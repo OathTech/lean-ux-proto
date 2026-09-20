@@ -1,0 +1,380 @@
+#!/usr/bin/python3
+"""Coordinator-owned worktrees with shared inputs and explicit cleanup receipts."""
+import argparse
+from contextlib import contextmanager
+from datetime import datetime, timezone
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+
+ROOT = Path(__file__).resolve().parents[1]
+RUNS = ROOT / '.artifacts/runs'
+LEDGER = RUNS / 'campaign.json'
+TREES = ROOT / '.worktrees'
+SCRATCH = RUNS / 'workspaces'
+
+
+def now():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def git(*args, cwd=ROOT, check=True):
+    return subprocess.run(['git', '-C', str(cwd), *args], text=True,
+                          capture_output=True, check=check)
+
+
+def atomic_json(path, value):
+    with tempfile.NamedTemporaryFile(mode='w', dir=path.parent, prefix=path.name + '.', delete=False) as stream:
+        temporary = Path(stream.name)
+        stream.write(json.dumps(value, indent=2) + '\n')
+        stream.flush()
+        os.fsync(stream.fileno())
+    temporary.replace(path)
+
+
+def safe_path(path):
+    path = Path(path)
+    if not path.is_absolute() or not path.is_relative_to(ROOT) or path == ROOT:
+        raise ValueError(f'Path outside managed project: {path}')
+    if path.resolve() != path:
+        raise ValueError(f'Symlink or noncanonical managed path: {path}')
+    return path
+
+
+@contextmanager
+def locked():
+    if not (ROOT / '.git').is_dir():
+        raise ValueError('Run the worktree manager from the coordinator checkout')
+    safe_path(RUNS)
+    RUNS.mkdir(parents=True, exist_ok=True)
+    with (RUNS / 'worktrees.lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        campaign = json.loads(LEDGER.read_text())
+        yield campaign
+        campaign['updated_at_utc'] = now()
+        atomic_json(LEDGER, campaign)
+
+
+def find(campaign, task_id):
+    matches = [r for r in campaign['worktrees'] if r['id'] == task_id]
+    if len(matches) != 1 or matches[0]['state'] == 'removed':
+        raise ValueError(f'Not an active registered worktree: {task_id}')
+    record = matches[0]
+    if record['path'] != str(TREES / task_id) or record['scratch'] != str(SCRATCH / task_id):
+        raise ValueError('Registry path does not match task identity')
+    safe_path(record['path'])
+    safe_path(record['scratch'])
+    return record
+
+
+def registered_git_trees():
+    blocks = git('worktree', 'list', '--porcelain').stdout.strip().split('\n\n')
+    return {line[9:]: block for block in blocks for line in block.splitlines()
+            if line.startswith('worktree ')}
+
+
+def settings(record):
+    scratch = Path(record['scratch'])
+    return {'schema_version': 1, 'task_id': record['id'], 'shared_root': str(ROOT),
+            'scratch_root': str(scratch), 'cache_root': str(scratch / 'cache'),
+            'artifacts_root': str(scratch / 'artifacts')}
+
+
+def finish_creation(record):
+    tree = Path(record['path'])
+    scratch = safe_path(record['scratch'])
+    scratch.mkdir(parents=True, exist_ok=True)
+    block = registered_git_trees().get(str(tree))
+    if block is None:
+        if tree.exists():
+            raise ValueError('Unregistered directory at pending worktree path')
+        branch = git('rev-parse', '--verify', 'refs/heads/' + record['branch'], check=False)
+        if branch.returncode == 0:
+            if branch.stdout.strip() != record['base']:
+                raise ValueError('Pending task branch points to unexpected commit')
+            git('worktree', 'add', '--quiet', str(tree), record['branch'])
+        else:
+            git('worktree', 'add', '--quiet', '-b', record['branch'], str(tree), record['base'])
+        block = registered_git_trees()[str(tree)]
+    if f"branch refs/heads/{record['branch']}" not in block:
+        raise ValueError('Git worktree registration/branch mismatch')
+    if git('rev-parse', 'HEAD', cwd=tree).stdout.strip() != record['base']:
+        raise ValueError('Incomplete creation has unexpected source changes')
+    marker = tree / '.leanux-workspace.json'
+    if marker.is_symlink() or (marker.exists() and json.loads(marker.read_text()) != settings(record)):
+        raise ValueError('Unexpected workspace configuration')
+    if not marker.exists():
+        atomic_json(marker, settings(record))
+    record.update(state='idle', updated_at_utc=now(), owner=None, job=None)
+
+
+def process_identity(pid):
+    try:
+        # Fields after comm start at field 3; field 22 is process start ticks.
+        fields = Path(f'/proc/{pid}/stat').read_text().rsplit(') ', 1)[1].split()
+        if fields[0] == 'Z':
+            return None
+        return {'pid': pid, 'start_ticks': fields[19], 'pgrp': int(fields[2]), 'session': int(fields[3])}
+    except FileNotFoundError:
+        return None
+
+
+def live_job(record):
+    job = record.get('job')
+    if not job:
+        return False
+    for item in Path('/proc').iterdir():
+        if item.name.isdigit():
+            identity = process_identity(int(item.name))
+            if (identity and identity['pgrp'] == job['pgrp']
+                    and identity['session'] == job['session']
+                    and int(identity['start_ticks']) >= int(job['start_ticks'])):
+                return True
+    return False
+
+
+def processes_using(record):
+    prefixes = (Path(record['path']), Path(record['scratch']))
+    found = []
+    for item in Path('/proc').iterdir():
+        if not item.name.isdigit() or int(item.name) == os.getpid():
+            continue
+        try:
+            if item.stat().st_uid != os.getuid():
+                continue
+            links = [item / 'cwd', item / 'exe', *(item / 'fd').iterdir()]
+            values = []
+            for link in links:
+                try:
+                    values.append(os.readlink(link).removesuffix(' (deleted)'))
+                except (FileNotFoundError, PermissionError, ProcessLookupError):
+                    continue
+            for line in (item / 'maps').read_text().splitlines():
+                parts = line.split(None, 5)
+                if len(parts) == 6:
+                    values.append(parts[5].removesuffix(' (deleted)'))
+            if any(Path(value).is_absolute() and any(Path(value).is_relative_to(prefix) for prefix in prefixes)
+                   for value in values):
+                found.append(int(item.name))
+        except (FileNotFoundError, PermissionError, ProcessLookupError):
+            continue
+    return found
+
+
+def disk_usage(campaign):
+    used = int(subprocess.check_output(['du', '-s', '-B1', '--', str(ROOT)], text=True).split()[0])
+    baseline = campaign.setdefault('initial_project_bytes', used)
+    campaign['disk_usage'] = {'measured_at_utc': now(), 'project_bytes': used,
+                              'additional_bytes': max(0, used - baseline),
+                              'free_bytes': shutil.disk_usage(ROOT).free}
+    return campaign['disk_usage']
+
+
+def validate_receipt(path, record):
+    path = safe_path(Path(path).absolute())
+    if not path.is_relative_to(RUNS / 'evidence'):
+        raise ValueError('Cleanup receipts must be in durable runs/evidence')
+    receipt = json.loads(path.read_text())
+    if receipt.get('worktree_id') != record['id'] or not receipt.get('retained'):
+        raise ValueError('Receipt lacks matching task identity or retained evidence')
+    for item in receipt['retained']:
+        retained = safe_path(ROOT / item['path'])
+        if (retained.is_relative_to(TREES) or retained.is_relative_to(SCRATCH)
+                or retained.is_relative_to(ROOT / '.cache')):
+            raise ValueError('Retained evidence is still in disposable storage')
+        if hashlib.sha256(retained.read_bytes()).hexdigest() != item['sha256']:
+            raise ValueError('Retained evidence does not match receipt')
+    return str(path.relative_to(ROOT))
+
+
+def create(args, campaign):
+    if not re.fullmatch(r'[a-z0-9][a-z0-9_-]{0,47}', args.task_id):
+        raise ValueError('Task id must use lowercase letters, digits, underscores or dashes')
+    if any(r['id'] == args.task_id for r in campaign['worktrees']):
+        raise ValueError('Task ids are permanent; choose a new id')
+    active = [r for r in campaign['worktrees'] if r['state'] != 'removed']
+    limit = 3 if args.kind == 'worker' else 1
+    if sum(r['kind'] == args.kind for r in active) >= limit:
+        raise ValueError('Worktree concurrency limit reached (includes paused trees)')
+    usage = disk_usage(campaign)
+    if usage['free_bytes'] < campaign['operating_limits']['disk_free_floor_bytes']:
+        raise ValueError('Disk-free floor reached')
+    if usage['additional_bytes'] >= campaign['operating_limits']['additional_bytes']:
+        raise ValueError('Aggregate additional-artifact budget reached')
+    base = git('rev-parse', '--verify', '--end-of-options', args.base + '^{commit}').stdout.strip()
+    tree = safe_path(TREES / args.task_id)
+    scratch = safe_path(SCRATCH / args.task_id)
+    if tree.exists() or scratch.exists():
+        raise ValueError('Unregistered path already exists')
+    branch = 'task/' + args.task_id
+    if git('show-ref', '--verify', 'refs/heads/' + branch, check=False).returncode == 0:
+        raise ValueError('Task branch already exists')
+    TREES.mkdir(exist_ok=True)
+    record = {'id': args.task_id, 'kind': args.kind, 'path': str(tree),
+              'scratch': str(scratch), 'branch': branch, 'base': base,
+              'state': 'creating', 'owner': None, 'job': None, 'created_at_utc': now()}
+    campaign['worktrees'].append(record)
+    # Durable intent before Git mutation enables recovery after interruption.
+    atomic_json(LEDGER, campaign)
+    scratch.mkdir(parents=True)
+    git('worktree', 'add', '--quiet', '-b', branch, str(tree), base)
+    if args.interrupt_after_add:
+        print('Simulated interruption after Git registration; resume with reconcile')
+        raise SystemExit(75)
+    finish_creation(record)
+    print(json.dumps(record, indent=2))
+
+
+def remove(args, campaign):
+    record = find(campaign, args.task_id)
+    if record['state'] != 'idle' or record.get('owner') or live_job(record):
+        raise ValueError('Worktree has an active owner/job or incomplete lifecycle')
+    users = processes_using(record)
+    if users:
+        raise ValueError(f'Processes still use worktree or scratch: {users}')
+    tree = Path(record['path'])
+    if str(tree) not in registered_git_trees():
+        raise ValueError('Missing Git registration; reconcile before cleanup')
+    marker = tree / '.leanux-workspace.json'
+    if marker.is_symlink() or json.loads(marker.read_text()) != settings(record):
+        raise ValueError('Workspace configuration mismatch')
+    dirty = git('status', '--porcelain', '--untracked-files=all', cwd=tree).stdout
+    if dirty:
+        raise ValueError('Dirty worktree: preserve/commit changes before cleanup\n' + dirty)
+    ignored = git('ls-files', '--others', '--ignored', '--exclude-standard', '-z', cwd=tree).stdout
+    unknown = [p for p in ignored.split('\0') if p and p != '.leanux-workspace.json'
+               and not p.startswith('.lake/')]
+    if unknown:
+        raise ValueError(f'Unregistered ignored contents: {unknown[:10]}')
+    receipt = validate_receipt(args.receipt, record)
+    head = git('rev-parse', 'HEAD', cwd=tree).stdout.strip()
+    merged = git('merge-base', '--is-ancestor', head, 'HEAD', check=False).returncode == 0
+    if not merged and not args.keep_ref:
+        raise ValueError('Unmerged work: integrate it or explicitly retain its branch with --keep-ref')
+    record.update(state='removing', head=head, receipt=receipt, keep_ref=args.keep_ref)
+    atomic_json(LEDGER, campaign)
+    finish_removal(record, campaign, args.interrupt_after_git_remove)
+    print(json.dumps(record, indent=2))
+
+
+def finish_removal(record, campaign, interrupt=False):
+    tree = safe_path(record['path'])
+    scratch = safe_path(record['scratch'])
+    validate_receipt(ROOT / record['receipt'], record)
+    if live_job(record) or processes_using(record):
+        raise ValueError('Task processes remain during teardown')
+    registered = str(tree) in registered_git_trees()
+    if tree.exists():
+        if not registered or git('rev-parse', 'HEAD', cwd=tree).stdout.strip() != record['head']:
+            raise ValueError('Ambiguous interrupted removal: preserve and inspect source')
+        if git('status', '--porcelain', '--untracked-files=all', cwd=tree).stdout:
+            raise ValueError('New source changes during teardown')
+        ignored = git('ls-files', '--others', '--ignored', '--exclude-standard', '-z', cwd=tree).stdout
+        if any(p and p != '.leanux-workspace.json' and not p.startswith('.lake/') for p in ignored.split('\0')):
+            raise ValueError('Unexpected ignored files during teardown')
+        lake = safe_path(tree / '.lake')
+        if lake.exists():
+            shutil.rmtree(lake)
+        marker = tree / '.leanux-workspace.json'
+        if marker.is_symlink():
+            raise ValueError('Unexpected marker symlink')
+        if marker.exists():
+            if json.loads(marker.read_text()) != settings(record):
+                raise ValueError('Workspace settings changed during teardown')
+            marker.unlink()
+        git('worktree', 'remove', str(tree))
+    elif registered:
+        raise ValueError('Missing worktree with surviving Git metadata: manual reconciliation required')
+    if interrupt:
+        raise SystemExit(75)
+    if scratch.exists():
+        shutil.rmtree(scratch)
+    branch = git('rev-parse', '--verify', 'refs/heads/' + record['branch'], check=False)
+    if branch.returncode == 0 and branch.stdout.strip() != record['head']:
+        raise ValueError('Task branch changed during teardown')
+    if branch.returncode == 0 and not record['keep_ref']:
+        git('branch', '-d', record['branch'])
+    record.update(state='removed', removed_at_utc=now(),
+                  preserved_ref=(record['branch'] if record['keep_ref'] else None))
+    disk_usage(campaign)
+
+
+def reconcile(campaign):
+    for record in campaign['worktrees']:
+        if record['state'] == 'removed':
+            continue
+        find(campaign, record['id'])
+        if record['state'] == 'creating':
+            finish_creation(record)
+        elif record['state'] == 'active' and record.get('job') and not live_job(record):
+            record['recovery_action'] = 'Job ended; coordinator must release owner after reconciling agent state'
+        elif record['state'] == 'removing':
+            finish_removal(record, campaign)
+    print(json.dumps(campaign['worktrees'], indent=2))
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest='action', required=True)
+    p = sub.add_parser('create')
+    p.add_argument('task_id')
+    p.add_argument('--base', default='HEAD')
+    p.add_argument('--kind', choices=['worker', 'evaluation'], default='worker')
+    p.add_argument('--interrupt-after-add', action='store_true', help='Recovery acceptance fault injection')
+    p = sub.add_parser('remove')
+    p.add_argument('task_id')
+    p.add_argument('--receipt', required=True)
+    p.add_argument('--keep-ref', action='store_true')
+    p.add_argument('--interrupt-after-git-remove', action='store_true', help='Recovery acceptance fault injection')
+    for name in ('acquire', 'release'):
+        p = sub.add_parser(name)
+        p.add_argument('task_id')
+        p.add_argument('--owner', required=True)
+        if name == 'acquire':
+            p.add_argument('--pid', type=int)
+    sub.add_parser('list')
+    sub.add_parser('reconcile')
+    args = parser.parse_args()
+    try:
+        with locked() as campaign:
+            if args.action == 'create':
+                create(args, campaign)
+            elif args.action == 'remove':
+                remove(args, campaign)
+            elif args.action == 'reconcile':
+                reconcile(campaign)
+            elif args.action == 'list':
+                print(json.dumps(campaign['worktrees'], indent=2))
+            else:
+                record = find(campaign, args.task_id)
+                if args.action == 'acquire':
+                    if record['state'] != 'idle':
+                        raise ValueError('Worktree already owned or unavailable')
+                    job = process_identity(args.pid) if args.pid else None
+                    if args.pid and not job:
+                        raise ValueError('Requested process is not live')
+                    if job and (job['pgrp'] != args.pid or job['session'] != args.pid):
+                        raise ValueError('Supervised jobs must start in a private session/process group')
+                    record.update(state='active', owner=args.owner, job=job)
+                else:
+                    if record['owner'] != args.owner or live_job(record):
+                        raise ValueError('Owner mismatch or live process')
+                    record.update(state='idle', owner=None, job=None)
+                print(json.dumps(record, indent=2))
+    except (ValueError, OSError, subprocess.CalledProcessError) as exc:
+        print(f'worktrees: {exc}', file=sys.stderr)
+        if isinstance(exc, subprocess.CalledProcessError):
+            print(exc.stderr, file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

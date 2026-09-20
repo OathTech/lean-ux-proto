@@ -19,7 +19,7 @@ if args.kernel_build:
     if not build.is_relative_to(ROOT / '.artifacts'):
         parser.error('kernel build directory must be inside .artifacts')
     env['LEANUX_KERNEL_BUILD'] = str(build)
-out = ROOT / '.artifacts/nono-validation'
+out = Path(env.get('LEANUX_ARTIFACTS', ROOT / '.artifacts')) / 'nono-validation'
 out.mkdir(parents=True, exist_ok=True)
 checks = [
     ('isolation', ['python3', 'scripts/check-isolation.py'], 30),

@@ -15,8 +15,9 @@ import tempfile
 
 def main() -> int:
     repo = Path(__file__).resolve().parents[1]
+    shared = Path(os.environ.get('LEANUX_SHARED_ROOT', repo))
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--lean-bin", type=Path, default=repo / ".tools/lean/bin")
+    parser.add_argument("--lean-bin", type=Path, default=shared / ".tools/lean/bin")
     parser.add_argument("--cc", default="gcc", help="C compiler executable")
     args = parser.parse_args()
     lean_bin = args.lean_bin.resolve()
@@ -31,7 +32,7 @@ def main() -> int:
     if clang is None or cxx is None:
         parser.error('Clang and G++ must be available in the bundle')
 
-    output_root = repo / ".artifacts/probes"
+    output_root = Path(os.environ.get('LEANUX_ARTIFACTS', repo / '.artifacts')) / 'probes'
     output_root.mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix="toolchains-", dir=output_root))
     for name in ("tmp", "cache", "elan"):

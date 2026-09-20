@@ -8,8 +8,9 @@ import re
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / ".artifacts/guest"
-KERNEL = Path(os.environ.get("LEANUX_KERNEL_BUILD", ROOT / ".artifacts/kernel"))
+SHARED = Path(os.environ.get('LEANUX_SHARED_ROOT', ROOT))
+OUT = Path(os.environ.get('LEANUX_ARTIFACTS', ROOT / '.artifacts')) / 'guest'
+KERNEL = Path(os.environ.get("LEANUX_KERNEL_BUILD", SHARED / ".artifacts/kernel"))
 OUT.mkdir(parents=True, exist_ok=True)
 subprocess.run(["gcc", "-static", "-O2", "-Wall", "-Wextra", "-Werror",
                 str(ROOT / "harness/probes/kcov-smoke.c"),
@@ -31,7 +32,7 @@ spec = ["dir /bin 755 0 0", "dir /dev 755 0 0", "dir /proc 755 0 0",
         "nod /dev/null 666 0 0 c 1 3", "slink /bin/sh busybox 777 0 0",
         f"file /init {OUT / 'init'} 755 0 0",
         f"file /kcov-smoke {OUT / 'kcov-smoke'} 755 0 0",
-        f"file /bin/busybox {ROOT / '.tools/sysroot/usr/bin/busybox'} 755 0 0"]
+        f"file /bin/busybox {SHARED / '.tools/sysroot/usr/bin/busybox'} 755 0 0"]
 (OUT / "initramfs.list").write_text("\n".join(spec) + "\n")
 cpio = subprocess.check_output([str(KERNEL / "usr/gen_init_cpio"),
                                 "-t", "0", str(OUT / "initramfs.list")])

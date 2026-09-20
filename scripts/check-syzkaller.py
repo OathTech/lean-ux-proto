@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Generate and compile a syzkaller program without executing its syscalls."""
 from pathlib import Path
+import os
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / '.artifacts/nono-validation'
+SHARED = Path(os.environ.get('LEANUX_SHARED_ROOT', ROOT))
+OUT = Path(os.environ.get('LEANUX_ARTIFACTS', ROOT / '.artifacts')) / 'nono-validation'
 OUT.mkdir(parents=True, exist_ok=True)
-BIN = ROOT / '.deps/syzkaller/bin'
+BIN = SHARED / '.deps/syzkaller/bin'
 program = subprocess.check_output([
     str(BIN / 'syz-mutate'), '-seed=42', '-len=8', '-enable=eventfd2,dup,close',
 ], text=True)

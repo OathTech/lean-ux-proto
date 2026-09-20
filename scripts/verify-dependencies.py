@@ -2,9 +2,11 @@
 """Verify staged download/documentation hashes without network access."""
 import hashlib
 import json
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+SHARED = Path(os.environ.get('LEANUX_SHARED_ROOT', ROOT))
 checks = {}
 def include(path, expected):
     if path in checks and checks[path] != expected:
@@ -24,7 +26,7 @@ proposal = json.loads((ROOT / "docs/resource-proposal.json").read_text())
 for row in proposal["source_files_inspected"]:
     include(f".deps/{row['source']}/{row['path']}", row["sha256"])
 for name, expected in checks.items():
-    with (ROOT / name).open("rb") as stream:
+    with (SHARED / name).open("rb") as stream:
         actual = hashlib.file_digest(stream, "sha256").hexdigest()
     if actual != expected:
         raise SystemExit(f"FAIL: checksum mismatch: {name}")

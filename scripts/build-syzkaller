@@ -2,6 +2,10 @@
 # Run via scripts/in-bundle. The sources and complete Go module cache are staged.
 set -eu
 LEANUX_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+if [ "${LEANUX_SHARED_ROOT:-$LEANUX_ROOT}" != "$LEANUX_ROOT" ]; then
+    echo 'Shared syzkaller maintenance must run in the coordinator checkout.' >&2
+    exit 1
+fi
 cd "$LEANUX_ROOT/.deps/syzkaller"
 # Archive checkouts have no Git metadata: provide the upstream revision explicitly.
 # Keep make serial; Go itself uses the launcher's GOMAXPROCS=4 budget.

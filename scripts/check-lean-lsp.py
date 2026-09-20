@@ -9,7 +9,8 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 ROOT = Path(__file__).resolve().parents[1]
-PROBES = ROOT / ".artifacts/probes"
+ARTIFACTS = Path(os.environ.get('LEANUX_ARTIFACTS', ROOT / '.artifacts'))
+PROBES = ARTIFACTS / 'probes'
 PROBES.mkdir(parents=True, exist_ok=True)
 PROJECT = Path(tempfile.mkdtemp(prefix="lsp-", dir=PROBES))
 (PROJECT / "lean-toolchain").write_text("leanprover/lean4:v4.33.1\n")
@@ -45,7 +46,8 @@ async def check():
                 else:
                     assert not result["success"] and any("Type mismatch" in d["message"] for d in errors), result
                 records.append({"file": name, "result": result})
-    (ROOT / ".artifacts/provisioning/lean-lsp-check.json").write_text(
+    (ARTIFACTS / 'provisioning').mkdir(parents=True, exist_ok=True)
+    (ARTIFACTS / 'provisioning/lean-lsp-check.json').write_text(
         json.dumps(records, indent=2) + "\n")
     print("PASS: offline Lean MCP diagnostics accept valid code and detect a type error.")
 

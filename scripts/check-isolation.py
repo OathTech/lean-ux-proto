@@ -12,19 +12,20 @@ import subprocess
 import sys
 
 root = Path(os.environ['LEANUX_ROOT']).resolve()
-assert Path(sys.executable).resolve().is_relative_to(root / '.tools'), sys.executable
+shared = Path(os.environ['LEANUX_SHARED_ROOT']).resolve()
+assert Path(sys.executable).resolve().is_relative_to(shared / '.tools'), sys.executable
 for name in ('TMPDIR', 'XDG_CACHE_HOME', 'ELAN_HOME', 'LAKE_CACHE_DIR',
              'LAKE_CONFIG', 'GOPATH', 'GOMODCACHE', 'GOCACHE'):
-    assert Path(os.environ[name]).resolve().is_relative_to(root), name
+    assert Path(os.environ[name]).resolve().is_relative_to(shared), name
 for compiler, language in (('gcc', 'c'), ('g++', 'c++'), ('clang', 'c')):
     result = subprocess.run([compiler, '-E', '-x', language, '-v', '-'],
                             input='', text=True, capture_output=True, check=True)
     search = result.stderr.split('#include <...> search starts here:\n', 1)[1]
     search = search.split('End of search list.', 1)[0]
     paths = [Path(line.strip()).resolve() for line in search.splitlines() if line.strip()]
-    assert paths and all(path.is_relative_to(root / '.tools') for path in paths), (compiler, paths)
+    assert paths and all(path.is_relative_to(shared / '.tools') for path in paths), (compiler, paths)
 perl_module = subprocess.check_output(['perl', '-Mstrict', '-e', 'print $INC{"strict.pm"}'], text=True)
-assert Path(perl_module).resolve().is_relative_to(root / '.tools'), perl_module
+assert Path(perl_module).resolve().is_relative_to(shared / '.tools'), perl_module
 for family in (socket.AF_INET, socket.AF_INET6):
     for kind in (socket.SOCK_STREAM, socket.SOCK_DGRAM):
         try:

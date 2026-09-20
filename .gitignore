@@ -6,4 +6,5 @@
 /.artifacts/
 /.lake/
 /.worktrees/
+/.leanux-workspace.json
 __pycache__/
