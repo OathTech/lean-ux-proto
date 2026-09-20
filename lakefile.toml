@@ -4,3 +4,7 @@ defaultTargets = ["Leanux"]
 
 [[lean_lib]]
 name = "Leanux"
+
+[[lean_exe]]
+name = "leanux-model"
+root = "Leanux.Main"
