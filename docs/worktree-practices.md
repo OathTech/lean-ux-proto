@@ -1,9 +1,10 @@
 # Worktrees, shared dependencies, and cleanup
 
 Status: operating policy for the [prototype plan](prototype-plan.md), recorded
-2026-09-20. Worktree automation and the launcher changes described here are
-bootstrap deliverables; they are not implemented yet. No worktrees or bulk-data
-copies were created while writing this policy.
+2026-09-20. The worktree manager and shared-input/private-output launcher support
+are implemented and passed the [bootstrap acceptance exercise](../reports/worktree-bootstrap.md).
+The original size and untracked-file inventory below records the pre-campaign
+state; the intended project files have since been committed without bulk data.
 
 ## Separate source, shared inputs, and disposable outputs
 
