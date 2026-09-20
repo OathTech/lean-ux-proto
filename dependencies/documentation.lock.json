@@ -1,0 +1,62 @@
+[
+  {
+    "path": ".deps/docs/lean-lake.html",
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Build-Tools-and-Distribution/Lake/",
+    "sha256": "5442a44907726df608cd556f470c88910bd485631f64743d73e67e59d610e376"
+  },
+  {
+    "path": ".deps/docs/lean-language.html",
+    "url": "https://lean-lang.org/doc/reference/4.33.0/",
+    "sha256": "9dc9b0cca87187a844bd29eb696008a27ca8ce081b524ac8317ec69eabf471ac"
+  },
+  {
+    "path": ".deps/docs/qemu-invocation.html",
+    "url": "https://www.qemu.org/docs/master/system/invocation.html",
+    "sha256": "90fceed01aaf55fb64393b81e43ca895e4eebd575b30ab9d13fa258ba8d76dc2"
+  },
+  {
+    "path": ".deps/docs/qemu-security.html",
+    "url": "https://www.qemu.org/docs/master/system/security.html",
+    "sha256": "db82a7df676f893fdac463db91b6ec6f22796612d371acdb845920e0ff31e34f"
+  },
+  {
+    "path": ".deps/docs/kernel-kcov.html",
+    "url": "https://docs.kernel.org/6.12/dev-tools/kcov.html",
+    "sha256": "8b561dc281b0542516d8b4a4e1815a42cbf036142412f065198666375455f88f"
+  },
+  {
+    "path": ".deps/docs/eventfd.2.html",
+    "url": "https://man7.org/linux/man-pages/man2/eventfd.2.html",
+    "sha256": "2639012787a9c3c0acad8dee59179a402ad6e5a4d12b4bed8d65913a7564e482"
+  },
+  {
+    "path": ".deps/docs/dup.2.html",
+    "url": "https://man7.org/linux/man-pages/man2/dup.2.html",
+    "sha256": "f0b886340b0471a181d135320ed5b3847de410ab05ca4a29b78780d1aa2aa2ae"
+  },
+  {
+    "path": ".deps/docs/fcntl.2.html",
+    "url": "https://man7.org/linux/man-pages/man2/fcntl.2.html",
+    "sha256": "33c2f86787d125e4156645967ee17dbb0df69a0b352d45457d56218641152b5a"
+  },
+  {
+    "path": ".deps/docs/close.2.html",
+    "url": "https://man7.org/linux/man-pages/man2/close.2.html",
+    "sha256": "20eea30e262be7d46294160b5ddbc90048e8185a4766276b15119365207d64c3"
+  },
+  {
+    "path": ".deps/docs/read.2.html",
+    "url": "https://man7.org/linux/man-pages/man2/read.2.html",
+    "sha256": "f3b9db6fd73b57cfcc947c083a324878add611e4c219855620e02495cbd6cc7c"
+  },
+  {
+    "path": ".deps/docs/write.2.html",
+    "url": "https://man7.org/linux/man-pages/man2/write.2.html",
+    "sha256": "82dd6ad3e998940915d9a9dc92d42afdb64ccb75121d350ae5ee42279d684ccc"
+  },
+  {
+    "path": ".deps/docs/seccomp.2.html",
+    "url": "https://man7.org/linux/man-pages/man2/seccomp.2.html",
+    "sha256": "95eca2f89204259e96055c099662dc27c4cf68818f082c35f3dc4d715bb150fa"
+  }
+]

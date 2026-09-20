@@ -1,0 +1,32 @@
+[
+  {
+    "name": "lean",
+    "version": "4.33.1",
+    "origin": "/home/dev/.elan/toolchains/leanprover--lean4---v4.33.1",
+    "provenance": "independent local copy; no shared hardlinks",
+    "archive": ".deps/downloads/lean-4.33.1-local-snapshot.tar.zst",
+    "sha256": "8e96283e2b09b5330677a3d06f95347dce67614d4516caa9db1d02cc8a03e35a",
+    "size_bytes": 749437964,
+    "destination": ".tools/lean"
+  },
+  {
+    "name": "go",
+    "version": "1.26.5",
+    "origin": "/usr/local/go",
+    "provenance": "independent local copy; no shared hardlinks",
+    "archive": ".deps/downloads/go-1.26.5-local-snapshot.tar.zst",
+    "sha256": "7fefdddfa6ba72911ad2d5562ada9146ee5cc82fb355c8d4034be5a56370244e",
+    "size_bytes": 63785285,
+    "destination": ".tools/go"
+  },
+  {
+    "name": "lean-lsp",
+    "version": "0.29.0",
+    "origin": "/home/dev/.local/share/uv/tools/lean-lsp-mcp",
+    "provenance": "independent local copy; no shared hardlinks",
+    "archive": ".deps/downloads/lean-lsp-0.29.0-local-snapshot.tar.zst",
+    "sha256": "06aeac884e1038273e53f2856eb36403729ca32c7930d91060d31e1febd65ad8",
+    "size_bytes": 13190506,
+    "destination": ".tools/lean-lsp"
+  }
+]

@@ -1,0 +1,9 @@
+# Locally provisioned tools, source archives, and generated experiment artifacts.
+/.tools/
+/.deps/
+/.cache/
+/.tmp/
+/.artifacts/
+/.lake/
+/.worktrees/
+__pycache__/

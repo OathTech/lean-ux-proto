@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "reviewed_on": "2026-09-20",
+  "status": "proposal_not_provisioned",
+  "target": {
+    "architecture": "x86_64",
+    "byte_order": "little",
+    "oracle": "qemu-system-x86_64",
+    "accelerator": "tcg",
+    "vcpus": 1
+  },
+  "sources": {
+    "lean": {
+      "repository": "https://github.com/leanprover/lean4.git",
+      "tag": "v4.33.1",
+      "commit": "819816b2e0a3bf405af45ae5c7af2491d8f5bee6",
+      "verification": "installed binary version and successful native build probe",
+      "local_destination": ".tools/lean"
+    },
+    "linux": {
+      "repository": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git",
+      "tag": "v6.12.110",
+      "tag_object": "56a837dcaf3e99bd36a6f11447fc40e9277e5591",
+      "commit": "fa5b06866b643cce7072a4e7c6be7ee3f0f1b95c",
+      "verification": "upstream ls-remote peeled tag; selected source files inspected",
+      "archive_url": "https://www.kernel.org/pub/linux/kernel/v6.x/linux-6.12.110.tar.xz",
+      "archive_size_bytes_from_http": 148552636,
+      "archive_sha256": null,
+      "local_destination": ".deps/linux"
+    },
+    "firecracker": {
+      "repository": "https://github.com/firecracker-microvm/firecracker.git",
+      "tag": "v1.17.0",
+      "tag_object": "29d66eb25954dbe3608eb91c180a6079f54d2ee8",
+      "commit": "95f868c8e345b1cc8faccd1a3c910b4989dc3f58",
+      "verification": "upstream ls-remote peeled tag; x86_64 seccomp policy inspected",
+      "role": "reference_only_initially",
+      "local_destination": ".deps/firecracker"
+    },
+    "syzkaller": {
+      "repository": "https://github.com/google/syzkaller.git",
+      "commit": "853b104bb454141a5b0fc0e4218ec78e9f34ffb1",
+      "verification": "upstream HEAD resolved on review date; go.mod inspected",
+      "go_version_directive": "1.26.0",
+      "role": "reference_then_optional_tool_integration",
+      "local_destination": ".deps/syzkaller"
+    }
+  },
+  "source_files_inspected": [
+    {
+      "source": "linux",
+      "path": "fs/eventfd.c",
+      "sha256": "0a1c91440a93705e2aa3def8fae1222cae36c3e0646d0a625e981f5780157ac1"
+    },
+    {
+      "source": "linux",
+      "path": "fs/file.c",
+      "sha256": "a92237a08678b49e9e5be1df13ceec059000fef239a46810399c2976053ce79d"
+    },
+    {
+      "source": "linux",
+      "path": "include/linux/fdtable.h",
+      "sha256": "ab0233740bd825ed7705e378278f60a3a184a7ded81fea060ac4a2fbfe2abfdb"
+    },
+    {
+      "source": "firecracker",
+      "path": "resources/seccomp/x86_64-unknown-linux-musl.json",
+      "sha256": "5974b9c5336be9daeb3b14fc8bfbb5d778a56f6e4e80f790a387bafc8a426608"
+    },
+    {
+      "source": "syzkaller",
+      "path": "go.mod",
+      "sha256": "324e73bf1e680992dccf7d8c134ec35831fa0ead23b3e5cf6e45428324296865"
+    }
+  ],
+  "unresolved_before_offline_acceptance": [
+    "Downloaded source archives and tool distribution hashes/provenance",
+    "Full compiler, binutils, libc and kernel-build package closure",
+    "QEMU package availability, dependency closure, firmware and hashes",
+    "Resolved Linux configuration, patches, build commands and output hashes",
+    "Guest runner, initramfs, machine/CPU, command line and resource limits",
+    "Sandbox profile and successful network-denied clean-build/boot/KCOV test",
+    "Local documentation snapshots and optional editor/LSP dependencies"
+  ]
+}

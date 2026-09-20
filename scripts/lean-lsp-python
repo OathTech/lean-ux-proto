@@ -1,0 +1,9 @@
+#!/bin/sh
+# Use the staged interpreter and MCP packages without changing the copied venv.
+set -eu
+LEANUX_LSP_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+if [ "${LEANUX_ROOT:-}" != "$LEANUX_LSP_ROOT" ]; then
+    exec "$LEANUX_LSP_ROOT/scripts/in-bundle" "$0" "$@"
+fi
+export PYTHONPATH="$LEANUX_ROOT/.tools/lean-lsp/lib/python3.12/site-packages${PYTHONPATH:+:$PYTHONPATH}"
+exec "$LEANUX_ROOT/.tools/sysroot/usr/bin/python3" "$@"

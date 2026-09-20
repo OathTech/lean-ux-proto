@@ -1,0 +1,32 @@
+#!/bin/sh
+# Relocation flags for staged tools. Called through .cache/bundle-bin links.
+set -eu
+: "${LEANUX_SYSROOT:?Run this tool through scripts/in-bundle}"
+tool=${0##*/}
+case "$tool" in
+    gcc|cc|gcc-13|x86_64-linux-gnu-gcc|x86_64-linux-gnu-gcc-13) driver=gcc-13 ;;
+    g++|c++|g++-13|x86_64-linux-gnu-g++|x86_64-linux-gnu-g++-13) driver=g++-13 ;;
+    cpp|cpp-13|x86_64-linux-gnu-cpp|x86_64-linux-gnu-cpp-13) driver=cpp-13 ;;
+    ld|x86_64-linux-gnu-ld)
+        exec "$LEANUX_SYSROOT/usr/bin/x86_64-linux-gnu-ld" --sysroot="$LEANUX_SYSROOT" "$@" ;;
+    clang|clang-19) driver=clang-19 ;;
+    clang++|clang++-19) driver=clang++-19 ;;
+    qemu-system-*)
+        exec "$LEANUX_SYSROOT/usr/bin/$tool" -L "$LEANUX_SYSROOT/usr/share/qemu" \
+            -L "$LEANUX_SYSROOT/usr/share/seabios" "$@" ;;
+    *) echo "Unknown bundle tool: $tool" >&2; exit 1 ;;
+esac
+case "$driver" in
+    cpp-13)
+        # -B also adds implicit include directories. Avoid that for cpp so
+        # syzkaller's intentional -nostdinc preprocessing keeps its semantics.
+        exec "$LEANUX_SYSROOT/usr/bin/$driver" --sysroot="$LEANUX_SYSROOT" "$@" ;;
+    clang*)
+        exec "$LEANUX_SYSROOT/usr/bin/$driver" --sysroot="$LEANUX_SYSROOT" \
+            --gcc-install-dir="$LEANUX_SYSROOT/usr/lib/gcc/x86_64-linux-gnu/13" "$@" ;;
+    *)
+        exec "$LEANUX_SYSROOT/usr/bin/$driver" --sysroot="$LEANUX_SYSROOT" \
+            -B"$LEANUX_SYSROOT/usr/libexec/gcc/x86_64-linux-gnu/13/" \
+            -B"$LEANUX_SYSROOT/usr/lib/gcc/x86_64-linux-gnu/13/" \
+            -B"$LEANUX_SYSROOT/usr/bin/" "$@" ;;
+esac

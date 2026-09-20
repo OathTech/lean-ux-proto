@@ -1,0 +1,13 @@
+#!/bin/sh
+# Start the locally staged MCP helper; no global editor configuration is changed.
+set -eu
+LEANUX_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+LEANUX_PROJECT=$(CDPATH= cd -- "${1:-$LEANUX_ROOT}" && pwd -P)
+case "$LEANUX_PROJECT/" in
+    "$LEANUX_ROOT/"*) ;;
+    *) echo 'Lean project must be inside this repository.' >&2; exit 1 ;;
+esac
+exec "$LEANUX_ROOT/scripts/in-bundle" /usr/bin/env \
+    LEAN_PROJECT_PATH="$LEANUX_PROJECT" \
+    LEAN_MCP_DISABLED_TOOLS=lean_leansearch,lean_loogle,lean_leanfinder,lean_state_search,lean_hammer_premise \
+    "$LEANUX_ROOT/scripts/lean-lsp-python" -c 'from lean_lsp_mcp import main; main()'

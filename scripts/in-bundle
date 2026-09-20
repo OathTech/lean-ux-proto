@@ -1,0 +1,88 @@
+#!/usr/bin/python3
+"""Select the local toolchain; confinement belongs to the calling nono session."""
+import os
+from pathlib import Path
+import sys
+
+root = Path(__file__).resolve().parents[1]
+sysroot = root / '.tools/sysroot'
+if not (sysroot / 'usr/bin/gcc-13').is_file():
+    raise SystemExit('Missing staged sysroot. Run scripts/stage-resources.py packages first.')
+
+for name in ('tmp', 'lake', 'elan', 'go-build', 'go', 'bundle-bin', 'bundle-libs'):
+    (root / '.cache' / name).mkdir(parents=True, exist_ok=True)
+(root / '.deps/go-mod').mkdir(parents=True, exist_ok=True)
+config = root / '.cache/lake-config.toml'
+if not config.exists():
+    config.write_text('')
+
+def link(path, target):
+    if path.is_symlink() and path.readlink() == target:
+        return
+    if path.exists() or path.is_symlink():
+        raise SystemExit(f'Unexpected existing bundle link: {path}')
+    try:
+        path.symlink_to(target)
+    except FileExistsError:
+        # Independent commands may initialize the same local links concurrently.
+        if not path.is_symlink() or path.readlink() != target:
+            raise
+
+# Keep the host loader and glibc together. Other shared libraries come from the
+# staged packages. These are links only; .tools is never modified.
+glibc = ('ld-linux', 'libc.so', 'libm.so', 'libmvec.', 'libpthread.', 'librt.',
+         'libdl.', 'libresolv.', 'libnss_', 'libanl.', 'libBrokenLocale.',
+         'libthread_db.', 'libutil.')
+for lib in (sysroot / 'usr/lib/x86_64-linux-gnu').glob('*.so*'):
+    if not lib.name.startswith(glibc):
+        link(root / '.cache/bundle-libs' / lib.name, lib)
+
+commands = ['gcc', 'cc', 'g++', 'c++', 'cpp', 'gcc-13', 'g++-13', 'cpp-13',
+            'x86_64-linux-gnu-gcc', 'x86_64-linux-gnu-g++', 'x86_64-linux-gnu-cpp',
+            'x86_64-linux-gnu-gcc-13', 'x86_64-linux-gnu-g++-13',
+            'x86_64-linux-gnu-cpp-13', 'ld', 'x86_64-linux-gnu-ld',
+            'clang', 'clang++', 'clang-19', 'clang++-19',
+            'qemu-system-x86_64', 'qemu-system-aarch64']
+for name in commands:
+    link(root / '.cache/bundle-bin' / name, root / 'scripts/bundle-tool')
+
+env = os.environ.copy()
+for name in ('LD_PRELOAD', 'LD_AUDIT', 'CPATH', 'C_INCLUDE_PATH',
+             'CPLUS_INCLUDE_PATH', 'LIBRARY_PATH', 'COMPILER_PATH', 'GCC_EXEC_PREFIX',
+             'PYTHONHOME', 'PYTHONPATH', 'PERL5OPT', 'GOFLAGS',
+             'CC', 'CXX', 'CPP', 'HOSTCC', 'HOSTCXX', 'LD', 'AS', 'AR', 'NM',
+             'OBJCOPY', 'OBJDUMP', 'READELF', 'STRIP',
+             'LEAN_PATH', 'LEAN_SRC_PATH', 'LEAN_SYSROOT', 'LEAN', 'LAKE',
+             'LAKE_HOME', 'LAKE_OVERRIDE_LEAN', 'ELAN_TOOLCHAIN'):
+    env.pop(name, None)
+env.update({
+    'LEANUX_ROOT': str(root), 'LEANUX_SYSROOT': str(sysroot),
+    'PATH': ':'.join(str(p) for p in (root / '.cache/bundle-bin', root / '.tools/lean/bin',
+                                   root / '.tools/go/bin', sysroot / 'usr/bin', sysroot / 'bin')),
+    'LD_LIBRARY_PATH': str(root / '.cache/bundle-libs'),
+    'LC_ALL': 'C', 'LANG': 'C', 'TERM': 'dumb',
+    'TMPDIR': str(root / '.cache/tmp'), 'TMPPREFIX': str(root / '.cache/tmp/zsh'),
+    'XDG_CACHE_HOME': str(root / '.cache'), 'ELAN_HOME': str(root / '.cache/elan'),
+    'LAKE_CACHE_DIR': str(root / '.cache/lake'), 'LAKE_CONFIG': str(config),
+    'LAKE_NO_CACHE': 'true',
+    'GOROOT': str(root / '.tools/go'),
+    'GOPATH': str(root / '.cache/go'), 'GOMODCACHE': str(root / '.deps/go-mod'),
+    'GOCACHE': str(root / '.cache/go-build'), 'GOENV': 'off',
+    'GOTOOLCHAIN': 'local', 'GOPROXY': 'off', 'GOSUMDB': 'off', 'GOMAXPROCS': '4',
+    'PKG_CONFIG_SYSROOT_DIR': str(sysroot), 'PKG_CONFIG_PATH': '',
+    'PKG_CONFIG_LIBDIR': ':'.join(str(sysroot / p) for p in
+        ('usr/lib/x86_64-linux-gnu/pkgconfig', 'usr/lib/pkgconfig', 'usr/share/pkgconfig')),
+    'BISON_PKGDATADIR': str(sysroot / 'usr/share/bison'),
+    'M4': str(sysroot / 'usr/bin/m4'),
+    'PERL': str(sysroot / 'usr/bin/perl'),
+    'PERL5LIB': ':'.join(str(sysroot / p) for p in
+        ('usr/lib/x86_64-linux-gnu/perl-base', 'usr/lib/x86_64-linux-gnu/perl/5.38',
+         'usr/share/perl/5.38', 'usr/share/perl5')),
+    'PYTHONNOUSERSITE': '1', 'PYTHONDONTWRITEBYTECODE': '1',
+    'PYTHONPATH': str(sysroot / 'etc/python3.12'),
+    'QEMU_MODULE_DIR': str(sysroot / 'usr/lib/x86_64-linux-gnu/qemu'),
+    'TZDIR': str(sysroot / 'usr/share/zoneinfo'),
+    'TERMINFO_DIRS': str(sysroot / 'usr/share/terminfo') + ':' + str(sysroot / 'usr/lib/terminfo'),
+})
+argv = sys.argv[1:] or [str(sysroot / 'usr/bin/bash'), '--noprofile', '--norc']
+os.execvpe(argv[0], argv, env)

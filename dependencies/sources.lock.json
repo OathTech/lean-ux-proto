@@ -1,0 +1,23 @@
+[
+  {
+    "name": "linux",
+    "url": "https://www.kernel.org/pub/linux/kernel/v6.x/linux-6.12.110.tar.xz",
+    "sha256": "8cee19e1839bb6ff4d5254d761933ae6ab670492d5ed030e09a80538320d5c4c",
+    "archive": ".deps/downloads/linux-6.12.110.tar.xz",
+    "commit": "fa5b06866b643cce7072a4e7c6be7ee3f0f1b95c"
+  },
+  {
+    "name": "firecracker",
+    "url": "https://codeload.github.com/firecracker-microvm/firecracker/tar.gz/95f868c8e345b1cc8faccd1a3c910b4989dc3f58",
+    "sha256": "27280787407229c412901dfcf74cd378f1336010e71050aba43ace51cd4a0f4f",
+    "archive": ".deps/downloads/firecracker-95f868c8e345b1cc8faccd1a3c910b4989dc3f58.tar.gz",
+    "commit": "95f868c8e345b1cc8faccd1a3c910b4989dc3f58"
+  },
+  {
+    "name": "syzkaller",
+    "url": "https://codeload.github.com/google/syzkaller/tar.gz/853b104bb454141a5b0fc0e4218ec78e9f34ffb1",
+    "sha256": "79fb5f59b57dc07af71f3ae9dedd3528cc31241ea47e2dfb7c68c893131f1c4e",
+    "archive": ".deps/downloads/syzkaller-853b104bb454141a5b0fc0e4218ec78e9f34ffb1.tar.gz",
+    "commit": "853b104bb454141a5b0fc0e4218ec78e9f34ffb1"
+  }
+]

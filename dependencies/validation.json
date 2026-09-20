@@ -1,0 +1,145 @@
+{
+  "schema_version": 1,
+  "completed_at_utc": "2026-09-20T07:29:23.430092+00:00",
+  "scope": "offline x86_64 FD/eventfd prototype dependencies",
+  "global_changes": false,
+  "package_count": 222,
+  "lean_manual_pages_and_assets": 436,
+  "kernel_release": "6.12.110-leanux-kcov",
+  "network_disabled_for_validation": true,
+  "oracle": {
+    "emulator": "QEMU 8.2.2",
+    "machine": "pc-i440fx-8.2",
+    "cpu": "qemu64",
+    "accelerator": "tcg",
+    "cpus": 1,
+    "memory_mib": 256,
+    "kcov_pcs": 558
+  },
+  "checks_passed": [
+    "isolation",
+    "Lean/Std native compilation and checked theorem",
+    "static C compilation",
+    "kernel build from staged source",
+    "guest boot and eventfd aliasing",
+    "KCOV and source symbolization",
+    "syzkaller offline tool builds",
+    "Go module verification",
+    "syzkaller generation and C conversion without executing generated syscalls",
+    "Lean MCP valid/invalid diagnostics",
+    "locked archive/reference/source sample checksums",
+    "syzkaller C formatting with staged clang-format 19"
+  ],
+  "bootstrap_requirements": [
+    "Linux x86_64 host",
+    "working unprivileged user and network namespaces",
+    "/bin/sh and /usr/bin/bwrap"
+  ],
+  "deferred": [
+    "Firecracker Rust build dependencies",
+    "mathlib and extra proof tools",
+    "AArch64 guest/cross-libc setup",
+    "KVM"
+  ],
+  "artifacts": [
+    {
+      "path": "kernel/config-x86_64",
+      "sha256": "31ae4073d94ee77e977058bd9805b3c87b00ab71bdbdc0feaa36e74f9472c843"
+    },
+    {
+      "path": ".artifacts/kernel/arch/x86/boot/bzImage",
+      "sha256": "9e16c4c1d095521aa6845c044e234d414dc4cb4fdd0ad5c1ac9f85efcf9dc6f6"
+    },
+    {
+      "path": ".artifacts/kernel/vmlinux",
+      "sha256": "cbef68c677b4e16ed013a46ab88da6da2f73ac747df3b59d9314c68ba570335b"
+    },
+    {
+      "path": ".artifacts/kernel/System.map",
+      "sha256": "735078b6d62657ab268ae418da5532cf2aea5ce406f9f043a66c8394c79a5c51"
+    },
+    {
+      "path": ".artifacts/guest/initramfs.cpio.gz",
+      "sha256": "8e198302ea638b5d2da23ca1deba79c5f1fd186b3cd663de6a612e60c220cac7"
+    },
+    {
+      "path": ".artifacts/guest/kcov-smoke",
+      "sha256": "fa4d89bcb813df24536935f603b80276dd28837b6d5c920499d97021b4d85f9e"
+    },
+    {
+      "path": ".artifacts/guest/qemu-command.json",
+      "sha256": "21d3381bb037758c88d6c66e2263cb08c19aef32ff17c251d2a2ffa5f0ddfbe8"
+    },
+    {
+      "path": ".deps/syzkaller/go.mod",
+      "sha256": "324e73bf1e680992dccf7d8c134ec35831fa0ead23b3e5cf6e45428324296865"
+    },
+    {
+      "path": ".deps/syzkaller/go.sum",
+      "sha256": "0c539669425cb7f9239359a1d251b35b4dfb018615fe273afb6acfb9480f3976"
+    },
+    {
+      "path": ".deps/syzkaller/bin/syz-mutate",
+      "sha256": "e691f5de9ad5fcdd572a6806bd10b06668b072eea63177f7a5c25e82246f39f3"
+    },
+    {
+      "path": ".deps/syzkaller/bin/syz-db",
+      "sha256": "4719ac2b90fef9835bb763331eead82432873887b22dfdd30fc5fa612d56622c"
+    },
+    {
+      "path": ".deps/syzkaller/bin/syz-sysgen",
+      "sha256": "daf73ccf29981a391892f4b964a4b6641475720fc7b0fefc005f605688e23645"
+    },
+    {
+      "path": ".deps/syzkaller/bin/syz-prog2c",
+      "sha256": "51aca6912fa4f596c5ad74b84e8206752439dc7d0ef156c4e29515f2128a662d"
+    },
+    {
+      "path": ".deps/syzkaller/bin/syz-repro",
+      "sha256": "fb0d49d7994a9d409784c0e6ca9ecc771065ca0f061064ecfbfcb4d4ae55fb5a"
+    },
+    {
+      "path": ".deps/syzkaller/bin/syz-manager",
+      "sha256": "8ef02f183df1312d6ee1af3d58cf7d333f8bc1f5469b28f8eb2ea307b7a96126"
+    },
+    {
+      "path": ".deps/syzkaller/bin/linux_amd64/syz-execprog",
+      "sha256": "9a37b0a82314ad6d8f62e669efe719586b79cafeafd08cd1b971a117ca39f2a2"
+    },
+    {
+      "path": ".deps/syzkaller/bin/linux_amd64/syz-executor",
+      "sha256": "c64a576106858df0a916e9b8d35eeb901cc88cabd6be95008a8cbd679632727e"
+    }
+  ],
+  "evidence": [
+    {
+      "path": ".artifacts/provisioning/offline-acceptance.log",
+      "sha256": "3e74b5383a9f920c4e617e37a88ccb30ef7e72dd5e87a6aff6357c5b42d08bc0"
+    },
+    {
+      "path": ".artifacts/provisioning/kernel-build.log",
+      "sha256": "724d5cd9dc1a9f3372ecc658d7884a299fcf5eb54449313a9a306561eaa3f795"
+    },
+    {
+      "path": ".artifacts/provisioning/syzkaller-build.log",
+      "sha256": "56d118b32ae43070d78a93ab0215eea30987a03110a1017acb96213f79ad5295"
+    },
+    {
+      "path": ".artifacts/provisioning/lean-lsp-check.json",
+      "sha256": "da8dd0c1686f511908609a6d329f6035b800d9ece28c75bc2c15e3a63851eb6c"
+    },
+    {
+      "path": ".artifacts/provisioning/dependency-verification.log",
+      "sha256": "2b4997234302bfcb2c7261cbf6a65b83fab42430feac52096e7ccb6bc742c118"
+    },
+    {
+      "path": ".artifacts/provisioning/syzkaller-generated.prog",
+      "sha256": "bce261936ad4090c25e1d378484ce5ae579bf6da4439f66d3a22d4ed770888c4"
+    },
+    {
+      "path": ".artifacts/provisioning/syzkaller-generated.c",
+      "sha256": "f92fbcb933a23349f774e38e01465aed5771300b1ccbd76d10f989a058476250"
+    }
+  ],
+  "workspace_size_kib": 11480936
+}

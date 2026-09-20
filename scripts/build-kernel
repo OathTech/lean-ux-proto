@@ -1,0 +1,39 @@
+#!/bin/sh
+# Run through scripts/in-bundle. Build a small KCOV-enabled oracle kernel.
+set -eu
+LEANUX_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+LEANUX_BUILD="${LEANUX_KERNEL_BUILD:-$LEANUX_ROOT/.artifacts/kernel}"
+LEANUX_BUILD=$(realpath -m -- "$LEANUX_BUILD")
+case "$LEANUX_BUILD/" in
+    "$LEANUX_ROOT/.artifacts/"*) ;;
+    *) echo 'Kernel build directory must be inside .artifacts.' >&2; exit 1 ;;
+esac
+mkdir -p "$LEANUX_BUILD"
+export KBUILD_BUILD_USER=leanux KBUILD_BUILD_HOST=offline KBUILD_BUILD_VERSION=1
+export KBUILD_BUILD_TIMESTAMP='2026-09-20 00:00:00 UTC'
+make -s -C "$LEANUX_ROOT/.deps/linux" O="$LEANUX_BUILD" ARCH=x86_64 allnoconfig
+LEANUX_CONFIG="$LEANUX_ROOT/.deps/linux/scripts/config"
+for option in 64BIT BINFMT_ELF BINFMT_SCRIPT PRINTK BUG MULTIUSER POSIX_TIMERS FUTEX \
+    EVENTFD EPOLL SIGNALFD TIMERFD SHMEM TMPFS PROC_FS SYSFS \
+    BLK_DEV_INITRD RD_GZIP DEVTMPFS DEVTMPFS_MOUNT TTY \
+    SERIAL_8250 SERIAL_8250_CONSOLE DEBUG_KERNEL DEBUG_FS \
+    DEBUG_INFO_DWARF4 KALLSYMS KCOV KCOV_INSTRUMENT_ALL \
+    KCOV_ENABLE_COMPARISONS; do
+    "$LEANUX_CONFIG" --file "$LEANUX_BUILD/.config" --enable "$option"
+done
+for option in MODULES SMP RANDOMIZE_BASE DEBUG_INFO_NONE LOCALVERSION_AUTO; do
+    "$LEANUX_CONFIG" --file "$LEANUX_BUILD/.config" --disable "$option"
+done
+"$LEANUX_CONFIG" --file "$LEANUX_BUILD/.config" --set-str LOCALVERSION '-leanux-kcov'
+make -s -C "$LEANUX_ROOT/.deps/linux" O="$LEANUX_BUILD" ARCH=x86_64 olddefconfig
+for option in 64BIT BINFMT_ELF BINFMT_SCRIPT EVENTFD BLK_DEV_INITRD SERIAL_8250_CONSOLE \
+    DEBUG_FS DEBUG_INFO_DWARF4 KCOV; do
+    grep -qx "CONFIG_${option}=y" "$LEANUX_BUILD/.config" || {
+        echo "Required kernel configuration did not resolve: $option" >&2
+        exit 1
+    }
+done
+make -C "$LEANUX_ROOT/.deps/linux" O="$LEANUX_BUILD" ARCH=x86_64 \
+    -j"${LEANUX_JOBS:-4}" bzImage vmlinux
+mkdir -p "$LEANUX_ROOT/kernel"
+cp "$LEANUX_BUILD/.config" "$LEANUX_ROOT/kernel/config-x86_64"

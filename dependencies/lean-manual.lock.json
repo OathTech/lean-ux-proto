@@ -1,0 +1,2618 @@
+[
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/",
+    "path": ".deps/docs/lean-reference/index.html",
+    "upstream_sha256": "9dc9b0cca87187a844bd29eb696008a27ca8ce081b524ac8317ec69eabf471ac",
+    "local_sha256": "b6752b829f4d17fb23e317129e87bea213f6bd4a212aa2c150241a924860a91a"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_AMS-Regular.ttf",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_AMS-Regular.ttf",
+    "upstream_sha256": "68534840bcfdd2bffb6f0e8deb48684dd01e7f04ea2813267577afb906de1d13",
+    "local_sha256": "68534840bcfdd2bffb6f0e8deb48684dd01e7f04ea2813267577afb906de1d13"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_AMS-Regular.woff",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_AMS-Regular.woff",
+    "upstream_sha256": "30da91e84c893f875e252689faebdc590b2871145e8adc7f9a9d4dbd8ce0b251",
+    "local_sha256": "30da91e84c893f875e252689faebdc590b2871145e8adc7f9a9d4dbd8ce0b251"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_AMS-Regular.woff2",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_AMS-Regular.woff2",
+    "upstream_sha256": "0cdd387c9590a1a9f9794560022dbb59654a7d86f187aa0c81495ad42d3a7308",
+    "local_sha256": "0cdd387c9590a1a9f9794560022dbb59654a7d86f187aa0c81495ad42d3a7308"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Caligraphic-Bold.ttf",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Caligraphic-Bold.ttf",
+    "upstream_sha256": "07d8e303ce4fc12b4bb54f1004170dd190a1f3db45d400fe68060df3e0897268",
+    "local_sha256": "07d8e303ce4fc12b4bb54f1004170dd190a1f3db45d400fe68060df3e0897268"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Caligraphic-Bold.woff",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Caligraphic-Bold.woff",
+    "upstream_sha256": "1ae6bd7475590e97e7f145a89e09ccde322f7a6bc0b91607b1c8b8ee28290fed",
+    "local_sha256": "1ae6bd7475590e97e7f145a89e09ccde322f7a6bc0b91607b1c8b8ee28290fed"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Caligraphic-Bold.woff2",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Caligraphic-Bold.woff2",
+    "upstream_sha256": "de7701e42cf1f4cf0b766c03fb27977207eee2f4fd5d76fa82188406da43ea4c",
+    "local_sha256": "de7701e42cf1f4cf0b766c03fb27977207eee2f4fd5d76fa82188406da43ea4c"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Caligraphic-Regular.ttf",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Caligraphic-Regular.ttf",
+    "upstream_sha256": "ed0b74372feefcbb9c0666b2e210da37b7e49fa7fbbf3eeb11db5f693dacfbb7",
+    "local_sha256": "ed0b74372feefcbb9c0666b2e210da37b7e49fa7fbbf3eeb11db5f693dacfbb7"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Caligraphic-Regular.woff",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Caligraphic-Regular.woff",
+    "upstream_sha256": "3398dd02302557a793f2863f88e02d96ce10df2abffa07c8e9fa90775116e65c",
+    "local_sha256": "3398dd02302557a793f2863f88e02d96ce10df2abffa07c8e9fa90775116e65c"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Caligraphic-Regular.woff2",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Caligraphic-Regular.woff2",
+    "upstream_sha256": "5d53e70ad607c2352162dec9e0923fb54ecdafaccbf604cd8dcf7d00facb989b",
+    "local_sha256": "5d53e70ad607c2352162dec9e0923fb54ecdafaccbf604cd8dcf7d00facb989b"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Fraktur-Bold.ttf",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Fraktur-Bold.ttf",
+    "upstream_sha256": "9163df9c7122432e6495b4229fa9071cf9ae86a758ae5efc4924ec2e1a6dbce1",
+    "local_sha256": "9163df9c7122432e6495b4229fa9071cf9ae86a758ae5efc4924ec2e1a6dbce1"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Fraktur-Bold.woff",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Fraktur-Bold.woff",
+    "upstream_sha256": "9be7ceb88004ab8ad124082246fbfcca4091e36385d4ec6ed1df67375dad50fb",
+    "local_sha256": "9be7ceb88004ab8ad124082246fbfcca4091e36385d4ec6ed1df67375dad50fb"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Fraktur-Bold.woff2",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Fraktur-Bold.woff2",
+    "upstream_sha256": "74444efd593c005e3f4573b44524704c0af0a937fe911cca9e94068d0d140d3f",
+    "local_sha256": "74444efd593c005e3f4573b44524704c0af0a937fe911cca9e94068d0d140d3f"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Fraktur-Regular.ttf",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Fraktur-Regular.ttf",
+    "upstream_sha256": "1e6f9579e90e2cac37f8f60a597c436e075c114385652b7cbeb0dec0421291b3",
+    "local_sha256": "1e6f9579e90e2cac37f8f60a597c436e075c114385652b7cbeb0dec0421291b3"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Fraktur-Regular.woff",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Fraktur-Regular.woff",
+    "upstream_sha256": "5e28753be717dac97f559f49bc10be9cf3c124ddcabda6659d11cb68febc6463",
+    "local_sha256": "5e28753be717dac97f559f49bc10be9cf3c124ddcabda6659d11cb68febc6463"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Fraktur-Regular.woff2",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Fraktur-Regular.woff2",
+    "upstream_sha256": "51814d270d06ff0255dba0799994fa4d8c84d11f09951d47595f4abb1f3602dc",
+    "local_sha256": "51814d270d06ff0255dba0799994fa4d8c84d11f09951d47595f4abb1f3602dc"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Main-Bold.ttf",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Main-Bold.ttf",
+    "upstream_sha256": "138ac28d1663b3037e9c5f52371fa5c63d8324f4a38d22cd573e6ea3a3fd0cf8",
+    "local_sha256": "138ac28d1663b3037e9c5f52371fa5c63d8324f4a38d22cd573e6ea3a3fd0cf8"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Main-Bold.woff",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Main-Bold.woff",
+    "upstream_sha256": "c76c5d696297d51b9cb1639c7da4334f0e7dec81b42b11213b5e25ef671bb822",
+    "local_sha256": "c76c5d696297d51b9cb1639c7da4334f0e7dec81b42b11213b5e25ef671bb822"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Main-Bold.woff2",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Main-Bold.woff2",
+    "upstream_sha256": "0f60d1b897938ec918c8ce073092411baf9438f6739465693ff18b0f9d20b021",
+    "local_sha256": "0f60d1b897938ec918c8ce073092411baf9438f6739465693ff18b0f9d20b021"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Main-BoldItalic.ttf",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Main-BoldItalic.ttf",
+    "upstream_sha256": "70ee1f64a20f2048c21940ef46d0144fd215baa953ca69afd1e31e98544f708f",
+    "local_sha256": "70ee1f64a20f2048c21940ef46d0144fd215baa953ca69afd1e31e98544f708f"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Main-BoldItalic.woff",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Main-BoldItalic.woff",
+    "upstream_sha256": "a6f7ec0d846ac7ad975adb8959c37ed49b94acbc4ae436db9ce9e20287e4a64c",
+    "local_sha256": "a6f7ec0d846ac7ad975adb8959c37ed49b94acbc4ae436db9ce9e20287e4a64c"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Main-BoldItalic.woff2",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Main-BoldItalic.woff2",
+    "upstream_sha256": "99cd42a3c072d918f2f44984a807cf7aa16e13545fd0875fc07c6c65f99e715b",
+    "local_sha256": "99cd42a3c072d918f2f44984a807cf7aa16e13545fd0875fc07c6c65f99e715b"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Main-Italic.ttf",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Main-Italic.ttf",
+    "upstream_sha256": "0d85ae7cc30f23790a7f1a58c4a112fdca8aae769b6ba11429af1d98b1b6cb3a",
+    "local_sha256": "0d85ae7cc30f23790a7f1a58c4a112fdca8aae769b6ba11429af1d98b1b6cb3a"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Main-Italic.woff",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Main-Italic.woff",
+    "upstream_sha256": "f1d6ef86f3b11a528bd5185199bd2443ecb2b0dead96d88674b5a2c12be24bdf",
+    "local_sha256": "f1d6ef86f3b11a528bd5185199bd2443ecb2b0dead96d88674b5a2c12be24bdf"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Main-Italic.woff2",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Main-Italic.woff2",
+    "upstream_sha256": "97479ca6cce906abc961ecac96faa5f9ca2e61b8e7670d475826bcdee9a7c267",
+    "local_sha256": "97479ca6cce906abc961ecac96faa5f9ca2e61b8e7670d475826bcdee9a7c267"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Main-Regular.ttf",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Main-Regular.ttf",
+    "upstream_sha256": "d0332f52868370fd83ae7fa46470f90c8f2eab2fcf12bc4f88080b340c95a830",
+    "local_sha256": "d0332f52868370fd83ae7fa46470f90c8f2eab2fcf12bc4f88080b340c95a830"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Main-Regular.woff",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Main-Regular.woff",
+    "upstream_sha256": "c6368d87e8a1a3a5d337623d83d8dc4b868f242a9ad476237d6f8d1e0f168cdc",
+    "local_sha256": "c6368d87e8a1a3a5d337623d83d8dc4b868f242a9ad476237d6f8d1e0f168cdc"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Main-Regular.woff2",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Main-Regular.woff2",
+    "upstream_sha256": "c2342cd8b869e01752a9321dc17213fc40d4d04c79688c1d43f2cf316abd7866",
+    "local_sha256": "c2342cd8b869e01752a9321dc17213fc40d4d04c79688c1d43f2cf316abd7866"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Math-BoldItalic.ttf",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Math-BoldItalic.ttf",
+    "upstream_sha256": "f9377ab0271cda59af24bcffbd46a4d0c8a3572ffafdbb38de2ad5ea7b0d5ee5",
+    "local_sha256": "f9377ab0271cda59af24bcffbd46a4d0c8a3572ffafdbb38de2ad5ea7b0d5ee5"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Math-BoldItalic.woff",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Math-BoldItalic.woff",
+    "upstream_sha256": "850c0af5c2238497febaf5e461d880bf458c341f42f4f330f1b1ab5698b1998e",
+    "local_sha256": "850c0af5c2238497febaf5e461d880bf458c341f42f4f330f1b1ab5698b1998e"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Math-BoldItalic.woff2",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Math-BoldItalic.woff2",
+    "upstream_sha256": "dc47344dbb6cb5b655c8460d561f4df5f501b90c804ad3c6cec65fe322351ab1",
+    "local_sha256": "dc47344dbb6cb5b655c8460d561f4df5f501b90c804ad3c6cec65fe322351ab1"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Math-Italic.ttf",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Math-Italic.ttf",
+    "upstream_sha256": "08ce98e51b04d58945a301e639e02b6998af29fdfd61a7b8afdd07bbfc479d4a",
+    "local_sha256": "08ce98e51b04d58945a301e639e02b6998af29fdfd61a7b8afdd07bbfc479d4a"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Math-Italic.woff",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Math-Italic.woff",
+    "upstream_sha256": "8a8d244581371912b8f3f5a23e2437cb2a59cd9bcaebb0346e722c05737a2571",
+    "local_sha256": "8a8d244581371912b8f3f5a23e2437cb2a59cd9bcaebb0346e722c05737a2571"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Math-Italic.woff2",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Math-Italic.woff2",
+    "upstream_sha256": "7af58c5ec8f132a2ddde9027c6d7814decce4d3b822a11192a42a20e2e973264",
+    "local_sha256": "7af58c5ec8f132a2ddde9027c6d7814decce4d3b822a11192a42a20e2e973264"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_SansSerif-Bold.ttf",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_SansSerif-Bold.ttf",
+    "upstream_sha256": "1ece03f79f95277d57dc7f6b435a74e1379b0d46104a8530286b60ff49369ea0",
+    "local_sha256": "1ece03f79f95277d57dc7f6b435a74e1379b0d46104a8530286b60ff49369ea0"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_SansSerif-Bold.woff",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_SansSerif-Bold.woff",
+    "upstream_sha256": "ece03cfd83e22c212cdef66feb8442d25a083beb988db3f1883f3f9738d750ba",
+    "local_sha256": "ece03cfd83e22c212cdef66feb8442d25a083beb988db3f1883f3f9738d750ba"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_SansSerif-Bold.woff2",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_SansSerif-Bold.woff2",
+    "upstream_sha256": "e99ae51144bf1232efcc1bfe5add36262c6866b0faab24fa75740e1b98577a62",
+    "local_sha256": "e99ae51144bf1232efcc1bfe5add36262c6866b0faab24fa75740e1b98577a62"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_SansSerif-Italic.ttf",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_SansSerif-Italic.ttf",
+    "upstream_sha256": "3931dd81faed86ba021bb2bbdc36f5bed9a38d6b4f4077aca59b265aa1b02083",
+    "local_sha256": "3931dd81faed86ba021bb2bbdc36f5bed9a38d6b4f4077aca59b265aa1b02083"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_SansSerif-Italic.woff",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_SansSerif-Italic.woff",
+    "upstream_sha256": "91ee67500cc0129aa0ace3ac5c61ff1692102f0f31d02b69347fba35dcb75bf2",
+    "local_sha256": "91ee67500cc0129aa0ace3ac5c61ff1692102f0f31d02b69347fba35dcb75bf2"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_SansSerif-Italic.woff2",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_SansSerif-Italic.woff2",
+    "upstream_sha256": "00b26ac825e2095056396e0553b8ac26d3f8ad158c3826e28b4c45b385c4714a",
+    "local_sha256": "00b26ac825e2095056396e0553b8ac26d3f8ad158c3826e28b4c45b385c4714a"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_SansSerif-Regular.ttf",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_SansSerif-Regular.ttf",
+    "upstream_sha256": "f36ea897e19f4a2e571d1e900e4e3710e438deb05a842486045ba0a3e616a4ad",
+    "local_sha256": "f36ea897e19f4a2e571d1e900e4e3710e438deb05a842486045ba0a3e616a4ad"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_SansSerif-Regular.woff",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_SansSerif-Regular.woff",
+    "upstream_sha256": "11e4dc8a6471ff6d6ee561d53d10fde8f7489e798257ff449c5d37c197435605",
+    "local_sha256": "11e4dc8a6471ff6d6ee561d53d10fde8f7489e798257ff449c5d37c197435605"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_SansSerif-Regular.woff2",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_SansSerif-Regular.woff2",
+    "upstream_sha256": "68e8c73ef42afd3ccec58bf0fba302cce448938e7fc020a5e31f8a952eee1342",
+    "local_sha256": "68e8c73ef42afd3ccec58bf0fba302cce448938e7fc020a5e31f8a952eee1342"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Script-Regular.ttf",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Script-Regular.ttf",
+    "upstream_sha256": "1c67f068fea8bb09bf099c088b1cf64bd27516a6e07f4684344873564bb66a67",
+    "local_sha256": "1c67f068fea8bb09bf099c088b1cf64bd27516a6e07f4684344873564bb66a67"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Script-Regular.woff",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Script-Regular.woff",
+    "upstream_sha256": "d96cdf2b3bdd4d64a8fd5f74a4c467f123a8a73931cd435889f08ffaf9bf947a",
+    "local_sha256": "d96cdf2b3bdd4d64a8fd5f74a4c467f123a8a73931cd435889f08ffaf9bf947a"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Script-Regular.woff2",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Script-Regular.woff2",
+    "upstream_sha256": "036d4e95149b69ff9bcc0cd55771efeb25ffa3947293e69acd78d5ac328c684b",
+    "local_sha256": "036d4e95149b69ff9bcc0cd55771efeb25ffa3947293e69acd78d5ac328c684b"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Size1-Regular.ttf",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Size1-Regular.ttf",
+    "upstream_sha256": "95b6d2f1a50173bfedb8c63e1d1c99b10427d0a4df4201cb44513b226951a22b",
+    "local_sha256": "95b6d2f1a50173bfedb8c63e1d1c99b10427d0a4df4201cb44513b226951a22b"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Size1-Regular.woff",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Size1-Regular.woff",
+    "upstream_sha256": "c943cc986384f59e86bea5fd7dc50a9c4dfe567a7c05eb40d6790720dead97c9",
+    "local_sha256": "c943cc986384f59e86bea5fd7dc50a9c4dfe567a7c05eb40d6790720dead97c9"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Size1-Regular.woff2",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Size1-Regular.woff2",
+    "upstream_sha256": "6b47c40166b6dbe21a5dfca7718413f2147fd2399be1ba605d8ad39cedf25dfe",
+    "local_sha256": "6b47c40166b6dbe21a5dfca7718413f2147fd2399be1ba605d8ad39cedf25dfe"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Size2-Regular.ttf",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Size2-Regular.ttf",
+    "upstream_sha256": "a6b2099fb555c60e3a0db3a08842ebf1d732c6eb4e4bf44913613bed4fc4e39b",
+    "local_sha256": "a6b2099fb555c60e3a0db3a08842ebf1d732c6eb4e4bf44913613bed4fc4e39b"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Size2-Regular.woff",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Size2-Regular.woff",
+    "upstream_sha256": "2014c523c3210bcc166648c4d4cc57f05b747df07a24277bf71c51e67dc79e3d",
+    "local_sha256": "2014c523c3210bcc166648c4d4cc57f05b747df07a24277bf71c51e67dc79e3d"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Size2-Regular.woff2",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Size2-Regular.woff2",
+    "upstream_sha256": "d04c54219f9eaec6d4d4fd42dfb28785975a4794d6b2fc71e566b9cd6db842dd",
+    "local_sha256": "d04c54219f9eaec6d4d4fd42dfb28785975a4794d6b2fc71e566b9cd6db842dd"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Size3-Regular.ttf",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Size3-Regular.ttf",
+    "upstream_sha256": "500e04d54f0d51666332c9d2089aa803be22aa878eca539e59fa53c6e522b082",
+    "local_sha256": "500e04d54f0d51666332c9d2089aa803be22aa878eca539e59fa53c6e522b082"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Size3-Regular.woff",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Size3-Regular.woff",
+    "upstream_sha256": "6ab6b62e9b62dae2c00dd90f791bd10950be0ecc3490d7d6045f51c2e8fe0949",
+    "local_sha256": "6ab6b62e9b62dae2c00dd90f791bd10950be0ecc3490d7d6045f51c2e8fe0949"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Size3-Regular.woff2",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Size3-Regular.woff2",
+    "upstream_sha256": "73d591271b1604960cb10bb90fee021670af7297017e0e98480b332d11f51995",
+    "local_sha256": "73d591271b1604960cb10bb90fee021670af7297017e0e98480b332d11f51995"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Size4-Regular.ttf",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Size4-Regular.ttf",
+    "upstream_sha256": "c647367d1dd4e162468717d020e1fc0f1dc5c26ebfdffbe55261713bf88c5877",
+    "local_sha256": "c647367d1dd4e162468717d020e1fc0f1dc5c26ebfdffbe55261713bf88c5877"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Size4-Regular.woff",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Size4-Regular.woff",
+    "upstream_sha256": "99f9c6750b489c9462bf04900bd3f939df9b829339daaaaa99ef5495cdddea58",
+    "local_sha256": "99f9c6750b489c9462bf04900bd3f939df9b829339daaaaa99ef5495cdddea58"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Size4-Regular.woff2",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Size4-Regular.woff2",
+    "upstream_sha256": "a4af7d414440a1c1790825cfb700cf9cf43b0f2c4b04f0ebc523011ad9853ec0",
+    "local_sha256": "a4af7d414440a1c1790825cfb700cf9cf43b0f2c4b04f0ebc523011ad9853ec0"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Typewriter-Regular.ttf",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Typewriter-Regular.ttf",
+    "upstream_sha256": "f01f3e87d9c6a61c0c081ceb577abd864eb00a612f7ac1620dd6915fad2ef5aa",
+    "local_sha256": "f01f3e87d9c6a61c0c081ceb577abd864eb00a612f7ac1620dd6915fad2ef5aa"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Typewriter-Regular.woff",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Typewriter-Regular.woff",
+    "upstream_sha256": "e14fed02b1aba7ce9f5afd5844b5d0321b22351febc720e0de8b8723527609f7",
+    "local_sha256": "e14fed02b1aba7ce9f5afd5844b5d0321b22351febc720e0de8b8723527609f7"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/fonts/KaTeX_Typewriter-Regular.woff2",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/fonts/KaTeX_Typewriter-Regular.woff2",
+    "upstream_sha256": "71d517d67827787cfabdf186914cc3358eda539e37931941f2b2fd4a21f68c0b",
+    "local_sha256": "71d517d67827787cfabdf186914cc3358eda539e37931941f2b2fd4a21f68c0b"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/katex.css",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/katex.css",
+    "upstream_sha256": "19095127357ed6d29fe0a63a6b000c913a89f7f1963b765dd3715e97c9852e75",
+    "local_sha256": "19095127357ed6d29fe0a63a6b000c913a89f7f1963b765dd3715e97c9852e75"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/katex.js",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/katex.js",
+    "upstream_sha256": "e8d885505949f3a5f4abdd5dd0d53696bd1371ad26ffbf4f310dcd77c8cdae89",
+    "local_sha256": "e8d885505949f3a5f4abdd5dd0d53696bd1371ad26ffbf4f310dcd77c8cdae89"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/katex/math.js",
+    "path": ".deps/docs/lean-reference/-verso-data/katex/math.js",
+    "upstream_sha256": "13d9988cff8c2d27cc1a3c96454b482d30314e2b9ace27047f1e063ab30240dd",
+    "local_sha256": "13d9988cff8c2d27cc1a3c96454b482d30314e2b9ace27047f1e063ab30240dd"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/popper.min.js",
+    "path": ".deps/docs/lean-reference/-verso-data/popper.min.js",
+    "upstream_sha256": "c212f4b505a86352aed62b24a8f16f999f821ecbe6456c7f3c8a04bc87968782",
+    "local_sha256": "c212f4b505a86352aed62b24a8f16f999f821ecbe6456c7f3c8a04bc87968782"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/tippy-border.css",
+    "path": ".deps/docs/lean-reference/-verso-data/tippy-border.css",
+    "upstream_sha256": "bd2dc7de7b0177047251280a8331b7d97ed750ea00004e69981fc7de517da995",
+    "local_sha256": "bd2dc7de7b0177047251280a8331b7d97ed750ea00004e69981fc7de517da995"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-data/tippy-bundle.umd.min.js",
+    "path": ".deps/docs/lean-reference/-verso-data/tippy-bundle.umd.min.js",
+    "upstream_sha256": "3f0fe70eb26ccf28f6887a192e29d38dd7ef7c2f079a73304ad42ddc7bed37de",
+    "local_sha256": "3f0fe70eb26ccf28f6887a192e29d38dd7ef7c2f079a73304ad42ddc7bed37de"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-search/domain-display.css",
+    "path": ".deps/docs/lean-reference/-verso-search/domain-display.css",
+    "upstream_sha256": "cade3c033c995f12db22cccc7c74436b916c5c8469b7c6cff0b9961d98143b20",
+    "local_sha256": "cade3c033c995f12db22cccc7c74436b916c5c8469b7c6cff0b9961d98143b20"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-search/elasticlunr.min.js",
+    "path": ".deps/docs/lean-reference/-verso-search/elasticlunr.min.js",
+    "upstream_sha256": "e528591249f3f4f2f091f59113b51453d2fe7d062b856f62caca135e4a57d7a0",
+    "local_sha256": "e528591249f3f4f2f091f59113b51453d2fe7d062b856f62caca135e4a57d7a0"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-search/fuzzysort.min.js",
+    "path": ".deps/docs/lean-reference/-verso-search/fuzzysort.min.js",
+    "upstream_sha256": "6be6f5eeab6b0e22fab168c589daa7b9f910104c3afb939e7cd700893ccff13a",
+    "local_sha256": "6be6f5eeab6b0e22fab168c589daa7b9f910104c3afb939e7cd700893ccff13a"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-search/search-box.css",
+    "path": ".deps/docs/lean-reference/-verso-search/search-box.css",
+    "upstream_sha256": "f7c742f4b6439d1f4b027a4da1f22994939d7b34f5af6e2a260fc03497003a5e",
+    "local_sha256": "f7c742f4b6439d1f4b027a4da1f22994939d7b34f5af6e2a260fc03497003a5e"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-search/search-config.js",
+    "path": ".deps/docs/lean-reference/-verso-search/search-config.js",
+    "upstream_sha256": "a6a40563e2b23f62dc52c54a3d51d7b35b3eb2cb937745d7115a843a1737e59e",
+    "local_sha256": "a6a40563e2b23f62dc52c54a3d51d7b35b3eb2cb937745d7115a843a1737e59e"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-search/search-highlight.css",
+    "path": ".deps/docs/lean-reference/-verso-search/search-highlight.css",
+    "upstream_sha256": "b99e8b97d255b99dd1b56320227d0ce44a947e87696d424200082911df8fc8fc",
+    "local_sha256": "b99e8b97d255b99dd1b56320227d0ce44a947e87696d424200082911df8fc8fc"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-search/search-highlight.js",
+    "path": ".deps/docs/lean-reference/-verso-search/search-highlight.js",
+    "upstream_sha256": "395e1db010df24f40b1aebe4bd7269d7962d5f85bff50a0b970527d5d15d8011",
+    "local_sha256": "395e1db010df24f40b1aebe4bd7269d7962d5f85bff50a0b970527d5d15d8011"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-search/search-init.js",
+    "path": ".deps/docs/lean-reference/-verso-search/search-init.js",
+    "upstream_sha256": "28e7288c0e71766c843fc7454613496e322578771b28e691a4a0b60f4b0313b1",
+    "local_sha256": "28e7288c0e71766c843fc7454613496e322578771b28e691a4a0b60f4b0313b1"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-search/search-page.css",
+    "path": ".deps/docs/lean-reference/-verso-search/search-page.css",
+    "upstream_sha256": "6a1bd3425d469a7149ecef343ca9b339a765efcefca694787f7d57899ca40912",
+    "local_sha256": "6a1bd3425d469a7149ecef343ca9b339a765efcefca694787f7d57899ca40912"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/-verso-search/searchIndex.js",
+    "path": ".deps/docs/lean-reference/-verso-search/searchIndex.js",
+    "upstream_sha256": "03988b4bce031a85e5204b51d567c616cbfa51993503064c891a0b8144ed4809",
+    "local_sha256": "03988b4bce031a85e5204b51d567c616cbfa51993503064c891a0b8144ed4809"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Attributes/",
+    "path": ".deps/docs/lean-reference/Attributes/index.html",
+    "upstream_sha256": "b495880815f292426a28a9906ee009cd5afa1de8ef4e37062b95fa651a4a4095",
+    "local_sha256": "25f3d26e28c6472b6155e4695cec5deb05f8445a370dedc13115caf964a1722d"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Axioms/",
+    "path": ".deps/docs/lean-reference/Axioms/index.html",
+    "upstream_sha256": "be43a0f1f89324682c15201cb6fa2da662b9e366e18adcab70dd54aa65325a46",
+    "local_sha256": "6a7777229d31fc9ca2cdffb2c9df4cb2dafc995c58f692e304cd15022730cef7"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Basic-Propositions/",
+    "path": ".deps/docs/lean-reference/Basic-Propositions/index.html",
+    "upstream_sha256": "f17f8fec312625f9fb1e8503af43167a5a987bd8e68c421a2c4924942f9116c8",
+    "local_sha256": "909f91b15709ac4931525e742ac5a926bb15bc50b12c9f5a00aa67e770aeb47f"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Basic-Propositions/Logical-Connectives/",
+    "path": ".deps/docs/lean-reference/Basic-Propositions/Logical-Connectives/index.html",
+    "upstream_sha256": "c9a117ad62a456853d8e6c76369f4bfe0ec114a362c758d1b761a1857ffcc7a7",
+    "local_sha256": "a7ae7d1faa2acfee396c155b61580219b9cfd83bf57584c0b161fc9556b21f8b"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Basic-Propositions/Propositional-Equality/",
+    "path": ".deps/docs/lean-reference/Basic-Propositions/Propositional-Equality/index.html",
+    "upstream_sha256": "65c86933dd52a0127531dfeb631f0e443fd778e0933498b231b90da5adce0abd",
+    "local_sha256": "e852e193073ab7e4e9e544424c63a62d1ebce118e9d6ac5edb16c8d5f72ae164"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Basic-Propositions/Quantifiers/",
+    "path": ".deps/docs/lean-reference/Basic-Propositions/Quantifiers/index.html",
+    "upstream_sha256": "469a47f1e79075bae55286b9a321b5a948024f06cff39dfc28d9b520a2c5ed88",
+    "local_sha256": "9c7b60c0d0390e881ff6c20ed669d6834ce4117adf938a8b4bf8d9f7994461fc"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Basic-Propositions/Truth/",
+    "path": ".deps/docs/lean-reference/Basic-Propositions/Truth/index.html",
+    "upstream_sha256": "fd269975497afd6bfc11b213facd4f722a894f2cef220c1de6e07aedd401bf5f",
+    "local_sha256": "73006de4d49e868554dd8130c702708279743394fa72b5feff242d0e5582006a"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Basic-Types/",
+    "path": ".deps/docs/lean-reference/Basic-Types/index.html",
+    "upstream_sha256": "8031d50eb2ebbe657d0054b2e4a8b02f29bd1de151db096244715d17df6b9a5b",
+    "local_sha256": "09b696afc7afab36b154c6626a0d7733a167b2f760e288bc48dfbb90c85047d0"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Basic-Types/Arrays/",
+    "path": ".deps/docs/lean-reference/Basic-Types/Arrays/index.html",
+    "upstream_sha256": "d1c76d083c94826d7820e68df152aa2c543ffd3e7bdadf401dcff0287d8b2fed",
+    "local_sha256": "ca6e2171150678d61b341b16c3a68e191019d0c66547ccf8b9ce0b3a96ed3d22"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Basic-Types/Bitvectors/",
+    "path": ".deps/docs/lean-reference/Basic-Types/Bitvectors/index.html",
+    "upstream_sha256": "f59f0c488bc5267efb881b8fbffe419238e87b67dc875629069c2850979ea942",
+    "local_sha256": "513125e158516ab6f30187c2c1486c42dd45b9c4c404a0681d17e685c2bd2f91"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Basic-Types/Booleans/",
+    "path": ".deps/docs/lean-reference/Basic-Types/Booleans/index.html",
+    "upstream_sha256": "3e1c22ee4c04290fce004383ba58efb16fbc3e4143c368a47069b57a08cab863",
+    "local_sha256": "deba6556608107d4b739e239861cfecf9e9d1c7f0d09cc6b7fee7bcd554fddfe"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Basic-Types/Byte-Arrays/",
+    "path": ".deps/docs/lean-reference/Basic-Types/Byte-Arrays/index.html",
+    "upstream_sha256": "9eb6b3a622bdfa5ee2cc8292b17dc14adf581478ed8dcd7c13a72e79fd8ee756",
+    "local_sha256": "35a646f4cee7baf74af32defff0315b3c212b2a646eea04544f7474d95c21764"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Basic-Types/Characters/",
+    "path": ".deps/docs/lean-reference/Basic-Types/Characters/index.html",
+    "upstream_sha256": "ef3c43c45944e2228aef0eff913401f449b86f1cfcf7811d71cad9e7b56bc622",
+    "local_sha256": "b3649bce0e41d71b55c7a5f01f262db9301f5e2acd4099858b10b3187d225cd6"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Basic-Types/Finite-Natural-Numbers/",
+    "path": ".deps/docs/lean-reference/Basic-Types/Finite-Natural-Numbers/index.html",
+    "upstream_sha256": "d37ded3432e6fa2be71e9e4a5a529a6a864106e2189d9356012d6d82c3f7a8d2",
+    "local_sha256": "213a611453002e2f8ef54dcac3c532fbbca78491fefb452e15b9dfccc368865f"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Basic-Types/Fixed-Precision-Integers/",
+    "path": ".deps/docs/lean-reference/Basic-Types/Fixed-Precision-Integers/index.html",
+    "upstream_sha256": "46aa0f2597355a3d039da53b8fec55b99a942cd3b61ac68e68a5b514dd95182b",
+    "local_sha256": "69c54825e483eec8ee2c8324e5cb43a1a696c8391b9904369459a52909be7938"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Basic-Types/Floating-Point-Numbers/",
+    "path": ".deps/docs/lean-reference/Basic-Types/Floating-Point-Numbers/index.html",
+    "upstream_sha256": "972799ae61d44559f6cc16a8979c2214f008e5cc2d066bd4607f136b8c4f6b5e",
+    "local_sha256": "84a70154ee3b185a2a91eca031b77f80ce637243b4bba932644e5b44d0930360"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Basic-Types/Integers/",
+    "path": ".deps/docs/lean-reference/Basic-Types/Integers/index.html",
+    "upstream_sha256": "63795fcbbbc182f97ac0b8b5ddd06c9843e817ff82572d9f10220efe67eb9b62",
+    "local_sha256": "1da791091eb3f092c6574fa8d5455b514a2e109ff3ce46c72414da0eeaf558a4"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Basic-Types/Lazy-Computations/",
+    "path": ".deps/docs/lean-reference/Basic-Types/Lazy-Computations/index.html",
+    "upstream_sha256": "c38d007d7e88cad5366cac526093d8ba8568e85063125fe19c1e0e5ed47fd35b",
+    "local_sha256": "7f740421e0d3d79f820988e2039b15991a17c8df1f75fff771d4ab7781b752bc"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Basic-Types/Linked-Lists/",
+    "path": ".deps/docs/lean-reference/Basic-Types/Linked-Lists/index.html",
+    "upstream_sha256": "45caf8479f69b4894327b93dc2ad38822964dd776ef65395bd856e5f68511351",
+    "local_sha256": "bdb40fde0c0a89d6c812b119ada1be96956bafe25d877c46a9e305eea7a71b0b"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Basic-Types/Maps-and-Sets/",
+    "path": ".deps/docs/lean-reference/Basic-Types/Maps-and-Sets/index.html",
+    "upstream_sha256": "2703783938c215b76beea0ab4fd6468e81dde274b58835d947a1860ceda3a1cc",
+    "local_sha256": "aa01af346c27b1dcf65e4e8d8fb7ef7694f0ebbf5b4de38e22c0b80146de92a7"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Basic-Types/Natural-Numbers/",
+    "path": ".deps/docs/lean-reference/Basic-Types/Natural-Numbers/index.html",
+    "upstream_sha256": "edc0e912df37c27e41e9c0f17d7ea7cf31b2a4d7af05d5e17fda5d2cd0ea537f",
+    "local_sha256": "ca94c40e4c321c061e767d2b937aac24b4f369bd6e46c76cb04f13e824d71f83"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Basic-Types/Optional-Values/",
+    "path": ".deps/docs/lean-reference/Basic-Types/Optional-Values/index.html",
+    "upstream_sha256": "68d982faab9bd815fd988d9d302efb33e4fefde86af0ce8bcfabbaa3977bd163",
+    "local_sha256": "f109698815950eb7500278a727954b2e95c1d52fe1a6945a8912e7aeb7337999"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Basic-Types/Ranges/",
+    "path": ".deps/docs/lean-reference/Basic-Types/Ranges/index.html",
+    "upstream_sha256": "258740b9fd47248244dd1161b4c69b1017b1f981c492329a2db42cff32f42d2c",
+    "local_sha256": "3ed9fe69fca11864d451d0ecd25390897e75df0a45ae23c680d1cd4ab328aab4"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Basic-Types/Strings/",
+    "path": ".deps/docs/lean-reference/Basic-Types/Strings/index.html",
+    "upstream_sha256": "fa8d4102bcacfaa93ea6dfae3f70e84616d02672d8be5e1cd486110375309d40",
+    "local_sha256": "f29974a960cfb4376a1192c555c4caf66a163af11d12b62ef4be4dee4c581f2f"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Basic-Types/Subtypes/",
+    "path": ".deps/docs/lean-reference/Basic-Types/Subtypes/index.html",
+    "upstream_sha256": "6aa804622eaed01b77ec5436a12302cbd00590b9c1260df0f558ba0ca2a83f3d",
+    "local_sha256": "dd947a2e497e820dab9495bfd59d9c02f4d016131b856cade6a905cb20efeec6"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Basic-Types/Sum-Types/",
+    "path": ".deps/docs/lean-reference/Basic-Types/Sum-Types/index.html",
+    "upstream_sha256": "ab04e98c7bdff9aeaaf616ade91e1acc72050911854648b2b03074df10eb9e8c",
+    "local_sha256": "d8404ae6b26f77b20b4c1f791ac8c818032eb0df9876209b12defdd4d437daa3"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Basic-Types/The-Empty-Type/",
+    "path": ".deps/docs/lean-reference/Basic-Types/The-Empty-Type/index.html",
+    "upstream_sha256": "39ce9afdc377063c24589ba6132b01574f0f346263fdb6fa465f2e35b3ac79d0",
+    "local_sha256": "a3bdac6ccfba7ab687579a5158ae721a078b94489d73e2a8c4af565120312008"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Basic-Types/The-Unit-Type/",
+    "path": ".deps/docs/lean-reference/Basic-Types/The-Unit-Type/index.html",
+    "upstream_sha256": "d28e984960660befdb55b03dae112836e938d65318f8bd75befb7753ea298491",
+    "local_sha256": "38f4bebea3e55b9921c5c6b4613e5c191b31ae29dc4c32b6a52c1aa66afeaa05"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Basic-Types/Tuples/",
+    "path": ".deps/docs/lean-reference/Basic-Types/Tuples/index.html",
+    "upstream_sha256": "78d97c3003ce3cff313afdc6c86dab86a123b1d0ef76dbe7c244c8038b7c561e",
+    "local_sha256": "73cea9b7d21ece047168c46129bb72985636f02e6cebc0c75fba03947092b854"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Build-Tools-and-Distribution/",
+    "path": ".deps/docs/lean-reference/Build-Tools-and-Distribution/index.html",
+    "upstream_sha256": "cdde6e2c03972d280e5ccdc1e013091a088b714548447a649c59a462756fe2b6",
+    "local_sha256": "a93aa07439a0d49950aecb57806d99803b65c8e7c2748e22240d8a3deea615e3"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Build-Tools-and-Distribution/Lake/",
+    "path": ".deps/docs/lean-reference/Build-Tools-and-Distribution/Lake/index.html",
+    "upstream_sha256": "5442a44907726df608cd556f470c88910bd485631f64743d73e67e59d610e376",
+    "local_sha256": "98b6845377463805a9d37ae6621250a17d1d42bda412ae1b9924f0a1e2212065"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Build-Tools-and-Distribution/Managing-Toolchains-with-Elan/",
+    "path": ".deps/docs/lean-reference/Build-Tools-and-Distribution/Managing-Toolchains-with-Elan/index.html",
+    "upstream_sha256": "9a6965430e79cabd73e4f467897f5fd6a054a6482619b1cfcce5c12395c8b7bc",
+    "local_sha256": "78875e4ded9f8896de2c72402385452f0559912efb7dea73d9e61c29807e8322"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Coercions/",
+    "path": ".deps/docs/lean-reference/Coercions/index.html",
+    "upstream_sha256": "f46990517568ce1b9629d6a0da1db236419925952550a75c61016552f7ec813f",
+    "local_sha256": "20b66e05c4cf9c21d5d5812c75852cdc3a4db0cabc63743c9a129141afd03f1d"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Coercions/Coercing-Between-Types/",
+    "path": ".deps/docs/lean-reference/Coercions/Coercing-Between-Types/index.html",
+    "upstream_sha256": "fc3ef1e9a260f46504d488cc74d48a45ba86b1ceab40a48f9b00fe2ecfbf32f9",
+    "local_sha256": "e2b4e45b695ef7f30dd9235e28dac542ad7a8502b67012c07503341e33778667"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Coercions/Coercing-to-Function-Types/",
+    "path": ".deps/docs/lean-reference/Coercions/Coercing-to-Function-Types/index.html",
+    "upstream_sha256": "6f7336547eb2ce5483d5207b03e2f6fcbeea3acde5299f450acb3735941d8cc1",
+    "local_sha256": "928091c7b0d1085dc73d9f71712d245e1ebdec525956fc53f3adc98bce4ccf07"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Coercions/Coercing-to-Sorts/",
+    "path": ".deps/docs/lean-reference/Coercions/Coercing-to-Sorts/index.html",
+    "upstream_sha256": "1384b79fef94271e70b6f9a212144185bf0966cbd5e330fedef513fc02337e8b",
+    "local_sha256": "dd06ffc363113e09e4629abe72a3da0509d4b64b21301d682bde39e918cacc49"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Coercions/Coercion-Insertion/",
+    "path": ".deps/docs/lean-reference/Coercions/Coercion-Insertion/index.html",
+    "upstream_sha256": "674e7f4c2aefa8a46da1b0a3ec9837bc286989eee57d84bfefb966268caf078a",
+    "local_sha256": "e3ab480016b7f6bfafaf37933de4ab4b9d6d215753382ea5f878cc5203d29d03"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Coercions/Implementation-Details/",
+    "path": ".deps/docs/lean-reference/Coercions/Implementation-Details/index.html",
+    "upstream_sha256": "d9f754c82cba895b1ad17a099f3d2f4884f7ba543ea7a9b7d3ae80693d13da5d",
+    "local_sha256": "908f4dae3a18019a096cd2d0a2f1b7ade8807b86ff5cb4be7e6dc924d51b7860"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Definitions/",
+    "path": ".deps/docs/lean-reference/Definitions/index.html",
+    "upstream_sha256": "9f9180d2a538e4a7f30a4c78efe2e8499c79b816d81b09562b27fbde7a292faa",
+    "local_sha256": "2a77520189b7b0eec558283d80dcac0c854ae825cb97ef46658e4ce6bac01e41"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Definitions/Definitions/",
+    "path": ".deps/docs/lean-reference/Definitions/Definitions/index.html",
+    "upstream_sha256": "61e59abf28886b04a822f03e125a116b65d989563a2a8b0def40ef105f8011fc",
+    "local_sha256": "643888c56fce00d56a23ab7007ab49ea22642689aa7833ff0778dc80ef87bf5e"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Definitions/Example-Declarations/",
+    "path": ".deps/docs/lean-reference/Definitions/Example-Declarations/index.html",
+    "upstream_sha256": "16995a20c5f1b6e2eb6dde5a4ae06e2ec84e5b6c6b1a2a01e7748848e6a95695",
+    "local_sha256": "77dc3ae9b0b476eefd7be42bbc2da127f35b8e21a73c40ec0852da9630dad375"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Definitions/Headers-and-Signatures/",
+    "path": ".deps/docs/lean-reference/Definitions/Headers-and-Signatures/index.html",
+    "upstream_sha256": "7cb161310ddcf27c1ee987e68e4a60127b09539034c9ea8f3c8403a3d2fef5f9",
+    "local_sha256": "1a32b9dbc252cdb3e7a61d9eb5c4e8b9d89023e6692f0c278b7640e377fe418e"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Definitions/Modifiers/",
+    "path": ".deps/docs/lean-reference/Definitions/Modifiers/index.html",
+    "upstream_sha256": "3ed3907e7c65c43300fb305aab90a838e8a079acc18ac370720e9610a40fd68b",
+    "local_sha256": "ad8725644496e7a67f4ee9aeb3aaea0a9216230990633d46877c402b3d486ea1"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Definitions/Recursive-Definitions/",
+    "path": ".deps/docs/lean-reference/Definitions/Recursive-Definitions/index.html",
+    "upstream_sha256": "1a8e5b80937e880304bd5239d0daa0090c6406378839fb0cd2af7701b96ae4f2",
+    "local_sha256": "9e3042becfaebfb18af391d22f6baed54357ce4d5fc636938c4f35c1245eebe4"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Definitions/Theorems/",
+    "path": ".deps/docs/lean-reference/Definitions/Theorems/index.html",
+    "upstream_sha256": "59a38e345d9d365d4a69205631eb122193dadb1b13e6dffd0cc61f9ec05a4a2e",
+    "local_sha256": "02a8c7b8ac1310f2b792bf8450c7411884d20e6b7062e617383c24075b36491a"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Elaboration-and-Compilation/",
+    "path": ".deps/docs/lean-reference/Elaboration-and-Compilation/index.html",
+    "upstream_sha256": "5006c087b4e641d81fcbd62bca732145f4c3f56feb3909d889d71b1bcfb6acf9",
+    "local_sha256": "db9db08587a4edcc62debad38eecfa819e60f1febbeb5cda804f784d7c85be9a"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Error-Explanations/",
+    "path": ".deps/docs/lean-reference/Error-Explanations/index.html",
+    "upstream_sha256": "d5891a27f21f148e8bd67d40ceaf077490ae1b6ab7985af7dcbaad241a5e34bd",
+    "local_sha256": "ede07130181f17ca7c12f5305e766aea5d580676b1b241ece9572d88d710fe73"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Error-Explanations/About___--ctorResultingTypeMismatch/",
+    "path": ".deps/docs/lean-reference/Error-Explanations/About___--ctorResultingTypeMismatch/index.html",
+    "upstream_sha256": "b9e139303f744544e6b4608f506b057632c1290ed09e70ef39c6b49b975288be",
+    "local_sha256": "97d7a2fcee488b634cf4cb2e4092afd5653cbb46dfb11a395b105ed046edc467"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Error-Explanations/About___--dependsOnNoncomputable/",
+    "path": ".deps/docs/lean-reference/Error-Explanations/About___--dependsOnNoncomputable/index.html",
+    "upstream_sha256": "575cfaec731305aa1c94974ab45ad3ab04b91e8defa840f11c185b791daed9ec",
+    "local_sha256": "dc1b207767c4d3b09ab34250e37fc09454f243049db6e68ecf5244c193c7644e"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Error-Explanations/About___--inductionWithNoAlts/",
+    "path": ".deps/docs/lean-reference/Error-Explanations/About___--inductionWithNoAlts/index.html",
+    "upstream_sha256": "a11ace4007df8a02cdf0918f4410cca4636fa7ee2df14280abe8583054525681",
+    "local_sha256": "ac5330451bc5d872ffeabb6a8176754d9eeddb6a1c52213be4af0557f77aa406"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Error-Explanations/About___--inductiveParamMismatch/",
+    "path": ".deps/docs/lean-reference/Error-Explanations/About___--inductiveParamMismatch/index.html",
+    "upstream_sha256": "a14831cd6ea95f0f95dbf5706d52debe2452927df5ec688142f2e5d64c90994a",
+    "local_sha256": "2b7418cf25ae47a57b6e7be449302dd190c0589c3c86d996891368811efe2c27"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Error-Explanations/About___--inductiveParamMissing/",
+    "path": ".deps/docs/lean-reference/Error-Explanations/About___--inductiveParamMissing/index.html",
+    "upstream_sha256": "4a60d67177505076a77258cd24fbb53e67f9b9e5eaca563313efce0f37fd6bac",
+    "local_sha256": "17756ccceae2ac644e1254a7e61c0356a31b39c6a104e14544499805125f1d4c"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Error-Explanations/About___--inferBinderTypeFailed/",
+    "path": ".deps/docs/lean-reference/Error-Explanations/About___--inferBinderTypeFailed/index.html",
+    "upstream_sha256": "9f00f34a484ff516e91adf66d0a8603007fe7ea2144c340497d11d5355eafbb7",
+    "local_sha256": "13aa76351192207d90460c7204d3e2b52567bf85061050972707e1325d4e3b7d"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Error-Explanations/About___--inferDefTypeFailed/",
+    "path": ".deps/docs/lean-reference/Error-Explanations/About___--inferDefTypeFailed/index.html",
+    "upstream_sha256": "733aff2dc70347a444f8ea49969b2609f7ba5976c28b58774cdbe7fb8e8c4f01",
+    "local_sha256": "99caa03d42cdd2873d7cc5dcd9a25df8a8b7b78315b98046f4d3c5dfd8f4fd87"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Error-Explanations/About___--invalidDottedIdent/",
+    "path": ".deps/docs/lean-reference/Error-Explanations/About___--invalidDottedIdent/index.html",
+    "upstream_sha256": "ea870089668c239d031654e7ce7455412a6344f152f691368561aa4eeba0eaf7",
+    "local_sha256": "70133e99f7c15c16aba1a3242ee025ffcd75b39a1a363f90fb3a600d509142bb"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Error-Explanations/About___--invalidField/",
+    "path": ".deps/docs/lean-reference/Error-Explanations/About___--invalidField/index.html",
+    "upstream_sha256": "42075f6279ae9831d7eb3d674f009d1d04a8db7e8493692c65402ab441cdda2b",
+    "local_sha256": "554c24df1e9db8164aaedf276a5658272c6acc77cb6632065a47b47c6f9471c0"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Error-Explanations/About___--projNonPropFromProp/",
+    "path": ".deps/docs/lean-reference/Error-Explanations/About___--projNonPropFromProp/index.html",
+    "upstream_sha256": "0c87b088f07f6b3983c07168d0cc7356133c824a4ad9d26088c2e01b882f55c0",
+    "local_sha256": "135089bf445a209c96b741d7bfa417f8cf0e22432d98e64a93bd5f849061af78"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Error-Explanations/About___--propRecLargeElim/",
+    "path": ".deps/docs/lean-reference/Error-Explanations/About___--propRecLargeElim/index.html",
+    "upstream_sha256": "0776908b2a43044c387521c7a1a5eb43ea50fb8e62fe8d247413660149bf5ef2",
+    "local_sha256": "9411f2c2358a452f1a0cbfa219a62f40ea89638abce88d4d1004858f2ea76fc3"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Error-Explanations/About___--redundantMatchAlt/",
+    "path": ".deps/docs/lean-reference/Error-Explanations/About___--redundantMatchAlt/index.html",
+    "upstream_sha256": "0bceef993341cbfa2c46d5eff0e410e19314b650ca5fb923cc3bfaa0c8b24b3f",
+    "local_sha256": "a2c65d6dbbaca77302765370a00656daa0aed8d8d82c146f650bc6e15b66aaa4"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Error-Explanations/About___--synthInstanceFailed/",
+    "path": ".deps/docs/lean-reference/Error-Explanations/About___--synthInstanceFailed/index.html",
+    "upstream_sha256": "657df3c9f0164e4c81b02ea702941c92e1bbb7075c9fbe467126870c10484c1f",
+    "local_sha256": "f229d3f436277c448e8c6ce73febe47ae0cd73872be53ed0b1725bb6c2ad2a88"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Error-Explanations/About___--unknownIdentifier/",
+    "path": ".deps/docs/lean-reference/Error-Explanations/About___--unknownIdentifier/index.html",
+    "upstream_sha256": "ccdf67eaa23e2a65c9616edb54b4ed59d434d28f525edf4bfbe64ee372e941b3",
+    "local_sha256": "5ea6e6d5de940a9e80668fa1b5298486ee8075afeb24f88dc04bd8f733702316"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Functors___-Monads-and--do--Notation/",
+    "path": ".deps/docs/lean-reference/Functors___-Monads-and--do--Notation/index.html",
+    "upstream_sha256": "d5c66a97e96f3916ebbc0cd2fb9da8aa6a34c4da4f825e20b6f042a3453e9af0",
+    "local_sha256": "99f7a060861fb17c59268d8c8c4aa28e9b10cd861afaca1473d730f39196f245"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Functors___-Monads-and--do--Notation/API-Reference/",
+    "path": ".deps/docs/lean-reference/Functors___-Monads-and--do--Notation/API-Reference/index.html",
+    "upstream_sha256": "84201435a22b0b2e5578a8dcdd7d531682acaa8e139d584d1919e37bfff279db",
+    "local_sha256": "2ad7518233664bf91125fe3421ed666914cb79f46fe578cd88c725bc8cdb8c25"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Functors___-Monads-and--do--Notation/Laws/",
+    "path": ".deps/docs/lean-reference/Functors___-Monads-and--do--Notation/Laws/index.html",
+    "upstream_sha256": "34165d54c746d26a071a8132cadee4055a27fe3633ae977bcd01d6cc4b91ba11",
+    "local_sha256": "4090e17e6294fe8c8561c00443cd3eed7a658a784b4dce174e1d47d021e9ced4"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Functors___-Monads-and--do--Notation/Lifting-Monads/",
+    "path": ".deps/docs/lean-reference/Functors___-Monads-and--do--Notation/Lifting-Monads/index.html",
+    "upstream_sha256": "a3aa1d031ef204d86d6ecd8b82b33989f78769990d0a774019c13aabed43b74a",
+    "local_sha256": "8ac6644a7c1f42f4a175b31715a689f38998999b4b417df0ed18654e5138b084"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Functors___-Monads-and--do--Notation/Syntax/",
+    "path": ".deps/docs/lean-reference/Functors___-Monads-and--do--Notation/Syntax/index.html",
+    "upstream_sha256": "6927d00a5f9f073863d530f242d34a9d374e4f417e9c8f5cc416937760c3ab27",
+    "local_sha256": "cf6216e32f4f07732600dfe58328db0c0506d2e9391f841e9ce18214bb527fc9"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Functors___-Monads-and--do--Notation/Varieties-of-Monads/",
+    "path": ".deps/docs/lean-reference/Functors___-Monads-and--do--Notation/Varieties-of-Monads/index.html",
+    "upstream_sha256": "510acb318f67f750e02fd986412bbe71fd298ab7735822f7e99aef7af1975e9d",
+    "local_sha256": "981b8b010b08a51e68142f3989ceca9b6ecf036e8ba06cc165bf177af696e18e"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/IO/",
+    "path": ".deps/docs/lean-reference/IO/index.html",
+    "upstream_sha256": "e44afa0bfa4a278119388d90cf9601a05aca91237fdd7c943554667598c57ec5",
+    "local_sha256": "08ca7ee9c7eb45f6eada0afc59ba543fdc6ac7966001cda20e3e7188c155180d"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/IO/Console-Output/",
+    "path": ".deps/docs/lean-reference/IO/Console-Output/index.html",
+    "upstream_sha256": "d933993c0a1483caa4c9e262d417582a17010bada12ab0053fb49ab764b4eb89",
+    "local_sha256": "7ec26a4e9f5668e25f82883303c66f050398260cdb303962728a743e3830d0a8"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/IO/Control-Structures/",
+    "path": ".deps/docs/lean-reference/IO/Control-Structures/index.html",
+    "upstream_sha256": "1c72fe7277b2d7ba4c823b0931b6e26f4b28c3830b77139ac1ceb0777c688062",
+    "local_sha256": "a9e1f4ee6bc516fc659bb68b8d60fe9814827cb09db415e76e108fe8e48f48e5"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/IO/Environment-Variables/",
+    "path": ".deps/docs/lean-reference/IO/Environment-Variables/index.html",
+    "upstream_sha256": "99c4689f0baeb7aa0839e4862c77ed94d3048a2f6a5f439d109e4b0dc5b16742",
+    "local_sha256": "13c9131db3e9b4e79c1d7e1b3ad8c49098ff5ff12716c5671355d8c2cb66a788"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/IO/Files___-File-Handles___-and-Streams/",
+    "path": ".deps/docs/lean-reference/IO/Files___-File-Handles___-and-Streams/index.html",
+    "upstream_sha256": "3a2bb154a00bc5165eeb41e529cc247a98e56c6457166fb5460b4b3e09a90d72",
+    "local_sha256": "b1e061f19f6f39213ba9188e6c9dac7ac6d97a4479f0302e3c4a94e8065617aa"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/IO/Logical-Model/",
+    "path": ".deps/docs/lean-reference/IO/Logical-Model/index.html",
+    "upstream_sha256": "60ec0f09af2db30d7d619b8a29a96dfddcc2e9fed9ceb679750a582c81cf73a1",
+    "local_sha256": "76c616e0ec66f91e41af616b239363f53c472b11bd23c19e5550870f2a394fc2"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/IO/Mutable-References/",
+    "path": ".deps/docs/lean-reference/IO/Mutable-References/index.html",
+    "upstream_sha256": "be96cf0228bdeab61a5c34212cd8ca71055f532df0d675722944eacaf9af015c",
+    "local_sha256": "cbd442405c94a4f129e46c28b9d14749df51c24d0721e47a8339f96926bbc597"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/IO/Processes/",
+    "path": ".deps/docs/lean-reference/IO/Processes/index.html",
+    "upstream_sha256": "d6f97d6919dbd8d01021937874ac468c860169e2be86c3d0d9508984219d03a4",
+    "local_sha256": "13eddf41d59c77fa702693a05734080ef50b0157ed4a9e86b96d91e439917701"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/IO/Random-Numbers/",
+    "path": ".deps/docs/lean-reference/IO/Random-Numbers/index.html",
+    "upstream_sha256": "b285cfd5314136ab852d5a436b315a99f695aff0190aeb8cc0bbd2bc465b692e",
+    "local_sha256": "f7b74630e8684b96c2dbf0511a4abc4e4c59202d6ee12d3710fc2db8386c7608"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/IO/System-and-Platform-Information/",
+    "path": ".deps/docs/lean-reference/IO/System-and-Platform-Information/index.html",
+    "upstream_sha256": "ddf618074f9f42c8029717e74f57276a2afccf3bb11c2fa00e964d5f9f83680a",
+    "local_sha256": "ee04ddb3d0d338001e047a9630a5573caa2517cf24ddad93cabf2ba8b6f9b06e"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/IO/Tasks-and-Threads/",
+    "path": ".deps/docs/lean-reference/IO/Tasks-and-Threads/index.html",
+    "upstream_sha256": "e97ef1c7c460194f9d4c08d4725b72c5482d43145c00729da55c6cf7143a9df4",
+    "local_sha256": "d27cafb1049937e86ddf2bd14021efc59709ad332a1c51854348cc7e8214d020"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/IO/Timing/",
+    "path": ".deps/docs/lean-reference/IO/Timing/index.html",
+    "upstream_sha256": "4f8031db8d4c34752d7984c07d87585520f794941d6def09e773284b46475d06",
+    "local_sha256": "4eb0cc3248f721e96b04fbf1b3c69842434943478015753547ccdcf9b60fa8ea"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Interacting-with-Lean/",
+    "path": ".deps/docs/lean-reference/Interacting-with-Lean/index.html",
+    "upstream_sha256": "8579278dd5e4e8b8fc5f0746ab34b0739f26c339a39b635801d0ac0bd18e9010",
+    "local_sha256": "38b270b26c0ecce9f581c93cfca365cb95fc7b1c4b8e900922b886a2ae7a9a40"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Introduction/",
+    "path": ".deps/docs/lean-reference/Introduction/index.html",
+    "upstream_sha256": "02182a9cdcf105f1a6fda53606ae7e3b960c975adfc4335353880a544d00b925",
+    "local_sha256": "a1b307be25e6577efbf517ff4b16fbe390d6c8f30b35e14e5f67ceee2b204ad3"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Iterators/",
+    "path": ".deps/docs/lean-reference/Iterators/index.html",
+    "upstream_sha256": "4651b4802b82ebaf5bc988584c552068a30d1f3a396816c4b74bbc857302c230",
+    "local_sha256": "80c48dd475ed12ed9022341c7ea8d41f2cd5a038b8e67128bc588211a23eabd6"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Iterators/Consuming-Iterators/",
+    "path": ".deps/docs/lean-reference/Iterators/Consuming-Iterators/index.html",
+    "upstream_sha256": "19fca132712810398cb4a9eb2b26d85da238e148a07c3910f46ecb581553497e",
+    "local_sha256": "3ba0f6acef3ff6e7f86c6b80624769a8a4ef0240982ebb6125d60afc5e8da1e4"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Iterators/Iterator-Combinators/",
+    "path": ".deps/docs/lean-reference/Iterators/Iterator-Combinators/index.html",
+    "upstream_sha256": "c1e53961803df4937685b07bd47362f6e72eb96e7cab715e860186d1867609bd",
+    "local_sha256": "b243ab100b78fc51a3c0a1a0e315c84fad1914fd99c76885ce1907b576878e3c"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Iterators/Iterator-Definitions/",
+    "path": ".deps/docs/lean-reference/Iterators/Iterator-Definitions/index.html",
+    "upstream_sha256": "c2adf66d7dcf4b4fd3e7021cf5a565f87ba81ff3a84c979ebdd85a8d410b138c",
+    "local_sha256": "008b01e833e7d1042cd22a6a0f83f343efe316b267807c2c5e9781d77681ab00"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Iterators/Reasoning-About-Iterators/",
+    "path": ".deps/docs/lean-reference/Iterators/Reasoning-About-Iterators/index.html",
+    "upstream_sha256": "59e3f0a8312fe25da4688ae1bd82fc122b275520c8de32ce8a772ad4abb3ab6c",
+    "local_sha256": "094287cffb348c923a4eb7708458d979f0f8a732d83392fd939760a10f7e140e"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Iterators/Run-Time-Considerations/",
+    "path": ".deps/docs/lean-reference/Iterators/Run-Time-Considerations/index.html",
+    "upstream_sha256": "0e61e90601aa71fef1ef63ea52a8fe37460a5a5a03839130f05cccf08811bd73",
+    "local_sha256": "3b80898a930f19f9ceada5ba74f8b4ac2dc62a94747231f1c08d8bc60f4aad9c"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Namespaces-and-Sections/",
+    "path": ".deps/docs/lean-reference/Namespaces-and-Sections/index.html",
+    "upstream_sha256": "8d5804f6fc78a2cc78f3e5ab7c3a243a4393e46acbbf69b31b95e4afc6bd344d",
+    "local_sha256": "ec9edef15b670125f373c0c2f92790b02cb1f975643953d3abeef2831d080282"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Notations-and-Macros/",
+    "path": ".deps/docs/lean-reference/Notations-and-Macros/index.html",
+    "upstream_sha256": "0ac517ed8fe3312296b57808f5677b32c8b6c6afcafe22d1a26e7f07c773481b",
+    "local_sha256": "1ac4757f6606967acda9ec0bb67e16d9340cfef9ee613cd29e8a5040786a95ff"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Notations-and-Macros/Custom-Operators/",
+    "path": ".deps/docs/lean-reference/Notations-and-Macros/Custom-Operators/index.html",
+    "upstream_sha256": "037f718e090a57166ddd81bca5f8c43bc2482525dee6ad6921e23d73645655d5",
+    "local_sha256": "2c886237893a6afd46d6878494132b02ada0765d4fc3c5feb0465a9b21089b76"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Notations-and-Macros/Defining-New-Syntax/",
+    "path": ".deps/docs/lean-reference/Notations-and-Macros/Defining-New-Syntax/index.html",
+    "upstream_sha256": "1759d1d00320a7b107edbb63ed8549ea18e4c4e80434bdefd01a3f362eb7cf43",
+    "local_sha256": "13afbd2af9bff7fc66b819358469031828ccb04ca92238abfdc38ebc37218358"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Notations-and-Macros/Elaborators/",
+    "path": ".deps/docs/lean-reference/Notations-and-Macros/Elaborators/index.html",
+    "upstream_sha256": "8073df0fefaae738514aed65140cdafe3417361428977bfe8e2ca2a058bab821",
+    "local_sha256": "aff7a32650e7211f2c266d52c9f6de68732a831ba1efcc2808eb3f3ede53f035"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Notations-and-Macros/Extending--do--Notation/",
+    "path": ".deps/docs/lean-reference/Notations-and-Macros/Extending--do--Notation/index.html",
+    "upstream_sha256": "a15cd7d5938e4135e34e21381694077afc57aed3bf8d736fcffe1754b433da78",
+    "local_sha256": "8ccfc3d15e86a07b90bb6537d414b3a9fc1be1291f97b06dc7b3fe33f7f8ea94"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Notations-and-Macros/Extending-Lean___s-Output/",
+    "path": ".deps/docs/lean-reference/Notations-and-Macros/Extending-Lean___s-Output/index.html",
+    "upstream_sha256": "f142c097441ccd5e3d7f17daceee04346a501a617ae5de91a3b7049d5aff5ff1",
+    "local_sha256": "f35fe5066aef70a7bb86e703e6632453d8f1093680c5d6217f6ed95fee74b99c"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Notations-and-Macros/Macros/",
+    "path": ".deps/docs/lean-reference/Notations-and-Macros/Macros/index.html",
+    "upstream_sha256": "8b95c091ccd92d45c8761e3057a523a3720b4049c9be2fa9342eb6105245c066",
+    "local_sha256": "dbc1a61fc6d896ec43ebe1d6c8b718d7a94d9ee58876e4a25306615a66953e12"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Notations-and-Macros/Notations/",
+    "path": ".deps/docs/lean-reference/Notations-and-Macros/Notations/index.html",
+    "upstream_sha256": "6ac3b21ae9b250c1c2ea99dbd5fe92d65bc3f2b5146b04a83f9cd7cce7be33a5",
+    "local_sha256": "a303c845082fea9c962411a019cfbec87311af7eed4b40075ce3c06f64b0e4bb"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Notations-and-Macros/Precedence/",
+    "path": ".deps/docs/lean-reference/Notations-and-Macros/Precedence/index.html",
+    "upstream_sha256": "3405af2672b9f0b0712c82517e7401cf3204d25ee6cb7d2f029e58cfcae8001c",
+    "local_sha256": "2502329cf6c7a9b1ae65351aafe81cb0aaf151b4567b9af7969a6d93b022a6aa"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Run-Time-Code/",
+    "path": ".deps/docs/lean-reference/Run-Time-Code/index.html",
+    "upstream_sha256": "bb57a8070b014d013d64c9fadc80cadaea5ed64574a457c3c6a15727b6416903",
+    "local_sha256": "b69d6e80ba95606d5b7f898cfc56a70847283d1bafb08b7478f284213d459025"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Run-Time-Code/Boxing/",
+    "path": ".deps/docs/lean-reference/Run-Time-Code/Boxing/index.html",
+    "upstream_sha256": "2dc0174a8ea7a22a2440454c0f3fd74fe5f54b746709c5c17568fd54b56670a4",
+    "local_sha256": "ff48d2819b2cd772320d96a422dffcf3a09255fb70120a9eca6aa5924b8e7c83"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Run-Time-Code/Foreign-Function-Interface/",
+    "path": ".deps/docs/lean-reference/Run-Time-Code/Foreign-Function-Interface/index.html",
+    "upstream_sha256": "9d150a6f34d00b187c052736d054f7f3363edf75a95012bd3bcaf2acabd6d048",
+    "local_sha256": "3aff2e7f73cdaca4ed2fe9db48769faffd46eb4e4b7bb656e8146c66e00157a9"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Run-Time-Code/Multi-Threaded-Execution/",
+    "path": ".deps/docs/lean-reference/Run-Time-Code/Multi-Threaded-Execution/index.html",
+    "upstream_sha256": "5497cbae73c1ae7e17e155e6e59becb53d93119b433e6f3838da1b84aa209936",
+    "local_sha256": "38ffe22e32e7bfeee3bc29775ea6c799677249af7bca68e8556ccb192c8cd6ef"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Run-Time-Code/Reference-Counting/",
+    "path": ".deps/docs/lean-reference/Run-Time-Code/Reference-Counting/index.html",
+    "upstream_sha256": "13cab424424f3d1e5513c1e090e27096c5d3a34f13ef4e29f20ad1bb35ad67d8",
+    "local_sha256": "82285bc59d4a379fea499ca4743305c5601efcb50b64a0e4b504317d39cb6542"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Source-Files-and-Modules/",
+    "path": ".deps/docs/lean-reference/Source-Files-and-Modules/index.html",
+    "upstream_sha256": "4674a45ea65ff75143f0df0c893d882732a5eb2472fb2d550a938eaa817910be",
+    "local_sha256": "1529072ec6e064a633d3d37d79ac96038dfb955417b2b9108e001937327036da"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Tactic-Proofs/",
+    "path": ".deps/docs/lean-reference/Tactic-Proofs/index.html",
+    "upstream_sha256": "15ec3b8a94922a4f95d94a3e11688bb13dece690a01eab051a83c0da09ef7339",
+    "local_sha256": "ece4b848a143d209036e299c2555f8f95f6b0bdd8dd5caf3655070a500ca0803"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Tactic-Proofs/Custom-Tactics/",
+    "path": ".deps/docs/lean-reference/Tactic-Proofs/Custom-Tactics/index.html",
+    "upstream_sha256": "267a2707fdd8c48e6a2e2e940432caec6ff62e6914bdfa84916cd5ce82410482",
+    "local_sha256": "3b32c832dacd16acce0ab4f9512f6514056198eb53483a2984249176f48f4bd0"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Tactic-Proofs/Naming-Bound-Variables/",
+    "path": ".deps/docs/lean-reference/Tactic-Proofs/Naming-Bound-Variables/index.html",
+    "upstream_sha256": "38ccc54ca706685b9b43809ca863edc946803d421710a10162f84eb07c0ecb3b",
+    "local_sha256": "d60248d8881d90345addb53d5c2b59b3897d682d90898582ba13e8ea4e208f72"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Tactic-Proofs/Options/",
+    "path": ".deps/docs/lean-reference/Tactic-Proofs/Options/index.html",
+    "upstream_sha256": "c4c35ebbc18a7f6e7a97ac885676e4468420ed5e7948bec2a42b7041beb4fc93",
+    "local_sha256": "2e302b89cd78fb6d62c904b826b2959f662f4228b9422f316e8d9f40c4b078ff"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Tactic-Proofs/Reading-Proof-States/",
+    "path": ".deps/docs/lean-reference/Tactic-Proofs/Reading-Proof-States/index.html",
+    "upstream_sha256": "d7dd2d5d913b5fc1ba90b0d4c0a2fc5bc0f3cd0576445386399bf28726a4aed8",
+    "local_sha256": "ed8c30a404825519b9f91702e0437e6f6bbad7e2df20512cdae858ebb8ae4e04"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Tactic-Proofs/Running-Tactics/",
+    "path": ".deps/docs/lean-reference/Tactic-Proofs/Running-Tactics/index.html",
+    "upstream_sha256": "ca70cbd1765dd24eadf107c42ea8e2ba74e7653435c8be2179c04a1cb42f1972",
+    "local_sha256": "a9617c0cc13405e51435d2f3479f13aae264223e7bedb2878cc8662bf6b9dded"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Tactic-Proofs/Tactic-Reference/",
+    "path": ".deps/docs/lean-reference/Tactic-Proofs/Tactic-Reference/index.html",
+    "upstream_sha256": "6874efa76a2c2cc0e539eb5f6c8a6a086ff4332f5d00b263f2be0b703e35a157",
+    "local_sha256": "a84f05ee5d346b453a707fdaff2e7989e2c0a8699ed1e1227211be50dc943bac"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Tactic-Proofs/Targeted-Rewriting-with--conv/",
+    "path": ".deps/docs/lean-reference/Tactic-Proofs/Targeted-Rewriting-with--conv/index.html",
+    "upstream_sha256": "971f6fec60eef82868e7f7adb605dc0e7713728751f8e7dd427b485cc9305102",
+    "local_sha256": "f5e727c17cd0a6649521d35aa8b93e6f92c4c051de4e7e1bdc53a14a661bcc13"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Tactic-Proofs/The-Tactic-Language/",
+    "path": ".deps/docs/lean-reference/Tactic-Proofs/The-Tactic-Language/index.html",
+    "upstream_sha256": "9297579e13e8b9c7407ca6383aee56be092b027d126c1a150f100672c1d3ba2e",
+    "local_sha256": "551974d3aa70c0bba52f9fd9349bb86dfb2a529ccd52f6e86d65c25bd090bed3"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Terms/",
+    "path": ".deps/docs/lean-reference/Terms/index.html",
+    "upstream_sha256": "baf1e8629cfe185cf4f2cebd9a44f8507d20751700caac7f61e99368aae9e684",
+    "local_sha256": "ba8d7151efd3c15e4179b7c65dfb1d21acbee0ee8739830bf40e982fc30a71ee"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Terms/Conditionals/",
+    "path": ".deps/docs/lean-reference/Terms/Conditionals/index.html",
+    "upstream_sha256": "1ac86ce0e3fe62ebe6a9d1e571887eee0a8a0a41fc9a52e4476a7580365b437b",
+    "local_sha256": "d80fcaf4e55b3f9d7b105512ee3e86724698df5746223dac740a106a3e1fd623"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Terms/Function-Application/",
+    "path": ".deps/docs/lean-reference/Terms/Function-Application/index.html",
+    "upstream_sha256": "1b96aace6f07cb7d9d3734b35747703b5a29517e1ab26ff729e71e5b2a58c2e8",
+    "local_sha256": "65d61fb433263cb4ac542643ff996557fad40ac7a4af2e2758319eb07ccf5666"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Terms/Function-Types/",
+    "path": ".deps/docs/lean-reference/Terms/Function-Types/index.html",
+    "upstream_sha256": "d2438844fd7b3c3aa1565c7fe19702414e9013ebbc8b99e34cf1a1cb56a15f3b",
+    "local_sha256": "07150cc38e1427ec9f0f8cdaa181f206e67e5ee1351102b9b6375a958f69c95f"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Terms/Functions/",
+    "path": ".deps/docs/lean-reference/Terms/Functions/index.html",
+    "upstream_sha256": "0dba323481657539c374548e1533b01d36233c5185033b20d5387e31c3dc0310",
+    "local_sha256": "1be6ca897e977147831e1112ba17d9f5088c37148de777c60a6a606f2c171611"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Terms/Holes/",
+    "path": ".deps/docs/lean-reference/Terms/Holes/index.html",
+    "upstream_sha256": "d6ab1f2df07c7ef28ff66b2f2fabb5103d5f376b8f98b4d1ffbca4bb350a6ec2",
+    "local_sha256": "2f89b2f6036f50717efda18528ed0cf803745692f4279875c0133883aa3238c9"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Terms/Identifiers/",
+    "path": ".deps/docs/lean-reference/Terms/Identifiers/index.html",
+    "upstream_sha256": "fcfd94b65d9bffed5c2e881ea5d4f91a0499c0ba1cdc7a97e52d3a406ec76cd0",
+    "local_sha256": "150cd4910c68cc805ebef2228b69159ba74aea0840356cae49f36b7fbc5da6f9"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Terms/Numeric-Literals/",
+    "path": ".deps/docs/lean-reference/Terms/Numeric-Literals/index.html",
+    "upstream_sha256": "1f1a39201afe95de650438f5f185002b28dd8d816985e18b50e88104cc376f3f",
+    "local_sha256": "1e049fd57092d9e2a725721bd2d9becbf3d9ef5eb29bb37b660d6cebddd5466e"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Terms/Pattern-Matching/",
+    "path": ".deps/docs/lean-reference/Terms/Pattern-Matching/index.html",
+    "upstream_sha256": "d139239a73472c85df93021c4477840cd2d94203429453a87ef74e8c02fb6529",
+    "local_sha256": "b5571df07100aae1c3d5dd4548b879bb8ca4f79cb9c091a44f7e18a326f3fb88"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Terms/Proofs/",
+    "path": ".deps/docs/lean-reference/Terms/Proofs/index.html",
+    "upstream_sha256": "b017c7e7c0b8769fbd790e423b6310bbc9976a03bd36b9a183f4d05bdbd70032",
+    "local_sha256": "ba16a2d1fbc8087151690ddcbb8e099682bc55f97fd6d9e7dbb4dfd0ff0ed5ba"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Terms/Quotation-and-Antiquotation/",
+    "path": ".deps/docs/lean-reference/Terms/Quotation-and-Antiquotation/index.html",
+    "upstream_sha256": "e05a90e2bd08732397498f068a3d5a8c0000ca571c3167d3b280cb5fb5ad08d3",
+    "local_sha256": "187ad495e8bcb9c33ee5aa351cfb1102b173b9a7adcff546be9ab8544f702ad7"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Terms/Structures-and-Constructors/",
+    "path": ".deps/docs/lean-reference/Terms/Structures-and-Constructors/index.html",
+    "upstream_sha256": "97897a428e1a23badfc4273ed453468412434a01287df8b1a654c32ac9f554c9",
+    "local_sha256": "b8c7ce32e73a4b01b274f2e86d6a524f6ece05b7020cc07306550bc2d1128895"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Terms/Type-Ascription/",
+    "path": ".deps/docs/lean-reference/Terms/Type-Ascription/index.html",
+    "upstream_sha256": "cd418dfd6b7076a0afaa3f63747226e0753b100a7d36a01be1055000645b57c8",
+    "local_sha256": "93bea4fd842f0a03c20ce4eb3c59282d4a66346bb1d001545b54e51835e5e900"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Terms/do--Notation/",
+    "path": ".deps/docs/lean-reference/Terms/do--Notation/index.html",
+    "upstream_sha256": "1f1f22fbab92fd0ebe8035c56837f68722ae35a49729b0ec1b0d02a6896ae5d5",
+    "local_sha256": "2363a8687e140a02a39d8a380af18b762c69cf6f460dd7fc0200c55e083c160b"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/The--grind--tactic/",
+    "path": ".deps/docs/lean-reference/The--grind--tactic/index.html",
+    "upstream_sha256": "33d08935182bca58f9e3922412ac89b86a7855d4cb0640624c109240be67d955",
+    "local_sha256": "9b5de370fa716ba24defb40c45819a0e2ab8db1cad5de461c9bd4f648d8466ba"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/The--grind--tactic/Algebraic-Solver-_LPAR_Commutative-Rings___-Fields_RPAR_/",
+    "path": ".deps/docs/lean-reference/The--grind--tactic/Algebraic-Solver-_LPAR_Commutative-Rings___-Fields_RPAR_/index.html",
+    "upstream_sha256": "020e9b13d5d8528982545f8b8e3c6e772b62b1ecd57055e3134b8746489085d5",
+    "local_sha256": "b55a0db0b354ec343917780220cee72dbc562ecae50a4f9c1521f259ff9d6d4d"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/The--grind--tactic/Annotating-Libraries-for--grind/",
+    "path": ".deps/docs/lean-reference/The--grind--tactic/Annotating-Libraries-for--grind/index.html",
+    "upstream_sha256": "ef63491d7462abc039b92092e51770780570aacea17b4aef130353420d3097dd",
+    "local_sha256": "045a6fe6b6d6cc2e3a6875416b18963ed30c6f1824a8840f264af45025ff29d6"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/The--grind--tactic/Bigger-Examples/",
+    "path": ".deps/docs/lean-reference/The--grind--tactic/Bigger-Examples/index.html",
+    "upstream_sha256": "efe6b3304e7f578f19a85d56961ec7af1d5161bcd97cca601529b06ff12df8f5",
+    "local_sha256": "d7e8383e1cdab05d8b4cc4ddf6d5a13b9eb81dd531bf370e535d5d4341cbcc56"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/The--grind--tactic/Case-Analysis/",
+    "path": ".deps/docs/lean-reference/The--grind--tactic/Case-Analysis/index.html",
+    "upstream_sha256": "94516c8d2d185fd6c251291c1eb6d3b1cbeea572132496a14b034d3042c8eb9d",
+    "local_sha256": "74b5a4bf435e61d58571aca18d37660ff6f60be378bedcedf5d73ac6e6a4032e"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/The--grind--tactic/Congruence-Closure/",
+    "path": ".deps/docs/lean-reference/The--grind--tactic/Congruence-Closure/index.html",
+    "upstream_sha256": "5c5619375b6011086bbfc039bf5cf4c676d6e22e764584afde1d9908ecfa09fe",
+    "local_sha256": "43c3b3de0ffd7e402c368dadf9e569273f4de3ebffcf82345edbf5edb2d9898c"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/The--grind--tactic/Constraint-Propagation/",
+    "path": ".deps/docs/lean-reference/The--grind--tactic/Constraint-Propagation/index.html",
+    "upstream_sha256": "8aecb58f3a6a7c6df7f3d0319aa796d7f7c0cb17ba1b90bca28bd0da2231168c",
+    "local_sha256": "ad6348e15991ba6fb47e0ffaea575b8e008b4b4215e81ad31cd6c8c4da721f46"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/The--grind--tactic/E___matching/",
+    "path": ".deps/docs/lean-reference/The--grind--tactic/E___matching/index.html",
+    "upstream_sha256": "77189193234f05beadcb63f1b396b3f7cb71f4e0f9b305479f2b8907ca40970f",
+    "local_sha256": "6e86463350b69a33195c4805e22fb219ad33f191f182a150be3e72124df9861c"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/The--grind--tactic/Error-Messages/",
+    "path": ".deps/docs/lean-reference/The--grind--tactic/Error-Messages/index.html",
+    "upstream_sha256": "8e2b3110af3dc9d8df16472c83d16d1b32af5a4b796e475e29f04c5b028f7d02",
+    "local_sha256": "0f17fb90360096dee87bd31a471b31a8619100619277e3bb694f7f334deb5db4"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/The--grind--tactic/Linear-Arithmetic-Solver/",
+    "path": ".deps/docs/lean-reference/The--grind--tactic/Linear-Arithmetic-Solver/index.html",
+    "upstream_sha256": "a1ca59e9a473c9d773ec8439e3d776a69a9da4ed3b2c1a72fff8c476fbb530db",
+    "local_sha256": "694fc8da37f9f3d0c31f4e68ea2ad2c00145f761e5cd3a4bc1276263120a9596"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/The--grind--tactic/Linear-Integer-Arithmetic/",
+    "path": ".deps/docs/lean-reference/The--grind--tactic/Linear-Integer-Arithmetic/index.html",
+    "upstream_sha256": "02047f19eee8c6d116e62b4aa385bb4550e899e52e2f063166f2c39888ef3148",
+    "local_sha256": "dcccb6b6426883fd41008267613fb2ead75808fda06b0398dba589c629a31c3f"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/The--grind--tactic/Minimizing--grind--calls/",
+    "path": ".deps/docs/lean-reference/The--grind--tactic/Minimizing--grind--calls/index.html",
+    "upstream_sha256": "064cce78cccbeff275a5e16102467e7f87097b6646d97a988b1804c53f0ee38c",
+    "local_sha256": "18642ad1641d27f6036c59e5f560180e89c0785e371fbf4ae1ab1a8f227a7743"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/The--grind--tactic/Reducibility/",
+    "path": ".deps/docs/lean-reference/The--grind--tactic/Reducibility/index.html",
+    "upstream_sha256": "12577c6d7dd075175876bbb8c209421f5ffa4b028cbc301c269925070222ab1d",
+    "local_sha256": "3aa5c2290b6985c0c2dab0b0900cddd240a5459150904f843b7fd3e8276aa3b5"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/The--mvcgen--tactic/",
+    "path": ".deps/docs/lean-reference/The--mvcgen--tactic/index.html",
+    "upstream_sha256": "a3102c9f54e3dbecc68140d55a246ab865ae2e8fdd2e18a8b5b87a815cc9f270",
+    "local_sha256": "eca0e146eb5750a1fe6c624844c3e0d66ec07948a08b834098a1276262be3424"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/The--mvcgen--tactic/Enabling--mvcgen--For-Monads/",
+    "path": ".deps/docs/lean-reference/The--mvcgen--tactic/Enabling--mvcgen--For-Monads/index.html",
+    "upstream_sha256": "d007936d0fb8b800b2c949d62944932bd1bf922f2952d3367e1f7b06dde36534",
+    "local_sha256": "b0ca9388f8cc328226f1ae9474db6a3b199a013245515566e82782f08298a460"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/The--mvcgen--tactic/Overview/",
+    "path": ".deps/docs/lean-reference/The--mvcgen--tactic/Overview/index.html",
+    "upstream_sha256": "9682665d295accd004cf3145ec68f94cdf035f87e1f47954b8d990071633220f",
+    "local_sha256": "dd3a74a86c4433e6fc326241b4ed0378cbaeaa18b21b05a1caf907a3dfdd484b"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/The--mvcgen--tactic/Predicate-Transformers/",
+    "path": ".deps/docs/lean-reference/The--mvcgen--tactic/Predicate-Transformers/index.html",
+    "upstream_sha256": "569b24a7b4589b4e0c7f12c585973e5941065c913d0aad93b1f2f65c7cae58af",
+    "local_sha256": "befb1ae3651541e56bedce77ded86c2f95cec5f87adcaf183aef009c77a3d634"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/The--mvcgen--tactic/Proof-Mode/",
+    "path": ".deps/docs/lean-reference/The--mvcgen--tactic/Proof-Mode/index.html",
+    "upstream_sha256": "c9d3ae6eeec4f2987d078c8ce35af1bde76b2af4ffdf42fb870d5f85a0230ddd",
+    "local_sha256": "c9704ee824ead2f330fe9e5ae4e85a7ae6eddebe26b80e3edca810f4104de7ec"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/The--mvcgen--tactic/Verification-Conditions/",
+    "path": ".deps/docs/lean-reference/The--mvcgen--tactic/Verification-Conditions/index.html",
+    "upstream_sha256": "aae72c05f0ee6e6ad5ec77a18a42e7e83c0f715c8f8fa7621426947cc0552882",
+    "local_sha256": "918decfeb9bac70302c69f064103aec7417a26d9e346a573c0662273ffb26c36"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/The-Simplifier/",
+    "path": ".deps/docs/lean-reference/The-Simplifier/index.html",
+    "upstream_sha256": "fd6d73e390870f43a42f5f485a8551d38704f20782fa63d10d2a9ee59300e934",
+    "local_sha256": "60e87b1496588f5c4178959d70ecc84a634a1d3ae629d73905b153f0550178a9"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/The-Simplifier/Configuring-Simplification/",
+    "path": ".deps/docs/lean-reference/The-Simplifier/Configuring-Simplification/index.html",
+    "upstream_sha256": "1034085dc2a8cb699ff5c9965c51772ae7e04b8494da4157e5d89d90b929484e",
+    "local_sha256": "09c8ed1507cd55da90c29d8030ce4540570d0fbf5bff14e6c4c325ee4ce3cbfe"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/The-Simplifier/Invoking-the-Simplifier/",
+    "path": ".deps/docs/lean-reference/The-Simplifier/Invoking-the-Simplifier/index.html",
+    "upstream_sha256": "802e601f60ee8ccd1f8b7c4b476fe79e1529aa46db369103acbcb46520a2c8ce",
+    "local_sha256": "00bfdf968d27efc056b14b1064a9a98c811341dc2ca30a67aa5eb67140dc1707"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/The-Simplifier/Rewrite-Rules/",
+    "path": ".deps/docs/lean-reference/The-Simplifier/Rewrite-Rules/index.html",
+    "upstream_sha256": "ff8f6b0b0936ce7765ad1357423f6961bb8b6310c3641a097eb322004f1a2eb3",
+    "local_sha256": "1e2ff71571f99a4cfd391bd538a2f2e06b147f6a74595b6cff0255d169ec7d4b"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/The-Simplifier/Simp-Normal-Forms/",
+    "path": ".deps/docs/lean-reference/The-Simplifier/Simp-Normal-Forms/index.html",
+    "upstream_sha256": "e13cebfd297a793b41a2989379e12456afa63ef890af1687a84fe9a2f6412960",
+    "local_sha256": "8d27212518d4753293577403509a36fa2af48d5e1c5ca55172e95ac9fd536f9f"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/The-Simplifier/Simp-sets/",
+    "path": ".deps/docs/lean-reference/The-Simplifier/Simp-sets/index.html",
+    "upstream_sha256": "86b7ca4a60b99226fa99d0ff2707c73235505612f2d9a7603ff94a94783c645d",
+    "local_sha256": "a04d96c03f6408a2694923d1d3258352d37cb43c48dd9b2c06da546eabee9954"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/The-Simplifier/Simplification-vs-Rewriting/",
+    "path": ".deps/docs/lean-reference/The-Simplifier/Simplification-vs-Rewriting/index.html",
+    "upstream_sha256": "60db295828edd2b9f029efb3804a3f77940bc80d7701926c4dd29de9fb061c36",
+    "local_sha256": "dbd2ab1260452898d18a6cea4f81c127542164cd69452257f360248d74404771"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/The-Simplifier/Terminal-vs-Non-Terminal-Positions/",
+    "path": ".deps/docs/lean-reference/The-Simplifier/Terminal-vs-Non-Terminal-Positions/index.html",
+    "upstream_sha256": "945f99a16c0bea4f8c3bed700a6c56c1b45e6e626b0cc7fb853ab645736d0f90",
+    "local_sha256": "1c7deebe11b571050051642d7879f9bf8ccbb236e330820545b2ee4fbb371979"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/The-Type-System/",
+    "path": ".deps/docs/lean-reference/The-Type-System/index.html",
+    "upstream_sha256": "cbf7e56e81450588fbdc71f747bf18b202c2de1568f58f3c5f904eca8fe0b841",
+    "local_sha256": "1176b277681a8bc6d272c8850c1be716aced32b0bcde2a84e6e6f78d8e4255bb"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/The-Type-System/Functions/",
+    "path": ".deps/docs/lean-reference/The-Type-System/Functions/index.html",
+    "upstream_sha256": "ad5e1d6fa1a4eabd8ac4e651b7bac00639dc38007a4aeac6a1042f9d7ec9054a",
+    "local_sha256": "9c0eca017ea5c70eae937b2bbac00da782283a2b389275602b9de501c5f49f1b"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/The-Type-System/Inductive-Types/",
+    "path": ".deps/docs/lean-reference/The-Type-System/Inductive-Types/index.html",
+    "upstream_sha256": "f533dddbdd8a28fde48de5fd418275eb69252edb138033e36fa6bc914dbe7dc5",
+    "local_sha256": "0792987e9f34feb6bd5574dfa2a190446619b7d9f5e5429e2048c08d194a2096"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/The-Type-System/Propositions/",
+    "path": ".deps/docs/lean-reference/The-Type-System/Propositions/index.html",
+    "upstream_sha256": "5733e781c0fdc72f5a8676f0cdc31898742c7fc7baafd9005f816ee3f9e137ee",
+    "local_sha256": "37454efbf12fbf049ad33f5f630d57db3ce59addad977bf7f3d4bb80bba4f022"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/The-Type-System/Quotients/",
+    "path": ".deps/docs/lean-reference/The-Type-System/Quotients/index.html",
+    "upstream_sha256": "c9876a8d430113366903a5b400d59b2620d0cb4d9f674daaffed8e2f5d0fb1e0",
+    "local_sha256": "625b010945a37865f7fe0ab433b793d61b79fa582c218e21000249306cea5b91"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/The-Type-System/Universes/",
+    "path": ".deps/docs/lean-reference/The-Type-System/Universes/index.html",
+    "upstream_sha256": "b32d7ef509117baa00b57d3fbe2f8d6b1ac8c99095e36bd57253b50c5ca101e6",
+    "local_sha256": "e1a98a13c61ed0ebaabe373ad367f7a3e27f7d40704b79fb491e653e89babb07"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Type-Classes/",
+    "path": ".deps/docs/lean-reference/Type-Classes/index.html",
+    "upstream_sha256": "394e447a6f80738a45d3db39c174a62509c9a9e1db1e9fcc02fbaaf86b881121",
+    "local_sha256": "7ef68515b18ef357c34be242e3a467de190699b483c84193376539f5987a78b7"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Type-Classes/Basic-Classes/",
+    "path": ".deps/docs/lean-reference/Type-Classes/Basic-Classes/index.html",
+    "upstream_sha256": "9f7d659b41b6501ef56d3f6ed23a6dd27267e2e64c206af78b22ca06b7902d52",
+    "local_sha256": "7487a589efbe4c26f84a805dd19c2120edd8067cff99e02b7d61a4bb65ff2017"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Type-Classes/Class-Declarations/",
+    "path": ".deps/docs/lean-reference/Type-Classes/Class-Declarations/index.html",
+    "upstream_sha256": "9cb1265f31977d5a8c76180012e14c3fe53abfcda4f5b0d952c961aa260d22df",
+    "local_sha256": "910ead04bd2122bc9dc1caaecb6bd165651e497e2a79d846aa65753f27e75180"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Type-Classes/Deriving-Instances/",
+    "path": ".deps/docs/lean-reference/Type-Classes/Deriving-Instances/index.html",
+    "upstream_sha256": "044608e70071403af9ebd0ac7748ef75f16859636e2f56aeb7207eecc69d9d65",
+    "local_sha256": "bf4d8c38d82300f451365e507c90eaf614dba9435c74c3d6e5397633e38f02b6"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Type-Classes/Instance-Declarations/",
+    "path": ".deps/docs/lean-reference/Type-Classes/Instance-Declarations/index.html",
+    "upstream_sha256": "3482b12722a05642757a41b326e149bd2dd6c28fbeddff9878940baf3d06595a",
+    "local_sha256": "091c8677874c9cd18a9d5cf967b7f883175221551a2cbc987b3b047ac68a087b"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/Type-Classes/Instance-Synthesis/",
+    "path": ".deps/docs/lean-reference/Type-Classes/Instance-Synthesis/index.html",
+    "upstream_sha256": "5d80f5ce1047afb0a73cd8cf0cebaa5bd52992ae3062b503ad52519c4524e03d",
+    "local_sha256": "0094a072c93e7527db5a5905895a0256bc57b75cc8144276ca550b0ff07a32e9"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/ValidatingProofs/",
+    "path": ".deps/docs/lean-reference/ValidatingProofs/index.html",
+    "upstream_sha256": "cabf448064dd3725dabd103a1a98adc5d1b1a8ebafbfa0e5b733a5724927eabb",
+    "local_sha256": "b655ddb124a1bdbf972bfd007e7491e6a89970895778b7822d1e3233dbc3fcb8"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/book.css",
+    "path": ".deps/docs/lean-reference/book.css",
+    "upstream_sha256": "778bb031dafd9a11c1d44114b6a40dbc770e683f31a1c853a66da55e8e44ae86",
+    "local_sha256": "778bb031dafd9a11c1d44114b6a40dbc770e683f31a1c853a66da55e8e44ae86"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/find/",
+    "path": ".deps/docs/lean-reference/find/index.html",
+    "upstream_sha256": "fdcdd1b3ebd589c7ebde8cf3a6f662e414c234ebee604ac64962a48a98af9d42",
+    "local_sha256": "e13a4cb56235ae58bd614e202f06bf99fed6b7e5b71a8740a6b636c09ee1eb74"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/platforms/",
+    "path": ".deps/docs/lean-reference/platforms/index.html",
+    "upstream_sha256": "aa2caaea45dcd6635a5a8d7de760a9357799c0d22c2a484d647ea81b2a6e8ffe",
+    "local_sha256": "593ee01cbc499343847599fc78fd0f1152b73e82849bd3120093d7d2a00fdf41"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/",
+    "path": ".deps/docs/lean-reference/releases/index.html",
+    "upstream_sha256": "cc599df04ea9f90e00c390a2849e854e93df77db509cb34c0a43cd4b7a0ff70f",
+    "local_sha256": "8f65f33ec3c30a564cd5b97325e5444c50cd4b779aeeeffb0a58ebf1ea2f2b6e"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.0.0-m1/",
+    "path": ".deps/docs/lean-reference/releases/v4.0.0-m1/index.html",
+    "upstream_sha256": "2c484ca24101fe4b111c871fa3448dd5ff70f862c5358109eadba9fa02510e4a",
+    "local_sha256": "937c4ab5de2c2aed779e5b72e2d103b03220ce11b7836cdb2fb4f98764ec89a5"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.0.0-m2/",
+    "path": ".deps/docs/lean-reference/releases/v4.0.0-m2/index.html",
+    "upstream_sha256": "28a3cc0e2b3d0e6a6d26a14259e62e299066d357465d3f4bda35c94f32850ac9",
+    "local_sha256": "c666c27731649ab64ef7c6d72a3c071f9c9d1b79a0d134c1d6649d3ceb390c28"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.0.0-m3/",
+    "path": ".deps/docs/lean-reference/releases/v4.0.0-m3/index.html",
+    "upstream_sha256": "5190122f6651f89dc9a16efd2cb4ff5d934fdf497cbe6c5ada3d92897b7e7b94",
+    "local_sha256": "5bbb1a828f537132f48ec3ea5c459f558d15b84dbded5333589417df81293398"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.0.0-m4/",
+    "path": ".deps/docs/lean-reference/releases/v4.0.0-m4/index.html",
+    "upstream_sha256": "7e917f1328ff2a3d9d6463fee7946408ec5b32e432c086246f73fafaefdd9f8c",
+    "local_sha256": "5cd3e9c5f212434c4128e9d4156028236b6f3245730d175b812b90873a3edf52"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.0.0-m5/",
+    "path": ".deps/docs/lean-reference/releases/v4.0.0-m5/index.html",
+    "upstream_sha256": "54987e4d24c11796368e8564b7afab39472b2f4a088a6b50bb41f088cd79e013",
+    "local_sha256": "ca4e8282acd9449beaab21c0d5dc619a565ad080d37214c06993573f2d6e93e8"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.0.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.0.0/index.html",
+    "upstream_sha256": "8c8899cd5edb6cfc2de18d894581d037ce48898a71856b038f632bfda151fee6",
+    "local_sha256": "f05469e8f4e7c59887588fc84b83b8cec2e23f394870cc9374b5a007f7d6c20d"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.1.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.1.0/index.html",
+    "upstream_sha256": "15a0a6e4c5ff7faa9b3244eb4530c741436054b123c8fe17e4478b40222a0154",
+    "local_sha256": "a47ef25d6f3f3d417daa60daaa4ceee59bc2a23dd1bc0a6206f67f182e6183b0"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.10.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.10.0/index.html",
+    "upstream_sha256": "359e544fe98c4d58e0b94587c7c766cfe0e03ad2df8e19de1e3f56928f986114",
+    "local_sha256": "56b575d626b5d980e5c8144f23193fa97ce33e415d4fb8d6de61adc0a08bfdea"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.11.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.11.0/index.html",
+    "upstream_sha256": "5356032443ec7bbbb1e6904ab51058ae414f8f54a463b4dfcf3bb75fe0d8cbd3",
+    "local_sha256": "99bfa352975c5efe6b13bde6b80204d191e32e29df9ab942b28ee407a1170ae8"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.12.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.12.0/index.html",
+    "upstream_sha256": "67c6a8fdc3654b2c965e5f60a52b5404e3fd204c9834c2dd7622ec9e8f5b0b6d",
+    "local_sha256": "9df1be526d69646ae2f253447e7c9a805bc1e7c90adeb0d3ce24e0dadb31df2a"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.13.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.13.0/index.html",
+    "upstream_sha256": "3a520a65711616339b897a494c7124ab1adabb9e0162c6024b1c6088d01d2dfc",
+    "local_sha256": "6f0d0b9b73f8cc58008b6fa44c4b6b50244c1e158eeafbf74bf2b0beaa21e0ec"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.14.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.14.0/index.html",
+    "upstream_sha256": "bcef8860035004b565bb760c6fc82634721b13e55aea12ece11bd3fd20a73273",
+    "local_sha256": "ecdb180c60733f1ca7e46b781c060fd2c2e0de84c3424a4c5d5a7b1b811a02ec"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.15.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.15.0/index.html",
+    "upstream_sha256": "e71b8bd7a3f34016a330021866d7b3c21845ef5fb1a9b0b38aeaac958a4ea18b",
+    "local_sha256": "740b68feb359c05593ae65d5c82e24517c3d7a676fa7d7d48017f99df5251b87"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.16.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.16.0/index.html",
+    "upstream_sha256": "5d4ba6cd158f3379f7d563b0796ad9bb9de5b35c83c349c38db27f4a980458ff",
+    "local_sha256": "a4466bf0e52993d0065d9514a71f34b3f8da3619c955e2f38fb931684e696318"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.17.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.17.0/index.html",
+    "upstream_sha256": "d63928d845a9f3d239726ec9e54a6168f0275a7bdbd38946a9a04b44d6336347",
+    "local_sha256": "0251cdf30d2b2797288e41fb97e115317b8460203c8d35ed87f90f70fc0a5c4a"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.18.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.18.0/index.html",
+    "upstream_sha256": "07725c012800b9404490d1d3bbb92aac5902484adff25a78d6c58b3b524eed78",
+    "local_sha256": "acb0a1264e2131ac7bedbb4ad47c207e4db2c61e31aeb61663fc3ca41ebc7780"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.19.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.19.0/index.html",
+    "upstream_sha256": "edec246a7fde7a45e6642ef3b0015423aab7ad0df4ae6e2d63afa6b6b33c9cb3",
+    "local_sha256": "ff1260a4ccf806133bb35d1a5bb01624f2494dd85fce9fabaae43ef47366ddf5"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.2.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.2.0/index.html",
+    "upstream_sha256": "ef59167099964df8f352ef066c377bb30546d9994c347936f709a415c3831979",
+    "local_sha256": "f3de429fd0a88e0f851091471fe91163ec24016e2cbcc5b4bcad2f0c0ab793ef"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.20.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.20.0/index.html",
+    "upstream_sha256": "581ed85c7ab659ec3f08fcffb8859aaf76572756693f9d65d5f9b572cb36ba48",
+    "local_sha256": "4cf04d8c0860bcc1daa5934ab1ea91604201ce3b474e4e886a04b88c4784559e"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.21.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.21.0/index.html",
+    "upstream_sha256": "219a839bc565de8407c5be2a137bc9f0adc6d15dfdaf026b25018af5b9de2a29",
+    "local_sha256": "64cbd7cef4828f7e0da1d039826f56e8e342901ff469102400ed7d3876ed5960"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.22.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.22.0/index.html",
+    "upstream_sha256": "06bdadf70d099b81bf4abda8e4457034f1144260161dff9754edda1ccc219082",
+    "local_sha256": "ea233a3e9cd1ae60f1f115c0b3950694068b2864ad5e7baa1213cfd58439289d"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.23.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.23.0/index.html",
+    "upstream_sha256": "ad6ff2590ce5b5307515c28320d8757bb2c76a2be797a95cc8a24068d6a25625",
+    "local_sha256": "90115d26ff031627aa9753e9350166d919b4bd5bc09c11cf0920c04c580e1a2f"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.24.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.24.0/index.html",
+    "upstream_sha256": "5130853f4aea4350e112e1beada3156210ee5519e862cb7094cc66ee2ea9ead8",
+    "local_sha256": "a1912d1f7cdfe848d08856afba92cd383a45bf78366a6c388fac7be17fddc217"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.25.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.25.0/index.html",
+    "upstream_sha256": "dca6de7372269e1a38d74224c744e4608e8b6989808be6d0729494683776ae62",
+    "local_sha256": "47f4706a36e9354beaa1b11f6bc4750919e5c503d8f973e3da8395e0ebe85d51"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.25.1/",
+    "path": ".deps/docs/lean-reference/releases/v4.25.1/index.html",
+    "upstream_sha256": "17c496826ff8ff575a69ad08552c410bcef7c6aa058689a9e85a15c0fb9cc1a4",
+    "local_sha256": "cbb7a59bacbd591eeb844e75f24814600c50f1aa43583d97b56d70cee2cddfd3"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.26.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.26.0/index.html",
+    "upstream_sha256": "43ebbbfeeb5e59973238f9b22400505cce09726b48e048062d2f1efa4d792c84",
+    "local_sha256": "f7930920cff20eaffed0a06bfcba305039c2f670e4416e97bfac1d18e23b6b2f"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.27.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.27.0/index.html",
+    "upstream_sha256": "2df68d9379d236029f2d073da855140c7135f8f5ea4bb62ccf4d3218c6265a3b",
+    "local_sha256": "ab16e5130b07603e57157aef155e948b601962db0b7a76f06aba61a2680a789d"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.28.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.28.0/index.html",
+    "upstream_sha256": "3c08ac63e913ba581907ca124ad60f7b161f661040db09d65ee84480cbbf3ecc",
+    "local_sha256": "ec3cd589f93306a75493ef672eb5bbd5030b9dabd3fa99fea7e0288ca0ad7af8"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.28.1/",
+    "path": ".deps/docs/lean-reference/releases/v4.28.1/index.html",
+    "upstream_sha256": "e5d9de2bdc502e5ab712fd934a798fb6360942250b98529f8b2e3cb7edd98f88",
+    "local_sha256": "efd9228dc452abc3af498b25b094fd4d1fad21f687a2570b04c9a84f047e036f"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.29.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.29.0/index.html",
+    "upstream_sha256": "75adccf82f43f6bac8d5fc7e60f082336f44f2f9e985f9aaaceba77cc59ef520",
+    "local_sha256": "cd492494d8d96a0dfbc41a8d70a56b1dd3096c18c6f20cfe1e3d9e4781159c0e"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.29.1/",
+    "path": ".deps/docs/lean-reference/releases/v4.29.1/index.html",
+    "upstream_sha256": "364c8f99a2466432130497010f627bb77bfbb570090175b5368266af4a540274",
+    "local_sha256": "4e140020c6111f40a7230ef383c7348a800cce5eca3a0b0255477d1c88fc677e"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.3.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.3.0/index.html",
+    "upstream_sha256": "6338a4c08a23dc5bd751c041ac90e5fa3e5b290e7d18b5b214113152b38e8d68",
+    "local_sha256": "6a339a94149f3f03a66118e1e231fcb5dee49610d3cc0af1ce13dfc58c13e5f4"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.30.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.30.0/index.html",
+    "upstream_sha256": "a85a6f5fbb9a185e6641db6ee4bbc8209c79aa6bfc3d262c81724c36269c916a",
+    "local_sha256": "eef203bd6903d4e26c895060dc7e78674c8902b63b15a9d2a14a2c8917c56222"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.31.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.31.0/index.html",
+    "upstream_sha256": "0887e87387eff5bec5d8c5e2489680205a581856e99e5bfdd4092afde1bdf849",
+    "local_sha256": "351dc298a8a768fd3a0349eedb57715283b882bd8c4a99815264494a23fbb820"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.32.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.32.0/index.html",
+    "upstream_sha256": "2b0ba3d8f5c929345a18b77a443f5686207e94ebed38d728124e70d1b1206cd5",
+    "local_sha256": "aa05922f8298670a7565eb51c069fc614dacf49c984330942e232f58f76ba745"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.32.1/",
+    "path": ".deps/docs/lean-reference/releases/v4.32.1/index.html",
+    "upstream_sha256": "c195c8994b5bc56ef46593d0d2da60ed639b5f36d38afc6c1bfabfbea118d769",
+    "local_sha256": "f803d40f4991be3f8c7000573b845db2867e9a77760c1da1d37a5fd6532d25af"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.32.2/",
+    "path": ".deps/docs/lean-reference/releases/v4.32.2/index.html",
+    "upstream_sha256": "08bab81d99d7fa4089fd359ce8d36940c780958aa2228ce7dc00e59c99110132",
+    "local_sha256": "c232368c5f38d2895998c50c63a41ad12c7e5c7db8dde24111b4b4ec9a44b92c"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.33.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.33.0/index.html",
+    "upstream_sha256": "cec8b2c7d492bb535432c0cdfa239b3bf137e84fcf200fdfc6213b4c624d5821",
+    "local_sha256": "9e2a75488886a70ba7fa41c6dd4c0f9669d7e6aee4ee3b1aec369f60c640c6fc"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.4.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.4.0/index.html",
+    "upstream_sha256": "136efe8c4c93081cb25a34236e57e1f86bd1deb34c47a885e7d830cc76241324",
+    "local_sha256": "040a415b9ad4e3895c8040b917ea1924b0f8a7702b73e67a4986c6b6cfab051f"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.5.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.5.0/index.html",
+    "upstream_sha256": "6c77c320c2ea37ff804111c20a7c22e9e1ce22e4e5dac5bd183dac0d29193f0c",
+    "local_sha256": "a57db92c3c4b6ebe71d0e840b5faf9db0d9d71316ed87c5b4857d92db4a5220b"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.6.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.6.0/index.html",
+    "upstream_sha256": "1c48cbe1f09a2edc180e1990bbfebe6fff503afce8aad2a4dbc82b0f0b20ad87",
+    "local_sha256": "879f458089f72fae129bd34f2f782231c47132e76b4a0740d78392f0011e53c8"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.7.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.7.0/index.html",
+    "upstream_sha256": "8c12e1e2968716fe02f018bba9e5be364f5f9af4374f0d7ccb25088be47d098e",
+    "local_sha256": "e752a7fda84bcf70dc27df63db4897219264943ec711ff67e5f5d3316f90210c"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.8.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.8.0/index.html",
+    "upstream_sha256": "838fd6fbafb3d22138391a518b5cb230cc308e23b9f3f6ae9cf0718e2a9b3637",
+    "local_sha256": "f1c7cb5fb71ecbefeb48b66edf3a37021fe82e8b5d8f814bc7deca3c4b7666c5"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/releases/v4.9.0/",
+    "path": ".deps/docs/lean-reference/releases/v4.9.0/index.html",
+    "upstream_sha256": "9939f2f17e3ba0107f90fa1c3d39a35fb5609ef50175b3da7c5b5b431da36bc6",
+    "local_sha256": "4bc572c67a2b5929c7c71faf7ddd53591153936c90bc85eca145c77dca68a386"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/colors.css",
+    "path": ".deps/docs/lean-reference/static/colors.css",
+    "upstream_sha256": "ccf43ed90d8e21288d724c64b38decbf4929a625424572b9673dcc4eaf31fb43",
+    "local_sha256": "ccf43ed90d8e21288d724c64b38decbf4929a625424572b9673dcc4eaf31fb43"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/noto-sans-mono/NotoSansMono-VariableFont_wdth,wght.ttf",
+    "path": ".deps/docs/lean-reference/static/fonts/noto-sans-mono/NotoSansMono-VariableFont_wdth,wght.ttf",
+    "upstream_sha256": "47d856141683450ee297592b27be447eb5141c68516e5e0e748c66b6e0a54afe",
+    "local_sha256": "47d856141683450ee297592b27be447eb5141c68516e5e0e748c66b6e0a54afe"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/noto-sans-mono/noto-sans-mono.css",
+    "path": ".deps/docs/lean-reference/static/fonts/noto-sans-mono/noto-sans-mono.css",
+    "upstream_sha256": "997191296a3f2774786fd97eb1e2efcf7ec33c56af40f88a527cf4e3c6b2c476",
+    "local_sha256": "997191296a3f2774786fd97eb1e2efcf7ec33c56af40f88a527cf4e3c6b2c476"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/OTF/SourceCodePro-Black.otf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/OTF/SourceCodePro-Black.otf",
+    "upstream_sha256": "1372d6cb5e4073b6be0d0bfa79e7e0ccf882d77e8a714c17492c4410f6379ac2",
+    "local_sha256": "1372d6cb5e4073b6be0d0bfa79e7e0ccf882d77e8a714c17492c4410f6379ac2"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/OTF/SourceCodePro-BlackIt.otf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/OTF/SourceCodePro-BlackIt.otf",
+    "upstream_sha256": "7cf24ffce3a9373d16fa95526e8091a45774a321dbf5dbe76aee9f45138c00c9",
+    "local_sha256": "7cf24ffce3a9373d16fa95526e8091a45774a321dbf5dbe76aee9f45138c00c9"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/OTF/SourceCodePro-Bold.otf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/OTF/SourceCodePro-Bold.otf",
+    "upstream_sha256": "6f5a4a46a99ad1b92a8675e98f148272c8d2476fc0eb067247dd5eea6a3ad84c",
+    "local_sha256": "6f5a4a46a99ad1b92a8675e98f148272c8d2476fc0eb067247dd5eea6a3ad84c"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/OTF/SourceCodePro-BoldIt.otf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/OTF/SourceCodePro-BoldIt.otf",
+    "upstream_sha256": "a015a5762527946aa99778f5397da14d10b963938d1d6e08153f173fdf29d8ee",
+    "local_sha256": "a015a5762527946aa99778f5397da14d10b963938d1d6e08153f173fdf29d8ee"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/OTF/SourceCodePro-ExtraLight.otf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/OTF/SourceCodePro-ExtraLight.otf",
+    "upstream_sha256": "ecec59fac495dc12514b1afab85fcf15d2f622a8fa48a247c913b01653424e11",
+    "local_sha256": "ecec59fac495dc12514b1afab85fcf15d2f622a8fa48a247c913b01653424e11"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/OTF/SourceCodePro-ExtraLightIt.otf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/OTF/SourceCodePro-ExtraLightIt.otf",
+    "upstream_sha256": "c58e92053e6ff16a2d3f76721bd6fe55e76f546b156548da86e3d390345da382",
+    "local_sha256": "c58e92053e6ff16a2d3f76721bd6fe55e76f546b156548da86e3d390345da382"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/OTF/SourceCodePro-It.otf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/OTF/SourceCodePro-It.otf",
+    "upstream_sha256": "6989245c8747ecef5d927f412b49e2cef495053434b635f560f20cc81a1433d1",
+    "local_sha256": "6989245c8747ecef5d927f412b49e2cef495053434b635f560f20cc81a1433d1"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/OTF/SourceCodePro-Light.otf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/OTF/SourceCodePro-Light.otf",
+    "upstream_sha256": "02303c413a412e0982833e4d9626415338de94f4e1778548b4051d4b5bce1b28",
+    "local_sha256": "02303c413a412e0982833e4d9626415338de94f4e1778548b4051d4b5bce1b28"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/OTF/SourceCodePro-LightIt.otf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/OTF/SourceCodePro-LightIt.otf",
+    "upstream_sha256": "f3ed5fb28aa873a6ffa75f4c3d2e0e1fbfecbbca6dae3a4ce27683a1f6e6180d",
+    "local_sha256": "f3ed5fb28aa873a6ffa75f4c3d2e0e1fbfecbbca6dae3a4ce27683a1f6e6180d"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/OTF/SourceCodePro-Medium.otf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/OTF/SourceCodePro-Medium.otf",
+    "upstream_sha256": "d6d11eb2088ce200b59f0fb620dba4f54c153b99fd2985c9708b0aa7037a1945",
+    "local_sha256": "d6d11eb2088ce200b59f0fb620dba4f54c153b99fd2985c9708b0aa7037a1945"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/OTF/SourceCodePro-MediumIt.otf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/OTF/SourceCodePro-MediumIt.otf",
+    "upstream_sha256": "443e47e4e4de0e932414825a84658064fd7c1ad711610c54681345b0e8df36c0",
+    "local_sha256": "443e47e4e4de0e932414825a84658064fd7c1ad711610c54681345b0e8df36c0"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/OTF/SourceCodePro-Regular.otf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/OTF/SourceCodePro-Regular.otf",
+    "upstream_sha256": "9f9664e2edf6f045c11e774f9bd0be6993971f2544a39061a5ce478b96b051f8",
+    "local_sha256": "9f9664e2edf6f045c11e774f9bd0be6993971f2544a39061a5ce478b96b051f8"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/OTF/SourceCodePro-Semibold.otf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/OTF/SourceCodePro-Semibold.otf",
+    "upstream_sha256": "1be15ad5855dab0017af32153342989b91fec313efcdbeda69bdeec92794da0d",
+    "local_sha256": "1be15ad5855dab0017af32153342989b91fec313efcdbeda69bdeec92794da0d"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/OTF/SourceCodePro-SemiboldIt.otf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/OTF/SourceCodePro-SemiboldIt.otf",
+    "upstream_sha256": "9489d3440e4b80ac528380831f12107c73f6034b962ad7f6c382e239f508caa6",
+    "local_sha256": "9489d3440e4b80ac528380831f12107c73f6034b962ad7f6c382e239f508caa6"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/TTF/SourceCodePro-Black.ttf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/TTF/SourceCodePro-Black.ttf",
+    "upstream_sha256": "37a4fd8a65b8d27580676cf956e8af3a2a6204dbc76dec4318ad0fed660bc89d",
+    "local_sha256": "37a4fd8a65b8d27580676cf956e8af3a2a6204dbc76dec4318ad0fed660bc89d"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/TTF/SourceCodePro-BlackIt.ttf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/TTF/SourceCodePro-BlackIt.ttf",
+    "upstream_sha256": "8b60e510e39f085e202447106cfd994394b5b76c55541ca6554c42e44b58918d",
+    "local_sha256": "8b60e510e39f085e202447106cfd994394b5b76c55541ca6554c42e44b58918d"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/TTF/SourceCodePro-Bold.ttf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/TTF/SourceCodePro-Bold.ttf",
+    "upstream_sha256": "b2095e0d657e6d28dc32444a9dacabab0c9241d0bf39d96371756cc9bdbc3a5f",
+    "local_sha256": "b2095e0d657e6d28dc32444a9dacabab0c9241d0bf39d96371756cc9bdbc3a5f"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/TTF/SourceCodePro-BoldIt.ttf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/TTF/SourceCodePro-BoldIt.ttf",
+    "upstream_sha256": "1b49d9304012bf8db9e5dd4104183d5c122c445d0570a2259125f71977595b90",
+    "local_sha256": "1b49d9304012bf8db9e5dd4104183d5c122c445d0570a2259125f71977595b90"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/TTF/SourceCodePro-ExtraLight.ttf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/TTF/SourceCodePro-ExtraLight.ttf",
+    "upstream_sha256": "8f4deb0901f375797fe51c2351abf2059e4ebbab2ec0ac390d040c3e802ddec6",
+    "local_sha256": "8f4deb0901f375797fe51c2351abf2059e4ebbab2ec0ac390d040c3e802ddec6"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/TTF/SourceCodePro-ExtraLightIt.ttf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/TTF/SourceCodePro-ExtraLightIt.ttf",
+    "upstream_sha256": "201b24b465e7882ff93365ce731c6129cbda11fed265d1114510efee30dedaab",
+    "local_sha256": "201b24b465e7882ff93365ce731c6129cbda11fed265d1114510efee30dedaab"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/TTF/SourceCodePro-It.ttf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/TTF/SourceCodePro-It.ttf",
+    "upstream_sha256": "9c9e0f4d016210a3c5bdfba5262637c5b26ddff4ccc382ebbc781de5961d0042",
+    "local_sha256": "9c9e0f4d016210a3c5bdfba5262637c5b26ddff4ccc382ebbc781de5961d0042"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/TTF/SourceCodePro-Light.ttf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/TTF/SourceCodePro-Light.ttf",
+    "upstream_sha256": "e9bb1870b0765b2cf06f797039d3dba4a78bb90360b20840bfc6a0c024d8f756",
+    "local_sha256": "e9bb1870b0765b2cf06f797039d3dba4a78bb90360b20840bfc6a0c024d8f756"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/TTF/SourceCodePro-LightIt.ttf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/TTF/SourceCodePro-LightIt.ttf",
+    "upstream_sha256": "784e689ed03d1738f65dd4537c41ba25ac336f9f34a86bf298e24a44260c20aa",
+    "local_sha256": "784e689ed03d1738f65dd4537c41ba25ac336f9f34a86bf298e24a44260c20aa"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/TTF/SourceCodePro-Medium.ttf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/TTF/SourceCodePro-Medium.ttf",
+    "upstream_sha256": "f9dbc746f60c83f5cb1503b19f90729d8195cab6bb67f2b861d4eb257ed86536",
+    "local_sha256": "f9dbc746f60c83f5cb1503b19f90729d8195cab6bb67f2b861d4eb257ed86536"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/TTF/SourceCodePro-MediumIt.ttf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/TTF/SourceCodePro-MediumIt.ttf",
+    "upstream_sha256": "d34387901d96871f3521cbe69fe95e65396bed83eeb579de9abac510a683253d",
+    "local_sha256": "d34387901d96871f3521cbe69fe95e65396bed83eeb579de9abac510a683253d"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/TTF/SourceCodePro-Regular.ttf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/TTF/SourceCodePro-Regular.ttf",
+    "upstream_sha256": "74bd80d3e42a08517cd7e1108ba3d86f2da29ac0f3065be95e0357956ab9db37",
+    "local_sha256": "74bd80d3e42a08517cd7e1108ba3d86f2da29ac0f3065be95e0357956ab9db37"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/TTF/SourceCodePro-Semibold.ttf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/TTF/SourceCodePro-Semibold.ttf",
+    "upstream_sha256": "014a0fdf42504ee1faf719a96eab5f9ffdade793f1d5c5729ad4606f2aedc765",
+    "local_sha256": "014a0fdf42504ee1faf719a96eab5f9ffdade793f1d5c5729ad4606f2aedc765"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/TTF/SourceCodePro-SemiboldIt.ttf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/TTF/SourceCodePro-SemiboldIt.ttf",
+    "upstream_sha256": "600253b4aae951db5b90882a866718d99dfb0e40ef3db5b5d2d8433a412ebc85",
+    "local_sha256": "600253b4aae951db5b90882a866718d99dfb0e40ef3db5b5d2d8433a412ebc85"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/WOFF/OTF/SourceCodePro-Black.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/WOFF/OTF/SourceCodePro-Black.otf.woff",
+    "upstream_sha256": "5c070bace669b93f53b8376b98a7f285cb6a6fb9b256d6134878a29144c734b4",
+    "local_sha256": "5c070bace669b93f53b8376b98a7f285cb6a6fb9b256d6134878a29144c734b4"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/WOFF/OTF/SourceCodePro-BlackIt.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/WOFF/OTF/SourceCodePro-BlackIt.otf.woff",
+    "upstream_sha256": "9cdcdc7a114e5bf9ba2e9aac31af99518a54fa7b99620245467e3c786110a1fe",
+    "local_sha256": "9cdcdc7a114e5bf9ba2e9aac31af99518a54fa7b99620245467e3c786110a1fe"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/WOFF/OTF/SourceCodePro-Bold.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/WOFF/OTF/SourceCodePro-Bold.otf.woff",
+    "upstream_sha256": "7cb40b8f9e2b2c03a64f01be6b589d8ffa3a2791aeea228e8e620b5a699b5696",
+    "local_sha256": "7cb40b8f9e2b2c03a64f01be6b589d8ffa3a2791aeea228e8e620b5a699b5696"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/WOFF/OTF/SourceCodePro-BoldIt.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/WOFF/OTF/SourceCodePro-BoldIt.otf.woff",
+    "upstream_sha256": "b3952602d9d4a18d8ac8d949d04d2e54e33795bffc14c7c73c7e51b6da1f2f88",
+    "local_sha256": "b3952602d9d4a18d8ac8d949d04d2e54e33795bffc14c7c73c7e51b6da1f2f88"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/WOFF/OTF/SourceCodePro-ExtraLight.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/WOFF/OTF/SourceCodePro-ExtraLight.otf.woff",
+    "upstream_sha256": "fdb3668583de700682e4f87b806db49c6c382620cc7a53bf9c2930227b3e9f91",
+    "local_sha256": "fdb3668583de700682e4f87b806db49c6c382620cc7a53bf9c2930227b3e9f91"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/WOFF/OTF/SourceCodePro-ExtraLightIt.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/WOFF/OTF/SourceCodePro-ExtraLightIt.otf.woff",
+    "upstream_sha256": "10a92084d36e35c8d9ddd4ef8dbe04c7911dba8b60a39f0b998436257be47b0a",
+    "local_sha256": "10a92084d36e35c8d9ddd4ef8dbe04c7911dba8b60a39f0b998436257be47b0a"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/WOFF/OTF/SourceCodePro-It.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/WOFF/OTF/SourceCodePro-It.otf.woff",
+    "upstream_sha256": "856f9a006cd5402e643da5158bd21960a5c1be1adfff8c941823efa1daeea91f",
+    "local_sha256": "856f9a006cd5402e643da5158bd21960a5c1be1adfff8c941823efa1daeea91f"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/WOFF/OTF/SourceCodePro-Light.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/WOFF/OTF/SourceCodePro-Light.otf.woff",
+    "upstream_sha256": "79b44d9f3d0b08a522d0d24898e490531098a55c44b963a5083311f56d278a5a",
+    "local_sha256": "79b44d9f3d0b08a522d0d24898e490531098a55c44b963a5083311f56d278a5a"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/WOFF/OTF/SourceCodePro-LightIt.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/WOFF/OTF/SourceCodePro-LightIt.otf.woff",
+    "upstream_sha256": "25faea556dc945730b4dd650c8dd82f6dad92334544238504d003e134f8f9ae5",
+    "local_sha256": "25faea556dc945730b4dd650c8dd82f6dad92334544238504d003e134f8f9ae5"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/WOFF/OTF/SourceCodePro-Medium.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/WOFF/OTF/SourceCodePro-Medium.otf.woff",
+    "upstream_sha256": "1ca4bcf597f4cecec709cbcaa4b4c3408b4867029921b7f94bbf268f24a64c21",
+    "local_sha256": "1ca4bcf597f4cecec709cbcaa4b4c3408b4867029921b7f94bbf268f24a64c21"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/WOFF/OTF/SourceCodePro-MediumIt.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/WOFF/OTF/SourceCodePro-MediumIt.otf.woff",
+    "upstream_sha256": "91731c7b767d0efa0e87eae48fbcf8df8c1595f8708f49628750a4721343997c",
+    "local_sha256": "91731c7b767d0efa0e87eae48fbcf8df8c1595f8708f49628750a4721343997c"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/WOFF/OTF/SourceCodePro-Regular.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/WOFF/OTF/SourceCodePro-Regular.otf.woff",
+    "upstream_sha256": "53df9d4067d2839dbb86943efb5fe6ec799af4db92f38ccbfc69f52ca991de01",
+    "local_sha256": "53df9d4067d2839dbb86943efb5fe6ec799af4db92f38ccbfc69f52ca991de01"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/WOFF/OTF/SourceCodePro-Semibold.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/WOFF/OTF/SourceCodePro-Semibold.otf.woff",
+    "upstream_sha256": "1d46ec645ca5b2d570620839ea6a6fc6c6de5db65dd2dc54615a6b36679ba5c9",
+    "local_sha256": "1d46ec645ca5b2d570620839ea6a6fc6c6de5db65dd2dc54615a6b36679ba5c9"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/WOFF/OTF/SourceCodePro-SemiboldIt.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/WOFF/OTF/SourceCodePro-SemiboldIt.otf.woff",
+    "upstream_sha256": "6feea3b2ba0ae4c7e5786ea69560ca304d7f3b3d060e336b0beecd962220016b",
+    "local_sha256": "6feea3b2ba0ae4c7e5786ea69560ca304d7f3b3d060e336b0beecd962220016b"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/WOFF2/TTF/SourceCodePro-Black.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/WOFF2/TTF/SourceCodePro-Black.ttf.woff2",
+    "upstream_sha256": "3e61b745ddbfc4f3f9aa1a0be4020b3031cad8b8b1365538ebb5c27314ecf7c3",
+    "local_sha256": "3e61b745ddbfc4f3f9aa1a0be4020b3031cad8b8b1365538ebb5c27314ecf7c3"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/WOFF2/TTF/SourceCodePro-BlackIt.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/WOFF2/TTF/SourceCodePro-BlackIt.ttf.woff2",
+    "upstream_sha256": "222e60d9149d7d92869275ff5cefa988ffcd78624216f7a65d7f0bd9670339cc",
+    "local_sha256": "222e60d9149d7d92869275ff5cefa988ffcd78624216f7a65d7f0bd9670339cc"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/WOFF2/TTF/SourceCodePro-Bold.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/WOFF2/TTF/SourceCodePro-Bold.ttf.woff2",
+    "upstream_sha256": "1916890a0a7e223c45308421dc7f20e31bca062888634ff09a24cb2b4c0b43c6",
+    "local_sha256": "1916890a0a7e223c45308421dc7f20e31bca062888634ff09a24cb2b4c0b43c6"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/WOFF2/TTF/SourceCodePro-BoldIt.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/WOFF2/TTF/SourceCodePro-BoldIt.ttf.woff2",
+    "upstream_sha256": "8d52472fd9e6f0c69fc6845d8bb06ee80fc48b854727bfd1878e2a6359aa7369",
+    "local_sha256": "8d52472fd9e6f0c69fc6845d8bb06ee80fc48b854727bfd1878e2a6359aa7369"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/WOFF2/TTF/SourceCodePro-ExtraLight.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/WOFF2/TTF/SourceCodePro-ExtraLight.ttf.woff2",
+    "upstream_sha256": "e1bf1ab6dd308d7d159eadb899523f7cbd9f790b1f97d3218ca911996703bcb3",
+    "local_sha256": "e1bf1ab6dd308d7d159eadb899523f7cbd9f790b1f97d3218ca911996703bcb3"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/WOFF2/TTF/SourceCodePro-ExtraLightIt.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/WOFF2/TTF/SourceCodePro-ExtraLightIt.ttf.woff2",
+    "upstream_sha256": "924eb66c17ff45f4f2c8e7f6a4383dcc624a7cf2554c30d6f8ccb3c0d09e8aa6",
+    "local_sha256": "924eb66c17ff45f4f2c8e7f6a4383dcc624a7cf2554c30d6f8ccb3c0d09e8aa6"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/WOFF2/TTF/SourceCodePro-It.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/WOFF2/TTF/SourceCodePro-It.ttf.woff2",
+    "upstream_sha256": "f65d785ba392916d5d26288a29abcb775fd07531edbff4a5ebb1cd428592bbc8",
+    "local_sha256": "f65d785ba392916d5d26288a29abcb775fd07531edbff4a5ebb1cd428592bbc8"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/WOFF2/TTF/SourceCodePro-Light.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/WOFF2/TTF/SourceCodePro-Light.ttf.woff2",
+    "upstream_sha256": "4f44ceede7bee5fc44871fe6d574a65f013e042229954cae25dea4687e6c7724",
+    "local_sha256": "4f44ceede7bee5fc44871fe6d574a65f013e042229954cae25dea4687e6c7724"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/WOFF2/TTF/SourceCodePro-LightIt.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/WOFF2/TTF/SourceCodePro-LightIt.ttf.woff2",
+    "upstream_sha256": "c1b824374da265deb39f08164c846fe1b52d899169a94839117a4f885cd425d5",
+    "local_sha256": "c1b824374da265deb39f08164c846fe1b52d899169a94839117a4f885cd425d5"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/WOFF2/TTF/SourceCodePro-Medium.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/WOFF2/TTF/SourceCodePro-Medium.ttf.woff2",
+    "upstream_sha256": "924641f3612b80982d2d32350d4bed27fad682d7220b3dcf2f3370c94b949c34",
+    "local_sha256": "924641f3612b80982d2d32350d4bed27fad682d7220b3dcf2f3370c94b949c34"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/WOFF2/TTF/SourceCodePro-MediumIt.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/WOFF2/TTF/SourceCodePro-MediumIt.ttf.woff2",
+    "upstream_sha256": "c76f625a88617588017a2d55afef59f96d6b1a7d19cb0676cc6bdd592d0a957d",
+    "local_sha256": "c76f625a88617588017a2d55afef59f96d6b1a7d19cb0676cc6bdd592d0a957d"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/WOFF2/TTF/SourceCodePro-Regular.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/WOFF2/TTF/SourceCodePro-Regular.ttf.woff2",
+    "upstream_sha256": "714eee29b70d191f5bf4b3a06b68f2c50522b1303d31c7d44dcefdcc5f9defd0",
+    "local_sha256": "714eee29b70d191f5bf4b3a06b68f2c50522b1303d31c7d44dcefdcc5f9defd0"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/WOFF2/TTF/SourceCodePro-Semibold.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/WOFF2/TTF/SourceCodePro-Semibold.ttf.woff2",
+    "upstream_sha256": "488b2806e8a76192c2ceef29b498ba01e46b697578b200ede1b5cad855c379ba",
+    "local_sha256": "488b2806e8a76192c2ceef29b498ba01e46b697578b200ede1b5cad855c379ba"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/WOFF2/TTF/SourceCodePro-SemiboldIt.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/WOFF2/TTF/SourceCodePro-SemiboldIt.ttf.woff2",
+    "upstream_sha256": "e2b39991bf098d36207239021e85c4905fbb8d505c784a12dac7bc9641d98786",
+    "local_sha256": "e2b39991bf098d36207239021e85c4905fbb8d505c784a12dac7bc9641d98786"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-code-pro/source-code-pro.css",
+    "path": ".deps/docs/lean-reference/static/fonts/source-code-pro/source-code-pro.css",
+    "upstream_sha256": "7004b2f82dc34fc37b35315cfaaa0cc6f53709cd92bb9e8bcca22011df0ae920",
+    "local_sha256": "7004b2f82dc34fc37b35315cfaaa0cc6f53709cd92bb9e8bcca22011df0ae920"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-sans/WOFF/OTF/SourceSans3-Black.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-sans/WOFF/OTF/SourceSans3-Black.otf.woff",
+    "upstream_sha256": "805c72226fa54ec05fa7b185040993095055844e3fca66f2794401b5230d99fe",
+    "local_sha256": "805c72226fa54ec05fa7b185040993095055844e3fca66f2794401b5230d99fe"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-sans/WOFF/OTF/SourceSans3-BlackIt.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-sans/WOFF/OTF/SourceSans3-BlackIt.otf.woff",
+    "upstream_sha256": "bced4723d4d12515e77266c69b37ee2a333954080e53627d7ca272ee60ce43b9",
+    "local_sha256": "bced4723d4d12515e77266c69b37ee2a333954080e53627d7ca272ee60ce43b9"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-sans/WOFF/OTF/SourceSans3-Bold.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-sans/WOFF/OTF/SourceSans3-Bold.otf.woff",
+    "upstream_sha256": "9cd09c2d6984753a2163999c33826d049bd423b504bc44fc8bf29cb4586b0066",
+    "local_sha256": "9cd09c2d6984753a2163999c33826d049bd423b504bc44fc8bf29cb4586b0066"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-sans/WOFF/OTF/SourceSans3-BoldIt.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-sans/WOFF/OTF/SourceSans3-BoldIt.otf.woff",
+    "upstream_sha256": "35a8a47ff79149cf166a1dfdd5792f320906fcd4d37ef696c8de4645ee03b122",
+    "local_sha256": "35a8a47ff79149cf166a1dfdd5792f320906fcd4d37ef696c8de4645ee03b122"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-sans/WOFF/OTF/SourceSans3-ExtraLight.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-sans/WOFF/OTF/SourceSans3-ExtraLight.otf.woff",
+    "upstream_sha256": "8c00ac7f1d9916d2c451b077586e3f4d4b993f96a2a1c668e4918b1d4915ae61",
+    "local_sha256": "8c00ac7f1d9916d2c451b077586e3f4d4b993f96a2a1c668e4918b1d4915ae61"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-sans/WOFF/OTF/SourceSans3-ExtraLightIt.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-sans/WOFF/OTF/SourceSans3-ExtraLightIt.otf.woff",
+    "upstream_sha256": "c1cdad871469ed181f20f19c3ea663862f0f4550be2675bef1169062c5151d89",
+    "local_sha256": "c1cdad871469ed181f20f19c3ea663862f0f4550be2675bef1169062c5151d89"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-sans/WOFF/OTF/SourceSans3-It.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-sans/WOFF/OTF/SourceSans3-It.otf.woff",
+    "upstream_sha256": "c45e5738462958b0ae7587b659ee97d133bc7d7811fcdefeef3b44e92e6bc2e4",
+    "local_sha256": "c45e5738462958b0ae7587b659ee97d133bc7d7811fcdefeef3b44e92e6bc2e4"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-sans/WOFF/OTF/SourceSans3-Light.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-sans/WOFF/OTF/SourceSans3-Light.otf.woff",
+    "upstream_sha256": "95531749acf308ff6358e8c135a7e5f4083053d719237cd5695773e2440d0935",
+    "local_sha256": "95531749acf308ff6358e8c135a7e5f4083053d719237cd5695773e2440d0935"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-sans/WOFF/OTF/SourceSans3-LightIt.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-sans/WOFF/OTF/SourceSans3-LightIt.otf.woff",
+    "upstream_sha256": "3ca72bfde44777198acc56d53625272f1f6d996479ddd935528a3215fa5dab5f",
+    "local_sha256": "3ca72bfde44777198acc56d53625272f1f6d996479ddd935528a3215fa5dab5f"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-sans/WOFF/OTF/SourceSans3-Regular.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-sans/WOFF/OTF/SourceSans3-Regular.otf.woff",
+    "upstream_sha256": "1e4d7d425e9ace7d40defb608000157205b82b5edb2f966bbcd04b55d674b719",
+    "local_sha256": "1e4d7d425e9ace7d40defb608000157205b82b5edb2f966bbcd04b55d674b719"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-sans/WOFF/OTF/SourceSans3-Semibold.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-sans/WOFF/OTF/SourceSans3-Semibold.otf.woff",
+    "upstream_sha256": "602c96e2eeac2f13878019069035d728093146b9f99a681d2de21870627179d3",
+    "local_sha256": "602c96e2eeac2f13878019069035d728093146b9f99a681d2de21870627179d3"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-sans/WOFF/OTF/SourceSans3-SemiboldIt.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-sans/WOFF/OTF/SourceSans3-SemiboldIt.otf.woff",
+    "upstream_sha256": "cff3a3963a724bf8839cedbd039d947e07afedbe988d8887937e034c3062ed00",
+    "local_sha256": "cff3a3963a724bf8839cedbd039d947e07afedbe988d8887937e034c3062ed00"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-sans/WOFF2/TTF/SourceSans3-Black.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-sans/WOFF2/TTF/SourceSans3-Black.ttf.woff2",
+    "upstream_sha256": "20698b6085d6bc3db5577c1398a42e089ca772b33b9c38267de1325561034d45",
+    "local_sha256": "20698b6085d6bc3db5577c1398a42e089ca772b33b9c38267de1325561034d45"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-sans/WOFF2/TTF/SourceSans3-BlackIt.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-sans/WOFF2/TTF/SourceSans3-BlackIt.ttf.woff2",
+    "upstream_sha256": "83327dde35da020a55e31c604eda8ea599771974b70250a6d373852d5d4b77d8",
+    "local_sha256": "83327dde35da020a55e31c604eda8ea599771974b70250a6d373852d5d4b77d8"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-sans/WOFF2/TTF/SourceSans3-Bold.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-sans/WOFF2/TTF/SourceSans3-Bold.ttf.woff2",
+    "upstream_sha256": "8d35c6d40e750a4ee23bbbba2bd604ad098d172907369b43281507e16b8e2e7a",
+    "local_sha256": "8d35c6d40e750a4ee23bbbba2bd604ad098d172907369b43281507e16b8e2e7a"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-sans/WOFF2/TTF/SourceSans3-BoldIt.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-sans/WOFF2/TTF/SourceSans3-BoldIt.ttf.woff2",
+    "upstream_sha256": "8c4b66aea0e7887dfd1e296b03ae53b76ce25256fae1437777514933acaef0f3",
+    "local_sha256": "8c4b66aea0e7887dfd1e296b03ae53b76ce25256fae1437777514933acaef0f3"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-sans/WOFF2/TTF/SourceSans3-ExtraLight.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-sans/WOFF2/TTF/SourceSans3-ExtraLight.ttf.woff2",
+    "upstream_sha256": "ff74c13ea991144c3af065e3a5a8327654d2b560169342ed2748b7d49ba8eff1",
+    "local_sha256": "ff74c13ea991144c3af065e3a5a8327654d2b560169342ed2748b7d49ba8eff1"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-sans/WOFF2/TTF/SourceSans3-ExtraLightIt.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-sans/WOFF2/TTF/SourceSans3-ExtraLightIt.ttf.woff2",
+    "upstream_sha256": "689861b4ce18b5a17302966c1893ff9f6e1b1eadc1a772b3ce9353a1dc9ef036",
+    "local_sha256": "689861b4ce18b5a17302966c1893ff9f6e1b1eadc1a772b3ce9353a1dc9ef036"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-sans/WOFF2/TTF/SourceSans3-It.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-sans/WOFF2/TTF/SourceSans3-It.ttf.woff2",
+    "upstream_sha256": "4d80b3b801f4c457f1b4adbd3911d8501338e6d282141663770c38d3a2e97859",
+    "local_sha256": "4d80b3b801f4c457f1b4adbd3911d8501338e6d282141663770c38d3a2e97859"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-sans/WOFF2/TTF/SourceSans3-Light.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-sans/WOFF2/TTF/SourceSans3-Light.ttf.woff2",
+    "upstream_sha256": "1fd6d4d511c3161a5a3555efa585fbe18cde2f151a79bd0af4655c5093fca90c",
+    "local_sha256": "1fd6d4d511c3161a5a3555efa585fbe18cde2f151a79bd0af4655c5093fca90c"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-sans/WOFF2/TTF/SourceSans3-LightIt.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-sans/WOFF2/TTF/SourceSans3-LightIt.ttf.woff2",
+    "upstream_sha256": "a5696d5ee159c1efae034f006be366ef22bb69e154e5cfbe335e2dbda1639f86",
+    "local_sha256": "a5696d5ee159c1efae034f006be366ef22bb69e154e5cfbe335e2dbda1639f86"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-sans/WOFF2/TTF/SourceSans3-Regular.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-sans/WOFF2/TTF/SourceSans3-Regular.ttf.woff2",
+    "upstream_sha256": "53492fb3a0def77354f166a55d09b63a10855e91c206c7620a81cf56e97f8ec3",
+    "local_sha256": "53492fb3a0def77354f166a55d09b63a10855e91c206c7620a81cf56e97f8ec3"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-sans/WOFF2/TTF/SourceSans3-Semibold.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-sans/WOFF2/TTF/SourceSans3-Semibold.ttf.woff2",
+    "upstream_sha256": "47b9b661b9f395fe7f0d0e119637fba5c8dad97bde3df60066fd24229c0792f4",
+    "local_sha256": "47b9b661b9f395fe7f0d0e119637fba5c8dad97bde3df60066fd24229c0792f4"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-sans/WOFF2/TTF/SourceSans3-SemiboldIt.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-sans/WOFF2/TTF/SourceSans3-SemiboldIt.ttf.woff2",
+    "upstream_sha256": "552d2d08e719d09413fbfff81f6fa16f153ad87edf6a49d69df9c303fea71ae6",
+    "local_sha256": "552d2d08e719d09413fbfff81f6fa16f153ad87edf6a49d69df9c303fea71ae6"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-sans/source-sans-3.css",
+    "path": ".deps/docs/lean-reference/static/fonts/source-sans/source-sans-3.css",
+    "upstream_sha256": "21844cf7a98dac073d77983905a6070710727cfa1cd177dc2b9dcda9a9ff9f80",
+    "local_sha256": "21844cf7a98dac073d77983905a6070710727cfa1cd177dc2b9dcda9a9ff9f80"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/OTF/SourceSerif4-Black.otf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/OTF/SourceSerif4-Black.otf",
+    "upstream_sha256": "47feb7b4ecac3271e988fe399b9a26e220f428c0acfa55e59744f9dc5a1e6f41",
+    "local_sha256": "47feb7b4ecac3271e988fe399b9a26e220f428c0acfa55e59744f9dc5a1e6f41"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/OTF/SourceSerif4-BlackIt.otf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/OTF/SourceSerif4-BlackIt.otf",
+    "upstream_sha256": "22e74ee4d16b716e481af222899b3894bcd5223c57ba1758d303d2eff68810f8",
+    "local_sha256": "22e74ee4d16b716e481af222899b3894bcd5223c57ba1758d303d2eff68810f8"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/OTF/SourceSerif4-Bold.otf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/OTF/SourceSerif4-Bold.otf",
+    "upstream_sha256": "f5fb9a7b1611353fdfebcf8b1e46c7d9108470f25999b841816d8b643b1856ff",
+    "local_sha256": "f5fb9a7b1611353fdfebcf8b1e46c7d9108470f25999b841816d8b643b1856ff"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/OTF/SourceSerif4-BoldIt.otf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/OTF/SourceSerif4-BoldIt.otf",
+    "upstream_sha256": "ebb5394e1e11e09480619c9bb10f020aded9530833edcbdb735a4702ae6fa09e",
+    "local_sha256": "ebb5394e1e11e09480619c9bb10f020aded9530833edcbdb735a4702ae6fa09e"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/OTF/SourceSerif4-ExtraLight.otf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/OTF/SourceSerif4-ExtraLight.otf",
+    "upstream_sha256": "29b8e7e8179978ce9b608460d9af71ac3da723687712e291fb0bedadede7f97a",
+    "local_sha256": "29b8e7e8179978ce9b608460d9af71ac3da723687712e291fb0bedadede7f97a"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/OTF/SourceSerif4-ExtraLightIt.otf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/OTF/SourceSerif4-ExtraLightIt.otf",
+    "upstream_sha256": "571ff10751f654f4ef38f78e5b394cb8a84539fd063e052530bdd19e1622316d",
+    "local_sha256": "571ff10751f654f4ef38f78e5b394cb8a84539fd063e052530bdd19e1622316d"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/OTF/SourceSerif4-It.otf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/OTF/SourceSerif4-It.otf",
+    "upstream_sha256": "f8062257f4693e438a8e317c9fe2b4393f0d4eed84d897edcbfd733c30a1c1a1",
+    "local_sha256": "f8062257f4693e438a8e317c9fe2b4393f0d4eed84d897edcbfd733c30a1c1a1"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/OTF/SourceSerif4-Light.otf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/OTF/SourceSerif4-Light.otf",
+    "upstream_sha256": "4128f8b2af440ca367c0c42fec1c32ccce7bc45dc1672af997518300e5e53d3c",
+    "local_sha256": "4128f8b2af440ca367c0c42fec1c32ccce7bc45dc1672af997518300e5e53d3c"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/OTF/SourceSerif4-LightIt.otf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/OTF/SourceSerif4-LightIt.otf",
+    "upstream_sha256": "f8ade752fd54e49d7f69150c21092a27a88ee690330873fcf84d033971d1cccc",
+    "local_sha256": "f8ade752fd54e49d7f69150c21092a27a88ee690330873fcf84d033971d1cccc"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/OTF/SourceSerif4-Regular.otf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/OTF/SourceSerif4-Regular.otf",
+    "upstream_sha256": "edf160d0d584deee8a3bb2c3371b2a7624ca63580fbe02c57c1f4c91e84d8787",
+    "local_sha256": "edf160d0d584deee8a3bb2c3371b2a7624ca63580fbe02c57c1f4c91e84d8787"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/OTF/SourceSerif4-Semibold.otf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/OTF/SourceSerif4-Semibold.otf",
+    "upstream_sha256": "25e034392847d9965c92f98971b3646436b7ab919ece9118b0c0e5ec94c02efc",
+    "local_sha256": "25e034392847d9965c92f98971b3646436b7ab919ece9118b0c0e5ec94c02efc"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/OTF/SourceSerif4-SemiboldIt.otf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/OTF/SourceSerif4-SemiboldIt.otf",
+    "upstream_sha256": "fc22addcea5d5ab982dfef6d388fff6bdb3e31ae46c37e0015b8312e634a6e9b",
+    "local_sha256": "fc22addcea5d5ab982dfef6d388fff6bdb3e31ae46c37e0015b8312e634a6e9b"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/TTF/SourceSerif4-Black.ttf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/TTF/SourceSerif4-Black.ttf",
+    "upstream_sha256": "9e99d6a487c6f4fab39c119b763d41cb2d849284521ce91620cb6286b58f97e6",
+    "local_sha256": "9e99d6a487c6f4fab39c119b763d41cb2d849284521ce91620cb6286b58f97e6"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/TTF/SourceSerif4-BlackIt.ttf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/TTF/SourceSerif4-BlackIt.ttf",
+    "upstream_sha256": "2511c7ec916d3ee9d9cd3266b64fcd0cca4fe7da9aa78b159276e778c3a500a5",
+    "local_sha256": "2511c7ec916d3ee9d9cd3266b64fcd0cca4fe7da9aa78b159276e778c3a500a5"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/TTF/SourceSerif4-Bold.ttf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/TTF/SourceSerif4-Bold.ttf",
+    "upstream_sha256": "7cf4f4e1ad74f45058d5bc61716b82560442fbdcd9d3654d2dea96bf6c683d86",
+    "local_sha256": "7cf4f4e1ad74f45058d5bc61716b82560442fbdcd9d3654d2dea96bf6c683d86"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/TTF/SourceSerif4-BoldIt.ttf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/TTF/SourceSerif4-BoldIt.ttf",
+    "upstream_sha256": "7b215b37f8873f5579f3f8d2ded3ca7c588e2f435cd996605ebfc5befe2cd5eb",
+    "local_sha256": "7b215b37f8873f5579f3f8d2ded3ca7c588e2f435cd996605ebfc5befe2cd5eb"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/TTF/SourceSerif4-ExtraLight.ttf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/TTF/SourceSerif4-ExtraLight.ttf",
+    "upstream_sha256": "c5f076816eadc1165296be461e883c20c15df410d0e2e934ccdc04fff44c1300",
+    "local_sha256": "c5f076816eadc1165296be461e883c20c15df410d0e2e934ccdc04fff44c1300"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/TTF/SourceSerif4-ExtraLightIt.ttf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/TTF/SourceSerif4-ExtraLightIt.ttf",
+    "upstream_sha256": "415944388bc4bd73f70797f82b5f8ea19f2cb54b673015e6dc5423c2e3b567d5",
+    "local_sha256": "415944388bc4bd73f70797f82b5f8ea19f2cb54b673015e6dc5423c2e3b567d5"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/TTF/SourceSerif4-It.ttf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/TTF/SourceSerif4-It.ttf",
+    "upstream_sha256": "9d2950a8f1da66e21502c35d646a1d2148e79f9ea43fd2158cf02f5232e7f430",
+    "local_sha256": "9d2950a8f1da66e21502c35d646a1d2148e79f9ea43fd2158cf02f5232e7f430"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/TTF/SourceSerif4-Light.ttf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/TTF/SourceSerif4-Light.ttf",
+    "upstream_sha256": "3051ab89b702d23474f0dccbc183b3004ff843f5c343d1ee31eca3d927fee0db",
+    "local_sha256": "3051ab89b702d23474f0dccbc183b3004ff843f5c343d1ee31eca3d927fee0db"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/TTF/SourceSerif4-LightIt.ttf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/TTF/SourceSerif4-LightIt.ttf",
+    "upstream_sha256": "f77ca75d8612072fe7bdae336a46d0727d3d729b56ffefa9700030198da892a1",
+    "local_sha256": "f77ca75d8612072fe7bdae336a46d0727d3d729b56ffefa9700030198da892a1"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/TTF/SourceSerif4-Regular.ttf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/TTF/SourceSerif4-Regular.ttf",
+    "upstream_sha256": "e5a4ee6a3d87bb9024796be390c6771e2a0eb1883dae25effaf57ca01668e24b",
+    "local_sha256": "e5a4ee6a3d87bb9024796be390c6771e2a0eb1883dae25effaf57ca01668e24b"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/TTF/SourceSerif4-Semibold.ttf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/TTF/SourceSerif4-Semibold.ttf",
+    "upstream_sha256": "36db62940cb5728b12b1802476dc7fcf4c6c519a7bdd476ba23a4e555fc4655f",
+    "local_sha256": "36db62940cb5728b12b1802476dc7fcf4c6c519a7bdd476ba23a4e555fc4655f"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/TTF/SourceSerif4-SemiboldIt.ttf",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/TTF/SourceSerif4-SemiboldIt.ttf",
+    "upstream_sha256": "d6a0a4317102a255a55850640332ba3acc7c872606a555516b4ecdb66f3c9899",
+    "local_sha256": "d6a0a4317102a255a55850640332ba3acc7c872606a555516b4ecdb66f3c9899"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/WOFF/OTF/SourceSerif4-Black.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/WOFF/OTF/SourceSerif4-Black.otf.woff",
+    "upstream_sha256": "094260125da3a51b1b667eb2f5c07cff977c15a17dd7445bf85180d6a1e942e4",
+    "local_sha256": "094260125da3a51b1b667eb2f5c07cff977c15a17dd7445bf85180d6a1e942e4"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/WOFF/OTF/SourceSerif4-BlackIt.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/WOFF/OTF/SourceSerif4-BlackIt.otf.woff",
+    "upstream_sha256": "f0fd5b82c23a5479d9e0cbc40c48a307b652e47c206d3e8a806d2fb42a1a14b8",
+    "local_sha256": "f0fd5b82c23a5479d9e0cbc40c48a307b652e47c206d3e8a806d2fb42a1a14b8"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/WOFF/OTF/SourceSerif4-Bold.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/WOFF/OTF/SourceSerif4-Bold.otf.woff",
+    "upstream_sha256": "b39af35c13ac6275ebae2bd4499e5ad050b07186bf1ca3446230f53dbac9be8d",
+    "local_sha256": "b39af35c13ac6275ebae2bd4499e5ad050b07186bf1ca3446230f53dbac9be8d"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/WOFF/OTF/SourceSerif4-BoldIt.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/WOFF/OTF/SourceSerif4-BoldIt.otf.woff",
+    "upstream_sha256": "36edc901f80493f14ea423f14675d7250238103f70230f80f91a65d9d5af78a1",
+    "local_sha256": "36edc901f80493f14ea423f14675d7250238103f70230f80f91a65d9d5af78a1"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/WOFF/OTF/SourceSerif4-ExtraLight.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/WOFF/OTF/SourceSerif4-ExtraLight.otf.woff",
+    "upstream_sha256": "83c54bf2c193eaade521db2526f1851489565ac90d6d318d7d2883b3d2f9d2f7",
+    "local_sha256": "83c54bf2c193eaade521db2526f1851489565ac90d6d318d7d2883b3d2f9d2f7"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/WOFF/OTF/SourceSerif4-ExtraLightIt.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/WOFF/OTF/SourceSerif4-ExtraLightIt.otf.woff",
+    "upstream_sha256": "00d2537465daa5efb1125b0a5aa8f0200353f30a74e546dbe0f5b233af47bbf3",
+    "local_sha256": "00d2537465daa5efb1125b0a5aa8f0200353f30a74e546dbe0f5b233af47bbf3"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/WOFF/OTF/SourceSerif4-It.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/WOFF/OTF/SourceSerif4-It.otf.woff",
+    "upstream_sha256": "97c6e78bdacf338bb6d6805602e9abc0a826a10685ca66d7c48876d4341f14fa",
+    "local_sha256": "97c6e78bdacf338bb6d6805602e9abc0a826a10685ca66d7c48876d4341f14fa"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/WOFF/OTF/SourceSerif4-Light.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/WOFF/OTF/SourceSerif4-Light.otf.woff",
+    "upstream_sha256": "8d79ebd36f8bb59d8dc93f90850d0c6a88d0f2445f05f528ea166112c7087734",
+    "local_sha256": "8d79ebd36f8bb59d8dc93f90850d0c6a88d0f2445f05f528ea166112c7087734"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/WOFF/OTF/SourceSerif4-LightIt.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/WOFF/OTF/SourceSerif4-LightIt.otf.woff",
+    "upstream_sha256": "37833389561c629778967b1c587ce663598350430fd26f9ef6867ee06c4cc523",
+    "local_sha256": "37833389561c629778967b1c587ce663598350430fd26f9ef6867ee06c4cc523"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/WOFF/OTF/SourceSerif4-Regular.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/WOFF/OTF/SourceSerif4-Regular.otf.woff",
+    "upstream_sha256": "b1a460e5c5ff891b7ddd3420ffcc5de20a5d1cd8ff0d1be09d3a810eae2acc2c",
+    "local_sha256": "b1a460e5c5ff891b7ddd3420ffcc5de20a5d1cd8ff0d1be09d3a810eae2acc2c"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/WOFF/OTF/SourceSerif4-Semibold.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/WOFF/OTF/SourceSerif4-Semibold.otf.woff",
+    "upstream_sha256": "90b12975f50e4890b2c4a9e7b6c3fa33eff39151a623c197b13c3080b39bce03",
+    "local_sha256": "90b12975f50e4890b2c4a9e7b6c3fa33eff39151a623c197b13c3080b39bce03"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/WOFF/OTF/SourceSerif4-SemiboldIt.otf.woff",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/WOFF/OTF/SourceSerif4-SemiboldIt.otf.woff",
+    "upstream_sha256": "b0c2266a9c004f8c93b1d473e6d3be4bb2256a84a8a624eaaebfad41749266de",
+    "local_sha256": "b0c2266a9c004f8c93b1d473e6d3be4bb2256a84a8a624eaaebfad41749266de"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/WOFF2/TTF/SourceSerif4-Black.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/WOFF2/TTF/SourceSerif4-Black.ttf.woff2",
+    "upstream_sha256": "d7320055f37024665289050a68e3094e8b235305e43b14eb813e96036a108c9e",
+    "local_sha256": "d7320055f37024665289050a68e3094e8b235305e43b14eb813e96036a108c9e"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/WOFF2/TTF/SourceSerif4-BlackIt.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/WOFF2/TTF/SourceSerif4-BlackIt.ttf.woff2",
+    "upstream_sha256": "8b2129d4faadd5834c2043bb1c3599e4d91a333f0808e173066431d423510485",
+    "local_sha256": "8b2129d4faadd5834c2043bb1c3599e4d91a333f0808e173066431d423510485"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/WOFF2/TTF/SourceSerif4-Bold.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/WOFF2/TTF/SourceSerif4-Bold.ttf.woff2",
+    "upstream_sha256": "6d4fd4c0f08798a478fe34aafea9bf5cfa1cbc6ae4b834193febaee74254d10c",
+    "local_sha256": "6d4fd4c0f08798a478fe34aafea9bf5cfa1cbc6ae4b834193febaee74254d10c"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/WOFF2/TTF/SourceSerif4-BoldIt.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/WOFF2/TTF/SourceSerif4-BoldIt.ttf.woff2",
+    "upstream_sha256": "738ded930ea75d50331c43390217282f212419e8bf0d42932771de8047c8e404",
+    "local_sha256": "738ded930ea75d50331c43390217282f212419e8bf0d42932771de8047c8e404"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/WOFF2/TTF/SourceSerif4-ExtraLight.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/WOFF2/TTF/SourceSerif4-ExtraLight.ttf.woff2",
+    "upstream_sha256": "5cfb034d389aa77a77aabf73be24ecbf0ada8563bf8901f5fb18f7f41f23ccf7",
+    "local_sha256": "5cfb034d389aa77a77aabf73be24ecbf0ada8563bf8901f5fb18f7f41f23ccf7"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/WOFF2/TTF/SourceSerif4-ExtraLightIt.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/WOFF2/TTF/SourceSerif4-ExtraLightIt.ttf.woff2",
+    "upstream_sha256": "51c217ed6b3597ce8ebe8e25d5b113154942966c1bfc5ee56f9892e8286fdb67",
+    "local_sha256": "51c217ed6b3597ce8ebe8e25d5b113154942966c1bfc5ee56f9892e8286fdb67"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/WOFF2/TTF/SourceSerif4-It.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/WOFF2/TTF/SourceSerif4-It.ttf.woff2",
+    "upstream_sha256": "ca3b17ed1e3e668ffd9e03385cfd46e1b095df783de53710d25d41241496026b",
+    "local_sha256": "ca3b17ed1e3e668ffd9e03385cfd46e1b095df783de53710d25d41241496026b"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/WOFF2/TTF/SourceSerif4-Light.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/WOFF2/TTF/SourceSerif4-Light.ttf.woff2",
+    "upstream_sha256": "bc6addadeba121667c261c3cdcdc6efd8bdb3454e7cbe81fd1718ca05347b2fd",
+    "local_sha256": "bc6addadeba121667c261c3cdcdc6efd8bdb3454e7cbe81fd1718ca05347b2fd"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/WOFF2/TTF/SourceSerif4-LightIt.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/WOFF2/TTF/SourceSerif4-LightIt.ttf.woff2",
+    "upstream_sha256": "d7ac8d8021be13ce5f449973eee8e10c3093c605647860b3136b303b6fb61848",
+    "local_sha256": "d7ac8d8021be13ce5f449973eee8e10c3093c605647860b3136b303b6fb61848"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/WOFF2/TTF/SourceSerif4-Regular.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/WOFF2/TTF/SourceSerif4-Regular.ttf.woff2",
+    "upstream_sha256": "6b053e98f0838afe81f3e784727be4583a7c13bb42f198dc5202ecffee0aaee0",
+    "local_sha256": "6b053e98f0838afe81f3e784727be4583a7c13bb42f198dc5202ecffee0aaee0"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/WOFF2/TTF/SourceSerif4-Semibold.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/WOFF2/TTF/SourceSerif4-Semibold.ttf.woff2",
+    "upstream_sha256": "457a13ac92e977d82e376038a2daac7fdb5433610910bf5787bdf6c1c3781865",
+    "local_sha256": "457a13ac92e977d82e376038a2daac7fdb5433610910bf5787bdf6c1c3781865"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/WOFF2/TTF/SourceSerif4-SemiboldIt.ttf.woff2",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/WOFF2/TTF/SourceSerif4-SemiboldIt.ttf.woff2",
+    "upstream_sha256": "a49ea2a227bc8d6c56691203b1f456f80802368a9b7c3c577408859c408a4062",
+    "local_sha256": "a49ea2a227bc8d6c56691203b1f456f80802368a9b7c3c577408859c408a4062"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/fonts/source-serif/source-serif-text.css",
+    "path": ".deps/docs/lean-reference/static/fonts/source-serif/source-serif-text.css",
+    "upstream_sha256": "d55140edd28902d2309b757a9fab1b9a74b8464355b1a9f804c8d1162c6840ae",
+    "local_sha256": "d55140edd28902d2309b757a9fab1b9a74b8464355b1a9f804c8d1162c6840ae"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/lean_logo.svg",
+    "path": ".deps/docs/lean-reference/static/lean_logo.svg",
+    "upstream_sha256": "047c4cea72d58b717ecad3eb11ce02940129bba7d4be9942587adf23354e8c20",
+    "local_sha256": "047c4cea72d58b717ecad3eb11ce02940129bba7d4be9942587adf23354e8c20"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/metadata.js",
+    "path": ".deps/docs/lean-reference/static/metadata.js",
+    "upstream_sha256": "140234f947b68ee5466a652805f6447fa0070f078a59e4c1b94db7f9708b5547",
+    "local_sha256": "140234f947b68ee5466a652805f6447fa0070f078a59e4c1b94db7f9708b5547"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/print.css",
+    "path": ".deps/docs/lean-reference/static/print.css",
+    "upstream_sha256": "e4476f1681423701cc723776694500fddf12b5f3fa7e026e91ddb606b3a3468e",
+    "local_sha256": "e4476f1681423701cc723776694500fddf12b5f3fa7e026e91ddb606b3a3468e"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/print.js",
+    "path": ".deps/docs/lean-reference/static/print.js",
+    "upstream_sha256": "c02a6ec810cc9fa0bb2e31a375363c39803f23ea542157ce361d0e7c79ef7fec",
+    "local_sha256": "c02a6ec810cc9fa0bb2e31a375363c39803f23ea542157ce361d0e7c79ef7fec"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/screenshots/do-return-hl-1.png",
+    "path": ".deps/docs/lean-reference/static/screenshots/do-return-hl-1.png",
+    "upstream_sha256": "e3a1e256e80d97d353ca4825ff37c7dcbceab82eb9e4b5b2608213be7f2a8281",
+    "local_sha256": "e3a1e256e80d97d353ca4825ff37c7dcbceab82eb9e4b5b2608213be7f2a8281"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/screenshots/do-return-hl-2.png",
+    "path": ".deps/docs/lean-reference/static/screenshots/do-return-hl-2.png",
+    "upstream_sha256": "bde77244154ace45361bd0b4bad0322cbafef063376537257f3fa28da5dd0078",
+    "local_sha256": "bde77244154ace45361bd0b4bad0322cbafef063376537257f3fa28da5dd0078"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/screenshots/doublecheckmarks.png",
+    "path": ".deps/docs/lean-reference/static/screenshots/doublecheckmarks.png",
+    "upstream_sha256": "549ece3039977bfacdc6ba56f3aa680cc6f317ef99f11022d8deee498112727f",
+    "local_sha256": "549ece3039977bfacdc6ba56f3aa680cc6f317ef99f11022d8deee498112727f"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/static/theme.css",
+    "path": ".deps/docs/lean-reference/static/theme.css",
+    "upstream_sha256": "6fbe25b6354d268e6aa720a4d3301df1d74646f66e2dea0e0e209df3b4e8b036",
+    "local_sha256": "6fbe25b6354d268e6aa720a4d3301df1d74646f66e2dea0e0e209df3b4e8b036"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/the-index/",
+    "path": ".deps/docs/lean-reference/the-index/index.html",
+    "upstream_sha256": "0699efe0c33b7fb2b897e59ba9a28a9e02295f9f84274dd5d4aae14a79d2cd1d",
+    "local_sha256": "e9d49773c3bf0be40c0750125be9ea7766f85baa56a43f9d8ca15a93053c0fdd"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/toc-resize.js",
+    "path": ".deps/docs/lean-reference/toc-resize.js",
+    "upstream_sha256": "20f6a416004c05debba4f136936dc09110d28556309a282a654a3ca9cc2e9032",
+    "local_sha256": "20f6a416004c05debba4f136936dc09110d28556309a282a654a3ca9cc2e9032"
+  },
+  {
+    "url": "https://lean-lang.org/doc/reference/4.33.0/verso-vars.css",
+    "path": ".deps/docs/lean-reference/verso-vars.css",
+    "upstream_sha256": "d0d62776b5ed39aa5dd8e9e6b5c29c7ebf2da232a0f5fe66c9af5a59947eb98c",
+    "local_sha256": "d0d62776b5ed39aa5dd8e9e6b5c29c7ebf2da232a0f5fe66c9af5a59947eb98c"
+  }
+]
