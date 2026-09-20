@@ -1,0 +1,6 @@
+name = "leanux"
+version = "0.1.0"
+defaultTargets = ["Leanux"]
+
+[[lean_lib]]
+name = "Leanux"

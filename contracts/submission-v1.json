@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "description": "Candidate changes are evaluated against an independently frozen contract snapshot. The coordinator may amend the implementation allowlist before first candidate evaluation, without changing semantics.",
+  "implementation_roots": [
+    "Leanux/FS/",
+    "Leanux/Runner.lean",
+    "Leanux/Main.lean"
+  ],
+  "proof_roots": [
+    "Leanux/Proofs/"
+  ],
+  "protected_paths": [
+    "contracts/",
+    "Leanux/FS/EventfdTypes.lean",
+    "Leanux/Reference/",
+    "evaluator/",
+    "harness/",
+    "scripts/",
+    "lakefile.toml",
+    "lean-toolchain"
+  ],
+  "required_identity_fields": [
+    "base_commit",
+    "source_sha256",
+    "contract_sha256",
+    "evaluator_sha256"
+  ],
+  "accepted_result_author": "coordinator evaluator only"
+}
