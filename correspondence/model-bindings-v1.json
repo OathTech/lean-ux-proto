@@ -2,7 +2,7 @@
   "version": 1,
   "bindings": [
     {
-      "file": "Leanux/FS/File.lean",
+      "file": "Leanux/FS/FileTypes.lean",
       "declaration": "initialFiles",
       "records": [
         "fixture"
@@ -10,7 +10,7 @@
       "note": "Initial trace-visible map is empty; reserved descriptors0..7 are implicit."
     },
     {
-      "file": "Leanux/FS/File.lean",
+      "file": "Leanux/FS/FileTypes.lean",
       "declaration": "lookupDescriptor",
       "records": [
         "file-lookup"
@@ -18,7 +18,7 @@
       "note": "Descriptor slot lookup."
     },
     {
-      "file": "Leanux/FS/File.lean",
+      "file": "Leanux/FS/FileTypes.lean",
       "declaration": "lookupFile",
       "records": [
         "file-lookup"
@@ -26,7 +26,7 @@
       "note": "Follow descriptor objectId to shared file."
     },
     {
-      "file": "Leanux/FS/File.lean",
+      "file": "Leanux/FS/FileTypes.lean",
       "declaration": "WellFormed",
       "records": [
         "fixture",
@@ -571,7 +571,7 @@
   "state_fields": [
     {
       "linux": "files_struct.fdtable.fd[] and open_fds",
-      "mirror": "Files.fdTable: Nat → Option FDEntry",
+      "mirror": "Files.fdTable: Nat \u2192 Option FDEntry",
       "relation": "Trace slots8..31 retain membership and file identity.0..7 implicitly reserved; temporary reservation bitmap folded into installation."
     },
     {

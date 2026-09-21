@@ -17,7 +17,8 @@
     "harness/",
     "scripts/",
     "lakefile.toml",
-    "lean-toolchain"
+    "lean-toolchain",
+    "Leanux/FS/FileTypes.lean"
   ],
   "required_identity_fields": [
     "base_commit",

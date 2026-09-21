@@ -3,8 +3,32 @@
   "created_at_utc": "2026-09-20T23:31:07.680798+00:00",
   "files": [
     {
+      "path": "Leanux/FS/EventfdTypes.lean",
+      "sha256": "447ba51975c30f5e6d11521fd6f833f7bb7b33dae265eb498aba2a9cabba2f0c"
+    },
+    {
+      "path": "Leanux/FS/FileTypes.lean",
+      "sha256": "e1e0a11a06d02e32f2bdbbbec0a83be16541b85be8c7ed95e2fe1fde94835608"
+    },
+    {
+      "path": "Leanux/Reference/AliasContract.lean",
+      "sha256": "fdd43b29a174745506bece20daa93d9a8a272fa7523e5262b637b20a3469a168"
+    },
+    {
+      "path": "Leanux/Reference/EventfdContract.lean",
+      "sha256": "61e9fd5024a9fe62efba653b4f549bef733171394c7d58d8170d0ecdec830ff4"
+    },
+    {
+      "path": "Leanux/Reference/EventfdRead.lean",
+      "sha256": "6a7f28f29ba81fb70ed019fef1246522150b0c547b124288eb72731392a77574"
+    },
+    {
       "path": "contracts/observation.schema.json",
       "sha256": "0cc873dc56a22c2636c420f571764acec6a1a3822c93279be4ddd8cf31480ad5"
+    },
+    {
+      "path": "contracts/proof-identities-v1.json",
+      "sha256": "d41b71ebdbb331606804d576c3c98a9464427043a0b68850d79b5965b5dd21c9"
     },
     {
       "path": "contracts/proof-v1.md",
@@ -16,7 +40,7 @@
     },
     {
       "path": "contracts/submission-v1.json",
-      "sha256": "a5b6c09e7d55dfd9f6af5cab03995190b4ea623d7a21c2b434e3913c226094b3"
+      "sha256": "8bbf8b33ef931c8eeb14efb58bf91ddf86fc2831869f385fd7143eba57d68c78"
     },
     {
       "path": "contracts/trace-v1.md",
@@ -27,8 +51,18 @@
       "sha256": "848f60025c2c3c3d5a74c4ef0efee9d14456a0325e73e834f3cdec3120a27fce"
     },
     {
-      "path": "Leanux/FS/EventfdTypes.lean",
-      "sha256": "447ba51975c30f5e6d11521fd6f833f7bb7b33dae265eb498aba2a9cabba2f0c"
+      "path": "lake-manifest.json",
+      "sha256": "1f33ea66a2a599f2afdfda1b97fe18cf4f2ff30b8437a58b613605ea262f19ea"
+    },
+    {
+      "path": "lakefile.toml",
+      "sha256": "36c9e68e0e5604d2e6ad8934ec9d2b16500763ce1b83dd78e029e439501162a1"
+    },
+    {
+      "path": "lean-toolchain",
+      "sha256": "3aac669c7a910ec2389f4e4f921b605adf6ebf2d1e0c9b9cd0be4d33f3f5db71"
     }
-  ]
+  ],
+  "settled_at_utc": "2026-09-21T01:20:07.900978+00:00",
+  "settlement_note": "Before first candidate evaluation: freeze settled FD proof types, relations and reference, protect FileTypes, and pin one Lean build thread. Trace/observation/scope semantics unchanged."
 }
