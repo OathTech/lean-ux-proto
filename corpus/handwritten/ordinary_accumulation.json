@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "id": "ordinary_accumulation",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 2,
+      "flags": 2048
+    },
+    {
+      "op": "write",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8,
+      "value": "3"
+    },
+    {
+      "op": "write",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8,
+      "value": "7"
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "id": "dup3_replacement",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 3,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 8,
+      "flags": 2048
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 1
+      }
+    },
+    {
+      "op": "dup3",
+      "fd": {
+        "ref": 0
+      },
+      "newfd": {
+        "ref": 1
+      },
+      "flags": 524288
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 1
+      },
+      "count": 8
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 2
+      },
+      "count": 8
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 3
+      },
+      "cmd": "F_GETFD",
+      "arg": 0
+    }
+  ]
+}

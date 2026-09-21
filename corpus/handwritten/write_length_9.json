@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "id": "write_length_9",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 7,
+      "flags": 2048
+    },
+    {
+      "op": "write",
+      "fd": {
+        "ref": 0
+      },
+      "count": 9,
+      "value": "5"
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8
+    }
+  ]
+}

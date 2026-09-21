@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "id": "forbidden_maximum_write",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 5,
+      "flags": 2048
+    },
+    {
+      "op": "write",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8,
+      "value": "18446744073709551615"
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8
+    },
+    {
+      "op": "write",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8,
+      "value": "0"
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8
+    }
+  ]
+}

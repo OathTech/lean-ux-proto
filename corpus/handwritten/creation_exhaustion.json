@@ -1,0 +1,156 @@
+{
+  "version": 1,
+  "id": "creation_exhaustion",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 0,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 1,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 2,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 3,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 4,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 5,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 6,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 7,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 8,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 9,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 10,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 11,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 12,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 13,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 14,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 15,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 16,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 17,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 18,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 19,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 20,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 21,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 22,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 23,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 25,
+      "flags": 2048
+    },
+    {
+      "op": "close",
+      "fd": {
+        "ref": 5
+      }
+    },
+    {
+      "op": "eventfd2",
+      "init": 123,
+      "flags": 2048
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 26
+      },
+      "count": 8
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 24
+      },
+      "count": 8
+    }
+  ]
+}

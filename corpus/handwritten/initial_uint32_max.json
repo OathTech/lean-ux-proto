@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "id": "initial_uint32_max",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 4294967295,
+      "flags": 2048
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8
+    },
+    {
+      "op": "eventfd2",
+      "init": 4294967295,
+      "flags": 2049
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 2
+      },
+      "count": 8
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 2
+      },
+      "count": 8
+    }
+  ]
+}

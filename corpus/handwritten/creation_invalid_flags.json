@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "id": "creation_invalid_flags",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 0,
+      "flags": 2050
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8
+    },
+    {
+      "op": "eventfd2",
+      "init": 3,
+      "flags": 2048
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 3
+      },
+      "count": 8
+    },
+    {
+      "op": "eventfd2",
+      "init": 0,
+      "flags": 2147485696
+    }
+  ]
+}

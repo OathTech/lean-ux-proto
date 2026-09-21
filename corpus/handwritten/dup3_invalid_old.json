@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "id": "dup3_invalid_old",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 6,
+      "flags": 2048
+    },
+    {
+      "op": "dup3",
+      "fd": {
+        "literal": -1
+      },
+      "newfd": {
+        "ref": 0
+      },
+      "flags": 0
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8
+    },
+    {
+      "op": "dup3",
+      "fd": {
+        "literal": 123456
+      },
+      "newfd": {
+        "literal": 12
+      },
+      "flags": 0
+    },
+    {
+      "op": "eventfd2",
+      "init": 1,
+      "flags": 2048
+    }
+  ]
+}

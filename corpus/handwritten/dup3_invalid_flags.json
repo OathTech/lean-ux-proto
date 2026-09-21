@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "id": "dup3_invalid_flags",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 3,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 7,
+      "flags": 2048
+    },
+    {
+      "op": "dup3",
+      "fd": {
+        "ref": 0
+      },
+      "newfd": {
+        "ref": 1
+      },
+      "flags": 1
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 1
+      },
+      "count": 8
+    },
+    {
+      "op": "dup3",
+      "fd": {
+        "literal": -1
+      },
+      "newfd": {
+        "literal": -1
+      },
+      "flags": 1
+    },
+    {
+      "op": "dup3",
+      "fd": {
+        "ref": 0
+      },
+      "newfd": {
+        "literal": 32
+      },
+      "flags": 2147483648
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8
+    }
+  ]
+}

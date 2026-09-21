@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "id": "independent_objects",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 4,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 9,
+      "flags": 2048
+    },
+    {
+      "op": "write",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8,
+      "value": "3"
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 1
+      },
+      "count": 8
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 1
+      },
+      "count": 8
+    }
+  ]
+}

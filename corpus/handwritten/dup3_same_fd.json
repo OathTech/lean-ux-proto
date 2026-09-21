@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "id": "dup3_same_fd",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 6,
+      "flags": 2048
+    },
+    {
+      "op": "dup3",
+      "fd": {
+        "ref": 0
+      },
+      "newfd": {
+        "ref": 0
+      },
+      "flags": 0
+    },
+    {
+      "op": "dup3",
+      "fd": {
+        "literal": -1
+      },
+      "newfd": {
+        "literal": -1
+      },
+      "flags": 0
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8
+    }
+  ]
+}

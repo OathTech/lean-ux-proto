@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "id": "invalid_descriptors",
+  "ops": [
+    {
+      "op": "read",
+      "fd": {
+        "literal": -1
+      },
+      "count": 8
+    },
+    {
+      "op": "write",
+      "fd": {
+        "literal": -2147483648
+      },
+      "count": 8,
+      "value": "7"
+    },
+    {
+      "op": "close",
+      "fd": {
+        "literal": 2147483647
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "literal": 31
+      }
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "literal": -1
+      },
+      "cmd": "F_GETFD",
+      "arg": 0
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "literal": 32
+      },
+      "cmd": "F_GETFL",
+      "arg": 0
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "literal": -1
+      },
+      "cmd": "F_SETFD",
+      "arg": 1
+    }
+  ]
+}

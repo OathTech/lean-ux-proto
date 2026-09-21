@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "id": "read_length_16",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 7,
+      "flags": 2048
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 0
+      },
+      "count": 16
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8
+    }
+  ]
+}

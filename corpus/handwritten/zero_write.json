@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "id": "zero_write",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 0,
+      "flags": 2048
+    },
+    {
+      "op": "write",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8,
+      "value": "0"
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8
+    },
+    {
+      "op": "eventfd2",
+      "init": 1,
+      "flags": 2049
+    },
+    {
+      "op": "write",
+      "fd": {
+        "ref": 3
+      },
+      "count": 8,
+      "value": "0"
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 3
+      },
+      "count": 8
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 3
+      },
+      "count": 8
+    }
+  ]
+}

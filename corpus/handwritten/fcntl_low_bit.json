@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "id": "fcntl_low_bit",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 1,
+      "flags": 2048
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 0
+      },
+      "cmd": "F_SETFD",
+      "arg": 4294967294
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 0
+      },
+      "cmd": "F_GETFD",
+      "arg": 0
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 0
+      },
+      "cmd": "F_SETFD",
+      "arg": 4294967295
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 0
+      },
+      "cmd": "F_GETFD",
+      "arg": 0
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 0
+      },
+      "cmd": "F_GETFL",
+      "arg": 0
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "id": "stale_reference_reuse",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 1,
+      "flags": 2048
+    },
+    {
+      "op": "close",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "eventfd2",
+      "init": 9,
+      "flags": 2048
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8
+    },
+    {
+      "op": "write",
+      "fd": {
+        "ref": 2
+      },
+      "count": 8,
+      "value": "4"
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8
+    },
+    {
+      "op": "close",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "close",
+      "fd": {
+        "ref": 2
+      }
+    }
+  ]
+}

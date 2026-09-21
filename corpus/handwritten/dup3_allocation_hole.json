@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "id": "dup3_allocation_hole",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 2,
+      "flags": 2048
+    },
+    {
+      "op": "dup3",
+      "fd": {
+        "ref": 0
+      },
+      "newfd": {
+        "literal": 20
+      },
+      "flags": 0
+    },
+    {
+      "op": "eventfd2",
+      "init": 3,
+      "flags": 2048
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "close",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "eventfd2",
+      "init": 7,
+      "flags": 2048
+    },
+    {
+      "op": "read",
+      "fd": {
+        "literal": 20
+      },
+      "count": 8
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 5
+      },
+      "count": 8
+    }
+  ]
+}

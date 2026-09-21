@@ -1,0 +1,201 @@
+{
+  "version": 1,
+  "id": "dup_exhaustion",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 3,
+      "flags": 2048
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup3",
+      "fd": {
+        "ref": 0
+      },
+      "newfd": {
+        "literal": 31
+      },
+      "flags": 524288
+    },
+    {
+      "op": "dup3",
+      "fd": {
+        "ref": 0
+      },
+      "newfd": {
+        "literal": 32
+      },
+      "flags": 0
+    },
+    {
+      "op": "close",
+      "fd": {
+        "ref": 7
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 28
+      },
+      "count": 8
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8
+    }
+  ]
+}

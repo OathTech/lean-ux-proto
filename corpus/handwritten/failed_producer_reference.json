@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "id": "failed_producer_reference",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 0,
+      "flags": 2050
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup3",
+      "fd": {
+        "ref": 1
+      },
+      "newfd": {
+        "literal": 12
+      },
+      "flags": 0
+    },
+    {
+      "op": "close",
+      "fd": {
+        "ref": 2
+      }
+    },
+    {
+      "op": "eventfd2",
+      "init": 11,
+      "flags": 2048
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 4
+      },
+      "count": 8
+    }
+  ]
+}

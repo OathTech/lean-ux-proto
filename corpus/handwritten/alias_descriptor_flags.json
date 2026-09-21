@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "id": "alias_descriptor_flags",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 0,
+      "flags": 526336
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 0
+      },
+      "cmd": "F_GETFD",
+      "arg": 0
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 1
+      },
+      "cmd": "F_GETFD",
+      "arg": 0
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 1
+      },
+      "cmd": "F_SETFD",
+      "arg": 1
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 0
+      },
+      "cmd": "F_SETFD",
+      "arg": 0
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 1
+      },
+      "cmd": "F_GETFD",
+      "arg": 0
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 0
+      },
+      "cmd": "F_GETFD",
+      "arg": 0
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 0
+      },
+      "cmd": "F_GETFL",
+      "arg": 0
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 1
+      },
+      "cmd": "F_GETFL",
+      "arg": 0
+    }
+  ]
+}
