@@ -1,6 +1,8 @@
 # Lean-ux prototype master plan
 
-Status: ready-to-execute plan, 2026-09-20. This is the implementation plan for
+Status: implementation paused at the user's request, 2026-09-21. Read the
+[pause handoff](pause-handoff.md) and campaign ledger before any resumption.
+The original planning baseline below is dated 2026-09-20. This is the implementation plan for
 [the project objectives](project-objectives.md). Writing this plan does not start
 the implementation campaign. Its planned paths and commands below are proposed
 deliverables unless explicitly marked as existing.

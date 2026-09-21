@@ -187,7 +187,9 @@ def check_records(root: Path, shared: Path, model: Path) -> None:
     actual = set()
     texts = []
     model_inputs = []
-    for filename in sorted({b["file"] for b in mappings["bindings"]}):
+    discovered = {str(p.relative_to(model)) for p in (model / "Leanux/FS").rglob("*.lean")}
+    discovered.update({"Leanux/Runner.lean", "Leanux/Main.lean"})
+    for filename in sorted(discovered):
         path = model / filename
         text = path.read_text()
         texts.append(text)
