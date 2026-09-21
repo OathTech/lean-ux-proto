@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "id": "critic_alias_offset_01",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 317,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 318,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 7,
+      "flags": 2049
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 2
+      }
+    },
+    {
+      "op": "write",
+      "fd": {
+        "ref": 3
+      },
+      "count": 8,
+      "value": "6"
+    },
+    {
+      "op": "close",
+      "fd": {
+        "ref": 2
+      }
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 3
+      },
+      "count": 8
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 3
+      },
+      "count": 8
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 3
+      },
+      "cmd": "F_GETFL",
+      "arg": 0
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8
+    }
+  ]
+}

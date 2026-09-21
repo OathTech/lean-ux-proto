@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "id": "critic_alias_replacement_01",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 317,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 318,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 7,
+      "flags": 2049
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 2
+      }
+    },
+    {
+      "op": "eventfd2",
+      "init": 82,
+      "flags": 2048
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 4
+      }
+    },
+    {
+      "op": "dup3",
+      "fd": {
+        "ref": 2
+      },
+      "newfd": {
+        "ref": 4
+      },
+      "flags": 524288
+    },
+    {
+      "op": "close",
+      "fd": {
+        "ref": 2
+      }
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 6
+      },
+      "count": 8
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 5
+      },
+      "count": 8
+    },
+    {
+      "op": "write",
+      "fd": {
+        "ref": 3
+      },
+      "count": 8,
+      "value": "22"
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 4
+      },
+      "count": 8
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 3
+      },
+      "count": 8
+    },
+    {
+      "op": "close",
+      "fd": {
+        "ref": 4
+      }
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 5
+      },
+      "count": 8
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8
+    }
+  ]
+}

@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "id": "critic_alias_moved_06",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 402,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 403,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 404,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 1025,
+      "flags": 526336
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 3
+      }
+    },
+    {
+      "op": "dup3",
+      "fd": {
+        "ref": 4
+      },
+      "newfd": {
+        "literal": 24
+      },
+      "flags": 524288
+    },
+    {
+      "op": "close",
+      "fd": {
+        "ref": 3
+      }
+    },
+    {
+      "op": "eventfd2",
+      "init": 97,
+      "flags": 2048
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 5
+      },
+      "count": 8
+    },
+    {
+      "op": "write",
+      "fd": {
+        "ref": 4
+      },
+      "count": 8,
+      "value": "17"
+    },
+    {
+      "op": "close",
+      "fd": {
+        "ref": 4
+      }
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 5
+      },
+      "count": 8
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 3
+      },
+      "count": 8
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 7
+      },
+      "count": 8
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 5
+      },
+      "cmd": "F_GETFD",
+      "arg": 0
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8
+    }
+  ]
+}

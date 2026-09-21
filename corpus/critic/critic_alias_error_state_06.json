@@ -1,0 +1,130 @@
+{
+  "version": 1,
+  "id": "critic_alias_error_state_06",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 402,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 403,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 404,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 1025,
+      "flags": 526336
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 3
+      }
+    },
+    {
+      "op": "write",
+      "fd": {
+        "ref": 4
+      },
+      "count": 8,
+      "value": "18446744073709551615"
+    },
+    {
+      "op": "dup3",
+      "fd": {
+        "ref": 3
+      },
+      "newfd": {
+        "ref": 3
+      },
+      "flags": 0
+    },
+    {
+      "op": "dup3",
+      "fd": {
+        "literal": -1
+      },
+      "newfd": {
+        "ref": 4
+      },
+      "flags": 0
+    },
+    {
+      "op": "close",
+      "fd": {
+        "ref": 3
+      }
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 4
+      },
+      "count": 7
+    },
+    {
+      "op": "write",
+      "fd": {
+        "ref": 4
+      },
+      "count": 9,
+      "value": "2"
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 4
+      },
+      "count": 8
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 4
+      },
+      "cmd": "F_SETFD",
+      "arg": 8
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 4
+      },
+      "cmd": "F_GETFD",
+      "arg": 0
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 4
+      },
+      "count": 8
+    },
+    {
+      "op": "close",
+      "fd": {
+        "ref": 4
+      }
+    },
+    {
+      "op": "close",
+      "fd": {
+        "ref": 4
+      }
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8
+    }
+  ]
+}
