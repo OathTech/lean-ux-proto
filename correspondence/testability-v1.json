@@ -1,0 +1,222 @@
+{
+  "version": 1,
+  "external_contracts": [
+    {
+      "id": "abi",
+      "source": "Native x86-64 LP64, little endian. Syscall entry macros cast unsigned int arguments to32bits, int flags to signed32bit pattern, size_t to64bits.",
+      "contract": "Contract restricts JSON counts to0..16 and descriptors to signed32 literals or prior nonnegative returns; negative literals become out-of-range unsigned descriptors. No retries.",
+      "limitation": "No compat ABI, pointer casts beyond allocated buffers, or signal restart semantics."
+    },
+    {
+      "id": "allocator",
+      "source": "kmalloc, alloc_file_pseudo, file table capacity, IDA.",
+      "contract": "Normal successful allocation gives fresh object identity. RLIMIT_NOFILE exhaustion is explicitly modeled EMFILE. ENOMEM/ENFILE or failed guest initialization remain separate environment/resource outcomes. IDA failure only yields a negative unobserved fdinfo id.",
+      "limitation": "No model of slab/file-count pressure, allocation timing, address reuse, or IDA ids."
+    },
+    {
+      "id": "references",
+      "source": "fget_raw/get_file, fdget/fdput, fput/__fput_sync, kref.",
+      "contract": "A live descriptor grants access to one shared file/context object. Temporary and kernel-held references do not equal the number of open FDs. Closing/replacing one alias preserves others. Unreachable historical cells can remain in the model and never become reachable through an old numeric result unless that FD is reused for a newly installed file.",
+      "limitation": "Reclamation, deferred release, inode refs and numeric reference counts are abstracted."
+    },
+    {
+      "id": "locks-rcu",
+      "source": "spin locks, irq exclusion, RCU lookup/installation, array_index_nospec.",
+      "contract": "One trace thread, private FD table, no concurrent eventfd producer or descriptor mutation. Correspondence points retain protected field effects; lock-held source context must be justified separately.",
+      "limitation": "No concurrency, memory-ordering, speculative execution or RCU lifetime theorem."
+    },
+    {
+      "id": "copies",
+      "source": "access_ok, copy_from_user, copy_to_iter and iov_iter initialization.",
+      "contract": "Every operation receives16allocated bytes; read size0..16 and write exact8 accesses are valid. Bytes are observed in x86-64 little endian. Eventfd's read updates count before its final copy; a future faulting-buffer extension must preserve that order.",
+      "limitation": "Copy failures excluded by explicit domain. They are not assumed to leave state unchanged."
+    },
+    {
+      "id": "waitqueues",
+      "source": "wait_event_interruptible_locked_irq, waitqueue_active, wake_up_locked_poll and current.in_eventfd.",
+      "contract": "NONBLOCK always set; no poll/epoll waiters or external signalers exist. Wakeup bookkeeping has no effect on retained counter, descriptor identities or emitted bytes.",
+      "limitation": "Blocking waits, interruptions, notifications and eventfd_signal_mask paths are outside scope."
+    },
+    {
+      "id": "file-policy",
+      "source": "security_file_fcntl, security_file_permission, fsnotify permission helpers, dnotify, POSIX file locks.",
+      "contract": "CONFIG_SECURITY=n, CONFIG_FANOTIFY=n and CONFIG_DNOTIFY=n. Trace has no locks or watches. Eventfd has no flush callback. Policy/notification/accounting effects do not change admitted results.",
+      "limitation": "No other policy configurations, filesystems, locks or notification interfaces."
+    },
+    {
+      "id": "source-storage",
+      "source": "eventfd_ctx_do_read pointers and caller-local output.",
+      "contract": "Context fields are readable/writable, output is writable64bit storage disjoint from context, context waitqueue lock is held and no external interference occurs. eventfd_read holds the lock and passes its separate local ucnt; nonzero guard establishes supported caller case.",
+      "limitation": "Boolean context witnesses document source obligations; Lean does not prove these facts for machine addresses or C memory."
+    },
+    {
+      "id": "fixture",
+      "source": "fresh process with descriptors0..7 occupied and RLIMIT_NOFILE32.",
+      "contract": "Model fdTable contains trace slots only;0..7 are implicit reserved occupants. Initial next_fd8 matches fixture. Kernel default FD capacity64 exceeds allowed bound32. Per-trace reset removes all trace aliases.",
+      "limitation": "No modeling of fork/runner transport/KCOV fixture setup inside trace semantics."
+    },
+    {
+      "id": "reservation",
+      "source": "alloc_fd's open_fds reservation before fd_install.",
+      "contract": "Mirror allocFd advances cursor and returns a private reservation value; fdInstall commits membership. No supported operation intervenes. Reservation bitmap andCLOEXEC write are folded into installation in the model, an explicit stuttering abstraction.",
+      "limitation": "No EBUSY from concurrent partially installed descriptors and no theorem over interrupted allocation."
+    },
+    {
+      "id": "observations",
+      "source": "Linux raw returns/errno and8byte read output.",
+      "contract": "Runner emits one ordered observation per operation; stale producer references retain the original FD number, failed producers resolve -1. Trusted comparison owns verdicts.",
+      "limitation": "Branch labels and KCOV addresses are supporting evidence, never a substitute for result comparison or the source bridge."
+    }
+  ],
+  "operations": [
+    {
+      "op": "eventfd2",
+      "syscall": 290,
+      "dispatch": "__x64_sys_eventfd2 → __se_sys_eventfd2 → __do_sys_eventfd2 → do_eventfd",
+      "helpers": [
+        "eventfd-create",
+        "alloc-fd",
+        "anon-file",
+        "fd-install"
+      ],
+      "checks": [
+        "valid/invalid flags including high bits",
+        "init0 and UInt32 max",
+        "semaphore and CLOEXEC",
+        "24-slot exhaustion and freed-slot reuse"
+      ],
+      "testability": "differentially testable under fixture; allocation failures separately classified"
+    },
+    {
+      "op": "dup",
+      "syscall": 32,
+      "dispatch": "__x64_sys_dup → __do_sys_dup → fget_raw → get_unused_fd_flags → fd_install",
+      "helpers": [
+        "dup",
+        "file-get",
+        "alloc-fd",
+        "fd-install"
+      ],
+      "checks": [
+        "bad/stale FD",
+        "shared counter across aliases",
+        "CLOEXEC cleared on new descriptor",
+        "exhaustion and reuse"
+      ],
+      "testability": "differentially testable under fixture"
+    },
+    {
+      "op": "dup3",
+      "syscall": 292,
+      "dispatch": "__x64_sys_dup3 → __do_sys_dup3 → ksys_dup3 → do_dup2",
+      "helpers": [
+        "dup3",
+        "do-dup2"
+      ],
+      "checks": [
+        "flags before equal/bad FDs",
+        "negative/out-of-limit target",
+        "replace live target",
+        "source/target aliases",
+        "target CLOEXEC"
+      ],
+      "testability": "differentially testable; concurrent reservation EBUSY excluded"
+    },
+    {
+      "op": "close",
+      "syscall": 3,
+      "dispatch": "__x64_sys_close → __do_sys_close → file_close_fd → file_close_fd_locked → filp_flush → __fput_sync",
+      "helpers": [
+        "file-close",
+        "close-syscall"
+      ],
+      "checks": [
+        "bad/already closed FD",
+        "close either alias",
+        "stale reference after slot reuse",
+        "other aliases remain usable"
+      ],
+      "testability": "differentially testable plus local model alias invariant"
+    },
+    {
+      "op": "read",
+      "syscall": 0,
+      "dispatch": "__x64_sys_read → __do_sys_read → ksys_read → vfs_read → new_sync_read → eventfd_fops.read_iter → eventfd_read → eventfd_ctx_do_read",
+      "helpers": [
+        "read-wrapper",
+        "eventfd-read",
+        "eventfd-read-value"
+      ],
+      "checks": [
+        "bad FD before short length",
+        "length0,7,8,9,16",
+        "empty EAGAIN",
+        "ordinary drain",
+        "semaphore one-at-a-time",
+        "post-error state"
+      ],
+      "testability": "differentially testable for valid buffers; local encoded-fragment stepping proof"
+    },
+    {
+      "op": "write",
+      "syscall": 1,
+      "dispatch": "__x64_sys_write → __do_sys_write → ksys_write → vfs_write → eventfd_fops.write → eventfd_write",
+      "helpers": [
+        "write-wrapper",
+        "eventfd-write"
+      ],
+      "checks": [
+        "bad FD before length",
+        "exact8 versus other lengths",
+        "zero",
+        "UINT64_MAX rejected",
+        "saturation and overflow boundary",
+        "alias observes addition"
+      ],
+      "testability": "differentially testable for valid buffers"
+    },
+    {
+      "op": "fcntl",
+      "syscall": 72,
+      "dispatch": "__x64_sys_fcntl → __do_sys_fcntl → fdget_raw → security_file_fcntl stub → do_fcntl",
+      "helpers": [
+        "fcntl"
+      ],
+      "checks": [
+        "bad FD",
+        "GETFD per descriptor",
+        "SETFD lowbit and highbit patterns",
+        "GETFL shared status2050"
+      ],
+      "testability": "differentially testable for GETFD, SETFD, GETFL only"
+    }
+  ],
+  "domain_partition": {
+    "syntactically_invalid": "Unknown fields, malformed numbers, unsupported op names, invalid refs or reserved descriptor literals are rejected with no execution.",
+    "unsupported": "Interfaces beyond frozen scope are not generated; explicit proposed extensions retain their own unsupported classification.",
+    "environment_resource": "Unexpected allocation failure, guest setup failure, lost coverage, timeout or interference never counts as Linux/model agreement.",
+    "supported": "Every admitted trace remains in evaluator denominator, including semantic mismatch and all failures."
+  },
+  "scope_extensions": [
+    {
+      "interface": "eventfd2 without NONBLOCK",
+      "testability": "requires bounded scheduling and wait/signal observations"
+    },
+    {
+      "interface": "faulting read/write buffers",
+      "testability": "requires C memory and partial-copy/error-state model"
+    },
+    {
+      "interface": "poll/epoll/eventfd_signal_mask",
+      "testability": "requires readiness notifications and external producers"
+    },
+    {
+      "interface": "concurrent FD operations",
+      "testability": "requires scheduling, temporary reservations, RCU and ownership model"
+    },
+    {
+      "interface": "other fcntl operations and other file kinds",
+      "testability": "requires separate per-command/file-operation contracts"
+    }
+  ]
+}

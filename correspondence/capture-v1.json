@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "manifest_path_relative_to_shared_root": ".artifacts/runs/workspaces/source-correspondence/artifacts/correspondence-final/manifest.json",
+  "manifest_sha256": "aa48db1e1123a4a82b3051846f0b848cb25f5d2f24fb17095ba959eaf88f031d",
+  "translation_units": 8,
+  "verified_identities": 876,
+  "archive_members_checked": 801,
+  "modified_source_members": [],
+  "reference_inputs": [
+    {
+      "path": "Leanux/Reference/EventfdRead.lean",
+      "sha256": "6a7f28f29ba81fb70ed019fef1246522150b0c547b124288eb72731392a77574"
+    },
+    {
+      "path": "Leanux/Reference/EventfdContract.lean",
+      "sha256": "61e9fd5024a9fe62efba653b4f549bef733171394c7d58d8170d0ecdec830ff4"
+    },
+    {
+      "path": "Leanux/Reference/AliasContract.lean",
+      "sha256": "fdd43b29a174745506bece20daa93d9a8a272fa7523e5262b637b20a3469a168"
+    },
+    {
+      "path": "Leanux/FS/EventfdTypes.lean",
+      "sha256": "447ba51975c30f5e6d11521fd6f833f7bb7b33dae265eb498aba2a9cabba2f0c"
+    }
+  ],
+  "acceptance_note": "Coordinator must independently freeze these inputs and promote the complete capture directory before task cleanup. Proof terms are not yet implemented."
+}
