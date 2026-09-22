@@ -1,5 +1,25 @@
 # Repository working rules
 
+## Executable kernel mirror; no model proofs
+
+The user clarified this requirement on 2026-09-22. The deliverable is a highly
+faithful executable Lean model of Linux, tested against actual kernel behavior.
+Each modeled computational step must correspond to a step in the configured
+Linux implementation. Preserve intermediate state, branch decisions, update
+order, and source mappings; record gaps and abstractions explicitly. Matching
+only final results is insufficient.
+
+Do not build proofs about the Lean model, proofs between handwritten Lean
+encodings, or proof-audit infrastructure. Do not add these as acceptance gates
+or substitute them for executable modeling and Linux comparisons. An eventual
+simulation between actual Linux code and the Lean model motivates the required
+computational fidelity; constructing that proof is outside the current work.
+
+This requirement supersedes proof tasks in older plans, handoffs, task ledgers,
+and retained evidence. Historical proof artifacts do not authorize recreating
+them. Removing those tasks does not establish that the remaining behavior or
+step-correspondence requirements have been met.
+
 ## Worktrees and user signoff for main
 
 This is a core trustworthiness requirement, explicitly set by the user on
@@ -7,7 +27,7 @@ This is a core trustworthiness requirement, explicitly set by the user on
 
 - All development takes place in task or integration worktrees on branches
   other than `main`. This includes code, documentation, configuration, builds,
-  tests, and proofs. Never edit tracked files or make development commits in the
+  and tests. Never edit tracked files or make development commits in the
   main checkout.
 - Use the main checkout for read-only inspection, shared inputs, worktree
   administration, and integration explicitly approved by the user. Follow

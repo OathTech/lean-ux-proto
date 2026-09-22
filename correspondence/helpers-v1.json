@@ -884,7 +884,7 @@
           "id": "readvalue.nonzero",
           "condition": "count!=0 under semaphore",
           "classification": "represented",
-          "reason": "Zero/nonzero included in local theorem even when caller avoids zero."
+          "reason": "The helper has zero/nonzero behavior; the supported eventfd_read caller checks for a nonzero counter before calling it."
         },
         {
           "id": "readvalue.lockdep",

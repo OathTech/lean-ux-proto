@@ -28,7 +28,7 @@ requires explicit user signoff for the concrete changes.
 
 | State | Ownership and treatment |
 | --- | --- |
-| Project source, schemas, small corpora, proofs, reports | Tracked files checked out separately in each worktree |
+| Project source, schemas, small corpora, reports | Tracked files checked out separately in each worktree |
 | `.tools` and pinned archives/reference documentation | One shared copy; candidate access is read-only |
 | Linux source and accepted oracle kernel/tool outputs | Coordinator-owned, versioned shared inputs; read-only during evaluation |
 | `.deps/go-mod` | Preserve the complete offline module store; use read-only where supported and serialize any required maintenance |
@@ -109,7 +109,7 @@ and before admitting new work when the disk budget is tight:
    Confirm no live owner or process still uses its checkout or outputs. A stale
    PID or an old modification time alone is not sufficient evidence.
 2. Preserve work: record commits or patches, include needed untracked source
-   files, and promote compact reports, proofs, corpora, and minimal failure
+   files, and promote compact reports, corpora, and minimal failure
    bundles to durable locations. Check the promoted artifacts and references
    before deleting their originals. Keep a Git ref for any unmerged commit still
    needed by evidence; a hash written in a report does not keep an object alive.

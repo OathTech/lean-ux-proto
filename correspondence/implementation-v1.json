@@ -10,7 +10,7 @@
     "Leanux/Runner.lean": "e167bfa6fde08503b3edae8b530ca982d310a635708c662c09b1c12b00f11710"
   },
   "bindings_sha256": "3bd8bfcec0369b397653c5786df7932c1e1f52da28006c537515e769c96d0187",
-  "reference_contract_sha256": "d41b71ebdbb331606804d576c3c98a9464427043a0b68850d79b5965b5dd21c9",
   "change_rule": "Any source or binding change requires renewed independent structural review before acceptance. Behavior experiments may diagnose unreviewed versions but cannot accept them.",
-  "raw_input_boundary": "The trusted host validates trace objects and serializes canonical JSON before model execution. The standalone Lean JSON parser is not the raw JSON syntax validator."
+  "raw_input_boundary": "The trusted host validates trace objects and serializes canonical JSON before model execution. The standalone Lean JSON parser is not the raw JSON syntax validator.",
+  "scope_amendment": "Model proofs and their reference contract removed at user request on 2026-09-22. Executable implementation and binding identities are unchanged; no new structural acceptance is claimed."
 }

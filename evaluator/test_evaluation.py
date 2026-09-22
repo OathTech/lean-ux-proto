@@ -54,7 +54,7 @@ class EvaluationChecks(unittest.TestCase):
         identities = {key: 'a' * (40 if key == 'base_commit' else 64) for key in policy['required_identity_fields']}
         valid = dict(version=1, identities=identities, files={'Leanux/FS/Eventfd.lean': '-- valid text\n'})
         validate_submission(valid, identities, policy)
-        for key in ('evaluator/protocol.py', 'contracts/trace-v1.md', 'Leanux/Reference/EventfdRead.lean',
+        for key in ('evaluator/protocol.py', 'contracts/trace-v1.md', 'Leanux/Proofs/Extra.lean',
                     'lakefile.toml', 'Leanux/FS/FileTypes.lean', 'Leanux/FS/a\x00.lean'):
             bad = dict(valid, files={key: '-- changed\n'})
             with self.assertRaises(ContractViolation):

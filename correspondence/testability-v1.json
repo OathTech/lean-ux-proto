@@ -155,7 +155,7 @@
         "semaphore one-at-a-time",
         "post-error state"
       ],
-      "testability": "differentially testable for valid buffers; local encoded-fragment stepping proof"
+      "testability": "differentially testable for valid buffers; review the ordered output assignment and counter subtraction against configured Linux source"
     },
     {
       "op": "write",

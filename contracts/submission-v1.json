@@ -1,18 +1,14 @@
 {
   "version": 1,
-  "description": "Candidate changes are evaluated against an independently frozen contract snapshot. The coordinator may amend the implementation allowlist before first candidate evaluation, without changing semantics.",
+  "description": "Executable model candidates are evaluated against an independently frozen behavioral contract and configured Linux source correspondence. Model proofs are outside the project scope.",
   "implementation_roots": [
     "Leanux/FS/",
     "Leanux/Runner.lean",
     "Leanux/Main.lean"
   ],
-  "proof_roots": [
-    "Leanux/Proofs/"
-  ],
   "protected_paths": [
     "contracts/",
     "Leanux/FS/EventfdTypes.lean",
-    "Leanux/Reference/",
     "evaluator/",
     "harness/",
     "scripts/",

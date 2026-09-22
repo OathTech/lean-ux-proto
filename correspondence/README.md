@@ -2,8 +2,9 @@
 
 These records describe the native x86-64 Linux 6.12.110 build at commit
 `fa5b06866b643cce7072a4e7c6be7ee3f0f1b95c` and the frozen FD/eventfd trace domain.
-They support review and local proof construction. They do not establish a
-simulation relation with a formal semantics of the kernel's C implementation.
+They support step-by-step source review and behavioral comparison of the
+executable model. They do not establish complete computational correspondence
+merely by recording source locations.
 
 `helpers-v1.json` inventories 19 helper groups and 82 selected source branches.
 Each branch is represented, excluded by the domain, abstracted with a stated
@@ -75,33 +76,22 @@ mode belongs to the eventfd context. Temporary references and unreachable
 object reclamation are abstracted explicitly, rather than equating a kernel
 reference count with the number of open descriptors.
 
-## Local proof contracts
+## Step correspondence and remaining gaps
 
-`Leanux/Reference/EventfdRead.lean` independently encodes the selected C fragment
-using a UInt32 flag word, UInt64 counter/output slot, and three control points.
-The reference first assigns the selected output, then subtracts that stored
-output from the counter. Its transition definitions never call mirror helpers.
-`EventfdContract.lean` defines `StepSimulation readValue doRead`, requiring the
-two steps, intermediate and final relations, both store effects, preserved
-flags/mode, and terminal state. It quantifies every related UInt64 counter and
-UInt32 flag word, including zero and both semaphore modes.
+The configured `eventfd_ctx_do_read` computation selects the output from the
+semaphore flag and counter, assigns the output, then subtracts that stored value
+from the counter. The executable mirror must retain the corresponding computation
+and ordered updates, with intermediate states traceable to the source. Its
+`eventfd_read` caller holds the context lock, passes a separate local output slot,
+and checks a nonzero counter before calling the helper.
 
-The source bridge requires a held context lock, readable/writable context,
-writable disjoint output storage, and no external interference. The supported
-`eventfd_read` caller holds the lock and passes its separate local `ucnt` after
-checking a nonzero counter. The helper theorem intentionally also covers zero,
-which other callers can supply. Context and branch examples are inhabited in
-Lean. These witnesses document the omitted memory/concurrency context; they are
-not evidence that arbitrary real C addresses satisfy it.
+Descriptor removal must preserve other descriptors' access to a shared file.
+Validate that behavior through the executable model and Linux comparisons. Record
+source-side ownership and reclamation abstractions explicitly.
 
-`AliasContract.lean` defines `CloseAliasPreservation` over the actual `Files`,
-`WellFormed`, `fileCloseFd`, and lookup APIs. Closing one of two distinct live
-descriptors for the same object must succeed, remove that descriptor, and
-preserve the other descriptor and its entire accessible file value. The
-coordinator freezes these propositions, reference transitions, relations,
-interface/admission definitions and identities before accepting proof changes.
-
-The planned evidence category is **encoded-fragment simulation**. The formal
-C-source bridge, full API simulation, concurrency, and memory safety remain
-open obligations. KCOV and branch labels are execution evidence with separate
-limits; neither establishes those proofs.
+The handwritten Lean proof references, theorem statements, and proof checks have
+been removed. Source manifests and implementation bindings remain. Their reviewed
+identities are useful provenance, but matching names, branch labels, or final
+outputs alone is insufficient to establish that every modeled step corresponds
+to Linux. Unresolved source and intermediate-state correspondence remains work
+for the executable mirror.

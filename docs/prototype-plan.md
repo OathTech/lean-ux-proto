@@ -2,8 +2,13 @@
 
 Status: implementation paused at the user's request, 2026-09-21. Read the
 [pause handoff](pause-handoff.md) and campaign ledger before any resumption.
-The original planning baseline below is dated 2026-09-20. This is the implementation plan for
-[the project objectives](project-objectives.md). Writing this plan does not start
+Proof requirements were removed at the user's direction on 2026-09-22. The
+required result is an executable mirror with step-by-step correspondence to Linux,
+validated against actual kernel behavior. Do not recreate model proofs or their
+audit infrastructure. Older proof tasks in the ledger and evidence are superseded;
+remaining behavioral and structural gates are still required and are not passed
+by this scope correction. This is the implementation plan for
+[the project objectives](project-objectives.md). Updating this plan does not start
 the implementation campaign. Its planned paths and commands below are proposed
 deliverables unless explicitly marked as existing.
 
@@ -51,16 +56,19 @@ Report unmet obligations explicitly; do not weaken the objective to close a run.
 ## Outcome and starting point
 
 Deliver an executable FD/eventfd mirror and an automatic evaluation-and-repair
-workflow with computational correspondence records, adversarial acceptance
-tests, and a checked local stepping theorem. The final demonstration must be
-reproducible from recorded inputs and honest about its unproved source bridge.
+workflow with step-by-step computational correspondence records and independent
+acceptance tests. Each modeled step must correspond to Linux computation; matching
+only final results is insufficient. The final demonstration must be reproducible
+from recorded inputs and report every unresolved correspondence gap. Proofs over
+the Lean model are outside scope.
 
 Environment preparation is complete. The active nono session passed all eight
 offline acceptance checks, including a fresh kernel build, QEMU/KCOV execution,
 Lean/C/C++ builds, syzkaller builds, Lean diagnostics, and 680 dependency checks.
 [The readiness record](../dependencies/sandbox-validation.json) identifies the
-evidence. There is currently no semantic mirror, differential trace runner,
-contributor isolation boundary, or simulation proof.
+evidence. The executable mirror, differential runner, and evaluator now exist;
+the [pause handoff](pause-handoff.md) records completed comparisons and unfinished
+work. The readiness results alone do not establish model fidelity.
 
 Use the existing standalone nono session and staged tools. Keep project work,
 caches, task snapshots, and profiles inside this repository. Other projects are
@@ -81,7 +89,7 @@ There are two substantive check-ins after the user starts implementation:
 | Check-in | Evidence presented | Default action |
 | --- | --- | --- |
 | First end-to-end result, at the end of Sprint 1 | Hand-written comparisons, the first correspondence records, and evaluator boundary results | Inform the user and continue automatically within scope |
-| Prototype acceptance, after Sprint 4 | Independent replay, repair history, adversarial rejection results, proofs, and remaining obligations | Finish this prototype and recommend the next scope |
+| Prototype acceptance, after Sprint 4 | Independent replay, repair history, rejection results, step correspondence, and remaining gaps | Finish this prototype and recommend the next scope |
 
 Starting the campaign acknowledges the scope and initial operating budgets;
 there is no additional kickoff approval ritual. Brief progress updates during
@@ -107,15 +115,15 @@ are serialized by the coordinator.
 
 | Workstream | Initial responsibility | Later responsibility |
 | --- | --- | --- |
-| Source and correspondence | Configured source, branch/state inventory, external helper contracts | Structural checking and independent proof-reference encoding |
+| Source and correspondence | Configured source, branch/state inventory, external helper contracts | Review each modeled step against configured Linux source |
 | Experiment and evaluator | Trace contract, guest runner, comparison, candidate confinement | Generator, minimizer, acceptance and recovery machinery |
-| Lean mirror | State representation and executable helpers after contract freeze | Repairs, local stepping proof, ownership invariant |
+| Lean mirror | State representation and executable helpers after contract freeze | Repairs, explicit intermediate states, and computational fidelity |
 
 After the first comparison works, rotate a worker into adversarial testing. The
 critic supplies executable tests or concrete failed obligations. The coordinator
 does not accept either a builder's success claim or a critic's prose as evidence.
-The source-reference author and mirror author should work independently on their
-respective implementations after agreeing on the state relation and obligation.
+The source reviewer checks the executable mirror against configured Linux source
+independently of its author, including branch order and intermediate updates.
 
 ```mermaid
 flowchart TD
@@ -127,7 +135,7 @@ flowchart TD
     D --> E
     E --> F[Generate, minimize, and repair]
     E --> G[Challenge evaluator and repairs]
-    C --> H[Independent reference and local stepping proof]
+    C --> H[Review each modeled step against Linux]
     D --> H
     H --> G
     F --> I[Clean replay and acceptance report]
@@ -147,12 +155,11 @@ unavailable. A role assignment does not change filesystem permissions.
 
 Begin with a short foundation stage owned by the coordinator. Freeze versioned
 schemas for scope, traces, observations, testability, correspondence, candidate
-submissions, and evaluator results. Select the initial proof fragment and record
-the intended theorem contract, including the definitions of its admitted domain,
-state relations, effect comparison, reference transitions, and permitted
-abstractions. Freeze those definitions and their noncandidate dependency identities;
-only the declared implementation side is open to candidate repair. Establish the
-task ledger and unique run layout.
+submissions, and evaluator results. Record the modeled Linux regions, intermediate
+states, branch decisions, update order, and permitted abstractions. Freeze the
+supported domain, observation rules, source identities, and candidate change
+policy; only the declared implementation side is open to candidate repair.
+Establish the task ledger and unique run layout.
 Create the small committed project baseline and implement shared-input/private-
 output launcher support plus the worktree lifecycle. Pass the two-worktree
 create/run/recovery/cleanup exercise before sustained agent fan-out. The workers
@@ -249,9 +256,8 @@ defense against specialization.
 For each required fault class below, define at least one executable mutant, an
 expected diagnostic class, and an accompanying valid control candidate. All
 specified mutants must be rejected. This is a bounded adversarial acceptance
-suite, not a complete detector for arbitrary malicious artifacts. Proof-related
-mutants run when the fixed proof checker from Sprint 4 is available; the other
-checks proceed independently.
+suite, not a complete detector for arbitrary malicious artifacts. These checks
+concern executable behavior, evaluator correctness, and source correspondence.
 
 | Deliberate fault | Required reason for rejection |
 | --- | --- |
@@ -260,7 +266,6 @@ checks proceed independently.
 | Changed comparator, normalization, scope, or trusted build file | Candidate submission violates the frozen contract |
 | Unsupported case reported as agreement, empty run, omitted required tests | Missing or invalid evaluator-produced evidence |
 | Stale source/configuration correspondence | Provenance or dependency mismatch |
-| Added axiom, proof hole, altered theorem type, or changes to the frozen relation/domain/effect definitions | Proof dependency or contract-identity mismatch |
 | Candidate writes to evaluator inputs, tools, or authoritative results | Enforced boundary denial, confirmed by unchanged protected data |
 | Malformed, oversized, truncated, or contradictory output; hung process | Explicit protocol/resource failure, never semantic agreement |
 
@@ -274,70 +279,52 @@ reason, valid controls pass, the over-specialized repair fails, and the principl
 repair passes. Any boundary weakness remains an explicit failed or limited gate;
 it cannot be waived by relabeling the threat model after the experiment.
 
-## Sprint 4 — Prove a local step and demonstrate reproducible completion
+## Sprint 4 — Review step fidelity and demonstrate reproducible completion
 
-Begin the proof work as soon as the source fragment and Lean state stabilize;
-it need not wait for all fuzzing. Use `eventfd_ctx_do_read` as the first fragment.
-Its frozen reference encoding represents the configured source's branch, output
-assignment, and counter subtraction as distinct steps with fixed-width values.
-Use entry, after-output-assignment, and exit correspondence points, extending
-mirror helper internals if necessary to expose the corresponding computation.
+Review the executable mirror against the configured Linux implementation. Each
+modeled step must identify its corresponding Linux computation, including
+intermediate state, branch predicates, arithmetic widths, ordered updates, error
+effects, and helper calls. Matching branch labels or final return values alone
+is insufficient. Record omissions and abstractions explicitly and repair
+unjustified differences in the executable code.
 
-Prove local stepping correspondence for arbitrary related states, including
-zero/nonzero counters and ordinary/semaphore flags. State writable-memory,
-aliasing, lock-held, and environmental assumptions explicitly. Provide concrete
-inhabited examples covering each admitted branch; ensure the supported API
-domain can establish the helper's preconditions. The source reference must not
-invoke the candidate mirror to define its behavior.
-
-Prove a second invariant: under explicit well-formedness conditions, closing one
-of two distinct descriptors referring to the same object preserves access through
-the other. Record helper and invariant dependencies in an obligation graph.
-Changes invalidate dependent proof and test evidence, including caller-side
-precondition and domain-preservation obligations.
-
-The evaluator checks the expected propositions under their frozen definitions,
-kernel-checked proof terms, and transitive axiom/declaration dependencies against
-the permitted baseline. Check the protected definition identities, not just the
-printed theorem types: replacing a relation with `True` or its admitted domain
-with `False` is a rejected contract mutation. Reject `sorry`, new unapproved
-axioms, circular assumed helper claims, and weakened statements. Any extra
-computation-based proof trust must be explicitly listed
-and approved; it is not accepted merely because a Lean build exits successfully.
-
-The theorem's evidence category is **encoded-fragment simulation**. Preserve the
-configured C, its source mapping, and the independently reviewed reference
-encoding so that the remaining source-semantics obligation is concrete. This
-prototype does not claim a checked translation of kernel C or a Linux-wide
-simulation theorem.
+For `eventfd_ctx_do_read`, review the selected output, output assignment, and
+subsequent counter subtraction in their actual order. For descriptor operations,
+review lookup, allocation, installation, replacement, removal, and shared-object
+access. Check caller conditions and experiment restrictions against the source.
+Keep implementation identities and mappings current; changed implementations
+require renewed structural review. Do not introduce another handwritten Lean
+reference or construct model theorems to satisfy this work.
 
 Perform a clean replay using the frozen evaluator and accepted source, fresh
 candidate build outputs, and recorded dependencies. Reuse the pinned oracle
 kernel unless its inputs changed; do not rebuild unrelated tooling for every
-candidate. Repeat the generated corpus, regression/critic cases, boundary and
-fault-injection checks, and proofs. Force one interruption and resume it, showing
-that incomplete attempts cannot become accepted results.
+candidate. Repeat the required behavior corpus and ordinary evaluator correctness
+checks. Retain completed environment evidence under the user's instruction not
+to restart those investigations. Force one ordinary job interruption and resume
+it, showing that incomplete attempts cannot become accepted results.
 
-**Automatic gate G4:** both the local stepping theorem and alias invariant pass
-the fixed proof checks; G1–G3 evidence reproduces; recovery works; no mandatory
-obligation is hidden or unresolved. Produce a final report with remaining source,
-configuration, environment, composition, and agent-isolation obligations. Present
-the final check-in and recommend the next subsystem or proof connection using
-the measured bottlenecks.
+**Automatic gate G4:** every modeled step has reviewed source correspondence;
+G1–G3 evidence reproduces under the applicable recorded identities; recovery
+works; no mandatory obligation is hidden or unresolved. Produce a final report
+with remaining source, configuration, environment, and composition limitations.
+This gate contains no proof obligation. Removing the former proof requirements
+does not establish that this gate passes. Present the final check-in and recommend
+the next model scope using the measured bottlenecks.
 
 ## Evaluator boundary and change control
 
-Maintain trusted scope/observation contracts, the source reference, evaluator,
+Maintain trusted scope/observation contracts, configured Linux source, evaluator,
 and accepted evidence separately from candidate inputs. The coordinator owns
 their accepted snapshots and serializes integration. Candidate submissions carry
 an allowlisted patch plus claimed results; the evaluator reconstructs results
 itself. A model candidate cannot submit changes to the evaluator, toolchain,
-theorem contract, or frozen reference as part of its repair.
+behavior contract, or accepted source identities as part of its repair.
 
 The existing `scripts/check-nono` grants the whole project writes, and
 `scripts/in-bundle` configures root-level project caches. Before evaluating
 candidate code, provide attempt-local build/cache paths and prepare trusted
-wrappers outside the candidate's writable area. Launch builds, Lean tactics,
+wrappers outside the candidate's writable area. Launch builds
 and binaries under a narrower child nono profile with only necessary read access,
 attempt-local writes, blocked network, and no inherited control descriptors.
 Keep evaluator-private tests and authoritative results outside those grants.
@@ -408,7 +395,7 @@ and may tune batches within these ceilings after measuring throughput:
 | Guests | One active QEMU guest, one vCPU, 256 MiB |
 | Generated batch | 100 traces, at most 64 operations each; 1,000 completed distinct traces for G2 |
 | Execution timeout | 120 seconds per guest batch initially; tighten or reduce batch size using measured throughput |
-| Candidate build/proof attempt | 15-minute execution deadline; process memory/output limits validated by the evaluator |
+| Candidate build attempt | 15-minute execution deadline; process memory/output limits validated by the evaluator |
 | Agent investigation | 45-minute work item before recording progress and replanning; this is not a requirement to stop the campaign |
 | Output and storage | 16 MiB captured output per attempt; at most 8 GiB additional worktree/cache/build/evidence data in total and a 5 GiB free-space floor |
 
@@ -424,7 +411,7 @@ and seek a bounded budget adjustment rather than silently removing the limit.
 
 At disk thresholds, stop new generation and remove only disposable successful
 scratch data after preserving evidence. Never remove dependency archives,
-`.deps/go-mod`, accepted source/proofs, minimized failures, or unique reports to
+`.deps/go-mod`, accepted model source, minimized failures, or unique reports to
 make a campaign continue. Automated recovery records are frequent; human
 checkpointing is not part of the inner loop.
 Apply the registered worktree teardown after completed tasks and at restart;
@@ -443,10 +430,8 @@ not claims that the files already exist:
 | `contracts/` | Versioned scope, trace, observation, candidate, and result schemas |
 | `correspondence/` | Configured-source manifests, helper/state mappings, testability and obligation records |
 | `Leanux/FS/` | Executable FD/file/eventfd mirror |
-| `Leanux/Reference/` | Frozen source-shaped reference fragment, independently reviewed |
-| `Leanux/Proofs/` | Local stepping theorem and descriptor invariant |
 | `harness/` | Linux runner, generator, comparator, minimizer, and syzkaller adapter experiment |
-| `evaluator/` | Trusted acceptance runner, proof checks, fault-injection cases, local nono profiles |
+| `evaluator/` | Trusted acceptance runner, behavior and correctness checks, local nono profiles |
 | `corpus/` | Small, durable regression, adversarial, and structural cases |
 | `.artifacts/runs/` | Attempt workspaces, logs, snapshots, task ledger, and bulk evidence |
 | `.worktrees/` | Managed task source checkouts; no copied dependency stores |
@@ -463,8 +448,8 @@ success flags.
 
 The report lists G1–G4 verdicts, exact evidence identities, completed and failed
 trace counts, observed branch coverage and gaps, the mismatch-to-repair history,
-mutant rejection results, proof statements and assumptions, boundary probe
-results, human interventions, resource usage, and unresolved obligations. Label
+mutant rejection results, step-correspondence findings, retained environment
+evidence, human interventions, resource usage, and unresolved obligations. Label
 seeded faults separately from natural discoveries and process discipline
 separately from enforced isolation. A required failed gate means an incomplete
 prototype; a research limitation outside the fixed gate is reported explicitly.

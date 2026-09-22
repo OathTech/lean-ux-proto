@@ -110,7 +110,7 @@ can grow substantially; retain minimized traces and compress archived reports.
 .artifacts/kernel/          out-of-tree kernel build and resolved configuration
 .artifacts/guest/           initramfs, runner, boot logs
 .artifacts/runs/            disposable run directories and raw observations
-Leanux/                    modeled semantics and later proofs
+Leanux/                    executable kernel model
 harness/                   generator, C runner, comparator and minimizer
 correspondence/             source maps and named abstractions
 corpus/                    curated regression and critic traces
@@ -139,8 +139,8 @@ then vendor or prefetch all Lake packages before adding them.
 
 If Go is introduced, keep its module/build caches local, set `GOTOOLCHAIN=local`,
 and test with `GOPROXY=off` after provisioning. If Rust is introduced, vendor
-crates and use locked offline builds. Remote theorem search is optional; local
-Lean diagnostics and proof checking must work without it.
+crates and use locked offline builds. Local Lean diagnostics, compilation, and executable model checks must work
+without remote services. Model-proof development is outside the current scope.
 
 If syzkaller integration is planned during the first offline work period, stage
 Go and its module closure now as well. Deferring that download means deferring

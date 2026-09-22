@@ -1,23 +1,28 @@
 # Lean-ux objectives
 
-Status: current project direction, consolidated on 2026-09-20. This document and
-the [prototype execution plan](prototype-plan.md) supersede the implementation
-sequence in the earlier [proposal](2026-09-20-prototype-proposal.md). The earlier
-documents remain useful design history. Only environment preparation has been
-completed; the mirror and its acceptance infrastructure are planned work.
+Status: corrected at the user's direction on 2026-09-22. This document and the
+[prototype execution plan](prototype-plan.md) supersede earlier proposals and
+proof milestones. Current implementation status is in the [pause handoff](pause-handoff.md).
+The campaign remains paused; removing proof work does not resume it.
 
 ## Purpose
 
-Build an executable Lean mirror of progressively larger parts of Linux, arranged
-so that its correspondence to the kernel can eventually be proved. The long-term
-ambition includes a large part, potentially all, of the kernel. Each actual claim
-will identify the kernel configuration, environment, and behaviors it covers.
+Build a highly faithful executable Lean mirror of progressively larger parts of
+Linux. Each modeled computational step must correspond to a step in the configured
+Linux implementation. Test the executable model against actual kernel behavior.
+The long-term ambition includes a large part, potentially all, of the kernel.
+Each actual claim identifies the configuration, environment, and behaviors covered.
+
+Do not construct proofs about the Lean model, proofs between handwritten Lean
+encodings, or proof-audit infrastructure. An eventual simulation between actual
+Linux code and the model motivates computational fidelity; building that proof
+is outside this project phase. Existing model proof requirements are withdrawn.
 
 The mirror has two inseparable responsibilities. Its observable behavior must
 agree with the chosen Linux implementation. Its computations must also have an
 explicit relationship to Linux's state changes and algorithmic flow. This
-relationship should decompose into local simulation proofs and support reasoning
-about their composition.
+relationship must be visible in the executable helpers and intermediate states,
+with source mappings and explicit gaps. Matching final outputs alone is insufficient.
 
 The project also develops the means to construct this mirror with sustained agent
 work: reproducible experiments, independent evaluation, targeted repairs, and
@@ -29,8 +34,8 @@ results.
 
 Produce a small but complete demonstration of this method using file descriptors
 and eventfd objects. The result must combine an executable mirror, a Linux test
-runner, a record of computational correspondence, an automatic repair workflow,
-and a meaningful local stepping theorem.
+runner, a step-by-step record of computational correspondence, and an automatic
+workflow for finding and repairing behavior discrepancies.
 
 The prototype succeeds when the following capabilities work together:
 
@@ -42,18 +47,17 @@ The prototype succeeds when the following capabilities work together:
    useful counterexample, and drive a principled repair without human semantic
    patching. Naturally discovered disagreements are retained separately.
 4. Independent challenges reject an over-specialized repair and attempts to
-   weaken the evaluator, supported domain, or proof obligation.
-5. Lean checks a local simulation theorem between two explicitly distinct
-   representations, over arbitrary related states, with matching effects and a
-   relation at the next correspondence point. A second theorem establishes a
-   useful descriptor ownership invariant.
+   weaken the evaluator, supported domain, or source-correspondence requirement.
+5. Every modeled step identifies the corresponding Linux computation, including
+   intermediate state, branch predicates, update order, and relevant effects.
+   Unmatched steps or unjustified abstractions remain explicit implementation gaps.
 6. The evaluator independently reproduces acceptance from recorded inputs, and
    an interrupted run resumes from durable work records without losing failures
    or silently accepting incomplete work.
 
-This establishes a prototype of a scalable construction method. The source-side
-semantics, configuration generalization, and composition work still required for
-an actual Linux simulation theorem must remain visible in its result.
+This establishes a prototype of a scalable model-construction method. Remaining
+source-correspondence gaps, configuration limits, and omitted kernel behavior
+must remain visible in its result.
 
 ## Initial scope
 
@@ -90,7 +94,9 @@ Generalizing to other architectures or configurations is separate work.
 
 ## Computational correspondence
 
-For a source region from correspondence point A to B, the intended obligation is:
+Future simulation work motivates the following relationship between a source
+region from correspondence point A to B and the executable model. This is a design
+requirement, not a request to construct a theorem in this prototype:
 
 ```text
 For every admitted kernel state c and mirror state m:
@@ -99,10 +105,11 @@ For every admitted kernel state c and mirror state m:
   produces matching relevant effects, and establishes related_B(c', m').
 ```
 
-Control locations are part of this account. Regions may contain multiple steps,
-and internal steps may leave the represented state unchanged. Collapsing steps
-requires a justification; forward simulation alone does not establish reverse
-inclusion of behaviors, termination, timing, or confidentiality properties.
+Control locations are part of this account. Each modeled computational step
+needs a corresponding Linux step; merely matching syscall entry and return is
+insufficient. Regions may contain multiple steps, which must remain accounted
+for individually. Record any collapsed or omitted work as an abstraction requiring
+review, rather than silently treating it as faithful correspondence.
 
 Each modeled helper must identify the following information:
 
@@ -117,19 +124,13 @@ Every call leaving the modeled region has a recorded contract or an unresolved
 obligation. Matching names and source locations is useful bookkeeping; evidence
 about the corresponding computation is required as well.
 
-The first stepping theorem will target the small computation in
-[`eventfd_ctx_do_read`](../.deps/linux/fs/eventfd.c): select a value according to
-semaphore mode and the counter, write that output, and subtract it from the
-counter. A frozen, independently maintained Lean encoding of the source-shaped
-steps will be related to the mirror implementation. The theorem covers the
-symbolic zero/nonzero and semaphore/ordinary cases with fixed-width arithmetic,
-explicit memory/ownership assumptions, and the lock-held obligation.
-
-This theorem relates two Lean encodings. The source-to-reference encoding is
-initially a reviewed, recorded assumption; it is not a formal semantics of the
-actual kernel C. Defining the reference by invoking the candidate mirror would
-not satisfy the objective. A descriptor alias-preservation theorem complements
-the stepping theorem but does not replace it.
+For example, `eventfd_ctx_do_read` selects a value from the semaphore mode and
+counter, assigns that output, then subtracts it from the counter. The executable
+mirror must expose the corresponding computation and order of updates. Preserve
+the configured source and record caller conditions, including the held lock,
+distinct writable output slot, and absence of concurrent interference in this
+slice. A separately handwritten Lean reference is not the Linux implementation
+and is not a substitute for this source correspondence or kernel comparisons.
 
 ## The configured program
 
@@ -170,31 +171,26 @@ Results retain distinct evidence categories:
 | --- | --- |
 | Behavioral evidence | Identified experiments agree under recorded conditions |
 | Structural accounting | Identified source decisions, state changes, and dependencies have dispositions |
-| Model theorem | A property follows for the Lean model under stated assumptions |
-| Encoded-fragment simulation | A stepping theorem relates distinct Lean encodings; the source translation obligation remains |
-| Kernel-source simulation | A theorem connects the mirror to an explicitly justified semantics of configured kernel source; deferred in this prototype |
 
-Tests, coverage, and structural reports cannot be promoted automatically to proof.
+Behavioral agreement and structural accounting are separate requirements. Tests,
+coverage, and source labels do not by themselves establish complete step fidelity.
 Unknown behavior, infrastructure failures, and timeouts never count as agreement.
-Accepted proof statements, assumptions, and their transitive dependencies are
-audited; an empty domain or an added axiom cannot substitute for the obligation.
-The frozen proof contract includes the definitions of the admitted domain, state
-relations, effect comparison, reference transitions, and permitted abstractions.
-Keeping a theorem's name and printed type while weakening those definitions is
-a contract change, not a successful proof repair.
+Freeze the trace domain, observation rules, source identities, and allowed model
+changes. A repair cannot change those requirements to obtain a passing result.
+Proofs about the Lean model are not an accepted evidence category.
 
 ## Automation and its trust boundary
 
 Contributors propose artifacts. A separately controlled evaluator rebuilds and
 checks them against fixed contracts and produces authoritative evidence. Its
 own fault-injection tests must show that incorrect semantics, overfitting,
-tampered comparisons, stale source identities, and invalid proof assumptions are
-rejected for the intended reason.
+tampered comparisons, and stale source identities are rejected for the intended
+reason.
 
 The current collaboration agents share project access. Roles and local hashes
 provide engineering discipline, not security against an agent using all that
 access maliciously. The prototype must enforce a narrower OS boundary for
-candidate builds, tactics, and executables, and demonstrate that they cannot
+candidate builds and executables, and demonstrate that they cannot
 modify accepted inputs or results. Strong isolation of an agent's entire tool
 host is a separate capability, to be implemented and tested before claiming
 resistance to fully hostile contributor agents.

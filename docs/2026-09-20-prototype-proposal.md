@@ -1,5 +1,9 @@
 # First prototype proposal — 2026-09-20
 
+Historical proposal only. The user's 2026-09-22 instruction in [AGENTS.md](../AGENTS.md)
+withdraws all model-proof work, including the proof foothold below. Follow the
+current [objectives](project-objectives.md) and [master plan](prototype-plan.md).
+
 **Historical proposal:** the current [objectives](project-objectives.md) and
 [execution plan](prototype-plan.md) incorporate the subsequent discussion of
 computational correspondence, local stepping proofs, evaluator integrity, and

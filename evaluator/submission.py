@@ -37,7 +37,7 @@ def allowed(name, policy):
     if any(name == p or p.endswith('/') and name.startswith(p) for p in policy['protected_paths']):
         return False
     return name.endswith('.lean') and any(name == p or p.endswith('/') and name.startswith(p)
-                                         for p in policy['implementation_roots'] + policy['proof_roots'])
+                                         for p in policy['implementation_roots'])
 
 
 def validate_submission(submission, expected, policy):

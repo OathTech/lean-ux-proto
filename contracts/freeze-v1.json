@@ -11,28 +11,8 @@
       "sha256": "e1e0a11a06d02e32f2bdbbbec0a83be16541b85be8c7ed95e2fe1fde94835608"
     },
     {
-      "path": "Leanux/Reference/AliasContract.lean",
-      "sha256": "fdd43b29a174745506bece20daa93d9a8a272fa7523e5262b637b20a3469a168"
-    },
-    {
-      "path": "Leanux/Reference/EventfdContract.lean",
-      "sha256": "61e9fd5024a9fe62efba653b4f549bef733171394c7d58d8170d0ecdec830ff4"
-    },
-    {
-      "path": "Leanux/Reference/EventfdRead.lean",
-      "sha256": "6a7f28f29ba81fb70ed019fef1246522150b0c547b124288eb72731392a77574"
-    },
-    {
       "path": "contracts/observation.schema.json",
       "sha256": "0cc873dc56a22c2636c420f571764acec6a1a3822c93279be4ddd8cf31480ad5"
-    },
-    {
-      "path": "contracts/proof-identities-v1.json",
-      "sha256": "d41b71ebdbb331606804d576c3c98a9464427043a0b68850d79b5965b5dd21c9"
-    },
-    {
-      "path": "contracts/proof-v1.md",
-      "sha256": "14b82d4cb05635e18e98861f07b3ab6efd3c51c030c96b758457a3e0608d9649"
     },
     {
       "path": "contracts/scope-v1.json",
@@ -40,7 +20,7 @@
     },
     {
       "path": "contracts/submission-v1.json",
-      "sha256": "8bbf8b33ef931c8eeb14efb58bf91ddf86fc2831869f385fd7143eba57d68c78"
+      "sha256": "fa0dcce3a66a206b6a0cedd7d93cc564c6cef7a1dbab35302f101f646aabcaae"
     },
     {
       "path": "contracts/trace-v1.md",
@@ -64,5 +44,6 @@
     }
   ],
   "settled_at_utc": "2026-09-21T01:20:07.900978+00:00",
-  "settlement_note": "Before first candidate evaluation: freeze settled FD proof types, relations and reference, protect FileTypes, and pin one Lean build thread. Trace/observation/scope semantics unchanged."
+  "settlement_note": "User-directed removal of model proof requirements on 2026-09-22. Executable model source, state types, trace domain, observations, and toolchain identities are unchanged. Prior evidence retains its original contract identity; this amendment does not re-accept historical results.",
+  "amended_at_utc": "2026-09-22T18:41:12.828059+00:00"
 }
