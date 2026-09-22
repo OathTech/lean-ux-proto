@@ -9,6 +9,10 @@ deliverables unless explicitly marked as existing.
 
 ## Governing-agent start and resume protocol
 
+Read [AGENTS.md](../AGENTS.md) first. All development occurs in worktrees, and
+every update to `main` requires explicit user signoff for the concrete changes.
+Automatic gates and long-cycle authorization never replace that signoff.
+
 This file is the entry point for every cycle of the implementation goal. It
 defines execution order and completion gates. The linked
 [objectives](project-objectives.md) define the intended claims, the
@@ -30,9 +34,10 @@ At each goal cycle:
 3. Select the next ready obligations, delegate independent bounded tasks, and
    perform useful coordinator work concurrently. Respect the dependency graph,
    aggregate resource limits, and evaluator ownership boundary.
-4. Evaluate submitted results, integrate accepted changes, and schedule targeted
-   repairs. Continue automatically across passed gates and the informational
-   midpoint check-in. Request a decision only under the exceptions stated below.
+4. Evaluate submitted results, integrate accepted changes on a non-main branch
+   in a worktree, and schedule targeted repairs. Continue automatically across
+   passed gates and the informational midpoint check-in. Obtain explicit user
+   signoff before any integration into `main`, in addition to the decisions below.
 5. Update the ledger with evidence, unresolved obligations, and concrete next
    actions. Clean up completed worktrees through the registered lifecycle while
    preserving active work and durable results.
@@ -83,7 +88,8 @@ there is no additional kickoff approval ritual. Brief progress updates during
 work are informational. Internal task records and recovery checkpoints require
 no human involvement.
 
-Ask for a decision only when a necessary change would expand the modeled scope,
+Always obtain explicit user signoff before merging concrete changes into `main`.
+Other decisions are needed when a necessary change would expand the modeled scope,
 weaken observations or acceptance criteria, add trusted assumptions, require
 unstaged dependencies/network or global changes, exceed authorized resource
 limits, or resolve a genuinely blocked critical path. Continue independent work

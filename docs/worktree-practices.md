@@ -18,10 +18,13 @@ about 224 KiB. Most current setup and planning files are still untracked; only
 the original brainstorming note is in HEAD. A new worktree at that HEAD would
 therefore omit the setup scripts and current plans.
 
-Keep the main checkout as the coordinator's integration workspace and the home
-of shared staged inputs. Put managed checkouts under `.worktrees/<task-id>/`
-inside this project, never in a neighboring project. Use one task branch per
-worker, starting from a recorded accepted commit.
+Keep the main checkout for read-only inspection, shared staged inputs, worktree
+administration, and user-approved integration. The coordinator also develops
+and combines changes in a worktree on a non-main branch. Put managed checkouts
+under `.worktrees/<task-id>/` inside this project, never in a neighboring project.
+Use one task branch per worker, starting from a recorded accepted commit.
+Follow [AGENTS.md](../AGENTS.md): every merge or equivalent update to `main`
+requires explicit user signoff for the concrete changes.
 
 | State | Ownership and treatment |
 | --- | --- |
@@ -81,6 +84,9 @@ The coordinator alone creates, integrates, renames, removes, or prunes managed
 worktrees and updates the shared dependency inputs. Workers edit their assigned
 checkout and produce patches or local task commits. Integration runs through the
 existing independent evaluator; a worker cannot declare its own result accepted.
+Evaluator acceptance permits further work on non-main branches. It does not
+authorize updating `main`; the coordinator must obtain explicit user signoff
+after preparing the reviewable changes and validation evidence.
 
 Allow at most three worker worktrees plus one temporary evaluation worktree.
 Paused or quarantined trees count toward that limit. Evaluation can reuse a clean
