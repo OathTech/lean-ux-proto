@@ -1,0 +1,171 @@
+import Leanux.FS.EventfdOps
+
+/-!
+# fs/file_table.c — `struct file` allocation and release
+
+`alloc_empty_file`/`init_file`, `file_init_path`, `alloc_file`,
+`alloc_file_pseudo`, `fput`, `__fput_sync`, `__fput` and `file_free`.
+
+Configured-program notes (this `.config`): `CONFIG_SECURITY=n`, so every
+`security_*` hook is the constant 0 and its error branch does not exist in the
+built code; fsnotify and dnotify are compiled out. `CONFIG_EPOLL=y` and
+`CONFIG_FILE_LOCKING=y`: `eventpoll_release`, `locks_remove_file` and
+`locks_remove_posix` are cut points (contract: the file is in no epoll set and
+holds no locks, so they change no mirror state).
+-/
+
+namespace Leanux
+
+/-- `OPEN_FMODE(flag)` (include/linux/fs.h:3725). -/
+def openFmode (flags : UInt32) : UInt32 :=
+  ((flags + 1) &&& O_ACCMODE) ||| (flags &&& FMODE_NONOTIFY)
+
+/-- Whether the file's inode is a character device (`S_ISCHR`). The anonymous
+    inode has mode S_IRUSR|S_IWUSR (fs/libfs.c); fixture inodes are not modeled. -/
+def inodeIsChr : FileKind → M Bool
+  | .eventfd _ => return false
+  | .fixture name => unsupported s!"inode of fixture file {name}"
+
+/-- file_free (file_table.c:87-98). `put_cred` and the slab free are cut points. -/
+def fileFree (fid : FileId) : M Unit := do
+  let f ← getFile fid
+  if ← branch .fileFreeAccounted (!hasFlag f.fMode FMODE_NOACCOUNT) then
+    modifyK fun k => { k with nrFiles := k.nrFiles - 1 }   -- percpu_counter_dec(&nr_files)
+  if ← branch .fileFreeBacking (hasFlag f.fMode FMODE_BACKING) then
+    unsupported "backing_file_free"
+  -- kmem_cache_free(filp_cachep, f)
+  modifyK fun k => { k with files := fun n => if n = fid then none else k.files n }
+
+/-- alloc_empty_file (file_table.c:214-253) with init_file (171-202) inlined:
+    `f_flags = flags`, `f_mode = OPEN_FMODE(flags)`, `f_count = 1`. -/
+def allocEmptyFile (flags : UInt32) (kind : FileKind) : M (Except Int FileId) := do
+  let k ← getK
+  if ← branch .allocEmptyFileOverMax (k.nrFiles >= k.maxFiles) then
+    _ ← branch .allocEmptyFileNotCapable false  -- the harness runs as root: capable(CAP_SYS_ADMIN)
+    unsupported "files_stat.max_files reached (percpu recount)"
+  if ← branch .allocEmptyFileNoMem (!(← envOk .filpAlloc)) then
+    return .error (-ENOMEM)
+  let fid := k.nextFile
+  setFile fid { fFlags := flags, fMode := openFmode flags, fCount := 1, kind }
+  modifyK fun k => { k with nextFile := fid + 1, nrFiles := k.nrFiles + 1 }
+  return .ok fid
+
+/-- `iocb_flags(file)` (include/linux/fs.h:3590-3602), with the IOCB values of
+    include/linux/fs.h:351-359 (IOCB_APPEND = RWF_APPEND, ...). -/
+def iocbFlags (fFlags : UInt32) : M UInt32 := do
+  let mut res : UInt32 := 0
+  if ← branch .iocbFlagsAppend (hasFlag fFlags O_APPEND) then res := res ||| 0x10
+  if ← branch .iocbFlagsDirect (hasFlag fFlags O_DIRECT) then res := res ||| ((1 : UInt32) <<< 17)
+  if ← branch .iocbFlagsDsync (hasFlag fFlags O_DSYNC) then res := res ||| 0x2
+  if ← branch .iocbFlagsSync (hasFlag fFlags O_SYNC_INTERNAL) then res := res ||| 0x4
+  return res
+
+/-- file_init_path (file_table.c:330-351). The path/inode/mapping fields and
+    `i_readcount_inc` are cut points (the anonymous inode is shared and not
+    modeled). -/
+def fileInitPath (fid : FileId) (fop : Fops) : M Unit := do
+  let f ← getFile fid
+  let mut mode := f.fMode
+  if ← branch .fileInitPathLlseek fop.llseek then mode := mode ||| FMODE_LSEEK
+  if ← branch .fileInitPathModeRead (hasFlag mode FMODE_READ) then
+    let canRead ← do
+      if ← branch .fileInitPathHasRead fop.read then pure true
+      else branch .fileInitPathHasReadIter fop.readIter
+    if canRead then mode := mode ||| FMODE_CAN_READ
+  if ← branch .fileInitPathModeWrite (hasFlag mode FMODE_WRITE) then
+    let canWrite ← do
+      if ← branch .fileInitPathHasWrite fop.write then pure true
+      else branch .fileInitPathHasWriteIter fop.writeIter
+    if canWrite then mode := mode ||| FMODE_CAN_WRITE
+  let iocb ← iocbFlags f.fFlags
+  mode := mode ||| FMODE_OPENED
+  setFile fid { f with fMode := mode, fIocbFlags := iocb }
+  -- i_readcount_inc for read-only files: a cut point
+  _ ← branch .fileInitPathReadOnly (mode &&& (FMODE_READ ||| FMODE_WRITE) == FMODE_READ)
+
+/-- alloc_file (file_table.c:360-369). -/
+def allocFile (flags : UInt32) (kind : FileKind) (fop : Fops) : M (Except Int FileId) := do
+  let r ← allocEmptyFile flags kind
+  if ← branch .allocFileOk (r matches .ok _) then
+    if let .ok fid := r then fileInitPath fid fop
+  return r
+
+/-- alloc_file_pseudo (file_table.c:382-400). `alloc_path_pseudo` allocates a
+    dentry (`d_alloc_pseudo`, an environment choice point); `mntget`,
+    `d_instantiate`, `ihold` and `path_put` are cut points. -/
+def allocFilePseudo (flags : UInt32) (kind : FileKind) (fop : Fops) : M (Except Int FileId) := do
+  if ← branch .allocPathPseudoFail (!(← envOk .dAllocPseudo)) then return .error (-ENOMEM)
+  let r ← allocFile flags kind fop
+  _ ← branch .allocFilePseudoErr (r matches .error _)
+  return r
+
+/-- put_file_access (fs/internal.h:114-121). -/
+def putFileAccess (f : File) : M Unit := do
+  if ← branch .putFileAccessReadOnly (f.fMode &&& (FMODE_READ ||| FMODE_WRITE) == FMODE_READ) then
+    unsupported "i_readcount_dec"
+  else if ← branch .putFileAccessWriter (hasFlag f.fMode FMODE_WRITER) then
+    unsupported "file_put_write_access"
+
+/-- __fput (file_table.c:442-482): the release of the last reference. -/
+def fputFinal (fid : FileId) : M Unit := do
+  let f ← getFile fid
+  if ← branch .fputFinalNotOpened (!hasFlag f.fMode FMODE_OPENED) then
+    fileFree fid
+    return
+  -- might_sleep(); fsnotify_close (compiled out)
+  -- eventpoll_release (include/linux/eventpoll.h:34-54)
+  if ← branch .eventpollReleaseLinked f.fEp then
+    unsupported "eventpoll_release_file"
+  -- locks_remove_file: a cut point (no locks); security_file_release (compiled out)
+  let fop ← fopsOf f.kind
+  if ← branch .fputFinalFasync (hasFlag f.fFlags FASYNC) then
+    unsupported "__fput with FASYNC"
+  if ← branch .fputFinalRelease fop.release then
+    _ ← fopRelease fid f.kind
+  -- `S_ISCHR(inode->i_mode) && inode->i_cdev != NULL && !(mode & FMODE_PATH)`
+  if ← branch .fputFinalCharDevice (← inodeIsChr f.kind) then
+    _ ← branch .fputFinalHasCdev true
+    _ ← branch .fputFinalNotPath (!hasFlag f.fMode FMODE_PATH)
+    unsupported "cdev_put"
+  -- fops_put: eventfd_fops has no module owner
+  -- file_f_owner_release (fcntl.c:116-125)
+  if ← branch .fileOwnerRelease f.fOwner then
+    unsupported "file_f_owner_release with an owner"
+  putFileAccess f
+  -- dput(dentry)
+  if ← branch .fputFinalNeedUnmount (hasFlag f.fMode FMODE_NEED_UNMOUNT) then
+    unsupported "dissolve_on_fput"
+  -- mntput(mnt)
+  fileFree fid
+
+/-- fput (file_table.c:517-540). The last reference queues `____fput` as task
+    work, run on return to user mode (see `Leanux.Syscalls`). -/
+def fput (fid : FileId) : M Unit := do
+  let f ← getFile fid
+  setFile fid { f with fCount := f.fCount - 1 }
+  if ← branch .fputLast (f.fCount == 1) then
+    if ← branch .fputNotOpened (!hasFlag f.fMode (FMODE_BACKING ||| FMODE_OPENED)) then
+      fileFree fid
+      return
+    let task := (← getK).task
+    -- `likely(!in_interrupt() && !(task->flags & PF_KTHREAD))`
+    let taskContext ← do
+      if ← branch .fputInInterrupt false then pure false  -- system-call context
+      else pure !(← branch .fputKthread task.isKthread)
+    if taskContext then
+      -- init_task_work; `if (!task_work_add(task, &file->f_task_work, TWA_RESUME)) return;`
+      if ← branch .fputTaskWorkAddFailed task.exited then
+        unsupported "task_work_add after exit_task_work (falls through to delayed fput)"
+      -- task_work_add pushes at the head of task->task_works (kernel/task_work.c)
+      modifyK fun k => { k with task := { k.task with taskWorks := fid :: k.task.taskWorks } }
+      return
+    unsupported "delayed fput"
+
+/-- __fput_sync (file_table.c:550-554). -/
+def fputSync (fid : FileId) : M Unit := do
+  let f ← getFile fid
+  setFile fid { f with fCount := f.fCount - 1 }
+  if ← branch .fputSyncLast (f.fCount == 1) then
+    fputFinal fid
+
+end Leanux

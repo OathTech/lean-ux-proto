@@ -1,16 +1,12 @@
-import Leanux.FS.File
+import Leanux.Syscalls
 import Lean.Data.Json
 
 namespace Leanux.Runner
-open Lean FS
+open Lean Leanux
 
 inductive FDArg where
   | literal (value : Int)
   | ref (index : Nat)
-  deriving Repr
-
-inductive FcntlCmd where
-  | getFD | setFD | getFL
   deriving Repr
 
 inductive Operation where
@@ -105,11 +101,11 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
     match cmd with
     | "F_GETFD" =>
       if arg != 0 then throw "getter arg must be zero"
-      return .fcntl fd .getFD arg
-    | "F_SETFD" => return .fcntl fd .setFD arg
+      return .fcntl fd FcntlCmd.getFD arg
+    | "F_SETFD" => return .fcntl fd FcntlCmd.setFD arg
     | "F_GETFL" =>
       if arg != 0 then throw "getter arg must be zero"
-      return .fcntl fd .getFL arg
+      return .fcntl fd FcntlCmd.getFL arg
     | _ => throw "unsupported fcntl command"
   | _ => throw "unsupported operation"
 
@@ -127,17 +123,39 @@ def parseTrace (j : Json) : Except String Trace := do
     ops := ops.push (← parseOperation j ops)
   return ⟨id, ops⟩
 
-structure Step where
-  state : Files
-  ret : Int
-  bytes : String := ""
-  branches : List String := []
+/-! ## Harness fixture and trace execution
 
-private def fail (s : Files) (err : Nat) (labels : List String) : Step :=
-  { state := s, ret := -(Int.ofNat err), branches := labels }
+The guest child (harness/guest.c) runs each trace in a fresh forked process:
+descriptors 0-2 are the inherited console (one shared `struct file`), 3 is
+KCOV (also memory-mapped), 4-7 are separately opened /dev/null files, and
+RLIMIT_NOFILE is 32. The fork gave the child its own files_struct
+(`count = 1`) with the embedded 64-slot table. Allocation history leaves
+`next_fd = 8`. Fixture files carry references held outside the trace. -/
 
-private def success (s : Files) (ret : Nat) (labels : List String) : Step :=
-  { state := s, ret := Int.ofNat ret, branches := labels }
+def fixtureFile (name : String) (refs : Nat) : File :=
+  { fFlags := O_RDWR, fMode := FMODE_READ ||| FMODE_WRITE ||| FMODE_OPENED,
+    fCount := refs, kind := .fixture name }
+
+def initialKernel : Kernel :=
+  let slot (fd : Nat) : Option FileId :=
+    if fd < 3 then some 0 else if fd < 8 then some (fd - 2) else none
+  let files : Nat → Option File := fun
+    | 0 => some (fixtureFile "console" 4)   -- fds 0-2 plus init's references
+    | 1 => some (fixtureFile "kcov" 2)      -- fd 3 plus the coverage mapping
+    | n@(_ + 2) => if n < 6 then some (fixtureFile "/dev/null" 1) else none
+  { task := {
+      files := { count := 1, resizeInProgress := false, nextFd := 8,
+                 fdt := { maxFds := NR_OPEN_DEFAULT, fd := slot,
+                          openFds := fun fd => fd < 8, closeOnExec := fun _ => false } }
+      rlimitNofile := 32 }
+    files, nextFile := 6, ctxs := fun _ => none, nextCtx := 0,
+    idaUsed := fun _ => false,
+    -- Environment facts: the system-wide open-file count and limit are not
+    -- observed; the guest has few files open, far below any boot-sized limit.
+    nrFiles := 6, maxFiles := 1000000, anonInodeInodeErr := false }
+
+/-- The harness environment: every allocation and user-memory access succeeds. -/
+def harnessEnv : EnvSite → Nat → Bool := fun _ _ => true
 
 def resolveFD (results : Array Int) : FDArg → Int
   | .literal n => n
@@ -146,15 +164,6 @@ def resolveFD (results : Array Int) : FDArg → Int
     | some n => if n < 0 then -1 else n
     | none => -1 -- Only reachable when bypassing parseTrace.
 
-/-- All descriptor syscalls convert arguments to unsigned 32-bit FDs. Signed
-    literals in this contract can name live slots only when they are nonnegative. -/
-private def resolveLive (s : Files) (fd : Int) : Option (Nat × FDEntry × File) := do
-  if fd < 8 || fd >= Int.ofNat s.limit then none else do
-    let number := fd.toNat
-    let entry ← lookupDescriptor s number
-    let file ← s.objects entry.objectId
-    some (number, entry, file)
-
 private def hexByte (n : Nat) : String :=
   let digits := "0123456789abcdef".toList.toArray
   String.ofList [digits[n / 16 % 16]!, digits[n % 16]!]
@@ -162,112 +171,51 @@ private def hexByte (n : Nat) : String :=
 def wordBytes (value : UInt64) : String :=
   String.join ((List.range 8).map fun i => hexByte (value.toNat / 256 ^ i % 256))
 
-def doEventfd (s : Files) (init flags : UInt32) : Step :=
-  if flags &&& (~~~ (526337 : UInt32)) != 0 then
-    fail s 22 ["do_eventfd.invalid_flags"]
-  else
-    match allocFd s with
-    | none => fail s 24 ["do_eventfd.valid_flags", "alloc_fd.limit"]
-    | some (fd, reserved) =>
-      let file : File := {
-        ctx := { count := UInt64.ofNat init.toNat, semaphore := flags &&& 1 != 0 }
-        statusFlags := 2050 }
-      let created := updateObject reserved s.nextObject file
-      let installed := fdInstall created fd ⟨s.nextObject, flags &&& 524288 != 0⟩
-      success { installed with nextObject := s.nextObject + 1 } fd
-        ["do_eventfd.valid_flags", "alloc_fd.reserve", "anon_inode_getfile.create", "fd_install"]
+def toSyscall (results : Array Int) : Operation → Syscall
+  | .eventfd2 init flags => .eventfd2 init flags
+  | .dup fd => .dup (uint (resolveFD results fd))
+  | .dup3 fd newfd flags => .dup3 (uint (resolveFD results fd)) (uint (resolveFD results newfd)) flags
+  | .close fd => .close (uint (resolveFD results fd))
+  | .read fd count => .read (uint (resolveFD results fd)) count
+  | .write fd count value => .write (uint (resolveFD results fd)) count value
+  | .fcntl fd cmd arg => .fcntl (uint (resolveFD results fd)) cmd arg.toUInt64
 
-def dupFd (s : Files) (fd : Int) : Step :=
-  match resolveLive s fd with
-  | none => fail s 9 ["dup.bad_fd"]
-  | some (_, entry, _) =>
-    match allocFd s with
-    | none => fail s 24 ["dup.lookup", "alloc_fd.limit"]
-    | some (newfd, reserved) =>
-      success (fdInstall reserved newfd { entry with cloexec := false }) newfd
-        ["dup.lookup", "alloc_fd.reserve", "dup.share_object", "fd_install"]
-
-def dup3Fd (s : Files) (fd newfd : Int) (flags : UInt32) : Step :=
-  if flags &&& (~~~ (524288 : UInt32)) != 0 then
-    fail s 22 ["ksys_dup3.invalid_flags"]
-  else if fd == newfd then
-    fail s 22 ["ksys_dup3.equal_fds"]
-  else if newfd < 0 || newfd >= Int.ofNat s.limit then
-    fail s 9 ["ksys_dup3.target_limit"]
-  else
-    match resolveLive s fd with
-    | none => fail s 9 ["ksys_dup3.bad_source"]
-    | some (_, entry, _) =>
-      let replacing := (lookupDescriptor s newfd.toNat).isSome
-      success (doDup2 s entry newfd.toNat (flags &&& 524288 != 0)) newfd.toNat
-        ["ksys_dup3.lookup", if replacing then "do_dup2.replace" else "do_dup2.unused",
-          "do_dup2.share_object"]
-
-def closeFd (s : Files) (fd : Int) : Step :=
-  if fd < 8 || fd >= Int.ofNat s.limit then fail s 9 ["close.bad_fd"]
-  else
-    match fileCloseFd s fd.toNat with
-    | none => fail s 9 ["close.bad_fd"]
-    | some (_, afterClose) => success afterClose 0 ["file_close_fd_locked.remove", "filp_close.release"]
-
-def readFd (s : Files) (fd : Int) (size : Nat) : Step :=
-  match resolveLive s fd with
-  | none => fail s 9 ["read.bad_fd"]
-  | some (_, entry, file) =>
-    let checked := Eventfd.eventfdRead file.ctx size
-    match checked.result with
-    | .error err => fail s err ("read.dispatch" :: checked.branches)
-    | .ok result =>
-      { state := updateObject s entry.objectId { file with ctx := result.next }
-        ret := 8, bytes := wordBytes result.value
-        branches := "read.dispatch" :: checked.branches }
-
-def writeFd (s : Files) (fd : Int) (size : Nat) (value : UInt64) : Step :=
-  match resolveLive s fd with
-  | none => fail s 9 ["write.bad_fd"]
-  | some (_, entry, file) =>
-    let checked := Eventfd.eventfdWrite file.ctx size value
-    match checked.result with
-    | .error err => fail s err ("write.dispatch" :: checked.branches)
-    | .ok ctx => success (updateObject s entry.objectId { file with ctx }) 8
-      ("write.dispatch" :: checked.branches)
-
-def fcntlFd (s : Files) (fd : Int) (cmd : FcntlCmd) (arg : UInt32) : Step :=
-  match resolveLive s fd with
-  | none => fail s 9 ["fcntl.bad_fd"]
-  | some (number, entry, file) =>
-    match cmd with
-    | .getFD => success s (if entry.cloexec then 1 else 0) ["fcntl.getfd"]
-    | .setFD => success (fdInstall s number { entry with cloexec := arg &&& 1 != 0 }) 0
-      ["fcntl.setfd"]
-    | .getFL => success s file.statusFlags.toNat ["fcntl.getfl"]
-
-def executeOperation (s : Files) (results : Array Int) : Operation → Step
-  | .eventfd2 init flags => doEventfd s init flags
-  | .dup fd => dupFd s (resolveFD results fd)
-  | .dup3 fd newfd flags => dup3Fd s (resolveFD results fd) (resolveFD results newfd) flags
-  | .close fd => closeFd s (resolveFD results fd)
-  | .read fd count => readFd s (resolveFD results fd) count
-  | .write fd count value => writeFd s (resolveFD results fd) count value
-  | .fcntl fd cmd arg => fcntlFd s (resolveFD results fd) cmd arg
-
-def executeTrace (trace : Trace) : Json := Id.run do
-  let mut state := initialFiles
+/-- Run a trace. An `unsupported` outcome is returned as an error: the mirror
+    never reports an observation for a path it does not model. -/
+def executeTrace (trace : Trace) : Except String Json := do
+  let mut world : World := { k := initialKernel, env := harnessEnv }
   let mut results : Array Int := #[]
   let mut observations : Array Json := #[]
   let mut branches : Array Json := #[]
   for op in trace.ops do
     let index := results.size
-    let step := executeOperation state results op
-    state := step.state
-    results := results.push step.ret
+    let (ret, w) ← (syscall (toSyscall results op)).run world
+      |>.mapError fun e => s!"trace {trace.id} operation {index}: {e}"
+    world := w
+    results := results.push ret
+    let bytes := match op, w.userOut with
+      | .read .., some v => if ret == 8 then wordBytes v else ""
+      | _, _ => ""
     observations := observations.push (Json.mkObj [
-      ("index", toJson index), ("ret", toJson step.ret),
-      ("errno", if step.ret < 0 then toJson (-step.ret) else .null),
-      ("bytes", toJson step.bytes)])
-    for label in step.branches do
-      branches := branches.push (Json.mkObj [("index", toJson index), ("label", toJson label)])
+      ("index", toJson index), ("ret", toJson ret),
+      ("errno", if ret < 0 then toJson (-ret) else .null),
+      ("bytes", toJson bytes)])
+    for s in w.steps do
+      branches := branches.push (Json.mkObj [("index", toJson index), ("label", toJson s.label)])
   return Json.mkObj [("version", toJson (1 : Nat)), ("id", toJson trace.id),
     ("observations", .arr observations), ("branches", .arr branches)]
+
+def spanJson (s : Span) : Json :=
+  Json.mkObj [("file", toJson s.file), ("lo", toJson s.lo), ("hi", toJson s.hi)]
+
+/-- The decision table, for the check's KCOV comparison. -/
+def decisionsJson : Json :=
+  .arr (Decision.all.map fun d =>
+    let i := d.info
+    Json.mkObj [("label", toJson i.label), ("file", toJson i.file), ("line", toJson i.line),
+      ("when_true", .arr (i.whenTrue.map spanJson).toArray),
+      ("when_false", .arr (i.whenFalse.map spanJson).toArray),
+      ("unobservable_true", match d.unobservable true with | some r => toJson r.name | none => .null),
+      ("unobservable_false", match d.unobservable false with | some r => toJson r.name | none => .null)]).toArray
 
 end Leanux.Runner

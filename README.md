@@ -42,7 +42,7 @@ and on the mirror. It then requires two things:
 
 It writes `report.json` under `$LEANUX_ARTIFACTS/check/` and exits nonzero
 unless everything passes. Unit tests:
-`python3 -B -m unittest evaluator.test_evaluation harness.test_trace harness.test_syzkaller_adapter`.
+`scripts/in-bundle python3 -B -m unittest evaluator.test_evaluation harness.test_trace harness.test_syzkaller_adapter`.
 Work happens in worktrees; see [worktree practices](docs/worktree-practices.md).
 
 ## Environment

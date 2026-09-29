@@ -325,6 +325,52 @@ presented for user signoff before anything reaches `main`.
   - The set-only A2 check arrived in Phase 1 rather than Phase 3, because the
     anchors separated cleanly on the recorded data.
 
+## 6b. Phase 2 status (2026-09-29) [AGENT]
+
+- **Restructured mirror.** The mirror now follows section 3's rules:
+  - one structure per C struct and one function per C function;
+  - 144 C decision points recorded in order, as a typed trace;
+  - explicit refcounts (`f_count`, `kref`) and bitmaps;
+  - separate `struct file` and `eventfd_ctx`;
+  - VFS dispatch through `f_op`;
+  - user copy as a separate step after the counter update;
+  - `fput` with deferred task work;
+  - an environment oracle;
+  - fail-noisy `unsupported` outcomes;
+  - the fixture confined to the runner.
+- **Former known gaps.** `next_fd` lowering and last-reference release are now
+  modeled decisions.
+- **A2 upgraded.** Hand-chosen witness lines are replaced by source spans per
+  decision outcome, intersected with the instrumentation points found in the
+  kernel image. The check is two-sided and complete: an unreported decision
+  that Linux evaluated fails. See `correspondence/README.md`.
+- **Review follow-up.** Independent Fable (structure) and Opus (tooling)
+  reviews led to:
+  - missing C decisions being added;
+  - merged short-circuit operands being split;
+  - a wrong `close` remap condition being fixed;
+  - task work made LIFO;
+  - boot and environment facts moved into runner-supplied state;
+  - A2 tightened: explicit, verified unobservable reasons, no multiplicity
+    exemption, a hardened instrumentation scan, and validated spans.
+
+  Residual gaps are listed in `correspondence/README.md`.
+- **Results.**
+  - The full corpus agrees: 1,067 traces, 35,657 operations.
+  - 117 of 161 decisions are KCOV-witnessed.
+  - Three mutants are rejected, two of them behavior-preserving.
+  - `decision_coverage` in the report lists the decisions never evaluated and
+    those seen with one outcome only; this feeds Phase 4.
+- **Remaining for Phase 3.** Step order within an operation (PCs are recorded
+  sorted), and `KCOV_TRACE_CMP` for predicate operands.
+- **Proposed next structural changes** (from the Fable review; user input wanted):
+  1. Finite, comparable state: arrays sized `max_fds` for the fdtable and
+     bitmaps, and finite identity-keyed stores.
+  2. Split `FileKind` into `f_op` and `private_data`, written where the C
+     writes them.
+  3. A structured `unsupported` type that separates domain exits from mirror
+     invariant failures.
+
 ## 7. Decisions
 
 [USER 2026-09-29] The user answered:

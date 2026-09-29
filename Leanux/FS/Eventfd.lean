@@ -1,40 +1,49 @@
-import Leanux.FS.EventfdTypes
+import Leanux.FS.File
+import Leanux.FS.AnonInodes
 
-namespace Leanux.FS.Eventfd
+/-!
+# fs/eventfd.c — `do_eventfd` and the `eventfd2` syscall
+-/
 
-/-- The output assignment in eventfd_ctx_do_read, including its zero case. -/
-def readValue (ctx : Ctx) : UInt64 :=
-  if ctx.semaphore && ctx.count != 0 then 1 else ctx.count
+namespace Leanux
 
-/-- The separate counter subtraction following the output assignment. -/
-def eventfdCtxDoRead (ctx : Ctx) : ReadResult :=
-  let value := readValue ctx
-  { value, next := { ctx with count := ctx.count - value } }
+/-- `ida_alloc(&eventfd_ida, GFP_KERNEL)` (lib/idr.c): a cut point with
+    contract "least unused id ≥ 0, or -ENOMEM" (an environment choice). -/
+def idaAlloc : M Int := do
+  if !(← envOk .idaAlloc) then return -ENOMEM
+  let k ← getK
+  let id := (List.range (k.nextCtx + 1)).find? (fun n => !k.idaUsed n) |>.getD (k.nextCtx + 1)
+  modifyK fun k => { k with idaUsed := fun n => if n = id then true else k.idaUsed n }
+  return id
 
-structure Checked (α : Type) where
-  result : Except Nat α
-  branches : List String
+/-- do_eventfd (eventfd.c:379-423). -/
+def doEventfd (count : UInt32) (flags : UInt32) : M Int := do
+  if ← branch .doEventfdInvalidFlags (flags &&& ~~~EFD_FLAGS_SET != 0) then return -EINVAL
+  -- ctx = kmalloc(sizeof(*ctx), GFP_KERNEL)
+  if ← branch .doEventfdNoMem (!(← envOk .kmallocEventfdCtx)) then return -ENOMEM
+  let cid := (← getK).nextCtx
+  -- kref_init; init_waitqueue_head; ctx->count = count; ctx->flags = flags
+  setCtx cid { kref := 1, count := count.toUInt64, flags, id := none }
+  modifyK fun k => { k with nextCtx := cid + 1 }
+  let id ← idaAlloc  -- ctx->id = ida_alloc(...): stored unchecked, as in the C
+  setCtx cid { (← getCtx cid) with id := some id }
+  let flags := (flags &&& EFD_SHARED_FCNTL_FLAGS) ||| O_RDWR
+  let fd ← getUnusedFdFlags flags
+  if ← branch .doEventfdFdError (fd < 0) then
+    eventfdFreeCtx cid  -- err:
+    return fd
+  let file ← anonInodeGetfile eventfdFops (.eventfd cid) flags
+  if ← branch .doEventfdFileError (file matches .error _) then
+    putUnusedFd fd.toNat
+    eventfdFreeCtx cid  -- err:
+    return match file with | .error e => e | .ok _ => 0
+  let .ok fid := file | unsupported "unreachable"
+  let f ← getFile fid
+  setFile fid { f with fMode := f.fMode ||| FMODE_NOWAIT }
+  fdInstall fd.toNat fid
+  return fd
 
-/-- Supported caller has a valid buffer and a nonblocking file. -/
-def eventfdRead (ctx : Ctx) (size : Nat) : Checked ReadResult :=
-  if size < 8 then
-    ⟨.error 22, ["eventfd_read.short_buffer"]⟩
-  else if ctx.count == 0 then
-    ⟨.error 11, ["eventfd_read.empty_nonblocking"]⟩
-  else
-    ⟨.ok (eventfdCtxDoRead ctx),
-      ["eventfd_read.ready", if ctx.semaphore then "eventfd_ctx_do_read.semaphore"
-        else "eventfd_ctx_do_read.ordinary", "eventfd_read.copy_success"]⟩
+/-- SYSCALL_DEFINE2(eventfd2, unsigned int, count, int, flags) (eventfd.c:425-428). -/
+def sysEventfd2 (count flags : UInt32) : M Int := doEventfd count flags
 
-/-- The C unsigned subtraction guard prevents overflow and excludes UINT64_MAX. -/
-def eventfdWrite (ctx : Ctx) (size : Nat) (value : UInt64) : Checked Ctx :=
-  if size != 8 then
-    ⟨.error 22, ["eventfd_write.wrong_size"]⟩
-  else if value == 18446744073709551615 then
-    ⟨.error 22, ["eventfd_write.reserved_value"]⟩
-  else if (18446744073709551615 : UInt64) - ctx.count > value then
-    ⟨.ok { ctx with count := ctx.count + value }, ["eventfd_write.add"]⟩
-  else
-    ⟨.error 11, ["eventfd_write.full_nonblocking"]⟩
-
-end Leanux.FS.Eventfd
+end Leanux

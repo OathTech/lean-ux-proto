@@ -21,12 +21,12 @@ import sys
 
 from harness.linux import KERNEL, LinuxRunError, run_linux
 from harness.trace import InvalidTrace, loads_trace, validate_trace
-from .coverage import symbolize
+from .coverage import instrumented_lines, symbolize
 from .generate import generate
 from .protocol import InvalidOutput, compare, loads, parse_batch, validate_coverage
 
 ROOT = Path(__file__).resolve().parents[1]
-ANCHORS = ROOT / 'correspondence/kcov-anchors-v1.json'
+ANCHORS = ROOT / 'correspondence/kcov.json'
 SUITES = ('handwritten', 'critic', 'generated')
 CHUNK = 100
 
@@ -92,35 +92,98 @@ def run_model(traces, out):
     return parse_batch(traces, result.stdout)
 
 
-def load_anchors():
-    anchors = json.loads(ANCHORS.read_text())
-    if set(anchors) != {'version', 'description', 'files', 'labels', 'paths', 'known_gaps'}:
-        raise ValueError('anchor file fields')
-    line = re.compile('(' + '|'.join(re.escape(f) for f in anchors['files']) + r'):[1-9][0-9]*')
-    for op, labels in anchors['labels'].items():
-        for label, entry in labels.items():
-            where = f'anchor {op}/{label}'
-            if set(entry) == {'unobservable'}:
-                if type(entry['unobservable']) is not str or not entry['unobservable']:
-                    raise ValueError(f'{where}: unobservable needs a reason')
-                continue
-            if set(entry) != {'covered', 'uncovered'}:
-                raise ValueError(f'{where}: expected covered+uncovered or unobservable')
-            lines = entry['covered'] + entry['uncovered']
-            if type(entry['covered']) is not list or type(entry['uncovered']) is not list or not lines:
-                raise ValueError(f'{where}: needs at least one witness line')
-            if any(type(x) is not str or not line.fullmatch(x) for x in lines):
-                raise ValueError(f'{where}: witness lines must be <anchored file>:<line>')
-    if set(anchors['paths']) != set(anchors['labels']):
-        raise ValueError('every operation needs both labels and paths')
-    for op, paths in anchors['paths'].items():
-        for path in paths:
-            if not path or len(set(path)) != len(path) or any(l not in anchors['labels'][op] for l in path):
-                raise ValueError(f'path {op}/{path}: labels must be distinct and anchored')
-    for gap in anchors['known_gaps']:
-        if set(gap) != {'op', 'name', 'line', 'note'} or not line.fullmatch(gap['line']):
-            raise ValueError(f'known gap {gap}: fields or line')
-    return anchors
+def load_kcov_config():
+    config = json.loads(ANCHORS.read_text())
+    if set(config) != {'version', 'description', 'files', 'functions', 'known_gaps'} or config['version'] != 2:
+        raise ValueError('kcov config fields or version')
+    if not config['files'] or not config['functions'] or any(type(x) is not str for x in config['files'] + config['functions']):
+        raise ValueError('kcov config needs anchored files and instrumented functions')
+    for gap in config['known_gaps']:
+        if set(gap) != {'op', 'name', 'line', 'note'} or gap['line'].rsplit(':', 1)[0] not in config['files']:
+            raise ValueError(f'known gap {gap}: fields or file')
+    return config
+
+
+SPAN_WINDOW = (40, 60)
+SOURCE = Path(os.environ.get('LEANUX_SHARED_ROOT', ROOT)).resolve() / '.deps/linux'
+_source_cache = {}
+
+
+def non_statement(line):
+    """Lines that own no code of their own: braces, labels, blanks and comments."""
+    path, number = line.rsplit(':', 1)
+    if path not in _source_cache:
+        _source_cache[path] = (SOURCE / path).read_text().splitlines()
+    lines = _source_cache[path]
+    if not 1 <= int(number) <= len(lines):
+        raise InvalidOutput(f'span line {line} is beyond the end of the file')
+    text = lines[int(number) - 1].strip()
+    return (not text or text in ('{', '}', '};') or re.match(r'(/\*|//|\*(\s|/|$))', text) is not None
+            or re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*:', text) is not None)
+
+
+def load_decisions(config):
+    """The mirror's decision table (`leanux-model --decisions`), validated."""
+    result = subprocess.run([MODEL, '--decisions'], capture_output=True, timeout=60)
+    if result.returncode:
+        raise InvalidOutput('leanux-model --decisions failed')
+    return parse_decisions(loads(result.stdout.decode()), config)
+
+
+def parse_decisions(decisions, config):
+    if type(decisions) is not list or not decisions:
+        raise InvalidOutput('empty decision table')
+    table = {}
+    for entry in decisions:
+        if set(entry) != {'label', 'file', 'line', 'when_true', 'when_false', 'unobservable_true', 'unobservable_false'}:
+            raise InvalidOutput(f'decision fields: {entry}')
+        label = entry['label']
+        if type(label) is not str or label in table or entry['file'] not in config['files']:
+            raise InvalidOutput(f'decision {label}: duplicate label or unanchored file')
+        if type(entry['line']) is not int or non_statement(f"{entry['file']}:{entry['line']}"):
+            raise InvalidOutput(f'decision {label}: condition line must be a source statement')
+        reasons = {True: entry['unobservable_true'], False: entry['unobservable_false']}
+        if any(r is not None and (type(r) is not str or not r) for r in reasons.values()):
+            raise InvalidOutput(f'decision {label}: unobservable reasons must be strings')
+        spans = {}
+        for outcome, key in ((True, 'when_true'), (False, 'when_false')):
+            lines = set()
+            for span in entry[key]:
+                if set(span) != {'file', 'lo', 'hi'} or span['file'] not in config['files']:
+                    raise InvalidOutput(f'decision {label}: span fields or file')
+                if type(span['lo']) is not int or type(span['hi']) is not int or not 1 <= span['lo'] <= span['hi']:
+                    raise InvalidOutput(f'decision {label}: span bounds')
+                # Spans stay near their condition: within the enclosing C function.
+                if not entry['line'] - SPAN_WINDOW[0] <= span['lo'] and span['hi'] <= entry['line'] + SPAN_WINDOW[1]:
+                    raise InvalidOutput(f'decision {label}: span {span} too far from line {entry["line"]}')
+                lines.update(f"{span['file']}:{n}" for n in range(span['lo'], span['hi'] + 1))
+            spans[outcome] = {line for line in lines if not non_statement(line)}
+        if spans[True] & spans[False]:
+            raise InvalidOutput(f'decision {label}: outcome spans overlap')
+        table[label] = dict(site=f"{entry['file']}:{entry['line']}", spans=spans, reasons=reasons,
+                            function=label.split('.', 1)[0])
+    return table
+
+
+def witness_table(decisions, instrumented, functions):
+    """Witnesses are the instrumented lines of each outcome span. A side with
+    no witness must declare why it is unobservable, and a declared reason must
+    not hide a side that does have witnesses. Each decision's C function (the
+    label prefix) must own instrumentation, so reaching it is checkable."""
+    table, problems = {}, []
+    for label, entry in decisions.items():
+        table[label] = {o: entry['spans'][o] & instrumented for o in (True, False)}
+        for outcome in (True, False):
+            if not table[label][outcome] and entry['reasons'][outcome] is None:
+                problems.append(f'{label}={int(outcome)}: no KCOV witness and no unobservable reason')
+            if table[label][outcome] and entry['reasons'][outcome] is not None:
+                problems.append(f'{label}={int(outcome)}: declared unobservable but witnessed by '
+                                f'{sorted(table[label][outcome])}')
+        if entry['function'] not in functions:
+            problems.append(f'{label}: C function {entry["function"]} owns no instrumentation point')
+    if problems:
+        raise InvalidOutput('decision table does not match the instrumented kernel:\n  ' + '\n  '.join(problems))
+    return table
 
 
 def op_lines(row, locations, files):
@@ -133,40 +196,68 @@ def op_lines(row, locations, files):
     return lines
 
 
-def control_flow(trace, model_obs, coverage, locations, anchors):
-    """A2: each reported label's witness lines agree with Linux coverage."""
-    labels = {}
+def parse_step(label):
+    name, sep, outcome = label.rpartition('=')
+    if not sep or outcome not in ('0', '1'):
+        return None
+    return name, outcome == '1'
+
+
+def control_flow(trace, model_obs, coverage, locations, config, decisions, witnesses, instrumented, functions):
+    """A2: the mirror's decision outcomes agree with Linux KCOV coverage.
+
+    For each operation: each decision is reported at most once; a reported
+    outcome must cover one of its
+    witnesses; the opposite outcome's witnesses must be uncovered; and a
+    decision the mirror did not report must have no covered witness at all.
+    """
+    steps = {}
     for branch in model_obs['branches']:
-        labels.setdefault(branch['index'], set()).add(branch['label'])
+        steps.setdefault(branch['index'], []).append(branch['label'])
+    span_lines = set().union(*(e['spans'][o] for e in decisions.values() for o in (True, False)))
     problems, gaps = [], Counter()
     for index, op in enumerate(trace['ops']):
-        lines = op_lines(coverage[index], locations, anchors['files'])
-        table = anchors['labels'].get(op['op'], {})
-        reported = labels.get(index, set())
+        lines = op_lines(coverage[index], locations, config['files'])
         if not lines:
             problems.append(dict(index=index, problem='no coverage in anchored files'))
+        unmapped = sorted((lines & span_lines) - instrumented)
+        if unmapped:
+            problems.append(dict(index=index, problem='covered span lines missing from the instrumentation map',
+                                 lines=unmapped))
+        reported = set()
+        for label in steps.get(index, []):
+            step = parse_step(label)
+            if step is None or step[0] not in decisions:
+                problems.append(dict(index=index, label=label, problem='unknown decision'))
+            elif any(name == step[0] for name, _ in reported):
+                problems.append(dict(index=index, label=label, problem='decision reported more than once'))
+            else:
+                reported.add(step)
         if not reported:
-            problems.append(dict(index=index, problem='no model label'))
-        elif reported not in [set(path) for path in anchors['paths'].get(op['op'], [])]:
-            problems.append(dict(index=index, labels=sorted(reported), problem='label set is not a known path'))
-        for label in sorted(reported):
-            entry = table.get(label)
-            if entry is None:
-                problems.append(dict(index=index, label=label, problem='label has no anchor entry'))
-            elif 'covered' in entry:
-                missing = [line for line in entry['covered'] if line not in lines]
-                present = [line for line in entry['uncovered'] if line in lines]
-                if missing or present:
-                    problems.append(dict(index=index, label=label, missing=missing, unexpected=present))
-        for gap in anchors['known_gaps']:
+            problems.append(dict(index=index, problem='no model decision'))
+        for name, outcome in sorted(reported):
+            own, other = witnesses[name][outcome], witnesses[name][not outcome]
+            if own and not (lines & own):
+                problems.append(dict(index=index, label=f'{name}={int(outcome)}', problem='outcome not witnessed',
+                                     witnesses=sorted(own)))
+            if lines & other:
+                problems.append(dict(index=index, label=f'{name}={int(outcome)}', problem='opposite outcome covered',
+                                     covered=sorted(lines & other)))
+        names = {name for name, _ in reported}
+        for name, sides in witnesses.items():
+            if name not in names and lines & (sides[True] | sides[False]):
+                problems.append(dict(index=index, label=name, problem='Linux evaluated an unreported decision',
+                                     covered=sorted(lines & (sides[True] | sides[False]))))
+        for gap in config['known_gaps']:
             if gap['op'] == op['op'] and gap['line'] in lines:
                 gaps[gap['name']] += 1
     return problems, gaps
 
 
-def run_chunk(traces, out, anchors):
+def run_chunk(traces, out, kcov):
     out.mkdir(parents=True)
     results, gaps = {}, Counter()
+    outcomes = Counter()
     try:
         linux = run_linux(traces, out / 'linux')
         coverage = [loads(line) for line in (out / 'linux/coverage.jsonl').read_text().splitlines()]
@@ -174,25 +265,26 @@ def run_chunk(traces, out, anchors):
         mapped = symbolize(coverage, KERNEL / 'vmlinux')
         (out / 'linux/coverage-map.json').write_text(json.dumps(mapped, indent=1) + '\n')
     except LinuxRunError as exc:
-        return {t['id']: dict(outcome=exc.kind, side='linux', detail=str(exc)) for t in traces}, gaps
+        return {t['id']: dict(outcome=exc.kind, side='linux', detail=str(exc)) for t in traces}, gaps, outcomes
     except (InvalidOutput, ValueError, OSError, subprocess.SubprocessError) as exc:
-        return {t['id']: dict(outcome='invalid_coverage', side='linux', detail=str(exc)) for t in traces}, gaps
+        return {t['id']: dict(outcome='invalid_coverage', side='linux', detail=str(exc)) for t in traces}, gaps, outcomes
     (out / 'model').mkdir()
     try:
         model = run_model(traces, out / 'model')
     except (InvalidOutput, OSError, subprocess.SubprocessError) as exc:
-        return {t['id']: dict(outcome='invalid_output', side='model', detail=str(exc)) for t in traces}, gaps
+        return {t['id']: dict(outcome='invalid_output', side='model', detail=str(exc)) for t in traces}, gaps, outcomes
     rows = iter(coverage)
     for trace, expected, actual in zip(traces, linux, model):
         trace_coverage = [next(rows) for _ in trace['ops']]
         result = compare(trace, expected, actual)
         if result['outcome'] == 'agreement':
-            problems, trace_gaps = control_flow(trace, actual, trace_coverage, mapped['locations'], anchors)
+            problems, trace_gaps = control_flow(trace, actual, trace_coverage, mapped['locations'], *kcov)
             gaps.update(trace_gaps)
+            outcomes.update(b['label'] for b in actual['branches'])
             if problems:
                 result = dict(id=trace['id'], outcome='control_flow_mismatch', problems=problems)
         results[trace['id']] = result
-    return results, gaps
+    return results, gaps, outcomes
 
 
 def main(argv=None):
@@ -214,29 +306,50 @@ def main(argv=None):
         parser.error(f'--out must be a new directory inside {artifacts}')
     try:
         traces = load_traces(suites, args.generated_count, args.seed, args.trace)
-        anchors = load_anchors()
+        config = load_kcov_config()
     except (InvalidTrace, ValueError, OSError) as exc:
         parser.exit(2, f'invalid input: {exc}\n')
     out.mkdir(parents=True, exist_ok=False)
     started = datetime.now(timezone.utc).isoformat()
     results, gaps, build, aborted = {}, Counter(), None, None
+    outcomes, decisions, kcov = Counter(), {}, None
     try:
         build = build_model(out, rebuild=not args.no_build)
+        decisions.update(load_decisions(config))
+        instrumented, functions = instrumented_lines(KERNEL / 'vmlinux', config['functions'], config['files'])
+        kcov = (config, decisions, witness_table(decisions, instrumented, functions), instrumented, functions)
+        observable = sum(bool(w[True] or w[False]) for w in kcov[2].values())
+        print(f'{len(decisions)} decisions, {observable} with KCOV witnesses', file=sys.stderr)
         for start in range(0, len(traces), CHUNK):
             chunk = traces[start:start + CHUNK]
             print(f'traces {start}-{start + len(chunk) - 1} ...', file=sys.stderr, flush=True)
-            chunk_results, chunk_gaps = run_chunk(chunk, out / f'chunk-{start // CHUNK:03}', anchors)
+            chunk_results, chunk_gaps, chunk_outcomes = run_chunk(chunk, out / f'chunk-{start // CHUNK:03}', kcov)
             results.update(chunk_results)
             gaps.update(chunk_gaps)
-    except Exception as exc:  # recorded as an aborted, failing run, then re-raised
+            outcomes.update(chunk_outcomes)
+    except BaseException as exc:  # recorded as an aborted, failing run, then re-raised
         aborted = f'{type(exc).__name__}: {exc}'
         raise
     finally:
-        status = write_report(out, traces, results, gaps, build, aborted, started, anchors, suites, args)
+        status = write_report(out, traces, results, gaps, build, aborted, started, suites, args,
+                              decision_summary(decisions, outcomes, kcov[2] if kcov else {}))
     return 0 if status == 'pass' else 1
 
 
-def write_report(out, traces, results, gaps, build, aborted, started, anchors, suites, args):
+def decision_summary(decisions, outcomes, witnesses):
+    """How often each decision outcome occurred in agreeing traces, and
+    which outcomes KCOV can witness: the map of what the corpus exercises."""
+    rows = {}
+    for label, entry in decisions.items():
+        rows[label] = dict(site=entry['site'], true=outcomes[f'{label}=1'], false=outcomes[f'{label}=0'],
+                           witnessed_true=bool(witnesses.get(label, {}).get(True)),
+                           witnessed_false=bool(witnesses.get(label, {}).get(False)))
+    return dict(decisions=len(rows), never_evaluated=sorted(l for l, r in rows.items() if not r['true'] + r['false']),
+                one_outcome_only=sorted(l for l, r in rows.items() if bool(r['true']) != bool(r['false'])),
+                table=rows)
+
+
+def write_report(out, traces, results, gaps, build, aborted, started, suites, args, decision_coverage=None):
     ordered = [results.get(trace['id'], dict(id=trace['id'], outcome='not_run')) for trace in traces]
     counts = Counter(r['outcome'] for r in ordered)
     vmlinux = KERNEL / 'vmlinux'
@@ -248,10 +361,10 @@ def write_report(out, traces, results, gaps, build, aborted, started, anchors, s
         started_at_utc=started, finished_at_utc=datetime.now(timezone.utc).isoformat(),
         git=git_state(), model_sources=model_identity(),
         kernel=kernel,
-        anchors_sha256=sha256(ANCHORS.read_bytes()),
+        kcov_config_sha256=sha256(ANCHORS.read_bytes()),
         selection=dict(suites=suites, generated_count=args.generated_count, seed=args.seed, trace=args.trace),
         traces=len(traces), operations=sum(len(t['ops']) for t in traces),
-        counts=dict(counts), known_gap_hits=dict(gaps),
+        counts=dict(counts), known_gap_hits=dict(gaps), decision_coverage=decision_coverage,
         failures=[r for r in ordered if r['outcome'] != 'agreement'])
     (out / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps({k: report[k] for k in ('status', 'traces', 'operations', 'counts', 'known_gap_hits')}, indent=2))

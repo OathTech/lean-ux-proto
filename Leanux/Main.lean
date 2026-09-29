@@ -1,11 +1,20 @@
 import Leanux.Runner
 
-/-- A fresh Files state is created for each JSONL trace. Invalid input stops
-    with an error on stderr and a nonzero exit, never a success observation. -/
-def main : IO UInt32 := do
-  let input ← IO.getStdin
+/-- Reads JSONL traces on stdin and writes one observation per trace. A fresh
+    kernel state is created for each trace. Invalid input, or a trace reaching
+    a path the mirror does not model, stops with a message on stderr and a
+    nonzero exit, never a success observation. `--decisions` prints the
+    decision table instead. -/
+def main (args : List String) : IO UInt32 := do
   let output ← IO.getStdout
   let errors ← IO.getStderr
+  if args == ["--decisions"] then
+    output.putStrLn Leanux.Runner.decisionsJson.compress
+    return 0
+  if !args.isEmpty then
+    errors.putStrLn "usage: leanux-model [--decisions] < traces.jsonl"
+    return 2
+  let input ← IO.getStdin
   repeat
     let line ← input.getLine
     if line.isEmpty then return 0
@@ -17,6 +26,11 @@ def main : IO UInt32 := do
       errors.putStrLn s!"invalid input: {message}"
       return 2
     | .ok trace =>
-      output.putStrLn (Leanux.Runner.executeTrace trace).compress
-      output.flush
+      match Leanux.Runner.executeTrace trace with
+      | .error message =>
+        errors.putStrLn message
+        return 3
+      | .ok json =>
+        output.putStrLn json.compress
+        output.flush
   return 0
