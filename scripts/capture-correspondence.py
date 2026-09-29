@@ -150,90 +150,17 @@ def verify(manifest: Path) -> None:
                       "manifest_sha256": sha(manifest)}))
 
 
-def check_records(root: Path, shared: Path, model: Path) -> None:
-    inventory_path = root / "correspondence/helpers-v1.json"
-    bindings_path = root / "correspondence/model-bindings-v1.json"
-    testability_path = root / "correspondence/testability-v1.json"
-    inventory = json.loads(inventory_path.read_text())
-    mappings = json.loads(bindings_path.read_text())
-    testability = json.loads(testability_path.read_text())
-    helpers = inventory["helper_records"]
-    ids = {h["id"] for h in helpers}
-    if len(ids) != len(helpers):
-        raise ValueError("duplicate helper record")
-    external_ids = {e["id"] for e in testability["external_contracts"]}
-    anchors = []
-    branches = {}
-    for helper in helpers:
-        path = shared / ".deps/linux" / helper["source"]["file"]
-        lines = path.read_text().splitlines()
-        hits = [i + 1 for i, line in enumerate(lines) if helper["source"]["anchor"] in line]
-        if not hits:
-            raise ValueError(f"missing source anchor: {helper['id']}")
-        anchors.append({"helper": helper["id"], "source": identity(path), "lines": hits})
-        if not set(helper["external"]) <= external_ids:
-            raise ValueError(f"undefined external contract: {helper['id']}")
-        for branch in helper["branches"]:
-            if branch["id"] in branches or branch["classification"] not in inventory["classification_values"]:
-                raise ValueError("duplicate branch or undefined classification")
-            branches[branch["id"]] = branch
-    definition = re.compile(r"^(?:private )?(?:partial )?def ([\w.]+)", re.MULTILINE)
-    bound = {}
-    for binding in mappings["bindings"]:
-        key = (binding["file"], binding["declaration"])
-        if key in bound or not set(binding["records"]) <= ids | external_ids:
-            raise ValueError(f"invalid binding: {key}")
-        bound[key] = binding
-    actual = set()
-    texts = []
-    model_inputs = []
-    discovered = {str(p.relative_to(model)) for p in (model / "Leanux/FS").rglob("*.lean")}
-    discovered.update({"Leanux/Runner.lean", "Leanux/Main.lean"})
-    for filename in sorted(discovered):
-        path = model / filename
-        text = path.read_text()
-        texts.append(text)
-        model_inputs.append(identity(path))
-        actual.update((filename, declaration) for declaration in definition.findall(text))
-    if actual != set(bound):
-        raise ValueError(f"unmatched model helpers: missing={actual - set(bound)}, extra={set(bound) - actual}")
-    labels = {record["label"] for record in mappings["branch_labels"]}
-    if len(labels) != len(mappings["branch_labels"]):
-        raise ValueError("duplicate branch label")
-    text = "\n".join(texts)
-    for record in mappings["branch_labels"]:
-        if json.dumps(record["label"]) not in text or not set(record["source_branch_ids"]) <= set(branches):
-            raise ValueError(f"missing label or source branch: {record['label']}")
-    emitted = set(re.findall(r'"([a-z_][a-z_0-9]*\.[a-z_0-9]+)"', text)) | {"fd_install"}
-    if emitted != labels:
-        raise ValueError(f"unmatched labels: {emitted ^ labels}")
-    if {o["op"] for o in testability["operations"]} != {"eventfd2", "dup", "dup3", "close", "read", "write", "fcntl"}:
-        raise ValueError("incomplete operation testability")
-    counts = {kind: sum(b["classification"] == kind for b in branches.values())
-              for kind in inventory["classification_values"]}
-    print(json.dumps({"status": "verified", "helper_records": len(helpers),
-                      "model_definitions": len(bound), "branch_labels": len(labels),
-                      "source_branch_classes": counts,
-                      "record_inputs": [identity(p) for p in (inventory_path, bindings_path, testability_path)],
-                      "model_inputs": model_inputs, "source_anchors": anchors}, indent=2))
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--kernel-build", type=Path)
     parser.add_argument("--verify", type=Path)
-    parser.add_argument("--check-records", action="store_true")
-    parser.add_argument("--model-root", type=Path)
     args = parser.parse_args()
     if args.verify:
         verify(args.verify.resolve())
         return
     root = Path(os.environ["LEANUX_ROOT"]).resolve()
     shared = Path(os.environ["LEANUX_SHARED_ROOT"]).resolve()
-    if args.check_records:
-        check_records(root, shared, (args.model_root or root).resolve())
-        return
     artifacts = Path(os.environ["LEANUX_ARTIFACTS"]).resolve()
     source = shared / ".deps/linux"
     source_lock = json.loads((shared / "dependencies/sources.lock.json").read_text())

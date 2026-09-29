@@ -66,8 +66,8 @@ The suite checks:
 - Lean MCP diagnostics for valid and deliberately invalid code.
 - Checksums of 680 locked archives, documentation files and source samples.
 
-Per-check logs and records are in `.artifacts/nono-validation/`. The current
-readiness report is `dependencies/sandbox-validation.json`. The original
+Per-check logs and records are in `.artifacts/nono-validation/`. The earlier
+sandbox readiness report was retired on 2026-09-29 with the isolation checks. The original
 `dependencies/validation.json` describes the earlier provisioning run; its
 mutable build outputs are not a current integrity baseline. Dependency archive
 locks remain authoritative. These checks establish development readiness,

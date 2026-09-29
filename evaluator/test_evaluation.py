@@ -5,7 +5,7 @@ import unittest
 
 from evaluator.generate import generate, identity, remove_operations
 from evaluator.protocol import InvalidOutput, compare, parse_batch, validate_coverage
-from evaluator.submission import ContractViolation, validate_submission
+from evaluator.check import control_flow, load_anchors
 from harness.trace import validate_trace
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -49,21 +49,24 @@ class EvaluationChecks(unittest.TestCase):
             with self.assertRaises(InvalidOutput):
                 validate_coverage([self.trace], altered)
 
-    def test_submission_controls(self):
-        policy = json.loads((ROOT / 'contracts/submission-v1.json').read_text())
-        identities = {key: 'a' * (40 if key == 'base_commit' else 64) for key in policy['required_identity_fields']}
-        valid = dict(version=1, identities=identities, files={'Leanux/FS/Eventfd.lean': '-- valid text\n'})
-        validate_submission(valid, identities, policy)
-        for key in ('evaluator/protocol.py', 'contracts/trace-v1.md', 'Leanux/Proofs/Extra.lean',
-                    'lakefile.toml', 'Leanux/FS/FileTypes.lean', 'Leanux/FS/a\x00.lean'):
-            bad = dict(valid, files={key: '-- changed\n'})
-            with self.assertRaises(ContractViolation):
-                validate_submission(bad, identities, policy)
-        with self.assertRaises(ContractViolation):
-            validate_submission(dict(valid, files={'Leanux/FS/Eventfd.lean': '\ud800'}), identities, policy)
-        for missing in (None, {}):
-            with self.assertRaises(ContractViolation):
-                validate_submission(dict(valid, identities=missing), missing, policy)
+    def test_control_flow_controls(self):
+        anchors = load_anchors()
+        trace = {'version': 1, 'id': 'cf', 'ops': [{'op': 'read', 'fd': {'literal': 8}, 'count': 8}]}
+        loc = {'0x1': [{'function': 'eventfd_read', 'source': '/x/.deps/linux/fs/eventfd.c:216'}],
+               '0x2': [{'function': 'eventfd_read', 'source': '/x/.deps/linux/fs/eventfd.c:224'}],
+               '0x3': [{'function': 'eventfd_read', 'source': '/x/.deps/linux/fs/eventfd.c:235 (discriminator 1)'}]}
+        empty = [{'id': 'cf', 'index': 0, 'count': 2, 'pcs': ['0x1', '0x2']}]
+        ready = [{'id': 'cf', 'index': 0, 'count': 2, 'pcs': ['0x1', '0x3']}]
+        def model(*labels):
+            return {'branches': [{'index': 0, 'label': label} for label in labels]}
+        good = model('read.dispatch', 'eventfd_read.empty_nonblocking')
+        self.assertEqual(control_flow(trace, good, empty, loc, anchors)[0], [])
+        # A wrong arm, an unknown label and a missing label are all rejected.
+        self.assertTrue(control_flow(trace, good, ready, loc, anchors)[0])
+        self.assertTrue(control_flow(trace, model('read.dispatch', 'eventfd_read.ready'), empty, loc, anchors)[0])
+        self.assertTrue(control_flow(trace, model('read.dispatch', 'made_up'), empty, loc, anchors)[0])
+        self.assertTrue(control_flow(trace, model(), empty, loc, anchors)[0])
+        self.assertTrue(control_flow(trace, model('read.bad_fd'), empty, loc, anchors)[0])
 
     def test_generator_and_reference_reduction(self):
         traces = generate(29, 1000)

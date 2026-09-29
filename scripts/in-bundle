@@ -3,11 +3,19 @@
 import os
 import json
 from pathlib import Path
+import subprocess
 import sys
 
 root = Path(__file__).resolve().parents[1]
 workspace = root / '.leanux-workspace.json'
 settings = json.loads(workspace.read_text()) if workspace.exists() else {}
+if not settings and (root / '.git').is_file():
+    # A plain `git worktree add .worktrees/<id>` checkout: shared tools and
+    # dependencies live in the main checkout; caches and outputs stay private
+    # to this worktree (both Git-ignored, removed with it).
+    common = subprocess.run(['git', '-C', str(root), 'rev-parse', '--path-format=absolute', '--git-common-dir'],
+                            capture_output=True, text=True, check=True).stdout.strip()
+    settings = {'shared_root': str(Path(common).parent)}
 # A nested invocation may switch worktrees. Do not carry the previous task's
 # writable directories into the new one. Explicit callers can unset LEANUX_ROOT.
 same_workspace = os.environ.get('LEANUX_ROOT') in (None, str(root))

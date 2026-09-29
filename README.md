@@ -25,6 +25,28 @@ agree on the recorded corpora. The plan above covers the next steps:
 
 The earlier campaign ledger and its gates are retired.
 
+## Checking the mirror
+
+```sh
+scripts/in-bundle python3 -m evaluator.check                   # everything: ~3 minutes
+scripts/in-bundle python3 -m evaluator.check --trace alias_close  # replay one case
+scripts/in-bundle python3 -m evaluator.check --suite handwritten --no-build
+```
+
+The check builds `leanux-model`, runs the handwritten, critic and seeded generated
+traces on the pinned Linux guest (QEMU, fresh child per trace, per-operation KCOV)
+and on the mirror. It then requires two things:
+- literal agreement of every observation;
+- consistency of every model branch label with the Linux coverage
+  ([anchors](correspondence/README.md)).
+
+It writes `report.json` under `$LEANUX_ARTIFACTS/check/` and exits nonzero
+unless everything passes. Unit tests:
+`python3 -B -m unittest evaluator.test_evaluation harness.test_trace harness.test_syzkaller_adapter`.
+Work happens in worktrees; see [worktree practices](docs/worktree-practices.md).
+
+## Environment
+
 Use the pinned tools inside your normal nono session:
 
 ```sh

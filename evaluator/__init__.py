@@ -1,1 +1,1 @@
-"""Coordinator-owned experiment evaluation; model output never supplies a verdict."""
+"""Trace generation, strict comparison, KCOV symbolization, and the check command."""

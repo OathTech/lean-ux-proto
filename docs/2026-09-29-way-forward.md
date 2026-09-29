@@ -299,6 +299,32 @@ presented for user signoff before anything reaches `main`.
 - **Later, by user choice:** the next component (e.g., pipes or epoll), and
   handing the eventfd read path to the workhorse logic as a first target.
 
+## 6a. Phase 1 status (2026-09-29) [AGENT]
+
+- **`check` implemented.** `python3 -m evaluator.check` covers A1 (observable
+  agreement), A2 (set-only KCOV control flow, with interim anchors in
+  `correspondence/kcov-anchors-v1.json`) and A4 (reproducibility).
+  - Run live on the pinned guest, it passes: 1,067 traces, 35,657 operations.
+  - Negative controls, both run live:
+    - a write-guard mutant (`>` changed to `>=`) gives 53 `semantic_mismatch`;
+    - a label swap in `do_dup2` (behavior unchanged) gives 200
+      `control_flow_mismatch`.
+  - Known-gap hits are reported: `next_fd` lowering and last-reference release.
+- **Removed:**
+  - `evaluator/{runner,experiment,process,boundary,submission}.py`;
+  - freeze and submission contracts;
+  - the ~1,700 lines of correspondence JSON;
+  - evaluator-boundary, isolation and sandbox-validation checks;
+  - the ledger-coupled worktree manager and its exercise.
+- **Deviations from section 5**, recorded for review:
+  - `scripts/check-nono` and `scripts/nono-check-profile.json` are kept, because
+    the offline environment suite runs through them. Only its isolation probe
+    is removed.
+  - `contracts/scope-v1.json` is kept as the machine-readable domain facts.
+  - `scripts/in-bundle` now detects plain Git worktrees. This is needed for D3.
+  - The set-only A2 check arrived in Phase 1 rather than Phase 3, because the
+    anchors separated cleanly on the recorded data.
+
 ## 7. Decisions
 
 [USER 2026-09-29] The user answered:

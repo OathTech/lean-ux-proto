@@ -11,7 +11,8 @@ outdir, timeout=120)` returns Linux observation objects in order. The output
 directory must be empty and within `LEANUX_ARTIFACTS`; paths are never reused.
 `LinuxRunError.kind` distinguishes build, guest, coverage, output, timeout, and
 resource failures. These are experiment failures, not semantic disagreements.
-The coordinator's independent evaluator owns agreement and acceptance.
+Agreement is decided by `python3 -m evaluator.check`, which also builds and runs
+the mirror; see the top-level README.
 
 The runner builds only `guest.c`, then boots the accepted
 `.artifacts/kernel-active-sandbox` kernel with one TCG CPU, 256 MiB memory,
