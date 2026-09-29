@@ -130,11 +130,13 @@ def _check_observation(result, trace):
 
 def _collect(outdir, traces, process_returncode):
     results, coverage, fixtures, errors, child_failures, completed, kernels = [], [], [], [], [], [], []
+    comparisons, comparison_results = [], []
     for line in (outdir / "boot.log").read_text(errors="strict").splitlines():
         line = line.rstrip("\r")
         for prefix, target in (("LEANUX_RESULT ", results), ("LEANUX_COVERAGE ", coverage),
                                ("LEANUX_FIXTURE ", fixtures), ("LEANUX_ERROR ", errors),
-                               ("LEANUX_CHILD_FAILURE ", child_failures)):
+                               ("LEANUX_CHILD_FAILURE ", child_failures), ("LEANUX_CMP ", comparisons),
+                               ("LEANUX_CMP_RESULT ", comparison_results)):
             if line.startswith(prefix):
                 try:
                     target.append(_decode_json(line[len(prefix):]))
@@ -147,6 +149,7 @@ def _collect(outdir, traces, process_returncode):
             kernels.append(line.removeprefix("LEANUX_KERNEL "))
     _jsonl(outdir / "observations.jsonl", results)
     _jsonl(outdir / "coverage.jsonl", coverage)
+    _jsonl(outdir / "comparisons.jsonl", comparisons)
     _jsonl(outdir / "guest-errors.jsonl", errors + child_failures)
     (outdir / "fixture.json").write_text(json.dumps({
         "roles": {"0": "console stdin", "1": "console stdout", "2": "console stderr", "3": "KCOV", "4-7": "/dev/null filler"},
@@ -160,7 +163,7 @@ def _collect(outdir, traces, process_returncode):
     boot = (outdir / "boot.log").read_text()
     if len(re.findall(r"^LEANUX_GUEST_EXIT=0\r?$", boot, re.MULTILINE)) != 1:
         raise LinuxRunError("crash", "Missing successful guest exit", outdir)
-    if len(results) != len(traces) or len(fixtures) != len(traces):
+    if len(results) != len(traces) or len(fixtures) != len(traces) or len(comparison_results) != len(traces):
         raise LinuxRunError("invalid_output", "Missing or extra trace results/fixtures", outdir)
     expected_coverage = [(trace["id"], i) for trace in traces for i in range(len(trace["ops"]))]
     if len(coverage) != len(expected_coverage):
@@ -178,8 +181,27 @@ def _collect(outdir, traces, process_returncode):
                 raise ValueError("coverage count")
             if any(type(pc) is not str or not re.fullmatch(r"0x[0-9a-f]{1,16}", pc) for pc in pcs) or len(set(pcs)) != len(pcs):
                 raise ValueError("coverage addresses")
+        if len(comparisons) != len(expected_coverage):
+            raise ValueError("comparison records per operation")
+        for row, (identifier, index) in zip(comparisons, expected_coverage):
+            if type(row) is not dict or set(row) != {"id", "index", "count", "records"} or row["id"] != identifier or row["index"] != index:
+                raise ValueError("comparison identity or order")
+            if type(row["count"]) is not int or not 1 <= row["count"] < 65536 or not 1 <= len(row["records"]) <= row["count"]:
+                raise ValueError("comparison record count")
+            if len({tuple(r) for r in row["records"]}) != len(row["records"]):
+                raise ValueError("duplicate comparison records")
+            if type(row["records"]) is not list or not all(
+                    type(r) is list and len(r) == 4 and type(r[0]) is int and 0 <= r[0] < 8
+                    and all(type(x) is str and re.fullmatch(r"0x[0-9a-f]{1,16}", x) for x in r[1:]) for r in row["records"]):
+                raise ValueError("comparison records")
     except (ValueError, TypeError, KeyError) as exc:
         raise LinuxRunError("invalid_output", str(exc), outdir) from exc
+    # The comparison child reruns each trace independently; its results must
+    # be identical, or the comparison records do not describe this run.
+    for result, again in zip(results, comparison_results):
+        if again != {"id": result["id"], "rets": [o["ret"] for o in result["observations"]],
+                     "bytes": [o["bytes"] for o in result["observations"]]}:
+            raise LinuxRunError("environment_failure", f"Nondeterministic rerun of {result['id']}", outdir)
     unexpected_errors = {4, 12, 23, 512, 513, 514, 516}
     if any(row["errno"] in unexpected_errors for result in results for row in result["observations"]):
         raise LinuxRunError("environment_failure", "Unexpected interruption or allocator resource failure", outdir)

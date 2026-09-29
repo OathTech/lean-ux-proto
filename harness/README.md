@@ -34,9 +34,17 @@ number even after closing or replacing that descriptor.
 KCOV is enabled and reset immediately before each operation, and its count is
 captured immediately afterwards, before disabling coverage. Empty or full
 coverage fails the experiment. Per-operation records preserve the total PC
-count and sorted unique addresses. Formatting, fixture setup, and parent work
-are outside the captured intervals. Address randomization is disabled to support
-source symbolization against the recorded `vmlinux`.
+count and each unique address once, at its first execution, in execution order.
+
+Each trace runs twice, in two fresh children:
+- **PC mode** (`KCOV_TRACE_PC`) records coverage.
+- **Comparison mode** (`KCOV_TRACE_CMP`) records every comparison's type, two
+  operands and PC. Runs of identical records are printed once.
+
+The comparison child's return values must equal the PC child's, or the run is
+an environment failure (nondeterminism). Formatting, fixture setup, and parent
+work are outside the captured intervals. Address randomization is disabled to
+support source symbolization against the recorded `vmlinux`.
 
 The run directory retains validated JSON input, exact wire input, observation
 JSONL, per-operation coverage JSONL, fixture layout, full serial log, compiler

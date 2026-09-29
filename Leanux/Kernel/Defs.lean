@@ -236,7 +236,14 @@ def modifyFdt (f : Fdtable → Fdtable) : M Unit :=
 
 /-- Record a C decision point with its outcome and return the outcome. -/
 def branch (d : Decision) (outcome : Bool) : M Bool := do
-  modify fun w => { w with steps := w.steps.push ⟨d, outcome⟩ }
+  modify fun w => { w with steps := w.steps.push { decision := d, outcome } }
+  return outcome
+
+/-- Record a C value comparison: its outcome and the two values the C
+    compares at the condition. The check matches them against
+    `KCOV_TRACE_CMP` records at the condition line. -/
+def branchCmp (d : Decision) (outcome : Bool) (a b : Int) : M Bool := do
+  modify fun w => { w with steps := w.steps.push { decision := d, outcome, operands := some (a, b) } }
   return outcome
 
 /-- Ask the environment oracle; the site's call count is part of the query. -/

@@ -50,7 +50,7 @@ def findNextFd (fdt : Fdtable) (start : Nat) : M Nat := do
   let maxfd := fdt.maxFds
   let maxbit := maxfd / BITS_PER_LONG
   let bitbit := (← findNextZeroBit (fullWord fdt) maxbit (start / BITS_PER_LONG)) * BITS_PER_LONG
-  if ← branch .findNextFdAllFull (bitbit >= maxfd) then return maxfd
+  if ← branchCmp .findNextFdAllFull (bitbit >= maxfd) bitbit maxfd then return maxfd
   let start ← do
     if ← branch .findNextFdSkipFullWords (bitbit > start) then pure bitbit else pure start
   findNextZeroBit (fdtOpen fdt) maxfd start
@@ -59,7 +59,7 @@ def findNextFd (fdt : Fdtable) (start : Nat) : M Nat := do
     embedded 64-slot table (`expand_fdtable`) is outside the domain. -/
 def expandFiles (nr : Nat) : M Int := do
   let files ← getFiles
-  if ← branch .expandFilesFits (nr < files.fdt.maxFds) then return 0
+  if ← branchCmp .expandFilesFits (nr < files.fdt.maxFds) nr files.fdt.maxFds then return 0
   if ← branch .expandFilesOverNrOpen (nr >= SYSCTL_NR_OPEN) then return -EMFILE
   if ← branch .expandFilesResizeInProgress files.resizeInProgress then
     unsupported "expand_files waiting for a concurrent resize"
@@ -72,16 +72,16 @@ def allocFd (start «end» : Nat) (flags : UInt32) : M Int := do
   let fdt := files.fdt
   let mut fd := start
   if ← branch .allocFdBelowNextFd (fd < files.nextFd) then fd := files.nextFd
-  if ← branch .allocFdSearch (fd < fdt.maxFds) then fd ← findNextFd fdt fd
+  if ← branchCmp .allocFdSearch (fd < fdt.maxFds) fd fdt.maxFds then fd ← findNextFd fdt fd
   -- error = -EMFILE
-  if ← branch .allocFdLimit (fd >= «end») then return -EMFILE  -- goto out
+  if ← branchCmp .allocFdLimit (fd >= «end») fd «end» then return -EMFILE  -- goto out
   let error ← expandFiles fd
-  if ← branch .allocFdExpandError (error < 0) then return error
-  if ← branch .allocFdExpanded (error != 0) then unsupported "alloc_fd retry after expansion"
-  if ← branch .allocFdUpdateNextFd (start <= (← getFiles).nextFd) then
+  if ← branchCmp .allocFdExpandError (error < 0) error 0 then return error
+  if ← branchCmp .allocFdExpanded (error != 0) error 0 then unsupported "alloc_fd retry after expansion"
+  if ← branchCmp .allocFdUpdateNextFd (start <= (← getFiles).nextFd) start (← getFiles).nextFd then
     modifyFiles fun fs => { fs with nextFd := fd + 1 }
   setOpenFd fd
-  if ← branch .allocFdCloexec (hasFlag flags O_CLOEXEC) then setCloseOnExecBit fd
+  if ← branchCmp .allocFdCloexec (hasFlag flags O_CLOEXEC) (flags &&& O_CLOEXEC).toNat 0 then setCloseOnExecBit fd
   else clearCloseOnExecBit fd
   -- Sanity check
   if ← branch .allocFdSlotNotNull (← fdtSlot (← getFiles).fdt fd).isSome then
@@ -96,7 +96,7 @@ def getUnusedFdFlags (flags : UInt32) : M Int := do
 /-- __put_unused_fd (file.c:561-567). -/
 def putUnusedFdLocked (fd : Nat) : M Unit := do
   clearOpenFd fd
-  if ← branch .putUnusedFdLowerNextFd (fd < (← getFiles).nextFd) then
+  if ← branchCmp .putUnusedFdLowerNextFd (fd < (← getFiles).nextFd) fd (← getFiles).nextFd then
     modifyFiles fun fs => { fs with nextFd := fd }
 
 /-- put_unused_fd (file.c:569-575). -/
@@ -107,7 +107,7 @@ def putUnusedFd (fd : Nat) : M Unit := do
 
 /-- fd_install (file.c:595-620). Consumes the caller's file reference. -/
 def fdInstall (fd : Nat) (fid : FileId) : M Unit := do
-  if ← branch .fdInstallBacking (hasFlag (← getFile fid).fMode FMODE_BACKING) then
+  if ← branchCmp .fdInstallBacking (hasFlag (← getFile fid).fMode FMODE_BACKING) ((← getFile fid).fMode &&& FMODE_BACKING).toNat 0 then
     unsupported "fd_install of a backing file (WARN_ON_ONCE)"
   -- rcu_read_lock_sched()
   if ← branch .fdInstallResizeInProgress (← getFiles).resizeInProgress then
@@ -121,7 +121,7 @@ def fdInstall (fd : Nat) (fid : FileId) : M Unit := do
 /-- file_close_fd_locked (file.c:635-652), with `file_lock` held. -/
 def fileCloseFdLocked (fd : Nat) : M (Option FileId) := do
   let fdt := (← getFiles).fdt
-  if ← branch .closeFdOutOfRange (fd >= fdt.maxFds) then return none
+  if ← branchCmp .closeFdOutOfRange (fd >= fdt.maxFds) fd fdt.maxFds then return none
   -- fd = array_index_nospec(fd, fdt->max_fds): the identity for in-range fd
   let file ← fdtSlot fdt fd
   if ← branch .closeFdFound file.isSome then
@@ -148,7 +148,7 @@ def filesLookupFdRaw (fd : Nat) : M (Option FileId) := do
 def getFileRef (fid : FileId) : M Unit := do
   let f ← getFile fid
   setFile fid { f with fCount := f.fCount + 1 }  -- prior = atomic_long_fetch_inc_relaxed(&f->f_count)
-  if ← branch .getFileFromZero (f.fCount == 0) then
+  if ← branchCmp .getFileFromZero (f.fCount == 0) f.fCount 0 then
     unsupported "get_file: f_count incremented from zero (WARN_ONCE)"
 
 /-- do_dup2 (file.c:1205-1248), entered with `file_lock` held. -/
@@ -163,7 +163,7 @@ def doDup2 (fid : FileId) (fd : Nat) (flags : UInt32) : M Int := do
   getFileRef fid
   setFdtSlot fd (some fid)  -- rcu_assign_pointer(fdt->fd[fd], file)
   setOpenFd fd
-  if ← branch .doDup2Cloexec (hasFlag flags O_CLOEXEC) then setCloseOnExecBit fd
+  if ← branchCmp .doDup2Cloexec (hasFlag flags O_CLOEXEC) (flags &&& O_CLOEXEC).toNat 0 then setCloseOnExecBit fd
   else clearCloseOnExecBit fd
   -- spin_unlock(&files->file_lock)
   if ← branch .doDup2Replace tofree.isSome then
@@ -172,14 +172,14 @@ def doDup2 (fid : FileId) (fd : Nat) (flags : UInt32) : M Int := do
 
 /-- ksys_dup3 (file.c:1331-1363). -/
 def ksysDup3 (oldfd newfd : Nat) (flags : UInt32) : M Int := do
-  if ← branch .dup3InvalidFlags (flags &&& ~~~O_CLOEXEC != 0) then return -EINVAL
-  if ← branch .dup3Equal (oldfd == newfd) then return -EINVAL
-  if ← branch .dup3TargetLimit (newfd >= (← getK).task.rlimitNofile) then return -EBADF
+  if ← branchCmp .dup3InvalidFlags (flags &&& ~~~O_CLOEXEC != 0) (flags &&& ~~~O_CLOEXEC).toNat 0 then return -EINVAL
+  if ← branchCmp .dup3Equal (oldfd == newfd) oldfd newfd then return -EINVAL
+  if ← branchCmp .dup3TargetLimit (newfd >= (← getK).task.rlimitNofile) newfd (← getK).task.rlimitNofile then return -EBADF
   -- spin_lock(&files->file_lock)
   let err ← expandFiles newfd
   let file ← filesLookupFdRaw oldfd   -- files_lookup_fd_locked
   if ← branch .dup3NoFile file.isNone then return -EBADF  -- Ebadf: spin_unlock
-  if ← branch .dup3ExpandError (err < 0) then
+  if ← branchCmp .dup3ExpandError (err < 0) err 0 then
     if ← branch .dup3ExpandEmfile (err == -EMFILE) then return -EBADF
     return err  -- out_unlock
   match file with
@@ -194,6 +194,7 @@ def fgetFilesRcu (fd : Nat) (mask : UInt32) : M (Option FileId) := do
   if ← branch .fgetRcuNoFile file.isNone then return none
   let some fid := file | invariant "unreachable"
   let f ← getFile fid
+  -- the condition tests atomic_long_inc_not_zero's result (a cut point), not a comparison
   if ← branch .fgetRcuIncNotZeroFailed (f.fCount == 0) then
     unsupported "__fget_files_rcu retry"
   setFile fid { f with fCount := f.fCount + 1 }
@@ -216,12 +217,13 @@ structure Fd where
 
 /-- __fget_light (file.c:1107-1132). -/
 def fgetLight (fd : Nat) (mask : UInt32) : M Fd := do
-  if ← branch .fgetLightSingleOwner ((← getFiles).count == 1) then
+  if ← branchCmp .fgetLightSingleOwner ((← getFiles).count == 1) (← getFiles).count 1 then
     let file ← filesLookupFdRaw fd
     let empty ← do
       if ← branch .fgetLightNoFile file.isNone then pure true
       else
         let some fid := file | invariant "unreachable"
+        -- the comparison depends on each caller's constant mask (fdget_raw's 0 folds away)
         branch .fgetLightMasked (hasFlag (← getFile fid).fMode mask)
     if empty then return {file := none}  -- EMPTY_FD
     return {file}                        -- BORROWED_FD
@@ -237,7 +239,7 @@ def fdgetPos (fd : Nat) : M Fd := do
     let some fid := f.file | invariant "unreachable"
     let file ← getFile fid
     let needsLock ← do
-      if ← branch .fposLockAtomicPos (hasFlag file.fMode FMODE_ATOMIC_POS) then
+      if ← branchCmp .fposLockAtomicPos (hasFlag file.fMode FMODE_ATOMIC_POS) (file.fMode &&& FMODE_ATOMIC_POS).toNat 0 then
         if ← branch .fposLockShared (file.fCount > 1) then pure true
         else branch .fposLockIterateShared (← fopsOf file.fOp).iterateShared
       else pure false
@@ -277,7 +279,7 @@ def sysDup (fildes : Nat) : M Int := do
   if ← branch .dupFound file.isSome then
     let some fid := file | invariant "unreachable"
     ret ← getUnusedFdFlags 0
-    if ← branch .dupAllocOk (ret >= 0) then fdInstall ret.toNat fid
+    if ← branchCmp .dupAllocOk (ret >= 0) ret 0 then fdInstall ret.toNat fid
     else fput fid
   return ret
 

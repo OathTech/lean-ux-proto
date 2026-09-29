@@ -30,10 +30,26 @@ static void fail(const char *id, int index, const char *kind, const char *detail
     _exit(1);
 }
 
-static int compare_pc(const void *a, const void *b)
+struct occurrence { unsigned long pc; unsigned long position; };
+static struct occurrence order[CAPACITY];
+static unsigned char first[CAPACITY];
+
+struct record_occurrence { unsigned long record[4]; unsigned long position; };
+static struct record_occurrence records[CAPACITY / 4];
+
+static int compare_record(const void *a, const void *b)
 {
-    unsigned long x = *(const unsigned long *)a, y = *(const unsigned long *)b;
-    return (x > y) - (x < y);
+    const struct record_occurrence *x = a, *y = b;
+    int order = memcmp(x->record, y->record, sizeof(x->record));
+    if (order) return order;
+    return x->position < y->position ? -1 : x->position > y->position;
+}
+
+static int compare_occurrence(const void *a, const void *b)
+{
+    const struct occurrence *x = a, *y = b;
+    if (x->pc != y->pc) return x->pc < y->pc ? -1 : 1;
+    return x->position < y->position ? -1 : x->position > y->position;
 }
 
 static long resolve(unsigned kind, long long value, const struct observation *results, unsigned i)
@@ -43,7 +59,9 @@ static long resolve(unsigned kind, long long value, const struct observation *re
     return results[value].ret >= 0 ? results[value].ret : -1;
 }
 
-static void execute(const struct trace *t, int input_fd)
+/* comparisons: 0 records PCs (KCOV_TRACE_PC); 1 records comparison operands
+ * (KCOV_TRACE_CMP) in a second, independent child for the same trace. */
+static void execute(const struct trace *t, int input_fd, int comparisons)
 {
     struct observation result[MAX_OPS] = {{0}};
     if (close(input_fd)) fail(t->id, -1, "environment_failure", "close_input");
@@ -63,7 +81,7 @@ static void execute(const struct trace *t, int input_fd)
     struct rlimit limit = {32, 32}, actual;
     if (setrlimit(RLIMIT_NOFILE, &limit) || getrlimit(RLIMIT_NOFILE, &actual) || actual.rlim_cur != 32 || actual.rlim_max != 32)
         fail(t->id, -1, "environment_failure", "rlimit_nofile");
-    printf("LEANUX_FIXTURE {\"id\":\"%s\",\"reserved\":[0,1,2,3,4,5,6,7],\"free\":[8,31],\"rlimit\":[32,32]}\n", t->id);
+    if (!comparisons) printf("LEANUX_FIXTURE {\"id\":\"%s\",\"reserved\":[0,1,2,3,4,5,6,7],\"free\":[8,31],\"rlimit\":[32,32]}\n", t->id);
     for (unsigned i = 0; i < t->count; ++i) {
         const struct operation *op = &t->ops[i];
         long fd = resolve(op->kind, op->fd, result, i);
@@ -72,7 +90,8 @@ static void execute(const struct trace *t, int input_fd)
         memset(buffer, op->code == 5 ? 0xa5 : 0, sizeof(buffer));
         if (op->code == 6)
             for (unsigned j = 0; j < 8; ++j) buffer[j] = (unsigned char)(op->value >> (8 * j));
-        if (ioctl(coverage_fd, KCOV_ENABLE, KCOV_TRACE_PC)) fail(t->id, i, "coverage_failure", "enable_kcov");
+        if (ioctl(coverage_fd, KCOV_ENABLE, comparisons ? KCOV_TRACE_CMP : KCOV_TRACE_PC))
+            fail(t->id, i, "coverage_failure", "enable_kcov");
         __atomic_store_n(&coverage[0], 0, __ATOMIC_RELAXED);
         errno = 0;
         long ret;
@@ -89,23 +108,72 @@ static void execute(const struct trace *t, int input_fd)
         int captured_errno = errno;
         unsigned long count = __atomic_load_n(&coverage[0], __ATOMIC_RELAXED);
         if (ioctl(coverage_fd, KCOV_DISABLE, 0)) fail(t->id, i, "coverage_failure", "disable_kcov");
-        if (!count || count >= CAPACITY - 1) fail(t->id, i, "coverage_failure", "empty_or_full_kcov");
+        /* KCOV stops counting once the buffer is full, so "full" is the last
+         * value it can reach: CAPACITY - 1 PCs, or (CAPACITY - 1) / 4 records. */
+        if (!count || count >= (comparisons ? (CAPACITY - 1) / 4 : CAPACITY - 1))
+            fail(t->id, i, "coverage_failure", "empty_or_full_kcov");
         result[i].error = ret == -1 ? captured_errno : 0;
         result[i].ret = ret == -1 ? -captured_errno : ret;
         if (op->code == 5 && ret > 0) {
             if (ret > 16) fail(t->id, i, "environment_failure", "read_return_exceeds_buffer");
             memcpy(result[i].bytes, buffer, (size_t)ret);
         }
-        /* Deduplication changes coverage representation only, after capture. */
-        qsort(coverage + 1, count, sizeof(*coverage), compare_pc);
+        if (comparisons) {
+            /* Records are (type, arg1, arg2, ip). Each distinct record is
+             * printed once, at its first occurrence, in execution order. */
+            for (unsigned long k = 0; k < count; ++k) {
+                memcpy(records[k].record, coverage + 1 + 4 * k, sizeof(records[k].record));
+                records[k].position = k;
+            }
+            qsort(records, count, sizeof(*records), compare_record);
+            memset(first, 0, count);
+            for (unsigned long k = 0; k < count; ++k)
+                if (!k || memcmp(records[k].record, records[k - 1].record, sizeof(records[k].record)))
+                    first[records[k].position] = 1;
+            printf("LEANUX_CMP {\"id\":\"%s\",\"index\":%u,\"count\":%lu,\"records\":[", t->id, i, count);
+            int comma = 0;
+            for (unsigned long k = 0; k < count; ++k) {
+                if (!first[k]) continue;
+                const unsigned long *r = coverage + 1 + 4 * k;
+                printf("%s[%lu,\"0x%lx\",\"0x%lx\",\"0x%lx\"]", comma ? "," : "", r[0], r[1], r[2], r[3]);
+                comma = 1;
+            }
+            printf("]}\n");
+            continue;
+        }
+        /* Deduplicate after capture, keeping each PC's first execution in
+         * order: sort (pc, position) pairs, mark first positions, then print
+         * the marked PCs in execution order. */
+        for (unsigned long j = 0; j < count; ++j) {
+            order[j].pc = coverage[j + 1];
+            order[j].position = j;
+        }
+        qsort(order, count, sizeof(*order), compare_occurrence);
+        memset(first, 0, count);
+        for (unsigned long j = 0; j < count; ++j)
+            if (!j || order[j].pc != order[j - 1].pc) first[order[j].position] = 1;
         printf("LEANUX_COVERAGE {\"id\":\"%s\",\"index\":%u,\"count\":%lu,\"pcs\":[", t->id, i, count);
         int comma = 0;
-        for (unsigned long j = 1; j <= count; ++j) {
-            if (j > 1 && coverage[j] == coverage[j - 1]) continue;
-            printf("%s\"0x%lx\"", comma ? "," : "", coverage[j]);
+        for (unsigned long j = 0; j < count; ++j) {
+            if (!first[j]) continue;
+            printf("%s\"0x%lx\"", comma ? "," : "", coverage[j + 1]);
             comma = 1;
         }
         printf("]}\n");
+    }
+    if (comparisons) {
+        printf("LEANUX_CMP_RESULT {\"id\":\"%s\",\"rets\":[", t->id);
+        for (unsigned i = 0; i < t->count; ++i) printf("%s%ld", i ? "," : "", result[i].ret);
+        printf("],\"bytes\":[");
+        for (unsigned i = 0; i < t->count; ++i) {
+            printf("%s\"", i ? "," : "");
+            if (t->ops[i].code == 5 && result[i].ret > 0)
+                for (long j = 0; j < result[i].ret; ++j) printf("%02x", result[i].bytes[j]);
+            printf("\"");
+        }
+        printf("]}\n");
+        fflush(stdout);
+        _exit(0);
     }
     printf("LEANUX_RESULT {\"version\":1,\"id\":\"%s\",\"observations\":[", t->id);
     for (unsigned i = 0; i < t->count; ++i) {
@@ -146,14 +214,16 @@ int main(int argc, char **argv)
                 &op->code, &op->kind, &op->fd, &op->newkind, &op->newfd, &op->a, &op->b, &op->value) != 8)
                 fail(trace.id, i, "invalid_input", "wire_operation");
         }
-        pid_t child = fork();
-        if (child < 0) fail(trace.id, -1, "environment_failure", "fork");
-        if (!child) execute(&trace, fileno(input));
-        int status;
-        if (waitpid(child, &status, 0) != child) fail(trace.id, -1, "environment_failure", "wait_child");
-        if (!WIFEXITED(status) || WEXITSTATUS(status)) {
-            printf("LEANUX_CHILD_FAILURE {\"id\":\"%s\",\"status\":%d}\n", trace.id, status);
-            ++failures;
+        for (int comparisons = 0; comparisons < 2; ++comparisons) {
+            pid_t child = fork();
+            if (child < 0) fail(trace.id, -1, "environment_failure", "fork");
+            if (!child) execute(&trace, fileno(input), comparisons);
+            int status;
+            if (waitpid(child, &status, 0) != child) fail(trace.id, -1, "environment_failure", "wait_child");
+            if (!WIFEXITED(status) || WEXITSTATUS(status)) {
+                printf("LEANUX_CHILD_FAILURE {\"id\":\"%s\",\"status\":%d}\n", trace.id, status);
+                ++failures;
+            }
         }
     }
     if (fgetc(input) != EOF) fail("batch", -1, "invalid_input", "wire_trailing_data");

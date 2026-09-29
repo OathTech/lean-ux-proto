@@ -18,7 +18,7 @@ def idaAlloc : M Int := do
 
 /-- do_eventfd (eventfd.c:379-423). -/
 def doEventfd (count : UInt32) (flags : UInt32) : M Int := do
-  if ← branch .doEventfdInvalidFlags (flags &&& ~~~EFD_FLAGS_SET != 0) then return -EINVAL
+  if ← branchCmp .doEventfdInvalidFlags (flags &&& ~~~EFD_FLAGS_SET != 0) (flags &&& ~~~EFD_FLAGS_SET).toNat 0 then return -EINVAL
   -- ctx = kmalloc(sizeof(*ctx), GFP_KERNEL)
   if ← branch .doEventfdNoMem (!(← envOk .kmallocEventfdCtx)) then return -ENOMEM
   let cid := (← getK).nextCtx
@@ -29,7 +29,7 @@ def doEventfd (count : UInt32) (flags : UInt32) : M Int := do
   setCtx cid { (← getCtx cid) with id := some id }
   let flags := (flags &&& EFD_SHARED_FCNTL_FLAGS) ||| O_RDWR
   let fd ← getUnusedFdFlags flags
-  if ← branch .doEventfdFdError (fd < 0) then
+  if ← branchCmp .doEventfdFdError (fd < 0) fd 0 then
     eventfdFreeCtx cid  -- err:
     return fd
   let file ← anonInodeGetfile .eventfd (.eventfdCtx cid) flags

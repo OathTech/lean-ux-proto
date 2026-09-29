@@ -15,7 +15,7 @@ namespace Leanux
     without fsnotify. `unsigned_offsets` is only reached for negative
     positions, which never arise from `f_pos = 0`. -/
 def rwVerifyArea (ppos : Option Int) (count : Nat) : M Int := do
-  if ← branch .rwVerifyNegativeCount (count >= 2 ^ 63) then return -EINVAL
+  if ← branchCmp .rwVerifyNegativeCount (count >= 2 ^ 63) count 0 then return -EINVAL
   if ← branch .rwVerifyHasPos ppos.isSome then
     let pos := ppos.getD 0
     if ← branch .rwVerifyNegativePos (pos < 0) then
@@ -38,8 +38,8 @@ def newSyncRead (fid : FileId) (len : Nat) (ppos : Option Int) : M (Int × Optio
 /-- vfs_read (read_write.c:549-578). -/
 def vfsRead (fid : FileId) (count : Nat) (pos : Option Int) : M (Int × Option Int) := do
   let f ← getFile fid
-  if ← branch .vfsReadNotReadable (!hasFlag f.fMode FMODE_READ) then return (-EBADF, pos)
-  if ← branch .vfsReadCannotRead (!hasFlag f.fMode FMODE_CAN_READ) then return (-EINVAL, pos)
+  if ← branchCmp .vfsReadNotReadable (!hasFlag f.fMode FMODE_READ) (f.fMode &&& FMODE_READ).toNat 0 then return (-EBADF, pos)
+  if ← branchCmp .vfsReadCannotRead (!hasFlag f.fMode FMODE_CAN_READ) (f.fMode &&& FMODE_CAN_READ).toNat 0 then return (-EINVAL, pos)
   if ← branch .vfsReadAccessFault (!(← envOk .accessOk)) then return (-EFAULT, pos)
   let ret ← rwVerifyArea pos count
   if ← branch .vfsReadVerifyError (ret != 0) then return (ret, pos)
@@ -55,7 +55,7 @@ def vfsRead (fid : FileId) (count : Nat) (pos : Option Int) : M (Int × Option I
 
 /-- `file_ppos` (read_write.c:695-699). -/
 def filePpos (f : File) : M (Option Int) := do
-  if ← branch .filePposStream (hasFlag f.fMode FMODE_STREAM) then return none
+  if ← branchCmp .filePposStream (hasFlag f.fMode FMODE_STREAM) (f.fMode &&& FMODE_STREAM).toNat 0 then return none
   return some f.fPos
 
 /-- ksys_read (read_write.c:701-718) and SYSCALL_DEFINE3(read). -/
@@ -68,7 +68,7 @@ def ksysRead (fd : Nat) (count : Nat) : M Int := do
     _ ← branch .ksysReadHasPpos ppos.isSome  -- pos = *ppos; ppos = &pos
     let (r, pos) ← vfsRead fid count ppos
     ret := r
-    if ← branch .ksysReadRetNonneg (ret >= 0) then
+    if ← branchCmp .ksysReadRetNonneg (ret >= 0) ret 0 then
       if ← branch .ksysReadStorePos pos.isSome then
         setFile fid { (← getFile fid) with fPos := pos.getD 0 }
     fdputPos f
@@ -94,8 +94,8 @@ def fileEndWrite (f : File) : M Unit := do
 /-- vfs_write (read_write.c:663-693). `userWord` is the buffer's first 8 bytes. -/
 def vfsWrite (fid : FileId) (userWord : UInt64) (count : Nat) (pos : Option Int) : M Int := do
   let f ← getFile fid
-  if ← branch .vfsWriteNotWritable (!hasFlag f.fMode FMODE_WRITE) then return -EBADF
-  if ← branch .vfsWriteCannotWrite (!hasFlag f.fMode FMODE_CAN_WRITE) then return -EINVAL
+  if ← branchCmp .vfsWriteNotWritable (!hasFlag f.fMode FMODE_WRITE) (f.fMode &&& FMODE_WRITE).toNat 0 then return -EBADF
+  if ← branchCmp .vfsWriteCannotWrite (!hasFlag f.fMode FMODE_CAN_WRITE) (f.fMode &&& FMODE_CAN_WRITE).toNat 0 then return -EINVAL
   if ← branch .vfsWriteAccessFault (!(← envOk .accessOk)) then return -EFAULT
   let ret ← rwVerifyArea pos count
   if ← branch .vfsWriteVerifyError (ret != 0) then return ret
@@ -120,7 +120,7 @@ def ksysWrite (fd : Nat) (userWord : UInt64) (count : Nat) : M Int := do
     let ppos ← filePpos (← getFile fid)
     _ ← branch .ksysWriteHasPpos ppos.isSome
     ret ← vfsWrite fid userWord count ppos
-    if ← branch .ksysWriteRetNonneg (ret >= 0) then
+    if ← branchCmp .ksysWriteRetNonneg (ret >= 0) ret 0 then
       if ← branch .ksysWriteStorePos ppos.isSome then
         setFile fid { (← getFile fid) with fPos := ppos.getD 0 }
     fdputPos f

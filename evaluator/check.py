@@ -144,7 +144,8 @@ def parse_decisions(decisions, config):
         raise InvalidOutput('empty decision table')
     table = {}
     for entry in decisions:
-        if set(entry) != {'label', 'file', 'line', 'when_true', 'when_false', 'unobservable_true', 'unobservable_false'}:
+        if set(entry) != {'label', 'file', 'line', 'when_true', 'when_false', 'unobservable_true', 'unobservable_false',
+                          'comparison'}:
             raise InvalidOutput(f'decision fields: {entry}')
         label = entry['label']
         if type(label) is not str or label in table or entry['file'] not in config['files']:
@@ -152,6 +153,10 @@ def parse_decisions(decisions, config):
         if type(entry['line']) is not int or non_statement(f"{entry['file']}:{entry['line']}"):
             raise InvalidOutput(f'decision {label}: condition line must be a source statement')
         reasons = {True: entry['unobservable_true'], False: entry['unobservable_false']}
+        comparison = entry['comparison']
+        if comparison is not None and (set(comparison) != {'rel', 'const_rhs'} or comparison['rel'] not in RELATIONS
+                                       or type(comparison['const_rhs']) is not bool):
+            raise InvalidOutput(f'decision {label}: comparison spec')
         if any(r is not None and (type(r) is not str or not r) for r in reasons.values()):
             raise InvalidOutput(f'decision {label}: unobservable reasons must be strings')
         spans = {}
@@ -170,7 +175,7 @@ def parse_decisions(decisions, config):
         if spans[True] & spans[False]:
             raise InvalidOutput(f'decision {label}: outcome spans overlap')
         table[label] = dict(site=f"{entry['file']}:{entry['line']}", spans=spans, reasons=reasons,
-                            function=label.split('.', 1)[0])
+                            function=label.split('.', 1)[0], comparison=comparison)
     return table
 
 
@@ -196,13 +201,19 @@ def witness_table(decisions, instrumented, functions):
 
 
 def op_lines(row, locations, files):
-    lines = set()
-    for pc in row['pcs']:
+    return set(line_positions(row, locations, files))
+
+
+def line_positions(row, locations, files):
+    """Each anchored line's first position in the operation's coverage. The
+    guest records each PC once, at its first execution, in execution order."""
+    positions = {}
+    for position, pc in enumerate(row['pcs']):
         for frame in locations[pc]:
             source = frame['source'].split('/.deps/linux/')[-1].split(' ')[0]
             if source.split(':')[0] in files:
-                lines.add(source)
-    return lines
+                positions.setdefault(source, position)
+    return positions
 
 
 def parse_step(label):
@@ -225,15 +236,17 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
         steps.setdefault(branch['index'], []).append(branch['label'])
     span_lines = set().union(*(e['spans'][o] for e in decisions.values() for o in (True, False)))
     problems, gaps = [], Counter()
+    order_stats = Counter()
     for index, op in enumerate(trace['ops']):
-        lines = op_lines(coverage[index], locations, config['files'])
+        positions = line_positions(coverage[index], locations, config['files'])
+        lines = set(positions)
         if not lines:
             problems.append(dict(index=index, problem='no coverage in anchored files'))
         unmapped = sorted((lines & span_lines) - instrumented)
         if unmapped:
             problems.append(dict(index=index, problem='covered span lines missing from the instrumentation map',
                                  lines=unmapped))
-        reported = set()
+        reported, sequence = set(), []
         for label in steps.get(index, []):
             step = parse_step(label)
             if step is None or step[0] not in decisions:
@@ -242,6 +255,7 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
                 problems.append(dict(index=index, label=label, problem='decision reported more than once'))
             else:
                 reported.add(step)
+                sequence.append(step)
         if not reported:
             problems.append(dict(index=index, problem='no model decision'))
         for name, outcome in sorted(reported):
@@ -252,6 +266,26 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
             if lines & other:
                 problems.append(dict(index=index, label=f'{name}={int(outcome)}', problem='opposite outcome covered',
                                      covered=sorted(lines & other)))
+        # Order: within each C function, witnessed decisions appear in the
+        # mirror's order at their first witness in Linux's execution. (Across
+        # functions an arm's first witness can follow a nested call's
+        # decisions, so positions are only comparable within a function.)
+        previous = {}
+        for name, outcome in sequence:
+            covered = witnesses[name][outcome] & lines
+            if not covered:
+                order_stats['unwitnessed'] += 1
+                continue
+            here = min(positions[line] for line in covered)
+            function = decisions[name]['function']
+            if function in previous:
+                order_stats['compared'] += 1
+                order_stats['ties'] += here == previous[function][1]
+            if function in previous and here < previous[function][1]:
+                problems.append(dict(index=index, label=f'{name}={int(outcome)}', problem='decision order differs from Linux',
+                                     after=previous[function][0], linux_position=here,
+                                     previous_position=previous[function][1]))
+            previous[function] = (f'{name}={int(outcome)}', here)
         names = {name for name, _ in reported}
         for name, sides in witnesses.items():
             if name not in names and lines & (sides[True] | sides[False]):
@@ -260,7 +294,79 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
         for gap in config['known_gaps']:
             if gap['op'] == op['op'] and gap['line'] in lines:
                 gaps[gap['name']] += 1
+    gaps.update({f'order: {k}': v for k, v in order_stats.items()})
     return problems, gaps
+
+
+KCOV_CMP_CONST = 1
+RELATIONS = ('lt', 'le', 'gt', 'ge', 'eq', 'ne', 'flag')
+# The constants a compiler may use for `x REL c`: `x < c` becomes `x <= c-1`,
+# `x <= c` becomes `x < c+1`, and so on; equality and mask tests are exact.
+CONSTANT_SHIFTS = {'lt': (0, -1), 'le': (0, 1), 'gt': (0, 1), 'ge': (0, -1), 'eq': (0,), 'ne': (0,), 'flag': (0,)}
+
+
+def encode(value, bits):
+    """`value` as a `bits`-wide C value, or None if it does not fit."""
+    if 0 <= value < 1 << bits:
+        return value
+    if -(1 << (bits - 1)) <= value < 0:
+        return value & ((1 << bits) - 1)
+    return None
+
+
+def operands_match(lhs, rhs, record, comparison):
+    """Whether a `KCOV_TRACE_CMP` record (type, arg1, arg2) is the C comparison
+    `lhs REL rhs` the mirror declares. Operands must fit the recorded width
+    (type bits 1-2: log2 bytes). A constant record (KCOV puts the constant in
+    arg1) needs a declared constant right-hand side: the variable must equal
+    `lhs` exactly and the constant may be shifted only as the relation allows.
+    A non-constant record may list the operands in either order, because the
+    compiler canonicalizes operand order (`nr < max_fds` is recorded as
+    `(max_fds, nr)`)."""
+    kind, x, y = record
+    bits = 8 << (kind >> 1)
+    a, b = encode(lhs, bits), encode(rhs, bits)
+    if a is None or b is None:
+        return False
+    if kind & KCOV_CMP_CONST:
+        if not comparison['const_rhs']:
+            return False
+        return y == a and any(x == (rhs + shift) & ((1 << bits) - 1) for shift in CONSTANT_SHIFTS[comparison['rel']])
+    return sorted((x, y)) == sorted((a, b))
+
+
+def operand_agreement(trace, model_obs, comparisons, locations, decisions):
+    """A3: declared value comparisons report operands, and each matches a
+    comparison Linux made at the decision's condition line (the innermost
+    source frame of the comparison) in the same operation."""
+    problems, checked = [], 0
+    for branch in model_obs['branches']:
+        name = branch['label'].rpartition('=')[0]
+        if name not in decisions:
+            continue  # control_flow reports unknown labels
+        comparison = decisions[name]['comparison']
+        if comparison is None:
+            if 'operands' in branch:
+                problems.append(dict(index=branch['index'], label=branch['label'],
+                                     problem='operands on a decision not declared a comparison'))
+            continue
+        if 'operands' not in branch:
+            problems.append(dict(index=branch['index'], label=branch['label'],
+                                 problem='declared comparison reported without operands'))
+            continue
+        site = decisions[name]['site']
+        records = [(r[0], int(r[1], 16), int(r[2], 16)) for r in comparisons[branch['index']]['records']
+                   if locations[r[3]][0]['source'].split('/.deps/linux/')[-1].split(' ')[0] == site]
+        lhs, rhs = branch['operands']
+        if not records:
+            problems.append(dict(index=branch['index'], label=branch['label'], problem='no comparison recorded at condition',
+                                 site=site, operands=[lhs, rhs]))
+        elif not any(operands_match(lhs, rhs, r, comparison) for r in records):
+            problems.append(dict(index=branch['index'], label=branch['label'], problem='operands differ from Linux',
+                                 site=site, operands=[lhs, rhs], linux=[[k, hex(x), hex(y)] for k, x, y in records[:6]]))
+        else:
+            checked += 1
+    return problems, checked
 
 
 def run_chunk(traces, out, kcov):
@@ -273,6 +379,10 @@ def run_chunk(traces, out, kcov):
         validate_coverage(traces, coverage)
         mapped = symbolize(coverage, KERNEL / 'vmlinux')
         (out / 'linux/coverage-map.json').write_text(json.dumps(mapped, indent=1) + '\n')
+        comparisons = [loads(line) for line in (out / 'linux/comparisons.jsonl').read_text().splitlines()]
+        compared = symbolize([{'pcs': sorted({r[3] for row in comparisons for r in row['records']})}],
+                             KERNEL / 'vmlinux')
+        (out / 'linux/comparison-map.json').write_text(json.dumps(compared, indent=1) + '\n')
     except LinuxRunError as exc:
         return {t['id']: dict(outcome=exc.kind, side='linux', detail=str(exc)) for t in traces}, gaps, outcomes
     except (InvalidOutput, ValueError, OSError, subprocess.SubprocessError) as exc:
@@ -283,12 +393,17 @@ def run_chunk(traces, out, kcov):
     except (InvalidOutput, OSError, subprocess.SubprocessError) as exc:
         kind = getattr(exc, 'kind', 'invalid_output')
         return {t['id']: dict(outcome=kind, side='model', detail=str(exc)) for t in traces}, gaps, outcomes
-    rows = iter(coverage)
+    rows, cmp_rows = iter(coverage), iter(comparisons)
     for trace, expected, actual in zip(traces, linux, model):
         trace_coverage = [next(rows) for _ in trace['ops']]
+        trace_comparisons = [next(cmp_rows) for _ in trace['ops']]
         result = compare(trace, expected, actual)
         if result['outcome'] == 'agreement':
             problems, trace_gaps = control_flow(trace, actual, trace_coverage, mapped['locations'], *kcov)
+            operand_problems, checked = operand_agreement(trace, actual, trace_comparisons,
+                                                          compared['locations'], kcov[1])
+            problems += operand_problems
+            outcomes['operand pairs matched'] += checked
             gaps.update(trace_gaps)
             outcomes.update(b['label'] for b in actual['branches'])
             if problems:
@@ -341,8 +456,9 @@ def main(argv=None):
         aborted = f'{type(exc).__name__}: {exc}'
         raise
     finally:
+        matched = outcomes.pop('operand pairs matched', 0)
         status = write_report(out, traces, results, gaps, build, aborted, started, suites, args,
-                              decision_summary(decisions, outcomes, kcov[2] if kcov else {}))
+                              decision_summary(decisions, outcomes, kcov[2] if kcov else {}), matched)
     return 0 if status == 'pass' else 1
 
 
@@ -359,7 +475,8 @@ def decision_summary(decisions, outcomes, witnesses):
                 table=rows)
 
 
-def write_report(out, traces, results, gaps, build, aborted, started, suites, args, decision_coverage=None):
+def write_report(out, traces, results, gaps, build, aborted, started, suites, args, decision_coverage=None,
+                 operand_pairs_matched=0):
     ordered = [results.get(trace['id'], dict(id=trace['id'], outcome='not_run')) for trace in traces]
     counts = Counter(r['outcome'] for r in ordered)
     vmlinux = KERNEL / 'vmlinux'
@@ -374,10 +491,11 @@ def write_report(out, traces, results, gaps, build, aborted, started, suites, ar
         kcov_config_sha256=sha256(ANCHORS.read_bytes()),
         selection=dict(suites=suites, generated_count=args.generated_count, seed=args.seed, trace=args.trace),
         traces=len(traces), operations=sum(len(t['ops']) for t in traces),
-        counts=dict(counts), known_gap_hits=dict(gaps), decision_coverage=decision_coverage,
+        counts=dict(counts), known_gap_hits=dict(gaps), operand_pairs_matched=operand_pairs_matched,
+        decision_coverage=decision_coverage,
         failures=[r for r in ordered if r['outcome'] != 'agreement'])
     (out / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
-    print(json.dumps({k: report[k] for k in ('status', 'traces', 'operations', 'counts', 'known_gap_hits')}, indent=2))
+    print(json.dumps({k: report[k] for k in ('status', 'traces', 'operations', 'counts', 'operand_pairs_matched')}, indent=2))
     print(f'report: {out / "report.json"}', file=sys.stderr)
     return report['status']
 

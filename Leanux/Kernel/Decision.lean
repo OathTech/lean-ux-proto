@@ -73,10 +73,13 @@ inductive Decision where
   | fcntlNoFile | fcntlPathFile | fcntlCaseGetfd | fcntlCaseSetfd | fcntlCaseGetfl | fcntlGetfdSet
   deriving Repr, BEq, DecidableEq, Inhabited
 
-/-- A recorded step: the decision and the outcome the mirror computed. -/
+/-- A recorded step: the decision, the outcome the mirror computed, and, for
+    value comparisons, the two operands the C compares (as C values; negative
+    numbers are two's complement in the check). -/
 structure Step where
   decision : Decision
   outcome : Bool
+  operands : Option (Int × Int) := none
   deriving Repr, BEq
 
 /-- An inclusive range of source lines in one file. -/
@@ -531,6 +534,84 @@ def Decision.unobservable : Decision → Bool → Option Unobservable
   | .fcntlGetfdSet, false => some .branchFree
   | .doDup2NoTofree, true => some .inlineHelper
   | _, _ => none
+
+/-- The relation of a C value comparison, as written in the source
+    (`lhs rel rhs`); `flag` is a mask test `(x & MASK)` against zero. -/
+inductive Rel where
+  | lt | le | gt | ge | eq | ne | flag
+  deriving Repr, BEq
+
+def Rel.name : Rel → String
+  | .lt => "lt" | .le => "le" | .gt => "gt" | .ge => "ge" | .eq => "eq" | .ne => "ne" | .flag => "flag"
+
+/-- A declared value comparison: the relation, and whether the right-hand
+    operand is a compile-time constant. -/
+structure Comparison where
+  rel : Rel
+  constRhs : Bool
+
+/-- The decisions that are value comparisons. Exactly these report operands
+    (`branchCmp`, as `(lhs, rhs)` in source order); the check requires it. -/
+def Decision.comparison : Decision → Option Comparison
+  | .allocFdCloexec => some ⟨.flag, true⟩
+  | .allocFdExpandError => some ⟨.lt, true⟩
+  | .allocFdExpanded => some ⟨.ne, true⟩
+  | .allocFdLimit => some ⟨.ge, false⟩
+  | .allocFdSearch => some ⟨.lt, false⟩
+  | .allocFdUpdateNextFd => some ⟨.le, false⟩
+  | .closeFdOutOfRange => some ⟨.ge, false⟩
+  | .ctxDoReadSemaphore => some ⟨.flag, true⟩
+  | .doDup2Cloexec => some ⟨.flag, true⟩
+  | .doEventfdFdError => some ⟨.lt, true⟩
+  | .doEventfdInvalidFlags => some ⟨.flag, true⟩
+  | .dup3Equal => some ⟨.eq, false⟩
+  | .dup3ExpandError => some ⟨.lt, true⟩
+  | .dup3InvalidFlags => some ⟨.flag, true⟩
+  | .dup3TargetLimit => some ⟨.ge, false⟩
+  | .dupAllocOk => some ⟨.ge, true⟩
+  | .eventfdFreeCtxHasId => some ⟨.ge, true⟩
+  | .eventfdReadEmpty => some ⟨.eq, true⟩
+  | .eventfdReadNonblock => some ⟨.flag, true⟩
+  | .eventfdReadShort => some ⟨.lt, true⟩
+  | .eventfdWriteBlocking => some ⟨.flag, true⟩
+  | .eventfdWriteFits => some ⟨.gt, false⟩
+  | .eventfdWriteReserved => some ⟨.eq, true⟩
+  | .eventfdWriteWrongSize => some ⟨.ne, true⟩
+  | .expandFilesFits => some ⟨.lt, false⟩
+  | .fcntlPathFile => some ⟨.flag, true⟩
+  | .fdInstallBacking => some ⟨.flag, true⟩
+  | .fgetLightSingleOwner => some ⟨.eq, true⟩
+  | .fileFreeAccounted => some ⟨.flag, true⟩
+  | .fileFreeBacking => some ⟨.flag, true⟩
+  | .fileInitPathModeRead => some ⟨.flag, true⟩
+  | .fileInitPathModeWrite => some ⟨.flag, true⟩
+  | .fileInitPathReadOnly => some ⟨.eq, true⟩
+  | .filePposStream => some ⟨.flag, true⟩
+  | .filpFlushCountZero => some ⟨.eq, true⟩
+  | .filpFlushNotPath => some ⟨.flag, true⟩
+  | .findNextFdAllFull => some ⟨.ge, false⟩
+  | .fposLockAtomicPos => some ⟨.flag, true⟩
+  | .fputFinalFasync => some ⟨.flag, true⟩
+  | .fputFinalNeedUnmount => some ⟨.flag, true⟩
+  | .fputFinalNotOpened => some ⟨.flag, true⟩
+  | .getFileFromZero => some ⟨.eq, true⟩
+  | .iocbFlagsAppend => some ⟨.flag, true⟩
+  | .iocbFlagsDirect => some ⟨.flag, true⟩
+  | .iocbFlagsDsync => some ⟨.flag, true⟩
+  | .iocbFlagsSync => some ⟨.flag, true⟩
+  | .ksysReadRetNonneg => some ⟨.ge, true⟩
+  | .ksysWriteRetNonneg => some ⟨.ge, true⟩
+  | .putFileAccessReadOnly => some ⟨.eq, true⟩
+  | .putFileAccessWriter => some ⟨.flag, true⟩
+  | .putUnusedFdLowerNextFd => some ⟨.lt, false⟩
+  | .refcountSubPositive => some ⟨.gt, true⟩
+  | .refcountSubToZero => some ⟨.eq, true⟩
+  | .rwVerifyNegativeCount => some ⟨.lt, true⟩
+  | .vfsReadCannotRead => some ⟨.flag, true⟩
+  | .vfsReadNotReadable => some ⟨.flag, true⟩
+  | .vfsWriteCannotWrite => some ⟨.flag, true⟩
+  | .vfsWriteNotWritable => some ⟨.flag, true⟩
+  | _ => none
 
 /-- Every decision, enumerated through the constructor index. -/
 def Decision.all : List Decision :=

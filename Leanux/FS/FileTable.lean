@@ -30,9 +30,9 @@ def inodeIsChr : Option InodeId → M Bool
 /-- file_free (file_table.c:87-98). `put_cred` and the slab free are cut points. -/
 def fileFree (fid : FileId) : M Unit := do
   let f ← getFile fid
-  if ← branch .fileFreeAccounted (!hasFlag f.fMode FMODE_NOACCOUNT) then
+  if ← branchCmp .fileFreeAccounted (!hasFlag f.fMode FMODE_NOACCOUNT) (f.fMode &&& FMODE_NOACCOUNT).toNat 0 then
     modifyK fun k => { k with nrFiles := k.nrFiles - 1 }   -- percpu_counter_dec(&nr_files)
-  if ← branch .fileFreeBacking (hasFlag f.fMode FMODE_BACKING) then
+  if ← branchCmp .fileFreeBacking (hasFlag f.fMode FMODE_BACKING) (f.fMode &&& FMODE_BACKING).toNat 0 then
     unsupported "backing_file_free"
   -- kmem_cache_free(filp_cachep, f)
   freeFile fid
@@ -55,10 +55,10 @@ def allocEmptyFile (flags : UInt32) : M (Except Int FileId) := do
     include/linux/fs.h:351-359 (IOCB_APPEND = RWF_APPEND, ...). -/
 def iocbFlags (fFlags : UInt32) : M UInt32 := do
   let mut res : UInt32 := 0
-  if ← branch .iocbFlagsAppend (hasFlag fFlags O_APPEND) then res := res ||| 0x10
-  if ← branch .iocbFlagsDirect (hasFlag fFlags O_DIRECT) then res := res ||| ((1 : UInt32) <<< 17)
-  if ← branch .iocbFlagsDsync (hasFlag fFlags O_DSYNC) then res := res ||| 0x2
-  if ← branch .iocbFlagsSync (hasFlag fFlags O_SYNC_INTERNAL) then res := res ||| 0x4
+  if ← branchCmp .iocbFlagsAppend (hasFlag fFlags O_APPEND) (fFlags &&& O_APPEND).toNat 0 then res := res ||| 0x10
+  if ← branchCmp .iocbFlagsDirect (hasFlag fFlags O_DIRECT) (fFlags &&& O_DIRECT).toNat 0 then res := res ||| ((1 : UInt32) <<< 17)
+  if ← branchCmp .iocbFlagsDsync (hasFlag fFlags O_DSYNC) (fFlags &&& O_DSYNC).toNat 0 then res := res ||| 0x2
+  if ← branchCmp .iocbFlagsSync (hasFlag fFlags O_SYNC_INTERNAL) (fFlags &&& O_SYNC_INTERNAL).toNat 0 then res := res ||| 0x4
   return res
 
 /-- file_init_path (file_table.c:330-351). The path/inode/mapping fields and
@@ -71,12 +71,12 @@ def fileInitPath (fid : FileId) (fopId : FopsId) (inode : InodeId) : M Unit := d
   let f ← getFile fid
   let mut mode := f.fMode
   if ← branch .fileInitPathLlseek fop.llseek then mode := mode ||| FMODE_LSEEK
-  if ← branch .fileInitPathModeRead (hasFlag mode FMODE_READ) then
+  if ← branchCmp .fileInitPathModeRead (hasFlag mode FMODE_READ) (mode &&& FMODE_READ).toNat 0 then
     let canRead ← do
       if ← branch .fileInitPathHasRead fop.read then pure true
       else branch .fileInitPathHasReadIter fop.readIter
     if canRead then mode := mode ||| FMODE_CAN_READ
-  if ← branch .fileInitPathModeWrite (hasFlag mode FMODE_WRITE) then
+  if ← branchCmp .fileInitPathModeWrite (hasFlag mode FMODE_WRITE) (mode &&& FMODE_WRITE).toNat 0 then
     let canWrite ← do
       if ← branch .fileInitPathHasWrite fop.write then pure true
       else branch .fileInitPathHasWriteIter fop.writeIter
@@ -86,7 +86,7 @@ def fileInitPath (fid : FileId) (fopId : FopsId) (inode : InodeId) : M Unit := d
   -- file->f_op = fop (file_table.c:348)
   setFile fid { f with fMode := mode, fIocbFlags := iocb, fOp := some fopId }
   -- i_readcount_inc for read-only files: a cut point
-  _ ← branch .fileInitPathReadOnly (mode &&& (FMODE_READ ||| FMODE_WRITE) == FMODE_READ)
+  _ ← branchCmp .fileInitPathReadOnly (mode &&& (FMODE_READ ||| FMODE_WRITE) == FMODE_READ) (mode &&& (FMODE_READ ||| FMODE_WRITE)).toNat FMODE_READ.toNat
 
 /-- alloc_file (file_table.c:360-369). -/
 def allocFile (flags : UInt32) (fopId : FopsId) (inode : InodeId) : M (Except Int FileId) := do
@@ -106,15 +106,15 @@ def allocFilePseudo (flags : UInt32) (inode : InodeId) (fopId : FopsId) : M (Exc
 
 /-- put_file_access (fs/internal.h:114-121). -/
 def putFileAccess (f : File) : M Unit := do
-  if ← branch .putFileAccessReadOnly (f.fMode &&& (FMODE_READ ||| FMODE_WRITE) == FMODE_READ) then
+  if ← branchCmp .putFileAccessReadOnly (f.fMode &&& (FMODE_READ ||| FMODE_WRITE) == FMODE_READ) (f.fMode &&& (FMODE_READ ||| FMODE_WRITE)).toNat FMODE_READ.toNat then
     unsupported "i_readcount_dec"
-  else if ← branch .putFileAccessWriter (hasFlag f.fMode FMODE_WRITER) then
+  else if ← branchCmp .putFileAccessWriter (hasFlag f.fMode FMODE_WRITER) (f.fMode &&& FMODE_WRITER).toNat 0 then
     unsupported "file_put_write_access"
 
 /-- __fput (file_table.c:442-482): the release of the last reference. -/
 def fputFinal (fid : FileId) : M Unit := do
   let f ← getFile fid
-  if ← branch .fputFinalNotOpened (!hasFlag f.fMode FMODE_OPENED) then
+  if ← branchCmp .fputFinalNotOpened (!hasFlag f.fMode FMODE_OPENED) (f.fMode &&& FMODE_OPENED).toNat 0 then
     fileFree fid
     return
   -- might_sleep(); fsnotify_close (compiled out)
@@ -123,7 +123,7 @@ def fputFinal (fid : FileId) : M Unit := do
     unsupported "eventpoll_release_file"
   -- locks_remove_file: a cut point (no locks); security_file_release (compiled out)
   let fop ← fopsOf f.fOp
-  if ← branch .fputFinalFasync (hasFlag f.fFlags FASYNC) then
+  if ← branchCmp .fputFinalFasync (hasFlag f.fFlags FASYNC) (f.fFlags &&& FASYNC).toNat 0 then
     unsupported "__fput with FASYNC"
   if ← branch .fputFinalRelease fop.release then
     _ ← fopRelease fid f.fOp
@@ -138,7 +138,7 @@ def fputFinal (fid : FileId) : M Unit := do
     unsupported "file_f_owner_release with an owner"
   putFileAccess f
   -- dput(dentry)
-  if ← branch .fputFinalNeedUnmount (hasFlag f.fMode FMODE_NEED_UNMOUNT) then
+  if ← branchCmp .fputFinalNeedUnmount (hasFlag f.fMode FMODE_NEED_UNMOUNT) (f.fMode &&& FMODE_NEED_UNMOUNT).toNat 0 then
     unsupported "dissolve_on_fput"
   -- mntput(mnt)
   fileFree fid

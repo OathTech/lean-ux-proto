@@ -34,7 +34,7 @@ def eventfdCtxOf (file : File) : M CtxId :=
 def eventfdFreeCtx (id : CtxId) : M Unit := do
   let ctx ← getCtx id
   let some cid := ctx.id | invariant "eventfd_free_ctx reading an unset ctx->id"
-  if ← branch .eventfdFreeCtxHasId (cid >= 0) then
+  if ← branchCmp .eventfdFreeCtxHasId (cid >= 0) cid 0 then
     -- ida_free(&eventfd_ida, ctx->id)
     modifyK fun k => { k with idaUsed := k.idaUsed.erase cid.toNat }
   -- kfree(ctx)
@@ -45,8 +45,8 @@ def eventfdFreeCtx (id : CtxId) : M Unit := do
     (NULL); saturation reports are `unsupported`. -/
 def refcountDecAndTest (old : Nat) : M Bool := do
   let i := 1
-  if ← branch .refcountSubPositive (old > 0) then
-    if ← branch .refcountSubToZero (old == i) then return true
+  if ← branchCmp .refcountSubPositive (old > 0) old 0 then
+    if ← branchCmp .refcountSubToZero (old == i) old i then return true
   if ← branch .refcountSubNonpositive (old == 0) then unsupported "refcount_warn_saturate (use after free)"
   if ← branch .refcountSubUnderflow (old < i) then unsupported "refcount_warn_saturate (underflow)"
   return false
@@ -76,8 +76,8 @@ def eventfdRelease (fid : FileId) : M Int := do
 def eventfdCtxDoRead (id : CtxId) : M UInt64 := do
   let ctx ← getCtx id
   let one ← do
-    if ← branch .ctxDoReadSemaphore (hasFlag ctx.flags EFD_SEMAPHORE) then
-      branch .ctxDoReadCountNonzero (ctx.count != 0)
+    if ← branchCmp .ctxDoReadSemaphore (hasFlag ctx.flags EFD_SEMAPHORE) (ctx.flags &&& EFD_SEMAPHORE).toNat 0 then
+      branch .ctxDoReadCountNonzero (ctx.count != 0)  -- a branch-free select: no comparison
     else pure false
   let cnt := if one then 1 else ctx.count
   setCtx id { ctx with count := ctx.count - cnt }
@@ -88,10 +88,10 @@ def eventfdCtxDoRead (id : CtxId) : M UInt64 := do
 def eventfdRead (iocb : Kiocb) (iterCount : Nat) : M Int := do
   let file ← getFile iocb.filp
   let id ← eventfdCtxOf file  -- ctx = file->private_data
-  if ← branch .eventfdReadShort (iterCount < 8) then return -EINVAL
+  if ← branchCmp .eventfdReadShort (iterCount < 8) iterCount 8 then return -EINVAL
   -- spin_lock_irq(&ctx->wqh.lock)
-  if ← branch .eventfdReadEmpty ((← getCtx id).count == 0) then
-    if ← branch .eventfdReadNonblock (hasFlag file.fFlags O_NONBLOCK) then
+  if ← branchCmp .eventfdReadEmpty ((← getCtx id).count == 0) (← getCtx id).count.toNat 0 then
+    if ← branchCmp .eventfdReadNonblock (hasFlag file.fFlags O_NONBLOCK) (file.fFlags &&& O_NONBLOCK).toNat 0 then
       return -EAGAIN  -- spin_unlock_irq
     if ← branch .eventfdReadNowait (hasFlag iocb.kiFlags IOCB_NOWAIT) then
       return -EAGAIN  -- spin_unlock_irq
@@ -111,15 +111,15 @@ def eventfdRead (iocb : Kiocb) (iterCount : Nat) : M Int := do
 def eventfdWrite (fid : FileId) (userWord : UInt64) (count : Nat) : M Int := do
   let file ← getFile fid
   let id ← eventfdCtxOf file  -- ctx = file->private_data
-  if ← branch .eventfdWriteWrongSize (count != 8) then return -EINVAL
+  if ← branchCmp .eventfdWriteWrongSize (count != 8) count 8 then return -EINVAL
   if ← branch .eventfdWriteCopyFault (!(← envOk .copyFromUser)) then return -EFAULT
   let ucnt := userWord
-  if ← branch .eventfdWriteReserved (ucnt == ULLONG_MAX) then return -EINVAL
+  if ← branchCmp .eventfdWriteReserved (ucnt == ULLONG_MAX) ucnt.toNat ULLONG_MAX.toNat then return -EINVAL
   -- spin_lock_irq(&ctx->wqh.lock)
   let mut res : Int := -EAGAIN
-  if ← branch .eventfdWriteFits (ULLONG_MAX - (← getCtx id).count > ucnt) then
+  if ← branchCmp .eventfdWriteFits (ULLONG_MAX - (← getCtx id).count > ucnt) (ULLONG_MAX - (← getCtx id).count).toNat ucnt.toNat then
     res := 8
-  else if ← branch .eventfdWriteBlocking (!hasFlag file.fFlags O_NONBLOCK) then
+  else if ← branchCmp .eventfdWriteBlocking (!hasFlag file.fFlags O_NONBLOCK) (file.fFlags &&& O_NONBLOCK).toNat 0 then
     unsupported "eventfd_write blocking wait"
   if ← branch .eventfdWriteResPositive (res > 0) then
     let ctx ← getCtx id

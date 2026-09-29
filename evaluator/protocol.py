@@ -60,8 +60,12 @@ def validate_observation(trace, result):
     if type(branches) is not list or len(branches) > 4096:
         raise InvalidOutput('branch report size')
     for branch in branches:
-        if not keys(branch, ('index', 'label')) or not integer(branch['index'], 0, len(trace['ops']) - 1):
+        if not (keys(branch, ('index', 'label')) or keys(branch, ('index', 'label', 'operands'))) \
+                or not integer(branch['index'], 0, len(trace['ops']) - 1):
             raise InvalidOutput('branch fields/index')
+        if 'operands' in branch and not (type(branch['operands']) is list and len(branch['operands']) == 2
+                                         and all(integer(x, -2**63, 2**64 - 1) for x in branch['operands'])):
+            raise InvalidOutput('branch operands')
         if type(branch['label']) is not str or not 1 <= len(branch['label']) <= 120:
             raise InvalidOutput('branch label')
     return result

@@ -35,7 +35,7 @@ def sysFcntl (fd : Nat) (cmd : FcntlCmd) (arg : UInt64) : M Int := do
   let mut err := -EBADF
   if ← branch .fcntlNoFile f.file.isNone then return err  -- goto out
   let some fid := f.file | invariant "unreachable"
-  if ← branch .fcntlPathFile (hasFlag (← getFile fid).fMode FMODE_PATH) then
+  if ← branchCmp .fcntlPathFile (hasFlag (← getFile fid).fMode FMODE_PATH) ((← getFile fid).fMode &&& FMODE_PATH).toNat 0 then
     unsupported "check_fcntl_cmd for O_PATH files"
   err ← doFcntl fd cmd arg fid
   fdput f  -- out1:

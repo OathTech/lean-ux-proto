@@ -74,6 +74,38 @@ nor hide evidence.
 - an unknown label, or an operation with no decision;
 - coverage only outside the anchored files.
 
+**Order.** The guest records each PC once, at its first execution, in
+execution order. Within each C function, the mirror's witnessed decisions must
+appear in the mirror's order at their first covered witness in Linux's
+execution.
+
+**Operands (A3).** Each trace is rerun with `KCOV_TRACE_CMP`, and the rerun's
+return values and read bytes must be identical. The decision table declares
+which decisions are C value comparisons (`Decision.comparison`): the relation
+as written (`lhs REL rhs`, or a mask test), and whether the right-hand side is
+a compile-time constant. There are 58 such decisions.
+
+Exactly the declared decisions report `(lhs, rhs)` (`branchCmp`); a missing
+or undeclared operand pair fails. Some comparison record must match, where the
+record's *innermost* source frame is the decision's condition line:
+- Both operands must fit the recorded width; nothing is truncated.
+- **Constant records** (KCOV puts the constant in arg1) need a declared
+  constant. The variable must equal `lhs` exactly, and the constant may differ
+  from `rhs` only as the relation allows (`x < 8` may appear as `x <= 7`).
+- **Non-constant records** may list the operands in either order. The compiler
+  canonicalizes operand order: `nr < max_fds` is recorded as `(max_fds, nr)`.
+
+Decisions whose condition is not a comparison at that line report no
+operands. Examples:
+- pointer and NULL tests;
+- `__fget_light`'s caller-dependent mask;
+- the branch-free select in `eventfd_ctx_do_read`;
+- `atomic_long_inc_not_zero`'s result.
+
+`alloc_empty_file.nr_files_at_max` is deliberately not declared: its operands
+are the system-wide `nr_files` and the boot-sized `max_files` (observed as
+24,192), which the mirror does not model.
+
 **Reasons** (`Unobservable` in `Leanux/Kernel/Decision.lean`):
 
 | Reason | Meaning |
@@ -98,7 +130,15 @@ nor hide evidence.
 - Witnesses are keyed by source line, not by inline context. A header helper
   inlined into an unmodeled caller in the same operation could in principle
   satisfy a witness.
-- Step order within an operation is not yet checked (Phase 3).
+- Order is compared only within a C function. Across functions, an arm's first
+  witness can follow the decisions of a call nested inside it. Ties and
+  unwitnessed steps are counted in the report (`order:` entries), not checked.
+- A non-constant comparison's operand order cannot be checked, because the
+  compiler reorders it. A swapped relation is caught by the outcome check,
+  except when the operands are equal.
+- Matching is existential over the records at the condition line. A C site
+  evaluated several times in one operation, while the mirror reports it once,
+  is not detected by A3.
 
 These are mitigated by structural review of each function against the C.
 

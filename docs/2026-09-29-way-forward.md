@@ -391,6 +391,29 @@ presented for user signoff before anything reaches `main`.
 - **Results.** Behavior and the decision table are unchanged: the full corpus
   passes, 1,067 traces.
 
+## 6d. Phase 3 status (2026-09-29) [AGENT]
+
+- **Execution order.** The guest records coverage in first-execution order.
+  A2 checks decision order within each C function. Across functions, nested
+  calls make witness positions incomparable.
+- **Operands (A3).** Each trace is rerun in `KCOV_TRACE_CMP` mode, and the
+  rerun must give identical results and bytes. 58 decisions are declared value
+  comparisons (relation, constant right-hand side). They must report their C
+  operands, and each pair must match a comparison whose innermost frame is the
+  condition line. Matching is width-checked and direction-aware for constants.
+  An Opus review of the first version found fail-open paths, and they are
+  fixed. Residual gaps are listed in `correspondence/README.md`.
+- **Results.**
+  - The full corpus passes, with 179,788 operand pairs matched.
+  - 126,344 same-function order pairs are compared.
+  - A behavior-preserving order swap in `ksys_dup3` is rejected.
+  - A behavior-preserving `max_fds` of 128 instead of 64 is rejected by
+    operands alone.
+- **Finding.** The comparison records show `max_files` = 24,192 and
+  `nr_files` ≈ 10 in the guest, against the runner's invented 1,000,000 and 6.
+  That decision is excluded from A3; making these environment facts observed
+  inputs is future work.
+
 ## 7. Decisions
 
 [USER 2026-09-29] The user answered:

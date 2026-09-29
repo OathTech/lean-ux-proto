@@ -57,7 +57,7 @@ class EvaluationChecks(unittest.TestCase):
         return {'label': label, 'file': 'fs/eventfd.c', 'line': line,
                 'when_true': [{'file': 'fs/eventfd.c', 'lo': lo, 'hi': hi} for lo, hi in true],
                 'when_false': [{'file': 'fs/eventfd.c', 'lo': lo, 'hi': hi} for lo, hi in false],
-                'unobservable_true': why_true, 'unobservable_false': why_false}
+                'unobservable_true': why_true, 'unobservable_false': why_false, 'comparison': None}
 
     def control_flow_fixture(self):
         table = check.parse_decisions([
@@ -139,6 +139,65 @@ class EvaluationChecks(unittest.TestCase):
         self.assertTrue(check.non_statement('fs/eventfd.c:245'))   # closing brace
         self.assertTrue(check.non_statement('fs/eventfd.c:97'))    # comment continuation
         self.assertFalse(check.non_statement('fs/eventfd.c:180'))  # '*cnt = ...' is code
+
+    def test_operand_matching(self):
+        match = check.operands_match
+        lt_const = {'rel': 'lt', 'const_rhs': True}
+        ge_var = {'rel': 'ge', 'const_rhs': False}
+        eq_const = {'rel': 'eq', 'const_rhs': True}
+        self.assertTrue(match(9, 32, (4, 9, 32), ge_var))              # non-constant: either order
+        self.assertTrue(match(9, 32, (4, 32, 9), ge_var))
+        self.assertFalse(match(9, 31, (4, 9, 32), ge_var))
+        self.assertTrue(match(8, 8, (7, 8, 8), lt_const))              # x < 8 recorded as x < 8 ...
+        self.assertTrue(match(8, 8, (7, 7, 8), lt_const))              # ... or as x <= 7
+        self.assertFalse(match(8, 8, (7, 9, 8), lt_const))             # but not x <= 9
+        self.assertFalse(match(9, 8, (7, 8, 8), lt_const))             # the variable must match exactly
+        self.assertFalse(match(8, 8, (6, 7, 8), lt_const))             # shifts only for constant records
+        self.assertFalse(match(8, 8, (7, 8, 8), ge_var))               # constant record, no declared constant
+        self.assertFalse(match(0, 1, (5, 0, 0), eq_const))             # equality: no shift
+        self.assertTrue(match(-1, 0, (5, 0, 0xffffffff), {'rel': 'lt', 'const_rhs': True}))  # negative, 4 bytes
+        self.assertFalse(match(0x100, 0, (1, 0, 0), {'rel': 'flag', 'const_rhs': True}))    # does not fit 1 byte
+
+    def test_operand_agreement(self):
+        cmp = {'rel': 'ge', 'const_rhs': False}
+        decisions = {'alloc_fd.at_limit': dict(site='fs/file.c:514', comparison=cmp),
+                     'alloc_fd.o_cloexec': dict(site='fs/file.c:532', comparison=None)}
+        loc = {'0x1': [{'function': 'alloc_fd', 'source': '/x/.deps/linux/fs/file.c:514'}],
+               '0x2': [{'function': 'alloc_fd', 'source': '/x/.deps/linux/fs/file.c:506'}],
+               '0x3': [{'function': 'helper', 'source': '/x/.deps/linux/include/linux/x.h:9'},
+                       {'function': 'alloc_fd', 'source': '/x/.deps/linux/fs/file.c:514'}]}
+        trace = {'ops': [{'op': 'dup'}]}
+        def run(branch, records):
+            model = {'branches': [dict(index=0, **branch)]}
+            return check.operand_agreement(trace, model, [{'records': records}], loc, decisions)
+        at_limit = dict(label='alloc_fd.at_limit=0', operands=[8, 32])
+        self.assertEqual(run(at_limit, [[4, '0x8', '0x20', '0x1']]), ([], 1))
+        self.assertTrue(run(dict(at_limit, operands=[8, 33]), [[4, '0x8', '0x20', '0x1']])[0])  # wrong operand
+        self.assertTrue(run(at_limit, [[4, '0x8', '0x20', '0x2']])[0])    # comparison at another line only
+        self.assertTrue(run(at_limit, [[4, '0x8', '0x20', '0x3']])[0])    # only in an inlined helper
+        self.assertTrue(run(at_limit, [])[0])                             # no comparison recorded
+        self.assertTrue(run(dict(label='alloc_fd.at_limit=0'), [[4, '0x8', '0x20', '0x1']])[0])   # operands omitted
+        self.assertTrue(run(dict(label='alloc_fd.o_cloexec=0', operands=[0, 0]), [])[0])         # undeclared
+        self.assertEqual(run(dict(label='made_up=1', operands=[1, 2]), []), ([], 0))             # left to control_flow
+
+    def test_order_within_a_function(self):
+        config = {'files': ['fs/eventfd.c'], 'known_gaps': []}
+        table = check.parse_decisions([
+            self.decision('eventfd_write.wrong_size', 254, [(255, 255)], [(256, 256)]),
+            self.decision('eventfd_write.ullong_max', 258, [(259, 259)], [(260, 260)])], config)
+        instrumented = {f'fs/eventfd.c:{n}' for n in (255, 256, 259, 260)}
+        witnesses = check.witness_table(table, instrumented, {'eventfd_write'})
+        loc = {f'0x{n}': [{'function': 'eventfd_write', 'source': f'/x/.deps/linux/fs/eventfd.c:{n}'}]
+               for n in (256, 260)}
+        trace = {'ops': [{'op': 'write'}]}
+        def run(labels, pcs):
+            model = {'branches': [{'index': 0, 'label': l} for l in labels]}
+            coverage = [{'pcs': pcs}]
+            return control_flow(trace, model, coverage, loc, config, table, witnesses, instrumented,
+                                {'eventfd_write'})[0]
+        in_order = ['eventfd_write.wrong_size=0', 'eventfd_write.ullong_max=0']
+        self.assertEqual(run(in_order, ['0x256', '0x260']), [])
+        self.assertTrue(run(list(reversed(in_order)), ['0x256', '0x260']))   # mirror order reversed
 
     def test_empty_run_is_not_a_pass(self):
         class Args:

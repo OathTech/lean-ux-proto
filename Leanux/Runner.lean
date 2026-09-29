@@ -204,7 +204,10 @@ def executeTrace (trace : Trace) : Except (Nat × Stop) Json := do
       ("errno", if ret < 0 then toJson (-ret) else .null),
       ("bytes", toJson bytes)])
     for s in w.steps do
-      branches := branches.push (Json.mkObj [("index", toJson index), ("label", toJson s.label)])
+      let fields := [("index", toJson index), ("label", toJson s.label)]
+      branches := branches.push (Json.mkObj (match s.operands with
+        | some (a, b) => fields ++ [("operands", toJson [a, b])]
+        | none => fields))
   return Json.mkObj [("version", toJson (1 : Nat)), ("id", toJson trace.id),
     ("observations", .arr observations), ("branches", .arr branches)]
 
@@ -219,6 +222,9 @@ def decisionsJson : Json :=
       ("when_true", .arr (i.whenTrue.map spanJson).toArray),
       ("when_false", .arr (i.whenFalse.map spanJson).toArray),
       ("unobservable_true", match d.unobservable true with | some r => toJson r.name | none => .null),
-      ("unobservable_false", match d.unobservable false with | some r => toJson r.name | none => .null)]).toArray
+      ("unobservable_false", match d.unobservable false with | some r => toJson r.name | none => .null),
+      ("comparison", match d.comparison with
+        | some c => Json.mkObj [("rel", toJson c.rel.name), ("const_rhs", toJson c.constRhs)]
+        | none => .null)]).toArray
 
 end Leanux.Runner
