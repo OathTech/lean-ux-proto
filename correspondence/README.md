@@ -20,8 +20,17 @@ one of 35,412 operations, each witness line was covered when its label was
 reported and absent when it was not.
 
 Details:
-- **Fail-closed.** A label with no entry fails the check. So does an operation
-  with no label.
+- **Fail-closed.** Each of the following fails the check:
+  - a label with no entry;
+  - an operation with no label;
+  - an operation whose coverage touches no anchored file;
+  - an operation whose label set is not one of the op's `paths`. This stops a
+    model from omitting an arm it took. Label sets are compared as sets; step
+    order becomes checkable in Phase 2.
+- **Validation.** The table itself is validated on load: every line is an
+  anchored `file:line`, every entry has at least one witness or a stated
+  reason, and every path is made of anchored labels. A unit test checks that
+  the labels in the Lean sources and in the table match exactly.
 - **Unobservable labels** state why KCOV cannot see them in this build, for
   example the semaphore/ordinary select at `fs/eventfd.c:180`.
 - **`known_gaps`** lists C choice points that KCOV observes but the mirror does

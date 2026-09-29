@@ -15,7 +15,10 @@ if not settings and (root / '.git').is_file():
     # to this worktree (both Git-ignored, removed with it).
     common = subprocess.run(['git', '-C', str(root), 'rev-parse', '--path-format=absolute', '--git-common-dir'],
                             capture_output=True, text=True, check=True).stdout.strip()
-    settings = {'shared_root': str(Path(common).parent)}
+    main_checkout = Path(common).parent
+    if Path(common).name != '.git' or not (main_checkout / '.tools').is_dir():
+        raise SystemExit(f'Cannot locate the main checkout for worktree {root}: {common}')
+    settings = {'shared_root': str(main_checkout)}
 # A nested invocation may switch worktrees. Do not carry the previous task's
 # writable directories into the new one. Explicit callers can unset LEANUX_ROOT.
 same_workspace = os.environ.get('LEANUX_ROOT') in (None, str(root))
