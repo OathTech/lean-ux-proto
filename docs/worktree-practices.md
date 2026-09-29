@@ -42,7 +42,7 @@ After the branch is merged, or explicitly abandoned:
 
 ```sh
 git -C .worktrees/<id> status --porcelain     # must be empty; commit or discard first
-git worktree remove --force .worktrees/<id>   # --force only because ignored build outputs remain
+git worktree remove .worktrees/<id>           # ignored build outputs do not block removal
 git branch -d task/<id>                       # -d refuses unmerged work; keep the ref if still needed
 ```
 
