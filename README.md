@@ -1,31 +1,29 @@
 # Lean-ux prototype
 
 This repository develops an executable Lean mirror of Linux, beginning with a
-small file-descriptor/eventfd slice. Each modeled computational step must
-correspond to a step in the configured Linux implementation, and executable
-behavior is tested against Linux. The prototype also develops an independently
-checked workflow for sustained model construction and repair.
-
-Proofs about the Lean model and proofs between handwritten Lean encodings are
-outside scope. Eventual simulation between actual Linux code and Lean motivates
-this model's fidelity; proof construction is not a prototype deliverable. See
+small file-descriptor/eventfd slice. The mirror is a purely operational,
+behavioral model. It abstracts away C semantic detail but keeps a simple
+correspondence of data structures and control-flow choice points with the
+configured Linux code, so that a later separation-logic simulation proof can
+relate the two. That proof, and any theorems about the mirror, are outside this
+project. Executable behavior is tested against the pinned kernel. See
 [the repository rules](AGENTS.md).
 
-- [Project objectives](docs/project-objectives.md)
-- [Prototype master plan: goal entry point and acceptance gates](docs/prototype-plan.md)
+- [Current plan: assessment and way forward (2026-09-29)](docs/2026-09-29-way-forward.md)
 - [Worktree, shared dependency, and cleanup practices](docs/worktree-practices.md)
-- [Original research note](docs/2026-09-19-rough-plan.md)
-- [Earlier plan review and semantic slice details](docs/2026-09-20-prototype-proposal.md)
 - [Offline development setup and environment audit](docs/offline-development.md)
-- [Pinned source identities](dependencies/sources.lock.json)
 - [Using the staged offline environment](docs/offline-usage.md)
+- [Pinned source identities](dependencies/sources.lock.json)
+- [Superseded plans and handoffs](docs/history/README.md)
 
-The offline dependency bundle is staged locally and verified with a kernel boot,
-KCOV collection, Lean/C builds, syzkaller builds, and Lean language-server
-diagnostics. The executable FD/eventfd model and Linux comparison harness are
-implemented; the [pause handoff](docs/pause-handoff.md) records completed comparisons
-and remaining work. The campaign remains paused. Model proof artifacts and their
-acceptance requirements were removed at the user's direction on 2026-09-22.
+Status (2026-09-29): the FD/eventfd mirror and the QEMU Linux runner exist and
+agree on the recorded corpora. The plan above covers the next steps:
+- a single check command;
+- a cut-back harness;
+- restructuring the mirror to C-shaped data and control flow;
+- KCOV-based control-flow checks.
+
+The earlier campaign ledger and its gates are retired.
 
 Use the pinned tools inside your normal nono session:
 

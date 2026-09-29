@@ -1,24 +1,36 @@
 # Repository working rules
 
-## Executable kernel mirror; no model proofs
+## Behavioral mirror at the thin-layer altitude; no theorem proving
 
-The user clarified this requirement on 2026-09-22. The deliverable is a highly
-faithful executable Lean model of Linux, tested against actual kernel behavior.
-Each modeled computational step must correspond to a step in the configured
-Linux implementation. Preserve intermediate state, branch decisions, update
-order, and source mappings; record gaps and abstractions explicitly. Matching
-only final results is insufficient.
+The user set this direction on 2026-09-22 and restated it on 2026-09-29. The
+current plan is [the way-forward plan](docs/2026-09-29-way-forward.md).
 
-Do not build proofs about the Lean model, proofs between handwritten Lean
-encodings, or proof-audit infrastructure. Do not add these as acceptance gates
-or substitute them for executable modeling and Linux comparisons. An eventual
-simulation between actual Linux code and the Lean model motivates the required
-computational fidelity; constructing that proof is outside the current work.
+The deliverable is a purely operational, executable Lean mirror of the
+configured Linux code, tested against actual kernel behavior. It is a thin
+middle layer:
+- low enough in operational detail that a later separation-logic simulation
+  proof against the C is straightforward;
+- high enough to avoid modeling C semantics (memory model, GNU C, byte-level
+  representation).
 
-This requirement supersedes proof tasks in older plans, handoffs, task ledgers,
-and retained evidence. Historical proof artifacts do not authorize recreating
-them. Removing those tasks does not establish that the remaining behavior or
-step-correspondence requirements have been met.
+The governing principle is to **abstract away C semantic detail, but keep a
+simple correspondence of data and control flow**:
+- kernel data structures map to mirror state of the same shape;
+- each C choice point on a modeled path has a corresponding mirror choice point,
+  in the same order;
+- out-of-scope branches are explicit, fail-noisy outcomes, never omissions.
+
+Matching only syscall results is insufficient. The design rules are in section 3
+of the plan.
+
+Do not build theorems of any kind:
+- no proofs about the mirror;
+- no proofs between Lean encodings;
+- no simulation proofs;
+- no proof-audit infrastructure.
+
+Do not add them as acceptance gates. Historical proof artifacts and older plans
+in `docs/history/` do not authorize recreating them.
 
 ## Worktrees and user signoff for main
 

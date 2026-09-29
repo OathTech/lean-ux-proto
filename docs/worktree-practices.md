@@ -1,6 +1,6 @@
 # Worktrees, shared dependencies, and cleanup
 
-Status: operating policy for the [prototype plan](prototype-plan.md), recorded
+Status: operating policy under the [way-forward plan](2026-09-29-way-forward.md), recorded
 2026-09-20. The worktree manager and shared-input/private-output launcher support
 are implemented and passed the [bootstrap acceptance exercise](../reports/worktree-bootstrap.md).
 The original size and untracked-file inventory below records the pre-campaign
