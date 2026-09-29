@@ -88,8 +88,17 @@ def run_model(traces, out):
     (out / 'model.stdout').write_bytes(result.stdout)
     (out / 'model.stderr').write_bytes(result.stderr)
     if result.returncode:
-        raise InvalidOutput(f'model exited {result.returncode}')
+        kind = {3: 'unsupported_path', 4: 'mirror_invariant'}.get(result.returncode, 'invalid_output')
+        raise ModelStopped(kind, result.stderr.decode(errors='replace').strip()[-2000:])
     return parse_batch(traces, result.stdout)
+
+
+class ModelStopped(InvalidOutput):
+    """The mirror stopped without observations: a path outside its domain
+    (exit 3), a mirror invariant failure (exit 4), or another error."""
+    def __init__(self, kind, detail):
+        super().__init__(detail)
+        self.kind = kind
 
 
 def load_kcov_config():
@@ -272,7 +281,8 @@ def run_chunk(traces, out, kcov):
     try:
         model = run_model(traces, out / 'model')
     except (InvalidOutput, OSError, subprocess.SubprocessError) as exc:
-        return {t['id']: dict(outcome='invalid_output', side='model', detail=str(exc)) for t in traces}, gaps, outcomes
+        kind = getattr(exc, 'kind', 'invalid_output')
+        return {t['id']: dict(outcome=kind, side='model', detail=str(exc)) for t in traces}, gaps, outcomes
     rows = iter(coverage)
     for trace, expected, actual in zip(traces, linux, model):
         trace_coverage = [next(rows) for _ in trace['ops']]

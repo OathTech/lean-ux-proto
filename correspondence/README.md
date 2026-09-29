@@ -13,8 +13,13 @@ The correspondence lives in the Lean sources, not in a separate registry.
 - **State.** `Leanux/Kernel/Defs.lean` has one structure per C struct:
   - `Fdtable`, `FilesStruct`, `Task`, `File` and `EventfdCtx`;
   - fields named as in the C;
-  - pointers replaced by identities into owned stores;
-  - `f_count` and `kref` kept explicitly.
+  - pointers replaced by identities into finite owned stores (`TreeMap`);
+  - fixed-size arrays for `fd[]` and the bitmaps;
+  - `f_count` and `kref` kept explicitly;
+  - `f_op`, `f_inode` and `private_data` as separate fields, written where
+    the C writes them.
+
+  The state is finite and comparable.
 - **Functions.** `Leanux/FS/*.lean` has one Lean function per C function on the
   path, in modules named after the C files (for example `File.lean` for
   `fs/file.c`). Each doc comment gives the C lines it mirrors. Lock
@@ -23,9 +28,11 @@ The correspondence lives in the Lean sources, not in a separate registry.
   decision point. Each has its label, its condition site, and the source spans
   that run only for each outcome. The mirror records `⟨decision, outcome⟩`
   where the C evaluates the condition, in the C's order.
-- **Unsupported paths.** Paths the mirror does not model end in a fail-noisy
-  `unsupported` outcome, never a silent default. Examples: blocking waits,
-  table expansion, and waiters on the wait queue.
+- **Unsupported paths.** Paths the mirror does not model end in
+  `Stop.outsideDomain`, carrying the C site; mirror defects end in
+  `Stop.invariant`. Neither is ever a silent default. Examples of paths
+  outside the domain: blocking waits, table expansion, and waiters on the
+  wait queue.
 - **Environment.** Outcomes decided by the environment consult an explicit
   oracle (`EnvSite`); the harness oracle says every site succeeds. Examples:
   allocation, `ida_alloc`, `access_ok`, and user copies.

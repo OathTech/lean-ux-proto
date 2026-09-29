@@ -1,15 +1,20 @@
 import Leanux.Kernel.Decision
+import Std.Data.TreeMap
+import Std.Data.TreeSet
 
 /-!
 # Mirror state and execution monad
 
 State is shaped like the configured C structures (Linux 6.12.110, x86-64):
 one structure per C struct, pointers replaced by abstract identities, and each
-object owned once in an identity-keyed store. Descriptor slots hold identities,
-not ownership. Field names follow the C.
+object owned once in a finite identity-keyed store. Descriptor slots hold
+identities, not ownership. Field names follow the C. The whole state is
+finite and comparable (`BEq`), so a relation to the kernel's objects can be
+stated slot by slot and object by object.
 -/
 
 namespace Leanux
+open Std
 
 /-! ## Constants (x86-64 UAPI and include/linux/fs.h) -/
 
@@ -70,11 +75,23 @@ def hasFlag (flags mask : UInt32) : Bool := flags &&& mask != 0
 abbrev FileId := Nat
 abbrev CtxId := Nat
 
-/-- `f_op` together with `private_data`: which operations table the file uses.
-    Fixture files (console, KCOV, /dev/null) are opened by the harness outside
-    the trace; their operations are outside the modeled slice. -/
-inductive FileKind where
-  | eventfd (ctx : CtxId)
+/-- The `struct file_operations` table a file's `f_op` points to. Fixture files
+    (console, KCOV, /dev/null) are opened by the harness outside the trace; their
+    operations are outside the modeled slice. -/
+inductive FopsId where
+  | eventfd
+  | fixture (name : String)
+  deriving Repr, BEq, DecidableEq
+
+/-- What a file's `private_data` points to. -/
+inductive PrivateData where
+  | eventfdCtx (ctx : CtxId)
+  deriving Repr, BEq, DecidableEq
+
+/-- The inode a file's `f_inode` points to: the shared anonymous inode, or a
+    fixture file's inode (outside the slice). -/
+inductive InodeId where
+  | anon
   | fixture (name : String)
   deriving Repr, BEq, DecidableEq
 
@@ -85,7 +102,12 @@ structure File where
   fFlags : UInt32
   fMode : UInt32
   fCount : Nat
-  kind : FileKind
+  /-- `f_op`: NULL until `file_init_path` (file_table.c:348). -/
+  fOp : Option FopsId := none
+  /-- `f_inode`: set by `file_init_path` (file_table.c:334). -/
+  fInode : Option InodeId := none
+  /-- `private_data`: set by `__anon_inode_getfile` (anon_inodes.c:129). -/
+  privateData : Option PrivateData := none
   fPos : Int := 0
   fIocbFlags : UInt32 := 0
   /-- `f_owner` is non-NULL only after F_SETOWN-style calls (outside the slice). -/
@@ -105,13 +127,17 @@ structure EventfdCtx where
   waiters : Nat := 0
   deriving Repr, BEq
 
-/-- `struct fdtable`. Slots and bits beyond `maxFds` are never consulted.
-    `full_fds_bits` is derived from `openFds` (see `fullWord`). -/
+/-- `struct fdtable`: the `fd[]` array and the `open_fds`/`close_on_exec`
+    bitmaps, each of length `max_fds`. `full_fds_bits` is derived from
+    `openFds` (see `fullWord`). Every access is bounds-checked; the C never
+    indexes past `max_fds`, so an out-of-range index is a mirror invariant
+    failure. -/
 structure Fdtable where
   maxFds : Nat
-  fd : Nat → Option FileId
-  openFds : Nat → Bool
-  closeOnExec : Nat → Bool
+  fd : Array (Option FileId)
+  openFds : Array Bool
+  closeOnExec : Array Bool
+  deriving Repr, BEq
 
 /-- `struct files_struct`. `count` is the number of tasks sharing it. -/
 structure FilesStruct where
@@ -121,6 +147,7 @@ structure FilesStruct where
   fdt : Fdtable
   /-- Identity of the `files->fdt` table; `expand_fdtable` would replace it. -/
   fdtGeneration : Nat := 0
+  deriving BEq
 
 /-- The parts of `struct task_struct` on these paths. `taskWorks` is the
     `task_work` list (deferred `____fput`), run on return to user mode. -/
@@ -132,6 +159,7 @@ structure Task where
   isKthread : Bool := false
   /-- `task_work_add` fails once the task has run `exit_task_work`. -/
   exited : Bool := false
+  deriving BEq
 
 /-- Whole-kernel mirror state. `nrFiles`/`maxFiles` mirror the system-wide
     `nr_files` percpu counter and `files_stat.max_files`, and
@@ -139,14 +167,16 @@ structure Task where
     pointer; the runner supplies these environment facts. -/
 structure Kernel where
   task : Task
-  files : FileId → Option File
+  files : TreeMap FileId File
   nextFile : FileId
-  ctxs : CtxId → Option EventfdCtx
+  ctxs : TreeMap CtxId EventfdCtx
   nextCtx : CtxId
-  idaUsed : Nat → Bool
+  /-- `eventfd_ida`: the allocated ids. -/
+  idaUsed : TreeSet Nat
   nrFiles : Nat
   maxFiles : Nat
   anonInodeInodeErr : Bool
+  deriving BEq
 
 /-! ## Environment oracle
 
@@ -165,14 +195,36 @@ structure World where
   env : EnvSite → Nat → Bool
   envCalls : List (EnvSite × Nat) := []
   steps : Array Step := #[]
-  /-- Bytes the syscall stored into the caller's buffer, if any. -/
+  /-- The caller's buffer (user memory), as written by `copy_to_iter`. -/
   userOut : Option UInt64 := none
 
-/-- The mirror monad. An `Except` error is an explicit, fail-noisy
-    `unsupported` outcome: the C would leave the modeled domain here. -/
-abbrev M := StateT World (Except String)
+/-- Why a mirror execution stopped without an observation. -/
+inductive Stop where
+  /-- The C leaves the modeled domain at `site` (the condition of the last
+      recorded decision): a blocking wait, table expansion, a waiter, ... -/
+  | outsideDomain (site : String) (what : String)
+  /-- The mirror's own state is inconsistent (a dangling identity, an
+      out-of-range slot, a NULL `f_op`): a mirror defect, never a C path. -/
+  | invariant (what : String)
+  deriving Repr
 
-def unsupported (what : String) : M α := throw s!"unsupported: {what}"
+def Stop.message : Stop → String
+  | .outsideDomain site what => s!"unsupported at {site}: {what}"
+  | .invariant what => s!"mirror invariant violated: {what}"
+
+/-- The mirror monad; `Stop` ends the execution fail-noisily. -/
+abbrev M := StateT World (Except Stop)
+
+/-- The C leaves the modeled domain here. The site is the last decision the
+    mirror recorded, which is the C condition that led here. -/
+def unsupported (what : String) : M α := do
+  let site := match (← get).steps.back? with
+    | some s => s!"{s.decision.info.file}:{s.decision.info.line}"
+    | none => "syscall entry"
+  throw (.outsideDomain site what)
+
+/-- A mirror defect: the state is inconsistent with the C's invariants. -/
+def invariant (what : String) : M α := throw (.invariant what)
 
 def getK : M Kernel := return (← get).k
 def modifyK (f : Kernel → Kernel) : M Unit := modify fun w => { w with k := f w.k }
@@ -195,19 +247,55 @@ def envOk (site : EnvSite) : M Bool := do
   return w.env site n
 
 def getFile (id : FileId) : M File := do
-  match (← getK).files id with
+  match (← getK).files.get? id with
   | some f => return f
-  | none => unsupported s!"dangling file identity {id}"
+  | none => invariant s!"dangling file identity {id}"
 
 def setFile (id : FileId) (f : File) : M Unit :=
-  modifyK fun k => { k with files := fun n => if n = id then some f else k.files n }
+  modifyK fun k => { k with files := k.files.insert id f }
+
+def freeFile (id : FileId) : M Unit :=
+  modifyK fun k => { k with files := k.files.erase id }
 
 def getCtx (id : CtxId) : M EventfdCtx := do
-  match (← getK).ctxs id with
+  match (← getK).ctxs.get? id with
   | some c => return c
-  | none => unsupported s!"dangling eventfd context {id}"
+  | none => invariant s!"dangling eventfd context {id}"
 
 def setCtx (id : CtxId) (c : EventfdCtx) : M Unit :=
-  modifyK fun k => { k with ctxs := fun n => if n = id then some c else k.ctxs n }
+  modifyK fun k => { k with ctxs := k.ctxs.insert id c }
+
+def freeCtx (id : CtxId) : M Unit :=
+  modifyK fun k => { k with ctxs := k.ctxs.erase id }
+
+/-! ## Bounds-checked descriptor-table access -/
+
+private def at? (a : Array α) (n : Nat) (what : String) : M α :=
+  match a[n]? with
+  | some x => return x
+  | none => invariant s!"{what}[{n}] beyond max_fds"
+
+/-- `fdt->fd[n]`. -/
+def fdtSlot (fdt : Fdtable) (n : Nat) : M (Option FileId) := at? fdt.fd n "fdt->fd"
+/-- `test_bit(n, fdt->open_fds)`. -/
+def fdtOpen (fdt : Fdtable) (n : Nat) : M Bool := at? fdt.openFds n "fdt->open_fds"
+/-- `test_bit(n, fdt->close_on_exec)`. -/
+def fdtCloexec (fdt : Fdtable) (n : Nat) : M Bool := at? fdt.closeOnExec n "fdt->close_on_exec"
+
+private def setAt (a : Array α) (n : Nat) (x : α) (what : String) : M (Array α) :=
+  if n < a.size then return a.set! n x else invariant s!"{what}[{n}] beyond max_fds"
+
+def setFdtSlot (n : Nat) (v : Option FileId) : M Unit := do
+  let t := (← getFiles).fdt
+  let fd ← setAt t.fd n v "fdt->fd"
+  modifyFdt fun t => { t with fd }
+def setFdtOpen (n : Nat) (b : Bool) : M Unit := do
+  let t := (← getFiles).fdt
+  let openFds ← setAt t.openFds n b "fdt->open_fds"
+  modifyFdt fun t => { t with openFds }
+def setFdtCloexec (n : Nat) (b : Bool) : M Unit := do
+  let t := (← getFiles).fdt
+  let closeOnExec ← setAt t.closeOnExec n b "fdt->close_on_exec"
+  modifyFdt fun t => { t with closeOnExec }
 
 end Leanux

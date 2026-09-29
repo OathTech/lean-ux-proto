@@ -29,7 +29,7 @@ def rwVerifyArea (ppos : Option Int) (count : Nat) : M Int := do
 def newSyncRead (fid : FileId) (len : Nat) (ppos : Option Int) : M (Int × Option Int) := do
   let f ← getFile fid
   let iocb : Kiocb := { filp := fid, kiFlags := f.fIocbFlags, kiPos := ppos.getD 0 }
-  let ret ← fopReadIter iocb len f.kind
+  let ret ← fopReadIter iocb len f.fOp
   if ← branch .newSyncReadQueued (ret == -529) then  -- BUG_ON(ret == -EIOCBQUEUED)
     unsupported "new_sync_read: -EIOCBQUEUED"
   -- if (ppos) *ppos = kiocb.ki_pos; eventfd_read leaves ki_pos unchanged
@@ -44,7 +44,7 @@ def vfsRead (fid : FileId) (count : Nat) (pos : Option Int) : M (Int × Option I
   let ret ← rwVerifyArea pos count
   if ← branch .vfsReadVerifyError (ret != 0) then return (ret, pos)
   let count := if ← branch .vfsReadClamp (count > MAX_RW_COUNT) then MAX_RW_COUNT else count
-  let fop ← fopsOf f.kind
+  let fop ← fopsOf f.fOp
   let (ret, pos) ← do
     if ← branch .vfsReadHasRead fop.read then unsupported "f_op->read"
     else if ← branch .vfsReadHasReadIter fop.readIter then newSyncRead fid count pos
@@ -63,7 +63,7 @@ def ksysRead (fd : Nat) (count : Nat) : M Int := do
   let f ← fdgetPos fd
   let mut ret := -EBADF
   if ← branch .ksysReadHasFile f.file.isSome then
-    let some fid := f.file | unsupported "unreachable"
+    let some fid := f.file | invariant "unreachable"
     let ppos ← filePpos (← getFile fid)
     _ ← branch .ksysReadHasPpos ppos.isSome  -- pos = *ppos; ppos = &pos
     let (r, pos) ← vfsRead fid count ppos
@@ -76,18 +76,19 @@ def ksysRead (fd : Nat) (count : Nat) : M Int := do
 
 /-- Whether the file's inode is a regular file (`S_ISREG`). The anonymous
     inode has mode S_IRUSR|S_IWUSR, with no file-type bits. -/
-def inodeIsReg : FileKind → M Bool
-  | .eventfd _ => return false
-  | .fixture name => unsupported s!"inode of fixture file {name}"
+def inodeIsReg : Option InodeId → M Bool
+  | some .anon => return false
+  | some (.fixture name) => unsupported s!"inode of fixture file {name}"
+  | none => invariant "file->f_inode is NULL"
 
 /-- `file_start_write` (include/linux/fs.h:2996-3001). -/
 def fileStartWrite (f : File) : M Unit := do
-  if ← branch .fileStartWriteNotRegular !(← inodeIsReg f.kind) then return
+  if ← branch .fileStartWriteNotRegular !(← inodeIsReg f.fInode) then return
   unsupported "sb_start_write"
 
 /-- `file_end_write` (include/linux/fs.h:3016-3021). -/
 def fileEndWrite (f : File) : M Unit := do
-  if ← branch .fileEndWriteNotRegular !(← inodeIsReg f.kind) then return
+  if ← branch .fileEndWriteNotRegular !(← inodeIsReg f.fInode) then return
   unsupported "sb_end_write"
 
 /-- vfs_write (read_write.c:663-693). `userWord` is the buffer's first 8 bytes. -/
@@ -100,9 +101,9 @@ def vfsWrite (fid : FileId) (userWord : UInt64) (count : Nat) (pos : Option Int)
   if ← branch .vfsWriteVerifyError (ret != 0) then return ret
   let count := if ← branch .vfsWriteClamp (count > MAX_RW_COUNT) then MAX_RW_COUNT else count
   fileStartWrite f
-  let fop ← fopsOf f.kind
+  let fop ← fopsOf f.fOp
   let ret ← do
-    if ← branch .vfsWriteHasWrite fop.write then fopWrite fid userWord count f.kind
+    if ← branch .vfsWriteHasWrite fop.write then fopWrite fid userWord count f.fOp
     else if ← branch .vfsWriteHasWriteIter fop.writeIter then unsupported "new_sync_write"
     else pure (-EINVAL)
   if ← branch .vfsWritePositive (ret > 0) then pure ()  -- fsnotify_modify; add_wchar
@@ -115,7 +116,7 @@ def ksysWrite (fd : Nat) (userWord : UInt64) (count : Nat) : M Int := do
   let f ← fdgetPos fd
   let mut ret := -EBADF
   if ← branch .ksysWriteHasFile f.file.isSome then
-    let some fid := f.file | unsupported "unreachable"
+    let some fid := f.file | invariant "unreachable"
     let ppos ← filePpos (← getFile fid)
     _ ← branch .ksysWriteHasPpos ppos.isSome
     ret ← vfsWrite fid userWord count ppos

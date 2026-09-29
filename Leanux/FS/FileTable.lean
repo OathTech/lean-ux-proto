@@ -22,9 +22,10 @@ def openFmode (flags : UInt32) : UInt32 :=
 
 /-- Whether the file's inode is a character device (`S_ISCHR`). The anonymous
     inode has mode S_IRUSR|S_IWUSR (fs/libfs.c); fixture inodes are not modeled. -/
-def inodeIsChr : FileKind → M Bool
-  | .eventfd _ => return false
-  | .fixture name => unsupported s!"inode of fixture file {name}"
+def inodeIsChr : Option InodeId → M Bool
+  | some .anon => return false
+  | some (.fixture name) => unsupported s!"inode of fixture file {name}"
+  | none => invariant "file->f_inode is NULL"
 
 /-- file_free (file_table.c:87-98). `put_cred` and the slab free are cut points. -/
 def fileFree (fid : FileId) : M Unit := do
@@ -34,11 +35,11 @@ def fileFree (fid : FileId) : M Unit := do
   if ← branch .fileFreeBacking (hasFlag f.fMode FMODE_BACKING) then
     unsupported "backing_file_free"
   -- kmem_cache_free(filp_cachep, f)
-  modifyK fun k => { k with files := fun n => if n = fid then none else k.files n }
+  freeFile fid
 
 /-- alloc_empty_file (file_table.c:214-253) with init_file (171-202) inlined:
     `f_flags = flags`, `f_mode = OPEN_FMODE(flags)`, `f_count = 1`. -/
-def allocEmptyFile (flags : UInt32) (kind : FileKind) : M (Except Int FileId) := do
+def allocEmptyFile (flags : UInt32) : M (Except Int FileId) := do
   let k ← getK
   if ← branch .allocEmptyFileOverMax (k.nrFiles >= k.maxFiles) then
     _ ← branch .allocEmptyFileNotCapable false  -- the harness runs as root: capable(CAP_SYS_ADMIN)
@@ -46,7 +47,7 @@ def allocEmptyFile (flags : UInt32) (kind : FileKind) : M (Except Int FileId) :=
   if ← branch .allocEmptyFileNoMem (!(← envOk .filpAlloc)) then
     return .error (-ENOMEM)
   let fid := k.nextFile
-  setFile fid { fFlags := flags, fMode := openFmode flags, fCount := 1, kind }
+  setFile fid { fFlags := flags, fMode := openFmode flags, fCount := 1 }
   modifyK fun k => { k with nextFile := fid + 1, nrFiles := k.nrFiles + 1 }
   return .ok fid
 
@@ -63,7 +64,10 @@ def iocbFlags (fFlags : UInt32) : M UInt32 := do
 /-- file_init_path (file_table.c:330-351). The path/inode/mapping fields and
     `i_readcount_inc` are cut points (the anonymous inode is shared and not
     modeled). -/
-def fileInitPath (fid : FileId) (fop : Fops) : M Unit := do
+def fileInitPath (fid : FileId) (fopId : FopsId) (inode : InodeId) : M Unit := do
+  let fop ← fopsOf (some fopId)
+  -- file->f_path = *path; file->f_inode = path->dentry->d_inode; f_mapping; f_wb_err; f_sb_err
+  setFile fid { (← getFile fid) with fInode := some inode }
   let f ← getFile fid
   let mut mode := f.fMode
   if ← branch .fileInitPathLlseek fop.llseek then mode := mode ||| FMODE_LSEEK
@@ -79,23 +83,24 @@ def fileInitPath (fid : FileId) (fop : Fops) : M Unit := do
     if canWrite then mode := mode ||| FMODE_CAN_WRITE
   let iocb ← iocbFlags f.fFlags
   mode := mode ||| FMODE_OPENED
-  setFile fid { f with fMode := mode, fIocbFlags := iocb }
+  -- file->f_op = fop (file_table.c:348)
+  setFile fid { f with fMode := mode, fIocbFlags := iocb, fOp := some fopId }
   -- i_readcount_inc for read-only files: a cut point
   _ ← branch .fileInitPathReadOnly (mode &&& (FMODE_READ ||| FMODE_WRITE) == FMODE_READ)
 
 /-- alloc_file (file_table.c:360-369). -/
-def allocFile (flags : UInt32) (kind : FileKind) (fop : Fops) : M (Except Int FileId) := do
-  let r ← allocEmptyFile flags kind
+def allocFile (flags : UInt32) (fopId : FopsId) (inode : InodeId) : M (Except Int FileId) := do
+  let r ← allocEmptyFile flags
   if ← branch .allocFileOk (r matches .ok _) then
-    if let .ok fid := r then fileInitPath fid fop
+    if let .ok fid := r then fileInitPath fid fopId inode
   return r
 
 /-- alloc_file_pseudo (file_table.c:382-400). `alloc_path_pseudo` allocates a
     dentry (`d_alloc_pseudo`, an environment choice point); `mntget`,
     `d_instantiate`, `ihold` and `path_put` are cut points. -/
-def allocFilePseudo (flags : UInt32) (kind : FileKind) (fop : Fops) : M (Except Int FileId) := do
+def allocFilePseudo (flags : UInt32) (inode : InodeId) (fopId : FopsId) : M (Except Int FileId) := do
   if ← branch .allocPathPseudoFail (!(← envOk .dAllocPseudo)) then return .error (-ENOMEM)
-  let r ← allocFile flags kind fop
+  let r ← allocFile flags fopId inode
   _ ← branch .allocFilePseudoErr (r matches .error _)
   return r
 
@@ -117,13 +122,13 @@ def fputFinal (fid : FileId) : M Unit := do
   if ← branch .eventpollReleaseLinked f.fEp then
     unsupported "eventpoll_release_file"
   -- locks_remove_file: a cut point (no locks); security_file_release (compiled out)
-  let fop ← fopsOf f.kind
+  let fop ← fopsOf f.fOp
   if ← branch .fputFinalFasync (hasFlag f.fFlags FASYNC) then
     unsupported "__fput with FASYNC"
   if ← branch .fputFinalRelease fop.release then
-    _ ← fopRelease fid f.kind
+    _ ← fopRelease fid f.fOp
   -- `S_ISCHR(inode->i_mode) && inode->i_cdev != NULL && !(mode & FMODE_PATH)`
-  if ← branch .fputFinalCharDevice (← inodeIsChr f.kind) then
+  if ← branch .fputFinalCharDevice (← inodeIsChr f.fInode) then
     _ ← branch .fputFinalHasCdev true
     _ ← branch .fputFinalNotPath (!hasFlag f.fMode FMODE_PATH)
     unsupported "cdev_put"

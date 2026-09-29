@@ -15,7 +15,7 @@ def filpFlush (fid : FileId) : M Int := do
   let f ← getFile fid
   -- CHECK_DATA_CORRUPTION(file_count(filp) == 0, ...)
   if ← branch .filpFlushCountZero (f.fCount == 0) then return 0
-  let fop ← fopsOf f.kind
+  let fop ← fopsOf f.fOp
   if ← branch .filpFlushHasFlush fop.flush then
     unsupported "f_op->flush"
   if ← branch .filpFlushNotPath (!hasFlag f.fMode FMODE_PATH) then

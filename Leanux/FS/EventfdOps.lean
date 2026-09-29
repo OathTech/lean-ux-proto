@@ -24,15 +24,21 @@ structure Kiocb where
 /-- `IOCB_NOWAIT` (include/linux/fs.h). -/
 def IOCB_NOWAIT : UInt32 := 0x8   -- RWF_NOWAIT
 
+/-- `file->private_data` of an eventfd file. -/
+def eventfdCtxOf (file : File) : M CtxId :=
+  match file.privateData with
+  | some (.eventfdCtx id) => return id
+  | none => invariant "eventfd operation on a file with NULL private_data"
+
 /-- eventfd_free_ctx (eventfd.c:82-87). -/
 def eventfdFreeCtx (id : CtxId) : M Unit := do
   let ctx ← getCtx id
-  let some cid := ctx.id | unsupported "eventfd_free_ctx reading an unset ctx->id"
+  let some cid := ctx.id | invariant "eventfd_free_ctx reading an unset ctx->id"
   if ← branch .eventfdFreeCtxHasId (cid >= 0) then
     -- ida_free(&eventfd_ida, ctx->id)
-    modifyK fun k => { k with idaUsed := fun n => if n = cid.toNat then false else k.idaUsed n }
+    modifyK fun k => { k with idaUsed := k.idaUsed.erase cid.toNat }
   -- kfree(ctx)
-  modifyK fun k => { k with ctxs := fun n => if n = id then none else k.ctxs n }
+  freeCtx id
 
 /-- `refcount_dec_and_test` = `__refcount_sub_and_test(1, r, NULL)`
     (include/linux/refcount.h:262-278). `if (oldp)` is constant-folded away
@@ -58,7 +64,7 @@ def eventfdCtxPut (id : CtxId) : M Unit := do
     is a cut point: with no waiters it changes no mirror state. -/
 def eventfdRelease (fid : FileId) : M Int := do
   let file ← getFile fid
-  let .eventfd id := file.kind | unsupported "eventfd_release on a non-eventfd file"
+  let id ← eventfdCtxOf file  -- ctx = file->private_data
   let ctx ← getCtx id
   if ctx.waiters != 0 then unsupported "wake_up_poll with waiters"
   eventfdCtxPut id
@@ -81,7 +87,7 @@ def eventfdCtxDoRead (id : CtxId) : M UInt64 := do
     is `iov_iter_count(to)`; the destination buffer is the caller's. -/
 def eventfdRead (iocb : Kiocb) (iterCount : Nat) : M Int := do
   let file ← getFile iocb.filp
-  let .eventfd id := file.kind | unsupported "eventfd_read on a non-eventfd file"
+  let id ← eventfdCtxOf file  -- ctx = file->private_data
   if ← branch .eventfdReadShort (iterCount < 8) then return -EINVAL
   -- spin_lock_irq(&ctx->wqh.lock)
   if ← branch .eventfdReadEmpty ((← getCtx id).count == 0) then
@@ -104,7 +110,7 @@ def eventfdRead (iocb : Kiocb) (iterCount : Nat) : M Int := do
     the 8-byte value in the caller's buffer. -/
 def eventfdWrite (fid : FileId) (userWord : UInt64) (count : Nat) : M Int := do
   let file ← getFile fid
-  let .eventfd id := file.kind | unsupported "eventfd_write on a non-eventfd file"
+  let id ← eventfdCtxOf file  -- ctx = file->private_data
   if ← branch .eventfdWriteWrongSize (count != 8) then return -EINVAL
   if ← branch .eventfdWriteCopyFault (!(← envOk .copyFromUser)) then return -EFAULT
   let ucnt := userWord
@@ -127,9 +133,10 @@ def eventfdWrite (fid : FileId) (userWord : UInt64) (count : Nat) : M Int := do
 
 /-! ## `f_op` dispatch (a cut point: indirect calls through `file->f_op`)
 
-The file's kind fixes its operations table; this is the relation a later
-proof would state as `f_op == &eventfd_fops ⇔ kind = eventfd`. Fixture files
-use operations outside the slice, so asking for them is `unsupported`. -/
+`file->f_op` names the operations table; this is the relation a later proof
+would state as `f_op == &eventfd_fops ⇔ fOp = some .eventfd`. Fixture files use
+operations outside the slice, so asking for them is `unsupported`; a NULL
+`f_op` on these paths is a mirror defect. -/
 
 /-- The members of `struct file_operations` these paths test. -/
 structure Fops where
@@ -149,20 +156,24 @@ structure Fops where
 def eventfdFops : Fops :=
   { llseek := true, readIter := true, write := true, release := true }
 
-def fopsOf : FileKind → M Fops
-  | .eventfd _ => return eventfdFops
-  | .fixture name => unsupported s!"file operations of fixture file {name}"
+def fopsOf : Option FopsId → M Fops
+  | some .eventfd => return eventfdFops
+  | some (.fixture name) => unsupported s!"file operations of fixture file {name}"
+  | none => invariant "file->f_op is NULL"
 
-def fopRelease (fid : FileId) : FileKind → M Int
-  | .eventfd _ => eventfdRelease fid
-  | .fixture name => unsupported s!"release of fixture file {name}"
+def fopRelease (fid : FileId) : Option FopsId → M Int
+  | some .eventfd => eventfdRelease fid
+  | some (.fixture name) => unsupported s!"release of fixture file {name}"
+  | none => invariant "file->f_op is NULL"
 
-def fopReadIter (iocb : Kiocb) (count : Nat) : FileKind → M Int
-  | .eventfd _ => eventfdRead iocb count
-  | .fixture name => unsupported s!"read_iter of fixture file {name}"
+def fopReadIter (iocb : Kiocb) (count : Nat) : Option FopsId → M Int
+  | some .eventfd => eventfdRead iocb count
+  | some (.fixture name) => unsupported s!"read_iter of fixture file {name}"
+  | none => invariant "file->f_op is NULL"
 
-def fopWrite (fid : FileId) (userWord : UInt64) (count : Nat) : FileKind → M Int
-  | .eventfd _ => eventfdWrite fid userWord count
-  | .fixture name => unsupported s!"write of fixture file {name}"
+def fopWrite (fid : FileId) (userWord : UInt64) (count : Nat) : Option FopsId → M Int
+  | some .eventfd => eventfdWrite fid userWord count
+  | some (.fixture name) => unsupported s!"write of fixture file {name}"
+  | none => invariant "file->f_op is NULL"
 
 end Leanux

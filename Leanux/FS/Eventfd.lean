@@ -12,8 +12,8 @@ namespace Leanux
 def idaAlloc : M Int := do
   if !(← envOk .idaAlloc) then return -ENOMEM
   let k ← getK
-  let id := (List.range (k.nextCtx + 1)).find? (fun n => !k.idaUsed n) |>.getD (k.nextCtx + 1)
-  modifyK fun k => { k with idaUsed := fun n => if n = id then true else k.idaUsed n }
+  let id := (List.range (k.idaUsed.size + 1)).find? (fun n => !k.idaUsed.contains n) |>.getD (k.idaUsed.size + 1)
+  modifyK fun k => { k with idaUsed := k.idaUsed.insert id }
   return id
 
 /-- do_eventfd (eventfd.c:379-423). -/
@@ -32,12 +32,12 @@ def doEventfd (count : UInt32) (flags : UInt32) : M Int := do
   if ← branch .doEventfdFdError (fd < 0) then
     eventfdFreeCtx cid  -- err:
     return fd
-  let file ← anonInodeGetfile eventfdFops (.eventfd cid) flags
+  let file ← anonInodeGetfile .eventfd (.eventfdCtx cid) flags
   if ← branch .doEventfdFileError (file matches .error _) then
     putUnusedFd fd.toNat
     eventfdFreeCtx cid  -- err:
     return match file with | .error e => e | .ok _ => 0
-  let .ok fid := file | unsupported "unreachable"
+  let .ok fid := file | invariant "unreachable"
   let f ← getFile fid
   setFile fid { f with fMode := f.fMode ||| FMODE_NOWAIT }
   fdInstall fd.toNat fid

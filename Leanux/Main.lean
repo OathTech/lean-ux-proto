@@ -1,9 +1,9 @@
 import Leanux.Runner
 
 /-- Reads JSONL traces on stdin and writes one observation per trace. A fresh
-    kernel state is created for each trace. Invalid input, or a trace reaching
-    a path the mirror does not model, stops with a message on stderr and a
-    nonzero exit, never a success observation. `--decisions` prints the
+    kernel state is created for each trace. Invalid input (exit 2), a path the
+    mirror does not model (exit 3), or a mirror invariant failure (exit 4)
+    stops with a message on stderr, never a success observation. `--decisions` prints the
     decision table instead. -/
 def main (args : List String) : IO UInt32 := do
   let output ← IO.getStdout
@@ -27,9 +27,10 @@ def main (args : List String) : IO UInt32 := do
       return 2
     | .ok trace =>
       match Leanux.Runner.executeTrace trace with
-      | .error message =>
-        errors.putStrLn message
-        return 3
+      | .error (index, stop) =>
+        errors.putStrLn s!"trace {trace.id} operation {index}: {stop.message}"
+        -- 3: the C leaves the modeled domain; 4: a mirror defect
+        return match stop with | .outsideDomain .. => 3 | .invariant _ => 4
       | .ok json =>
         output.putStrLn json.compress
         output.flush

@@ -10,7 +10,7 @@ namespace Leanux
 def sysClose (fd : Nat) : M Int := do
   let file ← fileCloseFd fd
   if ← branch .closeNoFile file.isNone then return -EBADF
-  let some fid := file | unsupported "unreachable"
+  let some fid := file | invariant "unreachable"
   let retval ← filpFlush fid
   -- "We're returning to user space. Don't bother with any delayed fput() cases."
   fputSync fid

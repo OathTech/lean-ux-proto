@@ -363,13 +363,33 @@ presented for user signoff before anything reaches `main`.
     those seen with one outcome only; this feeds Phase 4.
 - **Remaining for Phase 3.** Step order within an operation (PCs are recorded
   sorted), and `KCOV_TRACE_CMP` for predicate operands.
-- **Proposed next structural changes** (from the Fable review; user input wanted):
-  1. Finite, comparable state: arrays sized `max_fds` for the fdtable and
-     bitmaps, and finite identity-keyed stores.
-  2. Split `FileKind` into `f_op` and `private_data`, written where the C
-     writes them.
-  3. A structured `unsupported` type that separates domain exits from mirror
-     invariant failures.
+- **Structural changes** (from the Fable review): agreed by the user
+  [USER 2026-09-29] to be done before Phase 3; see section 6c.
+
+## 6c. Phase 2b status (2026-09-29) [AGENT]
+
+- **Finite, comparable state.**
+  - `struct fdtable` holds three arrays of length `max_fds`: `fd[]`,
+    `open_fds` and `close_on_exec`. Every access is bounds-checked, and an
+    out-of-range index is a mirror invariant failure.
+  - Files, eventfd contexts and `eventfd_ida` are finite `Std.TreeMap`s and
+    `TreeSet`s.
+  - The whole kernel state derives `BEq`.
+  - The finite-map type is provisional. It should be revisited to match
+    whatever cerberus-sl's workhorse logic uses for owned stores.
+- **`struct file` fields.** `f_op`, `f_inode` and `private_data` are separate
+  optional fields, written where the C writes them:
+  - `f_inode` and `f_op` in `file_init_path` (file_table.c:334, 348);
+  - `private_data` in `__anon_inode_getfile` (anon_inodes.c:129).
+
+  Dispatch reads `f_op`; eventfd operations read `private_data`. A NULL
+  field on these paths is an invariant failure.
+- **Structured stops.** `Stop.outsideDomain` carries the C site of the last
+  decision and exits with code 3; `Stop.invariant` marks mirror defects and
+  exits with code 4. The check reports them as `unsupported_path` and
+  `mirror_invariant`.
+- **Results.** Behavior and the decision table are unchanged: the full corpus
+  passes, 1,067 traces.
 
 ## 7. Decisions
 

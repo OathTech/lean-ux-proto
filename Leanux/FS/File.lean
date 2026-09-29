@@ -19,41 +19,41 @@ namespace Leanux
 
 /-- `!~fdt->open_fds[word]`: every descriptor in the 64-bit word is open. This
     is the only fact `full_fds_bits` records, so it is derived, not stored. -/
-def fullWord (fdt : Fdtable) (word : Nat) : Bool :=
-  (List.range BITS_PER_LONG).all fun i => fdt.openFds (word * BITS_PER_LONG + i)
+def fullWord (fdt : Fdtable) (word : Nat) : M Bool :=
+  (List.range BITS_PER_LONG).allM fun i => fdtOpen fdt (word * BITS_PER_LONG + i)
 
-def setCloseOnExecBit (fd : Nat) : M Unit :=  -- __set_close_on_exec
-  modifyFdt fun t => { t with closeOnExec := fun n => if n = fd then true else t.closeOnExec n }
+def setCloseOnExecBit (fd : Nat) : M Unit := setFdtCloexec fd true  -- __set_close_on_exec
 
 /-- __clear_close_on_exec (file.c:261-265). -/
 def clearCloseOnExecBit (fd : Nat) : M Unit := do
-  if ← branch .clearCloexecWasSet ((← getFiles).fdt.closeOnExec fd) then
-    modifyFdt fun t => { t with closeOnExec := fun n => if n = fd then false else t.closeOnExec n }
+  if ← branch .clearCloexecWasSet (← fdtCloexec (← getFiles).fdt fd) then
+    setFdtCloexec fd false
 
 /-- __set_open_fd (file.c:267-273). -/
 def setOpenFd (fd : Nat) : M Unit := do
-  modifyFdt fun t => { t with openFds := fun n => if n = fd then true else t.openFds n }
-  _ ← branch .setOpenFdFullWord (fullWord (← getFiles).fdt (fd / BITS_PER_LONG))
+  setFdtOpen fd true
+  _ ← branch .setOpenFdFullWord (← fullWord (← getFiles).fdt (fd / BITS_PER_LONG))
   -- __set_bit(fd, fdt->full_fds_bits) is implied by the derived view
 
 /-- __clear_open_fd (file.c:275-279). -/
-def clearOpenFd (fd : Nat) : M Unit :=
-  modifyFdt fun t => { t with openFds := fun n => if n = fd then false else t.openFds n }
+def clearOpenFd (fd : Nat) : M Unit := setFdtOpen fd false
 
 /-- `find_next_zero_bit(bits, size, start)`: an architecture bit-search cut
     point with contract "least clear bit in [start, size), else size". -/
-def findNextZeroBit (bit : Nat → Bool) (size start : Nat) : Nat :=
-  ((List.range (size - start)).map (· + start)).find? (fun n => !bit n) |>.getD size
+def findNextZeroBit (bit : Nat → M Bool) (size start : Nat) : M Nat := do
+  for n in List.range (size - start) do
+    if !(← bit (n + start)) then return n + start
+  return size
 
 /-- find_next_fd (file.c:475-487). -/
 def findNextFd (fdt : Fdtable) (start : Nat) : M Nat := do
   let maxfd := fdt.maxFds
   let maxbit := maxfd / BITS_PER_LONG
-  let bitbit := findNextZeroBit (fullWord fdt) maxbit (start / BITS_PER_LONG) * BITS_PER_LONG
+  let bitbit := (← findNextZeroBit (fullWord fdt) maxbit (start / BITS_PER_LONG)) * BITS_PER_LONG
   if ← branch .findNextFdAllFull (bitbit >= maxfd) then return maxfd
   let start ← do
     if ← branch .findNextFdSkipFullWords (bitbit > start) then pure bitbit else pure start
-  return findNextZeroBit fdt.openFds maxfd start
+  findNextZeroBit (fdtOpen fdt) maxfd start
 
 /-- expand_files (file.c:221-254), with `file_lock` held. Growth beyond the
     embedded 64-slot table (`expand_fdtable`) is outside the domain. -/
@@ -84,7 +84,7 @@ def allocFd (start «end» : Nat) (flags : UInt32) : M Int := do
   if ← branch .allocFdCloexec (hasFlag flags O_CLOEXEC) then setCloseOnExecBit fd
   else clearCloseOnExecBit fd
   -- Sanity check
-  if ← branch .allocFdSlotNotNull ((← getFiles).fdt.fd fd).isSome then
+  if ← branch .allocFdSlotNotNull (← fdtSlot (← getFiles).fdt fd).isSome then
     unsupported "alloc_fd: slot not NULL"
   -- out: spin_unlock(&files->file_lock)
   return fd
@@ -113,9 +113,9 @@ def fdInstall (fd : Nat) (fid : FileId) : M Unit := do
   if ← branch .fdInstallResizeInProgress (← getFiles).resizeInProgress then
     unsupported "fd_install during resize"
   -- smp_rmb(); fdt = rcu_dereference_sched(files->fdt)
-  if ← branch .fdInstallSlotBusy ((← getFiles).fdt.fd fd).isSome then
+  if ← branch .fdInstallSlotBusy (← fdtSlot (← getFiles).fdt fd).isSome then
     unsupported "fd_install: BUG_ON(fdt->fd[fd] != NULL)"
-  modifyFdt fun t => { t with fd := fun n => if n = fd then some fid else t.fd n }
+  setFdtSlot fd (some fid)  -- rcu_assign_pointer(fdt->fd[fd], file)
   -- rcu_read_unlock_sched()
 
 /-- file_close_fd_locked (file.c:635-652), with `file_lock` held. -/
@@ -123,9 +123,9 @@ def fileCloseFdLocked (fd : Nat) : M (Option FileId) := do
   let fdt := (← getFiles).fdt
   if ← branch .closeFdOutOfRange (fd >= fdt.maxFds) then return none
   -- fd = array_index_nospec(fd, fdt->max_fds): the identity for in-range fd
-  let file := fdt.fd fd
+  let file ← fdtSlot fdt fd
   if ← branch .closeFdFound file.isSome then
-    modifyFdt fun t => { t with fd := fun n => if n = fd then none else t.fd n }
+    setFdtSlot fd none  -- rcu_assign_pointer(fdt->fd[fd], NULL)
     putUnusedFdLocked fd
   return file
 
@@ -141,7 +141,7 @@ def fileCloseFd (fd : Nat) : M (Option FileId) := do
 def filesLookupFdRaw (fd : Nat) : M (Option FileId) := do
   let fdt := (← getFiles).fdt
   let inRange := fd < fdt.maxFds
-  let needsMasking := fdt.fd (if inRange then fd else 0)
+  let needsMasking ← fdtSlot fdt (if inRange then fd else 0)
   return if inRange then needsMasking else none
 
 /-- get_file (include/linux/fs.h:1122-1127). -/
@@ -155,13 +155,13 @@ def getFileRef (fid : FileId) : M Unit := do
 def doDup2 (fid : FileId) (fd : Nat) (flags : UInt32) : M Int := do
   let fdt := (← getFiles).fdt
   -- fd = array_index_nospec(fd, fdt->max_fds)
-  let tofree := fdt.fd fd
+  let tofree ← fdtSlot fdt fd
   -- `if (!tofree && fd_is_open(fd, fdt)) goto Ebusy;`
   if ← branch .doDup2NoTofree tofree.isNone then
-    if ← branch .doDup2FdOpen (fdt.openFds fd) then
+    if ← branch .doDup2FdOpen (← fdtOpen fdt fd) then
       return -EBUSY  -- Ebusy: spin_unlock
   getFileRef fid
-  modifyFdt fun t => { t with fd := fun n => if n = fd then some fid else t.fd n }
+  setFdtSlot fd (some fid)  -- rcu_assign_pointer(fdt->fd[fd], file)
   setOpenFd fd
   if ← branch .doDup2Cloexec (hasFlag flags O_CLOEXEC) then setCloseOnExecBit fd
   else clearCloseOnExecBit fd
@@ -184,7 +184,7 @@ def ksysDup3 (oldfd newfd : Nat) (flags : UInt32) : M Int := do
     return err  -- out_unlock
   match file with
   | some fid => doDup2 fid newfd flags
-  | none => unsupported "unreachable: file checked non-NULL"
+  | none => invariant "unreachable: file checked non-NULL"
 
 /-- __fget_files_rcu (file.c:930-1004) under rcu_read_lock. The retry arms
     (`inc_not_zero` failing, the table or slot changing) need concurrency. -/
@@ -192,7 +192,7 @@ def fgetFilesRcu (fd : Nat) (mask : UInt32) : M (Option FileId) := do
   let generation := (← getFiles).fdtGeneration  -- fdt = rcu_dereference_raw(files->fdt)
   let file ← filesLookupFdRaw fd
   if ← branch .fgetRcuNoFile file.isNone then return none
-  let some fid := file | unsupported "unreachable"
+  let some fid := file | invariant "unreachable"
   let f ← getFile fid
   if ← branch .fgetRcuIncNotZeroFailed (f.fCount == 0) then
     unsupported "__fget_files_rcu retry"
@@ -221,7 +221,7 @@ def fgetLight (fd : Nat) (mask : UInt32) : M Fd := do
     let empty ← do
       if ← branch .fgetLightNoFile file.isNone then pure true
       else
-        let some fid := file | unsupported "unreachable"
+        let some fid := file | invariant "unreachable"
         branch .fgetLightMasked (hasFlag (← getFile fid).fMode mask)
     if empty then return {file := none}  -- EMPTY_FD
     return {file}                        -- BORROWED_FD
@@ -234,12 +234,12 @@ def fdgetRaw (fd : Nat) : M Fd := fgetLight fd 0             -- file.c:1139-1142
 def fdgetPos (fd : Nat) : M Fd := do
   let f ← fdget fd
   if ← branch .fdgetPosHasFile f.file.isSome then
-    let some fid := f.file | unsupported "unreachable"
+    let some fid := f.file | invariant "unreachable"
     let file ← getFile fid
     let needsLock ← do
       if ← branch .fposLockAtomicPos (hasFlag file.fMode FMODE_ATOMIC_POS) then
         if ← branch .fposLockShared (file.fCount > 1) then pure true
-        else branch .fposLockIterateShared (← fopsOf file.kind).iterateShared
+        else branch .fposLockIterateShared (← fopsOf file.fOp).iterateShared
       else pure false
     if needsLock then
       return { f with posUnlock := true }  -- mutex_lock(&file->f_pos_lock)
@@ -264,8 +264,8 @@ def setCloseOnExec (fd : Nat) (flag : Bool) : M Unit := do
   -- spin_unlock(&files->file_lock)
 
 /-- get_close_on_exec (file.c:1196-1203): `test_bit`, no branch. -/
-def getCloseOnExec (fd : Nat) : M Bool :=
-  return (← getFiles).fdt.closeOnExec fd
+def getCloseOnExec (fd : Nat) : M Bool := do
+  fdtCloexec (← getFiles).fdt fd
 
 /-- fget_raw (file.c:1029-1032): `__fget(fd, 0)`. -/
 def fgetRaw (fd : Nat) : M (Option FileId) := fgetFilesRcu fd 0
@@ -275,7 +275,7 @@ def sysDup (fildes : Nat) : M Int := do
   let file ← fgetRaw fildes
   let mut ret := -EBADF
   if ← branch .dupFound file.isSome then
-    let some fid := file | unsupported "unreachable"
+    let some fid := file | invariant "unreachable"
     ret ← getUnusedFdFlags 0
     if ← branch .dupAllocOk (ret >= 0) then fdInstall ret.toNat fid
     else fput fid

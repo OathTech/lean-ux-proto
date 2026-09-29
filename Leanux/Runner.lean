@@ -132,24 +132,27 @@ RLIMIT_NOFILE is 32. The fork gave the child its own files_struct
 (`count = 1`) with the embedded 64-slot table. Allocation history leaves
 `next_fd = 8`. Fixture files carry references held outside the trace. -/
 
+/-- A fixture file. Its mode, operations and inode are outside the slice: any
+    operation that consults them is `unsupported`. -/
 def fixtureFile (name : String) (refs : Nat) : File :=
   { fFlags := O_RDWR, fMode := FMODE_READ ||| FMODE_WRITE ||| FMODE_OPENED,
-    fCount := refs, kind := .fixture name }
+    fCount := refs, fOp := some (.fixture name), fInode := some (.fixture name) }
 
 def initialKernel : Kernel :=
   let slot (fd : Nat) : Option FileId :=
     if fd < 3 then some 0 else if fd < 8 then some (fd - 2) else none
-  let files : Nat → Option File := fun
-    | 0 => some (fixtureFile "console" 4)   -- fds 0-2 plus init's references
-    | 1 => some (fixtureFile "kcov" 2)      -- fd 3 plus the coverage mapping
-    | n@(_ + 2) => if n < 6 then some (fixtureFile "/dev/null" 1) else none
+  let files : Std.TreeMap FileId File := Std.TreeMap.ofList
+    ([(0, fixtureFile "console" 4),   -- fds 0-2 plus init's references
+      (1, fixtureFile "kcov" 2)] ++    -- fd 3 plus the coverage mapping
+     (List.range 4).map fun i => (i + 2, fixtureFile "/dev/null" 1))
+  let slots := (List.range NR_OPEN_DEFAULT).toArray
   { task := {
       files := { count := 1, resizeInProgress := false, nextFd := 8,
-                 fdt := { maxFds := NR_OPEN_DEFAULT, fd := slot,
-                          openFds := fun fd => fd < 8, closeOnExec := fun _ => false } }
+                 fdt := { maxFds := NR_OPEN_DEFAULT, fd := slots.map slot,
+                          openFds := slots.map (· < 8), closeOnExec := slots.map fun _ => false } }
       rlimitNofile := 32 }
-    files, nextFile := 6, ctxs := fun _ => none, nextCtx := 0,
-    idaUsed := fun _ => false,
+    files, nextFile := 6, ctxs := {}, nextCtx := 0,
+    idaUsed := {},
     -- Environment facts: the system-wide open-file count and limit are not
     -- observed; the guest has few files open, far below any boot-sized limit.
     nrFiles := 6, maxFiles := 1000000, anonInodeInodeErr := false }
@@ -180,9 +183,9 @@ def toSyscall (results : Array Int) : Operation → Syscall
   | .write fd count value => .write (uint (resolveFD results fd)) count value
   | .fcntl fd cmd arg => .fcntl (uint (resolveFD results fd)) cmd arg.toUInt64
 
-/-- Run a trace. An `unsupported` outcome is returned as an error: the mirror
+/-- Run a trace. A `Stop` is returned with the operation index: the mirror
     never reports an observation for a path it does not model. -/
-def executeTrace (trace : Trace) : Except String Json := do
+def executeTrace (trace : Trace) : Except (Nat × Stop) Json := do
   let mut world : World := { k := initialKernel, env := harnessEnv }
   let mut results : Array Int := #[]
   let mut observations : Array Json := #[]
@@ -190,7 +193,7 @@ def executeTrace (trace : Trace) : Except String Json := do
   for op in trace.ops do
     let index := results.size
     let (ret, w) ← (syscall (toSyscall results op)).run world
-      |>.mapError fun e => s!"trace {trace.id} operation {index}: {e}"
+      |>.mapError fun e => (index, e)
     world := w
     results := results.push ret
     let bytes := match op, w.userOut with
