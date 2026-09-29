@@ -1,9 +1,10 @@
 # Way forward — assessment and proposal, 2026-09-29
 
-Status: **PROPOSAL, not adopted.** Drafted by an agent [AGENT] at the user's
-request. It changes no policy until the user approves it. Each decision below
-is marked [USER] (stated by the user, with date) or [AGENT] (proposed by the
-agent, awaiting approval).
+Status: **ADOPTED by the user on 2026-09-29** (decisions D1–D7, section 7). It
+takes effect on `main` only after the user signs off on the concrete integration
+diff. The agent [AGENT] drafted it at the user's request. Each decision below is
+marked [USER] (stated by the user, with date) or [AGENT] (proposed by the
+agent).
 
 ## 1. Direction (as stated by the user)
 
@@ -65,7 +66,11 @@ A fourth read-only survey covered `../cerberus-sl`.
    - **Bitmaps.** There are no `open_fds`/`close_on_exec` bitmaps. `alloc_fd`
      sets these bits at reservation (`fs/file.c:531-535`); the model's `allocFd`
      only moves `nextFd`, and `fdInstall` does the rest. The intermediate state
-     the C passes through therefore does not exist in the mirror.
+     the C passes through therefore does not exist in the mirror. Worse, it
+     violates the mirror's own `WellFormed`.
+
+     The same fold also reverses the order of two writes. C writes the cloexec
+     bit before installing the pointer; the mirror writes it after.
    - **Merged objects, no refcounts.** `struct file` and `eventfd_ctx` are
      merged into one object. There are no refcounts, and objects are never
      released. `doDup2` is one install step; the C's `get_file`, the `-EBUSY`
@@ -198,9 +203,23 @@ these:
 | # | Check | Mechanism |
 |---|---|---|
 | A1 | Observable agreement | Corpus plus seeded generated traces, run on Linux and the mirror, compared literally. Timeouts, crashes, and unknowns fail. |
-| A2 | Control-flow agreement | Per operation, the mirror's typed step trace is compared with the source lines that Linux's KCOV PCs map to, restricted to modeled functions. A spike must first establish how precise this can be under inlining (section 6, phase 3). |
+| A2 | Control-flow agreement | Per operation, the mirror's typed step trace is compared with the source lines that Linux's KCOV PCs map to, restricted to modeled functions. See the feasibility note below. |
 | A3 | Structural review | Each mirror function is reviewed against its C function, and the review is recorded in the code's doc comment with the source anchor. A changed function needs a fresh review. The reviewer is an agent or the user; the diff to `main` is approved by the user. |
 | A4 | Reproducibility | One command reproduces A1 and A2 from committed sources and the pinned kernel. |
+
+**A2 feasibility (checked by the model-fidelity review on recorded data).**
+- In `G2-generated/batch-00`, the per-outcome line sets are stable and
+  discriminate between outcomes. The review re-simulated 107 successful closes:
+  - the release path (`fs/eventfd.c:105,111,114`) is covered **iff** the closed
+    fd was the last alias;
+  - `fs/file.c:566` (lowering `next_fd`) is covered **iff** `fd < next_fd`.
+
+  There were zero mismatches. KCOV therefore already observes two choice points
+  that the mirror does not model.
+- **Limits.** `harness/guest.c:100` sorts the PCs, so only the *set* of blocks is
+  checkable, not their order. Dropping the sort recovers the order.
+- **Extra option.** `CONFIG_KCOV_ENABLE_COMPARISONS=y` is set, so
+  `KCOV_TRACE_CMP` could also expose branch-predicate operands.
 
 Explicitly **not** needed at this stage:
 
@@ -266,9 +285,11 @@ presented for user signoff before anything reaches `main`.
   5. user-copy steps and the environment oracle;
   6. the typed step trace.
 - **Phase 3: control-flow agreement (A2).**
-  - Spike: for 3–4 operations, compare the mirror's step anchors with the
-    KCOV→line map and measure false positives and negatives under inlining.
-  - Then add the check.
+  - Record the PCs unsorted, so the order of blocks survives.
+  - Attach expected line-block sets to each step constructor.
+  - Add the check. Because feasibility is already shown on recorded data, an
+    early, set-only version can run during Phase 2. It would catch any
+    restructuring that loses a C branch.
 - **Phase 4: widen the domain.**
   - Add the currently unreachable but modeled cases: EMFILE in generated
     traces, blocking-mode creation with would-block outcomes, `dup3`/`close`
@@ -278,7 +299,24 @@ presented for user signoff before anything reaches `main`.
 - **Later, by user choice:** the next component (e.g., pipes or epoll), and
   handing the eventfd read path to the workhorse logic as a first target.
 
-## 7. Decisions needed from the user
+## 7. Decisions
+
+[USER 2026-09-29] The user answered:
+- D1: agree.
+- D2: agree.
+- D3: agree.
+- D4: agree.
+- D5: agree.
+- D6: "don't remember, retire it".
+- D7: "sounds good".
+
+[AGENT] interpretation of D4: retired code and contracts are deleted from the
+tree, and git history keeps them. Superseded documents move to `docs/history/`.
+
+D2 approves the direction. Merging still requires signoff on the concrete
+amended diff, per `AGENTS.md`.
+
+Original questions:
 
 | ID | Decision |
 |---|---|
