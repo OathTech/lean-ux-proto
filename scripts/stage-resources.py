@@ -15,6 +15,11 @@ import tarfile
 
 ROOT = Path(__file__).resolve().parents[1]
 DOWNLOADS = ROOT / ".deps/downloads"
+# archive.ubuntu.com drops superseded updates from its pool (8 of the 222
+# locked packages were gone by 2026-09-30). The dated snapshot serves every
+# locked package unchanged; the lock's sha256 is enforced either way.
+UBUNTU_ARCHIVE = "https://archive.ubuntu.com/ubuntu/"
+UBUNTU_SNAPSHOT = "https://snapshot.ubuntu.com/ubuntu/20260920T000000Z/"
 
 
 def digest(path):
@@ -63,35 +68,28 @@ def unpack(archive, destination):
     marker.write_text(checksum + "\n")
 
 
-def sources():
+def sources(names=None):
+    """Fetch and unpack the locked sources, verifying each archive against
+    dependencies/sources.lock.json (URL and sha256). The lock is never
+    rewritten: a mismatch fails. `names` selects a subset (the check needs
+    only `linux`)."""
+    lock = json.loads((ROOT / "dependencies/sources.lock.json").read_text())
+    known = {entry["name"] for entry in lock}
+    if names is not None and not set(names) <= known:
+        raise RuntimeError(f"unknown sources {sorted(set(names) - known)}")
+    selected = [entry for entry in lock if names is None or entry["name"] in names]
+    for entry in selected:
+        archive = ROOT / entry["archive"]
+        fetch(entry["url"], archive, entry["sha256"])
+        unpack(archive, ROOT / ".deps" / entry["name"])
+        print(f"Staged source: {entry['name']}", flush=True)
     proposal = json.loads((ROOT / "docs/resource-proposal.json").read_text())
-    sums = DOWNLOADS / "linux-v6.x-sha256sums.asc"
-    fetch("https://www.kernel.org/pub/linux/kernel/v6.x/sha256sums.asc", sums)
-    linux_filename = "linux-6.12.110.tar.xz"
-    checksum = next(line.split()[0] for line in sums.read_text().splitlines()
-                    if line.endswith("  " + linux_filename))
-    entries = [
-        ("linux", proposal["sources"]["linux"]["archive_url"], linux_filename, checksum),
-    ]
-    for name, organization in (("firecracker", "firecracker-microvm"),
-                               ("syzkaller", "google")):
-        commit = proposal["sources"][name]["commit"]
-        entries.append((name, f"https://codeload.github.com/{organization}/{name}/tar.gz/{commit}",
-                        f"{name}-{commit}.tar.gz", None))
-    manifest = []
-    for name, url, filename, expected in entries:
-        archive = DOWNLOADS / filename
-        actual = fetch(url, archive, expected)
-        unpack(archive, ROOT / ".deps" / name)
-        manifest.append({"name": name, "url": url, "sha256": actual,
-                         "archive": str(archive.relative_to(ROOT)),
-                         "commit": proposal["sources"][name]["commit"]})
-        print(f"Staged source: {name}", flush=True)
     for item in proposal["source_files_inspected"]:
+        if item["source"] not in {entry["name"] for entry in selected}:
+            continue
         path = ROOT / ".deps" / item["source"] / item["path"]
         if digest(path) != item["sha256"]:
             raise RuntimeError(f"source pin audit failed: {path}")
-    (ROOT / "dependencies/sources.lock.json").write_text(json.dumps(manifest, indent=2) + "\n")
 
 
 def packages():
@@ -99,7 +97,9 @@ def packages():
     entries = json.loads(lock.read_text())
     def download(entry):
         path = DOWNLOADS / "debs" / entry["filename"]
-        fetch(entry["url"], path, entry["sha256"])
+        if not entry["url"].startswith(UBUNTU_ARCHIVE):
+            raise RuntimeError(f"unexpected package origin: {entry['url']}")
+        fetch(UBUNTU_SNAPSHOT + entry["url"][len(UBUNTU_ARCHIVE):], path, entry["sha256"])
         return path
     with ThreadPoolExecutor(max_workers=4) as pool:
         archives = list(pool.map(download, entries))
@@ -185,10 +185,11 @@ def documentation():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("phase", choices=("sources", "packages", "docs", "all"))
+    parser.add_argument("--sources", help="comma-separated subset of the locked sources, e.g. linux")
     args = parser.parse_args()
     (ROOT / "dependencies").mkdir(exist_ok=True)
     if args.phase in ("sources", "all"):
-        sources()
+        sources(args.sources.split(",") if args.sources else None)
     if args.phase in ("packages", "all"):
         packages()
     if args.phase in ("docs", "all"):

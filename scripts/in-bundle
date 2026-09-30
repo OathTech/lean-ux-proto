@@ -40,8 +40,6 @@ if not (sysroot / 'usr/bin/gcc-13').is_file():
 for name in ('tmp', 'lake', 'elan', 'go-build', 'go', 'bundle-bin', 'bundle-libs'):
     (cache / name).mkdir(parents=True, exist_ok=True)
 artifacts.mkdir(parents=True, exist_ok=True)
-if not (shared / '.deps/go-mod').is_dir():
-    raise SystemExit('Missing staged offline Go module store')
 config = cache / 'lake-config.toml'
 if not config.exists():
     config.write_text('')

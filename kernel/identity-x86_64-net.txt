@@ -1,0 +1,8 @@
+# Accepted networking oracle kernel (WireGuard stage A, signed off 2026-09-30).
+# Path-independent identity from scripts/kernel-identity.py: .config,
+# System.map and every loaded section of vmlinux, GNU build IDs zeroed.
+# A rebuild in another directory on 2026-09-30 gave the same identity.
+eeb680ce5a323b2c04ac7c63d9056969f20f2597f14e51f3195ad13f55384f76
+# vmlinux sha256 of the accepted build itself (path-dependent: debug info and
+# build IDs record the build directory).
+a8c40b559ddeef581a1a48586f33d855ae0789893e25cb3c42ba2116592d1c5b

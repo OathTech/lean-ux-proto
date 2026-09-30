@@ -7,7 +7,10 @@
     "archive": ".deps/downloads/lean-4.33.1-local-snapshot.tar.zst",
     "sha256": "8e96283e2b09b5330677a3d06f95347dce67614d4516caa9db1d02cc8a03e35a",
     "size_bytes": 749437964,
-    "destination": ".tools/lean"
+    "destination": ".tools/lean",
+    "upstream_url": "https://github.com/leanprover/lean4/releases/download/v4.33.1/lean-4.33.1-linux.tar.zst",
+    "upstream_sha256": "890afd185370f85666025b883914ab4f4b339136f8c96167b69cfb62aecaf235",
+    "upstream_equivalence": "release contents identical to the snapshot, file by file (17,493 files), checked 2026-09-30"
   },
   {
     "name": "go",

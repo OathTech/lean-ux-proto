@@ -11,31 +11,32 @@ project. Executable behavior is tested against the pinned kernel. See
 
 - [Current plan: assessment and way forward (2026-09-29)](docs/2026-09-29-way-forward.md)
 - [Next plan: finish the slice, then WireGuard (2026-09-29)](docs/2026-09-29-next-plan.md)
+- [WireGuard stage A report (2026-09-30)](docs/2026-09-30-wireguard-stage-a-report.md)
+- [Reproducing the results from a clone](REPRODUCING.md)
 - [Worktree, shared dependency, and cleanup practices](docs/worktree-practices.md)
 - [Offline development setup and environment audit](docs/offline-development.md)
 - [Using the staged offline environment](docs/offline-usage.md)
 - [Pinned source identities](dependencies/sources.lock.json)
 - [Superseded plans and handoffs](docs/history/README.md)
 
-Status (2026-09-29): the FD/eventfd mirror and the QEMU Linux runner exist and
-agree on the recorded corpora. The plan above covers the next steps:
-- a single check command;
-- a cut-back harness;
-- restructuring the mirror to C-shaped data and control flow;
-- KCOV-based control-flow checks.
-
-The earlier campaign ledger and its gates are retired.
+Status (2026-09-30): the FD/eventfd slice and WireGuard stage A (netlink
+configuration, the allowed-IPs trie, peers and keys) are mirrored with C-shaped
+data and control flow. They agree with the networking oracle kernel on
+behavior, KCOV control flow and comparison operands for 1,288 traces. Next is
+WireGuard stage B (packet receive path); see the plan.
 
 ## Checking the mirror
 
 ```sh
-scripts/in-bundle python3 -m evaluator.check                   # everything: ~3 minutes
+scripts/in-bundle python3 -m evaluator.check                   # everything: ~1.5 hours
+scripts/in-bundle python3 -m evaluator.check --suite wireguard # ~3 minutes
 scripts/in-bundle python3 -m evaluator.check --trace alias_close  # replay one case
 scripts/in-bundle python3 -m evaluator.check --suite handwritten --no-build
 ```
 
-The check builds `leanux-model` and runs the handwritten, critic and seeded
-generated traces on the pinned Linux guest and on the mirror:
+The check builds `leanux-model` and runs the handwritten, critic, WireGuard and
+seeded generated traces on the networking oracle kernel (`.artifacts/kernel-net`,
+built as in [REPRODUCING.md](REPRODUCING.md)) and on the mirror:
 - the guest is QEMU, with a fresh child per trace in each of two KCOV modes;
 - generated traces are kept only where the mirror places them inside the
   domain.
@@ -51,7 +52,7 @@ See [correspondence](correspondence/README.md).
 
 It writes `report.json` under `$LEANUX_ARTIFACTS/check/` and exits nonzero
 unless everything passes. Unit tests:
-`scripts/in-bundle python3 -B -m unittest evaluator.test_evaluation harness.test_trace harness.test_syzkaller_adapter`.
+`scripts/in-bundle python3 -B -m unittest evaluator.test_evaluation harness.test_trace harness.test_wg harness.test_linux harness.test_syzkaller_adapter`.
 Work happens in worktrees; see [worktree practices](docs/worktree-practices.md).
 
 ## Environment
@@ -70,5 +71,6 @@ Run `scripts/check-nono` for an acceptance suite under a separate nono test
 profile that blocks networking. See [nono setup](docs/nono-profile-proposal.md).
 
 Bulk dependencies and build outputs are Git-ignored; preserve them when copying
-this workspace for offline use. The bootstrap runtime is Linux x86-64 with
+this workspace for offline use, or stage them from the locks as in
+[REPRODUCING.md](REPRODUCING.md). The bootstrap runtime is Linux x86-64 with
 glibc 2.39 or newer, `/bin/sh`, Python 3, and nono.
