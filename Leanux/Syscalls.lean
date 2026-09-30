@@ -2,7 +2,7 @@ import Leanux.FS.Eventfd
 import Leanux.FS.ReadWrite
 import Leanux.FS.Fcntl
 import Leanux.FS.Close
-import Leanux.WG.Device
+import Leanux.Env
 
 /-!
 # System call entry and return to user mode
@@ -87,7 +87,7 @@ def dispatch : Syscall → M Int
     | .ok device =>
       modify fun w => { w with extraOut := [("device", device)] }
       return 0
-  | .wgUp => socketCallOn SENDER_FD WG.wgUp
+  | .wgUp => socketCallOn SENDER_FD Env.wgUp
   | .wgXmit family addr => socketCallOn SENDER_FD do
     -- the fixture adds wg0's routes at wg_up; before that no route exists
     if !(← WG.getDev).running then return -ENETUNREACH
@@ -95,7 +95,7 @@ def dispatch : Syscall → M Int
     let ret ← WG.wgXmit family addr
     return if ret == 0 then 4 else ret
   | .wgObserve => socketCallOn LISTEN4_FD do
-    let (ret, observed) ← WG.wgObserve
+    let (ret, observed) ← Env.observe
     modify fun w => { w with extraOut := observed.getObjValD "datagrams" |> fun d =>
       [("datagrams", d), ("stats", observed.getObjValD "stats")] }
     return ret

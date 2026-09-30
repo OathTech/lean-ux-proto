@@ -193,7 +193,6 @@ structure Kernel where
   anonInodeInodeErr : Bool
   /-- The fixture's WireGuard device, in traces that use the network fixture. -/
   wg : Option WG.Device := none
-  listeners : WG.Listeners := {}
   /-- `peer_counter` (drivers/net/wireguard/peer.c), a global atomic. -/
   peerCounter : Nat := 0
   deriving BEq
@@ -222,6 +221,10 @@ structure World where
   /-- Observation fields beyond the return value: a dump's `device`, or what
       `wg_observe` saw (`datagrams`, `stats`). -/
   extraOut : List (String × Lean.Json) := []
+  /-- Fixture state, not kernel state: the datagrams waiting at the network
+      fixture's UDP listeners (lengths), which `wg_observe` drains. -/
+  listenerV4 : List Nat := []
+  listenerV6 : List Nat := []
   /-- Peers whose handshake work this system call queued, while the call has
       not slept. The kernel is `CONFIG_PREEMPT_NONE` on one CPU, so their
       worker cannot have run yet. -/

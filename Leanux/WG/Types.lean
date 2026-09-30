@@ -108,16 +108,8 @@ structure Device where
   nextPeer : PeerId := 0
   deriving BEq
 
-/-- The fixture's UDP listeners (127.0.0.1 and ::1 at `LISTEN_PORT`): the
-    lengths of the datagrams waiting in each receive queue. -/
-structure Listeners where
-  v4 : List Nat := []
-  v6 : List Nat := []
-  deriving Repr, BEq
-
 def AF_INET : Nat := 2
 def AF_INET6 : Nat := 10
-def LISTEN_PORT : Nat := 51999
 def MESSAGE_HANDSHAKE_INITIATION_LEN : Nat := 148
 
 end Leanux.WG

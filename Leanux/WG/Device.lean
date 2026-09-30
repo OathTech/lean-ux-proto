@@ -6,7 +6,8 @@ import Leanux.WG.Netlink
 `wg_up` is `dev_change_flags(wg0, flags | IFF_UP)`, which sets
 `__LINK_STATE_START` and calls `wg_open`. `wg_socket_init` (the UDP sockets on
 `incoming_port`) is a cut point that succeeds on a fixed, free port; a zero
-port (a random one) or the fixture's own port is `unsupported`.
+port (a random one) is `unsupported`. The fixture's own ports are excluded by
+the environment (`Leanux/Env.lean`).
 
 `wg_xmit` receives the fixture sender's UDP datagrams, routed into wg0 by the
 default routes added at `wg_up`: never GSO, not shared, with a dst, and with
@@ -43,8 +44,8 @@ def wgOpen : M Int := do
   _ ← branch .openHasInet true    -- IN_DEV_CONF_SET(SEND_REDIRECTS, false)
   _ ← branch .openHasInet6 true   -- addr_gen_mode = IN6_ADDR_GEN_MODE_NONE
   let d ← getDev
+  -- wg_socket_init on incoming_port: a random port for 0 (outside the domain)
   if d.incomingPort == 0 then unsupported "wg_socket_init on a random port"
-  if d.incomingPort == LISTEN_PORT then unsupported "wg_socket_init on the fixture's listener port"
   if ← branch .openSocketError false then unsupported "unreachable"
   for pid in d.peerList do
     _ ← branch .openPeersIter true
@@ -56,7 +57,6 @@ def wgOpen : M Int := do
 /-- `dev_change_flags` to IFF_UP: `__dev_open` sets `__LINK_STATE_START`
     before `ndo_open`. The routes added after it are fixture. -/
 def wgUp : M Int := do
-  if (← getDev).running then unsupported "wg0 is already up"
   modifyDev fun d => { d with running := true }
   wgOpen
 
@@ -91,23 +91,5 @@ def wgXmit (family addr : Nat) : M Int := do
   sendStagedPackets pid
   peerPut peer
   return 0   -- NETDEV_TX_OK
-
-/-- `wg_observe`: the fixture waited for the handshake workers; its
-    `recvfrom` on the IPv4 listener returns the first datagram there. The
-    observation also lists every datagram both listeners hold (drained) and
-    wg0's transmit counters. -/
-def wgObserve : M (Int × Lean.Json) := do
-  runHandshakeWorkers
-  let l := (← getK).listeners
-  let ret : Int := match l.v4 with
-    | n :: _ => n
-    | [] => -EAGAIN
-  let datagrams := (l.v4.map fun n => (4, n)) ++ (l.v6.map fun n => (6, n))
-  let sorted := (datagrams.toArray.qsort fun a b => a.1 < b.1 || (a.1 == b.1 && a.2 < b.2)).toList
-  modifyK fun k => { k with listeners := {} }
-  let d ← getDev
-  return (ret, Lean.Json.mkObj [
-    ("datagrams", Lean.toJson (sorted.map fun (f, n) => [f, n, 1])),   -- MESSAGE_HANDSHAKE_INITIATION
-    ("stats", Lean.Json.mkObj [("tx_errors", Lean.toJson d.txErrors), ("tx_dropped", Lean.toJson d.txDropped)])])
 
 end Leanux.WG
