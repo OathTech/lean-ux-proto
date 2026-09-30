@@ -28,7 +28,7 @@ ASCII, at most 64 KiB, and contain 1–64 operations.
 
 | Saved-program call | Imported operation |
 | --- | --- |
-| `eventfd2(init, flags)` | eventfd2, with uint32 arguments and NONBLOCK required |
+| `eventfd2(init, flags)` | eventfd2, with uint32 arguments (blocking mode allowed since the Phase 4 amendment) |
 | `dup(fd)` | dup |
 | `dup3(fd, newfd, flags)` | dup3, with uint32 flags |
 | `close(fd)` | close |
@@ -51,7 +51,7 @@ outside this subset.
 Descriptor literals use the low signed 32 bits, matching Linux's `int`
 parameter conversion; for example `0xffffffffffffffff` becomes -1. Producer
 references remain references, including stale references and failed producers.
-The trace validator then applies reserved-slot, reference, NONBLOCK, length,
+The trace validator then applies reserved-slot, reference, length,
 and all other frozen-domain rules. It rejects literals that target slots 0–7.
 
 The adapter rejects result arithmetic, resource arrays, automatic/special
@@ -64,7 +64,7 @@ repair flags, insert calls, silently shorten programs, or infer missing values.
 
 An import supplies an operation sequence for the existing trace fixture:
 descriptors 0–7 reserved, descriptor limit 32, fresh sequential process, and
-nonblocking eventfds. Arbitrary syzkaller executor environments have different
+eventfds that never wait. Arbitrary syzkaller executor environments have different
 inherited descriptors, resource limits, scheduling, and memory conventions.
 Consequently this is a projection into the fixed experiment, not a claim that
 the original executor run and the imported trace have identical observations.

@@ -26,6 +26,8 @@ def Operation.isProducer : Operation → Bool
 structure Trace where
   id : String
   ops : Array Operation
+  /-- `RLIMIT_NOFILE`, set by the fixture before the first operation. -/
+  rlimit : Nat := 32
   deriving Repr
 
 private def fields (j : Json) (expected : List String) : Except String Unit := do
@@ -74,7 +76,6 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
     fields j ["op", "init", "flags"]
     let init ← u32Field j "init"
     let flags ← u32Field j "flags"
-    if flags &&& 2048 == 0 then throw "creation must request nonblocking mode"
     return .eventfd2 init flags
   | "dup" =>
     fields j ["op", "fd"]
@@ -99,18 +100,18 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
     let cmd ← (← field j "cmd").getStr?
     let arg ← u32Field j "arg"
     match cmd with
-    | "F_GETFD" =>
-      if arg != 0 then throw "getter arg must be zero"
-      return .fcntl fd FcntlCmd.getFD arg
+    | "F_GETFD" => return .fcntl fd FcntlCmd.getFD arg
     | "F_SETFD" => return .fcntl fd FcntlCmd.setFD arg
-    | "F_GETFL" =>
-      if arg != 0 then throw "getter arg must be zero"
-      return .fcntl fd FcntlCmd.getFL arg
+    | "F_GETFL" => return .fcntl fd FcntlCmd.getFL arg
+    | "F_SETFL" => return .fcntl fd FcntlCmd.setFL arg
     | _ => throw "unsupported fcntl command"
   | _ => throw "unsupported operation"
 
 def parseTrace (j : Json) : Except String Trace := do
-  fields j ["version", "id", "ops"]
+  let hasLimit := (j.getObjVal? "rlimit_nofile").isOk
+  fields j (if hasLimit then ["version", "id", "ops", "rlimit_nofile"] else ["version", "id", "ops"])
+  let rlimit ← if hasLimit then natField j "rlimit_nofile" 1024 else pure 32
+  if rlimit < 8 then throw "rlimit_nofile outside 8..1024"
   if (← (← field j "version").getNat?) != 1 then throw "unsupported trace version"
   let id ← (← field j "id").getStr?
   if id.isEmpty || id.length > 80 || !id.toList.all (fun c =>
@@ -121,7 +122,7 @@ def parseTrace (j : Json) : Except String Trace := do
   let mut ops := #[]
   for j in rawOps do
     ops := ops.push (← parseOperation j ops)
-  return ⟨id, ops⟩
+  return { id, ops, rlimit }
 
 /-! ## Harness fixture and trace execution
 
@@ -138,7 +139,7 @@ def fixtureFile (name : String) (refs : Nat) : File :=
   { fFlags := O_RDWR, fMode := FMODE_READ ||| FMODE_WRITE ||| FMODE_OPENED,
     fCount := refs, fOp := some (.fixture name), fInode := some (.fixture name) }
 
-def initialKernel : Kernel :=
+def initialKernel (rlimit : Nat) : Kernel :=
   let slot (fd : Nat) : Option FileId :=
     if fd < 3 then some 0 else if fd < 8 then some (fd - 2) else none
   let files : Std.TreeMap FileId File := Std.TreeMap.ofList
@@ -150,7 +151,7 @@ def initialKernel : Kernel :=
       files := { count := 1, resizeInProgress := false, nextFd := 8,
                  fdt := { maxFds := NR_OPEN_DEFAULT, fd := slots.map slot,
                           openFds := slots.map (· < 8), closeOnExec := slots.map fun _ => false } }
-      rlimitNofile := 32 }
+      rlimitNofile := rlimit }
     files, nextFile := 6, ctxs := {}, nextCtx := 0,
     idaUsed := {},
     -- Environment facts: the system-wide open-file count and limit are not
@@ -186,7 +187,7 @@ def toSyscall (results : Array Int) : Operation → Syscall
 /-- Run a trace. A `Stop` is returned with the operation index: the mirror
     never reports an observation for a path it does not model. -/
 def executeTrace (trace : Trace) : Except (Nat × Stop) Json := do
-  let mut world : World := { k := initialKernel, env := harnessEnv }
+  let mut world : World := { k := initialKernel trace.rlimit, env := harnessEnv }
   let mut results : Array Int := #[]
   let mut observations : Array Json := #[]
   let mut branches : Array Json := #[]
@@ -223,8 +224,10 @@ def decisionsJson : Json :=
       ("when_false", .arr (i.whenFalse.map spanJson).toArray),
       ("unobservable_true", match d.unobservable true with | some r => toJson r.name | none => .null),
       ("unobservable_false", match d.unobservable false with | some r => toJson r.name | none => .null),
+      ("repeatable", toJson d.repeatable),
       ("comparison", match d.comparison with
-        | some c => Json.mkObj [("rel", toJson c.rel.name), ("const_rhs", toJson c.constRhs)]
+        | some c => Json.mkObj [("rel", toJson c.rel.name), ("const_rhs", toJson c.constRhs),
+            ("site", match c.site with | some l => toJson s!"{i.file}:{l}" | none => .null)]
         | none => .null)]).toArray
 
 end Leanux.Runner

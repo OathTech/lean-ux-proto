@@ -57,7 +57,8 @@ class EvaluationChecks(unittest.TestCase):
         return {'label': label, 'file': 'fs/eventfd.c', 'line': line,
                 'when_true': [{'file': 'fs/eventfd.c', 'lo': lo, 'hi': hi} for lo, hi in true],
                 'when_false': [{'file': 'fs/eventfd.c', 'lo': lo, 'hi': hi} for lo, hi in false],
-                'unobservable_true': why_true, 'unobservable_false': why_false, 'comparison': None}
+                'unobservable_true': why_true, 'unobservable_false': why_false, 'repeatable': False,
+                'comparison': None}
 
     def control_flow_fixture(self):
         table = check.parse_decisions([
@@ -159,7 +160,7 @@ class EvaluationChecks(unittest.TestCase):
         self.assertFalse(match(0x100, 0, (1, 0, 0), {'rel': 'flag', 'const_rhs': True}))    # does not fit 1 byte
 
     def test_operand_agreement(self):
-        cmp = {'rel': 'ge', 'const_rhs': False}
+        cmp = {'rel': 'ge', 'const_rhs': False, 'site': None}
         decisions = {'alloc_fd.at_limit': dict(site='fs/file.c:514', comparison=cmp),
                      'alloc_fd.o_cloexec': dict(site='fs/file.c:532', comparison=None)}
         loc = {'0x1': [{'function': 'alloc_fd', 'source': '/x/.deps/linux/fs/file.c:514'}],
@@ -198,6 +199,20 @@ class EvaluationChecks(unittest.TestCase):
         in_order = ['eventfd_write.wrong_size=0', 'eventfd_write.ullong_max=0']
         self.assertEqual(run(in_order, ['0x256', '0x260']), [])
         self.assertTrue(run(list(reversed(in_order)), ['0x256', '0x260']))   # mirror order reversed
+
+    def test_generator_profiles(self):
+        v2 = generate(7, 300)
+        self.assertEqual(v2, generate(7, 300))                                    # deterministic
+        self.assertEqual(generate(7, 5, profile='v1'), generate(7, 5, profile='v1'))
+        with self.assertRaises(ValueError):
+            generate(7, 5, profile='v3')
+        creations = [op for t in v2 for op in t['ops'] if op['op'] == 'eventfd2']
+        self.assertTrue(any(not op['flags'] & 2048 for op in creations))          # blocking mode
+        self.assertTrue(any(op['op'] == 'fcntl' and op['cmd'] != 'F_SETFD' and op['arg']
+                            for t in v2 for op in t['ops']))                        # getter arguments
+        self.assertTrue(any(sum(op['op'] in ('eventfd2', 'dup') for op in t['ops']) > 24 for t in v2))  # bursts
+        for trace in v2:
+            validate_trace(trace)
 
     def test_empty_run_is_not_a_pass(self):
         class Args:

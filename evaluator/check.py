@@ -47,11 +47,38 @@ def git_state():
     return dict(head=head.stdout.strip(), dirty=bool(dirty.stdout.strip()))
 
 
-def load_traces(suites, count, seed, only):
+CANDIDATES_PER_TRACE = 3
+
+
+def domain_filter(traces):
+    """`leanux-model --domain`: whether each trace stays inside the modeled
+    domain (a blocking wait, for example, does not). A mirror invariant
+    failure aborts: it is a defect, not a filtering decision."""
+    payload = ''.join(json.dumps(t, separators=(',', ':'), sort_keys=True) + '\n' for t in traces)
+    result = subprocess.run([MODEL, '--domain'], input=payload.encode(), capture_output=True, timeout=600)
+    if result.returncode:
+        raise InvalidOutput(f'domain filter failed: {result.stderr.decode(errors="replace")[-2000:]}')
+    verdicts = [loads(line) for line in result.stdout.decode().splitlines()]
+    if [v.get('id') for v in verdicts] != [t['id'] for t in traces]:
+        raise InvalidOutput('domain filter verdicts do not match the candidates')
+    return verdicts
+
+
+def load_traces(suites, count, seed, only, filtered):
+    """The selected suites. Generated traces are drawn from a fixed number of
+    seeded candidates, keeping those the mirror places inside the domain;
+    `filtered` receives the rejected candidates' reasons."""
     traces = []
     for suite in suites:
         if suite == 'generated':
-            traces += generate(seed, count)
+            candidates = [validate_trace(t) for t in generate(seed, count * CANDIDATES_PER_TRACE)]
+            verdicts = domain_filter(candidates)
+            kept = [t for t, v in zip(candidates, verdicts) if v['in_domain']][:count]
+            if len(kept) < count:
+                raise ValueError(f'only {len(kept)} of {count} generated traces are inside the domain')
+            last = candidates.index(kept[-1])
+            filtered.update(f"{v['site']}: {v['what']}" for v in verdicts[:last + 1] if not v['in_domain'])
+            traces += kept
         else:
             files = sorted((ROOT / 'corpus' / suite).glob('*.json'))
             if not files:
@@ -145,7 +172,7 @@ def parse_decisions(decisions, config):
     table = {}
     for entry in decisions:
         if set(entry) != {'label', 'file', 'line', 'when_true', 'when_false', 'unobservable_true', 'unobservable_false',
-                          'comparison'}:
+                          'repeatable', 'comparison'} or type(entry['repeatable']) is not bool:
             raise InvalidOutput(f'decision fields: {entry}')
         label = entry['label']
         if type(label) is not str or label in table or entry['file'] not in config['files']:
@@ -154,9 +181,13 @@ def parse_decisions(decisions, config):
             raise InvalidOutput(f'decision {label}: condition line must be a source statement')
         reasons = {True: entry['unobservable_true'], False: entry['unobservable_false']}
         comparison = entry['comparison']
-        if comparison is not None and (set(comparison) != {'rel', 'const_rhs'} or comparison['rel'] not in RELATIONS
+        if comparison is not None and (set(comparison) != {'rel', 'const_rhs', 'site'} or comparison['rel'] not in RELATIONS
                                        or type(comparison['const_rhs']) is not bool):
             raise InvalidOutput(f'decision {label}: comparison spec')
+        if comparison is not None and comparison['site'] is not None:
+            site_file, _, site_line = comparison['site'].rpartition(':')
+            if site_file != entry['file'] or not site_line.isdigit() or abs(int(site_line) - entry['line']) > 2:
+                raise InvalidOutput(f'decision {label}: comparison site must be within two lines of the condition')
         if any(r is not None and (type(r) is not str or not r) for r in reasons.values()):
             raise InvalidOutput(f'decision {label}: unobservable reasons must be strings')
         spans = {}
@@ -175,7 +206,7 @@ def parse_decisions(decisions, config):
         if spans[True] & spans[False]:
             raise InvalidOutput(f'decision {label}: outcome spans overlap')
         table[label] = dict(site=f"{entry['file']}:{entry['line']}", spans=spans, reasons=reasons,
-                            function=label.split('.', 1)[0], comparison=comparison)
+                            function=label.split('.', 1)[0], comparison=comparison, repeatable=entry['repeatable'])
     return table
 
 
@@ -252,7 +283,9 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
             if step is None or step[0] not in decisions:
                 problems.append(dict(index=index, label=label, problem='unknown decision'))
             elif any(name == step[0] for name, _ in reported):
-                problems.append(dict(index=index, label=label, problem='decision reported more than once'))
+                if not decisions[step[0]]['repeatable']:
+                    problems.append(dict(index=index, label=label, problem='decision reported more than once'))
+                reported.add(step)  # a repeatable decision: later evaluations add outcomes, not order
             else:
                 reported.add(step)
                 sequence.append(step)
@@ -263,7 +296,8 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
             if own and not (lines & own):
                 problems.append(dict(index=index, label=f'{name}={int(outcome)}', problem='outcome not witnessed',
                                      witnesses=sorted(own)))
-            if lines & other:
+            both = (name, not outcome) in reported and decisions[name]['repeatable']
+            if lines & other and not both:
                 problems.append(dict(index=index, label=f'{name}={int(outcome)}', problem='opposite outcome covered',
                                      covered=sorted(lines & other)))
         # Order: within each C function, witnessed decisions appear in the
@@ -354,7 +388,7 @@ def operand_agreement(trace, model_obs, comparisons, locations, decisions):
             problems.append(dict(index=branch['index'], label=branch['label'],
                                  problem='declared comparison reported without operands'))
             continue
-        site = decisions[name]['site']
+        site = comparison['site'] or decisions[name]['site']
         records = [(r[0], int(r[1], 16), int(r[2], 16)) for r in comparisons[branch['index']]['records']
                    if locations[r[3]][0]['source'].split('/.deps/linux/')[-1].split(' ')[0] == site]
         lhs, rhs = branch['operands']
@@ -430,16 +464,17 @@ def main(argv=None):
     if not out.is_relative_to(artifacts) or out == artifacts:
         parser.error(f'--out must be a new directory inside {artifacts}')
     try:
-        traces = load_traces(suites, args.generated_count, args.seed, args.trace)
         config = load_kcov_config()
-    except (InvalidTrace, ValueError, OSError) as exc:
+    except (ValueError, OSError) as exc:
         parser.exit(2, f'invalid input: {exc}\n')
+    traces, filtered = [], Counter()
     out.mkdir(parents=True, exist_ok=False)
     started = datetime.now(timezone.utc).isoformat()
     results, gaps, build, aborted = {}, Counter(), None, None
     outcomes, decisions, kcov = Counter(), {}, None
     try:
         build = build_model(out, rebuild=not args.no_build)
+        traces = load_traces(suites, args.generated_count, args.seed, args.trace, filtered)
         decisions.update(load_decisions(config))
         instrumented, functions = instrumented_lines(KERNEL / 'vmlinux', config['functions'], config['files'])
         kcov = (config, decisions, witness_table(decisions, instrumented, functions), instrumented, functions)
@@ -458,7 +493,7 @@ def main(argv=None):
     finally:
         matched = outcomes.pop('operand pairs matched', 0)
         status = write_report(out, traces, results, gaps, build, aborted, started, suites, args,
-                              decision_summary(decisions, outcomes, kcov[2] if kcov else {}), matched)
+                              decision_summary(decisions, outcomes, kcov[2] if kcov else {}), matched, filtered)
     return 0 if status == 'pass' else 1
 
 
@@ -476,7 +511,7 @@ def decision_summary(decisions, outcomes, witnesses):
 
 
 def write_report(out, traces, results, gaps, build, aborted, started, suites, args, decision_coverage=None,
-                 operand_pairs_matched=0):
+                 operand_pairs_matched=0, domain_filtered=None):
     ordered = [results.get(trace['id'], dict(id=trace['id'], outcome='not_run')) for trace in traces]
     counts = Counter(r['outcome'] for r in ordered)
     vmlinux = KERNEL / 'vmlinux'
@@ -492,6 +527,7 @@ def write_report(out, traces, results, gaps, build, aborted, started, suites, ar
         selection=dict(suites=suites, generated_count=args.generated_count, seed=args.seed, trace=args.trace),
         traces=len(traces), operations=sum(len(t['ops']) for t in traces),
         counts=dict(counts), known_gap_hits=dict(gaps), operand_pairs_matched=operand_pairs_matched,
+        domain_filtered=dict(domain_filtered or {}),
         decision_coverage=decision_coverage,
         failures=[r for r in ordered if r['outcome'] != 'agreement'])
     (out / 'report.json').write_text(json.dumps(report, indent=2) + '\n')

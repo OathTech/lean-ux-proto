@@ -11,8 +11,9 @@ def main (args : List String) : IO UInt32 := do
   if args == ["--decisions"] then
     output.putStrLn Leanux.Runner.decisionsJson.compress
     return 0
-  if !args.isEmpty then
-    errors.putStrLn "usage: leanux-model [--decisions] < traces.jsonl"
+  let domainOnly := args == ["--domain"]
+  if !args.isEmpty && !domainOnly then
+    errors.putStrLn "usage: leanux-model [--decisions | --domain] < traces.jsonl"
     return 2
   let input ← IO.getStdin
   repeat
@@ -27,11 +28,22 @@ def main (args : List String) : IO UInt32 := do
       return 2
     | .ok trace =>
       match Leanux.Runner.executeTrace trace with
+      | .error (index, .outsideDomain site what) =>
+        if domainOnly then
+          -- `--domain`: report whether each trace stays inside the modeled domain
+          output.putStrLn (Lean.Json.mkObj [("id", Lean.toJson trace.id), ("in_domain", Lean.toJson false),
+            ("index", Lean.toJson index), ("site", Lean.toJson site), ("what", Lean.toJson what)]).compress
+        else
+          errors.putStrLn s!"trace {trace.id} operation {index}: {(Leanux.Stop.outsideDomain site what).message}"
+          return 3
+      | .ok json =>
+        if domainOnly then
+          output.putStrLn (Lean.Json.mkObj [("id", Lean.toJson trace.id), ("in_domain", Lean.toJson true)]).compress
+        else
+          output.putStrLn json.compress
+        output.flush
       | .error (index, stop) =>
         errors.putStrLn s!"trace {trace.id} operation {index}: {stop.message}"
-        -- 3: the C leaves the modeled domain; 4: a mirror defect
+        -- 4: a mirror defect (3, outside the domain, is handled above)
         return match stop with | .outsideDomain .. => 3 | .invariant _ => 4
-      | .ok json =>
-        output.putStrLn json.compress
-        output.flush
   return 0

@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "id": "setfl_flag_bits",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 1,
+      "flags": 0
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 0
+      },
+      "cmd": "F_SETFL",
+      "arg": 1024
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 0
+      },
+      "cmd": "F_GETFL",
+      "arg": 0
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 0
+      },
+      "cmd": "F_SETFL",
+      "arg": 16384
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 0
+      },
+      "cmd": "F_SETFL",
+      "arg": 262144
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 0
+      },
+      "cmd": "F_GETFL",
+      "arg": 0
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 0
+      },
+      "cmd": "F_SETFL",
+      "arg": 8192
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 0
+      },
+      "cmd": "F_SETFL",
+      "arg": 4294967295
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 0
+      },
+      "cmd": "F_GETFL",
+      "arg": 0
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 9
+      },
+      "cmd": "F_GETFL",
+      "arg": 0
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8
+    }
+  ]
+}

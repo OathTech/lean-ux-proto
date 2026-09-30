@@ -19,7 +19,7 @@
 #define MAX_OPS 64
 #define CAPACITY (64UL * 1024)
 struct operation { unsigned code, kind, newkind, a, b; long long fd, newfd; uint64_t value; };
-struct trace { char id[81]; unsigned count; struct operation ops[MAX_OPS]; };
+struct trace { char id[81]; unsigned count; unsigned rlimit; struct operation ops[MAX_OPS]; };
 struct observation { long ret; int error; unsigned char bytes[16]; };
 
 static void fail(const char *id, int index, const char *kind, const char *detail)
@@ -78,10 +78,10 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
     if (coverage == MAP_FAILED) fail(t->id, -1, "coverage_failure", "map_kcov");
     for (int fd = 4; fd < 8; ++fd)
         if (open("/dev/null", O_RDWR) != fd) fail(t->id, -1, "environment_failure", "fill_descriptor");
-    struct rlimit limit = {32, 32}, actual;
-    if (setrlimit(RLIMIT_NOFILE, &limit) || getrlimit(RLIMIT_NOFILE, &actual) || actual.rlim_cur != 32 || actual.rlim_max != 32)
+    struct rlimit limit = {t->rlimit, t->rlimit}, actual;
+    if (setrlimit(RLIMIT_NOFILE, &limit) || getrlimit(RLIMIT_NOFILE, &actual) || actual.rlim_cur != t->rlimit || actual.rlim_max != t->rlimit)
         fail(t->id, -1, "environment_failure", "rlimit_nofile");
-    if (!comparisons) printf("LEANUX_FIXTURE {\"id\":\"%s\",\"reserved\":[0,1,2,3,4,5,6,7],\"free\":[8,31],\"rlimit\":[32,32]}\n", t->id);
+    if (!comparisons) printf("LEANUX_FIXTURE {\"id\":\"%s\",\"reserved\":[0,1,2,3,4,5,6,7],\"free\":[8,%u],\"rlimit\":[%u,%u]}\n", t->id, t->rlimit - 1, t->rlimit, t->rlimit);
     for (unsigned i = 0; i < t->count; ++i) {
         const struct operation *op = &t->ops[i];
         long fd = resolve(op->kind, op->fd, result, i);
@@ -206,7 +206,8 @@ int main(int argc, char **argv)
     unsigned failures = 0;
     for (unsigned t = 0; t < total; ++t) {
         struct trace trace;
-        if (!fgets(line, sizeof(line), input) || sscanf(line, "T %80s %u", trace.id, &trace.count) != 2 || trace.count < 1 || trace.count > MAX_OPS)
+        if (!fgets(line, sizeof(line), input) || sscanf(line, "T %80s %u %u", trace.id, &trace.count, &trace.rlimit) != 3 || trace.count < 1 || trace.count > MAX_OPS ||
+            trace.rlimit < 8 || trace.rlimit > 1024)
             fail("batch", -1, "invalid_input", "wire_trace");
         for (unsigned i = 0; i < trace.count; ++i) {
             struct operation *op = &trace.ops[i];

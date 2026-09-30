@@ -25,7 +25,10 @@ def O_NONBLOCK : UInt32 := 0o4000
 def O_DSYNC : UInt32 := 0o10000
 def FASYNC : UInt32 := 0o20000
 def O_DIRECT : UInt32 := 0o40000
+def O_NOATIME : UInt32 := 0o1000000
 def O_CLOEXEC : UInt32 := 0o2000000
+/-- `SETFL_MASK` (fs/fcntl.c:37); `O_NDELAY` is `O_NONBLOCK` on x86-64. -/
+def SETFL_MASK : UInt32 := O_APPEND ||| O_NONBLOCK ||| O_DIRECT ||| O_NOATIME
 def O_SYNC_INTERNAL : UInt32 := 0o4000000   -- __O_SYNC
 
 def EFD_SEMAPHORE : UInt32 := 1
@@ -44,6 +47,7 @@ def FMODE_CAN_READ : UInt32 := (1 : UInt32) <<< 17
 def FMODE_CAN_WRITE : UInt32 := (1 : UInt32) <<< 18
 def FMODE_OPENED : UInt32 := (1 : UInt32) <<< 19
 def FMODE_STREAM : UInt32 := (1 : UInt32) <<< 21
+def FMODE_CAN_ODIRECT : UInt32 := (1 : UInt32) <<< 22
 def FMODE_BACKING : UInt32 := (1 : UInt32) <<< 24
 def FMODE_NONOTIFY : UInt32 := (1 : UInt32) <<< 25
 def FMODE_NOWAIT : UInt32 := (1 : UInt32) <<< 27
@@ -58,6 +62,7 @@ def EBUSY : Int := 16
 def ENFILE : Int := 23
 def EINVAL : Int := 22
 def EMFILE : Int := 24
+def EPERM : Int := 1
 
 def ULLONG_MAX : UInt64 := 18446744073709551615
 /-- `NR_OPEN_DEFAULT = BITS_PER_LONG`: capacity of the embedded initial table. -/
@@ -187,6 +192,7 @@ environment failures by the comparator. -/
 
 inductive EnvSite where
   | kmallocEventfdCtx | idaAlloc | filpAlloc | dAllocPseudo
+  | kmallocFdtable | kvmallocFdArray | kvmallocFdBitmaps
   | accessOk | copyToUser | copyFromUser
   deriving Repr, BEq, DecidableEq
 

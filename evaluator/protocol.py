@@ -90,7 +90,7 @@ def parse_batch(traces, output, max_bytes=16 * 1024 * 1024):
 # These outcomes cannot be ordinary results in the declared single-threaded,
 # valid-buffer fixture. In particular resource failure must not count as agreement.
 SEMANTIC_ERRNOS = {'eventfd2': {22, 24}, 'dup': {9, 24}, 'dup3': {9, 22},
-                   'close': {9}, 'fcntl': {9}, 'read': {9, 11, 22}, 'write': {9, 11, 22}}
+                   'close': {9}, 'fcntl': {1, 9, 22}, 'read': {9, 11, 22}, 'write': {9, 11, 22}}
 
 
 def compare(trace, linux, model):

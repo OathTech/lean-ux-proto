@@ -10,6 +10,7 @@ project. Executable behavior is tested against the pinned kernel. See
 [the repository rules](AGENTS.md).
 
 - [Current plan: assessment and way forward (2026-09-29)](docs/2026-09-29-way-forward.md)
+- [Next plan: finish the slice, then WireGuard (2026-09-29)](docs/2026-09-29-next-plan.md)
 - [Worktree, shared dependency, and cleanup practices](docs/worktree-practices.md)
 - [Offline development setup and environment audit](docs/offline-development.md)
 - [Using the staged offline environment](docs/offline-usage.md)
@@ -33,12 +34,20 @@ scripts/in-bundle python3 -m evaluator.check --trace alias_close  # replay one c
 scripts/in-bundle python3 -m evaluator.check --suite handwritten --no-build
 ```
 
-The check builds `leanux-model`, runs the handwritten, critic and seeded generated
-traces on the pinned Linux guest (QEMU, fresh child per trace, per-operation KCOV)
-and on the mirror. It then requires two things:
+The check builds `leanux-model` and runs the handwritten, critic and seeded
+generated traces on the pinned Linux guest and on the mirror:
+- the guest is QEMU, with a fresh child per trace in each of two KCOV modes;
+- generated traces are kept only where the mirror places them inside the
+  domain.
+
+It then requires:
 - literal agreement of every observation;
-- consistency of every model branch label with the Linux coverage
-  ([anchors](correspondence/README.md)).
+- agreement of every mirror decision with Linux's coverage, including order
+  within each C function;
+- agreement of every declared comparison's operands with Linux's comparison
+  records.
+
+See [correspondence](correspondence/README.md).
 
 It writes `report.json` under `$LEANUX_ARTIFACTS/check/` and exits nonzero
 unless everything passes. Unit tests:

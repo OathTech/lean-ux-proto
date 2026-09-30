@@ -14,7 +14,15 @@ def identity(trace):
                                    sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
 
-def generate(seed=20260920, count=1000, max_ops=64):
+def generate(seed=20260920, count=1000, max_ops=64, profile='v2'):
+    """Seeded traces. Profile `v1` reproduces the 2026-09-21 evidence; `v2`
+    (Phase 4) widens the domain: blocking eventfds, arbitrary getter
+    arguments, allocation bursts that reach EMFILE, and fewer invalid
+    creations so fewer operations fall through to EBADF."""
+    if profile == 'v2':
+        return generate_v2(seed, count, max_ops)
+    if profile != 'v1':
+        raise ValueError(f'unknown generator profile {profile}')
     if not 4 <= max_ops <= 64 or not 1 <= count <= 100000:
         raise ValueError('bounded generator parameters')
     rng = random.Random(seed)
@@ -133,3 +141,70 @@ def failure_signature(result):
         return None
     changed = tuple(key for key in ('ret', 'errno', 'bytes') if result['linux'][key] != result['model'][key])
     return result['outcome'], result['operation']['op'], changed
+
+
+def generate_v2(seed, count, max_ops):
+    if not 4 <= max_ops <= 64 or not 1 <= count <= 100000:
+        raise ValueError('bounded generator parameters')
+    rng = random.Random(seed)
+    seen, result = set(), []
+    while len(result) < count:
+        operations, producers = [], []
+        # A fifth of the traces raise RLIMIT_NOFILE so the table can grow past 64.
+        rlimit = rng.choices([32, 64, 96, 128, 1024], [16, 1, 1, 1, 1])[0]
+        literals = [-2**31, -1, 8, 9, 10, 15, 30, 31, 32, 63, 64, 2**31 - 1]
+        if rlimit > 32:
+            literals += [rlimit - 1, rlimit, 65, 100, 127, 700]
+
+        def fd():
+            if producers and rng.random() < .9:
+                return {'ref': rng.choice(producers)}
+            return {'literal': rng.choice(literals)}
+
+        def append(operation):
+            operations.append(operation)
+            if operation['op'] in PRODUCERS:
+                producers.append(len(operations) - 1)
+
+        def creation():
+            init = rng.choice([0, 0, 1, 2, 7, 2**32 - 1, rng.randrange(2**32)])
+            mode = rng.choice([2048, 0])                    # nonblocking or blocking
+            extra = rng.choices([0, 1, 524288, 524289, 2, 2**31], [6, 3, 2, 2, 1, 1])[0]
+            return dict(op='eventfd2', init=init, flags=mode | extra)
+
+        length = rng.randint(4, max_ops)
+        append(creation())
+        while len(operations) < length:
+            if rng.random() < .04 and len(operations) + 26 <= max_ops:
+                # Allocation burst: 24 slots are free (8..31), so this reaches EMFILE.
+                for _ in range(rng.randint(20, 26)):
+                    append(creation() if rng.random() < .5 or not producers else dict(op='dup', fd={'ref': rng.choice(producers)}))
+                continue
+            kind = rng.choices(['eventfd2', 'dup', 'dup3', 'close', 'read', 'write', 'fcntl'], [3, 3, 3, 3, 5, 5, 3])[0]
+            if kind == 'eventfd2':
+                append(creation())
+            elif kind in ('dup', 'close'):
+                append(dict(op=kind, fd=fd()))
+            elif kind == 'dup3':
+                newfd = fd() if rlimit == 32 or rng.random() < .5 else {'literal': rng.choice([64, 65, 100, rlimit - 1, rlimit])}
+                append(dict(op=kind, fd=fd(), newfd=newfd, flags=rng.choices([0, 524288, 1, 2**32 - 1], [5, 4, 1, 1])[0]))
+            elif kind in ('read', 'write'):
+                operation = dict(op=kind, fd=fd(), count=rng.choices([0, 7, 8, 9, 16], [1, 1, 10, 1, 1])[0])
+                if kind == 'write':
+                    operation['value'] = str(rng.choice([0, 1, 2, 17, U64, U64 - 1, U64 - 2, rng.randrange(U64)]))
+                append(operation)
+            else:
+                command = rng.choice(['F_GETFD', 'F_SETFD', 'F_GETFL', 'F_SETFL'])
+                if command == 'F_SETFL':
+                    arg = rng.choice([0, 2048, 1024, 16384, 262144, 8192, 2048 | 1024, 2**32 - 1])
+                else:
+                    arg = rng.choice([0, 1, 2, 3, 2**32 - 1])
+                append(dict(op=kind, fd=fd(), cmd=command, arg=arg))
+        trace = dict(version=1, id=f'generated-v2-{seed}-{len(result):05}', ops=operations[:max_ops])
+        if rlimit != 32:
+            trace['rlimit_nofile'] = rlimit
+        digest = identity(trace)
+        if digest not in seen:
+            seen.add(digest)
+            result.append(trace)
+    return result

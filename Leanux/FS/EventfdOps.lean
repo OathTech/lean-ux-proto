@@ -149,6 +149,7 @@ structure Fops where
   flush : Bool := false
   release : Bool := false
   fasync : Bool := false
+  checkFlags : Bool := false
   iterateShared : Bool := false
 
 /-- `eventfd_fops` (eventfd.c:302-311): release, poll, read_iter, write,

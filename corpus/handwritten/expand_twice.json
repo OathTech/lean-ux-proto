@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "id": "expand_twice",
+  "rlimit_nofile": 1024,
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 0,
+      "flags": 2048
+    },
+    {
+      "op": "dup3",
+      "fd": {
+        "ref": 0
+      },
+      "newfd": {
+        "literal": 100
+      },
+      "flags": 0
+    },
+    {
+      "op": "dup3",
+      "fd": {
+        "ref": 0
+      },
+      "newfd": {
+        "literal": 700
+      },
+      "flags": 0
+    },
+    {
+      "op": "eventfd2",
+      "init": 3,
+      "flags": 2049
+    },
+    {
+      "op": "read",
+      "fd": {
+        "literal": 700
+      },
+      "count": 8
+    },
+    {
+      "op": "close",
+      "fd": {
+        "literal": 100
+      }
+    },
+    {
+      "op": "close",
+      "fd": {
+        "literal": 700
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 3
+      }
+    }
+  ]
+}

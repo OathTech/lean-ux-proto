@@ -28,6 +28,7 @@
     "__x64_sys_write",
     "alloc_empty_file",
     "alloc_fd",
+    "alloc_fdtable",
     "alloc_file_pseudo",
     "anon_inode_getfile",
     "do_dup2",

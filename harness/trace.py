@@ -20,7 +20,7 @@ FIELDS = {
     "fcntl": {"op", "fd", "cmd", "arg"},
 }
 OPCODES = {name: i + 1 for i, name in enumerate(FIELDS)}
-FCNTL = {"F_GETFD": 1, "F_SETFD": 2, "F_GETFL": 3}
+FCNTL = {"F_GETFD": 1, "F_SETFD": 2, "F_GETFL": 3, "F_SETFL": 4}
 
 
 def _integer(value, low, high, where):
@@ -35,7 +35,10 @@ def _fields(value, keys, where):
 
 def validate_trace(trace):
     """Return a detached valid trace; reject all inputs outside trace v1."""
-    _fields(trace, {"version", "id", "ops"}, "trace")
+    if type(trace) is not dict or set(trace) not in ({"version", "id", "ops"}, {"version", "id", "ops", "rlimit_nofile"}):
+        raise InvalidTrace("trace: expected exactly ['id', 'ops', 'version'] and optionally 'rlimit_nofile'")
+    if "rlimit_nofile" in trace:
+        _integer(trace["rlimit_nofile"], 8, 1024, "rlimit_nofile")
     _integer(trace["version"], 1, 1, "version")
     if not isinstance(trace["id"], str) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,80}", trace["id"], re.ASCII):
         raise InvalidTrace("id: expected 1–80 ASCII identifier characters")
@@ -75,10 +78,6 @@ def validate_trace(trace):
         if name == "fcntl":
             if type(op["cmd"]) is not str or op["cmd"] not in FCNTL:
                 raise UnsupportedTrace(f"ops[{i}].cmd: unsupported fcntl command")
-            if op["cmd"] != "F_SETFD" and op["arg"] != 0:
-                raise InvalidTrace(f"ops[{i}].arg: getter argument must be zero")
-        if name == "eventfd2" and not op["flags"] & 2048:
-            raise InvalidTrace(f"ops[{i}].flags: EFD_NONBLOCK is required")
     return deepcopy(trace)
 
 
@@ -107,7 +106,7 @@ def serialize_wire(traces):
         raise InvalidTrace("guest batch trace identifiers must be unique")
     lines = ["LEANUX_WIRE_V1", str(len(traces))]
     for trace in traces:
-        lines.append(f"T {trace['id']} {len(trace['ops'])}")
+        lines.append(f"T {trace['id']} {len(trace['ops'])} {trace.get('rlimit_nofile', 32)}")
         for op in trace["ops"]:
             def fd(field):
                 value = op.get(field, {"literal": -1})

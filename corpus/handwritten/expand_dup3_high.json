@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "id": "expand_dup3_high",
+  "rlimit_nofile": 128,
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 0,
+      "flags": 2048
+    },
+    {
+      "op": "dup3",
+      "fd": {
+        "ref": 0
+      },
+      "newfd": {
+        "literal": 100
+      },
+      "flags": 524288
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 1
+      },
+      "cmd": "F_GETFD",
+      "arg": 0
+    },
+    {
+      "op": "write",
+      "fd": {
+        "ref": 1
+      },
+      "count": 8,
+      "value": "5"
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8
+    },
+    {
+      "op": "close",
+      "fd": {
+        "ref": 1
+      }
+    },
+    {
+      "op": "dup3",
+      "fd": {
+        "ref": 0
+      },
+      "newfd": {
+        "literal": 127
+      },
+      "flags": 0
+    },
+    {
+      "op": "dup3",
+      "fd": {
+        "ref": 0
+      },
+      "newfd": {
+        "literal": 128
+      },
+      "flags": 0
+    },
+    {
+      "op": "close",
+      "fd": {
+        "ref": 6
+      }
+    },
+    {
+      "op": "close",
+      "fd": {
+        "ref": 0
+      }
+    }
+  ]
+}

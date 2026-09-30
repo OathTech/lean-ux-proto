@@ -1,0 +1,392 @@
+{
+  "version": 1,
+  "id": "expand_by_allocation",
+  "rlimit_nofile": 96,
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 0,
+      "flags": 2048
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 62
+      },
+      "cmd": "F_GETFD",
+      "arg": 0
+    }
+  ]
+}

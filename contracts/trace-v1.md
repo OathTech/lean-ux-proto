@@ -36,9 +36,21 @@ does not invalidate the reference. A failed producer supplies the deliberately
 invalid number -1. Forward references and references to other operation kinds
 are invalid inputs. These rules are applied equally by the guest and mirror.
 
-`fcntl.cmd` is one of `F_GETFD`, `F_SETFD`, `F_GETFL`; getters require `arg=0`.
-Creation always includes `EFD_NONBLOCK` (2048), including calls with other invalid
-flag bits. Ordinary/semaphore mode is selected by bit 0. `EFD_CLOEXEC` is 524288.
+`fcntl.cmd` is one of `F_GETFD`, `F_SETFD`, `F_GETFL`; getters may carry any
+`arg`, which the kernel ignores. Creation may omit `EFD_NONBLOCK` (2048): a
+blocking eventfd is in the domain as long as no operation on it would wait (a
+read of an empty counter, or a write that does not fit). The mirror decides
+this (a wait is `Stop.outsideDomain`); generated traces are filtered through
+the mirror, and a trace in which Linux would block times out rather than
+passing. Ordinary/semaphore mode is selected by bit 0. `EFD_CLOEXEC` is 524288.
+(Amended 2026-09-29, Phase 4: the earlier contract required `EFD_NONBLOCK` and
+zero getter arguments. The amendment only widens the domain; every earlier
+trace remains valid.)
+
+A trace may set `rlimit_nofile` (8–1024, default 32): the fixture sets both
+`RLIMIT_NOFILE` bounds to it before the first operation, so descriptors up to
+`rlimit_nofile - 1` are usable and the descriptor table can grow beyond its
+initial 64 slots. (Amended 2026-09-29, Phase 4.)
 Duplication flags may be any unsigned 32-bit pattern, so invalid-flag behavior is
 observable. Flags reach kernel `int` arguments by their low 32 bits; literal FDs
 are sign-extended to the x86-64 argument register, with kernel parameter casts

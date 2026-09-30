@@ -50,7 +50,6 @@ class SyzkallerAdapterTests(unittest.TestCase):
             'r0 = dup(r0)',
             'r1 = close(r0)',
             'close(0x7)',
-            'eventfd2(0x0, 0x0)',
             'eventfd2(0x100000000, 0x800)',
             'read$eventfd(r0, 0x0, 0x8)',
             'read$eventfd(r0, &(0x7f0000000000)=0x1, 0x8)',

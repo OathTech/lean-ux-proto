@@ -171,7 +171,8 @@ def _collect(outdir, traces, process_returncode):
     try:
         for result, trace, fixture in zip(results, traces, fixtures):
             _check_observation(result, trace)
-            if fixture != {"id": trace["id"], "reserved": list(range(8)), "free": [8, 31], "rlimit": [32, 32]}:
+            limit = trace.get("rlimit_nofile", 32)
+            if fixture != {"id": trace["id"], "reserved": list(range(8)), "free": [8, limit - 1], "rlimit": [limit, limit]}:
                 raise ValueError("fixture mismatch")
         for row, (identifier, index) in zip(coverage, expected_coverage):
             if type(row) is not dict or set(row) != {"id", "index", "count", "pcs"} or row["id"] != identifier or type(row["index"]) is not int or row["index"] != index:

@@ -47,6 +47,9 @@ inductive Decision where
   -- fs/file.c, include/linux/file.h
   | clearCloexecWasSet | setOpenFdFullWord | findNextFdAllFull | findNextFdSkipFullWords
   | expandFilesFits | expandFilesOverNrOpen | expandFilesResizeInProgress
+  | allocFdtableOverNrOpen | allocFdtableBelowWanted | allocFdtableOverIntMax | allocFdtableNoMem
+  | allocFdtableFdArrayNoMem | allocFdtableBitmapNoMem | copyFdtableShrink
+  | expandFdtableShared | expandFdtableAllocError | expandFdtableBugNr | expandFdtableFreeOld
   | allocFdBelowNextFd | allocFdSearch | allocFdLimit | allocFdExpandError | allocFdExpanded
   | allocFdUpdateNextFd | allocFdCloexec | allocFdSlotNotNull | putUnusedFdLowerNextFd
   | fdInstallBacking | fdInstallResizeInProgress | fdInstallSlotBusy
@@ -70,7 +73,9 @@ inductive Decision where
   | vfsWriteClamp | vfsWriteHasWrite | vfsWriteHasWriteIter | vfsWritePositive
   | ksysWriteHasFile | ksysWriteHasPpos | ksysWriteRetNonneg | ksysWriteStorePos
   -- fs/fcntl.c
-  | fcntlNoFile | fcntlPathFile | fcntlCaseGetfd | fcntlCaseSetfd | fcntlCaseGetfl | fcntlGetfdSet
+  | fcntlNoFile | fcntlPathFile | fcntlCaseGetfd | fcntlCaseSetfd | fcntlCaseGetfl | fcntlCaseSetfl | fcntlGetfdSet
+  | setflAppendChanged | setflAppendOnly | setflNoatimeRequested | setflNoatimeNotSet | setflNotOwnerOrCapable
+  | setflNotFifo | setflDirect | setflCannotOdirect | setflHasCheckFlags | setflError | setflFasyncChanged | setflHasFasync
   deriving Repr, BEq, DecidableEq, Inhabited
 
 /-- A recorded step: the decision, the outcome the mirror computed, and, for
@@ -206,6 +211,17 @@ def Decision.info : Decision → DecisionInfo
   | .expandFilesFits => d "expand_files.fits" fl 232 [(233, 233)] [(236, 252)]
   | .expandFilesOverNrOpen => d "expand_files.over_nr_open" fl 236 [(237, 237)] [(239, 252)]
   | .expandFilesResizeInProgress => d "expand_files.resize_in_progress" fl 239 [(240, 244)] [(248, 252)]
+  | .allocFdtableOverNrOpen => d "alloc_fdtable.over_nr_open" fl 126 [(127, 129)] []
+  | .allocFdtableBelowWanted => d "alloc_fdtable.below_wanted" fl 128 [(129, 129)] []
+  | .allocFdtableOverIntMax => d "alloc_fdtable.over_int_max" fl 144 [(145, 145)] [(147, 167)]
+  | .allocFdtableNoMem => d "alloc_fdtable.kmalloc_failed" fl 148 [(149, 149)] [(150, 167)]
+  | .allocFdtableFdArrayNoMem => d "alloc_fdtable.fd_array_failed" fl 152 [(153, 153)] [(154, 167)]
+  | .allocFdtableBitmapNoMem => d "alloc_fdtable.bitmaps_failed" fl 159 [(160, 160)] [(161, 167)]
+  | .copyFdtableShrink => d "copy_fdtable.shrink" fl 77 [] [(79, 84)]
+  | .expandFdtableShared => d "expand_fdtable.files_shared" fl 196 [(197, 197)] []
+  | .expandFdtableAllocError => d "expand_fdtable.alloc_error" fl 200 [(201, 201)] [(202, 210)]
+  | .expandFdtableBugNr => d "expand_fdtable.nr_below_max_fds" fl 203 [] [(204, 210)]
+  | .expandFdtableFreeOld => d "expand_fdtable.free_old" fl 206 [(207, 207)] []
   | .allocFdBelowNextFd => d "alloc_fd.start_below_next_fd" fl 503 [(504, 504)] []
   | .allocFdSearch => d "alloc_fd.search_bitmap" fl 506 [(507, 507)] []
   | .allocFdLimit => d "alloc_fd.at_limit" fl 514 [(515, 515)] [(517, 543)]
@@ -301,6 +317,20 @@ def Decision.info : Decision → DecisionInfo
   | .fcntlCaseSetfd => d "do_fcntl.case_f_setfd" fc 467 [(468, 470)] []
   | .fcntlCaseGetfl => d "do_fcntl.case_f_getfl" fc 471 [(472, 473)] []
   | .fcntlGetfdSet => d "do_fcntl.close_on_exec_set" fc 465 [] []
+  | .fcntlCaseSetfl => d "do_fcntl.case_f_setfl" fc 474 [(475, 476)] []
+  -- setfl (fcntl.c:39-89); operands of one `&&` share their lines and bodies
+  | .setflAppendChanged => d "setfl.o_append_changed" fc 48 [] []
+  | .setflAppendOnly => d "setfl.is_append" fc 48 [(49, 49)] []
+  | .setflNoatimeRequested => d "setfl.o_noatime_requested" fc 52 [] []
+  | .setflNoatimeNotSet => d "setfl.o_noatime_not_set" fc 52 [(53, 54)] []
+  | .setflNotOwnerOrCapable => d "setfl.not_owner_or_capable" fc 53 [(54, 54)] []
+  | .setflNotFifo => d "setfl.not_fifo" fc 62 [] []
+  | .setflDirect => d "setfl.o_direct" fc 63 [] []
+  | .setflCannotOdirect => d "setfl.not_fmode_can_odirect" fc 64 [(65, 65)] []
+  | .setflHasCheckFlags => d "setfl.fop_check_flags" fc 67 [(68, 68)] []
+  | .setflError => d "setfl.error" fc 69 [(70, 70)] []
+  | .setflFasyncChanged => d "setfl.fasync_changed" fc 75 [] []
+  | .setflHasFasync => d "setfl.fop_fasync" fc 75 [(76, 80)] []
 
 /-- Why an outcome has no KCOV witness. The check requires a reason exactly
     for the sides whose spans own no instrumentation point in the built kernel,
@@ -533,6 +563,39 @@ def Decision.unobservable : Decision → Bool → Option Unobservable
   | .fcntlGetfdSet, true => some .branchFree
   | .fcntlGetfdSet, false => some .branchFree
   | .doDup2NoTofree, true => some .inlineHelper
+  | .allocFdtableOverNrOpen, false => some .sharedContinuation
+  | .allocFdtableBelowWanted, true => some .noInstrumentation
+  | .allocFdtableBelowWanted, false => some .sharedContinuation
+  | .allocFdtableOverIntMax, true => some .noInstrumentation
+  | .allocFdtableNoMem, true => some .noInstrumentation
+  | .allocFdtableFdArrayNoMem, true => some .noInstrumentation
+  | .allocFdtableBitmapNoMem, true => some .noInstrumentation
+  | .copyFdtableShrink, true => some .outsideDomain
+  | .expandFdtableShared, false => some .sharedContinuation
+  | .expandFdtableBugNr, true => some .outsideDomain
+  | .expandFdtableFreeOld, false => some .sharedContinuation
+  | .fcntlCaseSetfl, false => some .sharedContinuation
+  | .setflAppendChanged, true => some .sharedOperand
+  | .setflAppendChanged, false => some .sharedOperand
+  | .setflAppendOnly, true => some .noInstrumentation
+  | .setflAppendOnly, false => some .sharedContinuation
+  | .setflNoatimeRequested, true => some .sharedOperand
+  | .setflNoatimeRequested, false => some .sharedOperand
+  | .setflNoatimeNotSet, false => some .sharedContinuation
+  | .setflNotOwnerOrCapable, true => some .noInstrumentation
+  | .setflNotOwnerOrCapable, false => some .sharedContinuation
+  | .setflNotFifo, true => some .sharedOperand
+  | .setflNotFifo, false => some .sharedOperand
+  | .setflDirect, true => some .sharedOperand
+  | .setflDirect, false => some .sharedOperand
+  | .setflCannotOdirect, true => some .noInstrumentation
+  | .setflCannotOdirect, false => some .sharedContinuation
+  | .setflHasCheckFlags, false => some .sharedContinuation
+  | .setflError, true => some .noInstrumentation
+  | .setflError, false => some .sharedContinuation
+  | .setflFasyncChanged, true => some .sharedOperand
+  | .setflFasyncChanged, false => some .sharedOperand
+  | .setflHasFasync, false => some .sharedContinuation
   | _, _ => none
 
 /-- The relation of a C value comparison, as written in the source
@@ -549,69 +612,98 @@ def Rel.name : Rel → String
 structure Comparison where
   rel : Rel
   constRhs : Bool
+  /-- The line DWARF attributes the comparison to, when it differs from the
+      operand's source line (multi-line conditions); `none` means `line`. -/
+  site : Option Nat := none
 
 /-- The decisions that are value comparisons. Exactly these report operands
     (`branchCmp`, as `(lhs, rhs)` in source order); the check requires it. -/
 def Decision.comparison : Decision → Option Comparison
-  | .allocFdCloexec => some ⟨.flag, true⟩
-  | .allocFdExpandError => some ⟨.lt, true⟩
-  | .allocFdExpanded => some ⟨.ne, true⟩
-  | .allocFdLimit => some ⟨.ge, false⟩
-  | .allocFdSearch => some ⟨.lt, false⟩
-  | .allocFdUpdateNextFd => some ⟨.le, false⟩
-  | .closeFdOutOfRange => some ⟨.ge, false⟩
-  | .ctxDoReadSemaphore => some ⟨.flag, true⟩
-  | .doDup2Cloexec => some ⟨.flag, true⟩
-  | .doEventfdFdError => some ⟨.lt, true⟩
-  | .doEventfdInvalidFlags => some ⟨.flag, true⟩
-  | .dup3Equal => some ⟨.eq, false⟩
-  | .dup3ExpandError => some ⟨.lt, true⟩
-  | .dup3InvalidFlags => some ⟨.flag, true⟩
-  | .dup3TargetLimit => some ⟨.ge, false⟩
-  | .dupAllocOk => some ⟨.ge, true⟩
-  | .eventfdFreeCtxHasId => some ⟨.ge, true⟩
-  | .eventfdReadEmpty => some ⟨.eq, true⟩
-  | .eventfdReadNonblock => some ⟨.flag, true⟩
-  | .eventfdReadShort => some ⟨.lt, true⟩
-  | .eventfdWriteBlocking => some ⟨.flag, true⟩
-  | .eventfdWriteFits => some ⟨.gt, false⟩
-  | .eventfdWriteReserved => some ⟨.eq, true⟩
-  | .eventfdWriteWrongSize => some ⟨.ne, true⟩
-  | .expandFilesFits => some ⟨.lt, false⟩
-  | .fcntlPathFile => some ⟨.flag, true⟩
-  | .fdInstallBacking => some ⟨.flag, true⟩
-  | .fgetLightSingleOwner => some ⟨.eq, true⟩
-  | .fileFreeAccounted => some ⟨.flag, true⟩
-  | .fileFreeBacking => some ⟨.flag, true⟩
-  | .fileInitPathModeRead => some ⟨.flag, true⟩
-  | .fileInitPathModeWrite => some ⟨.flag, true⟩
-  | .fileInitPathReadOnly => some ⟨.eq, true⟩
-  | .filePposStream => some ⟨.flag, true⟩
-  | .filpFlushCountZero => some ⟨.eq, true⟩
-  | .filpFlushNotPath => some ⟨.flag, true⟩
-  | .findNextFdAllFull => some ⟨.ge, false⟩
-  | .fposLockAtomicPos => some ⟨.flag, true⟩
-  | .fputFinalFasync => some ⟨.flag, true⟩
-  | .fputFinalNeedUnmount => some ⟨.flag, true⟩
-  | .fputFinalNotOpened => some ⟨.flag, true⟩
-  | .getFileFromZero => some ⟨.eq, true⟩
-  | .iocbFlagsAppend => some ⟨.flag, true⟩
-  | .iocbFlagsDirect => some ⟨.flag, true⟩
-  | .iocbFlagsDsync => some ⟨.flag, true⟩
-  | .iocbFlagsSync => some ⟨.flag, true⟩
-  | .ksysReadRetNonneg => some ⟨.ge, true⟩
-  | .ksysWriteRetNonneg => some ⟨.ge, true⟩
-  | .putFileAccessReadOnly => some ⟨.eq, true⟩
-  | .putFileAccessWriter => some ⟨.flag, true⟩
-  | .putUnusedFdLowerNextFd => some ⟨.lt, false⟩
-  | .refcountSubPositive => some ⟨.gt, true⟩
-  | .refcountSubToZero => some ⟨.eq, true⟩
-  | .rwVerifyNegativeCount => some ⟨.lt, true⟩
-  | .vfsReadCannotRead => some ⟨.flag, true⟩
-  | .vfsReadNotReadable => some ⟨.flag, true⟩
-  | .vfsWriteCannotWrite => some ⟨.flag, true⟩
-  | .vfsWriteNotWritable => some ⟨.flag, true⟩
+  | .allocFdCloexec => some ⟨.flag, true, none⟩
+  | .allocFdExpandError => some ⟨.lt, true, none⟩
+  | .allocFdExpanded => some ⟨.ne, true, none⟩
+  | .allocFdLimit => some ⟨.ge, false, none⟩
+  | .allocFdSearch => some ⟨.lt, false, none⟩
+  | .allocFdUpdateNextFd => some ⟨.le, false, none⟩
+  | .closeFdOutOfRange => some ⟨.ge, false, none⟩
+  | .ctxDoReadSemaphore => some ⟨.flag, true, none⟩
+  | .doDup2Cloexec => some ⟨.flag, true, none⟩
+  | .doEventfdFdError => some ⟨.lt, true, none⟩
+  | .doEventfdInvalidFlags => some ⟨.flag, true, none⟩
+  | .dup3Equal => some ⟨.eq, false, none⟩
+  | .dup3ExpandError => some ⟨.lt, true, none⟩
+  | .dup3InvalidFlags => some ⟨.flag, true, none⟩
+  | .dup3TargetLimit => some ⟨.ge, false, none⟩
+  | .dupAllocOk => some ⟨.ge, true, none⟩
+  | .eventfdFreeCtxHasId => some ⟨.ge, true, none⟩
+  | .eventfdReadEmpty => some ⟨.eq, true, none⟩
+  | .eventfdReadNonblock => some ⟨.flag, true, none⟩
+  | .eventfdReadShort => some ⟨.lt, true, none⟩
+  | .eventfdWriteBlocking => some ⟨.flag, true, none⟩
+  | .eventfdWriteFits => some ⟨.gt, false, none⟩
+  | .eventfdWriteReserved => some ⟨.eq, true, none⟩
+  | .eventfdWriteWrongSize => some ⟨.ne, true, none⟩
+  | .expandFilesFits => some ⟨.lt, false, none⟩
+  | .fcntlPathFile => some ⟨.flag, true, none⟩
+  | .fdInstallBacking => some ⟨.flag, true, none⟩
+  | .fgetLightSingleOwner => some ⟨.eq, true, none⟩
+  | .fileFreeAccounted => some ⟨.flag, true, none⟩
+  | .fileFreeBacking => some ⟨.flag, true, none⟩
+  | .fileInitPathModeRead => some ⟨.flag, true, none⟩
+  | .fileInitPathModeWrite => some ⟨.flag, true, none⟩
+  | .fileInitPathReadOnly => some ⟨.eq, true, none⟩
+  | .filePposStream => some ⟨.flag, true, none⟩
+  | .filpFlushCountZero => some ⟨.eq, true, none⟩
+  | .filpFlushNotPath => some ⟨.flag, true, none⟩
+  | .findNextFdAllFull => some ⟨.ge, false, none⟩
+  | .fposLockAtomicPos => some ⟨.flag, true, none⟩
+  | .fputFinalFasync => some ⟨.flag, true, none⟩
+  | .fputFinalNeedUnmount => some ⟨.flag, true, none⟩
+  | .fputFinalNotOpened => some ⟨.flag, true, none⟩
+  | .getFileFromZero => some ⟨.eq, true, none⟩
+  | .iocbFlagsAppend => some ⟨.flag, true, none⟩
+  | .iocbFlagsDirect => some ⟨.flag, true, none⟩
+  | .iocbFlagsDsync => some ⟨.flag, true, none⟩
+  | .iocbFlagsSync => some ⟨.flag, true, none⟩
+  | .ksysReadRetNonneg => some ⟨.ge, true, none⟩
+  | .ksysWriteRetNonneg => some ⟨.ge, true, none⟩
+  | .putFileAccessReadOnly => some ⟨.eq, true, none⟩
+  | .putFileAccessWriter => some ⟨.flag, true, none⟩
+  | .putUnusedFdLowerNextFd => some ⟨.lt, false, none⟩
+  | .refcountSubPositive => some ⟨.gt, true, none⟩
+  | .refcountSubToZero => some ⟨.eq, true, none⟩
+  | .rwVerifyNegativeCount => some ⟨.lt, true, none⟩
+  | .vfsReadCannotRead => some ⟨.flag, true, none⟩
+  | .vfsReadNotReadable => some ⟨.flag, true, none⟩
+  | .vfsWriteCannotWrite => some ⟨.flag, true, none⟩
+  | .vfsWriteNotWritable => some ⟨.flag, true, none⟩
+  | .setflAppendChanged => some ⟨.flag, true, none⟩
+  | .setflNoatimeRequested => some ⟨.flag, true, none⟩
+  | .setflNoatimeNotSet => some ⟨.flag, true, none⟩
+  -- the three-line condition at fcntl.c:62-64: DWARF attributes `arg & O_DIRECT`
+  -- to 62 and `f_mode & FMODE_CAN_ODIRECT` to 63, one line before their source
+  | .setflDirect => some ⟨.flag, true, some 62⟩
+  | .setflCannotOdirect => some ⟨.flag, true, some 63⟩
+  | .setflFasyncChanged => some ⟨.flag, true, none⟩
+  | .allocFdtableOverNrOpen => some ⟨.gt, false, none⟩
+  | .expandFilesOverNrOpen => some ⟨.ge, false, none⟩
+  | .setflAppendOnly => some ⟨.flag, true, none⟩
+  | .setflNotOwnerOrCapable => some ⟨.eq, true, none⟩
+  | .setflNotFifo => some ⟨.ne, true, none⟩
+  | .allocFdtableBelowWanted => some ⟨.lt, false, none⟩
+  | .allocFdtableOverIntMax => some ⟨.gt, true, none⟩
+  | .copyFdtableShrink => some ⟨.lt, false, none⟩
+  | .expandFdtableShared => some ⟨.gt, true, none⟩
+  | .expandFdtableBugNr => some ⟨.lt, false, none⟩
   | _ => none
+
+/-- Decisions inside `alloc_fd`'s `repeat:` loop, evaluated again after a
+    successful expansion. Only these may be reported more than once in one
+    operation. -/
+def Decision.repeatable : Decision → Bool
+  | .allocFdBelowNextFd | .allocFdSearch | .findNextFdAllFull | .findNextFdSkipFullWords
+  | .allocFdLimit | .expandFilesFits | .allocFdExpandError | .allocFdExpanded => true
+  | _ => false
 
 /-- Every decision, enumerated through the constructor index. -/
 def Decision.all : List Decision :=

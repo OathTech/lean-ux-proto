@@ -382,6 +382,12 @@
           }
         ]
       }
+    },
+    "rlimit_nofile": {
+      "type": "integer",
+      "minimum": 8,
+      "maximum": 1024,
+      "$comment": "RLIMIT_NOFILE set by the fixture before the first operation; default 32"
     }
   },
   "required": [

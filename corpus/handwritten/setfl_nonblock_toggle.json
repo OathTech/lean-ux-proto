@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "id": "setfl_nonblock_toggle",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 0,
+      "flags": 2048
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 0
+      },
+      "cmd": "F_SETFL",
+      "arg": 0
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 0
+      },
+      "cmd": "F_GETFL",
+      "arg": 0
+    },
+    {
+      "op": "write",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8,
+      "value": "3"
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 0
+      },
+      "cmd": "F_SETFL",
+      "arg": 2048
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 0
+      },
+      "cmd": "F_GETFL",
+      "arg": 0
+    }
+  ]
+}

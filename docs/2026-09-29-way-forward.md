@@ -414,6 +414,43 @@ presented for user signoff before anything reaches `main`.
   That decision is excluded from A3; making these environment facts observed
   inputs is future work.
 
+## 6e. Phase 4 status (2026-09-29) [AGENT]
+
+- **Domain widened** (trace contract amended; every earlier trace stays valid):
+  - blocking-mode eventfds are allowed wherever no operation would wait;
+  - `fcntl` getters accept any argument.
+- **Mirror-filtered generation.** `leanux-model --domain` reports whether a
+  trace stays inside the modeled domain. The check draws generated traces from
+  three times as many seeded candidates, keeps the in-domain ones, and reports
+  what it filtered. Every rejection is a blocking wait. If the mirror wrongly
+  predicts no wait, Linux blocks and the run times out, so the error is loud.
+- **Generator v2.** The v1 profile is kept to reproduce the earlier evidence.
+  - Allocation bursts reach EMFILE: 0 occurrences before, 1,373 now.
+  - Fewer invalid creations cut the bad-descriptor share from 56% to 30% of
+    generated operations.
+- **Results.** The full corpus passes: 1,067 traces, 36,934 operations and
+  307,458 operand pairs. Decision-level coverage is unchanged (39 decisions
+  with both outcomes, 13 never evaluated). Blocking mode's only new C arm is
+  the wait itself, and every other single-outcome arm needs one of the
+  modeling extensions below.
+- **Environment facts: resolved by analysis.** `alloc_empty_file` reads the
+  system-wide `nr_files` through `percpu_counter_read_positive`, which is
+  approximate by design, because per-CPU batches fold in lazily. The mirror
+  cannot track it exactly without modeling percpu batching, and `max_files`
+  alone changes nothing observable. That decision stays out of A3.
+- **Modeling extensions awaiting a scope decision** (each needs new mirror
+  code and harness support):
+  1. fd-table expansion beyond 64 slots (`expand_fdtable`, RCU table
+     replacement; needs RLIMIT_NOFILE above 64);
+  2. allocation-failure injection (`failslab`/`fail_page_alloc`) driving the
+     environment oracle;
+  3. user-memory addresses and faults (`access_ok`, huge counts,
+     `copy_to/from_user` faults);
+  4. more `fcntl` commands, notably `F_SETFL`, which changes nonblocking mode
+     on a live file;
+  5. operations on the fixture's `/dev/null` files (char-device `__fput`
+     path).
+
 ## 7. Decisions
 
 [USER 2026-09-29] The user answered:
