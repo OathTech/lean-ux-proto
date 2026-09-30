@@ -75,9 +75,13 @@ braces, labels and comments are dropped from spans; statements are kept.
 - the condition line is a statement;
 - every decision's C function (the label prefix) owns instrumentation.
 
-**The reason rule.** A side with no witnesses must declare why (below), and a
-declared reason on a witnessed side fails. So a reason can neither be missing
-nor hide evidence.
+**Unobservable outcomes.** An outcome whose span owns no instrumentation point
+has no witness and is unobservable. The report counts these
+(`decision_coverage.unobservable_outcomes`, and `unobservable_decisions` for
+decisions with neither side witnessed). A declared, verified reason per
+outcome was required until 2026-09-30. The user retired that requirement as
+part of reducing the checker. Spans that were narrowed after reading the
+binary keep their explanation as a comment at the decision.
 
 **Per operation**, each of the following fails the check:
 - a decision reported more than once;
@@ -122,20 +126,6 @@ operands. Examples:
 `alloc_empty_file.nr_files_at_max` is deliberately not declared: its operands
 are the system-wide `nr_files` and the boot-sized `max_files` (observed as
 24,192), which the mirror does not model.
-
-**Reasons** (`Unobservable` in `Leanux/Kernel/Decision.lean`):
-
-| Reason | Meaning |
-|---|---|
-| `shared_continuation` | The outcome continues into code the other outcome also runs. |
-| `shared_operand` | A short-circuit operand sharing its line or body. |
-| `branch_free` | The value is selected without a branch. |
-| `no_instrumentation` | The span owns no point; verified. |
-| `compiler_shared` | A shared block is attributed to the span's line; commented at the decision. |
-| `outside_domain` | A `BUG_ON` trap. |
-| `constant_folded` | The configured build folds the test away. |
-| `same_line` | A `WARN_ONCE` body on the condition's line. |
-| `inline_helper` | Evaluated in a helper outside the span window. |
 
 **Residual gaps**, which coverage alone cannot close:
 - An unobservable outcome could be reported where the C never evaluates it,
