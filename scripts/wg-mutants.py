@@ -25,6 +25,22 @@ MUTANTS = [
   ('W5-trie-bit-off-by-one', 'dump-invisible: trie built on the wrong bit', 'Leanux/WG/AllowedIps.lean',
    "  return key / 2 ^ (node.bitlen - 1 - node.cidr) % 2\n",
    "  return key / 2 ^ (node.bitlen - node.cidr) % 2\n"),
+  # Stage B1 (transmit and routing)
+  ('B1-M1-first-match', 'routing: find_node stops at the first matching peer', 'Leanux/WG/AllowedIps.lean',
+   "    if ← branch .findNodeHasPeer n.peer.isSome then found := some id\n",
+   "    if ← branch .findNodeHasPeer n.peer.isSome then\n      if found.isNone then found := some id\n"),
+  ('B1-M2-no-keypair-get', 'behavior-preserving: wg_noise_keypair_get omitted', 'Leanux/WG/Send.lean',
+   "  keypairGetCurrent\n  if !(← branch .stagedNoKeypair true)",
+   "  if !(← branch .stagedNoKeypair true)"),
+  ('B1-M3-xmit-keeps-reference', 'behavior-preserving: wg_xmit never drops its peer reference', 'Leanux/WG/Device.lean',
+   "  sendStagedPackets pid\n  peerPut peer\n  return 0   -- NETDEV_TX_OK",
+   "  sendStagedPackets pid\n  return 0   -- NETDEV_TX_OK"),
+  ('B1-M4-low-order-emits', 'behavior: the worker emits for a low-order peer key', 'Leanux/WG/Send.lean',
+   "    let created := d.staticIdentity.hasIdentity && p.precomputedStaticStatic != List.replicate 32 0\n",
+   "    let created := d.staticIdentity.hasIdentity\n"),
+  ('B1-M5-dead-before-expired', 'behavior-preserving: is_dead tested before the expiry', 'Leanux/WG/Send.lean',
+   "  if ← branch .queuedNotExpired !p.lastSentExpired then return\n  if ← branch .queuedDead p.isDead then return\n",
+   "  if ← branch .queuedDead p.isDead then return\n  if ← branch .queuedNotExpired !p.lastSentExpired then return\n"),
 ]
 
 def w4(text):

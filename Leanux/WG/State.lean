@@ -34,6 +34,18 @@ def getPeer (id : PeerId) : M Peer := do
 def setPeer (id : PeerId) (p : Peer) : M Unit :=
   modifyDev fun d => { d with peers := d.peers.insert id p }
 
+/-- A path that reads or changes state the pending handshake worker also
+    touches: its outcome depends on when the worker runs. Work queued earlier
+    in this same system call, before it slept, has certainly not run
+    (`CONFIG_PREEMPT_NONE`, one CPU), so such paths are determined. -/
+def requireNotPending (pid : PeerId) (what : String) : M Unit := do
+  if (← getPeer pid).handshakePending && !(← get).queuedThisCall.contains pid then
+    unsupported s!"{what} races the pending handshake worker"
+
+/-- The system call sleeps (`synchronize_net`, `flush_workqueue`): queued
+    workers may run from here on. -/
+def mayHaveSlept : M Unit := modify fun w => { w with queuedThisCall := [] }
+
 /-- Read the pointer a slot holds (`*parent_bit`). -/
 def slotGet (s : Slot) : M (Option NodeId) := do
   match s with

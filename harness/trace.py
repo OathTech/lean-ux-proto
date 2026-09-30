@@ -3,7 +3,7 @@ from copy import deepcopy
 import json
 import re
 
-from .wg import InvalidConfig, encode_get, encode_set, validate_config
+from .wg import InvalidConfig, encode_get, encode_packet, encode_set, validate_config, validate_packet
 
 
 class InvalidTrace(ValueError):
@@ -22,8 +22,10 @@ FIELDS = {
     "fcntl": {"op", "fd", "cmd", "arg"},
     # WireGuard configuration of the fixture's `wg0` (harness/wg.py)
     "wg_set": {"op", "config"}, "wg_get": {"op"},
+    # Stage B1: bring wg0 up, send a packet into it, observe what it emitted
+    "wg_up": {"op"}, "wg_xmit": {"op", "packet"}, "wg_observe": {"op"},
 }
-WG_OPS = {"wg_set", "wg_get"}
+WG_OPS = {"wg_set", "wg_get", "wg_up", "wg_xmit", "wg_observe"}
 OPCODES = {name: i + 1 for i, name in enumerate(FIELDS)}
 FCNTL = {"F_GETFD": 1, "F_SETFD": 2, "F_GETFL": 3, "F_SETFL": 4}
 
@@ -88,13 +90,20 @@ def validate_trace(trace):
                 validate_config(op["config"], f"ops[{i}].config")
             except InvalidConfig as exc:
                 raise InvalidTrace(str(exc)) from exc
+        if name == "wg_xmit":
+            try:
+                validate_packet(op["packet"], f"ops[{i}].packet")
+            except InvalidConfig as exc:
+                raise InvalidTrace(str(exc)) from exc
     return deepcopy(trace)
 
 
 def uses_wireguard(trace):
     """Traces with WireGuard operations get the network fixture: a fresh
-    network namespace with a down `wg0`, and the generic-netlink socket at
-    descriptor 7 in place of the last /dev/null filler."""
+    network namespace with `lo` up and a down `wg0`; UDP listeners on
+    127.0.0.1 and ::1 at descriptors 4 and 5, a dual-stack UDP sender at 6,
+    and the generic-netlink socket at 7, in place of the /dev/null fillers.
+    `wg_up` also adds an address and a default route on `wg0` per family."""
     return any(op["op"] in WG_OPS for op in trace["ops"])
 
 
@@ -132,10 +141,14 @@ def serialize_wire(traces):
             newkind, newvalue = fd("newfd")
             a = op.get("init", op.get("count", FCNTL.get(op.get("cmd"), 0)))
             b = op.get("flags", op.get("arg", 0))
+            if op["op"] == "wg_xmit":
+                a, packet = encode_packet(op["packet"])
             line = f"{OPCODES[op['op']]} {kind} {value} {newkind} {newvalue} {a} {b} {op.get('value', '0')}"
             if op["op"] == "wg_set":
                 line += " " + encode_set(op["config"]).hex()
             elif op["op"] == "wg_get":
                 line += " " + encode_get().hex()
+            elif op["op"] == "wg_xmit":
+                line += " " + packet.hex()
             lines.append(line)
     return "\n".join(lines) + "\n"

@@ -211,9 +211,10 @@ def generate_v2(seed, count, max_ops):
 
 
 def generate_wireguard(seed, count, max_ops=12):
-    """Seeded WireGuard configuration traces over small pools of keys and
-    prefixes, so that peers, trie nodes and identities collide often. Every
-    trace ends with a dump."""
+    """Seeded WireGuard traces over small pools of keys and prefixes, so that
+    peers, trie nodes and identities collide often. Half are configuration
+    traces (stage A); half bring wg0 up and transmit (stage B1). Every trace
+    ends with a dump."""
     if not 2 <= max_ops <= 64 or not 1 <= count <= 100000:
         raise ValueError('bounded generator parameters')
     rng = random.Random(seed)
@@ -260,10 +261,43 @@ def generate_wireguard(seed, count, max_ops=12):
             result['peers'] = [peer() for _ in range(rng.choices([0, 1, 2, 3], [1, 4, 3, 2])[0])]
         return result
 
+    endpoints = [dict(family=4, addr='7f000001', port=51999), dict(family=6, addr='0' * 31 + '1', port=51999),
+                 dict(family=4, addr='7f000001', port=1234)]
+    destinations = [(4, a) for a in ('0a000001', '0a010201', '0a0102ff', '0a800001', 'c0a80001', '0b000001', 'e0000001')] + \
+                   [(6, a) for a in ('20010db8000000000000000000000001', '20010db8000000008000000000000002',
+                                     'fe800000000000000000000000000001', 'fd000000000000000000000000000001')]
+
+    def transmit_trace():
+        """Stage B1: configure, bring wg0 up, then transmit and observe."""
+        first = config()
+        first['listen_port'] = 51820
+        for peer in first.get('peers', []):
+            peer.pop('remove', None)
+            if rng.random() < .8:
+                peer['endpoint'] = rng.choice(endpoints)
+        ops = [{'op': 'wg_set', 'config': first}, {'op': 'wg_up'}]
+        for _ in range(rng.randint(1, max_ops - 4)):
+            kind = rng.choices(['xmit', 'observe', 'set', 'get'], [5, 3, 1, 1])[0]
+            if kind == 'xmit':
+                family, dst = rng.choice(destinations)
+                ops.append({'op': 'wg_xmit', 'packet': {'family': family, 'dst': dst}})
+            elif kind == 'observe':
+                ops.append({'op': 'wg_observe'})
+            elif kind == 'set':
+                change = config()
+                change.pop('listen_port', None)
+                ops.append({'op': 'wg_set', 'config': change})
+            else:
+                ops.append({'op': 'wg_get'})
+        return ops + [{'op': 'wg_observe'}]
+
     while len(result) < count:
-        operations = []
-        for _ in range(rng.randint(1, max_ops - 1)):
-            operations.append({'op': 'wg_get'} if rng.random() < .2 else {'op': 'wg_set', 'config': config()})
+        if rng.random() < .5:
+            operations = transmit_trace()
+        else:
+            operations = []
+            for _ in range(rng.randint(1, max_ops - 1)):
+                operations.append({'op': 'wg_get'} if rng.random() < .2 else {'op': 'wg_set', 'config': config()})
         operations.append({'op': 'wg_get'})
         trace = dict(version=1, id=f'generated-wg-{seed}-{len(result):05}', ops=operations)
         digest = identity(trace)

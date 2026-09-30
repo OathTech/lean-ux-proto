@@ -120,6 +120,8 @@ def _check_observation(result, trace):
         fields = {"index", "ret", "errno", "bytes"}
         if op["op"] == "wg_get" and type(observation) is dict and observation.get("ret") == 0:
             fields = fields | {"device"}
+        if op["op"] == "wg_observe":
+            fields = fields | {"datagrams", "stats"}
         if type(observation) is not dict or set(observation) != fields:
             raise ValueError("operation observation fields")
         ret, error, data = observation["ret"], observation["errno"], observation["bytes"]
@@ -160,15 +162,47 @@ def attach_devices(results, traces, records):
                 raise ValueError("missing or unexpected wireguard dump record")
 
 
+def attach_observed(results, traces, records):
+    """Each wg_observe has exactly one record: the datagrams the fixture's
+    listeners received (family, length, message type), sorted, since arrival
+    order across peers is not determined, and wg0's transmit counters."""
+    by_trace = {result["id"]: result for result in results}
+    seen = set()
+    for record in records:
+        if type(record) is not dict or set(record) != {"id", "index", "datagrams", "stats"} or record["id"] not in by_trace:
+            raise ValueError("wg_observe record fields or identity")
+        key = (record["id"], record["index"])
+        observations = by_trace[record["id"]]["observations"]
+        if key in seen or type(record["index"]) is not int or not 0 <= record["index"] < len(observations):
+            raise ValueError("duplicate or out-of-range wg_observe record")
+        seen.add(key)
+        datagrams = record["datagrams"]
+        if type(datagrams) is not list or not all(
+                type(d) is list and len(d) == 3 and d[0] in (4, 6) and all(type(x) is int and x >= 0 for x in d)
+                for d in datagrams):
+            raise ValueError("wg_observe datagrams")
+        stats = record["stats"]
+        if type(stats) is not dict or set(stats) != {"tx_errors", "tx_dropped"} or not all(
+                type(v) is int and v >= 0 for v in stats.values()):
+            raise ValueError("wg_observe stats")
+        observations[record["index"]]["datagrams"] = sorted(datagrams)
+        observations[record["index"]]["stats"] = stats
+    for trace in traces:
+        for index, op in enumerate(trace["ops"]):
+            if (op["op"] == "wg_observe") != ((trace["id"], index) in seen):
+                raise ValueError("missing or unexpected wg_observe record")
+
+
 def _collect(outdir, traces, process_returncode):
     results, coverage, fixtures, errors, child_failures, completed, kernels = [], [], [], [], [], [], []
-    comparisons, comparison_results, wireguard = [], [], []
+    comparisons, comparison_results, wireguard, observed = [], [], [], []
     for line in (outdir / "boot.log").read_text(errors="strict").splitlines():
         line = line.rstrip("\r")
         for prefix, target in (("LEANUX_RESULT ", results), ("LEANUX_COVERAGE ", coverage),
                                ("LEANUX_FIXTURE ", fixtures), ("LEANUX_ERROR ", errors),
                                ("LEANUX_CHILD_FAILURE ", child_failures), ("LEANUX_CMP ", comparisons),
-                               ("LEANUX_CMP_RESULT ", comparison_results), ("LEANUX_WG ", wireguard)):
+                               ("LEANUX_CMP_RESULT ", comparison_results), ("LEANUX_WG ", wireguard),
+                               ("LEANUX_WGOBS ", observed)):
             if line.startswith(prefix):
                 try:
                     target.append(_decode_json(line[len(prefix):]))
@@ -184,7 +218,7 @@ def _collect(outdir, traces, process_returncode):
     _jsonl(outdir / "comparisons.jsonl", comparisons)
     _jsonl(outdir / "guest-errors.jsonl", errors + child_failures)
     (outdir / "fixture.json").write_text(json.dumps({
-        "roles": {"0": "console stdin", "1": "console stdout", "2": "console stderr", "3": "KCOV", "4-7": "/dev/null filler"},
+        "roles": {"0": "console stdin", "1": "console stdout", "2": "console stderr", "3": "KCOV", "4-7": "/dev/null filler; in network traces 4-5 UDP listeners, 6 UDP sender, 7 generic netlink"},
         "per_trace": fixtures, "kernel_releases": kernels,
     }, indent=2) + "\n")
     if errors or child_failures:
@@ -202,6 +236,7 @@ def _collect(outdir, traces, process_returncode):
         raise LinuxRunError("missing_coverage", "Missing or extra per-operation coverage", outdir)
     try:
         attach_devices(results, traces, wireguard)
+        attach_observed(results, traces, observed)
         for result, trace, fixture in zip(results, traces, fixtures):
             _check_observation(result, trace)
             limit = trace.get("rlimit_nofile", 32)

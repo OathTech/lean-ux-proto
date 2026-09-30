@@ -32,10 +32,12 @@ def peerPut (peer : Option PeerId) : M Unit := do
   let p ← getPeer pid
   setPeer pid { p with refcount := p.refcount - 1 }
   if ← branch .peerKrefPutReleased (← refcountDecAndTest p.refcount) then
-    modifyDev fun d => { d with peers := d.peers.erase pid }
+    -- wg_packet_purge_staged_packets: DEV_STATS_ADD(tx_dropped, qlen)
+    modifyDev fun d => { d with txDropped := d.txDropped + p.staged, peers := d.peers.erase pid }
 
 /-- wg_noise_precompute_static_static (noise.c:47-57). -/
 def precomputeStaticStatic (pid : PeerId) : M Unit := do
+  requireNotPending pid "recomputing the static-static key"
   let identity := (← getDev).staticIdentity
   let p ← getPeer pid
   -- `!has_identity || !curve25519(precomputed, static_private, remote_static)`
@@ -57,6 +59,8 @@ def generatePublic (secret : Key) : M (Option Key × Bool) := do
 
 /-- wg_noise_set_static_identity_private_key (noise.c:294-303). -/
 def setStaticIdentityPrivateKey (privateKey : Key) : M Unit := do
+  -- the handshake worker reads has_identity
+  for pid in (← getDev).peerList do requireNotPending pid "changing the device identity"
   let clamped := clamp privateKey   -- memcpy; curve25519_clamp_secret
   let (pub, has) ← generatePublic privateKey
   modifyDev fun d => { d with staticIdentity := { hasIdentity := has, staticPrivate := clamped,
@@ -75,8 +79,10 @@ def keypairPutNull : M Unit := do
 
 /-- wg_noise_expire_current_peer_keypairs (noise.c:179-196). `handshake_clear`
     zeroes ephemeral state that the configuration path never set. -/
-def expireCurrentPeerKeypairs : M Unit := do
-  -- wg_noise_handshake_clear; wg_noise_reset_last_sent_handshake: cut points
+def expireCurrentPeerKeypairs (pid : PeerId) : M Unit := do
+  requireNotPending pid "clearing the handshake"
+  -- wg_noise_handshake_clear; wg_noise_reset_last_sent_handshake
+  setPeer pid { (← getPeer pid) with lastSentExpired := true }
   if ← branch .expireNextKeypair false then unsupported "next keypair present"
   if ← branch .expireCurrentKeypair false then unsupported "current keypair present"
 
@@ -86,22 +92,28 @@ def keypairsClear : M Unit := do
   keypairPutNull   -- previous_keypair
   keypairPutNull   -- current_keypair
 
-/-- `wg_pubkey_hashtable_lookup` (peerlookup.c:53-71): a map lookup (the
-    random-keyed bucket walk is a cut point), then wg_peer_get_maybe_zero
-    (peer.c:71-78). Returns a strong reference. -/
-def pubkeyLookup (key : Key) : M (Option PeerId) := do
-  let found := ((← getDev).peerHashtable.find? (·.1 == key)).map (·.2)
-  -- The bucket walk's `!memcmp` is reported once, with the walk's result:
-  -- the misses before a match depend on the random bucket key.
-  _ ← branch .pubkeyLookupMatch found.isSome
+/-- wg_peer_get_maybe_zero (peer.c:71-78): a strong reference, unless the
+    peer is NULL or its count already reached zero. -/
+def peerGetMaybeZero (peer : Option PeerId) : M (Option PeerId) := do
   -- `unlikely(!peer || !kref_get_unless_zero(&peer->refcount))`
-  if ← branch .peerGetMaybeZeroNull found.isNone then return none
-  let some pid := found | invariant "unreachable"
+  if ← branch .peerGetMaybeZeroNull peer.isNone then return none
+  let some pid := peer | invariant "unreachable"
   let p ← getPeer pid
   let live ← refcountIncNotZero p.refcount
   if ← branch .peerGetMaybeZeroDead !live then return none
   setPeer pid { p with refcount := p.refcount + 1 }
   return some pid
+
+/-- `wg_pubkey_hashtable_lookup` (peerlookup.c:53-71): a map lookup (the
+    random-keyed bucket walk is a cut point), then wg_peer_get_maybe_zero.
+    Returns a strong reference. -/
+def pubkeyLookup (key : Key) : M (Option PeerId) := do
+  let found := ((← getDev).peerHashtable.find? (·.1 == key)).map (·.2)
+  -- The bucket walk's `!memcmp` is reported once, with the walk's result:
+  -- the misses before a match depend on the random bucket key.
+  _ ← branch .pubkeyLookupMatch found.isSome
+  peerGetMaybeZero found
+
 
 /-- wg_noise_handshake_init (noise.c:59-76). -/
 def handshakeInit (pid : PeerId) (presharedKey : Option Key) : M Unit := do
@@ -151,6 +163,9 @@ def peerRemoveAfterDead (pid : PeerId) : M Unit := do
 def peerRemove (peer : Option PeerId) : M Unit := do
   if ← branch .peerRemoveNull peer.isNone then return
   let some pid := peer | invariant "unreachable"
+  -- flush_workqueue runs a queued worker inside this call: always a race here
+  if (← getPeer pid).handshakePending then unsupported "removing a peer with queued handshake work"
+  mayHaveSlept   -- synchronize_net(), flush_workqueue()
   peerMakeDead pid
   -- synchronize_net()
   peerRemoveAfterDead pid
@@ -159,6 +174,9 @@ def peerRemove (peer : Option PeerId) : M Unit := do
 def peerRemoveAll : M Unit := do
   free   -- wg_allowedips_free: avoid traversing each peer
   let dead := (← getDev).peerList
+  for pid in dead do
+    if (← getPeer pid).handshakePending then unsupported "removing a peer with queued handshake work"
+  mayHaveSlept   -- synchronize_net(), flush_workqueue()
   for pid in dead do
     _ ← branch .peerRemoveAllIter1 true
     peerMakeDead pid   -- then list_add_tail(&peer->peer_list, &dead_peers)

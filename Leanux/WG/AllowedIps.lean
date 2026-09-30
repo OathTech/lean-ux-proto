@@ -40,6 +40,23 @@ def prefixMatches (node : AipNode) (key bits : Nat) : M Bool := do
   let common ← commonBits node key bits
   return common ≥ node.cidr
 
+/-- find_node (allowedips.c:111-124): the deepest node on the key's path
+    that has a peer. -/
+def findNode (trie : Option NodeId) (bits key : Nat) : M (Option NodeId) := do
+  let mut node := trie
+  let mut found : Option NodeId := none
+  for _ in [0:130] do   -- MAX_ALLOWEDIPS_DEPTH bounds the path
+    -- while (node && prefix_matches(node, key, bits))
+    let id ← match node with
+      | none => do _ ← branch .findNodeNode false; return found
+      | some id => do _ ← branch .findNodeNode true; pure id
+    let n ← getNode id
+    if !(← branch .findNodePrefixMatches (← prefixMatches n key bits)) then return found
+    if ← branch .findNodeHasPeer n.peer.isSome then found := some id
+    if ← branch .findNodeFullLength (n.cidr == bits) then return found
+    node := n.bit[← choose n key]!
+  invariant "find_node deeper than MAX_ALLOWEDIPS_DEPTH"
+
 /-- copy_and_assign_cidr (allowedips.c:23-34): the key is copied unmasked. -/
 def newNode (key cidr bits : Nat) (peer : Option PeerId) : AipNode :=
   { peer, bit := #[none, none], cidr, bitlen := bits, bits := key, parent := .root4 }

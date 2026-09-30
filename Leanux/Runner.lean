@@ -19,6 +19,9 @@ inductive Operation where
   | fcntl (fd : FDArg) (cmd : FcntlCmd) (arg : UInt32)
   | wgSet (attrs : WG.DeviceAttrs)
   | wgGet
+  | wgUp
+  | wgXmit (family addr : Nat)
+  | wgObserve
   deriving Repr
 
 def Operation.isProducer : Operation → Bool
@@ -35,7 +38,7 @@ structure Trace where
 /-- The network fixture runs for traces with a WireGuard operation
     (harness/trace.py `uses_wireguard`). -/
 def Trace.net (t : Trace) : Bool :=
-  t.ops.any fun | .wgSet _ | .wgGet => true | _ => false
+  t.ops.any fun | .wgSet _ | .wgGet | .wgUp | .wgXmit .. | .wgObserve => true | _ => false
 
 private def fields (j : Json) (expected : List String) : Except String Unit := do
   let obj ← j.getObj?
@@ -197,6 +200,28 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
   | "wg_get" =>
     fields j ["op"]
     return .wgGet
+  | "wg_up" =>
+    fields j ["op"]
+    return .wgUp
+  | "wg_observe" =>
+    fields j ["op"]
+    return .wgObserve
+  | "wg_xmit" =>
+    fields j ["op", "packet"]
+    let p ← field j "packet"
+    fields p ["family", "dst"]
+    let family ← (← field p "family").getNat?
+    if family != 4 && family != 6 then throw "packet.family: expected 4 or 6"
+    let bytes ← hexBytes (← field p "dst") (if family == 4 then 8 else 32) "packet.dst"
+    let addr := bigEndian bytes
+    -- harness/wg.py validate_packet: destinations the sender's IP layer
+    -- handles before routing never reach wg0
+    let first := addr / 2 ^ 24
+    let bad4 := family == 4 && (first == 0 || first == 127 || addr == 0xffffffff || addr == 0x0afffe01)
+    let bad6 := family == 6 && (addr == 0 || addr == 1 || addr == 0xfd00ffff000000000000000000000001
+                                 || addr / 2 ^ 32 == 0xffff)
+    if bad4 || bad6 then throw "packet.dst: an address the sender does not route into wg0"
+    return .wgXmit family addr
   | _ => throw "unsupported operation"
 
 def parseTrace (j : Json) : Except String Trace := do
@@ -226,8 +251,10 @@ RLIMIT_NOFILE is 32. The fork gave the child its own files_struct
 `next_fd = 8`. Fixture files carry references held outside the trace.
 
 The network fixture (traces with a WireGuard operation) runs in a new network
-namespace holding `lo` and a down WireGuard device `wg0` at ifindex 3, and
-descriptor 7 is a generic-netlink socket instead of /dev/null. -/
+namespace holding `lo` (up) and a down WireGuard device `wg0` at ifindex 3.
+Descriptors 4 and 5 are UDP listeners on 127.0.0.1 and ::1 at `LISTEN_PORT`,
+6 a dual-stack UDP sender, and 7 a generic-netlink socket, instead of
+/dev/null. -/
 
 /-- A fixture file. Its mode, operations and inode are outside the slice: any
     operation that consults them is `unsupported`. -/
@@ -242,7 +269,10 @@ def initialKernel (rlimit : Nat) (net : Bool := false) : Kernel :=
     ([(0, fixtureFile "console" 4),   -- fds 0-2 plus init's references
       (1, fixtureFile "kcov" 2)] ++    -- fd 3 plus the coverage mapping
      (List.range 4).map fun i =>
-       (i + 2, fixtureFile (if net && i == 3 then "generic-netlink" else "/dev/null") 1))
+       (i + 2, fixtureFile (if !net then "/dev/null" else
+         match i with
+         | 0 => "udp-listener-127.0.0.1" | 1 => "udp-listener-::1" | 2 => "udp-sender"
+         | _ => "generic-netlink") 1))
   let slots := (List.range NR_OPEN_DEFAULT).toArray
   { task := {
       files := { count := 1, resizeInProgress := false, nextFd := 8,
@@ -283,6 +313,9 @@ def toSyscall (results : Array Int) : Operation → Syscall
   | .fcntl fd cmd arg => .fcntl (uint (resolveFD results fd)) cmd arg.toUInt64
   | .wgSet attrs => .wgSet attrs
   | .wgGet => .wgGet
+  | .wgUp => .wgUp
+  | .wgXmit family addr => .wgXmit family addr
+  | .wgObserve => .wgObserve
 
 /-- Run a trace. A `Stop` is returned with the operation index: the mirror
     never reports an observation for a path it does not model. -/
@@ -300,9 +333,7 @@ def executeTrace (trace : Trace) : Except (Nat × Stop) Json := do
     let bytes := match op, w.userOut with
       | .read .., some v => if ret == 8 then wordBytes v else ""
       | _, _ => ""
-    let device := match w.dumpOut with
-      | some d => [("device", d)]
-      | none => []
+    let device := w.extraOut
     observations := observations.push (Json.mkObj ([
       ("index", toJson index), ("ret", toJson ret),
       ("errno", if ret < 0 then toJson (-ret) else .null),

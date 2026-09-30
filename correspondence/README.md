@@ -217,3 +217,58 @@ choice folds away and is not reported there; `wg_allowedips_read_node` reports
 it. The device is down throughout: `netif_running` is false, and any path that
 would send, open sockets or arm timers is `unsupported`. A dump larger than
 3,000 bytes is `unsupported`, so the dump is always one message.
+
+## WireGuard stage B1 abstractions (transmit and routing)
+
+The fixture's sender sends UDP datagrams, and after `wg_up` the default routes
+on wg0 take every non-local destination into `wg_xmit`. The following are cut
+points, stated at their code:
+- the IP and UDP output path, and `ip_tunnel_parse_protocol`. The protocol
+  therefore always matches, so `wg_xmit.bad_protocol` is never true. An
+  `AF_PACKET` sender would reach it, but this kernel has no `CONFIG_PACKET`.
+- `dev_change_flags`, `__dev_open`, and `wg_socket_init` on a fixed, free
+  port;
+- ICMP generation on the error paths;
+- queue locking, `skb_orphan`, and the timers the worker arms.
+
+**The handshake worker is a contract**, applied when `wg_observe` has waited
+for it (`runHandshakeWorkers` in `Leanux/WG/Send.lean`). It runs in a
+kworker, outside per-task KCOV, so its decisions are not reported. It makes
+`last_sent_handshake` current. It sends a 148-byte initiation iff the device
+has an identity, the precomputed static-static is nonzero and the peer has an
+endpoint, and a sent initiation adds to `tx_bytes`. Stage B2's remote
+coverage can check the contract itself.
+
+**Races are outside the domain.** Between queueing a peer's handshake and the
+next `wg_observe`, the worker may run at any time. The exception is work
+queued earlier in the same system call, before the call slept: the kernel is
+`CONFIG_PREEMPT_NONE` on one CPU, so that work cannot have run yet.
+`synchronize_net` and `flush_workqueue` (peer removal) end the exception. So the following are
+`unsupported` while it is pending:
+- queueing again;
+- changing the identity, the endpoint or the static-static key;
+- clearing the handshake;
+- removing the peer;
+- dumping.
+
+`last_sent_handshake` is modeled as "expired" or "current", under the harness's
+bound: a trace fails as an environment failure if it runs longer than 4 s after
+`wg_up`, below `REKEY_TIMEOUT` (5 s). Endpoints other than loopback are
+outside the domain once a handshake is sent, because the worker would route
+them back into wg0.
+
+**Harness facts** found on Linux:
+- The kernel's RNG must be ready before any trace, since the worker calls
+  `wait_for_random_bytes()`; the guest blocks on `getrandom` at batch start.
+- Temporary sockets opened between operations must not use `SOCK_CLOEXEC`:
+  `close` leaves the close-on-exec bit set, and the next descriptor
+  allocation would observe it.
+- The persistent-keepalive timer can fire within the bound: the worker arms it
+  when it sends. It changes nothing observable, because once a handshake is
+  queued the staged queue is never empty (no session drains it). So the
+  timer's `wg_packet_send_keepalive` allocates nothing, and its requeue finds
+  `last_sent_handshake` current. Stage B2, which completes sessions, will
+  break this invariant.
+- The 0.4 s wait is the harness's only timing assumption. A worker slower than
+  that shows as a mismatch, since the datagram appears at the next observe;
+  it is never an agreement.

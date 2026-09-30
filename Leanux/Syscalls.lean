@@ -2,7 +2,7 @@ import Leanux.FS.Eventfd
 import Leanux.FS.ReadWrite
 import Leanux.FS.Fcntl
 import Leanux.FS.Close
-import Leanux.WG.Netlink
+import Leanux.WG.Device
 
 /-!
 # System call entry and return to user mode
@@ -34,22 +34,35 @@ inductive Syscall where
       then `recvmsg` of the acknowledgement: the result is its error code. -/
   | wgSet (attrs : WG.DeviceAttrs)
   /-- `sendmsg` of a WG_CMD_GET_DEVICE dump request, then `recvmsg` of the
-      dump; the device state goes to `dumpOut`. -/
+      dump; the device state goes to `extraOut`. -/
   | wgGet
+  /-- `ioctl(6, SIOCSIFFLAGS, flags | IFF_UP)` on the fixture's sender. -/
+  | wgUp
+  /-- `sendto` of a 4-byte UDP datagram from the fixture's sender to `addr`. -/
+  | wgXmit (family addr : Nat)
+  /-- `recvfrom(4, MSG_DONTWAIT)` after the fixture waited for the workers. -/
+  | wgObserve
 
 /-- The generic-netlink socket at descriptor 7 (`NETLINK_FD` in harness/guest.c). -/
 def NETLINK_FD : Nat := 7
 
-/-- One socket call on the fixture's netlink socket: `CLASS(fd, f)(fd)` in
-    `__sys_sendto`/`__sys_recvfrom` (net/socket.c), which is `fdget` and a
-    scoped `fdput`. `fd_empty` and `sock_from_file` are cut points: descriptor
-    7 cannot be closed by a trace, and it is a socket. -/
-def socketCall (body : M Int) : M Int := do
-  let f ← fdget NETLINK_FD
-  if f.file.isNone then invariant "the fixture's netlink socket is not open"
+/-- One call on a fixture socket: `CLASS(fd, f)(fd)` in `__sys_sendto`,
+    `__sys_recvfrom` (net/socket.c) and `ioctl` (fs/ioctl.c), which is
+    `fdget` and a scoped `fdput`. `fd_empty`, `sock_from_file` and the socket
+    and ioctl layers are cut points: traces cannot name descriptors 4-7, and
+    they are sockets. -/
+def socketCallOn (fd : Nat) (body : M Int) : M Int := do
+  let f ← fdget fd
+  if f.file.isNone then invariant "a fixture socket is not open"
   let ret ← body
   fdput f
   return ret
+
+def socketCall (body : M Int) : M Int := socketCallOn NETLINK_FD body
+
+/-- The network fixture's UDP listener on 127.0.0.1 and its sender. -/
+def LISTEN4_FD : Nat := 4
+def SENDER_FD : Nat := 6
 
 /-- `send` of the request, whose generic-netlink handling (including a dump's
     callbacks) runs inside the call, then `recv` of the acknowledgement or the
@@ -72,8 +85,20 @@ def dispatch : Syscall → M Int
     match ← WG.wgGetDevice with
     | .error e => return e
     | .ok device =>
-      modify fun w => { w with dumpOut := some device }
+      modify fun w => { w with extraOut := [("device", device)] }
       return 0
+  | .wgUp => socketCallOn SENDER_FD WG.wgUp
+  | .wgXmit family addr => socketCallOn SENDER_FD do
+    -- the fixture adds wg0's routes at wg_up; before that no route exists
+    if !(← WG.getDev).running then return -ENETUNREACH
+    -- udp_sendmsg returns the datagram's length once the device took it
+    let ret ← WG.wgXmit family addr
+    return if ret == 0 then 4 else ret
+  | .wgObserve => socketCallOn LISTEN4_FD do
+    let (ret, observed) ← WG.wgObserve
+    modify fun w => { w with extraOut := observed.getObjValD "datagrams" |> fun d =>
+      [("datagrams", d), ("stats", observed.getObjValD "stats")] }
+    return ret
 
 /-- `task_work_run` on exit to user mode: each queued `____fput` runs `__fput`. -/
 partial def taskWorkRun : M Unit := do
@@ -86,7 +111,7 @@ partial def taskWorkRun : M Unit := do
 
 /-- One system call: entry, the handler, and the return-to-user work. -/
 def syscall (call : Syscall) : M Int := do
-  modify fun w => { w with steps := #[], userOut := none, dumpOut := none }
+  modify fun w => { w with steps := #[], userOut := none, extraOut := [], queuedThisCall := [] }
   let ret ← dispatch call
   taskWorkRun
   return ret

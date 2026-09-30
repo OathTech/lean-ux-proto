@@ -1,4 +1,4 @@
-import Leanux.WG.Peer
+import Leanux.WG.Send
 import Lean.Data.Json
 
 /-!
@@ -21,8 +21,6 @@ succeeds and the dump completes in its first callback.
 namespace Leanux.WG
 open Leanux Lean
 
-def AF_INET : Nat := 2
-def AF_INET6 : Nat := 10
 def WGDEVICE_F_REPLACE_PEERS : UInt32 := 1
 def WGDEVICE_F_ALL : UInt32 := 1
 def WGPEER_F_REMOVE_ME : UInt32 := 1
@@ -110,7 +108,7 @@ def setAllowedip (pid : PeerId) (ip : AllowedIpAttrs) : M Int := do
   return -EINVAL
 
 /-- endpoint_eq (socket.c:258-271). Source addresses and `src_if4` are zero
-    on both sides on this path (never set with the device down), and the
+    on both sides on this path (only the receive path sets them), and the
     harness's IPv6 endpoints have scope 0. -/
 def endpointEq (a : EndpointAttr) (b : Option Endpoint) : M Bool := do
   let fb := b.map (·.family) |>.getD 0
@@ -128,6 +126,7 @@ def endpointEq (a : EndpointAttr) (b : Option Endpoint) : M Bool := do
 /-- wg_socket_set_peer_endpoint (socket.c:273-297); `dst_cache_reset` is a
     cut point. -/
 def setPeerEndpoint (pid : PeerId) (e : EndpointAttr) : M Unit := do
+  requireNotPending pid "changing the endpoint"
   if ← branch .setEndpointEq (← endpointEq e (← getPeer pid).endpoint) then return
   let set := do
     setPeer pid { (← getPeer pid) with endpoint := some { family := e.family, addr := e.addr, port := e.port } }
@@ -193,8 +192,8 @@ def setPeerCmd (a : PeerAttrs) : M Int := do
     let send ← andM (branch .peerKeepaliveWasZero (p.persistentKeepaliveInterval == 0))
       (andM (branch .peerKeepaliveNonzero (interval != 0)) (branch .peerKeepaliveRunning running))
     setPeer pid { p with persistentKeepaliveInterval := interval }
-    if ← branch .peerSendKeepalive send then unsupported "wg_packet_send_keepalive"
-  if ← branch .peerRunning running then unsupported "wg_packet_send_staged_packets"
+    if ← branch .peerSendKeepalive send then sendKeepalive pid
+  if ← branch .peerRunning running then sendStagedPackets pid
   out peer ret
 
 /-- wg_set_device (netlink.c:493-608). The harness's process is root in the
@@ -245,8 +244,8 @@ def wgSetDevice (a : DeviceAttrs) : M Int := do
       for pid in (← getDev).peerList do
         _ ← branch .setDevKeyPeerIter true
         precomputeStaticStatic pid
-        expireCurrentPeerKeypairs
-        if ← branch .setDevSendStagedPeer sendStaged then unsupported "wg_packet_send_staged_packets"
+        expireCurrentPeerKeypairs pid
+        if ← branch .setDevSendStagedPeer sendStaged then sendStagedPackets pid
       _ ← branch .setDevKeyPeerIter false
   if ← branch .setDevHasPeers a.peers.isSome then
     for p in a.peers.getD [] do
@@ -334,7 +333,7 @@ def getPeerDump (pid : PeerId) : M Json := do
   return Json.mkObj ([("public_key", toJson (hexKey p.remoteStatic)),
     ("preshared_key", toJson (hexKey p.presharedKey)),
     ("last_handshake", toJson [0, 0]), ("keepalive", toJson p.persistentKeepaliveInterval),
-    ("tx_bytes", toJson 0), ("rx_bytes", toJson 0), ("protocol_version", toJson 1)] ++ endpoint ++
+    ("tx_bytes", toJson p.txBytes), ("rx_bytes", toJson 0), ("protocol_version", toJson 1)] ++ endpoint ++
     [("allowed_ips", Json.arr ips)])
 
 /-- A WG_CMD_GET_DEVICE dump: wg_get_device_start (199-208), one
@@ -346,6 +345,8 @@ def wgGetDevice : M (Except Int Json) := do
     let .error e := wg | invariant "unreachable"
     return .error e
   let d ← getDev
+  -- the handshake worker updates tx_bytes
+  for pid in d.peerList do requireNotPending pid "dumping the peer"
   if (← dumpSize d) > DUMP_BOUND then unsupported "dump larger than one message"
   _ ← branch .dumpNoHdr false
   _ ← branch .dumpFirst true   -- ctx->next_peer is NULL

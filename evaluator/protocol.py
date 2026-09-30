@@ -45,10 +45,14 @@ def validate_observation(trace, result):
         fields = ('index', 'ret', 'errno', 'bytes')
         if op['op'] == 'wg_get' and type(obs) is dict and obs.get('ret') == 0:
             fields += ('device',)   # the canonical device state (harness/wg.py)
+        if op['op'] == 'wg_observe':
+            fields += ('datagrams', 'stats')   # what wg0 emitted, and its counters
         if not keys(obs, fields):
             raise InvalidOutput(f'observation {index}: fields')
         if 'device' in fields and type(obs['device']) is not dict:
             raise InvalidOutput(f'observation {index}: device state')
+        if 'datagrams' in fields and (type(obs['datagrams']) is not list or type(obs['stats']) is not dict):
+            raise InvalidOutput(f'observation {index}: observed emissions')
         if type(obs['index']) is not int or obs['index'] != index:
             raise InvalidOutput(f'observation {index}: order/index')
         ret, error, data = obs['ret'], obs['errno'], obs['bytes']
@@ -95,7 +99,9 @@ def parse_batch(traces, output, max_bytes=16 * 1024 * 1024):
 # These outcomes cannot be ordinary results in the declared single-threaded,
 # valid-buffer fixture. In particular resource failure must not count as agreement.
 SEMANTIC_ERRNOS = {'eventfd2': {22, 24}, 'dup': {9, 24}, 'dup3': {9, 22},
-                   'close': {9}, 'fcntl': {1, 9, 22}, 'wg_set': {22, 95}, 'wg_get': {22}, 'read': {9, 11, 22}, 'write': {9, 11, 22}}
+                   'close': {9}, 'fcntl': {1, 9, 22}, 'wg_set': {22, 95}, 'wg_get': {22},
+                   # ENOKEY, EDESTADDRREQ, EPROTONOSUPPORT, ENETUNREACH (no route before wg_up); EAGAIN when nothing arrived
+                   'wg_up': set(), 'wg_xmit': {126, 89, 93, 101}, 'wg_observe': {11}, 'read': {9, 11, 22}, 'write': {9, 11, 22}}
 
 
 def compare(trace, linux, model):

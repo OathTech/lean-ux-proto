@@ -132,6 +132,21 @@ inductive Decision where
   | setDevPrivateKeyLen | setDevKeyUnchanged | setDevGenPublic | setDevOldPeer | setDevSendStagedNoIdentity
   | setDevSendStagedRunning | setDevSendStagedKept | setDevSendStagedHasIdentity | setDevKeyPeerIter | setDevSendStagedPeer
   | setDevHasPeers | setDevPeersIter | setDevParseErr | setDevSetPeerErr | setDevZeroKey
+  -- drivers/net/wireguard/allowedips.c
+  | findNodeNode | findNodePrefixMatches | findNodeHasPeer | findNodeFullLength | lookupFound
+  | lookupPeerGone | lookupDstV4 | lookupDstV6
+  -- drivers/net/wireguard/queueing.h
+  | checkProtoParsed | checkProtoMatches
+  -- drivers/net/wireguard/device.c
+  | openHasInet | openHasInet6 | openSocketError | openPeersIter | openKeepalive
+  | xmitBadProtocol | xmitNoPeer | xmitNoPeerInet | xmitNoPeerInet6 | xmitEndpointNotInet
+  | xmitEndpointNotInet6 | xmitValidDst | xmitNotGso | xmitWalk | xmitShareFailed
+  | xmitStagedOverflow | xmitErrorInet | xmitErrorInet6
+  -- drivers/net/wireguard/send.c
+  | queuedNotRetry | queuedNotExpired | queuedDead | queuedAlreadyQueued | keepaliveStagedEmpty
+  | keepaliveNoMem | stagedEmpty | stagedNoKeypair | stagedOrphanWalk
+  -- drivers/net/wireguard/noise.c
+  | keypairGetNull | keypairGetZero
   deriving Repr, BEq, DecidableEq, Inhabited
 
 /-- A recorded step: the decision, the outcome the mirror computed, and, for
@@ -178,6 +193,9 @@ private def wso := "drivers/net/wireguard/socket.c"
 private def wpl := "drivers/net/wireguard/peerlookup.c"
 private def wck := "drivers/net/wireguard/cookie.c"
 private def c25 := "include/crypto/curve25519.h"
+private def wdv := "drivers/net/wireguard/device.c"
+private def wsd := "drivers/net/wireguard/send.c"
+private def wqh := "drivers/net/wireguard/queueing.h"
 
 private def sp (file : String) (lo hi : Nat) : Span := ⟨file, lo, hi⟩
 
@@ -621,6 +639,50 @@ def Decision.info : Decision → DecisionInfo
   | .setDevParseErr => d "wg_set_device.peer_parse_error" wnl 590 [] [(592, 592)]
   | .setDevSetPeerErr => d "wg_set_device.set_peer_error" wnl 593 [(594, 594)] []
   | .setDevZeroKey => d "wg_set_device.zero_private_key" wnl 604 [(605, 606)] []
+  -- drivers/net/wireguard/allowedips.c
+  | .findNodeNode => d "find_node.node" aip 116 [] []
+  | .findNodePrefixMatches => d "find_node.prefix_matches" aip 116 [(117, 121)] []
+  | .findNodeHasPeer => d "find_node.has_peer" aip 117 [(118, 118)] []
+  | .findNodeFullLength => d "find_node.full_length" aip 119 [(120, 120)] [(121, 121)]
+  | .lookupFound => d "lookup.found" aip 140 [(141, 143)] []
+  | .lookupPeerGone => d "lookup.peer_gone" aip 142 [(143, 143)] []
+  | .lookupDstV4 => d "wg_allowedips_lookup_dst.inet" aip 359 [(360, 360)] [(361, 363)]
+  | .lookupDstV6 => d "wg_allowedips_lookup_dst.inet6" aip 361 [(362, 362)] [(363, 363)]
+  -- drivers/net/wireguard/queueing.h
+  | .checkProtoParsed => d "wg_check_packet_protocol.parsed" wqh 73 [] []
+  | .checkProtoMatches => d "wg_check_packet_protocol.matches" wqh 73 [] []
+  -- drivers/net/wireguard/device.c
+  | .openHasInet => d "wg_open.has_inet_device" wdv 39 [(44, 45)] []
+  | .openHasInet6 => d "wg_open.has_inet6_device" wdv 47 [(48, 48)] []
+  | .openSocketError => d "wg_open.socket_init_error" wdv 52 [(53, 53)] [(54, 58)]
+  | .openPeersIter => d "wg_open.peers_iterate" wdv 54 [(55, 57)] []
+  | .openKeepalive => d "wg_open.persistent_keepalive" wdv 56 [(57, 57)] []
+  | .xmitBadProtocol => d "wg_xmit.bad_protocol" wdv 147 [(148, 150)] [(153, 153)]
+  | .xmitNoPeer => d "wg_xmit.no_peer" wdv 154 [(155, 162)] [(165, 165)]
+  | .xmitNoPeerInet => d "wg_xmit.no_peer_inet" wdv 156 [(157, 158)] [(159, 161)]
+  | .xmitNoPeerInet6 => d "wg_xmit.no_peer_inet6" wdv 159 [(160, 161)] []
+  | .xmitEndpointNotInet => d "wg_xmit.endpoint_not_inet" wdv 166 [] []
+  | .xmitEndpointNotInet6 => d "wg_xmit.endpoint_not_inet6" wdv 166 [(167, 170)] []
+  | .xmitValidDst => d "wg_xmit.valid_dst" wdv 173 [] []
+  | .xmitNotGso => d "wg_xmit.not_gso" wdv 176 [(177, 177)] [(179, 186)]
+  | .xmitWalk => d "wg_xmit.segments_iterate" wdv 189 [(190, 203)] []
+  | .xmitShareFailed => d "wg_xmit.share_check_failed" wdv 193 [(194, 194)] [(199, 203)]
+  | .xmitStagedOverflow => d "wg_xmit.staged_overflow" wdv 211 [(212, 213)] []
+  | .xmitErrorInet => d "wg_xmit.error_inet" wdv 226 [(227, 227)] [(228, 229)]
+  | .xmitErrorInet6 => d "wg_xmit.error_inet6" wdv 228 [(229, 229)] []
+  -- drivers/net/wireguard/send.c
+  | .queuedNotRetry => d "wg_packet_send_queued_handshake_initiation.not_retry" wsd 58 [(59, 59)] []
+  | .queuedNotExpired => d "wg_packet_send_queued_handshake_initiation.not_expired" wsd 66 [] [(68, 68)]
+  | .queuedDead => d "wg_packet_send_queued_handshake_initiation.dead" wsd 68 [(69, 69)] [(71, 76)]
+  | .queuedAlreadyQueued => d "wg_packet_send_queued_handshake_initiation.already_queued" wsd 75 [(80, 80)] []
+  | .keepaliveStagedEmpty => d "wg_packet_send_keepalive.staged_empty" wsd 225 [(226, 236)] []
+  | .keepaliveNoMem => d "wg_packet_send_keepalive.no_mem" wsd 228 [(229, 229)] [(230, 236)]
+  | .stagedEmpty => d "wg_packet_send_staged_packets.empty" wsd 353 [(354, 354)] [(357, 361)]
+  | .stagedNoKeypair => d "wg_packet_send_staged_packets.no_keypair" wsd 361 [(362, 362)] [(363, 363)]
+  | .stagedOrphanWalk => d "wg_packet_send_staged_packets.orphan_iterate" wsd 399 [(400, 400)] []
+  -- drivers/net/wireguard/noise.c
+  | .keypairGetNull => d "wg_noise_keypair_get.null" wno 146 [] []
+  | .keypairGetZero => d "wg_noise_keypair_get.refcount_zero" wno 146 [] [(148, 148)]
 
 /-- Why an outcome has no KCOV witness. The check requires a reason exactly
     for the sides whose spans own no instrumentation point in the built kernel,
@@ -1142,6 +1204,54 @@ def Decision.unobservable : Decision → Bool → Option Unobservable
   | .getPeerPskFail, true => some .compilerShared
   | .peerAipParseErr, true => some .compilerShared
   | .setDevParseErr, true => some .compilerShared
+  | .findNodeNode, true => some .sharedOperand
+  | .findNodeNode, false => some .sharedOperand
+  | .findNodePrefixMatches, false => some .sharedContinuation
+  | .findNodeHasPeer, false => some .sharedContinuation
+  | .lookupFound, false => some .sharedContinuation
+  | .lookupPeerGone, false => some .sharedContinuation
+  | .checkProtoParsed, true => some .sharedOperand
+  | .checkProtoParsed, false => some .sharedOperand
+  | .checkProtoMatches, true => some .sharedOperand
+  | .checkProtoMatches, false => some .sharedOperand
+  | .openHasInet, false => some .sharedContinuation
+  | .openHasInet6, false => some .sharedContinuation
+  | .openPeersIter, false => some .sharedContinuation
+  | .openKeepalive, false => some .sharedContinuation
+  | .xmitNoPeerInet6, false => some .sharedContinuation
+  | .xmitEndpointNotInet, true => some .sharedOperand
+  | .xmitEndpointNotInet, false => some .sharedOperand
+  | .xmitEndpointNotInet6, false => some .sharedContinuation
+  | .xmitValidDst, true => some .branchFree
+  | .xmitValidDst, false => some .branchFree
+  | .xmitWalk, false => some .sharedContinuation
+  | .xmitStagedOverflow, false => some .sharedContinuation
+  | .xmitErrorInet6, false => some .sharedContinuation
+  | .queuedNotRetry, false => some .sharedContinuation
+  | .queuedNotExpired, true => some .sharedOperand
+  | .queuedAlreadyQueued, false => some .sharedContinuation
+  | .keepaliveStagedEmpty, false => some .sharedContinuation
+  | .stagedOrphanWalk, false => some .sharedContinuation
+  | .keypairGetNull, true => some .sharedOperand
+  | .keypairGetNull, false => some .sharedOperand
+  | .keypairGetZero, true => some .sharedOperand
+  | .findNodeHasPeer, true => some .noInstrumentation
+  | .findNodeFullLength, true => some .noInstrumentation
+  | .lookupPeerGone, true => some .noInstrumentation
+  | .lookupDstV6, false => some .noInstrumentation
+  | .openSocketError, true => some .noInstrumentation
+  | .xmitBadProtocol, true => some .noInstrumentation
+  | .xmitNoPeer, true => some .noInstrumentation
+  | .xmitNoPeerInet, true => some .noInstrumentation
+  | .xmitNoPeerInet, false => some .noInstrumentation
+  | .xmitNoPeerInet6, true => some .noInstrumentation
+  | .xmitEndpointNotInet6, true => some .noInstrumentation
+  | .xmitShareFailed, true => some .noInstrumentation
+  | .queuedDead, true => some .noInstrumentation
+  | .keepaliveNoMem, true => some .noInstrumentation
+  | .stagedEmpty, true => some .noInstrumentation
+  | .stagedNoKeypair, true => some .noInstrumentation
+  | .keypairGetZero, false => some .noInstrumentation
   | _, _ => none
 
 /-- The relation of a C value comparison, as written in the source
@@ -1290,7 +1400,12 @@ def Decision.repeatable : Decision → Bool
   | .peerAipErr | .peerHasKeepalive | .peerKeepaliveWasZero | .peerKeepaliveNonzero | .peerKeepaliveRunning
   | .peerSendKeepalive | .peerRunning | .peerZeroPsk | .setDevFwmarkPeerIter | .setDevKeyPeerIter
   | .setDevSendStagedPeer | .setDevPeersIter | .setDevParseErr | .setDevSetPeerErr | .refcountSubPositive
-  | .refcountSubToZero | .refcountSubNonpositive | .refcountSubUnderflow => true
+  | .refcountSubToZero | .refcountSubNonpositive | .refcountSubUnderflow
+  | .findNodeNode | .findNodePrefixMatches | .findNodeHasPeer | .findNodeFullLength | .lookupFound
+  | .lookupPeerGone | .checkProtoParsed | .checkProtoMatches | .openPeersIter | .openKeepalive
+  | .xmitWalk | .xmitShareFailed | .xmitStagedOverflow | .queuedNotRetry | .queuedNotExpired
+  | .queuedDead | .queuedAlreadyQueued | .keepaliveStagedEmpty | .keepaliveNoMem | .stagedEmpty
+  | .stagedNoKeypair | .stagedOrphanWalk | .keypairGetNull | .keypairGetZero => true
   | _ => false
 
 /-- Every decision, enumerated through the constructor index. -/

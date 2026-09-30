@@ -314,3 +314,42 @@ def _decode_dump(payloads):
                 raise InvalidConfig(f"unknown device attribute {kind}")
     device["peers"] = peers
     return device
+
+
+# Stage B1: datagrams routed into wg0 from the fixture's UDP socket.
+PACKET_FIELDS = {"family", "dst"}
+
+
+def validate_packet(packet, where="packet"):
+    """A UDP datagram to `dst` (hex bytes of an IPv4 or IPv6 address), sent
+    from the fixture's dual-stack socket; the routes the fixture adds at
+    `wg_up` send every non-local destination into wg0."""
+    if type(packet) is not dict or set(packet) != PACKET_FIELDS:
+        raise InvalidConfig(f"{where}: expected exactly {sorted(PACKET_FIELDS)}")
+    if packet["family"] not in (4, 6):
+        raise InvalidConfig(f"{where}.family: expected 4 or 6")
+    digits = 8 if packet["family"] == 4 else 32
+    if type(packet["dst"]) is not str or not re.fullmatch(f"[0-9a-f]{{{digits}}}", packet["dst"]):
+        raise InvalidConfig(f"{where}.dst: expected {digits} lowercase hex digits")
+    dst = bytes.fromhex(packet["dst"])
+    # Destinations the sender's IP layer handles before routing never reach
+    # wg0: loopback and the fixture's own addresses (local), 0.0.0.0/8
+    # (EINVAL, or rewritten to loopback), the limited broadcast (EACCES), ::
+    # (rewritten to ::1), and v4-mapped addresses (the IPv4 path).
+    if packet["family"] == 4 and (dst[0] in (0, 127) or dst == b"\xff" * 4 or dst == bytes.fromhex(FIXTURE_ADDR4)):
+        raise InvalidConfig(f"{where}.dst: an address the sender does not route into wg0")
+    if packet["family"] == 6 and (dst in (bytes(16), bytes(15) + b"\x01", bytes.fromhex(FIXTURE_ADDR6))
+                                  or dst[:12] == bytes(10) + b"\xff\xff"):
+        raise InvalidConfig(f"{where}.dst: an address the sender does not route into wg0")
+    return packet
+
+
+FIXTURE_ADDR4 = "0afffe01"                             # 10.255.254.1/32 on wg0
+FIXTURE_ADDR6 = "fd00ffff000000000000000000000001"     # fd00:ffff::1/128 on wg0
+
+
+def encode_packet(packet):
+    """The guest's sockaddr_in6 address: IPv4 destinations as v4-mapped."""
+    validate_packet(packet)
+    dst = bytes.fromhex(packet["dst"])
+    return packet["family"], (bytes(10) + b"\xff\xff" + dst if packet["family"] == 4 else dst)

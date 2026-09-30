@@ -65,6 +65,17 @@ structure Peer where
   isDead : Bool := false
   refcount : Nat := 1
   internalId : Nat
+  /-- `staged_packet_queue`'s length: packets wait here for a session. -/
+  staged : Nat := 0
+  /-- `transmit_handshake_work` is queued and the worker has not run: the
+      worker's timing is not determined, so what reads its state is outside
+      the domain until `wg_observe` waits for it. -/
+  handshakePending : Bool := false
+  /-- Whether `last_sent_handshake` is older than `REKEY_TIMEOUT`. It starts
+      expired (`wg_noise_reset_last_sent_handshake`), and the worker makes it
+      current; traces are bounded well below `REKEY_TIMEOUT`. -/
+  lastSentExpired : Bool := true
+  txBytes : Nat := 0
   deriving Repr, BEq
 
 /-- `struct noise_static_identity`. -/
@@ -79,6 +90,9 @@ structure Device where
   ifindex : Nat
   ifname : String
   running : Bool := false
+  /-- `dev->stats` transmit counters. -/
+  txErrors : Nat := 0
+  txDropped : Nat := 0
   staticIdentity : StaticIdentity := {}
   incomingPort : Nat := 0
   fwmark : Nat := 0
@@ -93,5 +107,17 @@ structure Device where
   nextNode : NodeId := 0
   nextPeer : PeerId := 0
   deriving BEq
+
+/-- The fixture's UDP listeners (127.0.0.1 and ::1 at `LISTEN_PORT`): the
+    lengths of the datagrams waiting in each receive queue. -/
+structure Listeners where
+  v4 : List Nat := []
+  v6 : List Nat := []
+  deriving Repr, BEq
+
+def AF_INET : Nat := 2
+def AF_INET6 : Nat := 10
+def LISTEN_PORT : Nat := 51999
+def MESSAGE_HANDSHAKE_INITIATION_LEN : Nat := 148
 
 end Leanux.WG

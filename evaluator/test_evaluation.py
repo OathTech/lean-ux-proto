@@ -119,6 +119,12 @@ class EvaluationChecks(unittest.TestCase):
         problems = run(ready, [222, 235, 1224])
         self.assertEqual([p['problem'] for p in problems], ['span lines covered by an unlisted function'])
 
+    def test_control_flow_requires_reached_functions(self):
+        run = self.control_flow_fixture()
+        # eventfd_read ran (222, 235) but the mirror reported only another function.
+        problems = run(['eventfd_ctx_do_read.semaphore=1'], [222, 235])
+        self.assertIn('Linux ran a decision function the mirror reported nothing in', [p['problem'] for p in problems])
+
     def test_branch_free_exemption_needs_the_allowlist(self):
         table = check.parse_decisions([self.decision('fls128.high_nonzero', 180, [], [], 'branch_free', 'branch_free')],
                                       self.CONFIG)

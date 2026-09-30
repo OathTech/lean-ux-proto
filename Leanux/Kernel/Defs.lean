@@ -69,6 +69,10 @@ def ENODEV : Int := 19
 def EBADR : Int := 53
 def EOPNOTSUPP : Int := 95
 def EPFNOSUPPORT : Int := 96
+def ENOKEY : Int := 126
+def EDESTADDRREQ : Int := 89
+def EPROTONOSUPPORT : Int := 93
+def ENETUNREACH : Int := 101
 
 def ULLONG_MAX : UInt64 := 18446744073709551615
 /-- `NR_OPEN_DEFAULT = BITS_PER_LONG`: capacity of the embedded initial table. -/
@@ -189,6 +193,7 @@ structure Kernel where
   anonInodeInodeErr : Bool
   /-- The fixture's WireGuard device, in traces that use the network fixture. -/
   wg : Option WG.Device := none
+  listeners : WG.Listeners := {}
   /-- `peer_counter` (drivers/net/wireguard/peer.c), a global atomic. -/
   peerCounter : Nat := 0
   deriving BEq
@@ -204,7 +209,7 @@ inductive EnvSite where
   | kmallocEventfdCtx | idaAlloc | filpAlloc | dAllocPseudo
   | kmallocFdtable | kvmallocFdArray | kvmallocFdBitmaps
   | accessOk | copyToUser | copyFromUser
-  | kmemCacheZallocNode | kmemCacheZallocPeer | dstCacheInit
+  | kmemCacheZallocNode | kmemCacheZallocPeer | dstCacheInit | allocSkb
   deriving Repr, BEq, DecidableEq
 
 structure World where
@@ -214,8 +219,13 @@ structure World where
   steps : Array Step := #[]
   /-- The caller's buffer (user memory), as written by `copy_to_iter`. -/
   userOut : Option UInt64 := none
-  /-- The device state a WG_CMD_GET_DEVICE dump delivered to the caller. -/
-  dumpOut : Option Lean.Json := none
+  /-- Observation fields beyond the return value: a dump's `device`, or what
+      `wg_observe` saw (`datagrams`, `stats`). -/
+  extraOut : List (String × Lean.Json) := []
+  /-- Peers whose handshake work this system call queued, while the call has
+      not slept. The kernel is `CONFIG_PREEMPT_NONE` on one CPU, so their
+      worker cannot have run yet. -/
+  queuedThisCall : List Nat := []
 
 /-- Why a mirror execution stopped without an observation. -/
 inductive Stop where

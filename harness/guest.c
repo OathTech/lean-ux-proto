@@ -10,6 +10,9 @@
 #include <linux/rtnetlink.h>
 #include <linux/wireguard.h>
 #include <net/if.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <time.h>
 #include <sched.h>
 #include <sys/socket.h>
 #include <stdint.h>
@@ -28,6 +31,20 @@
 #define CAPACITY (64UL * 1024)
 #define MAX_PAYLOAD 32768
 #define NETLINK_FD 7
+/* Stage B1 network fixture: UDP listeners that catch what wg0 sends to
+ * 127.0.0.1 / ::1 at LISTEN_PORT, and a dual-stack UDP socket whose datagrams
+ * the routes added at wg_up send into wg0. */
+#define LISTEN4_FD 4
+#define LISTEN6_FD 5
+#define SEND_FD 6
+#define SEND_PORT 40000
+#define LISTEN_PORT 51999
+#define WG_IFINDEX 3
+/* wg_observe waits this long for the handshake workers before it looks. */
+#define OBSERVE_WAIT_US 400000
+/* Timers fire REKEY_TIMEOUT (5 s) after a handshake is sent; a trace must end
+ * well before that, counted from wg_up. */
+#define REKEY_BOUND_NS 4000000000LL
 struct operation { unsigned code, kind, newkind, a, b; long long fd, newfd; uint64_t value;
                    unsigned char payload[MAX_PAYLOAD]; size_t payload_len; };
 struct trace { char id[81]; unsigned count; unsigned rlimit; unsigned net; struct operation ops[MAX_OPS]; };
@@ -147,6 +164,11 @@ static void network_fixture(const char *id)
     if (nl_send(rtnl, RTM_NEWLINK, NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE | NLM_F_EXCL, 0, payload, len, 0) ||
         nl_receive(rtnl, 0, NULL, 0))
         fail(id, -1, "environment_failure", "create_wg0");
+    /* lo up: what wg0 sends to 127.0.0.1 and ::1 reaches the listeners. */
+    struct ifinfomsg up = {.ifi_family = AF_UNSPEC, .ifi_index = 1, .ifi_flags = IFF_UP, .ifi_change = IFF_UP};
+    if (nl_send(rtnl, RTM_NEWLINK, NLM_F_REQUEST | NLM_F_ACK, 0, (unsigned char *)&up, sizeof(up), 0) ||
+        nl_receive(rtnl, 0, NULL, 0))
+        fail(id, -1, "environment_failure", "lo_up");
     if (close(rtnl)) fail(id, -1, "environment_failure", "close_rtnetlink");
 }
 
@@ -187,6 +209,119 @@ static long resolve(unsigned kind, long long value, const struct observation *re
 
 /* comparisons: 0 records PCs (KCOV_TRACE_PC); 1 records comparison operands
  * (KCOV_TRACE_CMP) in a second, independent child for the same trace. */
+static unsigned char observe_buffer[2048];
+static struct timespec went_up;
+static int up_seen;
+
+/* A datagram's (family, length, message type) as JSON; the message type is
+ * the first little-endian u32 of a WireGuard message. */
+static int print_datagram(int comma, int family, long n)
+{
+    unsigned type = n >= 4 ? (unsigned)observe_buffer[0] | (unsigned)observe_buffer[1] << 8 |
+                             (unsigned)observe_buffer[2] << 16 | (unsigned)observe_buffer[3] << 24 : 0;
+    printf("%s[%d,%ld,%u]", comma ? "," : "", family, n, type);
+    return 1;
+}
+
+/* After wg_up, outside the coverage window: an address and a default route on
+ * wg0 for each family, so the sender's datagrams reach wg_xmit. Routes need
+ * the device up. The temporary socket is closed again. Temporary sockets in a
+ * trace take the lowest free descriptor, and close() leaves its close-on-exec
+ * bit as it was, so they are opened without SOCK_CLOEXEC: the bit stays clear,
+ * as the mirror's descriptor table has it. */
+static void rtnl_request(int rtnl, const char *id, unsigned index, unsigned short type, const void *body, size_t len,
+                         const char *what)
+{
+    if (nl_send(rtnl, type, NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE | NLM_F_EXCL, 0, body, len, 0) ||
+        nl_receive(rtnl, 0, NULL, 0))
+        fail(id, index, "environment_failure", what);
+}
+
+static void route_into_wg0(const char *id, unsigned index)
+{
+    int rtnl = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
+    if (rtnl < 0) fail(id, index, "environment_failure", "route_socket");
+    unsigned char body[128];
+    uint32_t wg = WG_IFINDEX;
+    for (int family = AF_INET; family; family = family == AF_INET ? AF_INET6 : 0) {
+        size_t len = sizeof(struct ifaddrmsg);
+        memset(body, 0, sizeof(body));
+        struct ifaddrmsg *ifa = (struct ifaddrmsg *)body;
+        ifa->ifa_family = family;
+        ifa->ifa_index = WG_IFINDEX;
+        ifa->ifa_flags = IFA_F_NODAD;
+        if (family == AF_INET) {
+            unsigned char a4[4] = {10, 255, 254, 1};
+            ifa->ifa_prefixlen = 32;
+            attr(body, &len, IFA_LOCAL, a4, 4);
+            attr(body, &len, IFA_ADDRESS, a4, 4);
+        } else {
+            unsigned char a6[16] = {0xfd, 0, 0xff, 0xff, [15] = 1};
+            ifa->ifa_prefixlen = 128;
+            attr(body, &len, IFA_ADDRESS, a6, 16);
+        }
+        rtnl_request(rtnl, id, index, RTM_NEWADDR, body, len, "address_on_wg0");
+        len = sizeof(struct rtmsg);
+        memset(body, 0, sizeof(body));
+        struct rtmsg *rt = (struct rtmsg *)body;
+        rt->rtm_family = family;
+        rt->rtm_table = RT_TABLE_MAIN;
+        rt->rtm_protocol = RTPROT_STATIC;
+        rt->rtm_scope = RT_SCOPE_LINK;
+        rt->rtm_type = RTN_UNICAST;
+        attr(body, &len, RTA_OIF, &wg, sizeof(wg));
+        rtnl_request(rtnl, id, index, RTM_NEWROUTE, body, len, "default_route_via_wg0");
+    }
+    if (close(rtnl)) fail(id, index, "environment_failure", "route_close");
+}
+
+/* wg0's transmit counters over a temporary rtnetlink socket, which is closed
+ * again (without SOCK_CLOEXEC, see route_into_wg0). */
+static void print_stats(const char *id, unsigned index)
+{
+    int rtnl = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
+    if (rtnl < 0) fail(id, index, "environment_failure", "stats_socket");
+    struct ifinfomsg request = {.ifi_family = AF_UNSPEC, .ifi_index = WG_IFINDEX};
+    if (nl_send(rtnl, RTM_GETLINK, NLM_F_REQUEST, 0, (unsigned char *)&request, sizeof(request), 0))
+        fail(id, index, "environment_failure", "stats_request");
+    ssize_t n = recv(rtnl, nl_buffer, sizeof(nl_buffer), 0);
+    struct nlmsghdr *h = (struct nlmsghdr *)nl_buffer;
+    if (n < 0 || !NLMSG_OK(h, n) || h->nlmsg_type != RTM_NEWLINK) fail(id, index, "environment_failure", "stats_reply");
+    struct rtattr *a = IFLA_RTA(NLMSG_DATA(h));
+    int remaining = (int)IFLA_PAYLOAD(h);
+    const struct rtnl_link_stats64 *stats = NULL;
+    for (; RTA_OK(a, remaining); a = RTA_NEXT(a, remaining))
+        if (a->rta_type == IFLA_STATS64 && RTA_PAYLOAD(a) >= sizeof(*stats)) stats = RTA_DATA(a);
+    if (!stats) fail(id, index, "environment_failure", "stats_missing");
+    printf("\"stats\":{\"tx_errors\":%llu,\"tx_dropped\":%llu}", (unsigned long long)stats->tx_errors,
+           (unsigned long long)stats->tx_dropped);
+    if (close(rtnl)) fail(id, index, "environment_failure", "stats_close");
+}
+
+/* After wg_observe's recvfrom: drain both listeners and read the counters.
+ * The comparison-mode child does the same, so both children end in the same
+ * state; only the PC-mode child reports. */
+static void observe(const struct trace *t, unsigned i, long first, int comparisons)
+{
+    if (!comparisons) printf("LEANUX_WGOBS {\"id\":\"%s\",\"index\":%u,\"datagrams\":[", t->id, i);
+    int comma = 0;
+    if (first >= 0 && !comparisons) comma = print_datagram(comma, 4, first);
+    for (int family = 4; family <= 6; family += 2) {
+        for (;;) {
+            long n = recv(family == 4 ? LISTEN4_FD : LISTEN6_FD, observe_buffer, sizeof(observe_buffer), MSG_DONTWAIT);
+            if (n < 0) {
+                if (errno != EAGAIN) fail(t->id, i, "environment_failure", "drain_listener");
+                break;
+            }
+            if (!comparisons) comma = print_datagram(comma, family, n);
+        }
+    }
+    if (comparisons) return;
+    printf("],");
+    print_stats(t->id, i);
+    printf("}\n");
+}
+
 static void execute(const struct trace *t, int input_fd, int comparisons)
 {
     struct observation result[MAX_OPS] = {{0}};
@@ -203,9 +338,25 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
     if (ioctl(coverage_fd, KCOV_INIT_TRACE, CAPACITY)) fail(t->id, -1, "coverage_failure", "initialize_kcov");
     unsigned long *coverage = mmap(NULL, CAPACITY * sizeof(*coverage), PROT_READ | PROT_WRITE, MAP_SHARED, coverage_fd, 0);
     if (coverage == MAP_FAILED) fail(t->id, -1, "coverage_failure", "map_kcov");
-    for (int fd = 4; fd < (t->net ? NETLINK_FD : 8); ++fd)
+    for (int fd = 4; fd < (t->net ? LISTEN4_FD : 8); ++fd)
         if (open("/dev/null", O_RDWR) != fd) fail(t->id, -1, "environment_failure", "fill_descriptor");
     if (t->net) {
+        /* No SOCK_CLOEXEC or SOCK_NONBLOCK: every fixture descriptor keeps the
+         * plain fixture's flags; reads that must not block use MSG_DONTWAIT. */
+        struct sockaddr_in a4 = {.sin_family = AF_INET, .sin_port = htons(LISTEN_PORT)};
+        a4.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        struct sockaddr_in6 a6 = {.sin6_family = AF_INET6, .sin6_port = htons(LISTEN_PORT), .sin6_addr = IN6ADDR_LOOPBACK_INIT};
+        int one = 1;
+        if (socket(AF_INET, SOCK_DGRAM, 0) != LISTEN4_FD || bind(LISTEN4_FD, (struct sockaddr *)&a4, sizeof(a4)))
+            fail(t->id, -1, "environment_failure", "listener4_at_4");
+        if (socket(AF_INET6, SOCK_DGRAM, 0) != LISTEN6_FD ||
+            setsockopt(LISTEN6_FD, IPPROTO_IPV6, IPV6_V6ONLY, &one, sizeof(one)) ||
+            bind(LISTEN6_FD, (struct sockaddr *)&a6, sizeof(a6)))
+            fail(t->id, -1, "environment_failure", "listener6_at_5");
+        int zero = 0;
+        if (socket(AF_INET6, SOCK_DGRAM, 0) != SEND_FD ||
+            setsockopt(SEND_FD, IPPROTO_IPV6, IPV6_V6ONLY, &zero, sizeof(zero)))
+            fail(t->id, -1, "environment_failure", "sender_at_6");
         /* The generic-netlink socket replaces the last filler; no SOCK_CLOEXEC,
          * so every fixture descriptor has close-on-exec clear. */
         if (socket(AF_NETLINK, SOCK_RAW, NETLINK_GENERIC) != NETLINK_FD)
@@ -224,6 +375,15 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         memset(buffer, op->code == 5 ? 0xa5 : 0, sizeof(buffer));
         if (op->code == 6)
             for (unsigned j = 0; j < 8; ++j) buffer[j] = (unsigned char)(op->value >> (8 * j));
+        if ((op->code >= 10) && !t->net) fail(t->id, i, "invalid_input", "wireguard_without_network_fixture");
+        struct ifreq up_request;
+        if (op->code == 10) {
+            memset(&up_request, 0, sizeof(up_request));
+            strcpy(up_request.ifr_name, "wg0");
+            if (ioctl(SEND_FD, SIOCGIFFLAGS, &up_request)) fail(t->id, i, "environment_failure", "get_wg0_flags");
+            up_request.ifr_flags |= IFF_UP;
+        }
+        if (op->code == 12) usleep(OBSERVE_WAIT_US);
         if (ioctl(coverage_fd, KCOV_ENABLE, comparisons ? KCOV_TRACE_CMP : KCOV_TRACE_PC))
             fail(t->id, i, "coverage_failure", "enable_kcov");
         __atomic_store_n(&coverage[0], 0, __ATOMIC_RELAXED);
@@ -248,6 +408,25 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             if (error < 0) { errno = -error; ret = -1; } else ret = 0;
             break;
         }
+        case 10: {
+            /* dev_change_flags(wg0, flags | IFF_UP) -> wg_open. The current
+             * flags were read before coverage started. */
+            struct ifreq request = up_request;
+            ret = syscall(SYS_ioctl, SEND_FD, SIOCSIFFLAGS, &request);
+            break;
+        }
+        case 11: {
+            struct sockaddr_in6 to = {.sin6_family = AF_INET6, .sin6_port = htons(SEND_PORT)};
+            if (op->payload_len != sizeof(to.sin6_addr)) fail(t->id, i, "invalid_input", "wire_address");
+            memcpy(&to.sin6_addr, op->payload, sizeof(to.sin6_addr));
+            ret = syscall(SYS_sendto, SEND_FD, "leux", 4, 0, &to, sizeof(to));
+            break;
+        }
+        case 12:
+            /* The first datagram at the IPv4 listener, if any; the rest are
+             * drained after coverage stops. */
+            ret = syscall(SYS_recvfrom, LISTEN4_FD, observe_buffer, sizeof(observe_buffer), MSG_DONTWAIT, NULL, NULL);
+            break;
         default: fail(t->id, i, "invalid_input", "wire_opcode");
         }
         int captured_errno = errno;
@@ -256,6 +435,18 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         /* Outside the coverage window: the dump's attribute payloads. */
         if (op->code == 9 && !comparisons && ret == 0)
             printf("LEANUX_WG {\"id\":\"%s\",\"index\":%u,\"payloads\":[%s]}\n", t->id, i, dump_hex);
+        if (op->code == 10 && ret == 0) {
+            clock_gettime(CLOCK_BOOTTIME, &went_up);
+            up_seen = 1;
+            route_into_wg0(t->id, i);
+        }
+        if (op->code == 12) observe(t, i, ret, comparisons);
+        if (up_seen) {
+            struct timespec now;
+            clock_gettime(CLOCK_BOOTTIME, &now);
+            if ((now.tv_sec - went_up.tv_sec) * 1000000000LL + (now.tv_nsec - went_up.tv_nsec) > REKEY_BOUND_NS)
+                fail(t->id, i, "environment_failure", "trace_exceeds_rekey_bound");
+        }
         /* KCOV stops counting once the buffer is full, so "full" is the last
          * value it can reach: CAPACITY - 1 PCs, or (CAPACITY - 1) / 4 records. */
         if (!count || count >= (comparisons ? (CAPACITY - 1) / 4 : CAPACITY - 1))
@@ -349,6 +540,12 @@ int main(int argc, char **argv)
         fail("batch", -1, "invalid_input", "wire_header");
     struct utsname identity;
     if (uname(&identity)) fail("batch", -1, "environment_failure", "uname");
+    /* Block until the kernel's RNG is initialized. WireGuard's handshake
+     * worker calls wait_for_random_bytes(), and its receive path drops
+     * handshakes until rng_is_initialized(): neither may depend on how long
+     * the guest has been up. */
+    unsigned char seed;
+    if (syscall(SYS_getrandom, &seed, 1, 0) != 1) fail("batch", -1, "environment_failure", "getrandom");
     printf("LEANUX_KERNEL %s\n", identity.release);
     unsigned failures = 0;
     for (unsigned t = 0; t < total; ++t) {
@@ -363,7 +560,7 @@ int main(int argc, char **argv)
                 &op->code, &op->kind, &op->fd, &op->newkind, &op->newfd, &op->a, &op->b, &op->value, &consumed) != 8)
                 fail(trace.id, i, "invalid_input", "wire_operation");
             op->payload_len = 0;
-            if (op->code == 8 || op->code == 9) {
+            if (op->code == 8 || op->code == 9 || op->code == 11) {
                 /* A WireGuard operation carries its attribute payload as hex. */
                 const char *hex = line + consumed;
                 if (*hex++ != ' ') fail(trace.id, i, "invalid_input", "wire_payload");

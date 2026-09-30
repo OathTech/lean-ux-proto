@@ -273,6 +273,23 @@ def unlisted_c_lines(row, locations, files, functions):
     return lines
 
 
+def decision_functions_run(row, locations, config, decisions):
+    """Decision functions (label prefixes) with a frame, in an anchored file,
+    of a PC that witnesses decisions (attributable, in a listed function)."""
+    functions = {entry['function'] for entry in decisions.values()}
+    listed_functions = set(config['functions'])
+    ran = set()
+    for pc in row['pcs']:
+        frames = locations[pc]
+        if not attributable(frames) or not listed(frames, listed_functions):
+            continue
+        for frame in frames:
+            source = frame['source'].split('/.deps/linux/')[-1].split(' ')[0].split(':')[0]
+            if frame['function'] in functions and source in config['files']:
+                ran.add(frame['function'])
+    return ran
+
+
 def listed(frames, functions):
     """Whether a PC belongs to one of the configured functions: its outermost
     DWARF frame, which names the symbol. Header helpers are inlined into
@@ -381,6 +398,15 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
                                      previous_position=previous[function][1]))
             previous[function] = (f'{name}={int(outcome)}', here)
         names = {name for name, _ in reported}
+        # Function reached: a decision function Linux ran (any frame of a
+        # counted point, in an anchored file) must have a reported decision.
+        # Unobservable outcomes cannot show an omitted decision; this shows an
+        # omitted function.
+        ran = decision_functions_run(coverage[index], locations, config, decisions)
+        silent = sorted(ran - {decisions[name]['function'] for name in names})
+        if silent:
+            problems.append(dict(index=index, problem='Linux ran a decision function the mirror reported nothing in',
+                                 functions=silent))
         for name, sides in witnesses.items():
             if name not in names and lines & (sides[True] | sides[False]):
                 problems.append(dict(index=index, label=name, problem='Linux evaluated an unreported decision',
@@ -466,12 +492,26 @@ def operand_agreement(trace, model_obs, comparisons, locations, decisions, funct
     return problems, checked
 
 
+# The guest's time budget: boot and a baseline, plus each wg_observe's wait
+# (OBSERVE_WAIT_US in harness/guest.c, 0.4 s, in each of the two children) and
+# a per-operation allowance, both with a factor of two for TCG.
+GUEST_BASE_SECONDS = 120
+OBSERVE_SECONDS = 2 * 2 * 0.4
+OPERATION_SECONDS = 0.05
+
+
+def guest_timeout(traces):
+    observes = sum(op['op'] == 'wg_observe' for trace in traces for op in trace['ops'])
+    operations = sum(len(trace['ops']) for trace in traces)
+    return GUEST_BASE_SECONDS + observes * OBSERVE_SECONDS + operations * OPERATION_SECONDS
+
+
 def run_chunk(traces, out, kcov):
     out.mkdir(parents=True)
     results, gaps = {}, Counter()
     outcomes = Counter()
     try:
-        linux = run_linux(traces, out / 'linux')
+        linux = run_linux(traces, out / 'linux', timeout=guest_timeout(traces))
         coverage = [loads(line) for line in (out / 'linux/coverage.jsonl').read_text().splitlines()]
         validate_coverage(traces, coverage)
         mapped = symbolize(coverage, KERNEL / 'vmlinux')
