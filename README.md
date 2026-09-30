@@ -19,11 +19,13 @@ project. Executable behavior is tested against the pinned kernel. See
 - [Pinned source identities](dependencies/sources.lock.json)
 - [Superseded plans and handoffs](docs/history/README.md)
 
-Status (2026-09-30): the FD/eventfd slice and WireGuard stage A (netlink
-configuration, the allowed-IPs trie, peers and keys) are mirrored with C-shaped
-data and control flow. They agree with the networking oracle kernel on
-behavior, KCOV control flow and comparison operands for 1,288 traces. Next is
-WireGuard stage B (packet receive path); see the plan.
+Status (2026-09-30): the FD/eventfd slice and WireGuard stages A and B1 are
+mirrored with C-shaped data and control flow. Stage A covers netlink
+configuration, the allowed-IPs trie, peers and keys; stage B1 covers
+transmission and routing. They agree with the networking oracle kernel on
+behavior, KCOV control flow and comparison operands for 1,302 traces. After a
+drift audit (2026-09-30), the checker is frozen and reduced; see the plan.
+Stage B2 (the receive path) is paused.
 
 ## Checking the mirror
 

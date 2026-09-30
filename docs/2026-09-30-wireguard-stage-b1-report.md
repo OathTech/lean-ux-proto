@@ -1,6 +1,7 @@
 # WireGuard stage B1 (transmit and routing) — report, 2026-09-30
 
-Status: **awaiting user signoff** for `main`. Branch `task/wg-stage-b1`.
+Status: **merged** to `main` with user signoff on 2026-09-30 (integration
+record in `.artifacts/runs/evidence/wg-stage-b1/`).
 Design: [next-plan, stage B1](2026-09-29-next-plan.md). Decisions are marked
 [USER] or [AGENT].
 

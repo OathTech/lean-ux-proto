@@ -1,7 +1,7 @@
 # WireGuard stage A — report, 2026-09-30
 
-Status: **awaiting user signoff** for `main`. Branch `task/wg-stage-a`,
-worktree `.worktrees/wg-stage-a`. The plan is
+Status: **merged** to `main` with user signoff on 2026-09-30 (integration
+record in `.artifacts/runs/evidence/wg-stage-a/`). The plan is
 [next-plan section 4](2026-09-29-next-plan.md). Decisions are marked [USER]
 or [AGENT].
 
