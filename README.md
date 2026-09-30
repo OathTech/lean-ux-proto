@@ -12,6 +12,7 @@ project. Executable behavior is tested against the pinned kernel. See
 - [Current plan: assessment and way forward (2026-09-29)](docs/2026-09-29-way-forward.md)
 - [Next plan: finish the slice, then WireGuard (2026-09-29)](docs/2026-09-29-next-plan.md)
 - [WireGuard stage A report (2026-09-30)](docs/2026-09-30-wireguard-stage-a-report.md)
+- [WireGuard stage B1 report (2026-09-30)](docs/2026-09-30-wireguard-stage-b1-report.md)
 - [Reproducing the results from a clone](REPRODUCING.md)
 - [Worktree, shared dependency, and cleanup practices](docs/worktree-practices.md)
 - [Offline development setup and environment audit](docs/offline-development.md)
