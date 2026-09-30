@@ -42,8 +42,13 @@ def validate_observation(trace, result):
     if type(observations) is not list or len(observations) != len(trace['ops']):
         raise InvalidOutput('missing or extra observations')
     for index, (op, obs) in enumerate(zip(trace['ops'], observations)):
-        if not keys(obs, ('index', 'ret', 'errno', 'bytes')):
+        fields = ('index', 'ret', 'errno', 'bytes')
+        if op['op'] == 'wg_get' and type(obs) is dict and obs.get('ret') == 0:
+            fields += ('device',)   # the canonical device state (harness/wg.py)
+        if not keys(obs, fields):
             raise InvalidOutput(f'observation {index}: fields')
+        if 'device' in fields and type(obs['device']) is not dict:
+            raise InvalidOutput(f'observation {index}: device state')
         if type(obs['index']) is not int or obs['index'] != index:
             raise InvalidOutput(f'observation {index}: order/index')
         ret, error, data = obs['ret'], obs['errno'], obs['bytes']
@@ -90,7 +95,7 @@ def parse_batch(traces, output, max_bytes=16 * 1024 * 1024):
 # These outcomes cannot be ordinary results in the declared single-threaded,
 # valid-buffer fixture. In particular resource failure must not count as agreement.
 SEMANTIC_ERRNOS = {'eventfd2': {22, 24}, 'dup': {9, 24}, 'dup3': {9, 22},
-                   'close': {9}, 'fcntl': {1, 9, 22}, 'read': {9, 11, 22}, 'write': {9, 11, 22}}
+                   'close': {9}, 'fcntl': {1, 9, 22}, 'wg_set': {22, 95}, 'wg_get': {22}, 'read': {9, 11, 22}, 'write': {9, 11, 22}}
 
 
 def compare(trace, linux, model):
@@ -103,7 +108,9 @@ def compare(trace, linux, model):
         if obs['errno'] is not None and obs['errno'] not in SEMANTIC_ERRNOS[trace['ops'][index]['op']]:
             return dict(id=trace['id'], outcome='environment_failure', index=index, observation=obs)
     for index, (actual, expected) in enumerate(zip(model['observations'], linux['observations'])):
-        if actual != expected:
+        # Canonical JSON keeps types apart (True vs 1, list vs tuple) in the
+        # nested device state; key order is irrelevant.
+        if json.dumps(actual, sort_keys=True) != json.dumps(expected, sort_keys=True):
             return dict(id=trace['id'], outcome='semantic_mismatch', index=index,
                         operation=trace['ops'][index], linux=expected, model=actual)
     return dict(id=trace['id'], outcome='agreement', operations=len(trace['ops']))

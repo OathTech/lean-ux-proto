@@ -1,4 +1,4 @@
-import Leanux.Kernel.Defs
+import Leanux.Kernel.Refcount
 
 /-!
 # fs/eventfd.c — context and file operations
@@ -39,17 +39,6 @@ def eventfdFreeCtx (id : CtxId) : M Unit := do
     modifyK fun k => { k with idaUsed := k.idaUsed.erase cid.toNat }
   -- kfree(ctx)
   freeCtx id
-
-/-- `refcount_dec_and_test` = `__refcount_sub_and_test(1, r, NULL)`
-    (include/linux/refcount.h:262-278). `if (oldp)` is constant-folded away
-    (NULL); saturation reports are `unsupported`. -/
-def refcountDecAndTest (old : Nat) : M Bool := do
-  let i := 1
-  if ← branchCmp .refcountSubPositive (old > 0) old 0 then
-    if ← branchCmp .refcountSubToZero (old == i) old i then return true
-  if ← branch .refcountSubNonpositive (old == 0) then unsupported "refcount_warn_saturate (use after free)"
-  if ← branch .refcountSubUnderflow (old < i) then unsupported "refcount_warn_saturate (underflow)"
-  return false
 
 /-- eventfd_ctx_put (eventfd.c:103-106): `kref_put(&ctx->kref, eventfd_free)`
     (include/linux/kref.h:62-69); `eventfd_free` is `container_of` plus

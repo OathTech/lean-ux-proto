@@ -1,6 +1,8 @@
 import Leanux.Kernel.Decision
+import Leanux.WG.Types
 import Std.Data.TreeMap
 import Std.Data.TreeSet
+import Lean.Data.Json
 
 /-!
 # Mirror state and execution monad
@@ -63,6 +65,10 @@ def ENFILE : Int := 23
 def EINVAL : Int := 22
 def EMFILE : Int := 24
 def EPERM : Int := 1
+def ENODEV : Int := 19
+def EBADR : Int := 53
+def EOPNOTSUPP : Int := 95
+def EPFNOSUPPORT : Int := 96
 
 def ULLONG_MAX : UInt64 := 18446744073709551615
 /-- `NR_OPEN_DEFAULT = BITS_PER_LONG`: capacity of the embedded initial table. -/
@@ -181,6 +187,10 @@ structure Kernel where
   nrFiles : Nat
   maxFiles : Nat
   anonInodeInodeErr : Bool
+  /-- The fixture's WireGuard device, in traces that use the network fixture. -/
+  wg : Option WG.Device := none
+  /-- `peer_counter` (drivers/net/wireguard/peer.c), a global atomic. -/
+  peerCounter : Nat := 0
   deriving BEq
 
 /-! ## Environment oracle
@@ -194,6 +204,7 @@ inductive EnvSite where
   | kmallocEventfdCtx | idaAlloc | filpAlloc | dAllocPseudo
   | kmallocFdtable | kvmallocFdArray | kvmallocFdBitmaps
   | accessOk | copyToUser | copyFromUser
+  | kmemCacheZallocNode | kmemCacheZallocPeer | dstCacheInit
   deriving Repr, BEq, DecidableEq
 
 structure World where
@@ -203,6 +214,8 @@ structure World where
   steps : Array Step := #[]
   /-- The caller's buffer (user memory), as written by `copy_to_iter`. -/
   userOut : Option UInt64 := none
+  /-- The device state a WG_CMD_GET_DEVICE dump delivered to the caller. -/
+  dumpOut : Option Lean.Json := none
 
 /-- Why a mirror execution stopped without an observation. -/
 inductive Stop where

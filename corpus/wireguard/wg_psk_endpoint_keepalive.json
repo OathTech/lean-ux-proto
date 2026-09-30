@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "id": "wg_psk_endpoint_keepalive",
+  "ops": [
+    {
+      "op": "wg_set",
+      "config": {
+        "peers": [
+          {
+            "public_key": "2222222222222222222222222222222222222222222222222222222222222222",
+            "preshared_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "keepalive": 0,
+            "endpoint": {
+              "family": 6,
+              "addr": "fd000000000000000000000000000001",
+              "port": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "op": "wg_get"
+    },
+    {
+      "op": "wg_set",
+      "config": {
+        "peers": [
+          {
+            "public_key": "2222222222222222222222222222222222222222222222222222222222222222",
+            "preshared_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "keepalive": 30,
+            "endpoint": {
+              "family": 6,
+              "addr": "fd000000000000000000000000000001",
+              "port": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "op": "wg_set",
+      "config": {
+        "peers": [
+          {
+            "public_key": "2222222222222222222222222222222222222222222222222222222222222222",
+            "keepalive": 60,
+            "endpoint": {
+              "family": 6,
+              "addr": "fd000000000000000000000000000001",
+              "port": 2
+            }
+          }
+        ]
+      }
+    },
+    {
+      "op": "wg_set",
+      "config": {
+        "peers": [
+          {
+            "public_key": "2222222222222222222222222222222222222222222222222222222222222222",
+            "endpoint": {
+              "family": 4,
+              "addr": "c0a80001",
+              "port": 2
+            }
+          }
+        ]
+      }
+    },
+    {
+      "op": "wg_get"
+    },
+    {
+      "op": "wg_set",
+      "config": {
+        "peers": [
+          {
+            "public_key": "2222222222222222222222222222222222222222222222222222222222222222",
+            "endpoint": {
+              "family": 4,
+              "addr": "c0a80001",
+              "port": 2
+            }
+          }
+        ]
+      }
+    },
+    {
+      "op": "wg_get"
+    }
+  ]
+}

@@ -51,7 +51,7 @@ class EvaluationChecks(unittest.TestCase):
             with self.assertRaises(InvalidOutput):
                 validate_coverage([self.trace], altered)
 
-    CONFIG = {'files': ['fs/eventfd.c'], 'known_gaps': []}
+    CONFIG = {'files': ['fs/eventfd.c'], 'functions': ['eventfd_read', 'eventfd_ctx_do_read'], 'known_gaps': []}
 
     def decision(self, label, line, true, false, why_true=None, why_false=None):
         return {'label': label, 'file': 'fs/eventfd.c', 'line': line,
@@ -71,6 +71,9 @@ class EvaluationChecks(unittest.TestCase):
         loc = {f'0x{n}': [{'function': 'eventfd_read', 'source': f'/x/.deps/linux/fs/eventfd.c:{n}'}]
                for n in (221, 222, 224, 235)}
         loc['0x999'] = [{'function': 'kmalloc', 'source': '/x/.deps/linux/mm/slub.c:999'}]
+        # eventfd.c:224 inlined into a function the configuration does not list
+        loc['0x1224'] = [{'function': 'eventfd_read', 'source': '/x/.deps/linux/fs/eventfd.c:224'},
+                         {'function': 'unlisted', 'source': '/x/.deps/linux/net/core/skbuff.c:1'}]
         trace = {'version': 1, 'id': 'cf', 'ops': [{'op': 'read', 'fd': {'literal': 8}, 'count': 8}]}
         def run(labels, lines):
             model = {'branches': [{'index': 0, 'label': l} for l in labels]}
@@ -99,6 +102,29 @@ class EvaluationChecks(unittest.TestCase):
         # Reporting both outcomes of a decision is rejected (no exemption).
         both = ['eventfd_read.short_buffer=0', 'eventfd_read.empty=0', 'eventfd_read.empty=1']
         self.assertTrue(run(both, [222, 224, 235]))
+
+    def test_header_lines_count_only_through_inline_frames(self):
+        from evaluator.coverage import attributable
+        inlined = [{'function': 'fdput', 'source': '/x/.deps/linux/include/linux/file.h:63'},
+                   {'function': '__sys_recvfrom', 'source': '/x/.deps/linux/net/socket.c:2235'}]
+        merged = [{'function': '__sys_recvfrom', 'source': '/x/.deps/linux/include/linux/file.h:63'}]
+        self.assertTrue(attributable(inlined))
+        self.assertFalse(attributable(merged))
+
+    def test_control_flow_rejects_unlisted_functions_in_c_files(self):
+        run = self.control_flow_fixture()
+        ready = ['eventfd_read.short_buffer=0', 'eventfd_read.empty=0', 'eventfd_ctx_do_read.semaphore=1']
+        # An unlisted function running a span line of an anchored C file fails,
+        # even when the line is mapped through a listed function.
+        problems = run(ready, [222, 235, 1224])
+        self.assertEqual([p['problem'] for p in problems], ['span lines covered by an unlisted function'])
+
+    def test_branch_free_exemption_needs_the_allowlist(self):
+        table = check.parse_decisions([self.decision('fls128.high_nonzero', 180, [], [], 'branch_free', 'branch_free')],
+                                      self.CONFIG)
+        check.witness_table(table, set(), set(), ['fls128'])
+        with self.assertRaises(check.InvalidOutput):
+            check.witness_table(table, set(), set(), [])
 
     def test_decision_table_controls(self):
         good = self.decision('eventfd_read.empty', 223, [(224, 224)], [(235, 235)])
@@ -182,7 +208,7 @@ class EvaluationChecks(unittest.TestCase):
         self.assertEqual(run(dict(label='made_up=1', operands=[1, 2]), []), ([], 0))             # left to control_flow
 
     def test_order_within_a_function(self):
-        config = {'files': ['fs/eventfd.c'], 'known_gaps': []}
+        config = {'files': ['fs/eventfd.c'], 'functions': ['eventfd_write'], 'known_gaps': []}
         table = check.parse_decisions([
             self.decision('eventfd_write.wrong_size', 254, [(255, 255)], [(256, 256)]),
             self.decision('eventfd_write.ullong_max', 258, [(259, 259)], [(260, 260)])], config)
@@ -216,7 +242,7 @@ class EvaluationChecks(unittest.TestCase):
 
     def test_empty_run_is_not_a_pass(self):
         class Args:
-            generated_count, seed, trace = 0, 0, None
+            generated_count, wireguard_count, seed, trace = 0, 0, 0, None
         out = ROOT / '.cache' / 'tmp' / 'empty-report'
         out.mkdir(parents=True, exist_ok=True)
         status = check.write_report(out, [], {}, {}, None, None, 'now', [], Args)

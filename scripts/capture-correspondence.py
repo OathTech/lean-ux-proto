@@ -169,7 +169,7 @@ def main() -> None:
     archive_identity = identity(source_archive)
     if archive_identity["sha256"] != pinned_source["sha256"]:
         raise ValueError("staged Linux archive differs from dependency lock")
-    build = (args.kernel_build or shared / ".artifacts/kernel-active-sandbox").resolve()
+    build = (args.kernel_build or shared / ".artifacts/kernel-net").resolve()
     output = (args.output or artifacts / "correspondence").resolve()
     if not output.is_relative_to(artifacts) or output == artifacts:
         raise ValueError("output must be a private subdirectory of LEANUX_ARTIFACTS")

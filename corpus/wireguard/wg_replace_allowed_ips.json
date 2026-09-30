@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "id": "wg_replace_allowed_ips",
+  "ops": [
+    {
+      "op": "wg_set",
+      "config": {
+        "peers": [
+          {
+            "public_key": "2222222222222222222222222222222222222222222222222222222222222222",
+            "allowed_ips": [
+              {
+                "family": 4,
+                "addr": "0a000000",
+                "cidr": 8
+              },
+              {
+                "family": 4,
+                "addr": "0a010000",
+                "cidr": 16
+              }
+            ]
+          },
+          {
+            "public_key": "3333333333333333333333333333333333333333333333333333333333333333",
+            "allowed_ips": [
+              {
+                "family": 4,
+                "addr": "0a020000",
+                "cidr": 16
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "op": "wg_set",
+      "config": {
+        "peers": [
+          {
+            "public_key": "2222222222222222222222222222222222222222222222222222222222222222",
+            "replace_allowed_ips": true,
+            "allowed_ips": [
+              {
+                "family": 4,
+                "addr": "0a010000",
+                "cidr": 16
+              },
+              {
+                "family": 6,
+                "addr": "fd000000000000000000000000000000",
+                "cidr": 8
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "op": "wg_get"
+    },
+    {
+      "op": "wg_set",
+      "config": {
+        "peers": [
+          {
+            "public_key": "3333333333333333333333333333333333333333333333333333333333333333",
+            "replace_allowed_ips": true
+          }
+        ]
+      }
+    },
+    {
+      "op": "wg_get"
+    }
+  ]
+}

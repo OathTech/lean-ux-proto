@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "id": "wg_private_key_collision",
+  "ops": [
+    {
+      "op": "wg_set",
+      "config": {
+        "peers": [
+          {
+            "public_key": "7b4e909bbe7ffe44c465a220037d608ee35897d31ef972f07f74892cb0f73f13",
+            "allowed_ips": [
+              {
+                "family": 4,
+                "addr": "0a000000",
+                "cidr": 8
+              }
+            ]
+          },
+          {
+            "public_key": "2222222222222222222222222222222222222222222222222222222222222222"
+          }
+        ]
+      }
+    },
+    {
+      "op": "wg_set",
+      "config": {
+        "private_key": "1111111111111111111111111111111111111111111111111111111111111111"
+      }
+    },
+    {
+      "op": "wg_get"
+    }
+  ]
+}

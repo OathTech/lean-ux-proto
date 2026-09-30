@@ -53,6 +53,15 @@ def _disassemble(kernel, function):
 COVERAGE_HOOK = '<__sanitizer_cov_trace_pc>'
 
 
+def attributable(frames):
+    """Whether a point's DWARF attribution is usable. Header code enters a
+    function only through inline frames; a point whose outermost frame (the
+    symbol's own) names a header line lies outside every inline range, where
+    the line table gives a merged block (a join after an inlined `if`) the
+    header's last line. Such points witness nothing."""
+    return not frames[-1]['source'].split(':')[0].endswith('.h')
+
+
 def instrumented_lines(kernel, functions, files):
     """Source lines that own a KCOV instrumentation point in the given functions,
     and the (inlined) function names those points belong to.
@@ -102,15 +111,28 @@ def instrumented_lines(kernel, functions, files):
     lines, names = set(), set()
     for function, pcs in per_function.items():
         query = ''.join(hex(pc - 1) + '\n' for pc in pcs).encode()
-        output = subprocess.run(['addr2line', '-e', kernel, '-i', '-f'], input=query,
+        output = subprocess.run(['addr2line', '-e', kernel, '-a', '-i', '-f'], input=query,
                                 capture_output=True, timeout=60, check=True).stdout.decode().splitlines()
+        stacks, index = [], 0
+        while index < len(output):
+            if output[index].startswith('0x'):
+                stacks.append([])
+                index += 1
+            elif stacks and index + 1 < len(output):
+                stacks[-1].append(dict(function=output[index], source=output[index + 1]))
+                index += 2
+            else:
+                raise ValueError('malformed addr2line output')
         found = 0
-        for name, source in zip(output[0::2], output[1::2]):
-            source = source.split('/.deps/linux/')[-1].split(' ')[0]
-            if source.split(':')[0] in files:
-                lines.add(source)
-                names.add(name)
-                found += 1
+        for frames in stacks:
+            if not attributable(frames):
+                continue
+            for frame in frames:
+                source = frame['source'].split('/.deps/linux/')[-1].split(' ')[0]
+                if source.split(':')[0] in files:
+                    lines.add(source)
+                    names.add(frame['function'])
+                    found += 1
         if not found:
             raise ValueError(f'function {function} has no instrumentation point in the anchored files')
     return lines, names

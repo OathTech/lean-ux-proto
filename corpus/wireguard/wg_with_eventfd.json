@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "id": "wg_with_eventfd",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 0,
+      "flags": 0
+    },
+    {
+      "op": "wg_set",
+      "config": {
+        "peers": [
+          {
+            "public_key": "2222222222222222222222222222222222222222222222222222222222222222"
+          }
+        ]
+      }
+    },
+    {
+      "op": "close",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "wg_get"
+    }
+  ]
+}

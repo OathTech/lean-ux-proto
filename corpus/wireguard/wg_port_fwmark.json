@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "id": "wg_port_fwmark",
+  "ops": [
+    {
+      "op": "wg_set",
+      "config": {
+        "listen_port": 1000,
+        "peers": [
+          {
+            "public_key": "2222222222222222222222222222222222222222222222222222222222222222"
+          }
+        ]
+      }
+    },
+    {
+      "op": "wg_set",
+      "config": {
+        "listen_port": 1000
+      }
+    },
+    {
+      "op": "wg_set",
+      "config": {
+        "listen_port": 0,
+        "fwmark": 1
+      }
+    },
+    {
+      "op": "wg_set",
+      "config": {
+        "fwmark": 4294967295
+      }
+    },
+    {
+      "op": "wg_get"
+    }
+  ]
+}

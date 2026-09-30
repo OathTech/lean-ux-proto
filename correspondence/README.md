@@ -51,6 +51,20 @@ KCOV instrumentation point, and in which (inlined) functions
 
 `kcov.json` lists the anchored files and the functions to scan.
 
+**Which points count** [AGENT 2026-09-30, WireGuard stage A]:
+- Only PCs whose outermost DWARF frame is a listed function witness
+  decisions, in A2, the order check and A3. The instrumentation map is built
+  from the same functions. The netlink core inlines the same header helpers
+  (refcounts on skbs and sockets), which would otherwise pollute witnesses.
+- A point whose outermost frame names a header line lies outside every inline
+  range. The compiler merged a block, such as the join after an inlined `if`,
+  and the line table gives it the header's last line. Such points count
+  neither in the map nor as witnesses. On the current kernel this drops 6
+  of 1,075 points; one of them would falsely witness `fdput.fdput_fput=1`.
+- A decision's C function may own no point only if `kcov.json` lists it in
+  `branch_free_functions` and both outcomes are declared `branch_free`. Today
+  that is `fls128`.
+
 An outcome's **witnesses** are the instrumented lines of its span. Blank lines,
 braces, labels and comments are dropped from spans; statements are kept.
 
@@ -70,7 +84,10 @@ nor hide evidence.
 - a reported outcome that covers none of its witnesses;
 - a reported outcome whose opposite outcome's witnesses are covered;
 - a decision the mirror did not report, but whose witnesses Linux covered;
-- a covered line inside a span that the instrumentation map does not know;
+- a covered line inside a span that the instrumentation map does not know
+  (raw coverage: any function, any attribution);
+- a span line of an anchored `.c` file covered by a function not listed in
+  `kcov.json` (a modeled path running outside the listed functions);
 - an unknown label, or an operation with no decision;
 - coverage only outside the anchored files.
 
@@ -83,7 +100,7 @@ execution.
 return values and read bytes must be identical. The decision table declares
 which decisions are C value comparisons (`Decision.comparison`): the relation
 as written (`lhs REL rhs`, or a mask test), and whether the right-hand side is
-a compile-time constant. There are 58 such decisions.
+a compile-time constant. There are 80 such decisions (`leanux-model --decisions`).
 
 Exactly the declared decisions report `(lhs, rhs)` (`branchCmp`); a missing
 or undeclared operand pair fails. Some comparison record must match, where the
@@ -127,9 +144,15 @@ are the system-wide `nr_files` and the boot-sized `max_files` (observed as
   "decision was reached" rule was evaluated and rejected: under DWARF
   attribution, condition-line coverage fails for 11 decisions whose condition
   lines are instrumented.
-- Witnesses are keyed by source line, not by inline context. A header helper
-  inlined into an unmodeled caller in the same operation could in principle
-  satisfy a witness.
+- Witnesses are keyed by source line, not by inline context. Within the
+  listed functions, a header helper inlined at two sites shares its witnesses.
+  Header span lines run by *unlisted* functions are ignored, not flagged,
+  because header helpers are inlined everywhere (`fdput` into 83 functions,
+  the refcount helpers into hundreds). A modeled path through an unlisted
+  function that only runs header decisions is therefore not detected; the
+  function list is kept complete by review.
+- Covered lines in listed functions that belong to no span are not checked,
+  so an unmodeled branch is caught only if it shares a span line.
 - Order is compared only within a C function. Across functions, an arm's first
   witness can follow the decisions of a call nested inside it. Ties and
   unwitnessed steps are counted in the report (`order:` entries), not checked.
@@ -170,3 +193,27 @@ same facts in machine-readable form.
 - The file status is computed as in the C: `O_RDWR | O_NONBLOCK` = 2050.
 - Close-on-exec is descriptor-local.
 - Descriptor references keep their number after close.
+
+## WireGuard stage A abstractions
+
+The mirror enters at `wg_set_device` and at the dump callbacks, with the
+attributes `harness/wg.py` encodes. The following are cut points, stated at
+their code:
+- the generic-netlink core, policy validation and the dump machinery;
+- the socket layer beyond `fdget`/`fdput` of descriptor 7;
+- timers, work queues, NAPI, packet queues, `dst_cache`, RCU freeing;
+- the index hashtable and the `hlist` helpers of the public-key hashtable. Their
+  branches (`hlist_unhashed`, `if (first)`, an empty staged-packet purge) live
+  in unanchored headers. They are constant on these paths, except the bucket
+  order, which depends on a random key.
+- the public-key lookup's bucket walk, reported as one `match` decision with
+  the walk's result;
+- the cookie keys (BLAKE2s);
+- Curve25519, computed by an RFC 7748 reference (the build runs the x86-64
+  implementation).
+
+`swap_endian` in `wg_allowedips_insert_v4`/`_v6` has a constant width, so the
+choice folds away and is not reported there; `wg_allowedips_read_node` reports
+it. The device is down throughout: `netif_running` is false, and any path that
+would send, open sockets or arm timers is `unsupported`. A dump larger than
+3,000 bytes is `unsupported`, so the dump is always one message.

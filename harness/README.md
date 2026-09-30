@@ -14,9 +14,12 @@ resource failures. These are experiment failures, not semantic disagreements.
 Agreement is decided by `python3 -m evaluator.check`, which also builds and runs
 the mirror; see the top-level README.
 
-The runner builds only `guest.c`, then boots the accepted
-`.artifacts/kernel-active-sandbox` kernel with one TCG CPU, 256 MiB memory,
-and no network device. A shared advisory lock reserves the one guest slot.
+The runner builds only `guest.c`, then boots the accepted networking kernel
+`.artifacts/kernel-net` (`scripts/build-kernel` with `LEANUX_KERNEL_PROFILE=net`,
+`kernel/config-x86_64-net`; `LEANUX_KERNEL_DIR` selects another build inside
+the artifact roots) with one TCG CPU, 256 MiB memory, and no network device.
+Traces with a WireGuard operation run in a fresh network namespace holding a
+down WireGuard device `wg0`, with a generic-netlink socket at descriptor 7. A shared advisory lock reserves the one guest slot.
 No experimental syscall sequence runs on the host. No kernel rebuild occurs.
 Each call boots a fresh VM, and each trace runs in a fresh forked child. The
 parent only reads the wire input and manages children; it owns no eventfd.

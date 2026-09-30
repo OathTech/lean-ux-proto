@@ -3,6 +3,8 @@ from copy import deepcopy
 import json
 import re
 
+from .wg import InvalidConfig, encode_get, encode_set, validate_config
+
 
 class InvalidTrace(ValueError):
     kind = "invalid_input"
@@ -18,7 +20,10 @@ FIELDS = {
     "dup3": {"op", "fd", "newfd", "flags"}, "close": {"op", "fd"},
     "read": {"op", "fd", "count"}, "write": {"op", "fd", "count", "value"},
     "fcntl": {"op", "fd", "cmd", "arg"},
+    # WireGuard configuration of the fixture's `wg0` (harness/wg.py)
+    "wg_set": {"op", "config"}, "wg_get": {"op"},
 }
+WG_OPS = {"wg_set", "wg_get"}
 OPCODES = {name: i + 1 for i, name in enumerate(FIELDS)}
 FCNTL = {"F_GETFD": 1, "F_SETFD": 2, "F_GETFL": 3, "F_SETFL": 4}
 
@@ -78,7 +83,19 @@ def validate_trace(trace):
         if name == "fcntl":
             if type(op["cmd"]) is not str or op["cmd"] not in FCNTL:
                 raise UnsupportedTrace(f"ops[{i}].cmd: unsupported fcntl command")
+        if name == "wg_set":
+            try:
+                validate_config(op["config"], f"ops[{i}].config")
+            except InvalidConfig as exc:
+                raise InvalidTrace(str(exc)) from exc
     return deepcopy(trace)
+
+
+def uses_wireguard(trace):
+    """Traces with WireGuard operations get the network fixture: a fresh
+    network namespace with a down `wg0`, and the generic-netlink socket at
+    descriptor 7 in place of the last /dev/null filler."""
+    return any(op["op"] in WG_OPS for op in trace["ops"])
 
 
 def loads_trace(line):
@@ -106,7 +123,7 @@ def serialize_wire(traces):
         raise InvalidTrace("guest batch trace identifiers must be unique")
     lines = ["LEANUX_WIRE_V1", str(len(traces))]
     for trace in traces:
-        lines.append(f"T {trace['id']} {len(trace['ops'])} {trace.get('rlimit_nofile', 32)}")
+        lines.append(f"T {trace['id']} {len(trace['ops'])} {trace.get('rlimit_nofile', 32)} {int(uses_wireguard(trace))}")
         for op in trace["ops"]:
             def fd(field):
                 value = op.get(field, {"literal": -1})
@@ -115,5 +132,10 @@ def serialize_wire(traces):
             newkind, newvalue = fd("newfd")
             a = op.get("init", op.get("count", FCNTL.get(op.get("cmd"), 0)))
             b = op.get("flags", op.get("arg", 0))
-            lines.append(f"{OPCODES[op['op']]} {kind} {value} {newkind} {newvalue} {a} {b} {op.get('value', '0')}")
+            line = f"{OPCODES[op['op']]} {kind} {value} {newkind} {newvalue} {a} {b} {op.get('value', '0')}"
+            if op["op"] == "wg_set":
+                line += " " + encode_set(op["config"]).hex()
+            elif op["op"] == "wg_get":
+                line += " " + encode_get().hex()
+            lines.append(line)
     return "\n".join(lines) + "\n"

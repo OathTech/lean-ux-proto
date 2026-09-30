@@ -208,3 +208,66 @@ def generate_v2(seed, count, max_ops):
             seen.add(digest)
             result.append(trace)
     return result
+
+
+def generate_wireguard(seed, count, max_ops=12):
+    """Seeded WireGuard configuration traces over small pools of keys and
+    prefixes, so that peers, trie nodes and identities collide often. Every
+    trace ends with a dump."""
+    if not 2 <= max_ops <= 64 or not 1 <= count <= 100000:
+        raise ValueError('bounded generator parameters')
+    rng = random.Random(seed)
+    keys = ['11' * 32, '22' * 32, '33' * 32, '00' * 32,
+            '7b4e909bbe7ffe44c465a220037d608ee35897d31ef972f07f74892cb0f73f13']   # public key of 11..11
+    private = ['11' * 32, '10' + '11' * 30 + '51', '22' * 32, '00' * 32]
+    v4 = ['0a000000', '0a010000', '0a010203', '0a800000', 'c0a80001', '00000000', 'ffffffff']
+    v6 = ['20010db8000000000000000000000000', '20010db8000000008000000000000001', '20010db9000000000000000000000000',
+          'fe800000000000000000000000000000', '00000000000000000000000000000000']
+    seen, result = set(), []
+
+    def allowed_ip():
+        if rng.random() < .6:
+            return dict(family=4, addr=rng.choice(v4), cidr=rng.choices([0, 8, 15, 16, 24, 32, 33], [1, 3, 2, 3, 2, 2, 1])[0])
+        return dict(family=6, addr=rng.choice(v6), cidr=rng.choices([0, 10, 32, 48, 64, 65, 128, 129], [1, 1, 3, 2, 2, 1, 2, 1])[0])
+
+    def peer():
+        entry = dict(public_key=rng.choice(keys))
+        for flag, p in (('remove', .1), ('update_only', .1), ('replace_allowed_ips', .15)):
+            if rng.random() < p:
+                entry[flag] = True
+        if rng.random() < .2:
+            entry['preshared_key'] = rng.choice(['aa' * 32, 'bb' * 32])
+        if rng.random() < .3:
+            entry['endpoint'] = rng.choice([dict(family=4, addr='0a000001', port=rng.choice([1, 51820])),
+                                            dict(family=6, addr=v6[1], port=rng.choice([1, 51820]))])
+        if rng.random() < .3:
+            entry['keepalive'] = rng.choice([0, 25])
+        if rng.random() < .8:
+            entry['allowed_ips'] = [allowed_ip() for _ in range(rng.choices([0, 1, 2, 3, 5], [1, 3, 3, 2, 1])[0])]
+        return entry
+
+    def config():
+        result = {}
+        if rng.random() < .3:
+            result['private_key'] = rng.choice(private)
+        if rng.random() < .15:
+            result['listen_port'] = rng.choice([0, 51820])
+        if rng.random() < .1:
+            result['fwmark'] = rng.choice([0, 1, 2**32 - 1])
+        if rng.random() < .1:
+            result['replace_peers'] = True
+        if rng.random() < .85:
+            result['peers'] = [peer() for _ in range(rng.choices([0, 1, 2, 3], [1, 4, 3, 2])[0])]
+        return result
+
+    while len(result) < count:
+        operations = []
+        for _ in range(rng.randint(1, max_ops - 1)):
+            operations.append({'op': 'wg_get'} if rng.random() < .2 else {'op': 'wg_set', 'config': config()})
+        operations.append({'op': 'wg_get'})
+        trace = dict(version=1, id=f'generated-wg-{seed}-{len(result):05}', ops=operations)
+        digest = identity(trace)
+        if digest not in seen:
+            seen.add(digest)
+            result.append(trace)
+    return result

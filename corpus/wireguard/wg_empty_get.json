@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "id": "wg_empty_get",
+  "ops": [
+    {
+      "op": "wg_get"
+    },
+    {
+      "op": "wg_get"
+    }
+  ]
+}

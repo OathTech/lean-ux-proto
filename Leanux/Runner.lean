@@ -17,6 +17,8 @@ inductive Operation where
   | read (fd : FDArg) (count : Nat)
   | write (fd : FDArg) (count : Nat) (value : UInt64)
   | fcntl (fd : FDArg) (cmd : FcntlCmd) (arg : UInt32)
+  | wgSet (attrs : WG.DeviceAttrs)
+  | wgGet
   deriving Repr
 
 def Operation.isProducer : Operation → Bool
@@ -29,6 +31,11 @@ structure Trace where
   /-- `RLIMIT_NOFILE`, set by the fixture before the first operation. -/
   rlimit : Nat := 32
   deriving Repr
+
+/-- The network fixture runs for traces with a WireGuard operation
+    (harness/trace.py `uses_wireguard`). -/
+def Trace.net (t : Trace) : Bool :=
+  t.ops.any fun | .wgSet _ | .wgGet => true | _ => false
 
 private def fields (j : Json) (expected : List String) : Except String Unit := do
   let obj ← j.getObj?
@@ -69,6 +76,85 @@ private def parseValue (j : Json) : Except String UInt64 := do
     throw "write value must be canonical UInt64 decimal"
   return UInt64.ofNat n
 
+
+/-! ## WireGuard configurations
+
+The trace's structured configuration (harness/wg.py `validate_config`), read
+as the attributes `encode_set` sends. Keys and addresses are lowercase hex. -/
+
+private def hexValue (c : Char) : Option Nat :=
+  if '0' ≤ c && c ≤ '9' then some (c.toNat - '0'.toNat)
+  else if 'a' ≤ c && c ≤ 'f' then some (c.toNat - 'a'.toNat + 10) else none
+
+/-- Exactly `digits` lowercase hex digits, as bytes. -/
+private def hexBytes (j : Json) (digits : Nat) (what : String) : Except String (List UInt8) := do
+  let s ← j.getStr?
+  let cs := s.toList
+  if cs.length != digits then throw s!"{what}: expected {digits} lowercase hex digits"
+  let some vs := cs.mapM hexValue | throw s!"{what}: expected {digits} lowercase hex digits"
+  let rec pairs : List Nat → List UInt8
+    | a :: b :: rest => UInt8.ofNat (a * 16 + b) :: pairs rest
+    | _ => []
+  return pairs vs
+
+private def bigEndian (bs : List UInt8) : Nat := bs.foldl (fun acc b => acc * 256 + b.toNat) 0
+
+private def subsetFields (j : Json) (allowed : List String) (what : String) : Except String Unit := do
+  let obj ← j.getObj?
+  if !obj.all (fun key _ => allowed.contains key) then throw s!"{what}: fields must be a subset of {allowed}"
+
+private def optField (j : Json) (name : String) : Option Json := (j.getObjVal? name).toOption
+
+private def boolField (j : Json) (name : String) : Except String Bool := do
+  match optField j name with
+  | none => return false
+  | some v => v.getBool?
+
+private def address (j : Json) (withPort : Bool) (what : String) : Except String (Nat × Nat × Nat × Nat) := do
+  fields j (if withPort then ["family", "addr", "port"] else ["family", "addr", "cidr"])
+  let family ← (← field j "family").getNat?
+  if family != 4 && family != 6 then throw s!"{what}.family: expected 4 or 6"
+  let len := if family == 4 then 4 else 16
+  let addr := bigEndian (← hexBytes (← field j "addr") (2 * len) s!"{what}.addr")
+  let last ← if withPort then natField j "port" 65535 else natField j "cidr" 255
+  return (if family == 4 then WG.AF_INET else WG.AF_INET6, addr, len, last)
+
+private def parsePeer (j : Json) (i : Nat) : Except String WG.PeerAttrs := do
+  let what := s!"config.peers[{i}]"
+  subsetFields j ["public_key", "remove", "update_only", "replace_allowed_ips", "preshared_key",
+    "endpoint", "keepalive", "allowed_ips"] what
+  let publicKey ← hexBytes (← field j "public_key") 64 s!"{what}.public_key"
+  let flags := (if ← boolField j "remove" then WG.WGPEER_F_REMOVE_ME else 0) |||
+    (if ← boolField j "update_only" then WG.WGPEER_F_UPDATE_ONLY else 0) |||
+    (if ← boolField j "replace_allowed_ips" then WG.WGPEER_F_REPLACE_ALLOWEDIPS else 0)
+  let presharedKey ← (optField j "preshared_key").mapM (hexBytes · 64 s!"{what}.preshared_key")
+  let endpoint ← (optField j "endpoint").mapM fun e => do
+    let (family, addr, len, port) ← address e true s!"{what}.endpoint"
+    -- sizeof(struct sockaddr_in) or sizeof(struct sockaddr_in6)
+    pure ({ len := if len == 4 then 16 else 28, family, addr, port } : WG.EndpointAttr)
+  let keepalive ← (optField j "keepalive").mapM fun _ => natField j "keepalive" 65535
+  let allowedIps ← (optField j "allowed_ips").mapM fun a => do
+    let ips ← a.getArr?
+    if ips.size > 32 then throw s!"{what}.allowed_ips: expected at most 32 entries"
+    ips.toList.mapIdxM fun k ip => do
+      let (family, addr, addrLen, cidr) ← address ip false s!"{what}.allowed_ips[{k}]"
+      pure ({ family, addr, addrLen, cidr } : WG.AllowedIpAttrs)
+  return { publicKey, presharedKey, flags := if flags != 0 then some flags else none,
+           endpoint, keepalive, allowedIps }
+
+private def parseConfig (j : Json) : Except String WG.DeviceAttrs := do
+  subsetFields j ["private_key", "listen_port", "fwmark", "replace_peers", "peers"] "config"
+  let privateKey ← (optField j "private_key").mapM (hexBytes · 64 "config.private_key")
+  let listenPort ← (optField j "listen_port").mapM fun _ => natField j "listen_port" 65535
+  let fwmark ← (optField j "fwmark").mapM fun _ => natField j "fwmark" 4294967295
+  let replace ← boolField j "replace_peers"
+  let peers ← (optField j "peers").mapM fun p => do
+    let ps ← p.getArr?
+    if ps.size > 16 then throw "config.peers: expected at most 16 peers"
+    ps.toList.mapIdxM fun i peer => parsePeer peer i
+  return { flags := if replace then some WG.WGDEVICE_F_REPLACE_PEERS else none,
+           privateKey, listenPort, fwmark, peers }
+
 private def parseOperation (j : Json) (prior : Array Operation) : Except String Operation := do
   let op ← (← field j "op").getStr?
   match op with
@@ -105,6 +191,12 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
     | "F_GETFL" => return .fcntl fd FcntlCmd.getFL arg
     | "F_SETFL" => return .fcntl fd FcntlCmd.setFL arg
     | _ => throw "unsupported fcntl command"
+  | "wg_set" =>
+    fields j ["op", "config"]
+    return .wgSet (← parseConfig (← field j "config"))
+  | "wg_get" =>
+    fields j ["op"]
+    return .wgGet
   | _ => throw "unsupported operation"
 
 def parseTrace (j : Json) : Except String Trace := do
@@ -131,7 +223,11 @@ descriptors 0-2 are the inherited console (one shared `struct file`), 3 is
 KCOV (also memory-mapped), 4-7 are separately opened /dev/null files, and
 RLIMIT_NOFILE is 32. The fork gave the child its own files_struct
 (`count = 1`) with the embedded 64-slot table. Allocation history leaves
-`next_fd = 8`. Fixture files carry references held outside the trace. -/
+`next_fd = 8`. Fixture files carry references held outside the trace.
+
+The network fixture (traces with a WireGuard operation) runs in a new network
+namespace holding `lo` and a down WireGuard device `wg0` at ifindex 3, and
+descriptor 7 is a generic-netlink socket instead of /dev/null. -/
 
 /-- A fixture file. Its mode, operations and inode are outside the slice: any
     operation that consults them is `unsupported`. -/
@@ -139,13 +235,14 @@ def fixtureFile (name : String) (refs : Nat) : File :=
   { fFlags := O_RDWR, fMode := FMODE_READ ||| FMODE_WRITE ||| FMODE_OPENED,
     fCount := refs, fOp := some (.fixture name), fInode := some (.fixture name) }
 
-def initialKernel (rlimit : Nat) : Kernel :=
+def initialKernel (rlimit : Nat) (net : Bool := false) : Kernel :=
   let slot (fd : Nat) : Option FileId :=
     if fd < 3 then some 0 else if fd < 8 then some (fd - 2) else none
   let files : Std.TreeMap FileId File := Std.TreeMap.ofList
     ([(0, fixtureFile "console" 4),   -- fds 0-2 plus init's references
       (1, fixtureFile "kcov" 2)] ++    -- fd 3 plus the coverage mapping
-     (List.range 4).map fun i => (i + 2, fixtureFile "/dev/null" 1))
+     (List.range 4).map fun i =>
+       (i + 2, fixtureFile (if net && i == 3 then "generic-netlink" else "/dev/null") 1))
   let slots := (List.range NR_OPEN_DEFAULT).toArray
   { task := {
       files := { count := 1, resizeInProgress := false, nextFd := 8,
@@ -156,7 +253,8 @@ def initialKernel (rlimit : Nat) : Kernel :=
     idaUsed := {},
     -- Environment facts: the system-wide open-file count and limit are not
     -- observed; the guest has few files open, far below any boot-sized limit.
-    nrFiles := 6, maxFiles := 1000000, anonInodeInodeErr := false }
+    nrFiles := 6, maxFiles := 1000000, anonInodeInodeErr := false,
+    wg := if net then some { ifindex := 3, ifname := "wg0" } else none }
 
 /-- The harness environment: every allocation and user-memory access succeeds. -/
 def harnessEnv : EnvSite → Nat → Bool := fun _ _ => true
@@ -183,11 +281,13 @@ def toSyscall (results : Array Int) : Operation → Syscall
   | .read fd count => .read (uint (resolveFD results fd)) count
   | .write fd count value => .write (uint (resolveFD results fd)) count value
   | .fcntl fd cmd arg => .fcntl (uint (resolveFD results fd)) cmd arg.toUInt64
+  | .wgSet attrs => .wgSet attrs
+  | .wgGet => .wgGet
 
 /-- Run a trace. A `Stop` is returned with the operation index: the mirror
     never reports an observation for a path it does not model. -/
 def executeTrace (trace : Trace) : Except (Nat × Stop) Json := do
-  let mut world : World := { k := initialKernel trace.rlimit, env := harnessEnv }
+  let mut world : World := { k := initialKernel trace.rlimit trace.net, env := harnessEnv }
   let mut results : Array Int := #[]
   let mut observations : Array Json := #[]
   let mut branches : Array Json := #[]
@@ -200,10 +300,13 @@ def executeTrace (trace : Trace) : Except (Nat × Stop) Json := do
     let bytes := match op, w.userOut with
       | .read .., some v => if ret == 8 then wordBytes v else ""
       | _, _ => ""
-    observations := observations.push (Json.mkObj [
+    let device := match w.dumpOut with
+      | some d => [("device", d)]
+      | none => []
+    observations := observations.push (Json.mkObj ([
       ("index", toJson index), ("ret", toJson ret),
       ("errno", if ret < 0 then toJson (-ret) else .null),
-      ("bytes", toJson bytes)])
+      ("bytes", toJson bytes)] ++ device))
     for s in w.steps do
       let fields := [("index", toJson index), ("label", toJson s.label)]
       branches := branches.push (Json.mkObj (match s.operands with

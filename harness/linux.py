@@ -17,11 +17,16 @@ import subprocess
 import time
 
 from .trace import InvalidTrace, loads_trace, serialize_wire, validate_trace
+from .wg import decode_dump
 
 ROOT = Path(__file__).resolve().parents[1]
 SHARED = Path(os.environ.get("LEANUX_SHARED_ROOT", ROOT)).resolve()
 ARTIFACTS = Path(os.environ.get("LEANUX_ARTIFACTS", ROOT / ".artifacts")).resolve()
-KERNEL = SHARED / ".artifacts/kernel-active-sandbox"
+# The accepted oracle kernel, or another kernel build selected by
+# LEANUX_KERNEL_DIR (it must lie inside the shared or task artifact roots).
+KERNEL = Path(os.environ.get("LEANUX_KERNEL_DIR", SHARED / ".artifacts/kernel-net")).resolve()
+if not (KERNEL.is_relative_to(SHARED / ".artifacts") or KERNEL.is_relative_to(ARTIFACTS)):
+    raise SystemExit(f"LEANUX_KERNEL_DIR outside the artifact roots: {KERNEL}")
 OUTPUT_LIMIT = 16 * 1024 * 1024
 
 
@@ -111,7 +116,11 @@ def _check_observation(result, trace):
     if type(observations) is not list or len(observations) != len(trace["ops"]):
         raise ValueError("observation count")
     for i, (observation, op) in enumerate(zip(observations, trace["ops"])):
-        if type(observation) is not dict or set(observation) != {"index", "ret", "errno", "bytes"}:
+        # A successful wg_get also carries the decoded device state.
+        fields = {"index", "ret", "errno", "bytes"}
+        if op["op"] == "wg_get" and type(observation) is dict and observation.get("ret") == 0:
+            fields = fields | {"device"}
+        if type(observation) is not dict or set(observation) != fields:
             raise ValueError("operation observation fields")
         ret, error, data = observation["ret"], observation["errno"], observation["bytes"]
         if type(observation["index"]) is not int or observation["index"] != i or type(ret) is not int or not -4095 <= ret < 2**63:
@@ -128,15 +137,38 @@ def _check_observation(result, trace):
             raise ValueError("read output byte count")
 
 
+def attach_devices(results, traces, records):
+    """Each successful wg_get has exactly one dump record; its payloads are
+    decoded (coalesced) into the observation's canonical `device`."""
+    by_trace = {result["id"]: result for result in results}
+    seen = set()
+    for record in records:
+        if type(record) is not dict or set(record) != {"id", "index", "payloads"} or record["id"] not in by_trace:
+            raise ValueError("wireguard record fields or identity")
+        key = (record["id"], record["index"])
+        observations = by_trace[record["id"]]["observations"]
+        if key in seen or type(record["index"]) is not int or not 0 <= record["index"] < len(observations):
+            raise ValueError("duplicate or out-of-range wireguard record")
+        seen.add(key)
+        if type(record["payloads"]) is not list or not all(type(p) is str for p in record["payloads"]):
+            raise ValueError("wireguard payloads")
+        observations[record["index"]]["device"] = decode_dump(record["payloads"])
+    for trace in traces:
+        for index, op in enumerate(trace["ops"]):
+            expected = op["op"] == "wg_get" and by_trace[trace["id"]]["observations"][index]["ret"] == 0
+            if expected != ((trace["id"], index) in seen):
+                raise ValueError("missing or unexpected wireguard dump record")
+
+
 def _collect(outdir, traces, process_returncode):
     results, coverage, fixtures, errors, child_failures, completed, kernels = [], [], [], [], [], [], []
-    comparisons, comparison_results = [], []
+    comparisons, comparison_results, wireguard = [], [], []
     for line in (outdir / "boot.log").read_text(errors="strict").splitlines():
         line = line.rstrip("\r")
         for prefix, target in (("LEANUX_RESULT ", results), ("LEANUX_COVERAGE ", coverage),
                                ("LEANUX_FIXTURE ", fixtures), ("LEANUX_ERROR ", errors),
                                ("LEANUX_CHILD_FAILURE ", child_failures), ("LEANUX_CMP ", comparisons),
-                               ("LEANUX_CMP_RESULT ", comparison_results)):
+                               ("LEANUX_CMP_RESULT ", comparison_results), ("LEANUX_WG ", wireguard)):
             if line.startswith(prefix):
                 try:
                     target.append(_decode_json(line[len(prefix):]))
@@ -169,6 +201,7 @@ def _collect(outdir, traces, process_returncode):
     if len(coverage) != len(expected_coverage):
         raise LinuxRunError("missing_coverage", "Missing or extra per-operation coverage", outdir)
     try:
+        attach_devices(results, traces, wireguard)
         for result, trace, fixture in zip(results, traces, fixtures):
             _check_observation(result, trace)
             limit = trace.get("rlimit_nofile", 32)
@@ -195,7 +228,7 @@ def _collect(outdir, traces, process_returncode):
                     type(r) is list and len(r) == 4 and type(r[0]) is int and 0 <= r[0] < 8
                     and all(type(x) is str and re.fullmatch(r"0x[0-9a-f]{1,16}", x) for x in r[1:]) for r in row["records"]):
                 raise ValueError("comparison records")
-    except (ValueError, TypeError, KeyError) as exc:
+    except (ValueError, TypeError, KeyError, IndexError) as exc:
         raise LinuxRunError("invalid_output", str(exc), outdir) from exc
     # The comparison child reruns each trace independently; its results must
     # be identical, or the comparison records do not describe this run.

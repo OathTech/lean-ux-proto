@@ -1,7 +1,8 @@
 """Build the mirror, run traces on the pinned Linux guest and the mirror, compare.
 
-    scripts/in-bundle python3 -m evaluator.check [--suite handwritten,critic,generated]
-        [--generated-count N] [--seed S] [--trace ID] [--out DIR] [--no-build]
+    scripts/in-bundle python3 -m evaluator.check
+        [--suite handwritten,critic,wireguard,generated,wireguard-generated]
+        [--generated-count N] [--wireguard-count N] [--seed S] [--trace ID] [--out DIR] [--no-build]
 
 The command fails unless every trace agrees on observations (A1) and every
 operation's model branch labels are consistent with Linux KCOV coverage (A2).
@@ -21,13 +22,13 @@ import sys
 
 from harness.linux import KERNEL, LinuxRunError, run_linux
 from harness.trace import InvalidTrace, loads_trace, validate_trace
-from .coverage import instrumented_lines, symbolize
-from .generate import generate
+from .coverage import attributable, instrumented_lines, symbolize
+from .generate import generate, generate_wireguard
 from .protocol import InvalidOutput, compare, loads, parse_batch, validate_coverage
 
 ROOT = Path(__file__).resolve().parents[1]
 ANCHORS = ROOT / 'correspondence/kcov.json'
-SUITES = ('handwritten', 'critic', 'generated')
+SUITES = ('handwritten', 'critic', 'wireguard', 'generated', 'wireguard-generated')
 CHUNK = 100
 
 
@@ -64,14 +65,16 @@ def domain_filter(traces):
     return verdicts
 
 
-def load_traces(suites, count, seed, only, filtered):
+def load_traces(suites, counts, seed, only, filtered):
     """The selected suites. Generated traces are drawn from a fixed number of
     seeded candidates, keeping those the mirror places inside the domain;
     `filtered` receives the rejected candidates' reasons."""
     traces = []
     for suite in suites:
-        if suite == 'generated':
-            candidates = [validate_trace(t) for t in generate(seed, count * CANDIDATES_PER_TRACE)]
+        if suite in ('generated', 'wireguard-generated'):
+            source = generate if suite == 'generated' else generate_wireguard
+            count = counts[suite]
+            candidates = [validate_trace(t) for t in source(seed, count * CANDIDATES_PER_TRACE)]
             verdicts = domain_filter(candidates)
             kept = [t for t, v in zip(candidates, verdicts) if v['in_domain']][:count]
             if len(kept) < count:
@@ -130,8 +133,11 @@ class ModelStopped(InvalidOutput):
 
 def load_kcov_config():
     config = json.loads(ANCHORS.read_text())
-    if set(config) != {'version', 'description', 'files', 'functions', 'known_gaps'} or config['version'] != 2:
+    if (set(config) != {'version', 'description', 'files', 'functions', 'branch_free_functions', 'known_gaps'}
+            or config['version'] != 2):
         raise ValueError('kcov config fields or version')
+    if any(type(x) is not str or x in config['functions'] for x in config['branch_free_functions']):
+        raise ValueError('branch-free functions must be names outside the instrumented functions')
     if not config['files'] or not config['functions'] or any(type(x) is not str for x in config['files'] + config['functions']):
         raise ValueError('kcov config needs anchored files and instrumented functions')
     for gap in config['known_gaps']:
@@ -210,11 +216,12 @@ def parse_decisions(decisions, config):
     return table
 
 
-def witness_table(decisions, instrumented, functions):
+def witness_table(decisions, instrumented, functions, branch_free_functions=()):
     """Witnesses are the instrumented lines of each outcome span. A side with
     no witness must declare why it is unobservable, and a declared reason must
     not hide a side that does have witnesses. Each decision's C function (the
-    label prefix) must own instrumentation, so reaching it is checkable."""
+    label prefix) must own instrumentation, so reaching it is checkable, unless
+    both outcomes are declared branch-free."""
     table, problems = {}, []
     for label, entry in decisions.items():
         table[label] = {o: entry['spans'][o] & instrumented for o in (True, False)}
@@ -224,7 +231,12 @@ def witness_table(decisions, instrumented, functions):
             if table[label][outcome] and entry['reasons'][outcome] is not None:
                 problems.append(f'{label}={int(outcome)}: declared unobservable but witnessed by '
                                 f'{sorted(table[label][outcome])}')
-        if entry['function'] not in functions:
+        # A function the compiler made entirely branch-free owns no point; its
+        # decisions are exempt only if the configuration lists it as such and
+        # both outcomes say so.
+        branch_free = (entry['function'] in branch_free_functions
+                       and all(entry['reasons'][o] == 'branch_free' for o in (True, False)))
+        if entry['function'] not in functions and not branch_free:
             problems.append(f'{label}: C function {entry["function"]} owns no instrumentation point')
     if problems:
         raise InvalidOutput('decision table does not match the instrumented kernel:\n  ' + '\n  '.join(problems))
@@ -235,11 +247,50 @@ def op_lines(row, locations, files):
     return set(line_positions(row, locations, files))
 
 
-def line_positions(row, locations, files):
-    """Each anchored line's first position in the operation's coverage. The
-    guest records each PC once, at its first execution, in execution order."""
+def raw_lines(row, locations, files):
+    """Every anchored line in the operation's coverage, from any function and
+    any attribution."""
+    lines = set()
+    for pc in row['pcs']:
+        for frame in locations[pc]:
+            source = frame['source'].split('/.deps/linux/')[-1].split(' ')[0]
+            if source.split(':')[0] in files:
+                lines.add(source)
+    return lines
+
+
+def unlisted_c_lines(row, locations, files, functions):
+    """Anchored `.c` lines run by attributable PCs of unlisted functions."""
+    lines = set()
+    for pc in row['pcs']:
+        frames = locations[pc]
+        if not attributable(frames) or listed(frames, functions):
+            continue
+        for frame in frames:
+            source = frame['source'].split('/.deps/linux/')[-1].split(' ')[0]
+            if source.split(':')[0] in files and source.split(':')[0].endswith('.c'):
+                lines.add(source)
+    return lines
+
+
+def listed(frames, functions):
+    """Whether a PC belongs to one of the configured functions: its outermost
+    DWARF frame, which names the symbol. Header helpers are inlined into
+    unmodeled code too (refcounts on the netlink core's skbs), so only these
+    PCs witness decisions, as only these PCs define the instrumentation map."""
+    return frames[-1]['function'].split('.')[0] in functions
+
+
+def line_positions(row, locations, files, functions=None):
+    """Each anchored line's first position in the operation's coverage, from
+    PCs in `functions` when given. The guest records each PC once, at its
+    first execution, in execution order."""
     positions = {}
     for position, pc in enumerate(row['pcs']):
+        if not attributable(locations[pc]):
+            continue
+        if functions is not None and not listed(locations[pc], functions):
+            continue
         for frame in locations[pc]:
             source = frame['source'].split('/.deps/linux/')[-1].split(' ')[0]
             if source.split(':')[0] in files:
@@ -269,11 +320,20 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
     problems, gaps = [], Counter()
     order_stats = Counter()
     for index, op in enumerate(trace['ops']):
-        positions = line_positions(coverage[index], locations, config['files'])
+        # Raw coverage of a span line (any function, any attribution) must be
+        # mapped, and no unlisted function may run span lines of an anchored
+        # C file: either means a modeled path runs outside the listed
+        # functions. (Header helpers are inlined everywhere, so header span
+        # lines in unlisted functions are a stated gap.)
+        unmapped = sorted((raw_lines(coverage[index], locations, config['files']) & span_lines) - instrumented)
+        foreign = sorted(unlisted_c_lines(coverage[index], locations, config['files'], set(config['functions']))
+                         & span_lines)
+        if foreign:
+            problems.append(dict(index=index, problem='span lines covered by an unlisted function', lines=foreign))
+        positions = line_positions(coverage[index], locations, config['files'], set(config['functions']))
         lines = set(positions)
         if not lines:
             problems.append(dict(index=index, problem='no coverage in anchored files'))
-        unmapped = sorted((lines & span_lines) - instrumented)
         if unmapped:
             problems.append(dict(index=index, problem='covered span lines missing from the instrumentation map',
                                  lines=unmapped))
@@ -369,10 +429,11 @@ def operands_match(lhs, rhs, record, comparison):
     return sorted((x, y)) == sorted((a, b))
 
 
-def operand_agreement(trace, model_obs, comparisons, locations, decisions):
+def operand_agreement(trace, model_obs, comparisons, locations, decisions, functions=None):
     """A3: declared value comparisons report operands, and each matches a
     comparison Linux made at the decision's condition line (the innermost
-    source frame of the comparison) in the same operation."""
+    source frame of the comparison) in the same operation, in one of the
+    configured `functions` when given."""
     problems, checked = [], 0
     for branch in model_obs['branches']:
         name = branch['label'].rpartition('=')[0]
@@ -390,7 +451,9 @@ def operand_agreement(trace, model_obs, comparisons, locations, decisions):
             continue
         site = comparison['site'] or decisions[name]['site']
         records = [(r[0], int(r[1], 16), int(r[2], 16)) for r in comparisons[branch['index']]['records']
-                   if locations[r[3]][0]['source'].split('/.deps/linux/')[-1].split(' ')[0] == site]
+                   if locations[r[3]][0]['source'].split('/.deps/linux/')[-1].split(' ')[0] == site
+                   and attributable(locations[r[3]])
+                   and (functions is None or listed(locations[r[3]], functions))]
         lhs, rhs = branch['operands']
         if not records:
             problems.append(dict(index=branch['index'], label=branch['label'], problem='no comparison recorded at condition',
@@ -435,7 +498,7 @@ def run_chunk(traces, out, kcov):
         if result['outcome'] == 'agreement':
             problems, trace_gaps = control_flow(trace, actual, trace_coverage, mapped['locations'], *kcov)
             operand_problems, checked = operand_agreement(trace, actual, trace_comparisons,
-                                                          compared['locations'], kcov[1])
+                                                          compared['locations'], kcov[1], set(kcov[0]['functions']))
             problems += operand_problems
             outcomes['operand pairs matched'] += checked
             gaps.update(trace_gaps)
@@ -450,6 +513,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--suite', default=','.join(SUITES))
     parser.add_argument('--generated-count', type=int, default=1000)
+    parser.add_argument('--wireguard-count', type=int, default=200)
     parser.add_argument('--seed', type=int, default=20260920)
     parser.add_argument('--trace')
     parser.add_argument('--out', type=Path)
@@ -471,19 +535,32 @@ def main(argv=None):
     out.mkdir(parents=True, exist_ok=False)
     started = datetime.now(timezone.utc).isoformat()
     results, gaps, build, aborted = {}, Counter(), None, None
-    outcomes, decisions, kcov = Counter(), {}, None
+    outcomes, decisions, kcov, splits = Counter(), {}, None, 0
     try:
         build = build_model(out, rebuild=not args.no_build)
-        traces = load_traces(suites, args.generated_count, args.seed, args.trace, filtered)
+        traces = load_traces(suites, {'generated': args.generated_count, 'wireguard-generated': args.wireguard_count},
+                             args.seed, args.trace, filtered)
         decisions.update(load_decisions(config))
         instrumented, functions = instrumented_lines(KERNEL / 'vmlinux', config['functions'], config['files'])
-        kcov = (config, decisions, witness_table(decisions, instrumented, functions), instrumented, functions)
+        kcov = (config, decisions, witness_table(decisions, instrumented, functions, config['branch_free_functions']),
+                instrumented, functions)
         observable = sum(bool(w[True] or w[False]) for w in kcov[2].values())
         print(f'{len(decisions)} decisions, {observable} with KCOV witnesses', file=sys.stderr)
-        for start in range(0, len(traces), CHUNK):
-            chunk = traces[start:start + CHUNK]
+        pending = [(start, traces[start:start + CHUNK], f'chunk-{start // CHUNK:03}')
+                   for start in range(0, len(traces), CHUNK)]
+        while pending:
+            start, chunk, name = pending.pop(0)
             print(f'traces {start}-{start + len(chunk) - 1} ...', file=sys.stderr, flush=True)
-            chunk_results, chunk_gaps, chunk_outcomes = run_chunk(chunk, out / f'chunk-{start // CHUNK:03}', kcov)
+            chunk_results, chunk_gaps, chunk_outcomes = run_chunk(chunk, out / name, kcov)
+            # One guest's console output is bounded; a chunk that exceeds it
+            # is rerun as two halves (recorded in the report). A single trace
+            # that still exceeds it fails.
+            if len(chunk) > 1 and chunk_results and all(r.get('outcome') == 'output_limit'
+                                                         for r in chunk_results.values()):
+                half = len(chunk) // 2
+                pending[:0] = [(start, chunk[:half], name + 'a'), (start + half, chunk[half:], name + 'b')]
+                splits += 1
+                continue
             results.update(chunk_results)
             gaps.update(chunk_gaps)
             outcomes.update(chunk_outcomes)
@@ -493,7 +570,7 @@ def main(argv=None):
     finally:
         matched = outcomes.pop('operand pairs matched', 0)
         status = write_report(out, traces, results, gaps, build, aborted, started, suites, args,
-                              decision_summary(decisions, outcomes, kcov[2] if kcov else {}), matched, filtered)
+                              decision_summary(decisions, outcomes, kcov[2] if kcov else {}), matched, filtered, splits)
     return 0 if status == 'pass' else 1
 
 
@@ -511,7 +588,7 @@ def decision_summary(decisions, outcomes, witnesses):
 
 
 def write_report(out, traces, results, gaps, build, aborted, started, suites, args, decision_coverage=None,
-                 operand_pairs_matched=0, domain_filtered=None):
+                 operand_pairs_matched=0, domain_filtered=None, chunk_splits=0):
     ordered = [results.get(trace['id'], dict(id=trace['id'], outcome='not_run')) for trace in traces]
     counts = Counter(r['outcome'] for r in ordered)
     vmlinux = KERNEL / 'vmlinux'
@@ -524,10 +601,11 @@ def write_report(out, traces, results, gaps, build, aborted, started, suites, ar
         git=git_state(), model_sources=model_identity(),
         kernel=kernel,
         kcov_config_sha256=sha256(ANCHORS.read_bytes()),
-        selection=dict(suites=suites, generated_count=args.generated_count, seed=args.seed, trace=args.trace),
+        selection=dict(suites=suites, generated_count=args.generated_count, wireguard_count=args.wireguard_count,
+                       seed=args.seed, trace=args.trace),
         traces=len(traces), operations=sum(len(t['ops']) for t in traces),
         counts=dict(counts), known_gap_hits=dict(gaps), operand_pairs_matched=operand_pairs_matched,
-        domain_filtered=dict(domain_filtered or {}),
+        domain_filtered=dict(domain_filtered or {}), chunk_splits=chunk_splits,
         decision_coverage=decision_coverage,
         failures=[r for r in ordered if r['outcome'] != 'agreement'])
     (out / 'report.json').write_text(json.dumps(report, indent=2) + '\n')

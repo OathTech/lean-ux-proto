@@ -76,6 +76,62 @@ inductive Decision where
   | fcntlNoFile | fcntlPathFile | fcntlCaseGetfd | fcntlCaseSetfd | fcntlCaseGetfl | fcntlCaseSetfl | fcntlGetfdSet
   | setflAppendChanged | setflAppendOnly | setflNoatimeRequested | setflNoatimeNotSet | setflNotOwnerOrCapable
   | setflNotFifo | setflDirect | setflCannotOdirect | setflHasCheckFlags | setflError | setflFasyncChanged | setflHasFasync
+  -- drivers/net/wireguard/allowedips.c
+  | swapEndian32 | swapEndian128 | pushRcuNonNull | rootRemoveLenPositive | rootRemovePopped
+  | rootRemoveHasPeer | fls128High | commonBits32 | commonBits128 | placementNode
+  | placementCidrLe | placementPrefixMatches | placementExact | addCidrTooLong | addNoPeer
+  | addEmptyTrie | addRootNoMem | addExact | addNewnodeNoMem | addNoParentNode
+  | addNoDown | addNewnodeCoversDown | addNewnodeAtRoot | addIntermediateNoMem | addIntermediateAtRoot
+  | freeHasRoot4 | freeHasRoot6 | removeListEmpty | removeListIter | removeHasBit0
+  | removeHasBit1 | removeChildExists | removeLeafBit0 | removeLeafBit1 | removeParentIsNode
+  | removeParentNoPeer | removeFreeParent | removeNotFreeParent | removeSiblingExists | readNodeHasCidr
+  -- include/linux/refcount.h (add)
+  | refcountAddNzZero | refcountAddNzRetry | refcountAddNzNegative | refcountAddNzWraps | refcountAddFromZero
+  | refcountAddNegative | refcountAddWraps
+  -- include/crypto/curve25519.h
+  | genPublicNullSecret
+  -- drivers/net/wireguard/cookie.c
+  | cookieDeviceHasIdentity
+  -- drivers/net/wireguard/noise.c
+  | precomputeNoIdentity | precomputeNullPoint | handshakeInitHasPsk | keypairPutNull | expireNextKeypair
+  | expireCurrentKeypair
+  -- drivers/net/wireguard/peer.c
+  | peerCreateMaxPeers | peerCreateNoMem | peerCreateDstCacheFail | peerGetMaybeZeroNull | peerGetMaybeZeroDead
+  | peerRemoveNotDead | peerRemoveNull | peerRemoveAllIter1 | peerRemoveAllIter2 | peerPutNull
+  | peerKrefPutReleased
+  -- drivers/net/wireguard/peerlookup.c
+  | pubkeyLookupMatch
+  -- drivers/net/wireguard/socket.c
+  | eqA4 | eqB4 | eqPort4 | eqAddr4 | eqSrc4
+  | eqSrcIf4 | eqA6 | eqB6 | eqPort6 | eqAddr6
+  | eqScope6 | eqSrc6 | eqANone | eqBNone | setEndpointEq
+  | setEndpointV4 | setEndpointV6
+  -- drivers/net/wireguard/netlink.c
+  | lookupBothOrNeither | lookupHasIfindex | lookupHasIfname | lookupNoDev | lookupNoLinkOps
+  | lookupNoKind | lookupKindMismatch | getAipNoNest | getAipPutCidr | getAipPutFamily
+  | getAipFamily6 | getAipPutAddr | getPeerNoNest | getPeerPubkeyFail | getPeerFirst
+  | getPeerPskFail | getPeerPutHandshake | getPeerPutKeepalive | getPeerPutTx | getPeerPutRx
+  | getPeerPutProto | getPeerEp4 | getPeerEp6 | getPeerEpFail | getPeerNoAips
+  | getPeerSeqUnset | getPeerSeqChanged | getPeerAipsNestFail | getPeerAipIter | getPeerAipFail
+  | getStartErr | dumpNoHdr | dumpFirst | dumpPutPort | dumpPutFwmark
+  | dumpPutIfindex | dumpPutIfname | dumpHasIdentity | dumpPutPrivate | dumpPutPublic
+  | dumpNoPeersNest | dumpPeerListEmpty | dumpCursorSet | dumpCursorDead | dumpPeerIter
+  | dumpGetPeerFail | dumpOutRetZero | dumpOutNotDone | dumpOutHasCursor | dumpRetErr
+  | dumpDone | getDoneHasWg | setPortSame | setPortPeerIter | setPortNotRunning
+  | aipNoFamily | aipNoAddr | aipNoCidr | aipV4Family | aipV4Cidr
+  | aipV4Len | aipV6Family | aipV6Cidr | aipV6Len | peerHasPubkey
+  | peerPubkeyLen | peerHasPsk | peerPskLen | peerHasFlags | peerBadFlags
+  | peerHasProtocol | peerBadProtocol | peerNotFound | peerNewRemoveOrUpdate | peerSelfHasIdentity
+  | peerSelfKeyMatch | peerCreateErr | peerRemoveMe | peerSetPsk | peerHasEndpoint
+  | peerEndpointV4Len | peerEndpointV4Family | peerEndpointV6Len | peerEndpointV6Family | peerReplaceAips
+  | peerHasAips | peerAipsIter | peerAipParseErr | peerAipErr | peerHasKeepalive
+  | peerKeepaliveWasZero | peerKeepaliveNonzero | peerKeepaliveRunning | peerSendKeepalive | peerRunning
+  | peerZeroPsk | setDevLookupErr | setDevHasFlags | setDevBadFlags | setDevHasPort
+  | setDevHasFwmark | setDevNoNet | setDevNotCapable | setDevPermErr | setDevFwmark
+  | setDevFwmarkPeerIter | setDevPort | setDevPortErr | setDevReplacePeers | setDevHasPrivateKey
+  | setDevPrivateKeyLen | setDevKeyUnchanged | setDevGenPublic | setDevOldPeer | setDevSendStagedNoIdentity
+  | setDevSendStagedRunning | setDevSendStagedKept | setDevSendStagedHasIdentity | setDevKeyPeerIter | setDevSendStagedPeer
+  | setDevHasPeers | setDevPeersIter | setDevParseErr | setDevSetPeerErr | setDevZeroKey
   deriving Repr, BEq, DecidableEq, Inhabited
 
 /-- A recorded step: the decision, the outcome the mirror computed, and, for
@@ -114,6 +170,14 @@ private def fih := "include/linux/file.h"
 private def inh := "fs/internal.h"
 private def rch := "include/linux/refcount.h"
 private def eph := "include/linux/eventpoll.h"
+private def aip := "drivers/net/wireguard/allowedips.c"
+private def wpe := "drivers/net/wireguard/peer.c"
+private def wno := "drivers/net/wireguard/noise.c"
+private def wnl := "drivers/net/wireguard/netlink.c"
+private def wso := "drivers/net/wireguard/socket.c"
+private def wpl := "drivers/net/wireguard/peerlookup.c"
+private def wck := "drivers/net/wireguard/cookie.c"
+private def c25 := "include/crypto/curve25519.h"
 
 private def sp (file : String) (lo hi : Nat) : Span := ⟨file, lo, hi⟩
 
@@ -331,6 +395,232 @@ def Decision.info : Decision → DecisionInfo
   | .setflError => d "setfl.error" fc 69 [(70, 70)] []
   | .setflFasyncChanged => d "setfl.fasync_changed" fc 75 [] []
   | .setflHasFasync => d "setfl.fop_fasync" fc 75 [(76, 80)] []
+  -- drivers/net/wireguard/allowedips.c
+  | .swapEndian32 => d "swap_endian.bits_32" aip 15 [(16, 16)] [(17, 20)]
+  | .swapEndian128 => d "swap_endian.bits_128" aip 17 [(18, 19)] []
+  | .pushRcuNonNull => d "push_rcu.non_null" aip 44 [(45, 47)] []
+  | .rootRemoveLenPositive => d "root_remove_peer_lists.len_positive" aip 74 [] []
+  | .rootRemovePopped => d "root_remove_peer_lists.popped_non_null" aip 74 [(75, 78)] []
+  | .rootRemoveHasPeer => d "root_remove_peer_lists.has_peer" aip 77 [(78, 78)] []
+  | .fls128High => d "fls128.high_nonzero" aip 84 [] []
+  | .commonBits32 => d "common_bits.bits_32" aip 90 [(91, 91)] [(92, 95)]
+  | .commonBits128 => d "common_bits.bits_128" aip 92 [(93, 95)] [(96, 96)]
+  | .placementNode => d "node_placement.node" aip 157 [] []
+  | .placementCidrLe => d "node_placement.cidr_le" aip 157 [] []
+  | .placementPrefixMatches => d "node_placement.prefix_matches" aip 157 [(158, 163)] []
+  | .placementExact => d "node_placement.exact" aip 159 [(160, 161)] [(163, 163)]
+  | .addCidrTooLong => d "add.cidr_too_long" aip 186 [] []
+  -- 187's point is the epilogue every `return 0` also runs
+  | .addNoPeer => d "add.no_peer" aip 186 [] [(189, 189)]
+  | .addEmptyTrie => d "add.empty_trie" aip 189 [(190, 197)] [(199, 199)]
+  | .addRootNoMem => d "add.root_no_mem" aip 191 [(192, 192)] [(193, 197)]
+  | .addExact => d "add.exact" aip 199 [(200, 202)] [(205, 210)]
+  | .addNewnodeNoMem => d "add.newnode_no_mem" aip 206 [(207, 207)] [(208, 210)]
+  | .addNoParentNode => d "add.no_parent_node" aip 212 [(213, 213)] [(215, 221)]
+  | .addNoDown => d "add.no_down" aip 217 [(218, 219)] []
+  | .addNewnodeCoversDown => d "add.newnode_covers_down" aip 225 [(226, 231)] [(234, 249)]
+  | .addNewnodeAtRoot => d "add.newnode_at_root" aip 227 [(228, 228)] [(230, 230)]
+  | .addIntermediateNoMem => d "add.intermediate_no_mem" aip 235 [(236, 238)] [(240, 249)]
+  | .addIntermediateAtRoot => d "add.intermediate_at_root" aip 245 [(246, 246)] [(248, 248)]
+  | .freeHasRoot4 => d "wg_allowedips_free.has_root4" aip 265 [(266, 270)] []
+  | .freeHasRoot6 => d "wg_allowedips_free.has_root6" aip 272 [(273, 277)] []
+  | .removeListEmpty => d "wg_allowedips_remove_by_peer.list_empty" aip 309 [(310, 310)] [(311, 313)]
+  | .removeListIter => d "wg_allowedips_remove_by_peer.iterate" aip 312 [(313, 314)] []
+  | .removeHasBit0 => d "wg_allowedips_remove_by_peer.has_bit0" aip 315 [] []
+  | .removeHasBit1 => d "wg_allowedips_remove_by_peer.has_bit1" aip 315 [(316, 316)] []
+  | .removeChildExists => d "wg_allowedips_remove_by_peer.child" aip 319 [(320, 320)] []
+  | .removeLeafBit0 => d "wg_allowedips_remove_by_peer.no_bit0" aip 325 [(326, 326)] []
+  | .removeLeafBit1 => d "wg_allowedips_remove_by_peer.no_bit1" aip 326 [(327, 327)] []
+  | .removeParentIsNode => d "wg_allowedips_remove_by_peer.parent_is_node" aip 327 [(328, 328)] []
+  | .removeParentNoPeer => d "wg_allowedips_remove_by_peer.parent_no_peer" aip 328 [] []
+  | .removeFreeParent => d "wg_allowedips_remove_by_peer.free_parent" aip 329 [(330, 332)] []
+  | .removeNotFreeParent => d "wg_allowedips_remove_by_peer.not_free_parent" aip 334 [(335, 335)] [(336, 339)]
+  | .removeSiblingExists => d "wg_allowedips_remove_by_peer.sibling" aip 336 [(337, 337)] []
+  | .readNodeHasCidr => d "wg_allowedips_read_node.has_cidr" aip 348 [(349, 349)] []
+  -- include/linux/refcount.h (add)
+  | .refcountAddNzZero => d "__refcount_add_not_zero.old_zero" rch 145 [(146, 146)] [(147, 147)]
+  | .refcountAddNzRetry => d "__refcount_add_not_zero.cmpxchg_failed" rch 147 [] []
+  | .refcountAddNzNegative => d "__refcount_add_not_zero.old_negative" rch 152 [] []
+  | .refcountAddNzWraps => d "__refcount_add_not_zero.wraps" rch 152 [] []
+  | .refcountAddFromZero => d "__refcount_add.old_zero" rch 189 [(190, 190)] [(191, 191)]
+  | .refcountAddNegative => d "__refcount_add.old_negative" rch 191 [] []
+  | .refcountAddWraps => d "__refcount_add.wraps" rch 191 [] []
+  -- include/crypto/curve25519.h
+  | .genPublicNullSecret => d "curve25519_generate_public.null_secret" c25 50 [(52, 52)] [(54, 58)]
+  -- drivers/net/wireguard/cookie.c
+  | .cookieDeviceHasIdentity => d "wg_cookie_checker_precompute_device_keys.has_identity" wck 47 [(48, 53)] [(55, 57)]
+  -- drivers/net/wireguard/noise.c
+  | .precomputeNoIdentity => d "wg_noise_precompute_static_static.no_identity" wno 50 [] [(51, 53)]
+  | .precomputeNullPoint => d "wg_noise_precompute_static_static.null_point" wno 51 [] []
+  | .handshakeInitHasPsk => d "wg_noise_handshake_init.has_preshared_key" wno 70 [(71, 72)] []
+  | .keypairPutNull => d "wg_noise_keypair_put.null" wno 133 [(134, 134)] [(135, 139)]
+  | .expireNextKeypair => d "wg_noise_expire_current_peer_keypairs.next_keypair" wno 189 [(190, 190)] []
+  | .expireCurrentKeypair => d "wg_noise_expire_current_peer_keypairs.current_keypair" wno 193 [(194, 194)] []
+  -- drivers/net/wireguard/peer.c
+  -- 31's point is the epilogue the successful return also runs
+  | .peerCreateMaxPeers => d "wg_peer_create.max_peers" wpe 30 [] [(33, 33)]
+  | .peerCreateNoMem => d "wg_peer_create.no_mem" wpe 34 [(35, 35)] [(36, 36)]
+  | .peerCreateDstCacheFail => d "wg_peer_create.dst_cache_failed" wpe 36 [(37, 37), (66, 68)] [(39, 64)]
+  | .peerGetMaybeZeroNull => d "wg_peer_get_maybe_zero.null" wpe 75 [] []
+  | .peerGetMaybeZeroDead => d "wg_peer_get_maybe_zero.refcount_zero" wpe 75 [] [(77, 77)]
+  | .peerRemoveNotDead => d "peer_remove_after_dead.not_dead" wpe 96 [] []
+  | .peerRemoveNull => d "wg_peer_remove.null" wpe 158 [(159, 159)] [(160, 164)]
+  | .peerRemoveAllIter1 => d "wg_peer_remove_all.make_dead_iterate" wpe 177 [(178, 179)] []
+  | .peerRemoveAllIter2 => d "wg_peer_remove_all.remove_iterate" wpe 182 [(183, 183)] []
+  | .peerPutNull => d "wg_peer_put.null" wpe 225 [(226, 226)] [(227, 227)]
+  | .peerKrefPutReleased => d "wg_peer_put.kref_put_released" wpe 227 [(202, 220)] []
+  -- drivers/net/wireguard/peerlookup.c
+  | .pubkeyLookupMatch => d "wg_pubkey_hashtable_lookup.match" wpl 62 [(64, 65)] []
+  -- drivers/net/wireguard/socket.c
+  | .eqA4 => d "endpoint_eq.a_inet" wso 260 [] []
+  | .eqB4 => d "endpoint_eq.b_inet" wso 260 [] []
+  | .eqPort4 => d "endpoint_eq.port4" wso 261 [] []
+  | .eqAddr4 => d "endpoint_eq.addr4" wso 262 [] []
+  | .eqSrc4 => d "endpoint_eq.src4" wso 263 [] []
+  | .eqSrcIf4 => d "endpoint_eq.src_if4" wso 263 [] []
+  | .eqA6 => d "endpoint_eq.a_inet6" wso 264 [] []
+  | .eqB6 => d "endpoint_eq.b_inet6" wso 265 [] []
+  | .eqPort6 => d "endpoint_eq.port6" wso 266 [] []
+  | .eqAddr6 => d "endpoint_eq.addr6" wso 267 [] []
+  | .eqScope6 => d "endpoint_eq.scope6" wso 268 [] []
+  | .eqSrc6 => d "endpoint_eq.src6" wso 269 [] []
+  | .eqANone => d "endpoint_eq.a_unset" wso 270 [] []
+  | .eqBNone => d "endpoint_eq.b_unset" wso 270 [] []
+  | .setEndpointEq => d "wg_socket_set_peer_endpoint.equal" wso 281 [(282, 282)] [(283, 284)]
+  | .setEndpointV4 => d "wg_socket_set_peer_endpoint.inet" wso 284 [(285, 287)] [(288, 288)]
+  | .setEndpointV6 => d "wg_socket_set_peer_endpoint.inet6" wso 288 [(289, 290)] [(292, 292)]
+  -- drivers/net/wireguard/netlink.c
+  | .lookupBothOrNeither => d "lookup_interface.both_or_neither" wnl 57 [(58, 58)] [(59, 59)]
+  | .lookupHasIfindex => d "lookup_interface.has_ifindex" wnl 59 [(60, 61)] [(62, 62)]
+  | .lookupHasIfname => d "lookup_interface.has_ifname" wnl 62 [(63, 64)] []
+  | .lookupNoDev => d "lookup_interface.no_dev" wnl 65 [(66, 66)] [(67, 67)]
+  | .lookupNoLinkOps => d "lookup_interface.no_link_ops" wnl 67 [] []
+  | .lookupNoKind => d "lookup_interface.no_kind" wnl 67 [] []
+  | .lookupKindMismatch => d "lookup_interface.kind_mismatch" wnl 68 [(69, 70)] [(72, 72)]
+  | .getAipNoNest => d "get_allowedips.no_nest" wnl 81 [(82, 82)] [(84, 84)]
+  | .getAipPutCidr => d "get_allowedips.put_cidr_failed" wnl 84 [] [(85, 85)]
+  | .getAipPutFamily => d "get_allowedips.put_family_failed" wnl 85 [] [(86, 86)]
+  | .getAipFamily6 => d "get_allowedips.inet6_length" wnl 86 [] []
+  | .getAipPutAddr => d "get_allowedips.put_addr_failed" wnl 86 [] [(92, 93)]
+  | .getPeerNoNest => d "get_peer.no_nest" wnl 113 [(114, 114)] [(116, 118)]
+  | .getPeerPubkeyFail => d "get_peer.put_public_key_failed" wnl 120 [(121, 121)] [(123, 123)]
+  | .getPeerFirst => d "get_peer.first_part" wnl 123 [(124, 162)] []
+  -- the point DWARF gives line 135 starts the `goto no_allowedips` block of line 164
+  | .getPeerPskFail => d "get_peer.put_preshared_key_failed" wnl 134 [] [(137, 138)]
+  | .getPeerPutHandshake => d "get_peer.put_last_handshake_failed" wnl 137 [] [(139, 140)]
+  | .getPeerPutKeepalive => d "get_peer.put_keepalive_failed" wnl 139 [] [(141, 142)]
+  | .getPeerPutTx => d "get_peer.put_tx_bytes_failed" wnl 141 [] [(143, 144)]
+  | .getPeerPutRx => d "get_peer.put_rx_bytes_failed" wnl 143 [] [(145, 145)]
+  | .getPeerPutProto => d "get_peer.put_protocol_version_failed" wnl 145 [] [(148, 149)]
+  | .getPeerEp4 => d "get_peer.endpoint_inet" wnl 149 [(150, 152)] [(153, 153)]
+  | .getPeerEp6 => d "get_peer.endpoint_inet6" wnl 153 [(154, 156)] []
+  | .getPeerEpFail => d "get_peer.put_endpoint_failed" wnl 158 [(159, 159)] [(160, 162)]
+  | .getPeerNoAips => d "get_peer.no_allowedips" wnl 164 [(165, 165)] [(166, 166)]
+  | .getPeerSeqUnset => d "get_peer.seq_unset" wnl 166 [(167, 167)] [(168, 168)]
+  | .getPeerSeqChanged => d "get_peer.seq_changed" wnl 168 [(169, 169)] []
+  | .getPeerAipsNestFail => d "get_peer.allowedips_nest_failed" wnl 172 [(173, 173)] [(175, 175)]
+  | .getPeerAipIter => d "get_peer.allowedips_iterate" wnl 175 [(177, 181)] []
+  | .getPeerAipFail => d "get_peer.get_allowedips_failed" wnl 181 [(182, 185)] []
+  | .getStartErr => d "wg_get_device_start.lookup_error" wnl 204 [(205, 205)] [(206, 207)]
+  | .dumpNoHdr => d "wg_get_device_dump.no_header" wnl 227 [(228, 228)] [(229, 229)]
+  | .dumpFirst => d "wg_get_device_dump.first_part" wnl 231 [(232, 251)] []
+  | .dumpPutPort => d "wg_get_device_dump.put_listen_port_failed" wnl 232 [] [(234, 234)]
+  | .dumpPutFwmark => d "wg_get_device_dump.put_fwmark_failed" wnl 234 [] [(235, 235)]
+  | .dumpPutIfindex => d "wg_get_device_dump.put_ifindex_failed" wnl 235 [] [(236, 236)]
+  | .dumpPutIfname => d "wg_get_device_dump.put_ifname_failed" wnl 236 [] [(239, 240)]
+  | .dumpHasIdentity => d "wg_get_device_dump.has_identity" wnl 240 [(241, 249)] []
+  | .dumpPutPrivate => d "wg_get_device_dump.put_private_key_failed" wnl 241 [] [(244, 246)]
+  | .dumpPutPublic => d "wg_get_device_dump.put_public_key_failed" wnl 244 [] []
+  | .dumpNoPeersNest => d "wg_get_device_dump.no_peers_nest" wnl 255 [(256, 256)] [(257, 257)]
+  | .dumpPeerListEmpty => d "wg_get_device_dump.peer_list_empty" wnl 264 [] [(265, 265)]
+  | .dumpCursorSet => d "wg_get_device_dump.cursor_set" wnl 265 [] []
+  | .dumpCursorDead => d "wg_get_device_dump.cursor_dead" wnl 265 [] []
+  | .dumpPeerIter => d "wg_get_device_dump.peers_iterate" wnl 270 [(271, 275)] []
+  | .dumpGetPeerFail => d "wg_get_device_dump.get_peer_failed" wnl 271 [(272, 273)] [(275, 275)]
+  | .dumpOutRetZero => d "wg_get_device_dump.ret_zero" wnl 280 [] []
+  | .dumpOutNotDone => d "wg_get_device_dump.not_done" wnl 280 [] []
+  | .dumpOutHasCursor => d "wg_get_device_dump.has_cursor" wnl 280 [(281, 281)] []
+  -- the compiler copies the `out:` tail per path; only the !done copy owns
+  -- genlmsg_end's point (290), and 296's point is the shared epilogue
+  | .dumpRetErr => d "wg_get_device_dump.ret_error" wnl 286 [(287, 288)] []
+  -- see ret_error
+  | .dumpDone => d "wg_get_device_dump.done" wnl 291 [(292, 293)] [(295, 295)]
+  | .getDoneHasWg => d "wg_get_device_done.has_wg" wnl 308 [(309, 309)] []
+  | .setPortSame => d "set_port.same_port" wnl 318 [(319, 319)] [(320, 320)]
+  | .setPortPeerIter => d "set_port.peers_iterate" wnl 320 [(321, 321)] []
+  | .setPortNotRunning => d "set_port.not_running" wnl 322 [(323, 324)] [(326, 326)]
+  | .aipNoFamily => d "set_allowedip.no_family" wnl 335 [] []
+  | .aipNoAddr => d "set_allowedip.no_ipaddr" wnl 335 [] []
+  | .aipNoCidr => d "set_allowedip.no_cidr" wnl 336 [] [(338, 339)]
+  | .aipV4Family => d "set_allowedip.inet" wnl 341 [] []
+  | .aipV4Cidr => d "set_allowedip.cidr_le_32" wnl 341 [] []
+  | .aipV4Len => d "set_allowedip.inet_length" wnl 342 [(343, 346)] []
+  | .aipV6Family => d "set_allowedip.inet6" wnl 347 [] []
+  | .aipV6Cidr => d "set_allowedip.cidr_le_128" wnl 347 [] []
+  | .aipV6Len => d "set_allowedip.inet6_length" wnl 348 [(349, 352)] []
+  | .peerHasPubkey => d "set_peer.has_public_key" wnl 365 [(366, 366)] []
+  | .peerPubkeyLen => d "set_peer.public_key_length" wnl 366 [(367, 367)] []
+  | .peerHasPsk => d "set_peer.has_preshared_key" wnl 370 [(371, 371)] []
+  | .peerPskLen => d "set_peer.preshared_key_length" wnl 371 [(372, 372)] []
+  | .peerHasFlags => d "set_peer.has_flags" wnl 374 [(375, 375)] []
+  | .peerBadFlags => d "set_peer.unknown_flags" wnl 377 [(378, 378)] [(380, 381)]
+  | .peerHasProtocol => d "set_peer.has_protocol_version" wnl 381 [(382, 383)] []
+  | .peerBadProtocol => d "set_peer.protocol_version_not_1" wnl 382 [(383, 383)] []
+  | .peerNotFound => d "set_peer.not_found" wnl 389 [(390, 421)] []
+  | .peerNewRemoveOrUpdate => d "set_peer.new_remove_or_update_only" wnl 390 [(391, 391)] [(394, 397)]
+  | .peerSelfHasIdentity => d "set_peer.device_has_identity" wnl 397 [(398, 400)] []
+  | .peerSelfKeyMatch => d "set_peer.device_public_key" wnl 398 [(406, 408)] []
+  | .peerCreateErr => d "set_peer.create_error" wnl 413 [(414, 416)] [(421, 421)]
+  | .peerRemoveMe => d "set_peer.remove_me" wnl 424 [(425, 426)] [(429, 429)]
+  | .peerSetPsk => d "set_peer.set_preshared_key" wnl 429 [(430, 433)] []
+  | .peerHasEndpoint => d "set_peer.has_endpoint" wnl 436 [(437, 441)] []
+  | .peerEndpointV4Len => d "set_peer.endpoint_inet_length" wnl 441 [] []
+  | .peerEndpointV4Family => d "set_peer.endpoint_inet" wnl 441 [(442, 443)] []
+  | .peerEndpointV6Len => d "set_peer.endpoint_inet6_length" wnl 444 [] []
+  | .peerEndpointV6Family => d "set_peer.endpoint_inet6" wnl 444 [(445, 446)] []
+  | .peerReplaceAips => d "set_peer.replace_allowedips" wnl 450 [(451, 452)] []
+  | .peerHasAips => d "set_peer.has_allowedips" wnl 454 [(455, 466)] []
+  | .peerAipsIter => d "set_peer.allowedips_iterate" wnl 458 [(459, 465)] []
+  -- the compiler merges the `goto out` of 462 with that of 465
+  | .peerAipParseErr => d "set_peer.allowedip_parse_error" wnl 461 [] [(463, 463)]
+  | .peerAipErr => d "set_peer.set_allowedip_error" wnl 464 [(465, 465)] []
+  | .peerHasKeepalive => d "set_peer.has_keepalive" wnl 469 [(470, 479)] []
+  | .peerKeepaliveWasZero => d "set_peer.keepalive_was_zero" wnl 473 [(474, 474)] []
+  | .peerKeepaliveNonzero => d "set_peer.keepalive_nonzero" wnl 474 [(475, 475)] []
+  | .peerKeepaliveRunning => d "set_peer.keepalive_running" wnl 475 [] []
+  | .peerSendKeepalive => d "set_peer.send_keepalive" wnl 478 [(479, 479)] []
+  | .peerRunning => d "set_peer.running" wnl 482 [(483, 483)] []
+  | .peerZeroPsk => d "set_peer.zero_preshared_key" wnl 487 [(488, 489)] []
+  | .setDevLookupErr => d "wg_set_device.lookup_error" wnl 499 [(500, 501)] [(504, 505)]
+  | .setDevHasFlags => d "wg_set_device.has_flags" wnl 507 [(508, 508)] []
+  | .setDevBadFlags => d "wg_set_device.unknown_flags" wnl 510 [(511, 511)] [(513, 513)]
+  | .setDevHasPort => d "wg_set_device.has_listen_port" wnl 513 [] []
+  | .setDevHasFwmark => d "wg_set_device.has_fwmark" wnl 513 [] []
+  | .setDevNoNet => d "wg_set_device.no_creating_net" wnl 517 [] []
+  | .setDevNotCapable => d "wg_set_device.not_capable" wnl 517 [] []
+  | .setDevPermErr => d "wg_set_device.permission_error" wnl 519 [(520, 520)] []
+  | .setDevFwmark => d "wg_set_device.set_fwmark" wnl 525 [(526, 530)] []
+  | .setDevFwmarkPeerIter => d "wg_set_device.fwmark_peers_iterate" wnl 529 [(530, 530)] []
+  | .setDevPort => d "wg_set_device.set_listen_port" wnl 533 [(534, 537)] []
+  | .setDevPortErr => d "wg_set_device.set_port_error" wnl 536 [(537, 537)] []
+  | .setDevReplacePeers => d "wg_set_device.replace_peers" wnl 540 [(541, 541)] []
+  | .setDevHasPrivateKey => d "wg_set_device.has_private_key" wnl 543 [(544, 545)] []
+  | .setDevPrivateKeyLen => d "wg_set_device.private_key_length" wnl 544 [(546, 553)] []
+  | .setDevKeyUnchanged => d "wg_set_device.private_key_unchanged" wnl 551 [(553, 553)] [(558, 558)]
+  | .setDevGenPublic => d "wg_set_device.public_key_generated" wnl 558 [(559, 564)] []
+  | .setDevOldPeer => d "wg_set_device.peer_with_new_public_key" wnl 561 [(562, 563)] []
+  | .setDevSendStagedNoIdentity => d "wg_set_device.had_no_identity" wnl 568 [] []
+  | .setDevSendStagedRunning => d "wg_set_device.running" wnl 568 [] []
+  | .setDevSendStagedKept => d "wg_set_device.send_staged_packets" wnl 570 [] []
+  | .setDevSendStagedHasIdentity => d "wg_set_device.has_identity" wnl 570 [] []
+  | .setDevKeyPeerIter => d "wg_set_device.key_peers_iterate" wnl 573 [(574, 577)] []
+  | .setDevSendStagedPeer => d "wg_set_device.send_staged_to_peer" wnl 576 [(577, 577)] []
+  | .setDevHasPeers => d "wg_set_device.has_peers" wnl 583 [(584, 595)] []
+  | .setDevPeersIter => d "wg_set_device.peers_iterate" wnl 587 [(588, 594)] []
+  -- the compiler merges the `goto out` of 591 with that of 594
+  | .setDevParseErr => d "wg_set_device.peer_parse_error" wnl 590 [] [(592, 592)]
+  | .setDevSetPeerErr => d "wg_set_device.set_peer_error" wnl 593 [(594, 594)] []
+  | .setDevZeroKey => d "wg_set_device.zero_private_key" wnl 604 [(605, 606)] []
 
 /-- Why an outcome has no KCOV witness. The check requires a reason exactly
     for the sides whose spans own no instrumentation point in the built kernel,
@@ -596,6 +886,262 @@ def Decision.unobservable : Decision → Bool → Option Unobservable
   | .setflFasyncChanged, true => some .sharedOperand
   | .setflFasyncChanged, false => some .sharedOperand
   | .setflHasFasync, false => some .sharedContinuation
+  | .swapEndian128, false => some .sharedContinuation
+  | .pushRcuNonNull, false => some .sharedContinuation
+  | .rootRemoveLenPositive, true => some .sharedOperand
+  | .rootRemoveLenPositive, false => some .sharedOperand
+  | .rootRemovePopped, false => some .sharedContinuation
+  | .rootRemoveHasPeer, false => some .sharedContinuation
+  | .fls128High, true => some .branchFree
+  | .fls128High, false => some .branchFree
+  | .placementNode, true => some .sharedOperand
+  | .placementNode, false => some .sharedOperand
+  | .placementCidrLe, true => some .sharedOperand
+  | .placementCidrLe, false => some .sharedOperand
+  | .placementPrefixMatches, false => some .sharedContinuation
+  | .addCidrTooLong, true => some .sharedOperand
+  | .addCidrTooLong, false => some .sharedOperand
+  | .addNoDown, false => some .sharedContinuation
+  | .freeHasRoot4, false => some .sharedContinuation
+  | .freeHasRoot6, false => some .sharedContinuation
+  | .removeListIter, false => some .sharedContinuation
+  | .removeHasBit0, true => some .sharedOperand
+  | .removeHasBit0, false => some .sharedOperand
+  | .removeHasBit1, false => some .sharedContinuation
+  | .removeChildExists, false => some .sharedContinuation
+  | .removeLeafBit0, false => some .sharedContinuation
+  | .removeLeafBit1, false => some .sharedContinuation
+  | .removeParentIsNode, false => some .sharedContinuation
+  | .removeParentNoPeer, true => some .sharedContinuation
+  | .removeParentNoPeer, false => some .sharedContinuation
+  | .removeFreeParent, false => some .sharedContinuation
+  | .removeSiblingExists, false => some .sharedContinuation
+  | .readNodeHasCidr, false => some .sharedContinuation
+  | .refcountAddNzRetry, true => some .sharedContinuation
+  | .refcountAddNzRetry, false => some .sharedContinuation
+  | .refcountAddNzNegative, true => some .sharedOperand
+  | .refcountAddNzNegative, false => some .sharedOperand
+  | .refcountAddNzWraps, true => some .sharedOperand
+  | .refcountAddNzWraps, false => some .sharedContinuation
+  | .refcountAddNegative, true => some .sharedOperand
+  | .refcountAddNegative, false => some .sharedOperand
+  | .refcountAddWraps, true => some .sharedOperand
+  | .refcountAddWraps, false => some .sharedContinuation
+  | .precomputeNoIdentity, true => some .sharedOperand
+  | .precomputeNullPoint, true => some .sharedOperand
+  | .precomputeNullPoint, false => some .sharedContinuation
+  | .handshakeInitHasPsk, false => some .sharedContinuation
+  | .expireNextKeypair, false => some .sharedContinuation
+  | .expireCurrentKeypair, false => some .sharedContinuation
+  | .peerGetMaybeZeroNull, true => some .sharedOperand
+  | .peerGetMaybeZeroNull, false => some .sharedOperand
+  | .peerGetMaybeZeroDead, true => some .sharedOperand
+  | .peerRemoveNotDead, true => some .sameLine
+  | .peerRemoveNotDead, false => some .sharedContinuation
+  | .peerRemoveAllIter1, false => some .sharedContinuation
+  | .peerRemoveAllIter2, false => some .sharedContinuation
+  | .peerKrefPutReleased, false => some .sharedContinuation
+  | .pubkeyLookupMatch, false => some .sharedContinuation
+  | .eqA4, true => some .sharedOperand
+  | .eqA4, false => some .sharedOperand
+  | .eqB4, true => some .sharedOperand
+  | .eqB4, false => some .sharedOperand
+  | .eqPort4, true => some .sharedOperand
+  | .eqPort4, false => some .sharedOperand
+  | .eqAddr4, true => some .sharedOperand
+  | .eqAddr4, false => some .sharedOperand
+  | .eqSrc4, true => some .sharedOperand
+  | .eqSrc4, false => some .sharedOperand
+  | .eqSrcIf4, true => some .sharedOperand
+  | .eqSrcIf4, false => some .sharedOperand
+  | .eqA6, true => some .sharedOperand
+  | .eqA6, false => some .sharedOperand
+  | .eqB6, true => some .sharedOperand
+  | .eqB6, false => some .sharedOperand
+  | .eqPort6, true => some .sharedOperand
+  | .eqPort6, false => some .sharedOperand
+  | .eqAddr6, true => some .sharedOperand
+  | .eqAddr6, false => some .sharedOperand
+  | .eqScope6, true => some .sharedOperand
+  | .eqScope6, false => some .sharedOperand
+  | .eqSrc6, true => some .sharedOperand
+  | .eqSrc6, false => some .sharedOperand
+  | .eqANone, true => some .sharedOperand
+  | .eqANone, false => some .sharedOperand
+  | .eqBNone, true => some .sharedOperand
+  | .eqBNone, false => some .sharedOperand
+  | .lookupHasIfname, false => some .sharedContinuation
+  | .lookupNoLinkOps, true => some .sharedOperand
+  | .lookupNoLinkOps, false => some .sharedOperand
+  | .lookupNoKind, true => some .sharedOperand
+  | .lookupNoKind, false => some .sharedOperand
+  | .getAipPutCidr, true => some .sharedOperand
+  | .getAipPutFamily, true => some .sharedOperand
+  | .getAipFamily6, true => some .branchFree
+  | .getAipFamily6, false => some .branchFree
+  | .getAipPutAddr, true => some .sharedOperand
+  | .getPeerFirst, false => some .sharedContinuation
+  | .getPeerPutHandshake, true => some .sharedOperand
+  | .getPeerPutKeepalive, true => some .sharedOperand
+  | .getPeerPutTx, true => some .sharedOperand
+  | .getPeerPutRx, true => some .sharedOperand
+  | .getPeerPutProto, true => some .sharedOperand
+  | .getPeerEp6, false => some .sharedContinuation
+  | .getPeerSeqChanged, false => some .sharedContinuation
+  | .getPeerAipIter, false => some .sharedContinuation
+  | .getPeerAipFail, false => some .sharedContinuation
+  | .dumpFirst, false => some .sharedContinuation
+  | .dumpPutPort, true => some .sharedOperand
+  | .dumpPutFwmark, true => some .sharedOperand
+  | .dumpPutIfindex, true => some .sharedOperand
+  | .dumpPutIfname, true => some .sharedOperand
+  | .dumpHasIdentity, false => some .sharedContinuation
+  | .dumpPutPrivate, true => some .sharedOperand
+  | .dumpPutPublic, true => some .sharedOperand
+  | .dumpPutPublic, false => some .sharedContinuation
+  | .dumpPeerListEmpty, true => some .sharedOperand
+  | .dumpCursorSet, true => some .sharedOperand
+  | .dumpCursorSet, false => some .sharedOperand
+  | .dumpCursorDead, true => some .sharedOperand
+  | .dumpCursorDead, false => some .sharedOperand
+  | .dumpPeerIter, false => some .sharedContinuation
+  | .dumpOutRetZero, true => some .sharedOperand
+  | .dumpOutRetZero, false => some .sharedOperand
+  | .dumpOutNotDone, true => some .sharedOperand
+  | .dumpOutNotDone, false => some .sharedOperand
+  | .dumpOutHasCursor, false => some .sharedContinuation
+  | .getDoneHasWg, false => some .sharedContinuation
+  | .setPortPeerIter, false => some .sharedContinuation
+  | .aipNoFamily, true => some .sharedOperand
+  | .aipNoFamily, false => some .sharedOperand
+  | .aipNoAddr, true => some .sharedOperand
+  | .aipNoAddr, false => some .sharedOperand
+  | .aipNoCidr, true => some .sharedOperand
+  | .aipV4Family, true => some .sharedOperand
+  | .aipV4Family, false => some .sharedOperand
+  | .aipV4Cidr, true => some .sharedOperand
+  | .aipV4Cidr, false => some .sharedOperand
+  | .aipV4Len, false => some .sharedContinuation
+  | .aipV6Family, true => some .sharedOperand
+  | .aipV6Family, false => some .sharedOperand
+  | .aipV6Cidr, true => some .sharedOperand
+  | .aipV6Cidr, false => some .sharedOperand
+  | .aipV6Len, false => some .sharedContinuation
+  | .peerHasPubkey, false => some .sharedContinuation
+  | .peerPubkeyLen, false => some .sharedContinuation
+  | .peerHasPsk, false => some .sharedContinuation
+  | .peerPskLen, false => some .sharedContinuation
+  | .peerHasFlags, false => some .sharedContinuation
+  | .peerHasProtocol, false => some .sharedContinuation
+  | .peerBadProtocol, false => some .sharedContinuation
+  | .peerNotFound, false => some .sharedContinuation
+  | .peerSelfHasIdentity, false => some .sharedContinuation
+  | .peerSelfKeyMatch, false => some .sharedContinuation
+  | .peerSetPsk, false => some .sharedContinuation
+  | .peerHasEndpoint, false => some .sharedContinuation
+  | .peerEndpointV4Len, true => some .sharedOperand
+  | .peerEndpointV4Len, false => some .sharedOperand
+  | .peerEndpointV4Family, false => some .sharedOperand
+  | .peerEndpointV6Len, true => some .sharedOperand
+  | .peerEndpointV6Len, false => some .sharedOperand
+  | .peerEndpointV6Family, false => some .sharedContinuation
+  | .peerReplaceAips, false => some .sharedContinuation
+  | .peerHasAips, false => some .sharedContinuation
+  | .peerAipsIter, false => some .sharedContinuation
+  | .peerAipErr, false => some .sharedContinuation
+  | .peerHasKeepalive, false => some .sharedContinuation
+  | .peerKeepaliveWasZero, false => some .sharedContinuation
+  | .peerKeepaliveNonzero, false => some .sharedContinuation
+  | .peerKeepaliveRunning, true => some .sharedContinuation
+  | .peerKeepaliveRunning, false => some .sharedContinuation
+  | .peerSendKeepalive, false => some .sharedContinuation
+  | .peerRunning, false => some .sharedContinuation
+  | .peerZeroPsk, false => some .sharedContinuation
+  | .setDevHasFlags, false => some .sharedContinuation
+  | .setDevHasPort, true => some .sharedOperand
+  | .setDevHasPort, false => some .sharedOperand
+  | .setDevHasFwmark, true => some .sharedOperand
+  | .setDevHasFwmark, false => some .sharedOperand
+  | .setDevNoNet, true => some .sharedOperand
+  | .setDevNoNet, false => some .sharedOperand
+  | .setDevNotCapable, true => some .sharedOperand
+  | .setDevNotCapable, false => some .sharedOperand
+  | .setDevPermErr, false => some .sharedContinuation
+  | .setDevFwmark, false => some .sharedContinuation
+  | .setDevFwmarkPeerIter, false => some .sharedContinuation
+  | .setDevPort, false => some .sharedContinuation
+  | .setDevPortErr, false => some .sharedContinuation
+  | .setDevReplacePeers, false => some .sharedContinuation
+  | .setDevHasPrivateKey, false => some .sharedContinuation
+  | .setDevPrivateKeyLen, false => some .sharedContinuation
+  | .setDevGenPublic, false => some .sharedContinuation
+  | .setDevOldPeer, false => some .sharedContinuation
+  | .setDevSendStagedNoIdentity, true => some .sharedOperand
+  | .setDevSendStagedNoIdentity, false => some .sharedOperand
+  | .setDevSendStagedRunning, true => some .sharedOperand
+  | .setDevSendStagedRunning, false => some .sharedOperand
+  | .setDevSendStagedKept, true => some .sharedOperand
+  | .setDevSendStagedKept, false => some .sharedOperand
+  | .setDevSendStagedHasIdentity, true => some .sharedOperand
+  | .setDevSendStagedHasIdentity, false => some .sharedOperand
+  | .setDevKeyPeerIter, false => some .sharedContinuation
+  | .setDevSendStagedPeer, false => some .sharedContinuation
+  | .setDevHasPeers, false => some .sharedContinuation
+  | .setDevPeersIter, false => some .sharedContinuation
+  | .setDevSetPeerErr, false => some .sharedContinuation
+  | .setDevZeroKey, false => some .sharedContinuation
+  | .placementExact, true => some .noInstrumentation
+  | .addRootNoMem, true => some .noInstrumentation
+  | .addNewnodeNoMem, true => some .noInstrumentation
+  | .removeListEmpty, true => some .noInstrumentation
+  | .removeHasBit1, true => some .noInstrumentation
+  | .removeParentIsNode, true => some .noInstrumentation
+  | .removeNotFreeParent, true => some .noInstrumentation
+  | .refcountAddNzZero, true => some .noInstrumentation
+  | .genPublicNullSecret, true => some .noInstrumentation
+  | .keypairPutNull, true => some .noInstrumentation
+  | .peerCreateNoMem, true => some .noInstrumentation
+  | .peerGetMaybeZeroDead, false => some .noInstrumentation
+  | .peerRemoveNull, true => some .noInstrumentation
+  | .peerPutNull, true => some .noInstrumentation
+  | .peerKrefPutReleased, true => some .noInstrumentation
+  | .pubkeyLookupMatch, true => some .noInstrumentation
+  | .setEndpointEq, true => some .noInstrumentation
+  | .setEndpointV6, false => some .noInstrumentation
+  | .lookupBothOrNeither, true => some .noInstrumentation
+  | .lookupNoDev, true => some .noInstrumentation
+  | .getAipNoNest, true => some .noInstrumentation
+  | .getPeerNoNest, true => some .noInstrumentation
+  | .getPeerPubkeyFail, true => some .noInstrumentation
+  | .getPeerEpFail, true => some .noInstrumentation
+  | .getPeerNoAips, true => some .noInstrumentation
+  | .getPeerSeqChanged, true => some .noInstrumentation
+  | .getPeerAipsNestFail, true => some .noInstrumentation
+  | .dumpNoHdr, true => some .noInstrumentation
+  | .dumpNoPeersNest, true => some .noInstrumentation
+  | .dumpNoPeersNest, false => some .noInstrumentation
+  | .dumpGetPeerFail, true => some .noInstrumentation
+  | .dumpGetPeerFail, false => some .noInstrumentation
+  | .dumpDone, true => some .noInstrumentation
+  | .setPortSame, true => some .noInstrumentation
+  | .peerBadFlags, true => some .noInstrumentation
+  | .peerBadProtocol, true => some .noInstrumentation
+  | .peerNewRemoveOrUpdate, true => some .noInstrumentation
+  | .peerCreateErr, true => some .noInstrumentation
+  | .peerAipErr, true => some .noInstrumentation
+  | .peerKeepaliveWasZero, true => some .noInstrumentation
+  | .setDevBadFlags, true => some .noInstrumentation
+  | .setDevPermErr, true => some .noInstrumentation
+  | .setDevPortErr, true => some .noInstrumentation
+  | .setDevSetPeerErr, true => some .noInstrumentation
+  | .peerCreateMaxPeers, true => some .compilerShared
+  | .addNoPeer, true => some .compilerShared
+  | .dumpRetErr, false => some .compilerShared
+  | .commonBits128, false => some .noInstrumentation
+  | .dumpDone, false => some .compilerShared
+  | .getPeerPskFail, true => some .compilerShared
+  | .peerAipParseErr, true => some .compilerShared
+  | .setDevParseErr, true => some .compilerShared
   | _, _ => none
 
 /-- The relation of a C value comparison, as written in the source
@@ -620,6 +1166,12 @@ structure Comparison where
     (`branchCmp`, as `(lhs, rhs)` in source order); the check requires it. -/
 def Decision.comparison : Decision → Option Comparison
   | .allocFdCloexec => some ⟨.flag, true, none⟩
+  | .placementCidrLe => some ⟨.le, false, none⟩
+  | .placementExact => some ⟨.eq, false, none⟩
+  | .addCidrTooLong => some ⟨.gt, false, none⟩
+  | .peerCreateMaxPeers => some ⟨.ge, true, none⟩
+  | .refcountAddFromZero => some ⟨.eq, true, none⟩
+  | .refcountAddNzZero => some ⟨.eq, true, none⟩
   | .allocFdExpandError => some ⟨.lt, true, none⟩
   | .allocFdExpanded => some ⟨.ne, true, none⟩
   | .allocFdLimit => some ⟨.ge, false, none⟩
@@ -697,12 +1249,48 @@ def Decision.comparison : Decision → Option Comparison
   | .expandFdtableBugNr => some ⟨.lt, false, none⟩
   | _ => none
 
-/-- Decisions inside `alloc_fd`'s `repeat:` loop, evaluated again after a
-    successful expansion. Only these may be reported more than once in one
-    operation. -/
+/-- Decisions that one operation may evaluate more than once: those inside
+    `alloc_fd`'s `repeat:` loop (evaluated again after a successful
+    expansion), the refcount helpers, `fdget`/`fdput` (a WireGuard operation
+    is two socket calls), and the WireGuard decisions under a loop over peers,
+    allowed IPs or trie nodes. Only these may be reported more than
+    once in one operation. -/
 def Decision.repeatable : Decision → Bool
   | .allocFdBelowNextFd | .allocFdSearch | .findNextFdAllFull | .findNextFdSkipFullWords
-  | .allocFdLimit | .expandFilesFits | .allocFdExpandError | .allocFdExpanded => true
+  | .allocFdLimit | .expandFilesFits | .allocFdExpandError | .allocFdExpanded
+  | .fgetLightSingleOwner | .fgetLightNoFile | .fgetLightMasked | .fdputFput
+  | .swapEndian32 | .swapEndian128 | .pushRcuNonNull | .rootRemoveLenPositive | .rootRemovePopped
+  | .rootRemoveHasPeer | .fls128High | .commonBits32 | .commonBits128 | .placementNode
+  | .placementCidrLe | .placementPrefixMatches | .placementExact | .addCidrTooLong | .addNoPeer
+  | .addEmptyTrie | .addRootNoMem | .addExact | .addNewnodeNoMem | .addNoParentNode
+  | .addNoDown | .addNewnodeCoversDown | .addNewnodeAtRoot | .addIntermediateNoMem | .addIntermediateAtRoot
+  | .removeListEmpty | .removeListIter | .removeHasBit0 | .removeHasBit1 | .removeChildExists
+  | .removeLeafBit0 | .removeLeafBit1 | .removeParentIsNode | .removeParentNoPeer | .removeFreeParent
+  | .removeNotFreeParent | .removeSiblingExists | .readNodeHasCidr | .refcountAddNzZero | .refcountAddNzRetry
+  | .refcountAddNzNegative | .refcountAddNzWraps | .refcountAddFromZero | .refcountAddNegative | .refcountAddWraps
+  | .genPublicNullSecret | .precomputeNoIdentity | .precomputeNullPoint | .handshakeInitHasPsk | .keypairPutNull
+  | .expireNextKeypair | .expireCurrentKeypair | .peerCreateMaxPeers | .peerCreateNoMem | .peerCreateDstCacheFail
+  | .peerGetMaybeZeroNull | .peerGetMaybeZeroDead | .peerRemoveNotDead | .peerRemoveNull | .peerRemoveAllIter1
+  | .peerRemoveAllIter2 | .peerPutNull | .peerKrefPutReleased | .pubkeyLookupMatch | .eqA4
+  | .eqB4 | .eqPort4 | .eqAddr4 | .eqSrc4 | .eqSrcIf4
+  | .eqA6 | .eqB6 | .eqPort6 | .eqAddr6 | .eqScope6
+  | .eqSrc6 | .eqANone | .eqBNone | .setEndpointEq | .setEndpointV4
+  | .setEndpointV6 | .getAipNoNest | .getAipPutCidr | .getAipPutFamily | .getAipFamily6
+  | .getAipPutAddr | .getPeerNoNest | .getPeerPubkeyFail | .getPeerFirst | .getPeerPskFail
+  | .getPeerPutHandshake | .getPeerPutKeepalive | .getPeerPutTx | .getPeerPutRx | .getPeerPutProto
+  | .getPeerEp4 | .getPeerEp6 | .getPeerEpFail | .getPeerNoAips | .getPeerSeqUnset
+  | .getPeerSeqChanged | .getPeerAipsNestFail | .getPeerAipIter | .getPeerAipFail | .dumpPeerIter
+  | .dumpGetPeerFail | .setPortPeerIter | .aipNoFamily | .aipNoAddr | .aipNoCidr
+  | .aipV4Family | .aipV4Cidr | .aipV4Len | .aipV6Family | .aipV6Cidr
+  | .aipV6Len | .peerHasPubkey | .peerPubkeyLen | .peerHasPsk | .peerPskLen
+  | .peerHasFlags | .peerBadFlags | .peerHasProtocol | .peerBadProtocol | .peerNotFound
+  | .peerNewRemoveOrUpdate | .peerSelfHasIdentity | .peerSelfKeyMatch | .peerCreateErr | .peerRemoveMe
+  | .peerSetPsk | .peerHasEndpoint | .peerEndpointV4Len | .peerEndpointV4Family | .peerEndpointV6Len
+  | .peerEndpointV6Family | .peerReplaceAips | .peerHasAips | .peerAipsIter | .peerAipParseErr
+  | .peerAipErr | .peerHasKeepalive | .peerKeepaliveWasZero | .peerKeepaliveNonzero | .peerKeepaliveRunning
+  | .peerSendKeepalive | .peerRunning | .peerZeroPsk | .setDevFwmarkPeerIter | .setDevKeyPeerIter
+  | .setDevSendStagedPeer | .setDevPeersIter | .setDevParseErr | .setDevSetPeerErr | .refcountSubPositive
+  | .refcountSubToZero | .refcountSubNonpositive | .refcountSubUnderflow => true
   | _ => false
 
 /-- Every decision, enumerated through the constructor index. -/
