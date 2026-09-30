@@ -35,7 +35,7 @@ MUTANTS = [
   ('B1-M3-xmit-keeps-reference', 'behavior-preserving: wg_xmit never drops its peer reference', 'Leanux/WG/Device.lean',
    "  sendStagedPackets pid\n  peerPut peer\n  return 0   -- NETDEV_TX_OK",
    "  sendStagedPackets pid\n  return 0   -- NETDEV_TX_OK"),
-  ('B1-M4-low-order-emits', 'behavior: the worker emits for a low-order peer key', 'Leanux/WG/Send.lean',
+  ('B1-M4-low-order-emits', 'behavior: the worker emits for a low-order peer key', 'Leanux/Env.lean',
    "    let created := d.staticIdentity.hasIdentity && p.precomputedStaticStatic != List.replicate 32 0\n",
    "    let created := d.staticIdentity.hasIdentity\n"),
   ('B1-M5-dead-before-expired', 'behavior-preserving: is_dead tested before the expiry', 'Leanux/WG/Send.lean',
