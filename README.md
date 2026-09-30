@@ -74,3 +74,11 @@ Bulk dependencies and build outputs are Git-ignored; preserve them when copying
 this workspace for offline use, or stage them from the locks as in
 [REPRODUCING.md](REPRODUCING.md). The bootstrap runtime is Linux x86-64 with
 glibc 2.39 or newer, `/bin/sh`, Python 3, and nono.
+
+## License
+
+GPL-2.0-only; see [LICENSE](LICENSE). The mirror follows the structure of
+Linux, which is GPL-2.0-only, so the repository uses the same license (not
+"or later", which would be incompatible with GPL-2.0-only code). Staged
+third-party sources and packages (`.deps`, `.tools`, not in Git) keep their
+own licenses.
