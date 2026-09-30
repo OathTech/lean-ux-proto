@@ -177,15 +177,14 @@ def parse_decisions(decisions, config):
         raise InvalidOutput('empty decision table')
     table = {}
     for entry in decisions:
-        if set(entry) != {'label', 'file', 'line', 'when_true', 'when_false', 'unobservable_true', 'unobservable_false',
-                          'repeatable', 'comparison'} or type(entry['repeatable']) is not bool:
+        if set(entry) != {'label', 'file', 'line', 'when_true', 'when_false', 'repeatable', 'comparison'} \
+                or type(entry['repeatable']) is not bool:
             raise InvalidOutput(f'decision fields: {entry}')
         label = entry['label']
         if type(label) is not str or label in table or entry['file'] not in config['files']:
             raise InvalidOutput(f'decision {label}: duplicate label or unanchored file')
         if type(entry['line']) is not int or non_statement(f"{entry['file']}:{entry['line']}"):
             raise InvalidOutput(f'decision {label}: condition line must be a source statement')
-        reasons = {True: entry['unobservable_true'], False: entry['unobservable_false']}
         comparison = entry['comparison']
         if comparison is not None and (set(comparison) != {'rel', 'const_rhs', 'site'} or comparison['rel'] not in RELATIONS
                                        or type(comparison['const_rhs']) is not bool):
@@ -194,8 +193,6 @@ def parse_decisions(decisions, config):
             site_file, _, site_line = comparison['site'].rpartition(':')
             if site_file != entry['file'] or not site_line.isdigit() or abs(int(site_line) - entry['line']) > 2:
                 raise InvalidOutput(f'decision {label}: comparison site must be within two lines of the condition')
-        if any(r is not None and (type(r) is not str or not r) for r in reasons.values()):
-            raise InvalidOutput(f'decision {label}: unobservable reasons must be strings')
         spans = {}
         for outcome, key in ((True, 'when_true'), (False, 'when_false')):
             lines = set()
@@ -211,32 +208,21 @@ def parse_decisions(decisions, config):
             spans[outcome] = {line for line in lines if not non_statement(line)}
         if spans[True] & spans[False]:
             raise InvalidOutput(f'decision {label}: outcome spans overlap')
-        table[label] = dict(site=f"{entry['file']}:{entry['line']}", spans=spans, reasons=reasons,
+        table[label] = dict(site=f"{entry['file']}:{entry['line']}", spans=spans,
                             function=label.split('.', 1)[0], comparison=comparison, repeatable=entry['repeatable'])
     return table
 
 
 def witness_table(decisions, instrumented, functions, branch_free_functions=()):
-    """Witnesses are the instrumented lines of each outcome span. A side with
-    no witness must declare why it is unobservable, and a declared reason must
-    not hide a side that does have witnesses. Each decision's C function (the
-    label prefix) must own instrumentation, so reaching it is checkable, unless
-    both outcomes are declared branch-free."""
+    """Witnesses are the instrumented lines of each outcome span. An outcome
+    without witnesses is unobservable; the report counts these (no declared
+    reason is required, user decision 2026-09-30). Each decision's C function
+    (the label prefix) must own instrumentation, so reaching it is checkable,
+    unless the configuration lists it as branch-free."""
     table, problems = {}, []
     for label, entry in decisions.items():
         table[label] = {o: entry['spans'][o] & instrumented for o in (True, False)}
-        for outcome in (True, False):
-            if not table[label][outcome] and entry['reasons'][outcome] is None:
-                problems.append(f'{label}={int(outcome)}: no KCOV witness and no unobservable reason')
-            if table[label][outcome] and entry['reasons'][outcome] is not None:
-                problems.append(f'{label}={int(outcome)}: declared unobservable but witnessed by '
-                                f'{sorted(table[label][outcome])}')
-        # A function the compiler made entirely branch-free owns no point; its
-        # decisions are exempt only if the configuration lists it as such and
-        # both outcomes say so.
-        branch_free = (entry['function'] in branch_free_functions
-                       and all(entry['reasons'][o] == 'branch_free' for o in (True, False)))
-        if entry['function'] not in functions and not branch_free:
+        if entry['function'] not in functions and entry['function'] not in branch_free_functions:
             problems.append(f'{label}: C function {entry["function"]} owns no instrumentation point')
     if problems:
         raise InvalidOutput('decision table does not match the instrumented kernel:\n  ' + '\n  '.join(problems))
@@ -622,7 +608,10 @@ def decision_summary(decisions, outcomes, witnesses):
         rows[label] = dict(site=entry['site'], true=outcomes[f'{label}=1'], false=outcomes[f'{label}=0'],
                            witnessed_true=bool(witnesses.get(label, {}).get(True)),
                            witnessed_false=bool(witnesses.get(label, {}).get(False)))
-    return dict(decisions=len(rows), never_evaluated=sorted(l for l, r in rows.items() if not r['true'] + r['false']),
+    return dict(decisions=len(rows),
+                unobservable_outcomes=sum((not r['witnessed_true']) + (not r['witnessed_false']) for r in rows.values()),
+                unobservable_decisions=sorted(l for l, r in rows.items() if not r['witnessed_true'] and not r['witnessed_false']),
+                never_evaluated=sorted(l for l, r in rows.items() if not r['true'] + r['false']),
                 one_outcome_only=sorted(l for l, r in rows.items() if bool(r['true']) != bool(r['false'])),
                 table=rows)
 

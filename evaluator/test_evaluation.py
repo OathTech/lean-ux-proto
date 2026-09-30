@@ -53,18 +53,17 @@ class EvaluationChecks(unittest.TestCase):
 
     CONFIG = {'files': ['fs/eventfd.c'], 'functions': ['eventfd_read', 'eventfd_ctx_do_read'], 'known_gaps': []}
 
-    def decision(self, label, line, true, false, why_true=None, why_false=None):
+    def decision(self, label, line, true, false):
         return {'label': label, 'file': 'fs/eventfd.c', 'line': line,
                 'when_true': [{'file': 'fs/eventfd.c', 'lo': lo, 'hi': hi} for lo, hi in true],
                 'when_false': [{'file': 'fs/eventfd.c', 'lo': lo, 'hi': hi} for lo, hi in false],
-                'unobservable_true': why_true, 'unobservable_false': why_false, 'repeatable': False,
-                'comparison': None}
+                'repeatable': False, 'comparison': None}
 
     def control_flow_fixture(self):
         table = check.parse_decisions([
-            self.decision('eventfd_read.short_buffer', 220, [(221, 221)], [(222, 222)], why_true='no_instrumentation'),
+            self.decision('eventfd_read.short_buffer', 220, [(221, 221)], [(222, 222)]),
             self.decision('eventfd_read.empty', 223, [(224, 224)], [(235, 235)]),
-            self.decision('eventfd_ctx_do_read.semaphore', 180, [], [], 'branch_free', 'branch_free')], self.CONFIG)
+            self.decision('eventfd_ctx_do_read.semaphore', 180, [], [])], self.CONFIG)
         instrumented = {'fs/eventfd.c:222', 'fs/eventfd.c:224', 'fs/eventfd.c:235'}
         functions = {'eventfd_read', 'eventfd_ctx_do_read'}
         witnesses = check.witness_table(table, instrumented, functions)
@@ -126,7 +125,7 @@ class EvaluationChecks(unittest.TestCase):
         self.assertIn('Linux ran a decision function the mirror reported nothing in', [p['problem'] for p in problems])
 
     def test_branch_free_exemption_needs_the_allowlist(self):
-        table = check.parse_decisions([self.decision('fls128.high_nonzero', 180, [], [], 'branch_free', 'branch_free')],
+        table = check.parse_decisions([self.decision('fls128.high_nonzero', 180, [], [])],
                                       self.CONFIG)
         check.witness_table(table, set(), set(), ['fls128'])
         with self.assertRaises(check.InvalidOutput):
@@ -140,7 +139,7 @@ class EvaluationChecks(unittest.TestCase):
             [self.decision('eventfd_read.empty', 223, [(224, 235)], [(235, 235)])],  # overlapping outcomes
             [self.decision('eventfd_read.empty', 223, [(100, 100)], [])],       # far from its condition
             [self.decision('eventfd_read.empty', 223, [(224, 9999)], [])],      # beyond the file
-            [dict(good, unobservable_true=3)],                                   # malformed reason
+            [dict(good, unobservable_true='no_instrumentation')],               # retired field
             [dict(good, file='mm/slub.c')],                                      # unanchored file
         ]
         for table in broken:
@@ -150,18 +149,11 @@ class EvaluationChecks(unittest.TestCase):
         with self.assertRaises(InvalidOutput):
             check.parse_decisions(blank, self.CONFIG)
 
-    def test_unobservable_reasons_match_the_binary(self):
+    def test_witnesses_come_from_the_binary(self):
         table = check.parse_decisions([self.decision('eventfd_read.empty', 223, [(224, 224)], [(235, 235)])], self.CONFIG)
-        check.witness_table(table, {'fs/eventfd.c:224', 'fs/eventfd.c:235'}, {'eventfd_read'})
-        # A side without witnesses needs a reason ...
-        with self.assertRaises(InvalidOutput):
-            check.witness_table(table, {'fs/eventfd.c:224'}, {'eventfd_read'})
-        # ... a reason must not hide a witnessed side ...
-        hidden = check.parse_decisions([self.decision('eventfd_read.empty', 223, [(224, 224)], [(235, 235)],
-                                                      why_false='no_instrumentation')], self.CONFIG)
-        with self.assertRaises(InvalidOutput):
-            check.witness_table(hidden, {'fs/eventfd.c:224', 'fs/eventfd.c:235'}, {'eventfd_read'})
-        # ... and the decision's C function must own instrumentation.
+        witnesses = check.witness_table(table, {'fs/eventfd.c:224'}, {'eventfd_read'})
+        self.assertEqual(witnesses['eventfd_read.empty'], {True: {'fs/eventfd.c:224'}, False: set()})
+        # The decision's C function must own instrumentation.
         with self.assertRaises(InvalidOutput):
             check.witness_table(table, {'fs/eventfd.c:224', 'fs/eventfd.c:235'}, {'eventfd_write'})
 
