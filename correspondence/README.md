@@ -169,28 +169,18 @@ The report's `decision_coverage` lists, per decision, how often each outcome
 occurred. It also lists which outcomes KCOV can witness, which decisions the
 corpus never evaluates, and which it sees with one outcome only.
 
-## Configured source capture
-
-`scripts/in-bundle python3 scripts/capture-correspondence.py`:
-- reads the accepted kernel build's `.cmd` records;
-- preprocesses the modeled translation units serially with the exact GCC
-  command;
-- writes `.i` files, line maps, the include closure with hashes, and a
-  comparison of every source input against the pinned archive.
-
-`--verify PATH` rechecks a captured manifest. `capture-v1.json` records the
-retained capture. It is source provenance and a fixed C text for later proof
-work, not evidence of agreement.
-
 ## Domain facts
 
-The trace domain has these properties. `contracts/scope-v1.json` records the
-same facts in machine-readable form.
+The trace domain (`harness/trace.py` validates it; the mirror's runner parses
+the same format):
 - Fixture descriptors 0–7 are reserved. They are modeled as fixture files whose
-  operations are outside the slice.
-- `RLIMIT_NOFILE` is 32, while the initial table capacity is 64.
-- Eventfds are nonblocking.
-- The file status is computed as in the C: `O_RDWR | O_NONBLOCK` = 2050.
+  operations are outside the slice. In traces with a WireGuard operation, 4–5
+  are UDP listeners, 6 a UDP sender and 7 a generic-netlink socket.
+- `RLIMIT_NOFILE` is 32 unless a trace sets 8–1024; the initial table capacity
+  is 64.
+- Eventfds may be blocking; a wait that would block is `unsupported`.
+- The file status is computed as in the C (`O_RDWR | O_NONBLOCK` = 2050 for a
+  nonblocking eventfd).
 - Close-on-exec is descriptor-local.
 - Descriptor references keep their number after close.
 

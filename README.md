@@ -15,7 +15,6 @@ project. Executable behavior is tested against the pinned kernel. See
 - [WireGuard stage B1 report (2026-09-30)](docs/2026-09-30-wireguard-stage-b1-report.md)
 - [Reproducing the results from a clone](REPRODUCING.md)
 - [Worktree, shared dependency, and cleanup practices](docs/worktree-practices.md)
-- [Offline development setup and environment audit](docs/offline-development.md)
 - [Using the staged offline environment](docs/offline-usage.md)
 - [Pinned source identities](dependencies/sources.lock.json)
 - [Superseded plans and handoffs](docs/history/README.md)
@@ -53,7 +52,7 @@ See [correspondence](correspondence/README.md).
 
 It writes `report.json` under `$LEANUX_ARTIFACTS/check/` and exits nonzero
 unless everything passes. Unit tests:
-`scripts/in-bundle python3 -B -m unittest evaluator.test_evaluation harness.test_trace harness.test_wg harness.test_linux harness.test_syzkaller_adapter`.
+`scripts/in-bundle python3 -B -m unittest evaluator.test_evaluation harness.test_trace harness.test_wg harness.test_linux`.
 Work happens in worktrees; see [worktree practices](docs/worktree-practices.md).
 
 ## Environment
