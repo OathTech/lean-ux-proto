@@ -1,4 +1,5 @@
 import Leanux.WG.Device
+import Leanux.WG.Receive
 
 /-!
 # The environment model: the harness fixture and the WireGuard kworker
@@ -49,6 +50,7 @@ def runHandshakeWorkers : M Unit := do
       if created && !loopback then unsupported "a handshake sent to a non-loopback endpoint"
     if p.refcount < 2 then invariant "the worker's reference is missing"
     setPeer pid { p with handshakePending := false, lastSentExpired := false, refcount := p.refcount - 1,
+                         indexed := p.indexed || created,
                          txBytes := p.txBytes + (if sent then MESSAGE_HANDSHAKE_INITIATION_LEN else 0) }
     if sent then
       let some e := p.endpoint | invariant "unreachable"
@@ -82,5 +84,19 @@ def observe : M (Int × Lean.Json) := do
   return (ret, Lean.Json.mkObj [
     ("datagrams", Lean.toJson (sorted.map fun (f, n) => [f, n, 1])),   -- MESSAGE_HANDSHAKE_INITIATION
     ("stats", Lean.Json.mkObj [("tx_errors", Lean.toJson d.txErrors), ("tx_dropped", Lean.toJson d.txDropped)])])
+
+/-- `wg_inject`: the fixture's sender sends one datagram to `port` on 127.0.0.1
+    or ::1. Only wg0's own socket is in the domain: wg0 up, on that port.
+    Loopback delivers it in softirq inside the `sendto`, and the guest waits
+    for the handshake worker. -/
+def inject (port : Nat) (msg : List UInt8) : M Int := do
+  let d ← getDev
+  if !d.running || port != d.incomingPort then unsupported "a datagram to a port other than wg0's"
+  -- a pending send worker inserts an index entry under a random index
+  for pid in d.peerList do requireNotPending pid "receiving while a handshake is queued"
+  WG.wgReceive msg
+  -- the queued receive work runs before the guest's wait ends
+  if !(← getDev).handshakeQueue.isEmpty then WG.handshakeReceiveWorker
+  return msg.length   -- udp_sendmsg returns the datagram's length
 
 end Leanux.Env

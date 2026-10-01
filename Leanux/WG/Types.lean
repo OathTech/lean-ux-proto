@@ -76,6 +76,9 @@ structure Peer where
       current; traces are bounded well below `REKEY_TIMEOUT`. -/
   lastSentExpired : Bool := true
   txBytes : Nat := 0
+  /-- `handshake.entry` is in the index hashtable (inserted, under a random
+      index, when an initiation is created; removed by `handshake_clear`). -/
+  indexed : Bool := false
   deriving Repr, BEq
 
 /-- `struct noise_static_identity`. -/
@@ -93,6 +96,13 @@ structure Device where
   /-- `dev->stats` transmit counters. -/
   txErrors : Nat := 0
   txDropped : Nat := 0
+  /-- `cookie_checker.message_mac1_key`: zero until an identity is set. -/
+  mac1Key : Key := List.replicate 32 0
+  /-- `handshake_queue.last_cpu`, initialized to -1 (queueing.c:31). -/
+  handshakeLastCpu : Int := -1
+  /-- `handshake_queue.ring`: queued handshake messages, oldest first; its
+      length is `handshake_queue_len`. -/
+  handshakeQueue : List (List UInt8) := []
   staticIdentity : StaticIdentity := {}
   incomingPort : Nat := 0
   fwmark : Nat := 0

@@ -32,17 +32,21 @@ Do not build theorems of any kind:
 Do not add them as acceptance gates. Historical proof artifacts and older plans
 in `docs/history/` do not authorize recreating them.
 
-## The checker is frozen and on a diet
+## Checks must pay for themselves
 
 Set by the user on 2026-09-30, after a drift audit: "We know roughly what we
 need, ie. data and control equivalence over the executable mirror. If we have
 that, we're building a reasonable digital twin. I'm happy to put the monitor
-infra 'on a diet' but we don't need to get sent on a sidequest."
+infra 'on a diet' but we don't need to get sent on a sidequest." Refined on
+2026-10-01: "I think we can add further checkers, we just need to make sure
+they 'pay the bills'. I.e we don't add checkers that just accrete. But finer
+grained instruments are okay."
 - The goal is data and control-flow equivalence of the executable mirror with
   Linux. The checker (`evaluator/`, `harness/`, `correspondence/`) serves that
-  goal and must stay small.
-- No new check rule, fixture mechanism or kernel build is added without an
-  explicit user decision, recorded as [USER].
+  goal.
+- A new check rule or instrument must state what it catches that the existing
+  ones do not, with evidence: a real defect or a mutant it alone rejects. One
+  that cannot show this is not added, and one that stops paying is removed.
 - The mirror (`Leanux/FS`, `Leanux/WG`, `Leanux/Kernel`) contains only the C's
   data and control flow. Fixture, scheduling and timing assumptions live in
   the environment model (`Leanux/Env.lean`) or the runner.

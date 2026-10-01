@@ -22,6 +22,7 @@ inductive Operation where
   | wgUp
   | wgXmit (family addr : Nat)
   | wgObserve
+  | wgInject (family port : Nat) (message : List UInt8)
   deriving Repr
 
 def Operation.isProducer : Operation → Bool
@@ -38,7 +39,7 @@ structure Trace where
 /-- The network fixture runs for traces with a WireGuard operation
     (harness/trace.py `uses_wireguard`). -/
 def Trace.net (t : Trace) : Bool :=
-  t.ops.any fun | .wgSet _ | .wgGet | .wgUp | .wgXmit .. | .wgObserve => true | _ => false
+  t.ops.any fun | .wgSet _ | .wgGet | .wgUp | .wgXmit .. | .wgObserve | .wgInject .. => true | _ => false
 
 private def fields (j : Json) (expected : List String) : Except String Unit := do
   let obj ← j.getObj?
@@ -206,6 +207,16 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
   | "wg_observe" =>
     fields j ["op"]
     return .wgObserve
+  | "wg_inject" =>
+    fields j ["op", "family", "port", "message"]
+    let family ← (← field j "family").getNat?
+    if family != 4 && family != 6 then throw "family: expected 4 or 6"
+    let port ← natField j "port" 65535
+    if port == 0 then throw "port: expected 1-65535"
+    let s ← (← field j "message").getStr?
+    if s.length == 0 || s.length % 2 != 0 || s.length > 2800 then throw "message: expected 1-1400 bytes of lowercase hex"
+    let message ← hexBytes (← field j "message") s.length "message"
+    return .wgInject family port message
   | "wg_xmit" =>
     fields j ["op", "packet"]
     let p ← field j "packet"
@@ -316,6 +327,7 @@ def toSyscall (results : Array Int) : Operation → Syscall
   | .wgUp => .wgUp
   | .wgXmit family addr => .wgXmit family addr
   | .wgObserve => .wgObserve
+  | .wgInject family port message => .wgInject family port message
 
 /-- Run a trace. A `Stop` is returned with the operation index: the mirror
     never reports an observation for a path it does not model. -/

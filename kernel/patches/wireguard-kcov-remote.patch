@@ -1,0 +1,40 @@
+--- a/drivers/net/wireguard/socket.c
++++ b/drivers/net/wireguard/socket.c
+@@ -16,7 +16,7 @@
+ #include <linux/inetdevice.h>
+ #include <net/udp_tunnel.h>
+ #include <net/ipv6.h>
+-
++#include <linux/kcov.h>
+ static int send4(struct wg_device *wg, struct sk_buff *skb,
+ 		 struct endpoint *endpoint, u8 ds, struct dst_cache *cache)
+ {
+@@ -323,7 +323,7 @@
+ 	if (unlikely(!wg))
+ 		goto err;
+ 	skb_mark_not_on_list(skb);
+-	wg_packet_receive(wg, skb);
++	kcov_remote_start_common(skb_get_kcov_handle(skb)); wg_packet_receive(wg, skb); kcov_remote_stop();
+ 	return 0;
+ 
+ err:
+--- a/drivers/net/wireguard/receive.c
++++ b/drivers/net/wireguard/receive.c
+@@ -15,7 +15,7 @@
+ #include <linux/ipv6.h>
+ #include <linux/udp.h>
+ #include <net/ip_tunnels.h>
+-
++#include <linux/kcov.h>
+ /* Must be called with bh disabled. */
+ static void update_rx_stats(struct wg_peer *peer, size_t len)
+ {
+@@ -210,7 +210,7 @@
+ 	struct sk_buff *skb;
+ 
+ 	while ((skb = ptr_ring_consume_bh(&queue->ring)) != NULL) {
+-		wg_receive_handshake_packet(wg, skb);
++		kcov_remote_start_common(skb_get_kcov_handle(skb)); wg_receive_handshake_packet(wg, skb); kcov_remote_stop();
+ 		dev_kfree_skb(skb);
+ 		atomic_dec(&wg->handshake_queue_len);
+ 		cond_resched();

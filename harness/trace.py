@@ -24,8 +24,10 @@ FIELDS = {
     "wg_set": {"op", "config"}, "wg_get": {"op"},
     # Stage B1: bring wg0 up, send a packet into it, observe what it emitted
     "wg_up": {"op"}, "wg_xmit": {"op", "packet"}, "wg_observe": {"op"},
+    # Stage B2: a raw WireGuard message sent to wg0's listen port
+    "wg_inject": {"op", "family", "port", "message"},
 }
-WG_OPS = {"wg_set", "wg_get", "wg_up", "wg_xmit", "wg_observe"}
+WG_OPS = {"wg_set", "wg_get", "wg_up", "wg_xmit", "wg_observe", "wg_inject"}
 OPCODES = {name: i + 1 for i, name in enumerate(FIELDS)}
 FCNTL = {"F_GETFD": 1, "F_SETFD": 2, "F_GETFL": 3, "F_SETFL": 4}
 
@@ -90,6 +92,14 @@ def validate_trace(trace):
                 validate_config(op["config"], f"ops[{i}].config")
             except InvalidConfig as exc:
                 raise InvalidTrace(str(exc)) from exc
+        if name == "wg_inject":
+            _integer(op["family"], 4, 6, f"ops[{i}].family")
+            if op["family"] == 5:
+                raise InvalidTrace(f"ops[{i}].family: expected 4 or 6")
+            _integer(op["port"], 1, 65535, f"ops[{i}].port")
+            message = op["message"]
+            if type(message) is not str or not re.fullmatch(r"(?:[0-9a-f]{2}){1,1400}", message, re.ASCII):
+                raise InvalidTrace(f"ops[{i}].message: expected 1-1400 bytes of lowercase hex")
         if name == "wg_xmit":
             try:
                 validate_packet(op["packet"], f"ops[{i}].packet")
@@ -143,6 +153,8 @@ def serialize_wire(traces):
             b = op.get("flags", op.get("arg", 0))
             if op["op"] == "wg_xmit":
                 a, packet = encode_packet(op["packet"])
+            if op["op"] == "wg_inject":
+                a, b = op["family"], op["port"]
             line = f"{OPCODES[op['op']]} {kind} {value} {newkind} {newvalue} {a} {b} {op.get('value', '0')}"
             if op["op"] == "wg_set":
                 line += " " + encode_set(op["config"]).hex()
@@ -150,5 +162,7 @@ def serialize_wire(traces):
                 line += " " + encode_get().hex()
             elif op["op"] == "wg_xmit":
                 line += " " + packet.hex()
+            elif op["op"] == "wg_inject":
+                line += " " + op["message"]
             lines.append(line)
     return "\n".join(lines) + "\n"

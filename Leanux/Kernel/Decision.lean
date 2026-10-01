@@ -147,6 +147,23 @@ inductive Decision where
   | keepaliveNoMem | stagedEmpty | stagedNoKeypair | stagedOrphanWalk
   -- drivers/net/wireguard/noise.c
   | keypairGetNull | keypairGetZero
+  -- drivers/net/wireguard/socket.c
+  | rxNoSock | rxNoWg
+  -- drivers/net/wireguard/receive.c
+  | hdrTooShort | hdrData | hdrDataLen | hdrInit | hdrInitLen
+  | hdrResp | hdrRespLen | hdrCookie | hdrCookieLen | prepBadProtocol
+  | prepTransportBelowHead | prepTransportBeyondTail | prepOffsetTooBig | prepOffsetBeyondLen | prepUdpLenSmall
+  | prepUdpLenLying | prepPullFailed | prepTrimFailed | prepLenMismatch | prepNoHeaderLen
+  | prepPullHeaderFailed | rxPrepareFailed | rxHandshake | rxData | rxRngNotReady
+  | rxQueueBusy | rxProduceFailed | workerConsumed | hsCookie | hsUnderLoad
+  | hsWasUnderLoad | hsLoadedOperand | hsLoadedCookieOk | hsNotLoaded | hsMacNoCookie
+  | hsNeedsCookieLoaded | hsNeedsCookieMac | dataNoKeypair
+  -- drivers/net/wireguard/cookie.c
+  | macInvalid | macNoCookieCheck | cookieLookupMiss
+  -- drivers/net/wireguard/peerlookup.c
+  | idxMatch | idxFound
+  -- drivers/net/wireguard/queueing.h
+  | cpumaskWrap
   deriving Repr, BEq, DecidableEq, Inhabited
 
 /-- A recorded step: the decision, the outcome the mirror computed, and, for
@@ -193,6 +210,7 @@ private def wso := "drivers/net/wireguard/socket.c"
 private def wpl := "drivers/net/wireguard/peerlookup.c"
 private def wck := "drivers/net/wireguard/cookie.c"
 private def c25 := "include/crypto/curve25519.h"
+private def wrc := "drivers/net/wireguard/receive.c"
 private def wdv := "drivers/net/wireguard/device.c"
 private def wsd := "drivers/net/wireguard/send.c"
 private def wqh := "drivers/net/wireguard/queueing.h"
@@ -683,6 +701,64 @@ def Decision.info : Decision → DecisionInfo
   -- drivers/net/wireguard/noise.c
   | .keypairGetNull => d "wg_noise_keypair_get.null" wno 146 [] []
   | .keypairGetZero => d "wg_noise_keypair_get.refcount_zero" wno 146 [] [(148, 148)]
+  -- drivers/net/wireguard/socket.c
+  -- 320-325 run before the patch's kcov_remote_start on 326: no stream collects them
+  | .rxNoSock => d "wg_receive.no_sock" wso 320 [(321, 321)] []
+  -- 325-327's witness is the return address of `call wg_packet_receive` inside the
+  -- remote section: wg_packet_receive ends by tail-jumping into the coverage hook
+  | .rxNoWg => d "wg_receive.no_device" wso 323 [(324, 324)] [(325, 327)]
+  -- drivers/net/wireguard/receive.c
+  | .hdrTooShort => d "validate_header_len.too_short" wrc 30 [(31, 31)] [(32, 32)]
+  | .hdrData => d "validate_header_len.data" wrc 32 [(33, 33)] []
+  | .hdrDataLen => d "validate_header_len.data_length" wrc 33 [(34, 34)] []
+  | .hdrInit => d "validate_header_len.initiation" wrc 35 [(36, 36)] []
+  | .hdrInitLen => d "validate_header_len.initiation_length" wrc 36 [(37, 37)] []
+  | .hdrResp => d "validate_header_len.response" wrc 38 [(39, 39)] []
+  | .hdrRespLen => d "validate_header_len.response_length" wrc 39 [(40, 40)] []
+  | .hdrCookie => d "validate_header_len.cookie" wrc 41 [(42, 42)] []
+  | .hdrCookieLen => d "validate_header_len.cookie_length" wrc 42 [(43, 43)] []
+  | .prepBadProtocol => d "prepare_skb_header.bad_protocol" wrc 52 [] [(53, 53)]
+  | .prepTransportBelowHead => d "prepare_skb_header.transport_below_head" wrc 53 [] [(54, 55)]
+  | .prepTransportBeyondTail => d "prepare_skb_header.transport_beyond_tail" wrc 54 [] [(57, 58)]
+  | .prepOffsetTooBig => d "prepare_skb_header.offset_too_big" wrc 59 [] [(60, 60)]
+  | .prepOffsetBeyondLen => d "prepare_skb_header.offset_beyond_len" wrc 60 [] [(65, 65)]
+  | .prepUdpLenSmall => d "prepare_skb_header.udp_len_small" wrc 66 [] [(67, 67)]
+  | .prepUdpLenLying => d "prepare_skb_header.udp_len_lying" wrc 67 [] [(72, 73)]
+  | .prepPullFailed => d "prepare_skb_header.pull_failed" wrc 74 [] [(76, 76)]
+  | .prepTrimFailed => d "prepare_skb_header.trim_failed" wrc 76 [] [(78, 78)]
+  | .prepLenMismatch => d "prepare_skb_header.len_mismatch" wrc 79 [(80, 81)] [(82, 82)]
+  | .prepNoHeaderLen => d "prepare_skb_header.no_header_len" wrc 83 [(84, 84)] [(85, 85)]
+  | .prepPullHeaderFailed => d "prepare_skb_header.pull_header_failed" wrc 86 [(87, 87)] [(88, 89)]
+  | .rxPrepareFailed => d "wg_packet_receive.prepare_failed" wrc 544 [(545, 545)] [(546, 546)]
+  | .rxHandshake => d "wg_packet_receive.handshake" wrc 546 [(550, 572)] []
+  | .rxData => d "wg_packet_receive.data" wrc 546 [(575, 577)] [(579, 580)]
+  | .rxRngNotReady => d "wg_packet_receive.rng_not_ready" wrc 552 [(553, 553)] [(554, 554)]
+  | .rxQueueBusy => d "wg_packet_receive.queue_busy" wrc 554 [(555, 558)] [(560, 560)]
+  | .rxProduceFailed => d "wg_packet_receive.produce_failed" wrc 561 [(562, 565)] [(567, 571)]
+  -- witnessed through 213's inline frames; 214-216 run after kcov_remote_stop
+  | .workerConsumed => d "wg_packet_handshake_receive_worker.consumed" wrc 212 [(213, 216)] []
+  | .hsCookie => d "wg_receive_handshake_packet.cookie" wrc 104 [(105, 109)] [(112, 113)]
+  | .hsUnderLoad => d "wg_receive_handshake_packet.under_load" wrc 114 [(115, 115)] [(116, 116)]
+  | .hsWasUnderLoad => d "wg_receive_handshake_packet.was_under_load" wrc 116 [(117, 119)] []
+  | .hsLoadedOperand => d "wg_receive_handshake_packet.loaded_and_cookie" wrc 123 [] []
+  | .hsLoadedCookieOk => d "wg_receive_handshake_packet.mac_with_cookie" wrc 123 [] []
+  | .hsNotLoaded => d "wg_receive_handshake_packet.not_loaded" wrc 124 [] []
+  -- not under load, the chain decides on this operand: 134 (the switch) runs iff
+  -- it is true. Its false side owns no point here: GCC knows under_load is
+  -- false and jumps past the `else if` at 126 to the drop.
+  | .hsMacNoCookie => d "wg_receive_handshake_packet.mac_without_cookie" wrc 124 [(125, 125), (134, 134)] []
+  | .hsNeedsCookieLoaded => d "wg_receive_handshake_packet.needs_cookie_loaded" wrc 126 [] []
+  | .hsNeedsCookieMac => d "wg_receive_handshake_packet.needs_cookie_mac" wrc 126 [(127, 127)] []
+  | .dataNoKeypair => d "wg_packet_consume_data.no_keypair" wrc 520 [(521, 521)] [(523, 523)]
+  -- drivers/net/wireguard/cookie.c
+  | .macInvalid => d "wg_cookie_validate_packet.mac1_invalid" wck 132 [(133, 133)] [(135, 135)]
+  | .macNoCookieCheck => d "wg_cookie_validate_packet.no_cookie_check" wck 137 [(138, 138)] [(140, 140)]
+  | .cookieLookupMiss => d "wg_cookie_message_consume.lookup_miss" wck 205 [(209, 209)] [(211, 211)]
+  -- drivers/net/wireguard/peerlookup.c
+  | .idxMatch => d "wg_index_hashtable_lookup.index_matches" wpl 211 [(212, 214)] []
+  | .idxFound => d "wg_index_hashtable_lookup.found" wpl 217 [(218, 222)] []
+  -- drivers/net/wireguard/queueing.h
+  | .cpumaskWrap => d "wg_cpumask_next_online.wrap" wqh 128 [(129, 129)] []
 
 /-- The relation of a C value comparison, as written in the source
     (`lhs rel rhs`); `flag` is a mask test `(x & MASK)` against zero. -/
@@ -835,7 +911,8 @@ def Decision.repeatable : Decision → Bool
   | .lookupPeerGone | .checkProtoParsed | .checkProtoMatches | .openPeersIter | .openKeepalive
   | .xmitWalk | .xmitShareFailed | .xmitStagedOverflow | .queuedNotRetry | .queuedNotExpired
   | .queuedDead | .queuedAlreadyQueued | .keepaliveStagedEmpty | .keepaliveNoMem | .stagedEmpty
-  | .stagedNoKeypair | .stagedOrphanWalk | .keypairGetNull | .keypairGetZero => true
+  | .stagedNoKeypair | .stagedOrphanWalk | .keypairGetNull | .keypairGetZero
+  | .workerConsumed => true
   | _ => false
 
 /-- Every decision, enumerated through the constructor index. -/

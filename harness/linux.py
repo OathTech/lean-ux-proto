@@ -16,7 +16,7 @@ import signal
 import subprocess
 import time
 
-from .trace import InvalidTrace, loads_trace, serialize_wire, validate_trace
+from .trace import uses_wireguard, InvalidTrace, loads_trace, serialize_wire, validate_trace
 from .wg import decode_dump
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,7 +24,7 @@ SHARED = Path(os.environ.get("LEANUX_SHARED_ROOT", ROOT)).resolve()
 ARTIFACTS = Path(os.environ.get("LEANUX_ARTIFACTS", ROOT / ".artifacts")).resolve()
 # The accepted oracle kernel, or another kernel build selected by
 # LEANUX_KERNEL_DIR (it must lie inside the shared or task artifact roots).
-KERNEL = Path(os.environ.get("LEANUX_KERNEL_DIR", SHARED / ".artifacts/kernel-net")).resolve()
+KERNEL = Path(os.environ.get("LEANUX_KERNEL_DIR", SHARED / ".artifacts/kernel-net-rcov")).resolve()
 if not (KERNEL.is_relative_to(SHARED / ".artifacts") or KERNEL.is_relative_to(ARTIFACTS)):
     raise SystemExit(f"LEANUX_KERNEL_DIR outside the artifact roots: {KERNEL}")
 OUTPUT_LIMIT = 16 * 1024 * 1024
@@ -193,16 +193,52 @@ def attach_observed(results, traces, records):
                 raise ValueError("missing or unexpected wg_observe record")
 
 
+def merge_remote(rows, remote, traces, key):
+    """Network traces carry a second, remote stream per operation (WireGuard's
+    softirq and workqueue receive paths, collected under the trace's KCOV
+    common handle). Exactly one remote record per network operation is
+    appended to that operation's row: task entries first, then remote ones,
+    each deduplicated in first-execution order."""
+    net = {trace["id"] for trace in traces if uses_wireguard(trace)}
+    by_key = {}
+    for record in remote:
+        if type(record) is not dict or set(record) != {"id", "index", "count", key} or record["id"] not in net:
+            raise ValueError("remote record fields or identity")
+        k = (record["id"], record["index"])
+        if k in by_key or type(record[key]) is not list:
+            raise ValueError("duplicate remote record")
+        by_key[k] = record
+    merged, used = [], set()
+    for row in rows:
+        k = (row.get("id"), row.get("index")) if type(row) is dict else None
+        if k and k[0] in net:
+            record = by_key.get(k)
+            if record is None:
+                raise ValueError(f"missing remote record for {k}")
+            used.add(k)
+            row = dict(row)
+            seen = {json.dumps(x) for x in row[key]}
+            row[key] = row[key] + [x for x in record[key] if json.dumps(x) not in seen]
+            if type(record["count"]) is not int or record["count"] < 0:
+                raise ValueError("remote record count")
+            row["count"] = row["count"] + record["count"]
+        merged.append(row)
+    if used != set(by_key):
+        raise ValueError("remote records without an operation")
+    return merged
+
+
 def _collect(outdir, traces, process_returncode):
     results, coverage, fixtures, errors, child_failures, completed, kernels = [], [], [], [], [], [], []
     comparisons, comparison_results, wireguard, observed = [], [], [], []
+    remote_coverage = []
     for line in (outdir / "boot.log").read_text(errors="strict").splitlines():
         line = line.rstrip("\r")
         for prefix, target in (("LEANUX_RESULT ", results), ("LEANUX_COVERAGE ", coverage),
                                ("LEANUX_FIXTURE ", fixtures), ("LEANUX_ERROR ", errors),
                                ("LEANUX_CHILD_FAILURE ", child_failures), ("LEANUX_CMP ", comparisons),
                                ("LEANUX_CMP_RESULT ", comparison_results), ("LEANUX_WG ", wireguard),
-                               ("LEANUX_WGOBS ", observed)):
+                               ("LEANUX_WGOBS ", observed), ("LEANUX_RCOVERAGE ", remote_coverage)):
             if line.startswith(prefix):
                 try:
                     target.append(_decode_json(line[len(prefix):]))
@@ -214,6 +250,10 @@ def _collect(outdir, traces, process_returncode):
         if line.startswith("LEANUX_KERNEL "):
             kernels.append(line.removeprefix("LEANUX_KERNEL "))
     _jsonl(outdir / "observations.jsonl", results)
+    try:
+        coverage = merge_remote(coverage, remote_coverage, traces, "pcs")
+    except ValueError as exc:
+        raise LinuxRunError("invalid_output", f"Remote coverage: {exc}", outdir) from exc
     _jsonl(outdir / "coverage.jsonl", coverage)
     _jsonl(outdir / "comparisons.jsonl", comparisons)
     _jsonl(outdir / "guest-errors.jsonl", errors + child_failures)

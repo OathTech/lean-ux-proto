@@ -41,6 +41,19 @@ MUTANTS = [
   ('B1-M5-dead-before-expired', 'behavior-preserving: is_dead tested before the expiry', 'Leanux/WG/Send.lean',
    "  if ← branch .queuedNotExpired !p.lastSentExpired then return\n  if ← branch .queuedDead p.isDead then return\n",
    "  if ← branch .queuedDead p.isDead then return\n  if ← branch .queuedNotExpired !p.lastSentExpired then return\n"),
+  # Stage B2 (receive)
+  ('B2-M1-no-header-pull', 'parsing: a message shorter than its header passes the pull', 'Leanux/WG/Receive.lean',
+   "  if ← orM (branch .prepPullFailed (msg.length < 4)) (branch .prepTrimFailed false) then return false\n",
+   "  if ← orM (branch .prepPullFailed false) (branch .prepTrimFailed false) then return false\n"),
+  ('B2-M2-cpu-never-wraps', 'state: last_cpu never wraps', 'Leanux/WG/Receive.lean',
+   "    if ← branch .cpumaskWrap (next ≥ 1) then pure (0 : Int) else pure next\n",
+   "    if ← branch .cpumaskWrap false then pure (0 : Int) else pure next\n"),
+  ('B2-M3-length-before-type', 'order: validate_header_len tests the length first', 'Leanux/WG/Receive.lean',
+   "  if ← andM (branch .hdrInit (t == MESSAGE_HANDSHAKE_INITIATION)) (branch .hdrInitLen (len == 148)) then\n",
+   "  if ← andM (branch .hdrInitLen (len == 148)) (branch .hdrInit (t == MESSAGE_HANDSHAKE_INITIATION)) then\n"),
+  ('B2-M4-response-off-by-one', 'parsing: a 91-byte response is accepted', 'Leanux/WG/Receive.lean',
+   "(branch .hdrRespLen (len == 92)) then\n    return 92",
+   "(branch .hdrRespLen (len == 92 || len == 91)) then\n    return 92"),
 ]
 
 def w4(text):

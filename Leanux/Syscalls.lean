@@ -42,6 +42,8 @@ inductive Syscall where
   | wgXmit (family addr : Nat)
   /-- `recvfrom(4, MSG_DONTWAIT)` after the fixture waited for the workers. -/
   | wgObserve
+  /-- `sendto` of a WireGuard message from the fixture's sender to `port`. -/
+  | wgInject (family port : Nat) (message : List UInt8)
 
 /-- The generic-netlink socket at descriptor 7 (`NETLINK_FD` in harness/guest.c). -/
 def NETLINK_FD : Nat := 7
@@ -94,6 +96,7 @@ def dispatch : Syscall → M Int
     -- udp_sendmsg returns the datagram's length once the device took it
     let ret ← WG.wgXmit family addr
     return if ret == 0 then 4 else ret
+  | .wgInject _ port message => socketCallOn SENDER_FD (Env.inject port message)
   | .wgObserve => socketCallOn LISTEN4_FD do
     let (ret, observed) ← Env.observe
     modify fun w => { w with extraOut := observed.getObjValD "datagrams" |> fun d =>

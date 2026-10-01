@@ -209,6 +209,53 @@ static long resolve(unsigned kind, long long value, const struct observation *re
 
 /* comparisons: 0 records PCs (KCOV_TRACE_PC); 1 records comparison operands
  * (KCOV_TRACE_CMP) in a second, independent child for the same trace. */
+/* Records are (type, arg1, arg2, ip). Each distinct record is printed once,
+ * at its first occurrence, in execution order. */
+static void print_records(const char *tag, const char *id, unsigned i, const unsigned long *area, unsigned long count)
+{
+    for (unsigned long k = 0; k < count; ++k) {
+        memcpy(records[k].record, area + 1 + 4 * k, sizeof(records[k].record));
+        records[k].position = k;
+    }
+    qsort(records, count, sizeof(*records), compare_record);
+    memset(first, 0, count);
+    for (unsigned long k = 0; k < count; ++k)
+        if (!k || memcmp(records[k].record, records[k - 1].record, sizeof(records[k].record)))
+            first[records[k].position] = 1;
+    printf("%s {\"id\":\"%s\",\"index\":%u,\"count\":%lu,\"records\":[", tag, id, i, count);
+    int comma = 0;
+    for (unsigned long k = 0; k < count; ++k) {
+        if (!first[k]) continue;
+        const unsigned long *r = area + 1 + 4 * k;
+        printf("%s[%lu,\"0x%lx\",\"0x%lx\",\"0x%lx\"]", comma ? "," : "", r[0], r[1], r[2], r[3]);
+        comma = 1;
+    }
+    printf("]}\n");
+}
+
+/* Deduplicate after capture, keeping each PC's first execution in order:
+ * sort (pc, position) pairs, mark first positions, then print the marked PCs
+ * in execution order. */
+static void print_pcs(const char *tag, const char *id, unsigned i, const unsigned long *area, unsigned long count)
+{
+    for (unsigned long j = 0; j < count; ++j) {
+        order[j].pc = area[j + 1];
+        order[j].position = j;
+    }
+    qsort(order, count, sizeof(*order), compare_occurrence);
+    memset(first, 0, count);
+    for (unsigned long j = 0; j < count; ++j)
+        if (!j || order[j].pc != order[j - 1].pc) first[order[j].position] = 1;
+    printf("%s {\"id\":\"%s\",\"index\":%u,\"count\":%lu,\"pcs\":[", tag, id, i, count);
+    int comma = 0;
+    for (unsigned long j = 0; j < count; ++j) {
+        if (!first[j]) continue;
+        printf("%s\"0x%lx\"", comma ? "," : "", area[j + 1]);
+        comma = 1;
+    }
+    printf("]}\n");
+}
+
 static unsigned char observe_buffer[2048];
 static struct timespec went_up;
 static int up_seen;
@@ -322,10 +369,42 @@ static void observe(const struct trace *t, unsigned i, long first, int compariso
     printf("}\n");
 }
 
+/* Remote coverage for network traces. KCOV_REMOTE_ENABLE claims the calling
+ * task's KCOV slot (a later KCOV_ENABLE would fail with EBUSY), so this
+ * process enables it and forks the process that runs the trace: fork passes
+ * the common handle down (copy_process) but not the KCOV slot. Every skb the
+ * trace allocates carries the handle, and the patched kernel's WireGuard
+ * receive paths collect under it into this shared mapping. This process keeps
+ * the KCOV descriptor open, which keeps the handle registered, and waits. */
+static unsigned long *enable_remote(const struct trace *t, int comparisons)
+{
+    int fd = open("/sys/kernel/debug/kcov", O_RDWR);
+    if (fd != 3) fail(t->id, -1, "coverage_failure", "open_remote_kcov_at_3");
+    if (ioctl(fd, KCOV_INIT_TRACE, CAPACITY)) fail(t->id, -1, "coverage_failure", "initialize_remote_kcov");
+    unsigned long *area = mmap(NULL, CAPACITY * sizeof(*area), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (area == MAP_FAILED) fail(t->id, -1, "coverage_failure", "map_remote_kcov");
+    struct kcov_remote_arg arg = {
+        .trace_mode = comparisons ? KCOV_TRACE_CMP : KCOV_TRACE_PC, .area_size = CAPACITY, .num_handles = 0,
+        .common_handle = kcov_remote_handle(KCOV_SUBSYSTEM_COMMON, (uint32_t)getpid()),
+    };
+    if (ioctl(fd, KCOV_REMOTE_ENABLE, &arg)) fail(t->id, -1, "coverage_failure", "enable_remote_kcov");
+    pid_t child = fork();
+    if (child < 0) fail(t->id, -1, "environment_failure", "fork_trace");
+    if (child) {
+        int status;
+        if (waitpid(child, &status, 0) != child) fail(t->id, -1, "environment_failure", "wait_trace");
+        _exit(WIFEXITED(status) ? WEXITSTATUS(status) : 1);
+    }
+    /* The trace process: the mapping stays, the descriptor goes. */
+    if (close(fd)) fail(t->id, -1, "environment_failure", "close_remote_kcov");
+    return area;
+}
+
 static void execute(const struct trace *t, int input_fd, int comparisons)
 {
     struct observation result[MAX_OPS] = {{0}};
     if (close(input_fd)) fail(t->id, -1, "environment_failure", "close_input");
+    unsigned long *remote = t->net ? enable_remote(t, comparisons) : NULL;
     if (t->net) network_fixture(t->id);
     /* Init invokes us with exactly console descriptors 0, 1, and 2. */
     for (int fd = 0; fd < 3; ++fd)
@@ -367,6 +446,13 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
     if (setrlimit(RLIMIT_NOFILE, &limit) || getrlimit(RLIMIT_NOFILE, &actual) || actual.rlim_cur != t->rlimit || actual.rlim_max != t->rlimit)
         fail(t->id, -1, "environment_failure", "rlimit_nofile");
     if (!comparisons) printf("LEANUX_FIXTURE {\"id\":\"%s\",\"reserved\":[0,1,2,3,4,5,6,7],\"free\":[8,%u],\"rlimit\":[%u,%u]}\n", t->id, t->rlimit - 1, t->rlimit, t->rlimit);
+    /* Per-task coverage stays enabled from here to exit: KCOV_DISABLE resets
+     * the task's KCOV state, including the common handle this process
+     * inherited for remote coverage (kcov_task_reset). Each operation resets
+     * the buffer at its start and captures the count at its end; KCOV
+     * appends beyond that count, so the operation's entries stay stable. */
+    if (ioctl(coverage_fd, KCOV_ENABLE, comparisons ? KCOV_TRACE_CMP : KCOV_TRACE_PC))
+        fail(t->id, -1, "coverage_failure", "enable_kcov");
     for (unsigned i = 0; i < t->count; ++i) {
         const struct operation *op = &t->ops[i];
         long fd = resolve(op->kind, op->fd, result, i);
@@ -384,9 +470,8 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             up_request.ifr_flags |= IFF_UP;
         }
         if (op->code == 12) usleep(OBSERVE_WAIT_US);
-        if (ioctl(coverage_fd, KCOV_ENABLE, comparisons ? KCOV_TRACE_CMP : KCOV_TRACE_PC))
-            fail(t->id, i, "coverage_failure", "enable_kcov");
         __atomic_store_n(&coverage[0], 0, __ATOMIC_RELAXED);
+        if (remote) __atomic_store_n(&remote[0], 0, __ATOMIC_RELAXED);
         errno = 0;
         long ret;
         switch (op->code) {
@@ -422,6 +507,20 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             ret = syscall(SYS_sendto, SEND_FD, "leux", 4, 0, &to, sizeof(to));
             break;
         }
+        case 13: {
+            /* A WireGuard message to wg0's port on 127.0.0.1 or ::1 (the
+             * fixture's sender; IPv4 as v4-mapped). */
+            struct sockaddr_in6 to = {.sin6_family = AF_INET6, .sin6_port = htons((uint16_t)op->b)};
+            if (op->a == 4) {
+                to.sin6_addr.s6_addr[10] = to.sin6_addr.s6_addr[11] = 0xff;
+                to.sin6_addr.s6_addr[12] = 127;
+                to.sin6_addr.s6_addr[15] = 1;
+            } else {
+                to.sin6_addr.s6_addr[15] = 1;
+            }
+            ret = syscall(SYS_sendto, SEND_FD, op->payload, op->payload_len, 0, &to, sizeof(to));
+            break;
+        }
         case 12:
             /* The first datagram at the IPv4 listener, if any; the rest are
              * drained after coverage stops. */
@@ -431,7 +530,6 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         }
         int captured_errno = errno;
         unsigned long count = __atomic_load_n(&coverage[0], __ATOMIC_RELAXED);
-        if (ioctl(coverage_fd, KCOV_DISABLE, 0)) fail(t->id, i, "coverage_failure", "disable_kcov");
         /* Outside the coverage window: the dump's attribute payloads. */
         if (op->code == 9 && !comparisons && ret == 0)
             printf("LEANUX_WG {\"id\":\"%s\",\"index\":%u,\"payloads\":[%s]}\n", t->id, i, dump_hex);
@@ -441,6 +539,8 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             route_into_wg0(t->id, i);
         }
         if (op->code == 12) observe(t, i, ret, comparisons);
+        /* The handshake worker runs after the send returns. */
+        if (op->code == 13) usleep(OBSERVE_WAIT_US);
         if (up_seen) {
             struct timespec now;
             clock_gettime(CLOCK_BOOTTIME, &now);
@@ -457,48 +557,24 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             if (ret > 16) fail(t->id, i, "environment_failure", "read_return_exceeds_buffer");
             memcpy(result[i].bytes, buffer, (size_t)ret);
         }
+        /* The remote stream: WireGuard's receive paths in softirq and on the
+         * handshake workqueue, tagged with this process's common handle
+         * through the skbs it allocated. wg_inject waited for the worker. */
+        unsigned long remote_count = 0;
+        if (remote) {
+            remote_count = __atomic_load_n(&remote[0], __ATOMIC_RELAXED);
+            if (remote_count >= (comparisons ? (CAPACITY - 1) / 4 : CAPACITY - 1))
+                fail(t->id, i, "coverage_failure", "full_remote_kcov");
+        }
         if (comparisons) {
-            /* Records are (type, arg1, arg2, ip). Each distinct record is
-             * printed once, at its first occurrence, in execution order. */
-            for (unsigned long k = 0; k < count; ++k) {
-                memcpy(records[k].record, coverage + 1 + 4 * k, sizeof(records[k].record));
-                records[k].position = k;
-            }
-            qsort(records, count, sizeof(*records), compare_record);
-            memset(first, 0, count);
-            for (unsigned long k = 0; k < count; ++k)
-                if (!k || memcmp(records[k].record, records[k - 1].record, sizeof(records[k].record)))
-                    first[records[k].position] = 1;
-            printf("LEANUX_CMP {\"id\":\"%s\",\"index\":%u,\"count\":%lu,\"records\":[", t->id, i, count);
-            int comma = 0;
-            for (unsigned long k = 0; k < count; ++k) {
-                if (!first[k]) continue;
-                const unsigned long *r = coverage + 1 + 4 * k;
-                printf("%s[%lu,\"0x%lx\",\"0x%lx\",\"0x%lx\"]", comma ? "," : "", r[0], r[1], r[2], r[3]);
-                comma = 1;
-            }
-            printf("]}\n");
+            /* No decision on the remote paths is a declared comparison yet, so
+             * the remote comparison stream is not reported (it would pay
+             * nothing). */
+            print_records("LEANUX_CMP", t->id, i, coverage, count);
             continue;
         }
-        /* Deduplicate after capture, keeping each PC's first execution in
-         * order: sort (pc, position) pairs, mark first positions, then print
-         * the marked PCs in execution order. */
-        for (unsigned long j = 0; j < count; ++j) {
-            order[j].pc = coverage[j + 1];
-            order[j].position = j;
-        }
-        qsort(order, count, sizeof(*order), compare_occurrence);
-        memset(first, 0, count);
-        for (unsigned long j = 0; j < count; ++j)
-            if (!j || order[j].pc != order[j - 1].pc) first[order[j].position] = 1;
-        printf("LEANUX_COVERAGE {\"id\":\"%s\",\"index\":%u,\"count\":%lu,\"pcs\":[", t->id, i, count);
-        int comma = 0;
-        for (unsigned long j = 0; j < count; ++j) {
-            if (!first[j]) continue;
-            printf("%s\"0x%lx\"", comma ? "," : "", coverage[j + 1]);
-            comma = 1;
-        }
-        printf("]}\n");
+        print_pcs("LEANUX_COVERAGE", t->id, i, coverage, count);
+        if (remote) print_pcs("LEANUX_RCOVERAGE", t->id, i, remote, remote_count);
     }
     if (comparisons) {
         printf("LEANUX_CMP_RESULT {\"id\":\"%s\",\"rets\":[", t->id);
@@ -560,7 +636,7 @@ int main(int argc, char **argv)
                 &op->code, &op->kind, &op->fd, &op->newkind, &op->newfd, &op->a, &op->b, &op->value, &consumed) != 8)
                 fail(trace.id, i, "invalid_input", "wire_operation");
             op->payload_len = 0;
-            if (op->code == 8 || op->code == 9 || op->code == 11) {
+            if (op->code == 8 || op->code == 9 || op->code == 11 || op->code == 13) {
                 /* A WireGuard operation carries its attribute payload as hex. */
                 const char *hex = line + consumed;
                 if (*hex++ != ' ') fail(trace.id, i, "invalid_input", "wire_payload");

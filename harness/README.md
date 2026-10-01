@@ -14,9 +14,10 @@ resource failures. These are experiment failures, not semantic disagreements.
 Agreement is decided by `python3 -m evaluator.check`, which also builds and runs
 the mirror; see the top-level README.
 
-The runner builds only `guest.c`, then boots the accepted networking kernel
-`.artifacts/kernel-net` (`scripts/build-kernel` with `LEANUX_KERNEL_PROFILE=net`,
-`kernel/config-x86_64-net`; `LEANUX_KERNEL_DIR` selects another build inside
+The runner builds only `guest.c`, then boots the accepted oracle kernel
+`.artifacts/kernel-net-rcov` (`scripts/build-kernel` with
+`LEANUX_KERNEL_PROFILE=net-rcov`: `kernel/config-x86_64-net` plus the
+remote-coverage patch; `LEANUX_KERNEL_DIR` selects another build inside
 the artifact roots) with one TCG CPU, 256 MiB memory, and no network device.
 Traces with a WireGuard operation run in a fresh network namespace holding a
 down WireGuard device `wg0`, with a generic-netlink socket at descriptor 7. A shared advisory lock reserves the one guest slot.
@@ -89,3 +90,12 @@ sharing and independent objects, descriptor flags, replacement and reuse,
 invalid inputs to the kernel that remain valid trace inputs, I/O lengths,
 counter saturation, and descriptor exhaustion. Invalid trace syntax is checked
 separately by `python3 -m unittest harness.test_trace`.
+
+**Remote coverage.** For network traces, the per-trace child enables
+`KCOV_REMOTE_ENABLE` with a common handle, then forks the process that runs
+the trace. That process inherits the handle, and the skbs it allocates carry
+it, so the patched kernel's receive paths (softirq and the handshake worker)
+collect into a shared mapping. Per-task coverage stays enabled for the whole
+trace, because `KCOV_DISABLE` clears the inherited handle. Each operation
+resets both buffers, and its coverage row is the task PCs followed by the
+remote ones.

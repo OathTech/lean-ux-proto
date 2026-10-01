@@ -2,9 +2,13 @@
 # Run through scripts/in-bundle. Build a small KCOV-enabled oracle kernel.
 # LEANUX_KERNEL_PROFILE=net adds networking and WireGuard (WireGuard plan, U1);
 # its configuration is recorded as kernel/config-x86_64-net.
+# LEANUX_KERNEL_PROFILE=net-rcov is the same configuration built from a copy of
+# the locked source with kernel/patches/wireguard-kcov-remote.patch applied
+# (WireGuard plan, U2): KCOV remote-coverage sections only, every line number
+# preserved, and debug paths mapped back to .deps/linux.
 set -eu
 PROFILE="${LEANUX_KERNEL_PROFILE:-base}"
-case "$PROFILE" in base|net) ;; *) echo "Unknown kernel profile: $PROFILE" >&2; exit 1 ;; esac
+case "$PROFILE" in base|net|net-rcov) ;; *) echo "Unknown kernel profile: $PROFILE" >&2; exit 1 ;; esac
 LEANUX_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
 LEANUX_SHARED_ROOT="${LEANUX_SHARED_ROOT:-$LEANUX_ROOT}"
 LEANUX_ARTIFACTS="${LEANUX_ARTIFACTS:-$LEANUX_ROOT/.artifacts}"
@@ -15,10 +19,38 @@ case "$LEANUX_BUILD/" in
     *) echo 'Kernel build directory must be inside .artifacts.' >&2; exit 1 ;;
 esac
 mkdir -p "$LEANUX_BUILD"
+SOURCE="$LEANUX_SHARED_ROOT/.deps/linux"
+KCFLAGS_EXTRA=''
+if [ "$PROFILE" = net-rcov ]; then
+    PATCH="$LEANUX_ROOT/kernel/patches/wireguard-kcov-remote.patch"
+    PATCH_SHA=503c899d061530af6d250ed018466b7ba1cc77407f3a3492edf031e20d9cfe07
+    SOURCE="$LEANUX_ARTIFACTS/src/linux-6.12.110-wireguard-kcov-remote"
+    if [ -e "$SOURCE/.leanux-patch-sha256" ]; then
+        [ "$(cat "$SOURCE/.leanux-patch-sha256")" = "$PATCH_SHA" ] || {
+            echo "Patched source exists with a different patch: $SOURCE" >&2
+            exit 1
+        }
+    else
+        ARCHIVE="$LEANUX_SHARED_ROOT/.deps/downloads/linux-6.12.110.tar.xz"
+        LOCKED=$(python3 -c "import json,sys; print(next(e['sha256'] for e in json.load(open(sys.argv[1])) if e['name'] == 'linux'))" \
+            "$LEANUX_SHARED_ROOT/dependencies/sources.lock.json")
+        [ "$(sha256sum "$ARCHIVE" | cut -d' ' -f1)" = "$LOCKED" ] || {
+            echo "Linux archive differs from the lock" >&2
+            exit 1
+        }
+        rm -rf "$SOURCE.extracting"
+        mkdir -p "$SOURCE.extracting"
+        tar -xJf "$ARCHIVE" -C "$SOURCE.extracting" --strip-components=1
+        python3 "$LEANUX_ROOT/scripts/apply-kernel-patch.py" "$PATCH" "$SOURCE.extracting" "$PATCH_SHA"
+        echo "$PATCH_SHA" > "$SOURCE.extracting/.leanux-patch-sha256"
+        mv "$SOURCE.extracting" "$SOURCE"
+    fi
+    KCFLAGS_EXTRA="-fdebug-prefix-map=$SOURCE=$LEANUX_SHARED_ROOT/.deps/linux"
+fi
 export KBUILD_BUILD_USER=leanux KBUILD_BUILD_HOST=offline KBUILD_BUILD_VERSION=1
 export KBUILD_BUILD_TIMESTAMP='2026-09-20 00:00:00 UTC'
-make -s -C "$LEANUX_SHARED_ROOT/.deps/linux" O="$LEANUX_BUILD" ARCH=x86_64 allnoconfig
-LEANUX_CONFIG="$LEANUX_SHARED_ROOT/.deps/linux/scripts/config"
+make -s -C "$SOURCE" O="$LEANUX_BUILD" ARCH=x86_64 allnoconfig
+LEANUX_CONFIG="$SOURCE/scripts/config"
 for option in 64BIT BINFMT_ELF BINFMT_SCRIPT PRINTK BUG MULTIUSER POSIX_TIMERS FUTEX \
     EVENTFD EPOLL SIGNALFD TIMERFD SHMEM TMPFS PROC_FS SYSFS \
     BLK_DEV_INITRD RD_GZIP DEVTMPFS DEVTMPFS_MOUNT TTY \
@@ -27,8 +59,8 @@ for option in 64BIT BINFMT_ELF BINFMT_SCRIPT PRINTK BUG MULTIUSER POSIX_TIMERS F
     KCOV_ENABLE_COMPARISONS; do
     "$LEANUX_CONFIG" --file "$LEANUX_BUILD/.config" --enable "$option"
 done
-if [ "$PROFILE" = net ]; then
-    # Generic C crypto only: allnoconfig leaves the x86 SIMD implementations off.
+if [ "$PROFILE" != base ]; then
+    # WIREGUARD selects the x86-64 crypto implementations (CRYPTO_CURVE25519_X86 etc.).
     for option in NET UNIX INET IPV6 NET_NS NETDEVICES NET_CORE VETH WIREGUARD; do
         "$LEANUX_CONFIG" --file "$LEANUX_BUILD/.config" --enable "$option"
     done
@@ -37,20 +69,23 @@ for option in MODULES SMP RANDOMIZE_BASE DEBUG_INFO_NONE LOCALVERSION_AUTO; do
     "$LEANUX_CONFIG" --file "$LEANUX_BUILD/.config" --disable "$option"
 done
 SUFFIX='-leanux-kcov'; [ "$PROFILE" = net ] && SUFFIX='-leanux-kcov-net'
+[ "$PROFILE" = net-rcov ] && SUFFIX='-leanux-kcov-net-rcov'
 "$LEANUX_CONFIG" --file "$LEANUX_BUILD/.config" --set-str LOCALVERSION "$SUFFIX"
-make -s -C "$LEANUX_SHARED_ROOT/.deps/linux" O="$LEANUX_BUILD" ARCH=x86_64 olddefconfig
+make -s -C "$SOURCE" O="$LEANUX_BUILD" ARCH=x86_64 olddefconfig
 REQUIRED="64BIT BINFMT_ELF BINFMT_SCRIPT EVENTFD BLK_DEV_INITRD SERIAL_8250_CONSOLE DEBUG_FS DEBUG_INFO_DWARF4 KCOV"
-[ "$PROFILE" = net ] && REQUIRED="$REQUIRED NET INET IPV6 NET_NS VETH WIREGUARD"
+[ "$PROFILE" != base ] && REQUIRED="$REQUIRED NET INET IPV6 NET_NS VETH WIREGUARD"
 for option in $REQUIRED; do
     grep -qx "CONFIG_${option}=y" "$LEANUX_BUILD/.config" || {
         echo "Required kernel configuration did not resolve: $option" >&2
         exit 1
     }
 done
-make -C "$LEANUX_SHARED_ROOT/.deps/linux" O="$LEANUX_BUILD" ARCH=x86_64 \
+make -C "$SOURCE" O="$LEANUX_BUILD" ARCH=x86_64 KCFLAGS="$KCFLAGS_EXTRA" \
     -j"${LEANUX_JOBS:-4}" bzImage vmlinux
 mkdir -p "$LEANUX_ROOT/kernel"
-if [ "$PROFILE" = net ]; then
+if [ "$PROFILE" = net-rcov ]; then
+    cp "$LEANUX_BUILD/.config" "$LEANUX_ROOT/kernel/config-x86_64-net-rcov"
+elif [ "$PROFILE" = net ]; then
     cp "$LEANUX_BUILD/.config" "$LEANUX_ROOT/kernel/config-x86_64-net"
 else
     cp "$LEANUX_BUILD/.config" "$LEANUX_ROOT/kernel/config-x86_64"

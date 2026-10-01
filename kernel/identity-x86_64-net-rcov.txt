@@ -1,0 +1,11 @@
+# Oracle kernel from stage B2 (U2; user-approved 2026-10-01 as the single oracle):
+# kernel/config-x86_64-net with kernel/patches/wireguard-kcov-remote.patch
+# (sha256 503c899d061530af6d250ed018466b7ba1cc77407f3a3492edf031e20d9cfe07),
+# built with LEANUX_KERNEL_PROFILE=net-rcov. Its DWARF names .deps/linux (via
+# -fdebug-prefix-map); the four patched lines there read as unpatched, which the
+# check does not use (it reads condition and span lines only, none of them patched).
+# Path-independent identity from
+# scripts/kernel-identity.py:
+2594fdff78c2e078c276dd2a53abc3b4081660513a2b9c56cf247cf6d02e1286
+# vmlinux sha256 of the build the evidence used (path-dependent):
+70a134be44e9856374c70522970810c2cb7184cf44fb54a50be21a8c4b95c62a

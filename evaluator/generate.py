@@ -212,9 +212,9 @@ def generate_v2(seed, count, max_ops):
 
 def generate_wireguard(seed, count, max_ops=12):
     """Seeded WireGuard traces over small pools of keys and prefixes, so that
-    peers, trie nodes and identities collide often. Half are configuration
-    traces (stage A); half bring wg0 up and transmit (stage B1). Every trace
-    ends with a dump."""
+    peers, trie nodes and identities collide often. A third are configuration
+    traces (stage A), a third bring wg0 up and transmit (stage B1), and a third
+    bring it up and inject messages (stage B2). Every trace ends with a dump."""
     if not 2 <= max_ops <= 64 or not 1 <= count <= 100000:
         raise ValueError('bounded generator parameters')
     rng = random.Random(seed)
@@ -291,8 +291,43 @@ def generate_wireguard(seed, count, max_ops=12):
                 ops.append({'op': 'wg_get'})
         return ops + [{'op': 'wg_observe'}]
 
+    def message():
+        """A WireGuard message near the parser's boundaries: type, reserved
+        bytes and length vary; the body is one repeated byte."""
+        kind = rng.choices([0, 1, 2, 3, 4, 5, 255], [1, 4, 3, 3, 4, 1, 1])[0]
+        exact = {1: 148, 2: 92, 3: 64, 4: rng.choice([32, 33, 48, 1400])}.get(kind, 148)
+        length = min(1400, rng.choices([exact, exact - 1, exact + 1, rng.randint(0, 40)], [6, 1, 1, 1])[0])
+        reserved = bytes(3) if rng.random() < .9 else bytes([0, 0, 1])
+        body = bytes([kind]) + reserved + bytes([rng.randrange(256)]) * max(0, length - 4)
+        return body[:length] if length else bytes([kind])
+
+    def receive_trace():
+        """Stage B2: configure, bring wg0 up, then inject messages."""
+        first = config()
+        first['listen_port'] = 51820
+        for peer in first.get('peers', []):
+            for field in ('remove', 'keepalive'):   # no handshake work: index lookups stay determined
+                peer.pop(field, None)
+        ops = [{'op': 'wg_set', 'config': first}, {'op': 'wg_up'}]
+        for _ in range(rng.randint(1, max_ops - 4)):
+            kind = rng.choices(['inject', 'set', 'get'], [8, 1, 1])[0]
+            if kind == 'inject':
+                ops.append({'op': 'wg_inject', 'family': rng.choice([4, 6]), 'port': 51820, 'message': message().hex()})
+            elif kind == 'set':
+                change = config()
+                change.pop('listen_port', None)
+                for peer in change.get('peers', []):
+                    peer.pop('keepalive', None)
+                ops.append({'op': 'wg_set', 'config': change})
+            else:
+                ops.append({'op': 'wg_get'})
+        return ops
+
     while len(result) < count:
-        if rng.random() < .5:
+        draw = rng.random()
+        if draw < 1 / 3:
+            operations = receive_trace()
+        elif draw < 2 / 3:
             operations = transmit_trace()
         else:
             operations = []

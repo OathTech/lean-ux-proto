@@ -1,5 +1,6 @@
 import Leanux.WG.AllowedIps
 import Leanux.Kernel.Refcount
+import Leanux.WG.Blake2s
 
 /-!
 # drivers/net/wireguard/peer.c, peerlookup.c (public keys) and the noise.c
@@ -19,6 +20,7 @@ def MAX_PEERS_PER_DEVICE : Nat := 1 <<< 20
 
 /-- wg_peer_get (peer.h): `kref_get(&peer->refcount)`. -/
 def peerGet (pid : PeerId) : M Unit := do
+  requireNotPending pid "a reference count the handshake worker also changes"
   let p ← getPeer pid
   refcountInc p.refcount
   setPeer pid { p with refcount := p.refcount + 1 }
@@ -29,6 +31,7 @@ def peerGet (pid : PeerId) : M Unit := do
 def peerPut (peer : Option PeerId) : M Unit := do
   if ← branch .peerPutNull peer.isNone then return
   let some pid := peer | invariant "unreachable"
+  requireNotPending pid "a reference count the handshake worker also changes"
   let p ← getPeer pid
   setPeer pid { p with refcount := p.refcount - 1 }
   if ← branch .peerKrefPutReleased (← refcountDecAndTest p.refcount) then
@@ -69,7 +72,14 @@ def setStaticIdentityPrivateKey (privateKey : Key) : M Unit := do
 /-- wg_cookie_checker_precompute_device_keys (cookie.c:45-59): the keys are
     BLAKE2s outputs nothing on this path observes. -/
 def cookiePrecomputeDeviceKeys : M Unit := do
-  _ ← branch .cookieDeviceHasIdentity (← getDev).staticIdentity.hasIdentity
+  let identity := (← getDev).staticIdentity
+  -- precompute_key(message_mac1_key, static_public, "mac1----"); the cookie
+  -- encryption key is not read on the modeled paths
+  let key ← do
+    if ← branch .cookieDeviceHasIdentity identity.hasIdentity then
+      pure (blake2s 32 [] ("mac1----".toUTF8.toList ++ identity.staticPublic))
+    else pure (List.replicate 32 0)
+  modifyDev fun d => { d with mac1Key := key }
 
 /-- wg_noise_keypair_put (noise.c:131-140) on the NULL keypairs of a peer that
     never completed a handshake. -/
@@ -81,8 +91,8 @@ def keypairPutNull : M Unit := do
     zeroes ephemeral state that the configuration path never set. -/
 def expireCurrentPeerKeypairs (pid : PeerId) : M Unit := do
   requireNotPending pid "clearing the handshake"
-  -- wg_noise_handshake_clear; wg_noise_reset_last_sent_handshake
-  setPeer pid { (← getPeer pid) with lastSentExpired := true }
+  -- wg_noise_handshake_clear (removes the index entry); wg_noise_reset_last_sent_handshake
+  setPeer pid { (← getPeer pid) with lastSentExpired := true, indexed := false }
   if ← branch .expireNextKeypair false then unsupported "next keypair present"
   if ← branch .expireCurrentKeypair false then unsupported "current keypair present"
 
@@ -98,6 +108,7 @@ def peerGetMaybeZero (peer : Option PeerId) : M (Option PeerId) := do
   -- `unlikely(!peer || !kref_get_unless_zero(&peer->refcount))`
   if ← branch .peerGetMaybeZeroNull peer.isNone then return none
   let some pid := peer | invariant "unreachable"
+  requireNotPending pid "a reference count the handshake worker also changes"
   let p ← getPeer pid
   let live ← refcountIncNotZero p.refcount
   if ← branch .peerGetMaybeZeroDead !live then return none
