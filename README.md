@@ -13,6 +13,7 @@ project. Executable behavior is tested against the pinned kernel. See
 - [Next plan: finish the slice, then WireGuard (2026-09-29)](docs/2026-09-29-next-plan.md)
 - [WireGuard stage A report (2026-09-30)](docs/2026-09-30-wireguard-stage-a-report.md)
 - [WireGuard stage B1 report (2026-09-30)](docs/2026-09-30-wireguard-stage-b1-report.md)
+- [WireGuard stage B2 report (2026-10-01)](docs/2026-10-01-wireguard-stage-b2-report.md)
 - [Reproducing the results from a clone](REPRODUCING.md)
 - [Worktree, shared dependency, and cleanup practices](docs/worktree-practices.md)
 - [Using the staged offline environment](docs/offline-usage.md)
@@ -23,9 +24,10 @@ Status (2026-09-30): the FD/eventfd slice and WireGuard stages A and B1 are
 mirrored with C-shaped data and control flow. Stage A covers netlink
 configuration, the allowed-IPs trie, peers and keys; stage B1 covers
 transmission and routing. They agree with the networking oracle kernel on
-behavior, KCOV control flow and comparison operands for 1,302 traces. After a
-drift audit (2026-09-30), the checker is frozen and reduced; see the plan.
-Stage B2 (the receive path) is paused.
+behavior, KCOV control flow and comparison operands for 1,310 traces. Stage
+B2 adds the receive path up to Noise, observed through remote KCOV on a
+patched kernel. After a drift audit (2026-09-30), checks must pay for
+themselves; see AGENTS.md.
 
 ## Checking the mirror
 
