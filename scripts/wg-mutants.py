@@ -49,11 +49,11 @@ MUTANTS = [
    "    if ← branch .cpumaskWrap (next ≥ 1) then pure (0 : Int) else pure next\n",
    "    if ← branch .cpumaskWrap false then pure (0 : Int) else pure next\n"),
   ('B2-M3-length-before-type', 'order: validate_header_len tests the length first', 'Leanux/WG/Receive.lean',
-   "  if ← andM (branch .hdrInit (t == MESSAGE_HANDSHAKE_INITIATION)) (branch .hdrInitLen (len == 148)) then\n",
-   "  if ← andM (branch .hdrInitLen (len == 148)) (branch .hdrInit (t == MESSAGE_HANDSHAKE_INITIATION)) then\n"),
+   "  if ← andM (branch .hdrInit (t == MESSAGE_HANDSHAKE_INITIATION))\n      (branch .hdrInitLen (len == 148)) then\n",
+   "  if ← andM (branch .hdrInitLen (len == 148))\n      (branch .hdrInit (t == MESSAGE_HANDSHAKE_INITIATION)) then\n"),
   ('B2-M4-response-off-by-one', 'parsing: a 91-byte response is accepted', 'Leanux/WG/Receive.lean',
-   "(branch .hdrRespLen (len == 92)) then\n    return 92",
-   "(branch .hdrRespLen (len == 92 || len == 91)) then\n    return 92"),
+   "      (branch .hdrRespLen (len == 92)) then\n",
+   "      (branch .hdrRespLen (len == 92 || len == 91)) then\n"),
 ]
 
 def w4(text):
