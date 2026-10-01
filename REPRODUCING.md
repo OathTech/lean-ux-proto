@@ -51,7 +51,7 @@ the accepted build.
 ## 3. Run the check
 
 ```sh
-scripts/in-bundle python3 -B -m unittest evaluator.test_evaluation harness.test_trace harness.test_wg harness.test_linux
+scripts/in-bundle python3 -B -m unittest evaluator.test_evaluation harness.test_trace harness.test_wg harness.test_noise harness.test_linux
 scripts/in-bundle python3 -m evaluator.check --suite wireguard        # ~3 minutes
 scripts/in-bundle python3 -m evaluator.check                          # everything, ~1.5 hours
 ```

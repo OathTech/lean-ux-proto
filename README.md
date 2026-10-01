@@ -14,6 +14,7 @@ project. Executable behavior is tested against the pinned kernel. See
 - [WireGuard stage A report (2026-09-30)](docs/2026-09-30-wireguard-stage-a-report.md)
 - [WireGuard stage B1 report (2026-09-30)](docs/2026-09-30-wireguard-stage-b1-report.md)
 - [WireGuard stage B2 report (2026-10-01)](docs/2026-10-01-wireguard-stage-b2-report.md)
+- [WireGuard stage C report (2026-10-01)](docs/2026-10-01-wireguard-stage-c-report.md)
 - [Reproducing the results from a clone](REPRODUCING.md)
 - [Worktree, shared dependency, and cleanup practices](docs/worktree-practices.md)
 - [Using the staged offline environment](docs/offline-usage.md)
