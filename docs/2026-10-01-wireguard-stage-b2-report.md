@@ -1,6 +1,7 @@
 # WireGuard stage B2 (receive path up to Noise) — report, 2026-10-01
 
-Status: **awaiting user signoff** for `main`. Branch `task/wg-stage-b2`.
+Status: **merged** to `main` with user signoff on 2026-10-01 (integration
+record in `.artifacts/runs/evidence/wg-stage-b2/`).
 Design and the user's decisions: [next-plan, stage B2](2026-09-29-next-plan.md).
 
 ## 1. What B2 delivers

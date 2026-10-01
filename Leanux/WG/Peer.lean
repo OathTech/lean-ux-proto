@@ -9,8 +9,9 @@ import Leanux.WG.Blake2s
 Cut points (no mirror state or decisions): `dst_cache_init`/`_reset`, timers,
 work items, packet queues, NAPI add/enable/disable/del, `synchronize_net`,
 `flush_workqueue`, the index hashtable, `call_rcu` freeing, the cookie keys
-(BLAKE2s), and `endpoint_eq` (a pure equality predicate). No keypairs exist
-before a handshake, so every `wg_noise_keypair_put` sees NULL.
+(BLAKE2s), and `endpoint_eq` (a pure equality predicate). The only keypair
+is a responder's pending next keypair (`Leanux/WG/Handshake.lean`); nothing
+else takes a reference to it, so putting it frees it.
 -/
 
 namespace Leanux.WG
@@ -87,18 +88,32 @@ def keypairPutNull : M Unit := do
   if ← branch .keypairPutNull true then return
   unsupported "wg_noise_keypair_put of a live keypair"
 
+/-- wg_noise_keypair_put (noise.c:131-140) of a keypair that only its slot
+    references (no data packet ever took one), so the put frees it. -/
+def keypairPutLive (unreferenceNow : Bool) : M Unit := do
+  if ← branch .keypairPutNull false then return
+  -- wg_index_hashtable_remove
+  _ ← branch .keypairPutUnreferenceNow unreferenceNow
+  -- kref_put: keypair_free_kref removes the entry again and frees it after RCU
+  _ ← branch .keypairKrefPutReleased (← refcountDecAndTest 1)
+
 /-- wg_noise_expire_current_peer_keypairs (noise.c:179-196). `handshake_clear`
     zeroes ephemeral state that the configuration path never set. -/
 def expireCurrentPeerKeypairs (pid : PeerId) : M Unit := do
   requireNotPending pid "clearing the handshake"
   -- wg_noise_handshake_clear (removes the index entry); wg_noise_reset_last_sent_handshake
-  setPeer pid { (← getPeer pid) with lastSentExpired := true, indexed := false }
-  if ← branch .expireNextKeypair false then unsupported "next keypair present"
+  -- handshake_zero inside wg_noise_handshake_clear
+  setPeer pid { (← getPeer pid) with lastSentExpired := true, indexed := false, handshakeState := 0, remoteIndex := 0 }
+  -- `keypair->sending.is_valid = false`: session keys are not tracked
+  _ ← branch .expireNextKeypair (← getPeer pid).nextKeypair
   if ← branch .expireCurrentKeypair false then unsupported "current keypair present"
 
 /-- wg_noise_keypairs_clear (noise.c:151-177). -/
-def keypairsClear : M Unit := do
-  keypairPutNull   -- next_keypair
+def keypairsClear (pid : PeerId) : M Unit := do
+  if (← getPeer pid).nextKeypair then
+    setPeer pid { (← getPeer pid) with nextKeypair := false }
+    keypairPutLive true
+  else keypairPutNull   -- next_keypair
   keypairPutNull   -- previous_keypair
   keypairPutNull   -- current_keypair
 
@@ -164,7 +179,7 @@ def peerMakeDead (pid : PeerId) : M Unit := do
 def peerRemoveAfterDead (pid : PeerId) : M Unit := do
   if ← branch .peerRemoveNotDead !(← getPeer pid).isDead then
     unsupported "peer_remove_after_dead: WARN_ON(!peer->is_dead)"
-  keypairsClear
+  keypairsClear pid
   -- timers stop; flush packet_crypt_wq twice; napi disable/del; flush handshake_send_wq
   if (← getDev).numPeers == 0 then invariant "--num_peers below zero"
   modifyDev fun d => { d with numPeers := d.numPeers - 1 }

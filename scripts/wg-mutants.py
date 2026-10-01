@@ -1,4 +1,4 @@
-"""WireGuard stage A mutants (stage A report, section 2).
+"""WireGuard mutants (stage A report, section 2; stages B1, B2 and C).
 
 Each mutant is applied to a clean committed tree, verified as applied, checked
 on the wireguard suite, then reverted. Run from the repository root:
@@ -54,13 +54,30 @@ MUTANTS = [
   ('B2-M4-response-off-by-one', 'parsing: a 91-byte response is accepted', 'Leanux/WG/Receive.lean',
    "      (branch .hdrRespLen (len == 92)) then\n",
    "      (branch .hdrRespLen (len == 92 || len == 91)) then\n"),
+  # Stage C (Noise responder)
+  ('C-M1-replay-inclusive', 'state: an equal timestamp is not a replay', 'Leanux/WG/Handshake.lean',
+   "  let replay := memcmp t p.latestTimestamp != .gt\n",
+   "  let replay := memcmp t p.latestTimestamp == .lt\n"),
+  ('C-M2-receiver-after-zero', 'data: the response carries the index handshake_zero cleared', 'Leanux/WG/Handshake.lean',
+   "      sendBufferToPeer pid MESSAGE_HANDSHAKE_RESPONSE_LEN 2 receiver\n",
+   "      sendBufferToPeer pid MESSAGE_HANDSHAKE_RESPONSE_LEN 2 (← getPeer pid).remoteIndex\n"),
+  ('C-M3-no-rx-traversal', 'behavior-preserving: no traversal timer after receiving', 'Leanux/WG/Receive.lean',
+   "  setPeer pid { p with rxBytes := p.rxBytes + msg.length }\n  timersTraversal pid\n",
+   "  setPeer pid { p with rxBytes := p.rxBytes + msg.length }\n"),
+  ('C-M4-keypair-kept-indexed', 'behavior-preserving: the old next keypair stays in the index', 'Leanux/WG/Handshake.lean',
+   "  if (← getPeer pid).nextKeypair then keypairPutLive true else keypairPutNull",
+   "  if (← getPeer pid).nextKeypair then keypairPutLive false else keypairPutNull"),
+  ('C-M5-endpoint-family-swapped', 'data: the learned endpoint tests IPv6 first', 'Leanux/WG/Handshake.lean',
+   "    if ← branch .epFromSkbInet (src.family == 4) then\n",
+   "    if ← branch .epFromSkbInet (src.family == 6) then\n"),
 ]
 
 def w4(text):
     fw = ("  if ← branch .setDevFwmark a.fwmark.isSome then\n"
           "    modifyDev fun d => { d with fwmark := a.fwmark.getD 0 }\n"
-          "    -- wg_socket_clear_peer_endpoint_src on each peer: see setPort\n"
-          "    for _ in (← getDev).peerList do _ ← branch .setDevFwmarkPeerIter true\n"
+          "    for pid in (← getDev).peerList do\n"
+          "      _ ← branch .setDevFwmarkPeerIter true\n"
+          "      clearPeerEndpointSrc pid\n"
           "    _ ← branch .setDevFwmarkPeerIter false\n")
     port = ("  if ← branch .setDevPort a.listenPort.isSome then\n"
             "    let ret ← setPort (a.listenPort.getD 0)\n"

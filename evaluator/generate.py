@@ -4,6 +4,8 @@ import hashlib
 import json
 import random
 
+from harness import noise
+
 U64 = 2**64 - 1
 PRODUCERS = {'eventfd2', 'dup', 'dup3'}
 
@@ -213,8 +215,9 @@ def generate_v2(seed, count, max_ops):
 def generate_wireguard(seed, count, max_ops=12):
     """Seeded WireGuard traces over small pools of keys and prefixes, so that
     peers, trie nodes and identities collide often. A third are configuration
-    traces (stage A), a third bring wg0 up and transmit (stage B1), and a third
-    bring it up and inject messages (stage B2). Every trace ends with a dump."""
+    traces (stage A), and the rest bring wg0 up and transmit (stage B1), inject
+    messages (stage B2), or inject handshake initiations (stage C), a sixth
+    each. Every trace ends with a dump."""
     if not 2 <= max_ops <= 64 or not 1 <= count <= 100000:
         raise ValueError('bounded generator parameters')
     rng = random.Random(seed)
@@ -323,10 +326,80 @@ def generate_wireguard(seed, count, max_ops=12):
                 ops.append({'op': 'wg_get'})
         return ops
 
+    initiators = [b'\x22' * 32, b'\x44' * 32]
+    handshake_privates = [b'\x11' * 32, b'\x55' * 32, b'\x22' * 32, None]
+
+    def handshake_trace():
+        """Stage C: configure, bring wg0 up, then inject Noise initiations from
+        two initiators (and a low-order static key) whose keys, timestamps and
+        targets collide with the configuration."""
+        device = rng.choices(handshake_privates, [6, 2, 1, 1])[0]
+        stamp = 1
+
+        def hs_peer():
+            public = rng.choices([noise.public_key(k) for k in initiators] + [bytes(32)], [6, 2, 1])[0]
+            entry = dict(public_key=public.hex(), allowed_ips=[allowed_ip() for _ in range(rng.randint(0, 2))])
+            if rng.random() < .2:
+                entry['preshared_key'] = rng.choice(['aa' * 32, 'bb' * 32])
+            if rng.random() < .3:
+                entry['endpoint'] = rng.choice(endpoints[:2])
+            if rng.random() < .2:
+                entry['keepalive'] = 25
+            if rng.random() < .1:
+                entry['remove'] = True
+            return entry
+
+        def initiation():
+            nonlocal stamp
+            stamp = max(1, stamp + rng.choices([1, 0, -1], [8, 1, 1])[0])
+            target = device if rng.random() < .9 else rng.choice([k for k in handshake_privates if k])
+            responder = noise.public_key(target) if target else bytes(32)
+            initiator = rng.choices(initiators, [7, 2])[0]
+            extra = {}
+            if rng.random() < .08:
+                extra['static_public'] = bytes(32)
+            if rng.random() < .05:
+                extra['ephemeral_public'] = bytes(32)
+            if rng.random() < .1:
+                extra['tamper'] = rng.choice(['static', 'timestamp'])
+            if target is None:
+                extra['mac1_key'] = bytes(32)
+            return noise.initiation(responder, initiator, bytes([rng.randrange(1, 256)]) * 32,
+                                    bytes(11) + bytes([stamp]), rng.randrange(2 ** 32), **extra)
+
+        first = dict(listen_port=51820, peers=[hs_peer() for _ in range(rng.randint(1, 3))])
+        for peer in first['peers']:
+            peer.pop('remove', None)
+        if device is not None:
+            first['private_key'] = device.hex()
+        ops = [{'op': 'wg_set', 'config': first}, {'op': 'wg_up'}]
+        if any('keepalive' in p for p in first['peers']):
+            ops.append({'op': 'wg_observe'})   # the keepalive's handshake work runs first
+        for _ in range(rng.randint(1, max_ops - 4)):
+            kind = rng.choices(['inject', 'observe', 'set', 'get'], [8, 3, 1, 1])[0]
+            if kind == 'inject':
+                ops.append({'op': 'wg_inject', 'family': rng.choice([4, 6]), 'port': 51820,
+                            'message': initiation().hex()})
+            elif kind == 'observe':
+                ops.append({'op': 'wg_observe'})
+            elif kind == 'set':
+                change = dict(peers=[hs_peer() for _ in range(rng.randint(0, 2))])
+                for peer in change['peers']:
+                    peer.pop('keepalive', None)
+                if rng.random() < .3:
+                    device = rng.choice(handshake_privates[:3])
+                    change['private_key'] = device.hex()
+                ops.append({'op': 'wg_set', 'config': change})
+            else:
+                ops.append({'op': 'wg_get'})
+        return ops + [{'op': 'wg_observe'}]
+
     while len(result) < count:
         draw = rng.random()
-        if draw < 1 / 3:
+        if draw < 1 / 6:
             operations = receive_trace()
+        elif draw < 1 / 3:
+            operations = handshake_trace()
         elif draw < 2 / 3:
             operations = transmit_trace()
         else:

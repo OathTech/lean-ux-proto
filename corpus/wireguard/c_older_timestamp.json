@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "id": "c_older_timestamp",
+  "ops": [
+    {
+      "op": "wg_set",
+      "config": {
+        "listen_port": 51820,
+        "peers": [
+          {
+            "public_key": "0faa684ed28867b97f4a6a2dee5df8ce974e76b7018e3f22a1c4cf2678570f20",
+            "allowed_ips": [
+              {
+                "family": 4,
+                "addr": "0a000000",
+                "cidr": 8
+              }
+            ]
+          }
+        ],
+        "private_key": "1111111111111111111111111111111111111111111111111111111111111111"
+      }
+    },
+    {
+      "op": "wg_up"
+    },
+    {
+      "op": "wg_inject",
+      "family": 4,
+      "port": 51820,
+      "message": "01000000070000007b0d47d93427f8311160781c7c733fd89f88970aef490d8aa0ee19a4cb8a1b14e453a91437f7c06f213c49d5d1436624de8e48361a7213f707704d9b6ff65a0a98d852f04a4a384dcd586cf951bb261e1fc30926532a16256d1ee06197221b1a171d285d1d1bfd0c25d32621abbf9f1943108b43b58efe835edcc1e900000000000000000000000000000000"
+    },
+    {
+      "op": "wg_inject",
+      "family": 4,
+      "port": 51820,
+      "message": "0100000008000000ffc951aa6f2fa03096d1d1b579735b2f6f84019fe2f617aa65ff3d68705f25271d4b6118bc0df0bc6bea6bf07ea0a04cdaa3bcde203e582453918991349b6cb5bafa2a2c379850d7434c5890a2fb3faa21609bc86cfdb6dc7dc7eafe5cb8d1bdd985cc3d7fed05c9c1274a7420e1c07c2cc4df09b23f69a71b49617e00000000000000000000000000000000"
+    },
+    {
+      "op": "wg_observe"
+    },
+    {
+      "op": "wg_get"
+    }
+  ]
+}

@@ -38,6 +38,9 @@
 #define LISTEN6_FD 5
 #define SEND_FD 6
 #define SEND_PORT 40000
+/* The sender is bound to this port, so a peer endpoint learned from its
+ * datagrams (a consumed handshake initiation) is deterministic. */
+#define SENDER_PORT 51998
 #define LISTEN_PORT 51999
 #define WG_IFINDEX 3
 /* wg_observe waits this long for the handshake workers before it looks. */
@@ -363,6 +366,24 @@ static void observe(const struct trace *t, unsigned i, long first, int compariso
             if (!comparisons) comma = print_datagram(comma, family, n);
         }
     }
+    if (!comparisons) printf("],\"replies\":[");
+    /* Replies to the sender: a handshake response's length, type and receiver
+     * index (bytes 8-11, little-endian). */
+    comma = 0;
+    for (;;) {
+        long n = recv(SEND_FD, observe_buffer, sizeof(observe_buffer), MSG_DONTWAIT);
+        if (n < 0) {
+            if (errno != EAGAIN) fail(t->id, i, "environment_failure", "drain_sender");
+            break;
+        }
+        if (comparisons) continue;
+        unsigned type = n >= 4 ? (unsigned)observe_buffer[0] | (unsigned)observe_buffer[1] << 8 |
+                                 (unsigned)observe_buffer[2] << 16 | (unsigned)observe_buffer[3] << 24 : 0;
+        unsigned receiver = n >= 12 ? (unsigned)observe_buffer[8] | (unsigned)observe_buffer[9] << 8 |
+                                      (unsigned)observe_buffer[10] << 16 | (unsigned)observe_buffer[11] << 24 : 0;
+        printf("%s[%ld,%u,%u]", comma ? "," : "", n, type, receiver);
+        comma = 1;
+    }
     if (comparisons) return;
     printf("],");
     print_stats(t->id, i);
@@ -433,8 +454,10 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             bind(LISTEN6_FD, (struct sockaddr *)&a6, sizeof(a6)))
             fail(t->id, -1, "environment_failure", "listener6_at_5");
         int zero = 0;
+        struct sockaddr_in6 from = {.sin6_family = AF_INET6, .sin6_port = htons(SENDER_PORT), .sin6_addr = IN6ADDR_ANY_INIT};
         if (socket(AF_INET6, SOCK_DGRAM, 0) != SEND_FD ||
-            setsockopt(SEND_FD, IPPROTO_IPV6, IPV6_V6ONLY, &zero, sizeof(zero)))
+            setsockopt(SEND_FD, IPPROTO_IPV6, IPV6_V6ONLY, &zero, sizeof(zero)) ||
+            bind(SEND_FD, (struct sockaddr *)&from, sizeof(from)))
             fail(t->id, -1, "environment_failure", "sender_at_6");
         /* The generic-netlink socket replaces the last filler; no SOCK_CLOEXEC,
          * so every fixture descriptor has close-on-exec clear. */
@@ -567,10 +590,10 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
                 fail(t->id, i, "coverage_failure", "full_remote_kcov");
         }
         if (comparisons) {
-            /* No decision on the remote paths is a declared comparison yet, so
-             * the remote comparison stream is not reported (it would pay
-             * nothing). */
+            /* The remote stream's comparisons: the handshake worker's peer
+             * reference counts (stage C) are declared comparisons. */
             print_records("LEANUX_CMP", t->id, i, coverage, count);
+            if (remote) print_records("LEANUX_RCMP", t->id, i, remote, remote_count);
             continue;
         }
         print_pcs("LEANUX_COVERAGE", t->id, i, coverage, count);

@@ -164,6 +164,25 @@ inductive Decision where
   | idxMatch | idxFound
   -- drivers/net/wireguard/queueing.h
   | cpumaskWrap
+  -- drivers/net/wireguard/noise.c
+  | msgEphemeralCopy | kdfNoFirstDst | kdfNoFirstLen | kdfNoSecondDst | kdfNoSecondLen
+  | kdfNoThirdDst | kdfNoThirdLen | mixDhNull | mixPrecomputedNull | msgDecryptFailed
+  | consumeNoIdentity | consumeEsFailed | consumeStaticFailed | consumeNoPeer | consumeSsFailed
+  | consumeTimestampFailed | consumeReplay | consumeFlood | consumeNewerTimestamp | consumeLaterTime
+  | consumeFailedPut | respNotConsumed | respNoEphemeral | respEeFailed | respSeFailed
+  | keypairCreateNoMem | sessionNotCreatedResponse | sessionNotConsumedResponse | sessionNoKeypair | sessionInitiator
+  | sessionAlive | addKeypairInitiator
+  -- drivers/net/wireguard/cookie.c
+  | addMacCookieValid | addMacCookieFresh
+  -- drivers/net/wireguard/send.c
+  | respCreated | respSessionBegun
+  -- drivers/net/wireguard/receive.c
+  | hsSwitchInitiation | hsSwitchResponse | hsInitNeedsCookie | hsInitNoPeer | hsWrongPacket
+  -- drivers/net/wireguard/socket.c
+  | epFromSkbOk | epFromSkbInet | epFromSkbInet6
+  -- drivers/net/wireguard/timers.c
+  | modTimerRunning | modTimerAlive | traversalKeepalive | keypairPutUnreferenceNow | keypairKrefPutReleased
+  | idxReplaceUnhashed | sendBufNoMem | sendSkbInet | sendSkbInet6 | sendSkbOk
   deriving Repr, BEq, DecidableEq, Inhabited
 
 /-- A recorded step: the decision, the outcome the mirror computed, and, for
@@ -211,6 +230,7 @@ private def wpl := "drivers/net/wireguard/peerlookup.c"
 private def wck := "drivers/net/wireguard/cookie.c"
 private def c25 := "include/crypto/curve25519.h"
 private def wrc := "drivers/net/wireguard/receive.c"
+private def wtm := "drivers/net/wireguard/timers.c"
 private def wdv := "drivers/net/wireguard/device.c"
 private def wsd := "drivers/net/wireguard/send.c"
 private def wqh := "drivers/net/wireguard/queueing.h"
@@ -759,6 +779,70 @@ def Decision.info : Decision → DecisionInfo
   | .idxFound => d "wg_index_hashtable_lookup.found" wpl 217 [(218, 222)] []
   -- drivers/net/wireguard/queueing.h
   | .cpumaskWrap => d "wg_cpumask_next_online.wrap" wqh 128 [(129, 129)] []
+  -- drivers/net/wireguard/noise.c
+  | .msgEphemeralCopy => d "message_ephemeral.copy" wno 490 [(491, 491)] []
+  | .kdfNoFirstDst => d "kdf.no_first_dst" wno 362 [] []
+  | .kdfNoFirstLen => d "kdf.no_first_len" wno 362 [] [(366, 368)]
+  | .kdfNoSecondDst => d "kdf.no_second_dst" wno 370 [] []
+  | .kdfNoSecondLen => d "kdf.no_second_len" wno 370 [] [(374, 376)]
+  | .kdfNoThirdDst => d "kdf.no_third_dst" wno 378 [] []
+  | .kdfNoThirdLen => d "kdf.no_third_len" wno 378 [] [(382, 384)]
+  | .mixDhNull => d "mix_dh.null_dh" wno 411 [(412, 412)] [(413, 415)]
+  | .mixPrecomputedNull => d "mix_precomputed_dh.null" wno 424 [(425, 425)] [(426, 429)]
+  | .msgDecryptFailed => d "message_decrypt.failed" wno 477 [(480, 480)] [(481, 482)]
+  | .consumeNoIdentity => d "wg_noise_handshake_consume_initiation.no_identity" wno 599 [(600, 600)] [(602, 605)]
+  | .consumeEsFailed => d "wg_noise_handshake_consume_initiation.es_failed" wno 608 [(609, 609)] [(612, 612)]
+  | .consumeStaticFailed => d "wg_noise_handshake_consume_initiation.static_failed" wno 612 [(614, 614)] [(617, 617)]
+  | .consumeNoPeer => d "wg_noise_handshake_consume_initiation.no_peer" wno 618 [(619, 619)] [(620, 624)]
+  -- ss succeeded: the inlined mix_precomputed_dh's kdf block (frame line 623,
+  -- not covered when ss fails). In this build no KCOV point is attributed to
+  -- the timestamp decryption at 628 before its result is known.
+  | .consumeSsFailed => d "wg_noise_handshake_consume_initiation.ss_failed" wno 623 [(625, 625)] [(623, 623)]
+  | .consumeTimestampFailed => d "wg_noise_handshake_consume_initiation.timestamp_failed" wno 628 [(630, 630)] [(632, 636)]
+  | .consumeReplay => d "wg_noise_handshake_consume_initiation.replay" wno 639 [] []
+  | .consumeFlood => d "wg_noise_handshake_consume_initiation.flood" wno 639 [] [(643, 644)]
+  | .consumeNewerTimestamp => d "wg_noise_handshake_consume_initiation.newer_timestamp" wno 645 [(646, 646)] []
+  | .consumeLaterTime => d "wg_noise_handshake_consume_initiation.later_consumption" wno 651 [(652, 652)] []
+  | .consumeFailedPut => d "wg_noise_handshake_consume_initiation.failed_put" wno 662 [(663, 663)] []
+  | .respNotConsumed => d "wg_noise_handshake_create_response.not_consumed" wno 681 [(682, 682)] [(684, 685)]
+  | .respNoEphemeral => d "wg_noise_handshake_create_response.no_ephemeral" wno 689 [(691, 691)] [(692, 694)]
+  | .respEeFailed => d "wg_noise_handshake_create_response.ee_failed" wno 697 [(699, 699)] [(702, 702)]
+  | .respSeFailed => d "wg_noise_handshake_create_response.se_failed" wno 702 [(704, 704)] [(707, 708)]
+  | .keypairCreateNoMem => d "keypair_create.no_mem" wno 102 [(103, 103)] [(104, 109)]
+  -- `a && b`: the continuation (827) follows both a=0 and a=1,b=0
+  | .sessionNotCreatedResponse => d "wg_noise_handshake_begin_session.not_created_response" wno 823 [(824, 824)] []
+  | .sessionNotConsumedResponse => d "wg_noise_handshake_begin_session.not_consumed_response" wno 824 [(825, 825)] []
+  | .sessionNoKeypair => d "wg_noise_handshake_begin_session.no_keypair" wno 828 [(829, 829)] [(830, 834)]
+  | .sessionInitiator => d "wg_noise_handshake_begin_session.initiator" wno 834 [(835, 836)] [(838, 839)]
+  | .sessionAlive => d "wg_noise_handshake_begin_session.alive" wno 843 [(845, 852)] [(854, 854)]
+  | .addKeypairInitiator => d "add_new_keypair.initiator" wno 210 [(211, 238)] [(245, 248)]
+  -- drivers/net/wireguard/cookie.c
+  | .addMacCookieValid => d "wg_cookie_add_mac_to_packet.cookie_valid" wck 170 [(171, 171)] []
+  | .addMacCookieFresh => d "wg_cookie_add_mac_to_packet.cookie_fresh" wck 171 [(173, 174)] []
+  -- drivers/net/wireguard/send.c
+  | .respCreated => d "wg_packet_send_handshake_response.created" wsd 94 [(95, 106)] []
+  | .respSessionBegun => d "wg_packet_send_handshake_response.session_begun" wsd 96 [(98, 105)] []
+  -- drivers/net/wireguard/receive.c
+  | .hsSwitchInitiation => d "wg_receive_handshake_packet.initiation" wrc 134 [(135, 155)] []
+  | .hsSwitchResponse => d "wg_receive_handshake_packet.response" wrc 134 [(158, 188)] []
+  | .hsInitNeedsCookie => d "wg_receive_handshake_packet.initiation_needs_cookie" wrc 139 [(140, 142)] [(144, 144)]
+  | .hsInitNoPeer => d "wg_receive_handshake_packet.initiation_no_peer" wrc 145 [(146, 148)] [(150, 155)]
+  | .hsWrongPacket => d "wg_receive_handshake_packet.wrong_packet" wrc 192 [(193, 194)] [(197, 203)]
+  -- drivers/net/wireguard/socket.c
+  | .epFromSkbOk => d "wg_socket_set_peer_endpoint_from_skb.endpoint_ok" wso 304 [(305, 305)] []
+  | .epFromSkbInet => d "wg_socket_endpoint_from_skb.inet" wso 239 [(240, 244)] [(245, 245)]
+  | .epFromSkbInet6 => d "wg_socket_endpoint_from_skb.inet6" wso 245 [(246, 250)] [(253, 253)]
+  -- drivers/net/wireguard/timers.c
+  | .modTimerRunning => d "mod_peer_timer.running" wtm 35 [(36, 36)] []
+  | .modTimerAlive => d "mod_peer_timer.alive" wtm 36 [(37, 37)] []
+  | .traversalKeepalive => d "wg_timers_any_authenticated_packet_traversal.keepalive" wtm 214 [(215, 216)] []
+  | .keypairPutUnreferenceNow => d "wg_noise_keypair_put.unreference_now" wno 135 [(136, 138)] []
+  | .keypairKrefPutReleased => d "wg_noise_keypair_put.kref_put_released" wno 139 [(119, 128)] []
+  | .sendBufNoMem => d "wg_socket_send_buffer_to_peer.no_mem" wso 194 [(195, 195)] [(197, 200)]
+  | .sendSkbInet => d "wg_socket_send_skb_to_peer.inet" wso 174 [(175, 176)] [(177, 177)]
+  | .sendSkbInet6 => d "wg_socket_send_skb_to_peer.inet6" wso 177 [(178, 179)] [(181, 181)]
+  | .sendSkbOk => d "wg_socket_send_skb_to_peer.sent" wso 182 [(183, 183)] []
+  | .idxReplaceUnhashed => d "wg_index_hashtable_replace.unhashed" wpl 174 [(175, 175)] [(177, 186)]
 
 /-- The relation of a C value comparison, as written in the source
     (`lhs rel rhs`); `flag` is a mask test `(x & MASK)` against zero. -/
@@ -912,7 +996,10 @@ def Decision.repeatable : Decision → Bool
   | .xmitWalk | .xmitShareFailed | .xmitStagedOverflow | .queuedNotRetry | .queuedNotExpired
   | .queuedDead | .queuedAlreadyQueued | .keepaliveStagedEmpty | .keepaliveNoMem | .stagedEmpty
   | .stagedNoKeypair | .stagedOrphanWalk | .keypairGetNull | .keypairGetZero
-  | .workerConsumed => true
+  | .workerConsumed
+  | .msgEphemeralCopy | .kdfNoFirstDst | .kdfNoFirstLen | .kdfNoSecondDst | .kdfNoSecondLen
+  | .kdfNoThirdDst | .kdfNoThirdLen | .mixDhNull | .mixPrecomputedNull | .msgDecryptFailed
+  | .modTimerRunning | .modTimerAlive | .traversalKeepalive => true
   | _ => false
 
 /-- Every decision, enumerated through the constructor index. -/

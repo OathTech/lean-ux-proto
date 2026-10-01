@@ -332,7 +332,7 @@ def toSyscall (results : Array Int) : Operation → Syscall
 /-- Run a trace. A `Stop` is returned with the operation index: the mirror
     never reports an observation for a path it does not model. -/
 def executeTrace (trace : Trace) : Except (Nat × Stop) Json := do
-  let mut world : World := { k := initialKernel trace.rlimit trace.net, env := harnessEnv }
+  let mut world : World := { k := initialKernel trace.rlimit trace.net, env := harnessEnv, timing := Env.timing }
   let mut results : Array Int := #[]
   let mut observations : Array Json := #[]
   let mut branches : Array Json := #[]

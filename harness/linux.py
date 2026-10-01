@@ -121,7 +121,7 @@ def _check_observation(result, trace):
         if op["op"] == "wg_get" and type(observation) is dict and observation.get("ret") == 0:
             fields = fields | {"device"}
         if op["op"] == "wg_observe":
-            fields = fields | {"datagrams", "stats"}
+            fields = fields | {"datagrams", "replies", "stats"}
         if type(observation) is not dict or set(observation) != fields:
             raise ValueError("operation observation fields")
         ret, error, data = observation["ret"], observation["errno"], observation["bytes"]
@@ -169,7 +169,7 @@ def attach_observed(results, traces, records):
     by_trace = {result["id"]: result for result in results}
     seen = set()
     for record in records:
-        if type(record) is not dict or set(record) != {"id", "index", "datagrams", "stats"} or record["id"] not in by_trace:
+        if type(record) is not dict or set(record) != {"id", "index", "datagrams", "replies", "stats"} or record["id"] not in by_trace:
             raise ValueError("wg_observe record fields or identity")
         key = (record["id"], record["index"])
         observations = by_trace[record["id"]]["observations"]
@@ -181,12 +181,17 @@ def attach_observed(results, traces, records):
                 type(d) is list and len(d) == 3 and d[0] in (4, 6) and all(type(x) is int and x >= 0 for x in d)
                 for d in datagrams):
             raise ValueError("wg_observe datagrams")
+        replies = record["replies"]
+        if type(replies) is not list or not all(
+                type(r) is list and len(r) == 3 and all(type(x) is int and x >= 0 for x in r) for r in replies):
+            raise ValueError("wg_observe replies")
         stats = record["stats"]
         if type(stats) is not dict or set(stats) != {"tx_errors", "tx_dropped"} or not all(
                 type(v) is int and v >= 0 for v in stats.values()):
             raise ValueError("wg_observe stats")
         observations[record["index"]]["datagrams"] = sorted(datagrams)
         observations[record["index"]]["stats"] = stats
+        observations[record["index"]]["replies"] = sorted(replies)
     for trace in traces:
         for index, op in enumerate(trace["ops"]):
             if (op["op"] == "wg_observe") != ((trace["id"], index) in seen):
@@ -231,14 +236,15 @@ def merge_remote(rows, remote, traces, key):
 def _collect(outdir, traces, process_returncode):
     results, coverage, fixtures, errors, child_failures, completed, kernels = [], [], [], [], [], [], []
     comparisons, comparison_results, wireguard, observed = [], [], [], []
-    remote_coverage = []
+    remote_coverage, remote_comparisons = [], []
     for line in (outdir / "boot.log").read_text(errors="strict").splitlines():
         line = line.rstrip("\r")
         for prefix, target in (("LEANUX_RESULT ", results), ("LEANUX_COVERAGE ", coverage),
                                ("LEANUX_FIXTURE ", fixtures), ("LEANUX_ERROR ", errors),
                                ("LEANUX_CHILD_FAILURE ", child_failures), ("LEANUX_CMP ", comparisons),
                                ("LEANUX_CMP_RESULT ", comparison_results), ("LEANUX_WG ", wireguard),
-                               ("LEANUX_WGOBS ", observed), ("LEANUX_RCOVERAGE ", remote_coverage)):
+                               ("LEANUX_WGOBS ", observed), ("LEANUX_RCOVERAGE ", remote_coverage),
+                               ("LEANUX_RCMP ", remote_comparisons)):
             if line.startswith(prefix):
                 try:
                     target.append(_decode_json(line[len(prefix):]))
@@ -252,6 +258,7 @@ def _collect(outdir, traces, process_returncode):
     _jsonl(outdir / "observations.jsonl", results)
     try:
         coverage = merge_remote(coverage, remote_coverage, traces, "pcs")
+        comparisons = merge_remote(comparisons, remote_comparisons, traces, "records")
     except ValueError as exc:
         raise LinuxRunError("invalid_output", f"Remote coverage: {exc}", outdir) from exc
     _jsonl(outdir / "coverage.jsonl", coverage)

@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "id": "c_low_order_ephemeral",
+  "ops": [
+    {
+      "op": "wg_set",
+      "config": {
+        "listen_port": 51820,
+        "peers": [
+          {
+            "public_key": "0faa684ed28867b97f4a6a2dee5df8ce974e76b7018e3f22a1c4cf2678570f20",
+            "allowed_ips": [
+              {
+                "family": 4,
+                "addr": "0a000000",
+                "cidr": 8
+              }
+            ]
+          }
+        ],
+        "private_key": "1111111111111111111111111111111111111111111111111111111111111111"
+      }
+    },
+    {
+      "op": "wg_up"
+    },
+    {
+      "op": "wg_inject",
+      "family": 4,
+      "port": 51820,
+      "message": "01000000070000000000000000000000000000000000000000000000000000000000000000000000833178c598279ea44c3897dbceddc7fbbb7d4fb5ab02b0c55d994c93a643a3330437f66bcac872455da020a89b8c7d55836a5504d84d967f07e6656847e8fdffb3925f304d49d7651a37281d0d4101eed17680493b97bc9731edddcd00000000000000000000000000000000"
+    },
+    {
+      "op": "wg_observe"
+    },
+    {
+      "op": "wg_get"
+    }
+  ]
+}

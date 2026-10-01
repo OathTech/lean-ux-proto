@@ -46,12 +46,13 @@ def validate_observation(trace, result):
         if op['op'] == 'wg_get' and type(obs) is dict and obs.get('ret') == 0:
             fields += ('device',)   # the canonical device state (harness/wg.py)
         if op['op'] == 'wg_observe':
-            fields += ('datagrams', 'stats')   # what wg0 emitted, and its counters
+            fields += ('datagrams', 'replies', 'stats')   # what wg0 emitted, replies to the sender, counters
         if not keys(obs, fields):
             raise InvalidOutput(f'observation {index}: fields')
         if 'device' in fields and type(obs['device']) is not dict:
             raise InvalidOutput(f'observation {index}: device state')
-        if 'datagrams' in fields and (type(obs['datagrams']) is not list or type(obs['stats']) is not dict):
+        if 'datagrams' in fields and (type(obs['datagrams']) is not list or type(obs['replies']) is not list
+                                      or type(obs['stats']) is not dict):
             raise InvalidOutput(f'observation {index}: observed emissions')
         if type(obs['index']) is not int or obs['index'] != index:
             raise InvalidOutput(f'observation {index}: order/index')

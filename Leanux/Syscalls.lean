@@ -96,11 +96,10 @@ def dispatch : Syscall → M Int
     -- udp_sendmsg returns the datagram's length once the device took it
     let ret ← WG.wgXmit family addr
     return if ret == 0 then 4 else ret
-  | .wgInject _ port message => socketCallOn SENDER_FD (Env.inject port message)
+  | .wgInject family port message => socketCallOn SENDER_FD (Env.inject family port message)
   | .wgObserve => socketCallOn LISTEN4_FD do
     let (ret, observed) ← Env.observe
-    modify fun w => { w with extraOut := observed.getObjValD "datagrams" |> fun d =>
-      [("datagrams", d), ("stats", observed.getObjValD "stats")] }
+    modify fun w => { w with extraOut := ["datagrams", "replies", "stats"].map fun k => (k, observed.getObjValD k) }
     return ret
 
 /-- `task_work_run` on exit to user mode: each queued `____fput` runs `__fput`. -/

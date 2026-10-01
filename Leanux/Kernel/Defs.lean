@@ -208,12 +208,23 @@ inductive EnvSite where
   | kmallocEventfdCtx | idaAlloc | filpAlloc | dAllocPseudo
   | kmallocFdtable | kvmallocFdArray | kvmallocFdBitmaps
   | accessOk | copyToUser | copyFromUser
-  | kmemCacheZallocNode | kmemCacheZallocPeer | dstCacheInit | allocSkb
+  | kmemCacheZallocNode | kmemCacheZallocPeer | dstCacheInit | allocSkb | kzallocKeypair
   deriving Repr, BEq, DecidableEq
+
+/-- Timing facts the environment supplies (`Leanux/Env.lean`); the mirror has
+    no clock. -/
+structure Timing where
+  /-- Whether at least this many nanoseconds have passed since a peer last
+      consumed an initiation (or since boot, if it never did). -/
+  sinceLastConsumption : Nat → Bool
+  /-- Whether a timer armed now for this many seconds can expire before the
+      trace ends. -/
+  timerMayExpire : Nat → Bool
 
 structure World where
   k : Kernel
   env : EnvSite → Nat → Bool
+  timing : Timing
   envCalls : List (EnvSite × Nat) := []
   steps : Array Step := #[]
   /-- The caller's buffer (user memory), as written by `copy_to_iter`. -/
@@ -225,6 +236,11 @@ structure World where
       fixture's UDP listeners (lengths), which `wg_observe` drains. -/
   listenerV4 : List Nat := []
   listenerV6 : List Nat := []
+  /-- Datagrams wg0's sockets sent (`wg_socket_send_buffer_to_peer`, a cut
+      point), oldest first: endpoint family, address and port, then length,
+      message type and receiver index. The environment decides which fixture
+      socket receives them. -/
+  sent : List (Nat × Nat × Nat × Nat × Nat × Nat) := []
   /-- Peers whose handshake work this system call queued, while the call has
       not slept. The kernel is `CONFIG_PREEMPT_NONE` on one CPU, so their
       worker cannot have run yet. -/

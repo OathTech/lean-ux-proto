@@ -52,6 +52,22 @@ structure Endpoint where
   family : Nat      -- AF_INET = 2, AF_INET6 = 10
   addr : Nat
   port : Nat
+  /-- `src4`/`src6` (the local address a received packet was sent to),
+      `src_if4`, and IPv6's `sin6_scope_id`: zero unless learned from an skb. -/
+  src : Nat := 0
+  srcIf : Nat := 0
+  scope : Nat := 0
+  deriving Repr, BEq
+
+/-- What a received skb says about its origin (`wg_socket_endpoint_from_skb`):
+    the IP family, source address and UDP port, destination address, and
+    arrival interface. -/
+structure SkbSource where
+  family : Nat
+  saddr : Nat
+  sport : Nat
+  daddr : Nat
+  iif : Nat
   deriving Repr, BEq
 
 /-- `struct wg_peer` with the parts of its `noise_handshake` on this path. -/
@@ -76,8 +92,21 @@ structure Peer where
       current; traces are bounded well below `REKEY_TIMEOUT`. -/
   lastSentExpired : Bool := true
   txBytes : Nat := 0
+  /-- `handshake.state`: ZEROED 0, CREATED_INITIATION 1, CONSUMED_INITIATION 2,
+      CREATED_RESPONSE 3, CONSUMED_RESPONSE 4. -/
+  handshakeState : Nat := 0
+  /-- `handshake.latest_timestamp` (TAI64N, compared with memcmp). -/
+  latestTimestamp : List UInt8 := List.replicate 12 0
+  /-- `handshake.remote_index`, the initiator's sender index. -/
+  remoteIndex : Nat := 0
+  /-- `keypairs.next_keypair` is set (a responder's session awaiting
+      confirmation); its keys are random. Its entry is in the index hashtable
+      (it replaced the handshake's) until the keypair is put. -/
+  nextKeypair : Bool := false
+  rxBytes : Nat := 0
   /-- `handshake.entry` is in the index hashtable (inserted, under a random
-      index, when an initiation is created; removed by `handshake_clear`). -/
+      index, when an initiation or response is created; removed by
+      `handshake_clear`, or replaced by a new keypair's entry). -/
   indexed : Bool := false
   deriving Repr, BEq
 
@@ -102,7 +131,7 @@ structure Device where
   handshakeLastCpu : Int := -1
   /-- `handshake_queue.ring`: queued handshake messages, oldest first; its
       length is `handshake_queue_len`. -/
-  handshakeQueue : List (List UInt8) := []
+  handshakeQueue : List (List UInt8 × SkbSource) := []
   staticIdentity : StaticIdentity := {}
   incomingPort : Nat := 0
   fwmark : Nat := 0

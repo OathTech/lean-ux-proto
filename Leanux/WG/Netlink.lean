@@ -83,12 +83,19 @@ def lookupInterface : M (Except Int Unit) := do
     return .error (-EOPNOTSUPP)
   return .ok ()
 
-/-- set_port (netlink.c:314-327). `wg_socket_clear_peer_endpoint_src` zeroes
-    source addresses that are always zero with the device down. -/
+/-- wg_socket_clear_peer_endpoint_src (socket.c:308-314): zeroes `src6`,
+    which overlays `src4` and `src_if4`. -/
+def clearPeerEndpointSrc (pid : PeerId) : M Unit := do
+  let p ← getPeer pid
+  setPeer pid { p with endpoint := p.endpoint.map fun e => { e with src := 0, srcIf := 0 } }
+
+/-- set_port (netlink.c:314-327). -/
 def setPort (port : Nat) : M Int := do
   let d ← getDev
   if ← branch .setPortSame (d.incomingPort == port) then return 0
-  for _ in d.peerList do _ ← branch .setPortPeerIter true
+  for pid in d.peerList do
+    _ ← branch .setPortPeerIter true
+    clearPeerEndpointSrc pid
   _ ← branch .setPortPeerIter false
   if ← branch .setPortNotRunning !d.running then
     modifyDev fun d => { d with incomingPort := port }
@@ -107,31 +114,29 @@ def setAllowedip (pid : PeerId) (ip : AllowedIpAttrs) : M Int := do
     return ← insert 6 ip.addr ip.cidr pid
   return -EINVAL
 
-/-- endpoint_eq (socket.c:258-271). Source addresses and `src_if4` are zero
-    on both sides on this path (only the receive path sets them), and the
-    harness's IPv6 endpoints have scope 0. -/
-def endpointEq (a : EndpointAttr) (b : Option Endpoint) : M Bool := do
+/-- endpoint_eq (socket.c:258-271). -/
+def endpointEq (a : Endpoint) (b : Option Endpoint) : M Bool := do
   let fb := b.map (·.family) |>.getD 0
-  let same := b.any fun e => e.addr == a.addr
+  let field (f : Endpoint → Nat) := b.any fun e => f e == f a
   let v4 ← andM (branch .eqA4 (a.family == AF_INET)) (andM (branch .eqB4 (fb == AF_INET))
-    (andM (branch .eqPort4 (b.any (·.port == a.port))) (andM (branch .eqAddr4 same)
-      (andM (branch .eqSrc4 true) (branch .eqSrcIf4 true)))))
+    (andM (branch .eqPort4 (field (·.port))) (andM (branch .eqAddr4 (field (·.addr)))
+      (andM (branch .eqSrc4 (field (·.src))) (branch .eqSrcIf4 (field (·.srcIf)))))))
   if v4 then return true
   let v6 ← andM (branch .eqA6 (a.family == AF_INET6)) (andM (branch .eqB6 (fb == AF_INET6))
-    (andM (branch .eqPort6 (b.any (·.port == a.port))) (andM (branch .eqAddr6 same)
-      (andM (branch .eqScope6 true) (branch .eqSrc6 true)))))
+    (andM (branch .eqPort6 (field (·.port))) (andM (branch .eqAddr6 (field (·.addr)))
+      (andM (branch .eqScope6 (field (·.scope))) (branch .eqSrc6 (field (·.src)))))))
   if v6 then return true
   andM (branch .eqANone (a.family == 0)) (branch .eqBNone (fb == 0))
 
 /-- wg_socket_set_peer_endpoint (socket.c:273-297); `dst_cache_reset` is a
     cut point. -/
-def setPeerEndpoint (pid : PeerId) (e : EndpointAttr) : M Unit := do
+def setPeerEndpoint (pid : PeerId) (e : Endpoint) : M Unit := do
   requireNotPending pid "changing the endpoint"
   if ← branch .setEndpointEq (← endpointEq e (← getPeer pid).endpoint) then return
-  let set := do
-    setPeer pid { (← getPeer pid) with endpoint := some { family := e.family, addr := e.addr, port := e.port } }
-  if ← branch .setEndpointV4 (e.family == AF_INET) then set
-  else if ← branch .setEndpointV6 (e.family == AF_INET6) then set
+  if ← branch .setEndpointV4 (e.family == AF_INET) then
+    setPeer pid { (← getPeer pid) with endpoint := some e }
+  else if ← branch .setEndpointV6 (e.family == AF_INET6) then
+    setPeer pid { (← getPeer pid) with endpoint := some e }
 
 /-- set_peer (netlink.c:357-491). -/
 def setPeerCmd (a : PeerAttrs) : M Int := do
@@ -173,9 +178,9 @@ def setPeerCmd (a : PeerAttrs) : M Int := do
   if ← branch .peerHasEndpoint a.endpoint.isSome then
     let some e := a.endpoint | invariant "unreachable"
     if ← andM (branch .peerEndpointV4Len (e.len == 16)) (branch .peerEndpointV4Family (e.family == AF_INET)) then
-      setPeerEndpoint pid e
+      setPeerEndpoint pid { family := e.family, addr := e.addr, port := e.port }
     else if ← andM (branch .peerEndpointV6Len (e.len == 28)) (branch .peerEndpointV6Family (e.family == AF_INET6)) then
-      setPeerEndpoint pid e
+      setPeerEndpoint pid { family := e.family, addr := e.addr, port := e.port }
   if ← branch .peerReplaceAips (flags &&& WGPEER_F_REPLACE_ALLOWEDIPS != 0) then removeByPeer pid
   let mut ret : Int := 0
   if ← branch .peerHasAips a.allowedIps.isSome then
@@ -215,8 +220,9 @@ def wgSetDevice (a : DeviceAttrs) : M Int := do
   modifyDev fun d => { d with deviceUpdateGen := d.deviceUpdateGen + 1 }
   if ← branch .setDevFwmark a.fwmark.isSome then
     modifyDev fun d => { d with fwmark := a.fwmark.getD 0 }
-    -- wg_socket_clear_peer_endpoint_src on each peer: see setPort
-    for _ in (← getDev).peerList do _ ← branch .setDevFwmarkPeerIter true
+    for pid in (← getDev).peerList do
+      _ ← branch .setDevFwmarkPeerIter true
+      clearPeerEndpointSrc pid
     _ ← branch .setDevFwmarkPeerIter false
   if ← branch .setDevPort a.listenPort.isSome then
     let ret ← setPort (a.listenPort.getD 0)
@@ -333,7 +339,7 @@ def getPeerDump (pid : PeerId) : M Json := do
   return Json.mkObj ([("public_key", toJson (hexKey p.remoteStatic)),
     ("preshared_key", toJson (hexKey p.presharedKey)),
     ("last_handshake", toJson [0, 0]), ("keepalive", toJson p.persistentKeepaliveInterval),
-    ("tx_bytes", toJson p.txBytes), ("rx_bytes", toJson 0), ("protocol_version", toJson 1)] ++ endpoint ++
+    ("tx_bytes", toJson p.txBytes), ("rx_bytes", toJson p.rxBytes), ("protocol_version", toJson 1)] ++ endpoint ++
     [("allowed_ips", Json.arr ips)])
 
 /-- A WG_CMD_GET_DEVICE dump: wg_get_device_start (199-208), one

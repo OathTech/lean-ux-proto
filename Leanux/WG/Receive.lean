@@ -1,7 +1,7 @@
-import Leanux.WG.Send
+import Leanux.WG.Handshake
 
 /-!
-# drivers/net/wireguard/receive.c — the receive path up to Noise
+# drivers/net/wireguard/receive.c — the receive path and the handshake worker
 
 The fixture's sender delivers one UDP datagram to wg0's socket over loopback,
 so the IP and UDP headers are well formed: `prepare_skb_header`'s header
@@ -13,8 +13,9 @@ linear and in bounds), the ptr ring, `queue_work_on`, `dev_kfree_skb`.
 
 Queued handshake messages wait in the device's `handshakeQueue`; the
 environment (`Leanux/Env.lean`) runs `handshakeReceiveWorker` when the queued
-work runs, before the operation ends. A handshake message with a valid MAC1 enters Noise
-(`wg_noise_handshake_consume_*`), stage C: `unsupported`. The index
+work runs, before the operation ends. A handshake initiation with a valid
+MAC1 enters Noise as the responder (`Leanux/WG/Handshake.lean`); a handshake
+response (the initiator role) is `unsupported`. The index
 hashtable's bucket walk is a cut point only while the table is empty; with an
 entry (inserted under a random index by the handshake worker), the walk's path
 is random and the lookup is `unsupported`.
@@ -76,7 +77,7 @@ def prepareSkbHeader (msg : List UInt8) : M Bool := do
 /-- wg_index_hashtable_lookup (peerlookup.c:202-226) on the empty table. -/
 def indexLookup : M (Option PeerId) := do
   for (_, p) in (← getDev).peers.toList do
-    if p.indexed then unsupported "an index lookup with entries under random indices"
+    if p.indexed || p.nextKeypair then unsupported "an index lookup with entries under random indices"
   -- the bucket is empty: `iter_entry->index == index` is never evaluated
   _ ← branch .idxFound false
   return none
@@ -98,7 +99,7 @@ def cookieValidatePacket (msg : List UInt8) : M Bool := do
   unsupported "unreachable"
 
 /-- wg_receive_handshake_packet (receive.c:92-204). -/
-def receiveHandshakePacket (msg : List UInt8) : M Unit := do
+def receiveHandshakePacket (msg : List UInt8) (src : SkbSource) : M Unit := do
   if ← branch .hsCookie (messageType msg == MESSAGE_HANDSHAKE_COOKIE) then
     cookieMessageConsume
     return
@@ -111,11 +112,33 @@ def receiveHandshakePacket (msg : List UInt8) : M Unit := do
   let valid ← cookieValidatePacket msg
   -- `(under_load && mac_state == VALID_MAC_WITH_COOKIE) || (!under_load && mac_state == VALID_MAC_BUT_NO_COOKIE)`
   _ ← branch .hsLoadedOperand false
-  if ← andM (branch .hsNotLoaded true) (branch .hsMacNoCookie valid) then
-    unsupported "a handshake message with a valid MAC1 (Noise, stage C)"
-  -- `else if (under_load && mac_state == VALID_MAC_BUT_NO_COOKIE)`
-  _ ← branch .hsNeedsCookieLoaded false
-  -- invalid MAC: the packet is dropped
+  if !(← andM (branch .hsNotLoaded true) (branch .hsMacNoCookie valid)) then
+    -- `else if (under_load && mac_state == VALID_MAC_BUT_NO_COOKIE)`
+    _ ← branch .hsNeedsCookieLoaded false
+    return   -- invalid MAC: the packet is dropped
+  -- packet_needs_cookie = false
+  let t := messageType msg
+  let peer ← do
+    if ← branch .hsSwitchInitiation (t == MESSAGE_HANDSHAKE_INITIATION) then
+      if ← branch .hsInitNeedsCookie false then unsupported "unreachable"
+      let peer ← consumeInitiation msg
+      if ← branch .hsInitNoPeer peer.isNone then return
+      let some pid := peer | invariant "unreachable"
+      setPeerEndpointFromSkb pid src
+      sendHandshakeResponse pid
+      pure peer
+    else if ← branch .hsSwitchResponse (t == MESSAGE_HANDSHAKE_RESPONSE) then
+      unsupported "a handshake response (the initiator role)"
+    else pure none
+  if ← branch .hsWrongPacket peer.isNone then invariant "a wrong type of packet in the handshake queue"
+  let some pid := peer | invariant "unreachable"
+  -- update_rx_stats: peer->rx_bytes (wg0's own rx counters,
+  -- dev_sw_netstats_rx_add, are not tracked: nothing reads them on the
+  -- modeled paths); wg_timers_any_authenticated_packet_received: del_timer
+  let p ← getPeer pid
+  setPeer pid { p with rxBytes := p.rxBytes + msg.length }
+  timersTraversal pid
+  peerPut peer
 
 /-- wg_packet_handshake_receive_worker (receive.c:206-218): drains the
     handshake queue. The environment runs it when the queued work runs. -/
@@ -125,9 +148,9 @@ def handshakeReceiveWorker : M Unit := do
     | [] => do
       _ ← branch .workerConsumed false
       return
-    | msg :: _ =>
+    | (msg, src) :: _ =>
       _ ← branch .workerConsumed true   -- ptr_ring_consume_bh
-      receiveHandshakePacket msg
+      receiveHandshakePacket msg src
       -- dev_kfree_skb; atomic_dec(&handshake_queue_len); cond_resched
       modifyDev fun d => { d with handshakeQueue := d.handshakeQueue.drop 1 }
   invariant "the handshake queue did not drain"
@@ -149,7 +172,7 @@ def cpumaskNextOnline : M Unit := do
   modifyDev fun d => { d with handshakeLastCpu := cpu }
 
 /-- wg_packet_receive (receive.c:542-586). -/
-def packetReceive (msg : List UInt8) : M Unit := do
+def packetReceive (msg : List UInt8) (src : SkbSource) : M Unit := do
   if ← branch .rxPrepareFailed !(← prepareSkbHeader msg) then return   -- err: dev_kfree_skb
   let t := messageType msg
   if ← branch .rxHandshake (t == MESSAGE_HANDSHAKE_INITIATION || t == MESSAGE_HANDSHAKE_RESPONSE
@@ -161,7 +184,7 @@ def packetReceive (msg : List UInt8) : M Unit := do
       unsupported "spin_trylock_bh on a busy handshake queue"
     -- ptr_ring_produce_bh fails when the ring (MAX_QUEUED_INCOMING_HANDSHAKES) is full
     if ← branch .rxProduceFailed (queueLen ≥ MAX_QUEUED_INCOMING_HANDSHAKES) then return   -- drop
-    modifyDev fun d => { d with handshakeQueue := d.handshakeQueue ++ [msg] }
+    modifyDev fun d => { d with handshakeQueue := d.handshakeQueue ++ [(msg, src)] }
     cpumaskNextOnline
     -- queue_work_on(cpu, handshake_receive_wq, ...): the environment runs the worker
     return
@@ -172,9 +195,9 @@ def packetReceive (msg : List UInt8) : M Unit := do
   invariant "validate_header_len admitted an unknown type"
 
 /-- wg_receive (socket.c:316-332), the UDP tunnel's `encap_rcv`. -/
-def wgReceive (msg : List UInt8) : M Unit := do
+def wgReceive (msg : List UInt8) (src : SkbSource) : M Unit := do
   if ← branch .rxNoSock false then unsupported "unreachable"
   if ← branch .rxNoWg false then unsupported "unreachable"
-  packetReceive msg
+  packetReceive msg src
 
 end Leanux.WG
