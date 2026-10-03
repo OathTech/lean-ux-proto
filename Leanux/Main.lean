@@ -3,17 +3,21 @@ import Leanux.Runner
 /-- Reads JSONL traces on stdin and writes one observation per trace. A fresh
     kernel state is created for each trace. Invalid input (exit 2), a path the
     mirror does not model (exit 3), or a mirror invariant failure (exit 4)
-    stops with a message on stderr, never a success observation. `--decisions` prints the
-    decision table instead. -/
+    stops with a message on stderr, never a success observation; records that
+    disagree with the mirror's hidden-input reads exit 5. `--decisions` prints
+    the decision table and `--hidden-sites` the hidden-input sites instead. -/
 def main (args : List String) : IO UInt32 := do
   let output ← IO.getStdout
   let errors ← IO.getStderr
   if args == ["--decisions"] then
     output.putStrLn Leanux.Runner.decisionsJson.compress
     return 0
+  if args == ["--hidden-sites"] then
+    output.putStrLn Leanux.Runner.hiddenSitesJson.compress
+    return 0
   let domainOnly := args == ["--domain"]
   if !args.isEmpty && !domainOnly then
-    errors.putStrLn "usage: leanux-model [--decisions | --domain] < traces.jsonl"
+    errors.putStrLn "usage: leanux-model [--decisions | --hidden-sites | --domain] < traces.jsonl"
     return 2
   let input ← IO.getStdin
   repeat
@@ -27,7 +31,9 @@ def main (args : List String) : IO UInt32 := do
       errors.putStrLn s!"invalid input: {message}"
       return 2
     | .ok trace =>
-      match Leanux.Runner.executeTrace trace with
+      -- `--domain` runs before Linux, without hidden-input records: their
+      -- reads return placeholders, and the check's run is authoritative
+      match Leanux.Runner.executeTrace trace (placeholders := domainOnly) with
       | .error (index, .outsideDomain site what) =>
         if domainOnly then
           -- `--domain`: report whether each trace stays inside the modeled domain
@@ -44,6 +50,7 @@ def main (args : List String) : IO UInt32 := do
         output.flush
       | .error (index, stop) =>
         errors.putStrLn s!"trace {trace.id} operation {index}: {stop.message}"
-        -- 4: a mirror defect (3, outside the domain, is handled above)
-        return match stop with | .outsideDomain .. => 3 | .invariant _ => 4
+        -- 4: a mirror defect, 5: hidden-input records that disagree with the
+        -- mirror (3, outside the domain, is handled above)
+        return match stop with | .outsideDomain .. => 3 | .invariant _ => 4 | .hidden _ => 5
   return 0

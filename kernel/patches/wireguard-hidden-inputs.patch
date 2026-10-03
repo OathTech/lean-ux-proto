@@ -178,8 +178,9 @@
  					    transmit_handshake_work);
  
 -	wg_packet_send_handshake_initiation(peer);
-+	kcov_remote_start_common(peer->device->kcov_handle); wg_packet_send_handshake_initiation(peer); kcov_remote_stop();
- 	wg_peer_put(peer);
+-	wg_peer_put(peer);
++	kcov_remote_start_common(peer->device->kcov_handle); wg_packet_send_handshake_initiation(peer);
++	wg_peer_put(peer); kcov_remote_stop();
  }
  
 --- a/drivers/net/wireguard/device.c

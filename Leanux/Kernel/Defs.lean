@@ -211,6 +211,41 @@ inductive EnvSite where
   | kmemCacheZallocNode | kmemCacheZallocPeer | dstCacheInit | allocSkb | kzallocKeypair
   deriving Repr, BEq, DecidableEq
 
+/-! ## Hidden inputs (docs/2026-10-03-hidden-inputs-design.md)
+
+A value the C draws or reads that the trace does not determine (a random
+draw, a clock read) is recorded by the patched kernel at its source
+(`kcov_record`), and the mirror consumes the record at the corresponding
+point, in order. The site table is cross-checked against each record's call
+site by the check. -/
+
+inductive HiddenSite where
+  | initEphemeral | respEphemeral | tai64nNow | indexDraw
+  deriving Repr, BEq, DecidableEq
+
+structure HiddenSiteInfo where
+  /-- The patch's `KCOV_HIDDEN_*` number. -/
+  id : Nat
+  label : String
+  file : String
+  line : Nat
+  /-- Bytes recorded (the record carries whole words, zero-padded). -/
+  len : Nat
+
+def HiddenSite.info : HiddenSite → HiddenSiteInfo
+  | .initEphemeral => ⟨1, "init_ephemeral", "drivers/net/wireguard/noise.c", 541, 32⟩
+  | .respEphemeral => ⟨2, "resp_ephemeral", "drivers/net/wireguard/noise.c", 688, 32⟩
+  | .tai64nNow => ⟨3, "tai64n_now", "drivers/net/wireguard/noise.c", 501, 16⟩
+  | .indexDraw => ⟨4, "index_draw", "drivers/net/wireguard/peerlookup.c", 132, 4⟩
+
+def HiddenSite.all : List HiddenSite := [.initEphemeral, .respEphemeral, .tai64nNow, .indexDraw]
+
+/-- One recorded value: the site's number and its bytes (whole words). -/
+structure HiddenRecord where
+  site : Nat
+  bytes : List UInt8
+  deriving Repr, BEq
+
 /-- Timing facts the environment supplies (`Leanux/Env.lean`); the mirror has
     no clock. -/
 structure Timing where
@@ -220,6 +255,15 @@ structure Timing where
   /-- Whether a timer armed now for this many seconds can expire before the
       trace ends. -/
   timerMayExpire : Nat → Bool
+
+/-- A datagram wg0's socket sent (`wg_socket_send_buffer_to_peer`, a cut
+    point): the endpoint's family, address and port, and the bytes. -/
+structure SentDatagram where
+  family : Nat
+  addr : Nat
+  port : Nat
+  bytes : List UInt8
+  deriving Repr, BEq
 
 structure World where
   k : Kernel
@@ -233,14 +277,20 @@ structure World where
       `wg_observe` saw (`datagrams`, `stats`). -/
   extraOut : List (String × Lean.Json) := []
   /-- Fixture state, not kernel state: the datagrams waiting at the network
-      fixture's UDP listeners (lengths), which `wg_observe` drains. -/
-  listenerV4 : List Nat := []
-  listenerV6 : List Nat := []
-  /-- Datagrams wg0's sockets sent (`wg_socket_send_buffer_to_peer`, a cut
-      point), oldest first: endpoint family, address and port, then length,
-      message type and receiver index. The environment decides which fixture
-      socket receives them. -/
-  sent : List (Nat × Nat × Nat × Nat × Nat × Nat) := []
+      fixture's UDP listeners and at its sender, which `wg_observe` drains. -/
+  listenerV4 : List (List UInt8) := []
+  listenerV6 : List (List UInt8) := []
+  senderInbox : List (List UInt8) := []
+  /-- Datagrams wg0's sockets sent, oldest first, not yet delivered. The
+      environment decides which fixture socket receives them. -/
+  sent : List SentDatagram := []
+  /-- The current operation's hidden-input records not yet consumed, in
+      order (task stream, then remote). `none`: no records were supplied. -/
+  hidden : Option (List HiddenRecord) := none
+  /-- Without records, `hidden` returns placeholders (`leanux-model --domain`,
+      which runs before Linux). -/
+  hiddenPlaceholders : Bool := false
+  placeholderCount : Nat := 0
   /-- Peers whose handshake work this system call queued, while the call has
       not slept. The kernel is `CONFIG_PREEMPT_NONE` on one CPU, so their
       worker cannot have run yet. -/
@@ -254,11 +304,15 @@ inductive Stop where
   /-- The mirror's own state is inconsistent (a dangling identity, an
       out-of-range slot, a NULL `f_op`): a mirror defect, never a C path. -/
   | invariant (what : String)
+  /-- The hidden-input records disagree with the mirror's reads: a different
+      site, a wrong length, a missing record, or one left unconsumed. -/
+  | hidden (what : String)
   deriving Repr
 
 def Stop.message : Stop → String
   | .outsideDomain site what => s!"unsupported at {site}: {what}"
   | .invariant what => s!"mirror invariant violated: {what}"
+  | .hidden what => s!"hidden-input records disagree: {what}"
 
 /-- The mirror monad; `Stop` ends the execution fail-noisily. -/
 abbrev M := StateT World (Except Stop)
@@ -300,6 +354,36 @@ def envOk (site : EnvSite) : M Bool := do
   let n := (w.envCalls.find? (·.1 == site)).map (·.2) |>.getD 0
   set { w with envCalls := (site, n + 1) :: w.envCalls.filter (·.1 != site) }
   return w.env site n
+
+/-- Consume the next hidden-input record, which must come from `s`. -/
+def hidden (s : HiddenSite) : M (List UInt8) := do
+  let w ← get
+  let i := s.info
+  match w.hidden with
+  | none =>
+    if !w.hiddenPlaceholders then throw (.hidden s!"no record supplied for {i.label}")
+    -- A placeholder of the right shape: distinct values, so index draws do
+    -- not collide; a clamped scalar for ephemeral keys.
+    let n := w.placeholderCount + 1
+    set { w with placeholderCount := n }
+    let raw := (List.range i.len).map fun k => UInt8.ofNat ((n * 131 + k * 29 + 7) % 256)
+    return match s with
+      | .initEphemeral | .respEphemeral =>
+        raw.set 0 (raw[0]! &&& 248) |>.set 31 ((raw[31]! &&& 127) ||| 64)
+      | _ => raw
+  | some [] => throw (.hidden s!"no record left for {i.label}")
+  | some (r :: rest) =>
+    if r.site != i.id then throw (.hidden s!"expected {i.label} (site {i.id}), the record is site {r.site}")
+    let words := (i.len + 7) / 8
+    if r.bytes.length != 8 * words || (r.bytes.drop i.len).any (· != 0) then
+      throw (.hidden s!"{i.label}: {r.bytes.length} bytes, expected {i.len} padded to {8 * words}")
+    let v := r.bytes.take i.len
+    -- the ephemeral hooks follow curve25519_generate_secret, which clamps
+    if (s == .initEphemeral || s == .respEphemeral) &&
+        (v[0]! &&& 7 != 0 || v[31]! &&& 128 != 0 || v[31]! &&& 64 == 0) then
+      throw (.hidden s!"{i.label}: the recorded secret is not clamped")
+    set { w with hidden := some rest }
+    return v
 
 def getFile (id : FileId) : M File := do
   match (← getK).files.get? id with

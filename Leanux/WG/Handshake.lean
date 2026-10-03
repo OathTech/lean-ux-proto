@@ -2,18 +2,14 @@ import Leanux.WG.Netlink
 import Leanux.WG.NoiseCrypto
 
 /-!
-# drivers/net/wireguard/noise.c — the responder side of the handshake
+# drivers/net/wireguard/noise.c — handshake messages, and the send worker
 
-`wg_noise_handshake_consume_initiation` is mirrored with every value: the
-chaining key, hash, DH results, decryptions and the timestamp all follow from
-the message and the device's keys (Curve25519, BLAKE2s, HMAC, ChaCha20-Poly1305
-references). `wg_noise_handshake_create_response` and
-`wg_noise_handshake_begin_session` draw a random ephemeral key, so the
-response's contents and the session keys are random; their decisions are
-determined and mirrored, and the values that depend on randomness are not
-tracked. The index hashtable (`wg_index_hashtable_insert/replace`, a random
-index) and `wg_socket_send_buffer_to_peer` (routing, `send4`/`send6`) are cut
-points; a sent datagram is recorded as an output in `World.sent`.
+Both roles' messages are mirrored with every value (Curve25519, BLAKE2s, HMAC,
+ChaCha20-Poly1305 references). The random ephemeral secrets, the clock read in
+`tai64n_now` and the random indices are hidden inputs, recorded by the patched
+kernel at their source and consumed here (`hidden`). Routing and the UDP send
+below `wg_socket_send_skb_to_peer` are a cut point; a sent datagram is recorded
+as an output in `World.sent`.
 
 Time comes from the environment's timing contract (`World.timing`): the flood
 test and the consumption-time update ask how long it has been since the last
@@ -25,6 +21,7 @@ namespace Leanux.WG
 open Leanux
 
 def HANDSHAKE_ZEROED : Nat := 0
+def HANDSHAKE_CREATED_INITIATION : Nat := 1
 def HANDSHAKE_CONSUMED_INITIATION : Nat := 2
 def HANDSHAKE_CREATED_RESPONSE : Nat := 3
 def HANDSHAKE_CONSUMED_RESPONSE : Nat := 4
@@ -103,54 +100,135 @@ def consumeInitiation (msg : List UInt8) : M (Option PeerId) := do
   let some pid := peer | invariant "unreachable"
   let ss ← mixPrecomputedDh ck (← getPeer pid).precomputedStaticStatic
   if ← branch .consumeSsFailed ss.isNone then return ← out peer none
-  let some (_, key) := ss | invariant "unreachable"
+  let some (ckSs, key) := ss | invariant "unreachable"
   let ts ← messageDecrypt ((msg.drop 88).take 28) key hash
   if ← branch .consumeTimestampFailed ts.isNone then return ← out peer none
-  let some (t, _) := ts | invariant "unreachable"
+  let some (t, hashT) := ts | invariant "unreachable"
   let p ← getPeer pid
   let replay := memcmp t p.latestTimestamp != .gt
   -- `last_initiation_consumption + NSEC_PER_SEC / INITIATIONS_PER_SECOND > now`
   let flood := !((← get).timing.sinceLastConsumption (1000000000 / INITIATIONS_PER_SECOND))
   if ← orM (branch .consumeReplay replay) (branch .consumeFlood flood) then return ← out peer none
-  -- success: remote_ephemeral, hash and chaining key are copied (not tracked)
+  -- Success! Copy everything to peer
+  setPeer pid { (← getPeer pid) with remoteEphemeral := e }
   if ← branch .consumeNewerTimestamp (memcmp t p.latestTimestamp == .gt) then
     setPeer pid { (← getPeer pid) with latestTimestamp := t }
-  setPeer pid { (← getPeer pid) with remoteIndex := u32le msg 4 }
+  setPeer pid { (← getPeer pid) with hash := hashT, chainingKey := ckSs, remoteIndex := u32le msg 4 }
   -- `(s64)(last_initiation_consumption - now) < 0`: then it becomes now
   _ ← branch .consumeLaterTime ((← get).timing.sinceLastConsumption 1)
   setPeer pid { (← getPeer pid) with handshakeState := HANDSHAKE_CONSUMED_INITIATION }
   out peer (some pid)
 
-/-- wg_noise_handshake_create_response (noise.c:667-725). The ephemeral key is
-    random, so the values computed from it are not tracked; its decisions are
-    determined. -/
-def createResponse (pid : PeerId) : M Bool := do
+/-- `cpu_to_le32`. -/
+def le32 (n : Nat) : List UInt8 := (List.range 4).map fun k => UInt8.ofNat (n / 256 ^ k % 256)
+
+/-- tai64n_now (noise.c:496-514) from the recorded `struct timespec64`: the
+    nanoseconds rounded down to a power of two (2^24, the largest below
+    NSEC_PER_SEC / INITIATIONS_PER_SECOND), then TAI64N big-endian. -/
+def tai64n (now : List UInt8) : List UInt8 :=
+  let le (bs : List UInt8) := bs.foldr (fun b acc => acc * 256 + b.toNat) 0
+  let sec := le (now.take 8)
+  let nsec := le ((now.drop 8).take 8)
+  let be (n width : Nat) := (List.range width).reverse.map fun k => UInt8.ofNat (n / 256 ^ k % 256)
+  be ((0x400000000000000a + sec) % 2 ^ 64) 8 ++ be (nsec - nsec % 2 ^ 24) 4
+
+/-- The handshake state the C updates in place (`handshake->chaining_key`,
+    `hash`). -/
+private def setChain (pid : PeerId) (ck hash : List UInt8) : M Unit := do
+  setPeer pid { (← getPeer pid) with chainingKey := ck, hash }
+
+/-- wg_noise_handshake_create_initiation (noise.c:516-581): the message
+    without its MACs, if created. The ephemeral secret, the clock read and the
+    index are recorded hidden inputs. -/
+def createInitiation (pid : PeerId) : M (Option (List UInt8)) := do
+  let identity := (← getDev).staticIdentity
+  if ← branch .initNoIdentity !identity.hasIdentity then return none
   let p ← getPeer pid
-  if ← branch .respNotConsumed (p.handshakeState != HANDSHAKE_CONSUMED_INITIATION) then return false
-  -- curve25519_generate_public of a fresh clamped secret: never the null point
-  _ ← branch .genPublicNullSecret false
-  if ← branch .respNoEphemeral false then return false
-  -- message_ephemeral in place, mix_dh(ee), mix_dh(se): their values are random
-  _ ← branch .msgEphemeralCopy false
-  _ ← kdf false false [] []
-  -- ee: null iff the initiator's ephemeral is low-order, which es already rejected
-  _ ← branch .mixDhNull false
-  _ ← kdf false false [] []
-  if ← branch .respEeFailed false then return false
-  -- se: null iff the peer's static key is low-order, which ss already rejected
-  _ ← branch .mixDhNull false
-  _ ← kdf false false [] []
-  if ← branch .respSeFailed false then return false
-  _ ← kdf true true [] []   -- mix_psk
-  -- message_encrypt; wg_index_hashtable_insert (a random index)
-  setPeer pid { (← getPeer pid) with indexed := true, handshakeState := HANDSHAKE_CREATED_RESPONSE }
-  return true
+  -- handshake_init(chaining_key, hash, remote_static)
+  let h := noiseHash (handshakeInitHash ++ p.remoteStatic)
+  setChain pid handshakeInitChainingKey h
+  -- e: curve25519_generate_secret (get_random_bytes_wait, then clamp),
+  -- recorded after the clamp
+  let secret ← hidden .initEphemeral
+  setPeer pid { (← getPeer pid) with ephemeralPrivate := secret }
+  let (pub, ok) ← generatePublic secret
+  if ← branch .initNoEphemeral !ok then return none
+  let some e := pub | invariant "unreachable"
+  let (ck, h) ← messageEphemeral false e handshakeInitChainingKey h
+  setChain pid ck h
+  -- es
+  let es ← mixDh true ck secret p.remoteStatic
+  if ← branch .initEsFailed es.isNone then return none
+  let some (ck, key) := es | invariant "unreachable"
+  -- s: message_encrypt
+  let encStatic := aeadEncrypt key noiseNonce identity.staticPublic h
+  let h := noiseHash (h ++ encStatic)
+  setChain pid ck h
+  -- ss
+  let ss ← mixPrecomputedDh ck p.precomputedStaticStatic
+  if ← branch .initSsFailed ss.isNone then return none
+  let some (ck, key) := ss | invariant "unreachable"
+  -- {t}
+  let timestamp := tai64n (← hidden .tai64nNow)
+  let encTime := aeadEncrypt key noiseNonce timestamp h
+  let h := noiseHash (h ++ encTime)
+  setChain pid ck h
+  let index ← indexInsert pid .handshake
+  setPeer pid { (← getPeer pid) with handshakeState := HANDSHAKE_CREATED_INITIATION }
+  return some (le32 1 ++ le32 index ++ e ++ encStatic ++ encTime ++ List.replicate 32 0)
+
+/-- wg_noise_handshake_create_response (noise.c:667-725): the message without
+    its MACs, if created. The ephemeral secret and the index are recorded
+    hidden inputs. -/
+def createResponse (pid : PeerId) : M (Option (List UInt8)) := do
+  let p ← getPeer pid
+  if ← branch .respNotConsumed (p.handshakeState != HANDSHAKE_CONSUMED_INITIATION) then return none
+  let receiver := p.remoteIndex
+  -- e
+  let secret ← hidden .respEphemeral   -- curve25519_generate_secret
+  setPeer pid { (← getPeer pid) with ephemeralPrivate := secret }
+  let (pub, ok) ← generatePublic secret
+  if ← branch .respNoEphemeral !ok then return none
+  let some e := pub | invariant "unreachable"
+  let (ck, h) ← messageEphemeral false e p.chainingKey p.hash
+  setChain pid ck h
+  -- ee
+  let ee ← mixDh false ck secret p.remoteEphemeral
+  if ← branch .respEeFailed ee.isNone then return none
+  let some (ck, _) := ee | invariant "unreachable"
+  setChain pid ck h
+  -- se
+  let se ← mixDh false ck secret p.remoteStatic
+  if ← branch .respSeFailed se.isNone then return none
+  let some (ck, _) := se | invariant "unreachable"
+  -- psk: mix_psk (kdf with three outputs, then mix_hash of the second)
+  let outs ← kdf true true ck p.presharedKey
+  let (ck, tempHash, key) := (outs.head!, outs.getD 1 [], outs.getD 2 [])
+  let h := noiseHash (h ++ tempHash)
+  -- {}
+  let encNothing := aeadEncrypt key noiseNonce [] h
+  let h := noiseHash (h ++ encNothing)
+  setChain pid ck h
+  let index ← indexInsert pid .handshake
+  setPeer pid { (← getPeer pid) with handshakeState := HANDSHAKE_CREATED_RESPONSE }
+  return some (le32 2 ++ le32 index ++ le32 receiver ++ e ++ encNothing ++ List.replicate 32 0)
+
+/-- wg_cookie_add_mac_to_packet (cookie.c:157-180): MAC1 under the peer's
+    key; no cookie was ever received, so MAC2 is zero. -/
+def addMacToPacket (pid : PeerId) (msg : List UInt8) : M (List UInt8) := do
+  let p ← getPeer pid
+  let body := msg.take (msg.length - 32)
+  let mac1 := blake2s 16 p.cookieMac1Key body   -- compute_mac1
+  setPeer pid { p with lastMac1Sent := mac1, haveSentMac1 := true }
+  -- `is_valid && !wg_birthdate_has_expired(...)`
+  if ← andM (branch .addMacCookieValid false) (branch .addMacCookieFresh false) then unsupported "unreachable"
+  return body ++ mac1 ++ List.replicate 16 0
 
 /-- add_new_keypair (noise.c:198-219) for the responder. -/
 def addNewKeypair (pid : PeerId) : M Unit := do
   if ← branch .addKeypairInitiator false then unsupported "unreachable"
   -- next_keypair = new; wg_noise_keypair_put(old next); previous = NULL; put(old previous)
-  if (← getPeer pid).nextKeypair then keypairPutLive true else keypairPutNull   -- old next_keypair
+  if (← getPeer pid).nextKeypair then keypairPutLive pid true else keypairPutNull   -- old next_keypair
   keypairPutNull   -- the responder never has a previous keypair
   setPeer pid { (← getPeer pid) with nextKeypair := true }
 
@@ -165,14 +243,13 @@ def beginSession (pid : PeerId) : M Bool := do
   if ← branch .keypairCreateNoMem !ok then pure ()
   if ← branch .sessionNoKeypair !ok then return false
   if ← branch .sessionInitiator (st == HANDSHAKE_CONSUMED_RESPONSE) then unsupported "unreachable"
-  _ ← kdf true false [] []   -- derive_keys: random session keys
-  setPeer pid { (← getPeer pid) with handshakeState := HANDSHAKE_ZEROED, remoteIndex := 0 }   -- handshake_zero
+  -- derive_keys: the session keys (not read until a data packet; stage D)
+  _ ← kdf true false (← getPeer pid).chainingKey []
+  handshakeZero pid
   if ← branch .sessionAlive !(← getPeer pid).isDead then
     addNewKeypair pid
-    -- wg_index_hashtable_replace (peerlookup.c:166-190): create_response
-    -- hashed the handshake's entry, and the keypair's takes its place
-    if ← branch .idxReplaceUnhashed !(← getPeer pid).indexed then invariant "the handshake has no index entry"
-    setPeer pid { (← getPeer pid) with indexed := false }
+    -- create_response hashed the handshake's entry; the keypair's takes its place
+    if !(← indexReplaceHandshake pid) then invariant "the handshake has no index entry"
     return true
   unsupported "a dead peer finishing a session"
 
@@ -193,8 +270,8 @@ def timersTraversal (pid : PeerId) : M Unit := do
 /-- wg_socket_send_buffer_to_peer (socket.c:189-200) and
     wg_socket_send_skb_to_peer (socket.c:167-187). `send4`/`send6` (routing,
     the UDP tunnel transmit) are a cut point: the datagram is recorded in
-    `World.sent`, and the environment checks it reaches a fixture socket. -/
-def sendBufferToPeer (pid : PeerId) (len type receiver : Nat) : M Unit := do
+    `World.sent`, and the environment delivers it. -/
+def sendBufferToPeer (pid : PeerId) (bytes : List UInt8) : M Unit := do
   if ← branch .sendBufNoMem !(← envOk .allocSkb) then return   -- -ENOMEM
   let p ← getPeer pid
   let family := (p.endpoint.map (·.family)).getD 0
@@ -204,22 +281,43 @@ def sendBufferToPeer (pid : PeerId) (len type receiver : Nat) : M Unit := do
     else pure false   -- dev_kfree_skb; -EAFNOSUPPORT
   if ← branch .sendSkbOk sent then
     let some e := p.endpoint | invariant "unreachable"
-    setPeer pid { p with txBytes := p.txBytes + len }
-    modify fun w => { w with sent := w.sent ++ [(e.family, e.addr, e.port, len, type, receiver)] }
+    setPeer pid { p with txBytes := p.txBytes + bytes.length }
+    modify fun w => { w with sent := w.sent ++ [{ family := e.family, addr := e.addr, port := e.port, bytes }] }
 
 /-- wg_packet_send_handshake_response (send.c:85-108). -/
 def sendHandshakeResponse (pid : PeerId) : M Unit := do
   setPeer pid { (← getPeer pid) with lastSentExpired := false }   -- last_sent_handshake = now
-  -- create_response copies remote_index into the packet before begin_session zeroes it
-  let receiver := (← getPeer pid).remoteIndex
-  if ← branch .respCreated (← createResponse pid) then
-    -- wg_cookie_add_mac_to_packet: no cookie was ever received
-    if ← andM (branch .addMacCookieValid false) (branch .addMacCookieFresh false) then unsupported "unreachable"
+  let created ← createResponse pid
+  if ← branch .respCreated created.isSome then
+    let some msg := created | invariant "unreachable"
+    let msg ← addMacToPacket pid msg
     if ← branch .respSessionBegun (← beginSession pid) then
       modPeerTimer pid   -- wg_timers_session_derived
       timersTraversal pid
       -- wg_timers_any_authenticated_packet_sent: del_timer
-      sendBufferToPeer pid MESSAGE_HANDSHAKE_RESPONSE_LEN 2 receiver
+      sendBufferToPeer pid msg
+
+/-- wg_packet_send_handshake_initiation (send.c:21-44). -/
+def sendHandshakeInitiation (pid : PeerId) : M Unit := do
+  -- `!wg_birthdate_has_expired(last_sent_handshake, REKEY_TIMEOUT)`
+  if ← branch .initRateLimited !(← getPeer pid).lastSentExpired then return
+  setPeer pid { (← getPeer pid) with lastSentExpired := false }   -- last_sent_handshake = now
+  let created ← createInitiation pid
+  if ← branch .initCreated created.isSome then
+    let some msg := created | invariant "unreachable"
+    let msg ← addMacToPacket pid msg
+    timersTraversal pid
+    -- wg_timers_any_authenticated_packet_sent: del_timer
+    sendBufferToPeer pid msg
+    -- wg_timers_handshake_initiated: its jitter draw only sets the expiry,
+    -- beyond the trace, so it is not recorded
+    modPeerTimer pid
+
+/-- wg_packet_handshake_send_worker (send.c:46-53), run by the environment
+    for a peer whose work is queued. -/
+def handshakeSendWorker (pid : PeerId) : M Unit := do
+  sendHandshakeInitiation pid
+  peerPut (some pid)
 
 /-- wg_socket_set_peer_endpoint_from_skb (socket.c:299-306) with
     wg_socket_endpoint_from_skb (socket.c:235-256). -/

@@ -34,6 +34,9 @@ structure Trace where
   ops : Array Operation
   /-- `RLIMIT_NOFILE`, set by the fixture before the first operation. -/
   rlimit : Nat := 32
+  /-- The hidden-input records Linux made for each operation (the check adds
+      them after the Linux run; docs/2026-10-03-hidden-inputs-design.md). -/
+  hidden : Option (Array (List HiddenRecord)) := none
   deriving Repr
 
 /-- The network fixture runs for traces with a WireGuard operation
@@ -235,9 +238,24 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
     return .wgXmit family addr
   | _ => throw "unsupported operation"
 
+private def parseHidden (j : Json) (ops : Nat) : Except String (Array (List HiddenRecord)) := do
+  let perOp ← j.getArr?
+  if perOp.size != ops then throw "hidden: expected one record list per operation"
+  perOp.mapM fun recs => do
+    (← recs.getArr?).toList.mapM fun r => do
+      let pair ← r.getArr?
+      if pair.size != 2 then throw "hidden: expected [site, hex] records"
+      let site ← pair[0]!.getNat?
+      let s ← pair[1]!.getStr?
+      if s.length % 16 != 0 || s.length > 128 then throw "hidden: payload must be whole 8-byte words"
+      let bytes ← hexBytes pair[1]! s.length "hidden"
+      return { site, bytes }
+
 def parseTrace (j : Json) : Except String Trace := do
   let hasLimit := (j.getObjVal? "rlimit_nofile").isOk
-  fields j (if hasLimit then ["version", "id", "ops", "rlimit_nofile"] else ["version", "id", "ops"])
+  let hasHidden := (j.getObjVal? "hidden").isOk
+  fields j ((if hasLimit then ["version", "id", "ops", "rlimit_nofile"] else ["version", "id", "ops"])
+    ++ (if hasHidden then ["hidden"] else []))
   let rlimit ← if hasLimit then natField j "rlimit_nofile" 1024 else pure 32
   if rlimit < 8 then throw "rlimit_nofile outside 8..1024"
   if (← (← field j "version").getNat?) != 1 then throw "unsupported trace version"
@@ -250,7 +268,8 @@ def parseTrace (j : Json) : Except String Trace := do
   let mut ops := #[]
   for j in rawOps do
     ops := ops.push (← parseOperation j ops)
-  return { id, ops, rlimit }
+  let hidden ← if hasHidden then some <$> parseHidden (← field j "hidden") ops.size else pure none
+  return { id, ops, rlimit, hidden }
 
 /-! ## Harness fixture and trace execution
 
@@ -331,15 +350,19 @@ def toSyscall (results : Array Int) : Operation → Syscall
 
 /-- Run a trace. A `Stop` is returned with the operation index: the mirror
     never reports an observation for a path it does not model. -/
-def executeTrace (trace : Trace) : Except (Nat × Stop) Json := do
-  let mut world : World := { k := initialKernel trace.rlimit trace.net, env := harnessEnv, timing := Env.timing }
+def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat × Stop) Json := do
+  let mut world : World := { k := initialKernel trace.rlimit trace.net, env := harnessEnv, timing := Env.timing,
+                             hiddenPlaceholders := placeholders && trace.hidden.isNone }
   let mut results : Array Int := #[]
   let mut observations : Array Json := #[]
   let mut branches : Array Json := #[]
   for op in trace.ops do
     let index := results.size
+    world := { world with hidden := trace.hidden.map (·[index]!) }
     let (ret, w) ← (syscall (toSyscall results op)).run world
       |>.mapError fun e => (index, e)
+    if let some (r :: _) := w.hidden then
+      throw (index, .hidden s!"a record of site {r.site} was not consumed")
     world := w
     results := results.push ret
     let bytes := match op, w.userOut with
@@ -357,6 +380,13 @@ def executeTrace (trace : Trace) : Except (Nat × Stop) Json := do
         | none => fields))
   return Json.mkObj [("version", toJson (1 : Nat)), ("id", toJson trace.id),
     ("observations", .arr observations), ("branches", .arr branches)]
+
+/-- The hidden-input site table, for the check's call-site cross-check. -/
+def hiddenSitesJson : Json :=
+  .arr (HiddenSite.all.map fun s =>
+    let i := s.info
+    Json.mkObj [("id", toJson i.id), ("label", toJson i.label), ("file", toJson i.file),
+      ("line", toJson i.line), ("len", toJson i.len)]).toArray
 
 def spanJson (s : Span) : Json :=
   Json.mkObj [("file", toJson s.file), ("lo", toJson s.lo), ("hi", toJson s.hi)]

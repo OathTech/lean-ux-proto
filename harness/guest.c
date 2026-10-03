@@ -266,6 +266,8 @@ static unsigned long split_hidden(const char *tag, const struct trace *t, unsign
     } else {
         for (unsigned long k = 0; k < count;) {
             unsigned long *r = area + 1 + 4 * k;
+            if ((r[0] >> 63) && ((r[0] >> 32) & 0xffff) == HIDDEN_MAGIC + 1)
+                fail(t->id, i, "coverage_failure", "malformed_hidden_record");   /* payload without header */
             if (!(r[0] >> 63) || ((r[0] >> 32) & 0xffff) != HIDDEN_MAGIC) {
                 if (kept != k) memmove(area + 1 + 4 * kept, r, 4 * sizeof(*r));
                 ++kept; ++k; continue;
@@ -312,27 +314,23 @@ static void print_pcs(const char *tag, const char *id, unsigned i, const unsigne
 }
 
 static unsigned char observe_buffer[2048];
-/* Every datagram wg_observe saw, as [family, hex] (printed after the
- * observation as LEANUX_DGRAM: the bytes a hidden-input consumer compares). */
-static char dgram_hex[1 << 16];
-static size_t dgram_len;
-static void note_datagram(int family, long n)
-{
-    if (dgram_len + 32 + 2 * (size_t)n >= sizeof(dgram_hex)) return;
-    dgram_len += (size_t)sprintf(dgram_hex + dgram_len, "%s[%d,\"", dgram_len ? "," : "", family);
-    for (long k = 0; k < n; ++k) dgram_len += (size_t)sprintf(dgram_hex + dgram_len, "%02x", observe_buffer[k]);
-    dgram_len += (size_t)sprintf(dgram_hex + dgram_len, "\"]");
-}
 static struct timespec went_up;
 static int up_seen;
 
-/* A datagram's (family, length, message type) as JSON; the message type is
- * the first little-endian u32 of a WireGuard message. */
+static void print_hex(long n)
+{
+    for (long k = 0; k < n; ++k) printf("%02x", observe_buffer[k]);
+}
+
+/* A datagram's (family, length, message type, bytes) as JSON; the message
+ * type is the first little-endian u32 of a WireGuard message. */
 static int print_datagram(int comma, int family, long n)
 {
     unsigned type = n >= 4 ? (unsigned)observe_buffer[0] | (unsigned)observe_buffer[1] << 8 |
                              (unsigned)observe_buffer[2] << 16 | (unsigned)observe_buffer[3] << 24 : 0;
-    printf("%s[%d,%ld,%u]", comma ? "," : "", family, n, type);
+    printf("%s[%d,%ld,%u,\"", comma ? "," : "", family, n, type);
+    print_hex(n);
+    printf("\"]");
     return 1;
 }
 
@@ -418,9 +416,7 @@ static void observe(const struct trace *t, unsigned i, long first, int compariso
 {
     if (!comparisons) printf("LEANUX_WGOBS {\"id\":\"%s\",\"index\":%u,\"datagrams\":[", t->id, i);
     int comma = 0;
-    dgram_len = 0;
-    dgram_hex[0] = '\0';
-    if (first >= 0 && !comparisons) { note_datagram(4, first); comma = print_datagram(comma, 4, first); }
+    if (first >= 0 && !comparisons) comma = print_datagram(comma, 4, first);
     for (int family = 4; family <= 6; family += 2) {
         for (;;) {
             long n = recv(family == 4 ? LISTEN4_FD : LISTEN6_FD, observe_buffer, sizeof(observe_buffer), MSG_DONTWAIT);
@@ -428,12 +424,12 @@ static void observe(const struct trace *t, unsigned i, long first, int compariso
                 if (errno != EAGAIN) fail(t->id, i, "environment_failure", "drain_listener");
                 break;
             }
-            if (!comparisons) { note_datagram(family, n); comma = print_datagram(comma, family, n); }
+            if (!comparisons) comma = print_datagram(comma, family, n);
         }
     }
     if (!comparisons) printf("],\"replies\":[");
-    /* Replies to the sender: a handshake response's length, type and receiver
-     * index (bytes 8-11, little-endian). */
+    /* Replies to the sender: a handshake response's length, type, receiver
+     * index (bytes 8-11, little-endian) and bytes. */
     comma = 0;
     for (;;) {
         long n = recv(SEND_FD, observe_buffer, sizeof(observe_buffer), MSG_DONTWAIT);
@@ -442,19 +438,19 @@ static void observe(const struct trace *t, unsigned i, long first, int compariso
             break;
         }
         if (comparisons) continue;
-        note_datagram(0, n);   /* family 0: a reply at the sender */
         unsigned type = n >= 4 ? (unsigned)observe_buffer[0] | (unsigned)observe_buffer[1] << 8 |
                                  (unsigned)observe_buffer[2] << 16 | (unsigned)observe_buffer[3] << 24 : 0;
         unsigned receiver = n >= 12 ? (unsigned)observe_buffer[8] | (unsigned)observe_buffer[9] << 8 |
                                       (unsigned)observe_buffer[10] << 16 | (unsigned)observe_buffer[11] << 24 : 0;
-        printf("%s[%ld,%u,%u]", comma ? "," : "", n, type, receiver);
+        printf("%s[%ld,%u,%u,\"", comma ? "," : "", n, type, receiver);
+        print_hex(n);
+        printf("\"]");
         comma = 1;
     }
     if (comparisons) return;
     printf("],");
     print_stats(t->id, i);
     printf("}\n");
-    printf("LEANUX_DGRAM {\"id\":\"%s\",\"index\":%u,\"datagrams\":[%s]}\n", t->id, i, dgram_hex);
 }
 
 /* Remote coverage for network traces. KCOV_REMOTE_ENABLE claims the calling

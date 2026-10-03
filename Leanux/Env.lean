@@ -10,9 +10,10 @@ the mirror proper (`Leanux/WG`) contains only the C's data and control flow:
   waits, drains the fixture's listeners and reports wg0's counters;
 - the fixture checks around `wg_up` (the device goes up once; its port must
   not be the fixture's);
-- the contract of the handshake kworker (`wg_packet_handshake_send_worker`),
-  applied when `wg_observe` has waited for it. It runs outside the trace's
-  KCOV coverage and reports no decisions.
+- when the kworkers run: the handshake receive worker inside `wg_inject`, and
+  the (mirrored) handshake send worker at the end of the operation that
+  queued it, which the guest waits for;
+- where wg0's datagrams go over loopback.
 -/
 
 namespace Leanux.Env
@@ -55,39 +56,38 @@ def listenerFamily (e : Endpoint) : Option Nat :=
   else if e.family == AF_INET6 && e.addr == 1 then some 6
   else none
 
-/-- The handshake worker's contract, for each peer whose work is queued,
-    once `wg_observe` has waited for it: `last_sent_handshake` becomes
-    current, and an initiation (148 bytes) is sent to the endpoint iff
-    `wg_noise_handshake_create_initiation` succeeds, which is iff the device
-    has an identity and the precomputed static-static is nonzero (with a
-    low-order remote key the ephemeral DH is zero too). It is sent if the peer
-    has an endpoint (else `wg_socket_send_skb_to_peer` fails with
-    -EAFNOSUPPORT), and a sent initiation adds to `tx_bytes`. The worker drops
-    the reference the queueing took. Endpoints other than loopback would route
-    back into wg0 from the worker; they are outside the domain. -/
-def runHandshakeWorkers : M Unit := do
-  let d ← getDev
-  for (pid, p) in d.peers.toList do
-    if !p.handshakePending then continue
-    let created := d.staticIdentity.hasIdentity && p.precomputedStaticStatic != List.replicate 32 0
-    -- wg_socket_send_skb_to_peer: with no endpoint, -EAFNOSUPPORT and no bytes
-    let sent := created && p.endpoint.isSome
-    if let some e := p.endpoint then
-      -- the initiation's sender index is random, and the sender reports it
-      if created && isSender e.family e.addr e.port then unsupported "a handshake initiation to the fixture's sender"
-      let loopback := (e.family == AF_INET && e.addr / 2 ^ 24 == 127) || (e.family == AF_INET6 && e.addr == 1)
-      if created && !loopback then unsupported "a handshake sent to a non-loopback endpoint"
-    if p.refcount < 2 then invariant "the worker's reference is missing"
-    setPeer pid { p with handshakePending := false, lastSentExpired := false, refcount := p.refcount - 1,
-                         indexed := p.indexed || created,
-                         handshakeState := if created then 1 else p.handshakeState,   -- CREATED_INITIATION
-                         txBytes := p.txBytes + (if sent then MESSAGE_HANDSHAKE_INITIATION_LEN else 0) }
-    if sent then
-      let some e := p.endpoint | invariant "unreachable"
-      match listenerFamily e with
-      | some 4 => modify fun w => { w with listenerV4 := w.listenerV4 ++ [MESSAGE_HANDSHAKE_INITIATION_LEN] }
-      | some _ => modify fun w => { w with listenerV6 := w.listenerV6 ++ [MESSAGE_HANDSHAKE_INITIATION_LEN] }
-      | none => pure ()
+/-- Deliver what wg0 sent (`World.sent`) over loopback: to the fixture's
+    sender or a listener, which keep the bytes for `wg_observe`; another
+    loopback port has no socket, so the datagram is dropped there (the send
+    itself succeeded). Any other destination routes back into wg0, which is
+    outside the domain. -/
+def deliverSent : M Unit := do
+  for dg in (← get).sent do
+    let loopback := (dg.family == AF_INET && dg.addr / 2 ^ 24 == 127) || (dg.family == AF_INET6 && dg.addr == 1)
+    if isSender dg.family dg.addr dg.port then
+      modify fun w => { w with senderInbox := w.senderInbox ++ [dg.bytes] }
+    else match listenerFamily { family := dg.family, addr := dg.addr, port := dg.port } with
+      | some 4 => modify fun w => { w with listenerV4 := w.listenerV4 ++ [dg.bytes] }
+      | some _ => modify fun w => { w with listenerV6 := w.listenerV6 ++ [dg.bytes] }
+      | none => if !loopback then unsupported "a datagram routed back into wg0"
+  modify fun w => { w with sent := [] }
+
+/-- The handshake send worker for each queued peer, oldest first, once the
+    queuing system call has returned: the guest waits inside every operation
+    that can queue it (`wg_set`, `wg_up`, `wg_xmit`), and the worker's remote
+    KCOV section lands in that operation. -/
+def runSendWorkers : M Unit := do
+  modify fun w => { w with queuedThisCall := [] }   -- the call returned and slept
+  for _ in [0:4096] do
+    match (← getDev).sendWorkQueue with
+    | [] => deliverSent; return
+    | pid :: rest =>
+      modifyDev fun d => { d with sendWorkQueue := rest }
+      let p ← getPeer pid
+      if !p.handshakePending then invariant "queued work without a pending flag"
+      setPeer pid { p with handshakePending := false }
+      WG.handshakeSendWorker pid
+  invariant "the send work queue did not drain"
 
 /-- `wg_up` as the fixture performs it: once, on a port that is not the
     fixture's own, then `dev_change_flags` (the mirror's `wgUp`). -/
@@ -98,32 +98,34 @@ def wgUp : M Int := do
   if d.incomingPort == SENDER_PORT then unsupported "wg0's port is the fixture's sender port"
   WG.wgUp
 
-/-- `wg_observe`: the fixture waited for the handshake workers; its
-    `recvfrom` on the IPv4 listener returns the first datagram there. The
-    observation also lists every datagram both listeners hold (drained), the
-    datagrams the sender received (length, type, receiver index; drained), and
-    wg0's transmit counters. Datagrams wg0 sent from the receive path
-    (`World.sent`) reach the sender; any other destination is outside the
-    domain. -/
+/-- `wg_observe`: its `recvfrom` on the IPv4 listener returns the first
+    datagram there. The observation also lists every datagram both listeners
+    hold, the datagrams the sender received, with their bytes (all drained),
+    and wg0's transmit counters. Send work queued without a wait would run
+    during the guest's wait before this operation, whose coverage is
+    discarded: outside the domain. -/
 def observe : M (Int × Lean.Json) := do
-  runHandshakeWorkers
+  if !(← getDev).sendWorkQueue.isEmpty then unsupported "send work queued by an operation that does not wait"
+  deliverSent
   let w ← get
-  let mut received : List (Nat × Nat × Nat) := []
-  for (family, addr, port, len, type, receiver) in w.sent do
-    if !isSender family addr port then unsupported "a datagram sent to an endpoint other than the fixture's sender"
-    received := received ++ [(len, type, receiver)]
-  let replies := (received.toArray.qsort fun a b => [a.1, a.2.1, a.2.2] < [b.1, b.2.1, b.2.2]).toList
-  modify fun w => { w with sent := [] }
+  let hex (bs : List UInt8) : String := String.join (bs.map fun b =>
+    let d := "0123456789abcdef".toList
+    String.mk [d[b.toNat / 16]!, d[b.toNat % 16]!])
+  let type (bs : List UInt8) : Nat := WG.u32le bs 0
   let ret : Int := match w.listenerV4 with
-    | n :: _ => n
+    | bs :: _ => bs.length
     | [] => -EAGAIN
-  let datagrams := (w.listenerV4.map fun n => (4, n)) ++ (w.listenerV6.map fun n => (6, n))
-  let sorted := (datagrams.toArray.qsort fun a b => a.1 < b.1 || (a.1 == b.1 && a.2 < b.2)).toList
-  modify fun w => { w with listenerV4 := [], listenerV6 := [] }
+  let datagrams := (w.listenerV4.map fun bs => (4, bs)) ++ (w.listenerV6.map fun bs => (6, bs))
+  let entries := datagrams.map fun (f, bs) => Lean.toJson [Lean.toJson f, Lean.toJson bs.length, Lean.toJson (type bs), Lean.toJson (hex bs)]
+  let replies := w.senderInbox.map fun bs =>
+    Lean.toJson [Lean.toJson bs.length, Lean.toJson (type bs), Lean.toJson (if bs.length ≥ 12 then WG.u32le bs 8 else 0),
+                 Lean.toJson (hex bs)]
+  let sortJson (xs : List Lean.Json) := (xs.toArray.qsort fun a b => a.compress < b.compress).toList
+  modify fun w => { w with listenerV4 := [], listenerV6 := [], senderInbox := [] }
   let d ← getDev
   return (ret, Lean.Json.mkObj [
-    ("datagrams", Lean.toJson (sorted.map fun (f, n) => [f, n, 1])),   -- MESSAGE_HANDSHAKE_INITIATION
-    ("replies", Lean.toJson (replies.map fun (n, t, r) => [n, t, r])),
+    ("datagrams", Lean.Json.arr (sortJson entries).toArray),
+    ("replies", Lean.Json.arr (sortJson replies).toArray),
     ("stats", Lean.Json.mkObj [("tx_errors", Lean.toJson d.txErrors), ("tx_dropped", Lean.toJson d.txDropped)])])
 
 /-- `wg_inject`: the fixture's sender sends one datagram to `port` on 127.0.0.1
@@ -138,6 +140,7 @@ def inject (family port : Nat) (msg : List UInt8) : M Int := do
   WG.wgReceive msg (← senderSource family)
   -- the queued receive work runs before the guest's wait ends
   if !(← getDev).handshakeQueue.isEmpty then WG.handshakeReceiveWorker
+  deliverSent
   return msg.length   -- udp_sendmsg returns the datagram's length
 
 end Leanux.Env

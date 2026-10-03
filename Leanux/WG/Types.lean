@@ -70,6 +70,19 @@ structure SkbSource where
   iif : Nat
   deriving Repr, BEq
 
+/-- `enum index_hashtable_type`. -/
+inductive IndexKind where
+  | handshake | keypair
+  deriving Repr, BEq, DecidableEq
+
+/-- An `index_hashtable_entry` in the device's index hashtable: a peer's
+    handshake or its (next) keypair, under a random index. -/
+structure IndexEntry where
+  index : Nat
+  peer : PeerId
+  kind : IndexKind
+  deriving Repr, BEq
+
 /-- `struct wg_peer` with the parts of its `noise_handshake` on this path. -/
 structure Peer where
   remoteStatic : Key
@@ -100,14 +113,21 @@ structure Peer where
   /-- `handshake.remote_index`, the initiator's sender index. -/
   remoteIndex : Nat := 0
   /-- `keypairs.next_keypair` is set (a responder's session awaiting
-      confirmation); its keys are random. Its entry is in the index hashtable
-      (it replaced the handshake's) until the keypair is put. -/
+      confirmation). Its entry is in the index hashtable (it replaced the
+      handshake's) until the keypair is put. -/
   nextKeypair : Bool := false
   rxBytes : Nat := 0
-  /-- `handshake.entry` is in the index hashtable (inserted, under a random
-      index, when an initiation or response is created; removed by
-      `handshake_clear`, or replaced by a new keypair's entry). -/
-  indexed : Bool := false
+  /-- `handshake.ephemeral_private`, `remote_ephemeral`, `chaining_key` and
+      `hash` (zeroed by `handshake_zero`). -/
+  ephemeralPrivate : Key := List.replicate 32 0
+  remoteEphemeral : Key := List.replicate 32 0
+  chainingKey : List UInt8 := List.replicate 32 0
+  hash : List UInt8 := List.replicate 32 0
+  /-- `latest_cookie.message_mac1_key` (`wg_cookie_checker_precompute_peer_keys`),
+      `last_mac1_sent` and `have_sent_mac1`. -/
+  cookieMac1Key : Key := List.replicate 32 0
+  lastMac1Sent : List UInt8 := List.replicate 16 0
+  haveSentMac1 : Bool := false
   deriving Repr, BEq
 
 /-- `struct noise_static_identity`. -/
@@ -145,6 +165,13 @@ structure Device where
   nodes : TreeMap NodeId AipNode := {}
   nextNode : NodeId := 0
   nextPeer : PeerId := 0
+  /-- The index hashtable's entries, newest first (`hlist_add_head_rcu`); a
+      bucket is the entries whose index has the same low 13 bits, in this
+      order. -/
+  indexTable : List IndexEntry := []
+  /-- `handshake_send_wq`: peers whose `transmit_handshake_work` is queued,
+      oldest first. -/
+  sendWorkQueue : List PeerId := []
   deriving BEq
 
 def AF_INET : Nat := 2

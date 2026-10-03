@@ -24,7 +24,7 @@ SHARED = Path(os.environ.get("LEANUX_SHARED_ROOT", ROOT)).resolve()
 ARTIFACTS = Path(os.environ.get("LEANUX_ARTIFACTS", ROOT / ".artifacts")).resolve()
 # The accepted oracle kernel, or another kernel build selected by
 # LEANUX_KERNEL_DIR (it must lie inside the shared or task artifact roots).
-KERNEL = Path(os.environ.get("LEANUX_KERNEL_DIR", SHARED / ".artifacts/kernel-net-rcov")).resolve()
+KERNEL = Path(os.environ.get("LEANUX_KERNEL_DIR", SHARED / ".artifacts/kernel-net-hidden")).resolve()
 if not (KERNEL.is_relative_to(SHARED / ".artifacts") or KERNEL.is_relative_to(ARTIFACTS)):
     raise SystemExit(f"LEANUX_KERNEL_DIR outside the artifact roots: {KERNEL}")
 OUTPUT_LIMIT = 16 * 1024 * 1024
@@ -177,21 +177,28 @@ def attach_observed(results, traces, records):
             raise ValueError("duplicate or out-of-range wg_observe record")
         seen.add(key)
         datagrams = record["datagrams"]
+        def hex_bytes(entry, length):
+            return (type(entry[-1]) is str and len(entry[-1]) == 2 * length
+                    and all(c in "0123456789abcdef" for c in entry[-1]))
         if type(datagrams) is not list or not all(
-                type(d) is list and len(d) == 3 and d[0] in (4, 6) and all(type(x) is int and x >= 0 for x in d)
+                type(d) is list and len(d) == 4 and d[0] in (4, 6)
+                and all(type(x) is int and x >= 0 for x in d[:3]) and hex_bytes(d, d[1])
                 for d in datagrams):
             raise ValueError("wg_observe datagrams")
         replies = record["replies"]
         if type(replies) is not list or not all(
-                type(r) is list and len(r) == 3 and all(type(x) is int and x >= 0 for x in r) for r in replies):
+                type(r) is list and len(r) == 4 and all(type(x) is int and x >= 0 for x in r[:3]) and hex_bytes(r, r[0])
+                for r in replies):
             raise ValueError("wg_observe replies")
         stats = record["stats"]
         if type(stats) is not dict or set(stats) != {"tx_errors", "tx_dropped"} or not all(
                 type(v) is int and v >= 0 for v in stats.values()):
             raise ValueError("wg_observe stats")
-        observations[record["index"]]["datagrams"] = sorted(datagrams)
+        # sorted as the mirror sorts them: by compact JSON
+        compact = lambda x: json.dumps(x, separators=(",", ":"))
+        observations[record["index"]]["datagrams"] = sorted(datagrams, key=compact)
         observations[record["index"]]["stats"] = stats
-        observations[record["index"]]["replies"] = sorted(replies)
+        observations[record["index"]]["replies"] = sorted(replies, key=compact)
     for trace in traces:
         for index, op in enumerate(trace["ops"]):
             if (op["op"] == "wg_observe") != ((trace["id"], index) in seen):
@@ -237,7 +244,7 @@ def _collect(outdir, traces, process_returncode):
     results, coverage, fixtures, errors, child_failures, completed, kernels = [], [], [], [], [], [], []
     comparisons, comparison_results, wireguard, observed = [], [], [], []
     remote_coverage, remote_comparisons = [], []
-    hidden, remote_hidden, dgrams = [], [], []
+    hidden, remote_hidden = [], []
     for line in (outdir / "boot.log").read_text(errors="strict").splitlines():
         line = line.rstrip("\r")
         for prefix, target in (("LEANUX_RESULT ", results), ("LEANUX_COVERAGE ", coverage),
@@ -246,7 +253,7 @@ def _collect(outdir, traces, process_returncode):
                                ("LEANUX_CMP_RESULT ", comparison_results), ("LEANUX_WG ", wireguard),
                                ("LEANUX_WGOBS ", observed), ("LEANUX_RCOVERAGE ", remote_coverage),
                                ("LEANUX_RCMP ", remote_comparisons), ("LEANUX_HIDDEN ", hidden),
-                               ("LEANUX_RHIDDEN ", remote_hidden), ("LEANUX_DGRAM ", dgrams)):
+                               ("LEANUX_RHIDDEN ", remote_hidden)):
             if line.startswith(prefix):
                 try:
                     target.append(_decode_json(line[len(prefix):]))
@@ -272,7 +279,6 @@ def _collect(outdir, traces, process_returncode):
                 or any(type(r) is not list or len(r) != 3 for r in row["records"])):
             raise LinuxRunError("invalid_output", "Malformed hidden-input record", outdir)
     _jsonl(outdir / "hidden.jsonl", [dict(r, stream="task") for r in hidden] + [dict(r, stream="remote") for r in remote_hidden])
-    _jsonl(outdir / "datagrams.jsonl", dgrams)
     _jsonl(outdir / "comparisons.jsonl", comparisons)
     _jsonl(outdir / "guest-errors.jsonl", errors + child_failures)
     (outdir / "fixture.json").write_text(json.dumps({

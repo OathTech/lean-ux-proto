@@ -21,7 +21,7 @@ import subprocess
 import sys
 
 from harness.linux import KERNEL, LinuxRunError, run_linux
-from harness.trace import InvalidTrace, loads_trace, validate_trace
+from harness.trace import InvalidTrace, loads_trace, uses_wireguard, validate_trace
 from .coverage import attributable, instrumented_lines, symbolize
 from .generate import generate, generate_wireguard
 from .protocol import InvalidOutput, compare, loads, parse_batch, validate_coverage
@@ -118,14 +118,15 @@ def run_model(traces, out):
     (out / 'model.stdout').write_bytes(result.stdout)
     (out / 'model.stderr').write_bytes(result.stderr)
     if result.returncode:
-        kind = {3: 'unsupported_path', 4: 'mirror_invariant'}.get(result.returncode, 'invalid_output')
+        kind = {3: 'unsupported_path', 4: 'mirror_invariant', 5: 'hidden_mismatch'}.get(result.returncode, 'invalid_output')
         raise ModelStopped(kind, result.stderr.decode(errors='replace').strip()[-2000:])
     return parse_batch(traces, result.stdout)
 
 
 class ModelStopped(InvalidOutput):
     """The mirror stopped without observations: a path outside its domain
-    (exit 3), a mirror invariant failure (exit 4), or another error."""
+    (exit 3), a mirror invariant failure (exit 4), hidden-input records that
+    disagree with its reads (exit 5), or another error."""
     def __init__(self, kind, detail):
         super().__init__(detail)
         self.kind = kind
@@ -162,6 +163,63 @@ def non_statement(line):
     text = lines[int(number) - 1].strip()
     return (not text or text in ('{', '}', '};') or re.match(r'(/\*|//|\*(\s|/|$))', text) is not None
             or re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*:', text) is not None)
+
+
+def load_hidden_sites():
+    """The mirror's hidden-input sites (`leanux-model --hidden-sites`):
+    number -> (label, "file:line")."""
+    result = subprocess.run([MODEL, '--hidden-sites'], capture_output=True, timeout=60)
+    if result.returncode:
+        raise InvalidOutput('leanux-model --hidden-sites failed')
+    sites = {}
+    for entry in loads(result.stdout.decode()):
+        if set(entry) != {'id', 'label', 'file', 'line', 'len'} or entry['id'] in sites:
+            raise InvalidOutput(f'hidden site fields: {entry}')
+        sites[entry['id']] = (entry['label'], f"{entry['file']}:{entry['line']}")
+    return sites
+
+
+def hidden_records(traces, rows):
+    """Each child's hidden-input records per operation of each network trace:
+    {(id, mode): [[[site, hex], ...] per op]}, the task stream before the
+    remote one, and every record's call site, for the site cross-check."""
+    net = {t['id']: len(t['ops']) for t in traces if uses_wireguard(t)}
+    per, seen = {}, set()
+    for row in rows:
+        if row['id'] not in net or not 0 <= row['index'] < net[row['id']]:
+            raise InvalidOutput('hidden-input record for an unknown operation')
+        row_key = (row['id'], row['mode'], row['index'], row['stream'])
+        if row_key in seen:
+            raise InvalidOutput('duplicate hidden-input row')
+        seen.add(row_key)
+        ops = per.setdefault((row['id'], row['mode']), [[[], []] for _ in range(net[row['id']])])
+        ops[row['index']][0 if row['stream'] == 'task' else 1] = row['records']
+    # every operation of a network trace has a task row in both children
+    for trace_id, count in net.items():
+        for mode in ('pc', 'cmp'):
+            if any((trace_id, mode, i, 'task') not in seen for i in range(count)):
+                raise InvalidOutput(f'hidden-input rows missing for {trace_id} ({mode})')
+    # Task records precede remote ones within an operation. Every site today
+    # runs in a kworker (the task stream is empty); a task-context site that
+    # interleaves with a remote section would need positions across streams.
+    records, calls = {}, []
+    for key, ops in per.items():
+        records[key] = [[[r[0], r[2]] for r in task + remote] for task, remote in ops]
+        calls += [(key[0], r[0], r[1]) for task, remote in ops for r in task + remote]
+    return records, calls
+
+
+def hidden_site_problems(calls, sites, locations):
+    """Each record's call site (the innermost source frame of its return
+    address: kcov_record is never inlined) must be its declared site's line."""
+    problems = {}
+    for trace_id, site, ip in calls:
+        frames = locations.get(ip, [])
+        sources = [f['source'].split('/.deps/linux/')[-1].split(' ')[0] for f in frames[:1]]
+        if site not in sites or sources != [sites[site][1]]:
+            problems.setdefault(trace_id, []).append(dict(index=None, label=f'hidden site {site}',
+                problem='hidden-input record from an undeclared call site', call_site=sorted(sources)))
+    return problems
 
 
 def load_decisions(config):
@@ -506,26 +564,45 @@ def run_chunk(traces, out, kcov):
         compared = symbolize([{'pcs': sorted({r[3] for row in comparisons for r in row['records']})}],
                              KERNEL / 'vmlinux')
         (out / 'linux/comparison-map.json').write_text(json.dumps(compared, indent=1) + '\n')
+        hidden_path = out / 'linux/hidden.jsonl'
+        rows = [loads(line) for line in hidden_path.read_text().splitlines()] if hidden_path.exists() else []
+        records, calls = hidden_records(traces, rows)
+        called = symbolize([{'pcs': sorted({ip for _, _, ip in calls})}], KERNEL / 'vmlinux') if calls else {'locations': {}}
+        site_problems = hidden_site_problems(calls, load_hidden_sites(), called['locations'])
     except LinuxRunError as exc:
         return {t['id']: dict(outcome=exc.kind, side='linux', detail=str(exc)) for t in traces}, gaps, outcomes
     except (InvalidOutput, ValueError, OSError, subprocess.SubprocessError) as exc:
         return {t['id']: dict(outcome='invalid_coverage', side='linux', detail=str(exc)) for t in traces}, gaps, outcomes
-    (out / 'model').mkdir()
+    # The mirror runs once with each guest child's hidden-input records: the
+    # coverage child's run is compared for behavior and control flow, the
+    # comparison child's for operands (docs/2026-10-03-hidden-inputs-design.md).
+    def with_hidden(mode):
+        return [dict(t, hidden=records[(t['id'], mode)]) if (t['id'], mode) in records else t for t in traces]
     try:
-        model = run_model(traces, out / 'model')
+        (out / 'model').mkdir()
+        model = run_model(with_hidden('pc'), out / 'model')
+        if records:
+            (out / 'model-cmp').mkdir()
+            model_cmp = run_model(with_hidden('cmp'), out / 'model-cmp')
+        else:
+            model_cmp = model
     except (InvalidOutput, OSError, subprocess.SubprocessError) as exc:
         kind = getattr(exc, 'kind', 'invalid_output')
         return {t['id']: dict(outcome=kind, side='model', detail=str(exc)) for t in traces}, gaps, outcomes
     rows, cmp_rows = iter(coverage), iter(comparisons)
-    for trace, expected, actual in zip(traces, linux, model):
+    for trace, expected, actual, actual_cmp in zip(traces, linux, model, model_cmp):
         trace_coverage = [next(rows) for _ in trace['ops']]
         trace_comparisons = [next(cmp_rows) for _ in trace['ops']]
         result = compare(trace, expected, actual)
         if result['outcome'] == 'agreement':
             problems, trace_gaps = control_flow(trace, actual, trace_coverage, mapped['locations'], *kcov)
-            operand_problems, checked = operand_agreement(trace, actual, trace_comparisons,
+            operand_problems, checked = operand_agreement(trace, actual_cmp, trace_comparisons,
                                                           compared['locations'], kcov[1], set(kcov[0]['functions']))
-            problems += operand_problems
+            problems += operand_problems + site_problems.get(trace['id'], [])
+            # Both children's returns are equal (harness/linux.py); so must be
+            # the mirror's under each child's records.
+            if [o['ret'] for o in actual_cmp['observations']] != [o['ret'] for o in actual['observations']]:
+                problems.append(dict(index=None, label='returns', problem='the comparison run returns differently'))
             outcomes['operand pairs matched'] += checked
             gaps.update(trace_gaps)
             outcomes.update(b['label'] for b in actual['branches'])

@@ -15,10 +15,9 @@ Queued handshake messages wait in the device's `handshakeQueue`; the
 environment (`Leanux/Env.lean`) runs `handshakeReceiveWorker` when the queued
 work runs, before the operation ends. A handshake initiation with a valid
 MAC1 enters Noise as the responder (`Leanux/WG/Handshake.lean`); a handshake
-response (the initiator role) is `unsupported`. The index
-hashtable's bucket walk is a cut point only while the table is empty; with an
-entry (inserted under a random index by the handshake worker), the walk's path
-is random and the lookup is `unsupported`.
+response (the initiator role) is `unsupported`. Index lookups walk the
+mirrored index hashtable, whose random indices are recorded hidden inputs; a
+cookie or data message for a known index is `unsupported`.
 -/
 
 namespace Leanux.WG
@@ -74,18 +73,11 @@ def prepareSkbHeader (msg : List UInt8) : M Bool := do
   if ← branch .prepPullHeaderFailed false then return false
   return true
 
-/-- wg_index_hashtable_lookup (peerlookup.c:202-226) on the empty table. -/
-def indexLookup : M (Option PeerId) := do
-  for (_, p) in (← getDev).peers.toList do
-    if p.indexed || p.nextKeypair then unsupported "an index lookup with entries under random indices"
-  -- the bucket is empty: `iter_entry->index == index` is never evaluated
-  _ ← branch .idxFound false
-  return none
-
 /-- wg_cookie_message_consume (cookie.c:198-236). -/
-def cookieMessageConsume : M Unit := do
-  let peer ← indexLookup
-  if ← branch .cookieLookupMiss peer.isNone then return
+def cookieMessageConsume (msg : List UInt8) : M Unit := do
+  -- `src->receiver_index`, of a handshake or a keypair
+  let entry ← indexLookup [.handshake, .keypair] (u32le msg 4)
+  if ← branch .cookieLookupMiss entry.isNone then return
   unsupported "a cookie for a known index"
 
 /-- wg_cookie_validate_packet (cookie.c:119-154) when not under load:
@@ -101,7 +93,7 @@ def cookieValidatePacket (msg : List UInt8) : M Bool := do
 /-- wg_receive_handshake_packet (receive.c:92-204). -/
 def receiveHandshakePacket (msg : List UInt8) (src : SkbSource) : M Unit := do
   if ← branch .hsCookie (messageType msg == MESSAGE_HANDSHAKE_COOKIE) then
-    cookieMessageConsume
+    cookieMessageConsume msg
     return
   -- `under_load = handshake_queue_len >= MAX_QUEUED_INCOMING_HANDSHAKES / 8`
   let queueLen := (← getDev).handshakeQueue.length
@@ -156,8 +148,9 @@ def handshakeReceiveWorker : M Unit := do
   invariant "the handshake queue did not drain"
 
 /-- wg_packet_consume_data (receive.c:509-540): no keypair has this index. -/
-def consumeData : M Unit := do
-  let _ ← indexLookup
+def consumeData (msg : List UInt8) : M Unit := do
+  -- `data->key_idx`, of a keypair
+  if (← indexLookup [.keypair] (u32le msg 4)).isSome then unsupported "a data message for a keypair"
   keypairGetCurrent   -- wg_noise_keypair_get(NULL)
   if !(← branch .dataNoKeypair true) then unsupported "a data keypair"
   -- err_keypair: wg_peer_put(NULL), then dev_kfree_skb
@@ -190,7 +183,7 @@ def packetReceive (msg : List UInt8) (src : SkbSource) : M Unit := do
     return
   if ← branch .rxData (t == MESSAGE_DATA) then
     -- ip_tunnel_get_dsfield (a cut point)
-    consumeData
+    consumeData msg
     return
   invariant "validate_header_len admitted an unknown type"
 

@@ -183,6 +183,8 @@ inductive Decision where
   -- drivers/net/wireguard/timers.c
   | modTimerRunning | modTimerAlive | traversalKeepalive | keypairPutUnreferenceNow | keypairKrefPutReleased
   | idxReplaceUnhashed | sendBufNoMem | sendSkbInet | sendSkbInet6 | sendSkbOk
+  | initRateLimited | initCreated | initNoIdentity | initNoEphemeral | initEsFailed | initSsFailed
+  | idxInsWalk1 | idxInsCollide1 | idxInsWalk2 | idxInsCollide2 | idxWalk | idxTypeMatch | idxPeerAlive
   deriving Repr, BEq, DecidableEq, Inhabited
 
 /-- A recorded step: the decision, the outcome the mirror computed, and, for
@@ -842,6 +844,20 @@ def Decision.info : Decision → DecisionInfo
   | .sendSkbInet => d "wg_socket_send_skb_to_peer.inet" wso 174 [(175, 176)] [(177, 177)]
   | .sendSkbInet6 => d "wg_socket_send_skb_to_peer.inet6" wso 177 [(178, 179)] [(181, 181)]
   | .sendSkbOk => d "wg_socket_send_skb_to_peer.sent" wso 182 [(183, 183)] []
+  -- the early return at 27 shares the function's epilogue: no witness
+  | .initRateLimited => d "wg_packet_send_handshake_initiation.rate_limited" wsd 25 [] [(29, 33)]
+  | .initCreated => d "wg_packet_send_handshake_initiation.created" wsd 34 [(35, 42)] []
+  | .initNoIdentity => d "wg_noise_handshake_create_initiation.no_identity" wno 532 [(533, 533)] [(535, 541)]
+  | .initNoEphemeral => d "wg_noise_handshake_create_initiation.no_ephemeral" wno 542 [(544, 544)] [(545, 547)]
+  | .initEsFailed => d "wg_noise_handshake_create_initiation.es_failed" wno 550 [(552, 552)] [(555, 557)]
+  | .initSsFailed => d "wg_noise_handshake_create_initiation.ss_failed" wno 560 [(562, 562)] [(565, 574)]
+  | .idxInsWalk1 => d "wg_index_hashtable_insert.unlocked_entry" wpl 133 [(136, 136)] []
+  | .idxInsCollide1 => d "wg_index_hashtable_insert.unlocked_collision" wpl 136 [(138, 138)] []
+  | .idxInsWalk2 => d "wg_index_hashtable_insert.locked_entry" wpl 145 [(148, 148)] []
+  | .idxInsCollide2 => d "wg_index_hashtable_insert.locked_collision" wpl 148 [(149, 151)] []
+  | .idxWalk => d "wg_index_hashtable_lookup.entry" wpl 209 [(211, 211)] []
+  | .idxTypeMatch => d "wg_index_hashtable_lookup.type_matches" wpl 212 [(213, 213)] []
+  | .idxPeerAlive => d "wg_index_hashtable_lookup.peer_alive" wpl 219 [(220, 220)] [(222, 222)]
   | .idxReplaceUnhashed => d "wg_index_hashtable_replace.unhashed" wpl 174 [(175, 175)] [(177, 186)]
 
 /-- The relation of a C value comparison, as written in the source
@@ -999,7 +1015,11 @@ def Decision.repeatable : Decision → Bool
   | .workerConsumed
   | .msgEphemeralCopy | .kdfNoFirstDst | .kdfNoFirstLen | .kdfNoSecondDst | .kdfNoSecondLen
   | .kdfNoThirdDst | .kdfNoThirdLen | .mixDhNull | .mixPrecomputedNull | .msgDecryptFailed
-  | .modTimerRunning | .modTimerAlive | .traversalKeepalive => true
+  | .modTimerRunning | .modTimerAlive | .traversalKeepalive
+  -- several send workers may run in one operation; bucket walks loop
+  | .initRateLimited | .initCreated | .initNoIdentity | .initNoEphemeral | .initEsFailed | .initSsFailed
+  | .idxInsWalk1 | .idxInsCollide1 | .idxInsWalk2 | .idxInsCollide2 | .idxWalk | .idxMatch
+  | .sendBufNoMem | .sendSkbInet | .sendSkbInet6 | .sendSkbOk | .addMacCookieValid | .addMacCookieFresh => true
   | _ => false
 
 /-- Every decision, enumerated through the constructor index. -/

@@ -29,7 +29,7 @@ if [ "$PROFILE" = net-rcov ] || [ "$PROFILE" = net-hidden ]; then
     PATCH_SHA=503c899d061530af6d250ed018466b7ba1cc77407f3a3492edf031e20d9cfe07
     SOURCE="$LEANUX_ARTIFACTS/src/linux-6.12.110-wireguard-kcov-remote"
     HIDDEN_PATCH="$LEANUX_ROOT/kernel/patches/wireguard-hidden-inputs.patch"
-    HIDDEN_SHA=108f6b74ef97dc5ef37a3965ff3fe577ce55dccc891296151d396b7b09cf5584
+    HIDDEN_SHA=91a412bad138e2f5d765ca5653dd874e4618658c081b3212a87894f93220cf0b
     if [ "$PROFILE" = net-hidden ]; then
         SOURCE="$LEANUX_ARTIFACTS/src/linux-6.12.110-wireguard-hidden-inputs"
         PATCH_SHA_RECORD="$PATCH_SHA $HIDDEN_SHA"

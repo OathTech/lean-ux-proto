@@ -116,6 +116,11 @@ def syscall (call : Syscall) : M Int := do
   modify fun w => { w with steps := #[], userOut := none, extraOut := [], queuedThisCall := [] }
   let ret ← dispatch call
   taskWorkRun
+  -- the guest waits inside the operations that can queue the handshake send
+  -- worker (and in wg_inject); the worker runs during that wait
+  match call with
+  | .wgSet _ | .wgUp | .wgXmit .. | .wgInject .. => Env.runSendWorkers
+  | _ => pure ()
   return ret
 
 end Leanux

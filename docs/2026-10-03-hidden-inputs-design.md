@@ -142,9 +142,9 @@ Site identity:
   and the Lean table cannot drift apart silently.
 
 The domain filter runs before Linux, so it has no records. There, `hidden`
-returns a fixed, clamped placeholder and flags the verdict as
-`hidden_dependent`. If the placeholder misled the filter, the authoritative
-run still stops noisily.
+returns a fixed, clamped placeholder. If the placeholder misled the filter,
+the authoritative run still stops noisily. (A `hidden_dependent` flag on the
+verdict was proposed; it is not implemented, since nothing would read it.)
 
 ## 6. Migration and scheduling
 
@@ -203,9 +203,11 @@ Hard later:
 3. **First consumer:** the send worker mirrored with every value, plus the
    response bytes.
 
-   What it alone catches: an unclamped ephemeral, a timestamp without
-   `ALIGN_DOWN`, MAC1 over the wrong length, swapped DH terms. Each of those
-   is a byte mismatch on a path that is an unchecked contract today.
+   What it alone catches: a timestamp without `ALIGN_DOWN`, MAC1 over the
+   wrong range, a wrong byte order, a skipped hash step. Each of those is a
+   byte mismatch on a path that is an unchecked contract today. (An
+   unclamped ephemeral cannot be caught: the hook follows the clamp, so the
+   mirror instead requires each recorded secret to be clamped.)
 
    Negative control: shuffled or dropped records must stop with
    `hidden_mismatch`.
@@ -234,7 +236,8 @@ handle, waiting inside queuing operations, and the applier allowlist.
 - **Kernel:** profile `net-hidden`, built into the worktree's `.artifacts`
   (`kcov_record` at `ffffffff810f1a40`). The shared oracle is untouched.
 - **Patch:** `kernel/patches/wireguard-hidden-inputs.patch` (sha256
-  `108f6b74…`), applied on top of the B2 patch. Every anchored file keeps its
+  `108f6b74…` for the probe; `91a412ba…` after the send-worker section was
+  extended to cover its `wg_peer_put`), applied on top of the B2 patch. Every anchored file keeps its
   line count; only `kcov.c` and `kcov.h` grow.
 - **Guest:** splits records out before deduplication, waits 100 ms inside
   `wg_set`, `wg_up` and `wg_xmit`, and prints every datagram's bytes.
@@ -253,8 +256,8 @@ Results on the WireGuard suite (52 traces, run `probe2`):
 
 Notes:
 - **One initiation failed after drawing its ephemeral** (`b1_low_order_peer`).
-  `create_initiation` stops at the null static-static DH, before the clock
-  read and the index insert. The record sequence shows exactly the C's path.
+  With a low-order remote key, `create_initiation`'s ephemeral-static DH
+  (`es`) is null, so it stops before the clock read and the index insert. The record sequence shows exactly the C's path.
 - **No index collision occurred** (29 draws for 29 inserts), so the collision
   arm stays unexercised, as expected.
 - **No witness span changed:** every stage C trace that does not queue the

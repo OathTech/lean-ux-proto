@@ -26,8 +26,14 @@ def peerGet (pid : PeerId) : M Unit := do
   refcountInc p.refcount
   setPeer pid { p with refcount := p.refcount + 1 }
 
-/-- wg_peer_put (peer.c:223-228) and kref_release (200-221). The release's
-    index-hashtable removal, staged-packet purge and `call_rcu` free are cut
+/-- `hlist_del_init_rcu` of a peer's entry of this kind (a no-op if unhashed):
+    wg_index_hashtable_remove (peerlookup.c:192-198). -/
+def indexRemove (pid : PeerId) (kind : IndexKind) : M Unit :=
+  modifyDev fun d => { d with indexTable := d.indexTable.filter fun e => !(e.peer == pid && e.kind == kind) }
+
+/-- wg_peer_put (peer.c:223-228) and kref_release (200-221): the release
+    removes the handshake's index entry (which `peer_remove_after_dead`
+    leaves for it); the staged-packet purge and the `call_rcu` free are cut
     points; the peer leaves the store. -/
 def peerPut (peer : Option PeerId) : M Unit := do
   if ← branch .peerPutNull peer.isNone then return
@@ -36,6 +42,7 @@ def peerPut (peer : Option PeerId) : M Unit := do
   let p ← getPeer pid
   setPeer pid { p with refcount := p.refcount - 1 }
   if ← branch .peerKrefPutReleased (← refcountDecAndTest p.refcount) then
+    indexRemove pid .handshake
     -- wg_packet_purge_staged_packets: DEV_STATS_ADD(tx_dropped, qlen)
     modifyDev fun d => { d with txDropped := d.txDropped + p.staged, peers := d.peers.erase pid }
 
@@ -88,22 +95,80 @@ def keypairPutNull : M Unit := do
   if ← branch .keypairPutNull true then return
   unsupported "wg_noise_keypair_put of a live keypair"
 
-/-- wg_noise_keypair_put (noise.c:131-140) of a keypair that only its slot
-    references (no data packet ever took one), so the put frees it. -/
-def keypairPutLive (unreferenceNow : Bool) : M Unit := do
+/-! ### The index hashtable (peerlookup.c) -/
+
+def INDEX_HASHTABLE_BITS : Nat := 13
+
+/-- `index_bucket` (peerlookup.c:73-81): the entries under the same masked
+    index, in list order. -/
+def indexBucket (index : Nat) : M (List IndexEntry) := do
+  let mask := 2 ^ INDEX_HASHTABLE_BITS
+  return (← getDev).indexTable.filter (·.index % mask == index % mask)
+
+/-- Whether a peer's entry of this kind is hashed. -/
+def indexHashed (pid : PeerId) (kind : IndexKind) : M Bool :=
+  return (← getDev).indexTable.any fun e => e.peer == pid && e.kind == kind
+
+/-- A walk over a bucket for `index`, reporting the loop and the compare:
+    whether some entry has this index. -/
+private def bucketHas (walk collide : Decision) (index : Nat) : M Bool := do
+  for e in ← indexBucket index do
+    _ ← branch walk true
+    if ← branch collide (e.index == index) then return true
+  _ ← branch walk false
+  return false
+
+/-- wg_index_hashtable_insert (peerlookup.c:109-153): a fresh random index
+    (a recorded hidden input) not in use, inserted at the head. -/
+def indexInsert (pid : PeerId) (kind : IndexKind) : M Nat := do
+  indexRemove pid kind
+  -- `goto search_unused_slot` draws again; nothing else inserts meanwhile
+  -- (one CPU), so the locked walk agrees with the unlocked one
+  for _ in [0:64] do
+    let draw ← hidden .indexDraw
+    let index := draw.foldr (fun b acc => acc * 256 + b.toNat) 0   -- __le32
+    if ← bucketHas .idxInsWalk1 .idxInsCollide1 index then continue
+    -- the locked walk's collision (stolen meanwhile, peerlookup.c:148) needs
+    -- a concurrent insert
+    if ← bucketHas .idxInsWalk2 .idxInsCollide2 index then unsupported "an index stolen during insertion"
+    modifyDev fun d => { d with indexTable := { index, peer := pid, kind } :: d.indexTable }
+    return index
+  unsupported "64 colliding index draws"
+
+/-- wg_index_hashtable_replace (peerlookup.c:166-190) of a peer's handshake
+    entry by its new keypair's, in place. Whether the handshake entry was
+    hashed. -/
+def indexReplaceHandshake (pid : PeerId) : M Bool := do
+  let hashed ← indexHashed pid .handshake
+  if ← branch .idxReplaceUnhashed !hashed then return false
+  modifyDev fun d => { d with indexTable := d.indexTable.map fun e =>
+    if e.peer == pid && e.kind == .handshake then { e with kind := .keypair } else e }
+  return true
+
+/-- `handshake_zero` (noise.c:78-86). -/
+def handshakeZero (pid : PeerId) : M Unit := do
+  let z : List UInt8 := List.replicate 32 0
+  let p ← getPeer pid
+  setPeer pid { p with ephemeralPrivate := z, remoteEphemeral := z, hash := z, chainingKey := z,
+                       remoteIndex := 0, handshakeState := 0 }
+
+/-- wg_noise_keypair_put (noise.c:131-140) of a peer's next keypair, which
+    only its slot references (no data packet ever took one): the put frees
+    it, and `keypair_free_kref` removes its index entry. -/
+def keypairPutLive (pid : PeerId) (unreferenceNow : Bool) : M Unit := do
   if ← branch .keypairPutNull false then return
-  -- wg_index_hashtable_remove
-  _ ← branch .keypairPutUnreferenceNow unreferenceNow
-  -- kref_put: keypair_free_kref removes the entry again and frees it after RCU
-  _ ← branch .keypairKrefPutReleased (← refcountDecAndTest 1)
+  if ← branch .keypairPutUnreferenceNow unreferenceNow then indexRemove pid .keypair
+  if ← branch .keypairKrefPutReleased (← refcountDecAndTest 1) then indexRemove pid .keypair
 
 /-- wg_noise_expire_current_peer_keypairs (noise.c:179-196). `handshake_clear`
     zeroes ephemeral state that the configuration path never set. -/
 def expireCurrentPeerKeypairs (pid : PeerId) : M Unit := do
   requireNotPending pid "clearing the handshake"
-  -- wg_noise_handshake_clear (removes the index entry); wg_noise_reset_last_sent_handshake
-  -- handshake_zero inside wg_noise_handshake_clear
-  setPeer pid { (← getPeer pid) with lastSentExpired := true, indexed := false, handshakeState := 0, remoteIndex := 0 }
+  -- wg_noise_handshake_clear: remove the entry, then handshake_zero
+  indexRemove pid .handshake
+  handshakeZero pid
+  -- wg_noise_reset_last_sent_handshake
+  setPeer pid { (← getPeer pid) with lastSentExpired := true }
   -- `keypair->sending.is_valid = false`: session keys are not tracked
   _ ← branch .expireNextKeypair (← getPeer pid).nextKeypair
   if ← branch .expireCurrentKeypair false then unsupported "current keypair present"
@@ -112,7 +177,7 @@ def expireCurrentPeerKeypairs (pid : PeerId) : M Unit := do
 def keypairsClear (pid : PeerId) : M Unit := do
   if (← getPeer pid).nextKeypair then
     setPeer pid { (← getPeer pid) with nextKeypair := false }
-    keypairPutLive true
+    keypairPutLive pid true
   else keypairPutNull   -- next_keypair
   keypairPutNull   -- previous_keypair
   keypairPutNull   -- current_keypair
@@ -129,6 +194,24 @@ def peerGetMaybeZero (peer : Option PeerId) : M (Option PeerId) := do
   if ← branch .peerGetMaybeZeroDead !live then return none
   setPeer pid { p with refcount := p.refcount + 1 }
   return some pid
+
+/-- wg_index_hashtable_lookup (peerlookup.c:201-226): the entry under
+    `index` whose kind is in `kinds`, with a strong reference to its peer. -/
+def indexLookup (kinds : List IndexKind) (index : Nat) : M (Option IndexEntry) := do
+  let mut entry : Option IndexEntry := none
+  let mut stopped := false
+  for e in ← indexBucket index do
+    _ ← branch .idxWalk true
+    if ← branch .idxMatch (e.index == index) then
+      if ← branch .idxTypeMatch (kinds.contains e.kind) then entry := some e
+      stopped := true
+      break
+  if !stopped then _ ← branch .idxWalk false
+  if ← branch .idxFound entry.isSome then
+    let some e := entry | invariant "unreachable"
+    let peer ← peerGetMaybeZero (some e.peer)
+    if ← branch .idxPeerAlive peer.isSome then return entry
+  return none
 
 /-- `wg_pubkey_hashtable_lookup` (peerlookup.c:53-71): a map lookup (the
     random-keyed bucket walk is a cut point), then wg_peer_get_maybe_zero.
@@ -159,8 +242,10 @@ def peerCreate (publicKey : Key) (presharedKey : Option Key) : M (Except Int Pee
   let internalId := (← getK).peerCounter + 1   -- atomic64_inc_return(&peer_counter)
   modifyK fun k => { k with peerCounter := internalId }
   modifyDev fun d => { d with nextPeer := pid + 1 }
+  -- wg_cookie_checker_precompute_peer_keys: BLAKE2s("mac1----" || remote static)
   setPeer pid { remoteStatic := publicKey, presharedKey := List.replicate 32 0,
-                precomputedStaticStatic := List.replicate 32 0, internalId }
+                precomputedStaticStatic := List.replicate 32 0, internalId,
+                cookieMac1Key := blake2s 32 [] ("mac1----".toUTF8.toList ++ publicKey) }
   handshakeInit pid presharedKey
   -- cookie init, timers, work items, queues, kref_init (refcount 1), NAPI
   modifyDev fun d => { d with peerList := d.peerList ++ [pid],   -- list_add_tail

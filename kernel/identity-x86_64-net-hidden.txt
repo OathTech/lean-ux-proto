@@ -1,0 +1,14 @@
+# Proposed oracle kernel for hidden inputs (docs/2026-10-03-hidden-inputs-design.md;
+# awaiting the user's approval to replace the net-rcov oracle):
+# kernel/config-x86_64-net with kernel/patches/wireguard-kcov-remote.patch
+# (sha256 503c899d061530af6d250ed018466b7ba1cc77407f3a3492edf031e20d9cfe07) and
+# kernel/patches/wireguard-hidden-inputs.patch
+# (sha256 91a412bad138e2f5d765ca5653dd874e4618658c081b3212a87894f93220cf0b),
+# built with LEANUX_KERNEL_PROFILE=net-hidden. Its DWARF names .deps/linux (via
+# -fdebug-prefix-map); the patched lines there read as unpatched, which the
+# check does not use: in the anchored files the patch only appends to existing
+# lines, and kernel/kcov.c and include/linux/kcov.h are not anchored.
+# Path-independent identity from scripts/kernel-identity.py:
+2189e45a6399df22ca5173b5bcbd0e39b55758dc16edb11e6e9e124686e0742a
+# vmlinux sha256 of the build the evidence used (path-dependent):
+fce9ecc4234f6ae8b9e229eb98a0a34fd5ac39d1e9e3dd49e499750588008092

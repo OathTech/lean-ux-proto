@@ -6,11 +6,11 @@ import Leanux.WG.Peer
 No session keypair exists in stage B1: `current_keypair` is NULL, so staged
 packets stay staged and a handshake initiation is queued.
 
-The handshake worker (`wg_packet_handshake_send_worker`, send.c:21-53) runs in
-a kworker at a time the trace does not determine. It is not mirrored here; the
-environment model (`Leanux/Env.lean`) applies its contract when `wg_observe`
-has waited for it. Until then, every path that reads what the worker changes
-is `unsupported` (`requireNotPending`).
+The handshake send worker (`wg_packet_handshake_send_worker`) is mirrored in
+`Leanux/WG/Handshake.lean`; the environment (`Leanux/Env.lean`) runs it when
+the queuing operation waits for it. Within the queuing system call, paths that
+read what the worker changes are `unsupported` unless the work was queued in
+that same call (`requireNotPending`).
 -/
 
 namespace Leanux.WG
@@ -36,6 +36,7 @@ def sendQueuedHandshakeInitiation (pid : PeerId) (isRetry : Bool) : M Unit := do
     peerPut (some pid)
     return
   setPeer pid { (← getPeer pid) with handshakePending := true }
+  modifyDev fun d => { d with sendWorkQueue := d.sendWorkQueue ++ [pid] }
   modify fun w => { w with queuedThisCall := pid :: w.queuedThisCall }
 
 /-- wg_noise_keypair_get (noise.c:142-149) of the NULL `current_keypair`. -/
