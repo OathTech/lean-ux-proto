@@ -100,10 +100,14 @@ structure Peer where
       worker's timing is not determined, so what reads its state is outside
       the domain until `wg_observe` waits for it. -/
   handshakePending : Bool := false
-  /-- Whether `last_sent_handshake` is older than `REKEY_TIMEOUT`. It starts
-      expired (`wg_noise_reset_last_sent_handshake`), and the worker makes it
-      current; traces are bounded well below `REKEY_TIMEOUT`. -/
-  lastSentExpired : Bool := true
+  /-- `last_sent_handshake` (ns of coarse boot time, s64): from recorded
+      clock reads (`wg_noise_reset_last_sent_handshake` sets it
+      `REKEY_TIMEOUT + 1` seconds in the past). -/
+  lastSentHandshake : Int := 0
+  /-- `handshake.last_initiation_consumption` (ns, s64). -/
+  lastInitiationConsumption : Int := 0
+  /-- The pending next keypair's `birthdate` (ns), from `derive_keys`. -/
+  keypairBirthdate : Int := 0
   txBytes : Nat := 0
   /-- `handshake.state`: ZEROED 0, CREATED_INITIATION 1, CONSUMED_INITIATION 2,
       CREATED_RESPONSE 3, CONSUMED_RESPONSE 4. -/

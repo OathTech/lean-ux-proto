@@ -212,6 +212,22 @@ def generate_v2(seed, count, max_ops):
     return result
 
 
+# The guest's waits (harness/guest.c): 0.4 s in wg_inject and wg_observe,
+# 0.1 s in the operations that can queue the handshake send worker. It fails
+# a trace that runs longer than 4 s after wg_up (REKEY_BOUND_NS), so the
+# generator keeps the planned waits well inside it.
+WAIT_BUDGET_SECONDS = 2.8
+
+
+def wait_after_up(operations):
+    waits, up = 0.0, False
+    for op in operations:
+        up = up or op['op'] == 'wg_up'
+        if up:
+            waits += {'wg_inject': 0.4, 'wg_observe': 0.4, 'wg_set': 0.1, 'wg_up': 0.1, 'wg_xmit': 0.1}.get(op['op'], 0)
+    return waits
+
+
 def generate_wireguard(seed, count, max_ops=12):
     """Seeded WireGuard traces over small pools of keys and prefixes, so that
     peers, trie nodes and identities collide often. A third are configuration
@@ -407,6 +423,8 @@ def generate_wireguard(seed, count, max_ops=12):
             for _ in range(rng.randint(1, max_ops - 1)):
                 operations.append({'op': 'wg_get'} if rng.random() < .2 else {'op': 'wg_set', 'config': config()})
         operations.append({'op': 'wg_get'})
+        if wait_after_up(operations) > WAIT_BUDGET_SECONDS:
+            continue   # the guest fails a trace longer than 4 s after wg_up
         trace = dict(version=1, id=f'generated-wg-{seed}-{len(result):05}', ops=operations)
         digest = identity(trace)
         if digest not in seen:

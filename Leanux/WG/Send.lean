@@ -27,7 +27,7 @@ def sendQueuedHandshakeInitiation (pid : PeerId) (isRetry : Bool) : M Unit := do
   _ ← branch .queuedNotRetry !isRetry
   let p ← getPeer pid
   -- `!wg_birthdate_has_expired(last_sent_handshake, REKEY_TIMEOUT) || is_dead`
-  if ← branch .queuedNotExpired !p.lastSentExpired then return
+  if ← branch .queuedNotExpired !(← birthdateHasExpired p.lastSentHandshake REKEY_TIMEOUT) then return
   if ← branch .queuedDead p.isDead then return
   peerGet pid
   -- `!queue_work(...)`: false iff the work is still queued (queued earlier in

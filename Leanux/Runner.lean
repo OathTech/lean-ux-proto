@@ -361,6 +361,7 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
     world := { world with hidden := trace.hidden.map (·[index]!) }
     let (ret, w) ← (syscall (toSyscall results op)).run world
       |>.mapError fun e => (index, e)
+    let (_, w) ← skipAmbient.run w |>.mapError fun e => (index, e)
     if let some (r :: _) := w.hidden then
       throw (index, .hidden s!"a record of site {r.site} was not consumed")
     world := w
@@ -385,8 +386,9 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
 def hiddenSitesJson : Json :=
   .arr (HiddenSite.all.map fun s =>
     let i := s.info
-    Json.mkObj [("id", toJson i.id), ("label", toJson i.label), ("file", toJson i.file),
-      ("line", toJson i.line), ("len", toJson i.len)]).toArray
+    Json.mkObj [("id", toJson i.id), ("label", toJson i.label), ("kind", toJson i.kind),
+      ("file", toJson i.file), ("line", toJson i.line), ("len", toJson i.len),
+      ("role", toJson i.role.name)]).toArray
 
 def spanJson (s : Span) : Json :=
   Json.mkObj [("file", toJson s.file), ("lo", toJson s.lo), ("hi", toJson s.hi)]
@@ -401,7 +403,8 @@ def decisionsJson : Json :=
       ("repeatable", toJson d.repeatable),
       ("comparison", match d.comparison with
         | some c => Json.mkObj [("rel", toJson c.rel.name), ("const_rhs", toJson c.constRhs),
-            ("site", match c.site with | some l => toJson s!"{i.file}:{l}" | none => .null)]
+            ("site", match c.site with | some l => toJson s!"{i.file}:{l}" | none => .null),
+            ("assigned", toJson c.assigned)]
         | none => .null)]).toArray
 
 end Leanux.Runner

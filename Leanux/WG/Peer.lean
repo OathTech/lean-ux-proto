@@ -145,6 +145,20 @@ def indexReplaceHandshake (pid : PeerId) : M Bool := do
     if e.peer == pid && e.kind == .handshake then { e with kind := .keypair } else e }
   return true
 
+def NSEC_PER_SEC : Int := 1000000000
+def REKEY_TIMEOUT : Nat := 5
+
+/-- wg_noise_reset_last_sent_handshake (noise.h:100-104): the recorded coarse
+    boot time, `REKEY_TIMEOUT + 1` seconds back. -/
+def resetLastSentHandshake (pid : PeerId) : M Unit := do
+  let now ← hiddenClock .resetLastSent
+  setPeer pid { (← getPeer pid) with lastSentHandshake := now - (REKEY_TIMEOUT + 1 : Nat) * NSEC_PER_SEC }
+
+/-- wg_birthdate_has_expired (timers.h:25-29), with the recorded clock. -/
+def birthdateHasExpired (birthday : Int) (seconds : Nat) : M Bool := do
+  let now ← hiddenClock .birthdateExpired
+  return birthday + seconds * NSEC_PER_SEC ≤ now
+
 /-- `handshake_zero` (noise.c:78-86). -/
 def handshakeZero (pid : PeerId) : M Unit := do
   let z : List UInt8 := List.replicate 32 0
@@ -167,8 +181,7 @@ def expireCurrentPeerKeypairs (pid : PeerId) : M Unit := do
   -- wg_noise_handshake_clear: remove the entry, then handshake_zero
   indexRemove pid .handshake
   handshakeZero pid
-  -- wg_noise_reset_last_sent_handshake
-  setPeer pid { (← getPeer pid) with lastSentExpired := true }
+  resetLastSentHandshake pid
   -- `keypair->sending.is_valid = false`: session keys are not tracked
   _ ← branch .expireNextKeypair (← getPeer pid).nextKeypair
   if ← branch .expireCurrentKeypair false then unsupported "current keypair present"
@@ -247,7 +260,9 @@ def peerCreate (publicKey : Key) (presharedKey : Option Key) : M (Except Int Pee
                 precomputedStaticStatic := List.replicate 32 0, internalId,
                 cookieMac1Key := blake2s 32 [] ("mac1----".toUTF8.toList ++ publicKey) }
   handshakeInit pid presharedKey
-  -- cookie init, timers, work items, queues, kref_init (refcount 1), NAPI
+  -- cookie init, timers, work items, queues, kref_init (refcount 1)
+  resetLastSentHandshake pid   -- peer.c:55
+  -- NAPI
   modifyDev fun d => { d with peerList := d.peerList ++ [pid],   -- list_add_tail
                               peerHashtable := (publicKey, pid) :: d.peerHashtable,
                               numPeers := d.numPeers + 1 }

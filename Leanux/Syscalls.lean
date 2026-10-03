@@ -94,6 +94,7 @@ def dispatch : Syscall → M Int
     -- the fixture adds wg0's routes at wg_up; before that no route exists
     if !(← WG.getDev).running then return -ENETUNREACH
     -- udp_sendmsg returns the datagram's length once the device took it
+    Env.fixtureSend
     let ret ← WG.wgXmit family addr
     return if ret == 0 then 4 else ret
   | .wgInject family port message => socketCallOn SENDER_FD (Env.inject family port message)

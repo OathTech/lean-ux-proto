@@ -1,0 +1,602 @@
+--- a/kernel/kcov.c
++++ b/kernel/kcov.c
+@@ -1125,3 +1125,83 @@
+ }
+ 
+ device_initcall(kcov_init);
++
++/*
++ * LEANUX: a choice the C consumes (a random draw, a clock read), recorded at
++ * a generic interception point into the active KCOV area
++ * (docs/2026-10-03-choice-stream-strategy.md). The record carries the kind,
++ * the consumer's return address, a sequence number that orders records
++ * across the task and remote streams, the value's length and up to 40 value
++ * bytes. Coverage mode: a header word (KCOV_CHOICE_MAGIC in bits 48-63, the
++ * length in 32-47, the kind in 16-31, the payload words in 0-15), the call
++ * site, the sequence number, then the payload. Comparison mode: a header
++ * record (type bit 63 | KCOV_CHOICE_MAGIC << 32 | kind << 16 | words; call
++ * site; sequence number; length), then records of three payload words
++ * (KCOV_CHOICE_MAGIC + 1). A record that does not fit marks the area full,
++ * so the harness fails noisily instead of losing a value.
++ */
++#define KCOV_CHOICE_MAGIC 0x4c5aULL
++#define KCOV_CHOICE_MAX_WORDS 5
++static atomic64_t kcov_choice_seq;
++
++void notrace kcov_choice_ip(u32 kind, unsigned long ip, const void *data, unsigned int len)
++{
++	struct task_struct *t = current;
++	const u8 *bytes = data;
++	u64 words[KCOV_CHOICE_MAX_WORDS + 1] = {0};
++	unsigned int n = len > 8 * KCOV_CHOICE_MAX_WORDS ? 8 * KCOV_CHOICE_MAX_WORDS : len;
++	unsigned int nwords = DIV_ROUND_UP(n, 8), i;
++	u64 *area, seq;
++
++	if (check_kcov_mode(KCOV_MODE_TRACE_PC, t)) {
++		u64 pos;
++
++		for (i = 0; i < n; i++)
++			words[i / 8] |= (u64)bytes[i] << (8 * (i % 8));
++		area = (u64 *)t->kcov_area;
++		pos = READ_ONCE(area[0]);
++		if (pos + 3 + nwords >= t->kcov_size) {
++			WRITE_ONCE(area[0], t->kcov_size - 1);
++			return;
++		}
++		seq = atomic64_inc_return(&kcov_choice_seq);
++		WRITE_ONCE(area[0], pos + 3 + nwords);
++		barrier();
++		area[pos + 1] = KCOV_CHOICE_MAGIC << 48 | (u64)(len & 0xffff) << 32 |
++				(u64)(kind & 0xffff) << 16 | nwords;
++		area[pos + 2] = canonicalize_ip(ip);
++		area[pos + 3] = seq;
++		for (i = 0; i < nwords; i++)
++			area[pos + 4 + i] = words[i];
++	} else if (IS_ENABLED(CONFIG_KCOV_ENABLE_COMPARISONS) &&
++		   check_kcov_mode(KCOV_MODE_TRACE_CMP, t)) {
++		u64 count, start, nrec = 1 + DIV_ROUND_UP(nwords, 3), r;
++
++		for (i = 0; i < n; i++)
++			words[i / 8] |= (u64)bytes[i] << (8 * (i % 8));
++		area = (u64 *)t->kcov_area;
++		count = READ_ONCE(area[0]);
++		start = 1 + count * KCOV_WORDS_PER_CMP;
++		if ((start + nrec * KCOV_WORDS_PER_CMP) * sizeof(u64) >
++		    t->kcov_size * sizeof(unsigned long)) {
++			WRITE_ONCE(area[0], (t->kcov_size - 1) / KCOV_WORDS_PER_CMP);
++			return;
++		}
++		seq = atomic64_inc_return(&kcov_choice_seq);
++		WRITE_ONCE(area[0], count + nrec);
++		barrier();
++		area[start] = 1ULL << 63 | KCOV_CHOICE_MAGIC << 32 | (u64)(kind & 0xffff) << 16 | nwords;
++		area[start + 1] = canonicalize_ip(ip);
++		area[start + 2] = seq;
++		area[start + 3] = len;
++		for (r = 0; r + 1 < nrec; r++) {
++			u64 *rec = area + start + (r + 1) * KCOV_WORDS_PER_CMP;
++
++			rec[0] = 1ULL << 63 | (KCOV_CHOICE_MAGIC + 1) << 32 | r;
++			rec[1] = words[3 * r];
++			rec[2] = words[3 * r + 1];
++			rec[3] = 3 * r + 2 <= KCOV_CHOICE_MAX_WORDS ? words[3 * r + 2] : 0;
++		}
++	}
++}
++EXPORT_SYMBOL(kcov_choice_ip);
+--- a/include/linux/kcov.h
++++ b/include/linux/kcov.h
+@@ -44,6 +44,8 @@
+ void kcov_remote_start(u64 handle);
+ void kcov_remote_stop(void);
+ u64 kcov_common_handle(void);
++/* LEANUX: a choice recorded at a generic interception point. */
++void kcov_choice_ip(u32 kind, unsigned long ip, const void *data, unsigned int len);
+ 
+ static inline void kcov_remote_start_common(u64 id)
+ {
+@@ -99,6 +101,7 @@
+ static inline void kcov_finish_switch(struct task_struct *t) {}
+ static inline void kcov_remote_start(u64 handle) {}
+ static inline void kcov_remote_stop(void) {}
++static inline void kcov_choice_ip(u32 kind, unsigned long ip, const void *data, unsigned int len) {}
+ static inline u64 kcov_common_handle(void)
+ {
+ 	return 0;
+--- a/drivers/char/random.c
++++ b/drivers/char/random.c
+@@ -65,6 +65,7 @@
+ #include <asm/processor.h>
+ #include <asm/irq.h>
+ #include <asm/irq_regs.h>
++#include <linux/kcov.h>
+ #include <asm/io.h>
+ 
+ /*********************************************************************
+@@ -428,6 +429,7 @@
+ void get_random_bytes(void *buf, size_t len)
+ {
+ 	_get_random_bytes(buf, len);
++	kcov_choice_ip(1, _RET_IP_, buf, len);	/* LEANUX: a recorded choice */
+ }
+ EXPORT_SYMBOL(get_random_bytes);
+ 
+@@ -507,7 +509,7 @@
+ 	.position = UINT_MAX							\
+ };										\
+ 										\
+-type get_random_ ##type(void)							\
++static type __get_random_ ##type## _raw(void)					\
+ {										\
+ 	type ret;								\
+ 	unsigned long flags;							\
+@@ -536,6 +538,15 @@
+ 	local_unlock_irqrestore(&batched_entropy_ ##type.lock, flags);		\
+ 	return ret;								\
+ }										\
++										\
++/* LEANUX: the exported draw records the choice; internal draws use _raw. */	\
++type get_random_ ##type(void)							\
++{										\
++	type ret = __get_random_ ##type## _raw();				\
++										\
++	kcov_choice_ip(100 + sizeof(ret), _RET_IP_, &ret, sizeof(ret));		\
++	return ret;								\
++}										\
+ EXPORT_SYMBOL(get_random_ ##type);
+ 
+ DEFINE_BATCHED_ENTROPY(u8)
+@@ -554,7 +565,7 @@
+ 	 * of `-ceil % ceil` is analogous to `2^32 % ceil`, but is computable
+ 	 * in 32-bits.
+ 	 */
+-	u32 rand = get_random_u32();
++	u32 rand = __get_random_u32_raw();	/* LEANUX: recorded once, below */
+ 	u64 mult;
+ 
+ 	/*
+@@ -565,16 +576,20 @@
+ 	 * get_random_u32_inclusive() can work over its whole range without
+ 	 * undefined behavior.
+ 	 */
+-	if (unlikely(!ceil))
++	if (unlikely(!ceil)) {
++		kcov_choice_ip(110, _RET_IP_, &rand, sizeof(rand));
+ 		return rand;
++	}
+ 
+ 	mult = (u64)ceil * rand;
+ 	if (unlikely((u32)mult < ceil)) {
+ 		u32 bound = -ceil % ceil;
+ 		while (unlikely((u32)mult < bound))
+-			mult = (u64)ceil * get_random_u32();
++			mult = (u64)ceil * __get_random_u32_raw();
+ 	}
+-	return mult >> 32;
++	rand = mult >> 32;
++	kcov_choice_ip(110, _RET_IP_, &rand, sizeof(rand));
++	return rand;
+ }
+ EXPORT_SYMBOL(__get_random_u32_below);
+ 
+--- a/kernel/time/timekeeping.c
++++ b/kernel/time/timekeeping.c
+@@ -23,6 +23,7 @@
+ #include <linux/pvclock_gtod.h>
+ #include <linux/compiler.h>
+ #include <linux/audit.h>
++#include <linux/kcov.h>
+ #include <linux/random.h>
+ 
+ #include "tick-internal.h"
+@@ -385,10 +386,18 @@
+  * of the following timestamps. Callers need to be aware of that and
+  * deal with it.
+  */
+-u64 notrace ktime_get_mono_fast_ns(void)
++static __always_inline u64 notrace leanux_raw_ktime_get_mono_fast_ns(void)
+ {
+ 	return __ktime_get_fast_ns(&tk_fast_mono);
+ }
++/* LEANUX: a recorded choice (a clock read). */
++u64 notrace ktime_get_mono_fast_ns(void)
++{
++	u64 v = leanux_raw_ktime_get_mono_fast_ns();
++
++	kcov_choice_ip(200, _RET_IP_, &v, sizeof(v));
++	return v;
++}
+ EXPORT_SYMBOL_GPL(ktime_get_mono_fast_ns);
+ 
+ /**
+@@ -397,10 +406,18 @@
+  * Contrary to ktime_get_mono_fast_ns() this is always correct because the
+  * conversion factor is not affected by NTP/PTP correction.
+  */
+-u64 notrace ktime_get_raw_fast_ns(void)
++static __always_inline u64 notrace leanux_raw_ktime_get_raw_fast_ns(void)
+ {
+ 	return __ktime_get_fast_ns(&tk_fast_raw);
+ }
++/* LEANUX: a recorded choice (a clock read). */
++u64 notrace ktime_get_raw_fast_ns(void)
++{
++	u64 v = leanux_raw_ktime_get_raw_fast_ns();
++
++	kcov_choice_ip(201, _RET_IP_, &v, sizeof(v));
++	return v;
++}
+ EXPORT_SYMBOL_GPL(ktime_get_raw_fast_ns);
+ 
+ /**
+@@ -427,11 +444,19 @@
+  * The caveats vs. timestamp ordering as documented for ktime_get_mono_fast_ns()
+  * apply as well.
+  */
+-u64 notrace ktime_get_boot_fast_ns(void)
++static __always_inline u64 notrace leanux_raw_ktime_get_boot_fast_ns(void)
+ {
+ 	struct timekeeper *tk = &tk_core.timekeeper;
+ 
+-	return (ktime_get_mono_fast_ns() + ktime_to_ns(data_race(tk->offs_boot)));
++	return (leanux_raw_ktime_get_mono_fast_ns() + ktime_to_ns(data_race(tk->offs_boot)));
++}
++/* LEANUX: a recorded choice (a clock read). */
++u64 notrace ktime_get_boot_fast_ns(void)
++{
++	u64 v = leanux_raw_ktime_get_boot_fast_ns();
++
++	kcov_choice_ip(202, _RET_IP_, &v, sizeof(v));
++	return v;
+ }
+ EXPORT_SYMBOL_GPL(ktime_get_boot_fast_ns);
+ 
+@@ -444,11 +469,19 @@
+  * by settime or adjtimex with an offset. The user of this function has to deal
+  * with the possibility of wrong timestamps in post processing.
+  */
+-u64 notrace ktime_get_tai_fast_ns(void)
++static __always_inline u64 notrace leanux_raw_ktime_get_tai_fast_ns(void)
+ {
+ 	struct timekeeper *tk = &tk_core.timekeeper;
+ 
+-	return (ktime_get_mono_fast_ns() + ktime_to_ns(data_race(tk->offs_tai)));
++	return (leanux_raw_ktime_get_mono_fast_ns() + ktime_to_ns(data_race(tk->offs_tai)));
++}
++/* LEANUX: a recorded choice (a clock read). */
++u64 notrace ktime_get_tai_fast_ns(void)
++{
++	u64 v = leanux_raw_ktime_get_tai_fast_ns();
++
++	kcov_choice_ip(203, _RET_IP_, &v, sizeof(v));
++	return v;
+ }
+ EXPORT_SYMBOL_GPL(ktime_get_tai_fast_ns);
+ 
+@@ -476,10 +509,18 @@
+  *
+  * See ktime_get_mono_fast_ns() for documentation of the time stamp ordering.
+  */
+-u64 ktime_get_real_fast_ns(void)
++static __always_inline u64 leanux_raw_ktime_get_real_fast_ns(void)
+ {
+ 	return __ktime_get_real_fast(&tk_fast_mono, NULL);
+ }
++/* LEANUX: a recorded choice (a clock read). */
++u64 ktime_get_real_fast_ns(void)
++{
++	u64 v = leanux_raw_ktime_get_real_fast_ns();
++
++	kcov_choice_ip(204, _RET_IP_, &v, sizeof(v));
++	return v;
++}
+ EXPORT_SYMBOL_GPL(ktime_get_real_fast_ns);
+ 
+ /**
+@@ -716,7 +757,7 @@
+  *
+  * Returns the time of day in a timespec64 (WARN if suspended).
+  */
+-void ktime_get_real_ts64(struct timespec64 *ts)
++static __always_inline void leanux_raw_ktime_get_real_ts64(struct timespec64 *ts)
+ {
+ 	struct timekeeper *tk = &tk_core.timekeeper;
+ 	unsigned int seq;
+@@ -735,9 +776,15 @@
+ 	ts->tv_nsec = 0;
+ 	timespec64_add_ns(ts, nsecs);
+ }
++/* LEANUX: a recorded choice (a clock read). */
++void ktime_get_real_ts64(struct timespec64 *ts)
++{
++	leanux_raw_ktime_get_real_ts64(ts);
++	kcov_choice_ip(205, _RET_IP_, ts, sizeof(*ts));
++}
+ EXPORT_SYMBOL(ktime_get_real_ts64);
+ 
+-ktime_t ktime_get(void)
++static __always_inline ktime_t leanux_raw_ktime_get(void)
+ {
+ 	struct timekeeper *tk = &tk_core.timekeeper;
+ 	unsigned int seq;
+@@ -755,6 +802,14 @@
+ 
+ 	return ktime_add_ns(base, nsecs);
+ }
++/* LEANUX: a recorded choice (a clock read). */
++ktime_t ktime_get(void)
++{
++	ktime_t v = leanux_raw_ktime_get();
++
++	kcov_choice_ip(206, _RET_IP_, &v, sizeof(v));
++	return v;
++}
+ EXPORT_SYMBOL_GPL(ktime_get);
+ 
+ u32 ktime_get_resolution_ns(void)
+@@ -780,7 +835,7 @@
+ 	[TK_OFFS_TAI]	= &tk_core.timekeeper.offs_tai,
+ };
+ 
+-ktime_t ktime_get_with_offset(enum tk_offsets offs)
++static __always_inline ktime_t leanux_raw_ktime_get_with_offset(enum tk_offsets offs)
+ {
+ 	struct timekeeper *tk = &tk_core.timekeeper;
+ 	unsigned int seq;
+@@ -799,9 +854,17 @@
+ 	return ktime_add_ns(base, nsecs);
+ 
+ }
++/* LEANUX: a recorded choice (a clock read). */
++ktime_t ktime_get_with_offset(enum tk_offsets offs)
++{
++	ktime_t v = leanux_raw_ktime_get_with_offset(offs);
++
++	kcov_choice_ip(207, _RET_IP_, &v, sizeof(v));
++	return v;
++}
+ EXPORT_SYMBOL_GPL(ktime_get_with_offset);
+ 
+-ktime_t ktime_get_coarse_with_offset(enum tk_offsets offs)
++static __always_inline ktime_t leanux_raw_ktime_get_coarse_with_offset(enum tk_offsets offs)
+ {
+ 	struct timekeeper *tk = &tk_core.timekeeper;
+ 	unsigned int seq;
+@@ -819,6 +882,14 @@
+ 
+ 	return ktime_add_ns(base, nsecs);
+ }
++/* LEANUX: a recorded choice (a clock read). */
++ktime_t ktime_get_coarse_with_offset(enum tk_offsets offs)
++{
++	ktime_t v = leanux_raw_ktime_get_coarse_with_offset(offs);
++
++	kcov_choice_ip(208, _RET_IP_, &v, sizeof(v));
++	return v;
++}
+ EXPORT_SYMBOL_GPL(ktime_get_coarse_with_offset);
+ 
+ /**
+@@ -844,7 +915,7 @@
+ /**
+  * ktime_get_raw - Returns the raw monotonic time in ktime_t format
+  */
+-ktime_t ktime_get_raw(void)
++static __always_inline ktime_t leanux_raw_ktime_get_raw(void)
+ {
+ 	struct timekeeper *tk = &tk_core.timekeeper;
+ 	unsigned int seq;
+@@ -860,6 +931,14 @@
+ 
+ 	return ktime_add_ns(base, nsecs);
+ }
++/* LEANUX: a recorded choice (a clock read). */
++ktime_t ktime_get_raw(void)
++{
++	ktime_t v = leanux_raw_ktime_get_raw();
++
++	kcov_choice_ip(209, _RET_IP_, &v, sizeof(v));
++	return v;
++}
+ EXPORT_SYMBOL_GPL(ktime_get_raw);
+ 
+ /**
+@@ -870,7 +949,7 @@
+  * clock and the wall_to_monotonic offset and stores the result
+  * in normalized timespec64 format in the variable pointed to by @ts.
+  */
+-void ktime_get_ts64(struct timespec64 *ts)
++static __always_inline void leanux_raw_ktime_get_ts64(struct timespec64 *ts)
+ {
+ 	struct timekeeper *tk = &tk_core.timekeeper;
+ 	struct timespec64 tomono;
+@@ -891,6 +970,12 @@
+ 	ts->tv_nsec = 0;
+ 	timespec64_add_ns(ts, nsec + tomono.tv_nsec);
+ }
++/* LEANUX: a recorded choice (a clock read). */
++void ktime_get_ts64(struct timespec64 *ts)
++{
++	leanux_raw_ktime_get_ts64(ts);
++	kcov_choice_ip(210, _RET_IP_, ts, sizeof(*ts));
++}
+ EXPORT_SYMBOL_GPL(ktime_get_ts64);
+ 
+ /**
+@@ -902,13 +987,21 @@
+  * covers ~136 years of uptime which should be enough to prevent
+  * premature wrap arounds.
+  */
+-time64_t ktime_get_seconds(void)
++static __always_inline time64_t leanux_raw_ktime_get_seconds(void)
+ {
+ 	struct timekeeper *tk = &tk_core.timekeeper;
+ 
+ 	WARN_ON(timekeeping_suspended);
+ 	return tk->ktime_sec;
+ }
++/* LEANUX: a recorded choice (a clock read). */
++time64_t ktime_get_seconds(void)
++{
++	time64_t v = leanux_raw_ktime_get_seconds();
++
++	kcov_choice_ip(211, _RET_IP_, &v, sizeof(v));
++	return v;
++}
+ EXPORT_SYMBOL_GPL(ktime_get_seconds);
+ 
+ /**
+@@ -921,7 +1014,7 @@
+  * counter to provide "atomic" access to the 64bit tk->xtime_sec
+  * value.
+  */
+-time64_t ktime_get_real_seconds(void)
++static __always_inline time64_t leanux_raw_ktime_get_real_seconds(void)
+ {
+ 	struct timekeeper *tk = &tk_core.timekeeper;
+ 	time64_t seconds;
+@@ -938,6 +1031,14 @@
+ 
+ 	return seconds;
+ }
++/* LEANUX: a recorded choice (a clock read). */
++time64_t ktime_get_real_seconds(void)
++{
++	time64_t v = leanux_raw_ktime_get_real_seconds();
++
++	kcov_choice_ip(212, _RET_IP_, &v, sizeof(v));
++	return v;
++}
+ EXPORT_SYMBOL_GPL(ktime_get_real_seconds);
+ 
+ /**
+@@ -1545,7 +1646,7 @@
+  *
+  * Returns the raw monotonic time (completely un-modified by ntp)
+  */
+-void ktime_get_raw_ts64(struct timespec64 *ts)
++static __always_inline void leanux_raw_ktime_get_raw_ts64(struct timespec64 *ts)
+ {
+ 	struct timekeeper *tk = &tk_core.timekeeper;
+ 	unsigned int seq;
+@@ -1561,6 +1662,12 @@
+ 	ts->tv_nsec = 0;
+ 	timespec64_add_ns(ts, nsecs);
+ }
++/* LEANUX: a recorded choice (a clock read). */
++void ktime_get_raw_ts64(struct timespec64 *ts)
++{
++	leanux_raw_ktime_get_raw_ts64(ts);
++	kcov_choice_ip(213, _RET_IP_, ts, sizeof(*ts));
++}
+ EXPORT_SYMBOL(ktime_get_raw_ts64);
+ 
+ 
+@@ -2279,16 +2386,22 @@
+  * basically means that however wrong your real time clock is at boot time,
+  * you get the right time here).
+  */
+-void getboottime64(struct timespec64 *ts)
++static __always_inline void leanux_raw_getboottime64(struct timespec64 *ts)
+ {
+ 	struct timekeeper *tk = &tk_core.timekeeper;
+ 	ktime_t t = ktime_sub(tk->offs_real, tk->offs_boot);
+ 
+ 	*ts = ktime_to_timespec64(t);
+ }
++/* LEANUX: a recorded choice (a clock read). */
++void getboottime64(struct timespec64 *ts)
++{
++	leanux_raw_getboottime64(ts);
++	kcov_choice_ip(214, _RET_IP_, ts, sizeof(*ts));
++}
+ EXPORT_SYMBOL_GPL(getboottime64);
+ 
+-void ktime_get_coarse_real_ts64(struct timespec64 *ts)
++static __always_inline void leanux_raw_ktime_get_coarse_real_ts64(struct timespec64 *ts)
+ {
+ 	struct timekeeper *tk = &tk_core.timekeeper;
+ 	unsigned int seq;
+@@ -2299,9 +2412,15 @@
+ 		*ts = tk_xtime(tk);
+ 	} while (read_seqcount_retry(&tk_core.seq, seq));
+ }
++/* LEANUX: a recorded choice (a clock read). */
++void ktime_get_coarse_real_ts64(struct timespec64 *ts)
++{
++	leanux_raw_ktime_get_coarse_real_ts64(ts);
++	kcov_choice_ip(215, _RET_IP_, ts, sizeof(*ts));
++}
+ EXPORT_SYMBOL(ktime_get_coarse_real_ts64);
+ 
+-void ktime_get_coarse_ts64(struct timespec64 *ts)
++static __always_inline void leanux_raw_ktime_get_coarse_ts64(struct timespec64 *ts)
+ {
+ 	struct timekeeper *tk = &tk_core.timekeeper;
+ 	struct timespec64 now, mono;
+@@ -2317,6 +2436,12 @@
+ 	set_normalized_timespec64(ts, now.tv_sec + mono.tv_sec,
+ 				now.tv_nsec + mono.tv_nsec);
+ }
++/* LEANUX: a recorded choice (a clock read). */
++void ktime_get_coarse_ts64(struct timespec64 *ts)
++{
++	leanux_raw_ktime_get_coarse_ts64(ts);
++	kcov_choice_ip(216, _RET_IP_, ts, sizeof(*ts));
++}
+ EXPORT_SYMBOL(ktime_get_coarse_ts64);
+ 
+ /*
+--- a/drivers/net/wireguard/send.c
++++ b/drivers/net/wireguard/send.c
+@@ -17,7 +17,7 @@
+ #include <net/ip_tunnels.h>
+ #include <net/udp.h>
+ #include <net/sock.h>
+-
++#include <linux/kcov.h>
+ static void wg_packet_send_handshake_initiation(struct wg_peer *peer)
+ {
+ 	struct message_handshake_initiation packet;
+@@ -48,8 +48,8 @@
+ 	struct wg_peer *peer = container_of(work, struct wg_peer,
+ 					    transmit_handshake_work);
+ 
+-	wg_packet_send_handshake_initiation(peer);
+-	wg_peer_put(peer);
++	kcov_remote_start_common(peer->device->kcov_handle); wg_packet_send_handshake_initiation(peer);
++	wg_peer_put(peer); kcov_remote_stop();
+ }
+ 
+ void wg_packet_send_queued_handshake_initiation(struct wg_peer *peer,
+--- a/drivers/net/wireguard/device.c
++++ b/drivers/net/wireguard/device.c
+@@ -10,7 +10,7 @@
+ #include "ratelimiter.h"
+ #include "peer.h"
+ #include "messages.h"
+-
++#include <linux/kcov.h>
+ #include <linux/module.h>
+ #include <linux/rtnetlink.h>
+ #include <linux/inet.h>
+@@ -320,7 +320,7 @@
+ 	wg_allowedips_init(&wg->peer_allowedips);
+ 	wg_cookie_checker_init(&wg->cookie_checker, wg);
+ 	INIT_LIST_HEAD(&wg->peer_list);
+-	wg->device_update_gen = 1;
++	wg->device_update_gen = 1; wg->kcov_handle = kcov_common_handle();
+ 
+ 	wg->peer_hashtable = wg_pubkey_hashtable_alloc();
+ 	if (!wg->peer_hashtable)
+--- a/drivers/net/wireguard/device.h
++++ b/drivers/net/wireguard/device.h
+@@ -53,7 +53,7 @@
+ 	atomic_t handshake_queue_len;
+ 	unsigned int num_peers, device_update_gen;
+ 	u32 fwmark;
+-	u16 incoming_port;
++	u16 incoming_port; u64 kcov_handle;
+ };
+ 
+ int wg_device_init(void);

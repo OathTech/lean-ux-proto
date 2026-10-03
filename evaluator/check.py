@@ -165,61 +165,85 @@ def non_statement(line):
             or re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*:', text) is not None)
 
 
+# The random and clock helpers a choice's call chain passes through before
+# reaching its consumer (choice-stream strategy, section 4.2).
+CHOICE_HELPERS = ('drivers/char/random.c', 'include/linux/random.h', 'kernel/time/timekeeping.c',
+                  'include/linux/timekeeping.h', 'include/crypto/curve25519.h', 'include/linux/hrtimer.h')
+RANDOM_KINDS = {1, 101, 102, 104, 108, 110}
+
+
 def load_hidden_sites():
-    """The mirror's hidden-input sites (`leanux-model --hidden-sites`):
-    number -> (label, "file:line")."""
+    """The mirror's choice sites (`leanux-model --hidden-sites`):
+    (kind, "file:line" of the consumer frame) -> entry."""
     result = subprocess.run([MODEL, '--hidden-sites'], capture_output=True, timeout=60)
     if result.returncode:
         raise InvalidOutput('leanux-model --hidden-sites failed')
     sites = {}
     for entry in loads(result.stdout.decode()):
-        if set(entry) != {'id', 'label', 'file', 'line', 'len'} or entry['id'] in sites:
+        if set(entry) != {'id', 'label', 'kind', 'file', 'line', 'len', 'role'} or entry['kind'] not in ('random', 'clock') \
+                or entry['role'] not in ('mirror', 'cut', 'ambient'):
             raise InvalidOutput(f'hidden site fields: {entry}')
-        sites[entry['id']] = (entry['label'], f"{entry['file']}:{entry['line']}")
+        key = (entry['kind'], f"{entry['file']}:{entry['line']}")
+        if key in sites:
+            raise InvalidOutput(f'duplicate hidden site {key}')
+        sites[key] = entry
     return sites
 
 
 def hidden_records(traces, rows):
-    """Each child's hidden-input records per operation of each network trace:
-    {(id, mode): [[[site, hex], ...] per op]}, the task stream before the
-    remote one, and every record's call site, for the site cross-check."""
-    net = {t['id']: len(t['ops']) for t in traces if uses_wireguard(t)}
+    """Each child's choice records per operation of each trace, ordered by
+    sequence number across the task and remote streams:
+    {(id, mode): [[[kind, call site, seq, length, hex], ...] per op]}."""
+    net = {t['id']: len(t['ops']) for t in traces}
     per, seen = {}, set()
     for row in rows:
         if row['id'] not in net or not 0 <= row['index'] < net[row['id']]:
-            raise InvalidOutput('hidden-input record for an unknown operation')
+            raise InvalidOutput('choice record for an unknown operation')
         row_key = (row['id'], row['mode'], row['index'], row['stream'])
         if row_key in seen:
-            raise InvalidOutput('duplicate hidden-input row')
+            raise InvalidOutput('duplicate choice row')
         seen.add(row_key)
-        ops = per.setdefault((row['id'], row['mode']), [[[], []] for _ in range(net[row['id']])])
-        ops[row['index']][0 if row['stream'] == 'task' else 1] = row['records']
-    # every operation of a network trace has a task row in both children
+        ops = per.setdefault((row['id'], row['mode']), [[] for _ in range(net[row['id']])])
+        ops[row['index']] += row['records']
+    # every operation of every trace has a task row in both children
     for trace_id, count in net.items():
         for mode in ('pc', 'cmp'):
             if any((trace_id, mode, i, 'task') not in seen for i in range(count)):
-                raise InvalidOutput(f'hidden-input rows missing for {trace_id} ({mode})')
-    # Task records precede remote ones within an operation. Every site today
-    # runs in a kworker (the task stream is empty); a task-context site that
-    # interleaves with a remote section would need positions across streams.
-    records, calls = {}, []
+                raise InvalidOutput(f'choice rows missing for {trace_id} ({mode})')
     for key, ops in per.items():
-        records[key] = [[[r[0], r[2]] for r in task + remote] for task, remote in ops]
-        calls += [(key[0], r[0], r[1]) for task, remote in ops for r in task + remote]
-    return records, calls
+        for op in ops:
+            op.sort(key=lambda r: r[2])
+            if len({r[2] for r in op}) != len(op):
+                raise InvalidOutput('duplicate choice sequence number')
+    return per
 
 
-def hidden_site_problems(calls, sites, locations):
-    """Each record's call site (the innermost source frame of its return
-    address: kcov_record is never inlined) must be its declared site's line."""
-    problems = {}
-    for trace_id, site, ip in calls:
-        frames = locations.get(ip, [])
-        sources = [f['source'].split('/.deps/linux/')[-1].split(' ')[0] for f in frames[:1]]
-        if site not in sites or sources != [sites[site][1]]:
-            problems.setdefault(trace_id, []).append(dict(index=None, label=f'hidden site {site}',
-                problem='hidden-input record from an undeclared call site', call_site=sorted(sources)))
-    return problems
+def resolve_choices(per, sites, locations):
+    """Each record's site, by the consumer frame of its call chain (the first
+    frame outside the random and clock helpers): {(id, mode): [[[site id,
+    hex padded to whole words], ...] per op]}, and per-trace problems for
+    records from undeclared consumers."""
+    resolved, problems = {}, {}
+    skipped = Counter()
+    for key, ops in per.items():
+        out = []
+        for index, op in enumerate(ops):
+            recs = []
+            for kind, ip, seq, length, data in op:
+                frames = [f['source'].split('/.deps/linux/')[-1].split(' ')[0] for f in locations.get(ip, [])]
+                consumer = next((src for src in frames if src.split(':')[0] not in CHOICE_HELPERS), None)
+                kind_class = 'random' if kind in RANDOM_KINDS else 'clock' if 200 <= kind <= 216 else None
+                entry = sites.get((kind_class, consumer)) if kind_class else None
+                if entry is None or length != entry['len']:
+                    problems.setdefault(key[0], []).append(dict(index=index, label=f'choice kind {kind}',
+                        problem='choice from an undeclared consumer', call_chain=frames, length=length))
+                    continue
+                recs.append([entry['id'], data + '0' * (-len(data) % 16)])
+                if entry['role'] != 'mirror' and key[1] == 'pc':
+                    skipped[f"{entry['role']}:{entry['label']}"] += 1
+            out.append(recs)
+        resolved[key] = out
+    return resolved, problems, skipped
 
 
 def load_decisions(config):
@@ -244,13 +268,22 @@ def parse_decisions(decisions, config):
         if type(entry['line']) is not int or non_statement(f"{entry['file']}:{entry['line']}"):
             raise InvalidOutput(f'decision {label}: condition line must be a source statement')
         comparison = entry['comparison']
-        if comparison is not None and (set(comparison) != {'rel', 'const_rhs', 'site'} or comparison['rel'] not in RELATIONS
-                                       or type(comparison['const_rhs']) is not bool):
+        if comparison is not None and (set(comparison) != {'rel', 'const_rhs', 'site', 'assigned'}
+                                       or comparison['rel'] not in RELATIONS
+                                       or type(comparison['const_rhs']) is not bool
+                                       or type(comparison['assigned']) is not bool):
             raise InvalidOutput(f'decision {label}: comparison spec')
         if comparison is not None and comparison['site'] is not None:
             site_file, _, site_line = comparison['site'].rpartition(':')
-            if site_file != entry['file'] or not site_line.isdigit() or abs(int(site_line) - entry['line']) > 2:
-                raise InvalidOutput(f'decision {label}: comparison site must be within two lines of the condition')
+            if site_file != entry['file'] or not site_line.isdigit():
+                raise InvalidOutput(f'decision {label}: comparison site file')
+            # a comparison in the condition is within two lines of it; one
+            # assigned to a local the condition tests precedes it closely
+            near = (0 < entry['line'] - int(site_line) <= 6) if comparison['assigned'] \
+                else abs(int(site_line) - entry['line']) <= 2
+            if not near:
+                raise InvalidOutput(f'decision {label}: comparison site must be within two lines of the condition'
+                                    ' (or, assigned, precede it within six)')
         spans = {}
         for outcome, key in ((True, 'when_true'), (False, 'when_false')):
             lines = set()
@@ -566,9 +599,11 @@ def run_chunk(traces, out, kcov):
         (out / 'linux/comparison-map.json').write_text(json.dumps(compared, indent=1) + '\n')
         hidden_path = out / 'linux/hidden.jsonl'
         rows = [loads(line) for line in hidden_path.read_text().splitlines()] if hidden_path.exists() else []
-        records, calls = hidden_records(traces, rows)
-        called = symbolize([{'pcs': sorted({ip for _, _, ip in calls})}], KERNEL / 'vmlinux') if calls else {'locations': {}}
-        site_problems = hidden_site_problems(calls, load_hidden_sites(), called['locations'])
+        per = hidden_records(traces, rows)
+        ips = sorted({r[1] for ops in per.values() for op in ops for r in op})
+        called = symbolize([{'pcs': ips}], KERNEL / 'vmlinux') if ips else {'locations': {}}
+        records, site_problems, skipped = resolve_choices(per, load_hidden_sites(), called['locations'])
+        outcomes.update({f'choice records skipped ({k})': n for k, n in skipped.items()})
     except LinuxRunError as exc:
         return {t['id']: dict(outcome=exc.kind, side='linux', detail=str(exc)) for t in traces}, gaps, outcomes
     except (InvalidOutput, ValueError, OSError, subprocess.SubprocessError) as exc:
@@ -672,8 +707,11 @@ def main(argv=None):
         raise
     finally:
         matched = outcomes.pop('operand pairs matched', 0)
+        skipped = {k[len('choice records skipped ('):-1]: outcomes.pop(k) for k in list(outcomes)
+                   if k.startswith('choice records skipped (')}
         status = write_report(out, traces, results, gaps, build, aborted, started, suites, args,
-                              decision_summary(decisions, outcomes, kcov[2] if kcov else {}), matched, filtered, splits)
+                              decision_summary(decisions, outcomes, kcov[2] if kcov else {}), matched, filtered, splits,
+                              skipped)
     return 0 if status == 'pass' else 1
 
 
@@ -694,7 +732,7 @@ def decision_summary(decisions, outcomes, witnesses):
 
 
 def write_report(out, traces, results, gaps, build, aborted, started, suites, args, decision_coverage=None,
-                 operand_pairs_matched=0, domain_filtered=None, chunk_splits=0):
+                 operand_pairs_matched=0, domain_filtered=None, chunk_splits=0, choice_records_skipped=None):
     ordered = [results.get(trace['id'], dict(id=trace['id'], outcome='not_run')) for trace in traces]
     counts = Counter(r['outcome'] for r in ordered)
     vmlinux = KERNEL / 'vmlinux'
@@ -711,6 +749,9 @@ def write_report(out, traces, results, gaps, build, aborted, started, suites, ar
                        seed=args.seed, trace=args.trace),
         traces=len(traces), operations=sum(len(t['ops']) for t in traces),
         counts=dict(counts), known_gap_hits=dict(gaps), operand_pairs_matched=operand_pairs_matched,
+        # cut and ambient choice records (coverage child), by site: consumed
+        # without their values, so their growth is visible here
+        choice_records_skipped=dict(sorted((choice_records_skipped or {}).items())),
         domain_filtered=dict(domain_filtered or {}), chunk_splits=chunk_splits,
         decision_coverage=decision_coverage,
         failures=[r for r in ordered if r['outcome'] != 'agreement'])

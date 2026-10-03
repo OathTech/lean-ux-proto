@@ -24,7 +24,7 @@ SHARED = Path(os.environ.get("LEANUX_SHARED_ROOT", ROOT)).resolve()
 ARTIFACTS = Path(os.environ.get("LEANUX_ARTIFACTS", ROOT / ".artifacts")).resolve()
 # The accepted oracle kernel, or another kernel build selected by
 # LEANUX_KERNEL_DIR (it must lie inside the shared or task artifact roots).
-KERNEL = Path(os.environ.get("LEANUX_KERNEL_DIR", SHARED / ".artifacts/kernel-net-hidden")).resolve()
+KERNEL = Path(os.environ.get("LEANUX_KERNEL_DIR", SHARED / ".artifacts/kernel-net-choice")).resolve()
 if not (KERNEL.is_relative_to(SHARED / ".artifacts") or KERNEL.is_relative_to(ARTIFACTS)):
     raise SystemExit(f"LEANUX_KERNEL_DIR outside the artifact roots: {KERNEL}")
 OUTPUT_LIMIT = 16 * 1024 * 1024
@@ -271,12 +271,16 @@ def _collect(outdir, traces, process_returncode):
     except ValueError as exc:
         raise LinuxRunError("invalid_output", f"Remote coverage: {exc}", outdir) from exc
     _jsonl(outdir / "coverage.jsonl", coverage)
-    # Hidden inputs (docs/2026-10-03-hidden-inputs-design.md): one task row and,
-    # with remote coverage, one remote row per network operation and child.
+    # Choices (docs/2026-10-03-choice-stream-strategy.md): one task row and,
+    # with remote coverage, one remote row per network operation and child;
+    # each record is [kind, call site, sequence number, length, value hex].
     for row in hidden + remote_hidden:
         if (type(row) is not dict or set(row) != {"id", "index", "mode", "records"} or row["mode"] not in ("pc", "cmp")
                 or type(row["records"]) is not list
-                or any(type(r) is not list or len(r) != 3 for r in row["records"])):
+                or any(type(r) is not list or len(r) != 5 or type(r[0]) is not int or type(r[1]) is not str
+                       or type(r[2]) is not int or type(r[3]) is not int or type(r[4]) is not str
+                       or len(r[4]) != 2 * min(r[3], 40)
+                       for r in row["records"])):
             raise LinuxRunError("invalid_output", "Malformed hidden-input record", outdir)
     _jsonl(outdir / "hidden.jsonl", [dict(r, stream="task") for r in hidden] + [dict(r, stream="remote") for r in remote_hidden])
     _jsonl(outdir / "comparisons.jsonl", comparisons)

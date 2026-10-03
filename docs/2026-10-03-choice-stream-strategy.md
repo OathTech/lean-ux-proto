@@ -90,8 +90,8 @@ them.
    mismatch writes a marker;
 3. writes the record.
 
-**One order.** A per-trace sequence counter, an atomic in the armed trace
-state, stamps every record and every section's start and stop. Task records
+**One order.** A global sequence counter (an atomic in `kcov.c`) stamps
+every record (step 1). Section start and stop records follow with step 3. Task records
 and remote sections then merge into one order. Today they merge by
 convention (task before remote, `evaluator/check.py:202-204`), which fails
 once task-context sites exist (`send.c:25-29` via `wg_xmit`). It also fails
@@ -102,8 +102,13 @@ section's deferred unit, at the position its start record gives.
 
 ### 4.2 Call-site identity
 
-A record's site is the **full inline chain** of its return address,
-symbolized by the evaluator. The innermost frame alone is not enough:
+A record's site is identified by its **consumer frame**: the first frame of
+its symbolized call chain outside the random and clock helpers (step 1 as
+built). An inline helper used by several callers (`timers.h:28`,
+`noise.h:103`) is one site for all of them. That is harmless, because records
+are consumed in sequence order and A2 fixes which caller ran, and a surplus
+record fails at the next read or at the operation's end. The full chain and
+the tail-jump check remain for supply resolution in step 2. The innermost frame alone is not enough:
 - both ephemerals are drawn through the inline `get_random_bytes_wait`
   (`include/linux/random.h:126`);
 - several `noise.h:103` and `timers.h:26-29` callers share a line.
@@ -120,8 +125,8 @@ Two host-side checks:
 
 | Kind | Where (6.12.110) | Notes |
 |---|---|---|
-| random | `get_random_bytes` (`random.c:428`); the batched `get_random_u8/16/32/64` (`:490-544`); `__get_random_u32_below` (`:546-579`) | `get_random_u32_below` with a non-constant ceiling is out of line (`random.h:60-62`): it records once, at `__get_random_u32_below`'s return, and its internal `get_random_u32` draws are suppressed by a per-task nesting flag. With a constant ceiling it is inline, and the batched draw records with the consumer's chain. Separate PRNGs do not bypass these (`prandom_u32` is gone in 6.12; the siphash keys are drawn before the window, `guest.c:152-170`). |
-| clock | every exported reader in `kernel/time/timekeeping.c`: 18 `EXPORT_SYMBOL` readers, including `ktime_get_coarse_real_ts64` (`fs/inode.c:2648`, pipes) and `ktime_get_ts64` (`fs/select.c:85`, epoll) | `jiffies` is a plain load and stays unhooked: in comparisons the comparison operands carry it (A3); where it reaches data it is a declared gap (section 7). |
+| random | `get_random_bytes` (`random.c:428`); the batched `get_random_u8/16/32/64` (`:490-544`); `__get_random_u32_below` (`:546-579`) | `get_random_u32_below` with a non-constant ceiling is out of line (`random.h:60-62`): it records once, at `__get_random_u32_below`'s return, and its internal draws use an unrecorded `_raw` variant of the batched function. With a constant ceiling it is inline, and the batched draw records with the consumer's chain. Separate PRNGs do not bypass these (`prandom_u32` is gone in 6.12; the siphash keys are drawn before the window, `guest.c:152-170`). |
+| clock | every exported reader in `kernel/time/timekeeping.c`: 17 wrapped readers (`ktime_get_snapshot`, PTP only, is not), including `ktime_get_coarse_real_ts64` (`fs/inode.c:2648`, pipes) and `ktime_get_ts64` (`fs/select.c:85`, epoll) | `jiffies` is a plain load and stays unhooked: in comparisons the comparison operands carry it (A3); where it reaches data it is a declared gap (section 7). |
 | dispatch | `process_one_work` (`workqueue.c:3264`); `call_timer_fn` (`timer.c:1795`); the `NET_RX` vector only, in `handle_softirqs` (`softirq.c:536`) | sections open only for dispatch functions in the **armed dispatch set** (section 4.4). `TIMER_SOFTIRQ` is excluded from the vector section, because a timer section inside a vector section would nest (`kcov.c:880`), and a nested stop closes the outer section. `RCU_SOFTIRQ` is excluded by construction, so RCU callbacks are unrecorded rather than debt. `KCOV_INSTRUMENT_softirq.o := n` (`kernel/Makefile:26`), so the dispatch code adds no PCs of its own. |
 
 Each section writes a start record naming the dispatched function. For the
@@ -150,8 +155,10 @@ Dispatches outside the set open no section and record nothing:
 - RCU callbacks;
 - netns cleanup.
 
-That is the background-work policy. There is **no** "environment noise"
-class, and so no fail-open loophole. A modeled worker of the trace runs
+That is the background-work policy for dispatched work: there is **no**
+"environment noise" class for it, and so no fail-open loophole. (Section 10b
+covers the one declared ambient clock consumer, the scheduler, which step 1
+found inside the window.) A modeled worker of the trace runs
 inside the set. Work outside the set is not the trace's. It is not checked,
 and is stated as out of the mirror's scope.
 
@@ -299,6 +306,23 @@ entries).
 6. **Tape-based generation with shrinking.**
 7. **The scalability test.** The next subsystem (pipes or epoll) needs only
    declarations.
+
+## 10b. Ambient sites (step 1)
+
+Step 1 adds one class the earlier text ruled out. Scheduler bookkeeping
+(`start_dl_timer`, `kernel/sched/deadline.c:1153`, reading `ktime_get`
+through `hrtimer_cb_get_time`) reads the clock wherever the task sleeps or
+wakes. It belongs to no cut point the mirror models.
+
+It is declared as an **ambient** site, consumed wherever it occurs. The
+class is bounded:
+- it is one declared consumer frame;
+- its records are counted per run (`choice_records_skipped`);
+- any other undeclared consumer still fails.
+
+This is weaker than the cut rule (no position at all), and is accepted
+because the mirror does not model the scheduler (one CPU, `PREEMPT_NONE`).
+Adding a second ambient site needs the same justification as a cut entry.
 
 ## 10a. Step 0 results [AGENT 2026-10-03]
 

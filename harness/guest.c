@@ -237,38 +237,22 @@ static void print_records(const char *tag, const char *id, unsigned i, const uns
     printf("]}\n");
 }
 
-/* Hidden inputs (docs/2026-10-03-hidden-inputs-design.md): the patched
- * kernel's kcov_record() writes tagged entries into the KCOV area. They are
- * split out before deduplication, printed in area order as
- * [site, call site, payload hex], and the area is compacted in place to the
- * ordinary entries; the new count is returned. A malformed record fails. */
-#define HIDDEN_MAGIC 0x4c58UL
-/* LEANUX PROBE (choice-stream strategy, step 0; net-probe kernels only):
- * generic choice and section records, [kind, call site, sequence, length,
- * payload hex], split out before anything else reads the area. */
-#define PROBE_MAGIC 0x4c59UL
-static unsigned long split_probe(const char *tag, const struct trace *t, unsigned i, unsigned long *area,
-                                 unsigned long count)
+/* Choices (docs/2026-10-03-choice-stream-strategy.md): the patched kernel's
+ * kcov_choice_ip() writes tagged records into the KCOV area at generic
+ * interception points (random draws, clock reads). They are split out
+ * before deduplication and printed in area order as
+ * [kind, call site, sequence number, length, value hex]; the area is
+ * compacted in place to the ordinary entries and the new count returned.
+ * A malformed record fails. */
+#define CHOICE_MAGIC 0x4c5aUL
+static void print_choice(int *comma, unsigned long kind, unsigned long ip, unsigned long seq, unsigned long len,
+                         const unsigned long *words, unsigned long nwords)
 {
-    unsigned long kept = 0;
-    int comma = 0, any = 0;
-    for (unsigned long j = 1; j <= count;) {
-        unsigned long w = area[j];
-        if (w >> 48 != PROBE_MAGIC) { area[1 + kept++] = w; ++j; continue; }
-        unsigned long n = w & 0xffff;
-        if (j + 2 + n > count) fail(t->id, i, "coverage_failure", "malformed_probe_record");
-        if (!any) printf("%s {\"id\":\"%s\",\"index\":%u,\"records\":[", tag, t->id, i);
-        any = 1;
-        printf("%s[%lu,\"0x%lx\",%lu,%lu,\"", comma ? "," : "", (w >> 16) & 0xffff, area[j + 1], area[j + 2],
-               (w >> 32) & 0xffff);
-        for (unsigned long k = 0; k < n; ++k)
-            for (int b = 0; b < 8; ++b) printf("%02lx", (area[j + 3 + k] >> (8 * b)) & 0xff);
-        printf("\"]");
-        comma = 1;
-        j += 3 + n;
-    }
-    if (any) printf("]}\n");
-    return kept;
+    printf("%s[%lu,\"0x%lx\",%lu,%lu,\"", *comma ? "," : "", kind, ip, seq, len);
+    unsigned long bytes = len < 8 * nwords ? len : 8 * nwords;
+    for (unsigned long k = 0; k < bytes; ++k) printf("%02lx", (words[k / 8] >> (8 * (k % 8))) & 0xff);
+    printf("\"]");
+    *comma = 1;
 }
 
 static unsigned long split_hidden(const char *tag, const struct trace *t, unsigned i, unsigned long *area,
@@ -281,36 +265,31 @@ static unsigned long split_hidden(const char *tag, const struct trace *t, unsign
     if (!comparisons) {
         for (unsigned long j = 1; j <= count;) {
             unsigned long w = area[j];
-            if (w >> 48 != HIDDEN_MAGIC) { area[1 + kept++] = w; ++j; continue; }
+            if (w >> 48 != CHOICE_MAGIC) { area[1 + kept++] = w; ++j; continue; }
             unsigned long n = w & 0xffff;
-            if (j + 1 + n > count) fail(t->id, i, "coverage_failure", "malformed_hidden_record");
-            printf("%s[%lu,\"0x%lx\",\"", comma ? "," : "", (w >> 16) & 0xffff, area[j + 1]);
-            for (unsigned long k = 0; k < n; ++k)
-                for (int b = 0; b < 8; ++b) printf("%02lx", (area[j + 2 + k] >> (8 * b)) & 0xff);
-            printf("\"]");
-            comma = 1;
-            j += 2 + n;
+            if (n > 5 || j + 2 + n > count) fail(t->id, i, "coverage_failure", "malformed_choice_record");
+            print_choice(&comma, (w >> 16) & 0xffff, area[j + 1], area[j + 2], (w >> 32) & 0xffff, area + j + 3, n);
+            j += 3 + n;
         }
     } else {
         for (unsigned long k = 0; k < count;) {
             unsigned long *r = area + 1 + 4 * k;
-            if ((r[0] >> 63) && ((r[0] >> 32) & 0xffff) == HIDDEN_MAGIC + 1)
-                fail(t->id, i, "coverage_failure", "malformed_hidden_record");   /* payload without header */
-            if (!(r[0] >> 63) || ((r[0] >> 32) & 0xffff) != HIDDEN_MAGIC) {
+            if ((r[0] >> 63) && ((r[0] >> 32) & 0xffff) == CHOICE_MAGIC + 1)
+                fail(t->id, i, "coverage_failure", "malformed_choice_record");   /* payload without header */
+            if (!(r[0] >> 63) || ((r[0] >> 32) & 0xffff) != CHOICE_MAGIC) {
                 if (kept != k) memmove(area + 1 + 4 * kept, r, 4 * sizeof(*r));
                 ++kept; ++k; continue;
             }
             unsigned long n = r[0] & 0xffff, nrec = 1 + (n + 2) / 3;
-            if (k + nrec > count) fail(t->id, i, "coverage_failure", "malformed_hidden_record");
-            printf("%s[%lu,\"0x%lx\",\"", comma ? "," : "", (r[0] >> 16) & 0xffff, r[1]);
+            if (n > 5 || k + nrec > count) fail(t->id, i, "coverage_failure", "malformed_choice_record");
+            unsigned long words[6] = {0};
             for (unsigned long w = 0; w < n; ++w) {
                 const unsigned long *p = area + 1 + 4 * (k + 1 + w / 3);
-                if (!(p[0] >> 63) || ((p[0] >> 32) & 0xffff) != HIDDEN_MAGIC + 1 || (p[0] & 0xffff) != w / 3)
-                    fail(t->id, i, "coverage_failure", "malformed_hidden_record");
-                for (int b = 0; b < 8; ++b) printf("%02lx", (p[1 + w % 3] >> (8 * b)) & 0xff);
+                if (!(p[0] >> 63) || ((p[0] >> 32) & 0xffff) != CHOICE_MAGIC + 1 || (p[0] & 0xffff) != w / 3)
+                    fail(t->id, i, "coverage_failure", "malformed_choice_record");
+                words[w] = p[1 + w % 3];
             }
-            printf("\"]");
-            comma = 1;
+            print_choice(&comma, (r[0] >> 16) & 0xffff, r[1], r[2], r[3], words, n);
             k += nrec;
         }
     }
@@ -683,11 +662,8 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             if (remote_count >= (comparisons ? (CAPACITY - 1) / 4 : CAPACITY - 1))
                 fail(t->id, i, "coverage_failure", "full_remote_kcov");
         }
-        if (t->net && !comparisons) {
-            count = split_probe("LEANUX_PROBE", t, i, coverage, count);
-            if (remote) remote_count = split_probe("LEANUX_RPROBE", t, i, remote, remote_count);
-        }
-        if (t->net) {
+        /* every trace: the generic clock hooks also fire on file paths */
+        {
             count = split_hidden("LEANUX_HIDDEN", t, i, coverage, count, comparisons);
             if (remote) remote_count = split_hidden("LEANUX_RHIDDEN", t, i, remote, remote_count, comparisons);
         }

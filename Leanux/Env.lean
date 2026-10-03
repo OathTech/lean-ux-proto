@@ -46,8 +46,14 @@ def INJECT_GAP_NS : Nat := 400000000
 def TRACE_BOUND_SECONDS : Nat := 4
 
 def timing : Timing where
-  sinceLastConsumption ns := ns ≤ INJECT_GAP_NS
   timerMayExpire s := s ≤ TRACE_BOUND_SECONDS
+
+/-- The fixture's own `sendto` (into wg0's route, or to wg0's port): the IP
+    output path draws the ident key and the ident, and may initialize the
+    flow-hash secret; these are cut-site choices (choice-stream strategy,
+    section 5). -/
+def fixtureSend : M Unit :=
+  skipCut [.ipIdentKey, .ipIdentReserve, .flowHashSecret]
 
 /-- Whether an endpoint is one of the fixture's listeners. -/
 def listenerFamily (e : Endpoint) : Option Nat :=
@@ -137,6 +143,7 @@ def inject (family port : Nat) (msg : List UInt8) : M Int := do
   if !d.running || port != d.incomingPort then unsupported "a datagram to a port other than wg0's"
   -- a pending send worker inserts an index entry under a random index
   for pid in d.peerList do requireNotPending pid "receiving while a handshake is queued"
+  fixtureSend
   WG.wgReceive msg (← senderSource family)
   -- the queued receive work runs before the guest's wait ends
   if !(← getDev).handshakeQueue.isEmpty then WG.handshakeReceiveWorker

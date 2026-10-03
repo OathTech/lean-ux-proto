@@ -32,22 +32,22 @@ documentation are not needed for the check. The first two can be staged with
 ## 2. Build and verify the oracle kernel
 
 ```sh
-LEANUX_KERNEL_PROFILE=net-hidden LEANUX_KERNEL_BUILD=.artifacts/kernel-net-hidden scripts/in-bundle scripts/build-kernel
-scripts/in-bundle python3 scripts/kernel-identity.py .artifacts/kernel-net-hidden
+LEANUX_KERNEL_PROFILE=net-choice LEANUX_KERNEL_BUILD=.artifacts/kernel-net-choice scripts/in-bundle scripts/build-kernel
+scripts/in-bundle python3 scripts/kernel-identity.py .artifacts/kernel-net-choice
 ```
 
 The profile extracts the locked Linux archive into
-`.artifacts/src/linux-6.12.110-wireguard-hidden-inputs` and applies two
-patches there, strictly and by hash (`scripts/apply-kernel-patch.py`):
+`.artifacts/src/linux-6.12.110-choice-stream` and applies two patches there,
+strictly and by hash (`scripts/apply-kernel-patch.py`):
 - `kernel/patches/wireguard-kcov-remote.patch` adds remote KCOV coverage to
   WireGuard's receive path;
-- `kernel/patches/wireguard-hidden-inputs.patch` records WireGuard's random
-  draws and clock reads into the KCOV stream (`kcov_record`), and covers the
-  handshake send worker.
+- `kernel/patches/choice-stream.patch` records every random draw and clock
+  read at generic interception points into the KCOV stream (`kcov_choice_ip`),
+  and covers the handshake send worker.
 
 Every line number in the files the check anchors is preserved. `.deps` is
 never modified. The identity must equal the first hash in
-`kernel/identity-x86_64-net-hidden.txt`.
+`kernel/identity-x86_64-net-choice.txt`.
 The `vmlinux` file hash itself differs between build directories, because the
 debug info and build IDs record the path; the identity excludes exactly that.
 If the identity differs, stop: the check's decision table was verified against

@@ -27,6 +27,8 @@ def HANDSHAKE_CREATED_RESPONSE : Nat := 3
 def HANDSHAKE_CONSUMED_RESPONSE : Nat := 4
 def MESSAGE_HANDSHAKE_RESPONSE_LEN : Nat := 92
 def INITIATIONS_PER_SECOND : Nat := 50
+/-- `CONFIG_HZ` (kernel/config-x86_64-net-choice). -/
+def HZ : Nat := 250
 
 private def zeroKey : List UInt8 := List.replicate 32 0
 
@@ -106,16 +108,22 @@ def consumeInitiation (msg : List UInt8) : M (Option PeerId) := do
   let some (t, hashT) := ts | invariant "unreachable"
   let p ← getPeer pid
   let replay := memcmp t p.latestTimestamp != .gt
-  -- `last_initiation_consumption + NSEC_PER_SEC / INITIATIONS_PER_SECOND > now`
-  let flood := !((← get).timing.sinceLastConsumption (1000000000 / INITIATIONS_PER_SECOND))
-  if ← orM (branch .consumeReplay replay) (branch .consumeFlood flood) then return ← out peer none
+  -- `(s64)last_initiation_consumption + NSEC_PER_SEC / INITIATIONS_PER_SECOND
+  -- > (s64)ktime_get_coarse_boottime_ns()`, computed before the test
+  let floodLhs := p.lastInitiationConsumption + NSEC_PER_SEC / INITIATIONS_PER_SECOND
+  let now ← hiddenClock .floodNow
+  if ← orM (branch .consumeReplay replay) (branchCmp .consumeFlood (floodLhs > now) floodLhs now) then
+    return ← out peer none
   -- Success! Copy everything to peer
   setPeer pid { (← getPeer pid) with remoteEphemeral := e }
   if ← branch .consumeNewerTimestamp (memcmp t p.latestTimestamp == .gt) then
     setPeer pid { (← getPeer pid) with latestTimestamp := t }
   setPeer pid { (← getPeer pid) with hash := hashT, chainingKey := ckSs, remoteIndex := u32le msg 4 }
-  -- `(s64)(last_initiation_consumption - now) < 0`: then it becomes now
-  _ ← branch .consumeLaterTime ((← get).timing.sinceLastConsumption 1)
+  -- `(s64)(last_initiation_consumption - (initiation_consumption = now)) < 0`
+  let consumption ← hiddenClock .consumptionNow
+  let last := (← getPeer pid).lastInitiationConsumption
+  if ← branch .consumeLaterTime (last - consumption < 0) then
+    setPeer pid { (← getPeer pid) with lastInitiationConsumption := consumption }
   setPeer pid { (← getPeer pid) with handshakeState := HANDSHAKE_CONSUMED_INITIATION }
   out peer (some pid)
 
@@ -147,9 +155,8 @@ def createInitiation (pid : PeerId) : M (Option (List UInt8)) := do
   -- handshake_init(chaining_key, hash, remote_static)
   let h := noiseHash (handshakeInitHash ++ p.remoteStatic)
   setChain pid handshakeInitChainingKey h
-  -- e: curve25519_generate_secret (get_random_bytes_wait, then clamp),
-  -- recorded after the clamp
-  let secret ← hidden .initEphemeral
+  -- e: curve25519_generate_secret: get_random_bytes_wait (recorded), then the clamp
+  let secret := clamp (← hidden .initEphemeral)
   setPeer pid { (← getPeer pid) with ephemeralPrivate := secret }
   let (pub, ok) ← generatePublic secret
   if ← branch .initNoEphemeral !ok then return none
@@ -185,7 +192,7 @@ def createResponse (pid : PeerId) : M (Option (List UInt8)) := do
   if ← branch .respNotConsumed (p.handshakeState != HANDSHAKE_CONSUMED_INITIATION) then return none
   let receiver := p.remoteIndex
   -- e
-  let secret ← hidden .respEphemeral   -- curve25519_generate_secret
+  let secret := clamp (← hidden .respEphemeral)   -- curve25519_generate_secret
   setPeer pid { (← getPeer pid) with ephemeralPrivate := secret }
   let (pub, ok) ← generatePublic secret
   if ← branch .respNoEphemeral !ok then return none
@@ -243,7 +250,10 @@ def beginSession (pid : PeerId) : M Bool := do
   if ← branch .keypairCreateNoMem !ok then pure ()
   if ← branch .sessionNoKeypair !ok then return false
   if ← branch .sessionInitiator (st == HANDSHAKE_CONSUMED_RESPONSE) then unsupported "unreachable"
-  -- derive_keys: the session keys (not read until a data packet; stage D)
+  -- derive_keys: the birthdate (a recorded clock read), then the session keys
+  -- (not read until a data packet; stage D)
+  let birthdate ← hiddenClock .deriveKeysBirthdate
+  setPeer pid { (← getPeer pid) with keypairBirthdate := birthdate }
   _ ← kdf true false (← getPeer pid).chainingKey []
   handshakeZero pid
   if ← branch .sessionAlive !(← getPeer pid).isDead then
@@ -279,14 +289,32 @@ def sendBufferToPeer (pid : PeerId) (bytes : List UInt8) : M Unit := do
     if ← branch .sendSkbInet (family == AF_INET) then pure true
     else if ← branch .sendSkbInet6 (family == AF_INET6) then pure true
     else pure false   -- dev_kfree_skb; -EAFNOSUPPORT
+  -- send4/send6 (a cut point) choose the IP ident (an ICMP answer from a
+  -- closed loopback port runs in softirq outside any section: unrecorded)
+  skipCut [.ipIdentKey, .ipIdentReserve, .flowHashSecret]
   if ← branch .sendSkbOk sent then
     let some e := p.endpoint | invariant "unreachable"
     setPeer pid { p with txBytes := p.txBytes + bytes.length }
     modify fun w => { w with sent := w.sent ++ [{ family := e.family, addr := e.addr, port := e.port, bytes }] }
 
+/-- wg_timers_handshake_initiated (timers.c:182-187): the retransmit timer,
+    with `get_random_u32_below(REKEY_TIMEOUT_JITTER_MAX_JIFFIES)` inline for
+    the constant ceiling `HZ / 3` = 83 (random.h:76-80): `get_random_u8`
+    draws (recorded) until `(u8)(83 * r) >= 256 % 83`. The jitter only sets
+    the expiry, beyond the trace. -/
+def timersHandshakeInitiated (pid : PeerId) : M Unit := do
+  let ceil := HZ / 3   -- REKEY_TIMEOUT_JITTER_MAX_JIFFIES; at most 256: the u8 path
+  for _ in [0:256] do
+    let r := (← hidden .retransmitJitter)[0]!.toNat
+    if (ceil * r) % 256 ≥ 256 % ceil then
+      modPeerTimer pid
+      return
+  unsupported "256 rejected jitter draws"
+
 /-- wg_packet_send_handshake_response (send.c:85-108). -/
 def sendHandshakeResponse (pid : PeerId) : M Unit := do
-  setPeer pid { (← getPeer pid) with lastSentExpired := false }   -- last_sent_handshake = now
+  let now ← hiddenClock .respLastSent   -- last_sent_handshake = now
+  setPeer pid { (← getPeer pid) with lastSentHandshake := now }
   let created ← createResponse pid
   if ← branch .respCreated created.isSome then
     let some msg := created | invariant "unreachable"
@@ -295,23 +323,26 @@ def sendHandshakeResponse (pid : PeerId) : M Unit := do
       modPeerTimer pid   -- wg_timers_session_derived
       timersTraversal pid
       -- wg_timers_any_authenticated_packet_sent: del_timer
+      let now ← hiddenClock .respLastSentAgain
+      setPeer pid { (← getPeer pid) with lastSentHandshake := now }
       sendBufferToPeer pid msg
 
 /-- wg_packet_send_handshake_initiation (send.c:21-44). -/
 def sendHandshakeInitiation (pid : PeerId) : M Unit := do
   -- `!wg_birthdate_has_expired(last_sent_handshake, REKEY_TIMEOUT)`
-  if ← branch .initRateLimited !(← getPeer pid).lastSentExpired then return
-  setPeer pid { (← getPeer pid) with lastSentExpired := false }   -- last_sent_handshake = now
+  if ← branch .initRateLimited !(← birthdateHasExpired (← getPeer pid).lastSentHandshake REKEY_TIMEOUT) then return
+  let now ← hiddenClock .initLastSent   -- last_sent_handshake = now
+  setPeer pid { (← getPeer pid) with lastSentHandshake := now }
   let created ← createInitiation pid
   if ← branch .initCreated created.isSome then
     let some msg := created | invariant "unreachable"
     let msg ← addMacToPacket pid msg
     timersTraversal pid
     -- wg_timers_any_authenticated_packet_sent: del_timer
+    let now ← hiddenClock .initLastSentAgain
+    setPeer pid { (← getPeer pid) with lastSentHandshake := now }
     sendBufferToPeer pid msg
-    -- wg_timers_handshake_initiated: its jitter draw only sets the expiry,
-    -- beyond the trace, so it is not recorded
-    modPeerTimer pid
+    timersHandshakeInitiated pid
 
 /-- wg_packet_handshake_send_worker (send.c:46-53), run by the environment
     for a peer whose work is queued. -/
