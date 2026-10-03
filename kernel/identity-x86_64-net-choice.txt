@@ -2,13 +2,13 @@
 # step 1; awaiting the user's approval to replace the net-hidden oracle):
 # kernel/config-x86_64-net with kernel/patches/wireguard-kcov-remote.patch
 # (sha256 503c899d061530af6d250ed018466b7ba1cc77407f3a3492edf031e20d9cfe07) and
-# kernel/patches/choice-stream.patch (sha256 3a689c3a293ccdbca6206db1153d6614792f580c43025f163065a3c706fe576c),
+# kernel/patches/choice-stream.patch (sha256 b662b4638fb16e5fb3a7b09a639286ef943f6cfb9502cf094d92cf0757b97338),
 # built with LEANUX_KERNEL_PROFILE=net-choice. The choice-stream patch records
 # random draws and clock reads at generic interception points (drivers/char/random.c,
 # kernel/time/timekeeping.c, kernel/kcov.c; none anchored) and keeps the
 # handshake send worker's remote section (send.c, device.c, device.h; line
 # counts preserved). Its DWARF names .deps/linux (via -fdebug-prefix-map).
 # Path-independent identity from scripts/kernel-identity.py:
-d645fd53e646100e298e40816b83d9ec043cbd8aea84314d64a0a9a535fa42ac
+d8884037565722f7fa7cc868b573da28494eb79cd86e0853a019117095d2c996
 # vmlinux sha256 of the build the evidence used (path-dependent):
-98f14ca1d5f802a4a62f03b0ee8afcd8b4cce66ccf0836315926883ca5582a2c
+ef103305285701a0760733e75b5eedec490354f3a87155f436d75152bab9614b

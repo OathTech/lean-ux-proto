@@ -307,6 +307,89 @@ entries).
 7. **The scalability test.** The next subsystem (pipes or epoll) needs only
    declarations.
 
+## 10c. Step 1 results [AGENT 2026-10-03]
+
+The user approved step 1. It is built on this branch; the oracle change needs
+the user's approval.
+
+**Kernel `net-choice`:** the B2 remote-coverage patch plus
+`kernel/patches/choice-stream.patch` (sha256 `b662b463…`), with identity
+`d8884037…` in `kernel/identity-x86_64-net-choice.txt`.
+- `kcov_choice_ip` records each choice: kind, call site, sequence number,
+  length, value.
+- The hooks are the five random entry points (`__get_random_u32_below`
+  records once, through a `_raw` split) and 17 wrapped clock readers.
+- WireGuard's four per-site hooks are retired. The send worker's section
+  stays until step 3.
+- The config is identical to the current oracle's apart from the version
+  string.
+
+**Mirror:**
+- **14 WireGuard sites.** The four already recorded; nine clock reads that
+  were assumptions before (`last_sent_handshake` at `noise.h:103` and
+  `send.c:29/39/89/102`; `wg_birthdate_has_expired` at `timers.h:28`; the
+  flood test and consumption time, `noise.c:637/650`; the keypair birthdate,
+  `noise.c:396`); and the retransmit jitter (`timers.c:186`) with the C's
+  exact rejection loop.
+- **Replaced:** the `lastSentExpired` flag and `Timing.sinceLastConsumption`,
+  by recorded values.
+- **Clamping:** the ephemeral secret is clamped by the mirror, from the raw
+  draw.
+- **Cut and ambient:** four cut sites are consumed at their cut points (the
+  fixture's own send, `wg_xmit`'s ICMP error path, wg0's send cut). One
+  ambient site, the scheduler (section 10b).
+- **The flood test** is a `branchCmp` on the recorded clock. Its compare is
+  assigned to `flood_attack` at `noise.c:635`, so the decision table gains an
+  explicit, bounded `assigned` comparison: it must precede the condition
+  within six lines. Only this decision uses it.
+
+**Evaluator:**
+- records are mapped to sites by consumer frame;
+- they are ordered by sequence number across the task and remote streams;
+- an undeclared consumer or an unknown kind is a problem;
+- skipped records are reported (`choice_records_skipped`).
+
+**Generator:** planned guest waits now stay within 2.8 s of the 4 s bound.
+One borderline trace had tipped over.
+
+**Full check** on `e8fd900` (clean tree, `vmlinux` `ef103305…`):
+
+| Check | Result |
+|---|---|
+| Behavior | 1,325 / 1,325 traces agree (38,934 operations) |
+| Control flow | all agree |
+| Operands | 320,655 pairs (the flood test's comparisons are new) |
+| Choice records skipped (coverage child) | `ip_idents_reserve` 345, `ip_ident_key` 127, ICMP 106, flow-hash secret 7, scheduler (ambient) 11 |
+
+**Mutants:** 27 of 30 rejected.
+- **H-M7, the flood threshold (5 instead of 50 per second):** rejected only
+  by A3, "operands differ from Linux", on 9 traces. Its outcome never flips
+  in the domain, so this is the evidence step 1 pays for itself: the mutant
+  survives without recorded clocks.
+- **H-M9** (`last_sent_handshake` not set back) and **H-M11** (cut records
+  without their cut point): rejected by `hidden_mismatch`.
+- **H-M10** (an undeclared cut consumer): rejected by "choice from an
+  undeclared consumer".
+- **Survivors:**
+  - **B2-M3 and C-M3**, as documented before.
+  - **H-M8**, the unclamped response ephemeral. This is an equivalent
+    mutant. The kernel's `curve25519` clamps its scalar internally
+    (`lib/crypto/curve25519-hacl64.c:772`), as does the mirror's RFC 7748
+    `x25519`. So `curve25519_generate_secret`'s clamp changes no output;
+    only the unobserved stored secret differs.
+
+**Review.** An independent Fable review found one wrong behavior: choice
+records were split only in network traces, so FS paths' clock reads would
+have corrupted coverage. Fixed: every trace. The FS suites pass, and today's
+FS slice makes no in-window clock reads. Also fixed:
+- double recording in two fast readers;
+- a dead cut entry;
+- unknown kinds were mapped as clock reads;
+- skipped records were not reported;
+- a missing negative control (H-M11);
+- the jitter ceiling from `HZ`;
+- the documentation (sections 4.1–4.3, 10b).
+
 ## 10b. Ambient sites (step 1)
 
 Step 1 adds one class the earlier text ruled out. Scheduler bookkeeping
