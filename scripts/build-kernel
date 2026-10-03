@@ -11,7 +11,7 @@
 # random and clock sources, and a remote section for the handshake send worker.
 set -eu
 PROFILE="${LEANUX_KERNEL_PROFILE:-base}"
-case "$PROFILE" in base|net|net-rcov|net-hidden) ;; *) echo "Unknown kernel profile: $PROFILE" >&2; exit 1 ;; esac
+case "$PROFILE" in base|net|net-rcov|net-hidden|net-probe) ;; *) echo "Unknown kernel profile: $PROFILE" >&2; exit 1 ;; esac
 LEANUX_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
 LEANUX_SHARED_ROOT="${LEANUX_SHARED_ROOT:-$LEANUX_ROOT}"
 LEANUX_ARTIFACTS="${LEANUX_ARTIFACTS:-$LEANUX_ROOT/.artifacts}"
@@ -24,13 +24,20 @@ esac
 mkdir -p "$LEANUX_BUILD"
 SOURCE="$LEANUX_SHARED_ROOT/.deps/linux"
 KCFLAGS_EXTRA=''
-if [ "$PROFILE" = net-rcov ] || [ "$PROFILE" = net-hidden ]; then
+if [ "$PROFILE" = net-rcov ] || [ "$PROFILE" = net-hidden ] || [ "$PROFILE" = net-probe ]; then
     PATCH="$LEANUX_ROOT/kernel/patches/wireguard-kcov-remote.patch"
     PATCH_SHA=503c899d061530af6d250ed018466b7ba1cc77407f3a3492edf031e20d9cfe07
     SOURCE="$LEANUX_ARTIFACTS/src/linux-6.12.110-wireguard-kcov-remote"
     HIDDEN_PATCH="$LEANUX_ROOT/kernel/patches/wireguard-hidden-inputs.patch"
     HIDDEN_SHA=91a412bad138e2f5d765ca5653dd874e4618658c081b3212a87894f93220cf0b
-    if [ "$PROFILE" = net-hidden ]; then
+    # net-probe: a throwaway measurement kernel (choice-stream strategy,
+    # section 10 step 0), never an oracle
+    PROBE_PATCH="$LEANUX_ROOT/kernel/patches/probe-choice-enumeration.patch"
+    PROBE_SHA=8205bdbaf48dfba17234aa8a95440b8f435f151dd42003f070b88d2ea228f41f
+    if [ "$PROFILE" = net-probe ]; then
+        SOURCE="$LEANUX_ARTIFACTS/src/linux-6.12.110-probe-choice-enumeration"
+        PATCH_SHA_RECORD="$PATCH_SHA $HIDDEN_SHA $PROBE_SHA"
+    elif [ "$PROFILE" = net-hidden ]; then
         SOURCE="$LEANUX_ARTIFACTS/src/linux-6.12.110-wireguard-hidden-inputs"
         PATCH_SHA_RECORD="$PATCH_SHA $HIDDEN_SHA"
     else
@@ -53,8 +60,11 @@ if [ "$PROFILE" = net-rcov ] || [ "$PROFILE" = net-hidden ]; then
         mkdir -p "$SOURCE.extracting"
         tar -xJf "$ARCHIVE" -C "$SOURCE.extracting" --strip-components=1
         python3 "$LEANUX_ROOT/scripts/apply-kernel-patch.py" "$PATCH" "$SOURCE.extracting" "$PATCH_SHA"
-        if [ "$PROFILE" = net-hidden ]; then
+        if [ "$PROFILE" = net-hidden ] || [ "$PROFILE" = net-probe ]; then
             python3 "$LEANUX_ROOT/scripts/apply-kernel-patch.py" "$HIDDEN_PATCH" "$SOURCE.extracting" "$HIDDEN_SHA"
+        fi
+        if [ "$PROFILE" = net-probe ]; then
+            python3 "$LEANUX_ROOT/scripts/apply-kernel-patch.py" "$PROBE_PATCH" "$SOURCE.extracting" "$PROBE_SHA"
         fi
         echo "$PATCH_SHA_RECORD" > "$SOURCE.extracting/.leanux-patch-sha256"
         mv "$SOURCE.extracting" "$SOURCE"
@@ -85,6 +95,7 @@ done
 SUFFIX='-leanux-kcov'; [ "$PROFILE" = net ] && SUFFIX='-leanux-kcov-net'
 [ "$PROFILE" = net-rcov ] && SUFFIX='-leanux-kcov-net-rcov'
 [ "$PROFILE" = net-hidden ] && SUFFIX='-leanux-kcov-net-hidden'
+[ "$PROFILE" = net-probe ] && SUFFIX='-leanux-kcov-net-probe'
 "$LEANUX_CONFIG" --file "$LEANUX_BUILD/.config" --set-str LOCALVERSION "$SUFFIX"
 make -s -C "$SOURCE" O="$LEANUX_BUILD" ARCH=x86_64 olddefconfig
 REQUIRED="64BIT BINFMT_ELF BINFMT_SCRIPT EVENTFD BLK_DEV_INITRD SERIAL_8250_CONSOLE DEBUG_FS DEBUG_INFO_DWARF4 KCOV"
@@ -98,7 +109,9 @@ done
 make -C "$SOURCE" O="$LEANUX_BUILD" ARCH=x86_64 KCFLAGS="$KCFLAGS_EXTRA" \
     -j"${LEANUX_JOBS:-4}" bzImage vmlinux
 mkdir -p "$LEANUX_ROOT/kernel"
-if [ "$PROFILE" = net-hidden ]; then
+if [ "$PROFILE" = net-probe ]; then
+    :   # a probe kernel records no configuration
+elif [ "$PROFILE" = net-hidden ]; then
     cp "$LEANUX_BUILD/.config" "$LEANUX_ROOT/kernel/config-x86_64-net-hidden"
 elif [ "$PROFILE" = net-rcov ]; then
     cp "$LEANUX_BUILD/.config" "$LEANUX_ROOT/kernel/config-x86_64-net-rcov"

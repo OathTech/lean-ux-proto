@@ -243,6 +243,34 @@ static void print_records(const char *tag, const char *id, unsigned i, const uns
  * [site, call site, payload hex], and the area is compacted in place to the
  * ordinary entries; the new count is returned. A malformed record fails. */
 #define HIDDEN_MAGIC 0x4c58UL
+/* LEANUX PROBE (choice-stream strategy, step 0; net-probe kernels only):
+ * generic choice and section records, [kind, call site, sequence, length,
+ * payload hex], split out before anything else reads the area. */
+#define PROBE_MAGIC 0x4c59UL
+static unsigned long split_probe(const char *tag, const struct trace *t, unsigned i, unsigned long *area,
+                                 unsigned long count)
+{
+    unsigned long kept = 0;
+    int comma = 0, any = 0;
+    for (unsigned long j = 1; j <= count;) {
+        unsigned long w = area[j];
+        if (w >> 48 != PROBE_MAGIC) { area[1 + kept++] = w; ++j; continue; }
+        unsigned long n = w & 0xffff;
+        if (j + 2 + n > count) fail(t->id, i, "coverage_failure", "malformed_probe_record");
+        if (!any) printf("%s {\"id\":\"%s\",\"index\":%u,\"records\":[", tag, t->id, i);
+        any = 1;
+        printf("%s[%lu,\"0x%lx\",%lu,%lu,\"", comma ? "," : "", (w >> 16) & 0xffff, area[j + 1], area[j + 2],
+               (w >> 32) & 0xffff);
+        for (unsigned long k = 0; k < n; ++k)
+            for (int b = 0; b < 8; ++b) printf("%02lx", (area[j + 3 + k] >> (8 * b)) & 0xff);
+        printf("\"]");
+        comma = 1;
+        j += 3 + n;
+    }
+    if (any) printf("]}\n");
+    return kept;
+}
+
 static unsigned long split_hidden(const char *tag, const struct trace *t, unsigned i, unsigned long *area,
                                   unsigned long count, int comparisons)
 {
@@ -654,6 +682,10 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             remote_count = __atomic_load_n(&remote[0], __ATOMIC_RELAXED);
             if (remote_count >= (comparisons ? (CAPACITY - 1) / 4 : CAPACITY - 1))
                 fail(t->id, i, "coverage_failure", "full_remote_kcov");
+        }
+        if (t->net && !comparisons) {
+            count = split_probe("LEANUX_PROBE", t, i, coverage, count);
+            if (remote) remote_count = split_probe("LEANUX_RPROBE", t, i, remote, remote_count);
         }
         if (t->net) {
             count = split_hidden("LEANUX_HIDDEN", t, i, coverage, count, comparisons);
