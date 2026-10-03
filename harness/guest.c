@@ -45,6 +45,7 @@
 #define WG_IFINDEX 3
 /* wg_observe waits this long for the handshake workers before it looks. */
 #define OBSERVE_WAIT_US 400000
+#define QUEUE_WAIT_US 100000
 /* Timers fire REKEY_TIMEOUT (5 s) after a handshake is sent; a trace must end
  * well before that, counted from wg_up. */
 #define REKEY_BOUND_NS 4000000000LL
@@ -236,6 +237,57 @@ static void print_records(const char *tag, const char *id, unsigned i, const uns
     printf("]}\n");
 }
 
+/* Hidden inputs (docs/2026-10-03-hidden-inputs-design.md): the patched
+ * kernel's kcov_record() writes tagged entries into the KCOV area. They are
+ * split out before deduplication, printed in area order as
+ * [site, call site, payload hex], and the area is compacted in place to the
+ * ordinary entries; the new count is returned. A malformed record fails. */
+#define HIDDEN_MAGIC 0x4c58UL
+static unsigned long split_hidden(const char *tag, const struct trace *t, unsigned i, unsigned long *area,
+                                  unsigned long count, int comparisons)
+{
+    printf("%s {\"id\":\"%s\",\"index\":%u,\"mode\":\"%s\",\"records\":[", tag, t->id, i,
+           comparisons ? "cmp" : "pc");
+    unsigned long kept = 0;
+    int comma = 0;
+    if (!comparisons) {
+        for (unsigned long j = 1; j <= count;) {
+            unsigned long w = area[j];
+            if (w >> 48 != HIDDEN_MAGIC) { area[1 + kept++] = w; ++j; continue; }
+            unsigned long n = w & 0xffff;
+            if (j + 1 + n > count) fail(t->id, i, "coverage_failure", "malformed_hidden_record");
+            printf("%s[%lu,\"0x%lx\",\"", comma ? "," : "", (w >> 16) & 0xffff, area[j + 1]);
+            for (unsigned long k = 0; k < n; ++k)
+                for (int b = 0; b < 8; ++b) printf("%02lx", (area[j + 2 + k] >> (8 * b)) & 0xff);
+            printf("\"]");
+            comma = 1;
+            j += 2 + n;
+        }
+    } else {
+        for (unsigned long k = 0; k < count;) {
+            unsigned long *r = area + 1 + 4 * k;
+            if (!(r[0] >> 63) || ((r[0] >> 32) & 0xffff) != HIDDEN_MAGIC) {
+                if (kept != k) memmove(area + 1 + 4 * kept, r, 4 * sizeof(*r));
+                ++kept; ++k; continue;
+            }
+            unsigned long n = r[0] & 0xffff, nrec = 1 + (n + 2) / 3;
+            if (k + nrec > count) fail(t->id, i, "coverage_failure", "malformed_hidden_record");
+            printf("%s[%lu,\"0x%lx\",\"", comma ? "," : "", (r[0] >> 16) & 0xffff, r[1]);
+            for (unsigned long w = 0; w < n; ++w) {
+                const unsigned long *p = area + 1 + 4 * (k + 1 + w / 3);
+                if (!(p[0] >> 63) || ((p[0] >> 32) & 0xffff) != HIDDEN_MAGIC + 1 || (p[0] & 0xffff) != w / 3)
+                    fail(t->id, i, "coverage_failure", "malformed_hidden_record");
+                for (int b = 0; b < 8; ++b) printf("%02lx", (p[1 + w % 3] >> (8 * b)) & 0xff);
+            }
+            printf("\"]");
+            comma = 1;
+            k += nrec;
+        }
+    }
+    printf("]}\n");
+    return kept;
+}
+
 /* Deduplicate after capture, keeping each PC's first execution in order:
  * sort (pc, position) pairs, mark first positions, then print the marked PCs
  * in execution order. */
@@ -260,6 +312,17 @@ static void print_pcs(const char *tag, const char *id, unsigned i, const unsigne
 }
 
 static unsigned char observe_buffer[2048];
+/* Every datagram wg_observe saw, as [family, hex] (printed after the
+ * observation as LEANUX_DGRAM: the bytes a hidden-input consumer compares). */
+static char dgram_hex[1 << 16];
+static size_t dgram_len;
+static void note_datagram(int family, long n)
+{
+    if (dgram_len + 32 + 2 * (size_t)n >= sizeof(dgram_hex)) return;
+    dgram_len += (size_t)sprintf(dgram_hex + dgram_len, "%s[%d,\"", dgram_len ? "," : "", family);
+    for (long k = 0; k < n; ++k) dgram_len += (size_t)sprintf(dgram_hex + dgram_len, "%02x", observe_buffer[k]);
+    dgram_len += (size_t)sprintf(dgram_hex + dgram_len, "\"]");
+}
 static struct timespec went_up;
 static int up_seen;
 
@@ -355,7 +418,9 @@ static void observe(const struct trace *t, unsigned i, long first, int compariso
 {
     if (!comparisons) printf("LEANUX_WGOBS {\"id\":\"%s\",\"index\":%u,\"datagrams\":[", t->id, i);
     int comma = 0;
-    if (first >= 0 && !comparisons) comma = print_datagram(comma, 4, first);
+    dgram_len = 0;
+    dgram_hex[0] = '\0';
+    if (first >= 0 && !comparisons) { note_datagram(4, first); comma = print_datagram(comma, 4, first); }
     for (int family = 4; family <= 6; family += 2) {
         for (;;) {
             long n = recv(family == 4 ? LISTEN4_FD : LISTEN6_FD, observe_buffer, sizeof(observe_buffer), MSG_DONTWAIT);
@@ -363,7 +428,7 @@ static void observe(const struct trace *t, unsigned i, long first, int compariso
                 if (errno != EAGAIN) fail(t->id, i, "environment_failure", "drain_listener");
                 break;
             }
-            if (!comparisons) comma = print_datagram(comma, family, n);
+            if (!comparisons) { note_datagram(family, n); comma = print_datagram(comma, family, n); }
         }
     }
     if (!comparisons) printf("],\"replies\":[");
@@ -377,6 +442,7 @@ static void observe(const struct trace *t, unsigned i, long first, int compariso
             break;
         }
         if (comparisons) continue;
+        note_datagram(0, n);   /* family 0: a reply at the sender */
         unsigned type = n >= 4 ? (unsigned)observe_buffer[0] | (unsigned)observe_buffer[1] << 8 |
                                  (unsigned)observe_buffer[2] << 16 | (unsigned)observe_buffer[3] << 24 : 0;
         unsigned receiver = n >= 12 ? (unsigned)observe_buffer[8] | (unsigned)observe_buffer[9] << 8 |
@@ -388,6 +454,7 @@ static void observe(const struct trace *t, unsigned i, long first, int compariso
     printf("],");
     print_stats(t->id, i);
     printf("}\n");
+    printf("LEANUX_DGRAM {\"id\":\"%s\",\"index\":%u,\"datagrams\":[%s]}\n", t->id, i, dgram_hex);
 }
 
 /* Remote coverage for network traces. KCOV_REMOTE_ENABLE claims the calling
@@ -562,8 +629,11 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             route_into_wg0(t->id, i);
         }
         if (op->code == 12) observe(t, i, ret, comparisons);
-        /* The handshake worker runs after the send returns. */
+        /* The handshake worker runs after the send returns. An operation
+         * that can queue the handshake send worker (wg_set, wg_up, wg_xmit)
+         * waits for it too, so the worker's remote section lands in it. */
         if (op->code == 13) usleep(OBSERVE_WAIT_US);
+        if (op->code == 8 || op->code == 10 || op->code == 11) usleep(QUEUE_WAIT_US);
         if (up_seen) {
             struct timespec now;
             clock_gettime(CLOCK_BOOTTIME, &now);
@@ -588,6 +658,10 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             remote_count = __atomic_load_n(&remote[0], __ATOMIC_RELAXED);
             if (remote_count >= (comparisons ? (CAPACITY - 1) / 4 : CAPACITY - 1))
                 fail(t->id, i, "coverage_failure", "full_remote_kcov");
+        }
+        if (t->net) {
+            count = split_hidden("LEANUX_HIDDEN", t, i, coverage, count, comparisons);
+            if (remote) remote_count = split_hidden("LEANUX_RHIDDEN", t, i, remote, remote_count, comparisons);
         }
         if (comparisons) {
             /* The remote stream's comparisons: the handshake worker's peer

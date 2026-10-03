@@ -1,7 +1,7 @@
 # WireGuard stage C (the Noise responder) — report, 2026-10-01
 
-Status: **awaiting signoff** on branch `task/wg-stage-c` (commit after `6b30e91`, which adds
-only this report and the plan status).
+Status: **merged** to `main` with user signoff on 2026-10-01 (integration
+record in `.artifacts/runs/evidence/wg-stage-c/`).
 Design: [next-plan, stage C](2026-09-29-next-plan.md) [AGENT; the user asked to
 proceed without stopping after the design].
 

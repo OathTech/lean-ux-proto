@@ -237,6 +237,7 @@ def _collect(outdir, traces, process_returncode):
     results, coverage, fixtures, errors, child_failures, completed, kernels = [], [], [], [], [], [], []
     comparisons, comparison_results, wireguard, observed = [], [], [], []
     remote_coverage, remote_comparisons = [], []
+    hidden, remote_hidden, dgrams = [], [], []
     for line in (outdir / "boot.log").read_text(errors="strict").splitlines():
         line = line.rstrip("\r")
         for prefix, target in (("LEANUX_RESULT ", results), ("LEANUX_COVERAGE ", coverage),
@@ -244,7 +245,8 @@ def _collect(outdir, traces, process_returncode):
                                ("LEANUX_CHILD_FAILURE ", child_failures), ("LEANUX_CMP ", comparisons),
                                ("LEANUX_CMP_RESULT ", comparison_results), ("LEANUX_WG ", wireguard),
                                ("LEANUX_WGOBS ", observed), ("LEANUX_RCOVERAGE ", remote_coverage),
-                               ("LEANUX_RCMP ", remote_comparisons)):
+                               ("LEANUX_RCMP ", remote_comparisons), ("LEANUX_HIDDEN ", hidden),
+                               ("LEANUX_RHIDDEN ", remote_hidden), ("LEANUX_DGRAM ", dgrams)):
             if line.startswith(prefix):
                 try:
                     target.append(_decode_json(line[len(prefix):]))
@@ -262,6 +264,15 @@ def _collect(outdir, traces, process_returncode):
     except ValueError as exc:
         raise LinuxRunError("invalid_output", f"Remote coverage: {exc}", outdir) from exc
     _jsonl(outdir / "coverage.jsonl", coverage)
+    # Hidden inputs (docs/2026-10-03-hidden-inputs-design.md): one task row and,
+    # with remote coverage, one remote row per network operation and child.
+    for row in hidden + remote_hidden:
+        if (type(row) is not dict or set(row) != {"id", "index", "mode", "records"} or row["mode"] not in ("pc", "cmp")
+                or type(row["records"]) is not list
+                or any(type(r) is not list or len(r) != 3 for r in row["records"])):
+            raise LinuxRunError("invalid_output", "Malformed hidden-input record", outdir)
+    _jsonl(outdir / "hidden.jsonl", [dict(r, stream="task") for r in hidden] + [dict(r, stream="remote") for r in remote_hidden])
+    _jsonl(outdir / "datagrams.jsonl", dgrams)
     _jsonl(outdir / "comparisons.jsonl", comparisons)
     _jsonl(outdir / "guest-errors.jsonl", errors + child_failures)
     (outdir / "fixture.json").write_text(json.dumps({

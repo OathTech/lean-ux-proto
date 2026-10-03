@@ -1,0 +1,215 @@
+--- a/kernel/kcov.c
++++ b/kernel/kcov.c
+@@ -1125,3 +1125,76 @@
+ }
+ 
+ device_initcall(kcov_init);
++
++/*
++ * LEANUX: record a hidden input (a random draw, a clock read) at its source,
++ * so the Lean mirror can consume it (docs/2026-10-03-hidden-inputs-design.md).
++ * The record goes into the active KCOV area, under the same context test as
++ * coverage, so it follows the per-operation reset and the remote-section copy.
++ * KCOV_MODE_TRACE_PC: a header word (KCOV_HIDDEN_MAGIC in the top 16 bits,
++ * never a kernel address), the call site, then the payload words.
++ * KCOV_MODE_TRACE_CMP: a header record (type bit 63 and KCOV_HIDDEN_MAGIC,
++ * arg1 = call site), then records of three payload words (KCOV_HIDDEN_MAGIC+1).
++ * A record that does not fit marks the area full, so the harness fails
++ * noisily instead of losing a value.
++ */
++#define KCOV_HIDDEN_MAGIC 0x4c58ULL
++#define KCOV_HIDDEN_MAX_WORDS 8
++
++void notrace kcov_record(u32 site, const void *data, unsigned int len)
++{
++	struct task_struct *t = current;
++	unsigned long ip = canonicalize_ip(_RET_IP_);
++	const u8 *bytes = data;
++	u64 words[KCOV_HIDDEN_MAX_WORDS + 2] = {0};
++	unsigned int nwords = DIV_ROUND_UP(len, 8), i;
++	u64 *area;
++
++	if (WARN_ON_ONCE(nwords > KCOV_HIDDEN_MAX_WORDS))
++		return;
++	for (i = 0; i < len; i++)
++		words[i / 8] |= (u64)bytes[i] << (8 * (i % 8));
++	if (check_kcov_mode(KCOV_MODE_TRACE_PC, t)) {
++		u64 pos;
++
++		area = (u64 *)t->kcov_area;
++		pos = READ_ONCE(area[0]);
++		if (pos + 2 + nwords >= t->kcov_size) {
++			WRITE_ONCE(area[0], t->kcov_size - 1);
++			return;
++		}
++		WRITE_ONCE(area[0], pos + 2 + nwords);
++		barrier();
++		area[pos + 1] = KCOV_HIDDEN_MAGIC << 48 | (u64)(site & 0xffff) << 16 | nwords;
++		area[pos + 2] = ip;
++		for (i = 0; i < nwords; i++)
++			area[pos + 3 + i] = words[i];
++	} else if (IS_ENABLED(CONFIG_KCOV_ENABLE_COMPARISONS) &&
++		   check_kcov_mode(KCOV_MODE_TRACE_CMP, t)) {
++		u64 count, start, nrec = 1 + DIV_ROUND_UP(nwords, 3), r;
++
++		area = (u64 *)t->kcov_area;
++		count = READ_ONCE(area[0]);
++		start = 1 + count * KCOV_WORDS_PER_CMP;
++		if ((start + nrec * KCOV_WORDS_PER_CMP) * sizeof(u64) >
++		    t->kcov_size * sizeof(unsigned long)) {
++			WRITE_ONCE(area[0], (t->kcov_size - 1) / KCOV_WORDS_PER_CMP);
++			return;
++		}
++		WRITE_ONCE(area[0], count + nrec);
++		barrier();
++		area[start] = 1ULL << 63 | KCOV_HIDDEN_MAGIC << 32 | (u64)(site & 0xffff) << 16 | nwords;
++		area[start + 1] = ip;
++		area[start + 2] = 0;
++		area[start + 3] = ip;
++		for (r = 0; r + 1 < nrec; r++) {
++			u64 *rec = area + start + (r + 1) * KCOV_WORDS_PER_CMP;
++
++			rec[0] = 1ULL << 63 | (KCOV_HIDDEN_MAGIC + 1) << 32 | r;
++			rec[1] = words[3 * r];
++			rec[2] = words[3 * r + 1];
++			rec[3] = words[3 * r + 2];
++		}
++	}
++}
++EXPORT_SYMBOL(kcov_record);
+--- a/include/linux/kcov.h
++++ b/include/linux/kcov.h
+@@ -45,6 +45,16 @@
+ void kcov_remote_stop(void);
+ u64 kcov_common_handle(void);
+ 
++/*
++ * LEANUX: hidden inputs recorded at their source (a random draw, a clock
++ * read) into the active KCOV area; see kcov_record() in kernel/kcov.c.
++ */
++#define KCOV_HIDDEN_INIT_EPHEMERAL 1
++#define KCOV_HIDDEN_RESP_EPHEMERAL 2
++#define KCOV_HIDDEN_TAI64N_NOW 3
++#define KCOV_HIDDEN_INDEX_DRAW 4
++void kcov_record(u32 site, const void *data, unsigned int len);
++
+ static inline void kcov_remote_start_common(u64 id)
+ {
+ 	kcov_remote_start(kcov_remote_handle(KCOV_SUBSYSTEM_COMMON, id));
+@@ -99,6 +109,7 @@
+ static inline void kcov_finish_switch(struct task_struct *t) {}
+ static inline void kcov_remote_start(u64 handle) {}
+ static inline void kcov_remote_stop(void) {}
++static inline void kcov_record(u32 site, const void *data, unsigned int len) {}
+ static inline u64 kcov_common_handle(void)
+ {
+ 	return 0;
+--- a/drivers/net/wireguard/noise.c
++++ b/drivers/net/wireguard/noise.c
+@@ -9,7 +9,7 @@
+ #include "messages.h"
+ #include "queueing.h"
+ #include "peerlookup.h"
+-
++#include <linux/kcov.h>
+ #include <linux/rcupdate.h>
+ #include <linux/slab.h>
+ #include <linux/bitmap.h>
+@@ -498,7 +498,7 @@
+ {
+ 	struct timespec64 now;
+ 
+-	ktime_get_real_ts64(&now);
++	ktime_get_real_ts64(&now); kcov_record(KCOV_HIDDEN_TAI64N_NOW, &now, sizeof(now));
+ 
+ 	/* In order to prevent some sort of infoleak from precise timers, we
+ 	 * round down the nanoseconds part to the closest rounded-down power of
+@@ -538,7 +538,7 @@
+ 		       handshake->remote_static);
+ 
+ 	/* e */
+-	curve25519_generate_secret(handshake->ephemeral_private);
++	curve25519_generate_secret(handshake->ephemeral_private); kcov_record(KCOV_HIDDEN_INIT_EPHEMERAL, handshake->ephemeral_private, NOISE_PUBLIC_KEY_LEN);
+ 	if (!curve25519_generate_public(dst->unencrypted_ephemeral,
+ 					handshake->ephemeral_private))
+ 		goto out;
+@@ -685,7 +685,7 @@
+ 	dst->receiver_index = handshake->remote_index;
+ 
+ 	/* e */
+-	curve25519_generate_secret(handshake->ephemeral_private);
++	curve25519_generate_secret(handshake->ephemeral_private); kcov_record(KCOV_HIDDEN_RESP_EPHEMERAL, handshake->ephemeral_private, NOISE_PUBLIC_KEY_LEN);
+ 	if (!curve25519_generate_public(dst->unencrypted_ephemeral,
+ 					handshake->ephemeral_private))
+ 		goto out;
+--- a/drivers/net/wireguard/peerlookup.c
++++ b/drivers/net/wireguard/peerlookup.c
+@@ -6,7 +6,7 @@
+ #include "peerlookup.h"
+ #include "peer.h"
+ #include "noise.h"
+-
++#include <linux/kcov.h>
+ static struct hlist_head *pubkey_bucket(struct pubkey_hashtable *table,
+ 					const u8 pubkey[NOISE_PUBLIC_KEY_LEN])
+ {
+@@ -129,7 +129,7 @@
+ 
+ search_unused_slot:
+ 	/* First we try to find an unused slot, randomly, while unlocked. */
+-	entry->index = (__force __le32)get_random_u32();
++	entry->index = (__force __le32)get_random_u32(); kcov_record(KCOV_HIDDEN_INDEX_DRAW, &entry->index, sizeof(entry->index));
+ 	hlist_for_each_entry_rcu_bh(existing_entry,
+ 				    index_bucket(table, entry->index),
+ 				    index_hash) {
+--- a/drivers/net/wireguard/send.c
++++ b/drivers/net/wireguard/send.c
+@@ -17,7 +17,7 @@
+ #include <net/ip_tunnels.h>
+ #include <net/udp.h>
+ #include <net/sock.h>
+-
++#include <linux/kcov.h>
+ static void wg_packet_send_handshake_initiation(struct wg_peer *peer)
+ {
+ 	struct message_handshake_initiation packet;
+@@ -48,7 +48,7 @@
+ 	struct wg_peer *peer = container_of(work, struct wg_peer,
+ 					    transmit_handshake_work);
+ 
+-	wg_packet_send_handshake_initiation(peer);
++	kcov_remote_start_common(peer->device->kcov_handle); wg_packet_send_handshake_initiation(peer); kcov_remote_stop();
+ 	wg_peer_put(peer);
+ }
+ 
+--- a/drivers/net/wireguard/device.c
++++ b/drivers/net/wireguard/device.c
+@@ -10,7 +10,7 @@
+ #include "ratelimiter.h"
+ #include "peer.h"
+ #include "messages.h"
+-
++#include <linux/kcov.h>
+ #include <linux/module.h>
+ #include <linux/rtnetlink.h>
+ #include <linux/inet.h>
+@@ -320,7 +320,7 @@
+ 	wg_allowedips_init(&wg->peer_allowedips);
+ 	wg_cookie_checker_init(&wg->cookie_checker, wg);
+ 	INIT_LIST_HEAD(&wg->peer_list);
+-	wg->device_update_gen = 1;
++	wg->device_update_gen = 1; wg->kcov_handle = kcov_common_handle();
+ 
+ 	wg->peer_hashtable = wg_pubkey_hashtable_alloc();
+ 	if (!wg->peer_hashtable)
+--- a/drivers/net/wireguard/device.h
++++ b/drivers/net/wireguard/device.h
+@@ -53,7 +53,7 @@
+ 	atomic_t handshake_queue_len;
+ 	unsigned int num_peers, device_update_gen;
+ 	u32 fwmark;
+-	u16 incoming_port;
++	u16 incoming_port; u64 kcov_handle;
+ };
+ 
+ int wg_device_init(void);
