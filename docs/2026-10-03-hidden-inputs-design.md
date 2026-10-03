@@ -271,3 +271,80 @@ its code: `create_initiation`'s `kdf` and `mix_dh`, the send path, and the
 keepalive timers. The mirror still treats it as an environment contract. So
 the new oracle cannot replace the current one until step 3 mirrors the send
 worker: **steps 2 and 3 land together.**
+
+## 9. The instrument and its first consumer: results [AGENT 2026-10-03]
+
+The user approved continuing as recommended. Steps 2 and 3 are implemented
+on this branch; the change to the oracle needs the user's approval.
+
+**What was built:**
+- **Patch.** The send worker's section now also covers its final
+  `wg_peer_put`, since the mirror reports that put's decisions. The patch's
+  sha256 is `91a412ba…`. The proposed identity is in
+  `kernel/identity-x86_64-net-hidden.txt`.
+- **Guest.** Datagram and reply bytes are part of `wg_observe`'s
+  observation.
+- **Evaluator.**
+  - The mirror runs once per guest child's records.
+  - Each record's innermost call site is checked against
+    `leanux-model --hidden-sites`.
+  - Exit 5 is `hidden_mismatch`.
+- **Mirror.**
+  - The `hidden` oracle. Ephemeral records must be clamped, as the C
+    guarantees at the hook.
+  - The send worker with every value: `create_initiation`, MAC1, the rate
+    limit, timers, and the index insert.
+  - The handshake response with every value.
+  - The index hashtable (insert, replace, remove, lookup) replaces the
+    per-peer flag. Cookie and data lookups are now mirrored, no longer
+    `unsupported`.
+  - The environment runs send workers at the end of the operations that
+    wait for them, and delivers datagrams over loopback.
+
+**Full check** on `f7a25d4` (clean tree), kernel `net-hidden` (`vmlinux`
+`fce9ecc4…`):
+
+| Check | Result |
+|---|---|
+| Behavior, now including the bytes of every initiation and response | 1,325 / 1,325 traces agree (38,968 operations) |
+| Control flow (task and remote) | all agree |
+| Operands | 320,600 pairs match |
+| WireGuard candidates rejected by the domain filter | none (stage C: 13, races with pending workers) |
+
+**Mutants:** 23 of 25 are rejected. B2-M3 and C-M3 survive, as documented
+before.
+- **The new mutants:**
+  - H-M1 to H-M4 change bytes: the unrounded timestamp, the MAC1 range, a
+    big-endian index, the skipped PSK hash. Each is rejected by behavior,
+    on 9 to 19 traces.
+  - H-M5 omits a timer call. It is rejected by control flow.
+  - H-M6, the negative control, reads the clock first. It is rejected with
+    `hidden_mismatch`.
+- **Three earlier mutants are now rejected through the record channel:**
+  W5, B1-M1 and C-M1 take a different path, so the mirror asks for records
+  Linux did not make. The record sequence is itself path evidence.
+- **Retargeted:** B1-M4 targeted the removed send-worker contract. It now
+  makes the mirrored worker ignore a null ephemeral-static DH, and a mirror
+  invariant rejects it.
+
+**What paid for itself:**
+- **The records** made wg0's initiation and response bytes comparable. They
+  turned the send worker from a contract into mirrored C, and lifted the
+  index-lookup exclusion.
+- **The two-run scheme** keeps A3 on the send worker's comparisons (1,249 to
+  1,289 pairs on the WireGuard suite).
+
+**Review.** An independent Fable review found one wrong state update: the
+peer's release did not remove its handshake index entry (`peer.c:211`). It
+is fixed. Every other finding is fixed or recorded here.
+
+**Gaps:**
+- **No in-domain trace can name a live index.** Traces are written before
+  the run, so a lookup that finds an entry, and the bucket walk over one,
+  stay unexercised.
+- **The rate-limit return shares the epilogue,** so its true outcome has no
+  witness.
+- **`kcov_record` drops values outside any KCOV context.** Only the
+  mirror's underflow notices.
+- **Clocks other than `tai64n_now` are still assumed** (the
+  `lastSentExpired` flag, `World.timing`).
