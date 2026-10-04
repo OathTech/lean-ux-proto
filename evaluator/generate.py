@@ -228,15 +228,20 @@ def wait_after_up(operations):
     return waits
 
 
-def generate_wireguard(seed, count, max_ops=12):
+def generate_wireguard(seed, count, max_ops=12, steered=0.0):
     """Seeded WireGuard traces over small pools of keys and prefixes, so that
     peers, trie nodes and identities collide often. A third are configuration
     traces (stage A), and the rest bring wg0 up and transmit (stage B1), inject
     messages (stage B2), or inject handshake initiations (stage C), a sixth
-    each. Every trace ends with a dump."""
-    if not 2 <= max_ops <= 64 or not 1 <= count <= 100000:
+    each. Every trace ends with a dump.
+
+    `steered` is the share of steered handshakes (stage D1, steered_handshake),
+    drawn from a separate generator: with the default 0 the other classes'
+    streams are exactly as before."""
+    if not 2 <= max_ops <= 64 or not 1 <= count <= 100000 or not 0 <= steered <= 1:
         raise ValueError('bounded generator parameters')
     rng = random.Random(seed)
+    steered_rng = random.Random(f'steered-{seed}')
     keys = ['11' * 32, '22' * 32, '33' * 32, '00' * 32,
             '7b4e909bbe7ffe44c465a220037d608ee35897d31ef972f07f74892cb0f73f13']   # public key of 11..11
     private = ['11' * 32, '10' + '11' * 30 + '51', '22' * 32, '00' * 32]
@@ -411,6 +416,15 @@ def generate_wireguard(seed, count, max_ops=12):
         return ops + [{'op': 'wg_observe'}]
 
     while len(result) < count:
+        if steered and steered_rng.random() < steered:
+            trace = steered_handshake(steered_rng, f'generated-wg-{seed}-{len(result):05}')
+            if wait_after_up(trace['ops']) > WAIT_BUDGET_SECONDS:
+                raise AssertionError('a steered handshake exceeds the wait budget')
+            digest = identity(trace)
+            if digest not in seen:
+                seen.add(digest)
+                result.append(trace)
+            continue
         draw = rng.random()
         if draw < 1 / 6:
             operations = receive_trace()
@@ -431,3 +445,98 @@ def generate_wireguard(seed, count, max_ops=12):
             seen.add(digest)
             result.append(trace)
     return result
+
+
+# Stage D1: wg0 initiates with steered hidden inputs, and a response computed
+# offline completes (or, tampered, fails) the handshake
+# (docs/2026-10-03-steering-design.md, sections 6.1-6.3).
+D1_DEVICES = [b'\x11' * 32, bytes.fromhex('10' + '11' * 30 + '51'), b'\x55' * 32]
+D1_PEERS = [b'\x22' * 32, b'\x44' * 32, b'\x66' * 32]
+D1_LISTENERS = [dict(family=4, addr='7f000001', port=51999), dict(family=6, addr='0' * 31 + '1', port=51999)]
+D1_SESSION = ['wg_receive_handshake_packet.response=1', 'wg_noise_handshake_begin_session.initiator=1',
+              'add_new_keypair.initiator=1', 'wg_packet_send_staged_packets.no_keypair=0']
+TAI64N_SEC_MAX = 2**63 // 1_000_000_000 - 30 * 365 * 24 * 3600 - 1   # harness/steer.py's bound, inclusive
+
+
+def steered_handshake(rng, trace_id):
+    """One steered D1 trace. The schedule is predicted from the trace's shape
+    rather than by running the mirror (design 6.3 step 2): each shape has a
+    fixed encounter order. create_initiation draws the ephemeral (before the
+    clamp), reads the clock, then draws the index; create_response draws its
+    ephemeral, then the index. The variants: a completed handshake (half),
+    a tampered encrypted_nothing, a bad MAC1, a receiver index naming nothing
+    (another bucket or the same one), a second response after the session,
+    and respond-then-initiate (a pending next keypair, then wg0 initiates
+    after a key change resets the rate limit)."""
+    device = rng.choice(D1_DEVICES)
+    peer_private = rng.choice(D1_PEERS)
+    peer_public = noise.public_key(peer_private)
+    psk = rng.choice([b'\xaa' * 32, b'\xbb' * 32, rng.randbytes(32)]) if rng.random() < .25 else None
+    variant = rng.choices(['session', 'nothing', 'mac1', 'other_bucket', 'same_bucket', 'second', 'respond_first'],
+                          [6, 1, 1, 1, 1, 1, 2])[0]
+
+    def clock():
+        sec = rng.choice([0, 1, rng.randrange(2**31), rng.randrange(2**31, TAI64N_SEC_MAX), TAI64N_SEC_MAX])
+        return sec, rng.choice([0, (1 << 24) - 1, 999_999_999, rng.randrange(1_000_000_000)])
+
+    def initiation(device):
+        ephemeral, (sec, nsec), index = rng.randbytes(32), clock(), rng.randrange(2**32)
+        steer = [['init_ephemeral', ephemeral.hex()], ['tai64n_now', noise.timespec64(sec, nsec).hex()],
+                 ['index_draw', index.to_bytes(4, 'little').hex()]]
+        return noise.steered_initiation(peer_public, device, ephemeral, sec, nsec, index), index, steer
+
+    def respond(message, device, **kw):
+        return noise.response(message, peer_private, rng.randbytes(32), psk, rng.randrange(2**32),
+                              initiator_public=noise.public_key(device), **kw).message
+
+    def inject(message):
+        return {'op': 'wg_inject', 'family': rng.choice([4, 6]), 'port': 51820, 'message': message.hex()}
+
+    peer = dict(public_key=peer_public.hex(), allowed_ips=[dict(family=4, addr='0a000000', cidr=8)],
+                endpoint=rng.choice(D1_LISTENERS))
+    if psk is not None:
+        peer['preshared_key'] = psk.hex()
+    peers = [peer]
+    if rng.random() < .3:   # a bystander: no endpoint and no keepalive, so no handshake work
+        bystander = rng.choice([k for k in D1_PEERS if k != peer_private])
+        peers.append(dict(public_key=noise.public_key(bystander).hex(),
+                          allowed_ips=[dict(family=4, addr='0a010000', cidr=16)]))
+    observe, get = {'op': 'wg_observe'}, {'op': 'wg_get'}
+    if variant == 'respond_first':
+        theirs = noise.initiation(noise.public_key(device), peer_private, rng.randbytes(32),
+                                  noise.tai64n(*clock()), rng.randrange(2**32))
+        second = rng.choice([k for k in D1_DEVICES if k != device])
+        ours, _, steer = initiation(second)
+        draws = [['resp_ephemeral', rng.randbytes(32).hex() if rng.random() < .5 else 'draw'],
+                 ['index_draw', rng.randbytes(4).hex() if rng.random() < .5 else 'draw']]
+        ops = [{'op': 'wg_set', 'config': dict(private_key=device.hex(), listen_port=51820, peers=peers)},
+               {'op': 'wg_up'}, inject(theirs), observe,
+               {'op': 'wg_set', 'config': dict(private_key=second.hex(),
+                                               peers=[dict(public_key=peer_public.hex(), keepalive=25)])},
+               observe, inject(respond(ours, second)), observe, get]
+        return dict(version=1, id=trace_id, ops=ops, steer=draws + steer,
+                    expect=['wg_receive_handshake_packet.initiation=1'] + D1_SESSION)
+    peer['keepalive'] = 25
+    ours, index, steer = initiation(device)
+    after, expect = [], D1_SESSION
+    if variant == 'nothing':
+        response, expect = respond(ours, device, tamper='nothing'), ['wg_receive_handshake_packet.response=1']
+    elif variant == 'mac1':
+        response, expect = respond(ours, device, tamper='mac1'), None
+    elif variant == 'other_bucket':
+        response = respond(ours, device, receiver_index=index ^ rng.randrange(1, 1 << 13))
+        expect = ['wg_receive_handshake_packet.response=1', 'wg_index_hashtable_lookup.entry=0']
+    elif variant == 'same_bucket':
+        response = respond(ours, device, receiver_index=index ^ (rng.randrange(1, 1 << 19) << 13))
+        expect = ['wg_receive_handshake_packet.response=1', 'wg_index_hashtable_lookup.index_matches=0']
+    else:
+        response = respond(ours, device)
+        if variant == 'second':
+            after = [inject(respond(ours, device)), observe]
+            expect = D1_SESSION + ['wg_index_hashtable_lookup.type_matches=0']
+    ops = [{'op': 'wg_set', 'config': dict(private_key=device.hex(), listen_port=51820, peers=peers)},
+           {'op': 'wg_up'}, observe, inject(response), observe, *after, get]
+    trace = dict(version=1, id=trace_id, ops=ops, steer=steer)
+    if expect:
+        trace['expect'] = expect
+    return trace
