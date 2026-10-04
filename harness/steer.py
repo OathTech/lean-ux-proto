@@ -35,11 +35,29 @@ class SteeringError(ValueError):
     pass
 
 
+def symbolize(vmlinux, addresses):
+    """Each address's inline chain, innermost first: [(function, file:line)]."""
+    query = ''.join(hex(a) + '\n' for a in addresses).encode()
+    lines = subprocess.run(['addr2line', '-e', str(vmlinux), '-a', '-i', '-f'], input=query, capture_output=True,
+                           check=True).stdout.decode().splitlines()
+    chains, k = [], 0
+    while k < len(lines):
+        if lines[k].startswith('0x'):
+            chains.append([])
+            k += 1
+        else:
+            chains[-1].append((lines[k], lines[k + 1].split('/.deps/linux/')[-1].split(' ')[0]))
+            k += 2
+    if len(chains) != len(addresses):
+        raise SteeringError('malformed addr2line output')
+    return chains
+
+
 def call_sites(vmlinux, cache_dir):
     """{(kind, consumer "file:line"): [return addresses]} for every call to a
     hooked entry point in the image."""
     digest = hashlib.sha256(Path(vmlinux).read_bytes()).hexdigest()
-    cache = Path(cache_dir) / f'steer-sites-{digest}.json'
+    cache = Path(cache_dir) / f'steer-sites-v2-{digest}.json'
     if cache.exists():
         return {(k, c): v for k, c, v in json.loads(cache.read_text())}
     out = subprocess.run(['objdump', '-d', '--no-show-raw-insn', str(vmlinux)], capture_output=True, text=True,
@@ -51,29 +69,21 @@ def call_sites(vmlinux, cache_dir):
             continue
         nxt = re.match(r'\s*([0-9a-f]+):', following)
         if m.group(1) == 'jmp':
-            tail_jumps.append(current.strip())
+            tail_jumps.append(int(current.strip().split(':')[0], 16))
         elif nxt:
             calls.append((HOOKS[m.group(2)], int(nxt.group(1), 16)))
-    query = ''.join(hex(ip - 1) + '\n' for _, ip in calls).encode()
-    lines = subprocess.run(['addr2line', '-e', str(vmlinux), '-a', '-i'], input=query, capture_output=True,
-                           check=True).stdout.decode().splitlines()
-    chains, k = [], -1
-    for line in lines:
-        if line.startswith('0x'):
-            chains.append([])
-        else:
-            chains[-1].append(line.split('/.deps/linux/')[-1].split(' ')[0])
-    if len(chains) != len(calls):
-        raise SteeringError('malformed addr2line output')
+    chains = symbolize(vmlinux, [ip - 1 for _, ip in calls] + tail_jumps)
     sites = {}
     for (kind, ip), chain in zip(calls, chains):
-        consumer = next((src for src in chain if src.split(':')[0] not in CHOICE_HELPERS), None)
+        consumer = next((src for _, src in chain if src.split(':')[0] not in CHOICE_HELPERS), None)
         if consumer:
-            sites.setdefault((kind, consumer), []).append(ip)
+            entry = sites.setdefault((kind, consumer), {'ips': [], 'functions': []})
+            entry['ips'].append(ip)
+            entry['functions'] = sorted(set(entry['functions']) | {chain[-1][0]})
     # A tail jump into a hook hides its consumer's frame from _RET_IP_: such
-    # records are attributed to the caller's caller. They are listed with the
-    # cache; resolve() refuses a site whose function tail-jumps to a hook.
-    sites[('tail_jumps', '')] = tail_jumps
+    # records are attributed to the caller's caller. resolve() refuses a site
+    # in a function that tail-jumps to a hook.
+    sites[('tail_jumps', '')] = sorted({chain[-1][0] for chain in chains[len(calls):]})
     cache.parent.mkdir(parents=True, exist_ok=True)
     cache.write_text(json.dumps([[k, c, v] for (k, c), v in sorted(sites.items(), key=str)]))
     return sites
@@ -88,11 +98,14 @@ def resolve(trace, site_table, sites):
         if entry is None or label not in STEERABLE:
             raise SteeringError(f'{trace["id"]}: {label!r} is not a steerable site')
         consumer = f"{entry['file']}:{entry['line']}"
-        kinds = [(k, ips) for (k, c), ips in sites.items() if k != 'tail_jumps' and c == consumer
+        kinds = [(k, v) for (k, c), v in sites.items() if k != 'tail_jumps' and c == consumer
                  and (k < 200) == (entry['kind'] == 'random')]
-        if len(kinds) != 1 or not 1 <= len(kinds[0][1]) <= 4:
+        if len(kinds) != 1 or not 1 <= len(kinds[0][1]['ips']) <= 4:
             raise SteeringError(f'{trace["id"]}: site {label} resolves to {kinds}')
-        kind, ips = kinds[0]
+        kind, found = kinds[0]
+        ips = found['ips']
+        if set(found['functions']) & set(sites.get(('tail_jumps', ''), [])):
+            raise SteeringError(f'{trace["id"]}: site {label} is in a function that tail-jumps to a hook')
         if value != 'draw':
             data = bytes.fromhex(value)
             if len(data) != entry['len']:

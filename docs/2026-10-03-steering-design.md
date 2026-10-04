@@ -7,6 +7,15 @@ direction 2026-10-03]; its semantics (complete schedules, supplied values
 still recorded, the exact check, expected outcomes) and the D1 scope stand. It builds on the
 [hidden-inputs design](2026-10-03-hidden-inputs-design.md), which is merged.
 
+**Status 2026-10-04 [AGENT]:** steering is built as step 2 of the
+[choice-stream strategy](2026-10-03-choice-stream-strategy.md) (its section
+10d). The mechanism there supersedes sections 4.2 and 7.2 here: a per-handle
+schedule, loaded by ioctl, complete for the sites it names. The guest reports
+leftovers and mismatches as status rows, not as guest failures. The ephemeral
+hook now precedes the clamp (any 32 bytes are a possible draw, and the clamp
+is real C), which supersedes section 3's post-clamp argument. Sections 1, 2,
+5, 6 and 7 stand.
+
 ## 1. Two questions
 
 The user separated two questions on 2026-10-03 [USER]:

@@ -390,6 +390,76 @@ FS slice makes no in-window clock reads. Also fixed:
 - the jitter ceiling from `HZ`;
 - the documentation (sections 4.1–4.3, 10b).
 
+## 10d. Step 2 results: steering [AGENT 2026-10-04]
+
+The user approved continuing to step 2 ("Great, continue").
+
+**Kernel:** `choice-stream.patch` (sha256 `9b75e58e…`, identity `d0123d1b…`).
+- **The schedule** lives on the trace's remote KCOV instance and is loaded by
+  ioctl (`KCOV_LEANUX_STEER_LOAD`) in the guest's parent before it forks the
+  trace process.
+- **Finding it:** from a remote section through `t->kcov`; from the trace
+  process's own context through `kcov_remote_find` on its inherited handle.
+- **Matching:** at a call site the schedule names, the encounter must match
+  the head entry, by kind and return address. A value entry is substituted
+  into the caller's buffer, and its record carries the steered bit (`0x8000`).
+  A "draw" entry keeps the kernel's value.
+- **Failures:** a non-match writes a `0xffff` marker record. The parent reads
+  back what is left and the mismatch count (`KCOV_LEANUX_STEER_STATUS`).
+- **Scope:** sites the schedule does not name are untouched. Only recording
+  contexts steer.
+
+**Harness and check:**
+- **Resolution:** `harness/steer.py` resolves each site label to the return
+  addresses of the hooked calls whose consumer frame is that site. It
+  disassembles `vmlinux`, and the result is cached per kernel. It refuses a
+  site in a function that tail-jumps to a hook, and checks each site's domain
+  (only the four steerable sites; the `tai64n_now` bounds).
+- **Exact check, per child:** the records at the named sites must be the
+  schedule, entry for entry: the label, the steered flag and the value.
+  Markers, leftovers and status rows are problems.
+- **Expected outcomes:** a steered trace's `expect` labels must be reported
+  in the mirror's run. That run agrees with Linux on behavior and control
+  flow, so this is a mirror-reachability check gated by A1 and A2, not a
+  direct assertion on Linux's coverage. Of the two corpus outcomes,
+  `wg_index_hashtable_insert.unlocked_collision=1` and
+  `wg_index_hashtable_lookup.type_matches=0` have no KCOV witness in this
+  build. The collision is still confirmed on the Linux side by the three
+  steered index records, a count only the C's `goto search_unused_slot`
+  produces, checked exactly.
+- **Domain mode:** placeholders follow the schedule per site (not across
+  sites) and reject a value of the wrong length. They are looser than the
+  authoritative check, which is the one that decides.
+
+**Results:**
+
+| Measure | Result |
+|---|---|
+| Full check on `90f90c7` (clean tree, `vmlinux` `04f2959f…`) | 1,327 / 1,327 traces agree (38,943 operations), 320,693 operand pairs |
+| Steered traces | `s2_index_collision` (an unlocked collision, then a redraw) and `s2_lookup_hits_handshake` (a data message naming a live handshake index); both schedules fully consumed with no mismatch in both children |
+| Controls (`scripts/steering-controls.py`) | an unreached site, an extra entry and out-of-order entries each fail with their problem |
+| Mutants | 30 of 32 rejected. S2-M1 (the lookup ignores its type mask) and S2-M2 (no redraw after a collision) are reachable only through the steered traces, and are rejected. Survivors: B2-M3, C-M3 and H-M8 (equivalent), as before. |
+
+**Caveats, stated:**
+- **The schedule's lifetime is safe by the guest's discipline.** The parent
+  loads before forking and reads back only after `waitpid`, and nothing
+  reloads or disables in between. The kernel takes no reference across the
+  lookup.
+- **The kernel trusts the host for value domains.** For example, a steered
+  `__get_random_u32_below` value is substituted after the C's bounding. The
+  harness is the only producer of schedules, and it checks.
+- **Tail jumps.** `wg_timers_handshake_complete`'s wall-clock read
+  (`timers.c:197`) is reached by a tail jump. Its records are attributed to
+  the caller's caller, and the site cannot be steered. D1, which needs that
+  record, must declare it accordingly.
+
+**Review.** An independent Fable review found no wrong or fail-open
+behavior. It found three claims the code did not back (now fixed or
+reworded): the tail-jump guard (implemented), the `expect` semantics (stated
+above), and stale design text (the steering design's status). It also found
+nits: duplicated helper lists (now one), the domain-mode value length (now
+checked), the control suite's error text, and the caveats above.
+
 ## 10b. Ambient sites (step 1)
 
 Step 1 adds one class the earlier text ruled out. Scheduler bookkeeping

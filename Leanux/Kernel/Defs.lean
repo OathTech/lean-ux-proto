@@ -422,7 +422,9 @@ def hidden (s : HiddenSite) : M (List UInt8) := do
     match w.steerValues.findIdx? (·.1 == i.label) with
     | some k =>
       set { w with placeholderCount := n, steerValues := w.steerValues.eraseIdx k }
-      if let some v := w.steerValues[k]!.2 then return v
+      if let some v := w.steerValues[k]!.2 then
+        if v.length != i.len then throw (.hidden s!"steer: {i.label} takes {i.len} bytes")
+        return v
     | none => pure ()
     let le (v width : Nat) := (List.range width).map fun k => UInt8.ofNat (v / 256 ^ k % 256)
     return match i.kind with

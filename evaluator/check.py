@@ -169,9 +169,9 @@ def non_statement(line):
 
 
 # The random and clock helpers a choice's call chain passes through before
-# reaching its consumer (choice-stream strategy, section 4.2).
-CHOICE_HELPERS = ('drivers/char/random.c', 'include/linux/random.h', 'kernel/time/timekeeping.c',
-                  'include/linux/timekeeping.h', 'include/crypto/curve25519.h', 'include/linux/hrtimer.h')
+# reaching its consumer (choice-stream strategy, section 4.2): one list, shared
+# with the steering resolver.
+from harness.steer import CHOICE_HELPERS  # noqa: E402
 RANDOM_KINDS = {1, 101, 102, 104, 108, 110}
 
 
@@ -714,7 +714,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     suites = args.suite.split(',')
     if not suites or any(s not in SUITES + CONTROL_SUITES for s in suites):
-        parser.error(f'--suite must be a comma-separated subset of {SUITES}')
+        parser.error(f'--suite must be a comma-separated subset of {SUITES + CONTROL_SUITES}')
     artifacts = Path(os.environ.get('LEANUX_ARTIFACTS', ROOT / '.artifacts')).resolve()
     stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
     out = (args.out or artifacts / 'check' / stamp).resolve()

@@ -21,9 +21,12 @@ EXPECTED = {
 def main():
     out = ROOT / '.artifacts/check/steering-controls'
     subprocess.run(['rm', '-rf', str(out)], check=True)
-    subprocess.run([sys.executable, '-m', 'evaluator.check', '--suite', 'steering-controls', '--no-build',
+    subprocess.run([sys.executable, '-m', 'evaluator.check', '--suite', 'steering-controls',
                     '--out', str(out)], cwd=ROOT, capture_output=True)
     report = json.loads((out / 'report.json').read_text())
+    if report.get('aborted') or report['traces'] != len(EXPECTED):
+        print(json.dumps(dict(error='the control run did not run its traces', aborted=report.get('aborted'))))
+        return 2
     failures = {f['id']: f for f in report['failures']}
     results, ok = {}, True
     for trace_id, problem in EXPECTED.items():
