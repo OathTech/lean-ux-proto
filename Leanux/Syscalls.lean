@@ -39,7 +39,7 @@ inductive Syscall where
   /-- `ioctl(6, SIOCSIFFLAGS, flags | IFF_UP)` on the fixture's sender. -/
   | wgUp
   /-- `sendto` of a 4-byte UDP datagram from the fixture's sender to `addr`. -/
-  | wgXmit (family addr : Nat)
+  | wgXmit (family addr : Nat) (payload : List UInt8)
   /-- `recvfrom(4, MSG_DONTWAIT)` after the fixture waited for the workers. -/
   | wgObserve
   /-- `sendto` of a WireGuard message from the fixture's sender to `port`. -/
@@ -90,13 +90,13 @@ def dispatch : Syscall → M Int
       modify fun w => { w with extraOut := [("device", device)] }
       return 0
   | .wgUp => socketCallOn SENDER_FD Env.wgUp
-  | .wgXmit family addr => socketCallOn SENDER_FD do
+  | .wgXmit family addr payload => socketCallOn SENDER_FD do
     -- the fixture adds wg0's routes at wg_up; before that no route exists
     if !(← WG.getDev).running then return -ENETUNREACH
     -- udp_sendmsg returns the datagram's length once the device took it
     Env.fixtureSend
-    let ret ← WG.wgXmit family addr (Env.xmitPacketLen family)
-    return if ret == 0 then 4 else ret
+    let ret ← WG.wgXmit family addr (← Env.xmitPacket family addr payload)
+    return if ret == 0 then payload.length else ret
   | .wgInject family port message => socketCallOn SENDER_FD (Env.inject family port message)
   | .wgObserve => socketCallOn LISTEN4_FD do
     let (ret, observed) ← Env.observe

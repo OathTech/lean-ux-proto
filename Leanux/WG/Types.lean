@@ -96,6 +96,14 @@ structure SymmetricKey where
   isValid : Bool := false
   deriving Repr, BEq
 
+/-- `struct noise_replay_counter` (noise.h): the highest counter seen plus
+    one, and the RFC 6479 bitmap as `COUNTER_BITS_TOTAL / BITS_PER_LONG` =
+    128 words of 64 bits. -/
+structure ReplayCounter where
+  counter : Nat := 0
+  backtrack : Array Nat := Array.replicate 128 0
+  deriving Repr, BEq
+
 /-- `struct noise_keypair` (noise.h): the session keys and counters. -/
 structure Keypair where
   sending : SymmetricKey := {}
@@ -108,6 +116,8 @@ structure Keypair where
   refcount : Nat := 1
   internalId : Nat := 0
   peer : PeerId := 0
+  /-- `receiving_counter` (D2). -/
+  receivingCounter : ReplayCounter := {}
   deriving Repr, BEq
 
 /-- `enum packet_state` (queueing.h). -/
@@ -115,16 +125,40 @@ inductive PacketState where
   | uncrypted | crypted | dead
   deriving Repr, BEq, DecidableEq
 
-/-- A data packet on its way out: the plaintext length (a keepalive is 0),
-    the keypair and nonce it was given, its state, and (once encrypted) the
-    message bytes. -/
+/-- An outgoing skb before encryption (D2): the IP packet `wg_xmit`
+    received (empty for a keepalive), its `CHECKSUM_PARTIAL` state as
+    (`csum_start`, `csum_offset`) offsets into `bytes`, or `none` when the
+    checksum is complete or absent, and `PACKET_CB(skb)->mtu`. -/
+structure Packet where
+  bytes : List UInt8 := []
+  csum : Option (Nat × Nat) := none
+  mtu : Nat := 0
+  deriving Repr, BEq
+
+/-- A data packet on its way out: the plaintext packet, the keypair and
+    nonce it was given, its state, and (once encrypted) the message bytes.
+    One ring item is a list of these (`create_data` gives the keypair to the
+    first; all share it). -/
 structure DataPacket where
   peer : PeerId
   keypair : KeypairId
   nonce : Nat
-  plaintextLen : Nat
+  plaintext : Packet := {}
   state : PacketState := .uncrypted
   bytes : List UInt8 := []
+  deriving Repr, BEq
+
+/-- A received data message on its way in (D2): its keypair (from the index
+    lookup), the counter it carries (`PACKET_CB(skb)->nonce`), the bytes
+    (the message, then the decrypted plaintext), its state, and the outer
+    headers' origin (`wg_socket_endpoint_from_skb`). -/
+structure RxPacket where
+  peer : PeerId
+  keypair : KeypairId
+  nonce : Nat := 0
+  bytes : List UInt8
+  state : PacketState := .uncrypted
+  source : SkbSource
   deriving Repr, BEq
 
 /-- `struct wg_peer` with the parts of its `noise_handshake` on this path. -/
@@ -138,9 +172,9 @@ structure Peer where
   isDead : Bool := false
   refcount : Nat := 1
   internalId : Nat
-  /-- `staged_packet_queue`: the length (`skb->len`) of each staged packet,
-      oldest first; a keepalive is 0. Packets wait here for a session. -/
-  staged : List Nat := []
+  /-- `staged_packet_queue`, oldest first; a keepalive is an empty packet.
+      Packets wait here for a session. -/
+  staged : List Packet := []
   /-- `transmit_handshake_work` is queued and the worker has not run: the
       worker's timing is not determined, so what reads its state is outside
       the domain until `wg_observe` waits for it. -/
@@ -175,6 +209,18 @@ structure Peer where
   /-- `tx_queue`: packets handed to the per-peer transmit worker, oldest
       first. -/
   txQueue : List DataPacket := []
+  /-- `rx_queue` (`wg_prev_queue`), oldest first, and whether its NAPI poll
+      is scheduled (`napi_schedule` without a run yet) (D2). -/
+  rxQueue : List RxPacket := []
+  napiScheduled : Bool := false
+  /-- Timer state read on modeled paths (D2; no timer fires within a
+      trace): `timer_pending(&timer_new_handshake)`,
+      `timer_pending(&timer_send_keepalive)`,
+      `timer_need_another_keepalive`, and `sent_lastminute_handshake`. -/
+  timerNewHandshakePending : Bool := false
+  timerSendKeepalivePending : Bool := false
+  timerNeedAnotherKeepalive : Bool := false
+  sentLastminuteHandshake : Bool := false
   rxBytes : Nat := 0
   /-- `handshake.ephemeral_private`, `remote_ephemeral`, `chaining_key` and
       `hash` (zeroed by `handshake_zero`). -/
@@ -201,9 +247,12 @@ structure Device where
   ifindex : Nat
   ifname : String
   running : Bool := false
-  /-- `dev->stats` transmit counters. -/
+  /-- `dev->stats` counters. -/
   txErrors : Nat := 0
   txDropped : Nat := 0
+  rxErrors : Nat := 0
+  rxFrameErrors : Nat := 0
+  rxLengthErrors : Nat := 0
   /-- `cookie_checker.message_mac1_key`: zero until an identity is set. -/
   mac1Key : Key := List.replicate 32 0
   /-- `handshake_queue.last_cpu`, initialized to -1 (queueing.c:31). -/
@@ -240,6 +289,10 @@ structure Device where
   encryptQueue : List DataPacket := []
   /-- Peers whose `transmit_packet_work` is queued, oldest first. -/
   txWorkQueue : List PeerId := []
+  /-- `decrypt_queue.last_cpu` and the messages queued for the decrypt worker,
+      oldest first (D2). -/
+  decryptLastCpu : Int := -1
+  decryptQueue : List RxPacket := []
   deriving BEq
 
 def AF_INET : Nat := 2

@@ -234,7 +234,7 @@ sequence number, and passes them to the mirror, which consumes them in order:
 /-- A deferred unit the kernel dispatches in a KCOV section (D1 sprint,
     stream 1): the work item's or softirq's function. -/
 inductive Worker where
-  | sendWorker | receiveWorker | encryptWorker | txWorker | netRx
+  | sendWorker | receiveWorker | encryptWorker | txWorker | netRx | decryptWorker
   deriving Repr, BEq, DecidableEq
 
 def Worker.symbol : Worker → String
@@ -243,11 +243,13 @@ def Worker.symbol : Worker → String
   | .encryptWorker => "wg_packet_encrypt_worker"
   | .txWorker => "wg_packet_tx_worker"
   | .netRx => "net_rx_action"
+  | .decryptWorker => "wg_packet_decrypt_worker"
 
 def Worker.index : Worker → Nat
   | .sendWorker => 0 | .receiveWorker => 1 | .encryptWorker => 2 | .txWorker => 3 | .netRx => 4
+  | .decryptWorker => 5
 
-def Worker.all : List Worker := [.sendWorker, .receiveWorker, .encryptWorker, .txWorker, .netRx]
+def Worker.all : List Worker := [.sendWorker, .receiveWorker, .encryptWorker, .txWorker, .netRx, .decryptWorker]
 
 inductive HiddenSite where
   | initEphemeral | respEphemeral | tai64nNow | indexDraw
@@ -263,6 +265,9 @@ inductive HiddenSite where
   /-- A reschedule at a worker's `cond_resched` (kind 302): written only
       when `__cond_resched` is about to schedule, inside a task section. -/
   | reschedReceive | reschedEncrypt | reschedTx
+  /-- D2: the decrypt worker's `cond_resched`, and `wg_timers_data_sent`'s
+      jitter draw. -/
+  | reschedDecrypt | newHandshakeJitter
   deriving Repr, BEq, DecidableEq
 
 inductive SiteRole where
@@ -317,13 +322,19 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   | .reschedReceive => ⟨60, "resched:wg_packet_handshake_receive_worker", "resched", "drivers/net/wireguard/receive.c", 216, 8, .mirror⟩
   | .reschedEncrypt => ⟨61, "resched:wg_packet_encrypt_worker", "resched", "drivers/net/wireguard/send.c", 307, 8, .mirror⟩
   | .reschedTx => ⟨62, "resched:wg_packet_tx_worker", "resched", "drivers/net/wireguard/send.c", 283, 8, .mirror⟩
+  | .reschedDecrypt => ⟨63, "resched:wg_packet_decrypt_worker", "resched", "drivers/net/wireguard/receive.c", 505, 8, .mirror⟩
+  -- `get_random_u32_below(REKEY_TIMEOUT_JITTER_MAX_JIFFIES)` in
+  -- wg_timers_data_sent (timers.c:150), the inline u8 path as for
+  -- `.retransmitJitter`. TO-CONFIRM: the consumer frame in this build
+  -- (wg_timers_data_sent may be inlined into its caller).
+  | .newHandshakeJitter => ⟨16, "new_handshake_jitter", "random", "drivers/net/wireguard/timers.c", 150, 1, .mirror⟩
 
 def HiddenSite.all : List HiddenSite :=
   [.initEphemeral, .respEphemeral, .tai64nNow, .indexDraw, .resetLastSent, .birthdateExpired, .initLastSent,
    .initLastSentAgain, .respLastSent, .respLastSentAgain, .floodNow, .consumptionNow, .deriveKeysBirthdate,
    .retransmitJitter, .walltimeLastHandshake, .ipIdentReserve, .ipIdentKey, .icmpCredit, .flowHashSecret, .schedDlTimer]
   ++ Worker.all.flatMap (fun w => [.sectionStart w, .sectionStop w])
-  ++ [.reschedReceive, .reschedEncrypt, .reschedTx]
+  ++ [.reschedReceive, .reschedEncrypt, .reschedTx, .reschedDecrypt, .newHandshakeJitter]
 
 /-- The resched site of a worker's `cond_resched`, for the workers that
     have one on the modeled paths. -/
@@ -331,6 +342,7 @@ def Worker.resched? : Worker → Option HiddenSite
   | .receiveWorker => some .reschedReceive
   | .encryptWorker => some .reschedEncrypt
   | .txWorker => some .reschedTx
+  | .decryptWorker => some .reschedDecrypt
   | .sendWorker | .netRx => none
 
 def SiteRole.name : SiteRole → String
@@ -358,6 +370,16 @@ structure SentDatagram where
   bytes : List UInt8
   deriving Repr, BEq
 
+/-- A datagram at the fixture's sender socket, with its source as
+    `recvfrom` reports it (D2: wg0's own datagrams and delivered inner
+    packets share the socket). -/
+structure InboxDatagram where
+  family : Nat
+  addr : Nat
+  port : Nat
+  bytes : List UInt8
+  deriving Repr, BEq
+
 structure World where
   k : Kernel
   env : EnvSite → Nat → Bool
@@ -373,7 +395,7 @@ structure World where
       fixture's UDP listeners and at its sender, which `wg_observe` drains. -/
   listenerV4 : List (List UInt8) := []
   listenerV6 : List (List UInt8) := []
-  senderInbox : List (List UInt8) := []
+  senderInbox : List InboxDatagram := []
   /-- Datagrams wg0's sockets sent, oldest first, not yet delivered. The
       environment decides which fixture socket receives them. -/
   sent : List SentDatagram := []

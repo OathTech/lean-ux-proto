@@ -57,10 +57,14 @@ def timing : Timing where
 def fixtureSend : M Unit :=
   skipCut [.ipIdentKey, .ipIdentReserve, .flowHashSecret]
 
-/-- The IP packet `wg_xmit` receives from the fixture's sender: its 4-byte
-    UDP datagram ("leux") behind a UDP header and an IPv4 or IPv6 header. -/
-def xmitPacketLen (family : Nat) : Nat :=
-  (if family == 4 then 20 else 40) + 8 + 4
+/-- The IP packet `wg_xmit` receives from the fixture's sender: the UDP
+    datagram behind a UDP header and an IPv4 or IPv6 header.
+    INTERFACE STUB (D2 stream A computes the bytes, the partial checksum and
+    the MTU, docs/2026-10-04-d2-data-plane.md section 2): until then only
+    the length is right, which is all the pre-D2 paths read (a payload packet
+    meeting a session is `unsupported`). -/
+def xmitPacket (family _addr : Nat) (payload : List UInt8) : M WG.Packet :=
+  return { bytes := List.replicate ((if family == 4 then 20 else 40) + 8 + payload.length) 0, mtu := WG.DEVICE_MTU }
 
 /-- Whether an endpoint is one of the fixture's listeners. -/
 def listenerFamily (e : Endpoint) : Option Nat :=
@@ -78,7 +82,11 @@ def deliverSent : M Unit := do
   for dg in (← get).sent do
     let loopback := (dg.family == AF_INET && dg.addr / 2 ^ 24 == 127) || (dg.family == AF_INET6 && dg.addr == 1)
     if isSender dg.family dg.addr dg.port then
-      modify fun w => { w with senderInbox := w.senderInbox ++ [dg.bytes] }
+      -- from wg0's socket on the loopback address of the datagram's family
+      -- (D2 stream A fixes how recvfrom reports it)
+      let src := { family := dg.family, addr := if dg.family == AF_INET then 0x7f000001 else 1,
+                   port := (← getDev).incomingPort, bytes := dg.bytes : InboxDatagram }
+      modify fun w => { w with senderInbox := w.senderInbox ++ [src] }
     else match listenerFamily { family := dg.family, addr := dg.addr, port := dg.port } with
       | some 4 => modify fun w => { w with listenerV4 := w.listenerV4 ++ [dg.bytes] }
       | some _ => modify fun w => { w with listenerV6 := w.listenerV6 ++ [dg.bytes] }
@@ -113,10 +121,11 @@ def runWorker (w : Worker) (body : M Unit) : M Unit := do
   else _ ← hidden (.sectionStop w)
 
 /-- The worker whose section a record starts or stops, with `true` for a
-    start; `none` for other records and for `net_rx_action`, a softirq that
-    runs nested where it is raised rather than being scheduled. -/
+    start; `none` for other records and for `net_rx_action`, a softirq,
+    which the environment runs where its records say: nested where it is
+    raised, or (D2) in ksoftirqd after a worker's switch. -/
 def sectionOf (site : Nat) : Option (Worker × Bool) :=
-  [Worker.sendWorker, .receiveWorker, .encryptWorker, .txWorker].findSome? fun w =>
+  [Worker.sendWorker, .receiveWorker, .encryptWorker, .txWorker, .decryptWorker].findSome? fun w =>
     if site == (HiddenSite.sectionStart w).info.id then some (w, true)
     else if site == (HiddenSite.sectionStop w).info.id then some (w, false)
     else none
@@ -233,7 +242,7 @@ def observe : M (Int × Lean.Json) := do
     | [] => -EAGAIN
   let datagrams := (w.listenerV4.map fun bs => (4, bs)) ++ (w.listenerV6.map fun bs => (6, bs))
   let entries := datagrams.map fun (f, bs) => Lean.toJson [Lean.toJson f, Lean.toJson bs.length, Lean.toJson (type bs), Lean.toJson (hex bs)]
-  let replies := w.senderInbox.map fun bs =>
+  let replies := w.senderInbox.map fun dg => let bs := dg.bytes
     Lean.toJson [Lean.toJson bs.length, Lean.toJson (type bs), Lean.toJson (if bs.length ≥ 12 then WG.u32le bs 8 else 0),
                  Lean.toJson (hex bs)]
   let sortJson (xs : List Lean.Json) := (xs.toArray.qsort fun a b => a.compress < b.compress).toList

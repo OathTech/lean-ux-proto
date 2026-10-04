@@ -63,9 +63,9 @@ def dataMessage (remoteIndex nonce : Nat) (key plaintext : List UInt8) : List UI
 def encryptPacket (pkt : DataPacket) : M (Option (List UInt8)) := do
   -- skb_get_hash (a cut point)
   skipCut [.flowHashSecret]
-  if pkt.plaintextLen != 0 then unsupported "a payload packet reached encryption"
-  let paddingLen ← calculateSkbPadding pkt.plaintextLen DEVICE_MTU
-  let plaintextLen := pkt.plaintextLen + paddingLen
+  if pkt.plaintext.bytes.length != 0 then unsupported "a payload packet reached encryption"
+  let paddingLen ← calculateSkbPadding pkt.plaintext.bytes.length DEVICE_MTU
+  let plaintextLen := pkt.plaintext.bytes.length + paddingLen
   -- `skb_cow_head(skb, DATA_PACKET_HEAD_ROOM) < 0`
   if ← branch .encCowHeadFailed !(← envOk .skbCowHead) then return none
   -- `skb->ip_summed == CHECKSUM_PARTIAL && skb_checksum_help(skb)`: a
@@ -146,7 +146,7 @@ def keepKeyFresh (pid : PeerId) : M Unit := do
 /-- wg_packet_create_data_done (send.c:242-260) for a one-packet list. -/
 def createDataDone (pid : PeerId) (pkt : DataPacket) : M Unit := do
   timersTraversal pid
-  -- wg_timers_any_authenticated_packet_sent: del_timer
+  timersAnyAuthenticatedPacketSent pid
   _ ← branch .doneSkbIterate true
   let isKeepalive := pkt.bytes.length == MESSAGE_DATA_LEN_0
   let sent ← sendSkbToPeer pid pkt.bytes

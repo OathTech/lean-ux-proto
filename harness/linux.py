@@ -34,7 +34,8 @@ OUTPUT_LIMIT = 16 * 1024 * 1024
 # net_rx_action (handle_softirqs). Everything else dispatched while a trace
 # runs (vmstat, RCU, netns cleanup) is not the trace's and records nothing.
 DISPATCH_SYMBOLS = ("wg_packet_handshake_send_worker", "wg_packet_handshake_receive_worker",
-                    "wg_packet_encrypt_worker", "wg_packet_tx_worker", "net_rx_action")
+                    "wg_packet_encrypt_worker", "wg_packet_tx_worker", "net_rx_action",
+                    "wg_packet_decrypt_worker")
 
 
 def dispatch_addresses(kernel=None, symbols=DISPATCH_SYMBOLS):

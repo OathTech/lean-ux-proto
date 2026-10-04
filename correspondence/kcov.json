@@ -145,6 +145,8 @@
     "wg_socket_set_peer_endpoint",
     "wg_socket_set_peer_endpoint_from_skb",
     "wg_timers_any_authenticated_packet_traversal",
+    "wg_timers_data_received",
+    "wg_timers_data_sent",
     "wg_timers_handshake_complete",
     "wg_timers_handshake_initiated",
     "wg_timers_session_derived",

@@ -127,7 +127,7 @@ def receiveHandshakePacket (msg : List UInt8) (src : SkbSource) : M Unit := do
       let some pid := peer | invariant "unreachable"
       setPeerEndpointFromSkb pid src
       if ← branch .hsRespSessionBegun (← beginSession pid) then
-        modPeerTimer pid   -- wg_timers_session_derived
+        discard <| modPeerTimer pid   -- wg_timers_session_derived
         timersHandshakeComplete pid
         -- either sends the staged packets or stages a keepalive and sends it
         sendKeepalive pid
@@ -137,9 +137,10 @@ def receiveHandshakePacket (msg : List UInt8) (src : SkbSource) : M Unit := do
   let some pid := peer | invariant "unreachable"
   -- update_rx_stats: peer->rx_bytes (wg0's own rx counters,
   -- dev_sw_netstats_rx_add, are not tracked: nothing reads them on the
-  -- modeled paths); wg_timers_any_authenticated_packet_received: del_timer
+  -- modeled paths)
   let p ← getPeer pid
   setPeer pid { p with rxBytes := p.rxBytes + msg.length }
+  timersAnyAuthenticatedPacketReceived pid
   timersTraversal pid
   peerPut peer
 

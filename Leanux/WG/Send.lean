@@ -187,11 +187,11 @@ def sendStagedPackets (pid : PeerId) : M Unit := do
     return ← outNokey true
   -- the nonces, in queue order
   let mut nonces : List Nat := []
-  for len in packets do
+  for pkt in packets do
     _ ← branch .stagedNonceIterate true
     -- `PACKET_CB(skb)->ds = ip_tunnel_ecn_encap(0, ip_hdr(skb), skb)` reads
     -- the inner IP header: a keepalive has none (protocol 0, ds 0)
-    if len != 0 then unsupported "a staged payload packet meeting a session"
+    if pkt.bytes.length != 0 then unsupported "a staged payload packet meeting a session"
     let k ← getKeypair id
     let nonce := k.sendingCounter   -- atomic64_inc_return(&sending_counter) - 1
     setKeypair id { k with sendingCounter := k.sendingCounter + 1 }
@@ -203,7 +203,7 @@ def sendStagedPackets (pid : PeerId) : M Unit := do
   let [nonce] := nonces | invariant "more than one keepalive staged"
   -- wg_peer_get(keypair->entry.peer); PACKET_CB(first)->keypair = keypair
   peerGet (← getKeypair id).peer
-  createData pid { peer := pid, keypair := id, nonce, plaintextLen := 0 }
+  createData pid { peer := pid, keypair := id, nonce, plaintext := {} }
 
 /-- wg_packet_send_keepalive (send.c:221-240): a keepalive is staged only
     when nothing else is. -/
@@ -212,7 +212,7 @@ def sendKeepalive (pid : PeerId) : M Unit := do
   if ← branch .keepaliveStagedEmpty p.staged.isEmpty then
     if ← branch .keepaliveNoMem !(← envOk .allocSkb) then return
     -- `PACKET_CB(skb)->mtu = skb->dev->mtu` (DEVICE_MTU; Data.lean pads with it)
-    setPeer pid { p with staged := p.staged ++ [0] }
+    setPeer pid { p with staged := p.staged ++ [{ mtu := DEVICE_MTU }] }
   sendStagedPackets pid
 
 end Leanux.WG

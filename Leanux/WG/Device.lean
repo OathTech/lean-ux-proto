@@ -61,8 +61,8 @@ def wgUp : M Int := do
   wgOpen
 
 /-- wg_xmit (device.c:137-233) for a datagram to `addr` (family 4 or 6),
-    an IP packet of `len` bytes. -/
-def wgXmit (family addr len : Nat) : M Int := do
+    the IP packet `pkt` (from the environment's sender). -/
+def wgXmit (family addr : Nat) (pkt : Packet) : M Int := do
   -- `real_protocol && skb->protocol == real_protocol`
   let ok ← andM (branch .checkProtoParsed true) (branch .checkProtoMatches true)
   if ← branch .xmitBadProtocol !ok then unsupported "unreachable"
@@ -91,7 +91,7 @@ def wgXmit (family addr len : Nat) : M Int := do
   -- `while (skb_queue_len(&peer->staged_packet_queue) > MAX_STAGED_PACKETS)`
   if ← branch .xmitStagedOverflow ((← getPeer pid).staged.length > MAX_STAGED_PACKETS) then
     unsupported "more than MAX_STAGED_PACKETS staged packets"
-  setPeer pid { (← getPeer pid) with staged := (← getPeer pid).staged ++ [len] }   -- skb_queue_splice_tail
+  setPeer pid { (← getPeer pid) with staged := (← getPeer pid).staged ++ [pkt] }   -- skb_queue_splice_tail
   sendStagedPackets pid
   peerPut peer
   return 0   -- NETDEV_TX_OK

@@ -147,6 +147,7 @@ def indexReplaceHandshake (pid : PeerId) (kp : KeypairId) : M Bool := do
 
 def NSEC_PER_SEC : Int := 1000000000
 def REKEY_TIMEOUT : Nat := 5
+def KEEPALIVE_TIMEOUT : Nat := 10
 
 /-- wg_noise_reset_last_sent_handshake (noise.h:100-104): the recorded coarse
     boot time, `REKEY_TIMEOUT + 1` seconds back. -/

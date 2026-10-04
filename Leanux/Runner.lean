@@ -20,7 +20,7 @@ inductive Operation where
   | wgSet (attrs : WG.DeviceAttrs)
   | wgGet
   | wgUp
-  | wgXmit (family addr : Nat)
+  | wgXmit (family addr : Nat) (payload : List UInt8)
   | wgObserve
   | wgInject (family port : Nat) (message : List UInt8)
   deriving Repr
@@ -226,7 +226,17 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
   | "wg_xmit" =>
     fields j ["op", "packet"]
     let p ← field j "packet"
-    fields p ["family", "dst"]
+    -- the UDP payload (D2); without one, the fixture's historic 4 bytes "leux"
+    let payload ← match p.getObjVal? "payload" with
+      | .ok v => do
+        fields p ["family", "dst", "payload"]
+        let s ← v.getStr?
+        if s.length == 0 || s.length % 2 != 0 || s.length > 2 * 1392 then
+          throw "packet.payload: expected 1-1392 bytes of lowercase hex"
+        hexBytes v s.length "packet.payload"
+      | .error _ => do
+        fields p ["family", "dst"]
+        pure "leux".toUTF8.toList
     let family ← (← field p "family").getNat?
     if family != 4 && family != 6 then throw "packet.family: expected 4 or 6"
     let bytes ← hexBytes (← field p "dst") (if family == 4 then 8 else 32) "packet.dst"
@@ -238,7 +248,7 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
     let bad6 := family == 6 && (addr == 0 || addr == 1 || addr == 0xfd00ffff000000000000000000000001
                                  || addr / 2 ^ 32 == 0xffff)
     if bad4 || bad6 then throw "packet.dst: an address the sender does not route into wg0"
-    return .wgXmit family addr
+    return .wgXmit family addr payload
   | _ => throw "unsupported operation"
 
 private def parseHidden (j : Json) (ops : Nat) : Except String (Array (List HiddenRecord)) := do
@@ -359,7 +369,7 @@ def toSyscall (results : Array Int) : Operation → Syscall
   | .wgSet attrs => .wgSet attrs
   | .wgGet => .wgGet
   | .wgUp => .wgUp
-  | .wgXmit family addr => .wgXmit family addr
+  | .wgXmit family addr payload => .wgXmit family addr payload
   | .wgObserve => .wgObserve
   | .wgInject family port message => .wgInject family port message
 

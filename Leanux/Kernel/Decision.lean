@@ -181,6 +181,7 @@ inductive Decision where
   -- drivers/net/wireguard/socket.c
   | epFromSkbOk | epFromSkbInet | epFromSkbInet6
   -- drivers/net/wireguard/timers.c
+  | timersDataSentNotPending | timersDataReceivedRunning | timersDataReceivedNotPending
   | modTimerRunning | modTimerAlive | traversalKeepalive | keypairPutUnreferenceNow | keypairKrefPutReleased
   | idxReplaceUnhashed | sendBufNoMem | sendSkbInet | sendSkbInet6 | sendSkbOk
   | initRateLimited | initCreated | initNoIdentity | initNoEphemeral | initEsFailed | initSsFailed
@@ -857,6 +858,10 @@ def Decision.info : Decision → DecisionInfo
   | .modTimerRunning => d "mod_peer_timer.running" wtm 35 [(36, 36)] []
   | .modTimerAlive => d "mod_peer_timer.alive" wtm 36 [(37, 37)] []
   | .traversalKeepalive => d "wg_timers_any_authenticated_packet_traversal.keepalive" wtm 214 [(215, 216)] []
+  -- D2 interface: timer state read on the data paths
+  | .timersDataSentNotPending => d "wg_timers_data_sent.not_pending" wtm 147 [(148, 150)] []
+  | .timersDataReceivedRunning => d "wg_timers_data_received.running" wtm 156 [(157, 157)] []
+  | .timersDataReceivedNotPending => d "wg_timers_data_received.not_pending" wtm 157 [(158, 159)] [(161, 161)]
   | .keypairPutUnreferenceNow => d "wg_noise_keypair_put.unreference_now" wno 135 [(136, 138)] []
   | .keypairKrefPutReleased => d "wg_noise_keypair_put.kref_put_released" wno 139 [(119, 128)] []
   | .sendBufNoMem => d "wg_socket_send_buffer_to_peer.no_mem" wso 194 [(195, 195)] [(197, 200)]
@@ -1116,6 +1121,7 @@ def Decision.repeatable : Decision → Bool
   | .workerConsumed
   | .msgEphemeralCopy | .kdfNoFirstDst | .kdfNoFirstLen | .kdfNoSecondDst | .kdfNoSecondLen
   | .kdfNoThirdDst | .kdfNoThirdLen | .mixDhNull | .mixPrecomputedNull | .msgDecryptFailed
+  | .timersDataSentNotPending | .timersDataReceivedRunning | .timersDataReceivedNotPending
   | .modTimerRunning | .modTimerAlive | .traversalKeepalive
   -- several send workers may run in one operation; bucket walks loop
   | .initRateLimited | .initCreated | .initNoIdentity | .initNoEphemeral | .initEsFailed | .initSsFailed
