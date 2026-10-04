@@ -122,6 +122,47 @@ MUTANTS = [
    "    let _ ← bucketHas .idxInsWalk1 .idxInsCollide1 index\n"),
 ]
 
+# Stage D1 (wg0 initiates), a draft: streams B and C write the targeted mirror
+# code, so the patterns (old, new) are filled in at integration. Entries:
+# (name, description, file, old, new, traces expected to reject it). Not run
+# until they move into MUTANTS with their patterns.
+D1_MUTANTS_DRAFT = [
+  ('D1-M1-keys-responder-order', 'data: begin_session derives the initiator\'s keys in responder order '
+   '(noise.c:834-839); only the keepalive bytes show it', 'Leanux/WG/Handshake.lean', None, None,
+   ['d1_basic', 'd1_preshared_key']),
+  ('D1-M2-key-idx-local', 'data: encrypt_packet writes the local index, not remote_index, as key_idx (send.c:207)',
+   'Leanux/WG/Data.lean', None, None, ['d1_basic']),
+  ('D1-M3-remote-index-not-updated', 'state: consume_response keeps the old remote_index instead of the '
+   'response\'s sender index (noise.c:797)', 'Leanux/WG/Handshake.lean', None, None, ['d1_basic']),
+  ('D1-M4-no-next-demotion', 'state: add_new_keypair\'s initiator arm ignores a pending next keypair '
+   '(noise.c:211-222); needs respond-then-initiate', 'Leanux/WG/Keypair.lean', None, None,
+   ['d1_respond_then_initiate']),
+  ('D1-M5-psk-not-mixed', 'data: consume_response mixes a zero PSK (noise.c:778)', 'Leanux/WG/Handshake.lean',
+   None, None, ['d1_preshared_key']),
+  ('D1-M6-nothing-unchecked', 'control: message_decrypt of encrypted_nothing is not checked (noise.c:781-783)',
+   'Leanux/WG/Handshake.lean', None, None, ['d1_tampered_nothing']),
+  ('D1-M7-ee-with-static', 'data: the ee DH uses wg0\'s static key instead of its ephemeral (noise.c:770)',
+   'Leanux/WG/Handshake.lean', None, None, ['d1_basic']),
+  ('D1-M8-initiator-flag-inverted', 'state: i_am_the_initiator := state == CREATED_RESPONSE (noise.c:830)',
+   'Leanux/WG/Handshake.lean', None, None, ['d1_basic', 'd1_respond_then_initiate']),
+  ('D1-M9-endpoint-not-learned', 'data: the response arm does not learn the endpoint (receive.c:172); the '
+   'keepalive goes to the configured listener, not the sender', 'Leanux/WG/Receive.lean', None, None,
+   ['d1_basic']),
+  ('D1-M10-nonce-from-one', 'data: the nonce is atomic64_inc_return without the - 1 (send.c:380)',
+   'Leanux/WG/Send.lean', None, None, ['d1_basic']),
+  ('D1-M11-keepalive-padded', 'data: encrypt_packet pads a zero-length payload to 16 bytes (send.c:176)',
+   'Leanux/WG/Data.lean', None, None, ['d1_basic']),
+  ('D1-M12-no-walltime', 'data: wg_timers_handshake_complete does not record walltime_last_handshake '
+   '(timers.c:197); the dump\'s last_handshake stays zero', 'Leanux/WG/Handshake.lean', None, None, ['d1_basic']),
+  ('D1-M13-no-keep-key-fresh', 'control, behavior-preserving: the tx worker skips keep_key_fresh (send.c:259)',
+   'Leanux/WG/Data.lean', None, None, ['d1_basic']),
+  ('D1-M14-no-keypair-put-tx', 'control, behavior-preserving: the tx worker keeps its keypair reference '
+   '(send.c:280)', 'Leanux/WG/Data.lean', None, None, ['d1_basic']),
+  ('D1-M15-state-recheck-dropped', 'control: consume_response skips the state check (noise.c:763); probably '
+   'equivalent: a hashed handshake entry is in CREATED_INITIATION except within a response\'s begin_session',
+   'Leanux/WG/Handshake.lean', None, None, []),
+]
+
 def w4(text):
     fw = ("  if ← branch .setDevFwmark a.fwmark.isSome then\n"
           "    modifyDev fun d => { d with fwmark := a.fwmark.getD 0 }\n"
