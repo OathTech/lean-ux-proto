@@ -178,11 +178,17 @@ def txWorker (pid : PeerId) : M Unit := do
     _ ← branch .txNeedResched false
   invariant "the tx queue did not drain"
 
--- The keepalive's message for a known key (cross-checked against
--- harness/noise.py's aead_encrypt in harness/test_d1_keepalive.py): key
--- bytes 0..31, remote index 0x04030201, nonce 0.
-#guard (dataMessage 0x04030201 0 (List.range 32 |>.map UInt8.ofNat) []).length == MESSAGE_DATA_LEN_0
-#guard (dataMessage 0x04030201 0 (List.range 32 |>.map UInt8.ofNat) []).take 16 ==
-  [4, 0, 0, 0, 1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0]
+private def hexOf (bs : List UInt8) : String :=
+  String.join (bs.map fun b => let d := "0123456789abcdef".toList; String.ofList [d[b.toNat / 16]!, d[b.toNat % 16]!])
+
+-- Keepalive messages for a known key (bytes 0..31) and remote index
+-- 0x04030201, at three counters; harness/test_d1_keepalive.py computes the
+-- same with harness/noise.py's independent aead_encrypt.
+#guard hexOf (dataMessage 0x04030201 0 ((List.range 32).map UInt8.ofNat) []) ==
+  "0400000001020304000000000000000010324f800a160bd9a1794255be7ec29d"
+#guard hexOf (dataMessage 0x04030201 5 ((List.range 32).map UInt8.ofNat) []) ==
+  "040000000102030405000000000000003e2fdcfe114117a96d0d40c0777d9d17"
+#guard hexOf (dataMessage 0x04030201 (2 ^ 40 + 3) ((List.range 32).map UInt8.ofNat) []) ==
+  "0400000001020304030000000001000082b9adec90da2dfe162521e79d637c95"
 
 end Leanux.WG
