@@ -1,6 +1,46 @@
 --- a/kernel/kcov.c
 +++ b/kernel/kcov.c
-@@ -1125,3 +1125,83 @@
+@@ -71,6 +71,8 @@
+ 	 * kcov_remote_stop(), see the comment there.
+ 	 */
+ 	int			sequence;
++	/* LEANUX: the trace's steering schedule (see kcov_choice_ip). */
++	struct kcov_steer	*steer;
+ };
+ 
+ struct kcov_remote_area {
+@@ -439,6 +441,7 @@
+ 	if (refcount_dec_and_test(&kcov->refcount)) {
+ 		kcov_remote_reset(kcov);
+ 		vfree(kcov->area);
++		kfree(kcov->steer);
+ 		kfree(kcov);
+ 	}
+ }
+@@ -692,6 +695,11 @@
+ 	}
+ }
+ 
++#define KCOV_LEANUX_STEER_LOAD		_IOW('c', 200, unsigned long)
++#define KCOV_LEANUX_STEER_STATUS	_IOR('c', 201, unsigned long)
++static long kcov_steer_load(struct kcov *kcov, void __user *arg);
++static long kcov_steer_status(struct kcov *kcov, void __user *arg);
++
+ static long kcov_ioctl(struct file *filep, unsigned int cmd, unsigned long arg)
+ {
+ 	struct kcov *kcov;
+@@ -729,6 +737,10 @@
+ 		kcov->mode = KCOV_MODE_INIT;
+ 		spin_unlock_irqrestore(&kcov->lock, flags);
+ 		return 0;
++	case KCOV_LEANUX_STEER_LOAD:
++		return kcov_steer_load(kcov, (void __user *)arg);
++	case KCOV_LEANUX_STEER_STATUS:
++		return kcov_steer_status(kcov, (void __user *)arg);
+ 	case KCOV_REMOTE_ENABLE:
+ 		if (get_user(remote_num_handles, (unsigned __user *)(arg +
+ 				offsetof(struct kcov_remote_arg, num_handles))))
+@@ -1125,3 +1137,238 @@
  }
  
  device_initcall(kcov_init);
@@ -23,9 +63,115 @@
 +#define KCOV_CHOICE_MAX_WORDS 5
 +static atomic64_t kcov_choice_seq;
 +
-+void notrace kcov_choice_ip(u32 kind, unsigned long ip, const void *data, unsigned int len)
++/*
++ * LEANUX steering (choice-stream strategy, step 2): a trace may supply the
++ * values of choices at named call sites. The guest's parent loads a schedule
++ * on its remote KCOV fd (KCOV_LEANUX_STEER_LOAD) before it forks the trace
++ * process. The schedule covers every encounter of the call sites it names,
++ * in order: each entry gives the site's return addresses and kind, and
++ * either a value to substitute or "draw" (keep the kernel's value). A hook
++ * at a named site that does not match the head entry is a mismatch: a marker
++ * record is written and the entry stays. Other sites are not steered. The
++ * parent reads the remaining entries and mismatches back
++ * (KCOV_LEANUX_STEER_STATUS). Only recording contexts consult the schedule.
++ */
++#define KCOV_STEER_MAX 64
++#define KCOV_STEER_IPS 4
++struct kcov_steer_entry {
++	u64 ips[KCOV_STEER_IPS];
++	u32 kind;
++	u32 len;
++	u32 draw;
++	u32 pad;
++	u8 value[40];
++};
++struct kcov_steer {
++	spinlock_t lock;
++	u32 n, head, mismatches;
++	struct kcov_steer_entry e[KCOV_STEER_MAX];
++};
++
++static struct kcov_steer *kcov_steer_find(struct task_struct *t)
++{
++	struct kcov_remote *remote;
++	struct kcov_steer *steer = NULL;
++	unsigned long flags;
++
++	if (t->kcov && t->kcov->remote)
++		return t->kcov->steer;		/* inside a remote section */
++	if (!t->kcov_handle)
++		return NULL;
++	spin_lock_irqsave(&kcov_remote_lock, flags);
++	remote = kcov_remote_find(t->kcov_handle);
++	if (remote)
++		steer = remote->kcov->steer;	/* the trace process's own context */
++	spin_unlock_irqrestore(&kcov_remote_lock, flags);
++	return steer;
++}
++
++static bool kcov_steer_names(struct kcov_steer *steer, unsigned long ip)
++{
++	u32 i, j;
++
++	for (i = 0; i < steer->n; i++)
++		for (j = 0; j < KCOV_STEER_IPS; j++)
++			if (steer->e[i].ips[j] == ip)
++				return true;
++	return false;
++}
++
++/* 1: steered, 0: not steered, -1: a mismatch at a named site */
++static int kcov_steer_apply(struct task_struct *t, u32 kind, unsigned long ip, void *data, unsigned int len)
++{
++	struct kcov_steer *steer = kcov_steer_find(t);
++	struct kcov_steer_entry *e;
++	unsigned long flags;
++	int ret = 0;
++	u32 j;
++
++	if (!steer)
++		return 0;
++	spin_lock_irqsave(&steer->lock, flags);
++	if (!kcov_steer_names(steer, ip))
++		goto out;
++	e = steer->head < steer->n ? &steer->e[steer->head] : NULL;
++	if (e && e->kind == kind && (e->draw || e->len == len))
++		for (j = 0; j < KCOV_STEER_IPS; j++)
++			if (e->ips[j] == ip) {
++				if (!e->draw) {
++					memcpy(data, e->value, len);
++					ret = 1;
++				}
++				steer->head++;
++				goto out;
++			}
++	steer->mismatches++;
++	ret = -1;
++out:
++	spin_unlock_irqrestore(&steer->lock, flags);
++	return ret;
++}
++
++static void kcov_choice_write(struct task_struct *t, u32 kind, unsigned long ip, const void *data, unsigned int len);
++
++void notrace kcov_choice_ip(u32 kind, unsigned long ip, void *data, unsigned int len)
 +{
 +	struct task_struct *t = current;
++	int steered;
++
++	if (!check_kcov_mode(KCOV_MODE_TRACE_PC, t) &&
++	    !(IS_ENABLED(CONFIG_KCOV_ENABLE_COMPARISONS) && check_kcov_mode(KCOV_MODE_TRACE_CMP, t)))
++		return;
++	/* values longer than a record's 40 bytes are never steered */
++	steered = len <= 40 ? kcov_steer_apply(t, kind, canonicalize_ip(ip), data, len) : 0;
++	if (steered < 0)
++		kcov_choice_write(t, 0xffff, ip, NULL, 0);	/* the mismatch marker */
++	kcov_choice_write(t, kind | (steered > 0 ? 0x8000 : 0), ip, data, len);
++}
++EXPORT_SYMBOL(kcov_choice_ip);
++
++static void notrace kcov_choice_write(struct task_struct *t, u32 kind, unsigned long ip, const void *data, unsigned int len)
++{
 +	const u8 *bytes = data;
 +	u64 words[KCOV_CHOICE_MAX_WORDS + 1] = {0};
 +	unsigned int n = len > 8 * KCOV_CHOICE_MAX_WORDS ? 8 * KCOV_CHOICE_MAX_WORDS : len;
@@ -83,7 +229,56 @@
 +		}
 +	}
 +}
-+EXPORT_SYMBOL(kcov_choice_ip);
++
++/* LEANUX: load a schedule: { u32 n; u32 pad; struct kcov_steer_entry e[n]; } */
++static long kcov_steer_load(struct kcov *kcov, void __user *arg)
++{
++	struct kcov_steer *steer, *old;
++	unsigned long flags;
++	u32 n, i;
++
++	if (get_user(n, (u32 __user *)arg))
++		return -EFAULT;
++	if (n > KCOV_STEER_MAX)
++		return -EINVAL;
++	steer = kzalloc(sizeof(*steer), GFP_KERNEL);
++	if (!steer)
++		return -ENOMEM;
++	if (copy_from_user(steer->e, arg + 8, n * sizeof(steer->e[0]))) {
++		kfree(steer);
++		return -EFAULT;
++	}
++	for (i = 0; i < n; i++)
++		if (steer->e[i].len > sizeof(steer->e[i].value)) {
++			kfree(steer);
++			return -EINVAL;
++		}
++	spin_lock_init(&steer->lock);
++	steer->n = n;
++	spin_lock_irqsave(&kcov->lock, flags);
++	old = kcov->steer;
++	kcov->steer = steer;
++	spin_unlock_irqrestore(&kcov->lock, flags);
++	kfree(old);
++	return 0;
++}
++
++/* LEANUX: { u32 remaining; u32 mismatches; } */
++static long kcov_steer_status(struct kcov *kcov, void __user *arg)
++{
++	u32 status[2] = { 0, 0 };
++	unsigned long flags;
++
++	spin_lock_irqsave(&kcov->lock, flags);
++	if (kcov->steer) {
++		spin_lock(&kcov->steer->lock);
++		status[0] = kcov->steer->n - kcov->steer->head;
++		status[1] = kcov->steer->mismatches;
++		spin_unlock(&kcov->steer->lock);
++	}
++	spin_unlock_irqrestore(&kcov->lock, flags);
++	return copy_to_user(arg, status, sizeof(status)) ? -EFAULT : 0;
++}
 --- a/include/linux/kcov.h
 +++ b/include/linux/kcov.h
 @@ -44,6 +44,8 @@
@@ -91,7 +286,7 @@
  void kcov_remote_stop(void);
  u64 kcov_common_handle(void);
 +/* LEANUX: a choice recorded at a generic interception point. */
-+void kcov_choice_ip(u32 kind, unsigned long ip, const void *data, unsigned int len);
++void kcov_choice_ip(u32 kind, unsigned long ip, void *data, unsigned int len);
  
  static inline void kcov_remote_start_common(u64 id)
  {
@@ -99,7 +294,7 @@
  static inline void kcov_finish_switch(struct task_struct *t) {}
  static inline void kcov_remote_start(u64 handle) {}
  static inline void kcov_remote_stop(void) {}
-+static inline void kcov_choice_ip(u32 kind, unsigned long ip, const void *data, unsigned int len) {}
++static inline void kcov_choice_ip(u32 kind, unsigned long ip, void *data, unsigned int len) {}
  static inline u64 kcov_common_handle(void)
  {
  	return 0;

@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "id": "sc_unreached_site",
+  "ops": [
+    {
+      "op": "wg_set",
+      "config": {
+        "private_key": "1111111111111111111111111111111111111111111111111111111111111111",
+        "listen_port": 51820,
+        "peers": [
+          {
+            "public_key": "0faa684ed28867b97f4a6a2dee5df8ce974e76b7018e3f22a1c4cf2678570f20",
+            "allowed_ips": [
+              {
+                "family": 4,
+                "addr": "0a000000",
+                "cidr": 16
+              }
+            ],
+            "keepalive": 25,
+            "endpoint": {
+              "family": 4,
+              "addr": "7f000001",
+              "port": 51999
+            }
+          }
+        ]
+      }
+    },
+    {
+      "op": "wg_up"
+    },
+    {
+      "op": "wg_observe"
+    }
+  ],
+  "steer": [
+    [
+      "resp_ephemeral",
+      "3333333333333333333333333333333333333333333333333333333333333333"
+    ]
+  ]
+}

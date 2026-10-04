@@ -51,7 +51,17 @@
 #define REKEY_BOUND_NS 4000000000LL
 struct operation { unsigned code, kind, newkind, a, b; long long fd, newfd; uint64_t value;
                    unsigned char payload[MAX_PAYLOAD]; size_t payload_len; };
-struct trace { char id[81]; unsigned count; unsigned rlimit; unsigned net; struct operation ops[MAX_OPS]; };
+/* A steering schedule entry (the patched kernel's struct kcov_steer_entry;
+ * docs/2026-10-03-choice-stream-strategy.md, step 2). */
+#define STEER_MAX 64
+struct steer_entry { uint64_t ips[4]; uint32_t kind, len, draw, pad; unsigned char value[40]; };
+struct steer_arg { uint32_t n, pad; struct steer_entry e[STEER_MAX]; };
+#define KCOV_LEANUX_STEER_LOAD _IOW('c', 200, unsigned long)
+#define KCOV_LEANUX_STEER_STATUS _IOR('c', 201, unsigned long)
+struct trace {
+    char id[81]; unsigned count; unsigned rlimit; unsigned net; struct operation ops[MAX_OPS];
+    unsigned nsteer; struct steer_entry steer[STEER_MAX];
+};
 static char line[4 * MAX_PAYLOAD];
 struct observation { long ret; int error; unsigned char bytes[16]; };
 
@@ -479,11 +489,26 @@ static unsigned long *enable_remote(const struct trace *t, int comparisons)
         .common_handle = kcov_remote_handle(KCOV_SUBSYSTEM_COMMON, (uint32_t)getpid()),
     };
     if (ioctl(fd, KCOV_REMOTE_ENABLE, &arg)) fail(t->id, -1, "coverage_failure", "enable_remote_kcov");
+    /* A steering schedule is attached to this remote instance before the
+     * trace process exists; its leftovers are read back after it exits. */
+    if (t->nsteer) {
+        static struct steer_arg steer;
+        steer.n = t->nsteer;
+        memcpy(steer.e, t->steer, t->nsteer * sizeof(steer.e[0]));
+        if (ioctl(fd, KCOV_LEANUX_STEER_LOAD, &steer)) fail(t->id, -1, "coverage_failure", "load_steering");
+    }
     pid_t child = fork();
     if (child < 0) fail(t->id, -1, "environment_failure", "fork_trace");
     if (child) {
         int status;
         if (waitpid(child, &status, 0) != child) fail(t->id, -1, "environment_failure", "wait_trace");
+        if (t->nsteer) {
+            uint32_t left[2];
+            if (ioctl(fd, KCOV_LEANUX_STEER_STATUS, left)) fail(t->id, -1, "coverage_failure", "steering_status");
+            printf("LEANUX_STEER {\"id\":\"%s\",\"mode\":\"%s\",\"remaining\":%u,\"mismatches\":%u}\n",
+                   t->id, comparisons ? "cmp" : "pc", left[0], left[1]);
+            fflush(stdout);
+        }
         _exit(WIFEXITED(status) ? WEXITSTATUS(status) : 1);
     }
     /* The trace process: the mapping stays, the descriptor goes. */
@@ -727,8 +752,10 @@ int main(int argc, char **argv)
     unsigned failures = 0;
     for (unsigned t = 0; t < total; ++t) {
         static struct trace trace;
-        if (!fgets(line, sizeof(line), input) || sscanf(line, "T %80s %u %u %u", trace.id, &trace.count, &trace.rlimit, &trace.net) != 4 ||
-            trace.count < 1 || trace.count > MAX_OPS || trace.rlimit < 8 || trace.rlimit > 1024 || trace.net > 1)
+        if (!fgets(line, sizeof(line), input) ||
+            sscanf(line, "T %80s %u %u %u %u", trace.id, &trace.count, &trace.rlimit, &trace.net, &trace.nsteer) != 5 ||
+            trace.count < 1 || trace.count > MAX_OPS || trace.rlimit < 8 || trace.rlimit > 1024 || trace.net > 1 ||
+            trace.nsteer > STEER_MAX || (trace.nsteer && !trace.net))
             fail("batch", -1, "invalid_input", "wire_trace");
         for (unsigned i = 0; i < trace.count; ++i) {
             struct operation *op = &trace.ops[i];
@@ -748,6 +775,23 @@ int main(int argc, char **argv)
                     op->payload[op->payload_len++] = (unsigned char)byte;
                     hex += 2;
                 }
+            }
+        }
+        for (unsigned k = 0; k < trace.nsteer; ++k) {
+            struct steer_entry *e = &trace.steer[k];
+            int consumed = 0;
+            memset(e, 0, sizeof(*e));
+            if (!fgets(line, sizeof(line), input) ||
+                sscanf(line, "S %u %u %u %" SCNx64 " %" SCNx64 " %" SCNx64 " %" SCNx64 "%n", &e->kind, &e->len, &e->draw,
+                       &e->ips[0], &e->ips[1], &e->ips[2], &e->ips[3], &consumed) != 7 ||
+                e->len > sizeof(e->value) || e->draw > 1)
+                fail(trace.id, -1, "invalid_input", "wire_steering");
+            const char *hex = line + consumed;
+            if (*hex == ' ') ++hex;
+            for (unsigned b = 0; b < (e->draw ? 0 : e->len); ++b) {
+                unsigned byte;
+                if (sscanf(hex + 2 * b, "%2x", &byte) != 1) fail(trace.id, -1, "invalid_input", "wire_steering");
+                e->value[b] = (unsigned char)byte;
             }
         }
         for (int comparisons = 0; comparisons < 2; ++comparisons) {

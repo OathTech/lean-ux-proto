@@ -20,7 +20,8 @@ import re
 import subprocess
 import sys
 
-from harness.linux import KERNEL, LinuxRunError, run_linux
+from harness.linux import ARTIFACTS as LINUX_ARTIFACTS, KERNEL, LinuxRunError, run_linux
+from harness.steer import SteeringError, call_sites, resolve as resolve_steering
 from harness.trace import InvalidTrace, loads_trace, uses_wireguard, validate_trace
 from .coverage import attributable, instrumented_lines, symbolize
 from .generate import generate, generate_wireguard
@@ -29,6 +30,8 @@ from .protocol import InvalidOutput, compare, loads, parse_batch, validate_cover
 ROOT = Path(__file__).resolve().parents[1]
 ANCHORS = ROOT / 'correspondence/kcov.json'
 SUITES = ('handwritten', 'critic', 'wireguard', 'generated', 'wireguard-generated')
+# Suites run only on request: traces that must fail (negative controls).
+CONTROL_SUITES = ('steering-controls',)
 CHUNK = 100
 
 
@@ -223,14 +226,19 @@ def resolve_choices(per, sites, locations):
     frame outside the random and clock helpers): {(id, mode): [[[site id,
     hex padded to whole words], ...] per op]}, and per-trace problems for
     records from undeclared consumers."""
-    resolved, problems = {}, {}
+    resolved, problems, meta = {}, {}, {}
     skipped = Counter()
     for key, ops in per.items():
-        out = []
+        out, labels = [], []
         for index, op in enumerate(ops):
-            recs = []
-            for kind, ip, seq, length, data in op:
+            recs, op_labels = [], []
+            for raw_kind, ip, seq, length, data in op:
                 frames = [f['source'].split('/.deps/linux/')[-1].split(' ')[0] for f in locations.get(ip, [])]
+                if raw_kind == 0xffff:   # the kernel's steering mismatch marker
+                    problems.setdefault(key[0], []).append(dict(index=index, label='steering',
+                        problem='a scheduled site met an entry it does not match', call_chain=frames))
+                    continue
+                kind, steered = raw_kind & 0x7fff, bool(raw_kind & 0x8000)
                 consumer = next((src for src in frames if src.split(':')[0] not in CHOICE_HELPERS), None)
                 kind_class = 'random' if kind in RANDOM_KINDS else 'clock' if 200 <= kind <= 216 else None
                 entry = sites.get((kind_class, consumer)) if kind_class else None
@@ -239,11 +247,41 @@ def resolve_choices(per, sites, locations):
                         problem='choice from an undeclared consumer', call_chain=frames, length=length))
                     continue
                 recs.append([entry['id'], data + '0' * (-len(data) % 16)])
+                op_labels.append((entry['label'], steered, data))
                 if entry['role'] != 'mirror' and key[1] == 'pc':
                     skipped[f"{entry['role']}:{entry['label']}"] += 1
             out.append(recs)
+            labels.append(op_labels)
         resolved[key] = out
-    return resolved, problems, skipped
+        meta[key] = labels
+    return resolved, problems, skipped, meta
+
+
+def steering_problems(traces, meta, status_rows):
+    """For each steered trace and guest child: the kernel consumed the whole
+    schedule with no mismatch, and the records at the scheduled sites are the
+    schedule, entry for entry (a value entry: steered, that value; a draw
+    entry: not steered)."""
+    problems = {}
+    status = {(r['id'], r['mode']): r for r in status_rows}
+    for trace in traces:
+        if 'steer' not in trace:
+            continue
+        sites = {label for label, _ in trace['steer']}
+        want = [(label, value != 'draw', value) for label, value in trace['steer']]
+        for mode in ('pc', 'cmp'):
+            row = status.get((trace['id'], mode))
+            if row is None or row['remaining'] or row['mismatches']:
+                problems.setdefault(trace['id'], []).append(dict(index=None, label='steering',
+                    problem='the schedule was not consumed exactly', mode=mode, status=row))
+            got = [(label, steered, data) for op in meta.get((trace['id'], mode), []) for label, steered, data in op
+                   if label in sites]
+            if len(got) != len(want) or any(g[0] != w[0] or g[1] != w[1] or (w[1] and g[2] != w[2])
+                                            for g, w in zip(got, want)):
+                problems.setdefault(trace['id'], []).append(dict(index=None, label='steering',
+                    problem='the records at scheduled sites are not the schedule', mode=mode,
+                    records=[[g[0], g[1]] for g in got][:16]))
+    return problems
 
 
 def load_decisions(config):
@@ -588,7 +626,13 @@ def run_chunk(traces, out, kcov):
     results, gaps = {}, Counter()
     outcomes = Counter()
     try:
-        linux = run_linux(traces, out / 'linux', timeout=guest_timeout(traces))
+        sites_by_key = load_hidden_sites()
+        steer_wire = {}
+        if any('steer' in t for t in traces):
+            by_label = {entry['label']: entry for entry in sites_by_key.values()}
+            calls = call_sites(KERNEL / 'vmlinux', LINUX_ARTIFACTS / 'cache')
+            steer_wire = {t['id']: resolve_steering(t, by_label, calls) for t in traces if 'steer' in t}
+        linux = run_linux(traces, out / 'linux', timeout=guest_timeout(traces), steer_wire=steer_wire)
         coverage = [loads(line) for line in (out / 'linux/coverage.jsonl').read_text().splitlines()]
         validate_coverage(traces, coverage)
         mapped = symbolize(coverage, KERNEL / 'vmlinux')
@@ -602,10 +646,16 @@ def run_chunk(traces, out, kcov):
         per = hidden_records(traces, rows)
         ips = sorted({r[1] for ops in per.values() for op in ops for r in op})
         called = symbolize([{'pcs': ips}], KERNEL / 'vmlinux') if ips else {'locations': {}}
-        records, site_problems, skipped = resolve_choices(per, load_hidden_sites(), called['locations'])
+        records, site_problems, skipped, meta = resolve_choices(per, sites_by_key, called['locations'])
+        steer_path = out / 'linux/steering.jsonl'
+        status_rows = [loads(line) for line in steer_path.read_text().splitlines()] if steer_path.exists() else []
+        for trace_id, found in steering_problems(traces, meta, status_rows).items():
+            site_problems.setdefault(trace_id, []).extend(found)
         outcomes.update({f'choice records skipped ({k})': n for k, n in skipped.items()})
     except LinuxRunError as exc:
         return {t['id']: dict(outcome=exc.kind, side='linux', detail=str(exc)) for t in traces}, gaps, outcomes
+    except SteeringError as exc:
+        return {t['id']: dict(outcome='invalid_input', side='linux', detail=str(exc)) for t in traces}, gaps, outcomes
     except (InvalidOutput, ValueError, OSError, subprocess.SubprocessError) as exc:
         return {t['id']: dict(outcome='invalid_coverage', side='linux', detail=str(exc)) for t in traces}, gaps, outcomes
     # The mirror runs once with each guest child's hidden-input records: the
@@ -634,6 +684,11 @@ def run_chunk(traces, out, kcov):
             operand_problems, checked = operand_agreement(trace, actual_cmp, trace_comparisons,
                                                           compared['locations'], kcov[1], set(kcov[0]['functions']))
             problems += operand_problems + site_problems.get(trace['id'], [])
+            # a steered trace states what its steering is for: the mirror's
+            # agreeing run (A2 ties it to Linux's coverage) must show it
+            reported = {b['label'] for b in actual['branches']}
+            problems += [dict(index=None, label=label, problem='expected outcome not reached')
+                         for label in trace.get('expect', []) if label not in reported]
             # Both children's returns are equal (harness/linux.py); so must be
             # the mirror's under each child's records.
             if [o['ret'] for o in actual_cmp['observations']] != [o['ret'] for o in actual['observations']]:
@@ -658,7 +713,7 @@ def main(argv=None):
     parser.add_argument('--no-build', action='store_true', help='reuse the existing .lake build')
     args = parser.parse_args(argv)
     suites = args.suite.split(',')
-    if not suites or any(s not in SUITES for s in suites):
+    if not suites or any(s not in SUITES + CONTROL_SUITES for s in suites):
         parser.error(f'--suite must be a comma-separated subset of {SUITES}')
     artifacts = Path(os.environ.get('LEANUX_ARTIFACTS', ROOT / '.artifacts')).resolve()
     stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')

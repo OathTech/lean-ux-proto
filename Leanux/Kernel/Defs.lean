@@ -330,6 +330,10 @@ structure World where
       which runs before Linux). -/
   hiddenPlaceholders : Bool := false
   placeholderCount : Nat := 0
+  /-- A steered trace's schedule (site label, value or a draw), which the
+      placeholders follow: the domain filter's verdict is then exact for the
+      steered sites. -/
+  steerValues : List (String × Option (List UInt8)) := []
   /-- Peers whose handshake work this system call queued, while the call has
       not slept. The kernel is `CONFIG_PREEMPT_NONE` on one CPU, so their
       worker cannot have run yet. -/
@@ -414,6 +418,12 @@ def hidden (s : HiddenSite) : M (List UInt8) := do
     -- clock that advances; a jitter byte that is accepted at once.
     let n := w.placeholderCount + 1
     set { w with placeholderCount := n }
+    -- a steered site takes the schedule's next value for it
+    match w.steerValues.findIdx? (·.1 == i.label) with
+    | some k =>
+      set { w with placeholderCount := n, steerValues := w.steerValues.eraseIdx k }
+      if let some v := w.steerValues[k]!.2 then return v
+    | none => pure ()
     let le (v width : Nat) := (List.range width).map fun k => UInt8.ofNat (v / 256 ^ k % 256)
     return match i.kind with
       | "clock" => le (1000000000000 + n * 1000000000) i.len

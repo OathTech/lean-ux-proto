@@ -37,7 +37,7 @@ if [ "$PROFILE" = net-rcov ] || [ "$PROFILE" = net-hidden ] || [ "$PROFILE" = ne
     # net-choice: generic choice capture (choice-stream strategy, step 1),
     # replacing the hidden-inputs patch's per-site hooks
     CHOICE_PATCH="$LEANUX_ROOT/kernel/patches/choice-stream.patch"
-    CHOICE_SHA=b662b4638fb16e5fb3a7b09a639286ef943f6cfb9502cf094d92cf0757b97338
+    CHOICE_SHA=9b75e58e2dba2c7012af1f2a4ef7f88d74ff052553fc79e0cfdbb5234499c252
     if [ "$PROFILE" = net-choice ]; then
         SOURCE="$LEANUX_ARTIFACTS/src/linux-6.12.110-choice-stream"
         PATCH_SHA_RECORD="$PATCH_SHA $CHOICE_SHA"

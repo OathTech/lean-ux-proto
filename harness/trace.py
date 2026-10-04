@@ -44,8 +44,25 @@ def _fields(value, keys, where):
 
 def validate_trace(trace):
     """Return a detached valid trace; reject all inputs outside trace v1."""
-    if type(trace) is not dict or set(trace) not in ({"version", "id", "ops"}, {"version", "id", "ops", "rlimit_nofile"}):
-        raise InvalidTrace("trace: expected exactly ['id', 'ops', 'version'] and optionally 'rlimit_nofile'")
+    if type(trace) is not dict or not {"version", "id", "ops"} <= set(trace) <= {"version", "id", "ops", "rlimit_nofile", "steer", "expect"}:
+        raise InvalidTrace("trace: expected exactly ['id', 'ops', 'version'] and optionally 'rlimit_nofile', 'steer', 'expect'")
+    # A steering schedule (choice-stream strategy, step 2): [site label, value
+    # hex or "draw"] in encounter order; the expected decision outcomes that
+    # the steering is for. Sites, lengths and domains are checked when the
+    # schedule is resolved against the kernel (harness/steer.py).
+    if "steer" in trace:
+        steer = trace["steer"]
+        if type(steer) is not list or not 1 <= len(steer) <= 64 or any(
+                type(e) is not list or len(e) != 2 or type(e[0]) is not str or type(e[1]) is not str
+                or not (e[1] == "draw" or re.fullmatch(r"(?:[0-9a-f]{2}){1,40}", e[1])) for e in steer):
+            raise InvalidTrace("steer: expected 1–64 [site, hex or 'draw'] entries")
+    if "expect" in trace:
+        expect = trace["expect"]
+        if type(expect) is not list or not 1 <= len(expect) <= 16 or any(
+                type(e) is not str or not re.fullmatch(r"[A-Za-z0-9_.]+=[01]", e) for e in expect):
+            raise InvalidTrace("expect: expected 1–16 'decision=0|1' labels")
+        if "steer" not in trace:
+            raise InvalidTrace("expect: only a steered trace states expected outcomes")
     if "rlimit_nofile" in trace:
         _integer(trace["rlimit_nofile"], 8, 1024, "rlimit_nofile")
     _integer(trace["version"], 1, 1, "version")
@@ -134,15 +151,21 @@ def loads_trace(line):
         raise InvalidTrace(f"invalid JSON: {exc}") from exc
 
 
-def serialize_wire(traces):
+def serialize_wire(traces, steer_wire=None):
+    """`steer_wire`: each steered trace's resolved schedule
+    (harness/steer.py), [(kind, length, draw, [return addresses], hex)]."""
     traces = [validate_trace(trace) for trace in traces]
+    steer_wire = steer_wire or {}
+    if any("steer" in t and t["id"] not in steer_wire for t in traces):
+        raise InvalidTrace("a steered trace has no resolved schedule")
     if not 1 <= len(traces) <= 4096:
         raise InvalidTrace("guest batch requires 1–4096 traces")
     if len({trace['id'] for trace in traces}) != len(traces):
         raise InvalidTrace("guest batch trace identifiers must be unique")
     lines = ["LEANUX_WIRE_V1", str(len(traces))]
     for trace in traces:
-        lines.append(f"T {trace['id']} {len(trace['ops'])} {trace.get('rlimit_nofile', 32)} {int(uses_wireguard(trace))}")
+        schedule = steer_wire.get(trace["id"], []) if "steer" in trace else []
+        lines.append(f"T {trace['id']} {len(trace['ops'])} {trace.get('rlimit_nofile', 32)} {int(uses_wireguard(trace))} {len(schedule)}")
         for op in trace["ops"]:
             def fd(field):
                 value = op.get(field, {"literal": -1})
@@ -165,4 +188,7 @@ def serialize_wire(traces):
             elif op["op"] == "wg_inject":
                 line += " " + op["message"]
             lines.append(line)
+        for kind, length, draw, ips, value in schedule:
+            ips = (list(ips) + [0, 0, 0, 0])[:4]
+            lines.append(f"S {kind} {length} {int(draw)} " + " ".join(f"{ip:x}" for ip in ips) + f" {'' if draw else value}")
     return "\n".join(lines) + "\n"

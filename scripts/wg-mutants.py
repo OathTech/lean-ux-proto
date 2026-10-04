@@ -112,6 +112,14 @@ MUTANTS = [
    'Leanux/Syscalls.lean',
    "    Env.fixtureSend\n    let ret ← WG.wgXmit family addr\n",
    "    let ret ← WG.wgXmit family addr\n"),
+  # Choice stream, step 2: paths only steering reaches
+  ('S2-M1-lookup-ignores-type', 'state: the index lookup ignores its type mask', 'Leanux/WG/Peer.lean',
+   "      if ← branch .idxTypeMatch (kinds.contains e.kind) then entry := some e\n",
+   "      if ← branch .idxTypeMatch true then entry := some e\n"),
+  ('S2-M2-insert-keeps-collision', 'state: the insert does not redraw after an unlocked collision',
+   'Leanux/WG/Peer.lean',
+   "    if ← bucketHas .idxInsWalk1 .idxInsCollide1 index then continue\n",
+   "    let _ ← bucketHas .idxInsWalk1 .idxInsCollide1 index\n"),
 ]
 
 def w4(text):

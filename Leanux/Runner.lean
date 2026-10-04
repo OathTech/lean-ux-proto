@@ -37,6 +37,9 @@ structure Trace where
   /-- The hidden-input records Linux made for each operation (the check adds
       them after the Linux run; docs/2026-10-03-hidden-inputs-design.md). -/
   hidden : Option (Array (List HiddenRecord)) := none
+  /-- A steering schedule (choice-stream strategy, step 2): the placeholders
+      follow it; Linux's records carry the steered values. -/
+  steer : List (String × Option (List UInt8)) := []
   deriving Repr
 
 /-- The network fixture runs for traces with a WireGuard operation
@@ -254,8 +257,11 @@ private def parseHidden (j : Json) (ops : Nat) : Except String (Array (List Hidd
 def parseTrace (j : Json) : Except String Trace := do
   let hasLimit := (j.getObjVal? "rlimit_nofile").isOk
   let hasHidden := (j.getObjVal? "hidden").isOk
+  let hasSteer := (j.getObjVal? "steer").isOk
+  let hasExpect := (j.getObjVal? "expect").isOk
   fields j ((if hasLimit then ["version", "id", "ops", "rlimit_nofile"] else ["version", "id", "ops"])
-    ++ (if hasHidden then ["hidden"] else []))
+    ++ (if hasHidden then ["hidden"] else []) ++ (if hasSteer then ["steer"] else [])
+    ++ (if hasExpect then ["expect"] else []))
   let rlimit ← if hasLimit then natField j "rlimit_nofile" 1024 else pure 32
   if rlimit < 8 then throw "rlimit_nofile outside 8..1024"
   if (← (← field j "version").getNat?) != 1 then throw "unsupported trace version"
@@ -269,7 +275,16 @@ def parseTrace (j : Json) : Except String Trace := do
   for j in rawOps do
     ops := ops.push (← parseOperation j ops)
   let hidden ← if hasHidden then some <$> parseHidden (← field j "hidden") ops.size else pure none
-  return { id, ops, rlimit, hidden }
+  let steer ← if hasSteer then (← (← field j "steer").getArr?).toList.mapM fun e => do
+      let pair ← e.getArr?
+      if pair.size != 2 then throw "steer: expected [site, value] entries"
+      let label ← pair[0]!.getStr?
+      let v ← pair[1]!.getStr?
+      if v == "draw" then return (label, none)
+      if v.length == 0 || v.length % 2 != 0 || v.length > 80 then throw "steer: value hex"
+      return (label, some (← hexBytes pair[1]! v.length "steer"))
+    else pure []
+  return { id, ops, rlimit, hidden, steer }
 
 /-! ## Harness fixture and trace execution
 
@@ -352,7 +367,8 @@ def toSyscall (results : Array Int) : Operation → Syscall
     never reports an observation for a path it does not model. -/
 def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat × Stop) Json := do
   let mut world : World := { k := initialKernel trace.rlimit trace.net, env := harnessEnv, timing := Env.timing,
-                             hiddenPlaceholders := placeholders && trace.hidden.isNone }
+                             hiddenPlaceholders := placeholders && trace.hidden.isNone,
+                             steerValues := if placeholders then trace.steer else [] }
   let mut results : Array Int := #[]
   let mut observations : Array Json := #[]
   let mut branches : Array Json := #[]

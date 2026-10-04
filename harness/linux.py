@@ -244,7 +244,7 @@ def _collect(outdir, traces, process_returncode):
     results, coverage, fixtures, errors, child_failures, completed, kernels = [], [], [], [], [], [], []
     comparisons, comparison_results, wireguard, observed = [], [], [], []
     remote_coverage, remote_comparisons = [], []
-    hidden, remote_hidden = [], []
+    hidden, remote_hidden, steering = [], [], []
     for line in (outdir / "boot.log").read_text(errors="strict").splitlines():
         line = line.rstrip("\r")
         for prefix, target in (("LEANUX_RESULT ", results), ("LEANUX_COVERAGE ", coverage),
@@ -253,7 +253,7 @@ def _collect(outdir, traces, process_returncode):
                                ("LEANUX_CMP_RESULT ", comparison_results), ("LEANUX_WG ", wireguard),
                                ("LEANUX_WGOBS ", observed), ("LEANUX_RCOVERAGE ", remote_coverage),
                                ("LEANUX_RCMP ", remote_comparisons), ("LEANUX_HIDDEN ", hidden),
-                               ("LEANUX_RHIDDEN ", remote_hidden)):
+                               ("LEANUX_RHIDDEN ", remote_hidden), ("LEANUX_STEER ", steering)):
             if line.startswith(prefix):
                 try:
                     target.append(_decode_json(line[len(prefix):]))
@@ -283,6 +283,13 @@ def _collect(outdir, traces, process_returncode):
                        for r in row["records"])):
             raise LinuxRunError("invalid_output", "Malformed hidden-input record", outdir)
     _jsonl(outdir / "hidden.jsonl", [dict(r, stream="task") for r in hidden] + [dict(r, stream="remote") for r in remote_hidden])
+    # Steering status per steered trace and child: entries left, mismatches.
+    steered = {t["id"] for t in traces if "steer" in t}
+    if (any(type(r) is not dict or set(r) != {"id", "mode", "remaining", "mismatches"} or r["id"] not in steered
+            or r["mode"] not in ("pc", "cmp") for r in steering)
+            or sorted((r["id"], r["mode"]) for r in steering) != sorted((i, m) for i in steered for m in ("pc", "cmp"))):
+        raise LinuxRunError("invalid_output", "Steering status rows missing or malformed", outdir)
+    _jsonl(outdir / "steering.jsonl", steering)
     _jsonl(outdir / "comparisons.jsonl", comparisons)
     _jsonl(outdir / "guest-errors.jsonl", errors + child_failures)
     (outdir / "fixture.json").write_text(json.dumps({
@@ -345,7 +352,7 @@ def _collect(outdir, traces, process_returncode):
     return results
 
 
-def run_linux(traces, outdir, *, timeout=120):
+def run_linux(traces, outdir, *, timeout=120, steer_wire=None):
     """Return ordered observations; preserve evidence and raise on execution failures.
 
     `outdir` must be a fresh/empty directory within the task's artifact root.
@@ -353,7 +360,7 @@ def run_linux(traces, outdir, *, timeout=120):
     calls boot fresh VMs. The project-wide advisory lock prevents overlapping VMs.
     """
     traces = [validate_trace(trace) for trace in traces]
-    wire = serialize_wire(traces)
+    wire = serialize_wire(traces, steer_wire)
     outdir = Path(outdir).resolve()
     if not outdir.is_relative_to(ARTIFACTS):
         raise ValueError(f"outdir must be within task artifact root {ARTIFACTS}")

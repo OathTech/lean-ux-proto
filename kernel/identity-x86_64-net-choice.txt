@@ -1,14 +1,16 @@
-# Proposed oracle kernel for the choice stream (docs/2026-10-03-choice-stream-strategy.md,
-# step 1; awaiting the user's approval to replace the net-hidden oracle):
+# Oracle kernel for the choice stream (docs/2026-10-03-choice-stream-strategy.md):
+# step 1 user-approved 2026-10-03; step 2 (steering) awaiting the user's approval.
 # kernel/config-x86_64-net with kernel/patches/wireguard-kcov-remote.patch
 # (sha256 503c899d061530af6d250ed018466b7ba1cc77407f3a3492edf031e20d9cfe07) and
-# kernel/patches/choice-stream.patch (sha256 b662b4638fb16e5fb3a7b09a639286ef943f6cfb9502cf094d92cf0757b97338),
+# kernel/patches/choice-stream.patch (sha256 9b75e58e2dba2c7012af1f2a4ef7f88d74ff052553fc79e0cfdbb5234499c252),
 # built with LEANUX_KERNEL_PROFILE=net-choice. The choice-stream patch records
-# random draws and clock reads at generic interception points (drivers/char/random.c,
-# kernel/time/timekeeping.c, kernel/kcov.c; none anchored) and keeps the
-# handshake send worker's remote section (send.c, device.c, device.h; line
-# counts preserved). Its DWARF names .deps/linux (via -fdebug-prefix-map).
+# random draws and clock reads at generic interception points
+# (drivers/char/random.c, kernel/time/timekeeping.c), lets a trace steer named
+# call sites through a per-handle schedule loaded by ioctl (kernel/kcov.c),
+# and keeps the handshake send worker's remote section (send.c, device.c,
+# device.h; line counts preserved). Of these only the WireGuard files are
+# anchored. Its DWARF names .deps/linux (via -fdebug-prefix-map).
 # Path-independent identity from scripts/kernel-identity.py:
-d8884037565722f7fa7cc868b573da28494eb79cd86e0853a019117095d2c996
+d0123d1b8c304e5f807d687ee762e6ef56b4a44a254f0a551cb2c44fea579554
 # vmlinux sha256 of the build the evidence used (path-dependent):
-ef103305285701a0760733e75b5eedec490354f3a87155f436d75152bab9614b
+04f2959f17d675286010f7867cadb66ce3b74601f17610f4283a94fd821e6124

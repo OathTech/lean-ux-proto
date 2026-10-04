@@ -66,7 +66,7 @@ class TraceContractTests(unittest.TestCase):
     def test_wire_preserves_widths_and_reference_modes(self):
         self.trace['ops'].append({'op': 'dup3', 'fd': {'literal': -2147483648}, 'newfd': {'ref': 0}, 'flags': 4294967295})
         self.assertEqual(serialize_wire([self.trace]),
-                         'LEANUX_WIRE_V1\n1\nT case 3 32 0\n1 0 -1 0 -1 0 2048 0\n6 1 0 0 -1 8 0 18446744073709551615\n3 0 -2147483648 1 0 0 4294967295 0\n')
+                         'LEANUX_WIRE_V1\n1\nT case 3 32 0 0\n1 0 -1 0 -1 0 2048 0\n6 1 0 0 -1 8 0 18446744073709551615\n3 0 -2147483648 1 0 0 4294967295 0\n')
 
 
 if __name__ == '__main__':
