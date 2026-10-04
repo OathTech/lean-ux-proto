@@ -37,13 +37,17 @@ scripts/in-bundle python3 scripts/kernel-identity.py .artifacts/kernel-net-choic
 ```
 
 The profile extracts the locked Linux archive into
-`.artifacts/src/linux-6.12.110-choice-stream` and applies two patches there,
+`.artifacts/src/linux-6.12.110-choice-stream-d1` and applies one patch there,
 strictly and by hash (`scripts/apply-kernel-patch.py`):
-- `kernel/patches/wireguard-kcov-remote.patch` adds remote KCOV coverage to
-  WireGuard's receive path;
-- `kernel/patches/choice-stream.patch` records every random draw and clock
-  read at generic interception points into the KCOV stream (`kcov_choice_ip`),
-  and covers the handshake send worker.
+`kernel/patches/choice-stream.patch` (generated from the locked source by
+`kernel/patches/gen-choice-stream.py`). It records every random draw and
+clock read at generic interception points into the KCOV stream
+(`kcov_choice_ip`), lets a trace steer named call sites, and collects the
+trace's deferred units in dispatch sections: `process_one_work` and the
+NET_RX vector open a KCOV remote section for each dispatch of a function in
+the dispatch set the guest arms (`harness/linux.py`, `DISPATCH_SYMBOLS`).
+It touches no WireGuard file; `kernel/patches/wireguard-kcov-remote.patch`
+(per-site sections) is used only by the older profiles.
 
 Every line number in the files the check anchors is preserved. `.deps` is
 never modified. The identity must equal the first hash in
