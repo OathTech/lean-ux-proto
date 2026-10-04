@@ -1,6 +1,7 @@
 # Oracle kernel for the choice stream (docs/2026-10-03-choice-stream-strategy.md):
-# step 1 user-approved 2026-10-03; step 2 (steering) and the D1 sprint's
-# dispatch sections (stream A) awaiting the user's approval.
+# step 1 and step 2 (steering) user-approved 2026-10-03; the D1 sprint's
+# dispatch sections (stream A) and resched records (integration) awaiting the
+# user's approval.
 # kernel/config-x86_64-net (unchanged) with kernel/patches/choice-stream.patch
 # (sha256 e3b901ca66cb334e8550adf95542118f9783ae88d6c7a57e75f1774589996c06)
 # applied alone to the locked source, built with LEANUX_KERNEL_PROFILE=net-choice.
@@ -11,9 +12,10 @@
 # sections in process_one_work (kernel/workqueue.c) and the NET_RX vector
 # (kernel/softirq.c) for the armed dispatch set, with start and stop records
 # and a dropped-section counter (kernel/kcov.c, include/linux/kcov.h,
-# include/linux/sched.h). No anchored file and no WireGuard file is touched.
+# include/linux/sched.h), and writes a resched record when __cond_resched
+# schedules inside a task section (kernel/sched/core.c). No anchored file and no WireGuard file is touched.
 # Its DWARF names .deps/linux (via -fdebug-prefix-map).
 # Path-independent identity from scripts/kernel-identity.py:
-705a5e1d106cf312e9bba53c2f48c6b46fdba9794f841c47b34b7dd3a2dc7037
+a63260c1b2680febd84bac97fb2865c0c5434b6b05362cf69ccac10b31bd1685
 # vmlinux sha256 of the build the evidence used (path-dependent):
-18794d9ea7ef459c93864fa512ece2d3a9ad5fac0d432c1bf587209a8506c75e
+ed9c25cdd6b52b6fc20286dab834e50e801697550a9a67571eabc7182d4834dc
