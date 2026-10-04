@@ -395,7 +395,8 @@ def deliverInner (pkt : List UInt8) : M Unit := do
   let version := byte 0 / 16
   if version == 4 then
     if byte 0 % 16 != 5 then unsupported "an inner IPv4 packet with options"
-    if onesSum (pkt.take 20) != 0xffff then   -- ip_fast_csum unsupported "an inner IPv4 header with a bad checksum"
+    -- ip_fast_csum of the header
+    if onesSum (pkt.take 20) != 0xffff then unsupported "an inner IPv4 header with a bad checksum"
     let totLen := WG.beAt pkt 2 2
     if totLen != pkt.length then invariant "consume_data_done trims to tot_len"
     if WG.beAt pkt 6 2 % 0x4000 != 0 then unsupported "an inner IPv4 fragment"
