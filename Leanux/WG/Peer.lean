@@ -43,7 +43,7 @@ def peerPut (peer : Option PeerId) : M Unit := do
   if ← branch .peerKrefPutReleased (← refcountDecAndTest p.refcount) then
     indexRemove pid .handshake
     -- wg_packet_purge_staged_packets: DEV_STATS_ADD(tx_dropped, qlen)
-    modifyDev fun d => { d with txDropped := d.txDropped + p.staged, peers := d.peers.erase pid }
+    modifyDev fun d => { d with txDropped := d.txDropped + p.staged.length, peers := d.peers.erase pid }
 
 /-- wg_noise_precompute_static_static (noise.c:47-57). -/
 def precomputeStaticStatic (pid : PeerId) : M Unit := do

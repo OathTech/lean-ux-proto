@@ -191,6 +191,19 @@ inductive Decision where
   | crespDecryptFailed | crespStateChanged | addKeypairHasNext
   -- drivers/net/wireguard/receive.c
   | hsRespNeedsCookie | hsRespNoPeer | hsRespSessionBegun
+  -- D1 stream C: drivers/net/wireguard/send.c (staged packets with a keypair,
+  -- create_data, encrypt_packet, the encrypt and tx workers, keep_key_fresh)
+  | stagedKeyInvalid | stagedBirthdateExpired | stagedNonceIterate | stagedNonceRejected
+  | createDataDead | createDataEpipe | createDataOk | createDataOkEpipe
+  | padNoMtu | padOverMtu | encCowHeadFailed | encChecksumPartial | encChecksumHelpFailed
+  | encCowDataFailed | encTooManyFrags | encSgvecFailed
+  | encWorkerConsumed | encWorkerSkbIterate | encWorkerEncrypted | encWorkerNeedResched
+  | txPacket | txNotUncrypted | txCrypted | txNeedResched
+  | doneSkbIterate | doneSendOk | doneNotKeepalive | doneDataSent
+  | freshKeypair | freshValid | freshCounter | freshInitiator | freshExpired | freshSend
+  -- D1 stream C: drivers/net/wireguard/queueing.h
+  | enqueuePeerQueueFull | enqueueRingFull | chooseCpuInvalid | chooseCpuOffline | chooseCpuIndexIterate
+  | prevQueuePeeked
   deriving Repr, BEq, DecidableEq, Inhabited
 
 /-- A recorded step: the decision, the outcome the mirror computed, and, for
@@ -884,6 +897,60 @@ def Decision.info : Decision → DecisionInfo
   | .hsRespNeedsCookie => d "wg_receive_handshake_packet.response_needs_cookie" wrc 161 [(162, 164)] [(166, 166)]
   | .hsRespNoPeer => d "wg_receive_handshake_packet.response_no_peer" wrc 167 [(168, 170)] [(172, 176)]
   | .hsRespSessionBegun => d "wg_receive_handshake_packet.response_session_begun" wrc 176 [(178, 186)] []
+  -- D1 stream C: drivers/net/wireguard/send.c
+  -- both `goto out_nokey`/`out_invalid` targets are shared with other exits
+  | .stagedKeyInvalid => d "wg_packet_send_staged_packets.key_invalid" wsd 363 [] [(365, 365)]
+  | .stagedBirthdateExpired => d "wg_packet_send_staged_packets.birthdate_expired" wsd 365 [] [(374, 388)]
+  | .stagedNonceIterate => d "wg_packet_send_staged_packets.nonce_iterate" wsd 374 [(378, 381)] [(385, 388)]
+  | .stagedNonceRejected => d "wg_packet_send_staged_packets.nonce_rejected" wsd 381 [] []
+  -- the `goto err` and the returns share the epilogue at 325
+  | .createDataDead => d "wg_packet_create_data.dead" wsd 317 [] [(320, 320)]
+  | .createDataEpipe => d "wg_packet_create_data.epipe" wsd 322 [(323, 323)] []
+  | .createDataOk => d "wg_packet_create_data.ok" wsd 326 [] []
+  | .createDataOkEpipe => d "wg_packet_create_data.ok_epipe" wsd 326 [] [(328, 330)]
+  | .padNoMtu => d "calculate_skb_padding.no_mtu" wsd 145 [(146, 146)] [(154, 159)]
+  | .padOverMtu => d "calculate_skb_padding.over_mtu" wsd 154 [(155, 155)] []
+  -- encrypt_packet's `return false` exits share the epilogue
+  | .encCowHeadFailed => d "encrypt_packet.cow_head_failed" wsd 183 [(184, 184)] [(187, 187)]
+  | .encChecksumPartial => d "encrypt_packet.checksum_partial" wsd 187 [] []
+  | .encChecksumHelpFailed => d "encrypt_packet.checksum_help_failed" wsd 188 [] []
+  | .encCowDataFailed => d "encrypt_packet.cow_data_failed" wsd 193 [] []
+  | .encTooManyFrags => d "encrypt_packet.too_many_frags" wsd 193 [] [(199, 213)]
+  | .encSgvecFailed => d "encrypt_packet.sgvec_failed" wsd 213 [] [(216, 218)]
+  | .encWorkerConsumed => d "wg_packet_encrypt_worker.consumed" wsd 293 [(294, 307)] []
+  -- the walk's exit and its `break` both reach 305
+  | .encWorkerSkbIterate => d "wg_packet_encrypt_worker.skb_iterate" wsd 296 [(297, 303)] []
+  | .encWorkerEncrypted => d "wg_packet_encrypt_worker.encrypted" wsd 297 [(299, 299)] [(301, 302)]
+  | .encWorkerNeedResched => d "wg_packet_encrypt_worker.need_resched" wsd 306 [(307, 307)] []
+  | .txPacket => d "wg_packet_tx_worker.packet" wsd 269 [(270, 270)] []
+  | .txNotUncrypted => d "wg_packet_tx_worker.not_uncrypted" wsd 270 [(272, 283)] []
+  | .txCrypted => d "wg_packet_tx_worker.crypted" wsd 275 [(276, 276)] [(278, 278)]
+  | .txNeedResched => d "wg_packet_tx_worker.need_resched" wsd 282 [(283, 283)] []
+  | .doneSkbIterate => d "wg_packet_create_data_done.skb_iterate" wsd 249 [(250, 253)] [(256, 259)]
+  -- `!send(...) && !is_keepalive` (251-252): the first operand's sides are
+  -- the call's continuation either way
+  | .doneSendOk => d "wg_packet_create_data_done.sent" wsd 251 [] []
+  | .doneNotKeepalive => d "wg_packet_create_data_done.not_keepalive" wsd 252 [(253, 253)] []
+  -- keep_key_fresh (259) follows either way
+  | .doneDataSent => d "wg_packet_create_data_done.data_sent" wsd 256 [(257, 257)] []
+  -- `keypair && is_valid && (counter > REKEY_AFTER_MESSAGES || (initiator &&
+  -- expired))` (131-134): each operand's true side evaluates the next line
+  | .freshKeypair => d "keep_key_fresh.keypair" wsd 131 [] []
+  | .freshValid => d "keep_key_fresh.valid" wsd 131 [(132, 132)] []
+  | .freshCounter => d "keep_key_fresh.counter" wsd 132 [] [(133, 133)]
+  | .freshInitiator => d "keep_key_fresh.initiator" wsd 133 [(134, 134)] []
+  | .freshExpired => d "keep_key_fresh.birthdate_expired" wsd 134 [] []
+  | .freshSend => d "keep_key_fresh.send" wsd 137 [(138, 138)] []
+  -- D1 stream C: drivers/net/wireguard/queueing.h
+  | .enqueuePeerQueueFull => d "wg_queue_enqueue_per_device_and_peer.peer_queue_full" wqh 167 [(168, 168)] [(173, 176)]
+  | .enqueueRingFull => d "wg_queue_enqueue_per_device_and_peer.ring_full" wqh 174 [(175, 175)] [(176, 176)]
+  -- `cpu >= nr_cpu_ids || !cpumask_test_cpu(cpu, cpu_online_mask)`: DWARF puts
+  -- the bit test (evaluated iff the first operand is false) on 109; the body
+  -- follows either operand
+  | .chooseCpuInvalid => d "wg_cpumask_choose_online.cpu_invalid" wqh 109 [] [(109, 109)]
+  | .chooseCpuOffline => d "wg_cpumask_choose_online.cpu_offline" wqh 110 [] []
+  | .chooseCpuIndexIterate => d "wg_cpumask_choose_online.index_iterate" wqh 113 [(114, 114)] []
+  | .prevQueuePeeked => d "wg_prev_queue_peek.peeked" wqh 145 [(146, 146)] [(147, 148)]
 
 /-- The relation of a C value comparison, as written in the source
     (`lhs rel rhs`); `flag` is a mask test `(x & MASK)` against zero. -/
@@ -1054,8 +1121,22 @@ def Decision.repeatable : Decision → Bool
   | .idxInsWalk1 | .idxInsCollide1 | .idxInsWalk2 | .idxInsCollide2 | .idxWalk | .idxMatch
   | .sendBufNoMem | .sendSkbInet | .sendSkbInet6 | .sendSkbOk | .addMacCookieValid | .addMacCookieFresh
   -- D1 stream B: add_new_keypair and keypairs_clear put up to three live
-  -- keypairs in one operation
-  | .keypairPutUnreferenceNow | .keypairKrefPutReleased => true
+  -- keypairs in one operation (stream C: the tx worker's put shares an
+  -- operation with the receive path's)
+  | .keypairPutUnreferenceNow | .keypairKrefPutReleased
+  -- D1 stream C: per peer and per packet (loops over staged packets, ring
+  -- items and tx-queue packets); the encrypt queue's wg_cpumask_next_online
+  -- and the tx worker's keypair put share an operation with the receive path's
+  | .stagedKeyInvalid | .stagedBirthdateExpired | .stagedNonceIterate | .stagedNonceRejected
+  | .createDataDead | .createDataEpipe | .createDataOk | .createDataOkEpipe
+  | .padNoMtu | .padOverMtu | .encCowHeadFailed | .encChecksumPartial | .encChecksumHelpFailed
+  | .encCowDataFailed | .encTooManyFrags | .encSgvecFailed
+  | .encWorkerConsumed | .encWorkerSkbIterate | .encWorkerEncrypted | .encWorkerNeedResched
+  | .txPacket | .txNotUncrypted | .txCrypted | .txNeedResched
+  | .doneSkbIterate | .doneSendOk | .doneNotKeepalive | .doneDataSent
+  | .freshKeypair | .freshValid | .freshCounter | .freshInitiator | .freshExpired | .freshSend
+  | .enqueuePeerQueueFull | .enqueueRingFull | .chooseCpuInvalid | .chooseCpuOffline | .chooseCpuIndexIterate
+  | .prevQueuePeeked | .cpumaskWrap => true
   | _ => false
 
 /-- Every decision, enumerated through the constructor index. -/

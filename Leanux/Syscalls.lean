@@ -95,7 +95,7 @@ def dispatch : Syscall → M Int
     if !(← WG.getDev).running then return -ENETUNREACH
     -- udp_sendmsg returns the datagram's length once the device took it
     Env.fixtureSend
-    let ret ← WG.wgXmit family addr
+    let ret ← WG.wgXmit family addr (Env.xmitPacketLen family)
     return if ret == 0 then 4 else ret
   | .wgInject family port message => socketCallOn SENDER_FD (Env.inject family port message)
   | .wgObserve => socketCallOn LISTEN4_FD do
