@@ -238,6 +238,40 @@ class EvaluationChecks(unittest.TestCase):
         for trace in v2:
             validate_trace(trace)
 
+    def test_section_records_pair_in_area_order(self):
+        # A worker's block follows the block of a NET_RX section nested in
+        # it (moved at its own stop); stops carry only the dropped count.
+        f, g = 0xffffffff81000010, 0xffffffff81000020
+        le = lambda v: v.to_bytes(8, 'little').hex()
+        area = [[300, '0x1', 5, 8, le(g)], [301, '0x2', 6, 8, le(0)],
+                [300, '0x3', 4, 8, le(f)], [104, '0x4', 7, 4, '01020304'], [301, '0x5', 8, 8, le(0)]]
+        paired = check.pair_sections(area)
+        self.assertEqual([r[5] for r in paired], [g, g, f, None, f])
+        rows = [dict(id='t', mode='pc', index=0, stream='task', records=[[104, '0x6', 3, 4, '00000000']]),
+                dict(id='t', mode='pc', index=0, stream='remote', records=area),
+                dict(id='t', mode='cmp', index=0, stream='task', records=[])]
+        ordered = check.hidden_records([{'id': 't', 'ops': [{}]}], rows)[('t', 'pc')][0]
+        self.assertEqual([(r[0], r[5]) for r in ordered],
+                         [(104, None), (300, f), (300, g), (301, g), (104, None), (301, f)])
+        sites = {('section', 'f:0'): dict(id=40, label='section_start:f', len=8, role='mirror'),
+                 ('section', 'f:1'): dict(id=41, label='section_stop:f', len=8, role='mirror'),
+                 ('section', 'g:0'): dict(id=48, label='section_start:g', len=8, role='mirror'),
+                 ('section', 'g:1'): dict(id=49, label='section_stop:g', len=8, role='mirror')}
+        resolved, problems, _, _ = check.resolve_choices({('t', 'pc'): [[r for r in ordered if r[0] >= 300]]},
+                                                         sites, {}, {f: 'f', g: 'g'})
+        self.assertEqual([r[0] for r in resolved[('t', 'pc')][0]], [40, 48, 49, 41])
+        self.assertEqual(problems, {})
+        # a lossy section, an unpaired stop, a section record in the task stream
+        lossy = [[300, '0x1', 1, 8, le(f), f], [301, '0x2', 2, 8, le(3), f]]
+        _, problems, _, _ = check.resolve_choices({('t', 'pc'): [lossy]}, sites, {}, {f: 'f'})
+        self.assertEqual(problems['t'][0]['problem'], 'records dropped in a dispatch section')
+        with self.assertRaises(InvalidOutput):
+            check.pair_sections(area[1:])
+        with self.assertRaises(InvalidOutput):
+            check.pair_sections(area[:1])
+        with self.assertRaises(InvalidOutput):
+            check.hidden_records([{'id': 't', 'ops': [{}]}], [dict(rows[1], stream='task')])
+
     def test_empty_run_is_not_a_pass(self):
         class Args:
             generated_count, wireguard_count, seed, trace = 0, 0, 0, None
