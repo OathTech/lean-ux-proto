@@ -63,7 +63,7 @@ def dataMessage (remoteIndex nonce : Nat) (key plaintext : List UInt8) : List UI
 def encryptPacket (pkt : DataPacket) : M (Option (List UInt8)) := do
   -- skb_get_hash (a cut point)
   skipCut [.flowHashSecret]
-  if pkt.plaintextLen != 0 then invariant "a payload packet reached encryption"
+  if pkt.plaintextLen != 0 then unsupported "a payload packet reached encryption"
   let paddingLen ← calculateSkbPadding pkt.plaintextLen DEVICE_MTU
   let plaintextLen := pkt.plaintextLen + paddingLen
   -- `skb_cow_head(skb, DATA_PACKET_HEAD_ROOM) < 0`

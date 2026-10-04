@@ -304,7 +304,8 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   -- record's consumer frame is the caller of `wg_timers_handshake_complete`:
   -- the response arm of `wg_receive_handshake_packet`, inlined into the
   -- receive worker (return address - 1 resolves to receive.c:179 in the
-  -- net-choice build). TO-CONFIRM against stream A's kernel.
+  -- net-choice build); confirmed against the D1 kernel (resolved records
+  -- of the full check).
   | .walltimeLastHandshake => ⟨15, "walltime_last_handshake", "clock", "drivers/net/wireguard/receive.c", 179, 16, .mirror⟩
   | .ipIdentReserve => ⟨20, "ip_idents_reserve", "random", "net/ipv4/route.c", 482, 4, .cut⟩
   | .ipIdentKey => ⟨21, "ip_ident_key", "random", "net/ipv4/route.c", 497, 16, .cut⟩

@@ -262,7 +262,9 @@ def beginSession (pid : PeerId) : M Bool := do
   if ← branch .sessionAlive !(← getPeer pid).isDead then
     addNewKeypair pid kp
     -- the keypair's entry takes the handshake's place
-    if !(← indexReplaceHandshake pid kp) then invariant "the handshake has no index entry"
+    -- `ret = wg_index_hashtable_replace(...)`: false when the handshake entry
+    -- was unhashed meanwhile (a concurrent clear), outside the domain
+    if !(← indexReplaceHandshake pid kp) then unsupported "begin_session: the handshake entry was unhashed"
     return true
   unsupported "a dead peer finishing a session"
 

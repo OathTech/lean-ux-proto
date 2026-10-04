@@ -336,6 +336,23 @@ def steering_problems(traces, meta, status_rows):
     return problems
 
 
+def section_problems(per, status_rows):
+    """For each network trace and guest child: every dispatch section the
+    kernel opened reached the trace's records. A section whose block was
+    moved after its operation's readout (a worker outliving the guest's
+    wait) is otherwise lost without a signal; the mirror would then pass if
+    it did not expect that unit either."""
+    problems = {}
+    for row in status_rows:
+        ops = per.get((row['id'], row['mode']))
+        starts = sum(1 for op in ops or [] for r in op if r[0] == SECTION_START)
+        if ops is None or starts != row['opened']:
+            problems.setdefault(row['id'], []).append(dict(index=None, label='section',
+                problem='dispatch sections opened but not recorded', mode=row['mode'],
+                opened=row['opened'], recorded=starts))
+    return problems
+
+
 def load_decisions(config):
     """The mirror's decision table (`leanux-model --decisions`), validated."""
     result = subprocess.run([MODEL, '--decisions'], capture_output=True, timeout=60)
@@ -708,6 +725,10 @@ def run_chunk(traces, out, kcov):
         steer_path = out / 'linux/steering.jsonl'
         status_rows = [loads(line) for line in steer_path.read_text().splitlines()] if steer_path.exists() else []
         for trace_id, found in steering_problems(traces, meta, status_rows).items():
+            site_problems.setdefault(trace_id, []).extend(found)
+        sections_path = out / 'linux/sections.jsonl'
+        section_rows = [loads(line) for line in sections_path.read_text().splitlines()] if sections_path.exists() else []
+        for trace_id, found in section_problems(per, section_rows).items():
             site_problems.setdefault(trace_id, []).extend(found)
         outcomes.update({f'choice records skipped ({k})': n for k, n in skipped.items()})
     except LinuxRunError as exc:

@@ -8,6 +8,7 @@ on the wireguard suite, then reverted. Run from the repository root:
 Every mutant must be rejected (status fail). W5 also aborts on a mirror
 invariant; run `--trace wg_trie_v6` by hand to see A2 alone reject it.
 """
+import glob
 import json, os, subprocess, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MUTANTS = [
@@ -122,10 +123,9 @@ MUTANTS = [
    "    let _ ← bucketHas .idxInsWalk1 .idxInsCollide1 index\n"),
 ]
 
-# Stage D1 (wg0 initiates), a draft: streams B and C write the targeted mirror
-# code, so the patterns (old, new) are filled in at integration. Entries:
-# (name, description, file, old, new, traces expected to reject it). Not run
-# until they move into MUTANTS with their patterns.
+# Stage D1 (wg0 initiates the handshake, the session, the keepalive data
+# path, the worker scheduler). Entries: (name, description, file, old, new),
+# appended to MUTANTS below.
 D1_MUTANTS = [
   ('D1-M1-keys-responder-order', 'data: begin_session derives the initiator\'s keys in responder order',
    'Leanux/WG/Handshake.lean',
@@ -199,6 +199,18 @@ def w4(text):
     assert text.count(fw + port) == 1
     return text.replace(fw + port, port + fw)
 
+def resched_records(out):
+    """Kind-302 records (reschedules in task sections) in a run's Linux
+    choice rows: a run with none cannot reject D1-M15."""
+    n = 0
+    for rows in glob.glob(os.path.join(ROOT, out, 'chunk-*', 'linux', 'hidden.jsonl')):
+        for line in open(rows):
+            row = json.loads(line)
+            if row['mode'] == 'pc':
+                n += sum(1 for r in row['records'] if r[0] & 0x7fff == 302)
+    return n
+
+
 def run(cmd, **kw):
     return subprocess.run(cmd, cwd=ROOT, **kw)
 
@@ -229,8 +241,11 @@ for name, what, path, old, new in MUTANTS:
         kinds = sorted({p['problem'] for f in report['failures'] for p in f.get('problems', [])} |
                        {f['outcome'] for f in report['failures']})
         results[name] = dict(description=what, base=head, file=path, exit=proc.returncode, status=report['status'],
-                             counts=report['counts'], failure_kinds=kinds, report=out + '/report.json')
-        print(name, report['status'], report['counts'], kinds, flush=True)
+                             counts=report['counts'], failure_kinds=kinds, report=out + '/report.json',
+                             resched_records=resched_records(out))
+        if name == 'D1-M15-ignore-resched' and report['status'] == 'pass' and not results[name]['resched_records']:
+            results[name]['status'] = 'inconclusive'   # no reschedule occurred to ignore
+        print(name, results[name]['status'], report['counts'], kinds, 'resched', results[name]['resched_records'], flush=True)
     finally:
         run(['git', 'checkout', '--', path])
 assert run(['git', 'status', '--porcelain'], capture_output=True, text=True).stdout == ''

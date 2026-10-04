@@ -85,12 +85,9 @@ def deliverSent : M Unit := do
       | none => if !loopback then unsupported "a datagram routed back into wg0"
   modify fun w => { w with sent := [] }
 
-/-- Whether the kernel records dispatch sections: the `net-choice` kernel
-    since the D1 sprint (stream A) opens one per dispatch of a function in
-    the armed dispatch set (`harness/linux.py`, `DISPATCH_SYMBOLS`). -/
-def SECTION_RECORDS : Bool := true
-
-/-- A deferred unit's run: with section records, its section's start and
+/-- A deferred unit's run. The kernel (the `net-choice` profile since the
+    D1 sprint) opens a dispatch section per dispatch of a function in the
+    armed set (`harness/linux.py`, `DISPATCH_SYMBOLS`); its start and
     stop records bracket it in the choice stream, so the order in which the
     kernel ran deferred units is checked rather than assumed.
 
@@ -105,16 +102,15 @@ def SECTION_RECORDS : Bool := true
     no state the others read. On the modeled paths each rest is a worker's
     final empty ring or queue poll. -/
 def runWorker (w : Worker) (body : M Unit) : M Unit := do
-  if SECTION_RECORDS then _ ← hidden (.sectionStart w)
+  _ ← hidden (.sectionStart w)
   -- whether this run switched away
   modify fun s => { s with yieldedWorkers := s.yieldedWorkers.filter (· != w.index) }
   body
-  if SECTION_RECORDS then
-    let stop := (HiddenSite.sectionStop w).info.id
-    let deferred := (← get).yieldedWorkers.contains w.index && (← peekHiddenSite).isSome
-      && (← peekHiddenSite) != some stop
-    if deferred then modify fun s => { s with pendingStops := s.pendingStops ++ [stop] }
-    else _ ← hidden (.sectionStop w)
+  let stop := (HiddenSite.sectionStop w).info.id
+  let deferred := (← get).yieldedWorkers.contains w.index && (← peekHiddenSite).isSome
+    && (← peekHiddenSite) != some stop
+  if deferred then modify fun s => { s with pendingStops := s.pendingStops ++ [stop] }
+  else _ ← hidden (.sectionStop w)
 
 /-- The worker whose section a record starts or stops, with `true` for a
     start; `none` for other records and for `net_rx_action`, a softirq that
@@ -151,6 +147,13 @@ def condResched : Nat → Worker → M Bool
         modifyDev fun d => { d with txWorkQueue := d.txWorkQueue.drop 1 }
         runWorker .txWorker (WG.txWorker pid (condResched fuel .txWorker))
       | _ => break
+    -- the loop ends at a record it does not run; one it could run is a
+    -- run beyond its bound
+    match (← peekHiddenSite).bind sectionOf with
+    | some (.encryptWorker, true) | some (.txWorker, true) =>
+      if !(← getDev).encryptQueue.isEmpty || !(← getDev).txWorkQueue.isEmpty then
+        invariant "more crypt worker runs at one cond_resched than the loop allows"
+    | _ => pure ()
     modify fun s => { s with yieldedWorkers := s.yieldedWorkers ++ [self.index] }
     return true
 

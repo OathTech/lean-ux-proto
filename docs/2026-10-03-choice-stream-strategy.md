@@ -127,7 +127,7 @@ Two host-side checks:
 |---|---|---|
 | random | `get_random_bytes` (`random.c:428`); the batched `get_random_u8/16/32/64` (`:490-544`); `__get_random_u32_below` (`:546-579`) | `get_random_u32_below` with a non-constant ceiling is out of line (`random.h:60-62`): it records once, at `__get_random_u32_below`'s return, and its internal draws use an unrecorded `_raw` variant of the batched function. With a constant ceiling it is inline, and the batched draw records with the consumer's chain. Separate PRNGs do not bypass these (`prandom_u32` is gone in 6.12; the siphash keys are drawn before the window, `guest.c:152-170`). |
 | clock | every exported reader in `kernel/time/timekeeping.c`: 17 wrapped readers (`ktime_get_snapshot`, PTP only, is not), including `ktime_get_coarse_real_ts64` (`fs/inode.c:2648`, pipes) and `ktime_get_ts64` (`fs/select.c:85`, epoll) | `jiffies` is a plain load and stays unhooked: in comparisons the comparison operands carry it (A3); where it reaches data it is a declared gap (section 7). |
-| dispatch | `process_one_work` (`workqueue.c:3264`); `call_timer_fn` (`timer.c:1795`); the `NET_RX` vector only, in `handle_softirqs` (`softirq.c:536`) | sections open only for dispatch functions in the **armed dispatch set** (section 4.4). `TIMER_SOFTIRQ` is excluded from the vector section, because a timer section inside a vector section would nest (`kcov.c:880`), and a nested stop closes the outer section. `RCU_SOFTIRQ` is excluded by construction, so RCU callbacks are unrecorded rather than debt. `KCOV_INSTRUMENT_softirq.o := n` (`kernel/Makefile:26`), so the dispatch code adds no PCs of its own. |
+| dispatch | `process_one_work` (`workqueue.c:3264`); `call_timer_fn` (`timer.c:1795`; **deferred**: the D1 kernel opens no timer sections, [AGENT] 2026-10-04); the `NET_RX` vector only, in `handle_softirqs` (`softirq.c:536`) | sections open only for dispatch functions in the **armed dispatch set** (section 4.4). `TIMER_SOFTIRQ` is excluded from the vector section, because a timer section inside a vector section would nest (`kcov.c:880`), and a nested stop closes the outer section. `RCU_SOFTIRQ` is excluded by construction, so RCU callbacks are unrecorded rather than debt. `KCOV_INSTRUMENT_softirq.o := n` (`kernel/Makefile:26`), so the dispatch code adds no PCs of its own. |
 
 Each section writes a start record naming the dispatched function. For the
 vector this is `net_rx_action`; the environment infers which skbs it handles
@@ -137,7 +137,17 @@ section.
 **Silent section loss.** `kcov_remote_start` returns silently when the handle
 is unregistered or the per-CPU area is unavailable (`kcov.c:884-918`). These
 paths increment a dropped-section counter. The guest reads it after each
-child and fails the trace if it is nonzero.
+child and fails the trace if it is nonzero. A section whose block reaches
+the area after its operation's readout is caught by the opened counter: the
+check requires every opened section's start record in the trace (D1
+integration, [AGENT] 2026-10-04, `evaluator/check.py` `section_problems`).
+
+**Reschedules.** On this `CONFIG_PREEMPT_NONE` kernel a worker gives up the
+CPU only at a `cond_resched` (or by sleeping, which the modeled workers do
+not). `__cond_resched` writes a resched record (kind 302) when it is about
+to schedule inside a task section, so a switch to a task without a section
+is recorded too. The environment replays it (`Env.condResched`) (D1
+integration, [AGENT] 2026-10-04).
 
 ### 4.4 The armed state, and the inter-trace boundary
 
@@ -148,7 +158,7 @@ ioctl on the remote KCOV fd:
 - the **armed dispatch set**: the dispatch functions the mirror models,
   resolved to addresses by the host. For WireGuard that is the handshake
   send and receive workers, the encrypt and tx workers, `net_rx_action`, and
-  WireGuard's timer callbacks.
+  (deferred, not in the D1 kernel) WireGuard's timer callbacks.
 
 Dispatches outside the set open no section and record nothing:
 - vmstat, which runs every `HZ` (`mm/vmstat.c:2013`);
