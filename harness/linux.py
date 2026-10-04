@@ -414,11 +414,21 @@ def run_linux(traces, outdir, *, timeout=120, steer_wire=None):
     lockpath = SHARED / ".artifacts/runs/qemu.lock"
     lockpath.parent.mkdir(parents=True, exist_ok=True)
     with lockpath.open("a+") as lock:
-        try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError as exc:
-            raise LinuxRunError("resource_busy", "Another project guest owns the QEMU slot", outdir) from exc
+        # Another worktree's guest may hold the one QEMU slot: wait for it, up
+        # to QEMU_LOCK_WAIT seconds, then fail as before.
+        deadline = time.monotonic() + QEMU_LOCK_WAIT
+        while True:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError as exc:
+                if time.monotonic() >= deadline:
+                    raise LinuxRunError("resource_busy", "Another project guest owns the QEMU slot", outdir) from exc
+                time.sleep(2)
         return _run_locked(traces, outdir, timeout)
+
+
+QEMU_LOCK_WAIT = 3600
 
 
 def _run_locked(traces, outdir, timeout):

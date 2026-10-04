@@ -34,6 +34,9 @@ SUITES = ('handwritten', 'critic', 'wireguard', 'generated', 'wireguard-generate
 # The share of generated WireGuard traces that are steered handshakes (the
 # initiator role, stage D1).
 STEERED_SHARE = 0.15
+# The share that are steered data-plane traces (stage D2, steered_data):
+# payload transmissions and received data messages.
+DATA_SHARE = 0.15
 # Suites run only on request: traces that must fail (negative controls).
 CONTROL_SUITES = ('steering-controls',)
 CHUNK = 100
@@ -80,7 +83,7 @@ def load_traces(suites, counts, seed, only, filtered):
     for suite in suites:
         if suite in ('generated', 'wireguard-generated'):
             source = generate if suite == 'generated' else \
-                (lambda s, n: generate_wireguard(s, n, steered=STEERED_SHARE))
+                (lambda s, n: generate_wireguard(s, n, steered=STEERED_SHARE, data=DATA_SHARE))
             count = counts[suite]
             candidates = [validate_trace(t) for t in source(seed, count * CANDIDATES_PER_TRACE)]
             verdicts = domain_filter(candidates)
