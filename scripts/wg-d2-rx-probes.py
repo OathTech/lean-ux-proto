@@ -145,6 +145,9 @@ def traces():
         "rx_v6_unallowed": data_trace([data_message(key, index, 0, ipv6_udp(b"six!", bytes.fromhex(
             "fd000000000000000000000000000002")))]),
         "rx_respond_then_data": respond_then_data(),
+        # a duplicate above COUNTER_BITS_TOTAL: the bitmap index wraps (masked)
+        "rx_duplicate_high": data_trace([data_message(key, index, 9000, b""),
+                                         data_message(key, index, 9000, b"")]),
         # REJECT_AFTER_MESSAGES - 1 is accepted; then decrypt_packet rejects
         # the keypair (counter limit, then invalid)
         "rx_counter_limit": data_trace([data_message(key, index, REJECT_AFTER_MESSAGES - 1, b""),
