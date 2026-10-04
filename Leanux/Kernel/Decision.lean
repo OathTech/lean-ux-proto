@@ -873,7 +873,10 @@ def Decision.info : Decision → DecisionInfo
   | .crespNotCreatedInitiation => d "wg_noise_handshake_consume_response.not_created_initiation" wno 763 [(764, 764)] [(767, 767)]
   | .crespEeFailed => d "wg_noise_handshake_consume_response.ee_failed" wno 770 [(771, 771)] [(774, 774)]
   | .crespSeFailed => d "wg_noise_handshake_consume_response.se_failed" wno 774 [(775, 775)] [(778, 778)]
-  | .crespDecryptFailed => d "wg_noise_handshake_consume_response.decrypt_failed" wno 781 [(783, 783)] [(786, 786)]
+  -- the success side runs the down_write and the recheck (786-790), which own
+  -- no KCOV point in the net-choice build: decrypt_failed=0 has no witness of
+  -- its own there (the recheck's outcome spans do)
+  | .crespDecryptFailed => d "wg_noise_handshake_consume_response.decrypt_failed" wno 781 [(783, 783)] [(786, 790)]
   | .crespStateChanged => d "wg_noise_handshake_consume_response.state_changed" wno 790 [(791, 792)] [(794, 801)]
   -- add_new_keypair's initiator arm (noise.c:215-233)
   | .addKeypairHasNext => d "add_new_keypair.has_next_keypair" wno 215 [(225, 228)] [(232, 233)]
