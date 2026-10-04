@@ -17,11 +17,12 @@ the queuing operation waits for it. Within the queuing system call, paths that
 read what the worker changes are `unsupported` unless the work was queued in
 that same call (`requireNotPending`).
 
-Domain limits (fail-noisy): a staged payload packet meeting a session (its
-inner IP header, `ip_tunnel_ecn_encap`, and its encryption are not
-mirrored), and more than one item in a crypt queue (the per-device ring or
-the peer's `tx_queue`, whose MPSC internals in queueing.c are mirrored as "the
-queue yields the packet").
+Domain limits (fail-noisy): more than one item in a crypt queue (the
+per-device ring or the peer's `tx_queue`, whose MPSC internals in queueing.c
+are mirrored as "the queue yields the item"). An item is the staged list
+`wg_packet_send_staged_packets` hands to `wg_packet_create_data` (D2 stream
+A): keepalives and the IP packets `wg_xmit` staged, each with its nonce and
+`ds`.
 -/
 
 namespace Leanux.WG
@@ -97,20 +98,22 @@ def cpumaskChooseOnline (pid : PeerId) : M Nat := do
   setPeer pid { (← getPeer pid) with serialWorkCpu := some 0 }
   return 0
 
-/-- wg_queue_enqueue_per_peer_tx (queueing.h:180-191): a reference to the
-    packet's peer (`PACKET_PEER`, the keypair's peer) for the duration, the
-    packet's state, and the peer's `transmit_packet_work` queued on its
-    serial CPU. -/
-def enqueuePerPeerTx (pkt : DataPacket) (state : PacketState) : M Unit := do
-  let pid := (← getKeypair pkt.keypair).peer
+/-- wg_queue_enqueue_per_peer_tx (queueing.h:180-191) of a ring item: a
+    reference to its peer (`PACKET_PEER(first)`, the keypair's peer) for the
+    duration, the item's state (`PACKET_CB(first)->state`), and the peer's
+    `transmit_packet_work` queued on its serial CPU. -/
+def enqueuePerPeerTx (item : List DataPacket) (state : PacketState) : M Unit := do
+  let some first := item.head? | invariant "an empty ring item"
+  let pid := (← getKeypair first.keypair).peer
   peerGet pid
-  -- atomic_set_release(&PACKET_CB(skb)->state, state): the same skb is on
-  -- the peer's tx_queue
+  -- atomic_set_release(&PACKET_CB(first)->state, state): the same skb list
+  -- is on the peer's tx_queue
+  let same (q : List DataPacket) := q.head?.map (fun f => f.keypair == first.keypair && f.nonce == first.nonce) == some true
   let p ← getPeer pid
-  if !p.txQueue.any (fun q => q.keypair == pkt.keypair && q.nonce == pkt.nonce) then
-    invariant "a packet for the tx worker that is not on its peer's tx_queue"
-  setPeer pid { p with txQueue := p.txQueue.map fun q =>
-    if q.keypair == pkt.keypair && q.nonce == pkt.nonce then { pkt with state } else q }
+  if !p.txQueue.any same then
+    invariant "an item for the tx worker that is not on its peer's tx_queue"
+  let firstWith := { first with state }
+  setPeer pid { p with txQueue := p.txQueue.map fun q => if same q then firstWith :: item.drop 1 else q }
   _ ← cpumaskChooseOnline pid
   -- queue_work_on(cpu, packet_crypt_wq, &peer->transmit_packet_work): a no-op
   -- while the work is pending
@@ -118,17 +121,17 @@ def enqueuePerPeerTx (pkt : DataPacket) (state : PacketState) : M Unit := do
     modifyDev fun d => { d with txWorkQueue := d.txWorkQueue ++ [pid] }
   peerPut (some pid)
 
-/-- wg_queue_enqueue_per_device_and_peer (queueing.h:157-178): 0, `-ENOSPC`
-    or `-EPIPE`. -/
-def enqueuePerDeviceAndPeer (pid : PeerId) (pkt : DataPacket) : M Int := do
-  -- atomic_set_release(&PACKET_CB(skb)->state, PACKET_STATE_UNCRYPTED)
-  let pkt := { pkt with state := .uncrypted }
+/-- wg_queue_enqueue_per_device_and_peer (queueing.h:157-178) of a ring item:
+    0, `-ENOSPC` or `-EPIPE`. -/
+def enqueuePerDeviceAndPeer (pid : PeerId) (item : List DataPacket) : M Int := do
+  -- atomic_set_release(&PACKET_CB(first)->state, PACKET_STATE_UNCRYPTED)
+  let item := item.mapIdx fun i pkt => if i == 0 then { pkt with state := .uncrypted } else pkt
   -- `!wg_prev_queue_enqueue(peer_queue, skb)`: `atomic_add_unless(&count, 1,
   -- MAX_QUEUED_PACKETS)` (queueing.c, mirrored as its result)
   let p ← getPeer pid
   if ← branch .enqueuePeerQueueFull (p.txQueue.length ≥ MAX_QUEUED_PACKETS) then return -ENOSPC
-  if !p.txQueue.isEmpty then unsupported "more than one packet on a peer's tx_queue"
-  setPeer pid { p with txQueue := p.txQueue ++ [pkt] }
+  if !p.txQueue.isEmpty then unsupported "more than one item on a peer's tx_queue"
+  setPeer pid { p with txQueue := p.txQueue ++ [item] }
   let d ← getDev
   let cpu ← cpumaskNextOnlineFrom d.encryptLastCpu
   modifyDev fun d => { d with encryptLastCpu := cpu }
@@ -136,26 +139,66 @@ def enqueuePerDeviceAndPeer (pid : PeerId) (pkt : DataPacket) : M Int := do
   if ← branch .enqueueRingFull (d.encryptQueue.length ≥ MAX_QUEUED_PACKETS) then return -EPIPE
   if !d.encryptQueue.isEmpty then unsupported "more than one item in the encrypt queue"
   -- queue_work_on(cpu, wq, &per_cpu_ptr(device_queue->worker, cpu)->work):
-  -- the environment runs the encrypt worker while its ring holds packets
-  modifyDev fun d => { d with encryptQueue := d.encryptQueue ++ [pkt] }
+  -- the environment runs the encrypt worker while its ring holds items
+  modifyDev fun d => { d with encryptQueue := d.encryptQueue ++ [item] }
   return 0
 
-/-- wg_packet_create_data (send.c:311-331). The packet holds a keypair
-    reference and a peer reference, which the tx worker drops (or this
-    function, on failure). -/
-def createData (pid : PeerId) (pkt : DataPacket) : M Unit := do
+/-- wg_packet_create_data (send.c:311-331) of a staged list. The list holds
+    a keypair reference and a peer reference, which the tx worker drops (or
+    this function, on failure). -/
+def createData (pid : PeerId) (item : List DataPacket) : M Unit := do
+  let some first := item.head? | invariant "an empty ring item"
   let ret ← do
     if ← branch .createDataDead (← getPeer pid).isDead then pure (-EINVAL)
     else
-      let ret ← enqueuePerDeviceAndPeer pid pkt
-      if ← branch .createDataEpipe (ret == -EPIPE) then enqueuePerPeerTx pkt .dead
+      let ret ← enqueuePerDeviceAndPeer pid item
+      if ← branch .createDataEpipe (ret == -EPIPE) then enqueuePerPeerTx item .dead
       pure ret
   -- `likely(!ret || ret == -EPIPE)`
   if ← branch .createDataOk (ret == 0) then return
   if ← branch .createDataOkEpipe (ret == -EPIPE) then return
-  keypairPut (some pkt.keypair) false
+  keypairPut (some first.keypair) false
   peerPut (some pid)
   -- kfree_skb_list(first)
+
+def ETH_P_IP : Nat := 0x0800
+def ETH_P_IPV6 : Nat := 0x86DD
+def ETH_P_8021Q : Nat := 0x8100
+def ETH_P_8021AD : Nat := 0x88A8
+
+/-- `skb->protocol` of a staged packet: 0 for a keepalive (`alloc_skb`), and
+    the IP version's EtherType for a packet `wg_xmit` received
+    (`wg_check_packet_protocol` held there). -/
+def Packet.protocol (pkt : Packet) : M Nat :=
+  match pkt.bytes with
+  | [] => pure 0
+  | b :: _ =>
+    if b.toNat / 16 == 4 then pure ETH_P_IP
+    else if b.toNat / 16 == 6 then pure ETH_P_IPV6
+    else invariant "a staged packet that is neither empty nor IP"
+
+/-- ip_tunnel_get_dsfield (include/net/ip_tunnels.h:555-566) of an skb with
+    this `protocol` whose network header starts `hdr`: `skb_protocol(skb,
+    true)` is `vlan_get_protocol`, whose VLAN walk (if_vlan.h:612) no skb on
+    the modeled paths takes. Shared by the transmit path (send.c:378) and the
+    receive path (receive.c:575). -/
+def ipTunnelGetDsfield (protocol : Nat) (hdr : List UInt8) : M Nat := do
+  if ← branch .vlanTypeIsVlan (protocol == ETH_P_8021Q || protocol == ETH_P_8021AD) then
+    unsupported "a VLAN-tagged skb"
+  if ← branch .dsfieldIp (protocol == ETH_P_IP) then return (hdr.getD 1 0).toNat   -- iph->tos
+  -- ipv6_get_dsfield: `ntohs(*(__be16 *)ipv6h) >> 4`, as a u8
+  if ← branch .dsfieldIpv6 (protocol == ETH_P_IPV6) then
+    return ((hdr.getD 0 0).toNat * 256 + (hdr.getD 1 0).toNat) / 16 % 256
+  return 0
+
+/-- ip_tunnel_ecn_encap (ip_tunnels.h:593-599) with INET_ECN_encapsulate
+    (inet_ecn.h:46-52) for an outer TOS of 0. -/
+def ipTunnelEcnEncap (pkt : Packet) : M Nat := do
+  let inner ← ipTunnelGetDsfield (← pkt.protocol) pkt.bytes
+  -- `outer &= ~INET_ECN_MASK` leaves 0; `!INET_ECN_is_ce(inner) ? (inner &
+  -- INET_ECN_MASK) : INET_ECN_ECT_0`
+  if ← branch .ecnEncapInnerCe (inner % 4 == 3) then return 2
+  return inner % 4
 
 /-- wg_packet_send_staged_packets (send.c:342-414). -/
 def sendStagedPackets (pid : PeerId) : M Unit := do
@@ -185,25 +228,22 @@ def sendStagedPackets (pid : PeerId) : M Unit := do
   if ← branch .stagedKeyInvalid !k.sending.isValid then return ← outNokey false
   if ← branch .stagedBirthdateExpired (← birthdateHasExpired k.sending.birthdate REJECT_AFTER_TIME) then
     return ← outNokey true
-  -- the nonces, in queue order
-  let mut nonces : List Nat := []
+  -- the nonces and `ds`, in queue order
+  let mut item : List DataPacket := []
   for pkt in packets do
     _ ← branch .stagedNonceIterate true
-    -- `PACKET_CB(skb)->ds = ip_tunnel_ecn_encap(0, ip_hdr(skb), skb)` reads
-    -- the inner IP header: a keepalive has none (protocol 0, ds 0)
-    if pkt.bytes.length != 0 then unsupported "a staged payload packet meeting a session"
+    -- `PACKET_CB(skb)->ds = ip_tunnel_ecn_encap(0, ip_hdr(skb), skb)`
+    let ds ← ipTunnelEcnEncap pkt
     let k ← getKeypair id
     let nonce := k.sendingCounter   -- atomic64_inc_return(&sending_counter) - 1
     setKeypair id { k with sendingCounter := k.sendingCounter + 1 }
     if ← branch .stagedNonceRejected (nonce ≥ REJECT_AFTER_MESSAGES) then return ← outNokey true
-    nonces := nonces ++ [nonce]
+    item := item ++ [{ peer := pid, keypair := id, nonce, plaintext := pkt, ds }]
   _ ← branch .stagedNonceIterate false
-  -- the walk admitted only keepalives, and a keepalive is staged only on an
-  -- empty queue: one packet
-  let [nonce] := nonces | invariant "more than one keepalive staged"
-  -- wg_peer_get(keypair->entry.peer); PACKET_CB(first)->keypair = keypair
+  -- `packets.prev->next = NULL`; wg_peer_get(keypair->entry.peer);
+  -- PACKET_CB(packets.next)->keypair = keypair
   peerGet (← getKeypair id).peer
-  createData pid { peer := pid, keypair := id, nonce, plaintext := {} }
+  createData pid item
 
 /-- wg_packet_send_keepalive (send.c:221-240): a keepalive is staged only
     when nothing else is. -/

@@ -221,6 +221,14 @@ inductive Decision where
   | doneProtoIp | doneV4TooShort | doneProtoIpv6 | doneLenBeyond | doneTrimFailed | doneDishonestPeer
   -- D2 stream B: drivers/net/wireguard/noise.c, allowedips.c
   | receivedNotNew | receivedChanged | lookupSrcV4 | lookupSrcV6
+  -- D2 stream B: INET_ECN_decapsulate inline in wg_packet_consume_data_done
+  -- (include/net/inet_ecn.h)
+  | ecnDecapInnerNotEct | ecnDecapOuterNotEct | ecnDecapRcZero | ecnDecapSetCe | ecnDecapOuterEct1
+  -- D2 stream A: `ip_tunnel_ecn_encap` inline in wg_packet_send_staged_packets
+  -- (include/linux/if_vlan.h, include/net/ip_tunnels.h, include/net/inet_ecn.h)
+  | vlanTypeIsVlan | dsfieldIp | dsfieldIpv6 | ecnEncapInnerCe
+  -- D2 stream A: calculate_skb_padding's `min(mtu, ALIGN(...))`
+  | padClamped
   deriving Repr, BEq, DecidableEq, Inhabited
 
 /-- A recorded step: the decision, the outcome the mirror computed, and, for
@@ -272,6 +280,9 @@ private def wtm := "drivers/net/wireguard/timers.c"
 private def wdv := "drivers/net/wireguard/device.c"
 private def wsd := "drivers/net/wireguard/send.c"
 private def wqh := "drivers/net/wireguard/queueing.h"
+private def vlh := "include/linux/if_vlan.h"
+private def iph := "include/net/ip_tunnels.h"
+private def ech := "include/net/inet_ecn.h"
 
 private def sp (file : String) (lo hi : Nat) : Span := ⟨file, lo, hi⟩
 
@@ -1044,6 +1055,29 @@ def Decision.info : Decision → DecisionInfo
   -- wg_allowedips_lookup_src (allowedips.c:367-375)
   | .lookupSrcV4 => d "wg_allowedips_lookup_src.inet" aip 370 [(371, 371)] [(372, 374)]
   | .lookupSrcV6 => d "wg_allowedips_lookup_src.inet6" aip 372 [(373, 373)] [(374, 374)]
+  -- INET_ECN_decapsulate and __INET_ECN_decapsulate (inet_ecn.h:251-284),
+  -- inlined into wg_packet_consume_data_done (receive.c:389, 393): compiled
+  -- without a KCOV point in this build (correspondence/kcov.json lists them
+  -- as branch-free), so no witnesses
+  | .ecnDecapInnerNotEct => d "__INET_ECN_decapsulate.inner_not_ect" ech 253 [] []
+  | .ecnDecapOuterNotEct => d "__INET_ECN_decapsulate.outer_not_ect" ech 254 [] []
+  | .ecnDecapRcZero => d "INET_ECN_decapsulate.rc_zero" ech 276 [] []
+  | .ecnDecapSetCe => d "INET_ECN_decapsulate.set_ce" ech 277 [] []
+  | .ecnDecapOuterEct1 => d "INET_ECN_decapsulate.outer_ect1" ech 279 [] []
+  -- D2 stream A: `ip_tunnel_ecn_encap(0, ip_hdr(skb), skb)` (send.c:378):
+  -- ip_tunnel_get_dsfield's `skb_protocol(skb, true)` is vlan_get_protocol,
+  -- whose `eth_type_vlan(type)` test (one decision for the two-case switch)
+  -- opens the VLAN walk; then the IPv4 and IPv6 tests; then
+  -- INET_ECN_encapsulate's `INET_ECN_is_ce(inner)`, whose two arms share
+  -- line 49 (no witness)
+  | .vlanTypeIsVlan => d "__vlan_get_protocol_offset.vlan_type" vlh 612 [(613, 628)] []
+  | .dsfieldIp => d "ip_tunnel_get_dsfield.ip" iph 560 [(561, 561)] [(562, 562)]
+  | .dsfieldIpv6 => d "ip_tunnel_get_dsfield.ipv6" iph 562 [(563, 563)] [(565, 565)]
+  | .ecnEncapInnerCe => d "INET_ECN_encapsulate.inner_ce" ech 49 [] []
+  -- `padded_size = min(PACKET_CB(skb)->mtu, ALIGN(last_unit, ...))`
+  -- (send.c:157-158): min()'s comparison, true when the MTU is the smaller
+  -- (a branch-free select: no witness)
+  | .padClamped => d "calculate_skb_padding.clamped" wsd 157 [] []
 
 /-- The relation of a C value comparison, as written in the source
     (`lhs rel rhs`); `flag` is a mask test `(x & MASK)` against zero. -/
@@ -1236,6 +1270,8 @@ def Decision.repeatable : Decision → Bool
   | .decWorkerConsumed | .decWorkerDecrypted | .decWorkerNeedResched
   | .rxPollPacket | .rxPollNotUncrypted | .rxPollNotCrypted | .rxPollCounterInvalid | .rxPollEndpointFailed
   | .rxPollFree | .rxPollBudgetDone | .ctrClearIter => true
+  -- D2 stream A: per packet of a staged list
+  | .vlanTypeIsVlan | .dsfieldIp | .dsfieldIpv6 | .ecnEncapInnerCe | .padClamped => true
   | _ => false
 
 /-- Every decision, enumerated through the constructor index. -/

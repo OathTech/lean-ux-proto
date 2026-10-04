@@ -25,8 +25,8 @@ Cut points:
 - `wg_reset_packet`, `dev_kfree_skb`, `napi_schedule` (the NAPI state is
   `Peer.napiScheduled`), `net_rx_action`, `napi_gro_receive` and
   `napi_complete_done` (the environment delivers what GRO received);
-- `ip_tunnel_parse_protocol` and `INET_ECN_decapsulate` (include/net), whose
-  results are computed here;
+- `ip_tunnel_parse_protocol` (out of line in net/ipv4), whose result is
+  computed here;
 - `dev_sw_netstats_rx_add` (wg0's own rx counters: nothing on the modeled
   paths reads them).
 -/
@@ -182,18 +182,29 @@ def keepKeyFreshRx (pid : PeerId) : M Unit := do
     setPeer pid { (← getPeer pid) with sentLastminuteHandshake := true }
     sendQueuedHandshakeInitiation pid false
 
-/-- ip_tunnel_parse_protocol (include/net/ip_tunnels.h) of a linear inner
-    packet: 4 (ETH_P_IP), 6 (ETH_P_IPV6) or 0. -/
+/-- ip_tunnel_parse_protocol (net/ipv4/ip_tunnel_core.c, a cut point) of a
+    linear inner packet: 4 (ETH_P_IP), 6 (ETH_P_IPV6) or 0. -/
 def ipTunnelParseProtocol (bytes : List UInt8) : Nat :=
   let version := (bytes.headD 0).toNat / 16
   if bytes.length ≥ 20 && version == 4 then 4
   else if bytes.length ≥ 40 && version == 6 then 6
   else 0
 
-/-- INET_ECN_decapsulate (include/net/inet_ecn.h): with a not-ECT outer DS
-    field it changes nothing, whatever the inner field. -/
-def inetEcnDecapsulate (outer _inner : Nat) : M Unit := do
-  if outer % 4 != 0 then unsupported "INET_ECN_decapsulate with an ECN-capable outer header"
+/-- INET_ECN_decapsulate (inet_ecn.h:269-284) with __INET_ECN_decapsulate
+    (251-267): the outer DS field's ECN bits against the inner's. Whatever
+    changes the inner header (`INET_ECN_set_ce`, `INET_ECN_set_ect1`) is
+    outside the domain; wg ignores the result. -/
+def inetEcnDecapsulate (outer inner : Nat) : M Unit := do
+  let mut rc := 0
+  let mut setCe := false
+  if ← branch .ecnDecapInnerNotEct (inner % 4 == 0) then
+    -- switch (outer & INET_ECN_MASK): case INET_ECN_NOT_ECT returns 0
+    if !(← branch .ecnDecapOuterNotEct (outer % 4 == 0)) then
+      rc := if outer % 4 == 3 then 2 else 1
+  else setCe := outer % 4 == 3   -- INET_ECN_is_ce(outer)
+  if ← branch .ecnDecapRcZero (rc == 0) then
+    if ← branch .ecnDecapSetCe setCe then unsupported "INET_ECN_set_ce on a received packet"
+    if ← branch .ecnDecapOuterEct1 (outer % 4 == 1) then unsupported "INET_ECN_set_ect1 on a received packet"
 
 /-- The device's error counters (`DEV_STATS_INC`). -/
 inductive Dishonest where
@@ -235,8 +246,7 @@ def consumeDataDone (pid : PeerId) (pkt : RxPacket) (endpoint : Endpoint) : M (O
   if !honest then return ← reject .type
   -- skb->ip_summed = CHECKSUM_UNNECESSARY; csum_level = ~0
   let protocol := ipTunnelParseProtocol bytes
-  -- PACKET_CB(skb)->ds: the outer DS field wg_packet_receive read
-  let ds := pkt.source.tos
+  let ds := pkt.ds   -- PACKET_CB(skb)->ds
   let mut ipLen := 0
   if ← branch .doneProtoIp (protocol == 4) then
     ipLen := beAt bytes 2 2   -- ntohs(ip_hdr(skb)->tot_len)

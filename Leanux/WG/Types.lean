@@ -146,6 +146,9 @@ structure DataPacket where
   keypair : KeypairId
   nonce : Nat
   plaintext : Packet := {}
+  /-- `PACKET_CB(skb)->ds` (D2 stream A): the outer DS field
+      `ip_tunnel_ecn_encap` computed, which `send4`/`send6` (a cut) use. -/
+  ds : Nat := 0
   state : PacketState := .uncrypted
   bytes : List UInt8 := []
   deriving Repr, BEq
@@ -161,6 +164,8 @@ structure RxPacket where
   bytes : List UInt8
   state : PacketState := .uncrypted
   source : SkbSource
+  /-- `PACKET_CB(skb)->ds`: the outer header's DS field (D2 stream B). -/
+  ds : Nat := 0
   deriving Repr, BEq
 
 /-- `struct wg_peer` with the parts of its `noise_handshake` on this path. -/
@@ -208,9 +213,10 @@ structure Peer where
   /-- `serial_work_cpu`: `nr_cpumask_bits` until the first transmit
       (`wg_cpumask_choose_online`). -/
   serialWorkCpu : Option Nat := none
-  /-- `tx_queue`: packets handed to the per-peer transmit worker, oldest
-      first. -/
-  txQueue : List DataPacket := []
+  /-- `tx_queue`: ring items handed to the per-peer transmit worker, oldest
+      first. An item is a staged list (`skb->next`), nonempty; its first
+      packet carries the item's `PACKET_CB` state (D2 stream A). -/
+  txQueue : List (List DataPacket) := []
   /-- `rx_queue` (`wg_prev_queue`), oldest first, and whether its NAPI poll
       is scheduled (`napi_schedule` without a run yet) (D2). -/
   rxQueue : List RxPacket := []
@@ -285,10 +291,11 @@ structure Device where
   /-- The keypair store (`kzalloc`ed keypairs that are still referenced). -/
   keypairs : TreeMap KeypairId Keypair := {}
   nextKeypairId : KeypairId := 0
-  /-- `encrypt_queue.last_cpu` (`wg_cpumask_next_online`), and the packets
-      queued for the encrypt worker, oldest first. -/
+  /-- `encrypt_queue.last_cpu` (`wg_cpumask_next_online`), and the ring
+      items queued for the encrypt worker, oldest first: each a staged list
+      of packets (D2 stream A). -/
   encryptLastCpu : Int := -1
-  encryptQueue : List DataPacket := []
+  encryptQueue : List (List DataPacket) := []
   /-- Peers whose `transmit_packet_work` is queued, oldest first. -/
   txWorkQueue : List PeerId := []
   /-- `decrypt_queue.last_cpu` and the messages queued for the decrypt worker,

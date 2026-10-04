@@ -46,6 +46,8 @@
 /* wg_observe waits this long for the handshake workers before it looks. */
 #define OBSERVE_WAIT_US 400000
 #define QUEUE_WAIT_US 100000
+/* A wg_xmit payload: at most wg0's MTU (1420) less the IPv4 and UDP headers. */
+#define MAX_XMIT_PAYLOAD 1392
 /* Timers fire REKEY_TIMEOUT (5 s) after a handshake is sent; a trace must end
  * well before that, counted from wg_up. */
 #define REKEY_BOUND_NS 4000000000LL
@@ -429,7 +431,7 @@ static void route_into_wg0(const char *id, unsigned index)
     if (close(rtnl)) fail(id, index, "environment_failure", "route_close");
 }
 
-/* wg0's transmit counters over a temporary rtnetlink socket, which is closed
+/* wg0's transmit counters and receive error counters over a temporary rtnetlink socket, which is closed
  * again (without SOCK_CLOEXEC, see route_into_wg0). */
 static void print_stats(const char *id, unsigned index)
 {
@@ -447,8 +449,9 @@ static void print_stats(const char *id, unsigned index)
     for (; RTA_OK(a, remaining); a = RTA_NEXT(a, remaining))
         if (a->rta_type == IFLA_STATS64 && RTA_PAYLOAD(a) >= sizeof(*stats)) stats = RTA_DATA(a);
     if (!stats) fail(id, index, "environment_failure", "stats_missing");
-    printf("\"stats\":{\"tx_errors\":%llu,\"tx_dropped\":%llu}", (unsigned long long)stats->tx_errors,
-           (unsigned long long)stats->tx_dropped);
+    printf("\"stats\":{\"tx_errors\":%llu,\"tx_dropped\":%llu,\"rx_frame_errors\":%llu,\"rx_length_errors\":%llu}",
+           (unsigned long long)stats->tx_errors, (unsigned long long)stats->tx_dropped,
+           (unsigned long long)stats->rx_frame_errors, (unsigned long long)stats->rx_length_errors);
     if (close(rtnl)) fail(id, index, "environment_failure", "stats_close");
 }
 
@@ -471,21 +474,32 @@ static void observe(const struct trace *t, unsigned i, long first, int compariso
         }
     }
     if (!comparisons) printf("],\"replies\":[");
-    /* Replies to the sender: a handshake response's length, type, receiver
-     * index (bytes 8-11, little-endian) and bytes. */
+    /* What the sender received (wg0's datagrams to it, and inner packets
+     * delivered to it): recvfrom's source as the IPv6 socket reports it
+     * (family, address as hex, port; an IPv4 source appears v4-mapped),
+     * then the length, the WireGuard message type, the receiver index
+     * (bytes 8-11, little-endian) and the bytes. */
     comma = 0;
     for (;;) {
-        long n = recv(SEND_FD, observe_buffer, sizeof(observe_buffer), MSG_DONTWAIT);
+        struct sockaddr_in6 source;
+        socklen_t source_len = sizeof(source);
+        memset(&source, 0, sizeof(source));
+        long n = recvfrom(SEND_FD, observe_buffer, sizeof(observe_buffer), MSG_DONTWAIT | MSG_TRUNC,
+                          (struct sockaddr *)&source, &source_len);
         if (n < 0) {
             if (errno != EAGAIN) fail(t->id, i, "environment_failure", "drain_sender");
             break;
         }
+        if (n > (long)sizeof(observe_buffer)) fail(t->id, i, "environment_failure", "sender_datagram_truncated");
+        if (source_len != sizeof(source)) fail(t->id, i, "environment_failure", "sender_source_length");
         if (comparisons) continue;
         unsigned type = n >= 4 ? (unsigned)observe_buffer[0] | (unsigned)observe_buffer[1] << 8 |
                                  (unsigned)observe_buffer[2] << 16 | (unsigned)observe_buffer[3] << 24 : 0;
         unsigned receiver = n >= 12 ? (unsigned)observe_buffer[8] | (unsigned)observe_buffer[9] << 8 |
                                       (unsigned)observe_buffer[10] << 16 | (unsigned)observe_buffer[11] << 24 : 0;
-        printf("%s[%ld,%u,%u,\"", comma ? "," : "", n, type, receiver);
+        printf("%s[%u,\"", comma ? "," : "", (unsigned)source.sin6_family);
+        for (unsigned k = 0; k < sizeof(source.sin6_addr); ++k) printf("%02x", source.sin6_addr.s6_addr[k]);
+        printf("\",%u,%ld,%u,%u,\"", (unsigned)ntohs(source.sin6_port), n, type, receiver);
         print_hex(n);
         printf("\"]");
         comma = 1;
@@ -588,8 +602,17 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             fail(t->id, -1, "environment_failure", "listener6_at_5");
         int zero = 0;
         struct sockaddr_in6 from = {.sin6_family = AF_INET6, .sin6_port = htons(SENDER_PORT), .sin6_addr = IN6ADDR_ANY_INIT};
+        /* D2: the IP packets the sender routes into wg0 are determined by
+         * the trace (Env.xmitPacket, docs/2026-10-04-d2-data-plane.md section
+         * 2). IP_PMTUDISC_DO sets DF and clears ignore_df, so an unconnected
+         * socket's IPv4 id is 0 rather than drawn from the jiffies-based
+         * ident generator; IPV6_AUTOFLOWLABEL = 0 keeps the flow label 0
+         * rather than a hash under a boot-time secret. */
+        int pmtudisc = IP_PMTUDISC_DO;
         if (socket(AF_INET6, SOCK_DGRAM, 0) != SEND_FD ||
             setsockopt(SEND_FD, IPPROTO_IPV6, IPV6_V6ONLY, &zero, sizeof(zero)) ||
+            setsockopt(SEND_FD, IPPROTO_IP, IP_MTU_DISCOVER, &pmtudisc, sizeof(pmtudisc)) ||
+            setsockopt(SEND_FD, IPPROTO_IPV6, IPV6_AUTOFLOWLABEL, &zero, sizeof(zero)) ||
             bind(SEND_FD, (struct sockaddr *)&from, sizeof(from)))
             fail(t->id, -1, "environment_failure", "sender_at_6");
         /* The generic-netlink socket replaces the last filler; no SOCK_CLOEXEC,
@@ -657,10 +680,17 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             break;
         }
         case 11: {
+            /* The destination address (IPv4 as v4-mapped), then the UDP
+             * payload; without one, the historic 4 bytes "leux". */
             struct sockaddr_in6 to = {.sin6_family = AF_INET6, .sin6_port = htons(SEND_PORT)};
-            if (op->payload_len != sizeof(to.sin6_addr)) fail(t->id, i, "invalid_input", "wire_address");
+            if (op->payload_len < sizeof(to.sin6_addr) || op->payload_len > sizeof(to.sin6_addr) + MAX_XMIT_PAYLOAD)
+                fail(t->id, i, "invalid_input", "wire_address");
             memcpy(&to.sin6_addr, op->payload, sizeof(to.sin6_addr));
-            ret = syscall(SYS_sendto, SEND_FD, "leux", 4, 0, &to, sizeof(to));
+            if (op->payload_len == sizeof(to.sin6_addr))
+                ret = syscall(SYS_sendto, SEND_FD, "leux", 4, 0, &to, sizeof(to));
+            else
+                ret = syscall(SYS_sendto, SEND_FD, op->payload + sizeof(to.sin6_addr),
+                              op->payload_len - sizeof(to.sin6_addr), 0, &to, sizeof(to));
             break;
         }
         case 13: {

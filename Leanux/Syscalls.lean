@@ -38,7 +38,7 @@ inductive Syscall where
   | wgGet
   /-- `ioctl(6, SIOCSIFFLAGS, flags | IFF_UP)` on the fixture's sender. -/
   | wgUp
-  /-- `sendto` of a 4-byte UDP datagram from the fixture's sender to `addr`. -/
+  /-- `sendto` of a UDP datagram (`payload`) from the fixture's sender to `addr`. -/
   | wgXmit (family addr : Nat) (payload : List UInt8)
   /-- `recvfrom(4, MSG_DONTWAIT)` after the fixture waited for the workers. -/
   | wgObserve
@@ -120,7 +120,8 @@ def syscall (call : Syscall) : M Int := do
   -- the guest waits inside the operations that can queue the handshake send
   -- worker (and in wg_inject); the worker runs during that wait
   match call with
-  | .wgSet _ | .wgUp | .wgXmit .. | .wgInject .. => Env.runSendWorkers
+  | .wgSet _ | .wgUp | .wgInject .. => Env.runSendWorkers
+  | .wgXmit .. => Env.afterXmit
   | _ => pure ()
   return ret
 

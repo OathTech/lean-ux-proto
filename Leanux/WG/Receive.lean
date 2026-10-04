@@ -189,7 +189,7 @@ def enqueuePerDeviceAndPeerRx (pkt : RxPacket) : M Int := do
 /-- wg_packet_consume_data (receive.c:509-540). The keypair (with its peer
     referenced by the lookup) and a keypair reference go with the skb to the
     decrypt worker and the NAPI poll, which drop them. -/
-def consumeData (msg : List UInt8) (src : SkbSource) : M Unit := do
+def consumeData (msg : List UInt8) (src : SkbSource) (ds : Nat) : M Unit := do
   -- `data->key_idx`, of a keypair; the lookup takes a reference to the peer
   let entry ← indexLookup [.keypair] (u32le msg 4)
   let peer := entry.map (·.peer)
@@ -208,7 +208,7 @@ def consumeData (msg : List UInt8) (src : SkbSource) : M Unit := do
     keypairPut (some id) false
     peerPut peer
     return
-  let ret ← enqueuePerDeviceAndPeerRx { peer := pid, keypair := id, bytes := msg, source := src }
+  let ret ← enqueuePerDeviceAndPeerRx { peer := pid, keypair := id, bytes := msg, source := src, ds }
   -- `unlikely(ret == -EPIPE)`: wg_queue_enqueue_per_peer_rx(skb, PACKET_STATE_DEAD)
   if ← branch .dataEpipe (ret == -EPIPE) then invariant "unreachable"
   -- `likely(!ret || ret == -EPIPE)`
@@ -222,6 +222,13 @@ def cpumaskNextOnline : M Unit := do
   let cpu ← do
     if ← branch .cpumaskWrap (next ≥ 1) then pure (0 : Int) else pure next
   modifyDev fun d => { d with handshakeLastCpu := cpu }
+
+/-- The first two bytes of the outer IP header as far as its DS field goes
+    (IPv4: version/IHL and TOS; IPv6: version, traffic class and the flow
+    label's top bits as zero), for `ip_tunnel_get_dsfield`. -/
+def outerDsBytes (src : SkbSource) : List UInt8 :=
+  if src.family == 4 then [0x45, UInt8.ofNat src.tos]
+  else [UInt8.ofNat (0x60 + src.tos / 16), UInt8.ofNat (src.tos % 16 * 16)]
 
 /-- wg_packet_receive (receive.c:542-586). -/
 def packetReceive (msg : List UInt8) (src : SkbSource) : M Unit := do
@@ -241,9 +248,11 @@ def packetReceive (msg : List UInt8) (src : SkbSource) : M Unit := do
     -- queue_work_on(cpu, handshake_receive_wq, ...): the environment runs the worker
     return
   if ← branch .rxData (t == MESSAGE_DATA) then
-    -- `PACKET_CB(skb)->ds = ip_tunnel_get_dsfield(ip_hdr(skb), skb)`: the
-    -- outer DS field, carried in `src`
-    consumeData msg src
+    -- `PACKET_CB(skb)->ds = ip_tunnel_get_dsfield(ip_hdr(skb), skb)` (its
+    -- inline decisions are stream A's, shared with send.c:378) of the outer
+    -- header, whose DS field the environment gives in `src`
+    let ds ← ipTunnelGetDsfield (if src.family == 4 then ETH_P_IP else ETH_P_IPV6) (outerDsBytes src)
+    consumeData msg src ds
     return
   invariant "validate_header_len admitted an unknown type"
 

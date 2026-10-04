@@ -26,7 +26,10 @@
     "drivers/net/wireguard/send.c",
     "drivers/net/wireguard/queueing.h",
     "drivers/net/wireguard/receive.c",
-    "drivers/net/wireguard/timers.c"
+    "drivers/net/wireguard/timers.c",
+    "include/linux/if_vlan.h",
+    "include/net/ip_tunnels.h",
+    "include/net/inet_ecn.h"
   ],
   "functions": [
     "____fput",
@@ -159,6 +162,8 @@
   ],
   "known_gaps": [],
   "branch_free_functions": [
-    "fls128"
+    "fls128",
+    "INET_ECN_decapsulate",
+    "__INET_ECN_decapsulate"
   ]
 }

@@ -213,6 +213,9 @@ inductive EnvSite where
   | kmemCacheZallocNode | kmemCacheZallocPeer | dstCacheInit | allocSkb | kzallocKeypair
   -- D1 stream C: encrypt_packet's skb surgery
   | skbCowHead | skbCowData | skbToSgvec
+  -- D2 stream A: encrypt_packet's `skb_checksum_help` (a cut; its output is
+  -- the environment's `Env.checksumHelp`)
+  | skbChecksumHelp
   deriving Repr, BEq, DecidableEq
 
 /-! ## Choices (docs/2026-10-03-choice-stream-strategy.md)
@@ -329,8 +332,10 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   | .reschedDecrypt => ⟨63, "resched:wg_packet_decrypt_worker", "resched", "drivers/net/wireguard/receive.c", 505, 8, .mirror⟩
   -- `get_random_u32_below(REKEY_TIMEOUT_JITTER_MAX_JIFFIES)` in
   -- wg_timers_data_sent (timers.c:150), the inline u8 path as for
-  -- `.retransmitJitter`. TO-CONFIRM: the consumer frame in this build
-  -- (wg_timers_data_sent may be inlined into its caller).
+  -- `.retransmitJitter`. Confirmed in the net-choice build (D2 stream A):
+  -- wg_timers_data_sent is its own symbol, get_random_u32_below is inlined
+  -- into it, and the records of the d2a transmit traces resolve to
+  -- timers.c:150.
   | .newHandshakeJitter => ⟨16, "new_handshake_jitter", "random", "drivers/net/wireguard/timers.c", 150, 1, .mirror⟩
   -- D2 stream B. As for `.walltimeLastHandshake`, the tail jump
   -- (`jmp ktime_get_real_ts64`) leaves the caller's frame: the call in
