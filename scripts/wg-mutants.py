@@ -178,8 +178,12 @@ D1_MUTANTS = [
    "  if ← branch .doneDataSent dataSent then unsupported \"wg_timers_data_sent (a data packet's handshake timer)\"\n"),
   ('D1-M14-no-keypair-put-tx', 'control, behavior-preserving: the tx worker keeps its keypair reference (send.c:280)',
    'Leanux/WG/Data.lean',
-   "    keypairPut (some pkt.keypair) false\n    peerPut (some pid)\n    _ ← branch .txNeedResched false\n",
-   "    peerPut (some pid)\n    _ ← branch .txNeedResched false\n"),
+   "    keypairPut (some pkt.keypair) false\n    peerPut (some pid)\n    _ ← branch .txNeedResched (← needResched)\n",
+   "    peerPut (some pid)\n    _ ← branch .txNeedResched (← needResched)\n"),
+  ('D1-M15-ignore-resched', 'scheduling: cond_resched never switches, ignoring the resched records (kind 302); the corpus has receive-worker reschedules, though whether one occurs is timing-dependent',
+   'Leanux/Env.lean',
+   "    if (← peekHiddenSite) != some site.info.id then return false\n",
+   "    if true then return false\n"),
 ]
 
 def w4(text):

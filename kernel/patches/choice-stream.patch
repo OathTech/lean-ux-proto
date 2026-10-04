@@ -73,7 +73,7 @@
  	case KCOV_REMOTE_ENABLE:
  		if (get_user(remote_num_handles, (unsigned __user *)(arg +
  				offsetof(struct kcov_remote_arg, num_handles))))
-@@ -1125,3 +1149,396 @@
+@@ -1125,3 +1149,418 @@
  }
  
  device_initcall(kcov_init);
@@ -395,6 +395,8 @@
 +	}
 +	atomic_inc(&kcov_sections_opened);
 +	s->open = true;
++	if (in_task())
++		t->kcov_leanux_section = 1;
 +	kcov_choice_write(t, 300, _RET_IP_, &ip, sizeof(ip));
 +}
 +EXPORT_SYMBOL(kcov_dispatch_start);
@@ -414,8 +416,28 @@
 +		atomic_inc(&kcov_sections_dropped);
 +	kcov_remote_stop();
 +	t->kcov_leanux_dropped = s->saved_dropped;
++	if (in_task())
++		t->kcov_leanux_section = 0;
 +}
 +EXPORT_SYMBOL(kcov_dispatch_stop);
++
++/*
++ * LEANUX: a scheduling choice (D1 integration). On this CONFIG_PREEMPT_NONE
++ * kernel a task section's worker gives up the CPU at a cond_resched; when
++ * __cond_resched is about to schedule, it writes a resched record (kind 302,
++ * the caller's return address, a zero word), so the trace records each
++ * switch, including one to a task without a section. Only inside a task's
++ * dispatch section: other tasks' reschedules are not choices of the trace.
++ */
++void notrace kcov_dispatch_resched(unsigned long ip)
++{
++	struct task_struct *t = current;
++	u64 zero = 0;
++
++	if (in_task() && t->kcov_leanux_section)
++		kcov_choice_write(t, 302, ip, &zero, sizeof(zero));
++}
++EXPORT_SYMBOL(kcov_dispatch_resched);
 +
 +/* LEANUX: arm: { u32 n; u32 pad; u64 funcs[n]; }, on the remote instance of
 + * the calling task, under its common handle; disarmed in kcov_remote_reset. */
@@ -472,7 +494,7 @@
 +}
 --- a/include/linux/kcov.h
 +++ b/include/linux/kcov.h
-@@ -44,6 +44,12 @@
+@@ -44,6 +44,14 @@
  void kcov_remote_start(u64 handle);
  void kcov_remote_stop(void);
  u64 kcov_common_handle(void);
@@ -482,10 +504,12 @@
 +struct kcov_dispatch_section { bool open; unsigned int saved_dropped; };
 +void kcov_dispatch_start(struct kcov_dispatch_section *s, void *func);
 +void kcov_dispatch_stop(struct kcov_dispatch_section *s);
++/* LEANUX: __cond_resched is about to schedule. */
++void kcov_dispatch_resched(unsigned long ip);
  
  static inline void kcov_remote_start_common(u64 id)
  {
-@@ -99,6 +105,10 @@
+@@ -99,6 +107,11 @@
  static inline void kcov_finish_switch(struct task_struct *t) {}
  static inline void kcov_remote_start(u64 handle) {}
  static inline void kcov_remote_stop(void) {}
@@ -493,17 +517,21 @@
 +struct kcov_dispatch_section { bool open; };
 +static inline void kcov_dispatch_start(struct kcov_dispatch_section *s, void *func) {}
 +static inline void kcov_dispatch_stop(struct kcov_dispatch_section *s) {}
++static inline void kcov_dispatch_resched(unsigned long ip) {}
  static inline u64 kcov_common_handle(void)
  {
  	return 0;
 --- a/include/linux/sched.h
 +++ b/include/linux/sched.h
-@@ -1491,6 +1491,9 @@
+@@ -1491,6 +1491,12 @@
  	/* Collect coverage from softirq context: */
  	unsigned int			kcov_softirq;
  
 +	/* LEANUX: records dropped in the current dispatch section: */
 +	unsigned int			kcov_leanux_dropped;
++
++	/* LEANUX: whether the task is in a dispatch section: */
++	unsigned int			kcov_leanux_section;
 +
  	/* Temporary storage for preempting remote coverage collection: */
  	unsigned int			kcov_saved_mode;
@@ -1011,3 +1039,13 @@
  		trace_softirq_exit(vec_nr);
  		if (unlikely(prev_count != preempt_count())) {
  			pr_err("huh, entered softirq %u %s %p with preempt_count %08x, exited with %08x?\n",
+--- a/kernel/sched/core.c
++++ b/kernel/sched/core.c
+@@ -7251,6 +7251,7 @@
+ int __sched __cond_resched(void)
+ {
+ 	if (should_resched(0) && !irqs_disabled()) {
++		kcov_dispatch_resched(_RET_IP_);	/* LEANUX */
+ 		preempt_schedule_common();
+ 		return 1;
+ 	}

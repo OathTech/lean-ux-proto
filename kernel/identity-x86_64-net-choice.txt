@@ -2,7 +2,7 @@
 # step 1 user-approved 2026-10-03; step 2 (steering) and the D1 sprint's
 # dispatch sections (stream A) awaiting the user's approval.
 # kernel/config-x86_64-net (unchanged) with kernel/patches/choice-stream.patch
-# (sha256 b5b92f282cb49853e34438f8b93b3dac50e2d7664e537fa1011700ea16002cf5)
+# (sha256 e3b901ca66cb334e8550adf95542118f9783ae88d6c7a57e75f1774589996c06)
 # applied alone to the locked source, built with LEANUX_KERNEL_PROFILE=net-choice.
 # The patch (kernel/patches/gen-choice-stream.py) records random draws and
 # clock reads at generic interception points (drivers/char/random.c,

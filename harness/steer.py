@@ -24,7 +24,8 @@ CLOCKS = ['ktime_get_mono_fast_ns', 'ktime_get_raw_fast_ns', 'ktime_get_boot_fas
           'ktime_get_coarse_ts64']
 HOOKS.update({name: 200 + i for i, name in enumerate(CLOCKS)})
 CHOICE_HELPERS = ('drivers/char/random.c', 'include/linux/random.h', 'kernel/time/timekeeping.c',
-                  'include/linux/timekeeping.h', 'include/crypto/curve25519.h', 'include/linux/hrtimer.h')
+                  'include/linux/timekeeping.h', 'include/crypto/curve25519.h', 'include/linux/hrtimer.h',
+                  'include/linux/sched.h')   # cond_resched's inline wrapper (resched records)
 # Sites a trace may steer, and their domains (strategy section 3): every
 # value in the domain is a possible output of the source.
 STEERABLE = {'init_ephemeral', 'resp_ephemeral', 'index_draw', 'tai64n_now'}

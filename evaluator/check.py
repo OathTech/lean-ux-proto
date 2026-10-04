@@ -180,6 +180,8 @@ from harness.steer import CHOICE_HELPERS  # noqa: E402
 RANDOM_KINDS = {1, 101, 102, 104, 108, 110}
 # Dispatch sections' start and stop records (kernel/patches/choice-stream.patch).
 SECTION_START, SECTION_STOP = 300, 301
+# A reschedule at a cond_resched inside a task's dispatch section (same patch).
+RESCHED = 302
 
 
 def load_hidden_sites():
@@ -191,7 +193,7 @@ def load_hidden_sites():
     sites = {}
     for entry in loads(result.stdout.decode()):
         if set(entry) != {'id', 'label', 'kind', 'file', 'line', 'len', 'role'} \
-                or entry['kind'] not in ('random', 'clock', 'section') \
+                or entry['kind'] not in ('random', 'clock', 'section', 'resched') \
                 or entry['role'] not in ('mirror', 'cut', 'ambient'):
             raise InvalidOutput(f'hidden site fields: {entry}')
         key = (entry['kind'], f"{entry['file']}:{entry['line']}")
@@ -282,7 +284,8 @@ def resolve_choices(per, sites, locations, dispatch=None):
                     continue
                 kind, steered = raw_kind & 0x7fff, bool(raw_kind & 0x8000)
                 consumer = next((src for src in frames if src.split(':')[0] not in CHOICE_HELPERS), None)
-                kind_class = 'random' if kind in RANDOM_KINDS else 'clock' if 200 <= kind <= 216 else None
+                kind_class = 'random' if kind in RANDOM_KINDS else 'clock' if 200 <= kind <= 216 \
+                    else 'resched' if raw_kind == RESCHED else None
                 if raw_kind in (SECTION_START, SECTION_STOP):
                     kind_class = 'section'
                     consumer = f'{dispatch.get(func)}:{raw_kind - SECTION_START}'

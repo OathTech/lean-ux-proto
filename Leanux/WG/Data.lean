@@ -17,8 +17,9 @@ keypair's sending key (the NoiseCrypto reference). Cut points:
 - `wg_reset_packet` (header resets; its `encapsulating` is the constant true);
 - routing and the UDP tunnel transmit below `wg_socket_send_skb_to_peer`, as
   in `sendBufferToPeer` (Handshake.lean);
-- `need_resched()`, a scheduler flag, reported false: a reschedule here would
-  cover `cond_resched`'s line, which the check reports.
+- `need_resched()`, a scheduler flag: the environment's scheduler decides it
+  from the section records (`Env.condResched`), and runs what the kernel
+  switched to at the `cond_resched()`.
 
 Only keepalives reach encryption in the domain (Send.lean), so a packet's
 `PACKET_CB(skb)->mtu` is the device's (`DEVICE_MTU`).
@@ -83,8 +84,10 @@ def encryptPacket (pkt : DataPacket) : M (Option (List UInt8)) := do
   return some (dataMessage k.remoteIndex pkt.nonce k.sending.key (List.replicate plaintextLen 0))
 
 /-- wg_packet_encrypt_worker (send.c:287-309): drains the encrypt queue.
-    Each ring item is one packet (Send.lean admits no more). -/
-def encryptWorker : M Unit := do
+    Each ring item is one packet (Send.lean admits no more). `needResched`
+    is the environment's scheduler: whether `need_resched()` holds, having
+    run what the kernel ran at the `cond_resched()`. -/
+def encryptWorker (needResched : M Bool) : M Unit := do
   for _ in [0:MAX_QUEUED_PACKETS + 1] do
     match (← getDev).encryptQueue with
     | [] =>
@@ -103,7 +106,7 @@ def encryptWorker : M Unit := do
           pure ({ first with bytes := encrypted.getD [] }, PacketState.crypted)
         else pure (first, PacketState.dead)   -- break
       enqueuePerPeerTx pkt state
-      _ ← branch .encWorkerNeedResched false
+      _ ← branch .encWorkerNeedResched (← needResched)
   invariant "the encrypt queue did not drain"
 
 /-- wg_socket_send_skb_to_peer (socket.c:168-187) of an encrypted packet:
@@ -155,8 +158,8 @@ def createDataDone (pid : PeerId) (pkt : DataPacket) : M Unit := do
 
 /-- wg_packet_tx_worker (send.c:262-285) for a peer: sends its encrypted
     packets in order, dropping the references `wg_packet_send_staged_packets`
-    took. -/
-def txWorker (pid : PeerId) : M Unit := do
+    took. `needResched` as for `encryptWorker`. -/
+def txWorker (pid : PeerId) (needResched : M Bool) : M Unit := do
   for _ in [0:MAX_QUEUED_PACKETS + 1] do
     -- wg_prev_queue_peek: `queue->peeked` is NULL (dropped after every
     -- packet, and never left set: see below)
@@ -175,7 +178,7 @@ def txWorker (pid : PeerId) : M Unit := do
     -- else kfree_skb_list(first)
     keypairPut (some pkt.keypair) false
     peerPut (some pid)
-    _ ← branch .txNeedResched false
+    _ ← branch .txNeedResched (← needResched)
   invariant "the tx queue did not drain"
 
 private def hexOf (bs : List UInt8) : String :=

@@ -145,7 +145,7 @@ def receiveHandshakePacket (msg : List UInt8) (src : SkbSource) : M Unit := do
 
 /-- wg_packet_handshake_receive_worker (receive.c:206-218): drains the
     handshake queue. The environment runs it when the queued work runs. -/
-def handshakeReceiveWorker (condResched : M Unit := pure ()) : M Unit := do
+def handshakeReceiveWorker (condResched : M Unit) : M Unit := do
   for _ in [0:MAX_QUEUED_INCOMING_HANDSHAKES] do
     match (← getDev).handshakeQueue with
     | [] => do

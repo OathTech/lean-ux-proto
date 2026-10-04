@@ -374,12 +374,14 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
   let mut branches : Array Json := #[]
   for op in trace.ops do
     let index := results.size
-    world := { world with hidden := trace.hidden.map (·[index]!) }
+    world := { world with hidden := trace.hidden.map (·[index]!), yieldedWorkers := [], pendingStops := [] }
     let (ret, w) ← (syscall (toSyscall results op)).run world
       |>.mapError fun e => (index, e)
     let (_, w) ← skipAmbient.run w |>.mapError fun e => (index, e)
     if let some (r :: _) := w.hidden then
       throw (index, .hidden s!"a record of site {r.site} was not consumed")
+    if let s :: _ := w.pendingStops then
+      throw (index, .hidden s!"a section stop of site {s} ended in the mirror but has no record")
     world := w
     results := results.push ret
     let bytes := match op, w.userOut with

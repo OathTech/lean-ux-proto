@@ -7,13 +7,14 @@ The patch applies to the pristine tree (scripts/apply-kernel-patch.py); it
 touches no file the check anchors (correspondence/kcov.json "files").
 Edits: kcov_choice_ip and steering (choice-stream strategy, steps 1-2); the
 random and clock hooks; dispatch sections in process_one_work and the NET_RX
-vector (D1 sprint, stream A).
+vector (D1 sprint, stream A); a resched record when cond_resched schedules
+inside a task's dispatch section (D1 integration).
 """
 import sys, re, os, shutil, subprocess
 WD='.artifacts/choice-patch'; N=WD+'/new'
 SOURCE=os.environ.get('LEANUX_SHARED_ROOT', '.') + '/.deps/linux'
 TOUCHED=['kernel/kcov.c','include/linux/kcov.h','include/linux/sched.h','drivers/char/random.c',
-         'kernel/time/timekeeping.c','kernel/workqueue.c','kernel/softirq.c']
+         'kernel/time/timekeeping.c','kernel/workqueue.c','kernel/softirq.c','kernel/sched/core.c']
 shutil.rmtree(WD, ignore_errors=True)
 for side in ('base', 'new'):
     for f in TOUCHED:
@@ -478,6 +479,8 @@ void notrace kcov_dispatch_start(struct kcov_dispatch_section *s, void *func)
 	}
 	atomic_inc(&kcov_sections_opened);
 	s->open = true;
+	if (in_task())
+		t->kcov_leanux_section = 1;
 	kcov_choice_write(t, 300, _RET_IP_, &ip, sizeof(ip));
 }
 EXPORT_SYMBOL(kcov_dispatch_start);
@@ -497,8 +500,28 @@ void notrace kcov_dispatch_stop(struct kcov_dispatch_section *s)
 		atomic_inc(&kcov_sections_dropped);
 	kcov_remote_stop();
 	t->kcov_leanux_dropped = s->saved_dropped;
+	if (in_task())
+		t->kcov_leanux_section = 0;
 }
 EXPORT_SYMBOL(kcov_dispatch_stop);
+
+/*
+ * LEANUX: a scheduling choice (D1 integration). On this CONFIG_PREEMPT_NONE
+ * kernel a task section's worker gives up the CPU at a cond_resched; when
+ * __cond_resched is about to schedule, it writes a resched record (kind 302,
+ * the caller's return address, a zero word), so the trace records each
+ * switch, including one to a task without a section. Only inside a task's
+ * dispatch section: other tasks' reschedules are not choices of the trace.
+ */
+void notrace kcov_dispatch_resched(unsigned long ip)
+{
+	struct task_struct *t = current;
+	u64 zero = 0;
+
+	if (in_task() && t->kcov_leanux_section)
+		kcov_choice_write(t, 302, ip, &zero, sizeof(zero));
+}
+EXPORT_SYMBOL(kcov_dispatch_resched);
 
 /* LEANUX: arm: { u32 n; u32 pad; u64 funcs[n]; }, on the remote instance of
  * the calling task, under its common handle; disarmed in kcov_remote_reset. */
@@ -616,12 +639,15 @@ sub('include/linux/kcov.h', 'void kcov_choice_ip(u32 kind, unsigned long ip, voi
     '/* LEANUX: a dispatch section (process_one_work, the NET_RX vector). */\n'
     'struct kcov_dispatch_section { bool open; unsigned int saved_dropped; };\n'
     'void kcov_dispatch_start(struct kcov_dispatch_section *s, void *func);\n'
-    'void kcov_dispatch_stop(struct kcov_dispatch_section *s);\n')
+    'void kcov_dispatch_stop(struct kcov_dispatch_section *s);\n'
+    '/* LEANUX: __cond_resched is about to schedule. */\n'
+    'void kcov_dispatch_resched(unsigned long ip);\n')
 sub('include/linux/kcov.h', 'static inline void kcov_choice_ip(u32 kind, unsigned long ip, void *data, unsigned int len) {}\n',
     'static inline void kcov_choice_ip(u32 kind, unsigned long ip, void *data, unsigned int len) {}\n'
     'struct kcov_dispatch_section { bool open; };\n'
     'static inline void kcov_dispatch_start(struct kcov_dispatch_section *s, void *func) {}\n'
-    'static inline void kcov_dispatch_stop(struct kcov_dispatch_section *s) {}\n')
+    'static inline void kcov_dispatch_stop(struct kcov_dispatch_section *s) {}\n'
+    'static inline void kcov_dispatch_resched(unsigned long ip) {}\n')
 sub('include/linux/sched.h', """	/* Collect coverage from softirq context: */
 	unsigned int			kcov_softirq;
 """, """	/* Collect coverage from softirq context: */
@@ -629,6 +655,9 @@ sub('include/linux/sched.h', """	/* Collect coverage from softirq context: */
 
 	/* LEANUX: records dropped in the current dispatch section: */
 	unsigned int			kcov_leanux_dropped;
+
+	/* LEANUX: whether the task is in a dispatch section: */
+	unsigned int			kcov_leanux_section;
 """)
 W = 'kernel/workqueue.c'
 sub(W, '#include <linux/irq_work.h>\n', '#include <linux/irq_work.h>\n#include <linux/kcov.h>\n')
@@ -666,6 +695,16 @@ sub(S, """		trace_softirq_entry(vec_nr);
 			kcov_dispatch_start(&section, h->action);
 		h->action();
 		kcov_dispatch_stop(&section);
+""")
+sub('kernel/sched/core.c', """	if (should_resched(0) && !irqs_disabled()) {
+		preempt_schedule_common();
+		return 1;
+	}
+""", """	if (should_resched(0) && !irqs_disabled()) {
+		kcov_dispatch_resched(_RET_IP_);	/* LEANUX */
+		preempt_schedule_common();
+		return 1;
+	}
 """)
 files=TOUCHED
 out=[]

@@ -92,33 +92,88 @@ def SECTION_RECORDS : Bool := true
 
 /-- A deferred unit's run: with section records, its section's start and
     stop records bracket it in the choice stream, so the order in which the
-    kernel ran deferred units is checked rather than assumed. -/
+    kernel ran deferred units is checked rather than assumed.
+
+    A worker that switched away at a `cond_resched` (`condResched`) resumes
+    when the kernel's scheduler picks it again, which may be after workers
+    the mirror cannot run first: its own callers, preempted further up the
+    mirror's call stack. The mirror runs the rest of such a worker at once
+    and leaves its stop pending; the stop's record is consumed where Linux
+    recorded it (`skipAmbient`), and an operation ends with none pending
+    (`Runner.executeTrace`). This assumes the resumed rests commute: they
+    may read no hidden input (a read out of order is a mismatch) and touch
+    no state the others read. On the modeled paths each rest is a worker's
+    final empty ring or queue poll. -/
 def runWorker (w : Worker) (body : M Unit) : M Unit := do
   if SECTION_RECORDS then _ ← hidden (.sectionStart w)
+  -- whether this run switched away
+  modify fun s => { s with yieldedWorkers := s.yieldedWorkers.filter (· != w.index) }
   body
-  if SECTION_RECORDS then _ ← hidden (.sectionStop w)
+  if SECTION_RECORDS then
+    let stop := (HiddenSite.sectionStop w).info.id
+    let deferred := (← get).yieldedWorkers.contains w.index && (← peekHiddenSite).isSome
+      && (← peekHiddenSite) != some stop
+    if deferred then modify fun s => { s with pendingStops := s.pendingStops ++ [stop] }
+    else _ ← hidden (.sectionStop w)
 
-/-- The crypt work a deferred unit queued, on the kernel's one CPU after
-    that unit: the encrypt worker (`packet_crypt_wq`, queued by
-    `wg_packet_create_data`), then the tx worker of each peer it queued
-    (`wg_queue_enqueue_per_peer_tx`), oldest first. What they send is
-    delivered. -/
+/-- The worker whose section a record starts or stops, with `true` for a
+    start; `none` for other records and for `net_rx_action`, a softirq that
+    runs nested where it is raised rather than being scheduled. -/
+def sectionOf (site : Nat) : Option (Worker × Bool) :=
+  [Worker.sendWorker, .receiveWorker, .encryptWorker, .txWorker].findSome? fun w =>
+    if site == (HiddenSite.sectionStart w).info.id then some (w, true)
+    else if site == (HiddenSite.sectionStop w).info.id then some (w, false)
+    else none
+
+/-- `need_resched()` and `cond_resched()` in worker `self`, on the kernel's
+    one CPU (`CONFIG_PREEMPT_NONE`): whether the kernel switched away, having
+    run here what it ran. A scheduling choice, recorded: the kernel writes a
+    resched record when `__cond_resched` is about to schedule. Then each
+    following record that starts a crypt worker with queued work is that
+    worker's run here (and so on, for what it switched to in turn). What the
+    kernel ran that has no section (another task) leaves no other record;
+    a worker the mirror cannot run here (a caller further up its stack)
+    resumes later (`runWorker`). `fuel` bounds the nesting: each level is a
+    worker run. -/
+def condResched : Nat → Worker → M Bool
+  | 0, _ => invariant "worker switches nested too deep"
+  | fuel + 1, self => do
+    let some site := self.resched? | invariant s!"{self.symbol} has no cond_resched"
+    if (← peekHiddenSite) != some site.info.id then return false
+    _ ← hidden site
+    for _ in [0:16] do
+      match (← peekHiddenSite).bind sectionOf with
+      | some (.encryptWorker, true) =>
+        if (← getDev).encryptQueue.isEmpty then break   -- not runnable: the record mismatches later
+        runWorker .encryptWorker (WG.encryptWorker (condResched fuel .encryptWorker))
+      | some (.txWorker, true) =>
+        let some pid := (← getDev).txWorkQueue.head? | break
+        modifyDev fun d => { d with txWorkQueue := d.txWorkQueue.drop 1 }
+        runWorker .txWorker (WG.txWorker pid (condResched fuel .txWorker))
+      | _ => break
+    modify fun s => { s with yieldedWorkers := s.yieldedWorkers ++ [self.index] }
+    return true
+
+/-- The bound on `condResched`'s nesting: a worker kind runs at most once
+    per level on the modeled paths. -/
+def SWITCH_DEPTH : Nat := 4
+
+/-- The crypt work a deferred unit queued that has not run at one of its
+    `cond_resched`s, on the kernel's one CPU after that unit: the encrypt
+    worker (`packet_crypt_wq`, queued by `wg_packet_create_data`), then the
+    tx worker of each peer it queued (`wg_queue_enqueue_per_peer_tx`),
+    oldest first. What they send is delivered. -/
 def runCryptWorkers : M Unit := do
-  if !(← getDev).encryptQueue.isEmpty then runWorker .encryptWorker WG.encryptWorker
+  if !(← getDev).encryptQueue.isEmpty then
+    runWorker .encryptWorker (WG.encryptWorker (condResched SWITCH_DEPTH .encryptWorker))
   for _ in [0:4096] do
     match (← getDev).txWorkQueue with
     | [] => deliverSent; return
     | pid :: rest =>
       modifyDev fun d => { d with txWorkQueue := rest }
-      runWorker .txWorker (WG.txWorker pid)
+      runWorker .txWorker (WG.txWorker pid (condResched SWITCH_DEPTH .txWorker))
       if !(← getDev).encryptQueue.isEmpty then invariant "the tx worker queued encryption"
   invariant "the tx work queue did not drain"
-
-/-- A `cond_resched` in a worker: the crypt workers it woke run here iff the
-    kernel ran them here, which the section records say (the next record is
-    the encrypt worker's section start). A scheduling choice, captured. -/
-def cryptYield : M Unit := do
-  if (← peekHiddenSite) == some (HiddenSite.sectionStart .encryptWorker).info.id then runCryptWorkers
 
 /-- Crypt work queued by a system call itself (a session's keepalive or
     staged packets sent from `wg_set` or `wg_xmit`): when the kworker runs it
@@ -199,7 +254,8 @@ def inject (family port : Nat) (msg : List UInt8) : M Int := do
   let src ← senderSource family
   runWorker .netRx (WG.wgReceive msg src)
   -- the queued receive work runs before the guest's wait ends
-  if !(← getDev).handshakeQueue.isEmpty then runWorker .receiveWorker (WG.handshakeReceiveWorker cryptYield)
+  if !(← getDev).handshakeQueue.isEmpty then
+    runWorker .receiveWorker (WG.handshakeReceiveWorker (discard <| condResched SWITCH_DEPTH .receiveWorker))
   -- then the crypt work the receive worker queued (a session's keepalive)
   runCryptWorkers
   deliverSent

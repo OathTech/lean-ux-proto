@@ -505,7 +505,8 @@ def steered_handshake(rng, trace_id):
     if variant == 'respond_first':
         theirs = noise.initiation(noise.public_key(device), peer_private, rng.randbytes(32),
                                   noise.tai64n(*clock()), rng.randrange(2**32))
-        second = rng.choice([k for k in D1_DEVICES if k != device])
+        # a key change: D1_DEVICES[1] is D1_DEVICES[0] clamped, the same key to wg_set_device
+        second = rng.choice([k for k in D1_DEVICES if noise.clamp(k) != noise.clamp(device)])
         ours, _, steer = initiation(second)
         draws = [['resp_ephemeral', rng.randbytes(32).hex() if rng.random() < .5 else 'draw'],
                  ['index_draw', rng.randbytes(4).hex() if rng.random() < .5 else 'draw']]

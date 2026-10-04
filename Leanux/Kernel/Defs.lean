@@ -260,6 +260,9 @@ inductive HiddenSite where
       site is the dispatched function; start carries its address, stop the
       count of records dropped in the section. -/
   | sectionStart (w : Worker) | sectionStop (w : Worker)
+  /-- A reschedule at a worker's `cond_resched` (kind 302): written only
+      when `__cond_resched` is about to schedule, inside a task section. -/
+  | reschedReceive | reschedEncrypt | reschedTx
   deriving Repr, BEq, DecidableEq
 
 inductive SiteRole where
@@ -270,7 +273,8 @@ structure HiddenSiteInfo where
   /-- The number the check passes for records of this site. -/
   id : Nat
   label : String
-  /-- `random` or `clock` (the interception point's kind). -/
+  /-- `random`, `clock`, `section` or `resched` (the interception point's
+      kind). -/
   kind : String
   /-- The consumer frame: the first frame of the call chain outside the
       random and clock helpers. -/
@@ -309,12 +313,24 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   | .schedDlTimer => ⟨30, "start_dl_timer", "clock", "kernel/sched/deadline.c", 1153, 8, .ambient⟩
   | .sectionStart w => ⟨40 + 2 * w.index, s!"section_start:{w.symbol}", "section", w.symbol, 0, 8, .mirror⟩
   | .sectionStop w => ⟨41 + 2 * w.index, s!"section_stop:{w.symbol}", "section", w.symbol, 1, 8, .mirror⟩
+  | .reschedReceive => ⟨60, "resched:wg_packet_handshake_receive_worker", "resched", "drivers/net/wireguard/receive.c", 216, 8, .mirror⟩
+  | .reschedEncrypt => ⟨61, "resched:wg_packet_encrypt_worker", "resched", "drivers/net/wireguard/send.c", 307, 8, .mirror⟩
+  | .reschedTx => ⟨62, "resched:wg_packet_tx_worker", "resched", "drivers/net/wireguard/send.c", 283, 8, .mirror⟩
 
 def HiddenSite.all : List HiddenSite :=
   [.initEphemeral, .respEphemeral, .tai64nNow, .indexDraw, .resetLastSent, .birthdateExpired, .initLastSent,
    .initLastSentAgain, .respLastSent, .respLastSentAgain, .floodNow, .consumptionNow, .deriveKeysBirthdate,
    .retransmitJitter, .walltimeLastHandshake, .ipIdentReserve, .ipIdentKey, .icmpCredit, .flowHashSecret, .schedDlTimer]
-  ++ Worker.all.flatMap fun w => [.sectionStart w, .sectionStop w]
+  ++ Worker.all.flatMap (fun w => [.sectionStart w, .sectionStop w])
+  ++ [.reschedReceive, .reschedEncrypt, .reschedTx]
+
+/-- The resched site of a worker's `cond_resched`, for the workers that
+    have one on the modeled paths. -/
+def Worker.resched? : Worker → Option HiddenSite
+  | .receiveWorker => some .reschedReceive
+  | .encryptWorker => some .reschedEncrypt
+  | .txWorker => some .reschedTx
+  | .sendWorker | .netRx => none
 
 def SiteRole.name : SiteRole → String
   | .mirror => "mirror" | .cut => "cut" | .ambient => "ambient"
@@ -367,6 +383,11 @@ structure World where
       which runs before Linux). -/
   hiddenPlaceholders : Bool := false
   placeholderCount : Nat := 0
+  /-- Workers that switched away at a `cond_resched` in this operation
+      (worker indices), and the section stops of their runs that ended in
+      the mirror before Linux recorded them (site ids): see `Env.runWorker`. -/
+  yieldedWorkers : List Nat := []
+  pendingStops : List Nat := []
   /-- A steered trace's schedule (site label, value or a draw), which the
       placeholders follow: the domain filter's verdict is then exact for the
       steered sites. -/
@@ -435,12 +456,21 @@ def envOk (site : EnvSite) : M Bool := do
   set { w with envCalls := (site, n + 1) :: w.envCalls.filter (·.1 != site) }
   return w.env site n
 
-/-- Drop ambient records at the head of the current operation's records. -/
+/-- Drop ambient records at the head of the current operation's records,
+    and pending section stops (each consumes its one pending entry). -/
 def skipAmbient : M Unit := do
   let w ← get
   if let some rs := w.hidden then
     let ambient := HiddenSite.all.filter (·.info.role == .ambient) |>.map (·.info.id)
-    set { w with hidden := some (rs.dropWhile fun r => ambient.contains r.site) }
+    let rec go (rs : List HiddenRecord) (pending : List Nat) : List HiddenRecord × List Nat :=
+      match rs with
+      | r :: rest =>
+        if ambient.contains r.site then go rest pending
+        else if pending.contains r.site then go rest (pending.erase r.site)
+        else (rs, pending)
+      | [] => ([], pending)
+    let (rest, pendingStops) := go rs w.pendingStops
+    set { w with hidden := some rest, pendingStops }
 
 /-- Consume the next choice record, which must come from `s`. -/
 def hidden (s : HiddenSite) : M (List UInt8) := do
