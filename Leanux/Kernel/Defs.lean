@@ -209,6 +209,8 @@ inductive EnvSite where
   | kmallocFdtable | kvmallocFdArray | kvmallocFdBitmaps
   | accessOk | copyToUser | copyFromUser
   | kmemCacheZallocNode | kmemCacheZallocPeer | dstCacheInit | allocSkb | kzallocKeypair
+  -- D1 stream C: encrypt_packet's skb surgery
+  | skbCowHead | skbCowData | skbToSgvec
   deriving Repr, BEq, DecidableEq
 
 /-! ## Choices (docs/2026-10-03-choice-stream-strategy.md)

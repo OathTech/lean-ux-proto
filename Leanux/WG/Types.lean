@@ -138,8 +138,9 @@ structure Peer where
   isDead : Bool := false
   refcount : Nat := 1
   internalId : Nat
-  /-- `staged_packet_queue`'s length: packets wait here for a session. -/
-  staged : Nat := 0
+  /-- `staged_packet_queue`: the length (`skb->len`) of each staged packet,
+      oldest first; a keepalive is 0. Packets wait here for a session. -/
+  staged : List Nat := []
   /-- `transmit_handshake_work` is queued and the worker has not run: the
       worker's timing is not determined, so what reads its state is outside
       the domain until `wg_observe` waits for it. -/
