@@ -213,6 +213,9 @@ inductive EnvSite where
   | kmemCacheZallocNode | kmemCacheZallocPeer | dstCacheInit | allocSkb | kzallocKeypair
   -- D1 stream C: encrypt_packet's skb surgery
   | skbCowHead | skbCowData | skbToSgvec
+  -- D2 stream A: encrypt_packet's `skb_checksum_help` (a cut; its output is
+  -- the environment's `Env.checksumHelp`)
+  | skbChecksumHelp
   deriving Repr, BEq, DecidableEq
 
 /-! ## Choices (docs/2026-10-03-choice-stream-strategy.md)

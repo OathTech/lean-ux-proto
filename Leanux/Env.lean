@@ -57,14 +57,104 @@ def timing : Timing where
 def fixtureSend : M Unit :=
   skipCut [.ipIdentKey, .ipIdentReserve, .flowHashSecret]
 
-/-- The IP packet `wg_xmit` receives from the fixture's sender: the UDP
-    datagram behind a UDP header and an IPv4 or IPv6 header.
-    INTERFACE STUB (D2 stream A computes the bytes, the partial checksum and
-    the MTU, docs/2026-10-04-d2-data-plane.md section 2): until then only
-    the length is right, which is all the pre-D2 paths read (a payload packet
-    meeting a session is `unsupported`). -/
-def xmitPacket (family _addr : Nat) (payload : List UInt8) : M WG.Packet :=
-  return { bytes := List.replicate ((if family == 4 then 20 else 40) + 8 + payload.length) 0, mtu := WG.DEVICE_MTU }
+/-- The fixture's sender transmits (`wg_xmit`) to this UDP port. -/
+def SEND_PORT : Nat := 40000
+
+/-- wg0's addresses, added at `wg_up` (guest.c `route_into_wg0`): the
+    source the sender's IP layer selects for a destination routed into wg0. -/
+def WG0_ADDR4 : Nat := 0x0afffe01
+def WG0_ADDR6 : Nat := 0xfd00ffff000000000000000000000001
+
+/-- The largest UDP payload whose IP packet fits wg0's MTU (1420). -/
+def MAX_XMIT_PAYLOAD4 : Nat := WG.DEVICE_MTU - 20 - 8
+def MAX_XMIT_PAYLOAD6 : Nat := WG.DEVICE_MTU - 40 - 8
+
+/-- `n` as `width` big-endian bytes. -/
+def beBytes (n width : Nat) : List UInt8 :=
+  (List.range width).reverse.map fun k => UInt8.ofNat (n / 256 ^ k % 256)
+
+/-- The ones'-complement sum (end-around carry) of `bytes` as big-endian
+    16-bit words (an odd tail padded with a zero byte), added to `init`, folded
+    to 16 bits: what the kernel's `csum_partial` family computes. -/
+def onesSum (bytes : List UInt8) (init : Nat := 0) : Nat := Id.run do
+  let rec words : List UInt8 → Nat → Nat
+    | a :: b :: rest, acc => words rest (acc + a.toNat * 256 + b.toNat)
+    | [a], acc => acc + a.toNat * 256
+    | [], acc => acc
+  let mut s := words bytes init
+  for _ in [0:8] do
+    if s > 0xffff then s := s % 0x10000 + s / 0x10000
+  return s
+
+/-- Whether the sender's IP layer builds a packet to `addr` that the
+    environment does not determine: an IPv6 link-local destination selects
+    wg0's random link-local source address, and a multicast destination
+    (224.0.0.0/4, ff00::/8) is sent with the socket's multicast hop limit and
+    source. -/
+def xmitBytesUnknown (family addr : Nat) : Bool :=
+  (family == 4 && addr / 2 ^ 28 == 0xe) || (family == 6 && (addr / 2 ^ 118 == 0x3fa || addr / 2 ^ 120 == 0xff))
+
+/-- The IP packet `wg_xmit` receives from the fixture's sender (`SEND_FD`,
+    bound to `[::]:51998`, dual-stack; IPv4 goes as v4-mapped): the UDP
+    datagram to `SEND_PORT` with `payload`, behind a UDP header and an IPv4 or
+    IPv6 header, as docs/2026-10-04-d2-data-plane.md section 2 derives it
+    from the fixture:
+    - IPv4 (`__ip_make_skb`, `__ip_local_out`): version/ihl 0x45, tos 0,
+      DF set and **id 0** (`IP_PMTUDISC_DO` on the sender: `ignore_df` is 0
+      and the socket is unconnected, ip.h:559-589), TTL 64, protocol 17,
+      the header checksum; source wg0's address.
+    - IPv6 (`ip6_make_skb`, `__ip6_local_out`): traffic class 0, **flow
+      label 0** (`IPV6_AUTOFLOWLABEL = 0` on the sender), payload length,
+      next header 17, hop limit 64; source wg0's address.
+    - UDP (`udp4_hwcsum`, `udp6_hwcsum_outgoing`): wg0 advertises
+      `NETIF_F_HW_CSUM`, so the skb is `CHECKSUM_PARTIAL`: the check field
+      holds the folded pseudo-header sum (`~csum_*_magic(..., 0)`), and
+      `csum_start`/`csum_offset` name the UDP header and its check field.
+    - `PACKET_CB(skb)->mtu` is `dst_mtu` of the route through wg0, 1420.
+    A payload too large for the MTU fails `sendto` (or fragments, on IPv6),
+    which is outside the domain. For the destinations of `xmitBytesUnknown`
+    the bytes are not determined: the packet carries a zero source address
+    as a placeholder, and `checksumHelp`, which every such packet meets
+    before its bytes are read (encryption), is `unsupported`. -/
+def xmitPacket (family addr : Nat) (payload : List UInt8) : M WG.Packet := do
+  let ulen := 8 + payload.length
+  if family == 4 then
+    if payload.length > MAX_XMIT_PAYLOAD4 then unsupported "a transmitted payload beyond wg0's MTU"
+    let src := if xmitBytesUnknown family addr then 0 else WG0_ADDR4
+    let pseudo := onesSum (beBytes src 4 ++ beBytes addr 4 ++ [0, 17] ++ beBytes ulen 2)
+    let udp := beBytes SENDER_PORT 2 ++ beBytes SEND_PORT 2 ++ beBytes ulen 2 ++ beBytes pseudo 2 ++ payload
+    let hdr (check : Nat) := [0x45, 0] ++ beBytes (20 + ulen) 2 ++ [0, 0, 0x40, 0, 64, 17] ++ beBytes check 2
+      ++ beBytes src 4 ++ beBytes addr 4
+    -- ip_send_check: `ip_fast_csum` over the header with a zero check field
+    let check := 0xffff - onesSum (hdr 0)
+    return { bytes := hdr check ++ udp, csum := some (20, 6), mtu := WG.DEVICE_MTU }
+  else if family == 6 then
+    if payload.length > MAX_XMIT_PAYLOAD6 then unsupported "a transmitted payload beyond wg0's MTU"
+    let src := if xmitBytesUnknown family addr then 0 else WG0_ADDR6
+    let pseudo := onesSum (beBytes src 16 ++ beBytes addr 16 ++ beBytes ulen 4 ++ [0, 0, 0, 17])
+    let udp := beBytes SENDER_PORT 2 ++ beBytes SEND_PORT 2 ++ beBytes ulen 2 ++ beBytes pseudo 2 ++ payload
+    let hdr := [0x60, 0, 0, 0] ++ beBytes ulen 2 ++ [17, 64] ++ beBytes src 16 ++ beBytes addr 16
+    return { bytes := hdr ++ udp, csum := some (40, 6), mtu := WG.DEVICE_MTU }
+  else unsupported "a transmit family other than IPv4 or IPv6"
+
+/-- `skb_checksum_help` (net/core/dev.c:3384-3431, a cut) of a
+    `CHECKSUM_PARTIAL` packet: the ones'-complement sum from `csum_start` to
+    the end (the check field holds the pseudo-header sum), folded and
+    complemented into the check field, `csum_fold(csum) ?: CSUM_MANGLED_0`
+    (a zero result is sent as 0xffff); the packet is then `CHECKSUM_NONE`.
+    Only its failure is an environment outcome (`.skbChecksumHelp`). -/
+def checksumHelp (pkt : WG.Packet) : M WG.Packet := do
+  let some (start, offset) := pkt.csum | invariant "skb_checksum_help on a packet without CHECKSUM_PARTIAL"
+  let version := (pkt.bytes.headD 0).toNat / 16
+  let field (off len : Nat) := ((pkt.bytes.drop off).take len).foldl (fun acc b => acc * 256 + b.toNat) 0
+  let dst := if version == 4 then field 16 4 else field 24 16
+  if xmitBytesUnknown (if version == 4 then 4 else 6) dst then
+    unsupported "a transmitted packet whose source or hop limit the fixture does not determine (link-local or multicast destination)"
+  let folded := 0xffff - onesSum (pkt.bytes.drop start)
+  let check := if folded == 0 then 0xffff else folded
+  let at_ := start + offset
+  if at_ + 2 > pkt.bytes.length then invariant "the checksum field lies beyond the packet"
+  return { pkt with bytes := pkt.bytes.take at_ ++ beBytes check 2 ++ pkt.bytes.drop (at_ + 2), csum := none }
 
 /-- Whether an endpoint is one of the fixture's listeners. -/
 def listenerFamily (e : Endpoint) : Option Nat :=
@@ -82,10 +172,9 @@ def deliverSent : M Unit := do
   for dg in (← get).sent do
     let loopback := (dg.family == AF_INET && dg.addr / 2 ^ 24 == 127) || (dg.family == AF_INET6 && dg.addr == 1)
     if isSender dg.family dg.addr dg.port then
-      -- from wg0's socket on the loopback address of the datagram's family
-      -- (D2 stream A fixes how recvfrom reports it)
-      let src := { family := dg.family, addr := if dg.family == AF_INET then 0x7f000001 else 1,
-                   port := (← getDev).incomingPort, bytes := dg.bytes : InboxDatagram }
+      -- from wg0's socket, bound to the wildcard address at its port: over
+      -- loopback the source is the destination's own address
+      let src := { family := dg.family, addr := dg.addr, port := (← getDev).incomingPort, bytes := dg.bytes : InboxDatagram }
       modify fun w => { w with senderInbox := w.senderInbox ++ [src] }
     else match listenerFamily { family := dg.family, addr := dg.addr, port := dg.port } with
       | some 4 => modify fun w => { w with listenerV4 := w.listenerV4 ++ [dg.bytes] }
@@ -150,7 +239,7 @@ def condResched : Nat → Worker → M Bool
       match (← peekHiddenSite).bind sectionOf with
       | some (.encryptWorker, true) =>
         if (← getDev).encryptQueue.isEmpty then break   -- not runnable: the record mismatches later
-        runWorker .encryptWorker (WG.encryptWorker (condResched fuel .encryptWorker))
+        runWorker .encryptWorker (WG.encryptWorker checksumHelp (condResched fuel .encryptWorker))
       | some (.txWorker, true) =>
         let some pid := (← getDev).txWorkQueue.head? | break
         modifyDev fun d => { d with txWorkQueue := d.txWorkQueue.drop 1 }
@@ -177,7 +266,7 @@ def SWITCH_DEPTH : Nat := 4
     oldest first. What they send is delivered. -/
 def runCryptWorkers : M Unit := do
   if !(← getDev).encryptQueue.isEmpty then
-    runWorker .encryptWorker (WG.encryptWorker (condResched SWITCH_DEPTH .encryptWorker))
+    runWorker .encryptWorker (WG.encryptWorker checksumHelp (condResched SWITCH_DEPTH .encryptWorker))
   for _ in [0:4096] do
     match (← getDev).txWorkQueue with
     | [] => deliverSent; return
@@ -188,8 +277,9 @@ def runCryptWorkers : M Unit := do
   invariant "the tx work queue did not drain"
 
 /-- Crypt work queued by a system call itself (a session's keepalive or
-    staged packets sent from `wg_set` or `wg_xmit`): when the kworker runs it
-    is not determined. -/
+    staged packets sent from `wg_set` or `wg_up`): when the kworker runs it
+    is not determined, since these operations' waits are not measured for
+    it. `wg_xmit` has its own (`afterXmit`). -/
 def requireNoCryptWork : M Unit := do
   let d ← getDev
   if !d.encryptQueue.isEmpty || !d.txWorkQueue.isEmpty then
@@ -213,6 +303,24 @@ def runSendWorkers : M Unit := do
       runWorker .sendWorker (WG.handshakeSendWorker pid)
   invariant "the send work queue did not drain"
 
+/-- After `wg_xmit` returns: the guest waits `QUEUE_WAIT_US` (0.1 s), in
+    which the kworkers run what the call queued: the encrypt worker and the
+    tx worker (`runCryptWorkers`, ordered by their section records, with the
+    loopback delivery of what they send), or the handshake send worker
+    (`runSendWorkers`). A call that queued both (a session and no session at
+    once) does not occur on the modeled paths; their order would be
+    unrecorded here, so it is outside the domain. The section records, and
+    the guest's opened-section count, show a worker that outlived the wait:
+    its records would be missing from this operation. -/
+def afterXmit : M Unit := do
+  let d ← getDev
+  let crypt := !d.encryptQueue.isEmpty || !d.txWorkQueue.isEmpty
+  if crypt && !d.sendWorkQueue.isEmpty then
+    unsupported "wg_xmit queued crypt work and a handshake (their order)"
+  modify fun w => { w with queuedThisCall := [] }   -- the call returned and slept
+  if crypt then runCryptWorkers
+  runSendWorkers
+
 /-- `wg_up` as the fixture performs it: once, on a port that is not the
     fixture's own, then `dev_change_flags` (the mirror's `wgUp`). -/
 def wgUp : M Int := do
@@ -224,8 +332,10 @@ def wgUp : M Int := do
 
 /-- `wg_observe`: its `recvfrom` on the IPv4 listener returns the first
     datagram there. The observation also lists every datagram both listeners
-    hold, the datagrams the sender received, with their bytes (all drained),
-    and wg0's transmit counters. Send work queued without a wait would run
+    hold, the datagrams the sender received, each with its `recvfrom`
+    source (family, address, port) and bytes (all drained), and wg0's
+    transmit counters and receive error counters (`rx_errors` moves with one
+    of these, so it adds nothing). Send work queued without a wait would run
     during the guest's wait before this operation, whose coverage is
     discarded: outside the domain. -/
 def observe : M (Int × Lean.Json) := do
@@ -242,8 +352,12 @@ def observe : M (Int × Lean.Json) := do
     | [] => -EAGAIN
   let datagrams := (w.listenerV4.map fun bs => (4, bs)) ++ (w.listenerV6.map fun bs => (6, bs))
   let entries := datagrams.map fun (f, bs) => Lean.toJson [Lean.toJson f, Lean.toJson bs.length, Lean.toJson (type bs), Lean.toJson (hex bs)]
+  -- the sender's `recvfrom` source: a `sockaddr_in6` (SEND_FD is an IPv6
+  -- socket), where an IPv4 source appears v4-mapped (::ffff:a.b.c.d)
   let replies := w.senderInbox.map fun dg => let bs := dg.bytes
-    Lean.toJson [Lean.toJson bs.length, Lean.toJson (type bs), Lean.toJson (if bs.length ≥ 12 then WG.u32le bs 8 else 0),
+    let addr6 := if dg.family == AF_INET then 0xffff00000000 + dg.addr else dg.addr
+    Lean.toJson [Lean.toJson AF_INET6, Lean.toJson (hex (beBytes addr6 16)), Lean.toJson dg.port,
+                 Lean.toJson bs.length, Lean.toJson (type bs), Lean.toJson (if bs.length ≥ 12 then WG.u32le bs 8 else 0),
                  Lean.toJson (hex bs)]
   let sortJson (xs : List Lean.Json) := (xs.toArray.qsort fun a b => a.compress < b.compress).toList
   modify fun w => { w with listenerV4 := [], listenerV6 := [], senderInbox := [] }
@@ -251,7 +365,9 @@ def observe : M (Int × Lean.Json) := do
   return (ret, Lean.Json.mkObj [
     ("datagrams", Lean.Json.arr (sortJson entries).toArray),
     ("replies", Lean.Json.arr (sortJson replies).toArray),
-    ("stats", Lean.Json.mkObj [("tx_errors", Lean.toJson d.txErrors), ("tx_dropped", Lean.toJson d.txDropped)])])
+    ("stats", Lean.Json.mkObj [("tx_errors", Lean.toJson d.txErrors), ("tx_dropped", Lean.toJson d.txDropped),
+                               ("rx_frame_errors", Lean.toJson d.rxFrameErrors),
+                               ("rx_length_errors", Lean.toJson d.rxLengthErrors)])])
 
 /-- `wg_inject`: the fixture's sender sends one datagram to `port` on 127.0.0.1
     or ::1. Only wg0's own socket is in the domain: wg0 up, on that port.

@@ -316,16 +316,26 @@ def _decode_dump(payloads):
     return device
 
 
-# Stage B1: datagrams routed into wg0 from the fixture's UDP socket.
+# Stage B1: datagrams routed into wg0 from the fixture's UDP socket; D2
+# adds their UDP payload.
 PACKET_FIELDS = {"family", "dst"}
+PACKET_OPTIONAL = {"payload"}
+# wg0's MTU (1420) less the IPv4 and UDP headers: an IPv4 packet that fits.
+# IPv6 payloads above 1372 do not fit either; the mirror's environment places
+# them outside the domain (Env.xmitPacket).
+MAX_XMIT_PAYLOAD = 1392
 
 
 def validate_packet(packet, where="packet"):
     """A UDP datagram to `dst` (hex bytes of an IPv4 or IPv6 address), sent
     from the fixture's dual-stack socket; the routes the fixture adds at
-    `wg_up` send every non-local destination into wg0."""
-    if type(packet) is not dict or set(packet) != PACKET_FIELDS:
-        raise InvalidConfig(f"{where}: expected exactly {sorted(PACKET_FIELDS)}")
+    `wg_up` send every non-local destination into wg0. `payload` (D2), 1 to
+    1392 bytes of lowercase hex, is the datagram; without it the datagram is
+    the fixture's historic 4 bytes "leux". A packet with a payload may not go
+    to an IPv6 link-local destination (fe80::/10): wg0's link-local source
+    address is random, so its bytes are not determined."""
+    if type(packet) is not dict or not PACKET_FIELDS <= set(packet) <= PACKET_FIELDS | PACKET_OPTIONAL:
+        raise InvalidConfig(f"{where}: expected {sorted(PACKET_FIELDS)} and optionally {sorted(PACKET_OPTIONAL)}")
     if packet["family"] not in (4, 6):
         raise InvalidConfig(f"{where}.family: expected 4 or 6")
     digits = 8 if packet["family"] == 4 else 32
@@ -341,6 +351,12 @@ def validate_packet(packet, where="packet"):
     if packet["family"] == 6 and (dst in (bytes(16), bytes(15) + b"\x01", bytes.fromhex(FIXTURE_ADDR6))
                                   or dst[:12] == bytes(10) + b"\xff\xff"):
         raise InvalidConfig(f"{where}.dst: an address the sender does not route into wg0")
+    if "payload" in packet:
+        payload = packet["payload"]
+        if type(payload) is not str or not re.fullmatch(f"(?:[0-9a-f]{{2}}){{1,{MAX_XMIT_PAYLOAD}}}", payload):
+            raise InvalidConfig(f"{where}.payload: expected 1 to {MAX_XMIT_PAYLOAD} bytes of lowercase hex")
+        if packet["family"] == 6 and dst[0] == 0xfe and dst[1] & 0xc0 == 0x80:
+            raise InvalidConfig(f"{where}.dst: a link-local destination (wg0's source address is random)")
     return packet
 
 
@@ -349,7 +365,9 @@ FIXTURE_ADDR6 = "fd00ffff000000000000000000000001"     # fd00:ffff::1/128 on wg0
 
 
 def encode_packet(packet):
-    """The guest's sockaddr_in6 address: IPv4 destinations as v4-mapped."""
+    """The guest's sockaddr_in6 address (IPv4 destinations as v4-mapped),
+    followed by the payload, if any."""
     validate_packet(packet)
     dst = bytes.fromhex(packet["dst"])
-    return packet["family"], (bytes(10) + b"\xff\xff" + dst if packet["family"] == 4 else dst)
+    address = bytes(10) + b"\xff\xff" + dst if packet["family"] == 4 else dst
+    return packet["family"], address + bytes.fromhex(packet.get("payload", ""))

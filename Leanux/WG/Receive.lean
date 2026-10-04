@@ -195,7 +195,10 @@ def packetReceive (msg : List UInt8) (src : SkbSource) : M Unit := do
     -- queue_work_on(cpu, handshake_receive_wq, ...): the environment runs the worker
     return
   if ← branch .rxData (t == MESSAGE_DATA) then
-    -- ip_tunnel_get_dsfield (a cut point)
+    -- `PACKET_CB(skb)->ds = ip_tunnel_get_dsfield(ip_hdr(skb), skb)` (D2
+    -- stream A: its inline decisions, shared with send.c:378); the outer
+    -- header's DS field is the fixture sender's, 0
+    _ ← ipTunnelGetDsfield (if src.family == 4 then ETH_P_IP else ETH_P_IPV6) []
     consumeData msg
     return
   invariant "validate_header_len admitted an unknown type"
