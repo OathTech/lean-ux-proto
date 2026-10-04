@@ -160,14 +160,58 @@ def handshakeReceiveWorker (condResched : M Unit) : M Unit := do
       condResched   -- receive.c:216: other kworkers may run here (the environment decides)
   invariant "the handshake queue did not drain"
 
-/-- wg_packet_consume_data (receive.c:509-540): no keypair has this index. -/
-def consumeData (msg : List UInt8) : M Unit := do
-  -- `data->key_idx`, of a keypair
-  if (← indexLookup [.keypair] (u32le msg 4)).isSome then unsupported "a data message for a keypair"
-  keypairGetCurrent   -- wg_noise_keypair_get(NULL)
-  if !(← branch .dataNoKeypair true) then unsupported "a data keypair"
-  -- err_keypair: wg_peer_put(NULL), then dev_kfree_skb
-  peerPut none
+/-- wg_queue_enqueue_per_device_and_peer (queueing.h:157-178) for the
+    decrypt queue and the peer's `rx_queue`: 0, or (outside the domain)
+    `-ENOSPC` / `-EPIPE`. One item per queue is the domain (design section
+    8): the decrypt worker of the previous injection has run. -/
+def enqueuePerDeviceAndPeerRx (pkt : RxPacket) : M Int := do
+  -- atomic_set_release(&PACKET_CB(skb)->state, PACKET_STATE_UNCRYPTED)
+  let pkt := { pkt with state := .uncrypted }
+  let p ← getPeer pkt.peer
+  -- `!wg_prev_queue_enqueue(peer_queue, skb)`: the queue's count is at MAX_QUEUED_PACKETS
+  if ← branch .enqueuePeerQueueFull (p.rxQueue.length ≥ MAX_QUEUED_PACKETS) then
+    unsupported "a full rx_queue (-ENOSPC)"
+  if !p.rxQueue.isEmpty then unsupported "more than one packet on a peer's rx_queue"
+  setPeer pkt.peer { p with rxQueue := p.rxQueue ++ [pkt] }
+  let d ← getDev
+  let cpu ← cpumaskNextOnlineFrom d.decryptLastCpu
+  modifyDev fun d => { d with decryptLastCpu := cpu }
+  if ← branch .enqueueRingFull (d.decryptQueue.length ≥ MAX_QUEUED_PACKETS) then
+    unsupported "a full decrypt ring (-EPIPE)"
+  if !d.decryptQueue.isEmpty then unsupported "more than one item in the decrypt queue"
+  -- queue_work_on(cpu, wq, &per_cpu_ptr(device_queue->worker, cpu)->work):
+  -- the environment runs the decrypt worker while its ring holds packets
+  modifyDev fun d => { d with decryptQueue := d.decryptQueue ++ [pkt] }
+  return 0
+
+/-- wg_packet_consume_data (receive.c:509-540). The keypair (with its peer
+    referenced by the lookup) and a keypair reference go with the skb to the
+    decrypt worker and the NAPI poll, which drop them. -/
+def consumeData (msg : List UInt8) (src : SkbSource) : M Unit := do
+  -- `data->key_idx`, of a keypair; the lookup takes a reference to the peer
+  let entry ← indexLookup [.keypair] (u32le msg 4)
+  let peer := entry.map (·.peer)
+  -- `unlikely(!wg_noise_keypair_get(PACKET_CB(skb)->keypair))`
+  let kp ← match entry with
+    | none => do keypairGetCurrent; pure none   -- wg_noise_keypair_get(NULL)
+    | some e => keypairGet e.keypair
+  if ← branch .dataNoKeypair kp.isNone then
+    -- err_keypair: wg_peer_put(peer), then dev_kfree_skb
+    peerPut peer
+    return
+  let some id := kp | invariant "unreachable"
+  let some pid := peer | invariant "a keypair entry without a peer"
+  if ← branch .dataPeerDead (← getPeer pid).isDead then
+    -- err: the keypair's put, then err_keypair
+    keypairPut (some id) false
+    peerPut peer
+    return
+  let ret ← enqueuePerDeviceAndPeerRx { peer := pid, keypair := id, bytes := msg, source := src }
+  -- `unlikely(ret == -EPIPE)`: wg_queue_enqueue_per_peer_rx(skb, PACKET_STATE_DEAD)
+  if ← branch .dataEpipe (ret == -EPIPE) then invariant "unreachable"
+  -- `likely(!ret || ret == -EPIPE)`
+  if ← orM (branch .dataEnqueueOk (ret == 0)) (branch .dataEnqueueOkEpipe (ret == -EPIPE)) then return
+  invariant "unreachable"
 
 /-- wg_cpumask_next_online (queueing.h:125-132) on this single-CPU kernel:
     `cpumask_next(n)` is `n + 1` and `nr_cpu_ids` is 1. -/
@@ -195,8 +239,9 @@ def packetReceive (msg : List UInt8) (src : SkbSource) : M Unit := do
     -- queue_work_on(cpu, handshake_receive_wq, ...): the environment runs the worker
     return
   if ← branch .rxData (t == MESSAGE_DATA) then
-    -- ip_tunnel_get_dsfield (a cut point)
-    consumeData msg
+    -- `PACKET_CB(skb)->ds = ip_tunnel_get_dsfield(ip_hdr(skb), skb)`: the
+    -- outer DS field, carried in `src`
+    consumeData msg src
     return
   invariant "validate_header_len admitted an unknown type"
 

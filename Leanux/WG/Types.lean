@@ -61,13 +61,15 @@ structure Endpoint where
 
 /-- What a received skb says about its origin (`wg_socket_endpoint_from_skb`):
     the IP family, source address and UDP port, destination address, and
-    arrival interface. -/
+    arrival interface; and the outer header's DS field
+    (`ip_tunnel_get_dsfield`, D2 stream B: `PACKET_CB(skb)->ds` on receive). -/
 structure SkbSource where
   family : Nat
   saddr : Nat
   sport : Nat
   daddr : Nat
   iif : Nat
+  tos : Nat := 0
   deriving Repr, BEq
 
 /-- `enum index_hashtable_type`. -/

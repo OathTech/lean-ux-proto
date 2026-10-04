@@ -439,18 +439,24 @@ def handshakeSendWorker (pid : PeerId) : M Unit := do
   sendHandshakeInitiation pid
   peerPut (some pid)
 
-/-- wg_socket_set_peer_endpoint_from_skb (socket.c:299-306) with
-    wg_socket_endpoint_from_skb (socket.c:235-256). -/
+/-- wg_socket_endpoint_from_skb (socket.c:235-256): the endpoint, or `none`
+    for `-EINVAL` (an skb that is neither IPv4 nor IPv6, which the receive
+    paths never pass). -/
+def endpointFromSkb (src : SkbSource) : M (Option Endpoint) := do
+  if ← branch .epFromSkbInet (src.family == 4) then
+    return some { family := AF_INET, addr := src.saddr, port := src.sport, src := src.daddr, srcIf := src.iif }
+  else if ← branch .epFromSkbInet6 (src.family == 6) then
+    -- ipv6_iface_scope_id: nonzero only for link-local and scoped multicast
+    if src.saddr / 2 ^ 118 == 0x3fa || src.saddr / 2 ^ 120 == 0xff then
+      unsupported "a scoped IPv6 source address"
+    return some { family := AF_INET6, addr := src.saddr, port := src.sport, src := src.daddr }
+  else invariant "an skb that is neither IPv4 nor IPv6"
+
+/-- wg_socket_set_peer_endpoint_from_skb (socket.c:299-306). -/
 def setPeerEndpointFromSkb (pid : PeerId) (src : SkbSource) : M Unit := do
-  let endpoint ← do
-    if ← branch .epFromSkbInet (src.family == 4) then
-      pure ({ family := AF_INET, addr := src.saddr, port := src.sport, src := src.daddr, srcIf := src.iif } : Endpoint)
-    else if ← branch .epFromSkbInet6 (src.family == 6) then
-      -- ipv6_iface_scope_id: nonzero only for link-local and scoped multicast
-      if src.saddr / 2 ^ 118 == 0x3fa || src.saddr / 2 ^ 120 == 0xff then
-        unsupported "a scoped IPv6 source address"
-      pure ({ family := AF_INET6, addr := src.saddr, port := src.sport, src := src.daddr } : Endpoint)
-    else invariant "an skb that is neither IPv4 nor IPv6"
-  if ← branch .epFromSkbOk true then setPeerEndpoint pid endpoint
+  let endpoint ← endpointFromSkb src
+  if ← branch .epFromSkbOk endpoint.isSome then
+    let some e := endpoint | invariant "unreachable"
+    setPeerEndpoint pid e
 
 end Leanux.WG

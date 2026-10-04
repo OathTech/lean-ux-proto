@@ -1,6 +1,7 @@
 import Leanux.WG.Device
 import Leanux.WG.Receive
 import Leanux.WG.Data
+import Leanux.WG.RxData
 
 /-!
 # The environment model: the harness fixture and the WireGuard kworker
@@ -33,10 +34,11 @@ def isSender (family addr port : Nat) : Bool :=
   port == SENDER_PORT && ((family == AF_INET && addr == 0x7f000001) || (family == AF_INET6 && addr == 1))
 
 /-- What the sender's datagrams carry in their skb: loopback source and
-    destination, the sender's port, and the loopback interface (ifindex 1). -/
+    destination, the sender's port, the loopback interface (ifindex 1), and
+    a zero DS field (the sender sets no TOS or traffic class). -/
 def senderSource (family : Nat) : M SkbSource :=
-  if family == 4 then pure { family := 4, saddr := 0x7f000001, sport := SENDER_PORT, daddr := 0x7f000001, iif := 1 }
-  else if family == 6 then pure { family := 6, saddr := 1, sport := SENDER_PORT, daddr := 1, iif := 1 }
+  if family == 4 then pure { family := 4, saddr := 0x7f000001, sport := SENDER_PORT, daddr := 0x7f000001, iif := 1, tos := 0 }
+  else if family == 6 then pure { family := 6, saddr := 1, sport := SENDER_PORT, daddr := 1, iif := 1, tos := 0 }
   else unsupported "an injection family other than IPv4 or IPv6"
 
 /-- The guest waits `OBSERVE_WAIT_US` (0.4 s) after every injection, and
@@ -253,6 +255,109 @@ def observe : M (Int × Lean.Json) := do
     ("replies", Lean.Json.arr (sortJson replies).toArray),
     ("stats", Lean.Json.mkObj [("tx_errors", Lean.toJson d.txErrors), ("tx_dropped", Lean.toJson d.txDropped)])])
 
+/-- wg0's addresses, added by the fixture at `wg_up` (`route_into_wg0`):
+    `10.255.254.1/32` and `fd00:ffff::1/128`. -/
+def WG0_ADDR4 : Nat := 0x0afffe01
+def WG0_ADDR6 : Nat := 0xfd00ffff000000000000000000000001
+
+/-- The IPv4 header checksum of `header` verifies (`ip_fast_csum` is 0). -/
+def ipv4HeaderChecksumOk (header : List UInt8) : Bool :=
+  let words := (List.range (header.length / 2)).map fun i => WG.beAt header (2 * i) 2
+  let fold (n : Nat) := (n % 65536) + n / 65536
+  fold (fold (fold (words.foldl (· + ·) 0))) == 0xffff
+
+/-- The delivery of an inner packet that GRO flushed at `napi_complete_done`
+    (a cut point: `gro_normal_list`, then the IPv4/IPv6 and UDP receive
+    paths), decided fail-closed by an exact predicate
+    (docs/2026-10-04-d2-data-plane.md, section 4). A delivered datagram is a
+    UDP datagram to the fixture's sender (wg0's address, the sender's port,
+    which is never wg0's own: `wgUp`); it lands in the sender's queue with
+    its inner source. Everything else is outside the domain: stack replies
+    (ICMP errors, other protocols), drops the environment does not model,
+    options, extension headers and fragments.
+    - IPv4: the UDP checksum is not verified, because wg marks the skb
+      `CHECKSUM_UNNECESSARY`. A local source (wg0's address, loopback) is a
+      martian and dropped by `ip_route_input_slow` / `fib_validate_source`.
+    - IPv6: a local source is accepted, an asymmetry with IPv4; a zero UDP
+      checksum is dropped (`udpv6_queue_rcv_one_skb`), a wrong nonzero one is
+      delivered. -/
+def deliverInner (pkt : List UInt8) : M Unit := do
+  let byte (i : Nat) : Nat := (pkt.getD i 0).toNat
+  let version := byte 0 / 16
+  if version == 4 then
+    if byte 0 % 16 != 5 then unsupported "an inner IPv4 packet with options"
+    if !ipv4HeaderChecksumOk (pkt.take 20) then unsupported "an inner IPv4 header with a bad checksum"
+    let totLen := WG.beAt pkt 2 2
+    if totLen != pkt.length then invariant "consume_data_done trims to tot_len"
+    if WG.beAt pkt 6 2 % 0x4000 != 0 then unsupported "an inner IPv4 fragment"
+    if byte 9 != 17 then unsupported "an inner IPv4 packet other than UDP (the stack may reply)"
+    let ulen := WG.beAt pkt 24 2
+    if ulen != totLen - 20 || ulen < 8 then unsupported "an inner UDP length other than the IPv4 payload's"
+    let src := WG.beAt pkt 12 4
+    let dst := WG.beAt pkt 16 4
+    if dst != WG0_ADDR4 || WG.beAt pkt 22 2 != SENDER_PORT then
+      unsupported "an inner IPv4 datagram to another destination than the fixture's sender"
+    -- martian sources: zeronet, loopback, multicast, class E and the limited
+    -- broadcast; and wg0's own (local) address
+    let top := src / 2 ^ 24
+    if top == 0 || top == 127 || top ≥ 224 || src == WG0_ADDR4 then
+      unsupported "an inner IPv4 datagram from a martian or local source"
+    modify fun w => { w with senderInbox := w.senderInbox ++
+      [{ family := AF_INET, addr := src, port := WG.beAt pkt 20 2, bytes := pkt.drop 28 }] }
+  else if version == 6 then
+    if byte 6 != 17 then unsupported "an inner IPv6 packet other than UDP, or with extension headers"
+    let payloadLen := WG.beAt pkt 4 2
+    if payloadLen + 40 != pkt.length then invariant "consume_data_done trims to the payload length"
+    if WG.beAt pkt 44 2 != payloadLen || payloadLen < 8 then
+      unsupported "an inner UDP length other than the IPv6 payload's"
+    let src := WG.beAt pkt 8 16
+    let dst := WG.beAt pkt 24 16
+    if dst != WG0_ADDR6 || WG.beAt pkt 42 2 != SENDER_PORT then
+      unsupported "an inner IPv6 datagram to another destination than the fixture's sender"
+    -- unspecified, loopback, v4-mapped, link-local (a scope id) and multicast
+    if src ≤ 1 || src / 2 ^ 32 == 0xffff || src / 2 ^ 118 == 0x3fa || src / 2 ^ 120 == 0xff then
+      unsupported "an inner IPv6 datagram from an unspecified, loopback, mapped, link-local or multicast source"
+    if WG.beAt pkt 46 2 == 0 then unsupported "an inner IPv6 UDP datagram with a zero checksum (dropped)"
+    modify fun w => { w with senderInbox := w.senderInbox ++
+      [{ family := AF_INET6, addr := src, port := WG.beAt pkt 40 2, bytes := pkt.drop 48 }] }
+  else invariant "consume_data_done passed a packet that is neither IPv4 nor IPv6"
+
+/-- The NET_RX softirq the decrypt worker's `napi_schedule` raised
+    (`____napi_schedule` → `raise_softirq_irqoff` outside `net_rx_action`,
+    which wakes ksoftirqd), placed by the records (design section 5). The
+    hook is called at the worker's loop head and after its enqueue; it runs
+    the poll iff a poll is pending and the next record starts a NET_RX
+    section:
+    - (a) ksoftirqd: the worker switched away at its `cond_resched` (a
+      resched record, consumed by `condResched`, which stops at a NET_RX
+      start), and ksoftirqd ran the softirq in a top-level section;
+    - (b) inline: the worker's next `spin_unlock_bh` (`ptr_ring_consume_bh`)
+      ran it, nested in the worker's section, with no resched record;
+    - (c) an interrupt's exit ran it, nested, before or after the
+      `need_resched()` test: the same records as (b), or a NET_RX section
+      before a resched record.
+    The placements differ only by the worker's state, which the poll does
+    not read (the worker's remaining work is its next ring poll). Without
+    records (the domain filter) the poll runs at the first hook. -/
+def napiSoftirq : M Unit := do
+  let d ← getDev
+  let pending := d.peers.toList.filterMap fun (pid, p) => if p.napiScheduled then some pid else none
+  if pending.isEmpty then return
+  if (← get).hidden.isSome && (← peekHiddenSite) != some (HiddenSite.sectionStart .netRx).info.id then return
+  if pending.length > 1 then unsupported "NAPI polls of several peers in one softirq"
+  -- net_rx_action → napi_poll(n, &repoll) → n->poll(n, n->weight)
+  runWorker .netRx do
+    for pid in pending do
+      discard <| WG.rxPoll pid WG.NAPI_POLL_WEIGHT fun pkts => pkts.forM deliverInner
+
+/-- The decrypt worker (`packet_crypt_wq`, queued by `consume_data` in the
+    injecting operation's NET_RX), once that softirq is done, with its
+    NAPI softirq placement and its `cond_resched` (receive.c:505). -/
+def runDecryptWorker : M Unit := do
+  runWorker .decryptWorker (WG.decryptWorker napiSoftirq (condResched SWITCH_DEPTH .decryptWorker))
+  if (← getDev).peers.toList.any (·.2.napiScheduled) then
+    invariant "a NAPI poll pending after the decrypt worker (its ring poll runs the softirq)"
+
 /-- `wg_inject`: the fixture's sender sends one datagram to `port` on 127.0.0.1
     or ::1. Only wg0's own socket is in the domain: wg0 up, on that port.
     Loopback delivers it in softirq inside the `sendto`, and the guest waits
@@ -268,7 +373,10 @@ def inject (family port : Nat) (msg : List UInt8) : M Int := do
   -- the queued receive work runs before the guest's wait ends
   if !(← getDev).handshakeQueue.isEmpty then
     runWorker .receiveWorker (WG.handshakeReceiveWorker (discard <| condResched SWITCH_DEPTH .receiveWorker))
-  -- then the crypt work the receive worker queued (a session's keepalive)
+  -- or the decrypt worker, with the NAPI poll its packet schedules
+  if !(← getDev).decryptQueue.isEmpty then runDecryptWorker
+  -- then the crypt work the receive worker or the NAPI poll queued (a
+  -- session's keepalive, staged packets on key confirmation)
   runCryptWorkers
   deliverSent
   return msg.length   -- udp_sendmsg returns the datagram's length

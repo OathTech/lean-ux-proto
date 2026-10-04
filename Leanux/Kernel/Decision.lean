@@ -205,6 +205,22 @@ inductive Decision where
   -- D1 stream C: drivers/net/wireguard/queueing.h
   | enqueuePeerQueueFull | enqueueRingFull | chooseCpuInvalid | chooseCpuOffline | chooseCpuIndexIterate
   | prevQueuePeeked
+  -- D2 stream B: drivers/net/wireguard/receive.c (data messages: consume_data,
+  -- the decrypt worker, counter_validate, the NAPI poll, consume_data_done,
+  -- the receive side of keep_key_fresh)
+  | dataPeerDead | dataEpipe | dataEnqueueOk | dataEnqueueOkEpipe
+  | decNoKeypair | decKeyInvalid | decKeyExpired | decCounterLimit | decCowDataFailed | decTooManyFrags
+  | decSgvecFailed | decDecryptFailed | decTrimFailed
+  | decWorkerConsumed | decWorkerDecrypted | decWorkerNeedResched
+  | ctrRejectCounter | ctrRejectTheirs | ctrTooOld | ctrAdvance | ctrClearIter
+  | rxPollNoBudget | rxPollPacket | rxPollNotUncrypted | rxPollNotCrypted | rxPollCounterInvalid
+  | rxPollEndpointFailed | rxPollFree | rxPollBudgetDone | rxPollComplete
+  | doneReceivedNew | rxFreshSentLastminute | rxFreshKeypair | rxFreshValid | rxFreshInitiator
+  | rxFreshExpired | rxFreshSend
+  | doneRxKeepalive | doneNetworkBelowHead | doneMayPullV4 | doneVersion4 | doneVersion6 | doneMayPullV6
+  | doneProtoIp | doneV4TooShort | doneProtoIpv6 | doneLenBeyond | doneTrimFailed | doneDishonestPeer
+  -- D2 stream B: drivers/net/wireguard/noise.c, allowedips.c
+  | receivedNotNew | receivedChanged | lookupSrcV4 | lookupSrcV6
   deriving Repr, BEq, DecidableEq, Inhabited
 
 /-- A recorded step: the decision, the outcome the mirror computed, and, for
@@ -957,6 +973,76 @@ def Decision.info : Decision → DecisionInfo
   | .chooseCpuOffline => d "wg_cpumask_choose_online.cpu_offline" wqh 110 [] []
   | .chooseCpuIndexIterate => d "wg_cpumask_choose_online.index_iterate" wqh 113 [(114, 114)] []
   | .prevQueuePeeked => d "wg_prev_queue_peek.peeked" wqh 145 [(146, 146)] [(147, 148)]
+  -- D2 stream B: wg_packet_consume_data (receive.c:509-540). The `goto err`
+  -- targets are shared with other exits.
+  | .dataPeerDead => d "wg_packet_consume_data.peer_dead" wrc 523 [(524, 524)] [(526, 527)]
+  | .dataEpipe => d "wg_packet_consume_data.epipe" wrc 528 [(529, 529)] []
+  -- `likely(!ret || ret == -EPIPE)` (530): the operands share the line
+  | .dataEnqueueOk => d "wg_packet_consume_data.enqueued" wrc 530 [(531, 532)] []
+  | .dataEnqueueOkEpipe => d "wg_packet_consume_data.enqueued_epipe" wrc 530 [] [(535, 535)]
+  -- decrypt_packet (receive.c:242-292): the `return false` exits share the
+  -- epilogue; in `a || b || c` (252-254) each operand's false side
+  -- evaluates the next line, and only the last one's true side alone
+  -- reaches the body
+  | .decNoKeypair => d "decrypt_packet.no_keypair" wrc 249 [(250, 250)] []
+  | .decKeyInvalid => d "decrypt_packet.key_invalid" wrc 252 [] [(253, 253)]
+  | .decKeyExpired => d "decrypt_packet.key_expired" wrc 253 [] [(254, 254)]
+  | .decCounterLimit => d "decrypt_packet.counter_limit" wrc 254 [(255, 256)] [(259, 260)]
+  | .decCowDataFailed => d "decrypt_packet.cow_data_failed" wrc 271 [] []
+  | .decTooManyFrags => d "decrypt_packet.too_many_frags" wrc 271 [] [(274, 275)]
+  | .decSgvecFailed => d "decrypt_packet.sgvec_failed" wrc 275 [] [(278, 280)]
+  | .decDecryptFailed => d "decrypt_packet.decrypt_failed" wrc 278 [] [(286, 287)]
+  | .decTrimFailed => d "decrypt_packet.trim_failed" wrc 287 [] [(289, 289)]
+  -- wg_packet_decrypt_worker (receive.c:493-507)
+  | .decWorkerConsumed => d "wg_packet_decrypt_worker.consumed" wrc 499 [(500, 503)] []
+  | .decWorkerDecrypted => d "wg_packet_decrypt_worker.decrypted" wrc 501 [] []
+  | .decWorkerNeedResched => d "wg_packet_decrypt_worker.need_resched" wrc 504 [(505, 505)] []
+  -- counter_validate (receive.c:295-331): the `goto out`s share the unlock
+  | .ctrRejectCounter => d "counter_validate.counter_at_limit" wrc 302 [] [(303, 303)]
+  | .ctrRejectTheirs => d "counter_validate.theirs_at_limit" wrc 303 [] [(306, 308)]
+  | .ctrTooOld => d "counter_validate.too_old" wrc 308 [] [(312, 314)]
+  | .ctrAdvance => d "counter_validate.advance" wrc 314 [(315, 321)] []
+  | .ctrClearIter => d "counter_validate.clear_iterate" wrc 318 [(319, 320)] []
+  -- wg_packet_rx_poll (receive.c:438-491): `goto next` joins at 478
+  | .rxPollNoBudget => d "wg_packet_rx_poll.no_budget" wrc 448 [(449, 449)] []
+  | .rxPollPacket => d "wg_packet_rx_poll.packet" wrc 451 [(452, 452)] []
+  | .rxPollNotUncrypted => d "wg_packet_rx_poll.not_uncrypted" wrc 452 [(454, 456)] []
+  | .rxPollNotCrypted => d "wg_packet_rx_poll.not_crypted" wrc 458 [] [(461, 461)]
+  | .rxPollCounterInvalid => d "wg_packet_rx_poll.counter_invalid" wrc 461 [] [(470, 470)]
+  | .rxPollEndpointFailed => d "wg_packet_rx_poll.endpoint_failed" wrc 470 [] [(473, 475)]
+  | .rxPollFree => d "wg_packet_rx_poll.free" wrc 480 [(481, 481)] []
+  | .rxPollBudgetDone => d "wg_packet_rx_poll.budget_done" wrc 483 [(484, 484)] []
+  | .rxPollComplete => d "wg_packet_rx_poll.complete" wrc 487 [(488, 488)] []
+  -- wg_packet_consume_data_done (receive.c:335-436); the dishonest labels
+  -- (415-435) are shared by several gotos
+  | .doneReceivedNew => d "wg_packet_consume_data_done.received_new" wrc 345 [(347, 348)] []
+  -- keep_key_fresh (receive.c:220-240), receive.c's own static function
+  | .rxFreshSentLastminute => d "keep_key_fresh.sent_lastminute" wrc 225 [(226, 226)] [(228, 229)]
+  | .rxFreshKeypair => d "keep_key_fresh.rx_keypair" wrc 230 [] []
+  | .rxFreshValid => d "keep_key_fresh.rx_valid" wrc 230 [(231, 231)] []
+  | .rxFreshInitiator => d "keep_key_fresh.rx_initiator" wrc 231 [(232, 233)] []
+  | .rxFreshExpired => d "keep_key_fresh.rx_birthdate_expired" wrc 232 [] []
+  | .rxFreshSend => d "keep_key_fresh.rx_send" wrc 236 [(237, 238)] []
+  | .doneRxKeepalive => d "wg_packet_consume_data_done.keepalive" wrc 357 [(358, 362)] [(365, 365)]
+  | .doneNetworkBelowHead => d "wg_packet_consume_data_done.network_below_head" wrc 367 [(368, 368)] []
+  -- `!(may_pull(iphdr) && (version == 4 || (version == 6 && may_pull(ipv6hdr))))`
+  -- (369-372): the operands' sides are the next operand or the shared exits
+  | .doneMayPullV4 => d "wg_packet_consume_data_done.may_pull_iphdr" wrc 369 [] []
+  | .doneVersion4 => d "wg_packet_consume_data_done.version_4" wrc 370 [] []
+  | .doneVersion6 => d "wg_packet_consume_data_done.version_6" wrc 371 [] []
+  | .doneMayPullV6 => d "wg_packet_consume_data_done.may_pull_ipv6hdr" wrc 372 [] []
+  | .doneProtoIp => d "wg_packet_consume_data_done.protocol_ip" wrc 385 [(386, 389)] [(390, 390)]
+  | .doneV4TooShort => d "wg_packet_consume_data_done.ip_len_too_short" wrc 387 [(388, 388)] [(389, 389)]
+  | .doneProtoIpv6 => d "wg_packet_consume_data_done.protocol_ipv6" wrc 390 [(391, 393)] [(395, 395)]
+  | .doneLenBeyond => d "wg_packet_consume_data_done.len_beyond_skb" wrc 398 [(399, 399)] [(400, 401)]
+  | .doneTrimFailed => d "wg_packet_consume_data_done.trim_failed" wrc 401 [(402, 402)] [(404, 405)]
+  | .doneDishonestPeer => d "wg_packet_consume_data_done.dishonest_peer" wrc 408 [(409, 409)] [(411, 413)]
+  -- wg_noise_received_with_keypair (noise.c:253-291)
+  | .receivedNotNew => d "wg_noise_received_with_keypair.not_new" wno 262 [(263, 263)] [(265, 265)]
+  | .receivedChanged => d "wg_noise_received_with_keypair.changed" wno 269 [(272, 273)] [(280, 290)]
+  -- wg_allowedips_lookup_src (allowedips.c:367-375)
+  | .lookupSrcV4 => d "wg_allowedips_lookup_src.inet" aip 370 [(371, 371)] [(372, 374)]
+  | .lookupSrcV6 => d "wg_allowedips_lookup_src.inet6" aip 372 [(373, 373)] [(374, 374)]
 
 /-- The relation of a C value comparison, as written in the source
     (`lhs rel rhs`); `flag` is a mask test `(x & MASK)` against zero. -/
@@ -1143,7 +1229,12 @@ def Decision.repeatable : Decision → Bool
   | .doneSkbIterate | .doneSendOk | .doneNotKeepalive | .doneDataSent
   | .freshKeypair | .freshValid | .freshCounter | .freshInitiator | .freshExpired | .freshSend
   | .enqueuePeerQueueFull | .enqueueRingFull | .chooseCpuInvalid | .chooseCpuOffline | .chooseCpuIndexIterate
-  | .prevQueuePeeked | .cpumaskWrap => true
+  | .prevQueuePeeked | .cpumaskWrap
+  -- D2 stream B: the loops of the decrypt worker, the NAPI poll and
+  -- counter_validate
+  | .decWorkerConsumed | .decWorkerDecrypted | .decWorkerNeedResched
+  | .rxPollPacket | .rxPollNotUncrypted | .rxPollNotCrypted | .rxPollCounterInvalid | .rxPollEndpointFailed
+  | .rxPollFree | .rxPollBudgetDone | .ctrClearIter => true
   | _ => false
 
 /-- Every decision, enumerated through the constructor index. -/
