@@ -1,11 +1,12 @@
-"""WireGuard mutants (stage A report, section 2; stages B1, B2 and C).
+"""WireGuard mutants (stage A report, section 2; stages B1, B2, C, D1 and D2).
 
 Each mutant is applied to a clean committed tree, verified as applied, checked
 on the wireguard suite, then reverted. Run from the repository root:
 
     scripts/in-bundle python3 scripts/wg-mutants.py [NAME ...]
 
-Every mutant must be rejected (status fail). W5 also aborts on a mirror
+Every mutant must be rejected (status fail). D2 entries without patterns are
+reported as pending. W5 also aborts on a mirror
 invariant; run `--trace wg_trie_v6` by hand to see A2 alone reject it.
 """
 import glob
@@ -186,6 +187,55 @@ D1_MUTANTS = [
    "    if true then return false\n"),
 ]
 
+# Stage D2 (the data plane; design docs/2026-10-04-d2-data-plane.md, section
+# 7). A DRAFT list, written by stream C before the mirror code exists: an
+# entry whose patterns are None is pending, reported as such and not run,
+# until integration fills it against the merged mirror. Entries with patterns
+# match the code at the time of writing; streams A and B may rewrite those
+# lines, in which case integration refreshes them (the runner fails on a
+# pattern that is not present exactly once). The files named for pending
+# entries are where the code is expected (stream B may use RxData.lean).
+D2_MUTANTS = [
+  ('D2-M1-window-off-by-one', 'state: counter_validate\'s window test is off by one (receive.c:308-309: '
+   'COUNTER_WINDOW_SIZE + their_counter < counter); d2_rx_window_boundary accepts N - 8129',
+   'Leanux/WG/Receive.lean', None, None),
+  ('D2-M2-bitmap-index-unmasked', 'state: the backtrack word index is not masked with '
+   '(COUNTER_BITS_TOTAL / BITS_PER_LONG) - 1 (receive.c:324); counters above 8191 index past the bitmap',
+   'Leanux/WG/Receive.lean', None, None),
+  ('D2-M3-their-counter-not-incremented', 'state: counter_validate drops ++their_counter (receive.c:306); '
+   'the window and bit positions shift by one', 'Leanux/WG/Receive.lean', None, None),
+  ('D2-M4-padding-ignores-mtu', 'data: calculate_skb_padding pads to ALIGN(len, 16) without the MTU clamp '
+   '(send.c:157); d2_padding_mtu (inner lengths 1419, 1420) pads to 1424',
+   'Leanux/WG/Data.lean',
+   "  let paddedSize := min mtu (alignPadding lastUnit)\n",
+   "  let paddedSize := alignPadding lastUnit\n"),
+  ('D2-M5-checksum-not-completed', 'data: encrypt_packet skips skb_checksum_help (send.c:187-189); the inner '
+   'UDP checksum stays the pseudo-header sum', 'Leanux/WG/Data.lean', None, None),
+  ('D2-M6-lookup-src-uses-destination', 'routing: wg_allowedips_lookup_src walks the inner destination '
+   '(allowedips.c); d2_rx_dishonest_source and the deliver traces change outcome',
+   'Leanux/WG/AllowedIps.lean', None, None),
+  ('D2-M7-received-with-keypair-no-promotion', 'state: wg_noise_received_with_keypair does not promote next '
+   'to current (noise.c); d2_respond_then_data and d2_respond_stage_then_data',
+   'Leanux/WG/Keypair.lean', None, None),
+  ('D2-M8-rx-bytes-trimmed', 'data: update_rx_stats counts message_data_len of the trimmed length, not '
+   'len_before_trim (receive.c:409); rx_bytes in the dump', 'Leanux/WG/Receive.lean', None, None),
+  ('D2-M9-keepalive-not-detected', 'control: consume_data_done does not test skb->len == 0 (receive.c:362); '
+   'd2_rx_keepalive goes on to the header checks', 'Leanux/WG/Receive.lean', None, None),
+  ('D2-M10-dead-as-crypted', 'control: the decrypt worker enqueues a failed decryption as CRYPTED '
+   '(receive.c:499-501); d2_rx_tampered_tag', 'Leanux/WG/Receive.lean', None, None),
+  # tentative: the pattern matches the D1 loop, which stream A rewrites for payload lists
+  ('D2-M11-nonce-per-list', 'data: every packet of a staged list takes the nonce read before the walk '
+   '(send.c:378-381); d2_staged_flush_4 repeats a nonce',
+   'Leanux/WG/Send.lean',
+   "    let k ← getKeypair id\n    let nonce := k.sendingCounter   -- atomic64_inc_return(&sending_counter) - 1\n",
+   "    let nonce := k.sendingCounter   -- atomic64_inc_return(&sending_counter) - 1\n"),
+  ('D2-M12-poll-outside-worker', 'scheduling control: the NAPI poll runs after the decrypt worker\'s section '
+   'instead of inside it (design section 5); rejected when the corpus shows orders (a) and (b)',
+   'Leanux/Env.lean', None, None),
+]
+PENDING = {m[0] for m in D2_MUTANTS if m[3] is None}
+
+
 def w4(text):
     fw = ("  if ← branch .setDevFwmark a.fwmark.isSome then\n"
           "    modifyDev fun d => { d with fwmark := a.fwmark.getD 0 }\n"
@@ -216,11 +266,15 @@ def run(cmd, **kw):
 
 assert run(['git', 'status', '--porcelain'], capture_output=True, text=True).stdout == '', 'tree must be clean'
 head = run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()
-MUTANTS = MUTANTS + D1_MUTANTS
+MUTANTS = MUTANTS + D1_MUTANTS + D2_MUTANTS
 selected = sys.argv[1:] or [m[0] for m in MUTANTS]
 results = {}
 for name, what, path, old, new in MUTANTS:
     if name not in selected:
+        continue
+    if name in PENDING:   # a draft entry: its pattern is filled at integration
+        results[name] = dict(description=what, base=head, file=path, status='pending')
+        print(name, 'pending (no pattern yet)', flush=True)
         continue
     full = os.path.join(ROOT, path)
     text = open(full).read()
