@@ -188,7 +188,9 @@ def attach_devices(results, traces, records):
 def attach_observed(results, traces, records):
     """Each wg_observe has exactly one record: the datagrams the fixture's
     listeners received (family, length, message type), sorted, since arrival
-    order across peers is not determined, and wg0's transmit counters."""
+    order across peers is not determined; the datagrams the sender received,
+    with their recvfrom sources, sorted; and wg0's transmit counters and
+    receive error counters."""
     by_trace = {result["id"]: result for result in results}
     seen = set()
     for record in records:
@@ -208,14 +210,19 @@ def attach_observed(results, traces, records):
                 and all(type(x) is int and x >= 0 for x in d[:3]) and hex_bytes(d, d[1])
                 for d in datagrams):
             raise ValueError("wg_observe datagrams")
+        # what the sender received: recvfrom's source (the IPv6 socket's
+        # family, the address as 32 hex digits, an IPv4 source v4-mapped, the
+        # port), then length, message type, receiver index and bytes
         replies = record["replies"]
         if type(replies) is not list or not all(
-                type(r) is list and len(r) == 4 and all(type(x) is int and x >= 0 for x in r[:3]) and hex_bytes(r, r[0])
+                type(r) is list and len(r) == 7 and r[0] == 10
+                and type(r[1]) is str and re.fullmatch(r"[0-9a-f]{32}", r[1]) is not None
+                and all(type(x) is int and x >= 0 for x in r[2:6]) and r[2] < 65536 and hex_bytes(r, r[3])
                 for r in replies):
             raise ValueError("wg_observe replies")
         stats = record["stats"]
-        if type(stats) is not dict or set(stats) != {"tx_errors", "tx_dropped"} or not all(
-                type(v) is int and v >= 0 for v in stats.values()):
+        if type(stats) is not dict or set(stats) != {"tx_errors", "tx_dropped", "rx_frame_errors", "rx_length_errors"} \
+                or not all(type(v) is int and v >= 0 for v in stats.values()):
             raise ValueError("wg_observe stats")
         # sorted as the mirror sorts them: by compact JSON
         compact = lambda x: json.dumps(x, separators=(",", ":"))
