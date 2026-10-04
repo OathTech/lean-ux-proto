@@ -295,3 +295,51 @@ class EvaluationChecks(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class D2GeneratorChecks(unittest.TestCase):
+    """Stage D2's steered data-plane traces (evaluator/generate.py, steered_data)."""
+
+    def test_data_share_zero_keeps_the_stream(self):
+        from evaluator.generate import generate_wireguard
+        a = generate_wireguard(11, 160, steered=0.3)
+        self.assertEqual(a, generate_wireguard(11, 160, steered=0.3, data=0.0))
+        # with D2 traces drawn first, every other trace keeps its content and order
+        b = generate_wireguard(11, 160, steered=0.3, data=0.25)
+        d2 = lambda t: any(op['op'] == 'wg_xmit' and 'payload' in op['packet'] for op in t['ops']) or any(
+            op['op'] == 'wg_inject' and op['message'][:2] == '04' and 'steer' in t for op in t['ops'])
+        others = [t['ops'] for t in b if not d2(t)]
+        self.assertGreater(len(b) - len(others), 20)
+        self.assertEqual(others, [t['ops'] for t in a][:len(others)])
+
+    def test_steered_data_traces(self):
+        import random
+        from harness import noise
+        from evaluator.generate import WAIT_BUDGET_SECONDS, steered_data, wait_after_up
+        rng = random.Random(5)
+        local = {bytes(noise.WG0_ADDR4), bytes(noise.WG0_ADDR6)}
+        seen = set()
+        for i in range(400):
+            trace = steered_data(rng, f't{i}')
+            self.assertLessEqual(wait_after_up(trace['ops']), WAIT_BUDGET_SECONDS)
+            self.assertLessEqual(len(trace['ops']), 64)
+            sites = [s for s, _ in trace['steer']]
+            self.assertIn(sites, (['resp_ephemeral', 'index_draw'], ['init_ephemeral', 'tai64n_now', 'index_draw']))
+            for op in trace['ops']:
+                if op['op'] == 'wg_xmit':
+                    dst = bytes.fromhex(op['packet']['dst'])
+                    self.assertNotIn(dst, local)
+                    self.assertFalse(dst[0] == 0xfe and dst[1] & 0xc0 == 0x80)
+                    n = len(op['packet']['payload']) // 2
+                    self.assertTrue(1 <= n <= (1392 if op['packet']['family'] == 4 else 1372))
+                    seen.add('xmit')
+                if op['op'] == 'wg_inject':
+                    self.assertLessEqual(len(op['message']) // 2, 1400)
+                    if op['message'][:2] == '04':
+                        seen.add('data')
+            # every operation but the payload's is valid today (stream A extends validate_packet)
+            stripped = copy.deepcopy(trace)
+            for op in stripped['ops']:
+                op.get('packet', {}).pop('payload', None)
+            validate_trace(stripped)
+        self.assertEqual(seen, {'xmit', 'data'})

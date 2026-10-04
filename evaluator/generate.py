@@ -228,7 +228,7 @@ def wait_after_up(operations):
     return waits
 
 
-def generate_wireguard(seed, count, max_ops=12, steered=0.0):
+def generate_wireguard(seed, count, max_ops=12, steered=0.0, data=0.0):
     """Seeded WireGuard traces over small pools of keys and prefixes, so that
     peers, trie nodes and identities collide often. A third are configuration
     traces (stage A), and the rest bring wg0 up and transmit (stage B1), inject
@@ -237,11 +237,15 @@ def generate_wireguard(seed, count, max_ops=12, steered=0.0):
 
     `steered` is the share of steered handshakes (stage D1, steered_handshake),
     drawn from a separate generator: with the default 0 the other classes'
-    streams are exactly as before."""
-    if not 2 <= max_ops <= 64 or not 1 <= count <= 100000 or not 0 <= steered <= 1:
+    streams are exactly as before. `data` is the share of steered data-plane
+    traces (stage D2, steered_data), drawn first and from a third generator:
+    the other traces keep their content and order (only their identifiers
+    shift), and with the default 0 the output is exactly as before."""
+    if not 2 <= max_ops <= 64 or not 1 <= count <= 100000 or not 0 <= steered <= 1 or not 0 <= data <= 1:
         raise ValueError('bounded generator parameters')
     rng = random.Random(seed)
     steered_rng = random.Random(f'steered-{seed}')
+    data_rng = random.Random(f'data-{seed}')
     keys = ['11' * 32, '22' * 32, '33' * 32, '00' * 32,
             '7b4e909bbe7ffe44c465a220037d608ee35897d31ef972f07f74892cb0f73f13']   # public key of 11..11
     private = ['11' * 32, '10' + '11' * 30 + '51', '22' * 32, '00' * 32]
@@ -416,6 +420,15 @@ def generate_wireguard(seed, count, max_ops=12, steered=0.0):
         return ops + [{'op': 'wg_observe'}]
 
     while len(result) < count:
+        if data and data_rng.random() < data:
+            trace = steered_data(data_rng, f'generated-wg-{seed}-{len(result):05}')
+            if wait_after_up(trace['ops']) > WAIT_BUDGET_SECONDS:
+                raise AssertionError('a steered data trace exceeds the wait budget')
+            digest = identity(trace)
+            if digest not in seen:
+                seen.add(digest)
+                result.append(trace)
+            continue
         if steered and steered_rng.random() < steered:
             trace = steered_handshake(steered_rng, f'generated-wg-{seed}-{len(result):05}')
             if wait_after_up(trace['ops']) > WAIT_BUDGET_SECONDS:
@@ -541,3 +554,187 @@ def steered_handshake(rng, trace_id):
     if expect:
         trace['expect'] = expect
     return trace
+
+
+# Stage D2: the data plane (docs/2026-10-04-d2-data-plane.md, section 6).
+# After a steered session (wg0 initiates, or responds), payload packets in
+# both directions: wg_xmit with payloads, and message_data built offline
+# under the session's keys carrying inner IPv4/IPv6 UDP packets.
+D2_ALLOWED4 = [('0a000000', 8), ('0a010000', 16)]
+D2_ALLOWED6 = [('20010db8000000000000000000000000', 32), ('20010db8000000000000000000000000', 48)]
+D2_OUTSIDE4 = ['c0a80002', '0b000001', 'ac100001']                 # in no allowed range
+D2_OUTSIDE6 = ['20010db9000000000000000000000002', '20020000000000000000000000000001']
+D2_SIZES4 = [1, 15, 16, 17, 20, 1376, 1377, 1391, 1392]            # inner lengths 1404, 1405, 1419, 1420
+D2_SIZES6 = [1, 15, 16, 17, 20, 1356, 1357, 1371, 1372]
+D2_INJECT_MAX = 1400 - 32                                           # wg_inject's message bound, less header and tag
+D2_WINDOW = noise.COUNTER_WINDOW_SIZE
+D2_REJECT = noise.REJECT_AFTER_MESSAGES
+
+
+def _in_prefix(rng, addr, cidr, length):
+    """A random address inside addr/cidr (`length` bytes)."""
+    base = int(addr, 16)
+    host_bits = 8 * length - cidr
+    return (base | rng.randrange(2 ** host_bits)).to_bytes(length, 'big')
+
+
+def steered_data(rng, trace_id):
+    """One steered D2 trace. The session comes first, as in
+    steered_handshake: wg0 initiates (steered ephemeral, clock and index),
+    or the peer initiates and wg0 responds (steered resp_ephemeral and
+    index_draw: the keys the peer sends with depend on both). Then one of:
+    - `xmit`: 1-4 payload transmissions after the session (sizes at the
+      padding and MTU-clamp boundaries, or random);
+    - `staged`: 1-4 transmissions before the session, flushed by it;
+    - `receive`: up to three injected data messages under a counter pattern
+      (in order, duplicate, reordered within the window, older than the
+      window, a jump over COUNTER_BITS_TOTAL, the window boundary pair, the
+      REJECT_AFTER_MESSAGES pair), each carrying a delivered inner packet, a
+      keepalive or a dishonest inner packet, sometimes with a tampered tag
+      or a wrong key index;
+    - `mixed`: data messages and transmissions interleaved (the timer state);
+    - `respond`: respond-then-data, optionally with a packet staged before
+      the confirmation.
+    Inner sources are drawn from the peer's allowed ranges minus wg0's local
+    addresses; transmit destinations are non-local addresses in them, so no
+    fe80::/10 destination occurs."""
+    device = rng.choice(D1_DEVICES)
+    peer_private = rng.choice(D1_PEERS)
+    peer_public = noise.public_key(peer_private)
+    psk = rng.choice([b'\xaa' * 32, rng.randbytes(32)]) if rng.random() < .2 else None
+    variant = rng.choices(['xmit', 'staged', 'receive', 'mixed', 'respond'], [3, 2, 5, 2, 3])[0]
+    allowed4, allowed6 = rng.choice(D2_ALLOWED4), rng.choice(D2_ALLOWED6)
+
+    def source(family):
+        if family == 4:
+            while True:
+                src = _in_prefix(rng, *allowed4, 4)
+                if src != noise.WG0_ADDR4:
+                    return src
+        return _in_prefix(rng, *allowed6, 16)
+
+    def destination(family):
+        if family == 4:
+            while True:
+                dst = _in_prefix(rng, *allowed4, 4)
+                if dst != noise.WG0_ADDR4:
+                    return dst
+        while True:
+            dst = _in_prefix(rng, *allowed6, 16)
+            if dst != noise.WG0_ADDR6:
+                return dst
+
+    def xmit():
+        family = rng.choice([4, 6])
+        sizes = D2_SIZES4 if family == 4 else D2_SIZES6
+        size = rng.choice(sizes) if rng.random() < .6 else rng.randint(1, sizes[-1])
+        dst = destination(family)
+        if rng.random() < .05:   # no peer for the destination: wg_xmit's error path, with a payload
+            dst = bytes.fromhex(rng.choice(D2_OUTSIDE4)) if family == 4 else bytes.fromhex(rng.choice(D2_OUTSIDE6))
+        return {'op': 'wg_xmit', 'packet': dict(family=family, dst=dst.hex(), payload=rng.randbytes(size).hex())}
+
+    def inner():
+        """A plaintext: a delivered inner packet, a keepalive, or a dishonest one."""
+        kind = rng.choices(['deliver4', 'deliver6', 'keepalive', 'type', 'size', 'source'], [5, 3, 1, 1, 1, 1])[0]
+        text = rng.randbytes(rng.choice([0, 1, 7, 16, rng.randint(0, 200)]))
+        sport = rng.choice([12345, 1, 65535, rng.randrange(1, 65536)])
+        if kind == 'keepalive':
+            return b''
+        if kind == 'deliver4':
+            return noise.to_wg0(4, source(4), text, sport=sport, checksum=rng.choice(['correct', 'wrong', 'zero']))
+        if kind == 'deliver6':   # a zero UDP checksum is dropped on IPv6: outside the delivery predicate
+            return noise.to_wg0(6, source(6), text, sport=sport, checksum=rng.choice(['correct', 'wrong']))
+        if kind == 'source':
+            family = rng.choice([4, 6])
+            src = bytes.fromhex(rng.choice(D2_OUTSIDE4 if family == 4 else D2_OUTSIDE6))
+            return noise.to_wg0(family, src, text, sport=sport)
+        if kind == 'type':
+            choice = rng.randrange(3)
+            if choice == 0:   # another version in a full header
+                return noise.to_wg0(4, source(4), text, sport=sport, version=rng.choice([0, 5, 7, 15]))
+            if choice == 1:   # shorter than an IPv4 header, even padded
+                return bytes([0x45]) + rng.randbytes(rng.randint(0, 14))
+            return bytes([0x60]) + rng.randbytes(rng.randint(19, 30))   # version 6, padded below 40
+        family = rng.choice([4, 6])
+        packet = noise.to_wg0(family, source(family), text, sport=sport)
+        padded = len(packet) + noise.padding(len(packet))
+        if family == 4:
+            return noise.to_wg0(4, source(4), text, sport=sport,
+                                tot_len=rng.choice([0, 19, padded + 1, rng.randint(padded + 1, 65535)]))
+        return noise.to_wg0(6, source(6), text, sport=sport, payload_len=rng.randint(padded - 39, 65535))
+
+    def counters(n):
+        pattern = rng.choice(['in_order', 'duplicate', 'reorder', 'old', 'jump', 'boundary', 'reject'])
+        top = rng.choice([D2_WINDOW + 1, 10000, rng.randrange(D2_WINDOW + 1, 2**48), rng.randrange(2**63, D2_REJECT)])
+        first = rng.choice([0, 0, 1, rng.randrange(1000)])
+        values = {'in_order': [first, first + 1, first + 2],
+                  'duplicate': [first, first, first + 1],
+                  'reorder': [first + 2, first, first + 1],
+                  'old': [top, top - D2_WINDOW - 1 - rng.randrange(min(100, top - D2_WINDOW)), top + 1],
+                  'jump': [first, first + noise.COUNTER_BITS_TOTAL + rng.randrange(1, 100), first + 1],
+                  'boundary': [top, top - D2_WINDOW, top - D2_WINDOW - 1],
+                  'reject': [D2_REJECT, D2_REJECT - 1, first]}[pattern]
+        return values[:n]
+
+    def data_ops(session, n):
+        ops = []
+        for counter in counters(n):
+            plaintext = inner()
+            index = session.local_index
+            if rng.random() < .05:
+                index ^= rng.randrange(1, 2**32)
+            message = noise.data_message(session.receiving, index, counter, plaintext, tamper=rng.random() < .1)
+            ops.append({'op': 'wg_inject', 'family': rng.choice([4, 6]), 'port': 51820, 'message': message.hex()})
+        return ops
+
+    peer = dict(public_key=peer_public.hex(),
+                allowed_ips=[dict(family=4, addr=allowed4[0], cidr=allowed4[1]),
+                             dict(family=6, addr=allowed6[0], cidr=allowed6[1])],
+                endpoint=rng.choice(D1_LISTENERS))
+    if psk is not None:
+        peer['preshared_key'] = psk.hex()
+    observe, get = {'op': 'wg_observe'}, {'op': 'wg_get'}
+
+    def setup():
+        return [{'op': 'wg_set', 'config': dict(private_key=device.hex(), listen_port=51820, peers=[peer])},
+                {'op': 'wg_up'}]
+
+    if variant == 'respond':
+        raw, index = rng.randbytes(32), rng.randrange(2**32)
+        theirs = noise.initiation(noise.public_key(device), peer_private, rng.randbytes(32),
+                                  noise.tai64n(rng.randrange(2**31), rng.randrange(10**9)), rng.randrange(2**32))
+        session = noise.responder_session(noise.wg0_response(theirs, device, raw, psk, index))
+        inject = {'op': 'wg_inject', 'family': rng.choice([4, 6]), 'port': 51820, 'message': theirs.hex()}
+        staged = [xmit() for _ in range(rng.choice([0, 0, 1, 2]))]
+        ops = setup() + [inject] + staged + data_ops(session, rng.randint(1, 3)) + [observe, get]
+        steer = [['resp_ephemeral', raw.hex()], ['index_draw', index.to_bytes(4, 'little').hex()]]
+        return dict(version=1, id=trace_id, ops=ops, steer=steer,
+                    expect=['wg_receive_handshake_packet.initiation=1', 'add_new_keypair.initiator=0'])
+
+    ephemeral, index = rng.randbytes(32), rng.randrange(2**32)
+    sec = rng.choice([1, rng.randrange(2**31), TAI64N_SEC_MAX])
+    nsec = rng.randrange(10**9)
+    steer = [['init_ephemeral', ephemeral.hex()], ['tai64n_now', noise.timespec64(sec, nsec).hex()],
+             ['index_draw', index.to_bytes(4, 'little').hex()]]
+    ours = noise.steered_initiation(peer_public, device, ephemeral, sec, nsec, index)
+    response = noise.response(ours, peer_private, rng.randbytes(32), psk, rng.randrange(2**32),
+                              initiator_public=noise.public_key(device))
+    session = noise.initiator_session(response)
+    respond = {'op': 'wg_inject', 'family': rng.choice([4, 6]), 'port': 51820, 'message': response.message.hex()}
+    if variant == 'staged':
+        # no persistent keepalive: the first transmission stages and initiates
+        first = xmit()
+        first['packet']['dst'] = destination(first['packet']['family']).hex()   # routed to the peer
+        ops = setup() + [first] + [xmit() for _ in range(rng.randint(0, 3))] + [observe, respond, observe, get]
+        return dict(version=1, id=trace_id, ops=ops, steer=steer,
+                    expect=D1_SESSION + ['wg_packet_send_staged_packets.no_keypair=1'])
+    peer['keepalive'] = 25
+    if variant == 'xmit':
+        after = [xmit() for _ in range(rng.randint(1, 4))]
+    elif variant == 'receive':
+        after = data_ops(session, rng.randint(1, 3))
+    else:
+        after = data_ops(session, 2) + [xmit(), xmit()]
+        rng.shuffle(after)
+    ops = setup() + [observe, respond] + after + [observe, get]
+    return dict(version=1, id=trace_id, ops=ops, steer=steer, expect=D1_SESSION)
