@@ -17,6 +17,18 @@ and the timestamp is newer than that peer's last one.
     consume_response(...)  the initiator's checks of a response (raises)
     keepalive(sending_key, receiver_index) -> 32 bytes (wg0's keepalive)
     tai64n(sec, nsec)      the timestamp tai64n_now encodes from a clock read
+
+Stage D2 (the data plane, docs/2026-10-04-d2-data-plane.md, sections 2, 4, 6):
+
+    initiator_session(response) / responder_session(response) -> Session
+                           wg0's keys and indices for either role
+    wg0_response(...)      the response wg0 sends to a peer's initiation
+    data_message(sending_key, receiver_index, counter, plaintext)
+                           a message_data, padded as encrypt_packet pads
+    ipv4_udp(...) / ipv6_udp(...)
+                           inner packets, honest or dishonest
+    xmit_packet(family, dst, payload)
+                           the inner packet the fixture's stack hands wg_xmit
 """
 from dataclasses import dataclass
 import hashlib
@@ -370,3 +382,201 @@ def steered_initiation(responder_public, initiator_private, ephemeral_raw, sec, 
     values: `ephemeral_raw` is the random draw before the clamp, (sec, nsec)
     the clock read tai64n_now rounds, `sender_index` the index draw."""
     return initiation(responder_public, initiator_private, clamp(ephemeral_raw), tai64n(sec, nsec), sender_index)
+
+
+# Stage D2: the data plane. A session from wg0's side, data messages in both
+# directions, and the inner IP packets they carry.
+
+DEVICE_MTU = 1420                 # wg0's MTU, and the route's dst MTU (design section 2)
+MESSAGE_PADDING_MULTIPLE = 16
+MESSAGE_DATA_HEADER = 16          # le32 type, le32 key_idx, le64 counter
+COUNTER_BITS_TOTAL = 8192
+COUNTER_WINDOW_SIZE = COUNTER_BITS_TOTAL - 64          # COUNTER_REDUNDANT_BITS = BITS_PER_LONG
+REJECT_AFTER_MESSAGES = 2**64 - 1 - COUNTER_WINDOW_SIZE - 1   # messages.h: U64_MAX - window - 1
+
+# The fixture (harness/guest.c): wg0's addresses (route_into_wg0), the
+# sender's port (SEND_FD, bound to [::]:51998) and the port wg_xmit sends to.
+WG0_ADDR4 = bytes([10, 255, 254, 1])
+WG0_ADDR6 = bytes.fromhex("fd00ffff000000000000000000000001")
+SENDER_PORT = 51998
+SEND_PORT = 40000
+CSUM_MANGLED_0 = 0xffff
+
+
+@dataclass(frozen=True)
+class Session:
+    """A session as wg0 holds it. `sending`/`receiving` are wg0's keys;
+    `local_index` is wg0's index (the key_idx of messages to wg0) and
+    `remote_index` the peer's (the key_idx of wg0's messages)."""
+    sending: bytes
+    receiving: bytes
+    local_index: int
+    remote_index: int
+    initiator: bool
+
+    def to_wg0(self, counter, plaintext, **kw):
+        """The message_data the peer sends to wg0 (see data_message)."""
+        return data_message(self.receiving, self.local_index, counter, plaintext, **kw)
+
+    def from_wg0(self, counter, plaintext, **kw):
+        """The message_data wg0 sends with this session."""
+        return data_message(self.sending, self.remote_index, counter, plaintext, **kw)
+
+    def open_from_wg0(self, message):
+        """Decrypt wg0's message_data: (counter, padded plaintext); raises
+        HandshakeError on another key_idx or a bad tag."""
+        index, counter, plaintext = open_data(message, self.sending)
+        if index != self.remote_index:
+            raise HandshakeError("key_idx is not the peer's index")
+        return counter, plaintext
+
+
+def initiator_session(response):
+    """wg0 initiated: `response` is the peer's (noise.response to wg0's
+    initiation). wg0 sends with the first derived key (begin_session's
+    initiator order) to the peer's sender index."""
+    return Session(response.initiator_sending, response.initiator_receiving, response.initiator_index,
+                   response.responder_index, True)
+
+
+def responder_session(response):
+    """wg0 responded: `response` is wg0's own (wg0_response). wg0 receives
+    with the first derived key, which the peer sends with."""
+    return Session(response.responder_sending, response.responder_receiving, response.responder_index,
+                   response.initiator_index, False)
+
+
+def wg0_response(peer_initiation, wg0_private, resp_ephemeral_raw, psk, wg0_index):
+    """The response wg0 (holding `wg0_private`) builds to a peer's initiation
+    from its steered draws: `resp_ephemeral_raw` (the `resp_ephemeral` draw,
+    before curve25519_generate_secret's clamp, which x25519 applies anyway)
+    and `wg0_index` (the `index_draw`). Feed it to responder_session."""
+    return response(peer_initiation, wg0_private, clamp(resp_ephemeral_raw), psk, wg0_index)
+
+
+def padding(length, mtu=DEVICE_MTU):
+    """calculate_skb_padding (send.c:141-160) for an skb of `length` bytes."""
+    align = lambda n: -(-n // MESSAGE_PADDING_MULTIPLE) * MESSAGE_PADDING_MULTIPLE
+    if not mtu:
+        return align(length) - length
+    last_unit = length % mtu if length > mtu else length
+    return min(mtu, align(last_unit)) - last_unit
+
+
+def data_message(sending_key, receiver_index, counter, plaintext, *, mtu=DEVICE_MTU, tamper=False):
+    """A message_data as encrypt_packet (send.c:162-219) builds it: le32 4,
+    le32 receiver_index (the receiver's key index), le64 counter, then the
+    ChaCha20-Poly1305 encryption of the plaintext padded with zeros as
+    calculate_skb_padding pads it (ALIGN(len, 16) clamped by the MTU), with
+    the nonce `4 zero bytes || le64 counter` and no associated data.
+    `tamper` flips a bit of the tag."""
+    if not 0 <= counter < 2**64:
+        raise ValueError("the counter is a u64")
+    padded = plaintext + bytes(padding(len(plaintext), mtu))
+    sealed = aead_encrypt(sending_key, _nonce(counter), padded, b"")
+    if tamper:
+        sealed = _flip_last(sealed)
+    return struct.pack("<IIQ", 4, receiver_index, counter) + sealed
+
+
+def message_data_len(plaintext_len):
+    """message_data_len (messages.h): what update_rx_stats adds for a
+    decrypted skb of `plaintext_len` bytes (padding included)."""
+    return MESSAGE_DATA_HEADER + plaintext_len + 16
+
+
+# Inner packets. Addresses are bytes (4 or 16); every multi-byte field is
+# big-endian.
+
+def _sum16(data):
+    if len(data) % 2:
+        data += b"\0"
+    total = sum(struct.unpack(f">{len(data) // 2}H", data))
+    while total >> 16:
+        total = (total & 0xffff) + (total >> 16)
+    return total
+
+
+def inet_checksum(data):
+    """The Internet checksum (RFC 1071): the complement of the folded
+    one's-complement sum."""
+    return ~_sum16(data) & 0xffff
+
+
+def _udp(src, dst, sport, dport, payload, checksum, ulen, pseudo):
+    ulen = 8 + len(payload) if ulen is None else ulen
+    header = struct.pack(">HHHH", sport, dport, ulen, 0)
+    correct = inet_checksum(pseudo(ulen) + header + payload) or CSUM_MANGLED_0
+    if checksum == "correct":
+        value = correct
+    elif checksum == "wrong":   # nonzero, and not the correct sum in either representation of zero
+        value = 0x1234 if correct != 0x1234 else 0x4321
+    elif checksum == "zero":
+        value = 0
+    elif type(checksum) is int and 0 <= checksum <= 0xffff:
+        value = checksum
+    else:
+        raise ValueError(f"unknown checksum {checksum!r}")
+    return header[:6] + struct.pack(">H", value) + payload
+
+
+def ipv4_udp(src, dst, sport, dport, payload, *, checksum="correct", tot_len=None, ulen=None, version=4,
+             ttl=64, ident=0, df=True, tos=0, protocol=17):
+    """An IPv4/UDP packet without options: version/ihl `version`/5, the
+    header checksum correct over the header as written. `tot_len`, `ulen`
+    and `version` override the honest values (the dishonest variants);
+    `checksum` is the UDP checksum: "correct" (0 sent as CSUM_MANGLED_0),
+    "wrong" (nonzero and incorrect), "zero", or a value."""
+    if len(src) != 4 or len(dst) != 4:
+        raise ValueError("IPv4 addresses are 4 bytes")
+    pseudo = lambda n: src + dst + struct.pack(">BBH", 0, protocol, n)
+    udp = _udp(src, dst, sport, dport, payload, checksum, ulen, pseudo)
+    tot_len = 20 + len(udp) if tot_len is None else tot_len
+    header = struct.pack(">BBHHHBBH4s4s", (version << 4) | 5, tos, tot_len, ident, 0x4000 if df else 0, ttl,
+                         protocol, 0, src, dst)
+    header = header[:10] + struct.pack(">H", inet_checksum(header)) + header[12:]
+    return header + udp
+
+
+def ipv6_udp(src, dst, sport, dport, payload, *, checksum="correct", payload_len=None, ulen=None, version=6,
+             hop_limit=64, flow_label=0, traffic_class=0, next_header=17):
+    """An IPv6/UDP packet without extension headers. `payload_len`, `ulen`
+    and `version` override the honest values; `checksum` as for ipv4_udp
+    (a zero UDP checksum is dropped on IPv6)."""
+    if len(src) != 16 or len(dst) != 16:
+        raise ValueError("IPv6 addresses are 16 bytes")
+    pseudo = lambda n: src + dst + struct.pack(">I3xB", n, next_header)
+    udp = _udp(src, dst, sport, dport, payload, checksum, ulen, pseudo)
+    payload_len = len(udp) if payload_len is None else payload_len
+    first = (version << 28) | (traffic_class << 20) | flow_label
+    return struct.pack(">IHBB", first, payload_len, next_header, hop_limit) + src + dst + udp
+
+
+def to_wg0(family, src, payload, sport=12345, **kw):
+    """An inner UDP packet for wg0's local address and the sender's port
+    (51998), from `src`: delivered to the fixture's sender socket when the
+    source is in the peer's allowed IPs and the packet passes the stack
+    (design section 4)."""
+    build = ipv4_udp if family == 4 else ipv6_udp
+    return build(src, WG0_ADDR4 if family == 4 else WG0_ADDR6, sport, SENDER_PORT, payload, **kw)
+
+
+def xmit_packet(family, dst, payload):
+    """The packet the fixture's stack hands wg_xmit for a `wg_xmit` operation
+    (design section 2) after skb_checksum_help: from wg0's address, port
+    51998 to `dst` port 40000. IPv4: tos 0, DF (IP_PMTUDISC_DO), id 0, TTL 64.
+    IPv6: traffic class and flow label 0 (IPV6_AUTOFLOWLABEL off), hop limit
+    64. The UDP checksum is complete, 0 written as CSUM_MANGLED_0."""
+    if family == 4:
+        return ipv4_udp(WG0_ADDR4, dst, SENDER_PORT, SEND_PORT, payload)
+    if family == 6:
+        if dst[0] == 0xfe and dst[1] & 0xc0 == 0x80:
+            raise ValueError("fe80::/10 destinations take wg0's random link-local source")
+        return ipv6_udp(WG0_ADDR6, dst, SENDER_PORT, SEND_PORT, payload)
+    raise ValueError("family 4 or 6")
+
+
+def wg0_data(session, counter, family, dst, payload):
+    """The message_data wg0 sends for a `wg_xmit` of `payload` to `dst`
+    under `session`, with nonce `counter`."""
+    return session.from_wg0(counter, xmit_packet(family, dst, payload))
