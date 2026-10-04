@@ -9,7 +9,32 @@
  };
  
  struct kcov_remote_area {
-@@ -439,6 +441,7 @@
+@@ -85,6 +87,7 @@
+ };
+ 
+ static DEFINE_SPINLOCK(kcov_remote_lock);
++static struct kcov *kcov_dispatch_kcov;		/* LEANUX: see kcov_dispatch_start */
+ static DEFINE_HASHTABLE(kcov_remote_map, 4);
+ static struct list_head kcov_remote_areas[2] = {
+ 	LIST_HEAD_INIT(kcov_remote_areas[0]), LIST_HEAD_INIT(kcov_remote_areas[1])
+@@ -385,6 +388,7 @@
+ 	kcov_task_reset(t);
+ 	t->kcov_handle = current->kcov_handle;
+ 	t->kcov_softirq = 0;
++	t->kcov_leanux_dropped = 0;
+ 	t->kcov_saved_mode = 0;
+ 	t->kcov_saved_size = 0;
+ 	t->kcov_saved_area = NULL;
+@@ -415,6 +419,8 @@
+ 		hash_del(&remote->hnode);
+ 		kfree(remote);
+ 	}
++	if (kcov_dispatch_kcov == kcov)
++		kcov_dispatch_kcov = NULL;	/* LEANUX: disarm with the handles */
+ 	/* Do reset before unlock to prevent races with kcov_remote_start(). */
+ 	kcov_reset(kcov);
+ 	spin_unlock_irqrestore(&kcov_remote_lock, flags);
+@@ -439,6 +445,7 @@
  	if (refcount_dec_and_test(&kcov->refcount)) {
  		kcov_remote_reset(kcov);
  		vfree(kcov->area);
@@ -17,7 +42,7 @@
  		kfree(kcov);
  	}
  }
-@@ -692,6 +695,11 @@
+@@ -692,6 +699,15 @@
  	}
  }
  
@@ -25,11 +50,15 @@
 +#define KCOV_LEANUX_STEER_STATUS	_IOR('c', 201, unsigned long)
 +static long kcov_steer_load(struct kcov *kcov, void __user *arg);
 +static long kcov_steer_status(struct kcov *kcov, void __user *arg);
++#define KCOV_LEANUX_DISPATCH_LOAD	_IOW('c', 202, unsigned long)
++#define KCOV_LEANUX_SECTION_STATUS	_IOR('c', 203, unsigned long)
++static long kcov_dispatch_load(struct kcov *kcov, void __user *arg);
++static long kcov_section_status(struct kcov *kcov, void __user *arg);
 +
  static long kcov_ioctl(struct file *filep, unsigned int cmd, unsigned long arg)
  {
  	struct kcov *kcov;
-@@ -729,6 +737,10 @@
+@@ -729,6 +745,14 @@
  		kcov->mode = KCOV_MODE_INIT;
  		spin_unlock_irqrestore(&kcov->lock, flags);
  		return 0;
@@ -37,10 +66,14 @@
 +		return kcov_steer_load(kcov, (void __user *)arg);
 +	case KCOV_LEANUX_STEER_STATUS:
 +		return kcov_steer_status(kcov, (void __user *)arg);
++	case KCOV_LEANUX_DISPATCH_LOAD:
++		return kcov_dispatch_load(kcov, (void __user *)arg);
++	case KCOV_LEANUX_SECTION_STATUS:
++		return kcov_section_status(kcov, (void __user *)arg);
  	case KCOV_REMOTE_ENABLE:
  		if (get_user(remote_num_handles, (unsigned __user *)(arg +
  				offsetof(struct kcov_remote_arg, num_handles))))
-@@ -1125,3 +1137,238 @@
+@@ -1125,3 +1149,396 @@
  }
  
  device_initcall(kcov_init);
@@ -187,6 +220,7 @@
 +		pos = READ_ONCE(area[0]);
 +		if (pos + 3 + nwords >= t->kcov_size) {
 +			WRITE_ONCE(area[0], t->kcov_size - 1);
++			t->kcov_leanux_dropped++;
 +			return;
 +		}
 +		seq = atomic64_inc_return(&kcov_choice_seq);
@@ -210,6 +244,7 @@
 +		if ((start + nrec * KCOV_WORDS_PER_CMP) * sizeof(u64) >
 +		    t->kcov_size * sizeof(unsigned long)) {
 +			WRITE_ONCE(area[0], (t->kcov_size - 1) / KCOV_WORDS_PER_CMP);
++			t->kcov_leanux_dropped++;
 +			return;
 +		}
 +		seq = atomic64_inc_return(&kcov_choice_seq);
@@ -279,25 +314,200 @@
 +	spin_unlock_irqrestore(&kcov->lock, flags);
 +	return copy_to_user(arg, status, sizeof(status)) ? -EFAULT : 0;
 +}
++
++/*
++ * LEANUX dispatch sections (choice-stream strategy, sections 4.3-4.4): the
++ * deferred units of a trace are collected by dispatch, not per call site.
++ * The guest's parent arms its remote KCOV instance with the dispatch set
++ * (KCOV_LEANUX_DISPATCH_LOAD: function addresses the host resolved from
++ * vmlinux). While it is armed, process_one_work opens a remote section under
++ * the instance's common handle iff the work function is in the set, and the
++ * NET_RX vector in handle_softirqs does the same iff net_rx_action is. Each
++ * section writes a start record (kind 300, the function's address) and a
++ * stop record (kind 301, the number of records dropped in the section),
++ * sequence-numbered like every other record. KCOV's nesting rules hold: no
++ * section in a task that already collects, and only a softirq section inside
++ * a task section. A section that cannot open (unregistered handle, no area,
++ * a nesting violation) or that loses records increments a counter, which
++ * the parent reads back (KCOV_LEANUX_SECTION_STATUS) and fails on.
++ */
++#define KCOV_DISPATCH_MAX 16
++static struct {
++	u64 handle;
++	u32 n;
++	unsigned long funcs[KCOV_DISPATCH_MAX];
++} kcov_dispatch;				/* under kcov_remote_lock */
++static atomic_t kcov_sections_dropped, kcov_sections_opened;
++
++/* Whether the current section's area has no room left (PCs may be lost). */
++static bool notrace kcov_section_area_full(struct task_struct *t)
++{
++	u64 *area = t->kcov_area;
++
++	if (t->kcov_mode == KCOV_MODE_TRACE_PC)
++		return READ_ONCE(area[0]) + 1 >= t->kcov_size;
++	return 1 + (READ_ONCE(area[0]) + 1) * KCOV_WORDS_PER_CMP > t->kcov_size;
++}
++
++/* Whether kcov_remote_stop's move fits the instance's area in full. */
++static bool notrace kcov_section_move_fits(struct task_struct *t)
++{
++	struct kcov *kcov = t->kcov;
++	u64 dst = READ_ONCE(*(u64 *)kcov->area), src = READ_ONCE(*(u64 *)t->kcov_area);
++
++	if (kcov->mode == KCOV_MODE_TRACE_PC)
++		return dst + src <= kcov->size - 1;
++	return dst + src <= (kcov->size - 1) / KCOV_WORDS_PER_CMP;
++}
++
++void notrace kcov_dispatch_start(struct kcov_dispatch_section *s, void *func)
++{
++	struct task_struct *t = current;
++	struct kcov *kcov;
++	unsigned long flags, ip = (unsigned long)func;
++	bool member = false;
++	u64 handle;
++	u32 i;
++
++	s->open = false;
++	if (!READ_ONCE(kcov_dispatch_kcov))
++		return;
++	spin_lock_irqsave(&kcov_remote_lock, flags);
++	kcov = kcov_dispatch_kcov;
++	for (i = 0; kcov && i < kcov_dispatch.n; i++)
++		if (kcov_dispatch.funcs[i] == ip)
++			member = true;
++	handle = kcov_dispatch.handle;
++	spin_unlock_irqrestore(&kcov_remote_lock, flags);
++	if (!member)
++		return;
++	if (in_task() ? kcov_mode_enabled(READ_ONCE(t->kcov_mode)) : !in_softirq_really() || t->kcov_softirq) {
++		atomic_inc(&kcov_sections_dropped);	/* would nest */
++		return;
++	}
++	s->saved_dropped = t->kcov_leanux_dropped;
++	t->kcov_leanux_dropped = 0;
++	kcov_remote_start(handle);
++	if (in_task() ? !kcov_mode_enabled(READ_ONCE(t->kcov_mode)) || t->kcov != kcov : !t->kcov_softirq) {
++		t->kcov_leanux_dropped = s->saved_dropped;
++		atomic_inc(&kcov_sections_dropped);	/* not opened */
++		return;
++	}
++	atomic_inc(&kcov_sections_opened);
++	s->open = true;
++	kcov_choice_write(t, 300, _RET_IP_, &ip, sizeof(ip));
++}
++EXPORT_SYMBOL(kcov_dispatch_start);
++
++void notrace kcov_dispatch_stop(struct kcov_dispatch_section *s)
++{
++	struct task_struct *t = current;
++	u64 dropped;
++
++	if (!s->open)
++		return;
++	if (kcov_section_area_full(t))
++		t->kcov_leanux_dropped++;
++	dropped = t->kcov_leanux_dropped;
++	kcov_choice_write(t, 301, _RET_IP_, &dropped, sizeof(dropped));
++	if (t->kcov_leanux_dropped || !kcov_section_move_fits(t))
++		atomic_inc(&kcov_sections_dropped);
++	kcov_remote_stop();
++	t->kcov_leanux_dropped = s->saved_dropped;
++}
++EXPORT_SYMBOL(kcov_dispatch_stop);
++
++/* LEANUX: arm: { u32 n; u32 pad; u64 funcs[n]; }, on the remote instance of
++ * the calling task, under its common handle; disarmed in kcov_remote_reset. */
++static long kcov_dispatch_load(struct kcov *kcov, void __user *arg)
++{
++	u64 funcs[KCOV_DISPATCH_MAX];
++	unsigned long flags;
++	long ret = 0;
++	u32 n, i;
++
++	if (get_user(n, (u32 __user *)arg))
++		return -EFAULT;
++	if (!n || n > KCOV_DISPATCH_MAX)
++		return -EINVAL;
++	if (copy_from_user(funcs, arg + 8, n * sizeof(funcs[0])))
++		return -EFAULT;
++	spin_lock_irqsave(&kcov->lock, flags);
++	if (!kcov->remote || current->kcov != kcov || !current->kcov_handle) {
++		spin_unlock_irqrestore(&kcov->lock, flags);
++		return -EINVAL;
++	}
++	spin_lock(&kcov_remote_lock);
++	if (kcov_dispatch_kcov) {
++		ret = -EBUSY;
++	} else {
++		kcov_dispatch.handle = current->kcov_handle;
++		kcov_dispatch.n = n;
++		for (i = 0; i < n; i++)
++			kcov_dispatch.funcs[i] = funcs[i];
++		atomic_set(&kcov_sections_dropped, 0);
++		atomic_set(&kcov_sections_opened, 0);
++		kcov_dispatch_kcov = kcov;
++	}
++	spin_unlock(&kcov_remote_lock);
++	spin_unlock_irqrestore(&kcov->lock, flags);
++	return ret;
++}
++
++/* LEANUX: { u32 dropped; u32 opened; } since the instance was armed */
++static long kcov_section_status(struct kcov *kcov, void __user *arg)
++{
++	u32 status[2];
++	unsigned long flags;
++
++	spin_lock_irqsave(&kcov_remote_lock, flags);
++	if (kcov_dispatch_kcov != kcov) {
++		spin_unlock_irqrestore(&kcov_remote_lock, flags);
++		return -EINVAL;
++	}
++	status[0] = atomic_read(&kcov_sections_dropped);
++	status[1] = atomic_read(&kcov_sections_opened);
++	spin_unlock_irqrestore(&kcov_remote_lock, flags);
++	return copy_to_user(arg, status, sizeof(status)) ? -EFAULT : 0;
++}
 --- a/include/linux/kcov.h
 +++ b/include/linux/kcov.h
-@@ -44,6 +44,8 @@
+@@ -44,6 +44,12 @@
  void kcov_remote_start(u64 handle);
  void kcov_remote_stop(void);
  u64 kcov_common_handle(void);
 +/* LEANUX: a choice recorded at a generic interception point. */
 +void kcov_choice_ip(u32 kind, unsigned long ip, void *data, unsigned int len);
++/* LEANUX: a dispatch section (process_one_work, the NET_RX vector). */
++struct kcov_dispatch_section { bool open; unsigned int saved_dropped; };
++void kcov_dispatch_start(struct kcov_dispatch_section *s, void *func);
++void kcov_dispatch_stop(struct kcov_dispatch_section *s);
  
  static inline void kcov_remote_start_common(u64 id)
  {
-@@ -99,6 +101,7 @@
+@@ -99,6 +105,10 @@
  static inline void kcov_finish_switch(struct task_struct *t) {}
  static inline void kcov_remote_start(u64 handle) {}
  static inline void kcov_remote_stop(void) {}
 +static inline void kcov_choice_ip(u32 kind, unsigned long ip, void *data, unsigned int len) {}
++struct kcov_dispatch_section { bool open; };
++static inline void kcov_dispatch_start(struct kcov_dispatch_section *s, void *func) {}
++static inline void kcov_dispatch_stop(struct kcov_dispatch_section *s) {}
  static inline u64 kcov_common_handle(void)
  {
  	return 0;
+--- a/include/linux/sched.h
++++ b/include/linux/sched.h
+@@ -1491,6 +1491,9 @@
+ 	/* Collect coverage from softirq context: */
+ 	unsigned int			kcov_softirq;
+ 
++	/* LEANUX: records dropped in the current dispatch section: */
++	unsigned int			kcov_leanux_dropped;
++
+ 	/* Temporary storage for preempting remote coverage collection: */
+ 	unsigned int			kcov_saved_mode;
+ 	unsigned int			kcov_saved_size;
 --- a/drivers/char/random.c
 +++ b/drivers/char/random.c
 @@ -65,6 +65,7 @@
@@ -742,56 +952,62 @@
  EXPORT_SYMBOL(ktime_get_coarse_ts64);
  
  /*
---- a/drivers/net/wireguard/send.c
-+++ b/drivers/net/wireguard/send.c
-@@ -17,7 +17,7 @@
- #include <net/ip_tunnels.h>
- #include <net/udp.h>
- #include <net/sock.h>
--
+--- a/kernel/workqueue.c
++++ b/kernel/workqueue.c
+@@ -55,6 +55,7 @@
+ #include <linux/kvm_para.h>
+ #include <linux/delay.h>
+ #include <linux/irq_work.h>
 +#include <linux/kcov.h>
- static void wg_packet_send_handshake_initiation(struct wg_peer *peer)
- {
- 	struct message_handshake_initiation packet;
-@@ -48,8 +48,8 @@
- 	struct wg_peer *peer = container_of(work, struct wg_peer,
- 					    transmit_handshake_work);
  
--	wg_packet_send_handshake_initiation(peer);
--	wg_peer_put(peer);
-+	kcov_remote_start_common(peer->device->kcov_handle); wg_packet_send_handshake_initiation(peer);
-+	wg_peer_put(peer); kcov_remote_stop();
- }
+ #include "workqueue_internal.h"
  
- void wg_packet_send_queued_handshake_initiation(struct wg_peer *peer,
---- a/drivers/net/wireguard/device.c
-+++ b/drivers/net/wireguard/device.c
-@@ -10,7 +10,7 @@
- #include "ratelimiter.h"
- #include "peer.h"
- #include "messages.h"
--
+@@ -3169,6 +3170,7 @@
+ 	unsigned long work_data;
+ 	int lockdep_start_depth, rcu_start_depth;
+ 	bool bh_draining = pool->flags & POOL_BH_DRAINING;
++	struct kcov_dispatch_section section;	/* LEANUX */
+ #ifdef CONFIG_LOCKDEP
+ 	/*
+ 	 * It is permissible to free the struct work_struct from
+@@ -3261,7 +3263,9 @@
+ 	 */
+ 	lockdep_invariant_state(true);
+ 	trace_workqueue_execute_start(work);
++	kcov_dispatch_start(&section, worker->current_func);	/* LEANUX */
+ 	worker->current_func(work);
++	kcov_dispatch_stop(&section);
+ 	/*
+ 	 * While we must be careful to not use "work" after this, the trace
+ 	 * point will only record its address.
+--- a/kernel/softirq.c
++++ b/kernel/softirq.c
+@@ -28,6 +28,7 @@
+ #include <linux/irq.h>
+ #include <linux/wait_bit.h>
+ #include <linux/workqueue.h>
 +#include <linux/kcov.h>
- #include <linux/module.h>
- #include <linux/rtnetlink.h>
- #include <linux/inet.h>
-@@ -320,7 +320,7 @@
- 	wg_allowedips_init(&wg->peer_allowedips);
- 	wg_cookie_checker_init(&wg->cookie_checker, wg);
- 	INIT_LIST_HEAD(&wg->peer_list);
--	wg->device_update_gen = 1;
-+	wg->device_update_gen = 1; wg->kcov_handle = kcov_common_handle();
  
- 	wg->peer_hashtable = wg_pubkey_hashtable_alloc();
- 	if (!wg->peer_hashtable)
---- a/drivers/net/wireguard/device.h
-+++ b/drivers/net/wireguard/device.h
-@@ -53,7 +53,7 @@
- 	atomic_t handshake_queue_len;
- 	unsigned int num_peers, device_update_gen;
- 	u32 fwmark;
--	u16 incoming_port;
-+	u16 incoming_port; u64 kcov_handle;
- };
+ #include <asm/softirq_stack.h>
  
- int wg_device_init(void);
+@@ -542,6 +543,7 @@
+ 	bool in_hardirq;
+ 	__u32 pending;
+ 	int softirq_bit;
++	struct kcov_dispatch_section section;	/* LEANUX */
+ 
+ 	/*
+ 	 * Mask out PF_MEMALLOC as the current task context is borrowed for the
+@@ -576,7 +578,12 @@
+ 		kstat_incr_softirqs_this_cpu(vec_nr);
+ 
+ 		trace_softirq_entry(vec_nr);
++		/* LEANUX: the NET_RX vector only (choice-stream strategy, 4.3) */
++		section.open = false;
++		if (vec_nr == NET_RX_SOFTIRQ)
++			kcov_dispatch_start(&section, h->action);
+ 		h->action();
++		kcov_dispatch_stop(&section);
+ 		trace_softirq_exit(vec_nr);
+ 		if (unlikely(prev_count != preempt_count())) {
+ 			pr_err("huh, entered softirq %u %s %p with preempt_count %08x, exited with %08x?\n",

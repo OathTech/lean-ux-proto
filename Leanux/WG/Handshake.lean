@@ -289,9 +289,9 @@ def sendBufferToPeer (pid : PeerId) (bytes : List UInt8) : M Unit := do
     if ← branch .sendSkbInet (family == AF_INET) then pure true
     else if ← branch .sendSkbInet6 (family == AF_INET6) then pure true
     else pure false   -- dev_kfree_skb; -EAFNOSUPPORT
-  -- send4/send6 (a cut point) choose the IP ident (an ICMP answer from a
-  -- closed loopback port runs in softirq outside any section: unrecorded)
-  skipCut [.ipIdentKey, .ipIdentReserve, .flowHashSecret]
+  -- send4/send6 (a cut point) choose the IP ident; the loopback delivery
+  -- runs NET_RX in a section nested in the worker's (D1 stream A)
+  skipCut [.ipIdentKey, .ipIdentReserve, .flowHashSecret, .sectionStart .netRx, .sectionStop .netRx]
   if ← branch .sendSkbOk sent then
     let some e := p.endpoint | invariant "unreachable"
     setPeer pid { p with txBytes := p.txBytes + bytes.length }

@@ -151,9 +151,11 @@ def loads_trace(line):
         raise InvalidTrace(f"invalid JSON: {exc}") from exc
 
 
-def serialize_wire(traces, steer_wire=None):
+def serialize_wire(traces, steer_wire=None, dispatch=()):
     """`steer_wire`: each steered trace's resolved schedule
-    (harness/steer.py), [(kind, length, draw, [return addresses], hex)]."""
+    (harness/steer.py), [(kind, length, draw, [return addresses], hex)].
+    `dispatch`: the dispatch set's function addresses (harness/linux.py),
+    which a batch with network traces needs."""
     traces = [validate_trace(trace) for trace in traces]
     steer_wire = steer_wire or {}
     if any("steer" in t and t["id"] not in steer_wire for t in traces):
@@ -162,7 +164,11 @@ def serialize_wire(traces, steer_wire=None):
         raise InvalidTrace("guest batch requires 1–4096 traces")
     if len({trace['id'] for trace in traces}) != len(traces):
         raise InvalidTrace("guest batch trace identifiers must be unique")
-    lines = ["LEANUX_WIRE_V1", str(len(traces))]
+    if any(uses_wireguard(t) for t in traces) and not dispatch:
+        raise InvalidTrace("network traces need the dispatch set")
+    if len(dispatch) > 16 or any(type(a) is not int or a <= 0 for a in dispatch):
+        raise InvalidTrace("dispatch set")
+    lines = ["LEANUX_WIRE_V2", str(len(traces)), " ".join(["D", str(len(dispatch))] + [f"{a:x}" for a in dispatch])]
     for trace in traces:
         schedule = steer_wire.get(trace["id"], []) if "steer" in trace else []
         lines.append(f"T {trace['id']} {len(trace['ops'])} {trace.get('rlimit_nofile', 32)} {int(uses_wireguard(trace))} {len(schedule)}")

@@ -20,7 +20,8 @@ import re
 import subprocess
 import sys
 
-from harness.linux import ARTIFACTS as LINUX_ARTIFACTS, KERNEL, LinuxRunError, run_linux
+from harness.linux import (ARTIFACTS as LINUX_ARTIFACTS, DISPATCH_SYMBOLS, KERNEL, LinuxRunError, dispatch_addresses,
+                          run_linux)
 from harness.steer import SteeringError, call_sites, resolve as resolve_steering
 from harness.trace import InvalidTrace, loads_trace, uses_wireguard, validate_trace
 from .coverage import attributable, instrumented_lines, symbolize
@@ -173,6 +174,8 @@ def non_statement(line):
 # with the steering resolver.
 from harness.steer import CHOICE_HELPERS  # noqa: E402
 RANDOM_KINDS = {1, 101, 102, 104, 108, 110}
+# Dispatch sections' start and stop records (kernel/patches/choice-stream.patch).
+SECTION_START, SECTION_STOP = 300, 301
 
 
 def load_hidden_sites():
@@ -194,10 +197,37 @@ def load_hidden_sites():
     return sites
 
 
+def pair_sections(records):
+    """A remote row's records in area order, each with the dispatched
+    function's address appended (None outside section records). A section's
+    records reach the area as one block at its stop (kcov_remote_stop), so in
+    area order every block starts with its start record and ends with its
+    stop record; a nested softirq section's block precedes its enclosing
+    one. The stop record carries only the dropped count, so it is paired with
+    its start here, before records are ordered by sequence number."""
+    out, open_ = [], []
+    for record in records:
+        func = None
+        if record[0] == SECTION_START:
+            if record[3] != 8:
+                raise InvalidOutput('section start record length')
+            func = int.from_bytes(bytes.fromhex(record[4]), 'little')
+            open_.append(func)
+        elif record[0] == SECTION_STOP:
+            if not open_:
+                raise InvalidOutput('section stop record without its start')
+            func = open_.pop()
+        out.append(list(record) + [func])
+    if open_:
+        raise InvalidOutput('section start record without its stop')
+    return out
+
+
 def hidden_records(traces, rows):
     """Each child's choice records per operation of each trace, ordered by
     sequence number across the task and remote streams:
-    {(id, mode): [[[kind, call site, seq, length, hex], ...] per op]}."""
+    {(id, mode): [[[kind, call site, seq, length, hex, section function], ...]
+    per op]}."""
     net = {t['id']: len(t['ops']) for t in traces}
     per, seen = {}, set()
     for row in rows:
@@ -208,7 +238,12 @@ def hidden_records(traces, rows):
             raise InvalidOutput('duplicate choice row')
         seen.add(row_key)
         ops = per.setdefault((row['id'], row['mode']), [[] for _ in range(net[row['id']])])
-        ops[row['index']] += row['records']
+        if row['stream'] == 'remote':
+            ops[row['index']] += pair_sections(row['records'])
+        elif any(r[0] in (SECTION_START, SECTION_STOP) for r in row['records']):
+            raise InvalidOutput('section record in the task stream')
+        else:
+            ops[row['index']] += [list(r) + [None] for r in row['records']]
     # every operation of every trace has a task row in both children
     for trace_id, count in net.items():
         for mode in ('pc', 'cmp'):
@@ -222,18 +257,20 @@ def hidden_records(traces, rows):
     return per
 
 
-def resolve_choices(per, sites, locations):
+def resolve_choices(per, sites, locations, dispatch=None):
     """Each record's site, by the consumer frame of its call chain (the first
-    frame outside the random and clock helpers): {(id, mode): [[[site id,
-    hex padded to whole words], ...] per op]}, and per-trace problems for
-    records from undeclared consumers."""
+    frame outside the random and clock helpers), or for a section record by
+    the dispatched function's symbol (`dispatch`: address -> symbol):
+    {(id, mode): [[[site id, hex padded to whole words], ...] per op]}, and
+    per-trace problems for records from undeclared consumers."""
+    dispatch = dispatch or {}
     resolved, problems, meta = {}, {}, {}
     skipped = Counter()
     for key, ops in per.items():
         out, labels = [], []
         for index, op in enumerate(ops):
             recs, op_labels = [], []
-            for raw_kind, ip, seq, length, data in op:
+            for raw_kind, ip, seq, length, data, func in op:
                 frames = [f['source'].split('/.deps/linux/')[-1].split(' ')[0] for f in locations.get(ip, [])]
                 if raw_kind == 0xffff:   # the kernel's steering mismatch marker
                     problems.setdefault(key[0], []).append(dict(index=index, label='steering',
@@ -242,6 +279,13 @@ def resolve_choices(per, sites, locations):
                 kind, steered = raw_kind & 0x7fff, bool(raw_kind & 0x8000)
                 consumer = next((src for src in frames if src.split(':')[0] not in CHOICE_HELPERS), None)
                 kind_class = 'random' if kind in RANDOM_KINDS else 'clock' if 200 <= kind <= 216 else None
+                if raw_kind in (SECTION_START, SECTION_STOP):
+                    kind_class = 'section'
+                    consumer = f'{dispatch.get(func)}:{raw_kind - SECTION_START}'
+                    frames = [dispatch.get(func, hex(func))]
+                    if raw_kind == SECTION_STOP and int.from_bytes(bytes.fromhex(data), 'little'):
+                        problems.setdefault(key[0], []).append(dict(index=index, label='section',
+                            problem='records dropped in a dispatch section', call_chain=frames))
                 entry = sites.get((kind_class, consumer)) if kind_class else None
                 if entry is None or length != entry['len']:
                     problems.setdefault(key[0], []).append(dict(index=index, label=f'choice kind {kind}',
@@ -628,6 +672,9 @@ def run_chunk(traces, out, kcov):
     outcomes = Counter()
     try:
         sites_by_key = load_hidden_sites()
+        # the mirror's section sites name functions of the dispatch set
+        if not {e['file'] for e in sites_by_key.values() if e['kind'] == 'section'} <= set(DISPATCH_SYMBOLS):
+            raise InvalidOutput('a section site outside the dispatch set')
         steer_wire = {}
         if any('steer' in t for t in traces):
             by_label = {entry['label']: entry for entry in sites_by_key.values()}
@@ -647,7 +694,10 @@ def run_chunk(traces, out, kcov):
         per = hidden_records(traces, rows)
         ips = sorted({r[1] for ops in per.values() for op in ops for r in op})
         called = symbolize([{'pcs': ips}], KERNEL / 'vmlinux') if ips else {'locations': {}}
-        records, site_problems, skipped, meta = resolve_choices(per, sites_by_key, called['locations'])
+        dispatch = {}
+        if any(uses_wireguard(t) for t in traces):
+            dispatch = dict(zip(dispatch_addresses(KERNEL), DISPATCH_SYMBOLS))
+        records, site_problems, skipped, meta = resolve_choices(per, sites_by_key, called['locations'], dispatch)
         steer_path = out / 'linux/steering.jsonl'
         status_rows = [loads(line) for line in steer_path.read_text().splitlines()] if steer_path.exists() else []
         for trace_id, found in steering_problems(traces, meta, status_rows).items():
