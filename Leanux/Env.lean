@@ -85,9 +85,10 @@ def deliverSent : M Unit := do
       | none => if !loopback then unsupported "a datagram routed back into wg0"
   modify fun w => { w with sent := [] }
 
-/-- Whether the kernel records dispatch sections (D1 sprint, stream 1 turns
-    this on with the kernel that emits them). -/
-def SECTION_RECORDS : Bool := false
+/-- Whether the kernel records dispatch sections: the `net-choice` kernel
+    since the D1 sprint (stream A) opens one per dispatch of a function in
+    the armed dispatch set (`harness/linux.py`, `DISPATCH_SYMBOLS`). -/
+def SECTION_RECORDS : Bool := true
 
 /-- A deferred unit's run: with section records, its section's start and
     stop records bracket it in the choice stream, so the order in which the

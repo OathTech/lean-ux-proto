@@ -28,6 +28,28 @@ KERNEL = Path(os.environ.get("LEANUX_KERNEL_DIR", SHARED / ".artifacts/kernel-ne
 if not (KERNEL.is_relative_to(SHARED / ".artifacts") or KERNEL.is_relative_to(ARTIFACTS)):
     raise SystemExit(f"LEANUX_KERNEL_DIR outside the artifact roots: {KERNEL}")
 OUTPUT_LIMIT = 16 * 1024 * 1024
+# The dispatch set (docs/2026-10-03-choice-stream-strategy.md, section 4.4):
+# the deferred units whose dispatch opens a KCOV section in a network trace.
+# Work items by their function (process_one_work); the NET_RX vector by
+# net_rx_action (handle_softirqs). Everything else dispatched while a trace
+# runs (vmstat, RCU, netns cleanup) is not the trace's and records nothing.
+DISPATCH_SYMBOLS = ("wg_packet_handshake_send_worker", "wg_packet_handshake_receive_worker",
+                    "wg_packet_encrypt_worker", "wg_packet_tx_worker", "net_rx_action")
+
+
+def dispatch_addresses(kernel=None, symbols=DISPATCH_SYMBOLS):
+    """Each dispatch symbol's address in the kernel's System.map (nokaslr):
+    exactly one text symbol of that name, or the run fails."""
+    found = {}
+    for line in (Path(kernel or KERNEL) / "System.map").read_text().splitlines():
+        address, kind, name = line.split()[:3]
+        if name in symbols:
+            if kind not in ("t", "T") or name in found:
+                raise ValueError(f"dispatch symbol {name} is not one text symbol")
+            found[name] = int(address, 16)
+    if set(found) != set(symbols):
+        raise ValueError(f"dispatch symbols missing: {sorted(set(symbols) - set(found))}")
+    return [found[name] for name in symbols]
 
 
 class LinuxRunError(RuntimeError):
@@ -206,9 +228,9 @@ def attach_observed(results, traces, records):
 
 
 def merge_remote(rows, remote, traces, key):
-    """Network traces carry a second, remote stream per operation (WireGuard's
-    softirq and workqueue receive paths, collected under the trace's KCOV
-    common handle). Exactly one remote record per network operation is
+    """Network traces carry a second, remote stream per operation (the
+    dispatch sections of the trace's deferred units, collected under the
+    trace's KCOV common handle). Exactly one remote record per network operation is
     appended to that operation's row: task entries first, then remote ones,
     each deduplicated in first-execution order."""
     net = {trace["id"] for trace in traces if uses_wireguard(trace)}
@@ -244,7 +266,7 @@ def _collect(outdir, traces, process_returncode):
     results, coverage, fixtures, errors, child_failures, completed, kernels = [], [], [], [], [], [], []
     comparisons, comparison_results, wireguard, observed = [], [], [], []
     remote_coverage, remote_comparisons = [], []
-    hidden, remote_hidden, steering = [], [], []
+    hidden, remote_hidden, steering, sections = [], [], [], []
     for line in (outdir / "boot.log").read_text(errors="strict").splitlines():
         line = line.rstrip("\r")
         for prefix, target in (("LEANUX_RESULT ", results), ("LEANUX_COVERAGE ", coverage),
@@ -253,7 +275,8 @@ def _collect(outdir, traces, process_returncode):
                                ("LEANUX_CMP_RESULT ", comparison_results), ("LEANUX_WG ", wireguard),
                                ("LEANUX_WGOBS ", observed), ("LEANUX_RCOVERAGE ", remote_coverage),
                                ("LEANUX_RCMP ", remote_comparisons), ("LEANUX_HIDDEN ", hidden),
-                               ("LEANUX_RHIDDEN ", remote_hidden), ("LEANUX_STEER ", steering)):
+                               ("LEANUX_RHIDDEN ", remote_hidden), ("LEANUX_STEER ", steering),
+                               ("LEANUX_SECTIONS ", sections)):
             if line.startswith(prefix):
                 try:
                     target.append(_decode_json(line[len(prefix):]))
@@ -290,6 +313,15 @@ def _collect(outdir, traces, process_returncode):
             or sorted((r["id"], r["mode"]) for r in steering) != sorted((i, m) for i in steered for m in ("pc", "cmp"))):
         raise LinuxRunError("invalid_output", "Steering status rows missing or malformed", outdir)
     _jsonl(outdir / "steering.jsonl", steering)
+    # Dispatch sections per network trace and child: none dropped (the guest
+    # fails a trace with a dropped section; this checks it reported).
+    net = {t["id"] for t in traces if uses_wireguard(t)}
+    if (any(type(r) is not dict or set(r) != {"id", "mode", "dropped", "opened"} or r["id"] not in net
+            or r["mode"] not in ("pc", "cmp") or type(r["dropped"]) is not int or type(r["opened"]) is not int
+            for r in sections)
+            or sorted((r["id"], r["mode"]) for r in sections) != sorted((i, m) for i in net for m in ("pc", "cmp"))):
+        raise LinuxRunError("invalid_output", "Section status rows missing or malformed", outdir)
+    _jsonl(outdir / "sections.jsonl", sections)
     _jsonl(outdir / "comparisons.jsonl", comparisons)
     _jsonl(outdir / "guest-errors.jsonl", errors + child_failures)
     (outdir / "fixture.json").write_text(json.dumps({
@@ -297,6 +329,7 @@ def _collect(outdir, traces, process_returncode):
         "per_trace": fixtures, "kernel_releases": kernels,
     }, indent=2) + "\n")
     if errors or child_failures:
+        # (a dropped section is a guest error: coverage_failure, dropped_sections)
         kind = errors[0].get("kind", "environment_failure") if errors else "crash"
         raise LinuxRunError(kind, "Guest trace failed; inspect guest-errors.jsonl", outdir)
     if process_returncode or completed != [f"LEANUX_BATCH_DONE traces={len(traces)} failures=0"] or len(kernels) != 1:
@@ -360,7 +393,8 @@ def run_linux(traces, outdir, *, timeout=120, steer_wire=None):
     calls boot fresh VMs. The project-wide advisory lock prevents overlapping VMs.
     """
     traces = [validate_trace(trace) for trace in traces]
-    wire = serialize_wire(traces, steer_wire)
+    dispatch = dispatch_addresses() if any(uses_wireguard(t) for t in traces) else []
+    wire = serialize_wire(traces, steer_wire, dispatch)
     outdir = Path(outdir).resolve()
     if not outdir.is_relative_to(ARTIFACTS):
         raise ValueError(f"outdir must be within task artifact root {ARTIFACTS}")

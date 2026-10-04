@@ -64,7 +64,9 @@ Use smaller guest batches when coverage would exceed this cap. Guest timeout is
 ## Guest wire format
 
 The adapter is the sole wire producer. All persistent comparisons use JSON.
-The ASCII wire begins with `LEANUX_WIRE_V1`, then a decimal trace count (1–4096).
+The ASCII wire begins with `LEANUX_WIRE_V2`, then a decimal trace count (1–4096),
+then the dispatch set: `D N` and N hex function addresses (N ≥ 1 when a trace
+uses the network fixture; `harness/linux.py` resolves them from `System.map`).
 Each trace begins `T ID N` for the validated identifier and operation count.
 Exactly N operation lines follow, each with eight decimal fields:
 

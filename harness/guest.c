@@ -58,6 +58,14 @@ struct steer_entry { uint64_t ips[4]; uint32_t kind, len, draw, pad; unsigned ch
 struct steer_arg { uint32_t n, pad; struct steer_entry e[STEER_MAX]; };
 #define KCOV_LEANUX_STEER_LOAD _IOW('c', 200, unsigned long)
 #define KCOV_LEANUX_STEER_STATUS _IOR('c', 201, unsigned long)
+/* The dispatch set (choice-stream strategy, section 4.4): the addresses of
+ * the deferred units whose dispatch opens a KCOV section, resolved by the
+ * host; one per batch. */
+#define DISPATCH_MAX 16
+struct dispatch_arg { uint32_t n, pad; uint64_t funcs[DISPATCH_MAX]; };
+static struct dispatch_arg dispatch;
+#define KCOV_LEANUX_DISPATCH_LOAD _IOW('c', 202, unsigned long)
+#define KCOV_LEANUX_SECTION_STATUS _IOR('c', 203, unsigned long)
 struct trace {
     char id[81]; unsigned count; unsigned rlimit; unsigned net; struct operation ops[MAX_OPS];
     unsigned nsteer; struct steer_entry steer[STEER_MAX];
@@ -184,6 +192,24 @@ static void network_fixture(const char *id)
         nl_receive(rtnl, 0, NULL, 0))
         fail(id, -1, "environment_failure", "lo_up");
     if (close(rtnl)) fail(id, -1, "environment_failure", "close_rtnetlink");
+}
+
+/* The inter-trace boundary (choice-stream strategy, section 4.4): delete wg0
+ * synchronously at the end of a network trace, while the parent still holds
+ * the armed remote instance. wg_destruct runs in this task (the device's
+ * priv_destructor, run by rtnl_unlock), so the device's workqueues are
+ * destroyed and its peers' timers stopped before the next trace exists. */
+static void delete_wg0(const char *id)
+{
+    int rtnl = socket(AF_NETLINK, SOCK_RAW | SOCK_CLOEXEC, NETLINK_ROUTE);
+    if (rtnl < 0) fail(id, -1, "environment_failure", "rtnetlink_socket_teardown");
+    unsigned char payload[64];
+    size_t len = sizeof(struct ifinfomsg);
+    memset(payload, 0, sizeof(payload));
+    attr(payload, &len, IFLA_IFNAME, "wg0", 4);
+    if (nl_send(rtnl, RTM_DELLINK, NLM_F_REQUEST | NLM_F_ACK, 0, payload, len, 0) || nl_receive(rtnl, 0, NULL, 0))
+        fail(id, -1, "environment_failure", "delete_wg0");
+    if (close(rtnl)) fail(id, -1, "environment_failure", "close_rtnetlink_teardown");
 }
 
 static void resolve_wireguard_family(const char *id, int fd)
@@ -473,10 +499,14 @@ static void observe(const struct trace *t, unsigned i, long first, int compariso
 /* Remote coverage for network traces. KCOV_REMOTE_ENABLE claims the calling
  * task's KCOV slot (a later KCOV_ENABLE would fail with EBUSY), so this
  * process enables it and forks the process that runs the trace: fork passes
- * the common handle down (copy_process) but not the KCOV slot. Every skb the
- * trace allocates carries the handle, and the patched kernel's WireGuard
- * receive paths collect under it into this shared mapping. This process keeps
- * the KCOV descriptor open, which keeps the handle registered, and waits. */
+ * the common handle down (copy_process) but not the KCOV slot. This process
+ * arms the instance with the dispatch set: while it is armed, the patched
+ * kernel's process_one_work and NET_RX vector open a section under the
+ * common handle for each dispatch of a function in the set, collecting into
+ * this shared mapping. This process keeps the KCOV descriptor open, which
+ * keeps the handle registered (and the instance armed), and waits; then it
+ * reads the count of sections that could not open or lost records, and a
+ * nonzero count fails the trace. */
 static unsigned long *enable_remote(const struct trace *t, int comparisons)
 {
     int fd = open("/sys/kernel/debug/kcov", O_RDWR);
@@ -497,6 +527,8 @@ static unsigned long *enable_remote(const struct trace *t, int comparisons)
         memcpy(steer.e, t->steer, t->nsteer * sizeof(steer.e[0]));
         if (ioctl(fd, KCOV_LEANUX_STEER_LOAD, &steer)) fail(t->id, -1, "coverage_failure", "load_steering");
     }
+    if (!dispatch.n) fail(t->id, -1, "invalid_input", "wire_dispatch");
+    if (ioctl(fd, KCOV_LEANUX_DISPATCH_LOAD, &dispatch)) fail(t->id, -1, "coverage_failure", "load_dispatch");
     pid_t child = fork();
     if (child < 0) fail(t->id, -1, "environment_failure", "fork_trace");
     if (child) {
@@ -509,6 +541,12 @@ static unsigned long *enable_remote(const struct trace *t, int comparisons)
                    t->id, comparisons ? "cmp" : "pc", left[0], left[1]);
             fflush(stdout);
         }
+        uint32_t sections[2];
+        if (ioctl(fd, KCOV_LEANUX_SECTION_STATUS, sections)) fail(t->id, -1, "coverage_failure", "section_status");
+        printf("LEANUX_SECTIONS {\"id\":\"%s\",\"mode\":\"%s\",\"dropped\":%u,\"opened\":%u}\n",
+               t->id, comparisons ? "cmp" : "pc", sections[0], sections[1]);
+        fflush(stdout);
+        if (sections[0]) fail(t->id, -1, "coverage_failure", "dropped_sections");
         _exit(WIFEXITED(status) ? WEXITSTATUS(status) : 1);
     }
     /* The trace process: the mapping stays, the descriptor goes. */
@@ -678,9 +716,10 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             if (ret > 16) fail(t->id, i, "environment_failure", "read_return_exceeds_buffer");
             memcpy(result[i].bytes, buffer, (size_t)ret);
         }
-        /* The remote stream: WireGuard's receive paths in softirq and on the
-         * handshake workqueue, tagged with this process's common handle
-         * through the skbs it allocated. wg_inject waited for the worker. */
+        /* The remote stream: the dispatch sections (the NET_RX vector and
+         * the work items in the dispatch set) that stopped during this
+         * operation, collected under this process's common handle. The
+         * operations that queue work waited for it. */
         unsigned long remote_count = 0;
         if (remote) {
             remote_count = __atomic_load_n(&remote[0], __ATOMIC_RELAXED);
@@ -714,6 +753,7 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         }
         printf("]}\n");
         fflush(stdout);
+        if (t->net) delete_wg0(t->id);
         _exit(0);
     }
     printf("LEANUX_RESULT {\"version\":1,\"id\":\"%s\",\"observations\":[", t->id);
@@ -727,6 +767,7 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
     }
     printf("],\"branches\":[]}\n");
     fflush(stdout);
+    if (t->net) delete_wg0(t->id);
     _exit(0);
 }
 
@@ -737,7 +778,7 @@ int main(int argc, char **argv)
     FILE *input = fopen(argv[1], "r");
     if (!input) fail("batch", -1, "environment_failure", "open_wire");
     unsigned total;
-    if (!fgets(line, sizeof(line), input) || strcmp(line, "LEANUX_WIRE_V1\n") ||
+    if (!fgets(line, sizeof(line), input) || strcmp(line, "LEANUX_WIRE_V2\n") ||
         !fgets(line, sizeof(line), input) || sscanf(line, "%u", &total) != 1 || total < 1 || total > 4096)
         fail("batch", -1, "invalid_input", "wire_header");
     struct utsname identity;
@@ -749,6 +790,17 @@ int main(int argc, char **argv)
     unsigned char seed;
     if (syscall(SYS_getrandom, &seed, 1, 0) != 1) fail("batch", -1, "environment_failure", "getrandom");
     printf("LEANUX_KERNEL %s\n", identity.release);
+    /* D n addr...: the dispatch set, in hex */
+    int consumed = 0;
+    if (!fgets(line, sizeof(line), input) || sscanf(line, "D %u%n", &dispatch.n, &consumed) != 1 || dispatch.n > DISPATCH_MAX)
+        fail("batch", -1, "invalid_input", "wire_dispatch");
+    for (unsigned k = 0; k < dispatch.n; ++k) {
+        int more = 0;
+        if (sscanf(line + consumed, " %" SCNx64 "%n", &dispatch.funcs[k], &more) != 1 || !dispatch.funcs[k])
+            fail("batch", -1, "invalid_input", "wire_dispatch");
+        consumed += more;
+    }
+    if (strcmp(line + consumed, "\n")) fail("batch", -1, "invalid_input", "wire_dispatch");
     unsigned failures = 0;
     for (unsigned t = 0; t < total; ++t) {
         static struct trace trace;

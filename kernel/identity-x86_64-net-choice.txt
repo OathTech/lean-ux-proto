@@ -1,16 +1,19 @@
 # Oracle kernel for the choice stream (docs/2026-10-03-choice-stream-strategy.md):
-# step 1 user-approved 2026-10-03; step 2 (steering) awaiting the user's approval.
-# kernel/config-x86_64-net with kernel/patches/wireguard-kcov-remote.patch
-# (sha256 503c899d061530af6d250ed018466b7ba1cc77407f3a3492edf031e20d9cfe07) and
-# kernel/patches/choice-stream.patch (sha256 9b75e58e2dba2c7012af1f2a4ef7f88d74ff052553fc79e0cfdbb5234499c252),
-# built with LEANUX_KERNEL_PROFILE=net-choice. The choice-stream patch records
-# random draws and clock reads at generic interception points
-# (drivers/char/random.c, kernel/time/timekeeping.c), lets a trace steer named
-# call sites through a per-handle schedule loaded by ioctl (kernel/kcov.c),
-# and keeps the handshake send worker's remote section (send.c, device.c,
-# device.h; line counts preserved). Of these only the WireGuard files are
-# anchored. Its DWARF names .deps/linux (via -fdebug-prefix-map).
+# step 1 user-approved 2026-10-03; step 2 (steering) and the D1 sprint's
+# dispatch sections (stream A) awaiting the user's approval.
+# kernel/config-x86_64-net (unchanged) with kernel/patches/choice-stream.patch
+# (sha256 b5b92f282cb49853e34438f8b93b3dac50e2d7664e537fa1011700ea16002cf5)
+# applied alone to the locked source, built with LEANUX_KERNEL_PROFILE=net-choice.
+# The patch (kernel/patches/gen-choice-stream.py) records random draws and
+# clock reads at generic interception points (drivers/char/random.c,
+# kernel/time/timekeeping.c), lets a trace steer named call sites through a
+# per-handle schedule loaded by ioctl (kernel/kcov.c), and opens dispatch
+# sections in process_one_work (kernel/workqueue.c) and the NET_RX vector
+# (kernel/softirq.c) for the armed dispatch set, with start and stop records
+# and a dropped-section counter (kernel/kcov.c, include/linux/kcov.h,
+# include/linux/sched.h). No anchored file and no WireGuard file is touched.
+# Its DWARF names .deps/linux (via -fdebug-prefix-map).
 # Path-independent identity from scripts/kernel-identity.py:
-d0123d1b8c304e5f807d687ee762e6ef56b4a44a254f0a551cb2c44fea579554
+705a5e1d106cf312e9bba53c2f48c6b46fdba9794f841c47b34b7dd3a2dc7037
 # vmlinux sha256 of the build the evidence used (path-dependent):
-04f2959f17d675286010f7867cadb66ce3b74601f17610f4283a94fd821e6124
+18794d9ea7ef459c93864fa512ece2d3a9ad5fac0d432c1bf587209a8506c75e

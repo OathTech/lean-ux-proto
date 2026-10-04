@@ -68,9 +68,10 @@ def wgXmit (family addr len : Nat) : M Int := do
   if ← branch .xmitBadProtocol !ok then unsupported "unreachable"
   let err (ret : Int) : M Int := do
     -- err_icmp: icmp_ndo_send / icmpv6_ndo_send (cut points, whose rate limit
-    -- and IP output draw cut-site choices), then err:
+    -- and IP output draw cut-site choices, and whose loopback delivery runs
+    -- NET_RX in a section), then err:
     if !(← branch .xmitErrorInet (family == 4)) then _ ← branch .xmitErrorInet6 (family == 6)
-    skipCut [.icmpCredit, .ipIdentKey, .ipIdentReserve, .flowHashSecret]
+    skipCut [.icmpCredit, .ipIdentKey, .ipIdentReserve, .flowHashSecret, .sectionStart .netRx, .sectionStop .netRx]
     modifyDev fun d => { d with txErrors := d.txErrors + 1 }   -- DEV_STATS_INC(dev, tx_errors)
     return ret
   let peer ← lookupDst family addr
