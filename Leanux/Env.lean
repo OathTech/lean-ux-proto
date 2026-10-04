@@ -114,6 +114,12 @@ def runCryptWorkers : M Unit := do
       if !(← getDev).encryptQueue.isEmpty then invariant "the tx worker queued encryption"
   invariant "the tx work queue did not drain"
 
+/-- A `cond_resched` in a worker: the crypt workers it woke run here iff the
+    kernel ran them here, which the section records say (the next record is
+    the encrypt worker's section start). A scheduling choice, captured. -/
+def cryptYield : M Unit := do
+  if (← peekHiddenSite) == some (HiddenSite.sectionStart .encryptWorker).info.id then runCryptWorkers
+
 /-- Crypt work queued by a system call itself (a session's keepalive or
     staged packets sent from `wg_set` or `wg_xmit`): when the kworker runs it
     is not determined. -/
@@ -193,7 +199,7 @@ def inject (family port : Nat) (msg : List UInt8) : M Int := do
   let src ← senderSource family
   runWorker .netRx (WG.wgReceive msg src)
   -- the queued receive work runs before the guest's wait ends
-  if !(← getDev).handshakeQueue.isEmpty then runWorker .receiveWorker WG.handshakeReceiveWorker
+  if !(← getDev).handshakeQueue.isEmpty then runWorker .receiveWorker (WG.handshakeReceiveWorker cryptYield)
   -- then the crypt work the receive worker queued (a session's keepalive)
   runCryptWorkers
   deliverSent

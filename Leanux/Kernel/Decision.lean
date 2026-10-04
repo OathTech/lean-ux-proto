@@ -911,7 +911,8 @@ def Decision.info : Decision → DecisionInfo
   | .padNoMtu => d "calculate_skb_padding.no_mtu" wsd 145 [(146, 146)] [(154, 159)]
   | .padOverMtu => d "calculate_skb_padding.over_mtu" wsd 154 [(155, 155)] []
   -- encrypt_packet's `return false` exits share the epilogue
-  | .encCowHeadFailed => d "encrypt_packet.cow_head_failed" wsd 183 [(184, 184)] [(187, 187)]
+  -- `return false` at 184 shares the function's epilogue (covered on success)
+  | .encCowHeadFailed => d "encrypt_packet.cow_head_failed" wsd 183 [] [(187, 187)]
   | .encChecksumPartial => d "encrypt_packet.checksum_partial" wsd 187 [] []
   | .encChecksumHelpFailed => d "encrypt_packet.checksum_help_failed" wsd 188 [] []
   | .encCowDataFailed => d "encrypt_packet.cow_data_failed" wsd 193 [] []

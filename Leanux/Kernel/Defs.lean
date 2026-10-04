@@ -477,6 +477,15 @@ def hidden (s : HiddenSite) : M (List UInt8) := do
     set { w with hidden := some rest }
     return r.bytes.take i.len
 
+/-- The site of the next record to consume (after ambient ones), without
+    consuming it: how the environment's scheduler reads a recorded
+    scheduling choice. `none` without records (the domain filter). -/
+def peekHiddenSite : M (Option Nat) := do
+  skipAmbient
+  return match (← get).hidden with
+    | some (r :: _) => some r.site
+    | _ => none
+
 /-- A recorded clock read: the value, a signed 64-bit count of nanoseconds. -/
 def hiddenClock (s : HiddenSite) : M Int := do
   let bs ← hidden s
