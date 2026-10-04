@@ -209,7 +209,7 @@ def dishonest (why : Dishonest) : M Unit :=
 def consumeDataDone (pid : PeerId) (pkt : RxPacket) (endpoint : Endpoint) : M (Option (List UInt8)) := do
   setPeerEndpoint pid endpoint
   if ← branch .doneReceivedNew (← receivedWithKeypair pid pkt.keypair) then
-    timersHandshakeComplete pid
+    timersHandshakeComplete pid .walltimeLastHandshakeData
     sendStagedPackets pid
   keepKeyFreshRx pid
   timersAnyAuthenticatedPacketReceived pid

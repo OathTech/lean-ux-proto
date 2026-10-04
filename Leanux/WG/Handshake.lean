@@ -359,10 +359,13 @@ def timersAnyAuthenticatedPacketReceived (pid : PeerId) : M Unit :=
     deletion and the attempt counter are timer state (cut);
     `sent_lastminute_handshake` is reset; the wall clock
     (`ktime_get_real_ts64`, a recorded `struct timespec64`) becomes the
-    dump's `last_handshake`. -/
-def timersHandshakeComplete (pid : PeerId) : M Unit := do
+    dump's `last_handshake`. `site` is the read's recorded consumer: the
+    caller, since the read is a tail jump (D2 stream B: the response arm of
+    the handshake receive path by default; `consume_data_done` on key
+    confirmation). -/
+def timersHandshakeComplete (pid : PeerId) (site : HiddenSite := .walltimeLastHandshake) : M Unit := do
   setPeer pid { (← getPeer pid) with sentLastminuteHandshake := false }
-  let now ← hidden .walltimeLastHandshake
+  let now ← hidden site
   setPeer pid { (← getPeer pid) with walltimeLastHandshake := now }
 
 /-- wg_timers_any_authenticated_packet_traversal (timers.c:212-217). A
