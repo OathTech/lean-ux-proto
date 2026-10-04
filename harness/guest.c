@@ -716,9 +716,10 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             if (ret > 16) fail(t->id, i, "environment_failure", "read_return_exceeds_buffer");
             memcpy(result[i].bytes, buffer, (size_t)ret);
         }
-        /* The remote stream: WireGuard's receive paths in softirq and on the
-         * handshake workqueue, tagged with this process's common handle
-         * through the skbs it allocated. wg_inject waited for the worker. */
+        /* The remote stream: the dispatch sections (the NET_RX vector and
+         * the work items in the dispatch set) that stopped during this
+         * operation, collected under this process's common handle. The
+         * operations that queue work waited for it. */
         unsigned long remote_count = 0;
         if (remote) {
             remote_count = __atomic_load_n(&remote[0], __ATOMIC_RELAXED);

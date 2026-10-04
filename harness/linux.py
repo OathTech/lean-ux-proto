@@ -228,9 +228,9 @@ def attach_observed(results, traces, records):
 
 
 def merge_remote(rows, remote, traces, key):
-    """Network traces carry a second, remote stream per operation (WireGuard's
-    softirq and workqueue receive paths, collected under the trace's KCOV
-    common handle). Exactly one remote record per network operation is
+    """Network traces carry a second, remote stream per operation (the
+    dispatch sections of the trace's deferred units, collected under the
+    trace's KCOV common handle). Exactly one remote record per network operation is
     appended to that operation's row: task entries first, then remote ones,
     each deduplicated in first-execution order."""
     net = {trace["id"] for trace in traces if uses_wireguard(trace)}
