@@ -31,6 +31,9 @@ from .protocol import InvalidOutput, compare, loads, parse_batch, validate_cover
 ROOT = Path(__file__).resolve().parents[1]
 ANCHORS = ROOT / 'correspondence/kcov.json'
 SUITES = ('handwritten', 'critic', 'wireguard', 'generated', 'wireguard-generated')
+# The share of generated WireGuard traces that are steered handshakes (the
+# initiator role, stage D1).
+STEERED_SHARE = 0.15
 # Suites run only on request: traces that must fail (negative controls).
 CONTROL_SUITES = ('steering-controls',)
 CHUNK = 100
@@ -76,7 +79,8 @@ def load_traces(suites, counts, seed, only, filtered):
     traces = []
     for suite in suites:
         if suite in ('generated', 'wireguard-generated'):
-            source = generate if suite == 'generated' else generate_wireguard
+            source = generate if suite == 'generated' else \
+                (lambda s, n: generate_wireguard(s, n, steered=STEERED_SHARE))
             count = counts[suite]
             candidates = [validate_trace(t) for t in source(seed, count * CANDIDATES_PER_TRACE)]
             verdicts = domain_filter(candidates)
