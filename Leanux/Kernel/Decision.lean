@@ -208,6 +208,8 @@ inductive Decision where
   -- D2 stream A: `ip_tunnel_ecn_encap` inline in wg_packet_send_staged_packets
   -- (include/linux/if_vlan.h, include/net/ip_tunnels.h, include/net/inet_ecn.h)
   | vlanTypeIsVlan | dsfieldIp | dsfieldIpv6 | ecnEncapInnerCe
+  -- D2 stream A: calculate_skb_padding's `min(mtu, ALIGN(...))`
+  | padClamped
   deriving Repr, BEq, DecidableEq, Inhabited
 
 /-- A recorded step: the decision, the outcome the mirror computed, and, for
@@ -973,6 +975,10 @@ def Decision.info : Decision → DecisionInfo
   | .dsfieldIp => d "ip_tunnel_get_dsfield.ip" iph 560 [(561, 561)] [(562, 562)]
   | .dsfieldIpv6 => d "ip_tunnel_get_dsfield.ipv6" iph 562 [(563, 563)] [(565, 565)]
   | .ecnEncapInnerCe => d "INET_ECN_encapsulate.inner_ce" ech 49 [] []
+  -- `padded_size = min(PACKET_CB(skb)->mtu, ALIGN(last_unit, ...))`
+  -- (send.c:157-158): min()'s comparison, true when the MTU is the smaller
+  -- (a branch-free select: no witness)
+  | .padClamped => d "calculate_skb_padding.clamped" wsd 157 [] []
 
 /-- The relation of a C value comparison, as written in the source
     (`lhs rel rhs`); `flag` is a mask test `(x & MASK)` against zero. -/
@@ -1161,7 +1167,7 @@ def Decision.repeatable : Decision → Bool
   | .enqueuePeerQueueFull | .enqueueRingFull | .chooseCpuInvalid | .chooseCpuOffline | .chooseCpuIndexIterate
   | .prevQueuePeeked | .cpumaskWrap => true
   -- D2 stream A: per packet of a staged list
-  | .vlanTypeIsVlan | .dsfieldIp | .dsfieldIpv6 | .ecnEncapInnerCe => true
+  | .vlanTypeIsVlan | .dsfieldIp | .dsfieldIpv6 | .ecnEncapInnerCe | .padClamped => true
   | _ => false
 
 /-- Every decision, enumerated through the constructor index. -/

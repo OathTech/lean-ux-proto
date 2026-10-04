@@ -52,7 +52,9 @@ def calculateSkbPadding (len mtu : Nat) : M Nat := do
   if ← branch .padNoMtu (mtu == 0) then return alignPadding len - len
   let lastUnit ← do
     if ← branch .padOverMtu (len > mtu) then pure (len % mtu) else pure len
-  let paddedSize := min mtu (alignPadding lastUnit)
+  -- min(mtu, ALIGN(last_unit, MESSAGE_PADDING_MULTIPLE))
+  let paddedSize ← do
+    if ← branch .padClamped (mtu < alignPadding lastUnit) then pure mtu else pure (alignPadding lastUnit)
   return paddedSize - lastUnit
 
 /-- The pure part of `encrypt_packet`: the `message_data` message for a
