@@ -30,8 +30,8 @@ MUTANTS = [
    "    if ← branch .findNodeHasPeer n.peer.isSome then found := some id\n",
    "    if ← branch .findNodeHasPeer n.peer.isSome then\n      if found.isNone then found := some id\n"),
   ('B1-M2-no-keypair-get', 'behavior-preserving: wg_noise_keypair_get omitted', 'Leanux/WG/Send.lean',
-   "  keypairGetCurrent\n  if !(← branch .stagedNoKeypair true)",
-   "  if !(← branch .stagedNoKeypair true)"),
+   '  let keypair ← keypairGet p.keypairCurrent\n',
+   '  let keypair : Option KeypairId := p.keypairCurrent\n'),
   ('B1-M3-xmit-keeps-reference', 'behavior-preserving: wg_xmit never drops its peer reference', 'Leanux/WG/Device.lean',
    "  sendStagedPackets pid\n  peerPut peer\n  return 0   -- NETDEV_TX_OK",
    "  sendStagedPackets pid\n  return 0   -- NETDEV_TX_OK"),
@@ -65,9 +65,9 @@ MUTANTS = [
   ('C-M3-no-rx-traversal', 'behavior-preserving: no traversal timer after receiving', 'Leanux/WG/Receive.lean',
    "  setPeer pid { p with rxBytes := p.rxBytes + msg.length }\n  timersTraversal pid\n",
    "  setPeer pid { p with rxBytes := p.rxBytes + msg.length }\n"),
-  ('C-M4-keypair-kept-indexed', 'behavior-preserving: the old next keypair stays in the index', 'Leanux/WG/Handshake.lean',
-   "  if (← getPeer pid).nextKeypair then keypairPutLive pid true else keypairPutNull",
-   "  if (← getPeer pid).nextKeypair then keypairPutLive pid false else keypairPutNull"),
+  ('C-M4-keypair-kept-indexed', 'behavior-preserving: the old next keypair stays in the index', 'Leanux/WG/Keypair.lean',
+   '    keypairPut next true\n',
+   '    keypairPut next false\n'),
   ('C-M5-endpoint-family-swapped', 'data: the learned endpoint tests IPv6 first', 'Leanux/WG/Handshake.lean',
    "    if ← branch .epFromSkbInet (src.family == 4) then\n",
    "    if ← branch .epFromSkbInet (src.family == 6) then\n"),
@@ -82,8 +82,8 @@ MUTANTS = [
    "  return some (le32 1 ++ le32 index ++ e ++ encStatic ++ encTime ++ List.replicate 32 0)\n",
    "  return some (le32 1 ++ (le32 index).reverse ++ e ++ encStatic ++ encTime ++ List.replicate 32 0)\n"),
   ('H-M4-psk-not-hashed', 'data: the response hash skips the PSK step', 'Leanux/WG/Handshake.lean',
-   "  let h := noiseHash (h ++ tempHash)\n",
-   "  let h := h\n"),
+   '  let (ck, tempHash, key) := (outs.head!, outs.getD 1 [], outs.getD 2 [])\n  let h := noiseHash (h ++ tempHash)\n',
+   '  let (ck, tempHash, key) := (outs.head!, outs.getD 1 [], outs.getD 2 [])\n  let h := h\n'),
   ('H-M5-no-initiation-traversal', 'behavior-preserving: no traversal timer before sending an initiation',
    'Leanux/WG/Handshake.lean',
    "    timersTraversal pid\n    -- wg_timers_any_authenticated_packet_sent: del_timer\n    let now ← hiddenClock .initLastSentAgain\n",
@@ -110,8 +110,8 @@ MUTANTS = [
    '  | .icmpCredit => ⟨22, "icmp_global_consume", "random", "net/ipv4/icmp.c", 269, 1, .cut⟩\n'),
   ('H-M11-no-fixture-cut', 'negative control: cut records in an operation without its cut point (wg_xmit)',
    'Leanux/Syscalls.lean',
-   "    Env.fixtureSend\n    let ret ← WG.wgXmit family addr\n",
-   "    let ret ← WG.wgXmit family addr\n"),
+   '    Env.fixtureSend\n    let ret ← WG.wgXmit family addr (Env.xmitPacketLen family)\n',
+   '    let ret ← WG.wgXmit family addr (Env.xmitPacketLen family)\n'),
   # Choice stream, step 2: paths only steering reaches
   ('S2-M1-lookup-ignores-type', 'state: the index lookup ignores its type mask', 'Leanux/WG/Peer.lean',
    "      if ← branch .idxTypeMatch (kinds.contains e.kind) then entry := some e\n",
@@ -126,41 +126,60 @@ MUTANTS = [
 # code, so the patterns (old, new) are filled in at integration. Entries:
 # (name, description, file, old, new, traces expected to reject it). Not run
 # until they move into MUTANTS with their patterns.
-D1_MUTANTS_DRAFT = [
-  ('D1-M1-keys-responder-order', 'data: begin_session derives the initiator\'s keys in responder order '
-   '(noise.c:834-839); only the keepalive bytes show it', 'Leanux/WG/Handshake.lean', None, None,
-   ['d1_basic', 'd1_preshared_key']),
-  ('D1-M2-key-idx-local', 'data: encrypt_packet writes the local index, not remote_index, as key_idx (send.c:207)',
-   'Leanux/WG/Data.lean', None, None, ['d1_basic']),
-  ('D1-M3-remote-index-not-updated', 'state: consume_response keeps the old remote_index instead of the '
-   'response\'s sender index (noise.c:797)', 'Leanux/WG/Handshake.lean', None, None, ['d1_basic']),
-  ('D1-M4-no-next-demotion', 'state: add_new_keypair\'s initiator arm ignores a pending next keypair '
-   '(noise.c:211-222); needs respond-then-initiate', 'Leanux/WG/Keypair.lean', None, None,
-   ['d1_respond_then_initiate']),
+D1_MUTANTS = [
+  ('D1-M1-keys-responder-order', 'data: begin_session derives the initiator\'s keys in responder order',
+   'Leanux/WG/Handshake.lean',
+   "  setKeypair kp (if initiator then { k with sending := first, receiving := second }\n",
+   "  setKeypair kp (if initiator then { k with sending := second, receiving := first }\n"),
+  ('D1-M2-key-idx-internal', 'data: encrypt_packet writes the keypair\'s internal id as key_idx (send.c:207)',
+   'Leanux/WG/Data.lean',
+   "  return some (dataMessage k.remoteIndex pkt.nonce k.sending.key (List.replicate plaintextLen 0))\n",
+   "  return some (dataMessage k.internalId pkt.nonce k.sending.key (List.replicate plaintextLen 0))\n"),
+  ('D1-M3-remote-index-not-updated', 'state: consume_response keeps the old remote_index (noise.c:797)',
+   'Leanux/WG/Handshake.lean',
+   "                                     remoteIndex := u32le msg 4, handshakeState := HANDSHAKE_CONSUMED_RESPONSE }\n",
+   "                                     handshakeState := HANDSHAKE_CONSUMED_RESPONSE }\n"),
+  ('D1-M4-no-next-demotion', 'state: add_new_keypair\'s initiator arm ignores a pending next keypair (noise.c:211-222)',
+   'Leanux/WG/Keypair.lean',
+   "    if ← branch .addKeypairHasNext next.isSome then\n",
+   "    if ← branch .addKeypairHasNext false then\n"),
   ('D1-M5-psk-not-mixed', 'data: consume_response mixes a zero PSK (noise.c:778)', 'Leanux/WG/Handshake.lean',
-   None, None, ['d1_preshared_key']),
-  ('D1-M6-nothing-unchecked', 'control: message_decrypt of encrypted_nothing is not checked (noise.c:781-783)',
-   'Leanux/WG/Handshake.lean', None, None, ['d1_tampered_nothing']),
+   "  -- psk: mix_psk (kdf with three outputs, then mix_hash of the second)\n  let outs ← kdf true true ck p.presharedKey\n  let (ck, tempHash, key) := (outs.getD 0 [], outs.getD 1 [], outs.getD 2 [])\n  let h := noiseHash (h ++ tempHash)\n  -- {}\n  let dec",
+   "  -- psk: mix_psk (kdf with three outputs, then mix_hash of the second)\n  let outs ← kdf true true ck (List.replicate 32 0)\n  let (ck, tempHash, key) := (outs.getD 0 [], outs.getD 1 [], outs.getD 2 [])\n  let h := noiseHash (h ++ tempHash)\n  -- {}\n  let dec"),
+  ('D1-M6-nothing-unchecked', 'control: encrypted_nothing\'s decryption is not checked (noise.c:781-783)',
+   'Leanux/WG/Handshake.lean',
+   "  if ← branch .crespDecryptFailed dec.isNone then return ← fail\n  let some (_, h) := dec | invariant \"unreachable\"\n",
+   "  if ← branch .crespDecryptFailed false then return ← fail\n  let h := (dec.map (·.2)).getD h\n"),
   ('D1-M7-ee-with-static', 'data: the ee DH uses wg0\'s static key instead of its ephemeral (noise.c:770)',
-   'Leanux/WG/Handshake.lean', None, None, ['d1_basic']),
-  ('D1-M8-initiator-flag-inverted', 'state: i_am_the_initiator := state == CREATED_RESPONSE (noise.c:830)',
-   'Leanux/WG/Handshake.lean', None, None, ['d1_basic', 'd1_respond_then_initiate']),
-  ('D1-M9-endpoint-not-learned', 'data: the response arm does not learn the endpoint (receive.c:172); the '
-   'keepalive goes to the configured listener, not the sender', 'Leanux/WG/Receive.lean', None, None,
-   ['d1_basic']),
-  ('D1-M10-nonce-from-one', 'data: the nonce is atomic64_inc_return without the - 1 (send.c:380)',
-   'Leanux/WG/Send.lean', None, None, ['d1_basic']),
-  ('D1-M11-keepalive-padded', 'data: encrypt_packet pads a zero-length payload to 16 bytes (send.c:176)',
-   'Leanux/WG/Data.lean', None, None, ['d1_basic']),
-  ('D1-M12-no-walltime', 'data: wg_timers_handshake_complete does not record walltime_last_handshake '
-   '(timers.c:197); the dump\'s last_handshake stays zero', 'Leanux/WG/Handshake.lean', None, None, ['d1_basic']),
+   'Leanux/WG/Handshake.lean',
+   "  let ee ← mixDh false ck p.ephemeralPrivate eph\n",
+   "  let ee ← mixDh false ck identity.staticPrivate eph\n"),
+  ('D1-M8-initiator-flag-inverted', 'state: i_am_the_initiator inverted (noise.c:830)', 'Leanux/WG/Handshake.lean',
+   "  setKeypair kp { (← getKeypair kp) with iAmTheInitiator := initiator, remoteIndex := p.remoteIndex }\n",
+   "  setKeypair kp { (← getKeypair kp) with iAmTheInitiator := !initiator, remoteIndex := p.remoteIndex }\n"),
+  ('D1-M9-endpoint-not-learned', 'data: the response arm does not learn the endpoint (receive.c:172)',
+   'Leanux/WG/Receive.lean',
+   "      let some pid := peer | invariant \"unreachable\"\n      setPeerEndpointFromSkb pid src\n      if ← branch .hsRespSessionBegun",
+   "      let some pid := peer | invariant \"unreachable\"\n      if ← branch .hsRespSessionBegun"),
+  ('D1-M10-nonce-from-one', 'data: the nonce is the counter after the increment (send.c:380)', 'Leanux/WG/Send.lean',
+   "    let nonce := k.sendingCounter   -- atomic64_inc_return(&sending_counter) - 1\n",
+   "    let nonce := k.sendingCounter + 1\n"),
+  ('D1-M11-keepalive-padded', 'data: a zero-length payload is padded to 16 bytes (send.c:141-160)',
+   'Leanux/WG/Data.lean',
+   "  let paddingLen ← calculateSkbPadding pkt.plaintextLen DEVICE_MTU\n",
+   "  let paddingLen ← (do let _ ← calculateSkbPadding pkt.plaintextLen DEVICE_MTU; pure 16)\n"),
+  ('D1-M12-no-walltime', 'data: walltime_last_handshake is consumed but not stored (timers.c:197)',
+   'Leanux/WG/Handshake.lean',
+   "  let now ← hidden .walltimeLastHandshake\n  setPeer pid { (← getPeer pid) with walltimeLastHandshake := now }\n",
+   "  let _ ← hidden .walltimeLastHandshake\n"),
   ('D1-M13-no-keep-key-fresh', 'control, behavior-preserving: the tx worker skips keep_key_fresh (send.c:259)',
-   'Leanux/WG/Data.lean', None, None, ['d1_basic']),
-  ('D1-M14-no-keypair-put-tx', 'control, behavior-preserving: the tx worker keeps its keypair reference '
-   '(send.c:280)', 'Leanux/WG/Data.lean', None, None, ['d1_basic']),
-  ('D1-M15-state-recheck-dropped', 'control: consume_response skips the state check (noise.c:763); probably '
-   'equivalent: a hashed handshake entry is in CREATED_INITIATION except within a response\'s begin_session',
-   'Leanux/WG/Handshake.lean', None, None, []),
+   'Leanux/WG/Data.lean',
+   "  if ← branch .doneDataSent dataSent then unsupported \"wg_timers_data_sent (a data packet's handshake timer)\"\n  keepKeyFresh pid\n",
+   "  if ← branch .doneDataSent dataSent then unsupported \"wg_timers_data_sent (a data packet's handshake timer)\"\n"),
+  ('D1-M14-no-keypair-put-tx', 'control, behavior-preserving: the tx worker keeps its keypair reference (send.c:280)',
+   'Leanux/WG/Data.lean',
+   "    keypairPut (some pkt.keypair) false\n    peerPut (some pid)\n    _ ← branch .txNeedResched false\n",
+   "    peerPut (some pid)\n    _ ← branch .txNeedResched false\n"),
 ]
 
 def w4(text):
@@ -181,6 +200,7 @@ def run(cmd, **kw):
 
 assert run(['git', 'status', '--porcelain'], capture_output=True, text=True).stdout == '', 'tree must be clean'
 head = run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()
+MUTANTS = MUTANTS + D1_MUTANTS
 selected = sys.argv[1:] or [m[0] for m in MUTANTS]
 results = {}
 for name, what, path, old, new in MUTANTS:

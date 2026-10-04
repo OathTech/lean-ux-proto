@@ -202,7 +202,11 @@ unhooked jitter draw (`timers.c:150`, via `data_sent`).
 - **Respond, then initiate, within 4 s.** wg0 first answers an injected
   initiation, giving it a pending next keypair, then initiates. This
   exercises the initiator arm's demotion of the next keypair
-  (`noise.c:211-222`).
+  (`noise.c:211-222`). Sending the response sets `last_sent_handshake`
+  (`send.c:89`), which rate-limits new initiations for `REKEY_TIMEOUT` (5 s,
+  longer than the trace). So the trace changes wg0's private key in between:
+  `wg_noise_expire_current_peer_keypairs` resets the rate limit and keeps
+  the next keypair (corpus `d1_respond_then_initiate`).
 - **An index collision with a live partner.** Two peers, both handshakes
   steered. The second insert's first draw equals the first peer's live
   index, then the second draw is fresh. The partner's index is steered too.

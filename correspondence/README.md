@@ -243,12 +243,10 @@ them back into wg0.
 - Temporary sockets opened between operations must not use `SOCK_CLOEXEC`:
   `close` leaves the close-on-exec bit set, and the next descriptor
   allocation would observe it.
-- The persistent-keepalive timer can fire within the bound: the worker arms it
-  when it sends. It changes nothing observable, because once a handshake is
-  queued the staged queue is never empty (no session drains it). So the
-  timer's `wg_packet_send_keepalive` allocates nothing, and its requeue finds
-  `last_sent_handshake` current. Stage B2, which completes sessions, will
-  break this invariant.
+- The persistent-keepalive timer: since stage C, an interval that could
+  expire within the 4 s bound is outside the domain (`Env.timing`,
+  `timerMayExpire`). Stage D1 completes sessions, which drain the staged
+  queue, so its traces use intervals beyond the bound (25 s).
 - The 0.4 s wait is the harness's only timing assumption. A worker slower than
   that shows as a mismatch, since the datagram appears at the next observe;
   it is never an agreement.
