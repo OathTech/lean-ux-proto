@@ -982,12 +982,12 @@ def Decision.info : Decision → DecisionInfo
   | .dataEnqueueOkEpipe => d "wg_packet_consume_data.enqueued_epipe" wrc 530 [] [(535, 535)]
   -- decrypt_packet (receive.c:242-292): the `return false` exits share the
   -- epilogue; in `a || b || c` (252-254) each operand's false side
-  -- evaluates the next line, and only the last one's true side alone
-  -- reaches the body
-  | .decNoKeypair => d "decrypt_packet.no_keypair" wrc 249 [(250, 250)] []
+  -- evaluates the next line; the body (255-256) follows any operand
+  -- `return false` (250) is the shared epilogue
+  | .decNoKeypair => d "decrypt_packet.no_keypair" wrc 249 [] []
   | .decKeyInvalid => d "decrypt_packet.key_invalid" wrc 252 [] [(253, 253)]
   | .decKeyExpired => d "decrypt_packet.key_expired" wrc 253 [] [(254, 254)]
-  | .decCounterLimit => d "decrypt_packet.counter_limit" wrc 254 [(255, 256)] [(259, 260)]
+  | .decCounterLimit => d "decrypt_packet.counter_limit" wrc 254 [] [(259, 260)]
   | .decCowDataFailed => d "decrypt_packet.cow_data_failed" wrc 271 [] []
   | .decTooManyFrags => d "decrypt_packet.too_many_frags" wrc 271 [] [(274, 275)]
   | .decSgvecFailed => d "decrypt_packet.sgvec_failed" wrc 275 [] [(278, 280)]
@@ -1039,7 +1039,8 @@ def Decision.info : Decision → DecisionInfo
   | .doneDishonestPeer => d "wg_packet_consume_data_done.dishonest_peer" wrc 408 [(409, 409)] [(411, 413)]
   -- wg_noise_received_with_keypair (noise.c:253-291)
   | .receivedNotNew => d "wg_noise_received_with_keypair.not_new" wno 262 [(263, 263)] [(265, 265)]
-  | .receivedChanged => d "wg_noise_received_with_keypair.changed" wno 269 [(272, 273)] [(280, 290)]
+  -- `return true` (290) shares the epilogue with `return false` (263)
+  | .receivedChanged => d "wg_noise_received_with_keypair.changed" wno 269 [(272, 273)] [(280, 289)]
   -- wg_allowedips_lookup_src (allowedips.c:367-375)
   | .lookupSrcV4 => d "wg_allowedips_lookup_src.inet" aip 370 [(371, 371)] [(372, 374)]
   | .lookupSrcV6 => d "wg_allowedips_lookup_src.inet6" aip 372 [(373, 373)] [(374, 374)]

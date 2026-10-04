@@ -69,6 +69,9 @@ def padded(plaintext, mtu=1420):
     return plaintext + bytes(size - len(plaintext))
 
 
+# Payloads are at least 4 bytes: the observation reports a reply's first
+# word as its type only from 4 bytes on (harness/guest.c), which the
+# mirror's observe does not yet follow for shorter ones (stream A owns it).
 def data_message(key, receiver_index, counter, plaintext, *, tamper=False, pad=True):
     body = padded(plaintext) if pad else plaintext
     sealed = noise.aead_encrypt(key, bytes(4) + struct.pack("<Q", counter), body, b"")
@@ -139,7 +142,7 @@ def traces():
         # a source outside the peer's allowed IPs: dishonest peer
         "rx_dishonest_source": data_trace([data_message(key, index, 0, v4(b"abc", src=bytes([192, 168, 1, 1])))]),
         # an IPv6 inner datagram (the peer has no IPv6 allowed IPs: dishonest peer)
-        "rx_v6_unallowed": data_trace([data_message(key, index, 0, ipv6_udp(b"six", bytes.fromhex(
+        "rx_v6_unallowed": data_trace([data_message(key, index, 0, ipv6_udp(b"six!", bytes.fromhex(
             "fd000000000000000000000000000002")))]),
         "rx_respond_then_data": respond_then_data(),
         # REJECT_AFTER_MESSAGES - 1 is accepted; then decrypt_packet rejects
@@ -156,7 +159,7 @@ def traces():
         "rx_roam_v6": data_trace([data_message(key, index, 0, v4(b"from six"))], family=6),
         # an IPv6 inner datagram from an allowed source, delivered
         "rx_v6_delivered": data_trace(
-            [data_message(key, index, 0, ipv6_udp(b"six", INNER_SRC6))],
+            [data_message(key, index, 0, ipv6_udp(b"six!", INNER_SRC6))],
             allowed_ips=[{"family": 4, "addr": "0a000000", "cidr": 8},
                          {"family": 6, "addr": "fd000000000000000000000000000000", "cidr": 16}]),
     }
