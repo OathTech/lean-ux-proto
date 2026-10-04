@@ -1,0 +1,108 @@
+{
+  "version": 1,
+  "id": "d2_staged_flush_4",
+  "ops": [
+    {
+      "op": "wg_set",
+      "config": {
+        "private_key": "1111111111111111111111111111111111111111111111111111111111111111",
+        "listen_port": 51820,
+        "peers": [
+          {
+            "public_key": "0faa684ed28867b97f4a6a2dee5df8ce974e76b7018e3f22a1c4cf2678570f20",
+            "allowed_ips": [
+              {
+                "family": 4,
+                "addr": "0a000000",
+                "cidr": 8
+              },
+              {
+                "family": 6,
+                "addr": "20010db8000000000000000000000000",
+                "cidr": 32
+              }
+            ],
+            "endpoint": {
+              "family": 4,
+              "addr": "7f000001",
+              "port": 51999
+            }
+          }
+        ]
+      }
+    },
+    {
+      "op": "wg_up"
+    },
+    {
+      "op": "wg_xmit",
+      "packet": {
+        "family": 4,
+        "dst": "0a000001",
+        "payload": "9c"
+      }
+    },
+    {
+      "op": "wg_xmit",
+      "packet": {
+        "family": 6,
+        "dst": "20010db8000000000000000000000001",
+        "payload": "bbc2c9d0d7dee5ecf3fa01080f161d242b323940474e555c636a71787f868d949ba2a9b0b7bec5ccd3dae1e8eff6fd040b121920272e353c434a51585f666d747b828990979ea5acb3bac1c8cfd6dde4ebf2f900070e151c232a31383f464d545b626970"
+      }
+    },
+    {
+      "op": "wg_xmit",
+      "packet": {
+        "family": 4,
+        "dst": "0a000001",
+        "payload": "dae1e8ef"
+      }
+    },
+    {
+      "op": "wg_xmit",
+      "packet": {
+        "family": 4,
+        "dst": "0a000001",
+        "payload": "f900070e151c232a31383f464d545b62"
+      }
+    },
+    {
+      "op": "wg_observe"
+    },
+    {
+      "op": "wg_inject",
+      "family": 4,
+      "port": 51820,
+      "message": "02000000040302010d0c0b0aff2ee45601ec1b67310c7790404585ae697331eee1c1f8cf2419731c1fff3e6bc50a223d86b8a86bf41a2bd3a1ab84f892fd9bacbc45bda46dc025e6cac665a500000000000000000000000000000000"
+    },
+    {
+      "op": "wg_observe"
+    },
+    {
+      "op": "wg_get"
+    }
+  ],
+  "steer": [
+    [
+      "init_ephemeral",
+      "8182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0"
+    ],
+    [
+      "tai64n_now",
+      "803bb16a00000000b168de3a00000000"
+    ],
+    [
+      "index_draw",
+      "0d0c0b0a"
+    ]
+  ],
+  "expect": [
+    "wg_receive_handshake_packet.response=1",
+    "wg_noise_handshake_begin_session.initiator=1",
+    "add_new_keypair.initiator=1",
+    "wg_packet_send_staged_packets.no_keypair=0",
+    "wg_packet_send_staged_packets.no_keypair=1",
+    "wg_packet_create_data_done.data_sent=1",
+    "encrypt_packet.checksum_partial=1"
+  ]
+}
