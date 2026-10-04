@@ -9,10 +9,10 @@ Shaped like the C structures of the configuration path: `struct wg_device`,
 `struct allowedips_node`. Pointers are identities into finite stores; list
 heads are ordered lists of identities.
 
-Omitted, as cut points of the configuration path with the device down: the UDP
-sockets, timers, work queues, NAPI, packet queues, keypairs (none exist before
-a handshake), the index hashtable, `dst_cache`, and the cookie keys (BLAKE2s
-outputs that nothing on this path observes). The public-key hashtable is a map:
+Omitted, as cut points: the UDP sockets, timers, NAPI, `dst_cache`, and the
+cookie keys (BLAKE2s outputs that nothing on the modeled paths observes).
+Keypairs live in the device's keypair store (`Device.keypairs`), referenced
+by identity from the peer's `keypairs` slots and the index hashtable. The public-key hashtable is a map:
 its bucketing uses a random `siphash` key, so bucket order is unobservable.
 -/
 
@@ -150,8 +150,6 @@ structure Peer where
   lastSentHandshake : Int := 0
   /-- `handshake.last_initiation_consumption` (ns, s64). -/
   lastInitiationConsumption : Int := 0
-  /-- The pending next keypair's `birthdate` (ns), from `derive_keys`. -/
-  keypairBirthdate : Int := 0
   txBytes : Nat := 0
   /-- `handshake.state`: ZEROED 0, CREATED_INITIATION 1, CONSUMED_INITIATION 2,
       CREATED_RESPONSE 3, CONSUMED_RESPONSE 4. -/
@@ -160,13 +158,10 @@ structure Peer where
   latestTimestamp : List UInt8 := List.replicate 12 0
   /-- `handshake.remote_index`, the initiator's sender index. -/
   remoteIndex : Nat := 0
-  /-- `keypairs.next_keypair` is set (a responder's session awaiting
-      confirmation). Its entry is in the index hashtable (it replaced the
-      handshake's) until the keypair is put. -/
-  nextKeypair : Bool := false
   /-- `keypairs.current_keypair`, `previous_keypair`, `next_keypair` in the
-      device's keypair store (the D1 sprint replaces `nextKeypair` with
-      these). -/
+      device's keypair store. A keypair's index entry (it replaced the
+      handshake's) stays in the index hashtable until the keypair is put
+      with `unreference_now` or released. -/
   keypairCurrent : Option KeypairId := none
   keypairPrevious : Option KeypairId := none
   keypairNext : Option KeypairId := none

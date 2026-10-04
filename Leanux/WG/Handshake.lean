@@ -231,42 +231,95 @@ def addMacToPacket (pid : PeerId) (msg : List UInt8) : M (List UInt8) := do
   if ← andM (branch .addMacCookieValid false) (branch .addMacCookieFresh false) then unsupported "unreachable"
   return body ++ mac1 ++ List.replicate 16 0
 
-/-- add_new_keypair (noise.c:198-219) for the responder. -/
-def addNewKeypair (pid : PeerId) : M Unit := do
-  if ← branch .addKeypairInitiator false then unsupported "unreachable"
-  -- next_keypair = new; wg_noise_keypair_put(old next); previous = NULL; put(old previous)
-  if (← getPeer pid).nextKeypair then keypairPutLive pid true else keypairPutNull   -- old next_keypair
-  keypairPutNull   -- the responder never has a previous keypair
-  setPeer pid { (← getPeer pid) with nextKeypair := true }
+/-- derive_keys (noise.c:392-402) into the new keypair: the birthdate (a
+    recorded clock read), then `kdf(first, second, chaining_key)` with no
+    input. The initiator's first output is its sending key, the responder's
+    its receiving key (noise.c:834-839). -/
+def deriveKeys (kp : KeypairId) (initiator : Bool) (chainingKey : List UInt8) : M Unit := do
+  let birthdate ← hiddenClock .deriveKeysBirthdate
+  let outs ← kdf true false chainingKey []
+  let sym (key : List UInt8) : SymmetricKey := { key, birthdate, isValid := true }
+  let (first, second) := (sym (outs.getD 0 []), sym (outs.getD 1 []))
+  let k ← getKeypair kp
+  setKeypair kp (if initiator then { k with sending := first, receiving := second }
+                 else { k with receiving := first, sending := second })
 
-/-- wg_noise_handshake_begin_session (noise.c:816-860) after creating a
-    response. -/
+/-- wg_noise_handshake_begin_session (noise.c:816-861): after creating a
+    response (the responder) or consuming one (the initiator). -/
 def beginSession (pid : PeerId) : M Bool := do
   let st := (← getPeer pid).handshakeState
   if ← andM (branch .sessionNotCreatedResponse (st != HANDSHAKE_CREATED_RESPONSE))
       (branch .sessionNotConsumedResponse (st != HANDSHAKE_CONSUMED_RESPONSE)) then return false
-  -- keypair_create (noise.c:98-110)
-  let ok ← envOk .kzallocKeypair
-  if ← branch .keypairCreateNoMem !ok then pure ()
-  if ← branch .sessionNoKeypair !ok then return false
-  if ← branch .sessionInitiator (st == HANDSHAKE_CONSUMED_RESPONSE) then unsupported "unreachable"
-  -- derive_keys: the birthdate (a recorded clock read), then the session keys
-  -- (not read until a data packet; stage D)
-  let birthdate ← hiddenClock .deriveKeysBirthdate
-  setPeer pid { (← getPeer pid) with keypairBirthdate := birthdate }
-  _ ← kdf true false (← getPeer pid).chainingKey []
+  let created ← keypairCreate pid
+  if ← branch .sessionNoKeypair created.isNone then return false
+  let some kp := created | invariant "unreachable"
+  let p ← getPeer pid
+  let initiator := st == HANDSHAKE_CONSUMED_RESPONSE
+  setKeypair kp { (← getKeypair kp) with iAmTheInitiator := initiator, remoteIndex := p.remoteIndex }
+  if ← branch .sessionInitiator initiator then deriveKeys kp true p.chainingKey
+  else deriveKeys kp false p.chainingKey
   handshakeZero pid
   if ← branch .sessionAlive !(← getPeer pid).isDead then
-    addNewKeypair pid
-    -- create_response hashed the handshake's entry; the keypair's takes its place
-    if !(← indexReplaceHandshake pid) then invariant "the handshake has no index entry"
+    addNewKeypair pid kp
+    -- the keypair's entry takes the handshake's place
+    if !(← indexReplaceHandshake pid kp) then invariant "the handshake has no index entry"
     return true
   unsupported "a dead peer finishing a session"
+
+/-- wg_noise_handshake_consume_response (noise.c:727-814). Returns the peer,
+    with a reference, on success. -/
+def consumeResponse (msg : List UInt8) : M (Option PeerId) := do
+  let identity := (← getDev).staticIdentity
+  if ← branch .crespNoIdentity !identity.hasIdentity then return none
+  -- `src->receiver_index`, of a handshake
+  let entry ← indexLookup [.handshake] (u32le msg 8)
+  if ← branch .crespNoHandshake entry.isNone then return none
+  let some e := entry | invariant "unreachable"
+  let pid := e.peer
+  let fail : M (Option PeerId) := do
+    peerPut (some pid)
+    return none
+  -- the copies taken under the read lock
+  let p ← getPeer pid
+  let state := p.handshakeState
+  if ← branch .crespNotCreatedInitiation (state != HANDSHAKE_CREATED_INITIATION) then return ← fail
+  -- e
+  let eph := (msg.drop 12).take 32
+  let (ck, h) ← messageEphemeral true eph p.chainingKey p.hash
+  -- ee
+  let ee ← mixDh false ck p.ephemeralPrivate eph
+  if ← branch .crespEeFailed ee.isNone then return ← fail
+  let some (ck, _) := ee | invariant "unreachable"
+  -- se
+  let se ← mixDh false ck identity.staticPrivate eph
+  if ← branch .crespSeFailed se.isNone then return ← fail
+  let some (ck, _) := se | invariant "unreachable"
+  -- psk: mix_psk (kdf with three outputs, then mix_hash of the second)
+  let outs ← kdf true true ck p.presharedKey
+  let (ck, tempHash, key) := (outs.getD 0 [], outs.getD 1 [], outs.getD 2 [])
+  let h := noiseHash (h ++ tempHash)
+  -- {}
+  let dec ← messageDecrypt ((msg.drop 44).take 16) key h
+  if ← branch .crespDecryptFailed dec.isNone then return ← fail
+  let some (_, h) := dec | invariant "unreachable"
+  -- the state recheck under the write lock (one CPU: nothing ran meanwhile)
+  if ← branch .crespStateChanged ((← getPeer pid).handshakeState != state) then return ← fail
+  setPeer pid { (← getPeer pid) with remoteEphemeral := eph, hash := h, chainingKey := ck,
+                                     remoteIndex := u32le msg 4, handshakeState := HANDSHAKE_CONSUMED_RESPONSE }
+  return some pid
 
 /-- mod_peer_timer (timers.c:30-39). -/
 def modPeerTimer (pid : PeerId) : M Unit := do
   let running := (← getDev).running
   _ ← andM (branch .modTimerRunning running) (branch .modTimerAlive !(← getPeer pid).isDead)
+
+/-- wg_timers_handshake_complete (timers.c:192-198): the retransmit timer's
+    deletion and the attempt counters are timer state (cut); the wall clock
+    (`ktime_get_real_ts64`, a recorded `struct timespec64`) becomes the
+    dump's `last_handshake`. -/
+def timersHandshakeComplete (pid : PeerId) : M Unit := do
+  let now ← hidden .walltimeLastHandshake
+  setPeer pid { (← getPeer pid) with walltimeLastHandshake := now }
 
 /-- wg_timers_any_authenticated_packet_traversal (timers.c:212-217). A
     persistent keepalive timer that could expire within the trace is outside

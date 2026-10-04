@@ -195,6 +195,8 @@ structure Kernel where
   wg : Option WG.Device := none
   /-- `peer_counter` (drivers/net/wireguard/peer.c), a global atomic. -/
   peerCounter : Nat := 0
+  /-- `keypair_counter` (drivers/net/wireguard/noise.c), a global atomic. -/
+  keypairCounter : Nat := 0
   deriving BEq
 
 /-! ## Environment oracle
@@ -249,6 +251,7 @@ inductive HiddenSite where
   | initEphemeral | respEphemeral | tai64nNow | indexDraw
   | resetLastSent | birthdateExpired | initLastSent | initLastSentAgain | respLastSent | respLastSentAgain
   | floodNow | consumptionNow | deriveKeysBirthdate | retransmitJitter
+  | walltimeLastHandshake
   | ipIdentReserve | ipIdentKey | icmpCredit | flowHashSecret
   | schedDlTimer
   /-- A dispatch section's start and stop records (kinds 300 and 301): the
@@ -290,6 +293,13 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   | .consumptionNow => ⟨12, "consumption_now", "clock", "drivers/net/wireguard/noise.c", 650, 8, .mirror⟩
   | .deriveKeysBirthdate => ⟨13, "derive_keys_birthdate", "clock", "drivers/net/wireguard/noise.c", 396, 8, .mirror⟩
   | .retransmitJitter => ⟨14, "retransmit_jitter", "random", "drivers/net/wireguard/timers.c", 186, 1, .mirror⟩
+  -- D1 stream B. `ktime_get_real_ts64(&peer->walltime_last_handshake)`
+  -- (timers.c:197) is a tail jump (`jmp ktime_get_real_ts64`), so the
+  -- record's consumer frame is the caller of `wg_timers_handshake_complete`:
+  -- the response arm of `wg_receive_handshake_packet`, inlined into the
+  -- receive worker (return address - 1 resolves to receive.c:179 in the
+  -- net-choice build). TO-CONFIRM against stream A's kernel.
+  | .walltimeLastHandshake => ⟨15, "walltime_last_handshake", "clock", "drivers/net/wireguard/receive.c", 179, 16, .mirror⟩
   | .ipIdentReserve => ⟨20, "ip_idents_reserve", "random", "net/ipv4/route.c", 482, 4, .cut⟩
   | .ipIdentKey => ⟨21, "ip_ident_key", "random", "net/ipv4/route.c", 497, 16, .cut⟩
   | .icmpCredit => ⟨22, "icmp_global_consume", "random", "net/ipv4/icmp.c", 268, 1, .cut⟩
@@ -301,7 +311,7 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
 def HiddenSite.all : List HiddenSite :=
   [.initEphemeral, .respEphemeral, .tai64nNow, .indexDraw, .resetLastSent, .birthdateExpired, .initLastSent,
    .initLastSentAgain, .respLastSent, .respLastSentAgain, .floodNow, .consumptionNow, .deriveKeysBirthdate,
-   .retransmitJitter, .ipIdentReserve, .ipIdentKey, .icmpCredit, .flowHashSecret, .schedDlTimer]
+   .retransmitJitter, .walltimeLastHandshake, .ipIdentReserve, .ipIdentKey, .icmpCredit, .flowHashSecret, .schedDlTimer]
   ++ Worker.all.flatMap fun w => [.sectionStart w, .sectionStop w]
 
 def SiteRole.name : SiteRole → String

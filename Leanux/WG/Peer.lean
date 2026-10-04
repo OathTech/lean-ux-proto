@@ -8,10 +8,9 @@ import Leanux.WG.Blake2s
 
 Cut points (no mirror state or decisions): `dst_cache_init`/`_reset`, timers,
 work items, packet queues, NAPI add/enable/disable/del, `synchronize_net`,
-`flush_workqueue`, the index hashtable, `call_rcu` freeing, the cookie keys
-(BLAKE2s), and `endpoint_eq` (a pure equality predicate). The only keypair
-is a responder's pending next keypair (`Leanux/WG/Handshake.lean`); nothing
-else takes a reference to it, so putting it frees it.
+`flush_workqueue`, `call_rcu` freeing, the cookie keys (BLAKE2s), and
+`endpoint_eq` (a pure equality predicate). The keypair store's references and
+peer removal, which clears a peer's keypairs, are in `Leanux/WG/Keypair.lean`.
 -/
 
 namespace Leanux.WG
@@ -136,13 +135,14 @@ def indexInsert (pid : PeerId) (kind : IndexKind) : M Nat := do
   unsupported "64 colliding index draws"
 
 /-- wg_index_hashtable_replace (peerlookup.c:166-190) of a peer's handshake
-    entry by its new keypair's, in place. Whether the handshake entry was
-    hashed. -/
-def indexReplaceHandshake (pid : PeerId) : M Bool := do
+    entry by its new keypair's, in place: the keypair's entry takes the
+    handshake's index and list position, and the handshake's is unhashed.
+    Whether the handshake entry was hashed. -/
+def indexReplaceHandshake (pid : PeerId) (kp : KeypairId) : M Bool := do
   let hashed ← indexHashed pid .handshake
   if ← branch .idxReplaceUnhashed !hashed then return false
   modifyDev fun d => { d with indexTable := d.indexTable.map fun e =>
-    if e.peer == pid && e.kind == .handshake then { e with kind := .keypair } else e }
+    if e.peer == pid && e.kind == .handshake then { e with kind := .keypair, keypair := some kp } else e }
   return true
 
 def NSEC_PER_SEC : Int := 1000000000
@@ -165,35 +165,6 @@ def handshakeZero (pid : PeerId) : M Unit := do
   let p ← getPeer pid
   setPeer pid { p with ephemeralPrivate := z, remoteEphemeral := z, hash := z, chainingKey := z,
                        remoteIndex := 0, handshakeState := 0 }
-
-/-- wg_noise_keypair_put (noise.c:131-140) of a peer's next keypair, which
-    only its slot references (no data packet ever took one): the put frees
-    it, and `keypair_free_kref` removes its index entry. -/
-def keypairPutLive (pid : PeerId) (unreferenceNow : Bool) : M Unit := do
-  if ← branch .keypairPutNull false then return
-  if ← branch .keypairPutUnreferenceNow unreferenceNow then indexRemove pid .keypair
-  if ← branch .keypairKrefPutReleased (← refcountDecAndTest 1) then indexRemove pid .keypair
-
-/-- wg_noise_expire_current_peer_keypairs (noise.c:179-196). `handshake_clear`
-    zeroes ephemeral state that the configuration path never set. -/
-def expireCurrentPeerKeypairs (pid : PeerId) : M Unit := do
-  requireNotPending pid "clearing the handshake"
-  -- wg_noise_handshake_clear: remove the entry, then handshake_zero
-  indexRemove pid .handshake
-  handshakeZero pid
-  resetLastSentHandshake pid
-  -- `keypair->sending.is_valid = false`: session keys are not tracked
-  _ ← branch .expireNextKeypair (← getPeer pid).nextKeypair
-  if ← branch .expireCurrentKeypair false then unsupported "current keypair present"
-
-/-- wg_noise_keypairs_clear (noise.c:151-177). -/
-def keypairsClear (pid : PeerId) : M Unit := do
-  if (← getPeer pid).nextKeypair then
-    setPeer pid { (← getPeer pid) with nextKeypair := false }
-    keypairPutLive pid true
-  else keypairPutNull   -- next_keypair
-  keypairPutNull   -- previous_keypair
-  keypairPutNull   -- current_keypair
 
 /-- wg_peer_get_maybe_zero (peer.c:71-78): a strong reference, unless the
     peer is NULL or its count already reached zero. -/
@@ -274,43 +245,5 @@ def peerMakeDead (pid : PeerId) : M Unit := do
   removeByPeer pid
   modifyDev fun d => { d with peerHashtable := d.peerHashtable.filter (·.2 != pid) }
   setPeer pid { (← getPeer pid) with isDead := true }
-
-/-- peer_remove_after_dead (peer.c:94-150). -/
-def peerRemoveAfterDead (pid : PeerId) : M Unit := do
-  if ← branch .peerRemoveNotDead !(← getPeer pid).isDead then
-    unsupported "peer_remove_after_dead: WARN_ON(!peer->is_dead)"
-  keypairsClear pid
-  -- timers stop; flush packet_crypt_wq twice; napi disable/del; flush handshake_send_wq
-  if (← getDev).numPeers == 0 then invariant "--num_peers below zero"
-  modifyDev fun d => { d with numPeers := d.numPeers - 1 }
-  peerPut (some pid)
-
-/-- wg_peer_remove (peer.c:156-165). -/
-def peerRemove (peer : Option PeerId) : M Unit := do
-  if ← branch .peerRemoveNull peer.isNone then return
-  let some pid := peer | invariant "unreachable"
-  -- flush_workqueue runs a queued worker inside this call: always a race here
-  if (← getPeer pid).handshakePending then unsupported "removing a peer with queued handshake work"
-  mayHaveSlept   -- synchronize_net(), flush_workqueue()
-  peerMakeDead pid
-  -- synchronize_net()
-  peerRemoveAfterDead pid
-
-/-- wg_peer_remove_all (peer.c:167-184). -/
-def peerRemoveAll : M Unit := do
-  free   -- wg_allowedips_free: avoid traversing each peer
-  let dead := (← getDev).peerList
-  for pid in dead do
-    if (← getPeer pid).handshakePending then unsupported "removing a peer with queued handshake work"
-  mayHaveSlept   -- synchronize_net(), flush_workqueue()
-  for pid in dead do
-    _ ← branch .peerRemoveAllIter1 true
-    peerMakeDead pid   -- then list_add_tail(&peer->peer_list, &dead_peers)
-  _ ← branch .peerRemoveAllIter1 false
-  -- synchronize_net()
-  for pid in dead do
-    _ ← branch .peerRemoveAllIter2 true
-    peerRemoveAfterDead pid
-  _ ← branch .peerRemoveAllIter2 false
 
 end Leanux.WG

@@ -305,6 +305,14 @@ def getAllowedips (family masked cidr : Nat) : M Json := do
   return Json.mkObj [("family", toJson family), ("addr", toJson (hexBE masked (if inet6 then 16 else 4))),
     ("cidr", toJson cidr)]
 
+/-- A `struct timespec64` (16 bytes: `tv_sec`, `tv_nsec`, little-endian
+    s64) as the `__kernel_timespec` the dump puts (netlink.c:124-138). -/
+def timespec (ts : List UInt8) : List Int :=
+  let s64 (bs : List UInt8) : Int :=
+    let u : Nat := bs.foldr (fun b acc => acc * 256 + b.toNat) 0
+    if u ≥ 2 ^ 63 then (u : Int) - (2 ^ 64 : Int) else (u : Int)
+  [s64 (ts.take 8), s64 ((ts.drop 8).take 8)]
+
 /-- get_peer (netlink.c:105-197) on a fresh cursor. -/
 def getPeerDump (pid : PeerId) : M Json := do
   let p ← getPeer pid
@@ -338,7 +346,7 @@ def getPeerDump (pid : PeerId) : M Json := do
     | none => []
   return Json.mkObj ([("public_key", toJson (hexKey p.remoteStatic)),
     ("preshared_key", toJson (hexKey p.presharedKey)),
-    ("last_handshake", toJson [0, 0]), ("keepalive", toJson p.persistentKeepaliveInterval),
+    ("last_handshake", toJson (timespec p.walltimeLastHandshake)), ("keepalive", toJson p.persistentKeepaliveInterval),
     ("tx_bytes", toJson p.txBytes), ("rx_bytes", toJson p.rxBytes), ("protocol_version", toJson 1)] ++ endpoint ++
     [("allowed_ips", Json.arr ips)])
 

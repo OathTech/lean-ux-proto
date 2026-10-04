@@ -14,8 +14,9 @@ linear and in bounds), the ptr ring, `queue_work_on`, `dev_kfree_skb`.
 Queued handshake messages wait in the device's `handshakeQueue`; the
 environment (`Leanux/Env.lean`) runs `handshakeReceiveWorker` when the queued
 work runs, before the operation ends. A handshake initiation with a valid
-MAC1 enters Noise as the responder (`Leanux/WG/Handshake.lean`); a handshake
-response (the initiator role) is `unsupported`. Index lookups walk the
+MAC1 enters Noise as the responder, and a handshake response with a valid
+MAC1 completes wg0's own initiation (`Leanux/WG/Handshake.lean`), which then
+sends its staged packets or a keepalive (`Leanux/WG/Send.lean`). Index lookups walk the
 mirrored index hashtable, whose random indices are recorded hidden inputs; a
 cookie or data message for a known index is `unsupported`.
 -/
@@ -120,7 +121,17 @@ def receiveHandshakePacket (msg : List UInt8) (src : SkbSource) : M Unit := do
       sendHandshakeResponse pid
       pure peer
     else if ← branch .hsSwitchResponse (t == MESSAGE_HANDSHAKE_RESPONSE) then
-      unsupported "a handshake response (the initiator role)"
+      if ← branch .hsRespNeedsCookie false then unsupported "unreachable"
+      let peer ← consumeResponse msg
+      if ← branch .hsRespNoPeer peer.isNone then return
+      let some pid := peer | invariant "unreachable"
+      setPeerEndpointFromSkb pid src
+      if ← branch .hsRespSessionBegun (← beginSession pid) then
+        modPeerTimer pid   -- wg_timers_session_derived
+        timersHandshakeComplete pid
+        -- either sends the staged packets or stages a keepalive and sends it
+        sendKeepalive pid
+      pure peer
     else pure none
   if ← branch .hsWrongPacket peer.isNone then invariant "a wrong type of packet in the handshake queue"
   let some pid := peer | invariant "unreachable"

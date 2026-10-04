@@ -107,6 +107,7 @@
     "wg_noise_handshake_begin_session",
     "wg_noise_handshake_clear",
     "wg_noise_handshake_consume_initiation",
+    "wg_noise_handshake_consume_response",
     "wg_noise_handshake_create_initiation",
     "wg_noise_handshake_create_response",
     "wg_noise_handshake_init",
@@ -141,6 +142,7 @@
     "wg_socket_set_peer_endpoint",
     "wg_socket_set_peer_endpoint_from_skb",
     "wg_timers_any_authenticated_packet_traversal",
+    "wg_timers_handshake_complete",
     "wg_timers_handshake_initiated",
     "wg_timers_session_derived",
     "wg_xmit"

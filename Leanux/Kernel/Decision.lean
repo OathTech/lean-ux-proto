@@ -185,6 +185,12 @@ inductive Decision where
   | idxReplaceUnhashed | sendBufNoMem | sendSkbInet | sendSkbInet6 | sendSkbOk
   | initRateLimited | initCreated | initNoIdentity | initNoEphemeral | initEsFailed | initSsFailed
   | idxInsWalk1 | idxInsCollide1 | idxInsWalk2 | idxInsCollide2 | idxWalk | idxTypeMatch | idxPeerAlive
+  -- D1 stream B
+  -- drivers/net/wireguard/noise.c
+  | crespNoIdentity | crespNoHandshake | crespNotCreatedInitiation | crespEeFailed | crespSeFailed
+  | crespDecryptFailed | crespStateChanged | addKeypairHasNext
+  -- drivers/net/wireguard/receive.c
+  | hsRespNeedsCookie | hsRespNoPeer | hsRespSessionBegun
   deriving Repr, BEq, DecidableEq, Inhabited
 
 /-- A recorded step: the decision, the outcome the mirror computed, and, for
@@ -859,6 +865,22 @@ def Decision.info : Decision → DecisionInfo
   | .idxTypeMatch => d "wg_index_hashtable_lookup.type_matches" wpl 212 [(213, 213)] []
   | .idxPeerAlive => d "wg_index_hashtable_lookup.peer_alive" wpl 219 [(220, 220)] [(222, 222)]
   | .idxReplaceUnhashed => d "wg_index_hashtable_replace.unhashed" wpl 174 [(175, 175)] [(177, 186)]
+  -- D1 stream B
+  -- wg_noise_handshake_consume_response (noise.c:727-814); each `goto fail`
+  -- jumps to the shared wg_peer_put at 804
+  | .crespNoIdentity => d "wg_noise_handshake_consume_response.no_identity" wno 744 [(745, 745)] [(747, 749)]
+  | .crespNoHandshake => d "wg_noise_handshake_consume_response.no_handshake" wno 750 [(751, 751)] [(753, 761)]
+  | .crespNotCreatedInitiation => d "wg_noise_handshake_consume_response.not_created_initiation" wno 763 [(764, 764)] [(767, 767)]
+  | .crespEeFailed => d "wg_noise_handshake_consume_response.ee_failed" wno 770 [(771, 771)] [(774, 774)]
+  | .crespSeFailed => d "wg_noise_handshake_consume_response.se_failed" wno 774 [(775, 775)] [(778, 778)]
+  | .crespDecryptFailed => d "wg_noise_handshake_consume_response.decrypt_failed" wno 781 [(783, 783)] [(786, 786)]
+  | .crespStateChanged => d "wg_noise_handshake_consume_response.state_changed" wno 790 [(791, 792)] [(794, 801)]
+  -- add_new_keypair's initiator arm (noise.c:215-233)
+  | .addKeypairHasNext => d "add_new_keypair.has_next_keypair" wno 215 [(225, 228)] [(232, 233)]
+  -- the response arm of wg_receive_handshake_packet (receive.c:157-188)
+  | .hsRespNeedsCookie => d "wg_receive_handshake_packet.response_needs_cookie" wrc 161 [(162, 164)] [(166, 166)]
+  | .hsRespNoPeer => d "wg_receive_handshake_packet.response_no_peer" wrc 167 [(168, 170)] [(172, 176)]
+  | .hsRespSessionBegun => d "wg_receive_handshake_packet.response_session_begun" wrc 176 [(178, 186)] []
 
 /-- The relation of a C value comparison, as written in the source
     (`lhs rel rhs`); `flag` is a mask test `(x & MASK)` against zero. -/
@@ -1027,7 +1049,10 @@ def Decision.repeatable : Decision → Bool
   -- several send workers may run in one operation; bucket walks loop
   | .initRateLimited | .initCreated | .initNoIdentity | .initNoEphemeral | .initEsFailed | .initSsFailed
   | .idxInsWalk1 | .idxInsCollide1 | .idxInsWalk2 | .idxInsCollide2 | .idxWalk | .idxMatch
-  | .sendBufNoMem | .sendSkbInet | .sendSkbInet6 | .sendSkbOk | .addMacCookieValid | .addMacCookieFresh => true
+  | .sendBufNoMem | .sendSkbInet | .sendSkbInet6 | .sendSkbOk | .addMacCookieValid | .addMacCookieFresh
+  -- D1 stream B: add_new_keypair and keypairs_clear put up to three live
+  -- keypairs in one operation
+  | .keypairPutUnreferenceNow | .keypairKrefPutReleased => true
   | _ => false
 
 /-- Every decision, enumerated through the constructor index. -/
