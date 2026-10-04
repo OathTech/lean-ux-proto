@@ -177,6 +177,18 @@ class D2Tests(unittest.TestCase):
         message = session.to_wg0(0, b"")
         self.assertEqual(message, noise.keepalive(peer_sending, 0x11223344))
 
+    def test_wg0_response_matches_linux(self):
+        """wg0's response in d2_respond_then_data (Linux 6.12.110,
+        kernel-net-choice, check of 2026-10-04, steered resp_ephemeral and
+        index_draw); Linux then delivered the inner datagram of the peer's
+        first data message, built under responder_session's keys."""
+        device, peer = b"\x11" * 32, b"\x22" * 32
+        theirs = noise.initiation(noise.public_key(device), peer, b"\x46" * 32, noise.tai64n(1, 0), 0x0badcafe)
+        ours = noise.wg0_response(theirs, device, bytes(range(1, 33)), None, 0x11223344)
+        self.assertEqual(ours.message.hex(),
+                         "0200000044332211fecaad0b07a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7c8d24"
+                         "98c35ac35eea33f009987f9b4b2d2967079c36ea7bdfa130f51d74c2261d" + "00" * 16)
+
     def test_padding(self):
         # ALIGN(len, 16), clamped by the MTU (1420) only in (1404, 1420]
         for length, pad in ((0, 0), (1, 15), (15, 1), (16, 0), (17, 15), (1404, 4), (1405, 3), (1408, 0),
