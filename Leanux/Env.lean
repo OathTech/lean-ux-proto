@@ -14,8 +14,12 @@ the mirror proper (`Leanux/WG`) contains only the C's data and control flow:
 - when the kworkers run: the handshake receive worker inside `wg_inject`,
   then the encrypt and tx workers it queued, and the (mirrored) handshake
   send worker at the end of the operation that queued it, which the guest
-  waits for;
-- where wg0's datagrams go over loopback.
+  waits for; the encrypt and tx workers `wg_xmit` queued, after it
+  (`afterXmit`);
+- the IP packet the fixture's sender hands `wg_xmit` (`xmitPacket`) and the
+  checksum completion `encrypt_packet` asks of the stack (`checksumHelp`);
+- where wg0's datagrams go over loopback, and how the sender's `recvfrom`
+  reports their source.
 -/
 
 namespace Leanux.Env
