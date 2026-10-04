@@ -1,4 +1,4 @@
-import Leanux.WG.Peer
+import Leanux.WG.Keypair
 
 /-!
 # drivers/net/wireguard/send.c — staging and handshake queueing, before any session

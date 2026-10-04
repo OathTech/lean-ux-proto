@@ -75,12 +75,56 @@ inductive IndexKind where
   | handshake | keypair
   deriving Repr, BEq, DecidableEq
 
+/-- A keypair's identity in the device's keypair store. -/
+abbrev KeypairId := Nat
+
 /-- An `index_hashtable_entry` in the device's index hashtable: a peer's
-    handshake or its (next) keypair, under a random index. -/
+    handshake or one of its keypairs, under a random index. -/
 structure IndexEntry where
   index : Nat
   peer : PeerId
   kind : IndexKind
+  /-- For a keypair entry, which keypair (an initiator peer can hold a
+      current and a next keypair, each with its own entry). -/
+  keypair : Option KeypairId := none
+  deriving Repr, BEq
+
+/-- `struct noise_symmetric_key`. -/
+structure SymmetricKey where
+  key : List UInt8 := List.replicate 32 0
+  birthdate : Int := 0
+  isValid : Bool := false
+  deriving Repr, BEq
+
+/-- `struct noise_keypair` (noise.h): the session keys and counters. -/
+structure Keypair where
+  sending : SymmetricKey := {}
+  receiving : SymmetricKey := {}
+  /-- `sending_counter` (`atomic64`): the next nonce is its value. -/
+  sendingCounter : Nat := 0
+  iAmTheInitiator : Bool := false
+  remoteIndex : Nat := 0
+  /-- The keypair's `kref`. -/
+  refcount : Nat := 1
+  internalId : Nat := 0
+  peer : PeerId := 0
+  deriving Repr, BEq
+
+/-- `enum packet_state` (queueing.h). -/
+inductive PacketState where
+  | uncrypted | crypted | dead
+  deriving Repr, BEq, DecidableEq
+
+/-- A data packet on its way out: the plaintext length (a keepalive is 0),
+    the keypair and nonce it was given, its state, and (once encrypted) the
+    message bytes. -/
+structure DataPacket where
+  peer : PeerId
+  keypair : KeypairId
+  nonce : Nat
+  plaintextLen : Nat
+  state : PacketState := .uncrypted
+  bytes : List UInt8 := []
   deriving Repr, BEq
 
 /-- `struct wg_peer` with the parts of its `noise_handshake` on this path. -/
@@ -120,6 +164,21 @@ structure Peer where
       confirmation). Its entry is in the index hashtable (it replaced the
       handshake's) until the keypair is put. -/
   nextKeypair : Bool := false
+  /-- `keypairs.current_keypair`, `previous_keypair`, `next_keypair` in the
+      device's keypair store (the D1 sprint replaces `nextKeypair` with
+      these). -/
+  keypairCurrent : Option KeypairId := none
+  keypairPrevious : Option KeypairId := none
+  keypairNext : Option KeypairId := none
+  /-- `walltime_last_handshake` (`struct timespec64`, a recorded clock read):
+      the dump's `last_handshake`. -/
+  walltimeLastHandshake : List UInt8 := List.replicate 16 0
+  /-- `serial_work_cpu`: `nr_cpumask_bits` until the first transmit
+      (`wg_cpumask_choose_online`). -/
+  serialWorkCpu : Option Nat := none
+  /-- `tx_queue`: packets handed to the per-peer transmit worker, oldest
+      first. -/
+  txQueue : List DataPacket := []
   rxBytes : Nat := 0
   /-- `handshake.ephemeral_private`, `remote_ephemeral`, `chaining_key` and
       `hash` (zeroed by `handshake_zero`). -/
@@ -176,6 +235,15 @@ structure Device where
   /-- `handshake_send_wq`: peers whose `transmit_handshake_work` is queued,
       oldest first. -/
   sendWorkQueue : List PeerId := []
+  /-- The keypair store (`kzalloc`ed keypairs that are still referenced). -/
+  keypairs : TreeMap KeypairId Keypair := {}
+  nextKeypairId : KeypairId := 0
+  /-- `encrypt_queue.last_cpu` (`wg_cpumask_next_online`), and the packets
+      queued for the encrypt worker, oldest first. -/
+  encryptLastCpu : Int := -1
+  encryptQueue : List DataPacket := []
+  /-- Peers whose `transmit_packet_work` is queued, oldest first. -/
+  txWorkQueue : List PeerId := []
   deriving BEq
 
 def AF_INET : Nat := 2

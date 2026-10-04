@@ -78,6 +78,18 @@ def deliverSent : M Unit := do
       | none => if !loopback then unsupported "a datagram routed back into wg0"
   modify fun w => { w with sent := [] }
 
+/-- Whether the kernel records dispatch sections (D1 sprint, stream 1 turns
+    this on with the kernel that emits them). -/
+def SECTION_RECORDS : Bool := false
+
+/-- A deferred unit's run: with section records, its section's start and
+    stop records bracket it in the choice stream, so the order in which the
+    kernel ran deferred units is checked rather than assumed. -/
+def runWorker (w : Worker) (body : M Unit) : M Unit := do
+  if SECTION_RECORDS then _ ← hidden (.sectionStart w)
+  body
+  if SECTION_RECORDS then _ ← hidden (.sectionStop w)
+
 /-- The handshake send worker for each queued peer, oldest first, once the
     queuing system call has returned: the guest waits inside every operation
     that can queue it (`wg_set`, `wg_up`, `wg_xmit`), and the worker's remote
@@ -92,7 +104,7 @@ def runSendWorkers : M Unit := do
       let p ← getPeer pid
       if !p.handshakePending then invariant "queued work without a pending flag"
       setPeer pid { p with handshakePending := false }
-      WG.handshakeSendWorker pid
+      runWorker .sendWorker (WG.handshakeSendWorker pid)
   invariant "the send work queue did not drain"
 
 /-- `wg_up` as the fixture performs it: once, on a port that is not the
@@ -144,9 +156,10 @@ def inject (family port : Nat) (msg : List UInt8) : M Int := do
   -- a pending send worker inserts an index entry under a random index
   for pid in d.peerList do requireNotPending pid "receiving while a handshake is queued"
   fixtureSend
-  WG.wgReceive msg (← senderSource family)
+  let src ← senderSource family
+  runWorker .netRx (WG.wgReceive msg src)
   -- the queued receive work runs before the guest's wait ends
-  if !(← getDev).handshakeQueue.isEmpty then WG.handshakeReceiveWorker
+  if !(← getDev).handshakeQueue.isEmpty then runWorker .receiveWorker WG.handshakeReceiveWorker
   deliverSent
   return msg.length   -- udp_sendmsg returns the datagram's length
 

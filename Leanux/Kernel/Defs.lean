@@ -227,12 +227,34 @@ sequence number, and passes them to the mirror, which consumes them in order:
 - an **ambient** site is consumed by code the mirror does not model at all
   (the scheduler), wherever it occurs. -/
 
+/-- A deferred unit the kernel dispatches in a KCOV section (D1 sprint,
+    stream 1): the work item's or softirq's function. -/
+inductive Worker where
+  | sendWorker | receiveWorker | encryptWorker | txWorker | netRx
+  deriving Repr, BEq, DecidableEq
+
+def Worker.symbol : Worker → String
+  | .sendWorker => "wg_packet_handshake_send_worker"
+  | .receiveWorker => "wg_packet_handshake_receive_worker"
+  | .encryptWorker => "wg_packet_encrypt_worker"
+  | .txWorker => "wg_packet_tx_worker"
+  | .netRx => "net_rx_action"
+
+def Worker.index : Worker → Nat
+  | .sendWorker => 0 | .receiveWorker => 1 | .encryptWorker => 2 | .txWorker => 3 | .netRx => 4
+
+def Worker.all : List Worker := [.sendWorker, .receiveWorker, .encryptWorker, .txWorker, .netRx]
+
 inductive HiddenSite where
   | initEphemeral | respEphemeral | tai64nNow | indexDraw
   | resetLastSent | birthdateExpired | initLastSent | initLastSentAgain | respLastSent | respLastSentAgain
   | floodNow | consumptionNow | deriveKeysBirthdate | retransmitJitter
   | ipIdentReserve | ipIdentKey | icmpCredit | flowHashSecret
   | schedDlTimer
+  /-- A dispatch section's start and stop records (kinds 300 and 301): the
+      site is the dispatched function; start carries its address, stop the
+      count of records dropped in the section. -/
+  | sectionStart (w : Worker) | sectionStop (w : Worker)
   deriving Repr, BEq, DecidableEq
 
 inductive SiteRole where
@@ -273,11 +295,14 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   | .icmpCredit => ⟨22, "icmp_global_consume", "random", "net/ipv4/icmp.c", 268, 1, .cut⟩
   | .flowHashSecret => ⟨23, "flow_hash_secret", "random", "net/core/flow_dissector.c", 1710, 16, .cut⟩
   | .schedDlTimer => ⟨30, "start_dl_timer", "clock", "kernel/sched/deadline.c", 1153, 8, .ambient⟩
+  | .sectionStart w => ⟨40 + 2 * w.index, s!"section_start:{w.symbol}", "section", w.symbol, 0, 8, .mirror⟩
+  | .sectionStop w => ⟨41 + 2 * w.index, s!"section_stop:{w.symbol}", "section", w.symbol, 1, 8, .mirror⟩
 
 def HiddenSite.all : List HiddenSite :=
   [.initEphemeral, .respEphemeral, .tai64nNow, .indexDraw, .resetLastSent, .birthdateExpired, .initLastSent,
    .initLastSentAgain, .respLastSent, .respLastSentAgain, .floodNow, .consumptionNow, .deriveKeysBirthdate,
    .retransmitJitter, .ipIdentReserve, .ipIdentKey, .icmpCredit, .flowHashSecret, .schedDlTimer]
+  ++ Worker.all.flatMap fun w => [.sectionStart w, .sectionStop w]
 
 def SiteRole.name : SiteRole → String
   | .mirror => "mirror" | .cut => "cut" | .ambient => "ambient"

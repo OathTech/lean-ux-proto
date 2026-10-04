@@ -183,7 +183,8 @@ def load_hidden_sites():
         raise InvalidOutput('leanux-model --hidden-sites failed')
     sites = {}
     for entry in loads(result.stdout.decode()):
-        if set(entry) != {'id', 'label', 'kind', 'file', 'line', 'len', 'role'} or entry['kind'] not in ('random', 'clock') \
+        if set(entry) != {'id', 'label', 'kind', 'file', 'line', 'len', 'role'} \
+                or entry['kind'] not in ('random', 'clock', 'section') \
                 or entry['role'] not in ('mirror', 'cut', 'ambient'):
             raise InvalidOutput(f'hidden site fields: {entry}')
         key = (entry['kind'], f"{entry['file']}:{entry['line']}")

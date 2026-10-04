@@ -34,6 +34,14 @@ def getPeer (id : PeerId) : M Peer := do
 def setPeer (id : PeerId) (p : Peer) : M Unit :=
   modifyDev fun d => { d with peers := d.peers.insert id p }
 
+def getKeypair (id : KeypairId) : M Keypair := do
+  match (← getDev).keypairs.get? id with
+  | some k => return k
+  | none => invariant s!"dangling keypair {id}"
+
+def setKeypair (id : KeypairId) (k : Keypair) : M Unit :=
+  modifyDev fun d => { d with keypairs := d.keypairs.insert id k }
+
 /-- A path that reads or changes state the pending handshake worker also
     touches: its outcome depends on when the worker runs. Work queued earlier
     in this same system call, before it slept, has certainly not run
