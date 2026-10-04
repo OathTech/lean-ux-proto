@@ -40,25 +40,16 @@
       "message": "02000000040302010d0c0b0aff2ee45601ec1b67310c7790404585ae697331eee1c1f8cf2419731c1fff3e6bc50a223d86b8a86bf41a2bd3a1ab84f892fd9bacbc45bda46dc025e6cac665a500000000000000000000000000000000"
     },
     {
-      "op": "wg_observe"
-    },
-    {
       "op": "wg_inject",
       "family": 4,
       "port": 51820,
       "message": "040000000d0c0b0a3de0ffffffffffff2e91b8b3f021e7ae82885233a7fefa57"
     },
     {
-      "op": "wg_observe"
-    },
-    {
       "op": "wg_inject",
       "family": 4,
       "port": 51820,
       "message": "040000000d0c0b0a00000000000000003edda890f6845ededf865560b7e0b3b9"
-    },
-    {
-      "op": "wg_observe"
     },
     {
       "op": "wg_inject",

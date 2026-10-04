@@ -87,10 +87,11 @@ def session():
 
 def data_trace(messages, extra=(), family=4, **peer_extra):
     resp, _, _ = session()
-    ops = d1.setup(**peer_extra) + [d1.OBSERVE, d1.inject(resp.message), d1.OBSERVE]
-    for m in messages:
-        ops += [d1.inject(m, family=family), d1.OBSERVE]
-    ops += list(extra) + [d1.GET]
+    # every injection waits 0.4 s: one observation at the end keeps the
+    # longest trace inside the guest's 4 s bound
+    ops = d1.setup(**peer_extra) + [d1.OBSERVE, d1.inject(resp.message)]
+    ops += [d1.inject(m, family=family) for m in messages]
+    ops += [d1.OBSERVE] + list(extra) + [d1.GET]
     return ops, d1.steer_initiation()
 
 
