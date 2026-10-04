@@ -18,7 +18,9 @@ MAC1 enters Noise as the responder, and a handshake response with a valid
 MAC1 completes wg0's own initiation (`Leanux/WG/Handshake.lean`), which then
 sends its staged packets or a keepalive (`Leanux/WG/Send.lean`). Index lookups walk the
 mirrored index hashtable, whose random indices are recorded hidden inputs; a
-cookie or data message for a known index is `unsupported`.
+cookie for a known index is `unsupported`. A data message for a keypair goes
+to the decrypt queue and the peer's `rx_queue`; the decrypt worker and the
+NAPI poll are in `Leanux/WG/RxData.lean` (D2).
 -/
 
 namespace Leanux.WG
