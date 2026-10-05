@@ -1,21 +1,33 @@
 # Oracle kernel for the choice stream (docs/2026-10-03-choice-stream-strategy.md):
 # step 1 and step 2 (steering) user-approved 2026-10-03; the D1 sprint's
-# dispatch sections (stream A) and resched records (integration) awaiting the
-# user's approval.
+# dispatch sections (stream A) and resched records (integration) and the D3
+# sprint's timer sections, arm record and virtual time advance
+# (docs/2026-10-05-d3-timers.md, stream K) awaiting the user's approval.
 # kernel/config-x86_64-net (unchanged) with kernel/patches/choice-stream.patch
-# (sha256 e3b901ca66cb334e8550adf95542118f9783ae88d6c7a57e75f1774589996c06)
+# (sha256 9f8f3d4ea39c04ef6b25ba9c0c0c087879ad28771bd8f761d92cc5b302fb9607)
 # applied alone to the locked source, built with LEANUX_KERNEL_PROFILE=net-choice.
 # The patch (kernel/patches/gen-choice-stream.py) records random draws and
 # clock reads at generic interception points (drivers/char/random.c,
 # kernel/time/timekeeping.c), lets a trace steer named call sites through a
 # per-handle schedule loaded by ioctl (kernel/kcov.c), and opens dispatch
-# sections in process_one_work (kernel/workqueue.c) and the NET_RX vector
-# (kernel/softirq.c) for the armed dispatch set, with start and stop records
-# and a dropped-section counter (kernel/kcov.c, include/linux/kcov.h,
-# include/linux/sched.h), and writes a resched record when __cond_resched
-# schedules inside a task section (kernel/sched/core.c). No anchored file and no WireGuard file is touched.
+# sections in process_one_work (kernel/workqueue.c), the NET_RX vector
+# (kernel/softirq.c) and call_timer_fn (kernel/time/timer.c) for the armed
+# dispatch set, with start and stop records and a dropped-section counter
+# (kernel/kcov.c, include/linux/kcov.h, include/linux/sched.h), and writes a
+# resched record when __cond_resched schedules inside a task section
+# (kernel/sched/core.c). D3: mod_timer writes an arm record (kind 303,
+# {jiffies, expires}) for an armed timer function when the dispatch set was
+# loaded with KCOV_DISPATCH_ARM_RECORDS; KCOV_LEANUX_TIME_ADVANCE advances
+# jiffies_64 (leanux_time_advance, kernel/time/timekeeping.c, refused unless
+# the timekeeper is refined-jiffies) and records kind 304 {before, after}.
+# No anchored file and no WireGuard file is touched.
 # Its DWARF names .deps/linux (via -fdebug-prefix-map).
+# The oracle is this build booted with the harness's parameters
+# (harness/linux.py BOOT_PARAMETERS):
+#   console=ttyS0 panic=1 nokaslr loglevel=3 clocksource=refined-jiffies
+# and the timekeeper clocksource refined-jiffies, checked at every batch's
+# start and end (LEANUX_CLOCKSOURCE rows).
 # Path-independent identity from scripts/kernel-identity.py:
-a63260c1b2680febd84bac97fb2865c0c5434b6b05362cf69ccac10b31bd1685
+ad90a10555011000b16fc905a4f9d9202d4e4e0c978873c16d08181fa082e877
 # vmlinux sha256 of the build the evidence used (path-dependent):
-ed9c25cdd6b52b6fc20286dab834e50e801697550a9a67571eabc7182d4834dc
+b2599261c81e22903aa154e435b9923eb68b05d0705ee1f8fa4de54bea3e476d
