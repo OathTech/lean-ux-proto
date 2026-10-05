@@ -19,7 +19,7 @@ class TraceContractTests(unittest.TestCase):
         traces = [loads_trace(path.read_text()) for path in paths]
         self.assertGreaterEqual(len(traces), 20)
         self.assertEqual(len({t['id'] for t in traces}), len(traces))
-        self.assertTrue(serialize_wire(traces).startswith(f"LEANUX_WIRE_V2\n{len(traces)}\nD 0\n"))
+        self.assertTrue(serialize_wire(traces).startswith(f"LEANUX_WIRE_V2\n{len(traces)}\nD 0\nA 0\n"))
 
     def test_accepts_phase4_domain(self):
         # Amended 2026-09-29: blocking creation and getter arguments are valid.
@@ -66,7 +66,7 @@ class TraceContractTests(unittest.TestCase):
     def test_wire_preserves_widths_and_reference_modes(self):
         self.trace['ops'].append({'op': 'dup3', 'fd': {'literal': -2147483648}, 'newfd': {'ref': 0}, 'flags': 4294967295})
         self.assertEqual(serialize_wire([self.trace]),
-                         'LEANUX_WIRE_V2\n1\nD 0\nT case 3 32 0 0\n1 0 -1 0 -1 0 2048 0\n6 1 0 0 -1 8 0 18446744073709551615\n3 0 -2147483648 1 0 0 4294967295 0\n')
+                         'LEANUX_WIRE_V2\n1\nD 0\nA 0\nT case 3 32 0 0\n1 0 -1 0 -1 0 2048 0\n6 1 0 0 -1 8 0 18446744073709551615\n3 0 -2147483648 1 0 0 4294967295 0\n')
 
 
 if __name__ == '__main__':

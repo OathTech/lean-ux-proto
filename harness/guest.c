@@ -49,8 +49,19 @@
 /* A wg_xmit payload: at most wg0's MTU (1420) less the IPv4 and UDP headers. */
 #define MAX_XMIT_PAYLOAD 1392
 /* Timers fire REKEY_TIMEOUT (5 s) after a handshake is sent; a trace must end
- * well before that, counted from wg_up. */
+ * well before that, counted from wg_up in real time: the virtual advances
+ * (wg_advance) are subtracted. */
 #define REKEY_BOUND_NS 4000000000LL
+/* D3 (docs/2026-10-05-d3-timers.md, section 4.3): wg_advance moves jiffies by
+ * `ticks` (KCOV_LEANUX_TIME_ADVANCE on the trace's own KCOV descriptor); the
+ * timekeeper (refined-jiffies) follows at the next tick, which also runs the
+ * due timers. The guest first waits for that tick (the monotonic clock has
+ * absorbed the jump: a sleep begun before it would end at that same tick),
+ * then ADVANCE_WAIT_US for the callbacks' work and loopback delivery. */
+#define KCOV_LEANUX_TIME_ADVANCE _IOW('c', 204, unsigned long)
+#define ADVANCE_WAIT_US 100000
+#define TICK_NS 4000000LL           /* CONFIG_HZ=250 */
+#define EXPECTED_CLOCKSOURCE "refined-jiffies"
 struct operation { unsigned code, kind, newkind, a, b; long long fd, newfd; uint64_t value;
                    unsigned char payload[MAX_PAYLOAD]; size_t payload_len; };
 /* A steering schedule entry (the patched kernel's struct kcov_steer_entry;
@@ -64,7 +75,9 @@ struct steer_arg { uint32_t n, pad; struct steer_entry e[STEER_MAX]; };
  * the deferred units whose dispatch opens a KCOV section, resolved by the
  * host; one per batch. */
 #define DISPATCH_MAX 16
-struct dispatch_arg { uint32_t n, pad; uint64_t funcs[DISPATCH_MAX]; };
+struct dispatch_arg { uint32_t n, flags; uint64_t funcs[DISPATCH_MAX]; };
+/* flags: write the kind-303 arm records (D3), from the wire's A line */
+#define DISPATCH_ARM_RECORDS 1
 static struct dispatch_arg dispatch;
 #define KCOV_LEANUX_DISPATCH_LOAD _IOW('c', 202, unsigned long)
 #define KCOV_LEANUX_SECTION_STATUS _IOR('c', 203, unsigned long)
@@ -361,6 +374,8 @@ static void print_pcs(const char *tag, const char *id, unsigned i, const unsigne
 static unsigned char observe_buffer[2048];
 static struct timespec went_up;
 static int up_seen;
+/* the virtual time the trace's advances added to CLOCK_BOOTTIME */
+static long long advanced_ns;
 
 static void print_hex(long n)
 {
@@ -649,6 +664,10 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             up_request.ifr_flags |= IFF_UP;
         }
         if (op->code == 12) usleep(OBSERVE_WAIT_US);
+        /* before the coverage window: the clock the advance's wait watches */
+        struct timespec before_advance = {0};
+        if (op->code == 14 && clock_gettime(CLOCK_MONOTONIC, &before_advance))
+            fail(t->id, i, "environment_failure", "advance_clock");
         __atomic_store_n(&coverage[0], 0, __ATOMIC_RELAXED);
         if (remote) __atomic_store_n(&remote[0], 0, __ATOMIC_RELAXED);
         errno = 0;
@@ -707,6 +726,14 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             ret = syscall(SYS_sendto, SEND_FD, op->payload, op->payload_len, 0, &to, sizeof(to));
             break;
         }
+        case 14: {
+            /* D3: the virtual time advance, on this process's KCOV
+             * descriptor (fd 3); the kernel records {jiffies before, after}
+             * (kind 304) in the task stream. */
+            unsigned long ticks = op->a;
+            ret = syscall(SYS_ioctl, 3, KCOV_LEANUX_TIME_ADVANCE, &ticks);
+            break;
+        }
         case 12:
             /* The first datagram at the IPv4 listener, if any; the rest are
              * drained after coverage stops. */
@@ -730,10 +757,28 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
          * waits for it too, so the worker's remote section lands in it. */
         if (op->code == 13) usleep(OBSERVE_WAIT_US);
         if (op->code == 8 || op->code == 10 || op->code == 11) usleep(QUEUE_WAIT_US);
+        if (op->code == 14) {
+            /* An advance that fails is not a trace operation the mirror can
+             * follow: fail the trace. Then wait for the tick that absorbs the
+             * jump (bounded: 1 s of real time), then ADVANCE_WAIT_US. */
+            if (ret != 0) fail(t->id, i, "environment_failure", "time_advance");
+            long long jump = (long long)op->a * TICK_NS;
+            int polls = 0;
+            for (;;) {
+                struct timespec now;
+                if (clock_gettime(CLOCK_MONOTONIC, &now)) fail(t->id, i, "environment_failure", "advance_clock");
+                if ((now.tv_sec - before_advance.tv_sec) * 1000000000LL + (now.tv_nsec - before_advance.tv_nsec) >= jump)
+                    break;
+                if (++polls > 1000) fail(t->id, i, "environment_failure", "advance_not_absorbed");
+                usleep(1000);
+            }
+            usleep(ADVANCE_WAIT_US);
+            advanced_ns += jump;
+        }
         if (up_seen) {
             struct timespec now;
             clock_gettime(CLOCK_BOOTTIME, &now);
-            if ((now.tv_sec - went_up.tv_sec) * 1000000000LL + (now.tv_nsec - went_up.tv_nsec) > REKEY_BOUND_NS)
+            if ((now.tv_sec - went_up.tv_sec) * 1000000000LL + (now.tv_nsec - went_up.tv_nsec) - advanced_ns > REKEY_BOUND_NS)
                 fail(t->id, i, "environment_failure", "trace_exceeds_rekey_bound");
         }
         /* KCOV stops counting once the buffer is full, so "full" is the last
@@ -801,6 +846,29 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
     _exit(0);
 }
 
+/* D3: the timekeeper's clocksource at batch start and end (the harness fails
+ * a batch unless both are EXPECTED_CLOCKSOURCE; docs/2026-10-05-d3-timers.md,
+ * section 4.3). */
+static void clocksource_row(const char *at)
+{
+    char names[2][256];
+    const char *files[2] = {"/sys/devices/system/clocksource/clocksource0/current_clocksource",
+                            "/sys/devices/system/clocksource/clocksource0/available_clocksource"};
+    for (int k = 0; k < 2; ++k) {
+        FILE *f = fopen(files[k], "r");
+        if (!f || !fgets(names[k], sizeof(names[k]), f)) fail("batch", -1, "environment_failure", "read_clocksource");
+        fclose(f);
+        names[k][strcspn(names[k], "\n")] = 0;
+        for (char *c = names[k]; *c; ++c)
+            if (*c == '"' || *c == '\\' || (unsigned char)*c < 0x20) fail("batch", -1, "environment_failure", "clocksource_name");
+    }
+    /* available_clocksource ends with a space */
+    size_t len = strlen(names[1]);
+    while (len && names[1][len - 1] == ' ') names[1][--len] = 0;
+    printf("LEANUX_CLOCKSOURCE {\"at\":\"%s\",\"current\":\"%s\",\"available\":\"%s\"}\n", at, names[0], names[1]);
+    fflush(stdout);
+}
+
 int main(int argc, char **argv)
 {
     setvbuf(stdout, NULL, _IOLBF, 0);
@@ -820,6 +888,7 @@ int main(int argc, char **argv)
     unsigned char seed;
     if (syscall(SYS_getrandom, &seed, 1, 0) != 1) fail("batch", -1, "environment_failure", "getrandom");
     printf("LEANUX_KERNEL %s\n", identity.release);
+    clocksource_row("start");
     /* D n addr...: the dispatch set, in hex */
     int consumed = 0;
     if (!fgets(line, sizeof(line), input) || sscanf(line, "D %u%n", &dispatch.n, &consumed) != 1 || dispatch.n > DISPATCH_MAX)
@@ -831,6 +900,12 @@ int main(int argc, char **argv)
         consumed += more;
     }
     if (strcmp(line + consumed, "\n")) fail("batch", -1, "invalid_input", "wire_dispatch");
+    /* A 0|1: the arm records (D3) */
+    unsigned arm = 2;
+    if (!fgets(line, sizeof(line), input) || sscanf(line, "A %u%n", &arm, &consumed) != 1 || arm > 1 ||
+        strcmp(line + consumed, "\n"))
+        fail("batch", -1, "invalid_input", "wire_arm_records");
+    dispatch.flags = arm ? DISPATCH_ARM_RECORDS : 0;
     unsigned failures = 0;
     for (unsigned t = 0; t < total; ++t) {
         static struct trace trace;
@@ -890,6 +965,7 @@ int main(int argc, char **argv)
     }
     if (fgetc(input) != EOF) fail("batch", -1, "invalid_input", "wire_trailing_data");
     fclose(input);
+    clocksource_row("end");
     printf("LEANUX_BATCH_DONE traces=%u failures=%u\n", total, failures);
     return failures ? 1 : 0;
 }

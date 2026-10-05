@@ -34,9 +34,23 @@ OUTPUT_LIMIT = 16 * 1024 * 1024
 # Work items by their function (process_one_work); the NET_RX vector by
 # net_rx_action (handle_softirqs). Everything else dispatched while a trace
 # runs (vmstat, RCU, netns cleanup) is not the trace's and records nothing.
+# D3 (docs/2026-10-05-d3-timers.md, section 3.1): WireGuard's five timer
+# callbacks (call_timer_fn) and the zero-key work item.
 DISPATCH_SYMBOLS = ("wg_packet_handshake_send_worker", "wg_packet_handshake_receive_worker",
                     "wg_packet_encrypt_worker", "wg_packet_tx_worker", "net_rx_action",
-                    "wg_packet_decrypt_worker")
+                    "wg_packet_decrypt_worker",
+                    "wg_expired_retransmit_handshake", "wg_expired_send_keepalive", "wg_expired_new_handshake",
+                    "wg_expired_zero_key_material", "wg_queued_expired_zero_key_material",
+                    "wg_expired_send_persistent_keepalive")
+# Whether the kernel writes the kind-303 arm records at mod_timer for the
+# dispatch set's timers (D3, section 3.3). Off until the mirror consumes
+# them: an unconsumed record is a choice from an undeclared consumer.
+ARM_RECORDS = False
+# The oracle is the kernel build booted with these parameters (D3, option
+# C-jiffies: the timekeeper is pinned to refined-jiffies, which the virtual
+# time advance requires; each batch checks it at start and end).
+EXPECTED_CLOCKSOURCE = "refined-jiffies"
+BOOT_PARAMETERS = f"console=ttyS0 panic=1 nokaslr loglevel=3 clocksource={EXPECTED_CLOCKSOURCE}"
 
 
 def dispatch_addresses(kernel=None, symbols=DISPATCH_SYMBOLS):
@@ -275,7 +289,7 @@ def _collect(outdir, traces, process_returncode):
     results, coverage, fixtures, errors, child_failures, completed, kernels = [], [], [], [], [], [], []
     comparisons, comparison_results, wireguard, observed = [], [], [], []
     remote_coverage, remote_comparisons = [], []
-    hidden, remote_hidden, steering, sections = [], [], [], []
+    hidden, remote_hidden, steering, sections, clocksources = [], [], [], [], []
     for line in (outdir / "boot.log").read_text(errors="strict").splitlines():
         line = line.rstrip("\r")
         for prefix, target in (("LEANUX_RESULT ", results), ("LEANUX_COVERAGE ", coverage),
@@ -285,7 +299,7 @@ def _collect(outdir, traces, process_returncode):
                                ("LEANUX_WGOBS ", observed), ("LEANUX_RCOVERAGE ", remote_coverage),
                                ("LEANUX_RCMP ", remote_comparisons), ("LEANUX_HIDDEN ", hidden),
                                ("LEANUX_RHIDDEN ", remote_hidden), ("LEANUX_STEER ", steering),
-                               ("LEANUX_SECTIONS ", sections)):
+                               ("LEANUX_SECTIONS ", sections), ("LEANUX_CLOCKSOURCE ", clocksources)):
             if line.startswith(prefix):
                 try:
                     target.append(_decode_json(line[len(prefix):]))
@@ -297,6 +311,12 @@ def _collect(outdir, traces, process_returncode):
         if line.startswith("LEANUX_KERNEL "):
             kernels.append(line.removeprefix("LEANUX_KERNEL "))
     _jsonl(outdir / "observations.jsonl", results)
+    # The timekeeper's clocksource at batch start and end (D3): both the
+    # expected one, or the batch is not a run of the oracle.
+    _jsonl(outdir / "clocksource.jsonl", clocksources)
+    if (len(clocksources) != 2 or [r.get("at") if type(r) is dict else None for r in clocksources] != ["start", "end"]
+            or any(set(r) != {"at", "current", "available"} or r["current"] != EXPECTED_CLOCKSOURCE for r in clocksources)):
+        raise LinuxRunError("environment_failure", f"Timekeeper clocksource is not {EXPECTED_CLOCKSOURCE} at batch start and end", outdir)
     try:
         coverage = merge_remote(coverage, remote_coverage, traces, "pcs")
         comparisons = merge_remote(comparisons, remote_comparisons, traces, "records")
@@ -394,7 +414,7 @@ def _collect(outdir, traces, process_returncode):
     return results
 
 
-def run_linux(traces, outdir, *, timeout=120, steer_wire=None):
+def run_linux(traces, outdir, *, timeout=120, steer_wire=None, arm_records=ARM_RECORDS):
     """Return ordered observations; preserve evidence and raise on execution failures.
 
     `outdir` must be a fresh/empty directory within the task's artifact root.
@@ -403,7 +423,7 @@ def run_linux(traces, outdir, *, timeout=120, steer_wire=None):
     """
     traces = [validate_trace(trace) for trace in traces]
     dispatch = dispatch_addresses() if any(uses_wireguard(t) for t in traces) else []
-    wire = serialize_wire(traces, steer_wire, dispatch)
+    wire = serialize_wire(traces, steer_wire, dispatch, arm_records)
     outdir = Path(outdir).resolve()
     if not outdir.is_relative_to(ARTIFACTS):
         raise ValueError(f"outdir must be within task artifact root {ARTIFACTS}")
@@ -430,13 +450,13 @@ def run_linux(traces, outdir, *, timeout=120, steer_wire=None):
                     print(f"waiting for the QEMU slot ({lockpath}), up to {QEMU_LOCK_WAIT} s", file=sys.stderr, flush=True)
                     waited = True
                 time.sleep(2)
-        return _run_locked(traces, outdir, timeout)
+        return _run_locked(traces, outdir, timeout, arm_records)
 
 
 QEMU_LOCK_WAIT = 3600
 
 
-def _run_locked(traces, outdir, timeout):
+def _run_locked(traces, outdir, timeout, arm_records):
     build = ["gcc", "-static", "-O2", "-Wall", "-Wextra", "-Werror", "-std=c11", str(ROOT / "harness/guest.c"), "-o", str(outdir / "guest-runner")]
     started = time.monotonic()
     build_returncode = _bounded_process(build, outdir / "build.log", 60, OUTPUT_LIMIT)
@@ -463,9 +483,9 @@ def _run_locked(traces, outdir, timeout):
     cpio_command = [str(KERNEL / "usr/gen_init_cpio"), "-t", "0", str(outdir / "initramfs.list")]
     cpio = subprocess.check_output(cpio_command, timeout=30)
     (outdir / "initramfs.cpio.gz").write_bytes(gzip.compress(cpio, mtime=0))
-    command = ["qemu-system-x86_64", "-accel", "tcg,thread=single", "-machine", "pc-i440fx-8.2", "-cpu", "qemu64", "-smp", "1", "-m", "256", "-display", "none", "-monitor", "none", "-serial", "stdio", "-nic", "none", "-no-reboot", "-kernel", str(KERNEL / "arch/x86/boot/bzImage"), "-initrd", str(outdir / "initramfs.cpio.gz"), "-append", "console=ttyS0 panic=1 nokaslr loglevel=3 clocksource=refined-jiffies"]
+    command = ["qemu-system-x86_64", "-accel", "tcg,thread=single", "-machine", "pc-i440fx-8.2", "-cpu", "qemu64", "-smp", "1", "-m", "256", "-display", "none", "-monitor", "none", "-serial", "stdio", "-nic", "none", "-no-reboot", "-kernel", str(KERNEL / "arch/x86/boot/bzImage"), "-initrd", str(outdir / "initramfs.cpio.gz"), "-append", BOOT_PARAMETERS]
     identities = [ROOT / "harness/guest.c", ROOT / "harness/linux.py", ROOT / "harness/trace.py", ROOT / "contracts/trace-v1.md", ROOT / "contracts/trace.schema.json", ROOT / "contracts/observation.schema.json", ROOT / "scripts/in-bundle", ROOT / "scripts/bundle-tool", KERNEL / ".config", KERNEL / "arch/x86/boot/bzImage", KERNEL / "vmlinux", KERNEL / "usr/gen_init_cpio", SHARED / ".tools/sysroot/usr/bin/busybox", outdir / "guest-runner", outdir / "init", outdir / "wire.txt", outdir / "initramfs.cpio.gz"]
-    provenance = {"schema_version": 1, "build_command": build, "cpio_command": cpio_command, "qemu_command": command, "timeout_seconds": timeout, "captured_output_limit_bytes": OUTPUT_LIMIT, "inputs": {str(path): sha256(path) for path in identities}, "compiler": subprocess.check_output(["gcc", "--version"], text=True), "qemu": subprocess.check_output(["qemu-system-x86_64", "--version"], text=True)}
+    provenance = {"schema_version": 1, "expected_clocksource": EXPECTED_CLOCKSOURCE, "arm_records": arm_records, "build_command": build, "cpio_command": cpio_command, "qemu_command": command, "timeout_seconds": timeout, "captured_output_limit_bytes": OUTPUT_LIMIT, "inputs": {str(path): sha256(path) for path in identities}, "compiler": subprocess.check_output(["gcc", "--version"], text=True), "qemu": subprocess.check_output(["qemu-system-x86_64", "--version"], text=True)}
     (outdir / "provenance.json").write_text(json.dumps(provenance, indent=2) + "\n")
     (outdir / "qemu-command.json").write_text(json.dumps(command, indent=2) + "\n")
     try:

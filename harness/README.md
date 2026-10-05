@@ -66,7 +66,10 @@ Use smaller guest batches when coverage would exceed this cap. Guest timeout is
 The adapter is the sole wire producer. All persistent comparisons use JSON.
 The ASCII wire begins with `LEANUX_WIRE_V2`, then a decimal trace count (1–4096),
 then the dispatch set: `D N` and N hex function addresses (N ≥ 1 when a trace
-uses the network fixture; `harness/linux.py` resolves them from `System.map`).
+uses the network fixture; `harness/linux.py` resolves them from `System.map`),
+then `A 0` or `A 1`: whether the kernel writes the kind-303 timer arm records
+(D3; `harness/linux.py` `ARM_RECORDS`). Opcode 14 is `wg_advance`, its `a` the
+ticks (D3, docs/2026-10-05-d3-timers.md).
 Each trace begins `T ID N` for the validated identifier and operation count.
 Exactly N operation lines follow, each with eight decimal fields:
 

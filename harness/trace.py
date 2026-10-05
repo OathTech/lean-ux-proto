@@ -26,8 +26,10 @@ FIELDS = {
     "wg_up": {"op"}, "wg_xmit": {"op", "packet"}, "wg_observe": {"op"},
     # Stage B2: a raw WireGuard message sent to wg0's listen port
     "wg_inject": {"op", "family", "port", "message"},
+    # D3: the virtual time advance by `ticks` jiffies (docs/2026-10-05-d3-timers.md, 4.3)
+    "wg_advance": {"op", "ticks"},
 }
-WG_OPS = {"wg_set", "wg_get", "wg_up", "wg_xmit", "wg_observe", "wg_inject"}
+WG_OPS = {"wg_set", "wg_get", "wg_up", "wg_xmit", "wg_observe", "wg_inject", "wg_advance"}
 OPCODES = {name: i + 1 for i, name in enumerate(FIELDS)}
 FCNTL = {"F_GETFD": 1, "F_SETFD": 2, "F_GETFL": 3, "F_SETFL": 4}
 
@@ -117,6 +119,8 @@ def validate_trace(trace):
             message = op["message"]
             if type(message) is not str or not re.fullmatch(r"(?:[0-9a-f]{2}){1,1400}", message, re.ASCII):
                 raise InvalidTrace(f"ops[{i}].message: expected 1-1400 bytes of lowercase hex")
+        if name == "wg_advance":
+            _integer(op["ticks"], 1, 2**31, f"ops[{i}].ticks")
         if name == "wg_xmit":
             try:
                 validate_packet(op["packet"], f"ops[{i}].packet")
@@ -151,11 +155,13 @@ def loads_trace(line):
         raise InvalidTrace(f"invalid JSON: {exc}") from exc
 
 
-def serialize_wire(traces, steer_wire=None, dispatch=()):
+def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False):
     """`steer_wire`: each steered trace's resolved schedule
     (harness/steer.py), [(kind, length, draw, [return addresses], hex)].
     `dispatch`: the dispatch set's function addresses (harness/linux.py),
-    which a batch with network traces needs."""
+    which a batch with network traces needs. `arm_records`: whether the
+    kernel writes the kind-303 arm records for the dispatch set's timers
+    (the `A` line; D3)."""
     traces = [validate_trace(trace) for trace in traces]
     steer_wire = steer_wire or {}
     if any("steer" in t and t["id"] not in steer_wire for t in traces):
@@ -168,7 +174,10 @@ def serialize_wire(traces, steer_wire=None, dispatch=()):
         raise InvalidTrace("network traces need the dispatch set")
     if len(dispatch) > 16 or any(type(a) is not int or a <= 0 for a in dispatch):
         raise InvalidTrace("dispatch set")
-    lines = ["LEANUX_WIRE_V2", str(len(traces)), " ".join(["D", str(len(dispatch))] + [f"{a:x}" for a in dispatch])]
+    if type(arm_records) is not bool:
+        raise InvalidTrace("arm_records")
+    lines = ["LEANUX_WIRE_V2", str(len(traces)), " ".join(["D", str(len(dispatch))] + [f"{a:x}" for a in dispatch]),
+             f"A {int(arm_records)}"]
     for trace in traces:
         schedule = steer_wire.get(trace["id"], []) if "steer" in trace else []
         lines.append(f"T {trace['id']} {len(trace['ops'])} {trace.get('rlimit_nofile', 32)} {int(uses_wireguard(trace))} {len(schedule)}")
@@ -184,6 +193,8 @@ def serialize_wire(traces, steer_wire=None, dispatch=()):
                 a, packet = encode_packet(op["packet"])
             if op["op"] == "wg_inject":
                 a, b = op["family"], op["port"]
+            if op["op"] == "wg_advance":
+                a = op["ticks"]
             line = f"{OPCODES[op['op']]} {kind} {value} {newkind} {newvalue} {a} {b} {op.get('value', '0')}"
             if op["op"] == "wg_set":
                 line += " " + encode_set(op["config"]).hex()
