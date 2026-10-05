@@ -75,6 +75,23 @@ def addNewKeypair (pid : PeerId) (newKeypair : KeypairId) : M Unit := do
     modifyPeer pid fun p => { p with keypairPrevious := none }
     keypairPut previous true
 
+/-- wg_noise_received_with_keypair (noise.c:253-291): the responder's key
+    confirmation. A packet received under the `next` keypair slides it into
+    `current`, the current into `previous`, and puts the old previous. The
+    recheck under `keypair_update_lock` sees the same `next` on this one-CPU
+    kernel (nothing else runs between the two reads in a softirq). -/
+def receivedWithKeypair (pid : PeerId) (received : KeypairId) : M Bool := do
+  -- `key_is_new = received_keypair == rcu_access_pointer(keypairs->next_keypair)`
+  if ← branch .receivedNotNew ((← getPeer pid).keypairNext != some received) then return false
+  -- spin_lock_bh(&keypairs->keypair_update_lock), then the double check
+  if ← branch .receivedChanged ((← getPeer pid).keypairNext != some received) then return false
+  let p ← getPeer pid
+  let old := p.keypairPrevious
+  modifyPeer pid fun p => { p with keypairPrevious := p.keypairCurrent }
+  keypairPut old true
+  modifyPeer pid fun p => { p with keypairCurrent := some received, keypairNext := none }
+  return true
+
 /-- wg_noise_keypairs_clear (noise.c:151-177): next, then previous, then
     current. -/
 def keypairsClear (pid : PeerId) : M Unit := do

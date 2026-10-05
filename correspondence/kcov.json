@@ -52,6 +52,7 @@
     "alloc_file_pseudo",
     "anon_inode_getfile",
     "common_bits",
+    "decrypt_packet",
     "do_dup2",
     "do_eventfd",
     "encrypt_packet",
@@ -94,6 +95,7 @@
     "wg_allowedips_insert_v4",
     "wg_allowedips_insert_v6",
     "wg_allowedips_lookup_dst",
+    "wg_allowedips_lookup_src",
     "wg_allowedips_read_node",
     "wg_allowedips_remove_by_peer",
     "wg_cookie_add_mac_to_packet",
@@ -119,12 +121,15 @@
     "wg_noise_keypair_put",
     "wg_noise_keypairs_clear",
     "wg_noise_precompute_static_static",
+    "wg_noise_received_with_keypair",
     "wg_noise_set_static_identity_private_key",
     "wg_open",
+    "wg_packet_decrypt_worker",
     "wg_packet_encrypt_worker",
     "wg_packet_handshake_receive_worker",
     "wg_packet_handshake_send_worker",
     "wg_packet_receive",
+    "wg_packet_rx_poll",
     "wg_packet_send_handshake_initiation",
     "wg_packet_send_handshake_response",
     "wg_packet_send_keepalive",
@@ -157,6 +162,8 @@
   ],
   "known_gaps": [],
   "branch_free_functions": [
-    "fls128"
+    "fls128",
+    "INET_ECN_decapsulate",
+    "__INET_ECN_decapsulate"
   ]
 }

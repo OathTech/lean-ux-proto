@@ -271,6 +271,10 @@ inductive HiddenSite where
   /-- D2: the decrypt worker's `cond_resched`, and `wg_timers_data_sent`'s
       jitter draw. -/
   | reschedDecrypt | newHandshakeJitter
+  /-- D2 stream B: `wg_timers_handshake_complete`'s wall-clock read on key
+      confirmation by a data message (its tail jump attributes the record to
+      the caller, `wg_packet_consume_data_done`). -/
+  | walltimeLastHandshakeData
   deriving Repr, BEq, DecidableEq
 
 inductive SiteRole where
@@ -333,13 +337,19 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   -- into it, and the records of the d2a transmit traces resolve to
   -- timers.c:150.
   | .newHandshakeJitter => ⟨16, "new_handshake_jitter", "random", "drivers/net/wireguard/timers.c", 150, 1, .mirror⟩
+  -- D2 stream B. As for `.walltimeLastHandshake`, the tail jump
+  -- (`jmp ktime_get_real_ts64`) leaves the caller's frame: the call in
+  -- wg_packet_consume_data_done (receive.c:347), inlined into
+  -- wg_packet_rx_poll; return address - 1 resolves to receive.c:347 in the
+  -- net-choice build (checked with the check's symbolizer).
+  | .walltimeLastHandshakeData => ⟨17, "walltime_last_handshake_data", "clock", "drivers/net/wireguard/receive.c", 347, 16, .mirror⟩
 
 def HiddenSite.all : List HiddenSite :=
   [.initEphemeral, .respEphemeral, .tai64nNow, .indexDraw, .resetLastSent, .birthdateExpired, .initLastSent,
    .initLastSentAgain, .respLastSent, .respLastSentAgain, .floodNow, .consumptionNow, .deriveKeysBirthdate,
    .retransmitJitter, .walltimeLastHandshake, .ipIdentReserve, .ipIdentKey, .icmpCredit, .flowHashSecret, .schedDlTimer]
   ++ Worker.all.flatMap (fun w => [.sectionStart w, .sectionStop w])
-  ++ [.reschedReceive, .reschedEncrypt, .reschedTx, .reschedDecrypt, .newHandshakeJitter]
+  ++ [.reschedReceive, .reschedEncrypt, .reschedTx, .reschedDecrypt, .newHandshakeJitter, .walltimeLastHandshakeData]
 
 /-- The resched site of a worker's `cond_resched`, for the workers that
     have one on the modeled paths. -/
