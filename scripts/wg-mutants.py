@@ -65,14 +65,14 @@ MUTANTS = [
    "  return some (le32 2 ++ le32 index ++ le32 receiver ++ e ++ encNothing ++ List.replicate 32 0)\n",
    "  return some (le32 2 ++ le32 index ++ le32 index ++ e ++ encNothing ++ List.replicate 32 0)\n"),
   ('C-M3-no-rx-traversal', 'behavior-preserving: no traversal timer after receiving', 'Leanux/WG/Receive.lean',
-   "  setPeer pid { p with rxBytes := p.rxBytes + msg.length }\n  timersTraversal pid\n",
-   "  setPeer pid { p with rxBytes := p.rxBytes + msg.length }\n"),
+   "  timersAnyAuthenticatedPacketReceived pid\n  timersTraversal pid\n  peerPut peer\n",
+   "  timersAnyAuthenticatedPacketReceived pid\n  peerPut peer\n"),
   ('C-M4-keypair-kept-indexed', 'behavior-preserving: the old next keypair stays in the index', 'Leanux/WG/Keypair.lean',
    '    keypairPut next true\n',
    '    keypairPut next false\n'),
   ('C-M5-endpoint-family-swapped', 'data: the learned endpoint tests IPv6 first', 'Leanux/WG/Handshake.lean',
-   "    if ← branch .epFromSkbInet (src.family == 4) then\n",
-   "    if ← branch .epFromSkbInet (src.family == 6) then\n"),
+   "  if ← branch .epFromSkbInet (src.family == 4) then\n",
+   "  if ← branch .epFromSkbInet (src.family == 6) then\n"),
   # Hidden inputs: the send worker and the response with every value
   ('H-M1-tai64n-unrounded', 'data: the timestamp keeps its nanoseconds', 'Leanux/WG/Handshake.lean',
    "  be ((0x400000000000000a + sec) % 2 ^ 64) 8 ++ be (nsec - nsec % 2 ^ 24) 4\n",
@@ -88,8 +88,8 @@ MUTANTS = [
    '  let (ck, tempHash, key) := (outs.head!, outs.getD 1 [], outs.getD 2 [])\n  let h := h\n'),
   ('H-M5-no-initiation-traversal', 'behavior-preserving: no traversal timer before sending an initiation',
    'Leanux/WG/Handshake.lean',
-   "    timersTraversal pid\n    -- wg_timers_any_authenticated_packet_sent: del_timer\n    let now ← hiddenClock .initLastSentAgain\n",
-   "    -- wg_timers_any_authenticated_packet_sent: del_timer\n    let now ← hiddenClock .initLastSentAgain\n"),
+   "    timersTraversal pid\n    timersAnyAuthenticatedPacketSent pid\n    let now ← hiddenClock .initLastSentAgain\n",
+   "    timersAnyAuthenticatedPacketSent pid\n    let now ← hiddenClock .initLastSentAgain\n"),
   ('H-M6-clock-before-ephemeral', 'negative control: the clock is read before the ephemeral key',
    'Leanux/WG/Handshake.lean',
    "  let secret := clamp (← hidden .initEphemeral)\n",
@@ -112,8 +112,8 @@ MUTANTS = [
    '  | .icmpCredit => ⟨22, "icmp_global_consume", "random", "net/ipv4/icmp.c", 269, 1, .cut⟩\n'),
   ('H-M11-no-fixture-cut', 'negative control: cut records in an operation without its cut point (wg_xmit)',
    'Leanux/Syscalls.lean',
-   '    Env.fixtureSend\n    let ret ← WG.wgXmit family addr (Env.xmitPacketLen family)\n',
-   '    let ret ← WG.wgXmit family addr (Env.xmitPacketLen family)\n'),
+   "    Env.fixtureSend\n    let ret ← WG.wgXmit family addr (← Env.xmitPacket family addr payload)\n",
+   "    let ret ← WG.wgXmit family addr (← Env.xmitPacket family addr payload)\n"),
   # Choice stream, step 2: paths only steering reaches
   ('S2-M1-lookup-ignores-type', 'state: the index lookup ignores its type mask', 'Leanux/WG/Peer.lean',
    "      if ← branch .idxTypeMatch (kinds.contains e.kind) then entry := some e\n",
@@ -134,8 +134,8 @@ D1_MUTANTS = [
    "  setKeypair kp (if initiator then { k with sending := second, receiving := first }\n"),
   ('D1-M2-key-idx-internal', 'data: encrypt_packet writes the keypair\'s internal id as key_idx (send.c:207)',
    'Leanux/WG/Data.lean',
-   "  return some (dataMessage k.remoteIndex pkt.nonce k.sending.key (List.replicate plaintextLen 0))\n",
-   "  return some (dataMessage k.internalId pkt.nonce k.sending.key (List.replicate plaintextLen 0))\n"),
+   "  return some (dataMessage k.remoteIndex pkt.nonce k.sending.key (inner.bytes ++ List.replicate paddingLen 0))\n",
+   "  return some (dataMessage k.internalId pkt.nonce k.sending.key (inner.bytes ++ List.replicate paddingLen 0))\n"),
   ('D1-M3-remote-index-not-updated', 'state: consume_response keeps the old remote_index (noise.c:797)',
    'Leanux/WG/Handshake.lean',
    "                                     remoteIndex := u32le msg 4, handshakeState := HANDSHAKE_CONSUMED_RESPONSE }\n",
@@ -167,19 +167,19 @@ D1_MUTANTS = [
    "    let nonce := k.sendingCounter + 1\n"),
   ('D1-M11-keepalive-padded', 'data: a zero-length payload is padded to 16 bytes (send.c:141-160)',
    'Leanux/WG/Data.lean',
-   "  let paddingLen ← calculateSkbPadding pkt.plaintextLen DEVICE_MTU\n",
-   "  let paddingLen ← (do let _ ← calculateSkbPadding pkt.plaintextLen DEVICE_MTU; pure 16)\n"),
+   "  let paddingLen ← calculateSkbPadding len pkt.plaintext.mtu\n",
+   "  let paddingLen ← (do let _ ← calculateSkbPadding len pkt.plaintext.mtu; pure 16)\n"),
   ('D1-M12-no-walltime', 'data: walltime_last_handshake is consumed but not stored (timers.c:197)',
    'Leanux/WG/Handshake.lean',
-   "  let now ← hidden .walltimeLastHandshake\n  setPeer pid { (← getPeer pid) with walltimeLastHandshake := now }\n",
-   "  let _ ← hidden .walltimeLastHandshake\n"),
+   "  let now ← hidden site\n  setPeer pid { (← getPeer pid) with walltimeLastHandshake := now }\n",
+   "  let _ ← hidden site\n"),
   ('D1-M13-no-keep-key-fresh', 'control, behavior-preserving: the tx worker skips keep_key_fresh (send.c:259)',
    'Leanux/WG/Data.lean',
-   "  if ← branch .doneDataSent dataSent then unsupported \"wg_timers_data_sent (a data packet's handshake timer)\"\n  keepKeyFresh pid\n",
-   "  if ← branch .doneDataSent dataSent then unsupported \"wg_timers_data_sent (a data packet's handshake timer)\"\n"),
+   "  if ← branch .doneDataSent dataSent then timersDataSent pid\n  keepKeyFresh pid\n",
+   "  if ← branch .doneDataSent dataSent then timersDataSent pid\n"),
   ('D1-M14-no-keypair-put-tx', 'control, behavior-preserving: the tx worker keeps its keypair reference (send.c:280)',
    'Leanux/WG/Data.lean',
-   "    keypairPut (some pkt.keypair) false\n    peerPut (some pid)\n    _ ← branch .txNeedResched (← needResched)\n",
+   "    keypairPut (some head.keypair) false\n    peerPut (some pid)\n    _ ← branch .txNeedResched (← needResched)\n",
    "    peerPut (some pid)\n    _ ← branch .txNeedResched (← needResched)\n"),
   ('D1-M15-ignore-resched', 'scheduling: cond_resched never switches, ignoring the resched records (kind 302); the corpus has receive-worker reschedules, though whether one occurs is timing-dependent',
    'Leanux/Env.lean',
@@ -197,41 +197,51 @@ D1_MUTANTS = [
 # entries are where the code is expected (stream B may use RxData.lean).
 D2_MUTANTS = [
   ('D2-M1-window-off-by-one', 'state: counter_validate\'s window test is off by one (receive.c:308-309: '
-   'COUNTER_WINDOW_SIZE + their_counter < counter); d2_rx_window_boundary accepts N - 8129',
-   'Leanux/WG/Receive.lean', None, None),
+   'COUNTER_WINDOW_SIZE + their_counter < counter); the window boundary pair', 'Leanux/WG/RxData.lean',
+   "  if ← branch .ctrTooOld (COUNTER_WINDOW_SIZE + theirs < c.counter) then return false\n",
+   "  if ← branch .ctrTooOld (COUNTER_WINDOW_SIZE + theirs ≤ c.counter) then return false\n"),
   ('D2-M2-bitmap-index-unmasked', 'state: the backtrack word index is not masked with '
-   '(COUNTER_BITS_TOTAL / BITS_PER_LONG) - 1 (receive.c:324); counters above 8191 index past the bitmap',
-   'Leanux/WG/Receive.lean', None, None),
-  ('D2-M3-their-counter-not-incremented', 'state: counter_validate drops ++their_counter (receive.c:306); '
-   'the window and bit positions shift by one', 'Leanux/WG/Receive.lean', None, None),
+   '(COUNTER_BITS_TOTAL / BITS_PER_LONG) - 1 (receive.c:324)', 'Leanux/WG/RxData.lean',
+   "  let index := index % words\n", "  let index := index\n"),
+  ('D2-M3-their-counter-not-incremented', 'state: counter_validate drops ++their_counter (receive.c:306)',
+   'Leanux/WG/RxData.lean', "  let theirs := theirs + 1   -- ++their_counter\n", ""),
   ('D2-M4-padding-ignores-mtu', 'data: calculate_skb_padding pads to ALIGN(len, 16) without the MTU clamp '
-   '(send.c:157); d2_padding_mtu (inner lengths 1419, 1420) pads to 1424',
-   'Leanux/WG/Data.lean',
-   "  let paddedSize := min mtu (alignPadding lastUnit)\n",
-   "  let paddedSize := alignPadding lastUnit\n"),
-  ('D2-M5-checksum-not-completed', 'data: encrypt_packet skips skb_checksum_help (send.c:187-189); the inner '
-   'UDP checksum stays the pseudo-header sum', 'Leanux/WG/Data.lean', None, None),
-  ('D2-M6-lookup-src-uses-destination', 'routing: wg_allowedips_lookup_src walks the inner destination '
-   '(allowedips.c); d2_rx_dishonest_source and the deliver traces change outcome',
-   'Leanux/WG/AllowedIps.lean', None, None),
+   '(send.c:157); d2_padding_mtu pads to 1424', 'Leanux/WG/Data.lean',
+   "    if ← branch .padClamped (mtu < alignPadding lastUnit) then pure mtu else pure (alignPadding lastUnit)\n",
+   "    if ← branch .padClamped (mtu < alignPadding lastUnit) then pure (alignPadding lastUnit) else pure (alignPadding lastUnit)\n"),
+  ('D2-M5-checksum-not-completed', 'data: encrypt_packet skips skb_checksum_help\'s result (send.c:187-189); '
+   'the inner UDP checksum stays the pseudo-header sum', 'Leanux/WG/Data.lean',
+   "    inner ← checksumHelp inner\n", "    inner := inner\n"),
+  ('D2-M6-lookup-src-uses-destination', 'routing: wg_allowedips_lookup_src walks the inner destination',
+   'Leanux/WG/RxData.lean',
+   "  if ← branch .lookupSrcV4 (protocol == 4) then return ← lookup t.root4 32 (beAt bytes 12 4)\n"
+   "  if ← branch .lookupSrcV6 (protocol == 6) then return ← lookup t.root6 128 (beAt bytes 8 16)\n",
+   "  if ← branch .lookupSrcV4 (protocol == 4) then return ← lookup t.root4 32 (beAt bytes 16 4)\n"
+   "  if ← branch .lookupSrcV6 (protocol == 6) then return ← lookup t.root6 128 (beAt bytes 24 16)\n"),
   ('D2-M7-received-with-keypair-no-promotion', 'state: wg_noise_received_with_keypair does not promote next '
-   'to current (noise.c); d2_respond_then_data and d2_respond_stage_then_data',
-   'Leanux/WG/Keypair.lean', None, None),
-  ('D2-M8-rx-bytes-trimmed', 'data: update_rx_stats counts message_data_len of the trimmed length, not '
-   'len_before_trim (receive.c:409); rx_bytes in the dump', 'Leanux/WG/Receive.lean', None, None),
-  ('D2-M9-keepalive-not-detected', 'control: consume_data_done does not test skb->len == 0 (receive.c:362); '
-   'd2_rx_keepalive goes on to the header checks', 'Leanux/WG/Receive.lean', None, None),
+   'to current (noise.c); the respond-then-data traces', 'Leanux/WG/Keypair.lean',
+   "  if ← branch .receivedNotNew ((← getPeer pid).keypairNext != some received) then return false\n",
+   "  if ← branch .receivedNotNew true then return false\n"),
+  ('D2-M8-rx-bytes-trimmed', 'data: update_rx_stats counts the trimmed length, not len_before_trim '
+   '(receive.c:409); rx_bytes in the dump', 'Leanux/WG/RxData.lean',
+   "  updateRxStats pid (lenBeforeTrim + MESSAGE_DATA_LEN_0)", "  updateRxStats pid (ipLen + MESSAGE_DATA_LEN_0)"),
+  ('D2-M9-keepalive-not-detected', 'control: consume_data_done does not test skb->len == 0 (receive.c:362)',
+   'Leanux/WG/RxData.lean',
+   "  if ← branch .doneRxKeepalive (len == 0) then\n", "  if ← branch .doneRxKeepalive false then\n"),
   ('D2-M10-dead-as-crypted', 'control: the decrypt worker enqueues a failed decryption as CRYPTED '
-   '(receive.c:499-501); d2_rx_tampered_tag', 'Leanux/WG/Receive.lean', None, None),
-  # tentative: the pattern matches the D1 loop, which stream A rewrites for payload lists
-  ('D2-M11-nonce-per-list', 'data: every packet of a staged list takes the nonce read before the walk '
-   '(send.c:378-381); d2_staged_flush_4 repeats a nonce',
-   'Leanux/WG/Send.lean',
-   "    let k ← getKeypair id\n    let nonce := k.sendingCounter   -- atomic64_inc_return(&sending_counter) - 1\n",
-   "    let nonce := k.sendingCounter   -- atomic64_inc_return(&sending_counter) - 1\n"),
+   '(receive.c:499-501); the tampered-tag traces', 'Leanux/WG/RxData.lean',
+   "      else enqueuePerPeerRx pkt .dead\n", "      else enqueuePerPeerRx pkt .crypted\n"),
+  ('D2-M11-nonce-per-list', 'data: the sending counter is not advanced per packet (send.c:378-381); '
+   'd2_staged_flush_4 repeats a nonce', 'Leanux/WG/Send.lean',
+   "    setKeypair id { k with sendingCounter := k.sendingCounter + 1 }\n", "    setKeypair id k\n"),
   ('D2-M12-poll-outside-worker', 'scheduling control: the NAPI poll runs after the decrypt worker\'s section '
-   'instead of inside it (design section 5); rejected when the corpus shows orders (a) and (b)',
-   'Leanux/Env.lean', None, None),
+   'instead of inside it (design section 5); rejected only when a run shows order (b) (timing-dependent)',
+   'Leanux/Env.lean',
+   "  runWorker .decryptWorker (WG.decryptWorker napiSoftirq (condResched SWITCH_DEPTH .decryptWorker))\n"
+   "  if (← getDev).peers.toList.any (·.2.napiScheduled) then\n"
+   "    invariant \"a NAPI poll pending after the decrypt worker (its ring poll runs the softirq)\"\n",
+   "  runWorker .decryptWorker (WG.decryptWorker (pure ()) (condResched SWITCH_DEPTH .decryptWorker))\n"
+   "  napiSoftirq\n"),
 ]
 PENDING = {m[0] for m in D2_MUTANTS if m[3] is None}
 
