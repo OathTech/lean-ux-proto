@@ -1,8 +1,8 @@
 # L: WireGuard device lifecycle — design, 2026-10-05
 
-Status: **proposed** [AGENT], for the user's decisions in section 13. The
-direction is the user's [USER 2026-10-04]: complete coverage of WireGuard's
-single-CPU behaviour. L covers what happens to `wg0` *as a device*: creation
+Status: **proposed** [AGENT], revised after an independent audit (section
+15), for the user's decisions in section 13. The direction is the user's
+[USER 2026-10-04]: complete coverage of WireGuard's single-CPU behaviour. L covers what happens to `wg0` *as a device*: creation
 inside a trace, going down and up again, changing the listen port while up,
 and deletion inside a trace. Today every trace starts with a down `wg0`
 created by the fixture before the window, goes up at most once, never changes
@@ -16,8 +16,9 @@ the kernel is `kernel/config-x86_64-net-choice`: one CPU, `PREEMPT_NONE`,
 
 L needs **no kernel change**. It adds three fixture operations, one trace
 field, mirror functions for `device.c`'s remaining paths, environment rules
-for what the fixture's routes and sockets do, and six new choice sites (three
-mirror, one computable mirror site for the random port, two cut).
+for what the fixture's routes and sockets do, and seven new choice sites
+(five mirror, one computed mirror site for the random port, and one cut
+consumer that records twice per creation).
 
 ## 1. Target
 
@@ -38,13 +39,17 @@ against Linux, plus the running-device arms of `netlink.c`'s `set_port` and
 
 ### 2.1 Creating wg0: `RTM_NEWLINK`
 
-The guest's fixture already issues this message (`harness/guest.c:175-197`,
+The guest's fixture already issues this message (`harness/guest.c:174-197`,
 `network_fixture`): `IFLA_IFNAME` "wg0", `IFLA_LINKINFO/IFLA_INFO_KIND`
 "wireguard", flags `NLM_F_CREATE|NLM_F_EXCL|NLM_F_ACK`, `ifi_index` 0,
 `ifi_flags` 0. Inside the trace process's `send()`: `netlink_unicast` runs
-`rtnetlink_rcv` synchronously (`rtnl_lock`, `netlink_rcv_skb`, `rtnl_unlock`),
-and the ACK is queued inside `netlink_rcv_skb`, so the whole creation
-completes before `send()` returns; the following `recv()` reads the ACK.
+`rtnetlink_rcv` synchronously, which is `netlink_rcv_skb(skb,
+&rtnetlink_rcv_msg)` (`rtnetlink.c:6784-6787`); `rtnetlink_rcv_msg` takes
+and releases `rtnl` around each message's handler, and `netlink_rcv_skb`
+queues the ACK after the handler returns. So the whole creation — and, for
+`RTM_DELLINK`, the `netdev_run_todo` that the handler's `rtnl_unlock` runs —
+completes before the ACK is queued and before `send()` returns; the
+following `recv()` reads the ACK.
 
 1. **The core** (`rtnetlink.c`): `__rtnl_newlink` looks the name up
    (`:3716-3718`); an existing device with `NLM_F_EXCL` is `-EEXIST`
@@ -78,16 +83,22 @@ completes before `send()` returns; the following `recv()` reads the ACK.
      `:5043-5056`: a hash hit increments `refcnt`; a worker is created only
      for a new pool, `:5081`). The kthread is created by `kthreadd`, not by
      the trace process, so its `copy_process` clock reads are outside every
-     recording context;
+     recording context (records are written only when `current` has KCOV
+     enabled). The trace process **sleeps** in `kthread_create`'s
+     completion wait: a `mayHaveSlept` point (section 5);
    - three `wg_packet_queue_init`s (`:348-361`; `queueing.c:25-41`:
      `ptr_ring_init`, `alloc_percpu`, `last_cpu = -1`);
-   - **`wg_ratelimiter_init`** (`:363`; `ratelimiter.c:236-281`): a global,
-     refcounted singleton. Only when `++init_refcnt == 1` (`:239`) does it
-     create the slab cache (`:242`), size the tables from RAM (`:251-255`),
-     allocate them (`:257-266`), queue the GC on `system_power_efficient_wq`
-     every `HZ` (`:269`) and **draw the 16-byte hsiphash key** (`:270`).
-     Today's fixture creates and deletes one device per trace, so the count
-     is 0 at every trace start and the first creation in a trace draws;
+   - **`wg_ratelimiter_init`** (`:363`; `ratelimiter.c:158-203`): a global,
+     refcounted singleton (the statics at `:12-18`). Only when
+     `++init_refcnt == 1` (`:161`) does it create the slab cache
+     (`:164-165`), size the tables from RAM (`:173-177`; 2048 buckets for
+     the 256 MB guest), allocate them (`:179-185`), queue the GC on
+     `system_power_efficient_wq` every `HZ` (`:191`) and **draw the 16-byte
+     hsiphash key** (`:192`). A failed allocation undoes the increment
+     (`:200`). The fixture creates and deletes one device per trace, so the
+     count is 0 at every trace start **provided every trace process ran its
+     teardown** (section 2.4, the failure path), and the first creation in a
+     trace draws;
    - `register_netdevice` (`:367`): the ifindex (`dev.c:10000-10018`:
      `xa_alloc_cyclic` on `net->dev_by_index`, `:10009-10011`, initialised
      `XA_FLAGS_ALLOC1` at `:12012`, so index 0 is busy (`xarray.h:274,282`)
@@ -107,7 +118,8 @@ completes before `send()` returns; the following `recv()` reads the ACK.
      reaches only the neighbour tables of a `NOARP` point-to-point device that
      no modeled path consults: a **cut consumer** of the `wg_create` cut
      point. The sysfs/kobject registration broadcasts a uevent to no listener
-     and runs no helper (`UEVENT_HELPER` unset);
+     and runs no helper (`UEVENT_HELPER` unset; `kobject_uevent.c:611-634`
+     is compiled out);
    - `list_add(&wg->device_list)` (`:371`), `priv_destructor = wg_destruct`
      (`:376`) — assigned last so a failing `register_netdevice` does not call
      it (`dev.c:10686-10687`).
@@ -144,7 +156,11 @@ index entry removed, handshake zeroed), `wg_noise_keypairs_clear`,
 site `.resetLastSent`, one per peer). Then the handshake ring is drained
 (`:130-131`, one `ptr_ring_consume` per queued message), `handshake_queue_len
 = 0` (`:132`), and `wg_socket_reinit(wg, NULL, NULL)` (`:133`; `socket.c:419-437`)
-frees both sockets after `synchronize_net()` (`:434`). **`incoming_port` is
+frees both sockets after `synchronize_net()` (`:434`), which **does not
+sleep on this kernel**: with `rtnl` held it is `synchronize_rcu_expedited`,
+otherwise `synchronize_rcu`, and Tiny RCU's `synchronize_rcu` only advances
+`gp_seq` (`kernel/rcu/tiny.c:150-159`; no `might_resched` under
+`PREEMPT_NONE`). **`incoming_port` is
 not changed** (`:431-432` writes it only when `new4` is set), so a later open
 rebinds the same port, including a port that was drawn at random the first
 time. The encrypt, decrypt and tx queues are not purged.
@@ -166,9 +182,13 @@ families, and `wg_xmit` is never reached.
 and the flags unchanged (`:1556-1557`); on success `IFF_UP`, `dev_activate`
 (`:1559-1561`), then `NETDEV_UP`, where `fib_netdev_event` re-adds the local
 routes of the surviving IPv4 address (`fib_frontend.c:1500`) but **not the
-default routes**, and `addrconf_dev_config` returns at once for `ARPHRD_NONE`
-(no link-local address; wg_open already set `addr_gen_mode = NONE`,
-`device.c:47-48`). `wg_open` (`device.c:31-62`): `wg_socket_init(wg,
+default routes**. `addrconf_dev_config` admits `ARPHRD_NONE`
+(`addrconf.c:3495-3504`) and proceeds; **no link-local address is added only
+because `wg_open` set `addr_gen_mode = IN6_ADDR_GEN_MODE_NONE`**
+(`device.c:47-48`) before `NETDEV_UP`. `ipv6_mc_up` draws nothing: the
+all-nodes groups carry `MAF_NOREPORT` (`mcast.c:906`) and
+`igmp6_group_added` returns on it (`:688`, `:724`). `wg_open`
+(`device.c:31-62`): `wg_socket_init(wg,
 incoming_port)` (`:51`); on error `goto out` with the error (so a
 `-EADDRINUSE` makes the `ioctl` fail and leaves the device down); for each
 peer `wg_packet_send_staged_packets` and, with a nonzero interval,
@@ -208,9 +228,12 @@ got** (`:397`, so one draw covers both), `v6only`; its `-EADDRINUSE` retries
 the pair up to 100 times only when the requested port was 0 (`:401-402`).
 Then `wg_socket_reinit(wg, new4, new6)` (`:412`): the pointers are swapped,
 `incoming_port = inet_sport(new4)` (`:431-432`), `synchronize_net()`
-(`:434`), and the old sockets are released (`:435-436`). The device keeps
-receiving throughout; the old sockets are still bound while the new ones
-bind, which only matters for a random draw (below).
+(`:434`, no sleep: section 2.2), and the old sockets are released
+(`:435-436`; `udp_tunnel_sock_release` and `sock_release` do not sleep
+either). So `wg_socket_init` and `wg_socket_reinit` have **no sleep point**
+on the modeled paths. The device keeps receiving throughout; the old sockets
+are still bound while the new ones bind, which only matters for a random
+draw (below).
 
 **`-EADDRINUSE` is deterministic in the fixture.** `udp_lib_lport_inuse`
 (`udp.c:142-170`) conflicts with a socket of the same netns at the same port
@@ -270,7 +293,8 @@ WireGuard's `link_ops` has no `dellink` (`device.c:402-407`), so
    `wg_stop` then `wg_destruct`, in one task.
 2. `unlist_netdevice`, `NETREG_UNREGISTERING` (`:11530-11531`),
    `flush_all_backlogs` (`:11533`, a `system_highpri_wq` work outside the
-   armed set), `synchronize_net` (`:11535`), `NETDEV_UNREGISTER` (`:11552`):
+   armed set, which the task **waits for**: a sleep point), `synchronize_net`
+   (`:11535`, no sleep: section 2.2), `NETDEV_UNREGISTER` (`:11552`):
    `inetdev_destroy` and `addrconf_ifdown(dev, 1)` remove the addresses;
    `fib_disable_ip(…, NETDEV_UNREGISTER, true)` and `fib6_ifdown`
    (`route.c:4919-4920`) remove every route via wg0; the neighbour parms are
@@ -297,21 +321,43 @@ WireGuard's `link_ops` has no `dellink` (`device.c:402-407`), so
    `wg_packet_queue_free` ×3 (`:258-260`; `queueing.c:43-48`: the handshake
    ring is purged, the crypt rings must be empty, `WARN_ON` otherwise),
    `rcu_barrier` (`:261`), **`wg_ratelimiter_uninit`** (`:262`;
-   `ratelimiter.c:283-299`: when `--init_refcnt` reaches 0,
-   `cancel_delayed_work_sync(&gc_work)`, **`wg_ratelimiter_gc_entries(NULL)`**
-   — whose first statement reads `ktime_get_coarse_boottime_ns()` (`:135`),
+   `ratelimiter.c:205-221`): when `--init_refcnt` reaches 0 (`:208`),
+   `cancel_delayed_work_sync(&gc_work)` (`:211`),
+   **`wg_ratelimiter_gc_entries(NULL)`** (`:212`; the function is `:55-83`)
+   — whose first statement reads `ktime_get_coarse_boottime_ns()` (`:57`),
    **a kind-208 clock record in the deleting task**, value unused when
-   `work` is NULL (`:143`) — `rcu_barrier`, the tables and the cache freed),
-   `memzero_explicit(static_identity)` (`:263`), the two hashtables freed
-   (`:264-265`), `free_netdev` (`:269`).
+   `work` is NULL (`:65`, `:71` short-circuit on `unlikely(!work)`); the
+   walk over the 2048 buckets with its two `hlist` loops and the `work`
+   tests (`:62-82`) is task-context coverage, subject to A2 once
+   `ratelimiter.c` is anchored (section 4.3) — then `rcu_barrier` (`:213`),
+   the tables and the cache freed (`:214-218`)), `memzero_explicit(static_identity)`
+   (`:263`), the two hashtables freed (`:264-265`), `free_netdev` (`:269`).
 
-All of it runs inside the trace process's `send()`; the `recv()` of the
-ACK follows. The guest's end-of-trace `delete_wg0` (`guest.c:204-215`) is
-the same message outside the window; with L it becomes conditional on the
-device's existence, and the inter-trace invariant of the strategy's section
-4.4 holds either way: a device deleted by the trace was destroyed
-synchronously inside the window, and a surviving one is destroyed by the
-teardown.
+   The sleep points of the deletion are `flush_all_backlogs`, the
+   `rcu_barrier`s (`dev.c:10916,10840`, `device.c:261`, `ratelimiter.c:213`),
+   `kthread_stop` of the rescuer, `msleep` in `netdev_wait_allrefs_any`, and
+   the flushes when work is pending. `synchronize_net` is not one.
+
+All of it runs inside the trace process's `send()`: the ACK is queued after
+`netdev_run_todo` returns, so after `wg_destruct` (no consequence for the
+mirror), and the `recv()` reads it. The guest's end-of-trace `delete_wg0`
+(`guest.c:204-215`) is the same message outside the window; with L it
+becomes conditional on the device's existence.
+
+**The inter-trace invariant has a condition** (audit M1). The strategy's
+section 4.4 and the refcount claim of 2.1 hold only if **every network trace
+process issues `RTM_DELLINK` before it exits**. Today a trace that `fail()`s
+calls `_exit(1)` without `delete_wg0` (`guest.c:78-84`); the netns is then
+torn down asynchronously by `cleanup_net` on a kworker
+(`net_namespace.c:595,702`), possibly inside the next trace's window:
+`wg_destruct` runs late, `init_refcnt` is skewed (the next creation draws no
+key where the mirror expects one), and with D3 the dead device's timers
+could fire as sections in the next trace. **Fix:** `fail()` in a process
+whose network fixture is live performs a best-effort synchronous
+`RTM_DELLINK` of `wg0` (errors ignored, no recursion into `fail`) before
+`_exit`. Residual: a child killed by a signal still leaves the asynchronous
+teardown; the next trace then sees a missing `.ratelimiterKey` record or a
+section it does not expect — fail-noisy, not silent.
 
 **Queued work at deletion.** The flushes in `peer_remove_after_dead` and
 `drain_workqueue` run whatever is queued, in sections. The mirror's existing
@@ -374,20 +420,25 @@ No decision in these functions is reported, and `main.c` stays unanchored.
 
 ### 3.1 New sites (`HiddenSite`, `Defs.lean`)
 
-| Site | Kind | Consumer frame | Bytes | Role | Where consumed |
+| Site | Hook (record kind) | Consumer frame | Bytes | Role | Where consumed |
 |---|---|---|---|---|---|
-| `.cookieSecretBirthdate` | clock | `drivers/net/wireguard/cookie.c:23` | 8 | mirror | `wgNewlink` → `cookieCheckerInit`; stored in `Device.cookieSecretBirthdate` |
-| `.cookieSecret` | random | `cookie.c:24` | 32 | mirror | same; stored in `Device.cookieSecret` (E reads it) |
-| `.pubkeyHashKey` | random | `peerlookup.c:29` | 16 | mirror | `wgNewlink`; stored in `Device.pubkeyHashKey` (data only; the bucket walk stays a cut, `Peer.lean:201-209`) |
-| `.ratelimiterKey` | random | `ratelimiter.c:270` | 16 | mirror | `wgNewlink` → `ratelimiterInit`, only when the refcount was 0; stored in `Kernel.ratelimiter.key` |
-| `.ratelimiterGcNow` | clock | `ratelimiter.c:135` | 8 | mirror | `wgDestruct` → `ratelimiterUninit`, only when the refcount reaches 0; value discarded (the `work == NULL` arm) |
-| `.udpPortDraw` | random | `net/ipv4/udp.c:257` | 4 | mirror (computed) | `socketInit` when the port is 0: `first = 32768 + ((rand × 28232) >> 32)` |
-| `.neighReachTime` | random | `net/core/neighbour.c:115` | 4 | **cut** | the `wg_create` cut point, two records (ARP and ND parms); justification: the value reaches only `neigh_parms.reachable_time` of a `NOARP` device, which no modeled path reads |
+| `.cookieSecretBirthdate` | `ktime_get_coarse_with_offset` (208) | `drivers/net/wireguard/cookie.c:23` | 8 | mirror | `wgNewlink` → `cookieCheckerInit`; stored in `Device.cookieSecretBirthdate` |
+| `.cookieSecret` | `get_random_bytes` (1) | `cookie.c:24` | 32 | mirror | same; stored in `Device.cookieSecret` (E reads it) |
+| `.pubkeyHashKey` | `get_random_bytes` (1) | `peerlookup.c:29` | 16 | mirror | `wgNewlink`; stored in `Device.pubkeyHashKey` (data only; the bucket walk stays a cut, `Peer.lean:201-209`) |
+| `.ratelimiterKey` | `get_random_bytes` (1) | `ratelimiter.c:192` | 16 | mirror | `wgNewlink` → `ratelimiterInit`, only when the refcount was 0; stored in `Kernel.ratelimiter.key` |
+| `.ratelimiterGcNow` | `ktime_get_coarse_with_offset` (208) | `ratelimiter.c:57` | 8 | mirror | `wgDestruct` → `ratelimiterUninit` → `gcEntries none`, only when the refcount reaches 0; the first statement of the function; value unused in the `work == NULL` arm |
+| `.udpPortDraw` | `get_random_u32` (104) | `net/ipv4/udp.c:257` | 4 | mirror (computed) | `socketInit` when the port is 0: `first = 32768 + ((rand × 28232) >> 32)` |
+| `.neighReachTime` | `__get_random_u32_below` (110) | `net/core/neighbour.c:115` | 4 | **cut** | the `wg_create` cut point: **exactly two kind-110 records** (ARP and ND parms), each carrying the post-rejection value. Justification: **unobserved** — `reachable_time` is exported only in `IFLA_INET6_CACHEINFO` (and the IPv4 neighbour sysctls), which the harness never decodes, and no modeled path reads it |
 
-Record kinds are the existing ones (random 2xx / clock 208 as the kernel
-emits them); no kernel change. The consumer-frame lines must be confirmed on
-the built kernel by the Linux-only probe (section 11, step L0), as the D1/D2
-sites were (`Defs.lean:301-311`); the table above is from source.
+The kinds are the existing ones of the `net-choice` kernel (`get_random_bytes`
+1, `get_random_u32` 104, `__get_random_u32_below` 110 with one record per
+call, the clock readers from 200 with `ktime_get_coarse_with_offset` at
+208); no kernel change. The consumer-frame lines must be confirmed on the
+built kernel by the Linux-only probe (section 11, step L0), as the D1/D2
+sites were (`Defs.lean:301-311`); the table above is from source. L0's
+checklist includes: the resolved consumer frames of the ratelimiter records
+are `ratelimiter.c:57` and `ratelimiter.c:192` (E's design cites `:191-192`
+for the same draw).
 
 **Why the three WireGuard draws are mirror sites and not cuts:** they are
 consumed by mirrored functions (`wg_newlink`, `wg_destruct`) at a fixed
@@ -409,8 +460,8 @@ alternative is forcing a refresh with D3's advance, `cookie.c:96-101`,
   `wg_stop`), `.ratelimiterGcNow` once, plus whatever sections the flushes
   run (D3 workers; pending work is otherwise `unsupported`).
 - Scheduler ambient (`.schedDlTimer`) wherever the task sleeps
-  (`synchronize_net`, `rcu_barrier`, `msleep`, `kthread_create`'s wait):
-  already declared, consumed anywhere.
+  (`rcu_barrier`, `kthread_create`/`kthread_stop`, `flush_all_backlogs`,
+  `msleep`; not `synchronize_net`): already declared, consumed anywhere.
 
 ### 3.3 Steering the random port [AGENT]
 
@@ -440,9 +491,10 @@ fail-noisy exit fires rather than a wrong port being accepted.
   with the fixture's wg0, 3 in a bare fixture; `wgNewlink` takes it and
   increments. Netns state, so it lives in `Kernel`, not `Device`.
 - `ratelimiter : { refcnt : Nat, key : List UInt8 }` — the global singleton
-  (`ratelimiter.c:91-94`). `refcnt` is 1 with the fixture's wg0 (the key
+  (`ratelimiter.c:12-18`). `refcnt` is 1 with the fixture's wg0 (the key
   unknown, drawn before the window; zeros, never read by L) and 0 in a bare
-  fixture.
+  fixture. `tableSize` (2048 for the 256 MB guest, `:173-177`) is an
+  environment constant in `Env.lean`, read by E's `gcEntries`.
 
 `Leanux/WG/Types.lean`, `Device`:
 - `sock4 sock6 : Option { port : Nat }` — the two socket pointers; `running`
@@ -470,16 +522,16 @@ sends].
 | Mirror | C | Notes |
 |---|---|---|
 | `wgSetup` | `device.c:274-307` | straight-line: a `Device` with the fixture's name, `ifindex := netIfindexNext`, MTU, flags; no decisions |
-| `wgNewlink` | `device.c:309-400` | `allowedipsInit`; `cookieCheckerInit` (two records); `deviceUpdateGen := 1`; `pubkeyHashtableAlloc` (record); `indexHashtableAlloc`; three `allocWorkqueue` and three `packetQueueInit` as `envOk` sites with decisions on device.c lines 326, 330, 335, 340, 345, 350, 355, 360; `ratelimiterInit` (decision `.ratelimiterInitFirst` at `ratelimiter.c:239`; the key record when first); `registerNetdevice` as `envOk` with the decision at `:368`, then `skipCut [.neighReachTime]` for the two notifier draws; `priv_destructor` has no mirror (the mirror's `wgDestruct` is called by the `wg_delete` operation); the unwinding arms mirror `:381-399` (the refcount decrement in `ratelimiterInit`'s failure, `ratelimiter.c:278`) |
+| `wgNewlink` | `device.c:309-400` | `allowedipsInit`; `cookieCheckerInit` (two records); `deviceUpdateGen := 1`; `pubkeyHashtableAlloc` (record); `indexHashtableAlloc`; three `allocWorkqueue` and three `packetQueueInit` as `envOk` sites with decisions on device.c lines 326, 330, 335, 340, 345, 350, 355, 360 (`mayHaveSlept` at the crypt workqueue: `kthread_create`); `ratelimiterInit` (decision `.ratelimiterInitFirst` at `ratelimiter.c:161`; the key record when first); `registerNetdevice` as `envOk` with the decision at `:368`, then `skipCut [.neighReachTime]` for the two notifier draws; `priv_destructor` has no mirror (the mirror's `wgDestruct` is called by the `wg_delete` operation); the unwinding arms mirror `:381-399` (the refcount decrement in `ratelimiterInit`'s failure, `ratelimiter.c:200`) |
 | `wgCreate` (op) | `rtnetlink.c:3787-3791`, `3581-3671` | `if wg.isSome then return -EEXIST` (core; no WG decision), else `wgSetup`, `wgNewlink`, install `some device` |
 | `socketInit port` | `socket.c:349-417` | `.socketInitNoNet` (`!creatingNet`, constant false); `.socketInitV4Err` decided by the environment's bound-port set (`Env.portBound`), returning `-EADDRINUSE`; for `port == 0` the draw and `first`; `.socketInitHasIpv6` (true); `.socketInitV6Err` (false; a true outcome is `unsupported "the IPv6 bind failed after the IPv4 one succeeded"`); `socketReinit (some {port}) (some {port})` |
-| `socketReinit new4 new6` | `socket.c:419-437` | `.reinitHasNew4`; `mayHaveSlept` (`synchronize_net`); `.sockFreeNull` ×2 for the old sockets |
+| `socketReinit new4 new6` | `socket.c:419-437` | `.reinitHasNew4`; **no `mayHaveSlept`** (`synchronize_net` does not sleep here, section 2.2; claiming a sleep where there is none would be fail-open); `.sockFreeNull` ×2 for the old sockets |
 | `setPort` running arm | `netlink.c:326` | replaces `unsupported "wg_socket_init"` by `socketInit port` |
 | `wgOpen` | `device.c:31-62` | `socketInit d.incomingPort` replaces the `unsupported` for port 0 and the constant `.openSocketError false`; on error `return ret` |
 | `wgUp` / `wgDown` | `dev.c:1519-1566`, `:1599-1641`, `:8994-9008` | `wgUp`: `running := true`, `wgOpen`, on error `running := false`; `wgDown`: `running := false`, `wgStop`; the notifier effects are `Env` (routes) |
 | `wgStop` | `device.c:115-135` | per peer (`.stopPeersIter`): `purgeStagedPackets` (`txDropped += staged.length`, `staged := []`), `timersStop` (D3: clear the five timers; a queued clear work runs here through `runWorker .clearPeerWorker`), `handshakeClear` (`indexRemove .handshake`, `handshakeZero`), `keypairsClear`, `resetLastSentHandshake`; the drain loop (`.stopDrainIter` per queued message), `handshakeQueue := []`; `socketReinit none none` |
-| `wgDestruct` | `device.c:242-270` | `creatingNet := false`, `incomingPort := 0`, `socketReinit none none`, `peerRemoveAll` (exists), destroy/free as cuts (crypt rings must be empty: `invariant` otherwise, the C's `WARN_ON`), `ratelimiterUninit` (`.ratelimiterUninitLast` at `ratelimiter.c:286`; the `.ratelimiterGcNow` record when last), `wg := none` |
-| `wgDelete` (op) | `rtnetlink.c:3383-3436`, `dev.c:11493-` | `if wg.isNone then return -ENODEV`; `if running then wgDown`; `wgDestruct`; `Env.routesViaWg0 := false`; return 0 |
+| `wgDestruct` | `device.c:242-270` | `creatingNet := false`, `incomingPort := 0`, `socketReinit none none`, `peerRemoveAll` (exists), destroy/free as cuts (`mayHaveSlept`: `kthread_stop`, `rcu_barrier`; crypt rings must be empty: `invariant` otherwise, the C's `WARN_ON`), `ratelimiterUninit` (`.ratelimiterUninitLast` at `ratelimiter.c:208`; when last: **`gcEntries none`** — E's function, which consumes `.ratelimiterGcNow` first (`:57`) and walks the `tableSize` buckets with the `work` tests, `:62-82`, as repeatable decisions; with no entries every inner loop is empty — then `mayHaveSlept` for the `rcu_barrier` at `:213`), `wg := none` |
+| `wgDelete` (op) | `rtnetlink.c:3383-3436`, `dev.c:11493-` | `if wg.isNone then return -ENODEV`; `if running then wgDown`; `mayHaveSlept` (`flush_all_backlogs`, the `rcu_barrier`s of `netdev_run_todo`); `wgDestruct`; `Env.routesViaWg0 := false`; return 0 |
 | `lookupInterface` | `netlink.c:52-73` | `.lookupNoDev (wg.isNone)` → `-ENODEV` |
 
 Everything else in `wg_set_device`, `set_peer`, `wg_open`'s peer loop and
@@ -489,13 +541,20 @@ Everything else in `wg_set_device`, `set_peer`, `wg_open`'s peer loop and
 
 `correspondence/kcov.json` gains the functions `wg_newlink`, `wg_stop`,
 `wg_destruct`, `wg_socket_init`, `wg_socket_reinit`, `wg_ratelimiter_init`,
-`wg_ratelimiter_uninit`, and the anchored file `drivers/net/wireguard/
-ratelimiter.c` (E will add `wg_ratelimiter_allow` and the GC to the same
-file; L adds only the two init functions). `wg_setup` owns no decision and is
-not listed. `set_port` and `wg_open` are already listed. A2's rule that a
-decision function Linux ran must report something (`check.py:594-601`) then
-covers the new functions; the rtnetlink and `dev.c` core stay unanchored, so
-their coverage is not checked (a cut, as the netlink core is today).
+`wg_ratelimiter_uninit`, **`wg_ratelimiter_gc_entries`**, and the anchored
+file `drivers/net/wireguard/ratelimiter.c`. Anchoring the file puts the
+task-context `wg_ratelimiter_gc_entries(NULL)` inside `wg_delete` under A2
+(audit M2), so the GC's loop needs a mirror the moment `wg_delete` exists.
+Ownership [AGENT, to agree with E]: E owns `gcEntries` (its design already
+cites the file); L lists the function and, if E's `gcEntries` has not landed
+when L integrates, adds the minimal version (the record, the bucket loop over
+`tableSize` with empty inner loops, the `work` tests) that E then extends
+with entries. `wg_ratelimiter_allow` stays E's. `wg_setup` owns no decision
+and is not listed. `set_port` and `wg_open` are already listed. A2's rule
+that a decision function Linux ran must report something
+(`check.py:594-601`) then covers the new functions; the rtnetlink and
+`dev.c` core stay unanchored, so their coverage is not checked (a cut, as
+the netlink core is today).
 
 New `Decision` constructors (`Decision.lean`), each with its condition line
 and spans, following the existing `d` table form: `newlinkPeerHashtableErr`
@@ -503,9 +562,12 @@ and spans, following the existing `d` table form: `newlinkPeerHashtableErr`
 `newlinkSendWqErr` (340), `newlinkCryptWqErr` (345), `newlinkEncryptQueueErr`
 (350), `newlinkDecryptQueueErr` (355), `newlinkHandshakeQueueErr` (360),
 `newlinkRatelimiterErr` (364), `newlinkRegisterErr` (368);
-`ratelimiterInitFirst` (ratelimiter.c:239), `ratelimiterInitCacheErr` (243),
-`ratelimiterInitTableV4Err` (258), `ratelimiterInitTableV6Err` (263),
-`ratelimiterUninitLast` (286); `stopPeersIter` (device.c:122),
+`ratelimiterInitFirst` (ratelimiter.c:161), `ratelimiterInitCacheErr` (165),
+`ratelimiterInitTableV4Err` (180), `ratelimiterInitTableV6Err` (185),
+`ratelimiterUninitLast` (208); the GC's `gcBucketIter` (62),
+`gcV4EntryIter` (64), `gcV4Expired` (65), `gcV6EntryIter` (70),
+`gcV6Expired` (71), `gcHasWork` (77, 80), all repeatable (E's names
+prevail); `stopPeersIter` (device.c:122),
 `stopDrainIter` (130); `socketInitNoNet` (socket.c:380), `socketInitV4Err`
 (388), `socketInitHasIpv6` (396), `socketInitV6Err` (399),
 `socketInitRetry` (401); `reinitHasNew4` (431), `sockFreeNull` (336,
@@ -522,7 +584,7 @@ Only fixture facts, stated as rules with their kernel reason:
   now the C's `-EADDRINUSE`. For a random draw, the collision set also holds
   wg0's own `incomingPort` while `sock4` is set (a running rebind to port 0).
 - **Routes.** `wg_xmit`'s dispatch returns `-ENETUNREACH` when
-  `!routesViaWg0` (today: `!running`, `Syscalls.lean:107`). Set by the
+  `!routesViaWg0` (today: `!running`, `Syscalls.lean:95`). Set by the
   `wg_up` operation after a successful open (the guest adds the routes after
   the window, `guest.c:722-726`); cleared by `wg_down` and `wg_delete`
   (section 2.2, 2.4). A trace that goes up, down and up again has routes
@@ -544,6 +606,18 @@ Only fixture facts, stated as rules with their kernel reason:
 - **Timers at down** (D3): `wgStop` clears the five timer fields, so no
   firing is expected afterwards; a timer section for a cleared timer is a
   hidden mismatch, as D3 defines.
+- **Sleep points** (`mayHaveSlept`, `State.lean:53-55`; audit m1). On this
+  kernel `synchronize_net` does not sleep (section 2.2), so it is never a
+  reason to call `mayHaveSlept`. The real sleep points on L's paths are
+  `rcu_barrier`, `kthread_create`/`kthread_stop` (`workqueue.c:5624,5919`),
+  `flush_all_backlogs` (`dev.c:11533`), `flush_work`/`flush_workqueue` when
+  work is pending, and `msleep` in `netdev_wait_allrefs_any`. `mayHaveSlept`
+  is placed there and nowhere else. The existing comments at
+  `Keypair.lean:144,155` ("synchronize_net(), flush_workqueue()") are
+  corrected in stream M: the `synchronize_net`s do not sleep, and the
+  flushes wait only for pending work, which the preceding `unsupported`
+  excludes — so those two calls are dropped [AGENT], with the regression
+  suites as the evidence that nothing depended on them.
 - **Temporary rtnetlink descriptor** [AGENT]. `wg_create` and `wg_delete`
   need a `NETLINK_ROUTE` socket. The guest opens it at the lowest free
   descriptor **before** the operation's window and closes it **after**
@@ -574,17 +648,26 @@ Only fixture facts, stated as rules with their kernel reason:
   `RTM_NEWLINK`; opcode 15/17 open the temporary rtnetlink socket before the
   window and close it after; the `SIOCGIFFLAGS` pre-read for `wg_up`/`wg_down`
   tolerates `ENODEV` (the operation then issues `SIOCSIFFLAGS` and reports
-  its error); after a successful up, `route_into_wg0(first)` — on the first
-  up both addresses and both routes with `NLM_F_EXCL`; on a later up the
-  IPv4 address add **must** fail with `EEXIST` and the IPv6 address and both
-  routes must succeed (fail-closed: any other combination is an
-  environment failure, since it would mean the kernel's keep-on-down
-  behaviour differs from section 2.2); `print_stats` reports `null` when
-  `RTM_GETLINK` by the resolved ifindex says `ENODEV`; `WG_IFINDEX` is no
-  longer a constant: the guest resolves it with `SIOCGIFINDEX` after each
-  successful create and after the fixture's own creation; the end-of-trace
-  `delete_wg0` runs only if `wg0` exists. The trace bound is unchanged
-  (the deletion runs inside it: section 10).
+  its error); after a successful up, `route_into_wg0(first)`, where
+  **`first` means "no successful up since this device instance was
+  created"**: it is reset by the fixture's creation, by `wg_create` and by
+  `wg_delete`, and a failed up does not clear it — on a first up both
+  addresses and both routes with `NLM_F_EXCL`; on a later up the IPv4
+  address add **must** fail with `EEXIST` and the IPv6 address and both
+  routes must succeed (fail-closed: any other combination is an environment
+  failure, since it would mean the kernel's keep-on-down behaviour differs
+  from section 2.2); `print_stats` maps **exactly `ENODEV`** from
+  `RTM_GETLINK` to `stats: null` and fails the trace on any other error;
+  `WG_IFINDEX` is no longer a constant: the guest resolves it with
+  `SIOCGIFINDEX` after each successful create and after the fixture's own
+  creation; the temporary rtnetlink socket of opcodes 15 and 17 is opened
+  **without `SOCK_CLOEXEC`** (as `route_into_wg0`'s is, so the descriptor's
+  close-on-exec bit stays clear, as the mirror's table has it); the
+  end-of-trace `delete_wg0` runs only if `wg0` exists; **`fail()` performs
+  the same best-effort synchronous `RTM_DELLINK` when the network fixture is
+  live** (section 2.4, M1), guarded against recursion; `wg_create` and
+  `wg_delete` print a `LEANUX_TIMING` row with their wall time. The trace
+  bound is unchanged (the deletion runs inside it: section 10).
 - **Harness** (`harness/linux.py`): `stats` may be `null`; the `-append`
   and the dispatch set are unchanged (D3's additions land independently).
   `harness/wg.py`: nothing (the dump decoder already carries `ifindex`).
@@ -693,6 +776,18 @@ rejected (`wg-mutants.py:8`).
 - **L-M10** `deviceUpdateGen` starts at 0: **not rejected** by any check
   (unobservable); recorded as a known data-only correction, not claimed as
   evidence.
+- **L-M11** `wgStop` does not clear the keypairs: in `l_down_after_session`
+  the data message injected after down/up is decrypted and delivered by the
+  mirror, dropped by Linux (the index lookup misses). Behaviour and A2.
+- **L-M12** `wgStop` does not clear the handshake: a response to the old
+  sender index injected after down/up is consumed by the mirror (the index
+  entry is still there), while Linux's lookup misses. New trace
+  `l_down_up_stale_response`: an initiation sent, `wg_down`, `wg_up`,
+  inject a response naming the old index.
+- **L-M13** `wgDown` does not clear `routesViaWg0`: the `wg_xmit` after a
+  down reaches `wg_xmit` in the mirror and `ENETUNREACH` in Linux
+  (`l_down_purges_staged`); A2 reports a decision function Linux did not
+  run.
 - **Controls:** `l_random_port_collision` (the `unsupported` fires);
   `l_create_twice` and `l_delete_absent` (core errors without WG coverage,
   only fd decisions: the A2 "no coverage in anchored files" rule is
@@ -721,22 +816,25 @@ IPv6 bind retry.
 
 ## 10. Risks
 
-- **High until measured: the KCOV area in the create and delete windows.**
-  `CAPACITY` is 64 K words (`guest.c:31`): at most 65,535 PC hits or
-  16,383 comparison records per operation, else `empty_or_full_kcov`
-  (`guest.c:739-742`). Device registration and unregistration run sysfs,
-  kobject, uevent and rtnetlink code that today's operations never do; the
-  comparison child is the tighter bound. Mitigation: L0 measures; if needed
-  `CAPACITY` rises to 256 K words (the two areas and the sort arrays grow
-  from about 15 MB to 60 MB in a 256 MB guest; `KCOV_INIT_TRACE` accepts it).
-  A guest constant, no kernel change.
-- **Medium: the deletion's duration inside the 4 s bound.** Three
-  `rcu_barrier`s, three `synchronize_net`s, three `destroy_workqueue`s with a
-  `kthread_stop`, and `netdev_wait_allrefs_any`'s sleep if a reference
-  lingers (1, 2, 4, … 250 ms). With Tiny RCU each barrier is a scheduling
-  round trip. Today's teardown is outside the bound and untimed. L0 times it;
-  if it is tens of milliseconds the bound is fine, and `wg_delete` gets no
-  guest wait.
+- **High, and likely to materialise: the KCOV area in the create window**
+  (audit M3). `CAPACITY` is 64 K words (`guest.c:31`): at most 65,535 PC
+  hits or **16,383 comparison records** per operation, else
+  `empty_or_full_kcov` (`guest.c:739-742`). `register_netdevice` registers
+  about 130 sysctl entries (IPv4 and IPv6 device conf, neighbour parms),
+  each inserted into an rb-tree by name comparison; `memcmp`/`strcmp` are
+  instrumented one comparison record per byte, so that alone is roughly 7 k
+  records, before sysfs and kobject work. The comparison child will very
+  probably overflow. **Raising `CAPACITY` is therefore the default outcome
+  of L0**, not a contingency: to 256 K words unless L0's counts say
+  otherwise. The cost is the guest's static arrays (`guest.c:86-91`:
+  `order` 16 B and `first` 1 B per word, `records` 40 B per 4 words) plus
+  the two mapped areas: about 2.7 MB today, about 11 MB at 256 K words, in
+  a 256 MB guest. A guest constant, no kernel change.
+- **Low: the deletion's duration inside the 4 s bound** (downgraded by the
+  audit). About four scheduler round trips (`rcu_barrier` ×3–4,
+  `kthread_stop`), milliseconds on Tiny RCU; `netdev_wait_allrefs_any`'s
+  `msleep` runs only if a reference lingers after the first barrier. L0's
+  `LEANUX_TIMING` row confirms it; `wg_delete` gets no guest wait.
 - **Medium: undeclared consumers in the registration path.** Section 2.1's
   inventory is from source; `register_netdevice` touches many subsystems. The
   L0 probe is the measurement, exactly as step 0 of the choice-stream
@@ -768,14 +866,25 @@ declared by L with assumed success; A's fault injection decides their
 outcomes later).
 
 **L0 — the Linux-only probe (first, needs one VM slot briefly):** the guest
-gains opcodes 15–17 and the bare fixture; a handful of traces (bare create;
-create+up+delete; up+down+up; set_port running; random port) run on the
-current `net-choice` kernel with a mirror that is not yet extended, in
-`--trace` mode. Read: the record inventory per operation (sites, counts,
-consumer frames), the PC and comparison counts against `CAPACITY`, and the
-wall time of `wg_delete` and `wg_create` (the guest prints a
-`LEANUX_TIMING` row for these two opcodes, kept afterwards). This settles
-sections 3.1 and 10 before any mirror code.
+gains opcodes 15–17, the bare fixture and the `fail()` teardown; a handful
+of traces (bare create; create+up+delete; up+down+up; set_port running;
+random port; `wg_up` on 51998 and on 51999) run on the current `net-choice`
+kernel with a mirror that is not yet extended, in `--trace` mode.
+Checklist:
+- the record inventory per operation: sites, counts, consumer frames —
+  in particular the ratelimiter records resolve to `ratelimiter.c:57` and
+  `ratelimiter.c:192`, the port draw to `udp.c:257`, the two neighbour
+  draws to `neighbour.c:115`, the cookie records to `cookie.c:23-24`, and
+  nothing undeclared appears;
+- the PC and comparison counts of the create and delete windows against
+  `CAPACITY`, with the raise to 256 K words applied if either exceeds the
+  bound (expected for the comparison child of `wg_create`);
+- the `-EADDRINUSE` outcomes of `wg_up` on the two fixture ports;
+- the first bare `wg_get`'s `ifindex` (3) and the index after
+  delete+create (4);
+- the wall time of `wg_create` and `wg_delete` (`LEANUX_TIMING`).
+
+This settles sections 3.1 and 10 before any mirror code.
 
 **Stream G — guest and harness** (`harness/guest.c`, `harness/trace.py`,
 `harness/linux.py`, `harness/steer.py`, `harness/test_*.py`): section 6.
@@ -799,7 +908,7 @@ parameters; the report with the record inventory; signoff.
 
 | Area | L owns | Shared with |
 |---|---|---|
-| `harness/guest.c` | opcodes 15–17, bare fixture, ifindex resolution, re-up routes, `stats: null`, conditional teardown, timing row | D3 (opcode 14, the clocksource rows) — disjoint hunks |
+| `harness/guest.c` | opcodes 15–17, bare fixture, ifindex resolution, re-up routes, `stats: null`, conditional teardown, `fail()` teardown, `CAPACITY`, timing row | D3 (opcode 14, the clocksource rows) — disjoint hunks |
 | `harness/trace.py`, `harness/linux.py` | the three ops, `net_fixture`, `stats` null | D3 (`wg_advance`, `DISPATCH_SYMBOLS`) |
 | `harness/steer.py` | the `udp_lib_get_port` site | — |
 | `Leanux/WG/Device.lean`, `Socket.lean` (new) | `wgSetup`, `wgNewlink`, `wgStop`, `wgDestruct`, `socketInit`, `socketReinit`, `wgUp`/`wgDown` | D3 (`timersStop`'s body) |
@@ -827,9 +936,14 @@ parameters; the report with the record inventory; signoff.
 5. **Natural ifindex allocation** (`ifi_index` 0, cyclic: 3 then 4) with
    `Kernel.netIfindexNext`, rather than pinning `ifi_index = 3` in the
    fixture's message.
-6. **`CAPACITY`**: permission to raise the guest's KCOV area if L0 shows the
-   create or delete window overflows (a guest constant; memory noted in
-   section 10).
+6. **`CAPACITY`**: permission to raise the guest's KCOV area to 256 K words
+   as L0's default outcome (the create window's comparison child is expected
+   to overflow the 16,383-record bound; about 11 MB of guest memory; section
+   10).
+9. **The `fail()` teardown** (section 2.4, M1): a best-effort synchronous
+   `RTM_DELLINK` on every failure path of a network trace, as the condition
+   under which the inter-trace invariant and the ratelimiter refcount claim
+   hold.
 7. **Question:** should `wg_delete` of an up device be allowed while
    timers are armed (every post-handshake device) — yes under D3, since
    `wg_stop` deletes them synchronously; without D3's fields the mirror
@@ -841,30 +955,92 @@ parameters; the report with the record inventory; signoff.
    required to start bare and create the device (L's recommendation), or
    should E also plan the refresh-by-advance route?
 
-## 14. Kernel claims not line-verified, or inferred
+## 14. Kernel claims that were inferred, with the audit's verdicts
 
-Stated so the review can target them:
-- That the unbound `handshake_send_wq` **shares** `system_unbound_wq`'s pool
+Stated in the first draft so the review could target them; the audit's
+answers are recorded here:
+- The unbound `handshake_send_wq` **shares** `system_unbound_wq`'s pool
   (section 2.1): inferred from `get_unbound_pool`'s hash lookup and the
-  default attributes; a new pool would create a worker thread, which is
-  below the cut and unrecorded either way.
-- That `kobject_uevent` runs no usermode helper: from `CONFIG_UEVENT_HELPER`
-  unset; the code path in `lib/kobject_uevent.c` was not read.
-- That `wg_ratelimiter_init`'s slab cache may merge with an existing one
+  default attributes. **Audit: plausible and harmless** — a new pool would
+  create a worker thread, below the cut and unrecorded either way.
+- `kobject_uevent` runs no usermode helper. **Audit: confirmed** —
+  `lib/kobject_uevent.c:611-634` is compiled out without
+  `CONFIG_UEVENT_HELPER`.
+- `wg_ratelimiter_init`'s slab cache may merge with an existing one
   (`kmem_cache_create` aliasing): not observable; mentioned only to explain
-  why `kmem_cache_destroy` may not free it.
-- The bind-conflict analysis (section 2.3) was read from
-  `inet_rcv_saddr_equal`/`ipv6_rcv_saddr_equal`'s structure
-  (`inet_connection_sock.c:34-110`) but the exact branch lines for the
-  mapped-vs-`v6only` case were not cited; the L0 probe's `wg_up` on 51998 and
-  51999 confirms the two outcomes directly.
-- `addrconf_dev_config` returning early for `ARPHRD_NONE` (no link-local
-  address at `NETDEV_UP`): consistent with today's passing `wg_up` and the
-  D3 design's statement (`device.c:48`, `IN6_ADDR_GEN_MODE_NONE`), not
-  re-read here.
-- The statement that `cleanup_net` runs only after the trace process exits
-  assumes no other holder of the fixture netns than the process and its
-  sockets; the strategy's section 4.4 makes the same assumption.
-- The ifindex of `sit0` being 2 is inferred from `IPV6_SIT=y` and the
-  harness's working assumption `WG_IFINDEX 3`; L0's first `wg_get` on a
-  bare fixture shows the created device's index.
+  why `kmem_cache_destroy` may not free it. Not audited; no claim depends on
+  it.
+- The bind-conflict analysis (section 2.3). **Audit: the conclusion is
+  correct** (`inet_connection_sock.c:76-80`, `:97-101`); L0's `wg_up` on
+  51998 and 51999 still confirms the two outcomes directly.
+- `addrconf_dev_config` and `ARPHRD_NONE`. **Audit: the first draft's
+  mechanism was wrong** — the function admits `ARPHRD_NONE`
+  (`addrconf.c:3495-3504`) and proceeds; no link-local address is added only
+  because `wg_open` set `addr_gen_mode = NONE` (`device.c:47-48`), and
+  `ipv6_mc_up` draws nothing (`MAF_NOREPORT`, `mcast.c:906,688,724`).
+  Section 2.2 is corrected.
+- `cleanup_net` runs only after the trace process exits. **Audit: holds
+  except on the failure path** — a `fail()`ed trace exits without
+  `delete_wg0`; section 2.4 (M1) states the condition and the fix.
+- `sit0` is ifindex 2. **Audit: confirmed by the config.** L0's first bare
+  `wg_get` still shows the created device's index.
+- The deletion's duration: **downgraded** to about four scheduler round
+  trips, milliseconds (section 10). The KCOV capacity: **upgraded** to a
+  likely overflow of the create window's comparison child (section 10).
+
+## 15. Audit record [AGENT 2026-10-05]
+
+An independent audit of the first draft verified almost every kernel path
+claim and found:
+- **C1 (critical).** Every `ratelimiter.c` line number was wrong: the
+  first draft's numbers came from a listing of `main.c` and `ratelimiter.c`
+  concatenated, so each was 78 too high (the file is 223 lines). Corrected
+  throughout: the GC is `:55-83` with its clock read at `:57`; init is
+  `:158-203` (`++init_refcnt != 1` at `:161`, the cache at `:164-165`, the
+  sizing at `:173-177`, the tables at `:179-185`, the GC queued at `:191`,
+  the key drawn at `:192`, the failure decrement at `:200`); uninit is
+  `:205-221` (the refcount test at `:208`, `cancel_delayed_work_sync` at
+  `:211`, `gc_entries(NULL)` at `:212`, `rcu_barrier` at `:213`). The sites
+  `.ratelimiterKey` and `.ratelimiterGcNow` are at `:192` and `:57`; L0's
+  checklist requires the resolved consumer frames to equal them. (The audit
+  quoted `:164` and `:181`/`:185` for the cache and table tests; the source
+  has the tests at `:165`, `:180` and `:185`, which the decisions use.)
+- **M1.** The refcount claim and the inter-trace invariant assumed every
+  trace reaches teardown; a `fail()`ed trace does not. Now stated as a
+  condition, with the best-effort synchronous `RTM_DELLINK` in `fail()`
+  (sections 2.4, 6, 13.9).
+- **M2.** Anchoring `ratelimiter.c` puts the task-context GC walk inside
+  `wg_delete` under A2. Now: `wgDestruct` → `ratelimiterUninit` → E's
+  `gcEntries none`, consuming `.ratelimiterGcNow` first; the function is
+  listed; ownership with E stated (section 4.3).
+- **M3.** The comparison-mode overflow of the create window is likely, not
+  possible: about 130 sysctl registrations with per-byte comparison records.
+  Raising `CAPACITY` is L0's default outcome; the memory figure corrected
+  from "15 → 60 MB" to about 2.7 MB today and 11 MB at 256 K words
+  (`guest.c:86-91`) (sections 10, 11, 13.6).
+- **m1.** `synchronize_net` does not sleep on this kernel (Tiny RCU,
+  `tiny.c:150-159`; no `might_resched` under `PREEMPT_NONE`), so
+  `mayHaveSlept` at `socketReinit` was unjustified and fail-open. The real
+  sleep points are listed in section 5 and placed in section 4.2; the
+  `Keypair.lean:144,155` comments are corrected in stream M.
+- **m2.** `addrconf_dev_config`'s mechanism corrected (section 2.2, 14).
+- **m3.** The record kinds named: `get_random_bytes` 1, `get_random_u32`
+  104, `__get_random_u32_below` 110 (one record per call, the post-rejection
+  value; `.neighReachTime` is exactly two such records),
+  `ktime_get_coarse_with_offset` 208; records are written only when
+  `current` has KCOV enabled (section 3.1).
+- **m4.** The `.neighReachTime` cut justified as "unobserved":
+  `reachable_time` is exported in `IFLA_INET6_CACHEINFO`, which the harness
+  never decodes (section 3.1).
+- **m5.** Three mutants added: `wgStop` not clearing keypairs (L-M11), not
+  clearing the handshake (L-M12, with a new trace), `wgDown` not clearing
+  `routesViaWg0` (L-M13) (section 8).
+- **m6.** The guest rules made fail-closed: `first` means no successful up
+  since this device instance was created (reset at create and delete; a
+  failed up does not count); `print_stats` maps exactly `ENODEV` to `null`;
+  the temporary rtnetlink socket is opened without `SOCK_CLOEXEC`
+  (section 6).
+- **m7.** `Syscalls.lean:95` (not `:107`); for `RTM_DELLINK` the ACK follows
+  `wg_destruct` (`rtnetlink_rcv` is `netlink_rcv_skb` with the per-message
+  `rtnl` handling inside `rtnetlink_rcv_msg`), no consequence;
+  `network_fixture` is at `guest.c:174-197` (sections 2.1, 2.4, 5).
