@@ -42,7 +42,7 @@
  		kfree(kcov);
  	}
  }
-@@ -692,6 +699,15 @@
+@@ -692,6 +699,17 @@
  	}
  }
  
@@ -54,11 +54,13 @@
 +#define KCOV_LEANUX_SECTION_STATUS	_IOR('c', 203, unsigned long)
 +static long kcov_dispatch_load(struct kcov *kcov, void __user *arg);
 +static long kcov_section_status(struct kcov *kcov, void __user *arg);
++#define KCOV_LEANUX_TIME_ADVANCE	_IOW('c', 204, unsigned long)
++static long kcov_time_advance(unsigned long __user *arg);
 +
  static long kcov_ioctl(struct file *filep, unsigned int cmd, unsigned long arg)
  {
  	struct kcov *kcov;
-@@ -729,6 +745,14 @@
+@@ -729,6 +747,16 @@
  		kcov->mode = KCOV_MODE_INIT;
  		spin_unlock_irqrestore(&kcov->lock, flags);
  		return 0;
@@ -68,12 +70,14 @@
 +		return kcov_steer_status(kcov, (void __user *)arg);
 +	case KCOV_LEANUX_DISPATCH_LOAD:
 +		return kcov_dispatch_load(kcov, (void __user *)arg);
++	case KCOV_LEANUX_TIME_ADVANCE:
++		return kcov_time_advance((unsigned long __user *)arg);
 +	case KCOV_LEANUX_SECTION_STATUS:
 +		return kcov_section_status(kcov, (void __user *)arg);
  	case KCOV_REMOTE_ENABLE:
  		if (get_user(remote_num_handles, (unsigned __user *)(arg +
  				offsetof(struct kcov_remote_arg, num_handles))))
-@@ -1125,3 +1149,418 @@
+@@ -1125,3 +1153,483 @@
  }
  
  device_initcall(kcov_init);
@@ -332,9 +336,12 @@
 + * the parent reads back (KCOV_LEANUX_SECTION_STATUS) and fails on.
 + */
 +#define KCOV_DISPATCH_MAX 16
++/* LEANUX D3: dispatch-load flags (the load argument's second word) */
++#define KCOV_DISPATCH_ARM_RECORDS 1	/* write kind-303 arm records */
 +static struct {
 +	u64 handle;
 +	u32 n;
++	u32 flags;
 +	unsigned long funcs[KCOV_DISPATCH_MAX];
 +} kcov_dispatch;				/* under kcov_remote_lock */
 +static atomic_t kcov_sections_dropped, kcov_sections_opened;
@@ -439,18 +446,19 @@
 +}
 +EXPORT_SYMBOL(kcov_dispatch_resched);
 +
-+/* LEANUX: arm: { u32 n; u32 pad; u64 funcs[n]; }, on the remote instance of
-+ * the calling task, under its common handle; disarmed in kcov_remote_reset. */
++/* LEANUX: arm: { u32 n; u32 flags; u64 funcs[n]; }, on the remote instance
++ * of the calling task, under its common handle; disarmed in
++ * kcov_remote_reset. flags: KCOV_DISPATCH_ARM_RECORDS (D3) or 0. */
 +static long kcov_dispatch_load(struct kcov *kcov, void __user *arg)
 +{
 +	u64 funcs[KCOV_DISPATCH_MAX];
 +	unsigned long flags;
 +	long ret = 0;
-+	u32 n, i;
++	u32 n, i, load_flags;
 +
-+	if (get_user(n, (u32 __user *)arg))
++	if (get_user(n, (u32 __user *)arg) || get_user(load_flags, (u32 __user *)(arg + 4)))
 +		return -EFAULT;
-+	if (!n || n > KCOV_DISPATCH_MAX)
++	if (!n || n > KCOV_DISPATCH_MAX || (load_flags & ~KCOV_DISPATCH_ARM_RECORDS))
 +		return -EINVAL;
 +	if (copy_from_user(funcs, arg + 8, n * sizeof(funcs[0])))
 +		return -EFAULT;
@@ -465,6 +473,7 @@
 +	} else {
 +		kcov_dispatch.handle = current->kcov_handle;
 +		kcov_dispatch.n = n;
++		kcov_dispatch.flags = load_flags;
 +		for (i = 0; i < n; i++)
 +			kcov_dispatch.funcs[i] = funcs[i];
 +		atomic_set(&kcov_sections_dropped, 0);
@@ -492,12 +501,74 @@
 +	spin_unlock_irqrestore(&kcov_remote_lock, flags);
 +	return copy_to_user(arg, status, sizeof(status)) ? -EFAULT : 0;
 +}
++
++/*
++ * LEANUX D3 (docs/2026-10-05-d3-timers.md, section 3.3): the arm record.
++ * mod_timer calls this with the timer's function, jiffies and the new
++ * expiry; for a function in the armed dispatch set, in a recording context,
++ * it writes kind 303 {jiffies, expires} (16 bytes) at the caller's return
++ * address. Lock-free: mod_timer is hot across the kernel, and the set only
++ * changes while no trace runs (kcov_dispatch_load before the trace process
++ * exists, disarm in kcov_remote_reset), so a READ_ONCE snapshot suffices;
++ * outside a trace this costs one load. Written only when the instance was
++ * armed with KCOV_DISPATCH_ARM_RECORDS (a load-time switch: off until the
++ * mirror consumes the record).
++ */
++void notrace kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsigned long ip)
++{
++	unsigned long fn = (unsigned long)func;
++	u64 v[2];
++	u32 n, i;
++
++	if (!READ_ONCE(kcov_dispatch_kcov) || !(READ_ONCE(kcov_dispatch.flags) & KCOV_DISPATCH_ARM_RECORDS))
++		return;
++	n = min_t(u32, READ_ONCE(kcov_dispatch.n), KCOV_DISPATCH_MAX);
++	for (i = 0; i < n; i++)
++		if (READ_ONCE(kcov_dispatch.funcs[i]) == fn) {
++			v[0] = now;
++			v[1] = expires;
++			kcov_choice_ip(303, ip, v, sizeof(v));
++			return;
++		}
++}
++EXPORT_SYMBOL(kcov_timer_arm);
++
++/*
++ * LEANUX D3 (section 4.3): the virtual time advance, on the calling task's
++ * own KCOV descriptor: { unsigned long ticks; }, 1 <= ticks <= 2^31. Only
++ * from a task that is collecting (the trace process), so the kind-304
++ * record {jiffies before, jiffies after} is never lost; the helper refuses
++ * any timekeeper clocksource but refined-jiffies (-EOPNOTSUPP). The next
++ * tick advances the timekeeper and raises TIMER_SOFTIRQ, as when time passes.
++ */
++static long kcov_time_advance(unsigned long __user *arg)
++{
++	struct task_struct *t = current;
++	unsigned long ticks;
++	u64 v[2];
++	int ret;
++
++	if (get_user(ticks, arg))
++		return -EFAULT;
++	if (!ticks || ticks > (1UL << 31))
++		return -EINVAL;
++	if (!check_kcov_mode(KCOV_MODE_TRACE_PC, t) &&
++	    !(IS_ENABLED(CONFIG_KCOV_ENABLE_COMPARISONS) && check_kcov_mode(KCOV_MODE_TRACE_CMP, t)))
++		return -EPERM;
++	ret = leanux_time_advance(ticks, &v[0], &v[1]);
++	if (ret)
++		return ret;
++	kcov_choice_write(t, 304, _RET_IP_, v, sizeof(v));
++	return 0;
++}
 --- a/include/linux/kcov.h
 +++ b/include/linux/kcov.h
-@@ -44,6 +44,14 @@
+@@ -44,6 +44,18 @@
  void kcov_remote_start(u64 handle);
  void kcov_remote_stop(void);
  u64 kcov_common_handle(void);
++/* LEANUX D3: the virtual time advance (kernel/time/timekeeping.c). */
++int leanux_time_advance(unsigned long ticks, u64 *before, u64 *after);
 +/* LEANUX: a choice recorded at a generic interception point. */
 +void kcov_choice_ip(u32 kind, unsigned long ip, void *data, unsigned int len);
 +/* LEANUX: a dispatch section (process_one_work, the NET_RX vector). */
@@ -506,10 +577,12 @@
 +void kcov_dispatch_stop(struct kcov_dispatch_section *s);
 +/* LEANUX: __cond_resched is about to schedule. */
 +void kcov_dispatch_resched(unsigned long ip);
++/* LEANUX D3: mod_timer's arm record (kind 303). */
++void kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsigned long ip);
  
  static inline void kcov_remote_start_common(u64 id)
  {
-@@ -99,6 +107,11 @@
+@@ -99,6 +111,12 @@
  static inline void kcov_finish_switch(struct task_struct *t) {}
  static inline void kcov_remote_start(u64 handle) {}
  static inline void kcov_remote_stop(void) {}
@@ -518,6 +591,7 @@
 +static inline void kcov_dispatch_start(struct kcov_dispatch_section *s, void *func) {}
 +static inline void kcov_dispatch_stop(struct kcov_dispatch_section *s) {}
 +static inline void kcov_dispatch_resched(unsigned long ip) {}
++static inline void kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsigned long ip) {}
  static inline u64 kcov_common_handle(void)
  {
  	return 0;
@@ -980,6 +1054,43 @@
  EXPORT_SYMBOL(ktime_get_coarse_ts64);
  
  /*
+@@ -2542,3 +2667,36 @@
+ }
+ EXPORT_SYMBOL(hardpps);
+ #endif /* CONFIG_NTP_PPS */
++
++/*
++ * LEANUX D3 (docs/2026-10-05-d3-timers.md, section 4.3, option C-jiffies):
++ * advance jiffies_64 by @ticks, as do_timer does at a tick, under
++ * jiffies_lock and jiffies_seq; tick_next_period moves with it (cosmetic in
++ * periodic mode). Nothing else: on the refined-jiffies timekeeper the next
++ * tick's update_wall_time reads the jumped jiffies and moves every clock by
++ * the same amount. On any other timekeeper the clocks would not follow, so
++ * the helper fails closed with -EOPNOTSUPP. Holding timekeeper_lock keeps
++ * the clocksource from changing in between (no path nests the two locks the
++ * other way round).
++ */
++int leanux_time_advance(unsigned long ticks, u64 *before, u64 *after)
++{
++	struct timekeeper *tk = &tk_core.timekeeper;
++	unsigned long flags;
++	int ret = -EOPNOTSUPP;
++
++	raw_spin_lock_irqsave(&timekeeper_lock, flags);
++	if (tk->tkr_mono.clock && !strcmp(tk->tkr_mono.clock->name, "refined-jiffies")) {
++		raw_spin_lock(&jiffies_lock);
++		write_seqcount_begin(&jiffies_seq);
++		*before = jiffies_64;
++		tick_next_period = ktime_add_ns(tick_next_period, (u64)ticks * TICK_NSEC);
++		do_timer(ticks);
++		*after = jiffies_64;
++		write_seqcount_end(&jiffies_seq);
++		raw_spin_unlock(&jiffies_lock);
++		ret = 0;
++	}
++	raw_spin_unlock_irqrestore(&timekeeper_lock, flags);
++	return ret;
++}
 --- a/kernel/workqueue.c
 +++ b/kernel/workqueue.c
 @@ -55,6 +55,7 @@
@@ -1049,3 +1160,41 @@
  		preempt_schedule_common();
  		return 1;
  	}
+--- a/kernel/time/timer.c
++++ b/kernel/time/timer.c
+@@ -44,6 +44,7 @@
+ #include <linux/slab.h>
+ #include <linux/compat.h>
+ #include <linux/random.h>
++#include <linux/kcov.h>
+ #include <linux/sysctl.h>
+ 
+ #include <linux/uaccess.h>
+@@ -1239,6 +1240,8 @@
+  */
+ int mod_timer(struct timer_list *timer, unsigned long expires)
+ {
++	/* LEANUX D3: the arm record (kind 303) for an armed function */
++	kcov_timer_arm(timer->function, jiffies, expires, _RET_IP_);
+ 	return __mod_timer(timer, expires, 0);
+ }
+ EXPORT_SYMBOL(mod_timer);
+@@ -1771,6 +1774,7 @@
+ 			  unsigned long baseclk)
+ {
+ 	int count = preempt_count();
++	struct kcov_dispatch_section section;	/* LEANUX */
+ 
+ #ifdef CONFIG_LOCKDEP
+ 	/*
+@@ -1792,7 +1796,10 @@
+ 	lock_map_acquire(&lockdep_map);
+ 
+ 	trace_timer_expire_entry(timer, baseclk);
++	/* LEANUX D3: a timer dispatch section iff fn is in the armed set */
++	kcov_dispatch_start(&section, fn);
+ 	fn(timer);
++	kcov_dispatch_stop(&section);
+ 	trace_timer_expire_exit(timer);
+ 
+ 	lock_map_release(&lockdep_map);
