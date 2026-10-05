@@ -84,6 +84,11 @@ def summarize(out, traces):
     frames = symbolize([{"pcs": ips}], KERNEL / "vmlinux")["locations"]
     symbol = dict(zip(dispatch_addresses(KERNEL), DISPATCH_SYMBOLS))
     observations = {json.loads(l)["id"]: json.loads(l) for l in (out / "linux/observations.jsonl").read_text().splitlines()}
+    observed = {}
+    for line in (out / "linux/boot.log").read_text().splitlines():
+        if line.startswith("LEANUX_WGOBS "):
+            record = json.loads(line[len("LEANUX_WGOBS "):])
+            observed[(record["id"], record["index"])] = record
     report = {}
     for trace in traces:
         lines = []
@@ -105,7 +110,9 @@ def summarize(out, traces):
             obs = observations[trace["id"]]["observations"][i]
             extra = ""
             if op["op"] == "wg_observe":
-                extra = f" datagrams={[(d[0], d[1], d[2]) for d in obs['datagrams']]} stats={obs['stats']}"
+                record = observed[(trace["id"], i)]
+                extra = (f" datagrams={[(d[0], d[1], d[2]) for d in record['datagrams']]}"
+                         f" replies={[(r[3], r[4]) for r in record['replies']]} stats={record['stats']}")
             lines.append(f"[{i}] {op['op']} ret={obs['ret']}{extra}: " + " ".join(desc))
         report[trace["id"]] = lines
     return report
@@ -116,6 +123,7 @@ def main():
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--only")
     parser.add_argument("--no-arm-records", action="store_true")
+    parser.add_argument("--summarize-only", action="store_true", help="summarize an existing --out")
     args = parser.parse_args()
     from evaluator.check import load_hidden_sites
     selected = traces()
@@ -127,9 +135,10 @@ def main():
     calls = call_sites(KERNEL / "vmlinux", args.out.resolve().parent / "cache")
     steer_wire = {t["id"]: resolve_steering(t, by_label, calls) for t in selected if "steer" in t}
     out = args.out.resolve()
-    out.mkdir(parents=True)
-    (out / "traces.jsonl").write_text("".join(json.dumps(t) + "\n" for t in selected))
-    run_linux(selected, out / "linux", timeout=600, steer_wire=steer_wire, arm_records=not args.no_arm_records)
+    if not args.summarize_only:
+        out.mkdir(parents=True)
+        (out / "traces.jsonl").write_text("".join(json.dumps(t) + "\n" for t in selected))
+        run_linux(selected, out / "linux", timeout=600, steer_wire=steer_wire, arm_records=not args.no_arm_records)
     report = summarize(out, selected)
     (out / "summary.json").write_text(json.dumps(report, indent=1) + "\n")
     sections = [json.loads(l) for l in (out / "linux/sections.jsonl").read_text().splitlines()]
