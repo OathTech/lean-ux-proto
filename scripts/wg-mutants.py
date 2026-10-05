@@ -112,10 +112,9 @@ MUTANTS = [
    'Leanux/Kernel/Defs.lean',
    '  | .icmpCredit => ⟨22, "icmp_global_consume", "random", "net/ipv4/icmp.c", 268, 1, .cut⟩\n',
    '  | .icmpCredit => ⟨22, "icmp_global_consume", "random", "net/ipv4/icmp.c", 269, 1, .cut⟩\n'),
-  ('H-M11-no-fixture-cut', 'negative control: cut records in an operation without its cut point (wg_xmit)',
-   'Leanux/Syscalls.lean',
-   "    Env.fixtureSend\n    let ret ← WG.wgXmit family addr (← Env.xmitPacket family addr payload)\n",
-   "    let ret ← WG.wgXmit family addr (← Env.xmitPacket family addr payload)\n"),
+  # H-M11 (no fixture cut in wg_xmit) retired [USER 2026-10-05]: since D2's
+  # IP_PMTUDISC_DO the xmit path draws no IP ident, so the cut consumes nothing
+  # and the control is equivalent.
   # Choice stream, step 2: paths only steering reaches
   ('S2-M1-lookup-ignores-type', 'state: the index lookup ignores its type mask', 'Leanux/WG/Peer.lean',
    "      if ← branch .idxTypeMatch (kinds.contains e.kind) then entry := some e\n",
