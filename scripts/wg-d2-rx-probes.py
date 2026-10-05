@@ -158,10 +158,12 @@ def traces():
         "rx_counter_jump": data_trace([data_message(key, index, 5, b""),
                                        data_message(key, index, 5 + 8192 + 70, b""),
                                        data_message(key, index, 5 + 8192 + 3, b"")]),
-        # partial bitmap clears (1 <= top <= 127, review m3): 100 (word 1), 160
-        # (word 2: clears one word), 99 (word 1 kept: accepted), 160 again
-        # (rejected), 300 (clears words 3-4), 161 (word 2 kept: accepted)
-        "rx_word_boundary": data_trace([data_message(key, index, c, b"") for c in (100, 160, 99, 160, 300, 161)]),
+        # partial bitmap clears (1 <= top <= 127, review m3), three messages
+        # each (the per-trace time bound): 100 (word 1), 160 (word 2: clears
+        # one word), 99 (word 1 kept: accepted); and 100, 300 (clears words
+        # 2-4), 100 again (word 1 kept: rejected as a duplicate)
+        "rx_word_boundary": data_trace([data_message(key, index, c, b"") for c in (100, 160, 99)]),
+        "rx_word_clear": data_trace([data_message(key, index, c, b"") for c in (100, 300, 100)]),
         # data from [::1]: the endpoint roams to the sender's IPv6 address
         "rx_roam_v6": data_trace([data_message(key, index, 0, v4(b"from six"))], family=6),
         # an IPv6 inner datagram from an allowed source, delivered

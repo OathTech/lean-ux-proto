@@ -58,24 +58,6 @@
       "message": "040000000d0c0b0a6300000000000000900998ec3e879f21597134c7484c6514"
     },
     {
-      "op": "wg_inject",
-      "family": 4,
-      "port": 51820,
-      "message": "040000000d0c0b0aa000000000000000dc4a7a634f8aceb5ff6ebcf280dbaec9"
-    },
-    {
-      "op": "wg_inject",
-      "family": 4,
-      "port": 51820,
-      "message": "040000000d0c0b0a2c01000000000000506a69ae74a3a1142e65ea6fc64e13ca"
-    },
-    {
-      "op": "wg_inject",
-      "family": 4,
-      "port": 51820,
-      "message": "040000000d0c0b0aa1000000000000004d890773533e610c3028fdcbd67cfeaf"
-    },
-    {
       "op": "wg_observe"
     },
     {
