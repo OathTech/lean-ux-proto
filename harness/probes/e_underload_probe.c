@@ -311,8 +311,8 @@ int main(void)
     int rcvbuf = 8 << 20;
     setsockopt(s, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
 
-    /* Sanity: a single plain initiation. Not under load, valid MAC1: no cookie,
-     * but it proves the packet reaches the handshake path (no reply expected). */
+    /* Four burst mechanisms, each after a clean settle (full drain + the 1 s
+     * last_under_load decay), reporting the cookie replies it produced. */
     for (int round = 0; round < 4; round++) {
         drain(s);
         sleep(2);              /* full drain + last_under_load (1 s) decay */

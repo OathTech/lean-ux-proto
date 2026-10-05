@@ -60,10 +60,11 @@ def baked():
 
 
 def main():
-    out = ARTIFACTS / "e-underload-probe"
+    probe = sys.argv[1] if len(sys.argv) > 1 else "e_underload_probe.c"
+    out = ARTIFACTS / Path(probe).stem
     out.mkdir(parents=True, exist_ok=True)
     priv_c, init_c, pub_hex = baked()
-    src = (ROOT / "harness/probes/e_underload_probe.c").read_text()
+    src = (ROOT / "harness/probes" / probe).read_text()
     src = src.replace("PRIV_BYTES", priv_c).replace("INIT_BYTES", init_c)
     (out / "probe.c").write_text(src)
     print(f"wg0 public key (for reference): {pub_hex}", file=sys.stderr)

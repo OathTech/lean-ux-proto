@@ -41,5 +41,37 @@ point, and wg's encap socket has no GRO so `udp_rcv_segment` fans them out to
 This **refutes** the first draft's "unreachable on one CPU" claim. The revised
 design (`2026-10-05-e-dos.md`) rescopes E to include the under-load arms.
 
+## Second probe: the decay-lever gating (`e_underload_timing_probe.c`)
+
+The v2 design reached `under_load` by flooding *invalid*-MAC1 handshakes to set
+`last_under_load` cheaply, then a controlled injection under the 1 s decay. The
+second-round audit (C1/M4) asked whether the flood actually drains to idle (a
+distinct worker section) before the decay expires. Measured on the same kernel:
+
+- **A cheap (invalid-MAC1, reply-free) flood does not cross 512 via GSO/sendmmsg**
+  (even 4096 segments): the worker drains fast invalid drops faster than the GSO
+  producer (128 per softirq with a `cond_resched` between datagrams,
+  `net/socket.c:2738`). `probe_reply:false`.
+- **It does cross via io_uring** (1024, 4096, 16384 all cross): `io_uring_enter`
+  submits the sends with no per-send `cond_resched`, so it outruns the drain.
+  `probe_reply:true`. **So the flood op must use io_uring, not GSO.**
+- **A *valid*-MAC1 flood crosses by any mechanism but is not reply-free: 1024
+  valid via GSO gave 761 / 893 / 774 cookie replies over three runs** — the
+  count is high and varies ~17% run to run, confirming the raw flood's dynamics
+  are scheduling-driven and must not be modelled exactly (design §4, §11).
+- **The io_uring invalid flood drains in ~1 ms** and the **distinct-section
+  window is wide**: a valid injection at delay D ∈ {50,100,…,900} ms (all past
+  the ~1 ms drain, so the worker is idle → a new section) still gets a reply
+  (decay live); at 1200 ms it does not (decay expired). Summary:
+  `{iouring_t_drain_ms:1, iouring_max_delay_with_reply_ms:900,
+  distinct_section_viable:true}`.
+
+**Conclusion.** The decay-lever is viable: an **io_uring invalid-MAC1 flood**
+(reply-free, crosses 512, drains to idle in ~1 ms) followed by a controlled
+valid injection **~50–400 ms later** (worker idle, decay live to ~900 ms, all
+well inside the 4 s bound) gives a separate, fully-drained flood section and a
+deterministic injection section (design §4, audit C1 fix).
+
 Full serial logs are under the task artifact root
-(`.artifacts/e-underload-probe/boot.log`, Git-ignored).
+(`.artifacts/e-underload-probe/boot.log`,
+`.artifacts/e_underload_timing_probe/boot.log`, Git-ignored).
