@@ -1070,7 +1070,7 @@ def Decision.info : Decision → DecisionInfo
   -- opens the VLAN walk; then the IPv4 and IPv6 tests; then
   -- INET_ECN_encapsulate's `INET_ECN_is_ce(inner)`, whose two arms share
   -- line 49 (no witness)
-  | .vlanTypeIsVlan => d "__vlan_get_protocol_offset.vlan_type" vlh 612 [(613, 628)] []
+  | .vlanTypeIsVlan => d "__vlan_get_protocol_offset.vlan_type" vlh 609 [(610, 628)] []
   | .dsfieldIp => d "ip_tunnel_get_dsfield.ip" iph 560 [(561, 561)] [(562, 562)]
   | .dsfieldIpv6 => d "ip_tunnel_get_dsfield.ipv6" iph 562 [(563, 563)] [(565, 565)]
   | .ecnEncapInnerCe => d "INET_ECN_encapsulate.inner_ce" ech 49 [] []

@@ -132,7 +132,7 @@ def encryptWorker (checksumHelp : Packet → M Packet) (needResched : M Bool) : 
     whether it returned 0. `send4`/`send6` are a cut point, as in
     `sendBufferToPeer`: the datagram is recorded in `World.sent`. Delivery
     over loopback runs the NET_RX softirq inside this worker's section. -/
-def sendSkbToPeer (pid : PeerId) (bytes : List UInt8) : M Bool := do
+def sendSkbToPeer (pid : PeerId) (bytes : List UInt8) (ds : Nat) : M Bool := do
   let p ← getPeer pid
   let family := (p.endpoint.map (·.family)).getD 0
   let sent ← do
@@ -145,7 +145,7 @@ def sendSkbToPeer (pid : PeerId) (bytes : List UInt8) : M Bool := do
   if ← branch .sendSkbOk sent then
     let some e := p.endpoint | invariant "unreachable"
     setPeer pid { p with txBytes := p.txBytes + bytes.length }
-    modify fun w => { w with sent := w.sent ++ [{ family := e.family, addr := e.addr, port := e.port, bytes }] }
+    modify fun w => { w with sent := w.sent ++ [{ family := e.family, addr := e.addr, port := e.port, bytes, ds }] }
   return sent
 
 /-- keep_key_fresh (send.c:124-139). -/
@@ -171,7 +171,7 @@ def createDataDone (pid : PeerId) (item : List DataPacket) : M Unit := do
   for skb in item do
     _ ← branch .doneSkbIterate true
     let isKeepalive := skb.bytes.length == MESSAGE_DATA_LEN_0
-    let sent ← sendSkbToPeer pid skb.bytes
+    let sent ← sendSkbToPeer pid skb.bytes skb.ds   -- wg_socket_send_skb_to_peer(peer, skb, PACKET_CB(skb)->ds)
     -- `likely(!wg_socket_send_skb_to_peer(...) && !is_keepalive)`
     if ← andM (branch .doneSendOk sent) (branch .doneNotKeepalive !isKeepalive) then dataSent := true
   _ ← branch .doneSkbIterate false

@@ -409,7 +409,11 @@ def deliverInner (pkt : List UInt8) : M Unit := do
     if dst != WG0_ADDR4 || WG.beAt pkt 22 2 != SENDER_PORT then
       unsupported "an inner IPv4 datagram to another destination than the fixture's sender"
     -- martian sources: zeronet, loopback, multicast, class E and the limited
-    -- broadcast; and wg0's own (local) address
+    -- broadcast; and wg0's own (local) address. Environment facts behind this
+    -- set (fixture state, not C): rp_filter = 0 and accept_local = 0, no
+    -- local routes beyond the fixture's, and the only local IPv4 addresses
+    -- are 127.0.0.1 and wg0's (`fib_validate_source` drops a local source).
+    -- A fixture change shows as an inbox mismatch.
     let top := src / 2 ^ 24
     if top == 0 || top == 127 || top ≥ 224 || src == WG0_ADDR4 then
       unsupported "an inner IPv4 datagram from a martian or local source"

@@ -143,13 +143,15 @@ def counterValidate (kp : KeypairId) (theirs : Nat) : M Bool := do
     let top := min (index - indexCurrent) words
     for i in [1:top + 1] do
       _ ← branch .ctrClearIter true
-      backtrack := backtrack.set! ((i + indexCurrent) % words) 0
+      let j := (i + indexCurrent) % words
+      if j ≥ backtrack.size then invariant s!"backtrack[{j}] beyond the bitmap"
+      backtrack := backtrack.set! j 0
     _ ← branch .ctrClearIter false
     counter := theirs
   -- `!test_and_set_bit(their_counter & (BITS_PER_LONG - 1), &backtrack[index & (words - 1)])`
   let index := index % words
   let bit := theirs % BITS_PER_LONG
-  let word := backtrack[index]!
+  let some word := backtrack[index]? | invariant s!"backtrack[{index}] beyond the bitmap"
   backtrack := backtrack.set! index (word ||| (1 <<< bit))
   setKeypair kp { k with receivingCounter := { counter, backtrack } }
   return (word >>> bit) % 2 == 0

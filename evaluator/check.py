@@ -67,7 +67,7 @@ def domain_filter(traces):
     failure aborts: it is a defect, not a filtering decision."""
     payload = ''.join(json.dumps(t, separators=(',', ':'), sort_keys=True) + '\n' for t in traces)
     result = subprocess.run([MODEL, '--domain'], input=payload.encode(), capture_output=True, timeout=600)
-    if result.returncode:
+    if result.returncode or result.stderr.strip():   # a Lean panic prints and continues: a mirror defect too
         raise InvalidOutput(f'domain filter failed: {result.stderr.decode(errors="replace")[-2000:]}')
     verdicts = [loads(line) for line in result.stdout.decode().splitlines()]
     if [v.get('id') for v in verdicts] != [t['id'] for t in traces]:
@@ -128,6 +128,12 @@ def run_model(traces, out):
     result = subprocess.run([MODEL], input=payload.encode(), capture_output=True, timeout=300)
     (out / 'model.stdout').write_bytes(result.stdout)
     (out / 'model.stderr').write_bytes(result.stderr)
+    if not result.returncode and result.stderr.strip():
+        # A completed run writes nothing to stderr. A Lean panic (an
+        # out-of-range `!` access: "index out of bounds", `get!` of none,
+        # `panic!`) prints there and continues with a default value: a mirror
+        # invariant failure, never a verdict on the default.
+        raise ModelStopped('mirror_invariant', result.stderr.decode(errors='replace').strip()[-2000:])
     if result.returncode:
         kind = {3: 'unsupported_path', 4: 'mirror_invariant', 5: 'hidden_mismatch'}.get(result.returncode, 'invalid_output')
         raise ModelStopped(kind, result.stderr.decode(errors='replace').strip()[-2000:])

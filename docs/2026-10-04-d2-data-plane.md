@@ -232,8 +232,9 @@ The environment decides its outcome **fail-closed**, by an exact predicate:
   - destination `fd00:ffff::1`, port 51998;
   - a source that is not loopback or multicast. A local source is accepted
     on IPv6, an asymmetry stated in the environment;
-  - a **nonzero** UDP checksum: zero is dropped in
-    `udpv6_queue_rcv_one_skb`, while a wrong nonzero value is delivered.
+  - a **nonzero** UDP checksum: zero is dropped in `__udp6_lib_rcv`
+    (`!uh->check && !udp_get_no_check6_rx(sk)`, `udp.c:1066`), while a
+    wrong nonzero value is delivered.
 - **Everything else is `unsupported`**: other destination ports, other
   protocols (an ICMP echo or a TCP SYN would make the stack reply through
   wg0), UDP to wg0's own listen port (it re-enters `wg_receive`), and

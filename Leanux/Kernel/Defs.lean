@@ -383,6 +383,10 @@ structure SentDatagram where
   addr : Nat
   port : Nat
   bytes : List UInt8
+  /-- The outer DS field `send4`/`send6` are given (`PACKET_CB(skb)->ds`;
+      0 for handshake messages). Not observed today: the fixture reads no
+      TOS. -/
+  ds : Nat := 0
   deriving Repr, BEq
 
 /-- A datagram at the fixture's sender socket, with its source as

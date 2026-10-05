@@ -13,6 +13,7 @@ from pathlib import Path
 import re
 import selectors
 import signal
+import sys
 import subprocess
 import time
 
@@ -417,13 +418,17 @@ def run_linux(traces, outdir, *, timeout=120, steer_wire=None):
         # Another worktree's guest may hold the one QEMU slot: wait for it, up
         # to QEMU_LOCK_WAIT seconds, then fail as before.
         deadline = time.monotonic() + QEMU_LOCK_WAIT
+        waited = False
         while True:
             try:
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 break
             except BlockingIOError as exc:
                 if time.monotonic() >= deadline:
-                    raise LinuxRunError("resource_busy", "Another project guest owns the QEMU slot", outdir) from exc
+                    raise LinuxRunError("resource_busy", f"Another project guest held the QEMU slot for {QEMU_LOCK_WAIT} s", outdir) from exc
+                if not waited:
+                    print(f"waiting for the QEMU slot ({lockpath}), up to {QEMU_LOCK_WAIT} s", file=sys.stderr, flush=True)
+                    waited = True
                 time.sleep(2)
         return _run_locked(traces, outdir, timeout)
 

@@ -12,6 +12,8 @@ invariant; run `--trace wg_trie_v6` by hand to see A2 alone reject it.
 import glob
 import json, os, subprocess, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
+from evaluator.napi_orders import napi_orders  # noqa: E402
 MUTANTS = [
   ('W1-unmasked-read-node', 'A1: dump shows unmasked prefixes', 'Leanux/WG/AllowedIps.lean',
    "  let masked := if hasCidr then n.bits / 2 ^ (n.bitlen - n.cidr) * 2 ^ (n.bitlen - n.cidr) else 0\n",
@@ -309,6 +311,11 @@ for name, what, path, old, new in MUTANTS:
                              resched_records=resched_records(out))
         if name == 'D1-M15-ignore-resched' and report['status'] == 'pass' and not results[name]['resched_records']:
             results[name]['status'] = 'inconclusive'   # no reschedule occurred to ignore
+        if name == 'D2-M12-poll-outside-worker':
+            orders = napi_orders(os.path.join(ROOT, out))
+            results[name]['napi_orders'] = dict(a=orders['a'], bc=orders['bc'])
+            if report['status'] == 'pass' and not orders['bc']:
+                results[name]['status'] = 'inconclusive'   # only order (a) occurred, which cannot reject it
         print(name, results[name]['status'], report['counts'], kinds, 'resched', results[name]['resched_records'], flush=True)
     finally:
         run(['git', 'checkout', '--', path])

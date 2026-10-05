@@ -324,6 +324,9 @@ PACKET_OPTIONAL = {"payload"}
 # IPv6 payloads above 1372 do not fit either; the mirror's environment places
 # them outside the domain (Env.xmitPacket).
 MAX_XMIT_PAYLOAD = 1392
+# IPv6 payloads above 1372 exceed the MTU (1420 - 40 - 8) and fragment at the
+# source (IPV6_PMTUDISC_WANT): outside the mirror's domain, so invalid input.
+MAX_XMIT_PAYLOAD6 = 1372
 
 
 def validate_packet(packet, where="packet"):
@@ -355,6 +358,8 @@ def validate_packet(packet, where="packet"):
         payload = packet["payload"]
         if type(payload) is not str or not re.fullmatch(f"(?:[0-9a-f]{{2}}){{1,{MAX_XMIT_PAYLOAD}}}", payload):
             raise InvalidConfig(f"{where}.payload: expected 1 to {MAX_XMIT_PAYLOAD} bytes of lowercase hex")
+        if packet["family"] == 6 and len(payload) > 2 * MAX_XMIT_PAYLOAD6:
+            raise InvalidConfig(f"{where}.payload: IPv6 payloads are at most {MAX_XMIT_PAYLOAD6} bytes (no fragmentation)")
         if packet["family"] == 6 and dst[0] == 0xfe and dst[1] & 0xc0 == 0x80:
             raise InvalidConfig(f"{where}.dst: a link-local destination (wg0's source address is random)")
     return packet
