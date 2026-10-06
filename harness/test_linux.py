@@ -5,7 +5,7 @@ import tempfile
 import time
 import unittest
 
-from .linux import ARTIFACTS, LinuxRunError, _bounded_process
+from .linux import ARTIFACTS, GUEST_VARIANTS, LinuxRunError, _bounded_process, run_linux
 
 
 class BoundedProcessTests(unittest.TestCase):
@@ -46,6 +46,15 @@ class BoundedProcessTests(unittest.TestCase):
             time.sleep(0.01)
         if status.exists():
             self.assertEqual(status.read_text().split(") ", 1)[1].split()[0], "Z")
+
+
+class GuestVariantTests(unittest.TestCase):
+    def test_only_named_variants(self):
+        # a negative control's guest build (D3's wait-0) is named, never free-form flags
+        self.assertEqual(GUEST_VARIANTS["advance-wait-0"], ("-DADVANCE_WAIT_US=0", "-DADVANCE_ABSORB=0"))
+        trace = {"version": 1, "id": "v", "ops": [{"op": "eventfd2", "init": 0, "flags": 0}]}
+        with self.assertRaises(ValueError):
+            run_linux([trace], ARTIFACTS / "never-created", guest_variant="-DADVANCE_WAIT_US=0")
 
 
 if __name__ == "__main__":

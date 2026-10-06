@@ -317,6 +317,77 @@ class EvaluationChecks(unittest.TestCase):
         self.assertEqual(traces, generate(29, 1000))
 
 
+    def test_timer_advances(self):
+        # D3 (section 7): the advance for a target timer, past the wheel's rounding
+        from evaluator.generate import fire_advance, quiet_limit, wheel_granularity
+        self.assertEqual([wheel_granularity(d) for d in (62, 63, 503, 504, 4031, 4032, 32256)],
+                         [1, 8, 8, 64, 64, 512, 4096])
+        self.assertEqual([fire_advance(d) for d in (1250 + 83, 2500, 3750 + 83, 1250, 135000)],
+                         [1450, 2600, 3950, 1350, 139150])
+        self.assertEqual(quiet_limit(6250), 4225)
+
+    def test_timers_share_zero_keeps_the_stream(self):
+        from evaluator.generate import generate_wireguard
+        a = generate_wireguard(11, 160, steered=0.3, data=0.2)
+        self.assertEqual(a, generate_wireguard(11, 160, steered=0.3, data=0.2, timers=0.0))
+        b = generate_wireguard(11, 160, steered=0.3, data=0.2, timers=0.2)
+        timer = lambda t: any(op['op'] == 'wg_advance' for op in t['ops'])
+        others = [t['ops'] for t in b if not timer(t)]
+        self.assertGreater(len(b) - len(others), 15)
+        self.assertEqual(others, [t['ops'] for t in a][:len(others)])
+
+    def test_steered_timer_traces(self):
+        import random
+        from evaluator.generate import WAIT_BUDGET_SECONDS, steered_timers, wait_after_up
+        rng = random.Random(7)
+        fired = set()
+        for i in range(300):
+            trace = validate_trace(steered_timers(rng, f't{i}'))
+            self.assertLessEqual(wait_after_up(trace['ops']), WAIT_BUDGET_SECONDS)
+            sites = [s for s, _ in trace['steer']]
+            # the first initiation's values (after a response's two draws),
+            # then three draws per later initiation
+            head = 2 if sites[0] == 'resp_ephemeral' else 0
+            self.assertEqual(sites[head:head + 3], ['init_ephemeral', 'tai64n_now', 'index_draw'])
+            later = trace['steer'][head + 3:]
+            self.assertEqual(later, [[s, 'draw'] for s in ('init_ephemeral', 'tai64n_now', 'index_draw')]
+                             * (len(later) // 3))
+            self.assertTrue(any(op['op'] == 'wg_advance' for op in trace['ops']))
+            fired.update(e for e in trace['expect'] if e.startswith('fired:'))
+        self.assertEqual(fired, {f'fired:wg_expired_{n}' for n in (
+            'retransmit_handshake', 'send_keepalive', 'new_handshake', 'zero_key_material',
+            'send_persistent_keepalive')})
+
+    def test_jiffies_progress(self):
+        def rec(kind, seq, a, b, func=None):
+            data = a.to_bytes(8, 'little').hex() + b.to_bytes(8, 'little').hex()
+            return [kind, 0, seq, 16, data, func]
+        trace = {'version': 1, 'id': 'j', 'ops': [{'op': 'wg_up'}, {'op': 'wg_advance', 'ticks': 1450},
+                                                   {'op': 'wg_observe'}]}
+        J = 2**32 - 100
+        good = [[rec(303, 1, J, J + 1300)],
+                [rec(304, 2, J + 10, J + 1460), rec(300, 3, 0, 0), rec(303, 4, J + 1461, J + 2800)],
+                []]
+        self.assertEqual(check.jiffies_problems([trace], {('j', 'pc'): good}), {})
+        def problems(ops):
+            return [p['problem'] for p in check.jiffies_problems([trace], {('j', 'pc'): ops}).get('j', [])]
+        # the jump recorded by another amount (a tick handler re-counting it)
+        self.assertEqual(problems([good[0], [rec(304, 2, J + 10, J + 2910)] + good[1][1:], []]),
+                         ['the advance moved jiffies by another amount', 'jiffies went back',
+                          'an arm after an advance before its absorbing tick'])
+        # a timer section before the advance record (a tick between the two)
+        self.assertEqual(problems([good[0], [good[1][1], good[1][0], good[1][2]], []]),
+                         ['records before the advance record'])
+        # an arm in the advance's operation before its absorbing tick
+        self.assertEqual(problems([good[0], [good[1][0], rec(303, 4, J + 1460, J + 2800)], []]),
+                         ['an arm after an advance before its absorbing tick'])
+        # natural progress beyond the real-time bound; an advance record elsewhere
+        self.assertEqual(problems([good[0], good[1], [rec(303, 5, J + 1461 + 1100, J + 9000)]]),
+                         ['jiffies progressed beyond the real-time bound'])
+        self.assertEqual(problems([good[0], [], [rec(304, 5, J + 10, J + 1460)]]),
+                         ['an advance without exactly one advance record', 'an advance record outside wg_advance'])
+
+
 if __name__ == '__main__':
     unittest.main()
 
