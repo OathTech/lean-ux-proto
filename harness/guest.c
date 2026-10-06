@@ -654,6 +654,10 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             strcpy(up_request.ifr_name, "wg0");
             if (ioctl(SEND_FD, SIOCGIFFLAGS, &up_request)) fail(t->id, i, "environment_failure", "get_wg0_flags");
             up_request.ifr_flags |= IFF_UP;
+            /* the trace bound's origin: before wg_open arms any timer, and
+             * outside the coverage window (the clock read is a choice
+             * record of the generic clock hook) */
+            clock_gettime(CLOCK_BOOTTIME, &went_up);
         }
         if (op->code == 12) usleep(OBSERVE_WAIT_US);
         __atomic_store_n(&coverage[0], 0, __ATOMIC_RELAXED);
@@ -683,8 +687,6 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             /* dev_change_flags(wg0, flags | IFF_UP) -> wg_open. The current
              * flags were read before coverage started. */
             struct ifreq request = up_request;
-            /* the bound's origin: before wg_open arms any timer */
-            clock_gettime(CLOCK_BOOTTIME, &went_up);
             ret = syscall(SYS_ioctl, SEND_FD, SIOCSIFFLAGS, &request);
             break;
         }
