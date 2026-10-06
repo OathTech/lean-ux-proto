@@ -1348,8 +1348,10 @@ def Decision.info : Decision → DecisionInfo
   -- 2101 and 2103 are the shared exit
   | .atimeEqual => d "atime_needs_update.atime_equal" "fs/inode.c" 2100 [] []
   -- relatime_need_update, inlined at 2096: 1945 `return true` has no point of
-  -- its own (it joins 2099)
-  | .relatimeNotSet => d "relatime_need_update.not_relatime" "fs/inode.c" 1944 [(1945, 1945)] [(1949, 1969)]
+  -- its own (it joins 2099), and the line table gives that join's atime load
+  -- 1949 (`atime = inode_get_atime(inode)`, merged with 2099's), so 1949 is
+  -- run on both sides (found by the first pipes run)
+  | .relatimeNotSet => d "relatime_need_update.not_relatime" "fs/inode.c" 1944 [(1945, 1945)] [(1950, 1969)]
   -- touch_atime: 2112's `return` is a tail jump to the coverage hook, which
   -- records the caller's return address (outside touch_atime)
   | .touchAtimeNoUpdate => d "touch_atime.no_update" "fs/inode.c" 2111 [(2112, 2112)] [(2114, 2131)]
