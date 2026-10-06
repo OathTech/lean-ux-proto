@@ -273,29 +273,29 @@ E_MUTANTS = [
 # §10). Checked on the e_underload_* traces (the sixth field 'e_underload').
 E_UNDERLOAD_MUTANTS = [
   ('E-M6-under-load-threshold-gt', 'data: under_load uses `>` not `>=` the threshold (receive.c:112). NOT '
-   'CLAIMED: the injection evaluates under_load with queue_len far below 512, and the flood section that '
-   'crosses 512 is discarded (§4.1), so the exact threshold is not observable in this design.',
+   'CLAIMED: the threshold is not a declared comparison and the leading packet runs with queue_len well above '
+   '512, so `>` vs `>=` is not observable (like E-M5).',
    'Leanux/WG/Receive.lean',
    "  if ← branch .hsUnderLoad (queueLen ≥ MAX_QUEUED_INCOMING_HANDSHAKES / 8) then\n",
    "  if ← branch .hsUnderLoad (queueLen > MAX_QUEUED_INCOMING_HANDSHAKES / 8) then\n", 'e_underload_flood'),
   ('E-M7-make-cookie-ignores-source-port', 'data: make_cookie hashes only the source IP, not the port '
    '(cookie.c:113); the cookie, hence the reply bytes, differ (e_underload_cookie)', 'Leanux/WG/Receive.lean',
    "  return blake2s 16 secret (addr ++ netBytes src.sport 2)\n",
-   "  return blake2s 16 secret addr\n", 'underload-decay'),
-  ('E-M8-decay-ignored', 'behavior: the mirror ignores last_under_load, so the injection is not under load '
-   '(receive.c:117); it takes the no-cookie proceed arm and the garbage initiation finds no peer — no cookie '
+   "  return blake2s 16 secret addr\n", 'e_underload'),
+  ('E-M8-queue-under-load-ignored', 'behavior: the leading flood packet is treated as not under load despite '
+   'queue_len >= 512 (receive.c:112-115); it takes the no-cookie proceed arm instead of sending a cookie — no '
    'reply where Linux sent one (e_underload_cookie)', 'Leanux/WG/Receive.lean',
-   "    _ ← hiddenClock .birthdateExpired\n    underLoad := true\n",
-   "    _ ← hiddenClock .birthdateExpired\n    underLoad := false\n", 'underload-decay'),
+   "    modify fun w => { w with lastUnderLoad := some now }\n    underLoad := true\n",
+   "    modify fun w => { w with lastUnderLoad := some now }\n    underLoad := false\n", 'e_underload'),
   ('E-M9-mac2-compare-inverted', 'control: wg_cookie_validate_packet treats a matching MAC2 as a miss '
    '(cookie.c:143); a valid-MAC1 no-cookie initiation is then read as rate-limited (unreached ratelimiter)',
    'Leanux/WG/Receive.lean',
    "  if ← branch .macCookieInvalid (computed2 != givenMac2) then return .noCookie\n",
-   "  if ← branch .macCookieInvalid (computed2 == givenMac2) then return .noCookie\n", 'underload-decay'),
+   "  if ← branch .macCookieInvalid (computed2 == givenMac2) then return .noCookie\n", 'e_underload'),
 ]
 PENDING = {m[0] for m in D2_MUTANTS if m[3] is None}
 # A subset value naming a whole suite (not a trace-id prefix).
-SUITE_NAMES = {'underload-decay'}
+SUITE_NAMES = set()
 # Workstream L (docs/2026-10-05-l-lifecycle.md, section 8): checked on the
 # l_* traces of the wireguard suite (the sixth field), each naming the trace
 # that rejects it. L-M10 is a data-only correction nothing observes: it is

@@ -592,6 +592,13 @@ structure World where
       control-flow mismatch (every normal trace keeps the constant-false decay,
       §4.2). -/
   lastUnderLoad : Option Int := none
+  /-- E-B, the queue depth a flood added (`wg_flood`'s invalid packets, not
+      modeled individually). The receive worker sees `handshakeQueue.length +
+      floodDepth`, so the leading valid packet the mirror checks is processed
+      with the queue over the `under_load` threshold (deterministic on both
+      guest children, no dependence on the one-second decay). Set only while a
+      flood's leading packets are processed; 0 otherwise. -/
+  floodDepth : Nat := 0
 
 /-- Why a mirror execution stopped without an observation. -/
 inductive Stop where
@@ -748,54 +755,38 @@ def skipCutExactly (site : HiddenSite) (n : Nat) : M Unit := do
   if let some (r :: _) := (← get).hidden then
     if r.site == site.info.id then throw (.hidden s!"more than {n} records of {site.info.label}")
 
-/-- E-B, the section-bracket discard (docs/2026-10-05-e-dos.md §4.1): consume
-    the records of the current operation that belong to a flood's dispatched
-    `w` section and the producer `net_rx_action` sections around it, dropping
-    each interior record (the per-packet `under_load`/decay clock reads, whose
-    count is scheduling-driven and not modeled). Returns the number of records
-    dropped and whether a `w` section opened (so `under_load` was reached). The
-    loop is bounded by the operation's record count. Fails closed if a `w`
-    section opened without a matching stop (a worker outliving the window). -/
-def discardFloodSection (w : Worker) : M (Nat × Bool × Bool) := do
-  let startW := (HiddenSite.sectionStart w).info.id
-  let stopW := (HiddenSite.sectionStop w).info.id
-  let startRx := (HiddenSite.sectionStart .netRx).info.id
-  let stopRx := (HiddenSite.sectionStop .netRx).info.id
+/-- Drop the next choice record (after ambient ones) and return its site;
+    `none` when none remain (the domain filter, or an exhausted stream). -/
+def dropHiddenRecord : M (Option Nat) := do
+  skipAmbient
+  match (← get).hidden with
+  | some (r :: rest) =>
+    modify fun s => { s with hidden := some rest }
+    return some r.site
+  | _ => return none
+
+/-- E-B, the section-bracket discard (docs/2026-10-05-e-dos.md §4.1, as
+    superseded by the queue-depth design): drop head records whose site is in
+    `allowed` until the next record is `stop` (then stop) or the stream is
+    exhausted. A record outside `allowed` before `stop` is a hidden mismatch —
+    a packet the flood produced that the mirror did not model where it stands
+    (a mid-flood injection). Returns how many were dropped and whether an
+    `.under_load_now` record was seen (so the flood crossed the threshold). The
+    loop is bounded by the operation's record count. -/
+def discardFloodRecords (stop : Nat) (allowed : List Nat) : M (Nat × Bool) := do
   let underLoad := (HiddenSite.underLoadNow).info.id
-  -- the flood op is fully discarded: the producer `net_rx` sections, the
-  -- receive-worker section(s), the per-packet `under_load`/decay clock reads,
-  -- and the fixture's IP-layer cut draws for its outbound sends.
-  let flood := [startW, stopW, startRx, stopRx, underLoad, (HiddenSite.birthdateExpired).info.id,
-                (HiddenSite.ipIdentKey).info.id, (HiddenSite.ipIdentReserve).info.id,
-                (HiddenSite.flowHashSecret).info.id,
-                -- the flood socket's ephemeral source port, and the worker's
-                -- cond_resched while draining the flood
-                (HiddenSite.udpPortDraw).info.id, (HiddenSite.reschedReceive).info.id]
   let mut dropped := 0
-  let mut sawWorker := false
   let mut crossed := false
-  let mut openW := 0
   for _ in [0:4000000] do
-    skipAmbient
-    match (← get).hidden with
-    | some (r :: rest) =>
-      if r.site == startW then sawWorker := true; openW := openW + 1
-      else if r.site == stopW then
-        if openW == 0 then throw (.hidden "flood: a receive-worker section stop without its start")
-        openW := openW - 1
-      else if r.site == underLoad then crossed := true
-      else if !flood.contains r.site then
-        -- a record that is not the flood's. Inside a receive-worker section it
-        -- is a modeled read (a merged injection, §4.1): fail closed. Outside,
-        -- the flood is drained and the next operation owns the rest.
-        if openW != 0 then
-          throw (.hidden "flood: a modeled record inside the flood's receive-worker section (a merged injection)")
-        return (dropped, sawWorker, crossed)
-      modify fun s => { s with hidden := some rest }
+    match ← peekHiddenSite with
+    | some s =>
+      if s == stop then return (dropped, crossed)
+      if !allowed.contains s then
+        throw (.hidden s!"flood: a modeled record (site {s}) inside the discarded flood region (a mid-flood injection)")
+      if s == underLoad then crossed := true
+      _ ← dropHiddenRecord
       dropped := dropped + 1
-    | _ =>
-      if openW != 0 then throw (.hidden "flood: the receive worker outlived the flood window")
-      return (dropped, sawWorker, crossed)
+    | none => return (dropped, crossed)
   throw (.hidden "flood: the record stream did not drain")
 
 def getFile (id : FileId) : M File := do

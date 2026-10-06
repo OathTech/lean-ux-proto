@@ -697,62 +697,66 @@ static unsigned long *enable_remote(const struct trace *t, int comparisons)
     return area;
 }
 
-/* E-B (docs/2026-10-05-e-dos.md §8): an io_uring batch of `n_invalid` invalid-
- * MAC1 initiations (and, for the merged-injection control, one bundled valid
- * initiation submitted first) to wg0's port. There is no per-send cond_resched,
- * so the batch outruns the single-CPU receive worker and crosses the
- * handshake_queue_len >= 512 under_load threshold (GSO/sendmmsg do not, measured:
- * docs/2026-10-05-e-probe-results.md). The invalid template has a MAC1 that will
- * not match, so every invalid flood packet is dropped (reply-free). The socket,
- * ring and SQEs are prepared before the coverage window (their inode/fd setup
- * draws clock choice records that are not WireGuard sites); only io_uring_enter
- * runs in the window, so the producer sections and the auto-bind land in it. */
+/* E-B (docs/2026-10-05-e-dos.md §8, queue-depth design): an io_uring batch to
+ * wg0's port, sent from the fixture sender (SEND_FD) so wg0's cookie replies
+ * come back to a socket the fixture reads and make_cookie's source matches the
+ * mirror's. The batch is `n_leading` valid-MAC1 initiations (processed first,
+ * each under load via the queue depth -> one byte-exact cookie reply), then an
+ * optional mid-flood `control` valid initiation (a negative control: the mirror
+ * does not model it, so its cookie records land in the discarded region and the
+ * check fails closed), then `n_invalid` invalid-MAC1 initiations. The batch has
+ * no per-send cond_resched, so it outruns the single-CPU receive worker and the
+ * whole batch is queued (handshake_queue_len = total >= 512) before the worker
+ * runs (GSO/sendmmsg do not cross cheaply, measured). The invalid template has a
+ * MAC1 that will not match, so invalid packets are dropped (reply-free). The
+ * ring and SQEs are prepared before the coverage window (the ring's inode setup
+ * draws clock records that are not WireGuard sites); only io_uring_enter runs in
+ * the window, so the producer sections land in it. The payload is
+ * n_leading(1) ‖ control_flag(1) ‖ (n_leading + control_flag) × 148-byte msgs. */
 struct flood_state {
-    int sock, ring;
+    int ring;
     void *sq;
     struct io_uring_sqe *sqes;
     size_t sqsz, sqesz;
     unsigned *ktail, submit;
-    struct sockaddr_in dst;
+    struct sockaddr_in6 dst;
     unsigned char tmpl[148];
 };
 
 static int flood_prep(struct flood_state *fs, unsigned port, unsigned n_invalid,
-                      const unsigned char *valid, size_t valid_len)
+                      const unsigned char *payload, unsigned payload_len)
 {
     memset(fs->tmpl, 0, sizeof(fs->tmpl));
     fs->tmpl[0] = 1;                       /* MESSAGE_HANDSHAKE_INITIATION */
     memset(fs->tmpl + 116, 0xff, 16);     /* a MAC1 that will not match */
+    /* v4-mapped destination: SEND_FD is the dual-stack IPv6 fixture sender, so
+     * wg0 sees IPv4 from 127.0.0.1:SENDER_PORT (as wg_inject does). */
     memset(&fs->dst, 0, sizeof(fs->dst));
-    fs->dst.sin_family = AF_INET; fs->dst.sin_port = htons((uint16_t)port);
-    fs->dst.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    fs->sock = socket(AF_INET, SOCK_DGRAM, 0);
-    if (fs->sock < 0) return -1;
-    unsigned total = n_invalid + (valid ? 1u : 0u);
+    fs->dst.sin6_family = AF_INET6; fs->dst.sin6_port = htons((uint16_t)port);
+    fs->dst.sin6_addr.s6_addr[10] = fs->dst.sin6_addr.s6_addr[11] = 0xff;
+    fs->dst.sin6_addr.s6_addr[12] = 127; fs->dst.sin6_addr.s6_addr[15] = 1;
+    unsigned n_leading = payload_len >= 2 ? payload[0] : 0;
+    unsigned control = payload_len >= 2 ? payload[1] : 0;
+    if ((unsigned)2 + (n_leading + control) * 148u != payload_len) return -1;
+    unsigned total = n_leading + control + n_invalid;
     struct io_uring_params pp; memset(&pp, 0, sizeof(pp));
     fs->ring = syscall(SYS_io_uring_setup, total, &pp);
-    if (fs->ring < 0) { close(fs->sock); return -1; }
+    if (fs->ring < 0) return -1;
     fs->sqsz = pp.sq_off.array + pp.sq_entries * sizeof(unsigned);
     fs->sqesz = pp.sq_entries * sizeof(struct io_uring_sqe);
     fs->sq = mmap(0, fs->sqsz, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, fs->ring, IORING_OFF_SQ_RING);
     fs->sqes = mmap(0, fs->sqesz, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, fs->ring, IORING_OFF_SQES);
-    if (fs->sq == MAP_FAILED || fs->sqes == MAP_FAILED) { close(fs->ring); close(fs->sock); return -1; }
+    if (fs->sq == MAP_FAILED || fs->sqes == MAP_FAILED) { close(fs->ring); return -1; }
     fs->ktail = (unsigned *)((char *)fs->sq + pp.sq_off.tail);
     unsigned *karray = (unsigned *)((char *)fs->sq + pp.sq_off.array);
     unsigned mask = *(unsigned *)((char *)fs->sq + pp.sq_off.ring_mask);
     fs->submit = total < pp.sq_entries ? total : pp.sq_entries;
     for (unsigned i = 0; i < fs->submit; i++) {
         struct io_uring_sqe *e = &fs->sqes[i]; memset(e, 0, sizeof(*e));
-        e->opcode = IORING_OP_SEND; e->fd = fs->sock;
-        /* an explicit destination per send (addr2/addr_len), so the socket is
-         * not connected: connect() would draw route/source-selection records. */
+        e->opcode = IORING_OP_SEND; e->fd = SEND_FD;
         e->addr2 = (unsigned long)&fs->dst; e->addr_len = sizeof(fs->dst);
-        /* the bundled valid initiation (the merged-injection control) is first,
-         * so the worker processes it while the batch is still queued (queue_len
-         * >= 512 -> under_load via the queue depth, deterministic): it makes a
-         * cookie reply inside the flood's section, which the mirror's section-
-         * bracket discard then rejects (§4.1). */
-        if (valid && i == 0) { e->addr = (unsigned long)valid; e->len = (unsigned)valid_len; }
+        /* order: leading valids, then the control valid, then the invalids */
+        if (i < n_leading + control) { e->addr = (unsigned long)(payload + 2 + i * 148u); e->len = 148; }
         else { e->addr = (unsigned long)fs->tmpl; e->len = sizeof(fs->tmpl); }
         karray[i & mask] = i;
     }
@@ -771,7 +775,6 @@ static void flood_cleanup(struct flood_state *fs)
     munmap(fs->sqes, fs->sqesz);
     munmap(fs->sq, fs->sqsz);
     close(fs->ring);
-    close(fs->sock);
 }
 
 static void execute(const struct trace *t, int input_fd, int comparisons)
@@ -884,8 +887,7 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         int flood_ready = 0;
         if (op->code == 18) {
             if (!t->net) fail(t->id, i, "invalid_input", "wireguard_without_network_fixture");
-            if (flood_prep(&flood, (unsigned)op->b, (unsigned)op->a,
-                           op->payload_len ? op->payload : NULL, op->payload_len))
+            if (flood_prep(&flood, (unsigned)op->b, (unsigned)op->a, op->payload, op->payload_len))
                 fail(t->id, i, "environment_failure", "flood_prepare");
             flood_ready = 1;
         }

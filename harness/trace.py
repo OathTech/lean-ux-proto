@@ -107,9 +107,10 @@ def validate_trace(trace):
         if name not in FIELDS:
             raise UnsupportedTrace(f"ops[{i}]: unsupported operation {name!r}")
         if name == "wg_flood":
-            # `messages` (0 or 1 bundled valid initiation) is optional
-            if not FIELDS[name] <= set(op) <= FIELDS[name] | {"messages"}:
-                raise InvalidTrace(f"ops[{i}]: expected {sorted(FIELDS[name])} and optionally messages")
+            # `messages` (leading valid initiations the mirror checks) and
+            # `control` (one mid-flood valid the mirror must not model) optional
+            if not FIELDS[name] <= set(op) <= FIELDS[name] | {"messages", "control"}:
+                raise InvalidTrace(f"ops[{i}]: expected {sorted(FIELDS[name])} and optionally messages, control")
         else:
             _fields(op, FIELDS[name], f"ops[{i}]")
         for field in ("init", "flags", "arg"):
@@ -156,11 +157,16 @@ def validate_trace(trace):
         if name == "wg_flood":
             _integer(op["count"], 1, 2**20, f"ops[{i}].count")
             _integer(op["port"], 1, 65535, f"ops[{i}].port")
+            # the leading valids and the optional control are 148-byte (296-hex)
+            # handshake initiations (the guest submits them as fixed-size slots)
             messages = op.get("messages", [])
-            if type(messages) is not list or len(messages) > 1 or any(
-                    type(m) is not str or not re.fullmatch(r"(?:[0-9a-f]{2}){1,1400}", m, re.ASCII)
+            if type(messages) is not list or len(messages) > 4 or any(
+                    type(m) is not str or not re.fullmatch(r"(?:[0-9a-f]{2}){148}", m, re.ASCII)
                     for m in messages):
-                raise InvalidTrace(f"ops[{i}].messages: expected 0 or 1 bundled initiation (hex)")
+                raise InvalidTrace(f"ops[{i}].messages: expected 0-4 leading 148-byte initiations (hex)")
+            if "control" in op and (type(op["control"]) is not str
+                                    or not re.fullmatch(r"(?:[0-9a-f]{2}){148}", op["control"], re.ASCII)):
+                raise InvalidTrace(f"ops[{i}].control: expected a 148-byte initiation (hex)")
         if name == "wg_xmit":
             try:
                 validate_packet(op["packet"], f"ops[{i}].packet")
@@ -260,9 +266,13 @@ def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False):
             elif op["op"] == "wg_inject":
                 line += " " + op["message"]
             elif op["op"] == "wg_flood":
-                # the bundled valid initiation (if any) as the payload; the
-                # invalid-MAC1 template is built in the guest
-                line += " " + (op.get("messages", [""]) + [""])[0]
+                # payload = n_leading(1) ‖ control_flag(1) ‖ the leading valids
+                # then the control (each 148 bytes); the invalid template is
+                # built in the guest
+                leading = op.get("messages", [])
+                control = op.get("control")
+                header = bytes([len(leading), 1 if control else 0]).hex()
+                line += " " + header + "".join(leading) + (control or "")
             lines.append(line)
         for kind, length, draw, ips, value in schedule:
             ips = (list(ips) + [0, 0, 0, 0])[:4]

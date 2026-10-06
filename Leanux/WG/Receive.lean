@@ -171,14 +171,16 @@ def receiveHandshakePacket (msg : List UInt8) (src : SkbSource) : M Unit := do
   if ← branch .hsCookie (messageType msg == MESSAGE_HANDSHAKE_COOKIE) then
     cookieMessageConsume msg
     return
-  -- `under_load = handshake_queue_len >= MAX_QUEUED_INCOMING_HANDSHAKES / 8`
-  let queueLen := (← getDev).handshakeQueue.length
+  -- `under_load = handshake_queue_len >= MAX_QUEUED_INCOMING_HANDSHAKES / 8`.
+  -- A `wg_flood` adds `floodDepth` invalid packets ahead of the checked leading
+  -- packet, so its queue is over the threshold (E-B §4.1, queue-depth design).
+  let queueLen := (← getDev).handshakeQueue.length + (← get).floodDepth
   let mut underLoad := false
   if ← branch .hsUnderLoad (queueLen ≥ MAX_QUEUED_INCOMING_HANDSHAKES / 8) then
-    -- `last_under_load = ktime_get_coarse_boottime_ns()` (receive.c:115): seen
-    -- only in the discarded flood section (the mirror never runs this per
-    -- packet — the flood is a discarded section, E-B §4.1)
-    unsupported "a handshake queue under load (the flood section is discarded)"
+    -- `last_under_load = ktime_get_coarse_boottime_ns()` (receive.c:115)
+    let now ← hiddenClock .underLoadNow
+    modify fun w => { w with lastUnderLoad := some now }
+    underLoad := true
   -- `else if (last_under_load)`: a kernel-global, set by a flood this trace ran.
   -- Every normal trace keeps it `none` (the constant-false decay guard, §4.2).
   else if ← branch .hsWasUnderLoad (← get).lastUnderLoad.isSome then

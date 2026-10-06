@@ -44,8 +44,9 @@ inductive Syscall where
   | wgObserve
   /-- `sendto` of a WireGuard message from the fixture's sender to `port`. -/
   | wgInject (family port : Nat) (message : List UInt8)
-  /-- E-B: an io_uring flood of invalid-MAC1 initiations to wg0's `port`. -/
-  | wgFlood (count port : Nat)
+  /-- E-B: an io_uring flood to wg0's `port`: `count` invalid-MAC1 initiations
+      with `messages` valid-MAC1 initiations submitted first. -/
+  | wgFlood (count port : Nat) (messages : List (List UInt8))
   /-- D3: `ioctl(3, KCOV_LEANUX_TIME_ADVANCE, &ticks)` on the trace's KCOV
       descriptor, then the guest's wait (docs/2026-10-05-d3-timers.md, 4.3). -/
   | wgAdvance (ticks : Nat)
@@ -140,7 +141,7 @@ def dispatch : Syscall → M Int
     let ret ← WG.wgXmit family addr (← Env.xmitPacket family addr payload)
     return if ret == 0 then payload.length else ret
   | .wgInject family port message => socketCallOn SENDER_FD (Env.inject family port message)
-  | .wgFlood count port => Env.flood count port
+  | .wgFlood count port messages => Env.flood count port messages
   | .wgObserve => socketCallOn LISTEN4_FD do
     let (ret, observed) ← Env.observe
     modify fun w => { w with extraOut := ["datagrams", "replies", "stats"].map fun k => (k, observed.getObjValD k) }
