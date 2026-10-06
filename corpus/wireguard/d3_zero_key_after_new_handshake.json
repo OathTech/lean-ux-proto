@@ -56,6 +56,12 @@
       "ticks": 139150
     },
     {
+      "op": "wg_inject",
+      "family": 4,
+      "port": 51820,
+      "message": "020000000807060511100f0e3286894cd2845a6db6a28fbf0677605f80e5a62385bf4e10a790ae5fde36736b5e824c0027a343f321d9c8da55c530b2fe3969610f3063c6060350807927506e00000000000000000000000000000000"
+    },
+    {
       "op": "wg_observe"
     },
     {
@@ -77,15 +83,15 @@
     ],
     [
       "init_ephemeral",
-      "draw"
+      "c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0"
     ],
     [
       "tai64n_now",
-      "draw"
+      "823bb16a00000000ffffff0000000000"
     ],
     [
       "index_draw",
-      "draw"
+      "11100f0e"
     ]
   ],
   "expect": [
@@ -96,6 +102,7 @@
     "fired:wg_expired_new_handshake",
     "fired:wg_expired_zero_key_material",
     "wg_packet_send_staged_packets.no_keypair=1",
-    "wg_expired_zero_key_material.alive=1"
+    "wg_expired_zero_key_material.alive=1",
+    "wg_index_hashtable_lookup.entry=0"
   ]
 }

@@ -63,6 +63,8 @@ RATE_LIMIT = fire_advance(REKEY_TIMEOUT_TICKS)                             # 135
 # The persistent keepalive of 25 s that D1's sessions arm stays quiet below
 # this total advance after its last arm.
 PERSISTENT_25_QUIET = quiet_limit(25 * HZ)
+# wg0's index in a steered second initiation.
+SECOND_INDEX = 0x0e0f1011
 # The callbacks' decisions (Leanux/Kernel/Decision.lean, stream M's region).
 GIVE_UP = "wg_expired_retransmit_handshake.give_up"
 NEED_ANOTHER = "wg_expired_send_keepalive.need_another"
@@ -231,14 +233,20 @@ def traces():
     # the new-handshake timer (15 s). The 540 s advance runs both timers in
     # one pass in bucket order: the new handshake (which queues the send
     # worker), then the zero key (which queues the clear work); the work
-    # runs FIFO on handshake_send_wq: the send worker sends an initiation,
-    # then the clear worker clears the handshake it created and the keypairs.
+    # runs FIFO on handshake_send_wq: the send worker sends an initiation
+    # (steered, so the peer's response can be computed), then the clear
+    # worker clears the handshake it created (its index entry removed) and
+    # the keypairs. The peer's response to that initiation then finds no
+    # handshake under its receiver index and is dropped (D3-M4).
     staged_ops, _, _ = staged_session()
+    second = d1.wg0_initiation(ephemeral=d1.EPHEMERAL_2, clock=d1.CLOCK_2, index=SECOND_INDEX)
+    late = d1.respond(second, ephemeral=d1.PEER_EPHEMERAL_2, index=d1.PEER_INDEX_2)
     out["d3_zero_key_after_new_handshake"] = (
-        staged_ops + [advance(ZERO_KEY), OBSERVE, GET],
-        steer + D3_DRAWS,
+        staged_ops + [advance(ZERO_KEY), inject(late.message), OBSERVE, GET],
+        steer + d1.steer_initiation(d1.EPHEMERAL_2, d1.CLOCK_2, SECOND_INDEX),
         SESSION + [fired("new_handshake"), fired("zero_key_material"),
-                   "wg_packet_send_staged_packets.no_keypair=1", ZERO_KEY_ALIVE + "=1"])
+                   "wg_packet_send_staged_packets.no_keypair=1", ZERO_KEY_ALIVE + "=1",
+                   "wg_index_hashtable_lookup.entry=0"])
 
     # Key expiry (section 6). Each starts from the session with the interval
     # then set to 0: the pending persistent keepalive fires in the advance
