@@ -695,20 +695,10 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         struct timespec before_advance = {0};
         if (op->code == 14 && clock_gettime(CLOCK_MONOTONIC, &before_advance))
             fail(t->id, i, "environment_failure", "advance_clock");
-        /* The advance starts just after a tick: the clock is tick-granular
-         * (refined-jiffies), so it changes at the tick. A tick that lands
-         * between the jump and the kernel's kind-304 record runs the due
-         * timers before the record (seen in about 3% of children of the
-         * long advances; evaluator/check.py jiffies_problems flags it); a
-         * fresh tick leaves the ioctl almost 4 ms. Bounded: 20000 reads. */
-        if (op->code == 14) {
-            struct timespec now = before_advance;
-            for (int spins = 0; now.tv_sec == before_advance.tv_sec && now.tv_nsec == before_advance.tv_nsec; ++spins) {
-                if (spins > 20000) fail(t->id, i, "environment_failure", "advance_no_tick");
-                if (clock_gettime(CLOCK_MONOTONIC, &now)) fail(t->id, i, "environment_failure", "advance_clock");
-            }
-            before_advance = now;
-        }
+        /* No wait for a fresh tick before the advance: the kernel keeps
+         * interrupts disabled from the jump until its kind-304 record
+         * (kcov_time_advance), so no tick can run the due timers before the
+         * record (evaluator/check.py jiffies_problems still checks it). */
         __atomic_store_n(&coverage[0], 0, __ATOMIC_RELAXED);
         if (remote && op->code != 12) __atomic_store_n(&remote[0], 0, __ATOMIC_RELAXED);
         errno = 0;

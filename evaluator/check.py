@@ -774,9 +774,9 @@ def operand_agreement(trace, model_obs, comparisons, locations, decisions, funct
 # - the guest's fixed waits (harness/guest.c), which do not slow down: each
 #   of a trace's two children (coverage, comparisons) sleeps OBSERVE_WAIT_US
 #   (0.4 s) before wg_observe and after wg_inject, and QUEUE_WAIT_US (0.1 s)
-#   after wg_set, wg_up and wg_xmit; D3: a wg_advance waits for the tick
-#   before it, then for its absorbing tick (each at most a 4 ms tick), then
-#   ADVANCE_WAIT_US (0.1 s), counted as ADVANCE_WAIT_SECONDS;
+#   after wg_set, wg_up and wg_xmit; D3: a wg_advance waits for its
+#   absorbing tick (at most 4 ms), then ADVANCE_WAIT_US (0.1 s), counted
+#   with margin as ADVANCE_WAIT_SECONDS;
 # - its computation (boot, fixtures, TCG execution), which does: measured on
 #   the loaded host (load average 50-100 on 32 CPUs, 3 guests) at most
 #   2.0 s per WireGuard trace (both children, boot included) and 0.025 s per
