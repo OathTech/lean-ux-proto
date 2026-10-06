@@ -1,12 +1,12 @@
-"""WireGuard mutants (stage A report, section 2; stages B1, B2, C, D1 and D2).
+"""WireGuard mutants (stage A report, section 2; stages B1, B2, C, D1, D2 and D3).
 
 Each mutant is applied to a clean committed tree, verified as applied, checked
 on the wireguard suite, then reverted. Run from the repository root:
 
     scripts/in-bundle python3 scripts/wg-mutants.py [NAME ...]
 
-Every mutant must be rejected (status fail). D2 entries without patterns are
-reported as pending. W5 also aborts on a mirror
+Every mutant must be rejected (status fail). D2 and D3 entries without patterns
+are reported as pending. W5 also aborts on a mirror
 invariant; run `--trace wg_trie_v6` by hand to see A2 alone reject it.
 """
 import glob
@@ -66,7 +66,12 @@ MUTANTS = [
   ('C-M2-receiver-is-sender', 'data: the response names its own index as the receiver', 'Leanux/WG/Handshake.lean',
    "  return some (le32 2 ++ le32 index ++ le32 receiver ++ e ++ encNothing ++ List.replicate 32 0)\n",
    "  return some (le32 2 ++ le32 index ++ le32 index ++ e ++ encNothing ++ List.replicate 32 0)\n"),
-  ('C-M3-no-rx-traversal', 'behavior-preserving: no traversal timer after receiving', 'Leanux/WG/Receive.lean',
+  # C-M3, the known survivor before D3: rejected once the mirror consumes
+  # the kind-303 arm records (ARM_RECORDS on): the receive path's
+  # traversal re-arm (persistent keepalive 25 s) leaves its record unconsumed
+  # (docs/2026-10-05-d3-timers.md, sections 3.3 and 8).
+  ('C-M3-no-rx-traversal', 'arm record: no traversal timer after receiving (its kind-303 record is unconsumed)',
+   'Leanux/WG/Receive.lean',
    "  timersAnyAuthenticatedPacketReceived pid\n  timersTraversal pid\n  peerPut peer\n",
    "  timersAnyAuthenticatedPacketReceived pid\n  peerPut peer\n"),
   ('C-M4-keypair-kept-indexed', 'behavior-preserving: the old next keypair stays in the index', 'Leanux/WG/Keypair.lean',
@@ -244,7 +249,47 @@ D2_MUTANTS = [
    "  runWorker .decryptWorker (WG.decryptWorker (pure ()) (condResched SWITCH_DEPTH .decryptWorker))\n"
    "  napiSoftirq\n"),
 ]
-PENDING = {m[0] for m in D2_MUTANTS if m[3] is None}
+
+# Stage D3 (timers; docs/2026-10-05-d3-timers.md, section 8). Entries whose
+# patterns are None are pending: the code is stream M's (the callbacks,
+# expected in Leanux/WG/Timers.lean, and the environment's firing in
+# Leanux/Env.lean), filled at integration. The others match the code at the
+# interface commit; M may rewrite those lines, in which case integration
+# refreshes them. Each is rejected only on the D3 traces named.
+D3_MUTANTS = [
+  ('D3-M1-attempts-not-incremented', 'state: the retransmit callback does not increment '
+   'timer_handshake_attempts (timers.c:63); d3_retransmit_gives_up never gives up (tx_dropped, the give-up '
+   'arm\'s zero-key arm record, a 21st initiation)', 'Leanux/WG/Timers.lean', None, None),
+  ('D3-M2-need-another-ignored', 'arm record: the keepalive callback ignores need_another_keepalive '
+   '(timers.c:84-88); the re-arm never fires, so only its kind-303 record, left unconsumed, shows it '
+   '(d3_keepalive_rearm_deleted)', 'Leanux/WG/Timers.lean', None, None),
+  ('D3-M3-firing-keeps-timer', 'state: a fired timer stays pending (expire_timers detaches it before the '
+   'callback, timer.c:1828-1829); the next data_received or data_sent pending test differs, consuming an arm '
+   'record or not (d3_keepalive_rearm_deleted, d3_new_handshake)', 'Leanux/Env.lean', None, None),
+  ('D3-M4-clear-keeps-handshake', 'state: the clear worker clears the keypairs but not the handshake '
+   '(timers.c:129); the index removal\'s control flow (d3_zero_key, d3_zero_key_after_new_handshake)',
+   'Leanux/WG/Timers.lean', None, None),
+  ('D3-M5-send-fresh-at-reject', 'behavior: send-side keep_key_fresh at REJECT_AFTER_TIME instead of '
+   'REKEY_AFTER_TIME (send.c:134); no initiation after 121 s (d3_send_keep_key_fresh)', 'Leanux/WG/Data.lean',
+   "          branch .freshExpired (← birthdateHasExpired k.sending.birthdate REKEY_AFTER_TIME)\n",
+   "          branch .freshExpired (← birthdateHasExpired k.sending.birthdate REJECT_AFTER_TIME)\n"),
+  ('D3-M6-no-lastminute-flag', 'hidden: receive-side keep_key_fresh does not set sent_lastminute_handshake '
+   '(receive.c:236); the second data message reads the clock again (d3_rx_keep_key_fresh)',
+   'Leanux/WG/RxData.lean',
+   "    setPeer pid { (← getPeer pid) with sentLastminuteHandshake := true }\n    sendQueuedHandshakeInitiation pid false\n",
+   "    sendQueuedHandshakeInitiation pid false\n"),
+  ('D3-M7-send-ignores-reject-after-time', 'behavior: send_staged_packets reads the birthdate but ignores '
+   'REJECT_AFTER_TIME (send.c:365); a data message instead of an initiation (d3_send_expired_key)',
+   'Leanux/WG/Send.lean',
+   "  if ← branch .stagedBirthdateExpired (← birthdateHasExpired k.sending.birthdate REJECT_AFTER_TIME) then\n",
+   "  if ← branch .stagedBirthdateExpired (← (do let _ ← birthdateHasExpired k.sending.birthdate REJECT_AFTER_TIME; pure false)) then\n"),
+  ('D3-M8-new-handshake-delay', 'arm record: timer_new_handshake armed at KEEPALIVE_TIMEOUT instead of '
+   'KEEPALIVE_TIMEOUT + REKEY_TIMEOUT (timers.c:149); only the kind-303 expires check sees it (every trace '
+   'that sends data after a session)', 'Leanux/WG/Handshake.lean',
+   "      armTimer pid .newHandshake (KEEPALIVE_TIMEOUT_TICKS + REKEY_TIMEOUT_TICKS + jitter)\n",
+   "      armTimer pid .newHandshake (KEEPALIVE_TIMEOUT_TICKS + jitter)\n"),
+]
+PENDING = {m[0] for m in D2_MUTANTS + D3_MUTANTS if m[3] is None}
 
 
 def w4(text):
@@ -277,7 +322,7 @@ def run(cmd, **kw):
 
 assert run(['git', 'status', '--porcelain'], capture_output=True, text=True).stdout == '', 'tree must be clean'
 head = run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()
-MUTANTS = MUTANTS + D1_MUTANTS + D2_MUTANTS
+MUTANTS = MUTANTS + D1_MUTANTS + D2_MUTANTS + D3_MUTANTS
 selected = sys.argv[1:] or [m[0] for m in MUTANTS]
 results = {}
 for name, what, path, old, new in MUTANTS:
