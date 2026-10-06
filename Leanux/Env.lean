@@ -605,6 +605,12 @@ def inject (family port : Nat) (msg : List UInt8) : M Int := do
 def flood (count port : Nat) : M Int := do
   let some d := (← getK).wg | unsupported "a flood to a port other than wg0's (no wg0)"
   if !d.running || port != d.incomingPort then unsupported "a flood to a port other than wg0's"
+  -- without records (the domain filter runs before Linux), accept the flood: it
+  -- is a natural harness input, inside the domain
+  if (← get).hidden.isNone then
+    modify fun w => { w with lastUnderLoad := some 0 }
+    let _ := count
+    return 0
   let (_, sawWorker, crossed) ← discardFloodSection .receiveWorker
   if !sawWorker then throw (.hidden "the flood did not reach the receive worker")
   if !crossed then throw (.hidden "the flood did not cross the under_load threshold (no under_load record)")

@@ -41,7 +41,9 @@ DATA_SHARE = 0.15
 # (L: lifecycle-controls, the random port steered onto a fixture port, which
 # the mirror must refuse: a stopped mirror fails its whole chunk, so it runs
 # apart)
-CONTROL_SUITES = ('steering-controls', 'lifecycle-controls')
+# (E-B: underload-controls, the merged-injection control, which the mirror's
+# section-bracket discard must reject — docs/2026-10-05-e-dos.md §4.1)
+CONTROL_SUITES = ('steering-controls', 'lifecycle-controls', 'underload-controls')
 CHUNK = 100
 
 

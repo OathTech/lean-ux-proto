@@ -782,8 +782,11 @@ def discardFloodSection (w : Worker) : M (Nat × Bool × Bool) := do
         openW := openW - 1
       else if r.site == underLoad then crossed := true
       else if !flood.contains r.site then
-        -- the first record that is not the flood's: the section is drained
-        if openW != 0 then throw (.hidden "flood: the receive worker outlived the flood window")
+        -- a record that is not the flood's. Inside a receive-worker section it
+        -- is a modeled read (a merged injection, §4.1): fail closed. Outside,
+        -- the flood is drained and the next operation owns the rest.
+        if openW != 0 then
+          throw (.hidden "flood: a modeled record inside the flood's receive-worker section (a merged injection)")
         return (dropped, sawWorker, crossed)
       modify fun s => { s with hidden := some rest }
       dropped := dropped + 1

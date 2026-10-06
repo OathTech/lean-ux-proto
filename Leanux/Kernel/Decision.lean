@@ -835,10 +835,11 @@ def Decision.info : Decision → DecisionInfo
   | .hsLoadedOperand => d "wg_receive_handshake_packet.loaded_and_cookie" wrc 123 [] []
   | .hsLoadedCookieOk => d "wg_receive_handshake_packet.mac_with_cookie" wrc 123 [] []
   | .hsNotLoaded => d "wg_receive_handshake_packet.not_loaded" wrc 124 [] []
-  -- not under load, the chain decides on this operand: 134 (the switch) runs iff
-  -- it is true. Its false side owns no point here: GCC knows under_load is
-  -- false and jumps past the `else if` at 126 to the drop.
-  | .hsMacNoCookie => d "wg_receive_handshake_packet.mac_without_cookie" wrc 124 [(125, 125), (134, 134)] []
+  -- not under load, this operand decides whether `packet_needs_cookie = false`
+  -- (line 125). The switch (134) is not attributed here: under load the
+  -- needs-cookie arm (hsNeedsCookieMac) also reaches it, so 134 is a shared
+  -- epilogue of the table, not a witness of this operand.
+  | .hsMacNoCookie => d "wg_receive_handshake_packet.mac_without_cookie" wrc 124 [(125, 125)] []
   | .hsNeedsCookieLoaded => d "wg_receive_handshake_packet.needs_cookie_loaded" wrc 126 [] []
   | .hsNeedsCookieMac => d "wg_receive_handshake_packet.needs_cookie_mac" wrc 126 [(127, 127)] []
   | .dataNoKeypair => d "wg_packet_consume_data.no_keypair" wrc 520 [(521, 521)] [(523, 523)]

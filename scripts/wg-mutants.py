@@ -269,6 +269,30 @@ E_MUTANTS = [
    "                                       haveSentMac1 := false }\n",
    "    setPeer pid { (← getPeer pid) with cookie := c, cookieBirthdate := birthdate, cookieIsValid := true }\n"),
 ]
+# Stage E-B (under-load + cookie-reply creation; docs/2026-10-05-e-dos.md §6.B,
+# §10). Checked on the e_underload_* traces (the sixth field 'e_underload').
+E_UNDERLOAD_MUTANTS = [
+  ('E-M6-under-load-threshold-gt', 'data: under_load uses `>` not `>=` the threshold (receive.c:112). NOT '
+   'CLAIMED: the injection evaluates under_load with queue_len far below 512, and the flood section that '
+   'crosses 512 is discarded (§4.1), so the exact threshold is not observable in this design.',
+   'Leanux/WG/Receive.lean',
+   "  if ← branch .hsUnderLoad (queueLen ≥ MAX_QUEUED_INCOMING_HANDSHAKES / 8) then\n",
+   "  if ← branch .hsUnderLoad (queueLen > MAX_QUEUED_INCOMING_HANDSHAKES / 8) then\n", 'e_underload'),
+  ('E-M7-make-cookie-ignores-source-port', 'data: make_cookie hashes only the source IP, not the port '
+   '(cookie.c:113); the cookie, hence the reply bytes, differ (e_underload_cookie)', 'Leanux/WG/Receive.lean',
+   "  return blake2s 16 secret (addr ++ netBytes src.sport 2)\n",
+   "  return blake2s 16 secret addr\n", 'e_underload'),
+  ('E-M8-decay-ignored', 'behavior: the mirror ignores last_under_load, so the injection is not under load '
+   '(receive.c:117); it takes the no-cookie proceed arm and the garbage initiation finds no peer — no cookie '
+   'reply where Linux sent one (e_underload_cookie)', 'Leanux/WG/Receive.lean',
+   "    _ ← hiddenClock .birthdateExpired\n    underLoad := true\n",
+   "    _ ← hiddenClock .birthdateExpired\n    underLoad := false\n", 'e_underload'),
+  ('E-M9-mac2-compare-inverted', 'control: wg_cookie_validate_packet treats a matching MAC2 as a miss '
+   '(cookie.c:143); a valid-MAC1 no-cookie initiation is then read as rate-limited (unreached ratelimiter)',
+   'Leanux/WG/Receive.lean',
+   "  if ← branch .macCookieInvalid (computed2 != givenMac2) then return .noCookie\n",
+   "  if ← branch .macCookieInvalid (computed2 == givenMac2) then return .noCookie\n", 'e_underload'),
+]
 PENDING = {m[0] for m in D2_MUTANTS if m[3] is None}
 # Workstream L (docs/2026-10-05-l-lifecycle.md, section 8): checked on the
 # l_* traces of the wireguard suite (the sixth field), each naming the trace
@@ -324,7 +348,7 @@ L_MUTANTS = [
    'wg_xmit (l_down_purges_staged)', 'Leanux/Env.lean',
    "  WG.wgDown\n  modify fun w => { w with routesViaWg0 := false }\n", "  WG.wgDown\n", 'l_'),
 ]
-NOT_CLAIMED = {'L-M10-update-gen-zero'}
+NOT_CLAIMED = {'L-M10-update-gen-zero', 'E-M6-under-load-threshold-gt'}
 # evaluator.check on the traces of one suite whose ids start with a prefix
 SUBSET = """import sys
 sys.path.insert(0, '.')
@@ -366,7 +390,7 @@ def run(cmd, **kw):
 
 assert run(['git', 'status', '--porcelain'], capture_output=True, text=True).stdout == '', 'tree must be clean'
 head = run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()
-MUTANTS = MUTANTS + D1_MUTANTS + D2_MUTANTS + E_MUTANTS + L_MUTANTS
+MUTANTS = MUTANTS + D1_MUTANTS + D2_MUTANTS + E_MUTANTS + E_UNDERLOAD_MUTANTS + L_MUTANTS
 selected = sys.argv[1:] or [m[0] for m in MUTANTS]
 results = {}
 for name, what, path, old, new, *subset in MUTANTS:
