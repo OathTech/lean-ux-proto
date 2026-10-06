@@ -45,7 +45,7 @@ GET = {"op": "wg_get"}
 # (KCOV on), so a larger count overflows the task and remote KCOV areas. All
 # `count` packets queue before the single-CPU receive worker runs (io_uring_enter
 # does not sleep), so the queue reaches `count` and crosses 512.
-FLOOD_COUNT = 600
+FLOOD_COUNT = 520
 
 
 def configure():
@@ -77,6 +77,12 @@ def base_ops():
 
 def traces():
     return {
+        # Robust (no injection, so no decay-timing dependence): the flood crosses
+        # the under_load threshold and its receive-worker section is discarded;
+        # no cookie reply (the invalid-MAC1 flood is reply-free). This validates
+        # the flood op, the section-bracket discard and the under_load reach
+        # (receive.c:115 covered) independently of the 1-second decay.
+        "e_underload_flood": base_ops() + [flood(), OBSERVE, GET],
         # a flood sets last_under_load; one injected valid-MAC1 initiation under
         # the decay yields exactly one cookie reply (byte-exact at the sender)
         "e_underload_cookie": base_ops() + [flood(), inject(0x1111_1111, b"\x51" * 32), OBSERVE, GET],

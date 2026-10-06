@@ -714,9 +714,13 @@ static int do_wg_flood(unsigned port, unsigned n_invalid,
     memset(tmpl + 116, 0xff, 16);     /* a MAC1 that will not match */
     int s = socket(AF_INET, SOCK_DGRAM, 0);
     if (s < 0) return -1;
-    struct sockaddr_in dst = {.sin_family = AF_INET, .sin_port = htons((uint16_t)port)};
+    /* an explicit destination per send (IORING_OP_SEND addr2/addr_len), so the
+     * socket is not connected: connect() would draw route/source-selection
+     * choice records (datagram.c) that are not WireGuard sites. */
+    static struct sockaddr_in dst;
+    memset(&dst, 0, sizeof(dst));
+    dst.sin_family = AF_INET; dst.sin_port = htons((uint16_t)port);
     dst.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    if (connect(s, (struct sockaddr *)&dst, sizeof(dst))) { close(s); return -1; }
     unsigned total = n_invalid + (valid ? 1u : 0u);
     struct io_uring_params pp; memset(&pp, 0, sizeof(pp));
     int ring = syscall(SYS_io_uring_setup, total, &pp);
@@ -733,9 +737,13 @@ static int do_wg_flood(unsigned port, unsigned n_invalid,
     for (unsigned i = 0; i < submit; i++) {
         struct io_uring_sqe *e = &sqes[i]; memset(e, 0, sizeof(*e));
         e->opcode = IORING_OP_SEND; e->fd = s;
-        /* the bundled valid initiation is submitted last, so the flood has
-         * already crossed 512 and the decay makes it under_load (§4.1) */
-        if (valid && i == submit - 1) { e->addr = (unsigned long)valid; e->len = (unsigned)valid_len; }
+        e->addr2 = (unsigned long)&dst; e->addr_len = sizeof(dst);
+        /* the bundled valid initiation (the merged-injection control) is
+         * submitted first, so the worker processes it while the whole batch is
+         * still queued (queue_len >= 512 -> under_load via the queue depth,
+         * deterministic): it makes a cookie reply inside the flood's section,
+         * which the mirror's section-bracket discard then rejects (§4.1). */
+        if (valid && i == 0) { e->addr = (unsigned long)valid; e->len = (unsigned)valid_len; }
         else { e->addr = (unsigned long)tmpl; e->len = sizeof(tmpl); }
         karray[i & mask] = i;
     }
