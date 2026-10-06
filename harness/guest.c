@@ -596,6 +596,29 @@ static unsigned long *enable_remote(const struct trace *t, int comparisons)
     return area;
 }
 
+/* A2: a trace without a remote instance (an FS trace) loads its steering
+ * schedule on its own KCOV descriptor, before KCOV_ENABLE; the patched kernel
+ * consults a task instance's schedule in the task's own context. The trace
+ * process reads the leftovers back itself, after its last operation. */
+static void load_task_steering(const struct trace *t, int coverage_fd)
+{
+    static struct steer_arg steer;
+    if (t->net || !t->nsteer) return;
+    steer.n = t->nsteer;
+    memcpy(steer.e, t->steer, t->nsteer * sizeof(steer.e[0]));
+    if (ioctl(coverage_fd, KCOV_LEANUX_STEER_LOAD, &steer)) fail(t->id, -1, "coverage_failure", "load_steering");
+}
+
+static void task_steering_status(const struct trace *t, int coverage_fd, int comparisons)
+{
+    uint32_t left[2];
+    if (t->net || !t->nsteer) return;
+    if (ioctl(coverage_fd, KCOV_LEANUX_STEER_STATUS, left)) fail(t->id, -1, "coverage_failure", "steering_status");
+    printf("LEANUX_STEER {\"id\":\"%s\",\"mode\":\"%s\",\"remaining\":%u,\"mismatches\":%u}\n",
+           t->id, comparisons ? "cmp" : "pc", left[0], left[1]);
+    fflush(stdout);
+}
+
 /* An armed trace's allocation records and unwinds (A0's cost measure). */
 static void alloc_status(const struct trace *t, int coverage_fd, int comparisons)
 {
@@ -624,6 +647,7 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
     if (ioctl(coverage_fd, KCOV_INIT_TRACE, CAPACITY)) fail(t->id, -1, "coverage_failure", "initialize_kcov");
     if ((alloc.n || alloc.flags) && ioctl(coverage_fd, KCOV_LEANUX_ALLOC_LOAD, &alloc))
         fail(t->id, -1, "coverage_failure", "load_allocation_set");
+    load_task_steering(t, coverage_fd);
     unsigned long *coverage = mmap(NULL, CAPACITY * sizeof(*coverage), PROT_READ | PROT_WRITE, MAP_SHARED, coverage_fd, 0);
     if (coverage == MAP_FAILED) fail(t->id, -1, "coverage_failure", "map_kcov");
     for (int fd = 4; fd < (t->net ? LISTEN4_FD : 8); ++fd)
@@ -854,10 +878,12 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         }
         printf("]}\n");
         fflush(stdout);
+        task_steering_status(t, coverage_fd, comparisons);
         alloc_status(t, coverage_fd, comparisons);
         if (t->net) delete_wg0(t->id);
         _exit(0);
     }
+    task_steering_status(t, coverage_fd, comparisons);
     alloc_status(t, coverage_fd, comparisons);
     printf("LEANUX_RESULT {\"version\":1,\"id\":\"%s\",\"observations\":[", t->id);
     for (unsigned i = 0; i < t->count; ++i) {
@@ -962,7 +988,7 @@ int main(int argc, char **argv)
         if (!fgets(line, sizeof(line), input) ||
             sscanf(line, "T %80s %u %u %u %u", trace.id, &trace.count, &trace.rlimit, &trace.net, &trace.nsteer) != 5 ||
             trace.count < 1 || trace.count > MAX_OPS || trace.rlimit < 8 || trace.rlimit > 1024 || trace.net > 1 ||
-            trace.nsteer > STEER_MAX || (trace.nsteer && !trace.net))
+            trace.nsteer > STEER_MAX)
             fail("batch", -1, "invalid_input", "wire_trace");
         for (unsigned i = 0; i < trace.count; ++i) {
             struct operation *op = &trace.ops[i];

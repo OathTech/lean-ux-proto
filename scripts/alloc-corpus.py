@@ -14,6 +14,14 @@ every allocation through them is recorded and consumed by the mirror.
 base: the mirror stops at `under_load` (Receive.lean). Its trace,
 `a_reply_nomem`, is pending stream E-B.
 
+A2 [USER 2026-10-06] steers the task-context (b-task) sites as a declared
+failslab-style extension: each such trace carries "domain_extension":
+"failslab". The NULL is in the allocator's output set (the OOM-victim path),
+but the forced trace as a whole is not a possible Linux execution (a victim
+does not run its next syscall). The FS traces load their schedule on their
+own KCOV instance (the guest, A2); a schedule lists every encounter of the
+sites it names.
+
 The output is deterministic: rerunning this script reproduces the files.
 """
 import json
@@ -97,15 +105,135 @@ TRACES = {
 }
 
 
+# ---- A2: the (b-task) sites, under the declared failslab-style extension ----
+def eventfd(init=0, flags=2048):
+    return {"op": "eventfd2", "init": init, "flags": flags}
+
+
+def ref(i):
+    return {"ref": i}
+
+
+def dup3(old, new, flags=0):
+    return {"op": "dup3", "fd": old, "newfd": {"literal": new}, "flags": flags}
+
+
+def read(fd):
+    return {"op": "read", "fd": fd, "count": 8}
+
+
+EVENTFD_NOMEM = "do_eventfd.kmalloc_failed"
+FILE_ERROR = "do_eventfd.file_error"
+# rlimit 128: dup3 to fd 100 grows the table to 128 slots (a 1 KiB fd array,
+# one slab call, below the 8 KiB kvmalloc refusal)
+FD_HIGH = 100
+PEER2 = b"\x44" * 32
+
+
+def wg_config(peers):
+    return {"op": "wg_set", "config": {"private_key": DEVICE.hex(), "listen_port": PORT, "peers": peers}}
+
+
+def wg_peer(key, ips):
+    return {"public_key": noise.public_key(key).hex(),
+            "allowed_ips": [{"family": 4, "addr": a, "cidr": c} for a, c in ips]}
+
+
+# name: (ops, steer, expect[, rlimit_nofile]); a fail in each, so each
+# declares the extension
+TRACES_A2 = {
+    # kmalloc(ctx) fails: -ENOMEM before any fd is reserved; the next
+    # eventfd2 gets fd 8
+    "a2_eventfd_nomem": ([eventfd(1), eventfd(2), read(ref(1))],
+                         [["kmallocEventfdCtx", FAIL], ["kmallocEventfdCtx", "draw"]],
+                         [f"{EVENTFD_NOMEM}=1", f"{EVENTFD_NOMEM}=0"]),
+    # alloc_empty_file fails after the dentry: alloc_file_pseudo's path_put,
+    # __anon_inode_getfile's iput, do_eventfd's put_unused_fd and
+    # eventfd_free_ctx; the reserved fd is released, so the next eventfd2
+    # gets fd 8 again (A-M6)
+    "a2_filp_nomem": ([eventfd(1), eventfd(2), eventfd(3), read(ref(1)), read(ref(2))],
+                      [["filpAlloc", FAIL], ["filpAlloc", "draw"], ["filpAlloc", "draw"]],
+                      ["alloc_empty_file.zalloc_failed=1", f"{FILE_ERROR}=1", f"{FILE_ERROR}=0"]),
+    # d_alloc_pseudo fails: alloc_path_pseudo's -ENOMEM, the same unwind
+    # without a file
+    "a2_dentry_nomem": ([eventfd(1), eventfd(2), read(ref(1))],
+                        [["dAllocPseudo", FAIL], ["dAllocPseudo", "draw"]],
+                        ["alloc_path_pseudo.d_alloc_failed=1", f"{FILE_ERROR}=1"]),
+    # the second eventfd2's file fails: fd 9 is reserved and released, so
+    # the third gets 9, not 10
+    "a2_filp_nomem_second": ([eventfd(1), eventfd(2), eventfd(3), read(ref(0)), read(ref(2))],
+                             [["filpAlloc", "draw"], ["filpAlloc", FAIL], ["filpAlloc", "draw"]],
+                             ["alloc_empty_file.zalloc_failed=1", f"{FILE_ERROR}=1"]),
+    # the fd table's three allocations (alloc_fdtable, file.c:147/151/156):
+    # dup3 to a high fd returns expand_files' -ENOMEM as is
+    # (ksys_dup3.expand_error, not the EMFILE->EBADF mapping); the table is
+    # not replaced, so a retry grows it and succeeds (A-M5)
+    "a2_fdtable_nomem": ([eventfd(1), dup3(ref(0), FD_HIGH), dup3(ref(0), FD_HIGH), read({"literal": FD_HIGH})],
+                         [["kmallocFdtable", FAIL], ["kmallocFdtable", "draw"]],
+                         ["alloc_fdtable.kmalloc_failed=1", "ksys_dup3.expand_error=1"], 128),
+    "a2_fdarray_nomem": ([eventfd(1), dup3(ref(0), FD_HIGH), dup3(ref(0), FD_HIGH), read({"literal": FD_HIGH})],
+                         [["kvmallocFdArray", FAIL], ["kvmallocFdArray", "draw"]],
+                         ["alloc_fdtable.fd_array_failed=1", "ksys_dup3.expand_error=1"], 128),
+    "a2_fdbitmap_nomem": ([eventfd(1), dup3(ref(0), FD_HIGH), dup3(ref(0), FD_HIGH), read({"literal": FD_HIGH})],
+                          [["kvmallocFdBitmaps", FAIL], ["kvmallocFdBitmaps", "draw"]],
+                          ["alloc_fdtable.bitmaps_failed=1", "ksys_dup3.expand_error=1"], 128),
+    # a failed growth leaves the small table: an fd below 64 still dup3s
+    "a2_fdarray_nomem_low": ([eventfd(1), dup3(ref(0), FD_HIGH), dup3(ref(0), 40), read({"literal": 40})],
+                             [["kvmallocFdArray", FAIL]],
+                             ["alloc_fdtable.fd_array_failed=1"], 128),
+    # wg_set with two peers, the second's kmem_cache_zalloc (peer.c:33)
+    # fails: set_peer returns PTR_ERR, wg_set_device stops with -ENOMEM; the
+    # first peer (and its allowed ips) stays, as wg_get shows (A-M1)
+    "a2_peer_nomem": ([wg_config([wg_peer(INITIATOR, [("0a000000", 8)]), wg_peer(PEER2, [("c0a80000", 16)])]), GET],
+                      [["kmemCacheZallocPeer", "draw"], ["kmemCacheZallocPeer", FAIL]],
+                      ["wg_peer_create.no_mem=1"]),
+    # the first peer fails: no peer at all, the device's key and port set
+    "a2_peer_nomem_first": ([wg_config([wg_peer(INITIATOR, [("0a000000", 8)])]), GET],
+                            [["kmemCacheZallocPeer", FAIL]], ["wg_peer_create.no_mem=1"]),
+    # allowed ips (add, allowedips.c:190/205/234): the root node
+    "a2_allowedips_root_nomem": ([wg_config([wg_peer(INITIATOR, [("0a000000", 8), ("c0a80000", 16)])]), GET],
+                                 [["allocNode190", FAIL]], ["add.root_no_mem=1"]),
+    # a new node below the root's prefix (10.1.0.0/16 under 10.0.0.0/8: no
+    # split, the second allocation, :205)
+    "a2_allowedips_newnode_nomem": ([wg_config([wg_peer(INITIATOR, [("0a000000", 8), ("0a010000", 16)])]), GET],
+                                    [["allocNode205", FAIL]], ["add.newnode_no_mem=1"]),
+    # 192.168.0.0/16 beside 10.0.0.0/8 needs an intermediate node (:205 then
+    # :234); :234 fails: newnode is unlinked from the peer's list and freed,
+    # the trie unchanged (A-M9: the dump would show the freed node)
+    "a2_allowedips_split_nomem": ([wg_config([wg_peer(INITIATOR, [("0a000000", 8), ("c0a80000", 16)])]), GET],
+                                  [["allocNode234", FAIL]], ["add.intermediate_no_mem=1"]),
+    # a split that succeeds, then a later insert's split fails: the first
+    # intermediate node stays
+    "a2_allowedips_split_second": ([wg_config([wg_peer(INITIATOR, [("0a000000", 8), ("c0a80000", 16),
+                                                                   ("ac100000", 12)])]), GET],
+                                   [["allocNode234", "draw"], ["allocNode234", FAIL]],
+                                   ["add.intermediate_no_mem=1", "add.intermediate_no_mem=0"]),
+}
+# Draw-only controls for the task-instance schedule: every encounter is
+# recorded and consumed exactly, nothing forced, so no extension is declared
+# (a draw is allowed at any steerable site).
+TRACES_A2_DRAW = {
+    "a2_eventfd_draw": ([eventfd(1), eventfd(2), read(ref(1))],
+                        [["kmallocEventfdCtx", "draw"], ["kmallocEventfdCtx", "draw"]],
+                        [f"{EVENTFD_NOMEM}=0"]),
+    "a2_fdtable_draw": ([eventfd(1), dup3(ref(0), FD_HIGH), read({"literal": FD_HIGH})],
+                        [["kmallocFdtable", "draw"]], ["alloc_fdtable.kmalloc_failed=0"], 128),
+}
+
+
 def main():
     out = ROOT / "corpus/alloc"
     out.mkdir(exist_ok=True)
-    for name, (ops, steer, expect, *rlimit) in TRACES.items():
-        trace = {"version": 1, "id": name, "ops": ops, "steer": steer, "expect": expect}
-        if rlimit:
-            trace["rlimit_nofile"] = rlimit[0]
-        (out / f"{name}.json").write_text(json.dumps(trace, indent=2) + "\n")
-    print(f"wrote {len(TRACES)} traces to {out}")
+    groups = [(TRACES, None), (TRACES_A2, "failslab"), (TRACES_A2_DRAW, None)]
+    for traces, extension in groups:
+        for name, (ops, steer, expect, *rlimit) in traces.items():
+            trace = {"version": 1, "id": name, "ops": ops, "steer": steer, "expect": expect}
+            if rlimit:
+                trace["rlimit_nofile"] = rlimit[0]
+            if extension:
+                trace["domain_extension"] = extension
+            (out / f"{name}.json").write_text(json.dumps(trace, indent=2) + "\n")
+    print(f"wrote {sum(len(t) for t, _ in groups)} traces to {out}")
 
 
 if __name__ == "__main__":

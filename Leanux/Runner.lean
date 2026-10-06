@@ -273,9 +273,17 @@ def parseTrace (j : Json) : Except String Trace := do
   let hasSteer := (j.getObjVal? "steer").isOk
   let hasExpect := (j.getObjVal? "expect").isOk
   let hasArmed := (j.getObjVal? "alloc_armed").isOk
+  let hasExtension := (j.getObjVal? "domain_extension").isOk
   fields j ((if hasLimit then ["version", "id", "ops", "rlimit_nofile"] else ["version", "id", "ops"])
     ++ (if hasHidden then ["hidden"] else []) ++ (if hasSteer then ["steer"] else [])
-    ++ (if hasExpect then ["expect"] else []) ++ (if hasArmed then ["alloc_armed"] else []))
+    ++ (if hasExpect then ["expect"] else []) ++ (if hasArmed then ["alloc_armed"] else [])
+    ++ (if hasExtension then ["domain_extension"] else []))
+  -- The declared failslab-style extension (docs/2026-10-05-a-alloc.md,
+  -- section 3, [USER 2026-10-06]): the trace forces task-context allocation
+  -- failures; the host checks the schedule, the mirror only its form.
+  if hasExtension then
+    if (← (← field j "domain_extension").getStr?) != "failslab" then throw "domain_extension: expected \"failslab\""
+    if !hasSteer then throw "domain_extension: only a steered trace declares it"
   let rlimit ← if hasLimit then natField j "rlimit_nofile" 1024 else pure 32
   if rlimit < 8 then throw "rlimit_nofile outside 8..1024"
   if (← (← field j "version").getNat?) != 1 then throw "unsupported trace version"

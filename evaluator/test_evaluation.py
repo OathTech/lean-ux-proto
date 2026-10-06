@@ -35,12 +35,18 @@ class EvaluationChecks(unittest.TestCase):
             parse_batch([self.trace], '')
 
     def test_resource_failures_are_not_agreement(self):
-        for error in (4, 5, 12, 14, 19, 23, 28, 38, 105, 512):
+        for error in (4, 5, 14, 19, 23, 28, 38, 105, 512):
             result = copy.deepcopy(self.result)
             result['observations'][0].update(ret=-error, errno=error)
             self.assertEqual(compare(self.trace, result, result)['outcome'], 'environment_failure')
         result['observations'][0].update(ret=-24, errno=24)
         self.assertEqual(compare(self.trace, result, result)['outcome'], 'agreement')
+        # A2: eventfd2's ENOMEM is compared (an allocation outcome the mirror
+        # consumes), so a mirror that did not take the arm disagrees
+        nomem = copy.deepcopy(self.result)
+        nomem['observations'][0].update(ret=-12, errno=12)
+        self.assertEqual(compare(self.trace, nomem, nomem)['outcome'], 'agreement')
+        self.assertEqual(compare(self.trace, nomem, self.result)['outcome'], 'semantic_mismatch')
 
     def test_coverage_controls(self):
         valid = [{'id': 'check', 'index': 0, 'count': 1, 'pcs': ['0xffffffff81000001']}]

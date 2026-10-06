@@ -54,13 +54,15 @@ static atomic64_t kcov_choice_seq;
  * LEANUX steering (choice-stream strategy, step 2): a trace may supply the
  * values of choices at named call sites. The guest's parent loads a schedule
  * on its remote KCOV fd (KCOV_LEANUX_STEER_LOAD) before it forks the trace
- * process. The schedule covers every encounter of the call sites it names,
- * in order: each entry gives the site's return addresses and kind, and
- * either a value to substitute or "draw" (keep the kernel's value). A hook
- * at a named site that does not match the head entry is a mismatch: a marker
- * record is written and the entry stays. Other sites are not steered. The
- * parent reads the remaining entries and mismatches back
- * (KCOV_LEANUX_STEER_STATUS). Only recording contexts consult the schedule.
+ * process; a trace with no remote instance (an FS trace, A2) loads it on its
+ * own task instance before KCOV_ENABLE, and that schedule is consulted in
+ * the task's own context (a network trace's task instance has none). The
+ * schedule covers every encounter of the call sites it names, in order: each
+ * entry gives the site's return addresses and kind, and either a value to
+ * substitute or "draw" (keep the kernel's value). A hook at a named site that
+ * does not match the head entry is a mismatch: a marker record is written and
+ * the entry stays. Other sites are not steered. The loader reads the
+ * remaining entries and mismatches back (KCOV_LEANUX_STEER_STATUS). Only recording contexts consult the schedule.
  */
 #define KCOV_STEER_MAX 64
 #define KCOV_STEER_IPS 4
@@ -86,6 +88,8 @@ static struct kcov_steer *kcov_steer_find(struct task_struct *t)
 
 	if (t->kcov && t->kcov->remote)
 		return t->kcov->steer;		/* inside a remote section */
+	if (t->kcov && t->kcov->steer)
+		return t->kcov->steer;		/* the task's own instance (A2: FS traces) */
 	if (!t->kcov_handle)
 		return NULL;
 	spin_lock_irqsave(&kcov_remote_lock, flags);

@@ -96,6 +96,12 @@ def resolve(trace, site_table, sites, alloc_sites=None):
     `site_table`: the mirror's sites by label (leanux-model --hidden-sites).
     `alloc_sites`: alloc_call_sites(...), needed for allocation labels."""
     out = []
+    if trace.get('domain_extension') and not any(
+            label in ALLOC_SITES and value != 'draw'
+            and ALLOC_SITES[label]['cls'] in EXTENSION_CLASSES[trace['domain_extension']]
+            for label, value in trace['steer']):
+        raise SteeringError(f'{trace["id"]}: declares the {trace["domain_extension"]} extension but forces no failure '
+                            'in its classes')
     for label, value in trace['steer']:
         if label in ALLOC_SITES:
             reason = alloc_refusal(trace, label, value)
@@ -151,10 +157,20 @@ ALLOC_HELPER_FILES = ('include/linux/slab.h', 'include/linux/gfp.h', 'mm/slub.c'
                       'net/core/skbuff.c', 'include/linux/skbuff.h', 'fs/dcache.c', 'fs/inode.c')
 ALLOC_HELPER_FUNCTIONS = ('skb_checksum_help',)
 # Classes (section 3): 'atomic' (a): a GFP_ATOMIC failure is an ordinary
-# output in any context, steerable [USER A1]. 'task' (b-task): only under the
-# failslab-style extension (Q1, A2), not enabled. 'kworker' (b-kworker,
-# noise.c:100): record-only, never steered (Q2).
+# output in any context, steerable [USER A1]. 'task' (b-task): steerable only
+# under the declared failslab-style extension [USER 2026-10-06, A2], i.e. for
+# a trace that declares "domain_extension": "failslab" (the NULL is in the
+# allocator's output set via the OOM-victim path; the forced trace is not a
+# possible Linux execution). 'kworker' (b-kworker, noise.c:100): record-only,
+# never steered (Q2).
 ENABLED_CLASSES = frozenset({'atomic'})
+EXTENSION_CLASSES = {'failslab': frozenset({'task'})}
+
+
+def enabled_classes(trace):
+    """The classes a trace may force failures in: (a) always, (b-task)
+    under the declared extension."""
+    return ENABLED_CLASSES | EXTENSION_CLASSES.get(trace.get('domain_extension'), frozenset())
 # The site table (sections 2, 5.5): label -> consumer frame, class, the
 # helper it calls (None: a direct site), and the encounters per
 # consultation: an int for an exact site, ('lax', n) for a lax site whose
@@ -275,8 +291,9 @@ def alloc_refusal(trace, label, value):
         return f'{label}: a __GFP_NOFAIL allocation is never failed'
     if 'kvmalloc_limit' in row and trace.get('rlimit_nofile', 32) > row['kvmalloc_limit']:
         return f'{label}: the array can exceed PAGE_SIZE (vmalloc fallback), never failed'
-    if row['cls'] not in ENABLED_CLASSES:
-        return f'{label}: class {row["cls"]} is not enabled for steering'
+    if row['cls'] not in enabled_classes(trace):
+        return f'{label}: class {row["cls"]} is not enabled for steering' + \
+            (' (a task-context failure needs "domain_extension": "failslab")' if row['cls'] == 'task' else '')
     return None
 
 

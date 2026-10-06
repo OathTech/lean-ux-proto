@@ -46,8 +46,8 @@ def _fields(value, keys, where):
 
 def validate_trace(trace):
     """Return a detached valid trace; reject all inputs outside trace v1."""
-    if type(trace) is not dict or not {"version", "id", "ops"} <= set(trace) <= {"version", "id", "ops", "rlimit_nofile", "steer", "expect"}:
-        raise InvalidTrace("trace: expected exactly ['id', 'ops', 'version'] and optionally 'rlimit_nofile', 'steer', 'expect'")
+    if type(trace) is not dict or not {"version", "id", "ops"} <= set(trace) <= {"version", "id", "ops", "rlimit_nofile", "steer", "expect", "domain_extension"}:
+        raise InvalidTrace("trace: expected exactly ['id', 'ops', 'version'] and optionally 'rlimit_nofile', 'steer', 'expect', 'domain_extension'")
     # A steering schedule (choice-stream strategy, step 2): [site label, value
     # hex or "draw"] in encounter order; the expected decision outcomes that
     # the steering is for. Sites, lengths and domains are checked when the
@@ -65,6 +65,16 @@ def validate_trace(trace):
             raise InvalidTrace("expect: expected 1–16 'decision=0|1' labels")
         if "steer" not in trace:
             raise InvalidTrace("expect: only a steered trace states expected outcomes")
+    # The declared failslab-style extension (docs/2026-10-05-a-alloc.md,
+    # section 3, [USER 2026-10-06]): the trace forces a task-context
+    # (b-task) allocation failure; the forced trace as a whole is not a
+    # possible Linux execution. harness/steer.py enables that class only for
+    # such a trace and refuses the marker on a trace that forces none.
+    if "domain_extension" in trace:
+        if trace["domain_extension"] != "failslab":
+            raise InvalidTrace("domain_extension: expected 'failslab'")
+        if "steer" not in trace:
+            raise InvalidTrace("domain_extension: only a steered trace declares it")
     if "rlimit_nofile" in trace:
         _integer(trace["rlimit_nofile"], 8, 1024, "rlimit_nofile")
     _integer(trace["version"], 1, 1, "version")

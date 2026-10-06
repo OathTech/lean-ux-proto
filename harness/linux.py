@@ -424,7 +424,13 @@ def _collect(outdir, traces, process_returncode, alloc=None):
                      "bytes": [o["bytes"] for o in result["observations"]]}:
             raise LinuxRunError("environment_failure", f"Nondeterministic rerun of {result['id']}", outdir)
     unexpected_errors = {4, 12, 23, 512, 513, 514, 516}
-    if any(row["errno"] in unexpected_errors for result in results for row in result["observations"]):
+    # A2: a trace under the declared failslab-style extension forces
+    # task-context allocation failures, so its ENOMEM is the expected result
+    # of the schedule (compared with the mirror, evaluator/protocol.py), not
+    # allocator pressure. Every other trace still fails on it.
+    forced = {12}
+    if any(row["errno"] in unexpected_errors - (forced if trace.get("domain_extension") == "failslab" else set())
+           for result, trace in zip(results, traces) for row in result["observations"]):
         raise LinuxRunError("environment_failure", "Unexpected interruption or allocator resource failure", outdir)
     return results
 
