@@ -912,6 +912,22 @@ sub(TM, """int mod_timer(struct timer_list *timer, unsigned long expires)
 	return __mod_timer(timer, expires, 0);
 }""")
 # ---- A stream K1: allocation outcomes (docs/2026-10-05-a-alloc.md, section 4) ----
+# LEANUX_ALLOC_CONTROLS=1 generates the control kernel's patch instead
+# (choice-stream-alloc-controls.patch; section 7, K1, K4, K5): load flags
+# that make a forced failure record ok = 1 (K1), treat the steered
+# encounter as __GFP_NOFAIL (K4), or name encounters by address only (K5).
+# Never the oracle: the oracle's load rejects these flags.
+CONTROLS = os.environ.get('LEANUX_ALLOC_CONTROLS') == '1'
+ALLOC_CONTROL_TEXT = {
+    '@@CONTROL_DOC@@': '' if not CONTROLS else '\n * CONTROL KERNEL (never the oracle): load flags 2 (a forced failure\n * records ok = 1), 4 (the steered encounter counts as __GFP_NOFAIL), 8\n * (the naming test is by address only).',
+    '@@CONTROL_DEFS@@': '#define KCOV_ALLOC_CONTROLS 0\n' if not CONTROLS else
+        '#define KCOV_ALLOC_CTL_RECORD_OK 2\t/* control K1 */\n#define KCOV_ALLOC_CTL_NOFAIL 4\t\t/* control K4 */\n'
+        '#define KCOV_ALLOC_CTL_ADDR_NAMING 8\t/* control K5 */\n'
+        '#define KCOV_ALLOC_CONTROLS (KCOV_ALLOC_CTL_RECORD_OK | KCOV_ALLOC_CTL_NOFAIL | KCOV_ALLOC_CTL_ADDR_NAMING)\n',
+    '@@CONTROL_GFP@@': '' if not CONTROLS else '\tif (load_flags & KCOV_ALLOC_CTL_NOFAIL)\n\t\tgfp |= __GFP_NOFAIL;\n',
+    '@@NAMING_CHAIN@@': 'use_chain' if not CONTROLS else 'use_chain && !(load_flags & KCOV_ALLOC_CTL_ADDR_NAMING)',
+    '@@FORCED_OK@@': 'false' if not CONTROLS else '!!(flags & KCOV_ALLOC_CTL_RECORD_OK)',
+}
 s = rd('kernel/kcov.c').rstrip('\n') + r"""
 
 /*
@@ -939,11 +955,12 @@ s = rd('kernel/kcov.c').rstrip('\n') + r"""
  * Lock-free like kcov_timer_arm: the set changes only while no trace work
  * runs, and a load clears kcov_alloc_armed before it writes the set. A
  * record that does not fit marks the area full (kcov_choice_write).
- * Forced failures are stream K2's (section 5); this build forces nothing.
+ * Forced failures (stream K2, section 5): the trace's steering schedule
+ * decides them, kcov_steer_alloc below.@@CONTROL_DOC@@
  */
 #define KCOV_ALLOC_RANGES_MAX 64
 #define KCOV_ALLOC_INVENTORY 1		/* load flag: record every candidate */
-#define KCOV_ALLOC_UNWIND 16		/* stack entries searched for the address */
+@@CONTROL_DEFS@@#define KCOV_ALLOC_UNWIND 16		/* stack entries searched for the address */
 #define KCOV_ALLOC_NESTED (1ULL << 8)
 #define KCOV_ALLOC_PAGE (1ULL << 9)
 #define KCOV_ALLOC_NOCHAIN (1ULL << 10)
@@ -989,7 +1006,7 @@ static notrace bool kcov_alloc_member(unsigned long ip, u32 n)
 }
 
 /* The return addresses above addr on the current stack (ORC). */
-static noinline notrace void kcov_alloc_chain(unsigned long addr, u64 *w)
+static noinline notrace void kcov_alloc_chain(unsigned long addr, u64 *w0, u64 *chain)
 {
 	unsigned long entries[KCOV_ALLOC_UNWIND];
 	u64 start = get_cycles();
@@ -999,41 +1016,98 @@ static noinline notrace void kcov_alloc_chain(unsigned long addr, u64 *w)
 	for (i = 0; i < n && entries[i] != addr; i++)
 		;
 	if (i == n)
-		w[0] |= KCOV_ALLOC_NOCHAIN;
+		*w0 |= KCOV_ALLOC_NOCHAIN;
 	else
 		for (j = 0; j < 4 && i + 1 + j < n; j++)
-			w[1 + j] = canonicalize_ip(entries[i + 1 + j]);
+			chain[j] = canonicalize_ip(entries[i + 1 + j]);
 	atomic_inc(&kcov_alloc_unwinds);
 	atomic64_add(get_cycles() - start, &kcov_alloc_unwind_cycles);
 }
 
 static notrace void kcov_alloc_record(struct task_struct *t, struct kcov_alloc_ctx *ctx, bool ok, bool steered)
 {
-	u64 w[5] = { ctx->word0 | (ok ? 1 : 0), 0, 0, 0, 0 };
+	u64 w[5] = { ctx->word0 | (ok ? 1 : 0), ctx->chain[0], ctx->chain[1], ctx->chain[2], ctx->chain[3] };
 
-	if (ctx->unwind)
-		kcov_alloc_chain(ctx->addr, w);
 	kcov_choice_write(t, 305 | (steered ? 0x8000 : 0), ctx->addr, w, sizeof(w));
 	atomic_inc(&kcov_alloc_records);
 }
 
-/* Stream K2 decides forced failures here (chain-aware steering, section
- * 5.2). Never for __GFP_NOFAIL (section 3, M2). This build forces nothing. */
-static notrace bool kcov_alloc_force(struct kcov_alloc_ctx *ctx, gfp_t gfp)
+/*
+ * LEANUX A stream K2 (section 5.2): steering an allocation. A kind-305
+ * schedule entry names an encounter when one of its return addresses is the
+ * allocation's address or, with KCOV_STEER_CHAIN, one of the unwound return
+ * addresses above it (a helper site: the consumer's call into the helper).
+ * Chain containment decides both whether the encounter is named at all and
+ * whether it matches the head entry; an addr-only naming test would leave
+ * helper sites silently unsteered (M4). Kind-305 entries are only ever
+ * "draw" or "fail" (value 0, checked at load).
+ */
+static notrace bool kcov_steer_alloc_names(const struct kcov_steer_entry *e, unsigned long ip, const u64 *chain,
+					   bool use_chain)
 {
-	if (gfp & __GFP_NOFAIL)
+	u32 j, k;
+
+	if (e->kind != 305)
 		return false;
+	for (j = 0; j < KCOV_STEER_IPS; j++) {
+		if (!e->ips[j])
+			continue;
+		if (e->ips[j] == ip)
+			return true;
+		if (use_chain && (e->flags & KCOV_STEER_CHAIN))
+			for (k = 0; k < 4; k++)
+				if (chain[k] && e->ips[j] == chain[k])
+					return true;
+	}
 	return false;
 }
 
+/* 1: fail this allocation; 0: not steered (no schedule, not named, a draw
+ * entry, or a __GFP_NOFAIL allocation, whose entry stays: never forced, M2);
+ * -1: a named encounter that does not match the head entry. */
+static notrace int kcov_steer_alloc(struct task_struct *t, struct kcov_alloc_ctx *ctx, gfp_t gfp, u32 load_flags)
+{
+	struct kcov_steer *steer = kcov_steer_find(t);
+	unsigned long ip = canonicalize_ip(ctx->addr), flags;
+	bool use_chain = ctx->unwind && !(ctx->word0 & KCOV_ALLOC_NOCHAIN);
+	struct kcov_steer_entry *e;
+	int ret = 0;
+	u32 i;
+
+	if (!steer)
+		return 0;
+@@CONTROL_GFP@@	spin_lock_irqsave(&steer->lock, flags);
+	for (i = 0; i < steer->n; i++)
+		if (kcov_steer_alloc_names(&steer->e[i], ip, ctx->chain, @@NAMING_CHAIN@@))
+			break;
+	if (i == steer->n)
+		goto out;
+	e = steer->head < steer->n ? &steer->e[steer->head] : NULL;
+	if (e && kcov_steer_alloc_names(e, ip, ctx->chain, use_chain)) {
+		if (!e->draw && (gfp & __GFP_NOFAIL))
+			goto out;
+		steer->head++;
+		ret = !e->draw;
+		goto out;
+	}
+	steer->mismatches++;
+	ret = -1;
+out:
+	spin_unlock_irqrestore(&steer->lock, flags);
+	return ret;
+}
+
 /* After kcov_alloc_armed was seen set. True: fail the allocation (its record
- * is written here, since the caller returns NULL without the post call). */
+ * is written here, since the caller returns NULL without the post call).
+ * The chain is unwound here, before the allocation, for the steering match
+ * and the record. Only armed mode (no KCOV_ALLOC_INVENTORY) is steered. */
 bool notrace __kcov_alloc_pre(struct kcov_alloc_ctx *ctx, unsigned long addr, gfp_t gfp, unsigned long size, bool page)
 {
 	struct task_struct *t = current;
 	unsigned int *depth;
 	u32 n, flags;
 	bool nested;
+	int steered;
 
 	if (!kcov_leanux_recording(t))
 		return false;
@@ -1046,12 +1120,20 @@ bool notrace __kcov_alloc_pre(struct kcov_alloc_ctx *ctx, unsigned long addr, gf
 	ctx->addr = addr;
 	ctx->word0 = (u64)(__force u32)gfp << 32 | min_t(u64, size, KCOV_ALLOC_SIZE_MAX) << 11 |
 		     (page ? KCOV_ALLOC_PAGE : 0) | (nested ? KCOV_ALLOC_NESTED : 0);
+	ctx->chain[0] = ctx->chain[1] = ctx->chain[2] = ctx->chain[3] = 0;
 	/* chains: armed mode always; inventory mode only in pass 2 (ranges)
 	 * and not for a refill inside a recorded allocation */
 	ctx->unwind = !(flags & KCOV_ALLOC_INVENTORY) || (n && !nested);
-	if (kcov_alloc_force(ctx, gfp)) {
-		kcov_alloc_record(t, ctx, false, true);
-		return true;
+	if (ctx->unwind)
+		kcov_alloc_chain(addr, &ctx->word0, ctx->chain);
+	if (!(flags & KCOV_ALLOC_INVENTORY)) {
+		steered = kcov_steer_alloc(t, ctx, gfp, flags);
+		if (steered < 0)
+			kcov_choice_write(t, 0xffff, addr, NULL, 0);	/* the mismatch marker */
+		if (steered > 0) {
+			kcov_alloc_record(t, ctx, @@FORCED_OK@@, true);
+			return true;
+		}
 	}
 	ctx->active = true;
 	(*depth)++;
@@ -1086,7 +1168,7 @@ static long kcov_alloc_load(struct kcov *kcov, void __user *arg)
 
 	if (copy_from_user(hdr, arg, sizeof(hdr)))
 		return -EFAULT;
-	if (hdr[0] > KCOV_ALLOC_RANGES_MAX || (hdr[1] & ~KCOV_ALLOC_INVENTORY))
+	if (hdr[0] > KCOV_ALLOC_RANGES_MAX || (hdr[1] & ~(KCOV_ALLOC_INVENTORY | KCOV_ALLOC_CONTROLS)))
 		return -EINVAL;
 	if (hdr[0]) {
 		r = kmalloc_array(hdr[0], sizeof(*r), GFP_KERNEL);
@@ -1147,6 +1229,9 @@ static long kcov_alloc_status(struct kcov *kcov, void __user *arg)
 	return copy_to_user(arg, &status, sizeof(status)) ? -EFAULT : 0;
 }
 """
+for k, v in ALLOC_CONTROL_TEXT.items():
+    assert s.count(k) == 1, k
+    s = s.replace(k, v)
 wr('kernel/kcov.c', s)
 sub('kernel/kcov.c', '#include <linux/log2.h>\n', '#include <linux/log2.h>\n#include <linux/stacktrace.h>\n#include <linux/timex.h>\n')
 sub('kernel/kcov.c', """static struct kcov *kcov_dispatch_kcov;		/* LEANUX: see kcov_dispatch_start */
@@ -1184,6 +1269,27 @@ sub('kernel/kcov.c', """	case KCOV_LEANUX_TIME_ADVANCE:
 	case KCOV_LEANUX_ALLOC_STATUS:
 		return kcov_alloc_status(kcov, (void __user *)arg);
 """)
+sub('kernel/kcov.c', """	u32 draw;
+	u32 pad;
+	u8 value[40];
+};""", """	u32 draw;
+	u32 flags;		/* LEANUX A: KCOV_STEER_CHAIN (kind 305 only) */
+	u8 value[40];
+};
+#define KCOV_STEER_CHAIN 1	/* LEANUX A: match the unwound chain too (section 5.2) */""")
+sub('kernel/kcov.c', """		for (j = 0; j < KCOV_STEER_IPS; j++)
+			if (steer->e[i].ips[j] == ip)
+				return true;
+	return false;""", """		for (j = 0; j < KCOV_STEER_IPS; j++)
+			if (steer->e[i].kind != 305 && steer->e[i].ips[j] == ip)
+				return true;	/* LEANUX A: kind 305 names by chain */
+	return false;""")
+sub('kernel/kcov.c', """	for (i = 0; i < n; i++)
+		if (steer->e[i].len > sizeof(steer->e[i].value)) {""", """	for (i = 0; i < n; i++)
+		if (steer->e[i].len > sizeof(steer->e[i].value) ||
+		    /* LEANUX A: kind 305 entries are draw or fail (8 zero bytes) */
+		    (steer->e[i].kind == 305 ? steer->e[i].len != 8 || (steer->e[i].flags & ~KCOV_STEER_CHAIN) ||
+		     (!steer->e[i].draw && memchr_inv(steer->e[i].value, 0, 8)) : steer->e[i].flags)) {""")
 sub('include/linux/sched.h', """	/* LEANUX: whether the task is in a dispatch section: */
 	unsigned int			kcov_leanux_section;
 """, """	/* LEANUX: whether the task is in a dispatch section: */
@@ -1195,9 +1301,9 @@ sub('include/linux/sched.h', """	/* LEANUX: whether the task is in a dispatch se
 ALLOC_H = '''/*
  * LEANUX A (docs/2026-10-05-a-alloc.md, section 4): the allocation hook, in
  * slab_alloc_node and __alloc_pages_noprof. Unarmed, one load. pre returns
- * true to fail the allocation (stream K2; never in this build).
+ * true to fail the allocation (a steered failure, stream K2).
  */
-struct kcov_alloc_ctx { unsigned long addr; u64 word0; bool active, unwind; };
+struct kcov_alloc_ctx { unsigned long addr; u64 word0; u64 chain[4]; bool active, unwind; };
 extern u32 kcov_alloc_armed;
 bool __kcov_alloc_pre(struct kcov_alloc_ctx *ctx, unsigned long addr, gfp_t gfp, unsigned long size, bool page);
 void __kcov_alloc_post(struct kcov_alloc_ctx *ctx, bool ok);
@@ -1295,5 +1401,5 @@ out=[]
 for f in files:
     r=subprocess.run(['diff','-u','--label','a/'+f,'--label','b/'+f,f'{WD}/base/{f}',f'{N}/{f}'],capture_output=True,text=True)
     assert r.returncode==1,(f,r.stderr); out.append(r.stdout)
-open('kernel/patches/choice-stream.patch','w').write(''.join(out))
+open('kernel/patches/choice-stream-alloc-controls.patch' if CONTROLS else 'kernel/patches/choice-stream.patch','w').write(''.join(out))
 print('ok')

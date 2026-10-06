@@ -67,7 +67,9 @@ struct operation { unsigned code, kind, newkind, a, b; long long fd, newfd; uint
 /* A steering schedule entry (the patched kernel's struct kcov_steer_entry;
  * docs/2026-10-03-choice-stream-strategy.md, step 2). */
 #define STEER_MAX 64
-struct steer_entry { uint64_t ips[4]; uint32_t kind, len, draw, pad; unsigned char value[40]; };
+struct steer_entry { uint64_t ips[4]; uint32_t kind, len, draw, flags; unsigned char value[40]; };
+/* flags: match the unwound chain too (kind 305 only; A, section 5.2) */
+#define STEER_CHAIN 1
 struct steer_arg { uint32_t n, pad; struct steer_entry e[STEER_MAX]; };
 #define KCOV_LEANUX_STEER_LOAD _IOW('c', 200, unsigned long)
 #define KCOV_LEANUX_STEER_STATUS _IOR('c', 201, unsigned long)
@@ -934,7 +936,7 @@ int main(int argc, char **argv)
     dispatch.flags = arm ? DISPATCH_ARM_RECORDS : 0;
     /* M flags n lo hi ...: the allocation set (A), in hex */
     if (!fgets(line, sizeof(line), input) || sscanf(line, "M %u %u%n", &alloc.flags, &alloc.n, &consumed) != 2 ||
-        alloc.n > ALLOC_RANGES_MAX || alloc.flags > ALLOC_INVENTORY)
+        alloc.n > ALLOC_RANGES_MAX || alloc.flags > 15)   /* bits 1-3: control kernel only */
         fail("batch", -1, "invalid_input", "wire_allocation_set");
     for (unsigned k = 0; k < alloc.n; ++k) {
         int more = 0;
@@ -987,9 +989,9 @@ int main(int argc, char **argv)
             int consumed = 0;
             memset(e, 0, sizeof(*e));
             if (!fgets(line, sizeof(line), input) ||
-                sscanf(line, "S %u %u %u %" SCNx64 " %" SCNx64 " %" SCNx64 " %" SCNx64 "%n", &e->kind, &e->len, &e->draw,
-                       &e->ips[0], &e->ips[1], &e->ips[2], &e->ips[3], &consumed) != 7 ||
-                e->len > sizeof(e->value) || e->draw > 1)
+                sscanf(line, "S %u %u %u %u %" SCNx64 " %" SCNx64 " %" SCNx64 " %" SCNx64 "%n", &e->kind, &e->len,
+                       &e->draw, &e->flags, &e->ips[0], &e->ips[1], &e->ips[2], &e->ips[3], &consumed) != 8 ||
+                e->len > sizeof(e->value) || e->draw > 1 || e->flags > STEER_CHAIN)
                 fail(trace.id, -1, "invalid_input", "wire_steering");
             const char *hex = line + consumed;
             if (*hex == ' ') ++hex;

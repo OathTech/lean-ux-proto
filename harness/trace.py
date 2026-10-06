@@ -156,6 +156,10 @@ def loads_trace(line):
 
 
 ALLOC_INVENTORY = 1      # the allocation load's inventory flag (A, docs/2026-10-05-a-alloc.md 4.3)
+# Control-kernel load flags (net-choice-actl only; the oracle's load rejects
+# them, which fails the trace): a forced failure records ok = 1 (K1), the
+# steered encounter counts as __GFP_NOFAIL (K4), naming by address only (K5).
+ALLOC_CONTROL_FLAGS = {"record_ok": 2, "nofail": 4, "addr_naming": 8}
 ALLOC_RANGES_MAX = 64
 
 
@@ -165,7 +169,8 @@ def alloc_line(alloc):
     disjoint. None or {"flags": 0, "ranges": []} is `M 0 0`: disarmed, no
     kind-305 records (the default until the phased flip, section 6.6)."""
     alloc = alloc or {"flags": 0, "ranges": []}
-    if type(alloc) is not dict or set(alloc) != {"flags", "ranges"} or alloc["flags"] not in (0, ALLOC_INVENTORY):
+    if type(alloc) is not dict or set(alloc) != {"flags", "ranges"} or type(alloc["flags"]) is not int \
+            or alloc["flags"] & ~(ALLOC_INVENTORY | sum(ALLOC_CONTROL_FLAGS.values())):
         raise InvalidTrace("allocation set")
     ranges = [tuple(r) for r in alloc["ranges"]]
     if len(ranges) > ALLOC_RANGES_MAX or any(
@@ -177,7 +182,7 @@ def alloc_line(alloc):
 
 def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False, alloc=None):
     """`steer_wire`: each steered trace's resolved schedule
-    (harness/steer.py), [(kind, length, draw, [return addresses], hex)].
+    (harness/steer.py), [(kind, length, draw, [return addresses], hex[, flags])].
     `dispatch`: the dispatch set's function addresses (harness/linux.py),
     which a batch with network traces needs. `arm_records`: whether the
     kernel writes the kind-303 arm records for the dispatch set's timers
@@ -225,7 +230,14 @@ def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False, allo
             elif op["op"] == "wg_inject":
                 line += " " + op["message"]
             lines.append(line)
-        for kind, length, draw, ips, value in schedule:
+        for entry in schedule:
+            # (kind, length, draw, ips, hex[, flags]); flags: 1 = match the
+            # unwound chain too (allocation entries, kind 305)
+            kind, length, draw, ips, value = entry[:5]
+            flags = entry[5] if len(entry) > 5 else 0
+            if len(entry) not in (5, 6) or flags not in (0, 1) or (flags and kind != 305):
+                raise InvalidTrace("steering entry")
             ips = (list(ips) + [0, 0, 0, 0])[:4]
-            lines.append(f"S {kind} {length} {int(draw)} " + " ".join(f"{ip:x}" for ip in ips) + f" {'' if draw else value}")
+            lines.append(f"S {kind} {length} {int(draw)} {flags} " + " ".join(f"{ip:x}" for ip in ips)
+                         + f" {'' if draw else value}")
     return "\n".join(lines) + "\n"

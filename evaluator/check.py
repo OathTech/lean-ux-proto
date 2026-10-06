@@ -185,7 +185,8 @@ def non_statement(line):
 # The random and clock helpers a choice's call chain passes through before
 # reaching its consumer (choice-stream strategy, section 4.2): one list, shared
 # with the steering resolver.
-from harness.steer import CHOICE_HELPERS  # noqa: E402
+from harness.steer import (ALLOC_HELPER_FUNCTIONS, ALLOC_HELPER_FILES, ALLOC_KIND, ALLOC_SITES,  # noqa: E402
+                           CHOICE_HELPERS, alloc_call_sites, alloc_ranges)
 RANDOM_KINDS = {1, 101, 102, 104, 108, 110}
 # Dispatch sections' start and stop records (kernel/patches/choice-stream.patch).
 SECTION_START, SECTION_STOP = 300, 301
@@ -202,7 +203,7 @@ def load_hidden_sites():
     sites = {}
     for entry in loads(result.stdout.decode()):
         if set(entry) != {'id', 'label', 'kind', 'file', 'line', 'len', 'role'} \
-                or entry['kind'] not in ('random', 'clock', 'section', 'resched') \
+                or entry['kind'] not in ('random', 'clock', 'section', 'resched', 'alloc') \
                 or entry['role'] not in ('mirror', 'cut', 'ambient'):
             raise InvalidOutput(f'hidden site fields: {entry}')
         key = (entry['kind'], f"{entry['file']}:{entry['line']}")
@@ -294,7 +295,10 @@ def resolve_choices(per, sites, locations, dispatch=None):
                 kind, steered = raw_kind & 0x7fff, bool(raw_kind & 0x8000)
                 consumer = next((src for src in frames if src.split(':')[0] not in CHOICE_HELPERS), None)
                 kind_class = 'random' if kind in RANDOM_KINDS else 'clock' if 200 <= kind <= 216 \
-                    else 'resched' if raw_kind == RESCHED else None
+                    else 'resched' if raw_kind == RESCHED else 'alloc' if kind == ALLOC_KIND else None
+                if kind_class == 'alloc':
+                    # the consumer frame by the unwound chain (docs/2026-10-05-a-alloc.md 4.2)
+                    frames, consumer = alloc_frames(ip, data, locations)
                 if raw_kind in (SECTION_START, SECTION_STOP):
                     kind_class = 'section'
                     consumer = f'{dispatch.get(func)}:{raw_kind - SECTION_START}'
@@ -308,7 +312,7 @@ def resolve_choices(per, sites, locations, dispatch=None):
                         problem='choice from an undeclared consumer', call_chain=frames, length=length))
                     continue
                 recs.append([entry['id'], data + '0' * (-len(data) % 16)])
-                op_labels.append((entry['label'], steered, data))
+                op_labels.append((entry['label'], steered, data, kind_class))
                 if entry['role'] != 'mirror' and key[1] == 'pc':
                     skipped[f"{entry['role']}:{entry['label']}"] += 1
             out.append(recs)
@@ -318,11 +322,35 @@ def resolve_choices(per, sites, locations, dispatch=None):
     return resolved, problems, skipped, meta
 
 
+def alloc_chain(data):
+    """A kind-305 record's unwound return addresses (words 1-4), as the
+    hex addresses the symbolization keys use."""
+    words = [int.from_bytes(bytes.fromhex(data[16 * i:16 * i + 16]), 'little') for i in range(1, 5)]
+    return [f'0x{w:x}' for w in words if w]
+
+
+def alloc_frames(ip, data, locations):
+    """The symbolized frames of an allocation record (its address, then its
+    chain) and its consumer frame: the first frame outside the choice and
+    allocation helpers (files, and functions by name)."""
+    frames, consumer = [], None
+    for address in [ip] + alloc_chain(data):
+        for f in locations.get(address, []):
+            source = f['source'].split('/.deps/linux/')[-1].split(' ')[0]
+            frames.append(source)
+            if consumer is None and source.split(':')[0] not in ALLOC_HELPER_FILES + CHOICE_HELPERS \
+                    and f['function'] not in ALLOC_HELPER_FUNCTIONS:
+                consumer = source
+    return frames, consumer
+
+
 def steering_problems(traces, meta, status_rows):
     """For each steered trace and guest child: the kernel consumed the whole
     schedule with no mismatch, and the records at the scheduled sites are the
     schedule, entry for entry (a value entry: steered, that value; a draw
-    entry: not steered)."""
+    entry: not steered). For an allocation entry the value compared is the
+    outcome byte of word 0: the rest of the payload (gfp, size, chain) is
+    build-specific attribution, not schedule."""
     problems = {}
     status = {(r['id'], r['mode']): r for r in status_rows}
     for trace in traces:
@@ -335,10 +363,12 @@ def steering_problems(traces, meta, status_rows):
             if row is None or row['remaining'] or row['mismatches']:
                 problems.setdefault(trace['id'], []).append(dict(index=None, label='steering',
                     problem='the schedule was not consumed exactly', mode=mode, status=row))
-            got = [(label, steered, data) for op in meta.get((trace['id'], mode), []) for label, steered, data in op
+            got = [(label, steered, data[:2] if kind_class == 'alloc' else data)
+                   for op in meta.get((trace['id'], mode), []) for label, steered, data, kind_class in op
                    if label in sites]
-            if len(got) != len(want) or any(g[0] != w[0] or g[1] != w[1] or (w[1] and g[2] != w[2])
-                                            for g, w in zip(got, want)):
+            want_mode = [(label, steered, value[:2] if label in ALLOC_SITES else value) for label, steered, value in want]
+            if len(got) != len(want_mode) or any(g[0] != w[0] or g[1] != w[1] or (w[1] and g[2] != w[2])
+                                                 for g, w in zip(got, want_mode)):
                 problems.setdefault(trace['id'], []).append(dict(index=None, label='steering',
                     problem='the records at scheduled sites are not the schedule', mode=mode,
                     records=[[g[0], g[1]] for g in got][:16]))
@@ -708,12 +738,19 @@ def run_chunk(traces, out, kcov):
         # the mirror's section sites name functions of the dispatch set
         if not {e['file'] for e in sites_by_key.values() if e['kind'] == 'section'} <= set(DISPATCH_SYMBOLS):
             raise InvalidOutput('a section site outside the dispatch set')
-        steer_wire = {}
+        steer_wire, alloc = {}, None
         if any('steer' in t for t in traces):
             by_label = {entry['label']: entry for entry in sites_by_key.values()}
             calls = call_sites(KERNEL / 'vmlinux', LINUX_ARTIFACTS / 'cache')
-            steer_wire = {t['id']: resolve_steering(t, by_label, calls) for t in traces if 'steer' in t}
-        linux = run_linux(traces, out / 'linux', timeout=guest_timeout(traces), steer_wire=steer_wire)
+            steered_alloc = {label for t in traces for label, _ in t.get('steer', []) if label in ALLOC_SITES}
+            # A chunk with a steered allocation site is armed with those
+            # sites' ranges (every trace in it then records their
+            # candidates); others stay disarmed (section 6.6).
+            alloc_sites = alloc_call_sites(KERNEL / 'vmlinux', LINUX_ARTIFACTS / 'cache') if steered_alloc else None
+            steer_wire = {t['id']: resolve_steering(t, by_label, calls, alloc_sites) for t in traces if 'steer' in t}
+            if steered_alloc:
+                alloc = {'flags': 0, 'ranges': alloc_ranges(steered_alloc, alloc_sites)}
+        linux = run_linux(traces, out / 'linux', timeout=guest_timeout(traces), steer_wire=steer_wire, alloc=alloc)
         coverage = [loads(line) for line in (out / 'linux/coverage.jsonl').read_text().splitlines()]
         validate_coverage(traces, coverage)
         mapped = symbolize(coverage, KERNEL / 'vmlinux')
@@ -725,7 +762,9 @@ def run_chunk(traces, out, kcov):
         hidden_path = out / 'linux/hidden.jsonl'
         rows = [loads(line) for line in hidden_path.read_text().splitlines()] if hidden_path.exists() else []
         per = hidden_records(traces, rows)
-        ips = sorted({r[1] for ops in per.values() for op in ops for r in op})
+        ips = sorted({r[1] for ops in per.values() for op in ops for r in op}
+                     | {a for ops in per.values() for op in ops for r in op if r[0] & 0x7fff == ALLOC_KIND
+                        for a in alloc_chain(r[4])})
         called = symbolize([{'pcs': ips}], KERNEL / 'vmlinux') if ips else {'locations': {}}
         dispatch = {}
         if any(uses_wireguard(t) for t in traces):

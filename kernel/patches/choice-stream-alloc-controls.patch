@@ -1,0 +1,1642 @@
+--- a/kernel/kcov.c
++++ b/kernel/kcov.c
+@@ -25,6 +25,8 @@
+ #include <linux/kcov.h>
+ #include <linux/refcount.h>
+ #include <linux/log2.h>
++#include <linux/stacktrace.h>
++#include <linux/timex.h>
+ #include <asm/setup.h>
+ 
+ #define kcov_debug(fmt, ...) pr_debug("%s: " fmt, __func__, ##__VA_ARGS__)
+@@ -71,6 +73,8 @@
+ 	 * kcov_remote_stop(), see the comment there.
+ 	 */
+ 	int			sequence;
++	/* LEANUX: the trace's steering schedule (see kcov_choice_ip). */
++	struct kcov_steer	*steer;
+ };
+ 
+ struct kcov_remote_area {
+@@ -85,6 +89,8 @@
+ };
+ 
+ static DEFINE_SPINLOCK(kcov_remote_lock);
++static struct kcov *kcov_dispatch_kcov;		/* LEANUX: see kcov_dispatch_start */
++static struct kcov *kcov_alloc_kcov;		/* LEANUX A: see kcov_alloc_load */
+ static DEFINE_HASHTABLE(kcov_remote_map, 4);
+ static struct list_head kcov_remote_areas[2] = {
+ 	LIST_HEAD_INIT(kcov_remote_areas[0]), LIST_HEAD_INIT(kcov_remote_areas[1])
+@@ -385,6 +391,8 @@
+ 	kcov_task_reset(t);
+ 	t->kcov_handle = current->kcov_handle;
+ 	t->kcov_softirq = 0;
++	t->kcov_leanux_dropped = 0;
++	t->kcov_leanux_in_alloc = 0;
+ 	t->kcov_saved_mode = 0;
+ 	t->kcov_saved_size = 0;
+ 	t->kcov_saved_area = NULL;
+@@ -415,6 +423,12 @@
+ 		hash_del(&remote->hnode);
+ 		kfree(remote);
+ 	}
++	if (kcov_dispatch_kcov == kcov)
++		kcov_dispatch_kcov = NULL;	/* LEANUX: disarm with the handles */
++	if (kcov_alloc_kcov == kcov) {
++		WRITE_ONCE(kcov_alloc_armed, 0);	/* LEANUX A: and the allocation set */
++		kcov_alloc_kcov = NULL;
++	}
+ 	/* Do reset before unlock to prevent races with kcov_remote_start(). */
+ 	kcov_reset(kcov);
+ 	spin_unlock_irqrestore(&kcov_remote_lock, flags);
+@@ -439,6 +453,7 @@
+ 	if (refcount_dec_and_test(&kcov->refcount)) {
+ 		kcov_remote_reset(kcov);
+ 		vfree(kcov->area);
++		kfree(kcov->steer);
+ 		kfree(kcov);
+ 	}
+ }
+@@ -692,6 +707,21 @@
+ 	}
+ }
+ 
++#define KCOV_LEANUX_STEER_LOAD		_IOW('c', 200, unsigned long)
++#define KCOV_LEANUX_STEER_STATUS	_IOR('c', 201, unsigned long)
++static long kcov_steer_load(struct kcov *kcov, void __user *arg);
++static long kcov_steer_status(struct kcov *kcov, void __user *arg);
++#define KCOV_LEANUX_DISPATCH_LOAD	_IOW('c', 202, unsigned long)
++#define KCOV_LEANUX_SECTION_STATUS	_IOR('c', 203, unsigned long)
++static long kcov_dispatch_load(struct kcov *kcov, void __user *arg);
++static long kcov_section_status(struct kcov *kcov, void __user *arg);
++#define KCOV_LEANUX_TIME_ADVANCE	_IOW('c', 204, unsigned long)
++static long kcov_time_advance(unsigned long __user *arg);
++#define KCOV_LEANUX_ALLOC_LOAD		_IOW('c', 205, unsigned long)
++#define KCOV_LEANUX_ALLOC_STATUS	_IOR('c', 206, unsigned long)
++static long kcov_alloc_load(struct kcov *kcov, void __user *arg);
++static long kcov_alloc_status(struct kcov *kcov, void __user *arg);
++
+ static long kcov_ioctl(struct file *filep, unsigned int cmd, unsigned long arg)
+ {
+ 	struct kcov *kcov;
+@@ -729,6 +759,20 @@
+ 		kcov->mode = KCOV_MODE_INIT;
+ 		spin_unlock_irqrestore(&kcov->lock, flags);
+ 		return 0;
++	case KCOV_LEANUX_STEER_LOAD:
++		return kcov_steer_load(kcov, (void __user *)arg);
++	case KCOV_LEANUX_STEER_STATUS:
++		return kcov_steer_status(kcov, (void __user *)arg);
++	case KCOV_LEANUX_DISPATCH_LOAD:
++		return kcov_dispatch_load(kcov, (void __user *)arg);
++	case KCOV_LEANUX_TIME_ADVANCE:
++		return kcov_time_advance((unsigned long __user *)arg);
++	case KCOV_LEANUX_ALLOC_LOAD:
++		return kcov_alloc_load(kcov, (void __user *)arg);
++	case KCOV_LEANUX_ALLOC_STATUS:
++		return kcov_alloc_status(kcov, (void __user *)arg);
++	case KCOV_LEANUX_SECTION_STATUS:
++		return kcov_section_status(kcov, (void __user *)arg);
+ 	case KCOV_REMOTE_ENABLE:
+ 		if (get_user(remote_num_handles, (unsigned __user *)(arg +
+ 				offsetof(struct kcov_remote_arg, num_handles))))
+@@ -1125,3 +1169,795 @@
+ }
+ 
+ device_initcall(kcov_init);
++
++/*
++ * LEANUX: a choice the C consumes (a random draw, a clock read), recorded at
++ * a generic interception point into the active KCOV area
++ * (docs/2026-10-03-choice-stream-strategy.md). The record carries the kind,
++ * the consumer's return address, a sequence number that orders records
++ * across the task and remote streams, the value's length and up to 40 value
++ * bytes. Coverage mode: a header word (KCOV_CHOICE_MAGIC in bits 48-63, the
++ * length in 32-47, the kind in 16-31, the payload words in 0-15), the call
++ * site, the sequence number, then the payload. Comparison mode: a header
++ * record (type bit 63 | KCOV_CHOICE_MAGIC << 32 | kind << 16 | words; call
++ * site; sequence number; length), then records of three payload words
++ * (KCOV_CHOICE_MAGIC + 1). A record that does not fit marks the area full,
++ * so the harness fails noisily instead of losing a value.
++ */
++#define KCOV_CHOICE_MAGIC 0x4c5aULL
++#define KCOV_CHOICE_MAX_WORDS 5
++static atomic64_t kcov_choice_seq;
++
++/*
++ * LEANUX steering (choice-stream strategy, step 2): a trace may supply the
++ * values of choices at named call sites. The guest's parent loads a schedule
++ * on its remote KCOV fd (KCOV_LEANUX_STEER_LOAD) before it forks the trace
++ * process. The schedule covers every encounter of the call sites it names,
++ * in order: each entry gives the site's return addresses and kind, and
++ * either a value to substitute or "draw" (keep the kernel's value). A hook
++ * at a named site that does not match the head entry is a mismatch: a marker
++ * record is written and the entry stays. Other sites are not steered. The
++ * parent reads the remaining entries and mismatches back
++ * (KCOV_LEANUX_STEER_STATUS). Only recording contexts consult the schedule.
++ */
++#define KCOV_STEER_MAX 64
++#define KCOV_STEER_IPS 4
++struct kcov_steer_entry {
++	u64 ips[KCOV_STEER_IPS];
++	u32 kind;
++	u32 len;
++	u32 draw;
++	u32 flags;		/* LEANUX A: KCOV_STEER_CHAIN (kind 305 only) */
++	u8 value[40];
++};
++#define KCOV_STEER_CHAIN 1	/* LEANUX A: match the unwound chain too (section 5.2) */
++struct kcov_steer {
++	spinlock_t lock;
++	u32 n, head, mismatches;
++	struct kcov_steer_entry e[KCOV_STEER_MAX];
++};
++
++static struct kcov_steer *kcov_steer_find(struct task_struct *t)
++{
++	struct kcov_remote *remote;
++	struct kcov_steer *steer = NULL;
++	unsigned long flags;
++
++	if (t->kcov && t->kcov->remote)
++		return t->kcov->steer;		/* inside a remote section */
++	if (!t->kcov_handle)
++		return NULL;
++	spin_lock_irqsave(&kcov_remote_lock, flags);
++	remote = kcov_remote_find(t->kcov_handle);
++	if (remote)
++		steer = remote->kcov->steer;	/* the trace process's own context */
++	spin_unlock_irqrestore(&kcov_remote_lock, flags);
++	return steer;
++}
++
++static bool kcov_steer_names(struct kcov_steer *steer, unsigned long ip)
++{
++	u32 i, j;
++
++	for (i = 0; i < steer->n; i++)
++		for (j = 0; j < KCOV_STEER_IPS; j++)
++			if (steer->e[i].kind != 305 && steer->e[i].ips[j] == ip)
++				return true;	/* LEANUX A: kind 305 names by chain */
++	return false;
++}
++
++/* 1: steered, 0: not steered, -1: a mismatch at a named site */
++static int kcov_steer_apply(struct task_struct *t, u32 kind, unsigned long ip, void *data, unsigned int len)
++{
++	struct kcov_steer *steer = kcov_steer_find(t);
++	struct kcov_steer_entry *e;
++	unsigned long flags;
++	int ret = 0;
++	u32 j;
++
++	if (!steer)
++		return 0;
++	spin_lock_irqsave(&steer->lock, flags);
++	if (!kcov_steer_names(steer, ip))
++		goto out;
++	e = steer->head < steer->n ? &steer->e[steer->head] : NULL;
++	if (e && e->kind == kind && (e->draw || e->len == len))
++		for (j = 0; j < KCOV_STEER_IPS; j++)
++			if (e->ips[j] == ip) {
++				if (!e->draw) {
++					memcpy(data, e->value, len);
++					ret = 1;
++				}
++				steer->head++;
++				goto out;
++			}
++	steer->mismatches++;
++	ret = -1;
++out:
++	spin_unlock_irqrestore(&steer->lock, flags);
++	return ret;
++}
++
++static void kcov_choice_write(struct task_struct *t, u32 kind, unsigned long ip, const void *data, unsigned int len);
++
++void notrace kcov_choice_ip(u32 kind, unsigned long ip, void *data, unsigned int len)
++{
++	struct task_struct *t = current;
++	int steered;
++
++	if (!check_kcov_mode(KCOV_MODE_TRACE_PC, t) &&
++	    !(IS_ENABLED(CONFIG_KCOV_ENABLE_COMPARISONS) && check_kcov_mode(KCOV_MODE_TRACE_CMP, t)))
++		return;
++	/* values longer than a record's 40 bytes are never steered */
++	steered = len <= 40 ? kcov_steer_apply(t, kind, canonicalize_ip(ip), data, len) : 0;
++	if (steered < 0)
++		kcov_choice_write(t, 0xffff, ip, NULL, 0);	/* the mismatch marker */
++	kcov_choice_write(t, kind | (steered > 0 ? 0x8000 : 0), ip, data, len);
++}
++EXPORT_SYMBOL(kcov_choice_ip);
++
++static void notrace kcov_choice_write(struct task_struct *t, u32 kind, unsigned long ip, const void *data, unsigned int len)
++{
++	const u8 *bytes = data;
++	u64 words[KCOV_CHOICE_MAX_WORDS + 1] = {0};
++	unsigned int n = len > 8 * KCOV_CHOICE_MAX_WORDS ? 8 * KCOV_CHOICE_MAX_WORDS : len;
++	unsigned int nwords = DIV_ROUND_UP(n, 8), i;
++	u64 *area, seq;
++
++	if (check_kcov_mode(KCOV_MODE_TRACE_PC, t)) {
++		u64 pos;
++
++		for (i = 0; i < n; i++)
++			words[i / 8] |= (u64)bytes[i] << (8 * (i % 8));
++		area = (u64 *)t->kcov_area;
++		pos = READ_ONCE(area[0]);
++		if (pos + 3 + nwords >= t->kcov_size) {
++			WRITE_ONCE(area[0], t->kcov_size - 1);
++			t->kcov_leanux_dropped++;
++			return;
++		}
++		seq = atomic64_inc_return(&kcov_choice_seq);
++		WRITE_ONCE(area[0], pos + 3 + nwords);
++		barrier();
++		area[pos + 1] = KCOV_CHOICE_MAGIC << 48 | (u64)(len & 0xffff) << 32 |
++				(u64)(kind & 0xffff) << 16 | nwords;
++		area[pos + 2] = canonicalize_ip(ip);
++		area[pos + 3] = seq;
++		for (i = 0; i < nwords; i++)
++			area[pos + 4 + i] = words[i];
++	} else if (IS_ENABLED(CONFIG_KCOV_ENABLE_COMPARISONS) &&
++		   check_kcov_mode(KCOV_MODE_TRACE_CMP, t)) {
++		u64 count, start, nrec = 1 + DIV_ROUND_UP(nwords, 3), r;
++
++		for (i = 0; i < n; i++)
++			words[i / 8] |= (u64)bytes[i] << (8 * (i % 8));
++		area = (u64 *)t->kcov_area;
++		count = READ_ONCE(area[0]);
++		start = 1 + count * KCOV_WORDS_PER_CMP;
++		if ((start + nrec * KCOV_WORDS_PER_CMP) * sizeof(u64) >
++		    t->kcov_size * sizeof(unsigned long)) {
++			WRITE_ONCE(area[0], (t->kcov_size - 1) / KCOV_WORDS_PER_CMP);
++			t->kcov_leanux_dropped++;
++			return;
++		}
++		seq = atomic64_inc_return(&kcov_choice_seq);
++		WRITE_ONCE(area[0], count + nrec);
++		barrier();
++		area[start] = 1ULL << 63 | KCOV_CHOICE_MAGIC << 32 | (u64)(kind & 0xffff) << 16 | nwords;
++		area[start + 1] = canonicalize_ip(ip);
++		area[start + 2] = seq;
++		area[start + 3] = len;
++		for (r = 0; r + 1 < nrec; r++) {
++			u64 *rec = area + start + (r + 1) * KCOV_WORDS_PER_CMP;
++
++			rec[0] = 1ULL << 63 | (KCOV_CHOICE_MAGIC + 1) << 32 | r;
++			rec[1] = words[3 * r];
++			rec[2] = words[3 * r + 1];
++			rec[3] = 3 * r + 2 <= KCOV_CHOICE_MAX_WORDS ? words[3 * r + 2] : 0;
++		}
++	}
++}
++
++/* LEANUX: load a schedule: { u32 n; u32 pad; struct kcov_steer_entry e[n]; } */
++static long kcov_steer_load(struct kcov *kcov, void __user *arg)
++{
++	struct kcov_steer *steer, *old;
++	unsigned long flags;
++	u32 n, i;
++
++	if (get_user(n, (u32 __user *)arg))
++		return -EFAULT;
++	if (n > KCOV_STEER_MAX)
++		return -EINVAL;
++	steer = kzalloc(sizeof(*steer), GFP_KERNEL);
++	if (!steer)
++		return -ENOMEM;
++	if (copy_from_user(steer->e, arg + 8, n * sizeof(steer->e[0]))) {
++		kfree(steer);
++		return -EFAULT;
++	}
++	for (i = 0; i < n; i++)
++		if (steer->e[i].len > sizeof(steer->e[i].value) ||
++		    /* LEANUX A: kind 305 entries are draw or fail (8 zero bytes) */
++		    (steer->e[i].kind == 305 ? steer->e[i].len != 8 || (steer->e[i].flags & ~KCOV_STEER_CHAIN) ||
++		     (!steer->e[i].draw && memchr_inv(steer->e[i].value, 0, 8)) : steer->e[i].flags)) {
++			kfree(steer);
++			return -EINVAL;
++		}
++	spin_lock_init(&steer->lock);
++	steer->n = n;
++	spin_lock_irqsave(&kcov->lock, flags);
++	old = kcov->steer;
++	kcov->steer = steer;
++	spin_unlock_irqrestore(&kcov->lock, flags);
++	kfree(old);
++	return 0;
++}
++
++/* LEANUX: { u32 remaining; u32 mismatches; } */
++static long kcov_steer_status(struct kcov *kcov, void __user *arg)
++{
++	u32 status[2] = { 0, 0 };
++	unsigned long flags;
++
++	spin_lock_irqsave(&kcov->lock, flags);
++	if (kcov->steer) {
++		spin_lock(&kcov->steer->lock);
++		status[0] = kcov->steer->n - kcov->steer->head;
++		status[1] = kcov->steer->mismatches;
++		spin_unlock(&kcov->steer->lock);
++	}
++	spin_unlock_irqrestore(&kcov->lock, flags);
++	return copy_to_user(arg, status, sizeof(status)) ? -EFAULT : 0;
++}
++
++/*
++ * LEANUX dispatch sections (choice-stream strategy, sections 4.3-4.4): the
++ * deferred units of a trace are collected by dispatch, not per call site.
++ * The guest's parent arms its remote KCOV instance with the dispatch set
++ * (KCOV_LEANUX_DISPATCH_LOAD: function addresses the host resolved from
++ * vmlinux). While it is armed, process_one_work opens a remote section under
++ * the instance's common handle iff the work function is in the set, and the
++ * NET_RX vector in handle_softirqs does the same iff net_rx_action is. Each
++ * section writes a start record (kind 300, the function's address) and a
++ * stop record (kind 301, the number of records dropped in the section),
++ * sequence-numbered like every other record. KCOV's nesting rules hold: no
++ * section in a task that already collects, and only a softirq section inside
++ * a task section. A section that cannot open (unregistered handle, no area,
++ * a nesting violation) or that loses records increments a counter, which
++ * the parent reads back (KCOV_LEANUX_SECTION_STATUS) and fails on.
++ */
++#define KCOV_DISPATCH_MAX 16
++/* LEANUX D3: dispatch-load flags (the load argument's second word) */
++#define KCOV_DISPATCH_ARM_RECORDS 1	/* write kind-303 arm records */
++static struct {
++	u64 handle;
++	u32 n;
++	u32 flags;
++	unsigned long funcs[KCOV_DISPATCH_MAX];
++} kcov_dispatch;				/* under kcov_remote_lock */
++static atomic_t kcov_sections_dropped, kcov_sections_opened;
++
++/* Whether the current section's area has no room left (PCs may be lost). */
++static bool notrace kcov_section_area_full(struct task_struct *t)
++{
++	u64 *area = t->kcov_area;
++
++	if (t->kcov_mode == KCOV_MODE_TRACE_PC)
++		return READ_ONCE(area[0]) + 1 >= t->kcov_size;
++	return 1 + (READ_ONCE(area[0]) + 1) * KCOV_WORDS_PER_CMP > t->kcov_size;
++}
++
++/* Whether kcov_remote_stop's move fits the instance's area in full. */
++static bool notrace kcov_section_move_fits(struct task_struct *t)
++{
++	struct kcov *kcov = t->kcov;
++	u64 dst = READ_ONCE(*(u64 *)kcov->area), src = READ_ONCE(*(u64 *)t->kcov_area);
++
++	if (kcov->mode == KCOV_MODE_TRACE_PC)
++		return dst + src <= kcov->size - 1;
++	return dst + src <= (kcov->size - 1) / KCOV_WORDS_PER_CMP;
++}
++
++void notrace kcov_dispatch_start(struct kcov_dispatch_section *s, void *func)
++{
++	struct task_struct *t = current;
++	struct kcov *kcov;
++	unsigned long flags, ip = (unsigned long)func;
++	bool member = false;
++	u64 handle;
++	u32 i;
++
++	s->open = false;
++	if (!READ_ONCE(kcov_dispatch_kcov))
++		return;
++	spin_lock_irqsave(&kcov_remote_lock, flags);
++	kcov = kcov_dispatch_kcov;
++	for (i = 0; kcov && i < kcov_dispatch.n; i++)
++		if (kcov_dispatch.funcs[i] == ip)
++			member = true;
++	handle = kcov_dispatch.handle;
++	spin_unlock_irqrestore(&kcov_remote_lock, flags);
++	if (!member)
++		return;
++	if (in_task() ? kcov_mode_enabled(READ_ONCE(t->kcov_mode)) : !in_softirq_really() || t->kcov_softirq) {
++		atomic_inc(&kcov_sections_dropped);	/* would nest */
++		return;
++	}
++	s->saved_dropped = t->kcov_leanux_dropped;
++	t->kcov_leanux_dropped = 0;
++	kcov_remote_start(handle);
++	if (in_task() ? !kcov_mode_enabled(READ_ONCE(t->kcov_mode)) || t->kcov != kcov : !t->kcov_softirq) {
++		t->kcov_leanux_dropped = s->saved_dropped;
++		atomic_inc(&kcov_sections_dropped);	/* not opened */
++		return;
++	}
++	atomic_inc(&kcov_sections_opened);
++	s->open = true;
++	if (in_task())
++		t->kcov_leanux_section = 1;
++	kcov_choice_write(t, 300, _RET_IP_, &ip, sizeof(ip));
++}
++EXPORT_SYMBOL(kcov_dispatch_start);
++
++void notrace kcov_dispatch_stop(struct kcov_dispatch_section *s)
++{
++	struct task_struct *t = current;
++	u64 dropped;
++
++	if (!s->open)
++		return;
++	if (kcov_section_area_full(t))
++		t->kcov_leanux_dropped++;
++	dropped = t->kcov_leanux_dropped;
++	kcov_choice_write(t, 301, _RET_IP_, &dropped, sizeof(dropped));
++	if (t->kcov_leanux_dropped || !kcov_section_move_fits(t))
++		atomic_inc(&kcov_sections_dropped);
++	kcov_remote_stop();
++	t->kcov_leanux_dropped = s->saved_dropped;
++	if (in_task())
++		t->kcov_leanux_section = 0;
++}
++EXPORT_SYMBOL(kcov_dispatch_stop);
++
++/*
++ * LEANUX: a scheduling choice (D1 integration). On this CONFIG_PREEMPT_NONE
++ * kernel a task section's worker gives up the CPU at a cond_resched; when
++ * __cond_resched is about to schedule, it writes a resched record (kind 302,
++ * the caller's return address, a zero word), so the trace records each
++ * switch, including one to a task without a section. Only inside a task's
++ * dispatch section: other tasks' reschedules are not choices of the trace.
++ */
++void notrace kcov_dispatch_resched(unsigned long ip)
++{
++	struct task_struct *t = current;
++	u64 zero = 0;
++
++	if (in_task() && t->kcov_leanux_section)
++		kcov_choice_write(t, 302, ip, &zero, sizeof(zero));
++}
++EXPORT_SYMBOL(kcov_dispatch_resched);
++
++/* LEANUX: arm: { u32 n; u32 flags; u64 funcs[n]; }, on the remote instance
++ * of the calling task, under its common handle; disarmed in
++ * kcov_remote_reset. flags: KCOV_DISPATCH_ARM_RECORDS (D3) or 0. */
++static long kcov_dispatch_load(struct kcov *kcov, void __user *arg)
++{
++	u64 funcs[KCOV_DISPATCH_MAX];
++	unsigned long flags;
++	long ret = 0;
++	u32 n, i, load_flags;
++
++	if (get_user(n, (u32 __user *)arg) || get_user(load_flags, (u32 __user *)(arg + 4)))
++		return -EFAULT;
++	if (!n || n > KCOV_DISPATCH_MAX || (load_flags & ~KCOV_DISPATCH_ARM_RECORDS))
++		return -EINVAL;
++	if (copy_from_user(funcs, arg + 8, n * sizeof(funcs[0])))
++		return -EFAULT;
++	spin_lock_irqsave(&kcov->lock, flags);
++	if (!kcov->remote || current->kcov != kcov || !current->kcov_handle) {
++		spin_unlock_irqrestore(&kcov->lock, flags);
++		return -EINVAL;
++	}
++	spin_lock(&kcov_remote_lock);
++	if (kcov_dispatch_kcov) {
++		ret = -EBUSY;
++	} else {
++		kcov_dispatch.handle = current->kcov_handle;
++		kcov_dispatch.n = n;
++		kcov_dispatch.flags = load_flags;
++		for (i = 0; i < n; i++)
++			kcov_dispatch.funcs[i] = funcs[i];
++		atomic_set(&kcov_sections_dropped, 0);
++		atomic_set(&kcov_sections_opened, 0);
++		kcov_dispatch_kcov = kcov;
++	}
++	spin_unlock(&kcov_remote_lock);
++	spin_unlock_irqrestore(&kcov->lock, flags);
++	return ret;
++}
++
++/* LEANUX: { u32 dropped; u32 opened; } since the instance was armed */
++static long kcov_section_status(struct kcov *kcov, void __user *arg)
++{
++	u32 status[2];
++	unsigned long flags;
++
++	spin_lock_irqsave(&kcov_remote_lock, flags);
++	if (kcov_dispatch_kcov != kcov) {
++		spin_unlock_irqrestore(&kcov_remote_lock, flags);
++		return -EINVAL;
++	}
++	status[0] = atomic_read(&kcov_sections_dropped);
++	status[1] = atomic_read(&kcov_sections_opened);
++	spin_unlock_irqrestore(&kcov_remote_lock, flags);
++	return copy_to_user(arg, status, sizeof(status)) ? -EFAULT : 0;
++}
++
++/*
++ * LEANUX D3 (docs/2026-10-05-d3-timers.md, section 3.3): the arm record.
++ * mod_timer calls this with the timer's function, jiffies and the new
++ * expiry; for a function in the armed dispatch set, in a recording context,
++ * it writes kind 303 {jiffies, expires} (16 bytes) at the caller's return
++ * address. Lock-free: mod_timer is hot across the kernel, and the set only
++ * changes while no trace runs (kcov_dispatch_load before the trace process
++ * exists, disarm in kcov_remote_reset), so a READ_ONCE snapshot suffices;
++ * outside a trace this costs one load. Written only when the instance was
++ * armed with KCOV_DISPATCH_ARM_RECORDS (a load-time switch: off until the
++ * mirror consumes the record).
++ */
++void notrace kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsigned long ip)
++{
++	unsigned long fn = (unsigned long)func;
++	u64 v[2];
++	u32 n, i;
++
++	if (!READ_ONCE(kcov_dispatch_kcov) || !(READ_ONCE(kcov_dispatch.flags) & KCOV_DISPATCH_ARM_RECORDS))
++		return;
++	n = min_t(u32, READ_ONCE(kcov_dispatch.n), KCOV_DISPATCH_MAX);
++	for (i = 0; i < n; i++)
++		if (READ_ONCE(kcov_dispatch.funcs[i]) == fn) {
++			v[0] = now;
++			v[1] = expires;
++			kcov_choice_ip(303, ip, v, sizeof(v));
++			return;
++		}
++}
++EXPORT_SYMBOL(kcov_timer_arm);
++
++/*
++ * LEANUX D3 (section 4.3): the virtual time advance, on the calling task's
++ * own KCOV descriptor: { unsigned long ticks; }, 1 <= ticks <= 2^31. Only
++ * from a task that is collecting (the trace process), so the kind-304
++ * record {jiffies before, jiffies after} is never lost; the helper refuses
++ * any timekeeper clocksource but refined-jiffies (-EOPNOTSUPP). The next
++ * tick advances the timekeeper and raises TIMER_SOFTIRQ, as when time passes.
++ */
++static long kcov_time_advance(unsigned long __user *arg)
++{
++	struct task_struct *t = current;
++	unsigned long ticks;
++	u64 v[2];
++	int ret;
++
++	if (get_user(ticks, arg))
++		return -EFAULT;
++	if (!ticks || ticks > (1UL << 31))
++		return -EINVAL;
++	if (!check_kcov_mode(KCOV_MODE_TRACE_PC, t) &&
++	    !(IS_ENABLED(CONFIG_KCOV_ENABLE_COMPARISONS) && check_kcov_mode(KCOV_MODE_TRACE_CMP, t)))
++		return -EPERM;
++	ret = leanux_time_advance(ticks, &v[0], &v[1]);
++	if (ret)
++		return ret;
++	kcov_choice_write(t, 304, _RET_IP_, v, sizeof(v));
++	return 0;
++}
++
++/*
++ * LEANUX A (docs/2026-10-05-a-alloc.md, section 4): allocation outcomes as
++ * recorded choices. slab_alloc_node and __alloc_pages_noprof call
++ * kcov_alloc_pre/kcov_alloc_post (include/linux/kcov.h) with the entry's
++ * explicit return address; the bulk allocators are unhooked by construction.
++ * The guest loads the allocation set (KCOV_LEANUX_ALLOC_LOAD, before any
++ * trace work) on one KCOV instance; it is disarmed with that instance
++ * (kcov_remote_reset). The hook, in this order: one load of
++ * kcov_alloc_armed; the recording-context test; membership of the
++ * canonicalized address in one of up to 64 sorted [lo, hi) ranges, or, with
++ * n = 0 and KCOV_ALLOC_INVENTORY, every allocation (inventory pass 1, no
++ * chain); then the record, kind 305, five words:
++ *   word 0: bits 0-7 the outcome (1 ok, 0 NULL); bit 8 nested (a refill: an
++ *           allocation inside another recorded one, in the same context);
++ *           bit 9 the page allocator (the size field is the order); bit 10
++ *           the unwind did not find the address on the stack; bits 11-31
++ *           orig_size (slab, saturating) or order (page); bits 32-63 the gfp
++ *           mask the hook saw (after gfp_allowed_mask; on the page path also
++ *           after current_gfp_context);
++ *   words 1-4: the return addresses above the address, innermost first,
++ *           zero-padded (zero in inventory pass 1 and for nested records in
++ *           inventory mode).
++ * Lock-free like kcov_timer_arm: the set changes only while no trace work
++ * runs, and a load clears kcov_alloc_armed before it writes the set. A
++ * record that does not fit marks the area full (kcov_choice_write).
++ * Forced failures (stream K2, section 5): the trace's steering schedule
++ * decides them, kcov_steer_alloc below.
++ * CONTROL KERNEL (never the oracle): load flags 2 (a forced failure
++ * records ok = 1), 4 (the steered encounter counts as __GFP_NOFAIL), 8
++ * (the naming test is by address only).
++ */
++#define KCOV_ALLOC_RANGES_MAX 64
++#define KCOV_ALLOC_INVENTORY 1		/* load flag: record every candidate */
++#define KCOV_ALLOC_CTL_RECORD_OK 2	/* control K1 */
++#define KCOV_ALLOC_CTL_NOFAIL 4		/* control K4 */
++#define KCOV_ALLOC_CTL_ADDR_NAMING 8	/* control K5 */
++#define KCOV_ALLOC_CONTROLS (KCOV_ALLOC_CTL_RECORD_OK | KCOV_ALLOC_CTL_NOFAIL | KCOV_ALLOC_CTL_ADDR_NAMING)
++#define KCOV_ALLOC_UNWIND 16		/* stack entries searched for the address */
++#define KCOV_ALLOC_NESTED (1ULL << 8)
++#define KCOV_ALLOC_PAGE (1ULL << 9)
++#define KCOV_ALLOC_NOCHAIN (1ULL << 10)
++#define KCOV_ALLOC_SIZE_MAX ((1ULL << 21) - 1)
++struct kcov_alloc_range { u64 lo, hi; };
++u32 kcov_alloc_armed;
++static struct {
++	u32 n;
++	u32 flags;
++	struct kcov_alloc_range r[KCOV_ALLOC_RANGES_MAX];
++} kcov_alloc;
++static atomic_t kcov_alloc_records, kcov_alloc_unwinds;
++static atomic64_t kcov_alloc_unwind_cycles;
++static DEFINE_PER_CPU(unsigned int, kcov_alloc_softirq_depth);
++
++static notrace bool kcov_leanux_recording(struct task_struct *t)
++{
++	return check_kcov_mode(KCOV_MODE_TRACE_PC, t) ||
++	       (IS_ENABLED(CONFIG_KCOV_ENABLE_COMPARISONS) && check_kcov_mode(KCOV_MODE_TRACE_CMP, t));
++}
++
++/* The depth of recorded allocations in progress in the current context: a
++ * softirq that interrupts a task's allocation is not nested in it. */
++static notrace unsigned int *kcov_alloc_depth(struct task_struct *t)
++{
++	return in_task() ? &t->kcov_leanux_in_alloc : this_cpu_ptr(&kcov_alloc_softirq_depth);
++}
++
++static notrace bool kcov_alloc_member(unsigned long ip, u32 n)
++{
++	u32 lo = 0, hi = n, mid;
++
++	while (lo < hi) {
++		mid = lo + (hi - lo) / 2;
++		if (ip < READ_ONCE(kcov_alloc.r[mid].lo))
++			hi = mid;
++		else if (ip >= READ_ONCE(kcov_alloc.r[mid].hi))
++			lo = mid + 1;
++		else
++			return true;
++	}
++	return false;
++}
++
++/* The return addresses above addr on the current stack (ORC). */
++static noinline notrace void kcov_alloc_chain(unsigned long addr, u64 *w0, u64 *chain)
++{
++	unsigned long entries[KCOV_ALLOC_UNWIND];
++	u64 start = get_cycles();
++	unsigned int n, i, j;
++
++	n = stack_trace_save(entries, KCOV_ALLOC_UNWIND, 0);
++	for (i = 0; i < n && entries[i] != addr; i++)
++		;
++	if (i == n)
++		*w0 |= KCOV_ALLOC_NOCHAIN;
++	else
++		for (j = 0; j < 4 && i + 1 + j < n; j++)
++			chain[j] = canonicalize_ip(entries[i + 1 + j]);
++	atomic_inc(&kcov_alloc_unwinds);
++	atomic64_add(get_cycles() - start, &kcov_alloc_unwind_cycles);
++}
++
++static notrace void kcov_alloc_record(struct task_struct *t, struct kcov_alloc_ctx *ctx, bool ok, bool steered)
++{
++	u64 w[5] = { ctx->word0 | (ok ? 1 : 0), ctx->chain[0], ctx->chain[1], ctx->chain[2], ctx->chain[3] };
++
++	kcov_choice_write(t, 305 | (steered ? 0x8000 : 0), ctx->addr, w, sizeof(w));
++	atomic_inc(&kcov_alloc_records);
++}
++
++/*
++ * LEANUX A stream K2 (section 5.2): steering an allocation. A kind-305
++ * schedule entry names an encounter when one of its return addresses is the
++ * allocation's address or, with KCOV_STEER_CHAIN, one of the unwound return
++ * addresses above it (a helper site: the consumer's call into the helper).
++ * Chain containment decides both whether the encounter is named at all and
++ * whether it matches the head entry; an addr-only naming test would leave
++ * helper sites silently unsteered (M4). Kind-305 entries are only ever
++ * "draw" or "fail" (value 0, checked at load).
++ */
++static notrace bool kcov_steer_alloc_names(const struct kcov_steer_entry *e, unsigned long ip, const u64 *chain,
++					   bool use_chain)
++{
++	u32 j, k;
++
++	if (e->kind != 305)
++		return false;
++	for (j = 0; j < KCOV_STEER_IPS; j++) {
++		if (!e->ips[j])
++			continue;
++		if (e->ips[j] == ip)
++			return true;
++		if (use_chain && (e->flags & KCOV_STEER_CHAIN))
++			for (k = 0; k < 4; k++)
++				if (chain[k] && e->ips[j] == chain[k])
++					return true;
++	}
++	return false;
++}
++
++/* 1: fail this allocation; 0: not steered (no schedule, not named, a draw
++ * entry, or a __GFP_NOFAIL allocation, whose entry stays: never forced, M2);
++ * -1: a named encounter that does not match the head entry. */
++static notrace int kcov_steer_alloc(struct task_struct *t, struct kcov_alloc_ctx *ctx, gfp_t gfp, u32 load_flags)
++{
++	struct kcov_steer *steer = kcov_steer_find(t);
++	unsigned long ip = canonicalize_ip(ctx->addr), flags;
++	bool use_chain = ctx->unwind && !(ctx->word0 & KCOV_ALLOC_NOCHAIN);
++	struct kcov_steer_entry *e;
++	int ret = 0;
++	u32 i;
++
++	if (!steer)
++		return 0;
++	if (load_flags & KCOV_ALLOC_CTL_NOFAIL)
++		gfp |= __GFP_NOFAIL;
++	spin_lock_irqsave(&steer->lock, flags);
++	for (i = 0; i < steer->n; i++)
++		if (kcov_steer_alloc_names(&steer->e[i], ip, ctx->chain, use_chain && !(load_flags & KCOV_ALLOC_CTL_ADDR_NAMING)))
++			break;
++	if (i == steer->n)
++		goto out;
++	e = steer->head < steer->n ? &steer->e[steer->head] : NULL;
++	if (e && kcov_steer_alloc_names(e, ip, ctx->chain, use_chain)) {
++		if (!e->draw && (gfp & __GFP_NOFAIL))
++			goto out;
++		steer->head++;
++		ret = !e->draw;
++		goto out;
++	}
++	steer->mismatches++;
++	ret = -1;
++out:
++	spin_unlock_irqrestore(&steer->lock, flags);
++	return ret;
++}
++
++/* After kcov_alloc_armed was seen set. True: fail the allocation (its record
++ * is written here, since the caller returns NULL without the post call).
++ * The chain is unwound here, before the allocation, for the steering match
++ * and the record. Only armed mode (no KCOV_ALLOC_INVENTORY) is steered. */
++bool notrace __kcov_alloc_pre(struct kcov_alloc_ctx *ctx, unsigned long addr, gfp_t gfp, unsigned long size, bool page)
++{
++	struct task_struct *t = current;
++	unsigned int *depth;
++	u32 n, flags;
++	bool nested;
++	int steered;
++
++	if (!kcov_leanux_recording(t))
++		return false;
++	n = min_t(u32, READ_ONCE(kcov_alloc.n), KCOV_ALLOC_RANGES_MAX);
++	flags = READ_ONCE(kcov_alloc.flags);
++	if (n ? !kcov_alloc_member(canonicalize_ip(addr), n) : !(flags & KCOV_ALLOC_INVENTORY))
++		return false;
++	depth = kcov_alloc_depth(t);
++	nested = *depth != 0;
++	ctx->addr = addr;
++	ctx->word0 = (u64)(__force u32)gfp << 32 | min_t(u64, size, KCOV_ALLOC_SIZE_MAX) << 11 |
++		     (page ? KCOV_ALLOC_PAGE : 0) | (nested ? KCOV_ALLOC_NESTED : 0);
++	ctx->chain[0] = ctx->chain[1] = ctx->chain[2] = ctx->chain[3] = 0;
++	/* chains: armed mode always; inventory mode only in pass 2 (ranges)
++	 * and not for a refill inside a recorded allocation */
++	ctx->unwind = !(flags & KCOV_ALLOC_INVENTORY) || (n && !nested);
++	if (ctx->unwind)
++		kcov_alloc_chain(addr, &ctx->word0, ctx->chain);
++	if (!(flags & KCOV_ALLOC_INVENTORY)) {
++		steered = kcov_steer_alloc(t, ctx, gfp, flags);
++		if (steered < 0)
++			kcov_choice_write(t, 0xffff, addr, NULL, 0);	/* the mismatch marker */
++		if (steered > 0) {
++			kcov_alloc_record(t, ctx, !!(flags & KCOV_ALLOC_CTL_RECORD_OK), true);
++			return true;
++		}
++	}
++	ctx->active = true;
++	(*depth)++;
++	return false;
++}
++EXPORT_SYMBOL(__kcov_alloc_pre);
++
++void notrace __kcov_alloc_post(struct kcov_alloc_ctx *ctx, bool ok)
++{
++	struct task_struct *t = current;
++
++	ctx->active = false;
++	(*kcov_alloc_depth(t))--;
++	if (kcov_leanux_recording(t))
++		kcov_alloc_record(t, ctx, ok, false);
++}
++EXPORT_SYMBOL(__kcov_alloc_post);
++
++/*
++ * LEANUX A: { u32 n; u32 flags; struct { u64 lo, hi; } ranges[n]; }, the
++ * ranges sorted and disjoint, lo < hi, n <= 64, flags 0 or
++ * KCOV_ALLOC_INVENTORY. n = 0 and flags = 0 disarms (no records). The set
++ * belongs to the instance that loaded it (another instance's load is
++ * -EBUSY) and is disarmed with it in kcov_remote_reset.
++ */
++static long kcov_alloc_load(struct kcov *kcov, void __user *arg)
++{
++	struct kcov_alloc_range *r = NULL;
++	unsigned long irqflags;
++	u32 hdr[2], i;
++	long ret = 0;
++
++	if (copy_from_user(hdr, arg, sizeof(hdr)))
++		return -EFAULT;
++	if (hdr[0] > KCOV_ALLOC_RANGES_MAX || (hdr[1] & ~(KCOV_ALLOC_INVENTORY | KCOV_ALLOC_CONTROLS)))
++		return -EINVAL;
++	if (hdr[0]) {
++		r = kmalloc_array(hdr[0], sizeof(*r), GFP_KERNEL);
++		if (!r)
++			return -ENOMEM;
++		if (copy_from_user(r, arg + 8, hdr[0] * sizeof(*r))) {
++			kfree(r);
++			return -EFAULT;
++		}
++		for (i = 0; i < hdr[0]; i++)
++			if (r[i].lo >= r[i].hi || (i && r[i - 1].hi > r[i].lo)) {
++				kfree(r);
++				return -EINVAL;
++			}
++	}
++	spin_lock_irqsave(&kcov_remote_lock, irqflags);
++	if (kcov_alloc_kcov && kcov_alloc_kcov != kcov) {
++		ret = -EBUSY;
++	} else {
++		WRITE_ONCE(kcov_alloc_armed, 0);
++		barrier();
++		kcov_alloc.n = hdr[0];
++		kcov_alloc.flags = hdr[1];
++		for (i = 0; i < hdr[0]; i++)
++			kcov_alloc.r[i] = r[i];
++		atomic_set(&kcov_alloc_records, 0);
++		atomic_set(&kcov_alloc_unwinds, 0);
++		atomic64_set(&kcov_alloc_unwind_cycles, 0);
++		barrier();
++		if (hdr[0] || hdr[1]) {
++			kcov_alloc_kcov = kcov;
++			WRITE_ONCE(kcov_alloc_armed, 1);
++		} else {
++			kcov_alloc_kcov = NULL;
++		}
++	}
++	spin_unlock_irqrestore(&kcov_remote_lock, irqflags);
++	kfree(r);
++	return ret;
++}
++
++/* LEANUX A: { u32 records; u32 unwinds; u64 unwind_cycles; } since the
++ * load, for the instance that holds the set (-EINVAL otherwise). */
++static long kcov_alloc_status(struct kcov *kcov, void __user *arg)
++{
++	struct { u32 records, unwinds; u64 cycles; } status;
++	unsigned long irqflags;
++
++	spin_lock_irqsave(&kcov_remote_lock, irqflags);
++	if (kcov_alloc_kcov != kcov) {
++		spin_unlock_irqrestore(&kcov_remote_lock, irqflags);
++		return -EINVAL;
++	}
++	status.records = atomic_read(&kcov_alloc_records);
++	status.unwinds = atomic_read(&kcov_alloc_unwinds);
++	status.cycles = atomic64_read(&kcov_alloc_unwind_cycles);
++	spin_unlock_irqrestore(&kcov_remote_lock, irqflags);
++	return copy_to_user(arg, &status, sizeof(status)) ? -EFAULT : 0;
++}
+--- a/include/linux/kcov.h
++++ b/include/linux/kcov.h
+@@ -44,6 +44,40 @@
+ void kcov_remote_start(u64 handle);
+ void kcov_remote_stop(void);
+ u64 kcov_common_handle(void);
++/* LEANUX D3: the virtual time advance (kernel/time/timekeeping.c). */
++int leanux_time_advance(unsigned long ticks, u64 *before, u64 *after);
++/* LEANUX: a choice recorded at a generic interception point. */
++void kcov_choice_ip(u32 kind, unsigned long ip, void *data, unsigned int len);
++/* LEANUX: a dispatch section (process_one_work, the NET_RX vector). */
++struct kcov_dispatch_section { bool open; unsigned int saved_dropped; };
++void kcov_dispatch_start(struct kcov_dispatch_section *s, void *func);
++void kcov_dispatch_stop(struct kcov_dispatch_section *s);
++/* LEANUX: __cond_resched is about to schedule. */
++void kcov_dispatch_resched(unsigned long ip);
++/* LEANUX D3: mod_timer's arm record (kind 303). */
++void kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsigned long ip);
++/*
++ * LEANUX A (docs/2026-10-05-a-alloc.md, section 4): the allocation hook, in
++ * slab_alloc_node and __alloc_pages_noprof. Unarmed, one load. pre returns
++ * true to fail the allocation (a steered failure, stream K2).
++ */
++struct kcov_alloc_ctx { unsigned long addr; u64 word0; u64 chain[4]; bool active, unwind; };
++extern u32 kcov_alloc_armed;
++bool __kcov_alloc_pre(struct kcov_alloc_ctx *ctx, unsigned long addr, gfp_t gfp, unsigned long size, bool page);
++void __kcov_alloc_post(struct kcov_alloc_ctx *ctx, bool ok);
++static __always_inline bool kcov_alloc_pre(struct kcov_alloc_ctx *ctx, unsigned long addr, gfp_t gfp,
++					   unsigned long size, bool page)
++{
++	ctx->active = false;
++	if (likely(!READ_ONCE(kcov_alloc_armed)))
++		return false;
++	return __kcov_alloc_pre(ctx, addr, gfp, size, page);
++}
++static __always_inline void kcov_alloc_post(struct kcov_alloc_ctx *ctx, bool ok)
++{
++	if (unlikely(ctx->active))
++		__kcov_alloc_post(ctx, ok);
++}
+ 
+ static inline void kcov_remote_start_common(u64 id)
+ {
+@@ -99,6 +133,16 @@
+ static inline void kcov_finish_switch(struct task_struct *t) {}
+ static inline void kcov_remote_start(u64 handle) {}
+ static inline void kcov_remote_stop(void) {}
++static inline void kcov_choice_ip(u32 kind, unsigned long ip, void *data, unsigned int len) {}
++struct kcov_dispatch_section { bool open; };
++static inline void kcov_dispatch_start(struct kcov_dispatch_section *s, void *func) {}
++static inline void kcov_dispatch_stop(struct kcov_dispatch_section *s) {}
++static inline void kcov_dispatch_resched(unsigned long ip) {}
++static inline void kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsigned long ip) {}
++struct kcov_alloc_ctx { };
++static inline bool kcov_alloc_pre(struct kcov_alloc_ctx *ctx, unsigned long addr, gfp_t gfp,
++				  unsigned long size, bool page) { return false; }
++static inline void kcov_alloc_post(struct kcov_alloc_ctx *ctx, bool ok) {}
+ static inline u64 kcov_common_handle(void)
+ {
+ 	return 0;
+--- a/include/linux/sched.h
++++ b/include/linux/sched.h
+@@ -1491,6 +1491,15 @@
+ 	/* Collect coverage from softirq context: */
+ 	unsigned int			kcov_softirq;
+ 
++	/* LEANUX: records dropped in the current dispatch section: */
++	unsigned int			kcov_leanux_dropped;
++
++	/* LEANUX: whether the task is in a dispatch section: */
++	unsigned int			kcov_leanux_section;
++
++	/* LEANUX A: recorded allocations in progress in task context: */
++	unsigned int			kcov_leanux_in_alloc;
++
+ 	/* Temporary storage for preempting remote coverage collection: */
+ 	unsigned int			kcov_saved_mode;
+ 	unsigned int			kcov_saved_size;
+--- a/drivers/char/random.c
++++ b/drivers/char/random.c
+@@ -65,6 +65,7 @@
+ #include <asm/processor.h>
+ #include <asm/irq.h>
+ #include <asm/irq_regs.h>
++#include <linux/kcov.h>
+ #include <asm/io.h>
+ 
+ /*********************************************************************
+@@ -428,6 +429,7 @@
+ void get_random_bytes(void *buf, size_t len)
+ {
+ 	_get_random_bytes(buf, len);
++	kcov_choice_ip(1, _RET_IP_, buf, len);	/* LEANUX: a recorded choice */
+ }
+ EXPORT_SYMBOL(get_random_bytes);
+ 
+@@ -507,7 +509,7 @@
+ 	.position = UINT_MAX							\
+ };										\
+ 										\
+-type get_random_ ##type(void)							\
++static type __get_random_ ##type## _raw(void)					\
+ {										\
+ 	type ret;								\
+ 	unsigned long flags;							\
+@@ -536,6 +538,15 @@
+ 	local_unlock_irqrestore(&batched_entropy_ ##type.lock, flags);		\
+ 	return ret;								\
+ }										\
++										\
++/* LEANUX: the exported draw records the choice; internal draws use _raw. */	\
++type get_random_ ##type(void)							\
++{										\
++	type ret = __get_random_ ##type## _raw();				\
++										\
++	kcov_choice_ip(100 + sizeof(ret), _RET_IP_, &ret, sizeof(ret));		\
++	return ret;								\
++}										\
+ EXPORT_SYMBOL(get_random_ ##type);
+ 
+ DEFINE_BATCHED_ENTROPY(u8)
+@@ -554,7 +565,7 @@
+ 	 * of `-ceil % ceil` is analogous to `2^32 % ceil`, but is computable
+ 	 * in 32-bits.
+ 	 */
+-	u32 rand = get_random_u32();
++	u32 rand = __get_random_u32_raw();	/* LEANUX: recorded once, below */
+ 	u64 mult;
+ 
+ 	/*
+@@ -565,16 +576,20 @@
+ 	 * get_random_u32_inclusive() can work over its whole range without
+ 	 * undefined behavior.
+ 	 */
+-	if (unlikely(!ceil))
++	if (unlikely(!ceil)) {
++		kcov_choice_ip(110, _RET_IP_, &rand, sizeof(rand));
+ 		return rand;
++	}
+ 
+ 	mult = (u64)ceil * rand;
+ 	if (unlikely((u32)mult < ceil)) {
+ 		u32 bound = -ceil % ceil;
+ 		while (unlikely((u32)mult < bound))
+-			mult = (u64)ceil * get_random_u32();
++			mult = (u64)ceil * __get_random_u32_raw();
+ 	}
+-	return mult >> 32;
++	rand = mult >> 32;
++	kcov_choice_ip(110, _RET_IP_, &rand, sizeof(rand));
++	return rand;
+ }
+ EXPORT_SYMBOL(__get_random_u32_below);
+ 
+--- a/kernel/time/timekeeping.c
++++ b/kernel/time/timekeeping.c
+@@ -23,6 +23,7 @@
+ #include <linux/pvclock_gtod.h>
+ #include <linux/compiler.h>
+ #include <linux/audit.h>
++#include <linux/kcov.h>
+ #include <linux/random.h>
+ 
+ #include "tick-internal.h"
+@@ -385,10 +386,18 @@
+  * of the following timestamps. Callers need to be aware of that and
+  * deal with it.
+  */
+-u64 notrace ktime_get_mono_fast_ns(void)
++static __always_inline u64 notrace leanux_raw_ktime_get_mono_fast_ns(void)
+ {
+ 	return __ktime_get_fast_ns(&tk_fast_mono);
+ }
++/* LEANUX: a recorded choice (a clock read). */
++u64 notrace ktime_get_mono_fast_ns(void)
++{
++	u64 v = leanux_raw_ktime_get_mono_fast_ns();
++
++	kcov_choice_ip(200, _RET_IP_, &v, sizeof(v));
++	return v;
++}
+ EXPORT_SYMBOL_GPL(ktime_get_mono_fast_ns);
+ 
+ /**
+@@ -397,10 +406,18 @@
+  * Contrary to ktime_get_mono_fast_ns() this is always correct because the
+  * conversion factor is not affected by NTP/PTP correction.
+  */
+-u64 notrace ktime_get_raw_fast_ns(void)
++static __always_inline u64 notrace leanux_raw_ktime_get_raw_fast_ns(void)
+ {
+ 	return __ktime_get_fast_ns(&tk_fast_raw);
+ }
++/* LEANUX: a recorded choice (a clock read). */
++u64 notrace ktime_get_raw_fast_ns(void)
++{
++	u64 v = leanux_raw_ktime_get_raw_fast_ns();
++
++	kcov_choice_ip(201, _RET_IP_, &v, sizeof(v));
++	return v;
++}
+ EXPORT_SYMBOL_GPL(ktime_get_raw_fast_ns);
+ 
+ /**
+@@ -427,11 +444,19 @@
+  * The caveats vs. timestamp ordering as documented for ktime_get_mono_fast_ns()
+  * apply as well.
+  */
+-u64 notrace ktime_get_boot_fast_ns(void)
++static __always_inline u64 notrace leanux_raw_ktime_get_boot_fast_ns(void)
+ {
+ 	struct timekeeper *tk = &tk_core.timekeeper;
+ 
+-	return (ktime_get_mono_fast_ns() + ktime_to_ns(data_race(tk->offs_boot)));
++	return (leanux_raw_ktime_get_mono_fast_ns() + ktime_to_ns(data_race(tk->offs_boot)));
++}
++/* LEANUX: a recorded choice (a clock read). */
++u64 notrace ktime_get_boot_fast_ns(void)
++{
++	u64 v = leanux_raw_ktime_get_boot_fast_ns();
++
++	kcov_choice_ip(202, _RET_IP_, &v, sizeof(v));
++	return v;
+ }
+ EXPORT_SYMBOL_GPL(ktime_get_boot_fast_ns);
+ 
+@@ -444,11 +469,19 @@
+  * by settime or adjtimex with an offset. The user of this function has to deal
+  * with the possibility of wrong timestamps in post processing.
+  */
+-u64 notrace ktime_get_tai_fast_ns(void)
++static __always_inline u64 notrace leanux_raw_ktime_get_tai_fast_ns(void)
+ {
+ 	struct timekeeper *tk = &tk_core.timekeeper;
+ 
+-	return (ktime_get_mono_fast_ns() + ktime_to_ns(data_race(tk->offs_tai)));
++	return (leanux_raw_ktime_get_mono_fast_ns() + ktime_to_ns(data_race(tk->offs_tai)));
++}
++/* LEANUX: a recorded choice (a clock read). */
++u64 notrace ktime_get_tai_fast_ns(void)
++{
++	u64 v = leanux_raw_ktime_get_tai_fast_ns();
++
++	kcov_choice_ip(203, _RET_IP_, &v, sizeof(v));
++	return v;
+ }
+ EXPORT_SYMBOL_GPL(ktime_get_tai_fast_ns);
+ 
+@@ -476,10 +509,18 @@
+  *
+  * See ktime_get_mono_fast_ns() for documentation of the time stamp ordering.
+  */
+-u64 ktime_get_real_fast_ns(void)
++static __always_inline u64 leanux_raw_ktime_get_real_fast_ns(void)
+ {
+ 	return __ktime_get_real_fast(&tk_fast_mono, NULL);
+ }
++/* LEANUX: a recorded choice (a clock read). */
++u64 ktime_get_real_fast_ns(void)
++{
++	u64 v = leanux_raw_ktime_get_real_fast_ns();
++
++	kcov_choice_ip(204, _RET_IP_, &v, sizeof(v));
++	return v;
++}
+ EXPORT_SYMBOL_GPL(ktime_get_real_fast_ns);
+ 
+ /**
+@@ -716,7 +757,7 @@
+  *
+  * Returns the time of day in a timespec64 (WARN if suspended).
+  */
+-void ktime_get_real_ts64(struct timespec64 *ts)
++static __always_inline void leanux_raw_ktime_get_real_ts64(struct timespec64 *ts)
+ {
+ 	struct timekeeper *tk = &tk_core.timekeeper;
+ 	unsigned int seq;
+@@ -735,9 +776,15 @@
+ 	ts->tv_nsec = 0;
+ 	timespec64_add_ns(ts, nsecs);
+ }
++/* LEANUX: a recorded choice (a clock read). */
++void ktime_get_real_ts64(struct timespec64 *ts)
++{
++	leanux_raw_ktime_get_real_ts64(ts);
++	kcov_choice_ip(205, _RET_IP_, ts, sizeof(*ts));
++}
+ EXPORT_SYMBOL(ktime_get_real_ts64);
+ 
+-ktime_t ktime_get(void)
++static __always_inline ktime_t leanux_raw_ktime_get(void)
+ {
+ 	struct timekeeper *tk = &tk_core.timekeeper;
+ 	unsigned int seq;
+@@ -755,6 +802,14 @@
+ 
+ 	return ktime_add_ns(base, nsecs);
+ }
++/* LEANUX: a recorded choice (a clock read). */
++ktime_t ktime_get(void)
++{
++	ktime_t v = leanux_raw_ktime_get();
++
++	kcov_choice_ip(206, _RET_IP_, &v, sizeof(v));
++	return v;
++}
+ EXPORT_SYMBOL_GPL(ktime_get);
+ 
+ u32 ktime_get_resolution_ns(void)
+@@ -780,7 +835,7 @@
+ 	[TK_OFFS_TAI]	= &tk_core.timekeeper.offs_tai,
+ };
+ 
+-ktime_t ktime_get_with_offset(enum tk_offsets offs)
++static __always_inline ktime_t leanux_raw_ktime_get_with_offset(enum tk_offsets offs)
+ {
+ 	struct timekeeper *tk = &tk_core.timekeeper;
+ 	unsigned int seq;
+@@ -799,9 +854,17 @@
+ 	return ktime_add_ns(base, nsecs);
+ 
+ }
++/* LEANUX: a recorded choice (a clock read). */
++ktime_t ktime_get_with_offset(enum tk_offsets offs)
++{
++	ktime_t v = leanux_raw_ktime_get_with_offset(offs);
++
++	kcov_choice_ip(207, _RET_IP_, &v, sizeof(v));
++	return v;
++}
+ EXPORT_SYMBOL_GPL(ktime_get_with_offset);
+ 
+-ktime_t ktime_get_coarse_with_offset(enum tk_offsets offs)
++static __always_inline ktime_t leanux_raw_ktime_get_coarse_with_offset(enum tk_offsets offs)
+ {
+ 	struct timekeeper *tk = &tk_core.timekeeper;
+ 	unsigned int seq;
+@@ -819,6 +882,14 @@
+ 
+ 	return ktime_add_ns(base, nsecs);
+ }
++/* LEANUX: a recorded choice (a clock read). */
++ktime_t ktime_get_coarse_with_offset(enum tk_offsets offs)
++{
++	ktime_t v = leanux_raw_ktime_get_coarse_with_offset(offs);
++
++	kcov_choice_ip(208, _RET_IP_, &v, sizeof(v));
++	return v;
++}
+ EXPORT_SYMBOL_GPL(ktime_get_coarse_with_offset);
+ 
+ /**
+@@ -844,7 +915,7 @@
+ /**
+  * ktime_get_raw - Returns the raw monotonic time in ktime_t format
+  */
+-ktime_t ktime_get_raw(void)
++static __always_inline ktime_t leanux_raw_ktime_get_raw(void)
+ {
+ 	struct timekeeper *tk = &tk_core.timekeeper;
+ 	unsigned int seq;
+@@ -860,6 +931,14 @@
+ 
+ 	return ktime_add_ns(base, nsecs);
+ }
++/* LEANUX: a recorded choice (a clock read). */
++ktime_t ktime_get_raw(void)
++{
++	ktime_t v = leanux_raw_ktime_get_raw();
++
++	kcov_choice_ip(209, _RET_IP_, &v, sizeof(v));
++	return v;
++}
+ EXPORT_SYMBOL_GPL(ktime_get_raw);
+ 
+ /**
+@@ -870,7 +949,7 @@
+  * clock and the wall_to_monotonic offset and stores the result
+  * in normalized timespec64 format in the variable pointed to by @ts.
+  */
+-void ktime_get_ts64(struct timespec64 *ts)
++static __always_inline void leanux_raw_ktime_get_ts64(struct timespec64 *ts)
+ {
+ 	struct timekeeper *tk = &tk_core.timekeeper;
+ 	struct timespec64 tomono;
+@@ -891,6 +970,12 @@
+ 	ts->tv_nsec = 0;
+ 	timespec64_add_ns(ts, nsec + tomono.tv_nsec);
+ }
++/* LEANUX: a recorded choice (a clock read). */
++void ktime_get_ts64(struct timespec64 *ts)
++{
++	leanux_raw_ktime_get_ts64(ts);
++	kcov_choice_ip(210, _RET_IP_, ts, sizeof(*ts));
++}
+ EXPORT_SYMBOL_GPL(ktime_get_ts64);
+ 
+ /**
+@@ -902,13 +987,21 @@
+  * covers ~136 years of uptime which should be enough to prevent
+  * premature wrap arounds.
+  */
+-time64_t ktime_get_seconds(void)
++static __always_inline time64_t leanux_raw_ktime_get_seconds(void)
+ {
+ 	struct timekeeper *tk = &tk_core.timekeeper;
+ 
+ 	WARN_ON(timekeeping_suspended);
+ 	return tk->ktime_sec;
+ }
++/* LEANUX: a recorded choice (a clock read). */
++time64_t ktime_get_seconds(void)
++{
++	time64_t v = leanux_raw_ktime_get_seconds();
++
++	kcov_choice_ip(211, _RET_IP_, &v, sizeof(v));
++	return v;
++}
+ EXPORT_SYMBOL_GPL(ktime_get_seconds);
+ 
+ /**
+@@ -921,7 +1014,7 @@
+  * counter to provide "atomic" access to the 64bit tk->xtime_sec
+  * value.
+  */
+-time64_t ktime_get_real_seconds(void)
++static __always_inline time64_t leanux_raw_ktime_get_real_seconds(void)
+ {
+ 	struct timekeeper *tk = &tk_core.timekeeper;
+ 	time64_t seconds;
+@@ -938,6 +1031,14 @@
+ 
+ 	return seconds;
+ }
++/* LEANUX: a recorded choice (a clock read). */
++time64_t ktime_get_real_seconds(void)
++{
++	time64_t v = leanux_raw_ktime_get_real_seconds();
++
++	kcov_choice_ip(212, _RET_IP_, &v, sizeof(v));
++	return v;
++}
+ EXPORT_SYMBOL_GPL(ktime_get_real_seconds);
+ 
+ /**
+@@ -1545,7 +1646,7 @@
+  *
+  * Returns the raw monotonic time (completely un-modified by ntp)
+  */
+-void ktime_get_raw_ts64(struct timespec64 *ts)
++static __always_inline void leanux_raw_ktime_get_raw_ts64(struct timespec64 *ts)
+ {
+ 	struct timekeeper *tk = &tk_core.timekeeper;
+ 	unsigned int seq;
+@@ -1561,6 +1662,12 @@
+ 	ts->tv_nsec = 0;
+ 	timespec64_add_ns(ts, nsecs);
+ }
++/* LEANUX: a recorded choice (a clock read). */
++void ktime_get_raw_ts64(struct timespec64 *ts)
++{
++	leanux_raw_ktime_get_raw_ts64(ts);
++	kcov_choice_ip(213, _RET_IP_, ts, sizeof(*ts));
++}
+ EXPORT_SYMBOL(ktime_get_raw_ts64);
+ 
+ 
+@@ -2279,16 +2386,22 @@
+  * basically means that however wrong your real time clock is at boot time,
+  * you get the right time here).
+  */
+-void getboottime64(struct timespec64 *ts)
++static __always_inline void leanux_raw_getboottime64(struct timespec64 *ts)
+ {
+ 	struct timekeeper *tk = &tk_core.timekeeper;
+ 	ktime_t t = ktime_sub(tk->offs_real, tk->offs_boot);
+ 
+ 	*ts = ktime_to_timespec64(t);
+ }
++/* LEANUX: a recorded choice (a clock read). */
++void getboottime64(struct timespec64 *ts)
++{
++	leanux_raw_getboottime64(ts);
++	kcov_choice_ip(214, _RET_IP_, ts, sizeof(*ts));
++}
+ EXPORT_SYMBOL_GPL(getboottime64);
+ 
+-void ktime_get_coarse_real_ts64(struct timespec64 *ts)
++static __always_inline void leanux_raw_ktime_get_coarse_real_ts64(struct timespec64 *ts)
+ {
+ 	struct timekeeper *tk = &tk_core.timekeeper;
+ 	unsigned int seq;
+@@ -2299,9 +2412,15 @@
+ 		*ts = tk_xtime(tk);
+ 	} while (read_seqcount_retry(&tk_core.seq, seq));
+ }
++/* LEANUX: a recorded choice (a clock read). */
++void ktime_get_coarse_real_ts64(struct timespec64 *ts)
++{
++	leanux_raw_ktime_get_coarse_real_ts64(ts);
++	kcov_choice_ip(215, _RET_IP_, ts, sizeof(*ts));
++}
+ EXPORT_SYMBOL(ktime_get_coarse_real_ts64);
+ 
+-void ktime_get_coarse_ts64(struct timespec64 *ts)
++static __always_inline void leanux_raw_ktime_get_coarse_ts64(struct timespec64 *ts)
+ {
+ 	struct timekeeper *tk = &tk_core.timekeeper;
+ 	struct timespec64 now, mono;
+@@ -2317,6 +2436,12 @@
+ 	set_normalized_timespec64(ts, now.tv_sec + mono.tv_sec,
+ 				now.tv_nsec + mono.tv_nsec);
+ }
++/* LEANUX: a recorded choice (a clock read). */
++void ktime_get_coarse_ts64(struct timespec64 *ts)
++{
++	leanux_raw_ktime_get_coarse_ts64(ts);
++	kcov_choice_ip(216, _RET_IP_, ts, sizeof(*ts));
++}
+ EXPORT_SYMBOL(ktime_get_coarse_ts64);
+ 
+ /*
+@@ -2542,3 +2667,36 @@
+ }
+ EXPORT_SYMBOL(hardpps);
+ #endif /* CONFIG_NTP_PPS */
++
++/*
++ * LEANUX D3 (docs/2026-10-05-d3-timers.md, section 4.3, option C-jiffies):
++ * advance jiffies_64 by @ticks, as do_timer does at a tick, under
++ * jiffies_lock and jiffies_seq; tick_next_period moves with it (cosmetic in
++ * periodic mode). Nothing else: on the refined-jiffies timekeeper the next
++ * tick's update_wall_time reads the jumped jiffies and moves every clock by
++ * the same amount. On any other timekeeper the clocks would not follow, so
++ * the helper fails closed with -EOPNOTSUPP. Holding timekeeper_lock keeps
++ * the clocksource from changing in between (no path nests the two locks the
++ * other way round).
++ */
++int leanux_time_advance(unsigned long ticks, u64 *before, u64 *after)
++{
++	struct timekeeper *tk = &tk_core.timekeeper;
++	unsigned long flags;
++	int ret = -EOPNOTSUPP;
++
++	raw_spin_lock_irqsave(&timekeeper_lock, flags);
++	if (tk->tkr_mono.clock && !strcmp(tk->tkr_mono.clock->name, "refined-jiffies")) {
++		raw_spin_lock(&jiffies_lock);
++		write_seqcount_begin(&jiffies_seq);
++		*before = jiffies_64;
++		tick_next_period = ktime_add_ns(tick_next_period, (u64)ticks * TICK_NSEC);
++		do_timer(ticks);
++		*after = jiffies_64;
++		write_seqcount_end(&jiffies_seq);
++		raw_spin_unlock(&jiffies_lock);
++		ret = 0;
++	}
++	raw_spin_unlock_irqrestore(&timekeeper_lock, flags);
++	return ret;
++}
+--- a/kernel/workqueue.c
++++ b/kernel/workqueue.c
+@@ -55,6 +55,7 @@
+ #include <linux/kvm_para.h>
+ #include <linux/delay.h>
+ #include <linux/irq_work.h>
++#include <linux/kcov.h>
+ 
+ #include "workqueue_internal.h"
+ 
+@@ -3169,6 +3170,7 @@
+ 	unsigned long work_data;
+ 	int lockdep_start_depth, rcu_start_depth;
+ 	bool bh_draining = pool->flags & POOL_BH_DRAINING;
++	struct kcov_dispatch_section section;	/* LEANUX */
+ #ifdef CONFIG_LOCKDEP
+ 	/*
+ 	 * It is permissible to free the struct work_struct from
+@@ -3261,7 +3263,9 @@
+ 	 */
+ 	lockdep_invariant_state(true);
+ 	trace_workqueue_execute_start(work);
++	kcov_dispatch_start(&section, worker->current_func);	/* LEANUX */
+ 	worker->current_func(work);
++	kcov_dispatch_stop(&section);
+ 	/*
+ 	 * While we must be careful to not use "work" after this, the trace
+ 	 * point will only record its address.
+--- a/kernel/softirq.c
++++ b/kernel/softirq.c
+@@ -28,6 +28,7 @@
+ #include <linux/irq.h>
+ #include <linux/wait_bit.h>
+ #include <linux/workqueue.h>
++#include <linux/kcov.h>
+ 
+ #include <asm/softirq_stack.h>
+ 
+@@ -542,6 +543,7 @@
+ 	bool in_hardirq;
+ 	__u32 pending;
+ 	int softirq_bit;
++	struct kcov_dispatch_section section;	/* LEANUX */
+ 
+ 	/*
+ 	 * Mask out PF_MEMALLOC as the current task context is borrowed for the
+@@ -576,7 +578,12 @@
+ 		kstat_incr_softirqs_this_cpu(vec_nr);
+ 
+ 		trace_softirq_entry(vec_nr);
++		/* LEANUX: the NET_RX vector only (choice-stream strategy, 4.3) */
++		section.open = false;
++		if (vec_nr == NET_RX_SOFTIRQ)
++			kcov_dispatch_start(&section, h->action);
+ 		h->action();
++		kcov_dispatch_stop(&section);
+ 		trace_softirq_exit(vec_nr);
+ 		if (unlikely(prev_count != preempt_count())) {
+ 			pr_err("huh, entered softirq %u %s %p with preempt_count %08x, exited with %08x?\n",
+--- a/kernel/sched/core.c
++++ b/kernel/sched/core.c
+@@ -7251,6 +7251,7 @@
+ int __sched __cond_resched(void)
+ {
+ 	if (should_resched(0) && !irqs_disabled()) {
++		kcov_dispatch_resched(_RET_IP_);	/* LEANUX */
+ 		preempt_schedule_common();
+ 		return 1;
+ 	}
+--- a/kernel/time/timer.c
++++ b/kernel/time/timer.c
+@@ -44,6 +44,7 @@
+ #include <linux/slab.h>
+ #include <linux/compat.h>
+ #include <linux/random.h>
++#include <linux/kcov.h>
+ #include <linux/sysctl.h>
+ 
+ #include <linux/uaccess.h>
+@@ -1239,6 +1240,8 @@
+  */
+ int mod_timer(struct timer_list *timer, unsigned long expires)
+ {
++	/* LEANUX D3: the arm record (kind 303) for an armed function */
++	kcov_timer_arm(timer->function, jiffies, expires, _RET_IP_);
+ 	return __mod_timer(timer, expires, 0);
+ }
+ EXPORT_SYMBOL(mod_timer);
+@@ -1771,6 +1774,7 @@
+ 			  unsigned long baseclk)
+ {
+ 	int count = preempt_count();
++	struct kcov_dispatch_section section;	/* LEANUX */
+ 
+ #ifdef CONFIG_LOCKDEP
+ 	/*
+@@ -1792,7 +1796,10 @@
+ 	lock_map_acquire(&lockdep_map);
+ 
+ 	trace_timer_expire_entry(timer, baseclk);
++	/* LEANUX D3: a timer dispatch section iff fn is in the armed set */
++	kcov_dispatch_start(&section, fn);
+ 	fn(timer);
++	kcov_dispatch_stop(&section);
+ 	trace_timer_expire_exit(timer);
+ 
+ 	lock_map_release(&lockdep_map);
+--- a/mm/slub.c
++++ b/mm/slub.c
+@@ -42,6 +42,7 @@
+ #include <kunit/test.h>
+ #include <kunit/test-bug.h>
+ #include <linux/sort.h>
++#include <linux/kcov.h>
+ 
+ #include <linux/debugfs.h>
+ #include <trace/events/kmem.h>
+@@ -4211,10 +4212,16 @@
+ {
+ 	void *object;
+ 	bool init = false;
++	struct kcov_alloc_ctx kctx;	/* LEANUX A */
+ 
++	/* LEANUX A: the allocation hook; a forced failure is recorded by pre */
++	if (kcov_alloc_pre(&kctx, addr, gfpflags & gfp_allowed_mask, orig_size, false))
++		return NULL;
+ 	s = slab_pre_alloc_hook(s, gfpflags);
+-	if (unlikely(!s))
++	if (unlikely(!s)) {
++		kcov_alloc_post(&kctx, false);
+ 		return NULL;
++	}
+ 
+ 	object = kfence_alloc(s, orig_size, gfpflags);
+ 	if (unlikely(object))
+@@ -4233,6 +4240,7 @@
+ 	 * object is set to NULL
+ 	 */
+ 	slab_post_alloc_hook(s, lru, gfpflags, 1, &object, init, orig_size);
++	kcov_alloc_post(&kctx, object != NULL);	/* LEANUX A */
+ 
+ 	return object;
+ }
+--- a/mm/page_alloc.c
++++ b/mm/page_alloc.c
+@@ -55,6 +55,7 @@
+ #include <linux/delayacct.h>
+ #include <linux/cacheinfo.h>
+ #include <linux/pgalloc_tag.h>
++#include <linux/kcov.h>
+ #include <asm/div64.h>
+ #include "internal.h"
+ #include "shuffle.h"
+@@ -4809,6 +4810,7 @@
+ 	unsigned int alloc_flags = ALLOC_WMARK_LOW;
+ 	gfp_t alloc_gfp; /* The gfp_t that was actually used for allocation */
+ 	struct alloc_context ac = { };
++	struct kcov_alloc_ctx kctx;	/* LEANUX A */
+ 
+ 	/*
+ 	 * There are several places where we assume that the order value is sane
+@@ -4827,9 +4829,14 @@
+ 	 */
+ 	gfp = current_gfp_context(gfp);
+ 	alloc_gfp = gfp;
++	/* LEANUX A: the allocation hook; a forced failure is recorded by pre */
++	if (kcov_alloc_pre(&kctx, _RET_IP_, gfp, order, true))
++		return NULL;
+ 	if (!prepare_alloc_pages(gfp, order, preferred_nid, nodemask, &ac,
+-			&alloc_gfp, &alloc_flags))
++			&alloc_gfp, &alloc_flags)) {
++		kcov_alloc_post(&kctx, false);
+ 		return NULL;
++	}
+ 
+ 	/*
+ 	 * Forbid the first pass from falling back to types that fragment
+@@ -4862,6 +4869,7 @@
+ 
+ 	trace_mm_page_alloc(page, order, alloc_gfp, ac.migratetype);
+ 	kmsan_alloc_page(page, order, alloc_gfp);
++	kcov_alloc_post(&kctx, page != NULL);	/* LEANUX A */
+ 
+ 	return page;
+ }
