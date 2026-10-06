@@ -816,7 +816,8 @@ def steered_timers(rng, trace_id):
     (stream K's note, section 13.5). Variants:
     - `retransmit`: no response; 1-3 advances, each firing the retransmit
       timer, whose retry sends another initiation;
-    - `gives_up`: 20 advances: 19 retries and the give-up (tx_dropped);
+    - `gives_up`: 20 advances: 19 retries and the give-up (tx_dropped),
+      then only a dump;
     - `keepalive`: 1 or 2 received data messages, an advance (the
       keepalive), and with 2 a second advance that fires nothing (the
       callback's re-arm is deleted by the tx worker);
@@ -906,7 +907,9 @@ def steered_timers(rng, trace_id):
             ops.append(advance(retransmit_fire + slack(150)))
             if variant == 'retransmit' and rng.random() < .3:
                 ops.append(observe)
-        ops += [observe, get]
+        # no final observation after 20 advances: on the TCG guest they take
+        # about 3.5 s of real time, and its 0.4 s wait exceeds the 4 s bound
+        ops += [get] if variant == 'gives_up' else [observe, get]
         expect = [fired('retransmit_handshake'), 'wg_packet_send_staged_packets.no_keypair=1']
         retries = count if variant == 'retransmit' else 19
         return dict(version=1, id=trace_id, ops=ops, steer=steer + D3_DRAWS * retries, expect=expect)

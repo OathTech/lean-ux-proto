@@ -413,6 +413,11 @@ def probe(args):
     from harness.linux import KERNEL, run_linux
     from harness.steer import call_sites, resolve as resolve_steering
     selected = list(finish(traces()).values())
+    if args.generated:
+        import random
+        from evaluator.generate import steered_timers
+        rng = random.Random(f"timers-probe-{args.generated_seed}")
+        selected = [validate_trace(steered_timers(rng, f"gen-timers-{i:03}")) for i in range(args.generated)]
     if args.controls:
         selected += list(finish(controls()).values())
     if args.only:
@@ -457,6 +462,8 @@ def main():
     parser.add_argument("--probe", type=Path, help="run on Linux alone into this new directory")
     parser.add_argument("--only")
     parser.add_argument("--controls", action="store_true", help="also probe the timer controls")
+    parser.add_argument("--generated", type=int, default=0, help="probe this many steered_timers traces instead")
+    parser.add_argument("--generated-seed", type=int, default=1)
     parser.add_argument("--guest-variant")
     parser.add_argument("--summarize-only", action="store_true")
     args = parser.parse_args()
