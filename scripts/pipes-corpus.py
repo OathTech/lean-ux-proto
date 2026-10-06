@@ -394,6 +394,25 @@ trace("p_eof", [
     read(R(5), 10),                            # 9: 0 (EOF, no wait)
 ])
 
+# The wrong end: a write to the read end and a read of the write end fail in
+# vfs_write/vfs_read before the pipe is reached (fs/read_write.c:667-668,
+# 553-554: FMODE_WRITE/FMODE_READ clear, -EBADF). The early returns jump into
+# the functions' shared exits, whose KCOV points the line table attributes to
+# read_write.c:567 and to file_end_write's not-regular test (fs.h:3018)
+# inlined at :691 (correspondence/kcov.json `shared_exits`). Zero-byte forms
+# fail the same way: the mode tests precede everything.
+trace("p_wrong_end", [
+    pipe2(NB),                                 # 0
+    write(R(0), 10),                           # 1: -EBADF, sigpipe 0
+    read(W(0), 10),                            # 2: -EBADF
+    write(R(0), 0),                            # 3: -EBADF
+    read(W(0), 0),                             # 4: -EBADF
+    write(W(0), 10),                           # 5: 10 (the right end still works)
+    read(R(0), 10),                            # 6: 10
+    close(R(0)),                               # 7: 0
+    close(W(0)),                               # 8: 0
+])
+
 # readers/writers count files, not descriptors: dup the read end and close
 # the original, the file stays open (readers 1). dup3 over a pipe end drops
 # that file's last reference: its __fput (pipe_release, readers 0) is

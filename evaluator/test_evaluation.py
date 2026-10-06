@@ -1,4 +1,5 @@
 import copy
+from collections import Counter
 import json
 from pathlib import Path
 import re
@@ -115,7 +116,8 @@ class EvaluationChecks(unittest.TestCase):
             with self.assertRaises(InvalidOutput):
                 validate_coverage([self.trace], altered)
 
-    CONFIG = {'files': ['fs/eventfd.c'], 'functions': ['eventfd_read', 'eventfd_ctx_do_read'], 'known_gaps': []}
+    CONFIG = {'files': ['fs/eventfd.c'], 'functions': ['eventfd_read', 'eventfd_ctx_do_read'], 'known_gaps': [],
+              'shared_exits': [], 'operand_exclusions': []}
 
     def decision(self, label, line, true, false):
         return {'label': label, 'file': 'fs/eventfd.c', 'line': line,
@@ -269,8 +271,62 @@ class EvaluationChecks(unittest.TestCase):
         self.assertTrue(run(dict(label='alloc_fd.o_cloexec=0', operands=[0, 0]), [])[0])         # undeclared
         self.assertEqual(run(dict(label='made_up=1', operands=[1, 2]), []), ([], 0))             # left to control_flow
 
+    def test_operand_exclusion_is_one_call_site(self):
+        # A declared exclusion (kcov.json operand_exclusions) stands for one
+        # Linux comparison at the condition line whose outermost frame is the
+        # declared call line; nothing else is accepted without operands.
+        cmp = {'rel': 'eq', 'const_rhs': True, 'site': None}
+        decisions = {'__refcount_add.old_zero': dict(site='include/linux/refcount.h:189', comparison=cmp),
+                     'alloc_fd.o_cloexec': dict(site='fs/file.c:532', comparison=None)}
+        inner = {'function': '__refcount_add', 'source': '/x/.deps/linux/include/linux/refcount.h:189'}
+        loc = {'0x1': [inner, {'function': 'alloc_pipe_info', 'source': '/x/.deps/linux/fs/pipe.c:794'}],
+               '0x2': [inner, {'function': 'alloc_pipe_info', 'source': '/x/.deps/linux/fs/pipe.c:830'}]}
+        exclusions = [{'label': '__refcount_add.old_zero', 'operand': 'root_user.__count', 'call': 'fs/pipe.c:794',
+                       'note': ''}]
+        trace = {'ops': [{'op': 'pipe2'}]}
+        def run(branches, records):
+            model = {'branches': [dict(index=0, **b) for b in branches]}
+            excluded = Counter()
+            problems, checked = check.operand_agreement(trace, model, [{'records': records}], loc, decisions,
+                                                        None, exclusions, excluded)
+            return problems, checked, sum(excluded.values())
+        at_call = [5, '0x0', '0x1a', '0x1']
+        elsewhere = [5, '0x0', '0x1a', '0x2']
+        ok = dict(label='__refcount_add.old_zero=0', operands_excluded='root_user.__count')
+        self.assertEqual(run([ok], [at_call]), ([], 0, 1))
+        self.assertTrue(run([ok], [elsewhere])[0])                     # the comparison at another call site
+        self.assertTrue(run([ok], [])[0])                              # no comparison recorded
+        self.assertTrue(run([ok, ok], [at_call])[0])                   # two exclusions, one comparison
+        self.assertTrue(run([dict(ok, operands_excluded='nr_files')], [at_call])[0])     # undeclared operand
+        self.assertTrue(run([dict(ok, operands=[2, 0])], [at_call])[0])                  # both forms at once
+        self.assertTrue(run([dict(label='alloc_fd.o_cloexec=0', operands_excluded='root_user.__count')], [])[0])
+        self.assertTrue(run([dict(label='__refcount_add.old_zero=0')], [at_call])[0])    # plain omission
+
+    def test_shared_exit_needs_the_early_return_path(self):
+        # A declared shared exit (kcov.json shared_exits) does not count its
+        # helper as having run, but only when the block entering the helper
+        # (unless_covered) was not covered in the operation.
+        decisions = {'file_end_write.not_regular': dict(function='file_end_write'),
+                     'vfs_write.not_fmode_write': dict(function='vfs_write')}
+        loc = {'0xa': [{'function': 'vfs_write', 'source': '/x/.deps/linux/fs/read_write.c:667'}],
+               '0xb': [{'function': 'vfs_write', 'source': '/x/.deps/linux/fs/read_write.c:691'}],
+               '0xc': [{'function': 'file_end_write', 'source': '/x/.deps/linux/include/linux/fs.h:3018 (discriminator 1)'},
+                       {'function': 'vfs_write', 'source': '/x/.deps/linux/fs/read_write.c:691 (discriminator 1)'}]}
+        config = {'files': ['fs/read_write.c', 'include/linux/fs.h'], 'functions': ['vfs_write'],
+                  'shared_exits': [{'function': 'file_end_write',
+                                    'frames': ['include/linux/fs.h:3018', 'fs/read_write.c:691'],
+                                    'unless_covered': ['fs/read_write.c:691'], 'note': ''}]}
+        early = check.decision_functions_run({'pcs': ['0xa', '0xc']}, loc, config, decisions)
+        self.assertEqual(early, ({'vfs_write'}, 1))
+        full = check.decision_functions_run({'pcs': ['0xa', '0xb', '0xc']}, loc, config, decisions)
+        self.assertEqual(full, ({'vfs_write', 'file_end_write'}, 0))
+        undeclared = check.decision_functions_run({'pcs': ['0xa', '0xc']}, loc, dict(config, shared_exits=[]),
+                                                  decisions)
+        self.assertEqual(undeclared, ({'vfs_write', 'file_end_write'}, 0))
+
     def test_order_within_a_function(self):
-        config = {'files': ['fs/eventfd.c'], 'functions': ['eventfd_write'], 'known_gaps': []}
+        config = {'files': ['fs/eventfd.c'], 'functions': ['eventfd_write'], 'known_gaps': [],
+                  'shared_exits': [], 'operand_exclusions': []}
         table = check.parse_decisions([
             self.decision('eventfd_write.wrong_size', 254, [(255, 255)], [(256, 256)]),
             self.decision('eventfd_write.ullong_max', 258, [(259, 259)], [(260, 260)])], config)

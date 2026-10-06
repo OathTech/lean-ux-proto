@@ -190,26 +190,19 @@ def pipeIsUnprivilegedUser : M Bool := do
     branch .unprivNoAdmin !capable
   else return false
 
-/-- `root_user.__count` before `get_current_user`'s `refcount_inc`.
-
-    OPEN ISSUE (P2 report): `get_current_user()` → `get_uid()` →
-    `refcount_inc(&root_user.__count)` is inlined into `alloc_pipe_info`
-    (fs/pipe.c:794), so `__refcount_add`'s decisions at refcount.h:189-191
-    are witnessed there and must be reported. Their A3 operand is the
-    guest-wide reference count of `root_user` (every root credential, kernel
-    threads included), which the mirror does not model and which changes as
-    processes come and go. The mirror reports the outcomes the contract fixes
-    (a live `root_user`: not zero, no overflow) with this placeholder as the
-    operand, so A3 rejects `__refcount_add.old_zero` at that site, noisily,
-    until the treatment is decided (the design's "refcount cut" does not
-    hold for an inlined helper with anchored decisions). -/
-def ROOT_USER_COUNT_PLACEHOLDER : Nat := 2
-
 /-- get_current_user (include/linux/cred.h) → get_uid
     (include/linux/sched/user.h:49-53): `refcount_inc(&u->__count)` on
-    `root_user`. -/
+    `root_user`. The helpers are inlined into `alloc_pipe_info`
+    (fs/pipe.c:794), so `__refcount_add`'s decisions at refcount.h:189-191
+    are witnessed there. Their operand is `root_user.__count`, the guest-wide
+    reference count of `root_user` (every root credential, kernel threads
+    included; 26 or 27 across runs), which the mirror does not model: a
+    declared operand exclusion at this call site only (`kcov.json`
+    `operand_exclusions`, `correspondence/README.md`; the precedent of
+    `alloc_empty_file.nr_files_at_max`). The outcomes are the contract's
+    (a live `root_user`) and are reported and A2-checked. -/
 def getCurrentUser : M UserId := do
-  refcountInc ROOT_USER_COUNT_PLACEHOLDER
+  refcountIncGuestWide .rootUserCount
   return .root
 
 /-! ## Allocation and release -/

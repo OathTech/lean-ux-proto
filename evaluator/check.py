@@ -168,7 +168,8 @@ class ModelStopped(InvalidOutput):
 
 def load_kcov_config():
     config = json.loads(ANCHORS.read_text())
-    if (set(config) != {'version', 'description', 'files', 'functions', 'branch_free_functions', 'known_gaps'}
+    if (set(config) != {'version', 'description', 'files', 'functions', 'branch_free_functions', 'known_gaps',
+                        'shared_exits', 'operand_exclusions'}
             or config['version'] != 2):
         raise ValueError('kcov config fields or version')
     if any(type(x) is not str or x in config['functions'] for x in config['branch_free_functions']):
@@ -178,6 +179,20 @@ def load_kcov_config():
     for gap in config['known_gaps']:
         if set(gap) != {'op', 'name', 'line', 'note'} or gap['line'].rsplit(':', 1)[0] not in config['files']:
             raise ValueError(f'known gap {gap}: fields or file')
+    def anchored_line(text):
+        return (type(text) is str and text.rsplit(':', 1)[0] in config['files']
+                and text.rsplit(':', 1)[-1].isdigit())
+    for exit_ in config['shared_exits']:
+        if (set(exit_) != {'function', 'frames', 'unless_covered', 'note'} or type(exit_['function']) is not str
+                or type(exit_['frames']) is not list or len(exit_['frames']) < 2
+                or not all(anchored_line(f) for f in exit_['frames'])
+                or type(exit_['unless_covered']) is not list or not exit_['unless_covered']
+                or not all(anchored_line(f) for f in exit_['unless_covered'])):
+            raise ValueError(f'shared exit {exit_}: fields, frames or file')
+    for exclusion in config['operand_exclusions']:
+        if (set(exclusion) != {'label', 'operand', 'call', 'note'} or type(exclusion['label']) is not str
+                or type(exclusion['operand']) is not str or not anchored_line(exclusion['call'])):
+            raise ValueError(f'operand exclusion {exclusion}: fields or file')
     return config
 
 
@@ -483,21 +498,41 @@ def unlisted_c_lines(row, locations, files, functions):
     return lines
 
 
+def frame_chain(frames):
+    """A point's DWARF frames as `file:line` strings, innermost first."""
+    return tuple(frame['source'].split('/.deps/linux/')[-1].split(' ')[0] for frame in frames)
+
+
 def decision_functions_run(row, locations, config, decisions):
     """Decision functions (label prefixes) with a frame, in an anchored file,
-    of a PC that witnesses decisions (attributable, in a listed function)."""
+    of a PC that witnesses decisions (attributable, in a listed function),
+    and how many of the row's PCs are declared shared exits.
+
+    A declared shared exit (`kcov.json` `shared_exits`) is one point, named
+    by its exact frame chain, that the compiler shares between a function's
+    early returns and an inlined helper's exit; the line table attributes it
+    to the helper. When the operation did not cover the declared
+    `unless_covered` point (the block that enters the helper on its own
+    path), the early returns reached it and the helper did not run: then,
+    and only then, that helper's frame at that exact point is not counted as
+    the helper running."""
     functions = {entry['function'] for entry in decisions.values()}
     listed_functions = set(config['functions'])
-    ran = set()
+    covered = {frame_chain(locations[pc]) for pc in row['pcs']}
+    shared = {tuple(e['frames']): e['function'] for e in config['shared_exits']
+              if tuple(e['unless_covered']) not in covered}
+    ran, shared_hits = set(), 0
     for pc in row['pcs']:
         frames = locations[pc]
         if not attributable(frames) or not listed(frames, listed_functions):
             continue
+        exempt = shared.get(frame_chain(frames))
+        shared_hits += exempt is not None
         for frame in frames:
             source = frame['source'].split('/.deps/linux/')[-1].split(' ')[0].split(':')[0]
-            if frame['function'] in functions and source in config['files']:
+            if frame['function'] in functions and source in config['files'] and frame['function'] != exempt:
                 ran.add(frame['function'])
-    return ran
+    return ran, shared_hits
 
 
 def listed(frames, functions):
@@ -612,7 +647,9 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
         # counted point, in an anchored file) must have a reported decision.
         # Unobservable outcomes cannot show an omitted decision; this shows an
         # omitted function.
-        ran = decision_functions_run(coverage[index], locations, config, decisions)
+        ran, shared_hits = decision_functions_run(coverage[index], locations, config, decisions)
+        if shared_hits:
+            gaps['shared exits reached by an early return (kcov.json)'] += shared_hits
         silent = sorted(ran - {decisions[name]['function'] for name in names})
         if silent:
             problems.append(dict(index=index, problem='Linux ran a decision function the mirror reported nothing in',
@@ -665,17 +702,47 @@ def operands_match(lhs, rhs, record, comparison):
     return sorted((x, y)) == sorted((a, b))
 
 
-def operand_agreement(trace, model_obs, comparisons, locations, decisions, functions=None):
+def operand_agreement(trace, model_obs, comparisons, locations, decisions, functions=None, exclusions=(),
+                      excluded=None):
     """A3: declared value comparisons report operands, and each matches a
     comparison Linux made at the decision's condition line (the innermost
     source frame of the comparison) in the same operation, in one of the
-    configured `functions` when given."""
+    configured `functions` when given.
+
+    A declared operand exclusion (`kcov.json` `operand_exclusions`) is one
+    call site whose operand is a guest-wide value the mirror does not model:
+    the mirror reports the outcome with `operands_excluded` naming the
+    operand instead of the pair. It must name a declared (label, operand),
+    and Linux must have recorded the comparison at the condition line with
+    the declared call line as the outermost frame, once for each such report
+    in the operation. `excluded` (a Counter) receives the count."""
     problems, checked = [], 0
+    used = Counter()
     for branch in model_obs['branches']:
         name = branch['label'].rpartition('=')[0]
         if name not in decisions:
             continue  # control_flow reports unknown labels
         comparison = decisions[name]['comparison']
+        if 'operands_excluded' in branch:
+            entry = next((e for e in exclusions
+                          if e['label'] == name and e['operand'] == branch['operands_excluded']), None)
+            if comparison is None or 'operands' in branch or entry is None:
+                problems.append(dict(index=branch['index'], label=branch['label'],
+                                     problem='undeclared operand exclusion', operand=branch['operands_excluded']))
+                continue
+            site = comparison['site'] or decisions[name]['site']
+            at_call = sum(1 for r in comparisons[branch['index']]['records']
+                          if frame_chain(locations[r[3]])[0] == site and frame_chain(locations[r[3]])[-1] == entry['call']
+                          and attributable(locations[r[3]])
+                          and (functions is None or listed(locations[r[3]], functions)))
+            used[(branch['index'], name)] += 1
+            if used[(branch['index'], name)] > at_call:
+                problems.append(dict(index=branch['index'], label=branch['label'],
+                                     problem='operand exclusion without a comparison at its declared call site',
+                                     site=site, call=entry['call'], linux_records_at_call=at_call))
+            elif excluded is not None:
+                excluded[f"operands excluded: {name} at {entry['call']} ({entry['operand']})"] += 1
+            continue
         if comparison is None:
             if 'operands' in branch:
                 problems.append(dict(index=branch['index'], label=branch['label'],
@@ -795,7 +862,8 @@ def run_chunk(traces, out, kcov):
         if result['outcome'] == 'agreement':
             problems, trace_gaps = control_flow(trace, actual, trace_coverage, mapped['locations'], *kcov)
             operand_problems, checked = operand_agreement(trace, actual_cmp, trace_comparisons,
-                                                          compared['locations'], kcov[1], set(kcov[0]['functions']))
+                                                          compared['locations'], kcov[1], set(kcov[0]['functions']),
+                                                          kcov[0]['operand_exclusions'], trace_gaps)
             problems += operand_problems + site_problems.get(trace['id'], [])
             # a steered trace states what its steering is for: the mirror's
             # agreeing run (A2 ties it to Linux's coverage) must show it
@@ -849,7 +917,13 @@ def main(argv=None):
                                       'pipes-generated': args.pipes_count},
                              args.seed, args.trace, filtered)
         decisions.update(load_decisions(config))
-        instrumented, functions = instrumented_lines(KERNEL / 'vmlinux', config['functions'], config['files'])
+        instrumented, functions, chains = instrumented_lines(KERNEL / 'vmlinux', config['functions'], config['files'])
+        # each declared shared exit names exactly one instrumentation point
+        for exit_ in config['shared_exits']:
+            for chain in (exit_['frames'], exit_['unless_covered']):
+                if chains[tuple(chain)] != 1:
+                    raise InvalidOutput(f"shared exit {exit_['frames']}: {chain} names {chains[tuple(chain)]}"
+                                        ' instrumentation points of the listed functions, not one')
         kcov = (config, decisions, witness_table(decisions, instrumented, functions, config['branch_free_functions']),
                 instrumented, functions)
         observable = sum(bool(w[True] or w[False]) for w in kcov[2].values())

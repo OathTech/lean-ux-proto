@@ -683,6 +683,14 @@ def branchCmp (d : Decision) (outcome : Bool) (a b : Int) : M Bool := do
   modify fun w => { w with steps := w.steps.push { decision := d, outcome, operands := some (a, b) } }
   return outcome
 
+/-- Record a C value comparison at a declared operand exclusion (a call site
+    whose operand is a guest-wide value the mirror does not model; see
+    `OperandExclusion`): the outcome, which the contract fixes, without the
+    operands. The check requires Linux's comparison at the declared call site. -/
+def branchCmpExcluded (d : Decision) (outcome : Bool) (x : OperandExclusion) : M Bool := do
+  modify fun w => { w with steps := w.steps.push { decision := d, outcome, excluded := some x } }
+  return outcome
+
 /-- Ask the environment oracle; the site's call count is part of the query. -/
 def envOk (site : EnvSite) : M Bool := do
   let w ← get

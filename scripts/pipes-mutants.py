@@ -9,8 +9,8 @@ Run from the repository root:
 Every mutant must be rejected by the instrument named in its description:
 its run must find something the unmutated baseline run (made first, on the
 same suite) does not. With a passing baseline that is simply a failing run;
-the baseline rule keeps the mutants informative while an open, known failure
-(a stream's declared placeholder) is still in the tree. Stream P2's mutants (fs/pipe.c, kernel/signal.c) were written
+the baseline rule keeps the mutants informative should an open, known failure
+be in the tree (at integration the baseline passes). Stream P2's mutants (fs/pipe.c, kernel/signal.c) were written
 against P2's code as merged into task/p3; an entry without a pattern is
 reported as pending. P-NC is the negative control of section 8: `current_time` undeclared,
 so every pipes trace fails with "choice from an undeclared consumer".

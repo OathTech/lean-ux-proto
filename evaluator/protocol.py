@@ -99,9 +99,14 @@ def validate_observation(trace, result):
     if type(branches) is not list or len(branches) > 4096:
         raise InvalidOutput('branch report size')
     for branch in branches:
-        if not (keys(branch, ('index', 'label')) or keys(branch, ('index', 'label', 'operands'))) \
+        if not (keys(branch, ('index', 'label')) or keys(branch, ('index', 'label', 'operands'))
+                or keys(branch, ('index', 'label', 'operands_excluded'))) \
                 or not integer(branch['index'], 0, len(trace['ops']) - 1):
             raise InvalidOutput('branch fields/index')
+        # a declared operand exclusion (correspondence/kcov.json) names the operand
+        if 'operands_excluded' in branch and not (type(branch['operands_excluded']) is str
+                                                  and 1 <= len(branch['operands_excluded']) <= 80):
+            raise InvalidOutput('branch operands_excluded')
         if 'operands' in branch and not (type(branch['operands']) is list and len(branch['operands']) == 2
                                          and all(integer(x, -2**63, 2**64 - 1) for x in branch['operands'])):
             raise InvalidOutput('branch operands')

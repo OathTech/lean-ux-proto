@@ -499,9 +499,10 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
       ("bytes", toJson bytes)] ++ fds ++ device))
     for s in w.steps do
       let fields := [("index", toJson index), ("label", toJson s.label)]
-      branches := branches.push (Json.mkObj (match s.operands with
-        | some (a, b) => fields ++ [("operands", toJson [a, b])]
-        | none => fields))
+      branches := branches.push (Json.mkObj (match s.operands, s.excluded with
+        | some (a, b), _ => fields ++ [("operands", toJson [a, b])]
+        | none, some x => fields ++ [("operands_excluded", toJson x.operand)]
+        | none, none => fields))
   return Json.mkObj [("version", toJson (1 : Nat)), ("id", toJson trace.id),
     ("observations", .arr observations), ("branches", .arr branches)]
 

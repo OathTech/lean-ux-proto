@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "description": "KCOV configuration for the A2 control-flow check. Witnesses are not listed here: each mirror decision (leanux-model --decisions) carries source spans for its outcomes, and the check intersects them with the lines that own a KCOV instrumentation point in these functions of the built kernel. 'files' bounds the source considered; 'functions' must include every function whose code (including inlined helpers) the modeled paths execute, and the check fails if coverage lands in a decision span the map does not know. 'known_gaps' lists C choice points KCOV observes but the mirror does not yet model; hits are reported, not failed. 'functions' scopes witnesses: only their PCs witness decisions, and a span line of an anchored C file covered by any other function fails the check; header helpers inlined into unlisted functions are not checked. 'branch_free_functions' lists C functions the compiler made branch-free (no KCOV point); only their decisions may lack an instrumented function.",
+  "description": "KCOV configuration for the A2 control-flow check. Witnesses are not listed here: each mirror decision (leanux-model --decisions) carries source spans for its outcomes, and the check intersects them with the lines that own a KCOV instrumentation point in these functions of the built kernel. 'files' bounds the source considered; 'functions' must include every function whose code (including inlined helpers) the modeled paths execute, and the check fails if coverage lands in a decision span the map does not know. 'known_gaps' lists C choice points KCOV observes but the mirror does not yet model; hits are reported, not failed. 'functions' scopes witnesses: only their PCs witness decisions, and a span line of an anchored C file covered by any other function fails the check; header helpers inlined into unlisted functions are not checked. 'branch_free_functions' lists C functions the compiler made branch-free (no KCOV point); only their decisions may lack an instrumented function. 'shared_exits' declares single instrumentation points, each named by its exact DWARF frame chain (file:line, innermost first; the check requires the chain to name exactly one point of the listed functions), that the compiler shares between a function's early returns and an inlined helper's exit: when the operation did not cover the 'unless_covered' point (the block entering the helper, also exactly one point), the helper's frame there does not count as the helper having run. 'operand_exclusions' declares single call sites of a comparison decision whose operand is a guest-wide value the mirror does not model: the mirror reports the outcome there with 'operands_excluded' instead of the pair, and the check requires Linux's comparison at that call site (outermost frame = 'call'). Both are documented in correspondence/README.md.",
   "files": [
     "fs/eventfd.c",
     "fs/file.c",
@@ -203,6 +203,27 @@
     "__sigqueue_alloc"
   ],
   "known_gaps": [],
+  "shared_exits": [
+    {
+      "function": "file_end_write",
+      "frames": [
+        "include/linux/fs.h:3018",
+        "fs/read_write.c:691"
+      ],
+      "unless_covered": [
+        "fs/read_write.c:691"
+      ],
+      "note": "vfs_write's early returns (-EBADF 668, -EINVAL 670, -EFAULT 672, rw_verify_area's error 676) jump into the epilogue at the KCOV call of file_end_write's not-regular return block (fs.h:3018 inlined at read_write.c:691; return PC 0xffffffff811a279e in the accepted build): the point runs on those paths although file_end_write did not. On the paths that reach file_end_write, the block entering it (read_write.c:691 in vfs_write's own frame, return PC 0xffffffff811a2778) runs first and the early returns skip it, so the declaration applies only when that point is not covered. Found by the generated pipes suite (writes to a read end), deterministic in corpus/pipes/p_wrong_end. vfs_read's counterpart (567) is vfs_read's own frame and needs no declaration; the early returns' false spans leave both points out."
+    }
+  ],
+  "operand_exclusions": [
+    {
+      "label": "__refcount_add.old_zero",
+      "operand": "root_user.__count",
+      "call": "fs/pipe.c:794",
+      "note": "get_current_user() -> get_uid() -> refcount_inc(&root_user.__count) is inlined into alloc_pipe_info (fs/pipe.c:794), so __refcount_add's comparison at refcount.h:189 is recorded there with the guest-wide reference count of root_user (every root credential, kernel threads included; 26 or 27 across runs), which the mirror does not model: the precedent of alloc_empty_file.nr_files_at_max. The outcome (a live root_user: not zero) is reported and A2-checked; only the operands at this call site are excluded. Every other refcount_inc keeps its operands."
+    }
+  ],
   "branch_free_functions": [
     "fls128",
     "INET_ECN_decapsulate",

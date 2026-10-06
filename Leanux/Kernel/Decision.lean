@@ -288,13 +288,29 @@ inductive Decision where
   -- P stream 2 signal (end)
   deriving Repr, BEq, DecidableEq, Inhabited
 
+/-- A call site of a value comparison whose operand is a guest-wide value the
+    mirror does not model, declared in `correspondence/kcov.json`
+    (`operand_exclusions`, with the reason) and in `correspondence/README.md`.
+    There the mirror reports the outcome without the operand pair. -/
+inductive OperandExclusion where
+  /-- `root_user.__count`, compared by `refcount_inc` inlined into
+      `alloc_pipe_info` (fs/pipe.c:794, through `get_current_user`). -/
+  | rootUserCount
+  deriving Repr, BEq, DecidableEq, Inhabited
+
+/-- The operand's name, as `kcov.json` declares it. -/
+def OperandExclusion.operand : OperandExclusion → String
+  | .rootUserCount => "root_user.__count"
+
 /-- A recorded step: the decision, the outcome the mirror computed, and, for
     value comparisons, the two operands the C compares (as C values; negative
-    numbers are two's complement in the check). -/
+    numbers are two's complement in the check), or, at a declared exclusion,
+    the excluded operand instead. -/
 structure Step where
   decision : Decision
   outcome : Bool
   operands : Option (Int × Int) := none
+  excluded : Option OperandExclusion := none
   deriving Repr, BEq
 
 /-- An inclusive range of source lines in one file. -/
