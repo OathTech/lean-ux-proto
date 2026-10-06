@@ -697,63 +697,81 @@ static unsigned long *enable_remote(const struct trace *t, int comparisons)
     return area;
 }
 
-/* E-B (docs/2026-10-05-e-dos.md §8): submit `n_invalid` copies of an
- * invalid-MAC1 initiation, then (if `valid`) one bundled valid initiation, in
- * one io_uring batch to a UDP socket connected to wg0's port. There is no
- * per-send cond_resched, so the batch outruns the single-CPU receive worker and
- * crosses the handshake_queue_len >= 512 under_load threshold (GSO/sendmmsg do
- * not, measured: docs/2026-10-05-e-probe-results.md). The invalid template has a
- * MAC1 that will not match, so every flood packet is dropped (reply-free).
- * Returns 0 on a successful submission, -1 on failure. */
-static int do_wg_flood(unsigned port, unsigned n_invalid,
-                       const unsigned char *valid, size_t valid_len)
+/* E-B (docs/2026-10-05-e-dos.md §8): an io_uring batch of `n_invalid` invalid-
+ * MAC1 initiations (and, for the merged-injection control, one bundled valid
+ * initiation submitted first) to wg0's port. There is no per-send cond_resched,
+ * so the batch outruns the single-CPU receive worker and crosses the
+ * handshake_queue_len >= 512 under_load threshold (GSO/sendmmsg do not, measured:
+ * docs/2026-10-05-e-probe-results.md). The invalid template has a MAC1 that will
+ * not match, so every invalid flood packet is dropped (reply-free). The socket,
+ * ring and SQEs are prepared before the coverage window (their inode/fd setup
+ * draws clock choice records that are not WireGuard sites); only io_uring_enter
+ * runs in the window, so the producer sections and the auto-bind land in it. */
+struct flood_state {
+    int sock, ring;
+    void *sq;
+    struct io_uring_sqe *sqes;
+    size_t sqsz, sqesz;
+    unsigned *ktail, submit;
+    struct sockaddr_in dst;
+    unsigned char tmpl[148];
+};
+
+static int flood_prep(struct flood_state *fs, unsigned port, unsigned n_invalid,
+                      const unsigned char *valid, size_t valid_len)
 {
-    static unsigned char tmpl[148];
-    memset(tmpl, 0, sizeof(tmpl));
-    tmpl[0] = 1;                       /* MESSAGE_HANDSHAKE_INITIATION */
-    memset(tmpl + 116, 0xff, 16);     /* a MAC1 that will not match */
-    int s = socket(AF_INET, SOCK_DGRAM, 0);
-    if (s < 0) return -1;
-    /* an explicit destination per send (IORING_OP_SEND addr2/addr_len), so the
-     * socket is not connected: connect() would draw route/source-selection
-     * choice records (datagram.c) that are not WireGuard sites. */
-    static struct sockaddr_in dst;
-    memset(&dst, 0, sizeof(dst));
-    dst.sin_family = AF_INET; dst.sin_port = htons((uint16_t)port);
-    dst.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    memset(fs->tmpl, 0, sizeof(fs->tmpl));
+    fs->tmpl[0] = 1;                       /* MESSAGE_HANDSHAKE_INITIATION */
+    memset(fs->tmpl + 116, 0xff, 16);     /* a MAC1 that will not match */
+    memset(&fs->dst, 0, sizeof(fs->dst));
+    fs->dst.sin_family = AF_INET; fs->dst.sin_port = htons((uint16_t)port);
+    fs->dst.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    fs->sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (fs->sock < 0) return -1;
     unsigned total = n_invalid + (valid ? 1u : 0u);
     struct io_uring_params pp; memset(&pp, 0, sizeof(pp));
-    int ring = syscall(SYS_io_uring_setup, total, &pp);
-    if (ring < 0) { close(s); return -1; }
-    size_t sqsz = pp.sq_off.array + pp.sq_entries * sizeof(unsigned);
-    void *sq = mmap(0, sqsz, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, ring, IORING_OFF_SQ_RING);
-    struct io_uring_sqe *sqes = mmap(0, pp.sq_entries * sizeof(struct io_uring_sqe),
-                                     PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, ring, IORING_OFF_SQES);
-    if (sq == MAP_FAILED || sqes == MAP_FAILED) { close(ring); close(s); return -1; }
-    unsigned *ktail = (unsigned *)((char *)sq + pp.sq_off.tail);
-    unsigned *karray = (unsigned *)((char *)sq + pp.sq_off.array);
-    unsigned mask = *(unsigned *)((char *)sq + pp.sq_off.ring_mask);
-    unsigned submit = total < pp.sq_entries ? total : pp.sq_entries;
-    for (unsigned i = 0; i < submit; i++) {
-        struct io_uring_sqe *e = &sqes[i]; memset(e, 0, sizeof(*e));
-        e->opcode = IORING_OP_SEND; e->fd = s;
-        e->addr2 = (unsigned long)&dst; e->addr_len = sizeof(dst);
-        /* the bundled valid initiation (the merged-injection control) is
-         * submitted first, so the worker processes it while the whole batch is
-         * still queued (queue_len >= 512 -> under_load via the queue depth,
-         * deterministic): it makes a cookie reply inside the flood's section,
-         * which the mirror's section-bracket discard then rejects (§4.1). */
+    fs->ring = syscall(SYS_io_uring_setup, total, &pp);
+    if (fs->ring < 0) { close(fs->sock); return -1; }
+    fs->sqsz = pp.sq_off.array + pp.sq_entries * sizeof(unsigned);
+    fs->sqesz = pp.sq_entries * sizeof(struct io_uring_sqe);
+    fs->sq = mmap(0, fs->sqsz, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, fs->ring, IORING_OFF_SQ_RING);
+    fs->sqes = mmap(0, fs->sqesz, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, fs->ring, IORING_OFF_SQES);
+    if (fs->sq == MAP_FAILED || fs->sqes == MAP_FAILED) { close(fs->ring); close(fs->sock); return -1; }
+    fs->ktail = (unsigned *)((char *)fs->sq + pp.sq_off.tail);
+    unsigned *karray = (unsigned *)((char *)fs->sq + pp.sq_off.array);
+    unsigned mask = *(unsigned *)((char *)fs->sq + pp.sq_off.ring_mask);
+    fs->submit = total < pp.sq_entries ? total : pp.sq_entries;
+    for (unsigned i = 0; i < fs->submit; i++) {
+        struct io_uring_sqe *e = &fs->sqes[i]; memset(e, 0, sizeof(*e));
+        e->opcode = IORING_OP_SEND; e->fd = fs->sock;
+        /* an explicit destination per send (addr2/addr_len), so the socket is
+         * not connected: connect() would draw route/source-selection records. */
+        e->addr2 = (unsigned long)&fs->dst; e->addr_len = sizeof(fs->dst);
+        /* the bundled valid initiation (the merged-injection control) is first,
+         * so the worker processes it while the batch is still queued (queue_len
+         * >= 512 -> under_load via the queue depth, deterministic): it makes a
+         * cookie reply inside the flood's section, which the mirror's section-
+         * bracket discard then rejects (§4.1). */
         if (valid && i == 0) { e->addr = (unsigned long)valid; e->len = (unsigned)valid_len; }
-        else { e->addr = (unsigned long)tmpl; e->len = sizeof(tmpl); }
+        else { e->addr = (unsigned long)fs->tmpl; e->len = sizeof(fs->tmpl); }
         karray[i & mask] = i;
     }
-    __atomic_store_n(ktail, submit, __ATOMIC_RELEASE);
-    long r = syscall(SYS_io_uring_enter, ring, submit, 0, 0, 0, 0);
-    munmap(sqes, pp.sq_entries * sizeof(struct io_uring_sqe));
-    munmap(sq, sqsz);
-    close(ring);
-    close(s);
+    return 0;
+}
+
+static int flood_enter(struct flood_state *fs)
+{
+    __atomic_store_n(fs->ktail, fs->submit, __ATOMIC_RELEASE);
+    long r = syscall(SYS_io_uring_enter, fs->ring, fs->submit, 0, 0, 0, 0);
     return r < 0 ? -1 : 0;
+}
+
+static void flood_cleanup(struct flood_state *fs)
+{
+    munmap(fs->sqes, fs->sqesz);
+    munmap(fs->sq, fs->sqsz);
+    close(fs->ring);
+    close(fs->sock);
 }
 
 static void execute(const struct trace *t, int input_fd, int comparisons)
@@ -859,6 +877,18 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             lifecycle_len = op->code == 15 ? newlink_wg0(lifecycle_body, sizeof(lifecycle_body))
                                            : dellink_wg0(lifecycle_body, sizeof(lifecycle_body));
         }
+        /* E-B: the flood's socket, io_uring ring and SQEs are prepared before
+         * the window (their inode/fd setup draws non-WireGuard clock records);
+         * only io_uring_enter runs in the window. */
+        struct flood_state flood;
+        int flood_ready = 0;
+        if (op->code == 18) {
+            if (!t->net) fail(t->id, i, "invalid_input", "wireguard_without_network_fixture");
+            if (flood_prep(&flood, (unsigned)op->b, (unsigned)op->a,
+                           op->payload_len ? op->payload : NULL, op->payload_len))
+                fail(t->id, i, "environment_failure", "flood_prepare");
+            flood_ready = 1;
+        }
         if (op->code == 12) usleep(OBSERVE_WAIT_US);
         /* before the coverage window: the clock the advance's wait watches */
         struct timespec before_advance = {0};
@@ -935,12 +965,10 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             break;
         }
         case 18: {
-            /* E-B: an io_uring invalid-MAC1 flood to wg0's port (op->a count,
-             * op->b port); op->payload is an optional bundled valid initiation
-             * (the merged-injection negative control). */
-            if (!t->net) fail(t->id, i, "invalid_input", "wireguard_without_network_fixture");
-            ret = do_wg_flood((unsigned)op->b, (unsigned)op->a,
-                              op->payload_len ? op->payload : NULL, op->payload_len);
+            /* E-B: submit the prepared io_uring flood batch (op->a count, op->b
+             * port); op->payload is an optional bundled valid initiation (the
+             * merged-injection negative control). */
+            ret = flood_enter(&flood);
             break;
         }
         case 15: case 17: {
@@ -970,6 +998,10 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         }
         int captured_errno = errno;
         unsigned long count = __atomic_load_n(&coverage[0], __ATOMIC_RELAXED);
+        /* close the flood's socket and ring after the task count is captured
+         * (the packets are already queued in wg0; the worker drains them in the
+         * post-op wait regardless) so the fd teardown is outside the window. */
+        if (flood_ready) flood_cleanup(&flood);
         if (op->code >= 15 && op->code <= 17) {
             if (clock_gettime(CLOCK_MONOTONIC, &op_finished)) fail(t->id, i, "environment_failure", "timing_clock");
             printf("LEANUX_TIMING {\"id\":\"%s\",\"index\":%u,\"mode\":\"%s\",\"op\":%u,\"ns\":%lld}\n", t->id, i,
