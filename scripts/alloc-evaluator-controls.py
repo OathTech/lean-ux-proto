@@ -30,6 +30,13 @@ checks the same controls on the kernel side only (Linux, no mirror).
   (b) the mirror alone, given (a)'s records with that record's outcome byte
   set to 0 (what a natural failure records), must stop with the
   `unsupported` answer.
+- C-kv-forced (oracle, A2): since A2 the guest steers FS traces on their own
+  KCOV instance, so the 8 KiB slab attempt can be failed on Linux. The host
+  refuses such an entry (harness/steer.py, the kvmalloc limit); this control
+  lifts the refusal in its own process only. Linux must go on to `vmalloc`
+  and succeed (the dup3 returns its fd), recording a steered fail at
+  `kvmallocFdArray`, and the mirror must stop with `unsupported "kvmalloc
+  vmalloc fallback"` rather than take the -ENOMEM arm.
 Each case runs in its own process, with LEANUX_KERNEL_DIR selecting the
 kernel.
 """
@@ -63,6 +70,10 @@ CASES = {
            'naming by address only: the helper site is never steered, the schedule left over'),
     'C-kv': ('kernel', 0, CKV, ('kvmallocFdArray',),
              '(a) armed, the natural success agrees; (b) a fail record: unsupported "kvmalloc vmalloc fallback"'),
+    'C-kv-forced': ('kernel', 0, dict(CKV, id='ac_kvmalloc_forced', steer=[['kvmallocFdArray', FAIL]],
+                                     domain_extension='failslab'), (),
+                    'a forced 8 KiB slab failure: Linux falls back to vmalloc (dup3 succeeds); the mirror answers '
+                    'unsupported "kvmalloc vmalloc fallback"'),
 }
 
 
@@ -73,6 +84,8 @@ def run_case(name, out):
     from evaluator.coverage import instrumented_lines
     from harness.trace import validate_trace
     _, flags, trace, arm, _ = CASES[name]
+    if name == 'C-kv-forced':   # lift the host's 8 KiB refusal, in this process only
+        steer.ALLOC_SITES['kvmallocFdArray'].pop('kvmalloc_limit')
     config = check.load_kcov_config()
     decisions = check.load_decisions(config)
     instrumented, functions = instrumented_lines(check.KERNEL / 'vmlinux', config['functions'], config['files'])
@@ -95,6 +108,13 @@ def run_case(name, out):
             proc = subprocess.run([str(check.MODEL)], input=(json.dumps(inputs[0]) + '\n').encode(),
                                   capture_output=True, timeout=120)
             result['fail_record'] = dict(exit=proc.returncode, stderr=proc.stderr.decode()[-500:])
+    if name == 'C-kv-forced':
+        linux = [json.loads(line) for line in (out / 'linux/observations.jsonl').read_text().splitlines()]
+        steering = [json.loads(line) for line in (out / 'linux/steering.jsonl').read_text().splitlines()]
+        records = [r for row in (json.loads(line) for line in (out / 'linux/hidden.jsonl').read_text().splitlines())
+                   if row['mode'] == 'pc' for r in row['records'] if r[0] & 0x7fff == steer.ALLOC_KIND]
+        result = dict(check=result, linux_rets=[o['ret'] for o in linux[0]['observations']], steering=steering,
+                      steered_alloc_records=sum(1 for r in records if r[0] & 0x8000))
     (out / 'result.json').write_text(json.dumps(result, indent=1) + '\n')
     print(json.dumps(result)[:3000])
 
@@ -131,6 +151,14 @@ def main():
                 and result.get('alloc_armed') == ['kvmallocFdArray', 'kvmallocFdBitmaps']
             result['outcome'] = 'see armed_run and fail_record'
             detail = json.dumps(dict(armed=result.get('armed_run', {}).get('outcome'), fail_record=fr))
+        elif name == 'C-kv-forced':
+            chk = result.get('check', {})
+            steering = result.get('steering', [])
+            ok = result.get('linux_rets', [None, None])[1] == 1000 and result.get('steered_alloc_records') == 1 \
+                and len(steering) == 2 and all(r['remaining'] == 0 and r['mismatches'] == 0 for r in steering) \
+                and chk.get('outcome') != 'agreement' and 'kvmalloc vmalloc fallback' in json.dumps(chk)
+            result['outcome'] = chk.get('outcome', 'no_result')
+            detail = json.dumps(chk)
         else:
             ok = result['outcome'] not in ('agreement', 'no_result') and result.get('side') != 'linux'
         summary[name] = dict(expected=what, kernel=str(kernel), outcome=result['outcome'], problems=kinds,
