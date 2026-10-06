@@ -687,16 +687,24 @@ def operand_agreement(trace, model_obs, comparisons, locations, decisions, funct
 
 # The guest's time budget: boot and a baseline, plus each wg_observe's wait
 # (OBSERVE_WAIT_US in harness/guest.c, 0.4 s, in each of the two children) and
-# a per-operation allowance, both with a factor of two for TCG.
+# a per-operation allowance, both with a factor of two for TCG. Pipes (P design
+# section 6): each pause_ms is slept in both children, exactly; a read or
+# write's bytes get an allowance (TCG copies and hashes 64 KiB in well under a
+# millisecond; this is for safety: 1 s per MiB per child, doubled).
 GUEST_BASE_SECONDS = 120
 OBSERVE_SECONDS = 2 * 2 * 0.4
 OPERATION_SECONDS = 0.05
+PAUSE_SECONDS_PER_MS = 2 * 0.001
+IO_SECONDS_PER_BYTE = 2 * 2 / 2**20
 
 
 def guest_timeout(traces):
-    observes = sum(op['op'] == 'wg_observe' for trace in traces for op in trace['ops'])
-    operations = sum(len(trace['ops']) for trace in traces)
-    return GUEST_BASE_SECONDS + observes * OBSERVE_SECONDS + operations * OPERATION_SECONDS
+    ops = [op for trace in traces for op in trace['ops']]
+    observes = sum(op['op'] == 'wg_observe' for op in ops)
+    pauses = sum(op.get('pause_ms', 0) for op in ops)
+    io_bytes = sum(op['count'] for op in ops if op['op'] in ('read', 'write'))
+    return (GUEST_BASE_SECONDS + observes * OBSERVE_SECONDS + len(ops) * OPERATION_SECONDS
+            + pauses * PAUSE_SECONDS_PER_MS + io_bytes * IO_SECONDS_PER_BYTE)
 
 
 def run_chunk(traces, out, kcov):

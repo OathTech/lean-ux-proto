@@ -428,15 +428,15 @@ def writeBuffer (index : Nat) (value : UInt64) (count : Nat) : ByteArray :=
     else UInt8.ofNat ((7 * index + 13 * k + 17 * (k >>> 8)) % 256))
 
 /-- The `digest` observation field of a read (P design section 6, Q1):
-    BLAKE2s-256 over all `ret` bytes when `ret > 0`, else `null`. Declared for
-    P1, which switches the field on together with the guest. -/
+    BLAKE2s-256 over all `ret` bytes when `ret > 0`, else `null`; harness/guest.c
+    computes the same. -/
 def readDigest (out : Option ByteArray) (ret : Int) : Json :=
   match out with
   | some bs => if ret > 0 then toJson (hexBytesOf (ByteArray.mk (WG.blake2s 32 [] (bs.extract 0 ret.toNat).toList).toArray)) else .null
   | none => .null
 
 /-- The `sigpipe` observation field of a write: whether `SIGPIPE` is pending
-    in the task after the call. Declared for P1, as `readDigest`. -/
+    in the task after the call (the guest's `sigpending()` after each write). -/
 def writeSigpipe (k : Kernel) : Json :=
   toJson (if sigismember k.task.pending SIGPIPE then (1 : Nat) else 0)
 
@@ -483,11 +483,14 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
     let bytes := match op, w.userOut with
       | .read .., some v => if ret > 0 then hexBytesOf (v.extract 0 (min ret.toNat READ_HEAD)) else ""
       | _, _ => ""
-    -- pipe2: the pair copied to the caller, or null on failure
+    -- pipe2: the pair copied to the caller, or null on failure; a read's
+    -- digest; a write's sigpipe (P design section 6)
     let fds : List (String × Json) := match op with
       | .pipe2 _ => [("fds", match w.userFds with
           | some (r, wr) => if ret == 0 then toJson [r, wr] else .null
           | none => .null)]
+      | .read .. => [("digest", readDigest w.userOut ret)]
+      | .write .. => [("sigpipe", writeSigpipe w.k)]
       | _ => []
     let device := w.extraOut
     observations := observations.push (Json.mkObj ([

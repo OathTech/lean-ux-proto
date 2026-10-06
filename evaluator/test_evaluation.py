@@ -34,6 +34,70 @@ class EvaluationChecks(unittest.TestCase):
         with self.assertRaises(InvalidOutput):
             parse_batch([self.trace], '')
 
+    def test_pipes_observation_fields(self):
+        """P design section 6: a read's head and digest, a write's sigpipe, a
+        pipe2's fds, on both sides (protocol) and on the Linux side
+        (harness/linux.py, which also recomputes short reads' digests)."""
+        import hashlib
+        from harness.linux import _check_observation
+        trace = {'version': 1, 'id': 'p', 'ops': [
+            {'op': 'pipe2', 'flags': 2048},
+            {'op': 'write', 'fd': {'pipe': 0, 'end': 1}, 'count': 100, 'value': '0'},
+            {'op': 'read', 'fd': {'pipe': 0, 'end': 0}, 'count': 69632},
+            {'op': 'read', 'fd': {'pipe': 0, 'end': 0}, 'count': 5},
+            {'op': 'pipe2', 'flags': 1}]}
+        head = bytes(range(100))
+        result = {'version': 1, 'id': 'p', 'branches': [], 'observations': [
+            {'index': 0, 'ret': 0, 'errno': None, 'bytes': '', 'fds': [8, 9]},
+            {'index': 1, 'ret': 100, 'errno': None, 'bytes': '', 'sigpipe': 0},
+            {'index': 2, 'ret': 100, 'errno': None, 'bytes': head[:64].hex(), 'digest': hashlib.blake2s(head).hexdigest()},
+            {'index': 3, 'ret': 3, 'errno': None, 'bytes': 'aabbcc', 'digest': hashlib.blake2s(bytes.fromhex('aabbcc')).hexdigest()},
+            {'index': 4, 'ret': -22, 'errno': 22, 'bytes': '', 'fds': None}]}
+        self.assertEqual(compare(trace, result, result)['outcome'], 'agreement')
+        _check_observation(copy.deepcopy(result), trace)
+        broken = [
+            (2, {'bytes': head.hex()}),                    # more than the 64-byte head
+            (2, {'digest': None}),                         # a successful read without a digest
+            (2, {'digest': 'AB' * 32}),
+            (1, {'sigpipe': 2}),
+            (1, {'sigpipe': True}),
+            (0, {'fds': [8, 8]}),
+            (0, {'fds': None}),
+            (4, {'fds': [8, 9]}),                          # descriptors after a failure
+        ]
+        for index, change in broken:
+            with self.subTest(change=change):
+                altered = copy.deepcopy(result)
+                altered['observations'][index].update(change)
+                with self.assertRaises(InvalidOutput):
+                    parse_batch([trace], json.dumps(altered))
+                with self.assertRaises(ValueError):
+                    _check_observation(altered, trace)
+        for index, field in ((1, 'sigpipe'), (2, 'digest'), (0, 'fds')):
+            altered = copy.deepcopy(result)
+            del altered['observations'][index][field]
+            with self.assertRaises(InvalidOutput):
+                parse_batch([trace], json.dumps(altered))
+        # Linux side only: a short read's digest is recomputed with hashlib,
+        # and a read cannot return more than its count.
+        for index, change in ((3, {'digest': hashlib.blake2s(b'x').hexdigest()}), (3, {'ret': 6, 'bytes': 'aa' * 6})):
+            altered = copy.deepcopy(result)
+            altered['observations'][index].update(change)
+            with self.assertRaises(ValueError):
+                _check_observation(altered, trace)
+        # A semantic difference in a digest or sigpipe is a mismatch.
+        for index, change in ((2, {'digest': '00' * 32}), (1, {'sigpipe': 1})):
+            model = copy.deepcopy(result)
+            model['observations'][index].update(change)
+            self.assertEqual(compare(trace, result, model)['outcome'], 'semantic_mismatch')
+
+    def test_guest_timeout_counts_pauses_and_bytes(self):
+        plain = [{'ops': [{'op': 'read', 'fd': {'literal': 8}, 'count': 8}]}]
+        paused = [{'ops': [{'op': 'read', 'fd': {'literal': 8}, 'count': 8, 'pause_ms': 20}]}]
+        large = [{'ops': [{'op': 'write', 'fd': {'literal': 8}, 'count': 69632, 'value': '0'}]}]
+        self.assertAlmostEqual(check.guest_timeout(paused) - check.guest_timeout(plain), 0.04)
+        self.assertGreater(check.guest_timeout(large), check.guest_timeout(plain) + 0.2)
+
     def test_resource_failures_are_not_agreement(self):
         for error in (4, 5, 12, 14, 19, 23, 28, 38, 105, 512):
             result = copy.deepcopy(self.result)
