@@ -52,6 +52,8 @@ inductive SigInfo where
     SIGTTOU 22}. A value, not a mirrored choice point of its own. -/
 def sigKernelStop (sig : Nat) : Bool := sig < SIGRTMIN && [19, 20, 21, 22].contains sig
 
+#guard [19, 20, 21, 22].all sigKernelStop && !sigKernelStop SIGPIPE && !sigKernelStop SIGCONT
+
 /-- __sigqueue_alloc (kernel/signal.c:404-442). `inc_rlimit_get_ucounts` is a
     cut point with the contract: the per-user pending count after the
     increment, nonzero (no overflow). Its value is not observable to the
