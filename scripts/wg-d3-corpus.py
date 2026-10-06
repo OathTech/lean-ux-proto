@@ -175,10 +175,13 @@ def traces():
     # wg_expired_new_handshake clears the endpoint source and queues an
     # initiation with is_retry false (attempts 0); the send worker sends a
     # fresh initiation (rate limit passed). The persistent keepalive (25 s,
-    # re-armed by the transmission) stays quiet.
+    # re-armed by the transmission) stays quiet. A second transmission
+    # after the firing (the session's keypair is still current) finds the
+    # timer no longer pending (expire_timers detached it) and re-arms it,
+    # with a jitter draw and an arm record (D3-M3).
     assert NEW_HANDSHAKE <= PERSISTENT_25_QUIET
     out["d3_new_handshake"] = (
-        ka_ops + [xmit(), advance(NEW_HANDSHAKE), OBSERVE, GET],
+        ka_ops + [xmit(), advance(NEW_HANDSHAKE), xmit(3), OBSERVE, GET],
         steer + D3_DRAWS,
         SESSION + [fired("new_handshake"), "wg_timers_data_sent.not_pending=1",
                    "wg_packet_send_queued_handshake_initiation.not_retry=1"])

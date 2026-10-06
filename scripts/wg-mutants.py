@@ -250,25 +250,32 @@ D2_MUTANTS = [
    "  napiSoftirq\n"),
 ]
 
-# Stage D3 (timers; docs/2026-10-05-d3-timers.md, section 8). Entries whose
-# patterns are None are pending: the code is stream M's (the callbacks,
-# expected in Leanux/WG/Timers.lean, and the environment's firing in
-# Leanux/Env.lean), filled at integration. The others match the code at the
-# interface commit; M may rewrite those lines, in which case integration
-# refreshes them. Each is rejected only on the D3 traces named.
+# Stage D3 (timers; docs/2026-10-05-d3-timers.md, section 8). The patterns
+# match stream M's code (task/d3-m at 2438924: the callbacks in
+# Leanux/WG/Timers.lean, the clear work in Keypair.lean, the firing in
+# Env.lean) and the interface commit's arm sites. Each is rejected only on
+# the D3 traces named.
 D3_MUTANTS = [
   ('D3-M1-attempts-not-incremented', 'state: the retransmit callback does not increment '
    'timer_handshake_attempts (timers.c:63); d3_retransmit_gives_up never gives up (tx_dropped, the give-up '
-   'arm\'s zero-key arm record, a 21st initiation)', 'Leanux/WG/Timers.lean', None, None),
+   'arm\'s zero-key arm record, a 21st initiation)', 'Leanux/WG/Timers.lean',
+   "    setPeer pid { p with timerHandshakeAttempts := p.timerHandshakeAttempts + 1 }\n",
+   "    setPeer pid p\n"),
   ('D3-M2-need-another-ignored', 'arm record: the keepalive callback ignores need_another_keepalive '
    '(timers.c:84-88); the re-arm never fires, so only its kind-303 record, left unconsumed, shows it '
-   '(d3_keepalive_rearm_deleted)', 'Leanux/WG/Timers.lean', None, None),
+   '(d3_keepalive_rearm_deleted); mod_peer_timer\'s two decisions are kept', 'Leanux/WG/Timers.lean',
+   "    discard <| modPeerTimer pid .sendKeepalive KEEPALIVE_TIMEOUT_TICKS\n",
+   "    discard <| modPeerTimerGuard pid\n"),
   ('D3-M3-firing-keeps-timer', 'state: a fired timer stays pending (expire_timers detaches it before the '
    'callback, timer.c:1828-1829); the next data_received or data_sent pending test differs, consuming an arm '
-   'record or not (d3_keepalive_rearm_deleted, d3_new_handshake)', 'Leanux/Env.lean', None, None),
+   'record or not (d3_new_handshake\'s transmission after the firing)', 'Leanux/Env.lean',
+   "  | [pid] =>\n    delTimer pid t\n    runTimerSection w (WG.timerCallback pid t)\n",
+   "  | [pid] =>\n    runTimerSection w (WG.timerCallback pid t)\n"),
   ('D3-M4-clear-keeps-handshake', 'state: the clear worker clears the keypairs but not the handshake '
    '(timers.c:129); the index removal\'s control flow (d3_zero_key, d3_zero_key_after_new_handshake)',
-   'Leanux/WG/Timers.lean', None, None),
+   'Leanux/WG/Keypair.lean',
+   "def queuedExpiredZeroKeyMaterial (pid : PeerId) : M Unit := do\n  handshakeClear pid\n  keypairsClear pid\n",
+   "def queuedExpiredZeroKeyMaterial (pid : PeerId) : M Unit := do\n  keypairsClear pid\n"),
   ('D3-M5-send-fresh-at-reject', 'behavior: send-side keep_key_fresh at REJECT_AFTER_TIME instead of '
    'REKEY_AFTER_TIME (send.c:134); no initiation after 121 s (d3_send_keep_key_fresh)', 'Leanux/WG/Data.lean',
    "          branch .freshExpired (← birthdateHasExpired k.sending.birthdate REKEY_AFTER_TIME)\n",

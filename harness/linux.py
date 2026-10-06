@@ -43,8 +43,10 @@ DISPATCH_SYMBOLS = ("wg_packet_handshake_send_worker", "wg_packet_handshake_rece
                     "wg_expired_zero_key_material", "wg_queued_expired_zero_key_material",
                     "wg_expired_send_persistent_keepalive")
 # Whether the kernel writes the kind-303 arm records at mod_timer for the
-# dispatch set's timers (D3, section 3.3). Off until the mirror consumes
-# them: an unconsumed record is a choice from an undeclared consumer.
+# dispatch set's timers (D3, section 3.3). On since the mirror consumes them
+# at every arm site (stream M); evaluator/check.py passes the same value to
+# the kernel and the mirror. Off, the kernel writes none and the mirror
+# consumes none; a record present anyway is left unconsumed, a mismatch.
 ARM_RECORDS = True
 # The oracle is the kernel build booted with these parameters (D3, option
 # C-jiffies: the timekeeper is pinned to refined-jiffies, which the virtual

@@ -821,7 +821,8 @@ def steered_timers(rng, trace_id):
     - `keepalive`: 1 or 2 received data messages, an advance (the
       keepalive), and with 2 a second advance that fires nothing (the
       callback's re-arm is deleted by the tx worker);
-    - `new_handshake`: data sent, then an advance: a fresh initiation;
+    - `new_handshake`: data sent, then an advance: a fresh initiation; and
+      sometimes data sent again, which re-arms the fired timer;
     - `persistent`: an interval of 5-30 s, one advance: a keepalive;
     - `zero_key`: the keepalive interval set to 0 (its pending timer fires
       as a no-op), one 540 s advance: the clear worker; then a data message
@@ -937,7 +938,10 @@ def steered_timers(rng, trace_id):
         target = fire_advance(NEW_HANDSHAKE_TICKS + JITTER_MAX_TICKS)
         assert target <= persistent_quiet
         ops = session_ops + [xmit() for _ in range(rng.choice([1, 2]))]
-        ops += [advance(target + slack(persistent_quiet - target)), observe, get]
+        ops.append(advance(target + slack(persistent_quiet - target)))
+        if rng.random() < .5:
+            ops.append(xmit())   # the fired timer is not pending: data_sent re-arms it
+        ops += [observe, get]
         return dict(version=1, id=trace_id, ops=ops, steer=steer + D3_DRAWS,
                     expect=D1_SESSION + [fired('new_handshake'), 'wg_timers_data_sent.not_pending=1'])
     if variant == 'persistent':

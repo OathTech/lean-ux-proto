@@ -57,6 +57,14 @@
       "ticks": 3950
     },
     {
+      "op": "wg_xmit",
+      "packet": {
+        "family": 4,
+        "dst": "0a000001",
+        "payload": "5e656c737a81888f969da4abb2b9c0c7ced5dc"
+      }
+    },
+    {
       "op": "wg_observe"
     },
     {
