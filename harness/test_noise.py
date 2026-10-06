@@ -284,5 +284,53 @@ class D2Tests(unittest.TestCase):
         self.assertEqual(session.open_from_wg0(message)[1], noise.xmit_packet(4, bytes([10, 0, 0, 1]), bytes(1392)))
 
 
+    # Stage E (section 6.A): XChaCha20-Poly1305 and the cookie reply.
+    def test_hchacha20_draft_vector(self):
+        # draft-irtf-cfrg-xchacha-03, section 2.2.1 (also libsodium's crypto_core_hchacha20)
+        nonce = bytes.fromhex("000000090000004a0000000031415927")
+        self.assertEqual(noise.hchacha20(bytes(range(32)), nonce).hex(),
+                         "82413b4227b27bfed30e42508a877d73a0f9e4d58a74a853c12ec41326d3ecdc")
+
+    def test_xchacha20poly1305_draft_vector(self):
+        # draft-irtf-cfrg-xchacha-03, appendix A.3.1 (checked against libsodium)
+        key, nonce = bytes(range(0x80, 0xa0)), bytes(range(0x40, 0x58))
+        aad = bytes.fromhex("50515253c0c1c2c3c4c5c6c7")
+        plaintext = (b"Ladies and Gentlemen of the class of '99: If I could offer you only one tip for the future, "
+                     b"sunscreen would be it.")
+        out = noise.xchacha20poly1305_encrypt(key, nonce, plaintext, aad)
+        self.assertEqual(out[:16].hex(), "bd6d179d3e83d43b9576579493c0e939")
+        self.assertEqual(out[-16:].hex(), "c0875924c1c7987947deafd8780acf49")
+        self.assertEqual(noise.xchacha20poly1305_decrypt(key, nonce, out, aad), plaintext)
+        with self.assertRaises(noise.HandshakeError):
+            noise.xchacha20poly1305_decrypt(key, nonce, out, aad[:-1] + b"\x00")
+        # the cookie-sized vector the Lean mirror's #guard uses (libsodium agrees)
+        self.assertEqual(noise.xchacha20poly1305_encrypt(bytes(range(32)), bytes(range(0x40, 0x58)),
+                                                         bytes([7] * 16), bytes([1] * 16)).hex(),
+                         "d33e0277d7e77e1188f380b9a89b6295f5e04a578ccbd2023f1c0eeeb9ea6e52")
+
+    def test_cookie_message(self):
+        peer = b"\x22" * 32
+        init = noise.initiation(noise.public_key(peer), b"\x11" * 32, noise.clamp(b"\x33" * 32),
+                                noise.tai64n(1_700_000_000, 0), 0x0a0b0c0d)
+        peer_public = noise.public_key(peer)
+        nonce, cookie = bytes(range(24)), bytes(range(100, 116))
+        mac1 = noise.last_mac1(init)
+        reply = noise.cookie_message(0x0a0b0c0d, cookie, nonce, mac1, peer_public)
+        self.assertEqual(len(reply), 64)
+        self.assertEqual(reply[:8].hex(), "030000000d0c0b0a")
+        self.assertEqual(reply[8:32], nonce)
+        self.assertEqual(noise.consume_cookie_message(reply, mac1, peer_public), cookie)
+        # the key is BLAKE2s("cookie--" || the sender's public key)
+        self.assertEqual(noise.cookie_key(peer_public), noise._hash(b"cookie--" + peer_public))
+        with self.assertRaises(noise.HandshakeError):
+            noise.consume_cookie_message(reply, bytes(16), peer_public)
+        bad = noise.cookie_message(0x0a0b0c0d, cookie, nonce, mac1, peer_public, aad=bytes(16))
+        with self.assertRaises(noise.HandshakeError):
+            noise.consume_cookie_message(bad, mac1, peer_public)
+        # MAC2 covers the message up to mac2 and leaves mac1 in place
+        with_mac2 = noise.with_mac2(init, cookie)
+        self.assertEqual(with_mac2[:-16], init[:-16])
+        self.assertEqual(with_mac2[-16:], noise.hashlib.blake2s(init[:-16], key=cookie, digest_size=16).digest())
+
 if __name__ == "__main__":
     unittest.main()

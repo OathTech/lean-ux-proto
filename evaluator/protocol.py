@@ -35,10 +35,15 @@ def keys(value, expected):
 def validate_observation(trace, result):
     """Check protocol shape, not whether the claimed semantics are correct."""
     # D3: the mirror adds `fired` (the timer sections its environment ran,
-    # for `fired:<symbol>` expectations) when one ran
-    if not (keys(result, ('version', 'id', 'observations', 'branches'))
-            or keys(result, ('version', 'id', 'observations', 'branches', 'fired'))):
+    # for `fired:<symbol>` expectations) when one ran; it reports how many
+    # NAPI poll placements its records left open (Env.napiIrqExit), which the
+    # check enumerates
+    base = ('version', 'id', 'observations', 'branches')
+    if not any(keys(result, base + extra) for extra in
+               ((), ('fired',), ('napi_irq_ambiguous',), ('fired', 'napi_irq_ambiguous'))):
         raise InvalidOutput('observation fields')
+    if 'napi_irq_ambiguous' in result and not integer(result['napi_irq_ambiguous'], 1, 64):
+        raise InvalidOutput('napi_irq_ambiguous')
     if type(result['version']) is not int or result['version'] != 1 or result['id'] != trace['id']:
         raise InvalidOutput('version or trace identity')
     observations = result['observations']

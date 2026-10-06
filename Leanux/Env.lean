@@ -47,20 +47,21 @@ def senderSource (family : Nat) : M SkbSource :=
   else unsupported "an injection family other than IPv4 or IPv6"
 
 /-- The guest waits `OBSERVE_WAIT_US` (0.4 s) after every injection, and
-    fails any trace that runs longer than `REKEY_BOUND_NS` (4 s) after
-    `wg_up`. So two consumed initiations are at least 0.4 s apart (and the
-    first comes long after boot), and only a timer of more than 4 s cannot
-    expire within the trace. -/
+    fails any trace that runs longer than `REKEY_BOUND_NS` (4.5 s) after
+    the start of its `wg_up`, net of its advances (D3). So two consumed
+    initiations are at least 0.4 s apart (and the first comes long after
+    boot). The bound gives the D3 firing window's `traceBound`. -/
 def INJECT_GAP_NS : Nat := 400000000
-def TRACE_BOUND_SECONDS : Nat := 4
+def TRACE_BOUND_MS : Nat := 4500
 
 /-- D3 (docs/2026-10-05-d3-timers.md, section 5.3): the firing window's
     bounds. The guest waits `ADVANCE_WAIT_US` (0.1 s, 25 ticks) once an
     advance is absorbed (stream K, section 13.3), and the trace's real-time
-    bound is 4 s (1000 ticks). -/
+    bound is 4.5 s from just before `wg_up` (`TRACE_BOUND_MS`, 1125 ticks),
+    net of the advances. -/
 def timing : Timing where
   advanceWait := 25
-  traceBound := TRACE_BOUND_SECONDS * WG.HZ
+  traceBound := TRACE_BOUND_MS * WG.HZ / 1000
 
 /-- The fixture's own `sendto` (into wg0's route, or to wg0's port): the IP
     output path draws the ident key and the ident, and may initialize the
@@ -68,6 +69,28 @@ def timing : Timing where
     section 5). -/
 def fixtureSend : M Unit :=
   skipCut [.ipIdentKey, .ipIdentReserve, .flowHashSecret]
+
+/-- The fixture's `sendto` into wg0's route, to a multicast destination,
+    before `wg_xmit`: the IP output loops a copy back to local receivers.
+    - IPv4: the route of any multicast destination is `RTCF_MULTICAST`, and
+      `sk_mc_loop` holds (the sender is an IPv6 socket, whose
+      `IPV6_MULTICAST_LOOP` defaults to on), so `ip_mc_output` clones the
+      packet to `ip_mc_finish_output` → `dev_loopback_xmit` → `netif_rx`
+      before `ip_finish_output` hands it to wg0 (ip_output.c:382-424).
+      `netif_rx` disables bottom halves around the enqueue and its
+      `local_bh_enable` runs the raised NET_RX (dev.c:5374-5387): a
+      section of its own (`WG.loopbackSend`). No socket takes the copy
+      (none is bound to `SEND_PORT`), and a multicast is not answered with
+      an ICMP error.
+    - IPv6: `ip6_finish_output2` loops a copy only to a group wg0 has
+      joined (`ipv6_chk_mcast_addr`), which the environment does not model.
+    Recorded evidence: every `wg_xmit` to 224.0.0.1 shows one NET_RX section
+    and no other record (41 operations, 2026-10-06), which the lax cut of
+    `wg_xmit`'s error path used to absorb. -/
+def xmitMulticastLoop (family addr : Nat) : M Unit := do
+  if family == 4 && addr / 2 ^ 28 == 0xe then WG.loopbackSend [] true
+  else if family == 6 && addr / 2 ^ 120 == 0xff then
+    unsupported "an IPv6 multicast destination (whether the IP output loops a copy back depends on wg0's groups)"
 
 /-- The fixture's sender transmits (`wg_xmit`) to this UDP port. -/
 def SEND_PORT : Nat := 40000
@@ -640,9 +663,11 @@ def deliverInner (pkt : List UInt8) : M Unit := do
     - (c) an interrupt's exit ran it, nested, before or after the
       `need_resched()` test: the same records as (b), or a NET_RX section
       before a resched record.
-    The placements differ only by the worker's state, which the poll does
-    not read (the worker's remaining work is its next ring poll). Without
-    records (the domain filter) the poll runs at the first hook. -/
+    These placements differ only by the worker's state, which the poll does
+    not read (the worker's remaining work is its next ring poll). A fourth,
+    (c') inside `wg_queue_enqueue_per_peer_rx`, differs in the peer's
+    reference count and is not told apart by the records (`napiIrqExit`).
+    Without records (the domain filter) the poll runs at the first hook. -/
 def napiSoftirq : M Unit := do
   let d ← getDev
   let pending := d.peers.toList.filterMap fun (pid, p) => if p.napiScheduled then some pid else none
@@ -654,11 +679,34 @@ def napiSoftirq : M Unit := do
     for pid in pending do
       discard <| WG.rxPoll pid WG.NAPI_POLL_WEIGHT fun pkts => pkts.forM deliverInner
 
+/-- (c') An interrupt at `__napi_schedule`'s `local_irq_restore`: its exit
+    (`irq_exit_rcu` → `invoke_softirq`, `in_interrupt()` false in the
+    worker) runs the NET_RX just raised **before** `wg_queue_enqueue_per_peer_rx`
+    drops its peer reference (queueing.h:199-202). The records are those of
+    (c) after the function (and of (b) at the next ring poll): a NET_RX
+    section right after the enqueue. The poll's reads differ only in the
+    peer's reference count, one higher here: its `kref_get_unless_zero` in
+    the allowed-IPs lookup and its `wg_peer_put` compare it (KCOV operands;
+    seen on a contended host, rx_roam_v6 and rx_in_order, 2026-10-06:
+    Linux 1, 1, 3 where (c) gives 1, 1, 2). No record tells the two apart,
+    so the placement is a choice the check enumerates
+    (`World.napiBeforePut`): each choice is one complete execution, and
+    the comparison child's operands must agree with one of them. Without
+    records (the domain filter) the poll is placed by `napiSoftirq`. -/
+def napiIrqExit : M Unit := do
+  if (← get).hidden.isNone then return
+  if !(← getDev).peers.toList.any (·.2.napiScheduled) then return
+  if (← peekHiddenSite) != some (HiddenSite.sectionStart .netRx).info.id then return
+  let w ← get
+  let here := w.napiBeforePut.headD false
+  set { w with napiBeforePut := w.napiBeforePut.drop 1, napiAmbiguous := w.napiAmbiguous + 1 }
+  if here then napiSoftirq
+
 /-- The decrypt worker (`packet_crypt_wq`, queued by `consume_data` in the
     injecting operation's NET_RX), once that softirq is done, with its
-    NAPI softirq placement and its `cond_resched` (receive.c:505). -/
+    NAPI softirq placements and its `cond_resched` (receive.c:505). -/
 def runDecryptWorker : M Unit := do
-  runWorker .decryptWorker (WG.decryptWorker napiSoftirq (condResched SWITCH_DEPTH .decryptWorker))
+  runWorker .decryptWorker (WG.decryptWorker napiSoftirq napiIrqExit (condResched SWITCH_DEPTH .decryptWorker))
   if (← getDev).peers.toList.any (·.2.napiScheduled) then
     invariant "a NAPI poll pending after the decrypt worker (its ring poll runs the softirq)"
 

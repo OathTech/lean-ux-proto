@@ -68,10 +68,15 @@ def wgXmit (family addr : Nat) (pkt : Packet) : M Int := do
   if ← branch .xmitBadProtocol !ok then unsupported "unreachable"
   let err (ret : Int) : M Int := do
     -- err_icmp: icmp_ndo_send / icmpv6_ndo_send (cut points, whose rate limit
-    -- and IP output draw cut-site choices, and whose loopback delivery runs
-    -- NET_RX in a section), then err:
+    -- and IP output draw cut-site choices), then err. The error is sent iff
+    -- the rate limits allowed it, and then `icmp_global_consume` drew
+    -- (icmp.c:310-339, ipv6/icmp.c:195-238: type 3 / type 1 is in the
+    -- default ratemask, wg0 is not loopback, the reply's route is local);
+    -- the ICMP's loopback delivery raises NET_RX, whose section runs at
+    -- `__dev_queue_xmit`'s `rcu_read_unlock_bh` (`loopbackSend`).
     if !(← branch .xmitErrorInet (family == 4)) then _ ← branch .xmitErrorInet6 (family == 6)
-    skipCut [.icmpCredit, .ipIdentKey, .ipIdentReserve, .flowHashSecret, .sectionStart .netRx, .sectionStop .netRx]
+    let drawn ← skipCutSites [.icmpCredit, .ipIdentKey, .ipIdentReserve, .flowHashSecret]
+    loopbackSend [] (drawn.contains (HiddenSite.icmpCredit).info.id)
     modifyDev fun d => { d with txErrors := d.txErrors + 1 }   -- DEV_STATS_INC(dev, tx_errors)
     return ret
   let peer ← lookupDst family addr

@@ -324,7 +324,7 @@ class EvaluationChecks(unittest.TestCase):
                          [1, 8, 8, 64, 64, 512, 4096])
         self.assertEqual([fire_advance(d) for d in (1250 + 83, 2500, 3750 + 83, 1250, 135000)],
                          [1450, 2600, 3950, 1350, 139150])
-        self.assertEqual(quiet_limit(6250), 4225)
+        self.assertEqual(quiet_limit(6250), 3975)
 
     def test_timers_share_zero_keeps_the_stream(self):
         from evaluator.generate import generate_wireguard
@@ -382,7 +382,7 @@ class EvaluationChecks(unittest.TestCase):
         self.assertEqual(problems([good[0], [good[1][0], rec(303, 4, J + 1460, J + 2800)], []]),
                          ['an arm after an advance before its absorbing tick'])
         # natural progress beyond the real-time bound; an advance record elsewhere
-        self.assertEqual(problems([good[0], good[1], [rec(303, 5, J + 1461 + 1100, J + 9000)]]),
+        self.assertEqual(problems([good[0], good[1], [rec(303, 5, J + 1461 + 1250, J + 9000)]]),
                          ['jiffies progressed beyond the real-time bound'])
         self.assertEqual(problems([good[0], [], [rec(304, 5, J + 10, J + 1460)]]),
                          ['an advance without exactly one advance record', 'an advance record outside wg_advance'])

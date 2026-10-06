@@ -48,10 +48,14 @@
 #define QUEUE_WAIT_US 100000
 /* A wg_xmit payload: at most wg0's MTU (1420) less the IPv4 and UDP headers. */
 #define MAX_XMIT_PAYLOAD 1392
-/* Timers fire REKEY_TIMEOUT (5 s) after a handshake is sent; a trace must end
- * well before that, counted from wg_up in real time: the virtual advances
- * (wg_advance) are subtracted. */
-#define REKEY_BOUND_NS 4000000000LL
+/* No WireGuard timer is armed before wg_up (mod_peer_timer needs a running
+ * device). Counted from just before the wg_up ioctl, in real time (the
+ * virtual advances of wg_advance are subtracted), a trace must end within
+ * 4.5 s: REKEY_TIMEOUT (5 s) less a 0.5 s margin; the mirror's firing window
+ * (Leanux/Env.lean TRACE_BOUND_MS, Timing.traceBound) uses the same bound.
+ * 4.5 s, not 4 s: on a contended host b2_lengths (3.3 s of waits) took
+ * 3.80 s (2026-10-06, docs/2026-10-06-contended-host.md). */
+#define REKEY_BOUND_NS 4500000000LL
 /* D3 (docs/2026-10-05-d3-timers.md, section 4.3): wg_advance moves jiffies by
  * `ticks` (KCOV_LEANUX_TIME_ADVANCE on the trace's own KCOV descriptor); the
  * timekeeper (refined-jiffies) follows at the next tick, which also runs the
@@ -385,6 +389,10 @@ static struct timespec went_up;
 static int up_seen;
 /* the virtual time the trace's advances added to CLOCK_BOOTTIME */
 static long long advanced_ns;
+/* The trace's guest time from wg_up to its last operation's end (with that
+ * operation's wait), net of the advances, reported per child: the margin to
+ * REKEY_BOUND_NS. */
+static long long since_up_ns;
 
 static void print_hex(long n)
 {
@@ -671,6 +679,10 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             strcpy(up_request.ifr_name, "wg0");
             if (ioctl(SEND_FD, SIOCGIFFLAGS, &up_request)) fail(t->id, i, "environment_failure", "get_wg0_flags");
             up_request.ifr_flags |= IFF_UP;
+            /* the trace bound's origin: before wg_open arms any timer, and
+             * outside the coverage window (the clock read is a choice
+             * record of the generic clock hook) */
+            clock_gettime(CLOCK_BOOTTIME, &went_up);
         }
         /* wg_observe's wait is an idle point (D3, section 5.3): a timer that
          * fires naturally in it, and the work it queues, land in this
@@ -776,7 +788,6 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         if (op->code == 9 && !comparisons && ret == 0)
             printf("LEANUX_WG {\"id\":\"%s\",\"index\":%u,\"payloads\":[%s]}\n", t->id, i, dump_hex);
         if (op->code == 10 && ret == 0) {
-            clock_gettime(CLOCK_BOOTTIME, &went_up);
             up_seen = 1;
             route_into_wg0(t->id, i);
         }
@@ -807,7 +818,8 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         if (up_seen) {
             struct timespec now;
             clock_gettime(CLOCK_BOOTTIME, &now);
-            if ((now.tv_sec - went_up.tv_sec) * 1000000000LL + (now.tv_nsec - went_up.tv_nsec) - advanced_ns > REKEY_BOUND_NS)
+            since_up_ns = (now.tv_sec - went_up.tv_sec) * 1000000000LL + (now.tv_nsec - went_up.tv_nsec) - advanced_ns;
+            if (since_up_ns > REKEY_BOUND_NS)
                 fail(t->id, i, "environment_failure", "trace_exceeds_rekey_bound");
         }
         /* KCOV stops counting once the buffer is full, so "full" is the last
@@ -845,6 +857,9 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         print_pcs("LEANUX_COVERAGE", t->id, i, coverage, count);
         if (remote) print_pcs("LEANUX_RCOVERAGE", t->id, i, remote, remote_count);
     }
+    if (up_seen)
+        printf("LEANUX_TIMING {\"id\":\"%s\",\"mode\":\"%s\",\"since_up_ns\":%lld}\n", t->id,
+               comparisons ? "cmp" : "pc", since_up_ns);
     if (comparisons) {
         printf("LEANUX_CMP_RESULT {\"id\":\"%s\",\"rets\":[", t->id);
         for (unsigned i = 0; i < t->count; ++i) printf("%s%ld", i ? "," : "", result[i].ret);

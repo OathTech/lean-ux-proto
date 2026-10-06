@@ -10,8 +10,9 @@ Shaped like the C structures of the configuration path: `struct wg_device`,
 heads are ordered lists of identities.
 
 Omitted, as cut points: the UDP sockets, the timer wheel (the timers'
-`expires` is mirrored, D3), NAPI, `dst_cache`, and the cookie keys (BLAKE2s
-outputs that nothing on the modeled paths observes).
+`expires` is mirrored, D3), NAPI, `dst_cache`, and the device's cookie
+encryption key and secret (nothing on the modeled paths reads them: wg0 does
+not create cookie replies).
 Keypairs live in the device's keypair store (`Device.keypairs`), referenced
 by identity from the peer's `keypairs` slots and the index hashtable. The public-key hashtable is a map:
 its bucketing uses a random `siphash` key, so bucket order is unobservable.
@@ -252,6 +253,14 @@ structure Peer where
   cookieMac1Key : Key := List.replicate 32 0
   lastMac1Sent : List UInt8 := List.replicate 16 0
   haveSentMac1 : Bool := false
+  /-- `latest_cookie.cookie_decryption_key` (`wg_cookie_checker_precompute_peer_keys`,
+      cookie.c:63-64), and the cookie a cookie reply delivered
+      (`wg_cookie_message_consume`, cookie.c:224-226): `cookie`, `birthdate`
+      (ns of coarse boot time, a recorded clock read) and `is_valid`. -/
+  cookieDecryptionKey : Key := List.replicate 32 0
+  cookie : List UInt8 := List.replicate 16 0
+  cookieBirthdate : Int := 0
+  cookieIsValid : Bool := false
   deriving Repr, BEq
 
 /-- A peer's five timers (`struct wg_peer`, peer.h:53-55), in the order of

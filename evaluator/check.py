@@ -372,9 +372,10 @@ def section_problems(per, status_rows):
     return problems
 
 
-# The guest's real-time bound in ticks (REKEY_BOUND_NS, 4 s at HZ 250): the
-# natural progress of `jiffies` over a trace, the advances excluded.
-JIFFIES_BOUND = 1000
+# The guest's real-time bound in ticks (REKEY_BOUND_NS, 4.5 s at HZ 250, from
+# just before wg_up): the natural progress of `jiffies` over a trace, the
+# advances excluded.
+JIFFIES_BOUND = 1125
 # Slack for the ticks outside the bounded span (the absorbing tick of each
 # advance counts as real time; the first record may precede wg_up).
 JIFFIES_SLACK = 25
@@ -765,22 +766,81 @@ def operand_agreement(trace, model_obs, comparisons, locations, decisions, funct
     return problems, checked
 
 
-# The guest's time budget: boot and a baseline, plus each wg_observe's wait
-# (OBSERVE_WAIT_US in harness/guest.c, 0.4 s, in each of the two children) and
-# a per-operation allowance, both with a factor of two for TCG.
-GUEST_BASE_SECONDS = 120
-OBSERVE_SECONDS = 2 * 2 * 0.4
-OPERATION_SECONDS = 0.05
-# D3: a wg_advance waits for its absorbing tick, then ADVANCE_WAIT_US (0.1 s).
-ADVANCE_SECONDS = 2 * 2 * 0.15
+# The guest's time budget. A timeout only bounds a hung guest, so the budget
+# is generous; a budget that a contended host can exceed makes a correct run
+# fail (2026-10-06: 6 of 148 recorded WireGuard-chunk runs timed out at
+# 1.00-1.01x the old budget, which did not count wg_inject's wait or the
+# queue waits, and 10 more completed at 0.90-0.98x). Two parts:
+# - the guest's fixed waits (harness/guest.c), which do not slow down: each
+#   of a trace's two children (coverage, comparisons) sleeps OBSERVE_WAIT_US
+#   (0.4 s) before wg_observe and after wg_inject, and QUEUE_WAIT_US (0.1 s)
+#   after wg_set, wg_up and wg_xmit; D3: a wg_advance waits for the tick
+#   before it, then for its absorbing tick (each at most a 4 ms tick), then
+#   ADVANCE_WAIT_US (0.1 s), counted as ADVANCE_WAIT_SECONDS;
+# - its computation (boot, fixtures, TCG execution), which does: measured on
+#   the loaded host (load average 50-100 on 32 CPUs, 3 guests) at most
+#   2.0 s per WireGuard trace (both children, boot included) and 0.025 s per
+#   operation of other traces, scaled by CONTENTION_FACTOR.
+GUEST_CHILDREN = 2
+OBSERVE_WAIT_SECONDS = 0.4
+QUEUE_WAIT_SECONDS = 0.1
+ADVANCE_WAIT_SECONDS = 0.15
+GUEST_BOOT_SECONDS = 30
+WIREGUARD_TRACE_SECONDS = 2.0
+OPERATION_SECONDS = 0.03
+CONTENTION_FACTOR = 3
 
 
 def guest_timeout(traces):
-    observes = sum(op['op'] == 'wg_observe' for trace in traces for op in trace['ops'])
-    advances = sum(op['op'] == 'wg_advance' for trace in traces for op in trace['ops'])
-    operations = sum(len(trace['ops']) for trace in traces)
-    return (GUEST_BASE_SECONDS + observes * OBSERVE_SECONDS + advances * ADVANCE_SECONDS
-            + operations * OPERATION_SECONDS)
+    ops = [op['op'] for trace in traces for op in trace['ops']]
+    waits = GUEST_CHILDREN * (OBSERVE_WAIT_SECONDS * sum(op in ('wg_observe', 'wg_inject') for op in ops)
+                              + QUEUE_WAIT_SECONDS * sum(op in ('wg_set', 'wg_up', 'wg_xmit') for op in ops)
+                              + ADVANCE_WAIT_SECONDS * sum(op == 'wg_advance' for op in ops))
+    compute = (GUEST_BOOT_SECONDS + WIREGUARD_TRACE_SECONDS * sum(uses_wireguard(t) for t in traces)
+               + OPERATION_SECONDS * len(ops))
+    return round(waits + CONTENTION_FACTOR * compute)
+
+
+# Outcomes of the guest's infrastructure, not of Linux's or the mirror's
+# behavior: a chunk that fails with one of them (every trace alike) is run
+# once more, and the report records it (`chunk_retries`). output_limit is
+# deterministic and is split instead; a mismatch of any kind is never rerun.
+RETRIED_OUTCOMES = ('timeout', 'resource_busy')
+
+
+# Env.napiIrqExit: a NAPI poll whose records leave its placement open (inside
+# wg_queue_enqueue_per_peer_rx, holding its peer reference, or after it) is a
+# choice the mirror reports and the check enumerates: each choice vector is one
+# complete execution, and the comparison child's operands must agree with one
+# of them. Up to this many open placements per trace are enumerated; beyond,
+# the mismatch stands.
+NAPI_PLACEMENTS_MAX = 3
+
+
+def napi_placements(trace, hidden_traces, actual_cmp, out, trace_comparisons, locations, kcov):
+    """The first other placement vector under which the comparison child's
+    operands agree: (choice, observation, problems, checked), or None."""
+    count = actual_cmp['napi_irq_ambiguous']
+    if count > NAPI_PLACEMENTS_MAX:
+        return None
+    with_records = next(t for t in hidden_traces if t['id'] == trace['id'])
+    for bits in range(1, 2 ** count):
+        choice = [bool(bits >> i & 1) for i in range(count)]
+        where = out / f'model-cmp-napi-{trace["id"]}-{bits}'
+        where.mkdir()
+        try:
+            [alternative] = run_model([dict(with_records, napi_irq_before_put=choice)], where)
+        except (InvalidOutput, OSError, subprocess.SubprocessError):
+            continue
+        if alternative.get('napi_irq_ambiguous') != count:
+            continue
+        if [o['ret'] for o in alternative['observations']] != [o['ret'] for o in actual_cmp['observations']]:
+            continue
+        problems, checked = operand_agreement(trace, alternative, trace_comparisons, locations, kcov[1],
+                                              set(kcov[0]['functions']))
+        if not problems:
+            return choice, alternative, problems, checked
+    return None
 
 
 def run_chunk(traces, out, kcov, guest_variant=None):
@@ -830,11 +890,11 @@ def run_chunk(traces, out, kcov, guest_variant=None):
             site_problems.setdefault(trace_id, []).extend(found)
         outcomes.update({f'choice records skipped ({k})': n for k, n in skipped.items()})
     except LinuxRunError as exc:
-        return {t['id']: dict(outcome=exc.kind, side='linux', detail=str(exc)) for t in traces}, gaps, outcomes
+        return {t['id']: dict(id=t['id'], outcome=exc.kind, side='linux', detail=str(exc)) for t in traces}, gaps, outcomes
     except SteeringError as exc:
-        return {t['id']: dict(outcome='invalid_input', side='linux', detail=str(exc)) for t in traces}, gaps, outcomes
+        return {t['id']: dict(id=t['id'], outcome='invalid_input', side='linux', detail=str(exc)) for t in traces}, gaps, outcomes
     except (InvalidOutput, ValueError, OSError, subprocess.SubprocessError) as exc:
-        return {t['id']: dict(outcome='invalid_coverage', side='linux', detail=str(exc)) for t in traces}, gaps, outcomes
+        return {t['id']: dict(id=t['id'], outcome='invalid_coverage', side='linux', detail=str(exc)) for t in traces}, gaps, outcomes
     # The mirror runs once with each guest child's hidden-input records: the
     # coverage child's run is compared for behavior and control flow, the
     # comparison child's for operands (docs/2026-10-03-hidden-inputs-design.md).
@@ -851,7 +911,7 @@ def run_chunk(traces, out, kcov, guest_variant=None):
             model_cmp = model
     except (InvalidOutput, OSError, subprocess.SubprocessError) as exc:
         kind = getattr(exc, 'kind', 'invalid_output')
-        return {t['id']: dict(outcome=kind, side='model', detail=str(exc)) for t in traces}, gaps, outcomes
+        return {t['id']: dict(id=t['id'], outcome=kind, side='model', detail=str(exc)) for t in traces}, gaps, outcomes
     rows, cmp_rows = iter(coverage), iter(comparisons)
     for trace, expected, actual, actual_cmp in zip(traces, linux, model, model_cmp):
         trace_coverage = [next(rows) for _ in trace['ops']]
@@ -861,6 +921,13 @@ def run_chunk(traces, out, kcov, guest_variant=None):
             problems, trace_gaps = control_flow(trace, actual, trace_coverage, mapped['locations'], *kcov)
             operand_problems, checked = operand_agreement(trace, actual_cmp, trace_comparisons,
                                                           compared['locations'], kcov[1], set(kcov[0]['functions']))
+            if operand_problems and actual_cmp.get('napi_irq_ambiguous'):
+                placed = napi_placements(trace, with_hidden('cmp'), actual_cmp, out, trace_comparisons,
+                                         compared['locations'], kcov)
+                if placed is not None:
+                    choice, actual_cmp, operand_problems, checked = placed
+                    # popped into the report's napi_irq_placements
+                    outcomes[f'napi placement ({trace["id"]})'] = sum(1 << i for i, b in enumerate(choice) if b)
             problems += operand_problems + site_problems.get(trace['id'], [])
             # a steered trace states what its steering is for: the mirror's
             # agreeing run (A2 ties it to Linux's coverage) must show it
@@ -913,7 +980,7 @@ def main(argv=None):
     out.mkdir(parents=True, exist_ok=False)
     started = datetime.now(timezone.utc).isoformat()
     results, gaps, build, aborted = {}, Counter(), None, None
-    outcomes, decisions, kcov, splits = Counter(), {}, None, 0
+    outcomes, decisions, kcov, splits, retries = Counter(), {}, None, 0, {}
     try:
         build = build_model(out, rebuild=not args.no_build)
         traces = load_traces(suites, {'generated': args.generated_count, 'wireguard-generated': args.wireguard_count},
@@ -930,6 +997,15 @@ def main(argv=None):
             start, chunk, name = pending.pop(0)
             print(f'traces {start}-{start + len(chunk) - 1} ...', file=sys.stderr, flush=True)
             chunk_results, chunk_gaps, chunk_outcomes = run_chunk(chunk, out / name, kcov, args.guest_variant)
+            first = {r.get('outcome') for r in chunk_results.values()}
+            if chunk_results and len(first) == 1 and first <= set(RETRIED_OUTCOMES):
+                detail = next(iter(chunk_results.values())).get('detail')
+                print(f'{name}: {first.pop()} ({detail}); running it once more', file=sys.stderr, flush=True)
+                retries[name] = dict(retries=1, first_outcome=next(iter(chunk_results.values()))['outcome'],
+                                     detail=detail, rerun=name + '-retry')
+                chunk_results, chunk_gaps, chunk_outcomes = run_chunk(chunk, out / (name + '-retry'), kcov,
+                                                                      args.guest_variant)
+                retries[name]['rerun_outcomes'] = dict(Counter(r.get('outcome') for r in chunk_results.values()))
             # One guest's console output is bounded; a chunk that exceeds it
             # is rerun as two halves (recorded in the report). A single trace
             # that still exceeds it fails.
@@ -949,9 +1025,11 @@ def main(argv=None):
         matched = outcomes.pop('operand pairs matched', 0)
         skipped = {k[len('choice records skipped ('):-1]: outcomes.pop(k) for k in list(outcomes)
                    if k.startswith('choice records skipped (')}
+        placements = {k[len('napi placement ('):-1]: outcomes.pop(k) for k in list(outcomes)
+                      if k.startswith('napi placement (')}
         status = write_report(out, traces, results, gaps, build, aborted, started, suites, args,
                               decision_summary(decisions, outcomes, kcov[2] if kcov else {}), matched, filtered, splits,
-                              skipped)
+                              skipped, retries, placements)
     return 0 if status == 'pass' else 1
 
 
@@ -972,7 +1050,8 @@ def decision_summary(decisions, outcomes, witnesses):
 
 
 def write_report(out, traces, results, gaps, build, aborted, started, suites, args, decision_coverage=None,
-                 operand_pairs_matched=0, domain_filtered=None, chunk_splits=0, choice_records_skipped=None):
+                 operand_pairs_matched=0, domain_filtered=None, chunk_splits=0, choice_records_skipped=None,
+                 chunk_retries=None, napi_irq_placements=None):
     ordered = [results.get(trace['id'], dict(id=trace['id'], outcome='not_run')) for trace in traces]
     counts = Counter(r['outcome'] for r in ordered)
     vmlinux = KERNEL / 'vmlinux'
@@ -993,6 +1072,13 @@ def write_report(out, traces, results, gaps, build, aborted, started, suites, ar
         # without their values, so their growth is visible here
         choice_records_skipped=dict(sorted((choice_records_skipped or {}).items())),
         domain_filtered=dict(domain_filtered or {}), chunk_splits=chunk_splits,
+        # chunks rerun once after an infrastructure outcome (RETRIED_OUTCOMES),
+        # by chunk: the first outcome and the rerun's outcomes
+        chunk_retries=dict(chunk_retries or {}),
+        # traces whose comparison child agreed only under another placement
+        # of an open NAPI poll (Env.napiIrqExit): the choice, bit i for the
+        # trace's i-th open poll (1: inside wg_queue_enqueue_per_peer_rx)
+        napi_irq_placements=dict(sorted((napi_irq_placements or {}).items())),
         decision_coverage=decision_coverage,
         failures=[r for r in ordered if r['outcome'] != 'agreement'])
     (out / 'report.json').write_text(json.dumps(report, indent=2) + '\n')

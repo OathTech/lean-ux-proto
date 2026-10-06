@@ -214,9 +214,10 @@ def generate_v2(seed, count, max_ops):
 
 # The guest's waits (harness/guest.c): 0.4 s in wg_inject and wg_observe,
 # 0.1 s in the operations that can queue the handshake send worker, and 0.1 s
-# after the tick that absorbs a wg_advance (D3). It fails
-# a trace that runs longer than 4 s after wg_up (REKEY_BOUND_NS), so the
-# generator keeps the planned waits well inside it.
+# after the tick that absorbs a wg_advance (D3). It fails a trace that runs
+# longer than 4.5 s after wg_up, net of its advances (REKEY_BOUND_NS), so the
+# generator keeps the planned waits well inside it (computation took up to
+# 0.5 s per trace on a contended host, 2026-10-06).
 WAIT_BUDGET_SECONDS = 2.8
 
 
@@ -467,7 +468,7 @@ def generate_wireguard(seed, count, max_ops=12, steered=0.0, data=0.0, timers=0.
                 operations.append({'op': 'wg_get'} if rng.random() < .2 else {'op': 'wg_set', 'config': config()})
         operations.append({'op': 'wg_get'})
         if wait_after_up(operations) > WAIT_BUDGET_SECONDS:
-            continue   # the guest fails a trace longer than 4 s after wg_up
+            continue   # the guest fails a trace longer than 4.5 s after wg_up
         trace = dict(version=1, id=f'generated-wg-{seed}-{len(result):05}', ops=operations)
         digest = identity(trace)
         if digest not in seen:
@@ -760,7 +761,7 @@ def steered_data(rng, trace_id):
 # (docs/2026-10-05-d3-timers.md, sections 2.2, 6 and 7). In ticks (HZ 250).
 HZ = 250
 ADVANCE_WAIT_TICKS = 25            # ADVANCE_WAIT_US (0.1 s) after the absorbing tick
-TRACE_BOUND_TICKS = 1000           # the guest's real-time bound, REKEY_BOUND_NS (4 s)
+TRACE_BOUND_TICKS = 1125           # the guest's real-time bound, REKEY_BOUND_NS (4.5 s)
 REKEY_TIMEOUT_TICKS = 5 * HZ
 JITTER_MAX_TICKS = HZ // 3         # get_random_u32_below(REKEY_TIMEOUT_JITTER_MAX_JIFFIES): [0, 83)
 KEEPALIVE_TIMEOUT_TICKS = 10 * HZ
@@ -909,7 +910,8 @@ def steered_timers(rng, trace_id):
             if variant == 'retransmit' and rng.random() < .3:
                 ops.append(observe)
         # no final observation after 20 advances: on the TCG guest they take
-        # about 3.5 s of real time, and its 0.4 s wait exceeds the 4 s bound
+        # about 3.5 s of real time, and its 0.4 s wait would leave too little
+        # margin to the 4.5 s bound
         ops += [get] if variant == 'gives_up' else [observe, get]
         expect = [fired('retransmit_handshake'), 'wg_packet_send_staged_packets.no_keypair=1',
                   'wg_expired_retransmit_handshake.give_up=0']

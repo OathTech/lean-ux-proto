@@ -311,6 +311,8 @@ inductive HiddenSite where
       `{jiffies before, jiffies after}` of the `wg_advance` operation, in
       the trace process's task stream. -/
   | modTimerArm | timeAdvance
+  /-- E-A: `wg_cookie_message_consume`'s birthdate of a stored cookie. -/
+  | cookieBirthdate
   deriving Repr, BEq, DecidableEq
 
 inductive SiteRole where
@@ -386,6 +388,10 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   -- wg_packet_rx_poll; return address - 1 resolves to receive.c:347 in the
   -- net-choice build (checked with the check's symbolizer).
   | .walltimeLastHandshakeData => ⟨17, "walltime_last_handshake_data", "clock", "drivers/net/wireguard/receive.c", 347, 16, .mirror⟩
+  -- E-A (ids 64-69 are E-A's): `peer->latest_cookie.birthdate =
+  -- ktime_get_coarse_boottime_ns()` (cookie.c:225), the inline coarse
+  -- boot-time read in wg_cookie_message_consume.
+  | .cookieBirthdate => ⟨64, "cookie_birthdate", "clock", "drivers/net/wireguard/cookie.c", 225, 8, .mirror⟩
   -- D3 (ids 100-115 reserved for D3: docs/2026-10-05-d3-timers.md, section
   -- 14). `kcov_timer_arm(fn, jiffies, expires, _RET_IP_)` in `mod_timer`:
   -- the return address - 1 resolves to timers.c:37 for all seven callers
@@ -400,7 +406,8 @@ def HiddenSite.all : List HiddenSite :=
    .initLastSentAgain, .respLastSent, .respLastSentAgain, .floodNow, .consumptionNow, .deriveKeysBirthdate,
    .retransmitJitter, .walltimeLastHandshake, .ipIdentReserve, .ipIdentKey, .icmpCredit, .flowHashSecret, .schedDlTimer]
   ++ Worker.all.flatMap (fun w => [.sectionStart w, .sectionStop w])
-  ++ [.reschedReceive, .reschedEncrypt, .reschedTx, .reschedDecrypt, .newHandshakeJitter, .walltimeLastHandshakeData]
+  ++ [.reschedReceive, .reschedEncrypt, .reschedTx, .reschedDecrypt, .newHandshakeJitter, .walltimeLastHandshakeData,
+      .cookieBirthdate]
   ++ [.modTimerArm, .timeAdvance]
 
 /-- The resched site of a worker's `cond_resched`, for the workers that
@@ -488,6 +495,18 @@ structure World where
       the mirror before Linux recorded them (site ids): see `Env.runWorker`. -/
   yieldedWorkers : List Nat := []
   pendingStops : List Nat := []
+  /-- A NET_RX softirq raised by a loopback transmission (`netif_rx` from
+      `send4`/`send6` or an ICMP error), whose section has not been consumed
+      yet: see `WG.loopbackSoftirq`. An operation ends with none pending
+      (`Runner.executeTrace`). -/
+  netRxRaised : Bool := false
+  /-- The placements of the decrypt worker's NAPI poll that its records do
+      not determine (`Env.napiIrqExit`): for each such poll in turn, whether
+      it ran at the interrupt exit inside `wg_queue_enqueue_per_peer_rx`
+      (`true`) or after it; the check enumerates them. Missing entries are
+      `false`. `napiAmbiguous` counts the polls met. -/
+  napiBeforePut : List Bool := []
+  napiAmbiguous : Nat := 0
   /-- A steered trace's schedule (site label, value or a draw), which the
       placeholders follow: the domain filter's verdict is then exact for the
       steered sites. -/
@@ -636,15 +655,26 @@ def hiddenClock (s : HiddenSite) : M Int := do
   return if u ≥ 2 ^ 63 then (u : Int) - (2 ^ 64 : Int) else (u : Int)
 
 /-- A cut point: consume the head records that come from these cut sites
-    (any number, as the cut's own code may or may not draw). -/
-def skipCut (sites : List HiddenSite) : M Unit := do
-  skipAmbient
-  let w ← get
-  if let some rs := w.hidden then
-    let ids := sites.map (·.info.id)
-    let rest := rs.dropWhile fun r => ids.contains r.site
-    set { w with hidden := some rest }
-    if rest.length != rs.length then skipAmbient
+    (any number, as the cut's own code may or may not draw), with the
+    ambient records and pending section stops among them; return the cut
+    records' sites, in order. An ambient record (the scheduler's) may lie
+    between two cut records: the run continues past it (a contended host
+    showed `start_dl_timer` inside a loopback NET_RX section). -/
+def skipCutSites (sites : List HiddenSite) : M (List Nat) := do
+  let ids := sites.map (·.info.id)
+  let mut taken := []
+  for _ in [0:4096] do
+    skipAmbient
+    let w ← get
+    match w.hidden with
+    | some (r :: rest) =>
+      if !ids.contains r.site then return taken
+      set { w with hidden := some rest }
+      taken := taken ++ [r.site]
+    | _ => return taken
+  invariant "a cut point consumed more than 4096 records"
+
+def skipCut (sites : List HiddenSite) : M Unit := discard <| skipCutSites sites
 
 def getFile (id : FileId) : M File := do
   match (← getK).files.get? id with

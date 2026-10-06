@@ -219,15 +219,23 @@ def createResponse (pid : PeerId) : M (Option (List UInt8)) := do
   setPeer pid { (← getPeer pid) with handshakeState := HANDSHAKE_CREATED_RESPONSE }
   return some (le32 2 ++ le32 index ++ le32 receiver ++ e ++ encNothing ++ List.replicate 32 0)
 
-/-- wg_cookie_add_mac_to_packet (cookie.c:157-180): MAC1 under the peer's
-    key; no cookie was ever received, so MAC2 is zero. -/
+/-- `COOKIE_SECRET_MAX_AGE - COOKIE_SECRET_LATENCY` (messages.h:28-29), in
+    seconds. -/
+def COOKIE_FRESH_SECONDS : Nat := 2 * 60 - 5
+
+/-- wg_cookie_add_mac_to_packet (cookie.c:156-178): MAC1 under the peer's
+    key; MAC2 under the stored cookie while it is valid and fresh, else zero. -/
 def addMacToPacket (pid : PeerId) (msg : List UInt8) : M (List UInt8) := do
   let p ← getPeer pid
   let body := msg.take (msg.length - 32)
   let mac1 := blake2s 16 p.cookieMac1Key body   -- compute_mac1
   setPeer pid { p with lastMac1Sent := mac1, haveSentMac1 := true }
-  -- `is_valid && !wg_birthdate_has_expired(...)`
-  if ← andM (branch .addMacCookieValid false) (branch .addMacCookieFresh false) then unsupported "unreachable"
+  -- `is_valid && !wg_birthdate_has_expired(birthdate, ...)`: the clock read
+  -- happens only when the cookie is valid (`&&` short-circuits)
+  if ← andM (branch .addMacCookieValid p.cookieIsValid)
+      (do branch .addMacCookieFresh !(← birthdateHasExpired p.cookieBirthdate COOKIE_FRESH_SECONDS)) then
+    -- compute_mac2: keyed by the cookie, over the message up to mac2
+    return body ++ mac1 ++ blake2s 16 p.cookie (body ++ mac1)
   return body ++ mac1 ++ List.replicate 16 0
 
 /-- derive_keys (noise.c:392-402) into the new keypair: the birthdate (a
@@ -400,8 +408,8 @@ def sendBufferToPeer (pid : PeerId) (bytes : List UInt8) : M Unit := do
     else if ← branch .sendSkbInet6 (family == AF_INET6) then pure true
     else pure false   -- dev_kfree_skb; -EAFNOSUPPORT
   -- send4/send6 (a cut point) choose the IP ident; the loopback delivery
-  -- runs NET_RX in a section nested in the worker's (D1 stream A)
-  skipCut [.ipIdentKey, .ipIdentReserve, .flowHashSecret, .sectionStart .netRx, .sectionStop .netRx]
+  -- runs NET_RX in a section nested at the send (`loopbackSend`)
+  loopbackSend [.ipIdentKey, .ipIdentReserve, .flowHashSecret] sent
   if ← branch .sendSkbOk sent then
     let some e := p.endpoint | invariant "unreachable"
     setPeer pid { p with txBytes := p.txBytes + bytes.length }

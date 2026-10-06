@@ -62,6 +62,7 @@ the accepted build.
 ```sh
 scripts/in-bundle python3 -B -m unittest evaluator.test_evaluation harness.test_trace harness.test_wg harness.test_noise harness.test_linux
 scripts/in-bundle python3 -m evaluator.check --suite wireguard        # ~3 minutes
+scripts/in-bundle python3 -B -m unittest evaluator.test_model_replay  # recorded replays; needs the check's build
 scripts/in-bundle python3 -m evaluator.check                          # everything, ~1.5 hours
 ```
 
@@ -79,7 +80,9 @@ nonzero unless every trace agrees. Compare it with the recorded result
 The generated traces are seeded (`--seed 20260920`, the default), so the trace
 set is the same. The guest runs QEMU TCG with one CPU, so the coverage is
 deterministic; `chunk_splits` may vary with console output size and does not
-affect results.
+affect results. `chunk_retries` lists the chunks run a second time after a
+guest timeout or a busy QEMU slot (at most once each; never after a
+mismatch); on a contended host it may be non-empty.
 
 ## What is not reproduced
 

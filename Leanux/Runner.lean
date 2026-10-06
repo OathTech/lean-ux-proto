@@ -45,6 +45,9 @@ structure Trace where
   /-- D3: whether `hidden` includes the kind-303 arm records (the check sets
       it from `harness/linux.py` `ARM_RECORDS`, the wire's `A` line). -/
   armRecords : Bool := false
+  /-- The check's choice for each NAPI poll placement the records leave open
+      (`World.napiBeforePut`). -/
+  napiBeforePut : List Bool := []
   deriving Repr
 
 /-- The network fixture runs for traces with a WireGuard operation
@@ -282,9 +285,11 @@ def parseTrace (j : Json) : Except String Trace := do
   let hasSteer := (j.getObjVal? "steer").isOk
   let hasExpect := (j.getObjVal? "expect").isOk
   let hasArm := (j.getObjVal? "arm_records").isOk
+  let hasPlacement := (j.getObjVal? "napi_irq_before_put").isOk
   fields j ((if hasLimit then ["version", "id", "ops", "rlimit_nofile"] else ["version", "id", "ops"])
     ++ (if hasHidden then ["hidden"] else []) ++ (if hasSteer then ["steer"] else [])
-    ++ (if hasExpect then ["expect"] else []) ++ (if hasArm then ["arm_records"] else []))
+    ++ (if hasExpect then ["expect"] else []) ++ (if hasArm then ["arm_records"] else [])
+    ++ (if hasPlacement then ["napi_irq_before_put"] else []))
   -- D3: the arm-record switch qualifies the records, so it comes with them
   if hasArm && !hasHidden then throw "arm_records: only with hidden records"
   let armRecords ← if hasArm then (← field j "arm_records").getBool? else pure false
@@ -310,7 +315,11 @@ def parseTrace (j : Json) : Except String Trace := do
       if v.length == 0 || v.length % 2 != 0 || v.length > 80 then throw "steer: value hex"
       return (label, some (← hexBytes pair[1]! v.length "steer"))
     else pure []
-  return { id, ops, rlimit, hidden, steer, armRecords }
+  let napiBeforePut ← if hasPlacement then
+      (← (← field j "napi_irq_before_put").getArr?).toList.mapM fun b => b.getBool?
+    else pure []
+  if napiBeforePut.length > 8 then throw "napi_irq_before_put: more than 8 entries"
+  return { id, ops, rlimit, hidden, steer, armRecords, napiBeforePut }
 
 /-! ## Harness fixture and trace execution
 
@@ -396,14 +405,15 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
   let mut world : World := { k := initialKernel trace.rlimit trace.net, env := harnessEnv, timing := Env.timing,
                              hiddenPlaceholders := placeholders && trace.hidden.isNone,
                              steerValues := if placeholders then trace.steer else [],
-                             armRecords := trace.armRecords }
+                             armRecords := trace.armRecords,
+                             napiBeforePut := trace.napiBeforePut }
   let mut results : Array Int := #[]
   let mut observations : Array Json := #[]
   let mut branches : Array Json := #[]
   let mut fired : Array Json := #[]
   for op in trace.ops do
     let index := results.size
-    world := { world with hidden := trace.hidden.map (·[index]!), yieldedWorkers := [], pendingStops := [] }
+    world := { world with hidden := trace.hidden.map (·[index]!), yieldedWorkers := [], pendingStops := [], netRxRaised := false }
     let (ret, w) ← (syscall (toSyscall results op)).run world
       |>.mapError fun e => (index, e)
     let (_, w) ← skipAmbient.run w |>.mapError fun e => (index, e)
@@ -411,6 +421,8 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
       throw (index, .hidden s!"a record of site {r.site} was not consumed")
     if let s :: _ := w.pendingStops then
       throw (index, .hidden s!"a section stop of site {s} ended in the mirror but has no record")
+    if w.netRxRaised then
+      throw (index, .invariant "a NET_RX softirq raised by a loopback transmission was left pending")
     world := w
     results := results.push ret
     let bytes := match op, w.userOut with
@@ -428,11 +440,15 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
         | none => fields))
     for symbol in w.fired do
       fired := fired.push (Json.mkObj [("index", toJson index), ("symbol", toJson symbol)])
+  -- a placement the check chose must have been met
+  if world.napiBeforePut.any id then
+    throw (results.size - 1, .invariant "napi_irq_before_put names more NAPI polls than the trace has")
   -- D3: the timer sections the environment ran (`fired:<symbol>`
   -- expectations), present only when one ran
   return Json.mkObj ([("version", toJson (1 : Nat)), ("id", toJson trace.id),
     ("observations", .arr observations), ("branches", .arr branches)]
-    ++ (if fired.isEmpty then [] else [("fired", .arr fired)]))
+    ++ (if fired.isEmpty then [] else [("fired", .arr fired)])
+    ++ (if world.napiAmbiguous > 0 then [("napi_irq_ambiguous", toJson world.napiAmbiguous)] else []))
 
 /-- The hidden-input site table, for the check's call-site cross-check. -/
 def hiddenSitesJson : Json :=
