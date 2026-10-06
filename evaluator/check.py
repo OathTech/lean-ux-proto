@@ -384,8 +384,10 @@ def jiffies_problems(traces, per):
     """The `jiffies`-progress check (D3, section 4.4) over each child's
     arm (303: {jiffies, expires}) and advance (304: {before, after})
     records in sequence order:
-    - every wg_advance has exactly one 304, with after - before = ticks, and
-      no other operation has one;
+    - every wg_advance has exactly one 304, first in its operation, with
+      after - before = ticks, and no other operation has one (a 304 after
+      the timers it released means a tick ran them between the jump and the
+      record: the mirror would consume them in the wrong order);
     - `jiffies` never goes back: each record's value is at least the last
       known one (a 304's `after` becomes the last known);
     - an arm after an advance in the same operation sees at least `after + 1`
@@ -406,6 +408,10 @@ def jiffies_problems(traces, per):
                                   records=len(advances)))
             if op['op'] != 'wg_advance' and advances:
                 found.append(dict(index=index, problem='an advance record outside wg_advance'))
+            if advances and records[0][0] != TIME_ADVANCE:
+                # a tick between the jump and its record ran the timers first
+                found.append(dict(index=index, problem='records before the advance record',
+                                  kinds=[r[0] for r in records[:records.index(advances[0])]][:8]))
             floor = None
             for kind, _ip, _seq, length, data, _func in records:
                 if kind not in (TIMER_ARM, TIME_ADVANCE):
