@@ -1046,3 +1046,102 @@ claim and found:
   `wg_destruct` (`rtnetlink_rcv` is `netlink_rcv_skb` with the per-message
   `rtnl` handling inside `rtnetlink_rcv_msg`), no consequence;
   `network_fixture` is at `guest.c:174-197` (sections 2.1, 2.4, 5).
+
+## 16. Stream M results [AGENT 2026-10-06]
+
+Branch `task/l-m`, on D3's interface commit (`task/d3`, `45f077a`) with
+stream G (`task/l-g`) merged. Kernel: the D3 build
+(`.artifacts/kernel-net-choice-d3`, `clocksource=refined-jiffies`),
+`ARM_RECORDS` off as D3's interface has it.
+
+### 16.1 The merge of stream G
+
+Six files conflicted with D3's interface (`Leanux/Runner.lean`,
+`Leanux/Syscalls.lean`, `evaluator/protocol.py`, `harness/guest.c`,
+`harness/linux.py`, `harness/trace.py`). Both sides are kept: `wg_advance`
+is opcode 14 and `wg_create`/`wg_down`/`wg_delete` 15-17; `FIELDS`,
+`WG_OPS`, the Lean `Operation`/`Syscall`/`Trace` carry D3's `armRecords`
+and G's `bare`; `SEMANTIC_ERRNOS` has D3's empty `wg_advance` set and G's
+`ENODEV`/`EADDRINUSE` sets; `linux.py` collects both `LEANUX_CLOCKSOURCE`
+and `LEANUX_TIMING`; `guest.c` keeps D3's advance case and clock beside G's
+lifecycle cases and timing clock, and the rekey bound counts from the first
+real up (G) minus the advances (D3). The unit tests pass; the full check
+below covers the merged harness.
+
+### 16.2 What was built (sections 4-5)
+
+- State: `Device.sock4/sock6`, `creatingNet`, `cookieSecret`,
+  `cookieSecretBirthdate`, `pubkeyHashKey`, `deviceUpdateGen := 1`;
+  `Kernel.netIfindexNext`, `Kernel.ratelimiter {refcnt, key}`;
+  `World.routesViaWg0`, `World.portBound` (supplied as `Env.portBound`);
+  `SentDatagram.sport` (the socket's port at the send cut, which
+  `Env.deliverSent` reports).
+- Sites 120-126 (outside 64-115): the seven of section 3.1, with L0's
+  consumer frames. `.neighReachTime` is a cut consumed by
+  `skipCutExactly .neighReachTime 2` (exactly two records per creation, fail
+  closed), rather than `skipCut`'s any number.
+- `Leanux/WG/Socket.lean` (new): `socketReinit` with its decisions (no
+  `mayHaveSlept`), `socketInit` (cut: the bound-port outcome, the random
+  port computed from `.udpPortDraw`, `unsupported` on a collision with a
+  fixture port or wg0's own sockets). `Leanux/WG/Device.lean`: `wgOpen`
+  calls `socketInit`, `wgUp` undoes `running` on failure, `wgStop`,
+  `wgDown`, `ratelimiterInit`, `gcEntries` (empty tables), `ratelimiterUninit`,
+  `wgSetup`, `wgNewlink`, `wgCreate`, `wgDestruct`, `wgDelete`.
+  `Netlink.lean`: `set_port`'s running arm binds; `lookupNoDev` is real.
+  `Env.lean`: `portBound`, `wgUp`/`wgDown`/`wgDelete` with the routes,
+  `ENODEV` without wg0, `stats: null`, no-device guards.
+  `Syscalls.lean`: `rtnetlinkRequest` (the temporary descriptor of section
+  5). `Runner.lean`: `initialKernel` with the bare mode. `Keypair.lean`: the
+  two `mayHaveSlept` calls dropped with corrected comments (audit m1).
+- Decisions (an `-- L stream M` block after the D3 regions): `wg_newlink`
+  (326-368), `wg_stop` (122, 130), `wg_socket_reinit` (431) and `sock_free`
+  (336), `wg_ratelimiter_init` (161-185), `wg_ratelimiter_uninit` (208, two
+  operands), `wg_ratelimiter_gc_entries` (62, 64, 70, 77, 80).
+  `correspondence/kcov.json`: `ratelimiter.c` anchored; `wg_newlink`,
+  `wg_stop`, `wg_destruct`, `wg_socket_reinit`, `wg_ratelimiter_init`,
+  `wg_ratelimiter_uninit`, `wg_ratelimiter_gc_entries` listed.
+- Corpus: `scripts/wg-l-corpus.py`, 20 `corpus/wireguard/l_*.json` traces
+  (section 7's list, plus `l_up_down_noop`, `l_create_delete_create` and
+  `l_down_up_stale_response`; the two D3-dependent traces wait for D3's
+  advance), and the control `corpus/lifecycle-controls/l_random_port_collision.json`.
+- Mutants L-M1..M13 in `scripts/wg-mutants.py`, run on the `l_*` traces.
+
+### 16.3 Deviations [AGENT]
+
+- **`wg_socket_init` stays unlisted**, so `socketInitNoNet`, `V4Err`,
+  `HasIpv6`, `V6Err` and `Retry` (4.3) are not reported. Listing it makes
+  its inlined `maybe_get_net`/`put_net` PCs witnesses of the refcount
+  decisions (`include/linux/refcount.h` 145-152, 264-275), whose declared
+  comparisons need the namespace's reference count, which the mirror does
+  not hold. Its outcomes are still checked by results, dumps and the
+  datagrams' source ports.
+- **`wg_ratelimiter_gc_entries` reports its first bucket only**: the 2048
+  empty buckets' identical outcomes would exceed the protocol's bound of
+  4096 branches per trace; the check treats a repeatable decision's
+  outcomes as a set, so nothing is lost to it. `gcV4Expired`/`gcV6Expired`
+  are E's (never evaluated with empty tables).
+- **`lookup_interface.kind_mismatch`'s false span (72) removed**: 72's point
+  is the epilogue the `-ENODEV` return shares, which the first bare
+  `wg_get` showed.
+- `wg_stop` with handshake messages queued for the receive worker is
+  `unsupported` (the drain is not exercised); `wg_stop` with pending send
+  work, crypt work, decrypt work or a scheduled NAPI poll is `unsupported`.
+- The collision control is its own control suite (`lifecycle-controls`,
+  run by `scripts/steering-controls.py`): a stopped mirror fails its whole
+  chunk, so it cannot share a chunk with traces that must agree.
+- Not done: the generator's `lifecycle` class (section 7) and the D3
+  traces `l_down_stops_timers`, `l_delete_with_clear_work`.
+
+### 16.4 Evidence
+
+- Full check, all suites, on the D3 kernel at `563d930`
+  (`.artifacts/lm-full1`): **1389 of 1389 agree** (the 1369 existing traces
+  and the 20 `l_*`), 39389 operations, 323466 operand pairs, 4 output-limit
+  chunk splits, no timed-out chunk. Cut records skipped include
+  `neigh_reach_time` 14 (7 creations × 2).
+- Mutants (`l_*` traces): L-M1..M9 and L-M11..M13 rejected (hidden
+  mismatch: M1, M2, M3, M4, M6, M8, M12, M13; unsupported: M5, M11;
+  semantic mismatch: M7, M9). L-M10 passes, as expected (not claimed).
+- Controls: the three steering controls and `l_random_port_collision`
+  (`unsupported_path`: "the random port draw collides with a bound port")
+  are rejected.
