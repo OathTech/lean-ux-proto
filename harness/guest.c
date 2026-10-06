@@ -48,9 +48,13 @@
 #define QUEUE_WAIT_US 100000
 /* A wg_xmit payload: at most wg0's MTU (1420) less the IPv4 and UDP headers. */
 #define MAX_XMIT_PAYLOAD 1392
-/* Timers fire REKEY_TIMEOUT (5 s) after a handshake is sent; a trace must end
- * well before that, counted from wg_up. */
-#define REKEY_BOUND_NS 4000000000LL
+/* No WireGuard timer is armed before wg_up (mod_peer_timer needs a running
+ * device), and none fires earlier than 5 s after it is armed (REKEY_TIMEOUT;
+ * a persistent keepalive of 4 s or less is outside the mirror's domain), and
+ * the kernel never fires a timer early. Counted from just before the wg_up
+ * ioctl, a trace must end before that with a 0.5 s margin. 4.5 s, not 4 s:
+ * on a contended host b2_lengths (3.3 s of waits) took 3.80 s (2026-10-06). */
+#define REKEY_BOUND_NS 4500000000LL
 struct operation { unsigned code, kind, newkind, a, b; long long fd, newfd; uint64_t value;
                    unsigned char payload[MAX_PAYLOAD]; size_t payload_len; };
 /* A steering schedule entry (the patched kernel's struct kcov_steer_entry;
@@ -679,6 +683,8 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             /* dev_change_flags(wg0, flags | IFF_UP) -> wg_open. The current
              * flags were read before coverage started. */
             struct ifreq request = up_request;
+            /* the bound's origin: before wg_open arms any timer */
+            clock_gettime(CLOCK_BOOTTIME, &went_up);
             ret = syscall(SYS_ioctl, SEND_FD, SIOCSIFFLAGS, &request);
             break;
         }
@@ -723,7 +729,6 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         if (op->code == 9 && !comparisons && ret == 0)
             printf("LEANUX_WG {\"id\":\"%s\",\"index\":%u,\"payloads\":[%s]}\n", t->id, i, dump_hex);
         if (op->code == 10 && ret == 0) {
-            clock_gettime(CLOCK_BOOTTIME, &went_up);
             up_seen = 1;
             route_into_wg0(t->id, i);
         }

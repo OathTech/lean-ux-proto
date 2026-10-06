@@ -214,8 +214,9 @@ def generate_v2(seed, count, max_ops):
 
 # The guest's waits (harness/guest.c): 0.4 s in wg_inject and wg_observe,
 # 0.1 s in the operations that can queue the handshake send worker. It fails
-# a trace that runs longer than 4 s after wg_up (REKEY_BOUND_NS), so the
-# generator keeps the planned waits well inside it.
+# a trace that runs longer than 4.5 s after wg_up (REKEY_BOUND_NS), so the
+# generator keeps the planned waits well inside it (computation took up to
+# 0.5 s per trace on a contended host, 2026-10-06).
 WAIT_BUDGET_SECONDS = 2.8
 
 

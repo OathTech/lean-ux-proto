@@ -46,15 +46,16 @@ def senderSource (family : Nat) : M SkbSource :=
   else unsupported "an injection family other than IPv4 or IPv6"
 
 /-- The guest waits `OBSERVE_WAIT_US` (0.4 s) after every injection, and
-    fails any trace that runs longer than `REKEY_BOUND_NS` (4 s) after
-    `wg_up`. So two consumed initiations are at least 0.4 s apart (and the
-    first comes long after boot), and only a timer of more than 4 s cannot
-    expire within the trace. -/
+    fails any trace that runs longer than `REKEY_BOUND_NS` (4.5 s) after
+    the start of its `wg_up`. So two consumed initiations are at least 0.4 s
+    apart (and the first comes long after boot), and a timer of `s` whole
+    seconds armed in the trace can expire within it iff `s` s ≤ 4.5 s:
+    timers of 5 s or more cannot. -/
 def INJECT_GAP_NS : Nat := 400000000
-def TRACE_BOUND_SECONDS : Nat := 4
+def TRACE_BOUND_MS : Nat := 4500
 
 def timing : Timing where
-  timerMayExpire s := s ≤ TRACE_BOUND_SECONDS
+  timerMayExpire s := s * 1000 ≤ TRACE_BOUND_MS
 
 /-- The fixture's own `sendto` (into wg0's route, or to wg0's port): the IP
     output path draws the ident key and the ident, and may initialize the
