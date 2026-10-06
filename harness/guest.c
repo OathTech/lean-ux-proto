@@ -59,7 +59,16 @@
  * absorbed the jump: a sleep begun before it would end at that same tick),
  * then ADVANCE_WAIT_US for the callbacks' work and loopback delivery. */
 #define KCOV_LEANUX_TIME_ADVANCE _IOW('c', 204, unsigned long)
+/* The wait-0 control (docs/2026-10-05-d3-timers.md, section 8) builds the
+ * guest with -DADVANCE_WAIT_US=0 -DADVANCE_ABSORB=0 (harness/linux.py,
+ * GUEST_VARIANTS): wg_advance returns at once, so the callbacks' sections and
+ * the work they queue land in the next operation. */
+#ifndef ADVANCE_WAIT_US
 #define ADVANCE_WAIT_US 100000
+#endif
+#ifndef ADVANCE_ABSORB
+#define ADVANCE_ABSORB 1
+#endif
 #define TICK_NS 4000000LL           /* CONFIG_HZ=250 */
 #define EXPECTED_CLOCKSOURCE "refined-jiffies"
 struct operation { unsigned code, kind, newkind, a, b; long long fd, newfd; uint64_t value;
@@ -663,13 +672,19 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             if (ioctl(SEND_FD, SIOCGIFFLAGS, &up_request)) fail(t->id, i, "environment_failure", "get_wg0_flags");
             up_request.ifr_flags |= IFF_UP;
         }
-        if (op->code == 12) usleep(OBSERVE_WAIT_US);
+        /* wg_observe's wait is an idle point (D3, section 5.3): a timer that
+         * fires naturally in it, and the work it queues, land in this
+         * operation's remote row, so the remote area is reset before it. */
+        if (op->code == 12) {
+            if (remote) __atomic_store_n(&remote[0], 0, __ATOMIC_RELAXED);
+            usleep(OBSERVE_WAIT_US);
+        }
         /* before the coverage window: the clock the advance's wait watches */
         struct timespec before_advance = {0};
         if (op->code == 14 && clock_gettime(CLOCK_MONOTONIC, &before_advance))
             fail(t->id, i, "environment_failure", "advance_clock");
         __atomic_store_n(&coverage[0], 0, __ATOMIC_RELAXED);
-        if (remote) __atomic_store_n(&remote[0], 0, __ATOMIC_RELAXED);
+        if (remote && op->code != 12) __atomic_store_n(&remote[0], 0, __ATOMIC_RELAXED);
         errno = 0;
         long ret;
         switch (op->code) {
@@ -764,7 +779,7 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             if (ret != 0) fail(t->id, i, "environment_failure", "time_advance");
             long long jump = (long long)op->a * TICK_NS;
             int polls = 0;
-            for (;;) {
+            for (; ADVANCE_ABSORB;) {
                 struct timespec now;
                 if (clock_gettime(CLOCK_MONOTONIC, &now)) fail(t->id, i, "environment_failure", "advance_clock");
                 if ((now.tv_sec - before_advance.tv_sec) * 1000000000LL + (now.tv_nsec - before_advance.tv_nsec) >= jump)
@@ -772,7 +787,7 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
                 if (++polls > 1000) fail(t->id, i, "environment_failure", "advance_not_absorbed");
                 usleep(1000);
             }
-            usleep(ADVANCE_WAIT_US);
+            if (ADVANCE_WAIT_US) usleep(ADVANCE_WAIT_US);
             advanced_ns += jump;
         }
         if (up_seen) {

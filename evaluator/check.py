@@ -20,8 +20,8 @@ import re
 import subprocess
 import sys
 
-from harness.linux import (ARTIFACTS as LINUX_ARTIFACTS, ARM_RECORDS, DISPATCH_SYMBOLS, KERNEL, LinuxRunError, dispatch_addresses,
-                          run_linux)
+from harness.linux import (ARTIFACTS as LINUX_ARTIFACTS, ARM_RECORDS, DISPATCH_SYMBOLS, GUEST_VARIANTS, KERNEL, LinuxRunError,
+                          dispatch_addresses, run_linux)
 from harness.steer import SteeringError, call_sites, resolve as resolve_steering
 from harness.trace import InvalidTrace, loads_trace, uses_wireguard, validate_trace
 from .coverage import attributable, instrumented_lines, symbolize
@@ -37,8 +37,11 @@ STEERED_SHARE = 0.15
 # The share that are steered data-plane traces (stage D2, steered_data):
 # payload transmissions and received data messages.
 DATA_SHARE = 0.15
+# The share that are steered timer traces (stage D3, steered_timers): the
+# virtual time advance firing WireGuard's timers, and the key-expiry arms.
+TIMERS_SHARE = 0.1
 # Suites run only on request: traces that must fail (negative controls).
-CONTROL_SUITES = ('steering-controls',)
+CONTROL_SUITES = ('steering-controls', 'timer-controls')
 CHUNK = 100
 
 
@@ -83,7 +86,7 @@ def load_traces(suites, counts, seed, only, filtered):
     for suite in suites:
         if suite in ('generated', 'wireguard-generated'):
             source = generate if suite == 'generated' else \
-                (lambda s, n: generate_wireguard(s, n, steered=STEERED_SHARE, data=DATA_SHARE))
+                (lambda s, n: generate_wireguard(s, n, steered=STEERED_SHARE, data=DATA_SHARE, timers=TIMERS_SHARE))
             count = counts[suite]
             candidates = [validate_trace(t) for t in source(seed, count * CANDIDATES_PER_TRACE)]
             verdicts = domain_filter(candidates)
@@ -366,6 +369,70 @@ def section_problems(per, status_rows):
             problems.setdefault(row['id'], []).append(dict(index=None, label='section',
                 problem='dispatch sections opened but not recorded', mode=row['mode'],
                 opened=row['opened'], recorded=starts))
+    return problems
+
+
+# The guest's real-time bound in ticks (REKEY_BOUND_NS, 4 s at HZ 250): the
+# natural progress of `jiffies` over a trace, the advances excluded.
+JIFFIES_BOUND = 1000
+# Slack for the ticks outside the bounded span (the absorbing tick of each
+# advance counts as real time; the first record may precede wg_up).
+JIFFIES_SLACK = 25
+
+
+def jiffies_problems(traces, per):
+    """The `jiffies`-progress check (D3, section 4.4) over each child's
+    arm (303: {jiffies, expires}) and advance (304: {before, after})
+    records in sequence order:
+    - every wg_advance has exactly one 304, with after - before = ticks, and
+      no other operation has one;
+    - `jiffies` never goes back: each record's value is at least the last
+      known one (a 304's `after` becomes the last known);
+    - an arm after an advance in the same operation sees at least `after + 1`
+      (the tick that absorbs the jump comes before any callback or worker);
+    - the natural progress over the trace (the jumps excluded) stays within
+      the real-time bound.
+    A tick handler that re-counted the jump, or an advance recorded wrongly,
+    fails here before any mirror runs."""
+    ops_of = {t['id']: t['ops'] for t in traces}
+    problems = {}
+    for (trace_id, mode), ops in per.items():
+        found, last, natural = [], None, 0
+        for index, records in enumerate(ops):
+            op = ops_of[trace_id][index]
+            advances = [r for r in records if r[0] == TIME_ADVANCE]
+            if op['op'] == 'wg_advance' and len(advances) != 1:
+                found.append(dict(index=index, problem='an advance without exactly one advance record',
+                                  records=len(advances)))
+            if op['op'] != 'wg_advance' and advances:
+                found.append(dict(index=index, problem='an advance record outside wg_advance'))
+            floor = None
+            for kind, _ip, _seq, length, data, _func in records:
+                if kind not in (TIMER_ARM, TIME_ADVANCE):
+                    continue
+                if length != 16:
+                    found.append(dict(index=index, problem=f'record kind {kind} length {length}'))
+                    continue
+                first, second = (int.from_bytes(bytes.fromhex(data[k:k + 16]), 'little') for k in (0, 16))
+                if last is not None and first < last:
+                    found.append(dict(index=index, problem='jiffies went back', last=last, jiffies=first, kind=kind))
+                elif last is not None:
+                    natural += first - last
+                if kind == TIME_ADVANCE:
+                    if op['op'] == 'wg_advance' and second - first != op['ticks']:
+                        found.append(dict(index=index, problem='the advance moved jiffies by another amount',
+                                          before=first, after=second, ticks=op['ticks']))
+                    last = floor = second
+                    continue
+                if floor is not None and first < floor + 1:
+                    found.append(dict(index=index, problem='an arm after an advance before its absorbing tick',
+                                      after=floor, jiffies=first))
+                last = first
+        if natural > JIFFIES_BOUND + JIFFIES_SLACK:
+            found.append(dict(index=None, problem='jiffies progressed beyond the real-time bound',
+                              natural=natural, bound=JIFFIES_BOUND))
+        if found:
+            problems.setdefault(trace_id, []).extend(dict(p, label='jiffies', mode=mode) for p in found)
     return problems
 
 
@@ -698,15 +765,19 @@ def operand_agreement(trace, model_obs, comparisons, locations, decisions, funct
 GUEST_BASE_SECONDS = 120
 OBSERVE_SECONDS = 2 * 2 * 0.4
 OPERATION_SECONDS = 0.05
+# D3: a wg_advance waits for its absorbing tick, then ADVANCE_WAIT_US (0.1 s).
+ADVANCE_SECONDS = 2 * 2 * 0.15
 
 
 def guest_timeout(traces):
     observes = sum(op['op'] == 'wg_observe' for trace in traces for op in trace['ops'])
+    advances = sum(op['op'] == 'wg_advance' for trace in traces for op in trace['ops'])
     operations = sum(len(trace['ops']) for trace in traces)
-    return GUEST_BASE_SECONDS + observes * OBSERVE_SECONDS + operations * OPERATION_SECONDS
+    return (GUEST_BASE_SECONDS + observes * OBSERVE_SECONDS + advances * ADVANCE_SECONDS
+            + operations * OPERATION_SECONDS)
 
 
-def run_chunk(traces, out, kcov):
+def run_chunk(traces, out, kcov, guest_variant=None):
     out.mkdir(parents=True)
     results, gaps = {}, Counter()
     outcomes = Counter()
@@ -723,7 +794,7 @@ def run_chunk(traces, out, kcov):
         # one arm-record switch for the kernel (the wire's `A` line) and the
         # mirror (the input's `arm_records`)
         linux = run_linux(traces, out / 'linux', timeout=guest_timeout(traces), steer_wire=steer_wire,
-                          arm_records=ARM_RECORDS)
+                          arm_records=ARM_RECORDS, guest_variant=guest_variant)
         coverage = [loads(line) for line in (out / 'linux/coverage.jsonl').read_text().splitlines()]
         validate_coverage(traces, coverage)
         mapped = symbolize(coverage, KERNEL / 'vmlinux')
@@ -748,6 +819,8 @@ def run_chunk(traces, out, kcov):
         sections_path = out / 'linux/sections.jsonl'
         section_rows = [loads(line) for line in sections_path.read_text().splitlines()] if sections_path.exists() else []
         for trace_id, found in section_problems(per, section_rows).items():
+            site_problems.setdefault(trace_id, []).extend(found)
+        for trace_id, found in jiffies_problems(traces, per).items():
             site_problems.setdefault(trace_id, []).extend(found)
         outcomes.update({f'choice records skipped ({k})': n for k, n in skipped.items()})
     except LinuxRunError as exc:
@@ -813,10 +886,14 @@ def main(argv=None):
     parser.add_argument('--trace')
     parser.add_argument('--out', type=Path)
     parser.add_argument('--no-build', action='store_true', help='reuse the existing .lake build')
+    parser.add_argument('--guest-variant', choices=sorted(GUEST_VARIANTS),
+                        help='a guest build variant for a negative control (never the oracle)')
     args = parser.parse_args(argv)
     suites = args.suite.split(',')
     if not suites or any(s not in SUITES + CONTROL_SUITES for s in suites):
         parser.error(f'--suite must be a comma-separated subset of {SUITES + CONTROL_SUITES}')
+    if args.guest_variant and set(suites) - set(CONTROL_SUITES):
+        parser.error('--guest-variant runs control suites only')
     artifacts = Path(os.environ.get('LEANUX_ARTIFACTS', ROOT / '.artifacts')).resolve()
     stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
     out = (args.out or artifacts / 'check' / stamp).resolve()
@@ -846,7 +923,7 @@ def main(argv=None):
         while pending:
             start, chunk, name = pending.pop(0)
             print(f'traces {start}-{start + len(chunk) - 1} ...', file=sys.stderr, flush=True)
-            chunk_results, chunk_gaps, chunk_outcomes = run_chunk(chunk, out / name, kcov)
+            chunk_results, chunk_gaps, chunk_outcomes = run_chunk(chunk, out / name, kcov, args.guest_variant)
             # One guest's console output is bounded; a chunk that exceeds it
             # is rerun as two halves (recorded in the report). A single trace
             # that still exceeds it fails.
@@ -903,7 +980,7 @@ def write_report(out, traces, results, gaps, build, aborted, started, suites, ar
         kernel=kernel,
         kcov_config_sha256=sha256(ANCHORS.read_bytes()),
         selection=dict(suites=suites, generated_count=args.generated_count, wireguard_count=args.wireguard_count,
-                       seed=args.seed, trace=args.trace),
+                       seed=args.seed, trace=args.trace, guest_variant=getattr(args, 'guest_variant', None)),
         traces=len(traces), operations=sum(len(t['ops']) for t in traces),
         counts=dict(counts), known_gap_hits=dict(gaps), operand_pairs_matched=operand_pairs_matched,
         # cut and ambient choice records (coverage child), by site: consumed

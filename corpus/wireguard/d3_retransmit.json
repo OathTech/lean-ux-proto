@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "id": "d3_retransmit",
+  "ops": [
+    {
+      "op": "wg_set",
+      "config": {
+        "private_key": "1111111111111111111111111111111111111111111111111111111111111111",
+        "listen_port": 51820,
+        "peers": [
+          {
+            "public_key": "0faa684ed28867b97f4a6a2dee5df8ce974e76b7018e3f22a1c4cf2678570f20",
+            "allowed_ips": [
+              {
+                "family": 4,
+                "addr": "0a000000",
+                "cidr": 8
+              },
+              {
+                "family": 6,
+                "addr": "20010db8000000000000000000000000",
+                "cidr": 32
+              }
+            ],
+            "endpoint": {
+              "family": 4,
+              "addr": "7f000001",
+              "port": 51999
+            }
+          }
+        ]
+      }
+    },
+    {
+      "op": "wg_up"
+    },
+    {
+      "op": "wg_xmit",
+      "packet": {
+        "family": 4,
+        "dst": "0a000001",
+        "payload": "20272e353c434a51585f666d747b828990"
+      }
+    },
+    {
+      "op": "wg_observe"
+    },
+    {
+      "op": "wg_advance",
+      "ticks": 1450
+    },
+    {
+      "op": "wg_observe"
+    },
+    {
+      "op": "wg_get"
+    }
+  ],
+  "steer": [
+    [
+      "init_ephemeral",
+      "8182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0"
+    ],
+    [
+      "tai64n_now",
+      "803bb16a00000000b168de3a00000000"
+    ],
+    [
+      "index_draw",
+      "0d0c0b0a"
+    ],
+    [
+      "init_ephemeral",
+      "draw"
+    ],
+    [
+      "tai64n_now",
+      "draw"
+    ],
+    [
+      "index_draw",
+      "draw"
+    ]
+  ],
+  "expect": [
+    "fired:wg_expired_retransmit_handshake",
+    "wg_packet_send_staged_packets.no_keypair=1",
+    "wg_packet_send_queued_handshake_initiation.not_retry=0"
+  ]
+}

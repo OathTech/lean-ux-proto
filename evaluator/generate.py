@@ -213,7 +213,8 @@ def generate_v2(seed, count, max_ops):
 
 
 # The guest's waits (harness/guest.c): 0.4 s in wg_inject and wg_observe,
-# 0.1 s in the operations that can queue the handshake send worker. It fails
+# 0.1 s in the operations that can queue the handshake send worker, and 0.1 s
+# after the tick that absorbs a wg_advance (D3). It fails
 # a trace that runs longer than 4 s after wg_up (REKEY_BOUND_NS), so the
 # generator keeps the planned waits well inside it.
 WAIT_BUDGET_SECONDS = 2.8
@@ -224,11 +225,12 @@ def wait_after_up(operations):
     for op in operations:
         up = up or op['op'] == 'wg_up'
         if up:
-            waits += {'wg_inject': 0.4, 'wg_observe': 0.4, 'wg_set': 0.1, 'wg_up': 0.1, 'wg_xmit': 0.1}.get(op['op'], 0)
+            waits += {'wg_inject': 0.4, 'wg_observe': 0.4, 'wg_set': 0.1, 'wg_up': 0.1, 'wg_xmit': 0.1,
+                      'wg_advance': 0.1}.get(op['op'], 0)
     return waits
 
 
-def generate_wireguard(seed, count, max_ops=12, steered=0.0, data=0.0):
+def generate_wireguard(seed, count, max_ops=12, steered=0.0, data=0.0, timers=0.0):
     """Seeded WireGuard traces over small pools of keys and prefixes, so that
     peers, trie nodes and identities collide often. A third are configuration
     traces (stage A), and the rest bring wg0 up and transmit (stage B1), inject
@@ -240,12 +242,17 @@ def generate_wireguard(seed, count, max_ops=12, steered=0.0, data=0.0):
     streams are exactly as before. `data` is the share of steered data-plane
     traces (stage D2, steered_data), drawn first and from a third generator:
     the other traces keep their content and order (only their identifiers
-    shift), and with the default 0 the output is exactly as before."""
-    if not 2 <= max_ops <= 64 or not 1 <= count <= 100000 or not 0 <= steered <= 1 or not 0 <= data <= 1:
+    shift), and with the default 0 the output is exactly as before.
+    `timers` is the share of steered timer traces (stage D3, steered_timers),
+    drawn before the data-plane share from a fourth generator, with the same
+    property."""
+    if not 2 <= max_ops <= 64 or not 1 <= count <= 100000 or not 0 <= steered <= 1 or not 0 <= data <= 1 \
+            or not 0 <= timers <= 1:
         raise ValueError('bounded generator parameters')
     rng = random.Random(seed)
     steered_rng = random.Random(f'steered-{seed}')
     data_rng = random.Random(f'data-{seed}')
+    timers_rng = random.Random(f'timers-{seed}')
     keys = ['11' * 32, '22' * 32, '33' * 32, '00' * 32,
             '7b4e909bbe7ffe44c465a220037d608ee35897d31ef972f07f74892cb0f73f13']   # public key of 11..11
     private = ['11' * 32, '10' + '11' * 30 + '51', '22' * 32, '00' * 32]
@@ -420,6 +427,15 @@ def generate_wireguard(seed, count, max_ops=12, steered=0.0, data=0.0):
         return ops + [{'op': 'wg_observe'}]
 
     while len(result) < count:
+        if timers and timers_rng.random() < timers:
+            trace = steered_timers(timers_rng, f'generated-wg-{seed}-{len(result):05}')
+            if wait_after_up(trace['ops']) > WAIT_BUDGET_SECONDS:
+                raise AssertionError('a steered timer trace exceeds the wait budget')
+            digest = identity(trace)
+            if digest not in seen:
+                seen.add(digest)
+                result.append(trace)
+            continue
         if data and data_rng.random() < data:
             trace = steered_data(data_rng, f'generated-wg-{seed}-{len(result):05}')
             if wait_after_up(trace['ops']) > WAIT_BUDGET_SECONDS:
@@ -738,3 +754,251 @@ def steered_data(rng, trace_id):
         rng.shuffle(after)
     ops = setup() + [observe, respond] + after + [observe, get]
     return dict(version=1, id=trace_id, ops=ops, steer=steer, expect=D1_SESSION)
+
+
+# Stage D3: WireGuard's timers under the virtual time advance
+# (docs/2026-10-05-d3-timers.md, sections 2.2, 6 and 7). In ticks (HZ 250).
+HZ = 250
+ADVANCE_WAIT_TICKS = 25            # ADVANCE_WAIT_US (0.1 s) after the absorbing tick
+TRACE_BOUND_TICKS = 1000           # the guest's real-time bound, REKEY_BOUND_NS (4 s)
+REKEY_TIMEOUT_TICKS = 5 * HZ
+JITTER_MAX_TICKS = HZ // 3         # get_random_u32_below(REKEY_TIMEOUT_JITTER_MAX_JIFFIES): [0, 83)
+KEEPALIVE_TIMEOUT_TICKS = 10 * HZ
+NEW_HANDSHAKE_TICKS = KEEPALIVE_TIMEOUT_TICKS + REKEY_TIMEOUT_TICKS
+ZERO_KEY_TICKS = 180 * 3 * HZ      # REJECT_AFTER_TIME * 3
+# LVL_START(n + 1) (kernel/time/timer.c:154-171): a delta below the n-th
+# entry is on level n, whose buckets are 8^n ticks wide.
+WHEEL_LEVEL_LIMITS = (63, 504, 4032, 32256, 258048, 2064384)
+D3_DRAWS = [['init_ephemeral', 'draw'], ['tai64n_now', 'draw'], ['index_draw', 'draw']]
+
+
+def wheel_granularity(delay):
+    """How late (in ticks) the wheel may run a timer armed `delay` ahead:
+    calc_index rounds the expiry up to its level's bucket (section 2.2)."""
+    for level, limit in enumerate(WHEEL_LEVEL_LIMITS):
+        if delay < limit:
+            return 8 ** level
+    raise ValueError('delay beyond the wheel')
+
+
+def fire_advance(delay_max):
+    """An advance that surely runs a timer armed at most `delay_max` ticks
+    ahead within the advance's own wait: the delay, the wheel's rounding
+    and the wait, rounded up to 50 ticks (section 7). The margin is a
+    heuristic: the trace's `fired:` label is the check."""
+    need = delay_max + wheel_granularity(delay_max) + ADVANCE_WAIT_TICKS
+    return -(-need // 50) * 50
+
+
+def quiet_limit(delay_min):
+    """The largest total advance after a timer's arm that surely does not run
+    it before the trace ends: the real time before and after the advances
+    (each at most the bound) and the wait stay below its expiry."""
+    return delay_min - ADVANCE_WAIT_TICKS - 2 * TRACE_BOUND_TICKS
+
+
+def expiry_advance(seconds):
+    """An advance past a coarse-boot-time threshold (`wg_birthdate_has_expired`,
+    section 6) by one second."""
+    return (seconds + 1) * HZ
+
+
+def steered_timers(rng, trace_id):
+    """One steered D3 trace: a session (or none), then advances that fire
+    one target timer each, with margin away from the wheel's rounding zone,
+    while every other pending timer stays below its quiet limit.
+
+    Sessions: wg0 initiates as in steered_handshake (persistent keepalive
+    25 s from wg_up, which sends the initiation), or for `retransmit` and
+    `after_new_handshake` a wg_xmit initiates with keepalive 0. Every later
+    initiation (a retransmit, a new handshake, a key that needs refreshing)
+    gets three `draw` entries: steering covers each encounter of its sites
+    (stream K's note, section 13.5). Variants:
+    - `retransmit`: no response; 1-3 advances, each firing the retransmit
+      timer, whose retry sends another initiation;
+    - `gives_up`: 20 advances: 19 retries and the give-up (tx_dropped);
+    - `keepalive`: 1 or 2 received data messages, an advance (the
+      keepalive), and with 2 a second advance that fires nothing (the
+      callback's re-arm is deleted by the tx worker);
+    - `new_handshake`: data sent, then an advance: a fresh initiation;
+    - `persistent`: an interval of 5-30 s, one advance: a keepalive;
+    - `zero_key`: the keepalive interval set to 0 (its pending timer fires
+      as a no-op), one 540 s advance: the clear worker; then a data message
+      under the cleared keys and/or a wg_xmit that initiates;
+    - `after_new_handshake`: the session from a staged packet (data sent),
+      one 540 s advance: the new handshake and the zero-key timer in bucket
+      order, the send worker then the clear worker;
+    - `expiry`: the interval set to 0, then one of the key-expiry arms of
+      section 6 (send after REJECT_AFTER_TIME, send-side keep_key_fresh at
+      120 s, receive-side keep_key_fresh at 165 s, receive after
+      REJECT_AFTER_TIME);
+    - `respond_initiate`: the peer initiates and wg0 responds; an advance
+      past REKEY_TIMEOUT lets a wg_xmit initiate, and the response
+      completes wg0's session as initiator over the pending next keypair."""
+    device = rng.choice(D1_DEVICES)
+    peer_private = rng.choice(D1_PEERS)
+    peer_public = noise.public_key(peer_private)
+    psk = rng.choice([b'\xaa' * 32, rng.randbytes(32)]) if rng.random() < .2 else None
+    variant = rng.choices(['retransmit', 'gives_up', 'keepalive', 'new_handshake', 'persistent', 'zero_key',
+                           'after_new_handshake', 'expiry', 'respond_initiate'],
+                          [3, 1, 3, 3, 3, 2, 2, 5, 2])[0]
+    allowed4 = rng.choice(D2_ALLOWED4)
+    peer = dict(public_key=peer_public.hex(), allowed_ips=[dict(family=4, addr=allowed4[0], cidr=allowed4[1])],
+                endpoint=rng.choice(D1_LISTENERS))
+    if psk is not None:
+        peer['preshared_key'] = psk.hex()
+    observe, get = {'op': 'wg_observe'}, {'op': 'wg_get'}
+    W, R = ADVANCE_WAIT_TICKS, TRACE_BOUND_TICKS
+
+    def advance(ticks):
+        return {'op': 'wg_advance', 'ticks': ticks}
+
+    def destination():
+        while True:
+            dst = _in_prefix(rng, *allowed4, 4)
+            if dst != noise.WG0_ADDR4:
+                return dst
+
+    def xmit():
+        return {'op': 'wg_xmit', 'packet': dict(family=4, dst=destination().hex(),
+                                                payload=rng.randbytes(rng.choice([1, 16, rng.randint(1, 200)])).hex())}
+
+    def inject(message):
+        return {'op': 'wg_inject', 'family': rng.choice([4, 6]), 'port': 51820, 'message': message.hex()}
+
+    def data(session, counter):
+        src = destination()
+        inner = noise.to_wg0(4, src, rng.randbytes(rng.choice([0, 7, 16, rng.randint(1, 100)])),
+                             sport=rng.choice([12345, rng.randrange(1, 65536)]))
+        return inject(noise.data_message(session.receiving, session.local_index, counter, inner))
+
+    def setup(keepalive):
+        p = dict(peer, keepalive=keepalive) if keepalive else peer
+        return [{'op': 'wg_set', 'config': dict(private_key=device.hex(), listen_port=51820, peers=[p])},
+                {'op': 'wg_up'}]
+
+    def keepalive_off():
+        return {'op': 'wg_set', 'config': dict(peers=[dict(public_key=peer_public.hex(), keepalive=0)])}
+
+    def slack(limit):
+        return rng.randrange(0, max(1, min(200, limit) + 1))
+
+    # wg0's initiation with steered values, and the peer's response
+    ephemeral, index = rng.randbytes(32), rng.randrange(2**32)
+    sec, nsec = rng.choice([1, rng.randrange(2**31)]), rng.randrange(10**9)
+    steer = [['init_ephemeral', ephemeral.hex()], ['tai64n_now', noise.timespec64(sec, nsec).hex()],
+             ['index_draw', index.to_bytes(4, 'little').hex()]]
+    ours = noise.steered_initiation(peer_public, device, ephemeral, sec, nsec, index)
+    response = noise.response(ours, peer_private, rng.randbytes(32), psk, rng.randrange(2**32),
+                              initiator_public=noise.public_key(device))
+    session = noise.initiator_session(response)
+    respond = inject(response.message)
+    fired = lambda name: f'fired:wg_expired_{name}'   # noqa: E731
+    retransmit_fire = fire_advance(REKEY_TIMEOUT_TICKS + JITTER_MAX_TICKS)
+
+    if variant in ('retransmit', 'gives_up'):
+        # no session: the initiation's send arms the retransmit timer, the
+        # only pending timer; each advance fires it (the rate limit of 5 s
+        # has passed too) and its retry re-arms it
+        count = 20 if variant == 'gives_up' else rng.choice([1, 1, 2, 3])
+        ops = setup(0) + [xmit()]
+        for k in range(count):
+            ops.append(advance(retransmit_fire + slack(150)))
+            if variant == 'retransmit' and rng.random() < .3:
+                ops.append(observe)
+        ops += [observe, get]
+        expect = [fired('retransmit_handshake'), 'wg_packet_send_staged_packets.no_keypair=1']
+        retries = count if variant == 'retransmit' else 19
+        return dict(version=1, id=trace_id, ops=ops, steer=steer + D3_DRAWS * retries, expect=expect)
+
+    session_ops = setup(25) + [observe, respond]
+    persistent_quiet = quiet_limit(25 * HZ)
+    if variant == 'keepalive':
+        n = rng.choice([1, 2])
+        ops = session_ops + [data(session, c) for c in range(n)]
+        ops.append(advance(fire_advance(KEEPALIVE_TIMEOUT_TICKS) + slack(persistent_quiet - 2600)))
+        if n == 2 and rng.random() < .6:
+            # the re-arm made in the callback is deleted when the keepalive is sent
+            ops.append(advance(fire_advance(KEEPALIVE_TIMEOUT_TICKS)))
+        ops += [observe, get]
+        expect = D1_SESSION + [fired('send_keepalive'), 'wg_timers_data_received.not_pending=1']
+        if n == 2:
+            expect.append('wg_timers_data_received.not_pending=0')
+        return dict(version=1, id=trace_id, ops=ops, steer=steer, expect=expect)
+    if variant == 'new_handshake':
+        target = fire_advance(NEW_HANDSHAKE_TICKS + JITTER_MAX_TICKS)
+        assert target <= persistent_quiet
+        ops = session_ops + [xmit() for _ in range(rng.choice([1, 2]))]
+        ops += [advance(target + slack(persistent_quiet - target)), observe, get]
+        return dict(version=1, id=trace_id, ops=ops, steer=steer + D3_DRAWS,
+                    expect=D1_SESSION + [fired('new_handshake'), 'wg_timers_data_sent.not_pending=1'])
+    if variant == 'persistent':
+        interval = rng.choice([5, 6, 10, 16, 17, 25, 30])
+        ops = setup(interval) + [observe, respond]
+        if rng.random() < .5:
+            ops.append(observe)
+        ops += [advance(fire_advance(interval * HZ) + slack(200)), observe, get]
+        return dict(version=1, id=trace_id, ops=ops, steer=steer,
+                    expect=D1_SESSION + [fired('send_persistent_keepalive')])
+    if variant == 'zero_key':
+        # the interval set to 0 leaves the pending persistent timer, which
+        # fires first in the pass and sends nothing
+        ops = session_ops + [keepalive_off(), advance(fire_advance(ZERO_KEY_TICKS) + slack(200))]
+        tail = rng.choice(['data', 'xmit', 'both'])
+        if tail in ('data', 'both'):
+            ops.append(data(session, 0))       # its keypair's index entry is gone: dropped
+        draws = []
+        if tail in ('xmit', 'both'):
+            ops.append(xmit())                 # no keypair: an initiation
+            draws = D3_DRAWS
+        ops += [observe, get]
+        expect = D1_SESSION + [fired('zero_key_material'), fired('send_persistent_keepalive')]
+        if tail != 'xmit':
+            expect.append('wg_packet_consume_data.no_keypair=1')
+        return dict(version=1, id=trace_id, ops=ops, steer=steer + draws, expect=expect)
+    if variant == 'after_new_handshake':
+        # keepalive 0: the wg_xmit stages a packet and initiates; the
+        # response flushes it (data sent: the new-handshake timer)
+        ops = setup(0) + [xmit(), observe, respond, advance(fire_advance(ZERO_KEY_TICKS) + slack(200)), observe, get]
+        return dict(version=1, id=trace_id, ops=ops, steer=steer + D3_DRAWS,
+                    expect=D1_SESSION + [fired('new_handshake'), fired('zero_key_material')])
+    if variant == 'expiry':
+        arm = rng.choice(['send_expired', 'send_fresh', 'rx_fresh', 'rx_expired'])
+        ops = session_ops + [keepalive_off()]
+        expect = D1_SESSION + [fired('send_persistent_keepalive')]
+        rekey_after, reject_after, rx_fresh_after = 120, 180, 180 - 10 - 5
+        if arm == 'send_expired':
+            ops += [advance(expiry_advance(reject_after) + slack(750)), xmit()]
+            expect.append('wg_packet_send_staged_packets.birthdate_expired=1')
+            draws = D3_DRAWS
+        elif arm == 'send_fresh':
+            # below the receive-side threshold by more than the trace bound
+            ops += [advance(expiry_advance(rekey_after) + slack(1000)), xmit()]
+            expect += ['keep_key_fresh.birthdate_expired=1', 'keep_key_fresh.send=1']
+            draws = D3_DRAWS
+        elif arm == 'rx_fresh':
+            ops += [advance(expiry_advance(rx_fresh_after) + slack(1000)), data(session, 0)]
+            expect += ['keep_key_fresh.rx_birthdate_expired=1', 'keep_key_fresh.rx_send=1']
+            if rng.random() < .6:
+                ops.append(data(session, 1))   # returns before the clock read
+                expect.append('keep_key_fresh.sent_lastminute=1')
+            draws = D3_DRAWS
+        else:
+            ops += [advance(expiry_advance(reject_after) + slack(750)), data(session, 0)]
+            expect.append('decrypt_packet.key_expired=1')
+            draws = []
+        ops += [observe, get]
+        return dict(version=1, id=trace_id, ops=ops, steer=steer + draws, expect=expect)
+    # respond_initiate: the response sets last_sent_handshake; an advance past
+    # REKEY_TIMEOUT lets the staged packet's initiation through
+    raw, wg0_index = rng.randbytes(32), rng.randrange(2**32)
+    theirs = noise.initiation(noise.public_key(device), peer_private, rng.randbytes(32),
+                              noise.tai64n(rng.randrange(2**31), rng.randrange(10**9)), rng.randrange(2**32))
+    noise.wg0_response(theirs, device, raw, psk, wg0_index)   # the handshake is consumable
+    second = noise.response(ours, peer_private, rng.randbytes(32), psk, rng.randrange(2**32),
+                            initiator_public=noise.public_key(device))
+    ops = setup(0) + [inject(theirs), advance(REKEY_TIMEOUT_TICKS + 2 * W + slack(400)), xmit(), observe,
+                      inject(second.message), observe, get]
+    draws = [['resp_ephemeral', raw.hex()], ['index_draw', wg0_index.to_bytes(4, 'little').hex()]]
+    return dict(version=1, id=trace_id, ops=ops, steer=draws + steer,
+                expect=['wg_receive_handshake_packet.initiation=1'] + D1_SESSION)

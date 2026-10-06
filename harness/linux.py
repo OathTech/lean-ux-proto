@@ -51,6 +51,11 @@ ARM_RECORDS = False
 # time advance requires; each batch checks it at start and end).
 EXPECTED_CLOCKSOURCE = "refined-jiffies"
 BOOT_PARAMETERS = f"console=ttyS0 panic=1 nokaslr loglevel=3 clocksource={EXPECTED_CLOCKSOURCE}"
+# Guest build variants for negative controls only (never the oracle): the
+# compiler definitions each adds. `advance-wait-0` (D3, section 8): wg_advance
+# neither waits for the absorbing tick nor sleeps, so the timer sections land
+# in the next operation, which the mirror must reject.
+GUEST_VARIANTS = {"advance-wait-0": ("-DADVANCE_WAIT_US=0", "-DADVANCE_ABSORB=0")}
 
 
 def dispatch_addresses(kernel=None, symbols=DISPATCH_SYMBOLS):
@@ -414,13 +419,15 @@ def _collect(outdir, traces, process_returncode):
     return results
 
 
-def run_linux(traces, outdir, *, timeout=120, steer_wire=None, arm_records=ARM_RECORDS):
+def run_linux(traces, outdir, *, timeout=120, steer_wire=None, arm_records=ARM_RECORDS, guest_variant=None):
     """Return ordered observations; preserve evidence and raise on execution failures.
 
     `outdir` must be a fresh/empty directory within the task's artifact root.
     One VM executes the batch, forking a fresh child for every trace. Independent
     calls boot fresh VMs. The project-wide advisory lock prevents overlapping VMs.
     """
+    if guest_variant is not None and guest_variant not in GUEST_VARIANTS:
+        raise ValueError(f"unknown guest variant {guest_variant!r}")
     traces = [validate_trace(trace) for trace in traces]
     dispatch = dispatch_addresses() if any(uses_wireguard(t) for t in traces) else []
     wire = serialize_wire(traces, steer_wire, dispatch, arm_records)
@@ -450,7 +457,7 @@ def run_linux(traces, outdir, *, timeout=120, steer_wire=None, arm_records=ARM_R
                 lock.close()
                 continue
             with lock:
-                return _run_locked(traces, outdir, timeout, arm_records)
+                return _run_locked(traces, outdir, timeout, arm_records, guest_variant)
         if time.monotonic() >= deadline:
             raise LinuxRunError("resource_busy", f"Other guests held all {QEMU_SLOTS} QEMU slots for {QEMU_LOCK_WAIT} s", outdir)
         if not waited:
@@ -464,8 +471,8 @@ QEMU_LOCK_WAIT = 3600
 QEMU_SLOTS = int(os.environ.get("LEANUX_QEMU_SLOTS", "3"))
 
 
-def _run_locked(traces, outdir, timeout, arm_records):
-    build = ["gcc", "-static", "-O2", "-Wall", "-Wextra", "-Werror", "-std=c11", str(ROOT / "harness/guest.c"), "-o", str(outdir / "guest-runner")]
+def _run_locked(traces, outdir, timeout, arm_records, guest_variant=None):
+    build = ["gcc", "-static", "-O2", "-Wall", "-Wextra", "-Werror", "-std=c11", *GUEST_VARIANTS.get(guest_variant, ()), str(ROOT / "harness/guest.c"), "-o", str(outdir / "guest-runner")]
     started = time.monotonic()
     build_returncode = _bounded_process(build, outdir / "build.log", 60, OUTPUT_LIMIT)
     if build_returncode:
@@ -493,7 +500,7 @@ def _run_locked(traces, outdir, timeout, arm_records):
     (outdir / "initramfs.cpio.gz").write_bytes(gzip.compress(cpio, mtime=0))
     command = ["qemu-system-x86_64", "-accel", "tcg,thread=single", "-machine", "pc-i440fx-8.2", "-cpu", "qemu64", "-smp", "1", "-m", "256", "-display", "none", "-monitor", "none", "-serial", "stdio", "-nic", "none", "-no-reboot", "-kernel", str(KERNEL / "arch/x86/boot/bzImage"), "-initrd", str(outdir / "initramfs.cpio.gz"), "-append", BOOT_PARAMETERS]
     identities = [ROOT / "harness/guest.c", ROOT / "harness/linux.py", ROOT / "harness/trace.py", ROOT / "contracts/trace-v1.md", ROOT / "contracts/trace.schema.json", ROOT / "contracts/observation.schema.json", ROOT / "scripts/in-bundle", ROOT / "scripts/bundle-tool", KERNEL / ".config", KERNEL / "arch/x86/boot/bzImage", KERNEL / "vmlinux", KERNEL / "usr/gen_init_cpio", SHARED / ".tools/sysroot/usr/bin/busybox", outdir / "guest-runner", outdir / "init", outdir / "wire.txt", outdir / "initramfs.cpio.gz"]
-    provenance = {"schema_version": 1, "expected_clocksource": EXPECTED_CLOCKSOURCE, "arm_records": arm_records, "build_command": build, "cpio_command": cpio_command, "qemu_command": command, "timeout_seconds": timeout, "captured_output_limit_bytes": OUTPUT_LIMIT, "inputs": {str(path): sha256(path) for path in identities}, "compiler": subprocess.check_output(["gcc", "--version"], text=True), "qemu": subprocess.check_output(["qemu-system-x86_64", "--version"], text=True)}
+    provenance = {"schema_version": 1, "expected_clocksource": EXPECTED_CLOCKSOURCE, "arm_records": arm_records, "guest_variant": guest_variant, "build_command": build, "cpio_command": cpio_command, "qemu_command": command, "timeout_seconds": timeout, "captured_output_limit_bytes": OUTPUT_LIMIT, "inputs": {str(path): sha256(path) for path in identities}, "compiler": subprocess.check_output(["gcc", "--version"], text=True), "qemu": subprocess.check_output(["qemu-system-x86_64", "--version"], text=True)}
     (outdir / "provenance.json").write_text(json.dumps(provenance, indent=2) + "\n")
     (outdir / "qemu-command.json").write_text(json.dumps(command, indent=2) + "\n")
     try:
