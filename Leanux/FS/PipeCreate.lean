@@ -132,7 +132,7 @@ def doPipeFlags (flags : UInt32) : M (Except Int (Nat × Nat × FileId × FileId
 def doPipe2 (flags : UInt32) : M Int := do
   let r ← doPipeFlags flags
   let error : Int := match r with | .error e => e | .ok _ => 0
-  if ← branchCmp .doPipe2Ok (error == 0) error 0 then
+  if ← branch .doPipe2Ok (error == 0) then
     let .ok (fdr, fdw, f0, f1) := r | invariant "unreachable"
     if ← branch .doPipe2CopyFault !(← envOk .copyToUser) then
       fput f0

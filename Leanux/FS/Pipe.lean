@@ -339,7 +339,7 @@ def pipeRead (iocb : Kiocb) (count : Nat) : M Int := do
           unsupported "pipe_read: PIPE_BUF_FLAG_WHOLE (a notification buffer)"
         chars := totalLen
       let error ← pipeBufConfirm buf
-      if ← branchCmp .pipeReadConfirmError (error != 0) error 0 then
+      if ← branch .pipeReadConfirmError (error != 0) then
         unsupported "pipe_read: pipe_buf_confirm failed"
       let some page := buf.page | invariant "pipe_read: a buffer with a NULL page"
       let written ← copyPageToIter page buf.offset chars count
@@ -354,10 +354,10 @@ def pipeRead (iocb : Kiocb) (count : Nat) : M Int := do
         totalLen := chars
         buf := { buf with len := 0 }
       setPipeBuf pid i buf
-      if ← branchCmp .pipeReadBufEmpty (buf.len == 0) buf.len 0 then
+      if ← branch .pipeReadBufEmpty (buf.len == 0) then
         tail ← pipeUpdateTail pid i tail
       totalLen := totalLen - chars
-      if ← branchCmp .pipeReadDone (totalLen == 0) totalLen 0 then break  -- common path
+      if ← branch .pipeReadDone (totalLen == 0) then break  -- common path
       if ← branchCmp .pipeReadMore (head != tail) head.toNat tail.toNat then continue
     let p ← getPipe pid
     if ← branchCmp .pipeReadNoWriters (p.writers == 0) p.writers 0 then break
@@ -413,7 +413,7 @@ def pipeWriteToOut (iocb : Kiocb) (filp : File) (pid : PipeId) (src : IovIter) :
       else pure false
     if fits then
       ret ← pipeBufConfirm buf
-      if ← branchCmp .pipeWriteMergeConfirmErr (ret != 0) ret 0 then return (ret, wasEmpty)
+      if ← branch .pipeWriteMergeConfirmErr (ret != 0) then return (ret, wasEmpty)
       let some page := buf.page | invariant "pipe_write: a buffer with a NULL page"
       let (n, src') ← copyPageFromIter page offset chars src
       src := src'
@@ -423,7 +423,7 @@ def pipeWriteToOut (iocb : Kiocb) (filp : File) (pid : PipeId) (src : IovIter) :
       if ← branchCmp .pipeWriteMergeDone (src.count == 0) src.count 0 then return (ret, wasEmpty)
   repeat
     let p ← getPipe pid
-    if ← branchCmp .pipeWriteLoopNoReaders (p.readers == 0) p.readers 0 then
+    if ← branch .pipeWriteLoopNoReaders (p.readers == 0) then
       _ ← sendSig SIGPIPE 0
       if ← branchCmp .pipeWriteLoopNoRet (ret == 0) ret 0 then ret := -EPIPE
       break
@@ -463,7 +463,7 @@ def pipeWriteToOut (iocb : Kiocb) (filp : File) (pid : PipeId) (src : IovIter) :
       if ← branchCmp .pipeWriteDone (src.count == 0) src.count 0 then break
     -- the local `head` (505): one behind `pipe->head` after an insertion (526)
     let p ← getPipe pid
-    if ← branchCmp .pipeWriteStaleNotFull (!pipeFull head p.tail p.maxUsage) (pipeOccupancy head p.tail) p.maxUsage then
+    if ← branch .pipeWriteStaleNotFull (!pipeFull head p.tail p.maxUsage) then
       continue
     -- Wait for buffer space to become available.
     let nonblock ← do

@@ -371,7 +371,8 @@ def Decision.info : Decision → DecisionInfo
   | .iocbFlagsDirect => d "iocb_flags.o_direct" fsh 3595 [(3596, 3596)] []
   | .iocbFlagsDsync => d "iocb_flags.o_dsync" fsh 3597 [(3598, 3598)] []
   | .iocbFlagsSync => d "iocb_flags.o_sync" fsh 3599 [(3600, 3600)] []
-  | .fileInitPathLlseek => d "file_init_path.llseek" ft 338 [(339, 339)] []
+  -- 339's point runs without an llseek too (pipefifo_fops, found by the pipes corpus)
+  | .fileInitPathLlseek => d "file_init_path.llseek" ft 338 [] []
   | .fileInitPathModeRead => d "file_init_path.fmode_read" ft 340 [(341, 341)] []
   | .fileInitPathHasRead => d "file_init_path.fop_read" ft 341 [] []
   -- 342 and 345 are shared with the preceding `fop->read`/`fop->write` operand
@@ -486,7 +487,8 @@ def Decision.info : Decision → DecisionInfo
   | .anonGetfileFileErr => d "__anon_inode_getfile.file_error" an 124 [(125, 125), (133, 136)] [(127, 131)]
   -- fs/read_write.c
   | .rwVerifyNegativeCount => d "rw_verify_area.negative_count" rw 453 [(454, 454)] [(456, 474)]
-  | .rwVerifyHasPos => d "rw_verify_area.has_ppos" rw 456 [(457, 467)] []
+  -- 460's point also runs with ppos NULL (found by the pipes corpus): left out
+  | .rwVerifyHasPos => d "rw_verify_area.has_ppos" rw 456 [(461, 467)] []
   -- the unsigned_offsets load at 460 is hoisted onto the pos >= 0 path
   | .rwVerifyNegativePos => d "rw_verify_area.negative_pos" rw 459 [(461, 463)] [(464, 466)]
   | .rwVerifyPosOverflow => d "rw_verify_area.pos_overflow" rw 464 [(465, 466)] []
@@ -503,6 +505,8 @@ def Decision.info : Decision → DecisionInfo
   | .filePposStream => d "file_ppos.fmode_stream" rw 698 [] []
   | .ksysReadHasFile => d "ksys_read.has_file" rw 706 [(707, 715)] []
   | .ksysReadHasPpos => d "ksys_read.has_ppos" rw 708 [(709, 710)] []
+  -- `ret >= 0 && ppos`: not declared a comparison: for a stream file (ppos NULL) the compiler
+  -- tests `ppos` first and never compares `ret` (no record; found by the pipes corpus)
   | .ksysReadRetNonneg => d "ksys_read.ret_nonnegative" rw 713 [] []
   | .ksysReadStorePos => d "ksys_read.store_pos" rw 713 [(714, 714)] []
   | .fileStartWriteNotRegular => d "file_start_write.not_regular" fsh 2998 [(2999, 2999)] [(3000, 3000)]
@@ -517,6 +521,7 @@ def Decision.info : Decision → DecisionInfo
   | .vfsWritePositive => d "vfs_write.ret_positive" rw 686 [(687, 688)] []
   | .ksysWriteHasFile => d "ksys_write.has_file" rw 730 [(731, 739)] []
   | .ksysWriteHasPpos => d "ksys_write.has_ppos" rw 732 [(733, 734)] []
+  -- as ksys_read.ret_nonnegative
   | .ksysWriteRetNonneg => d "ksys_write.ret_nonnegative" rw 737 [] []
   | .ksysWriteStorePos => d "ksys_write.store_pos" rw 737 [(738, 738)] []
   -- fs/fcntl.c
@@ -1129,18 +1134,24 @@ def Decision.info : Decision → DecisionInfo
   | .pipeReadNotEmpty => d "pipe_read.not_empty" "fs/pipe.c" 305 [(306, 350)] []
   | .pipeReadCharsOver => d "pipe_read.chars_over_total" "fs/pipe.c" 311 [(312, 317)] []
   | .pipeReadWhole => d "pipe_read.whole" "fs/pipe.c" 312 [(313, 315)] [(317, 317)]
+  -- `if (error)`: `pipe_buf_confirm` is inlined and returns the constant 0 for these ops, so
+  -- the test folds away on that path (no comparison record)
   | .pipeReadConfirmError => d "pipe_read.confirm_error" "fs/pipe.c" 321 [(322, 324)] [(327, 328)]
   | .pipeReadShortCopy => d "pipe_read.short_copy" "fs/pipe.c" 328 [(329, 331)] [(333, 335)]
   | .pipeReadFaultNoRet => d "pipe_read.fault_no_ret" "fs/pipe.c" 329 [(330, 330)] []
   | .pipeReadPacket => d "pipe_read.packet" "fs/pipe.c" 338 [(339, 340)] []
+  -- `if (!buf->len)`: folded after the packet arm sets `buf->len = 0` (no record there)
   | .pipeReadBufEmpty => d "pipe_read.buf_empty" "fs/pipe.c" 343 [(344, 344)] []
+  -- `total_len -= chars; if (!total_len)`: compiled as `total_len == chars` on some paths and
+  -- against 0 on others, so its operands are not one comparison
   | .pipeReadDone => d "pipe_read.total_done" "fs/pipe.c" 346 [(347, 347)] [(348, 349)]
   | .pipeReadMore => d "pipe_read.more" "fs/pipe.c" 348 [(349, 349)] []
   | .pipeReadNoWriters => d "pipe_read.no_writers" "fs/pipe.c" 352 [(353, 353)] [(354, 354)]
   | .pipeReadHaveData => d "pipe_read.have_data" "fs/pipe.c" 354 [(355, 355)] [(356, 356)]
   -- `(f_flags & O_NONBLOCK) || (ki_flags & IOCB_NOWAIT)` over 356-357; DWARF puts both tests at 356
   | .pipeReadNonblock => d "pipe_read.o_nonblock" "fs/pipe.c" 356 [] [(357, 357)]
-  | .pipeReadNowait => d "pipe_read.iocb_nowait" "fs/pipe.c" 357 [(358, 359)] [(361, 395)]
+  -- the body (358-359) runs for either operand
+  | .pipeReadNowait => d "pipe_read.iocb_nowait" "fs/pipe.c" 357 [] [(361, 395)]
   | .pipeReadEmptyAtEnd => d "pipe_read.empty_at_end" "fs/pipe.c" 397 [(398, 398)] []
   | .pipeReadWasFull => d "pipe_read.was_full" "fs/pipe.c" 401 [(402, 402)] []
   | .pipeReadWakeNextReader => d "pipe_read.wake_next_reader" "fs/pipe.c" 403 [(404, 404)] []
@@ -1153,9 +1164,11 @@ def Decision.info : Decision → DecisionInfo
   -- the merge test over 479-480; DWARF puts `offset + chars <= PAGE_SIZE` at 479
   | .pipeWriteCanMerge => d "pipe_write.can_merge" "fs/pipe.c" 479 [] []
   | .pipeWriteFits => d "pipe_write.fits" "fs/pipe.c" 480 [(481, 493)] []
+  -- as pipe_read.confirm_error: folded on the inlined `return 0` path
   | .pipeWriteMergeConfirmErr => d "pipe_write.merge_confirm_error" "fs/pipe.c" 482 [(483, 483)] [(485, 485)]
   | .pipeWriteMergeShort => d "pipe_write.merge_short_copy" "fs/pipe.c" 486 [(487, 488)] [(491, 492)]
   | .pipeWriteMergeDone => d "pipe_write.merge_done" "fs/pipe.c" 492 [(493, 493)] []
+  -- the first iteration reuses the `pipe->readers` load of 457 (no comparison record)
   | .pipeWriteLoopNoReaders => d "pipe_write.loop_no_readers" "fs/pipe.c" 498 [(499, 502)] [(505, 506)]
   | .pipeWriteLoopNoRet => d "pipe_write.epipe_no_ret" "fs/pipe.c" 500 [(501, 501)] []
   -- `!pipe_full(head, tail, max_usage)`: `head - tail >= max_usage`, recorded at 506
@@ -1165,8 +1178,9 @@ def Decision.info : Decision → DecisionInfo
   -- `ret = ret ? : -ENOMEM`: a select
   | .pipeWriteAllocRet => d "pipe_write.alloc_failed_ret" "fs/pipe.c" 515 [] []
   -- `is_packetized(filp)` (411-414, `f_flags & O_DIRECT`), inlined with its test recorded at 534;
-  -- is_packetized owns no instrumentation point of its own
-  | .pipeWritePacketized => d "pipe_write.packetized" "fs/pipe.c" 534 [(535, 535)] [(537, 537)]
+  -- is_packetized owns no instrumentation point of its own. The flags store
+  -- is a select in this build: 535's point runs for either outcome
+  | .pipeWritePacketized => d "pipe_write.packetized" "fs/pipe.c" 534 [] []
   -- `copied < PAGE_SIZE && iov_iter_count(from)`: the operands share line 541, and 546 runs
   -- after either false outcome
   | .pipeWriteShortCopy => d "pipe_write.short_copy" "fs/pipe.c" 541 [] []
@@ -1174,11 +1188,13 @@ def Decision.info : Decision → DecisionInfo
   | .pipeWriteFaultNoRet => d "pipe_write.fault_no_ret" "fs/pipe.c" 542 [(543, 543)] []
   | .pipeWriteDone => d "pipe_write.done" "fs/pipe.c" 549 [(550, 550)] []
   -- `!pipe_full(head, ...)` with the local `head` read at 505: after a slot is inserted
-  -- (`pipe->head = head + 1`, 526) it is one behind (design Appendix A, audit)
+  -- (`pipe->head = head + 1`, 526) it is one behind (design Appendix A, audit). Not declared a
+  -- comparison: after a full ring at 506 the compiler reuses that test (no record at 553)
   | .pipeWriteStaleNotFull => d "pipe_write.not_full_stale_head" "fs/pipe.c" 553 [(554, 554)] [(557, 557)]
   -- `(f_flags & O_NONBLOCK) || (ki_flags & IOCB_NOWAIT)` over 557-558; DWARF puts both tests at 557
   | .pipeWriteNonblock => d "pipe_write.o_nonblock" "fs/pipe.c" 557 [] [(558, 558)]
-  | .pipeWriteNowait => d "pipe_write.iocb_nowait" "fs/pipe.c" 558 [(559, 561)] [(563, 582)]
+  -- the body (559-561) runs for either operand
+  | .pipeWriteNowait => d "pipe_write.iocb_nowait" "fs/pipe.c" 558 [] [(563, 582)]
   | .pipeWriteNoRet => d "pipe_write.eagain_no_ret" "fs/pipe.c" 559 [(560, 560)] []
   | .pipeWriteFullAtOut => d "pipe_write.full_at_out" "fs/pipe.c" 585 [(586, 586)] []
   -- `was_empty || pipe->poll_usage`: the operands share line 601 and the body (602)
@@ -1193,7 +1209,8 @@ def Decision.info : Decision → DecisionInfo
   -- put_pipe_info and pipe_release run once per __fput: twice in the -EMFILE unwind (design section 4)
   | .putPipeInfoLast => d "put_pipe_info.last_file" "fs/pipe.c" 712 [(713, 714)] []
   | .putPipeInfoKill => d "put_pipe_info.kill" "fs/pipe.c" 718 [(719, 719)] []
-  | .pipeReleaseRead => d "pipe_release.fmode_read" "fs/pipe.c" 728 [(729, 729)] []
+  -- 729's point runs on the write end's release too (the decrement is not a separate block)
+  | .pipeReleaseRead => d "pipe_release.fmode_read" "fs/pipe.c" 728 [] []
   | .pipeReleaseWrite => d "pipe_release.fmode_write" "fs/pipe.c" 730 [(731, 731)] []
   -- `!pipe->readers != !pipe->writers`: two zero tests and an xor, not one comparison (design section 10)
   | .pipeReleaseOneSide => d "pipe_release.one_side_left" "fs/pipe.c" 734 [(735, 738)] []
@@ -1227,19 +1244,25 @@ def Decision.info : Decision → DecisionInfo
   -- `watch_queue_init` is the -ENOPKG stub (CONFIG_WATCH_QUEUE unset): `if (error)` at 931 is folded
   | .createPipeFilesNotification => d "create_pipe_files.notification_pipe" "fs/pipe.c" 929 [(930, 935)] [(938, 940)]
   | .createPipeFilesWriterErr => d "create_pipe_files.writer_error" "fs/pipe.c" 941 [(942, 944)] [(947, 950)]
-  | .createPipeFilesReaderErr => d "create_pipe_files.reader_error" "fs/pipe.c" 952 [(953, 955)] [(957, 962)]
+  -- 962 is the return block every exit shares
+  | .createPipeFilesReaderErr => d "create_pipe_files.reader_error" "fs/pipe.c" 952 [(953, 955)] [(957, 961)]
   | .doPipeFlagsInvalid => d "__do_pipe_flags.invalid_flags" "fs/pipe.c" 970 [(971, 971)] [(973, 973)]
   | .doPipeFlagsCreateErr => d "__do_pipe_flags.create_error" "fs/pipe.c" 974 [(975, 975)] [(977, 977)]
   | .doPipeFlagsFdrErr => d "__do_pipe_flags.fdr_error" "fs/pipe.c" 978 [(979, 979)] [(980, 982)]
   | .doPipeFlagsFdwErr => d "__do_pipe_flags.fdw_error" "fs/pipe.c" 983 [(984, 984)] [(985, 993)]
+  -- the inlined error returns of __do_pipe_flags jump past the test (no record on those paths)
   | .doPipe2Ok => d "do_pipe2.no_error" "fs/pipe.c" 1025 [(1026, 1035)] []
   | .doPipe2CopyFault => d "do_pipe2.copy_to_user_failed" "fs/pipe.c" 1026 [(1027, 1031)] [(1033, 1034)]
   | .roundPipeSizeTooBig => d "round_pipe_size.too_big" "fs/pipe.c" 1249 [(1250, 1250)] [(1253, 1253)]
-  | .roundPipeSizeSmall => d "round_pipe_size.below_page" "fs/pipe.c" 1253 [(1254, 1254)] [(1256, 1256)]
+  -- the returns share one block attributed to 1256
+  | .roundPipeSizeSmall => d "round_pipe_size.below_page" "fs/pipe.c" 1253 [(1254, 1254)] []
   | .resizeRingNoMem => d "pipe_resize_ring.kcalloc_failed" "fs/pipe.c" 1273 [(1274, 1274)] [(1276, 1282)]
   | .resizeRingBusy => d "pipe_resize_ring.busy" "fs/pipe.c" 1282 [(1283, 1285)] [(1292, 1292)]
-  | .resizeRingNonEmpty => d "pipe_resize_ring.non_empty" "fs/pipe.c" 1292 [(1293, 1305)] []
-  | .resizeRingNoWrap => d "pipe_resize_ring.h_after_t" "fs/pipe.c" 1295 [(1296, 1297)] [(1299, 1304)]
+  -- the two `memcpy(bufs, pipe->bufs + t, ...)` (1296, 1303) share one call attributed to 1296,
+  -- which also runs for an empty ring: 1296 is left out of every span, and the copy arms
+  -- are h_after_t's
+  | .resizeRingNonEmpty => d "pipe_resize_ring.non_empty" "fs/pipe.c" 1292 [] []
+  | .resizeRingNoWrap => d "pipe_resize_ring.h_after_t" "fs/pipe.c" 1295 [(1297, 1297)] [(1299, 1304)]
   | .resizeRingHeadPart => d "pipe_resize_ring.h_nonzero" "fs/pipe.c" 1300 [(1301, 1302)] []
   -- dead in this build: 1320 stores `max_usage` unconditionally, so the compiler dropped the test
   -- (no comparison record, no point); still the C's choice point
@@ -1260,7 +1283,8 @@ def Decision.info : Decision → DecisionInfo
   | .getPipeInfoNoPipe => d "get_pipe_info.no_pipe" "fs/pipe.c" 1390 [] [(1394, 1394)]
   | .pipeFcntlNoPipe => d "pipe_fcntl.no_pipe" "fs/pipe.c" 1403 [(1404, 1404)] [(1406, 1406)]
   | .pipeFcntlSetSize => d "pipe_fcntl.case_f_setpipe_sz" "fs/pipe.c" 1409 [(1410, 1411)] []
-  | .pipeFcntlGetSize => d "pipe_fcntl.case_f_getpipe_sz" "fs/pipe.c" 1412 [(1413, 1414)] []
+  -- `pipe->max_usage * PAGE_SIZE` (1413) shares its code with pipe_set_size's return
+  | .pipeFcntlGetSize => d "pipe_fcntl.case_f_getpipe_sz" "fs/pipe.c" 1412 [] []
   | .fcntlCasePipeSz => d "do_fcntl.case_f_setpipe_sz" fc 538 [(539, 541)] []
   | .killFasyncList => d "kill_fasync.has_list" fc 1151 [(1152, 1154)] []
   | .newSyncWriteQueued => d "new_sync_write.eiocbqueued" rw 591 [] []
@@ -1300,8 +1324,9 @@ def Decision.info : Decision → DecisionInfo
   | .sendSignalPrivInfo => d "__send_signal_locked.case_priv" "kernel/signal.c" 1136 [(1137, 1143)] []
   | .sendSignalOverflowNotSpecial => d "__send_signal_locked.overflow_not_special" "kernel/signal.c" 1148 [] []
   | .sendSignalMultiprocess => d "__send_signal_locked.multiprocess" "kernel/signal.c" 1171 [(1172, 1182)] [(1184, 1184)]
-  -- `signal->flags` is not mirrored (the trace child is not exiting): not declared a comparison
-  | .prepareSignalGroupExit => d "prepare_signal.group_exit" "kernel/signal.c" 908 [(909, 914)] [(915, 915)]
+  -- `signal->flags` is not mirrored (the trace child is not exiting): not declared a comparison;
+  -- 910's point runs on the false path too
+  | .prepareSignalGroupExit => d "prepare_signal.group_exit" "kernel/signal.c" 908 [(911, 914)] [(915, 915)]
   | .prepareSignalStop => d "prepare_signal.kernel_stop" "kernel/signal.c" 915 [(916, 922)] [(923, 923)]
   | .prepareSignalCont => d "prepare_signal.sigcont" "kernel/signal.c" 923 [(924, 964)] []
   -- `sigismember(&t->blocked, sig) || sigismember(&t->real_blocked, sig)`: one line, one body
@@ -1399,8 +1424,6 @@ def Decision.comparison : Decision → Option Comparison
   | .iocbFlagsDirect => some ⟨.flag, true, none, false⟩
   | .iocbFlagsDsync => some ⟨.flag, true, none, false⟩
   | .iocbFlagsSync => some ⟨.flag, true, none, false⟩
-  | .ksysReadRetNonneg => some ⟨.ge, true, none, false⟩
-  | .ksysWriteRetNonneg => some ⟨.ge, true, none, false⟩
   | .putFileAccessReadOnly => some ⟨.eq, true, none, false⟩
   | .putFileAccessWriter => some ⟨.flag, true, none, false⟩
   | .putUnusedFdLowerNextFd => some ⟨.lt, false, none, false⟩
@@ -1436,12 +1459,9 @@ def Decision.comparison : Decision → Option Comparison
   | .pipeReadNotEmpty => some ⟨.eq, false, none, false⟩
   | .pipeReadCharsOver => some ⟨.gt, false, none, false⟩
   | .pipeReadWhole => some ⟨.flag, true, none, false⟩
-  | .pipeReadConfirmError => some ⟨.ne, true, none, false⟩
   | .pipeReadShortCopy => some ⟨.lt, false, none, false⟩
   | .pipeReadFaultNoRet => some ⟨.eq, true, none, false⟩
   | .pipeReadPacket => some ⟨.flag, true, none, false⟩
-  | .pipeReadBufEmpty => some ⟨.eq, true, none, false⟩
-  | .pipeReadDone => some ⟨.eq, true, none, false⟩
   | .pipeReadMore => some ⟨.eq, false, none, false⟩
   | .pipeReadNoWriters => some ⟨.eq, true, none, false⟩
   | .pipeReadHaveData => some ⟨.ne, true, none, false⟩
@@ -1454,10 +1474,8 @@ def Decision.comparison : Decision → Option Comparison
   | .pipeWriteChars => some ⟨.ne, true, none, false⟩
   | .pipeWriteCanMerge => some ⟨.flag, true, none, false⟩
   | .pipeWriteFits => some ⟨.le, true, some 479, false⟩
-  | .pipeWriteMergeConfirmErr => some ⟨.ne, true, none, false⟩
   | .pipeWriteMergeShort => some ⟨.lt, false, none, false⟩
   | .pipeWriteMergeDone => some ⟨.eq, true, none, false⟩
-  | .pipeWriteLoopNoReaders => some ⟨.eq, true, none, false⟩
   | .pipeWriteLoopNoRet => some ⟨.eq, true, none, false⟩
   | .pipeWriteNotFull => some ⟨.ge, false, none, false⟩
   | .pipeWriteAllocRet => some ⟨.ne, true, none, false⟩
@@ -1466,7 +1484,6 @@ def Decision.comparison : Decision → Option Comparison
   | .pipeWriteShortCopyLeft => some ⟨.ne, true, none, false⟩
   | .pipeWriteFaultNoRet => some ⟨.eq, true, none, false⟩
   | .pipeWriteDone => some ⟨.eq, true, none, false⟩
-  | .pipeWriteStaleNotFull => some ⟨.ge, false, none, false⟩
   | .pipeWriteNonblock => some ⟨.flag, true, none, false⟩
   | .pipeWriteNowait => some ⟨.flag, true, some 557, false⟩
   | .pipeWriteNoRet => some ⟨.eq, true, none, false⟩
@@ -1486,7 +1503,6 @@ def Decision.comparison : Decision → Option Comparison
   | .doPipeFlagsCreateErr => some ⟨.ne, true, none, false⟩
   | .doPipeFlagsFdrErr => some ⟨.lt, true, none, false⟩
   | .doPipeFlagsFdwErr => some ⟨.lt, true, none, false⟩
-  | .doPipe2Ok => some ⟨.eq, true, none, false⟩
   | .roundPipeSizeTooBig => some ⟨.gt, true, none, false⟩
   | .roundPipeSizeSmall => some ⟨.lt, true, none, false⟩
   | .resizeRingBusy => some ⟨.lt, false, none, false⟩

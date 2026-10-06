@@ -68,7 +68,7 @@ def ksysRead (fd : Nat) (count : Nat) : M Int := do
     _ ← branch .ksysReadHasPpos ppos.isSome  -- pos = *ppos; ppos = &pos
     let (r, pos) ← vfsRead fid count ppos
     ret := r
-    if ← branchCmp .ksysReadRetNonneg (ret >= 0) ret 0 then
+    if ← branch .ksysReadRetNonneg (ret >= 0) then
       if ← branch .ksysReadStorePos pos.isSome then
         setFile fid { (← getFile fid) with fPos := pos.getD 0 }
     fdputPos f
@@ -138,7 +138,7 @@ def ksysWrite (fd : Nat) (buf : ByteArray) (count : Nat) : M Int := do
     let ppos ← filePpos (← getFile fid)
     _ ← branch .ksysWriteHasPpos ppos.isSome
     ret ← vfsWrite fid buf count ppos
-    if ← branchCmp .ksysWriteRetNonneg (ret >= 0) ret 0 then
+    if ← branch .ksysWriteRetNonneg (ret >= 0) then
       if ← branch .ksysWriteStorePos ppos.isSome then
         setFile fid { (← getFile fid) with fPos := ppos.getD 0 }
     fdputPos f
