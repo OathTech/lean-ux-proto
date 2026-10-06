@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "id": "l_create_delete_create",
+  "net_fixture": "bare",
+  "ops": [
+    {
+      "op": "wg_create"
+    },
+    {
+      "op": "wg_delete"
+    },
+    {
+      "op": "wg_create"
+    },
+    {
+      "op": "wg_get"
+    }
+  ]
+}

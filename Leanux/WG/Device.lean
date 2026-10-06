@@ -152,12 +152,18 @@ def ratelimiterInit : M Int := do
     clock read's value is unused there. -/
 def gcEntries (work : Bool) : M Unit := do
   let _now ← hiddenClock .ratelimiterGcNow
-  for _ in [0:RATELIMITER_TABLE_SIZE] do
-    _ ← branch .gcBucketIter true
+  -- The buckets are alike (all empty), so the first iteration's outcomes are
+  -- reported and the rest evaluated silently: a repeatable decision's
+  -- outcomes are a set per operation in the check, and the report of a
+  -- trace is bounded (4096 branches, evaluator/protocol.py).
+  for i in [0:RATELIMITER_TABLE_SIZE] do
+    let report (dec : Decision) (outcome : Bool) : M Bool :=
+      if i == 0 then branch dec outcome else pure outcome
+    _ ← report .gcBucketIter true
     -- hlist_for_each_entry_safe over table_v4[i], then table_v6[i]: empty
-    _ ← branch .gcV4EntryIter false
-    _ ← branch .gcV6EntryIter false
-    if ← branch .gcHasWork work then unsupported "the ratelimiter GC's cond_resched (a work run)"
+    _ ← report .gcV4EntryIter false
+    _ ← report .gcV6EntryIter false
+    if ← report .gcHasWork work then unsupported "the ratelimiter GC's cond_resched (a work run)"
   _ ← branch .gcBucketIter false
   if ← branch .gcRequeue work then unsupported "the ratelimiter GC re-queuing itself (a work run)"
 
