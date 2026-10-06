@@ -58,7 +58,7 @@ def inject(message, family=4):
 
 XMIT = {"op": "wg_xmit", "packet": {"family": 4, "dst": "0a000001"}}
 
-# name: (ops, steer, expect)
+# name: (ops, steer, expect[, rlimit_nofile])
 TRACES = {
     # wg0 initiates (wg_xmit with no session queues the initiation; the send
     # worker's alloc_skb at socket.c:192): recorded unsteered, then each failure
@@ -94,14 +94,25 @@ TRACES = {
     "a_keepalive_set_nomem": (setup(endpoint=LISTENER) + [
         {"op": "wg_set", "config": {"peers": [{"public_key": noise.public_key(INITIATOR).hex(), "keepalive": 25}]}},
         OBSERVE, GET], [["keepaliveSkb", FAIL]], [f"{KEEPALIVE_NOMEM}=1"]),
+    # an FS run armed with the kvmalloc helper range (a draw: the task class
+    # is not failed [USER A1]): the dup3 expands the table to 1024 slots, an
+    # 8 KiB fd array (the slab attempt with __GFP_NORETRY) and its bitmaps,
+    # each one recorded and consumed
+    "a_fdtable_kvmalloc_draw": ([{"op": "eventfd2", "init": 0, "flags": 0},
+                                 {"op": "dup3", "fd": {"ref": 0}, "newfd": {"literal": 1000}, "flags": 0},
+                                 {"op": "write", "fd": {"literal": 1000}, "count": 8, "value": "1"},
+                                 {"op": "read", "fd": {"ref": 0}, "count": 8}],
+                                [["kvmallocFdArray", "draw"]], ["alloc_fdtable.fd_array_failed=0"], 1024),
 }
 
 
 def main():
     out = ROOT / "corpus/alloc"
     out.mkdir(exist_ok=True)
-    for name, (ops, steer, expect) in TRACES.items():
+    for name, (ops, steer, expect, *rlimit) in TRACES.items():
         trace = {"version": 1, "id": name, "ops": ops, "steer": steer, "expect": expect}
+        if rlimit:
+            trace["rlimit_nofile"] = rlimit[0]
         (out / f"{name}.json").write_text(json.dumps(trace, indent=2) + "\n")
     print(f"wrote {len(TRACES)} traces to {out}")
 

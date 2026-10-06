@@ -1,4 +1,5 @@
-"""WireGuard mutants (stage A report, section 2; stages B1, B2, C, D1 and D2).
+"""WireGuard mutants (stage A report, section 2; stages B1, B2, C, D1 and D2), and
+the allocation-outcome mutants of A (docs/2026-10-05-a-alloc.md, section 7).
 
 Each mutant is applied to a clean committed tree, verified as applied, checked
 on the wireguard suite, then reverted. Run from the repository root:
@@ -246,6 +247,52 @@ D2_MUTANTS = [
 ]
 PENDING = {m[0] for m in D2_MUTANTS if m[3] is None}
 
+# A (allocation outcomes; docs/2026-10-05-a-alloc.md, section 7). Checked on
+# the alloc suite (corpus/alloc: armed, steered traces); an unarmed run
+# answers every allocation ok, so no other suite can reject these. A-M2
+# (keypair_create, noise.c:100 record-only) and A-M4 (skb_cow_data never
+# allocates on this fixture, A0) are dropped. The A2 entries need the
+# (b-task) failure traces, which A1 does not steer [USER A1]: their patterns
+# are written against the current code and they are reported as pending.
+A_MUTANTS = [
+  ('A-M3-keepalive-sends-after-nomem', 'control: wg_packet_send_keepalive calls wg_packet_send_staged_packets '
+   'after a failed allocation (send.c:228-229 returns); the staged-queue decision the C never reaches (A2)',
+   'Leanux/WG/Send.lean',
+   "    if ← branch .keepaliveNoMem !(← hiddenAlloc .keepaliveSkb) then return\n",
+   "    if ← branch .keepaliveNoMem !(← hiddenAlloc .keepaliveSkb) then return ← sendStagedPackets pid\n"),
+  ('A-M10-sendbuf-ignores-record', 'behavior: wg_socket_send_buffer_to_peer ignores the allocation outcome '
+   '(socket.c:194); a datagram Linux never sent', 'Leanux/WG/Handshake.lean',
+   "  if ← branch .sendBufNoMem !(← hiddenAlloc .sendBufSkb) then return\n",
+   "  _ ← hiddenAlloc .sendBufSkb\n  if ← branch .sendBufNoMem false then return\n"),
+  ('A-M1-peer-create-ignores-record', 'A2: wg_peer_create ignores the allocation outcome (peer.c:35)',
+   'Leanux/WG/Peer.lean',
+   "  if ← branch .peerCreateNoMem !(← hiddenAlloc .kmemCacheZallocPeer) then return .error (-ENOMEM)\n",
+   "  _ ← hiddenAlloc .kmemCacheZallocPeer\n  if ← branch .peerCreateNoMem false then return .error (-ENOMEM)\n"),
+  ('A-M5-fdtable-installed-after-nomem', 'A2: alloc_fdtable goes on after a failed fd array (file.c:152-154)',
+   'Leanux/FS/File.lean',
+   "  if ← branch .allocFdtableFdArrayNoMem !arrayOk then return .error (-ENOMEM)\n",
+   "  _ ← branch .allocFdtableFdArrayNoMem !arrayOk\n"),
+  ('A-M6-eventfd-keeps-fd', 'A2: do_eventfd forgets put_unused_fd on the file failure (eventfd.c:411-412)',
+   'Leanux/FS/Eventfd.lean',
+   "    putUnusedFd fd.toNat\n    eventfdFreeCtx cid  -- err:\n",
+   "    eventfdFreeCtx cid  -- err:\n"),
+  ('A-M7-pipe-accounting-kept', 'P/A2: alloc_pipe_info failure without the accounting revert (pipe.c:832)',
+   'Leanux/FS/Pipe.lean', None, None),
+  ('A-M8-pipe-write-enomem', 'P/A2: pipe_write returns -ENOMEM instead of the partial count (pipe.c:515)',
+   'Leanux/FS/Pipe.lean', None, None),
+  ('A-M9-intermediate-keeps-newnode', 'A2: add\'s third allocation failure keeps newnode (allowedips.c:235-239)',
+   'Leanux/WG/AllowedIps.lean',
+   "    listDel newnode\n    freeNode newnode\n    return -ENOMEM\n",
+   "    return -ENOMEM\n"),
+]
+A_PENDING = {'A-M1-peer-create-ignores-record': 'pending A2 (b-task steering not enabled)',
+             'A-M5-fdtable-installed-after-nomem': 'pending A2 (b-task steering not enabled)',
+             'A-M6-eventfd-keeps-fd': 'pending A2 (b-task steering not enabled)',
+             'A-M7-pipe-accounting-kept': 'pending P and A2 (no pipe mirror on this base)',
+             'A-M8-pipe-write-enomem': 'pending P and A2 (no pipe mirror on this base)',
+             'A-M9-intermediate-keeps-newnode': 'pending A2 (b-task steering not enabled)'}
+SUITE_OF = {m[0]: 'alloc' for m in A_MUTANTS}
+
 
 def w4(text):
     fw = ("  if ← branch .setDevFwmark a.fwmark.isSome then\n"
@@ -277,7 +324,7 @@ def run(cmd, **kw):
 
 assert run(['git', 'status', '--porcelain'], capture_output=True, text=True).stdout == '', 'tree must be clean'
 head = run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()
-MUTANTS = MUTANTS + D1_MUTANTS + D2_MUTANTS
+MUTANTS = MUTANTS + D1_MUTANTS + D2_MUTANTS + A_MUTANTS
 selected = sys.argv[1:] or [m[0] for m in MUTANTS]
 results = {}
 for name, what, path, old, new in MUTANTS:
@@ -286,6 +333,12 @@ for name, what, path, old, new in MUTANTS:
     if name in PENDING:   # a draft entry: its pattern is filled at integration
         results[name] = dict(description=what, base=head, file=path, status='pending')
         print(name, 'pending (no pattern yet)', flush=True)
+        continue
+    if name in A_PENDING:
+        if old is not None:   # the pattern still matches the code
+            assert open(os.path.join(ROOT, path)).read().count(old) == 1, f'{name}: pattern not unique/present'
+        results[name] = dict(description=what, base=head, file=path, status='pending', reason=A_PENDING[name])
+        print(name, A_PENDING[name], flush=True)
         continue
     full = os.path.join(ROOT, path)
     text = open(full).read()
@@ -300,7 +353,7 @@ for name, what, path, old, new in MUTANTS:
         assert path in diff, f'{name}: mutation not applied'
         out = f'.artifacts/check/mutant-{name}'
         run(['rm', '-rf', out])
-        proc = run(['timeout', '3000', sys.executable, '-m', 'evaluator.check', '--suite', 'wireguard',
+        proc = run(['timeout', '3000', sys.executable, '-m', 'evaluator.check', '--suite', SUITE_OF.get(name, 'wireguard'),
                     '--out', out], capture_output=True, text=True)
         report = json.load(open(os.path.join(ROOT, out, 'report.json')))
         kinds = sorted({p['problem'] for f in report['failures'] for p in f.get('problems', [])} |

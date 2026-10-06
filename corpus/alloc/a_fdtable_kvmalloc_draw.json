@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "id": "a_fdtable_kvmalloc_draw",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 0,
+      "flags": 0
+    },
+    {
+      "op": "dup3",
+      "fd": {
+        "ref": 0
+      },
+      "newfd": {
+        "literal": 1000
+      },
+      "flags": 0
+    },
+    {
+      "op": "write",
+      "fd": {
+        "literal": 1000
+      },
+      "count": 8,
+      "value": "1"
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8
+    }
+  ],
+  "steer": [
+    [
+      "kvmallocFdArray",
+      "draw"
+    ]
+  ],
+  "expect": [
+    "alloc_fdtable.fd_array_failed=0"
+  ],
+  "rlimit_nofile": 1024
+}
