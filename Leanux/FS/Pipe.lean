@@ -518,6 +518,10 @@ def roundupPowOfTwoUL (n : Nat) : Nat := Id.run do
   while p < n do p := 2 * p
   return p
 
+#guard roundupPowOfTwoUL 4096 == 4096 && roundupPowOfTwoUL 4097 == 8192 && roundupPowOfTwoUL (2 ^ 31) == 2 ^ 31
+-- the ring indices wrap as `unsigned int`: occupancy across the wrap, and fullness
+#guard pipeOccupancy 3 0xFFFFFFFE == 5 && pipeFull 16 0 16 && !pipeFull 15 0 16 && pipeFull 0 0xFFFFFFFF 1
+
 /-- round_pipe_size (fs/pipe.c:1247-1257); `size` is an `unsigned int`. -/
 def roundPipeSize (size : Nat) : M Nat := do
   if ← branchCmp .roundPipeSizeTooBig (size > 2 ^ 31) size (2 ^ 31) then return 0
