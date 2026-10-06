@@ -88,11 +88,12 @@ def traces():
                              ["fired:wg_expired_retransmit_handshake", "wg_expired_retransmit_handshake.give_up=0"])
     # attempts 1..19 retry, the 20th firing gives up: the staged packet is
     # purged (tx_dropped 1), the keepalive timer deleted, the zero-key timer
-    # armed
-    out["d3m_retransmit_gives_up"] = (no_keepalive() + [XMIT] + [advance(1450)] * 20 + [d1.OBSERVE, d1.GET],
+    # armed. A stretch (section 10): 20 advances nearly use the guest's 4 s
+    # real-time bound, so no observation follows (one exceeded it)
+    out["d3m_retransmit_gives_up"] = (no_keepalive() + [XMIT] + [advance(1450)] * 20,
                                       DRAWN_INITIATION * 20,
                                       ["fired:wg_expired_retransmit_handshake", "wg_expired_retransmit_handshake.give_up=1",
-                                       "wg_expired_retransmit_handshake.zero_key_not_pending=0"])
+                                       "wg_expired_retransmit_handshake.zero_key_not_pending=1"])
     # a data message arms the keepalive timer (2500); advance 2600 fires it
     out["d3m_keepalive"] = (ses + [data(key, index, 0, b"one"), advance(2600), d1.OBSERVE], steer,
                             ["fired:wg_expired_send_keepalive", "wg_expired_send_keepalive.need_another=0"])
@@ -109,10 +110,15 @@ def traces():
     out["d3m_persistent"] = (ses + [d1.OBSERVE, advance(6800), d1.OBSERVE], steer,
                              ["fired:wg_expired_send_persistent_keepalive",
                               "wg_expired_send_persistent_keepalive.interval=1"])
-    # a 2 s persistent keepalive fires in real time in one of the waits
+    # a 2 s persistent keepalive fires in real time, in one of the 0.4 s
+    # waits after the junk injections (a 1-byte message, dropped before any
+    # traversal re-arm), about 2 s after the response; the next firing (4 s)
+    # is after the trace. No wg_observe: its wait is before its coverage
+    # window, so a section there would be lost (and flagged)
     natural = d1.setup()
     natural[0]["config"]["peers"][0]["keepalive"] = 2
-    out["d3m_persistent_natural"] = (natural + [d1.OBSERVE, d1.inject(rx.session()[0].message)] + [d1.OBSERVE] * 4,
+    junk = {"op": "wg_inject", "family": 4, "port": d1.PORT, "message": "01"}
+    out["d3m_persistent_natural"] = (natural + [d1.inject(rx.session()[0].message)] + [junk] * 5,
                                      steer, ["fired:wg_expired_send_persistent_keepalive"])
     # 540 s: the persistent keepalive (the keypair has expired: an
     # initiation), then the zero-key timer and its clear work

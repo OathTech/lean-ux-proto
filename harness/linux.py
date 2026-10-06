@@ -45,7 +45,7 @@ DISPATCH_SYMBOLS = ("wg_packet_handshake_send_worker", "wg_packet_handshake_rece
 # Whether the kernel writes the kind-303 arm records at mod_timer for the
 # dispatch set's timers (D3, section 3.3). Off until the mirror consumes
 # them: an unconsumed record is a choice from an undeclared consumer.
-ARM_RECORDS = False
+ARM_RECORDS = True
 # The oracle is the kernel build booted with these parameters (D3, option
 # C-jiffies: the timekeeper is pinned to refined-jiffies, which the virtual
 # time advance requires; each batch checks it at start and end).
