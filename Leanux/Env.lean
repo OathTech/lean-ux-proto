@@ -327,6 +327,56 @@ def afterXmit : M Unit := do
   if crypt then runCryptWorkers
   runSendWorkers
 
+/-! ## D3: timers and the time advance (docs/2026-10-05-d3-timers.md, section 5.3)
+
+Interface stubs, owned by stream M: the hooks exist and stop
+`unsupported "D3 stream M: not yet ..."` where the semantics belong to M. -/
+
+/-- The site of the next record that is not ambient and not a pending
+    section stop, without consuming anything (unlike `peekHiddenSite`). -/
+def peekNextSite : M (Option Nat) := do
+  let w ← get
+  let some rs := w.hidden | return none
+  let ambient := HiddenSite.all.filter (·.info.role == .ambient) |>.map (·.info.id)
+  let rec go : List HiddenRecord → List Nat → Option Nat
+    | r :: rest, pending =>
+      if ambient.contains r.site then go rest pending
+      else if pending.contains r.site then go rest (pending.erase r.site)
+      else some r.site
+    | [], _ => none
+  return go rs w.pendingStops
+
+/-- The D3 unit whose section a record starts: a timer callback or the
+    clear worker. -/
+def timerSectionOf (site : Nat) : Option Worker :=
+  Worker.all.find? fun w =>
+    (w.timer?.isSome || w == .clearPeerWorker) && site == (HiddenSite.sectionStart w).info.id
+
+/-- A timer callback's section, run by the environment (`call_timer_fn`):
+    noted for the trace's `fired:<symbol>` expectations, then run as any
+    dispatched unit. The caller (stream M) has chosen the peer and cleared
+    its timer: the callback is entered with its own timer detached. -/
+def runTimerSection (w : Worker) (body : M Unit) : M Unit := do
+  if w.timer?.isNone then invariant s!"{w.symbol} is not a timer callback"
+  modify fun s => { s with fired := s.fired.push w.symbol }
+  runWorker w body
+
+/-- An idle point (the guest's waits after `wg_set`, `wg_up`, `wg_inject`,
+    `wg_xmit`, and before `wg_observe`), where a timer may fire naturally.
+    Stub: a timer or clear-worker section here is not yet modeled. Reads no
+    state and consumes nothing. -/
+def idleTimers : M Unit := do
+  if let some w := (← peekNextSite).bind timerSectionOf then
+    unsupported s!"D3 stream M: not yet (the section of {w.symbol} at an idle point)"
+
+/-- `wg_advance`: `ioctl(3, KCOV_LEANUX_TIME_ADVANCE, &ticks)` on the
+    trace's KCOV descriptor, then the guest's wait (stream K, section 13.3).
+    Stub: the kind-304 record (`.timeAdvance`, `{before, after}`), the
+    timer sections the next tick runs and the work they queue belong to
+    stream M. The ioctl returns 0. -/
+def advance (ticks : Nat) : M Int :=
+  unsupported s!"D3 stream M: not yet (wg_advance of {ticks} ticks: the kind-304 record and the timers it fires)"
+
 /-- `wg_up` as the fixture performs it: once, on a port that is not the
     fixture's own, then `dev_change_flags` (the mirror's `wgUp`). -/
 def wgUp : M Int := do
@@ -345,6 +395,7 @@ def wgUp : M Int := do
     during the guest's wait before this operation, whose coverage is
     discarded: outside the domain. -/
 def observe : M (Int × Lean.Json) := do
+  idleTimers   -- the guest's wait before this operation
   if !(← getDev).sendWorkQueue.isEmpty then unsupported "send work queued by an operation that does not wait"
   requireNoCryptWork
   deliverSent

@@ -34,7 +34,10 @@ def keys(value, expected):
 
 def validate_observation(trace, result):
     """Check protocol shape, not whether the claimed semantics are correct."""
-    if not keys(result, ('version', 'id', 'observations', 'branches')):
+    # D3: the mirror adds `fired` (the timer sections its environment ran,
+    # for `fired:<symbol>` expectations) when one ran
+    if not (keys(result, ('version', 'id', 'observations', 'branches'))
+            or keys(result, ('version', 'id', 'observations', 'branches', 'fired'))):
         raise InvalidOutput('observation fields')
     if type(result['version']) is not int or result['version'] != 1 or result['id'] != trace['id']:
         raise InvalidOutput('version or trace identity')
@@ -78,6 +81,11 @@ def validate_observation(trace, result):
             raise InvalidOutput('branch operands')
         if type(branch['label']) is not str or not 1 <= len(branch['label']) <= 120:
             raise InvalidOutput('branch label')
+    fired = result.get('fired')
+    if fired is not None and (type(fired) is not list or not 1 <= len(fired) <= 4096 or any(
+            not keys(f, ('index', 'symbol')) or not integer(f['index'], 0, len(trace['ops']) - 1)
+            or type(f['symbol']) is not str or not re.fullmatch(r'[a-z0-9_]{1,80}', f['symbol']) for f in fired)):
+        raise InvalidOutput('fired timer sections')
     return result
 
 
@@ -102,7 +110,9 @@ def parse_batch(traces, output, max_bytes=16 * 1024 * 1024):
 SEMANTIC_ERRNOS = {'eventfd2': {22, 24}, 'dup': {9, 24}, 'dup3': {9, 22},
                    'close': {9}, 'fcntl': {1, 9, 22}, 'wg_set': {22, 95}, 'wg_get': {22},
                    # ENOKEY, EDESTADDRREQ, EPROTONOSUPPORT, ENETUNREACH (no route before wg_up); EAGAIN when nothing arrived
-                   'wg_up': set(), 'wg_xmit': {126, 89, 93, 101}, 'wg_observe': {11}, 'read': {9, 11, 22}, 'write': {9, 11, 22}}
+                   'wg_up': set(), 'wg_xmit': {126, 89, 93, 101}, 'wg_observe': {11}, 'read': {9, 11, 22}, 'write': {9, 11, 22},
+                   # D3: the advance ioctl fails only outside the oracle's setup (-EOPNOTSUPP, -EINVAL, -EPERM)
+                   'wg_advance': set()}
 
 
 def compare(trace, linux, model):

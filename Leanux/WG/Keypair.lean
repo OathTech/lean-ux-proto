@@ -130,7 +130,13 @@ def peerRemoveAfterDead (pid : PeerId) : M Unit := do
   if ← branch .peerRemoveNotDead !(← getPeer pid).isDead then
     unsupported "peer_remove_after_dead: WARN_ON(!peer->is_dead)"
   keypairsClear pid
-  -- timers stop; flush packet_crypt_wq twice; napi disable/del; flush handshake_send_wq
+  -- wg_timers_stop (timers.c:235-243): `timer_delete_sync` of the five
+  -- timers, then `flush_work(&peer->clear_peer_work)`, which runs a queued
+  -- clear work here (D3 stream M)
+  for t in PeerTimer.all do delTimer pid t
+  if (← getDev).clearWorkQueue.contains pid then
+    unsupported "D3 stream M: not yet (flush_work of a queued clear_peer_work)"
+  -- flush packet_crypt_wq twice; napi disable/del; flush handshake_send_wq
   if (← getDev).numPeers == 0 then invariant "--num_peers below zero"
   modifyDev fun d => { d with numPeers := d.numPeers - 1 }
   peerPut (some pid)

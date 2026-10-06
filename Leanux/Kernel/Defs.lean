@@ -235,9 +235,16 @@ sequence number, and passes them to the mirror, which consumes them in order:
   (the scheduler), wherever it occurs. -/
 
 /-- A deferred unit the kernel dispatches in a KCOV section (D1 sprint,
-    stream 1): the work item's or softirq's function. -/
+    stream 1): the work item's, softirq's or (D3) timer callback's function.
+    `Worker.index` is the function's position in `harness/linux.py`
+    `DISPATCH_SYMBOLS`. -/
 inductive Worker where
   | sendWorker | receiveWorker | encryptWorker | txWorker | netRx | decryptWorker
+  /-- D3 (docs/2026-10-05-d3-timers.md, sections 3.1 and 5.2): the five
+      timer callbacks, each run by `call_timer_fn` in `TIMER_SOFTIRQ`, and
+      the zero-key work item (`clear_peer_work` on `handshake_send_wq`). -/
+  | timerRetransmit | timerSendKeepalive | timerNewHandshake | timerZeroKey | clearPeerWorker
+  | timerPersistentKeepalive
   deriving Repr, BEq, DecidableEq
 
 def Worker.symbol : Worker → String
@@ -247,12 +254,33 @@ def Worker.symbol : Worker → String
   | .txWorker => "wg_packet_tx_worker"
   | .netRx => "net_rx_action"
   | .decryptWorker => "wg_packet_decrypt_worker"
+  | .timerRetransmit => "wg_expired_retransmit_handshake"
+  | .timerSendKeepalive => "wg_expired_send_keepalive"
+  | .timerNewHandshake => "wg_expired_new_handshake"
+  | .timerZeroKey => "wg_expired_zero_key_material"
+  | .clearPeerWorker => "wg_queued_expired_zero_key_material"
+  | .timerPersistentKeepalive => "wg_expired_send_persistent_keepalive"
 
 def Worker.index : Worker → Nat
   | .sendWorker => 0 | .receiveWorker => 1 | .encryptWorker => 2 | .txWorker => 3 | .netRx => 4
   | .decryptWorker => 5
+  | .timerRetransmit => 6 | .timerSendKeepalive => 7 | .timerNewHandshake => 8 | .timerZeroKey => 9
+  | .clearPeerWorker => 10 | .timerPersistentKeepalive => 11
 
-def Worker.all : List Worker := [.sendWorker, .receiveWorker, .encryptWorker, .txWorker, .netRx, .decryptWorker]
+def Worker.all : List Worker :=
+  [.sendWorker, .receiveWorker, .encryptWorker, .txWorker, .netRx, .decryptWorker,
+   .timerRetransmit, .timerSendKeepalive, .timerNewHandshake, .timerZeroKey, .clearPeerWorker,
+   .timerPersistentKeepalive]
+
+/-- D3: the timer callbacks (sections opened by `call_timer_fn`), with the
+    peer timer each runs for. -/
+def Worker.timer? : Worker → Option WG.PeerTimer
+  | .timerRetransmit => some .retransmitHandshake
+  | .timerSendKeepalive => some .sendKeepalive
+  | .timerNewHandshake => some .newHandshake
+  | .timerZeroKey => some .zeroKeyMaterial
+  | .timerPersistentKeepalive => some .persistentKeepalive
+  | _ => none
 
 inductive HiddenSite where
   | initEphemeral | respEphemeral | tai64nNow | indexDraw
@@ -275,6 +303,14 @@ inductive HiddenSite where
       confirmation by a data message (its tail jump attributes the record to
       the caller, `wg_packet_consume_data_done`). -/
   | walltimeLastHandshakeData
+  /-- D3 (docs/2026-10-05-d3-timers.md, sections 3.3-3.4 and 13.4): the
+      kind-303 arm record `{jiffies at mod_timer, expires}` written at
+      `mod_timer` for a timer of the dispatch set (consumer `timers.c:37`,
+      `mod_peer_timer`, inlined into its seven callers; gated by
+      `harness/linux.py` `ARM_RECORDS`), and the kind-304 record
+      `{jiffies before, jiffies after}` of the `wg_advance` operation, in
+      the trace process's task stream. -/
+  | modTimerArm | timeAdvance
   deriving Repr, BEq, DecidableEq
 
 inductive SiteRole where
@@ -285,8 +321,8 @@ structure HiddenSiteInfo where
   /-- The number the check passes for records of this site. -/
   id : Nat
   label : String
-  /-- `random`, `clock`, `section` or `resched` (the interception point's
-      kind). -/
+  /-- `random`, `clock`, `section`, `resched`, `timer` (kind 303) or
+      `advance` (kind 304): the interception point's kind. -/
   kind : String
   /-- The consumer frame: the first frame of the call chain outside the
       random and clock helpers. -/
@@ -295,6 +331,13 @@ structure HiddenSiteInfo where
   /-- Bytes recorded (the record carries whole words, zero-padded). -/
   len : Nat
   role : SiteRole
+
+/-- A worker's section-start site id (its stop is the next id). The D1/D2
+    units keep `40 + 2·index` (40-51); `40 + 2·index` for the D3 units
+    (indices 6-11) would reach the resched sites (60-63), so they take
+    102-113 in the D3 range. -/
+def Worker.sectionId (w : Worker) : Nat :=
+  if w.index < 6 then 40 + 2 * w.index else 102 + 2 * (w.index - 6)
 
 def HiddenSite.info : HiddenSite → HiddenSiteInfo
   | .initEphemeral => ⟨1, "init_ephemeral", "random", "drivers/net/wireguard/noise.c", 541, 32, .mirror⟩
@@ -324,8 +367,8 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   | .icmpCredit => ⟨22, "icmp_global_consume", "random", "net/ipv4/icmp.c", 268, 1, .cut⟩
   | .flowHashSecret => ⟨23, "flow_hash_secret", "random", "net/core/flow_dissector.c", 1710, 16, .cut⟩
   | .schedDlTimer => ⟨30, "start_dl_timer", "clock", "kernel/sched/deadline.c", 1153, 8, .ambient⟩
-  | .sectionStart w => ⟨40 + 2 * w.index, s!"section_start:{w.symbol}", "section", w.symbol, 0, 8, .mirror⟩
-  | .sectionStop w => ⟨41 + 2 * w.index, s!"section_stop:{w.symbol}", "section", w.symbol, 1, 8, .mirror⟩
+  | .sectionStart w => ⟨w.sectionId, s!"section_start:{w.symbol}", "section", w.symbol, 0, 8, .mirror⟩
+  | .sectionStop w => ⟨w.sectionId + 1, s!"section_stop:{w.symbol}", "section", w.symbol, 1, 8, .mirror⟩
   | .reschedReceive => ⟨60, "resched:wg_packet_handshake_receive_worker", "resched", "drivers/net/wireguard/receive.c", 216, 8, .mirror⟩
   | .reschedEncrypt => ⟨61, "resched:wg_packet_encrypt_worker", "resched", "drivers/net/wireguard/send.c", 307, 8, .mirror⟩
   | .reschedTx => ⟨62, "resched:wg_packet_tx_worker", "resched", "drivers/net/wireguard/send.c", 283, 8, .mirror⟩
@@ -343,6 +386,14 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   -- wg_packet_rx_poll; return address - 1 resolves to receive.c:347 in the
   -- net-choice build (checked with the check's symbolizer).
   | .walltimeLastHandshakeData => ⟨17, "walltime_last_handshake_data", "clock", "drivers/net/wireguard/receive.c", 347, 16, .mirror⟩
+  -- D3 (ids 100-115 reserved for D3: docs/2026-10-05-d3-timers.md, section
+  -- 14). `kcov_timer_arm(fn, jiffies, expires, _RET_IP_)` in `mod_timer`:
+  -- the return address - 1 resolves to timers.c:37 for all seven callers
+  -- (stream K, section 13.4). The advance record is written by the ioctl
+  -- handler; its call site is `vfs_ioctl` (fs/ioctl.c:51), the only caller
+  -- of `kcov_ioctl`.
+  | .modTimerArm => ⟨100, "mod_timer_arm", "timer", "drivers/net/wireguard/timers.c", 37, 16, .mirror⟩
+  | .timeAdvance => ⟨101, "time_advance", "advance", "fs/ioctl.c", 51, 16, .mirror⟩
 
 def HiddenSite.all : List HiddenSite :=
   [.initEphemeral, .respEphemeral, .tai64nNow, .indexDraw, .resetLastSent, .birthdateExpired, .initLastSent,
@@ -350,6 +401,7 @@ def HiddenSite.all : List HiddenSite :=
    .retransmitJitter, .walltimeLastHandshake, .ipIdentReserve, .ipIdentKey, .icmpCredit, .flowHashSecret, .schedDlTimer]
   ++ Worker.all.flatMap (fun w => [.sectionStart w, .sectionStop w])
   ++ [.reschedReceive, .reschedEncrypt, .reschedTx, .reschedDecrypt, .newHandshakeJitter, .walltimeLastHandshakeData]
+  ++ [.modTimerArm, .timeAdvance]
 
 /-- The resched site of a worker's `cond_resched`, for the workers that
     have one on the modeled paths. -/
@@ -358,7 +410,7 @@ def Worker.resched? : Worker → Option HiddenSite
   | .encryptWorker => some .reschedEncrypt
   | .txWorker => some .reschedTx
   | .decryptWorker => some .reschedDecrypt
-  | .sendWorker | .netRx => none
+  | _ => none
 
 def SiteRole.name : SiteRole → String
   | .mirror => "mirror" | .cut => "cut" | .ambient => "ambient"
@@ -438,6 +490,19 @@ structure World where
       not slept. The kernel is `CONFIG_PREEMPT_NONE` on one CPU, so their
       worker cannot have run yet. -/
   queuedThisCall : List Nat := []
+  /-- D3, fixture knowledge (docs/2026-10-05-d3-timers.md, section 5.4): the
+      last `jiffies` a record told (kinds 303 and 304), 64-bit, never
+      truncated; `none` before the first. -/
+  jiffiesLast : Option Nat := none
+  /-- D3: whether this run's records include the kind-303 arm records (the
+      wire's `A` line, `harness/linux.py` `ARM_RECORDS`; the check passes
+      the same value as the input's `arm_records`). Without them the mirror
+      consumes none and a timer's `expires` is nominal. -/
+  armRecords : Bool := false
+  /-- D3: the timer sections the environment ran in this operation, by
+      callback symbol, for the trace's `fired:<symbol>` expectations
+      (`Env.runTimerSection`). -/
+  fired : Array String := #[]
 
 /-- Why a mirror execution stopped without an observation. -/
 inductive Stop where

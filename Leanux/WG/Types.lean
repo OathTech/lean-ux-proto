@@ -9,8 +9,9 @@ Shaped like the C structures of the configuration path: `struct wg_device`,
 `struct allowedips_node`. Pointers are identities into finite stores; list
 heads are ordered lists of identities.
 
-Omitted, as cut points: the UDP sockets, timers, NAPI, `dst_cache`, and the
-cookie keys (BLAKE2s outputs that nothing on the modeled paths observes).
+Omitted, as cut points: the UDP sockets, the timer wheel (the timers'
+`expires` is mirrored, D3), NAPI, `dst_cache`, and the cookie keys (BLAKE2s
+outputs that nothing on the modeled paths observes).
 Keypairs live in the device's keypair store (`Device.keypairs`), referenced
 by identity from the peer's `keypairs` slots and the index hashtable. The public-key hashtable is a map:
 its bucketing uses a random `siphash` key, so bucket order is unobservable.
@@ -221,12 +222,22 @@ structure Peer where
       is scheduled (`napi_schedule` without a run yet) (D2). -/
   rxQueue : List RxPacket := []
   napiScheduled : Bool := false
-  /-- Timer state read on modeled paths (D2; no timer fires within a
-      trace): `timer_pending(&timer_new_handshake)`,
-      `timer_pending(&timer_send_keepalive)`,
-      `timer_need_another_keepalive`, and `sent_lastminute_handshake`. -/
-  timerNewHandshakePending : Bool := false
-  timerSendKeepalivePending : Bool := false
+  /-- The five `struct timer_list` (peer.h:53-55), D3 interface
+      (docs/2026-10-05-d3-timers.md, section 5.1): `some expires` (absolute
+      64-bit `jiffies`, never truncated) while the timer is pending, `none`
+      otherwise; `timer_pending` is `isSome` (`Peer.timerPending`). The
+      expiry comes from the kind-303 arm record once the mirror consumes it
+      (stream M); until then it is the nominal `jiffies + delay`
+      (`WG.armTimer`), which nothing reads. -/
+  timerRetransmitHandshake : Option Nat := none
+  timerSendKeepalive : Option Nat := none
+  timerNewHandshake : Option Nat := none
+  timerZeroKeyMaterial : Option Nat := none
+  timerPersistentKeepalive : Option Nat := none
+  /-- `timer_handshake_attempts` (peer.h:56). -/
+  timerHandshakeAttempts : Nat := 0
+  /-- `timer_need_another_keepalive` and `sent_lastminute_handshake`
+      (peer.h:57-59). -/
   timerNeedAnotherKeepalive : Bool := false
   sentLastminuteHandshake : Bool := false
   rxBytes : Nat := 0
@@ -242,6 +253,34 @@ structure Peer where
   lastMac1Sent : List UInt8 := List.replicate 16 0
   haveSentMac1 : Bool := false
   deriving Repr, BEq
+
+/-- A peer's five timers (`struct wg_peer`, peer.h:53-55), in the order of
+    their callbacks in timers.c. -/
+inductive PeerTimer where
+  | retransmitHandshake | sendKeepalive | newHandshake | zeroKeyMaterial | persistentKeepalive
+  deriving Repr, BEq, DecidableEq
+
+def PeerTimer.all : List PeerTimer :=
+  [.retransmitHandshake, .sendKeepalive, .newHandshake, .zeroKeyMaterial, .persistentKeepalive]
+
+/-- The timer's `expires` while pending. -/
+def Peer.timer (p : Peer) : PeerTimer → Option Nat
+  | .retransmitHandshake => p.timerRetransmitHandshake
+  | .sendKeepalive => p.timerSendKeepalive
+  | .newHandshake => p.timerNewHandshake
+  | .zeroKeyMaterial => p.timerZeroKeyMaterial
+  | .persistentKeepalive => p.timerPersistentKeepalive
+
+/-- `timer_pending(&peer->timer_x)` (timer.h:145-148): hashed in a bucket. -/
+def Peer.timerPending (p : Peer) (t : PeerTimer) : Bool := (p.timer t).isSome
+
+def Peer.setTimer (p : Peer) (t : PeerTimer) (v : Option Nat) : Peer :=
+  match t with
+  | .retransmitHandshake => { p with timerRetransmitHandshake := v }
+  | .sendKeepalive => { p with timerSendKeepalive := v }
+  | .newHandshake => { p with timerNewHandshake := v }
+  | .zeroKeyMaterial => { p with timerZeroKeyMaterial := v }
+  | .persistentKeepalive => { p with timerPersistentKeepalive := v }
 
 /-- `struct noise_static_identity`. -/
 structure StaticIdentity where
@@ -302,6 +341,10 @@ structure Device where
       oldest first (D2). -/
   decryptLastCpu : Int := -1
   decryptQueue : List RxPacket := []
+  /-- D3: peers whose `clear_peer_work` (`wg_queued_expired_zero_key_material`)
+      is queued on `handshake_send_wq`, oldest first
+      (docs/2026-10-05-d3-timers.md, section 5.4). -/
+  clearWorkQueue : List PeerId := []
   deriving BEq
 
 def AF_INET : Nat := 2

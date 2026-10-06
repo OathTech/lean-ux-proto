@@ -44,6 +44,9 @@ inductive Syscall where
   | wgObserve
   /-- `sendto` of a WireGuard message from the fixture's sender to `port`. -/
   | wgInject (family port : Nat) (message : List UInt8)
+  /-- D3: `ioctl(3, KCOV_LEANUX_TIME_ADVANCE, &ticks)` on the trace's KCOV
+      descriptor, then the guest's wait (docs/2026-10-05-d3-timers.md, 4.3). -/
+  | wgAdvance (ticks : Nat)
 
 /-- The generic-netlink socket at descriptor 7 (`NETLINK_FD` in harness/guest.c). -/
 def NETLINK_FD : Nat := 7
@@ -102,6 +105,7 @@ def dispatch : Syscall → M Int
     let (ret, observed) ← Env.observe
     modify fun w => { w with extraOut := ["datagrams", "replies", "stats"].map fun k => (k, observed.getObjValD k) }
     return ret
+  | .wgAdvance ticks => Env.advance ticks
 
 /-- `task_work_run` on exit to user mode: each queued `____fput` runs `__fput`. -/
 partial def taskWorkRun : M Unit := do
@@ -114,14 +118,15 @@ partial def taskWorkRun : M Unit := do
 
 /-- One system call: entry, the handler, and the return-to-user work. -/
 def syscall (call : Syscall) : M Int := do
-  modify fun w => { w with steps := #[], userOut := none, extraOut := [], queuedThisCall := [] }
+  modify fun w => { w with steps := #[], userOut := none, extraOut := [], queuedThisCall := [], fired := #[] }
   let ret ← dispatch call
   taskWorkRun
   -- the guest waits inside the operations that can queue the handshake send
   -- worker (and in wg_inject); the worker runs during that wait
+  -- worker; D3: a timer may fire in these waits (`Env.idleTimers`)
   match call with
-  | .wgSet _ | .wgUp | .wgInject .. => Env.runSendWorkers
-  | .wgXmit .. => Env.afterXmit
+  | .wgSet _ | .wgUp | .wgInject .. => Env.runSendWorkers; Env.idleTimers
+  | .wgXmit .. => Env.afterXmit; Env.idleTimers
   | _ => pure ()
   return ret
 

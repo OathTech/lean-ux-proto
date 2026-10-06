@@ -63,6 +63,25 @@ class TraceContractTests(unittest.TestCase):
         with self.assertRaises(UnsupportedTrace):
             validate_trace(self.trace)
 
+    def test_d3_advance_and_fired_expectations(self):
+        # D3 interface: wg_advance {ticks} is wire opcode 14 with `a` = ticks;
+        # `fired:wg_expired_*` is an expectation form; the `A` line carries
+        # the arm-record switch.
+        trace = {"version": 1, "id": "d3", "ops": [{"op": "wg_advance", "ticks": 2**31}],
+                 "steer": [["tai64n_now", "draw"]],
+                 "expect": ["fired:wg_expired_new_handshake", "wg_timers_data_sent.not_pending=1"]}
+        self.assertEqual(validate_trace(trace), trace)
+        plain = {k: v for k, v in trace.items() if k not in ("steer", "expect")}
+        wire = serialize_wire([plain], dispatch=(1,), arm_records=True)
+        self.assertEqual(wire.splitlines()[3:6], ["A 1", "T d3 1 32 1 0", f"14 0 -1 0 -1 {2**31} 0 0"])
+        for bad in ([{"op": "wg_advance", "ticks": 0}], [{"op": "wg_advance", "ticks": 2**31 + 1}],
+                    [{"op": "wg_advance", "ticks": 1, "extra": 0}]):
+            with self.assertRaises(InvalidTrace):
+                validate_trace(dict(trace, ops=bad))
+        for label in ("fired:", "fired:net_rx_action", "fired:wg_expired_X", "fired:wg_expired_a=1"):
+            with self.assertRaises(InvalidTrace):
+                validate_trace(dict(trace, expect=[label]))
+
     def test_wire_preserves_widths_and_reference_modes(self):
         self.trace['ops'].append({'op': 'dup3', 'fd': {'literal': -2147483648}, 'newfd': {'ref': 0}, 'flags': 4294967295})
         self.assertEqual(serialize_wire([self.trace]),

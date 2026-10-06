@@ -310,72 +310,91 @@ def consumeResponse (msg : List UInt8) : M (Option PeerId) := do
                                      remoteIndex := u32le msg 4, handshakeState := HANDSHAKE_CONSUMED_RESPONSE }
   return some pid
 
-/-- mod_peer_timer (timers.c:30-39): whether the timer was armed. -/
-def modPeerTimer (pid : PeerId) : M Bool := do
+/-- mod_peer_timer's guard (timers.c:33-34): `netif_running && !is_dead`. -/
+def modPeerTimerGuard (pid : PeerId) : M Bool := do
   let running := (← getDev).running
   andM (branch .modTimerRunning running) (branch .modTimerAlive !(← getPeer pid).isDead)
 
+/-- mod_peer_timer (timers.c:30-39): whether the timer was armed; if so,
+    `mod_timer(timer, jiffies + delay)` (`armTimer`, D3). `delay` is in
+    ticks, as the caller computed it. -/
+def modPeerTimer (pid : PeerId) (t : PeerTimer) (delay : Nat) : M Bool := do
+  if ← modPeerTimerGuard pid then
+    armTimer pid t delay
+    return true
+  return false
+
+/-- The timers' delays in ticks (timers.c, messages.h:43-50). -/
+def REKEY_TIMEOUT_TICKS : Nat := REKEY_TIMEOUT * HZ
+def KEEPALIVE_TIMEOUT_TICKS : Nat := KEEPALIVE_TIMEOUT * HZ
+def ZERO_KEY_MATERIAL_TICKS : Nat := REJECT_AFTER_TIME * 3 * HZ
+
 /-- `get_random_u32_below(REKEY_TIMEOUT_JITTER_MAX_JIFFIES)` inline for the
     constant ceiling `HZ / 3` = 83 (random.h:76-80): `get_random_u8` draws
-    (recorded at `site`) until `(u8)(83 * r) >= 256 % 83`. The jitter only
-    sets an expiry beyond the trace. -/
-def jitterBelowRekeyTimeout (site : HiddenSite) : M Unit := do
+    (recorded at `site`) until `(u8)(83 * r) >= 256 % 83`; the result is
+    `(83 * r) >> 8`, in ticks. -/
+def jitterBelowRekeyTimeout (site : HiddenSite) : M Nat := do
   let ceil := HZ / 3   -- REKEY_TIMEOUT_JITTER_MAX_JIFFIES; at most 256: the u8 path
   for _ in [0:256] do
     let r := (← hidden site)[0]!.toNat
-    if (ceil * r) % 256 ≥ 256 % ceil then return
+    if (ceil * r) % 256 ≥ 256 % ceil then return ceil * r / 256
   unsupported "256 rejected jitter draws"
 
 /-- wg_timers_data_sent (timers.c:145-151). The expiry argument (with its
     jitter draw) is evaluated before `mod_peer_timer`'s test. -/
 def timersDataSent (pid : PeerId) : M Unit := do
-  if ← branch .timersDataSentNotPending !(← getPeer pid).timerNewHandshakePending then
-    jitterBelowRekeyTimeout .newHandshakeJitter
-    if ← modPeerTimer pid then
+  if ← branch .timersDataSentNotPending !((← getPeer pid).timerPending .newHandshake) then
+    let jitter ← jitterBelowRekeyTimeout .newHandshakeJitter
+    if ← modPeerTimerGuard pid then
       if (← get).timing.timerMayExpire (KEEPALIVE_TIMEOUT + REKEY_TIMEOUT) then
         unsupported "the new-handshake timer firing within the trace"
-      setPeer pid { (← getPeer pid) with timerNewHandshakePending := true }
+      armTimer pid .newHandshake (KEEPALIVE_TIMEOUT_TICKS + REKEY_TIMEOUT_TICKS + jitter)
 
 /-- wg_timers_data_received (timers.c:154-163). -/
 def timersDataReceived (pid : PeerId) : M Unit := do
   if ← branch .timersDataReceivedRunning (← getDev).running then
-    if ← branch .timersDataReceivedNotPending !(← getPeer pid).timerSendKeepalivePending then
-      if ← modPeerTimer pid then
+    if ← branch .timersDataReceivedNotPending !((← getPeer pid).timerPending .sendKeepalive) then
+      if ← modPeerTimerGuard pid then
         if (← get).timing.timerMayExpire KEEPALIVE_TIMEOUT then
           unsupported "the send-keepalive timer firing within the trace"
-        setPeer pid { (← getPeer pid) with timerSendKeepalivePending := true }
+        armTimer pid .sendKeepalive KEEPALIVE_TIMEOUT_TICKS
     else
       setPeer pid { (← getPeer pid) with timerNeedAnotherKeepalive := true }
 
 /-- wg_timers_any_authenticated_packet_sent (timers.c:168-171): `del_timer`. -/
 def timersAnyAuthenticatedPacketSent (pid : PeerId) : M Unit :=
-  do setPeer pid { (← getPeer pid) with timerSendKeepalivePending := false }
+  delTimer pid .sendKeepalive
 
 /-- wg_timers_any_authenticated_packet_received (timers.c:176-179): `del_timer`. -/
 def timersAnyAuthenticatedPacketReceived (pid : PeerId) : M Unit :=
-  do setPeer pid { (← getPeer pid) with timerNewHandshakePending := false }
+  delTimer pid .newHandshake
 
-/-- wg_timers_handshake_complete (timers.c:192-198): the retransmit timer's
-    deletion and the attempt counter are timer state (cut);
-    `sent_lastminute_handshake` is reset; the wall clock
+/-- wg_timers_handshake_complete (timers.c:192-198): `del_timer` of the
+    retransmit timer, `timer_handshake_attempts = 0`,
+    `sent_lastminute_handshake` reset; the wall clock
     (`ktime_get_real_ts64`, a recorded `struct timespec64`) becomes the
     dump's `last_handshake`. `site` is the read's recorded consumer: the
     caller, since the read is a tail jump (D2 stream B: the response arm of
     the handshake receive path by default; `consume_data_done` on key
     confirmation). -/
 def timersHandshakeComplete (pid : PeerId) (site : HiddenSite := .walltimeLastHandshake) : M Unit := do
-  setPeer pid { (← getPeer pid) with sentLastminuteHandshake := false }
+  delTimer pid .retransmitHandshake
+  setPeer pid { (← getPeer pid) with timerHandshakeAttempts := 0, sentLastminuteHandshake := false }
   let now ← hidden site
   setPeer pid { (← getPeer pid) with walltimeLastHandshake := now }
 
+/-- wg_timers_session_derived (timers.c:201-207): the zero-key timer. -/
+def timersSessionDerived (pid : PeerId) : M Unit :=
+  discard <| modPeerTimer pid .zeroKeyMaterial ZERO_KEY_MATERIAL_TICKS
+
 /-- wg_timers_any_authenticated_packet_traversal (timers.c:212-217). A
     persistent keepalive timer that could expire within the trace is outside
-    the domain (its expiry is not modeled). -/
+    the domain (D2: its firing is not modeled yet). -/
 def timersTraversal (pid : PeerId) : M Unit := do
   let interval := (← getPeer pid).persistentKeepaliveInterval
   if ← branch .traversalKeepalive (interval != 0) then
     if (← get).timing.timerMayExpire interval then unsupported "a persistent keepalive timer firing within the trace"
-    discard <| modPeerTimer pid
+    discard <| modPeerTimer pid .persistentKeepalive (interval * HZ)
 
 /-- wg_socket_send_buffer_to_peer (socket.c:189-200) and
     wg_socket_send_skb_to_peer (socket.c:167-187). `send4`/`send6` (routing,
@@ -400,8 +419,8 @@ def sendBufferToPeer (pid : PeerId) (bytes : List UInt8) : M Unit := do
 /-- wg_timers_handshake_initiated (timers.c:182-187): the retransmit timer,
     with its jitter (`jitterBelowRekeyTimeout`). -/
 def timersHandshakeInitiated (pid : PeerId) : M Unit := do
-  jitterBelowRekeyTimeout .retransmitJitter
-  discard <| modPeerTimer pid
+  let jitter ← jitterBelowRekeyTimeout .retransmitJitter
+  discard <| modPeerTimer pid .retransmitHandshake (REKEY_TIMEOUT_TICKS + jitter)
 
 /-- wg_packet_send_handshake_response (send.c:85-108). -/
 def sendHandshakeResponse (pid : PeerId) : M Unit := do
@@ -412,7 +431,7 @@ def sendHandshakeResponse (pid : PeerId) : M Unit := do
     let some msg := created | invariant "unreachable"
     let msg ← addMacToPacket pid msg
     if ← branch .respSessionBegun (← beginSession pid) then
-      discard <| modPeerTimer pid   -- wg_timers_session_derived
+      timersSessionDerived pid
       timersTraversal pid
       timersAnyAuthenticatedPacketSent pid
       let now ← hiddenClock .respLastSentAgain

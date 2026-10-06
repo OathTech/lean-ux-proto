@@ -20,7 +20,7 @@ import re
 import subprocess
 import sys
 
-from harness.linux import (ARTIFACTS as LINUX_ARTIFACTS, DISPATCH_SYMBOLS, KERNEL, LinuxRunError, dispatch_addresses,
+from harness.linux import (ARTIFACTS as LINUX_ARTIFACTS, ARM_RECORDS, DISPATCH_SYMBOLS, KERNEL, LinuxRunError, dispatch_addresses,
                           run_linux)
 from harness.steer import SteeringError, call_sites, resolve as resolve_steering
 from harness.trace import InvalidTrace, loads_trace, uses_wireguard, validate_trace
@@ -191,6 +191,12 @@ RANDOM_KINDS = {1, 101, 102, 104, 108, 110}
 SECTION_START, SECTION_STOP = 300, 301
 # A reschedule at a cond_resched inside a task's dispatch section (same patch).
 RESCHED = 302
+# D3 (docs/2026-10-05-d3-timers.md, sections 3.3-3.4, 13.4): the arm record
+# {jiffies, expires} at mod_timer for a dispatch-set timer (class 'timer',
+# resolved by its consumer frame, timers.c:37), and the time advance's
+# {before, after} (class 'advance', resolved by its consumer frame, the
+# ioctl's call site fs/ioctl.c:51, the only caller of kcov_ioctl).
+TIMER_ARM, TIME_ADVANCE = 303, 304
 
 
 def load_hidden_sites():
@@ -202,7 +208,7 @@ def load_hidden_sites():
     sites = {}
     for entry in loads(result.stdout.decode()):
         if set(entry) != {'id', 'label', 'kind', 'file', 'line', 'len', 'role'} \
-                or entry['kind'] not in ('random', 'clock', 'section', 'resched') \
+                or entry['kind'] not in ('random', 'clock', 'section', 'resched', 'timer', 'advance') \
                 or entry['role'] not in ('mirror', 'cut', 'ambient'):
             raise InvalidOutput(f'hidden site fields: {entry}')
         key = (entry['kind'], f"{entry['file']}:{entry['line']}")
@@ -294,7 +300,8 @@ def resolve_choices(per, sites, locations, dispatch=None):
                 kind, steered = raw_kind & 0x7fff, bool(raw_kind & 0x8000)
                 consumer = next((src for src in frames if src.split(':')[0] not in CHOICE_HELPERS), None)
                 kind_class = 'random' if kind in RANDOM_KINDS else 'clock' if 200 <= kind <= 216 \
-                    else 'resched' if raw_kind == RESCHED else None
+                    else 'resched' if raw_kind == RESCHED else 'timer' if raw_kind == TIMER_ARM \
+                    else 'advance' if raw_kind == TIME_ADVANCE else None
                 if raw_kind in (SECTION_START, SECTION_STOP):
                     kind_class = 'section'
                     consumer = f'{dispatch.get(func)}:{raw_kind - SECTION_START}'
@@ -713,7 +720,10 @@ def run_chunk(traces, out, kcov):
             by_label = {entry['label']: entry for entry in sites_by_key.values()}
             calls = call_sites(KERNEL / 'vmlinux', LINUX_ARTIFACTS / 'cache')
             steer_wire = {t['id']: resolve_steering(t, by_label, calls) for t in traces if 'steer' in t}
-        linux = run_linux(traces, out / 'linux', timeout=guest_timeout(traces), steer_wire=steer_wire)
+        # one arm-record switch for the kernel (the wire's `A` line) and the
+        # mirror (the input's `arm_records`)
+        linux = run_linux(traces, out / 'linux', timeout=guest_timeout(traces), steer_wire=steer_wire,
+                          arm_records=ARM_RECORDS)
         coverage = [loads(line) for line in (out / 'linux/coverage.jsonl').read_text().splitlines()]
         validate_coverage(traces, coverage)
         mapped = symbolize(coverage, KERNEL / 'vmlinux')
@@ -750,7 +760,8 @@ def run_chunk(traces, out, kcov):
     # coverage child's run is compared for behavior and control flow, the
     # comparison child's for operands (docs/2026-10-03-hidden-inputs-design.md).
     def with_hidden(mode):
-        return [dict(t, hidden=records[(t['id'], mode)]) if (t['id'], mode) in records else t for t in traces]
+        return [dict(t, hidden=records[(t['id'], mode)], arm_records=ARM_RECORDS) if (t['id'], mode) in records
+                else t for t in traces]
     try:
         (out / 'model').mkdir()
         model = run_model(with_hidden('pc'), out / 'model')
@@ -774,7 +785,10 @@ def run_chunk(traces, out, kcov):
             problems += operand_problems + site_problems.get(trace['id'], [])
             # a steered trace states what its steering is for: the mirror's
             # agreeing run (A2 ties it to Linux's coverage) must show it
-            reported = {b['label'] for b in actual['branches']}
+            # (D3: `fired:<symbol>` names a timer section the mirror's
+            # environment ran)
+            reported = {b['label'] for b in actual['branches']} \
+                | {f"fired:{f['symbol']}" for f in actual.get('fired', [])}
             problems += [dict(index=None, label=label, problem='expected outcome not reached')
                          for label in trace.get('expect', []) if label not in reported]
             # Both children's returns are equal (harness/linux.py); so must be

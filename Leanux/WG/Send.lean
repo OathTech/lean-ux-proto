@@ -52,8 +52,8 @@ def DEVICE_MTU : Nat := 1500 - (32 + 8 + 40)
     depend on the worker's timing. -/
 def sendQueuedHandshakeInitiation (pid : PeerId) (isRetry : Bool) : M Unit := do
   requireNotPending pid "queueing a handshake"
-  -- `peer->timer_handshake_attempts = 0` (timers are cut points)
-  _ ← branch .queuedNotRetry !isRetry
+  if ← branch .queuedNotRetry !isRetry then
+    setPeer pid { (← getPeer pid) with timerHandshakeAttempts := 0 }
   let p ← getPeer pid
   -- `!wg_birthdate_has_expired(last_sent_handshake, REKEY_TIMEOUT) || is_dead`
   if ← branch .queuedNotExpired !(← birthdateHasExpired p.lastSentHandshake REKEY_TIMEOUT) then return

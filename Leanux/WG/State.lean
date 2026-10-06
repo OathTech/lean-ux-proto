@@ -50,6 +50,22 @@ def requireNotPending (pid : PeerId) (what : String) : M Unit := do
   if (← getPeer pid).handshakePending && !(← get).queuedThisCall.contains pid then
     unsupported s!"{what} races the pending handshake worker"
 
+/-- D3 (docs/2026-10-05-d3-timers.md, section 5.1): `mod_timer(&peer->timer_x,
+    jiffies + delay)`, once `mod_peer_timer`'s guard has passed. With arm
+    records (`World.armRecords`) the expiry is the kind-303 record's, checked
+    against `delay` (stream M); without them it is the nominal
+    `jiffies + delay` from the last recorded `jiffies` (0 before any), which
+    nothing reads: firing stays outside the domain (`Timing.timerMayExpire`). -/
+def armTimer (pid : PeerId) (t : PeerTimer) (delay : Nat) : M Unit := do
+  if (← get).armRecords then
+    unsupported "D3 stream M: not yet (consuming the kind-303 arm record)"
+  let j := (← get).jiffiesLast.getD 0
+  setPeer pid ((← getPeer pid).setTimer t (some (j + delay)))
+
+/-- `del_timer(&peer->timer_x)` (timer.c:1407-1430): detach if pending. -/
+def delTimer (pid : PeerId) (t : PeerTimer) : M Unit := do
+  setPeer pid ((← getPeer pid).setTimer t none)
+
 /-- The system call sleeps (`synchronize_net`, `flush_workqueue`): queued
     workers may run from here on. -/
 def mayHaveSlept : M Unit := modify fun w => { w with queuedThisCall := [] }

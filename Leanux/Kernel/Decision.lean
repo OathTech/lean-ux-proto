@@ -229,6 +229,10 @@ inductive Decision where
   | vlanTypeIsVlan | dsfieldIp | dsfieldIpv6 | ecnEncapInnerCe
   -- D2 stream A: calculate_skb_padding's `min(mtu, ALIGN(...))`
   | padClamped
+  -- D3 stream M (constructors; docs/2026-10-05-d3-timers.md, section 5)
+  -- end D3 stream M
+  -- D3 stream H (constructors; sections 7-8)
+  -- end D3 stream H
   deriving Repr, BEq, DecidableEq, Inhabited
 
 /-- A recorded step: the decision, the outcome the mirror computed, and, for
@@ -1078,6 +1082,10 @@ def Decision.info : Decision → DecisionInfo
   -- (send.c:157-158): min()'s comparison, true when the MTU is the smaller
   -- (a branch-free select: no witness)
   | .padClamped => d "calculate_skb_padding.clamped" wsd 157 [] []
+  -- D3 stream M (their infos; docs/2026-10-05-d3-timers.md, section 5)
+  -- end D3 stream M
+  -- D3 stream H (their infos; sections 7-8)
+  -- end D3 stream H
 
 /-- The relation of a C value comparison, as written in the source
     (`lhs rel rhs`); `flag` is a mask test `(x & MASK)` against zero. -/
@@ -1190,6 +1198,10 @@ def Decision.comparison : Decision → Option Comparison
   | .copyFdtableShrink => some ⟨.lt, false, none, false⟩
   | .expandFdtableShared => some ⟨.gt, true, none, false⟩
   | .expandFdtableBugNr => some ⟨.lt, false, none, false⟩
+  -- D3 stream M (comparisons; docs/2026-10-05-d3-timers.md, section 5)
+  -- end D3 stream M
+  -- D3 stream H (comparisons; sections 7-8)
+  -- end D3 stream H
   | _ => none
 
 /-- Decisions that one operation may evaluate more than once: those inside
@@ -1272,6 +1284,10 @@ def Decision.repeatable : Decision → Bool
   | .rxPollFree | .rxPollBudgetDone | .ctrClearIter => true
   -- D2 stream A: per packet of a staged list
   | .vlanTypeIsVlan | .dsfieldIp | .dsfieldIpv6 | .ecnEncapInnerCe | .padClamped => true
+  -- D3 stream M (repeatable decisions; docs/2026-10-05-d3-timers.md, section 5)
+  -- end D3 stream M
+  -- D3 stream H (repeatable decisions; sections 7-8)
+  -- end D3 stream H
   | _ => false
 
 /-- Every decision, enumerated through the constructor index. -/

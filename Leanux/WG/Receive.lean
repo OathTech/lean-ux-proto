@@ -129,7 +129,7 @@ def receiveHandshakePacket (msg : List UInt8) (src : SkbSource) : M Unit := do
       let some pid := peer | invariant "unreachable"
       setPeerEndpointFromSkb pid src
       if ← branch .hsRespSessionBegun (← beginSession pid) then
-        discard <| modPeerTimer pid   -- wg_timers_session_derived
+        timersSessionDerived pid
         timersHandshakeComplete pid
         -- either sends the staged packets or stages a keepalive and sends it
         sendKeepalive pid

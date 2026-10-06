@@ -23,6 +23,8 @@ inductive Operation where
   | wgXmit (family addr : Nat) (payload : List UInt8)
   | wgObserve
   | wgInject (family port : Nat) (message : List UInt8)
+  /-- D3: the virtual time advance (harness/trace.py `wg_advance`). -/
+  | wgAdvance (ticks : Nat)
   deriving Repr
 
 def Operation.isProducer : Operation → Bool
@@ -40,12 +42,17 @@ structure Trace where
   /-- A steering schedule (choice-stream strategy, step 2): the placeholders
       follow it; Linux's records carry the steered values. -/
   steer : List (String × Option (List UInt8)) := []
+  /-- D3: whether `hidden` includes the kind-303 arm records (the check sets
+      it from `harness/linux.py` `ARM_RECORDS`, the wire's `A` line). -/
+  armRecords : Bool := false
   deriving Repr
 
 /-- The network fixture runs for traces with a WireGuard operation
     (harness/trace.py `uses_wireguard`). -/
 def Trace.net (t : Trace) : Bool :=
-  t.ops.any fun | .wgSet _ | .wgGet | .wgUp | .wgXmit .. | .wgObserve | .wgInject .. => true | _ => false
+  t.ops.any fun
+    | .wgSet _ | .wgGet | .wgUp | .wgXmit .. | .wgObserve | .wgInject .. | .wgAdvance _ => true
+    | _ => false
 
 private def fields (j : Json) (expected : List String) : Except String Unit := do
   let obj ← j.getObj?
@@ -223,6 +230,11 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
     if s.length == 0 || s.length % 2 != 0 || s.length > 2800 then throw "message: expected 1-1400 bytes of lowercase hex"
     let message ← hexBytes (← field j "message") s.length "message"
     return .wgInject family port message
+  | "wg_advance" =>
+    fields j ["op", "ticks"]
+    let ticks ← natField j "ticks" (2 ^ 31)
+    if ticks == 0 then throw "ticks: expected 1-2^31"
+    return .wgAdvance ticks
   | "wg_xmit" =>
     fields j ["op", "packet"]
     let p ← field j "packet"
@@ -269,9 +281,13 @@ def parseTrace (j : Json) : Except String Trace := do
   let hasHidden := (j.getObjVal? "hidden").isOk
   let hasSteer := (j.getObjVal? "steer").isOk
   let hasExpect := (j.getObjVal? "expect").isOk
+  let hasArm := (j.getObjVal? "arm_records").isOk
   fields j ((if hasLimit then ["version", "id", "ops", "rlimit_nofile"] else ["version", "id", "ops"])
     ++ (if hasHidden then ["hidden"] else []) ++ (if hasSteer then ["steer"] else [])
-    ++ (if hasExpect then ["expect"] else []))
+    ++ (if hasExpect then ["expect"] else []) ++ (if hasArm then ["arm_records"] else []))
+  -- D3: the arm-record switch qualifies the records, so it comes with them
+  if hasArm && !hasHidden then throw "arm_records: only with hidden records"
+  let armRecords ← if hasArm then (← field j "arm_records").getBool? else pure false
   let rlimit ← if hasLimit then natField j "rlimit_nofile" 1024 else pure 32
   if rlimit < 8 then throw "rlimit_nofile outside 8..1024"
   if (← (← field j "version").getNat?) != 1 then throw "unsupported trace version"
@@ -294,7 +310,7 @@ def parseTrace (j : Json) : Except String Trace := do
       if v.length == 0 || v.length % 2 != 0 || v.length > 80 then throw "steer: value hex"
       return (label, some (← hexBytes pair[1]! v.length "steer"))
     else pure []
-  return { id, ops, rlimit, hidden, steer }
+  return { id, ops, rlimit, hidden, steer, armRecords }
 
 /-! ## Harness fixture and trace execution
 
@@ -372,16 +388,19 @@ def toSyscall (results : Array Int) : Operation → Syscall
   | .wgXmit family addr payload => .wgXmit family addr payload
   | .wgObserve => .wgObserve
   | .wgInject family port message => .wgInject family port message
+  | .wgAdvance ticks => .wgAdvance ticks
 
 /-- Run a trace. A `Stop` is returned with the operation index: the mirror
     never reports an observation for a path it does not model. -/
 def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat × Stop) Json := do
   let mut world : World := { k := initialKernel trace.rlimit trace.net, env := harnessEnv, timing := Env.timing,
                              hiddenPlaceholders := placeholders && trace.hidden.isNone,
-                             steerValues := if placeholders then trace.steer else [] }
+                             steerValues := if placeholders then trace.steer else [],
+                             armRecords := trace.armRecords }
   let mut results : Array Int := #[]
   let mut observations : Array Json := #[]
   let mut branches : Array Json := #[]
+  let mut fired : Array Json := #[]
   for op in trace.ops do
     let index := results.size
     world := { world with hidden := trace.hidden.map (·[index]!), yieldedWorkers := [], pendingStops := [] }
@@ -407,8 +426,13 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
       branches := branches.push (Json.mkObj (match s.operands with
         | some (a, b) => fields ++ [("operands", toJson [a, b])]
         | none => fields))
-  return Json.mkObj [("version", toJson (1 : Nat)), ("id", toJson trace.id),
+    for symbol in w.fired do
+      fired := fired.push (Json.mkObj [("index", toJson index), ("symbol", toJson symbol)])
+  -- D3: the timer sections the environment ran (`fired:<symbol>`
+  -- expectations), present only when one ran
+  return Json.mkObj ([("version", toJson (1 : Nat)), ("id", toJson trace.id),
     ("observations", .arr observations), ("branches", .arr branches)]
+    ++ (if fired.isEmpty then [] else [("fired", .arr fired)]))
 
 /-- The hidden-input site table, for the check's call-site cross-check. -/
 def hiddenSitesJson : Json :=

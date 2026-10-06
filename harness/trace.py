@@ -58,11 +58,14 @@ def validate_trace(trace):
                 type(e) is not list or len(e) != 2 or type(e[0]) is not str or type(e[1]) is not str
                 or not (e[1] == "draw" or re.fullmatch(r"(?:[0-9a-f]{2}){1,40}", e[1])) for e in steer):
             raise InvalidTrace("steer: expected 1–64 [site, hex or 'draw'] entries")
+    # D3: `fired:<callback>` expects that a timer callback ran in a section
+    # the mirror's environment accepted (docs/2026-10-05-d3-timers.md, 7).
     if "expect" in trace:
         expect = trace["expect"]
         if type(expect) is not list or not 1 <= len(expect) <= 16 or any(
-                type(e) is not str or not re.fullmatch(r"[A-Za-z0-9_.]+=[01]", e) for e in expect):
-            raise InvalidTrace("expect: expected 1–16 'decision=0|1' labels")
+                type(e) is not str or not re.fullmatch(r"[A-Za-z0-9_.]+=[01]|fired:wg_expired_[a-z_]{1,40}", e)
+                for e in expect):
+            raise InvalidTrace("expect: expected 1–16 'decision=0|1' or 'fired:wg_expired_*' labels")
         if "steer" not in trace:
             raise InvalidTrace("expect: only a steered trace states expected outcomes")
     if "rlimit_nofile" in trace:

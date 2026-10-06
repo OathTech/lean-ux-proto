@@ -34,6 +34,15 @@ class EvaluationChecks(unittest.TestCase):
         with self.assertRaises(InvalidOutput):
             parse_batch([self.trace], '')
 
+    def test_fired_timer_sections_field(self):
+        # D3: the mirror's optional `fired` list, validated strictly
+        result = dict(copy.deepcopy(self.result), fired=[{'index': 0, 'symbol': 'wg_expired_new_handshake'}])
+        self.assertEqual(parse_batch([self.trace], json.dumps(result))[0]['fired'][0]['index'], 0)
+        for fired in ([], [{'index': 1, 'symbol': 'wg_expired_new_handshake'}], [{'index': 0}],
+                      [{'index': 0, 'symbol': 'Bad Symbol'}], {}):
+            with self.assertRaises(InvalidOutput):
+                parse_batch([self.trace], json.dumps(dict(copy.deepcopy(self.result), fired=fired)))
+
     def test_resource_failures_are_not_agreement(self):
         for error in (4, 5, 12, 14, 19, 23, 28, 38, 105, 512):
             result = copy.deepcopy(self.result)
@@ -271,6 +280,21 @@ class EvaluationChecks(unittest.TestCase):
             check.pair_sections(area[:1])
         with self.assertRaises(InvalidOutput):
             check.hidden_records([{'id': 't', 'ops': [{}]}], [dict(rows[1], stream='task')])
+
+    def test_d3_timer_and_advance_records_resolve(self):
+        # D3: kind 303 resolves by its consumer frame to class 'timer', kind
+        # 304 to class 'advance'; a 303 record elsewhere is undeclared
+        sites = {('timer', 'drivers/net/wireguard/timers.c:37'): dict(id=100, label='mod_timer_arm', len=16, role='mirror'),
+                 ('advance', 'fs/ioctl.c:51'): dict(id=101, label='time_advance', len=16, role='mirror')}
+        frame = lambda src: [{'source': f'/x/.deps/linux/{src} (discriminator 1)'}]
+        locations = {'0xa': frame('drivers/net/wireguard/timers.c:37') + frame('drivers/net/wireguard/timers.c:61'),
+                     '0xb': frame('fs/ioctl.c:51'), '0xc': frame('fs/ioctl.c:51')}
+        op = [[304, '0xb', 1, 16, '00' * 16, None], [303, '0xa', 2, 16, '11' * 16, None]]
+        resolved, problems, _, _ = check.resolve_choices({('t', 'pc'): [op]}, sites, locations)
+        self.assertEqual([r[0] for r in resolved[('t', 'pc')][0]], [101, 100])
+        self.assertEqual(problems, {})
+        _, problems, _, _ = check.resolve_choices({('t', 'pc'): [[[303, '0xc', 1, 16, '00' * 16, None]]]}, sites, locations)
+        self.assertEqual(problems['t'][0]['problem'], 'choice from an undeclared consumer')
 
     def test_empty_run_is_not_a_pass(self):
         class Args:
