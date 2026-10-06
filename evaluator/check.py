@@ -1,8 +1,9 @@
 """Build the mirror, run traces on the pinned Linux guest and the mirror, compare.
 
     scripts/in-bundle python3 -m evaluator.check
-        [--suite handwritten,critic,wireguard,generated,wireguard-generated]
-        [--generated-count N] [--wireguard-count N] [--seed S] [--trace ID] [--out DIR] [--no-build]
+        [--suite handwritten,critic,wireguard,generated,wireguard-generated,pipes,pipes-generated]
+        [--generated-count N] [--wireguard-count N] [--pipes-count N] [--seed S] [--trace ID] [--out DIR]
+        [--no-build]
 
 The command fails unless every trace agrees on observations (A1) and every
 operation's model branch labels are consistent with Linux KCOV coverage (A2).
@@ -30,7 +31,11 @@ from .protocol import InvalidOutput, compare, loads, parse_batch, validate_cover
 
 ROOT = Path(__file__).resolve().parents[1]
 ANCHORS = ROOT / 'correspondence/kcov.json'
-SUITES = ('handwritten', 'critic', 'wireguard', 'generated', 'wireguard-generated')
+SUITES = ('handwritten', 'critic', 'wireguard', 'generated', 'wireguard-generated', 'pipes', 'pipes-generated')
+# Corpus suites whose traces pass the domain filter first: the pipes corpus
+# holds a hang control (a blocking read) that must never reach the guest.
+# There, a trace named `*_filtered` must be outside the domain and every
+# other trace inside it; anything else fails the run.
 # The share of generated WireGuard traces that are steered handshakes (the
 # initiator role, stage D1).
 STEERED_SHARE = 0.15
@@ -81,9 +86,10 @@ def load_traces(suites, counts, seed, only, filtered):
     `filtered` receives the rejected candidates' reasons."""
     traces = []
     for suite in suites:
-        if suite in ('generated', 'wireguard-generated'):
-            source = generate if suite == 'generated' else \
-                (lambda s, n: generate_wireguard(s, n, steered=STEERED_SHARE, data=DATA_SHARE))
+        if suite in ('generated', 'wireguard-generated', 'pipes-generated'):
+            source = {'generated': generate,
+                      'wireguard-generated': lambda s, n: generate_wireguard(s, n, steered=STEERED_SHARE, data=DATA_SHARE),
+                      'pipes-generated': lambda s, n: generate(s, n, profile='pipes')}[suite]
             count = counts[suite]
             candidates = [validate_trace(t) for t in source(seed, count * CANDIDATES_PER_TRACE)]
             verdicts = domain_filter(candidates)
@@ -97,7 +103,18 @@ def load_traces(suites, counts, seed, only, filtered):
             files = sorted((ROOT / 'corpus' / suite).glob('*.json'))
             if not files:
                 raise ValueError(f'empty corpus suite {suite}')
-            traces += [loads_trace(path.read_text()) for path in files]
+            loaded = [loads_trace(path.read_text()) for path in files]
+            if suite == 'pipes':
+                verdicts = domain_filter([validate_trace(t) for t in loaded])
+                wrong = [t['id'] for t, v in zip(loaded, verdicts) if v['in_domain'] == t['id'].endswith('_filtered')]
+                if wrong:
+                    raise ValueError(f'pipes corpus traces on the wrong side of the domain filter: {wrong}: '
+                                     + '; '.join(f"{t['id']}: {v.get('site')}: {v.get('what')}"
+                                                 for t, v in zip(loaded, verdicts) if t['id'] in wrong)[:4000])
+                filtered.update(f"{t['id']}: {v['site']}: {v['what']}" for t, v in zip(loaded, verdicts)
+                                if not v['in_domain'])
+                loaded = [t for t, v in zip(loaded, verdicts) if v['in_domain']]
+            traces += loaded
     ids = [trace['id'] for trace in traces]
     if len(set(ids)) != len(ids):
         raise ValueError('duplicate trace identifiers')
@@ -803,6 +820,7 @@ def main(argv=None):
     parser.add_argument('--suite', default=','.join(SUITES))
     parser.add_argument('--generated-count', type=int, default=1000)
     parser.add_argument('--wireguard-count', type=int, default=200)
+    parser.add_argument('--pipes-count', type=int, default=200)
     parser.add_argument('--seed', type=int, default=20260920)
     parser.add_argument('--trace')
     parser.add_argument('--out', type=Path)
@@ -827,7 +845,8 @@ def main(argv=None):
     outcomes, decisions, kcov, splits = Counter(), {}, None, 0
     try:
         build = build_model(out, rebuild=not args.no_build)
-        traces = load_traces(suites, {'generated': args.generated_count, 'wireguard-generated': args.wireguard_count},
+        traces = load_traces(suites, {'generated': args.generated_count, 'wireguard-generated': args.wireguard_count,
+                                      'pipes-generated': args.pipes_count},
                              args.seed, args.trace, filtered)
         decisions.update(load_decisions(config))
         instrumented, functions = instrumented_lines(KERNEL / 'vmlinux', config['functions'], config['files'])
@@ -897,7 +916,7 @@ def write_report(out, traces, results, gaps, build, aborted, started, suites, ar
         kernel=kernel,
         kcov_config_sha256=sha256(ANCHORS.read_bytes()),
         selection=dict(suites=suites, generated_count=args.generated_count, wireguard_count=args.wireguard_count,
-                       seed=args.seed, trace=args.trace),
+                       pipes_count=getattr(args, 'pipes_count', None), seed=args.seed, trace=args.trace),
         traces=len(traces), operations=sum(len(t['ops']) for t in traces),
         counts=dict(counts), known_gap_hits=dict(gaps), operand_pairs_matched=operand_pairs_matched,
         # cut and ambient choice records (coverage child), by site: consumed
