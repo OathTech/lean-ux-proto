@@ -78,6 +78,11 @@ def createPipeFiles (flags : UInt32) : M (Except Int (FileId × FileId)) := do
     iputPipefs ino
     return match f with | .error e => .error e | .ok _ => .error 0
   let .ok fw := f | invariant "unreachable"
+  -- alloc_path_pseudo's d_alloc_pseudo + d_instantiate (fs/file_table.c:374-378)
+  -- gave the pseudo dentry its first reference. `allocFilePseudo` leaves the
+  -- dentry to a cut (it serves the shared anonymous inode too), so the count
+  -- is recorded here, before anything reads it (`dputPipefs` in `__fput`).
+  setInode ino { (← getInode ino) with dCount := 1 }
   let pid ← iPipe
   setFile fw { (← getFile fw) with privateData := some (.pipe pid), fPipe := 0 }
   let r ← allocFileClone fw (O_RDONLY ||| (flags &&& O_NONBLOCK)) .pipefifo
