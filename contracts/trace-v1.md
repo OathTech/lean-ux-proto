@@ -1,4 +1,4 @@
-# FD/eventfd experiment contract, version 1
+# FD/eventfd/pipe experiment contract, version 1
 
 This contract fixes the initial experiment domain and observable results. Schema
 files describe syntax; the additional validity rules below are normative. Changes
@@ -21,12 +21,14 @@ underscore, dash, and dot. Unknown fields are errors. Operation forms are:
 ```
 
 All integer JSON values must be integers, excluding booleans. `init`, `flags`,
-and `arg` are unsigned 32-bit values. `count` is 0–16. A write value is a canonical
-unsigned decimal string in 0–18446744073709551615, with no leading zero except
-`"0"`. It supplies an eight-byte little-endian word, followed by zero padding up
-to sixteen allocated bytes. Reads use sixteen allocated bytes initialized to
-`0xa5`; only the bytes actually returned are observed. Faulting pointers are
-outside the domain.
+and `arg` are unsigned 32-bit values. `count` is 0–69632 (`MAX_IO`, 17 pages;
+amended for pipes, below; it was 0–16). A write value is a canonical unsigned
+decimal string in 0–18446744073709551615, with no leading zero except `"0"`. It
+supplies bytes 0–7 of the write buffer, little-endian; byte `k ≥ 8` of the
+write at operation index `i` is `(7·i + 13·k + 17·(k >> 8)) mod 256`, computed
+identically by the guest and the mirror, so nothing beyond `value` crosses the
+wire. Reads use a buffer initialized to `0xa5`; only the bytes actually
+returned are observed (see Output). Faulting pointers are outside the domain.
 
 Descriptor arguments contain exactly one of `literal` or `ref`. Literals are
 signed 32-bit integers and must be negative or at least 8. References name an
@@ -56,6 +58,34 @@ observable. Flags reach kernel `int` arguments by their low 32 bits; literal FDs
 are sign-extended to the x86-64 argument register, with kernel parameter casts
 preserved by the mirror. There are no implicit retries.
 
+## Pipes (amended 2026-10-06, workstream P)
+
+The amendment widens the domain; every earlier trace remains valid. The design
+is `docs/2026-10-05-p-pipes.md`, section 6.
+
+- **`{"op":"pipe2","flags":u32}`** creates an anonymous pipe. A descriptor
+  argument may be `{"pipe": i, "end": 0}` (the read end, `fd[0]`) or
+  `{"pipe": i, "end": 1}` (the write end, `fd[1]`), where `i` names an earlier
+  `pipe2`. `{"ref": i}` must still name an `eventfd2`, `dup` or `dup3`; a `ref`
+  to a `pipe2` is invalid. A failed `pipe2` resolves both ends to -1.
+- **`fcntl.cmd`** also accepts `F_SETFL` (Phase 4), `F_SETPIPE_SZ` (1031) and
+  `F_GETPIPE_SZ` (1032); `arg` stays an unsigned 32-bit value.
+- **`"pause_ms": 1–20`** may be added to any operation: the guest sleeps that
+  long immediately before the operation's coverage reset, outside every
+  window. The mirror ignores it. It makes coarse-clock ticks (4 ms, `HZ=250`)
+  deterministic between operations.
+- **Signals.** The trace child blocks `SIGPIPE` before the first operation
+  and fails the trace if any signal is pending then. A write to a pipe without
+  readers therefore leaves `SIGPIPE` pending (it is never delivered); any
+  other pending signal is an environment failure.
+- **Blocking.** A pipe may be created without `O_NONBLOCK`, as long as no
+  operation would wait, under the same rule as blocking eventfds (the mirror
+  decides; generated traces are filtered; the guest's parent kills a child
+  that hangs and the batch fails).
+- **Wire.** Opcode 14 is `pipe2`; descriptor kinds 2 and 3 are the read and
+  write ends with the producer's index as value; `pause_ms` is the ninth field
+  of every operation line (0 when absent).
+
 ## Fixture and isolation
 
 Each trace starts in a fresh process in the pinned guest. Set the soft and hard
@@ -82,12 +112,30 @@ The runner emits one object with exactly `version`, `id`, `observations`, and
 `ret` is the signed raw Linux syscall result; failure is `-errno`. `errno` is null
 on success and the positive error number on failure. If the C `syscall()` helper
 normalizes a failure to -1, reconstruct the raw result from the captured errno
-immediately. Successful reads include precisely `ret` bytes as lowercase hex;
+immediately. Successful reads include their first `min(ret, 64)` bytes as
+lowercase hex (all of them for `ret ≤ 64`, so eventfd reads are unchanged);
 every other operation or failed read has `bytes=""`. No comparison renames FD
 numbers, ignores error state, or drops output bytes.
 
+Per operation kind, an observation carries exactly these further fields
+(amended 2026-10-06 for pipes):
+- `pipe2`: `"fds": [r, w]` (the read end, then the write end) after success,
+  `null` on failure;
+- `read`: `"digest"`, the lowercase hex BLAKE2s-256 of all `ret` returned
+  bytes when `ret > 0`, else `null`. The evaluator recomputes it from `bytes`
+  for every read of at most 64 bytes;
+- `write`: `"sigpipe"`, 1 if `SIGPIPE` is pending in the trace child after the
+  call (it stays pending for the rest of the trace), else 0.
+
+The WireGuard operations' observations are specified by `evaluator/protocol.py`
+and `harness/wg.py`, as are those operations' inputs (`harness/trace.py`); the
+JSON schemas here cover the FD, eventfd and pipe operations only.
+
 `branches` is an array of `{index,label}` records for mirror execution reporting.
 It may be empty on the Linux side, where KCOV is retained separately per operation.
+A declared value comparison adds `operands` (`[lhs, rhs]`, C values); at a
+declared operand exclusion (`correspondence/kcov.json`, `operand_exclusions`)
+it carries `operands_excluded`, the excluded operand's name, instead.
 Labels are evidence to check against actual definitions and the correspondence
 inventory, not a substitute for observations or source analysis.
 

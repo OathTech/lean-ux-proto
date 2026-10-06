@@ -41,7 +41,45 @@
           },
           "bytes": {
             "type": "string",
-            "pattern": "^([0-9a-f]{2}){0,16}$"
+            "pattern": "^([0-9a-f]{2}){0,64}$",
+            "$comment": "A successful read's first min(ret, 64) bytes; empty otherwise."
+          },
+          "fds": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 2147483647
+                },
+                "minItems": 2,
+                "maxItems": 2
+              }
+            ],
+            "$comment": "pipe2 only, and required there: [read end, write end] after success, null on failure."
+          },
+          "digest": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            ],
+            "$comment": "read only, and required there: BLAKE2s-256 of all ret bytes when ret > 0, else null."
+          },
+          "sigpipe": {
+            "enum": [
+              0,
+              1
+            ],
+            "$comment": "write only, and required there: whether SIGPIPE (blocked in the trace child) is pending after the call."
           }
         },
         "required": [
@@ -50,7 +88,8 @@
           "errno",
           "bytes"
         ],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "$comment": "The WireGuard observations (device, datagrams, replies, stats) are specified by evaluator/protocol.py and harness/wg.py, not here."
       }
     },
     "branches": {
@@ -68,13 +107,34 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 120
+          },
+          "operands": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "$comment": "A declared value comparison's two operands as C values (correspondence/README.md, A3)."
+          },
+          "operands_excluded": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "$comment": "Instead of operands, at a declared operand exclusion (correspondence/kcov.json operand_exclusions): the excluded operand's name."
           }
         },
         "required": [
           "index",
           "label"
         ],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "not": {
+          "required": [
+            "operands",
+            "operands_excluded"
+          ]
+        }
       }
     }
   },
@@ -85,5 +145,5 @@
     "branches"
   ],
   "additionalProperties": false,
-  "$comment": "Evaluator checks exact operation counts, indices, errno and output-byte consistency against input."
+  "$comment": "Evaluator checks exact operation counts, indices, errno and output-byte consistency against input, and which operation kinds carry fds, digest and sigpipe (evaluator/protocol.py)."
 }
