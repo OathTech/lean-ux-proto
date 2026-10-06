@@ -767,7 +767,10 @@ def discardFloodSection (w : Worker) : M (Nat × Bool × Bool) := do
   -- and the fixture's IP-layer cut draws for its outbound sends.
   let flood := [startW, stopW, startRx, stopRx, underLoad, (HiddenSite.birthdateExpired).info.id,
                 (HiddenSite.ipIdentKey).info.id, (HiddenSite.ipIdentReserve).info.id,
-                (HiddenSite.flowHashSecret).info.id]
+                (HiddenSite.flowHashSecret).info.id,
+                -- the flood socket's ephemeral source port, and the worker's
+                -- cond_resched while draining the flood
+                (HiddenSite.udpPortDraw).info.id, (HiddenSite.reschedReceive).info.id]
   let mut dropped := 0
   let mut sawWorker := false
   let mut crossed := false

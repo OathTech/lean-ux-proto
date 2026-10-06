@@ -41,7 +41,11 @@ CREATE = {"op": "wg_create"}
 UP = {"op": "wg_up"}
 OBSERVE = {"op": "wg_observe"}
 GET = {"op": "wg_get"}
-FLOOD_COUNT = 1024                      # crosses 512 via io_uring (measured)
+# Just above the 512 threshold: io_uring runs the sends inline in the trace task
+# (KCOV on), so a larger count overflows the task and remote KCOV areas. All
+# `count` packets queue before the single-CPU receive worker runs (io_uring_enter
+# does not sleep), so the queue reaches `count` and crosses 512.
+FLOOD_COUNT = 600
 
 
 def configure():

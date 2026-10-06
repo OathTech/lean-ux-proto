@@ -19,7 +19,7 @@
     },
     {
       "op": "wg_flood",
-      "count": 1024,
+      "count": 600,
       "port": 51820
     },
     {

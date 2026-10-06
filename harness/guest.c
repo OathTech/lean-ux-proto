@@ -30,9 +30,11 @@
 
 #define MAX_OPS 64
 /* The KCOV area in words, task and remote alike (L, docs/2026-10-05-l-lifecycle.md
- * section 10: a wg_create window's comparison child exceeds 64 K words). The
- * host's bounds follow it (harness/trace.py KCOV_CAPACITY). */
-#define CAPACITY (256UL * 1024)
+ * section 10: a wg_create window's comparison child exceeds 64 K words; E-B: an
+ * io_uring flood crossing 512 runs ~600 UDP sends inline in the trace task with
+ * KCOV on, so both streams need headroom). The host's bounds follow it
+ * (harness/trace.py KCOV_CAPACITY). */
+#define CAPACITY (1024UL * 1024)
 #define MAX_PAYLOAD 32768
 #define NETLINK_FD 7
 /* Stage B1 network fixture: UDP listeners that catch what wg0 sends to
@@ -856,7 +858,7 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             fail(t->id, i, "environment_failure", "advance_clock");
         /* the lifecycle operations' wall time, taken outside the window */
         struct timespec op_started = {0}, op_finished = {0};
-        if (op->code >= 15 && clock_gettime(CLOCK_MONOTONIC, &op_started))
+        if (op->code >= 15 && op->code <= 17 && clock_gettime(CLOCK_MONOTONIC, &op_started))
             fail(t->id, i, "environment_failure", "timing_clock");
         __atomic_store_n(&coverage[0], 0, __ATOMIC_RELAXED);
         if (remote) __atomic_store_n(&remote[0], 0, __ATOMIC_RELAXED);
@@ -960,7 +962,7 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         }
         int captured_errno = errno;
         unsigned long count = __atomic_load_n(&coverage[0], __ATOMIC_RELAXED);
-        if (op->code >= 15) {
+        if (op->code >= 15 && op->code <= 17) {
             if (clock_gettime(CLOCK_MONOTONIC, &op_finished)) fail(t->id, i, "environment_failure", "timing_clock");
             printf("LEANUX_TIMING {\"id\":\"%s\",\"index\":%u,\"mode\":\"%s\",\"op\":%u,\"ns\":%lld}\n", t->id, i,
                    comparisons ? "cmp" : "pc", op->code,
@@ -1000,8 +1002,10 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         if (op->code == 13) usleep(OBSERVE_WAIT_US);
         if (op->code == 8 || op->code == 10 || op->code == 11) usleep(QUEUE_WAIT_US);
         /* E-B: wait for the receive worker to drain the flood (its discarded
-         * section) in this operation's window (~1 ms drain, measured). */
-        if (op->code == 18) usleep(OBSERVE_WAIT_US);
+         * section) in this operation's window (~1 ms drain, measured). Keep the
+         * wait short: the following injection must reach the worker within the
+         * one-second last_under_load decay (§4.1). */
+        if (op->code == 18) usleep(QUEUE_WAIT_US);
         if (op->code == 14) {
             /* An advance that fails is not a trace operation the mirror can
              * follow: fail the trace. Then wait for the tick that absorbs the
