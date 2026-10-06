@@ -2,9 +2,11 @@
 # step 1 and step 2 (steering) user-approved 2026-10-03; the D1 sprint's
 # dispatch sections (stream A) and resched records (integration) and the D3
 # sprint's timer sections, arm record and virtual time advance
-# (docs/2026-10-05-d3-timers.md, stream K) awaiting the user's approval.
+# (docs/2026-10-05-d3-timers.md, stream K) awaiting the user's approval;
+# A stream K1's allocation hook (docs/2026-10-05-a-alloc.md, section 4)
+# awaiting the user's approval with A.
 # kernel/config-x86_64-net (unchanged) with kernel/patches/choice-stream.patch
-# (sha256 9f8f3d4ea39c04ef6b25ba9c0c0c087879ad28771bd8f761d92cc5b302fb9607)
+# (sha256 a97a602436ac56a5f64a1c751c2a7d2a99392df01eb3563bcf17b2f6ce5f0929)
 # applied alone to the locked source, built with LEANUX_KERNEL_PROFILE=net-choice.
 # The patch (kernel/patches/gen-choice-stream.py) records random draws and
 # clock reads at generic interception points (drivers/char/random.c,
@@ -20,6 +22,14 @@
 # loaded with KCOV_DISPATCH_ARM_RECORDS; KCOV_LEANUX_TIME_ADVANCE advances
 # jiffies_64 (leanux_time_advance, kernel/time/timekeeping.c, refused unless
 # the timekeeper is refined-jiffies) and records kind 304 {before, after}.
+# A (K1): slab_alloc_node (mm/slub.c) and __alloc_pages_noprof
+# (mm/page_alloc.c) call kcov_alloc_pre/post with the entry's explicit return
+# address; armed by KCOV_LEANUX_ALLOC_LOAD (ioctl 205: ranges and the
+# inventory flag; n = 0, flags = 0 is disarmed, the default), they write
+# kind 305 (outcome, gfp, size or order, up to four unwound return
+# addresses) in recording contexts; KCOV_LEANUX_ALLOC_STATUS (206) counts
+# records and unwinds. Unarmed: one load per allocation, no records. No
+# forced failures in this build (stream K2).
 # No anchored file and no WireGuard file is touched.
 # Its DWARF names .deps/linux (via -fdebug-prefix-map).
 # The oracle is this build booted with the harness's parameters
@@ -28,6 +38,6 @@
 # and the timekeeper clocksource refined-jiffies, checked at every batch's
 # start and end (LEANUX_CLOCKSOURCE rows).
 # Path-independent identity from scripts/kernel-identity.py:
-ad90a10555011000b16fc905a4f9d9202d4e4e0c978873c16d08181fa082e877
+c8bce441551d05608da5a1af3c3bafedd94a3dd85933ca15ea2da1c716dee4f7
 # vmlinux sha256 of the build the evidence used (path-dependent):
-b2599261c81e22903aa154e435b9923eb68b05d0705ee1f8fa4de54bea3e476d
+3eaa532cbbe6a2653c6981ad8c9c5d1875848bd0cc6bafedb6e9675f8375dd08
