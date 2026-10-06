@@ -125,23 +125,76 @@ alike) is rerun once, and `report.json` `chunk_retries` records it.
 measured with 3 concurrent guests fit the new budget with more than 2.5x
 headroom.
 
-## 4. The in-guest 4 s bound
+## 4. The in-guest trace bound
 
 The guest now reports each trace's guest time from `wg_up` to its last
-operation (`LEANUX_TIMING`, `linux/timing.jsonl`). In 3 WireGuard suite
-runs (1320 child runs):
+operation (`LEANUX_TIMING`, `linux/timing.jsonl`). Over 9 WireGuard suite
+runs with this instrument (3960 child runs, three of the runs pinned to one
+CPU, below):
 - the median was 1.74 s;
-- the 99th percentile was 3.0 s;
-- the maximum was **3.80 s**, for `b2_lengths`, which has 3.3 s of planned
+- the 99th percentile was 3.0-3.24 s;
+- the maximum was **3.84 s**, for `b2_lengths`, which has 3.3 s of planned
   waits after `wg_up`.
 
-That leaves 0.2 s of the 4.0 s bound, so a heavier load fails the trace
-with `environment_failure trace_exceeds_rekey_bound`. See section 5 for the
-change.
+The old 4.0 s bound left 0.16 s, so a heavier load fails the trace with
+`environment_failure trace_exceeds_rekey_bound`.
 
-## 5. Evidence
+**Change.** The bound is now 4.5 s, and its origin is read just before the
+`wg_up` ioctl, outside its coverage window. It used to be read after the
+ioctl returned. No WireGuard timer is armed before `wg_up`
+(`mod_peer_timer` needs a running device), and none fires earlier than 5 s
+after it is armed. So the 0.5 s margin holds by construction.
+`Env.timing` is unchanged for whole seconds: a timer of 4 s or less may
+expire, one of 5 s or more cannot. The generator's wait budget stays at
+2.8 s.
 
-See the integration record of this branch (the final report) for the runs:
-- before and after the fix, 3 concurrent WireGuard suite runs each;
-- the full check;
-- replays of every recorded chunk through the new mirror.
+**A slip, caught by the check.** The first version read the clock inside
+the coverage window. The generic clock hook recorded that read as a choice
+from an undeclared consumer, and the check rejected all 220 traces that
+contain `wg_up` (runs `pinned-1` to `pinned-3`). Fixed in 997575c.
+
+## 5. Evidence (2026-10-06)
+
+All WireGuard suite runs use `--suite wireguard,wireguard-generated`, 296
+traces each.
+
+| Runs | Code | Host | Result |
+|---|---|---|---|
+| before-1..3, concurrent | task/wgc 86cf5ee | load average 20-98 | 1 pass. before-1 lost 100 traces to 2 guest timeouts. before-3 had 1 control_flow_mismatch (rx_roam_v6, section 2) |
+| after-1..3, concurrent | 2cff2f4 | load average falling to about 7 | 3/3 pass (296/296, 11193 operand pairs), no retries |
+| final-1..3, concurrent, all pinned to one CPU (`taskset -c 31`, about 2.5x slower guests) | 997575c | load average 4-10 plus the pinning | 3/3 pass, no retries. 50-trace chunks took up to 276 s; the old budget was about 248 s |
+| full check | 2cff2f4 | | pass, 1369/1369, 39260 operations, 323087 operand pairs (as D2) |
+
+Other evidence:
+- **Pinned runs on the old budget.** In the pinned runs, 8 of 45 chunk runs
+  ran longer than the old budget formula allows. The longest took 0.50x the
+  new budget.
+- **The open placement occurs.** It occurred again in `pinned-3`, where
+  `d2_rx_window_boundary` agreed under placement (c').
+- **Replays.** Every completed chunk of before-1..3, and of wgc par1/par2
+  (same base), replays through the new mirror (`run_chunk` on the recorded
+  Linux outputs) with full agreement. That is 20 chunks. `rx_roam_v6` agrees
+  under placement (c').
+- **Model inputs from every worktree.** All recorded model inputs across the
+  worktrees give the same output under the old and new mirror, except the
+  b1 trace. That trace now agrees.
+- **Record mutants** (`evaluator/test_model_replay.py`). The old rule
+  accepted three changes to the records: no section at the send, two
+  sections at it, and one placed after the send. The new rule rejects all
+  three. An ambient record inside a section is now accepted.
+- **Mutants** (`scripts/wg-mutants.py`): W3, B1-M3, D1-M14, H-M10, D2-M10
+  and D2-M12 are all rejected. D2-M12 is conclusive, with 3 order (b/c)
+  placements. The D2-M10 and D2-M12 patterns were updated for the new
+  `irqExit` hook.
+
+## 6. Open
+
+- **50-trace WireGuard chunks are near the output limit.** They produce
+  16.66 of 16.78 MB of console output, and every 100-trace chunk exceeds
+  it. Under the pinned load the 50-trace chunks exceeded it too, and were
+  split to 25. Splitting costs a guest run each time but never fails a
+  trace. A smaller first chunk for WireGuard traces would save that run.
+- **A pending NAPI poll at any other point of the decrypt worker.** For
+  example, an interrupt inside `decrypt_packet` of the next packet. The
+  records would show its section there, and the mirror stops with a hidden
+  mismatch (fail-closed). It has not been observed.
