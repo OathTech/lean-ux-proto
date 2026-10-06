@@ -432,28 +432,36 @@ def run_linux(traces, outdir, *, timeout=120, steer_wire=None, arm_records=ARM_R
         raise ValueError(f"outdir must be empty: {outdir}")
     _jsonl(outdir / "inputs.jsonl", traces)
     (outdir / "wire.txt").write_text(wire)
-    lockpath = SHARED / ".artifacts/runs/qemu.lock"
-    lockpath.parent.mkdir(parents=True, exist_ok=True)
-    with lockpath.open("a+") as lock:
-        # Another worktree's guest may hold the one QEMU slot: wait for it, up
-        # to QEMU_LOCK_WAIT seconds, then fail as before.
-        deadline = time.monotonic() + QEMU_LOCK_WAIT
-        waited = False
-        while True:
+    # QEMU_SLOTS guests may run at once, project-wide (each worktree's checks
+    # share these lock files in the main checkout). Slot 0 is the historic
+    # single lock file, so a worktree on older code still excludes slot 0.
+    # Wait for any free slot, up to QEMU_LOCK_WAIT seconds, then fail.
+    runs = SHARED / ".artifacts/runs"
+    runs.mkdir(parents=True, exist_ok=True)
+    paths = [runs / ("qemu.lock" if i == 0 else f"qemu.lock.{i}") for i in range(QEMU_SLOTS)]
+    deadline = time.monotonic() + QEMU_LOCK_WAIT
+    waited = False
+    while True:
+        for path in paths:
+            lock = path.open("a+")
             try:
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                break
-            except BlockingIOError as exc:
-                if time.monotonic() >= deadline:
-                    raise LinuxRunError("resource_busy", f"Another project guest held the QEMU slot for {QEMU_LOCK_WAIT} s", outdir) from exc
-                if not waited:
-                    print(f"waiting for the QEMU slot ({lockpath}), up to {QEMU_LOCK_WAIT} s", file=sys.stderr, flush=True)
-                    waited = True
-                time.sleep(2)
-        return _run_locked(traces, outdir, timeout, arm_records)
+            except BlockingIOError:
+                lock.close()
+                continue
+            with lock:
+                return _run_locked(traces, outdir, timeout, arm_records)
+        if time.monotonic() >= deadline:
+            raise LinuxRunError("resource_busy", f"Other guests held all {QEMU_SLOTS} QEMU slots for {QEMU_LOCK_WAIT} s", outdir)
+        if not waited:
+            print(f"waiting for one of {QEMU_SLOTS} QEMU slots ({runs}), up to {QEMU_LOCK_WAIT} s", file=sys.stderr, flush=True)
+            waited = True
+        time.sleep(2)
 
 
 QEMU_LOCK_WAIT = 3600
+# Concurrent guests (single-threaded TCG, 256 MiB each); LEANUX_QEMU_SLOTS overrides.
+QEMU_SLOTS = int(os.environ.get("LEANUX_QEMU_SLOTS", "3"))
 
 
 def _run_locked(traces, outdir, timeout, arm_records):
