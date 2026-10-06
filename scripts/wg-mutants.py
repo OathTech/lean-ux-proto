@@ -256,7 +256,10 @@ PENDING = {m[0] for m in D2_MUTANTS if m[3] is None}
 # are written against the current code and they are reported as pending.
 A_MUTANTS = [
   ('A-M3-keepalive-sends-after-nomem', 'control: wg_packet_send_keepalive calls wg_packet_send_staged_packets '
-   'after a failed allocation (send.c:228-229 returns); the staged-queue decision the C never reaches (A2)',
+   'after a failed allocation (send.c:228-229 returns). Survives on this base: both modeled callers (wg_open, '
+   'set_peer) run wg_packet_send_staged_packets on the empty queue in the same operation, so the extra call '
+   'changes no observation and covers nothing new; the distinguishing callers (receive.c:186 with an empty '
+   'staged queue, the keepalive timers) are not reachable here',
    'Leanux/WG/Send.lean',
    "    if ← branch .keepaliveNoMem !(← hiddenAlloc .keepaliveSkb) then return\n",
    "    if ← branch .keepaliveNoMem !(← hiddenAlloc .keepaliveSkb) then return ← sendStagedPackets pid\n"),
@@ -264,6 +267,14 @@ A_MUTANTS = [
    '(socket.c:194); a datagram Linux never sent', 'Leanux/WG/Handshake.lean',
    "  if ← branch .sendBufNoMem !(← hiddenAlloc .sendBufSkb) then return\n",
    "  _ ← hiddenAlloc .sendBufSkb\n  if ← branch .sendBufNoMem false then return\n"),
+  ('A-M11-keepalive-ignores-record', 'behavior: wg_packet_send_keepalive ignores the allocation outcome '
+   '(send.c:228); a keepalive staged (and an initiation sent) that Linux never had', 'Leanux/WG/Send.lean',
+   "    if ← branch .keepaliveNoMem !(← hiddenAlloc .keepaliveSkb) then return\n",
+   "    _ ← hiddenAlloc .keepaliveSkb\n    if ← branch .keepaliveNoMem false then return\n"),
+  ('A-M12-alloc-skb-one-record', 'records: an __alloc_skb site consumes one record per consultation, not the '
+   'sk_buff and then the data buffer (design 6.2, M6)', 'Leanux/Kernel/Defs.lean',
+   '  | .sendBufSkb => ⟨11, "sendBufSkb", "drivers/net/wireguard/socket.c", 192, .exact 2⟩\n',
+   '  | .sendBufSkb => ⟨11, "sendBufSkb", "drivers/net/wireguard/socket.c", 192, .exact 1⟩\n'),
   ('A-M1-peer-create-ignores-record', 'A2: wg_peer_create ignores the allocation outcome (peer.c:35)',
    'Leanux/WG/Peer.lean',
    "  if ← branch .peerCreateNoMem !(← hiddenAlloc .kmemCacheZallocPeer) then return .error (-ENOMEM)\n",
