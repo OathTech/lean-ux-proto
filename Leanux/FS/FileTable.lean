@@ -98,13 +98,24 @@ def allocFile (flags : UInt32) (fopId : FopsId) (inode : InodeId) : M (Except In
     if let .ok fid := r then fileInitPath fid fopId inode
   return r
 
-/-- alloc_file_pseudo (file_table.c:382-400). `alloc_path_pseudo` allocates a
-    dentry (`d_alloc_pseudo`, an environment choice point); `mntget`,
-    `d_instantiate`, `ihold` and `path_put` are cut points. -/
+/-- alloc_file_pseudo (file_table.c:382-400). `alloc_path_pseudo`
+    (:371-380) allocates a dentry (`d_alloc_pseudo`, an environment choice
+    point) holding its first reference; `mntget` and `d_instantiate` are cut
+    points. A pipefs inode's pseudo dentry counts its references
+    (`Inode.dCount`, dropped by `dputPipefs` in `__fput`); the anonymous
+    inode's dentry is a cut point. On failure, `ihold(inode)` and
+    `path_put(&path)`: the dentry's last reference goes, and the `iput` of
+    its killing balances the `ihold` (both cuts). -/
 def allocFilePseudo (flags : UInt32) (inode : InodeId) (fopId : FopsId) : M (Except Int FileId) := do
   if ← branch .allocPathPseudoFail (!(← envOk .dAllocPseudo)) then return .error (-ENOMEM)
+  if let .pipefs id := inode then
+    let ino ← getInode id
+    if ino.dCount != 0 then invariant s!"d_alloc_pseudo for pipefs inode {id}, whose dentry exists"
+    setInode id { ino with dCount := 1 }
   let r ← allocFile flags fopId inode
-  _ ← branch .allocFilePseudoErr (r matches .error _)
+  if ← branch .allocFilePseudoErr (r matches .error _) then
+    if let .pipefs id := inode then
+      setInode id { (← getInode id) with dCount := 0 }
   return r
 
 /-- put_file_access (fs/internal.h:114-121). -/
