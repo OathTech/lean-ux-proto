@@ -147,7 +147,9 @@ def peerRemove (peer : Option PeerId) : M Unit := do
   let some pid := peer | invariant "unreachable"
   -- flush_workqueue runs a queued worker inside this call: always a race here
   if (← getPeer pid).handshakePending then unsupported "removing a peer with queued handshake work"
-  mayHaveSlept   -- synchronize_net(), flush_workqueue()
+  -- synchronize_net() does not sleep on this kernel (Tiny RCU, PREEMPT_NONE);
+  -- the flushes in peer_remove_after_dead wait only for pending work, which
+  -- the test above excludes: no sleep point here (L, audit m1)
   peerMakeDead pid
   -- synchronize_net()
   peerRemoveAfterDead pid
@@ -158,7 +160,8 @@ def peerRemoveAll : M Unit := do
   let dead := (← getDev).peerList
   for pid in dead do
     if (← getPeer pid).handshakePending then unsupported "removing a peer with queued handshake work"
-  mayHaveSlept   -- synchronize_net(), flush_workqueue()
+  -- no sleep point: synchronize_net() does not sleep here, and nothing is
+  -- pending for the flushes to wait for (L, audit m1)
   for pid in dead do
     _ ← branch .peerRemoveAllIter1 true
     peerMakeDead pid   -- then list_add_tail(&peer->peer_list, &dead_peers)

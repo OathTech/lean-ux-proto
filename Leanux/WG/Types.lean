@@ -289,11 +289,27 @@ structure StaticIdentity where
   staticPublic : Key := List.replicate 32 0
   deriving Repr, BEq
 
-/-- `struct wg_device` (the fixture's `wg0`, created down). -/
+/-- `struct wg_device`: the fixture's `wg0` (created down before the
+    trace), or one a trace created (`wg_newlink`, L). -/
 structure Device where
   ifindex : Nat
   ifname : String
   running : Bool := false
+  /-- `sock4`, `sock6` (L): the bound UDP sockets, by their port; `none`
+      while down (NULL). `wg_socket_reinit` sets `incoming_port` from
+      `sock4`. -/
+  sock4 : Option Nat := none
+  sock6 : Option Nat := none
+  /-- `creating_net` is set (L): cleared only by `wg_destruct`; the operand
+      of `wg_socket_init`'s `-ENONET` arm. -/
+  creatingNet : Bool := true
+  /-- `cookie_checker.secret` and `secret_birthdate` (L, `wg_cookie_checker_init`)
+      and the public-key hashtable's siphash key (`wg_pubkey_hashtable_alloc`),
+      from their records; zeros for the fixture's wg0, created before the
+      trace (unknown). -/
+  cookieSecret : List UInt8 := List.replicate 32 0
+  cookieSecretBirthdate : Int := 0
+  pubkeyHashKey : List UInt8 := List.replicate 16 0
   /-- `dev->stats` counters. -/
   txErrors : Nat := 0
   txDropped : Nat := 0
@@ -310,7 +326,8 @@ structure Device where
   staticIdentity : StaticIdentity := {}
   incomingPort : Nat := 0
   fwmark : Nat := 0
-  deviceUpdateGen : Nat := 0
+  /-- `device_update_gen`: 1 at `wg_newlink` (device.c:323). -/
+  deviceUpdateGen : Nat := 1
   numPeers : Nat := 0
   peerList : List PeerId := []
   peers : TreeMap PeerId Peer := {}

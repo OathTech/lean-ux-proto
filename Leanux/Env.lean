@@ -10,8 +10,9 @@ Not a mirror of C. This module holds what the trace's environment does, so
 the mirror proper (`Leanux/WG`) contains only the C's data and control flow:
 - the network fixture's listener port and the `wg_observe` operation, which
   waits, drains the fixture's listeners and reports wg0's counters;
-- the fixture checks around `wg_up` (the device goes up once; its port must
-  not be the fixture's);
+- the fixture's bound ports (`portBound`) and its routes into wg0
+  (`World.routesViaWg0`), which `wg_up`, `wg_down` and `wg_delete` change
+  (docs/2026-10-05-l-lifecycle.md, section 5);
 - when the kworkers run: the handshake receive worker inside `wg_inject`,
   then the encrypt and tx workers it queued, and the (mirrored) handshake
   send worker at the end of the operation that queued it, which the guest
@@ -32,6 +33,13 @@ def LISTEN_PORT : Nat := 51999
 /-- The fixture's sender (`wg_inject`) is bound to this port on `[::]`
     (dual-stack); `wg_observe` drains what it received. -/
 def SENDER_PORT : Nat := 51998
+
+/-- L (docs/2026-10-05-l-lifecycle.md, section 2.3): the ports where a
+    wildcard UDP bind of wg0's conflicts with a fixture socket (no
+    `SO_REUSEADDR`; a wildcard address matches any): the `127.0.0.1`
+    listener's and the dual-stack `[::]` sender's. The `::1` listener is
+    `v6only` at `LISTEN_PORT`, already excluded by the IPv4 bind. -/
+def portBound (p : Nat) : Bool := p == LISTEN_PORT || p == SENDER_PORT
 
 /-- Whether an endpoint is the fixture's sender. -/
 def isSender (family addr port : Nat) : Bool :=
@@ -180,7 +188,7 @@ def deliverSent : M Unit := do
     if isSender dg.family dg.addr dg.port then
       -- from wg0's socket, bound to the wildcard address at its port: over
       -- loopback the source is the destination's own address
-      let src := { family := dg.family, addr := dg.addr, port := (← getDev).incomingPort, bytes := dg.bytes : InboxDatagram }
+      let src := { family := dg.family, addr := dg.addr, port := dg.sport, bytes := dg.bytes : InboxDatagram }
       modify fun w => { w with senderInbox := w.senderInbox ++ [src] }
     else match listenerFamily { family := dg.family, addr := dg.addr, port := dg.port } with
       | some 4 => modify fun w => { w with listenerV4 := w.listenerV4 ++ [dg.bytes] }
@@ -287,7 +295,7 @@ def runCryptWorkers : M Unit := do
     is not determined, since these operations' waits are not measured for
     it. `wg_xmit` has its own (`afterXmit`). -/
 def requireNoCryptWork : M Unit := do
-  let d ← getDev
+  let some d := (← getK).wg | return
   if !d.encryptQueue.isEmpty || !d.txWorkQueue.isEmpty then
     unsupported "crypt work queued in a system call (its worker's timing)"
 
@@ -296,6 +304,7 @@ def requireNoCryptWork : M Unit := do
     that can queue it (`wg_set`, `wg_up`, `wg_xmit`), and the worker's remote
     KCOV section lands in that operation. -/
 def runSendWorkers : M Unit := do
+  if (← getK).wg.isNone then return   -- L: no device, no worker
   requireNoCryptWork
   modify fun w => { w with queuedThisCall := [] }   -- the call returned and slept
   for _ in [0:4096] do
@@ -319,7 +328,7 @@ def runSendWorkers : M Unit := do
     the guest's opened-section count, show a worker that outlived the wait:
     its records would be missing from this operation. -/
 def afterXmit : M Unit := do
-  let d ← getDev
+  let some d := (← getK).wg | return   -- L: no device (the send failed)
   let crypt := !d.encryptQueue.isEmpty || !d.txWorkQueue.isEmpty
   if crypt && !d.sendWorkQueue.isEmpty then
     unsupported "wg_xmit queued crypt work and a handshake (their order)"
@@ -377,14 +386,45 @@ def idleTimers : M Unit := do
 def advance (ticks : Nat) : M Int :=
   unsupported s!"D3 stream M: not yet (wg_advance of {ticks} ticks: the kind-304 record and the timers it fires)"
 
-/-- `wg_up` as the fixture performs it: once, on a port that is not the
-    fixture's own, then `dev_change_flags` (the mirror's `wgUp`). -/
-def wgUp : M Int := do
+/-- Work a down or a deletion would leave behind: crypt work (its worker's
+    timing) and a decrypt queue or NAPI poll still pending
+    (docs/2026-10-05-l-lifecycle.md, section 9). -/
+def requireIdleDevice : M Unit := do
+  requireNoCryptWork
   let d ← getDev
-  if d.running then unsupported "wg0 is already up (the fixture's routes exist)"
-  if d.incomingPort == LISTEN_PORT then unsupported "wg0's port is the fixture's listener port"
-  if d.incomingPort == SENDER_PORT then unsupported "wg0's port is the fixture's sender port"
-  WG.wgUp
+  if !d.decryptQueue.isEmpty || d.peers.toList.any (·.2.napiScheduled) then
+    unsupported "receive work queued at wg_stop (its worker's timing)"
+
+/-- `wg_up`: `SIOCSIFFLAGS` with `IFF_UP` (`dev_ifsioc`, `dev_change_flags`).
+    Without wg0, `-ENODEV` (`dev_load` requests no module: no
+    `CONFIG_MODULES`). An up device does not change (`__dev_change_flags`
+    sees no `IFF_UP` change, dev.c:8962). Otherwise the mirror's `wgUp`;
+    after a success the guest adds wg0's addresses and routes. -/
+def wgUp : M Int := do
+  let some d := (← getK).wg | return -ENODEV
+  if d.running then return 0
+  let ret ← WG.wgUp
+  if ret == 0 then modify fun w => { w with routesViaWg0 := true }
+  return ret
+
+/-- `wg_down`: `SIOCSIFFLAGS` without `IFF_UP`. `-ENODEV` without wg0; a
+    down device does not change; an up one goes through `__dev_close_many`
+    (`wg_stop`), and `NETDEV_DOWN` removes the routes. -/
+def wgDown : M Int := do
+  let some d := (← getK).wg | return -ENODEV
+  if !d.running then return 0
+  requireIdleDevice
+  WG.wgDown
+  modify fun w => { w with routesViaWg0 := false }
+  return 0
+
+/-- `wg_delete`: `RTM_DELLINK` (the mirror's `wgDelete`); `NETDEV_DOWN` and
+    `NETDEV_UNREGISTER` remove every route via wg0. -/
+def wgDelete : M Int := do
+  if (← getK).wg.isSome then requireIdleDevice
+  let ret ← WG.wgDelete
+  modify fun w => { w with routesViaWg0 := false }
+  return ret
 
 /-- `wg_observe`: its `recvfrom` on the IPv4 listener returns the first
     datagram there. The observation also lists every datagram both listeners
@@ -396,7 +436,8 @@ def wgUp : M Int := do
     discarded: outside the domain. -/
 def observe : M (Int × Lean.Json) := do
   idleTimers   -- the guest's wait before this operation
-  if !(← getDev).sendWorkQueue.isEmpty then unsupported "send work queued by an operation that does not wait"
+  if let some d := (← getK).wg then
+    if !d.sendWorkQueue.isEmpty then unsupported "send work queued by an operation that does not wait"
   requireNoCryptWork
   deliverSent
   let w ← get
@@ -419,13 +460,16 @@ def observe : M (Int × Lean.Json) := do
                  Lean.toJson (hex bs)]
   let sortJson (xs : List Lean.Json) := (xs.toArray.qsort fun a b => a.compress < b.compress).toList
   modify fun w => { w with listenerV4 := [], listenerV6 := [], senderInbox := [] }
-  let d ← getDev
+  -- L: without wg0 the guest's RTM_GETLINK fails with ENODEV: `stats` null
+  let stats := match (← getK).wg with
+    | some d => Lean.Json.mkObj [("tx_errors", Lean.toJson d.txErrors), ("tx_dropped", Lean.toJson d.txDropped),
+                                 ("rx_frame_errors", Lean.toJson d.rxFrameErrors),
+                                 ("rx_length_errors", Lean.toJson d.rxLengthErrors)]
+    | none => Lean.Json.null
   return (ret, Lean.Json.mkObj [
     ("datagrams", Lean.Json.arr (sortJson entries).toArray),
     ("replies", Lean.Json.arr (sortJson replies).toArray),
-    ("stats", Lean.Json.mkObj [("tx_errors", Lean.toJson d.txErrors), ("tx_dropped", Lean.toJson d.txDropped),
-                               ("rx_frame_errors", Lean.toJson d.rxFrameErrors),
-                               ("rx_length_errors", Lean.toJson d.rxLengthErrors)])])
+    ("stats", stats)])
 
 /-- The delivery of an inner packet that GRO flushed at `napi_complete_done`
     (a cut point: `gro_normal_list`, then the IPv4/IPv6 and UDP receive
@@ -529,7 +573,7 @@ def runDecryptWorker : M Unit := do
     Loopback delivers it in softirq inside the `sendto`, and the guest waits
     for the handshake worker. -/
 def inject (family port : Nat) (msg : List UInt8) : M Int := do
-  let d ← getDev
+  let some d := (← getK).wg | unsupported "a datagram to a port other than wg0's (no wg0)"
   if !d.running || port != d.incomingPort then unsupported "a datagram to a port other than wg0's"
   -- a pending send worker inserts an index entry under a random index
   for pid in d.peerList do requireNotPending pid "receiving while a handshake is queued"

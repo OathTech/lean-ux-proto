@@ -4,10 +4,15 @@ import Leanux.WG.Netlink
 # drivers/net/wireguard/device.c — bringing wg0 up and transmitting
 
 `wg_up` is `dev_change_flags(wg0, flags | IFF_UP)`, which sets
-`__LINK_STATE_START` and calls `wg_open`. `wg_socket_init` (the UDP sockets on
-`incoming_port`) is a cut point that succeeds on a fixed, free port; a zero
-port (a random one) is `unsupported`. The fixture's own ports are excluded by
-the environment (`Leanux/Env.lean`).
+`__LINK_STATE_START` and calls `wg_open`; `wg_down` clears it and calls
+`wg_stop`. `wg_socket_init` (`Leanux/WG/Socket.lean`) binds the UDP sockets
+on `incoming_port`, or a random port for 0.
+
+L (docs/2026-10-05-l-lifecycle.md): creation (`wg_setup`, `wg_newlink`, from
+`RTM_NEWLINK`) and deletion (`wg_stop` if up, then `wg_destruct`, from
+`RTM_DELLINK`). The rtnetlink and `net/core/dev.c` core around them is a cut:
+the mirror enters at the WireGuard callbacks, with the core's `-EEXIST` and
+`-ENODEV` as outcomes.
 
 `wg_xmit` receives the fixture sender's UDP datagrams, routed into wg0 by the
 default routes added at `wg_up`: never GSO, not shared, with a dst, and with
@@ -44,9 +49,9 @@ def wgOpen : M Int := do
   _ ← branch .openHasInet true    -- IN_DEV_CONF_SET(SEND_REDIRECTS, false)
   _ ← branch .openHasInet6 true   -- addr_gen_mode = IN6_ADDR_GEN_MODE_NONE
   let d ← getDev
-  -- wg_socket_init on incoming_port: a random port for 0 (outside the domain)
-  if d.incomingPort == 0 then unsupported "wg_socket_init on a random port"
-  if ← branch .openSocketError false then unsupported "unreachable"
+  -- mutex_lock(&wg->device_update_lock); wg_socket_init on incoming_port
+  let ret ← socketInit d.incomingPort
+  if ← branch .openSocketError (ret < 0) then return ret   -- goto out
   for pid in d.peerList do
     _ ← branch .openPeersIter true
     sendStagedPackets pid
@@ -54,11 +59,220 @@ def wgOpen : M Int := do
   _ ← branch .openPeersIter false
   return 0
 
-/-- `dev_change_flags` to IFF_UP: `__dev_open` sets `__LINK_STATE_START`
-    before `ndo_open`. The routes added after it are fixture. -/
+/-- `dev_change_flags` to IFF_UP: `__dev_open` (dev.c:1519-1566) sets
+    `__LINK_STATE_START` before `ndo_open`, and clears it again when
+    `ndo_open` fails (the flags stay down). The routes added after it are
+    fixture. -/
 def wgUp : M Int := do
   modifyDev fun d => { d with running := true }
-  wgOpen
+  let ret ← wgOpen
+  if ret < 0 then modifyDev fun d => { d with running := false }
+  return ret
+
+/-! ## L: wg_stop, creation and deletion -/
+
+/-- wg_packet_purge_staged_packets (send.c:333-340):
+    `DEV_STATS_ADD(tx_dropped, qlen)`, then the queue is purged. -/
+def purgeStagedPackets (pid : PeerId) : M Unit := do
+  let p ← getPeer pid
+  modifyDev fun d => { d with txDropped := d.txDropped + p.staged.length }
+  setPeer pid { (← getPeer pid) with staged := [] }
+
+/-- wg_timers_stop (timers.c:235-243): `timer_delete_sync` of the five
+    timers, then `flush_work(&peer->clear_peer_work)`, which runs a queued
+    clear work here. As in `peerRemoveAfterDead` (D3 interface, section
+    14.3): the queued clear work is D3 stream M's to fill in. -/
+def timersStop (pid : PeerId) : M Unit := do
+  for t in PeerTimer.all do delTimer pid t
+  if (← getDev).clearWorkQueue.contains pid then
+    unsupported "D3 stream M: not yet (flush_work of a queued clear_peer_work)"
+
+/-- wg_noise_handshake_clear (noise.c:88-96). -/
+def handshakeClear (pid : PeerId) : M Unit := do
+  indexRemove pid .handshake
+  handshakeZero pid
+
+/-- wg_stop (device.c:115-135), with `__LINK_STATE_START` already clear
+    (`__dev_close_many`, dev.c:1612). The encrypt, decrypt and tx queues
+    are not purged; the environment excludes work still queued there. -/
+def wgStop : M Unit := do
+  -- mutex_lock(&wg->device_update_lock)
+  for pid in (← getDev).peerList do
+    _ ← branch .stopPeersIter true
+    -- the handshake send work stays queued across wg_stop; when it runs is
+    -- not determined
+    requireNotPending pid "wg_stop while a handshake is queued"
+    purgeStagedPackets pid
+    timersStop pid
+    handshakeClear pid
+    keypairsClear pid
+    resetLastSentHandshake pid
+  _ ← branch .stopPeersIter false
+  -- `while ((skb = ptr_ring_consume(&wg->handshake_queue.ring)) != NULL)`:
+  -- a message queued for a receive worker that has not run
+  if !(← getDev).handshakeQueue.isEmpty then
+    unsupported "wg_stop with handshake messages queued for the receive worker (its timing)"
+  _ ← branch .stopDrainIter false
+  modifyDev fun d => { d with handshakeQueue := [] }   -- atomic_set(&wg->handshake_queue_len, 0)
+  socketReinit none none
+
+/-- `dev_change_flags` without IFF_UP on an up device: `__dev_close_many`
+    clears `__LINK_STATE_START`, then `ndo_stop`. -/
+def wgDown : M Unit := do
+  modifyDev fun d => { d with running := false }
+  wgStop
+
+/-- The ratelimiter's `table_size` (ratelimiter.c:173-177), sized from
+    `totalram_pages()`: 2048 buckets for the fixture's 256 MB guest
+    (an environment fact; docs/2026-10-05-l-lifecycle.md, section 2.1). -/
+def RATELIMITER_TABLE_SIZE : Nat := 2048
+
+/-- wg_ratelimiter_init (ratelimiter.c:158-203). The slab cache and the
+    tables are allocation sites (A's domain); the GC work it queues runs on
+    `system_power_efficient_wq` outside every section, reading no table
+    entry on the modeled paths (a cut). -/
+def ratelimiterInit : M Int := do
+  -- mutex_lock(&init_lock); `++init_refcnt != 1`
+  modifyK fun k => { k with ratelimiter := { k.ratelimiter with refcnt := k.ratelimiter.refcnt + 1 } }
+  let undo : M Int := do   -- err: --init_refcnt
+    modifyK fun k => { k with ratelimiter := { k.ratelimiter with refcnt := k.ratelimiter.refcnt - 1 } }
+    return -ENOMEM
+  if ← branch .ratelimiterInitNotFirst ((← getK).ratelimiter.refcnt != 1) then return 0
+  if ← branch .ratelimiterInitCacheErr !(← envOk .ratelimiterCache) then return ← undo
+  if ← branch .ratelimiterInitTableV4Err !(← envOk .ratelimiterTable) then return ← undo
+  if ← branch .ratelimiterInitTableV6Err !(← envOk .ratelimiterTable) then return ← undo
+  -- queue_delayed_work(system_power_efficient_wq, &gc_work, HZ)
+  let key ← hidden .ratelimiterKey
+  modifyK fun k => { k with ratelimiter := { k.ratelimiter with key } }
+  return 0
+
+/-- wg_ratelimiter_gc_entries (ratelimiter.c:55-83) on the empty tables of the
+    modeled paths (an entry is made only under load, E's domain, which
+    extends this walk with entries). `work` is NULL on the uninit path: its
+    clock read's value is unused there. -/
+def gcEntries (work : Bool) : M Unit := do
+  let _now ← hiddenClock .ratelimiterGcNow
+  for _ in [0:RATELIMITER_TABLE_SIZE] do
+    _ ← branch .gcBucketIter true
+    -- hlist_for_each_entry_safe over table_v4[i], then table_v6[i]: empty
+    _ ← branch .gcV4EntryIter false
+    _ ← branch .gcV6EntryIter false
+    if ← branch .gcHasWork work then unsupported "the ratelimiter GC's cond_resched (a work run)"
+  _ ← branch .gcBucketIter false
+  if ← branch .gcRequeue work then unsupported "the ratelimiter GC re-queuing itself (a work run)"
+
+/-- wg_ratelimiter_uninit (ratelimiter.c:205-221). -/
+def ratelimiterUninit : M Unit := do
+  -- mutex_lock(&init_lock); `!init_refcnt || --init_refcnt`
+  let r := (← getK).ratelimiter.refcnt
+  if ← branch .ratelimiterUninitZero (r == 0) then return
+  modifyK fun k => { k with ratelimiter := { k.ratelimiter with refcnt := r - 1 } }
+  if ← branch .ratelimiterUninitNotLast (r - 1 != 0) then return
+  -- cancel_delayed_work_sync(&gc_work): waits only for a GC run in progress,
+  -- which reads and changes nothing the mirror holds (empty tables)
+  gcEntries false
+  mayHaveSlept   -- rcu_barrier()
+  -- the tables and the cache are freed (cuts); `key` stays, unused
+
+/-- wg_setup (device.c:274-307): the net_device's ops, type, flags and MTU
+    (constants of the mirror: `DEVICE_MTU`), then `memset(wg, 0)`. The
+    rtnetlink core (`rtnl_create_link`, rtnetlink.c:3499-3515) allocated it
+    with the name "wg0" and `ifi_index` 0. -/
+def wgSetup : M Unit :=
+  modifyK fun k => { k with wg := some { ifindex := 0, ifname := "wg0", creatingNet := false, deviceUpdateGen := 0 } }
+
+/-- wg_cookie_checker_init (cookie.c:19-26). -/
+def cookieCheckerInit : M Unit := do
+  let birthdate ← hiddenClock .cookieSecretBirthdate
+  let secret ← hidden .cookieSecret
+  modifyDev fun d => { d with cookieSecretBirthdate := birthdate, cookieSecret := secret }
+
+/-- wg_pubkey_hashtable_alloc (peerlookup.c:22-33): `kvmalloc`, then the
+    siphash key. Its `if (!table)` is an allocation outcome in an unlisted
+    function (A's domain). -/
+def pubkeyHashtableAlloc : M Bool := do
+  if !(← envOk .pubkeyHashtableAlloc) then return false
+  let key ← hidden .pubkeyHashKey
+  modifyDev fun d => { d with pubkeyHashKey := key }
+  return true
+
+/-- wg_newlink (device.c:309-400), on the device `wgSetup` made. The
+    unwinding arms (381-399) follow allocation failures, A's domain:
+    reported, then outside the domain. -/
+def wgNewlink : M Int := do
+  let unwind : M Int := unsupported "wg_newlink's unwinding after an allocation failure"
+  modifyDev fun d => { d with creatingNet := true }   -- rcu_assign_pointer(wg->creating_net, src_net)
+  -- wg_allowedips_init: empty tries, seq 1 (the fresh device's)
+  cookieCheckerInit
+  modifyDev fun d => { d with deviceUpdateGen := 1 }
+  if ← branch .newlinkPeerHashtableErr !(← pubkeyHashtableAlloc) then return -ENOMEM
+  if ← branch .newlinkIndexHashtableErr !(← envOk .indexHashtableAlloc) then return ← unwind
+  -- three alloc_workqueue: only packet_crypt_wq (WQ_MEM_RECLAIM) gets a
+  -- rescuer, whose kthread_create the task waits for (a sleep point)
+  if ← branch .newlinkRecvWqErr !(← envOk .allocWorkqueue) then return ← unwind
+  if ← branch .newlinkSendWqErr !(← envOk .allocWorkqueue) then return ← unwind
+  let crypt ← envOk .allocWorkqueue
+  mayHaveSlept
+  if ← branch .newlinkCryptWqErr !crypt then return ← unwind
+  if ← branch .newlinkEncryptQueueErr !(← envOk .packetQueueInit) then return ← unwind
+  if ← branch .newlinkDecryptQueueErr !(← envOk .packetQueueInit) then return ← unwind
+  if ← branch .newlinkHandshakeQueueErr !(← envOk .packetQueueInit) then return ← unwind
+  let ret ← ratelimiterInit
+  if ← branch .newlinkRatelimiterErr (ret < 0) then return ← unwind
+  -- register_netdevice: the ifindex (the netns cursor, dev.c:10000-10018),
+  -- then NETDEV_REGISTER, whose inetdev_init and ipv6_add_dev each draw a
+  -- neighbour parms' reachable time (a cut: unobserved)
+  let ok ← envOk .registerNetdevice
+  if ← branch .newlinkRegisterErr !ok then return ← unwind
+  let ifindex := (← getK).netIfindexNext
+  modifyK fun k => { k with netIfindexNext := ifindex + 1 }
+  modifyDev fun d => { d with ifindex }
+  skipCutExactly .neighReachTime 2
+  -- list_add(&wg->device_list, &device_list); priv_destructor = wg_destruct
+  return 0
+
+/-- `RTM_NEWLINK` of "wg0" (rtnetlink.c:3716-3791, 3581-3671): an existing
+    device with `NLM_F_EXCL` is `-EEXIST` before any WireGuard code; else
+    `wg_setup` and `wg_newlink`. A failed `newlink` frees the device. -/
+def wgCreate : M Int := do
+  if (← getK).wg.isSome then return -EEXIST
+  wgSetup
+  let ret ← wgNewlink
+  if ret < 0 then modifyK fun k => { k with wg := none }
+  return ret
+
+/-- wg_destruct (device.c:242-270), from `netdev_run_todo`. -/
+def wgDestruct : M Unit := do
+  -- list_del(&wg->device_list) under rtnl; mutex_lock(&wg->device_update_lock)
+  modifyDev fun d => { d with creatingNet := false, incomingPort := 0 }
+  socketReinit none none
+  peerRemoveAll
+  -- destroy_workqueue ×3: drain_workqueue runs what is still queued (work
+  -- the environment excludes), then the rescuer's kthread_stop (a sleep)
+  let d ← getDev
+  if !d.sendWorkQueue.isEmpty || !d.encryptQueue.isEmpty || !d.txWorkQueue.isEmpty
+      || !d.decryptQueue.isEmpty || !d.clearWorkQueue.isEmpty then
+    unsupported "wg_destruct with queued work (destroy_workqueue runs it)"
+  mayHaveSlept
+  -- wg_packet_queue_free: the handshake ring is purged; the crypt rings are
+  -- empty (WARN_ON otherwise)
+  modifyDev fun d => { d with handshakeQueue := [] }
+  mayHaveSlept   -- rcu_barrier()
+  ratelimiterUninit
+  -- memzero_explicit(&wg->static_identity); kvfree ×2; free_netdev
+  modifyK fun k => { k with wg := none }
+
+/-- `RTM_DELLINK` of "wg0" (rtnetlink.c:3383-3436): `-ENODEV` without one;
+    else `unregister_netdevice_many_notify` (dev.c:11493-): `dev_close_many`
+    runs `wg_stop` for an up device; then `flush_all_backlogs` (a sleep
+    point), the notifiers, and `netdev_run_todo` (its `rcu_barrier`, a sleep
+    point), which calls `wg_destruct`. -/
+def wgDelete : M Int := do
+  if (← getK).wg.isNone then return -ENODEV
+  if (← getDev).running then wgDown
+  mayHaveSlept
+  wgDestruct
+  return 0
 
 /-- wg_xmit (device.c:137-233) for a datagram to `addr` (family 4 or 6),
     the IP packet `pkt` (from the environment's sender). -/

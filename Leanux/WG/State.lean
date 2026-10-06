@@ -66,8 +66,20 @@ def armTimer (pid : PeerId) (t : PeerTimer) (delay : Nat) : M Unit := do
 def delTimer (pid : PeerId) (t : PeerTimer) : M Unit := do
   setPeer pid ((← getPeer pid).setTimer t none)
 
-/-- The system call sleeps (`synchronize_net`, `flush_workqueue`): queued
-    workers may run from here on. -/
+/-- L: the bound port of the socket `send4`/`send6` (socket.c:27-47, a cut)
+    sends from: `wg->sock4` or `wg->sock6`. A send with that socket NULL (a
+    worker racing `wg_stop`) is `-ENONET`, not modeled. -/
+def socketPort (family : Nat) : M Nat := do
+  let d ← getDev
+  match (if family == AF_INET then d.sock4 else d.sock6) with
+  | some port => return port
+  | none => unsupported "a send while wg0's socket is NULL (-ENONET)"
+
+/-- The system call sleeps: queued workers may run from here on. On this
+    kernel (Tiny RCU, `CONFIG_PREEMPT_NONE`) `synchronize_net` does not
+    sleep (docs/2026-10-05-l-lifecycle.md, section 2.2); the sleep points are
+    `rcu_barrier`, `kthread_create`/`kthread_stop`, `flush_all_backlogs`,
+    `msleep`, and the flushes when work is pending. -/
 def mayHaveSlept : M Unit := modify fun w => { w with queuedThisCall := [] }
 
 /-- Read the pointer a slot holds (`*parent_bit`). -/

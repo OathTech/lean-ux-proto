@@ -25,9 +25,7 @@ inductive Operation where
   | wgInject (family port : Nat) (message : List UInt8)
   /-- D3: the virtual time advance (harness/trace.py `wg_advance`). -/
   | wgAdvance (ticks : Nat)
-  /-- L (docs/2026-10-05-l-lifecycle.md): wg0's lifecycle. Parsed so that
-      Linux-only runs reach the mirror; the mirror stops `unsupported` until
-      stream M models them. -/
+  /-- L (docs/2026-10-05-l-lifecycle.md): wg0's lifecycle. -/
   | wgCreate
   | wgDown
   | wgDelete
@@ -348,7 +346,9 @@ RLIMIT_NOFILE is 32. The fork gave the child its own files_struct
 `next_fd = 8`. Fixture files carry references held outside the trace.
 
 The network fixture (traces with a WireGuard operation) runs in a new network
-namespace holding `lo` (up) and a down WireGuard device `wg0` at ifindex 3.
+namespace holding `lo` (up), `sit0` (ifindex 2) and, unless the trace asks for
+the bare fixture (L), a down WireGuard device `wg0` at ifindex 3, created
+before the trace (its ratelimiter reference taken, its draws unknown).
 Descriptors 4 and 5 are UDP listeners on 127.0.0.1 and ::1 at `LISTEN_PORT`,
 6 a dual-stack UDP sender, and 7 a generic-netlink socket, instead of
 /dev/null. -/
@@ -359,7 +359,7 @@ def fixtureFile (name : String) (refs : Nat) : File :=
   { fFlags := O_RDWR, fMode := FMODE_READ ||| FMODE_WRITE ||| FMODE_OPENED,
     fCount := refs, fOp := some (.fixture name), fInode := some (.fixture name) }
 
-def initialKernel (rlimit : Nat) (net : Bool := false) : Kernel :=
+def initialKernel (rlimit : Nat) (net : Bool := false) (bare : Bool := false) : Kernel :=
   let slot (fd : Nat) : Option FileId :=
     if fd < 3 then some 0 else if fd < 8 then some (fd - 2) else none
   let files : Std.TreeMap FileId File := Std.TreeMap.ofList
@@ -381,7 +381,12 @@ def initialKernel (rlimit : Nat) (net : Bool := false) : Kernel :=
     -- Environment facts: the system-wide open-file count and limit are not
     -- observed; the guest has few files open, far below any boot-sized limit.
     nrFiles := 6, maxFiles := 1000000, anonInodeInodeErr := false,
-    wg := if net then some { ifindex := 3, ifname := "wg0" } else none }
+    wg := if net && !bare then some { ifindex := 3, ifname := "wg0" } else none,
+    -- L: the netns's ifindex cursor (lo 1, sit0 2, the fixture's wg0 3) and
+    -- the ratelimiter's reference count (the fixture's wg0 holds one; every
+    -- earlier trace process deleted its devices)
+    netIfindexNext := if net && !bare then 4 else 3,
+    ratelimiter := { refcnt := if net && !bare then 1 else 0 } }
 
 /-- The harness environment: every allocation and user-memory access succeeds. -/
 def harnessEnv : EnvSite → Nat → Bool := fun _ _ => true
@@ -422,9 +427,8 @@ def toSyscall (results : Array Int) : Operation → Syscall
 /-- Run a trace. A `Stop` is returned with the operation index: the mirror
     never reports an observation for a path it does not model. -/
 def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat × Stop) Json := do
-  if trace.bare then
-    throw (0, .outsideDomain "fixture" "L stream M: not yet (the bare network fixture)")
-  let mut world : World := { k := initialKernel trace.rlimit trace.net, env := harnessEnv, timing := Env.timing,
+  let mut world : World := { k := initialKernel trace.rlimit trace.net trace.bare, env := harnessEnv,
+                             timing := Env.timing, portBound := Env.portBound,
                              hiddenPlaceholders := placeholders && trace.hidden.isNone,
                              steerValues := if placeholders then trace.steer else [],
                              armRecords := trace.armRecords }

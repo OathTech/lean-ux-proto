@@ -1,4 +1,5 @@
 import Leanux.WG.Send
+import Leanux.WG.Socket
 import Lean.Data.Json
 
 /-!
@@ -12,8 +13,8 @@ device by `WGDEVICE_A_IFNAME` = "wg0", sends `NLA_F_NESTED` lists that
 `nla_parse_nested` accepts, never sends a peer's protocol version, and sends
 all three attributes of each allowed IP.
 
-The fixture's device is down, so `netif_running` is false: socket setup,
-keepalives and staged-packet transmission are outside the domain. A dump fits
+A running device's port change rebinds its sockets (`set_port`'s
+`wg_socket_init`, L). A dump fits
 in one message (`unsupported` above a conservative size), so every `nla_put`
 succeeds and the dump completes in its first callback.
 -/
@@ -76,8 +77,9 @@ def lookupInterface : M (Except Int Unit) := do
   if ← branch .lookupBothOrNeither false then return .error (-EBADR)
   if ← branch .lookupHasIfindex false then unsupported "lookup by ifindex"
   _ ← branch .lookupHasIfname true
-  -- dev_get_by_name finds the fixture's wg0; its rtnl_link_ops kind is "wireguard"
-  if ← branch .lookupNoDev false then return .error (-ENODEV)
+  -- dev_get_by_name finds wg0 unless the trace's fixture has none (L: a bare
+  -- fixture, or after wg_delete); its rtnl_link_ops kind is "wireguard"
+  if ← branch .lookupNoDev (← getK).wg.isNone then return .error (-ENODEV)
   if ← orM (branch .lookupNoLinkOps false) (orM (branch .lookupNoKind false)
       (branch .lookupKindMismatch false)) then
     return .error (-EOPNOTSUPP)
@@ -100,7 +102,7 @@ def setPort (port : Nat) : M Int := do
   if ← branch .setPortNotRunning !d.running then
     modifyDev fun d => { d with incomingPort := port }
     return 0
-  unsupported "wg_socket_init"
+  socketInit port
 
 /-- set_allowedip (netlink.c:329-355). -/
 def setAllowedip (pid : PeerId) (ip : AllowedIpAttrs) : M Int := do

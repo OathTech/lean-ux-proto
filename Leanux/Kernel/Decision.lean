@@ -233,6 +233,18 @@ inductive Decision where
   -- end D3 stream M
   -- D3 stream H (constructors; sections 7-8)
   -- end D3 stream H
+  -- L stream M (docs/2026-10-05-l-lifecycle.md, section 4.3)
+  -- drivers/net/wireguard/device.c: wg_newlink, wg_stop
+  | newlinkPeerHashtableErr | newlinkIndexHashtableErr | newlinkRecvWqErr | newlinkSendWqErr | newlinkCryptWqErr
+  | newlinkEncryptQueueErr | newlinkDecryptQueueErr | newlinkHandshakeQueueErr | newlinkRatelimiterErr
+  | newlinkRegisterErr | stopPeersIter | stopDrainIter
+  -- drivers/net/wireguard/socket.c: wg_socket_reinit, sock_free
+  | reinitHasNew4 | sockFreeNull
+  -- drivers/net/wireguard/ratelimiter.c: init, uninit, and the GC walk with
+  -- an empty table (E extends it with entries)
+  | ratelimiterInitNotFirst | ratelimiterInitCacheErr | ratelimiterInitTableV4Err | ratelimiterInitTableV6Err
+  | ratelimiterUninitZero | ratelimiterUninitNotLast
+  | gcBucketIter | gcV4EntryIter | gcV6EntryIter | gcHasWork | gcRequeue
   deriving Repr, BEq, DecidableEq, Inhabited
 
 /-- A recorded step: the decision, the outcome the mirror computed, and, for
@@ -287,6 +299,7 @@ private def wqh := "drivers/net/wireguard/queueing.h"
 private def vlh := "include/linux/if_vlan.h"
 private def iph := "include/net/ip_tunnels.h"
 private def ech := "include/net/inet_ecn.h"
+private def wrl := "drivers/net/wireguard/ratelimiter.c"
 
 private def sp (file : String) (lo hi : Nat) : Span := ⟨file, lo, hi⟩
 
@@ -1086,6 +1099,43 @@ def Decision.info : Decision → DecisionInfo
   -- end D3 stream M
   -- D3 stream H (their infos; sections 7-8)
   -- end D3 stream H
+  -- L stream M. wg_newlink (device.c:309-400): each `if (!x)`/`if (ret < 0)`
+  -- jumps to an unwinding label that later labels' paths also reach, so only
+  -- the last arm's label (382) is its own; the false sides are the next
+  -- statement's lines.
+  | .newlinkPeerHashtableErr => d "wg_newlink.peer_hashtable_failed" wdv 326 [] [(329, 329)]
+  | .newlinkIndexHashtableErr => d "wg_newlink.index_hashtable_failed" wdv 330 [] [(333, 334)]
+  | .newlinkRecvWqErr => d "wg_newlink.receive_wq_failed" wdv 335 [] [(338, 339)]
+  | .newlinkSendWqErr => d "wg_newlink.send_wq_failed" wdv 340 [] [(343, 344)]
+  | .newlinkCryptWqErr => d "wg_newlink.crypt_wq_failed" wdv 345 [] [(348, 349)]
+  | .newlinkEncryptQueueErr => d "wg_newlink.encrypt_queue_failed" wdv 350 [] [(353, 354)]
+  | .newlinkDecryptQueueErr => d "wg_newlink.decrypt_queue_failed" wdv 355 [] [(358, 359)]
+  | .newlinkHandshakeQueueErr => d "wg_newlink.handshake_queue_failed" wdv 360 [] [(363, 363)]
+  | .newlinkRatelimiterErr => d "wg_newlink.ratelimiter_failed" wdv 364 [] [(367, 367)]
+  | .newlinkRegisterErr => d "wg_newlink.register_failed" wdv 368 [(382, 382)] [(371, 379)]
+  -- wg_stop (device.c:115-135): the peer loop, then the handshake ring drain
+  | .stopPeersIter => d "wg_stop.peers_iterate" wdv 122 [(123, 128)] [(129, 129)]
+  | .stopDrainIter => d "wg_stop.drain_handshake_ring" wdv 130 [(131, 131)] [(132, 133)]
+  -- wg_socket_reinit (socket.c:419-437) and its inlined sock_free (334-340)
+  | .reinitHasNew4 => d "wg_socket_reinit.new4" wso 431 [(432, 432)] []
+  | .sockFreeNull => d "sock_free.null" wso 336 [(337, 337)] [(338, 339)]
+  -- wg_ratelimiter_init (ratelimiter.c:158-203): `++init_refcnt != 1` jumps to
+  -- the shared `out:`; the failure arms reach the shared `err:` labels
+  | .ratelimiterInitNotFirst => d "wg_ratelimiter_init.refcnt_not_one" wrl 161 [] [(164, 192)]
+  | .ratelimiterInitCacheErr => d "wg_ratelimiter_init.cache_failed" wrl 165 [] [(173, 192)]
+  | .ratelimiterInitTableV4Err => d "wg_ratelimiter_init.table_v4_failed" wrl 180 [(181, 181)] [(183, 192)]
+  | .ratelimiterInitTableV6Err => d "wg_ratelimiter_init.table_v6_failed" wrl 185 [(186, 187)] [(191, 192)]
+  -- wg_ratelimiter_uninit (205-221): `!init_refcnt || --init_refcnt` on one
+  -- line; both true sides jump to the shared `out:`
+  | .ratelimiterUninitZero => d "wg_ratelimiter_uninit.refcnt_zero" wrl 208 [] []
+  | .ratelimiterUninitNotLast => d "wg_ratelimiter_uninit.not_last" wrl 208 [] [(211, 218)]
+  -- wg_ratelimiter_gc_entries (55-83): the bucket loop, its two entry loops,
+  -- and the `work` tests (77, 80)
+  | .gcBucketIter => d "wg_ratelimiter_gc_entries.bucket_iterate" wrl 62 [(63, 78)] []
+  | .gcV4EntryIter => d "wg_ratelimiter_gc_entries.v4_entry_iterate" wrl 64 [(65, 67)] []
+  | .gcV6EntryIter => d "wg_ratelimiter_gc_entries.v6_entry_iterate" wrl 70 [(71, 73)] []
+  | .gcHasWork => d "wg_ratelimiter_gc_entries.has_work" wrl 77 [(78, 78)] []
+  | .gcRequeue => d "wg_ratelimiter_gc_entries.requeue" wrl 80 [(81, 81)] []
 
 /-- The relation of a C value comparison, as written in the source
     (`lhs rel rhs`); `flag` is a mask test `(x & MASK)` against zero. -/
@@ -1288,6 +1338,11 @@ def Decision.repeatable : Decision → Bool
   -- end D3 stream M
   -- D3 stream H (repeatable decisions; sections 7-8)
   -- end D3 stream H
+  -- L stream M: loops over peers, queued messages and the ratelimiter's
+  -- buckets; wg_socket_reinit runs twice when an up device is deleted
+  -- (wg_stop, then wg_destruct), and sock_free twice per call
+  | .stopPeersIter | .stopDrainIter | .reinitHasNew4 | .sockFreeNull
+  | .gcBucketIter | .gcV4EntryIter | .gcV6EntryIter | .gcHasWork => true
   | _ => false
 
 /-- Every decision, enumerated through the constructor index. -/
