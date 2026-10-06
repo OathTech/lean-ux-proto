@@ -510,10 +510,12 @@ def Decision.info : Decision → DecisionInfo
   | .rwVerifyNegativePos => d "rw_verify_area.negative_pos" rw 459 [(461, 463)] [(464, 466)]
   | .rwVerifyPosOverflow => d "rw_verify_area.pos_overflow" rw 464 [(465, 466)] []
   | .newSyncReadQueued => d "new_sync_read.eiocbqueued" rw 489 [] []
-  | .vfsReadNotReadable => d "vfs_read.not_fmode_read" rw 553 [(554, 554)] [(555, 577)]
-  | .vfsReadCannotRead => d "vfs_read.not_fmode_can_read" rw 555 [(556, 556)] [(557, 577)]
-  | .vfsReadAccessFault => d "vfs_read.access_not_ok" rw 557 [(558, 558)] [(560, 577)]
-  | .vfsReadVerifyError => d "vfs_read.verify_error" rw 561 [(562, 562)] [(563, 577)]
+  -- the early returns jump into the shared exit, whose point DWARF puts at 567: 567 is
+  -- left out of the false spans (found by the generated pipes suite: a read of a write end)
+  | .vfsReadNotReadable => d "vfs_read.not_fmode_read" rw 553 [(554, 554)] [(555, 566), (568, 577)]
+  | .vfsReadCannotRead => d "vfs_read.not_fmode_can_read" rw 555 [(556, 556)] [(557, 566), (568, 577)]
+  | .vfsReadAccessFault => d "vfs_read.access_not_ok" rw 557 [(558, 558)] [(560, 566), (568, 577)]
+  | .vfsReadVerifyError => d "vfs_read.verify_error" rw 561 [(562, 562)] [(563, 566), (568, 577)]
   -- the block attributed to 567 is shared with the read_iter call
   | .vfsReadClamp => d "vfs_read.clamp_count" rw 563 [(564, 564)] []
   | .vfsReadHasRead => d "vfs_read.fop_read" rw 566 [] [(568, 571)]
@@ -528,10 +530,13 @@ def Decision.info : Decision → DecisionInfo
   | .ksysReadStorePos => d "ksys_read.store_pos" rw 713 [(714, 714)] []
   | .fileStartWriteNotRegular => d "file_start_write.not_regular" fsh 2998 [(2999, 2999)] [(3000, 3000)]
   | .fileEndWriteNotRegular => d "file_end_write.not_regular" fsh 3018 [(3019, 3019)] [(3020, 3020)]
-  | .vfsWriteNotWritable => d "vfs_write.not_fmode_write" rw 667 [(668, 668)] [(669, 692)]
-  | .vfsWriteCannotWrite => d "vfs_write.not_fmode_can_write" rw 669 [(670, 670)] [(671, 692)]
-  | .vfsWriteAccessFault => d "vfs_write.access_not_ok" rw 671 [(672, 672)] [(674, 692)]
-  | .vfsWriteVerifyError => d "vfs_write.verify_error" rw 675 [(676, 676)] [(677, 692)]
+  -- the early returns jump into the shared exit, whose point is file_end_write's
+  -- not-regular return (fs.h:3018 inlined at 691): 691 is left out of the false spans
+  -- (found by the generated pipes suite: a write to a read end)
+  | .vfsWriteNotWritable => d "vfs_write.not_fmode_write" rw 667 [(668, 668)] [(669, 690), (692, 692)]
+  | .vfsWriteCannotWrite => d "vfs_write.not_fmode_can_write" rw 669 [(670, 670)] [(671, 690), (692, 692)]
+  | .vfsWriteAccessFault => d "vfs_write.access_not_ok" rw 671 [(672, 672)] [(674, 690), (692, 692)]
+  | .vfsWriteVerifyError => d "vfs_write.verify_error" rw 675 [(676, 676)] [(677, 690), (692, 692)]
   | .vfsWriteClamp => d "vfs_write.clamp_count" rw 677 [(678, 678)] []
   | .vfsWriteHasWrite => d "vfs_write.fop_write" rw 680 [(681, 681)] [(682, 685)]
   | .vfsWriteHasWriteIter => d "vfs_write.fop_write_iter" rw 682 [(683, 683)] [(685, 685)]
