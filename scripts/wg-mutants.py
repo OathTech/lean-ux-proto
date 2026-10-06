@@ -231,17 +231,17 @@ D2_MUTANTS = [
    "  if ← branch .doneRxKeepalive (len == 0) then\n", "  if ← branch .doneRxKeepalive false then\n"),
   ('D2-M10-dead-as-crypted', 'control: the decrypt worker enqueues a failed decryption as CRYPTED '
    '(receive.c:499-501); the tampered-tag traces', 'Leanux/WG/RxData.lean',
-   "      else enqueuePerPeerRx pkt .dead\n", "      else enqueuePerPeerRx pkt .crypted\n"),
+   "      else enqueuePerPeerRx irqExit pkt .dead\n", "      else enqueuePerPeerRx irqExit pkt .crypted\n"),
   ('D2-M11-nonce-per-list', 'data: the sending counter is not advanced per packet (send.c:378-381); '
    'd2_staged_flush_4 repeats a nonce', 'Leanux/WG/Send.lean',
    "    setKeypair id { k with sendingCounter := k.sendingCounter + 1 }\n", "    setKeypair id k\n"),
   ('D2-M12-poll-outside-worker', 'scheduling control: the NAPI poll runs after the decrypt worker\'s section '
    'instead of inside it (design section 5); rejected only when a run shows order (b) (timing-dependent)',
    'Leanux/Env.lean',
-   "  runWorker .decryptWorker (WG.decryptWorker napiSoftirq (condResched SWITCH_DEPTH .decryptWorker))\n"
+   "  runWorker .decryptWorker (WG.decryptWorker napiSoftirq napiIrqExit (condResched SWITCH_DEPTH .decryptWorker))\n"
    "  if (← getDev).peers.toList.any (·.2.napiScheduled) then\n"
    "    invariant \"a NAPI poll pending after the decrypt worker (its ring poll runs the softirq)\"\n",
-   "  runWorker .decryptWorker (WG.decryptWorker (pure ()) (condResched SWITCH_DEPTH .decryptWorker))\n"
+   "  runWorker .decryptWorker (WG.decryptWorker (pure ()) (pure ()) (condResched SWITCH_DEPTH .decryptWorker))\n"
    "  napiSoftirq\n"),
 ]
 PENDING = {m[0] for m in D2_MUTANTS if m[3] is None}
