@@ -789,6 +789,9 @@ def run_chunk(traces, out, kcov, alloc_flags=0, arm=()):
         for trace_id, found in section_problems(per, section_rows).items():
             site_problems.setdefault(trace_id, []).extend(found)
         outcomes.update({f'choice records skipped ({k})': n for k, n in skipped.items()})
+        # the transitional unarmed answer (docs/2026-10-05-a-alloc.md 6.6) is
+        # declared: the report counts the traces each way
+        outcomes['alloc runs (armed)' if armed_labels else 'alloc runs (unarmed)'] += len(traces)
     except LinuxRunError as exc:
         return {t['id']: dict(outcome=exc.kind, side='linux', detail=str(exc)) for t in traces}, gaps, outcomes
     except SteeringError as exc:
@@ -904,9 +907,10 @@ def main(argv=None):
         matched = outcomes.pop('operand pairs matched', 0)
         skipped = {k[len('choice records skipped ('):-1]: outcomes.pop(k) for k in list(outcomes)
                    if k.startswith('choice records skipped (')}
+        alloc_runs = {k[len('alloc runs ('):-1]: outcomes.pop(k) for k in list(outcomes) if k.startswith('alloc runs (')}
         status = write_report(out, traces, results, gaps, build, aborted, started, suites, args,
                               decision_summary(decisions, outcomes, kcov[2] if kcov else {}), matched, filtered, splits,
-                              skipped)
+                              skipped, alloc_runs)
     return 0 if status == 'pass' else 1
 
 
@@ -927,7 +931,8 @@ def decision_summary(decisions, outcomes, witnesses):
 
 
 def write_report(out, traces, results, gaps, build, aborted, started, suites, args, decision_coverage=None,
-                 operand_pairs_matched=0, domain_filtered=None, chunk_splits=0, choice_records_skipped=None):
+                 operand_pairs_matched=0, domain_filtered=None, chunk_splits=0, choice_records_skipped=None,
+                 alloc_runs=None):
     ordered = [results.get(trace['id'], dict(id=trace['id'], outcome='not_run')) for trace in traces]
     counts = Counter(r['outcome'] for r in ordered)
     vmlinux = KERNEL / 'vmlinux'
@@ -947,6 +952,9 @@ def write_report(out, traces, results, gaps, build, aborted, started, suites, ar
         # cut and ambient choice records (coverage child), by site: consumed
         # without their values, so their growth is visible here
         choice_records_skipped=dict(sorted((choice_records_skipped or {}).items())),
+        # traces whose allocation outcomes were consumed from records (armed),
+        # and those that ran on the transitional unarmed answer (all ok)
+        alloc_runs=dict(sorted((alloc_runs or {}).items())),
         domain_filtered=dict(domain_filtered or {}), chunk_splits=chunk_splits,
         decision_coverage=decision_coverage,
         failures=[r for r in ordered if r['outcome'] != 'agreement'])
