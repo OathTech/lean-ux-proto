@@ -1,0 +1,92 @@
+"""Replays of recorded hidden inputs through the built mirror (no guest).
+
+Run after `lake build leanux-model` (the check builds it):
+    scripts/in-bundle python3 -B -m unittest evaluator.test_model_replay
+A missing binary fails the tests; it does not skip them.
+
+The loopback NET_RX rule (Leanux/WG/State.lean, `loopbackSend`): a transmission
+over loopback raises NET_RX, whose section runs nested at the send's
+`local_bh_enable`, exactly once. It replaced a cut that consumed any number
+(zero or more) of NET_RX start/stop records at the send, and that stopped at an
+ambient record between them.
+"""
+import copy
+import json
+from pathlib import Path
+import subprocess
+import unittest
+
+from evaluator.check import MODEL
+
+# b1_other_endpoint as recorded on a contended host (load average 50-80,
+# 2026-10-06; .worktrees/e-a mutant-E-M3 run, chunk-000a). Operation 3's
+# handshake initiation goes to 127.0.0.1:1234; its NET_RX section holds an
+# ambient start_dl_timer record (site 30) between the flow-hash draw and the
+# section stop. The old cut failed: "expected retransmit_jitter (site 14), the
+# record is site 49".
+CONTENDED_B1 = json.loads(r'''{"hidden":[[[5,"5b31367705000000"],[5,"5b31367705000000"]],[],[[6,"7559868a05000000"],[40,"f05e3981ffffffff"],[6,"7559868a05000000"],[7,"7559868a05000000"],[1,"c316ce75497d83af1b4c84fab0f4e43799218ff3d33f5a1c7e9c132db661f306"],[3,"ba42c46a000000003825442500000000"],[4,"5943036600000000"],[8,"7559868a05000000"],[21,"3fb20f6a799beedd9f6e0b1ce0f0a413"],[20,"70894b4c00000000"],[48,"e0b33f81ffffffff"],[20,"d421a3fb00000000"],[49,"0000000000000000"],[14,"f600000000000000"],[41,"0000000000000000"]],[[6,"4356af9605000000"],[40,"f05e3981ffffffff"],[6,"4356af9605000000"],[7,"4356af9605000000"],[1,"886624c57b7b843a16108557b069e52653c4d396e35fe5bdaf4651ee71e8c338"],[3,"ba42c46a0000000006226d3100000000"],[4,"8ca6bb5500000000"],[8,"4356af9605000000"],[48,"e0b33f81ffffffff"],[23,"63c72430cf336ef60e363a07e859538a"],[30,"4356af9605000000"],[49,"0000000000000000"],[14,"be00000000000000"],[41,"0000000000000000"]],[],[]],"id":"b1_other_endpoint","ops":[{"config":{"listen_port":51820,"peers":[{"allowed_ips":[{"addr":"0a000000","cidr":8,"family":4}],"endpoint":{"addr":"7f000001","family":4,"port":1234},"public_key":"2222222222222222222222222222222222222222222222222222222222222222"},{"allowed_ips":[{"addr":"fd000000000000000000000000000000","cidr":8,"family":6}],"endpoint":{"addr":"00000000000000000000000000000001","family":6,"port":1234},"public_key":"3333333333333333333333333333333333333333333333333333333333333333"}],"private_key":"0100000000000000000000000000000000000000000000000000000000000000"},"op":"wg_set"},{"op":"wg_up"},{"op":"wg_xmit","packet":{"dst":"0a000001","family":4}},{"op":"wg_xmit","packet":{"dst":"fd000000000000000000000000000001","family":6}},{"op":"wg_observe"},{"op":"wg_get"}],"version":1}''')
+
+# A wg_xmit to 224.0.0.1 without a peer (generated-wg-20260920-00136, recorded
+# 2026-10-05): the fixture's sendto loops a multicast copy back before wg_xmit
+# (one NET_RX section), and the ENOKEY error sends no ICMP (no icmp_global_consume
+# draw). The old error-path cut absorbed that section.
+MULTICAST = json.loads(r'''{"hidden":[[[5,"a0579b4b04000000"]],[],[[48,"e0b33f81ffffffff"],[49,"0000000000000000"]],[],[]],"id":"generated-wg-20260920-00136","ops":[{"config":{"listen_port":51820,"peers":[{"allowed_ips":[{"addr":"20010db9000000000000000000000000","cidr":32,"family":6}],"endpoint":{"addr":"00000000000000000000000000000001","family":6,"port":51999},"public_key":"2222222222222222222222222222222222222222222222222222222222222222"}],"replace_peers":true},"op":"wg_set"},{"op":"wg_up"},{"op":"wg_xmit","packet":{"dst":"e0000001","family":4}},{"op":"wg_observe"},{"op":"wg_get"}],"version":1}''')
+
+
+def replay(trace):
+    if not MODEL.is_file():
+        raise AssertionError(f'{MODEL} is missing: run `lake build leanux-model` first')
+    result = subprocess.run([MODEL], input=json.dumps(trace).encode(), capture_output=True, timeout=120)
+    out = (result.stdout + result.stderr).decode()
+    return None if result.returncode == 0 and out.startswith('{') and not result.stderr else out.strip()
+
+
+def sites(op):
+    return [r[0] for r in op]
+
+
+class LoopbackNetRx(unittest.TestCase):
+    def mutated(self, trace, index, change):
+        trace = copy.deepcopy(trace)
+        trace['hidden'][index] = change(trace['hidden'][index])
+        return trace
+
+    def test_contended_record_order_agrees(self):
+        self.assertIsNone(replay(CONTENDED_B1))
+
+    def test_multicast_loop_section_agrees(self):
+        self.assertIsNone(replay(MULTICAST))
+
+    def test_send_without_its_section_is_rejected(self):
+        # the old cut accepted zero sections
+        trace = self.mutated(CONTENDED_B1, 2, lambda op: [r for r in op if r[0] not in (48, 49)])
+        self.assertIn('raised NET_RX: expected its section', replay(trace) or '')
+
+    def test_two_sections_at_one_send_are_rejected(self):
+        # the old cut accepted any number of sections
+        def twice(op):
+            stop = sites(op).index(49)
+            return op[:stop + 1] + [[48, 'e0b33f81ffffffff'], [49, '0000000000000000']] + op[stop + 1:]
+        self.assertIn('the record is site 48', replay(self.mutated(CONTENDED_B1, 2, twice)) or '')
+
+    def test_section_after_the_send_is_rejected(self):
+        # not a placement Linux takes: the raise runs at the send's local_bh_enable
+        def late(op):
+            start, stop = sites(op).index(48), sites(op).index(49)
+            rest = op[:start] + op[stop + 1:]
+            jitter = sites(rest).index(14)
+            return rest[:jitter + 1] + op[start:stop + 1] + rest[jitter + 1:]
+        self.assertIn('raised NET_RX: expected its section', replay(self.mutated(CONTENDED_B1, 2, late)) or '')
+
+    def test_mirror_record_inside_the_section_is_rejected(self):
+        def foreign(op):
+            stop = sites(op).index(49)
+            return op[:stop] + [[4, '0102030400000000']] + op[stop:]
+        self.assertIn('expected section_stop:net_rx_action', replay(self.mutated(CONTENDED_B1, 2, foreign)) or '')
+
+    def test_multicast_without_its_section_is_rejected(self):
+        self.assertIn('raised NET_RX: expected its section', replay(self.mutated(MULTICAST, 2, lambda op: [])) or '')
+
+
+if __name__ == '__main__':
+    unittest.main()

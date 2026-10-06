@@ -54,6 +54,71 @@ def requireNotPending (pid : PeerId) (what : String) : M Unit := do
     workers may run from here on. -/
 def mayHaveSlept : M Unit := modify fun w => { w with queuedThisCall := [] }
 
+/-! ## The NET_RX softirq of a loopback transmission
+
+wg0's datagrams (`send4`/`send6`, under `rcu_read_lock_bh`) and the ICMP
+errors of `wg_xmit` (`icmp_ndo_send`, under `__dev_queue_xmit`'s
+`rcu_read_lock_bh`) leave over loopback: `loopback_xmit` → `__netif_rx`
+raises NET_RX with bottom halves disabled (`raise_softirq_irqoff` with
+`in_interrupt()` true, so ksoftirqd is not woken: softirq.c:704-709). The
+softirq runs at the `local_bh_enable` that ends the region:
+`__local_bh_enable_ip` calls `do_softirq` when `!in_interrupt()` and a
+softirq is pending (softirq.c:401-408), and nothing before it can run it
+(an interrupt's exit sees `in_interrupt()`). So on the modeled paths, which
+transmit only from process context, its section is **nested at the send
+point, exactly once per raise**:
+- `net_rx_action` polls the backlog until it is empty; the ICMP reply the
+  delivery may produce (port unreachable) is queued to the same backlog
+  while it is polled and handled in the same section;
+- `handle_softirqs` defers to ksoftirqd only work that a softirq re-raised
+  (a NAPI instance not completed), which a one- or two-packet backlog poll
+  never leaves.
+The section holds the delivery's own cut-site records (the reply's IP
+ident, the flow-hash secret) and ambient records, and nothing else. A
+record order other than this is a hidden-input mismatch (fail-closed), not
+a lax skip. The D2 decrypt worker's NAPI poll is the case that may be
+deferred to ksoftirqd (`Env.napiSoftirq`); if one were pending here, one
+`net_rx_action` would poll both, which is outside the domain. -/
+
+/-- The records a loopback delivery's NET_RX section may hold besides its
+    start and stop: the ICMP reply's IP output (ident key and reserve) and
+    the flow dissector's hash secret. -/
+def loopbackRxSites : List HiddenSite := [.ipIdentKey, .ipIdentReserve, .flowHashSecret]
+
+/-- `__netif_rx` → `____napi_schedule(backlog)` → `__raise_softirq_irqoff`:
+    the pending bit. One transmission raises it once; the bit is clear on
+    the modeled paths (each raise runs at its own `local_bh_enable`). -/
+def raiseLoopbackRx : M Unit := do
+  if (← get).netRxRaised then invariant "a loopback NET_RX raised while one is pending"
+  modify fun w => { w with netRxRaised := true }
+
+/-- The `local_bh_enable` that ends the transmitting region: the raised
+    NET_RX runs here, in its own section (the records' `net_rx_action`
+    start and stop, with `loopbackRxSites` between). Without records (the
+    domain filter) the section is not read. -/
+def loopbackSoftirq : M Unit := do
+  if !(← get).netRxRaised then return
+  if (← getDev).peers.toList.any (·.2.napiScheduled) then
+    unsupported "a loopback NET_RX section while a NAPI poll is pending (one net_rx_action polls both)"
+  modify fun w => { w with netRxRaised := false }
+  if (← get).hidden.isNone then return
+  let start := (HiddenSite.sectionStart .netRx).info
+  if (← peekHiddenSite) != some start.id then
+    let next := match ← peekHiddenSite with | some s => s!"site {s}" | none => "none"
+    throw (.hidden s!"a loopback transmission raised NET_RX: expected its section ({start.label}, site {start.id}) at the send's local_bh_enable, the record is {next}")
+  _ ← hidden (.sectionStart .netRx)
+  skipCut loopbackRxSites
+  _ ← hidden (.sectionStop .netRx)
+
+/-- A loopback transmission's cut point: the IP output's cut-site records
+    (`sites`, any number), then, if the packet left (`raised`), its NET_RX
+    section at the region's end. -/
+def loopbackSend (sites : List HiddenSite) (raised : Bool) : M Unit := do
+  skipCut sites
+  if raised then
+    raiseLoopbackRx
+    loopbackSoftirq
+
 /-- Read the pointer a slot holds (`*parent_bit`). -/
 def slotGet (s : Slot) : M (Option NodeId) := do
   match s with

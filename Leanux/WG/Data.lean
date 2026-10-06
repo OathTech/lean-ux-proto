@@ -139,9 +139,9 @@ def sendSkbToPeer (pid : PeerId) (bytes : List UInt8) (ds : Nat) : M Bool := do
     if ← branch .sendSkbInet (family == AF_INET) then pure true
     else if ← branch .sendSkbInet6 (family == AF_INET6) then pure true
     else pure false   -- dev_kfree_skb; -EAFNOSUPPORT
-  -- send4/send6 choose the IP ident; the loopback delivery is a nested
-  -- NET_RX section
-  if sent then skipCut [.ipIdentKey, .ipIdentReserve, .flowHashSecret, .sectionStart .netRx, .sectionStop .netRx]
+  -- send4/send6 choose the IP ident; the loopback delivery is a NET_RX
+  -- section nested at the send (`loopbackSend`)
+  if sent then loopbackSend [.ipIdentKey, .ipIdentReserve, .flowHashSecret] true
   if ← branch .sendSkbOk sent then
     let some e := p.endpoint | invariant "unreachable"
     setPeer pid { p with txBytes := p.txBytes + bytes.length }

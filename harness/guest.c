@@ -361,6 +361,9 @@ static void print_pcs(const char *tag, const char *id, unsigned i, const unsigne
 static unsigned char observe_buffer[2048];
 static struct timespec went_up;
 static int up_seen;
+/* The trace's guest time from wg_up to its last operation's end (with that
+ * operation's wait), reported per child: the margin to REKEY_BOUND_NS. */
+static long long since_up_ns;
 
 static void print_hex(long n)
 {
@@ -733,7 +736,8 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         if (up_seen) {
             struct timespec now;
             clock_gettime(CLOCK_BOOTTIME, &now);
-            if ((now.tv_sec - went_up.tv_sec) * 1000000000LL + (now.tv_nsec - went_up.tv_nsec) > REKEY_BOUND_NS)
+            since_up_ns = (now.tv_sec - went_up.tv_sec) * 1000000000LL + (now.tv_nsec - went_up.tv_nsec);
+            if (since_up_ns > REKEY_BOUND_NS)
                 fail(t->id, i, "environment_failure", "trace_exceeds_rekey_bound");
         }
         /* KCOV stops counting once the buffer is full, so "full" is the last
@@ -771,6 +775,9 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         print_pcs("LEANUX_COVERAGE", t->id, i, coverage, count);
         if (remote) print_pcs("LEANUX_RCOVERAGE", t->id, i, remote, remote_count);
     }
+    if (up_seen)
+        printf("LEANUX_TIMING {\"id\":\"%s\",\"mode\":\"%s\",\"since_up_ns\":%lld}\n", t->id,
+               comparisons ? "cmp" : "pc", since_up_ns);
     if (comparisons) {
         printf("LEANUX_CMP_RESULT {\"id\":\"%s\",\"rets\":[", t->id);
         for (unsigned i = 0; i < t->count; ++i) printf("%s%ld", i ? "," : "", result[i].ret);

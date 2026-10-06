@@ -685,18 +685,42 @@ def operand_agreement(trace, model_obs, comparisons, locations, decisions, funct
     return problems, checked
 
 
-# The guest's time budget: boot and a baseline, plus each wg_observe's wait
-# (OBSERVE_WAIT_US in harness/guest.c, 0.4 s, in each of the two children) and
-# a per-operation allowance, both with a factor of two for TCG.
-GUEST_BASE_SECONDS = 120
-OBSERVE_SECONDS = 2 * 2 * 0.4
-OPERATION_SECONDS = 0.05
+# The guest's time budget. A timeout only bounds a hung guest, so the budget
+# is generous; a budget that a contended host can exceed makes a correct run
+# fail (2026-10-06: 6 of 148 recorded WireGuard-chunk runs timed out at
+# 1.00-1.01x the old budget, which did not count wg_inject's wait or the
+# queue waits, and 10 more completed at 0.90-0.98x). Two parts:
+# - the guest's fixed waits (harness/guest.c), which do not slow down: each
+#   of a trace's two children (coverage, comparisons) sleeps OBSERVE_WAIT_US
+#   (0.4 s) before wg_observe and after wg_inject, and QUEUE_WAIT_US (0.1 s)
+#   after wg_set, wg_up and wg_xmit;
+# - its computation (boot, fixtures, TCG execution), which does: measured on
+#   the loaded host (load average 50-100 on 32 CPUs, 3 guests) at most
+#   2.0 s per WireGuard trace (both children, boot included) and 0.025 s per
+#   operation of other traces, scaled by CONTENTION_FACTOR.
+GUEST_CHILDREN = 2
+OBSERVE_WAIT_SECONDS = 0.4
+QUEUE_WAIT_SECONDS = 0.1
+GUEST_BOOT_SECONDS = 30
+WIREGUARD_TRACE_SECONDS = 2.0
+OPERATION_SECONDS = 0.03
+CONTENTION_FACTOR = 3
 
 
 def guest_timeout(traces):
-    observes = sum(op['op'] == 'wg_observe' for trace in traces for op in trace['ops'])
-    operations = sum(len(trace['ops']) for trace in traces)
-    return GUEST_BASE_SECONDS + observes * OBSERVE_SECONDS + operations * OPERATION_SECONDS
+    ops = [op['op'] for trace in traces for op in trace['ops']]
+    waits = GUEST_CHILDREN * (OBSERVE_WAIT_SECONDS * sum(op in ('wg_observe', 'wg_inject') for op in ops)
+                              + QUEUE_WAIT_SECONDS * sum(op in ('wg_set', 'wg_up', 'wg_xmit') for op in ops))
+    compute = (GUEST_BOOT_SECONDS + WIREGUARD_TRACE_SECONDS * sum(uses_wireguard(t) for t in traces)
+               + OPERATION_SECONDS * len(ops))
+    return round(waits + CONTENTION_FACTOR * compute)
+
+
+# Outcomes of the guest's infrastructure, not of Linux's or the mirror's
+# behavior: a chunk that fails with one of them (every trace alike) is run
+# once more, and the report records it (`chunk_retries`). output_limit is
+# deterministic and is split instead; a mismatch of any kind is never rerun.
+RETRIED_OUTCOMES = ('timeout', 'resource_busy')
 
 
 def run_chunk(traces, out, kcov):
@@ -816,7 +840,7 @@ def main(argv=None):
     out.mkdir(parents=True, exist_ok=False)
     started = datetime.now(timezone.utc).isoformat()
     results, gaps, build, aborted = {}, Counter(), None, None
-    outcomes, decisions, kcov, splits = Counter(), {}, None, 0
+    outcomes, decisions, kcov, splits, retries = Counter(), {}, None, 0, {}
     try:
         build = build_model(out, rebuild=not args.no_build)
         traces = load_traces(suites, {'generated': args.generated_count, 'wireguard-generated': args.wireguard_count},
@@ -833,6 +857,14 @@ def main(argv=None):
             start, chunk, name = pending.pop(0)
             print(f'traces {start}-{start + len(chunk) - 1} ...', file=sys.stderr, flush=True)
             chunk_results, chunk_gaps, chunk_outcomes = run_chunk(chunk, out / name, kcov)
+            first = {r.get('outcome') for r in chunk_results.values()}
+            if chunk_results and len(first) == 1 and first <= set(RETRIED_OUTCOMES):
+                detail = next(iter(chunk_results.values())).get('detail')
+                print(f'{name}: {first.pop()} ({detail}); running it once more', file=sys.stderr, flush=True)
+                retries[name] = dict(retries=1, first_outcome=next(iter(chunk_results.values()))['outcome'],
+                                     detail=detail, rerun=name + '-retry')
+                chunk_results, chunk_gaps, chunk_outcomes = run_chunk(chunk, out / (name + '-retry'), kcov)
+                retries[name]['rerun_outcomes'] = dict(Counter(r.get('outcome') for r in chunk_results.values()))
             # One guest's console output is bounded; a chunk that exceeds it
             # is rerun as two halves (recorded in the report). A single trace
             # that still exceeds it fails.
@@ -854,7 +886,7 @@ def main(argv=None):
                    if k.startswith('choice records skipped (')}
         status = write_report(out, traces, results, gaps, build, aborted, started, suites, args,
                               decision_summary(decisions, outcomes, kcov[2] if kcov else {}), matched, filtered, splits,
-                              skipped)
+                              skipped, retries)
     return 0 if status == 'pass' else 1
 
 
@@ -875,7 +907,8 @@ def decision_summary(decisions, outcomes, witnesses):
 
 
 def write_report(out, traces, results, gaps, build, aborted, started, suites, args, decision_coverage=None,
-                 operand_pairs_matched=0, domain_filtered=None, chunk_splits=0, choice_records_skipped=None):
+                 operand_pairs_matched=0, domain_filtered=None, chunk_splits=0, choice_records_skipped=None,
+                 chunk_retries=None):
     ordered = [results.get(trace['id'], dict(id=trace['id'], outcome='not_run')) for trace in traces]
     counts = Counter(r['outcome'] for r in ordered)
     vmlinux = KERNEL / 'vmlinux'
@@ -896,6 +929,9 @@ def write_report(out, traces, results, gaps, build, aborted, started, suites, ar
         # without their values, so their growth is visible here
         choice_records_skipped=dict(sorted((choice_records_skipped or {}).items())),
         domain_filtered=dict(domain_filtered or {}), chunk_splits=chunk_splits,
+        # chunks rerun once after an infrastructure outcome (RETRIED_OUTCOMES),
+        # by chunk: the first outcome and the rerun's outcomes
+        chunk_retries=dict(chunk_retries or {}),
         decision_coverage=decision_coverage,
         failures=[r for r in ordered if r['outcome'] != 'agreement'])
     (out / 'report.json').write_text(json.dumps(report, indent=2) + '\n')

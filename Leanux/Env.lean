@@ -63,6 +63,28 @@ def timing : Timing where
 def fixtureSend : M Unit :=
   skipCut [.ipIdentKey, .ipIdentReserve, .flowHashSecret]
 
+/-- The fixture's `sendto` into wg0's route, to a multicast destination,
+    before `wg_xmit`: the IP output loops a copy back to local receivers.
+    - IPv4: the route of any multicast destination is `RTCF_MULTICAST`, and
+      `sk_mc_loop` holds (the sender is an IPv6 socket, whose
+      `IPV6_MULTICAST_LOOP` defaults to on), so `ip_mc_output` clones the
+      packet to `ip_mc_finish_output` → `dev_loopback_xmit` → `netif_rx`
+      before `ip_finish_output` hands it to wg0 (ip_output.c:382-424).
+      `netif_rx` disables bottom halves around the enqueue and its
+      `local_bh_enable` runs the raised NET_RX (dev.c:5374-5387): a
+      section of its own (`WG.loopbackSend`). No socket takes the copy
+      (none is bound to `SEND_PORT`), and a multicast is not answered with
+      an ICMP error.
+    - IPv6: `ip6_finish_output2` loops a copy only to a group wg0 has
+      joined (`ipv6_chk_mcast_addr`), which the environment does not model.
+    Recorded evidence: every `wg_xmit` to 224.0.0.1 shows one NET_RX section
+    and no other record (41 operations, 2026-10-06), which the lax cut of
+    `wg_xmit`'s error path used to absorb. -/
+def xmitMulticastLoop (family addr : Nat) : M Unit := do
+  if family == 4 && addr / 2 ^ 28 == 0xe then WG.loopbackSend [] true
+  else if family == 6 && addr / 2 ^ 120 == 0xff then
+    unsupported "an IPv6 multicast destination (whether the IP output loops a copy back depends on wg0's groups)"
+
 /-- The fixture's sender transmits (`wg_xmit`) to this UDP port. -/
 def SEND_PORT : Nat := 40000
 

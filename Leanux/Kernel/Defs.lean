@@ -430,6 +430,11 @@ structure World where
       the mirror before Linux recorded them (site ids): see `Env.runWorker`. -/
   yieldedWorkers : List Nat := []
   pendingStops : List Nat := []
+  /-- A NET_RX softirq raised by a loopback transmission (`netif_rx` from
+      `send4`/`send6` or an ICMP error), whose section has not been consumed
+      yet: see `WG.loopbackSoftirq`. An operation ends with none pending
+      (`Runner.executeTrace`). -/
+  netRxRaised : Bool := false
   /-- A steered trace's schedule (site label, value or a draw), which the
       placeholders follow: the domain filter's verdict is then exact for the
       steered sites. -/
@@ -565,15 +570,26 @@ def hiddenClock (s : HiddenSite) : M Int := do
   return if u ≥ 2 ^ 63 then (u : Int) - (2 ^ 64 : Int) else (u : Int)
 
 /-- A cut point: consume the head records that come from these cut sites
-    (any number, as the cut's own code may or may not draw). -/
-def skipCut (sites : List HiddenSite) : M Unit := do
-  skipAmbient
-  let w ← get
-  if let some rs := w.hidden then
-    let ids := sites.map (·.info.id)
-    let rest := rs.dropWhile fun r => ids.contains r.site
-    set { w with hidden := some rest }
-    if rest.length != rs.length then skipAmbient
+    (any number, as the cut's own code may or may not draw), with the
+    ambient records and pending section stops among them; return the cut
+    records' sites, in order. An ambient record (the scheduler's) may lie
+    between two cut records: the run continues past it (a contended host
+    showed `start_dl_timer` inside a loopback NET_RX section). -/
+def skipCutSites (sites : List HiddenSite) : M (List Nat) := do
+  let ids := sites.map (·.info.id)
+  let mut taken := []
+  for _ in [0:4096] do
+    skipAmbient
+    let w ← get
+    match w.hidden with
+    | some (r :: rest) =>
+      if !ids.contains r.site then return taken
+      set { w with hidden := some rest }
+      taken := taken ++ [r.site]
+    | _ => return taken
+  invariant "a cut point consumed more than 4096 records"
+
+def skipCut (sites : List HiddenSite) : M Unit := discard <| skipCutSites sites
 
 def getFile (id : FileId) : M File := do
   match (← getK).files.get? id with

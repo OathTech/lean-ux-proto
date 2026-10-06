@@ -275,7 +275,7 @@ def _collect(outdir, traces, process_returncode):
     results, coverage, fixtures, errors, child_failures, completed, kernels = [], [], [], [], [], [], []
     comparisons, comparison_results, wireguard, observed = [], [], [], []
     remote_coverage, remote_comparisons = [], []
-    hidden, remote_hidden, steering, sections = [], [], [], []
+    hidden, remote_hidden, steering, sections, timing = [], [], [], [], []
     for line in (outdir / "boot.log").read_text(errors="strict").splitlines():
         line = line.rstrip("\r")
         for prefix, target in (("LEANUX_RESULT ", results), ("LEANUX_COVERAGE ", coverage),
@@ -285,7 +285,7 @@ def _collect(outdir, traces, process_returncode):
                                ("LEANUX_WGOBS ", observed), ("LEANUX_RCOVERAGE ", remote_coverage),
                                ("LEANUX_RCMP ", remote_comparisons), ("LEANUX_HIDDEN ", hidden),
                                ("LEANUX_RHIDDEN ", remote_hidden), ("LEANUX_STEER ", steering),
-                               ("LEANUX_SECTIONS ", sections)):
+                               ("LEANUX_SECTIONS ", sections), ("LEANUX_TIMING ", timing)):
             if line.startswith(prefix):
                 try:
                     target.append(_decode_json(line[len(prefix):]))
@@ -297,6 +297,7 @@ def _collect(outdir, traces, process_returncode):
         if line.startswith("LEANUX_KERNEL "):
             kernels.append(line.removeprefix("LEANUX_KERNEL "))
     _jsonl(outdir / "observations.jsonl", results)
+    _jsonl(outdir / "timing.jsonl", timing)
     try:
         coverage = merge_remote(coverage, remote_coverage, traces, "pcs")
         comparisons = merge_remote(comparisons, remote_comparisons, traces, "records")
