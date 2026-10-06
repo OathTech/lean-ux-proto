@@ -4,7 +4,7 @@
 # sprint's timer sections, arm record and virtual time advance
 # (docs/2026-10-05-d3-timers.md, stream K) awaiting the user's approval.
 # kernel/config-x86_64-net (unchanged) with kernel/patches/choice-stream.patch
-# (sha256 9f8f3d4ea39c04ef6b25ba9c0c0c087879ad28771bd8f761d92cc5b302fb9607)
+# (sha256 3b0f2026265c7ccfe3bd8951ab7afd3ccdf5b56d6ffea70f5c715a57f7f217ab)
 # applied alone to the locked source, built with LEANUX_KERNEL_PROFILE=net-choice.
 # The patch (kernel/patches/gen-choice-stream.py) records random draws and
 # clock reads at generic interception points (drivers/char/random.c,
@@ -19,7 +19,8 @@
 # {jiffies, expires}) for an armed timer function when the dispatch set was
 # loaded with KCOV_DISPATCH_ARM_RECORDS; KCOV_LEANUX_TIME_ADVANCE advances
 # jiffies_64 (leanux_time_advance, kernel/time/timekeeping.c, refused unless
-# the timekeeper is refined-jiffies) and records kind 304 {before, after}.
+# the timekeeper is refined-jiffies) and records kind 304 {before, after},
+# with interrupts disabled from the jump until the record (D3 integration).
 # No anchored file and no WireGuard file is touched.
 # Its DWARF names .deps/linux (via -fdebug-prefix-map).
 # The oracle is this build booted with the harness's parameters
@@ -28,6 +29,6 @@
 # and the timekeeper clocksource refined-jiffies, checked at every batch's
 # start and end (LEANUX_CLOCKSOURCE rows).
 # Path-independent identity from scripts/kernel-identity.py:
-ad90a10555011000b16fc905a4f9d9202d4e4e0c978873c16d08181fa082e877
+8744fcc402b0efd49200e317c02f0e4a352441bbe38c2b11c79533b041ad399e
 # vmlinux sha256 of the build the evidence used (path-dependent):
-b2599261c81e22903aa154e435b9923eb68b05d0705ee1f8fa4de54bea3e476d
+883e1f60dc50df9a7a72ffd08fcf29cc25df3ba9e5f808efa93c594bdd646c51
