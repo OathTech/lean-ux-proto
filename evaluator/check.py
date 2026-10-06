@@ -1,8 +1,9 @@
 """Build the mirror, run traces on the pinned Linux guest and the mirror, compare.
 
     scripts/in-bundle python3 -m evaluator.check
-        [--suite handwritten,critic,wireguard,generated,wireguard-generated]
+        [--suite handwritten,critic,wireguard,alloc,generated,wireguard-generated]
         [--generated-count N] [--wireguard-count N] [--seed S] [--trace ID] [--out DIR] [--no-build]
+        [--alloc-share F]
 
 The command fails unless every trace agrees on observations (A1) and every
 operation's model branch labels are consistent with Linux KCOV coverage (A2).
