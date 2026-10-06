@@ -2,9 +2,10 @@
 from copy import deepcopy
 from pathlib import Path
 import json
+import re
 import unittest
 
-from .trace import InvalidTrace, UnsupportedTrace, loads_trace, serialize_wire, validate_trace
+from .trace import KCOV_CAPACITY, OPCODES, InvalidTrace, UnsupportedTrace, loads_trace, serialize_wire, validate_trace
 
 
 class TraceContractTests(unittest.TestCase):
@@ -67,6 +68,31 @@ class TraceContractTests(unittest.TestCase):
         self.trace['ops'].append({'op': 'dup3', 'fd': {'literal': -2147483648}, 'newfd': {'ref': 0}, 'flags': 4294967295})
         self.assertEqual(serialize_wire([self.trace]),
                          'LEANUX_WIRE_V2\n1\nD 0\nT case 3 32 0 0\n1 0 -1 0 -1 0 2048 0\n6 1 0 0 -1 8 0 18446744073709551615\n3 0 -2147483648 1 0 0 4294967295 0\n')
+
+    def test_lifecycle_operations_and_bare_fixture(self):
+        # L (docs/2026-10-05-l-lifecycle.md section 6): opcodes 15-17, the
+        # bare fixture as the wire's net 2, only on network traces.
+        self.assertEqual([OPCODES[n] for n in ("wg_create", "wg_down", "wg_delete")], [15, 16, 17])
+        self.assertEqual(len(set(OPCODES.values())), len(OPCODES))
+        trace = {"version": 1, "id": "life", "net_fixture": "bare",
+                 "ops": [{"op": "wg_create"}, {"op": "wg_down"}, {"op": "wg_delete"}]}
+        self.assertEqual(validate_trace(trace), trace)
+        wire = serialize_wire([trace], dispatch=[1])
+        self.assertIn("\nT life 3 32 2 0\n15 0 -1 0 -1 0 0 0\n16 0 -1 0 -1 0 0 0\n17 0 -1 0 -1 0 0 0\n", wire)
+        del trace["net_fixture"]
+        self.assertIn("\nT life 3 32 1 0\n", serialize_wire([trace], dispatch=[1]))
+        for bad in ({"net_fixture": "wg0"}, {"net_fixture": True}, {"net_fixture": "bare", "ops": [{"op": "dup", "fd": {"literal": 8}}]}):
+            with self.subTest(bad=bad):
+                with self.assertRaises(InvalidTrace):
+                    validate_trace(dict(trace, **bad))
+        with self.assertRaises(InvalidTrace):
+            validate_trace(dict(trace, ops=[{"op": "wg_create", "extra": 1}]))
+
+    def test_guest_capacity_matches_host_bounds(self):
+        guest = (Path(__file__).resolve().parent / "guest.c").read_text()
+        match = re.search(r"#define CAPACITY \((\d+)UL \* 1024\)", guest)
+        self.assertIsNotNone(match)
+        self.assertEqual(int(match.group(1)) * 1024, KCOV_CAPACITY)
 
 
 if __name__ == '__main__':

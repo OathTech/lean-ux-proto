@@ -44,6 +44,11 @@ inductive Syscall where
   | wgObserve
   /-- `sendto` of a WireGuard message from the fixture's sender to `port`. -/
   | wgInject (family port : Nat) (message : List UInt8)
+  /-- L (docs/2026-10-05-l-lifecycle.md): `RTM_NEWLINK` of wg0, `SIOCSIFFLAGS`
+      without `IFF_UP`, `RTM_DELLINK` of wg0. Not yet modeled (stream M). -/
+  | wgCreate
+  | wgDown
+  | wgDelete
 
 /-- The generic-netlink socket at descriptor 7 (`NETLINK_FD` in harness/guest.c). -/
 def NETLINK_FD : Nat := 7
@@ -102,6 +107,7 @@ def dispatch : Syscall → M Int
     let (ret, observed) ← Env.observe
     modify fun w => { w with extraOut := ["datagrams", "replies", "stats"].map fun k => (k, observed.getObjValD k) }
     return ret
+  | .wgCreate | .wgDown | .wgDelete => unsupported "L stream M: not yet"
 
 /-- `task_work_run` on exit to user mode: each queued `____fput` runs `__fput`. -/
 partial def taskWorkRun : M Unit := do

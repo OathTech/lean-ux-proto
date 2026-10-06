@@ -28,7 +28,9 @@ CHOICE_HELPERS = ('drivers/char/random.c', 'include/linux/random.h', 'kernel/tim
                   'include/linux/sched.h')   # cond_resched's inline wrapper (resched records)
 # Sites a trace may steer, and their domains (strategy section 3): every
 # value in the domain is a possible output of the source.
-STEERABLE = {'init_ephemeral', 'resp_ephemeral', 'index_draw', 'tai64n_now'}
+# L (docs/2026-10-05-l-lifecycle.md section 3.3): udp_lib_get_port's
+# get_random_u32 (net/ipv4/udp.c:257), any 4 bytes.
+STEERABLE = {'init_ephemeral', 'resp_ephemeral', 'index_draw', 'tai64n_now', 'udp_port_draw'}
 TIME_SETTOD_SEC_MAX = (1 << 63) // 1_000_000_000 - 30 * 365 * 24 * 3600   # KTIME_SEC_MAX - TIME_UPTIME_SEC_MAX
 
 

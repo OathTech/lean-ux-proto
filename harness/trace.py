@@ -26,9 +26,25 @@ FIELDS = {
     "wg_up": {"op"}, "wg_xmit": {"op", "packet"}, "wg_observe": {"op"},
     # Stage B2: a raw WireGuard message sent to wg0's listen port
     "wg_inject": {"op", "family", "port", "message"},
+    # L: wg0's lifecycle (docs/2026-10-05-l-lifecycle.md section 6): RTM_NEWLINK,
+    # SIOCSIFFLAGS without IFF_UP, RTM_DELLINK
+    "wg_create": {"op"}, "wg_down": {"op"}, "wg_delete": {"op"},
 }
-WG_OPS = {"wg_set", "wg_get", "wg_up", "wg_xmit", "wg_observe", "wg_inject"}
-OPCODES = {name: i + 1 for i, name in enumerate(FIELDS)}
+LIFECYCLE_OPS = ("wg_create", "wg_down", "wg_delete")
+WG_OPS = {"wg_set", "wg_get", "wg_up", "wg_xmit", "wg_observe", "wg_inject"} | set(LIFECYCLE_OPS)
+# The wire opcodes: FIELDS order, except that L's operations are 15-17
+# whatever precedes them (opcode 14 is D3's wg_advance).
+OPCODES = {name: i + 1 for i, name in enumerate(n for n in FIELDS if n not in LIFECYCLE_OPS)}
+OPCODES.update({name: 15 + i for i, name in enumerate(LIFECYCLE_OPS)})
+if len(set(OPCODES.values())) != len(OPCODES):
+    raise ImportError("harness.trace: two operations share a wire opcode")
+# The guest's KCOV area in words, task and remote (harness/guest.c CAPACITY):
+# KCOV stops at CAPACITY - 1 PCs or (CAPACITY - 1) // 4 comparison records,
+# and the guest fails an operation whose area filled.
+KCOV_CAPACITY = 256 * 1024
+# The optional top-level `net_fixture` (L): "bare" starts a network trace
+# without wg0; absent, the fixture creates a down wg0.
+NET_FIXTURES = ("bare",)
 FCNTL = {"F_GETFD": 1, "F_SETFD": 2, "F_GETFL": 3, "F_SETFL": 4}
 
 
@@ -44,8 +60,8 @@ def _fields(value, keys, where):
 
 def validate_trace(trace):
     """Return a detached valid trace; reject all inputs outside trace v1."""
-    if type(trace) is not dict or not {"version", "id", "ops"} <= set(trace) <= {"version", "id", "ops", "rlimit_nofile", "steer", "expect"}:
-        raise InvalidTrace("trace: expected exactly ['id', 'ops', 'version'] and optionally 'rlimit_nofile', 'steer', 'expect'")
+    if type(trace) is not dict or not {"version", "id", "ops"} <= set(trace) <= {"version", "id", "ops", "rlimit_nofile", "steer", "expect", "net_fixture"}:
+        raise InvalidTrace("trace: expected exactly ['id', 'ops', 'version'] and optionally 'rlimit_nofile', 'steer', 'expect', 'net_fixture'")
     # A steering schedule (choice-stream strategy, step 2): [site label, value
     # hex or "draw"] in encounter order; the expected decision outcomes that
     # the steering is for. Sites, lengths and domains are checked when the
@@ -122,6 +138,11 @@ def validate_trace(trace):
                 validate_packet(op["packet"], f"ops[{i}].packet")
             except InvalidConfig as exc:
                 raise InvalidTrace(str(exc)) from exc
+    if "net_fixture" in trace:
+        if type(trace["net_fixture"]) is not str or trace["net_fixture"] not in NET_FIXTURES:
+            raise InvalidTrace(f"net_fixture: expected one of {list(NET_FIXTURES)}")
+        if not uses_wireguard(trace):
+            raise InvalidTrace("net_fixture: only a network trace has a network fixture")
     return deepcopy(trace)
 
 
@@ -130,8 +151,16 @@ def uses_wireguard(trace):
     network namespace with `lo` up and a down `wg0`; UDP listeners on
     127.0.0.1 and ::1 at descriptors 4 and 5, a dual-stack UDP sender at 6,
     and the generic-netlink socket at 7, in place of the /dev/null fillers.
-    `wg_up` also adds an address and a default route on `wg0` per family."""
+    `wg_up` also adds an address and a default route on `wg0` per family.
+    With `"net_fixture": "bare"` there is no `wg0` until a `wg_create`."""
     return any(op["op"] in WG_OPS for op in trace["ops"])
+
+
+def net_mode(trace):
+    """The wire's `net` field: 0 no network fixture, 1 with a down wg0, 2 bare."""
+    if not uses_wireguard(trace):
+        return 0
+    return 2 if trace.get("net_fixture") == "bare" else 1
 
 
 def loads_trace(line):
@@ -171,7 +200,7 @@ def serialize_wire(traces, steer_wire=None, dispatch=()):
     lines = ["LEANUX_WIRE_V2", str(len(traces)), " ".join(["D", str(len(dispatch))] + [f"{a:x}" for a in dispatch])]
     for trace in traces:
         schedule = steer_wire.get(trace["id"], []) if "steer" in trace else []
-        lines.append(f"T {trace['id']} {len(trace['ops'])} {trace.get('rlimit_nofile', 32)} {int(uses_wireguard(trace))} {len(schedule)}")
+        lines.append(f"T {trace['id']} {len(trace['ops'])} {trace.get('rlimit_nofile', 32)} {net_mode(trace)} {len(schedule)}")
         for op in trace["ops"]:
             def fd(field):
                 value = op.get(field, {"literal": -1})
