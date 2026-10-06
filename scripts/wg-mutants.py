@@ -251,9 +251,9 @@ PENDING = {m[0] for m in D2_MUTANTS if m[3] is None}
 # the alloc suite (corpus/alloc: armed, steered traces); an unarmed run
 # answers every allocation ok, so no other suite can reject these. A-M2
 # (keypair_create, noise.c:100 record-only) and A-M4 (skb_cow_data never
-# allocates on this fixture, A0) are dropped. The A2 entries need the
-# (b-task) failure traces, which A1 does not steer [USER A1]: their patterns
-# are written against the current code and they are reported as pending.
+# allocates on this fixture, A0) are dropped. The A2 entries (A-M1, A-M5,
+# A-M6, A-M9, A-M13) are rejected by the a2_* traces of the (b-task)
+# failslab-style extension [USER 2026-10-06]; A-M7/A-M8 wait for pipes (P).
 A_MUTANTS = [
   ('A-M3-keepalive-sends-after-nomem', 'control: wg_packet_send_keepalive calls wg_packet_send_staged_packets '
    'after a failed allocation (send.c:228-229 returns). Survives on this base: both modeled callers (wg_open, '
@@ -295,13 +295,14 @@ A_MUTANTS = [
    'Leanux/WG/AllowedIps.lean',
    "    listDel newnode\n    freeNode newnode\n    return -ENOMEM\n",
    "    return -ENOMEM\n"),
+  # A2 (new): the one arm only a task-context failure reaches
+  ('A-M13-dup3-enomem-as-ebadf', 'A2: ksys_dup3 maps every expand_files error to EBADF, not only EMFILE '
+   '(file.c:1352-1354: ENOMEM is returned as is)', 'Leanux/FS/File.lean',
+   "    if ← branch .dup3ExpandEmfile (err == -EMFILE) then return -EBADF\n",
+   "    if ← branch .dup3ExpandEmfile true then return -EBADF\n"),
 ]
-A_PENDING = {'A-M1-peer-create-ignores-record': 'pending A2 (b-task steering not enabled)',
-             'A-M5-fdtable-installed-after-nomem': 'pending A2 (b-task steering not enabled)',
-             'A-M6-eventfd-keeps-fd': 'pending A2 (b-task steering not enabled)',
-             'A-M7-pipe-accounting-kept': 'pending P and A2 (no pipe mirror on this base)',
-             'A-M8-pipe-write-enomem': 'pending P and A2 (no pipe mirror on this base)',
-             'A-M9-intermediate-keeps-newnode': 'pending A2 (b-task steering not enabled)'}
+A_PENDING = {'A-M7-pipe-accounting-kept': 'pending P (no pipe mirror on this base)',
+             'A-M8-pipe-write-enomem': 'pending P (no pipe mirror on this base)'}
 SUITE_OF = {m[0]: 'alloc' for m in A_MUTANTS}
 
 

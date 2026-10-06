@@ -68,6 +68,31 @@ class TraceContractTests(unittest.TestCase):
         self.assertEqual(serialize_wire([self.trace]),
                          'LEANUX_WIRE_V2\n1\nD 0\nA 0\nM 0 0\nT case 3 32 0 0\n1 0 -1 0 -1 0 2048 0\n6 1 0 0 -1 8 0 18446744073709551615\n3 0 -2147483648 1 0 0 4294967295 0\n')
 
+    def test_failslab_extension(self):
+        """A2: the (b-task) class is enabled only under the declared
+        extension, and the marker only with such a failure."""
+        from harness.steer import ALLOC_FAIL, SteeringError, alloc_refusal, resolve
+        trace = deepcopy(self.trace)
+        trace['steer'] = [['kmallocEventfdCtx', ALLOC_FAIL]]
+        validate_trace(trace)
+        self.assertIn('not enabled', alloc_refusal(trace, 'kmallocEventfdCtx', ALLOC_FAIL))
+        self.assertIsNone(alloc_refusal(trace, 'kmallocEventfdCtx', 'draw'))
+        trace['domain_extension'] = 'failslab'
+        validate_trace(trace)
+        self.assertIsNone(alloc_refusal(trace, 'kmallocEventfdCtx', ALLOC_FAIL))
+        self.assertIsNone(alloc_refusal(trace, 'sendBufSkb', ALLOC_FAIL))
+        # b-kworker stays record-only; the 8 KiB kvmalloc stays refused
+        self.assertIn('not enabled', alloc_refusal(trace, 'kzallocKeypair', ALLOC_FAIL))
+        self.assertIn('vmalloc', alloc_refusal(dict(trace, rlimit_nofile=1024), 'kvmallocFdArray', ALLOC_FAIL))
+        self.assertIsNone(alloc_refusal(dict(trace, rlimit_nofile=128), 'kvmallocFdArray', ALLOC_FAIL))
+        # the marker without a forced task-context failure is refused
+        for steer in ([['kmallocEventfdCtx', 'draw']], [['sendBufSkb', ALLOC_FAIL]]):
+            with self.assertRaises(SteeringError):
+                resolve(dict(trace, steer=steer), {}, {})
+        for bad in (dict(trace, domain_extension='other'), {k: v for k, v in trace.items() if k != 'steer'}):
+            with self.assertRaises(InvalidTrace):
+                validate_trace(bad)
+
 
 if __name__ == '__main__':
     unittest.main()

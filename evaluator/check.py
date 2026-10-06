@@ -956,6 +956,12 @@ def write_report(out, traces, results, gaps, build, aborted, started, suites, ar
         # traces whose allocation outcomes were consumed from records (armed),
         # and those that ran on the transitional unarmed answer (all ok)
         alloc_runs=dict(sorted((alloc_runs or {}).items())),
+        # A2 [USER 2026-10-06]: traces under a declared domain extension. A
+        # "failslab" trace forces task-context allocation failures: each
+        # failure is in the allocator's output set (the OOM-victim path), but
+        # the trace as a whole is not a possible Linux execution
+        domain_extensions={ext: sorted(t['id'] for t in traces if t.get('domain_extension') == ext)
+                           for ext in sorted({t['domain_extension'] for t in traces if 'domain_extension' in t})},
         domain_filtered=dict(domain_filtered or {}), chunk_splits=chunk_splits,
         decision_coverage=decision_coverage,
         failures=[r for r in ordered if r['outcome'] != 'agreement'])
