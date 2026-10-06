@@ -4,10 +4,10 @@
 # sprint's timer sections, arm record and virtual time advance
 # (docs/2026-10-05-d3-timers.md, stream K) awaiting the user's approval;
 # A streams K1 (the allocation hook) and K2 (steering a forced failure)
-# (docs/2026-10-05-a-alloc.md, sections 4-5) awaiting the user's approval
-# with A.
+# (docs/2026-10-05-a-alloc.md, sections 4-5) and A2's task-instance
+# steering (section 19) awaiting the user's approval with A.
 # kernel/config-x86_64-net (unchanged) with kernel/patches/choice-stream.patch
-# (sha256 855db29b346f34b7bcc2cefba451348e7b26fc7bd706af10a1c8dc14fcb580b1)
+# (sha256 31b20759fca6c15996b37fd47d4442cdf26e0edee20a5a9f2bf77ae69a50b8ab)
 # applied alone to the locked source, built with LEANUX_KERNEL_PROFILE=net-choice.
 # The patch (kernel/patches/gen-choice-stream.py) records random draws and
 # clock reads at generic interception points (drivers/char/random.c,
@@ -41,6 +41,11 @@
 # kernel/patches/choice-stream-alloc-controls.patch (profile net-choice-actl,
 # never an oracle) adds load flags for controls K1/K4/K5; the oracle's load
 # rejects them.
+# A2 (section 19): kcov_steer_find also returns the schedule of the task's
+# own KCOV instance (loaded there by a trace with no remote instance, an FS
+# trace, before KCOV_ENABLE), consulted in the task's own context; a
+# network trace's task instance carries none, so its remote lookup is
+# unchanged. Two lines in kernel/kcov.c.
 # No anchored file and no WireGuard file is touched.
 # Its DWARF names .deps/linux (via -fdebug-prefix-map).
 # The oracle is this build booted with the harness's parameters
@@ -49,6 +54,6 @@
 # and the timekeeper clocksource refined-jiffies, checked at every batch's
 # start and end (LEANUX_CLOCKSOURCE rows).
 # Path-independent identity from scripts/kernel-identity.py:
-a1df4c5c0bcb3cab218f4ac55bca917162e48abac0ca08940ee509dd7dc2f5ce
+b2af20f75ecf35a968571d52db22bfb3fbedc5f1c50906bb510e9875ada50150
 # vmlinux sha256 of the build the evidence used (path-dependent):
-46318621356117671fc566e8176a6df52ad9d26e3dc06c552f52a759acbce1af
+b1a4938cdbd8a230b51852f9f13605c4be45348e58dad3d43ddb01002457d30e
