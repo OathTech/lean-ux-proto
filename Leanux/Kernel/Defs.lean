@@ -341,6 +341,8 @@ inductive HiddenSite where
       `neigh_rand_reach_time` draws of `register_netdevice` (a cut). -/
   | cookieSecretBirthdate | cookieSecret | pubkeyHashKey | ratelimiterKey | ratelimiterGcNow
   | udpPortDraw | neighReachTime
+  /-- E-A: `wg_cookie_message_consume`'s birthdate of a stored cookie. -/
+  | cookieBirthdate
   deriving Repr, BEq, DecidableEq
 
 inductive SiteRole where
@@ -440,6 +442,10 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   -- IFLA_INET6_CACHEINFO and the neighbour sysctls, which the harness never
   -- reads, and read by no modeled path (unobserved)
   | .neighReachTime => ⟨126, "neigh_reach_time", "random", "net/core/neighbour.c", 115, 4, .cut⟩
+  -- E-A (ids 64-69 are E-A's): `peer->latest_cookie.birthdate =
+  -- ktime_get_coarse_boottime_ns()` (cookie.c:225), the inline coarse
+  -- boot-time read in wg_cookie_message_consume.
+  | .cookieBirthdate => ⟨64, "cookie_birthdate", "clock", "drivers/net/wireguard/cookie.c", 225, 8, .mirror⟩
 
 def HiddenSite.all : List HiddenSite :=
   [.initEphemeral, .respEphemeral, .tai64nNow, .indexDraw, .resetLastSent, .birthdateExpired, .initLastSent,
@@ -450,6 +456,7 @@ def HiddenSite.all : List HiddenSite :=
   ++ [.modTimerArm, .timeAdvance]
   ++ [.cookieSecretBirthdate, .cookieSecret, .pubkeyHashKey, .ratelimiterKey, .ratelimiterGcNow, .udpPortDraw,
       .neighReachTime]
+  ++ [.cookieBirthdate]
 
 /-- The resched site of a worker's `cond_resched`, for the workers that
     have one on the modeled paths. -/

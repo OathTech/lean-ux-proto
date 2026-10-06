@@ -1,7 +1,7 @@
 import Leanux.WG.Blake2s
 
 /-!
-# Noise primitives: ChaCha20-Poly1305 (RFC 8439), HMAC-BLAKE2s, the KDF
+# Noise primitives: ChaCha20-Poly1305 (RFC 8439), XChaCha20-Poly1305, HMAC-BLAKE2s, the KDF
 
 Reference implementations, like Curve25519 and BLAKE2s: cut points with pure
 contracts (lib/crypto and noise.c's `hmac`/`kdf` arithmetic are not mirrored;
@@ -28,14 +28,31 @@ private def le32 (bs : List UInt8) (i : Nat) : UInt32 :=
 private def bytesOfWords (ws : List UInt32) : List UInt8 :=
   ws.flatMap fun w => (List.range 4).map fun k => (w >>> (8 * k).toUInt32).toUInt8
 
-def chacha20Block (key : List UInt8) (counter : Nat) (nonce : List UInt8) : List UInt8 := Id.run do
-  let init : Array UInt32 := #[0x61707865, 0x3320646e, 0x79622d32, 0x6b206574] ++
-    (List.range 8).toArray.map (le32 key) ++ #[counter.toUInt32] ++ (List.range 3).toArray.map (le32 nonce)
+/-- The 20-round ChaCha permutation (ten double rounds), without the
+    feed-forward addition of the input state: the core both `chacha20Block`
+    and `hchacha20` use. -/
+private def chacha20Permute (init : Array UInt32) : Array UInt32 := Id.run do
   let mut s := init
   for _ in [0:10] do
     s := quarter s 0 4 8 12; s := quarter s 1 5 9 13; s := quarter s 2 6 10 14; s := quarter s 3 7 11 15
     s := quarter s 0 5 10 15; s := quarter s 1 6 11 12; s := quarter s 2 7 8 13; s := quarter s 3 4 9 14
-  return bytesOfWords ((List.range 16).map fun i => s[i]! + init[i]!)
+  return s
+
+private def chachaConstants : Array UInt32 := #[0x61707865, 0x3320646e, 0x79622d32, 0x6b206574]
+
+def chacha20Block (key : List UInt8) (counter : Nat) (nonce : List UInt8) : List UInt8 :=
+  let init : Array UInt32 := chachaConstants ++
+    (List.range 8).toArray.map (le32 key) ++ #[counter.toUInt32] ++ (List.range 3).toArray.map (le32 nonce)
+  let s := chacha20Permute init
+  bytesOfWords ((List.range 16).map fun i => s[i]! + init[i]!)
+
+/-- HChaCha20 (lib/crypto/chacha.c `hchacha_block_generic`): the permuted
+    state's words 0-3 and 12-15, with no feed-forward addition; the 16-byte
+    nonce fills words 12-15. -/
+def hchacha20 (key nonce16 : List UInt8) : List UInt8 :=
+  let s := chacha20Permute (chachaConstants ++ (List.range 8).toArray.map (le32 key) ++
+    (List.range 4).toArray.map (le32 nonce16))
+  bytesOfWords ([0, 1, 2, 3, 12, 13, 14, 15].map fun i => s[i]!)
 
 def chacha20 (key : List UInt8) (counter : Nat) (nonce data : List UInt8) : List UInt8 :=
   let blocks := (data.length + 63) / 64
@@ -71,6 +88,21 @@ def aeadDecrypt (key nonce sealed aad : List UInt8) : Option (List UInt8) :=
   let ciphertext := sealed.take (sealed.length - 16)
   if aeadTag key nonce aad ciphertext != sealed.drop (sealed.length - 16) then none
   else some (chacha20 key 1 nonce ciphertext)
+
+/-- XChaCha20-Poly1305 (lib/crypto/chacha20poly1305.c `xchacha_init`):
+    ChaCha20-Poly1305 under the subkey HChaCha20(key, nonce[0:16]) with the
+    96-bit nonce 0^4 ‖ nonce[16:24]. -/
+def xchachaSubkeyNonce (key nonce : List UInt8) : List UInt8 × List UInt8 :=
+  (hchacha20 key (nonce.take 16), List.replicate 4 0 ++ (nonce.drop 16).take 8)
+
+def xchachaEncrypt (key nonce plaintext aad : List UInt8) : List UInt8 :=
+  let (k, n) := xchachaSubkeyNonce key nonce
+  aeadEncrypt k n plaintext aad
+
+/-- The plaintext iff the tag verifies. -/
+def xchachaDecrypt (key nonce sealed aad : List UInt8) : Option (List UInt8) :=
+  let (k, n) := xchachaSubkeyNonce key nonce
+  aeadDecrypt k n sealed aad
 
 /-- The nonce WireGuard's Noise uses: a zero counter. -/
 def noiseNonce : List UInt8 := List.replicate 12 0
@@ -128,6 +160,20 @@ private def unhex (s : String) : List UInt8 :=
   ["42a038507e272afffcea6d2d2a98346bcedbd242b0cab0cb664dd6dd486e38db",
    "cdc87247bb6325709c399eb10f937003b5f85b4e29f3d8016f4c10f9d8b5655c",
    "37009b4aeed47b33230402a8d0d209dc1c8f0762b16958d4b7362c72ff2fdacc"]
+-- draft-irtf-cfrg-xchacha-03 section 2.2.1 (HChaCha20) and appendix A.3.1
+-- (XChaCha20-Poly1305); libsodium agrees on both
+#guard hex (hchacha20 ((List.range 32).map UInt8.ofNat) (unhex "000000090000004a0000000031415927")) ==
+  "82413b4227b27bfed30e42508a877d73a0f9e4d58a74a853c12ec41326d3ecdc"
+#guard hex (xchachaEncrypt ((List.range' 0x80 32).map UInt8.ofNat) ((List.range' 0x40 24).map UInt8.ofNat)
+    "Ladies and Gentlemen of the class of '99: If I could offer you only one tip for the future, sunscreen would be it.".toUTF8.toList
+    (unhex "50515253c0c1c2c3c4c5c6c7")) ==
+  "bd6d179d3e83d43b9576579493c0e939572a1700252bfaccbed2902c21396cbb731c7f1b0b4aa6440bf3a82f4eda7e39ae64c6708c54c216cb96b72e1213b4522f8c9ba40db5d945b11b69b982c1bb9e3f3fac2bc369488f76b2383565d3fff921f9664c97637da9768812f615c68b13b52ec0875924c1c7987947deafd8780acf49"
+-- a cookie-sized vector (harness/noise.py, libsodium): 16-byte cookie, 16-byte AAD
+#guard xchachaDecrypt ((List.range 32).map UInt8.ofNat) ((List.range' 0x40 24).map UInt8.ofNat)
+  (unhex "d33e0277d7e77e1188f380b9a89b6295f5e04a578ccbd2023f1c0eeeb9ea6e52") (List.replicate 16 1) ==
+  some (List.replicate 16 7)
+#guard xchachaDecrypt ((List.range 32).map UInt8.ofNat) ((List.range' 0x40 24).map UInt8.ofNat)
+  (unhex "d33e0277d7e77e1188f380b9a89b6295f5e04a578ccbd2023f1c0eeeb9ea6e52") (List.replicate 16 0) == none
 #guard hex handshakeInitChainingKey == "60e26daef327efc02ec335e2a025d2d016eb4206f87277f52d38d1988b78cd36"
 #guard hex handshakeInitHash == "2211b361081ac566691243db458ad5322d9c6c662293e8b70ee19c65ba079ef3"
 

@@ -580,3 +580,87 @@ def wg0_data(session, counter, family, dst, payload):
     """The message_data wg0 sends for a `wg_xmit` of `payload` to `dst`
     under `session`, with nonce `counter`."""
     return session.from_wg0(counter, xmit_packet(family, dst, payload))
+
+
+# Stage E (docs/2026-10-05-e-dos.md, section 6.A): the cookie reply wg0
+# consumes (cookie.c:198-236) and the MAC2 it then puts on its handshakes
+# (cookie.c:156-178).
+
+LABEL_COOKIE = b"cookie--"
+COOKIE_LEN = 16
+COOKIE_NONCE_LEN = 24
+MESSAGE_HANDSHAKE_COOKIE = 3
+
+
+def _chacha20_permute(state):
+    """The 20-round ChaCha permutation of a 16-word state, without the
+    feed-forward addition chacha20_block applies."""
+    s = list(state)
+    for _ in range(10):
+        for a, b, c, d in ((0, 4, 8, 12), (1, 5, 9, 13), (2, 6, 10, 14), (3, 7, 11, 15),
+                           (0, 5, 10, 15), (1, 6, 11, 12), (2, 7, 8, 13), (3, 4, 9, 14)):
+            _quarter(s, a, b, c, d)
+    return s
+
+
+def hchacha20(key, nonce16):
+    """HChaCha20 (lib/crypto/chacha.c hchacha_block_generic): words 0-3 and
+    12-15 of the permuted state, keyed by `key` with `nonce16` in words 12-15."""
+    s = _chacha20_permute([0x61707865, 0x3320646e, 0x79622d32, 0x6b206574, *struct.unpack("<8I", key),
+                           *struct.unpack("<4I", nonce16)])
+    return struct.pack("<8I", *s[0:4], *s[12:16])
+
+
+def xchacha20poly1305_encrypt(key, nonce, plaintext, aad):
+    """lib/crypto/chacha20poly1305.c xchacha_init: the subkey HChaCha20(key,
+    nonce[0:16]), then ChaCha20-Poly1305 under it with the nonce 0^4 ||
+    nonce[16:24]."""
+    assert len(nonce) == COOKIE_NONCE_LEN
+    return aead_encrypt(hchacha20(key, nonce[:16]), bytes(4) + nonce[16:], plaintext, aad)
+
+
+def xchacha20poly1305_decrypt(key, nonce, sealed, aad):
+    assert len(nonce) == COOKIE_NONCE_LEN
+    return aead_decrypt(hchacha20(key, nonce[:16]), bytes(4) + nonce[16:], sealed, aad)
+
+
+def cookie_key(public):
+    """precompute_key(…, public, "cookie--") (cookie.c:33-42): the sender of
+    a cookie reply encrypts under its own public key's key; the receiver
+    (wg_cookie_checker_precompute_peer_keys, cookie.c:61-67) decrypts under
+    its peer's."""
+    return _hash(LABEL_COOKIE + public)
+
+
+def last_mac1(handshake_message):
+    """macs->mac1 of a handshake message (the AAD of the cookie reply)."""
+    return handshake_message[-32:-16]
+
+
+def cookie_message(receiver_index, cookie, nonce, mac1, sender_public, *, aad=None):
+    """struct message_handshake_cookie (messages.h:98-103) as
+    wg_cookie_message_create (cookie.c:180-196) builds it at the sender:
+    header 3, the receiver's index, the nonce, and the cookie encrypted
+    under cookie_key(sender_public) with AAD = the MAC1 of the handshake it
+    answers. `aad` overrides that AAD (a reply the receiver cannot decrypt)."""
+    assert len(cookie) == COOKIE_LEN and len(mac1) == COOKIE_LEN
+    sealed = xchacha20poly1305_encrypt(cookie_key(sender_public), nonce, cookie, mac1 if aad is None else aad)
+    return struct.pack("<II", MESSAGE_HANDSHAKE_COOKIE, receiver_index) + nonce + sealed
+
+
+def consume_cookie_message(message, last_mac1_sent, sender_public):
+    """The receiver's decrypt (cookie.c:216-219): the cookie, or HandshakeError."""
+    if len(message) != 64 or message[:4] != struct.pack("<I", MESSAGE_HANDSHAKE_COOKIE):
+        raise HandshakeError("not a cookie reply")
+    return xchacha20poly1305_decrypt(cookie_key(sender_public), message[8:32], message[32:], last_mac1_sent)
+
+
+def mac2(handshake_message, cookie):
+    """compute_mac2 (cookie.c:83-89): keyed BLAKE2s-128 under the cookie over
+    the message up to mac2."""
+    return hashlib.blake2s(handshake_message[:-16], key=cookie, digest_size=16).digest()
+
+
+def with_mac2(handshake_message, cookie):
+    """The message with mac2 = compute_mac2(message, cookie)."""
+    return handshake_message[:-16] + mac2(handshake_message, cookie)

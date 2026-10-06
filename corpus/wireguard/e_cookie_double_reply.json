@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "id": "e_cookie_double_reply",
+  "ops": [
+    {
+      "op": "wg_set",
+      "config": {
+        "private_key": "1111111111111111111111111111111111111111111111111111111111111111",
+        "listen_port": 51820,
+        "peers": [
+          {
+            "public_key": "0faa684ed28867b97f4a6a2dee5df8ce974e76b7018e3f22a1c4cf2678570f20",
+            "allowed_ips": [
+              {
+                "family": 4,
+                "addr": "0a000000",
+                "cidr": 8
+              }
+            ],
+            "endpoint": {
+              "family": 4,
+              "addr": "7f000001",
+              "port": 51999
+            },
+            "keepalive": 25
+          }
+        ]
+      }
+    },
+    {
+      "op": "wg_up"
+    },
+    {
+      "op": "wg_observe"
+    },
+    {
+      "op": "wg_inject",
+      "family": 4,
+      "port": 51820,
+      "message": "030000000d0c0b0a606162636465666768696a6b6c6d6e6f70717273747576770cff956cca5b1e22243ac5590b63d780ef88c4ef6e7b27b33d6e948174b400f1"
+    },
+    {
+      "op": "wg_observe"
+    },
+    {
+      "op": "wg_inject",
+      "family": 4,
+      "port": 51820,
+      "message": "030000000d0c0b0a909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7d26154f87bf2fc43f20a055b8b05fc558669f6289bc194e123df3f38d70c7e73"
+    },
+    {
+      "op": "wg_observe"
+    },
+    {
+      "op": "wg_get"
+    }
+  ],
+  "steer": [
+    [
+      "init_ephemeral",
+      "8182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0"
+    ],
+    [
+      "tai64n_now",
+      "803bb16a00000000b168de3a00000000"
+    ],
+    [
+      "index_draw",
+      "0d0c0b0a"
+    ]
+  ],
+  "expect": [
+    "wg_cookie_message_consume.decrypted=1",
+    "wg_cookie_message_consume.no_mac1_sent=1"
+  ]
+}
