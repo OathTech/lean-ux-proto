@@ -76,17 +76,25 @@ def base_ops():
 
 
 def traces():
+    # corpus/wireguard (default suite): robust, no injection, so no decay-timing
+    # dependence. The flood crosses the under_load threshold and its receive-
+    # worker section is discarded; no cookie reply (the invalid-MAC1 flood is
+    # reply-free). Validates the flood op, the section-bracket discard and the
+    # under_load reach (receive.c:115 covered) independently of the 1-second decay.
     return {
-        # Robust (no injection, so no decay-timing dependence): the flood crosses
-        # the under_load threshold and its receive-worker section is discarded;
-        # no cookie reply (the invalid-MAC1 flood is reply-free). This validates
-        # the flood op, the section-bracket discard and the under_load reach
-        # (receive.c:115 covered) independently of the 1-second decay.
         "e_underload_flood": base_ops() + [flood(), OBSERVE, GET],
-        # a flood sets last_under_load; one injected valid-MAC1 initiation under
-        # the decay yields exactly one cookie reply (byte-exact at the sender)
+    }
+
+
+def decay_traces():
+    # corpus/underload-decay (opt-in suite): the decay-lever cookie-reply traces.
+    # A flood sets last_under_load; valid-MAC1 initiations injected within the
+    # one-second decay each yield exactly one byte-exact cookie reply. The flood
+    # drain (~512 keyed-BLAKE2s MAC1 checks) can exceed the decay in the slower
+    # comparison guest child under instrumented TCG, so these are opt-in and run
+    # on a host where that drain fits the decay (docs/2026-10-05-e-dos.md §4.1).
+    return {
         "e_underload_cookie": base_ops() + [flood(), inject(0x1111_1111, b"\x51" * 32), OBSERVE, GET],
-        # two injections within the decay window → two cookie replies
         "e_underload_two_replies": base_ops()
         + [flood(), inject(0x2222_2222, b"\x52" * 32), inject(0x3333_3333, b"\x53" * 32), OBSERVE, GET],
     }
@@ -104,17 +112,20 @@ def controls():
     }
 
 
+def write_suite(subdir, cases):
+    out = ROOT / "corpus" / subdir
+    out.mkdir(exist_ok=True)
+    for name, ops in cases.items():
+        (out / f"{name}.json").write_text(json.dumps({"version": 1, "id": name, "net_fixture": "bare", "ops": ops},
+                                                     indent=2) + "\n")
+
+
 def main():
-    wg = ROOT / "corpus" / "wireguard"
-    for name, ops in traces().items():
-        (wg / f"{name}.json").write_text(json.dumps({"version": 1, "id": name, "net_fixture": "bare", "ops": ops},
-                                                    indent=2) + "\n")
-    ctrl = ROOT / "corpus" / "underload-controls"
-    ctrl.mkdir(exist_ok=True)
-    for name, ops in controls().items():
-        (ctrl / f"{name}.json").write_text(json.dumps({"version": 1, "id": name, "net_fixture": "bare", "ops": ops},
-                                                      indent=2) + "\n")
-    print(f"wrote {len(traces())} under-load traces and {len(controls())} controls")
+    write_suite("wireguard", traces())
+    write_suite("underload-decay", decay_traces())
+    write_suite("underload-controls", controls())
+    print(f"wrote {len(traces())} wireguard, {len(decay_traces())} underload-decay, "
+          f"{len(controls())} control traces")
 
 
 if __name__ == "__main__":

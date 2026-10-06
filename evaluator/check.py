@@ -44,6 +44,13 @@ DATA_SHARE = 0.15
 # (E-B: underload-controls, the merged-injection control, which the mirror's
 # section-bracket discard must reject — docs/2026-10-05-e-dos.md §4.1)
 CONTROL_SUITES = ('steering-controls', 'lifecycle-controls', 'underload-controls')
+# Opt-in suites, never run by default. (E-B: underload-decay, the decay-lever
+# cookie-reply traces. Their flood drains ~512 keyed-BLAKE2s MAC1 checks, which
+# in the slower comparison guest child under instrumented TCG can exceed the
+# one-second last_under_load decay, so the injection misses the window — a
+# timing sensitivity of the fixture, not a mirror defect (docs/2026-10-05-e-dos.md
+# §4.1, §12). They pass on a host where the cmp-child drain fits the decay.)
+OPTIONAL_SUITES = ('underload-decay',)
 CHUNK = 100
 
 
@@ -862,8 +869,8 @@ def main(argv=None):
     parser.add_argument('--no-build', action='store_true', help='reuse the existing .lake build')
     args = parser.parse_args(argv)
     suites = args.suite.split(',')
-    if not suites or any(s not in SUITES + CONTROL_SUITES for s in suites):
-        parser.error(f'--suite must be a comma-separated subset of {SUITES + CONTROL_SUITES}')
+    if not suites or any(s not in SUITES + CONTROL_SUITES + OPTIONAL_SUITES for s in suites):
+        parser.error(f'--suite must be a comma-separated subset of {SUITES + CONTROL_SUITES + OPTIONAL_SUITES}')
     artifacts = Path(os.environ.get('LEANUX_ARTIFACTS', ROOT / '.artifacts')).resolve()
     stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
     out = (args.out or artifacts / 'check' / stamp).resolve()

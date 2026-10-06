@@ -277,23 +277,25 @@ E_UNDERLOAD_MUTANTS = [
    'crosses 512 is discarded (§4.1), so the exact threshold is not observable in this design.',
    'Leanux/WG/Receive.lean',
    "  if ← branch .hsUnderLoad (queueLen ≥ MAX_QUEUED_INCOMING_HANDSHAKES / 8) then\n",
-   "  if ← branch .hsUnderLoad (queueLen > MAX_QUEUED_INCOMING_HANDSHAKES / 8) then\n", 'e_underload'),
+   "  if ← branch .hsUnderLoad (queueLen > MAX_QUEUED_INCOMING_HANDSHAKES / 8) then\n", 'e_underload_flood'),
   ('E-M7-make-cookie-ignores-source-port', 'data: make_cookie hashes only the source IP, not the port '
    '(cookie.c:113); the cookie, hence the reply bytes, differ (e_underload_cookie)', 'Leanux/WG/Receive.lean',
    "  return blake2s 16 secret (addr ++ netBytes src.sport 2)\n",
-   "  return blake2s 16 secret addr\n", 'e_underload'),
+   "  return blake2s 16 secret addr\n", 'underload-decay'),
   ('E-M8-decay-ignored', 'behavior: the mirror ignores last_under_load, so the injection is not under load '
    '(receive.c:117); it takes the no-cookie proceed arm and the garbage initiation finds no peer — no cookie '
    'reply where Linux sent one (e_underload_cookie)', 'Leanux/WG/Receive.lean',
    "    _ ← hiddenClock .birthdateExpired\n    underLoad := true\n",
-   "    _ ← hiddenClock .birthdateExpired\n    underLoad := false\n", 'e_underload'),
+   "    _ ← hiddenClock .birthdateExpired\n    underLoad := false\n", 'underload-decay'),
   ('E-M9-mac2-compare-inverted', 'control: wg_cookie_validate_packet treats a matching MAC2 as a miss '
    '(cookie.c:143); a valid-MAC1 no-cookie initiation is then read as rate-limited (unreached ratelimiter)',
    'Leanux/WG/Receive.lean',
    "  if ← branch .macCookieInvalid (computed2 != givenMac2) then return .noCookie\n",
-   "  if ← branch .macCookieInvalid (computed2 == givenMac2) then return .noCookie\n", 'e_underload'),
+   "  if ← branch .macCookieInvalid (computed2 == givenMac2) then return .noCookie\n", 'underload-decay'),
 ]
 PENDING = {m[0] for m in D2_MUTANTS if m[3] is None}
+# A subset value naming a whole suite (not a trace-id prefix).
+SUITE_NAMES = {'underload-decay'}
 # Workstream L (docs/2026-10-05-l-lifecycle.md, section 8): checked on the
 # l_* traces of the wireguard suite (the sixth field), each naming the trace
 # that rejects it. L-M10 is a data-only correction nothing observes: it is
@@ -413,8 +415,15 @@ for name, what, path, old, new, *subset in MUTANTS:
         assert path in diff, f'{name}: mutation not applied'
         out = f'.artifacts/check/mutant-{name}'
         run(['rm', '-rf', out])
-        check = ['-c', SUBSET, subset[0]] if subset else ['-m', 'evaluator.check']
-        proc = run(['timeout', '3000', sys.executable, *check, '--suite', 'wireguard',
+        # subset[0] is either a suite name (run that whole suite) or a trace-id
+        # prefix (run the wireguard suite filtered to it)
+        if subset and subset[0] in SUITE_NAMES:
+            check, suite = ['-m', 'evaluator.check'], subset[0]
+        elif subset:
+            check, suite = ['-c', SUBSET, subset[0]], 'wireguard'
+        else:
+            check, suite = ['-m', 'evaluator.check'], 'wireguard'
+        proc = run(['timeout', '3000', sys.executable, *check, '--suite', suite,
                     '--out', out], capture_output=True, text=True)
         report = json.load(open(os.path.join(ROOT, out, 'report.json')))
         kinds = sorted({p['problem'] for f in report['failures'] for p in f.get('problems', [])} |
