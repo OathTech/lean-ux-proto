@@ -196,13 +196,18 @@ def consumer(rec, syms):
     return None
 
 
-def cycles_per_us(passdir):
-    for chunk in sorted(Path(passdir).glob('chunk-*/alloc.jsonl')):
-        for line in chunk.read_text().splitlines():
-            row = json.loads(line)
-            if 'mhz' in row:
-                return float(row['mhz'])
-    raise ValueError('no TSC rate')
+def cycles_per_us(passdir, given=None):
+    """The guest's TSC rate. Under TCG the guest reads the host's TSC, so the
+    guest kernel's calibration ("cpu MHz") is that rate when the calibration
+    succeeded; a boot under host load may report 0. The largest reported
+    rate, or --tsc-mhz."""
+    if given:
+        return given
+    rates = [float(json.loads(line)['mhz']) for chunk in sorted(Path(passdir).glob('chunk-*/alloc.jsonl'))
+             for line in chunk.read_text().splitlines() if 'mhz' in json.loads(line)]
+    if not rates or max(rates) <= 0:
+        raise ValueError('no TSC rate: pass --tsc-mhz')
+    return max(rates)
 
 
 def timing(passdir):
@@ -307,7 +312,7 @@ def cmd_report(args):
                                                         'drivers/net/wireguard/send.c:188'):
                 key = (r['packet']['family'], len(r['packet'].get('payload', '')) // 2)
                 xmit[key][c[0].split(':')[-1]] += 1
-        mhz = cycles_per_us(args.pass2)
+        mhz = cycles_per_us(args.pass2, args.tsc_mhz)
         unwinds = cycles = 0
         for chunk in sorted(Path(args.pass2).glob('chunk-*/alloc.jsonl')):
             for line in chunk.read_text().splitlines():
@@ -342,6 +347,7 @@ def main():
     rep.add_argument('--pass1', required=True)
     rep.add_argument('--pass2')
     rep.add_argument('--baseline')
+    rep.add_argument('--tsc-mhz', type=float)
     args = parser.parse_args()
     if args.cmd == 'run' and args.pass_ == 2 and not args.from_:
         parser.error('pass 2 needs --from PASS1')
