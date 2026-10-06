@@ -29,7 +29,12 @@
     "drivers/net/wireguard/timers.c",
     "include/linux/if_vlan.h",
     "include/net/ip_tunnels.h",
-    "include/net/inet_ecn.h"
+    "include/net/inet_ecn.h",
+    "fs/pipe.c",
+    "include/linux/pipe_fs_i.h",
+    "fs/inode.c",
+    "include/linux/time64.h",
+    "kernel/signal.c"
   ],
   "functions": [
     "____fput",

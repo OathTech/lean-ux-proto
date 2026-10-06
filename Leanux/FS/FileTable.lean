@@ -21,9 +21,11 @@ def openFmode (flags : UInt32) : UInt32 :=
   ((flags + 1) &&& O_ACCMODE) ||| (flags &&& FMODE_NONOTIFY)
 
 /-- Whether the file's inode is a character device (`S_ISCHR`). The anonymous
-    inode has mode S_IRUSR|S_IWUSR (fs/libfs.c); fixture inodes are not modeled. -/
+    inode has mode S_IRUSR|S_IWUSR (fs/libfs.c); a pipefs inode is `S_IFIFO`;
+    fixture inodes are not modeled. -/
 def inodeIsChr : Option InodeId → M Bool
   | some .anon => return false
+  | some (.pipefs id) => return (← getInode id).iMode &&& S_IFMT == S_IFCHR
   | some (.fixture name) => unsupported s!"inode of fixture file {name}"
   | none => invariant "file->f_inode is NULL"
 

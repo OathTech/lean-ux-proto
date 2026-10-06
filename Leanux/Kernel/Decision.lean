@@ -229,6 +229,14 @@ inductive Decision where
   | vlanTypeIsVlan | dsfieldIp | dsfieldIpv6 | ecnEncapInnerCe
   -- D2 stream A: calculate_skb_padding's `min(mtu, ALIGN(...))`
   | padClamped
+  -- P stream 2 (begin): fs/pipe.c, include/linux/pipe_fs_i.h, fs/fcntl.c,
+  -- fs/read_write.c (docs/2026-10-05-p-pipes.md section 11, Appendix A)
+  -- P stream 2 (end)
+  -- P stream 3 (begin): fs/inode.c, include/linux/time64.h, include/linux/fs.h,
+  -- fs/libfs.c
+  -- P stream 3 (end)
+  -- P stream 2 signal (begin): kernel/signal.c
+  -- P stream 2 signal (end)
   deriving Repr, BEq, DecidableEq, Inhabited
 
 /-- A recorded step: the decision, the outcome the mirror computed, and, for
@@ -1078,6 +1086,14 @@ def Decision.info : Decision → DecisionInfo
   -- (send.c:157-158): min()'s comparison, true when the MTU is the smaller
   -- (a branch-free select: no witness)
   | .padClamped => d "calculate_skb_padding.clamped" wsd 157 [] []
+  -- P stream 2 (begin): fs/pipe.c, include/linux/pipe_fs_i.h, fs/fcntl.c,
+  -- fs/read_write.c (docs/2026-10-05-p-pipes.md section 11, Appendix A)
+  -- P stream 2 (end)
+  -- P stream 3 (begin): fs/inode.c, include/linux/time64.h, include/linux/fs.h,
+  -- fs/libfs.c
+  -- P stream 3 (end)
+  -- P stream 2 signal (begin): kernel/signal.c
+  -- P stream 2 signal (end)
 
 /-- The relation of a C value comparison, as written in the source
     (`lhs rel rhs`); `flag` is a mask test `(x & MASK)` against zero. -/
@@ -1190,6 +1206,14 @@ def Decision.comparison : Decision → Option Comparison
   | .copyFdtableShrink => some ⟨.lt, false, none, false⟩
   | .expandFdtableShared => some ⟨.gt, true, none, false⟩
   | .expandFdtableBugNr => some ⟨.lt, false, none, false⟩
+  -- P stream 2 (begin): fs/pipe.c, include/linux/pipe_fs_i.h, fs/fcntl.c,
+  -- fs/read_write.c (docs/2026-10-05-p-pipes.md section 11, Appendix A)
+  -- P stream 2 (end)
+  -- P stream 3 (begin): fs/inode.c, include/linux/time64.h, include/linux/fs.h,
+  -- fs/libfs.c
+  -- P stream 3 (end)
+  -- P stream 2 signal (begin): kernel/signal.c
+  -- P stream 2 signal (end)
   | _ => none
 
 /-- Decisions that one operation may evaluate more than once: those inside
@@ -1272,6 +1296,32 @@ def Decision.repeatable : Decision → Bool
   | .rxPollFree | .rxPollBudgetDone | .ctrClearIter => true
   -- D2 stream A: per packet of a staged list
   | .vlanTypeIsVlan | .dsfieldIp | .dsfieldIpv6 | .ecnEncapInnerCe | .padClamped => true
+  -- P interface (design section 4, audit M2): `pipe2` runs alloc_fd,
+  -- alloc_empty_file, file_init_path, alloc_file and fd_install twice in one
+  -- operation, and its -EMFILE unwind runs two fput/__fput in the same
+  -- operation's task work. This loosens "reported once" for eventfd
+  -- operations on these decisions [AGENT, accepted in the design].
+  | .allocFdUpdateNextFd | .setOpenFdFullWord | .allocFdCloexec | .clearCloexecWasSet | .allocFdSlotNotNull
+  | .putUnusedFdLowerNextFd
+  | .fdInstallBacking | .fdInstallResizeInProgress | .fdInstallSlotBusy
+  | .allocEmptyFileOverMax | .allocEmptyFileNotCapable | .allocEmptyFileNoMem
+  | .iocbFlagsAppend | .iocbFlagsDirect | .iocbFlagsDsync | .iocbFlagsSync
+  | .fileInitPathLlseek | .fileInitPathModeRead | .fileInitPathHasRead | .fileInitPathHasReadIter
+  | .fileInitPathModeWrite | .fileInitPathHasWrite | .fileInitPathHasWriteIter | .fileInitPathReadOnly
+  | .allocFileOk | .allocFilePseudoErr
+  | .fputLast | .fputNotOpened | .fputInInterrupt | .fputKthread | .fputTaskWorkAddFailed
+  | .fputFinalNotOpened | .fputFinalFasync | .fputFinalRelease | .fputFinalCharDevice | .fputFinalHasCdev
+  | .fputFinalNotPath | .fputFinalNeedUnmount
+  | .eventpollReleaseLinked | .fileOwnerRelease | .putFileAccessReadOnly | .putFileAccessWriter
+  | .fileFreeAccounted | .fileFreeBacking => true
+  -- P stream 2 (begin): fs/pipe.c, include/linux/pipe_fs_i.h, fs/fcntl.c,
+  -- fs/read_write.c (docs/2026-10-05-p-pipes.md section 11, Appendix A)
+  -- P stream 2 (end)
+  -- P stream 3 (begin): fs/inode.c, include/linux/time64.h, include/linux/fs.h,
+  -- fs/libfs.c
+  -- P stream 3 (end)
+  -- P stream 2 signal (begin): kernel/signal.c
+  -- P stream 2 signal (end)
   | _ => false
 
 /-- Every decision, enumerated through the constructor index. -/

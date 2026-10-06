@@ -32,6 +32,25 @@ def keys(value, expected):
     return type(value) is dict and set(value) == set(expected)
 
 
+# The pipes observation contract (docs/2026-10-05-p-pipes.md section 6).
+# A read's "bytes" is the hex of its first READ_HEAD bytes (all of them when
+# ret <= READ_HEAD; eventfd reads are unchanged). Each operation kind's fields
+# beyond index/ret/errno/bytes:
+#   pipe2: "fds": [r, w] after success, null on failure (active now)
+#   read:  "digest": 64 hex digits, BLAKE2s-256 of all ret bytes when ret > 0,
+#          else null
+#   write: "sigpipe": 0 or 1, whether SIGPIPE is pending after the call
+# `digest` and `sigpipe` change today's eventfd observations, so stream P1
+# switches them on together with the guest (harness/guest.c) and the runner
+# (Leanux/Runner.lean readDigest, writeSigpipe): move them into
+# EXTRA_FIELDS then.
+READ_HEAD = 64
+MAX_IO = 69632
+DIGEST = re.compile(r'[0-9a-f]{64}')
+EXTRA_FIELDS = {'pipe2': ('fds',)}
+EXTRA_FIELDS_P1 = {'read': ('digest',), 'write': ('sigpipe',)}
+
+
 def validate_observation(trace, result):
     """Check protocol shape, not whether the claimed semantics are correct."""
     if not keys(result, ('version', 'id', 'observations', 'branches')):
@@ -42,7 +61,7 @@ def validate_observation(trace, result):
     if type(observations) is not list or len(observations) != len(trace['ops']):
         raise InvalidOutput('missing or extra observations')
     for index, (op, obs) in enumerate(zip(trace['ops'], observations)):
-        fields = ('index', 'ret', 'errno', 'bytes')
+        fields = ('index', 'ret', 'errno', 'bytes') + EXTRA_FIELDS.get(op['op'], ())
         if op['op'] == 'wg_get' and type(obs) is dict and obs.get('ret') == 0:
             fields += ('device',)   # the canonical device state (harness/wg.py)
         if op['op'] == 'wg_observe':
@@ -54,6 +73,18 @@ def validate_observation(trace, result):
         if 'datagrams' in fields and (type(obs['datagrams']) is not list or type(obs['replies']) is not list
                                       or type(obs['stats']) is not dict):
             raise InvalidOutput(f'observation {index}: observed emissions')
+        if 'fds' in fields and not (
+                (obs.get('ret') == 0 and type(obs['fds']) is list and len(obs['fds']) == 2
+                 and all(integer(fd, 0, 2**31 - 1) for fd in obs['fds']) and obs['fds'][0] != obs['fds'][1])
+                or (obs.get('ret') != 0 and obs['fds'] is None)):
+            raise InvalidOutput(f'observation {index}: pipe descriptors')
+        if 'digest' in fields and not (
+                (type(obs.get('ret')) is int and obs['ret'] > 0 and type(obs['digest']) is str
+                 and DIGEST.fullmatch(obs['digest']))
+                or (not (type(obs.get('ret')) is int and obs['ret'] > 0) and obs['digest'] is None)):
+            raise InvalidOutput(f'observation {index}: digest')
+        if 'sigpipe' in fields and (type(obs['sigpipe']) is not int or obs['sigpipe'] not in (0, 1)):
+            raise InvalidOutput(f'observation {index}: sigpipe')
         if type(obs['index']) is not int or obs['index'] != index:
             raise InvalidOutput(f'observation {index}: order/index')
         ret, error, data = obs['ret'], obs['errno'], obs['bytes']
@@ -61,9 +92,9 @@ def validate_observation(trace, result):
             raise InvalidOutput(f'observation {index}: return range')
         if (ret < 0 and (not integer(error, 1, 4095) or error != -ret)) or (ret >= 0 and error is not None):
             raise InvalidOutput(f'observation {index}: contradictory errno')
-        if type(data) is not str or not re.fullmatch(r'(?:[0-9a-f]{2}){0,16}', data):
+        if type(data) is not str or not re.fullmatch(r'(?:[0-9a-f]{2}){0,%d}' % READ_HEAD, data):
             raise InvalidOutput(f'observation {index}: byte encoding')
-        expected = ret if op['op'] == 'read' and ret >= 0 else 0
+        expected = min(ret, READ_HEAD) if op['op'] == 'read' and ret >= 0 else 0
         if len(data) != 2 * expected:
             raise InvalidOutput(f'observation {index}: byte count')
     branches = result['branches']
@@ -103,6 +134,12 @@ SEMANTIC_ERRNOS = {'eventfd2': {22, 24}, 'dup': {9, 24}, 'dup3': {9, 22},
                    'close': {9}, 'fcntl': {1, 9, 22}, 'wg_set': {22, 95}, 'wg_get': {22},
                    # ENOKEY, EDESTADDRREQ, EPROTONOSUPPORT, ENETUNREACH (no route before wg_up); EAGAIN when nothing arrived
                    'wg_up': set(), 'wg_xmit': {126, 89, 93, 101}, 'wg_observe': {11}, 'read': {9, 11, 22}, 'write': {9, 11, 22}}
+# Pipes (P design section 6): EINVAL, EMFILE, ENOPKG (O_NOTIFICATION_PIPE
+# without CONFIG_WATCH_QUEUE); EPIPE on write; EBUSY from F_SETPIPE_SZ.
+# ENFILE and ENOMEM stay environment failures.
+SEMANTIC_ERRNOS['pipe2'] = {22, 24, 65}
+SEMANTIC_ERRNOS['write'] = SEMANTIC_ERRNOS['write'] | {32}
+SEMANTIC_ERRNOS['fcntl'] = SEMANTIC_ERRNOS['fcntl'] | {16}
 
 
 def compare(trace, linux, model):

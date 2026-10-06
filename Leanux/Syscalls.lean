@@ -2,6 +2,7 @@ import Leanux.FS.Eventfd
 import Leanux.FS.ReadWrite
 import Leanux.FS.Fcntl
 import Leanux.FS.Close
+import Leanux.FS.Inode
 import Leanux.Env
 
 /-!
@@ -27,8 +28,11 @@ inductive Syscall where
   | close (fd : Nat)
   /-- `read(fd, buf, count)` into a valid caller buffer. -/
   | read (fd count : Nat)
-  /-- `write(fd, buf, count)`; `word` is the buffer's first 8 bytes. -/
-  | write (fd count : Nat) (word : UInt64)
+  /-- `write(fd, buf, count)`; `buf` is the caller's buffer (the trace's
+      pattern, Runner `writeBuffer`). -/
+  | write (fd count : Nat) (buf : ByteArray)
+  /-- `pipe2(fildes, flags)` with a valid `fildes` (P). -/
+  | pipe2 (flags : UInt32)
   | fcntl (fd : Nat) (cmd : FcntlCmd) (arg : UInt64)
   /-- `sendmsg` of WG_CMD_SET_DEVICE on the fixture's generic-netlink socket,
       then `recvmsg` of the acknowledgement: the result is its error code. -/
@@ -80,7 +84,9 @@ def dispatch : Syscall → M Int
   | .dup3 oldfd newfd flags => ksysDup3 oldfd newfd flags
   | .close fd => sysClose fd
   | .read fd count => ksysRead fd count
-  | .write fd count word => ksysWrite fd word count
+  | .write fd count buf => ksysWrite fd buf count
+  -- SYSCALL_DEFINE2(pipe2) -> do_pipe2 (fs/pipe.c:1018-1043): P2
+  | .pipe2 _ => unsupported "P2: not yet (pipe2)"
   | .fcntl fd cmd arg => sysFcntl fd cmd arg
   | .wgSet attrs => netlinkRequest (WG.wgSetDevice attrs)
   | .wgGet => netlinkRequest do
@@ -114,7 +120,7 @@ partial def taskWorkRun : M Unit := do
 
 /-- One system call: entry, the handler, and the return-to-user work. -/
 def syscall (call : Syscall) : M Int := do
-  modify fun w => { w with steps := #[], userOut := none, extraOut := [], queuedThisCall := [] }
+  modify fun w => { w with steps := #[], userOut := none, userFds := none, extraOut := [], queuedThisCall := [] }
   let ret ← dispatch call
   taskWorkRun
   -- the guest waits inside the operations that can queue the handshake send
