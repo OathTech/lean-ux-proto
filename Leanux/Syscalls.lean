@@ -65,6 +65,10 @@ def socketCallOn (fd : Nat) (body : M Int) : M Int := do
 
 def socketCall (body : M Int) : M Int := socketCallOn NETLINK_FD body
 
+/-- The trace's KCOV descriptor (harness/guest.c), on which `wg_advance`
+    issues its ioctl. -/
+def KCOV_FD : Nat := 3
+
 /-- The network fixture's UDP listener on 127.0.0.1 and its sender. -/
 def LISTEN4_FD : Nat := 4
 def SENDER_FD : Nat := 6
@@ -105,7 +109,15 @@ def dispatch : Syscall → M Int
     let (ret, observed) ← Env.observe
     modify fun w => { w with extraOut := ["datagrams", "replies", "stats"].map fun k => (k, observed.getObjValD k) }
     return ret
-  | .wgAdvance ticks => Env.advance ticks
+  | .wgAdvance ticks => do
+    -- `ioctl(3, KCOV_LEANUX_TIME_ADVANCE, &ticks)`: `CLASS(fd, f)(fd)`
+    -- (fs/ioctl.c), then the LEANUX case of `kcov_ioctl` (a cut point but
+    -- for its kind-304 record)
+    let f ← fdget KCOV_FD
+    if f.file.isNone then unsupported "wg_advance after the trace closed the KCOV descriptor"
+    let ret ← Env.advance ticks
+    fdput f
+    return ret
 
 /-- `task_work_run` on exit to user mode: each queued `____fput` runs `__fput`. -/
 partial def taskWorkRun : M Unit := do
@@ -127,6 +139,8 @@ def syscall (call : Syscall) : M Int := do
   match call with
   | .wgSet _ | .wgUp | .wgInject .. => Env.runSendWorkers; Env.idleTimers
   | .wgXmit .. => Env.afterXmit; Env.idleTimers
+  -- D3: the guest waits after the advance; the next tick runs the due timers
+  | .wgAdvance _ => Env.afterAdvance
   | _ => pure ()
   return ret
 

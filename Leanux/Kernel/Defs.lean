@@ -422,11 +422,17 @@ structure HiddenRecord where
   deriving Repr, BEq
 
 /-- Timing facts the environment supplies (`Leanux/Env.lean`); the mirror has
-    no clock. -/
+    no clock. D3 (docs/2026-10-05-d3-timers.md, section 5.3): the bounds of
+    the firing window, in ticks. A timer section is accepted iff its timer is
+    pending with `expires < J_hi`, where `J_hi` is the advance's `jiffies`
+    after plus `advanceWait` inside `wg_advance`, and the last recorded
+    `jiffies` plus `traceBound` plus `advanceWait` at the other idle points. -/
 structure Timing where
-  /-- Whether a timer armed now for this many seconds can expire before the
-      trace ends. -/
-  timerMayExpire : Nat → Bool
+  /-- The guest's wait after an advance has been absorbed (`W`). -/
+  advanceWait : Nat
+  /-- The trace's real-time bound (`R`), which also bounds the time since the
+      last recorded `jiffies`. -/
+  traceBound : Nat
 
 /-- A datagram wg0's socket sent (`wg_socket_send_buffer_to_peer`, a cut
     point): the endpoint's family, address and port, and the bytes. -/
