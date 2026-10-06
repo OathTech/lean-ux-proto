@@ -132,9 +132,12 @@ def traces():
     # (attempts 1..19, 20 initiations in all); firing 20 finds attempts 19 >
     # MAX_TIMER_HANDSHAKES (18) and gives up: the keepalive timer deleted, the
     # staged packet purged (tx_dropped 1), and the zero-key timer armed (it was
-    # not pending: no session). No initiation after the give-up.
+    # not pending: no session). No initiation after the give-up. The dump
+    # shows the 20 initiations in the peer's tx_bytes. No wg_observe: on the
+    # TCG guest the 20 advances take about 3.5 s of real time, and an
+    # observation's 0.4 s wait exceeded the 4 s bound (probe h1).
     out["d3_retransmit_gives_up"] = (
-        d2.setup(keepalive=False) + [xmit()] + [advance(RETRANSMIT)] * 20 + [OBSERVE, GET],
+        d2.setup(keepalive=False) + [xmit()] + [advance(RETRANSMIT)] * 20 + [GET],
         steer + D3_DRAWS * 19,
         [fired("retransmit_handshake"), "wg_packet_send_staged_packets.no_keypair=1"])
 
@@ -321,18 +324,24 @@ def finish(out):
 
 # --- Linux-only probes ------------------------------------------------------
 
-def summarize(out, selected):
+def summarize(out, selected, sites):
     """Per trace and operation: the advance and arm records, the sections
-    by symbol, the datagrams and stats each wg_observe saw; plus the checks
-    this script can make without the mirror."""
-    from evaluator.check import hidden_records, jiffies_problems, section_problems
+    by symbol, the datagrams and stats each wg_observe saw; plus the
+    Linux-side checks of evaluator/check.py, which need no mirror: every
+    record from a declared consumer, the steering schedule consumed exactly
+    and matching the records, every opened section recorded, and the
+    jiffies progress."""
+    from evaluator.check import (hidden_records, jiffies_problems, resolve_choices, section_problems,
+                                 steering_problems)
     from evaluator.coverage import symbolize
     from harness.linux import DISPATCH_SYMBOLS, KERNEL, dispatch_addresses
     lines = lambda path: [json.loads(l) for l in (out / path).read_text().splitlines()]   # noqa: E731
     per = hidden_records(selected, lines("linux/hidden.jsonl"))
-    ips = sorted({r[1] for ops in per.values() for op in ops for r in op if r[0] == 303})
+    ips = sorted({r[1] for ops in per.values() for op in ops for r in op})
     frames = symbolize([{"pcs": ips}], KERNEL / "vmlinux")["locations"] if ips else {}
     symbol = dict(zip(dispatch_addresses(KERNEL), DISPATCH_SYMBOLS))
+    _, site_problems, _, meta = resolve_choices(per, sites, frames, symbol)
+    steer_problems = steering_problems(selected, meta, lines("linux/steering.jsonl"))
     observed = {}
     for line in (out / "linux/boot.log").read_text().splitlines():
         if line.startswith("LEANUX_WGOBS "):
@@ -374,30 +383,36 @@ def summarize(out, selected):
             fired_labels_missing=[e for e in trace.get("expect", []) if e.startswith("fired:") and e not in fired],
             steering={m: {k: steering.get((tid, m), {}).get(k) for k in ("remaining", "mismatches")}
                       for m in ("pc", "cmp")},
-            jiffies_problems=jiffies.get(tid, []), section_problems=sections.get(tid, []))
-    return report, per
+            jiffies_problems=jiffies.get(tid, []), section_problems=sections.get(tid, []),
+            site_problems=site_problems.get(tid, []) + steer_problems.get(tid, []))
+    return report, per, meta
 
 
-def section_signature(records, symbol, start_symbol):
-    """The kinds from `start_symbol`'s section onward in one operation, with
-    sections by symbol: what a virtual and a natural firing must share."""
-    out, on = [], False
-    for kind, _ip, _seq, _len, _data, func in records:
-        if kind == 300 and symbol.get(func) == start_symbol:
+def firing_signature(labels, roles, start_symbol):
+    """What a virtual and a natural firing of `start_symbol` must share, from
+    its section onward in one operation (resolved records, as the mirror
+    consumes them): the sections opened (a multiset: whether the tx worker
+    runs nested in the encrypt worker's reschedule is timing), and the
+    mirrored choice sites in order, without the reschedules and the ambient
+    and cut records (scheduling and noise)."""
+    sections, sites, on = [], [], False
+    for label, _steered, _data in labels:
+        if label == f"section_start:{start_symbol}":
             on = True
         if not on:
             continue
-        out.append(f"{'start' if kind == 300 else 'stop'}:{symbol.get(func)}" if kind in (300, 301) else
-                   str(kind & 0x7fff))
-    return out
+        if label.startswith("section_start:"):
+            sections.append(label)
+        elif not label.startswith(("section_stop:", "resched:")) and roles.get(label) == "mirror":
+            sites.append(label)
+    return sorted(sections), sites
 
 
 def probe(args):
     from evaluator.check import load_hidden_sites
-    from harness.linux import DISPATCH_SYMBOLS, KERNEL, dispatch_addresses, run_linux
+    from harness.linux import KERNEL, run_linux
     from harness.steer import call_sites, resolve as resolve_steering
     selected = list(finish(traces()).values())
-    variants = {}
     if args.controls:
         selected += list(finish(controls()).values())
     if args.only:
@@ -413,14 +428,15 @@ def probe(args):
         (out / "traces.jsonl").write_text("".join(json.dumps(t) + "\n" for t in selected))
         run_linux(selected, out / "linux", timeout=900, steer_wire=steer_wire, arm_records=True,
                   guest_variant=args.guest_variant)
-    report, per = summarize(out, selected)
-    symbol = dict(zip(dispatch_addresses(KERNEL), DISPATCH_SYMBOLS))
+    report, per, meta = summarize(out, selected, sites)
     ids = {t["id"] for t in selected}
     if {"d3_persistent_keepalive", "d3_persistent_natural"} <= ids:
+        roles = {entry["label"]: entry["role"] for entry in sites.values()}
+
         def signature(tid):
-            sigs = [section_signature(op, symbol, "wg_expired_send_persistent_keepalive")
-                    for op in per[(tid, "pc")]]
-            return [s for s in sigs if s]
+            sigs = [firing_signature(labels, roles, "wg_expired_send_persistent_keepalive")
+                    for labels in meta[(tid, "pc")]]
+            return [s for s in sigs if s[0]]
         virtual, natural = signature("d3_persistent_keepalive"), signature("d3_persistent_natural")
         report["natural_vs_virtual"] = dict(virtual=virtual, natural=natural, same=virtual == natural)
     (out / "summary.json").write_text(json.dumps(report, indent=1) + "\n")
@@ -429,11 +445,11 @@ def probe(args):
             print("== natural vs virtual:", entry["same"])
             continue
         print(f"== {name} fired={entry['fired_in_op']} missing={entry['fired_labels_missing']}"
-              f" steering={entry['steering']} jiffies={entry['jiffies_problems']} sections={entry['section_problems']}")
+              f" steering={entry['steering']} jiffies={entry['jiffies_problems']} sections={entry['section_problems']}"
+              f" sites={entry['site_problems']}")
         for line in entry["ops"]:
             print("  " + line[:600])
     print(Counter(json.loads(l)["current"] for l in (out / "linux/clocksource.jsonl").read_text().splitlines()))
-    return variants
 
 
 def main():
