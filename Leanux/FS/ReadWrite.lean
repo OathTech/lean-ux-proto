@@ -40,7 +40,9 @@ def vfsRead (fid : FileId) (count : Nat) (pos : Option Int) : M (Int × Option I
   let f ← getFile fid
   if ← branchCmp .vfsReadNotReadable (!hasFlag f.fMode FMODE_READ) (f.fMode &&& FMODE_READ).toNat 0 then return (-EBADF, pos)
   if ← branchCmp .vfsReadCannotRead (!hasFlag f.fMode FMODE_CAN_READ) (f.fMode &&& FMODE_CAN_READ).toNat 0 then return (-EINVAL, pos)
-  if ← branch .vfsReadAccessFault (!(← envOk .accessOk)) then return (-EFAULT, pos)
+  -- `access_ok(buf, count)`: the guest passes a valid user buffer (a trace
+  -- input under A-U, docs/2026-10-05-a-alloc.md 6.5)
+  if ← branch .vfsReadAccessFault false then return (-EFAULT, pos)
   let ret ← rwVerifyArea pos count
   if ← branch .vfsReadVerifyError (ret != 0) then return (ret, pos)
   let count := if ← branch .vfsReadClamp (count > MAX_RW_COUNT) then MAX_RW_COUNT else count
@@ -96,7 +98,8 @@ def vfsWrite (fid : FileId) (userWord : UInt64) (count : Nat) (pos : Option Int)
   let f ← getFile fid
   if ← branchCmp .vfsWriteNotWritable (!hasFlag f.fMode FMODE_WRITE) (f.fMode &&& FMODE_WRITE).toNat 0 then return -EBADF
   if ← branchCmp .vfsWriteCannotWrite (!hasFlag f.fMode FMODE_CAN_WRITE) (f.fMode &&& FMODE_CAN_WRITE).toNat 0 then return -EINVAL
-  if ← branch .vfsWriteAccessFault (!(← envOk .accessOk)) then return -EFAULT
+  -- `access_ok(buf, count)`: a valid user buffer (as in vfsRead)
+  if ← branch .vfsWriteAccessFault false then return -EFAULT
   let ret ← rwVerifyArea pos count
   if ← branch .vfsWriteVerifyError (ret != 0) then return ret
   let count := if ← branch .vfsWriteClamp (count > MAX_RW_COUNT) then MAX_RW_COUNT else count

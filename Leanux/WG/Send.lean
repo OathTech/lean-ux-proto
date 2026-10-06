@@ -250,7 +250,9 @@ def sendStagedPackets (pid : PeerId) : M Unit := do
 def sendKeepalive (pid : PeerId) : M Unit := do
   let p ← getPeer pid
   if ← branch .keepaliveStagedEmpty p.staged.isEmpty then
-    if ← branch .keepaliveNoMem !(← envOk .allocSkb) then return
+    -- `alloc_skb(DATA_PACKET_HEAD_ROOM + MESSAGE_MINIMUM_LENGTH, GFP_ATOMIC)`
+    -- (send.c:226): NULL returns without staging or sending (send.c:228-229)
+    if ← branch .keepaliveNoMem !(← hiddenAlloc .keepaliveSkb) then return
     -- `PACKET_CB(skb)->mtu = skb->dev->mtu` (DEVICE_MTU; Data.lean pads with it)
     setPeer pid { p with staged := p.staged ++ [{ mtu := DEVICE_MTU }] }
   sendStagedPackets pid

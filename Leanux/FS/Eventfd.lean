@@ -8,11 +8,15 @@ import Leanux.FS.AnonInodes
 namespace Leanux
 
 /-- `ida_alloc(&eventfd_ida, GFP_KERNEL)` (lib/idr.c): a cut point with
-    contract "least unused id ≥ 0, or -ENOMEM" (an environment choice). -/
+    contract "least unused id ≥ 0". Ids below `BITS_PER_XA_VALUE` (63) live
+    in an xarray value entry and allocate nothing (idr.c:405-416,442-443);
+    beyond that the bitmap and node allocations are outside the domain
+    (retired as a choice, docs/2026-10-05-a-alloc.md 6.4: unobservable, with
+    a state-dependent count). -/
 def idaAlloc : M Int := do
-  if !(← envOk .idaAlloc) then return -ENOMEM
   let k ← getK
   let id := (List.range (k.idaUsed.size + 1)).find? (fun n => !k.idaUsed.contains n) |>.getD (k.idaUsed.size + 1)
+  if id ≥ 63 then unsupported "ida bitmap allocation (id ≥ 63)"
   modifyK fun k => { k with idaUsed := k.idaUsed.insert id }
   return id
 
@@ -20,7 +24,7 @@ def idaAlloc : M Int := do
 def doEventfd (count : UInt32) (flags : UInt32) : M Int := do
   if ← branchCmp .doEventfdInvalidFlags (flags &&& ~~~EFD_FLAGS_SET != 0) (flags &&& ~~~EFD_FLAGS_SET).toNat 0 then return -EINVAL
   -- ctx = kmalloc(sizeof(*ctx), GFP_KERNEL)
-  if ← branch .doEventfdNoMem (!(← envOk .kmallocEventfdCtx)) then return -ENOMEM
+  if ← branch .doEventfdNoMem (!(← hiddenAlloc .kmallocEventfdCtx)) then return -ENOMEM
   let cid := (← getK).nextCtx
   -- kref_init; init_waitqueue_head; ctx->count = count; ctx->flags = flags
   setCtx cid { kref := 1, count := count.toUInt64, flags, id := none }

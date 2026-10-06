@@ -71,7 +71,8 @@ def wgXmit (family addr : Nat) (pkt : Packet) : M Int := do
     -- and IP output draw cut-site choices, and whose loopback delivery runs
     -- NET_RX in a section), then err:
     if !(← branch .xmitErrorInet (family == 4)) then _ ← branch .xmitErrorInet6 (family == 6)
-    skipCut [.icmpCredit, .ipIdentKey, .ipIdentReserve, .flowHashSecret, .sectionStart .netRx, .sectionStop .netRx]
+    skipCut ([.icmpCredit, .ipIdentKey, .ipIdentReserve, .flowHashSecret, .sectionStart .netRx, .sectionStop .netRx]
+      ++ allocCuts)
     modifyDev fun d => { d with txErrors := d.txErrors + 1 }   -- DEV_STATS_INC(dev, tx_errors)
     return ret
   let peer ← lookupDst family addr

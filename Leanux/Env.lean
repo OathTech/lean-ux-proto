@@ -61,7 +61,8 @@ def timing : Timing where
     flow-hash secret; these are cut-site choices (choice-stream strategy,
     section 5). -/
 def fixtureSend : M Unit :=
-  skipCut [.ipIdentKey, .ipIdentReserve, .flowHashSecret]
+  -- and the datagram's skb (`sock_alloc_send_pskb`, an allocation cut site)
+  skipCut ([.ipIdentKey, .ipIdentReserve, .flowHashSecret] ++ allocCuts)
 
 /-- The fixture's sender transmits (`wg_xmit`) to this UDP port. -/
 def SEND_PORT : Nat := 40000
@@ -334,7 +335,11 @@ def wgUp : M Int := do
   if d.running then unsupported "wg0 is already up (the fixture's routes exist)"
   if d.incomingPort == LISTEN_PORT then unsupported "wg0's port is the fixture's listener port"
   if d.incomingPort == SENDER_PORT then unsupported "wg0's port is the fixture's sender port"
-  WG.wgUp
+  let ret ← WG.wgUp
+  -- `dev_change_flags`' rtnetlink notifications and the fixture's routes
+  -- allocate netlink skbs below the cut (allocation cut sites)
+  skipCut allocCuts
+  return ret
 
 /-- `wg_observe`: its `recvfrom` on the IPv4 listener returns the first
     datagram there. The observation also lists every datagram both listeners

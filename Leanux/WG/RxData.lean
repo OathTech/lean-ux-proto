@@ -20,8 +20,9 @@ branch; the inner packet it hands to `napi_gro_receive` is delivered at
 `napi_complete_done` by the environment's delivery cut.
 
 Cut points:
-- `skb_cow_data` and `skb_to_sgvec`, whose failures are environment
-  outcomes (`envOk`);
+- `skb_cow_data`, whose failure is an allocation outcome (`hiddenAlloc`;
+  lax, count 0 on this fixture), and `skb_to_sgvec`, which cannot fail for
+  a linear skb;
 - `wg_reset_packet`, `dev_kfree_skb`, `napi_schedule` (the NAPI state is
   `Peer.napiScheduled`), `net_rx_action`, `napi_gro_receive` and
   `napi_complete_done` (the environment delivers what GRO received);
@@ -72,9 +73,11 @@ def decryptPacket (pkt : RxPacket) : M (Option RxPacket) := do
     return none
   let nonce := u64le pkt.bytes 8   -- le64_to_cpu(((struct message_data *)skb->data)->counter)
   -- `num_frags = skb_cow_data(skb, 0, &trailer)`; `num_frags < 0 || num_frags > ARRAY_SIZE(sg)`
-  let cowOk ← envOk .skbCowData
+  let cowOk ← hiddenAlloc .skbCowDataRx
   if ← orM (branch .decCowDataFailed !cowOk) (branch .decTooManyFrags false) then return none
-  if ← branch .decSgvecFailed !(← envOk .skbToSgvec) then return none
+  -- `skb_to_sgvec` < 0: not an allocation (docs/2026-10-05-a-alloc.md 6.4);
+  -- a linear skb: `__skb_to_sgvec` returns 1
+  if ← branch .decSgvecFailed false then return none
   -- chacha20poly1305_decrypt_sg_inplace(sg, skb->len, NULL, 0, nonce, receiving.key)
   let plain := aeadDecrypt k.receiving.key (counterNonce nonce) (pkt.bytes.drop 16) []
   if ← branch .decDecryptFailed plain.isNone then return none

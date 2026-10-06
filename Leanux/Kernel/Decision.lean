@@ -891,7 +891,9 @@ def Decision.info : Decision → DecisionInfo
   | .timersDataReceivedNotPending => d "wg_timers_data_received.not_pending" wtm 157 [(158, 159)] [(161, 161)]
   | .keypairPutUnreferenceNow => d "wg_noise_keypair_put.unreference_now" wno 135 [(136, 138)] []
   | .keypairKrefPutReleased => d "wg_noise_keypair_put.kref_put_released" wno 139 [(119, 128)] []
-  | .sendBufNoMem => d "wg_socket_send_buffer_to_peer.no_mem" wso 194 [(195, 195)] [(197, 200)]
+  -- the false span ends at 199: the return at 200 shares its code with the
+  -- -ENOMEM exit (A1: the failure arm covers socket.c:200)
+  | .sendBufNoMem => d "wg_socket_send_buffer_to_peer.no_mem" wso 194 [(195, 195)] [(197, 199)]
   | .sendSkbInet => d "wg_socket_send_skb_to_peer.inet" wso 174 [(175, 176)] [(177, 177)]
   | .sendSkbInet6 => d "wg_socket_send_skb_to_peer.inet6" wso 177 [(178, 179)] [(181, 181)]
   | .sendSkbOk => d "wg_socket_send_skb_to_peer.sent" wso 182 [(183, 183)] []

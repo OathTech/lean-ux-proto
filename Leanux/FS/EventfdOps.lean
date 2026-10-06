@@ -91,7 +91,8 @@ def eventfdRead (iocb : Kiocb) (iterCount : Nat) : M Int := do
     unsupported "wake_up_locked_poll with waiters"
   modifyK fun k => { k with task := { k.task with inEventfd := false } }
   -- spin_unlock_irq(&ctx->wqh.lock)
-  if ← branch .eventfdReadCopyFault (!(← envOk .copyToUser)) then return -EFAULT
+  -- `copy_to_iter`: the guest's buffer is mapped (a trace input under A-U, 6.5)
+  if ← branch .eventfdReadCopyFault false then return -EFAULT
   modify fun w => { w with userOut := some ucnt }
   return 8
 
@@ -101,7 +102,8 @@ def eventfdWrite (fid : FileId) (userWord : UInt64) (count : Nat) : M Int := do
   let file ← getFile fid
   let id ← eventfdCtxOf file  -- ctx = file->private_data
   if ← branchCmp .eventfdWriteWrongSize (count != 8) count 8 then return -EINVAL
-  if ← branch .eventfdWriteCopyFault (!(← envOk .copyFromUser)) then return -EFAULT
+  -- `copy_from_user`: the guest's buffer is mapped (A-U, 6.5)
+  if ← branch .eventfdWriteCopyFault false then return -EFAULT
   let ucnt := userWord
   if ← branchCmp .eventfdWriteReserved (ucnt == ULLONG_MAX) ucnt.toNat ULLONG_MAX.toNat then return -EINVAL
   -- spin_lock_irq(&ctx->wqh.lock)

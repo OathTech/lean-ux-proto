@@ -30,7 +30,7 @@ from .protocol import InvalidOutput, compare, loads, parse_batch, validate_cover
 
 ROOT = Path(__file__).resolve().parents[1]
 ANCHORS = ROOT / 'correspondence/kcov.json'
-SUITES = ('handwritten', 'critic', 'wireguard', 'generated', 'wireguard-generated')
+SUITES = ('handwritten', 'critic', 'wireguard', 'alloc', 'generated', 'wireguard-generated')
 # The share of generated WireGuard traces that are steered handshakes (the
 # initiator role, stage D1).
 STEERED_SHARE = 0.15
@@ -186,7 +186,7 @@ def non_statement(line):
 # reaching its consumer (choice-stream strategy, section 4.2): one list, shared
 # with the steering resolver.
 from harness.steer import (ALLOC_HELPER_FUNCTIONS, ALLOC_HELPER_FILES, ALLOC_KIND, ALLOC_SITES,  # noqa: E402
-                           CHOICE_HELPERS, alloc_call_sites, alloc_ranges)
+                           CHOICE_HELPERS, alloc_armed_labels, alloc_call_sites, alloc_ranges)
 RANDOM_KINDS = {1, 101, 102, 104, 108, 110}
 # Dispatch sections' start and stop records (kernel/patches/choice-stream.patch).
 SECTION_START, SECTION_STOP = 300, 301
@@ -729,7 +729,10 @@ def guest_timeout(traces):
     return GUEST_BASE_SECONDS + observes * OBSERVE_SECONDS + operations * OPERATION_SECONDS
 
 
-def run_chunk(traces, out, kcov):
+def run_chunk(traces, out, kcov, alloc_flags=0):
+    """`alloc_flags`: the allocation load flags of an armed chunk; nonzero
+    only for the control kernel's controls (scripts/alloc-controls.py), which
+    the oracle rejects."""
     out.mkdir(parents=True)
     results, gaps = {}, Counter()
     outcomes = Counter()
@@ -738,7 +741,7 @@ def run_chunk(traces, out, kcov):
         # the mirror's section sites name functions of the dispatch set
         if not {e['file'] for e in sites_by_key.values() if e['kind'] == 'section'} <= set(DISPATCH_SYMBOLS):
             raise InvalidOutput('a section site outside the dispatch set')
-        steer_wire, alloc = {}, None
+        steer_wire, alloc, armed_labels = {}, None, []
         if any('steer' in t for t in traces):
             by_label = {entry['label']: entry for entry in sites_by_key.values()}
             calls = call_sites(KERNEL / 'vmlinux', LINUX_ARTIFACTS / 'cache')
@@ -749,7 +752,9 @@ def run_chunk(traces, out, kcov):
             alloc_sites = alloc_call_sites(KERNEL / 'vmlinux', LINUX_ARTIFACTS / 'cache') if steered_alloc else None
             steer_wire = {t['id']: resolve_steering(t, by_label, calls, alloc_sites) for t in traces if 'steer' in t}
             if steered_alloc:
-                alloc = {'flags': 0, 'ranges': alloc_ranges(steered_alloc, alloc_sites)}
+                alloc = {'flags': alloc_flags, 'ranges': alloc_ranges(steered_alloc, alloc_sites)}
+                # the sites whose records every trace of the chunk carries
+                armed_labels = alloc_armed_labels(alloc['ranges'], alloc_sites)
         linux = run_linux(traces, out / 'linux', timeout=guest_timeout(traces), steer_wire=steer_wire, alloc=alloc)
         coverage = [loads(line) for line in (out / 'linux/coverage.jsonl').read_text().splitlines()]
         validate_coverage(traces, coverage)
@@ -789,7 +794,8 @@ def run_chunk(traces, out, kcov):
     # coverage child's run is compared for behavior and control flow, the
     # comparison child's for operands (docs/2026-10-03-hidden-inputs-design.md).
     def with_hidden(mode):
-        return [dict(t, hidden=records[(t['id'], mode)]) if (t['id'], mode) in records else t for t in traces]
+        armed = dict(alloc_armed=armed_labels) if armed_labels else {}
+        return [dict(t, hidden=records[(t['id'], mode)], **armed) if (t['id'], mode) in records else t for t in traces]
     try:
         (out / 'model').mkdir()
         model = run_model(with_hidden('pc'), out / 'model')

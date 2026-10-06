@@ -103,7 +103,7 @@ def resolve(trace, site_table, sites, alloc_sites=None):
                 raise SteeringError(f'{trace["id"]}: {reason}')
             mirror = site_table.get(label)
             consumer = ALLOC_SITES[label]['consumer']
-            if mirror is not None and (mirror['kind'] != 'alloc' or f"{mirror['file']}:{mirror['line']}" != consumer):
+            if mirror is None or mirror['kind'] != 'alloc' or f"{mirror['file']}:{mirror['line']}" != consumer:
                 raise SteeringError(f'{trace["id"]}: the mirror declares {label} elsewhere than {consumer}')
             if alloc_sites is None:
                 raise SteeringError(f'{trace["id"]}: allocation sites not resolved')
@@ -317,3 +317,36 @@ def alloc_ranges(labels, alloc_sites):
     if len(merged) > 64:
         raise SteeringError('more than 64 allocation ranges')
     return merged
+
+
+def site_ranges(label, alloc_sites):
+    """The ranges whose allocations are this site's candidates."""
+    sites, ranges = alloc_sites
+    row = ALLOC_SITES[label]
+    if row['helper'] is None:
+        return [(ip, ip + 1) for ip in alloc_entry(label, 'draw', alloc_sites)[3]]
+    return [ranges[f] for f in ALLOC_HELPER_RANGES[row['helper']]]
+
+
+def alloc_armed_labels(armed, alloc_sites):
+    """The exact sites whose records an armed run carries (the mirror
+    consumes their outcomes, `World.allocArmed`): every site whose ranges all
+    lie in the armed set `armed` (alloc_ranges' result). An exact site with
+    only some of its ranges armed would record some encounters and not
+    others; it is refused. Lax sites are not listed: their count is fixed
+    (at 0, A0) and the mirror consumes none of their records."""
+    def inside(r):
+        return any(lo <= r[0] and r[1] <= hi for lo, hi in armed)
+
+    def touches(r):
+        return any(r[0] < hi and lo < r[1] for lo, hi in armed)
+    out = []
+    for label, row in sorted(ALLOC_SITES.items()):
+        if type(row['count']) is not int:
+            continue
+        rs = site_ranges(label, alloc_sites)
+        if all(inside(r) for r in rs):
+            out.append(label)
+        elif any(touches(r) for r in rs):
+            raise SteeringError(f'allocation site {label} is only partly armed')
+    return out

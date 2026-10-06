@@ -382,7 +382,9 @@ def timersTraversal (pid : PeerId) : M Unit := do
     the UDP tunnel transmit) are a cut point: the datagram is recorded in
     `World.sent`, and the environment delivers it. -/
 def sendBufferToPeer (pid : PeerId) (bytes : List UInt8) : M Unit := do
-  if ← branch .sendBufNoMem !(← envOk .allocSkb) then return   -- -ENOMEM
+  -- `alloc_skb(len + SKB_HEADER_LEN, GFP_ATOMIC)` (socket.c:192); NULL: -ENOMEM,
+  -- which every caller ignores (send.c:40,103)
+  if ← branch .sendBufNoMem !(← hiddenAlloc .sendBufSkb) then return
   let p ← getPeer pid
   let family := (p.endpoint.map (·.family)).getD 0
   let sent ← do
@@ -391,7 +393,7 @@ def sendBufferToPeer (pid : PeerId) (bytes : List UInt8) : M Unit := do
     else pure false   -- dev_kfree_skb; -EAFNOSUPPORT
   -- send4/send6 (a cut point) choose the IP ident; the loopback delivery
   -- runs NET_RX in a section nested in the worker's (D1 stream A)
-  skipCut [.ipIdentKey, .ipIdentReserve, .flowHashSecret, .sectionStart .netRx, .sectionStop .netRx]
+  skipCut ([.ipIdentKey, .ipIdentReserve, .flowHashSecret, .sectionStart .netRx, .sectionStop .netRx] ++ allocCuts)
   if ← branch .sendSkbOk sent then
     let some e := p.endpoint | invariant "unreachable"
     setPeer pid { p with txBytes := p.txBytes + bytes.length }

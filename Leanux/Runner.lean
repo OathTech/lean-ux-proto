@@ -40,6 +40,9 @@ structure Trace where
   /-- A steering schedule (choice-stream strategy, step 2): the placeholders
       follow it; Linux's records carry the steered values. -/
   steer : List (String × Option (List UInt8)) := []
+  /-- The allocation sites the run armed (the check adds them with the
+      records): their outcomes are consumed from the records. -/
+  allocArmed : List String := []
   deriving Repr
 
 /-- The network fixture runs for traces with a WireGuard operation
@@ -269,9 +272,10 @@ def parseTrace (j : Json) : Except String Trace := do
   let hasHidden := (j.getObjVal? "hidden").isOk
   let hasSteer := (j.getObjVal? "steer").isOk
   let hasExpect := (j.getObjVal? "expect").isOk
+  let hasArmed := (j.getObjVal? "alloc_armed").isOk
   fields j ((if hasLimit then ["version", "id", "ops", "rlimit_nofile"] else ["version", "id", "ops"])
     ++ (if hasHidden then ["hidden"] else []) ++ (if hasSteer then ["steer"] else [])
-    ++ (if hasExpect then ["expect"] else []))
+    ++ (if hasExpect then ["expect"] else []) ++ (if hasArmed then ["alloc_armed"] else []))
   let rlimit ← if hasLimit then natField j "rlimit_nofile" 1024 else pure 32
   if rlimit < 8 then throw "rlimit_nofile outside 8..1024"
   if (← (← field j "version").getNat?) != 1 then throw "unsupported trace version"
@@ -294,7 +298,14 @@ def parseTrace (j : Json) : Except String Trace := do
       if v.length == 0 || v.length % 2 != 0 || v.length > 80 then throw "steer: value hex"
       return (label, some (← hexBytes pair[1]! v.length "steer"))
     else pure []
-  return { id, ops, rlimit, hidden, steer }
+  let allocArmed ← if hasArmed then (← (← field j "alloc_armed").getArr?).toList.mapM fun e => do
+      let label ← e.getStr?
+      if !(AllocSite.all.any fun s => s.info.label == label && s.info.count != .cut) then
+        throw s!"alloc_armed: {label} is not a consumed allocation site"
+      pure label
+    else pure []
+  if hasArmed && !hasHidden then throw "alloc_armed: an armed run carries its records"
+  return { id, ops, rlimit, hidden, steer, allocArmed }
 
 /-! ## Harness fixture and trace execution
 
@@ -341,9 +352,6 @@ def initialKernel (rlimit : Nat) (net : Bool := false) : Kernel :=
     nrFiles := 6, maxFiles := 1000000, anonInodeInodeErr := false,
     wg := if net then some { ifindex := 3, ifname := "wg0" } else none }
 
-/-- The harness environment: every allocation and user-memory access succeeds. -/
-def harnessEnv : EnvSite → Nat → Bool := fun _ _ => true
-
 def resolveFD (results : Array Int) : FDArg → Int
   | .literal n => n
   | .ref i =>
@@ -376,7 +384,8 @@ def toSyscall (results : Array Int) : Operation → Syscall
 /-- Run a trace. A `Stop` is returned with the operation index: the mirror
     never reports an observation for a path it does not model. -/
 def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat × Stop) Json := do
-  let mut world : World := { k := initialKernel trace.rlimit trace.net, env := harnessEnv, timing := Env.timing,
+  let mut world : World := { k := initialKernel trace.rlimit trace.net, timing := Env.timing,
+                             allocArmed := trace.allocArmed,
                              hiddenPlaceholders := placeholders && trace.hidden.isNone,
                              steerValues := if placeholders then trace.steer else [] }
   let mut results : Array Int := #[]

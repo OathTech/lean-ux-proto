@@ -47,7 +47,8 @@ private def modifyPeer (pid : PeerId) (f : Peer → Peer) : M Unit := do
 /-- keypair_create (noise.c:98-110): a zeroed keypair in the store, with the
     next `keypair_counter` value and one reference. -/
 def keypairCreate (pid : PeerId) : M (Option KeypairId) := do
-  let ok ← envOk .kzallocKeypair
+  -- kzalloc in a kworker: GFP_KERNEL, record-only (class b-kworker, Q2)
+  let ok ← hiddenAlloc .kzallocKeypair
   if ← branch .keypairCreateNoMem !ok then return none
   let internalId := (← getK).keypairCounter + 1   -- atomic64_inc_return(&keypair_counter)
   modifyK fun k => { k with keypairCounter := internalId }

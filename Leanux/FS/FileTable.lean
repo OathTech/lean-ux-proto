@@ -44,7 +44,7 @@ def allocEmptyFile (flags : UInt32) : M (Except Int FileId) := do
   if ← branch .allocEmptyFileOverMax (k.nrFiles >= k.maxFiles) then
     _ ← branch .allocEmptyFileNotCapable false  -- the harness runs as root: capable(CAP_SYS_ADMIN)
     unsupported "files_stat.max_files reached (percpu recount)"
-  if ← branch .allocEmptyFileNoMem (!(← envOk .filpAlloc)) then
+  if ← branch .allocEmptyFileNoMem (!(← hiddenAlloc .filpAlloc)) then
     return .error (-ENOMEM)
   let fid := k.nextFile
   setFile fid { fFlags := flags, fMode := openFmode flags, fCount := 1 }
@@ -99,7 +99,7 @@ def allocFile (flags : UInt32) (fopId : FopsId) (inode : InodeId) : M (Except In
     dentry (`d_alloc_pseudo`, an environment choice point); `mntget`,
     `d_instantiate`, `ihold` and `path_put` are cut points. -/
 def allocFilePseudo (flags : UInt32) (inode : InodeId) (fopId : FopsId) : M (Except Int FileId) := do
-  if ← branch .allocPathPseudoFail (!(← envOk .dAllocPseudo)) then return .error (-ENOMEM)
+  if ← branch .allocPathPseudoFail (!(← hiddenAlloc .dAllocPseudo)) then return .error (-ENOMEM)
   let r ← allocFile flags fopId inode
   _ ← branch .allocFilePseudoErr (r matches .error _)
   return r
