@@ -695,10 +695,25 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         struct timespec before_advance = {0};
         if (op->code == 14 && clock_gettime(CLOCK_MONOTONIC, &before_advance))
             fail(t->id, i, "environment_failure", "advance_clock");
-        /* No wait for a fresh tick before the advance: the kernel keeps
-         * interrupts disabled from the jump until its kind-304 record
-         * (kcov_time_advance), so no tick can run the due timers before the
-         * record (evaluator/check.py jiffies_problems still checks it). */
+        /* The advance starts just after a tick: the clock is tick-granular
+         * (refined-jiffies), so it changes at the tick. This fixes the
+         * advance's phase: the absorbing tick comes almost 4 ms after the
+         * ioctl. The record order no longer depends on it (the kernel keeps
+         * interrupts off from the jump to its kind-304 record; before that
+         * fix a tick in between ran the due timers before the record in about
+         * 3% of the long advances' children, which jiffies_problems flags),
+         * but the wait-0 control does: without the fixed phase its absorbing
+         * tick also lands inside the advance's own readout or between two
+         * operations (docs/2026-10-05-d3-timers.md, section 16). Bounded:
+         * 20000 reads. */
+        if (op->code == 14) {
+            struct timespec now = before_advance;
+            for (int spins = 0; now.tv_sec == before_advance.tv_sec && now.tv_nsec == before_advance.tv_nsec; ++spins) {
+                if (spins > 20000) fail(t->id, i, "environment_failure", "advance_no_tick");
+                if (clock_gettime(CLOCK_MONOTONIC, &now)) fail(t->id, i, "environment_failure", "advance_clock");
+            }
+            before_advance = now;
+        }
         __atomic_store_n(&coverage[0], 0, __ATOMIC_RELAXED);
         if (remote && op->code != 12) __atomic_store_n(&remote[0], 0, __ATOMIC_RELAXED);
         errno = 0;
