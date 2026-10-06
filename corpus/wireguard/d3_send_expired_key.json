@@ -106,6 +106,7 @@
     "add_new_keypair.initiator=1",
     "wg_packet_send_staged_packets.no_keypair=0",
     "fired:wg_expired_send_persistent_keepalive",
+    "wg_expired_send_persistent_keepalive.interval=0",
     "wg_packet_send_staged_packets.birthdate_expired=1"
   ]
 }

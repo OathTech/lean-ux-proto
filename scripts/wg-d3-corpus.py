@@ -63,6 +63,11 @@ RATE_LIMIT = fire_advance(REKEY_TIMEOUT_TICKS)                             # 135
 # The persistent keepalive of 25 s that D1's sessions arm stays quiet below
 # this total advance after its last arm.
 PERSISTENT_25_QUIET = quiet_limit(25 * HZ)
+# The callbacks' decisions (Leanux/Kernel/Decision.lean, stream M's region).
+GIVE_UP = "wg_expired_retransmit_handshake.give_up"
+NEED_ANOTHER = "wg_expired_send_keepalive.need_another"
+INTERVAL = "wg_expired_send_persistent_keepalive.interval"
+ZERO_KEY_ALIVE = "wg_expired_zero_key_material.alive"
 
 
 def fired(name):
@@ -126,7 +131,7 @@ def traces():
         d2.setup(keepalive=False) + [xmit(), OBSERVE, advance(RETRANSMIT), OBSERVE, GET],
         steer + D3_DRAWS,
         [fired("retransmit_handshake"), "wg_packet_send_staged_packets.no_keypair=1",
-         "wg_packet_send_queued_handshake_initiation.not_retry=0"])
+         "wg_packet_send_queued_handshake_initiation.not_retry=0", GIVE_UP + "=0"])
 
     # As d3_retransmit, then 20 advances in all: firings 1-19 retry
     # (attempts 1..19, 20 initiations in all); firing 20 finds attempts 19 >
@@ -139,7 +144,8 @@ def traces():
     out["d3_retransmit_gives_up"] = (
         d2.setup(keepalive=False) + [xmit()] + [advance(RETRANSMIT)] * 20 + [GET],
         steer + D3_DRAWS * 19,
-        [fired("retransmit_handshake"), "wg_packet_send_staged_packets.no_keypair=1"])
+        [fired("retransmit_handshake"), "wg_packet_send_staged_packets.no_keypair=1", GIVE_UP + "=0",
+         GIVE_UP + "=1", "wg_expired_retransmit_handshake.zero_key_not_pending=1"])
 
     # A session, then one data message from the peer: data_received arms the
     # send-keepalive timer (2500 ticks). The advance fires it:
@@ -149,7 +155,7 @@ def traces():
     out["d3_keepalive"] = (
         ka_ops + [data(sess, 0, "one"), advance(KEEPALIVE), OBSERVE, GET],
         steer,
-        SESSION + [fired("send_keepalive"), "wg_timers_data_received.not_pending=1"])
+        SESSION + [fired("send_keepalive"), "wg_timers_data_received.not_pending=1", NEED_ANOTHER + "=0"])
 
     # The control of audit M2: two data messages without a transmission
     # between them (the second finds the timer pending and sets
@@ -162,7 +168,7 @@ def traces():
         ka_ops + [data(sess, 0, "one"), data(sess, 1, "two"), advance(KEEPALIVE), advance(KEEPALIVE), OBSERVE, GET],
         steer,
         SESSION + [fired("send_keepalive"), "wg_timers_data_received.not_pending=1",
-                   "wg_timers_data_received.not_pending=0"])
+                   "wg_timers_data_received.not_pending=0", NEED_ANOTHER + "=1"])
 
     # A session, then a data packet sent: data_sent arms the new-handshake
     # timer (3750 + [0, 83) ticks). The advance fires it:
@@ -185,7 +191,8 @@ def traces():
     out["d3_persistent_keepalive"] = (
         ops5 + [OBSERVE, advance(PERSISTENT_5), OBSERVE, GET],
         steer,
-        SESSION + [fired("send_persistent_keepalive"), "wg_timers_any_authenticated_packet_traversal.keepalive=1"])
+        SESSION + [fired("send_persistent_keepalive"), "wg_timers_any_authenticated_packet_traversal.keepalive=1",
+                   INTERVAL + "=1"])
 
     # The natural-firing control: persistent keepalive 2 s and no advance.
     # The response, injected right after wg_up (whose wait sent the
@@ -200,7 +207,7 @@ def traces():
     out["d3_persistent_natural"] = (
         [op for op in ops2 if op is not OBSERVE] + [OBSERVE] * 5 + [GET],
         steer,
-        SESSION + [fired("send_persistent_keepalive")])
+        SESSION + [fired("send_persistent_keepalive"), INTERVAL + "=1"])
 
     # The zero-key timer (540 s from session_derived). The interval is set to
     # 0 first, so the persistent keepalive timer (25 s) fires earlier in the
@@ -214,7 +221,8 @@ def traces():
         ka_ops + [keepalive_off(), advance(ZERO_KEY), data(sess, 0, "after zero"), xmit(2), OBSERVE, GET],
         steer + D3_DRAWS,
         SESSION + [fired("zero_key_material"), fired("send_persistent_keepalive"),
-                   "wg_packet_consume_data.no_keypair=1"])
+                   "wg_packet_consume_data.no_keypair=1", INTERVAL + "=0", ZERO_KEY_ALIVE + "=1",
+                   "wg_expired_zero_key_material.already_queued=0"])
 
     # The session from a staged packet (keepalive 0): the flushed packet arms
     # the new-handshake timer (15 s). The 540 s advance runs both timers in
@@ -227,7 +235,7 @@ def traces():
         staged_ops + [advance(ZERO_KEY), OBSERVE, GET],
         steer + D3_DRAWS,
         SESSION + [fired("new_handshake"), fired("zero_key_material"),
-                   "wg_packet_send_staged_packets.no_keypair=1"])
+                   "wg_packet_send_staged_packets.no_keypair=1", ZERO_KEY_ALIVE + "=1"])
 
     # Key expiry (section 6). Each starts from the session with the interval
     # then set to 0: the pending persistent keepalive fires in the advance
@@ -240,14 +248,15 @@ def traces():
     out["d3_send_expired_key"] = (
         ka_ops + [keepalive_off(), advance(REJECT_AFTER), xmit(), OBSERVE, GET],
         steer + D3_DRAWS,
-        SESSION + [fired("send_persistent_keepalive"), "wg_packet_send_staged_packets.birthdate_expired=1"])
+        SESSION + [fired("send_persistent_keepalive"), INTERVAL + "=0", "wg_packet_send_staged_packets.birthdate_expired=1"])
     # Send-side keep_key_fresh at REKEY_AFTER_TIME (121 s): the packet is
     # sent (counter 1), then keep_key_fresh (send.c:124-139; wg0 is the
     # initiator) queues an initiation: a data message, then an initiation.
     out["d3_send_keep_key_fresh"] = (
         ka_ops + [keepalive_off(), advance(REKEY_AFTER), xmit(), OBSERVE, GET],
         steer + D3_DRAWS,
-        SESSION + [fired("send_persistent_keepalive"), "keep_key_fresh.birthdate_expired=1", "keep_key_fresh.send=1"])
+        SESSION + [fired("send_persistent_keepalive"), INTERVAL + "=0", "keep_key_fresh.birthdate_expired=1",
+                   "keep_key_fresh.send=1"])
     # Receive-side keep_key_fresh at 165 s (166 s): the first data message is
     # delivered and keep_key_fresh (receive.c:220-240) sets
     # sent_lastminute_handshake and queues an initiation; the second returns
@@ -256,7 +265,7 @@ def traces():
         ka_ops + [keepalive_off(), advance(RX_FRESH), data(sess, 0, "fresh one"), data(sess, 1, "fresh two"),
                   OBSERVE, GET],
         steer + D3_DRAWS,
-        SESSION + [fired("send_persistent_keepalive"), "keep_key_fresh.rx_birthdate_expired=1",
+        SESSION + [fired("send_persistent_keepalive"), INTERVAL + "=0", "keep_key_fresh.rx_birthdate_expired=1",
                    "keep_key_fresh.rx_send=1", "keep_key_fresh.sent_lastminute=1"])
     # Receive after REJECT_AFTER_TIME (181 s): decrypt_packet (receive.c:253)
     # finds the receiving birthdate expired: receiving.is_valid = false, the
@@ -264,7 +273,7 @@ def traces():
     out["d3_rx_expired_key"] = (
         ka_ops + [keepalive_off(), advance(REJECT_AFTER), data(sess, 0, "too late"), OBSERVE, GET],
         steer,
-        SESSION + [fired("send_persistent_keepalive"), "decrypt_packet.key_expired=1"])
+        SESSION + [fired("send_persistent_keepalive"), INTERVAL + "=0", "decrypt_packet.key_expired=1"])
 
     # The 5 s rate limit without the key trick (replaces
     # d1_respond_then_initiate's private-key change): the peer initiates and

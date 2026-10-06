@@ -95,6 +95,7 @@
     "wg_packet_send_staged_packets.no_keypair=0",
     "fired:wg_expired_new_handshake",
     "fired:wg_expired_zero_key_material",
-    "wg_packet_send_staged_packets.no_keypair=1"
+    "wg_packet_send_staged_packets.no_keypair=1",
+    "wg_expired_zero_key_material.alive=1"
   ]
 }

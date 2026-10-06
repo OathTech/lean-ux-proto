@@ -81,6 +81,7 @@
     "add_new_keypair.initiator=1",
     "wg_packet_send_staged_packets.no_keypair=0",
     "fired:wg_expired_send_keepalive",
-    "wg_timers_data_received.not_pending=1"
+    "wg_timers_data_received.not_pending=1",
+    "wg_expired_send_keepalive.need_another=0"
   ]
 }

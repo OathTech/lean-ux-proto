@@ -910,7 +910,11 @@ def steered_timers(rng, trace_id):
         # no final observation after 20 advances: on the TCG guest they take
         # about 3.5 s of real time, and its 0.4 s wait exceeds the 4 s bound
         ops += [get] if variant == 'gives_up' else [observe, get]
-        expect = [fired('retransmit_handshake'), 'wg_packet_send_staged_packets.no_keypair=1']
+        expect = [fired('retransmit_handshake'), 'wg_packet_send_staged_packets.no_keypair=1',
+                  'wg_expired_retransmit_handshake.give_up=0']
+        if variant == 'gives_up':
+            expect += ['wg_expired_retransmit_handshake.give_up=1',
+                       'wg_expired_retransmit_handshake.zero_key_not_pending=1']
         retries = count if variant == 'retransmit' else 19
         return dict(version=1, id=trace_id, ops=ops, steer=steer + D3_DRAWS * retries, expect=expect)
 
@@ -924,7 +928,8 @@ def steered_timers(rng, trace_id):
             # the re-arm made in the callback is deleted when the keepalive is sent
             ops.append(advance(fire_advance(KEEPALIVE_TIMEOUT_TICKS)))
         ops += [observe, get]
-        expect = D1_SESSION + [fired('send_keepalive'), 'wg_timers_data_received.not_pending=1']
+        expect = D1_SESSION + [fired('send_keepalive'), 'wg_timers_data_received.not_pending=1',
+                               f'wg_expired_send_keepalive.need_another={int(n == 2)}']
         if n == 2:
             expect.append('wg_timers_data_received.not_pending=0')
         return dict(version=1, id=trace_id, ops=ops, steer=steer, expect=expect)
@@ -942,7 +947,8 @@ def steered_timers(rng, trace_id):
             ops.append(observe)
         ops += [advance(fire_advance(interval * HZ) + slack(200)), observe, get]
         return dict(version=1, id=trace_id, ops=ops, steer=steer,
-                    expect=D1_SESSION + [fired('send_persistent_keepalive')])
+                    expect=D1_SESSION + [fired('send_persistent_keepalive'),
+                                         'wg_expired_send_persistent_keepalive.interval=1'])
     if variant == 'zero_key':
         # the interval set to 0 leaves the pending persistent timer, which
         # fires first in the pass and sends nothing
@@ -955,7 +961,9 @@ def steered_timers(rng, trace_id):
             ops.append(xmit())                 # no keypair: an initiation
             draws = D3_DRAWS
         ops += [observe, get]
-        expect = D1_SESSION + [fired('zero_key_material'), fired('send_persistent_keepalive')]
+        expect = D1_SESSION + [fired('zero_key_material'), fired('send_persistent_keepalive'),
+                               'wg_expired_send_persistent_keepalive.interval=0',
+                               'wg_expired_zero_key_material.alive=1']
         if tail != 'xmit':
             expect.append('wg_packet_consume_data.no_keypair=1')
         return dict(version=1, id=trace_id, ops=ops, steer=steer + draws, expect=expect)
@@ -964,11 +972,12 @@ def steered_timers(rng, trace_id):
         # response flushes it (data sent: the new-handshake timer)
         ops = setup(0) + [xmit(), observe, respond, advance(fire_advance(ZERO_KEY_TICKS) + slack(200)), observe, get]
         return dict(version=1, id=trace_id, ops=ops, steer=steer + D3_DRAWS,
-                    expect=D1_SESSION + [fired('new_handshake'), fired('zero_key_material')])
+                    expect=D1_SESSION + [fired('new_handshake'), fired('zero_key_material'),
+                                         'wg_expired_zero_key_material.alive=1'])
     if variant == 'expiry':
         arm = rng.choice(['send_expired', 'send_fresh', 'rx_fresh', 'rx_expired'])
         ops = session_ops + [keepalive_off()]
-        expect = D1_SESSION + [fired('send_persistent_keepalive')]
+        expect = D1_SESSION + [fired('send_persistent_keepalive'), 'wg_expired_send_persistent_keepalive.interval=0']
         rekey_after, reject_after, rx_fresh_after = 120, 180, 180 - 10 - 5
         if arm == 'send_expired':
             ops += [advance(expiry_advance(reject_after) + slack(750)), xmit()]

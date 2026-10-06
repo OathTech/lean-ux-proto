@@ -113,6 +113,9 @@
     "wg_packet_send_staged_packets.no_keypair=0",
     "fired:wg_expired_zero_key_material",
     "fired:wg_expired_send_persistent_keepalive",
-    "wg_packet_consume_data.no_keypair=1"
+    "wg_packet_consume_data.no_keypair=1",
+    "wg_expired_send_persistent_keepalive.interval=0",
+    "wg_expired_zero_key_material.alive=1",
+    "wg_expired_zero_key_material.already_queued=0"
   ]
 }

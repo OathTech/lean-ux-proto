@@ -370,6 +370,9 @@
   ],
   "expect": [
     "fired:wg_expired_retransmit_handshake",
-    "wg_packet_send_staged_packets.no_keypair=1"
+    "wg_packet_send_staged_packets.no_keypair=1",
+    "wg_expired_retransmit_handshake.give_up=0",
+    "wg_expired_retransmit_handshake.give_up=1",
+    "wg_expired_retransmit_handshake.zero_key_not_pending=1"
   ]
 }
