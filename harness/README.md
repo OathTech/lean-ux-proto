@@ -72,7 +72,12 @@ then `A 0` or `A 1`: whether the kernel writes the kind-303 timer arm records
 value to the kernel (`run_linux(..., arm_records=)`) and to the mirror (each
 trace's `arm_records` next to its `hidden` records), so the two cannot
 disagree silently. Opcode 14 is `wg_advance`, its `a` the ticks (D3,
-docs/2026-10-05-d3-timers.md).
+docs/2026-10-05-d3-timers.md). `wg_observe`'s 0.4 s wait is inside its
+operation's remote window (an idle point where a timer may fire naturally,
+D3 section 5.3). A negative control may build the guest as a named variant
+(`harness/linux.py` `GUEST_VARIANTS`, `run_linux(..., guest_variant=)`,
+`evaluator.check --guest-variant`, recorded in provenance): `advance-wait-0`
+returns from `wg_advance` without waiting for the absorbing tick.
 Each trace begins `T ID N` for the validated identifier and operation count.
 Exactly N operation lines follow, each with eight decimal fields:
 
