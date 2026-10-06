@@ -37,6 +37,16 @@
     "kernel/signal.c"
   ],
   "functions": [
+    "touch_atime",
+    "atime_needs_update",
+    "file_update_time",
+    "inode_needs_update_time",
+    "generic_update_time",
+    "inode_update_timestamps",
+    "inode_set_ctime_current",
+    "current_time",
+    "timestamp_truncate",
+    "pipe_read",
     "____fput",
     "__fput",
     "__fput_sync",

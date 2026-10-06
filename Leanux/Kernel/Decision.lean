@@ -234,6 +234,23 @@ inductive Decision where
   -- P stream 2 (end)
   -- P stream 3 (begin): fs/inode.c, include/linux/time64.h, include/linux/fs.h,
   -- fs/libfs.c
+  -- timestamp_truncate (fs/inode.c:2612-2631), called by every current_time
+  | truncClampMax | truncClampMin | truncSecIsMax | truncSecIsMin | truncGranOne
+  -- timespec64_equal (include/linux/time64.h:46-50)
+  | tsEqualSec | tsEqualNsec
+  -- atime_needs_update, HAS_UNMAPPED_ID, relatime_need_update, touch_atime
+  | atimeSNoatime | unmappedUid | unmappedGid | atimeIsNoatime | atimeSbNodiratime
+  | atimeMntNoatime | atimeMntNodiratime | atimeNoRelatimeUpdate | atimeEqual | relatimeNotSet
+  | touchAtimeNoUpdate | touchAtimeTrylockFailed | touchAtimeWriteAccessErr
+  -- inode_update_time, generic_update_time, inode_update_timestamps
+  | inodeUpdateTimeHasOp | genericUpdated | genericLazytime | genericVersion
+  | tsUpdateCmtime | tsUpdateCtimeDiffers | tsUpdateMtimeDiffers | tsUpdateIVersion
+  | tsUpdateAtimeFlag | tsUpdateAtimeDiffers
+  -- file_update_time, __file_update_time, inode_needs_update_time
+  | needsNocmtime | needsMtimeDiffers | needsCtimeDiffers | needsIVersion
+  | fileUpdateNothing | fileUpdateWriteAccessOk
+  -- include/linux/fs.h: file_accessed, i_readcount_dec
+  | fileAccessedNotNoatime | iReadcountDecUnderflow
   -- P stream 3 (end)
   -- P stream 2 signal (begin): kernel/signal.c
   -- P stream 2 signal (end)
@@ -1091,6 +1108,77 @@ def Decision.info : Decision → DecisionInfo
   -- P stream 2 (end)
   -- P stream 3 (begin): fs/inode.c, include/linux/time64.h, include/linux/fs.h,
   -- fs/libfs.c
+  -- Witnesses were reviewed against the built kernel's line table
+  -- (objdump -l of each listed function) for shared exits; a line that every
+  -- exit runs is left out of both spans.
+  -- timestamp_truncate: `clamp` (minmax.h:181-182, `>= hi` then `<= lo`) is
+  -- one line; its first comparison is a branch, the second a cmov. The `||`
+  -- at 2618 has one body line (2619) reached by either operand.
+  | .truncClampMax => d "timestamp_truncate.clamp_ge_max" "fs/inode.c" 2617 [] []
+  | .truncClampMin => d "timestamp_truncate.clamp_le_min" "fs/inode.c" 2617 [] []
+  | .truncSecIsMax => d "timestamp_truncate.sec_is_max" "fs/inode.c" 2618 [] []
+  | .truncSecIsMin => d "timestamp_truncate.sec_is_min" "fs/inode.c" 2618 [] []
+  -- 2623 is the empty statement `;`
+  | .truncGranOne => d "timestamp_truncate.gran_one" "fs/inode.c" 2622 [] [(2624, 2629)]
+  -- `(a->tv_sec == b->tv_sec) && (a->tv_nsec == b->tv_nsec)`: one line, the
+  -- callers' `if`s are their own decisions
+  | .tsEqualSec => d "timespec64_equal.sec" "include/linux/time64.h" 49 [] []
+  | .tsEqualNsec => d "timespec64_equal.nsec" "include/linux/time64.h" 49 [] []
+  -- atime_needs_update: every `return false` (2076, 2082, ...) and the final
+  -- `return true` (2103) leave through one block the line table gives 2076,
+  -- so 2076 witnesses nothing; the false sides run the next test
+  | .atimeSNoatime => d "atime_needs_update.s_noatime" "fs/inode.c" 2075 [] [(2081, 2100)]
+  -- HAS_UNMAPPED_ID (fs.h:2384-2389), inlined at 2081: `!vfsuid_valid(...) ||
+  -- !vfsgid_valid(...)`; both operands' bodies are the shared exit
+  | .unmappedUid => d "HAS_UNMAPPED_ID.uid_invalid" "include/linux/fs.h" 2387 [] []
+  | .unmappedGid => d "HAS_UNMAPPED_ID.gid_invalid" "include/linux/fs.h" 2388 [] []
+  | .atimeIsNoatime => d "atime_needs_update.is_noatime" "fs/inode.c" 2084 [] [(2086, 2100)]
+  -- `(s_flags & SB_NODIRATIME) && S_ISDIR(i_mode)`: the S_ISDIR operand
+  -- (2086, discriminator 1) is on the true side
+  | .atimeSbNodiratime => d "atime_needs_update.sb_nodiratime" "fs/inode.c" 2086 [] [(2089, 2100)]
+  | .atimeMntNoatime => d "atime_needs_update.mnt_noatime" "fs/inode.c" 2089 [] [(2091, 2100)]
+  -- the S_ISDIR operand shares line 2091
+  | .atimeMntNodiratime => d "atime_needs_update.mnt_nodiratime" "fs/inode.c" 2091 [] [(2094, 2100)]
+  | .atimeNoRelatimeUpdate => d "atime_needs_update.no_relatime_update" "fs/inode.c" 2096 [] [(2099, 2100)]
+  -- 2101 and 2103 are the shared exit
+  | .atimeEqual => d "atime_needs_update.atime_equal" "fs/inode.c" 2100 [] []
+  -- relatime_need_update, inlined at 2096: 1945 `return true` has no point of
+  -- its own (it joins 2099)
+  | .relatimeNotSet => d "relatime_need_update.not_relatime" "fs/inode.c" 1944 [(1945, 1945)] [(1949, 1969)]
+  -- touch_atime: 2112's `return` is a tail jump to the coverage hook, which
+  -- records the caller's return address (outside touch_atime)
+  | .touchAtimeNoUpdate => d "touch_atime.no_update" "fs/inode.c" 2111 [(2112, 2112)] [(2114, 2131)]
+  | .touchAtimeTrylockFailed => d "touch_atime.trylock_failed" "fs/inode.c" 2114 [(2115, 2115)] [(2117, 2131)]
+  | .touchAtimeWriteAccessErr => d "touch_atime.write_access_error" "fs/inode.c" 2117 [(2118, 2118)] [(2128, 2129)]
+  -- inode_update_time, inlined into touch_atime (2128) and __file_update_time (2245)
+  | .inodeUpdateTimeHasOp => d "inode_update_time.has_update_time" "fs/inode.c" 2054 [(2055, 2055)] [(2056, 2057)]
+  | .genericUpdated => d "generic_update_time.updated" "fs/inode.c" 2039 [(2040, 2040)] []
+  -- the ternary's arms share line 2040
+  | .genericLazytime => d "generic_update_time.sb_lazytime" "fs/inode.c" 2040 [] []
+  | .genericVersion => d "generic_update_time.s_version" "fs/inode.c" 2041 [(2042, 2042)] []
+  | .tsUpdateCmtime => d "inode_update_timestamps.cmtime" "fs/inode.c" 1993 [(1994, 2005)] [(2007, 2007)]
+  | .tsUpdateCtimeDiffers => d "inode_update_timestamps.ctime_differs" "fs/inode.c" 1998 [(1999, 1999)] []
+  | .tsUpdateMtimeDiffers => d "inode_update_timestamps.mtime_differs" "fs/inode.c" 2000 [(2001, 2002)] []
+  -- `IS_I_VERSION(inode) && inode_maybe_inc_iversion(...)`: one line
+  | .tsUpdateIVersion => d "inode_update_timestamps.i_version" "fs/inode.c" 2004 [] []
+  | .tsUpdateAtimeFlag => d "inode_update_timestamps.s_atime" "fs/inode.c" 2010 [(2011, 2016)] []
+  | .tsUpdateAtimeDiffers => d "inode_update_timestamps.atime_differs" "fs/inode.c" 2013 [(2014, 2015)] []
+  -- inode_needs_update_time: 2222 `return 0` joins the shared exit, which
+  -- the line table gives 2232 (so 2232 is left out)
+  | .needsNocmtime => d "inode_needs_update_time.nocmtime" "fs/inode.c" 2221 [(2222, 2222)] [(2224, 2230)]
+  | .needsMtimeDiffers => d "inode_needs_update_time.mtime_differs" "fs/inode.c" 2225 [(2226, 2226)] []
+  | .needsCtimeDiffers => d "inode_needs_update_time.ctime_differs" "fs/inode.c" 2229 [(2230, 2230)] []
+  | .needsIVersion => d "inode_needs_update_time.i_version" "fs/inode.c" 2232 [] []
+  -- file_update_time: `return ret` (2273) joins __file_update_time's
+  -- `return ret`, which the line table gives 2240 (left out)
+  | .fileUpdateNothing => d "file_update_time.nothing" "fs/inode.c" 2272 [(2273, 2273)] [(2275, 2275)]
+  | .fileUpdateWriteAccessOk => d "__file_update_time.write_access" "fs/inode.c" 2244 [(2245, 2246)] []
+  -- file_accessed (fs.h:2576-2580), inlined into pipe_read: touch_atime's
+  -- tail jump to the coverage hook puts a point on 2579 only when it does
+  -- not update, so 2579 is no witness
+  | .fileAccessedNotNoatime => d "file_accessed.not_noatime" fsh 2578 [] []
+  -- i_readcount_dec (fs.h:3125-3129): BUG_ON's arm is on the same line
+  | .iReadcountDecUnderflow => d "i_readcount_dec.underflow" fsh 3128 [] []
   -- P stream 3 (end)
   -- P stream 2 signal (begin): kernel/signal.c
   -- P stream 2 signal (end)
@@ -1211,6 +1299,37 @@ def Decision.comparison : Decision → Option Comparison
   -- P stream 2 (end)
   -- P stream 3 (begin): fs/inode.c, include/linux/time64.h, include/linux/fs.h,
   -- fs/libfs.c
+  -- the first clamp comparison is a branch with a cmp8 record; the second a
+  -- cmov without one (non-comparison)
+  | .truncClampMax => some ⟨.ge, false, none, false⟩
+  | .truncSecIsMax => some ⟨.eq, false, none, false⟩
+  | .truncSecIsMin => some ⟨.eq, false, none, false⟩
+  | .truncGranOne => some ⟨.eq, true, none, false⟩
+  | .tsEqualSec => some ⟨.eq, false, none, false⟩
+  | .tsEqualNsec => some ⟨.eq, false, none, false⟩
+  | .atimeSNoatime => some ⟨.flag, true, none, false⟩
+  | .atimeIsNoatime => some ⟨.flag, true, none, false⟩
+  | .atimeSbNodiratime => some ⟨.flag, true, none, false⟩
+  | .atimeMntNoatime => some ⟨.flag, true, none, false⟩
+  | .atimeMntNodiratime => some ⟨.flag, true, none, false⟩
+  | .relatimeNotSet => some ⟨.flag, true, none, false⟩
+  -- `!atime_needs_update(...)`: the bool result against 0 (const_cmp1)
+  | .touchAtimeNoUpdate => some ⟨.eq, true, none, false⟩
+  | .touchAtimeWriteAccessErr => some ⟨.ne, true, none, false⟩
+  | .genericUpdated => some ⟨.flag, true, none, false⟩
+  | .genericLazytime => some ⟨.flag, true, none, false⟩
+  | .genericVersion => some ⟨.flag, true, none, false⟩
+  | .tsUpdateCmtime => some ⟨.flag, true, none, false⟩
+  | .tsUpdateIVersion => some ⟨.flag, true, none, false⟩
+  | .tsUpdateAtimeFlag => some ⟨.flag, true, none, false⟩
+  | .needsNocmtime => some ⟨.flag, true, none, false⟩
+  | .needsIVersion => some ⟨.flag, true, none, false⟩
+  | .fileUpdateNothing => some ⟨.le, true, none, false⟩
+  -- `!mnt_get_write_access_file(file)`: the result against 0
+  | .fileUpdateWriteAccessOk => some ⟨.eq, true, none, false⟩
+  | .fileAccessedNotNoatime => some ⟨.flag, true, none, false⟩
+  -- `atomic_dec_return(&inode->i_readcount) < 0`: the new value against 0
+  | .iReadcountDecUnderflow => some ⟨.lt, true, none, false⟩
   -- P stream 3 (end)
   -- P stream 2 signal (begin): kernel/signal.c
   -- P stream 2 signal (end)
@@ -1319,6 +1438,11 @@ def Decision.repeatable : Decision → Bool
   -- P stream 2 (end)
   -- P stream 3 (begin): fs/inode.c, include/linux/time64.h, include/linux/fs.h,
   -- fs/libfs.c
+  -- every current_time truncates (one to three per operation); every
+  -- `timespec64_equal` (up to three per write); i_readcount_dec with
+  -- put_file_access (the -EMFILE unwind runs two __fput in one operation)
+  | .truncClampMax | .truncClampMin | .truncSecIsMax | .truncSecIsMin | .truncGranOne
+  | .tsEqualSec | .tsEqualNsec | .iReadcountDecUnderflow => true
   -- P stream 3 (end)
   -- P stream 2 signal (begin): kernel/signal.c
   -- P stream 2 signal (end)
