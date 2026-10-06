@@ -750,11 +750,14 @@ EXPORT_SYMBOL(kcov_timer_arm);
  * record {jiffies before, jiffies after} is never lost; the helper refuses
  * any timekeeper clocksource but refined-jiffies (-EOPNOTSUPP). The next
  * tick advances the timekeeper and raises TIMER_SOFTIRQ, as when time passes.
+ * Interrupts stay disabled from the jump until the kind-304 record is
+ * written: a tick in between would run the timers the jump made due (at its
+ * irq exit) before the record, so their records would precede it.
  */
 static long kcov_time_advance(unsigned long __user *arg)
 {
 	struct task_struct *t = current;
-	unsigned long ticks;
+	unsigned long ticks, flags;
 	u64 v[2];
 	int ret;
 
@@ -765,11 +768,12 @@ static long kcov_time_advance(unsigned long __user *arg)
 	if (!check_kcov_mode(KCOV_MODE_TRACE_PC, t) &&
 	    !(IS_ENABLED(CONFIG_KCOV_ENABLE_COMPARISONS) && check_kcov_mode(KCOV_MODE_TRACE_CMP, t)))
 		return -EPERM;
+	local_irq_save(flags);
 	ret = leanux_time_advance(ticks, &v[0], &v[1]);
-	if (ret)
-		return ret;
-	kcov_choice_write(t, 304, _RET_IP_, v, sizeof(v));
-	return 0;
+	if (!ret)
+		kcov_choice_write(t, 304, _RET_IP_, v, sizeof(v));
+	local_irq_restore(flags);
+	return ret;
 }
 """
 wr('kernel/kcov.c', s)

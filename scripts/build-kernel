@@ -42,7 +42,7 @@ if [ "$PROFILE" = net-rcov ] || [ "$PROFILE" = net-hidden ] || [ "$PROFILE" = ne
     # wireguard-kcov-remote.patch's per-site sections for this profile; since
     # D3 (docs/2026-10-05-d3-timers.md) also timer sections, the arm record and
     # the virtual time advance
-    CHOICE_SHA=9f8f3d4ea39c04ef6b25ba9c0c0c087879ad28771bd8f761d92cc5b302fb9607
+    CHOICE_SHA=3b0f2026265c7ccfe3bd8951ab7afd3ccdf5b56d6ffea70f5c715a57f7f217ab
     if [ "$PROFILE" = net-choice ]; then
         SOURCE="$LEANUX_ARTIFACTS/src/linux-6.12.110-choice-stream-d3"
         PATCH_SHA_RECORD="$CHOICE_SHA"
