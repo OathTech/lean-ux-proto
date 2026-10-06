@@ -1,19 +1,24 @@
 # W4 + W7: transmit shapes and bulk queues — design, 2026-10-06
 
-Status: **proposed** [AGENT], for the user's decisions in section 13. The
-census ([2026-10-06-wireguard-census.md](2026-10-06-wireguard-census.md))
-lists W4 (transmit shapes, M) and W7 (bulk and multi-item queues, L) as
-in-reach workstreams toward the user's goal of 2026-10-06, 100% of reasonable
-single-CPU WireGuard. P5 (concurrency recheck arms) and P9 (NAPI budget
-exhaustion) stay excluded; section 10 re-derives P9 under W7's multi-item
-polls, since the census argued it from "at most one packet per poll".
+Status: **proposed, revision v2** [AGENT], for the user's decisions in
+section 13. Revision v2 (2026-10-06) answers a critical audit; section 15
+gives each finding's disposition, and the body below is corrected in place
+(the v1 text is in the commit history of `task/w47-design`). The census
+([2026-10-06-wireguard-census.md](2026-10-06-wireguard-census.md)) lists W4
+(transmit shapes, M) and W7 (bulk and multi-item queues, L) as in-reach
+workstreams toward the user's goal of 2026-10-06, 100% of reasonable
+single-CPU WireGuard. P5 (concurrency recheck arms) stays excluded. P9 (NAPI
+budget exhaustion) is **reachable on one CPU** in the stretch tier (section
+10, corrected in v2); its treatment is decision 13.5.
 
 Line numbers are in the unpatched `.deps/linux` (6.12.110) unless a file is
 named as patched. The kernel is `kernel/config-x86_64-net-choice`: one CPU,
 `CONFIG_PREEMPT_NONE`, `HZ=250`, `CONFIG_IO_URING=y` (`:201`), `NR_CPUS=1`
-(`:290`). Mirror references are to `task/census` (= `main` + the census) and
-`task/d3-int`/`task/e-b` where named. The base for implementation is the
-integrated D3+L+A+E tip (section 12).
+(`:290`), `CONFIG_IP_MULTICAST` off (`:686`, so no `CONFIG_IP_MROUTE`),
+`CONFIG_IPV6_MULTIPLE_TABLES` off (`:724`). Mirror references are to
+`task/census` (= `main` + the census; section 14 gives the `main` line for
+each `Decision.lean` reference) and `task/d3-int`/`task/e-b` where named.
+The base for implementation is the integrated D3+L+A+E tip (section 12).
 
 Two premises of the task brief changed under verification and are stated
 up front:
@@ -27,10 +32,12 @@ up front:
   **connected** sender socket (its ident seed is a capturable draw) or a
   kernel capture of the ident (option K1).
 - **`Env.runWorker`'s commuting assumption does not survive multi-item
-  queues** (`Leanux/Env.lean:200-217`: "each rest is a worker's final empty
-  ring or queue poll"). With several items a tx worker that yields back into
-  an encrypt worker higher on the mirror's stack resumes to a non-empty
-  queue. Section 5.4 makes this fail-closed first and gives the step-worker
+  queues** (`Leanux/Env.lean:200-217`; `task/d3-int:Leanux/Env.lean:236-245`:
+  "each rest is a worker's final empty ring or queue poll"). The breakage is
+  generic (v2, M7): **any** yield by a unit nested on the mirror's stack
+  while an outer open worker still has queued items, since Linux may resume
+  the outer worker first and the mirror cannot. Section 5.4 makes this
+  fail-closed first, in the generic form, and gives the step-worker
   restructuring as the full fix.
 
 ## 1. Target
@@ -42,9 +49,13 @@ CPU, with its bytes checked at the fixture's listener:
   **one ring item** (device.c:176-204, 215, 218).
 - The staged-queue trim, `> MAX_STAGED_PACKETS` (device.c:211-214), reachable
   with two or three GSO transmissions and no session.
-- The padding arms of `calculate_skb_padding` (send.c:141-160): `!mtu`
-  (`:145`), `len > mtu` (`:154-155`), the `min` clamp (`:157-158`), via a route
-  MTU below the device MTU, `SIOCSIFMTU` and `IFLA_MTU` at creation.
+- The padding arms of `calculate_skb_padding` (send.c:141-160) not yet
+  taken: `len > mtu` (`:154-155`, `.padOverMtu` true) via a route MTU below
+  the device MTU, and `!mtu` (`:145`, `.padNoMtu` true, only with a device
+  MTU of 0: decision 13.6). The `min` clamp (`:157-158`, `.padClamped`) is
+  **already two-outcome** since D2 (inner lengths 1404-1420, D2 §6; v2, M8).
+  `SIOCSIFMTU` and `IFLA_MTU` at creation move the device MTU and the
+  `wg_open` arms.
 - `Device.mtu` as mirror state in place of `WG.DEVICE_MTU`
   (`Leanux/WG/Send.lean:48`), read by `wg_xmit` (device.c:173), the keepalive
   (send.c:232) and `wg_open`'s IPv6 test (device.c:34, 47).
@@ -107,10 +118,15 @@ far end: `-ENOSPC` and `-EPIPE` on full queues (1024 items).
     segment from the super-skb's id (`af_inet.c:1451-1454`), `tot_len` and
     the header checksum (`:1456-1457`). The super-skb's id comes from
     `__ip_make_skb` → `ip_select_ident` (`ip_output.c:1465`, `ip.h:591-595`
-    → `:559-589`): for the fixture's **unconnected, `IP_PMTUDISC_DO`**
-    sender, `DF && !ignore_df` → **`id = 0`** (`ip.h:583-584`; `ignore_df`
-    from `ip_sk_ignore_df`, `:462-467`). So the segments carry ids 0, 1, …,
-    n−1: deterministic, no hidden input. IPv6 segments have no id.
+    → `:559-589`, **`segs = 1`** for UDP): for the fixture's **unconnected,
+    `IP_PMTUDISC_DO`** sender, `DF && !ignore_df` → **`id = 0`**
+    (`ip.h:583-584`; `ignore_df` from `ip_sk_ignore_df`, `:462-467`). So the
+    segments carry ids 0, 1, …, n−1: deterministic, no hidden input. For the
+    **connected** sender `SEND2_FD` (section 3, v2 M2) the branch at
+    `ip.h:568-581` runs first regardless of DF: `id = atomic_add_return(1,
+    &inet_id)`, so one datagram consumes one `inet_id` value whatever its
+    segment count, and its segments carry `id, id+1, …`. IPv6 segments have
+    no id.
   - Consequence for the mirror: a GSO segment's `encrypt_packet` takes the
     **false** arm of `skb->ip_summed == CHECKSUM_PARTIAL` (send.c:187), where
     every D2 packet took the true arm. Both arms of `.encChecksumPartial`
@@ -129,17 +145,20 @@ far end: `-ENOSPC` and `-EPIPE` on full queues (1024 items).
 keypair, `wg_packet_send_staged_packets` puts the packets back at the head
 (send.c:393-408) and queues an initiation (`:413`, rate-limited by
 `REKEY_TIMEOUT`, a `.birthdateExpired` read per call). So:
-- xmit 1, 128 segments: trim loop `128 > 128` false; staged = 128;
+- xmit 1, 128 segments: the trim test is `0 > 128`, false (the queue is
+  empty before the splice); staged = 128;
 - xmit 2, 128 segments: `128 > 128` false; staged = 256;
-- xmit 3, any size n: 128 iterations drop the oldest 128 (`tx_dropped += 128`),
-  then staged = 128 + n.
+- xmit 3, any size n: `256 > 128`: 128 iterations drop the oldest 128
+  (`tx_dropped += 128`), then staged = 128 + n.
 
 Two GSO transmissions reach 256 staged; the third takes the loop. When the
 offline response completes the session, the flush is **one ring item of
 128 + n packets** through the encrypt and tx workers (W7's multi-packet item
-on the send side). With a small `gso_size` (8 bytes) the 129 ciphertexts are
-48 bytes each. The D2 reason for excluding the trim ("129 transmissions × the
-100 ms wait", D2 §8) no longer applies.
+on the send side). With a small `gso_size` (8 bytes) each segment is a
+36-byte inner packet, padded to 48, so the 129 data messages are **80 bytes**
+each (16-byte header, 48 bytes of ciphertext, 16-byte tag). The D2 reason
+for excluding the trim ("129 transmissions × the 100 ms wait", D2 §8) no
+longer applies. A 128-segment GSO send needs `gso_size ≤ 511` (section 6).
 
 ### 2.3 Padding arms: route MTU, `SIOCSIFMTU`, `IFLA_MTU`
 
@@ -149,18 +168,28 @@ false)` (`route.c:1366-1369`, `ip.h:469-495`): `rt_pmtu` if set and
 unexpired (`:481-487`), else **`RTAX_MTU` of the route** (`:490-492`), else
 `dev->mtu` (`:494`).
 
-- **Route MTU below the device MTU** (the `len > mtu` and clamp arms).
-  A route `… dev wg0 mtu 1300` gives `dst_mtu = 1300`. The sender must still
-  build a 1420-byte packet: with **`IP_PMTUDISC_PROBE`**, `ip_sk_use_pmtu`
-  is false (`ip.h:457-460`), so `cork->fragsize = dev->mtu = 1420`
-  (`ip_output.c:1307-1308`) and `ip_skb_dst_mtu = dev->mtu`
+- **Route MTU below the device MTU** (the `len > mtu` arm, `.padOverMtu`
+  true). A route `… dev wg0 mtu 1300` gives `dst_mtu = 1300`. The sender
+  must still build a 1420-byte packet: with **`IP_PMTUDISC_PROBE`**,
+  `ip_sk_use_pmtu` is false (`ip.h:457-460`), so `cork->fragsize = dev->mtu
+  = 1420` (`ip_output.c:1307-1308`) and `ip_skb_dst_mtu = dev->mtu`
   (`ip.h:511-525`, the `:523` branch), so `__ip_finish_output` does not
-  fragment (`:311`) and DF is set (`:1441-1442`). `wg_xmit` then sees
-  `len = 1420 > mtu = 1300`: `last_unit = 1420 % 1300 = 120`,
-  `padded_size = min(1300, 128) = 128`, padding 8; ciphertext 1420 + 8 + 32.
-  IPv6 is symmetric (`ip6_output.c:1401-1405`, `ip6_route.h:269-281`,
-  `IPV6_PMTUDISC_PROBE`). A route with `mtu lock` is not needed: `RTAX_MTU`
-  is read regardless (`ip.h:490`); `lock` only guards against PMTU updates.
+  fragment (`:311`). **DF is set** for `PROBE` (`:1441-1442`) and
+  `ignore_df` is false (`ip_sk_ignore_df`: `pmtudisc < DO || == OMIT`,
+  `ip.h:462-467`; `PROBE = 3`), so the unconnected sender's **id is 0**
+  (`ip.h:583-584`); from `SEND2_FD` it is the next `inet_id` (v2, m7).
+  `wg_xmit` then sees `len = 1420 > mtu = 1300`: `last_unit = 1420 % 1300 =
+  120`, `padded_size = min(1300, 128) = 128`, padding 8; ciphertext 1420 + 8
+  + 32. **The clamp is not taken here** (`128 < 1300`; v2, M8): with route
+  MTU 1300 the clamp needs inner lengths 1297-1300 (IPv4 payloads
+  1269-1272), and D2 already covers both of its outcomes at the device MTU,
+  so no such class is needed. IPv6 is symmetric (`ip6_output.c:1401-1405`,
+  `IPV6_PMTUDISC_PROBE`); its `dst_mtu` is `ip6_mtu` (`ipv6/route.c:3272`)
+  → `ip6_dst_mtu_maybe_forward` (`ip6_route.h:269-281`): `RTAX_MTU` if set,
+  else **`idev->cnf.mtu6`**, which `NETDEV_CHANGEMTU` copies from `dev->mtu`
+  (`addrconf.c:3697-3700`; v2, m3). A route with `mtu lock` is not needed:
+  `RTAX_MTU` is read regardless (`ip.h:490`); `lock` only guards against
+  PMTU updates.
 - **`SIOCSIFMTU`** → `dev_set_mtu_ext` → `dev_validate_mtu`
   (`dev.c:9085-9122`, `:9061-9075`) → `__dev_set_mtu` writes `dev->mtu`
   (`:9048-9058`; wg has no `ndo_change_mtu`) → `NETDEV_CHANGEMTU`. wg never
@@ -168,19 +197,46 @@ unexpired (`:481-487`), else **`RTAX_MTU` of the route** (`:490-492`), else
   `alloc_netdev_mqs` sets none), so **`dev_validate_mtu` accepts 0** (`:9065`
   is `new_mtu < 0 || new_mtu < dev->min_mtu`). Consequences:
   - `< 1280`: `addrconf_notify` runs `addrconf_ifdown(dev, 1)`
-    (`addrconf.c:3691-3695`): wg0's IPv6 is gone until the MTU is raised
-    again (`:3704-3711`, `ipv6_add_dev`).
+    (`addrconf.c:3691-3695`): wg0's `inet6_dev`, addresses and IPv6 routes
+    are gone until the MTU is raised again (`:3704-3711`, `ipv6_add_dev`).
   - `< 68`: `inetdev_event` runs `inetdev_destroy` (`devinet.c:1637-1643`):
-    wg0's IPv4 address and routes are gone.
+    wg0's `in_device`, IPv4 address and routes are gone; a later valid MTU
+    re-creates the `in_device` empty (`:1586-1588`).
+  - **The fixture must follow** (v2, M5). `route_into_wg0`
+    (`task/e-b:harness/guest.c:486-527`, run at every `wg_up`, `:1037`) adds
+    `10.255.254.1/32` and `fd00:ffff::1/128` by `RTM_NEWADDR` with
+    `NLM_F_EXCL` and the default routes, and `rtnl_request` (`:469-478`)
+    fails the trace on any errno other than the expected one: `0` on the
+    first up, `-EEXIST` for IPv4 afterwards (the address survives a down),
+    `0` for IPv6. Below 1280 the IPv6 add is **`-EINVAL`**
+    (`inet6_addr_add` → `addrconf_add_dev` → `ipv6_find_idev` →
+    `ipv6_add_dev`, `addrconf.c:381-382`); below 68 the IPv4 add is
+    `-ENOBUFS` while the `in_device` is absent (`devinet.c:888`) and **`0`,
+    not `-EEXIST`**, once a valid MTU has re-created it empty. So the
+    fixture takes wg0's MTU (`SIOCGIFMTU` on `SEND_FD`, before the window)
+    and expects, per family, the kernel's refusal below the family's floor
+    (the exact errnos of the address and route adds are fixed by probe P-B,
+    section 12, and any other value fails the trace: the refusal is itself a
+    check of the teardown the mirror's `inet4Dev`/`inet6Dev` state records).
+    Classes that lower the MTU are **terminal for the affected family**;
+    classes that raise it back above 1280 stay terminal too (the addresses
+    and routes are not re-added inside a trace).
   - With MTU 0 and a keepalive (`PACKET_CB(skb)->mtu = skb->dev->mtu`,
     send.c:232), `calculate_skb_padding` takes the **`!mtu` arm**
-    (send.c:145-146, `.padNoMtu`, `Decision.lean:943`), and a `wg_down` /
-    `wg_up` afterwards takes **both `if (dev_v4)` and `if (dev_v6)` false**
-    in `wg_open` (device.c:39, 47). A probe must confirm `ip link set wg0 mtu
-    0` is accepted on this kernel (section 12); the fixture's routes do not
-    survive it, so this class ends the trace.
-  - A normal lowering (say 1000, DO sender) changes `cork->fragsize`,
-    `MAX_XMIT_PAYLOAD*`, the padding and `-EMSGSIZE` boundary.
+    (send.c:145-146, `.padNoMtu`, `Decision.lean:943` on `task/census`,
+    `:1026` on `main`), and a `wg_down` / `wg_up` afterwards takes **both
+    `if (dev_v4)` and `if (dev_v6)` false** in `wg_open` (device.c:39, 47).
+    `dev_validate_mtu` accepts 0 (`:9065`; wg sets no `min_mtu`,
+    device.c:290-297) and the keepalive's 32-byte message pads to 0 bytes
+    either way (`ALIGN(32, 16) − 32`), so the arm is observable only by A2.
+    Whether this class exists is decision 13.6; v1's "ends with the
+    keepalive" (section 6) and "a `wg_down`/`wg_up` afterwards" (here) were
+    inconsistent, and the class, if built, is `wg_set_mtu 0`, the
+    keepalive, `wg_down`, `wg_up` (with the MTU-aware fixture expecting the
+    refusals above), then `wg_observe`.
+  - A lowering that keeps IPv6 (say 1300, DO sender) changes
+    `cork->fragsize`, `MAX_XMIT_PAYLOAD*`, the padding and the `-EMSGSIZE`
+    boundary for both families; 1000 would also drop IPv6 (above).
 - **`IFLA_MTU` at creation** (L's `wg_create`, `task/e-b:harness/guest.c:976-
   986`): `rtnl_create_link` validates and sets `dev->mtu` before
   `register_netdevice` (`rtnetlink.c:3517-3526`); `NETDEV_REGISTER` creates
@@ -188,7 +244,10 @@ unexpired (`:481-487`), else **`RTAX_MTU` of the route** (`:490-492`), else
   and `ipv6_add_dev` refuses below, `:381-382`), while `inetdev_init` always
   runs (`devinet.c:1576-1580`). So a device created with MTU 1279 enters
   `wg_open` with `dev_v6 == NULL`: the false arm of `.openHasInet6`
-  (`Device.lean:45`, constant true today).
+  (`Device.lean:45`, constant true today). Its first `wg_up`'s
+  `route_into_wg0` then meets `-EINVAL` on the IPv6 add (above), which the
+  MTU-aware fixture expects; the trace continues IPv4-only. This is the
+  recommended route to `.openHasInet6` false (decision 13.6).
 
 ### 2.4 Multicast and link-local transmit
 
@@ -207,25 +266,47 @@ unexpired (`:481-487`), else **`RTAX_MTU` of the route** (`:490-492`), else
   `fe80::1/64` to wg0 (`route_into_wg0`): a datagram to `fe80::2` via wg0
   selects `fe80::1`. The peer's allowed IPs must cover it.
 - **Multicast.** `ff02::1` via wg0 (scope id = wg0's ifindex or
-  `IPV6_MULTICAST_IF`): hop limit `IPV6_DEFAULT_MCASTHOPS = 1`
-  (`include/net/ipv6.h:53`, `:905`; `af_inet6.c:223`); IPv4 `224.0.0.1` with
-  `mc_ttl = 1` (`af_inet.c:364`; `ip_output.c:1452-1453`). The source is
-  wg0's global address (no link-local exists; with `fe80::1` added, source
-  selection prefers it for a link-local-scope destination — the fixture
-  decides which, and the bytes check it). The **loopback copy**:
-  - IPv4: `ip_mc_output` clones to `dev_loopback_xmit` when `sk_mc_loop`
-    (`ip_output.c:382-400`) — D3 already models this as a NET_RX section
-    before `wg_xmit` (`task/d3-int:Leanux/Env.lean:90-93`,
-    `xmitMulticastLoop`).
+  `IPV6_MULTICAST_IF`; the `ff00::/8 dev wg0` route exists from the
+  fixture's IPv6 address add, `addrconf_add_dev`, `addrconf.c:2579-2581`):
+  hop limit `IPV6_DEFAULT_MCASTHOPS = 1` (`include/net/ipv6.h:53`, `:905`;
+  `af_inet6.c:223`). IPv4 `224.0.0.1` with `mc_ttl = 1` (`ip_output.c:
+  1452-1453`): the fixture's sender is an **AF_INET6** socket (`guest.c:
+  821-826`), so its IPv4 side comes from `inet6_create` (`af_inet6.c:
+  237-238`, `MC_LOOP` and `mc_ttl = 1`), not `af_inet.c:364` (v2, M3). The
+  source is wg0's global address (no link-local exists; with `fe80::1`
+  added, source selection prefers it for a link-local-scope destination —
+  the fixture decides which, and the bytes check it). The **loopback copy**
+  is decided by a **membership set per family** (v2, M3):
+  - IPv4: `__mkroute_output` sets `RTCF_LOCAL` on a multicast route only when
+    `ip_check_mc_rcu` finds the `in_device` a member (`route.c:2581-2587`),
+    and only `RTCF_LOCAL` selects `dst.output = ip_mc_output` (`:2647-2652`;
+    the `CONFIG_IP_MROUTE` branch is not built). `ip_mc_output` then clones
+    to `dev_loopback_xmit` when `sk_mc_loop` (`ip_output.c:382-400`). The
+    `in_device` joins **only `224.0.0.1`** (`ip_mc_up`, `igmp.c:1796`). So
+    `224.0.0.1` loops and `224.0.0.2` or `239.1.1.1` does not. **D3's
+    `xmitMulticastLoop` loops for any `224/4`** (`task/d3-int:Leanux/
+    Env.lean:90-93`): latent, since D3's corpus only ever sent to
+    `224.0.0.1` (41 operations), and fail-noisy, since a send to `224.0.0.2`
+    would expect a NET_RX section Linux does not produce. Corrected here
+    with the set `{224.0.0.1}` (decision 13.7).
   - IPv6: `ip6_finish_output2` loops only when wg0 is a member
-    (`ipv6_chk_mcast_addr`, `ip6_output.c:86-99`). Every `inet6_dev` joins
-    `ff01::1` and `ff02::1` (`addrconf.c:466-471`), plus the solicited-node
-    group of each address. So `ff02::1` loops, `ff02::1234` does not. D3's
-    `unsupported` for IPv6 multicast (`Env.lean:93`) becomes an exact
-    membership set over the fixture's addresses.
+    (`ipv6_chk_mcast_addr`, `ip6_output.c:86-99`). `ipv6_add_dev` joins
+    `ff01::1` and `ff02::1` (`addrconf.c:468`, `:471`); `ff02::2` needs
+    forwarding and `IFF_MULTICAST` (`:474-475`), which wg0 lacks; and
+    **wg0 is `IFF_NOARP`** (device.c:290), so `addrconf_join_solict` returns
+    before joining any solicited-node group (`addrconf.c:2246-2254`). The
+    set is **exactly `{ff01::1, ff02::1}`** (v1's "plus the solicited-node
+    group of each address" was wrong). So `ff02::1` loops, `ff02::1234` does
+    not. D3's `unsupported` for IPv6 multicast (`Env.lean:93`) becomes this
+    set.
+  - `sk_mc_loop` dispatches on `sk_family` (`sock.c:761-777`): for the
+    AF_INET6 sender it reads **`MC6_LOOP`** even for a v4-mapped send, so the
+    no-loop control sets `IPV6_MULTICAST_LOOP = 0` for both families, and
+    `IP_MULTICAST_LOOP = 0` on this sender does not change the loop (a cheap
+    negative control, `w4_mcast_noloop_v4opt`, section 6). The
+    `dev_recursion_level()` guard (`:763`) is 0 in system-call context.
   - Nothing receives the copy (no socket on `SEND_PORT`), and multicast
-    destinations draw no ICMP error. Setting `IP(V6)_MULTICAST_LOOP = 0` on
-    the sender for a control class flips the `sk_mc_loop` arm.
+    destinations draw no ICMP error.
 
 ### 2.5 Transmit fragmentation (`IP_PMTUDISC_DONT`)
 
@@ -235,9 +316,12 @@ accepted. `__ip_append_data` builds the datagram as a head skb plus
 `frag_list` members (`__ip_make_skb`, `:1412-1429`); since
 `length + fragheaderlen > mtu`, `csummode` stays `CHECKSUM_NONE` (`:1011-
 1016`) and `udp_send_skb` computes the UDP checksum in software over the
-whole datagram (`udp.c:1030-1031`; the `frag_list` branch of `udp4_hwcsum`,
-`:913-930`). DF is clear (`:1440-1445`) and the ident is drawn
-(`:1465` → `ip.h:585-587` → `__ip_select_ident`, section 3.6).
+whole datagram: **`csum = udp_csum(skb)` then `csum_tcpudp_magic`**
+(`udp.c:1030-1033`; `udp_csum` walks the `frag_list`). The `frag_list`
+branch of `udp4_hwcsum` (`:913-930`) is the `CHECKSUM_PARTIAL` path and is
+not taken (v2, m2). DF is clear (`:1440-1445`) and the ident is drawn
+(`:1465` → `ip.h:585-587` → `__ip_select_ident`, or from `inet_id` for the
+connected sender, `ip.h:568-581`; section 3).
 `__ip_finish_output`: `skb->len > mtu` → `ip_fragment` (`:311-312`) →
 `ip_do_fragment` (`:589-590`), the `frag_list` fast path (`:816-847`):
 `ip_fraglist_init` sets `MF` on the head (`:605-622`), each `output()` call
@@ -253,8 +337,22 @@ IPv6 (`IPV6_PMTUDISC_DONT`): `ip6_fragment` (`ip6_output.c:873-`), the
 `frag_list` path (`:932`), one `output()` per fragment (`:977`); the
 Fragment header's id is `ipv6_select_ident` (`:923`) →
 `__ipv6_select_ident` = `get_random_u32_above(0)` (`output_core.c:14-19`) =
-`1 + get_random_u32_below(U32_MAX)` (`random.h:98-103`), a draw the generic
-hook records (kind 110; section 3).
+`1 + get_random_u32_below(U32_MAX)` (`random.h:98-103`). **The record is
+kind 104, not 110** (v2, C1): `U32_MAX` is a constant, so
+`get_random_u32_below` takes its inline path (`random.h:60-85`), whose
+`ceil > 2^16` arm calls the exported `get_random_u32()` (`:83`), which the
+patch records as `100 + sizeof(u32)` (`kernel/patches/choice-stream.patch`,
+`get_random_##type`, hunk at `random.c:536-549`); kind 110 is written only
+by `__get_random_u32_below` (patch hunk at `random.c:565-590`), which a
+constant ceil never reaches. With `ceil = 2^32 − 1`, `-ceil % ceil = 1`, so
+the inline path rejects exactly a raw draw `r = 0` and redraws (another
+kind-104 record at the same site), and returns `(ceil · r) >> 32 = r − 1`;
+hence **`id = r`, the first non-zero record**. The consumer frame is the
+inlined `__ipv6_select_ident` body, **`output_core.c:18`** (DWARF chain on
+the built kernel: `random.h:87 → :102 → output_core.c:18 → :53`;
+`__ipv6_select_ident` is absent from `System.map`), by the same rule that
+names `.ipIdentReserve` route.c:482 (`harness/steer.py:26-28`,
+`check.py:285-320`: the first frame outside the random/clock helpers).
 
 ### 2.6 The queues (W7)
 
@@ -309,9 +407,29 @@ does not wake ksoftirqd when `in_interrupt()`, which holds with BH disabled,
 `:402-408`). So **K sends in one `io_uring_enter` are K inline NET_RX
 sections in one system call, and no kworker runs until the call returns**
 (E measured 1024 crossing a queue depth of 512 by this route; the 1025-item
-case is probe P-A, section 12). The staged `wg_xmit` path is the same: each
-send's `wg_xmit` runs inline (`__dev_queue_xmit`, `dev.c:4527-4559`) and
-`create_data` only queues work (`queue_work_on`, `queueing.h:176`).
+case is probe P-A, section 12).
+
+**The xmit path is the same only once the sender's `sk_sndbuf` is raised**
+(v2, M1). An inject's skb is orphaned inline, at `loopback_xmit`'s
+`skb_orphan` (`loopback.c:79`), so its `sock_wfree` charge is released
+inside the send. A send **into wg0** keeps its charge: `wg_xmit` only drops
+the dst (device.c:189-204), `encrypt_packet` reuses the skb, and the
+ciphertext is orphaned only when the **tx worker** hands it to `lo` — after
+the system call. The default `sk_sndbuf` is `sysctl_wmem_default =
+SK_WMEM_MAX = 212992` (`sock.c:286`, `sock.h:2867-2869`), about 277 small
+skbs (truesize 768); the next `sock_alloc_send_pskb` fails with `-EAGAIN`
+for a non-blocking send (`sock.c:2918-2923`), io_uring's `io_send` returns
+it under `IO_URING_F_NONBLOCK` (`io_uring/net.c:578-579`), and
+`io_queue_async` (`io_uring.c:1913-1929`) poll-arms the request on
+`POLLOUT` or punts it to io-wq — either way the send completes **after the
+window**, outside this argument. So **`SO_SNDBUFFORCE` (8 MiB, giving
+`sk_sndbuf = 16 MiB`, `sock.c:1328-1333`) is set on `SEND_FD` and
+`SEND2_FD`** before the window; 1025 full-size xmits charge about 2.4 MiB.
+With that, each send's `wg_xmit` runs inline (`__dev_queue_xmit`,
+`dev.c:4527-4559`) and `create_data` only queues work (`queue_work_on`,
+`queueing.h:176`). `wg_batch` reports the CQEs present when
+`io_uring_enter` returns as part of its result (section 5.5), so a deferred
+item fails on the result rather than as a later record mismatch.
 
 ### 2.8 The workers' loops and the NAPI placement with several items
 
@@ -333,8 +451,19 @@ send's `wg_xmit` runs inline (`__dev_queue_xmit`, `dev.c:4527-4559`) and
   set** (`queueing.h:147-148`, receive.c:451-453). Every placement within
   the gap yields the same poll; the next poll returns the `peeked` item
   (`queueing.h:145-146`). The D2 hooks (loop head and after the enqueue,
-  `RxData.lean:107,122`) therefore stay valid without a wider search
-  (section 5.3).
+  `RxData.lean:107,122`) therefore stay valid without a wider search for
+  **control flow** (section 5.3). The **operand** ambiguity of the (c')
+  placement (the poll before `wg_peer_put`, one peer reference higher;
+  `task/d3-int:docs/2026-10-06-contended-host.md` §2) is a separate matter
+  that **scales with the item count** (v2, C2): `Env.napiIrqExit`
+  (`task/d3-int:Leanux/Env.lean:696-703`) counts every inline poll as one
+  open choice, and `check.py` enumerates the `2^count` vectors only for
+  `count ≤ NAPI_PLACEMENTS_MAX = 3` (`evaluator/check.py:811-845`), and only
+  on an operand mismatch (`:924`). An n-item batch has n inline polls, so one
+  (c') among them is unrecoverable for n > 3. The contended-host note saw
+  (c') in three traces of a 1369-trace check, so a 1025-item trace would
+  fail with high probability and an 8-item trace in about 2% of runs.
+  Decision 13.2 gives the options.
 - **Encrypt worker** (send.c:287-309) and **tx worker** (`:262-285`): the
   encrypt worker's `cond_resched` (`:306-307`) yields to the tx kworker when
   `need_resched` (D1 saw both directions; the resched record and the tx
@@ -353,9 +482,14 @@ send's `wg_xmit` runs inline (`__dev_queue_xmit`, `dev.c:4527-4559`) and
 - **Budget (P9).** A poll processes at most the items `CRYPTED` since the
   previous softirq run: one from the worker path (above), or two when an irq
   exit lands between item i+1's `atomic_set_release` and its
-  `napi_schedule`. `NAPI_POLL_WEIGHT = 64` (`netdevice.h:2632`, peer.c:57) is
-  unreachable; `netdev_budget = 300` and the 2-jiffy limit (`hotdata.c:13-
-  15`, `dev.c:7097-7101`) likewise. P9 stays out (section 10).
+  `napi_schedule`. But the poll also counts **`DEAD`** entries toward
+  `work_done` (receive.c:456-459 `goto next`, `:483-484`; v2, M4), and the
+  `-EPIPE` arm of `consume_data` (`:526-529`) marks an entry `DEAD` **in
+  the softirq**, any number of times per `net_rx_action`. So
+  `NAPI_POLL_WEIGHT = 64` (`netdevice.h:2632`, peer.c:57) **is reachable on
+  one CPU**: section 10. `netdev_budget = 300` and the 2-jiffy limit
+  (`hotdata.c:13-15`, `dev.c:7097-7101`) stay unreachable (at most 128
+  segments per datagram).
 
 ## 3. Hidden inputs
 
@@ -363,13 +497,14 @@ send's `wg_xmit` runs inline (`__dev_queue_xmit`, `dev.c:4527-4559`) and
 |---|---|---|---|
 | GSO segment ids | none: `id = 0` for the DO, unconnected sender (`ip.h:583-584`), then `id++` (`af_inet.c:1453`) | computed | W4 GSO bytes |
 | GSO segment UDP checksums | none: software (`udp_offload.c:439-441`) | computed | W4 GSO bytes |
-| IPv4 fragment ident, **connected** sender | `__ip4_datagram_connect`, `datagram.c:76`: `atomic_set(&inet->inet_id, get_random_u16())` | **new `HiddenSite` `.inetIdSeed`** (2 bytes, mirror) at the existing generic hook (kind 102); consumed by the mirror's `wg_connect` op; `ip_select_ident_segs` then reads `inet_id` (`ip.h:567-581`): id, id+1, … | W4 fragmentation |
+| Connected sender's txhash | `__ip4_datagram_connect` → `sk_set_txhash` → `net_tx_rndhash` → `get_random_u32()` (`datagram.c:75`, `sock.h:2088-2099`), **before** the seed; a v4-mapped `connect()` on the dual-stack sender takes this path (`ipv6/datagram.c:157-161`, `:189-199`, then `goto out`), a native IPv6 `connect()` draws only this (`:268`) | **new `HiddenSite` `.txHash`** (kind 104, 4 bytes, role `.cut`: `sk_txhash` is not observed) at consumer frame **`include/net/sock.h:2092`** (DWARF chain on the built kernel: `sock.h:2092 → :2098 → datagram.c:75`; one site serves both families); consumed by `wg_connect` first (v2, M2) | W4 fragmentation |
+| IPv4 fragment ident, **connected** sender | `__ip4_datagram_connect`, `datagram.c:76`: `atomic_set(&inet->inet_id, get_random_u16())` | **new `HiddenSite` `.inetIdSeed`** (2 bytes, mirror) at the existing generic hook (kind 102); consumed by the mirror's `wg_connect` op into **socket state `inet_id`** in Env; every datagram from `SEND2_FD`, GSO included, then takes `id = atomic_add_return(1, &inet_id)` (`ip.h:575-581`): the first id is **seed + 1**, the next seed + 2, … (v2, M2) | W4 fragmentation, any `SEND2_FD` send |
 | IPv4 fragment ident, unconnected `DONT` sender | `.ipIdentReserve` records `delta` only (`route.c:481-482`); the bucket counter is boot-random (`:3720`) | **not reconstructible**: stays `.cut`; the class is `unsupported` unless option K1 | — |
-| IPv6 fragment id | `ipv6_select_ident` → `get_random_u32_above(0)` (`output_core.c:18`; kind 110 via `get_random_u32_below`) | **new `HiddenSite` `.ipv6FragId`** (4 bytes, mirror): id = record + 1. Confirm the consumer frame resolves to `output_core.c` (the static `__ipv6_select_ident` is inlined) before relying on it | W4 IPv6 fragmentation |
+| IPv6 fragment id | `ipv6_select_ident` → `get_random_u32_above(0)` (`output_core.c:18`): the inline `get_random_u32_below(U32_MAX)` calls `get_random_u32()`, **kind 104**, once per attempt (2.5; v2, C1) | **new `HiddenSite` `.ipv6FragId`** (kind 104, 4 bytes, mirror) at consumer frame **`net/ipv6/output_core.c:18`**: **id = the first non-zero record**; a zero record is followed by another at the same site (the mirror consumes until non-zero, and a zero record followed by anything else is a hidden mismatch) | W4 IPv6 fragmentation |
 | `wg_xmit`'s `mtu` | route/device, fixture facts | environment (`Env.xmitPackets`), checked by padding bytes | W4 |
 | wg0's IPv6 presence | `dev->mtu ≥ 1280` at registration / after `CHANGEMTU` | mirror state `Device.inet6Dev` | W4 `wg_open` |
 | Scheduling: encrypt/tx/decrypt yields | kind 302 resched records (`.reschedEncrypt/.reschedTx/.reschedDecrypt`, `Defs.lean`) | existing, now per item | W7 |
-| Scheduling: NAPI placement | NET_RX section records (kinds 300/301) | existing; pinned per item (2.8) | W7 |
+| Scheduling: NAPI placement | NET_RX section records (kinds 300/301) | existing; pinned per item for control flow (2.8); the (c') operand choice is decision 13.2 | W7 |
 | Ordering of several queued units | section start records | existing | W7 |
 
 **Kernel-change options (need user approval; the design does not depend on
@@ -381,9 +516,15 @@ them):**
   pays nothing now).
 - **K2.** Record `work_done` at the poll's `napi_complete_done`
   (receive.c:488) or the `state` the poll observes per iteration. Turns the
-  "pinned per item" argument of 2.8 into a checked fact. Recommended only if
-  the W7 corpus shows placements the argument does not cover (the
-  `napi_orders.py` extension of section 8 reports them).
+  "pinned per item" argument of 2.8 into a checked fact. Not recommended
+  (13.2); the W7 corpus's `napi_orders.py` extension (section 8) reports
+  any placement the argument does not cover.
+- **K3** (v2, C2 option iii). Record the (c') placement itself: a choice
+  record in `wg_queue_enqueue_per_peer_rx` after `wg_peer_put`
+  (queueing.h:201), so a nested NET_RX section's position relative to it
+  tells before-put from after-put. A new hook against the user's
+  "generic capture points, zero new hooks" preference; option (ii) of 13.2
+  keeps the check without it.
 - The census's `handshake_queue_len` capture (P12) is not needed here.
 
 ## 4. W4 in the mirror and the environment
@@ -402,10 +543,18 @@ them):**
   (`:211`, replacing the `unsupported` at `Device.lean:92-93`),
   `wg_open.has_inet` already exists (`.openHasInet`), `wg_prev_queue_dequeue.*`
   (section 5.1). `.xmitNotGso`, `.xmitWalk`, `.encChecksumPartial`,
-  `.padOverMtu`, `.padClamped`, `.padNoMtu`, `.openHasInet6` gain their second
-  outcome.
-- New `HiddenSite`s `.inetIdSeed`, `.ipv6FragId` (section 3), both at the
-  existing random hook; new sites follow E's precedent (`.cookieNonce`).
+  `.padOverMtu`, `.openHasInet6` gain their second outcome; `.padClamped`
+  already has both (D2; v2, M8); `.padNoMtu` and `.openHasInet` only under
+  decision 13.6. `wg_prev_queue_dequeue.*`'s tests are pointer compares
+  (queueing.c:84, 85, 91, 96, 101), declared in the `d` form without a
+  comparison, as `.prevQueuePeeked` is (so `operand_agreement` skips their
+  operands, `check.py:742-747`); `queueing.c` joins `correspondence/
+  kcov.json` `files` and `wg_prev_queue_dequeue` its `functions` (v2, M9;
+  `operand_exclusions` entries are only needed if the check is extended to
+  claim every recorded compare, which it does not do today).
+- New `HiddenSite`s `.txHash` (`.cut`), `.inetIdSeed`, `.ipv6FragId`
+  (section 3), all at the existing random hook; new sites follow E's
+  precedent (`.cookieNonce`).
 
 **`Device.lean`:**
 - `wgXmit (family addr : Nat) (pkts : List Packet) (mtu : Nat)`: the GSO
@@ -429,7 +578,8 @@ them):**
 `.encChecksumPartial` takes `inner.csum.isSome` as today, now false for GSO
 segments and fragments.
 
-**`Env.lean`:**
+**`Leanux/Env/IpStack.lean`** (new, stream T; `Env.lean` keeps only the
+hooks that call it, section 12):
 - `xmitPackets (family addr : Nat) (payload : List UInt8) (opts : XmitOpts) :
   M (List (List Packet) × Nat)` replaces `xmitPacket`: the outer list is the
   `wg_xmit` calls of one `sendto`/`sendmsg` (one, or two for a fragmented
@@ -438,24 +588,48 @@ segments and fragments.
   `gsoSize`, `pmtudisc ∈ {DO, DONT, PROBE}`, `connected`, and the fixture's
   route MTU for the destination (from the trace's `net_fixture`, section 6).
   It computes:
-  - GSO: segment i's IPv4 header (`id = i`, `tot_len`, header checksum), UDP
-    header (`len`, the complete checksum, `CSUM_MANGLED_0` for 0), payload
-    slice; `csum := none`. The stack's `-EMSGSIZE`/`-EINVAL` conditions
-    (2.1) are the operation's result with no `wg_xmit`.
+  - GSO: segment i's IPv4 header (`id = base + i`, where `base` is 0 for
+    `SEND_FD` and the next `inet_id` for `SEND2_FD`; `tot_len`, header
+    checksum), UDP header (`len`, the complete checksum, `CSUM_MANGLED_0`
+    for 0), payload slice; `csum := none`. The stack's `-EMSGSIZE`/`-EINVAL`
+    conditions (2.1) are the operation's result with no `wg_xmit`.
   - Fragmentation (`DONT`, length > route MTU): the datagram's UDP checksum
-    over the whole payload; fragment 1 (`MF`, 1400 payload bytes on IPv4),
-    fragment 2 (offset 175); the id from `.inetIdSeed` (connected) — the
-    unconnected case is `unsupported "an unconnected sender's fragment
-    ident (route.c:488 over a boot-random bucket)"`. IPv6: the Fragment
-    header with `.ipv6FragId`.
-  - `PROBE` with a route MTU: a full-size packet with `mtu` = route MTU.
+    over the whole payload (`udp_csum`, 2.5); fragment 1 (`MF`, 1400 payload
+    bytes on IPv4), fragment 2 (offset 175); the id from `inet_id`
+    (connected) — the unconnected case is `unsupported "an unconnected
+    sender's fragment ident (route.c:488 over a boot-random bucket)"`. IPv6:
+    the Fragment header with `.ipv6FragId`.
+  - `PROBE` with a route MTU: a full-size packet with `mtu` = route MTU, DF
+    set, id 0 (`SEND_FD`) or the next `inet_id` (`SEND2_FD`).
   - Multicast/link-local: source, TTL/hop limit per 2.4; `xmitBytesUnknown`
     shrinks to destinations the fixture does not determine.
-- `xmitMulticastLoop` (from d3-int) gains the IPv6 membership set
-  `{ff01::1, ff02::1} ∪ solicitedNode(wg0's addresses)`.
+- **Sender socket state** (v2, M2): `Sender.inetId : Option Nat` for
+  `SEND2_FD`, set by `wg_connect` from `.inetIdSeed` (after consuming
+  `.txHash`), incremented by every datagram it sends; `none` means
+  unconnected (a send then takes the `SEND_FD` rules).
+- **Multicast membership sets** (v2, M3): `xmitMulticastLoop` (from d3-int)
+  loops iff the destination is in the family's set, `{224.0.0.1}` for IPv4
+  and `{ff01::1, ff02::1}` for IPv6 (2.4), and `sk_mc_loop` is the sender's
+  `MC6_LOOP` for both families (`XmitOpts.multicastLoop`, from
+  `IPV6_MULTICAST_LOOP`). The IPv4 set replaces D3's "any `224/4`".
 - `MAX_XMIT_PAYLOAD*` become functions of `Device.mtu` and the route MTU.
 - `fixtureSend`'s cut list is unchanged (a connected sender draws no
   `ip_idents_reserve`; the cut is lax).
+
+**Keepalives queued by `wg_set` and `wg_up`** (v2, M6; `Env.lean`, a hook
+shared with stream B). Today `Env.runSendWorkers` → `requireNoCryptWork`
+(`task/d3-int:Leanux/Env.lean:318-322`, `:338-339`; `Syscalls.lean:139-141`)
+makes a keepalive sent from `wg_set persistent_keepalive` or `wg_up` under a
+session `unsupported` ("crypt work queued in a system call"), which the MTU
+classes of section 6 need. [AGENT] The `wg_set`/`wg_up` return path takes
+`afterXmit`'s shape (`:355-362`): the crypt workers run during the guest's
+`QUEUE_WAIT_US` wait, ordered by their section starts, with the
+crypt-plus-handshake rule relaxed to "ordered by section starts" as in 5.5.
+This lifts an existing `unsupported` without weakening any check (the
+sections and resched records are the evidence, as for `wg_xmit`). The
+alternative, driving the keepalive from the persistent-keepalive timer
+through `wg_advance` (D3's `afterAdvance`), covers fewer paths and is not
+taken.
 
 ## 5. W7 in the mirror and the environment
 
@@ -490,7 +664,13 @@ DataPacket)`, `Peer.rxQueue : PrevQueue RxPacket` replace the lists
 - `txWorker` (`Data.lean:184-206`) and `rxPoll` (`RxData.lean:276-318`): peek
   through `PrevQueue`; an `UNCRYPTED` head ends the loop with it peeked (the
   `unsupported`s at `Data.lean:194` and `RxData.lean:288` go). `rxPoll`'s
-  budget arm stays `unsupported` (P9, section 10).
+  budget arm (`.rxPollBudgetDone`, `RxData.lean:311`, a real decision
+  today) is handled by the environment per decision 13.5: either
+  `net_rx_action`'s repoll (section 10) or an explicit `unsupported` at the
+  poll site in `napiSoftirq`. Today a budget-exhausted poll would leave
+  `napiScheduled` set and trip `runDecryptWorker`'s `invariant`
+  (`task/d3-int:Leanux/Env.lean:710-711`): fail-noisy, but as a mirror
+  error, not a domain exclusion.
 - `encryptWorker`/`decryptWorker` already loop over the ring
   (`Data.lean:101-129`, `RxData.lean:104-124`); `MAX_QUEUED_PACKETS + 1`
   bounds remain.
@@ -509,7 +689,8 @@ DataPacket)`, `Peer.rxQueue : PrevQueue RxPacket` replace the lists
 | The poll runs in ksoftirqd (a) | resched record, top-level NET_RX section | existing |
 | The poll runs inline / at irq exit (b/c) | nested NET_RX section start between the worker's records | existing hooks; per 2.8 the gap pins the item and both hooks agree, so **no new search** |
 | An irq exit between `atomic_set_release` and `napi_schedule` of item i+1 | nested NET_RX section after item i+1's clock read | the poll processes two items; the hook after the enqueue covers it (the order of records tells) |
-| A unit resumes above the mirror's stack with work pending | a resched record followed by no runnable section start, while an open worker has queued work | **fail-closed** (5.4) |
+| A unit resumes above the mirror's stack with work pending | a resched record in a nested unit while an outer open worker has queued work | **fail-closed** (5.4, generic) |
+| The (c') placement of an inline poll (before `wg_peer_put`) | no record; only the poll's peer-refcount operands differ | a per-poll choice, n of them per n-item batch; enumerated today only for ≤ 3 (2.8, C2): **decision 13.2** |
 
 `evaluator/napi_orders.py` is extended to count, per trace, the number of
 polls per decrypt-worker run, the items per poll, and the (a)/(b/c) split;
@@ -522,44 +703,71 @@ two-item poll if it occurs, else the mutant that ignores the peeked slot
 `runWorker` (`Env.lean:200-217`) lets a worker that switched away finish in
 the mirror at once, leaving its section stop pending, because "each rest is
 a worker's final empty ring or queue poll". With several items that is
-false in one case: the tx worker yields at send.c:282-283 (tick-driven;
-D1 saw one tx yield in 1334 traces) while the encrypt worker, open higher
-on the mirror's stack, still has ring items; Linux resumes the encrypt
-worker, which crypts more items before the tx worker resumes; the mirror's
-tx worker would resume to the old queue. The same shape arises for the
-decrypt worker vs. ksoftirqd only if `net_rx_action` yielded mid-poll, which
-it does not.
+false **whenever a nested unit yields while an outer open worker still has
+queued items** (v2, M7; v1 named only one instance). The shape: `condResched`
+in worker O (say the encrypt worker, at send.c:306-307) runs the unit U
+whose section start follows the resched record (say the tx worker) nested
+inside O's `runWorker`; U yields in turn (send.c:282-283, tick-driven; D1
+saw one tx yield in 1334 traces); Linux may now resume O, which crypts more
+items before U resumes, while the mirror's U, already running to completion
+inside O's call, sees O's old queue. Every pairing of units with a
+`cond_resched` is the same (`Worker.resched?`, `Defs.lean:356-360`:
+receive, encrypt, tx, decrypt); the decrypt worker vs. ksoftirqd is exempt
+only because `net_rx_action` does not yield mid-poll, so a poll run as a
+unit never has a suspended outer with queued work.
 
-- **Phase 1 (required):** `condResched` detects "yield with no runnable
-  section start while another open worker has queued work" and returns
-  `unsupported "a worker resumed above the mirror's stack with work
-  pending"`. A `napi_orders.py` counter reports how often it occurs on the
-  existing D1/D2 corpus records (no VM run needed: a `.reschedTx` record
-  inside an open encrypt section with items left).
-- **Phase 2 (if phase 1 loses many bulk traces):** the four units become
-  step functions (`encryptStep`, `txStep`, `decryptStep`, `rxPollStep`,
-  each one loop iteration) and the environment interleaves steps by the
-  records. The mirror code per step is the C's loop body unchanged; only
-  the loop driver moves to the environment. This is the thin layer's
-  natural shape and is the recommendation if phase 1's counter exceeds a
-  few percent of bulk traces.
+- **Phase 1 (required, generic):** `runWorker` keeps the mirror's stack of
+  open workers; at a resched record in unit U, after the runnable section
+  starts are run, if U is nested and **any outer open worker on the stack
+  has queued items** (the encrypt ring for `.encryptWorker`; `txWorkQueue`
+  or a `CRYPTED` tx head for `.txWorker`; the decrypt ring for
+  `.decryptWorker`), `condResched` returns `unsupported "a worker yielded
+  below an open worker with queued work (the mirror's stack order)"`. The
+  test does not name the unit kinds. Its control: a synthetic record stream
+  with a `.reschedTx` inside an open encrypt section with items left must
+  be `unsupported`, and the same stream with the encrypt ring empty must
+  pass.
+- **P-C's measure** (v2, M7): on the D1/D2 corpora every queue holds one
+  item, so the detector's count there is zero by construction (vacuous).
+  The offline measure is the **nesting proxy**: the number of resched
+  records inside a nested unit's section (a yield whose enclosing block is
+  itself inside another worker's section), per trace and per unit pair,
+  from the existing check runs' records. That is the rate at which the
+  scheduling precondition occurs; with multi-item queues each such yield is
+  a phase-1 rejection whenever the outer has work.
+- **Phase 2 (decided on the W7 corpus):** the four units become step
+  functions (`encryptStep`, `txStep`, `decryptStep`, `rxPollStep`, each one
+  loop iteration) and the environment interleaves steps by the records. The
+  mirror code per step is the C's loop body unchanged; only the loop driver
+  moves to the environment. This is the thin layer's natural shape and is
+  the recommendation if phase 1's counter on the W7 corpus exceeds a few
+  percent of bulk traces.
 
 ### 5.5 The batch operation
 
 `wg_batch` (generalizing E-B's `wg_flood`, `task/e-b:harness/guest.c:700-
-775`, opcode 18): a list of items, each `inject {family, port, message}` or
-`xmit {packet, payload, opts}`, all on `SEND_FD`, prepared as SQEs before
-the window (`flood_prep`'s pattern), one `io_uring_enter`, then a wait.
-In the environment (`Env.batch`): for each item in order, `fixtureSend` and
-`runWorker .netRx (wgReceive …)` for an inject (plus any `-EPIPE` poll), or
-`wgXmit` for an xmit — no worker runs between items (2.7); after the loop,
-the deferred units run as the records order them: `runDecryptWorker` and
-`runCryptWorkers` (which already follow section starts), with `afterXmit`'s
-rule that a call queuing both crypt work and a handshake is `unsupported`
-(`Env.lean:321-329`) relaxed to "ordered by their section starts". The
-guest's wait after a batch is a trace parameter (`wait_ms`, default 100,
-measured in P-A); a worker outliving it shows as missing section records
-(the `opened` count check from D1).
+775`; wire opcode **allocated by the coordinator**, `OP_BATCH` below): a
+list of items, each `inject {family, port, message}` or `xmit {packet,
+payload, opts}`, on `SEND_FD` (or `SEND2_FD` for a connected xmit), prepared
+as SQEs before the window (`flood_prep`'s pattern), one `io_uring_enter`,
+then a wait. **Both senders carry `SO_SNDBUFFORCE` (8 MiB)** set before the
+window (2.7; v2, M1). The operation's result includes the **CQEs present
+when `io_uring_enter` returns**: their count and each `res`; the mirror
+expects `submit` entries with `res` = the item's length (an inject's `-EPIPE`
+or a stack `-EMSGSIZE` is a per-item result too). `wg_flood` (`:769`) does
+not read its CQEs today; `wg_batch` subsumes it and the rule comes with it.
+In the environment (`Leanux/Env/Batch.lean`, stream B, `Env.batch`): for
+each item in order, `fixtureSend` and `runWorker .netRx (wgReceive …)` for
+an inject (plus any `-EPIPE` poll), or `wgXmit` for an xmit — no worker
+runs between items (2.7); after the loop, the deferred units run as the
+records order them: `runDecryptWorker` and `runCryptWorkers` (which already
+follow section starts), with `afterXmit`'s rule that a call queuing both
+crypt work and a handshake is `unsupported` (`task/d3-int:Leanux/
+Env.lean:355-362`) relaxed to "ordered by their section starts". The
+guest's wait after a batch is a trace parameter (`wait_ms`), whose default
+is an **output of P-A** (v2, m5) rather than the 100 ms assumed in v1; a
+worker outliving it shows as missing section records (the `opened` count
+check from D1).
 
 ## 6. Harness
 
@@ -568,22 +776,35 @@ measured in P-A); a worker outliving it shows as missing section records
     (`do` default, `dont`, `probe`; set per op with `IP_MTU_DISCOVER` /
     `IPV6_MTU_DISCOVER` before the send and restored after), `connected`
     (a second dual-stack sender `SEND2_FD`, bound to `SENDER_PORT + 1`,
-    `connect()`ed **inside the window** so `.inetIdSeed` is recorded, then
-    `send()`), `multicast_loop` (`IP(V6)_MULTICAST_LOOP`), and a payload up
-    to 65507 bytes (`MAX_PAYLOAD` raised; `wg.py:357-362`'s MTU bound becomes
-    a per-`pmtudisc` rule).
+    `connect()`ed **inside the window** so `.txHash` then `.inetIdSeed` are
+    recorded, then `send()`), `multicast_loop` (**`IPV6_MULTICAST_LOOP`**,
+    the bit `sk_mc_loop` reads on this AF_INET6 sender for both families,
+    2.4), and a payload up to 65507 bytes (`MAX_PAYLOAD` raised;
+    `wg.py:357-362`'s MTU bound becomes a per-`pmtudisc` rule).
   - `wg_set_mtu {mtu}`: `SIOCSIFMTU` via `SEND_FD`'s ioctl (as `wg_up` uses
     `SIOCSIFFLAGS`, `guest.c:926-931`).
-  - `wg_create` gains `mtu` (`IFLA_MTU`).
+  - `wg_create` gains `mtu` (`IFLA_MTU`; `task/l-m` has no `mtu` field yet).
+  - **`route_into_wg0` becomes MTU-aware** (2.3; v2, M5): it reads wg0's MTU
+    (`SIOCGIFMTU`) and expects, per family, the kernel's refusal below the
+    family's floor (IPv6 add `-EINVAL` below 1280; IPv4 add `-ENOBUFS` below
+    68, or `0` instead of `-EEXIST` once a valid MTU re-created the empty
+    `in_device`; the route adds' errnos from P-B), failing the trace on any
+    other value as today.
   - `net_fixture` (already an optional trace field, `trace.py:73`) gains
     `routes: [{dst, mtu}]`, `link_local: "fe80::1/64"`, `allowed_ips` for the
     peer config is unchanged (the generator adds `224.0.0.0/4`, `ff00::/8`,
     `fe80::/64` where a class needs them).
-  - `wg_batch {items: [...], wait_ms}`: section 5.5. `MAX_PAYLOAD` (32768,
-    `guest.c:32`) and `line` (`:75`) grow to hold 1025 messages;
-    `SO_RCVBUFFORCE` (8 MiB) on both listeners and `SEND_FD`, since the
-    default `rmem_default` (`sock.c:287`, 212992) holds about 270 small
-    datagrams and the bulk tiers deliver up to 1025.
+  - `wg_batch {items: [...], wait_ms}`: section 5.5; its result carries the
+    CQEs. `MAX_PAYLOAD` (32768, `guest.c:32`) and `line` (`:75`) grow to hold
+    1025 messages; `SO_RCVBUFFORCE` (8 MiB) on both listeners and `SEND_FD`,
+    since the default `rmem_default` (`sock.c:287`, 212992) holds about 270
+    small datagrams and the bulk tiers deliver up to 1025; **`SO_SNDBUFFORCE`
+    (8 MiB) on `SEND_FD` and `SEND2_FD`** (2.7; v2, M1).
+  - **Wire opcodes** for `wg_set_mtu`, `wg_batch` and `wg_connect` (if it is
+    its own op rather than a `wg_xmit` flag) are placeholders `OP_SET_MTU`,
+    `OP_BATCH`, `OP_CONNECT` here; the coordinator allocates them at the
+    interface commit (`trace.py` `OPCODES`, 15-17 are L's and 18 is
+    `wg_flood`).
   - `wg_observe` for bulk: the listener drain (`guest.c:563-600`) reports
     every datagram as today; for the full-ring tier the generator uses
     keepalive data messages (32 bytes, 48 as ciphertext) so the observe line
@@ -593,32 +814,52 @@ measured in P-A); a worker outliving it shows as missing section records
     already 1M words on `task/e-b` (`guest.c:37`, raised for the flood). A
     1025-item batch at roughly 300 PCs per message fits the PC child, but
     the comparisons child (four words per record, `trace.py:52`) may not. A
-    per-trace `kcov_capacity` (bulk: 4M words = 32 MiB, both the task and
-    the remote area; the VM has 256 MiB) replaces the constant;
-    `validate_coverage` already fails a full buffer. P-A measures the
-    actual record volume.
+    per-trace `kcov_capacity` replaces the constant (both the task and the
+    remote area; the VM has 256 MiB); `validate_coverage` already fails a
+    full buffer. **Its bulk value is an output of P-A** (v2, m5), which
+    measures the record volume per item in both children; v1's 4M words
+    (32 MiB) is the upper bound P-A starts from, not the answer.
 - **`harness/noise.py`:** GSO segment and fragment builders (headers,
   checksums, ids) anchored to the mirror's `Env.xmitPackets` by `#guard`
   vectors and to Linux by the A1 bytes; batches of data messages under a
   session with counter lists.
 - **Generator** (`scripts/wg-w47-corpus.py`, classes; the corpus
   `corpus/wireguard/w4_*.json`, `w7_*.json`):
-  - `w4_gso_{4,6}_{n}`: after a session, one GSO xmit of n ∈ {2, 3, 128}
-    segments, `gso_size` ∈ {8, 1392 or 1372, a non-divisor so the last
-    segment is short}; expect n ciphertexts.
-  - `w4_gso_trim`: no session; two GSO xmits of 128, a third of 1; expect
-    `tx_dropped = 128`; then the offline response flushes 129.
+  - `w4_gso_{4,6}_{n}`: after a session, one GSO xmit; the (n, `gso_size`)
+    pairs are **constrained by the 65507-byte payload bound** (v2, m4):
+    n ∈ {2, 3} with `gso_size` ∈ {8, 1392 (IPv4) or 1372 (IPv6), a
+    non-divisor so the last segment is short}, and n = 128 with `gso_size`
+    ∈ {8, 511} only (128 segments need `gso_size ≤ 511`; at `gso_size`
+    1392 the largest datagram gives 48 segments, 47 full and one of 83
+    bytes, so a `w4_gso_4_48` class covers the largest-segment end). Expect
+    n ciphertexts.
+  - `w4_gso_trim`: no session; two GSO xmits of 128 (`gso_size` 8), a third
+    of 1; expect `tx_dropped = 128`; then the offline response flushes 129
+    80-byte messages.
   - `w4_route_mtu_probe_{4,6}`: route MTU 1300, `PROBE`, payload 1392/1372;
-    the modulo arm and the clamp.
-  - `w4_set_mtu_{1000,1279,1280,0}`: `wg_set_mtu` then xmits and a keepalive
-    (`wg_set` with `persistent_keepalive`), `wg_down`/`wg_up` for the
-    `wg_open` arms; `_0` ends with the keepalive.
-  - `w4_create_mtu_1279`: L's `wg_create` with `IFLA_MTU`, `wg_up`.
+    **the `len > mtu` arm** (`.padOverMtu` true, padding 8). The clamp is
+    not taken here and needs no class (2.3; v2, M8).
+  - `w4_set_mtu_{1300,1279}`: `wg_set_mtu` then xmits and a keepalive
+    (`wg_set` with `persistent_keepalive`, under a session: the keepalive
+    rule of section 4), then `wg_down`/`wg_up` with the MTU-aware fixture:
+    `_1300` keeps both families and moves the padding and `-EMSGSIZE`
+    boundaries; `_1279` drops IPv6 (its later IPv6 xmits are not in the
+    class) and reaches `.openHasInet6` false at the `wg_up`. Terminal.
+    `w4_set_mtu_0` (the `!mtu` arm and `.openHasInet` false) exists only
+    under decision 13.6: `wg_set_mtu 0`, the keepalive, `wg_down`, `wg_up`,
+    `wg_observe`.
+  - `w4_create_mtu_1279`: L's `wg_create` with `IFLA_MTU`, `wg_up` (IPv6
+    add `-EINVAL` expected), IPv4 xmits.
   - `w4_frag_{4,6}_connected`: `connected`, `DONT`, payload 2000; expect two
-    ciphertexts. `w4_frag_4_unconnected` is a **domain control**: expected
-    `unsupported`.
-  - `w4_mcast_{4,6}`, `w4_mcast_6_nomember`, `w4_mcast_noloop`,
-    `w4_linklocal_6`: 2.4.
+    ciphertexts with id = seed + 1 (IPv4) or the first non-zero kind-104
+    record (IPv6). `w4_frag_4_unconnected` is a **domain control**: expected
+    `unsupported`. `w4_gso_4_connected` (a GSO send from `SEND2_FD`): ids
+    seed + 1, seed + 2, … (M2's "including GSO").
+  - `w4_mcast_{4,6}`, `w4_mcast_{4,6}_nomember` (`224.0.0.2`, `ff02::1234`:
+    no NET_RX section; the IPv4 one is the trace that rejects D3's "any
+    `224/4`"), `w4_mcast_noloop` (`IPV6_MULTICAST_LOOP = 0`, both families),
+    `w4_mcast_noloop_v4opt` (`IP_MULTICAST_LOOP = 0` on the AF_INET6 sender:
+    the copy still loops), `w4_linklocal_6`: 2.4.
   - `w7_multi_rx_{2,4,8}`: a batch of n data messages under a session
     (valid; one tampered in `_dead`); `w7_multi_tx_{2,4,8}`: a batch of n
     xmits; `w7_mixed`: injects and xmits in one batch (encrypt and decrypt
@@ -647,8 +888,11 @@ measured in P-A); a worker outliving it shows as missing section records
   `-ENOSPC`/`-EPIPE` item is missing; the DEAD list is missing whole).
 - **Inner datagrams** at `SEND_FD` for valid payload batches.
 - **A2 control flow and operands:** the new arms of section 4 and 5.1-5.2;
-  the trim's iteration count; `wg_prev_queue_dequeue`'s arms;
-  `.prevQueuePeeked` true; `.encChecksumPartial` false.
+  the trim's iteration count; `wg_prev_queue_dequeue`'s arms (control flow
+  only: pointer compares); `.prevQueuePeeked` true; `.encChecksumPartial`
+  false; `.padOverMtu` true.
+- **Operation results:** `wg_batch`'s CQE count and `res` per item (5.5);
+  the fixture's expected refusals at `wg_up` after an MTU change (2.3).
 - **Section and resched records:** per-item yields, the pinned poll
   placements, two NAPIs in one NET_RX section.
 
@@ -667,17 +911,27 @@ it):
 - **W4-M6** trim at `≥ 128` — `w4_gso_trim` (`tx_dropped` 129 vs 128).
 - **W4-M7** `mtu` from `dev->mtu` instead of `dst_mtu` — `w4_route_mtu_probe`
   padding bytes.
-- **W4-M8** `last_unit %= mtu` dropped — same trace (padding 8 vs clamp).
+- **W4-M8** `last_unit %= mtu` dropped — same trace: without the modulo,
+  `min(1300, ALIGN(1420, 16) = 1424) = 1300` and `1300 − 1420` is 0 in the
+  mirror's `Nat` (Linux's unsigned wrap would be caught by `skb_put`), so
+  the mutant pads 0 where Linux pads 8: bytes (v2, M8 corrects v1's
+  "padding 8 vs clamp").
 - **W4-M9** keepalive padded with `Device.mtu` ignored (`!mtu` arm) —
-  `w4_set_mtu_0` A2 operands (bytes equal: honest).
+  `w4_set_mtu_0` A2 operands (bytes equal: honest); **only under 13.6**.
 - **W4-M10** `wg_open`'s `dev_v6` constant true — `w4_create_mtu_1279` A2.
 - **W4-M11** fragment 2 given a UDP header / wrong offset — `w4_frag_*`
   bytes.
-- **W4-M12** fragment ident not from `.inetIdSeed` (0) — bytes; the
-  **control** `w4_frag_4_unconnected` must be `unsupported`, not a pass.
-- **W4-M13** IPv6 multicast loop modelled for a non-member group —
-  `w4_mcast_6_nomember` (an extra NET_RX section expected: section
-  mismatch).
+- **W4-M12** fragment ident not from `inet_id` (0, or seed instead of
+  seed + 1) — bytes; the **control** `w4_frag_4_unconnected` must be
+  `unsupported`, not a pass.
+- **W4-M13** multicast loop modelled for a non-member group —
+  `w4_mcast_{4,6}_nomember` (an extra NET_RX section expected: section
+  mismatch). The IPv4 trace rejects D3's current `xmitMulticastLoop`
+  unmodified: a real defect this class alone finds.
+- **W4-M14** the loop keyed on the IPv4 `MC_LOOP` bit — `w4_mcast_noloop_v4opt`
+  (the mirror would expect no NET_RX section; Linux loops).
+- **W4-M15** the IPv6 fragment id as record + 1 (v1's rule) or from a
+  kind-110 site — `w4_frag_6_connected` bytes / hidden mismatch.
 - **W7-M1** `-ENOSPC` tested after the ring produce — `w7_full_tx_1025` A2
   (and the `-EPIPE` decision taken).
 - **W7-M2** the 1025th item sent anyway — `w7_full_*` counters.
@@ -695,18 +949,28 @@ it):
   (stretch): the poll would deliver it.
 - **W7-M9** the scheduler ignoring per-item resched records (D1-M15's
   bulk form) — any `w7_multi_*` trace with a yield.
+- **W7-M10** (stretch, under 13.5's repoll option) the poll continuing past
+  `budget` or `napi_complete_done` called after a full poll —
+  `w7_budget_dead` (section 10): the second NET_RX section is unexpected
+  or missing.
 
 Controls: `w4_frag_4_unconnected` (`unsupported`), the phase-1 commuting
-detector on a synthetic record stream (a `.reschedTx` with the encrypt
-queue non-empty must be `unsupported`), and the measurement probes of
-section 12 re-run on any new kernel.
+detector on synthetic record streams (a `.reschedTx` inside an open encrypt
+section with ring items must be `unsupported`; the same with the ring empty
+must pass; and the same shape with the units swapped, a `.reschedEncrypt`
+nested under an open tx section with a `CRYPTED` head, must be
+`unsupported` — the generic form, v2 M7), `w4_mcast_noloop_v4opt`, and the
+measurement probes of section 12 re-run on any new kernel.
 
 ## 9. Out of scope (fail-noisy), and why
 
 | Item | Why |
 |---|---|
 | P5 arms: `wg_prev_queue_dequeue`'s `tail != head` (queueing.c:96-97, 105), concurrent producer mid-enqueue | SMP or in-region preemption |
-| P9: a poll using its budget (receive.c:483-488), `net_rx_action`'s squeeze | at most two items per poll on one CPU (2.8) |
+| P9: a poll using its budget (receive.c:483-484) | **reachable** on one CPU via `-EPIPE` `DEAD` entries (section 10); stretch tier under 13.5, or excluded by choice with an explicit `unsupported` at the poll site |
+| `net_rx_action`'s squeeze (`netdev_budget` 300, 2 jiffies) and `__do_softirq`'s restart limit | at most 128 segments per datagram: two polls of 64; `unsupported` beyond (fail-noisy) |
+| A device MTU of 0 or below 68 (`.padNoMtu` true, `.openHasInet` false) | decision 13.6 |
+| A batch item deferred by io_uring (`-EAGAIN`, poll-arm or io-wq) | avoided by `SO_SNDBUFFORCE`; a deferral fails on `wg_batch`'s CQE result (5.5) |
 | Unconnected `DONT` fragmentation; `IP_PMTUDISC_WANT`/`OMIT`/`INTERFACE` | the ident over a boot-random bucket (3); K1 would lift it |
 | More than 128 GSO segments, `gso_size + 28 > fragsize` | the stack returns `-EINVAL`/`-EMSGSIZE` before `wg_xmit` (`udp.c:988-995`) |
 | GSO plus fragmentation (`DONT` with `gso_size`) | `cork->gso_size` sets `mtu = IP_MAX_MTU` (`ip_output.c:992`), no fragments; nothing new |
@@ -721,14 +985,46 @@ section 12 re-run on any new kernel.
 ## 10. P9 re-derived
 
 The census excluded NAPI budget exhaustion because "a poll sees at most one
-packet on one CPU". W7 changes "one" to "the items `CRYPTED` since the
-previous softirq run". Section 2.8 shows that is one from the worker path
-(the pending softirq is serviced at the next `ptr_ring_consume_bh`,
-`softirq.c:402-408`) or two at an irq exit inside `wg_queue_enqueue_per_peer_rx`.
-Sixty-four needs sixty-four worker iterations without a `local_bh_enable`,
-which the worker loop does not have. The `-EPIPE` poll inside NET_RX
-processes zero. P9 stays excluded, with this argument replacing the
-census's.
+packet on one CPU", and v1 of this note kept it out by counting only
+`CRYPTED` items: one from the worker path (the pending softirq is serviced
+at the next `ptr_ring_consume_bh`, `softirq.c:402-408`) or two at an irq
+exit inside `wg_queue_enqueue_per_peer_rx`. **Both arguments overlooked
+`DEAD` entries** (v2, M4). `wg_packet_rx_poll` counts every non-`UNCRYPTED`
+entry it drops: a `DEAD` one takes `goto next` (receive.c:456-459), is
+freed, and still runs `if (++work_done >= budget) break` (`:483-484`). The
+`-EPIPE` arm of `consume_data` (`:526-529`) produces `DEAD` entries in the
+softirq, one per data message that finds the decrypt ring full while the
+peer's `rx_queue` accepts it (2.6: this needs **two peers**, A's queue
+short of 1024 while the ring holds B's items). A UDP GSO datagram to wg0's
+port fans up to 128 data messages into one `net_rx_action` (`udp.c:
+2275-2280`, `udp.h:459-492`; E §4), so:
+
+- B's 1024-item batch fills the decrypt ring (no worker runs inside the
+  call, 2.7); in the same `io_uring_enter`, one GSO datagram carrying
+  **64 or more** data messages for A takes `-EPIPE` 64 times and A's NAPI
+  joins `poll_list` at the first (`dev.c:4665-4669`);
+- `net_rx_action` polls A after the backlog poll (`:7074-7083`): A's
+  `rx_queue` head is a `DEAD` entry (nothing `UNCRYPTED` precedes it), the
+  poll drops 64 and breaks at `work_done = 64` (**`.rxPollBudgetDone`
+  true**, `RxData.lean:311`), `napi_complete_done` is not called;
+- `napi_poll` puts A on `repoll` (`dev.c:6959-6975`), `net_rx_action`
+  breaks out when `list` is empty with `repoll` non-empty, splices
+  `repoll` back and re-raises NET_RX (`:7102-7110`); `__do_softirq`'s
+  restart runs **a second `net_rx_action`** (a second NET_RX section),
+  whose poll drops the rest (with 65 or more messages, at least one) and
+  completes.
+
+So P9 is reachable on one CPU, in the stretch tier (two sessions, a full
+ring, a 64-segment GSO inject): class `w7_budget_dead`. Its mirror side is
+the existing arm plus, in the environment, the repoll: `napiSoftirq` loops
+while the polled NAPI stays scheduled, consuming one NET_RX section start
+per poll, and reports `unsupported` beyond `__do_softirq`'s ten restarts
+or if a section is missing (fail-noisy). `netdev_budget = 300` and the
+2-jiffy limit stay unreachable (section 9). **Decision 13.5** chooses
+between building this (recommended) and excluding P9 by choice, in which
+case the exclusion is an explicit `unsupported "a poll exhausted its
+budget (net_rx_action's repoll)"` at the poll site, not the `invariant`
+that would fire today (5.2).
 
 ## 11. Risks
 
@@ -749,6 +1045,14 @@ census's.
 - **Low — the pinned-placement argument** (2.8) rests on `softirq.c:402-408`
   and `:467-483`; K2 would make it a checked fact if the extended
   `napi_orders.py` ever reports a placement outside the argument.
+- **High until 13.2 is decided — the (c') operand ambiguity** scales with
+  the item count (2.8, C2): with the enumeration bound of 3, most
+  full-ring traces and about 2% of 8-item traces would fail on one open
+  placement. Option (ii) keeps the operand check at two mirror runs per
+  failing trace.
+- **Medium — sender buffers** (2.7, M1): the xmit batches depend on
+  `SO_SNDBUFFORCE`; P-A confirms every CQE is present at `io_uring_enter`'s
+  return, and `wg_batch`'s result makes a deferral fail noisily thereafter.
 - **Fixture state changes** (`wg_set_mtu` below 1280/68) remove addresses
   and routes; the generator keeps those classes terminal.
 - **Observe volume** for 1025-item traces: the line and JSON sizes; bounded
@@ -764,36 +1068,54 @@ plumbing and the chunk isolation). Worktrees and branches as in D1-D3; one
 signoff at the end for the merge (no kernel change unless K1/K2 is
 approved).
 
-**Probes first (gating, throwaway, `harness/probes/w47_*.c`):**
+**Probes first (gating, throwaway, `harness/probes/w47_*.c`), with
+`SO_SNDBUFFORCE` on the senders (M1):**
 - **P-A** bulk feasibility: 1025 io_uring sends of data messages to wg0's
-  port and 1025 xmits into wg0, under KCOV with a 2M-word area: wall time
-  from `enter` to idle workers, whether every item queued before any worker
-  ran (`-ENOSPC` observed exactly once), record counts, observe size. Also
-  128-segment GSO xmit timing.
+  port and 1025 xmits into wg0, under KCOV: wall time from `enter` to idle
+  workers, whether every item queued before any worker ran (`-ENOSPC`
+  observed exactly once), **every CQE present at `io_uring_enter`'s return
+  with `res` = length** (no `-EAGAIN` deferral), record counts per item in
+  both children, observe size, and 128-segment GSO xmit timing. **Its
+  outputs are `kcov_capacity`'s bulk value and `wait_ms`'s default** (v2,
+  m5), and the full-ring tier's go/no-go (13.4).
 - **P-B** fixture facts: `ip -6 addr show wg0` after `wg_up` (no `fe80`
-  expected); `ip link set wg0 mtu 0` accepted; `ip -6 maddr show wg0`
-  (membership set); a `PROBE` send over a `mtu 1300` route reaching
-  `wg_xmit` unfragmented (one ciphertext of 1460 bytes).
-- **P-C** (offline, no VM): the phase-1 counter over the existing D1/D2
-  check runs' `hidden.jsonl`.
+  expected); `ip -6 maddr show wg0` and `ip maddr show wg0` (the membership
+  sets `{ff01::1, ff02::1}` and `{224.0.0.1}`, M3); a `PROBE` send over a
+  `mtu 1300` route reaching `wg_xmit` unfragmented (one ciphertext of 1460
+  bytes); **the errnos of `route_into_wg0`'s four requests at MTU 1279 and,
+  under 13.6, at MTU 0** (the IPv6 add `-EINVAL`, the IPv4 add `-ENOBUFS`,
+  the route adds), and whether `ip link set wg0 mtu 0` is accepted.
+- **P-C** (offline, no VM): the **nesting proxy** of 5.4 over the existing
+  D1/D2 check runs' records (the phase-1 counter itself is zero there by
+  construction, M7).
 
-**Interface commit** (on `task/w47`): `Device.mtu`, `inet4Dev`, `inet6Dev`;
-`PrevQueue`; `Kernel.napiPollList`; the new decisions and hidden sites; the
-op schemas (`wg_xmit` options, `wg_set_mtu`, `wg_create.mtu`, `net_fixture`
-routes, `wg_batch`, `kcov_capacity`, `wait_ms`); `DEVICE_MTU` removed.
+**Interface commit** (on `task/w47`, **only after D3+L+A+E are integrated**
+on the base): `Device.mtu`, `inet4Dev`, `inet6Dev`; `PrevQueue`;
+`Kernel.napiPollList`; `Sender.inetId`; the new decisions and hidden sites
+(`.txHash`, `.inetIdSeed`, `.ipv6FragId`); the op schemas (`wg_xmit`
+options, `wg_set_mtu`, `wg_create.mtu`, `net_fixture` routes, `wg_batch`
+with its CQE result, `kcov_capacity`, `wait_ms`); the wire opcodes
+allocated by the coordinator (placeholders until then, section 6);
+`DEVICE_MTU` removed; the two new environment files created empty with
+their hooks in `Env.lean`.
 
-**Streams and file ownership:**
-- **T — transmit shapes (W4):** `Leanux/Env.lean` (`xmitPackets`,
-  multicast membership, `setMtu` consequences), `Leanux/WG/Device.lean`
+**Streams and file ownership** (the two streams meet in `Env.lean` only at
+the hooks, so neither edits the other's file):
+- **T — transmit shapes (W4):** **`Leanux/Env/IpStack.lean`** (new:
+  `xmitPackets`, the membership sets, `Sender.inetId`, `setMtu`
+  consequences; `Env.lean` hooks `xmitPackets`, `xmitMulticastLoop` and
+  the `wg_set`/`wg_up` keepalive rule of section 4), `Leanux/WG/Device.lean`
   (`wgXmit` GSO/trim/`wgOpen`), `Leanux/WG/Send.lean` (`sendKeepalive`),
   `harness/noise.py` (segment/fragment builders), `harness/guest.c` W4 ops
-  and fixture (`route_into_wg0`, `SEND2_FD`, sockopts).
+  and fixture (`route_into_wg0` MTU-aware, `SEND2_FD`, sockopts).
 - **B — bulk (W7):** `Leanux/WG/Send.lean` (`enqueuePerDeviceAndPeer`),
   `Leanux/WG/Data.lean` (`txWorker`), `Leanux/WG/RxData.lean` (`rxPoll`,
   `enqueuePerPeerRx`), `Leanux/WG/Receive.lean` (`consumeData` arms),
-  `Leanux/Env.lean` (`batch`, `napiSoftirq`, `condResched` generalization,
-  the phase-1 detector), `harness/guest.c` `wg_batch` (from `wg_flood`),
-  `kcov_capacity`.
+  **`Leanux/Env/Batch.lean`** (new: `batch`, `napiSoftirq` with the
+  per-peer list and, under 13.5, the repoll, the `condResched`
+  generalization, the generic phase-1 detector; `Env.lean` hooks `batch`
+  and the worker runners), `harness/guest.c` `wg_batch` (from `wg_flood`,
+  with the CQE result), `kcov_capacity`.
 - **H — harness, generator, corpus, evidence:** `scripts/wg-w47-corpus.py`,
   `corpus/wireguard/w4_*`, `w7_*`, `scripts/wg-mutants.py` patterns W4-M*
   and W7-M*, `evaluator/napi_orders.py` extension, the probes and their
@@ -806,26 +1128,94 @@ integration.
 
 ## 13. Decisions for the user
 
-1. **The fragment-ident route.** Build fragmentation on a **connected**
-   sender (`.inetIdSeed`, no kernel change) and leave the unconnected
-   `DONT` class `unsupported`; or approve **K1** (capture the ident at
-   `route.c:505`) and cover both. Recommendation: the connected sender now;
-   K1 only if the outer-header bytes ever become an observable.
-2. **K2** (record the poll's `work_done`): not recommended now; revisit if
-   the extended `napi_orders.py` reports a placement the argument of 2.8
-   does not cover.
-3. **The commuting assumption:** phase 1 (fail-closed detector) is required;
-   phase 2 (step workers) is a restructuring of four mirror loops, decided
-   on P-C's and the W7 corpus's counts.
-4. **The full-ring tier (1025 items)** depends on P-A. If it does not fit
-   the 4.5 s bound on TCG, keep the `-ENOSPC` arms as built mirror code with
-   the domain `unsupported`, and carry W7 on the 2-8-item tiers.
-5. **The stretch tier** (`-EPIPE`, two NAPIs; two sessions): build the
-   mirror arms in B (cheap), schedule the traces after integration.
-6. **`wg_set_mtu 0`** and its address teardown: include as a terminal class
-   (it reaches three otherwise unreachable arms), or exclude as unreasonable.
-7. **The D2 correction** (wg0 has no link-local address): record it in D2's
-   note at integration.
+Items 1, 3, 4 and 7 are [AGENT] recommendations pending the user; items
+2, 5 and 6 are **user decisions** with options, since one of their options
+weakens or narrows a check.
+
+1. **The fragment-ident route** — recommendation: the **connected** sender
+   with no K1, with M2 applied (`.txHash` then `.inetIdSeed` at
+   `wg_connect`; `inet_id` as socket state consumed by every `SEND2_FD`
+   datagram, GSO included; first id = seed + 1). The unconnected `DONT`
+   class stays `unsupported`; K1 only if the outer-header bytes ever become
+   an observable.
+2. **The (c') placement ambiguity under bulk (C2)** — **user decision.**
+   The control-flow placement is pinned (2.8); only the poll's two
+   peer-refcount compares (`kref_get_unless_zero` in the allowed-IPs
+   lookup, `wg_peer_put`) differ, by one, and `check.py` enumerates
+   placement vectors only for ≤ 3 open polls. Options:
+   - **(i) `operand_exclusions`** for those two compares at the poll's call
+     sites (the precedent form, `kcov.json`). Cost: **a check is lost** —
+     the peer reference count as the poll sees it, which is how a mirror
+     that drops or duplicates a `wg_peer_get`/`put` on the receive path
+     would be caught (the outcome, "not zero", is the same either way).
+     Nothing else changes.
+   - **(ii) operand agreement partitioned per poll section** — keeps the
+     check. The (c') choice of poll i changes only the operands inside
+     poll i's NET_RX section (by the next item the put has happened in
+     both placements), so the placements are independent across polls.
+     The check runs the mirror **twice** per operand-mismatching trace
+     (all-after-put and all-before-put), tags each mirror branch with the
+     NET_RX section it ran in, partitions Linux's comparison records by the
+     section blocks the remote stream already carries in the comparisons
+     child (`pair_sections`, `check.py:224-240`, `:266`), and accepts each
+     section under either run; the two runs must agree on every branch
+     outside the NET_RX sections and on all observations, else the
+     independence premise failed and the trace fails. Cost: one more
+     mirror run and the section tagging, O(n) matching, no kernel change;
+     `NAPI_PLACEMENTS_MAX` goes away. **Recommended** [AGENT]: it keeps
+     the operand check at a cost that does not grow with n.
+   - **(iii) a kernel record of the placement** (K3, section 3): exact and
+     simple in the check, but a new hook against the user's zero-new-hooks
+     preference, needing patch approval; and the next such ambiguity would
+     need another.
+   K2 (record `work_done`) is not recommended for any of these.
+3. **The commuting assumption** — recommendation: phase 1 is required in
+   the **generic form** (5.4: any nested yield under an outer open worker
+   with queued items, not a named unit pair); P-C reports the nesting proxy
+   on D1/D2; phase 2 (step workers) is decided on the W7 corpus's phase-1
+   count.
+4. **The full-ring tier (1025 items)** — recommendation: gate it on P-A
+   **after `SO_SNDBUFFORCE`** (without it the xmit batch is deferred at
+   about 277 items and P-A would measure the wrong thing). If it does not
+   fit the 4.5 s bound on TCG, keep the `-ENOSPC` arms as built mirror code
+   with the domain `unsupported`, and carry W7 on the 2-8-item tiers.
+5. **The stretch tier and P9** — recommendation: build the stretch arms in
+   B (`-EPIPE`, two NAPIs) and schedule the traces after integration.
+   **P9 is a user decision** (section 10): (a) **stretch tier** — the
+   `w7_budget_dead` class and `net_rx_action`'s repoll in `Batch.lean`
+   (a loop over consecutive NET_RX sections while the NAPI stays scheduled,
+   `unsupported` beyond ten restarts); cost: one class and about a dozen
+   lines of environment, on the stretch tier's two-session setup; or (b)
+   **excluded by choice**, as an explicit `unsupported` at the poll site
+   when `work_done ≥ budget` (fail-noisy), with the reason "a 64-message
+   GSO inject against a full ring with two sessions". **Recommended: (a)**
+   [AGENT], since the user's bar is "exclude only for profound reasons"
+   and this arm is a real single-CPU path with a cheap environment model.
+6. **`wg_set_mtu 0`** — **user decision.** The coordinator's recommendation
+   is to exclude it as an unreasonable configuration, cover
+   `.openHasInet6` false via `IFLA_MTU` 1279 with the MTU-aware fixture,
+   and document `.padNoMtu` true and `.openHasInet` false as excluded with
+   that reason. **After verification I disagree, mildly** [AGENT]: the
+   kernel accepts MTU 0 without complaint (`dev_validate_mtu`, no
+   `min_mtu`), the two arms are real C branches `wg_open` and
+   `calculate_skb_padding` were written for, the class is terminal, and
+   once the fixture is MTU-aware (needed anyway for 1279) its extra cost is
+   one more threshold (68) and the errnos P-B measures. "Unreasonable" is
+   a judgment of taste, not a profound reason in the user's sense. Options:
+   (a) **include** `w4_set_mtu_0` as a terminal class behind P-B
+   (recommended, cheap to reverse); (b) **exclude** with the reason above,
+   documented in section 9 — `.openHasInet6` false is covered by
+   `w4_create_mtu_1279` either way. Both options leave `.openHasInet6`
+   covered; only (a) covers `.padNoMtu` true and `.openHasInet` false.
+7. **The D2/D3/E corrections** — recommendation: record at integration, in
+   the owning notes: D2 §2 "wg0 gets a random link-local address" (wrong,
+   2.4); D2's single named commuting case (generalized, 5.4); **D3's
+   `xmitMulticastLoop` loops for any `224/4`** (latent; the set is
+   `{224.0.0.1}`, 2.4); v1 of this note's kind-110 IPv6 id, `.padClamped`
+   as a new outcome, the `w4_route_mtu_probe` clamp claim, and the
+   "staged `wg_xmit` path is the same" sentence (all corrected in v2);
+   E's `wg_flood` not reading its CQEs (harmless for loopback injects,
+   subsumed by `wg_batch`).
 
 ## 14. Verified claims (file:line index)
 
@@ -876,3 +1266,210 @@ integration.
   700-775, 821-825, 926-931, 969-974, 1050;
   `task/e-b:harness/trace.py` 19-48, 52, 73, 101; `harness/wg.py` 332-370;
   `evaluator/check.py` 696-703; `evaluator/napi_orders.py`.
+- **Added in v2** (each read for the audit response):
+  - random.h: `get_random_u32_below` 60-85 (the inline path, `:83`),
+    `get_random_u32_above` 98-103. `kernel/patches/choice-stream.patch`:
+    `get_random_##type` records `100 + sizeof` (hunk at random.c:536-549),
+    kind 110 only in `__get_random_u32_below` (hunk at random.c:565-590).
+    output_core.c: 14-19, 47-55. Built kernel (`.artifacts/kernel-net-
+    choice`): `__ipv6_select_ident` and `ip_idents_reserve` absent from
+    `System.map`; DWARF chains at the draws, `random.h:87 → :102 →
+    output_core.c:18 → :53` and `sock.h:2092 → :2098 → datagram.c:75`.
+    `harness/steer.py` 26-28 (`CHOICE_HELPERS`); `check.py` 285-320 (the
+    consumer frame), 192 (`RANDOM_KINDS`).
+  - datagram.c: `__ip4_datagram_connect` 75-76. sock.h: `net_tx_rndhash`,
+    `sk_set_txhash` 2088-2099. ipv6/datagram.c: `__ip6_datagram_connect`
+    141-161, 189-199, 268. ip.h: `ip_select_ident_segs` 559-589 (connected
+    branch 568-581, `atomic_add_return`). ip_output.c: 1436-1445 (DF for
+    `PROBE`), 1465 (`ip_select_ident`, segs 1). af_inet.c: 1439-1457 (the
+    per-segment `id++`).
+  - loopback.c: 79 (`skb_orphan`). sock.c: 282-286 (`sysctl_wmem_default`),
+    761-777 (`sk_mc_loop`), 1328-1333 (`SO_SNDBUF[FORCE]`), 2918-2923
+    (`sock_alloc_send_pskb`'s `-EAGAIN`). sock.h: 2867-2869 (`SK_WMEM_MAX`).
+    io_uring/net.c: 578-579. io_uring/io_uring.c: `io_queue_async`
+    1913-1929. `task/e-b:harness/guest.c`: `rtnl_request` 469-478,
+    `route_into_wg0` 486-527 (called at `:1037`), `flood_prep`/`flood_enter`
+    726-770 (CQEs not read), the sender 814-826.
+  - addrconf.c: `ipv6_add_dev` 375-382, joins 466-475,
+    `addrconf_join_solict` 2246-2254, `addrconf_add_dev` 2566-2581
+    (`ff00::/8`), `inet6_addr_add` 3024-, `addrconf_notify` 3683-3711
+    (`mtu6` 3697-3700). igmp.c: `ip_mc_up` 1789-1803, `ip_check_mc_rcu` 2724.
+    route.c: `__mkroute_output` 2566-2587 (`RTCF_LOCAL`), 2647-2652
+    (`dst.output = ip_mc_output`). ip_output.c: `ip_mc_output` 367-410.
+    ip6_output.c: `ip6_finish_output2` 60-100. af_inet6.c: 223-224,
+    237-238. device.c: 290 (`IFF_NOARP`), 296-297 (no `min_mtu`).
+    devinet.c: `inetdev_event` 1570-1590 (re-creation at 1586-1588),
+    1637-1643, 888 (`-ENOBUFS`). `kernel/config-x86_64-net-choice`: 686,
+    724-725.
+  - receive.c: `wg_packet_rx_poll` 438-491 (`DEAD` at 456-459, budget
+    483-484), `wg_packet_consume_data` 509-540. dev.c: `napi_poll` 6959-6975,
+    `net_rx_action` 7052-7115 (repoll splice and re-raise 7102-7110).
+    ipv6/route.c: `ip6_mtu` 3272. udp.c: `udp_send_skb` 1018-1036.
+    send.c: `calculate_skb_padding` 141-160, tx worker 262-285 (yield
+    282-283), encrypt worker 287-309. queueing.c: 72-78, 80-106.
+  - Mirror: `task/d3-int:Leanux/Env.lean` 90-93 (`xmitMulticastLoop`),
+    236-245 (`runWorker`), 267-296 (`condResched`), 302-313, 318-322
+    (`requireNoCryptWork`), 338-344 (`runSendWorkers`), 355-362
+    (`afterXmit`), 671-680 (`napiSoftirq`), 696-703 (`napiIrqExit`),
+    708-711 (`runDecryptWorker`); `task/d3-int:Leanux/Syscalls.lean`
+    133-145 (`runSendWorkers` at 139-141); `task/d3-int:evaluator/check.py`
+    224-240 (`pair_sections`), 255-275 (section records only in the remote
+    stream, both children), 732-770 (`operand_agreement`), 811-845
+    (`NAPI_PLACEMENTS_MAX`, `napi_placements`), 924;
+    `task/d3-int:docs/2026-10-06-contended-host.md` §2, 166-180;
+    `task/census:Leanux/Kernel/Defs.lean` 239-275, 356-360;
+    `task/census:Leanux/WG/RxData.lean` 276-313 (`.rxPollBudgetDone` at
+    311); `correspondence/kcov.json` `files` (queueing.h listed,
+    queueing.c not), `functions` (164, `wg_packet_rx_poll` in,
+    `wg_prev_queue_dequeue` out), `operand_exclusions` (one entry, the
+    precedent form); `docs/2026-10-04-d2-data-plane.md` 324-328 (the
+    clamp at inner lengths 1404-1420); `task/l-m:harness/guest.c` (no
+    `IFLA_MTU`).
+  - `Decision.lean` lines, `task/census` → `main`: `.openHasInet` 742 →
+    825, `.openHasInet6` 743 → 826, `.xmitNotGso` 754 → 837, `.xmitWalk`
+    755 → 838, `.padNoMtu` 943 → 1026, `.padOverMtu` 944 → 1027,
+    `.encChecksumPartial` 948 → 1031, `.enqueuePeerQueueFull` 978 → 1061,
+    `.enqueueRingFull` 979 → 1062, `.prevQueuePeeked` 986 → 1069,
+    `.dataEpipe` 990 → 1073, `.rxPollBudgetDone` 1025 → 1108;
+    `.padClamped` is declared at 231 on both.
+
+## 15. Revision v2 — audit response
+
+Each finding of the audit, verified against the sources named in section
+14 before adoption; **adopted** means the body above is corrected in place.
+Pushback is marked.
+
+**C1 — the IPv6 fragment id is a kind-104 record.** Adopted (2.5, 3). The
+arithmetic checks: the inline `get_random_u32_below(U32_MAX)` draws the
+exported `get_random_u32()` (kind 104), rejects exactly `r = 0`, returns
+`r − 1`, so the id is the first non-zero record. `.ipv6FragId`, the
+`noise.py` builder and the `#guard` vectors use that rule. **Pushback on
+the site:** the consumer frame is **output_core.c:18**, the inlined
+`__ipv6_select_ident` body, not :47 — the check takes the first frame
+outside the random/clock helpers (`steer.py:26-28`, `check.py:304`), which
+is how the equally inlined `ip_idents_reserve` got route.c:482; the DWARF
+chain on the built kernel confirms it (section 14). The table names :18.
+
+**C2 — the NAPI placement ambiguity scales with the item count.** Adopted
+(2.8, 5.3, 11) and **raised as decision 13.2** with the three options,
+their costs, and (ii) recommended. Verified: `napiIrqExit` counts every
+inline poll, `napi_placements` enumerates only for `count ≤ 3` and only on
+an operand mismatch, and the comparisons child's remote stream carries the
+section blocks (ii) needs. The base rate is the contended-host note's three
+traces in a 1369-trace check. (ii) is formulated as two mirror runs with an
+independence check, so its cost does not grow with n.
+
+**M1 — xmit batches exhaust `sk_sndbuf`.** Adopted (2.7, 5.5, 6, 9, 11,
+12, 13.4). Verified: the inject skb is orphaned inline at `loopback.c:79`,
+the xmit skb keeps its charge to the tx worker; the default is 212992
+(about 277 small skbs); `-EAGAIN` at `sock.c:2918-2923` → `net.c:578-579`
+→ `io_queue_async`. **Pushback on the citation:** the deferral is
+`io_queue_async` (`io_uring.c:1913-1929`, poll-arm or io-wq), not :1357
+(`io_req_task_submit`'s `REQ_F_FORCE_ASYNC` arm). `SO_SNDBUFFORCE` on both
+senders; 2.7's "the same" sentence is corrected; `wg_batch`'s result
+carries the CQEs so a deferral fails on the result (as an operation result,
+not a new checker).
+
+**M2 — the connected sender draws a txhash first.** Adopted (2.1, 3, 4, 6,
+13.1). Verified: `sk_set_txhash` at `datagram.c:75` before the seed at
+`:76`; a v4-mapped `connect()` on the dual-stack sender takes exactly that
+path and returns (`ipv6/datagram.c:157-161`, `:189-199`); a native IPv6
+`connect()` draws the txhash only (`:268`); the UDP path calls
+`ip_select_ident` with `segs = 1`, so a GSO datagram consumes one `inet_id`
+and its segments count up from it; the first id is seed + 1. New site
+`.txHash` (`.cut`) at the shared consumer frame `sock.h:2092`; `inet_id` is
+socket state in `IpStack.lean`.
+
+**M3 — the multicast membership sets.** Adopted (2.4, 4, 6, 8, 13.7).
+Verified: `IFF_NOARP` (device.c:290) makes `addrconf_join_solict` return
+early, so the IPv6 set is exactly `{ff01::1, ff02::1}` (v1's solicited-node
+groups were wrong); IPv4 loops only through `RTCF_LOCAL`, which
+`ip_check_mc_rcu` grants to members, and the `in_device` joins only
+`224.0.0.1`; D3's `xmitMulticastLoop` (`task/d3-int:Env.lean:90-93`) loops
+for any `224/4` — latent and fail-noisy, corrected to the set, with
+`w4_mcast_4_nomember` as the trace that rejects the old code; the AF_INET6
+sender's IPv4 side comes from `inet6_create` (`af_inet6.c:237-238`) and
+`sk_mc_loop` reads `MC6_LOOP` for it, so the control uses
+`IPV6_MULTICAST_LOOP` (and `w4_mcast_noloop_v4opt` shows `IP_MULTICAST_LOOP`
+is a no-op there).
+
+**M4 — P9 is reachable on one CPU.** Adopted (2.8, 5.2, 9, 10) and
+**raised as decision 13.5** with (a) the stretch tier plus the repoll in
+`Batch.lean` and (b) exclusion by choice as an explicit `unsupported`;
+**(a) recommended**. Verified: `DEAD` entries take `goto next` and still
+count (`receive.c:456-459`, `483-484`); the `-EPIPE` arm marks entries
+`DEAD` in the softirq; two peers are needed (2.6's accounting); a
+64-message GSO inject suffices; the repoll is a second `net_rx_action`
+after `dev.c:7102-7110`. Precision: 64 entries take the arm (the 64th
+`++work_done >= budget`); the 65th gives the repoll an item.
+
+**M5 — the MTU classes conflict with `route_into_wg0`.** Adopted (2.3, 6,
+12). Verified: `rtnl_request` fails on any unexpected errno; below 1280 the
+IPv6 add is `-EINVAL` (`ipv6_add_dev`); below 68 the IPv4 add is `-ENOBUFS`
+while the `in_device` is absent and `0` (not `-EEXIST`) once a valid MTU
+re-created it; the fixture becomes MTU-aware and **expects the kernel's
+refusal** (the errnos fixed by P-B), which also checks the teardown the
+mirror's `inet4Dev`/`inet6Dev` record. The 2.3/section-6 inconsistency
+about MTU 0 is resolved (the class, if any, is set-MTU, keepalive, down,
+up, observe). Classes that raise the MTU back stay terminal. v1's "normal
+lowering (say 1000)" would itself have dropped IPv6; it is now 1300.
+
+**M6 — a keepalive from `wg_set`/`wg_up` under a session is unsupported.**
+Adopted (section 4). Verified: `Syscalls.lean:139-141` → `runSendWorkers`
+→ `requireNoCryptWork` (`:318-322`, `:339`). [AGENT] The `afterXmit` shape
+is taken for `wg_set`/`wg_up` (the crypt workers run in the guest's wait,
+ordered by section starts); this lifts an `unsupported` without weakening
+a check, so it is not a user decision. The timer-driven alternative is
+noted and not taken.
+
+**M7 — the commuting breakage is generic.** Adopted (premises, 5.4, 8, 12,
+13.3). Verified against `runWorker`/`condResched` (`task/d3-int:Env.lean:
+236-296`): the mirror runs the nested unit to completion inside the outer's
+call, so any nested yield under an outer open worker with queued items is
+the same hazard. Phase 1 keeps a stack of open workers and tests it
+generically; P-C over D1/D2 is vacuous (one-item queues) and is replaced by
+the nesting proxy; phase 2 is decided on the W7 corpus. Controls cover
+both unit orders.
+
+**M8 — `.padClamped` is already two-outcome.** Adopted (1, 2.3, 4, 6, 8,
+13.7). Verified: D2's inner lengths 1404-1420 cover the clamp
+(`d2-data-plane.md:324-328`, `.padClamped` at `Decision.lean:231`); with
+route MTU 1300 and len 1420, `min(1300, 128)` does not clamp. The claim is
+dropped; the new outcomes are `.padOverMtu` true (and `.padNoMtu` true only
+under 13.6). The payload 1269-1272 variant is noted as not new coverage.
+W4-M8's rejection is restated with the actual arithmetic.
+
+**M9 — `queueing.c` in `kcov.json`.** Adopted with a precision (section
+4). `queueing.c` joins `files` and `wg_prev_queue_dequeue` joins
+`functions` (verified absent). **Pushback on the mechanism:** its tests are
+pointer compares, and the precedent for those is a decision declared in
+the `d` form without a comparison (`.prevQueuePeeked`), which
+`operand_agreement` skips (`check.py:742-747`); `operand_exclusions` is the
+precedent for a *declared* comparison with an unmodelable operand at one
+call site. The note uses the `d` form and keeps `operand_exclusions` as the
+fallback if the check is ever extended to claim every recorded compare.
+
+**m1** adopted (2.2): xmit 1 tests `0 > 128`; the data messages are 80
+bytes (v1's 48 was the padded plaintext). **m2** adopted (2.5): `udp_csum`
++ `csum_tcpudp_magic` at `udp.c:1030-1033`. **m3** adopted (2.3): the IPv6
+`dst_mtu` falls back to `idev->cnf.mtu6` (`ip6_mtu` → `ip6_dst_mtu_maybe_
+forward`), synced at `NETDEV_CHANGEMTU`. **m4** adopted (2.2, 6) with a
+correction: at `gso_size` 1392 the 65507-byte payload gives **48**
+segments (47 full plus one of 83 bytes), not 47; 128 segments need
+`gso_size ≤ 511`; the cross product is constrained accordingly. **m5**
+adopted (5.5, 6, 12): `kcov_capacity` and `wait_ms` are P-A outputs.
+**m6** adopted (header, 2.3, 14): the header already said `task/census`,
+but section 14 gave bare numbers; the `main` lines are now listed. **m7**
+adopted (2.3, 4): `PROBE` sets DF, `ignore_df` is false, the unconnected id
+is 0 and the connected one is the next `inet_id`.
+
+**Section 13** adopted as recommendations pending the user (1, 3, 4, 7)
+and as user decisions with options and a recommendation (2, 5, 6). On 6,
+after verification, this revision **disagrees mildly** with excluding MTU
+0 and says so in place, recommending inclusion as a terminal class behind
+P-B; the user decides.
+
+**Execution plan** adopted (12): the interface commit only after D3+L+A+E
+are integrated; stream T in `Leanux/Env/IpStack.lean`, stream B in
+`Leanux/Env/Batch.lean`, meeting in `Env.lean` only at the hooks; wire
+opcodes as placeholders until the coordinator allocates them.
