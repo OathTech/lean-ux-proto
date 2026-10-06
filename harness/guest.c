@@ -813,7 +813,7 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         if (op->code == 5) memset(read_buffer, 0xa5, op->a);
         if (op->code == 6) fill_write_buffer(i, op->value, op->a);
         int pipe_fds[2] = {-1, -1};
-        if ((op->code >= 10) && !t->net) fail(t->id, i, "invalid_input", "wireguard_without_network_fixture");
+        if (op->code >= 10 && op->code <= 13 && !t->net) fail(t->id, i, "invalid_input", "wireguard_without_network_fixture");
         struct ifreq up_request;
         if (op->code == 10) {
             memset(&up_request, 0, sizeof(up_request));
