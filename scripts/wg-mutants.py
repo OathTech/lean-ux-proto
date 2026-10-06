@@ -287,11 +287,21 @@ E_UNDERLOAD_MUTANTS = [
    'reply where Linux sent one (e_underload_cookie)', 'Leanux/WG/Receive.lean',
    "    modify fun w => { w with lastUnderLoad := some now }\n    underLoad := true\n",
    "    modify fun w => { w with lastUnderLoad := some now }\n    underLoad := false\n", 'e_underload'),
-  ('E-M9-mac2-compare-inverted', 'control: wg_cookie_validate_packet treats a matching MAC2 as a miss '
-   '(cookie.c:143); a valid-MAC1 no-cookie initiation is then read as rate-limited (unreached ratelimiter)',
-   'Leanux/WG/Receive.lean',
+  ('E-M9-mac2-compare-inverted', 'control: wg_cookie_validate_packet treats a non-matching MAC2 as valid '
+   '(cookie.c:143); a no-cookie initiation then takes the ratelimiter/consume arm instead of a cookie reply, '
+   'so the reply records disagree (e_underload_cookie)', 'Leanux/WG/Receive.lean',
    "  if ← branch .macCookieInvalid (computed2 != givenMac2) then return .noCookie\n",
    "  if ← branch .macCookieInvalid (computed2 == givenMac2) then return .noCookie\n", 'e_underload'),
+  ('E-M10-ratelimiter-allow-inverted', 'control: wg_ratelimiter_allow denies a packet with tokens (the bucket '
+   'compare inverted, ratelimiter.c:126); the hit packet is dropped before consume_initiation, so its flood_now '
+   'read is missing (e_underload_ratelimit)', 'Leanux/WG/Receive.lean',
+   "    let ret ← branchCmp .rlAllow (newTokens ≥ PACKET_COST) newTokens PACKET_COST\n",
+   "    let ret ← branchCmp .rlAllow (newTokens < PACKET_COST) newTokens PACKET_COST\n", 'e_underload_ratelimit'),
+  ('E-M11-ratelimiter-insert-tokens', 'data: a new ratelimiter entry starts at TOKEN_MAX, not TOKEN_MAX - '
+   'PACKET_COST (ratelimiter.c:147); the next hit from the same IP reports a different token count '
+   '(e_underload_ratelimit, the rlAllow operands)', 'Leanux/WG/Receive.lean',
+   "      table := (ip, TOKEN_MAX - PACKET_COST, now) :: k.ratelimiter.table } }\n",
+   "      table := (ip, TOKEN_MAX, now) :: k.ratelimiter.table } }\n", 'e_underload_ratelimit'),
 ]
 PENDING = {m[0] for m in D2_MUTANTS if m[3] is None}
 # A subset value naming a whole suite (not a trace-id prefix).
