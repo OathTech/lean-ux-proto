@@ -269,12 +269,14 @@ def alloc_refusal(trace, label, value):
         return None
     if value != ALLOC_FAIL:
         return f'{label}: an allocation entry is "draw" or fail ({ALLOC_FAIL})'
-    if row['cls'] not in ENABLED_CLASSES:
-        return f'{label}: class {row["cls"]} is not enabled for steering'
+    # Intrinsic refusals (a fail is never a possible/clean outcome here),
+    # checked before the class policy gate so the honest reason surfaces.
     if row.get('nofail'):
         return f'{label}: a __GFP_NOFAIL allocation is never failed'
     if 'kvmalloc_limit' in row and trace.get('rlimit_nofile', 32) > row['kvmalloc_limit']:
         return f'{label}: the array can exceed PAGE_SIZE (vmalloc fallback), never failed'
+    if row['cls'] not in ENABLED_CLASSES:
+        return f'{label}: class {row["cls"]} is not enabled for steering'
     return None
 
 
