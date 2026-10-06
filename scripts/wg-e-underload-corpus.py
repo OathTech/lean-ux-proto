@@ -54,6 +54,31 @@ def configure():
     return {"op": "wg_set", "config": {"private_key": d1.key(DEVICE), "listen_port": PORT, "peers": []}}
 
 
+# arm C (ratelimiter): the cookie secret is steered, so the fixture computes
+# make_cookie and a valid MAC2 to reach the ratelimiter; wg0's responses are
+# steered (D1).
+RL_SECRET = bytes(range(0x90, 0xb0))
+RESP_EPHEMERAL_2 = bytes(range(0x21, 0x41))
+RL_INDEX_1, RL_INDEX_2 = 0x11223344, 0x55667788
+SENDER_SADDR = bytes([127, 0, 0, 1])
+SENDER_SPORT = 51998
+
+
+def configure_peer():
+    return {"op": "wg_set", "config": {"private_key": d1.key(DEVICE), "listen_port": PORT,
+            "peers": [{"public_key": d1.key(noise.public_key(d1.PEER)),
+                       "allowed_ips": [{"family": 4, "addr": "0a000000", "cidr": 8}]}]}}
+
+
+def rl_initiation(ephemeral, sec, index):
+    """A real Noise initiation (peer -> wg0) with a valid MAC1 and a valid MAC2
+    (from make_cookie under the steered secret), so wg0 under load reaches the
+    ratelimiter; an allow makes wg0 consume it and send a handshake response."""
+    cookie = noise.make_cookie(RL_SECRET, SENDER_SADDR, SENDER_SPORT)
+    init = noise.initiation(noise.public_key(d1.DEVICE), d1.PEER, ephemeral, noise.tai64n(sec, 0), index)
+    return noise.with_mac2(init, cookie)
+
+
 def valid_initiation(index, ephemeral):
     """A valid-MAC1 initiation to wg0 (MAC1 keyed by blake2s('mac1----' ||
     wg0_public)); its body is not consumed (the under-load path sends a cookie
@@ -110,6 +135,22 @@ def controls():
     }
 
 
+def ratelimit_traces():
+    # arm C: a flood sets under_load; then valid-MAC1+MAC2 Noise initiations from
+    # one source IP reach the ratelimiter. The first inserts a bucket entry
+    # (always allows) and is consumed -> a handshake response; the second, same
+    # IP, hits the bucket (the token arithmetic) and, with tokens left, allows ->
+    # a second response. Both responses are observable at the sender (steered).
+    two = flood(leading=[rl_initiation(d1.PEER_EPHEMERAL, 1, d1.PEER_INDEX),
+                         rl_initiation(d1.PEER_EPHEMERAL_2, 2, d1.PEER_INDEX_2)])
+    steer = [["cookie_secret", RL_SECRET.hex()],
+             ["resp_ephemeral", d1.RESP_EPHEMERAL.hex()], ["index_draw", d1.le32(RL_INDEX_1)],
+             ["resp_ephemeral", RESP_EPHEMERAL_2.hex()], ["index_draw", d1.le32(RL_INDEX_2)]]
+    expect = ["wg_receive_handshake_packet.initiation=1", "wg_ratelimiter_allow.entry_matches=1"]
+    return {"e_underload_ratelimit": dict(ops=[CREATE, configure_peer(), UP, two, OBSERVE, GET],
+                                          steer=steer, expect=expect)}
+
+
 def write_suite(subdir, cases):
     out = ROOT / "corpus" / subdir
     out.mkdir(exist_ok=True)
@@ -118,10 +159,20 @@ def write_suite(subdir, cases):
                                                      indent=2) + "\n")
 
 
+def write_steered(subdir, cases):
+    out = ROOT / "corpus" / subdir
+    out.mkdir(exist_ok=True)
+    for name, c in cases.items():
+        trace = {"version": 1, "id": name, "net_fixture": "bare", "ops": c["ops"],
+                 "steer": c["steer"], "expect": c["expect"]}
+        (out / f"{name}.json").write_text(json.dumps(trace, indent=2) + "\n")
+
+
 def main():
     write_suite("wireguard", traces())
+    write_steered("wireguard", ratelimit_traces())
     write_suite("underload-controls", controls())
-    print(f"wrote {len(traces())} wireguard and {len(controls())} control traces")
+    print(f"wrote {len(traces())} + {len(ratelimit_traces())} wireguard and {len(controls())} control traces")
 
 
 if __name__ == "__main__":

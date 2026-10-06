@@ -186,6 +186,12 @@ structure Task where
 structure Ratelimiter where
   refcnt : Nat := 0
   key : List UInt8 := List.replicate 16 0
+  /-- E-B arm C (docs/2026-10-05-e-dos.md §6.C): the token-bucket table, keyed by
+      source IP (the `(net, ip)` hash is a cut, and there is one netns per
+      trace): `(ip, tokens, last_time_ns)` per entry. The GC that would free
+      stale entries arms a timer (D3); its firing is out of scope on this base
+      (no timer source here), so entries persist for the trace. -/
+  table : List (Nat × Int × Int) := []
   deriving Repr, BEq
 
 /-- Whole-kernel mirror state. `nrFiles`/`maxFiles` mirror the system-wide
@@ -239,6 +245,8 @@ inductive EnvSite where
   -- success in the harness)
   | pubkeyHashtableAlloc | indexHashtableAlloc | allocWorkqueue | packetQueueInit
   | ratelimiterCache | ratelimiterTable | registerNetdevice
+  -- E-B arm C: wg_ratelimiter_allow's per-entry kmem_cache_alloc (ratelimiter.c:138)
+  | ratelimiterEntry
   deriving Repr, BEq, DecidableEq
 
 /-! ## Choices (docs/2026-10-03-choice-stream-strategy.md)
@@ -349,6 +357,9 @@ inductive HiddenSite where
       discarded flood section; and `wg_cookie_message_create`'s nonce
       (`get_random_bytes_wait`, cookie.c:190, 24 bytes) of a cookie reply. -/
   | underLoadNow | cookieNonce
+  /-- E-B arm C: `wg_ratelimiter_allow`'s coarse-boot-time reads, on a bucket
+      hit (`ratelimiter.c:121`) and on a new-entry insert (`ratelimiter.c:146`). -/
+  | ratelimiterNow | ratelimiterInsertNow
   deriving Repr, BEq, DecidableEq
 
 inductive SiteRole where
@@ -457,6 +468,8 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   -- cookie.c:190 is the cookie reply's nonce.
   | .underLoadNow => ⟨130, "under_load_now", "clock", "drivers/net/wireguard/receive.c", 115, 8, .mirror⟩
   | .cookieNonce => ⟨131, "cookie_nonce", "random", "drivers/net/wireguard/cookie.c", 190, 24, .mirror⟩
+  | .ratelimiterNow => ⟨132, "ratelimiter_now", "clock", "drivers/net/wireguard/ratelimiter.c", 121, 8, .mirror⟩
+  | .ratelimiterInsertNow => ⟨133, "ratelimiter_insert_now", "clock", "drivers/net/wireguard/ratelimiter.c", 146, 8, .mirror⟩
 
 def HiddenSite.all : List HiddenSite :=
   [.initEphemeral, .respEphemeral, .tai64nNow, .indexDraw, .resetLastSent, .birthdateExpired, .initLastSent,
@@ -468,7 +481,7 @@ def HiddenSite.all : List HiddenSite :=
   ++ [.cookieSecretBirthdate, .cookieSecret, .pubkeyHashKey, .ratelimiterKey, .ratelimiterGcNow, .udpPortDraw,
       .neighReachTime]
   ++ [.cookieBirthdate]
-  ++ [.underLoadNow, .cookieNonce]
+  ++ [.underLoadNow, .cookieNonce, .ratelimiterNow, .ratelimiterInsertNow]
 
 /-- The resched site of a worker's `cond_resched`, for the workers that
     have one on the modeled paths. -/

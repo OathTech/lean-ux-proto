@@ -162,6 +162,8 @@ inductive Decision where
   | macInvalid | macNoCookieCheck | cookieLookupMiss
   -- E-B: wg_cookie_validate_packet's MAC2 compare under load (cookie.c:143)
   | macCookieInvalid
+  -- E-B arm C: wg_ratelimiter_allow (ratelimiter.c)
+  | rlProtoIp | rlEntryMatch | rlAllow | rlOverLimit | rlAllocFail
   -- E-A: wg_cookie_message_consume beyond the lookup
   | cookieNoMac1Sent | cookieDecryptOk
   -- drivers/net/wireguard/peerlookup.c
@@ -1149,6 +1151,15 @@ def Decision.info : Decision → DecisionInfo
   | .gcV6EntryIter => d "wg_ratelimiter_gc_entries.v6_entry_iterate" wrl 70 [(71, 73)] []
   | .gcHasWork => d "wg_ratelimiter_gc_entries.has_work" wrl 77 [(78, 78)] []
   | .gcRequeue => d "wg_ratelimiter_gc_entries.requeue" wrl 80 [(81, 81)] []
+  -- E-B arm C: wg_ratelimiter_allow (ratelimiter.c:84-156)
+  | .rlProtoIp => d "wg_ratelimiter_allow.inet" wrl 95 [(96, 98)] []
+  | .rlEntryMatch => d "wg_ratelimiter_allow.entry_matches" wrl 112 [(113, 130)] []
+  -- the `tokens >= PACKET_COST` compare at :126; its outcome (allow/deny) is
+  -- observed downstream (a handshake response vs silence), not at this line; the
+  -- operands are checked
+  | .rlAllow => d "wg_ratelimiter_allow.allow" wrl 126 [] []
+  | .rlOverLimit => d "wg_ratelimiter_allow.over_max_entries" wrl 135 [(136, 136)] [(138, 138)]
+  | .rlAllocFail => d "wg_ratelimiter_allow.alloc_failed" wrl 139 [(140, 140)] [(142, 142)]
 
 /-- The relation of a C value comparison, as written in the source
     (`lhs rel rhs`); `flag` is a mask test `(x & MASK)` against zero. -/
@@ -1179,6 +1190,10 @@ def Decision.comparison : Decision → Option Comparison
   -- noise.c:635-637 (DWARF puts the compare at 635); the condition at 639
   -- tests flood_attack
   | .consumeFlood => some ⟨.gt, false, some 635, true⟩
+  -- E-B arm C: `tokens >= PACKET_COST` (ratelimiter.c:126) and
+  -- `atomic_inc_return(&total_entries) > max_entries` (ratelimiter.c:135)
+  | .rlAllow => some ⟨.ge, true, none, false⟩
+  | .rlOverLimit => some ⟨.gt, true, none, false⟩
   | .allocFdCloexec => some ⟨.flag, true, none, false⟩
   | .placementCidrLe => some ⟨.le, false, none, false⟩
   | .placementExact => some ⟨.eq, false, none, false⟩
@@ -1356,6 +1371,8 @@ def Decision.repeatable : Decision → Bool
   -- (wg_stop, then wg_destruct), and sock_free twice per call
   | .stopPeersIter | .stopDrainIter | .reinitHasNew4 | .sockFreeNull
   | .gcBucketIter | .gcV4EntryIter | .gcV6EntryIter | .gcHasWork => true
+  -- E-B arm C: the ratelimiter bucket walk compares each entry
+  | .rlEntryMatch => true
   | _ => false
 
 /-- Every decision, enumerated through the constructor index. -/

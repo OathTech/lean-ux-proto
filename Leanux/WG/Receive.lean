@@ -119,10 +119,48 @@ def makeCookie (src : SkbSource) : M (List UInt8) := do
   let addr := if src.family == 4 then netBytes src.saddr 4 else netBytes src.saddr 16
   return blake2s 16 secret (addr ++ netBytes src.sport 2)
 
+/-- Ratelimiter constants (ratelimiter.c:34-39): `NSEC_PER_SEC / 20`, times 5. -/
+def PACKET_COST : Int := 1000000000 / 20
+def TOKEN_MAX : Int := PACKET_COST * 5
+/-- `max_entries` on the 256 MiB VM (docs/2026-10-05-e-dos.md §2.6:
+    `roundup_pow_of_two((65536<<12)/(1<<14)/8) = 2048`, `* 8`). -/
+def RL_MAX_ENTRIES : Nat := 16384
+
+/-- wg_ratelimiter_allow (ratelimiter.c:84-156): the per-`(net, ip)` token
+    bucket. The `(net, ip)` hsiphash is a cut and there is one netns per trace,
+    so the mirror keys by source IP. On a bucket hit: refill
+    `min(TOKEN_MAX, tokens + now - last)`, allow iff `>= PACKET_COST`, deduct. On
+    a miss: insert (always allows the first packet). The 16384-entry table limit
+    needs 16384 distinct source IPs — out of reach (the profound reason); the GC
+    that frees stale entries arms a timer (D3), out of scope on this base. -/
+def ratelimiterAllow (src : SkbSource) : M Bool := do
+  if ← branch .rlProtoIp (src.family == 4) then pure ()
+  else unsupported "the ratelimiter on a non-IPv4 handshake (arm C is IPv4)"
+  let ip := src.saddr
+  match (← getK).ratelimiter.table.find? (·.1 == ip) with
+  | some (_, tokens, lastTime) =>
+    _ ← branch .rlEntryMatch true
+    let now ← hiddenClock .ratelimiterNow
+    let newTokens := min TOKEN_MAX (tokens + now - lastTime)
+    let ret ← branchCmp .rlAllow (newTokens ≥ PACKET_COST) newTokens PACKET_COST
+    let tokens' := if ret then newTokens - PACKET_COST else newTokens
+    modifyK fun k => { k with ratelimiter := { k.ratelimiter with
+      table := k.ratelimiter.table.map fun e => if e.1 == ip then (ip, tokens', now) else e } }
+    return ret
+  | none =>
+    let total := (← getK).ratelimiter.table.length + 1
+    if ← branchCmp .rlOverLimit (total > RL_MAX_ENTRIES) (Int.ofNat total) (Int.ofNat RL_MAX_ENTRIES) then
+      unsupported "the ratelimiter table limit (16384 distinct source IPs — out of reach)"
+    if ← branch .rlAllocFail !(← envOk .ratelimiterEntry) then
+      unsupported "a ratelimiter entry allocation failure (-ENOMEM)"
+    let now ← hiddenClock .ratelimiterInsertNow
+    modifyK fun k => { k with ratelimiter := { k.ratelimiter with
+      table := (ip, TOKEN_MAX - PACKET_COST, now) :: k.ratelimiter.table } }
+    return true
+
 /-- wg_cookie_validate_packet (cookie.c:119-154): the MAC1 check, and under
-    load the MAC2 check (make_cookie, compute_mac2). The ratelimiter
-    (cookie.c:147) is a stretch, unreached for a valid-MAC1 initiation with no
-    cookie (its MAC2 fails first). -/
+    load the MAC2 check (make_cookie, compute_mac2) and, on a valid MAC2, the
+    ratelimiter (arm C). -/
 def cookieValidatePacket (msg : List UInt8) (src : SkbSource) (checkCookie : Bool) : M MacState := do
   let len := msg.length
   let computed := blake2s 16 (← getDev).mac1Key (msg.take (len - 32))
@@ -134,7 +172,8 @@ def cookieValidatePacket (msg : List UInt8) (src : SkbSource) (checkCookie : Boo
   let computed2 := blake2s 16 cookie (msg.take (len - 16))
   let givenMac2 := (msg.drop (len - 16)).take 16
   if ← branch .macCookieInvalid (computed2 != givenMac2) then return .noCookie
-  unsupported "the ratelimiter (cookie.c:147, arm C — a stretch)"
+  -- VALID_MAC_WITH_COOKIE_BUT_RATELIMITED unless wg_ratelimiter_allow permits
+  if ← ratelimiterAllow src then return .withCookie else return .ratelimited
 
 /-- wg_socket_send_buffer_as_reply_to_skb (socket.c:203-233): the reply goes to
     the initiating skb's endpoint (the flooding/injecting fixture sender). The

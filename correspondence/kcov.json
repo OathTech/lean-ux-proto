@@ -147,6 +147,7 @@
     "wg_pubkey_hashtable_add",
     "wg_pubkey_hashtable_lookup",
     "wg_pubkey_hashtable_remove",
+    "wg_ratelimiter_allow",
     "wg_ratelimiter_gc_entries",
     "wg_ratelimiter_init",
     "wg_ratelimiter_uninit",
