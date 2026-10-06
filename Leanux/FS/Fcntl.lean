@@ -87,8 +87,10 @@ def doFcntl (fd : Nat) (cmd : FcntlCmd) (arg : UInt64) (fid : FileId) : M Int :=
     _ ← branch .fcntlCaseSetfl true
     setfl fid (argi.toNat.toUInt32)  -- setfl(fd, filp, argi)
   -- `case F_SETPIPE_SZ: case F_GETPIPE_SZ: err = pipe_fcntl(filp, cmd, argi)`
-  -- (fcntl.c:538-541): P2
-  | .setPipeSz | .getPipeSz => unsupported "P2: not yet (pipe_fcntl)"
+  -- (fcntl.c:538-541); pipe_fcntl takes `unsigned int arg`
+  | .setPipeSz | .getPipeSz =>
+    _ ← branch .fcntlCasePipeSz true
+    pipeFcntl fid (if cmd == .setPipeSz then F_SETPIPE_SZ else F_GETPIPE_SZ) (arg.toUInt32.toNat)
 
 /-- SYSCALL_DEFINE3(fcntl) (fcntl.c:573-594). `security_file_fcntl` is the
     constant 0 (`CONFIG_SECURITY=n`), so `if (!err)` is not a branch here. -/

@@ -94,9 +94,20 @@ def fileEndWrite (f : File) : M Unit := do
   unsupported "sb_end_write"
 
 /-- new_sync_write (read_write.c:580-595): the `write_iter` arm of
-    `vfs_write`. P2 opens this collapse (design section 4). -/
-def newSyncWrite (_fid : FileId) (_buf : ByteArray) (_count : Nat) (_ppos : Option Int) : M Int :=
-  unsupported "P2: not yet (new_sync_write)"
+    `vfs_write` (P design section 4). `init_sync_kiocb` copies
+    `f_iocb_flags`; `iov_iter_ubuf` describes the first `len` bytes of the
+    caller's buffer. `ppos` is NULL for `FMODE_STREAM` files (pipes). -/
+def newSyncWrite (fid : FileId) (buf : ByteArray) (len : Nat) (ppos : Option Int) : M Int := do
+  let f ← getFile fid
+  let iocb : Kiocb := { filp := fid, kiFlags := f.fIocbFlags, kiPos := ppos.getD 0 }
+  if len > buf.size then invariant "new_sync_write: the caller's buffer is shorter than len"
+  let ret ← fopWriteIter iocb { bytes := buf.extract 0 len } f.fOp
+  if ← branch .newSyncWriteQueued (ret == -529) then  -- BUG_ON(ret == -EIOCBQUEUED)
+    unsupported "new_sync_write: -EIOCBQUEUED"
+  -- `if (ret > 0 && ppos) *ppos = kiocb.ki_pos`: pipe_write leaves ki_pos
+  if ← branchCmp .newSyncWritePositive (ret > 0) ret 0 then
+    _ ← branch .newSyncWritePpos ppos.isSome
+  return ret
 
 /-- vfs_write (read_write.c:663-693). `buf` is the caller's buffer. -/
 def vfsWrite (fid : FileId) (buf : ByteArray) (count : Nat) (pos : Option Int) : M Int := do

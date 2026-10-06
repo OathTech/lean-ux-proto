@@ -231,11 +231,43 @@ inductive Decision where
   | padClamped
   -- P stream 2 (begin): fs/pipe.c, include/linux/pipe_fs_i.h, fs/fcntl.c,
   -- fs/read_write.c (docs/2026-10-05-p-pipes.md section 11, Appendix A)
+  | anonBufReleaseSole | anonBufReleaseNoTmp | pipeBufConfirmNoConfirm | pipeReadNull | pipeReadNotEmpty
+  | pipeReadCharsOver | pipeReadWhole | pipeReadConfirmError | pipeReadShortCopy | pipeReadFaultNoRet
+  | pipeReadPacket | pipeReadBufEmpty | pipeReadDone | pipeReadMore | pipeReadNoWriters | pipeReadHaveData
+  | pipeReadNonblock | pipeReadNowait | pipeReadEmptyAtEnd | pipeReadWasFull | pipeReadWakeNextReader
+  | pipeReadPositive | pipeWriteNull | pipeWriteNoReaders | pipeWriteChars | pipeWriteNotWasEmpty
+  | pipeWriteCanMerge | pipeWriteFits | pipeWriteMergeConfirmErr | pipeWriteMergeShort | pipeWriteMergeDone
+  | pipeWriteLoopNoReaders | pipeWriteLoopNoRet | pipeWriteNotFull | pipeWriteNoTmpPage
+  | pipeWriteAllocFailed | pipeWriteAllocRet | pipeWritePacketized | pipeWriteShortCopy
+  | pipeWriteShortCopyLeft | pipeWriteFaultNoRet | pipeWriteDone | pipeWriteStaleNotFull | pipeWriteNonblock
+  | pipeWriteNowait | pipeWriteNoRet | pipeWriteFullAtOut | pipeWriteWasEmpty | pipeWritePollUsage
+  | pipeWriteWakeNextWriter | pipeWritePositive | pipeWriteSbTrylock | pipeWriteUpdateTimeErr
+  | putPipeInfoLast | putPipeInfoKill | pipeReleaseRead | pipeReleaseWrite | pipeReleaseOneSide
+  | tooManySoftLimit | tooManySoftOver | tooManyHardLimit | tooManyHardOver | unprivNoResource
+  | unprivNoAdmin | allocPipeInfoNoMem | allocPipeInfoOverMax | allocPipeInfoNotCapable | allocPipeInfoSoft
+  | allocPipeInfoSoftUnpriv | allocPipeInfoHard | allocPipeInfoHardUnpriv | allocPipeInfoBufs
+  | freePipeInfoLoop | freePipeInfoBufOps | freePipeInfoTmpPage | getPipeInodeNoInode | getPipeInodeNoPipe
+  | createPipeFilesNoInode | createPipeFilesNotification | createPipeFilesWriterErr
+  | createPipeFilesReaderErr | doPipeFlagsInvalid | doPipeFlagsCreateErr | doPipeFlagsFdrErr
+  | doPipeFlagsFdwErr | doPipe2Ok | doPipe2CopyFault | roundPipeSizeTooBig | roundPipeSizeSmall
+  | resizeRingNoMem | resizeRingBusy | resizeRingNonEmpty | resizeRingNoWrap | resizeRingHeadPart
+  | resizeRingShrinkMaxUsage | pipeSetSizeZero | pipeSetSizeGrowMax | pipeSetSizeOverMax
+  | pipeSetSizeNotCapable | pipeSetSizeGrowLimits | pipeSetSizeHard | pipeSetSizeSoft | pipeSetSizeUnpriv
+  | pipeSetSizeResizeErr | getPipeInfoNotPipe | getPipeInfoNoPipe | pipeFcntlNoPipe | pipeFcntlSetSize
+  | pipeFcntlGetSize | fcntlCasePipeSz | killFasyncList | newSyncWriteQueued | newSyncWritePositive
+  | newSyncWritePpos | allocFileCloneOk
   -- P stream 2 (end)
   -- P stream 3 (begin): fs/inode.c, include/linux/time64.h, include/linux/fs.h,
   -- fs/libfs.c
   -- P stream 3 (end)
   -- P stream 2 signal (begin): kernel/signal.c
+  | sendSigPriv | sendSigInfoInvalid | doSendSigLock | sendSignalLockedNoinfo | sendSignalLockedPriv
+  | sendSignalNotPrepared | sendSignalShared | legacyQueueNotRt | legacyQueuePending | sendSignalLegacy
+  | sendSignalSigkill | sendSignalKthread | sendSignalNotRt | sendSignalSiSpecial | sendSignalQueued
+  | sendSignalNoinfo | sendSignalPrivInfo | sendSignalOverflowNotSpecial | sendSignalMultiprocess
+  | prepareSignalGroupExit | prepareSignalStop | prepareSignalCont | sigIgnoredBlocked
+  | sigIgnoredRealBlocked | sigIgnoredPtrace | completeSignalWants | wantsSignalBlocked
+  | completeSignalPidType | sigqueueAllocNoUcounts | sigqueueAllocOverride | sigqueueAllocNull
   -- P stream 2 signal (end)
   deriving Repr, BEq, DecidableEq, Inhabited
 
@@ -1088,11 +1120,202 @@ def Decision.info : Decision → DecisionInfo
   | .padClamped => d "calculate_skb_padding.clamped" wsd 157 [] []
   -- P stream 2 (begin): fs/pipe.c, include/linux/pipe_fs_i.h, fs/fcntl.c,
   -- fs/read_write.c (docs/2026-10-05-p-pipes.md section 11, Appendix A)
+  -- `page_count(page) == 1 && !pipe->tmp_page`: the operands share line 125 and the else arm (128)
+  | .anonBufReleaseSole => d "anon_pipe_buf_release.page_count_one" "fs/pipe.c" 125 [] []
+  | .anonBufReleaseNoTmp => d "anon_pipe_buf_release.no_tmp_page" "fs/pipe.c" 125 [(126, 126)] []
+  | .pipeBufConfirmNoConfirm => d "pipe_buf_confirm.no_confirm" "include/linux/pipe_fs_i.h" 230 [(231, 231)] [(232, 232)]
+  | .pipeReadNull => d "pipe_read.null_read" "fs/pipe.c" 260 [(261, 261)] [(263, 279)]
+  -- `!pipe_empty(head, tail)`: the inlined `head == tail` is recorded at 305 (no inline frame)
+  | .pipeReadNotEmpty => d "pipe_read.not_empty" "fs/pipe.c" 305 [(306, 350)] []
+  | .pipeReadCharsOver => d "pipe_read.chars_over_total" "fs/pipe.c" 311 [(312, 317)] []
+  | .pipeReadWhole => d "pipe_read.whole" "fs/pipe.c" 312 [(313, 315)] [(317, 317)]
+  | .pipeReadConfirmError => d "pipe_read.confirm_error" "fs/pipe.c" 321 [(322, 324)] [(327, 328)]
+  | .pipeReadShortCopy => d "pipe_read.short_copy" "fs/pipe.c" 328 [(329, 331)] [(333, 335)]
+  | .pipeReadFaultNoRet => d "pipe_read.fault_no_ret" "fs/pipe.c" 329 [(330, 330)] []
+  | .pipeReadPacket => d "pipe_read.packet" "fs/pipe.c" 338 [(339, 340)] []
+  | .pipeReadBufEmpty => d "pipe_read.buf_empty" "fs/pipe.c" 343 [(344, 344)] []
+  | .pipeReadDone => d "pipe_read.total_done" "fs/pipe.c" 346 [(347, 347)] [(348, 349)]
+  | .pipeReadMore => d "pipe_read.more" "fs/pipe.c" 348 [(349, 349)] []
+  | .pipeReadNoWriters => d "pipe_read.no_writers" "fs/pipe.c" 352 [(353, 353)] [(354, 354)]
+  | .pipeReadHaveData => d "pipe_read.have_data" "fs/pipe.c" 354 [(355, 355)] [(356, 356)]
+  -- `(f_flags & O_NONBLOCK) || (ki_flags & IOCB_NOWAIT)` over 356-357; DWARF puts both tests at 356
+  | .pipeReadNonblock => d "pipe_read.o_nonblock" "fs/pipe.c" 356 [] [(357, 357)]
+  | .pipeReadNowait => d "pipe_read.iocb_nowait" "fs/pipe.c" 357 [(358, 359)] [(361, 395)]
+  | .pipeReadEmptyAtEnd => d "pipe_read.empty_at_end" "fs/pipe.c" 397 [(398, 398)] []
+  | .pipeReadWasFull => d "pipe_read.was_full" "fs/pipe.c" 401 [(402, 402)] []
+  | .pipeReadWakeNextReader => d "pipe_read.wake_next_reader" "fs/pipe.c" 403 [(404, 404)] []
+  | .pipeReadPositive => d "pipe_read.ret_positive" "fs/pipe.c" 406 [(407, 407)] []
+  | .pipeWriteNull => d "pipe_write.null_write" "fs/pipe.c" 452 [(453, 453)] [(455, 455)]
+  | .pipeWriteNoReaders => d "pipe_write.no_readers" "fs/pipe.c" 457 [(458, 460)] [(471, 473)]
+  -- `chars && !was_empty`: the operands share line 474
+  | .pipeWriteChars => d "pipe_write.chars" "fs/pipe.c" 474 [] []
+  | .pipeWriteNotWasEmpty => d "pipe_write.not_was_empty" "fs/pipe.c" 474 [(475, 494)] []
+  -- the merge test over 479-480; DWARF puts `offset + chars <= PAGE_SIZE` at 479
+  | .pipeWriteCanMerge => d "pipe_write.can_merge" "fs/pipe.c" 479 [] []
+  | .pipeWriteFits => d "pipe_write.fits" "fs/pipe.c" 480 [(481, 493)] []
+  | .pipeWriteMergeConfirmErr => d "pipe_write.merge_confirm_error" "fs/pipe.c" 482 [(483, 483)] [(485, 485)]
+  | .pipeWriteMergeShort => d "pipe_write.merge_short_copy" "fs/pipe.c" 486 [(487, 488)] [(491, 492)]
+  | .pipeWriteMergeDone => d "pipe_write.merge_done" "fs/pipe.c" 492 [(493, 493)] []
+  | .pipeWriteLoopNoReaders => d "pipe_write.loop_no_readers" "fs/pipe.c" 498 [(499, 502)] [(505, 506)]
+  | .pipeWriteLoopNoRet => d "pipe_write.epipe_no_ret" "fs/pipe.c" 500 [(501, 501)] []
+  -- `!pipe_full(head, tail, max_usage)`: `head - tail >= max_usage`, recorded at 506
+  | .pipeWriteNotFull => d "pipe_write.not_full" "fs/pipe.c" 506 [(507, 550)] []
+  | .pipeWriteNoTmpPage => d "pipe_write.no_tmp_page" "fs/pipe.c" 512 [(513, 518)] []
+  | .pipeWriteAllocFailed => d "pipe_write.alloc_failed" "fs/pipe.c" 514 [(515, 516)] [(518, 518)]
+  -- `ret = ret ? : -ENOMEM`: a select
+  | .pipeWriteAllocRet => d "pipe_write.alloc_failed_ret" "fs/pipe.c" 515 [] []
+  -- `is_packetized(filp)` (411-414, `f_flags & O_DIRECT`), inlined with its test recorded at 534;
+  -- is_packetized owns no instrumentation point of its own
+  | .pipeWritePacketized => d "pipe_write.packetized" "fs/pipe.c" 534 [(535, 535)] [(537, 537)]
+  -- `copied < PAGE_SIZE && iov_iter_count(from)`: the operands share line 541, and 546 runs
+  -- after either false outcome
+  | .pipeWriteShortCopy => d "pipe_write.short_copy" "fs/pipe.c" 541 [] []
+  | .pipeWriteShortCopyLeft => d "pipe_write.short_copy_count" "fs/pipe.c" 541 [(542, 544)] []
+  | .pipeWriteFaultNoRet => d "pipe_write.fault_no_ret" "fs/pipe.c" 542 [(543, 543)] []
+  | .pipeWriteDone => d "pipe_write.done" "fs/pipe.c" 549 [(550, 550)] []
+  -- `!pipe_full(head, ...)` with the local `head` read at 505: after a slot is inserted
+  -- (`pipe->head = head + 1`, 526) it is one behind (design Appendix A, audit)
+  | .pipeWriteStaleNotFull => d "pipe_write.not_full_stale_head" "fs/pipe.c" 553 [(554, 554)] [(557, 557)]
+  -- `(f_flags & O_NONBLOCK) || (ki_flags & IOCB_NOWAIT)` over 557-558; DWARF puts both tests at 557
+  | .pipeWriteNonblock => d "pipe_write.o_nonblock" "fs/pipe.c" 557 [] [(558, 558)]
+  | .pipeWriteNowait => d "pipe_write.iocb_nowait" "fs/pipe.c" 558 [(559, 561)] [(563, 582)]
+  | .pipeWriteNoRet => d "pipe_write.eagain_no_ret" "fs/pipe.c" 559 [(560, 560)] []
+  | .pipeWriteFullAtOut => d "pipe_write.full_at_out" "fs/pipe.c" 585 [(586, 586)] []
+  -- `was_empty || pipe->poll_usage`: the operands share line 601 and the body (602)
+  | .pipeWriteWasEmpty => d "pipe_write.was_empty" "fs/pipe.c" 601 [] []
+  | .pipeWritePollUsage => d "pipe_write.poll_usage" "fs/pipe.c" 601 [] []
+  | .pipeWriteWakeNextWriter => d "pipe_write.wake_next_writer" "fs/pipe.c" 604 [(605, 605)] []
+  -- `ret > 0 && sb_start_write_trylock(...)`: the operands share line 606; the trylock is a cut
+  -- returning success (design section 5)
+  | .pipeWritePositive => d "pipe_write.ret_positive" "fs/pipe.c" 606 [] []
+  | .pipeWriteSbTrylock => d "pipe_write.sb_start_write_trylock" "fs/pipe.c" 606 [(607, 610)] []
+  | .pipeWriteUpdateTimeErr => d "pipe_write.update_time_error" "fs/pipe.c" 608 [(609, 609)] []
+  -- put_pipe_info and pipe_release run once per __fput: twice in the -EMFILE unwind (design section 4)
+  | .putPipeInfoLast => d "put_pipe_info.last_file" "fs/pipe.c" 712 [(713, 714)] []
+  | .putPipeInfoKill => d "put_pipe_info.kill" "fs/pipe.c" 718 [(719, 719)] []
+  | .pipeReleaseRead => d "pipe_release.fmode_read" "fs/pipe.c" 728 [(729, 729)] []
+  | .pipeReleaseWrite => d "pipe_release.fmode_write" "fs/pipe.c" 730 [(731, 731)] []
+  -- `!pipe->readers != !pipe->writers`: two zero tests and an xor, not one comparison (design section 10)
+  | .pipeReleaseOneSide => d "pipe_release.one_side_left" "fs/pipe.c" 734 [(735, 738)] []
+  -- `soft_limit && user_bufs > soft_limit`: one line, a returned value
+  | .tooManySoftLimit => d "too_many_pipe_buffers_soft.limit_set" "fs/pipe.c" 775 [] []
+  | .tooManySoftOver => d "too_many_pipe_buffers_soft.over_limit" "fs/pipe.c" 775 [] []
+  | .tooManyHardLimit => d "too_many_pipe_buffers_hard.limit_set" "fs/pipe.c" 782 [] []
+  | .tooManyHardOver => d "too_many_pipe_buffers_hard.over_limit" "fs/pipe.c" 782 [] []
+  -- `!capable(CAP_SYS_RESOURCE) && !capable(CAP_SYS_ADMIN)`: `capable` is a cut returning true
+  -- for root (design section 5); alloc_pipe_info may call it at 807 and 812
+  | .unprivNoResource => d "pipe_is_unprivileged_user.not_cap_sys_resource" "fs/pipe.c" 787 [] []
+  | .unprivNoAdmin => d "pipe_is_unprivileged_user.not_cap_sys_admin" "fs/pipe.c" 787 [] []
+  | .allocPipeInfoNoMem => d "alloc_pipe_info.kzalloc_failed" "fs/pipe.c" 799 [(800, 800)] [(802, 802)]
+  -- `pipe_bufs * PAGE_SIZE > max_size` with `pipe_bufs` the constant 16: folded to
+  -- `max_size < 65536`, the variable on the left (design Appendix A)
+  | .allocPipeInfoOverMax => d "alloc_pipe_info.def_over_max_size" "fs/pipe.c" 802 [] []
+  | .allocPipeInfoNotCapable => d "alloc_pipe_info.not_capable" "fs/pipe.c" 802 [(803, 803)] []
+  | .allocPipeInfoSoft => d "alloc_pipe_info.soft_exceeded" "fs/pipe.c" 807 [] []
+  | .allocPipeInfoSoftUnpriv => d "alloc_pipe_info.soft_unprivileged" "fs/pipe.c" 807 [(808, 809)] []
+  | .allocPipeInfoHard => d "alloc_pipe_info.hard_exceeded" "fs/pipe.c" 812 [] []
+  | .allocPipeInfoHardUnpriv => d "alloc_pipe_info.hard_unprivileged" "fs/pipe.c" 812 [(813, 813)] []
+  | .allocPipeInfoBufs => d "alloc_pipe_info.bufs_allocated" "fs/pipe.c" 818 [(819, 828)] [(832, 835)]
+  -- `i < pipe->ring_size`: the rotated loop tests `ring_size != 0` first, a constant
+  -- comparison the mirror's `(i, ring_size)` would not match, so no operands
+  | .freePipeInfoLoop => d "free_pipe_info.slot_iterate" "fs/pipe.c" 850 [(851, 853)] [(859, 859)]
+  | .freePipeInfoBufOps => d "free_pipe_info.buf_ops" "fs/pipe.c" 852 [(853, 853)] []
+  | .freePipeInfoTmpPage => d "free_pipe_info.tmp_page" "fs/pipe.c" 859 [(860, 860)] []
+  | .getPipeInodeNoInode => d "get_pipe_inode.no_inode" "fs/pipe.c" 885 [(886, 886)] [(888, 888)]
+  | .getPipeInodeNoPipe => d "get_pipe_inode.no_pipe" "fs/pipe.c" 891 [(892, 892)] [(894, 909)]
+  | .createPipeFilesNoInode => d "create_pipe_files.no_inode" "fs/pipe.c" 926 [(927, 927)] [(929, 929)]
+  -- `watch_queue_init` is the -ENOPKG stub (CONFIG_WATCH_QUEUE unset): `if (error)` at 931 is folded
+  | .createPipeFilesNotification => d "create_pipe_files.notification_pipe" "fs/pipe.c" 929 [(930, 935)] [(938, 940)]
+  | .createPipeFilesWriterErr => d "create_pipe_files.writer_error" "fs/pipe.c" 941 [(942, 944)] [(947, 950)]
+  | .createPipeFilesReaderErr => d "create_pipe_files.reader_error" "fs/pipe.c" 952 [(953, 955)] [(957, 962)]
+  | .doPipeFlagsInvalid => d "__do_pipe_flags.invalid_flags" "fs/pipe.c" 970 [(971, 971)] [(973, 973)]
+  | .doPipeFlagsCreateErr => d "__do_pipe_flags.create_error" "fs/pipe.c" 974 [(975, 975)] [(977, 977)]
+  | .doPipeFlagsFdrErr => d "__do_pipe_flags.fdr_error" "fs/pipe.c" 978 [(979, 979)] [(980, 982)]
+  | .doPipeFlagsFdwErr => d "__do_pipe_flags.fdw_error" "fs/pipe.c" 983 [(984, 984)] [(985, 993)]
+  | .doPipe2Ok => d "do_pipe2.no_error" "fs/pipe.c" 1025 [(1026, 1035)] []
+  | .doPipe2CopyFault => d "do_pipe2.copy_to_user_failed" "fs/pipe.c" 1026 [(1027, 1031)] [(1033, 1034)]
+  | .roundPipeSizeTooBig => d "round_pipe_size.too_big" "fs/pipe.c" 1249 [(1250, 1250)] [(1253, 1253)]
+  | .roundPipeSizeSmall => d "round_pipe_size.below_page" "fs/pipe.c" 1253 [(1254, 1254)] [(1256, 1256)]
+  | .resizeRingNoMem => d "pipe_resize_ring.kcalloc_failed" "fs/pipe.c" 1273 [(1274, 1274)] [(1276, 1282)]
+  | .resizeRingBusy => d "pipe_resize_ring.busy" "fs/pipe.c" 1282 [(1283, 1285)] [(1292, 1292)]
+  | .resizeRingNonEmpty => d "pipe_resize_ring.non_empty" "fs/pipe.c" 1292 [(1293, 1305)] []
+  | .resizeRingNoWrap => d "pipe_resize_ring.h_after_t" "fs/pipe.c" 1295 [(1296, 1297)] [(1299, 1304)]
+  | .resizeRingHeadPart => d "pipe_resize_ring.h_nonzero" "fs/pipe.c" 1300 [(1301, 1302)] []
+  -- dead in this build: 1320 stores `max_usage` unconditionally, so the compiler dropped the test
+  -- (no comparison record, no point); still the C's choice point
+  | .resizeRingShrinkMaxUsage => d "pipe_resize_ring.shrink_max_usage" "fs/pipe.c" 1314 [] []
+  | .pipeSetSizeZero => d "pipe_set_size.no_slots" "fs/pipe.c" 1347 [(1348, 1348)] [(1357, 1357)]
+  -- `nr_slots > max_usage && size > pipe_max_size && !capable(...)` over 1357-1358; DWARF puts
+  -- both comparisons at 1357
+  | .pipeSetSizeGrowMax => d "pipe_set_size.grow_check_max" "fs/pipe.c" 1357 [] []
+  | .pipeSetSizeOverMax => d "pipe_set_size.over_max_size" "fs/pipe.c" 1358 [] []
+  | .pipeSetSizeNotCapable => d "pipe_set_size.not_capable" "fs/pipe.c" 1358 [(1359, 1359)] []
+  | .pipeSetSizeGrowLimits => d "pipe_set_size.grow_check_limits" "fs/pipe.c" 1363 [] []
+  | .pipeSetSizeHard => d "pipe_set_size.hard_exceeded" "fs/pipe.c" 1364 [] []
+  | .pipeSetSizeSoft => d "pipe_set_size.soft_exceeded" "fs/pipe.c" 1365 [] []
+  | .pipeSetSizeUnpriv => d "pipe_set_size.unprivileged" "fs/pipe.c" 1366 [(1367, 1368)] []
+  | .pipeSetSizeResizeErr => d "pipe_set_size.resize_error" "fs/pipe.c" 1372 [(1373, 1373)] [(1375, 1375)]
+  -- `file->f_op != &pipefifo_fops || !pipe`: one line; `for_splice && ...` (1392) folds away
+  | .getPipeInfoNotPipe => d "get_pipe_info.not_pipefifo" "fs/pipe.c" 1390 [] []
+  | .getPipeInfoNoPipe => d "get_pipe_info.no_pipe" "fs/pipe.c" 1390 [] [(1394, 1394)]
+  | .pipeFcntlNoPipe => d "pipe_fcntl.no_pipe" "fs/pipe.c" 1403 [(1404, 1404)] [(1406, 1406)]
+  | .pipeFcntlSetSize => d "pipe_fcntl.case_f_setpipe_sz" "fs/pipe.c" 1409 [(1410, 1411)] []
+  | .pipeFcntlGetSize => d "pipe_fcntl.case_f_getpipe_sz" "fs/pipe.c" 1412 [(1413, 1414)] []
+  | .fcntlCasePipeSz => d "do_fcntl.case_f_setpipe_sz" fc 538 [(539, 541)] []
+  | .killFasyncList => d "kill_fasync.has_list" fc 1151 [(1152, 1154)] []
+  | .newSyncWriteQueued => d "new_sync_write.eiocbqueued" rw 591 [] []
+  -- `ret > 0 && ppos`: one line; `ppos` is NULL for FMODE_STREAM files
+  | .newSyncWritePositive => d "new_sync_write.ret_positive" rw 592 [] []
+  | .newSyncWritePpos => d "new_sync_write.ppos" rw 592 [(593, 593)] []
+  -- fs/file_table.c, called only by create_pipe_files on these paths
+  | .allocFileCloneOk => d "alloc_file_clone.ok" ft 433 [(434, 435)] []
   -- P stream 2 (end)
   -- P stream 3 (begin): fs/inode.c, include/linux/time64.h, include/linux/fs.h,
   -- fs/libfs.c
   -- P stream 3 (end)
   -- P stream 2 signal (begin): kernel/signal.c
+  -- `__si_special(priv)`: a select between SEND_SIG_PRIV and SEND_SIG_NOINFO
+  | .sendSigPriv => d "send_sig.priv" "kernel/signal.c" 1675 [] []
+  -- `!valid_signal(sig)`: `sig <= _NSIG` (include/linux/signal.h:274), recorded at 1662
+  | .sendSigInfoInvalid => d "send_sig_info.invalid_signal" "kernel/signal.c" 1662 [(1663, 1663)] [(1665, 1665)]
+  | .doSendSigLock => d "do_send_sig_info.lock_task_sighand" "kernel/signal.c" 1303 [(1304, 1305)] []
+  | .sendSignalLockedNoinfo => d "send_signal_locked.noinfo" "kernel/signal.c" 1221 [(1222, 1223)] [(1224, 1249)]
+  | .sendSignalLockedPriv => d "send_signal_locked.priv" "kernel/signal.c" 1224 [(1225, 1226)] [(1227, 1249)]
+  | .sendSignalNotPrepared => d "__send_signal_locked.not_prepared" "kernel/signal.c" 1084 [(1085, 1085)] [(1087, 1087)]
+  -- `pending = (type != PIDTYPE_PID) ? ...`: a select
+  | .sendSignalShared => d "__send_signal_locked.shared_pending" "kernel/signal.c" 1087 [] []
+  -- `(sig < SIGRTMIN) && sigismember(&signals->signal, sig)`: one line, a returned value
+  | .legacyQueueNotRt => d "legacy_queue.not_rt" "kernel/signal.c" 1070 [] []
+  | .legacyQueuePending => d "legacy_queue.pending" "kernel/signal.c" 1070 [] []
+  | .sendSignalLegacy => d "__send_signal_locked.legacy_queue" "kernel/signal.c" 1094 [(1095, 1095)] [(1097, 1101)]
+  -- `(sig == SIGKILL) || (t->flags & PF_KTHREAD)`: one line
+  | .sendSignalSigkill => d "__send_signal_locked.sigkill" "kernel/signal.c" 1101 [] []
+  | .sendSignalKthread => d "__send_signal_locked.kthread" "kernel/signal.c" 1101 [] [(1113, 1118)]
+  -- no comparison record at 1113 (the compare is shared with 1101's): not declared one
+  | .sendSignalNotRt => d "__send_signal_locked.not_rt" "kernel/signal.c" 1113 [(1114, 1114)] [(1116, 1116)]
+  -- `is_si_special(info) || info->si_code >= 0`: one line, assigned
+  | .sendSignalSiSpecial => d "__send_signal_locked.si_special" "kernel/signal.c" 1114 [] []
+  | .sendSignalQueued => d "__send_signal_locked.queued" "kernel/signal.c" 1120 [(1121, 1146)] [(1148, 1164)]
+  | .sendSignalNoinfo => d "__send_signal_locked.case_noinfo" "kernel/signal.c" 1123 [(1124, 1135)] []
+  | .sendSignalPrivInfo => d "__send_signal_locked.case_priv" "kernel/signal.c" 1136 [(1137, 1143)] []
+  | .sendSignalOverflowNotSpecial => d "__send_signal_locked.overflow_not_special" "kernel/signal.c" 1148 [] []
+  | .sendSignalMultiprocess => d "__send_signal_locked.multiprocess" "kernel/signal.c" 1171 [(1172, 1182)] [(1184, 1184)]
+  -- `signal->flags` is not mirrored (the trace child is not exiting): not declared a comparison
+  | .prepareSignalGroupExit => d "prepare_signal.group_exit" "kernel/signal.c" 908 [(909, 914)] [(915, 915)]
+  | .prepareSignalStop => d "prepare_signal.kernel_stop" "kernel/signal.c" 915 [(916, 922)] [(923, 923)]
+  | .prepareSignalCont => d "prepare_signal.sigcont" "kernel/signal.c" 923 [(924, 964)] []
+  -- `sigismember(&t->blocked, sig) || sigismember(&t->real_blocked, sig)`: one line, one body
+  | .sigIgnoredBlocked => d "sig_ignored.blocked" "kernel/signal.c" 111 [] []
+  | .sigIgnoredRealBlocked => d "sig_ignored.real_blocked" "kernel/signal.c" 111 [] [(119, 122)]
+  | .sigIgnoredPtrace => d "sig_ignored.ptraced" "kernel/signal.c" 119 [(120, 120)] [(122, 122)]
+  | .completeSignalWants => d "complete_signal.wants_signal" "kernel/signal.c" 1004 [(1005, 1005)] [(1006, 1006)]
+  | .wantsSignalBlocked => d "wants_signal.blocked" "kernel/signal.c" 979 [(980, 980)] [(982, 991)]
+  -- `(type == PIDTYPE_PID) || thread_group_empty(p)`: one line, one body
+  | .completeSignalPidType => d "complete_signal.pid_type" "kernel/signal.c" 1006 [] []
+  | .sigqueueAllocNoUcounts => d "__sigqueue_alloc.no_ucounts" "kernel/signal.c" 425 [(426, 426)] [(428, 428)]
+  -- `override_rlimit || likely(sigpending <= task_rlimit(...))`: one line, one body
+  | .sigqueueAllocOverride => d "__sigqueue_alloc.override_rlimit" "kernel/signal.c" 428 [] []
+  | .sigqueueAllocNull => d "__sigqueue_alloc.q_null" "kernel/signal.c" 434 [(435, 435)] [(437, 439)]
   -- P stream 2 signal (end)
 
 /-- The relation of a C value comparison, as written in the source
@@ -1208,11 +1431,88 @@ def Decision.comparison : Decision → Option Comparison
   | .expandFdtableBugNr => some ⟨.lt, false, none, false⟩
   -- P stream 2 (begin): fs/pipe.c, include/linux/pipe_fs_i.h, fs/fcntl.c,
   -- fs/read_write.c (docs/2026-10-05-p-pipes.md section 11, Appendix A)
+  | .anonBufReleaseSole => some ⟨.eq, true, none, false⟩
+  | .pipeReadNull => some ⟨.eq, true, none, false⟩
+  | .pipeReadNotEmpty => some ⟨.eq, false, none, false⟩
+  | .pipeReadCharsOver => some ⟨.gt, false, none, false⟩
+  | .pipeReadWhole => some ⟨.flag, true, none, false⟩
+  | .pipeReadConfirmError => some ⟨.ne, true, none, false⟩
+  | .pipeReadShortCopy => some ⟨.lt, false, none, false⟩
+  | .pipeReadFaultNoRet => some ⟨.eq, true, none, false⟩
+  | .pipeReadPacket => some ⟨.flag, true, none, false⟩
+  | .pipeReadBufEmpty => some ⟨.eq, true, none, false⟩
+  | .pipeReadDone => some ⟨.eq, true, none, false⟩
+  | .pipeReadMore => some ⟨.eq, false, none, false⟩
+  | .pipeReadNoWriters => some ⟨.eq, true, none, false⟩
+  | .pipeReadHaveData => some ⟨.ne, true, none, false⟩
+  | .pipeReadNonblock => some ⟨.flag, true, none, false⟩
+  | .pipeReadNowait => some ⟨.flag, true, some 356, false⟩
+  | .pipeReadEmptyAtEnd => some ⟨.eq, false, none, false⟩
+  | .pipeReadPositive => some ⟨.gt, true, none, false⟩
+  | .pipeWriteNull => some ⟨.eq, true, none, false⟩
+  | .pipeWriteNoReaders => some ⟨.eq, true, none, false⟩
+  | .pipeWriteChars => some ⟨.ne, true, none, false⟩
+  | .pipeWriteCanMerge => some ⟨.flag, true, none, false⟩
+  | .pipeWriteFits => some ⟨.le, true, some 479, false⟩
+  | .pipeWriteMergeConfirmErr => some ⟨.ne, true, none, false⟩
+  | .pipeWriteMergeShort => some ⟨.lt, false, none, false⟩
+  | .pipeWriteMergeDone => some ⟨.eq, true, none, false⟩
+  | .pipeWriteLoopNoReaders => some ⟨.eq, true, none, false⟩
+  | .pipeWriteLoopNoRet => some ⟨.eq, true, none, false⟩
+  | .pipeWriteNotFull => some ⟨.ge, false, none, false⟩
+  | .pipeWriteAllocRet => some ⟨.ne, true, none, false⟩
+  | .pipeWritePacketized => some ⟨.flag, true, none, false⟩
+  | .pipeWriteShortCopy => some ⟨.lt, true, none, false⟩
+  | .pipeWriteShortCopyLeft => some ⟨.ne, true, none, false⟩
+  | .pipeWriteFaultNoRet => some ⟨.eq, true, none, false⟩
+  | .pipeWriteDone => some ⟨.eq, true, none, false⟩
+  | .pipeWriteStaleNotFull => some ⟨.ge, false, none, false⟩
+  | .pipeWriteNonblock => some ⟨.flag, true, none, false⟩
+  | .pipeWriteNowait => some ⟨.flag, true, some 557, false⟩
+  | .pipeWriteNoRet => some ⟨.eq, true, none, false⟩
+  | .pipeWriteFullAtOut => some ⟨.ge, false, none, false⟩
+  | .pipeWritePositive => some ⟨.gt, true, none, false⟩
+  | .pipeWriteUpdateTimeErr => some ⟨.ne, true, none, false⟩
+  | .putPipeInfoLast => some ⟨.eq, true, none, false⟩
+  | .pipeReleaseRead => some ⟨.flag, true, none, false⟩
+  | .pipeReleaseWrite => some ⟨.flag, true, none, false⟩
+  | .tooManySoftLimit => some ⟨.ne, true, none, false⟩
+  | .tooManySoftOver => some ⟨.gt, false, none, false⟩
+  | .tooManyHardLimit => some ⟨.ne, true, none, false⟩
+  | .tooManyHardOver => some ⟨.gt, false, none, false⟩
+  | .allocPipeInfoOverMax => some ⟨.lt, true, none, false⟩
+  | .createPipeFilesNotification => some ⟨.flag, true, none, false⟩
+  | .doPipeFlagsInvalid => some ⟨.flag, true, none, false⟩
+  | .doPipeFlagsCreateErr => some ⟨.ne, true, none, false⟩
+  | .doPipeFlagsFdrErr => some ⟨.lt, true, none, false⟩
+  | .doPipeFlagsFdwErr => some ⟨.lt, true, none, false⟩
+  | .doPipe2Ok => some ⟨.eq, true, none, false⟩
+  | .roundPipeSizeTooBig => some ⟨.gt, true, none, false⟩
+  | .roundPipeSizeSmall => some ⟨.lt, true, none, false⟩
+  | .resizeRingBusy => some ⟨.lt, false, none, false⟩
+  | .resizeRingNonEmpty => some ⟨.gt, true, none, false⟩
+  | .resizeRingNoWrap => some ⟨.gt, false, none, false⟩
+  | .resizeRingHeadPart => some ⟨.gt, true, none, false⟩
+  | .pipeSetSizeZero => some ⟨.eq, true, none, false⟩
+  | .pipeSetSizeGrowMax => some ⟨.gt, false, none, false⟩
+  | .pipeSetSizeOverMax => some ⟨.gt, false, some 1357, false⟩
+  | .pipeSetSizeGrowLimits => some ⟨.gt, false, none, false⟩
+  | .pipeSetSizeResizeErr => some ⟨.lt, true, none, false⟩
+  | .newSyncWritePositive => some ⟨.gt, true, none, false⟩
   -- P stream 2 (end)
   -- P stream 3 (begin): fs/inode.c, include/linux/time64.h, include/linux/fs.h,
   -- fs/libfs.c
   -- P stream 3 (end)
   -- P stream 2 signal (begin): kernel/signal.c
+  | .sendSigPriv => some ⟨.ne, true, none, false⟩
+  | .sendSigInfoInvalid => some ⟨.le, true, none, false⟩
+  | .sendSignalShared => some ⟨.ne, true, none, false⟩
+  | .legacyQueueNotRt => some ⟨.lt, true, none, false⟩
+  | .sendSignalSigkill => some ⟨.eq, true, none, false⟩
+  | .sendSignalMultiprocess => some ⟨.gt, true, none, false⟩
+  | .prepareSignalCont => some ⟨.eq, true, none, false⟩
+  | .completeSignalPidType => some ⟨.eq, true, none, false⟩
+  | .sigqueueAllocOverride => some ⟨.ne, true, none, false⟩
   -- P stream 2 signal (end)
   | _ => none
 
@@ -1316,6 +1616,15 @@ def Decision.repeatable : Decision → Bool
   | .fileFreeAccounted | .fileFreeBacking => true
   -- P stream 2 (begin): fs/pipe.c, include/linux/pipe_fs_i.h, fs/fcntl.c,
   -- fs/read_write.c (docs/2026-10-05-p-pipes.md section 11, Appendix A)
+  | .anonBufReleaseSole | .anonBufReleaseNoTmp | .pipeBufConfirmNoConfirm | .pipeReadNotEmpty
+  | .pipeReadCharsOver | .pipeReadWhole | .pipeReadConfirmError | .pipeReadShortCopy | .pipeReadFaultNoRet
+  | .pipeReadPacket | .pipeReadBufEmpty | .pipeReadDone | .pipeReadMore | .pipeReadNoWriters
+  | .pipeReadHaveData | .pipeReadNonblock | .pipeReadNowait | .pipeWriteLoopNoReaders | .pipeWriteLoopNoRet
+  | .pipeWriteNotFull | .pipeWriteNoTmpPage | .pipeWriteAllocFailed | .pipeWriteAllocRet
+  | .pipeWritePacketized | .pipeWriteShortCopy | .pipeWriteShortCopyLeft | .pipeWriteFaultNoRet
+  | .pipeWriteDone | .pipeWriteStaleNotFull | .pipeWriteNonblock | .pipeWriteNowait | .pipeWriteNoRet
+  | .putPipeInfoLast | .putPipeInfoKill | .pipeReleaseRead | .pipeReleaseWrite | .pipeReleaseOneSide
+  | .unprivNoResource | .unprivNoAdmin | .freePipeInfoLoop | .freePipeInfoBufOps | .killFasyncList => true
   -- P stream 2 (end)
   -- P stream 3 (begin): fs/inode.c, include/linux/time64.h, include/linux/fs.h,
   -- fs/libfs.c

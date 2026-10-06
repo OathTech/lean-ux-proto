@@ -3,6 +3,7 @@ import Leanux.FS.ReadWrite
 import Leanux.FS.Fcntl
 import Leanux.FS.Close
 import Leanux.FS.Inode
+import Leanux.FS.PipeCreate
 import Leanux.Env
 
 /-!
@@ -85,8 +86,7 @@ def dispatch : Syscall → M Int
   | .close fd => sysClose fd
   | .read fd count => ksysRead fd count
   | .write fd count buf => ksysWrite fd buf count
-  -- SYSCALL_DEFINE2(pipe2) -> do_pipe2 (fs/pipe.c:1018-1043): P2
-  | .pipe2 _ => unsupported "P2: not yet (pipe2)"
+  | .pipe2 flags => sysPipe2 flags
   | .fcntl fd cmd arg => sysFcntl fd cmd arg
   | .wgSet attrs => netlinkRequest (WG.wgSetDevice attrs)
   | .wgGet => netlinkRequest do

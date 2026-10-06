@@ -1,4 +1,5 @@
 import Leanux.Kernel.Refcount
+import Leanux.FS.Pipe
 
 /-!
 # fs/eventfd.c — context and file operations
@@ -14,15 +15,6 @@ waiter-present outcome is `unsupported`.
 -/
 
 namespace Leanux
-
-/-- `struct kiocb`, the parts `eventfd_read` consults. -/
-structure Kiocb where
-  filp : FileId
-  kiFlags : UInt32
-  kiPos : Int
-
-/-- `IOCB_NOWAIT` (include/linux/fs.h). -/
-def IOCB_NOWAIT : UInt32 := 0x8   -- RWF_NOWAIT
 
 /-- `file->private_data` of an eventfd file. -/
 def eventfdCtxOf (file : File) : M CtxId :=
@@ -170,13 +162,17 @@ def fopsOf : Option FopsId → M Fops
 
 def fopRelease (fid : FileId) : Option FopsId → M Int
   | some .eventfd => eventfdRelease fid
-  | some .pipefifo => unsupported "P2: not yet (pipe_release)"
+  | some .pipefifo => do
+    -- pipe_release(inode, file): `inode` is the file's pipefs inode
+    match (← getFile fid).fInode with
+    | some (.pipefs ino) => pipeRelease ino fid
+    | _ => invariant "a pipefifo file whose f_inode is not a pipefs inode"
   | some (.fixture name) => unsupported s!"release of fixture file {name}"
   | none => invariant "file->f_op is NULL"
 
 def fopReadIter (iocb : Kiocb) (count : Nat) : Option FopsId → M Int
   | some .eventfd => eventfdRead iocb count
-  | some .pipefifo => unsupported "P2: not yet (pipe_read)"
+  | some .pipefifo => pipeRead iocb count
   | some (.fixture name) => unsupported s!"read_iter of fixture file {name}"
   | none => invariant "file->f_op is NULL"
 
@@ -188,8 +184,8 @@ def fopWrite (fid : FileId) (buf : ByteArray) (count : Nat) : Option FopsId → 
 
 /-- `f_op->write_iter` (the `new_sync_write` path). `from` is the caller's
     buffer as an `iov_iter`. -/
-def fopWriteIter (_iocb : Kiocb) (_from : IovIter) : Option FopsId → M Int
-  | some .pipefifo => unsupported "P2: not yet (pipe_write)"
+def fopWriteIter (iocb : Kiocb) («from» : IovIter) : Option FopsId → M Int
+  | some .pipefifo => pipeWrite iocb «from»
   | some .eventfd => invariant "eventfd_fops has no write_iter (fopsOf routes it to write)"
   | some (.fixture name) => unsupported s!"write_iter of fixture file {name}"
   | none => invariant "file->f_op is NULL"
