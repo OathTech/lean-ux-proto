@@ -1,4 +1,5 @@
-"""WireGuard mutants (stage A report, section 2; stages B1, B2, C, D1 and D2).
+"""WireGuard mutants (stage A report, section 2; stages B1, B2, C, D1, D2 and
+workstream L).
 
 Each mutant is applied to a clean committed tree, verified as applied, checked
 on the wireguard suite, then reverted. Run from the repository root:
@@ -245,6 +246,70 @@ D2_MUTANTS = [
    "  napiSoftirq\n"),
 ]
 PENDING = {m[0] for m in D2_MUTANTS if m[3] is None}
+# Workstream L (docs/2026-10-05-l-lifecycle.md, section 8): checked on the
+# l_* traces of the wireguard suite (the sixth field), each naming the trace
+# that rejects it. L-M10 is a data-only correction nothing observes: it is
+# run and expected to pass (not claimed as evidence).
+L_MUTANTS = [
+  ('L-M1-stop-keeps-staged', 'behavior: wg_stop does not purge the staged packets (device.c:123); '
+   'tx_dropped differs (l_down_purges_staged)', 'Leanux/WG/Device.lean',
+   "    purgeStagedPackets pid\n    timersStop pid\n", "    timersStop pid\n", 'l_'),
+  ('L-M2-stop-keeps-last-sent', 'behavior and hidden: wg_stop does not reset last_sent_handshake (device.c:127); '
+   'the reset_last_sent record is left over (l_down_up_keepalive)', 'Leanux/WG/Device.lean',
+   "    keypairsClear pid\n    resetLastSentHandshake pid\n  _ ← branch .stopPeersIter false\n",
+   "    keypairsClear pid\n  _ ← branch .stopPeersIter false\n", 'l_'),
+  ('L-M3-reinit-clears-port', 'data: wg_socket_reinit with a NULL new4 sets incoming_port 0 (socket.c:431-432); '
+   'the dump after a down differs, and the reopen draws a port', 'Leanux/WG/Socket.lean',
+   "  if ← branch .reinitHasNew4 new4.isSome then\n    let some port := new4 | invariant \"unreachable\"\n"
+   "    modifyDev fun d => { d with incomingPort := port }   -- ntohs(inet_sk(new4)->inet_sport)\n",
+   "  if ← branch .reinitHasNew4 new4.isSome then\n    let some port := new4 | invariant \"unreachable\"\n"
+   "    modifyDev fun d => { d with incomingPort := port }   -- ntohs(inet_sk(new4)->inet_sport)\n"
+   "  else modifyDev fun d => { d with incomingPort := 0 }\n", 'l_'),
+  ('L-M4-set-port-stores-when-running', 'behavior: set_port stores the port instead of binding on a running '
+   'device (netlink.c:326); l_set_port_running_inuse returns 0, l_set_port_running sends from 51820',
+   'Leanux/WG/Netlink.lean', "  socketInit port\n",
+   "  modifyDev fun d => { d with incomingPort := port }\n  return 0\n", 'l_'),
+  ('L-M5-port-mod', 'data: the random port is low + rand % remaining instead of reciprocal_scale (udp.c:258); '
+   'listen_port differs (l_random_port_natural, the steered traces)', 'Leanux/WG/Socket.lean',
+   "  LOCAL_PORT_LOW + (rand * (LOCAL_PORT_HIGH - LOCAL_PORT_LOW + 1)) / 2 ^ 32\n",
+   "  LOCAL_PORT_LOW + rand % (LOCAL_PORT_HIGH - LOCAL_PORT_LOW + 1)\n", 'l_'),
+  ('L-M6-uninit-keeps-refcount', 'hidden: wg_ratelimiter_uninit does not drop init_refcnt (ratelimiter.c:208); '
+   'the next creation leaves the ratelimiter_key record (l_delete_create, l_create_delete_create)',
+   'Leanux/WG/Device.lean',
+   "  modifyK fun k => { k with ratelimiter := { k.ratelimiter with refcnt := r - 1 } }\n", "", 'l_'),
+  ('L-M7-ifindex-constant', 'data: register_netdevice gives ifindex 3 always (dev.c:10000-10018); '
+   'the recreated device\'s dump differs (l_delete_create, l_create_delete_create)', 'Leanux/WG/Device.lean',
+   "  modifyDev fun d => { d with ifindex }\n", "  modifyDev fun d => { d with ifindex := 3 }\n", 'l_'),
+  ('L-M8-delete-skips-stop', 'hidden and control: deleting an up device skips wg_stop (dev.c:11526); '
+   'the reset_last_sent record is left over (l_delete_up)', 'Leanux/WG/Device.lean',
+   "  if (← getDev).running then wgDown\n", "", 'l_'),
+  ('L-M9-failed-open-stays-running', 'behavior and control: a failed wg_open leaves __LINK_STATE_START set '
+   '(dev.c:1556); the next port change binds (l_up_fixture_port)', 'Leanux/WG/Device.lean',
+   "  if ret < 0 then modifyDev fun d => { d with running := false }\n", "", 'l_'),
+  ('L-M10-update-gen-zero', 'data only, unobservable: device_update_gen starts at 0 (device.c:323); '
+   'expected to pass (not claimed)', 'Leanux/WG/Device.lean',
+   "  modifyDev fun d => { d with deviceUpdateGen := 1 }\n", "  modifyDev fun d => { d with deviceUpdateGen := 0 }\n",
+   'l_'),
+  ('L-M11-stop-keeps-keypairs', 'behavior and control: wg_stop does not clear the keypairs (device.c:126); '
+   'the old session\'s data message is decrypted (l_down_after_session)', 'Leanux/WG/Device.lean',
+   "    handshakeClear pid\n    keypairsClear pid\n", "    handshakeClear pid\n", 'l_'),
+  ('L-M12-stop-keeps-handshake', 'behavior and control: wg_stop does not clear the handshake (device.c:125); '
+   'the stale response is consumed (l_down_up_stale_response)', 'Leanux/WG/Device.lean',
+   "    timersStop pid\n    handshakeClear pid\n", "    timersStop pid\n", 'l_'),
+  ('L-M13-down-keeps-routes', 'environment: wg_down leaves the routes into wg0; the wg_xmit after it reaches '
+   'wg_xmit (l_down_purges_staged)', 'Leanux/Env.lean',
+   "  WG.wgDown\n  modify fun w => { w with routesViaWg0 := false }\n", "  WG.wgDown\n", 'l_'),
+]
+NOT_CLAIMED = {'L-M10-update-gen-zero'}
+# evaluator.check on the traces of one suite whose ids start with a prefix
+SUBSET = """import sys
+sys.path.insert(0, '.')
+import evaluator.check as c
+prefix = sys.argv[1]
+load = c.load_traces
+c.load_traces = lambda *a, **k: [t for t in load(*a, **k) if t['id'].startswith(prefix)]
+sys.exit(c.main(sys.argv[2:]))
+"""
 
 
 def w4(text):
@@ -277,10 +342,10 @@ def run(cmd, **kw):
 
 assert run(['git', 'status', '--porcelain'], capture_output=True, text=True).stdout == '', 'tree must be clean'
 head = run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()
-MUTANTS = MUTANTS + D1_MUTANTS + D2_MUTANTS
+MUTANTS = MUTANTS + D1_MUTANTS + D2_MUTANTS + L_MUTANTS
 selected = sys.argv[1:] or [m[0] for m in MUTANTS]
 results = {}
-for name, what, path, old, new in MUTANTS:
+for name, what, path, old, new, *subset in MUTANTS:
     if name not in selected:
         continue
     if name in PENDING:   # a draft entry: its pattern is filled at integration
@@ -300,7 +365,8 @@ for name, what, path, old, new in MUTANTS:
         assert path in diff, f'{name}: mutation not applied'
         out = f'.artifacts/check/mutant-{name}'
         run(['rm', '-rf', out])
-        proc = run(['timeout', '3000', sys.executable, '-m', 'evaluator.check', '--suite', 'wireguard',
+        check = ['-c', SUBSET, subset[0]] if subset else ['-m', 'evaluator.check']
+        proc = run(['timeout', '3000', sys.executable, *check, '--suite', 'wireguard',
                     '--out', out], capture_output=True, text=True)
         report = json.load(open(os.path.join(ROOT, out, 'report.json')))
         kinds = sorted({p['problem'] for f in report['failures'] for p in f.get('problems', [])} |
@@ -310,6 +376,8 @@ for name, what, path, old, new in MUTANTS:
                              resched_records=resched_records(out))
         if name == 'D1-M15-ignore-resched' and report['status'] == 'pass' and not results[name]['resched_records']:
             results[name]['status'] = 'inconclusive'   # no reschedule occurred to ignore
+        if name in NOT_CLAIMED:
+            results[name]['status'] = 'not-claimed-' + report['status']
         if name == 'D2-M12-poll-outside-worker':
             orders = napi_orders(os.path.join(ROOT, out))
             results[name]['napi_orders'] = dict(a=orders['a'], bc=orders['bc'])
