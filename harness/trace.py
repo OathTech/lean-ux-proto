@@ -50,10 +50,10 @@ OPTIONAL_OP_FIELDS = {"pause_ms"}
 PAUSE_MS = (1, 20)
 # The guest (harness/guest.c) implements the pipes contract: pipe2, the pipe
 # descriptor kinds, F_SETPIPE_SZ/F_GETPIPE_SZ, pause_ms and counts up to
-# MAX_IO. Until it does, such traces are rejected as unsupported (fail
-# closed), and counts stay within the guest's 16-byte buffer. Stream P1
-# switches this on together with guest.c.
-GUEST_PIPES = False
+# MAX_IO (stream P1). With this off, such traces are rejected as unsupported
+# (fail closed), counts stay within the old guest's 16-byte buffer, and the
+# wire has no ninth field.
+GUEST_PIPES = True
 LEGACY_IO = 16
 
 

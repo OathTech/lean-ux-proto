@@ -36,19 +36,17 @@ def keys(value, expected):
 # A read's "bytes" is the hex of its first READ_HEAD bytes (all of them when
 # ret <= READ_HEAD; eventfd reads are unchanged). Each operation kind's fields
 # beyond index/ret/errno/bytes:
-#   pipe2: "fds": [r, w] after success, null on failure (active now)
+#   pipe2: "fds": [r, w] after success, null on failure
 #   read:  "digest": 64 hex digits, BLAKE2s-256 of all ret bytes when ret > 0,
 #          else null
 #   write: "sigpipe": 0 or 1, whether SIGPIPE is pending after the call
-# `digest` and `sigpipe` change today's eventfd observations, so stream P1
-# switches them on together with the guest (harness/guest.c) and the runner
-# (Leanux/Runner.lean readDigest, writeSigpipe): move them into
-# EXTRA_FIELDS then.
+# `digest` and `sigpipe` are emitted by the guest (harness/guest.c) and the
+# runner (Leanux/Runner.lean readDigest, writeSigpipe) for every read and
+# write, eventfd's included (stream P1 switched them on together).
 READ_HEAD = 64
 MAX_IO = 69632
 DIGEST = re.compile(r'[0-9a-f]{64}')
-EXTRA_FIELDS = {'pipe2': ('fds',)}
-EXTRA_FIELDS_P1 = {'read': ('digest',), 'write': ('sigpipe',)}
+EXTRA_FIELDS = {'pipe2': ('fds',), 'read': ('digest',), 'write': ('sigpipe',)}
 
 
 def validate_observation(trace, result):
