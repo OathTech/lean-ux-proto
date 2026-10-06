@@ -37,6 +37,9 @@ STEERED_SHARE = 0.15
 # The share that are steered data-plane traces (stage D2, steered_data):
 # payload transmissions and received data messages.
 DATA_SHARE = 0.15
+# The share that steer allocation failures (A1, alloc_fail): the chunks that
+# hold one are armed, so every network trace in them runs armed.
+ALLOC_SHARE = 0.05
 # Suites run only on request: traces that must fail (negative controls).
 CONTROL_SUITES = ('steering-controls',)
 CHUNK = 100
@@ -75,7 +78,7 @@ def domain_filter(traces):
     return verdicts
 
 
-def load_traces(suites, counts, seed, only, filtered):
+def load_traces(suites, counts, seed, only, filtered, alloc_share=ALLOC_SHARE):
     """The selected suites. Generated traces are drawn from a fixed number of
     seeded candidates, keeping those the mirror places inside the domain;
     `filtered` receives the rejected candidates' reasons."""
@@ -83,7 +86,7 @@ def load_traces(suites, counts, seed, only, filtered):
     for suite in suites:
         if suite in ('generated', 'wireguard-generated'):
             source = generate if suite == 'generated' else \
-                (lambda s, n: generate_wireguard(s, n, steered=STEERED_SHARE, data=DATA_SHARE))
+                (lambda s, n: generate_wireguard(s, n, steered=STEERED_SHARE, data=DATA_SHARE, alloc=alloc_share))
             count = counts[suite]
             candidates = [validate_trace(t) for t in source(seed, count * CANDIDATES_PER_TRACE)]
             verdicts = domain_filter(candidates)
@@ -844,6 +847,8 @@ def main(argv=None):
     parser.add_argument('--trace')
     parser.add_argument('--out', type=Path)
     parser.add_argument('--no-build', action='store_true', help='reuse the existing .lake build')
+    parser.add_argument('--alloc-share', type=float, default=ALLOC_SHARE,
+                        help='share of alloc_fail traces among the generated WireGuard traces (0: none, as before A1)')
     args = parser.parse_args(argv)
     suites = args.suite.split(',')
     if not suites or any(s not in SUITES + CONTROL_SUITES for s in suites):
@@ -865,7 +870,7 @@ def main(argv=None):
     try:
         build = build_model(out, rebuild=not args.no_build)
         traces = load_traces(suites, {'generated': args.generated_count, 'wireguard-generated': args.wireguard_count},
-                             args.seed, args.trace, filtered)
+                             args.seed, args.trace, filtered, args.alloc_share)
         decisions.update(load_decisions(config))
         instrumented, functions = instrumented_lines(KERNEL / 'vmlinux', config['functions'], config['files'])
         kcov = (config, decisions, witness_table(decisions, instrumented, functions, config['branch_free_functions']),
@@ -934,7 +939,7 @@ def write_report(out, traces, results, gaps, build, aborted, started, suites, ar
         kernel=kernel,
         kcov_config_sha256=sha256(ANCHORS.read_bytes()),
         selection=dict(suites=suites, generated_count=args.generated_count, wireguard_count=args.wireguard_count,
-                       seed=args.seed, trace=args.trace),
+                       seed=args.seed, trace=args.trace, alloc_share=getattr(args, 'alloc_share', None)),
         traces=len(traces), operations=sum(len(t['ops']) for t in traces),
         counts=dict(counts), known_gap_hits=dict(gaps), operand_pairs_matched=operand_pairs_matched,
         # cut and ambient choice records (coverage child), by site: consumed

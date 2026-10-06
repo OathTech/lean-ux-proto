@@ -228,7 +228,7 @@ def wait_after_up(operations):
     return waits
 
 
-def generate_wireguard(seed, count, max_ops=12, steered=0.0, data=0.0):
+def generate_wireguard(seed, count, max_ops=12, steered=0.0, data=0.0, alloc=0.0):
     """Seeded WireGuard traces over small pools of keys and prefixes, so that
     peers, trie nodes and identities collide often. A third are configuration
     traces (stage A), and the rest bring wg0 up and transmit (stage B1), inject
@@ -240,12 +240,16 @@ def generate_wireguard(seed, count, max_ops=12, steered=0.0, data=0.0):
     streams are exactly as before. `data` is the share of steered data-plane
     traces (stage D2, steered_data), drawn first and from a third generator:
     the other traces keep their content and order (only their identifiers
-    shift), and with the default 0 the output is exactly as before."""
-    if not 2 <= max_ops <= 64 or not 1 <= count <= 100000 or not 0 <= steered <= 1 or not 0 <= data <= 1:
+    shift), and with the default 0 the output is exactly as before. `alloc`
+    is the share of allocation-failure traces (A1, alloc_fail), drawn before
+    `data` from a fourth generator, with the same property."""
+    if not 2 <= max_ops <= 64 or not 1 <= count <= 100000 or not 0 <= steered <= 1 or not 0 <= data <= 1 \
+            or not 0 <= alloc <= 1:
         raise ValueError('bounded generator parameters')
     rng = random.Random(seed)
     steered_rng = random.Random(f'steered-{seed}')
     data_rng = random.Random(f'data-{seed}')
+    alloc_rng = random.Random(f'alloc-{seed}')
     keys = ['11' * 32, '22' * 32, '33' * 32, '00' * 32,
             '7b4e909bbe7ffe44c465a220037d608ee35897d31ef972f07f74892cb0f73f13']   # public key of 11..11
     private = ['11' * 32, '10' + '11' * 30 + '51', '22' * 32, '00' * 32]
@@ -420,6 +424,15 @@ def generate_wireguard(seed, count, max_ops=12, steered=0.0, data=0.0):
         return ops + [{'op': 'wg_observe'}]
 
     while len(result) < count:
+        if alloc and alloc_rng.random() < alloc:
+            trace = alloc_fail(alloc_rng, f'generated-wg-{seed}-{len(result):05}')
+            if wait_after_up(trace['ops']) > WAIT_BUDGET_SECONDS:
+                raise AssertionError('an allocation-failure trace exceeds the wait budget')
+            digest = identity(trace)
+            if digest not in seen:
+                seen.add(digest)
+                result.append(trace)
+            continue
         if data and data_rng.random() < data:
             trace = steered_data(data_rng, f'generated-wg-{seed}-{len(result):05}')
             if wait_after_up(trace['ops']) > WAIT_BUDGET_SECONDS:
@@ -738,3 +751,89 @@ def steered_data(rng, trace_id):
         rng.shuffle(after)
     ops = setup() + [observe, respond] + after + [observe, get]
     return dict(version=1, id=trace_id, ops=ops, steer=steer, expect=D1_SESSION)
+
+
+# A1 (docs/2026-10-05-a-alloc.md, sections 5.1, 7): allocation failures at the
+# class-(a) sites, the GFP_ATOMIC alloc_skb calls. Each is an `__alloc_skb`
+# helper site with two encounters on success (the sk_buff, then the data
+# buffer): a consultation's schedule is `fail` (the sk_buff), `draw, fail`
+# (the data buffer) or `draw, draw` (recorded success). A schedule lists
+# every encounter of the site it names, in order; the shapes below fix the
+# number of consultations, and the domain filter's placeholder run confirms
+# it (an encounter beyond the schedule, or an entry left over, is outside the
+# domain there).
+A1_FAIL = '00' * 8
+A1_CONSULTATIONS = [['fail'], ['draw', 'fail'], ['draw', 'draw']]
+A1_ENDPOINTS = [dict(family=4, addr='7f000001', port=51999), dict(family=6, addr='0' * 31 + '1', port=51999),
+                dict(family=4, addr='7f000001', port=40001)]   # a loopback port with no socket
+A1_INITIATORS = [b'\x22' * 32, b'\x44' * 32]
+
+
+def alloc_fail(rng, trace_id):
+    """One A1 trace, steering one class-(a) site:
+    - `keepalive_up`: persistent keepalive set before wg_up: the staged
+      keepalive of wg_up (keepaliveSkb, in the syscall);
+    - `keepalive_set`: persistent keepalive turned on by a wg_set while up;
+    - `initiate`: wg_xmit with no session queues the initiation
+      (sendBufSkb in the send worker); later transmissions are rate limited;
+    - `respond`: injected initiations (sendBufSkb in the receive worker),
+      one or two (a newer timestamp), each answered.
+    Every consultation of the steered site gets a schedule; at least one
+    fails."""
+    device = rng.choice(D1_DEVICES)
+    initiator = rng.choice(A1_INITIATORS)
+    variant = rng.choices(['keepalive_up', 'keepalive_set', 'initiate', 'respond'], [3, 2, 3, 3])[0]
+    peer = dict(public_key=noise.public_key(initiator).hex(),
+                allowed_ips=[dict(family=4, addr='0a000000', cidr=8)])
+    observe, get = {'op': 'wg_observe'}, {'op': 'wg_get'}
+    expect_nomem = None
+
+    def consultations(n):
+        plan = [rng.choice(A1_CONSULTATIONS) for _ in range(n)]
+        if not any('fail' in c for c in plan):
+            plan[rng.randrange(n)] = rng.choice(A1_CONSULTATIONS[:2])
+        return plan
+
+    def entries(site, plan):
+        return [[site, A1_FAIL if v == 'fail' else 'draw'] for c in plan for v in c]
+
+    def setup():
+        return {'op': 'wg_set', 'config': dict(private_key=device.hex(), listen_port=51820, peers=[peer])}
+
+    if variant in ('keepalive_up', 'keepalive_set'):
+        peer['endpoint'] = rng.choice(A1_ENDPOINTS)
+        if variant == 'keepalive_up':
+            peer['keepalive'] = 25
+            ops = [setup(), {'op': 'wg_up'}]
+        else:
+            ops = [setup(), {'op': 'wg_up'},
+                   {'op': 'wg_set', 'config': dict(peers=[dict(public_key=peer['public_key'], keepalive=25)])}]
+        ops += [observe] + ([get] if rng.random() < .5 else []) + [get]
+        plan = consultations(1)
+        steer = entries('keepaliveSkb', plan)
+        expect_nomem = 'wg_packet_send_keepalive.no_mem'
+    elif variant == 'initiate':
+        peer['endpoint'] = rng.choice(A1_ENDPOINTS)
+        family = rng.choice([4, 4, 6])
+        if family == 6:
+            peer['allowed_ips'].append(dict(family=6, addr='20010db8000000000000000000000000', cidr=32))
+        dst = '0a0000' + format(rng.randrange(1, 255), '02x') if family == 4 else \
+            '20010db8' + rng.randbytes(12).hex()
+        xmit = {'op': 'wg_xmit', 'packet': dict(family=family, dst=dst)}
+        ops = [setup(), {'op': 'wg_up'}, xmit] + [xmit] * rng.choice([0, 0, 1]) + [observe, get]
+        plan = consultations(1)
+        steer = entries('sendBufSkb', plan)
+        expect_nomem = 'wg_socket_send_buffer_to_peer.no_mem'
+    else:
+        stamps = [1] if rng.random() < .6 else [1, 2]
+        injects = []
+        for k, stamp in enumerate(stamps):
+            message = noise.initiation(noise.public_key(device), initiator, bytes([rng.randrange(1, 256)]) * 32,
+                                       bytes(11) + bytes([stamp]), rng.randrange(2 ** 32))
+            injects += [{'op': 'wg_inject', 'family': rng.choice([4, 6]), 'port': 51820, 'message': message.hex()},
+                        observe]
+        ops = [setup(), {'op': 'wg_up'}] + injects + [get]
+        plan = consultations(len(stamps))
+        steer = entries('sendBufSkb', plan)
+        expect_nomem = 'wg_socket_send_buffer_to_peer.no_mem'
+    return dict(version=1, id=trace_id, ops=ops, steer=steer, expect=[f'{expect_nomem}=1'])

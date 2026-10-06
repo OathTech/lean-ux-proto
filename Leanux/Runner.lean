@@ -387,7 +387,10 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
   let mut world : World := { k := initialKernel trace.rlimit trace.net, timing := Env.timing,
                              allocArmed := trace.allocArmed,
                              hiddenPlaceholders := placeholders && trace.hidden.isNone,
-                             steerValues := if placeholders then trace.steer else [] }
+                             steerValues := if placeholders then trace.steer else [],
+                             allocSteered := if placeholders then
+                               (trace.steer.map (·.1)).filter fun l => AllocSite.all.any (·.info.label == l)
+                             else [] }
   let mut results : Array Int := #[]
   let mut observations : Array Json := #[]
   let mut branches : Array Json := #[]
@@ -416,6 +419,10 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
       branches := branches.push (Json.mkObj (match s.operands with
         | some (a, b) => fields ++ [("operands", toJson [a, b])]
         | none => fields))
+  -- the domain filter: a schedule entry for an allocation site that the
+  -- mirror never met would be left over in the kernel
+  if world.hiddenPlaceholders && world.steerValues.any (fun e => world.allocSteered.contains e.1) then
+    throw (trace.ops.size - 1, .outsideDomain "steer" "allocation schedule entries beyond the encounters")
   return Json.mkObj [("version", toJson (1 : Nat)), ("id", toJson trace.id),
     ("observations", .arr observations), ("branches", .arr branches)]
 

@@ -514,6 +514,9 @@ structure World where
       unarmed answer of docs/2026-10-05-a-alloc.md section 6.6, declared,
       and never applied to a site the run armed. -/
   allocArmed : List String := []
+  /-- In the domain filter: the allocation sites the steering schedule
+      names. Their every encounter needs an entry (design section 5.1). -/
+  allocSteered : List String := []
 
 /-- Why a mirror execution stopped without an observation. -/
 inductive Stop where
@@ -670,7 +673,12 @@ private def allocRecord (s : AllocSite) : M Bool := do
 private def allocPlaceholder (s : AllocSite) : M Bool := do
   let w ← get
   match w.steerValues.findIdx? (·.1 == s.info.label) with
-  | none => return true
+  | none =>
+    -- the kernel would record this encounter of a named site against no
+    -- entry: the schedule must list every encounter
+    if w.allocSteered.contains s.info.label then
+      unsupported s!"steer: an encounter of {s.info.label} beyond its schedule"
+    return true
   | some k =>
     set { w with steerValues := w.steerValues.eraseIdx k }
     match w.steerValues[k]!.2 with
