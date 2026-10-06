@@ -68,7 +68,10 @@ The ASCII wire begins with `LEANUX_WIRE_V2`, then a decimal trace count (1–409
 then the dispatch set: `D N` and N hex function addresses (N ≥ 1 when a trace
 uses the network fixture; `harness/linux.py` resolves them from `System.map`),
 then `A 0` or `A 1`: whether the kernel writes the kind-303 timer arm records
-(D3; `harness/linux.py` `ARM_RECORDS`). Opcode 14 is `wg_advance`, its `a` the
+(D3; `harness/linux.py` `ARM_RECORDS`), then the allocation set: `M FLAGS N`
+and N hex `lo hi` ranges (A, docs/2026-10-05-a-alloc.md section 4.3; `M 0 0`
+disarms, the default; flag 1 is the inventory mode, with N = 0 every
+allocation in a recording context). Opcode 14 is `wg_advance`, its `a` the
 ticks (D3, docs/2026-10-05-d3-timers.md).
 Each trace begins `T ID N` for the validated identifier and operation count.
 Exactly N operation lines follow, each with eight decimal fields:

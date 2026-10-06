@@ -81,6 +81,17 @@ struct dispatch_arg { uint32_t n, flags; uint64_t funcs[DISPATCH_MAX]; };
 static struct dispatch_arg dispatch;
 #define KCOV_LEANUX_DISPATCH_LOAD _IOW('c', 202, unsigned long)
 #define KCOV_LEANUX_SECTION_STATUS _IOR('c', 203, unsigned long)
+/* The allocation set (A, docs/2026-10-05-a-alloc.md section 4.3), one per
+ * batch from the wire's M line: n sorted [lo, hi) ranges and flags (1: the
+ * inventory mode). n = 0 and flags = 0 is disarmed: no load, no records. The
+ * trace process loads it on its own KCOV descriptor before it enables
+ * coverage; the kernel disarms it when that descriptor's instance goes. */
+#define ALLOC_RANGES_MAX 64
+#define ALLOC_INVENTORY 1
+struct alloc_arg { uint32_t n, flags; struct { uint64_t lo, hi; } r[ALLOC_RANGES_MAX]; };
+static struct alloc_arg alloc;
+#define KCOV_LEANUX_ALLOC_LOAD _IOW('c', 205, unsigned long)
+#define KCOV_LEANUX_ALLOC_STATUS _IOR('c', 206, unsigned long)
 struct trace {
     char id[81]; unsigned count; unsigned rlimit; unsigned net; struct operation ops[MAX_OPS];
     unsigned nsteer; struct steer_entry steer[STEER_MAX];
@@ -583,6 +594,17 @@ static unsigned long *enable_remote(const struct trace *t, int comparisons)
     return area;
 }
 
+/* An armed trace's allocation records and unwinds (A0's cost measure). */
+static void alloc_status(const struct trace *t, int coverage_fd, int comparisons)
+{
+    struct { uint32_t records, unwinds; uint64_t cycles; } status;
+    if (!alloc.n && !alloc.flags) return;
+    if (ioctl(coverage_fd, KCOV_LEANUX_ALLOC_STATUS, &status)) fail(t->id, -1, "coverage_failure", "allocation_status");
+    printf("LEANUX_ALLOC {\"id\":\"%s\",\"mode\":\"%s\",\"records\":%u,\"unwinds\":%u,\"cycles\":%" PRIu64 "}\n",
+           t->id, comparisons ? "cmp" : "pc", status.records, status.unwinds, status.cycles);
+    fflush(stdout);
+}
+
 static void execute(const struct trace *t, int input_fd, int comparisons)
 {
     struct observation result[MAX_OPS] = {{0}};
@@ -598,6 +620,8 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
     int coverage_fd = open("/sys/kernel/debug/kcov", O_RDWR);
     if (coverage_fd != 3) fail(t->id, -1, "coverage_failure", "open_kcov_at_3");
     if (ioctl(coverage_fd, KCOV_INIT_TRACE, CAPACITY)) fail(t->id, -1, "coverage_failure", "initialize_kcov");
+    if ((alloc.n || alloc.flags) && ioctl(coverage_fd, KCOV_LEANUX_ALLOC_LOAD, &alloc))
+        fail(t->id, -1, "coverage_failure", "load_allocation_set");
     unsigned long *coverage = mmap(NULL, CAPACITY * sizeof(*coverage), PROT_READ | PROT_WRITE, MAP_SHARED, coverage_fd, 0);
     if (coverage == MAP_FAILED) fail(t->id, -1, "coverage_failure", "map_kcov");
     for (int fd = 4; fd < (t->net ? LISTEN4_FD : 8); ++fd)
@@ -828,9 +852,11 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         }
         printf("]}\n");
         fflush(stdout);
+        alloc_status(t, coverage_fd, comparisons);
         if (t->net) delete_wg0(t->id);
         _exit(0);
     }
+    alloc_status(t, coverage_fd, comparisons);
     printf("LEANUX_RESULT {\"version\":1,\"id\":\"%s\",\"observations\":[", t->id);
     for (unsigned i = 0; i < t->count; ++i) {
         printf("%s{\"index\":%u,\"ret\":%ld,\"errno\":", i ? "," : "", i, result[i].ret);
@@ -906,6 +932,28 @@ int main(int argc, char **argv)
         strcmp(line + consumed, "\n"))
         fail("batch", -1, "invalid_input", "wire_arm_records");
     dispatch.flags = arm ? DISPATCH_ARM_RECORDS : 0;
+    /* M flags n lo hi ...: the allocation set (A), in hex */
+    if (!fgets(line, sizeof(line), input) || sscanf(line, "M %u %u%n", &alloc.flags, &alloc.n, &consumed) != 2 ||
+        alloc.n > ALLOC_RANGES_MAX || alloc.flags > ALLOC_INVENTORY)
+        fail("batch", -1, "invalid_input", "wire_allocation_set");
+    for (unsigned k = 0; k < alloc.n; ++k) {
+        int more = 0;
+        if (sscanf(line + consumed, " %" SCNx64 " %" SCNx64 "%n", &alloc.r[k].lo, &alloc.r[k].hi, &more) != 2 ||
+            alloc.r[k].lo >= alloc.r[k].hi || (k && alloc.r[k - 1].hi > alloc.r[k].lo))
+            fail("batch", -1, "invalid_input", "wire_allocation_set");
+        consumed += more;
+    }
+    if (strcmp(line + consumed, "\n")) fail("batch", -1, "invalid_input", "wire_allocation_set");
+    if (alloc.n || alloc.flags) {
+        /* the TSC rate, to convert the unwind cycles (A0) */
+        FILE *cpuinfo = fopen("/proc/cpuinfo", "r");
+        char mhz[64] = "";
+        while (cpuinfo && fgets(line, sizeof(line), cpuinfo))
+            if (!strncmp(line, "cpu MHz", 7) && sscanf(line, "cpu MHz : %63s", mhz) == 1) break;
+        if (cpuinfo) fclose(cpuinfo);
+        if (!mhz[0] || strspn(mhz, "0123456789.") != strlen(mhz)) fail("batch", -1, "environment_failure", "cpu_mhz");
+        printf("LEANUX_ALLOC_TSC {\"mhz\":\"%s\"}\n", mhz);
+    }
     unsigned failures = 0;
     for (unsigned t = 0; t < total; ++t) {
         static struct trace trace;

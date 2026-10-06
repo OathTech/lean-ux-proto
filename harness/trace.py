@@ -155,13 +155,33 @@ def loads_trace(line):
         raise InvalidTrace(f"invalid JSON: {exc}") from exc
 
 
-def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False):
+ALLOC_INVENTORY = 1      # the allocation load's inventory flag (A, docs/2026-10-05-a-alloc.md 4.3)
+ALLOC_RANGES_MAX = 64
+
+
+def alloc_line(alloc):
+    """The `M` line: the allocation set the kernel arms for each trace
+    (KCOV_LEANUX_ALLOC_LOAD): `M flags n` and n hex `lo hi` pairs, sorted and
+    disjoint. None or {"flags": 0, "ranges": []} is `M 0 0`: disarmed, no
+    kind-305 records (the default until the phased flip, section 6.6)."""
+    alloc = alloc or {"flags": 0, "ranges": []}
+    if type(alloc) is not dict or set(alloc) != {"flags", "ranges"} or alloc["flags"] not in (0, ALLOC_INVENTORY):
+        raise InvalidTrace("allocation set")
+    ranges = [tuple(r) for r in alloc["ranges"]]
+    if len(ranges) > ALLOC_RANGES_MAX or any(
+            len(r) != 2 or not all(type(x) is int for x in r) or not 0 < r[0] < r[1] < 2**64 for r in ranges) \
+            or any(a[1] > b[0] for a, b in zip(ranges, ranges[1:])):
+        raise InvalidTrace("allocation ranges")
+    return " ".join(["M", str(alloc["flags"]), str(len(ranges))] + [f"{lo:x} {hi:x}" for lo, hi in ranges])
+
+
+def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False, alloc=None):
     """`steer_wire`: each steered trace's resolved schedule
     (harness/steer.py), [(kind, length, draw, [return addresses], hex)].
     `dispatch`: the dispatch set's function addresses (harness/linux.py),
     which a batch with network traces needs. `arm_records`: whether the
     kernel writes the kind-303 arm records for the dispatch set's timers
-    (the `A` line; D3)."""
+    (the `A` line; D3). `alloc`: the allocation set (the `M` line; A)."""
     traces = [validate_trace(trace) for trace in traces]
     steer_wire = steer_wire or {}
     if any("steer" in t and t["id"] not in steer_wire for t in traces):
@@ -177,7 +197,7 @@ def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False):
     if type(arm_records) is not bool:
         raise InvalidTrace("arm_records")
     lines = ["LEANUX_WIRE_V2", str(len(traces)), " ".join(["D", str(len(dispatch))] + [f"{a:x}" for a in dispatch]),
-             f"A {int(arm_records)}"]
+             f"A {int(arm_records)}", alloc_line(alloc)]
     for trace in traces:
         schedule = steer_wire.get(trace["id"], []) if "steer" in trace else []
         lines.append(f"T {trace['id']} {len(trace['ops'])} {trace.get('rlimit_nofile', 32)} {int(uses_wireguard(trace))} {len(schedule)}")

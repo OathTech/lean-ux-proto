@@ -10,14 +10,17 @@ random and clock hooks; dispatch sections in process_one_work and the NET_RX
 vector (D1 sprint, stream A); a resched record when cond_resched schedules
 inside a task's dispatch section (D1 integration); timer dispatch sections at
 call_timer_fn, the kind-303 arm record at mod_timer and the virtual time
-advance (KCOV_LEANUX_TIME_ADVANCE, kind 304) (D3, docs/2026-10-05-d3-timers.md).
+advance (KCOV_LEANUX_TIME_ADVANCE, kind 304) (D3, docs/2026-10-05-d3-timers.md);
+the allocation hook in slab_alloc_node and __alloc_pages_noprof, kind 305, its
+load ioctl with the inventory mode (KCOV_LEANUX_ALLOC_LOAD, 205) and status
+ioctl (206) (A stream K1, docs/2026-10-05-a-alloc.md, section 4).
 """
 import sys, re, os, shutil, subprocess
 WD='.artifacts/choice-patch'; N=WD+'/new'
 SOURCE=os.environ.get('LEANUX_SHARED_ROOT', '.') + '/.deps/linux'
 TOUCHED=['kernel/kcov.c','include/linux/kcov.h','include/linux/sched.h','drivers/char/random.c',
          'kernel/time/timekeeping.c','kernel/workqueue.c','kernel/softirq.c','kernel/sched/core.c',
-         'kernel/time/timer.c']
+         'kernel/time/timer.c','mm/slub.c','mm/page_alloc.c']
 shutil.rmtree(WD, ignore_errors=True)
 for side in ('base', 'new'):
     for f in TOUCHED:
@@ -907,6 +910,385 @@ sub(TM, """int mod_timer(struct timer_list *timer, unsigned long expires)
 	/* LEANUX D3: the arm record (kind 303) for an armed function */
 	kcov_timer_arm(timer->function, jiffies, expires, _RET_IP_);
 	return __mod_timer(timer, expires, 0);
+}""")
+# ---- A stream K1: allocation outcomes (docs/2026-10-05-a-alloc.md, section 4) ----
+s = rd('kernel/kcov.c').rstrip('\n') + r"""
+
+/*
+ * LEANUX A (docs/2026-10-05-a-alloc.md, section 4): allocation outcomes as
+ * recorded choices. slab_alloc_node and __alloc_pages_noprof call
+ * kcov_alloc_pre/kcov_alloc_post (include/linux/kcov.h) with the entry's
+ * explicit return address; the bulk allocators are unhooked by construction.
+ * The guest loads the allocation set (KCOV_LEANUX_ALLOC_LOAD, before any
+ * trace work) on one KCOV instance; it is disarmed with that instance
+ * (kcov_remote_reset). The hook, in this order: one load of
+ * kcov_alloc_armed; the recording-context test; membership of the
+ * canonicalized address in one of up to 64 sorted [lo, hi) ranges, or, with
+ * n = 0 and KCOV_ALLOC_INVENTORY, every allocation (inventory pass 1, no
+ * chain); then the record, kind 305, five words:
+ *   word 0: bits 0-7 the outcome (1 ok, 0 NULL); bit 8 nested (a refill: an
+ *           allocation inside another recorded one, in the same context);
+ *           bit 9 the page allocator (the size field is the order); bit 10
+ *           the unwind did not find the address on the stack; bits 11-31
+ *           orig_size (slab, saturating) or order (page); bits 32-63 the gfp
+ *           mask the hook saw (after gfp_allowed_mask; on the page path also
+ *           after current_gfp_context);
+ *   words 1-4: the return addresses above the address, innermost first,
+ *           zero-padded (zero in inventory pass 1 and for nested records in
+ *           inventory mode).
+ * Lock-free like kcov_timer_arm: the set changes only while no trace work
+ * runs, and a load clears kcov_alloc_armed before it writes the set. A
+ * record that does not fit marks the area full (kcov_choice_write).
+ * Forced failures are stream K2's (section 5); this build forces nothing.
+ */
+#define KCOV_ALLOC_RANGES_MAX 64
+#define KCOV_ALLOC_INVENTORY 1		/* load flag: record every candidate */
+#define KCOV_ALLOC_UNWIND 16		/* stack entries searched for the address */
+#define KCOV_ALLOC_NESTED (1ULL << 8)
+#define KCOV_ALLOC_PAGE (1ULL << 9)
+#define KCOV_ALLOC_NOCHAIN (1ULL << 10)
+#define KCOV_ALLOC_SIZE_MAX ((1ULL << 21) - 1)
+struct kcov_alloc_range { u64 lo, hi; };
+u32 kcov_alloc_armed;
+static struct {
+	u32 n;
+	u32 flags;
+	struct kcov_alloc_range r[KCOV_ALLOC_RANGES_MAX];
+} kcov_alloc;
+static atomic_t kcov_alloc_records, kcov_alloc_unwinds;
+static atomic64_t kcov_alloc_unwind_cycles;
+static DEFINE_PER_CPU(unsigned int, kcov_alloc_softirq_depth);
+
+static notrace bool kcov_leanux_recording(struct task_struct *t)
+{
+	return check_kcov_mode(KCOV_MODE_TRACE_PC, t) ||
+	       (IS_ENABLED(CONFIG_KCOV_ENABLE_COMPARISONS) && check_kcov_mode(KCOV_MODE_TRACE_CMP, t));
+}
+
+/* The depth of recorded allocations in progress in the current context: a
+ * softirq that interrupts a task's allocation is not nested in it. */
+static notrace unsigned int *kcov_alloc_depth(struct task_struct *t)
+{
+	return in_task() ? &t->kcov_leanux_in_alloc : this_cpu_ptr(&kcov_alloc_softirq_depth);
+}
+
+static notrace bool kcov_alloc_member(unsigned long ip, u32 n)
+{
+	u32 lo = 0, hi = n, mid;
+
+	while (lo < hi) {
+		mid = lo + (hi - lo) / 2;
+		if (ip < READ_ONCE(kcov_alloc.r[mid].lo))
+			hi = mid;
+		else if (ip >= READ_ONCE(kcov_alloc.r[mid].hi))
+			lo = mid + 1;
+		else
+			return true;
+	}
+	return false;
+}
+
+/* The return addresses above addr on the current stack (ORC). */
+static noinline notrace void kcov_alloc_chain(unsigned long addr, u64 *w)
+{
+	unsigned long entries[KCOV_ALLOC_UNWIND];
+	u64 start = get_cycles();
+	unsigned int n, i, j;
+
+	n = stack_trace_save(entries, KCOV_ALLOC_UNWIND, 0);
+	for (i = 0; i < n && entries[i] != addr; i++)
+		;
+	if (i == n)
+		w[0] |= KCOV_ALLOC_NOCHAIN;
+	else
+		for (j = 0; j < 4 && i + 1 + j < n; j++)
+			w[1 + j] = canonicalize_ip(entries[i + 1 + j]);
+	atomic_inc(&kcov_alloc_unwinds);
+	atomic64_add(get_cycles() - start, &kcov_alloc_unwind_cycles);
+}
+
+static notrace void kcov_alloc_record(struct task_struct *t, struct kcov_alloc_ctx *ctx, bool ok, bool steered)
+{
+	u64 w[5] = { ctx->word0 | (ok ? 1 : 0), 0, 0, 0, 0 };
+
+	if (ctx->unwind)
+		kcov_alloc_chain(ctx->addr, w);
+	kcov_choice_write(t, 305 | (steered ? 0x8000 : 0), ctx->addr, w, sizeof(w));
+	atomic_inc(&kcov_alloc_records);
+}
+
+/* Stream K2 decides forced failures here (chain-aware steering, section
+ * 5.2). Never for __GFP_NOFAIL (section 3, M2). This build forces nothing. */
+static notrace bool kcov_alloc_force(struct kcov_alloc_ctx *ctx, gfp_t gfp)
+{
+	if (gfp & __GFP_NOFAIL)
+		return false;
+	return false;
+}
+
+/* After kcov_alloc_armed was seen set. True: fail the allocation (its record
+ * is written here, since the caller returns NULL without the post call). */
+bool notrace __kcov_alloc_pre(struct kcov_alloc_ctx *ctx, unsigned long addr, gfp_t gfp, unsigned long size, bool page)
+{
+	struct task_struct *t = current;
+	unsigned int *depth;
+	u32 n, flags;
+	bool nested;
+
+	if (!kcov_leanux_recording(t))
+		return false;
+	n = min_t(u32, READ_ONCE(kcov_alloc.n), KCOV_ALLOC_RANGES_MAX);
+	flags = READ_ONCE(kcov_alloc.flags);
+	if (n ? !kcov_alloc_member(canonicalize_ip(addr), n) : !(flags & KCOV_ALLOC_INVENTORY))
+		return false;
+	depth = kcov_alloc_depth(t);
+	nested = *depth != 0;
+	ctx->addr = addr;
+	ctx->word0 = (u64)(__force u32)gfp << 32 | min_t(u64, size, KCOV_ALLOC_SIZE_MAX) << 11 |
+		     (page ? KCOV_ALLOC_PAGE : 0) | (nested ? KCOV_ALLOC_NESTED : 0);
+	/* chains: armed mode always; inventory mode only in pass 2 (ranges)
+	 * and not for a refill inside a recorded allocation */
+	ctx->unwind = !(flags & KCOV_ALLOC_INVENTORY) || (n && !nested);
+	if (kcov_alloc_force(ctx, gfp)) {
+		kcov_alloc_record(t, ctx, false, true);
+		return true;
+	}
+	ctx->active = true;
+	(*depth)++;
+	return false;
+}
+EXPORT_SYMBOL(__kcov_alloc_pre);
+
+void notrace __kcov_alloc_post(struct kcov_alloc_ctx *ctx, bool ok)
+{
+	struct task_struct *t = current;
+
+	ctx->active = false;
+	(*kcov_alloc_depth(t))--;
+	if (kcov_leanux_recording(t))
+		kcov_alloc_record(t, ctx, ok, false);
+}
+EXPORT_SYMBOL(__kcov_alloc_post);
+
+/*
+ * LEANUX A: { u32 n; u32 flags; struct { u64 lo, hi; } ranges[n]; }, the
+ * ranges sorted and disjoint, lo < hi, n <= 64, flags 0 or
+ * KCOV_ALLOC_INVENTORY. n = 0 and flags = 0 disarms (no records). The set
+ * belongs to the instance that loaded it (another instance's load is
+ * -EBUSY) and is disarmed with it in kcov_remote_reset.
+ */
+static long kcov_alloc_load(struct kcov *kcov, void __user *arg)
+{
+	struct kcov_alloc_range *r = NULL;
+	unsigned long irqflags;
+	u32 hdr[2], i;
+	long ret = 0;
+
+	if (copy_from_user(hdr, arg, sizeof(hdr)))
+		return -EFAULT;
+	if (hdr[0] > KCOV_ALLOC_RANGES_MAX || (hdr[1] & ~KCOV_ALLOC_INVENTORY))
+		return -EINVAL;
+	if (hdr[0]) {
+		r = kmalloc_array(hdr[0], sizeof(*r), GFP_KERNEL);
+		if (!r)
+			return -ENOMEM;
+		if (copy_from_user(r, arg + 8, hdr[0] * sizeof(*r))) {
+			kfree(r);
+			return -EFAULT;
+		}
+		for (i = 0; i < hdr[0]; i++)
+			if (r[i].lo >= r[i].hi || (i && r[i - 1].hi > r[i].lo)) {
+				kfree(r);
+				return -EINVAL;
+			}
+	}
+	spin_lock_irqsave(&kcov_remote_lock, irqflags);
+	if (kcov_alloc_kcov && kcov_alloc_kcov != kcov) {
+		ret = -EBUSY;
+	} else {
+		WRITE_ONCE(kcov_alloc_armed, 0);
+		barrier();
+		kcov_alloc.n = hdr[0];
+		kcov_alloc.flags = hdr[1];
+		for (i = 0; i < hdr[0]; i++)
+			kcov_alloc.r[i] = r[i];
+		atomic_set(&kcov_alloc_records, 0);
+		atomic_set(&kcov_alloc_unwinds, 0);
+		atomic64_set(&kcov_alloc_unwind_cycles, 0);
+		barrier();
+		if (hdr[0] || hdr[1]) {
+			kcov_alloc_kcov = kcov;
+			WRITE_ONCE(kcov_alloc_armed, 1);
+		} else {
+			kcov_alloc_kcov = NULL;
+		}
+	}
+	spin_unlock_irqrestore(&kcov_remote_lock, irqflags);
+	kfree(r);
+	return ret;
+}
+
+/* LEANUX A: { u32 records; u32 unwinds; u64 unwind_cycles; } since the
+ * load, for the instance that holds the set (-EINVAL otherwise). */
+static long kcov_alloc_status(struct kcov *kcov, void __user *arg)
+{
+	struct { u32 records, unwinds; u64 cycles; } status;
+	unsigned long irqflags;
+
+	spin_lock_irqsave(&kcov_remote_lock, irqflags);
+	if (kcov_alloc_kcov != kcov) {
+		spin_unlock_irqrestore(&kcov_remote_lock, irqflags);
+		return -EINVAL;
+	}
+	status.records = atomic_read(&kcov_alloc_records);
+	status.unwinds = atomic_read(&kcov_alloc_unwinds);
+	status.cycles = atomic64_read(&kcov_alloc_unwind_cycles);
+	spin_unlock_irqrestore(&kcov_remote_lock, irqflags);
+	return copy_to_user(arg, &status, sizeof(status)) ? -EFAULT : 0;
+}
+"""
+wr('kernel/kcov.c', s)
+sub('kernel/kcov.c', '#include <linux/log2.h>\n', '#include <linux/log2.h>\n#include <linux/stacktrace.h>\n#include <linux/timex.h>\n')
+sub('kernel/kcov.c', """static struct kcov *kcov_dispatch_kcov;		/* LEANUX: see kcov_dispatch_start */
+""", """static struct kcov *kcov_dispatch_kcov;		/* LEANUX: see kcov_dispatch_start */
+static struct kcov *kcov_alloc_kcov;		/* LEANUX A: see kcov_alloc_load */
+""")
+sub('kernel/kcov.c', """	if (kcov_dispatch_kcov == kcov)
+		kcov_dispatch_kcov = NULL;	/* LEANUX: disarm with the handles */
+""", """	if (kcov_dispatch_kcov == kcov)
+		kcov_dispatch_kcov = NULL;	/* LEANUX: disarm with the handles */
+	if (kcov_alloc_kcov == kcov) {
+		WRITE_ONCE(kcov_alloc_armed, 0);	/* LEANUX A: and the allocation set */
+		kcov_alloc_kcov = NULL;
+	}
+""")
+sub('kernel/kcov.c', """	t->kcov_leanux_dropped = 0;
+	t->kcov_saved_mode = 0;""", """	t->kcov_leanux_dropped = 0;
+	t->kcov_leanux_in_alloc = 0;
+	t->kcov_saved_mode = 0;""")
+sub('kernel/kcov.c', """#define KCOV_LEANUX_TIME_ADVANCE	_IOW('c', 204, unsigned long)
+static long kcov_time_advance(unsigned long __user *arg);
+""", """#define KCOV_LEANUX_TIME_ADVANCE	_IOW('c', 204, unsigned long)
+static long kcov_time_advance(unsigned long __user *arg);
+#define KCOV_LEANUX_ALLOC_LOAD		_IOW('c', 205, unsigned long)
+#define KCOV_LEANUX_ALLOC_STATUS	_IOR('c', 206, unsigned long)
+static long kcov_alloc_load(struct kcov *kcov, void __user *arg);
+static long kcov_alloc_status(struct kcov *kcov, void __user *arg);
+""")
+sub('kernel/kcov.c', """	case KCOV_LEANUX_TIME_ADVANCE:
+		return kcov_time_advance((unsigned long __user *)arg);
+""", """	case KCOV_LEANUX_TIME_ADVANCE:
+		return kcov_time_advance((unsigned long __user *)arg);
+	case KCOV_LEANUX_ALLOC_LOAD:
+		return kcov_alloc_load(kcov, (void __user *)arg);
+	case KCOV_LEANUX_ALLOC_STATUS:
+		return kcov_alloc_status(kcov, (void __user *)arg);
+""")
+sub('include/linux/sched.h', """	/* LEANUX: whether the task is in a dispatch section: */
+	unsigned int			kcov_leanux_section;
+""", """	/* LEANUX: whether the task is in a dispatch section: */
+	unsigned int			kcov_leanux_section;
+
+	/* LEANUX A: recorded allocations in progress in task context: */
+	unsigned int			kcov_leanux_in_alloc;
+""")
+ALLOC_H = '''/*
+ * LEANUX A (docs/2026-10-05-a-alloc.md, section 4): the allocation hook, in
+ * slab_alloc_node and __alloc_pages_noprof. Unarmed, one load. pre returns
+ * true to fail the allocation (stream K2; never in this build).
+ */
+struct kcov_alloc_ctx { unsigned long addr; u64 word0; bool active, unwind; };
+extern u32 kcov_alloc_armed;
+bool __kcov_alloc_pre(struct kcov_alloc_ctx *ctx, unsigned long addr, gfp_t gfp, unsigned long size, bool page);
+void __kcov_alloc_post(struct kcov_alloc_ctx *ctx, bool ok);
+static __always_inline bool kcov_alloc_pre(struct kcov_alloc_ctx *ctx, unsigned long addr, gfp_t gfp,
+					   unsigned long size, bool page)
+{
+	ctx->active = false;
+	if (likely(!READ_ONCE(kcov_alloc_armed)))
+		return false;
+	return __kcov_alloc_pre(ctx, addr, gfp, size, page);
+}
+static __always_inline void kcov_alloc_post(struct kcov_alloc_ctx *ctx, bool ok)
+{
+	if (unlikely(ctx->active))
+		__kcov_alloc_post(ctx, ok);
+}
+'''
+sub('include/linux/kcov.h', """/* LEANUX D3: mod_timer's arm record (kind 303). */
+void kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsigned long ip);
+""", """/* LEANUX D3: mod_timer's arm record (kind 303). */
+void kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsigned long ip);
+""" + ALLOC_H)
+sub('include/linux/kcov.h', """static inline void kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsigned long ip) {}
+""", """static inline void kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsigned long ip) {}
+struct kcov_alloc_ctx { };
+static inline bool kcov_alloc_pre(struct kcov_alloc_ctx *ctx, unsigned long addr, gfp_t gfp,
+				  unsigned long size, bool page) { return false; }
+static inline void kcov_alloc_post(struct kcov_alloc_ctx *ctx, bool ok) {}
+""")
+SL = 'mm/slub.c'
+sub(SL, '#include <linux/sort.h>\n', '#include <linux/sort.h>\n#include <linux/kcov.h>\n')
+sub(SL, """	void *object;
+	bool init = false;
+
+	s = slab_pre_alloc_hook(s, gfpflags);
+	if (unlikely(!s))
+		return NULL;
+""", """	void *object;
+	bool init = false;
+	struct kcov_alloc_ctx kctx;	/* LEANUX A */
+
+	/* LEANUX A: the allocation hook; a forced failure is recorded by pre */
+	if (kcov_alloc_pre(&kctx, addr, gfpflags & gfp_allowed_mask, orig_size, false))
+		return NULL;
+	s = slab_pre_alloc_hook(s, gfpflags);
+	if (unlikely(!s)) {
+		kcov_alloc_post(&kctx, false);
+		return NULL;
+	}
+""")
+sub(SL, """	slab_post_alloc_hook(s, lru, gfpflags, 1, &object, init, orig_size);
+
+	return object;
+}
+""", """	slab_post_alloc_hook(s, lru, gfpflags, 1, &object, init, orig_size);
+	kcov_alloc_post(&kctx, object != NULL);	/* LEANUX A */
+
+	return object;
+}
+""")
+PA = 'mm/page_alloc.c'
+sub(PA, '#include <linux/pgalloc_tag.h>\n', '#include <linux/pgalloc_tag.h>\n#include <linux/kcov.h>\n')
+sub(PA, """	gfp_t alloc_gfp; /* The gfp_t that was actually used for allocation */
+	struct alloc_context ac = { };
+""", """	gfp_t alloc_gfp; /* The gfp_t that was actually used for allocation */
+	struct alloc_context ac = { };
+	struct kcov_alloc_ctx kctx;	/* LEANUX A */
+""")
+sub(PA, """	gfp = current_gfp_context(gfp);
+	alloc_gfp = gfp;
+	if (!prepare_alloc_pages(gfp, order, preferred_nid, nodemask, &ac,
+			&alloc_gfp, &alloc_flags))
+		return NULL;
+""", """	gfp = current_gfp_context(gfp);
+	alloc_gfp = gfp;
+	/* LEANUX A: the allocation hook; a forced failure is recorded by pre */
+	if (kcov_alloc_pre(&kctx, _RET_IP_, gfp, order, true))
+		return NULL;
+	if (!prepare_alloc_pages(gfp, order, preferred_nid, nodemask, &ac,
+			&alloc_gfp, &alloc_flags)) {
+		kcov_alloc_post(&kctx, false);
+		return NULL;
+	}
+""")
+sub(PA, """	kmsan_alloc_page(page, order, alloc_gfp);
+
+	return page;
+}""", """	kmsan_alloc_page(page, order, alloc_gfp);
+	kcov_alloc_post(&kctx, page != NULL);	/* LEANUX A */
+
+	return page;
 }""")
 files=TOUCHED
 out=[]

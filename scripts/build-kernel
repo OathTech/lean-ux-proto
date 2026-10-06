@@ -41,10 +41,11 @@ if [ "$PROFILE" = net-rcov ] || [ "$PROFILE" = net-hidden ] || [ "$PROFILE" = ne
     # it also carries the dispatch sections and applies alone, retiring
     # wireguard-kcov-remote.patch's per-site sections for this profile; since
     # D3 (docs/2026-10-05-d3-timers.md) also timer sections, the arm record and
-    # the virtual time advance
-    CHOICE_SHA=9f8f3d4ea39c04ef6b25ba9c0c0c087879ad28771bd8f761d92cc5b302fb9607
+    # the virtual time advance; since A (docs/2026-10-05-a-alloc.md) the
+    # allocation hook in mm/slub.c and mm/page_alloc.c
+    CHOICE_SHA=a97a602436ac56a5f64a1c751c2a7d2a99392df01eb3563bcf17b2f6ce5f0929
     if [ "$PROFILE" = net-choice ]; then
-        SOURCE="$LEANUX_ARTIFACTS/src/linux-6.12.110-choice-stream-d3"
+        SOURCE="$LEANUX_ARTIFACTS/src/linux-6.12.110-choice-stream-a"
         PATCH_SHA_RECORD="$CHOICE_SHA"
     elif [ "$PROFILE" = net-probe ]; then
         SOURCE="$LEANUX_ARTIFACTS/src/linux-6.12.110-probe-choice-enumeration"
