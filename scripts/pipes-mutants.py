@@ -135,9 +135,11 @@ def signatures(report):
     the unmutated baseline does not (with a passing baseline: when it fails)."""
     found = set()
     for f in report['failures']:
-        found.add((f['id'], 'outcome', f['outcome']))
+        # a chunk-level failure (the Linux run, the mirror run) carries no id
+        trace = f.get('id', '?')
+        found.add((trace, 'outcome', f['outcome']))
         for p in f.get('problems', []):
-            found.add((f['id'], p.get('index'), p.get('label'), p['problem']))
+            found.add((trace, p.get('index'), p.get('label'), p['problem']))
     if report['aborted']:
         found.add(('*', 'aborted', report['aborted'][:200]))
     return found
