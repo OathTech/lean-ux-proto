@@ -620,14 +620,14 @@ def flood (count port : Nat) (messages : List (List UInt8)) : M Int := do
   -- `net_rx` sections and IP-layer cut draws
   let _ ← discardFloodRecords startW cuts
   -- the receive-worker section: the checked leading valid packets first, then
-  -- the invalid flood discarded
+  -- the invalid flood discarded. The leading valids go through the real worker
+  -- (which consumes the `cond_resched` records between packets); `floodDepth`
+  -- keeps them over the under_load threshold.
   _ ← hidden (.sectionStart .receiveWorker)
-  modify fun w => { w with floodDepth := count + messages.length }
   let src ← senderSource 4
-  for msg in messages do
-    WG.receiveHandshakePacket msg src    -- under load via the queue depth; its
-                                         -- records (under_load, make_cookie ×2,
-                                         -- nonce, reply) are consumed in order
+  modifyDev fun d => { d with handshakeQueue := messages.map (fun m => (m, src)) }
+  modify fun w => { w with floodDepth := count + messages.length }
+  WG.handshakeReceiveWorker (discard <| condResched SWITCH_DEPTH .receiveWorker)
   modify fun w => { w with floodDepth := 0 }
   -- the remaining invalid packets' per-packet reads (under_load / decay /
   -- reschedule), discarded; a modeled record here (a mid-flood injection) fails
