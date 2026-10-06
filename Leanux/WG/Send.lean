@@ -200,6 +200,13 @@ def ipTunnelEcnEncap (pkt : Packet) : M Nat := do
   if ← branch .ecnEncapInnerCe (inner % 4 == 3) then return 2
   return inner % 4
 
+/-- wg_packet_purge_staged_packets (send.c:333-340): the staged packets
+    are counted as `tx_dropped` and freed. -/
+def purgeStagedPackets (pid : PeerId) : M Unit := do
+  let p ← getPeer pid
+  modifyDev fun d => { d with txDropped := d.txDropped + p.staged.length }
+  setPeer pid { p with staged := [] }
+
 /-- wg_packet_send_staged_packets (send.c:342-414). -/
 def sendStagedPackets (pid : PeerId) : M Unit := do
   let p ← getPeer pid

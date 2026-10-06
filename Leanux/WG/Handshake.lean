@@ -11,10 +11,9 @@ kernel at their source and consumed here (`hidden`). Routing and the UDP send
 below `wg_socket_send_skb_to_peer` are a cut point; a sent datagram is recorded
 as an output in `World.sent`.
 
-Time comes from the environment's timing contract (`World.timing`): the flood
-test and the consumption-time update ask how long it has been since the last
-consumed initiation, and the traversal timer asks whether it could expire
-within the trace.
+Time comes from recorded clock reads (coarse boot time) and, for the timers'
+expiries, from the kind-303 arm records (`armTimer`, D3). Timer firing is
+mirrored in `Leanux/WG/Timers.lean` and placed by the environment.
 -/
 
 namespace Leanux.WG
@@ -346,18 +345,13 @@ def timersDataSent (pid : PeerId) : M Unit := do
   if ← branch .timersDataSentNotPending !((← getPeer pid).timerPending .newHandshake) then
     let jitter ← jitterBelowRekeyTimeout .newHandshakeJitter
     if ← modPeerTimerGuard pid then
-      if (← get).timing.timerMayExpire (KEEPALIVE_TIMEOUT + REKEY_TIMEOUT) then
-        unsupported "the new-handshake timer firing within the trace"
       armTimer pid .newHandshake (KEEPALIVE_TIMEOUT_TICKS + REKEY_TIMEOUT_TICKS + jitter)
 
 /-- wg_timers_data_received (timers.c:154-163). -/
 def timersDataReceived (pid : PeerId) : M Unit := do
   if ← branch .timersDataReceivedRunning (← getDev).running then
     if ← branch .timersDataReceivedNotPending !((← getPeer pid).timerPending .sendKeepalive) then
-      if ← modPeerTimerGuard pid then
-        if (← get).timing.timerMayExpire KEEPALIVE_TIMEOUT then
-          unsupported "the send-keepalive timer firing within the trace"
-        armTimer pid .sendKeepalive KEEPALIVE_TIMEOUT_TICKS
+      discard <| modPeerTimer pid .sendKeepalive KEEPALIVE_TIMEOUT_TICKS
     else
       setPeer pid { (← getPeer pid) with timerNeedAnotherKeepalive := true }
 
@@ -387,13 +381,10 @@ def timersHandshakeComplete (pid : PeerId) (site : HiddenSite := .walltimeLastHa
 def timersSessionDerived (pid : PeerId) : M Unit :=
   discard <| modPeerTimer pid .zeroKeyMaterial ZERO_KEY_MATERIAL_TICKS
 
-/-- wg_timers_any_authenticated_packet_traversal (timers.c:212-217). A
-    persistent keepalive timer that could expire within the trace is outside
-    the domain (D2: its firing is not modeled yet). -/
+/-- wg_timers_any_authenticated_packet_traversal (timers.c:212-217). -/
 def timersTraversal (pid : PeerId) : M Unit := do
   let interval := (← getPeer pid).persistentKeepaliveInterval
   if ← branch .traversalKeepalive (interval != 0) then
-    if (← get).timing.timerMayExpire interval then unsupported "a persistent keepalive timer firing within the trace"
     discard <| modPeerTimer pid .persistentKeepalive (interval * HZ)
 
 /-- wg_socket_send_buffer_to_peer (socket.c:189-200) and

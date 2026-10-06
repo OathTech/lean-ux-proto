@@ -2,6 +2,7 @@ import Leanux.WG.Device
 import Leanux.WG.Receive
 import Leanux.WG.Data
 import Leanux.WG.RxData
+import Leanux.WG.Timers
 
 /-!
 # The environment model: the harness fixture and the WireGuard kworker
@@ -53,8 +54,13 @@ def senderSource (family : Nat) : M SkbSource :=
 def INJECT_GAP_NS : Nat := 400000000
 def TRACE_BOUND_SECONDS : Nat := 4
 
+/-- D3 (docs/2026-10-05-d3-timers.md, section 5.3): the firing window's
+    bounds. The guest waits `ADVANCE_WAIT_US` (0.1 s, 25 ticks) once an
+    advance is absorbed (stream K, section 13.3), and the trace's real-time
+    bound is 4 s (1000 ticks). -/
 def timing : Timing where
-  timerMayExpire s := s ≤ TRACE_BOUND_SECONDS
+  advanceWait := 25
+  traceBound := TRACE_BOUND_SECONDS * WG.HZ
 
 /-- The fixture's own `sendto` (into wg0's route, or to wg0's port): the IP
     output path draws the ident key and the ident, and may initialize the
@@ -291,6 +297,17 @@ def requireNoCryptWork : M Unit := do
   if !d.encryptQueue.isEmpty || !d.txWorkQueue.isEmpty then
     unsupported "crypt work queued in a system call (its worker's timing)"
 
+/-- The handshake send worker of the peer at the head of its queue. -/
+def runOneSendWorker : M Unit := do
+  match (← getDev).sendWorkQueue with
+  | [] => invariant "no queued handshake send work"
+  | pid :: rest =>
+    modifyDev fun d => { d with sendWorkQueue := rest }
+    let p ← getPeer pid
+    if !p.handshakePending then invariant "queued work without a pending flag"
+    setPeer pid { p with handshakePending := false }
+    runWorker .sendWorker (WG.handshakeSendWorker pid)
+
 /-- The handshake send worker for each queued peer, oldest first, once the
     queuing system call has returned: the guest waits inside every operation
     that can queue it (`wg_set`, `wg_up`, `wg_xmit`), and the worker's remote
@@ -299,14 +316,8 @@ def runSendWorkers : M Unit := do
   requireNoCryptWork
   modify fun w => { w with queuedThisCall := [] }   -- the call returned and slept
   for _ in [0:4096] do
-    match (← getDev).sendWorkQueue with
-    | [] => deliverSent; return
-    | pid :: rest =>
-      modifyDev fun d => { d with sendWorkQueue := rest }
-      let p ← getPeer pid
-      if !p.handshakePending then invariant "queued work without a pending flag"
-      setPeer pid { p with handshakePending := false }
-      runWorker .sendWorker (WG.handshakeSendWorker pid)
+    if (← getDev).sendWorkQueue.isEmpty then deliverSent; return
+    runOneSendWorker
   invariant "the send work queue did not drain"
 
 /-- After `wg_xmit` returns: the guest waits `QUEUE_WAIT_US` (0.1 s), in
@@ -329,8 +340,12 @@ def afterXmit : M Unit := do
 
 /-! ## D3: timers and the time advance (docs/2026-10-05-d3-timers.md, section 5.3)
 
-Interface stubs, owned by stream M: the hooks exist and stop
-`unsupported "D3 stream M: not yet ..."` where the semantics belong to M. -/
+Timer sections are accepted at the idle points, where the guest sleeps:
+inside `wg_advance`'s wait and in the waits after `wg_set`, `wg_up`,
+`wg_inject`, `wg_xmit` and before `wg_observe`. Which timers fired, and in
+what order, is captured by their sections; a section is accepted iff its
+timer is pending and could be due (`fireTimer`). A timer section anywhere
+else is a hidden mismatch: the mirror cannot run a callback mid-body. -/
 
 /-- The site of the next record that is not ambient and not a pending
     section stop, without consuming anything (unlike `peekHiddenSite`). -/
@@ -361,21 +376,144 @@ def runTimerSection (w : Worker) (body : M Unit) : M Unit := do
   modify fun s => { s with fired := s.fired.push w.symbol }
   runWorker w body
 
-/-- An idle point (the guest's waits after `wg_set`, `wg_up`, `wg_inject`,
-    `wg_xmit`, and before `wg_observe`), where a timer may fire naturally.
-    Stub: a timer or clear-worker section here is not yet modeled. Reads no
-    state and consumes nothing. -/
-def idleTimers : M Unit := do
-  if let some w := (← peekNextSite).bind timerSectionOf then
-    unsupported s!"D3 stream M: not yet (the section of {w.symbol} at an idle point)"
+/-- The clear work (`wg_queued_expired_zero_key_material`) of the peer at
+    the head of its queue. It shares `handshake_send_wq` with the send
+    worker; their order is the records' (a captured scheduling choice). -/
+def runOneClearWorker : M Unit := do
+  match (← getDev).clearWorkQueue with
+  | [] => invariant "no queued clear work"
+  | pid :: rest =>
+    modifyDev fun d => { d with clearWorkQueue := rest }
+    runWorker .clearPeerWorker (WG.queuedExpiredZeroKeyMaterial pid)
 
-/-- `wg_advance`: `ioctl(3, KCOV_LEANUX_TIME_ADVANCE, &ticks)` on the
-    trace's KCOV descriptor, then the guest's wait (stream K, section 13.3).
-    Stub: the kind-304 record (`.timeAdvance`, `{before, after}`), the
-    timer sections the next tick runs and the work they queue belong to
-    stream M. The ioctl returns 0. -/
-def advance (ticks : Nat) : M Int :=
-  unsupported s!"D3 stream M: not yet (wg_advance of {ticks} ticks: the kind-304 record and the timers it fires)"
+/-- The timer callback that serves timer `t`. -/
+def timerWorker (t : PeerTimer) : M Worker := do
+  match Worker.all.find? (·.timer? == some t) with
+  | some w => return w
+  | none => invariant "a peer timer without a callback unit"
+
+/-- `call_timer_fn` of callback `w`, whose section the next record starts.
+    Its peer is the one whose timer of that kind is pending and could be
+    due: `expires < jHi` (a timer fires no earlier than `expires + 1`, by a
+    softirq whose `jiffies` is at most `jHi`). Exactly one peer: none is a
+    hidden mismatch (Linux ran a callback the mirror has no due timer for);
+    several are outside the domain (their order in one pass follows the
+    arming order, which the mirror does not need yet). The timer is detached
+    before the call (`expire_timers`, timer.c:1828-1829). -/
+def fireTimer (w : Worker) (jHi : Nat) : M Unit := do
+  let some t := w.timer? | invariant s!"{w.symbol} is not a timer callback"
+  let d ← getDev
+  let due := d.peerList.filter fun pid =>
+    match d.peers.get? pid >>= (·.timer t) with
+    | some e => e < jHi
+    | none => false
+  match due with
+  | [pid] =>
+    delTimer pid t
+    runTimerSection w (WG.timerCallback pid t)
+  | [] => throw (.hidden s!"a section of {w.symbol}, but no peer's timer is pending with expires before jiffies {jHi}")
+  | _ => unsupported s!"several peers' timers for {w.symbol} due in one pass (their order)"
+
+/-- The timer sections the records show at an idle point, and the work they
+    queue, in record order (docs/2026-10-05-d3-timers.md, section 5.3):
+    `call_timer_fn` of each due timer (`fireTimer`), then the handshake send
+    worker and the clear work (FIFO on `handshake_send_wq`, ordered by
+    their records), the encrypt and tx workers, and the loopback delivery
+    of what they send. Work queued before the idle point has run already
+    (each operation runs its own); a worker section here without queued
+    work is left to the caller, whose records then mismatch. Whether a
+    timer fired. Work a timer queued that has not run when the records end
+    outlived the guest's wait: outside the domain. Without records (the
+    domain filter) nothing fires here. -/
+def runTimers (jHi : Nat) : M Bool := do
+  modify fun w => { w with queuedThisCall := [] }   -- the guest slept
+  let startOf (w : Worker) := (HiddenSite.sectionStart w).info.id
+  let mut fired := false
+  for _ in [0:4096] do
+    let some site ← peekNextSite | break
+    let d ← getDev
+    if let some w := timerSectionOf site then
+      if w == .clearPeerWorker then
+        if d.clearWorkQueue.isEmpty then break
+        runOneClearWorker
+      else
+        fireTimer w jHi
+        fired := true
+    else if !fired then break
+    else if site == startOf .sendWorker && !d.sendWorkQueue.isEmpty then runOneSendWorker
+    else if (site == startOf .encryptWorker || site == startOf .txWorker)
+        && (!d.encryptQueue.isEmpty || !d.txWorkQueue.isEmpty) then runCryptWorkers
+    else break
+  if fired then
+    deliverSent
+    let d ← getDev
+    if !d.sendWorkQueue.isEmpty || !d.clearWorkQueue.isEmpty || !d.encryptQueue.isEmpty || !d.txWorkQueue.isEmpty then
+      unsupported "work a timer queued outlived the guest's wait"
+  return fired
+
+/-- The domain filter's stand-in for an advance's timer pass (no records):
+    every pending timer with `expires < jHi` fires, earliest first (bucket
+    order), then the crypt workers, the send workers and the clear work. A
+    prediction for the filter's verdict only; the check follows the
+    records. -/
+def runTimersPlaceholder (jHi : Nat) : M Unit := do
+  modify fun w => { w with queuedThisCall := [] }
+  for _ in [0:64] do
+    let d ← getDev
+    let due := d.peerList.flatMap fun pid =>
+      match d.peers.get? pid with
+      | some p => PeerTimer.all.filterMap fun t => (p.timer t).bind fun e => if e < jHi then some (e, pid, t) else none
+      | none => []
+    let first := due.foldl (fun acc c => match acc with
+      | some a => if c.1 < a.1 then some c else some a
+      | none => some c) none
+    let some (_, pid, t) := first | break
+    delTimer pid t
+    runTimerSection (← timerWorker t) (WG.timerCallback pid t)
+  runCryptWorkers
+  runSendWorkers
+  for _ in [0:64] do
+    if (← getDev).clearWorkQueue.isEmpty then break
+    runOneClearWorker
+
+/-- An idle point (the guest's waits after `wg_set`, `wg_up`, `wg_inject`,
+    `wg_xmit`, and before `wg_observe`), where a timer may fire naturally:
+    `jiffies` is at most the last recorded one plus the trace's real-time
+    bound plus a wait (`Timing`). -/
+def idleTimers : M Unit := do
+  let w ← get
+  discard <| runTimers (w.jiffiesLast.getD 0 + w.timing.traceBound + w.timing.advanceWait)
+
+/-- `wg_advance`'s ioctl: `leanux_time_advance` moves `jiffies_64` by
+    `ticks` (`do_timer`), and the ioctl records kind 304 `{before, after}`
+    (`.timeAdvance`) and returns 0. The record must show exactly `ticks`;
+    `after` becomes the last known `jiffies`. The window rule needs every
+    pending timer's recorded expiry, so with records but without arm records
+    an advance is outside the domain. Without records (the domain filter)
+    the advance starts from the last known `jiffies` (0 before any). -/
+def advance (ticks : Nat) : M Int := do
+  let w ← get
+  let (j0, j1) ← if w.hidden.isNone && w.hiddenPlaceholders then
+      let j0 := w.jiffiesLast.getD 0
+      pure (j0, j0 + ticks)
+    else do
+      if !w.armRecords then unsupported "a time advance without arm records (the timers' expiries are unknown)"
+      let bs ← hidden .timeAdvance
+      pure (WG.recordWord bs 0, WG.recordWord bs 1)
+  if j1 < j0 || j1 - j0 != ticks then
+    throw (.hidden s!"the advance moved jiffies from {j0} to {j1}, not by {ticks}")
+  modify fun w => { w with jiffiesLast := some j1 }
+  return 0
+
+/-- The guest's wait after `wg_advance`'s ioctl (stream K, section 13.3: until
+    the monotonic clock has absorbed the advance, then `ADVANCE_WAIT_US`):
+    the next tick raises `TIMER_SOFTIRQ`, the due callbacks run in sections,
+    then the work they queue, all in this operation's records. -/
+def afterAdvance : M Unit := do
+  let w ← get
+  let jHi := w.jiffiesLast.getD 0 + w.timing.advanceWait
+  if w.hidden.isNone && w.hiddenPlaceholders then runTimersPlaceholder jHi
+  else discard <| runTimers jHi
 
 /-- `wg_up` as the fixture performs it: once, on a port that is not the
     fixture's own, then `dev_change_flags` (the mirror's `wgUp`). -/

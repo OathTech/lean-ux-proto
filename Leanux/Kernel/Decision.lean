@@ -230,6 +230,9 @@ inductive Decision where
   -- D2 stream A: calculate_skb_padding's `min(mtu, ALIGN(...))`
   | padClamped
   -- D3 stream M (constructors; docs/2026-10-05-d3-timers.md, section 5)
+  -- drivers/net/wireguard/timers.c: the timer callbacks
+  | retransmitGiveUp | retransmitZeroKeyNotPending | keepaliveNeedAnother | zeroKeyAlive | zeroKeyAlreadyQueued
+  | persistentKeepaliveInterval
   -- end D3 stream M
   -- D3 stream H (constructors; sections 7-8)
   -- end D3 stream H
@@ -1083,6 +1086,12 @@ def Decision.info : Decision → DecisionInfo
   -- (a branch-free select: no witness)
   | .padClamped => d "calculate_skb_padding.clamped" wsd 157 [] []
   -- D3 stream M (their infos; docs/2026-10-05-d3-timers.md, section 5)
+  | .retransmitGiveUp => d "wg_expired_retransmit_handshake.give_up" wtm 46 [(51, 62)] [(64, 75)]
+  | .retransmitZeroKeyNotPending => d "wg_expired_retransmit_handshake.zero_key_not_pending" wtm 60 [(61, 62)] []
+  | .keepaliveNeedAnother => d "wg_expired_send_keepalive.need_another" wtm 84 [(85, 87)] []
+  | .zeroKeyAlive => d "wg_expired_zero_key_material.alive" wtm 110 [(111, 117)] []
+  | .zeroKeyAlreadyQueued => d "wg_expired_zero_key_material.already_queued" wtm 112 [(117, 117)] []
+  | .persistentKeepaliveInterval => d "wg_expired_send_persistent_keepalive.interval" wtm 140 [(141, 141)] []
   -- end D3 stream M
   -- D3 stream H (their infos; sections 7-8)
   -- end D3 stream H

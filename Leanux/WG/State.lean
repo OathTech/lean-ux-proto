@@ -50,17 +50,32 @@ def requireNotPending (pid : PeerId) (what : String) : M Unit := do
   if (← getPeer pid).handshakePending && !(← get).queuedThisCall.contains pid then
     unsupported s!"{what} races the pending handshake worker"
 
-/-- D3 (docs/2026-10-05-d3-timers.md, section 5.1): `mod_timer(&peer->timer_x,
-    jiffies + delay)`, once `mod_peer_timer`'s guard has passed. With arm
-    records (`World.armRecords`) the expiry is the kind-303 record's, checked
-    against `delay` (stream M); without them it is the nominal
-    `jiffies + delay` from the last recorded `jiffies` (0 before any), which
-    nothing reads: firing stays outside the domain (`Timing.timerMayExpire`). -/
+/-- A little-endian 64-bit word of a record (`jiffies` is 64-bit from
+    `INITIAL_JIFFIES` = 2^32 - 75000: never truncated). -/
+def recordWord (bs : List UInt8) (k : Nat) : Nat :=
+  ((bs.drop (8 * k)).take 8).foldr (fun b acc => acc * 256 + b.toNat) 0
+
+/-- D3 (docs/2026-10-05-d3-timers.md, sections 3.3 and 5.1): `mod_timer(&peer->
+    timer_x, jiffies + delay)`, once `mod_peer_timer`'s guard has passed.
+    With arm records (`World.armRecords`) the expiry is the kind-303
+    record's `{jiffies, expires}`: the caller computed `jiffies + delay`
+    before `mod_timer` read `jiffies`, and a tick may land in between, so
+    `expires - jiffies` is `delay` or `delay - 1`; anything else is a hidden
+    mismatch. The record's `jiffies` becomes the last known one. Without
+    records (the domain filter) the expiry is the nominal `jiffies + delay`
+    from the last known `jiffies` (0 before any). `mod_timer` of a pending
+    timer moves it (`__mod_timer`), so the field is overwritten. -/
 def armTimer (pid : PeerId) (t : PeerTimer) (delay : Nat) : M Unit := do
-  if (← get).armRecords then
-    unsupported "D3 stream M: not yet (consuming the kind-303 arm record)"
-  let j := (← get).jiffiesLast.getD 0
-  setPeer pid ((← getPeer pid).setTimer t (some (j + delay)))
+  let w ← get
+  let e ← if w.armRecords then
+      let bs ← hidden .modTimerArm
+      let (j, e) := (recordWord bs 0, recordWord bs 1)
+      if e < j || (e - j != delay && e - j + 1 != delay) then
+        throw (.hidden s!"timer expiry differs from Linux: mod_timer at jiffies {j} to {e}, the mirror's delay is {delay}")
+      modify fun w => { w with jiffiesLast := some j }
+      pure e
+    else pure (w.jiffiesLast.getD 0 + delay)
+  setPeer pid ((← getPeer pid).setTimer t (some e))
 
 /-- `del_timer(&peer->timer_x)` (timer.c:1407-1430): detach if pending. -/
 def delTimer (pid : PeerId) (t : PeerTimer) : M Unit := do

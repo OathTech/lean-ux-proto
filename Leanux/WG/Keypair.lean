@@ -123,6 +123,20 @@ def expireCurrentPeerKeypairs (pid : PeerId) : M Unit := do
     let some kp := p.keypairCurrent | invariant "unreachable"
     invalidate kp
 
+/-- wg_noise_handshake_clear (noise.c:88-96): the handshake's index entry
+    removed, then `handshake_zero`. -/
+def handshakeClear (pid : PeerId) : M Unit := do
+  indexRemove pid .handshake
+  handshakeZero pid
+
+/-- wg_queued_expired_zero_key_material (timers.c:122-133), the work item
+    `clear_peer_work` on `handshake_send_wq`, queued by the zero-key timer
+    (`Timers.lean`) with a peer reference, which it drops. -/
+def queuedExpiredZeroKeyMaterial (pid : PeerId) : M Unit := do
+  handshakeClear pid
+  keypairsClear pid
+  peerPut (some pid)
+
 /-! ### Peer removal (peer.c:94-184), which clears the peer's keypairs -/
 
 /-- peer_remove_after_dead (peer.c:94-150). -/
@@ -131,11 +145,15 @@ def peerRemoveAfterDead (pid : PeerId) : M Unit := do
     unsupported "peer_remove_after_dead: WARN_ON(!peer->is_dead)"
   keypairsClear pid
   -- wg_timers_stop (timers.c:235-243): `timer_delete_sync` of the five
-  -- timers, then `flush_work(&peer->clear_peer_work)`, which runs a queued
-  -- clear work here (D3 stream M)
+  -- timers (none can be running: one CPU, and a softirq is not preempted by
+  -- this task), then `flush_work(&peer->clear_peer_work)`: a queued clear
+  -- work runs now, in its kworker's section, while this task waits
   for t in PeerTimer.all do delTimer pid t
   if (← getDev).clearWorkQueue.contains pid then
-    unsupported "D3 stream M: not yet (flush_work of a queued clear_peer_work)"
+    modifyDev fun d => { d with clearWorkQueue := d.clearWorkQueue.erase pid }
+    _ ← hidden (.sectionStart .clearPeerWorker)
+    queuedExpiredZeroKeyMaterial pid
+    _ ← hidden (.sectionStop .clearPeerWorker)
   -- flush packet_crypt_wq twice; napi disable/del; flush handshake_send_wq
   if (← getDev).numPeers == 0 then invariant "--num_peers below zero"
   modifyDev fun d => { d with numPeers := d.numPeers - 1 }
