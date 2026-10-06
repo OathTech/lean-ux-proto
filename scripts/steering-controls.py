@@ -57,7 +57,9 @@ def main():
     report = run_suite('lifecycle-controls', len(LIFECYCLE_EXPECTED))
     if report is None:
         return 2
-    failures = {f['id']: f for f in report['failures']}
+    # a stopped mirror fails its chunk: the report's failures carry the
+    # stopping trace in their detail ("trace <id> operation <i>: ...")
+    failures = {f.get('id') or f.get('detail', '').split(' ')[1]: f for f in report['failures']}
     for trace_id, (outcome, detail) in LIFECYCLE_EXPECTED.items():
         f = failures.get(trace_id) or {}
         passed = f.get('outcome') == outcome and detail in f.get('detail', '')
