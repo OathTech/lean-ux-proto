@@ -168,7 +168,8 @@ def main():
             print(name, 'pending (no pattern yet)', flush=True)
             continue
         full = os.path.join(ROOT, path)
-        open(full, 'w').write(mutate(name, open(full).read(), old, new))
+        mutated = mutate(name, open(full).read(), old, new)   # before opening for writing
+        open(full, 'w').write(mutated)
         try:
             diff = run(['git', 'diff', '--stat'], capture_output=True, text=True).stdout
             assert path in diff, f'{name}: mutation not applied'
