@@ -40,6 +40,9 @@ structure Trace where
   /-- A steering schedule (choice-stream strategy, step 2): the placeholders
       follow it; Linux's records carry the steered values. -/
   steer : List (String × Option (List UInt8)) := []
+  /-- The check's choice for each NAPI poll placement the records leave open
+      (`World.napiBeforePut`). -/
+  napiBeforePut : List Bool := []
   deriving Repr
 
 /-- The network fixture runs for traces with a WireGuard operation
@@ -269,9 +272,10 @@ def parseTrace (j : Json) : Except String Trace := do
   let hasHidden := (j.getObjVal? "hidden").isOk
   let hasSteer := (j.getObjVal? "steer").isOk
   let hasExpect := (j.getObjVal? "expect").isOk
+  let hasPlacement := (j.getObjVal? "napi_irq_before_put").isOk
   fields j ((if hasLimit then ["version", "id", "ops", "rlimit_nofile"] else ["version", "id", "ops"])
     ++ (if hasHidden then ["hidden"] else []) ++ (if hasSteer then ["steer"] else [])
-    ++ (if hasExpect then ["expect"] else []))
+    ++ (if hasExpect then ["expect"] else []) ++ (if hasPlacement then ["napi_irq_before_put"] else []))
   let rlimit ← if hasLimit then natField j "rlimit_nofile" 1024 else pure 32
   if rlimit < 8 then throw "rlimit_nofile outside 8..1024"
   if (← (← field j "version").getNat?) != 1 then throw "unsupported trace version"
@@ -294,7 +298,11 @@ def parseTrace (j : Json) : Except String Trace := do
       if v.length == 0 || v.length % 2 != 0 || v.length > 80 then throw "steer: value hex"
       return (label, some (← hexBytes pair[1]! v.length "steer"))
     else pure []
-  return { id, ops, rlimit, hidden, steer }
+  let napiBeforePut ← if hasPlacement then
+      (← (← field j "napi_irq_before_put").getArr?).toList.mapM fun b => b.getBool?
+    else pure []
+  if napiBeforePut.length > 8 then throw "napi_irq_before_put: more than 8 entries"
+  return { id, ops, rlimit, hidden, steer, napiBeforePut }
 
 /-! ## Harness fixture and trace execution
 
@@ -378,7 +386,8 @@ def toSyscall (results : Array Int) : Operation → Syscall
 def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat × Stop) Json := do
   let mut world : World := { k := initialKernel trace.rlimit trace.net, env := harnessEnv, timing := Env.timing,
                              hiddenPlaceholders := placeholders && trace.hidden.isNone,
-                             steerValues := if placeholders then trace.steer else [] }
+                             steerValues := if placeholders then trace.steer else [],
+                             napiBeforePut := trace.napiBeforePut }
   let mut results : Array Int := #[]
   let mut observations : Array Json := #[]
   let mut branches : Array Json := #[]
@@ -409,8 +418,12 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
       branches := branches.push (Json.mkObj (match s.operands with
         | some (a, b) => fields ++ [("operands", toJson [a, b])]
         | none => fields))
-  return Json.mkObj [("version", toJson (1 : Nat)), ("id", toJson trace.id),
+  -- a placement the check chose must have been met
+  if world.napiBeforePut.any id then
+    throw (results.size - 1, .invariant "napi_irq_before_put names more NAPI polls than the trace has")
+  return Json.mkObj ([("version", toJson (1 : Nat)), ("id", toJson trace.id),
     ("observations", .arr observations), ("branches", .arr branches)]
+    ++ (if world.napiAmbiguous > 0 then [("napi_irq_ambiguous", toJson world.napiAmbiguous)] else []))
 
 /-- The hidden-input site table, for the check's call-site cross-check. -/
 def hiddenSitesJson : Json :=

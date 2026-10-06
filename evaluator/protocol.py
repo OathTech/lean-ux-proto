@@ -34,8 +34,13 @@ def keys(value, expected):
 
 def validate_observation(trace, result):
     """Check protocol shape, not whether the claimed semantics are correct."""
-    if not keys(result, ('version', 'id', 'observations', 'branches')):
+    # the mirror reports how many NAPI poll placements its records left open
+    # (Env.napiIrqExit); the check enumerates them
+    base = ('version', 'id', 'observations', 'branches')
+    if not (keys(result, base) or keys(result, base + ('napi_irq_ambiguous',))):
         raise InvalidOutput('observation fields')
+    if 'napi_irq_ambiguous' in result and not integer(result['napi_irq_ambiguous'], 1, 64):
+        raise InvalidOutput('napi_irq_ambiguous')
     if type(result['version']) is not int or result['version'] != 1 or result['id'] != trace['id']:
         raise InvalidOutput('version or trace identity')
     observations = result['observations']

@@ -435,6 +435,13 @@ structure World where
       yet: see `WG.loopbackSoftirq`. An operation ends with none pending
       (`Runner.executeTrace`). -/
   netRxRaised : Bool := false
+  /-- The placements of the decrypt worker's NAPI poll that its records do
+      not determine (`Env.napiIrqExit`): for each such poll in turn, whether
+      it ran at the interrupt exit inside `wg_queue_enqueue_per_peer_rx`
+      (`true`) or after it; the check enumerates them. Missing entries are
+      `false`. `napiAmbiguous` counts the polls met. -/
+  napiBeforePut : List Bool := []
+  napiAmbiguous : Nat := 0
   /-- A steered trace's schedule (site label, value or a draw), which the
       placeholders follow: the domain filter's verdict is then exact for the
       steered sites. -/

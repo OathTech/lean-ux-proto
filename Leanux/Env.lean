@@ -473,9 +473,11 @@ def deliverInner (pkt : List UInt8) : M Unit := do
     - (c) an interrupt's exit ran it, nested, before or after the
       `need_resched()` test: the same records as (b), or a NET_RX section
       before a resched record.
-    The placements differ only by the worker's state, which the poll does
-    not read (the worker's remaining work is its next ring poll). Without
-    records (the domain filter) the poll runs at the first hook. -/
+    These placements differ only by the worker's state, which the poll does
+    not read (the worker's remaining work is its next ring poll). A fourth,
+    (c') inside `wg_queue_enqueue_per_peer_rx`, differs in the peer's
+    reference count and is not told apart by the records (`napiIrqExit`).
+    Without records (the domain filter) the poll runs at the first hook. -/
 def napiSoftirq : M Unit := do
   let d ← getDev
   let pending := d.peers.toList.filterMap fun (pid, p) => if p.napiScheduled then some pid else none
@@ -487,11 +489,34 @@ def napiSoftirq : M Unit := do
     for pid in pending do
       discard <| WG.rxPoll pid WG.NAPI_POLL_WEIGHT fun pkts => pkts.forM deliverInner
 
+/-- (c') An interrupt at `__napi_schedule`'s `local_irq_restore`: its exit
+    (`irq_exit_rcu` → `invoke_softirq`, `in_interrupt()` false in the
+    worker) runs the NET_RX just raised **before** `wg_queue_enqueue_per_peer_rx`
+    drops its peer reference (queueing.h:199-202). The records are those of
+    (c) after the function (and of (b) at the next ring poll): a NET_RX
+    section right after the enqueue. The poll's reads differ only in the
+    peer's reference count, one higher here: its `kref_get_unless_zero` in
+    the allowed-IPs lookup and its `wg_peer_put` compare it (KCOV operands;
+    seen on a contended host, rx_roam_v6 and rx_in_order, 2026-10-06:
+    Linux 1, 1, 3 where (c) gives 1, 1, 2). No record tells the two apart,
+    so the placement is a choice the check enumerates
+    (`World.napiBeforePut`): each choice is one complete execution, and
+    the comparison child's operands must agree with one of them. Without
+    records (the domain filter) the poll is placed by `napiSoftirq`. -/
+def napiIrqExit : M Unit := do
+  if (← get).hidden.isNone then return
+  if !(← getDev).peers.toList.any (·.2.napiScheduled) then return
+  if (← peekHiddenSite) != some (HiddenSite.sectionStart .netRx).info.id then return
+  let w ← get
+  let here := w.napiBeforePut.headD false
+  set { w with napiBeforePut := w.napiBeforePut.drop 1, napiAmbiguous := w.napiAmbiguous + 1 }
+  if here then napiSoftirq
+
 /-- The decrypt worker (`packet_crypt_wq`, queued by `consume_data` in the
     injecting operation's NET_RX), once that softirq is done, with its
-    NAPI softirq placement and its `cond_resched` (receive.c:505). -/
+    NAPI softirq placements and its `cond_resched` (receive.c:505). -/
 def runDecryptWorker : M Unit := do
-  runWorker .decryptWorker (WG.decryptWorker napiSoftirq (condResched SWITCH_DEPTH .decryptWorker))
+  runWorker .decryptWorker (WG.decryptWorker napiSoftirq napiIrqExit (condResched SWITCH_DEPTH .decryptWorker))
   if (← getDev).peers.toList.any (·.2.napiScheduled) then
     invariant "a NAPI poll pending after the decrypt worker (its ring poll runs the softirq)"
 

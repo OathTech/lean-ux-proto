@@ -4,6 +4,11 @@ Run after `lake build leanux-model` (the check builds it):
     scripts/in-bundle python3 -B -m unittest evaluator.test_model_replay
 A missing binary fails the tests; it does not skip them.
 
+The decrypt worker's NAPI poll placement (Leanux/Env.lean, `napiIrqExit`): a
+poll the records place right after the enqueue may have run inside it, holding
+the enqueue's peer reference; the mirror reports such polls and takes the
+placement as an input, which the check enumerates.
+
 The loopback NET_RX rule (Leanux/WG/State.lean, `loopbackSend`): a transmission
 over loopback raises NET_RX, whose section runs nested at the send's
 `local_bh_enable`, exactly once. It replaced a cut that consumed any number
@@ -31,6 +36,19 @@ CONTENDED_B1 = json.loads(r'''{"hidden":[[[5,"5b31367705000000"],[5,"5b313677050
 # (one NET_RX section), and the ENOKEY error sends no ICMP (no icmp_global_consume
 # draw). The old error-path cut absorbed that section.
 MULTICAST = json.loads(r'''{"hidden":[[[5,"a0579b4b04000000"]],[],[[48,"e0b33f81ffffffff"],[49,"0000000000000000"]],[],[]],"id":"generated-wg-20260920-00136","ops":[{"config":{"listen_port":51820,"peers":[{"allowed_ips":[{"addr":"20010db9000000000000000000000000","cidr":32,"family":6}],"endpoint":{"addr":"00000000000000000000000000000001","family":6,"port":51999},"public_key":"2222222222222222222222222222222222222222222222222222222222222222"}],"replace_peers":true},"op":"wg_set"},{"op":"wg_up"},{"op":"wg_xmit","packet":{"dst":"e0000001","family":4}},{"op":"wg_observe"},{"op":"wg_get"}],"version":1}''')
+
+# rx_roam_v6's comparison child as recorded on a contended host (load average
+# 50-80, 2026-10-06, .worktrees/flake before-3 chunk-000b): operation 4's NAPI
+# poll is a NET_RX section right after the decrypt worker's enqueue, with no
+# resched record. Linux's kref_get_unless_zero operands were 1, 1, 3: the poll
+# ran at the interrupt exit inside wg_queue_enqueue_per_peer_rx, holding its
+# peer reference (Env.napiIrqExit); the placement after it gives 1, 1, 2.
+CONTENDED_ROAM_CMP = json.loads(r'''{"hidden":[[[5,"a152759a1e000000"]],[[6,"9909f3a41e000000"],[40,"f05e3981ffffffff"],[6,"9909f3a41e000000"],[7,"9909f3a41e000000"],[1,"8182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0"],[3,"803bb16a00000000b168de3a00000000"],[4,"0d0c0b0a00000000"],[8,"9909f3a41e000000"],[21,"23496d285f2d34c75cb861a51ec9230c"],[20,"01b25d3c00000000"],[48,"e0b33f81ffffffff"],[49,"0000000000000000"],[14,"3d00000000000000"],[41,"0000000000000000"]],[],[[48,"e0b33f81ffffffff"],[49,"0000000000000000"],[42,"807c3981ffffffff"],[13,"a99501cd1e000000"],[15,"8560c46a000000005316763a00000000"],[6,"a99501cd1e000000"],[60,"0000000000000000"],[44,"c0643981ffffffff"],[45,"0000000000000000"],[46,"00623981ffffffff"],[20,"7000000000000000"],[48,"e0b33f81ffffffff"],[49,"0000000000000000"],[6,"a99501cd1e000000"],[47,"0000000000000000"],[43,"0000000000000000"]],[[48,"e0b33f81ffffffff"],[49,"0000000000000000"],[50,"008c3981ffffffff"],[6,"a39cc3eb1e000000"],[48,"e0b33f81ffffffff"],[6,"9da600ec1e000000"],[49,"0000000000000000"],[63,"0000000000000000"],[51,"0000000000000000"]],[],[]],"id":"rx_roam_v6","ops":[{"config":{"listen_port":51820,"peers":[{"allowed_ips":[{"addr":"0a000000","cidr":8,"family":4}],"endpoint":{"addr":"7f000001","family":4,"port":51999},"keepalive":25,"public_key":"0faa684ed28867b97f4a6a2dee5df8ce974e76b7018e3f22a1c4cf2678570f20"}],"private_key":"1111111111111111111111111111111111111111111111111111111111111111"},"op":"wg_set"},{"op":"wg_up"},{"op":"wg_observe"},{"family":4,"message":"02000000040302010d0c0b0aff2ee45601ec1b67310c7790404585ae697331eee1c1f8cf2419731c1fff3e6bc50a223d86b8a86bf41a2bd3a1ab84f892fd9bacbc45bda46dc025e6cac665a500000000000000000000000000000000","op":"wg_inject","port":51820},{"family":6,"message":"040000000d0c0b0a0000000000000000973bf9043cd64074998eeaaf05b9f8acd9ac555ca8099f9adfd3b40e88941a5d98b87fb01b15950d9b40eed7d7f7e394ee18c53077613a5d3e5a2bb979c5a98e","op":"wg_inject","port":51820},{"op":"wg_observe"},{"op":"wg_get"}],"steer":[["init_ephemeral","8182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0"],["tai64n_now","803bb16a00000000b168de3a00000000"],["index_draw","0d0c0b0a"]],"version":1}''')
+
+
+def run(trace):
+    result = subprocess.run([MODEL], input=json.dumps(trace).encode(), capture_output=True, timeout=120)
+    return result.returncode, result.stdout.decode(), result.stderr.decode()
 
 
 def replay(trace):
@@ -86,6 +104,29 @@ class LoopbackNetRx(unittest.TestCase):
 
     def test_multicast_without_its_section_is_rejected(self):
         self.assertIn('raised NET_RX: expected its section', replay(self.mutated(MULTICAST, 2, lambda op: [])) or '')
+
+
+class NapiPlacement(unittest.TestCase):
+    def lookups(self, trace):
+        if not MODEL.is_file():
+            raise AssertionError(f'{MODEL} is missing: run `lake build leanux-model` first')
+        code, out, err = run(trace)
+        self.assertEqual((code, err), (0, ''))
+        result = json.loads(out)
+        return result.get('napi_irq_ambiguous'), [b['operands'] for b in result['branches']
+                                                  if b['index'] == 4 and b['label'] == '__refcount_add_not_zero.old_zero=0']
+
+    def test_open_placement_is_reported(self):
+        self.assertEqual(self.lookups(CONTENDED_ROAM_CMP), (1, [[1, 0], [1, 0], [2, 0]]))
+
+    def test_placement_inside_the_enqueue_holds_its_reference(self):
+        self.assertEqual(self.lookups(dict(CONTENDED_ROAM_CMP, napi_irq_before_put=[True])),
+                         (1, [[1, 0], [1, 0], [3, 0]]))
+
+    def test_a_choice_for_a_poll_that_does_not_exist_fails(self):
+        code, _, err = run(dict(CONTENDED_ROAM_CMP, napi_irq_before_put=[True, True]))
+        self.assertEqual(code, 4)
+        self.assertIn('names more NAPI polls than the trace has', err)
 
 
 if __name__ == '__main__':

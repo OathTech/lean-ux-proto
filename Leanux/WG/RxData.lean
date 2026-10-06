@@ -85,8 +85,11 @@ def decryptPacket (pkt : RxPacket) : M (Option RxPacket) := do
 
 /-- wg_queue_enqueue_per_peer_rx (queueing.h:193-203): a reference to the
     packet's peer for the duration, the packet's state (the same skb is on
-    the peer's `rx_queue`), and `napi_schedule`. -/
-def enqueuePerPeerRx (pkt : RxPacket) (state : PacketState) : M Unit := do
+    the peer's `rx_queue`), and `napi_schedule`. `irqExit` is the
+    environment's placement of an interrupt at `__napi_schedule`'s
+    `local_irq_restore`, whose exit may run the NET_RX just raised while
+    this function still holds its peer reference. -/
+def enqueuePerPeerRx (irqExit : M Unit) (pkt : RxPacket) (state : PacketState) : M Unit := do
   let pid := (← getKeypair pkt.keypair).peer   -- PACKET_PEER(skb)
   peerGet pid
   let p ← getPeer pid
@@ -95,13 +98,15 @@ def enqueuePerPeerRx (pkt : RxPacket) (state : PacketState) : M Unit := do
     | invariant "a decrypted packet that is not on its peer's rx_queue"
   -- napi_schedule: NAPI_STATE_SCHED, and NET_RX raised (a cut point)
   setPeer pid { p with rxQueue := p.rxQueue.set i { pkt with state }, napiScheduled := true }
+  irqExit
   peerPut (some pid)
 
 /-- wg_packet_decrypt_worker (receive.c:493-507): drains the decrypt queue.
     `softirq` is the environment's NET_RX placement (the NAPI poll the
-    worker's `napi_schedule` raised, where the records put it);
+    worker's `napi_schedule` raised, where the records put it), and
+    `irqExit` its placement inside `wg_queue_enqueue_per_peer_rx`;
     `needResched` its scheduler, as for the encrypt worker. -/
-def decryptWorker (softirq : M Unit) (needResched : M Bool) : M Unit := do
+def decryptWorker (softirq irqExit : M Unit) (needResched : M Bool) : M Unit := do
   for _ in [0:MAX_QUEUED_PACKETS + 1] do
     -- ptr_ring_consume_bh: its spin_unlock_bh runs a pending softirq
     softirq
@@ -116,8 +121,8 @@ def decryptWorker (softirq : M Unit) (needResched : M Bool) : M Unit := do
       -- `likely(decrypt_packet(...)) ? PACKET_STATE_CRYPTED : PACKET_STATE_DEAD`
       if ← branch .decWorkerDecrypted decrypted.isSome then
         let some d := decrypted | invariant "unreachable"
-        enqueuePerPeerRx d .crypted
-      else enqueuePerPeerRx pkt .dead
+        enqueuePerPeerRx irqExit d .crypted
+      else enqueuePerPeerRx irqExit pkt .dead
       -- an interrupt's exit may run the raised softirq before the test
       softirq
       _ ← branch .decWorkerNeedResched (← needResched)

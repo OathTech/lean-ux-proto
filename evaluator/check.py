@@ -723,6 +723,41 @@ def guest_timeout(traces):
 RETRIED_OUTCOMES = ('timeout', 'resource_busy')
 
 
+# Env.napiIrqExit: a NAPI poll whose records leave its placement open (inside
+# wg_queue_enqueue_per_peer_rx, holding its peer reference, or after it) is a
+# choice the mirror reports and the check enumerates: each choice vector is one
+# complete execution, and the comparison child's operands must agree with one
+# of them. Up to this many open placements per trace are enumerated; beyond,
+# the mismatch stands.
+NAPI_PLACEMENTS_MAX = 3
+
+
+def napi_placements(trace, hidden_traces, actual_cmp, out, trace_comparisons, locations, kcov):
+    """The first other placement vector under which the comparison child's
+    operands agree: (choice, observation, problems, checked), or None."""
+    count = actual_cmp['napi_irq_ambiguous']
+    if count > NAPI_PLACEMENTS_MAX:
+        return None
+    with_records = next(t for t in hidden_traces if t['id'] == trace['id'])
+    for bits in range(1, 2 ** count):
+        choice = [bool(bits >> i & 1) for i in range(count)]
+        where = out / f'model-cmp-napi-{trace["id"]}-{bits}'
+        where.mkdir()
+        try:
+            [alternative] = run_model([dict(with_records, napi_irq_before_put=choice)], where)
+        except (InvalidOutput, OSError, subprocess.SubprocessError):
+            continue
+        if alternative.get('napi_irq_ambiguous') != count:
+            continue
+        if [o['ret'] for o in alternative['observations']] != [o['ret'] for o in actual_cmp['observations']]:
+            continue
+        problems, checked = operand_agreement(trace, alternative, trace_comparisons, locations, kcov[1],
+                                              set(kcov[0]['functions']))
+        if not problems:
+            return choice, alternative, problems, checked
+    return None
+
+
 def run_chunk(traces, out, kcov):
     out.mkdir(parents=True)
     results, gaps = {}, Counter()
@@ -765,11 +800,11 @@ def run_chunk(traces, out, kcov):
             site_problems.setdefault(trace_id, []).extend(found)
         outcomes.update({f'choice records skipped ({k})': n for k, n in skipped.items()})
     except LinuxRunError as exc:
-        return {t['id']: dict(outcome=exc.kind, side='linux', detail=str(exc)) for t in traces}, gaps, outcomes
+        return {t['id']: dict(id=t['id'], outcome=exc.kind, side='linux', detail=str(exc)) for t in traces}, gaps, outcomes
     except SteeringError as exc:
-        return {t['id']: dict(outcome='invalid_input', side='linux', detail=str(exc)) for t in traces}, gaps, outcomes
+        return {t['id']: dict(id=t['id'], outcome='invalid_input', side='linux', detail=str(exc)) for t in traces}, gaps, outcomes
     except (InvalidOutput, ValueError, OSError, subprocess.SubprocessError) as exc:
-        return {t['id']: dict(outcome='invalid_coverage', side='linux', detail=str(exc)) for t in traces}, gaps, outcomes
+        return {t['id']: dict(id=t['id'], outcome='invalid_coverage', side='linux', detail=str(exc)) for t in traces}, gaps, outcomes
     # The mirror runs once with each guest child's hidden-input records: the
     # coverage child's run is compared for behavior and control flow, the
     # comparison child's for operands (docs/2026-10-03-hidden-inputs-design.md).
@@ -785,7 +820,7 @@ def run_chunk(traces, out, kcov):
             model_cmp = model
     except (InvalidOutput, OSError, subprocess.SubprocessError) as exc:
         kind = getattr(exc, 'kind', 'invalid_output')
-        return {t['id']: dict(outcome=kind, side='model', detail=str(exc)) for t in traces}, gaps, outcomes
+        return {t['id']: dict(id=t['id'], outcome=kind, side='model', detail=str(exc)) for t in traces}, gaps, outcomes
     rows, cmp_rows = iter(coverage), iter(comparisons)
     for trace, expected, actual, actual_cmp in zip(traces, linux, model, model_cmp):
         trace_coverage = [next(rows) for _ in trace['ops']]
@@ -795,6 +830,13 @@ def run_chunk(traces, out, kcov):
             problems, trace_gaps = control_flow(trace, actual, trace_coverage, mapped['locations'], *kcov)
             operand_problems, checked = operand_agreement(trace, actual_cmp, trace_comparisons,
                                                           compared['locations'], kcov[1], set(kcov[0]['functions']))
+            if operand_problems and actual_cmp.get('napi_irq_ambiguous'):
+                placed = napi_placements(trace, with_hidden('cmp'), actual_cmp, out, trace_comparisons,
+                                         compared['locations'], kcov)
+                if placed is not None:
+                    choice, actual_cmp, operand_problems, checked = placed
+                    # popped into the report's napi_irq_placements
+                    outcomes[f'napi placement ({trace["id"]})'] = sum(1 << i for i, b in enumerate(choice) if b)
             problems += operand_problems + site_problems.get(trace['id'], [])
             # a steered trace states what its steering is for: the mirror's
             # agreeing run (A2 ties it to Linux's coverage) must show it
@@ -884,9 +926,11 @@ def main(argv=None):
         matched = outcomes.pop('operand pairs matched', 0)
         skipped = {k[len('choice records skipped ('):-1]: outcomes.pop(k) for k in list(outcomes)
                    if k.startswith('choice records skipped (')}
+        placements = {k[len('napi placement ('):-1]: outcomes.pop(k) for k in list(outcomes)
+                      if k.startswith('napi placement (')}
         status = write_report(out, traces, results, gaps, build, aborted, started, suites, args,
                               decision_summary(decisions, outcomes, kcov[2] if kcov else {}), matched, filtered, splits,
-                              skipped, retries)
+                              skipped, retries, placements)
     return 0 if status == 'pass' else 1
 
 
@@ -908,7 +952,7 @@ def decision_summary(decisions, outcomes, witnesses):
 
 def write_report(out, traces, results, gaps, build, aborted, started, suites, args, decision_coverage=None,
                  operand_pairs_matched=0, domain_filtered=None, chunk_splits=0, choice_records_skipped=None,
-                 chunk_retries=None):
+                 chunk_retries=None, napi_irq_placements=None):
     ordered = [results.get(trace['id'], dict(id=trace['id'], outcome='not_run')) for trace in traces]
     counts = Counter(r['outcome'] for r in ordered)
     vmlinux = KERNEL / 'vmlinux'
@@ -932,6 +976,10 @@ def write_report(out, traces, results, gaps, build, aborted, started, suites, ar
         # chunks rerun once after an infrastructure outcome (RETRIED_OUTCOMES),
         # by chunk: the first outcome and the rerun's outcomes
         chunk_retries=dict(chunk_retries or {}),
+        # traces whose comparison child agreed only under another placement
+        # of an open NAPI poll (Env.napiIrqExit): the choice, bit i for the
+        # trace's i-th open poll (1: inside wg_queue_enqueue_per_peer_rx)
+        napi_irq_placements=dict(sorted((napi_irq_placements or {}).items())),
         decision_coverage=decision_coverage,
         failures=[r for r in ordered if r['outcome'] != 'agreement'])
     (out / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
