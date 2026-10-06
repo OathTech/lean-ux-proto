@@ -732,10 +732,12 @@ def guest_timeout(traces):
     return GUEST_BASE_SECONDS + observes * OBSERVE_SECONDS + operations * OPERATION_SECONDS
 
 
-def run_chunk(traces, out, kcov, alloc_flags=0):
+def run_chunk(traces, out, kcov, alloc_flags=0, arm=()):
     """`alloc_flags`: the allocation load flags of an armed chunk; nonzero
-    only for the control kernel's controls (scripts/alloc-controls.py), which
-    the oracle rejects."""
+    only for the control kernel's controls, which the oracle rejects. `arm`:
+    allocation sites to arm without steering them (a control's armed run of
+    an FS trace, which the guest cannot steer). Both are for
+    scripts/alloc-evaluator-controls.py only."""
     out.mkdir(parents=True)
     results, gaps = {}, Counter()
     outcomes = Counter()
@@ -745,10 +747,10 @@ def run_chunk(traces, out, kcov, alloc_flags=0):
         if not {e['file'] for e in sites_by_key.values() if e['kind'] == 'section'} <= set(DISPATCH_SYMBOLS):
             raise InvalidOutput('a section site outside the dispatch set')
         steer_wire, alloc, armed_labels = {}, None, []
-        if any('steer' in t for t in traces):
+        if any('steer' in t for t in traces) or arm:
             by_label = {entry['label']: entry for entry in sites_by_key.values()}
             calls = call_sites(KERNEL / 'vmlinux', LINUX_ARTIFACTS / 'cache')
-            steered_alloc = {label for t in traces for label, _ in t.get('steer', []) if label in ALLOC_SITES}
+            steered_alloc = {label for t in traces for label, _ in t.get('steer', []) if label in ALLOC_SITES} | set(arm)
             # A chunk with a steered allocation site is armed with those
             # sites' ranges (every trace in it then records their
             # candidates); others stay disarmed (section 6.6).

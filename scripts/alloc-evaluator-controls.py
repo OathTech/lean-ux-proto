@@ -16,14 +16,20 @@ checks the same controls on the kernel side only (Linux, no mirror).
   `__GFP_NOFAIL`: never failed, the entry left over.
 - K5 (control kernel, `addr_naming`): naming by address only never names a
   helper site: the entry left over.
-- C-kv (oracle): a fail record at the 8 KiB `kvmalloc` of the fd array (an
+- C-kv (oracle): the 8 KiB `kvmalloc` of the fd array (an
   `rlimit_nofile = 1024` trace whose `dup3` expands the table to 1024
-  slots). Linux falls back to `vmalloc` and succeeds; the mirror must answer
-  `unsupported "kvmalloc vmalloc fallback"`, never -ENOMEM. The host refuses
-  to schedule this failure (harness/steer.py `alloc_refusal`); this control
-  bypasses that refusal for its one trace, so the failure is forced (the
-  record's steered bit is set) rather than natural; the mirror reads only
-  the outcome byte, which is the same for both.
+  slots). Its slab attempt carries __GFP_NORETRY and can fail, after which
+  `vmalloc` succeeds; the mirror must then answer `unsupported "kvmalloc
+  vmalloc fallback"`, never -ENOMEM. Neither a natural failure nor a forced
+  one can be produced on this base: no memory-pressure fixture exists, the
+  control kernel has no such flag, and the guest steers network traces only
+  (the schedule rides the remote KCOV instance). So the control has two
+  parts: (a) Linux, armed with the kvmalloc helper range and not steered,
+  runs the trace and the whole check must agree, which shows that the
+  record resolves to `kvmallocFdArray` and is consumed (the natural success);
+  (b) the mirror alone, given (a)'s records with that record's outcome byte
+  set to 0 (what a natural failure records), must stop with the
+  `unsupported` answer.
 Each case runs in its own process, with LEANUX_KERNEL_DIR selecting the
 kernel.
 """
@@ -40,23 +46,23 @@ CTL = {'record_ok': 2, 'nofail': 4, 'addr_naming': 8}
 CKV = {"version": 1, "id": "ac_kvmalloc_fallback", "rlimit_nofile": 1024,
        "ops": [{"op": "eventfd2", "init": 0, "flags": 0},
                {"op": "dup3", "fd": {"ref": 0}, "newfd": {"literal": 1000}, "flags": 0},
-               {"op": "write", "fd": {"literal": 1000}, "count": 8, "value": "1"}],
-       "steer": [["kvmallocFdArray", FAIL]]}
+               {"op": "write", "fd": {"literal": 1000}, "count": 8, "value": "1"}]}
 
 
 def corpus(name):
     return json.loads((ROOT / 'corpus/alloc' / f'{name}.json').read_text())
 
 
-# case: (kernel option, load flags, trace, bypass the host's refusal, what must fail)
+# case: (kernel option, load flags, trace, sites armed unsteered, what must hold)
 CASES = {
-    'K1': ('control_kernel', CTL['record_ok'], corpus('a_sendbuf_init_nomem'), False,
+    'K1': ('control_kernel', CTL['record_ok'], corpus('a_sendbuf_init_nomem'), (),
            'a forced failure recorded as ok: the records disagree with Linux'),
-    'K4': ('control_kernel', CTL['nofail'], corpus('a_sendbuf_init_nomem'), False,
+    'K4': ('control_kernel', CTL['nofail'], corpus('a_sendbuf_init_nomem'), (),
            'a __GFP_NOFAIL encounter is never failed: the schedule is left over'),
-    'K5': ('control_kernel', CTL['addr_naming'], corpus('a_sendbuf_init_nomem'), False,
+    'K5': ('control_kernel', CTL['addr_naming'], corpus('a_sendbuf_init_nomem'), (),
            'naming by address only: the helper site is never steered, the schedule left over'),
-    'C-kv': ('kernel', 0, CKV, True, 'the mirror answers unsupported "kvmalloc vmalloc fallback"'),
+    'C-kv': ('kernel', 0, CKV, ('kvmallocFdArray',),
+             '(a) armed, the natural success agrees; (b) a fail record: unsupported "kvmalloc vmalloc fallback"'),
 }
 
 
@@ -66,17 +72,29 @@ def run_case(name, out):
     from evaluator import check
     from evaluator.coverage import instrumented_lines
     from harness.trace import validate_trace
-    _, flags, trace, bypass, _ = CASES[name]
-    if bypass:
-        refuse = steer.alloc_refusal
-        steer.alloc_refusal = lambda t, label, value: None if t['id'] == CKV['id'] else refuse(t, label, value)
+    _, flags, trace, arm, _ = CASES[name]
     config = check.load_kcov_config()
     decisions = check.load_decisions(config)
     instrumented, functions = instrumented_lines(check.KERNEL / 'vmlinux', config['functions'], config['files'])
     kcov = (config, decisions, check.witness_table(decisions, instrumented, functions,
                                                    config['branch_free_functions']), instrumented, functions)
-    results, _, _ = check.run_chunk([validate_trace(trace)], out, kcov, alloc_flags=flags)
+    results, _, _ = check.run_chunk([validate_trace(trace)], out, kcov, alloc_flags=flags, arm=arm)
     result = results[trace['id']]
+    if name == 'C-kv':
+        result = dict(armed_run=result)
+        # (b): the armed run's records, the fd array's outcome byte set to 0
+        inputs = [json.loads(line) for line in (out / 'model/inputs.jsonl').read_text().splitlines()]
+        site = next(e['id'] for e in check.load_hidden_sites().values() if e['label'] == 'kvmallocFdArray')
+        found = [(i, k) for i, op in enumerate(inputs[0]['hidden']) for k, r in enumerate(op) if r[0] == site]
+        result['fd_array_records'] = [inputs[0]['hidden'][i][k] for i, k in found]
+        result['alloc_armed'] = inputs[0].get('alloc_armed')
+        if len(found) == 1:
+            i, k = found[0]
+            rec = inputs[0]['hidden'][i][k]
+            inputs[0]['hidden'][i][k] = [rec[0], '00' + rec[1][2:]]
+            proc = subprocess.run([str(check.MODEL)], input=(json.dumps(inputs[0]) + '\n').encode(),
+                                  capture_output=True, timeout=120)
+            result['fail_record'] = dict(exit=proc.returncode, stderr=proc.stderr.decode()[-500:])
     (out / 'result.json').write_text(json.dumps(result, indent=1) + '\n')
     print(json.dumps(result)[:3000])
 
@@ -94,6 +112,8 @@ def main():
         run_case(args.case, out / args.case)
         return 0
     summary = {}
+    if args.only and (out / 'summary.json').exists():   # merge with the earlier cases' results
+        summary = json.loads((out / 'summary.json').read_text())
     for name in (args.only.split(',') if args.only else CASES):
         kernel_opt, _, trace, _, what = CASES[name]
         kernel = Path(getattr(args, kernel_opt)).resolve()
@@ -105,7 +125,12 @@ def main():
         kinds = sorted({p['problem'] for p in result.get('problems', [])})
         detail = result.get('detail', '')
         if name == 'C-kv':
-            ok = result['outcome'] == 'unsupported_path' and 'kvmalloc vmalloc fallback' in detail
+            fr = result.get('fail_record', {})
+            ok = result.get('armed_run', {}).get('outcome') == 'agreement' and fr.get('exit') == 3 \
+                and 'kvmalloc vmalloc fallback' in fr.get('stderr', '') \
+                and result.get('alloc_armed') == ['kvmallocFdArray', 'kvmallocFdBitmaps']
+            result['outcome'] = 'see armed_run and fail_record'
+            detail = json.dumps(dict(armed=result.get('armed_run', {}).get('outcome'), fail_record=fr))
         else:
             ok = result['outcome'] not in ('agreement', 'no_result') and result.get('side') != 'linux'
         summary[name] = dict(expected=what, kernel=str(kernel), outcome=result['outcome'], problems=kinds,

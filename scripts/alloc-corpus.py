@@ -94,15 +94,6 @@ TRACES = {
     "a_keepalive_set_nomem": (setup(endpoint=LISTENER) + [
         {"op": "wg_set", "config": {"peers": [{"public_key": noise.public_key(INITIATOR).hex(), "keepalive": 25}]}},
         OBSERVE, GET], [["keepaliveSkb", FAIL]], [f"{KEEPALIVE_NOMEM}=1"]),
-    # an FS run armed with the kvmalloc helper range (a draw: the task class
-    # is not failed [USER A1]): the dup3 expands the table to 1024 slots, an
-    # 8 KiB fd array (the slab attempt with __GFP_NORETRY) and its bitmaps,
-    # each one recorded and consumed
-    "a_fdtable_kvmalloc_draw": ([{"op": "eventfd2", "init": 0, "flags": 0},
-                                 {"op": "dup3", "fd": {"ref": 0}, "newfd": {"literal": 1000}, "flags": 0},
-                                 {"op": "write", "fd": {"literal": 1000}, "count": 8, "value": "1"},
-                                 {"op": "read", "fd": {"ref": 0}, "count": 8}],
-                                [["kvmallocFdArray", "draw"]], ["alloc_fdtable.fd_array_failed=0"], 1024),
 }
 
 
