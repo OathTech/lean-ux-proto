@@ -285,6 +285,20 @@ def traces():
     # REKEY_TIMEOUT it stages, finds no current keypair and initiates. The
     # response completes wg0's session as initiator; add_new_keypair's
     # initiator arm demotes the pending next keypair.
+    # The between zone [AGENT]: an advance of exactly the zero-key delay
+    # plus the wait puts the timer's expiry inside the advance's window
+    # (e < J_hi), but its level-4 bucket (up to 4096 ticks later) is most
+    # likely still ahead, so Linux does not run it in this operation (probe
+    # h-between); it may fire in the observation's wait, or after the trace.
+    # The mirror does not predict firings from expiries (section 5.3: no
+    # must-fire rule, audit M4); it follows the sections wherever they land
+    # at an idle point. A mirror that fired every timer with e < J_hi would
+    # fail here.
+    out["d3_between_zone"] = (
+        ka_ops + [keepalive_off(), advance(ZERO_KEY_TICKS + 25), OBSERVE, GET],
+        steer,
+        SESSION + [fired("send_persistent_keepalive"), INTERVAL + "=0"])
+
     theirs = noise.initiation(noise.public_key(d1.DEVICE), d1.PEER, d1.PEER_EPHEMERAL, noise.tai64n(1, 0), 0x0badcafe)
     out["d3_respond_then_initiate"] = (
         [{"op": "wg_set", "config": {"private_key": d1.key(d1.DEVICE), "listen_port": d1.PORT,
@@ -310,15 +324,6 @@ def controls():
         # were opened but not recorded, which fails as well.)
         "tc_advance_wait0": (ka_ops + [data(sess, 0, "one"), advance(KEEPALIVE), GET],
                              steer, [fired("send_keepalive")]),
-        # The between zone: an advance of exactly the zero-key delay plus the
-        # wait puts the timer's expiry inside the window (e < J_hi), but its
-        # level-4 bucket (4096 ticks) is still ahead, so Linux does not run
-        # it in this operation, nor before the trace ends. Whether the mirror
-        # can tell that it must not fire depends on the wheel's rounding,
-        # which it does not model (audit M4): the advance is outside the
-        # supported domain, and the mirror must say so rather than guess.
-        "tc_between_zone": (ka_ops + [keepalive_off(), advance(ZERO_KEY_TICKS + 25), OBSERVE, GET],
-                            steer, [fired("send_persistent_keepalive")]),
     }
 
 

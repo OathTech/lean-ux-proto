@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "id": "tc_between_zone",
+  "id": "d3_between_zone",
   "ops": [
     {
       "op": "wg_set",
@@ -81,6 +81,11 @@
     ]
   ],
   "expect": [
-    "fired:wg_expired_send_persistent_keepalive"
+    "wg_receive_handshake_packet.response=1",
+    "wg_noise_handshake_begin_session.initiator=1",
+    "add_new_keypair.initiator=1",
+    "wg_packet_send_staged_packets.no_keypair=0",
+    "fired:wg_expired_send_persistent_keepalive",
+    "wg_expired_send_persistent_keepalive.interval=0"
   ]
 }

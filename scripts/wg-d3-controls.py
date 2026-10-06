@@ -10,10 +10,9 @@ way, each run with its guest variant.
   keepalive timer's section and its workers land in the wg_get after it
   (not an idle point: the mirror meets an unexpected section, a hidden
   mismatch), or after the trace's last readout (opened but not recorded).
-- tc_between_zone, on the oracle guest: the zero-key timer's expiry is
-  inside the advance's window but its wheel bucket is not, so Linux does not
-  run it (probe h-between); the mirror cannot tell without modeling the
-  wheel's rounding and must stop `unsupported` rather than guess.
+(The between zone, an expiry inside the advance's window whose wheel bucket
+is not, is not a control: the mirror follows the sections and agrees;
+corpus/wireguard/d3_between_zone.json.)
 """
 import json
 import subprocess
@@ -24,7 +23,6 @@ ROOT = Path(__file__).resolve().parent.parent
 # trace -> (guest variant, accepted ways to fail: an outcome, or a problem)
 EXPECTED = {
     'tc_advance_wait0': ('advance-wait-0', {'hidden_mismatch', 'dispatch sections opened but not recorded'}),
-    'tc_between_zone': (None, {'unsupported_path'}),
 }
 
 
