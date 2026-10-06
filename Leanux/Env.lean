@@ -591,4 +591,25 @@ def inject (family port : Nat) (msg : List UInt8) : M Int := do
   deliverSent
   return msg.length   -- udp_sendmsg returns the datagram's length
 
+/-- `wg_flood` (docs/2026-10-05-e-dos.md §8): the fixture submits an io_uring
+    batch of invalid-MAC1 initiations to wg0's port. On the kernel they cross the
+    `handshake_queue_len >= 512` threshold, set `last_under_load`, and are all
+    dropped at the MAC1 check (reply-free), in one fully-drained receive-worker
+    section. The mirror does not model the flood's scheduling-driven dynamics:
+    it discards the whole flood section's records (§4.1) and records only that
+    `under_load` was set. It requires the flood to have reached the receive
+    worker and crossed the threshold (an `.under_load_now` record); a flood that
+    did not cross, or whose section did not close in this operation (the worker
+    outliving the window, a merged injection — §4.1), fails closed. The op
+    returns 0 (the submission succeeded). -/
+def flood (count port : Nat) : M Int := do
+  let some d := (← getK).wg | unsupported "a flood to a port other than wg0's (no wg0)"
+  if !d.running || port != d.incomingPort then unsupported "a flood to a port other than wg0's"
+  let (_, sawWorker, crossed) ← discardFloodSection .receiveWorker
+  if !sawWorker then throw (.hidden "the flood did not reach the receive worker")
+  if !crossed then throw (.hidden "the flood did not cross the under_load threshold (no under_load record)")
+  modify fun w => { w with lastUnderLoad := some 0 }   -- set; its value is a declared cut (§4.1)
+  let _ := count
+  return 0
+
 end Leanux.Env

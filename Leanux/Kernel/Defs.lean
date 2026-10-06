@@ -343,6 +343,12 @@ inductive HiddenSite where
   | udpPortDraw | neighReachTime
   /-- E-A: `wg_cookie_message_consume`'s birthdate of a stored cookie. -/
   | cookieBirthdate
+  /-- E-B (docs/2026-10-05-e-dos.md §5): the `under_load` clock read when a
+      handshake crosses the queue threshold (`last_under_load =
+      ktime_get_coarse_boottime_ns()`, receive.c:115), seen only in the
+      discarded flood section; and `wg_cookie_message_create`'s nonce
+      (`get_random_bytes_wait`, cookie.c:190, 24 bytes) of a cookie reply. -/
+  | underLoadNow | cookieNonce
   deriving Repr, BEq, DecidableEq
 
 inductive SiteRole where
@@ -446,6 +452,11 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   -- ktime_get_coarse_boottime_ns()` (cookie.c:225), the inline coarse
   -- boot-time read in wg_cookie_message_consume.
   | .cookieBirthdate => ⟨64, "cookie_birthdate", "clock", "drivers/net/wireguard/cookie.c", 225, 8, .mirror⟩
+  -- E-B (ids 130-139, outside E-A's 64-69, A's 70-99, D3's 100-115 and L's
+  -- 120-126). receive.c:115 is read only in the discarded flood section;
+  -- cookie.c:190 is the cookie reply's nonce.
+  | .underLoadNow => ⟨130, "under_load_now", "clock", "drivers/net/wireguard/receive.c", 115, 8, .mirror⟩
+  | .cookieNonce => ⟨131, "cookie_nonce", "random", "drivers/net/wireguard/cookie.c", 190, 24, .mirror⟩
 
 def HiddenSite.all : List HiddenSite :=
   [.initEphemeral, .respEphemeral, .tai64nNow, .indexDraw, .resetLastSent, .birthdateExpired, .initLastSent,
@@ -457,6 +468,7 @@ def HiddenSite.all : List HiddenSite :=
   ++ [.cookieSecretBirthdate, .cookieSecret, .pubkeyHashKey, .ratelimiterKey, .ratelimiterGcNow, .udpPortDraw,
       .neighReachTime]
   ++ [.cookieBirthdate]
+  ++ [.underLoadNow, .cookieNonce]
 
 /-- The resched site of a worker's `cond_resched`, for the workers that
     have one on the modeled paths. -/
@@ -572,6 +584,14 @@ structure World where
       wildcard bind there conflicts (`Env.portBound`; the runner supplies
       it, as it supplies `env`). -/
   portBound : Nat → Bool := fun _ => false
+  /-- E-B, fixture knowledge (docs/2026-10-05-e-dos.md §4): the kernel-global
+      `last_under_load` (receive.c:100), set by a flood that crossed the queue
+      threshold and live for one second of decay. `some _` after a `wg_flood`
+      in this trace; its exact value is a declared cut (the flood section that
+      set it is discarded). Per trace: a leak into another trace is a
+      control-flow mismatch (every normal trace keeps the constant-false decay,
+      §4.2). -/
+  lastUnderLoad : Option Int := none
 
 /-- Why a mirror execution stopped without an observation. -/
 inductive Stop where
@@ -727,6 +747,50 @@ def skipCutExactly (site : HiddenSite) (n : Nat) : M Unit := do
   skipAmbient
   if let some (r :: _) := (← get).hidden then
     if r.site == site.info.id then throw (.hidden s!"more than {n} records of {site.info.label}")
+
+/-- E-B, the section-bracket discard (docs/2026-10-05-e-dos.md §4.1): consume
+    the records of the current operation that belong to a flood's dispatched
+    `w` section and the producer `net_rx_action` sections around it, dropping
+    each interior record (the per-packet `under_load`/decay clock reads, whose
+    count is scheduling-driven and not modeled). Returns the number of records
+    dropped and whether a `w` section opened (so `under_load` was reached). The
+    loop is bounded by the operation's record count. Fails closed if a `w`
+    section opened without a matching stop (a worker outliving the window). -/
+def discardFloodSection (w : Worker) : M (Nat × Bool × Bool) := do
+  let startW := (HiddenSite.sectionStart w).info.id
+  let stopW := (HiddenSite.sectionStop w).info.id
+  let startRx := (HiddenSite.sectionStart .netRx).info.id
+  let stopRx := (HiddenSite.sectionStop .netRx).info.id
+  let underLoad := (HiddenSite.underLoadNow).info.id
+  -- the flood op is fully discarded: the producer `net_rx` sections, the
+  -- receive-worker section(s), the per-packet `under_load`/decay clock reads,
+  -- and the fixture's IP-layer cut draws for its outbound sends.
+  let flood := [startW, stopW, startRx, stopRx, underLoad, (HiddenSite.birthdateExpired).info.id,
+                (HiddenSite.ipIdentKey).info.id, (HiddenSite.ipIdentReserve).info.id,
+                (HiddenSite.flowHashSecret).info.id]
+  let mut dropped := 0
+  let mut sawWorker := false
+  let mut crossed := false
+  let mut openW := 0
+  for _ in [0:4000000] do
+    skipAmbient
+    match (← get).hidden with
+    | some (r :: rest) =>
+      if r.site == startW then sawWorker := true; openW := openW + 1
+      else if r.site == stopW then
+        if openW == 0 then throw (.hidden "flood: a receive-worker section stop without its start")
+        openW := openW - 1
+      else if r.site == underLoad then crossed := true
+      else if !flood.contains r.site then
+        -- the first record that is not the flood's: the section is drained
+        if openW != 0 then throw (.hidden "flood: the receive worker outlived the flood window")
+        return (dropped, sawWorker, crossed)
+      modify fun s => { s with hidden := some rest }
+      dropped := dropped + 1
+    | _ =>
+      if openW != 0 then throw (.hidden "flood: the receive worker outlived the flood window")
+      return (dropped, sawWorker, crossed)
+  throw (.hidden "flood: the record stream did not drain")
 
 def getFile (id : FileId) : M File := do
   match (← getK).files.get? id with

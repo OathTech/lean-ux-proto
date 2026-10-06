@@ -160,6 +160,8 @@ inductive Decision where
   | hsNeedsCookieLoaded | hsNeedsCookieMac | dataNoKeypair
   -- drivers/net/wireguard/cookie.c
   | macInvalid | macNoCookieCheck | cookieLookupMiss
+  -- E-B: wg_cookie_validate_packet's MAC2 compare under load (cookie.c:143)
+  | macCookieInvalid
   -- E-A: wg_cookie_message_consume beyond the lookup
   | cookieNoMac1Sent | cookieDecryptOk
   -- drivers/net/wireguard/peerlookup.c
@@ -843,6 +845,10 @@ def Decision.info : Decision → DecisionInfo
   -- drivers/net/wireguard/cookie.c
   | .macInvalid => d "wg_cookie_validate_packet.mac1_invalid" wck 132 [(133, 133)] [(135, 135)]
   | .macNoCookieCheck => d "wg_cookie_validate_packet.no_cookie_check" wck 137 [(138, 138)] [(140, 140)]
+  -- E-B: under load, make_cookie then compute_mac2; the memneq fails for a
+  -- valid-MAC1 initiation with no cookie (true → goto out = VALID_MAC_BUT_NO_COOKIE).
+  -- The true side shares the `out:` epilogue; the false side reaches the ratelimiter.
+  | .macCookieInvalid => d "wg_cookie_validate_packet.mac2_invalid" wck 143 [] [(146, 146)]
   | .cookieLookupMiss => d "wg_cookie_message_consume.lookup_miss" wck 205 [(209, 209)] [(211, 211)]
   | .cookieNoMac1Sent => d "wg_cookie_message_consume.no_mac1_sent" wck 212 [(213, 214)] [(216, 220)]
   | .cookieDecryptOk => d "wg_cookie_message_consume.decrypted" wck 222 [(223, 228)] [(230, 231)]

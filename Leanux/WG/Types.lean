@@ -317,6 +317,11 @@ structure Device where
       trace (unknown). -/
   cookieSecret : List UInt8 := List.replicate 32 0
   cookieSecretBirthdate : Int := 0
+  /-- `cookie_checker.cookie_encryption_key` (E-B): `blake2s("cookie--" ‖
+      static_public)` (`wg_cookie_checker_precompute_device_keys`, cookie.c:48),
+      under which `wg_cookie_message_create` seals a cookie reply; zero until an
+      identity is set. -/
+  cookieEncryptionKey : List UInt8 := List.replicate 32 0
   pubkeyHashKey : List UInt8 := List.replicate 16 0
   /-- `dev->stats` counters. -/
   txErrors : Nat := 0

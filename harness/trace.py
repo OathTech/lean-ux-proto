@@ -28,16 +28,24 @@ FIELDS = {
     "wg_inject": {"op", "family", "port", "message"},
     # D3: the virtual time advance by `ticks` jiffies (docs/2026-10-05-d3-timers.md, 4.3)
     "wg_advance": {"op", "ticks"},
+    # E-B: an io_uring flood of `count` invalid-MAC1 initiations to wg0's
+    # `port`, to cross the under_load threshold (docs/2026-10-05-e-dos.md §8).
+    # `messages` (optional, 0 or 1 entry) bundles a valid initiation into the
+    # same io_uring batch, for the merged-injection negative control.
+    "wg_flood": {"op", "count", "port"},
     # L: wg0's lifecycle (docs/2026-10-05-l-lifecycle.md section 6): RTM_NEWLINK,
     # SIOCSIFFLAGS without IFF_UP, RTM_DELLINK
     "wg_create": {"op"}, "wg_down": {"op"}, "wg_delete": {"op"},
 }
 LIFECYCLE_OPS = ("wg_create", "wg_down", "wg_delete")
-WG_OPS = {"wg_set", "wg_get", "wg_up", "wg_xmit", "wg_observe", "wg_inject", "wg_advance"} | set(LIFECYCLE_OPS)
-# The wire opcodes: FIELDS order, except that L's operations are 15-17
-# whatever precedes them (opcode 14 is D3's wg_advance).
-OPCODES = {name: i + 1 for i, name in enumerate(n for n in FIELDS if n not in LIFECYCLE_OPS)}
+WG_OPS = {"wg_set", "wg_get", "wg_up", "wg_xmit", "wg_observe", "wg_inject", "wg_advance",
+          "wg_flood"} | set(LIFECYCLE_OPS)
+# The wire opcodes: FIELDS order, except that L's operations are 15-17 whatever
+# precedes them (opcode 14 is D3's wg_advance) and E-B's wg_flood is 18.
+OPCODES = {name: i + 1 for i, name in enumerate(
+    n for n in FIELDS if n not in LIFECYCLE_OPS and n != "wg_flood")}
 OPCODES.update({name: 15 + i for i, name in enumerate(LIFECYCLE_OPS)})
+OPCODES["wg_flood"] = 18
 if len(set(OPCODES.values())) != len(OPCODES):
     raise ImportError("harness.trace: two operations share a wire opcode")
 # The guest's KCOV area in words, task and remote (harness/guest.c CAPACITY):
@@ -98,7 +106,12 @@ def validate_trace(trace):
         name = op["op"]
         if name not in FIELDS:
             raise UnsupportedTrace(f"ops[{i}]: unsupported operation {name!r}")
-        _fields(op, FIELDS[name], f"ops[{i}]")
+        if name == "wg_flood":
+            # `messages` (0 or 1 bundled valid initiation) is optional
+            if not FIELDS[name] <= set(op) <= FIELDS[name] | {"messages"}:
+                raise InvalidTrace(f"ops[{i}]: expected {sorted(FIELDS[name])} and optionally messages")
+        else:
+            _fields(op, FIELDS[name], f"ops[{i}]")
         for field in ("init", "flags", "arg"):
             if field in op:
                 _integer(op[field], 0, 2**32 - 1, f"ops[{i}].{field}")
@@ -116,7 +129,7 @@ def validate_trace(trace):
                 _integer(fd["ref"], 0, i - 1, f"ops[{i}].{field}.ref")
                 if ops[fd["ref"]]["op"] not in PRODUCERS:
                     raise InvalidTrace(f"ops[{i}].{field}: reference must name FD producer")
-        if "count" in op:
+        if "count" in op and name != "wg_flood":
             _integer(op["count"], 0, 16, f"ops[{i}].count")
         if name == "write":
             value = op["value"]
@@ -140,6 +153,14 @@ def validate_trace(trace):
                 raise InvalidTrace(f"ops[{i}].message: expected 1-1400 bytes of lowercase hex")
         if name == "wg_advance":
             _integer(op["ticks"], 1, 2**31, f"ops[{i}].ticks")
+        if name == "wg_flood":
+            _integer(op["count"], 1, 2**20, f"ops[{i}].count")
+            _integer(op["port"], 1, 65535, f"ops[{i}].port")
+            messages = op.get("messages", [])
+            if type(messages) is not list or len(messages) > 1 or any(
+                    type(m) is not str or not re.fullmatch(r"(?:[0-9a-f]{2}){1,1400}", m, re.ASCII)
+                    for m in messages):
+                raise InvalidTrace(f"ops[{i}].messages: expected 0 or 1 bundled initiation (hex)")
         if name == "wg_xmit":
             try:
                 validate_packet(op["packet"], f"ops[{i}].packet")
@@ -227,6 +248,8 @@ def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False):
                 a, b = op["family"], op["port"]
             if op["op"] == "wg_advance":
                 a = op["ticks"]
+            if op["op"] == "wg_flood":
+                a, b = op["count"], op["port"]
             line = f"{OPCODES[op['op']]} {kind} {value} {newkind} {newvalue} {a} {b} {op.get('value', '0')}"
             if op["op"] == "wg_set":
                 line += " " + encode_set(op["config"]).hex()
@@ -236,6 +259,10 @@ def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False):
                 line += " " + packet.hex()
             elif op["op"] == "wg_inject":
                 line += " " + op["message"]
+            elif op["op"] == "wg_flood":
+                # the bundled valid initiation (if any) as the payload; the
+                # invalid-MAC1 template is built in the guest
+                line += " " + (op.get("messages", [""]) + [""])[0]
             lines.append(line)
         for kind, length, draw, ips, value in schedule:
             ips = (list(ips) + [0, 0, 0, 0])[:4]

@@ -9,6 +9,7 @@
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
 #include <linux/wireguard.h>
+#include <linux/io_uring.h>
 #include <net/if.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -694,6 +695,57 @@ static unsigned long *enable_remote(const struct trace *t, int comparisons)
     return area;
 }
 
+/* E-B (docs/2026-10-05-e-dos.md §8): submit `n_invalid` copies of an
+ * invalid-MAC1 initiation, then (if `valid`) one bundled valid initiation, in
+ * one io_uring batch to a UDP socket connected to wg0's port. There is no
+ * per-send cond_resched, so the batch outruns the single-CPU receive worker and
+ * crosses the handshake_queue_len >= 512 under_load threshold (GSO/sendmmsg do
+ * not, measured: docs/2026-10-05-e-probe-results.md). The invalid template has a
+ * MAC1 that will not match, so every flood packet is dropped (reply-free).
+ * Returns 0 on a successful submission, -1 on failure. */
+static int do_wg_flood(unsigned port, unsigned n_invalid,
+                       const unsigned char *valid, size_t valid_len)
+{
+    static unsigned char tmpl[148];
+    memset(tmpl, 0, sizeof(tmpl));
+    tmpl[0] = 1;                       /* MESSAGE_HANDSHAKE_INITIATION */
+    memset(tmpl + 116, 0xff, 16);     /* a MAC1 that will not match */
+    int s = socket(AF_INET, SOCK_DGRAM, 0);
+    if (s < 0) return -1;
+    struct sockaddr_in dst = {.sin_family = AF_INET, .sin_port = htons((uint16_t)port)};
+    dst.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    if (connect(s, (struct sockaddr *)&dst, sizeof(dst))) { close(s); return -1; }
+    unsigned total = n_invalid + (valid ? 1u : 0u);
+    struct io_uring_params pp; memset(&pp, 0, sizeof(pp));
+    int ring = syscall(SYS_io_uring_setup, total, &pp);
+    if (ring < 0) { close(s); return -1; }
+    size_t sqsz = pp.sq_off.array + pp.sq_entries * sizeof(unsigned);
+    void *sq = mmap(0, sqsz, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, ring, IORING_OFF_SQ_RING);
+    struct io_uring_sqe *sqes = mmap(0, pp.sq_entries * sizeof(struct io_uring_sqe),
+                                     PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, ring, IORING_OFF_SQES);
+    if (sq == MAP_FAILED || sqes == MAP_FAILED) { close(ring); close(s); return -1; }
+    unsigned *ktail = (unsigned *)((char *)sq + pp.sq_off.tail);
+    unsigned *karray = (unsigned *)((char *)sq + pp.sq_off.array);
+    unsigned mask = *(unsigned *)((char *)sq + pp.sq_off.ring_mask);
+    unsigned submit = total < pp.sq_entries ? total : pp.sq_entries;
+    for (unsigned i = 0; i < submit; i++) {
+        struct io_uring_sqe *e = &sqes[i]; memset(e, 0, sizeof(*e));
+        e->opcode = IORING_OP_SEND; e->fd = s;
+        /* the bundled valid initiation is submitted last, so the flood has
+         * already crossed 512 and the decay makes it under_load (§4.1) */
+        if (valid && i == submit - 1) { e->addr = (unsigned long)valid; e->len = (unsigned)valid_len; }
+        else { e->addr = (unsigned long)tmpl; e->len = sizeof(tmpl); }
+        karray[i & mask] = i;
+    }
+    __atomic_store_n(ktail, submit, __ATOMIC_RELEASE);
+    long r = syscall(SYS_io_uring_enter, ring, submit, 0, 0, 0, 0);
+    munmap(sqes, pp.sq_entries * sizeof(struct io_uring_sqe));
+    munmap(sq, sqsz);
+    close(ring);
+    close(s);
+    return r < 0 ? -1 : 0;
+}
+
 static void execute(const struct trace *t, int input_fd, int comparisons)
 {
     struct observation result[MAX_OPS] = {{0}};
@@ -872,6 +924,15 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             ret = syscall(SYS_ioctl, 3, KCOV_LEANUX_TIME_ADVANCE, &ticks);
             break;
         }
+        case 18: {
+            /* E-B: an io_uring invalid-MAC1 flood to wg0's port (op->a count,
+             * op->b port); op->payload is an optional bundled valid initiation
+             * (the merged-injection negative control). */
+            if (!t->net) fail(t->id, i, "invalid_input", "wireguard_without_network_fixture");
+            ret = do_wg_flood((unsigned)op->b, (unsigned)op->a,
+                              op->payload_len ? op->payload : NULL, op->payload_len);
+            break;
+        }
         case 15: case 17: {
             /* L: RTM_NEWLINK (wg_newlink, register_netdevice) or RTM_DELLINK
              * (unregister, netdev_run_todo, wg_destruct), both complete
@@ -938,6 +999,9 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
          * waits for it too, so the worker's remote section lands in it. */
         if (op->code == 13) usleep(OBSERVE_WAIT_US);
         if (op->code == 8 || op->code == 10 || op->code == 11) usleep(QUEUE_WAIT_US);
+        /* E-B: wait for the receive worker to drain the flood (its discarded
+         * section) in this operation's window (~1 ms drain, measured). */
+        if (op->code == 18) usleep(OBSERVE_WAIT_US);
         if (op->code == 14) {
             /* An advance that fails is not a trace operation the mirror can
              * follow: fail the trace. Then wait for the tick that absorbs the
@@ -1102,7 +1166,7 @@ int main(int argc, char **argv)
                 &op->code, &op->kind, &op->fd, &op->newkind, &op->newfd, &op->a, &op->b, &op->value, &consumed) != 8)
                 fail(trace.id, i, "invalid_input", "wire_operation");
             op->payload_len = 0;
-            if (op->code == 8 || op->code == 9 || op->code == 11 || op->code == 13) {
+            if (op->code == 8 || op->code == 9 || op->code == 11 || op->code == 13 || op->code == 18) {
                 /* A WireGuard operation carries its attribute payload as hex. */
                 const char *hex = line + consumed;
                 if (*hex++ != ' ') fail(trace.id, i, "invalid_input", "wire_payload");

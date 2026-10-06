@@ -49,6 +49,36 @@ def sha256(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def chunk_traces(traces):
+    """Split traces into chunks of at most CHUNK. E-B isolation
+    (docs/2026-10-05-e-dos.md §4.2): a `wg_flood` sets the kernel-global
+    `last_under_load` (receive.c:100), which teardown does not reset and which
+    decays over one second, so an under-load trace can leak `under_load` into a
+    later trace in the same VM boot (one chunk). Each under-load trace therefore
+    runs in a chunk by itself; every normal trace keeps the constant-false decay
+    (the cross-trace guard). Yields `(start, chunk, name)`."""
+    def under_load(trace):
+        return any(op['op'] == 'wg_flood' for op in trace['ops'])
+    pending, current, cur_start = [], [], 0
+    def flush():
+        nonlocal current
+        if current:
+            pending.append((cur_start, current, f'chunk-{len(pending):03}'))
+            current = []
+    for i, trace in enumerate(traces):
+        if under_load(trace):
+            flush()
+            pending.append((i, [trace], f'chunk-{len(pending):03}'))
+        else:
+            if not current:
+                cur_start = i
+            current.append(trace)
+            if len(current) == CHUNK:
+                flush()
+    flush()
+    return pending
+
+
 def model_identity():
     paths = ['lakefile.toml', 'lake-manifest.json', 'lean-toolchain', 'Leanux.lean']
     paths += sorted(str(p.relative_to(ROOT)) for p in (ROOT / 'Leanux').rglob('*.lean'))
@@ -540,6 +570,17 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
     problems, gaps = [], Counter()
     order_stats = Counter()
     for index, op in enumerate(trace['ops']):
+        # E-B (docs/2026-10-05-e-dos.md §4.1): a `wg_flood` runs the receive
+        # worker as a discarded section whose per-packet coverage is
+        # scheduling-driven and not modeled (the mirror reports no decisions for
+        # it). The one checked control-flow effect is that the flood crossed the
+        # threshold: receive.c:115 (last_under_load = now) is covered.
+        if op['op'] == 'wg_flood':
+            covered = raw_lines(coverage[index], locations, config['files'])
+            if 'drivers/net/wireguard/receive.c:115' not in covered:
+                problems.append(dict(index=index,
+                                     problem='flood did not reach under_load (receive.c:115 not covered)'))
+            continue
         # Raw coverage of a span line (any function, any attribution) must be
         # mapped, and no unlisted function may run span lines of an anchored
         # C file: either means a modeled path runs outside the listed
@@ -704,7 +745,8 @@ OPERATION_SECONDS = 0.05
 
 
 def guest_timeout(traces):
-    observes = sum(op['op'] == 'wg_observe' for trace in traces for op in trace['ops'])
+    # wg_flood also waits OBSERVE_WAIT_US in each child for the receive worker
+    observes = sum(op['op'] in ('wg_observe', 'wg_flood') for trace in traces for op in trace['ops'])
     operations = sum(len(trace['ops']) for trace in traces)
     return GUEST_BASE_SECONDS + observes * OBSERVE_SECONDS + operations * OPERATION_SECONDS
 
@@ -844,8 +886,7 @@ def main(argv=None):
                 instrumented, functions)
         observable = sum(bool(w[True] or w[False]) for w in kcov[2].values())
         print(f'{len(decisions)} decisions, {observable} with KCOV witnesses', file=sys.stderr)
-        pending = [(start, traces[start:start + CHUNK], f'chunk-{start // CHUNK:03}')
-                   for start in range(0, len(traces), CHUNK)]
+        pending = list(chunk_traces(traces))
         while pending:
             start, chunk, name = pending.pop(0)
             print(f'traces {start}-{start + len(chunk) - 1} ...', file=sys.stderr, flush=True)

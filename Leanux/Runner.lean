@@ -23,6 +23,9 @@ inductive Operation where
   | wgXmit (family addr : Nat) (payload : List UInt8)
   | wgObserve
   | wgInject (family port : Nat) (message : List UInt8)
+  /-- E-B: an io_uring flood of invalid-MAC1 initiations to wg0's port, to
+      cross the `under_load` threshold (docs/2026-10-05-e-dos.md §8). -/
+  | wgFlood (count port : Nat)
   /-- D3: the virtual time advance (harness/trace.py `wg_advance`). -/
   | wgAdvance (ticks : Nat)
   /-- L (docs/2026-10-05-l-lifecycle.md): wg0's lifecycle. -/
@@ -58,7 +61,7 @@ structure Trace where
 def Trace.net (t : Trace) : Bool :=
   t.ops.any fun
     | .wgSet _ | .wgGet | .wgUp | .wgXmit .. | .wgObserve | .wgInject .. | .wgAdvance _
-    | .wgCreate | .wgDown | .wgDelete => true
+    | .wgFlood .. | .wgCreate | .wgDown | .wgDelete => true
     | _ => false
 
 private def fields (j : Json) (expected : List String) : Except String Unit := do
@@ -246,6 +249,18 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
     if s.length == 0 || s.length % 2 != 0 || s.length > 2800 then throw "message: expected 1-1400 bytes of lowercase hex"
     let message ← hexBytes (← field j "message") s.length "message"
     return .wgInject family port message
+  | "wg_flood" =>
+    -- the optional `messages` (bundled valid initiations) is a fixture-only
+    -- field the mirror ignores: the whole flood section is discarded
+    let obj ← j.getObj?
+    if !(obj.all (fun k _ => ["op", "count", "port", "messages"].contains k)
+        && obj.contains "op" && obj.contains "count" && obj.contains "port") then
+      throw "expected op, count, port and optionally messages"
+    let count ← natField j "count" (2 ^ 20)
+    if count == 0 then throw "count: expected 1-2^20"
+    let port ← natField j "port" 65535
+    if port == 0 then throw "port: expected 1-65535"
+    return .wgFlood count port
   | "wg_advance" =>
     fields j ["op", "ticks"]
     let ticks ← natField j "ticks" (2 ^ 31)
@@ -419,6 +434,7 @@ def toSyscall (results : Array Int) : Operation → Syscall
   | .wgXmit family addr payload => .wgXmit family addr payload
   | .wgObserve => .wgObserve
   | .wgInject family port message => .wgInject family port message
+  | .wgFlood count port => .wgFlood count port
   | .wgAdvance ticks => .wgAdvance ticks
   | .wgCreate => .wgCreate
   | .wgDown => .wgDown
