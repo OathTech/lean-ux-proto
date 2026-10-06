@@ -103,9 +103,11 @@ def traces():
     out["d3m_keepalive_rearm_deleted"] = (ses + [data(key, index, 0, b"one"), data(key, index, 1, b"two"),
                                                  advance(2600), advance(2600), d1.OBSERVE], steer,
                                           ["fired:wg_expired_send_keepalive", "wg_expired_send_keepalive.need_another=1"])
-    # a data packet sent arms the new-handshake timer (3750 + [0, 83))
-    out["d3m_new_handshake"] = (ses + [XMIT, advance(3950), d1.OBSERVE], steer + DRAWN_INITIATION,
-                                ["fired:wg_expired_new_handshake"])
+    # a data packet sent arms the new-handshake timer (3750 + [0, 83)); the
+    # transmission after the firing finds it detached (data_sent arms it
+    # again: D3-M3, a firing that does not detach its timer, skips that arm)
+    out["d3m_new_handshake"] = (ses + [XMIT, advance(3950), XMIT, d1.OBSERVE], steer + DRAWN_INITIATION,
+                                ["fired:wg_expired_new_handshake", "wg_timers_data_sent.not_pending=1"])
     # the persistent keepalive (25 s = 6250, level 3: up to 512 late)
     out["d3m_persistent"] = (ses + [d1.OBSERVE, advance(6800), d1.OBSERVE], steer,
                              ["fired:wg_expired_send_persistent_keepalive",
