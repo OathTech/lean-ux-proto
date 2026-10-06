@@ -181,6 +181,13 @@ TRACES_A2 = {
     "a2_fdarray_nomem_low": ([eventfd(1), dup3(ref(0), FD_HIGH), dup3(ref(0), 40), read({"literal": 40})],
                              [["kvmallocFdArray", FAIL]],
                              ["alloc_fdtable.fd_array_failed=1"], 128),
+    # alloc_fd's expansion (get_unused_fd_flags): 56 eventfd2s fill fds
+    # 8-63, the 57th needs fd 64 and the table's kmalloc fails: alloc_fd
+    # returns -ENOMEM (alloc_fd.expand_error), do_eventfd frees the context
+    # (do_eventfd.fd_error); the next eventfd2 grows the table and gets 64
+    "a2_allocfd_nomem": ([eventfd(1)] * 57 + [eventfd(2), read({"literal": 64})],
+                         [["kmallocFdtable", FAIL], ["kmallocFdtable", "draw"]],
+                         ["alloc_fd.expand_error=1", "do_eventfd.fd_error=1"], 128),
     # wg_set with two peers, the second's kmem_cache_zalloc (peer.c:33)
     # fails: set_peer returns PTR_ERR, wg_set_device stops with -ENOMEM; the
     # first peer (and its allowed ips) stays, as wg_get shows (A-M1)
