@@ -136,17 +136,21 @@ def controls():
 
 
 def ratelimit_traces():
-    # arm C: a flood sets under_load; then valid-MAC1+MAC2 Noise initiations from
-    # one source IP reach the ratelimiter. The first inserts a bucket entry
-    # (always allows) and is consumed -> a handshake response; the second, same
-    # IP, hits the bucket (the token arithmetic) and, with tokens left, allows ->
-    # a second response. Both responses are observable at the sender (steered).
+    # arm C: a flood sets under_load; then two valid-MAC1+MAC2 Noise initiations
+    # from one source IP reach the ratelimiter. The first inserts a bucket entry
+    # (always allows) and is consumed -> a handshake response. The second, same
+    # IP, hits the bucket (ratelimiter.c:121, the token arithmetic): with tokens
+    # left it is allowed and consumed, but noise.c's own flood check (50/s,
+    # last_initiation_consumption) drops a second consume in the same tick, so it
+    # produces no response. So the ratelimiter's allow is checked by the record
+    # stream (allow -> consume reads flood_now; deny -> dropped before consume),
+    # and its token compare by the operands; only the first response is steered.
     two = flood(leading=[rl_initiation(d1.PEER_EPHEMERAL, 1, d1.PEER_INDEX),
                          rl_initiation(d1.PEER_EPHEMERAL_2, 2, d1.PEER_INDEX_2)])
     steer = [["cookie_secret", RL_SECRET.hex()],
-             ["resp_ephemeral", d1.RESP_EPHEMERAL.hex()], ["index_draw", d1.le32(RL_INDEX_1)],
-             ["resp_ephemeral", RESP_EPHEMERAL_2.hex()], ["index_draw", d1.le32(RL_INDEX_2)]]
-    expect = ["wg_receive_handshake_packet.initiation=1", "wg_ratelimiter_allow.entry_matches=1"]
+             ["resp_ephemeral", d1.RESP_EPHEMERAL.hex()], ["index_draw", d1.le32(RL_INDEX_1)]]
+    expect = ["wg_receive_handshake_packet.initiation=1", "wg_ratelimiter_allow.entry_matches=1",
+              "wg_ratelimiter_allow.inet=1"]
     return {"e_underload_ratelimit": dict(ops=[CREATE, configure_peer(), UP, two, OBSERVE, GET],
                                           steer=steer, expect=expect)}
 

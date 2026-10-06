@@ -56,18 +56,11 @@
     [
       "index_draw",
       "44332211"
-    ],
-    [
-      "resp_ephemeral",
-      "2122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40"
-    ],
-    [
-      "index_draw",
-      "88776655"
     ]
   ],
   "expect": [
     "wg_receive_handshake_packet.initiation=1",
-    "wg_ratelimiter_allow.entry_matches=1"
+    "wg_ratelimiter_allow.entry_matches=1",
+    "wg_ratelimiter_allow.inet=1"
   ]
 }
