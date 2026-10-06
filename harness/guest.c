@@ -28,7 +28,10 @@
 #include <unistd.h>
 
 #define MAX_OPS 64
-#define CAPACITY (64UL * 1024)
+/* The KCOV area in words, task and remote alike (L, docs/2026-10-05-l-lifecycle.md
+ * section 10: a wg_create window's comparison child exceeds 64 K words). The
+ * host's bounds follow it (harness/trace.py KCOV_CAPACITY). */
+#define CAPACITY (256UL * 1024)
 #define MAX_PAYLOAD 32768
 #define NETLINK_FD 7
 /* Stage B1 network fixture: UDP listeners that catch what wg0 sends to
@@ -42,7 +45,6 @@
  * datagrams (a consumed handshake initiation) is deterministic. */
 #define SENDER_PORT 51998
 #define LISTEN_PORT 51999
-#define WG_IFINDEX 3
 /* wg_observe waits this long for the handshake workers before it looks. */
 #define OBSERVE_WAIT_US 400000
 #define QUEUE_WAIT_US 100000
@@ -82,17 +84,31 @@ static struct dispatch_arg dispatch;
 #define KCOV_LEANUX_DISPATCH_LOAD _IOW('c', 202, unsigned long)
 #define KCOV_LEANUX_SECTION_STATUS _IOR('c', 203, unsigned long)
 struct trace {
+    /* net: 0 no network fixture, 1 the fixture with a down wg0, 2 the bare
+     * network fixture without wg0 (L, "net_fixture": "bare") */
     char id[81]; unsigned count; unsigned rlimit; unsigned net; struct operation ops[MAX_OPS];
     unsigned nsteer; struct steer_entry steer[STEER_MAX];
 };
 static char line[4 * MAX_PAYLOAD];
 struct observation { long ret; int error; unsigned char bytes[16]; };
 
+/* Set in a trace process once its network namespace exists: fail() then
+ * deletes wg0 before exiting (L, docs/2026-10-05-l-lifecycle.md section 2.4,
+ * audit M1), so wg_destruct runs synchronously in this task rather than in
+ * an asynchronous netns cleanup that could fall into the next trace. */
+static int net_live;
+static void delete_wg0_best_effort(void);
+
 static void fail(const char *id, int index, const char *kind, const char *detail)
 {
     printf("LEANUX_ERROR {\"id\":\"%s\",\"index\":%d,\"kind\":\"%s\",\"detail\":\"%s\",\"errno\":%d}\n",
            id, index, kind, detail, errno);
     fflush(stdout);
+    /* At most once: the teardown itself never calls fail(). */
+    if (net_live) {
+        net_live = 0;
+        delete_wg0_best_effort();
+    }
     _exit(1);
 }
 
@@ -182,25 +198,58 @@ static void attr(unsigned char *buf, size_t *len, unsigned short type, const voi
     *len += NLA_ALIGN(a->nla_len);
 }
 
-/* Fresh network namespace with a down `wg0`, created over a temporary
- * rtnetlink socket that is closed again before the fixture descriptors are
- * opened, so the descriptor-table history matches the plain fixture. */
-static void network_fixture(const char *id)
+/* The RTM_NEWLINK body that creates wg0 (the fixture's and wg_create's):
+ * ifi_index 0, ifi_flags 0, IFLA_IFNAME "wg0", IFLA_LINKINFO/IFLA_INFO_KIND
+ * "wireguard"; sent with NLM_F_CREATE | NLM_F_EXCL | NLM_F_ACK. */
+#define NEWLINK_FLAGS (NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE | NLM_F_EXCL)
+static size_t newlink_wg0(unsigned char *payload, size_t size)
 {
-    if (unshare(CLONE_NEWNET)) fail(id, -1, "environment_failure", "unshare_net");
-    int rtnl = socket(AF_NETLINK, SOCK_RAW | SOCK_CLOEXEC, NETLINK_ROUTE);
-    if (rtnl < 0) fail(id, -1, "environment_failure", "rtnetlink_socket");
-    unsigned char payload[256];
     size_t len = sizeof(struct ifinfomsg);
-    memset(payload, 0, sizeof(payload));
+    memset(payload, 0, size);
     attr(payload, &len, IFLA_IFNAME, "wg0", 4);
     size_t linkinfo = len;
     attr(payload, &len, IFLA_LINKINFO | NLA_F_NESTED, "", 0);
     attr(payload, &len, IFLA_INFO_KIND, "wireguard", 10);
     ((struct nlattr *)(payload + linkinfo))->nla_len = len - linkinfo;
-    if (nl_send(rtnl, RTM_NEWLINK, NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE | NLM_F_EXCL, 0, payload, len, 0) ||
-        nl_receive(rtnl, 0, NULL, 0))
-        fail(id, -1, "environment_failure", "create_wg0");
+    return len;
+}
+
+/* The RTM_DELLINK body that deletes wg0 by name (the teardown's and
+ * wg_delete's); sent with NLM_F_ACK. */
+static size_t dellink_wg0(unsigned char *payload, size_t size)
+{
+    size_t len = sizeof(struct ifinfomsg);
+    memset(payload, 0, size);
+    attr(payload, &len, IFLA_IFNAME, "wg0", 4);
+    return len;
+}
+
+/* L (docs/2026-10-05-l-lifecycle.md section 6): whether wg0 exists in this
+ * trace process's namespace, its ifindex (resolved after each creation), and
+ * whether the next successful up is the first since this device instance was
+ * created (`route_into_wg0`). */
+static int wg_exists;
+static unsigned wg_ifindex;
+static int first_up;
+
+/* Fresh network namespace with `lo` up and, unless the trace asks for the
+ * bare fixture, a down `wg0`, created over a temporary rtnetlink socket that
+ * is closed again before the fixture descriptors are opened, so the
+ * descriptor-table history matches the plain fixture. */
+static void network_fixture(const char *id, int bare)
+{
+    if (unshare(CLONE_NEWNET)) fail(id, -1, "environment_failure", "unshare_net");
+    net_live = 1;
+    int rtnl = socket(AF_NETLINK, SOCK_RAW | SOCK_CLOEXEC, NETLINK_ROUTE);
+    if (rtnl < 0) fail(id, -1, "environment_failure", "rtnetlink_socket");
+    unsigned char payload[256];
+    if (!bare) {
+        size_t len = newlink_wg0(payload, sizeof(payload));
+        if (nl_send(rtnl, RTM_NEWLINK, NEWLINK_FLAGS, 0, payload, len, 0) || nl_receive(rtnl, 0, NULL, 0))
+            fail(id, -1, "environment_failure", "create_wg0");
+        wg_exists = 1;
+        first_up = 1;
+    }
     /* lo up: what wg0 sends to 127.0.0.1 and ::1 reaches the listeners. */
     struct ifinfomsg up = {.ifi_family = AF_UNSPEC, .ifi_index = 1, .ifi_flags = IFF_UP, .ifi_change = IFF_UP};
     if (nl_send(rtnl, RTM_NEWLINK, NLM_F_REQUEST | NLM_F_ACK, 0, (unsigned char *)&up, sizeof(up), 0) ||
@@ -216,15 +265,29 @@ static void network_fixture(const char *id)
  * destroyed and its peers' timers stopped before the next trace exists. */
 static void delete_wg0(const char *id)
 {
+    /* L: a trace may have deleted wg0 (or never created it). */
+    if (!wg_exists) return;
     int rtnl = socket(AF_NETLINK, SOCK_RAW | SOCK_CLOEXEC, NETLINK_ROUTE);
     if (rtnl < 0) fail(id, -1, "environment_failure", "rtnetlink_socket_teardown");
     unsigned char payload[64];
-    size_t len = sizeof(struct ifinfomsg);
-    memset(payload, 0, sizeof(payload));
-    attr(payload, &len, IFLA_IFNAME, "wg0", 4);
+    size_t len = dellink_wg0(payload, sizeof(payload));
     if (nl_send(rtnl, RTM_DELLINK, NLM_F_REQUEST | NLM_F_ACK, 0, payload, len, 0) || nl_receive(rtnl, 0, NULL, 0))
         fail(id, -1, "environment_failure", "delete_wg0");
+    wg_exists = 0;
     if (close(rtnl)) fail(id, -1, "environment_failure", "close_rtnetlink_teardown");
+}
+
+/* fail()'s teardown (audit M1): the same synchronous RTM_DELLINK, whatever
+ * this process believes about wg0, with every error ignored (ENODEV when
+ * there is none) and without calling fail(). */
+static void delete_wg0_best_effort(void)
+{
+    int rtnl = socket(AF_NETLINK, SOCK_RAW | SOCK_CLOEXEC, NETLINK_ROUTE);
+    if (rtnl < 0) return;
+    unsigned char payload[64];
+    size_t len = dellink_wg0(payload, sizeof(payload));
+    if (!nl_send(rtnl, RTM_DELLINK, NLM_F_REQUEST | NLM_F_ACK, 0, payload, len, 0)) (void)nl_receive(rtnl, 0, NULL, 0);
+    close(rtnl);
 }
 
 static void resolve_wireguard_family(const char *id, int fd)
@@ -401,25 +464,34 @@ static int print_datagram(int comma, int family, long n)
  * bit as it was, so they are opened without SOCK_CLOEXEC: the bit stays clear,
  * as the mirror's descriptor table has it. */
 static void rtnl_request(int rtnl, const char *id, unsigned index, unsigned short type, const void *body, size_t len,
-                         const char *what)
+                         const char *what, int expected)
 {
-    if (nl_send(rtnl, type, NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE | NLM_F_EXCL, 0, body, len, 0) ||
-        nl_receive(rtnl, 0, NULL, 0))
+    int error = nl_send(rtnl, type, NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE | NLM_F_EXCL, 0, body, len, 0);
+    if (!error) error = nl_receive(rtnl, 0, NULL, 0);
+    if (error != expected) {
+        errno = error < 0 ? -error : 0;
         fail(id, index, "environment_failure", what);
+    }
 }
 
-static void route_into_wg0(const char *id, unsigned index)
+/* `first`: no successful up since this device instance was created (L,
+ * docs/2026-10-05-l-lifecycle.md section 2.2 and 6). On a later up, wg0's
+ * IPv4 address survived the down (only its routes were flushed) and must
+ * be refused with EEXIST; the IPv6 address (keep_addr_on_down 0) and both
+ * default routes were removed and must be added again. Any other outcome
+ * fails the trace: the kernel's down behaviour is not the one modeled. */
+static void route_into_wg0(const char *id, unsigned index, int first)
 {
     int rtnl = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
     if (rtnl < 0) fail(id, index, "environment_failure", "route_socket");
     unsigned char body[128];
-    uint32_t wg = WG_IFINDEX;
+    uint32_t wg = wg_ifindex;
     for (int family = AF_INET; family; family = family == AF_INET ? AF_INET6 : 0) {
         size_t len = sizeof(struct ifaddrmsg);
         memset(body, 0, sizeof(body));
         struct ifaddrmsg *ifa = (struct ifaddrmsg *)body;
         ifa->ifa_family = family;
-        ifa->ifa_index = WG_IFINDEX;
+        ifa->ifa_index = wg_ifindex;
         ifa->ifa_flags = IFA_F_NODAD;
         if (family == AF_INET) {
             unsigned char a4[4] = {10, 255, 254, 1};
@@ -431,7 +503,9 @@ static void route_into_wg0(const char *id, unsigned index)
             ifa->ifa_prefixlen = 128;
             attr(body, &len, IFA_ADDRESS, a6, 16);
         }
-        rtnl_request(rtnl, id, index, RTM_NEWADDR, body, len, "address_on_wg0");
+        rtnl_request(rtnl, id, index, RTM_NEWADDR, body, len,
+                     first ? "address_on_wg0" : "address_on_wg0_after_down",
+                     !first && family == AF_INET ? -EEXIST : 0);
         len = sizeof(struct rtmsg);
         memset(body, 0, sizeof(body));
         struct rtmsg *rt = (struct rtmsg *)body;
@@ -441,22 +515,35 @@ static void route_into_wg0(const char *id, unsigned index)
         rt->rtm_scope = RT_SCOPE_LINK;
         rt->rtm_type = RTN_UNICAST;
         attr(body, &len, RTA_OIF, &wg, sizeof(wg));
-        rtnl_request(rtnl, id, index, RTM_NEWROUTE, body, len, "default_route_via_wg0");
+        rtnl_request(rtnl, id, index, RTM_NEWROUTE, body, len,
+                     first ? "default_route_via_wg0" : "default_route_via_wg0_after_down", 0);
     }
     if (close(rtnl)) fail(id, index, "environment_failure", "route_close");
 }
 
 /* wg0's transmit counters and receive error counters over a temporary rtnetlink socket, which is closed
- * again (without SOCK_CLOEXEC, see route_into_wg0). */
+ * again (without SOCK_CLOEXEC, see route_into_wg0). The device is named,
+ * not indexed (L: it may have been deleted or recreated); exactly ENODEV is
+ * "no device", printed as `"stats":null`, and any other error fails. */
 static void print_stats(const char *id, unsigned index)
 {
     int rtnl = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
     if (rtnl < 0) fail(id, index, "environment_failure", "stats_socket");
-    struct ifinfomsg request = {.ifi_family = AF_UNSPEC, .ifi_index = WG_IFINDEX};
-    if (nl_send(rtnl, RTM_GETLINK, NLM_F_REQUEST, 0, (unsigned char *)&request, sizeof(request), 0))
+    unsigned char request[64];
+    size_t len = sizeof(struct ifinfomsg);
+    memset(request, 0, sizeof(request));
+    attr(request, &len, IFLA_IFNAME, "wg0", 4);
+    if (nl_send(rtnl, RTM_GETLINK, NLM_F_REQUEST, 0, request, len, 0))
         fail(id, index, "environment_failure", "stats_request");
     ssize_t n = recv(rtnl, nl_buffer, sizeof(nl_buffer), 0);
     struct nlmsghdr *h = (struct nlmsghdr *)nl_buffer;
+    if (n >= 0 && NLMSG_OK(h, n) && h->nlmsg_type == NLMSG_ERROR &&
+        h->nlmsg_len >= NLMSG_LENGTH(sizeof(struct nlmsgerr)) &&
+        ((struct nlmsgerr *)NLMSG_DATA(h))->error == -ENODEV) {
+        printf("\"stats\":null");
+        if (close(rtnl)) fail(id, index, "environment_failure", "stats_close");
+        return;
+    }
     if (n < 0 || !NLMSG_OK(h, n) || h->nlmsg_type != RTM_NEWLINK) fail(id, index, "environment_failure", "stats_reply");
     struct rtattr *a = IFLA_RTA(NLMSG_DATA(h));
     int remaining = (int)IFLA_PAYLOAD(h);
@@ -525,6 +612,30 @@ static void observe(const struct trace *t, unsigned i, long first, int compariso
     printf("}\n");
 }
 
+/* wg0's ifindex, through the fixture's sender (dev_ioctl), after each
+ * creation: 3 in the fixture's namespace (lo 1, sit0 2), 4 after a deletion
+ * and a recreation; the dumps and the trace's results show it. */
+static void resolve_wg_ifindex(const char *id, int index)
+{
+    struct ifreq request;
+    memset(&request, 0, sizeof(request));
+    strcpy(request.ifr_name, "wg0");
+    if (ioctl(SEND_FD, SIOCGIFINDEX, &request) || request.ifr_ifindex <= 0)
+        fail(id, index, "environment_failure", "wg0_ifindex");
+    wg_ifindex = (unsigned)request.ifr_ifindex;
+}
+
+/* The temporary rtnetlink socket of wg_create and wg_delete (L, section 5):
+ * opened before the operation's coverage window at the lowest free
+ * descriptor, without SOCK_CLOEXEC (close() keeps the close-on-exec bit, and
+ * the mirror's table has it clear), and closed after the window. */
+static int rtnl_temporary(const struct trace *t, unsigned i)
+{
+    int fd = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
+    if (fd < 0) fail(t->id, (int)i, "environment_failure", "lifecycle_rtnetlink_socket");
+    return fd;
+}
+
 /* Remote coverage for network traces. KCOV_REMOTE_ENABLE claims the calling
  * task's KCOV slot (a later KCOV_ENABLE would fail with EBUSY), so this
  * process enables it and forks the process that runs the trace: fork passes
@@ -588,7 +699,7 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
     struct observation result[MAX_OPS] = {{0}};
     if (close(input_fd)) fail(t->id, -1, "environment_failure", "close_input");
     unsigned long *remote = t->net ? enable_remote(t, comparisons) : NULL;
-    if (t->net) network_fixture(t->id);
+    if (t->net) network_fixture(t->id, t->net == 2);
     /* Init invokes us with exactly console descriptors 0, 1, and 2. */
     for (int fd = 0; fd < 3; ++fd)
         if (fcntl(fd, F_GETFD) < 0) fail(t->id, -1, "environment_failure", "console_layout");
@@ -635,6 +746,7 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         if (socket(AF_NETLINK, SOCK_RAW, NETLINK_GENERIC) != NETLINK_FD)
             fail(t->id, -1, "environment_failure", "genl_socket_at_7");
         resolve_wireguard_family(t->id, NETLINK_FD);
+        if (wg_exists) resolve_wg_ifindex(t->id, -1);
     }
     struct rlimit limit = {t->rlimit, t->rlimit}, actual;
     if (setrlimit(RLIMIT_NOFILE, &limit) || getrlimit(RLIMIT_NOFILE, &actual) || actual.rlim_cur != t->rlimit || actual.rlim_max != t->rlimit)
@@ -656,18 +768,44 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         if (op->code == 6)
             for (unsigned j = 0; j < 8; ++j) buffer[j] = (unsigned char)(op->value >> (8 * j));
         if ((op->code >= 10) && !t->net) fail(t->id, i, "invalid_input", "wireguard_without_network_fixture");
+        /* wg_up (10) and wg_down (16): the flags are read before the
+         * window; without a device (L) they are 0 and the SIOCSIFFLAGS
+         * reports ENODEV. `was_up`: the change is a no-op (dev.c:8962). */
         struct ifreq up_request;
-        if (op->code == 10) {
+        int was_up = 0;
+        if (op->code == 10 || op->code == 16) {
             memset(&up_request, 0, sizeof(up_request));
             strcpy(up_request.ifr_name, "wg0");
-            if (ioctl(SEND_FD, SIOCGIFFLAGS, &up_request)) fail(t->id, i, "environment_failure", "get_wg0_flags");
-            up_request.ifr_flags |= IFF_UP;
+            if (ioctl(SEND_FD, SIOCGIFFLAGS, &up_request)) {
+                if (errno != ENODEV || wg_exists) fail(t->id, i, "environment_failure", "get_wg0_flags");
+                memset(&up_request, 0, sizeof(up_request));
+                strcpy(up_request.ifr_name, "wg0");
+            } else if (!wg_exists) {
+                fail(t->id, i, "environment_failure", "wg0_flags_without_wg0");
+            }
+            was_up = !!(up_request.ifr_flags & IFF_UP);
+            if (op->code == 10) up_request.ifr_flags |= IFF_UP;
+            else up_request.ifr_flags &= ~IFF_UP;
+        }
+        /* wg_create (15) and wg_delete (17): the temporary socket and the
+         * request are prepared before the window. */
+        int lifecycle_fd = -1;
+        unsigned char lifecycle_body[256];
+        size_t lifecycle_len = 0;
+        if (op->code == 15 || op->code == 17) {
+            lifecycle_fd = rtnl_temporary(t, i);
+            lifecycle_len = op->code == 15 ? newlink_wg0(lifecycle_body, sizeof(lifecycle_body))
+                                           : dellink_wg0(lifecycle_body, sizeof(lifecycle_body));
         }
         if (op->code == 12) usleep(OBSERVE_WAIT_US);
         /* before the coverage window: the clock the advance's wait watches */
         struct timespec before_advance = {0};
         if (op->code == 14 && clock_gettime(CLOCK_MONOTONIC, &before_advance))
             fail(t->id, i, "environment_failure", "advance_clock");
+        /* the lifecycle operations' wall time, taken outside the window */
+        struct timespec op_started = {0}, op_finished = {0};
+        if (op->code >= 15 && clock_gettime(CLOCK_MONOTONIC, &op_started))
+            fail(t->id, i, "environment_failure", "timing_clock");
         __atomic_store_n(&coverage[0], 0, __ATOMIC_RELAXED);
         if (remote) __atomic_store_n(&remote[0], 0, __ATOMIC_RELAXED);
         errno = 0;
@@ -734,6 +872,24 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             ret = syscall(SYS_ioctl, 3, KCOV_LEANUX_TIME_ADVANCE, &ticks);
             break;
         }
+        case 15: case 17: {
+            /* L: RTM_NEWLINK (wg_newlink, register_netdevice) or RTM_DELLINK
+             * (unregister, netdev_run_todo, wg_destruct), both complete
+             * inside send(); recv() reads the acknowledgement, whose error
+             * code is the result. */
+            int error = nl_send(lifecycle_fd, op->code == 15 ? RTM_NEWLINK : RTM_DELLINK,
+                                op->code == 15 ? NEWLINK_FLAGS : NLM_F_REQUEST | NLM_F_ACK, 0, lifecycle_body,
+                                lifecycle_len, 0);
+            if (!error) error = nl_receive(lifecycle_fd, 0, NULL, 0);
+            if (error < 0) { errno = -error; ret = -1; } else ret = 0;
+            break;
+        }
+        case 16: {
+            /* L: dev_change_flags(wg0, flags & ~IFF_UP) -> wg_stop. */
+            struct ifreq request = up_request;
+            ret = syscall(SYS_ioctl, SEND_FD, SIOCSIFFLAGS, &request);
+            break;
+        }
         case 12:
             /* The first datagram at the IPv4 listener, if any; the rest are
              * drained after coverage stops. */
@@ -743,13 +899,38 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         }
         int captured_errno = errno;
         unsigned long count = __atomic_load_n(&coverage[0], __ATOMIC_RELAXED);
+        if (op->code >= 15) {
+            if (clock_gettime(CLOCK_MONOTONIC, &op_finished)) fail(t->id, i, "environment_failure", "timing_clock");
+            printf("LEANUX_TIMING {\"id\":\"%s\",\"index\":%u,\"mode\":\"%s\",\"op\":%u,\"ns\":%lld}\n", t->id, i,
+                   comparisons ? "cmp" : "pc", op->code,
+                   (op_finished.tv_sec - op_started.tv_sec) * 1000000000LL + (op_finished.tv_nsec - op_started.tv_nsec));
+        }
+        if (lifecycle_fd >= 0 && close(lifecycle_fd)) fail(t->id, i, "environment_failure", "lifecycle_rtnetlink_close");
+        /* L: what the fixture knows about wg0 after the operation. */
+        if (op->code == 15 && ret == 0) {
+            if (wg_exists) fail(t->id, i, "environment_failure", "wg_create_succeeded_twice");
+            wg_exists = 1;
+            first_up = 1;
+            resolve_wg_ifindex(t->id, (int)i);
+        }
+        if (op->code == 17 && ret == 0) {
+            if (!wg_exists) fail(t->id, i, "environment_failure", "wg_delete_without_wg0");
+            wg_exists = 0;
+            first_up = 1;
+        }
         /* Outside the coverage window: the dump's attribute payloads. */
         if (op->code == 9 && !comparisons && ret == 0)
             printf("LEANUX_WG {\"id\":\"%s\",\"index\":%u,\"payloads\":[%s]}\n", t->id, i, dump_hex);
-        if (op->code == 10 && ret == 0) {
-            clock_gettime(CLOCK_BOOTTIME, &went_up);
-            up_seen = 1;
-            route_into_wg0(t->id, i);
+        /* A successful up that changed the flags gets wg0's addresses and
+         * routes (the first since creation, or again after a down); the
+         * rekey bound counts from the trace's first such up. */
+        if (op->code == 10 && ret == 0 && !was_up) {
+            if (!up_seen) {
+                clock_gettime(CLOCK_BOOTTIME, &went_up);
+                up_seen = 1;
+            }
+            route_into_wg0(t->id, i, first_up);
+            first_up = 0;
         }
         if (op->code == 12) observe(t, i, ret, comparisons);
         /* The handshake worker runs after the send returns. An operation
@@ -911,7 +1092,7 @@ int main(int argc, char **argv)
         static struct trace trace;
         if (!fgets(line, sizeof(line), input) ||
             sscanf(line, "T %80s %u %u %u %u", trace.id, &trace.count, &trace.rlimit, &trace.net, &trace.nsteer) != 5 ||
-            trace.count < 1 || trace.count > MAX_OPS || trace.rlimit < 8 || trace.rlimit > 1024 || trace.net > 1 ||
+            trace.count < 1 || trace.count > MAX_OPS || trace.rlimit < 8 || trace.rlimit > 1024 || trace.net > 2 ||
             trace.nsteer > STEER_MAX || (trace.nsteer && !trace.net))
             fail("batch", -1, "invalid_input", "wire_trace");
         for (unsigned i = 0; i < trace.count; ++i) {

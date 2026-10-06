@@ -47,6 +47,11 @@ inductive Syscall where
   /-- D3: `ioctl(3, KCOV_LEANUX_TIME_ADVANCE, &ticks)` on the trace's KCOV
       descriptor, then the guest's wait (docs/2026-10-05-d3-timers.md, 4.3). -/
   | wgAdvance (ticks : Nat)
+  /-- L (docs/2026-10-05-l-lifecycle.md): `RTM_NEWLINK` of wg0, `SIOCSIFFLAGS`
+      without `IFF_UP`, `RTM_DELLINK` of wg0. Not yet modeled (stream M). -/
+  | wgCreate
+  | wgDown
+  | wgDelete
 
 /-- The generic-netlink socket at descriptor 7 (`NETLINK_FD` in harness/guest.c). -/
 def NETLINK_FD : Nat := 7
@@ -106,6 +111,7 @@ def dispatch : Syscall → M Int
     modify fun w => { w with extraOut := ["datagrams", "replies", "stats"].map fun k => (k, observed.getObjValD k) }
     return ret
   | .wgAdvance ticks => Env.advance ticks
+  | .wgCreate | .wgDown | .wgDelete => unsupported "L stream M: not yet"
 
 /-- `task_work_run` on exit to user mode: each queued `____fput` runs `__fput`. -/
 partial def taskWorkRun : M Unit := do
