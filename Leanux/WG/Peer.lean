@@ -227,9 +227,12 @@ def peerCreate (publicKey : Key) (presharedKey : Option Key) : M (Except Int Pee
   let internalId := (← getK).peerCounter + 1   -- atomic64_inc_return(&peer_counter)
   modifyK fun k => { k with peerCounter := internalId }
   modifyDev fun d => { d with nextPeer := pid + 1 }
-  -- wg_cookie_checker_precompute_peer_keys: BLAKE2s("mac1----" || remote static)
+  -- wg_cookie_init (zeroed: no cookie, is_valid and have_sent_mac1 false),
+  -- then wg_cookie_checker_precompute_peer_keys (cookie.c:61-67):
+  -- BLAKE2s("cookie--" || remote static) and BLAKE2s("mac1----" || remote static)
   setPeer pid { remoteStatic := publicKey, presharedKey := List.replicate 32 0,
                 precomputedStaticStatic := List.replicate 32 0, internalId,
+                cookieDecryptionKey := blake2s 32 [] ("cookie--".toUTF8.toList ++ publicKey),
                 cookieMac1Key := blake2s 32 [] ("mac1----".toUTF8.toList ++ publicKey) }
   handshakeInit pid presharedKey
   -- cookie init, timers, work items, queues, kref_init (refcount 1)

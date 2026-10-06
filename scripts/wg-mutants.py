@@ -1,4 +1,4 @@
-"""WireGuard mutants (stage A report, section 2; stages B1, B2, C, D1 and D2).
+"""WireGuard mutants (stage A report, section 2; stages B1, B2, C, D1, D2 and E arm 4).
 
 Each mutant is applied to a clean committed tree, verified as applied, checked
 on the wireguard suite, then reverted. Run from the repository root:
@@ -244,6 +244,30 @@ D2_MUTANTS = [
    "  runWorker .decryptWorker (WG.decryptWorker (pure ()) (pure ()) (condResched SWITCH_DEPTH .decryptWorker))\n"
    "  napiSoftirq\n"),
 ]
+# Stage E arm 4 (cookie-reply consumption and MAC2; docs/2026-10-05-e-dos.md
+# sections 6.A and 10). E-M5 (freshness 120 vs 115 s) needs D3's time
+# advance and is not claimed.
+E_MUTANTS = [
+  ('E-M1-cookie-stored-on-failed-decrypt', 'state: wg_cookie_message_consume stores the cookie without '
+   'verifying the tag (cookie.c:216-222); e_cookie_bad_mac1_aad', 'Leanux/WG/Receive.lean',
+   "  let cookie := xchachaDecrypt p.cookieDecryptionKey ((msg.drop 8).take 24) ((msg.drop 32).take 32) p.lastMac1Sent\n",
+   "  let cookie := some ((xchachaEncrypt p.cookieDecryptionKey ((msg.drop 8).take 24) ((msg.drop 32).take 16)\n"
+   "    p.lastMac1Sent).take 16)\n"),
+  ('E-M2-mac2-ignores-cookie-valid', 'data: wg_cookie_add_mac_to_packet never uses the stored cookie '
+   '(is_valid ignored, cookie.c:170); e_cookie_then_reinitiate\'s MAC2', 'Leanux/WG/Handshake.lean',
+   "  if ← andM (branch .addMacCookieValid p.cookieIsValid)\n",
+   "  if ← andM (branch .addMacCookieValid false)\n"),
+  ('E-M3-mac2-keyed-by-mac1-key', 'data: compute_mac2 keyed by the MAC1 key, not the cookie (cookie.c:173-174)',
+   'Leanux/WG/Handshake.lean',
+   "    return body ++ mac1 ++ blake2s 16 p.cookie (body ++ mac1)\n",
+   "    return body ++ mac1 ++ blake2s 16 p.cookieMac1Key (body ++ mac1)\n"),
+  ('E-M4-have-sent-mac1-not-cleared', 'state: a consumed cookie leaves have_sent_mac1 set (cookie.c:227); '
+   'e_cookie_double_reply decrypts the second reply where Linux goes to out (cookie.c:212)',
+   'Leanux/WG/Receive.lean',
+   "    setPeer pid { (← getPeer pid) with cookie := c, cookieBirthdate := birthdate, cookieIsValid := true,\n"
+   "                                       haveSentMac1 := false }\n",
+   "    setPeer pid { (← getPeer pid) with cookie := c, cookieBirthdate := birthdate, cookieIsValid := true }\n"),
+]
 PENDING = {m[0] for m in D2_MUTANTS if m[3] is None}
 
 
@@ -277,7 +301,7 @@ def run(cmd, **kw):
 
 assert run(['git', 'status', '--porcelain'], capture_output=True, text=True).stdout == '', 'tree must be clean'
 head = run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()
-MUTANTS = MUTANTS + D1_MUTANTS + D2_MUTANTS
+MUTANTS = MUTANTS + D1_MUTANTS + D2_MUTANTS + E_MUTANTS
 selected = sys.argv[1:] or [m[0] for m in MUTANTS]
 results = {}
 for name, what, path, old, new in MUTANTS:

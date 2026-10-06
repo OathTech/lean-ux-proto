@@ -275,6 +275,8 @@ inductive HiddenSite where
       confirmation by a data message (its tail jump attributes the record to
       the caller, `wg_packet_consume_data_done`). -/
   | walltimeLastHandshakeData
+  /-- E-A: `wg_cookie_message_consume`'s birthdate of a stored cookie. -/
+  | cookieBirthdate
   deriving Repr, BEq, DecidableEq
 
 inductive SiteRole where
@@ -343,13 +345,18 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   -- wg_packet_rx_poll; return address - 1 resolves to receive.c:347 in the
   -- net-choice build (checked with the check's symbolizer).
   | .walltimeLastHandshakeData => ⟨17, "walltime_last_handshake_data", "clock", "drivers/net/wireguard/receive.c", 347, 16, .mirror⟩
+  -- E-A (ids 64-69 are E-A's): `peer->latest_cookie.birthdate =
+  -- ktime_get_coarse_boottime_ns()` (cookie.c:225), the inline coarse
+  -- boot-time read in wg_cookie_message_consume.
+  | .cookieBirthdate => ⟨64, "cookie_birthdate", "clock", "drivers/net/wireguard/cookie.c", 225, 8, .mirror⟩
 
 def HiddenSite.all : List HiddenSite :=
   [.initEphemeral, .respEphemeral, .tai64nNow, .indexDraw, .resetLastSent, .birthdateExpired, .initLastSent,
    .initLastSentAgain, .respLastSent, .respLastSentAgain, .floodNow, .consumptionNow, .deriveKeysBirthdate,
    .retransmitJitter, .walltimeLastHandshake, .ipIdentReserve, .ipIdentKey, .icmpCredit, .flowHashSecret, .schedDlTimer]
   ++ Worker.all.flatMap (fun w => [.sectionStart w, .sectionStop w])
-  ++ [.reschedReceive, .reschedEncrypt, .reschedTx, .reschedDecrypt, .newHandshakeJitter, .walltimeLastHandshakeData]
+  ++ [.reschedReceive, .reschedEncrypt, .reschedTx, .reschedDecrypt, .newHandshakeJitter, .walltimeLastHandshakeData,
+      .cookieBirthdate]
 
 /-- The resched site of a worker's `cond_resched`, for the workers that
     have one on the modeled paths. -/

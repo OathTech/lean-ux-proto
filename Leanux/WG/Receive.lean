@@ -17,8 +17,8 @@ work runs, before the operation ends. A handshake initiation with a valid
 MAC1 enters Noise as the responder, and a handshake response with a valid
 MAC1 completes wg0's own initiation (`Leanux/WG/Handshake.lean`), which then
 sends its staged packets or a keepalive (`Leanux/WG/Send.lean`). Index lookups walk the
-mirrored index hashtable, whose random indices are recorded hidden inputs; a
-cookie for a known index is `unsupported`. A data message for a keypair goes
+mirrored index hashtable, whose random indices are recorded hidden inputs. A cookie
+reply for a known index is decrypted and stored (`cookieMessageConsume`). A data message for a keypair goes
 to the decrypt queue and the peer's `rx_queue`; the decrypt worker and the
 NAPI poll are in `Leanux/WG/RxData.lean` (D2).
 -/
@@ -76,12 +76,27 @@ def prepareSkbHeader (msg : List UInt8) : M Bool := do
   if ← branch .prepPullHeaderFailed false then return false
   return true
 
-/-- wg_cookie_message_consume (cookie.c:198-236). -/
+/-- wg_cookie_message_consume (cookie.c:198-236). The lookup takes a
+    reference to the peer, which `out:` drops. -/
 def cookieMessageConsume (msg : List UInt8) : M Unit := do
   -- `src->receiver_index`, of a handshake or a keypair
   let entry ← indexLookup [.handshake, .keypair] (u32le msg 4)
   if ← branch .cookieLookupMiss entry.isNone then return
-  unsupported "a cookie for a known index"
+  let some e := entry | invariant "unreachable"
+  let pid := e.peer
+  let p ← getPeer pid
+  if ← branch .cookieNoMac1Sent !p.haveSentMac1 then
+    peerPut (some pid)   -- goto out
+    return
+  -- xchacha20poly1305_decrypt(cookie, encrypted_cookie, 32, last_mac1_sent,
+  -- COOKIE_LEN, nonce, cookie_decryption_key)
+  let cookie := xchachaDecrypt p.cookieDecryptionKey ((msg.drop 8).take 24) ((msg.drop 32).take 32) p.lastMac1Sent
+  if ← branch .cookieDecryptOk cookie.isSome then
+    let some c := cookie | invariant "unreachable"
+    let birthdate ← hiddenClock .cookieBirthdate
+    setPeer pid { (← getPeer pid) with cookie := c, cookieBirthdate := birthdate, cookieIsValid := true,
+                                       haveSentMac1 := false }
+  peerPut (some pid)   -- out:
 
 /-- wg_cookie_validate_packet (cookie.c:119-154) when not under load:
     whether MAC1 is valid. -/
