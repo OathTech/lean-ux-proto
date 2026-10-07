@@ -236,8 +236,6 @@ inductive Decision where
   | retransmitGiveUp | retransmitZeroKeyNotPending | keepaliveNeedAnother | zeroKeyAlive | zeroKeyAlreadyQueued
   | persistentKeepaliveInterval
   -- end D3 stream M
-  -- D3 stream H (constructors; sections 7-8)
-  -- end D3 stream H
   -- P stream 2 (begin): fs/pipe.c, include/linux/pipe_fs_i.h, fs/fcntl.c,
   -- fs/read_write.c (docs/2026-10-05-p-pipes.md section 11, Appendix A)
   | anonBufReleaseSole | anonBufReleaseNoTmp | pipeBufConfirmNoConfirm | pipeReadNull | pipeReadNotEmpty
@@ -1192,8 +1190,6 @@ def Decision.info : Decision → DecisionInfo
   | .zeroKeyAlreadyQueued => d "wg_expired_zero_key_material.already_queued" wtm 112 [(117, 117)] []
   | .persistentKeepaliveInterval => d "wg_expired_send_persistent_keepalive.interval" wtm 140 [(141, 141)] []
   -- end D3 stream M
-  -- D3 stream H (their infos; sections 7-8)
-  -- end D3 stream H
   -- P stream 2 (begin): fs/pipe.c, include/linux/pipe_fs_i.h, fs/fcntl.c,
   -- fs/read_write.c (docs/2026-10-05-p-pipes.md section 11, Appendix A)
   -- `page_count(page) == 1 && !pipe->tmp_page`: the operands share line 125 and the else arm (128)
@@ -1598,8 +1594,6 @@ def Decision.comparison : Decision → Option Comparison
   | .expandFdtableBugNr => some ⟨.lt, false, none, false⟩
   -- D3 stream M (comparisons; docs/2026-10-05-d3-timers.md, section 5)
   -- end D3 stream M
-  -- D3 stream H (comparisons; sections 7-8)
-  -- end D3 stream H
   -- P stream 2 (begin): fs/pipe.c, include/linux/pipe_fs_i.h, fs/fcntl.c,
   -- fs/read_write.c (docs/2026-10-05-p-pipes.md section 11, Appendix A)
   | .anonBufReleaseSole => some ⟨.eq, true, none, false⟩
@@ -1793,8 +1787,6 @@ def Decision.repeatable : Decision → Bool
   | .vlanTypeIsVlan | .dsfieldIp | .dsfieldIpv6 | .ecnEncapInnerCe | .padClamped => true
   -- D3 stream M (repeatable decisions; docs/2026-10-05-d3-timers.md, section 5)
   -- end D3 stream M
-  -- D3 stream H (repeatable decisions; sections 7-8)
-  -- end D3 stream H
   -- P interface (design section 4, audit M2): `pipe2` runs alloc_fd,
   -- alloc_empty_file, file_init_path, alloc_file and fd_install twice in one
   -- operation, and its -EMFILE unwind runs two fput/__fput in the same
