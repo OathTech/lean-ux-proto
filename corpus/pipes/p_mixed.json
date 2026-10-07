@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "id": "p_mixed",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 0,
+      "flags": 2048
+    },
+    {
+      "op": "pipe2",
+      "flags": 2048
+    },
+    {
+      "op": "write",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8,
+      "value": "5"
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 0
+      },
+      "cmd": "F_SETPIPE_SZ",
+      "arg": 4096
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 0
+      },
+      "cmd": "F_GETPIPE_SZ",
+      "arg": 0
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 0
+      },
+      "count": 69632
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 1,
+        "end": 1
+      },
+      "count": 8,
+      "value": "7"
+    },
+    {
+      "op": "read",
+      "fd": {
+        "pipe": 1,
+        "end": 0
+      },
+      "count": 69632
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 0
+      },
+      "cmd": "F_GETFL",
+      "arg": 0
+    },
+    {
+      "op": "close",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "close",
+      "fd": {
+        "pipe": 1,
+        "end": 0
+      }
+    },
+    {
+      "op": "close",
+      "fd": {
+        "pipe": 1,
+        "end": 1
+      }
+    }
+  ]
+}

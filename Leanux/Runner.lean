@@ -7,7 +7,18 @@ open Lean Leanux
 inductive FDArg where
   | literal (value : Int)
   | ref (index : Nat)
+  /-- `{"pipe": i, "end": e}`: end `e` (0 = `fd[0]`, the read end; 1 =
+      `fd[1]`, the write end) of the earlier `pipe2` at index `i`. -/
+  | pipe (index : Nat) (endIdx : Nat)
   deriving Repr
+
+/-- The byte-count bound for `read` and `write` (P design section 6, Q5): 17
+    pages, so one write can overfill the default 16-slot ring. -/
+def MAX_IO : Nat := 69632
+/-- Bytes of a read shown in the clear (`bytes`); the `digest` covers all. -/
+def READ_HEAD : Nat := 64
+/-- The fixture pause before an operation's coverage window, in ms. -/
+def PAUSE_MS_MAX : Nat := 20
 
 inductive Operation where
   | eventfd2 (init flags : UInt32)
@@ -17,6 +28,8 @@ inductive Operation where
   | read (fd : FDArg) (count : Nat)
   | write (fd : FDArg) (count : Nat) (value : UInt64)
   | fcntl (fd : FDArg) (cmd : FcntlCmd) (arg : UInt32)
+  /-- `pipe2(fildes, flags)` (P). -/
+  | pipe2 (flags : UInt32)
   | wgSet (attrs : WG.DeviceAttrs)
   | wgGet
   | wgUp
@@ -27,8 +40,14 @@ inductive Operation where
   | wgAdvance (ticks : Nat)
   deriving Repr
 
+/-- The operations a `{"ref": i}` may name. -/
 def Operation.isProducer : Operation → Bool
   | .eventfd2 .. | .dup .. | .dup3 .. => true
+  | _ => false
+
+/-- The operations a `{"pipe": i, "end": e}` may name. -/
+def Operation.isPipe : Operation → Bool
+  | .pipe2 _ => true
   | _ => false
 
 structure Trace where
@@ -48,6 +67,10 @@ structure Trace where
   /-- The check's choice for each NAPI poll placement the records leave open
       (`World.napiBeforePut`). -/
   napiBeforePut : List Bool := []
+  /-- Each operation's `pause_ms` (0 when absent): a fixture sleep before the
+      operation's coverage window, ignored by the mirror (only the clock
+      advances). -/
+  pauses : Array Nat := #[]
   deriving Repr
 
 /-- The network fixture runs for traces with a WireGuard operation
@@ -74,6 +97,15 @@ private def u32Field (j : Json) (name : String) : Except String UInt32 :=
 
 private def parseFD (j : Json) (prior : Array Operation) : Except String FDArg := do
   let obj ← j.getObj?
+  if let some v := obj.get? "pipe" then
+    fields j ["pipe", "end"]
+    let n ← v.getNat?
+    let e ← natField j "end" 1
+    match prior[n]? with
+    | some op =>
+      if op.isPipe then return .pipe n e
+      else throw "pipe reference must name a pipe2"
+    | none => throw "pipe reference must name an earlier operation"
   if obj.size != 1 then throw "descriptor argument needs one field"
   if let some v := obj.get? "literal" then
     let n ← v.getInt?
@@ -195,11 +227,14 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
     return .close (← parseFD (← field j "fd") prior)
   | "read" =>
     fields j ["op", "fd", "count"]
-    return .read (← parseFD (← field j "fd") prior) (← natField j "count" 16)
+    return .read (← parseFD (← field j "fd") prior) (← natField j "count" MAX_IO)
   | "write" =>
     fields j ["op", "fd", "count", "value"]
-    return .write (← parseFD (← field j "fd") prior) (← natField j "count" 16)
+    return .write (← parseFD (← field j "fd") prior) (← natField j "count" MAX_IO)
       (← parseValue j)
+  | "pipe2" =>
+    fields j ["op", "flags"]
+    return .pipe2 (← u32Field j "flags")
   | "fcntl" =>
     fields j ["op", "fd", "cmd", "arg"]
     let fd ← parseFD (← field j "fd") prior
@@ -210,6 +245,8 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
     | "F_SETFD" => return .fcntl fd FcntlCmd.setFD arg
     | "F_GETFL" => return .fcntl fd FcntlCmd.getFL arg
     | "F_SETFL" => return .fcntl fd FcntlCmd.setFL arg
+    | "F_SETPIPE_SZ" => return .fcntl fd FcntlCmd.setPipeSz arg
+    | "F_GETPIPE_SZ" => return .fcntl fd FcntlCmd.getPipeSz arg
     | _ => throw "unsupported fcntl command"
   | "wg_set" =>
     fields j ["op", "config"]
@@ -303,8 +340,19 @@ def parseTrace (j : Json) : Except String Trace := do
   let rawOps ← (← field j "ops").getArr?
   if rawOps.isEmpty || rawOps.size > 64 then throw "trace length outside 1..64"
   let mut ops := #[]
+  let mut pauses := #[]
   for j in rawOps do
+    -- `pause_ms` (1-20) may accompany any operation; the rest is the
+    -- operation's own exact field set
+    let obj ← j.getObj?
+    let (j, pause) ← match obj.get? "pause_ms" with
+      | some v => do
+        let n ← v.getNat?
+        if n < 1 || n > PAUSE_MS_MAX then throw "pause_ms outside 1..20"
+        pure (Json.obj (obj.erase "pause_ms"), n)
+      | none => pure (j, 0)
     ops := ops.push (← parseOperation j ops)
+    pauses := pauses.push pause
   let hidden ← if hasHidden then some <$> parseHidden (← field j "hidden") ops.size else pure none
   let steer ← if hasSteer then (← (← field j "steer").getArr?).toList.mapM fun e => do
       let pair ← e.getArr?
@@ -319,7 +367,7 @@ def parseTrace (j : Json) : Except String Trace := do
       (← (← field j "napi_irq_before_put").getArr?).toList.mapM fun b => b.getBool?
     else pure []
   if napiBeforePut.length > 8 then throw "napi_irq_before_put: more than 8 entries"
-  return { id, ops, rlimit, hidden, steer, armRecords, napiBeforePut }
+  return { id, ops, rlimit, hidden, steer, armRecords, napiBeforePut, pauses }
 
 /-! ## Harness fixture and trace execution
 
@@ -358,39 +406,74 @@ def initialKernel (rlimit : Nat) (net : Bool := false) : Kernel :=
       files := { count := 1, resizeInProgress := false, nextFd := 8,
                  fdt := { maxFds := NR_OPEN_DEFAULT, fd := slots.map slot,
                           openFds := slots.map (· < 8), closeOnExec := slots.map fun _ => false } }
-      rlimitNofile := rlimit }
+      rlimitNofile := rlimit
+      -- the trace child blocks SIGPIPE before the first operation and starts
+      -- with no pending signal (P design section 6; the guest side is P1's)
+      blocked := sigmask SIGPIPE, pending := 0 }
     files, nextFile := 6, ctxs := {}, nextCtx := 0,
     idaUsed := {},
     -- Environment facts: the system-wide open-file count and limit are not
     -- observed; the guest has few files open, far below any boot-sized limit.
     nrFiles := 6, maxFiles := 1000000, anonInodeInodeErr := false,
+    -- Pipes (P design section 5): sysctl defaults, and `root_user`'s
+    -- `pipe_bufs` at its baseline of 0 (no pipes outside the trace)
+    pipeMaxSize := 1048576, pipeUserPagesSoft := 16384, pipeUserPagesHard := 0, user := { pipeBufs := 0 },
     wg := if net then some { ifindex := 3, ifname := "wg0" } else none }
 
 /-- The harness environment: every allocation and user-memory access succeeds. -/
 def harnessEnv : EnvSite → Nat → Bool := fun _ _ => true
 
-def resolveFD (results : Array Int) : FDArg → Int
+/-- A descriptor argument's value. `ends` holds each operation's `pipe2`
+    pair (`fds`); a failed producer resolves to -1 (harness/guest.c). -/
+def resolveFD (results : Array Int) (ends : Array (Option (Nat × Nat))) : FDArg → Int
   | .literal n => n
   | .ref i =>
     match results[i]? with
     | some n => if n < 0 then -1 else n
     | none => -1 -- Only reachable when bypassing parseTrace.
+  | .pipe i e =>
+    match results[i]?, ends[i]? with
+    | some 0, some (some (r, w)) => if e == 0 then r else w
+    | _, _ => -1
 
 private def hexByte (n : Nat) : String :=
   let digits := "0123456789abcdef".toList.toArray
   String.ofList [digits[n / 16 % 16]!, digits[n % 16]!]
 
-def wordBytes (value : UInt64) : String :=
-  String.join ((List.range 8).map fun i => hexByte (value.toNat / 256 ^ i % 256))
+def hexBytesOf (bs : ByteArray) : String :=
+  String.join (bs.toList.map fun b => hexByte b.toNat)
 
-def toSyscall (results : Array Int) : Operation → Syscall
+/-- The caller's write buffer for operation `index` (P design section 6),
+    which harness/guest.c fills identically: bytes 0-7 are `value`
+    little-endian (eventfd writes read them), and byte `k ≥ 8` is
+    `(7·index + 13·k + 17·(k >> 8)) mod 256`. At least 8 bytes long. -/
+def writeBuffer (index : Nat) (value : UInt64) (count : Nat) : ByteArray :=
+  ByteArray.mk ((List.range (max count 8)).toArray.map fun k =>
+    if k < 8 then UInt8.ofNat (value.toNat / 256 ^ k % 256)
+    else UInt8.ofNat ((7 * index + 13 * k + 17 * (k >>> 8)) % 256))
+
+/-- The `digest` observation field of a read (P design section 6, Q1):
+    BLAKE2s-256 over all `ret` bytes when `ret > 0`, else `null`; harness/guest.c
+    computes the same. -/
+def readDigest (out : Option ByteArray) (ret : Int) : Json :=
+  match out with
+  | some bs => if ret > 0 then toJson (hexBytesOf (ByteArray.mk (WG.blake2s 32 [] (bs.extract 0 ret.toNat).toList).toArray)) else .null
+  | none => .null
+
+/-- The `sigpipe` observation field of a write: whether `SIGPIPE` is pending
+    in the task after the call (the guest's `sigpending()` after each write). -/
+def writeSigpipe (k : Kernel) : Json :=
+  toJson (if sigismember k.task.pending SIGPIPE then (1 : Nat) else 0)
+
+def toSyscall (results : Array Int) (ends : Array (Option (Nat × Nat))) (index : Nat) : Operation → Syscall
   | .eventfd2 init flags => .eventfd2 init flags
-  | .dup fd => .dup (uint (resolveFD results fd))
-  | .dup3 fd newfd flags => .dup3 (uint (resolveFD results fd)) (uint (resolveFD results newfd)) flags
-  | .close fd => .close (uint (resolveFD results fd))
-  | .read fd count => .read (uint (resolveFD results fd)) count
-  | .write fd count value => .write (uint (resolveFD results fd)) count value
-  | .fcntl fd cmd arg => .fcntl (uint (resolveFD results fd)) cmd arg.toUInt64
+  | .dup fd => .dup (uint (resolveFD results ends fd))
+  | .dup3 fd newfd flags => .dup3 (uint (resolveFD results ends fd)) (uint (resolveFD results ends newfd)) flags
+  | .close fd => .close (uint (resolveFD results ends fd))
+  | .read fd count => .read (uint (resolveFD results ends fd)) count
+  | .write fd count value => .write (uint (resolveFD results ends fd)) count (writeBuffer index value count)
+  | .fcntl fd cmd arg => .fcntl (uint (resolveFD results ends fd)) cmd arg.toUInt64
+  | .pipe2 flags => .pipe2 flags
   | .wgSet attrs => .wgSet attrs
   | .wgGet => .wgGet
   | .wgUp => .wgUp
@@ -408,13 +491,14 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
                              armRecords := trace.armRecords,
                              napiBeforePut := trace.napiBeforePut }
   let mut results : Array Int := #[]
+  let mut ends : Array (Option (Nat × Nat)) := #[]
   let mut observations : Array Json := #[]
   let mut branches : Array Json := #[]
   let mut fired : Array Json := #[]
   for op in trace.ops do
     let index := results.size
     world := { world with hidden := trace.hidden.map (·[index]!), yieldedWorkers := [], pendingStops := [], netRxRaised := false }
-    let (ret, w) ← (syscall (toSyscall results op)).run world
+    let (ret, w) ← (syscall (toSyscall results ends index op)).run world
       |>.mapError fun e => (index, e)
     let (_, w) ← skipAmbient.run w |>.mapError fun e => (index, e)
     if let some (r :: _) := w.hidden then
@@ -425,19 +509,31 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
       throw (index, .invariant "a NET_RX softirq raised by a loopback transmission was left pending")
     world := w
     results := results.push ret
+    ends := ends.push (if ret == 0 then w.userFds else none)
+    -- a read's first READ_HEAD bytes in the clear (eventfd reads: all 8)
     let bytes := match op, w.userOut with
-      | .read .., some v => if ret == 8 then wordBytes v else ""
+      | .read .., some v => if ret > 0 then hexBytesOf (v.extract 0 (min ret.toNat READ_HEAD)) else ""
       | _, _ => ""
+    -- pipe2: the pair copied to the caller, or null on failure; a read's
+    -- digest; a write's sigpipe (P design section 6)
+    let fds : List (String × Json) := match op with
+      | .pipe2 _ => [("fds", match w.userFds with
+          | some (r, wr) => if ret == 0 then toJson [r, wr] else .null
+          | none => .null)]
+      | .read .. => [("digest", readDigest w.userOut ret)]
+      | .write .. => [("sigpipe", writeSigpipe w.k)]
+      | _ => []
     let device := w.extraOut
     observations := observations.push (Json.mkObj ([
       ("index", toJson index), ("ret", toJson ret),
       ("errno", if ret < 0 then toJson (-ret) else .null),
-      ("bytes", toJson bytes)] ++ device))
+      ("bytes", toJson bytes)] ++ fds ++ device))
     for s in w.steps do
       let fields := [("index", toJson index), ("label", toJson s.label)]
-      branches := branches.push (Json.mkObj (match s.operands with
-        | some (a, b) => fields ++ [("operands", toJson [a, b])]
-        | none => fields))
+      branches := branches.push (Json.mkObj (match s.operands, s.excluded with
+        | some (a, b), _ => fields ++ [("operands", toJson [a, b])]
+        | none, some x => fields ++ [("operands_excluded", toJson x.operand)]
+        | none, none => fields))
     for symbol in w.fired do
       fired := fired.push (Json.mkObj [("index", toJson index), ("symbol", toJson symbol)])
   -- a placement the check chose must have been met

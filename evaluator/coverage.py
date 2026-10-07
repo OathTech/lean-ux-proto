@@ -1,4 +1,5 @@
 """Bind reported KCOV PCs to DWARF locations in the accepted Linux image."""
+from collections import Counter
 import hashlib
 import re
 from pathlib import Path
@@ -64,7 +65,9 @@ def attributable(frames):
 
 def instrumented_lines(kernel, functions, files):
     """Source lines that own a KCOV instrumentation point in the given functions,
-    and the (inlined) function names those points belong to.
+    the (inlined) function names those points belong to, and how many points
+    have each frame chain (`file:line` per DWARF frame, innermost first; the
+    check's shared-exit declarations must each name exactly one).
 
     KCOV records the return address of the call to `__sanitizer_cov_trace_pc`.
     When a callee ends by jumping to the hook (directly, conditionally, or
@@ -108,7 +111,7 @@ def instrumented_lines(kernel, functions, files):
                 if target and (target.group(0) == COVERAGE_HOOK or ends_in_coverage(target.group(1))):
                     pcs.append(int(following.split(':')[0], 16))
         per_function[function] = pcs
-    lines, names = set(), set()
+    lines, names, chains = set(), set(), Counter()
     for function, pcs in per_function.items():
         query = ''.join(hex(pc - 1) + '\n' for pc in pcs).encode()
         output = subprocess.run(['addr2line', '-e', kernel, '-a', '-i', '-f'], input=query,
@@ -127,6 +130,7 @@ def instrumented_lines(kernel, functions, files):
         for frames in stacks:
             if not attributable(frames):
                 continue
+            chains[tuple(frame['source'].split('/.deps/linux/')[-1].split(' ')[0] for frame in frames)] += 1
             for frame in frames:
                 source = frame['source'].split('/.deps/linux/')[-1].split(' ')[0]
                 if source.split(':')[0] in files:
@@ -135,4 +139,4 @@ def instrumented_lines(kernel, functions, files):
                     found += 1
         if not found:
             raise ValueError(f'function {function} has no instrumentation point in the anchored files')
-    return lines, names
+    return lines, names, chains

@@ -1,6 +1,75 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:leanux:trace:v1",
+  "$defs": {
+    "fd": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "literal": {
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 2147483647
+            }
+          },
+          "required": [
+            "literal"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ref": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 63
+            }
+          },
+          "required": [
+            "ref"
+          ],
+          "additionalProperties": false,
+          "$comment": "Names an earlier eventfd2, dup or dup3."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "pipe": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 63
+            },
+            "end": {
+              "enum": [
+                0,
+                1
+              ]
+            }
+          },
+          "required": [
+            "pipe",
+            "end"
+          ],
+          "additionalProperties": false,
+          "$comment": "End 0 (fd[0], the read end) or 1 (fd[1], the write end) of an earlier pipe2."
+        }
+      ]
+    },
+    "pause_ms": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 20,
+      "$comment": "The guest sleeps this long before the operation's coverage reset; the mirror ignores it (P design section 6)."
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 69632,
+      "$comment": "MAX_IO: 17 pages (P design section 6)."
+    }
+  },
   "type": "object",
   "properties": {
     "version": {
@@ -31,6 +100,9 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 4294967295
+              },
+              "pause_ms": {
+                "$ref": "#/$defs/pause_ms"
               }
             },
             "required": [
@@ -44,39 +116,34 @@
             "type": "object",
             "properties": {
               "op": {
+                "const": "pipe2"
+              },
+              "flags": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4294967295
+              },
+              "pause_ms": {
+                "$ref": "#/$defs/pause_ms"
+              }
+            },
+            "required": [
+              "op",
+              "flags"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "op": {
                 "const": "dup"
               },
               "fd": {
-                "oneOf": [
-                  {
-                    "type": "object",
-                    "properties": {
-                      "literal": {
-                        "type": "integer",
-                        "minimum": -2147483648,
-                        "maximum": 2147483647
-                      }
-                    },
-                    "required": [
-                      "literal"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "ref": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 63
-                      }
-                    },
-                    "required": [
-                      "ref"
-                    ],
-                    "additionalProperties": false
-                  }
-                ]
+                "$ref": "#/$defs/fd"
+              },
+              "pause_ms": {
+                "$ref": "#/$defs/pause_ms"
               }
             },
             "required": [
@@ -92,73 +159,18 @@
                 "const": "dup3"
               },
               "fd": {
-                "oneOf": [
-                  {
-                    "type": "object",
-                    "properties": {
-                      "literal": {
-                        "type": "integer",
-                        "minimum": -2147483648,
-                        "maximum": 2147483647
-                      }
-                    },
-                    "required": [
-                      "literal"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "ref": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 63
-                      }
-                    },
-                    "required": [
-                      "ref"
-                    ],
-                    "additionalProperties": false
-                  }
-                ]
+                "$ref": "#/$defs/fd"
               },
               "newfd": {
-                "oneOf": [
-                  {
-                    "type": "object",
-                    "properties": {
-                      "literal": {
-                        "type": "integer",
-                        "minimum": -2147483648,
-                        "maximum": 2147483647
-                      }
-                    },
-                    "required": [
-                      "literal"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "ref": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 63
-                      }
-                    },
-                    "required": [
-                      "ref"
-                    ],
-                    "additionalProperties": false
-                  }
-                ]
+                "$ref": "#/$defs/fd"
               },
               "flags": {
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 4294967295
+              },
+              "pause_ms": {
+                "$ref": "#/$defs/pause_ms"
               }
             },
             "required": [
@@ -176,36 +188,10 @@
                 "const": "close"
               },
               "fd": {
-                "oneOf": [
-                  {
-                    "type": "object",
-                    "properties": {
-                      "literal": {
-                        "type": "integer",
-                        "minimum": -2147483648,
-                        "maximum": 2147483647
-                      }
-                    },
-                    "required": [
-                      "literal"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "ref": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 63
-                      }
-                    },
-                    "required": [
-                      "ref"
-                    ],
-                    "additionalProperties": false
-                  }
-                ]
+                "$ref": "#/$defs/fd"
+              },
+              "pause_ms": {
+                "$ref": "#/$defs/pause_ms"
               }
             },
             "required": [
@@ -221,41 +207,13 @@
                 "const": "read"
               },
               "fd": {
-                "oneOf": [
-                  {
-                    "type": "object",
-                    "properties": {
-                      "literal": {
-                        "type": "integer",
-                        "minimum": -2147483648,
-                        "maximum": 2147483647
-                      }
-                    },
-                    "required": [
-                      "literal"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "ref": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 63
-                      }
-                    },
-                    "required": [
-                      "ref"
-                    ],
-                    "additionalProperties": false
-                  }
-                ]
+                "$ref": "#/$defs/fd"
               },
               "count": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 16
+                "$ref": "#/$defs/count"
+              },
+              "pause_ms": {
+                "$ref": "#/$defs/pause_ms"
               }
             },
             "required": [
@@ -272,45 +230,17 @@
                 "const": "write"
               },
               "fd": {
-                "oneOf": [
-                  {
-                    "type": "object",
-                    "properties": {
-                      "literal": {
-                        "type": "integer",
-                        "minimum": -2147483648,
-                        "maximum": 2147483647
-                      }
-                    },
-                    "required": [
-                      "literal"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "ref": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 63
-                      }
-                    },
-                    "required": [
-                      "ref"
-                    ],
-                    "additionalProperties": false
-                  }
-                ]
+                "$ref": "#/$defs/fd"
               },
               "count": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 16
+                "$ref": "#/$defs/count"
               },
               "value": {
                 "type": "string",
                 "pattern": "^(0|[1-9][0-9]{0,19})$"
+              },
+              "pause_ms": {
+                "$ref": "#/$defs/pause_ms"
               }
             },
             "required": [
@@ -328,48 +258,25 @@
                 "const": "fcntl"
               },
               "fd": {
-                "oneOf": [
-                  {
-                    "type": "object",
-                    "properties": {
-                      "literal": {
-                        "type": "integer",
-                        "minimum": -2147483648,
-                        "maximum": 2147483647
-                      }
-                    },
-                    "required": [
-                      "literal"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "ref": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 63
-                      }
-                    },
-                    "required": [
-                      "ref"
-                    ],
-                    "additionalProperties": false
-                  }
-                ]
+                "$ref": "#/$defs/fd"
               },
               "cmd": {
                 "enum": [
                   "F_GETFD",
                   "F_SETFD",
-                  "F_GETFL"
+                  "F_GETFL",
+                  "F_SETFL",
+                  "F_SETPIPE_SZ",
+                  "F_GETPIPE_SZ"
                 ]
               },
               "arg": {
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 4294967295
+              },
+              "pause_ms": {
+                "$ref": "#/$defs/pause_ms"
               }
             },
             "required": [
@@ -396,5 +303,5 @@
     "ops"
   ],
   "additionalProperties": false,
-  "$comment": "Additional normative range, reference, reserved-FD and NONBLOCK rules are in trace-v1.md."
+  "$comment": "Additional normative range, reference, reserved-FD, NONBLOCK and pipes rules are in trace-v1.md. This schema covers the FD, eventfd and pipe operations; the WireGuard operations (wg_*) and the steering fields (steer, expect) are specified by harness/trace.py and harness/wg.py, not here."
 }

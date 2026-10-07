@@ -28,10 +28,49 @@ FIELDS = {
     "wg_inject": {"op", "family", "port", "message"},
     # D3: the virtual time advance by `ticks` jiffies (docs/2026-10-05-d3-timers.md, 4.3)
     "wg_advance": {"op", "ticks"},
+    # P (pipes, docs/2026-10-05-p-pipes.md section 6)
+    "pipe2": {"op", "flags"},
 }
 WG_OPS = {"wg_set", "wg_get", "wg_up", "wg_xmit", "wg_observe", "wg_inject", "wg_advance"}
-OPCODES = {name: i + 1 for i, name in enumerate(FIELDS)}
-FCNTL = {"F_GETFD": 1, "F_SETFD": 2, "F_GETFL": 3, "F_SETFL": 4}
+# Wire opcodes: an explicit table, not FIELDS' order (a positional derivation
+# gave P's pipe2 and D3's wg_advance the same code, 14). harness/guest.c
+# mirrors it as OP_* #defines; harness/test_trace.py checks that the codes
+# are distinct and that the guest's agree. [AGENT, coordinator, D3 merge]
+OPCODES = {
+    "eventfd2": 1, "dup": 2, "dup3": 3, "close": 4, "read": 5, "write": 6, "fcntl": 7,
+    "wg_set": 8, "wg_get": 9, "wg_up": 10, "wg_xmit": 11, "wg_observe": 12, "wg_inject": 13,
+    "pipe2": 14,
+    # 15-17: reserved for L (wg_create, wg_down, wg_delete); 18: reserved for
+    # E (wg_flood)
+    "wg_advance": 19,
+}
+RESERVED_OPCODES = {15: "wg_create", 16: "wg_down", 17: "wg_delete", 18: "wg_flood"}
+if set(OPCODES) != set(FIELDS):
+    raise AssertionError(f"OPCODES and FIELDS name different operations: {set(OPCODES) ^ set(FIELDS)}")
+# fcntl commands: the wire carries the command number itself
+# (F_LINUX_SPECIFIC_BASE = 1024: F_SETPIPE_SZ = 1031, F_GETPIPE_SZ = 1032)
+FCNTL = {"F_GETFD": 1, "F_SETFD": 2, "F_GETFL": 3, "F_SETFL": 4, "F_SETPIPE_SZ": 1031, "F_GETPIPE_SZ": 1032}
+
+# The pipes trace contract (P design section 6). A descriptor argument is
+# {"literal": n}, {"ref": i} naming an eventfd2/dup/dup3, or {"pipe": i,
+# "end": e} naming end e of the pipe2 at index i (0: fd[0], the read end; 1:
+# fd[1], the write end). A failed producer resolves to -1. Wire kinds:
+FD_KIND_LITERAL, FD_KIND_REF, FD_KIND_PIPE_READ, FD_KIND_PIPE_WRITE = 0, 1, 2, 3
+PIPE_PRODUCERS = {"pipe2"}
+# read/write byte counts: 17 pages, so one write overfills the default ring
+MAX_IO = 69632
+# Any operation may carry "pause_ms" (1-20): the guest sleeps that long before
+# the operation's coverage reset (a ninth wire field, 0 when absent); the
+# mirror ignores it.
+OPTIONAL_OP_FIELDS = {"pause_ms"}
+PAUSE_MS = (1, 20)
+# The guest (harness/guest.c) implements the pipes contract: pipe2, the pipe
+# descriptor kinds, F_SETPIPE_SZ/F_GETPIPE_SZ, pause_ms and counts up to
+# MAX_IO (stream P1). With this off, such traces are rejected as unsupported
+# (fail closed), counts stay within the old guest's 16-byte buffer, and the
+# wire has no ninth field.
+GUEST_PIPES = True
+LEGACY_IO = 16
 
 
 def _integer(value, low, high, where):
@@ -82,7 +121,11 @@ def validate_trace(trace):
         name = op["op"]
         if name not in FIELDS:
             raise UnsupportedTrace(f"ops[{i}]: unsupported operation {name!r}")
-        _fields(op, FIELDS[name], f"ops[{i}]")
+        _fields({k: v for k, v in op.items() if k not in OPTIONAL_OP_FIELDS}, FIELDS[name], f"ops[{i}]")
+        pipes = name in PIPE_PRODUCERS
+        if "pause_ms" in op:
+            _integer(op["pause_ms"], *PAUSE_MS, f"ops[{i}].pause_ms")
+            pipes = True
         for field in ("init", "flags", "arg"):
             if field in op:
                 _integer(op[field], 0, 2**32 - 1, f"ops[{i}].{field}")
@@ -90,9 +133,15 @@ def validate_trace(trace):
             if field not in op:
                 continue
             fd = op[field]
-            if type(fd) is not dict or set(fd) not in ({"literal"}, {"ref"}):
-                raise InvalidTrace(f"ops[{i}].{field}: expected literal or ref")
-            if "literal" in fd:
+            if type(fd) is not dict or set(fd) not in ({"literal"}, {"ref"}, {"pipe", "end"}):
+                raise InvalidTrace(f"ops[{i}].{field}: expected literal, ref or pipe end")
+            if "pipe" in fd:
+                _integer(fd["pipe"], 0, i - 1, f"ops[{i}].{field}.pipe")
+                _integer(fd["end"], 0, 1, f"ops[{i}].{field}.end")
+                if ops[fd["pipe"]]["op"] not in PIPE_PRODUCERS:
+                    raise InvalidTrace(f"ops[{i}].{field}: pipe end must name a pipe2")
+                pipes = True
+            elif "literal" in fd:
                 _integer(fd["literal"], -(2**31), 2**31 - 1, f"ops[{i}].{field}.literal")
                 if 0 <= fd["literal"] < 8:
                     raise InvalidTrace(f"ops[{i}].{field}: reserved fixture descriptor")
@@ -101,7 +150,9 @@ def validate_trace(trace):
                 if ops[fd["ref"]]["op"] not in PRODUCERS:
                     raise InvalidTrace(f"ops[{i}].{field}: reference must name FD producer")
         if "count" in op:
-            _integer(op["count"], 0, 16, f"ops[{i}].count")
+            _integer(op["count"], 0, MAX_IO, f"ops[{i}].count")
+            if op["count"] > LEGACY_IO:
+                pipes = True
         if name == "write":
             value = op["value"]
             if type(value) is not str or not re.fullmatch(r"0|[1-9][0-9]{0,19}", value, re.ASCII) or int(value) >= 2**64:
@@ -109,6 +160,10 @@ def validate_trace(trace):
         if name == "fcntl":
             if type(op["cmd"]) is not str or op["cmd"] not in FCNTL:
                 raise UnsupportedTrace(f"ops[{i}].cmd: unsupported fcntl command")
+            if op["cmd"] in ("F_SETPIPE_SZ", "F_GETPIPE_SZ"):
+                pipes = True
+        if pipes and not GUEST_PIPES:
+            raise UnsupportedTrace(f"ops[{i}]: the pipes contract is not implemented by the guest yet (P1)")
         if name == "wg_set":
             try:
                 validate_config(op["config"], f"ops[{i}].config")
@@ -187,7 +242,9 @@ def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False):
         for op in trace["ops"]:
             def fd(field):
                 value = op.get(field, {"literal": -1})
-                return (1, value["ref"]) if "ref" in value else (0, value["literal"])
+                if "pipe" in value:
+                    return (FD_KIND_PIPE_READ + value["end"], value["pipe"])
+                return (FD_KIND_REF, value["ref"]) if "ref" in value else (FD_KIND_LITERAL, value["literal"])
             kind, value = fd("fd")
             newkind, newvalue = fd("newfd")
             a = op.get("init", op.get("count", FCNTL.get(op.get("cmd"), 0)))
@@ -199,6 +256,8 @@ def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False):
             if op["op"] == "wg_advance":
                 a = op["ticks"]
             line = f"{OPCODES[op['op']]} {kind} {value} {newkind} {newvalue} {a} {b} {op.get('value', '0')}"
+            if GUEST_PIPES:
+                line += f" {op.get('pause_ms', 0)}"   # the ninth field (P1)
             if op["op"] == "wg_set":
                 line += " " + encode_set(op["config"]).hex()
             elif op["op"] == "wg_get":

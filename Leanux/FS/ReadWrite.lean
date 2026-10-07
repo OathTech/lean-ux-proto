@@ -68,16 +68,18 @@ def ksysRead (fd : Nat) (count : Nat) : M Int := do
     _ ← branch .ksysReadHasPpos ppos.isSome  -- pos = *ppos; ppos = &pos
     let (r, pos) ← vfsRead fid count ppos
     ret := r
-    if ← branchCmp .ksysReadRetNonneg (ret >= 0) ret 0 then
+    if ← branch .ksysReadRetNonneg (ret >= 0) then
       if ← branch .ksysReadStorePos pos.isSome then
         setFile fid { (← getFile fid) with fPos := pos.getD 0 }
     fdputPos f
   return ret
 
 /-- Whether the file's inode is a regular file (`S_ISREG`). The anonymous
-    inode has mode S_IRUSR|S_IWUSR, with no file-type bits. -/
+    inode has mode S_IRUSR|S_IWUSR, with no file-type bits; a pipefs inode's
+    `i_mode` is `S_IFIFO | S_IRUSR | S_IWUSR` (fs/pipe.c:906). -/
 def inodeIsReg : Option InodeId → M Bool
   | some .anon => return false
+  | some (.pipefs id) => return (← getInode id).iMode &&& S_IFMT == S_IFREG
   | some (.fixture name) => unsupported s!"inode of fixture file {name}"
   | none => invariant "file->f_inode is NULL"
 
@@ -91,8 +93,24 @@ def fileEndWrite (f : File) : M Unit := do
   if ← branch .fileEndWriteNotRegular !(← inodeIsReg f.fInode) then return
   unsupported "sb_end_write"
 
-/-- vfs_write (read_write.c:663-693). `userWord` is the buffer's first 8 bytes. -/
-def vfsWrite (fid : FileId) (userWord : UInt64) (count : Nat) (pos : Option Int) : M Int := do
+/-- new_sync_write (read_write.c:580-595): the `write_iter` arm of
+    `vfs_write` (P design section 4). `init_sync_kiocb` copies
+    `f_iocb_flags`; `iov_iter_ubuf` describes the first `len` bytes of the
+    caller's buffer. `ppos` is NULL for `FMODE_STREAM` files (pipes). -/
+def newSyncWrite (fid : FileId) (buf : ByteArray) (len : Nat) (ppos : Option Int) : M Int := do
+  let f ← getFile fid
+  let iocb : Kiocb := { filp := fid, kiFlags := f.fIocbFlags, kiPos := ppos.getD 0 }
+  if len > buf.size then invariant "new_sync_write: the caller's buffer is shorter than len"
+  let ret ← fopWriteIter iocb { bytes := buf.extract 0 len } f.fOp
+  if ← branch .newSyncWriteQueued (ret == -529) then  -- BUG_ON(ret == -EIOCBQUEUED)
+    unsupported "new_sync_write: -EIOCBQUEUED"
+  -- `if (ret > 0 && ppos) *ppos = kiocb.ki_pos`: pipe_write leaves ki_pos
+  if ← branchCmp .newSyncWritePositive (ret > 0) ret 0 then
+    _ ← branch .newSyncWritePpos ppos.isSome
+  return ret
+
+/-- vfs_write (read_write.c:663-693). `buf` is the caller's buffer. -/
+def vfsWrite (fid : FileId) (buf : ByteArray) (count : Nat) (pos : Option Int) : M Int := do
   let f ← getFile fid
   if ← branchCmp .vfsWriteNotWritable (!hasFlag f.fMode FMODE_WRITE) (f.fMode &&& FMODE_WRITE).toNat 0 then return -EBADF
   if ← branchCmp .vfsWriteCannotWrite (!hasFlag f.fMode FMODE_CAN_WRITE) (f.fMode &&& FMODE_CAN_WRITE).toNat 0 then return -EINVAL
@@ -103,8 +121,8 @@ def vfsWrite (fid : FileId) (userWord : UInt64) (count : Nat) (pos : Option Int)
   fileStartWrite f
   let fop ← fopsOf f.fOp
   let ret ← do
-    if ← branch .vfsWriteHasWrite fop.write then fopWrite fid userWord count f.fOp
-    else if ← branch .vfsWriteHasWriteIter fop.writeIter then unsupported "new_sync_write"
+    if ← branch .vfsWriteHasWrite fop.write then fopWrite fid buf count f.fOp
+    else if ← branch .vfsWriteHasWriteIter fop.writeIter then newSyncWrite fid buf count pos
     else pure (-EINVAL)
   if ← branch .vfsWritePositive (ret > 0) then pure ()  -- fsnotify_modify; add_wchar
   -- inc_syscw(current)
@@ -112,15 +130,15 @@ def vfsWrite (fid : FileId) (userWord : UInt64) (count : Nat) (pos : Option Int)
   return ret
 
 /-- ksys_write (read_write.c:725-743) and SYSCALL_DEFINE3(write). -/
-def ksysWrite (fd : Nat) (userWord : UInt64) (count : Nat) : M Int := do
+def ksysWrite (fd : Nat) (buf : ByteArray) (count : Nat) : M Int := do
   let f ← fdgetPos fd
   let mut ret := -EBADF
   if ← branch .ksysWriteHasFile f.file.isSome then
     let some fid := f.file | invariant "unreachable"
     let ppos ← filePpos (← getFile fid)
     _ ← branch .ksysWriteHasPpos ppos.isSome
-    ret ← vfsWrite fid userWord count ppos
-    if ← branchCmp .ksysWriteRetNonneg (ret >= 0) ret 0 then
+    ret ← vfsWrite fid buf count ppos
+    if ← branch .ksysWriteRetNonneg (ret >= 0) then
       if ← branch .ksysWriteStorePos ppos.isSome then
         setFile fid { (← getFile fid) with fPos := ppos.getD 0 }
     fdputPos f

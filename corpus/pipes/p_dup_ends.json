@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "id": "p_dup_ends",
+  "ops": [
+    {
+      "op": "pipe2",
+      "flags": 2048
+    },
+    {
+      "op": "dup",
+      "fd": {
+        "pipe": 0,
+        "end": 0
+      }
+    },
+    {
+      "op": "close",
+      "fd": {
+        "pipe": 0,
+        "end": 0
+      }
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "count": 7,
+      "value": "81985529216486895"
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 1
+      },
+      "count": 7
+    },
+    {
+      "op": "dup3",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "newfd": {
+        "literal": 20
+      },
+      "flags": 0
+    },
+    {
+      "op": "close",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      }
+    },
+    {
+      "op": "write",
+      "fd": {
+        "ref": 5
+      },
+      "count": 3,
+      "value": "81985529216486895"
+    },
+    {
+      "op": "eventfd2",
+      "init": 0,
+      "flags": 2048
+    },
+    {
+      "op": "dup3",
+      "fd": {
+        "ref": 8
+      },
+      "newfd": {
+        "ref": 1
+      },
+      "flags": 0
+    },
+    {
+      "op": "write",
+      "fd": {
+        "ref": 5
+      },
+      "count": 3,
+      "value": "81985529216486895"
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 9
+      },
+      "count": 8
+    }
+  ]
+}

@@ -1,0 +1,174 @@
+{
+  "version": 1,
+  "id": "p_resize",
+  "ops": [
+    {
+      "op": "pipe2",
+      "flags": 2048
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "cmd": "F_GETPIPE_SZ",
+      "arg": 0
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "cmd": "F_SETPIPE_SZ",
+      "arg": 4096
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "count": 4096,
+      "value": "81985529216486895"
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "count": 1,
+      "value": "81985529216486895"
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "cmd": "F_SETPIPE_SZ",
+      "arg": 8192
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "pipe": 0,
+        "end": 0
+      },
+      "cmd": "F_GETPIPE_SZ",
+      "arg": 0
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "cmd": "F_SETPIPE_SZ",
+      "arg": 0
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "cmd": "F_SETPIPE_SZ",
+      "arg": 4095
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "cmd": "F_SETPIPE_SZ",
+      "arg": 4097
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "cmd": "F_GETPIPE_SZ",
+      "arg": 0
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "cmd": "F_SETPIPE_SZ",
+      "arg": 2147483649
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "cmd": "F_SETPIPE_SZ",
+      "arg": 4294967295
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "cmd": "F_SETPIPE_SZ",
+      "arg": 1048577
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "pipe": 0,
+        "end": 0
+      },
+      "cmd": "F_GETPIPE_SZ",
+      "arg": 0
+    },
+    {
+      "op": "eventfd2",
+      "init": 0,
+      "flags": 2048
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 15
+      },
+      "cmd": "F_SETPIPE_SZ",
+      "arg": 4096
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "ref": 15
+      },
+      "cmd": "F_GETPIPE_SZ",
+      "arg": 0
+    },
+    {
+      "op": "read",
+      "fd": {
+        "pipe": 0,
+        "end": 0
+      },
+      "count": 69632
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "cmd": "F_SETPIPE_SZ",
+      "arg": 4194304
+    }
+  ]
+}
