@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "id": "a2_fdarray_nomem_low",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 1,
+      "flags": 2048
+    },
+    {
+      "op": "dup3",
+      "fd": {
+        "ref": 0
+      },
+      "newfd": {
+        "literal": 100
+      },
+      "flags": 0
+    },
+    {
+      "op": "dup3",
+      "fd": {
+        "ref": 0
+      },
+      "newfd": {
+        "literal": 40
+      },
+      "flags": 0
+    },
+    {
+      "op": "read",
+      "fd": {
+        "literal": 40
+      },
+      "count": 8
+    }
+  ],
+  "steer": [
+    [
+      "kvmallocFdArray",
+      "0000000000000000"
+    ]
+  ],
+  "expect": [
+    "alloc_fdtable.fd_array_failed=1"
+  ],
+  "rlimit_nofile": 128,
+  "domain_extension": "failslab"
+}

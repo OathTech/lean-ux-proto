@@ -11,7 +11,7 @@
 # random and clock sources, and a remote section for the handshake send worker.
 set -eu
 PROFILE="${LEANUX_KERNEL_PROFILE:-base}"
-case "$PROFILE" in base|net|net-rcov|net-hidden|net-probe|net-choice) ;; *) echo "Unknown kernel profile: $PROFILE" >&2; exit 1 ;; esac
+case "$PROFILE" in base|net|net-rcov|net-hidden|net-probe|net-choice|net-choice-actl) ;; *) echo "Unknown kernel profile: $PROFILE" >&2; exit 1 ;; esac
 LEANUX_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
 LEANUX_SHARED_ROOT="${LEANUX_SHARED_ROOT:-$LEANUX_ROOT}"
 LEANUX_ARTIFACTS="${LEANUX_ARTIFACTS:-$LEANUX_ROOT/.artifacts}"
@@ -24,7 +24,7 @@ esac
 mkdir -p "$LEANUX_BUILD"
 SOURCE="$LEANUX_SHARED_ROOT/.deps/linux"
 KCFLAGS_EXTRA=''
-if [ "$PROFILE" = net-rcov ] || [ "$PROFILE" = net-hidden ] || [ "$PROFILE" = net-probe ] || [ "$PROFILE" = net-choice ]; then
+if [ "$PROFILE" = net-rcov ] || [ "$PROFILE" = net-hidden ] || [ "$PROFILE" = net-probe ] || [ "$PROFILE" = net-choice ] || [ "$PROFILE" = net-choice-actl ]; then
     PATCH="$LEANUX_ROOT/kernel/patches/wireguard-kcov-remote.patch"
     PATCH_SHA=503c899d061530af6d250ed018466b7ba1cc77407f3a3492edf031e20d9cfe07
     SOURCE="$LEANUX_ARTIFACTS/src/linux-6.12.110-wireguard-kcov-remote"
@@ -41,11 +41,20 @@ if [ "$PROFILE" = net-rcov ] || [ "$PROFILE" = net-hidden ] || [ "$PROFILE" = ne
     # it also carries the dispatch sections and applies alone, retiring
     # wireguard-kcov-remote.patch's per-site sections for this profile; since
     # D3 (docs/2026-10-05-d3-timers.md) also timer sections, the arm record and
-    # the virtual time advance
-    CHOICE_SHA=3b0f2026265c7ccfe3bd8951ab7afd3ccdf5b56d6ffea70f5c715a57f7f217ab
+    # the virtual time advance; since A (docs/2026-10-05-a-alloc.md) the
+    # allocation hook in mm/slub.c and mm/page_alloc.c; since the D3+A
+    # integration the irqs-off time advance and KCOV_DISPATCH_MAX 32
+    CHOICE_SHA=4274afa340f5fe7f9178eca8ab56d2e0b8278fa63e734d8e9adda2ba53a4edf0
+    # net-choice-actl: the allocation-steering control kernel (A, section 7:
+    # K1, K4, K5), the same patch with control load flags; never an oracle
+    ACTL_PATCH="$LEANUX_ROOT/kernel/patches/choice-stream-alloc-controls.patch"
+    ACTL_SHA=8dd6fffee734cbdc35942d21e99dd269ebd18a6879a39e2d00b5fdbf2915671b
     if [ "$PROFILE" = net-choice ]; then
-        SOURCE="$LEANUX_ARTIFACTS/src/linux-6.12.110-choice-stream-d3"
+        SOURCE="$LEANUX_ARTIFACTS/src/linux-6.12.110-choice-stream-da"
         PATCH_SHA_RECORD="$CHOICE_SHA"
+    elif [ "$PROFILE" = net-choice-actl ]; then
+        SOURCE="$LEANUX_ARTIFACTS/src/linux-6.12.110-choice-stream-da-controls"
+        PATCH_SHA_RECORD="$ACTL_SHA"
     elif [ "$PROFILE" = net-probe ]; then
         SOURCE="$LEANUX_ARTIFACTS/src/linux-6.12.110-probe-choice-enumeration"
         PATCH_SHA_RECORD="$PATCH_SHA $HIDDEN_SHA $PROBE_SHA"
@@ -71,7 +80,7 @@ if [ "$PROFILE" = net-rcov ] || [ "$PROFILE" = net-hidden ] || [ "$PROFILE" = ne
         rm -rf "$SOURCE.extracting"
         mkdir -p "$SOURCE.extracting"
         tar -xJf "$ARCHIVE" -C "$SOURCE.extracting" --strip-components=1
-        if [ "$PROFILE" != net-choice ]; then
+        if [ "$PROFILE" != net-choice ] && [ "$PROFILE" != net-choice-actl ]; then
             python3 "$LEANUX_ROOT/scripts/apply-kernel-patch.py" "$PATCH" "$SOURCE.extracting" "$PATCH_SHA"
         fi
         if [ "$PROFILE" = net-hidden ] || [ "$PROFILE" = net-probe ]; then
@@ -82,6 +91,9 @@ if [ "$PROFILE" = net-rcov ] || [ "$PROFILE" = net-hidden ] || [ "$PROFILE" = ne
         fi
         if [ "$PROFILE" = net-choice ]; then
             python3 "$LEANUX_ROOT/scripts/apply-kernel-patch.py" "$CHOICE_PATCH" "$SOURCE.extracting" "$CHOICE_SHA"
+        fi
+        if [ "$PROFILE" = net-choice-actl ]; then
+            python3 "$LEANUX_ROOT/scripts/apply-kernel-patch.py" "$ACTL_PATCH" "$SOURCE.extracting" "$ACTL_SHA"
         fi
         echo "$PATCH_SHA_RECORD" > "$SOURCE.extracting/.leanux-patch-sha256"
         mv "$SOURCE.extracting" "$SOURCE"
@@ -114,6 +126,7 @@ SUFFIX='-leanux-kcov'; [ "$PROFILE" = net ] && SUFFIX='-leanux-kcov-net'
 [ "$PROFILE" = net-hidden ] && SUFFIX='-leanux-kcov-net-hidden'
 [ "$PROFILE" = net-probe ] && SUFFIX='-leanux-kcov-net-probe'
 [ "$PROFILE" = net-choice ] && SUFFIX='-leanux-kcov-net-choice'
+[ "$PROFILE" = net-choice-actl ] && SUFFIX='-leanux-kcov-net-choice-actl'
 "$LEANUX_CONFIG" --file "$LEANUX_BUILD/.config" --set-str LOCALVERSION "$SUFFIX"
 make -s -C "$SOURCE" O="$LEANUX_BUILD" ARCH=x86_64 olddefconfig
 REQUIRED="64BIT BINFMT_ELF BINFMT_SCRIPT EVENTFD BLK_DEV_INITRD SERIAL_8250_CONSOLE DEBUG_FS DEBUG_INFO_DWARF4 KCOV"
@@ -129,8 +142,8 @@ make -C "$SOURCE" O="$LEANUX_BUILD" ARCH=x86_64 KCFLAGS="$KCFLAGS_EXTRA" \
 mkdir -p "$LEANUX_ROOT/kernel"
 if [ "$PROFILE" = net-choice ]; then
     cp "$LEANUX_BUILD/.config" "$LEANUX_ROOT/kernel/config-x86_64-net-choice"
-elif [ "$PROFILE" = net-probe ]; then
-    :   # a probe kernel records no configuration
+elif [ "$PROFILE" = net-probe ] || [ "$PROFILE" = net-choice-actl ]; then
+    :   # a probe or control kernel records no configuration
 elif [ "$PROFILE" = net-hidden ]; then
     cp "$LEANUX_BUILD/.config" "$LEANUX_ROOT/kernel/config-x86_64-net-hidden"
 elif [ "$PROFILE" = net-rcov ]; then

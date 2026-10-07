@@ -112,8 +112,14 @@ def parse_batch(traces, output, max_bytes=16 * 1024 * 1024):
 
 # These outcomes cannot be ordinary results in the declared single-threaded,
 # valid-buffer fixture. In particular resource failure must not count as agreement.
-SEMANTIC_ERRNOS = {'eventfd2': {22, 24}, 'dup': {9, 24}, 'dup3': {9, 22},
-                   'close': {9}, 'fcntl': {1, 9, 22}, 'wg_set': {22, 95}, 'wg_get': {22},
+# ENOMEM (12) is compared, not absorbed, where an allocation outcome the
+# mirror consumes from the records can produce it (docs/2026-10-05-a-alloc.md
+# 6.3; A2): eventfd2 (the context, file, dentry and fd table), dup, dup3 and
+# fcntl (F_DUPFD*: the fd table), wg_set (peer and allowed-ips nodes). A
+# Linux ENOMEM the mirror did not take is a semantic mismatch, and its
+# record is unconsumed or absent: fail-noisy on both sides.
+SEMANTIC_ERRNOS = {'eventfd2': {12, 22, 24}, 'dup': {9, 12, 24}, 'dup3': {9, 12, 22},
+                   'close': {9}, 'fcntl': {1, 9, 12, 22}, 'wg_set': {12, 22, 95}, 'wg_get': {22},
                    # ENOKEY, EDESTADDRREQ, EPROTONOSUPPORT, ENETUNREACH (no route before wg_up); EAGAIN when nothing arrived
                    'wg_up': set(), 'wg_xmit': {126, 89, 93, 101}, 'wg_observe': {11}, 'read': {9, 11, 22}, 'write': {9, 11, 22},
                    # D3: the advance ioctl fails only outside the oracle's setup (-EOPNOTSUPP, -EINVAL, -EPERM)

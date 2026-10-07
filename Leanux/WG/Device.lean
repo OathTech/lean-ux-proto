@@ -75,7 +75,7 @@ def wgXmit (family addr : Nat) (pkt : Packet) : M Int := do
     -- the ICMP's loopback delivery raises NET_RX, whose section runs at
     -- `__dev_queue_xmit`'s `rcu_read_unlock_bh` (`loopbackSend`).
     if !(← branch .xmitErrorInet (family == 4)) then _ ← branch .xmitErrorInet6 (family == 6)
-    let drawn ← skipCutSites [.icmpCredit, .ipIdentKey, .ipIdentReserve, .flowHashSecret]
+    let drawn ← skipCutSites ([.icmpCredit, .ipIdentKey, .ipIdentReserve, .flowHashSecret] ++ allocCuts)
     loopbackSend [] (drawn.contains (HiddenSite.icmpCredit).info.id)
     modifyDev fun d => { d with txErrors := d.txErrors + 1 }   -- DEV_STATS_INC(dev, tx_errors)
     return ret

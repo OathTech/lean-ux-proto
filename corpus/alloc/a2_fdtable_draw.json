@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "id": "a2_fdtable_draw",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 1,
+      "flags": 2048
+    },
+    {
+      "op": "dup3",
+      "fd": {
+        "ref": 0
+      },
+      "newfd": {
+        "literal": 100
+      },
+      "flags": 0
+    },
+    {
+      "op": "read",
+      "fd": {
+        "literal": 100
+      },
+      "count": 8
+    }
+  ],
+  "steer": [
+    [
+      "kmallocFdtable",
+      "draw"
+    ]
+  ],
+  "expect": [
+    "alloc_fdtable.kmalloc_failed=0"
+  ],
+  "rlimit_nofile": 128
+}

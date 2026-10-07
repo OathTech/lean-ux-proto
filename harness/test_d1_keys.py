@@ -139,7 +139,7 @@ def stateJson (pid : PeerId) : M Json := do
     ("walltime", toJson (timespec p.walltimeLastHandshake)), ("refcount", toJson p.refcount)]
 
 def runM (records : List HiddenRecord) (act : M Json) : String :=
-  let w : World := { k := Runner.initialKernel 1024 true, env := Runner.harnessEnv, timing := Env.timing,
+  let w : World := { k := Runner.initialKernel 1024 true, timing := Env.timing,
                      hidden := some records }
   match act.run w with
   | .ok (j, w) => (Json.mkObj [("result", j), ("steps", toJson (w.steps.toList.map (·.label))),

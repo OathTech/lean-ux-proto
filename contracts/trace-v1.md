@@ -70,6 +70,15 @@ trace operations. Child execution is sequential, with no injected signals or
 external eventfd producers. Allocator-pressure failures and unexpected external
 interference have separate experiment outcomes; neither counts as agreement.
 
+(Amended 2026-10-06, A2.) A steered trace (`steer`, `expect`; the
+choice-stream strategy) may declare `"domain_extension": "failslab"`: it forces
+allocation failures at task-context `GFP_KERNEL`-class sites. The NULL is in
+the allocator's output set (the OOM-victim path), but the forced trace as a
+whole is not a possible Linux execution (a victim does not run its next
+syscall), exactly as for the kernel's own `failslab` testing. The host refuses
+such a failure without the marker, and the marker without such a failure
+(`harness/steer.py`); the check report lists the traces that declare it.
+
 ## Output and comparison
 
 The runner emits one object with exactly `version`, `id`, `observations`, and

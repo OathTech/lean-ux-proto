@@ -35,7 +35,7 @@ inductive Decision where
   | iocbFlagsAppend | iocbFlagsDirect | iocbFlagsDsync | iocbFlagsSync
   | fileInitPathLlseek | fileInitPathModeRead | fileInitPathHasRead | fileInitPathHasReadIter
   | fileInitPathModeWrite | fileInitPathHasWrite | fileInitPathHasWriteIter | fileInitPathReadOnly
-  | allocFileOk | allocPathPseudoFail | allocFilePseudoErr
+  | allocFileOk | allocPathPseudoFail | allocFilePseudoPathErr | allocFilePseudoErr
   | putFileAccessReadOnly | putFileAccessWriter
   | fputFinalNotOpened | eventpollReleaseLinked | fputFinalFasync | fputFinalRelease
   | fputFinalCharDevice | fputFinalHasCdev | fputFinalNotPath
@@ -335,7 +335,9 @@ def Decision.info : Decision → DecisionInfo
   | .fileFreeBacking => d "file_free.backing" ft 93 [(94, 94)] [(96, 96)]
   | .allocEmptyFileOverMax => d "alloc_empty_file.nr_files_at_max" ft 223 [] []
   | .allocEmptyFileNotCapable => d "alloc_empty_file.not_capable" ft 223 [(228, 229)] []
-  | .allocEmptyFileNoMem => d "alloc_empty_file.zalloc_failed" ft 233 [(234, 234)] [(236, 244)]
+  -- 242 (percpu_counter_inc's irq restore) is the block shared with the
+  -- -ENOMEM return (found by A2's a2_filp_nomem); 243-244 have no PC of their own
+  | .allocEmptyFileNoMem => d "alloc_empty_file.zalloc_failed" ft 233 [(234, 234)] [(236, 241)]
   | .iocbFlagsAppend => d "iocb_flags.o_append" fsh 3593 [(3594, 3594)] []
   | .iocbFlagsDirect => d "iocb_flags.o_direct" fsh 3595 [(3596, 3596)] []
   | .iocbFlagsDsync => d "iocb_flags.o_dsync" fsh 3597 [(3598, 3598)] []
@@ -351,6 +353,10 @@ def Decision.info : Decision → DecisionInfo
   | .fileInitPathReadOnly => d "file_init_path.read_only" ft 349 [(350, 350)] []
   | .allocFileOk => d "alloc_file.ok" ft 366 [(367, 367)] []
   | .allocPathPseudoFail => d "alloc_path_pseudo.d_alloc_failed" ft 375 [(376, 376)] [(377, 378)]
+  -- the compiler folds this test into alloc_path_pseudo's (both test the
+  -- dentry): 392 has no PC, and 394's PC is in the inlined alloc_file's
+  -- success block (A2's a2_filp_nomem does not cover it), so no witness
+  | .allocFilePseudoPathErr => d "alloc_file_pseudo.path_error" ft 391 [(392, 392)] []
   | .allocFilePseudoErr => d "alloc_file_pseudo.file_error" ft 395 [(396, 397)] []
   | .putFileAccessReadOnly => d "put_file_access.read_only" inh 116 [(117, 117)] []
   | .putFileAccessWriter => d "put_file_access.fmode_writer" inh 118 [(119, 119)] []
@@ -392,9 +398,11 @@ def Decision.info : Decision → DecisionInfo
   | .allocFdtableOverNrOpen => d "alloc_fdtable.over_nr_open" fl 126 [(127, 129)] []
   | .allocFdtableBelowWanted => d "alloc_fdtable.below_wanted" fl 128 [(129, 129)] []
   | .allocFdtableOverIntMax => d "alloc_fdtable.over_int_max" fl 144 [(145, 145)] [(147, 167)]
-  | .allocFdtableNoMem => d "alloc_fdtable.kmalloc_failed" fl 148 [(149, 149)] [(150, 167)]
-  | .allocFdtableFdArrayNoMem => d "alloc_fdtable.fd_array_failed" fl 152 [(153, 153)] [(154, 167)]
-  | .allocFdtableBitmapNoMem => d "alloc_fdtable.bitmaps_failed" fl 159 [(160, 160)] [(161, 167)]
+  -- 167 `return fdt` is the epilogue shared with the -ENOMEM return at 174
+  -- (found by A2's fd-table traces)
+  | .allocFdtableNoMem => d "alloc_fdtable.kmalloc_failed" fl 148 [(149, 149)] [(150, 166)]
+  | .allocFdtableFdArrayNoMem => d "alloc_fdtable.fd_array_failed" fl 152 [(153, 153)] [(154, 166)]
+  | .allocFdtableBitmapNoMem => d "alloc_fdtable.bitmaps_failed" fl 159 [(160, 160)] [(161, 166)]
   | .copyFdtableShrink => d "copy_fdtable.shrink" fl 77 [] [(79, 84)]
   | .expandFdtableShared => d "expand_fdtable.files_shared" fl 196 [(197, 197)] []
   | .expandFdtableAllocError => d "expand_fdtable.alloc_error" fl 200 [(201, 201)] [(202, 210)]
@@ -693,8 +701,10 @@ def Decision.info : Decision → DecisionInfo
   | .peerEndpointV6Len => d "set_peer.endpoint_inet6_length" wnl 444 [] []
   | .peerEndpointV6Family => d "set_peer.endpoint_inet6" wnl 444 [(445, 446)] []
   | .peerReplaceAips => d "set_peer.replace_allowedips" wnl 450 [(451, 452)] []
-  | .peerHasAips => d "set_peer.has_allowedips" wnl 454 [(455, 466)] []
-  | .peerAipsIter => d "set_peer.allowedips_iterate" wnl 458 [(459, 465)] []
+  -- 462's `goto out` is the block every earlier `goto out` shares (A2's
+  -- a2_peer_nomem_first reaches it from the peer-create failure)
+  | .peerHasAips => d "set_peer.has_allowedips" wnl 454 [(455, 461), (463, 466)] []
+  | .peerAipsIter => d "set_peer.allowedips_iterate" wnl 458 [(459, 461), (463, 465)] []
   -- the compiler merges the `goto out` of 462 with that of 465
   | .peerAipParseErr => d "set_peer.allowedip_parse_error" wnl 461 [] [(463, 463)]
   | .peerAipErr => d "set_peer.set_allowedip_error" wnl 464 [(465, 465)] []
@@ -902,7 +912,9 @@ def Decision.info : Decision → DecisionInfo
   | .timersDataReceivedNotPending => d "wg_timers_data_received.not_pending" wtm 157 [(158, 159)] [(161, 161)]
   | .keypairPutUnreferenceNow => d "wg_noise_keypair_put.unreference_now" wno 135 [(136, 138)] []
   | .keypairKrefPutReleased => d "wg_noise_keypair_put.kref_put_released" wno 139 [(119, 128)] []
-  | .sendBufNoMem => d "wg_socket_send_buffer_to_peer.no_mem" wso 194 [(195, 195)] [(197, 200)]
+  -- the false span ends at 199: the return at 200 shares its code with the
+  -- -ENOMEM exit (A1: the failure arm covers socket.c:200)
+  | .sendBufNoMem => d "wg_socket_send_buffer_to_peer.no_mem" wso 194 [(195, 195)] [(197, 199)]
   | .sendSkbInet => d "wg_socket_send_skb_to_peer.inet" wso 174 [(175, 176)] [(177, 177)]
   | .sendSkbInet6 => d "wg_socket_send_skb_to_peer.inet6" wso 177 [(178, 179)] [(181, 181)]
   | .sendSkbOk => d "wg_socket_send_skb_to_peer.sent" wso 182 [(183, 183)] []

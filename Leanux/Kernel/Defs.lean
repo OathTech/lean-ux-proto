@@ -199,24 +199,90 @@ structure Kernel where
   keypairCounter : Nat := 0
   deriving BEq
 
-/-! ## Environment oracle
+/-! ## Allocation outcomes (docs/2026-10-05-a-alloc.md, section 6)
 
-Choice points decided by the environment (allocation, user memory) consult
-an oracle rather than being excluded by the domain. The harness oracle says
-every site succeeds; Linux results outside that assumption are classified as
-environment failures by the comparator. -/
+An allocation's outcome is a hidden choice like a random draw: the patched
+kernel records it (kind 305, 40 bytes; word 0's low byte is the outcome, 1 ok
+or 0 NULL; the rest is attribution) at the two allocator entry functions,
+with the consumer's unwound call chain, when the run armed the allocation
+ranges that contain it. One site per consumer frame. How the mirror consumes
+a site's records (section 6.2): -/
 
-inductive EnvSite where
-  | kmallocEventfdCtx | idaAlloc | filpAlloc | dAllocPseudo
-  | kmallocFdtable | kvmallocFdArray | kvmallocFdBitmaps
-  | accessOk | copyToUser | copyFromUser
-  | kmemCacheZallocNode | kmemCacheZallocPeer | dstCacheInit | allocSkb | kzallocKeypair
-  -- D1 stream C: encrypt_packet's skb surgery
-  | skbCowHead | skbCowData | skbToSgvec
-  -- D2 stream A: encrypt_packet's `skb_checksum_help` (a cut; its output is
-  -- the environment's `Env.checksumHelp`)
-  | skbChecksumHelp
+inductive AllocCount where
+  /-- `n` records per successful consultation, in order; a failed record
+      ends the consultation (an `__alloc_skb` site: the `sk_buff`, then the
+      data buffer, so 2 on success and 1 when the `sk_buff` fails). -/
+  | exact (n : Nat)
+  /-- A lax site whose count A0 fixed at 0 on this fixture (section 16.2.3):
+      the outcome is constantly ok and no record is consumed, so a record of
+      the site is never consumed and fails the run (unconsumed, or met at
+      the next read). -/
+  | laxZero
+  /-- A below-cut consumer of an armed helper range (section 16.2.4): its
+      records are consumed at the cut point that contains it (`skipCut`),
+      any number; a failed one is `unsupported`. -/
+  | cut
   deriving Repr, BEq, DecidableEq
+
+inductive AllocSite where
+  -- FS slice (class b-task: not steered, Q1)
+  | kmallocEventfdCtx | filpAlloc | dAllocPseudo | kmallocFdtable | kvmallocFdArray | kvmallocFdBitmaps
+  -- WireGuard control plane (b-task), and noise.c:100 (b-kworker: record-only)
+  | kmemCacheZallocPeer | allocNode190 | allocNode205 | allocNode234 | kzallocKeypair
+  -- the GFP_ATOMIC alloc_skb sites (class a: steerable [USER A1])
+  | sendBufSkb | replySkb | keepaliveSkb
+  -- D2's lax sites, count 0 on this fixture (A0)
+  | skbCowHead | skbChecksumHelp | skbCowDataTx | skbCowDataRx
+  -- below-cut consumers of the `__alloc_skb`/`kmalloc_reserve` ranges
+  | nlmsgNew | netlinkAllocLargeSkb | sockAllocSendPskb | netlinkDump | netlinkTrim
+  deriving Repr, BEq, DecidableEq
+
+structure AllocSiteInfo where
+  index : Nat
+  /-- The label, as harness/steer.py `ALLOC_SITES` names the site. -/
+  label : String
+  file : String
+  line : Nat
+  count : AllocCount
+
+def AllocSite.info : AllocSite → AllocSiteInfo
+  | .kmallocEventfdCtx => ⟨0, "kmallocEventfdCtx", "fs/eventfd.c", 393, .exact 1⟩
+  | .filpAlloc => ⟨1, "filpAlloc", "fs/file_table.c", 232, .exact 1⟩
+  | .dAllocPseudo => ⟨2, "dAllocPseudo", "fs/file_table.c", 374, .exact 1⟩
+  -- A0 (section 16.2.2): the fd-table frames are file.c:147/151/156 in 6.12.110
+  | .kmallocFdtable => ⟨3, "kmallocFdtable", "fs/file.c", 147, .exact 1⟩
+  | .kvmallocFdArray => ⟨4, "kvmallocFdArray", "fs/file.c", 151, .exact 1⟩
+  | .kvmallocFdBitmaps => ⟨5, "kvmallocFdBitmaps", "fs/file.c", 156, .exact 1⟩
+  | .kmemCacheZallocPeer => ⟨6, "kmemCacheZallocPeer", "drivers/net/wireguard/peer.c", 33, .exact 1⟩
+  | .allocNode190 => ⟨7, "allocNode190", "drivers/net/wireguard/allowedips.c", 190, .exact 1⟩
+  | .allocNode205 => ⟨8, "allocNode205", "drivers/net/wireguard/allowedips.c", 205, .exact 1⟩
+  | .allocNode234 => ⟨9, "allocNode234", "drivers/net/wireguard/allowedips.c", 234, .exact 1⟩
+  | .kzallocKeypair => ⟨10, "kzallocKeypair", "drivers/net/wireguard/noise.c", 100, .exact 1⟩
+  | .sendBufSkb => ⟨11, "sendBufSkb", "drivers/net/wireguard/socket.c", 192, .exact 2⟩
+  | .replySkb => ⟨12, "replySkb", "drivers/net/wireguard/socket.c", 217, .exact 2⟩
+  | .keepaliveSkb => ⟨13, "keepaliveSkb", "drivers/net/wireguard/send.c", 226, .exact 2⟩
+  | .skbCowHead => ⟨14, "skbCowHead", "drivers/net/wireguard/send.c", 183, .laxZero⟩
+  | .skbChecksumHelp => ⟨15, "skbChecksumHelp", "drivers/net/wireguard/send.c", 188, .laxZero⟩
+  | .skbCowDataTx => ⟨16, "skbCowDataTx", "drivers/net/wireguard/send.c", 192, .laxZero⟩
+  | .skbCowDataRx => ⟨17, "skbCowDataRx", "drivers/net/wireguard/receive.c", 268, .laxZero⟩
+  -- nlmsg_new (the netlink ack and rtnetlink notifications)
+  | .nlmsgNew => ⟨18, "nlmsgNew", "include/net/netlink.h", 1015, .cut⟩
+  -- netlink_alloc_large_skb: the request skb in netlink_sendmsg
+  | .netlinkAllocLargeSkb => ⟨19, "netlinkAllocLargeSkb", "net/netlink/af_netlink.c", 1180, .cut⟩
+  -- sock_alloc_send_pskb: the fixture's sendto, and ICMP via ip_append_data
+  | .sockAllocSendPskb => ⟨20, "sockAllocSendPskb", "net/core/sock.c", 2930, .cut⟩
+  | .netlinkDump => ⟨21, "netlinkDump", "net/netlink/af_netlink.c", 2284, .cut⟩
+  -- netlink_trim's pskb_expand_head (its kmalloc_reserve is in the range)
+  | .netlinkTrim => ⟨22, "netlinkTrim", "net/netlink/af_netlink.c", 1294, .cut⟩
+
+def AllocSite.all : List AllocSite :=
+  [.kmallocEventfdCtx, .filpAlloc, .dAllocPseudo, .kmallocFdtable, .kvmallocFdArray, .kvmallocFdBitmaps,
+   .kmemCacheZallocPeer, .allocNode190, .allocNode205, .allocNode234, .kzallocKeypair,
+   .sendBufSkb, .replySkb, .keepaliveSkb, .skbCowHead, .skbChecksumHelp, .skbCowDataTx, .skbCowDataRx,
+   .nlmsgNew, .netlinkAllocLargeSkb, .sockAllocSendPskb, .netlinkDump, .netlinkTrim]
+
+/-- The below-cut allocation consumers (consumed at cut points). -/
+def AllocSite.cuts : List AllocSite := AllocSite.all.filter (·.info.count == .cut)
 
 /-! ## Choices (docs/2026-10-03-choice-stream-strategy.md)
 
@@ -313,6 +379,9 @@ inductive HiddenSite where
   | modTimerArm | timeAdvance
   /-- E-A: `wg_cookie_message_consume`'s birthdate of a stored cookie. -/
   | cookieBirthdate
+  /-- An allocation outcome (kind 305) at a consumer frame: ids 70-99 are
+      A's (docs/2026-10-05-a-alloc.md, section 6.1). -/
+  | alloc (s : AllocSite)
   deriving Repr, BEq, DecidableEq
 
 inductive SiteRole where
@@ -400,6 +469,8 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   -- of `kcov_ioctl`.
   | .modTimerArm => ⟨100, "mod_timer_arm", "timer", "drivers/net/wireguard/timers.c", 37, 16, .mirror⟩
   | .timeAdvance => ⟨101, "time_advance", "advance", "fs/ioctl.c", 51, 16, .mirror⟩
+  | .alloc s => let i := s.info
+    ⟨70 + i.index, i.label, "alloc", i.file, i.line, 40, if i.count == .cut then .cut else .mirror⟩
 
 def HiddenSite.all : List HiddenSite :=
   [.initEphemeral, .respEphemeral, .tai64nNow, .indexDraw, .resetLastSent, .birthdateExpired, .initLastSent,
@@ -409,6 +480,7 @@ def HiddenSite.all : List HiddenSite :=
   ++ [.reschedReceive, .reschedEncrypt, .reschedTx, .reschedDecrypt, .newHandshakeJitter, .walltimeLastHandshakeData,
       .cookieBirthdate]
   ++ [.modTimerArm, .timeAdvance]
+  ++ AllocSite.all.map .alloc
 
 /-- The resched site of a worker's `cond_resched`, for the workers that
     have one on the modeled paths. -/
@@ -466,9 +538,7 @@ structure InboxDatagram where
 
 structure World where
   k : Kernel
-  env : EnvSite → Nat → Bool
   timing : Timing
-  envCalls : List (EnvSite × Nat) := []
   steps : Array Step := #[]
   /-- The caller's buffer (user memory), as written by `copy_to_iter`. -/
   userOut : Option UInt64 := none
@@ -528,6 +598,15 @@ structure World where
       callback symbol, for the trace's `fired:<symbol>` expectations
       (`Env.runTimerSection`). -/
   fired : Array String := #[]
+  /-- The allocation sites whose records this run carries: the sites inside
+      the ranges the evaluator armed (harness/steer.py `alloc_armed_labels`).
+      Every other site answers ok without a record — the transitional
+      unarmed answer of docs/2026-10-05-a-alloc.md section 6.6, declared,
+      and never applied to a site the run armed. -/
+  allocArmed : List String := []
+  /-- In the domain filter: the allocation sites the steering schedule
+      names. Their every encounter needs an entry (design section 5.1). -/
+  allocSteered : List String := []
 
 /-- Why a mirror execution stopped without an observation. -/
 inductive Stop where
@@ -580,13 +659,6 @@ def branch (d : Decision) (outcome : Bool) : M Bool := do
 def branchCmp (d : Decision) (outcome : Bool) (a b : Int) : M Bool := do
   modify fun w => { w with steps := w.steps.push { decision := d, outcome, operands := some (a, b) } }
   return outcome
-
-/-- Ask the environment oracle; the site's call count is part of the query. -/
-def envOk (site : EnvSite) : M Bool := do
-  let w ← get
-  let n := (w.envCalls.find? (·.1 == site)).map (·.2) |>.getD 0
-  set { w with envCalls := (site, n + 1) :: w.envCalls.filter (·.1 != site) }
-  return w.env site n
 
 /-- Drop ambient records at the head of the current operation's records,
     and pending section stops (each consumes its one pending entry). -/
@@ -659,9 +731,13 @@ def hiddenClock (s : HiddenSite) : M Int := do
     ambient records and pending section stops among them; return the cut
     records' sites, in order. An ambient record (the scheduler's) may lie
     between two cut records: the run continues past it (a contended host
-    showed `start_dl_timer` inside a loopback NET_RX section). -/
+    showed `start_dl_timer` inside a loopback NET_RX section). An allocation
+    cut site's records are consumed the same way, but a failed one is
+    outside the domain: the cut's code would take an error path the mirror
+    does not follow. -/
 def skipCutSites (sites : List HiddenSite) : M (List Nat) := do
   let ids := sites.map (·.info.id)
+  let allocIds := AllocSite.cuts.map fun s => (HiddenSite.alloc s).info
   let mut taken := []
   for _ in [0:4096] do
     skipAmbient
@@ -669,12 +745,74 @@ def skipCutSites (sites : List HiddenSite) : M (List Nat) := do
     match w.hidden with
     | some (r :: rest) =>
       if !ids.contains r.site then return taken
+      if let some i := allocIds.find? (·.id == r.site) then
+        if r.bytes.headD 1 != 1 then unsupported s!"a below-cut allocation failed ({i.label}, {i.file}:{i.line})"
       set { w with hidden := some rest }
       taken := taken ++ [r.site]
     | _ => return taken
   invariant "a cut point consumed more than 4096 records"
 
 def skipCut (sites : List HiddenSite) : M Unit := discard <| skipCutSites sites
+
+/-- The below-cut allocation consumers, as cut sites, for `skipCut`. -/
+def allocCuts : List HiddenSite := AllocSite.cuts.map .alloc
+
+/-- One allocation encounter's outcome at an armed site: the record's
+    outcome byte (1 ok, 0 NULL; anything else is not a kind-305 outcome). -/
+private def allocRecord (s : AllocSite) : M Bool := do
+  let bs ← hidden (.alloc s)
+  match bs.headD 2 with
+  | 1 => return true
+  | 0 => return false
+  | b => throw (.hidden s!"{s.info.label}: outcome byte {b}, expected 0 or 1")
+
+/-- One allocation encounter's outcome in the domain filter (placeholders):
+    ok, unless the steering schedule names the site, in which case its next
+    entry decides (a draw is ok; the only value is the fail word). -/
+private def allocPlaceholder (s : AllocSite) : M Bool := do
+  let w ← get
+  match w.steerValues.findIdx? (·.1 == s.info.label) with
+  | none =>
+    -- the kernel would record this encounter of a named site against no
+    -- entry: the schedule must list every encounter
+    if w.allocSteered.contains s.info.label then
+      unsupported s!"steer: an encounter of {s.info.label} beyond its schedule"
+    return true
+  | some k =>
+    set { w with steerValues := w.steerValues.eraseIdx k }
+    match w.steerValues[k]!.2 with
+    | none => return true
+    | some v =>
+      if v.length != 8 || v.any (· != 0) then throw (.hidden s!"steer: {s.info.label} takes draw or the fail word")
+      return false
+
+/-- An allocation outcome at this consumer frame (design section 6.1): `ok`,
+    or the failure arm.
+    - An exact site consumes its declared number of records, in order, and
+      stops at a failed one (an `__alloc_skb` site: the `sk_buff`, then the
+      data buffer). A missing, unexpected or malformed record is a hidden
+      mismatch, as for every choice.
+    - A lax site with count 0 answers ok and consumes nothing (A0 found no
+      allocation there on this fixture, section 16.2.3): a record of it
+      would be left over, failing the run.
+    - A site the run did not arm answers ok: the transitional unarmed
+      answer (section 6.6), declared in `World.allocArmed`.
+    In the domain filter the steering schedule decides (`allocPlaceholder`). -/
+def hiddenAlloc (s : AllocSite) : M Bool := do
+  let i := s.info
+  match i.count with
+  | .laxZero => return true
+  | .cut => invariant s!"{i.label} is a below-cut consumer, consumed only at a cut point"
+  | .exact n =>
+    let w ← get
+    let placeholders := w.hidden.isNone && w.hiddenPlaceholders
+    if !placeholders && !w.allocArmed.contains i.label then return true   -- unarmed (section 6.6)
+    let encounter : M Bool := if placeholders then allocPlaceholder s else allocRecord s
+    let mut k := 0
+    while k < n do
+      if !(← encounter) then return false
+      k := k + 1
+    return true
 
 def getFile (id : FileId) : M File := do
   match (← getK).files.get? id with

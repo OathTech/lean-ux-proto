@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "id": "a2_eventfd_draw",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 1,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 2,
+      "flags": 2048
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 1
+      },
+      "count": 8
+    }
+  ],
+  "steer": [
+    [
+      "kmallocEventfdCtx",
+      "draw"
+    ],
+    [
+      "kmallocEventfdCtx",
+      "draw"
+    ]
+  ],
+  "expect": [
+    "do_eventfd.kmalloc_failed=0"
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "id": "a2_fdbitmap_nomem",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 1,
+      "flags": 2048
+    },
+    {
+      "op": "dup3",
+      "fd": {
+        "ref": 0
+      },
+      "newfd": {
+        "literal": 100
+      },
+      "flags": 0
+    },
+    {
+      "op": "dup3",
+      "fd": {
+        "ref": 0
+      },
+      "newfd": {
+        "literal": 100
+      },
+      "flags": 0
+    },
+    {
+      "op": "read",
+      "fd": {
+        "literal": 100
+      },
+      "count": 8
+    }
+  ],
+  "steer": [
+    [
+      "kvmallocFdBitmaps",
+      "0000000000000000"
+    ],
+    [
+      "kvmallocFdBitmaps",
+      "draw"
+    ]
+  ],
+  "expect": [
+    "alloc_fdtable.bitmaps_failed=1",
+    "ksys_dup3.expand_error=1"
+  ],
+  "rlimit_nofile": 128,
+  "domain_extension": "failslab"
+}
