@@ -2,6 +2,8 @@
 import json
 import re
 
+from harness.trace import KCOV_CAPACITY
+
 
 class InvalidOutput(ValueError):
     pass
@@ -59,8 +61,9 @@ def validate_observation(trace, result):
             raise InvalidOutput(f'observation {index}: fields')
         if 'device' in fields and type(obs['device']) is not dict:
             raise InvalidOutput(f'observation {index}: device state')
+        # stats null: no wg0 (L)
         if 'datagrams' in fields and (type(obs['datagrams']) is not list or type(obs['replies']) is not list
-                                      or type(obs['stats']) is not dict):
+                                      or (obs['stats'] is not None and type(obs['stats']) is not dict)):
             raise InvalidOutput(f'observation {index}: observed emissions')
         if type(obs['index']) is not int or obs['index'] != index:
             raise InvalidOutput(f'observation {index}: order/index')
@@ -113,11 +116,16 @@ def parse_batch(traces, output, max_bytes=16 * 1024 * 1024):
 # These outcomes cannot be ordinary results in the declared single-threaded,
 # valid-buffer fixture. In particular resource failure must not count as agreement.
 SEMANTIC_ERRNOS = {'eventfd2': {22, 24}, 'dup': {9, 24}, 'dup3': {9, 22},
-                   'close': {9}, 'fcntl': {1, 9, 22}, 'wg_set': {22, 95}, 'wg_get': {22},
+                   'close': {9}, 'fcntl': {1, 9, 22},
+                   # L (docs/2026-10-05-l-lifecycle.md): ENODEV without wg0;
+                   # EADDRINUSE binding a fixture port (wg_up, a running wg_set)
+                   'wg_set': {22, 95, 19, 98}, 'wg_get': {22, 19},
                    # ENOKEY, EDESTADDRREQ, EPROTONOSUPPORT, ENETUNREACH (no route before wg_up); EAGAIN when nothing arrived
-                   'wg_up': set(), 'wg_xmit': {126, 89, 93, 101}, 'wg_observe': {11}, 'read': {9, 11, 22}, 'write': {9, 11, 22},
+                   'wg_up': {19, 98}, 'wg_xmit': {126, 89, 93, 101}, 'wg_observe': {11}, 'read': {9, 11, 22}, 'write': {9, 11, 22},
                    # D3: the advance ioctl fails only outside the oracle's setup (-EOPNOTSUPP, -EINVAL, -EPERM)
-                   'wg_advance': set()}
+                   'wg_advance': set(),
+                   # EEXIST (a second wg0), ENODEV (no wg0)
+                   'wg_create': {17}, 'wg_down': {19}, 'wg_delete': {19}}
 
 
 def compare(trace, linux, model):
@@ -147,7 +155,8 @@ def validate_coverage(traces, coverage):
         if not keys(entry, ('id', 'index', 'count', 'pcs')) or entry['id'] != ident or type(entry['index']) is not int or entry['index'] != index:
             raise InvalidOutput('coverage identity/operation order')
         pcs = entry['pcs']
-        if type(pcs) is not list or not pcs or not integer(entry['count'], len(pcs), 65534):
+        # a network row is the task and remote streams, each below CAPACITY - 1
+        if type(pcs) is not list or not pcs or not integer(entry['count'], len(pcs), 2 * (KCOV_CAPACITY - 1) - 1):
             raise InvalidOutput('missing or truncated per-operation coverage')
         if any(type(pc) is not str or not re.fullmatch(r'0x[0-9a-f]{16}', pc) for pc in pcs) or len(set(pcs)) != len(pcs):
             raise InvalidOutput('invalid coverage PC set')

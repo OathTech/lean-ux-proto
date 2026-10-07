@@ -139,21 +139,25 @@ def queuedExpiredZeroKeyMaterial (pid : PeerId) : M Unit := do
 
 /-! ### Peer removal (peer.c:94-184), which clears the peer's keypairs -/
 
-/-- peer_remove_after_dead (peer.c:94-150). -/
-def peerRemoveAfterDead (pid : PeerId) : M Unit := do
-  if ← branch .peerRemoveNotDead !(← getPeer pid).isDead then
-    unsupported "peer_remove_after_dead: WARN_ON(!peer->is_dead)"
-  keypairsClear pid
-  -- wg_timers_stop (timers.c:235-243): `timer_delete_sync` of the five
-  -- timers (none can be running: one CPU, and a softirq is not preempted by
-  -- this task), then `flush_work(&peer->clear_peer_work)`: a queued clear
-  -- work runs now, in its kworker's section, while this task waits
+/-- wg_timers_stop (timers.c:235-243): `timer_delete_sync` of the five
+    timers (none can be running: one CPU, and a softirq is not preempted by
+    this task), then `flush_work(&peer->clear_peer_work)`: a queued clear
+    work runs now, in its kworker's section, while this task waits. Called
+    by peer removal and by `wg_stop` (L). -/
+def timersStop (pid : PeerId) : M Unit := do
   for t in PeerTimer.all do delTimer pid t
   if (← getDev).clearWorkQueue.contains pid then
     modifyDev fun d => { d with clearWorkQueue := d.clearWorkQueue.erase pid }
     _ ← hidden (.sectionStart .clearPeerWorker)
     queuedExpiredZeroKeyMaterial pid
     _ ← hidden (.sectionStop .clearPeerWorker)
+
+/-- peer_remove_after_dead (peer.c:94-150). -/
+def peerRemoveAfterDead (pid : PeerId) : M Unit := do
+  if ← branch .peerRemoveNotDead !(← getPeer pid).isDead then
+    unsupported "peer_remove_after_dead: WARN_ON(!peer->is_dead)"
+  keypairsClear pid
+  timersStop pid
   -- flush packet_crypt_wq twice; napi disable/del; flush handshake_send_wq
   if (← getDev).numPeers == 0 then invariant "--num_peers below zero"
   modifyDev fun d => { d with numPeers := d.numPeers - 1 }
@@ -165,7 +169,9 @@ def peerRemove (peer : Option PeerId) : M Unit := do
   let some pid := peer | invariant "unreachable"
   -- flush_workqueue runs a queued worker inside this call: always a race here
   if (← getPeer pid).handshakePending then unsupported "removing a peer with queued handshake work"
-  mayHaveSlept   -- synchronize_net(), flush_workqueue()
+  -- synchronize_net() does not sleep on this kernel (Tiny RCU, PREEMPT_NONE);
+  -- the flushes in peer_remove_after_dead wait only for pending work, which
+  -- the test above excludes: no sleep point here (L, audit m1)
   peerMakeDead pid
   -- synchronize_net()
   peerRemoveAfterDead pid
@@ -176,7 +182,8 @@ def peerRemoveAll : M Unit := do
   let dead := (← getDev).peerList
   for pid in dead do
     if (← getPeer pid).handshakePending then unsupported "removing a peer with queued handshake work"
-  mayHaveSlept   -- synchronize_net(), flush_workqueue()
+  -- no sleep point: synchronize_net() does not sleep here, and nothing is
+  -- pending for the flushes to wait for (L, audit m1)
   for pid in dead do
     _ ← branch .peerRemoveAllIter1 true
     peerMakeDead pid   -- then list_add_tail(&peer->peer_list, &dead_peers)

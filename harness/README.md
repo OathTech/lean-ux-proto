@@ -21,6 +21,13 @@ remote-coverage patch; `LEANUX_KERNEL_DIR` selects another build inside
 the artifact roots) with one TCG CPU, 256 MiB memory, and no network device.
 Traces with a WireGuard operation run in a fresh network namespace holding a
 down WireGuard device `wg0`, with a generic-netlink socket at descriptor 7. A shared advisory lock reserves the one guest slot.
+With `"net_fixture": "bare"` the namespace has no `wg0` until a `wg_create`
+(L, `docs/2026-10-05-l-lifecycle.md`). `wg_create` and `wg_delete` send
+`RTM_NEWLINK`/`RTM_DELLINK` over a temporary rtnetlink socket opened at the
+lowest free descriptor before the operation's window and closed after it;
+`wg_down` clears `IFF_UP`. A trace process that fails once its namespace
+exists deletes `wg0` synchronously before exiting, so the device's teardown
+never falls into the next trace. The KCOV areas are 256 K words.
 No experimental syscall sequence runs on the host. No kernel rebuild occurs.
 Each call boots a fresh VM, and each trace runs in a fresh forked child. The
 parent only reads the wire input and manages children; it owns no eventfd.

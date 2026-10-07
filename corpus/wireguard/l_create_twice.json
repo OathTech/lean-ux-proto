@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "id": "l_create_twice",
+  "net_fixture": "bare",
+  "ops": [
+    {
+      "op": "wg_create"
+    },
+    {
+      "op": "wg_create"
+    },
+    {
+      "op": "wg_get"
+    }
+  ]
+}

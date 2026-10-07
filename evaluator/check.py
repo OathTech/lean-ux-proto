@@ -41,7 +41,10 @@ DATA_SHARE = 0.15
 # virtual time advance firing WireGuard's timers, and the key-expiry arms.
 TIMERS_SHARE = 0.1
 # Suites run only on request: traces that must fail (negative controls).
-CONTROL_SUITES = ('steering-controls', 'timer-controls')
+# (L: lifecycle-controls, the random port steered onto a fixture port, which
+# the mirror must refuse: a stopped mirror fails its whole chunk, so it runs
+# apart)
+CONTROL_SUITES = ('steering-controls', 'timer-controls', 'lifecycle-controls')
 CHUNK = 100
 
 

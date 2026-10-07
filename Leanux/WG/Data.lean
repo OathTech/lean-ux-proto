@@ -145,7 +145,8 @@ def sendSkbToPeer (pid : PeerId) (bytes : List UInt8) (ds : Nat) : M Bool := do
   if ← branch .sendSkbOk sent then
     let some e := p.endpoint | invariant "unreachable"
     setPeer pid { p with txBytes := p.txBytes + bytes.length }
-    modify fun w => { w with sent := w.sent ++ [{ family := e.family, addr := e.addr, port := e.port, bytes, ds }] }
+    let sport ← socketPort e.family
+    modify fun w => { w with sent := w.sent ++ [{ family := e.family, addr := e.addr, port := e.port, bytes, ds, sport }] }
   return sent
 
 /-- keep_key_fresh (send.c:124-139). -/
