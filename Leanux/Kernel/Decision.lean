@@ -236,8 +236,6 @@ inductive Decision where
   | retransmitGiveUp | retransmitZeroKeyNotPending | keepaliveNeedAnother | zeroKeyAlive | zeroKeyAlreadyQueued
   | persistentKeepaliveInterval
   -- end D3 stream M
-  -- D3 stream H (constructors; sections 7-8)
-  -- end D3 stream H
   -- L stream M (docs/2026-10-05-l-lifecycle.md, section 4.3)
   -- drivers/net/wireguard/device.c: wg_newlink, wg_stop
   | newlinkPeerHashtableErr | newlinkIndexHashtableErr | newlinkRecvWqErr | newlinkSendWqErr | newlinkCryptWqErr
@@ -1195,8 +1193,6 @@ def Decision.info : Decision → DecisionInfo
   | .zeroKeyAlreadyQueued => d "wg_expired_zero_key_material.already_queued" wtm 112 [(117, 117)] []
   | .persistentKeepaliveInterval => d "wg_expired_send_persistent_keepalive.interval" wtm 140 [(141, 141)] []
   -- end D3 stream M
-  -- D3 stream H (their infos; sections 7-8)
-  -- end D3 stream H
   -- L stream M. wg_newlink (device.c:309-400): each `if (!x)`/`if (ret < 0)`
   -- jumps to an unwinding label that later labels' paths also reach, so only
   -- the last arm's label (382) is its own; the false sides are the next
@@ -1638,8 +1634,6 @@ def Decision.comparison : Decision → Option Comparison
   | .expandFdtableBugNr => some ⟨.lt, false, none, false⟩
   -- D3 stream M (comparisons; docs/2026-10-05-d3-timers.md, section 5)
   -- end D3 stream M
-  -- D3 stream H (comparisons; sections 7-8)
-  -- end D3 stream H
   -- P stream 2 (begin): fs/pipe.c, include/linux/pipe_fs_i.h, fs/fcntl.c,
   -- fs/read_write.c (docs/2026-10-05-p-pipes.md section 11, Appendix A)
   | .anonBufReleaseSole => some ⟨.eq, true, none, false⟩
@@ -1833,8 +1827,6 @@ def Decision.repeatable : Decision → Bool
   | .vlanTypeIsVlan | .dsfieldIp | .dsfieldIpv6 | .ecnEncapInnerCe | .padClamped => true
   -- D3 stream M (repeatable decisions; docs/2026-10-05-d3-timers.md, section 5)
   -- end D3 stream M
-  -- D3 stream H (repeatable decisions; sections 7-8)
-  -- end D3 stream H
   -- L stream M: loops over peers, queued messages and the ratelimiter's
   -- buckets; wg_socket_reinit runs twice when an up device is deleted
   -- (wg_stop, then wg_destruct), and sock_free twice per call
