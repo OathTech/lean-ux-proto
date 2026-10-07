@@ -1299,7 +1299,10 @@ def Decision.info : Decision → DecisionInfo
   | .allocPipeInfoSoftUnpriv => d "alloc_pipe_info.soft_unprivileged" "fs/pipe.c" 807 [(808, 809)] []
   | .allocPipeInfoHard => d "alloc_pipe_info.hard_exceeded" "fs/pipe.c" 812 [] []
   | .allocPipeInfoHardUnpriv => d "alloc_pipe_info.hard_unprivileged" "fs/pipe.c" 812 [(813, 813)] []
-  | .allocPipeInfoBufs => d "alloc_pipe_info.bufs_allocated" "fs/pipe.c" 818 [(819, 828)] [(832, 835)]
+  -- `return pipe` (828) is the shared return block the NULL returns jump to,
+  -- and out_free_uid (835) is reached from the kzalloc failure too: neither
+  -- witnesses an arm (found by A's pipe-site traces, D3+A integration)
+  | .allocPipeInfoBufs => d "alloc_pipe_info.bufs_allocated" "fs/pipe.c" 818 [(819, 827)] [(832, 833)]
   -- `i < pipe->ring_size`: the rotated loop tests `ring_size != 0` first, a constant
   -- comparison the mirror's `(i, ring_size)` would not match, so no operands
   | .freePipeInfoLoop => d "free_pipe_info.slot_iterate" "fs/pipe.c" 850 [(851, 853)] [(859, 859)]

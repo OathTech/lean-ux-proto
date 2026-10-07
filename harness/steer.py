@@ -203,6 +203,11 @@ ALLOC_SITES = {
     'allocNode205': dict(consumer='drivers/net/wireguard/allowedips.c:205', cls='task', helper=None, count=1),
     'allocNode234': dict(consumer='drivers/net/wireguard/allowedips.c:234', cls='task', helper=None, count=1),
     'kzallocKeypair': dict(consumer='drivers/net/wireguard/noise.c:100', cls='kworker', helper=None, count=1),
+    # pipes (A section 19.6; D3+A integration): direct calls, task context
+    # (pipe.c:882 and :1271 are deferred: Leanux/Kernel/Defs.lean AllocSite)
+    'kzallocPipeInfo': dict(consumer='fs/pipe.c:798', cls='task', helper=None, count=1),
+    'kcallocPipeBufs': dict(consumer='fs/pipe.c:815', cls='task', helper=None, count=1),
+    'allocPipePage': dict(consumer='fs/pipe.c:513', cls='task', helper=None, count=1),
 }
 ALLOC_KIND = 305
 ALLOC_FAIL = '00' * 8      # a fail entry's value: word 0 with outcome 0

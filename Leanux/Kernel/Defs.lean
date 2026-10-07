@@ -382,17 +382,19 @@ with the consumer's unwound call chain, when the run armed the allocation
 ranges that contain it. One site per consumer frame. How the mirror consumes
 a site's records (section 6.2): -/
 
-/-- The environment oracle, for the pipe paths' allocation and usercopy
-    sites only (P, design section 5): every site succeeds (`harnessEnv`).
-    A's sites (the FS slice and WireGuard) are allocation outcomes
-    (`AllocSite`, `hiddenAlloc`) and the eventfd/pipe2 usercopies trace
-    inputs (A, section 6.5); the pipe sites join `AllocSite` with A's pipe
-    rows (docs/2026-10-05-a-alloc.md, section 19.6), not yet done. -/
+/-- The environment oracle, for the pipe paths' remaining sites only (P,
+    design section 5): every site succeeds (`harnessEnv`). A's sites (the
+    FS slice, WireGuard and, since the D3+A integration, three direct pipe
+    allocations) are allocation outcomes (`AllocSite`, `hiddenAlloc`)
+    and the eventfd/pipe2 usercopies trace inputs (A, section 6.5). Left
+    here: the inode-allocation cut and the resize kcalloc (see
+    `AllocSite.kzallocPipeInfo`'s note), the page usercopies and
+    `__sigqueue_alloc`. -/
 inductive EnvSite where
   -- P (pipes, design section 5). `allocInode` is the inode-allocation cut:
   -- new_inode_pseudo -> alloc_inode -> alloc_inode_sb, inode_init_always_gfp
   -- and get_next_ino, no decisions (audit M3)
-  | allocInode | kzallocPipeInfo | kcallocPipeBufs | allocPipePage | kcallocResizeBufs
+  | allocInode | kcallocResizeBufs
   | copyPageToIter | copyPageFromIter | sigqueueAlloc
   deriving Repr, BEq, DecidableEq
 
@@ -423,6 +425,8 @@ inductive AllocSite where
   | skbCowHead | skbChecksumHelp | skbCowDataTx | skbCowDataRx
   -- below-cut consumers of the `__alloc_skb`/`kmalloc_reserve` ranges
   | nlmsgNew | netlinkAllocLargeSkb | sockAllocSendPskb | netlinkDump | netlinkTrim
+  -- the pipe paths' direct sites (b-task; A section 19.6, integration)
+  | kzallocPipeInfo | kcallocPipeBufs | allocPipePage
   deriving Repr, BEq, DecidableEq
 
 structure AllocSiteInfo where
@@ -462,12 +466,26 @@ def AllocSite.info : AllocSite → AllocSiteInfo
   | .netlinkDump => ⟨21, "netlinkDump", "net/netlink/af_netlink.c", 2284, .cut⟩
   -- netlink_trim's pskb_expand_head (its kmalloc_reserve is in the range)
   | .netlinkTrim => ⟨22, "netlinkTrim", "net/netlink/af_netlink.c", 1294, .cut⟩
+  -- Pipes (A section 19.6; D3+A integration [AGENT]): direct calls, one
+  -- record per consultation. alloc_pipe_info's kzalloc (pipe.c:798) and
+  -- kcalloc of the buffers (:815); pipe_write's alloc_page, consulted only
+  -- when `tmp_page` is NULL (:513, through __alloc_pages_noprof). Not
+  -- sites: get_pipe_inode's new_inode_pseudo (:882), as arming alloc_inode
+  -- would also record WireGuard's in-window sock_alloc, a consumer this
+  -- table does not declare; pipe_resize_ring's kcalloc (:1271), as above
+  -- KMALLOC_MAX_CACHE_SIZE (more than 204 slots) it is a large kmalloc whose
+  -- page allocation is not recorded at this frame (its count depends on
+  -- the size).
+  | .kzallocPipeInfo => ⟨23, "kzallocPipeInfo", "fs/pipe.c", 798, .exact 1⟩
+  | .kcallocPipeBufs => ⟨24, "kcallocPipeBufs", "fs/pipe.c", 815, .exact 1⟩
+  | .allocPipePage => ⟨25, "allocPipePage", "fs/pipe.c", 513, .exact 1⟩
 
 def AllocSite.all : List AllocSite :=
   [.kmallocEventfdCtx, .filpAlloc, .dAllocPseudo, .kmallocFdtable, .kvmallocFdArray, .kvmallocFdBitmaps,
    .kmemCacheZallocPeer, .allocNode190, .allocNode205, .allocNode234, .kzallocKeypair,
    .sendBufSkb, .replySkb, .keepaliveSkb, .skbCowHead, .skbChecksumHelp, .skbCowDataTx, .skbCowDataRx,
-   .nlmsgNew, .netlinkAllocLargeSkb, .sockAllocSendPskb, .netlinkDump, .netlinkTrim]
+   .nlmsgNew, .netlinkAllocLargeSkb, .sockAllocSendPskb, .netlinkDump, .netlinkTrim,
+   .kzallocPipeInfo, .kcallocPipeBufs, .allocPipePage]
 
 /-- The below-cut allocation consumers (consumed at cut points). -/
 def AllocSite.cuts : List AllocSite := AllocSite.all.filter (·.info.count == .cut)

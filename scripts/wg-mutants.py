@@ -351,7 +351,8 @@ MISMATCH_OUTCOMES = frozenset({'semantic_mismatch', 'control_flow_mismatch', 'hi
 # (keypair_create, noise.c:100 record-only) and A-M4 (skb_cow_data never
 # allocates on this fixture, A0) are dropped. The A2 entries (A-M1, A-M5,
 # A-M6, A-M9, A-M13) are rejected by the a2_* traces of the (b-task)
-# failslab-style extension [USER 2026-10-06]; A-M7/A-M8 wait for pipes (P).
+# failslab-style extension [USER 2026-10-06]; A-M7/A-M8 by the a2_pipe_*
+# traces since the D3+A integration (A's pipe sites, section 19.6).
 A_MUTANTS = [
   ('A-M3-keepalive-sends-after-nomem', 'control: wg_packet_send_keepalive calls wg_packet_send_staged_packets '
    'after a failed allocation (send.c:228-229 returns). Survives on this base: both modeled callers (wg_open, '
@@ -385,10 +386,16 @@ A_MUTANTS = [
    'Leanux/FS/Eventfd.lean',
    "    putUnusedFd fd.toNat\n    eventfdFreeCtx cid  -- err:\n",
    "    eventfdFreeCtx cid  -- err:\n"),
-  ('A-M7-pipe-accounting-kept', 'P/A2: alloc_pipe_info failure without the accounting revert (pipe.c:832)',
-   'Leanux/FS/Pipe.lean', None, None),
-  ('A-M8-pipe-write-enomem', 'P/A2: pipe_write returns -ENOMEM instead of the partial count (pipe.c:515)',
-   'Leanux/FS/Pipe.lean', None, None),
+  ('A-M7-pipe-accounting-kept', 'P/A2: alloc_pipe_info failure without the accounting revert (pipe.c:832); '
+   'a2_pipe_bufs_nomem (the next pipe2\'s user_bufs operands)',
+   'Leanux/FS/Pipe.lean',
+   "  -- out_revert_acct:\n  _ ← accountPipeBuffers pipeBufs 0\n",
+   "  -- out_revert_acct:\n"),
+  ('A-M8-pipe-write-enomem', 'P/A2: pipe_write returns -ENOMEM instead of the partial count (pipe.c:515); '
+   'a2_pipe_page_nomem_partial',
+   'Leanux/FS/Pipe.lean',
+   "          if !(← branchCmp .pipeWriteAllocRet (ret != 0) ret 0) then ret := -ENOMEM\n",
+   "          _ ← branchCmp .pipeWriteAllocRet (ret != 0) ret 0\n          ret := -ENOMEM\n"),
   ('A-M9-intermediate-keeps-newnode', 'A2: add\'s third allocation failure keeps newnode (allowedips.c:235-239)',
    'Leanux/WG/AllowedIps.lean',
    "    listDel newnode\n    freeNode newnode\n    return -ENOMEM\n",
@@ -399,8 +406,7 @@ A_MUTANTS = [
    "    if ← branch .dup3ExpandEmfile (err == -EMFILE) then return -EBADF\n",
    "    if ← branch .dup3ExpandEmfile true then return -EBADF\n"),
 ]
-A_PENDING = {'A-M7-pipe-accounting-kept': 'pending P (no pipe mirror on this base)',
-             'A-M8-pipe-write-enomem': 'pending P (no pipe mirror on this base)'}
+A_PENDING = {}
 SUITE_OF = {m[0]: 'alloc' for m in A_MUTANTS}
 
 

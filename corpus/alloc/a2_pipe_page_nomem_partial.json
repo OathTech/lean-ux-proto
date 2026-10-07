@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "id": "a2_pipe_page_nomem_partial",
+  "ops": [
+    {
+      "op": "pipe2",
+      "flags": 2048
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "count": 8192,
+      "value": "7"
+    },
+    {
+      "op": "read",
+      "fd": {
+        "pipe": 0,
+        "end": 0
+      },
+      "count": 8192
+    }
+  ],
+  "steer": [
+    [
+      "allocPipePage",
+      "draw"
+    ],
+    [
+      "allocPipePage",
+      "0000000000000000"
+    ]
+  ],
+  "expect": [
+    "pipe_write.alloc_failed=1"
+  ],
+  "domain_extension": "failslab"
+}

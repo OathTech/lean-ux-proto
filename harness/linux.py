@@ -469,8 +469,9 @@ def _collect(outdir, traces, process_returncode, alloc=None):
     # A2: a trace under the declared failslab-style extension forces
     # task-context allocation failures, so its ENOMEM is the expected result
     # of the schedule (compared with the mirror, evaluator/protocol.py), not
-    # allocator pressure. Every other trace still fails on it.
-    forced = {12}
+    # allocator pressure; so is pipe2's ENFILE (a forced alloc_pipe_info
+    # failure, A section 19.6). Every other trace still fails on them.
+    forced = {12, 23}
     if any(row["errno"] in unexpected_errors - (forced if trace.get("domain_extension") == "failslab" else set())
            for result, trace in zip(results, traces) for row in result["observations"]):
         raise LinuxRunError("environment_failure", "Unexpected interruption or allocator resource failure", outdir)

@@ -216,6 +216,47 @@ TRACES_A2 = {
                                    [["allocNode234", "draw"], ["allocNode234", FAIL]],
                                    ["add.intermediate_no_mem=1", "add.intermediate_no_mem=0"]),
 }
+
+
+# Pipes (A section 19.6; D3+A integration [AGENT]): the three direct pipe
+# sites, each failed once under the extension. pipe2 is nonblocking, so no
+# read waits; a failed pipe2's ends resolve to -1, so the later operations
+# use the second pipe.
+def pipe2():
+    return {"op": "pipe2", "flags": 2048}
+
+
+def pwrite(p, count, value="7"):
+    return {"op": "write", "fd": {"pipe": p, "end": 1}, "count": count, "value": value}
+
+
+def pread(p, count):
+    return {"op": "read", "fd": {"pipe": p, "end": 0}, "count": count}
+
+
+TRACES_A2.update({
+    # alloc_pipe_info's kzalloc (pipe.c:798) fails: get_pipe_inode's
+    # fail_iput, create_pipe_files' -ENFILE; the next pipe2 succeeds
+    "a2_pipe_info_nomem": ([pipe2(), pipe2(), pwrite(1, 8), pread(1, 8)],
+                           [["kzallocPipeInfo", FAIL], ["kzallocPipeInfo", "draw"]],
+                           ["alloc_pipe_info.kzalloc_failed=1", "get_pipe_inode.no_pipe=1"]),
+    # the buffers' kcalloc (:815) fails: out_revert_acct undoes the
+    # accounting (A-M7: the next pipe2's user_bufs operands show it), -ENFILE
+    "a2_pipe_bufs_nomem": ([pipe2(), pipe2(), pwrite(1, 8), pread(1, 8)],
+                           [["kzallocPipeInfo", "draw"], ["kcallocPipeBufs", FAIL],
+                            ["kzallocPipeInfo", "draw"], ["kcallocPipeBufs", "draw"]],
+                           ["alloc_pipe_info.bufs_allocated=0", "get_pipe_inode.no_pipe=1"]),
+    # pipe_write's first page (:513) fails: nothing written, -ENOMEM; the
+    # retry allocates (tmp_page is still NULL) and writes
+    "a2_pipe_page_nomem": ([pipe2(), pwrite(0, 8), pwrite(0, 8), pread(0, 16)],
+                           [["allocPipePage", FAIL], ["allocPipePage", "draw"]],
+                           ["pipe_write.alloc_failed=1"]),
+    # the second page of an 8 KiB write fails: the partial count 4096 is
+    # returned (`ret ? : -ENOMEM`, A-M8), the read gets the first page
+    "a2_pipe_page_nomem_partial": ([pipe2(), pwrite(0, 8192), pread(0, 8192)],
+                                   [["allocPipePage", "draw"], ["allocPipePage", FAIL]],
+                                   ["pipe_write.alloc_failed=1"]),
+})
 # Draw-only controls for the task-instance schedule: every encounter is
 # recorded and consumed exactly, nothing forced, so no extension is declared
 # (a draw is allowed at any steerable site).

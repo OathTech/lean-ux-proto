@@ -160,9 +160,12 @@ SEMANTIC_ERRNOS = {'eventfd2': {12, 22, 24}, 'dup': {9, 12, 24}, 'dup3': {9, 12,
                    'wg_advance': set()}
 # Pipes (P design section 6): EINVAL, EMFILE, ENOPKG (O_NOTIFICATION_PIPE
 # without CONFIG_WATCH_QUEUE); EPIPE on write; EBUSY from F_SETPIPE_SZ.
-# ENFILE and ENOMEM stay environment failures.
-SEMANTIC_ERRNOS['pipe2'] = {22, 24, 65}
-SEMANTIC_ERRNOS['write'] = SEMANTIC_ERRNOS['write'] | {32}
+# A's pipe sites (section 19.6; D3+A integration): pipe2's ENFILE (a failed
+# alloc_pipe_info in get_pipe_inode) and write's ENOMEM (pipe_write's first
+# page, `ret ? : -ENOMEM`) are compared; Linux gives them only under a
+# declared failslab trace (harness/linux.py), otherwise environment failures.
+SEMANTIC_ERRNOS['pipe2'] = {22, 23, 24, 65}
+SEMANTIC_ERRNOS['write'] = SEMANTIC_ERRNOS['write'] | {12, 32}
 SEMANTIC_ERRNOS['fcntl'] = SEMANTIC_ERRNOS['fcntl'] | {16}
 
 
