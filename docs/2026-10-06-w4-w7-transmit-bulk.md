@@ -1,15 +1,22 @@
 # W4 + W7: transmit shapes and bulk queues — design, 2026-10-06
 
-Status: **proposed, revision v2** [AGENT], for the user's decisions in
-section 13. Revision v2 (2026-10-06) answers a critical audit; section 15
-gives each finding's disposition, and the body below is corrected in place
-(the v1 text is in the commit history of `task/w47-design`). The census
+Status: **decided, revision v3** (2026-10-07). Revision v2 (2026-10-06)
+answered a critical audit (section 15); revision v3 applies the user's
+decisions of 2026-10-07 (section 13, with provenance) and the **WireGuard
+boundary rule** — [USER 2026-10-07] "we should stop at the boundary of
+wireguard (unless this breaks important things)": the IP stack is modeled
+only where it drives WireGuard code paths or is needed to predict
+WireGuard's observable behaviour. Section 16 gives, per class, the
+WireGuard line, decision or outcome it alone reaches, the kept minimal set,
+and what is excluded as beyond the boundary (fail-noisy `unsupported`).
+The body below is corrected in place; sections marked *record only* keep
+verified kernel facts for classes no longer built. The census
 ([2026-10-06-wireguard-census.md](2026-10-06-wireguard-census.md)) lists W4
 (transmit shapes, M) and W7 (bulk and multi-item queues, L) as in-reach
 workstreams toward the user's goal of 2026-10-06, 100% of reasonable
-single-CPU WireGuard. P5 (concurrency recheck arms) stays excluded. P9 (NAPI
-budget exhaustion) is **reachable on one CPU** in the stretch tier (section
-10, corrected in v2); its treatment is decision 13.5.
+single-CPU WireGuard. P5 (concurrency recheck arms) stays excluded. P9
+(NAPI budget exhaustion) is **reachable on one CPU** and is built in the
+stretch tier (section 10; decision 13.5(a)).
 
 Line numbers are in the unpatched `.deps/linux` (6.12.110) unless a file is
 named as patched. The kernel is `kernel/config-x86_64-net-choice`: one CPU,
@@ -42,40 +49,59 @@ up front:
 
 ## 1. Target
 
-**W4 — transmit shapes.** Every `wg_xmit` arm the IP stack can reach on one
-CPU, with its bytes checked at the fixture's listener:
+**W4 — transmit shapes** (v3: every `wg_xmit` arm **WireGuard code** can
+take on one CPU, with its bytes checked at the fixture's listener; the IP
+stack only as far as those arms and their bytes need it):
 - UDP GSO: one `sendmsg` with `UDP_SEGMENT` arrives at `wg_xmit` as one GSO
   skb; `skb_gso_segment` splits it; the segments are **one staged list** and
-  **one ring item** (device.c:176-204, 215, 218).
+  **one ring item** (device.c:176-204, 215, 218). **Kept**, IPv4, equal
+  segments: `.xmitNotGso` false, `.xmitGsoError` false and the n-iteration
+  walk are WireGuard lines no other class reaches (16.1).
 - The staged-queue trim, `> MAX_STAGED_PACKETS` (device.c:211-214), reachable
-  with two or three GSO transmissions and no session.
+  with two or three GSO transmissions and no session. **Kept** (16.1).
 - The padding arms of `calculate_skb_padding` (send.c:141-160) not yet
   taken: `len > mtu` (`:154-155`, `.padOverMtu` true) via a route MTU below
-  the device MTU, and `!mtu` (`:145`, `.padNoMtu` true, only with a device
-  MTU of 0: decision 13.6). The `min` clamp (`:157-158`, `.padClamped`) is
-  **already two-outcome** since D2 (inner lengths 1404-1420, D2 §6; v2, M8).
-  `SIOCSIFMTU` and `IFLA_MTU` at creation move the device MTU and the
-  `wg_open` arms.
+  the device MTU — **kept**, IPv4 — and `!mtu` (`:145`, `.padNoMtu` true,
+  only with a device MTU of 0) — **kept**, decision 13.6(a). The `min` clamp
+  (`:157-158`, `.padClamped`) is **already two-outcome** since D2 (inner
+  lengths 1404-1420, D2 §6; v2, M8). `SIOCSIFMTU` moves the device MTU and
+  the `wg_open` arms; `IFLA_MTU` at creation is **dropped** (16.1: nothing
+  `wg_set_mtu 0` does not reach).
 - `Device.mtu` as mirror state in place of `WG.DEVICE_MTU`
   (`Leanux/WG/Send.lean:48`), read by `wg_xmit` (device.c:173), the keepalive
-  (send.c:232) and `wg_open`'s IPv6 test (device.c:34, 47).
-- Multicast and link-local destinations, whose source, TTL and hop limit the
-  fixture determines (today `Env.xmitBytesUnknown`, `Env.lean:100`, and
-  `checksumHelp`'s `unsupported`, `:158`).
-- Transmit fragmentation: one `sendto` with `IP_PMTUDISC_DONT` above the MTU
-  gives **two `wg_xmit` calls** in one system call.
+  (send.c:232) and `wg_open`'s IPv6 test (device.c:34, 47). **Kept**: the
+  data flow `dev->mtu → PACKET_CB->mtu → padding` is checked by
+  `w4_set_mtu_1300`'s bytes.
+- Multicast and link-local destinations: **excluded, beyond the WireGuard
+  boundary** (16.1: `wg_xmit` sees ordinary packets; the loop copy, source,
+  TTL and hop limit are IP-stack behaviour). Only the IPv4 membership set
+  `{224.0.0.1}` is kept, because the existing corpus's no-peer `wg_xmit`s to
+  `224.0.0.1` (`evaluator/generate.py:302`) need it to predict their NET_RX
+  section (2.4, M3). IPv6 multicast stays `unsupported`.
+- Transmit fragmentation (`IP_PMTUDISC_DONT`, two `wg_xmit` calls in one
+  system call): **excluded, beyond the WireGuard boundary** (16.1: the two
+  calls take only lines GSO already takes; the ident draws are IP-stack
+  hidden inputs). K1 is deferred under the boundary rule.
 
 **W7 — bulk and multi-item queues.** The crypt rings and per-peer
 `prev_queue`s holding several items at once, produced by io_uring batches
 with no drain point between sends (the E measurement,
 `task/e-dos:docs/2026-10-05-e-probe-results.md`): the workers' multi-item
-loops, the `peeked` state of `prev_queue`, a `DEAD` break mid-list, several
-peers' polls in one `net_rx_action`, the `cond_resched` placements, and the
-far end: `-ENOSPC` and `-EPIPE` on full queues (1024 items).
+loops, the `peeked` state of `prev_queue`, a `DEAD` break mid-list, the
+`cond_resched` placements, the far end — `-ENOSPC` and `-EPIPE` on full
+queues (1024 items) — and the poll's budget arm (P9, 13.5(a)). This is
+WireGuard queue behaviour and stays in scope; v3 drops only "several
+peers' polls in one `net_rx_action`" (16.2: an environment arm with no
+WireGuard line of its own) and the n = 4 and `rx_dead` instances.
 
 ## 2. Kernel mechanisms, verified
 
 ### 2.1 UDP GSO through `wg_xmit`
+
+*v3 scope:* kept for **IPv4 with a `gso_size` that divides the payload**;
+IPv6 GSO and a short last segment are beyond the WireGuard boundary (no
+WireGuard line of their own, 16.1) and are `unsupported` in `xmitPackets`
+(fail-noisy). The IPv6 and last-segment facts below stay as record.
 
 - **Sender side.** `UDP_SEGMENT` as a cmsg (`udp.c:1081-1085`) or socket
   option (`:2810-2814`). `udp_send_skb` (`udp.c:984-1014`): `hlen +
@@ -121,8 +147,8 @@ far end: `-ENOSPC` and `-EPIPE` on full queues (1024 items).
     → `:559-589`, **`segs = 1`** for UDP): for the fixture's **unconnected,
     `IP_PMTUDISC_DO`** sender, `DF && !ignore_df` → **`id = 0`**
     (`ip.h:583-584`; `ignore_df` from `ip_sk_ignore_df`, `:462-467`). So the
-    segments carry ids 0, 1, …, n−1: deterministic, no hidden input. For the
-    **connected** sender `SEND2_FD` (section 3, v2 M2) the branch at
+    segments carry ids 0, 1, …, n−1: deterministic, no hidden input. For a
+    **connected** sender (record only: not built in v3, section 3) the branch at
     `ip.h:568-581` runs first regardless of DF: `id = atomic_add_return(1,
     &inet_id)`, so one datagram consumes one `inet_id` value whatever its
     segment count, and its segments carry `id, id+1, …`. IPv6 segments have
@@ -162,6 +188,12 @@ longer applies. A 128-segment GSO send needs `gso_size ≤ 511` (section 6).
 
 ### 2.3 Padding arms: route MTU, `SIOCSIFMTU`, `IFLA_MTU`
 
+*v3 scope:* kept are the IPv4 route-MTU class and `SIOCSIFMTU` to 1300 and
+to 0 (16.1). The IPv6 route MTU (`mtu6`), `IFLA_MTU` at creation and
+`SIOCSIFMTU` to 1279 are dropped: each reaches only lines `w4_set_mtu_0`
+or the IPv4 class already reaches. The MTU-aware fixture is needed for
+the MTU-0 class's `wg_up` only.
+
 `PACKET_CB(skb)->mtu = skb_valid_dst(skb) ? dst_mtu(skb_dst(skb)) : dev->mtu`
 (device.c:173). `dst_mtu` → `ipv4_mtu` → `ip_dst_mtu_maybe_forward(dst,
 false)` (`route.c:1366-1369`, `ip.h:469-495`): `rt_pmtu` if set and
@@ -177,7 +209,8 @@ unexpired (`:481-487`), else **`RTAX_MTU` of the route** (`:490-492`), else
   fragment (`:311`). **DF is set** for `PROBE` (`:1441-1442`) and
   `ignore_df` is false (`ip_sk_ignore_df`: `pmtudisc < DO || == OMIT`,
   `ip.h:462-467`; `PROBE = 3`), so the unconnected sender's **id is 0**
-  (`ip.h:583-584`); from `SEND2_FD` it is the next `inet_id` (v2, m7).
+  (`ip.h:583-584`); a connected sender, not built in v3, would take the
+  next `inet_id` instead (v2, m7).
   `wg_xmit` then sees `len = 1420 > mtu = 1300`: `last_unit = 1420 % 1300 =
   120`, `padded_size = min(1300, 128) = 128`, padding 8; ciphertext 1420 + 8
   + 32. **The clamp is not taken here** (`128 < 1300`; v2, M8): with route
@@ -251,6 +284,17 @@ unexpired (`:481-487`), else **`RTAX_MTU` of the route** (`:490-492`), else
 
 ### 2.4 Multicast and link-local transmit
 
+*v3 scope — record only, except the IPv4 membership set.* Multicast and
+link-local destinations reach no WireGuard line of their own (`wg_xmit`
+sees an ordinary packet; the peer lookup reads only the destination), and
+the loop copy, source selection, TTL and hop limit are IP-stack behaviour:
+**excluded, beyond the WireGuard boundary** (16.1). What is kept: the IPv4
+set `{224.0.0.1}` in `xmitMulticastLoop`, because the existing corpus's
+no-peer `wg_xmit`s to `224.0.0.1` (`evaluator/generate.py:302`, 41
+operations) need it to predict their NET_RX section, replacing D3's "any
+`224/4`"; IPv6 multicast and `fe80::/10` destinations stay `unsupported`
+(fail-noisy). The D2 §2 correction (no link-local address on wg0) stands.
+
 - **wg0 has no link-local address.** `__dev_open` calls `ndo_open`
   (`dev.c:1552`) and `dev_open` raises `NETDEV_UP` only afterwards
   (`:1588-1593`); `wg_open` sets `addr_gen_mode = IN6_ADDR_GEN_MODE_NONE`
@@ -309,6 +353,22 @@ unexpired (`:481-487`), else **`RTAX_MTU` of the route** (`:490-492`), else
     destinations draw no ICMP error.
 
 ### 2.5 Transmit fragmentation (`IP_PMTUDISC_DONT`)
+
+*v3 scope — record only.* Inner fragmentation reaches no WireGuard line
+that GSO does not: two ordinary `wg_xmit` calls, `CHECKSUM_NONE` packets
+(`.encChecksumPartial` false, GSO's too), a second packet without a UDP
+header that WireGuard never parses. The ident draws (`inet_id`, the
+connected sender's txhash, the IPv6 Fragment id) are IP-stack hidden
+inputs. **Excluded, beyond the WireGuard boundary** (16.1): `xmitPackets`
+answers `unsupported "a fragmented datagram (beyond the WireGuard
+boundary)"` for `DONT` above the route MTU, and the connected sender,
+`SEND2_FD` and `wg_connect` are not built. **Outer** fragmentation (the
+ciphertext datagram exceeding `lo`'s 65536-byte MTU) would need wg0's MTU
+raised to within about 60 bytes of 65535; it happens after
+`udp_tunnel_xmit_skb` (`ip_fragment` with `ignore_df = 1`, no ICMP) with no
+WireGuard line, and is excluded on the same rule; the listener's
+`recvfrom` sees the reassembled datagram either way. K1 is deferred under
+the boundary rule. The facts below stay as record.
 
 `ip_sk_ignore_df` is true for `DONT` and `WANT` (`ip.h:462-467`), so
 `maxnonfragsize = IP_MAX_MTU` (`ip_output.c:999`) and a 2000-byte payload is
@@ -423,8 +483,8 @@ it under `IO_URING_F_NONBLOCK` (`io_uring/net.c:578-579`), and
 `io_queue_async` (`io_uring.c:1913-1929`) poll-arms the request on
 `POLLOUT` or punts it to io-wq — either way the send completes **after the
 window**, outside this argument. So **`SO_SNDBUFFORCE` (8 MiB, giving
-`sk_sndbuf = 16 MiB`, `sock.c:1328-1333`) is set on `SEND_FD` and
-`SEND2_FD`** before the window; 1025 full-size xmits charge about 2.4 MiB.
+`sk_sndbuf = 16 MiB`, `sock.c:1328-1333`) is set on `SEND_FD`** before
+the window; 1025 full-size xmits charge about 2.4 MiB.
 With that, each send's `wg_xmit` runs inline (`__dev_queue_xmit`,
 `dev.c:4527-4559`) and `create_data` only queues work (`queue_work_on`,
 `queueing.h:176`). `wg_batch` reports the CQEs present when
@@ -497,10 +557,10 @@ item fails on the result rather than as a later record mismatch.
 |---|---|---|---|
 | GSO segment ids | none: `id = 0` for the DO, unconnected sender (`ip.h:583-584`), then `id++` (`af_inet.c:1453`) | computed | W4 GSO bytes |
 | GSO segment UDP checksums | none: software (`udp_offload.c:439-441`) | computed | W4 GSO bytes |
-| Connected sender's txhash | `__ip4_datagram_connect` → `sk_set_txhash` → `net_tx_rndhash` → `get_random_u32()` (`datagram.c:75`, `sock.h:2088-2099`), **before** the seed; a v4-mapped `connect()` on the dual-stack sender takes this path (`ipv6/datagram.c:157-161`, `:189-199`, then `goto out`), a native IPv6 `connect()` draws only this (`:268`) | **new `HiddenSite` `.txHash`** (kind 104, 4 bytes, role `.cut`: `sk_txhash` is not observed) at consumer frame **`include/net/sock.h:2092`** (DWARF chain on the built kernel: `sock.h:2092 → :2098 → datagram.c:75`; one site serves both families); consumed by `wg_connect` first (v2, M2) | W4 fragmentation |
-| IPv4 fragment ident, **connected** sender | `__ip4_datagram_connect`, `datagram.c:76`: `atomic_set(&inet->inet_id, get_random_u16())` | **new `HiddenSite` `.inetIdSeed`** (2 bytes, mirror) at the existing generic hook (kind 102); consumed by the mirror's `wg_connect` op into **socket state `inet_id`** in Env; every datagram from `SEND2_FD`, GSO included, then takes `id = atomic_add_return(1, &inet_id)` (`ip.h:575-581`): the first id is **seed + 1**, the next seed + 2, … (v2, M2) | W4 fragmentation, any `SEND2_FD` send |
-| IPv4 fragment ident, unconnected `DONT` sender | `.ipIdentReserve` records `delta` only (`route.c:481-482`); the bucket counter is boot-random (`:3720`) | **not reconstructible**: stays `.cut`; the class is `unsupported` unless option K1 | — |
-| IPv6 fragment id | `ipv6_select_ident` → `get_random_u32_above(0)` (`output_core.c:18`): the inline `get_random_u32_below(U32_MAX)` calls `get_random_u32()`, **kind 104**, once per attempt (2.5; v2, C1) | **new `HiddenSite` `.ipv6FragId`** (kind 104, 4 bytes, mirror) at consumer frame **`net/ipv6/output_core.c:18`**: **id = the first non-zero record**; a zero record is followed by another at the same site (the mirror consumes until non-zero, and a zero record followed by anything else is a hidden mismatch) | W4 IPv6 fragmentation |
+| Connected sender's txhash | `__ip4_datagram_connect` → `sk_set_txhash` → `net_tx_rndhash` → `get_random_u32()` (`datagram.c:75`, `sock.h:2088-2099`), **before** the seed; a v4-mapped `connect()` on the dual-stack sender takes this path (`ipv6/datagram.c:157-161`, `:189-199`, then `goto out`), a native IPv6 `connect()` draws only this (`:268`) | **v3: not built** (beyond the WireGuard boundary, with the connected sender). Record: it would be a `.cut` site (kind 104, 4 bytes) at consumer frame `include/net/sock.h:2092` (DWARF chain `sock.h:2092 → :2098 → datagram.c:75`), consumed by `wg_connect` first (v2, M2) | — |
+| IPv4 fragment ident, **connected** sender | `__ip4_datagram_connect`, `datagram.c:76`: `atomic_set(&inet->inet_id, get_random_u16())` | **v3: not built.** Record: a mirror site `.inetIdSeed` (kind 102, 2 bytes) into socket state `inet_id`, consumed once per datagram, GSO included, first id seed + 1 (`ip.h:575-581`; v2, M2) | — |
+| IPv4 fragment ident, unconnected `DONT` sender | `.ipIdentReserve` records `delta` only (`route.c:481-482`); the bucket counter is boot-random (`:3720`) | **not reconstructible**: stays `.cut`; the class is `unsupported` (fragmentation is beyond the boundary; K1 deferred) | — |
+| IPv6 fragment id | `ipv6_select_ident` → `get_random_u32_above(0)` (`output_core.c:18`): the inline `get_random_u32_below(U32_MAX)` calls `get_random_u32()`, **kind 104**, once per attempt (2.5; v2, C1) | **v3: not built.** Record: a mirror site `.ipv6FragId` (kind 104, 4 bytes) at consumer frame `net/ipv6/output_core.c:18`, id = the first non-zero record, a zero record redrawn at the same site | — |
 | `wg_xmit`'s `mtu` | route/device, fixture facts | environment (`Env.xmitPackets`), checked by padding bytes | W4 |
 | wg0's IPv6 presence | `dev->mtu ≥ 1280` at registration / after `CHANGEMTU` | mirror state `Device.inet6Dev` | W4 `wg_open` |
 | Scheduling: encrypt/tx/decrypt yields | kind 302 resched records (`.reschedEncrypt/.reschedTx/.reschedDecrypt`, `Defs.lean`) | existing, now per item | W7 |
@@ -510,10 +570,11 @@ item fails on the result rather than as a later record mismatch.
 **Kernel-change options (need user approval; the design does not depend on
 them):**
 - **K1.** Record the ident at `__ip_select_ident` (`route.c:505`, after
-  `ip_idents_reserve`) as a hidden site. Lifts the unconnected-`DONT`
-  fragmentation class and would make `.ipIdentReserve`'s outer-datagram
-  cut exact too (the wg outer IP header is not observed today, so that part
-  pays nothing now).
+  `ip_idents_reserve`) as a hidden site. Would lift the unconnected-`DONT`
+  fragmentation class and make `.ipIdentReserve`'s outer-datagram cut exact
+  (the wg outer IP header is not observed today, so that part pays nothing
+  now). **Deferred under the boundary rule** [AGENT 2026-10-07, delegated]:
+  the ident is an IP-stack input to a class that is itself excluded.
 - **K2.** Record `work_done` at the poll's `napi_complete_done`
   (receive.c:488) or the `state` the poll observes per iteration. Turns the
   "pinned per item" argument of 2.8 into a checked fact. Not recommended
@@ -523,19 +584,20 @@ them):**
   record in `wg_queue_enqueue_per_peer_rx` after `wg_peer_put`
   (queueing.h:201), so a nested NET_RX section's position relative to it
   tells before-put from after-put. A new hook against the user's
-  "generic capture points, zero new hooks" preference; option (ii) of 13.2
-  keeps the check without it.
+  "generic capture points, zero new hooks" preference. **Moot**: option
+  (ii) of 13.2 was approved [USER 2026-10-07] and keeps the check without
+  it.
 - The census's `handshake_queue_len` capture (P12) is not needed here.
 
 ## 4. W4 in the mirror and the environment
 
 **Interface commit** (`Leanux/WG/Types.lean`, `Leanux/Kernel/Defs.lean`,
 `Leanux/Kernel/Decision.lean`):
-- `Device.mtu : Nat := 1420` (`wg_setup`, device.c:296) and
-  `Device.inet6Dev : Bool := true`; `WG.DEVICE_MTU` is removed and its three
-  readers (`Send.lean:255`, `Env.lean:75-76`, `Device.lean:42`) read the
-  state. L's `wg_create` sets `mtu` from `IFLA_MTU` and `inet6Dev := mtu ≥
-  1280`.
+- `Device.mtu : Nat := 1420` (`wg_setup`, device.c:296), `Device.inet4Dev :
+  Bool := true` and `Device.inet6Dev : Bool := true`; `WG.DEVICE_MTU` is
+  removed and its three readers (`Send.lean:255`, `Env.lean:75-76`,
+  `Device.lean:42`) read the state. v3: `wg_create` does not take
+  `IFLA_MTU` (dropped, 16.1); only `setMtu` moves the three fields.
 - `Packet.csum : Option (Nat × Nat)` already encodes `CHECKSUM_PARTIAL`
   (`Types.lean:134-137`); GSO segments and fragments carry `none`.
 - New decisions, in `Decision.lean`'s `d name file line [true] [false]`
@@ -552,9 +614,10 @@ them):**
   kcov.json` `files` and `wg_prev_queue_dequeue` its `functions` (v2, M9;
   `operand_exclusions` entries are only needed if the check is extended to
   claim every recorded compare, which it does not do today).
-- New `HiddenSite`s `.txHash` (`.cut`), `.inetIdSeed`, `.ipv6FragId`
-  (section 3), all at the existing random hook; new sites follow E's
-  precedent (`.cookieNonce`).
+- **No new `HiddenSite`** (v3): `.txHash`, `.inetIdSeed` and `.ipv6FragId`
+  belonged to the fragmentation classes, which are beyond the boundary
+  (section 3, record only). The GSO ids and checksums are computed, not
+  drawn.
 
 **`Device.lean`:**
 - `wgXmit (family addr : Nat) (pkts : List Packet) (mtu : Nat)`: the GSO
@@ -585,33 +648,30 @@ hooks that call it, section 12):
   `wg_xmit` calls of one `sendto`/`sendmsg` (one, or two for a fragmented
   datagram), the inner list the packets of one call (the GSO segments, or
   one packet), and the `mtu` `wg_xmit` computes. `XmitOpts` carries
-  `gsoSize`, `pmtudisc ∈ {DO, DONT, PROBE}`, `connected`, and the fixture's
-  route MTU for the destination (from the trace's `net_fixture`, section 6).
-  It computes:
-  - GSO: segment i's IPv4 header (`id = base + i`, where `base` is 0 for
-    `SEND_FD` and the next `inet_id` for `SEND2_FD`; `tot_len`, header
-    checksum), UDP header (`len`, the complete checksum, `CSUM_MANGLED_0`
-    for 0), payload slice; `csum := none`. The stack's `-EMSGSIZE`/`-EINVAL`
-    conditions (2.1) are the operation's result with no `wg_xmit`.
-  - Fragmentation (`DONT`, length > route MTU): the datagram's UDP checksum
-    over the whole payload (`udp_csum`, 2.5); fragment 1 (`MF`, 1400 payload
-    bytes on IPv4), fragment 2 (offset 175); the id from `inet_id`
-    (connected) — the unconnected case is `unsupported "an unconnected
-    sender's fragment ident (route.c:488 over a boot-random bucket)"`. IPv6:
-    the Fragment header with `.ipv6FragId`.
-  - `PROBE` with a route MTU: a full-size packet with `mtu` = route MTU, DF
-    set, id 0 (`SEND_FD`) or the next `inet_id` (`SEND2_FD`).
-  - Multicast/link-local: source, TTL/hop limit per 2.4; `xmitBytesUnknown`
-    shrinks to destinations the fixture does not determine.
-- **Sender socket state** (v2, M2): `Sender.inetId : Option Nat` for
-  `SEND2_FD`, set by `wg_connect` from `.inetIdSeed` (after consuming
-  `.txHash`), incremented by every datagram it sends; `none` means
-  unconnected (a send then takes the `SEND_FD` rules).
-- **Multicast membership sets** (v2, M3): `xmitMulticastLoop` (from d3-int)
-  loops iff the destination is in the family's set, `{224.0.0.1}` for IPv4
-  and `{ff01::1, ff02::1}` for IPv6 (2.4), and `sk_mc_loop` is the sender's
-  `MC6_LOOP` for both families (`XmitOpts.multicastLoop`, from
-  `IPV6_MULTICAST_LOOP`). The IPv4 set replaces D3's "any `224/4`".
+  `gsoSize`, `pmtudisc ∈ {DO, PROBE}` and the fixture's route MTU for the
+  destination (from the trace's `net_fixture`, section 6). v3: it models
+  exactly what the kept classes need and answers `unsupported` (fail-noisy,
+  "beyond the WireGuard boundary") to the rest:
+  - GSO, **IPv4, `gsoSize` dividing the payload**: segment i's IPv4 header
+    (`id = i`, `tot_len`, header checksum), UDP header (`len`, the complete
+    checksum, `CSUM_MANGLED_0` for 0), payload slice; `csum := none`. The
+    stack's `-EMSGSIZE`/`-EINVAL` conditions (2.1) are the operation's
+    result with no `wg_xmit`. IPv6 GSO and a non-dividing `gsoSize`:
+    `unsupported`.
+  - `PROBE` with a route MTU, **IPv4**: a full-size packet with `mtu` = route
+    MTU, DF set, id 0. IPv6: `unsupported`.
+  - `DONT`, a connected sender, a datagram above the route MTU:
+    `unsupported` (2.5).
+  - Multicast/link-local: unchanged from D3 — `xmitBytesUnknown` for
+    multicast destinations with no fixture-determined bytes, `unsupported`
+    for IPv6 multicast and `fe80::/10`.
+- **The IPv4 multicast membership set** (v2, M3; v3 kept for the existing
+  corpus): `xmitMulticastLoop` (from d3-int) loops iff the IPv4 destination
+  is in `{224.0.0.1}` (2.4), replacing D3's "any `224/4`"; IPv6 keeps D3's
+  `unsupported`. No kept trace distinguishes the two IPv4 rules (the
+  generator only ever sends to `224.0.0.1`); the correction is to the
+  kernel's rule and costs nothing, and a future non-member send would fail
+  noisily under either (a section mismatch).
 - `MAX_XMIT_PAYLOAD*` become functions of `Device.mtu` and the route MTU.
 - `fixtureSend`'s cut list is unchanged (a connected sender draws no
   `ip_idents_reserve`; the cut is lax).
@@ -677,9 +737,13 @@ DataPacket)`, `Peer.rxQueue : PrevQueue RxPacket` replace the lists
 - NAPI: `Kernel.napiPollList : List PeerId` in `napi_schedule` order replaces
   the per-peer `napiScheduled` flag as the softirq's worklist (the flag
   stays as `NAPI_STATE_SCHED`); `Env.napiSoftirq` (`Env.lean:457-466`) polls
-  the list in order and drops its `unsupported` at `:462`. A NAPI scheduled
-  inside `wgReceive` (the `-EPIPE` arm) is polled in the same `runWorker
-  .netRx` body, after the receive (2.6).
+  the list in order. v3: its `unsupported "NAPI polls of several peers in
+  one softirq"` (`:462`; `task/d3-int:Env.lean:676`) **stays**, since
+  `w7_two_napi` is dropped (16.2) and every kept class schedules one
+  peer's NAPI per softirq (in `w7_budget_dead` B's items are `UNCRYPTED`
+  in the ring and schedule nothing). A NAPI scheduled inside `wgReceive`
+  (the `-EPIPE` arm) is polled in the same `runWorker .netRx` body, after
+  the receive (2.6).
 
 ### 5.3 Scheduling: recorded, searched, argued
 
@@ -748,7 +812,7 @@ unit never has a suspended outer with queued work.
 `wg_batch` (generalizing E-B's `wg_flood`, `task/e-b:harness/guest.c:700-
 775`; wire opcode **allocated by the coordinator**, `OP_BATCH` below): a
 list of items, each `inject {family, port, message}` or `xmit {packet,
-payload, opts}`, on `SEND_FD` (or `SEND2_FD` for a connected xmit), prepared
+payload, opts}` or `inject_gso {messages}`, all on `SEND_FD`, prepared
 as SQEs before the window (`flood_prep`'s pattern), one `io_uring_enter`,
 then a wait. **Both senders carry `SO_SNDBUFFORCE` (8 MiB)** set before the
 window (2.7; v2, M1). The operation's result includes the **CQEs present
@@ -772,39 +836,37 @@ check from D1).
 ## 6. Harness
 
 - **Ops** (`harness/trace.py` FIELDS, `harness/wg.py`, `harness/guest.c`):
-  - `wg_xmit` gains optional `gso_size` (cmsg `UDP_SEGMENT`), `pmtudisc`
-    (`do` default, `dont`, `probe`; set per op with `IP_MTU_DISCOVER` /
-    `IPV6_MTU_DISCOVER` before the send and restored after), `connected`
-    (a second dual-stack sender `SEND2_FD`, bound to `SENDER_PORT + 1`,
-    `connect()`ed **inside the window** so `.txHash` then `.inetIdSeed` are
-    recorded, then `send()`), `multicast_loop` (**`IPV6_MULTICAST_LOOP`**,
-    the bit `sk_mc_loop` reads on this AF_INET6 sender for both families,
-    2.4), and a payload up to 65507 bytes (`MAX_PAYLOAD` raised;
-    `wg.py:357-362`'s MTU bound becomes a per-`pmtudisc` rule).
+  - `wg_xmit` gains optional `gso_size` (cmsg `UDP_SEGMENT`; v3: IPv4 only,
+    dividing the payload — `validate_trace` refuses the rest, fail-noisy)
+    and `pmtudisc` (`do` default, `probe`; set per op with `IP_MTU_DISCOVER`
+    before the send and restored after; v3: no `dont`), and a payload up to
+    the GSO classes' need (`MAX_PAYLOAD` raised to 2784 for `w4_gso_4_2`;
+    `wg.py:357-362`'s MTU bound becomes a per-`pmtudisc` rule). v3 drops
+    `connected` (no `SEND2_FD`, no `wg_connect`) and `multicast_loop`.
   - `wg_set_mtu {mtu}`: `SIOCSIFMTU` via `SEND_FD`'s ioctl (as `wg_up` uses
     `SIOCSIFFLAGS`, `guest.c:926-931`).
-  - `wg_create` gains `mtu` (`IFLA_MTU`; `task/l-m` has no `mtu` field yet).
-  - **`route_into_wg0` becomes MTU-aware** (2.3; v2, M5): it reads wg0's MTU
-    (`SIOCGIFMTU`) and expects, per family, the kernel's refusal below the
-    family's floor (IPv6 add `-EINVAL` below 1280; IPv4 add `-ENOBUFS` below
-    68, or `0` instead of `-EEXIST` once a valid MTU re-created the empty
-    `in_device`; the route adds' errnos from P-B), failing the trace on any
-    other value as today.
+  - `wg_create` is unchanged (v3: no `IFLA_MTU`).
+  - **`route_into_wg0` becomes MTU-aware for the MTU-0 class only** (2.3;
+    v2 M5, v3 narrowed): it reads wg0's MTU (`SIOCGIFMTU`) and, below 68,
+    expects the kernel's refusal of all four requests (IPv6 add `-EINVAL`;
+    IPv4 add `-ENOBUFS` while the `in_device` is absent; the route adds'
+    errnos from P-B), failing the trace on any other value as today. No
+    kept class brings wg0 up with an MTU in [68, 1280).
   - `net_fixture` (already an optional trace field, `trace.py:73`) gains
-    `routes: [{dst, mtu}]`, `link_local: "fe80::1/64"`, `allowed_ips` for the
-    peer config is unchanged (the generator adds `224.0.0.0/4`, `ff00::/8`,
-    `fe80::/64` where a class needs them).
+    `routes: [{dst, mtu}]` for the route-MTU class; v3 drops `link_local`
+    and the multicast `allowed_ips` additions.
   - `wg_batch {items: [...], wait_ms}`: section 5.5; its result carries the
-    CQEs. `MAX_PAYLOAD` (32768, `guest.c:32`) and `line` (`:75`) grow to hold
-    1025 messages; `SO_RCVBUFFORCE` (8 MiB) on both listeners and `SEND_FD`,
-    since the default `rmem_default` (`sock.c:287`, 212992) holds about 270
-    small datagrams and the bulk tiers deliver up to 1025; **`SO_SNDBUFFORCE`
-    (8 MiB) on `SEND_FD` and `SEND2_FD`** (2.7; v2, M1).
-  - **Wire opcodes** for `wg_set_mtu`, `wg_batch` and `wg_connect` (if it is
-    its own op rather than a `wg_xmit` flag) are placeholders `OP_SET_MTU`,
-    `OP_BATCH`, `OP_CONNECT` here; the coordinator allocates them at the
+    CQEs; an item may be `inject_gso {messages}` (a UDP GSO datagram of
+    equal-size data messages to wg0's port, E §4's fan-out) for
+    `w7_budget_dead`. `MAX_PAYLOAD` (32768, `guest.c:32`) and `line` (`:75`)
+    grow to hold 1025 messages; `SO_RCVBUFFORCE` (8 MiB) on both listeners
+    and `SEND_FD`, since the default `rmem_default` (`sock.c:287`, 212992)
+    holds about 270 small datagrams and the bulk tiers deliver up to 1025;
+    **`SO_SNDBUFFORCE` (8 MiB) on `SEND_FD`** (2.7; v2, M1).
+  - **Wire opcodes** for `wg_set_mtu` and `wg_batch` are placeholders
+    `OP_SET_MTU` and `OP_BATCH` here; the coordinator allocates them at the
     interface commit (`trace.py` `OPCODES`, 15-17 are L's and 18 is
-    `wg_flood`).
+    `wg_flood`). v3: no `OP_CONNECT`.
   - `wg_observe` for bulk: the listener drain (`guest.c:563-600`) reports
     every datagram as today; for the full-ring tier the generator uses
     keepalive data messages (32 bytes, 48 as ciphertext) so the observe line
@@ -819,57 +881,78 @@ check from D1).
     full buffer. **Its bulk value is an output of P-A** (v2, m5), which
     measures the record volume per item in both children; v1's 4M words
     (32 MiB) is the upper bound P-A starts from, not the answer.
-- **`harness/noise.py`:** GSO segment and fragment builders (headers,
-  checksums, ids) anchored to the mirror's `Env.xmitPackets` by `#guard`
-  vectors and to Linux by the A1 bytes; batches of data messages under a
-  session with counter lists.
+- **`harness/noise.py`:** the IPv4 GSO segment builder (headers, checksums,
+  ids 0…n−1) anchored to the mirror's `Env.xmitPackets` by `#guard` vectors
+  and to Linux by the A1 bytes; batches of data messages under a session
+  with counter lists, and the GSO inject datagram of equal-size messages.
+  v3: no fragment builders.
 - **Generator** (`scripts/wg-w47-corpus.py`, classes; the corpus
   `corpus/wireguard/w4_*.json`, `w7_*.json`):
-  - `w4_gso_{4,6}_{n}`: after a session, one GSO xmit; the (n, `gso_size`)
-    pairs are **constrained by the 65507-byte payload bound** (v2, m4):
-    n ∈ {2, 3} with `gso_size` ∈ {8, 1392 (IPv4) or 1372 (IPv6), a
-    non-divisor so the last segment is short}, and n = 128 with `gso_size`
-    ∈ {8, 511} only (128 segments need `gso_size ≤ 511`; at `gso_size`
-    1392 the largest datagram gives 48 segments, 47 full and one of 83
-    bytes, so a `w4_gso_4_48` class covers the largest-segment end). Expect
-    n ciphertexts.
-  - `w4_gso_trim`: no session; two GSO xmits of 128 (`gso_size` 8), a third
-    of 1; expect `tx_dropped = 128`; then the offline response flushes 129
-    80-byte messages.
-  - `w4_route_mtu_probe_{4,6}`: route MTU 1300, `PROBE`, payload 1392/1372;
-    **the `len > mtu` arm** (`.padOverMtu` true, padding 8). The clamp is
-    not taken here and needs no class (2.3; v2, M8).
-  - `w4_set_mtu_{1300,1279}`: `wg_set_mtu` then xmits and a keepalive
-    (`wg_set` with `persistent_keepalive`, under a session: the keepalive
-    rule of section 4), then `wg_down`/`wg_up` with the MTU-aware fixture:
-    `_1300` keeps both families and moves the padding and `-EMSGSIZE`
-    boundaries; `_1279` drops IPv6 (its later IPv6 xmits are not in the
-    class) and reaches `.openHasInet6` false at the `wg_up`. Terminal.
-    `w4_set_mtu_0` (the `!mtu` arm and `.openHasInet` false) exists only
-    under decision 13.6: `wg_set_mtu 0`, the keepalive, `wg_down`, `wg_up`,
-    `wg_observe`.
-  - `w4_create_mtu_1279`: L's `wg_create` with `IFLA_MTU`, `wg_up` (IPv6
-    add `-EINVAL` expected), IPv4 xmits.
-  - `w4_frag_{4,6}_connected`: `connected`, `DONT`, payload 2000; expect two
-    ciphertexts with id = seed + 1 (IPv4) or the first non-zero kind-104
-    record (IPv6). `w4_frag_4_unconnected` is a **domain control**: expected
-    `unsupported`. `w4_gso_4_connected` (a GSO send from `SEND2_FD`): ids
-    seed + 1, seed + 2, … (M2's "including GSO").
-  - `w4_mcast_{4,6}`, `w4_mcast_{4,6}_nomember` (`224.0.0.2`, `ff02::1234`:
-    no NET_RX section; the IPv4 one is the trace that rejects D3's "any
-    `224/4`"), `w4_mcast_noloop` (`IPV6_MULTICAST_LOOP = 0`, both families),
-    `w4_mcast_noloop_v4opt` (`IP_MULTICAST_LOOP = 0` on the AF_INET6 sender:
-    the copy still loops), `w4_linklocal_6`: 2.4.
-  - `w7_multi_rx_{2,4,8}`: a batch of n data messages under a session
-    (valid; one tampered in `_dead`); `w7_multi_tx_{2,4,8}`: a batch of n
-    xmits; `w7_mixed`: injects and xmits in one batch (encrypt and decrypt
-    workers both queued).
-  - `w7_full_rx_1025`, `w7_full_tx_1025`: the `-ENOSPC` arms (keepalive
-    messages / 1-byte payloads), `rx_bytes`/counters as observables.
-  - `w7_epipe_rx`, `w7_epipe_tx`, `w7_two_napi`: **stretch** — two sessions
-    (two steered handshakes; `STEER_MAX = 64` entries suffice), the ring
-    at 1024, and for `w7_two_napi` a GSO datagram to wg0's port carrying
-    data messages for A and B.
+  v3: **the minimal set** of section 16 — 5 W4 classes and 11 W7 classes
+  (v2 had 35 and 15). Each W4 class names the WireGuard line, decision or
+  outcome it alone reaches (16.1).
+  - `w4_gso_4_2`: after a session, one IPv4 GSO xmit, `gso_size` 1392,
+    payload 2784 (two full-size segments); expect two ciphertexts with ids
+    0 and 1. Reaches `.xmitNotGso` false, `.xmitGsoError` false and a
+    two-iteration `.xmitWalk` under a session, and anchors the GSO
+    geometry on the smallest instance before `w4_gso_trim` depends on it.
+  - `w4_gso_trim`: no session; two GSO xmits of 128 (`gso_size` 8, payload
+    1024), a third of 1; expect `tx_dropped = 128`; then the offline response
+    flushes 129 80-byte messages. Alone reaches the trim loop
+    (`.xmitStagedTrimIter` true, device.c:211-214) and the `tx_dropped`
+    counter; 128 segments need `gso_size ≤ 511` (v2, m4).
+  - `w4_route_mtu_probe_4`: route MTU 1300 via `net_fixture.routes`,
+    `PROBE`, payload 1392 (len 1420): alone reaches **the `len > mtu` arm**
+    (`.padOverMtu` true, send.c:154-155, padding 8). The clamp is not taken
+    here and needs no class (2.3; v2, M8).
+  - `w4_set_mtu_1300`: `wg_set_mtu 1300` under a session, then an IPv4 xmit
+    of a 1300-byte packet and a keepalive (`wg_set` with
+    `persistent_keepalive`: the keepalive rule of section 4), `wg_observe`.
+    Alone checks the data flow `dev->mtu → PACKET_CB->mtu` at both read
+    sites (device.c:173, send.c:232) with a value other than 1420: the
+    xmit pads to 1300 (0 bytes) where a constant 1420 would pad to 1312
+    (12 bytes). Both families stay up.
+  - `w4_set_mtu_0` [AGENT 2026-10-07, delegated, 13.6(a)]: `wg_set_mtu 0`
+    under a session, the keepalive (**`.padNoMtu` true**, send.c:145-146),
+    `wg_down`, `wg_up` (**`.openHasInet` false and `.openHasInet6` false**,
+    device.c:39, 47; the MTU-aware fixture expects the four refusals),
+    `wg_observe`. Terminal. The three outcomes are reached by no other kept
+    class; P-B confirms the kernel accepts MTU 0 and fixes the errnos.
+  - `w7_multi_rx_{2,8}`: a batch of n valid data messages under a session.
+    n = 2 alone reaches `wg_prev_queue_dequeue`'s "more remain" arm
+    (queueing.c:91-95) and `.prevQueuePeeked` true (the poll between items
+    leaves item 2 peeked, 2.8); n = 8 is the instance where per-item yields
+    and two-item polls occur (W7-M3, M5, M9 are conclusive only with one).
+  - `w7_multi_tx_{2,8}`: a batch of n xmits under a session: the tx-side
+    twins (`tx_queue`'s dequeue arms, the tx worker stopping at an
+    `UNCRYPTED` head with it peeked, send.c:269-272).
+  - `w7_multi_tx_dead` (with stream A's `skbCowHead` steer on the k-th
+    call): alone reaches the encrypt worker's `DEAD` break mid-list
+    (send.c:299-302) and the tx worker's `kfree_skb_list` of a multi-skb
+    `DEAD` item (`:277-278`), which D2 mirrored but never exercised
+    (`d2-sprint.md:294`).
+  - `w7_mixed`: injects and xmits in one batch (encrypt and decrypt workers
+    both queued): the one class where `Batch.lean` orders two different
+    deferred units by their section starts.
+  - `w7_full_rx_1025`, `w7_full_tx_1025` (gated on P-A, 13.4): the
+    `-ENOSPC` arms (`.enqueuePeerQueueFull` true, queueing.c:74) on each
+    side; keepalive messages / 1-byte payloads; `rx_bytes`/counters as
+    observables.
+  - `w7_epipe_rx`, `w7_epipe_tx`: **stretch** — two sessions (two steered
+    handshakes; `STEER_MAX = 64` entries suffice), the ring at 1024: the
+    `-EPIPE` arms (`.enqueueRingFull` true; `.dataEpipe` true with the
+    in-softirq poll of a single `DEAD` entry; send.c:322-323's `DEAD` list).
+  - `w7_budget_dead` [AGENT 2026-10-07, delegated, 13.5(a)]: **stretch** —
+    B's 1024-item batch fills the decrypt ring, then one `inject_gso` of 64
+    data messages for A in the same `io_uring_enter`: `.rxPollBudgetDone`
+    true and `net_rx_action`'s repoll (section 10).
+  - Dropped in v3 (16.1, 16.2): `w4_gso_{4,6}_3`, every IPv6 GSO class, the
+    non-divisor `gso_size` classes, `w4_gso_{4,6}_128`, `w4_gso_4_48`,
+    `w4_route_mtu_probe_6`, `w4_set_mtu_1279`, `w4_create_mtu_1279`,
+    `w4_frag_{4,6}_connected`, `w4_frag_4_unconnected`, `w4_gso_4_connected`,
+    `w4_mcast_{4,6}`, `w4_mcast_{4,6}_nomember`, `w4_mcast_noloop`,
+    `w4_mcast_noloop_v4opt`, `w4_linklocal_6`; `w7_multi_rx_4`,
+    `w7_multi_rx_dead`, `w7_multi_tx_4`, `w7_two_napi`.
   - Isolation: bulk traces one per chunk (as E's under-load traces), since
     their wall time is a large share of the 4.5 s bound (`TRACE_BOUND_MS`,
     `task/d3-int:Leanux/Env.lean:55`).
@@ -877,10 +960,10 @@ check from D1).
 ## 7. Observables
 
 - **A1 bytes** at the listener: every GSO segment's ciphertext (ids,
-  lengths, the software UDP checksum, `CSUM_MANGLED_0`), both fragments
-  (same id, `MF`/offset, `CHECKSUM_NONE` so no `skb_checksum_help`
-  rewrite), padding under the route MTU, multicast/link-local sources and
-  hop limits (inside the ciphertext).
+  lengths, the software UDP checksum, `CSUM_MANGLED_0`; `CHECKSUM_NONE` so
+  no `skb_checksum_help` rewrite), padding under the route MTU and under
+  a device MTU of 1300, the 32-byte keepalive at MTU 0. v3: no fragments,
+  no multicast/link-local sources.
 - **Counters** (`wg_observe` stats, `guest.c:557-559`): `tx_dropped` at the
   trim (128), `tx_errors` for `IS_ERR(segs)`; the dump's `rx_bytes`
   (`32 × accepted` for keepalive batches) and `tx_bytes`.
@@ -899,43 +982,48 @@ check from D1).
 ## 8. Evidence: what pays for itself
 
 Mutants rejected only on W4/W7 traces (each names the trace that rejects
-it):
-- **W4-M1** GSO segment ids not incremented (all 0) — `w4_gso_4_3` bytes.
-- **W4-M2** the GSO last segment padded to `gso_size` — `w4_gso_*` with a
-  non-divisor.
-- **W4-M3** segment checksum left as the pseudo-header partial — bytes.
+it). v3: the W4 list follows the kept classes (16.1); mutants whose only
+rejecting trace was dropped are listed as dropped, so that nothing claims
+evidence the corpus no longer carries.
+- **W4-M1** GSO segment ids not incremented (all 0) — `w4_gso_4_2` bytes
+  (and `w4_gso_trim`'s 128).
+- **W4-M2** the GSO last segment padded to `gso_size` — **dropped** (needs a
+  non-divisor `gso_size`, beyond the boundary).
+- **W4-M3** segment checksum left as the pseudo-header partial —
+  `w4_gso_4_2` bytes.
 - **W4-M4** `skb_checksum_help` applied to a `CHECKSUM_NONE` packet — bytes
   (the field would change) and the `.encChecksumPartial` operand.
 - **W4-M5** trim before splice replaced by trim after (drops the new
   segments) — `w4_gso_trim`'s `tx_dropped` and the flushed counters.
 - **W4-M6** trim at `≥ 128` — `w4_gso_trim` (`tx_dropped` 129 vs 128).
-- **W4-M7** `mtu` from `dev->mtu` instead of `dst_mtu` — `w4_route_mtu_probe`
-  padding bytes.
+- **W4-M7** `mtu` from `dev->mtu` instead of `dst_mtu` —
+  `w4_route_mtu_probe_4` padding bytes.
 - **W4-M8** `last_unit %= mtu` dropped — same trace: without the modulo,
   `min(1300, ALIGN(1420, 16) = 1424) = 1300` and `1300 − 1420` is 0 in the
   mirror's `Nat` (Linux's unsigned wrap would be caught by `skb_put`), so
   the mutant pads 0 where Linux pads 8: bytes (v2, M8 corrects v1's
   "padding 8 vs clamp").
 - **W4-M9** keepalive padded with `Device.mtu` ignored (`!mtu` arm) —
-  `w4_set_mtu_0` A2 operands (bytes equal: honest); **only under 13.6**.
-- **W4-M10** `wg_open`'s `dev_v6` constant true — `w4_create_mtu_1279` A2.
-- **W4-M11** fragment 2 given a UDP header / wrong offset — `w4_frag_*`
-  bytes.
-- **W4-M12** fragment ident not from `inet_id` (0, or seed instead of
-  seed + 1) — bytes; the **control** `w4_frag_4_unconnected` must be
-  `unsupported`, not a pass.
-- **W4-M13** multicast loop modelled for a non-member group —
-  `w4_mcast_{4,6}_nomember` (an extra NET_RX section expected: section
-  mismatch). The IPv4 trace rejects D3's current `xmitMulticastLoop`
-  unmodified: a real defect this class alone finds.
-- **W4-M14** the loop keyed on the IPv4 `MC_LOOP` bit — `w4_mcast_noloop_v4opt`
-  (the mirror would expect no NET_RX section; Linux loops).
-- **W4-M15** the IPv6 fragment id as record + 1 (v1's rule) or from a
-  kind-110 site — `w4_frag_6_connected` bytes / hidden mismatch.
+  `w4_set_mtu_0` A2 operands (bytes equal: honest).
+- **W4-M10** `wg_open`'s `dev_v6` (or `dev_v4`) constant true —
+  `w4_set_mtu_0` A2 at the `wg_up`.
+- **W4-M11** fragment 2 given a UDP header / wrong offset — **dropped**
+  (fragmentation is beyond the boundary).
+- **W4-M12** fragment ident not from `inet_id` — **dropped** (same).
+- **W4-M13** multicast loop modelled for a non-member group — **dropped**:
+  no kept trace sends to a non-member group, so the `{224.0.0.1}`
+  correction (2.4) is a kernel-rule fix without a rejecting trace, stated
+  as such; a future non-member send fails noisily under either rule.
+- **W4-M14** the loop keyed on the IPv4 `MC_LOOP` bit — **dropped** (same).
+- **W4-M15** the IPv6 fragment id as record + 1 or from a kind-110 site —
+  **dropped** (same as M11).
+- **W4-M16** (v3) `Device.mtu` constant 1420 after `wg_set_mtu` —
+  `w4_set_mtu_1300` bytes: a 1300-byte packet pads 0 under the device's
+  MTU and 12 under the constant (`min(1420, 1312) − 1300`).
 - **W7-M1** `-ENOSPC` tested after the ring produce — `w7_full_tx_1025` A2
   (and the `-EPIPE` decision taken).
 - **W7-M2** the 1025th item sent anyway — `w7_full_*` counters.
-- **W7-M3** `peeked` ignored (re-dequeue) — `w7_multi_rx_4`: the peeked
+- **W7-M3** `peeked` ignored (re-dequeue) — `w7_multi_rx_2`: the peeked
   item is lost (`rx_bytes`, inner datagrams), A2 `.prevQueuePeeked`.
 - **W7-M4** `tailIsStub` never reset (the re-stub arm skipped) — A2 on
   `w7_multi_*` (the dequeue decisions).
@@ -943,8 +1031,9 @@ it):
   mismatch on the trace where the encrypt worker yielded (recorded), else
   inconclusive, reported.
 - **W7-M6** DEAD break not breaking (remaining packets encrypted) — `w7_multi_tx_dead` (needs A's `skbCowHead` steer on the k-th call; else this mutant waits for A).
-- **W7-M7** polls serving one peer when two are pending — `w7_two_napi`
-  (stretch).
+- **W7-M7** polls serving one peer when two are pending — **dropped** with
+  `w7_two_napi` (16.2); the environment keeps its `unsupported` for two
+  pending NAPIs, so the arm is fail-noisy rather than modeled.
 - **W7-M8** `-EPIPE` item not marked DEAD on receive — `w7_epipe_rx`
   (stretch): the poll would deliver it.
 - **W7-M9** the scheduler ignoring per-item resched records (D1-M15's
@@ -954,12 +1043,18 @@ it):
   `w7_budget_dead` (section 10): the second NET_RX section is unexpected
   or missing.
 
-Controls: `w4_frag_4_unconnected` (`unsupported`), the phase-1 commuting
-detector on synthetic record streams (a `.reschedTx` inside an open encrypt
-section with ring items must be `unsupported`; the same with the ring empty
-must pass; and the same shape with the units swapped, a `.reschedEncrypt`
-nested under an open tx section with a `CRYPTED` head, must be
-`unsupported` — the generic form, v2 M7), `w4_mcast_noloop_v4opt`, and the
+Controls: the phase-1 commuting detector on synthetic record streams (a
+`.reschedTx` inside an open encrypt section with ring items must be
+`unsupported`; the same with the ring empty must pass; and the same shape
+with the units swapped, a `.reschedEncrypt` nested under an open tx section
+with a `CRYPTED` head, must be `unsupported` — the generic form, v2 M7);
+**domain controls for the boundary** (v3): one trace each for a `dont`
+xmit above the route MTU, an IPv6 `gso_size` xmit, and a non-dividing
+`gso_size`, expected `unsupported` (so the exclusions are fail-noisy in the
+mirror, not silently absorbed by the harness); the per-section operand
+agreement of 13.2 on a synthetic two-poll trace whose Linux operands take
+(c') in the second poll only (must pass under the two-run rule, and must
+fail if the two runs disagree outside the NET_RX sections); and the
 measurement probes of section 12 re-run on any new kernel.
 
 ## 9. Out of scope (fail-noisy), and why
@@ -967,16 +1062,18 @@ measurement probes of section 12 re-run on any new kernel.
 | Item | Why |
 |---|---|
 | P5 arms: `wg_prev_queue_dequeue`'s `tail != head` (queueing.c:96-97, 105), concurrent producer mid-enqueue | SMP or in-region preemption |
-| P9: a poll using its budget (receive.c:483-484) | **reachable** on one CPU via `-EPIPE` `DEAD` entries (section 10); stretch tier under 13.5, or excluded by choice with an explicit `unsupported` at the poll site |
+| P9: a poll using its budget (receive.c:483-484) | **built** in the stretch tier (`w7_budget_dead`, section 10; 13.5(a)) |
 | `net_rx_action`'s squeeze (`netdev_budget` 300, 2 jiffies) and `__do_softirq`'s restart limit | at most 128 segments per datagram: two polls of 64; `unsupported` beyond (fail-noisy) |
-| A device MTU of 0 or below 68 (`.padNoMtu` true, `.openHasInet` false) | decision 13.6 |
+| A device MTU of 0 (`.padNoMtu` true, `.openHasInet` false) | **built** as the terminal class `w4_set_mtu_0` (13.6(a)); MTUs in [1, 68) and [68, 1280) reach nothing it does not and are not generated |
 | A batch item deferred by io_uring (`-EAGAIN`, poll-arm or io-wq) | avoided by `SO_SNDBUFFORCE`; a deferral fails on `wg_batch`'s CQE result (5.5) |
-| Unconnected `DONT` fragmentation; `IP_PMTUDISC_WANT`/`OMIT`/`INTERFACE` | the ident over a boot-random bucket (3); K1 would lift it |
+| **Beyond the WireGuard boundary** (v3, [USER 2026-10-07]; each `unsupported` in the mirror, fail-noisy): inner fragmentation (`DONT` above the route MTU, any sender), the connected sender and its ident/txhash draws, the IPv6 Fragment id, outer fragmentation, IPv6 GSO, a non-dividing `gso_size`, the IPv6 route MTU (`mtu6`), `IFLA_MTU` at creation, device MTUs other than 1300 and 0, multicast classes (IPv4 non-member, IPv6, the loop controls), link-local destinations | no WireGuard line, decision or outcome of their own (16.1); the IP-stack facts stay as record in 2.1, 2.3-2.5 |
+| Unconnected `DONT` fragmentation; `IP_PMTUDISC_WANT`/`OMIT`/`INTERFACE` | the ident over a boot-random bucket (3); K1 deferred under the boundary rule |
 | More than 128 GSO segments, `gso_size + 28 > fragsize` | the stack returns `-EINVAL`/`-EMSGSIZE` before `wg_xmit` (`udp.c:988-995`) |
-| GSO plus fragmentation (`DONT` with `gso_size`) | `cork->gso_size` sets `mtu = IP_MAX_MTU` (`ip_output.c:992`), no fragments; nothing new |
+| GSO plus fragmentation (`DONT` with `gso_size`) | `cork->gso_size` sets `mtu = IP_MAX_MTU` (`ip_output.c:992`), no fragments; nothing new, and beyond the boundary |
 | `IS_ERR(skb_gso_segment)`, `encrypt_packet` failures mid-list without A | allocation failures: stream A's capture and steering |
 | IPv6 extension headers, IPv4 options on transmit | W6 |
-| `-EPIPE`, two NAPIs in one `net_rx_action` | the stretch tier (two sessions); the mirror arms are built, the traces follow |
+| `-EPIPE`, the budget arm | the stretch tier (two sessions); the mirror arms are built, the traces follow integration |
+| Two NAPIs in one `net_rx_action` | v3: dropped (16.2) — an environment arm with no WireGuard line of its own; `napiSoftirq` keeps its `unsupported` for two pending NAPIs |
 | Phase 2 step workers | only if phase 1's detector fires often (5.4) |
 | A second device sharing nothing | W13 (rings are per device) |
 | Receive-side rcvbuf drops at `SEND_FD` | avoided by `SO_RCVBUFFORCE`; a trace that overflows it is `unsupported` by the delivery predicate, not modelled |
@@ -1020,20 +1117,22 @@ the existing arm plus, in the environment, the repoll: `napiSoftirq` loops
 while the polled NAPI stays scheduled, consuming one NET_RX section start
 per poll, and reports `unsupported` beyond `__do_softirq`'s ten restarts
 or if a section is missing (fail-noisy). `netdev_budget = 300` and the
-2-jiffy limit stay unreachable (section 9). **Decision 13.5** chooses
-between building this (recommended) and excluding P9 by choice, in which
-case the exclusion is an explicit `unsupported "a poll exhausted its
-budget (net_rx_action's repoll)"` at the poll site, not the `invariant`
-that would fire today (5.2).
+2-jiffy limit stay unreachable (section 9). **Decided 13.5(a)** [AGENT
+2026-10-07, delegated]: built, in `Batch.lean`, on the stretch tier. The
+GSO inject that fans the 64 messages is the one receive-side IP-stack
+mechanism v3 keeps (E §4's `udp_rcv_segment` fan-out), since without it
+the arm is unreachable on one CPU.
 
 ## 11. Risks
 
 - **Low — W4 bytes.** Every W4 fact is checked by ciphertext bytes; a wrong
   segment checksum, id or padding fails noisily on the first trace.
-- **Medium — the environment's stack model** (GSO segmentation, fragment
-  geometry, source selection). Each fact is verified once by a trace before
-  the generator relies on it (D2's method); the `#guard` vectors tie
-  `noise.py` and `Env.xmitPackets`.
+- **Low — the environment's stack model** (v3: IPv4 GSO segmentation with
+  equal segments, the route MTU, the device MTU's teardown flags; no
+  fragment geometry, no source selection). Each fact is verified once by a
+  trace before the generator relies on it (D2's method: `w4_gso_4_2`
+  before `w4_gso_trim`); the `#guard` vectors tie `noise.py` and
+  `Env.xmitPackets`.
 - **Medium — W7 timing on TCG.** Unknown until P-A: the per-send cost of
   io_uring + loopback + `wg_receive` under KCOV, 1024 AEADs in the worker,
   1024 loopback deliveries in the tx worker, and the record volume. If a
@@ -1045,11 +1144,15 @@ that would fire today (5.2).
 - **Low — the pinned-placement argument** (2.8) rests on `softirq.c:402-408`
   and `:467-483`; K2 would make it a checked fact if the extended
   `napi_orders.py` ever reports a placement outside the argument.
-- **High until 13.2 is decided — the (c') operand ambiguity** scales with
-  the item count (2.8, C2): with the enumeration bound of 3, most
-  full-ring traces and about 2% of 8-item traces would fail on one open
-  placement. Option (ii) keeps the operand check at two mirror runs per
-  failing trace.
+- **Medium — the per-section operand agreement** (13.2, option (ii)
+  approved [USER 2026-10-07]): the (c') ambiguity no longer bounds the
+  item count, but the check change is new code in `check.py` (section
+  tagging of mirror branches, section partition of Linux's comparison
+  records, the two-run independence test). Its control (section 8) and the
+  D2/D3 replays (every recorded trace must still agree, with
+  `NAPI_PLACEMENTS_MAX` gone) bound the risk; if the independence test
+  ever fails on a real trace, the placement is not independent and the
+  trace fails noisily rather than passing.
 - **Medium — sender buffers** (2.7, M1): the xmit batches depend on
   `SO_SNDBUFFORCE`; P-A confirms every CQE is present at `io_uring_enter`'s
   return, and `wg_batch`'s result makes a deferral fail noisily thereafter.
@@ -1078,48 +1181,72 @@ approved).
   both children, observe size, and 128-segment GSO xmit timing. **Its
   outputs are `kcov_capacity`'s bulk value and `wait_ms`'s default** (v2,
   m5), and the full-ring tier's go/no-go (13.4).
-- **P-B** fixture facts: `ip -6 addr show wg0` after `wg_up` (no `fe80`
-  expected); `ip -6 maddr show wg0` and `ip maddr show wg0` (the membership
-  sets `{ff01::1, ff02::1}` and `{224.0.0.1}`, M3); a `PROBE` send over a
-  `mtu 1300` route reaching `wg_xmit` unfragmented (one ciphertext of 1460
-  bytes); **the errnos of `route_into_wg0`'s four requests at MTU 1279 and,
-  under 13.6, at MTU 0** (the IPv6 add `-EINVAL`, the IPv4 add `-ENOBUFS`,
-  the route adds), and whether `ip link set wg0 mtu 0` is accepted.
+- **P-B** fixture facts (v3, narrowed): `ip maddr show wg0` (the IPv4 set
+  `{224.0.0.1}`, M3); a `PROBE` send over a `mtu 1300` route reaching
+  `wg_xmit` unfragmented (one ciphertext of 1460 bytes); whether `ip link
+  set wg0 mtu 0` is accepted, and **the errnos of `route_into_wg0`'s four
+  requests at MTU 0** (the IPv6 add `-EINVAL`, the IPv4 add `-ENOBUFS`, the
+  route adds). Dropped from P-B: `ip -6 addr show wg0` (the D2 §2
+  correction stands on `addrconf.c` alone and no kept class depends on
+  it), `ip -6 maddr`, the MTU-1279 errnos.
 - **P-C** (offline, no VM): the **nesting proxy** of 5.4 over the existing
   D1/D2 check runs' records (the phase-1 counter itself is zero there by
   construction, M7).
 
 **Interface commit** (on `task/w47`, **only after D3+L+A+E are integrated**
 on the base): `Device.mtu`, `inet4Dev`, `inet6Dev`; `PrevQueue`;
-`Kernel.napiPollList`; `Sender.inetId`; the new decisions and hidden sites
-(`.txHash`, `.inetIdSeed`, `.ipv6FragId`); the op schemas (`wg_xmit`
-options, `wg_set_mtu`, `wg_create.mtu`, `net_fixture` routes, `wg_batch`
-with its CQE result, `kcov_capacity`, `wait_ms`); the wire opcodes
-allocated by the coordinator (placeholders until then, section 6);
+`Kernel.napiPollList`; the new decisions (`wg_xmit.gso_error`,
+`wg_xmit.staged_trim_iter`, `wg_prev_queue_dequeue.*`); **no new hidden
+site**; the op schemas (`wg_xmit` `gso_size`/`pmtudisc`, `wg_set_mtu`,
+`net_fixture.routes`, `wg_batch` with `inject_gso` items and its CQE
+result, `kcov_capacity`, `wait_ms`); the wire opcodes allocated by the
+coordinator (placeholders `OP_SET_MTU`, `OP_BATCH` until then, section 6);
 `DEVICE_MTU` removed; the two new environment files created empty with
 their hooks in `Env.lean`.
 
 **Streams and file ownership** (the two streams meet in `Env.lean` only at
 the hooks, so neither edits the other's file):
 - **T — transmit shapes (W4):** **`Leanux/Env/IpStack.lean`** (new:
-  `xmitPackets`, the membership sets, `Sender.inetId`, `setMtu`
-  consequences; `Env.lean` hooks `xmitPackets`, `xmitMulticastLoop` and
-  the `wg_set`/`wg_up` keepalive rule of section 4), `Leanux/WG/Device.lean`
-  (`wgXmit` GSO/trim/`wgOpen`), `Leanux/WG/Send.lean` (`sendKeepalive`),
-  `harness/noise.py` (segment/fragment builders), `harness/guest.c` W4 ops
-  and fixture (`route_into_wg0` MTU-aware, `SEND2_FD`, sockopts).
+  `xmitPackets` for IPv4 GSO and the IPv4 route MTU, the `{224.0.0.1}`
+  set, `setMtu` consequences, and the boundary `unsupported`s; `Env.lean`
+  hooks `xmitPackets`, `xmitMulticastLoop` and the `wg_set`/`wg_up`
+  keepalive rule of section 4), `Leanux/WG/Device.lean` (`wgXmit`
+  GSO/trim/`wgOpen`), `Leanux/WG/Send.lean` (`sendKeepalive`),
+  `harness/noise.py` (the GSO segment builder), `harness/guest.c` W4 ops
+  and fixture (`wg_xmit` options, `wg_set_mtu`, `route_into_wg0` MTU-aware
+  at MTU 0, `SO_SNDBUFFORCE`).
 - **B — bulk (W7):** `Leanux/WG/Send.lean` (`enqueuePerDeviceAndPeer`),
   `Leanux/WG/Data.lean` (`txWorker`), `Leanux/WG/RxData.lean` (`rxPoll`,
   `enqueuePerPeerRx`), `Leanux/WG/Receive.lean` (`consumeData` arms),
   **`Leanux/Env/Batch.lean`** (new: `batch`, `napiSoftirq` with the
-  per-peer list and, under 13.5, the repoll, the `condResched`
+  per-peer list and the repoll (13.5(a)), the `condResched`
   generalization, the generic phase-1 detector; `Env.lean` hooks `batch`
   and the worker runners), `harness/guest.c` `wg_batch` (from `wg_flood`,
-  with the CQE result), `kcov_capacity`.
-- **H — harness, generator, corpus, evidence:** `scripts/wg-w47-corpus.py`,
-  `corpus/wireguard/w4_*`, `w7_*`, `scripts/wg-mutants.py` patterns W4-M*
-  and W7-M*, `evaluator/napi_orders.py` extension, the probes and their
-  results note.
+  with `inject_gso` and the CQE result), `kcov_capacity`.
+- **H — harness, generator, corpus, evidence, and the check change:**
+  `scripts/wg-w47-corpus.py`, `corpus/wireguard/w4_*`, `w7_*`,
+  `scripts/wg-mutants.py` patterns W4-M* and W7-M*, `evaluator/
+  napi_orders.py` extension, the probes and their results note, and
+  **`evaluator/check.py`'s per-section operand agreement** (13.2 (ii),
+  approved): mirror branches tagged with their NET_RX section ordinal
+  (`leanux-model` output, one field), Linux's comparison records
+  partitioned by the remote stream's section blocks, two mirror runs on
+  an operand mismatch with the independence test, `NAPI_PLACEMENTS_MAX`
+  and `napi_placements` removed, `napi_irq_before_put` becoming the
+  all-false/all-true pair; every recorded D2/D3 chunk replayed.
+
+**Effort** (v3 against v2, by what each stream builds; the user asked for
+the change, not hours):
+
+| Stream | v2 | v3 |
+|---|---|---|
+| T mirror/environment | GSO ×2 families with short last segments, fragmentation ×2 families, `inet_id` + 3 hidden sites + `wg_connect`, route MTU ×2 (`mtu6`), 2 membership sets + loop control, link-local source selection, `setMtu` with 3 thresholds, `IFLA_MTU` | IPv4 GSO with equal segments, IPv4 route MTU, the `{224.0.0.1}` set, `setMtu` with the 0/68/1280 flags, 6 boundary `unsupported`s |
+| T harness | `wg_xmit` ×5 options, `SEND2_FD` + connect, `wg_set_mtu`, `wg_create.mtu`, fixture: routes, link-local, MTU-aware at 3 thresholds, 2 sockopts; `noise.py` GSO + fragment builders | `wg_xmit` ×2 options, `wg_set_mtu`, fixture: routes, MTU-aware at MTU 0, 1 sockopt; `noise.py` GSO builder |
+| B | as v2 plus the repoll; minus the multi-peer `napiSoftirq` | unchanged otherwise |
+| H corpus | 35 W4 + 15 W7 classes | 5 W4 + 11 W7 classes, plus 3 boundary domain controls |
+| H mutants | W4 ×15, W7 ×10 | W4 ×10 (M1, M3-M10, M16), W7 ×9 (M1-M6, M8-M10) |
+| H check | — | the per-section operand agreement (13.2 (ii)) |
+| Probes | P-A, P-B ×6 facts, P-C | P-A, P-B ×4 facts, P-C |
 
 **Integration:** the full check with bulk traces one per chunk, the W4/W7
 mutants and controls, the phase-1 counter report, the report and signoff.
@@ -1128,9 +1255,30 @@ integration.
 
 ## 13. Decisions for the user
 
-Items 1, 3, 4 and 7 are [AGENT] recommendations pending the user; items
-2, 5 and 6 are **user decisions** with options, since one of their options
-weakens or narrows a check.
+**Decided, 2026-10-07** (v3). Provenance per item; the v2 texts below are
+kept as the record of the options and reasoning.
+- Scope — [USER 2026-10-07]: "we should stop at the boundary of wireguard
+  (unless this breaks important things)". The IP stack is modeled only
+  where it drives WireGuard code paths or is needed to predict WireGuard's
+  observable behaviour. Applied in section 16.
+- 13.1 — [AGENT 2026-10-07, under delegated authority]: the connected
+  sender was the recommendation, but **no K1 and no connected sender**:
+  fragmentation is beyond the boundary (16.1), so neither is built. K1
+  deferred under the boundary rule.
+- 13.2 — [USER 2026-10-07]: **option (ii) approved** — per-NET_RX-section
+  operand agreement, two mirror runs, the independence check. Stream H
+  (section 12).
+- 13.3 — [AGENT, delegated]: as recommended (generic phase 1; nesting
+  proxy; phase 2 on the W7 corpus).
+- 13.4 — [AGENT, delegated]: as recommended (full-ring tier gated on P-A
+  after `SO_SNDBUFFORCE`).
+- 13.5 — [AGENT, delegated]: **(a)**, P9 in the stretch tier
+  (`w7_budget_dead`, the repoll in `Batch.lean`).
+- 13.6 — [AGENT, delegated]: **(a)**, `wg_set_mtu 0` as a terminal class.
+  v3 then drops `w4_create_mtu_1279` and `w4_set_mtu_1279`, since the
+  MTU-0 class reaches `.openHasInet6` false too (16.1).
+- 13.7 — [AGENT, delegated]: as recommended; v3 adds that the `{224.0.0.1}`
+  correction has no rejecting trace (8, W4-M13).
 
 1. **The fragment-ident route** — recommendation: the **connected** sender
    with no K1, with M2 applied (`.txHash` then `.inetIdSeed` at
@@ -1332,6 +1480,13 @@ weakens or narrows a check.
     `.enqueueRingFull` 979 → 1062, `.prevQueuePeeked` 986 → 1069,
     `.dataEpipe` 990 → 1073, `.rxPollBudgetDone` 1025 → 1108;
     `.padClamped` is declared at 231 on both.
+- **Added in v3:** `task/d3-int:evaluator/generate.py` 302 (the random
+  xmit destinations include `e0000001`), `task/d3-int:evaluator/
+  test_model_replay.py` 34-38 (a no-peer `wg_xmit` to 224.0.0.1 with its
+  one NET_RX section); `task/census:docs/2026-10-04-d2-data-plane.md` 329
+  (staged flushes of 1-4 packets: the multi-skb item), 335 (tampered tags:
+  the poll's `DEAD` arm); `task/census:docs/2026-10-04-d2-sprint.md` 294
+  (the multi-skb `DEAD` break never exercised).
 
 ## 15. Revision v2 — audit response
 
@@ -1473,3 +1628,97 @@ P-B; the user decides.
 are integrated; stream T in `Leanux/Env/IpStack.lean`, stream B in
 `Leanux/Env/Batch.lean`, meeting in `Env.lean` only at the hooks; wire
 opcodes as placeholders until the coordinator allocates them.
+
+## 16. Revision v3 — WireGuard boundary and decisions
+
+**The rule** [USER 2026-10-07]: "we should stop at the boundary of
+wireguard (unless this breaks important things)". Applied as: a class is
+kept iff it reaches a WireGuard line, decision or outcome (in
+`drivers/net/wireguard/`, as the mirror's A2 decisions name them) that no
+other kept class reaches, or it is needed so that the observations of kept
+traces stay predictable; the IP stack is modeled only as far as the kept
+classes' bytes and records need. Everything else is marked **excluded:
+beyond the WireGuard boundary**, as a fail-noisy `unsupported` in the
+mirror (section 9) and a `validate_trace` refusal in the harness, with
+three domain-control traces (section 8) showing the `unsupported` fires.
+The verified kernel facts of the dropped classes stay in sections 2.1,
+2.3-2.5 as record.
+
+### 16.1 W4, class by class
+
+| Class (v2) | WireGuard line / decision / outcome it alone reaches | Verdict |
+|---|---|---|
+| `w4_gso_4_2` (gso_size 1392, payload 2784) | `.xmitNotGso` false, `.xmitGsoError` false (device.c:176-187), a two-iteration `.xmitWalk` (`:189-204`) under a session; `.encChecksumPartial` false. The multi-skb encrypt/tx walks themselves are D2's (staged flushes of 1-4 packets, `d2-data-plane.md:329`). | **kept** — also the geometry anchor for `w4_gso_trim` |
+| `w4_gso_trim` (2×128 at gso_size 8, then 1) | the trim loop `.xmitStagedTrimIter` true (device.c:211-214), `tx_dropped`; the 129-skb item of the flush | **kept** |
+| `w4_gso_{4,6}_3`, non-divisor sizes, `w4_gso_{4,6}_128`, `w4_gso_4_48`, every IPv6 GSO class | nothing beyond the two above: segment count and size do not change a WireGuard branch (padding's arms are D2's); a short last segment and IPv6 are IP-stack geometry | **dropped** (boundary) |
+| `w4_route_mtu_probe_4` (route MTU 1300, PROBE, len 1420) | `.padOverMtu` true (send.c:154-155) | **kept** |
+| `w4_route_mtu_probe_6` | the same line; needs the IPv6 route MTU (`mtu6`) | **dropped** (boundary) |
+| `w4_set_mtu_1300` | the data flow `dev->mtu → PACKET_CB->mtu` at device.c:173 and send.c:232 with a value other than 1420 (W4-M16: bytes 0 vs 12 bytes of padding); both families stay up | **kept** |
+| `w4_set_mtu_0` (13.6(a)) | `.padNoMtu` true (send.c:145-146), `.openHasInet` false (device.c:39), `.openHasInet6` false (`:47`) | **kept**, terminal |
+| `w4_set_mtu_1279`, `w4_create_mtu_1279` | `.openHasInet6` false only — reached by `w4_set_mtu_0`; `IFLA_MTU` and the 1280 threshold add IP-stack teardown modeling and fixture expectations for nothing further | **dropped** (redundant with the MTU-0 class) |
+| `w4_frag_{4,6}_connected`, `w4_frag_4_unconnected`, `w4_gso_4_connected` | two ordinary `wg_xmit` calls; `.encChecksumPartial` false (GSO's); a second packet without a UDP header that WireGuard never parses. The ident draws (`.txHash`, `.inetIdSeed`, `.ipv6FragId`) are IP-stack hidden inputs | **dropped** (boundary; K1 deferred) |
+| `w4_mcast_{4,6}`, `w4_mcast_{4,6}_nomember`, `w4_mcast_noloop`, `w4_mcast_noloop_v4opt` | none: `wg_xmit` sees an ordinary packet, the peer lookup reads only the destination, multicast draws no ICMP; the loop copy, TTL, hop limit and `sk_mc_loop` are IP-stack behaviour. What the existing corpus needs — the NET_RX section of a no-peer `wg_xmit` to `224.0.0.1` (`generate.py:302`) — is the IPv4 set `{224.0.0.1}`, kept in `xmitMulticastLoop` | **dropped** (boundary); the set kept |
+| `w4_linklocal_6` | none (D2's IPv6 xmit lines); source selection is IP-stack | **dropped** (boundary) |
+
+Kept W4: `w4_gso_4_2`, `w4_gso_trim`, `w4_route_mtu_probe_4`,
+`w4_set_mtu_1300`, `w4_set_mtu_0` — 5 of 35. Together they reach every W4
+WireGuard outcome of section 1: `.xmitNotGso`/`.xmitGsoError`/`.xmitWalk`
+(n > 1), the trim, `.padOverMtu` true, `.padNoMtu` true, `.openHasInet`
+false, `.openHasInet6` false, `.encChecksumPartial` false, and the
+`Device.mtu` data flow. IP-stack modeling retained for them: IPv4 GSO
+geometry with equal segments (ids, lengths, UDP checksums); `dst_mtu` =
+route MTU for an IPv4 `PROBE` send; `Device.mtu` with the 68/1280 flags
+and the fixture's refusals at MTU 0; the `{224.0.0.1}` set. Dropped
+modeling: fragment geometry and the three hidden sites, `inet_id`, the
+connected sender, IPv6 GSO, short last segments, `mtu6`, `IFLA_MTU`, the
+IPv6 membership set and loop control, link-local source selection.
+
+### 16.2 W7, checked against the rule
+
+W7 is WireGuard queue behaviour (queueing.c/h, the workers' loops,
+`wg_packet_rx_poll`) and stays in scope. Per class:
+
+| Class (v2) | WireGuard line / decision / outcome it alone reaches | Verdict |
+|---|---|---|
+| `w7_multi_rx_2` | `wg_prev_queue_dequeue`'s "more remain" arm (queueing.c:91-95); `.prevQueuePeeked` true; the poll stopping at an `UNCRYPTED` head | **kept** |
+| `w7_multi_rx_8` | no new line; the instance with per-item yields and two-item polls (W7-M3, M5, M9 conclusive) | **kept** (scheduling evidence) |
+| `w7_multi_rx_4` | nothing between 2 and 8 | **dropped** |
+| `w7_multi_rx_dead` | the poll's `DEAD` arm is D2's (tampered tags); a `DEAD` entry mid-queue takes no new line | **dropped** |
+| `w7_multi_tx_2`, `w7_multi_tx_8` | the tx-side twins (`tx_queue` dequeue arms; the tx worker stopping at an `UNCRYPTED` head, send.c:269-272) | **kept** |
+| `w7_multi_tx_4` | nothing between 2 and 8 | **dropped** |
+| `w7_multi_tx_dead` (with A) | the encrypt worker's `DEAD` break mid-list (send.c:299-302) and `kfree_skb_list` of a multi-skb `DEAD` item (`:277-278`): "mirrored, but never exercised" (`d2-sprint.md:294`) | **kept** |
+| `w7_mixed` | no new line; the one class ordering two deferred units by section starts in `Batch.lean` (needed for the environment's ordering rule) | **kept** |
+| `w7_full_rx_1025`, `w7_full_tx_1025` | `.enqueuePeerQueueFull` true (queueing.c:74, `-ENOSPC`) on each side | **kept** (P-A gated) |
+| `w7_epipe_rx`, `w7_epipe_tx` | `.enqueueRingFull` true (`-EPIPE`); `.dataEpipe` true and the in-softirq poll of a `DEAD` entry; send.c:322-323's `DEAD` list | **kept** (stretch) |
+| `w7_two_napi` | none: `wg_packet_rx_poll` is per peer; two NAPIs in one `net_rx_action` is `dev.c`'s list, an environment arm | **dropped**; `napiSoftirq` keeps its `unsupported` |
+| `w7_budget_dead` (13.5(a)) | `.rxPollBudgetDone` true (receive.c:483-484) and the repoll | **kept** (stretch) |
+
+Kept W7: 11 of 15. The receive-side GSO inject (`inject_gso`) is the one
+IP-stack mechanism kept for W7, because `w7_budget_dead` is unreachable on
+one CPU without it.
+
+### 16.3 What the rule changed elsewhere
+
+- Hidden inputs (3): no new site; the fragment rows are record only; K1
+  deferred; K3 moot (13.2 (ii) approved).
+- Mirror/environment (4, 5.2): `xmitPackets` models IPv4 GSO and the IPv4
+  route MTU and answers `unsupported` to the rest; no `Sender.inetId`;
+  `napiSoftirq` keeps its multi-peer `unsupported`; the keepalive rule for
+  `wg_set`/`wg_up` stays (the MTU classes need it).
+- Harness (6): `wg_xmit` keeps `gso_size` and `pmtudisc ∈ {do, probe}`;
+  no `connected`, `multicast_loop`, `SEND2_FD`, `wg_create.mtu`,
+  `link_local`; the MTU-aware fixture only at MTU 0; `wg_batch` gains
+  `inject_gso`; opcodes `OP_SET_MTU`, `OP_BATCH`.
+- Mutants (8): W4 keeps M1, M3-M10 and adds M16; drops M2, M11-M15. W7
+  drops M7. Three boundary domain controls and the 13.2 (ii) control
+  added.
+- Plan (12): T shrinks to the IPv4 GSO/route-MTU/MTU rules; H gains the
+  `check.py` per-section operand agreement; P-B drops three facts; the
+  effort table compares v2 and v3.
+- Corrections to record at integration (13.7) are unchanged, with the
+  note that the `{224.0.0.1}` fix has no rejecting trace.
+
+**Size change:** classes 50 → 16 (W4 35 → 5, W7 15 → 11); hidden sites
+3 → 0; harness ops/options: `wg_xmit` options 5 → 2, `wg_connect` and
+`wg_create.mtu` gone, one new item kind (`inject_gso`); W4 mutants 15 →
+10, W7 10 → 9; P-B facts 6 → 4.
