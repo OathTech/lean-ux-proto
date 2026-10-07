@@ -59,9 +59,6 @@ def findNextFd (fdt : Fdtable) (start : Nat) : M Nat := do
 def roundupPowOfTwo (n : Nat) : Nat :=
   if n ≤ 1 then 1 else 2 ^ (Nat.log2 (n - 1) + 1)
 
-/-- PAGE_SIZE on x86_64. -/
-def PAGE_SIZE : Nat := 4096
-
 /-- alloc_fdtable (file.c:94-175). `CONFIG_32BIT=n`, so `nr` is the smallest
     power of two at least `slots_wanted`. The three allocations consult the
     environment oracle; `kvmalloc` leaves the arrays uninitialized, and

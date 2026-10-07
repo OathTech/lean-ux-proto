@@ -1,0 +1,128 @@
+{
+  "version": 1,
+  "id": "p_packet_setfl",
+  "ops": [
+    {
+      "op": "pipe2",
+      "flags": 2048
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "count": 10,
+      "value": "81985529216486895"
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "cmd": "F_SETFL",
+      "arg": 18432
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "cmd": "F_GETFL",
+      "arg": 0
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "count": 5,
+      "value": "81985529216486895"
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "count": 3,
+      "value": "81985529216486895"
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "count": 4096,
+      "value": "81985529216486895"
+    },
+    {
+      "op": "read",
+      "fd": {
+        "pipe": 0,
+        "end": 0
+      },
+      "count": 100
+    },
+    {
+      "op": "read",
+      "fd": {
+        "pipe": 0,
+        "end": 0
+      },
+      "count": 100
+    },
+    {
+      "op": "pipe2",
+      "flags": 2048
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "pipe": 9,
+        "end": 0
+      },
+      "cmd": "F_SETFL",
+      "arg": 18432
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "pipe": 9,
+        "end": 0
+      },
+      "cmd": "F_GETFL",
+      "arg": 0
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 9,
+        "end": 1
+      },
+      "count": 10,
+      "value": "81985529216486895"
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 9,
+        "end": 1
+      },
+      "count": 10,
+      "value": "81985529216486895"
+    },
+    {
+      "op": "read",
+      "fd": {
+        "pipe": 9,
+        "end": 0
+      },
+      "count": 100
+    }
+  ]
+}

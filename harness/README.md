@@ -74,8 +74,10 @@ disarms, the default; flag 1 is the inventory mode, with N = 0 every
 allocation in a recording context). `evaluator/check.py` passes the same
 arm-record value to the kernel (`run_linux(..., arm_records=)`) and to the
 mirror (each trace's `arm_records` next to its `hidden` records), so the two
-cannot disagree silently. Opcode 14 is `wg_advance`, its `a` the ticks (D3,
-docs/2026-10-05-d3-timers.md). `wg_observe`'s 0.4 s wait is inside its
+cannot disagree silently. Opcodes come from the explicit table `harness/trace.py`
+`OPCODES` (mirrored by `OP_*` in `harness/guest.c`; `harness/test_trace.py`
+checks both): 14 is `pipe2`, 15-18 are reserved (L, E), and 19 is
+`wg_advance`, its `a` the ticks (D3, docs/2026-10-05-d3-timers.md). `wg_observe`'s 0.4 s wait is inside its
 operation's remote window (an idle point where a timer may fire naturally,
 D3 section 5.3). A negative control may build the guest as a named variant
 (`harness/linux.py` `GUEST_VARIANTS`, `run_linux(..., guest_variant=)`,

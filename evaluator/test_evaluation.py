@@ -1,4 +1,5 @@
 import copy
+from collections import Counter
 import json
 from pathlib import Path
 import re
@@ -43,6 +44,74 @@ class EvaluationChecks(unittest.TestCase):
             with self.assertRaises(InvalidOutput):
                 parse_batch([self.trace], json.dumps(dict(copy.deepcopy(self.result), fired=fired)))
 
+    def test_pipes_observation_fields(self):
+        """P design section 6: a read's head and digest, a write's sigpipe, a
+        pipe2's fds, on both sides (protocol) and on the Linux side
+        (harness/linux.py, which also recomputes short reads' digests)."""
+        import hashlib
+        from harness.linux import _check_observation
+        trace = {'version': 1, 'id': 'p', 'ops': [
+            {'op': 'pipe2', 'flags': 2048},
+            {'op': 'write', 'fd': {'pipe': 0, 'end': 1}, 'count': 100, 'value': '0'},
+            {'op': 'read', 'fd': {'pipe': 0, 'end': 0}, 'count': 69632},
+            {'op': 'read', 'fd': {'pipe': 0, 'end': 0}, 'count': 5},
+            {'op': 'pipe2', 'flags': 1}]}
+        head = bytes(range(100))
+        result = {'version': 1, 'id': 'p', 'branches': [], 'observations': [
+            {'index': 0, 'ret': 0, 'errno': None, 'bytes': '', 'fds': [8, 9]},
+            {'index': 1, 'ret': 100, 'errno': None, 'bytes': '', 'sigpipe': 0},
+            {'index': 2, 'ret': 100, 'errno': None, 'bytes': head[:64].hex(), 'digest': hashlib.blake2s(head).hexdigest()},
+            {'index': 3, 'ret': 3, 'errno': None, 'bytes': 'aabbcc', 'digest': hashlib.blake2s(bytes.fromhex('aabbcc')).hexdigest()},
+            {'index': 4, 'ret': -22, 'errno': 22, 'bytes': '', 'fds': None}]}
+        self.assertEqual(compare(trace, result, result)['outcome'], 'agreement')
+        _check_observation(copy.deepcopy(result), trace)
+        broken = [
+            (2, {'bytes': head.hex()}),                    # more than the 64-byte head
+            (2, {'digest': None}),                         # a successful read without a digest
+            (2, {'digest': 'AB' * 32}),
+            (1, {'sigpipe': 2}),
+            (1, {'sigpipe': True}),
+            (0, {'fds': [8, 8]}),
+            (0, {'fds': None}),
+            (4, {'fds': [8, 9]}),                          # descriptors after a failure
+        ]
+        for index, change in broken:
+            with self.subTest(change=change):
+                altered = copy.deepcopy(result)
+                altered['observations'][index].update(change)
+                with self.assertRaises(InvalidOutput):
+                    parse_batch([trace], json.dumps(altered))
+                with self.assertRaises(ValueError):
+                    _check_observation(altered, trace)
+        for index, field in ((1, 'sigpipe'), (2, 'digest'), (0, 'fds')):
+            altered = copy.deepcopy(result)
+            del altered['observations'][index][field]
+            with self.assertRaises(InvalidOutput):
+                parse_batch([trace], json.dumps(altered))
+        # Linux side only: a short read's digest is recomputed with hashlib,
+        # and a read cannot return more than its count.
+        for index, change in ((3, {'digest': hashlib.blake2s(b'x').hexdigest()}), (3, {'ret': 6, 'bytes': 'aa' * 6})):
+            altered = copy.deepcopy(result)
+            altered['observations'][index].update(change)
+            with self.assertRaises(ValueError):
+                _check_observation(altered, trace)
+        # A semantic difference in a digest or sigpipe is a mismatch.
+        for index, change in ((2, {'digest': '00' * 32}), (1, {'sigpipe': 1})):
+            model = copy.deepcopy(result)
+            model['observations'][index].update(change)
+            self.assertEqual(compare(trace, result, model)['outcome'], 'semantic_mismatch')
+
+    def test_guest_timeout_counts_pauses_and_bytes(self):
+        # D3 merge: the budget is rounded to whole seconds (fixed waits plus
+        # CONTENTION_FACTOR x compute), so the traces are long enough to show
+        # each term: 50 pauses of 20 ms are slept in both children (2 s, not
+        # scaled); 20 writes of 69632 bytes get 1 s/MiB per child, scaled.
+        plain = [{'ops': [{'op': 'read', 'fd': {'literal': 8}, 'count': 8}] * 50}]
+        paused = [{'ops': [{'op': 'read', 'fd': {'literal': 8}, 'count': 8, 'pause_ms': 20}] * 50}]
+        large = [{'ops': [{'op': 'write', 'fd': {'literal': 8}, 'count': 69632, 'value': '0'}] * 50}]
+        self.assertEqual(check.guest_timeout(paused) - check.guest_timeout(plain), 2)
+        self.assertGreater(check.guest_timeout(large), check.guest_timeout(plain) + 15)
+
     def test_resource_failures_are_not_agreement(self):
         for error in (4, 5, 14, 19, 23, 28, 38, 105, 512):
             result = copy.deepcopy(self.result)
@@ -66,7 +135,8 @@ class EvaluationChecks(unittest.TestCase):
             with self.assertRaises(InvalidOutput):
                 validate_coverage([self.trace], altered)
 
-    CONFIG = {'files': ['fs/eventfd.c'], 'functions': ['eventfd_read', 'eventfd_ctx_do_read'], 'known_gaps': []}
+    CONFIG = {'files': ['fs/eventfd.c'], 'functions': ['eventfd_read', 'eventfd_ctx_do_read'], 'known_gaps': [],
+              'shared_exits': [], 'operand_exclusions': []}
 
     def decision(self, label, line, true, false):
         return {'label': label, 'file': 'fs/eventfd.c', 'line': line,
@@ -220,8 +290,62 @@ class EvaluationChecks(unittest.TestCase):
         self.assertTrue(run(dict(label='alloc_fd.o_cloexec=0', operands=[0, 0]), [])[0])         # undeclared
         self.assertEqual(run(dict(label='made_up=1', operands=[1, 2]), []), ([], 0))             # left to control_flow
 
+    def test_operand_exclusion_is_one_call_site(self):
+        # A declared exclusion (kcov.json operand_exclusions) stands for one
+        # Linux comparison at the condition line whose outermost frame is the
+        # declared call line; nothing else is accepted without operands.
+        cmp = {'rel': 'eq', 'const_rhs': True, 'site': None}
+        decisions = {'__refcount_add.old_zero': dict(site='include/linux/refcount.h:189', comparison=cmp),
+                     'alloc_fd.o_cloexec': dict(site='fs/file.c:532', comparison=None)}
+        inner = {'function': '__refcount_add', 'source': '/x/.deps/linux/include/linux/refcount.h:189'}
+        loc = {'0x1': [inner, {'function': 'alloc_pipe_info', 'source': '/x/.deps/linux/fs/pipe.c:794'}],
+               '0x2': [inner, {'function': 'alloc_pipe_info', 'source': '/x/.deps/linux/fs/pipe.c:830'}]}
+        exclusions = [{'label': '__refcount_add.old_zero', 'operand': 'root_user.__count', 'call': 'fs/pipe.c:794',
+                       'note': ''}]
+        trace = {'ops': [{'op': 'pipe2'}]}
+        def run(branches, records):
+            model = {'branches': [dict(index=0, **b) for b in branches]}
+            excluded = Counter()
+            problems, checked = check.operand_agreement(trace, model, [{'records': records}], loc, decisions,
+                                                        None, exclusions, excluded)
+            return problems, checked, sum(excluded.values())
+        at_call = [5, '0x0', '0x1a', '0x1']
+        elsewhere = [5, '0x0', '0x1a', '0x2']
+        ok = dict(label='__refcount_add.old_zero=0', operands_excluded='root_user.__count')
+        self.assertEqual(run([ok], [at_call]), ([], 0, 1))
+        self.assertTrue(run([ok], [elsewhere])[0])                     # the comparison at another call site
+        self.assertTrue(run([ok], [])[0])                              # no comparison recorded
+        self.assertTrue(run([ok, ok], [at_call])[0])                   # two exclusions, one comparison
+        self.assertTrue(run([dict(ok, operands_excluded='nr_files')], [at_call])[0])     # undeclared operand
+        self.assertTrue(run([dict(ok, operands=[2, 0])], [at_call])[0])                  # both forms at once
+        self.assertTrue(run([dict(label='alloc_fd.o_cloexec=0', operands_excluded='root_user.__count')], [])[0])
+        self.assertTrue(run([dict(label='__refcount_add.old_zero=0')], [at_call])[0])    # plain omission
+
+    def test_shared_exit_needs_the_early_return_path(self):
+        # A declared shared exit (kcov.json shared_exits) does not count its
+        # helper as having run, but only when the block entering the helper
+        # (unless_covered) was not covered in the operation.
+        decisions = {'file_end_write.not_regular': dict(function='file_end_write'),
+                     'vfs_write.not_fmode_write': dict(function='vfs_write')}
+        loc = {'0xa': [{'function': 'vfs_write', 'source': '/x/.deps/linux/fs/read_write.c:667'}],
+               '0xb': [{'function': 'vfs_write', 'source': '/x/.deps/linux/fs/read_write.c:691'}],
+               '0xc': [{'function': 'file_end_write', 'source': '/x/.deps/linux/include/linux/fs.h:3018 (discriminator 1)'},
+                       {'function': 'vfs_write', 'source': '/x/.deps/linux/fs/read_write.c:691 (discriminator 1)'}]}
+        config = {'files': ['fs/read_write.c', 'include/linux/fs.h'], 'functions': ['vfs_write'],
+                  'shared_exits': [{'function': 'file_end_write',
+                                    'frames': ['include/linux/fs.h:3018', 'fs/read_write.c:691'],
+                                    'unless_covered': ['fs/read_write.c:691'], 'note': ''}]}
+        early = check.decision_functions_run({'pcs': ['0xa', '0xc']}, loc, config, decisions)
+        self.assertEqual(early, ({'vfs_write'}, 1))
+        full = check.decision_functions_run({'pcs': ['0xa', '0xb', '0xc']}, loc, config, decisions)
+        self.assertEqual(full, ({'vfs_write', 'file_end_write'}, 0))
+        undeclared = check.decision_functions_run({'pcs': ['0xa', '0xc']}, loc, dict(config, shared_exits=[]),
+                                                  decisions)
+        self.assertEqual(undeclared, ({'vfs_write', 'file_end_write'}, 0))
+
     def test_order_within_a_function(self):
-        config = {'files': ['fs/eventfd.c'], 'functions': ['eventfd_write'], 'known_gaps': []}
+        config = {'files': ['fs/eventfd.c'], 'functions': ['eventfd_write'], 'known_gaps': [],
+                  'shared_exits': [], 'operand_exclusions': []}
         table = check.parse_decisions([
             self.decision('eventfd_write.wrong_size', 254, [(255, 255)], [(256, 256)]),
             self.decision('eventfd_write.ullong_max', 258, [(259, 259)], [(260, 260)])], config)

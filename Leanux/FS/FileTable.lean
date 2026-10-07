@@ -1,4 +1,5 @@
 import Leanux.FS.EventfdOps
+import Leanux.FS.Inode
 
 /-!
 # fs/file_table.c — `struct file` allocation and release
@@ -21,9 +22,11 @@ def openFmode (flags : UInt32) : UInt32 :=
   ((flags + 1) &&& O_ACCMODE) ||| (flags &&& FMODE_NONOTIFY)
 
 /-- Whether the file's inode is a character device (`S_ISCHR`). The anonymous
-    inode has mode S_IRUSR|S_IWUSR (fs/libfs.c); fixture inodes are not modeled. -/
+    inode has mode S_IRUSR|S_IWUSR (fs/libfs.c); a pipefs inode is `S_IFIFO`;
+    fixture inodes are not modeled. -/
 def inodeIsChr : Option InodeId → M Bool
   | some .anon => return false
+  | some (.pipefs id) => return (← getInode id).iMode &&& S_IFMT == S_IFCHR
   | some (.fixture name) => unsupported s!"inode of fixture file {name}"
   | none => invariant "file->f_inode is NULL"
 
@@ -61,9 +64,9 @@ def iocbFlags (fFlags : UInt32) : M UInt32 := do
   if ← branchCmp .iocbFlagsSync (hasFlag fFlags O_SYNC_INTERNAL) (fFlags &&& O_SYNC_INTERNAL).toNat 0 then res := res ||| 0x4
   return res
 
-/-- file_init_path (file_table.c:330-351). The path/inode/mapping fields and
-    `i_readcount_inc` are cut points (the anonymous inode is shared and not
-    modeled). -/
+/-- file_init_path (file_table.c:330-351). The path/mapping fields are cut
+    points; `i_readcount_inc` (include/linux/fs.h:3130-3133) counts on the
+    inode record (`inodeReadcountInc`). -/
 def fileInitPath (fid : FileId) (fopId : FopsId) (inode : InodeId) : M Unit := do
   let fop ← fopsOf (some fopId)
   -- file->f_path = *path; file->f_inode = path->dentry->d_inode; f_mapping; f_wb_err; f_sb_err
@@ -85,8 +88,8 @@ def fileInitPath (fid : FileId) (fopId : FopsId) (inode : InodeId) : M Unit := d
   mode := mode ||| FMODE_OPENED
   -- file->f_op = fop (file_table.c:348)
   setFile fid { f with fMode := mode, fIocbFlags := iocb, fOp := some fopId }
-  -- i_readcount_inc for read-only files: a cut point
-  _ ← branchCmp .fileInitPathReadOnly (mode &&& (FMODE_READ ||| FMODE_WRITE) == FMODE_READ) (mode &&& (FMODE_READ ||| FMODE_WRITE)).toNat FMODE_READ.toNat
+  if ← branchCmp .fileInitPathReadOnly (mode &&& (FMODE_READ ||| FMODE_WRITE) == FMODE_READ) (mode &&& (FMODE_READ ||| FMODE_WRITE)).toNat FMODE_READ.toNat then
+    inodeReadcountInc (some inode)
 
 /-- alloc_file (file_table.c:360-369). -/
 def allocFile (flags : UInt32) (fopId : FopsId) (inode : InodeId) : M (Except Int FileId) := do
@@ -96,24 +99,34 @@ def allocFile (flags : UInt32) (fopId : FopsId) (inode : InodeId) : M (Except In
   return r
 
 /-- alloc_path_pseudo (file_table.c:371-380): the dentry (`d_alloc_pseudo`,
-    an allocation outcome); `mntget` and `d_instantiate` are cut points. -/
-def allocPathPseudo : M Int := do
+    an allocation outcome) holding its first reference; `mntget` and
+    `d_instantiate` are cut points. A pipefs inode's pseudo dentry counts
+    its references (`Inode.dCount`, dropped by `dputPipefs` in `__fput`);
+    the anonymous inode's dentry is a cut point. -/
+def allocPathPseudo (inode : InodeId) : M Int := do
   if ← branch .allocPathPseudoFail (!(← hiddenAlloc .dAllocPseudo)) then return -ENOMEM
+  if let .pipefs id := inode then
+    let ino ← getInode id
+    if ino.dCount != 0 then invariant s!"d_alloc_pseudo for pipefs inode {id}, whose dentry exists"
+    setInode id { ino with dCount := 1 }
   return 0
 
-/-- alloc_file_pseudo (file_table.c:382-400). `ihold` and `path_put` are
-    cut points. -/
+/-- alloc_file_pseudo (file_table.c:382-400). On failure, `ihold(inode)` and
+    `path_put(&path)`: the dentry's last reference goes, and the `iput` of
+    its killing balances the `ihold` (both cuts). -/
 def allocFilePseudo (flags : UInt32) (inode : InodeId) (fopId : FopsId) : M (Except Int FileId) := do
-  let ret ← allocPathPseudo
+  let ret ← allocPathPseudo inode
   if ← branch .allocFilePseudoPathErr (ret != 0) then return .error ret
   let r ← allocFile flags fopId inode
-  _ ← branch .allocFilePseudoErr (r matches .error _)
+  if ← branch .allocFilePseudoErr (r matches .error _) then
+    if let .pipefs id := inode then
+      setInode id { (← getInode id) with dCount := 0 }
   return r
 
 /-- put_file_access (fs/internal.h:114-121). -/
 def putFileAccess (f : File) : M Unit := do
   if ← branchCmp .putFileAccessReadOnly (f.fMode &&& (FMODE_READ ||| FMODE_WRITE) == FMODE_READ) (f.fMode &&& (FMODE_READ ||| FMODE_WRITE)).toNat FMODE_READ.toNat then
-    unsupported "i_readcount_dec"
+    inodeReadcountDec f.fInode
   else if ← branchCmp .putFileAccessWriter (hasFlag f.fMode FMODE_WRITER) (f.fMode &&& FMODE_WRITER).toNat 0 then
     unsupported "file_put_write_access"
 
@@ -143,7 +156,9 @@ def fputFinal (fid : FileId) : M Unit := do
   if ← branch .fileOwnerRelease f.fOwner then
     unsupported "file_f_owner_release with an owner"
   putFileAccess f
-  -- dput(dentry)
+  -- dput(dentry): a pipe file's pseudo dentry counts its references
+  -- (`dputPipefs`); the anonymous inode's dentry is a cut point
+  if let some (.pipefs id) := f.fInode then dputPipefs id
   if ← branchCmp .fputFinalNeedUnmount (hasFlag f.fMode FMODE_NEED_UNMOUNT) (f.fMode &&& FMODE_NEED_UNMOUNT).toNat 0 then
     unsupported "dissolve_on_fput"
   -- mntput(mnt)

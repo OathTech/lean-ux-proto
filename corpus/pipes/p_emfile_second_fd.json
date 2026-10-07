@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "id": "p_emfile_second_fd",
+  "ops": [
+    {
+      "op": "pipe2",
+      "flags": 2048
+    },
+    {
+      "op": "pipe2",
+      "flags": 18432
+    },
+    {
+      "op": "eventfd2",
+      "init": 0,
+      "flags": 2048
+    },
+    {
+      "op": "pipe2",
+      "flags": 2048
+    },
+    {
+      "op": "close",
+      "fd": {
+        "ref": 2
+      }
+    },
+    {
+      "op": "pipe2",
+      "flags": 2048
+    }
+  ],
+  "rlimit_nofile": 9
+}

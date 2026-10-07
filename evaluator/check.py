@@ -1,9 +1,9 @@
 """Build the mirror, run traces on the pinned Linux guest and the mirror, compare.
 
     scripts/in-bundle python3 -m evaluator.check
-        [--suite handwritten,critic,wireguard,alloc,generated,wireguard-generated]
-        [--generated-count N] [--wireguard-count N] [--seed S] [--trace ID] [--out DIR] [--no-build]
-        [--alloc-share F]
+        [--suite handwritten,critic,wireguard,alloc,generated,wireguard-generated,pipes,pipes-generated]
+        [--generated-count N] [--wireguard-count N] [--pipes-count N] [--seed S] [--trace ID] [--out DIR]
+        [--no-build] [--alloc-share F]
 
 The command fails unless every trace agrees on observations (A1) and every
 operation's model branch labels are consistent with Linux KCOV coverage (A2).
@@ -31,7 +31,11 @@ from .protocol import InvalidOutput, compare, loads, parse_batch, validate_cover
 
 ROOT = Path(__file__).resolve().parents[1]
 ANCHORS = ROOT / 'correspondence/kcov.json'
-SUITES = ('handwritten', 'critic', 'wireguard', 'alloc', 'generated', 'wireguard-generated')
+SUITES = ('handwritten', 'critic', 'wireguard', 'alloc', 'generated', 'wireguard-generated', 'pipes', 'pipes-generated')
+# Corpus suites whose traces pass the domain filter first: the pipes corpus
+# holds a hang control (a blocking read) that must never reach the guest.
+# There, a trace named `*_filtered` must be outside the domain and every
+# other trace inside it; anything else fails the run.
 # The share of generated WireGuard traces that are steered handshakes (the
 # initiator role, stage D1).
 STEERED_SHARE = 0.15
@@ -88,10 +92,11 @@ def load_traces(suites, counts, seed, only, filtered, alloc_share=ALLOC_SHARE):
     `filtered` receives the rejected candidates' reasons."""
     traces = []
     for suite in suites:
-        if suite in ('generated', 'wireguard-generated'):
-            source = generate if suite == 'generated' else \
-                (lambda s, n: generate_wireguard(s, n, steered=STEERED_SHARE, data=DATA_SHARE, timers=TIMERS_SHARE,
-                                                 alloc=alloc_share))
+        if suite in ('generated', 'wireguard-generated', 'pipes-generated'):
+            source = {'generated': generate,
+                      'wireguard-generated': lambda s, n: generate_wireguard(s, n, steered=STEERED_SHARE, data=DATA_SHARE,
+                                                                             timers=TIMERS_SHARE, alloc=alloc_share),
+                      'pipes-generated': lambda s, n: generate(s, n, profile='pipes')}[suite]
             count = counts[suite]
             candidates = [validate_trace(t) for t in source(seed, count * CANDIDATES_PER_TRACE)]
             verdicts = domain_filter(candidates)
@@ -105,7 +110,18 @@ def load_traces(suites, counts, seed, only, filtered, alloc_share=ALLOC_SHARE):
             files = sorted((ROOT / 'corpus' / suite).glob('*.json'))
             if not files:
                 raise ValueError(f'empty corpus suite {suite}')
-            traces += [loads_trace(path.read_text()) for path in files]
+            loaded = [loads_trace(path.read_text()) for path in files]
+            if suite == 'pipes':
+                verdicts = domain_filter([validate_trace(t) for t in loaded])
+                wrong = [t['id'] for t, v in zip(loaded, verdicts) if v['in_domain'] == t['id'].endswith('_filtered')]
+                if wrong:
+                    raise ValueError(f'pipes corpus traces on the wrong side of the domain filter: {wrong}: '
+                                     + '; '.join(f"{t['id']}: {v.get('site')}: {v.get('what')}"
+                                                 for t, v in zip(loaded, verdicts) if t['id'] in wrong)[:4000])
+                filtered.update(f"{t['id']}: {v['site']}: {v['what']}" for t, v in zip(loaded, verdicts)
+                                if not v['in_domain'])
+                loaded = [t for t, v in zip(loaded, verdicts) if v['in_domain']]
+            traces += loaded
     ids = [trace['id'] for trace in traces]
     if len(set(ids)) != len(ids):
         raise ValueError('duplicate trace identifiers')
@@ -159,7 +175,8 @@ class ModelStopped(InvalidOutput):
 
 def load_kcov_config():
     config = json.loads(ANCHORS.read_text())
-    if (set(config) != {'version', 'description', 'files', 'functions', 'branch_free_functions', 'known_gaps'}
+    if (set(config) != {'version', 'description', 'files', 'functions', 'branch_free_functions', 'known_gaps',
+                        'shared_exits', 'operand_exclusions'}
             or config['version'] != 2):
         raise ValueError('kcov config fields or version')
     if any(type(x) is not str or x in config['functions'] for x in config['branch_free_functions']):
@@ -169,6 +186,20 @@ def load_kcov_config():
     for gap in config['known_gaps']:
         if set(gap) != {'op', 'name', 'line', 'note'} or gap['line'].rsplit(':', 1)[0] not in config['files']:
             raise ValueError(f'known gap {gap}: fields or file')
+    def anchored_line(text):
+        return (type(text) is str and text.rsplit(':', 1)[0] in config['files']
+                and text.rsplit(':', 1)[-1].isdigit())
+    for exit_ in config['shared_exits']:
+        if (set(exit_) != {'function', 'frames', 'unless_covered', 'note'} or type(exit_['function']) is not str
+                or type(exit_['frames']) is not list or len(exit_['frames']) < 2
+                or not all(anchored_line(f) for f in exit_['frames'])
+                or type(exit_['unless_covered']) is not list or not exit_['unless_covered']
+                or not all(anchored_line(f) for f in exit_['unless_covered'])):
+            raise ValueError(f'shared exit {exit_}: fields, frames or file')
+    for exclusion in config['operand_exclusions']:
+        if (set(exclusion) != {'label', 'operand', 'call', 'note'} or type(exclusion['label']) is not str
+                or type(exclusion['operand']) is not str or not anchored_line(exclusion['call'])):
+            raise ValueError(f'operand exclusion {exclusion}: fields or file')
     return config
 
 
@@ -582,21 +613,41 @@ def unlisted_c_lines(row, locations, files, functions):
     return lines
 
 
+def frame_chain(frames):
+    """A point's DWARF frames as `file:line` strings, innermost first."""
+    return tuple(frame['source'].split('/.deps/linux/')[-1].split(' ')[0] for frame in frames)
+
+
 def decision_functions_run(row, locations, config, decisions):
     """Decision functions (label prefixes) with a frame, in an anchored file,
-    of a PC that witnesses decisions (attributable, in a listed function)."""
+    of a PC that witnesses decisions (attributable, in a listed function),
+    and how many of the row's PCs are declared shared exits.
+
+    A declared shared exit (`kcov.json` `shared_exits`) is one point, named
+    by its exact frame chain, that the compiler shares between a function's
+    early returns and an inlined helper's exit; the line table attributes it
+    to the helper. When the operation did not cover the declared
+    `unless_covered` point (the block that enters the helper on its own
+    path), the early returns reached it and the helper did not run: then,
+    and only then, that helper's frame at that exact point is not counted as
+    the helper running."""
     functions = {entry['function'] for entry in decisions.values()}
     listed_functions = set(config['functions'])
-    ran = set()
+    covered = {frame_chain(locations[pc]) for pc in row['pcs']}
+    shared = {tuple(e['frames']): e['function'] for e in config['shared_exits']
+              if tuple(e['unless_covered']) not in covered}
+    ran, shared_hits = set(), 0
     for pc in row['pcs']:
         frames = locations[pc]
         if not attributable(frames) or not listed(frames, listed_functions):
             continue
+        exempt = shared.get(frame_chain(frames))
+        shared_hits += exempt is not None
         for frame in frames:
             source = frame['source'].split('/.deps/linux/')[-1].split(' ')[0].split(':')[0]
-            if frame['function'] in functions and source in config['files']:
+            if frame['function'] in functions and source in config['files'] and frame['function'] != exempt:
                 ran.add(frame['function'])
-    return ran
+    return ran, shared_hits
 
 
 def listed(frames, functions):
@@ -711,7 +762,9 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
         # counted point, in an anchored file) must have a reported decision.
         # Unobservable outcomes cannot show an omitted decision; this shows an
         # omitted function.
-        ran = decision_functions_run(coverage[index], locations, config, decisions)
+        ran, shared_hits = decision_functions_run(coverage[index], locations, config, decisions)
+        if shared_hits:
+            gaps['shared exits reached by an early return (kcov.json)'] += shared_hits
         silent = sorted(ran - {decisions[name]['function'] for name in names})
         if silent:
             problems.append(dict(index=index, problem='Linux ran a decision function the mirror reported nothing in',
@@ -764,17 +817,47 @@ def operands_match(lhs, rhs, record, comparison):
     return sorted((x, y)) == sorted((a, b))
 
 
-def operand_agreement(trace, model_obs, comparisons, locations, decisions, functions=None):
+def operand_agreement(trace, model_obs, comparisons, locations, decisions, functions=None, exclusions=(),
+                      excluded=None):
     """A3: declared value comparisons report operands, and each matches a
     comparison Linux made at the decision's condition line (the innermost
     source frame of the comparison) in the same operation, in one of the
-    configured `functions` when given."""
+    configured `functions` when given.
+
+    A declared operand exclusion (`kcov.json` `operand_exclusions`) is one
+    call site whose operand is a guest-wide value the mirror does not model:
+    the mirror reports the outcome with `operands_excluded` naming the
+    operand instead of the pair. It must name a declared (label, operand),
+    and Linux must have recorded the comparison at the condition line with
+    the declared call line as the outermost frame, once for each such report
+    in the operation. `excluded` (a Counter) receives the count."""
     problems, checked = [], 0
+    used = Counter()
     for branch in model_obs['branches']:
         name = branch['label'].rpartition('=')[0]
         if name not in decisions:
             continue  # control_flow reports unknown labels
         comparison = decisions[name]['comparison']
+        if 'operands_excluded' in branch:
+            entry = next((e for e in exclusions
+                          if e['label'] == name and e['operand'] == branch['operands_excluded']), None)
+            if comparison is None or 'operands' in branch or entry is None:
+                problems.append(dict(index=branch['index'], label=branch['label'],
+                                     problem='undeclared operand exclusion', operand=branch['operands_excluded']))
+                continue
+            site = comparison['site'] or decisions[name]['site']
+            at_call = sum(1 for r in comparisons[branch['index']]['records']
+                          if frame_chain(locations[r[3]])[0] == site and frame_chain(locations[r[3]])[-1] == entry['call']
+                          and attributable(locations[r[3]])
+                          and (functions is None or listed(locations[r[3]], functions)))
+            used[(branch['index'], name)] += 1
+            if used[(branch['index'], name)] > at_call:
+                problems.append(dict(index=branch['index'], label=branch['label'],
+                                     problem='operand exclusion without a comparison at its declared call site',
+                                     site=site, call=entry['call'], linux_records_at_call=at_call))
+            elif excluded is not None:
+                excluded[f"operands excluded: {name} at {entry['call']} ({entry['operand']})"] += 1
+            continue
         if comparison is None:
             if 'operands' in branch:
                 problems.append(dict(index=branch['index'], label=branch['label'],
@@ -811,28 +894,36 @@ def operand_agreement(trace, model_obs, comparisons, locations, decisions, funct
 #   (0.4 s) before wg_observe and after wg_inject, and QUEUE_WAIT_US (0.1 s)
 #   after wg_set, wg_up and wg_xmit; D3: a wg_advance waits for the tick
 #   before it, then for its absorbing tick (each at most a 4 ms tick), then
-#   ADVANCE_WAIT_US (0.1 s), counted as ADVANCE_WAIT_SECONDS;
+#   ADVANCE_WAIT_US (0.1 s), counted as ADVANCE_WAIT_SECONDS; pipes (P design
+#   section 6): each pause_ms, exactly;
 # - its computation (boot, fixtures, TCG execution), which does: measured on
 #   the loaded host (load average 50-100 on 32 CPUs, 3 guests) at most
 #   2.0 s per WireGuard trace (both children, boot included) and 0.025 s per
-#   operation of other traces, scaled by CONTENTION_FACTOR.
+#   operation of other traces, plus, for pipes, an allowance for a read or
+#   write's bytes (TCG copies and hashes 64 KiB in well under a millisecond;
+#   this is for safety: 1 s per MiB per child), scaled by CONTENTION_FACTOR.
 GUEST_CHILDREN = 2
 OBSERVE_WAIT_SECONDS = 0.4
 QUEUE_WAIT_SECONDS = 0.1
 ADVANCE_WAIT_SECONDS = 0.15
+PAUSE_SECONDS_PER_MS = 0.001
 GUEST_BOOT_SECONDS = 30
 WIREGUARD_TRACE_SECONDS = 2.0
 OPERATION_SECONDS = 0.03
+IO_SECONDS_PER_BYTE = 1 / 2**20
 CONTENTION_FACTOR = 3
 
 
 def guest_timeout(traces):
-    ops = [op['op'] for trace in traces for op in trace['ops']]
-    waits = GUEST_CHILDREN * (OBSERVE_WAIT_SECONDS * sum(op in ('wg_observe', 'wg_inject') for op in ops)
-                              + QUEUE_WAIT_SECONDS * sum(op in ('wg_set', 'wg_up', 'wg_xmit') for op in ops)
-                              + ADVANCE_WAIT_SECONDS * sum(op == 'wg_advance' for op in ops))
+    ops = [op for trace in traces for op in trace['ops']]
+    names = [op['op'] for op in ops]
+    waits = GUEST_CHILDREN * (OBSERVE_WAIT_SECONDS * sum(op in ('wg_observe', 'wg_inject') for op in names)
+                              + QUEUE_WAIT_SECONDS * sum(op in ('wg_set', 'wg_up', 'wg_xmit') for op in names)
+                              + ADVANCE_WAIT_SECONDS * sum(op == 'wg_advance' for op in names)
+                              + PAUSE_SECONDS_PER_MS * sum(op.get('pause_ms', 0) for op in ops))
+    io_bytes = sum(op['count'] for op in ops if op['op'] in ('read', 'write'))
     compute = (GUEST_BOOT_SECONDS + WIREGUARD_TRACE_SECONDS * sum(uses_wireguard(t) for t in traces)
-               + OPERATION_SECONDS * len(ops))
+               + OPERATION_SECONDS * len(ops) + GUEST_CHILDREN * IO_SECONDS_PER_BYTE * io_bytes)
     return round(waits + CONTENTION_FACTOR * compute)
 
 
@@ -854,7 +945,8 @@ NAPI_PLACEMENTS_MAX = 3
 
 def napi_placements(trace, hidden_traces, actual_cmp, out, trace_comparisons, locations, kcov):
     """The first other placement vector under which the comparison child's
-    operands agree: (choice, observation, problems, checked), or None."""
+    operands agree: (choice, observation, problems, checked, excluded), or
+    None."""
     count = actual_cmp['napi_irq_ambiguous']
     if count > NAPI_PLACEMENTS_MAX:
         return None
@@ -871,10 +963,11 @@ def napi_placements(trace, hidden_traces, actual_cmp, out, trace_comparisons, lo
             continue
         if [o['ret'] for o in alternative['observations']] != [o['ret'] for o in actual_cmp['observations']]:
             continue
+        excluded = Counter()
         problems, checked = operand_agreement(trace, alternative, trace_comparisons, locations, kcov[1],
-                                              set(kcov[0]['functions']))
+                                              set(kcov[0]['functions']), kcov[0]['operand_exclusions'], excluded)
         if not problems:
-            return choice, alternative, problems, checked
+            return choice, alternative, problems, checked, excluded
     return None
 
 
@@ -974,15 +1067,20 @@ def run_chunk(traces, out, kcov, guest_variant=None, alloc_flags=0, arm=()):
         result = compare(trace, expected, actual)
         if result['outcome'] == 'agreement':
             problems, trace_gaps = control_flow(trace, actual, trace_coverage, mapped['locations'], *kcov)
+            # P: declared operand exclusions are counted with the gaps, from
+            # the placement that agrees (D3 merge [AGENT])
+            excluded = Counter()
             operand_problems, checked = operand_agreement(trace, actual_cmp, trace_comparisons,
-                                                          compared['locations'], kcov[1], set(kcov[0]['functions']))
+                                                          compared['locations'], kcov[1], set(kcov[0]['functions']),
+                                                          kcov[0]['operand_exclusions'], excluded)
             if operand_problems and actual_cmp.get('napi_irq_ambiguous'):
                 placed = napi_placements(trace, with_hidden('cmp'), actual_cmp, out, trace_comparisons,
                                          compared['locations'], kcov)
                 if placed is not None:
-                    choice, actual_cmp, operand_problems, checked = placed
+                    choice, actual_cmp, operand_problems, checked, excluded = placed
                     # popped into the report's napi_irq_placements
                     outcomes[f'napi placement ({trace["id"]})'] = sum(1 << i for i, b in enumerate(choice) if b)
+            trace_gaps.update(excluded)
             problems += operand_problems + site_problems.get(trace['id'], [])
             # a steered trace states what its steering is for: the mirror's
             # agreeing run (A2 ties it to Linux's coverage) must show it
@@ -1010,6 +1108,7 @@ def main(argv=None):
     parser.add_argument('--suite', default=','.join(SUITES))
     parser.add_argument('--generated-count', type=int, default=1000)
     parser.add_argument('--wireguard-count', type=int, default=200)
+    parser.add_argument('--pipes-count', type=int, default=200)
     parser.add_argument('--seed', type=int, default=20260920)
     parser.add_argument('--trace')
     parser.add_argument('--out', type=Path)
@@ -1040,10 +1139,17 @@ def main(argv=None):
     outcomes, decisions, kcov, splits, retries = Counter(), {}, None, 0, {}
     try:
         build = build_model(out, rebuild=not args.no_build)
-        traces = load_traces(suites, {'generated': args.generated_count, 'wireguard-generated': args.wireguard_count},
+        traces = load_traces(suites, {'generated': args.generated_count, 'wireguard-generated': args.wireguard_count,
+                                      'pipes-generated': args.pipes_count},
                              args.seed, args.trace, filtered, args.alloc_share)
         decisions.update(load_decisions(config))
-        instrumented, functions = instrumented_lines(KERNEL / 'vmlinux', config['functions'], config['files'])
+        instrumented, functions, chains = instrumented_lines(KERNEL / 'vmlinux', config['functions'], config['files'])
+        # each declared shared exit names exactly one instrumentation point
+        for exit_ in config['shared_exits']:
+            for chain in (exit_['frames'], exit_['unless_covered']):
+                if chains[tuple(chain)] != 1:
+                    raise InvalidOutput(f"shared exit {exit_['frames']}: {chain} names {chains[tuple(chain)]}"
+                                        ' instrumentation points of the listed functions, not one')
         kcov = (config, decisions, witness_table(decisions, instrumented, functions, config['branch_free_functions']),
                 instrumented, functions)
         observable = sum(bool(w[True] or w[False]) for w in kcov[2].values())
@@ -1123,8 +1229,8 @@ def write_report(out, traces, results, gaps, build, aborted, started, suites, ar
         kernel=kernel,
         kcov_config_sha256=sha256(ANCHORS.read_bytes()),
         selection=dict(suites=suites, generated_count=args.generated_count, wireguard_count=args.wireguard_count,
-                       seed=args.seed, trace=args.trace, guest_variant=getattr(args, 'guest_variant', None),
-                       alloc_share=getattr(args, 'alloc_share', None)),
+                       pipes_count=getattr(args, 'pipes_count', None), seed=args.seed, trace=args.trace,
+                       guest_variant=getattr(args, 'guest_variant', None), alloc_share=getattr(args, 'alloc_share', None)),
         traces=len(traces), operations=sum(len(t['ops']) for t in traces),
         counts=dict(counts), known_gap_hits=dict(gaps), operand_pairs_matched=operand_pairs_matched,
         # cut and ambient choice records (coverage child), by site: consumed

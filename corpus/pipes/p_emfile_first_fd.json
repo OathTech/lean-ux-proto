@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "id": "p_emfile_first_fd",
+  "ops": [
+    {
+      "op": "pipe2",
+      "flags": 2048
+    },
+    {
+      "op": "pipe2",
+      "flags": 0
+    },
+    {
+      "op": "pipe2",
+      "flags": 128
+    },
+    {
+      "op": "pipe2",
+      "flags": 1
+    }
+  ],
+  "rlimit_nofile": 8
+}

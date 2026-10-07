@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "id": "p_flags",
+  "ops": [
+    {
+      "op": "pipe2",
+      "flags": 1
+    },
+    {
+      "op": "pipe2",
+      "flags": 128
+    },
+    {
+      "op": "pipe2",
+      "flags": 2147483648
+    },
+    {
+      "op": "pipe2",
+      "flags": 2176
+    },
+    {
+      "op": "pipe2",
+      "flags": 2048
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 1,
+        "end": 1
+      },
+      "count": 8,
+      "value": "81985529216486895"
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 4,
+        "end": 1
+      },
+      "count": 8,
+      "value": "81985529216486895"
+    },
+    {
+      "op": "read",
+      "fd": {
+        "pipe": 4,
+        "end": 0
+      },
+      "count": 8
+    },
+    {
+      "op": "close",
+      "fd": {
+        "pipe": 4,
+        "end": 1
+      }
+    },
+    {
+      "op": "close",
+      "fd": {
+        "pipe": 4,
+        "end": 0
+      }
+    }
+  ]
+}

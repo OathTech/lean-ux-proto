@@ -21,7 +21,11 @@ open Std
 /-! ## Constants (x86-64 UAPI and include/linux/fs.h) -/
 
 def O_ACCMODE : UInt32 := 0o3
+def O_RDONLY : UInt32 := 0o0
+def O_WRONLY : UInt32 := 0o1
 def O_RDWR : UInt32 := 0o2
+/-- `O_NOTIFICATION_PIPE = O_EXCL` (include/uapi/linux/watch_queue.h:9). -/
+def O_NOTIFICATION_PIPE : UInt32 := 0o200
 def O_APPEND : UInt32 := 0o2000
 def O_NONBLOCK : UInt32 := 0o4000
 def O_DSYNC : UInt32 := 0o10000
@@ -61,6 +65,8 @@ def EAGAIN : Int := 11
 def ENOMEM : Int := 12
 def EFAULT : Int := 14
 def EBUSY : Int := 16
+def EPIPE : Int := 32
+def ENOPKG : Int := 65
 def ENFILE : Int := 23
 def EINVAL : Int := 22
 def EMFILE : Int := 24
@@ -85,28 +91,72 @@ def MAX_RW_COUNT : Nat := 0x7ffff000
 
 def hasFlag (flags mask : UInt32) : Bool := flags &&& mask != 0
 
+/-! ## Pipes (P, docs/2026-10-05-p-pipes.md section 2) -/
+
+def PAGE_SIZE : Nat := 4096
+/-- include/linux/pipe_fs_i.h:5. -/
+def PIPE_DEF_BUFFERS : Nat := 16
+/-- `struct pipe_buffer` flags (include/linux/pipe_fs_i.h:7-12; `LOSS` needs
+    `CONFIG_WATCH_QUEUE`, unset). -/
+def PIPE_BUF_FLAG_LRU : UInt32 := 0x01
+def PIPE_BUF_FLAG_ATOMIC : UInt32 := 0x02
+def PIPE_BUF_FLAG_GIFT : UInt32 := 0x04
+def PIPE_BUF_FLAG_PACKET : UInt32 := 0x08
+def PIPE_BUF_FLAG_CAN_MERGE : UInt32 := 0x10
+def PIPE_BUF_FLAG_WHOLE : UInt32 := 0x20
+
+/-- `i_flags` bits (include/linux/fs.h:2306-2314) and `i_mode` bits
+    (include/uapi/linux/stat.h). -/
+def S_NOATIME : Nat := 1 <<< 1
+def S_APPEND : Nat := 1 <<< 2
+def S_NOCMTIME : Nat := 1 <<< 7
+def S_PRIVATE : Nat := 1 <<< 9
+def S_IFMT : Nat := 0o170000
+def S_IFIFO : Nat := 0o010000
+def S_IFCHR : Nat := 0o020000
+def S_IFREG : Nat := 0o100000
+def S_IRUSR : Nat := 0o400
+def S_IWUSR : Nat := 0o200
+/-- `I_DIRTY = I_DIRTY_SYNC | I_DIRTY_DATASYNC | I_DIRTY_PAGES`
+    (include/linux/fs.h:2502-2519). -/
+def I_DIRTY : Nat := (1 <<< 3) ||| (1 <<< 4) ||| (1 <<< 5)
+
+/-- `SIGPIPE` (arch/x86/include/uapi/asm/signal.h:35). -/
+def SIGPIPE : Nat := 13
+
 /-! ## Objects -/
 
 abbrev FileId := Nat
 abbrev CtxId := Nat
+/-- Identities of `struct pipe_inode_info`, of the pipes' data pages and of
+    pipefs inodes, each into its store in `Kernel`. -/
+abbrev PipeId := Nat
+abbrev PageId := Nat
+abbrev PipefsInodeId := Nat
 
 /-- The `struct file_operations` table a file's `f_op` points to. Fixture files
     (console, KCOV, /dev/null) are opened by the harness outside the trace; their
     operations are outside the modeled slice. -/
 inductive FopsId where
   | eventfd
+  /-- `pipefifo_fops` (fs/pipe.c:1232-1241). -/
+  | pipefifo
   | fixture (name : String)
   deriving Repr, BEq, DecidableEq
 
 /-- What a file's `private_data` points to. -/
 inductive PrivateData where
   | eventfdCtx (ctx : CtxId)
+  /-- A pipe file's `private_data` is its `pipe_inode_info` (fs/pipe.c:947,957). -/
+  | pipe (id : PipeId)
   deriving Repr, BEq, DecidableEq
 
 /-- The inode a file's `f_inode` points to: the shared anonymous inode, or a
     fixture file's inode (outside the slice). -/
 inductive InodeId where
   | anon
+  /-- A pipefs inode, owned by `Kernel.inodes` (`get_pipe_inode`). -/
+  | pipefs (id : PipefsInodeId)
   | fixture (name : String)
   deriving Repr, BEq, DecidableEq
 
@@ -129,6 +179,9 @@ structure File where
   fOwner : Bool := false
   /-- `f_ep`: the file is linked into an epoll set (never, in this slice). -/
   fEp : Bool := false
+  /-- `f_pipe` (include/linux/fs.h:1092), written at fs/pipe.c:948,958 and
+      read only by `pipe_poll`. -/
+  fPipe : Nat := 0
   deriving Repr, BEq
 
 /-- `struct eventfd_ctx`. `wqh` is represented only by its waiter count; the
@@ -141,6 +194,105 @@ structure EventfdCtx where
   id : Option Int
   waiters : Nat := 0
   deriving Repr, BEq
+
+/-- `struct timespec64` (include/linux/time64.h): 16 bytes, `tv_sec` then
+    `tv_nsec`, both signed 64-bit. -/
+structure Timespec64 where
+  tvSec : Int
+  tvNsec : Int
+  deriving Repr, BEq, Inhabited
+
+/-- `struct pipe_buffer` (include/linux/pipe_fs_i.h:26-32). `ops` is
+    "`&anon_pipe_buf_ops`, else NULL" (`pipe_buf_release` NULLs it); `private`
+    is unused on these paths. -/
+structure PipeBuffer where
+  page : Option PageId := none
+  offset : Nat := 0
+  len : Nat := 0
+  ops : Bool := false
+  flags : UInt32 := 0
+  deriving Repr, BEq, Inhabited
+
+/-- `pipe->user`: always `&root_user`, the one `UserStruct` (`Kernel.user`). -/
+inductive UserId where
+  | root
+  deriving Repr, BEq, DecidableEq
+
+/-- `struct pipe_inode_info` (include/linux/pipe_fs_i.h:58-83). `head` and
+    `tail` wrap as `unsigned int` and are masked with `ringSize - 1` only at
+    dereference. The mutex and the wait queues are cuts (one task, no
+    waiters); `watch_queue` and `note_loss` do not exist in this build;
+    `fasync_readers`/`fasync_writers` are NULL lists, kept as booleans. -/
+structure PipeInodeInfo where
+  head : UInt32 := 0
+  tail : UInt32 := 0
+  maxUsage : Nat
+  ringSize : Nat
+  nrAccounted : Nat
+  readers : Nat := 0
+  writers : Nat := 0
+  files : Nat := 0
+  rCounter : Nat := 0
+  wCounter : Nat := 0
+  pollUsage : Bool := false
+  tmpPage : Option PageId := none
+  fasyncReaders : Bool := false
+  fasyncWriters : Bool := false
+  bufs : Array PipeBuffer
+  user : UserId := .root
+  deriving Repr, BEq
+
+/-- The `struct page` of a pipe data page: its refcount (`page_count`) and
+    its bytes (the digest check observes them). -/
+structure Page where
+  pageCount : Nat := 1
+  bytes : ByteArray
+  deriving Inhabited
+
+instance : BEq Page where
+  beq a b := a.pageCount == b.pageCount && a.bytes.data == b.bytes.data
+
+/-- `struct inode` of a pipefs inode, the fields these paths use.
+    `get_pipe_inode` sets `i_state = I_DIRTY` and `i_mode = S_IFIFO | S_IRUSR |
+    S_IWUSR` (fs/pipe.c:905-906); the inode-allocation cut (`.allocInode`)
+    gives `i_flags = 0`, `i_count = 1`, `i_pipe = NULL` and `i_ino` from a
+    mirror-local counter. `dCount` is the pseudo dentry's `d_lockref.count`
+    (the dentry is otherwise a cut): its last `dput` releases the inode. -/
+structure Inode where
+  iIno : Nat
+  iMode : Nat
+  iFlags : Nat := 0
+  iState : Nat := 0
+  iAtime : Timespec64 := ⟨0, 0⟩
+  iMtime : Timespec64 := ⟨0, 0⟩
+  iCtime : Timespec64 := ⟨0, 0⟩
+  iPipe : Option PipeId := none
+  iReadcount : Nat := 0
+  iWritecount : Nat := 0
+  iCount : Nat := 1
+  dCount : Nat := 0
+  deriving Repr, BEq
+
+/-- `struct user_struct` (include/linux/sched/user.h:14-21), the one field
+    these paths use; one instance, `root_user`. -/
+structure UserStruct where
+  pipeBufs : Nat := 0
+  deriving Repr, BEq
+
+/-- A signal set of one word (`_NSIG_WORDS == 1`): bit `sig - 1`. -/
+abbrev SigSet := UInt64
+
+def sigmask (sig : Nat) : SigSet := (1 : UInt64) <<< (sig - 1).toUInt64
+def sigismember (s : SigSet) (sig : Nat) : Bool := s &&& sigmask sig != 0
+def sigaddset (s : SigSet) (sig : Nat) : SigSet := s ||| sigmask sig
+
+/-- The caller's buffer as an `iov_iter` (`iov_iter_ubuf`): `count` is
+    `iov_iter_count`. -/
+structure IovIter where
+  bytes : ByteArray
+  pos : Nat := 0
+
+def IovIter.count (i : IovIter) : Nat := i.bytes.size - i.pos
 
 /-- `struct fdtable`: the `fd[]` array and the `open_fds`/`close_on_exec`
     bitmaps, each of length `max_fds`. `full_fds_bits` is derived from
@@ -174,6 +326,11 @@ structure Task where
   isKthread : Bool := false
   /-- `task_work_add` fails once the task has run `exit_task_work`. -/
   exited : Bool := false
+  /-- `t->blocked` and `t->pending.signal`. Shape deviation (P design
+      section 2): `t->pending` is the set plus a `sigqueue` list; only the
+      set is mirrored (`legacy_queue` tests it, nothing dequeues). -/
+  blocked : SigSet := 0
+  pending : SigSet := 0
   deriving BEq
 
 /-- Whole-kernel mirror state. `nrFiles`/`maxFiles` mirror the system-wide
@@ -197,6 +354,23 @@ structure Kernel where
   peerCounter : Nat := 0
   /-- `keypair_counter` (drivers/net/wireguard/noise.c), a global atomic. -/
   keypairCounter : Nat := 0
+  /-- Pipes (P): the pipefs inodes, the `pipe_inode_info`s and their data
+      pages, each an owned store with its next identity. -/
+  inodes : TreeMap PipefsInodeId Inode := {}
+  nextInode : PipefsInodeId := 0
+  /-- The inode-allocation cut's mirror-local `i_ino` counter (`get_next_ino`
+      has an unknown boot baseline; `i_ino` is unobserved in stage 1). -/
+  lastIno : Nat := 0
+  pipes : TreeMap PipeId PipeInodeInfo := {}
+  nextPipe : PipeId := 0
+  pages : TreeMap PageId Page := {}
+  nextPage : PageId := 0
+  /-- `root_user`; `pipe_bufs` is tracked from a baseline of 0 (section 5). -/
+  user : UserStruct := {}
+  /-- sysctl defaults (fs/pipe.c:54, 59-60), never written by traces. -/
+  pipeMaxSize : Nat := 1048576
+  pipeUserPagesSoft : Nat := 16384
+  pipeUserPagesHard : Nat := 0
   deriving BEq
 
 /-! ## Allocation outcomes (docs/2026-10-05-a-alloc.md, section 6)
@@ -207,6 +381,20 @@ or 0 NULL; the rest is attribution) at the two allocator entry functions,
 with the consumer's unwound call chain, when the run armed the allocation
 ranges that contain it. One site per consumer frame. How the mirror consumes
 a site's records (section 6.2): -/
+
+/-- The environment oracle, for the pipe paths' allocation and usercopy
+    sites only (P, design section 5): every site succeeds (`harnessEnv`).
+    A's sites (the FS slice and WireGuard) are allocation outcomes
+    (`AllocSite`, `hiddenAlloc`) and the eventfd/pipe2 usercopies trace
+    inputs (A, section 6.5); the pipe sites join `AllocSite` with A's pipe
+    rows (docs/2026-10-05-a-alloc.md, section 19.6), not yet done. -/
+inductive EnvSite where
+  -- P (pipes, design section 5). `allocInode` is the inode-allocation cut:
+  -- new_inode_pseudo -> alloc_inode -> alloc_inode_sb, inode_init_always_gfp
+  -- and get_next_ino, no decisions (audit M3)
+  | allocInode | kzallocPipeInfo | kcallocPipeBufs | allocPipePage | kcallocResizeBufs
+  | copyPageToIter | copyPageFromIter | sigqueueAlloc
+  deriving Repr, BEq, DecidableEq
 
 inductive AllocCount where
   /-- `n` records per successful consultation, in order; a failed record
@@ -382,6 +570,10 @@ inductive HiddenSite where
   /-- An allocation outcome (kind 305) at a consumer frame: ids 70-99 are
       A's (docs/2026-10-05-a-alloc.md, section 6.1). -/
   | alloc (s : AllocSite)
+  /-- P (pipes): `current_time` (fs/inode.c:2648), the coarse real-time
+      clock read through `ktime_get_coarse_real_ts64` (kind 215), shared by
+      all five callers on the pipe paths (design section 3). -/
+  | currentTime
   deriving Repr, BEq, DecidableEq
 
 inductive SiteRole where
@@ -471,6 +663,10 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   | .timeAdvance => ⟨101, "time_advance", "advance", "fs/ioctl.c", 51, 16, .mirror⟩
   | .alloc s => let i := s.info
     ⟨70 + i.index, i.label, "alloc", i.file, i.line, 40, if i.count == .cut then .cut else .mirror⟩
+  -- P (pipes, design section 3): id 18 is free on main and on every task
+  -- branch (E-A uses 64-69, A 70-99); the records are consumed in sequence
+  -- order by whichever of the five callers runs
+  | .currentTime => ⟨18, "current_time", "clock", "fs/inode.c", 2648, 16, .mirror⟩
 
 def HiddenSite.all : List HiddenSite :=
   [.initEphemeral, .respEphemeral, .tai64nNow, .indexDraw, .resetLastSent, .birthdateExpired, .initLastSent,
@@ -481,6 +677,7 @@ def HiddenSite.all : List HiddenSite :=
       .cookieBirthdate]
   ++ [.modTimerArm, .timeAdvance]
   ++ AllocSite.all.map .alloc
+  ++ [.currentTime]
 
 /-- The resched site of a worker's `cond_resched`, for the workers that
     have one on the modeled paths. -/
@@ -538,10 +735,17 @@ structure InboxDatagram where
 
 structure World where
   k : Kernel
+  /-- The pipe sites' environment oracle (`EnvSite`). -/
+  env : EnvSite → Nat → Bool
   timing : Timing
+  envCalls : List (EnvSite × Nat) := []
   steps : Array Step := #[]
-  /-- The caller's buffer (user memory), as written by `copy_to_iter`. -/
-  userOut : Option UInt64 := none
+  /-- The caller's buffer (user memory), as written by `copy_to_iter` (an
+      eventfd read's 8 bytes) or `copy_page_to_iter` (a pipe read). -/
+  userOut : Option ByteArray := none
+  /-- The descriptor pair `do_pipe2` copied to the caller (`fd[0]`, `fd[1]`,
+      fs/pipe.c:1026): the `fds` observation field. -/
+  userFds : Option (Nat × Nat) := none
   /-- Observation fields beyond the return value: a dump's `device`, or what
       `wg_observe` saw (`datagrams`, `stats`). -/
   extraOut : List (String × Lean.Json) := []
@@ -660,6 +864,21 @@ def branchCmp (d : Decision) (outcome : Bool) (a b : Int) : M Bool := do
   modify fun w => { w with steps := w.steps.push { decision := d, outcome, operands := some (a, b) } }
   return outcome
 
+/-- Record a C value comparison at a declared operand exclusion (a call site
+    whose operand is a guest-wide value the mirror does not model; see
+    `OperandExclusion`): the outcome, which the contract fixes, without the
+    operands. The check requires Linux's comparison at the declared call site. -/
+def branchCmpExcluded (d : Decision) (outcome : Bool) (x : OperandExclusion) : M Bool := do
+  modify fun w => { w with steps := w.steps.push { decision := d, outcome, excluded := some x } }
+  return outcome
+
+/-- Ask the environment oracle; the site's call count is part of the query. -/
+def envOk (site : EnvSite) : M Bool := do
+  let w ← get
+  let n := (w.envCalls.find? (·.1 == site)).map (·.2) |>.getD 0
+  set { w with envCalls := (site, n + 1) :: w.envCalls.filter (·.1 != site) }
+  return w.env site n
+
 /-- Drop ambient records at the head of the current operation's records,
     and pending section stops (each consumes its one pending entry). -/
 def skipAmbient : M Unit := do
@@ -699,7 +918,10 @@ def hidden (s : HiddenSite) : M (List UInt8) := do
     | none => pure ()
     let le (v width : Nat) := (List.range width).map fun k => UInt8.ofNat (v / 256 ^ k % 256)
     return match i.kind with
-      | "clock" => le (1000000000000 + n * 1000000000) i.len
+      -- a sane timespec64 (tv_nsec < 10^9) for `current_time` (P design
+      -- section 3); the other 16-byte clocks keep their placeholder
+      | "clock" => if s == .currentTime then le (1700000000 + n) 8 ++ le 0 8
+          else le (1000000000000 + n * 1000000000) i.len
       | _ => if s == .retransmitJitter then [200] else
           (List.range i.len).map fun k => UInt8.ofNat ((n * 131 + k * 29 + 7) % 256)
   | some [] => throw (.hidden s!"no record left for {i.label}")
@@ -725,6 +947,16 @@ def hiddenClock (s : HiddenSite) : M Int := do
   let bs ← hidden s
   let u : Nat := bs.foldr (fun b acc => acc * 256 + b.toNat) 0
   return if u ≥ 2 ^ 63 then (u : Int) - (2 ^ 64 : Int) else (u : Int)
+
+/-- A recorded `struct timespec64` (16 bytes: `tv_sec`, then `tv_nsec`,
+    little-endian signed 64-bit words). -/
+def hiddenTimespec (s : HiddenSite) : M Timespec64 := do
+  let bs ← hidden s
+  if bs.length != 16 then throw (.hidden s!"{s.info.label}: a timespec64 needs 16 bytes")
+  let word (b : List UInt8) : Int :=
+    let u : Nat := b.foldr (fun b acc => acc * 256 + b.toNat) 0
+    if u ≥ 2 ^ 63 then (u : Int) - (2 ^ 64 : Int) else (u : Int)
+  return ⟨word (bs.take 8), word (bs.drop 8)⟩
 
 /-- A cut point: consume the head records that come from these cut sites
     (any number, as the cut's own code may or may not draw), with the
@@ -835,6 +1067,30 @@ def setCtx (id : CtxId) (c : EventfdCtx) : M Unit :=
 
 def freeCtx (id : CtxId) : M Unit :=
   modifyK fun k => { k with ctxs := k.ctxs.erase id }
+
+def getInode (id : PipefsInodeId) : M Inode := do
+  match (← getK).inodes.get? id with
+  | some i => return i
+  | none => invariant s!"dangling pipefs inode identity {id}"
+
+def setInode (id : PipefsInodeId) (i : Inode) : M Unit :=
+  modifyK fun k => { k with inodes := k.inodes.insert id i }
+
+def getPipe (id : PipeId) : M PipeInodeInfo := do
+  match (← getK).pipes.get? id with
+  | some p => return p
+  | none => invariant s!"dangling pipe identity {id}"
+
+def setPipe (id : PipeId) (p : PipeInodeInfo) : M Unit :=
+  modifyK fun k => { k with pipes := k.pipes.insert id p }
+
+def getPage (id : PageId) : M Page := do
+  match (← getK).pages.get? id with
+  | some p => return p
+  | none => invariant s!"dangling page identity {id}"
+
+def setPage (id : PageId) (p : Page) : M Unit :=
+  modifyK fun k => { k with pages := k.pages.insert id p }
 
 /-! ## Bounds-checked descriptor-table access -/
 

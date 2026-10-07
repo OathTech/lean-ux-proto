@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
+#include <limits.h>
 #include <linux/genetlink.h>
 #include <linux/if_link.h>
 #include <linux/kcov.h>
@@ -14,6 +15,7 @@
 #include <arpa/inet.h>
 #include <time.h>
 #include <sched.h>
+#include <signal.h>
 #include <sys/socket.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -75,7 +77,37 @@
 #endif
 #define TICK_NS 4000000LL           /* CONFIG_HZ=250 */
 #define EXPECTED_CLOCKSOURCE "refined-jiffies"
-struct operation { unsigned code, kind, newkind, a, b; long long fd, newfd; uint64_t value;
+/* Pipes (docs/2026-10-05-p-pipes.md section 6): read and write byte counts
+ * up to MAX_IO (17 pages); a read is observed as its first READ_HEAD bytes and
+ * a BLAKE2s-256 digest of all of them; pause_ms (at most PAUSE_MS_MAX) is
+ * slept before an operation's coverage reset. */
+#define MAX_IO 69632
+#define READ_HEAD 64
+#define PAUSE_MS_MAX 20
+/* Wire opcodes: the explicit table of harness/trace.py OPCODES (unit test
+ * harness/test_trace.py OpcodeTableTests checks that the two agree). 15-18
+ * are reserved there (L: wg_create, wg_down, wg_delete; E: wg_flood) and
+ * fall to the default case here until implemented. */
+#define OP_EVENTFD2 1
+#define OP_DUP 2
+#define OP_DUP3 3
+#define OP_CLOSE 4
+#define OP_READ 5
+#define OP_WRITE 6
+#define OP_FCNTL 7
+#define OP_WG_SET 8
+#define OP_WG_GET 9
+#define OP_WG_UP 10
+#define OP_WG_XMIT 11
+#define OP_WG_OBSERVE 12
+#define OP_WG_INJECT 13
+#define OP_PIPE2 14
+#define OP_WG_ADVANCE 19
+/* The parent's per-child hang guard (P design section 6): a child still
+ * running after this many seconds is killed with its process group. */
+#define WATCHDOG_BASE_SECONDS 60
+#define WATCHDOG_OP_SECONDS 3
+struct operation { unsigned code, kind, newkind, a, b, pause_ms; long long fd, newfd; uint64_t value;
                    unsigned char payload[MAX_PAYLOAD]; size_t payload_len; };
 /* A steering schedule entry (the patched kernel's struct kcov_steer_entry;
  * docs/2026-10-03-choice-stream-strategy.md, step 2). */
@@ -112,7 +144,15 @@ struct trace {
     unsigned nsteer; struct steer_entry steer[STEER_MAX];
 };
 static char line[4 * MAX_PAYLOAD];
-struct observation { long ret; int error; unsigned char bytes[16]; };
+/* fds: a successful pipe2's pair; digest: BLAKE2s-256 of all bytes a read
+ * returned; sigpipe: SIGPIPE pending after a write. */
+struct observation { long ret; int error; unsigned char bytes[READ_HEAD]; unsigned char digest[32];
+                     int fds[2]; int sigpipe; };
+/* The caller's buffers for read and write, page-aligned; every page is
+ * written once in each trace child before KCOV_ENABLE, so no page fault lands
+ * in a coverage window. */
+static unsigned char read_buffer[MAX_IO] __attribute__((aligned(4096)));
+static unsigned char write_buffer[MAX_IO] __attribute__((aligned(4096)));
 
 static void fail(const char *id, int index, const char *kind, const char *detail)
 {
@@ -120,6 +160,94 @@ static void fail(const char *id, int index, const char *kind, const char *detail
            id, index, kind, detail, errno);
     fflush(stdout);
     _exit(1);
+}
+
+/* ---- BLAKE2s-256 (RFC 7693), unkeyed -------------------------------------
+ * The digest of a read's bytes (P design section 6, Q1). The mirror computes
+ * it with Leanux/WG/Blake2s.lean and the host recomputes it with hashlib for
+ * reads of at most READ_HEAD bytes; this implementation is self-tested at
+ * startup (blake2s_self_test) and the batch fails if it disagrees. */
+static const uint32_t blake2s_iv[8] = {0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A,
+                                       0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19};
+static const unsigned char blake2s_sigma[10][16] = {
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}, {14, 10, 4, 8, 9, 15, 13, 6, 1, 12, 0, 2, 11, 7, 5, 3},
+    {11, 8, 12, 0, 5, 2, 15, 13, 10, 14, 3, 6, 7, 1, 9, 4}, {7, 9, 3, 1, 13, 12, 11, 14, 2, 6, 5, 10, 4, 0, 15, 8},
+    {9, 0, 5, 7, 2, 4, 10, 15, 14, 1, 11, 12, 6, 8, 3, 13}, {2, 12, 6, 10, 0, 11, 8, 3, 4, 13, 7, 5, 15, 14, 1, 9},
+    {12, 5, 1, 15, 14, 13, 4, 10, 0, 7, 6, 3, 9, 2, 8, 11}, {13, 11, 7, 14, 12, 1, 3, 9, 5, 0, 15, 4, 8, 6, 2, 10},
+    {6, 15, 14, 9, 11, 3, 0, 8, 12, 2, 13, 7, 1, 4, 10, 5}, {10, 2, 8, 4, 7, 6, 1, 5, 15, 11, 9, 14, 3, 12, 13, 0}};
+
+static uint32_t rotr32(uint32_t x, unsigned n) { return (x >> n) | (x << (32 - n)); }
+
+#define BLAKE2S_G(a, b, c, d, x, y) do { \
+    v[a] += v[b] + (x); v[d] = rotr32(v[d] ^ v[a], 16); v[c] += v[d]; v[b] = rotr32(v[b] ^ v[c], 12); \
+    v[a] += v[b] + (y); v[d] = rotr32(v[d] ^ v[a], 8); v[c] += v[d]; v[b] = rotr32(v[b] ^ v[c], 7); } while (0)
+
+static void blake2s_compress(uint32_t h[8], const unsigned char block[64], uint64_t t, int last)
+{
+    uint32_t m[16], v[16];
+    for (int i = 0; i < 16; ++i)
+        m[i] = (uint32_t)block[4 * i] | (uint32_t)block[4 * i + 1] << 8 | (uint32_t)block[4 * i + 2] << 16 |
+               (uint32_t)block[4 * i + 3] << 24;
+    for (int i = 0; i < 8; ++i) { v[i] = h[i]; v[i + 8] = blake2s_iv[i]; }
+    v[12] ^= (uint32_t)t;
+    v[13] ^= (uint32_t)(t >> 32);
+    if (last) v[14] = ~v[14];
+    for (int r = 0; r < 10; ++r) {
+        const unsigned char *s = blake2s_sigma[r];
+        BLAKE2S_G(0, 4, 8, 12, m[s[0]], m[s[1]]);
+        BLAKE2S_G(1, 5, 9, 13, m[s[2]], m[s[3]]);
+        BLAKE2S_G(2, 6, 10, 14, m[s[4]], m[s[5]]);
+        BLAKE2S_G(3, 7, 11, 15, m[s[6]], m[s[7]]);
+        BLAKE2S_G(0, 5, 10, 15, m[s[8]], m[s[9]]);
+        BLAKE2S_G(1, 6, 11, 12, m[s[10]], m[s[11]]);
+        BLAKE2S_G(2, 7, 8, 13, m[s[12]], m[s[13]]);
+        BLAKE2S_G(3, 4, 9, 14, m[s[14]], m[s[15]]);
+    }
+    for (int i = 0; i < 8; ++i) h[i] ^= v[i] ^ v[i + 8];
+}
+
+static void blake2s256(const unsigned char *data, size_t len, unsigned char out[32])
+{
+    uint32_t h[8];
+    unsigned char block[64];
+    memcpy(h, blake2s_iv, sizeof(h));
+    h[0] ^= 0x01010000 | 32;   /* depth 1, fanout 1, no key, 32-byte digest */
+    size_t done = 0;
+    /* every block but the last is full and not final; the last (possibly
+     * empty, zero-padded) block carries the total length and the final flag */
+    while (len - done > 64) {
+        blake2s_compress(h, data + done, done + 64, 0);
+        done += 64;
+    }
+    memset(block, 0, sizeof(block));
+    if (len) memcpy(block, data + done, len - done);
+    blake2s_compress(h, block, len, 1);
+    for (int i = 0; i < 32; ++i) out[i] = (unsigned char)(h[i / 4] >> (8 * (i % 4)));
+}
+
+/* Vectors from Python's hashlib.blake2s (the first three are also the
+ * mirror's, Leanux/WG/Blake2s.lean): empty, one partial block, exactly one
+ * block, one byte past it, a multi-block input, and MAX_IO bytes. */
+static void blake2s_self_test(void)
+{
+    static const struct { size_t len; int kind; const char *hex; } vectors[] = {
+        {0, 0, "69217a3079908094e11121d042354a7c1f55b6482ca1a51e1b250dfd1ed0eef9"},
+        {3, 1, "508c5e8c327c14e2e1a72ba34eeb452f37458b209ed63a294d999b4c86675982"},   /* "abc" */
+        {64, 0, "56f34e8b96557e90c1f24b52d0c89d51086acf1b00f634cf1dde9233b8eaaa3e"},  /* bytes 0..63 */
+        {65, 0, "1b53ee94aaf34e4b159d48de352c7f0661d0a40edff95a0b1639b4090e974472"},
+        {200, 0, "6d244e1a06ce4ef578dd0f63aff0936706735119ca9c8d22d86c801414ab9741"},
+        {MAX_IO, 2, "7537c8397db7a1f5ace6b25c1e81d858303da18987a96c06b571f4e5b66121a7"}, /* k mod 251 */
+    };
+    for (size_t v = 0; v < sizeof(vectors) / sizeof(vectors[0]); ++v) {
+        for (size_t k = 0; k < vectors[v].len; ++k)
+            read_buffer[k] = vectors[v].kind == 1 ? (unsigned char)"abc"[k]
+                           : (unsigned char)(vectors[v].kind == 2 ? k % 251 : k);
+        unsigned char digest[32];
+        char hex[65];
+        blake2s256(read_buffer, vectors[v].len, digest);
+        for (int i = 0; i < 32; ++i) sprintf(hex + 2 * i, "%02x", digest[i]);
+        if (strcmp(hex, vectors[v].hex)) fail("batch", -1, "environment_failure", "blake2s_self_test");
+    }
 }
 
 struct occurrence { unsigned long pc; unsigned long position; };
@@ -281,11 +409,54 @@ static void resolve_wireguard_family(const char *id, int fd)
 
 static char dump_hex[2 * (1 << 16) * 4];
 
-static long resolve(unsigned kind, long long value, const struct observation *results, unsigned i)
+/* A descriptor argument: kind 0 a literal; 1 the result of an earlier
+ * eventfd2/dup/dup3; 2 and 3 the read end (fd[0]) and write end (fd[1]) of an
+ * earlier pipe2. A failed producer resolves to -1. Anything else is invalid
+ * wire input (harness/trace.py never produces it). */
+static long resolve(const struct trace *t, unsigned kind, long long value, const struct observation *results, unsigned i)
 {
     if (!kind) return (long)(int32_t)value;
-    if (kind != 1 || value < 0 || (unsigned long long)value >= i) return -1;
-    return results[value].ret >= 0 ? results[value].ret : -1;
+    if (kind > 3 || value < 0 || (unsigned long long)value >= i) fail(t->id, i, "invalid_input", "wire_descriptor");
+    if ((kind == 1) == (t->ops[value].code == OP_PIPE2)) fail(t->id, i, "invalid_input", "wire_descriptor_producer");
+    if (kind == 1) return results[value].ret >= 0 ? results[value].ret : -1;
+    return results[value].ret == 0 ? results[value].fds[kind - 2] : -1;
+}
+
+/* The write buffer of operation i (P design section 6; Leanux/Runner.lean
+ * writeBuffer): bytes 0-7 are the value little-endian, byte k >= 8 is
+ * (7 i + 13 k + 17 (k >> 8)) mod 256. */
+static void fill_write_buffer(unsigned i, uint64_t value, unsigned count)
+{
+    for (unsigned k = 0; k < 8; ++k) write_buffer[k] = (unsigned char)(value >> (8 * k));
+    for (unsigned k = 8; k < count && k < MAX_IO; ++k) write_buffer[k] = (unsigned char)((7 * i + 13 * k + 17 * (k >> 8)) % 256);
+}
+
+static void print_hex_bytes(const unsigned char *data, long n)
+{
+    for (long k = 0; k < n; ++k) printf("%02x", data[k]);
+}
+
+/* An operation's observation fields beyond ret and errno: a read's head as
+ * hex ("bytes") and its digest; a write's sigpipe; a pipe2's fds. The
+ * comparison child prints the same values per field (LEANUX_CMP_RESULT). */
+static void print_head(const struct operation *op, const struct observation *r)
+{
+    printf("\"");
+    if (op->code == OP_READ && r->ret > 0) print_hex_bytes(r->bytes, r->ret < READ_HEAD ? r->ret : READ_HEAD);
+    printf("\"");
+}
+
+static void print_digest(const struct operation *op, const struct observation *r)
+{
+    if (op->code != OP_READ || r->ret <= 0) { printf("null"); return; }
+    printf("\"");
+    print_hex_bytes(r->digest, 32);
+    printf("\"");
+}
+
+static void print_fds(const struct operation *op, const struct observation *r)
+{
+    if (op->code == OP_PIPE2 && r->ret == 0) printf("[%d,%d]", r->fds[0], r->fds[1]); else printf("null");
 }
 
 /* comparisons: 0 records PCs (KCOV_TRACE_PC); 1 records comparison operands
@@ -651,6 +822,11 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
 {
     struct observation result[MAX_OPS] = {{0}};
     if (close(input_fd)) fail(t->id, -1, "environment_failure", "close_input");
+    /* The parent's watchdog: SIGALRM's handler is the parent's, not ours; and
+     * this child leads its own process group, so the watchdog's kill reaches
+     * a network trace's trace process too. */
+    if (signal(SIGALRM, SIG_DFL) == SIG_ERR) fail(t->id, -1, "environment_failure", "reset_sigalrm");
+    if (setpgid(0, 0)) fail(t->id, -1, "environment_failure", "setpgid");
     unsigned long *remote = t->net ? enable_remote(t, comparisons) : NULL;
     if (t->net) network_fixture(t->id);
     /* Init invokes us with exactly console descriptors 0, 1, and 2. */
@@ -712,19 +888,35 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
      * inherited for remote coverage (kcov_task_reset). Each operation resets
      * the buffer at its start and captures the count at its end; KCOV
      * appends beyond that count, so the operation's entries stay stable. */
+    /* Every page of the read and write buffers is written once here, so no
+     * page fault (or copy-on-write after fork) lands in a coverage window. */
+    memset(read_buffer, 0xa5, sizeof(read_buffer));
+    memset(write_buffer, 0, sizeof(write_buffer));
+    /* SIGPIPE is blocked, not ignored (P design section 6, Q2): an EPIPE
+     * write takes the full generation path and leaves SIGPIPE pending, which
+     * each write observes with sigpending() outside its window. Nothing is
+     * pending at the start. */
+    sigset_t pipe_mask, pending;
+    if (sigemptyset(&pipe_mask) || sigaddset(&pipe_mask, SIGPIPE) || sigprocmask(SIG_BLOCK, &pipe_mask, NULL))
+        fail(t->id, -1, "environment_failure", "block_sigpipe");
+    if (sigpending(&pending)) fail(t->id, -1, "environment_failure", "sigpending");
+    for (int sig = 1; sig < NSIG; ++sig)
+        if (sigismember(&pending, sig) == 1) fail(t->id, -1, "environment_failure", "signal_pending_at_start");
     if (ioctl(coverage_fd, KCOV_ENABLE, comparisons ? KCOV_TRACE_CMP : KCOV_TRACE_PC))
         fail(t->id, -1, "coverage_failure", "enable_kcov");
     for (unsigned i = 0; i < t->count; ++i) {
         const struct operation *op = &t->ops[i];
-        long fd = resolve(op->kind, op->fd, result, i);
-        long newfd = resolve(op->newkind, op->newfd, result, i);
-        unsigned char buffer[16];
-        memset(buffer, op->code == 5 ? 0xa5 : 0, sizeof(buffer));
-        if (op->code == 6)
-            for (unsigned j = 0; j < 8; ++j) buffer[j] = (unsigned char)(op->value >> (8 * j));
-        if ((op->code >= 10) && !t->net) fail(t->id, i, "invalid_input", "wireguard_without_network_fixture");
+        long fd = resolve(t, op->kind, op->fd, result, i);
+        long newfd = resolve(t, op->newkind, op->newfd, result, i);
+        if ((op->code == OP_READ || op->code == OP_WRITE) && op->a > MAX_IO) fail(t->id, i, "invalid_input", "wire_count");
+        /* A read's buffer is refilled with 0xa5; a write's is determined by
+         * the trace (fill_write_buffer). */
+        if (op->code == OP_READ) memset(read_buffer, 0xa5, op->a);
+        if (op->code == OP_WRITE) fill_write_buffer(i, op->value, op->a);
+        int pipe_fds[2] = {-1, -1};
+        if (op->code >= OP_WG_UP && op->code <= OP_WG_INJECT && !t->net) fail(t->id, i, "invalid_input", "wireguard_without_network_fixture");
         struct ifreq up_request;
-        if (op->code == 10) {
+        if (op->code == OP_WG_UP) {
             memset(&up_request, 0, sizeof(up_request));
             strcpy(up_request.ifr_name, "wg0");
             if (ioctl(SEND_FD, SIOCGIFFLAGS, &up_request)) fail(t->id, i, "environment_failure", "get_wg0_flags");
@@ -734,16 +926,24 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
              * record of the generic clock hook) */
             clock_gettime(CLOCK_BOOTTIME, &went_up);
         }
+        /* A fixture pause (P design section 6): only the clock advances.
+         * Before the observe wait and the advance's tick wait, so that the
+         * advance still starts just after a tick (D3 merge [AGENT]). */
+        if (op->pause_ms) {
+            struct timespec pause = {.tv_sec = 0, .tv_nsec = (long)op->pause_ms * 1000000L};
+            while (nanosleep(&pause, &pause))
+                if (errno != EINTR) fail(t->id, i, "environment_failure", "pause");
+        }
         /* wg_observe's wait is an idle point (D3, section 5.3): a timer that
          * fires naturally in it, and the work it queues, land in this
          * operation's remote row, so the remote area is reset before it. */
-        if (op->code == 12) {
+        if (op->code == OP_WG_OBSERVE) {
             if (remote) __atomic_store_n(&remote[0], 0, __ATOMIC_RELAXED);
             usleep(OBSERVE_WAIT_US);
         }
         /* before the coverage window: the clock the advance's wait watches */
         struct timespec before_advance = {0};
-        if (op->code == 14 && clock_gettime(CLOCK_MONOTONIC, &before_advance))
+        if (op->code == OP_WG_ADVANCE && clock_gettime(CLOCK_MONOTONIC, &before_advance))
             fail(t->id, i, "environment_failure", "advance_clock");
         /* The advance starts just after a tick: the clock is tick-granular
          * (refined-jiffies), so it changes at the tick. This fixes the
@@ -756,7 +956,7 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
          * tick also lands inside the advance's own readout or between two
          * operations (docs/2026-10-05-d3-timers.md, section 16). Bounded:
          * 20000 reads. */
-        if (op->code == 14) {
+        if (op->code == OP_WG_ADVANCE) {
             struct timespec now = before_advance;
             for (int spins = 0; now.tv_sec == before_advance.tv_sec && now.tv_nsec == before_advance.tv_nsec; ++spins) {
                 if (spins > 20000) fail(t->id, i, "environment_failure", "advance_no_tick");
@@ -765,36 +965,36 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             before_advance = now;
         }
         __atomic_store_n(&coverage[0], 0, __ATOMIC_RELAXED);
-        if (remote && op->code != 12) __atomic_store_n(&remote[0], 0, __ATOMIC_RELAXED);
+        if (remote && op->code != OP_WG_OBSERVE) __atomic_store_n(&remote[0], 0, __ATOMIC_RELAXED);
         errno = 0;
         long ret;
         switch (op->code) {
-        case 1: ret = syscall(SYS_eventfd2, (unsigned long)op->a, (unsigned long)op->b); break;
-        case 2: ret = syscall(SYS_dup, fd); break;
-        case 3: ret = syscall(SYS_dup3, fd, newfd, (unsigned long)op->b); break;
-        case 4: ret = syscall(SYS_close, fd); break;
-        case 5: ret = syscall(SYS_read, fd, buffer, (unsigned long)op->a); break;
-        case 6: ret = syscall(SYS_write, fd, buffer, (unsigned long)op->a); break;
-        case 7: ret = syscall(SYS_fcntl, fd, (unsigned long)op->a, (unsigned long)op->b); break;
-        case 8: case 9: {
+        case OP_EVENTFD2: ret = syscall(SYS_eventfd2, (unsigned long)op->a, (unsigned long)op->b); break;
+        case OP_DUP: ret = syscall(SYS_dup, fd); break;
+        case OP_DUP3: ret = syscall(SYS_dup3, fd, newfd, (unsigned long)op->b); break;
+        case OP_CLOSE: ret = syscall(SYS_close, fd); break;
+        case OP_READ: ret = syscall(SYS_read, fd, read_buffer, (unsigned long)op->a); break;
+        case OP_WRITE: ret = syscall(SYS_write, fd, write_buffer, (unsigned long)op->a); break;
+        case OP_FCNTL: ret = syscall(SYS_fcntl, fd, (unsigned long)op->a, (unsigned long)op->b); break;
+        case OP_WG_SET: case OP_WG_GET: {
             /* WG_CMD_SET_DEVICE (acknowledged) or a WG_CMD_GET_DEVICE dump; the
              * kernel's error code becomes the operation's result. */
             if (!t->net) fail(t->id, i, "invalid_input", "wireguard_without_network_fixture");
             int error = nl_send(NETLINK_FD, wg_family,
-                                op->code == 8 ? NLM_F_REQUEST | NLM_F_ACK : NLM_F_REQUEST | NLM_F_DUMP,
-                                op->code == 8 ? WG_CMD_SET_DEVICE : WG_CMD_GET_DEVICE, op->payload, op->payload_len, 1);
-            if (!error) error = nl_receive(NETLINK_FD, GENL_HDRLEN, op->code == 9 ? dump_hex : NULL, sizeof(dump_hex));
+                                op->code == OP_WG_SET ? NLM_F_REQUEST | NLM_F_ACK : NLM_F_REQUEST | NLM_F_DUMP,
+                                op->code == OP_WG_SET ? WG_CMD_SET_DEVICE : WG_CMD_GET_DEVICE, op->payload, op->payload_len, 1);
+            if (!error) error = nl_receive(NETLINK_FD, GENL_HDRLEN, op->code == OP_WG_GET ? dump_hex : NULL, sizeof(dump_hex));
             if (error < 0) { errno = -error; ret = -1; } else ret = 0;
             break;
         }
-        case 10: {
+        case OP_WG_UP: {
             /* dev_change_flags(wg0, flags | IFF_UP) -> wg_open. The current
              * flags were read before coverage started. */
             struct ifreq request = up_request;
             ret = syscall(SYS_ioctl, SEND_FD, SIOCSIFFLAGS, &request);
             break;
         }
-        case 11: {
+        case OP_WG_XMIT: {
             /* The destination address (IPv4 as v4-mapped), then the UDP
              * payload; without one, the historic 4 bytes "leux". */
             struct sockaddr_in6 to = {.sin6_family = AF_INET6, .sin6_port = htons(SEND_PORT)};
@@ -808,7 +1008,7 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
                               op->payload_len - sizeof(to.sin6_addr), 0, &to, sizeof(to));
             break;
         }
-        case 13: {
+        case OP_WG_INJECT: {
             /* A WireGuard message to wg0's port on 127.0.0.1 or ::1 (the
              * fixture's sender; IPv4 as v4-mapped). */
             struct sockaddr_in6 to = {.sin6_family = AF_INET6, .sin6_port = htons((uint16_t)op->b)};
@@ -822,7 +1022,7 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             ret = syscall(SYS_sendto, SEND_FD, op->payload, op->payload_len, 0, &to, sizeof(to));
             break;
         }
-        case 14: {
+        case OP_WG_ADVANCE: {
             /* D3: the virtual time advance, on this process's KCOV
              * descriptor (fd 3); the kernel records {jiffies before, after}
              * (kind 304) in the task stream. */
@@ -830,7 +1030,8 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             ret = syscall(SYS_ioctl, 3, KCOV_LEANUX_TIME_ADVANCE, &ticks);
             break;
         }
-        case 12:
+        case OP_PIPE2: ret = syscall(SYS_pipe2, pipe_fds, (unsigned long)op->b); break;
+        case OP_WG_OBSERVE:
             /* The first datagram at the IPv4 listener, if any; the rest are
              * drained after coverage stops. */
             ret = syscall(SYS_recvfrom, LISTEN4_FD, observe_buffer, sizeof(observe_buffer), MSG_DONTWAIT, NULL, NULL);
@@ -839,20 +1040,27 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         }
         int captured_errno = errno;
         unsigned long count = __atomic_load_n(&coverage[0], __ATOMIC_RELAXED);
+        /* Outside the window: SIGPIPE pending after a write; any other
+         * pending signal is outside the fixture. */
+        if (sigpending(&pending)) fail(t->id, i, "environment_failure", "sigpending");
+        for (int sig = 1; sig < NSIG; ++sig)
+            if (sig != SIGPIPE && sigismember(&pending, sig) == 1)
+                fail(t->id, i, "environment_failure", "unexpected_pending_signal");
+        result[i].sigpipe = sigismember(&pending, SIGPIPE) == 1;
         /* Outside the coverage window: the dump's attribute payloads. */
-        if (op->code == 9 && !comparisons && ret == 0)
+        if (op->code == OP_WG_GET && !comparisons && ret == 0)
             printf("LEANUX_WG {\"id\":\"%s\",\"index\":%u,\"payloads\":[%s]}\n", t->id, i, dump_hex);
-        if (op->code == 10 && ret == 0) {
+        if (op->code == OP_WG_UP && ret == 0) {
             up_seen = 1;
             route_into_wg0(t->id, i);
         }
-        if (op->code == 12) observe(t, i, ret, comparisons);
+        if (op->code == OP_WG_OBSERVE) observe(t, i, ret, comparisons);
         /* The handshake worker runs after the send returns. An operation
          * that can queue the handshake send worker (wg_set, wg_up, wg_xmit)
          * waits for it too, so the worker's remote section lands in it. */
-        if (op->code == 13) usleep(OBSERVE_WAIT_US);
-        if (op->code == 8 || op->code == 10 || op->code == 11) usleep(QUEUE_WAIT_US);
-        if (op->code == 14) {
+        if (op->code == OP_WG_INJECT) usleep(OBSERVE_WAIT_US);
+        if (op->code == OP_WG_SET || op->code == OP_WG_UP || op->code == OP_WG_XMIT) usleep(QUEUE_WAIT_US);
+        if (op->code == OP_WG_ADVANCE) {
             /* An advance that fails is not a trace operation the mirror can
              * follow: fail the trace. Then wait for the tick that absorbs the
              * jump (bounded: 1 s of real time), then ADVANCE_WAIT_US. */
@@ -883,9 +1091,17 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             fail(t->id, i, "coverage_failure", "empty_or_full_kcov");
         result[i].error = ret == -1 ? captured_errno : 0;
         result[i].ret = ret == -1 ? -captured_errno : ret;
-        if (op->code == 5 && ret > 0) {
-            if (ret > 16) fail(t->id, i, "environment_failure", "read_return_exceeds_buffer");
-            memcpy(result[i].bytes, buffer, (size_t)ret);
+        if ((op->code == OP_READ || op->code == OP_WRITE) && ret > (long)op->a)
+            fail(t->id, i, "environment_failure", "io_return_exceeds_count");
+        if (op->code == OP_READ && ret > 0) {
+            memcpy(result[i].bytes, read_buffer, (size_t)(ret < READ_HEAD ? ret : READ_HEAD));
+            blake2s256(read_buffer, (size_t)ret, result[i].digest);
+        }
+        if (op->code == OP_PIPE2) {
+            if (ret == 0 && (pipe_fds[0] < 0 || pipe_fds[1] < 0 || pipe_fds[0] == pipe_fds[1]))
+                fail(t->id, i, "environment_failure", "pipe2_descriptors");
+            result[i].fds[0] = ret == 0 ? pipe_fds[0] : -1;
+            result[i].fds[1] = ret == 0 ? pipe_fds[1] : -1;
         }
         /* The remote stream: the dispatch sections (the NET_RX vector and
          * the work items in the dispatch set) that stopped during this
@@ -916,15 +1132,19 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         printf("LEANUX_TIMING {\"id\":\"%s\",\"mode\":\"%s\",\"since_up_ns\":%lld}\n", t->id,
                comparisons ? "cmp" : "pc", since_up_ns);
     if (comparisons) {
+        /* Per operation: ret, bytes, and the fds/digest/sigpipe fields
+         * (null where an operation has none), for the determinism check. */
         printf("LEANUX_CMP_RESULT {\"id\":\"%s\",\"rets\":[", t->id);
         for (unsigned i = 0; i < t->count; ++i) printf("%s%ld", i ? "," : "", result[i].ret);
         printf("],\"bytes\":[");
-        for (unsigned i = 0; i < t->count; ++i) {
-            printf("%s\"", i ? "," : "");
-            if (t->ops[i].code == 5 && result[i].ret > 0)
-                for (long j = 0; j < result[i].ret; ++j) printf("%02x", result[i].bytes[j]);
-            printf("\"");
-        }
+        for (unsigned i = 0; i < t->count; ++i) { printf("%s", i ? "," : ""); print_head(&t->ops[i], &result[i]); }
+        printf("],\"fds\":[");
+        for (unsigned i = 0; i < t->count; ++i) { printf("%s", i ? "," : ""); print_fds(&t->ops[i], &result[i]); }
+        printf("],\"digest\":[");
+        for (unsigned i = 0; i < t->count; ++i) { printf("%s", i ? "," : ""); print_digest(&t->ops[i], &result[i]); }
+        printf("],\"sigpipe\":[");
+        for (unsigned i = 0; i < t->count; ++i)
+            if (t->ops[i].code == OP_WRITE) printf("%s%d", i ? "," : "", result[i].sigpipe); else printf("%snull", i ? "," : "");
         printf("]}\n");
         fflush(stdout);
         task_steering_status(t, coverage_fd, comparisons);
@@ -938,10 +1158,12 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
     for (unsigned i = 0; i < t->count; ++i) {
         printf("%s{\"index\":%u,\"ret\":%ld,\"errno\":", i ? "," : "", i, result[i].ret);
         if (result[i].error) printf("%d", result[i].error); else printf("null");
-        printf(",\"bytes\":\"");
-        if (t->ops[i].code == 5 && result[i].ret > 0)
-            for (long j = 0; j < result[i].ret; ++j) printf("%02x", result[i].bytes[j]);
-        printf("\"}");
+        printf(",\"bytes\":");
+        print_head(&t->ops[i], &result[i]);
+        if (t->ops[i].code == OP_READ) { printf(",\"digest\":"); print_digest(&t->ops[i], &result[i]); }
+        if (t->ops[i].code == OP_WRITE) printf(",\"sigpipe\":%d", result[i].sigpipe);
+        if (t->ops[i].code == OP_PIPE2) { printf(",\"fds\":"); print_fds(&t->ops[i], &result[i]); }
+        printf("}");
     }
     printf("],\"branches\":[]}\n");
     fflush(stdout);
@@ -972,9 +1194,29 @@ static void clocksource_row(const char *at)
     fflush(stdout);
 }
 
+/* The parent's watchdog (P design section 6): SIGALRM kills the running
+ * child's process group; the child's own signal state is untouched. A killed
+ * child is a LEANUX_CHILD_FAILURE, which fails the chunk. */
+static volatile pid_t watched;
+static volatile sig_atomic_t watchdog_fired;
+
+static void on_watchdog(int sig)
+{
+    (void)sig;
+    if (watched > 0) {
+        kill(-watched, SIGKILL);
+        kill(watched, SIGKILL);
+        watchdog_fired = 1;
+    }
+}
+
 int main(int argc, char **argv)
 {
     setvbuf(stdout, NULL, _IOLBF, 0);
+    blake2s_self_test();
+    struct sigaction watchdog = {.sa_handler = on_watchdog, .sa_flags = SA_RESTART};
+    if (sigemptyset(&watchdog.sa_mask) || sigaction(SIGALRM, &watchdog, NULL))
+        fail("batch", -1, "environment_failure", "watchdog_handler");
     if (argc != 2) fail("batch", -1, "invalid_input", "wire_argument");
     FILE *input = fopen(argv[1], "r");
     if (!input) fail("batch", -1, "environment_failure", "open_wire");
@@ -1042,11 +1284,14 @@ int main(int argc, char **argv)
         for (unsigned i = 0; i < trace.count; ++i) {
             struct operation *op = &trace.ops[i];
             int consumed = 0;
-            if (!fgets(line, sizeof(line), input) || sscanf(line, "%u %u %lld %u %lld %u %u %" SCNu64 "%n",
-                &op->code, &op->kind, &op->fd, &op->newkind, &op->newfd, &op->a, &op->b, &op->value, &consumed) != 8)
+            /* opcode, fd kind and value, newfd kind and value, a, b, value,
+             * pause_ms (the ninth field, P design section 6) */
+            if (!fgets(line, sizeof(line), input) || sscanf(line, "%u %u %lld %u %lld %u %u %" SCNu64 " %u%n",
+                &op->code, &op->kind, &op->fd, &op->newkind, &op->newfd, &op->a, &op->b, &op->value, &op->pause_ms,
+                &consumed) != 9 || op->pause_ms > PAUSE_MS_MAX || op->kind > 3 || op->newkind > 3)
                 fail(trace.id, i, "invalid_input", "wire_operation");
             op->payload_len = 0;
-            if (op->code == 8 || op->code == 9 || op->code == 11 || op->code == 13) {
+            if (op->code == OP_WG_SET || op->code == OP_WG_GET || op->code == OP_WG_XMIT || op->code == OP_WG_INJECT) {
                 /* A WireGuard operation carries its attribute payload as hex. */
                 const char *hex = line + consumed;
                 if (*hex++ != ' ') fail(trace.id, i, "invalid_input", "wire_payload");
@@ -1081,9 +1326,29 @@ int main(int argc, char **argv)
             if (child < 0) fail(trace.id, -1, "environment_failure", "fork");
             if (!child) execute(&trace, fileno(input), comparisons);
             int status;
-            if (waitpid(child, &status, 0) != child) fail(trace.id, -1, "environment_failure", "wait_child");
+            unsigned pauses = 0;
+            unsigned long long advanced_ns = 0;
+            for (unsigned i = 0; i < trace.count; ++i) {
+                pauses += trace.ops[i].pause_ms;
+                if (trace.ops[i].code == OP_WG_ADVANCE) advanced_ns += trace.ops[i].a * (unsigned long long)TICK_NS;
+            }
+            /* alarm() runs on the monotonic clock, which under refined-jiffies
+             * jumps with every wg_advance (D3): the advanced time is added, or
+             * a long advance fires the watchdog at once (the first run after
+             * the merge with P lost 125 traces to it) [AGENT]. */
+            unsigned long long seconds = WATCHDOG_BASE_SECONDS + WATCHDOG_OP_SECONDS * trace.count + (pauses + 999) / 1000
+                                         + (advanced_ns + 999999999ULL) / 1000000000ULL;
+            if (seconds > UINT_MAX) fail(trace.id, -1, "invalid_input", "watchdog_seconds");
+            watchdog_fired = 0;
+            watched = child;
+            alarm((unsigned)seconds);
+            pid_t waited = waitpid(child, &status, 0);
+            watched = 0;
+            alarm(0);
+            if (waited != child) fail(trace.id, -1, "environment_failure", "wait_child");
             if (!WIFEXITED(status) || WEXITSTATUS(status)) {
-                printf("LEANUX_CHILD_FAILURE {\"id\":\"%s\",\"status\":%d}\n", trace.id, status);
+                printf("LEANUX_CHILD_FAILURE {\"id\":\"%s\",\"status\":%d,\"watchdog\":%d}\n", trace.id, status,
+                       (int)watchdog_fired);
                 ++failures;
             }
         }

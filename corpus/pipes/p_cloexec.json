@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "id": "p_cloexec",
+  "ops": [
+    {
+      "op": "pipe2",
+      "flags": 526336
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "pipe": 0,
+        "end": 0
+      },
+      "cmd": "F_GETFD",
+      "arg": 0
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "cmd": "F_GETFD",
+      "arg": 0
+    },
+    {
+      "op": "pipe2",
+      "flags": 2048
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "pipe": 3,
+        "end": 0
+      },
+      "cmd": "F_GETFD",
+      "arg": 0
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "pipe": 3,
+        "end": 1
+      },
+      "cmd": "F_GETFD",
+      "arg": 0
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "cmd": "F_SETFD",
+      "arg": 0
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "cmd": "F_GETFD",
+      "arg": 0
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "pipe": 0,
+        "end": 0
+      },
+      "cmd": "F_GETFL",
+      "arg": 0
+    }
+  ]
+}

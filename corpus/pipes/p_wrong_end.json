@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "id": "p_wrong_end",
+  "ops": [
+    {
+      "op": "pipe2",
+      "flags": 2048
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 0,
+        "end": 0
+      },
+      "count": 10,
+      "value": "81985529216486895"
+    },
+    {
+      "op": "read",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "count": 10
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 0,
+        "end": 0
+      },
+      "count": 0,
+      "value": "81985529216486895"
+    },
+    {
+      "op": "read",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "count": 0
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "count": 10,
+      "value": "81985529216486895"
+    },
+    {
+      "op": "read",
+      "fd": {
+        "pipe": 0,
+        "end": 0
+      },
+      "count": 10
+    },
+    {
+      "op": "close",
+      "fd": {
+        "pipe": 0,
+        "end": 0
+      }
+    },
+    {
+      "op": "close",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      }
+    }
+  ]
+}

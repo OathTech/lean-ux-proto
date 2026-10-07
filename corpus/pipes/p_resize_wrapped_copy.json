@@ -1,0 +1,222 @@
+{
+  "version": 1,
+  "id": "p_resize_wrapped_copy",
+  "ops": [
+    {
+      "op": "pipe2",
+      "flags": 2048
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "count": 4096,
+      "value": "0"
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "count": 4096,
+      "value": "1"
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "count": 4096,
+      "value": "2"
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "count": 4096,
+      "value": "3"
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "count": 4096,
+      "value": "4"
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "count": 4096,
+      "value": "5"
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "count": 4096,
+      "value": "6"
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "count": 4096,
+      "value": "7"
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "count": 4096,
+      "value": "8"
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "count": 4096,
+      "value": "9"
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "count": 4096,
+      "value": "10"
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "count": 4096,
+      "value": "11"
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "count": 4096,
+      "value": "12"
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "count": 4096,
+      "value": "13"
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "count": 4096,
+      "value": "14"
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "count": 4096,
+      "value": "15"
+    },
+    {
+      "op": "read",
+      "fd": {
+        "pipe": 0,
+        "end": 0
+      },
+      "count": 4096
+    },
+    {
+      "op": "read",
+      "fd": {
+        "pipe": 0,
+        "end": 0
+      },
+      "count": 4096
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "count": 4096,
+      "value": "100"
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "count": 4096,
+      "value": "101"
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "cmd": "F_SETPIPE_SZ",
+      "arg": 131072
+    },
+    {
+      "op": "fcntl",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "cmd": "F_GETPIPE_SZ",
+      "arg": 0
+    },
+    {
+      "op": "read",
+      "fd": {
+        "pipe": 0,
+        "end": 0
+      },
+      "count": 69632
+    },
+    {
+      "op": "read",
+      "fd": {
+        "pipe": 0,
+        "end": 0
+      },
+      "count": 1
+    }
+  ]
+}

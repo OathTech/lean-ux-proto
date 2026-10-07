@@ -1,4 +1,5 @@
 import Leanux.Kernel.Refcount
+import Leanux.FS.Pipe
 
 /-!
 # fs/eventfd.c — context and file operations
@@ -15,19 +16,11 @@ waiter-present outcome is `unsupported`.
 
 namespace Leanux
 
-/-- `struct kiocb`, the parts `eventfd_read` consults. -/
-structure Kiocb where
-  filp : FileId
-  kiFlags : UInt32
-  kiPos : Int
-
-/-- `IOCB_NOWAIT` (include/linux/fs.h). -/
-def IOCB_NOWAIT : UInt32 := 0x8   -- RWF_NOWAIT
-
 /-- `file->private_data` of an eventfd file. -/
 def eventfdCtxOf (file : File) : M CtxId :=
   match file.privateData with
   | some (.eventfdCtx id) => return id
+  | some (.pipe _) => invariant "eventfd operation on a pipe file"
   | none => invariant "eventfd operation on a file with NULL private_data"
 
 /-- eventfd_free_ctx (eventfd.c:82-87). -/
@@ -93,18 +86,22 @@ def eventfdRead (iocb : Kiocb) (iterCount : Nat) : M Int := do
   -- spin_unlock_irq(&ctx->wqh.lock)
   -- `copy_to_iter`: the guest's buffer is mapped (a trace input under A-U, 6.5)
   if ← branch .eventfdReadCopyFault false then return -EFAULT
-  modify fun w => { w with userOut := some ucnt }
+  -- copy_to_iter(&ucnt, sizeof(ucnt), to): the 8 bytes, little-endian
+  modify fun w => { w with userOut := some (ByteArray.mk ((List.range 8).map fun k =>
+    UInt8.ofNat (ucnt.toNat / 256 ^ k % 256)).toArray) }
   return 8
 
-/-- eventfd_write (eventfd.c:247-280), the `write` operation. `userWord` is
-    the 8-byte value in the caller's buffer. -/
-def eventfdWrite (fid : FileId) (userWord : UInt64) (count : Nat) : M Int := do
+/-- eventfd_write (eventfd.c:247-280), the `write` operation. `buf` is the
+    caller's buffer. -/
+def eventfdWrite (fid : FileId) (buf : ByteArray) (count : Nat) : M Int := do
   let file ← getFile fid
   let id ← eventfdCtxOf file  -- ctx = file->private_data
   if ← branchCmp .eventfdWriteWrongSize (count != 8) count 8 then return -EINVAL
   -- `copy_from_user`: the guest's buffer is mapped (A-U, 6.5)
   if ← branch .eventfdWriteCopyFault false then return -EFAULT
-  let ucnt := userWord
+  -- copy_from_user(&ucnt, buf, sizeof(ucnt)): the first 8 bytes, little-endian
+  if buf.size < 8 then invariant "eventfd_write: the caller's buffer is shorter than 8 bytes"
+  let ucnt : UInt64 := UInt64.ofNat ((List.range 8).foldr (fun k acc => acc * 256 + buf[k]!.toNat) 0)
   if ← branchCmp .eventfdWriteReserved (ucnt == ULLONG_MAX) ucnt.toNat ULLONG_MAX.toNat then return -EINVAL
   -- spin_lock_irq(&ctx->wqh.lock)
   let mut res : Int := -EAGAIN
@@ -142,30 +139,57 @@ structure Fops where
   fasync : Bool := false
   checkFlags : Bool := false
   iterateShared : Bool := false
+  poll : Bool := false
+  unlockedIoctl : Bool := false
+  «open» : Bool := false
+  spliceWrite : Bool := false
 
 /-- `eventfd_fops` (eventfd.c:302-311): release, poll, read_iter, write,
     llseek = noop_llseek, show_fdinfo; built in, so no module owner. -/
 def eventfdFops : Fops :=
   { llseek := true, readIter := true, write := true, release := true }
 
+/-- `pipefifo_fops` (fs/pipe.c:1232-1241): open, read_iter, write_iter,
+    poll, unlocked_ioctl, release, fasync, splice_write; no `llseek` (so no
+    `FMODE_LSEEK`), no `check_flags`; built in. -/
+def pipefifoFops : Fops :=
+  { readIter := true, writeIter := true, release := true, fasync := true, poll := true,
+    unlockedIoctl := true, «open» := true, spliceWrite := true }
+
 def fopsOf : Option FopsId → M Fops
   | some .eventfd => return eventfdFops
+  | some .pipefifo => return pipefifoFops
   | some (.fixture name) => unsupported s!"file operations of fixture file {name}"
   | none => invariant "file->f_op is NULL"
 
 def fopRelease (fid : FileId) : Option FopsId → M Int
   | some .eventfd => eventfdRelease fid
+  | some .pipefifo => do
+    -- pipe_release(inode, file): `inode` is the file's pipefs inode
+    match (← getFile fid).fInode with
+    | some (.pipefs ino) => pipeRelease ino fid
+    | _ => invariant "a pipefifo file whose f_inode is not a pipefs inode"
   | some (.fixture name) => unsupported s!"release of fixture file {name}"
   | none => invariant "file->f_op is NULL"
 
 def fopReadIter (iocb : Kiocb) (count : Nat) : Option FopsId → M Int
   | some .eventfd => eventfdRead iocb count
+  | some .pipefifo => pipeRead iocb count
   | some (.fixture name) => unsupported s!"read_iter of fixture file {name}"
   | none => invariant "file->f_op is NULL"
 
-def fopWrite (fid : FileId) (userWord : UInt64) (count : Nat) : Option FopsId → M Int
-  | some .eventfd => eventfdWrite fid userWord count
+def fopWrite (fid : FileId) (buf : ByteArray) (count : Nat) : Option FopsId → M Int
+  | some .eventfd => eventfdWrite fid buf count
+  | some .pipefifo => invariant "pipefifo_fops has no write (fopsOf routes it to write_iter)"
   | some (.fixture name) => unsupported s!"write of fixture file {name}"
+  | none => invariant "file->f_op is NULL"
+
+/-- `f_op->write_iter` (the `new_sync_write` path). `from` is the caller's
+    buffer as an `iov_iter`. -/
+def fopWriteIter (iocb : Kiocb) («from» : IovIter) : Option FopsId → M Int
+  | some .pipefifo => pipeWrite iocb «from»
+  | some .eventfd => invariant "eventfd_fops has no write_iter (fopsOf routes it to write)"
+  | some (.fixture name) => unsupported s!"write_iter of fixture file {name}"
   | none => invariant "file->f_op is NULL"
 
 end Leanux
