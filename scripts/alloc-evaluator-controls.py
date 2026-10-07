@@ -88,7 +88,7 @@ def run_case(name, out):
         steer.ALLOC_SITES['kvmallocFdArray'].pop('kvmalloc_limit')
     config = check.load_kcov_config()
     decisions = check.load_decisions(config)
-    instrumented, functions = instrumented_lines(check.KERNEL / 'vmlinux', config['functions'], config['files'])
+    instrumented, functions, _chains = instrumented_lines(check.KERNEL / 'vmlinux', config['functions'], config['files'])
     kcov = (config, decisions, check.witness_table(decisions, instrumented, functions,
                                                    config['branch_free_functions']), instrumented, functions)
     results, _, _ = check.run_chunk([validate_trace(trace)], out, kcov, alloc_flags=flags, arm=arm)
