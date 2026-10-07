@@ -582,8 +582,10 @@ class WgMutantScoringChecks(unittest.TestCase):
     def test_mismatches_reject(self):
         for outcome in self.m.MISMATCH_OUTCOMES:
             self.assertEqual(self.m.classify(self.report(outcome))[0], 'rejected')
-        status, mismatches, other = self.m.classify(self.report('hidden_mismatch', 'timeout'))
-        self.assertEqual((status, mismatches, other), ('rejected', ['hidden_mismatch'], ['timeout']))
+        self.assertEqual(self.m.classify(self.report('hidden_mismatch', 'semantic_mismatch'))[0], 'rejected')
+        # a mismatch beside an infrastructure outcome is no verdict
+        status, mismatches, other = self.m.classify(self.report('hidden_mismatch', 'environment_failure'))
+        self.assertEqual((status, mismatches, other), ('no_verdict', ['hidden_mismatch'], ['environment_failure']))
 
     def test_infrastructure_is_no_verdict(self):
         for outcome in ('environment_failure', 'timeout', 'resource_busy', 'output_limit', 'crash',
