@@ -5,9 +5,14 @@ on the wireguard suite, then reverted. Run from the repository root:
 
     scripts/in-bundle python3 scripts/wg-mutants.py [NAME ...]
 
-Every mutant must be rejected (status fail). D2 and D3 entries without patterns
-are reported as pending. W5 also aborts on a mirror
-invariant; run `--trace wg_trie_v6` by hand to see A2 alone reject it.
+Every mutant must be rejected: its run must end in a mirror-side verdict
+(`MISMATCH_OUTCOMES`). A run that fails only on the infrastructure (an
+environment failure, a timeout, a busy QEMU slot, an aborted run, no report,
+or any other outcome) is "no_verdict", never a rejection, and the script then
+exits 1. D2 and D3 entries without patterns are reported as pending; the
+entries of `EQUIVALENT` are not run and are reported as equivalent. W5 also
+aborts on a mirror invariant; run `--trace wg_trie_v6` by hand to see A2
+alone reject it.
 """
 import glob
 import json, os, subprocess, sys
@@ -321,6 +326,23 @@ D3_MUTANTS = [
    "      armTimer pid .newHandshake (KEEPALIVE_TIMEOUT_TICKS + jitter)\n"),
 ]
 PENDING = {m[0] for m in D2_MUTANTS + D3_MUTANTS if m[3] is None}
+# Equivalent mutants: listed and reported as such, never run or scored as
+# survivors [AGENT 2026-10-07, review S4].
+EQUIVALENT = {
+    'H-M8-response-unclamped': 'curve25519() clamps the scalar itself (lib/crypto/curve25519), so the '
+                               'unclamped ephemeral gives the same public key and the same shared secret',
+}
+
+# The outcomes that are a verdict on the mirror: Linux and the mutated mirror
+# disagree (behavior, control flow, hidden inputs), or the mutated mirror stops
+# on its own (an invariant, a path outside its domain). Every other outcome
+# (environment_failure, timeout, resource_busy, output_limit, crash,
+# build_failure, invalid_output, invalid_coverage, invalid_input,
+# missing_coverage, not_run, a guest error kind, anything new) is the
+# infrastructure's: no verdict [AGENT 2026-10-07, review S2; as
+# scripts/wg-d3-controls.py accepts only named mismatch kinds].
+MISMATCH_OUTCOMES = frozenset({'semantic_mismatch', 'control_flow_mismatch', 'hidden_mismatch',
+                               'mirror_invariant', 'unsupported_path'})
 
 
 def w4(text):
@@ -348,51 +370,112 @@ def resched_records(out):
     return n
 
 
+def classify(report):
+    """A mutant run's verdict from its check report (None: no report):
+    (status, mismatch outcomes, other outcomes). 'rejected' needs a mismatch
+    outcome in a run that was not aborted; 'survived' needs a clean pass; any
+    other run is 'no_verdict' (fail-closed: an infrastructure failure never
+    counts as a rejection)."""
+    if report is None:
+        return 'no_verdict', [], ['no report']
+    outcomes = {f['outcome'] for f in report['failures']}
+    mismatches, other = sorted(outcomes & MISMATCH_OUTCOMES), sorted(outcomes - MISMATCH_OUTCOMES)
+    if report.get('aborted'):
+        return 'no_verdict', mismatches, other + ['aborted']
+    if mismatches:
+        return 'rejected', mismatches, other
+    if report['status'] == 'pass' and not report['failures']:
+        return 'survived', [], []
+    return 'no_verdict', [], other or ['fail without failures']
+
+
+def tally(results):
+    """Counts per status, for the printed and the stored summary."""
+    counts = {}
+    for r in results.values():
+        counts[r['status']] = counts.get(r['status'], 0) + 1
+    return dict(sorted(counts.items()))
+
+
 def run(cmd, **kw):
     return subprocess.run(cmd, cwd=ROOT, **kw)
 
-assert run(['git', 'status', '--porcelain'], capture_output=True, text=True).stdout == '', 'tree must be clean'
-head = run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()
-MUTANTS = MUTANTS + D1_MUTANTS + D2_MUTANTS + E_MUTANTS + D3_MUTANTS
-selected = sys.argv[1:] or [m[0] for m in MUTANTS]
-results = {}
-for name, what, path, old, new in MUTANTS:
-    if name not in selected:
-        continue
-    if name in PENDING:   # a draft entry: its pattern is filled at integration
-        results[name] = dict(description=what, base=head, file=path, status='pending')
-        print(name, 'pending (no pattern yet)', flush=True)
-        continue
-    full = os.path.join(ROOT, path)
-    text = open(full).read()
-    if old is None:
-        mutated = w4(text)
-    else:
-        assert text.count(old) == 1, f'{name}: pattern not unique/present'
-        mutated = text.replace(old, new)
-    open(full, 'w').write(mutated)
-    try:
-        diff = run(['git', 'diff', '--stat'], capture_output=True, text=True).stdout
-        assert path in diff, f'{name}: mutation not applied'
-        out = f'.artifacts/check/mutant-{name}'
-        run(['rm', '-rf', out])
-        proc = run(['timeout', '3000', sys.executable, '-m', 'evaluator.check', '--suite', 'wireguard',
-                    '--out', out], capture_output=True, text=True)
-        report = json.load(open(os.path.join(ROOT, out, 'report.json')))
-        kinds = sorted({p['problem'] for f in report['failures'] for p in f.get('problems', [])} |
-                       {f['outcome'] for f in report['failures']})
-        results[name] = dict(description=what, base=head, file=path, exit=proc.returncode, status=report['status'],
-                             counts=report['counts'], failure_kinds=kinds, report=out + '/report.json',
-                             resched_records=resched_records(out))
-        if name == 'D1-M15-ignore-resched' and report['status'] == 'pass' and not results[name]['resched_records']:
-            results[name]['status'] = 'inconclusive'   # no reschedule occurred to ignore
-        if name == 'D2-M12-poll-outside-worker':
-            orders = napi_orders(os.path.join(ROOT, out))
-            results[name]['napi_orders'] = dict(a=orders['a'], bc=orders['bc'])
-            if report['status'] == 'pass' and not orders['bc']:
-                results[name]['status'] = 'inconclusive'   # only order (a) occurred, which cannot reject it
-        print(name, results[name]['status'], report['counts'], kinds, 'resched', results[name]['resched_records'], flush=True)
-    finally:
-        run(['git', 'checkout', '--', path])
-assert run(['git', 'status', '--porcelain'], capture_output=True, text=True).stdout == ''
-json.dump(results, open(os.path.join(ROOT, '.artifacts/check/mutants-summary.json'), 'w'), indent=2)
+
+def main():
+    assert run(['git', 'status', '--porcelain'], capture_output=True, text=True).stdout == '', 'tree must be clean'
+    head = run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()
+    mutants = MUTANTS + D1_MUTANTS + D2_MUTANTS + E_MUTANTS + D3_MUTANTS
+    names = [m[0] for m in mutants]
+    assert set(EQUIVALENT) <= set(names), 'an EQUIVALENT entry names no mutant'
+    selected = sys.argv[1:] or names
+    unknown = sorted(set(selected) - set(names))
+    if unknown:
+        raise SystemExit(f'unknown mutants: {unknown}')
+    results = {}
+    for name, what, path, old, new in mutants:
+        if name not in selected:
+            continue
+        if name in PENDING:   # a draft entry: its pattern is filled at integration
+            results[name] = dict(description=what, base=head, file=path, status='pending')
+            print(name, 'pending (no pattern yet)', flush=True)
+            continue
+        if name in EQUIVALENT:
+            results[name] = dict(description=what, base=head, file=path, status='equivalent',
+                                 reason=EQUIVALENT[name])
+            print(name, 'equivalent (not run):', EQUIVALENT[name], flush=True)
+            continue
+        full = os.path.join(ROOT, path)
+        text = open(full).read()
+        if old is None:
+            mutated = w4(text)
+        else:
+            assert text.count(old) == 1, f'{name}: pattern not unique/present'
+            mutated = text.replace(old, new)
+        open(full, 'w').write(mutated)
+        try:
+            diff = run(['git', 'diff', '--stat'], capture_output=True, text=True).stdout
+            assert path in diff, f'{name}: mutation not applied'
+            out = f'.artifacts/check/mutant-{name}'
+            run(['rm', '-rf', out])
+            proc = run(['timeout', '3000', sys.executable, '-m', 'evaluator.check', '--suite', 'wireguard',
+                        '--out', out], capture_output=True, text=True)
+            path_report = os.path.join(ROOT, out, 'report.json')
+            report = json.load(open(path_report)) if os.path.exists(path_report) else None
+            status, mismatches, other = classify(report)
+            if report is None:
+                results[name] = dict(description=what, base=head, file=path, exit=proc.returncode, status=status,
+                                     no_verdict=other, stderr=proc.stderr[-2000:])
+                print(name, status, '(no report)', proc.stderr[-400:], flush=True)
+                continue
+            kinds = sorted({p['problem'] for f in report['failures'] for p in f.get('problems', [])} |
+                           {f['outcome'] for f in report['failures']})
+            results[name] = dict(description=what, base=head, file=path, exit=proc.returncode, status=status,
+                                 check_status=report['status'], counts=report['counts'], failure_kinds=kinds,
+                                 mismatch_outcomes=mismatches, other_outcomes=other, aborted=report.get('aborted'),
+                                 report=out + '/report.json', resched_records=resched_records(out))
+            if name == 'D1-M15-ignore-resched' and status == 'survived' and not results[name]['resched_records']:
+                results[name]['status'] = 'inconclusive'   # no reschedule occurred to ignore
+            if name == 'D2-M12-poll-outside-worker':
+                orders = napi_orders(os.path.join(ROOT, out))
+                results[name]['napi_orders'] = dict(a=orders['a'], bc=orders['bc'])
+                if status == 'survived' and not orders['bc']:
+                    results[name]['status'] = 'inconclusive'   # only order (a) occurred, which cannot reject it
+            print(name, results[name]['status'], report['counts'], kinds, 'other', other,
+                  'resched', results[name]['resched_records'], flush=True)
+        finally:
+            run(['git', 'checkout', '--', path])
+    assert run(['git', 'status', '--porcelain'], capture_output=True, text=True).stdout == ''
+    totals = tally(results)
+    os.makedirs(os.path.join(ROOT, '.artifacts/check'), exist_ok=True)
+    json.dump(dict(results, totals=totals), open(os.path.join(ROOT, '.artifacts/check/mutants-summary.json'), 'w'),
+              indent=2)
+    print('totals', totals, flush=True)
+    no_verdict = sorted(n for n, r in results.items() if r['status'] == 'no_verdict')
+    if no_verdict:
+        print('NO VERDICT (infrastructure; rerun these):', ' '.join(no_verdict), flush=True)
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

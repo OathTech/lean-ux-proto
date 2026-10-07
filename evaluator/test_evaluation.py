@@ -562,3 +562,45 @@ class D2GeneratorChecks(unittest.TestCase):
                 op.get('packet', {}).pop('payload', None)
             validate_trace(stripped)
         self.assertEqual(seen, {'xmit', 'data'})
+
+
+class WgMutantScoringChecks(unittest.TestCase):
+    """scripts/wg-mutants.py: only a mirror-side verdict rejects a mutant; an
+    infrastructure outcome is no verdict (review S2), and H-M8 is listed as
+    equivalent (review S4)."""
+    @classmethod
+    def setUpClass(cls):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('wg_mutants', ROOT / 'scripts/wg-mutants.py')
+        cls.m = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.m)   # main() is not run on import
+
+    def report(self, *outcomes, aborted=None):
+        return dict(status='pass' if not outcomes and not aborted else 'fail', aborted=aborted,
+                    failures=[dict(id=f't{i}', outcome=o) for i, o in enumerate(outcomes)])
+
+    def test_mismatches_reject(self):
+        for outcome in self.m.MISMATCH_OUTCOMES:
+            self.assertEqual(self.m.classify(self.report(outcome))[0], 'rejected')
+        status, mismatches, other = self.m.classify(self.report('hidden_mismatch', 'timeout'))
+        self.assertEqual((status, mismatches, other), ('rejected', ['hidden_mismatch'], ['timeout']))
+
+    def test_infrastructure_is_no_verdict(self):
+        for outcome in ('environment_failure', 'timeout', 'resource_busy', 'output_limit', 'crash',
+                        'invalid_output', 'invalid_coverage', 'not_run', 'some_new_kind'):
+            self.assertEqual(self.m.classify(self.report(outcome)), ('no_verdict', [], [outcome]))
+        self.assertEqual(self.m.classify(None)[0], 'no_verdict')
+        self.assertEqual(self.m.classify(self.report('semantic_mismatch', aborted='KeyboardInterrupt'))[0],
+                         'no_verdict')
+        self.assertEqual(self.m.classify(dict(status='fail', aborted=None, failures=[]))[0], 'no_verdict')
+
+    def test_clean_pass_survives(self):
+        self.assertEqual(self.m.classify(self.report()), ('survived', [], []))
+
+    def test_equivalent_listed_not_deleted(self):
+        names = {m[0] for m in self.m.MUTANTS}
+        self.assertIn('H-M8-response-unclamped', names)
+        self.assertIn('H-M8-response-unclamped', self.m.EQUIVALENT)
+        self.assertEqual(self.m.tally({'a': dict(status='equivalent'), 'b': dict(status='no_verdict'),
+                                       'c': dict(status='rejected')}),
+                         {'equivalent': 1, 'no_verdict': 1, 'rejected': 1})
