@@ -152,6 +152,11 @@ def _bounded_process(command, output, timeout, limit):
             process.stdout.close()
 
 
+# A read's observation: the hex of its first READ_HEAD bytes and the
+# BLAKE2s-256 digest of all of them (P design section 6).
+READ_HEAD = 64
+
+
 def _check_observation(result, trace):
     if type(result) is not dict or set(result) != {"version", "id", "observations", "branches"}:
         raise ValueError("observation envelope fields")
@@ -167,6 +172,8 @@ def _check_observation(result, trace):
             fields = fields | {"device"}
         if op["op"] == "wg_observe":
             fields = fields | {"datagrams", "replies", "stats"}
+        # P design section 6: a read's digest, a write's sigpipe, a pipe2's fds
+        fields = fields | {"read": {"digest"}, "write": {"sigpipe"}, "pipe2": {"fds"}}.get(op["op"], set())
         if type(observation) is not dict or set(observation) != fields:
             raise ValueError("operation observation fields")
         ret, error, data = observation["ret"], observation["errno"], observation["bytes"]
@@ -177,11 +184,34 @@ def _check_observation(result, trace):
                 raise ValueError("inconsistent errno")
         elif error is not None:
             raise ValueError("errno on success")
-        if type(data) is not str or not re.fullmatch(r"(?:[0-9a-f]{2}){0,16}", data):
+        if type(data) is not str or not re.fullmatch(r"(?:[0-9a-f]{2}){0,%d}" % READ_HEAD, data):
             raise ValueError("read output encoding")
-        expected = ret if op["op"] == "read" and ret >= 0 else 0
-        if len(data) != 2 * expected or expected > op.get("count", 16):
+        if op["op"] in ("read", "write") and ret > op["count"]:
+            raise ValueError("read or write returned more than its count")
+        expected = min(ret, READ_HEAD) if op["op"] == "read" and ret >= 0 else 0
+        if len(data) != 2 * expected:
             raise ValueError("read output byte count")
+        if op["op"] == "read":
+            digest = observation["digest"]
+            if ret <= 0:
+                if digest is not None:
+                    raise ValueError("digest of an empty or failed read")
+            elif type(digest) is not str or not re.fullmatch(r"[0-9a-f]{64}", digest):
+                raise ValueError("read digest encoding")
+            # every bytes in the clear: the guest's BLAKE2s against hashlib's
+            elif ret <= READ_HEAD and digest != hashlib.blake2s(bytes.fromhex(data)).hexdigest():
+                raise ValueError("read digest disagrees with hashlib.blake2s over its bytes")
+        if op["op"] == "write" and (type(observation["sigpipe"]) is not int or observation["sigpipe"] not in (0, 1)):
+            raise ValueError("write sigpipe")
+        if op["op"] == "pipe2":
+            fds = observation["fds"]
+            limit = trace.get("rlimit_nofile", 32)
+            if ret == 0:
+                if (type(fds) is not list or len(fds) != 2 or any(type(fd) is not int or not 0 <= fd < limit for fd in fds)
+                        or fds[0] == fds[1]):
+                    raise ValueError("pipe2 descriptors")
+            elif fds is not None:
+                raise ValueError("pipe2 descriptors after a failure")
 
 
 def attach_devices(results, traces, records):
@@ -441,8 +471,11 @@ def _collect(outdir, traces, process_returncode):
     # The comparison child reruns each trace independently; its results must
     # be identical, or the comparison records do not describe this run.
     for result, again in zip(results, comparison_results):
-        if again != {"id": result["id"], "rets": [o["ret"] for o in result["observations"]],
-                     "bytes": [o["bytes"] for o in result["observations"]]}:
+        observations = result["observations"]
+        if again != {"id": result["id"], "rets": [o["ret"] for o in observations],
+                     "bytes": [o["bytes"] for o in observations], "fds": [o.get("fds") for o in observations],
+                     "digest": [o.get("digest") for o in observations],
+                     "sigpipe": [o.get("sigpipe") for o in observations]}:
             raise LinuxRunError("environment_failure", f"Nondeterministic rerun of {result['id']}", outdir)
     unexpected_errors = {4, 12, 23, 512, 513, 514, 516}
     if any(row["errno"] in unexpected_errors for result in results for row in result["observations"]):

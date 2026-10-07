@@ -23,6 +23,8 @@ def generate(seed=20260920, count=1000, max_ops=64, profile='v2'):
     creations so fewer operations fall through to EBADF."""
     if profile == 'v2':
         return generate_v2(seed, count, max_ops)
+    if profile == 'pipes':
+        return generate_pipes(seed, count, min(max_ops, 48))
     if profile != 'v1':
         raise ValueError(f'unknown generator profile {profile}')
     if not 4 <= max_ops <= 64 or not 1 <= count <= 100000:
@@ -203,6 +205,132 @@ def generate_v2(seed, count, max_ops):
                     arg = rng.choice([0, 1, 2, 3, 2**32 - 1])
                 append(dict(op=kind, fd=fd(), cmd=command, arg=arg))
         trace = dict(version=1, id=f'generated-v2-{seed}-{len(result):05}', ops=operations[:max_ops])
+        if rlimit != 32:
+            trace['rlimit_nofile'] = rlimit
+        digest = identity(trace)
+        if digest not in seen:
+            seen.add(digest)
+            result.append(trace)
+    return result
+
+
+# Profile `pipes` (docs/2026-10-05-p-pipes.md section 7).
+O_NONBLOCK, O_DIRECT, O_NOATIME, O_CLOEXEC, O_NOTIFICATION_PIPE = 0o4000, 0o40000, 0o1000000, 0o2000000, 0o200
+PIPE_FLAGS = [O_NONBLOCK, O_NONBLOCK | O_CLOEXEC, O_NONBLOCK | O_DIRECT, O_DIRECT, 0, O_CLOEXEC,
+              O_NOTIFICATION_PIPE, 1, 2**31]
+# nonblocking 6 : 1, so most traces stay outside the blocking waits (the
+# domain filter excludes those)
+PIPE_FLAG_WEIGHTS = [12, 6, 6, 1, 1, 1, 1, 1, 1]
+PIPE_COUNTS = [0, 1, 7, 8, 9, 16, 100, 4095, 4096, 4097, 8192, 16384, 65536, 65537, 69632]
+# F_SETPIPE_SZ arguments: accepted sizes are capped at 4 MiB, and 2^31 (and
+# 2^31 - 1, which rounds up to it) is excluded: round_pipe_size rejects only
+# size > 1U << 31 (fs/pipe.c:1249), so 2^31 would kcalloc 2^19 buffers in
+# pipe_resize_ring (:1271) and fail with -ENOMEM on the guest, an allocation
+# outcome that fails the chunk (audit M1). 2^31 + 1 and 2^32 - 1 give -EINVAL
+# without allocating.
+PIPE_SIZES = [0, 1, 4095, 4096, 4097, 8192, 65536, 65537, 1048576, 1048577, 4194304, 2**31 + 1, 2**32 - 1]
+PIPE_SETFL = [O_NONBLOCK, O_NONBLOCK | O_DIRECT, O_NONBLOCK | O_NOATIME, O_DIRECT, 0,
+              O_NONBLOCK | O_DIRECT | O_NOATIME, 2**32 - 1]
+PAUSE_SHARE = .1
+
+
+def generate_pipes(seed, count, max_ops=48):
+    """Seeded pipe traces: producers `eventfd2` and `pipe2`, descriptors drawn
+    over pipe ends, eventfds and literals; reads and writes near the page and
+    ring boundaries; fcntl including F_SETPIPE_SZ/F_GETPIPE_SZ. Bursts: 17
+    page writes (fill to -EAGAIN), 16 one-byte packet writes, and write/read
+    pairs on a one-slot ring (index wrap). A tenth of the reads and writes
+    pause 5 ms first (the stamps' "differs" outcome). Blocking pipes are
+    rare; the domain filter drops the traces that would wait."""
+    if not 4 <= max_ops <= 64 or not 1 <= count <= 100000:
+        raise ValueError('bounded generator parameters')
+    rng = random.Random(f'pipes-{seed}')
+    seen, result = set(), []
+    while len(result) < count:
+        operations, events, pipes = [], [], []
+        rlimit = rng.choices([32, 9, 10, 64], [20, 1, 1, 2])[0]
+        literals = [-1, 8, 9, 10, 11, 15, 31, 2**31 - 1]
+
+        def end(index=None, which=None):
+            index = rng.choice(pipes) if index is None else index
+            return {'pipe': index, 'end': rng.choice([0, 1]) if which is None else which}
+
+        def fd():
+            draw = rng.random()
+            if pipes and draw < .75:
+                return end()
+            if events and draw < .9:
+                return {'ref': rng.choice(events)}
+            return {'literal': rng.choice(literals)}
+
+        def append(operation):
+            if len(operations) < max_ops:
+                operations.append(operation)
+                if operation['op'] == 'pipe2':
+                    pipes.append(len(operations) - 1)
+                elif operation['op'] in PRODUCERS:
+                    events.append(len(operations) - 1)
+
+        def paused(operation):
+            if rng.random() < PAUSE_SHARE:
+                operation['pause_ms'] = 5
+            return operation
+
+        def write(target, count):
+            return paused(dict(op='write', fd=target, count=count,
+                               value=str(rng.choice([0, 1, 17, U64, rng.randrange(U64)]))))
+
+        def creation():
+            return dict(op='pipe2', flags=rng.choices(PIPE_FLAGS, PIPE_FLAG_WEIGHTS)[0])
+
+        length = rng.randint(4, max_ops)
+        append(creation())
+        while len(operations) < length:
+            burst = rng.random()
+            if pipes and burst < .012:
+                # fill the default ring: 17 page writes, the last one -EAGAIN
+                target = end(which=1)
+                for _ in range(17):
+                    append(write(target, 4096))
+                continue
+            if pipes and burst < .02:
+                # sixteen one-byte packets (on an O_DIRECT write end they fill the ring)
+                target = end(which=1)
+                if rng.random() < .5:
+                    append(dict(op='fcntl', fd=target, cmd='F_SETFL', arg=O_NONBLOCK | O_DIRECT))
+                for _ in range(16):
+                    append(write(target, 1))
+                continue
+            if pipes and burst < .03:
+                # a one-slot ring and write/read pairs: head and tail pass ring_size
+                index = rng.choice(pipes)
+                append(dict(op='fcntl', fd=end(index, 1), cmd='F_SETPIPE_SZ', arg=4096))
+                for _ in range(rng.randint(2, 6)):
+                    append(write(end(index, 1), rng.choice([1, 7, 100])))
+                    append(paused(dict(op='read', fd=end(index, 0), count=rng.choice([1, 100, 4096]))))
+                continue
+            kind = rng.choices(['pipe2', 'eventfd2', 'dup', 'dup3', 'close', 'read', 'write', 'fcntl'],
+                               [3, 1, 2, 2, 3, 8, 8, 5])[0]
+            if kind == 'pipe2':
+                append(creation())
+            elif kind == 'eventfd2':
+                append(dict(op='eventfd2', init=rng.choice([0, 1, 7]), flags=O_NONBLOCK))
+            elif kind in ('dup', 'close'):
+                append(dict(op=kind, fd=fd()))
+            elif kind == 'dup3':
+                newfd = fd() if rng.random() < .6 else {'literal': rng.choice([20, 30, rlimit - 1])}
+                append(dict(op=kind, fd=fd(), newfd=newfd, flags=rng.choices([0, O_CLOEXEC, 1], [6, 3, 1])[0]))
+            elif kind == 'read':
+                append(paused(dict(op='read', fd=fd(), count=rng.choice(PIPE_COUNTS))))
+            elif kind == 'write':
+                append(write(fd(), rng.choice(PIPE_COUNTS)))
+            else:
+                command = rng.choices(['F_GETFD', 'F_SETFD', 'F_GETFL', 'F_SETFL', 'F_SETPIPE_SZ', 'F_GETPIPE_SZ'],
+                                      [1, 1, 2, 3, 5, 3])[0]
+                arg = {'F_SETFD': lambda: rng.choice([0, 1]), 'F_SETFL': lambda: rng.choice(PIPE_SETFL),
+                       'F_SETPIPE_SZ': lambda: rng.choice(PIPE_SIZES)}.get(command, lambda: 0)()
+                append(dict(op='fcntl', fd=fd(), cmd=command, arg=arg))
+        trace = dict(version=1, id=f'pipes-{seed}-{len(result):05}', ops=operations)
         if rlimit != 32:
             trace['rlimit_nofile'] = rlimit
         digest = identity(trace)

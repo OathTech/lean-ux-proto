@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "id": "p_eof",
+  "ops": [
+    {
+      "op": "pipe2",
+      "flags": 2048
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "count": 5,
+      "value": "81985529216486895"
+    },
+    {
+      "op": "close",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      }
+    },
+    {
+      "op": "read",
+      "fd": {
+        "pipe": 0,
+        "end": 0
+      },
+      "count": 100
+    },
+    {
+      "op": "read",
+      "fd": {
+        "pipe": 0,
+        "end": 0
+      },
+      "count": 100
+    },
+    {
+      "op": "pipe2",
+      "flags": 0
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 5,
+        "end": 1
+      },
+      "count": 0,
+      "value": "81985529216486895"
+    },
+    {
+      "op": "read",
+      "fd": {
+        "pipe": 5,
+        "end": 0
+      },
+      "count": 0
+    },
+    {
+      "op": "close",
+      "fd": {
+        "pipe": 5,
+        "end": 1
+      }
+    },
+    {
+      "op": "read",
+      "fd": {
+        "pipe": 5,
+        "end": 0
+      },
+      "count": 10
+    }
+  ]
+}

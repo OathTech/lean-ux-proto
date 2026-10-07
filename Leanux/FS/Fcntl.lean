@@ -9,23 +9,24 @@ namespace Leanux
 
 inductive FcntlCmd where
   | getFD | setFD | getFL | setFL
+  /-- `F_SETPIPE_SZ` (1031) and `F_GETPIPE_SZ` (1032),
+      include/uapi/linux/fcntl.h:34-35. -/
+  | setPipeSz | getPipeSz
   deriving Repr, BEq
 
 /-- `inode->i_flags` and `inode->i_mode & S_IFMT` of the file's inode. The
     anonymous inode (fs/libfs.c, `alloc_anon_inode`) has `i_flags = S_PRIVATE`
-    and `i_mode = S_IRUSR | S_IWUSR`, so no file-type bits. -/
-def S_APPEND : Nat := 1 <<< 2
-def S_PRIVATE : Nat := 1 <<< 9
-def S_IFMT : Nat := 0o170000
-def S_IFIFO : Nat := 0o010000
-
+    and `i_mode = S_IRUSR | S_IWUSR`, so no file-type bits. A pipefs inode's
+    fields are in the inode store (`get_pipe_inode`). -/
 def inodeFlags : Option InodeId → M Nat
   | some .anon => return S_PRIVATE
+  | some (.pipefs id) => return (← getInode id).iFlags
   | some (.fixture name) => unsupported s!"inode of fixture file {name}"
   | none => invariant "file->f_inode is NULL"
 
 def inodeFileType : Option InodeId → M Nat
   | some .anon => return 0
+  | some (.pipefs id) => return (← getInode id).iMode &&& S_IFMT
   | some (.fixture name) => unsupported s!"inode of fixture file {name}"
   | none => invariant "file->f_inode is NULL"
 
@@ -85,6 +86,11 @@ def doFcntl (fd : Nat) (cmd : FcntlCmd) (arg : UInt64) (fid : FileId) : M Int :=
   | .setFL =>
     _ ← branch .fcntlCaseSetfl true
     setfl fid (argi.toNat.toUInt32)  -- setfl(fd, filp, argi)
+  -- `case F_SETPIPE_SZ: case F_GETPIPE_SZ: err = pipe_fcntl(filp, cmd, argi)`
+  -- (fcntl.c:538-541); pipe_fcntl takes `unsigned int arg`
+  | .setPipeSz | .getPipeSz =>
+    _ ← branch .fcntlCasePipeSz true
+    pipeFcntl fid (if cmd == .setPipeSz then F_SETPIPE_SZ else F_GETPIPE_SZ) (arg.toUInt32.toNat)
 
 /-- SYSCALL_DEFINE3(fcntl) (fcntl.c:573-594). `security_file_fcntl` is the
     constant 0 (`CONFIG_SECURITY=n`), so `if (!err)` is not a branch here. -/

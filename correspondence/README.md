@@ -64,6 +64,24 @@ KCOV instrumentation point, and in which (inlined) functions
 - A decision's C function may own no point only if `kcov.json` lists it in
   `branch_free_functions` and both outcomes are declared `branch_free`. Today
   that is `fls128`.
+- **Shared exits** [AGENT 2026-10-06, workstream P]. The compiler may share
+  one point between a function's early returns and an inlined helper's exit;
+  the line table then attributes the point to the helper, which did not run
+  on the early-return path, and the "function reached" rule (below) would
+  fire. `kcov.json` `shared_exits` names each such point by its exact frame
+  chain, plus the point that enters the helper on its own path
+  (`unless_covered`); at startup the check requires each chain to name
+  exactly one instrumentation point of the listed functions. In an
+  operation that did not cover the `unless_covered` point, the helper's frame
+  at the shared point does not count as the helper running; nothing else
+  changes, and spans must still leave the shared point out. Hits are counted
+  in `known_gap_hits`. Today there is one: `vfs_write`'s early returns
+  (`-EBADF`, `-EINVAL`, `-EFAULT`, `rw_verify_area`'s error) jump to the
+  point of `file_end_write`'s not-regular return (`fs.h:3018` inlined at
+  `read_write.c:691`); the block entering `file_end_write` is
+  `read_write.c:691` in `vfs_write`'s own frame. `vfs_read`'s counterpart,
+  `read_write.c:567`, is in `vfs_read`'s own frame and needs only the
+  narrowed spans. `corpus/pipes/p_wrong_end` exercises both.
 
 An outcome's **witnesses** are the instrumented lines of its span. Blank lines,
 braces, labels and comments are dropped from spans; statements are kept.
@@ -104,7 +122,7 @@ execution.
 return values and read bytes must be identical. The decision table declares
 which decisions are C value comparisons (`Decision.comparison`): the relation
 as written (`lhs REL rhs`, or a mask test), and whether the right-hand side is
-a compile-time constant. There are 80 such decisions (`leanux-model --decisions`).
+a compile-time constant. The count is in `leanux-model --decisions`.
 
 Exactly the declared decisions report `(lhs, rhs)` (`branchCmp`); a missing
 or undeclared operand pair fails. Some comparison record must match, where the
@@ -126,6 +144,24 @@ operands. Examples:
 `alloc_empty_file.nr_files_at_max` is deliberately not declared: its operands
 are the system-wide `nr_files` and the boot-sized `max_files` (observed as
 24,192), which the mirror does not model.
+
+**Operand exclusions at one call site** [AGENT 2026-10-06, workstream P].
+The same reason can hold for one call site of a header helper whose other call
+sites have operands the mirror knows. `kcov.json` `operand_exclusions` names
+each such site: the decision label, the operand, and the call line (the
+outermost DWARF frame of Linux's comparison record). There the mirror reports
+the outcome with `operands_excluded` (the operand's name) instead of the pair
+(`branchCmpExcluded`, `OperandExclusion` in `Leanux/Kernel/Decision.lean`).
+The check accepts it only for a declared (label, operand), and only if Linux
+recorded the comparison at the condition line with the declared call line as
+the outermost frame, once per such report in the operation. The outcome is
+still reported and A2-checked; every other site keeps its operands. Hits are
+counted in the report's `known_gap_hits`. Today there is one:
+- `__refcount_add.old_zero` at `fs/pipe.c:794`: `get_current_user()` →
+  `get_uid()` → `refcount_inc(&root_user.__count)` is inlined into
+  `alloc_pipe_info`, and the operand is `root_user`'s guest-wide reference
+  count (every root credential, kernel threads included; 26 or 27 across
+  runs). The mirror reports the contract's outcome, a live `root_user`.
 
 **Residual gaps**, which coverage alone cannot close:
 - An unobservable outcome could be reported where the C never evaluates it,
