@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
+#include <limits.h>
 #include <linux/genetlink.h>
 #include <linux/if_link.h>
 #include <linux/kcov.h>
@@ -1443,10 +1444,21 @@ int main(int argc, char **argv)
             if (!child) execute(&trace, fileno(input), comparisons);
             int status;
             unsigned pauses = 0;
-            for (unsigned i = 0; i < trace.count; ++i) pauses += trace.ops[i].pause_ms;
+            unsigned long long advanced_ns = 0;
+            for (unsigned i = 0; i < trace.count; ++i) {
+                pauses += trace.ops[i].pause_ms;
+                if (trace.ops[i].code == OP_WG_ADVANCE) advanced_ns += trace.ops[i].a * (unsigned long long)TICK_NS;
+            }
+            /* alarm() runs on the monotonic clock, which under refined-jiffies
+             * jumps with every wg_advance (D3): the advanced time is added, or
+             * a long advance fires the watchdog at once (the first run after
+             * the merge with P lost 125 traces to it) [AGENT]. */
+            unsigned long long seconds = WATCHDOG_BASE_SECONDS + WATCHDOG_OP_SECONDS * trace.count + (pauses + 999) / 1000
+                                         + (advanced_ns + 999999999ULL) / 1000000000ULL;
+            if (seconds > UINT_MAX) fail(trace.id, -1, "invalid_input", "watchdog_seconds");
             watchdog_fired = 0;
             watched = child;
-            alarm(WATCHDOG_BASE_SECONDS + WATCHDOG_OP_SECONDS * trace.count + (pauses + 999) / 1000);
+            alarm((unsigned)seconds);
             pid_t waited = waitpid(child, &status, 0);
             watched = 0;
             alarm(0);
