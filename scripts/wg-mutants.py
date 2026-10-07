@@ -438,17 +438,22 @@ def resched_records(out):
 def classify(report):
     """A mutant run's verdict from its check report (None: no report):
     (status, mismatch outcomes, other outcomes). 'rejected' needs a mismatch
-    outcome in a run that was not aborted; 'survived' needs a clean pass; any
-    other run is 'no_verdict' (fail-closed: an infrastructure failure never
-    counts as a rejection)."""
+    outcome in a run that was not aborted and has no other outcome; 'survived'
+    needs a clean pass; any other run is 'no_verdict' (fail-closed: an
+    infrastructure failure never counts as a rejection, and one beside a
+    mismatch puts the run's oracle in doubt: a run against a kernel without
+    the D3 ioctl fails the D3 traces `environment_failure` and the others
+    `hidden_mismatch`) [AGENT 2026-10-07]."""
     if report is None:
         return 'no_verdict', [], ['no report']
     outcomes = {f['outcome'] for f in report['failures']}
     mismatches, other = sorted(outcomes & MISMATCH_OUTCOMES), sorted(outcomes - MISMATCH_OUTCOMES)
     if report.get('aborted'):
         return 'no_verdict', mismatches, other + ['aborted']
-    if mismatches:
+    if mismatches and not other:
         return 'rejected', mismatches, other
+    if mismatches:
+        return 'no_verdict', mismatches, other
     if report['status'] == 'pass' and not report['failures']:
         return 'survived', [], []
     return 'no_verdict', [], other or ['fail without failures']
