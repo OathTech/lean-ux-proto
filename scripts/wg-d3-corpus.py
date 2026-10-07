@@ -335,10 +335,24 @@ def controls():
     }
 
 
+# Over the wait budget by construction, and kept [AGENT, int-dl follow-up 1]:
+# the give-up needs 20 firings of the retransmit timer (attempts 0-19 against
+# MAX_TIMER_HANDSHAKES 18), one per advance (each retry re-arms it 5 s past the
+# advanced jiffies), and each advance needs its wait for the retry's send
+# worker. Measured 3.1-3.9 s after wg_up against the 4.5 s bound
+# (evaluator/generate.py ADVANCE_COST_SECONDS); the generator no longer draws
+# this chain.
+OVER_BUDGET = {"d3_retransmit_gives_up": 4.2}
+
+
 def finish(out):
     result = {}
     for name, (ops, steer, expect) in out.items():
-        if wait_after_up(ops) > WAIT_BUDGET_SECONDS:
+        cost = wait_after_up(ops)
+        if name in OVER_BUDGET:
+            if round(cost, 6) != OVER_BUDGET[name]:
+                raise AssertionError(f"{name}: modeled wait {cost} s, recorded {OVER_BUDGET[name]} s")
+        elif cost > WAIT_BUDGET_SECONDS:
             raise AssertionError(f"{name} exceeds the guest's wait budget")
         if len(expect) > 16:
             raise AssertionError(f"{name}: at most 16 expected outcomes")

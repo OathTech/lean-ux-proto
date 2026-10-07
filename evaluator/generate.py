@@ -347,6 +347,13 @@ def generate_pipes(seed, count, max_ops=48):
 # generator keeps the planned waits well inside it (computation took up to
 # 0.5 s per trace on a contended host, 2026-10-06).
 WAIT_BUDGET_SECONDS = 2.8
+# A wg_advance costs more real time than its 0.1 s wait: the fresh-tick start
+# and the absorbing tick (up to 4 ms each, polled at 1 ms), and the work its
+# callbacks queue (a retransmit's initiation is a Curve25519 computation under
+# TCG). Measured on the contended host (int-dl full check, 2026-10-07): the 20
+# advances of a give-up chain ran 1.4-1.6 s beyond their modeled waits, about
+# 0.17 s per advance in all; counted at 0.2 s [AGENT, int-dl follow-up 1].
+ADVANCE_COST_SECONDS = 0.2
 
 
 def wait_after_up(operations):
@@ -355,7 +362,7 @@ def wait_after_up(operations):
         up = up or op['op'] == 'wg_up'
         if up:
             waits += {'wg_inject': 0.4, 'wg_observe': 0.4, 'wg_set': 0.1, 'wg_up': 0.1, 'wg_xmit': 0.1,
-                      'wg_advance': 0.1}.get(op['op'], 0)
+                      'wg_advance': ADVANCE_COST_SECONDS}.get(op['op'], 0)
     return waits
 
 
@@ -945,8 +952,8 @@ def steered_timers(rng, trace_id):
     (stream K's note, section 13.5). Variants:
     - `retransmit`: no response; 1-3 advances, each firing the retransmit
       timer, whose retry sends another initiation;
-    - `gives_up`: 20 advances: 19 retries and the give-up (tx_dropped),
-      then only a dump;
+    (no `gives_up` chain: its 20 advances do not fit the wait budget; the
+    handwritten `d3_retransmit_gives_up` covers the give-up);
     - `keepalive`: 1 or 2 received data messages, an advance (the
       keepalive), and with 2 a second advance that fires nothing (the
       callback's re-arm is deleted by the tx worker);
@@ -970,9 +977,12 @@ def steered_timers(rng, trace_id):
     peer_private = rng.choice(D1_PEERS)
     peer_public = noise.public_key(peer_private)
     psk = rng.choice([b'\xaa' * 32, rng.randbytes(32)]) if rng.random() < .2 else None
-    variant = rng.choices(['retransmit', 'gives_up', 'keepalive', 'new_handshake', 'persistent', 'zero_key',
+    # No give-up chain (20 advances, about 3.2-3.9 s after wg_up): it does not
+    # fit the wait budget at ADVANCE_COST_SECONDS; the handwritten
+    # d3_retransmit_gives_up covers it [AGENT, int-dl follow-up 1]
+    variant = rng.choices(['retransmit', 'keepalive', 'new_handshake', 'persistent', 'zero_key',
                            'after_new_handshake', 'expiry', 'respond_initiate'],
-                          [3, 1, 3, 3, 3, 2, 2, 5, 2])[0]
+                          [3, 3, 3, 3, 2, 2, 5, 2])[0]
     allowed4 = rng.choice(D2_ALLOWED4)
     peer = dict(public_key=peer_public.hex(), allowed_ips=[dict(family=4, addr=allowed4[0], cidr=allowed4[1])],
                 endpoint=rng.choice(D1_LISTENERS))
@@ -1027,27 +1037,20 @@ def steered_timers(rng, trace_id):
     fired = lambda name: f'fired:wg_expired_{name}'   # noqa: E731
     retransmit_fire = fire_advance(REKEY_TIMEOUT_TICKS + JITTER_MAX_TICKS)
 
-    if variant in ('retransmit', 'gives_up'):
+    if variant == 'retransmit':
         # no session: the initiation's send arms the retransmit timer, the
         # only pending timer; each advance fires it (the rate limit of 5 s
         # has passed too) and its retry re-arms it
-        count = 20 if variant == 'gives_up' else rng.choice([1, 1, 2, 3])
+        count = rng.choice([1, 1, 2, 3])
         ops = setup(0) + [xmit()]
         for k in range(count):
             ops.append(advance(retransmit_fire + slack(150)))
-            if variant == 'retransmit' and rng.random() < .3:
+            if rng.random() < .3:
                 ops.append(observe)
-        # no final observation after 20 advances: on the TCG guest they take
-        # about 3.5 s of real time, and its 0.4 s wait would leave too little
-        # margin to the 4.5 s bound
-        ops += [get] if variant == 'gives_up' else [observe, get]
+        ops += [observe, get]
         expect = [fired('retransmit_handshake'), 'wg_packet_send_staged_packets.no_keypair=1',
                   'wg_expired_retransmit_handshake.give_up=0']
-        if variant == 'gives_up':
-            expect += ['wg_expired_retransmit_handshake.give_up=1',
-                       'wg_expired_retransmit_handshake.zero_key_not_pending=1']
-        retries = count if variant == 'retransmit' else 19
-        return dict(version=1, id=trace_id, ops=ops, steer=steer + D3_DRAWS * retries, expect=expect)
+        return dict(version=1, id=trace_id, ops=ops, steer=steer + D3_DRAWS * count, expect=expect)
 
     session_ops = setup(25) + [observe, respond]
     persistent_quiet = quiet_limit(25 * HZ)

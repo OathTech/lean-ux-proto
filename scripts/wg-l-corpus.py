@@ -26,6 +26,11 @@ from evaluator.generate import WAIT_BUDGET_SECONDS, wait_after_up  # noqa: E402
 _spec = importlib.util.spec_from_file_location("wg_d1_corpus", ROOT / "scripts" / "wg-d1-corpus.py")
 d1 = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(d1)
+# D3's helpers (the timer traces' sessions and advances) for the two traces
+# that need the time advance
+_spec3 = importlib.util.spec_from_file_location("wg_d3_corpus", ROOT / "scripts" / "wg-d3-corpus.py")
+d3 = importlib.util.module_from_spec(_spec3)
+_spec3.loader.exec_module(d3)
 
 DEVICE, PEER, PORT, LISTENER = d1.DEVICE, d1.PEER, d1.PORT, d1.LISTENER
 SENDER = {"family": 4, "addr": "7f000001", "port": 51998}   # the fixture's sender
@@ -75,6 +80,10 @@ def peer_initiation():
 
 RESPOND_STEER = [["resp_ephemeral", d1.RESP_EPHEMERAL.hex()], ["index_draw", d1.le32(d1.INDEX_RESPONDER_SIDE)]]
 SESSION = d1.EXPECT_SESSION
+
+
+def d2_initiator_steer():
+    return d3.d2.initiator()[2]
 
 
 def traces():
@@ -163,6 +172,30 @@ def traces():
         # A bare fixture's RTM_DELLINK: ENODEV from the core.
         "l_delete_absent": (BARE, [DELETE, OBSERVE], None, None),
     }
+    # With D3 (section 7) [AGENT, int-dl follow-up 2].
+    retransmit_steer = d2_initiator_steer()
+    zk_ops, _, zk_steer = d3.session()
+    out.update({
+        # An initiation (the staged packet queues it; its send arms the
+        # retransmit timer), then wg_down: wg_stop purges the packet
+        # (tx_dropped 1) and wg_timers_stop deletes the five timers, so an
+        # advance past the retransmit's expiry runs no section, and the
+        # observation finds nothing new.
+        "l_down_stops_timers": (
+            None, d3.d2.setup(keepalive=False) + [d3.xmit(), OBSERVE, DOWN, d3.advance(d3.RETRANSMIT), OBSERVE, GET],
+            retransmit_steer, ["wg_packet_send_staged_packets.no_keypair=1", "wg_stop.peers_iterate=1"]),
+        # D3's zero-key firing (as d3_zero_key: the persistent keepalive set
+        # to 0 first, so it fires as a no-op in the same pass); the clear work
+        # it queues runs in the advance's wait (the guest waits for it). Then
+        # wg_delete of the up device: wg_stop over the cleared peer (its
+        # wg_timers_stop finds no queued clear work: the work never stays
+        # queued past an idle point in this harness), wg_destruct, and every
+        # operation on the missing device.
+        "l_delete_after_clear_work": (
+            None, zk_ops + [d3.keepalive_off(), d3.advance(d3.ZERO_KEY), DELETE, GET, OBSERVE],
+            zk_steer, SESSION + [d3.fired("zero_key_material"), d3.ZERO_KEY_ALIVE + "=1",
+                                 "wg_stop.peers_iterate=1"]),
+    })
     result = {}
     for name, (fixture, ops, steer, expect) in out.items():
         trace = {"version": 1, "id": name}
