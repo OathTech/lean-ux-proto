@@ -2,7 +2,7 @@
 # step 1 and step 2 (steering) user-approved 2026-10-03; the D1 sprint's
 # dispatch sections (stream A) and resched records (integration) and the D3
 # sprint's timer sections, arm record and virtual time advance
-# (docs/2026-10-05-d3-timers.md, stream K) awaiting the user's approval.
+# (docs/2026-10-05-d3-timers.md, stream K) user-approved 2026-10-07.
 # kernel/config-x86_64-net (unchanged) with kernel/patches/choice-stream.patch
 # (sha256 3b0f2026265c7ccfe3bd8951ab7afd3ccdf5b56d6ffea70f5c715a57f7f217ab)
 # applied alone to the locked source, built with LEANUX_KERNEL_PROFILE=net-choice.
