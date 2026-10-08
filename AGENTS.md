@@ -32,6 +32,11 @@ Do not build theorems of any kind:
 Do not add them as acceptance gates. Historical proof artifacts and older plans
 in `docs/history/` do not authorize recreating them.
 
+Keep later proof work possible without doing it: follow the conventions
+marked "Adopt as a convention" in sections 3(a), 3(b), 3(d), 3(e) and B7 of
+[the future-proof-paths note](docs/2026-10-06-future-proof-paths.md)
+(user-approved 2026-10-07).
+
 ## Checks must pay for themselves
 
 Set by the user on 2026-09-30, after a drift audit: "We know roughly what we
