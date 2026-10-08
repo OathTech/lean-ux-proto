@@ -43,7 +43,8 @@ The pause branch (`task/pause`) adds documentation only:
 - the future-proof-paths note;
 - the five revised workstream designs;
 - this note;
-- the setup guide.
+- the setup guide;
+- the AGENTS.md pointer to the future-proof-paths conventions.
 
 ## 2. Work on branches, not on `main`
 
@@ -107,8 +108,7 @@ docs.
 - T1 is approved: per-NET_RX-section operand agreement for bulk traces
   (two mirror runs, plus an independence check). It is built in W4+W7.
 - The future-proof-paths conventions are recorded in the note, with a
-  one-line pointer in AGENTS.md. Not yet done; do it at the next
-  integration.
+  pointer in AGENTS.md (added on `task/pause`).
 
 **Ways of working**
 - Agents are time-boxed.
@@ -147,7 +147,6 @@ docs.
 4. **Land E** on L+A: renumber the opcodes, run a full check and the E
    mutants, then get signoff.
 5. Integration housekeeping:
-   - the AGENTS.md pointer;
    - the future-proof-paths audit items (fail-open kdf defaults →
      `invariant`; fuel the two `partial def`s; a bounds-checked
      `AipNode.bitAt`);
