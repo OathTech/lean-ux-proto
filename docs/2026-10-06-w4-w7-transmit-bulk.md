@@ -1722,3 +1722,98 @@ one CPU without it.
 3 → 0; harness ops/options: `wg_xmit` options 5 → 2, `wg_connect` and
 `wg_create.mtu` gone, one new item kind (`inject_gso`); W4 mutants 15 →
 10, W7 10 → 9; P-B facts 6 → 4.
+
+## 17. Results [AGENT 2026-10-11, stream T]
+
+Branch `task/w47` on the interface commit (`task/interface` b11145f: main
+with housekeeping and the `Env.lean` split). Stream T is built and
+validated at suite level; streams B and H are not started (17.5).
+
+### 17.1 What was built (sections 4, 6, 16.1)
+
+- **Mirror.** `Device.mtu`, `inet4Dev`, `inet6Dev` replace `WG.DEVICE_MTU`;
+  the keepalive reads the device's MTU (send.c:232) and `wg_open` reads the
+  two devices (device.c:39, 47). `wgXmit` takes the environment's packet
+  list and `dst_mtu`: the GSO arm (`.xmitNotGso` false, the new
+  `.xmitGsoError` at device.c:181 over `EnvSite.skbSegment`), the walk
+  with the one `mtu` per call, and the trim loop (`.xmitStagedTrimIter`,
+  device.c:211-214, `tx_dropped` per iteration) in place of the
+  `unsupported` of `.xmitStagedOverflow`, which it replaces (same line).
+  `setMtu` mirrors `dev_set_mtu` as a cut: `-ERANGE` above `max_mtu`, the
+  MTU written, the inet6_dev down below 1280 and the in_device below 68
+  (no decision in `dev.c`: the file is not anchored, and the kept classes
+  use 1300 and 0).
+- **`Env/IpStack.lean`.** `XmitOpts` (`gsoSize`, `probe`, the route MTU
+  from `World.routes`); `xmitPackets` returns one `wg_xmit` call's packets
+  and `mtu`, or the sender's errno (`-EMSGSIZE` above `cork->fragsize`,
+  which is `dst_mtu` under `DO` and `dev->mtu` under `PROBE`; `-EINVAL`
+  above 128 segments); IPv4 GSO with equal segments (`gsoSegment`: ids
+  0..n−1, DF, per-segment header and complete UDP checksums,
+  `CHECKSUM_NONE`); a payload at most `gso_size` long is one ordinary
+  packet (udp.c:1005: no GSO flag). Beyond the boundary, `unsupported`:
+  IPv6 GSO, a short last segment, an IPv6 route MTU or PROBE.
+  `multicastLoops` is the `{224.0.0.1}` set (2.4), called from
+  `Env.xmitMulticastLoop`. `MAX_XMIT_PAYLOAD4/6` take the MTU.
+- **Harness.** `wg_xmit` packets carry `gso_size` (IPv4, 2-128 whole
+  segments) and `pmtudisc` ("do" or "probe"); the guest sends with a
+  `UDP_SEGMENT` cmsg and sets `IP_MTU_DISCOVER` per send, restoring `DO`
+  after it; `wg_set_mtu {mtu}` is `SIOCSIFMTU` on the sender's socket;
+  `net_fixture: {"routes": [{family, dst, mtu}]}` adds host routes into wg0
+  with `RTAX_MTU` at every `wg_up` (wire: the `T` line's sixth field and
+  `R` lines); the fixture is MTU-aware (2.3): below 68 the IPv4 address add
+  is `-ENOBUFS`, below 1280 the IPv6 add `-EINVAL`, and the route adds
+  `-ENODEV`, expected exactly, which the `w4_set_mtu_0` run confirmed (the
+  fixture fails the trace on any other value: this is probe P-B's measurement
+  of the four errnos). `SO_SNDBUFFORCE` (8 MiB) on the sender (2.7);
+  `MAX_XMIT_PAYLOAD` 2784. `noise.gso_segments` builds the segments
+  (checked in `harness/test_noise.py`).
+- **Corpus** (`scripts/wg-w47-corpus.py`): the five kept classes of 16.1,
+  and the three boundary domain controls (`corpus/w47-controls`,
+  `scripts/wg-w47-controls.py`: the mirror alone, `--domain`, places each
+  outside the domain with the stated reason).
+- **Mutants** W4-M1, M3-M10 and M16, on the `w4_` subset.
+
+### 17.2 Deviations and judgment calls [AGENT]
+
+- **The keepalive of the MTU classes comes from the persistent-keepalive
+  timer through `wg_advance`**, not from `wg_set`/`wg_up` under a session
+  (section 4's keepalive rule). That rule changes `Env.runSendWorkers`'
+  crypt-work treatment in `Env.lean`, which belongs to the dispatch-order
+  stream at integration (docs/2026-10-11-interface.md), so stream T does
+  not touch it. The timer route reaches the same two read sites
+  (send.c:232 with 1300 and with 0, `.padNoMtu` true) and costs one
+  `wg_advance` per class; the rule stays as described for the coordinator.
+  `w4_set_mtu_0` turns the keepalive off before the down, so the up after it
+  stages nothing and sends no second initiation.
+- **`MAX_BRANCHES`** (`evaluator/protocol.py`, a shared surface) is raised
+  from 4096 to 32768: the trim class's 129-packet flush reports 2766
+  branches in one operation and 4307 in the trace. The guest's output limit
+  still bounds the whole.
+- **The placeholder wire opcode is 25** (`OP_WG_SET_MTU`, named for the
+  guest-defines test), outside the reservations 20-24; the coordinator
+  allocates the real code. `wg_batch` (stream B) needs a second code.
+- `.xmitGsoError`'s site is an `EnvSite` (assumed success, as L's and E's
+  sites) rather than an `AllocSite`: `skb_segment`'s allocations are not in
+  an armed range (A's inventory covers WireGuard's own sites).
+- The sender's `-EMSGSIZE`/`-EINVAL` are returned as results (22 and 90
+  join `wg_xmit`'s semantic errnos) rather than `unsupported`, since the
+  trace contract already refuses the shapes that would produce them.
+
+### 17.3 Validation
+
+(Filled in below after the suite and mutant runs.)
+
+### 17.4 Wire opcodes needed from the coordinator
+
+`wg_set_mtu` (placeholder 25) and, for stream B, `wg_batch` (the design's
+`OP_BATCH`; `wg_flood` is 18 and would be subsumed).
+
+### 17.5 Not done: streams B and H
+
+- **B** (section 5, `Env/Batch.lean`, `wg_batch` from `wg_flood` with
+  `inject_gso` and the CQE result, `PrevQueue` as data, the multi-item
+  loops, the generic phase-1 detector, the repoll of 13.5(a), `kcov_capacity`,
+  probe P-A) is untouched: the interface commit's `Batch.lean` holds only
+  the shared runner pieces.
+- **H**: the per-section operand agreement of 13.2 (ii) in `check.py`,
+  `napi_orders.py`, the W7 corpus and mutants, the phase-1 controls.
