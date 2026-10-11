@@ -32,8 +32,9 @@ def inodeFileType : Option InodeId → M Nat
 
 /-- setfl (fcntl.c:39-89). `O_NONBLOCK != O_NDELAY` is false on x86-64, so the
     SunOS test is not a branch in this build. `inode_owner_or_capable` is a cut
-    point: the harness runs as root, which is capable. `f_lock` is taken around
-    the update. -/
+    point: it passes at the owner test (fs/inode.c:2531), the pipe inode's
+    `i_uid` being its creator's fsuid (fs/pipe.c:907), so `capable` is never
+    consulted. `f_lock` is taken around the update. -/
 def setfl (fid : FileId) (arg : UInt32) : M Int := do
   let f ← getFile fid
   -- `((arg ^ filp->f_flags) & O_APPEND) && IS_APPEND(inode)`
@@ -43,7 +44,8 @@ def setfl (fid : FileId) (arg : UInt32) : M Int := do
   -- `(arg & O_NOATIME) && !(filp->f_flags & O_NOATIME)`, then the owner check
   if ← branchCmp .setflNoatimeRequested (hasFlag arg O_NOATIME) (arg &&& O_NOATIME).toNat 0 then
     if ← branchCmp .setflNoatimeNotSet (!hasFlag f.fFlags O_NOATIME) (f.fFlags &&& O_NOATIME).toNat 0 then
-      -- inode_owner_or_capable: a cut point; the harness runs as root, so it returns 1
+      -- inode_owner_or_capable: a cut point; the owner test passes (fs/inode.c:2531),
+      -- so it returns 1 without reaching capable()
       let ownerOrCapable : Nat := 1
       if ← branchCmp .setflNotOwnerOrCapable (ownerOrCapable == 0) ownerOrCapable 0 then return -EPERM
   -- `!S_ISFIFO(inode->i_mode) && (arg & O_DIRECT) && !(filp->f_mode & FMODE_CAN_ODIRECT)`
