@@ -10,6 +10,10 @@
 # on top (hidden-inputs design): kcov_record() and its hooks at WireGuard's
 # random and clock sources, and a remote section for the handshake send worker.
 set -eu
+# The box-wide memory-cap wrapper (cgroup memory.max; see ~/.claude/CLAUDE.md).
+# scripts/in-bundle's PATH has no /usr/local/bin, hence the absolute path.
+CAPPED="${LEANUX_CAPPED:-/usr/local/bin/capped}"
+[ -x "$CAPPED" ] || { echo "Memory-cap wrapper not found: $CAPPED (install capped, or point LEANUX_CAPPED at it)." >&2; exit 1; }
 PROFILE="${LEANUX_KERNEL_PROFILE:-base}"
 case "$PROFILE" in base|net|net-rcov|net-hidden|net-probe|net-choice) ;; *) echo "Unknown kernel profile: $PROFILE" >&2; exit 1 ;; esac
 LEANUX_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
@@ -124,7 +128,7 @@ for option in $REQUIRED; do
         exit 1
     }
 done
-make -C "$SOURCE" O="$LEANUX_BUILD" ARCH=x86_64 KCFLAGS="$KCFLAGS_EXTRA" \
+"$CAPPED" -- make -C "$SOURCE" O="$LEANUX_BUILD" ARCH=x86_64 KCFLAGS="$KCFLAGS_EXTRA" \
     -j"${LEANUX_JOBS:-4}" bzImage vmlinux
 mkdir -p "$LEANUX_ROOT/kernel"
 if [ "$PROFILE" = net-choice ]; then

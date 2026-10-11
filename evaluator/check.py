@@ -130,12 +130,22 @@ def load_traces(suites, counts, seed, only, filtered):
 
 
 MODEL = ROOT / '.lake/build/bin/leanux-model'
+# The box-wide memory-cap wrapper (cgroup memory.max; see ~/.claude/CLAUDE.md).
+# scripts/in-bundle's PATH has no /usr/local/bin, hence the absolute path.
+CAPPED = Path(os.environ.get('LEANUX_CAPPED', '/usr/local/bin/capped'))
+
+
+def capped(command):
+    """Prefix a heavy command with the memory-cap wrapper; no wrapper, no run."""
+    if not os.access(CAPPED, os.X_OK):
+        raise RuntimeError(f'memory-cap wrapper not found: {CAPPED} (install capped, or point LEANUX_CAPPED at it)')
+    return [str(CAPPED), '--'] + command
 
 
 def build_model(out, rebuild):
     """Build, or with rebuild=False require the existing build to be up to date."""
     env = dict(os.environ, LEAN_NUM_THREADS='1')
-    command = ['lake', 'build', 'leanux-model'] + ([] if rebuild else ['--no-build'])
+    command = capped(['lake', 'build', 'leanux-model'] + ([] if rebuild else ['--no-build']))
     result = subprocess.run(command, cwd=ROOT, env=env, capture_output=True, timeout=1800)
     (out / 'build.log').write_bytes(result.stdout + result.stderr)
     if result.returncode:

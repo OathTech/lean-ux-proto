@@ -39,6 +39,11 @@ scripts/in-bundle python3 -m evaluator.check --trace alias_close  # replay one c
 scripts/in-bundle python3 -m evaluator.check --suite handwritten --no-build
 ```
 
+On the shared devboxes, run each of these through the box-wide memory-cap
+wrapper: `capped -- scripts/in-bundle ...`. The check wraps its own model build
+with it, and `scripts/build-kernel` wraps the kernel `make`; `LEANUX_CAPPED`
+overrides the wrapper's path (default `/usr/local/bin/capped`).
+
 The check builds `leanux-model` and runs the handwritten, critic, WireGuard and
 seeded generated traces on the networking oracle kernel (`.artifacts/kernel-net`,
 built as in [REPRODUCING.md](REPRODUCING.md)) and on the mirror:
