@@ -2094,10 +2094,13 @@ grow.
   sets. A rejecting form needs per-dispatch-section coverage (the guest
   tagging PCs by block as it now tags comparison records, and the check
   comparing each section's decisions as its own sequence): a new check
-  rule, with this mutant as its evidence, for a later step. Note that the
-  PENDING-bit model changes the mutant's live behaviour: a switch mid-loop
-  now leaves the re-queue's kind-307 record unconsumed (17.13 reports the
-  rerun).
+  rule, for a later step. The mutant is **rejected live anyway** under the
+  PENDING-bit model of the dispatch-order capture (17.13): the switch it
+  skips leaves the tx unit pending in the mirror, so the encrypt worker's
+  next item queues nothing and Linux's re-queue record (kind 307) stays
+  unconsumed, a hidden mismatch (2 of the 5 `w7_` runs; the others had no
+  mid-loop yield). It is listed as rejected by that mechanism, not by the
+  per-item order the design named.
 
 ### 17.13 Validation (stream H)
 
@@ -2118,4 +2121,15 @@ All on the dispatch-order oracle, under `capped`:
   branches differ between the runs: the poll's and the put's operands, and
   the poll's position); `d2_rx_window_boundary` 65 and `d2_rx_in_order` 68
   pairs, no open poll, no problems.
-- Suites `handwritten,wireguard` and the W4/W7 mutants: below.
+- Suites `handwritten,wireguard` (`.artifacts/check/w47h-suites`, at
+  `fbf2826`): **pass, 192/192**, 9471 operand pairs, no retries, no
+  before-put sections (no operand mismatch with an open poll occurred, so
+  the two-run rule was exercised by the replays above, not live). The run
+  before the commit (same code but the first guest tagging, 17.10) was
+  187/192: the four `e_underload_*` past the rekey bound from the
+  per-block copies, and `w7_multi_tx_8` the phase-1 rejection of 17.11.
+- Mutants W4-M1, M3-M10, M16 and W7-M3, M4, M5, M9 (`scripts/wg-mutants.py`,
+  `.artifacts/check/mutants-summary.json`): **14/14 rejected**, no other
+  outcome. W4 as in 17.3; W7-M3 4 `hidden_mismatch`; W7-M4 5
+  `mirror_invariant`; W7-M5 1 `mirror_invariant`; **W7-M9 2 `hidden_mismatch`**
+  (17.12), where stream B's run had it survive.
