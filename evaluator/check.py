@@ -288,6 +288,13 @@ TIMER_ARM, TIME_ADVANCE = 303, 304
 # any class yet: a record of this kind is an unknown site (fail-noisy) until
 # W9-K lands the kernel hook and W9-M its sites and the `jiffies` class.
 DST_CACHE_JIFFIES = 306
+# Dispatch order (docs/2026-10-11-dispatch-order.md): the queue record
+# {work, func} written at __queue_work for a work item of the dispatch set
+# (class 'queue', resolved by the function's symbol like a section); a
+# section start carries {func, unit} and an arm record {jiffies, expires,
+# timer}, so every dispatched unit is paired with its queueing or arming
+# (dispatch_problems) and the mirror runs the unit the record names.
+QUEUE = 307
 
 
 def load_hidden_sites():
@@ -299,7 +306,7 @@ def load_hidden_sites():
     sites = {}
     for entry in loads(result.stdout.decode()):
         if set(entry) != {'id', 'label', 'kind', 'file', 'line', 'len', 'role'} \
-                or entry['kind'] not in ('random', 'clock', 'section', 'resched', 'timer', 'advance', 'alloc') \
+                or entry['kind'] not in ('random', 'clock', 'section', 'resched', 'timer', 'advance', 'alloc', 'queue') \
                 or entry['role'] not in ('mirror', 'cut', 'ambient'):
             raise InvalidOutput(f'hidden site fields: {entry}')
         key = (entry['kind'], f"{entry['file']}:{entry['line']}")
@@ -311,7 +318,8 @@ def load_hidden_sites():
 
 def pair_sections(records):
     """A remote row's records in area order, each with the dispatched
-    function's address appended (None outside section records). A section's
+    function's address appended (None outside section records); a start
+    record is {func, unit} (the unit is the mirror's and dispatch_problems'). A section's
     records reach the area as one block at its stop (kcov_remote_stop), so in
     area order every block starts with its start record and ends with its
     stop record; a nested softirq section's block precedes its enclosing
@@ -321,9 +329,9 @@ def pair_sections(records):
     for record in records:
         func = None
         if record[0] == SECTION_START:
-            if record[3] != 8:
+            if record[3] != 16:
                 raise InvalidOutput('section start record length')
-            func = int.from_bytes(bytes.fromhex(record[4]), 'little')
+            func = int.from_bytes(bytes.fromhex(record[4][:16]), 'little')
             open_.append(func)
         elif record[0] == SECTION_STOP:
             if not open_:
@@ -392,7 +400,13 @@ def resolve_choices(per, sites, locations, dispatch=None):
                 consumer = next((src for src in frames if src.split(':')[0] not in CHOICE_HELPERS), None)
                 kind_class = 'random' if kind in RANDOM_KINDS else 'clock' if 200 <= kind <= 216 \
                     else 'resched' if raw_kind == RESCHED else 'timer' if raw_kind == TIMER_ARM \
-                    else 'advance' if raw_kind == TIME_ADVANCE else 'alloc' if kind == ALLOC_KIND else None
+                    else 'advance' if raw_kind == TIME_ADVANCE else 'alloc' if kind == ALLOC_KIND \
+                    else 'queue' if raw_kind == QUEUE else None
+                if kind_class == 'queue':
+                    # {work, func}: the site is the queued function's symbol
+                    queued_func = int.from_bytes(bytes.fromhex(data[16:32]), 'little') if length == 16 else 0
+                    consumer = f'{dispatch.get(queued_func)}:0'
+                    frames = [dispatch.get(queued_func, hex(queued_func))]
                 if kind_class == 'alloc':
                     # the consumer frame by the unwound chain (docs/2026-10-05-a-alloc.md 4.2)
                     frames, consumer = alloc_frames(ip, data, locations)
@@ -500,7 +514,7 @@ JIFFIES_SLACK = 25
 
 def jiffies_problems(traces, per):
     """The `jiffies`-progress check (D3, section 4.4) over each child's
-    arm (303: {jiffies, expires}) and advance (304: {before, after})
+    arm (303: {jiffies, expires, timer}) and advance (304: {before, after})
     records in sequence order:
     - every wg_advance has exactly one 304, first in its operation, with
       after - before = ticks, and no other operation has one (a 304 after
@@ -534,7 +548,7 @@ def jiffies_problems(traces, per):
             for kind, _ip, _seq, length, data, _func in records:
                 if kind not in (TIMER_ARM, TIME_ADVANCE):
                     continue
-                if length != 16:
+                if length != (24 if kind == TIMER_ARM else 16):
                     found.append(dict(index=index, problem=f'record kind {kind} length {length}'))
                     continue
                 first, second = (int.from_bytes(bytes.fromhex(data[k:k + 16]), 'little') for k in (0, 16))
@@ -558,6 +572,53 @@ def jiffies_problems(traces, per):
         if found:
             problems.setdefault(trace_id, []).extend(dict(p, label='jiffies', mode=mode) for p in found)
     return problems
+
+
+def dispatch_problems(per):
+    """The dispatch-order pairing (docs/2026-10-11-dispatch-order.md), per
+    child, over the records in sequence order: a work item's queue record
+    (307: {work, func}) or a timer's arm record (303: {jiffies, expires,
+    timer}) names a unit; the section start that dispatches it (300: {func,
+    unit}) must name a unit queued or armed earlier in the trace and not
+    dispatched since, which it then consumes (a re-arm moves a timer, a
+    re-queue of a running item queues it again). A softirq section (unit
+    0 for net_rx_action) is paired with nothing; any other section without
+    a unit is a kernel without the identity. Returns the problems, and per
+    (trace, mode) the units still queued or armed at the trace's end
+    (reported, not a failure: an unfired timer, or work the mirror already
+    refuses as having outlived the guest's wait)."""
+    problems, leftovers = {}, {}
+    for (trace_id, mode), ops in per.items():
+        pending, found = {}, []
+        for index, records in enumerate(ops):
+            for kind, _ip, _seq, length, data, func in records:
+                raw = kind & 0x7fff
+                if raw == QUEUE and length == 16:
+                    unit = int.from_bytes(bytes.fromhex(data[:16]), 'little')
+                    if unit in pending and pending[unit] == 'work':
+                        found.append(dict(index=index, problem='a work item queued while already queued', unit=hex(unit)))
+                    pending[unit] = 'work'
+                elif raw == TIMER_ARM and length == 24:
+                    pending[int.from_bytes(bytes.fromhex(data[32:48]), 'little')] = 'timer'
+                elif raw == SECTION_START and length == 16:
+                    unit = int.from_bytes(bytes.fromhex(data[16:32]), 'little')
+                    if unit == 0:
+                        if func is not None and func not in SOFTIRQ_FUNCS:
+                            found.append(dict(index=index, problem='a dispatch section without its unit', function=hex(func)))
+                    elif unit not in pending:
+                        found.append(dict(index=index, problem='a dispatched unit that was never queued or armed', unit=hex(unit)))
+                    else:
+                        del pending[unit]
+        if found:
+            problems.setdefault(trace_id, []).extend(dict(p, label='dispatch', mode=mode) for p in found)
+        if pending:
+            leftovers[(trace_id, mode)] = dict(Counter(pending.values()))
+    return problems, leftovers
+
+
+# The dispatched functions whose sections name no unit: the NET_RX vector
+# (handle_softirqs passes NULL); set by run_chunk from the dispatch map.
+SOFTIRQ_FUNCS = set()
 
 
 def load_decisions(config):
@@ -1095,6 +1156,14 @@ def run_chunk(traces, out, kcov, guest_variant=None, alloc_flags=0, arm=()):
             site_problems.setdefault(trace_id, []).extend(found)
         for trace_id, found in jiffies_problems(traces, per).items():
             site_problems.setdefault(trace_id, []).extend(found)
+        SOFTIRQ_FUNCS.clear()
+        SOFTIRQ_FUNCS.update(a for a, name in dispatch.items() if name == 'net_rx_action')
+        dispatch_found, left = dispatch_problems(per)
+        for trace_id, found in dispatch_found.items():
+            site_problems.setdefault(trace_id, []).extend(found)
+        for counts in left.values():
+            for unit_kind, n in counts.items():
+                outcomes[f'dispatch units left {unit_kind == "timer" and "armed" or "queued"}'] += n
         outcomes.update({f'choice records skipped ({k})': n for k, n in skipped.items()})
         # the transitional unarmed answer (docs/2026-10-05-a-alloc.md 6.6) is
         # declared: the report counts the traces each way
