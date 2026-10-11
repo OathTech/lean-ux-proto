@@ -14,7 +14,13 @@ advance (KCOV_LEANUX_TIME_ADVANCE, kind 304) (D3, docs/2026-10-05-d3-timers.md);
 the allocation hook in slab_alloc_node and __alloc_pages_noprof, kind 305, its
 load ioctl with the inventory mode (KCOV_LEANUX_ALLOC_LOAD, 205) and status
 ioctl (206) (A stream K1, docs/2026-10-05-a-alloc.md, section 4); the
-dispatch set's capacity KCOV_DISPATCH_MAX 32 (D3+A integration).
+dispatch set's capacity KCOV_DISPATCH_MAX 32 (D3+A integration); the dispatch
+identity (docs/2026-10-11-dispatch-order.md): the kind-300 start record's
+second word names the dispatched unit (the work item's or timer's address, 0
+for a softirq), the kind-303 arm record's third word the timer, and the
+kind-307 queue record at __queue_work {work, func} the unit a recording
+context queued, so the mirror follows the dispatch order instead of assuming
+queue order. Record-only.
 """
 import sys, re, os, shutil, subprocess
 WD='.artifacts/choice-patch'; N=WD+'/new'
@@ -417,8 +423,10 @@ s = rd('kernel/kcov.c').rstrip('\n') + r'''
  * vmlinux). While it is armed, process_one_work opens a remote section under
  * the instance's common handle iff the work function is in the set, and the
  * NET_RX vector in handle_softirqs does the same iff net_rx_action is. Each
- * section writes a start record (kind 300, the function's address) and a
- * stop record (kind 301, the number of records dropped in the section),
+ * section writes a start record (kind 300: the function's address, then the
+ * dispatched unit: the work item's address from process_one_work, the
+ * timer's from call_timer_fn, 0 for a softirq; docs/2026-10-11-dispatch-order.md)
+ * and a stop record (kind 301, the number of records dropped in the section),
  * sequence-numbered like every other record. KCOV's nesting rules hold: no
  * section in a task that already collects, and only a softirq section inside
  * a task section. A section that cannot open (unregistered handle, no area,
@@ -455,11 +463,12 @@ static bool notrace kcov_section_move_fits(struct task_struct *t)
 	return dst + src <= (kcov->size - 1) / KCOV_WORDS_PER_CMP;
 }
 
-void notrace kcov_dispatch_start(struct kcov_dispatch_section *s, void *func)
+void notrace kcov_dispatch_start(struct kcov_dispatch_section *s, void *func, void *unit)
 {
 	struct task_struct *t = current;
 	struct kcov *kcov;
 	unsigned long flags, ip = (unsigned long)func;
+	u64 v[2];
 	bool member = false;
 	u64 handle;
 	u32 i;
@@ -492,7 +501,9 @@ void notrace kcov_dispatch_start(struct kcov_dispatch_section *s, void *func)
 	s->open = true;
 	if (in_task())
 		t->kcov_leanux_section = 1;
-	kcov_choice_write(t, 300, _RET_IP_, &ip, sizeof(ip));
+	v[0] = ip;
+	v[1] = (unsigned long)unit;	/* the dispatched unit (dispatch order) */
+	kcov_choice_write(t, 300, _RET_IP_, v, sizeof(v));
 }
 EXPORT_SYMBOL(kcov_dispatch_start);
 
@@ -649,14 +660,14 @@ sub('include/linux/kcov.h', 'void kcov_choice_ip(u32 kind, unsigned long ip, voi
     'void kcov_choice_ip(u32 kind, unsigned long ip, void *data, unsigned int len);\n'
     '/* LEANUX: a dispatch section (process_one_work, the NET_RX vector). */\n'
     'struct kcov_dispatch_section { bool open; unsigned int saved_dropped; };\n'
-    'void kcov_dispatch_start(struct kcov_dispatch_section *s, void *func);\n'
+    'void kcov_dispatch_start(struct kcov_dispatch_section *s, void *func, void *unit);\n'
     'void kcov_dispatch_stop(struct kcov_dispatch_section *s);\n'
     '/* LEANUX: __cond_resched is about to schedule. */\n'
     'void kcov_dispatch_resched(unsigned long ip);\n')
 sub('include/linux/kcov.h', 'static inline void kcov_choice_ip(u32 kind, unsigned long ip, void *data, unsigned int len) {}\n',
     'static inline void kcov_choice_ip(u32 kind, unsigned long ip, void *data, unsigned int len) {}\n'
     'struct kcov_dispatch_section { bool open; };\n'
-    'static inline void kcov_dispatch_start(struct kcov_dispatch_section *s, void *func) {}\n'
+    'static inline void kcov_dispatch_start(struct kcov_dispatch_section *s, void *func, void *unit) {}\n'
     'static inline void kcov_dispatch_stop(struct kcov_dispatch_section *s) {}\n'
     'static inline void kcov_dispatch_resched(unsigned long ip) {}\n')
 sub('include/linux/sched.h', """	/* Collect coverage from softirq context: */
@@ -681,9 +692,16 @@ sub(W, """	int lockdep_start_depth, rcu_start_depth;
 sub(W, """	trace_workqueue_execute_start(work);
 	worker->current_func(work);
 """, """	trace_workqueue_execute_start(work);
-	kcov_dispatch_start(&section, worker->current_func);	/* LEANUX */
+	kcov_dispatch_start(&section, worker->current_func, work);	/* LEANUX */
 	worker->current_func(work);
 	kcov_dispatch_stop(&section);
+""")
+# dispatch order (docs/2026-10-11-dispatch-order.md): the queue record, at
+# the one point every queued work item passes (queue_work_on, queue_work_node,
+# a delayed work's timer, flush_delayed_work), once its pending bit is set
+sub(W, """	trace_workqueue_queue_work(req_cpu, pwq, work);
+""", """	trace_workqueue_queue_work(req_cpu, pwq, work);
+	kcov_work_queued(work, _RET_IP_);	/* LEANUX: the queue record (kind 307) */
 """)
 S = 'kernel/softirq.c'
 sub(S, '#include <linux/workqueue.h>\n', '#include <linux/workqueue.h>\n#include <linux/kcov.h>\n')
@@ -703,7 +721,7 @@ sub(S, """		trace_softirq_entry(vec_nr);
 		/* LEANUX: the NET_RX vector only (choice-stream strategy, 4.3) */
 		section.open = false;
 		if (vec_nr == NET_RX_SOFTIRQ)
-			kcov_dispatch_start(&section, h->action);
+			kcov_dispatch_start(&section, h->action, NULL);
 		h->action();
 		kcov_dispatch_stop(&section);
 """)
@@ -718,24 +736,26 @@ sub('kernel/sched/core.c', """	if (should_resched(0) && !irqs_disabled()) {
 	}
 """)
 # ---- D3 stream K: timers and time control (docs/2026-10-05-d3-timers.md) ----
+sub('kernel/kcov.c', '#include <linux/refcount.h>\n', '#include <linux/refcount.h>\n#include <linux/workqueue.h>\t/* LEANUX: kcov_work_queued */\n')
 s = rd('kernel/kcov.c').rstrip('\n') + r"""
 
 /*
  * LEANUX D3 (docs/2026-10-05-d3-timers.md, section 3.3): the arm record.
  * mod_timer calls this with the timer's function, jiffies and the new
  * expiry; for a function in the armed dispatch set, in a recording context,
- * it writes kind 303 {jiffies, expires} (16 bytes) at the caller's return
- * address. Lock-free: mod_timer is hot across the kernel, and the set only
+ * it writes kind 303 {jiffies, expires, timer} (24 bytes: the timer's
+ * address names the unit its dispatch section starts with, dispatch
+ * order) at the caller's return address. Lock-free: mod_timer is hot across the kernel, and the set only
  * changes while no trace runs (kcov_dispatch_load before the trace process
  * exists, disarm in kcov_remote_reset), so a READ_ONCE snapshot suffices;
  * outside a trace this costs one load. Written only when the instance was
  * armed with KCOV_DISPATCH_ARM_RECORDS (a load-time switch: off until the
  * mirror consumes the record).
  */
-void notrace kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsigned long ip)
+void notrace kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsigned long ip, void *timer)
 {
 	unsigned long fn = (unsigned long)func;
-	u64 v[2];
+	u64 v[3];
 	u32 n, i;
 
 	if (!READ_ONCE(kcov_dispatch_kcov) || !(READ_ONCE(kcov_dispatch.flags) & KCOV_DISPATCH_ARM_RECORDS))
@@ -745,11 +765,41 @@ void notrace kcov_timer_arm(void *func, unsigned long now, unsigned long expires
 		if (READ_ONCE(kcov_dispatch.funcs[i]) == fn) {
 			v[0] = now;
 			v[1] = expires;
+			v[2] = (unsigned long)timer;
 			kcov_choice_ip(303, ip, v, sizeof(v));
 			return;
 		}
 }
 EXPORT_SYMBOL(kcov_timer_arm);
+
+/*
+ * LEANUX dispatch order (docs/2026-10-11-dispatch-order.md): the queue
+ * record. __queue_work calls this for every work item it queues; for a work
+ * function in the armed dispatch set, in a recording context, it writes
+ * kind 307 {work, func} (16 bytes) at the caller's return address, gated
+ * like the arm record (KCOV_DISPATCH_ARM_RECORDS). The item's dispatch
+ * carries the same address in its kind-300 start record, so the order in
+ * which queued units run is recorded, never assumed. Lock-free like
+ * kcov_timer_arm; outside a trace one load.
+ */
+void notrace kcov_work_queued(struct work_struct *work, unsigned long ip)
+{
+	unsigned long fn = (unsigned long)work->func;
+	u64 v[2];
+	u32 n, i;
+
+	if (!READ_ONCE(kcov_dispatch_kcov) || !(READ_ONCE(kcov_dispatch.flags) & KCOV_DISPATCH_ARM_RECORDS))
+		return;
+	n = min_t(u32, READ_ONCE(kcov_dispatch.n), KCOV_DISPATCH_MAX);
+	for (i = 0; i < n; i++)
+		if (READ_ONCE(kcov_dispatch.funcs[i]) == fn) {
+			v[0] = (unsigned long)work;
+			v[1] = fn;
+			kcov_choice_ip(307, ip, v, sizeof(v));
+			return;
+		}
+}
+EXPORT_SYMBOL(kcov_work_queued);
 
 /*
  * LEANUX D3 (section 4.3): the virtual time advance, on the calling task's
@@ -844,11 +894,16 @@ void kcov_dispatch_resched(unsigned long ip);
 """, """/* LEANUX: __cond_resched is about to schedule. */
 void kcov_dispatch_resched(unsigned long ip);
 /* LEANUX D3: mod_timer's arm record (kind 303). */
-void kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsigned long ip);
+void kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsigned long ip, void *timer);
+/* LEANUX dispatch order: __queue_work's queue record (kind 307). */
+struct work_struct;
+void kcov_work_queued(struct work_struct *work, unsigned long ip);
 """)
 sub('include/linux/kcov.h', """static inline void kcov_dispatch_resched(unsigned long ip) {}
 """, """static inline void kcov_dispatch_resched(unsigned long ip) {}
-static inline void kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsigned long ip) {}
+static inline void kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsigned long ip, void *timer) {}
+struct work_struct;
+static inline void kcov_work_queued(struct work_struct *work, unsigned long ip) {}
 """)
 sub('include/linux/kcov.h', 'u64 kcov_common_handle(void);\n', 'u64 kcov_common_handle(void);\n'
     '/* LEANUX D3: the virtual time advance (kernel/time/timekeeping.c). */\n'
@@ -906,7 +961,7 @@ sub(TM, """	trace_timer_expire_entry(timer, baseclk);
 	trace_timer_expire_exit(timer);
 """, """	trace_timer_expire_entry(timer, baseclk);
 	/* LEANUX D3: a timer dispatch section iff fn is in the armed set */
-	kcov_dispatch_start(&section, fn);
+	kcov_dispatch_start(&section, fn, timer);
 	fn(timer);
 	kcov_dispatch_stop(&section);
 	trace_timer_expire_exit(timer);
@@ -917,7 +972,7 @@ sub(TM, """int mod_timer(struct timer_list *timer, unsigned long expires)
 }""", """int mod_timer(struct timer_list *timer, unsigned long expires)
 {
 	/* LEANUX D3: the arm record (kind 303) for an armed function */
-	kcov_timer_arm(timer->function, jiffies, expires, _RET_IP_);
+	kcov_timer_arm(timer->function, jiffies, expires, _RET_IP_, timer);
 	return __mod_timer(timer, expires, 0);
 }""")
 # ---- A stream K1: allocation outcomes (docs/2026-10-05-a-alloc.md, section 4) ----
@@ -1331,12 +1386,12 @@ static __always_inline void kcov_alloc_post(struct kcov_alloc_ctx *ctx, bool ok)
 }
 '''
 sub('include/linux/kcov.h', """/* LEANUX D3: mod_timer's arm record (kind 303). */
-void kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsigned long ip);
+void kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsigned long ip, void *timer);
 """, """/* LEANUX D3: mod_timer's arm record (kind 303). */
-void kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsigned long ip);
+void kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsigned long ip, void *timer);
 """ + ALLOC_H)
-sub('include/linux/kcov.h', """static inline void kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsigned long ip) {}
-""", """static inline void kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsigned long ip) {}
+sub('include/linux/kcov.h', """static inline void kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsigned long ip, void *timer) {}
+""", """static inline void kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsigned long ip, void *timer) {}
 struct kcov_alloc_ctx { };
 static inline bool kcov_alloc_pre(struct kcov_alloc_ctx *ctx, unsigned long addr, gfp_t gfp,
 				  unsigned long size, bool page) { return false; }

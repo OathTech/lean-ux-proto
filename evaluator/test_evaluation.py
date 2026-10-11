@@ -395,8 +395,8 @@ class EvaluationChecks(unittest.TestCase):
         # it (moved at its own stop); stops carry only the dropped count.
         f, g = 0xffffffff81000010, 0xffffffff81000020
         le = lambda v: v.to_bytes(8, 'little').hex()
-        area = [[300, '0x1', 5, 8, le(g)], [301, '0x2', 6, 8, le(0)],
-                [300, '0x3', 4, 8, le(f)], [104, '0x4', 7, 4, '01020304'], [301, '0x5', 8, 8, le(0)]]
+        area = [[300, '0x1', 5, 16, le(g) + le(0x21)], [301, '0x2', 6, 8, le(0)],
+                [300, '0x3', 4, 16, le(f) + le(0x11)], [104, '0x4', 7, 4, '01020304'], [301, '0x5', 8, 8, le(0)]]
         paired = check.pair_sections(area)
         self.assertEqual([r[5] for r in paired], [g, g, f, None, f])
         rows = [dict(id='t', mode='pc', index=0, stream='task', records=[[104, '0x6', 3, 4, '00000000']]),
@@ -405,16 +405,16 @@ class EvaluationChecks(unittest.TestCase):
         ordered = check.hidden_records([{'id': 't', 'ops': [{}]}], rows)[('t', 'pc')][0]
         self.assertEqual([(r[0], r[5]) for r in ordered],
                          [(104, None), (300, f), (300, g), (301, g), (104, None), (301, f)])
-        sites = {('section', 'f:0'): dict(id=40, label='section_start:f', len=8, role='mirror'),
+        sites = {('section', 'f:0'): dict(id=40, label='section_start:f', len=16, role='mirror'),
                  ('section', 'f:1'): dict(id=41, label='section_stop:f', len=8, role='mirror'),
-                 ('section', 'g:0'): dict(id=48, label='section_start:g', len=8, role='mirror'),
+                 ('section', 'g:0'): dict(id=48, label='section_start:g', len=16, role='mirror'),
                  ('section', 'g:1'): dict(id=49, label='section_stop:g', len=8, role='mirror')}
         resolved, problems, _, _ = check.resolve_choices({('t', 'pc'): [[r for r in ordered if r[0] >= 300]]},
                                                          sites, {}, {f: 'f', g: 'g'})
         self.assertEqual([r[0] for r in resolved[('t', 'pc')][0]], [40, 48, 49, 41])
         self.assertEqual(problems, {})
         # a lossy section, an unpaired stop, a section record in the task stream
-        lossy = [[300, '0x1', 1, 8, le(f), f], [301, '0x2', 2, 8, le(3), f]]
+        lossy = [[300, '0x1', 1, 16, le(f) + le(0x11), f], [301, '0x2', 2, 8, le(3), f]]
         _, problems, _, _ = check.resolve_choices({('t', 'pc'): [lossy]}, sites, {}, {f: 'f'})
         self.assertEqual(problems['t'][0]['problem'], 'records dropped in a dispatch section')
         with self.assertRaises(InvalidOutput):
@@ -423,20 +423,54 @@ class EvaluationChecks(unittest.TestCase):
             check.pair_sections(area[:1])
         with self.assertRaises(InvalidOutput):
             check.hidden_records([{'id': 't', 'ops': [{}]}], [dict(rows[1], stream='task')])
+        with self.assertRaises(InvalidOutput):   # a start record without the unit word (a kernel before 2026-10-11)
+            check.pair_sections([[300, '0x1', 5, 8, le(g)], [301, '0x2', 6, 8, le(0)]])
+
+    def test_dispatch_order_records_resolve_and_pair(self):
+        # Dispatch order: a queue record {work, func} resolves to class
+        # 'queue' at the queued function's symbol; the section that runs
+        # the unit names it; dispatch_problems pairs them in sequence order
+        f, w1, w2 = 0xffffffff81000010, 0xffff888000001000, 0xffff888000002000
+        le = lambda v: v.to_bytes(8, 'little').hex()
+        sites = {('queue', 'f:0'): dict(id=300, label='queued:f', len=16, role='mirror'),
+                 ('section', 'f:0'): dict(id=40, label='section_start:f', len=16, role='mirror'),
+                 ('section', 'f:1'): dict(id=41, label='section_stop:f', len=8, role='mirror')}
+        op = [[307, '0x9', 1, 16, le(w1) + le(f), None], [307, '0x9', 2, 16, le(w2) + le(f), None],
+              [300, '0x1', 3, 16, le(f) + le(w2), f], [301, '0x2', 4, 8, le(0), f],
+              [300, '0x1', 5, 16, le(f) + le(w1), f], [301, '0x2', 6, 8, le(0), f]]
+        resolved, problems, _, _ = check.resolve_choices({('t', 'pc'): [op]}, sites, {}, {f: 'f'})
+        self.assertEqual([r[0] for r in resolved[('t', 'pc')][0]], [300, 300, 40, 41, 40, 41])
+        self.assertEqual(problems, {})
+        self.assertEqual(check.dispatch_problems({('t', 'pc'): [op]}), ({}, {}))
+        # dispatched but never queued; a work section without its unit; a leftover
+        never = [[300, '0x1', 3, 16, le(f) + le(w2), f], [301, '0x2', 4, 8, le(0), f]]
+        found, left = check.dispatch_problems({('t', 'pc'): [never]})
+        self.assertEqual([p['problem'] for p in found['t']], ['a dispatched unit that was never queued or armed'])
+        bare = [[300, '0x1', 3, 16, le(f) + le(0), f], [301, '0x2', 4, 8, le(0), f]]
+        found, _ = check.dispatch_problems({('t', 'pc'): [bare]})
+        self.assertEqual([p['problem'] for p in found['t']], ['a dispatch section without its unit'])
+        queued = [[307, '0x9', 1, 16, le(w1) + le(f), None]]
+        found, left = check.dispatch_problems({('t', 'pc'): [queued]})
+        self.assertEqual((found, left), ({}, {('t', 'pc'): {'work': 1}}))
+        # a timer: armed (24 bytes, its address last), then its section; an unfired one is left armed
+        t1 = 0xffff888000003000
+        armed = [[303, '0xa', 1, 24, le(5) + le(9) + le(t1), None], [300, '0x1', 2, 16, le(f) + le(t1), f],
+                 [301, '0x2', 3, 8, le(0), f], [303, '0xa', 4, 24, le(9) + le(20) + le(t1), None]]
+        self.assertEqual(check.dispatch_problems({('t', 'pc'): [armed]}), ({}, {('t', 'pc'): {'timer': 1}}))
 
     def test_d3_timer_and_advance_records_resolve(self):
         # D3: kind 303 resolves by its consumer frame to class 'timer', kind
         # 304 to class 'advance'; a 303 record elsewhere is undeclared
-        sites = {('timer', 'drivers/net/wireguard/timers.c:37'): dict(id=100, label='mod_timer_arm', len=16, role='mirror'),
+        sites = {('timer', 'drivers/net/wireguard/timers.c:37'): dict(id=100, label='mod_timer_arm', len=24, role='mirror'),
                  ('advance', 'fs/ioctl.c:51'): dict(id=101, label='time_advance', len=16, role='mirror')}
         frame = lambda src: [{'source': f'/x/.deps/linux/{src} (discriminator 1)'}]
         locations = {'0xa': frame('drivers/net/wireguard/timers.c:37') + frame('drivers/net/wireguard/timers.c:61'),
                      '0xb': frame('fs/ioctl.c:51'), '0xc': frame('fs/ioctl.c:51')}
-        op = [[304, '0xb', 1, 16, '00' * 16, None], [303, '0xa', 2, 16, '11' * 16, None]]
+        op = [[304, '0xb', 1, 16, '00' * 16, None], [303, '0xa', 2, 24, '11' * 24, None]]
         resolved, problems, _, _ = check.resolve_choices({('t', 'pc'): [op]}, sites, locations)
         self.assertEqual([r[0] for r in resolved[('t', 'pc')][0]], [101, 100])
         self.assertEqual(problems, {})
-        _, problems, _, _ = check.resolve_choices({('t', 'pc'): [[[303, '0xc', 1, 16, '00' * 16, None]]]}, sites, locations)
+        _, problems, _, _ = check.resolve_choices({('t', 'pc'): [[[303, '0xc', 1, 24, '00' * 24, None]]]}, sites, locations)
         self.assertEqual(problems['t'][0]['problem'], 'choice from an undeclared consumer')
 
     def test_empty_run_is_not_a_pass(self):
@@ -504,7 +538,9 @@ class EvaluationChecks(unittest.TestCase):
     def test_jiffies_progress(self):
         def rec(kind, seq, a, b, func=None):
             data = a.to_bytes(8, 'little').hex() + b.to_bytes(8, 'little').hex()
-            return [kind, 0, seq, 16, data, func]
+            if kind == 303:   # the arm record names its timer (dispatch order): a third word
+                data += (0).to_bytes(8, 'little').hex()
+            return [kind, 0, seq, len(data) // 2, data, func]
         trace = {'version': 1, 'id': 'j', 'ops': [{'op': 'wg_up'}, {'op': 'wg_advance', 'ticks': 1450},
                                                    {'op': 'wg_observe'}]}
         J = 2**32 - 100

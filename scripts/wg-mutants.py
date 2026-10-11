@@ -558,6 +558,19 @@ A_MUTANTS = [
 ]
 A_PENDING = {}
 SUITE_OF = {m[0]: 'alloc' for m in A_MUTANTS}
+# Dispatch order (docs/2026-10-11-dispatch-order.md, section 6): the mirror
+# runs the queued send worker at the head of its queue, ignoring the unit the
+# dispatch record names. Rejected deterministically by the replay of the
+# recorded B-first s2_index_collision run (evaluator/test_model_replay.py
+# DispatchOrder, the capture of 2026-10-11 on the dispatch-order oracle) and,
+# live, by s2_index_collision whenever Linux dispatches peer B first (9 of 10
+# fresh-guest runs on that oracle); run on the s2_* traces.
+Q_MUTANTS = [
+  ('Q-M1-dispatch-order-ignored', 'dispatch order: the send worker runs the queue head, not the unit the record names',
+   'Leanux/Env.lean',
+   "    | some u => resolveUnit .sendWorker u d.sendWorkQueue d.peerList\n    | none => pure headPid\n",
+   "    | some _ => pure headPid\n    | none => pure headPid\n", 's2_'),
+]
 
 
 def w4(text):
@@ -624,7 +637,7 @@ def run(cmd, **kw):
 def main():
     assert run(['git', 'status', '--porcelain'], capture_output=True, text=True).stdout == '', 'tree must be clean'
     head = run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()
-    mutants = MUTANTS + D1_MUTANTS + D2_MUTANTS + E_MUTANTS + E_UNDERLOAD_MUTANTS + D3_MUTANTS + L_MUTANTS + A_MUTANTS + W4_MUTANTS
+    mutants = MUTANTS + D1_MUTANTS + D2_MUTANTS + E_MUTANTS + E_UNDERLOAD_MUTANTS + D3_MUTANTS + L_MUTANTS + A_MUTANTS + Q_MUTANTS + W4_MUTANTS
     names = [m[0] for m in mutants]
     assert set(EQUIVALENT) <= set(names), 'an EQUIVALENT entry names no mutant'
     assert NOT_CLAIMED <= set(names), 'a NOT_CLAIMED entry names no mutant'

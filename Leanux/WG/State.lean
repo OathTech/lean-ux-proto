@@ -73,6 +73,10 @@ def armTimer (pid : PeerId) (t : PeerTimer) (delay : Nat) : M Unit := do
       if e < j || (e - j != delay && e - j + 1 != delay) then
         throw (.hidden s!"timer expiry differs from Linux: mod_timer at jiffies {j} to {e}, the mirror's delay is {delay}")
       modify fun w => { w with jiffiesLast := some j }
+      -- dispatch order (docs/2026-10-11-dispatch-order.md): the record's
+      -- third word is the timer's address, which its section names
+      let u := recordWord bs 2
+      if u != 0 then modify fun w => { w with timerUnits := (u, pid, t) :: w.timerUnits.filter (·.1 != u) }
       pure e
     else pure (w.jiffiesLast.getD 0 + delay)
   setPeer pid ((← getPeer pid).setTimer t (some e))

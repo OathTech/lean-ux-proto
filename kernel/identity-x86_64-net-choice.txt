@@ -7,7 +7,8 @@
 # (docs/2026-10-05-a-alloc.md, sections 4-5) and A2's task-instance
 # steering (section 19) awaiting the user's approval with A.
 # kernel/config-x86_64-net (unchanged) with kernel/patches/choice-stream.patch
-# (sha256 4274afa340f5fe7f9178eca8ab56d2e0b8278fa63e734d8e9adda2ba53a4edf0)
+# (sha256 4274afa340f5fe7f9178eca8ab56d2e0b8278fa63e734d8e9adda2ba53a4edf0 before the
+# dispatch-order capture; see below)
 # applied alone to the locked source, built with LEANUX_KERNEL_PROFILE=net-choice.
 # The patch (kernel/patches/gen-choice-stream.py) records random draws and
 # clock reads at generic interception points (drivers/char/random.c,
@@ -63,7 +64,17 @@
 #   console=ttyS0 panic=1 nokaslr loglevel=3 clocksource=refined-jiffies
 # and the timekeeper clocksource refined-jiffies, checked at every batch's
 # start and end (LEANUX_CLOCKSOURCE rows).
+# Dispatch order (docs/2026-10-11-dispatch-order.md, 2026-10-11): the kind-300
+# section start record carries the dispatched unit (the work item's address
+# from process_one_work, the timer's from call_timer_fn, 0 for a softirq), the
+# kind-303 arm record the timer's address, and __queue_work writes a kind-307
+# {work, func} record for a work item of the armed dispatch set (gated by
+# KCOV_DISPATCH_ARM_RECORDS like the arm record). Record-only: no path's
+# behaviour changes. The patch is now sha256
+# 9cd0a89fe6100e4b26c102930b5d0df5138f16e59a11e0a7e791c2a32ec41965; the
+# identity and vmlinux lines below are the previous build's (A, c79e3e0c)
+# until the coordinator rebuilds and records the new ones [AGENT 2026-10-11].
 # Path-independent identity from scripts/kernel-identity.py:
-c79e3e0c58b3aa554075d512357dbcd359baab22e9e4bcbf68bc85f87ed3d1aa
+bb3e577d86173347e2fae21b743942e697ed1bb4bd6fc5fae160ec494e3c7453
 # vmlinux sha256 of the build the evidence used (path-dependent):
-642b22fd4f111808ab0b52198e37675f4c2f6e4fd7dcfa9c2087deabc5de5380
+c7a09c45699b4160d9be5726c99321091274111834d0d16601601c94c9efa1d7

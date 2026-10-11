@@ -1,0 +1,126 @@
+# Dispatch order: the unit a section runs is recorded (2026-10-11)
+
+Decision [USER 2026-10-11]: option A, "Okay, let's do (A)": the order in which
+Linux dispatches queued deferred units is recorded at the source, not assumed
+from queue order and not taken as a placement the check reruns.
+
+Stream: `task/dispatch-order` on the interface commit. Kernel change:
+record-only (the approved class); the merge's signoff covers the new identity.
+
+## 1. The gap
+
+`s2_index_collision` configures two peers whose handshake initiations are both
+queued by `wg_up` (`wg_packet_send_queued_handshake_initiation`, send.c:55-83,
+once per peer in `peer_list` order). `handshake_send_wq` is `WQ_UNBOUND`
+(device.c:338): its pool may run the two items in either order. The mirror ran
+`sendWorkQueue` oldest first (`Env.runSendWorkers`). When Linux ran peer B's
+item first, the records still matched one by one, since the index draw and the
+ephemeral are consumed in record order, while the encrypted static was built
+for the wrong remote static: a semantic mismatch at `wg_observe`, in about two
+of three fresh-guest runs and in none of the chunked full checks (the pool's
+state differs). Nothing in the records named the peer: the kind-300 section
+start carried only the function's address.
+
+The same assumption sat in the clear work (`runOneClearWorker`), the tx worker
+(`runCryptWorkers`, per-peer `transmit_packet_work` on `packet_crypt_wq`) and
+the timer pass (`fireTimer`: several peers' due timers of one kind were
+"outside the domain (their order)").
+
+## 2. The records (kernel/patches/gen-choice-stream.py)
+
+Three generic, record-only changes at the interception points that exist:
+
+| Record | Where | Payload | Before |
+|---|---|---|---|
+| kind 300, section start | `kcov_dispatch_start` (process_one_work, handle_softirqs, call_timer_fn) | `{func, unit}`, 16 bytes: the work item's address, the timer's, or 0 for a softirq | `{func}`, 8 bytes |
+| kind 303, the arm record | `mod_timer` (`kcov_timer_arm`) | `{jiffies, expires, timer}`, 24 bytes | `{jiffies, expires}`, 16 bytes |
+| kind 307, the queue record (new) | `__queue_work`, after `trace_workqueue_queue_work` (workqueue.c:2356), the one point every queued item passes once its pending bit is set | `{work, func}`, 16 bytes, at the caller's return address | none |
+
+The queue record is written only for a work function in the armed dispatch
+set, in a recording context (the trace's syscall, a section), gated by
+`KCOV_DISPATCH_ARM_RECORDS` like the arm record; lock-free like
+`kcov_timer_arm`. Work the kernel queues outside the set (linkwatch, RCU,
+vmstat) records nothing, as before. A `__queue_work` from a timer's callback or
+a NET_RX section lands in that section's stream; from the syscall, in the task
+stream; the harness orders both by sequence number (`hidden_records`), so a
+queue record always precedes the start of the section that runs its unit.
+
+Addresses are opaque to the mirror. A unit's address is fixed for the life of
+its owner (`peer->transmit_handshake_work`, `transmit_packet_work`,
+`clear_peer_work`, the five `timer_list`s; the device's per-CPU crypt work and
+`incoming_handshake_work`), so it names the unit across re-queues and re-arms.
+
+## 3. The harness (evaluator/check.py)
+
+- `pair_sections` requires the 16-byte start (a kernel without the identity is
+  an `invalid_coverage` outcome, never a silent fallback); the function is
+  word 0.
+- Kind 307 resolves to class `queue` at the queued function's symbol
+  (`('queue', '<symbol>:0')`), as a section resolves at its dispatched
+  function's; an undeclared function is a problem, as for any record.
+- `dispatch_problems`, per child in sequence order: a queue record or an arm
+  record names a unit; a section start must name a unit queued or armed
+  earlier and not dispatched since, and consumes it. Problems (the trace
+  fails): a dispatched unit never queued or armed; a work item queued while
+  already queued; a non-softirq section without its unit. Units still queued
+  or armed at the trace's end are counted in the report (`dispatch units left
+  queued/armed`), not failed: an unfired timer is normal, and work that outlived
+  the guest's wait is the mirror's existing refusal.
+- `jiffies_problems` reads the 24-byte arm record's first two words as before.
+
+## 4. The mirror (Leanux/Kernel/Defs.lean, Leanux/Env.lean, Leanux/WG/State.lean)
+
+- A hidden site per work-item function, kind `queue`, ids 300 + the worker's
+  index (`HiddenSite.queued`): the send, receive, encrypt, tx, decrypt and
+  clear workers (timers arm, softirqs are not queued). The section-start sites
+  are 16 bytes, `mod_timer_arm` 24.
+- The queue records are captured out of band: `skipAmbient` moves each one
+  into `World.queuedUnits` (worker, address) where it occurs in the stream,
+  so the mirror's queueing points (owned by other streams) are unchanged.
+  Data and control flow are unchanged: the queueing happens where the C
+  queues, the record's value is an address the mirror learns.
+- At a dispatch, `peekUnit w` reads the unit from the start record without
+  consuming it. `resolveUnit w unit queue live` names the queued peer: an
+  address paired before is known; otherwise the captured addresses for `w`,
+  in order, are the queued units of `w` without an address, in order (both
+  follow the C's queueing order), which pairs them (`World.unitPeers`). A
+  count that differs, an address never queued, or a unit whose peer is not
+  queued is a hidden mismatch.
+- `runOneSendWorker`, `runOneClearWorker` and the tx loop of
+  `runCryptWorkers` run the named unit and remove it from its queue; without
+  an identity (the domain filter's placeholders; a record with a zero unit)
+  they keep the head of the queue.
+- `armTimer` keeps the arm record's timer address (`World.timerUnits`:
+  address, peer, timer). `fireTimer` runs the timer the section names; it
+  must be that callback's kind, pending and due, else a hidden mismatch.
+  Several due timers of one kind are no longer outside the domain when the
+  records name them; without an identity the one-due rule stands.
+- Not changed: `Env/Batch.lean`'s `condResched` still takes the tx queue's
+  head for a crypt worker it runs at a switch (W4+W7 B's file; it can adopt
+  `peekUnit`/`resolveUnit` from `Defs.lean`); the receive, decrypt and encrypt
+  workers are single units per device, so their queue records only pair.
+
+## 5. Replays of earlier captures
+
+Captures made before the identity word (evaluator/test_model_replay.py) are
+widened with a zero unit (`widen`): a zero unit is "no identity", under which
+the mirror keeps the legacy rule, so the contended-host regressions stay
+replayable. Live runs cannot take that path: `pair_sections` refuses an
+8-byte start, and `dispatch_problems` refuses a work section with unit 0.
+
+## 6. Evidence plan (the coordinator, on the rebuilt kernel)
+
+1. Rebuild the oracle (`LEANUX_KERNEL_PROFILE=net-choice`) and the control
+   kernel (`net-choice-actl`); record both identities in the identity files.
+2. `s2_index_collision` alone, 10 fresh guests: 10/10 agreement, with the
+   dispatch order visible in the records; keep one B-first capture
+   (`model-inputs.jsonl`) for the replay mutant.
+3. The full check; the scoped mutants (Env.lean, Defs.lean, State.lean) and
+   the D3 set; the controls.
+4. Mutant Q-M1 (`scripts/wg-mutants.py`, pending the capture): the send
+   worker runs the queue head, ignoring the named unit. Rejected
+   deterministically by replaying the B-first capture, and live by
+   `s2_index_collision` whenever Linux dispatches peer B first.
+
+What the record pays for: the s2 defect above; W3+W12's several peers'
+timers in one pass; the tx workers of several peers.

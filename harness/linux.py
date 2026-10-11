@@ -102,6 +102,9 @@ DISPATCH_SYMBOLS = ("wg_packet_handshake_send_worker", "wg_packet_handshake_rece
 # at every arm site (stream M); evaluator/check.py passes the same value to
 # the kernel and the mirror. Off, the kernel writes none and the mirror
 # consumes none; a record present anyway is left unconsumed, a mismatch.
+# Dispatch order (docs/2026-10-11-dispatch-order.md): the same flag gates
+# the kind-307 queue record at __queue_work; a section start carries the
+# dispatched unit, an arm record the timer's address.
 ARM_RECORDS = True
 # The oracle is the kernel build booted with these parameters (D3, option
 # C-jiffies: the timekeeper is pinned to refined-jiffies, which the virtual
