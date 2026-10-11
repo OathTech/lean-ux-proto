@@ -54,7 +54,7 @@ def findNode (trie : Option NodeId) (bits key : Nat) : M (Option NodeId) := do
     if !(← branch .findNodePrefixMatches (← prefixMatches n key bits)) then return found
     if ← branch .findNodeHasPeer n.peer.isSome then found := some id
     if ← branch .findNodeFullLength (n.cidr == bits) then return found
-    node := n.bit[← choose n key]!
+    node ← n.bitAt (← choose n key)
   invariant "find_node deeper than MAX_ALLOWEDIPS_DEPTH"
 
 /-- copy_and_assign_cidr (allowedips.c:23-34): the key is copied unmasked. -/
@@ -108,7 +108,7 @@ def nodePlacement (trie : Option NodeId) (key cidr bits : Nat) : M (Option NodeI
     if !(← branch .placementPrefixMatches (← prefixMatches n key bits)) then return (parent, false)
     parent := some id
     if ← branchCmp .placementExact (n.cidr == cidr) n.cidr cidr then return (parent, true)
-    node := n.bit[← choose n key]!
+    node ← n.bitAt (← choose n key)
   invariant "node_placement deeper than MAX_ALLOWEDIPS_DEPTH"
 
 /-- add (allowedips.c:181-250). -/
@@ -142,7 +142,7 @@ def add (root : Slot) (bits key cidr : Nat) (peer : Option PeerId) : M Int := do
     else
       let some node := placed | invariant "unreachable"
       let bit ← choose (← getNode node) key
-      let down := (← getNode node).bit[bit]!
+      let down ← (← getNode node).bitAt bit
       if ← branch .addNoDown down.isNone then
         connectNode (.child node bit) newnode
         return 0
@@ -194,16 +194,16 @@ def removeByPeer (pid : PeerId) : M Unit := do
     let n ← getNode id
     setNode id { n with peer := none }
     -- `if (node->bit[0] && node->bit[1]) continue;`
-    if ← branch .removeHasBit0 n.bit[0]!.isSome then
-      if ← branch .removeHasBit1 n.bit[1]!.isSome then continue
-    let child := if n.bit[0]!.isNone then n.bit[1]! else n.bit[0]!   -- bit[!bit[0]]
+    if ← branch .removeHasBit0 (← n.bitAt 0).isSome then
+      if ← branch .removeHasBit1 (← n.bitAt 1).isSome then continue
+    let child ← if (← n.bitAt 0).isNone then n.bitAt 1 else n.bitAt 0   -- bit[!bit[0]]
     if ← branch .removeChildExists child.isSome then
       if let some c := child then setNode c { (← getNode c) with parent := n.parent }
     slotSet n.parent child   -- *parent_bit = child
     -- free_parent = !bit[0] && !bit[1] && (parent_bit_packed & 3) <= 1 && !parent->peer
     let freeParent ← do
-      if !(← branch .removeLeafBit0 n.bit[0]!.isNone) then pure false
-      else if !(← branch .removeLeafBit1 n.bit[1]!.isNone) then pure false
+      if !(← branch .removeLeafBit0 (← n.bitAt 0).isNone) then pure false
+      else if !(← branch .removeLeafBit1 (← n.bitAt 1).isNone) then pure false
       else match n.parent with
         | .child parent _ => do
           _ ← branch .removeParentIsNode true
@@ -214,7 +214,7 @@ def removeByPeer (pid : PeerId) : M Unit := do
     let mut sibling := child
     if ← branch .removeFreeParent freeParent then
       let .child parent bit := n.parent | invariant "free_parent without a parent node"
-      sibling := (← getNode parent).bit[1 - bit]!   -- parent->bit[!(parent_bit_packed & 1)]
+      sibling ← (← getNode parent).bitAt (1 - bit)   -- parent->bit[!(parent_bit_packed & 1)]
     freeNode id   -- call_rcu(&node->rcu, node_free_rcu)
     if ← branch .removeNotFreeParent !freeParent then continue
     let .child parent _ := n.parent | invariant "free_parent without a parent node"
@@ -225,13 +225,23 @@ def removeByPeer (pid : PeerId) : M Unit := do
     freeNode parent   -- call_rcu(&parent->rcu, node_free_rcu)
   _ ← branch .removeListIter false
 
-/-- The node and all nodes below it (root_free_rcu's walk, a cut point). -/
-partial def subtree (id : NodeId) : M (List NodeId) := do
-  let n ← getNode id
-  let mut out := [id]
-  for c in n.bit.toList do
-    if let some c := c then out := out ++ (← subtree c)
-  return out
+/-- The node and all nodes below it (root_free_rcu's walk, a cut point), in
+    the recursion's order: the node, then bit[0]'s subtree, then bit[1]'s. An
+    explicit stack, fuel-bounded (future-proof-paths note, 3(d)). -/
+def subtree (id : NodeId) : M (List NodeId) := do
+  let mut out := #[]
+  let mut stack := [id]
+  for _ in [0:1 <<< 20] do
+    match stack with
+    | [] => return out.toList
+    | n :: rest =>
+      stack := rest
+      out := out.push n
+      let node ← getNode n
+      -- bit[1] goes under bit[0] on the stack, so bit[0]'s subtree is listed first
+      for c in node.bit.toList.reverse do
+        if let some c := c then stack := c :: stack
+  invariant "the trie walk did not terminate"
 
 /-- root_remove_peer_lists (allowedips.c:69-80): a depth-first walk with an
     explicit stack, pushing bit[0] then bit[1]. -/

@@ -184,14 +184,22 @@ def dispatch : Syscall → M Int
   | .wgDown => socketCallOn SENDER_FD Env.wgDown
   | .wgDelete => rtnetlinkRequest Env.wgDelete
 
-/-- `task_work_run` on exit to user mode: each queued `____fput` runs `__fput`. -/
-partial def taskWorkRun : M Unit := do
-  match (← getK).task.taskWorks with
-  | [] => return
-  | fid :: rest =>
-    modifyK fun k => { k with task := { k.task with taskWorks := rest } }
-    fputFinal fid
-    taskWorkRun
+/-- The fuel of `taskWorkRun`: far above the files a trace can close (at most
+    `MAX_OPS` operations), never the bound the C has (none). -/
+def TASK_WORK_FUEL : Nat := 1 <<< 16
+
+/-- `task_work_run` on exit to user mode: each queued `____fput` runs `__fput`.
+    An `__fput` may queue more work (a release dropping another reference), so
+    the loop is fuel-bounded rather than bounded by the queue at entry
+    (future-proof-paths note, 3(d)). -/
+def taskWorkRun : M Unit := do
+  for _ in [0:TASK_WORK_FUEL] do
+    match (← getK).task.taskWorks with
+    | [] => return
+    | fid :: rest =>
+      modifyK fun k => { k with task := { k.task with taskWorks := rest } }
+      fputFinal fid
+  invariant "task_work_run did not drain the task's work"
 
 /-- One system call: entry, the handler, and the return-to-user work. -/
 def syscall (call : Syscall) : M Int := do
