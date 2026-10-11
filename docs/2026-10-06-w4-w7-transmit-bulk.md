@@ -1995,3 +1995,127 @@ All on the dispatch-order oracle (`kernel-net-choice-q`, identity
   `napi_orders.py` extension (polls per decrypt-worker run, items per poll,
   the (a)/(b/c) split), the phase-1 counter report.
 
+
+## 17.10 Stream H: what was built [AGENT 2026-10-11, stream H]
+
+Branch `task/w47` continued on the merge of `task/dispatch-order`
+`dbe9e0e` (the PENDING-bit model of queued units, `a333927`; one conflict,
+`World.openWorkers` beside the new `pendingWork`; `Env/Batch.lean`'s
+`condResched` takes `resolveUnit`'s new signature). Commit `fbf2826`.
+
+- **The per-section operand agreement (13.2 (ii), T1).** The mirror stamps
+  every step with the ordinal of the NET_RX section it ran in
+  (`Step.netRx`; `World.netRxSections`/`netRxSection`, set in
+  `Env.runWorker` for `.netRx` and cleared at its end, reset per operation;
+  the model output's `section` field, accepted by `evaluator/protocol.py`).
+  The guest tags every remote comparison record with the dispatch-section
+  blocks it occurred in: `split_hidden` numbers the blocks by their start
+  records in area order (a section's records reach the remote area as one
+  block at its stop, nested blocks before their enclosing one, so the
+  running count is the block and the stop record ends it), and
+  `print_records` prints each distinct remote record once, in sorted
+  order, with its blocks as ranges (`"1-3,7"`, a fifth element;
+  `harness/linux.py` accepts it). `evaluator/check.py`: `netrx_sections`
+  maps each operation's `net_rx_action` blocks of the comparison child to
+  the mirror's ordinals by the start records' sequence numbers;
+  `record_blocks` parses the ranges; `section_agreement` is the rule, run
+  on an operand mismatch of a trace with open placements after one more
+  mirror run with every placement before the put (`napi_irq_before_put`
+  all true). `NAPI_PLACEMENTS_MAX` and `napi_placements` are gone; the
+  report's `napi_irq_placements` is now `napi_before_put_sections`, the
+  NET_RX ordinals taken from the before-put run, per trace.
+- **The rule, as the data corrected it.** The design said the (c')
+  placement changes only the operands inside the poll's section. The first
+  replay of `rx_roam_v6` (one open poll) showed it also changes the
+  enqueue's own `wg_peer_put`, the branch right after the poll outside any
+  section (3 → 2 with the poll after it, 2 → 1 with the poll before it),
+  and it moves the section among the branches outside any section. So the
+  runs are compared per section (each NET_RX section's branches, and the
+  branches outside any, each in their own order): the control flow must be
+  the same; the operands may differ only in `count` NET_RX sections and
+  `count` adjacent runs of branches outside them, paired in order; each
+  pair (the poll's span) agrees with Linux under one run as a whole, the
+  section's branches against that section's block and the put's against
+  the records outside the NET_RX blocks; everything else agrees under
+  both. More differences than open polls fail the trace: the independence
+  premise failed.
+- **A second correction from the first live run.** The guest's
+  first-occurrence marking compared record content only, so the worker's
+  put behind the poll, identical in bytes and address to the poll's put
+  (`wg_peer_put` is one function), was dropped; records are now distinct
+  per block. The naive per-block printing then made a flood's 520 identical
+  NET_RX sections print 520 copies, past the rekey bound of the four
+  `e_underload_*` traces; hence the ranges.
+- **`evaluator/napi_orders.py`** reads the function word of the 16-byte
+  start record (the dispatch-order capture widened it; before this the (a)
+  and (b/c) counts were both zero on the new kernel), counts the NET_RX
+  polls per decrypt-worker run (`polls_per_run`), and the phase-1 nesting
+  proxy (5.4, P-C): a resched record in a unit nested in another unit, per
+  (outer, inner) pair (`nested_yields`), with the trace and operation; the
+  CLI adds the report's phase-1 rejections.
+
+### 17.11 The phase-1 counter report (5.4, 13.3)
+
+On the dispatch-order oracle (`kernel-net-choice-q`, identity `bb3e577d…`):
+
+| Run | Nesting proxy (resched in a nested unit) | Phase-1 rejections |
+|---|---|---|
+| `w47b-suites` (stream B's suite run, 192 traces) | 6: `handshake_receive_worker > tx_worker` 3, `> encrypt_worker` 3 | 0 |
+| `w47h-suites`, first run of H (192) | 9: `handshake_receive_worker > encrypt_worker` 6, `> tx_worker` 2, **`encrypt_worker > tx_worker` 1** | **1: `w7_multi_tx_8`** (operation 4, at peer.c:227) |
+
+The proxy occurs in the receive worker's nested units of ordinary traces
+(`d2_rx_deliver_v6`, `d2_xmit_after_session`, `l_delete_after_clear_work`,
+`w4_gso_trim`, …) without a rejection: the outer receive worker had no
+queued work. The one rejection is the design's case exactly: the tx worker
+yielded under the encrypt worker while the encrypt ring still held items
+(an 8-item transmit batch), fail-closed. In two runs of the five-trace W7
+core tier that is 1 of 10 bulk-trace runs; the design makes phase 2 (step
+workers) a decision on this count ("a few percent of bulk traces"), so it
+goes to the coordinator with the 1025-item tier, where the rate can only
+grow.
+
+### 17.12 Deviations and judgment calls [AGENT]
+
+- The poll's span (17.10) replaces the design's "everything outside the
+  sections agrees" test, which the data refuted; the independence test is
+  now the count of differing spans against the open-poll count, and the
+  per-section control-flow equality.
+- Remote comparison records are printed in sorted order with block ranges,
+  not in first-execution order: no consumer depends on their order
+  (`operand_agreement` matches any record at the condition; the harness
+  checks duplicates only).
+- `polls_per_run` and the (a)/(b/c) split come from the records; the items
+  per poll do not (the mirror's `wg_prev_queue_peek.peeked` outcomes in the
+  report's decision table are the measure, as 17.7 used them).
+- **W7-M9's rejecting form is not built.** The per-section bookkeeping
+  partitions *operands* by NET_RX section; W7-M9's consumed-but-unrun
+  switch is visible only in the per-item order of the tx worker's
+  outcomes, which the batch operation's repeatable decisions compare as
+  sets. A rejecting form needs per-dispatch-section coverage (the guest
+  tagging PCs by block as it now tags comparison records, and the check
+  comparing each section's decisions as its own sequence): a new check
+  rule, with this mutant as its evidence, for a later step. Note that the
+  PENDING-bit model changes the mutant's live behaviour: a switch mid-loop
+  now leaves the re-queue's kind-307 record unconsumed (17.13 reports the
+  rerun).
+
+### 17.13 Validation (stream H)
+
+All on the dispatch-order oracle, under `capped`:
+- `lake build leanux-model` passes; unit tests (the six modules, with
+  `test_section_agreement_two_runs`: a synthetic two-poll trace whose
+  second poll came before the put passes with section 2 under the
+  before-put run, and a mixed span, a wrong poll, a difference outside the
+  spans, a control-flow difference and a record outside its block all
+  fail; `test_netrx_sections_from_the_remote_rows`): 114 pass.
+- Live, single traces: `rx_roam_v6` (one open poll), `d2_rx_window_boundary`,
+  `d2_rx_in_order`, `e_underload_flood` (op 3: 6378 comparison records,
+  3825 tagged, the widest in blocks 1-520; cmp child 1.79 s of the 4.5 s
+  bound, as before the change) all pass.
+- The recorded runs replayed through both placement runs and
+  `section_agreement` (`.artifacts/h/section_driver.py`, not committed):
+  `rx_roam_v6` 41 operand pairs, no problems, the after-put run (101
+  branches differ between the runs: the poll's and the put's operands, and
+  the poll's position); `d2_rx_window_boundary` 65 and `d2_rx_in_order` 68
+  pairs, no open poll, no problems.
+- Suites `handwritten,wireguard` and the W4/W7 mutants: below.
