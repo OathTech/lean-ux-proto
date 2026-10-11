@@ -20,14 +20,21 @@ second word names the dispatched unit (the work item's or timer's address, 0
 for a softirq), the kind-303 arm record's third word the timer, and the
 kind-307 queue record at __queue_work {work, func} the unit a recording
 context queued, so the mirror follows the dispatch order instead of assuming
-queue order. Record-only.
+queue order. Record-only. W9 (docs/2026-10-06-w8-w9-netns-routing.md,
+section 4.1): the kind-306 record of the `jiffies` the dst cache stores, at
+`dst_cache_reset` (include/net/dst_cache.h, inline: `_THIS_IP_`, resolved
+through the inline chain) and at the refresh on a miss (net/core/dst_cache.c,
+`dst_cache_per_cpu_get`'s fail label), gated by KCOV_DISPATCH_ARM_RECORDS like
+the arm record; the mirror computes the cache's `time_after` from the two
+recorded values. Record-only.
 """
 import sys, re, os, shutil, subprocess
 WD='.artifacts/choice-patch'; N=WD+'/new'
 SOURCE=os.environ.get('LEANUX_SHARED_ROOT', '.') + '/.deps/linux'
 TOUCHED=['kernel/kcov.c','include/linux/kcov.h','include/linux/sched.h','drivers/char/random.c',
          'kernel/time/timekeeping.c','kernel/workqueue.c','kernel/softirq.c','kernel/sched/core.c',
-         'kernel/time/timer.c','mm/slub.c','mm/page_alloc.c']
+         'kernel/time/timer.c','mm/slub.c','mm/page_alloc.c',
+         'include/net/dst_cache.h','net/core/dst_cache.c']
 shutil.rmtree(WD, ignore_errors=True)
 for side in ('base', 'new'):
     for f in TOUCHED:
@@ -802,6 +809,28 @@ void notrace kcov_work_queued(struct work_struct *work, unsigned long ip)
 EXPORT_SYMBOL(kcov_work_queued);
 
 /*
+ * LEANUX W9 (docs/2026-10-06-w8-w9-netns-routing.md, section 4.1): the
+ * jiffies value the dst cache stores, at a reset (dst_cache_reset, the
+ * inline in include/net/dst_cache.h: dst_cache_init, dst_cache_reset_now and
+ * WireGuard's socket.c callers) and at the refresh of a miss
+ * (dst_cache_per_cpu_get's fail label). The cache's hit test is
+ * time_after(refresh_ts, reset_ts): a plain jiffies comparison the mirror
+ * cannot otherwise compute. Kind 306, 8 bytes, at the site's own address
+ * (_THIS_IP_: the record resolves through the inline chain to the header
+ * line). Gated like the arm record (KCOV_DISPATCH_ARM_RECORDS); outside a
+ * trace one load. Record-only: the stored value is the one recorded.
+ */
+void notrace kcov_dst_cache_ts(unsigned long ts, unsigned long ip)
+{
+	u64 v = ts;
+
+	if (!READ_ONCE(kcov_dispatch_kcov) || !(READ_ONCE(kcov_dispatch.flags) & KCOV_DISPATCH_ARM_RECORDS))
+		return;
+	kcov_choice_ip(306, ip, &v, sizeof(v));
+}
+EXPORT_SYMBOL(kcov_dst_cache_ts);
+
+/*
  * LEANUX D3 (section 4.3): the virtual time advance, on the calling task's
  * own KCOV descriptor: { unsigned long ticks; }, 1 <= ticks <= 2^31. Only
  * from a task that is collecting (the trace process), so the kind-304
@@ -975,6 +1004,36 @@ sub(TM, """int mod_timer(struct timer_list *timer, unsigned long expires)
 	kcov_timer_arm(timer->function, jiffies, expires, _RET_IP_, timer);
 	return __mod_timer(timer, expires, 0);
 }""")
+# ---- W9: the dst cache's jiffies (docs/2026-10-06-w8-w9-netns-routing.md, 4.1) ----
+# Record-only: the value stored is the value recorded; kind 306, two sites.
+DC='include/net/dst_cache.h'
+sub(DC, '''#include <linux/jiffies.h>
+''', '''#include <linux/jiffies.h>
+#include <linux/instruction_pointer.h>
+''')
+sub(DC, '''static inline void dst_cache_reset(struct dst_cache *dst_cache)
+{
+	WRITE_ONCE(dst_cache->reset_ts, jiffies);
+}''', '''#ifdef CONFIG_KCOV
+/* LEANUX W9: the jiffies the dst cache stores, recorded (kind 306). */
+void kcov_dst_cache_ts(unsigned long ts, unsigned long ip);
+#else
+static inline void kcov_dst_cache_ts(unsigned long ts, unsigned long ip) {}
+#endif
+
+static inline void dst_cache_reset(struct dst_cache *dst_cache)
+{
+	unsigned long ts = jiffies;
+
+	WRITE_ONCE(dst_cache->reset_ts, ts);
+	kcov_dst_cache_ts(ts, _THIS_IP_);	/* LEANUX W9: kind 306 */
+}''')
+sub('net/core/dst_cache.c', '''fail:
+	idst->refresh_ts = jiffies;
+	return NULL;''', '''fail:
+	idst->refresh_ts = jiffies;
+	kcov_dst_cache_ts(idst->refresh_ts, _THIS_IP_);	/* LEANUX W9: kind 306 */
+	return NULL;''')
 # ---- A stream K1: allocation outcomes (docs/2026-10-05-a-alloc.md, section 4) ----
 # LEANUX_ALLOC_CONTROLS=1 generates the control kernel's patch instead
 # (choice-stream-alloc-controls.patch; section 7, K1, K4, K5): load flags

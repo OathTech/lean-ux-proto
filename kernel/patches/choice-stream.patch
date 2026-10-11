@@ -102,7 +102,7 @@
  	case KCOV_REMOTE_ENABLE:
  		if (get_user(remote_num_handles, (unsigned __user *)(arg +
  				offsetof(struct kcov_remote_arg, num_handles))))
-@@ -1125,3 +1170,831 @@
+@@ -1125,3 +1170,853 @@
  }
  
  device_initcall(kcov_init);
@@ -601,6 +601,28 @@
 +		}
 +}
 +EXPORT_SYMBOL(kcov_work_queued);
++
++/*
++ * LEANUX W9 (docs/2026-10-06-w8-w9-netns-routing.md, section 4.1): the
++ * jiffies value the dst cache stores, at a reset (dst_cache_reset, the
++ * inline in include/net/dst_cache.h: dst_cache_init, dst_cache_reset_now and
++ * WireGuard's socket.c callers) and at the refresh of a miss
++ * (dst_cache_per_cpu_get's fail label). The cache's hit test is
++ * time_after(refresh_ts, reset_ts): a plain jiffies comparison the mirror
++ * cannot otherwise compute. Kind 306, 8 bytes, at the site's own address
++ * (_THIS_IP_: the record resolves through the inline chain to the header
++ * line). Gated like the arm record (KCOV_DISPATCH_ARM_RECORDS); outside a
++ * trace one load. Record-only: the stored value is the one recorded.
++ */
++void notrace kcov_dst_cache_ts(unsigned long ts, unsigned long ip)
++{
++	u64 v = ts;
++
++	if (!READ_ONCE(kcov_dispatch_kcov) || !(READ_ONCE(kcov_dispatch.flags) & KCOV_DISPATCH_ARM_RECORDS))
++		return;
++	kcov_choice_ip(306, ip, &v, sizeof(v));
++}
++EXPORT_SYMBOL(kcov_dst_cache_ts);
 +
 +/*
 + * LEANUX D3 (section 4.3): the virtual time advance, on the calling task's
@@ -1691,3 +1713,44 @@
  
  	return page;
  }
+--- a/include/net/dst_cache.h
++++ b/include/net/dst_cache.h
+@@ -3,6 +3,7 @@
+ #define _NET_DST_CACHE_H
+ 
+ #include <linux/jiffies.h>
++#include <linux/instruction_pointer.h>
+ #include <net/dst.h>
+ #if IS_ENABLED(CONFIG_IPV6)
+ #include <net/ip6_fib.h>
+@@ -74,9 +75,19 @@
+  *	This does not free the cached dst to avoid races and contentions.
+  *	the dst will be freed on later cache lookup.
+  */
++#ifdef CONFIG_KCOV
++/* LEANUX W9: the jiffies the dst cache stores, recorded (kind 306). */
++void kcov_dst_cache_ts(unsigned long ts, unsigned long ip);
++#else
++static inline void kcov_dst_cache_ts(unsigned long ts, unsigned long ip) {}
++#endif
++
+ static inline void dst_cache_reset(struct dst_cache *dst_cache)
+ {
+-	WRITE_ONCE(dst_cache->reset_ts, jiffies);
++	unsigned long ts = jiffies;
++
++	WRITE_ONCE(dst_cache->reset_ts, ts);
++	kcov_dst_cache_ts(ts, _THIS_IP_);	/* LEANUX W9: kind 306 */
+ }
+ 
+ /**
+--- a/net/core/dst_cache.c
++++ b/net/core/dst_cache.c
+@@ -60,6 +60,7 @@
+ 
+ fail:
+ 	idst->refresh_ts = jiffies;
++	kcov_dst_cache_ts(idst->refresh_ts, _THIS_IP_);	/* LEANUX W9: kind 306 */
+ 	return NULL;
+ }
+ 
