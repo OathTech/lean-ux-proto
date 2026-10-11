@@ -48,6 +48,9 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from harness.linux import approved_kernel_identity  # noqa: E402
+CONTROL_IDENTITY_FILE = ROOT / 'kernel/identity-x86_64-net-choice-actl.txt'
 FAIL = '00' * 8
 CTL = {'record_ok': 2, 'nofail': 4, 'addr_naming': 8}
 CKV = {"version": 1, "id": "ac_kvmalloc_fallback", "rlimit_nofile": 1024,
@@ -138,6 +141,12 @@ def main():
         kernel_opt, _, trace, _, what = CASES[name]
         kernel = Path(getattr(args, kernel_opt)).resolve()
         env = dict(os.environ, LEANUX_KERNEL_DIR=str(kernel))
+        # The identity check (harness/linux.py verify_kernel): the oracle is
+        # checked against kernel/identity-x86_64-net-choice.txt; the control
+        # kernel, never an oracle, is named explicitly for its cases.
+        env.pop('LEANUX_KERNEL_IDENTITY', None)
+        if kernel_opt == 'control_kernel':
+            env['LEANUX_KERNEL_IDENTITY'] = approved_kernel_identity(CONTROL_IDENTITY_FILE)
         proc = subprocess.run([sys.executable, __file__, '--kernel', args.kernel, '--control-kernel',
                                args.control_kernel, '--out', str(out), '--case', name], env=env, cwd=ROOT)
         path = out / name / 'result.json'

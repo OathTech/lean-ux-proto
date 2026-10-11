@@ -33,11 +33,19 @@ from evaluator.check import load_hidden_sites  # noqa: E402
 CTL = {'record_ok': 2, 'nofail': 4, 'addr_naming': 8}
 
 
-def run(kernel, traces, out, *, alloc_flags=0, alloc_labels=(), steer_all=None, timeout=600):
+CONTROL_IDENTITY_FILE = ROOT / 'kernel/identity-x86_64-net-choice-actl.txt'
+
+
+def run(kernel, traces, out, *, control=False, alloc_flags=0, alloc_labels=(), steer_all=None, timeout=600):
     """Run `traces` Linux-only on `kernel`, armed for `alloc_labels` with
     `alloc_flags`, steering each trace's own schedule (or `steer_all` for every
-    trace). Returns the collected observations and the steering rows."""
+    trace). Returns the collected observations and the steering rows.
+    `control`: the kernel is the control kernel, named for the identity check
+    (harness/linux.py verify_kernel); otherwise it must be the oracle."""
     os.environ['LEANUX_KERNEL_DIR'] = str(Path(kernel).resolve())
+    os.environ.pop('LEANUX_KERNEL_IDENTITY', None)
+    if control:
+        os.environ['LEANUX_KERNEL_IDENTITY'] = H.approved_kernel_identity(CONTROL_IDENTITY_FILE)
     import importlib
     importlib.reload(H)
     traces = [loads_trace(t) if isinstance(t, str) else t for t in traces]
@@ -142,7 +150,7 @@ def main():
     # Here (Linux only) we confirm the kernel still fails the allocation (the
     # arm is reached) yet reports the schedule consumed, so only the record's
     # outcome byte, which the evaluator compares, distinguishes it.
-    obs, steer = run(args.control_kernel, [corpus('ac_sendbuf_nomem')], out / 'k1',
+    obs, steer = run(args.control_kernel, [corpus('ac_sendbuf_nomem')], out / 'k1', control=True,
                      alloc_flags=CTL['record_ok'], alloc_labels={'sendBufSkb'})
     k1_dg = len(datagrams(obs, 'ac_sendbuf_nomem'))
     results['K1_record_ok_still_fails_alloc'] = k1_dg == base_dg - 1 and steer_exact(steer, 'ac_sendbuf_nomem')
@@ -153,7 +161,7 @@ def main():
 
     # K4: the steered encounter counts as __GFP_NOFAIL: never failed, the entry
     # stays (left over), and the datagram is NOT suppressed.
-    obs, steer = run(args.control_kernel, [corpus('ac_sendbuf_nomem')], out / 'k4',
+    obs, steer = run(args.control_kernel, [corpus('ac_sendbuf_nomem')], out / 'k4', control=True,
                      alloc_flags=CTL['nofail'], alloc_labels={'sendBufSkb'})
     results['K4_nofail_not_failed_entry_left_over'] = len(datagrams(obs, 'ac_sendbuf_nomem')) == base_dg \
         and steer_leftover(steer, 'ac_sendbuf_nomem')
@@ -162,7 +170,7 @@ def main():
     # calls __alloc_skb): its entry names the consumer frame above the
     # allocation address, so an addr-only naming test never matches it; the
     # entry is left over and the datagram is not suppressed.
-    obs, steer = run(args.control_kernel, [corpus('ac_sendbuf_nomem')], out / 'k5',
+    obs, steer = run(args.control_kernel, [corpus('ac_sendbuf_nomem')], out / 'k5', control=True,
                      alloc_flags=CTL['addr_naming'], alloc_labels={'sendBufSkb'})
     results['K5_addr_naming_helper_site_left_over'] = len(datagrams(obs, 'ac_sendbuf_nomem')) == base_dg \
         and steer_leftover(steer, 'ac_sendbuf_nomem')
