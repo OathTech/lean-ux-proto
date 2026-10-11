@@ -621,6 +621,12 @@ inductive HiddenSite where
       `{jiffies before, jiffies after}` of the `wg_advance` operation, in
       the trace process's task stream. -/
   | modTimerArm | timeAdvance
+  /-- Dispatch order (docs/2026-10-11-dispatch-order.md): the kind-307 queue
+      record `{work, func}` written at `__queue_work` for a work item of the
+      dispatch set; its site is the work function. Captured out of band
+      (`skipAmbient`), then paired with the units the mirror queued, in
+      order, when a dispatch names one (`resolveUnit`). -/
+  | queued (w : Worker)
   /-- E-A: `wg_cookie_message_consume`'s birthdate of a stored cookie. -/
   | cookieBirthdate
   /-- L (docs/2026-10-05-l-lifecycle.md, section 3.1): `wg_cookie_checker_init`'s
@@ -686,6 +692,10 @@ def Worker.sectionId (w : Worker) : Nat :=
   else if w.index < 15 then 102 + 2 * (w.index - 6)
   else 200 + 2 * (w.index - 15)
 
+/-- The queue-record site of a work item's function (dispatch order): ids
+    from 300, above every section id. -/
+def Worker.queueId (w : Worker) : Nat := 300 + w.index
+
 def HiddenSite.info : HiddenSite → HiddenSiteInfo
   | .initEphemeral => ⟨1, "init_ephemeral", "random", "drivers/net/wireguard/noise.c", 541, 32, .mirror⟩
   | .respEphemeral => ⟨2, "resp_ephemeral", "random", "drivers/net/wireguard/noise.c", 688, 32, .mirror⟩
@@ -714,8 +724,9 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   | .icmpCredit => ⟨22, "icmp_global_consume", "random", "net/ipv4/icmp.c", 268, 1, .cut⟩
   | .flowHashSecret => ⟨23, "flow_hash_secret", "random", "net/core/flow_dissector.c", 1710, 16, .cut⟩
   | .schedDlTimer => ⟨30, "start_dl_timer", "clock", "kernel/sched/deadline.c", 1153, 8, .ambient⟩
-  | .sectionStart w => ⟨w.sectionId, s!"section_start:{w.symbol}", "section", w.symbol, 0, 8, .mirror⟩
+  | .sectionStart w => ⟨w.sectionId, s!"section_start:{w.symbol}", "section", w.symbol, 0, 16, .mirror⟩
   | .sectionStop w => ⟨w.sectionId + 1, s!"section_stop:{w.symbol}", "section", w.symbol, 1, 8, .mirror⟩
+  | .queued w => ⟨w.queueId, s!"queued:{w.symbol}", "queue", w.symbol, 0, 16, .mirror⟩
   | .reschedReceive => ⟨60, "resched:wg_packet_handshake_receive_worker", "resched", "drivers/net/wireguard/receive.c", 216, 8, .mirror⟩
   | .reschedEncrypt => ⟨61, "resched:wg_packet_encrypt_worker", "resched", "drivers/net/wireguard/send.c", 307, 8, .mirror⟩
   | .reschedTx => ⟨62, "resched:wg_packet_tx_worker", "resched", "drivers/net/wireguard/send.c", 283, 8, .mirror⟩
@@ -743,7 +754,7 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   -- (stream K, section 13.4). The advance record is written by the ioctl
   -- handler; its call site is `vfs_ioctl` (fs/ioctl.c:51), the only caller
   -- of `kcov_ioctl`.
-  | .modTimerArm => ⟨100, "mod_timer_arm", "timer", "drivers/net/wireguard/timers.c", 37, 16, .mirror⟩
+  | .modTimerArm => ⟨100, "mod_timer_arm", "timer", "drivers/net/wireguard/timers.c", 37, 24, .mirror⟩
   | .timeAdvance => ⟨101, "time_advance", "advance", "fs/ioctl.c", 51, 16, .mirror⟩
   -- L (ids 120-126, outside E-A's 64-69, A's 70-99 and D3's 100-115). The
   -- consumer frames were confirmed on the built kernel by stream G's L0 probe
@@ -783,6 +794,7 @@ def HiddenSite.all : List HiddenSite :=
   ++ [.reschedReceive, .reschedEncrypt, .reschedTx, .reschedDecrypt, .newHandshakeJitter, .walltimeLastHandshakeData,
       .cookieBirthdate]
   ++ [.modTimerArm, .timeAdvance]
+  ++ (Worker.all.filter fun w => w.timer?.isNone && w != .netRx).map .queued
   ++ [.cookieSecretBirthdate, .cookieSecret, .pubkeyHashKey, .ratelimiterKey, .ratelimiterGcNow, .udpPortDraw,
       .neighReachTime]
   ++ AllocSite.all.map .alloc
@@ -882,6 +894,14 @@ structure World where
       the mirror before Linux recorded them (site ids): see `Env.runWorker`. -/
   yieldedWorkers : List Nat := []
   pendingStops : List Nat := []
+  /-- Dispatch order (docs/2026-10-11-dispatch-order.md): the queue records'
+      work addresses captured so far (worker index, address), oldest first,
+      not yet paired with a unit; the addresses paired with a peer's unit
+      (`unitPeers`: address, worker index, peer); and each armed timer's
+      address from its arm record (`timerUnits`: address, peer, timer). -/
+  queuedUnits : List (Nat × Nat) := []
+  unitPeers : List (Nat × Nat × Nat) := []
+  timerUnits : List (Nat × Nat × WG.PeerTimer) := []
   /-- A NET_RX softirq raised by a loopback transmission (`netif_rx` from
       `send4`/`send6` or an ICMP error), whose section has not been consumed
       yet: see `WG.loopbackSoftirq`. An operation ends with none pending
@@ -1018,21 +1038,38 @@ def envOk (site : EnvSite) : M Bool := do
   set { w with envCalls := (site, n + 1) :: w.envCalls.filter (·.1 != site) }
   return w.env site n
 
+/-- Word `k` of a record's bytes (little-endian). -/
+def recordWordOf (bs : List UInt8) (k : Nat) : Nat :=
+  ((bs.drop (8 * k)).take 8).foldr (fun b acc => acc * 256 + b.toNat) 0
+
+/-- The worker whose queue-record site this is (dispatch order). -/
+def queuedWorkerOf (site : Nat) : Option Nat :=
+  HiddenSite.all.findSome? fun s => match s with
+    | .queued w => if w.queueId == site then some w.index else none
+    | _ => none
+
+/-- Whether the consumers pass over a site's records: ambient ones (dropped
+    wherever they occur) and the queue records (captured). -/
+def HiddenSite.passive (site : Nat) : Bool :=
+  (queuedWorkerOf site).isSome || HiddenSite.all.any fun s => s.info.id == site && s.info.role == .ambient
+
 /-- Drop ambient records at the head of the current operation's records,
-    and pending section stops (each consumes its one pending entry). -/
+    and pending section stops (each consumes its one pending entry); capture
+    queue records (dispatch order) into `World.queuedUnits`. -/
 def skipAmbient : M Unit := do
   let w ← get
   if let some rs := w.hidden then
-    let ambient := HiddenSite.all.filter (·.info.role == .ambient) |>.map (·.info.id)
-    let rec go (rs : List HiddenRecord) (pending : List Nat) : List HiddenRecord × List Nat :=
+    let rec go (rs : List HiddenRecord) (pending : List Nat) (caught : List (Nat × Nat)) :
+        List HiddenRecord × List Nat × List (Nat × Nat) :=
       match rs with
       | r :: rest =>
-        if ambient.contains r.site then go rest pending
-        else if pending.contains r.site then go rest (pending.erase r.site)
-        else (rs, pending)
-      | [] => ([], pending)
-    let (rest, pendingStops) := go rs w.pendingStops
-    set { w with hidden := some rest, pendingStops }
+        if let some wi := queuedWorkerOf r.site then go rest pending (caught ++ [(wi, recordWordOf r.bytes 0)])
+        else if HiddenSite.passive r.site then go rest pending caught
+        else if pending.contains r.site then go rest (pending.erase r.site) caught
+        else (rs, pending, caught)
+      | [] => ([], pending, caught)
+    let (rest, pendingStops, caught) := go rs w.pendingStops []
+    set { w with hidden := some rest, pendingStops, queuedUnits := w.queuedUnits ++ caught }
 
 /-- Consume the next choice record, which must come from `s`. -/
 def hidden (s : HiddenSite) : M (List UInt8) := do
@@ -1080,6 +1117,45 @@ def peekHiddenSite : M (Option Nat) := do
   return match (← get).hidden with
     | some (r :: _) => some r.site
     | _ => none
+
+/-- Dispatch order: the unit the next record names, if it starts `w`'s
+    section with the identity word (kind 300 since 2026-10-11): the work
+    item's or the timer's address. `none` without records, for a record of
+    another site (the consumer then mismatches), and for a record without
+    the word or with a zero word (a softirq; a capture made before the
+    identity existed, where the legacy queue-order rule applies). -/
+def peekUnit (w : Worker) : M (Option Nat) := do
+  skipAmbient
+  match (← get).hidden with
+  | some (r :: _) =>
+    if r.site != (HiddenSite.sectionStart w).info.id || r.bytes.length < 16 then return none
+    let u := recordWordOf r.bytes 1
+    return if u == 0 then none else some u
+  | _ => return none
+
+/-- Dispatch order: the queued unit of worker `w` that a dispatch names by
+    address `unit`, among `queue` (the mirror's queued peers of that kind,
+    oldest first; `live`: the peers that exist). An address paired before
+    names its peer. Otherwise the queue records captured for `w`, in order,
+    name the queued units without an address, in order: both follow the
+    C's queueing order, which the mirror mirrors. Fail-noisy: a count that
+    differs, an address never queued, or a unit whose peer is not queued is
+    a hidden mismatch. -/
+def resolveUnit (w : Worker) (unit : Nat) (queue live : List Nat) : M Nat := do
+  let st ← get
+  let known := st.unitPeers.filter fun (e : Nat × Nat × Nat) => e.2.1 == w.index && live.contains e.2.2
+  let fresh := (st.queuedUnits.filter fun (e : Nat × Nat) => e.1 == w.index && !known.any (·.1 == e.2)).map (·.2)
+  let unassigned := queue.filter fun pid => !known.any (·.2.2 == pid)
+  if fresh.length != unassigned.length then
+    throw (.hidden s!"{w.symbol}: {fresh.length} queue records for {unassigned.length} queued units without an address")
+  let learned : List (Nat × Nat × Nat) := (fresh.zip unassigned).map fun (e : Nat × Nat) => (e.1, w.index, e.2)
+  set { st with unitPeers := (st.unitPeers.filter fun (e : Nat × Nat × Nat) => e.2.1 != w.index || live.contains e.2.2) ++ learned,
+                queuedUnits := st.queuedUnits.filter fun (e : Nat × Nat) => e.1 != w.index }
+  match (known ++ learned).find? (·.1 == unit) with
+  | some (_, _, pid) =>
+    if !queue.contains pid then throw (.hidden s!"{w.symbol}: the dispatched unit is peer {pid}'s, which is not queued")
+    return pid
+  | none => throw (.hidden s!"{w.symbol}: the dispatched unit {unit} was never queued")
 
 /-- A recorded clock read: the value, a signed 64-bit count of nanoseconds. -/
 def hiddenClock (s : HiddenSite) : M Int := do

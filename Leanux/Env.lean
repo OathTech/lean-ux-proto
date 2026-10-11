@@ -142,10 +142,15 @@ def runCryptWorkers : M Unit := do
   if !(← getDev).encryptQueue.isEmpty then
     runWorker .encryptWorker (WG.encryptWorker checksumHelp (condResched SWITCH_DEPTH .encryptWorker))
   for _ in [0:4096] do
-    match (← getDev).txWorkQueue with
-    | [] => deliverSent; return
-    | pid :: rest =>
-      modifyDev fun d => { d with txWorkQueue := rest }
+    let d ← getDev
+    match d.txWorkQueue.head? with
+    | none => deliverSent; return
+    | some headPid =>
+      -- the tx worker the dispatch record names (dispatch order), else the head
+      let pid ← match ← peekUnit .txWorker with
+        | some u => resolveUnit .txWorker u d.txWorkQueue d.peerList
+        | none => pure headPid
+      modifyDev fun d => { d with txWorkQueue := d.txWorkQueue.erase pid }
       runWorker .txWorker (WG.txWorker pid (condResched SWITCH_DEPTH .txWorker))
       if !(← getDev).encryptQueue.isEmpty then invariant "the tx worker queued encryption"
   invariant "the tx work queue did not drain"
@@ -159,16 +164,21 @@ def requireNoCryptWork : M Unit := do
   if !d.encryptQueue.isEmpty || !d.txWorkQueue.isEmpty then
     unsupported "crypt work queued in a system call (its worker's timing)"
 
-/-- The handshake send worker of the peer at the head of its queue. -/
+/-- The handshake send worker whose unit the next dispatch record names
+    (docs/2026-10-11-dispatch-order.md: `handshake_send_wq` is unbound, so
+    two queued items may run in either order), or, without an identity (the
+    domain filter's placeholders), the peer at the head of the queue. -/
 def runOneSendWorker : M Unit := do
-  match (← getDev).sendWorkQueue with
-  | [] => invariant "no queued handshake send work"
-  | pid :: rest =>
-    modifyDev fun d => { d with sendWorkQueue := rest }
-    let p ← getPeer pid
-    if !p.handshakePending then invariant "queued work without a pending flag"
-    setPeer pid { p with handshakePending := false }
-    runWorker .sendWorker (WG.handshakeSendWorker pid)
+  let d ← getDev
+  let some headPid := d.sendWorkQueue.head? | invariant "no queued handshake send work"
+  let pid ← match ← peekUnit .sendWorker with
+    | some u => resolveUnit .sendWorker u d.sendWorkQueue d.peerList
+    | none => pure headPid
+  modifyDev fun d => { d with sendWorkQueue := d.sendWorkQueue.erase pid }
+  let p ← getPeer pid
+  if !p.handshakePending then invariant "queued work without a pending flag"
+  setPeer pid { p with handshakePending := false }
+  runWorker .sendWorker (WG.handshakeSendWorker pid)
 
 /-- The handshake send worker for each queued peer, oldest first, once the
     queuing system call has returned: the guest waits inside every operation
@@ -215,10 +225,9 @@ else is a hidden mismatch: the mirror cannot run a callback mid-body. -/
 def peekNextSite : M (Option Nat) := do
   let w ← get
   let some rs := w.hidden | return none
-  let ambient := HiddenSite.all.filter (·.info.role == .ambient) |>.map (·.info.id)
   let rec go : List HiddenRecord → List Nat → Option Nat
     | r :: rest, pending =>
-      if ambient.contains r.site then go rest pending
+      if HiddenSite.passive r.site then go rest pending   -- ambient, or a queue record
       else if pending.contains r.site then go rest (pending.erase r.site)
       else some r.site
     | [], _ => none
@@ -243,11 +252,13 @@ def runTimerSection (w : Worker) (body : M Unit) : M Unit := do
     the head of its queue. It shares `handshake_send_wq` with the send
     worker; their order is the records' (a captured scheduling choice). -/
 def runOneClearWorker : M Unit := do
-  match (← getDev).clearWorkQueue with
-  | [] => invariant "no queued clear work"
-  | pid :: rest =>
-    modifyDev fun d => { d with clearWorkQueue := rest }
-    runWorker .clearPeerWorker (WG.queuedExpiredZeroKeyMaterial pid)
+  let d ← getDev
+  let some headPid := d.clearWorkQueue.head? | invariant "no queued clear work"
+  let pid ← match ← peekUnit .clearPeerWorker with
+    | some u => resolveUnit .clearPeerWorker u d.clearWorkQueue d.peerList
+    | none => pure headPid
+  modifyDev fun d => { d with clearWorkQueue := d.clearWorkQueue.erase pid }
+  runWorker .clearPeerWorker (WG.queuedExpiredZeroKeyMaterial pid)
 
 /-- The timer callback that serves timer `t`. -/
 def timerWorker (t : PeerTimer) : M Worker := do
@@ -270,12 +281,29 @@ def fireTimer (w : Worker) (jHi : Nat) : M Unit := do
     match d.peers.get? pid >>= (·.timer t) with
     | some e => e < jHi
     | none => false
-  match due with
-  | [pid] =>
+  -- dispatch order (docs/2026-10-11-dispatch-order.md): the timer the
+  -- section names, by the address its arm record carried
+  let named ← match ← peekUnit w with
+    | some u =>
+      match (← get).timerUnits.find? (·.1 == u) with
+      | some (_, pid, t') =>
+        if t' != t then throw (.hidden s!"a section of {w.symbol} for another timer of peer {pid}")
+        pure (some pid)
+      | none => throw (.hidden s!"a section of {w.symbol} for a timer the mirror never armed ({u})")
+    | none => pure none
+  match named with
+  | some pid =>
+    if !due.contains pid then
+      throw (.hidden s!"a section of {w.symbol} for peer {pid}, whose timer is not pending with expires before jiffies {jHi}")
     delTimer pid t
     runTimerSection w (WG.timerCallback pid t)
-  | [] => throw (.hidden s!"a section of {w.symbol}, but no peer's timer is pending with expires before jiffies {jHi}")
-  | _ => unsupported s!"several peers' timers for {w.symbol} due in one pass (their order)"
+  | none =>
+    match due with
+    | [pid] =>
+      delTimer pid t
+      runTimerSection w (WG.timerCallback pid t)
+    | [] => throw (.hidden s!"a section of {w.symbol}, but no peer's timer is pending with expires before jiffies {jHi}")
+    | _ => unsupported s!"several peers' timers for {w.symbol} due in one pass (their order)"
 
 /-- The timer sections the records show at an idle point, and the work they
     queue, in record order (docs/2026-10-05-d3-timers.md, section 5.3):

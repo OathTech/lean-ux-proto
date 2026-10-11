@@ -46,15 +46,33 @@ MULTICAST = json.loads(r'''{"hidden":[[[5,"a0579b4b04000000"]],[],[[48,"e0b33f81
 CONTENDED_ROAM_CMP = json.loads(r'''{"hidden":[[[5,"a152759a1e000000"]],[[6,"9909f3a41e000000"],[40,"f05e3981ffffffff"],[6,"9909f3a41e000000"],[7,"9909f3a41e000000"],[1,"8182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0"],[3,"803bb16a00000000b168de3a00000000"],[4,"0d0c0b0a00000000"],[8,"9909f3a41e000000"],[21,"23496d285f2d34c75cb861a51ec9230c"],[20,"01b25d3c00000000"],[48,"e0b33f81ffffffff"],[49,"0000000000000000"],[14,"3d00000000000000"],[41,"0000000000000000"]],[],[[48,"e0b33f81ffffffff"],[49,"0000000000000000"],[42,"807c3981ffffffff"],[13,"a99501cd1e000000"],[15,"8560c46a000000005316763a00000000"],[6,"a99501cd1e000000"],[60,"0000000000000000"],[44,"c0643981ffffffff"],[45,"0000000000000000"],[46,"00623981ffffffff"],[20,"7000000000000000"],[48,"e0b33f81ffffffff"],[49,"0000000000000000"],[6,"a99501cd1e000000"],[47,"0000000000000000"],[43,"0000000000000000"]],[[48,"e0b33f81ffffffff"],[49,"0000000000000000"],[50,"008c3981ffffffff"],[6,"a39cc3eb1e000000"],[48,"e0b33f81ffffffff"],[6,"9da600ec1e000000"],[49,"0000000000000000"],[63,"0000000000000000"],[51,"0000000000000000"]],[],[]],"id":"rx_roam_v6","ops":[{"config":{"listen_port":51820,"peers":[{"allowed_ips":[{"addr":"0a000000","cidr":8,"family":4}],"endpoint":{"addr":"7f000001","family":4,"port":51999},"keepalive":25,"public_key":"0faa684ed28867b97f4a6a2dee5df8ce974e76b7018e3f22a1c4cf2678570f20"}],"private_key":"1111111111111111111111111111111111111111111111111111111111111111"},"op":"wg_set"},{"op":"wg_up"},{"op":"wg_observe"},{"family":4,"message":"02000000040302010d0c0b0aff2ee45601ec1b67310c7790404585ae697331eee1c1f8cf2419731c1fff3e6bc50a223d86b8a86bf41a2bd3a1ab84f892fd9bacbc45bda46dc025e6cac665a500000000000000000000000000000000","op":"wg_inject","port":51820},{"family":6,"message":"040000000d0c0b0a0000000000000000973bf9043cd64074998eeaaf05b9f8acd9ac555ca8099f9adfd3b40e88941a5d98b87fb01b15950d9b40eed7d7f7e394ee18c53077613a5d3e5a2bb979c5a98e","op":"wg_inject","port":51820},{"op":"wg_observe"},{"op":"wg_get"}],"steer":[["init_ephemeral","8182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0"],["tai64n_now","803bb16a00000000b168de3a00000000"],["index_draw","0d0c0b0a"]],"version":1}''')
 
 
+def widen(trace):
+    """Dispatch order (docs/2026-10-11-dispatch-order.md): a section start
+    record is {func, unit} and an arm record {jiffies, expires, timer} since
+    2026-10-11. The captures above predate the identity word; a zero unit is
+    "no identity", under which the mirror keeps the queue-order rule, so the
+    captures stay replayable as recorded. Site ids from the built mirror."""
+    from evaluator.check import load_hidden_sites
+    sites = load_hidden_sites()
+    starts = {e['id'] for (kind, consumer), e in sites.items() if kind == 'section' and consumer.endswith(':0')}
+    arms = {e['id'] for (kind, _), e in sites.items() if kind == 'timer'}
+    out = copy.deepcopy(trace)
+    for op in out['hidden']:
+        for rec in op:
+            if (rec[0] in starts and len(rec[1]) == 16) or (rec[0] in arms and len(rec[1]) == 32):
+                rec[1] += '0' * 16
+    return out
+
+
 def run(trace):
-    result = subprocess.run([MODEL], input=json.dumps(trace).encode(), capture_output=True, timeout=120)
+    result = subprocess.run([MODEL], input=json.dumps(widen(trace)).encode(), capture_output=True, timeout=120)
     return result.returncode, result.stdout.decode(), result.stderr.decode()
 
 
 def replay(trace):
     if not MODEL.is_file():
         raise AssertionError(f'{MODEL} is missing: run `lake build leanux-model` first')
-    result = subprocess.run([MODEL], input=json.dumps(trace).encode(), capture_output=True, timeout=120)
+    result = subprocess.run([MODEL], input=json.dumps(widen(trace)).encode(), capture_output=True, timeout=120)
     out = (result.stdout + result.stderr).decode()
     return None if result.returncode == 0 and out.startswith('{') and not result.stderr else out.strip()
 
