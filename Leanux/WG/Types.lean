@@ -323,6 +323,19 @@ structure Device where
       identity is set. -/
   cookieEncryptionKey : List UInt8 := List.replicate 32 0
   pubkeyHashKey : List UInt8 := List.replicate 16 0
+  /-- The device tstats (`NETDEV_PCPU_STAT_TSTATS`, `update_rx_stats`,
+      receive.c:19-23): every honest data message and keepalive (W5, 2.6).
+      The driver adds no transmit count. -/
+  rxPackets : Nat := 0
+  rxBytes : Nat := 0
+  /-- The transmit side of the tstats: `iptunnel_xmit_stats` in
+      `iptunnel_xmit` / `ip6tunnel_xmit` (`udp_tunnel_xmit_skb`,
+      `udp_tunnel6_xmit_skb` with `skb->dev = wg->dev`) counts every
+      datagram wg0's sockets send and its length (W5, 2.6: the design's
+      "no transmit count" was wrong; the first run showed `tx_packets` 1,
+      `tx_bytes` 148 after one initiation [AGENT, W5+W6 fork]). -/
+  txPackets : Nat := 0
+  txBytes : Nat := 0
   /-- `dev->stats` counters. -/
   txErrors : Nat := 0
   txDropped : Nat := 0

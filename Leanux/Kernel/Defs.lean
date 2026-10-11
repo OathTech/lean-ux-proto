@@ -646,6 +646,12 @@ inductive HiddenSite where
   /-- E-B arm C: `wg_ratelimiter_allow`'s coarse-boot-time reads, on a bucket
       hit (`ratelimiter.c:121`) and on a new-entry insert (`ratelimiter.c:146`). -/
   | ratelimiterNow | ratelimiterInsertNow
+  /-- W5+W6 (docs/2026-10-06-w5-w6-receive.md, 3.2; id 140 of the stream's
+      140-149): the TCP established-hash secret, `net_get_random_once` in
+      `inet_ehashfn` (net/ipv4/inet_hashtables.c:36), drawn by the first TCP
+      segment's lookup of a boot (early demux, or the socket lookup): a cut
+      before the stack's RST re-enters `wg_xmit`. -/
+  | inetEhashSecret
   -- Reserved id ranges for the W streams (the interface commit,
   -- docs/2026-10-11-interface.md), outside every range above: W5-W6
   -- 140-149 (`.inetEhashSecret`), W8-W9 150-169 (`.dstCacheResetTs`,
@@ -774,6 +780,8 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   | .cookieNonce => ⟨131, "cookie_nonce", "random", "drivers/net/wireguard/cookie.c", 190, 24, .mirror⟩
   | .ratelimiterNow => ⟨132, "ratelimiter_now", "clock", "drivers/net/wireguard/ratelimiter.c", 121, 8, .mirror⟩
   | .ratelimiterInsertNow => ⟨133, "ratelimiter_insert_now", "clock", "drivers/net/wireguard/ratelimiter.c", 146, 8, .mirror⟩
+  -- W5+W6 (ids 140-149)
+  | .inetEhashSecret => ⟨140, "inet_ehash_secret", "random", "net/ipv4/inet_hashtables.c", 36, 4, .cut⟩
 
 def HiddenSite.all : List HiddenSite :=
   [.initEphemeral, .respEphemeral, .tai64nNow, .indexDraw, .resetLastSent, .birthdateExpired, .initLastSent,
@@ -788,6 +796,7 @@ def HiddenSite.all : List HiddenSite :=
   ++ AllocSite.all.map .alloc
   ++ [.currentTime]
   ++ [.underLoadNow, .cookieNonce, .ratelimiterNow, .ratelimiterInsertNow]
+  ++ [.inetEhashSecret]
 
 /-- The resched site of a worker's `cond_resched`, for the workers that
     have one on the modeled paths. -/
@@ -831,9 +840,14 @@ structure SentDatagram where
       bound port): what the receiving fixture socket reports. -/
   sport : Nat := 0
   /-- The outer DS field `send4`/`send6` are given (`PACKET_CB(skb)->ds`;
-      0 for handshake messages). Not observed today: the fixture reads no
-      TOS. -/
+      0 for handshake messages): the outer IPv4 TOS / IPv6 traffic class
+      (`iptunnel_xmit`, `ip6_flow_hdr`), which the fixture's listeners and
+      sender report (W5). -/
   ds : Nat := 0
+  /-- W5 (2.5): the source `send4`/`send6` ask for, `endpoint->src4/src6`
+      (the destination of the datagram the endpoint was learned from); 0
+      for an endpoint set by netlink, where the route selects the source. -/
+  src : Nat := 0
   deriving Repr, BEq
 
 /-- A datagram at the fixture's sender socket, with its source as
@@ -844,6 +858,13 @@ structure InboxDatagram where
   addr : Nat
   port : Nat
   bytes : List UInt8
+  /-- W5: the TOS / traffic class the sender's `recvmsg` reports (the
+      outer DS of wg0's datagram, the inner TOS of a delivered packet). -/
+  tos : Nat := 0
+  /-- W5: the destination `IPV6_PKTINFO` reports on the dual-stack sender
+      (an IPv4 datagram's as v4-mapped): wg0's address for a delivered
+      inner packet, the endpoint's address for wg0's own datagram. -/
+  dst : Nat := 0
   deriving Repr, BEq
 
 structure World where
@@ -863,9 +884,11 @@ structure World where
       `wg_observe` saw (`datagrams`, `stats`). -/
   extraOut : List (String × Lean.Json) := []
   /-- Fixture state, not kernel state: the datagrams waiting at the network
-      fixture's UDP listeners and at its sender, which `wg_observe` drains. -/
-  listenerV4 : List (List UInt8) := []
-  listenerV6 : List (List UInt8) := []
+      fixture's UDP listeners (each with the outer TOS / traffic class the
+      listener's cmsg reports, W5) and at its sender, which `wg_observe`
+      drains. -/
+  listenerV4 : List (Nat × List UInt8) := []
+  listenerV6 : List (Nat × List UInt8) := []
   senderInbox : List InboxDatagram := []
   /-- Datagrams wg0's sockets sent, oldest first, not yet delivered. The
       environment decides which fixture socket receives them. -/

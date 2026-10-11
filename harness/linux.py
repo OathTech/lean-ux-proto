@@ -107,6 +107,13 @@ ARM_RECORDS = True
 # C-jiffies: the timekeeper is pinned to refined-jiffies, which the virtual
 # time advance requires; each batch checks it at start and end).
 EXPECTED_CLOCKSOURCE = "refined-jiffies"
+# W5 (docs/2026-10-06-w5-w6-receive.md, section 6; D2 [USER 2026-10-07]): the
+# network fixture's facts the guest sets per network namespace and reads back
+# into its LEANUX_FIXTURE row: `net.ipv6.auto_flowlabels`,
+# `net.ipv4.icmp_ratelimit` and `net.ipv6.icmp.ratelimit` at 0, and the
+# link-local address fe80::ffff:1/128 on lo (the scoped-source injections;
+# not fe80::1, a transmit destination of existing traces).
+EXPECTED_NET_FIXTURE = {"auto_flowlabels": 0, "icmp_ratelimit": 0, "icmp6_ratelimit": 0, "lo_link_local": "fe80::ffff:1"}
 BOOT_PARAMETERS = f"console=ttyS0 panic=1 nokaslr loglevel=3 clocksource={EXPECTED_CLOCKSOURCE}"
 # Guest build variants for negative controls only (never the oracle): the
 # compiler definitions each adds. `advance-wait-0` (D3, section 8): wg_advance
@@ -312,25 +319,36 @@ def attach_observed(results, traces, records):
         def hex_bytes(entry, length):
             return (type(entry[-1]) is str and len(entry[-1]) == 2 * length
                     and all(c in "0123456789abcdef" for c in entry[-1]))
+        # W5: each datagram carries the TOS / traffic class its receiver's
+        # cmsg reported (IP_RECVTOS, IPV6_RECVTCLASS; -1 without one):
+        # [family, length, type, tos, bytes]
         if type(datagrams) is not list or not all(
-                type(d) is list and len(d) == 4 and d[0] in (4, 6)
-                and all(type(x) is int and x >= 0 for x in d[:3]) and hex_bytes(d, d[1])
+                type(d) is list and len(d) == 5 and d[0] in (4, 6)
+                and all(type(x) is int and x >= 0 for x in d[:3]) and type(d[3]) is int and -1 <= d[3] <= 255
+                and hex_bytes(d, d[1])
                 for d in datagrams):
             raise ValueError("wg_observe datagrams")
-        # what the sender received: recvfrom's source (the IPv6 socket's
+        # what the sender received: recvmsg's source (the IPv6 socket's
         # family, the address as 32 hex digits, an IPv4 source v4-mapped, the
-        # port), then length, message type, receiver index and bytes
+        # port, the scope id), the TOS, the destination IPV6_PKTINFO reported
+        # (32 hex digits, zero for an IPv4 datagram), then length, message
+        # type, receiver index and bytes (W5)
         replies = record["replies"]
         if type(replies) is not list or not all(
-                type(r) is list and len(r) == 7 and r[0] == 10
+                type(r) is list and len(r) == 10 and r[0] == 10
                 and type(r[1]) is str and re.fullmatch(r"[0-9a-f]{32}", r[1]) is not None
-                and all(type(x) is int and x >= 0 for x in r[2:6]) and r[2] < 65536 and hex_bytes(r, r[3])
+                and type(r[2]) is int and 0 <= r[2] < 65536 and type(r[3]) is int and r[3] >= 0
+                and type(r[4]) is int and -1 <= r[4] <= 255
+                and type(r[5]) is str and re.fullmatch(r"[0-9a-f]{32}", r[5]) is not None
+                and all(type(x) is int and x >= 0 for x in r[6:9]) and hex_bytes(r, r[6])
                 for r in replies):
             raise ValueError("wg_observe replies")
-        # null: no wg0 (L; the guest maps exactly ENODEV to null)
+        # null: no wg0 (L; the guest maps exactly ENODEV to null). W5: the
+        # device's tstats (rx_packets, rx_bytes; tx_* are constant 0).
         stats = record["stats"]
         if stats is not None and (type(stats) is not dict
-                                  or set(stats) != {"tx_errors", "tx_dropped", "rx_frame_errors", "rx_length_errors"}
+                                  or set(stats) != {"tx_errors", "tx_dropped", "rx_frame_errors", "rx_length_errors",
+                                                    "rx_packets", "rx_bytes", "tx_packets", "tx_bytes"}
                                   or not all(type(v) is int and v >= 0 for v in stats.values())):
             raise ValueError("wg_observe stats")
         # sorted as the mirror sorts them: by compact JSON
@@ -480,6 +498,16 @@ def _collect(outdir, traces, process_returncode, alloc=None):
         raise LinuxRunError("crash", "Missing successful guest exit", outdir)
     if len(results) != len(traces) or len(fixtures) != len(traces) or len(comparison_results) != len(traces):
         raise LinuxRunError("invalid_output", "Missing or extra trace results/fixtures", outdir)
+    # W5 (D2 [USER 2026-10-07]): the network fixture's sysctls and the
+    # link-local address on lo, read back by the guest per network trace; a
+    # trace run against another fixture is an environment failure, not a
+    # silent change of verdicts.
+    net_ids = {t["id"] for t in traces if uses_wireguard(t)}
+    for row in fixtures:
+        if type(row) is not dict or "id" not in row:
+            raise LinuxRunError("invalid_output", "Malformed fixture row", outdir)
+        if (row["id"] in net_ids) != ("net" in row) or ("net" in row and row["net"] != EXPECTED_NET_FIXTURE):
+            raise LinuxRunError("environment_failure", f"Network fixture facts differ from {EXPECTED_NET_FIXTURE}: {row}", outdir)
     # L: the wall time of each lifecycle operation (wg_create, wg_down,
     # wg_delete), one row per child (timing.jsonl; checked once the batch
     # completed, so a failed trace reports its own error).
@@ -511,7 +539,10 @@ def _collect(outdir, traces, process_returncode, alloc=None):
         for result, trace, fixture in zip(results, traces, fixtures):
             _check_observation(result, trace)
             limit = trace.get("rlimit_nofile", 32)
-            if fixture != {"id": trace["id"], "reserved": list(range(8)), "free": [8, limit - 1], "rlimit": [limit, limit]}:
+            expected = {"id": trace["id"], "reserved": list(range(8)), "free": [8, limit - 1], "rlimit": [limit, limit]}
+            if uses_wireguard(trace):
+                expected["net"] = EXPECTED_NET_FIXTURE   # W5: the network namespace's facts
+            if fixture != expected:
                 raise ValueError("fixture mismatch")
         for row, (identifier, index) in zip(coverage, expected_coverage):
             if type(row) is not dict or set(row) != {"id", "index", "count", "pcs"} or row["id"] != identifier or type(row["index"]) is not int or row["index"] != index:

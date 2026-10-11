@@ -397,6 +397,28 @@ static size_t dellink_wg0(unsigned char *payload, size_t size)
 static int wg_exists;
 static unsigned wg_ifindex;
 static int first_up;
+/* W5 (docs/2026-10-06-w5-w6-receive.md, section 6; D2 [USER 2026-10-07]):
+ * the network namespace's sysctls, set to 0 and read back for the
+ * LEANUX_FIXTURE row (harness/linux.py EXPECTED_NET_FIXTURE). */
+static long net_sysctl[3];
+static const char *const NET_SYSCTLS[3] = {"/proc/sys/net/ipv6/auto_flowlabels", "/proc/sys/net/ipv4/icmp_ratelimit",
+                                           "/proc/sys/net/ipv6/icmp/ratelimit"};
+/* The link-local address on lo (W5, 2.5): the scoped-source injections.
+ * fe80::ffff:1, not fe80::1: existing traces transmit to fe80::1 through wg0
+ * (b1_trie_routing, wg_trie_v6, the generator), which a local address would
+ * intercept [AGENT, W5+W6 fork]. */
+static const unsigned char LO_LINK_LOCAL[16] = {0xfe, 0x80, [12] = 0xff, [13] = 0xff, [15] = 1};
+
+static void set_net_sysctls(const char *id)
+{
+    for (int k = 0; k < 3; ++k) {
+        FILE *f = fopen(NET_SYSCTLS[k], "w");
+        if (!f || fputs("0\n", f) < 0 || fclose(f)) fail(id, -1, "environment_failure", "sysctl_write");
+        f = fopen(NET_SYSCTLS[k], "r");
+        if (!f || fscanf(f, "%ld", &net_sysctl[k]) != 1) fail(id, -1, "environment_failure", "sysctl_read");
+        fclose(f);
+    }
+}
 
 /* Fresh network namespace with `lo` up and, unless the trace asks for the
  * bare fixture, a down `wg0`, created over a temporary rtnetlink socket that
@@ -421,7 +443,25 @@ static void network_fixture(const char *id, int bare)
     if (nl_send(rtnl, RTM_NEWLINK, NLM_F_REQUEST | NLM_F_ACK, 0, (unsigned char *)&up, sizeof(up), 0) ||
         nl_receive(rtnl, 0, NULL, 0))
         fail(id, -1, "environment_failure", "lo_up");
+    /* W5: fe80::ffff:1/128 on lo (no DAD on IFF_LOOPBACK), for the link-local
+     * sender; and the namespace's sysctls. */
+    size_t len = sizeof(struct ifaddrmsg);
+    memset(payload, 0, sizeof(payload));
+    struct ifaddrmsg *ifa = (struct ifaddrmsg *)payload;
+    ifa->ifa_family = AF_INET6;
+    ifa->ifa_index = 1;
+    /* /128, not /64: a prefix route fe80::/64 on lo would take every
+     * link-local destination away from the default route via wg0 (the
+     * first run sent b1_trie_routing's fe80::1 datagram out on lo). */
+    ifa->ifa_prefixlen = 128;
+    ifa->ifa_flags = IFA_F_NODAD;
+    ifa->ifa_scope = RT_SCOPE_LINK;
+    attr(payload, &len, IFA_ADDRESS, LO_LINK_LOCAL, 16);
+    if (nl_send(rtnl, RTM_NEWADDR, NLM_F_REQUEST | NLM_F_CREATE | NLM_F_EXCL | NLM_F_ACK, 0, payload, len, 0) ||
+        nl_receive(rtnl, 0, NULL, 0))
+        fail(id, -1, "environment_failure", "lo_link_local");
     if (close(rtnl)) fail(id, -1, "environment_failure", "close_rtnetlink");
+    set_net_sysctls(id);
 }
 
 /* The inter-trace boundary (choice-stream strategy, section 4.4): delete wg0
@@ -660,13 +700,50 @@ static void print_hex(long n)
     for (long k = 0; k < n; ++k) printf("%02x", observe_buffer[k]);
 }
 
-/* A datagram's (family, length, message type, bytes) as JSON; the message
- * type is the first little-endian u32 of a WireGuard message. */
-static int print_datagram(int comma, int family, long n)
+/* W5: recvmsg into observe_buffer with the control messages the fixture
+ * sockets are set to report: the TOS (IP_TOS, a byte) or traffic class
+ * (IPV6_TCLASS, an int) into `tos` (-1 without one), and for the sender the
+ * datagram's destination (IPV6_PKTINFO) into `dst` (zero for an IPv4
+ * datagram). `source`, when given, receives the datagram's source. Returns
+ * recvmsg's result (with MSG_TRUNC in `flags`, the real length). */
+static long recv_with_cmsg(int fd, int flags, struct sockaddr_in6 *source, socklen_t *source_len, int *tos,
+                           unsigned char dst[16])
+{
+    struct iovec iov = {.iov_base = observe_buffer, .iov_len = sizeof(observe_buffer)};
+    union { struct cmsghdr h; unsigned char bytes[256]; } control;
+    struct msghdr msg = {.msg_name = source, .msg_namelen = source ? *source_len : 0, .msg_iov = &iov, .msg_iovlen = 1,
+                         .msg_control = &control, .msg_controllen = sizeof(control)};
+    long n = recvmsg(fd, &msg, flags);
+    if (n < 0) return n;
+    if (source) *source_len = msg.msg_namelen;
+    *tos = -1;
+    if (dst) memset(dst, 0, 16);
+    for (struct cmsghdr *c = CMSG_FIRSTHDR(&msg); c; c = CMSG_NXTHDR(&msg, c)) {
+        if (c->cmsg_level == IPPROTO_IP && c->cmsg_type == IP_TOS) {
+            *tos = *(unsigned char *)CMSG_DATA(c);
+        } else if (c->cmsg_level == IPPROTO_IPV6 && c->cmsg_type == IPV6_TCLASS) {
+            int v;
+            memcpy(&v, CMSG_DATA(c), sizeof(v));
+            *tos = v;
+        } else if (c->cmsg_level == IPPROTO_IPV6 && c->cmsg_type == IPV6_PKTINFO && dst) {
+            struct in6_pktinfo pi;
+            memcpy(&pi, CMSG_DATA(c), sizeof(pi));
+            memcpy(dst, &pi.ipi6_addr, 16);
+        }
+    }
+    return n;
+}
+
+/* the TOS of the datagram wg_observe's own recvmsg returned (W5) */
+static int first_tos = -1;
+
+/* A datagram's (family, length, message type, TOS, bytes) as JSON; the
+ * message type is the first little-endian u32 of a WireGuard message. */
+static int print_datagram(int comma, int family, long n, int tos)
 {
     unsigned type = n >= 4 ? (unsigned)observe_buffer[0] | (unsigned)observe_buffer[1] << 8 |
                              (unsigned)observe_buffer[2] << 16 | (unsigned)observe_buffer[3] << 24 : 0;
-    printf("%s[%d,%ld,%u,\"", comma ? "," : "", family, n, type);
+    printf("%s[%d,%ld,%u,%d,\"", comma ? "," : "", family, n, type, tos);
     print_hex(n);
     printf("\"]");
     return 1;
@@ -766,9 +843,15 @@ static void print_stats(const char *id, unsigned index)
     for (; RTA_OK(a, remaining); a = RTA_NEXT(a, remaining))
         if (a->rta_type == IFLA_STATS64 && RTA_PAYLOAD(a) >= sizeof(*stats)) stats = RTA_DATA(a);
     if (!stats) fail(id, index, "environment_failure", "stats_missing");
-    printf("\"stats\":{\"tx_errors\":%llu,\"tx_dropped\":%llu,\"rx_frame_errors\":%llu,\"rx_length_errors\":%llu}",
+    /* W5 (2.6): the device tstats (dev_get_tstats64): rx_packets and rx_bytes
+     * count every honest data message and keepalive (update_rx_stats); the
+     * driver never adds a transmit count, so tx_packets and tx_bytes stay 0. */
+    printf("\"stats\":{\"tx_errors\":%llu,\"tx_dropped\":%llu,\"rx_frame_errors\":%llu,\"rx_length_errors\":%llu,"
+           "\"rx_packets\":%llu,\"rx_bytes\":%llu,\"tx_packets\":%llu,\"tx_bytes\":%llu}",
            (unsigned long long)stats->tx_errors, (unsigned long long)stats->tx_dropped,
-           (unsigned long long)stats->rx_frame_errors, (unsigned long long)stats->rx_length_errors);
+           (unsigned long long)stats->rx_frame_errors, (unsigned long long)stats->rx_length_errors,
+           (unsigned long long)stats->rx_packets, (unsigned long long)stats->rx_bytes,
+           (unsigned long long)stats->tx_packets, (unsigned long long)stats->tx_bytes);
     if (close(rtnl)) fail(id, index, "environment_failure", "stats_close");
 }
 
@@ -779,30 +862,34 @@ static void observe(const struct trace *t, unsigned i, long first, int compariso
 {
     if (!comparisons) printf("LEANUX_WGOBS {\"id\":\"%s\",\"index\":%u,\"datagrams\":[", t->id, i);
     int comma = 0;
-    if (first >= 0 && !comparisons) comma = print_datagram(comma, 4, first);
+    if (first >= 0 && !comparisons) comma = print_datagram(comma, 4, first, first_tos);
     for (int family = 4; family <= 6; family += 2) {
         for (;;) {
-            long n = recv(family == 4 ? LISTEN4_FD : LISTEN6_FD, observe_buffer, sizeof(observe_buffer), MSG_DONTWAIT);
+            int tos;
+            long n = recv_with_cmsg(family == 4 ? LISTEN4_FD : LISTEN6_FD, MSG_DONTWAIT, NULL, NULL, &tos, NULL);
             if (n < 0) {
                 if (errno != EAGAIN) fail(t->id, i, "environment_failure", "drain_listener");
                 break;
             }
-            if (!comparisons) comma = print_datagram(comma, family, n);
+            if (!comparisons) comma = print_datagram(comma, family, n, tos);
         }
     }
     if (!comparisons) printf("],\"replies\":[");
     /* What the sender received (wg0's datagrams to it, and inner packets
-     * delivered to it): recvfrom's source as the IPv6 socket reports it
-     * (family, address as hex, port; an IPv4 source appears v4-mapped),
-     * then the length, the WireGuard message type, the receiver index
-     * (bytes 8-11, little-endian) and the bytes. */
+     * delivered to it): recvmsg's source as the IPv6 socket reports it
+     * (family, address as hex, port, scope id; an IPv4 source appears
+     * v4-mapped), the TOS / traffic class (W5), the destination
+     * IPV6_PKTINFO reports (zero for an IPv4 datagram), then the length, the
+     * WireGuard message type, the receiver index (bytes 8-11, little-endian)
+     * and the bytes. */
     comma = 0;
     for (;;) {
         struct sockaddr_in6 source;
         socklen_t source_len = sizeof(source);
         memset(&source, 0, sizeof(source));
-        long n = recvfrom(SEND_FD, observe_buffer, sizeof(observe_buffer), MSG_DONTWAIT | MSG_TRUNC,
-                          (struct sockaddr *)&source, &source_len);
+        int tos;
+        unsigned char dst[16];
+        long n = recv_with_cmsg(SEND_FD, MSG_DONTWAIT | MSG_TRUNC, &source, &source_len, &tos, dst);
         if (n < 0) {
             if (errno != EAGAIN) fail(t->id, i, "environment_failure", "drain_sender");
             break;
@@ -816,7 +903,9 @@ static void observe(const struct trace *t, unsigned i, long first, int compariso
                                       (unsigned)observe_buffer[10] << 16 | (unsigned)observe_buffer[11] << 24 : 0;
         printf("%s[%u,\"", comma ? "," : "", (unsigned)source.sin6_family);
         for (unsigned k = 0; k < sizeof(source.sin6_addr); ++k) printf("%02x", source.sin6_addr.s6_addr[k]);
-        printf("\",%u,%ld,%u,%u,\"", (unsigned)ntohs(source.sin6_port), n, type, receiver);
+        printf("\",%u,%u,%d,\"", (unsigned)ntohs(source.sin6_port), (unsigned)source.sin6_scope_id, tos);
+        for (unsigned k = 0; k < 16; ++k) printf("%02x", dst[k]);
+        printf("\",%ld,%u,%u,\"", n, type, receiver);
         print_hex(n);
         printf("\"]");
         comma = 1;
@@ -1057,10 +1146,14 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         a4.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
         struct sockaddr_in6 a6 = {.sin6_family = AF_INET6, .sin6_port = htons(LISTEN_PORT), .sin6_addr = IN6ADDR_LOOPBACK_INIT};
         int one = 1;
-        if (socket(AF_INET, SOCK_DGRAM, 0) != LISTEN4_FD || bind(LISTEN4_FD, (struct sockaddr *)&a4, sizeof(a4)))
+        /* W5: every fixture socket reports the TOS / traffic class of what
+         * it receives (recvmsg cmsg), the sender also the destination. */
+        if (socket(AF_INET, SOCK_DGRAM, 0) != LISTEN4_FD || bind(LISTEN4_FD, (struct sockaddr *)&a4, sizeof(a4)) ||
+            setsockopt(LISTEN4_FD, IPPROTO_IP, IP_RECVTOS, &one, sizeof(one)))
             fail(t->id, -1, "environment_failure", "listener4_at_4");
         if (socket(AF_INET6, SOCK_DGRAM, 0) != LISTEN6_FD ||
             setsockopt(LISTEN6_FD, IPPROTO_IPV6, IPV6_V6ONLY, &one, sizeof(one)) ||
+            setsockopt(LISTEN6_FD, IPPROTO_IPV6, IPV6_RECVTCLASS, &one, sizeof(one)) ||
             bind(LISTEN6_FD, (struct sockaddr *)&a6, sizeof(a6)))
             fail(t->id, -1, "environment_failure", "listener6_at_5");
         int zero = 0;
@@ -1076,6 +1169,9 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             setsockopt(SEND_FD, IPPROTO_IPV6, IPV6_V6ONLY, &zero, sizeof(zero)) ||
             setsockopt(SEND_FD, IPPROTO_IP, IP_MTU_DISCOVER, &pmtudisc, sizeof(pmtudisc)) ||
             setsockopt(SEND_FD, IPPROTO_IPV6, IPV6_AUTOFLOWLABEL, &zero, sizeof(zero)) ||
+            setsockopt(SEND_FD, IPPROTO_IP, IP_RECVTOS, &one, sizeof(one)) ||
+            setsockopt(SEND_FD, IPPROTO_IPV6, IPV6_RECVTCLASS, &one, sizeof(one)) ||
+            setsockopt(SEND_FD, IPPROTO_IPV6, IPV6_RECVPKTINFO, &one, sizeof(one)) ||
             bind(SEND_FD, (struct sockaddr *)&from, sizeof(from)))
             fail(t->id, -1, "environment_failure", "sender_at_6");
         /* The generic-netlink socket replaces the last filler; no SOCK_CLOEXEC,
@@ -1088,7 +1184,14 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
     struct rlimit limit = {t->rlimit, t->rlimit}, actual;
     if (setrlimit(RLIMIT_NOFILE, &limit) || getrlimit(RLIMIT_NOFILE, &actual) || actual.rlim_cur != t->rlimit || actual.rlim_max != t->rlimit)
         fail(t->id, -1, "environment_failure", "rlimit_nofile");
-    if (!comparisons) printf("LEANUX_FIXTURE {\"id\":\"%s\",\"reserved\":[0,1,2,3,4,5,6,7],\"free\":[8,%u],\"rlimit\":[%u,%u]}\n", t->id, t->rlimit - 1, t->rlimit, t->rlimit);
+    if (!comparisons) {
+        printf("LEANUX_FIXTURE {\"id\":\"%s\",\"reserved\":[0,1,2,3,4,5,6,7],\"free\":[8,%u],\"rlimit\":[%u,%u]", t->id, t->rlimit - 1, t->rlimit, t->rlimit);
+        /* W5: the network namespace's facts, as read back */
+        if (t->net)
+            printf(",\"net\":{\"auto_flowlabels\":%ld,\"icmp_ratelimit\":%ld,\"icmp6_ratelimit\":%ld,\"lo_link_local\":\"fe80::ffff:1\"}",
+                   net_sysctl[0], net_sysctl[1], net_sysctl[2]);
+        printf("}\n");
+    }
     /* Per-task coverage stays enabled from here to exit: KCOV_DISABLE resets
      * the task's KCOV state, including the common handle this process
      * inherited for remote coverage (kcov_task_reset). Each operation resets
@@ -1184,6 +1287,27 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
                 fail(t->id, i, "environment_failure", "flood_prepare");
             flood_ready = 1;
         }
+        /* W5: the sender's TOS / traffic class for this operation (the outer
+         * DS field of an injection, the inner TOS of a transmitted packet),
+         * set before the window on both levels of the dual-stack socket
+         * (IP_TOS applies to a v4-mapped destination, IPV6_TCLASS otherwise;
+         * a datagram socket keeps the ECN bits); and whether an injection
+         * is sent from the link-local address on lo (`from: "ll"`). */
+        int sender_tos = 0, sender_ll = 0;
+        if (op->code == OP_WG_INJECT) {
+            if (op->value > 0x1ff || ((op->value >> 8) && op->a != 6)) fail(t->id, i, "invalid_input", "wire_inject_options");
+            sender_tos = (int)(op->value & 0xff);
+            sender_ll = (int)(op->value >> 8);
+        }
+        if (op->code == OP_WG_XMIT) {
+            if (op->b > 255) fail(t->id, i, "invalid_input", "wire_xmit_tos");
+            sender_tos = (int)op->b;
+        }
+        if (op->code == OP_WG_INJECT || op->code == OP_WG_XMIT) {
+            if (setsockopt(SEND_FD, IPPROTO_IP, IP_TOS, &sender_tos, sizeof(sender_tos)) ||
+                setsockopt(SEND_FD, IPPROTO_IPV6, IPV6_TCLASS, &sender_tos, sizeof(sender_tos)))
+                fail(t->id, i, "environment_failure", "sender_tos");
+        }
         /* before the coverage window: the clock the advance's wait watches */
         struct timespec before_advance = {0};
         if (op->code == OP_WG_ADVANCE && clock_gettime(CLOCK_MONOTONIC, &before_advance))
@@ -1266,7 +1390,28 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             } else {
                 to.sin6_addr.s6_addr[15] = 1;
             }
-            ret = syscall(SYS_sendto, SEND_FD, op->payload, op->payload_len, 0, &to, sizeof(to));
+            if (sender_ll) {
+                /* W5 (2.5): from fe80::1 on lo (IPV6_PKTINFO: the source and
+                 * the interface), so wg0 learns the scoped endpoint
+                 * [fe80::1%1]:51998 with src6 = ::1. */
+                struct iovec iov = {.iov_base = (void *)op->payload, .iov_len = op->payload_len};
+                union { struct cmsghdr h; unsigned char bytes[CMSG_SPACE(sizeof(struct in6_pktinfo))]; } control;
+                memset(&control, 0, sizeof(control));
+                struct msghdr msg = {.msg_name = &to, .msg_namelen = sizeof(to), .msg_iov = &iov, .msg_iovlen = 1,
+                                     .msg_control = &control, .msg_controllen = sizeof(control)};
+                struct cmsghdr *c = CMSG_FIRSTHDR(&msg);
+                c->cmsg_level = IPPROTO_IPV6;
+                c->cmsg_type = IPV6_PKTINFO;
+                c->cmsg_len = CMSG_LEN(sizeof(struct in6_pktinfo));
+                struct in6_pktinfo pi;
+                memset(&pi, 0, sizeof(pi));
+                memcpy(&pi.ipi6_addr, LO_LINK_LOCAL, 16);
+                pi.ipi6_ifindex = 1;
+                memcpy(CMSG_DATA(c), &pi, sizeof(pi));
+                ret = syscall(SYS_sendmsg, SEND_FD, &msg, 0);
+            } else {
+                ret = syscall(SYS_sendto, SEND_FD, op->payload, op->payload_len, 0, &to, sizeof(to));
+            }
             break;
         }
         case OP_WG_ADVANCE: {
@@ -1304,9 +1449,9 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             break;
         }
         case OP_WG_OBSERVE:
-            /* The first datagram at the IPv4 listener, if any; the rest are
-             * drained after coverage stops. */
-            ret = syscall(SYS_recvfrom, LISTEN4_FD, observe_buffer, sizeof(observe_buffer), MSG_DONTWAIT, NULL, NULL);
+            /* The first datagram at the IPv4 listener, if any (recvmsg, for
+             * its TOS cmsg: W5); the rest are drained after coverage stops. */
+            ret = recv_with_cmsg(LISTEN4_FD, MSG_DONTWAIT, NULL, NULL, &first_tos, NULL);
             break;
         default: fail(t->id, i, "invalid_input", "wire_opcode");
         }

@@ -193,7 +193,9 @@ def sendBufferAsReplyToSkb (src : SkbSource) (buffer : List UInt8) : M Unit := d
   if !(← hiddenAlloc .replySkb) then return
   skipCut [.ipIdentKey, .ipIdentReserve, .flowHashSecret, .sectionStart .netRx, .sectionStop .netRx]
   let sport ← socketPort e.family
-  modify fun w => { w with sent := w.sent ++ [{ family := e.family, addr := e.addr, port := e.port, bytes := buffer, sport }] }
+  -- iptunnel_xmit_stats: the device tstats (W5, 2.6)
+  modifyDev fun d => { d with txPackets := d.txPackets + 1, txBytes := d.txBytes + buffer.length }
+  modify fun w => { w with sent := w.sent ++ [{ family := e.family, addr := e.addr, port := e.port, bytes := buffer, sport, src := e.src }] }
 
 /-- wg_cookie_message_create (cookie.c:180-196): header 3 ‖ receiver index ‖
     nonce (`get_random_bytes_wait`, `.cookieNonce`) ‖ `xchacha20poly1305_encrypt`
@@ -281,6 +283,8 @@ def receiveHandshakePacket (msg : List UInt8) (src : SkbSource) : M Unit := do
   -- modeled paths)
   let p ← getPeer pid
   setPeer pid { p with rxBytes := p.rxBytes + msg.length }
+  -- update_rx_stats (receive.c:198): the device tstats too (W5, 2.6)
+  modifyDev fun d => { d with rxPackets := d.rxPackets + 1, rxBytes := d.rxBytes + msg.length }
   timersAnyAuthenticatedPacketReceived pid
   timersTraversal pid
   peerPut peer

@@ -53,6 +53,8 @@ def u64le (bs : List UInt8) (off : Nat) : Nat :=
 /-- update_rx_stats (receive.c:19-23): `peer->rx_bytes`; the device's
     `dev_sw_netstats_rx_add` is a cut point. -/
 def updateRxStats (pid : PeerId) (len : Nat) : M Unit := do
+  -- dev_sw_netstats_rx_add(peer->device->dev, len): the device tstats (W5, 2.6)
+  modifyDev fun d => { d with rxPackets := d.rxPackets + 1, rxBytes := d.rxBytes + len }
   let p ← getPeer pid
   setPeer pid { p with rxBytes := p.rxBytes + len }
 
@@ -200,11 +202,72 @@ def ipTunnelParseProtocol (bytes : List UInt8) : Nat :=
   else if bytes.length ≥ 40 && version == 6 then 6
   else 0
 
+/-- `csum16_add` on the IPv4 header's check field (W5; the environment's
+    helper, `Leanux/Env/Stack.lean` has the same arithmetic): the `__sum16`
+    is added in memory order on x86 with the carry folded back. `check` is
+    the field's big-endian value, `addLe` the addend as the kernel's u16. -/
+def csum16Add (check addLe : Nat) : Nat :=
+  let le := check % 256 * 256 + check / 256
+  let res := (le + addLe) % 65536
+  let res := if res < le then (res + 1) % 65536 else res
+  res % 256 * 256 + res / 256
+
+/-- `IP_ECN_set_ce` (inet_ecn.h:77-103): `ecn = (tos + 1) & 3`; nothing for
+    not-ECT (01) and CE (00); ECT(1) adds `htons(0xFFFD)`, ECT(0)
+    `htons(0xFFFE)` to the check field (`csum16_add`), then `tos |= CE`. -/
+def ipEcnSetCe (bytes : List UInt8) : M (List UInt8) := do
+  let tos := (bytes.getD 1 0).toNat
+  let ecn := (tos + 1) % 4
+  if ← branch .ipEcnSetCeNotCapable (ecn / 2 == 0) then return bytes
+  -- `htons(0xFFFB) + htons(ecn)` as the kernel's u16: 0xFBFF + ecn << 8
+  let check := csum16Add (beAt bytes 10 2) (0xfbff + ecn * 256)
+  return bytes.take 1 ++ [UInt8.ofNat (tos / 4 * 4 + 3)] ++ (bytes.drop 2).take 8
+    ++ [UInt8.ofNat (check / 256), UInt8.ofNat (check % 256)] ++ bytes.drop 12
+
+/-- `IP_ECN_set_ect1` (inet_ecn.h:105-113): only ECT(0) changes, `check +=
+    htons(1)`, `tos ^= INET_ECN_MASK`. -/
+def ipEcnSetEct1 (bytes : List UInt8) : M (List UInt8) := do
+  let tos := (bytes.getD 1 0).toNat
+  if ← branch .ipEcnSetEct1NotEct0 (tos % 4 != 2) then return bytes
+  let check := csum16Add (beAt bytes 10 2) 0x0100
+  return bytes.take 1 ++ [UInt8.ofNat (tos / 4 * 4 + 1)] ++ (bytes.drop 2).take 8
+    ++ [UInt8.ofNat (check / 256), UInt8.ofNat (check % 256)] ++ bytes.drop 12
+
+/-- `IP6_ECN_set_ce` (inet_ecn.h:134-148): nothing for a not-ECT traffic
+    class; else the first word `|= htonl(INET_ECN_CE << 20)` (no checksum
+    in the header; the skb is not `CHECKSUM_COMPLETE`). -/
+def ip6EcnSetCe (bytes : List UInt8) : M (List UInt8) := do
+  let b1 := (bytes.getD 1 0).toNat
+  if ← branch .ip6EcnSetCeNotEct (b1 / 16 % 4 == 0) then return bytes
+  return bytes.take 1 ++ [UInt8.ofNat (b1 ||| 0x30)] ++ bytes.drop 2
+
+/-- `IP6_ECN_set_ect1` (inet_ecn.h:150-164): only ECT(0) changes, the word
+    `^= htonl(INET_ECN_MASK << 20)`. -/
+def ip6EcnSetEct1 (bytes : List UInt8) : M (List UInt8) := do
+  let b1 := (bytes.getD 1 0).toNat
+  if ← branch .ip6EcnSetEct1NotEct0 (b1 / 16 % 4 != 2) then return bytes
+  return bytes.take 1 ++ [UInt8.ofNat (b1 ^^^ 0x30)] ++ bytes.drop 2
+
+/-- `INET_ECN_set_ce` / `INET_ECN_set_ect1` (inet_ecn.h:172-189, 208-225):
+    the protocol switch on `skb_protocol(skb, true)` (the inner header is
+    long enough: `consume_data_done` pulled it). -/
+def inetEcnSet (ce : Bool) (protocol : Nat) (bytes : List UInt8) : M (List UInt8) := do
+  if ce then
+    if ← branch .inetSetCeIp (protocol == 4) then return ← ipEcnSetCe bytes
+    if ← branch .inetSetCeIpv6 (protocol == 6) then return ← ip6EcnSetCe bytes
+    return bytes
+  else
+    if ← branch .inetSetEct1Ip (protocol == 4) then return ← ipEcnSetEct1 bytes
+    if ← branch .inetSetEct1Ipv6 (protocol == 6) then return ← ip6EcnSetEct1 bytes
+    return bytes
+
 /-- INET_ECN_decapsulate (inet_ecn.h:269-284) with __INET_ECN_decapsulate
-    (251-267): the outer DS field's ECN bits against the inner's. Whatever
-    changes the inner header (`INET_ECN_set_ce`, `INET_ECN_set_ect1`) is
-    outside the domain; wg ignores the result. -/
-def inetEcnDecapsulate (outer inner : Nat) : M Unit := do
+    (251-267): the outer DS field's ECN bits against the inner's; the
+    rewrite of the inner header (`INET_ECN_set_ce`, `INET_ECN_set_ect1`:
+    W5, design 2.1) is returned; wg ignores the result code (a "drop"
+    verdict still delivers). -/
+def inetEcnDecapsulate (protocol outer : Nat) (bytes : List UInt8) : M (List UInt8) := do
+  let inner := if protocol == 4 then (bytes.getD 1 0).toNat else beAt bytes 0 2 / 16 % 256
   let mut rc := 0
   let mut setCe := false
   if ← branch .ecnDecapInnerNotEct (inner % 4 == 0) then
@@ -213,8 +276,9 @@ def inetEcnDecapsulate (outer inner : Nat) : M Unit := do
       rc := if outer % 4 == 3 then 2 else 1
   else setCe := outer % 4 == 3   -- INET_ECN_is_ce(outer)
   if ← branch .ecnDecapRcZero (rc == 0) then
-    if ← branch .ecnDecapSetCe setCe then unsupported "INET_ECN_set_ce on a received packet"
-    if ← branch .ecnDecapOuterEct1 (outer % 4 == 1) then unsupported "INET_ECN_set_ect1 on a received packet"
+    if ← branch .ecnDecapSetCe setCe then return ← inetEcnSet true protocol bytes
+    if ← branch .ecnDecapOuterEct1 (outer % 4 == 1) then return ← inetEcnSet false protocol bytes
+  return bytes
 
 /-- The device's error counters (`DEV_STATS_INC`). -/
 inductive Dishonest where
@@ -258,13 +322,14 @@ def consumeDataDone (pid : PeerId) (pkt : RxPacket) (endpoint : Endpoint) : M (O
   let protocol := ipTunnelParseProtocol bytes
   let ds := pkt.ds   -- PACKET_CB(skb)->ds
   let mut ipLen := 0
+  let mut bytes := bytes
   if ← branch .doneProtoIp (protocol == 4) then
     ipLen := beAt bytes 2 2   -- ntohs(ip_hdr(skb)->tot_len)
     if ← branch .doneV4TooShort (ipLen < 20) then return ← reject .size
-    inetEcnDecapsulate ds (beAt bytes 1 1)
+    bytes ← inetEcnDecapsulate 4 ds bytes   -- INET_ECN_decapsulate(skb, ds, ip_hdr(skb)->tos)
   else if ← branch .doneProtoIpv6 (protocol == 6) then
     ipLen := beAt bytes 4 2 + 40   -- ntohs(payload_len) + sizeof(struct ipv6hdr)
-    inetEcnDecapsulate ds (beAt bytes 0 2 / 16 % 256)   -- ipv6_get_dsfield
+    bytes ← inetEcnDecapsulate 6 ds bytes   -- ..., ipv6_get_dsfield(ipv6_hdr(skb))
   else return ← reject .type
   if ← branch .doneLenBeyond (ipLen > len) then return ← reject .size
   let lenBeforeTrim := len

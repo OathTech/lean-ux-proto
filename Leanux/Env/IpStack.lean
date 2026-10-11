@@ -80,14 +80,19 @@ def xmitBytesUnknown (family addr : Nat) : Bool :=
     the bytes are not determined: the packet carries a zero source address
     as a placeholder, and `checksumHelp`, which every such packet meets
     before its bytes are read (encryption), is `unsupported`. -/
-def xmitPacket (family addr : Nat) (payload : List UInt8) : M WG.Packet := do
+def xmitPacket (family addr : Nat) (payload : List UInt8) (tos : Nat := 0) : M WG.Packet := do
   let ulen := 8 + payload.length
+  -- W5 (docs/2026-10-06-w5-w6-receive.md, 2.1): `tos` is the sender's
+  -- `IP_TOS` / `IPV6_TCLASS` for this send (`__ip_make_skb` writes
+  -- `inet->tos`; `ip6_make_skb` the socket's tclass; a datagram socket
+  -- keeps the ECN bits), the inner header's TOS / traffic class.
+  if tos > 255 then invariant "a TOS beyond a byte"
   if family == 4 then
     if payload.length > MAX_XMIT_PAYLOAD4 then unsupported "a transmitted payload beyond wg0's MTU"
     let src := if xmitBytesUnknown family addr then 0 else WG0_ADDR4
     let pseudo := onesSum (beBytes src 4 ++ beBytes addr 4 ++ [0, 17] ++ beBytes ulen 2)
     let udp := beBytes SENDER_PORT 2 ++ beBytes SEND_PORT 2 ++ beBytes ulen 2 ++ beBytes pseudo 2 ++ payload
-    let hdr (check : Nat) := [0x45, 0] ++ beBytes (20 + ulen) 2 ++ [0, 0, 0x40, 0, 64, 17] ++ beBytes check 2
+    let hdr (check : Nat) := [0x45, UInt8.ofNat tos] ++ beBytes (20 + ulen) 2 ++ [0, 0, 0x40, 0, 64, 17] ++ beBytes check 2
       ++ beBytes src 4 ++ beBytes addr 4
     -- ip_send_check: `ip_fast_csum` over the header with a zero check field
     let check := 0xffff - onesSum (hdr 0)
@@ -97,7 +102,9 @@ def xmitPacket (family addr : Nat) (payload : List UInt8) : M WG.Packet := do
     let src := if xmitBytesUnknown family addr then 0 else WG0_ADDR6
     let pseudo := onesSum (beBytes src 16 ++ beBytes addr 16 ++ beBytes ulen 4 ++ [0, 0, 0, 17])
     let udp := beBytes SENDER_PORT 2 ++ beBytes SEND_PORT 2 ++ beBytes ulen 2 ++ beBytes pseudo 2 ++ payload
-    let hdr := [0x60, 0, 0, 0] ++ beBytes ulen 2 ++ [17, 64] ++ beBytes src 16 ++ beBytes addr 16
+    -- version 6, the traffic class, flow label 0
+    let hdr := [UInt8.ofNat (0x60 + tos / 16), UInt8.ofNat (tos % 16 * 16), 0, 0] ++ beBytes ulen 2 ++ [17, 64]
+      ++ beBytes src 16 ++ beBytes addr 16
     return { bytes := hdr ++ udp, csum := some (40, 6), mtu := WG.DEVICE_MTU }
   else unsupported "a transmit family other than IPv4 or IPv6"
 

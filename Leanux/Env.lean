@@ -5,6 +5,7 @@ import Leanux.WG.RxData
 import Leanux.WG.Timers
 import Leanux.Env.IpStack
 import Leanux.Env.Batch
+import Leanux.Env.Stack
 
 /-!
 # The environment model: the harness fixture and the WireGuard kworker
@@ -48,16 +49,32 @@ def LISTEN_PORT : Nat := 51999
     `v6only` at `LISTEN_PORT`, already excluded by the IPv4 bind. -/
 def portBound (p : Nat) : Bool := p == LISTEN_PORT || p == SENDER_PORT
 
-/-- Whether an endpoint is the fixture's sender. -/
+/-- W5 (docs/2026-10-06-w5-w6-receive.md, 2.5): the link-local address on
+    `lo`, fe80::ffff:1/128 (harness/guest.c `network_fixture`; not fe80::1,
+    which existing traces transmit to through wg0), the source of a
+    `from: "ll"` injection (`IPV6_PKTINFO` on the dual-stack sender: the
+    address and interface 1). -/
+def LO_LINK_LOCAL : Nat := 0xfe8000000000000000000000ffff0001
+
+/-- Whether an endpoint is the fixture's sender: its port at the loopback
+    addresses, or (W5) at the link-local address on `lo` (the sender is
+    bound to `[::]`, so a datagram to `fe80::1` at its port reaches it). -/
 def isSender (family addr port : Nat) : Bool :=
-  port == SENDER_PORT && ((family == AF_INET && addr == 0x7f000001) || (family == AF_INET6 && addr == 1))
+  port == SENDER_PORT && ((family == AF_INET && addr == 0x7f000001)
+    || (family == AF_INET6 && (addr == 1 || addr == LO_LINK_LOCAL)))
 
 /-- What the sender's datagrams carry in their skb: loopback source and
     destination, the sender's port, the loopback interface (ifindex 1), and
-    a zero DS field (the sender sets no TOS or traffic class). -/
-def senderSource (family : Nat) : M SkbSource :=
-  if family == 4 then pure { family := 4, saddr := 0x7f000001, sport := SENDER_PORT, daddr := 0x7f000001, iif := 1, tos := 0 }
-  else if family == 6 then pure { family := 6, saddr := 1, sport := SENDER_PORT, daddr := 1, iif := 1, tos := 0 }
+    the DS field the operation's `tos` set on the sender (W5, 2.1: `IP_TOS`
+    for a v4-mapped destination, `IPV6_TCLASS` otherwise, ECN bits kept).
+    With `ll` (W5, 2.5) the source is the link-local address on `lo`
+    (`IPV6_PKTINFO`), the destination still `::1`. -/
+def senderSource (family : Nat) (tos : Nat := 0) (ll : Bool := false) : M SkbSource :=
+  if family == 4 then
+    if ll then unsupported "a link-local source for an IPv4 injection"
+    else pure { family := 4, saddr := 0x7f000001, sport := SENDER_PORT, daddr := 0x7f000001, iif := 1, tos }
+  else if family == 6 then
+    pure { family := 6, saddr := if ll then LO_LINK_LOCAL else 1, sport := SENDER_PORT, daddr := 1, iif := 1, tos }
   else unsupported "an injection family other than IPv4 or IPv6"
 
 /-- The guest waits `OBSERVE_WAIT_US` (0.4 s) after every injection, and
@@ -121,15 +138,24 @@ def listenerFamily (e : Endpoint) : Option Nat :=
     outside the domain. -/
 def deliverSent : M Unit := do
   for dg in (← get).sent do
-    let loopback := (dg.family == AF_INET && dg.addr / 2 ^ 24 == 127) || (dg.family == AF_INET6 && dg.addr == 1)
+    let loopback := (dg.family == AF_INET && dg.addr / 2 ^ 24 == 127)
+      || (dg.family == AF_INET6 && (dg.addr == 1 || dg.addr == LO_LINK_LOCAL))
     if isSender dg.family dg.addr dg.port then
-      -- from wg0's socket, bound to the wildcard address at its port: over
-      -- loopback the source is the destination's own address
-      let src := { family := dg.family, addr := dg.addr, port := dg.sport, bytes := dg.bytes : InboxDatagram }
+      -- from wg0's socket, bound to the wildcard address at its port, with
+      -- the source `send4`/`send6` ask for: the endpoint's `src4`/`src6`
+      -- (the destination of the datagram it was learned from, a local
+      -- address here, socket.c:134-135), or, for an endpoint set by
+      -- netlink, the route's choice: over loopback the destination's own
+      -- address (W5, 2.5). The outer DS field is `ds` (W5, 2.1).
+      -- the destination `IPV6_PKTINFO` reports on the dual-stack socket: an
+      -- IPv4 datagram's as v4-mapped (ip6_datagram_recv_common_ctl)
+      let src := { family := dg.family, addr := if dg.src != 0 then dg.src else dg.addr, port := dg.sport,
+                   bytes := dg.bytes, tos := dg.ds,
+                   dst := if dg.family == AF_INET6 then dg.addr else 0xffff00000000 + dg.addr : InboxDatagram }
       modify fun w => { w with senderInbox := w.senderInbox ++ [src] }
     else match listenerFamily { family := dg.family, addr := dg.addr, port := dg.port } with
-      | some 4 => modify fun w => { w with listenerV4 := w.listenerV4 ++ [dg.bytes] }
-      | some _ => modify fun w => { w with listenerV6 := w.listenerV6 ++ [dg.bytes] }
+      | some 4 => modify fun w => { w with listenerV4 := w.listenerV4 ++ [(dg.ds, dg.bytes)] }
+      | some _ => modify fun w => { w with listenerV6 := w.listenerV6 ++ [(dg.ds, dg.bytes)] }
       | none => if !loopback then unsupported "a datagram routed back into wg0"
   modify fun w => { w with sent := [] }
 
@@ -450,15 +476,21 @@ def observe : M (Int × Lean.Json) := do
   -- the guest reports type 0 for a datagram shorter than 4 bytes
   let type (bs : List UInt8) : Nat := if bs.length ≥ 4 then WG.u32le bs 0 else 0
   let ret : Int := match w.listenerV4 with
-    | bs :: _ => bs.length
+    | (_, bs) :: _ => bs.length
     | [] => -EAGAIN
-  let datagrams := (w.listenerV4.map fun bs => (4, bs)) ++ (w.listenerV6.map fun bs => (6, bs))
-  let entries := datagrams.map fun (f, bs) => Lean.toJson [Lean.toJson f, Lean.toJson bs.length, Lean.toJson (type bs), Lean.toJson (hex bs)]
-  -- the sender's `recvfrom` source: a `sockaddr_in6` (SEND_FD is an IPv6
-  -- socket), where an IPv4 source appears v4-mapped (::ffff:a.b.c.d)
+  -- W5: each datagram with the TOS / traffic class the listener's cmsg
+  -- reports (`IP_RECVTOS`, `IPV6_RECVTCLASS`): the outer DS field wg0 sent
+  let datagrams := (w.listenerV4.map fun (ds, bs) => (4, ds, bs)) ++ (w.listenerV6.map fun (ds, bs) => (6, ds, bs))
+  let entries := datagrams.map fun (f, ds, bs) =>
+    Lean.toJson [Lean.toJson f, Lean.toJson bs.length, Lean.toJson (type bs), Lean.toJson ds, Lean.toJson (hex bs)]
+  -- the sender's `recvmsg` source: a `sockaddr_in6` (SEND_FD is an IPv6
+  -- socket), where an IPv4 source appears v4-mapped (::ffff:a.b.c.d), with
+  -- its scope id (0: no kept source is link-local), then the TOS and the
+  -- destination `IPV6_PKTINFO` reports (W5)
   let replies := w.senderInbox.map fun dg => let bs := dg.bytes
     let addr6 := if dg.family == AF_INET then 0xffff00000000 + dg.addr else dg.addr
-    Lean.toJson [Lean.toJson AF_INET6, Lean.toJson (hex (beBytes addr6 16)), Lean.toJson dg.port,
+    Lean.toJson [Lean.toJson AF_INET6, Lean.toJson (hex (beBytes addr6 16)), Lean.toJson dg.port, Lean.toJson (0 : Nat),
+                 Lean.toJson dg.tos, Lean.toJson (hex (beBytes dg.dst 16)),
                  Lean.toJson bs.length, Lean.toJson (type bs), Lean.toJson (if bs.length ≥ 12 then WG.u32le bs 8 else 0),
                  Lean.toJson (hex bs)]
   let sortJson (xs : List Lean.Json) := (xs.toArray.qsort fun a b => a.compress < b.compress).toList
@@ -467,7 +499,10 @@ def observe : M (Int × Lean.Json) := do
   let stats := match (← getK).wg with
     | some d => Lean.Json.mkObj [("tx_errors", Lean.toJson d.txErrors), ("tx_dropped", Lean.toJson d.txDropped),
                                  ("rx_frame_errors", Lean.toJson d.rxFrameErrors),
-                                 ("rx_length_errors", Lean.toJson d.rxLengthErrors)]
+                                 ("rx_length_errors", Lean.toJson d.rxLengthErrors),
+                                 -- W5 (2.6): the device tstats; no transmit count in the driver
+                                 ("rx_packets", Lean.toJson d.rxPackets), ("rx_bytes", Lean.toJson d.rxBytes),
+                                 ("tx_packets", Lean.toJson d.txPackets), ("tx_bytes", Lean.toJson d.txBytes)]
     | none => Lean.Json.null
   return (ret, Lean.Json.mkObj [
     ("datagrams", Lean.Json.arr (sortJson entries).toArray),
@@ -475,65 +510,9 @@ def observe : M (Int × Lean.Json) := do
     ("stats", stats)])
 
 /-- The delivery of an inner packet that GRO flushed at `napi_complete_done`
-    (a cut point: `gro_normal_list`, then the IPv4/IPv6 and UDP receive
-    paths), decided fail-closed by an exact predicate
-    (docs/2026-10-04-d2-data-plane.md, section 4). A delivered datagram is a
-    UDP datagram to the fixture's sender (wg0's address, the sender's port,
-    which is never wg0's own: `wgUp`); it lands in the sender's queue with
-    its inner source. Everything else is outside the domain: stack replies
-    (ICMP errors, other protocols), drops the environment does not model,
-    options, extension headers and fragments.
-    - IPv4: the UDP checksum is not verified, because wg marks the skb
-      `CHECKSUM_UNNECESSARY`. A local source (wg0's address, loopback) is a
-      martian and dropped by `ip_route_input_slow` / `fib_validate_source`.
-    - IPv6: a local source is accepted, an asymmetry with IPv4; a zero UDP
-      checksum is dropped (`udpv6_queue_rcv_one_skb`), a wrong nonzero one is
-      delivered. -/
-def deliverInner (pkt : List UInt8) : M Unit := do
-  let byte (i : Nat) : Nat := (pkt.getD i 0).toNat
-  let version := byte 0 / 16
-  if version == 4 then
-    if byte 0 % 16 != 5 then unsupported "an inner IPv4 packet with options"
-    -- ip_fast_csum of the header
-    if onesSum (pkt.take 20) != 0xffff then unsupported "an inner IPv4 header with a bad checksum"
-    let totLen := WG.beAt pkt 2 2
-    if totLen != pkt.length then invariant "consume_data_done trims to tot_len"
-    if WG.beAt pkt 6 2 % 0x4000 != 0 then unsupported "an inner IPv4 fragment"
-    if byte 9 != 17 then unsupported "an inner IPv4 packet other than UDP (the stack may reply)"
-    let ulen := WG.beAt pkt 24 2
-    if ulen != totLen - 20 || ulen < 8 then unsupported "an inner UDP length other than the IPv4 payload's"
-    let src := WG.beAt pkt 12 4
-    let dst := WG.beAt pkt 16 4
-    if dst != WG0_ADDR4 || WG.beAt pkt 22 2 != SENDER_PORT then
-      unsupported "an inner IPv4 datagram to another destination than the fixture's sender"
-    -- martian sources: zeronet, loopback, multicast, class E and the limited
-    -- broadcast; and wg0's own (local) address. Environment facts behind this
-    -- set (fixture state, not C): rp_filter = 0 and accept_local = 0, no
-    -- local routes beyond the fixture's, and the only local IPv4 addresses
-    -- are 127.0.0.1 and wg0's (`fib_validate_source` drops a local source).
-    -- A fixture change shows as an inbox mismatch.
-    let top := src / 2 ^ 24
-    if top == 0 || top == 127 || top ≥ 224 || src == WG0_ADDR4 then
-      unsupported "an inner IPv4 datagram from a martian or local source"
-    modify fun w => { w with senderInbox := w.senderInbox ++
-      [{ family := AF_INET, addr := src, port := WG.beAt pkt 20 2, bytes := pkt.drop 28 }] }
-  else if version == 6 then
-    if byte 6 != 17 then unsupported "an inner IPv6 packet other than UDP, or with extension headers"
-    let payloadLen := WG.beAt pkt 4 2
-    if payloadLen + 40 != pkt.length then invariant "consume_data_done trims to the payload length"
-    if WG.beAt pkt 44 2 != payloadLen || payloadLen < 8 then
-      unsupported "an inner UDP length other than the IPv6 payload's"
-    let src := WG.beAt pkt 8 16
-    let dst := WG.beAt pkt 24 16
-    if dst != WG0_ADDR6 || WG.beAt pkt 42 2 != SENDER_PORT then
-      unsupported "an inner IPv6 datagram to another destination than the fixture's sender"
-    -- unspecified, loopback, v4-mapped, link-local (a scope id) and multicast
-    if src ≤ 1 || src / 2 ^ 32 == 0xffff || src / 2 ^ 118 == 0x3fa || src / 2 ^ 120 == 0xff then
-      unsupported "an inner IPv6 datagram from an unspecified, loopback, mapped, link-local or multicast source"
-    if WG.beAt pkt 46 2 == 0 then unsupported "an inner IPv6 UDP datagram with a zero checksum (dropped)"
-    modify fun w => { w with senderInbox := w.senderInbox ++
-      [{ family := AF_INET6, addr := src, port := WG.beAt pkt 40 2, bytes := pkt.drop 48 }] }
-  else invariant "consume_data_done passed a packet that is neither IPv4 nor IPv6"
+    (a cut point): the receive-side stack model, `Leanux/Env/Stack.lean`
+    (W5+W6), decides fail-closed what Linux does with it. -/
+def deliverInner (pkt : List UInt8) : M Unit := Stack.receive pkt
 
 /-- The NET_RX softirq the decrypt worker's `napi_schedule` raised
     (`____napi_schedule` → `raise_softirq_irqoff` outside `net_rx_action`,
@@ -600,13 +579,13 @@ def runDecryptWorker : M Unit := do
     or ::1. Only wg0's own socket is in the domain: wg0 up, on that port.
     Loopback delivers it in softirq inside the `sendto`, and the guest waits
     for the handshake worker. -/
-def inject (family port : Nat) (msg : List UInt8) : M Int := do
+def inject (family port : Nat) (msg : List UInt8) (tos : Nat := 0) (ll : Bool := false) : M Int := do
   let some d := (← getK).wg | unsupported "a datagram to a port other than wg0's (no wg0)"
   if !d.running || port != d.incomingPort then unsupported "a datagram to a port other than wg0's"
   -- a pending send worker inserts an index entry under a random index
   for pid in d.peerList do requireNotPending pid "receiving while a handshake is queued"
   fixtureSend
-  let src ← senderSource family
+  let src ← senderSource family tos ll
   runWorker .netRx (WG.wgReceive msg src)
   -- the queued receive work runs before the guest's wait ends
   if !(← getDev).handshakeQueue.isEmpty then
