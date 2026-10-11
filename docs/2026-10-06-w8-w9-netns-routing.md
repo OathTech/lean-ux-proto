@@ -1411,3 +1411,84 @@ until W5-W6; Q10 documented, not built.
 the learned endpoint and the reply's source for all three inject
 destinations; `tx_dropped` in W8b; the default route after `wg_deladdr`;
 the resolved frames of the inline reset sites.
+
+## 14. Results [AGENT 2026-10-11]
+
+Branch `task/w89` on the dispatch-order base (`task/dispatch-order`
+dbe9e0e: main + housekeeping + the interface commit + the dispatch
+identity). W9's core is built; W8 is not started (section 14.4).
+
+### 14.1 What was built
+
+- **W9-K** (commit 18bbdbf, record-only): `kernel/patches/gen-choice-stream.py`
+  adds `kcov_dst_cache_ts(ts, ip)` in kcov.c, gated by
+  `KCOV_DISPATCH_ARM_RECORDS` like the arm record, called with the value
+  stored from `dst_cache_reset` (include/net/dst_cache.h, the inline; the
+  prototype lives there under `CONFIG_KCOV`, an empty inline otherwise) and
+  from `dst_cache_per_cpu_get`'s fail label (net/core/dst_cache.c), both at
+  `_THIS_IP_`. Both patches regenerated; `scripts/build-kernel` CHOICE_SHA
+  `8b34860c…`, ACTL_SHA `114c2969…`. Not built here: the coordinator
+  builds both kernels and records the identities (the identity files'
+  lines are the dispatch-order builds' until then). Decision 11.11 (the
+  dispatch cap) is moot: the cap is already 32 since the D3+A integration.
+- **W9-G** (50ed61c): `wg_deladdr`/`wg_delroute` (opcodes 23/24,
+  `{op, family}`; the ACK is the result: EADDRNOTAVAIL 99, ESRCH 3);
+  `wg_inject`'s optional `to` (loopback, wg0, loopback-alias; the code in
+  the wire's value field); the guest's message builders beside
+  `route_into_wg0`'s; L's EEXIST-on-a-later-up rule refined (not after a
+  `wg_deladdr 4`). `evaluator/check.py`: kind 306 is class `jiffies`.
+- **W9-M** (8083c7c): section 4.2 as designed, with these placements:
+  the routing model is `World.route4/6` in `Leanux/Kernel/Defs.lean`
+  (not `Env`: `Leanux/WG` cannot import `Env`, and `send4` needs it), with
+  `routeLookup` noting the IPv4 default route's use; `send4`/`send6` take
+  the endpoint and an optional cache peer (`&peer->endpoint` for
+  `wg_socket_send_skb_to_peer`, a stack copy for the reply path); the
+  transmit keeps the IP-ident cut and the nested NET_RX section
+  (`loopbackSend`), E's reply path its lax cut; a route into wg0 stays
+  `unsupported` (W9-R). Sites 150/151 (kind `jiffies`): `dst_cache.h:79`
+  and `dst_cache.c:62` as section 4.4 names them; the resolved frames are
+  confirmed on the built kernel (a mismatch is an unknown site).
+  Captures made before the record (`evaluator/test_model_replay.py`)
+  carry `"dst_cache_records": false`, under which the mirror keeps the
+  pre-W9 rule (the cache always misses, no record consumed); a live run
+  never sets it.
+- **W-H** (this commit): `scripts/wg-w89-corpus.py`, eight `w9_*` traces
+  (section 14.2); mutants W9-M1, M2, M3, M5, M8, M9, M10 on the `w9_`
+  subset (`scripts/wg-mutants.py`). W9-M4 needs a roaming inject and is
+  not written; W9-M6 waits for W9-R; W9-M7 needs a deladdr-while-cached
+  trace.
+
+### 14.2 The corpus
+
+| Trace | What it reaches |
+|---|---|
+| `w9_endpoint_alias` | the initiation to `127.0.0.2:51998`: the `127/8` local route, the sender's wildcard bind, source `127.0.0.1` (W9-M1) |
+| `w9_two_sends` | the initiation (a miss after `dst_cache_init`) and the retransmit: a hit iff the recorded refresh jiffy is after the reset's (W9-M3) |
+| `w9_delroute_untouched` | `wg_delroute 4` before any lookup through the route: no generation bump (W9-M9) |
+| `w9_unroutable` | `-ENETUNREACH` at `send4`: no datagram, `tx_bytes` unchanged (W9-M5); the peer starts without an endpoint so the running-device `wg_set` queues the keepalive's initiation |
+| `w9_deladdr_then_send` | `wg_deladdr 4` takes the default route (`wg_delroute 4` → ESRCH), the inner `sendto` fails (W9-M8) |
+| `w9_deladdr6_then_send` | the IPv6 removal keeps the default route (the second `wg_delroute 6` → ESRCH) |
+| `w9_inject_to_alias` | a response from the alias: `src4 = 127.0.0.2`, rejected by `inet_confirm_addr` at the keepalive's send (W9-M2) |
+| `w9_inject_to_wg0_addr` | a response to wg0's own address: the endpoint `10.255.254.1:51998`, the cache reset, the reply from that address (W9-M10) |
+
+### 14.3 Validation
+
+On the dispatch-order oracle (`bb3e577d`), which writes no kind-306 record:
+- `lake build leanux-model`: OK (82 jobs); unit and replay tests: 111 OK;
+  `leanux-model --hidden-sites` lists 150/151 as kind `jiffies`.
+- `evaluator.check --suite handwritten`: pass (no WireGuard trace).
+- Every WireGuard trace with a peer fails at its first `wg_set` with
+  "no record left for dst_cache_reset_ts" (`d1_basic` and the eight
+  `w9_*` traces, each accepted by the domain filter): the expected,
+  uniform failure until the W9-K kernel exists. **The suite-level check
+  of W9-M, the eight traces and the seven mutants is the coordinator's,
+  on the rebuilt oracle.**
+
+### 14.4 Not done
+
+- **W8** entirely (the foreign-creator fixture, `wg_netns_close` 22, the
+  per-trace arm subset, the batch pins, `wg_netns_pre_exit`, the live
+  `socketInit` arm, `setDevice`'s `-EPERM`, W8b): a second stream on this
+  branch, after W9's kernel is built (W8 needs no kernel change).
+- The generator classes (`routing`, `netns`); the control suite for the
+  datagram routed into wg0; W9-R; the stretch items W9-S1/S2.

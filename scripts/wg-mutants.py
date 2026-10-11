@@ -507,6 +507,47 @@ A_MUTANTS = [
 ]
 A_PENDING = {}
 SUITE_OF = {m[0]: 'alloc' for m in A_MUTANTS}
+
+# W9 (docs/2026-10-06-w8-w9-netns-routing.md, section 7): each runs on the
+# w9_* traces (the sixth field) on the W9-K oracle (kind 306). W9-M4 (the
+# reset at socket.c:294 ignored) needs a roaming inject and is not written;
+# W9-M6/M7 wait for W9-R and a deladdr-while-cached trace.
+W9_MUTANTS = [
+  ('W9-M1-sender-exact-address', 'environment: the fixture sender is 127.0.0.1/::1 only, not the wildcard bind; '
+   'a datagram to 127.0.0.2:51998 is dropped silently where Linux delivers it (w9_endpoint_alias; '
+   'the latent fail-open of design section 2.5)', 'Leanux/Env.lean',
+   "  port == SENDER_PORT && w.wildcardLocal family addr\n",
+   "  port == SENDER_PORT && ((family == AF_INET && addr == 0x7f000001) || (family == AF_INET6 && addr == 1))\n", 'w9_'),
+  ('W9-M2-src-not-local-never', 'data: send4 keeps a src4 that is not a configured address (socket.c:53 never fires); '
+   'the keepalive leaves from 127.0.0.2 in the mirror, 127.0.0.1 in Linux (w9_inject_to_alias)',
+   'Leanux/WG/Socket.lean',
+   "    if ← branch .send4SrcNotLocal !confirmed then\n",
+   "    if ← branch .send4SrcNotLocal false then\n", 'w9_'),
+  ('W9-M3-cache-never-hits', 'data: the dst cache never hits (every send misses: socket.c:51 and the arms 53-82); '
+   'A2 on the second send of w9_two_sends when the recorded refresh is after the reset',
+   'Leanux/WG/Socket.lean',
+   "    if c.refreshTs > c.resetTs && s.gen == gen then return some s\n",
+   "    if false && c.refreshTs > c.resetTs && s.gen == gen then return some s\n", 'w9_'),
+  ('W9-M5-route-error-counts', 'data: a route error still counts tx_bytes (socket.c:182-183); the dump differs on '
+   'w9_unroutable', 'Leanux/WG/Handshake.lean',
+   "  if ← branch .sendSkbOk (ret == 0) then\n    let p ← getPeer pid\n    setPeer pid { p with txBytes := p.txBytes + bytes.length }\n",
+   "  if ← branch .sendSkbOk (ret == 0 || ret == -ENETUNREACH) then\n    let p ← getPeer pid\n    setPeer pid { p with txBytes := p.txBytes + bytes.length }\n", 'w9_'),
+  ('W9-M8-deladdr-keeps-route', 'environment: deleting wg0\'s only IPv4 address keeps the default route '
+   '(fib_disable_ip not modeled); wg_delroute 4 returns 0 where Linux returns -ESRCH (w9_deladdr_then_send)',
+   'Leanux/Env.lean',
+   "    set { w with addrs4 := [], defaultRoute4 := false, ipv4Gen := w.ipv4Gen + 1 }\n",
+   "    set { w with addrs4 := [], ipv4Gen := w.ipv4Gen + 1 }\n", 'w9_'),
+  ('W9-M9-delroute-bumps-regardless', 'environment: wg_delroute 4 bumps rt_genid even when the route was never '
+   'looked up (FA_S_ACCESSED); the retransmit misses in the mirror where Linux hits (w9_delroute_untouched, A2 at :51)',
+   'Leanux/Env.lean',
+   "                 ipv4Gen := if w.defaultRoute4Accessed then w.ipv4Gen + 1 else w.ipv4Gen }\n",
+   "                 ipv4Gen := w.ipv4Gen + 1 }\n", 'w9_'),
+  ('W9-M10-wg0-address-not-sender', 'environment: the wildcard sender does not receive at wg0\'s own address; '
+   'the keepalive to 10.255.254.1:51998 is dropped in the mirror, received in Linux (w9_inject_to_wg0_addr)',
+   'Leanux/Kernel/Defs.lean',
+   "  (family == 2 && (addr / 2 ^ 24 == 127 || w.addrs4.contains addr))\n",
+   "  (family == 2 && addr / 2 ^ 24 == 127)\n", 'w9_'),
+]
 # Dispatch order (docs/2026-10-11-dispatch-order.md, section 6): the mirror
 # runs the queued send worker at the head of its queue, ignoring the unit the
 # dispatch record names. Rejected deterministically by the replay of the
@@ -586,7 +627,7 @@ def run(cmd, **kw):
 def main():
     assert run(['git', 'status', '--porcelain'], capture_output=True, text=True).stdout == '', 'tree must be clean'
     head = run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()
-    mutants = MUTANTS + D1_MUTANTS + D2_MUTANTS + E_MUTANTS + E_UNDERLOAD_MUTANTS + D3_MUTANTS + L_MUTANTS + A_MUTANTS + Q_MUTANTS
+    mutants = MUTANTS + D1_MUTANTS + D2_MUTANTS + E_MUTANTS + E_UNDERLOAD_MUTANTS + D3_MUTANTS + L_MUTANTS + A_MUTANTS + Q_MUTANTS + W9_MUTANTS
     names = [m[0] for m in mutants]
     assert set(EQUIVALENT) <= set(names), 'an EQUIVALENT entry names no mutant'
     assert NOT_CLAIMED <= set(names), 'a NOT_CLAIMED entry names no mutant'
