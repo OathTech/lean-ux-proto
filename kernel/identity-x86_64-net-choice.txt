@@ -75,6 +75,6 @@
 # identity and vmlinux lines below are the previous build's (A, c79e3e0c)
 # until the coordinator rebuilds and records the new ones [AGENT 2026-10-11].
 # Path-independent identity from scripts/kernel-identity.py:
-c79e3e0c58b3aa554075d512357dbcd359baab22e9e4bcbf68bc85f87ed3d1aa
+bb3e577d86173347e2fae21b743942e697ed1bb4bd6fc5fae160ec494e3c7453
 # vmlinux sha256 of the build the evidence used (path-dependent):
-642b22fd4f111808ab0b52198e37675f4c2f6e4fd7dcfa9c2087deabc5de5380
+c7a09c45699b4160d9be5726c99321091274111834d0d16601601c94c9efa1d7
