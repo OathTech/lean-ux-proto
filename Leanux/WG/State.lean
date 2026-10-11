@@ -163,12 +163,20 @@ def loopbackSend (sites : List HiddenSite) (raised : Bool) : M Unit := do
     raiseLoopbackRx
     loopbackSoftirq
 
+/-- `node->bit[i]`, `i` 0 or 1: the bounds-checked read that replaces
+    `bit[..]!` in the trie code (future-proof-paths note, 3(d)); an index
+    outside the pair is a mirror invariant failure, not a panic. -/
+def AipNode.bitAt (n : AipNode) (i : Nat) : M (Option NodeId) :=
+  match n.bit[i]? with
+  | some c => pure c
+  | none => invariant s!"allowedips node bit[{i}] is out of range"
+
 /-- Read the pointer a slot holds (`*parent_bit`). -/
 def slotGet (s : Slot) : M (Option NodeId) := do
   match s with
   | .root4 => return (← getDev).peerAllowedips.root4
   | .root6 => return (← getDev).peerAllowedips.root6
-  | .child parent bit => return (← getNode parent).bit[bit]!
+  | .child parent bit => (← getNode parent).bitAt bit
 
 /-- Store a pointer into a slot (`rcu_assign_pointer(*parent_bit, node)`). -/
 def slotSet (s : Slot) (v : Option NodeId) : M Unit := do
