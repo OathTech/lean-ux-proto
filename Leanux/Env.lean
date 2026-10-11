@@ -103,7 +103,9 @@ def fixtureSend : M Unit :=
     and no other record (41 operations, 2026-10-06), which the lax cut of
     `wg_xmit`'s error path used to absorb. -/
 def xmitMulticastLoop (family addr : Nat) : M Unit := do
-  if family == 4 && addr / 2 ^ 28 == 0xe then WG.loopbackSend [] true
+  -- W4 (section 2.4): the IPv4 copy loops only for a joined group, `224.0.0.1`
+  -- (`multicastLoops`); another IPv4 group is sent out without a copy
+  if multicastLoops family addr then WG.loopbackSend [] true
   else if family == 6 && addr / 2 ^ 120 == 0xff then
     unsupported "an IPv6 multicast destination (whether the IP output loops a copy back depends on wg0's groups)"
 
@@ -405,6 +407,19 @@ def wgUp : M Int := do
   -- allocate netlink skbs below the cut (allocation cut sites, A)
   skipCut allocCuts
   if ret == 0 then modify fun w => { w with routesViaWg0 := true }
+  return ret
+
+/-- W4: `wg_set_mtu`, `SIOCSIFMTU` on wg0 from the fixture's sender
+    (`dev_ioctl` → `dev_set_mtu`): `-ENODEV` without wg0; the notifications
+    of `NETDEV_CHANGEMTU` and the IPv6 and IPv4 teardowns below 1280 and 68
+    allocate netlink skbs below the cut (allocation cut sites, A). The
+    fixture's routes of a family taken down are gone until the next `wg_up`
+    re-adds them; a transmit in between is outside the domain
+    (`Syscalls.lean`). -/
+def setMtu (mtu : Nat) : M Int := do
+  if (← getK).wg.isNone then return -ENODEV
+  let ret ← WG.setMtu mtu
+  skipCut allocCuts
   return ret
 
 /-- `wg_down`: `SIOCSIFFLAGS` without `IFF_UP`. `-ENODEV` without wg0; a

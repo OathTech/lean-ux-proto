@@ -44,10 +44,12 @@ def lookupDst (family addr : Nat) : M (Option PeerId) := do
   return none
 
 /-- wg_open (device.c:31-62). The fixture's wg0 has an IPv4 and an IPv6
-    device (its MTU of 1420 admits both at registration). -/
+    device (its MTU of 1420 admits both at registration) until an MTU change
+    takes one down (W4: `Device.inet4Dev`, `inet6Dev`). -/
 def wgOpen : M Int := do
-  _ ← branch .openHasInet true    -- IN_DEV_CONF_SET(SEND_REDIRECTS, false)
-  _ ← branch .openHasInet6 true   -- addr_gen_mode = IN6_ADDR_GEN_MODE_NONE
+  let dev ← getDev
+  _ ← branch .openHasInet dev.inet4Dev    -- IN_DEV_CONF_SET(SEND_REDIRECTS, false)
+  _ ← branch .openHasInet6 dev.inet6Dev   -- addr_gen_mode = IN6_ADDR_GEN_MODE_NONE
   let d ← getDev
   -- mutex_lock(&wg->device_update_lock); wg_socket_init on incoming_port
   let ret ← socketInit d.incomingPort
@@ -259,9 +261,11 @@ def wgDelete : M Int := do
   wgDestruct
   return 0
 
-/-- wg_xmit (device.c:137-233) for a datagram to `addr` (family 4 or 6),
-    the IP packet `pkt` (from the environment's sender). -/
-def wgXmit (family addr : Nat) (pkt : Packet) : M Int := do
+/-- wg_xmit (device.c:137-233) for a datagram to `addr` (family 4 or 6):
+    the IP packets `pkts` the environment's sender hands it (one, or the
+    segments of a GSO skb, two or more; W4) and `mtu`, the `dst_mtu` of the
+    datagram's route (device.c:173; `Env.xmitPackets`). -/
+def wgXmit (family addr : Nat) (pkts : List Packet) (mtu : Nat) : M Int := do
   -- `real_protocol && skb->protocol == real_protocol`
   let ok ← andM (branch .checkProtoParsed true) (branch .checkProtoMatches true)
   if ← branch .xmitBadProtocol !ok then unsupported "unreachable"
@@ -288,16 +292,50 @@ def wgXmit (family addr : Nat) (pkt : Packet) : M Int := do
     peerPut peer   -- err_peer
     return ← err (-EDESTADDRREQ)
   _ ← branch .xmitValidDst true   -- mtu = dst_mtu(skb_dst(skb))
-  _ ← branch .xmitNotGso true     -- skb_mark_not_on_list
-  _ ← branch .xmitWalk true
-  _ ← branch .xmitShareFailed false
+  -- `if (!skb_is_gso(skb))` (device.c:176): a GSO skb arrives as its segments
+  if !(← branch .xmitNotGso (pkts.length < 2)) then
+    -- skb_gso_segment(skb, 0) (device.c:179-186): `IS_ERR(segs)` only when
+    -- an allocation inside skb_segment fails (A's domain, `envOk`)
+    if ← branch .xmitGsoError !(← envOk .skbSegment) then
+      peerPut peer   -- err_peer
+      return ← err (-ENOMEM)
+  -- skb_list_walk_safe (device.c:189-204): every packet of the list gets
+  -- the one `mtu` of this call
+  let mut packets : List Packet := []
+  for pkt in pkts do
+    _ ← branch .xmitWalk true
+    _ ← branch .xmitShareFailed false
+    packets := packets ++ [{ pkt with mtu }]
   _ ← branch .xmitWalk false
   -- `while (skb_queue_len(&peer->staged_packet_queue) > MAX_STAGED_PACKETS)`
-  if ← branch .xmitStagedOverflow ((← getPeer pid).staged.length > MAX_STAGED_PACKETS) then
-    unsupported "more than MAX_STAGED_PACKETS staged packets"
-  setPeer pid { (← getPeer pid) with staged := (← getPeer pid).staged ++ [pkt] }   -- skb_queue_splice_tail
+  -- (device.c:211-214): the oldest packets go, one `tx_dropped` each, before
+  -- the new ones are spliced (W4: the trim)
+  for _ in [0:(← getPeer pid).staged.length + 1] do
+    let p ← getPeer pid
+    if ← branch .xmitStagedTrimIter (p.staged.length > MAX_STAGED_PACKETS) then
+      setPeer pid { p with staged := p.staged.drop 1 }
+      modifyDev fun d => { d with txDropped := d.txDropped + 1 }
+    else break
+  setPeer pid { (← getPeer pid) with staged := (← getPeer pid).staged ++ packets }   -- skb_queue_splice_tail
   sendStagedPackets pid
   peerPut peer
   return 0   -- NETDEV_TX_OK
+
+/-! ## W4: `SIOCSIFMTU` (docs/2026-10-06-w4-w7-transmit-bulk.md, section 4) -/
+
+/-- `dev->max_mtu` (device.c:297): `round_down(INT_MAX, MESSAGE_PADDING_MULTIPLE)
+    - overhead`, the overhead being 32 + 8 + 40. -/
+def MAX_MTU : Nat := 2147483647 / 16 * 16 - 80
+
+/-- `dev_set_mtu` (net/core/dev.c:9085-9122) of wg0, a cut: `dev_validate_mtu`
+    refuses above `max_mtu` (`-ERANGE`; wg sets no `min_mtu`, so 0 is
+    accepted), `__dev_set_mtu` writes `dev->mtu`, and `NETDEV_CHANGEMTU`'s
+    notifiers take the `inet6_dev` down below 1280 (addrconf.c:3691-3695)
+    and the `in_device` down below 68 (devinet.c:1637-1643); a later valid
+    MTU re-creates each, empty. -/
+def setMtu (mtu : Nat) : M Int := do
+  if mtu > MAX_MTU then return -ERANGE
+  modifyDev fun d => { d with mtu, inet6Dev := mtu ≥ 1280, inet4Dev := mtu ≥ 68 }
+  return 0
 
 end Leanux.WG

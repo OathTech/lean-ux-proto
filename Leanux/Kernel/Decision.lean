@@ -141,7 +141,9 @@ inductive Decision where
   | openHasInet | openHasInet6 | openSocketError | openPeersIter | openKeepalive
   | xmitBadProtocol | xmitNoPeer | xmitNoPeerInet | xmitNoPeerInet6 | xmitEndpointNotInet
   | xmitEndpointNotInet6 | xmitValidDst | xmitNotGso | xmitWalk | xmitShareFailed
-  | xmitStagedOverflow | xmitErrorInet | xmitErrorInet6
+  | xmitStagedTrimIter | xmitErrorInet | xmitErrorInet6
+  -- W4: skb_gso_segment's failure (device.c:181)
+  | xmitGsoError
   -- drivers/net/wireguard/send.c
   | queuedNotRetry | queuedNotExpired | queuedDead | queuedAlreadyQueued | keepaliveStagedEmpty
   | keepaliveNoMem | stagedEmpty | stagedNoKeypair | stagedOrphanWalk
@@ -873,7 +875,8 @@ def Decision.info : Decision → DecisionInfo
   | .xmitNotGso => d "wg_xmit.not_gso" wdv 176 [(177, 177)] [(179, 186)]
   | .xmitWalk => d "wg_xmit.segments_iterate" wdv 189 [(190, 203)] []
   | .xmitShareFailed => d "wg_xmit.share_check_failed" wdv 193 [(194, 194)] [(199, 203)]
-  | .xmitStagedOverflow => d "wg_xmit.staged_overflow" wdv 211 [(212, 213)] []
+  | .xmitStagedTrimIter => d "wg_xmit.staged_trim_iter" wdv 211 [(212, 213)] []
+  | .xmitGsoError => d "wg_xmit.gso_error" wdv 181 [(182, 183)] [(185, 186)]
   | .xmitErrorInet => d "wg_xmit.error_inet" wdv 226 [(227, 227)] [(228, 229)]
   | .xmitErrorInet6 => d "wg_xmit.error_inet6" wdv 228 [(229, 229)] []
   -- drivers/net/wireguard/send.c
@@ -1826,7 +1829,7 @@ def Decision.repeatable : Decision → Bool
   | .refcountSubToZero | .refcountSubNonpositive | .refcountSubUnderflow
   | .findNodeNode | .findNodePrefixMatches | .findNodeHasPeer | .findNodeFullLength | .lookupFound
   | .lookupPeerGone | .checkProtoParsed | .checkProtoMatches | .openPeersIter | .openKeepalive
-  | .xmitWalk | .xmitShareFailed | .xmitStagedOverflow | .queuedNotRetry | .queuedNotExpired
+  | .xmitWalk | .xmitShareFailed | .xmitStagedTrimIter | .queuedNotRetry | .queuedNotExpired
   | .queuedDead | .queuedAlreadyQueued | .keepaliveStagedEmpty | .keepaliveNoMem | .stagedEmpty
   | .stagedNoKeypair | .stagedOrphanWalk | .keypairGetNull | .keypairGetZero
   | .workerConsumed

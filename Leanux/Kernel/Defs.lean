@@ -79,6 +79,9 @@ def ENOKEY : Int := 126
 def EDESTADDRREQ : Int := 89
 def EPROTONOSUPPORT : Int := 93
 def ENETUNREACH : Int := 101
+-- W4: dev_validate_mtu's refusal, and the sender's datagram above cork->fragsize
+def ERANGE : Int := 34
+def EMSGSIZE : Int := 90
 /-- L: `wg_create` of an existing wg0; a bind at a held port. -/
 def EEXIST : Int := 17
 def EADDRINUSE : Int := 98
@@ -427,6 +430,9 @@ inductive EnvSite where
   | copyPageToIter | copyPageFromIter | sigqueueAlloc
   -- E-B arm C: wg_ratelimiter_allow's per-entry kmem_cache_alloc (ratelimiter.c:138)
   | ratelimiterEntry
+  -- W4: skb_gso_segment's allocations inside skb_segment (device.c:179), an
+  -- assumed-success site as the sites above (A's domain)
+  | skbSegment
   deriving Repr, BEq, DecidableEq
 
 inductive AllocCount where
@@ -922,6 +928,10 @@ structure World where
       survives a down, which the guest checks). Without them the sender's
       `sendto` into wg0 fails with `-ENETUNREACH`. -/
   routesViaWg0 : Bool := false
+  /-- W4, fixture state: the routes `net_fixture.routes` adds into wg0 at
+      every `wg_up` (family, destination, the route's MTU): `dst_mtu` of a
+      datagram to that destination (`Env.xmitPackets`). -/
+  routes : List (Nat × Nat × Nat) := []
   /-- L, environment: whether a fixture socket holds UDP port `p` so that a
       wildcard bind there conflicts (`Env.portBound`; the runner supplies
       it, as it supplies `env`). -/

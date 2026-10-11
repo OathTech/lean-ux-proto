@@ -262,6 +262,23 @@ class D2Tests(unittest.TestCase):
         self.assertEqual(noise.to_wg0(6, src, b"hi", version=4)[0] >> 4, 4)
         self.assertNotEqual(noise.to_wg0(6, src, b"hi", checksum="wrong")[46:48], bytes(2))
 
+    def test_gso_segments_are_equal_checksummed_and_numbered(self):
+        # W4: one UDP_SEGMENT datagram as wg_xmit receives it (design 2.1):
+        # equal segments, ids 0..n-1, DF, a complete UDP checksum per segment
+        payload = bytes(range(256)) * 11   # 2816 = 2 x 1408? no: 4 x 704
+        segments = noise.gso_segments(bytes([10, 0, 0, 1]), payload, 704)
+        self.assertEqual(len(segments), 4)
+        for i, seg in enumerate(segments):
+            self.assertEqual(len(seg), 20 + 8 + 704)
+            self.assertEqual(seg[4:6], i.to_bytes(2, "big"))          # id
+            self.assertEqual(seg[6:8], b"\x40\x00")                   # DF
+            self.assertEqual(noise.inet_checksum(seg[:20]), 0)         # header checksum verifies
+            pseudo = seg[12:16] + seg[16:20] + bytes([0, 17]) + len(seg[20:]).to_bytes(2, "big")
+            self.assertEqual(noise.inet_checksum(pseudo + seg[20:]), 0)   # UDP checksum verifies
+            self.assertEqual(seg[28:], payload[i * 704:(i + 1) * 704])
+        with self.assertRaises(ValueError):
+            noise.gso_segments(bytes([10, 0, 0, 1]), payload, 1000)   # a short last segment
+
     def test_xmit_packet(self):
         packet = noise.xmit_packet(4, bytes([10, 0, 0, 1]), b"leux")
         self.assertEqual(packet[:20].hex()[:20], "45000020" "0000" "4000" "4011")

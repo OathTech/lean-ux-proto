@@ -33,7 +33,9 @@ inductive Operation where
   | wgSet (attrs : WG.DeviceAttrs)
   | wgGet
   | wgUp
-  | wgXmit (family addr : Nat) (payload : List UInt8)
+  | wgXmit (family addr : Nat) (payload : List UInt8) (opts : Env.XmitOpts)
+  /-- W4 (docs/2026-10-06-w4-w7-transmit-bulk.md section 6): `SIOCSIFMTU` on wg0. -/
+  | wgSetMtu (mtu : Nat)
   | wgObserve
   | wgInject (family port : Nat) (message : List UInt8)
   /-- E-B: an io_uring flood of `count` invalid-MAC1 initiations to wg0's port,
@@ -78,6 +80,9 @@ structure Trace where
   napiBeforePut : List Bool := []
   /-- `"net_fixture": "bare"` (L): the network fixture without wg0. -/
   bare : Bool := false
+  /-- W4: `"net_fixture": {"routes": [...]}`, the routes the fixture adds into
+      wg0 at every `wg_up` (family, destination, MTU): `World.routes`. -/
+  routes : List (Nat × Nat × Nat) := []
   /-- The allocation sites the run armed (the check adds them with the
       records): their outcomes are consumed from the records. -/
   allocArmed : List String := []
@@ -92,7 +97,7 @@ structure Trace where
 def Trace.net (t : Trace) : Bool :=
   t.ops.any fun
     | .wgSet _ | .wgGet | .wgUp | .wgXmit .. | .wgObserve | .wgInject .. | .wgAdvance _
-    | .wgFlood _ _ _ | .wgCreate | .wgDown | .wgDelete => true
+    | .wgFlood _ _ _ | .wgCreate | .wgDown | .wgDelete | .wgSetMtu _ => true
     | _ => false
 
 private def fields (j : Json) (expected : List String) : Except String Unit := do
@@ -323,16 +328,34 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
   | "wg_xmit" =>
     fields j ["op", "packet"]
     let p ← field j "packet"
+    -- W4: `gso_size` (UDP_SEGMENT) and `pmtudisc` ("do", the sender's default,
+    -- or "probe") are optional; a GSO payload may reach 128 segments
+    let hasGso := (p.getObjVal? "gso_size").isOk
+    let hasPmtu := (p.getObjVal? "pmtudisc").isOk
+    let hasPayload := (p.getObjVal? "payload").isOk
+    fields p (["family", "dst"] ++ (if hasPayload then ["payload"] else [])
+      ++ (if hasGso then ["gso_size"] else []) ++ (if hasPmtu then ["pmtudisc"] else []))
+    let gsoSize ← if hasGso then do
+        let g ← (← field p "gso_size").getNat?
+        if g == 0 || g > 1392 then throw "packet.gso_size: expected 1-1392"
+        pure (some g)
+      else pure none
+    let probe ← if hasPmtu then do
+        match ← (← field p "pmtudisc").getStr? with
+        | "do" => pure false
+        | "probe" => pure true
+        | _ => throw "packet.pmtudisc: expected \"do\" or \"probe\""
+      else pure false
+    let maxPayload := if hasGso then 128 * 1392 else 1392
     -- the UDP payload (D2); without one, the fixture's historic 4 bytes "leux"
     let payload ← match p.getObjVal? "payload" with
       | .ok v => do
-        fields p ["family", "dst", "payload"]
         let s ← v.getStr?
-        if s.length == 0 || s.length % 2 != 0 || s.length > 2 * 1392 then
-          throw "packet.payload: expected 1-1392 bytes of lowercase hex"
+        if s.length == 0 || s.length % 2 != 0 || s.length > 2 * maxPayload then
+          throw s!"packet.payload: expected 1-{maxPayload} bytes of lowercase hex"
         hexBytes v s.length "packet.payload"
       | .error _ => do
-        fields p ["family", "dst"]
+        if hasGso then throw "packet.gso_size: only with a payload"
         pure "leux".toUTF8.toList
     let family ← (← field p "family").getNat?
     if family != 4 && family != 6 then throw "packet.family: expected 4 or 6"
@@ -345,7 +368,14 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
     let bad6 := family == 6 && (addr == 0 || addr == 1 || addr == 0xfd00ffff000000000000000000000001
                                  || addr / 2 ^ 32 == 0xffff)
     if bad4 || bad6 then throw "packet.dst: an address the sender does not route into wg0"
-    return .wgXmit family addr payload
+    -- a gso_size on IPv6 is beyond the WireGuard boundary: the mirror's
+    -- `Env.xmitPackets` answers `unsupported` (the boundary control wc_gso_ipv6)
+    return .wgXmit family addr payload { gsoSize, probe, routeMtu := none }
+  | "wg_set_mtu" =>
+    fields j ["op", "mtu"]
+    let mtu ← (← field j "mtu").getNat?
+    if mtu > 65535 then throw "mtu: expected 0-65535"
+    return .wgSetMtu mtu
   | _ => throw "unsupported operation"
 
 private def parseHidden (j : Json) (ops : Nat) : Except String (Array (List HiddenRecord)) := do
@@ -424,10 +454,25 @@ def parseTrace (j : Json) : Except String Trace := do
       (← (← field j "napi_irq_before_put").getArr?).toList.mapM fun b => b.getBool?
     else pure []
   if napiBeforePut.length > 8 then throw "napi_irq_before_put: more than 8 entries"
-  let bare ← if hasFixture then do
-      if (← (← field j "net_fixture").getStr?) != "bare" then throw "net_fixture: expected \"bare\""
-      pure true
-    else pure false
+  let (bare, routes) ← if hasFixture then do
+      let f ← field j "net_fixture"
+      match f.getStr? with
+      | .ok "bare" => pure (true, [])
+      | .ok _ => throw "net_fixture: expected \"bare\" or {\"routes\": [...]}"
+      | .error _ => do
+        -- W4: the fixture's routes into wg0 with an MTU (section 6)
+        fields f ["routes"]
+        let rs ← (← (← field f "routes").getArr?).toList.mapM fun r => do
+          fields r ["family", "dst", "mtu"]
+          let family ← (← field r "family").getNat?
+          if family != 4 && family != 6 then throw "net_fixture.routes[].family: expected 4 or 6"
+          let addr := bigEndian (← hexBytes (← field r "dst") (if family == 4 then 8 else 32) "net_fixture.routes[].dst")
+          let mtu ← (← field r "mtu").getNat?
+          if mtu < 68 || mtu > 65535 then throw "net_fixture.routes[].mtu: expected 68-65535"
+          pure (family, addr, mtu)
+        if rs.isEmpty || rs.length > 8 then throw "net_fixture.routes: expected 1-8 routes"
+        pure (false, rs)
+    else pure (false, [])
   let allocArmed ← if hasArmed then (← (← field j "alloc_armed").getArr?).toList.mapM fun e => do
       let label ← e.getStr?
       if !(AllocSite.all.any fun s => s.info.label == label && s.info.count != .cut) then
@@ -435,8 +480,8 @@ def parseTrace (j : Json) : Except String Trace := do
       pure label
     else pure []
   if hasArmed && !hasHidden then throw "alloc_armed: an armed run carries its records"
-  let trace : Trace := { id, ops, rlimit, hidden, steer, armRecords, napiBeforePut, allocArmed, pauses, bare }
-  if bare && !trace.net then throw "net_fixture: only a network trace has a network fixture"
+  let trace : Trace := { id, ops, rlimit, hidden, steer, armRecords, napiBeforePut, allocArmed, pauses, bare, routes }
+  if (bare || !routes.isEmpty) && !trace.net then throw "net_fixture: only a network trace has a network fixture"
   return trace
 
 /-! ## Harness fixture and trace execution
@@ -555,7 +600,8 @@ def toSyscall (results : Array Int) (ends : Array (Option (Nat × Nat))) (index 
   | .wgSet attrs => .wgSet attrs
   | .wgGet => .wgGet
   | .wgUp => .wgUp
-  | .wgXmit family addr payload => .wgXmit family addr payload
+  | .wgXmit family addr payload opts => .wgXmit family addr payload opts
+  | .wgSetMtu mtu => .wgSetMtu mtu
   | .wgObserve => .wgObserve
   | .wgInject family port message => .wgInject family port message
   | .wgFlood count port messages => .wgFlood count port messages
@@ -569,7 +615,7 @@ def toSyscall (results : Array Int) (ends : Array (Option (Nat × Nat))) (index 
 def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat × Stop) Json := do
   let mut world : World := { k := initialKernel trace.rlimit trace.net trace.bare, env := harnessEnv,
                              timing := Env.timing, portBound := Env.portBound,
-                             allocArmed := trace.allocArmed,
+                             allocArmed := trace.allocArmed, routes := trace.routes,
                              hiddenPlaceholders := placeholders && trace.hidden.isNone,
                              steerValues := if placeholders then trace.steer else [],
                              armRecords := trace.armRecords,

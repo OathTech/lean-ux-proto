@@ -415,6 +415,57 @@ L_MUTANTS = [
    'wg_xmit (l_down_purges_staged)', 'Leanux/Env.lean',
    "  WG.wgDown\n  modify fun w => { w with routesViaWg0 := false }\n", "  WG.wgDown\n", 'l_'),
 ]
+# W4 (docs/2026-10-06-w4-w7-transmit-bulk.md, section 8): the kept transmit
+# shapes; each names the w4_* trace that rejects it, and runs on the w4_ subset.
+W4_MUTANTS = [
+  ('W4-M1-gso-ids-constant', 'bytes: GSO segment ids not incremented, all 0 (w4_gso_4_2, w4_gso_trim)',
+   'Leanux/Env/IpStack.lean',
+   "  let hdr (c : Nat) := [0x45, 0] ++ beBytes (20 + ulen) 2 ++ beBytes i 2 ++ [0x40, 0, 64, 17] ++ beBytes c 2\n",
+   "  let hdr (c : Nat) := [0x45, 0] ++ beBytes (20 + ulen) 2 ++ beBytes 0 2 ++ [0x40, 0, 64, 17] ++ beBytes c 2\n", 'w4_'),
+  ('W4-M3-gso-checksum-partial', 'bytes: a segment keeps the pseudo-header partial sum as its UDP checksum (w4_gso_4_2)',
+   'Leanux/Env/IpStack.lean',
+   "  let check := if folded == 0 then 0xffff else folded\n  let udp := udp0.take 6 ++ beBytes check 2 ++ slice\n",
+   "  let check := onesSum pseudo\n  let udp := udp0.take 6 ++ beBytes check 2 ++ slice\n", 'w4_'),
+  ('W4-M4-gso-checksum-help', 'bytes and operand: skb_checksum_help applied to a CHECKSUM_NONE segment (w4_gso_4_2)',
+   'Leanux/Env/IpStack.lean',
+   "  { bytes := hdr (0xffff - onesSum (hdr 0)) ++ udp, csum := none, mtu }\n",
+   "  { bytes := hdr (0xffff - onesSum (hdr 0)) ++ udp, csum := some (20, 6), mtu }\n", 'w4_'),
+  ('W4-M5-trim-after-splice', 'counter: the trim runs after the splice, dropping the new segments (w4_gso_trim)',
+   'Leanux/WG/Device.lean',
+   "  for _ in [0:(← getPeer pid).staged.length + 1] do\n    let p ← getPeer pid\n"
+   "    if ← branch .xmitStagedTrimIter (p.staged.length > MAX_STAGED_PACKETS) then\n"
+   "      setPeer pid { p with staged := p.staged.drop 1 }\n"
+   "      modifyDev fun d => { d with txDropped := d.txDropped + 1 }\n    else break\n"
+   "  setPeer pid { (← getPeer pid) with staged := (← getPeer pid).staged ++ packets }   -- skb_queue_splice_tail\n",
+   "  setPeer pid { (← getPeer pid) with staged := (← getPeer pid).staged ++ packets }   -- skb_queue_splice_tail\n"
+   "  for _ in [0:(← getPeer pid).staged.length + 1] do\n    let p ← getPeer pid\n"
+   "    if ← branch .xmitStagedTrimIter (p.staged.length > MAX_STAGED_PACKETS) then\n"
+   "      setPeer pid { p with staged := p.staged.drop 1 }\n"
+   "      modifyDev fun d => { d with txDropped := d.txDropped + 1 }\n    else break\n", 'w4_'),
+  ('W4-M6-trim-at-128', 'counter: the trim loop runs at 128 staged, not above it (w4_gso_trim: tx_dropped 129)',
+   'Leanux/WG/Device.lean',
+   "    if ← branch .xmitStagedTrimIter (p.staged.length > MAX_STAGED_PACKETS) then\n",
+   "    if ← branch .xmitStagedTrimIter (p.staged.length >= MAX_STAGED_PACKETS) then\n", 'w4_'),
+  ('W4-M7-mtu-from-device', 'bytes: PACKET_CB->mtu from dev->mtu instead of dst_mtu (w4_route_mtu_probe_4)',
+   'Leanux/Env/IpStack.lean',
+   "    let mtu := routeMtu.getD dev.mtu\n", "    let mtu := dev.mtu\n", 'w4_'),
+  ('W4-M8-no-last-unit-modulo', 'bytes: last_unit is len instead of len % mtu over the MTU (w4_route_mtu_probe_4)',
+   'Leanux/WG/Data.lean',
+   "    if ← branch .padOverMtu (len > mtu) then pure (len % mtu) else pure len\n",
+   "    if ← branch .padOverMtu (len > mtu) then pure len else pure len\n", 'w4_'),
+  ('W4-M9-keepalive-constant-mtu', 'operand: the keepalive ignores Device.mtu (w4_set_mtu_0: the no_mtu arm)',
+   'Leanux/WG/Send.lean',
+   "    setPeer pid { p with staged := p.staged ++ [{ mtu := (← getDev).mtu }] }\n",
+   "    setPeer pid { p with staged := p.staged ++ [{ mtu := 1420 }] }\n", 'w4_'),
+  ('W4-M10-open-inet6-constant', 'operand: wg_open sees an inet6_dev always (w4_set_mtu_0: the wg_up after MTU 0)',
+   'Leanux/WG/Device.lean',
+   "  _ ← branch .openHasInet6 dev.inet6Dev   -- addr_gen_mode = IN6_ADDR_GEN_MODE_NONE\n",
+   "  _ ← branch .openHasInet6 true   -- addr_gen_mode = IN6_ADDR_GEN_MODE_NONE\n", 'w4_'),
+  ('W4-M16-mtu-not-stored', 'bytes: Device.mtu stays 1420 after SIOCSIFMTU (w4_set_mtu_1300: 12 bytes of padding)',
+   'Leanux/WG/Device.lean',
+   "  modifyDev fun d => { d with mtu, inet6Dev := mtu ≥ 1280, inet4Dev := mtu ≥ 68 }\n",
+   "  modifyDev fun d => { d with inet6Dev := mtu ≥ 1280, inet4Dev := mtu ≥ 68 }\n", 'w4_'),
+]
 NOT_CLAIMED = {'L-M10-update-gen-zero', 'E-M6-under-load-threshold-gt'}
 # evaluator.check on the traces of one suite whose ids start with a prefix
 SUBSET = """import sys
@@ -573,7 +624,7 @@ def run(cmd, **kw):
 def main():
     assert run(['git', 'status', '--porcelain'], capture_output=True, text=True).stdout == '', 'tree must be clean'
     head = run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()
-    mutants = MUTANTS + D1_MUTANTS + D2_MUTANTS + E_MUTANTS + E_UNDERLOAD_MUTANTS + D3_MUTANTS + L_MUTANTS + A_MUTANTS
+    mutants = MUTANTS + D1_MUTANTS + D2_MUTANTS + E_MUTANTS + E_UNDERLOAD_MUTANTS + D3_MUTANTS + L_MUTANTS + A_MUTANTS + W4_MUTANTS
     names = [m[0] for m in mutants]
     assert set(EQUIVALENT) <= set(names), 'an EQUIVALENT entry names no mutant'
     assert NOT_CLAIMED <= set(names), 'a NOT_CLAIMED entry names no mutant'

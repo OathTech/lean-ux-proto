@@ -38,10 +38,12 @@ FIELDS = {
     "wg_create": {"op"}, "wg_down": {"op"}, "wg_delete": {"op"},
     # P (pipes, docs/2026-10-05-p-pipes.md section 6)
     "pipe2": {"op", "flags"},
+    # W4 (docs/2026-10-06-w4-w7-transmit-bulk.md section 6): SIOCSIFMTU on wg0
+    "wg_set_mtu": {"op", "mtu"},
 }
 LIFECYCLE_OPS = ("wg_create", "wg_down", "wg_delete")
 WG_OPS = {"wg_set", "wg_get", "wg_up", "wg_xmit", "wg_observe", "wg_inject", "wg_advance",
-          "wg_flood"} | set(LIFECYCLE_OPS)
+          "wg_flood", "wg_set_mtu"} | set(LIFECYCLE_OPS)
 # Wire opcodes: an explicit table, not FIELDS' order (a positional derivation
 # gave P's pipe2 and D3's wg_advance the same code, 14). harness/guest.c
 # mirrors it as OP_* #defines; harness/test_trace.py checks that the codes
@@ -56,6 +58,10 @@ OPCODES = {
     "wg_create": 15, "wg_down": 16, "wg_delete": 17,
     "wg_flood": 18,
     "wg_advance": 19,
+    # W4: a PLACEHOLDER code (the design's OP_SET_MTU) until the coordinator
+    # allocates it at integration (docs/2026-10-11-interface.md); 20-24 are
+    # W2's and W8/W9's reservations
+    "wg_set_mtu": 25,
 }
 # Reserved wire opcodes (the interface commit, docs/2026-10-11-interface.md),
 # allocated by the coordinator so the W streams' worktrees cannot clash. A
@@ -74,8 +80,11 @@ if set(OPCODES) != set(FIELDS):
 # and the guest fails an operation whose area filled.
 KCOV_CAPACITY = 1024 * 1024
 # The optional top-level `net_fixture` (L): "bare" starts a network trace
-# without wg0; absent, the fixture creates a down wg0.
+# without wg0; absent, the fixture creates a down wg0. W4: an object
+# {"routes": [{"family", "dst", "mtu"}]} keeps wg0 and adds, at every wg_up,
+# a host route into wg0 with that MTU for each destination (1-8 routes).
 NET_FIXTURES = ("bare",)
+MAX_FIXTURE_ROUTES = 8
 # fcntl commands: the wire carries the command number itself
 # (F_LINUX_SPECIFIC_BASE = 1024: F_SETPIPE_SZ = 1031, F_GETPIPE_SZ = 1032)
 FCNTL = {"F_GETFD": 1, "F_SETFD": 2, "F_GETFL": 3, "F_SETFL": 4, "F_SETPIPE_SZ": 1031, "F_GETPIPE_SZ": 1032}
@@ -243,9 +252,15 @@ def validate_trace(trace):
                 validate_packet(op["packet"], f"ops[{i}].packet")
             except InvalidConfig as exc:
                 raise InvalidTrace(str(exc)) from exc
+        if name == "wg_set_mtu":
+            if type(op["mtu"]) is not int or not 0 <= op["mtu"] <= 65535:
+                raise InvalidTrace(f"ops[{i}].mtu: expected an integer 0-65535")
     if "net_fixture" in trace:
-        if type(trace["net_fixture"]) is not str or trace["net_fixture"] not in NET_FIXTURES:
-            raise InvalidTrace(f"net_fixture: expected one of {list(NET_FIXTURES)}")
+        fixture = trace["net_fixture"]
+        if type(fixture) is dict:
+            validate_fixture_routes(fixture)
+        elif type(fixture) is not str or fixture not in NET_FIXTURES:
+            raise InvalidTrace(f"net_fixture: expected one of {list(NET_FIXTURES)} or {{'routes': [...]}}")
         if not uses_wireguard(trace):
             raise InvalidTrace("net_fixture: only a network trace has a network fixture")
     return deepcopy(trace)
@@ -266,6 +281,26 @@ def net_mode(trace):
     if not uses_wireguard(trace):
         return 0
     return 2 if trace.get("net_fixture") == "bare" else 1
+
+
+def validate_fixture_routes(fixture):
+    """W4: `net_fixture` as {"routes": [{"family": 4|6, "dst": hex, "mtu": n}]}."""
+    if set(fixture) != {"routes"} or type(fixture["routes"]) is not list \
+            or not 1 <= len(fixture["routes"]) <= MAX_FIXTURE_ROUTES:
+        raise InvalidTrace(f"net_fixture: expected {{'routes': [1-{MAX_FIXTURE_ROUTES} routes]}}")
+    for k, route in enumerate(fixture["routes"]):
+        if type(route) is not dict or set(route) != {"family", "dst", "mtu"} or route["family"] not in (4, 6):
+            raise InvalidTrace(f"net_fixture.routes[{k}]: expected family (4 or 6), dst, mtu")
+        digits = 8 if route["family"] == 4 else 32
+        if type(route["dst"]) is not str or not re.fullmatch(f"[0-9a-f]{{{digits}}}", route["dst"]):
+            raise InvalidTrace(f"net_fixture.routes[{k}].dst: expected {digits} lowercase hex digits")
+        if type(route["mtu"]) is not int or not 68 <= route["mtu"] <= 65535:
+            raise InvalidTrace(f"net_fixture.routes[{k}].mtu: expected 68-65535")
+
+
+def fixture_routes(trace):
+    fixture = trace.get("net_fixture")
+    return fixture["routes"] if type(fixture) is dict else []
 
 
 def loads_trace(line):
@@ -335,7 +370,11 @@ def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False, allo
              f"A {int(arm_records)}", alloc_line(alloc)]
     for trace in traces:
         schedule = steer_wire.get(trace["id"], []) if "steer" in trace else []
-        lines.append(f"T {trace['id']} {len(trace['ops'])} {trace.get('rlimit_nofile', 32)} {net_mode(trace)} {len(schedule)}")
+        routes = fixture_routes(trace)
+        lines.append(f"T {trace['id']} {len(trace['ops'])} {trace.get('rlimit_nofile', 32)} {net_mode(trace)} {len(schedule)} {len(routes)}")
+        # W4: the fixture's routes into wg0 (family, destination, MTU), one line each
+        for route in routes:
+            lines.append(f"R {route['family']} {route['dst']} {route['mtu']}")
         for op in trace["ops"]:
             def fd(field):
                 value = op.get(field, {"literal": -1})
@@ -346,15 +385,21 @@ def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False, allo
             newkind, newvalue = fd("newfd")
             a = op.get("init", op.get("count", FCNTL.get(op.get("cmd"), 0)))
             b = op.get("flags", op.get("arg", 0))
+            op_value = op.get('value', '0')
             if op["op"] == "wg_xmit":
+                # W4: b = gso_size (0: none), the value field 1 for IP_PMTUDISC_PROBE (0: DO)
                 a, packet = encode_packet(op["packet"])
+                b = op["packet"].get("gso_size", 0)
+                op_value = 1 if op["packet"].get("pmtudisc") == "probe" else 0
+            if op["op"] == "wg_set_mtu":
+                a = op["mtu"]
             if op["op"] == "wg_inject":
                 a, b = op["family"], op["port"]
             if op["op"] == "wg_advance":
                 a = op["ticks"]
             if op["op"] == "wg_flood":
                 a, b = op["count"], op["port"]
-            line = f"{OPCODES[op['op']]} {kind} {value} {newkind} {newvalue} {a} {b} {op.get('value', '0')}"
+            line = f"{OPCODES[op['op']]} {kind} {value} {newkind} {newvalue} {a} {b} {op_value}"
             if GUEST_PIPES:
                 line += f" {op.get('pause_ms', 0)}"   # the ninth field (P1)
             if op["op"] == "wg_set":

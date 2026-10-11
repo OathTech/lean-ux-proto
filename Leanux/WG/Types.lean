@@ -323,6 +323,13 @@ structure Device where
       identity is set. -/
   cookieEncryptionKey : List UInt8 := List.replicate 32 0
   pubkeyHashKey : List UInt8 := List.replicate 16 0
+  /-- W4 (docs/2026-10-06-w4-w7-transmit-bulk.md, section 4): `dev->mtu`,
+      1420 from `wg_setup` (device.c:296), moved by `SIOCSIFMTU` (`setMtu`);
+      whether wg0 has an `in_device` (gone below 68) and an `inet6_dev` (gone
+      below 1280), the tests of `wg_open` (device.c:39, 47). -/
+  mtu : Nat := 1420
+  inet4Dev : Bool := true
+  inet6Dev : Bool := true
   /-- `dev->stats` counters. -/
   txErrors : Nat := 0
   txDropped : Nat := 0

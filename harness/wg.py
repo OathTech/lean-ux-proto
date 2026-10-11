@@ -319,7 +319,10 @@ def _decode_dump(payloads):
 # Stage B1: datagrams routed into wg0 from the fixture's UDP socket; D2
 # adds their UDP payload.
 PACKET_FIELDS = {"family", "dst"}
-PACKET_OPTIONAL = {"payload"}
+# W4: `gso_size` (UDP_SEGMENT, IPv4, 2-128 equal segments) and `pmtudisc`
+# ("do", the sender's default, or "probe"); docs/2026-10-06-w4-w7-transmit-bulk.md section 6
+PACKET_OPTIONAL = {"payload", "gso_size", "pmtudisc"}
+UDP_MAX_SEGMENTS = 128
 # wg0's MTU (1420) less the IPv4 and UDP headers: an IPv4 packet that fits.
 # IPv6 payloads above 1372 do not fit either; the mirror's environment places
 # them outside the domain (Env.xmitPacket).
@@ -354,10 +357,22 @@ def validate_packet(packet, where="packet"):
     if packet["family"] == 6 and (dst in (bytes(16), bytes(15) + b"\x01", bytes.fromhex(FIXTURE_ADDR6))
                                   or dst[:12] == bytes(10) + b"\xff\xff"):
         raise InvalidConfig(f"{where}.dst: an address the sender does not route into wg0")
+    if "pmtudisc" in packet and packet["pmtudisc"] not in ("do", "probe"):
+        raise InvalidConfig(f"{where}.pmtudisc: expected \"do\" or \"probe\"")
+    if "gso_size" in packet:
+        gso = packet["gso_size"]
+        if "payload" not in packet or packet["family"] != 4:
+            raise InvalidConfig(f"{where}.gso_size: only with a payload, IPv4 only (the WireGuard boundary)")
+        if type(gso) is not int or not 1 <= gso <= MAX_XMIT_PAYLOAD:
+            raise InvalidConfig(f"{where}.gso_size: expected 1-{MAX_XMIT_PAYLOAD}")
+        length = len(packet["payload"]) // 2
+        if length % gso or not 2 <= length // gso <= UDP_MAX_SEGMENTS:
+            raise InvalidConfig(f"{where}.gso_size: the payload must be 2-{UDP_MAX_SEGMENTS} whole segments")
+    limit = MAX_XMIT_PAYLOAD * (UDP_MAX_SEGMENTS if "gso_size" in packet else 1)
     if "payload" in packet:
         payload = packet["payload"]
-        if type(payload) is not str or not re.fullmatch(f"(?:[0-9a-f]{{2}}){{1,{MAX_XMIT_PAYLOAD}}}", payload):
-            raise InvalidConfig(f"{where}.payload: expected 1 to {MAX_XMIT_PAYLOAD} bytes of lowercase hex")
+        if type(payload) is not str or not re.fullmatch(f"(?:[0-9a-f]{{2}}){{1,{limit}}}", payload):
+            raise InvalidConfig(f"{where}.payload: expected 1 to {limit} bytes of lowercase hex")
         if packet["family"] == 6 and len(payload) > 2 * MAX_XMIT_PAYLOAD6:
             raise InvalidConfig(f"{where}.payload: IPv6 payloads are at most {MAX_XMIT_PAYLOAD6} bytes (no fragmentation)")
         if packet["family"] == 6 and dst[0] == 0xfe and dst[1] & 0xc0 == 0x80:

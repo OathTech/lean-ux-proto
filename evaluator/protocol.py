@@ -107,7 +107,11 @@ def validate_observation(trace, result):
         if len(data) != 2 * expected:
             raise InvalidOutput(f'observation {index}: byte count')
     branches = result['branches']
-    if type(branches) is not list or len(branches) > 4096:
+    # W4 (docs/2026-10-06-w4-w7-transmit-bulk.md, 2.2): a multi-packet ring
+    # item (the 129-packet flush of w4_gso_trim) reports about 2800 branches
+    # in one operation; the bound follows the bulk tiers (W7), as the guest's
+    # output limit bounds the whole
+    if type(branches) is not list or len(branches) > MAX_BRANCHES:
         raise InvalidOutput('branch report size')
     for branch in branches:
         if not (keys(branch, ('index', 'label')) or keys(branch, ('index', 'label', 'operands'))
@@ -155,17 +159,23 @@ def parse_batch(traces, output, max_bytes=16 * 1024 * 1024):
 # fcntl (F_DUPFD*: the fd table), wg_set (peer and allowed-ips nodes). A
 # Linux ENOMEM the mirror did not take is a semantic mismatch, and its
 # record is unconsumed or absent: fail-noisy on both sides.
+# The mirror's branches per trace (W4: raised from 4096 for multi-packet items)
+MAX_BRANCHES = 32768
+
 SEMANTIC_ERRNOS = {'eventfd2': {12, 22, 24}, 'dup': {9, 12, 24}, 'dup3': {9, 12, 22},
                    'close': {9}, 'fcntl': {1, 9, 12, 22},
                    # L (docs/2026-10-05-l-lifecycle.md): ENODEV without wg0;
                    # EADDRINUSE binding a fixture port (wg_up, a running wg_set)
                    'wg_set': {12, 22, 95, 19, 98}, 'wg_get': {22, 19},
                    # ENOKEY, EDESTADDRREQ, EPROTONOSUPPORT, ENETUNREACH (no route before wg_up); EAGAIN when nothing arrived
-                   'wg_up': {19, 98}, 'wg_xmit': {126, 89, 93, 101}, 'wg_observe': {11}, 'read': {9, 11, 22}, 'write': {9, 11, 22},
+                   'wg_up': {19, 98}, 'wg_xmit': {126, 89, 93, 101, 90, 22}, 'wg_observe': {11}, 'read': {9, 11, 22}, 'write': {9, 11, 22},
                    # D3: the advance ioctl fails only outside the oracle's setup (-EOPNOTSUPP, -EINVAL, -EPERM)
                    'wg_advance': set(),
                    # E-B: the io_uring submission (wg_flood) fails only outside the oracle's setup
                    'wg_flood': set(),
+                   # W4: dev_validate_mtu's -ERANGE; wg_xmit's -EMSGSIZE/-EINVAL from the sender's
+                   # IP layer under a route MTU or UDP_SEGMENT (no wg_xmit runs)
+                   'wg_set_mtu': {19, 34},
                    # EEXIST (a second wg0), ENODEV (no wg0)
                    'wg_create': {17}, 'wg_down': {19}, 'wg_delete': {19}}
 # Opcodes 20-24 are reserved for the W streams (harness/trace.py

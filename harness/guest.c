@@ -29,6 +29,13 @@
 #include <sys/utsname.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <netinet/udp.h>
+#ifndef UDP_SEGMENT
+#define UDP_SEGMENT 103   /* W4: linux/udp.h */
+#endif
+#ifndef SOL_UDP
+#define SOL_UDP 17
+#endif
 
 #define MAX_OPS 64
 /* The KCOV area in words, task and remote alike (L, docs/2026-10-05-l-lifecycle.md
@@ -53,8 +60,12 @@
 /* wg_observe waits this long for the handshake workers before it looks. */
 #define OBSERVE_WAIT_US 400000
 #define QUEUE_WAIT_US 100000
-/* A wg_xmit payload: at most wg0's MTU (1420) less the IPv4 and UDP headers. */
-#define MAX_XMIT_PAYLOAD 1392
+/* A wg_xmit payload: at most wg0's MTU (1420) less the IPv4 and UDP headers,
+ * or (W4) two full-size UDP_SEGMENT segments. */
+#define MAX_XMIT_PAYLOAD 2784
+/* W4: the fixture's routes into wg0 with an MTU ("net_fixture": {"routes"}). */
+#define MAX_FIXTURE_ROUTES 8
+struct fixture_route { unsigned family; unsigned char dst[16]; unsigned mtu; };
 /* No WireGuard timer is armed before wg_up (mod_peer_timer needs a running
  * device). Counted from just before the wg_up ioctl, in real time (the
  * virtual advances of wg_advance are subtracted), a trace must end within
@@ -112,6 +123,10 @@
 #define OP_WG_DELETE 17
 #define OP_WG_FLOOD 18
 #define OP_WG_ADVANCE 19
+/* W4 (docs/2026-10-06-w4-w7-transmit-bulk.md section 6): SIOCSIFMTU on wg0.
+ * A PLACEHOLDER code (the design's OP_SET_MTU) until the coordinator
+ * allocates it; 20-24 are reserved for W2 and W8/W9 (harness/trace.py). */
+#define OP_WG_SET_MTU 25
 /* 20-24 are reserved for the W streams (harness/trace.py RESERVED_OPCODES,
  * docs/2026-10-11-interface.md): 20 wg_get_start and 21 wg_get_recv (W2),
  * 22 wg_netns_close (W8), 23 wg_deladdr and 24 wg_delroute (W9). No define
@@ -158,7 +173,11 @@ struct trace {
      * network fixture without wg0 (L, "net_fixture": "bare") */
     char id[81]; unsigned count; unsigned rlimit; unsigned net; struct operation ops[MAX_OPS];
     unsigned nsteer; struct steer_entry steer[STEER_MAX];
+    unsigned nroutes; struct fixture_route routes[MAX_FIXTURE_ROUTES];
 };
+/* W4: the running trace's fixture routes, for route_into_wg0. */
+static const struct fixture_route *fixture_routes;
+static unsigned n_fixture_routes;
 static char line[4 * MAX_PAYLOAD];
 /* fds: a successful pipe2's pair; digest: BLAKE2s-256 of all bytes a read
  * returned; sigpipe: SIGPIPE pending after a write. */
@@ -701,7 +720,20 @@ static void route_into_wg0(const char *id, unsigned index, int first)
     if (rtnl < 0) fail(id, index, "environment_failure", "route_socket");
     unsigned char body[128];
     uint32_t wg = wg_ifindex;
+    /* W4 (design section 2.3): after an MTU change below a family's floor
+     * the kernel has taken the family's IP device down (the inet6_dev below
+     * 1280, addrconf.c:3691-3695; the in_device below 68, devinet.c:1637-1643)
+     * and refuses the addresses and routes: the IPv6 address add is -EINVAL
+     * (ipv6_add_dev, addrconf.c:381-382), the IPv4 address add -ENOBUFS
+     * (devinet.c:888), the route adds -ENODEV. The refusals are expected
+     * exactly; any other value fails the trace, as every request does. */
+    struct ifreq mtu_request;
+    memset(&mtu_request, 0, sizeof(mtu_request));
+    strcpy(mtu_request.ifr_name, "wg0");
+    if (ioctl(SEND_FD, SIOCGIFMTU, &mtu_request)) fail(id, index, "environment_failure", "get_wg0_mtu");
+    int down4 = mtu_request.ifr_mtu < 68, down6 = mtu_request.ifr_mtu < 1280;
     for (int family = AF_INET; family; family = family == AF_INET ? AF_INET6 : 0) {
+        int down = family == AF_INET ? down4 : down6;
         size_t len = sizeof(struct ifaddrmsg);
         memset(body, 0, sizeof(body));
         struct ifaddrmsg *ifa = (struct ifaddrmsg *)body;
@@ -720,7 +752,7 @@ static void route_into_wg0(const char *id, unsigned index, int first)
         }
         rtnl_request(rtnl, id, index, RTM_NEWADDR, body, len,
                      first ? "address_on_wg0" : "address_on_wg0_after_down",
-                     !first && family == AF_INET ? -EEXIST : 0);
+                     down ? (family == AF_INET ? -ENOBUFS : -EINVAL) : !first && family == AF_INET ? -EEXIST : 0);
         len = sizeof(struct rtmsg);
         memset(body, 0, sizeof(body));
         struct rtmsg *rt = (struct rtmsg *)body;
@@ -731,7 +763,31 @@ static void route_into_wg0(const char *id, unsigned index, int first)
         rt->rtm_type = RTN_UNICAST;
         attr(body, &len, RTA_OIF, &wg, sizeof(wg));
         rtnl_request(rtnl, id, index, RTM_NEWROUTE, body, len,
-                     first ? "default_route_via_wg0" : "default_route_via_wg0_after_down", 0);
+                     first ? "default_route_via_wg0" : "default_route_via_wg0_after_down", down ? -ENODEV : 0);
+        /* W4: the trace's host routes into wg0 with their MTU (RTAX_MTU), one
+         * request each, after the default route of the family. */
+        for (unsigned k = 0; k < n_fixture_routes; ++k) {
+            const struct fixture_route *r = &fixture_routes[k];
+            if ((int)(r->family == 4 ? AF_INET : AF_INET6) != family) continue;
+            len = sizeof(struct rtmsg);
+            memset(body, 0, sizeof(body));
+            rt = (struct rtmsg *)body;
+            rt->rtm_family = family;
+            rt->rtm_dst_len = family == AF_INET ? 32 : 128;
+            rt->rtm_table = RT_TABLE_MAIN;
+            rt->rtm_protocol = RTPROT_STATIC;
+            rt->rtm_scope = RT_SCOPE_LINK;
+            rt->rtm_type = RTN_UNICAST;
+            attr(body, &len, RTA_DST, r->dst, family == AF_INET ? 4 : 16);
+            attr(body, &len, RTA_OIF, &wg, sizeof(wg));
+            uint32_t mtu = r->mtu;
+            unsigned char metrics[16];
+            size_t mlen = 0;
+            attr(metrics, &mlen, RTAX_MTU, &mtu, sizeof(mtu));
+            attr(body, &len, RTA_METRICS, metrics, mlen);
+            rtnl_request(rtnl, id, index, RTM_NEWROUTE, body, len,
+                         first ? "fixture_route_via_wg0" : "fixture_route_via_wg0_after_down", down ? -ENODEV : 0);
+        }
     }
     if (close(rtnl)) fail(id, index, "environment_failure", "route_close");
 }
@@ -1025,6 +1081,8 @@ static void flood_cleanup(struct flood_state *fs)
 
 static void execute(const struct trace *t, int input_fd, int comparisons)
 {
+    fixture_routes = t->routes;   /* W4: for route_into_wg0 at every wg_up */
+    n_fixture_routes = t->nroutes;
     struct observation result[MAX_OPS] = {{0}};
     if (close(input_fd)) fail(t->id, -1, "environment_failure", "close_input");
     /* The parent's watchdog: SIGALRM's handler is the parent's, not ours; and
@@ -1072,9 +1130,13 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
          * ident generator; IPV6_AUTOFLOWLABEL = 0 keeps the flow label 0
          * rather than a hash under a boot-time secret. */
         int pmtudisc = IP_PMTUDISC_DO;
+        /* W4 (design 2.7): a large send buffer, so a batch of sends is never
+         * deferred by the socket's limit (SO_SNDBUFFORCE: root in the guest). */
+        int sndbuf = 8 * 1024 * 1024;
         if (socket(AF_INET6, SOCK_DGRAM, 0) != SEND_FD ||
             setsockopt(SEND_FD, IPPROTO_IPV6, IPV6_V6ONLY, &zero, sizeof(zero)) ||
             setsockopt(SEND_FD, IPPROTO_IP, IP_MTU_DISCOVER, &pmtudisc, sizeof(pmtudisc)) ||
+            setsockopt(SEND_FD, SOL_SOCKET, SO_SNDBUFFORCE, &sndbuf, sizeof(sndbuf)) ||
             setsockopt(SEND_FD, IPPROTO_IPV6, IPV6_AUTOFLOWLABEL, &zero, sizeof(zero)) ||
             bind(SEND_FD, (struct sockaddr *)&from, sizeof(from)))
             fail(t->id, -1, "environment_failure", "sender_at_6");
@@ -1120,7 +1182,7 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         if (op->code == OP_READ) memset(read_buffer, 0xa5, op->a);
         if (op->code == OP_WRITE) fill_write_buffer(i, op->value, op->a);
         int pipe_fds[2] = {-1, -1};
-        if (((op->code >= OP_WG_UP && op->code <= OP_WG_INJECT) || IS_LIFECYCLE_OP(op->code)) && !t->net)
+        if (((op->code >= OP_WG_UP && op->code <= OP_WG_INJECT) || IS_LIFECYCLE_OP(op->code) || op->code == OP_WG_SET_MTU) && !t->net)
             fail(t->id, i, "invalid_input", "wireguard_without_network_fixture");
         /* wg_up and wg_down: the flags are read before the window; without
          * a device (L) they are 0 and the SIOCSIFFLAGS reports ENODEV.
@@ -1248,11 +1310,46 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             if (op->payload_len < sizeof(to.sin6_addr) || op->payload_len > sizeof(to.sin6_addr) + MAX_XMIT_PAYLOAD)
                 fail(t->id, i, "invalid_input", "wire_address");
             memcpy(&to.sin6_addr, op->payload, sizeof(to.sin6_addr));
-            if (op->payload_len == sizeof(to.sin6_addr))
+            /* W4: b is UDP_SEGMENT's gso_size (0: none), value 1 asks for
+             * IP_PMTUDISC_PROBE for this send (restored to DO after it). */
+            int probe = IP_PMTUDISC_PROBE, do_ = IP_PMTUDISC_DO;
+            if (op->value == 1 && setsockopt(SEND_FD, IPPROTO_IP, IP_MTU_DISCOVER, &probe, sizeof(probe)))
+                fail(t->id, i, "environment_failure", "pmtudisc_probe");
+            if (op->payload_len == sizeof(to.sin6_addr)) {
                 ret = syscall(SYS_sendto, SEND_FD, "leux", 4, 0, &to, sizeof(to));
-            else
+            } else if (op->b) {
+                struct iovec iov = {.iov_base = (void *)(op->payload + sizeof(to.sin6_addr)),
+                                    .iov_len = op->payload_len - sizeof(to.sin6_addr)};
+                char control[CMSG_SPACE(sizeof(uint16_t))];
+                memset(control, 0, sizeof(control));
+                struct msghdr msg = {.msg_name = &to, .msg_namelen = sizeof(to), .msg_iov = &iov, .msg_iovlen = 1,
+                                     .msg_control = control, .msg_controllen = sizeof(control)};
+                struct cmsghdr *cm = CMSG_FIRSTHDR(&msg);
+                cm->cmsg_level = SOL_UDP;
+                cm->cmsg_type = UDP_SEGMENT;
+                cm->cmsg_len = CMSG_LEN(sizeof(uint16_t));
+                uint16_t gso = (uint16_t)op->b;
+                memcpy(CMSG_DATA(cm), &gso, sizeof(gso));
+                ret = syscall(SYS_sendmsg, SEND_FD, &msg, 0);
+            } else {
                 ret = syscall(SYS_sendto, SEND_FD, op->payload + sizeof(to.sin6_addr),
                               op->payload_len - sizeof(to.sin6_addr), 0, &to, sizeof(to));
+            }
+            if (op->value == 1) {
+                int saved = errno;
+                if (setsockopt(SEND_FD, IPPROTO_IP, IP_MTU_DISCOVER, &do_, sizeof(do_)))
+                    fail(t->id, i, "environment_failure", "pmtudisc_restore");
+                errno = saved;
+            }
+            break;
+        }
+        case OP_WG_SET_MTU: {
+            /* W4: dev_ioctl(SIOCSIFMTU) -> dev_set_mtu(wg0, a). */
+            struct ifreq request;
+            memset(&request, 0, sizeof(request));
+            strcpy(request.ifr_name, "wg0");
+            request.ifr_mtu = (int)op->a;
+            ret = syscall(SYS_ioctl, SEND_FD, SIOCSIFMTU, &request);
             break;
         }
         case OP_WG_INJECT: {
@@ -1585,10 +1682,25 @@ int main(int argc, char **argv)
     for (unsigned t = 0; t < total; ++t) {
         static struct trace trace;
         if (!fgets(line, sizeof(line), input) ||
-            sscanf(line, "T %80s %u %u %u %u", trace.id, &trace.count, &trace.rlimit, &trace.net, &trace.nsteer) != 5 ||
+            sscanf(line, "T %80s %u %u %u %u %u", trace.id, &trace.count, &trace.rlimit, &trace.net, &trace.nsteer,
+                   &trace.nroutes) != 6 ||
             trace.count < 1 || trace.count > MAX_OPS || trace.rlimit < 8 || trace.rlimit > 1024 || trace.net > 2 ||
-            trace.nsteer > STEER_MAX)
+            trace.nsteer > STEER_MAX || trace.nroutes > MAX_FIXTURE_ROUTES || (trace.nroutes && trace.net != 1))
             fail("batch", -1, "invalid_input", "wire_trace");
+        /* W4: the fixture's routes into wg0 (family, destination, MTU). */
+        for (unsigned k = 0; k < trace.nroutes; ++k) {
+            struct fixture_route *r = &trace.routes[k];
+            char hex[40];
+            if (!fgets(line, sizeof(line), input) || sscanf(line, "R %u %39s %u", &r->family, hex, &r->mtu) != 3 ||
+                (r->family != 4 && r->family != 6) || strlen(hex) != (r->family == 4 ? 8u : 32u) ||
+                r->mtu < 68 || r->mtu > 65535)
+                fail("batch", -1, "invalid_input", "wire_route");
+            for (size_t b = 0; b < strlen(hex) / 2; ++b) {
+                unsigned byte;
+                if (sscanf(hex + 2 * b, "%2x", &byte) != 1) fail("batch", -1, "invalid_input", "wire_route");
+                r->dst[b] = (unsigned char)byte;
+            }
+        }
         for (unsigned i = 0; i < trace.count; ++i) {
             struct operation *op = &trace.ops[i];
             int consumed = 0;

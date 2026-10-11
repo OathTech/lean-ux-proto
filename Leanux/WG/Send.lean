@@ -41,12 +41,6 @@ def REKEY_AFTER_TIME : Nat := 120
 def REKEY_AFTER_MESSAGES : Nat := 2 ^ 60
 def COUNTER_WINDOW_SIZE : Nat := 8192 - 64   -- COUNTER_BITS_TOTAL - BITS_PER_LONG
 def REJECT_AFTER_MESSAGES : Nat := (2 ^ 64 - 1) - COUNTER_WINDOW_SIZE - 1
-/-- `dev->mtu` as `wg_setup` (device.c:280-296) sets it: `ETH_DATA_LEN -
-    overhead`, with `overhead = MESSAGE_MINIMUM_LENGTH + sizeof(struct udphdr)
-    + max(sizeof(struct ipv6hdr), sizeof(struct iphdr))`. No operation in the
-    domain changes it. -/
-def DEVICE_MTU : Nat := 1500 - (32 + 8 + 40)
-
 /-- wg_packet_send_queued_handshake_initiation (send.c:55-83). The pending
     check comes first: once queued, `queue_work` and `last_sent_handshake`
     depend on the worker's timing. -/
@@ -260,8 +254,8 @@ def sendKeepalive (pid : PeerId) : M Unit := do
     -- `alloc_skb(DATA_PACKET_HEAD_ROOM + MESSAGE_MINIMUM_LENGTH, GFP_ATOMIC)`
     -- (send.c:226): NULL returns without staging or sending (send.c:228-229)
     if ← branch .keepaliveNoMem !(← hiddenAlloc .keepaliveSkb) then return
-    -- `PACKET_CB(skb)->mtu = skb->dev->mtu` (DEVICE_MTU; Data.lean pads with it)
-    setPeer pid { p with staged := p.staged ++ [{ mtu := DEVICE_MTU }] }
+    -- `PACKET_CB(skb)->mtu = skb->dev->mtu` (W4: `Device.mtu`; Data.lean pads with it)
+    setPeer pid { p with staged := p.staged ++ [{ mtu := (← getDev).mtu }] }
   sendStagedPackets pid
 
 end Leanux.WG
