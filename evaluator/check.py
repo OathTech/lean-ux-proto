@@ -282,6 +282,12 @@ RESCHED = 302
 # {before, after} (class 'advance', resolved by its consumer frame, the
 # ioctl's call site fs/ioctl.c:51, the only caller of kcov_ioctl).
 TIMER_ARM, TIME_ADVANCE = 303, 304
+# W9 (docs/2026-10-06-w8-w9-netns-routing.md, sections 4.1 and 5): the
+# dst-cache `jiffies` records (`dst_cache_reset_now`, the refresh), reserved
+# at the interface commit (docs/2026-10-11-interface.md) and not resolved by
+# any class yet: a record of this kind is an unknown site (fail-noisy) until
+# W9-K lands the kernel hook and W9-M its sites and the `jiffies` class.
+DST_CACHE_JIFFIES = 306
 
 
 def load_hidden_sites():

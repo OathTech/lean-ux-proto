@@ -171,9 +171,12 @@ class OpcodeTableTests(unittest.TestCase):
         self.assertTrue(all(isinstance(c, int) and c >= 1 for c in codes))
         self.assertEqual((OPCODES["pipe2"], OPCODES["wg_advance"]), (14, 19))
         self.assertEqual((OPCODES["wg_create"], OPCODES["wg_down"], OPCODES["wg_delete"]), (15, 16, 17))
-        # E-B took its reserved code 18 at the int-e merge; nothing is reserved now
+        # E-B took its reserved code 18 at the int-e merge; the interface commit
+        # reserves 20-24 for the W streams (docs/2026-10-11-interface.md)
         self.assertEqual(OPCODES["wg_flood"], 18)
-        self.assertEqual(RESERVED_OPCODES, {})
+        self.assertEqual(sorted(RESERVED_OPCODES), [20, 21, 22, 23, 24])
+        self.assertTrue(all(isinstance(v, str) and v for v in RESERVED_OPCODES.values()))
+        self.assertFalse(set(OPCODES.values()) & set(RESERVED_OPCODES))
         self.assertEqual(sorted(c for n, c in OPCODES.items()
                                 if n not in ("pipe2", "wg_advance", "wg_create", "wg_down", "wg_delete", "wg_flood")),
                          list(range(1, 14)))
@@ -181,6 +184,17 @@ class OpcodeTableTests(unittest.TestCase):
     def test_guest_defines_match(self):
         defines = {name.lower(): int(code) for name, code in re.findall(r"^#define OP_(\w+) (\d+)$", self.GUEST, re.M)}
         self.assertEqual(defines, OPCODES)
+
+    def test_reserved_opcodes_are_rejected_everywhere(self):
+        # no name maps to a reserved code (a trace cannot ask for one), the
+        # guest defines none of them, and its switch fails any other code
+        self.assertFalse(set(RESERVED_OPCODES) & set(OPCODES.values()))
+        defines = {int(code) for code in re.findall(r"^#define OP_\w+ (\d+)$", self.GUEST, re.M)}
+        self.assertFalse(defines & set(RESERVED_OPCODES))
+        self.assertRegex(self.GUEST, r'default: fail\(t->id, i, "invalid_input", "wire_opcode"\);')
+        for code in RESERVED_OPCODES:
+            with self.assertRaises(InvalidTrace):
+                validate_trace({"version": 1, "id": "r", "ops": [{"op": f"reserved_{code}"}]})
 
     def test_guest_has_no_numeric_opcodes(self):
         numeric = re.findall(r"(?:code\s*[!=<>]=?\s*\d+|\bcase\s+\d+\s*:)", self.GUEST)

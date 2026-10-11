@@ -548,6 +548,13 @@ inductive Worker where
       the zero-key work item (`clear_peer_work` on `handshake_send_wq`). -/
   | timerRetransmit | timerSendKeepalive | timerNewHandshake | timerZeroKey | clearPeerWorker
   | timerPersistentKeepalive
+  -- Reserved for the W streams (the interface commit,
+  -- docs/2026-10-11-interface.md): W8-W9's `cleanup_net` and
+  -- `linkwatch_event` units at indices 12-13, W5-W6's two units at 14-15
+  -- (`Worker.sectionId` gives 114-119 and 200-201). A stream appends its
+  -- constructors in its own block here and in `symbol`, `index`, `all`,
+  -- `timer?`, `resched?`, and its symbols to `harness/linux.py`
+  -- `DISPATCH_SYMBOLS` in the same order.
   deriving Repr, BEq, DecidableEq
 
 def Worker.symbol : Worker → String
@@ -639,6 +646,12 @@ inductive HiddenSite where
   /-- E-B arm C: `wg_ratelimiter_allow`'s coarse-boot-time reads, on a bucket
       hit (`ratelimiter.c:121`) and on a new-entry insert (`ratelimiter.c:146`). -/
   | ratelimiterNow | ratelimiterInsertNow
+  -- Reserved id ranges for the W streams (the interface commit,
+  -- docs/2026-10-11-interface.md), outside every range above: W5-W6
+  -- 140-149 (`.inetEhashSecret`), W8-W9 150-169 (`.dstCacheResetTs`,
+  -- `.dstCacheRefreshTs`, kind 306), W1-W2 170-179, W3-W12 180-189;
+  -- W4-W7 adds no site. A stream appends its constructors in its own
+  -- block here, in `info` and in `all`, as D3, L and E-B did.
   deriving Repr, BEq, DecidableEq
 
 inductive SiteRole where
@@ -649,8 +662,10 @@ structure HiddenSiteInfo where
   /-- The number the check passes for records of this site. -/
   id : Nat
   label : String
-  /-- `random`, `clock`, `section`, `resched`, `timer` (kind 303) or
-      `advance` (kind 304): the interception point's kind. -/
+  /-- `random`, `clock`, `section`, `resched`, `timer` (kind 303),
+      `advance` (kind 304) or `alloc` (kind 305): the interception point's
+      kind. Kind 306 (the dst-cache `jiffies` records, class `jiffies`) is
+      reserved for W9 (docs/2026-10-11-interface.md) and unused until it lands. -/
   kind : String
   /-- The consumer frame: the first frame of the call chain outside the
       random and clock helpers. -/
@@ -663,9 +678,13 @@ structure HiddenSiteInfo where
 /-- A worker's section-start site id (its stop is the next id). The D1/D2
     units keep `40 + 2·index` (40-51); `40 + 2·index` for the D3 units
     (indices 6-11) would reach the resched sites (60-63), so they take
-    102-113 in the D3 range. -/
+    102-113 in the D3 range, and indices 12-14 continue to 114-119. From
+    index 15 the ids start at 200: `102 + 2·(index - 6)` would reach L's
+    120-126 (the interface commit's reservation, docs/2026-10-11-interface.md). -/
 def Worker.sectionId (w : Worker) : Nat :=
-  if w.index < 6 then 40 + 2 * w.index else 102 + 2 * (w.index - 6)
+  if w.index < 6 then 40 + 2 * w.index
+  else if w.index < 15 then 102 + 2 * (w.index - 6)
+  else 200 + 2 * (w.index - 15)
 
 def HiddenSite.info : HiddenSite → HiddenSiteInfo
   | .initEphemeral => ⟨1, "init_ephemeral", "random", "drivers/net/wireguard/noise.c", 541, 32, .mirror⟩

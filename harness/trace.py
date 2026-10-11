@@ -57,7 +57,16 @@ OPCODES = {
     "wg_flood": 18,
     "wg_advance": 19,
 }
-RESERVED_OPCODES = {}
+# Reserved wire opcodes (the interface commit, docs/2026-10-11-interface.md),
+# allocated by the coordinator so the W streams' worktrees cannot clash. A
+# reserved code names no operation: traces carry names, so no such code
+# reaches the wire from here; the guest fails one as invalid_input
+# (harness/guest.c, the opcode switch's default) and the mirror as an
+# unknown operation. A stream moves its codes into OPCODES when it lands.
+RESERVED_OPCODES = {20: "wg_get_start (W2)", 21: "wg_get_recv (W2)",
+                    22: "wg_netns_close (W8)", 23: "wg_deladdr (W9)", 24: "wg_delroute (W9)"}
+if set(OPCODES.values()) & set(RESERVED_OPCODES):
+    raise AssertionError(f"reserved opcodes in use: {set(OPCODES.values()) & set(RESERVED_OPCODES)}")
 if set(OPCODES) != set(FIELDS):
     raise AssertionError(f"OPCODES and FIELDS name different operations: {set(OPCODES) ^ set(FIELDS)}")
 # The guest's KCOV area in words, task and remote (harness/guest.c CAPACITY):

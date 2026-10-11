@@ -112,6 +112,10 @@
 #define OP_WG_DELETE 17
 #define OP_WG_FLOOD 18
 #define OP_WG_ADVANCE 19
+/* 20-24 are reserved for the W streams (harness/trace.py RESERVED_OPCODES,
+ * docs/2026-10-11-interface.md): 20 wg_get_start and 21 wg_get_recv (W2),
+ * 22 wg_netns_close (W8), 23 wg_deladdr and 24 wg_delroute (W9). No define
+ * until a stream lands: the opcode switch's default fails any such code. */
 #define IS_LIFECYCLE_OP(code) ((code) == OP_WG_CREATE || (code) == OP_WG_DOWN || (code) == OP_WG_DELETE)
 /* The parent's per-child hang guard (P design section 6): a child still
  * running after this many seconds is killed with its process group. */

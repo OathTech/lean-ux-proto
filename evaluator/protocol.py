@@ -168,6 +168,9 @@ SEMANTIC_ERRNOS = {'eventfd2': {12, 22, 24}, 'dup': {9, 12, 24}, 'dup3': {9, 12,
                    'wg_flood': set(),
                    # EEXIST (a second wg0), ENODEV (no wg0)
                    'wg_create': {17}, 'wg_down': {19}, 'wg_delete': {19}}
+# Opcodes 20-24 are reserved for the W streams (harness/trace.py
+# RESERVED_OPCODES); their operations, and so their entries here, come with
+# the streams that land them.
 # Pipes (P design section 6): EINVAL, EMFILE, ENOPKG (O_NOTIFICATION_PIPE
 # without CONFIG_WATCH_QUEUE); EPIPE on write; EBUSY from F_SETPIPE_SZ.
 # A's pipe sites (section 19.6; D3+A integration): pipe2's ENFILE (a failed
