@@ -76,7 +76,8 @@ def timing : Timing where
     flow-hash secret; these are cut-site choices (choice-stream strategy,
     section 5). -/
 def fixtureSend : M Unit :=
-  skipCut [.ipIdentKey, .ipIdentReserve, .flowHashSecret]
+  -- and the datagram's skb (`sock_alloc_send_pskb`, an allocation cut site)
+  skipCut ([.ipIdentKey, .ipIdentReserve, .flowHashSecret] ++ allocCuts)
 
 /-- The fixture's `sendto` into wg0's route, to a multicast destination,
     before `wg_xmit`: the IP output loops a copy back to local receivers.
@@ -570,6 +571,9 @@ def wgUp : M Int := do
   let some d := (← getK).wg | return -ENODEV
   if d.running then return 0
   let ret ← WG.wgUp
+  -- `dev_change_flags`' rtnetlink notifications and the fixture's routes
+  -- allocate netlink skbs below the cut (allocation cut sites, A)
+  skipCut allocCuts
   if ret == 0 then modify fun w => { w with routesViaWg0 := true }
   return ret
 
@@ -581,6 +585,9 @@ def wgDown : M Int := do
   if !d.running then return 0
   requireIdleDevice
   WG.wgDown
+  -- `__dev_close_many`'s rtnetlink notifications and the routes' removal
+  -- allocate netlink skbs below the cut (allocation cut sites, A)
+  skipCut allocCuts
   modify fun w => { w with routesViaWg0 := false }
   return 0
 

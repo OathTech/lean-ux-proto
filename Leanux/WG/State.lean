@@ -124,9 +124,10 @@ deferred to ksoftirqd (`Env.napiSoftirq`); if one were pending here, one
 `net_rx_action` would poll both, which is outside the domain. -/
 
 /-- The records a loopback delivery's NET_RX section may hold besides its
-    start and stop: the ICMP reply's IP output (ident key and reserve) and
-    the flow dissector's hash secret. -/
-def loopbackRxSites : List HiddenSite := [.ipIdentKey, .ipIdentReserve, .flowHashSecret]
+    start and stop: the ICMP reply's IP output (ident key and reserve, and
+    its skb, `sock_alloc_send_pskb` via `ip_append_data`, an allocation cut
+    site) and the flow dissector's hash secret. -/
+def loopbackRxSites : List HiddenSite := [.ipIdentKey, .ipIdentReserve, .flowHashSecret] ++ allocCuts
 
 /-- `__netif_rx` → `____napi_schedule(backlog)` → `__raise_softirq_irqoff`:
     the pending bit. One transmission raises it once; the bit is clear on

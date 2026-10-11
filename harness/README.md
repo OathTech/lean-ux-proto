@@ -75,10 +75,13 @@ The ASCII wire begins with `LEANUX_WIRE_V2`, then a decimal trace count (1–409
 then the dispatch set: `D N` and N hex function addresses (N ≥ 1 when a trace
 uses the network fixture; `harness/linux.py` resolves them from `System.map`),
 then `A 0` or `A 1`: whether the kernel writes the kind-303 timer arm records
-(D3; `harness/linux.py` `ARM_RECORDS`). `evaluator/check.py` passes the same
-value to the kernel (`run_linux(..., arm_records=)`) and to the mirror (each
-trace's `arm_records` next to its `hidden` records), so the two cannot
-disagree silently. Opcodes come from the explicit table `harness/trace.py`
+(D3; `harness/linux.py` `ARM_RECORDS`), then the allocation set: `M FLAGS N`
+and N hex `lo hi` ranges (A, docs/2026-10-05-a-alloc.md section 4.3; `M 0 0`
+disarms, the default; flag 1 is the inventory mode, with N = 0 every
+allocation in a recording context). `evaluator/check.py` passes the same
+arm-record value to the kernel (`run_linux(..., arm_records=)`) and to the
+mirror (each trace's `arm_records` next to its `hidden` records), so the two
+cannot disagree silently. Opcodes come from the explicit table `harness/trace.py`
 `OPCODES` (mirrored by `OP_*` in `harness/guest.c`; `harness/test_trace.py`
 checks both): 14 is `pipe2`, 15-18 are reserved (L, E), and 19 is
 `wg_advance`, its `a` the ticks (D3, docs/2026-10-05-d3-timers.md). `wg_observe`'s 0.4 s wait is inside its

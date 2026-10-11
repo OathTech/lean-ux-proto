@@ -73,6 +73,9 @@ structure Trace where
   napiBeforePut : List Bool := []
   /-- `"net_fixture": "bare"` (L): the network fixture without wg0. -/
   bare : Bool := false
+  /-- The allocation sites the run armed (the check adds them with the
+      records): their outcomes are consumed from the records. -/
+  allocArmed : List String := []
   /-- Each operation's `pause_ms` (0 when absent): a fixture sleep before the
       operation's coverage window, ignored by the mirror (only the clock
       advances). -/
@@ -340,14 +343,24 @@ def parseTrace (j : Json) : Except String Trace := do
   let hasArm := (j.getObjVal? "arm_records").isOk
   let hasPlacement := (j.getObjVal? "napi_irq_before_put").isOk
   let hasFixture := (j.getObjVal? "net_fixture").isOk
+  let hasArmed := (j.getObjVal? "alloc_armed").isOk
+  let hasExtension := (j.getObjVal? "domain_extension").isOk
   fields j ((if hasLimit then ["version", "id", "ops", "rlimit_nofile"] else ["version", "id", "ops"])
     ++ (if hasHidden then ["hidden"] else []) ++ (if hasSteer then ["steer"] else [])
     ++ (if hasExpect then ["expect"] else []) ++ (if hasArm then ["arm_records"] else [])
     ++ (if hasPlacement then ["napi_irq_before_put"] else [])
-    ++ (if hasFixture then ["net_fixture"] else []))
+    ++ (if hasFixture then ["net_fixture"] else [])
+    ++ (if hasArmed then ["alloc_armed"] else [])
+    ++ (if hasExtension then ["domain_extension"] else []))
   -- D3: the arm-record switch qualifies the records, so it comes with them
   if hasArm && !hasHidden then throw "arm_records: only with hidden records"
   let armRecords ← if hasArm then (← field j "arm_records").getBool? else pure false
+  -- The declared failslab-style extension (docs/2026-10-05-a-alloc.md,
+  -- section 3, [USER 2026-10-06]): the trace forces task-context allocation
+  -- failures; the host checks the schedule, the mirror only its form.
+  if hasExtension then
+    if (← (← field j "domain_extension").getStr?) != "failslab" then throw "domain_extension: expected \"failslab\""
+    if !hasSteer then throw "domain_extension: only a steered trace declares it"
   let rlimit ← if hasLimit then natField j "rlimit_nofile" 1024 else pure 32
   if rlimit < 8 then throw "rlimit_nofile outside 8..1024"
   if (← (← field j "version").getNat?) != 1 then throw "unsupported trace version"
@@ -389,7 +402,14 @@ def parseTrace (j : Json) : Except String Trace := do
       if (← (← field j "net_fixture").getStr?) != "bare" then throw "net_fixture: expected \"bare\""
       pure true
     else pure false
-  let trace : Trace := { id, ops, rlimit, hidden, steer, armRecords, napiBeforePut, pauses, bare }
+  let allocArmed ← if hasArmed then (← (← field j "alloc_armed").getArr?).toList.mapM fun e => do
+      let label ← e.getStr?
+      if !(AllocSite.all.any fun s => s.info.label == label && s.info.count != .cut) then
+        throw s!"alloc_armed: {label} is not a consumed allocation site"
+      pure label
+    else pure []
+  if hasArmed && !hasHidden then throw "alloc_armed: an armed run carries its records"
+  let trace : Trace := { id, ops, rlimit, hidden, steer, armRecords, napiBeforePut, allocArmed, pauses, bare }
   if bare && !trace.net then throw "net_fixture: only a network trace has a network fixture"
   return trace
 
@@ -451,7 +471,8 @@ def initialKernel (rlimit : Nat) (net : Bool := false) (bare : Bool := false) : 
     netIfindexNext := if net && !bare then 4 else 3,
     ratelimiter := { refcnt := if net && !bare then 1 else 0 } }
 
-/-- The harness environment: every allocation and user-memory access succeeds. -/
+/-- The harness environment for the pipe sites (`EnvSite`): every allocation
+    and user-memory access succeeds. -/
 def harnessEnv : EnvSite → Nat → Bool := fun _ _ => true
 
 /-- A descriptor argument's value. `ends` holds each operation's `pipe2`
@@ -521,10 +542,14 @@ def toSyscall (results : Array Int) (ends : Array (Option (Nat × Nat))) (index 
 def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat × Stop) Json := do
   let mut world : World := { k := initialKernel trace.rlimit trace.net trace.bare, env := harnessEnv,
                              timing := Env.timing, portBound := Env.portBound,
+                             allocArmed := trace.allocArmed,
                              hiddenPlaceholders := placeholders && trace.hidden.isNone,
                              steerValues := if placeholders then trace.steer else [],
                              armRecords := trace.armRecords,
-                             napiBeforePut := trace.napiBeforePut }
+                             napiBeforePut := trace.napiBeforePut,
+                             allocSteered := if placeholders then
+                               (trace.steer.map (·.1)).filter fun l => AllocSite.all.any (·.info.label == l)
+                             else [] }
   let mut results : Array Int := #[]
   let mut ends : Array (Option (Nat × Nat)) := #[]
   let mut observations : Array Json := #[]
@@ -574,6 +599,10 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
   -- a placement the check chose must have been met
   if world.napiBeforePut.any id then
     throw (results.size - 1, .invariant "napi_irq_before_put names more NAPI polls than the trace has")
+  -- the domain filter: a schedule entry for an allocation site that the
+  -- mirror never met would be left over in the kernel
+  if world.hiddenPlaceholders && world.steerValues.any (fun e => world.allocSteered.contains e.1) then
+    throw (trace.ops.size - 1, .outsideDomain "steer" "allocation schedule entries beyond the encounters")
   -- D3: the timer sections the environment ran (`fired:<symbol>`
   -- expectations), present only when one ran
   return Json.mkObj ([("version", toJson (1 : Nat)), ("id", toJson trace.id),

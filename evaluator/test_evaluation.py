@@ -113,12 +113,18 @@ class EvaluationChecks(unittest.TestCase):
         self.assertGreater(check.guest_timeout(large), check.guest_timeout(plain) + 15)
 
     def test_resource_failures_are_not_agreement(self):
-        for error in (4, 5, 12, 14, 19, 23, 28, 38, 105, 512):
+        for error in (4, 5, 14, 19, 23, 28, 38, 105, 512):
             result = copy.deepcopy(self.result)
             result['observations'][0].update(ret=-error, errno=error)
             self.assertEqual(compare(self.trace, result, result)['outcome'], 'environment_failure')
         result['observations'][0].update(ret=-24, errno=24)
         self.assertEqual(compare(self.trace, result, result)['outcome'], 'agreement')
+        # A2: eventfd2's ENOMEM is compared (an allocation outcome the mirror
+        # consumes), so a mirror that did not take the arm disagrees
+        nomem = copy.deepcopy(self.result)
+        nomem['observations'][0].update(ret=-12, errno=12)
+        self.assertEqual(compare(self.trace, nomem, nomem)['outcome'], 'agreement')
+        self.assertEqual(compare(self.trace, nomem, self.result)['outcome'], 'semantic_mismatch')
 
     def test_observe_without_device(self):
         # L: wg_observe's stats are null exactly when there is no wg0; any
@@ -577,6 +583,36 @@ class D2GeneratorChecks(unittest.TestCase):
         self.assertEqual(seen, {'xmit', 'data'})
 
 
+class AllocChecks(unittest.TestCase):
+    """A1 (docs/2026-10-05-a-alloc.md): the alloc_fail class and the armed site set."""
+
+    def test_alloc_share_zero_keeps_the_stream(self):
+        from evaluator.generate import generate_wireguard
+        a = generate_wireguard(11, 120, steered=0.15, data=0.15)
+        self.assertEqual(a, generate_wireguard(11, 120, steered=0.15, data=0.15, alloc=0.0))
+        b = generate_wireguard(11, 120, steered=0.15, data=0.15, alloc=0.2)
+        alloc = [t for t in b if any(s in ('sendBufSkb', 'keepaliveSkb') for s, _ in t.get('steer', []))]
+        self.assertGreater(len(alloc), 10)
+        others = [t['ops'] for t in b if t not in alloc]
+        self.assertEqual(others, [t['ops'] for t in a][:len(others)])
+        for t in alloc:
+            validate_trace(t)
+            self.assertIn('0000000000000000', [v for _, v in t['steer']])
+
+    def test_armed_labels(self):
+        from harness.steer import ALLOC_SITES, SteeringError, alloc_armed_labels
+        sites = {('direct', row['consumer']): {'ips': [0x10000 + 16 * k], 'functions': ['f']}
+                 for k, row in enumerate(ALLOC_SITES.values()) if row['helper'] is None}
+        sites[('direct', 'fs/eventfd.c:393')] = {'ips': [0x200, 0x300], 'functions': ['g']}
+        sites[('tail_jumps', '')] = []
+        ranges = {'__alloc_skb': (0x1000, 0x1100), 'kmalloc_reserve': (0x2000, 0x2100),
+                  'pskb_expand_head': (0x3000, 0x3100), '__d_alloc': (0x4000, 0x4100),
+                  '__kvmalloc_node_noprof': (0x5000, 0x5100)}
+        armed = alloc_armed_labels([(0x1000, 0x1100), (0x2000, 0x2100)], (sites, ranges))
+        self.assertEqual(armed, ['keepaliveSkb', 'replySkb', 'sendBufSkb'])
+        self.assertIn('kmallocEventfdCtx', alloc_armed_labels([(0x200, 0x201), (0x300, 0x301)], (sites, ranges)))
+        with self.assertRaises(SteeringError):   # one of two call sites armed
+            alloc_armed_labels([(0x200, 0x201)], (sites, ranges))
 class WgMutantScoringChecks(unittest.TestCase):
     """scripts/wg-mutants.py: only a mirror-side verdict rejects a mutant; an
     infrastructure outcome is no verdict (review S2), and H-M8 is listed as

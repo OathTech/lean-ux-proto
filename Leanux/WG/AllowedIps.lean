@@ -71,9 +71,11 @@ def chooseAndConnectNode (parent node : NodeId) : M Unit := do
   let bit ← choose (← getNode parent) (← getNode node).bits
   connectNode (.child parent bit) node
 
-/-- A zeroed allocation from `node_cache` (an environment choice point). -/
-def allocNode (n : AipNode) : M (Option NodeId) := do
-  if !(← envOk .kmemCacheZallocNode) then return none   -- kmem_cache_zalloc(node_cache)
+/-- A zeroed allocation from `node_cache` at one of `add`'s three
+    `kmem_cache_zalloc` calls (`site`: allowedips.c:190, :205 or :234), an
+    allocation outcome. -/
+def allocNode (site : AllocSite) (n : AipNode) : M (Option NodeId) := do
+  if !(← hiddenAlloc site) then return none   -- kmem_cache_zalloc(node_cache)
   let id := (← getDev).nextNode
   modifyDev fun d => { d with nextNode := id + 1, nodes := d.nodes.insert id n }
   return some id
@@ -118,7 +120,7 @@ def add (root : Slot) (bits key cidr : Nat) (peer : Option PeerId) : M Int := do
   let trie ← slotGet root
   if ← branch .addEmptyTrie trie.isNone then
     let some id ← (do
-        let r ← allocNode (newNode key cidr bits (some pid))
+        let r ← allocNode .allocNode190 (newNode key cidr bits (some pid))
         if ← branch .addRootNoMem r.isNone then return none
         pure r) | return -ENOMEM
     listAddTail pid id
@@ -131,7 +133,7 @@ def add (root : Slot) (bits key cidr : Nat) (peer : Option PeerId) : M Int := do
     listDel id              -- list_move_tail
     listAddTail pid id
     return 0
-  let newnodeAlloc ← allocNode (newNode key cidr bits (some pid))
+  let newnodeAlloc ← allocNode .allocNode205 (newNode key cidr bits (some pid))
   if ← branch .addNewnodeNoMem newnodeAlloc.isNone then return -ENOMEM
   let some newnode := newnodeAlloc | invariant "unreachable"
   listAddTail pid newnode
@@ -155,7 +157,7 @@ def add (root : Slot) (bits key cidr : Nat) (peer : Option PeerId) : M Int := do
     if ← branch .addNewnodeAtRoot parent.isNone then connectNode root newnode
     else if let some p := parent then chooseAndConnectNode p newnode
     return 0
-  let nodeAlloc ← allocNode (newNode (← getNode newnode).bits cidr bits none)
+  let nodeAlloc ← allocNode .allocNode234 (newNode (← getNode newnode).bits cidr bits none)
   if ← branch .addIntermediateNoMem nodeAlloc.isNone then
     listDel newnode
     freeNode newnode

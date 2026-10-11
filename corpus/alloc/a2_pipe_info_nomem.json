@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "id": "a2_pipe_info_nomem",
+  "ops": [
+    {
+      "op": "pipe2",
+      "flags": 2048
+    },
+    {
+      "op": "pipe2",
+      "flags": 2048
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 1,
+        "end": 1
+      },
+      "count": 8,
+      "value": "7"
+    },
+    {
+      "op": "read",
+      "fd": {
+        "pipe": 1,
+        "end": 0
+      },
+      "count": 8
+    }
+  ],
+  "steer": [
+    [
+      "kzallocPipeInfo",
+      "0000000000000000"
+    ],
+    [
+      "kzallocPipeInfo",
+      "draw"
+    ]
+  ],
+  "expect": [
+    "alloc_pipe_info.kzalloc_failed=1",
+    "get_pipe_inode.no_pipe=1"
+  ],
+  "domain_extension": "failslab"
+}

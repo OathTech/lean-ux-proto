@@ -122,14 +122,16 @@ def doPipeFlags (flags : UInt32) : M (Except Int (Nat × Nat × FileId × FileId
   setFile f1 { (← getFile f1) with fMode := (← getFile f1).fMode ||| FMODE_NOWAIT }
   return .ok (fdr.toNat, fdw.toNat, f0, f1)
 
-/-- do_pipe2 (fs/pipe.c:1018-1038) with a valid `fildes`; `copy_to_user` is an
-    environment choice point, and the pair it copies is `World.userFds`. -/
+/-- do_pipe2 (fs/pipe.c:1018-1038) with a valid `fildes`; `copy_to_user`
+    does not fault (the guest's buffer is mapped, A section 6.5), and the
+    pair it copies is `World.userFds`. -/
 def doPipe2 (flags : UInt32) : M Int := do
   let r ← doPipeFlags flags
   let error : Int := match r with | .error e => e | .ok _ => 0
   if ← branch .doPipe2Ok (error == 0) then
     let .ok (fdr, fdw, f0, f1) := r | invariant "unreachable"
-    if ← branch .doPipe2CopyFault !(← envOk .copyToUser) then
+    -- `copy_to_user`: the guest's buffer is mapped (a trace input, A-U, 6.5)
+    if ← branch .doPipe2CopyFault false then
       fput f0
       fput f1
       putUnusedFd fdr

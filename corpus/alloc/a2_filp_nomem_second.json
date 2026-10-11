@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "id": "a2_filp_nomem_second",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 1,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 2,
+      "flags": 2048
+    },
+    {
+      "op": "eventfd2",
+      "init": 3,
+      "flags": 2048
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 2
+      },
+      "count": 8
+    }
+  ],
+  "steer": [
+    [
+      "filpAlloc",
+      "draw"
+    ],
+    [
+      "filpAlloc",
+      "0000000000000000"
+    ],
+    [
+      "filpAlloc",
+      "draw"
+    ]
+  ],
+  "expect": [
+    "alloc_empty_file.zalloc_failed=1",
+    "do_eventfd.file_error=1"
+  ],
+  "domain_extension": "failslab"
+}

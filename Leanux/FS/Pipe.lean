@@ -214,7 +214,7 @@ def allocPipeInfo : M (Option PipeId) := do
   let user ← getCurrentUser
   let maxSize := (← getK).pipeMaxSize
   -- pipe = kzalloc(sizeof(struct pipe_inode_info), GFP_KERNEL_ACCOUNT)
-  if ← branch .allocPipeInfoNoMem !(← envOk .kzallocPipeInfo) then
+  if ← branch .allocPipeInfoNoMem !(← hiddenAlloc .kzallocPipeInfo) then
     return none  -- out_free_uid: free_uid(user)
   -- `pipe_bufs * PAGE_SIZE > max_size && !capable(CAP_SYS_RESOURCE)`
   if ← branchCmp .allocPipeInfoOverMax (PIPE_DEF_BUFFERS * PAGE_SIZE > maxSize) maxSize (PIPE_DEF_BUFFERS * PAGE_SIZE) then
@@ -231,7 +231,7 @@ def allocPipeInfo : M (Option PipeId) := do
     else pure false
   if !revert then
     -- pipe->bufs = kcalloc(pipe_bufs, sizeof(struct pipe_buffer), GFP_KERNEL_ACCOUNT)
-    if ← branch .allocPipeInfoBufs (← envOk .kcallocPipeBufs) then
+    if ← branch .allocPipeInfoBufs (← hiddenAlloc .kcallocPipeBufs) then
       -- init_waitqueue_head (x2), r_counter = w_counter = 1, max_usage =
       -- ring_size = nr_accounted = pipe_bufs, user, mutex_init
       let pid := (← getK).nextPipe
@@ -425,7 +425,7 @@ def pipeWriteToOut (iocb : Kiocb) (filp : File) (pid : PipeId) (src : IovIter) :
       let mut page := p.tmpPage
       if ← branch .pipeWriteNoTmpPage page.isNone then
         -- alloc_page(GFP_HIGHUSER | __GFP_ACCOUNT)
-        if ← branch .pipeWriteAllocFailed !(← envOk .allocPipePage) then
+        if ← branch .pipeWriteAllocFailed !(← hiddenAlloc .allocPipePage) then
           -- `ret = ret ? : -ENOMEM`
           if !(← branchCmp .pipeWriteAllocRet (ret != 0) ret 0) then ret := -ENOMEM
           break

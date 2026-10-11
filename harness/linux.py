@@ -324,11 +324,12 @@ def merge_remote(rows, remote, traces, key):
     return merged
 
 
-def _collect(outdir, traces, process_returncode):
+def _collect(outdir, traces, process_returncode, alloc=None):
     results, coverage, fixtures, errors, child_failures, completed, kernels = [], [], [], [], [], [], []
     comparisons, comparison_results, wireguard, observed = [], [], [], []
     remote_coverage, remote_comparisons = [], []
     hidden, remote_hidden, steering, sections, clocksources, timing = [], [], [], [], [], []
+    alloc_status, alloc_tsc = [], []
     for line in (outdir / "boot.log").read_text(errors="strict").splitlines():
         line = line.rstrip("\r")
         for prefix, target in (("LEANUX_RESULT ", results), ("LEANUX_COVERAGE ", coverage),
@@ -339,7 +340,8 @@ def _collect(outdir, traces, process_returncode):
                                ("LEANUX_RCMP ", remote_comparisons), ("LEANUX_HIDDEN ", hidden),
                                ("LEANUX_RHIDDEN ", remote_hidden), ("LEANUX_STEER ", steering),
                                ("LEANUX_SECTIONS ", sections), ("LEANUX_CLOCKSOURCE ", clocksources),
-                               ("LEANUX_TIMING ", timing)):
+                               ("LEANUX_TIMING ", timing),
+                               ("LEANUX_ALLOC ", alloc_status), ("LEANUX_ALLOC_TSC ", alloc_tsc)):
             if line.startswith(prefix):
                 try:
                     target.append(_decode_json(line[len(prefix):]))
@@ -393,6 +395,19 @@ def _collect(outdir, traces, process_returncode):
         raise LinuxRunError("invalid_output", "Section status rows missing or malformed", outdir)
     _jsonl(outdir / "sections.jsonl", sections)
     _jsonl(outdir / "timing.jsonl", timing)
+    # The allocation set (A): armed batches report, per trace and child, the
+    # kind-305 records and unwinds since the load, and the TSC rate once;
+    # disarmed batches report nothing.
+    armed = bool(alloc and (alloc["flags"] or alloc["ranges"]))
+    if (any(type(r) is not dict or set(r) != {"id", "mode", "records", "unwinds", "cycles"}
+            or r["mode"] not in ("pc", "cmp") or not all(type(r[k]) is int and r[k] >= 0 for k in ("records", "unwinds", "cycles"))
+            for r in alloc_status)
+            or sorted((r["id"], r["mode"]) for r in alloc_status)
+            != (sorted((t["id"], m) for t in traces for m in ("pc", "cmp")) if armed else [])
+            or len(alloc_tsc) != int(armed) or any(set(r) != {"mhz"} for r in alloc_tsc)):
+        raise LinuxRunError("invalid_output", "Allocation status rows missing or malformed", outdir)
+    if armed:
+        _jsonl(outdir / "alloc.jsonl", alloc_tsc + alloc_status)
     _jsonl(outdir / "comparisons.jsonl", comparisons)
     _jsonl(outdir / "guest-errors.jsonl", errors + child_failures)
     (outdir / "fixture.json").write_text(json.dumps({
@@ -478,12 +493,19 @@ def _collect(outdir, traces, process_returncode):
                      "sigpipe": [o.get("sigpipe") for o in observations]}:
             raise LinuxRunError("environment_failure", f"Nondeterministic rerun of {result['id']}", outdir)
     unexpected_errors = {4, 12, 23, 512, 513, 514, 516}
-    if any(row["errno"] in unexpected_errors for result in results for row in result["observations"]):
+    # A2: a trace under the declared failslab-style extension forces
+    # task-context allocation failures, so its ENOMEM is the expected result
+    # of the schedule (compared with the mirror, evaluator/protocol.py), not
+    # allocator pressure; so is pipe2's ENFILE (a forced alloc_pipe_info
+    # failure, A section 19.6). Every other trace still fails on them.
+    forced = {12, 23}
+    if any(row["errno"] in unexpected_errors - (forced if trace.get("domain_extension") == "failslab" else set())
+           for result, trace in zip(results, traces) for row in result["observations"]):
         raise LinuxRunError("environment_failure", "Unexpected interruption or allocator resource failure", outdir)
     return results
 
 
-def run_linux(traces, outdir, *, timeout=120, steer_wire=None, arm_records=ARM_RECORDS, guest_variant=None):
+def run_linux(traces, outdir, *, timeout=120, steer_wire=None, arm_records=ARM_RECORDS, guest_variant=None, alloc=None):
     """Return ordered observations; preserve evidence and raise on execution failures.
 
     `outdir` must be a fresh/empty directory within the task's artifact root.
@@ -494,7 +516,7 @@ def run_linux(traces, outdir, *, timeout=120, steer_wire=None, arm_records=ARM_R
         raise ValueError(f"unknown guest variant {guest_variant!r}")
     traces = [validate_trace(trace) for trace in traces]
     dispatch = dispatch_addresses() if any(uses_wireguard(t) for t in traces) else []
-    wire = serialize_wire(traces, steer_wire, dispatch, arm_records)
+    wire = serialize_wire(traces, steer_wire, dispatch, arm_records, alloc)
     outdir = Path(outdir).resolve()
     if not outdir.is_relative_to(ARTIFACTS):
         raise ValueError(f"outdir must be within task artifact root {ARTIFACTS}")
@@ -521,7 +543,7 @@ def run_linux(traces, outdir, *, timeout=120, steer_wire=None, arm_records=ARM_R
                 lock.close()
                 continue
             with lock:
-                return _run_locked(traces, outdir, timeout, arm_records, guest_variant)
+                return _run_locked(traces, outdir, timeout, arm_records, guest_variant, alloc)
         if time.monotonic() >= deadline:
             raise LinuxRunError("resource_busy", f"Other guests held all {QEMU_SLOTS} QEMU slots for {QEMU_LOCK_WAIT} s", outdir)
         if not waited:
@@ -535,7 +557,7 @@ QEMU_LOCK_WAIT = 3600
 QEMU_SLOTS = int(os.environ.get("LEANUX_QEMU_SLOTS", "3"))
 
 
-def _run_locked(traces, outdir, timeout, arm_records, guest_variant=None):
+def _run_locked(traces, outdir, timeout, arm_records, guest_variant=None, alloc=None):
     build = ["gcc", "-static", "-O2", "-Wall", "-Wextra", "-Werror", "-std=c11", *GUEST_VARIANTS.get(guest_variant, ()), str(ROOT / "harness/guest.c"), "-o", str(outdir / "guest-runner")]
     started = time.monotonic()
     build_returncode = _bounded_process(build, outdir / "build.log", 60, OUTPUT_LIMIT)
@@ -564,13 +586,13 @@ def _run_locked(traces, outdir, timeout, arm_records, guest_variant=None):
     (outdir / "initramfs.cpio.gz").write_bytes(gzip.compress(cpio, mtime=0))
     command = ["qemu-system-x86_64", "-accel", "tcg,thread=single", "-machine", "pc-i440fx-8.2", "-cpu", "qemu64", "-smp", "1", "-m", "256", "-display", "none", "-monitor", "none", "-serial", "stdio", "-nic", "none", "-no-reboot", "-kernel", str(KERNEL / "arch/x86/boot/bzImage"), "-initrd", str(outdir / "initramfs.cpio.gz"), "-append", BOOT_PARAMETERS]
     identities = [ROOT / "harness/guest.c", ROOT / "harness/linux.py", ROOT / "harness/trace.py", ROOT / "contracts/trace-v1.md", ROOT / "contracts/trace.schema.json", ROOT / "contracts/observation.schema.json", ROOT / "scripts/in-bundle", ROOT / "scripts/bundle-tool", KERNEL / ".config", KERNEL / "arch/x86/boot/bzImage", KERNEL / "vmlinux", KERNEL / "usr/gen_init_cpio", SHARED / ".tools/sysroot/usr/bin/busybox", outdir / "guest-runner", outdir / "init", outdir / "wire.txt", outdir / "initramfs.cpio.gz"]
-    provenance = {"schema_version": 1, "expected_clocksource": EXPECTED_CLOCKSOURCE, "arm_records": arm_records, "guest_variant": guest_variant, "build_command": build, "cpio_command": cpio_command, "qemu_command": command, "timeout_seconds": timeout, "captured_output_limit_bytes": OUTPUT_LIMIT, "inputs": {str(path): sha256(path) for path in identities}, "compiler": subprocess.check_output(["gcc", "--version"], text=True), "qemu": subprocess.check_output(["qemu-system-x86_64", "--version"], text=True)}
+    provenance = {"schema_version": 1, "expected_clocksource": EXPECTED_CLOCKSOURCE, "arm_records": arm_records, "guest_variant": guest_variant, "alloc": alloc or {"flags": 0, "ranges": []}, "build_command": build, "cpio_command": cpio_command, "qemu_command": command, "timeout_seconds": timeout, "captured_output_limit_bytes": OUTPUT_LIMIT, "inputs": {str(path): sha256(path) for path in identities}, "compiler": subprocess.check_output(["gcc", "--version"], text=True), "qemu": subprocess.check_output(["qemu-system-x86_64", "--version"], text=True)}
     (outdir / "provenance.json").write_text(json.dumps(provenance, indent=2) + "\n")
     (outdir / "qemu-command.json").write_text(json.dumps(command, indent=2) + "\n")
     try:
         returncode = _bounded_process(command, outdir / "boot.log", timeout,
                                       OUTPUT_LIMIT - (outdir / "build.log").stat().st_size)
-        observations = _collect(outdir, traces, returncode)
+        observations = _collect(outdir, traces, returncode, alloc)
     except LinuxRunError as exc:
         (outdir / "run-status.json").write_text(json.dumps({"kind": exc.kind, "detail": str(exc), "elapsed_seconds": time.monotonic() - started}) + "\n")
         raise

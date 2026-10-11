@@ -2,9 +2,12 @@
 # step 1 and step 2 (steering) user-approved 2026-10-03; the D1 sprint's
 # dispatch sections (stream A) and resched records (integration) and the D3
 # sprint's timer sections, arm record and virtual time advance
-# (docs/2026-10-05-d3-timers.md, stream K) user-approved 2026-10-07.
+# (docs/2026-10-05-d3-timers.md, stream K) user-approved 2026-10-07;
+# A streams K1 (the allocation hook) and K2 (steering a forced failure)
+# (docs/2026-10-05-a-alloc.md, sections 4-5) and A2's task-instance
+# steering (section 19) awaiting the user's approval with A.
 # kernel/config-x86_64-net (unchanged) with kernel/patches/choice-stream.patch
-# (sha256 3b0f2026265c7ccfe3bd8951ab7afd3ccdf5b56d6ffea70f5c715a57f7f217ab)
+# (sha256 4274afa340f5fe7f9178eca8ab56d2e0b8278fa63e734d8e9adda2ba53a4edf0)
 # applied alone to the locked source, built with LEANUX_KERNEL_PROFILE=net-choice.
 # The patch (kernel/patches/gen-choice-stream.py) records random draws and
 # clock reads at generic interception points (drivers/char/random.c,
@@ -21,6 +24,38 @@
 # jiffies_64 (leanux_time_advance, kernel/time/timekeeping.c, refused unless
 # the timekeeper is refined-jiffies) and records kind 304 {before, after},
 # with interrupts disabled from the jump until the record (D3 integration).
+# A (K1): slab_alloc_node (mm/slub.c) and __alloc_pages_noprof
+# (mm/page_alloc.c) call kcov_alloc_pre/post with the entry's explicit return
+# address; armed by KCOV_LEANUX_ALLOC_LOAD (ioctl 205: ranges and the
+# inventory flag; n = 0, flags = 0 is disarmed, the default), they write
+# kind 305 (outcome, gfp, size or order, up to four unwound return
+# addresses) in recording contexts; KCOV_LEANUX_ALLOC_STATUS (206) counts
+# records and unwinds. Unarmed: one load per allocation, no records. No
+# A (K2, section 5): a kind-305 steering entry (the per-handle schedule,
+# KCOV_LEANUX_STEER_LOAD) forces the allocation to fail. Chain containment
+# decides both the naming test and the head match, so helper sites (the
+# consumer's frame above the allocation) are steerable; the forced record
+# is written from the pre side with outcome 0 and the steered bit, and the
+# allocator returns NULL. A __GFP_NOFAIL allocation is never forced (its
+# entry stays). The steer entry's former pad word is now `flags`
+# (KCOV_STEER_CHAIN, bit 0; kind 305 only). The companion control kernel
+# kernel/patches/choice-stream-alloc-controls.patch (profile net-choice-actl,
+# never an oracle) adds load flags for controls K1/K4/K5; the oracle's load
+# rejects them.
+# A2 (section 19): kcov_steer_find also returns the schedule of the task's
+# own KCOV instance (loaded there by a trace with no remote instance, an FS
+# trace, before KCOV_ENABLE), consulted in the task's own context; a
+# network trace's task instance carries none, so its remote lookup is
+# unchanged. Two lines in kernel/kcov.c.
+# D3+A integration (task/int-da): one combined patch, D3 as on task/d3-int
+# and A as on task/a2, and the dispatch set's capacity KCOV_DISPATCH_MAX
+# raised from 16 to 32 (record-only infrastructure; harness/guest.c
+# DISPATCH_MAX and harness/trace.py's wire bound match it). Nothing else.
+# The control kernel (profile net-choice-actl, never an oracle):
+# kernel/patches/choice-stream-alloc-controls.patch (sha256
+# 8dd6fffee734cbdc35942d21e99dd269ebd18a6879a39e2d00b5fdbf2915671b),
+# identity 044b46e520daf448866ebeff2606c4ea9e29ea2f50e527e17b6ed28584b88c38,
+# vmlinux 16c759b35cc33745539c8b46c45b66cdb22f2b9c742f94f09d67a66af9a6e273.
 # No anchored file and no WireGuard file is touched.
 # Its DWARF names .deps/linux (via -fdebug-prefix-map).
 # The oracle is this build booted with the harness's parameters
@@ -29,6 +64,6 @@
 # and the timekeeper clocksource refined-jiffies, checked at every batch's
 # start and end (LEANUX_CLOCKSOURCE rows).
 # Path-independent identity from scripts/kernel-identity.py:
-8744fcc402b0efd49200e317c02f0e4a352441bbe38c2b11c79533b041ad399e
+c79e3e0c58b3aa554075d512357dbcd359baab22e9e4bcbf68bc85f87ed3d1aa
 # vmlinux sha256 of the build the evidence used (path-dependent):
-883e1f60dc50df9a7a72ffd08fcf29cc25df3ba9e5f808efa93c594bdd646c51
+642b22fd4f111808ab0b52198e37675f4c2f6e4fd7dcfa9c2087deabc5de5380

@@ -149,11 +149,17 @@ def parse_batch(traces, output, max_bytes=16 * 1024 * 1024):
 
 # These outcomes cannot be ordinary results in the declared single-threaded,
 # valid-buffer fixture. In particular resource failure must not count as agreement.
-SEMANTIC_ERRNOS = {'eventfd2': {22, 24}, 'dup': {9, 24}, 'dup3': {9, 22},
-                   'close': {9}, 'fcntl': {1, 9, 22},
+# ENOMEM (12) is compared, not absorbed, where an allocation outcome the
+# mirror consumes from the records can produce it (docs/2026-10-05-a-alloc.md
+# 6.3; A2): eventfd2 (the context, file, dentry and fd table), dup, dup3 and
+# fcntl (F_DUPFD*: the fd table), wg_set (peer and allowed-ips nodes). A
+# Linux ENOMEM the mirror did not take is a semantic mismatch, and its
+# record is unconsumed or absent: fail-noisy on both sides.
+SEMANTIC_ERRNOS = {'eventfd2': {12, 22, 24}, 'dup': {9, 12, 24}, 'dup3': {9, 12, 22},
+                   'close': {9}, 'fcntl': {1, 9, 12, 22},
                    # L (docs/2026-10-05-l-lifecycle.md): ENODEV without wg0;
                    # EADDRINUSE binding a fixture port (wg_up, a running wg_set)
-                   'wg_set': {22, 95, 19, 98}, 'wg_get': {22, 19},
+                   'wg_set': {12, 22, 95, 19, 98}, 'wg_get': {22, 19},
                    # ENOKEY, EDESTADDRREQ, EPROTONOSUPPORT, ENETUNREACH (no route before wg_up); EAGAIN when nothing arrived
                    'wg_up': {19, 98}, 'wg_xmit': {126, 89, 93, 101}, 'wg_observe': {11}, 'read': {9, 11, 22}, 'write': {9, 11, 22},
                    # D3: the advance ioctl fails only outside the oracle's setup (-EOPNOTSUPP, -EINVAL, -EPERM)
@@ -162,9 +168,12 @@ SEMANTIC_ERRNOS = {'eventfd2': {22, 24}, 'dup': {9, 24}, 'dup3': {9, 22},
                    'wg_create': {17}, 'wg_down': {19}, 'wg_delete': {19}}
 # Pipes (P design section 6): EINVAL, EMFILE, ENOPKG (O_NOTIFICATION_PIPE
 # without CONFIG_WATCH_QUEUE); EPIPE on write; EBUSY from F_SETPIPE_SZ.
-# ENFILE and ENOMEM stay environment failures.
-SEMANTIC_ERRNOS['pipe2'] = {22, 24, 65}
-SEMANTIC_ERRNOS['write'] = SEMANTIC_ERRNOS['write'] | {32}
+# A's pipe sites (section 19.6; D3+A integration): pipe2's ENFILE (a failed
+# alloc_pipe_info in get_pipe_inode) and write's ENOMEM (pipe_write's first
+# page, `ret ? : -ENOMEM`) are compared; Linux gives them only under a
+# declared failslab trace (harness/linux.py), otherwise environment failures.
+SEMANTIC_ERRNOS['pipe2'] = {22, 23, 24, 65}
+SEMANTIC_ERRNOS['write'] = SEMANTIC_ERRNOS['write'] | {12, 32}
 SEMANTIC_ERRNOS['fcntl'] = SEMANTIC_ERRNOS['fcntl'] | {16}
 
 

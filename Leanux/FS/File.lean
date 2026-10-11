@@ -69,9 +69,15 @@ def allocFdtable (slotsWanted : Nat) : M (Except Int Fdtable) := do
     nr := SYSCTL_NR_OPEN / BITS_PER_LONG * BITS_PER_LONG  -- round_down(sysctl_nr_open, BITS_PER_LONG)
     if ← branchCmp .allocFdtableBelowWanted (nr < slotsWanted) nr slotsWanted then return .error (-EMFILE)
   if ← branchCmp .allocFdtableOverIntMax (nr > 2147483647 / 8) nr (2147483647 / 8) then return .error (-EMFILE)
-  if ← branch .allocFdtableNoMem (!(← envOk .kmallocFdtable)) then return .error (-ENOMEM)
-  if ← branch .allocFdtableFdArrayNoMem (!(← envOk .kvmallocFdArray)) then return .error (-ENOMEM)
-  if ← branch .allocFdtableBitmapNoMem (!(← envOk .kvmallocFdBitmaps)) then return .error (-ENOMEM)
+  if ← branch .allocFdtableNoMem (!(← hiddenAlloc .kmallocFdtable)) then return .error (-ENOMEM)
+  -- `kvmalloc_array(nr, sizeof(struct file *))`: above PAGE_SIZE its one slab
+  -- attempt carries __GFP_NORETRY (mm/util.c:620-624) and may fail, after
+  -- which vmalloc succeeds; a fail record there never means -ENOMEM
+  -- (docs/2026-10-05-a-alloc.md 6.2, M7), and the fallback is not modeled
+  let arrayOk ← hiddenAlloc .kvmallocFdArray
+  if !arrayOk && nr * 8 > PAGE_SIZE then unsupported "kvmalloc vmalloc fallback"
+  if ← branch .allocFdtableFdArrayNoMem !arrayOk then return .error (-ENOMEM)
+  if ← branch .allocFdtableBitmapNoMem (!(← hiddenAlloc .kvmallocFdBitmaps)) then return .error (-ENOMEM)
   return .ok { maxFds := nr, fd := Array.replicate nr none, openFds := Array.replicate nr false,
                closeOnExec := Array.replicate nr false }
 

@@ -221,8 +221,12 @@ def peerCreate (publicKey : Key) (presharedKey : Option Key) : M (Except Int Pee
   let d ← getDev
   if ← branchCmp .peerCreateMaxPeers (d.numPeers ≥ MAX_PEERS_PER_DEVICE) d.numPeers MAX_PEERS_PER_DEVICE then
     return .error (-ENOMEM)
-  if ← branch .peerCreateNoMem !(← envOk .kmemCacheZallocPeer) then return .error (-ENOMEM)
-  if ← branch .peerCreateDstCacheFail !(← envOk .dstCacheInit) then return .error (-ENOMEM)
+  if ← branch .peerCreateNoMem !(← hiddenAlloc .kmemCacheZallocPeer) then return .error (-ENOMEM)
+  -- `dst_cache_init` (alloc_percpu_gfp): retired as a choice
+  -- (docs/2026-10-05-a-alloc.md 6.4). The percpu allocator allocates only
+  -- when no chunk has room (percpu.c:1851-1855), a state-dependent count, so
+  -- the site would be lax and unsteerable; the arm stays dead, named.
+  if ← branch .peerCreateDstCacheFail false then return .error (-ENOMEM)
   let pid := d.nextPeer
   let internalId := (← getK).peerCounter + 1   -- atomic64_inc_return(&peer_counter)
   modifyK fun k => { k with peerCounter := internalId }

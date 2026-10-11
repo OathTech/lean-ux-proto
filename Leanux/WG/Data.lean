@@ -12,8 +12,9 @@ CPU after the work that queued them.
 `message_data` header and ChaCha20-Poly1305 of the padded plaintext under the
 keypair's sending key (the NoiseCrypto reference). Cut points:
 - `skb_get_hash` (flow dissection; it may draw the flow-hash secret once);
-- the skb surgery `skb_cow_head`, `skb_cow_data` and `skb_to_sgvec`, whose
-  failures are environment outcomes (`envOk`);
+- the skb surgery `skb_cow_head`, `skb_checksum_help` and `skb_cow_data`,
+  whose failures are allocation outcomes (`hiddenAlloc`; lax, count 0 on
+  this fixture), and `skb_to_sgvec`, which cannot fail for a linear skb;
 - `wg_reset_packet` (header resets; its `encapsulating` is the constant true);
 - routing and the UDP tunnel transmit below `wg_socket_send_skb_to_peer`, as
   in `sendBufferToPeer` (Handshake.lean);
@@ -74,21 +75,23 @@ def encryptPacket (checksumHelp : Packet → M Packet) (keypair : KeypairId) (pk
   let paddingLen ← calculateSkbPadding len pkt.plaintext.mtu
   -- plaintext_len = skb->len + padding_len (the AEAD below covers it)
   -- `skb_cow_head(skb, DATA_PACKET_HEAD_ROOM) < 0`
-  if ← branch .encCowHeadFailed !(← envOk .skbCowHead) then return none
+  if ← branch .encCowHeadFailed !(← hiddenAlloc .skbCowHead) then return none
   -- `skb->ip_summed == CHECKSUM_PARTIAL && skb_checksum_help(skb)`: a
   -- keepalive's `ip_summed` is CHECKSUM_NONE
   let mut inner := pkt.plaintext
   if ← branch .encChecksumPartial inner.csum.isSome then
-    if ← branch .encChecksumHelpFailed !(← envOk .skbChecksumHelp) then return none
+    if ← branch .encChecksumHelpFailed !(← hiddenAlloc .skbChecksumHelp) then return none
     inner ← checksumHelp inner
   -- `num_frags = skb_cow_data(...)`: 1 (the skb is linear), or negative
-  let cowOk ← envOk .skbCowData
+  let cowOk ← hiddenAlloc .skbCowDataTx
   if ← branch .encCowDataFailed !cowOk then return none
   if ← branch .encTooManyFrags false then return none   -- num_frags > ARRAY_SIZE(sg)
   -- the zero padding, the header (`key_idx = keypair->remote_index`,
   -- `counter = cpu_to_le64(nonce)`) and room for the tag
   let k ← getKeypair keypair
-  if ← branch .encSgvecFailed !(← envOk .skbToSgvec) then return none
+  -- `skb_to_sgvec` < 0: not an allocation (docs/2026-10-05-a-alloc.md 6.4);
+  -- a linear skb: `__skb_to_sgvec` returns 1
+  if ← branch .encSgvecFailed false then return none
   -- chacha20poly1305_encrypt_sg_inplace over the packet and its padding
   return some (dataMessage k.remoteIndex pkt.nonce k.sending.key (inner.bytes ++ List.replicate paddingLen 0))
 
@@ -141,7 +144,7 @@ def sendSkbToPeer (pid : PeerId) (bytes : List UInt8) (ds : Nat) : M Bool := do
     else pure false   -- dev_kfree_skb; -EAFNOSUPPORT
   -- send4/send6 choose the IP ident; the loopback delivery is a NET_RX
   -- section nested at the send (`loopbackSend`)
-  if sent then loopbackSend [.ipIdentKey, .ipIdentReserve, .flowHashSecret] true
+  if sent then loopbackSend ([.ipIdentKey, .ipIdentReserve, .flowHashSecret] ++ allocCuts) true
   if ← branch .sendSkbOk sent then
     let some e := p.endpoint | invariant "unreachable"
     setPeer pid { p with txBytes := p.txBytes + bytes.length }

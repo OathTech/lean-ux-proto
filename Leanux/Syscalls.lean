@@ -86,9 +86,17 @@ def SENDER_FD : Nat := 6
 
 /-- `send` of the request, whose generic-netlink handling (including a dump's
     callbacks) runs inside the call, then `recv` of the acknowledgement or the
-    dump, whose error code is the operation's result. -/
+    dump, whose error code is the operation's result. The netlink core's skb
+    allocations are below the cut (allocation cut sites, consumed when the
+    run armed the `__alloc_skb` range): the request's
+    (`netlink_alloc_large_skb`) before the handler, the acknowledgement's and
+    the dump's (`nlmsg_new`, `netlink_dump`, `netlink_trim`) after it. -/
 def netlinkRequest (handler : M Int) : M Int := do
-  let ret ← socketCall handler
+  let ret ← socketCall do
+    skipCut allocCuts
+    let ret ← handler
+    skipCut allocCuts
+    pure ret
   _ ← socketCall (pure 0)
   return ret
 
@@ -113,7 +121,13 @@ def rtnetlinkRequest (handler : M Int) : M Int := do
   setFdtSlot fd (some fid)
   setFdtOpen fd true
   setFdtCloexec fd false
-  let ret ← socketCallOn fd handler
+  -- the request's, the acknowledgement's and the notifications' skbs are
+  -- below the cut (allocation cut sites), as in `netlinkRequest`
+  let ret ← socketCallOn fd do
+    skipCut allocCuts
+    let ret ← handler
+    skipCut allocCuts
+    pure ret
   _ ← socketCallOn fd (pure 0)
   -- close(fd) after the window
   setFdtSlot fd none

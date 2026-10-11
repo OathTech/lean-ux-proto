@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "id": "a2_pipe_bufs_nomem",
+  "ops": [
+    {
+      "op": "pipe2",
+      "flags": 2048
+    },
+    {
+      "op": "pipe2",
+      "flags": 2048
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 1,
+        "end": 1
+      },
+      "count": 8,
+      "value": "7"
+    },
+    {
+      "op": "read",
+      "fd": {
+        "pipe": 1,
+        "end": 0
+      },
+      "count": 8
+    }
+  ],
+  "steer": [
+    [
+      "kzallocPipeInfo",
+      "draw"
+    ],
+    [
+      "kcallocPipeBufs",
+      "0000000000000000"
+    ],
+    [
+      "kzallocPipeInfo",
+      "draw"
+    ],
+    [
+      "kcallocPipeBufs",
+      "draw"
+    ]
+  ],
+  "expect": [
+    "alloc_pipe_info.bufs_allocated=0",
+    "get_pipe_inode.no_pipe=1"
+  ],
+  "domain_extension": "failslab"
+}
