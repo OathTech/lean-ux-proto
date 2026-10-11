@@ -509,19 +509,17 @@ A_PENDING = {}
 SUITE_OF = {m[0]: 'alloc' for m in A_MUTANTS}
 # Dispatch order (docs/2026-10-11-dispatch-order.md, section 6): the mirror
 # runs the queued send worker at the head of its queue, ignoring the unit the
-# dispatch record names. Rejected deterministically by the replay of a
-# recorded B-first s2_index_collision run (evaluator/test_model_replay.py,
-# pending the capture on the dispatch-order kernel) and, live, by
-# s2_index_collision whenever Linux dispatches peer B first (about 2 of 3
-# fresh-guest runs on the old kernel); run on the s2_* traces.
+# dispatch record names. Rejected deterministically by the replay of the
+# recorded B-first s2_index_collision run (evaluator/test_model_replay.py
+# DispatchOrder, the capture of 2026-10-11 on the dispatch-order oracle) and,
+# live, by s2_index_collision whenever Linux dispatches peer B first (9 of 10
+# fresh-guest runs on that oracle); run on the s2_* traces.
 Q_MUTANTS = [
   ('Q-M1-dispatch-order-ignored', 'dispatch order: the send worker runs the queue head, not the unit the record names',
    'Leanux/Env.lean',
    "    | some u => resolveUnit .sendWorker u d.sendWorkQueue d.peerList\n    | none => pure headPid\n",
    "    | some _ => pure headPid\n    | none => pure headPid\n", 's2_'),
 ]
-# runnable once the coordinator has built the dispatch-order kernel and captured a B-first run
-PENDING_CAPTURE = {'Q-M1-dispatch-order-ignored'}
 
 
 def w4(text):
@@ -603,10 +601,6 @@ def main():
         if name in PENDING:   # a draft entry: its pattern is filled at integration
             results[name] = dict(description=what, base=head, file=path, status='pending')
             print(name, 'pending (no pattern yet)', flush=True)
-            continue
-        if name in PENDING_CAPTURE and name not in sys.argv[1:]:   # run only when named, on the new kernel
-            results[name] = dict(description=what, base=head, file=path, status='pending')
-            print(name, 'pending (awaits the dispatch-order kernel and a B-first capture)', flush=True)
             continue
         if name in A_PENDING:
             if old is not None:   # the pattern still matches the code
