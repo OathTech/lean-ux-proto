@@ -1801,7 +1801,26 @@ validated at suite level; streams B and H are not started (17.5).
 
 ### 17.3 Validation
 
-(Filled in below after the suite and mutant runs.)
+All on the A oracle (`kernel-net-choice-a`, identity `c79e3e0c…`), under
+`capped`, at `d0f27e1`:
+- Unit tests (`evaluator.test_evaluation`, `harness.test_trace`,
+  `harness.test_wg`, `harness.test_linux`, `harness.test_noise`): 96 pass
+  (the GSO segment builder and the wire header are new cases).
+- Each `w4_*` trace alone against Linux: 5/5 agreement (the first run of
+  `w4_set_mtu_0` failed on the up's second initiation, fixed by turning
+  the keepalive off before the down; the first run of `w4_gso_trim` failed
+  the old 4096-branch bound).
+- Suites `handwritten,wireguard` (`.artifacts/check/w47-suites`): **pass,
+  187/187**, 9038 operand pairs, 3 output-limit chunk splits, no retries.
+- Boundary controls (`scripts/wg-w47-controls.py`): 3/3 placed outside the
+  domain with the stated reason.
+- Mutants W4-M1, M3-M10, M16 on the `w4_` subset: **10/10 rejected**, no
+  other outcome in any run. M1, M3, M4 (`w4_gso_4_2` and `w4_gso_trim`
+  bytes), M7 and M8 (`w4_route_mtu_probe_4` bytes) are semantic
+  mismatches; M5 and M6 are hidden mismatches at `w4_gso_trim`'s flush (the
+  stop fails the chunk, so every trace of it is listed); M9, M10 and M16
+  are control-flow mismatches at `w4_set_mtu_0` / `w4_set_mtu_1300`
+  (M16 also a semantic mismatch: the 12 bytes of padding).
 
 ### 17.4 Wire opcodes needed from the coordinator
 
