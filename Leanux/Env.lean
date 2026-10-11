@@ -3,6 +3,8 @@ import Leanux.WG.Receive
 import Leanux.WG.Data
 import Leanux.WG.RxData
 import Leanux.WG.Timers
+import Leanux.Env.IpStack
+import Leanux.Env.Batch
 
 /-!
 # The environment model: the harness fixture and the WireGuard kworker
@@ -23,6 +25,14 @@ the mirror proper (`Leanux/WG`) contains only the C's data and control flow:
   checksum completion `encrypt_packet` asks of the stack (`checksumHelp`);
 - where wg0's datagrams go over loopback, and how the sender's `recvfrom`
   reports their source.
+
+Since the interface commit (docs/2026-10-11-interface.md) two parts live in
+their own files, each owned by one W4+W7 stream: the transmit-side IP stack
+(`Leanux/Env/IpStack.lean`: `xmitPacket`, `checksumHelp`, the ports and
+addresses the packets carry) and the deferred units' shared machinery
+(`Leanux/Env/Batch.lean`: `runWorker`, `sectionOf`, `condResched`). This
+file keeps the fixture, the operations, the worker runners, the timers and
+the lifecycle: the hooks the streams meet at.
 -/
 
 namespace Leanux.Env
@@ -30,10 +40,6 @@ open Leanux Leanux.WG
 
 /-- The fixture's UDP listeners are on 127.0.0.1 and ::1 at this port. -/
 def LISTEN_PORT : Nat := 51999
-
-/-- The fixture's sender (`wg_inject`) is bound to this port on `[::]`
-    (dual-stack); `wg_observe` drains what it received. -/
-def SENDER_PORT : Nat := 51998
 
 /-- L (docs/2026-10-05-l-lifecycle.md, section 2.3): the ports where a
     wildcard UDP bind of wg0's conflicts with a fixture socket (no
@@ -101,105 +107,6 @@ def xmitMulticastLoop (family addr : Nat) : M Unit := do
   else if family == 6 && addr / 2 ^ 120 == 0xff then
     unsupported "an IPv6 multicast destination (whether the IP output loops a copy back depends on wg0's groups)"
 
-/-- The fixture's sender transmits (`wg_xmit`) to this UDP port. -/
-def SEND_PORT : Nat := 40000
-
-/-- wg0's addresses, added at `wg_up` (guest.c `route_into_wg0`): the
-    source the sender's IP layer selects for a destination routed into wg0. -/
-def WG0_ADDR4 : Nat := 0x0afffe01
-def WG0_ADDR6 : Nat := 0xfd00ffff000000000000000000000001
-
-/-- The largest UDP payload whose IP packet fits wg0's MTU (1420). -/
-def MAX_XMIT_PAYLOAD4 : Nat := WG.DEVICE_MTU - 20 - 8
-def MAX_XMIT_PAYLOAD6 : Nat := WG.DEVICE_MTU - 40 - 8
-
-/-- `n` as `width` big-endian bytes. -/
-def beBytes (n width : Nat) : List UInt8 :=
-  (List.range width).reverse.map fun k => UInt8.ofNat (n / 256 ^ k % 256)
-
-/-- The ones'-complement sum (end-around carry) of `bytes` as big-endian
-    16-bit words (an odd tail padded with a zero byte), added to `init`, folded
-    to 16 bits: what the kernel's `csum_partial` family computes. -/
-def onesSum (bytes : List UInt8) (init : Nat := 0) : Nat := Id.run do
-  let rec words : List UInt8 → Nat → Nat
-    | a :: b :: rest, acc => words rest (acc + a.toNat * 256 + b.toNat)
-    | [a], acc => acc + a.toNat * 256
-    | [], acc => acc
-  let mut s := words bytes init
-  for _ in [0:8] do
-    if s > 0xffff then s := s % 0x10000 + s / 0x10000
-  return s
-
-/-- Whether the sender's IP layer builds a packet to `addr` that the
-    environment does not determine: an IPv6 link-local destination selects
-    wg0's random link-local source address, and a multicast destination
-    (224.0.0.0/4, ff00::/8) is sent with the socket's multicast hop limit and
-    source. -/
-def xmitBytesUnknown (family addr : Nat) : Bool :=
-  (family == 4 && addr / 2 ^ 28 == 0xe) || (family == 6 && (addr / 2 ^ 118 == 0x3fa || addr / 2 ^ 120 == 0xff))
-
-/-- The IP packet `wg_xmit` receives from the fixture's sender (`SEND_FD`,
-    bound to `[::]:51998`, dual-stack; IPv4 goes as v4-mapped): the UDP
-    datagram to `SEND_PORT` with `payload`, behind a UDP header and an IPv4 or
-    IPv6 header, as docs/2026-10-04-d2-data-plane.md section 2 derives it
-    from the fixture:
-    - IPv4 (`__ip_make_skb`, `__ip_local_out`): version/ihl 0x45, tos 0,
-      DF set and **id 0** (`IP_PMTUDISC_DO` on the sender: `ignore_df` is 0
-      and the socket is unconnected, ip.h:559-589), TTL 64, protocol 17,
-      the header checksum; source wg0's address.
-    - IPv6 (`ip6_make_skb`, `__ip6_local_out`): traffic class 0, **flow
-      label 0** (`IPV6_AUTOFLOWLABEL = 0` on the sender), payload length,
-      next header 17, hop limit 64; source wg0's address.
-    - UDP (`udp4_hwcsum`, `udp6_hwcsum_outgoing`): wg0 advertises
-      `NETIF_F_HW_CSUM`, so the skb is `CHECKSUM_PARTIAL`: the check field
-      holds the folded pseudo-header sum (`~csum_*_magic(..., 0)`), and
-      `csum_start`/`csum_offset` name the UDP header and its check field.
-    - `PACKET_CB(skb)->mtu` is `dst_mtu` of the route through wg0, 1420.
-    A payload too large for the MTU fails `sendto` (or fragments, on IPv6),
-    which is outside the domain. For the destinations of `xmitBytesUnknown`
-    the bytes are not determined: the packet carries a zero source address
-    as a placeholder, and `checksumHelp`, which every such packet meets
-    before its bytes are read (encryption), is `unsupported`. -/
-def xmitPacket (family addr : Nat) (payload : List UInt8) : M WG.Packet := do
-  let ulen := 8 + payload.length
-  if family == 4 then
-    if payload.length > MAX_XMIT_PAYLOAD4 then unsupported "a transmitted payload beyond wg0's MTU"
-    let src := if xmitBytesUnknown family addr then 0 else WG0_ADDR4
-    let pseudo := onesSum (beBytes src 4 ++ beBytes addr 4 ++ [0, 17] ++ beBytes ulen 2)
-    let udp := beBytes SENDER_PORT 2 ++ beBytes SEND_PORT 2 ++ beBytes ulen 2 ++ beBytes pseudo 2 ++ payload
-    let hdr (check : Nat) := [0x45, 0] ++ beBytes (20 + ulen) 2 ++ [0, 0, 0x40, 0, 64, 17] ++ beBytes check 2
-      ++ beBytes src 4 ++ beBytes addr 4
-    -- ip_send_check: `ip_fast_csum` over the header with a zero check field
-    let check := 0xffff - onesSum (hdr 0)
-    return { bytes := hdr check ++ udp, csum := some (20, 6), mtu := WG.DEVICE_MTU }
-  else if family == 6 then
-    if payload.length > MAX_XMIT_PAYLOAD6 then unsupported "a transmitted payload beyond wg0's MTU"
-    let src := if xmitBytesUnknown family addr then 0 else WG0_ADDR6
-    let pseudo := onesSum (beBytes src 16 ++ beBytes addr 16 ++ beBytes ulen 4 ++ [0, 0, 0, 17])
-    let udp := beBytes SENDER_PORT 2 ++ beBytes SEND_PORT 2 ++ beBytes ulen 2 ++ beBytes pseudo 2 ++ payload
-    let hdr := [0x60, 0, 0, 0] ++ beBytes ulen 2 ++ [17, 64] ++ beBytes src 16 ++ beBytes addr 16
-    return { bytes := hdr ++ udp, csum := some (40, 6), mtu := WG.DEVICE_MTU }
-  else unsupported "a transmit family other than IPv4 or IPv6"
-
-/-- `skb_checksum_help` (net/core/dev.c:3384-3431, a cut) of a
-    `CHECKSUM_PARTIAL` packet: the ones'-complement sum from `csum_start` to
-    the end (the check field holds the pseudo-header sum), folded and
-    complemented into the check field, `csum_fold(csum) ?: CSUM_MANGLED_0`
-    (a zero result is sent as 0xffff); the packet is then `CHECKSUM_NONE`.
-    Only its failure is an environment outcome (`.skbChecksumHelp`). -/
-def checksumHelp (pkt : WG.Packet) : M WG.Packet := do
-  let some (start, offset) := pkt.csum | invariant "skb_checksum_help on a packet without CHECKSUM_PARTIAL"
-  let version := (pkt.bytes.headD 0).toNat / 16
-  let field (off len : Nat) := ((pkt.bytes.drop off).take len).foldl (fun acc b => acc * 256 + b.toNat) 0
-  let dst := if version == 4 then field 16 4 else field 24 16
-  if xmitBytesUnknown (if version == 4 then 4 else 6) dst then
-    unsupported "a transmitted packet whose source or hop limit the fixture does not determine (link-local or multicast destination)"
-  let folded := 0xffff - onesSum (pkt.bytes.drop start)
-  let check := if folded == 0 then 0xffff else folded
-  let at_ := start + offset
-  if at_ + 2 > pkt.bytes.length then invariant "the checksum field lies beyond the packet"
-  return { pkt with bytes := pkt.bytes.take at_ ++ beBytes check 2 ++ pkt.bytes.drop (at_ + 2), csum := none }
-
 /-- Whether an endpoint is one of the fixture's listeners. -/
 def listenerFamily (e : Endpoint) : Option Nat :=
   if e.port != LISTEN_PORT then none
@@ -225,83 +132,6 @@ def deliverSent : M Unit := do
       | some _ => modify fun w => { w with listenerV6 := w.listenerV6 ++ [dg.bytes] }
       | none => if !loopback then unsupported "a datagram routed back into wg0"
   modify fun w => { w with sent := [] }
-
-/-- A deferred unit's run. The kernel (the `net-choice` profile since the
-    D1 sprint) opens a dispatch section per dispatch of a function in the
-    armed set (`harness/linux.py`, `DISPATCH_SYMBOLS`); its start and
-    stop records bracket it in the choice stream, so the order in which the
-    kernel ran deferred units is checked rather than assumed.
-
-    A worker that switched away at a `cond_resched` (`condResched`) resumes
-    when the kernel's scheduler picks it again, which may be after workers
-    the mirror cannot run first: its own callers, preempted further up the
-    mirror's call stack. The mirror runs the rest of such a worker at once
-    and leaves its stop pending; the stop's record is consumed where Linux
-    recorded it (`skipAmbient`), and an operation ends with none pending
-    (`Runner.executeTrace`). This assumes the resumed rests commute: they
-    may read no hidden input (a read out of order is a mismatch) and touch
-    no state the others read. On the modeled paths each rest is a worker's
-    final empty ring or queue poll. -/
-def runWorker (w : Worker) (body : M Unit) : M Unit := do
-  _ ← hidden (.sectionStart w)
-  -- whether this run switched away
-  modify fun s => { s with yieldedWorkers := s.yieldedWorkers.filter (· != w.index) }
-  body
-  let stop := (HiddenSite.sectionStop w).info.id
-  let deferred := (← get).yieldedWorkers.contains w.index && (← peekHiddenSite).isSome
-    && (← peekHiddenSite) != some stop
-  if deferred then modify fun s => { s with pendingStops := s.pendingStops ++ [stop] }
-  else _ ← hidden (.sectionStop w)
-
-/-- The worker whose section a record starts or stops, with `true` for a
-    start; `none` for other records and for `net_rx_action`, a softirq,
-    which the environment runs where its records say: nested where it is
-    raised, or (D2) in ksoftirqd after a worker's switch. -/
-def sectionOf (site : Nat) : Option (Worker × Bool) :=
-  [Worker.sendWorker, .receiveWorker, .encryptWorker, .txWorker, .decryptWorker].findSome? fun w =>
-    if site == (HiddenSite.sectionStart w).info.id then some (w, true)
-    else if site == (HiddenSite.sectionStop w).info.id then some (w, false)
-    else none
-
-/-- `need_resched()` and `cond_resched()` in worker `self`, on the kernel's
-    one CPU (`CONFIG_PREEMPT_NONE`): whether the kernel switched away, having
-    run here what it ran. A scheduling choice, recorded: the kernel writes a
-    resched record when `__cond_resched` is about to schedule. Then each
-    following record that starts a crypt worker with queued work is that
-    worker's run here (and so on, for what it switched to in turn). What the
-    kernel ran that has no section (another task) leaves no other record;
-    a worker the mirror cannot run here (a caller further up its stack)
-    resumes later (`runWorker`). `fuel` bounds the nesting: each level is a
-    worker run. -/
-def condResched : Nat → Worker → M Bool
-  | 0, _ => invariant "worker switches nested too deep"
-  | fuel + 1, self => do
-    let some site := self.resched? | invariant s!"{self.symbol} has no cond_resched"
-    if (← peekHiddenSite) != some site.info.id then return false
-    _ ← hidden site
-    for _ in [0:16] do
-      match (← peekHiddenSite).bind sectionOf with
-      | some (.encryptWorker, true) =>
-        if (← getDev).encryptQueue.isEmpty then break   -- not runnable: the record mismatches later
-        runWorker .encryptWorker (WG.encryptWorker checksumHelp (condResched fuel .encryptWorker))
-      | some (.txWorker, true) =>
-        let some pid := (← getDev).txWorkQueue.head? | break
-        modifyDev fun d => { d with txWorkQueue := d.txWorkQueue.drop 1 }
-        runWorker .txWorker (WG.txWorker pid (condResched fuel .txWorker))
-      | _ => break
-    -- the loop ends at a record it does not run; one it could run is a
-    -- run beyond its bound
-    match (← peekHiddenSite).bind sectionOf with
-    | some (.encryptWorker, true) | some (.txWorker, true) =>
-      if !(← getDev).encryptQueue.isEmpty || !(← getDev).txWorkQueue.isEmpty then
-        invariant "more crypt worker runs at one cond_resched than the loop allows"
-    | _ => pure ()
-    modify fun s => { s with yieldedWorkers := s.yieldedWorkers ++ [self.index] }
-    return true
-
-/-- The bound on `condResched`'s nesting: a worker kind runs at most once
-    per level on the modeled paths. -/
-def SWITCH_DEPTH : Nat := 4
 
 /-- The crypt work a deferred unit queued that has not run at one of its
     `cond_resched`s, on the kernel's one CPU after that unit: the encrypt
