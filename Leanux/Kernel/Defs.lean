@@ -343,6 +343,12 @@ structure Task where
 structure Ratelimiter where
   refcnt : Nat := 0
   key : List UInt8 := List.replicate 16 0
+  /-- E-B arm C (docs/2026-10-05-e-dos.md §6.C): the token-bucket table, keyed by
+      source IP (the `(net, ip)` hash is a cut, and there is one netns per
+      trace): `(ip, tokens, last_time_ns)` per entry. The GC that would free
+      stale entries arms a timer (D3); its firing is out of scope on this base
+      (no timer source here), so entries persist for the trace. -/
+  table : List (Nat × Int × Int) := []
   deriving Repr, BEq
 
 /-- Whole-kernel mirror state. `nrFiles`/`maxFiles` mirror the system-wide
@@ -419,6 +425,8 @@ inductive EnvSite where
   -- and get_next_ino, no decisions (audit M3)
   | allocInode | kcallocResizeBufs
   | copyPageToIter | copyPageFromIter | sigqueueAlloc
+  -- E-B arm C: wg_ratelimiter_allow's per-entry kmem_cache_alloc (ratelimiter.c:138)
+  | ratelimiterEntry
   deriving Repr, BEq, DecidableEq
 
 inductive AllocCount where
@@ -622,6 +630,15 @@ inductive HiddenSite where
       clock read through `ktime_get_coarse_real_ts64` (kind 215), shared by
       all five callers on the pipe paths (design section 3). -/
   | currentTime
+  /-- E-B (docs/2026-10-05-e-dos.md §5): the `under_load` clock read when a
+      handshake crosses the queue threshold (`last_under_load =
+      ktime_get_coarse_boottime_ns()`, receive.c:115), seen only in the
+      discarded flood section; and `wg_cookie_message_create`'s nonce
+      (`get_random_bytes_wait`, cookie.c:190, 24 bytes) of a cookie reply. -/
+  | underLoadNow | cookieNonce
+  /-- E-B arm C: `wg_ratelimiter_allow`'s coarse-boot-time reads, on a bucket
+      hit (`ratelimiter.c:121`) and on a new-entry insert (`ratelimiter.c:146`). -/
+  | ratelimiterNow | ratelimiterInsertNow
   deriving Repr, BEq, DecidableEq
 
 inductive SiteRole where
@@ -731,6 +748,13 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   -- branch (E-A uses 64-69, A 70-99); the records are consumed in sequence
   -- order by whichever of the five callers runs
   | .currentTime => ⟨18, "current_time", "clock", "fs/inode.c", 2648, 16, .mirror⟩
+  -- E-B (ids 130-139, outside E-A's 64-69, A's 70-99, D3's 100-115 and L's
+  -- 120-126; P's current_time is 18). receive.c:115 is read only in the
+  -- discarded flood section; cookie.c:190 is the cookie reply's nonce.
+  | .underLoadNow => ⟨130, "under_load_now", "clock", "drivers/net/wireguard/receive.c", 115, 8, .mirror⟩
+  | .cookieNonce => ⟨131, "cookie_nonce", "random", "drivers/net/wireguard/cookie.c", 190, 24, .mirror⟩
+  | .ratelimiterNow => ⟨132, "ratelimiter_now", "clock", "drivers/net/wireguard/ratelimiter.c", 121, 8, .mirror⟩
+  | .ratelimiterInsertNow => ⟨133, "ratelimiter_insert_now", "clock", "drivers/net/wireguard/ratelimiter.c", 146, 8, .mirror⟩
 
 def HiddenSite.all : List HiddenSite :=
   [.initEphemeral, .respEphemeral, .tai64nNow, .indexDraw, .resetLastSent, .birthdateExpired, .initLastSent,
@@ -744,6 +768,7 @@ def HiddenSite.all : List HiddenSite :=
       .neighReachTime]
   ++ AllocSite.all.map .alloc
   ++ [.currentTime]
+  ++ [.underLoadNow, .cookieNonce, .ratelimiterNow, .ratelimiterInsertNow]
 
 /-- The resched site of a worker's `cond_resched`, for the workers that
     have one on the modeled paths. -/
@@ -891,6 +916,21 @@ structure World where
   /-- In the domain filter: the allocation sites the steering schedule
       names. Their every encounter needs an entry (design section 5.1). -/
   allocSteered : List String := []
+  /-- E-B, fixture knowledge (docs/2026-10-05-e-dos.md §4): the kernel-global
+      `last_under_load` (receive.c:100), set by a flood that crossed the queue
+      threshold and live for one second of decay. `some _` after a `wg_flood`
+      in this trace; its exact value is a declared cut (the flood section that
+      set it is discarded). Per trace: a leak into another trace is a
+      control-flow mismatch (every normal trace keeps the constant-false decay,
+      §4.2). -/
+  lastUnderLoad : Option Int := none
+  /-- E-B, the queue depth a flood added (`wg_flood`'s invalid packets, not
+      modeled individually). The receive worker sees `handshakeQueue.length +
+      floodDepth`, so the leading valid packet the mirror checks is processed
+      with the queue over the `under_load` threshold (deterministic on both
+      guest children, no dependence on the one-second decay). Set only while a
+      flood's leading packets are processed; 0 otherwise. -/
+  floodDepth : Nat := 0
 
 /-- Why a mirror execution stopped without an observation. -/
 inductive Stop where
@@ -1143,6 +1183,40 @@ def hiddenAlloc (s : AllocSite) : M Bool := do
       if !(← encounter) then return false
       k := k + 1
     return true
+
+/-- Drop the next choice record (after ambient ones) and return its site;
+    `none` when none remain (the domain filter, or an exhausted stream). -/
+def dropHiddenRecord : M (Option Nat) := do
+  skipAmbient
+  match (← get).hidden with
+  | some (r :: rest) =>
+    modify fun s => { s with hidden := some rest }
+    return some r.site
+  | _ => return none
+
+/-- E-B, the section-bracket discard (docs/2026-10-05-e-dos.md §4.1, as
+    superseded by the queue-depth design): drop head records whose site is in
+    `allowed` until the next record is `stop` (then stop) or the stream is
+    exhausted. A record outside `allowed` before `stop` is a hidden mismatch —
+    a packet the flood produced that the mirror did not model where it stands
+    (a mid-flood injection). Returns how many were dropped and whether an
+    `.under_load_now` record was seen (so the flood crossed the threshold). The
+    loop is bounded by the operation's record count. -/
+def discardFloodRecords (stop : Nat) (allowed : List Nat) : M (Nat × Bool) := do
+  let underLoad := (HiddenSite.underLoadNow).info.id
+  let mut dropped := 0
+  let mut crossed := false
+  for _ in [0:4000000] do
+    match ← peekHiddenSite with
+    | some s =>
+      if s == stop then return (dropped, crossed)
+      if !allowed.contains s then
+        throw (.hidden s!"flood: a modeled record (site {s}) inside the discarded flood region (a mid-flood injection)")
+      if s == underLoad then crossed := true
+      _ ← dropHiddenRecord
+      dropped := dropped + 1
+    | none => return (dropped, crossed)
+  throw (.hidden "flood: the record stream did not drain")
 
 def getFile (id : FileId) : M File := do
   match (← getK).files.get? id with

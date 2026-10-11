@@ -52,12 +52,44 @@ ALLOC_SHARE = 0.05
 # (L: lifecycle-controls, the random port steered onto a fixture port, which
 # the mirror must refuse: a stopped mirror fails its whole chunk, so it runs
 # apart)
-CONTROL_SUITES = ('steering-controls', 'timer-controls', 'lifecycle-controls')
+# (E-B: underload-controls, the merged-injection control, which the mirror's
+# section-bracket discard must reject — docs/2026-10-05-e-dos.md §4.1)
+CONTROL_SUITES = ('steering-controls', 'timer-controls', 'lifecycle-controls', 'underload-controls')
 CHUNK = 100
 
 
 def sha256(data):
     return hashlib.sha256(data).hexdigest()
+
+
+def chunk_traces(traces):
+    """Split traces into chunks of at most CHUNK. E-B isolation
+    (docs/2026-10-05-e-dos.md §4.2): a `wg_flood` sets the kernel-global
+    `last_under_load` (receive.c:100), which teardown does not reset and which
+    decays over one second, so an under-load trace can leak `under_load` into a
+    later trace in the same VM boot (one chunk). Each under-load trace therefore
+    runs in a chunk by itself; every normal trace keeps the constant-false decay
+    (the cross-trace guard). Yields `(start, chunk, name)`."""
+    def under_load(trace):
+        return any(op['op'] == 'wg_flood' for op in trace['ops'])
+    pending, current, cur_start = [], [], 0
+    def flush():
+        nonlocal current
+        if current:
+            pending.append((cur_start, current, f'chunk-{len(pending):03}'))
+            current = []
+    for i, trace in enumerate(traces):
+        if under_load(trace):
+            flush()
+            pending.append((i, [trace], f'chunk-{len(pending):03}'))
+        else:
+            if not current:
+                cur_start = i
+            current.append(trace)
+            if len(current) == CHUNK:
+                flush()
+    flush()
+    return pending
 
 
 def model_identity():
@@ -710,6 +742,17 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
     problems, gaps = [], Counter()
     order_stats = Counter()
     for index, op in enumerate(trace['ops']):
+        # E-B (docs/2026-10-05-e-dos.md §4.1): a `wg_flood` runs the receive
+        # worker as a discarded section whose per-packet coverage is
+        # scheduling-driven and not modeled (the mirror reports no decisions for
+        # it). The one checked control-flow effect is that the flood crossed the
+        # threshold: receive.c:115 (last_under_load = now) is covered.
+        if op['op'] == 'wg_flood':
+            covered = raw_lines(coverage[index], locations, config['files'])
+            if 'drivers/net/wireguard/receive.c:115' not in covered:
+                problems.append(dict(index=index,
+                                     problem='flood did not reach under_load (receive.c:115 not covered)'))
+            continue
         # Raw coverage of a span line (any function, any attribution) must be
         # mapped, and no unlisted function may run span lines of an anchored
         # C file: either means a modeled path runs outside the listed
@@ -930,8 +973,9 @@ CONTENTION_FACTOR = 3
 def guest_timeout(traces):
     ops = [op for trace in traces for op in trace['ops']]
     names = [op['op'] for op in ops]
+    # E-B: a wg_flood waits QUEUE_WAIT_US after its submission (harness/guest.c)
     waits = GUEST_CHILDREN * (OBSERVE_WAIT_SECONDS * sum(op in ('wg_observe', 'wg_inject') for op in names)
-                              + QUEUE_WAIT_SECONDS * sum(op in ('wg_set', 'wg_up', 'wg_xmit') for op in names)
+                              + QUEUE_WAIT_SECONDS * sum(op in ('wg_set', 'wg_up', 'wg_xmit', 'wg_flood') for op in names)
                               + ADVANCE_WAIT_SECONDS * sum(op == 'wg_advance' for op in names)
                               + PAUSE_SECONDS_PER_MS * sum(op.get('pause_ms', 0) for op in ops))
     io_bytes = sum(op['count'] for op in ops if op['op'] in ('read', 'write'))
@@ -1167,8 +1211,7 @@ def main(argv=None):
                 instrumented, functions)
         observable = sum(bool(w[True] or w[False]) for w in kcov[2].values())
         print(f'{len(decisions)} decisions, {observable} with KCOV witnesses', file=sys.stderr)
-        pending = [(start, traces[start:start + CHUNK], f'chunk-{start // CHUNK:03}')
-                   for start in range(0, len(traces), CHUNK)]
+        pending = list(chunk_traces(traces))
         while pending:
             start, chunk, name = pending.pop(0)
             print(f'traces {start}-{start + len(chunk) - 1} ...', file=sys.stderr, flush=True)

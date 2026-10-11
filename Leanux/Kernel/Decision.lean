@@ -160,6 +160,10 @@ inductive Decision where
   | hsNeedsCookieLoaded | hsNeedsCookieMac | dataNoKeypair
   -- drivers/net/wireguard/cookie.c
   | macInvalid | macNoCookieCheck | cookieLookupMiss
+  -- E-B: wg_cookie_validate_packet's MAC2 compare under load (cookie.c:143)
+  | macCookieInvalid
+  -- E-B arm C: wg_ratelimiter_allow (ratelimiter.c)
+  | rlProtoIp | rlEntryMatch | rlAllow | rlOverLimit | rlAllocFail
   -- E-A: wg_cookie_message_consume beyond the lookup
   | cookieNoMac1Sent | cookieDecryptOk
   -- drivers/net/wireguard/peerlookup.c
@@ -927,16 +931,21 @@ def Decision.info : Decision → DecisionInfo
   | .hsLoadedOperand => d "wg_receive_handshake_packet.loaded_and_cookie" wrc 123 [] []
   | .hsLoadedCookieOk => d "wg_receive_handshake_packet.mac_with_cookie" wrc 123 [] []
   | .hsNotLoaded => d "wg_receive_handshake_packet.not_loaded" wrc 124 [] []
-  -- not under load, the chain decides on this operand: 134 (the switch) runs iff
-  -- it is true. Its false side owns no point here: GCC knows under_load is
-  -- false and jumps past the `else if` at 126 to the drop.
-  | .hsMacNoCookie => d "wg_receive_handshake_packet.mac_without_cookie" wrc 124 [(125, 125), (134, 134)] []
+  -- not under load, this operand decides whether `packet_needs_cookie = false`
+  -- (line 125). The switch (134) is not attributed here: under load the
+  -- needs-cookie arm (hsNeedsCookieMac) also reaches it, so 134 is a shared
+  -- epilogue of the table, not a witness of this operand.
+  | .hsMacNoCookie => d "wg_receive_handshake_packet.mac_without_cookie" wrc 124 [(125, 125)] []
   | .hsNeedsCookieLoaded => d "wg_receive_handshake_packet.needs_cookie_loaded" wrc 126 [] []
   | .hsNeedsCookieMac => d "wg_receive_handshake_packet.needs_cookie_mac" wrc 126 [(127, 127)] []
   | .dataNoKeypair => d "wg_packet_consume_data.no_keypair" wrc 520 [(521, 521)] [(523, 523)]
   -- drivers/net/wireguard/cookie.c
   | .macInvalid => d "wg_cookie_validate_packet.mac1_invalid" wck 132 [(133, 133)] [(135, 135)]
   | .macNoCookieCheck => d "wg_cookie_validate_packet.no_cookie_check" wck 137 [(138, 138)] [(140, 140)]
+  -- E-B: under load, make_cookie then compute_mac2; the memneq fails for a
+  -- valid-MAC1 initiation with no cookie (true → goto out = VALID_MAC_BUT_NO_COOKIE).
+  -- The true side shares the `out:` epilogue; the false side reaches the ratelimiter.
+  | .macCookieInvalid => d "wg_cookie_validate_packet.mac2_invalid" wck 143 [] [(146, 146)]
   | .cookieLookupMiss => d "wg_cookie_message_consume.lookup_miss" wck 205 [(209, 209)] [(211, 211)]
   | .cookieNoMac1Sent => d "wg_cookie_message_consume.no_mac1_sent" wck 212 [(213, 214)] [(216, 220)]
   | .cookieDecryptOk => d "wg_cookie_message_consume.decrypted" wck 222 [(223, 228)] [(230, 231)]
@@ -1537,6 +1546,15 @@ def Decision.info : Decision → DecisionInfo
   | .sigqueueAllocOverride => d "__sigqueue_alloc.override_rlimit" "kernel/signal.c" 428 [] []
   | .sigqueueAllocNull => d "__sigqueue_alloc.q_null" "kernel/signal.c" 434 [(435, 435)] [(437, 439)]
   -- P stream 2 signal (end)
+  -- E-B arm C: wg_ratelimiter_allow (ratelimiter.c:84-156)
+  | .rlProtoIp => d "wg_ratelimiter_allow.inet" wrl 95 [(96, 98)] []
+  | .rlEntryMatch => d "wg_ratelimiter_allow.entry_matches" wrl 112 [(113, 130)] []
+  -- the `tokens >= PACKET_COST` compare at :126; its outcome (allow/deny) is
+  -- observed downstream (a handshake response vs silence), not at this line; the
+  -- operands are checked
+  | .rlAllow => d "wg_ratelimiter_allow.allow" wrl 126 [] []
+  | .rlOverLimit => d "wg_ratelimiter_allow.over_max_entries" wrl 135 [(136, 136)] [(138, 138)]
+  | .rlAllocFail => d "wg_ratelimiter_allow.alloc_failed" wrl 139 [(140, 140)] [(142, 142)]
 
 /-- The relation of a C value comparison, as written in the source
     (`lhs rel rhs`); `flag` is a mask test `(x & MASK)` against zero. -/
@@ -1567,6 +1585,10 @@ def Decision.comparison : Decision → Option Comparison
   -- noise.c:635-637 (DWARF puts the compare at 635); the condition at 639
   -- tests flood_attack
   | .consumeFlood => some ⟨.gt, false, some 635, true⟩
+  -- E-B arm C: `tokens >= PACKET_COST` (ratelimiter.c:126) and
+  -- `atomic_inc_return(&total_entries) > max_entries` (ratelimiter.c:135)
+  | .rlAllow => some ⟨.ge, true, none, false⟩
+  | .rlOverLimit => some ⟨.gt, true, none, false⟩
   | .allocFdCloexec => some ⟨.flag, true, none, false⟩
   | .placementCidrLe => some ⟨.le, false, none, false⟩
   | .placementExact => some ⟨.eq, false, none, false⟩
@@ -1887,6 +1909,8 @@ def Decision.repeatable : Decision → Bool
   -- P stream 3 (end)
   -- P stream 2 signal (begin): kernel/signal.c
   -- P stream 2 signal (end)
+  -- E-B arm C: the ratelimiter bucket walk compares each entry
+  | .rlEntryMatch => true
   | _ => false
 
 /-- Every decision, enumerated through the constructor index. -/

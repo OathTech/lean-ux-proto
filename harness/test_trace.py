@@ -171,9 +171,11 @@ class OpcodeTableTests(unittest.TestCase):
         self.assertTrue(all(isinstance(c, int) and c >= 1 for c in codes))
         self.assertEqual((OPCODES["pipe2"], OPCODES["wg_advance"]), (14, 19))
         self.assertEqual((OPCODES["wg_create"], OPCODES["wg_down"], OPCODES["wg_delete"]), (15, 16, 17))
-        self.assertEqual(RESERVED_OPCODES, {18: "wg_flood"})
+        # E-B took its reserved code 18 at the int-e merge; nothing is reserved now
+        self.assertEqual(OPCODES["wg_flood"], 18)
+        self.assertEqual(RESERVED_OPCODES, {})
         self.assertEqual(sorted(c for n, c in OPCODES.items()
-                                if n not in ("pipe2", "wg_advance", "wg_create", "wg_down", "wg_delete")),
+                                if n not in ("pipe2", "wg_advance", "wg_create", "wg_down", "wg_delete", "wg_flood")),
                          list(range(1, 14)))
 
     def test_guest_defines_match(self):

@@ -164,6 +164,8 @@ SEMANTIC_ERRNOS = {'eventfd2': {12, 22, 24}, 'dup': {9, 12, 24}, 'dup3': {9, 12,
                    'wg_up': {19, 98}, 'wg_xmit': {126, 89, 93, 101}, 'wg_observe': {11}, 'read': {9, 11, 22}, 'write': {9, 11, 22},
                    # D3: the advance ioctl fails only outside the oracle's setup (-EOPNOTSUPP, -EINVAL, -EPERM)
                    'wg_advance': set(),
+                   # E-B: the io_uring submission (wg_flood) fails only outside the oracle's setup
+                   'wg_flood': set(),
                    # EEXIST (a second wg0), ENODEV (no wg0)
                    'wg_create': {17}, 'wg_down': {19}, 'wg_delete': {19}}
 # Pipes (P design section 6): EINVAL, EMFILE, ENOPKG (O_NOTIFICATION_PIPE

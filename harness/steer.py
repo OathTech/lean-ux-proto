@@ -30,7 +30,9 @@ CHOICE_HELPERS = ('drivers/char/random.c', 'include/linux/random.h', 'kernel/tim
 # value in the domain is a possible output of the source.
 # L (docs/2026-10-05-l-lifecycle.md section 3.3): udp_lib_get_port's
 # get_random_u32 (net/ipv4/udp.c:257), any 4 bytes.
-STEERABLE = {'init_ephemeral', 'resp_ephemeral', 'index_draw', 'tai64n_now', 'udp_port_draw'}
+# E-B arm C: the cookie secret (cookie.c:24, get_random_bytes) is steered so the
+# fixture can compute make_cookie and a valid MAC2 to reach the ratelimiter.
+STEERABLE = {'init_ephemeral', 'resp_ephemeral', 'index_draw', 'tai64n_now', 'udp_port_draw', 'cookie_secret'}
 TIME_SETTOD_SEC_MAX = (1 << 63) // 1_000_000_000 - 30 * 365 * 24 * 3600   # KTIME_SEC_MAX - TIME_UPTIME_SEC_MAX
 
 

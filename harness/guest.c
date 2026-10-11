@@ -10,6 +10,7 @@
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
 #include <linux/wireguard.h>
+#include <linux/io_uring.h>
 #include <net/if.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -31,9 +32,11 @@
 
 #define MAX_OPS 64
 /* The KCOV area in words, task and remote alike (L, docs/2026-10-05-l-lifecycle.md
- * section 10: a wg_create window's comparison child exceeds 64 K words). The
- * host's bounds follow it (harness/trace.py KCOV_CAPACITY). */
-#define CAPACITY (256UL * 1024)
+ * section 10: a wg_create window's comparison child exceeds 64 K words; E-B: an
+ * io_uring flood crossing 512 runs ~600 UDP sends inline in the trace task with
+ * KCOV on, so both streams need headroom). The host's bounds follow it
+ * (harness/trace.py KCOV_CAPACITY). */
+#define CAPACITY (1024UL * 1024)
 #define MAX_PAYLOAD 32768
 #define NETLINK_FD 7
 /* Stage B1 network fixture: UDP listeners that catch what wg0 sends to
@@ -107,6 +110,7 @@
 #define OP_WG_CREATE 15
 #define OP_WG_DOWN 16
 #define OP_WG_DELETE 17
+#define OP_WG_FLOOD 18
 #define OP_WG_ADVANCE 19
 #define IS_LIFECYCLE_OP(code) ((code) == OP_WG_CREATE || (code) == OP_WG_DOWN || (code) == OP_WG_DELETE)
 /* The parent's per-child hang guard (P design section 6): a child still
@@ -935,6 +939,86 @@ static void alloc_status(const struct trace *t, int coverage_fd, int comparisons
     fflush(stdout);
 }
 
+/* E-B (docs/2026-10-05-e-dos.md §8, queue-depth design): an io_uring batch to
+ * wg0's port, sent from the fixture sender (SEND_FD) so wg0's cookie replies
+ * come back to a socket the fixture reads and make_cookie's source matches the
+ * mirror's. The batch is `n_leading` valid-MAC1 initiations (processed first,
+ * each under load via the queue depth -> one byte-exact cookie reply), then an
+ * optional mid-flood `control` valid initiation (a negative control: the mirror
+ * does not model it, so its cookie records land in the discarded region and the
+ * check fails closed), then `n_invalid` invalid-MAC1 initiations. The batch has
+ * no per-send cond_resched, so it outruns the single-CPU receive worker and the
+ * whole batch is queued (handshake_queue_len = total >= 512) before the worker
+ * runs (GSO/sendmmsg do not cross cheaply, measured). The invalid template has a
+ * MAC1 that will not match, so invalid packets are dropped (reply-free). The
+ * ring and SQEs are prepared before the coverage window (the ring's inode setup
+ * draws clock records that are not WireGuard sites); only io_uring_enter runs in
+ * the window, so the producer sections land in it. The payload is
+ * n_leading(1) ‖ control_flag(1) ‖ (n_leading + control_flag) × 148-byte msgs. */
+struct flood_state {
+    int ring;
+    void *sq;
+    struct io_uring_sqe *sqes;
+    size_t sqsz, sqesz;
+    unsigned *ktail, submit;
+    struct sockaddr_in6 dst;
+    unsigned char tmpl[148];
+};
+
+static int flood_prep(struct flood_state *fs, unsigned port, unsigned n_invalid,
+                      const unsigned char *payload, unsigned payload_len)
+{
+    memset(fs->tmpl, 0, sizeof(fs->tmpl));
+    fs->tmpl[0] = 1;                       /* MESSAGE_HANDSHAKE_INITIATION */
+    memset(fs->tmpl + 116, 0xff, 16);     /* a MAC1 that will not match */
+    /* v4-mapped destination: SEND_FD is the dual-stack IPv6 fixture sender, so
+     * wg0 sees IPv4 from 127.0.0.1:SENDER_PORT (as wg_inject does). */
+    memset(&fs->dst, 0, sizeof(fs->dst));
+    fs->dst.sin6_family = AF_INET6; fs->dst.sin6_port = htons((uint16_t)port);
+    fs->dst.sin6_addr.s6_addr[10] = fs->dst.sin6_addr.s6_addr[11] = 0xff;
+    fs->dst.sin6_addr.s6_addr[12] = 127; fs->dst.sin6_addr.s6_addr[15] = 1;
+    unsigned n_leading = payload_len >= 2 ? payload[0] : 0;
+    unsigned control = payload_len >= 2 ? payload[1] : 0;
+    if ((unsigned)2 + (n_leading + control) * 148u != payload_len) return -1;
+    unsigned total = n_leading + control + n_invalid;
+    struct io_uring_params pp; memset(&pp, 0, sizeof(pp));
+    fs->ring = syscall(SYS_io_uring_setup, total, &pp);
+    if (fs->ring < 0) return -1;
+    fs->sqsz = pp.sq_off.array + pp.sq_entries * sizeof(unsigned);
+    fs->sqesz = pp.sq_entries * sizeof(struct io_uring_sqe);
+    fs->sq = mmap(0, fs->sqsz, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, fs->ring, IORING_OFF_SQ_RING);
+    fs->sqes = mmap(0, fs->sqesz, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, fs->ring, IORING_OFF_SQES);
+    if (fs->sq == MAP_FAILED || fs->sqes == MAP_FAILED) { close(fs->ring); return -1; }
+    fs->ktail = (unsigned *)((char *)fs->sq + pp.sq_off.tail);
+    unsigned *karray = (unsigned *)((char *)fs->sq + pp.sq_off.array);
+    unsigned mask = *(unsigned *)((char *)fs->sq + pp.sq_off.ring_mask);
+    fs->submit = total < pp.sq_entries ? total : pp.sq_entries;
+    for (unsigned i = 0; i < fs->submit; i++) {
+        struct io_uring_sqe *e = &fs->sqes[i]; memset(e, 0, sizeof(*e));
+        e->opcode = IORING_OP_SEND; e->fd = SEND_FD;
+        e->addr2 = (unsigned long)&fs->dst; e->addr_len = sizeof(fs->dst);
+        /* order: leading valids, then the control valid, then the invalids */
+        if (i < n_leading + control) { e->addr = (unsigned long)(payload + 2 + i * 148u); e->len = 148; }
+        else { e->addr = (unsigned long)fs->tmpl; e->len = sizeof(fs->tmpl); }
+        karray[i & mask] = i;
+    }
+    return 0;
+}
+
+static int flood_enter(struct flood_state *fs)
+{
+    __atomic_store_n(fs->ktail, fs->submit, __ATOMIC_RELEASE);
+    long r = syscall(SYS_io_uring_enter, fs->ring, fs->submit, 0, 0, 0, 0);
+    return r < 0 ? -1 : 0;
+}
+
+static void flood_cleanup(struct flood_state *fs)
+{
+    munmap(fs->sqes, fs->sqesz);
+    munmap(fs->sq, fs->sqsz);
+    close(fs->ring);
+}
+
 static void execute(const struct trace *t, int input_fd, int comparisons)
 {
     struct observation result[MAX_OPS] = {{0}};
@@ -1085,6 +1169,17 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             lifecycle_len = op->code == OP_WG_CREATE ? newlink_wg0(lifecycle_body, sizeof(lifecycle_body))
                                            : dellink_wg0(lifecycle_body, sizeof(lifecycle_body));
         }
+        /* E-B: the flood's socket, io_uring ring and SQEs are prepared before
+         * the window (their inode/fd setup draws non-WireGuard clock records);
+         * only io_uring_enter runs in the window. */
+        struct flood_state flood;
+        int flood_ready = 0;
+        if (op->code == OP_WG_FLOOD) {
+            if (!t->net) fail(t->id, i, "invalid_input", "wireguard_without_network_fixture");
+            if (flood_prep(&flood, (unsigned)op->b, (unsigned)op->a, op->payload, op->payload_len))
+                fail(t->id, i, "environment_failure", "flood_prepare");
+            flood_ready = 1;
+        }
         /* before the coverage window: the clock the advance's wait watches */
         struct timespec before_advance = {0};
         if (op->code == OP_WG_ADVANCE && clock_gettime(CLOCK_MONOTONIC, &before_advance))
@@ -1179,6 +1274,13 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             break;
         }
         case OP_PIPE2: ret = syscall(SYS_pipe2, pipe_fds, (unsigned long)op->b); break;
+        case OP_WG_FLOOD: {
+            /* E-B: submit the prepared io_uring flood batch (op->a count, op->b
+             * port); op->payload is an optional bundled valid initiation (the
+             * merged-injection negative control). */
+            ret = flood_enter(&flood);
+            break;
+        }
         case OP_WG_CREATE: case OP_WG_DELETE: {
             /* L: RTM_NEWLINK (wg_newlink, register_netdevice) or RTM_DELLINK
              * (unregister, netdev_run_todo, wg_destruct), both complete
@@ -1206,6 +1308,10 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         }
         int captured_errno = errno;
         unsigned long count = __atomic_load_n(&coverage[0], __ATOMIC_RELAXED);
+        /* close the flood's socket and ring after the task count is captured
+         * (the packets are already queued in wg0; the worker drains them in the
+         * post-op wait regardless) so the fd teardown is outside the window. */
+        if (flood_ready) flood_cleanup(&flood);
         if (IS_LIFECYCLE_OP(op->code)) {
             if (clock_gettime(CLOCK_MONOTONIC, &op_finished)) fail(t->id, i, "environment_failure", "timing_clock");
             printf("LEANUX_TIMING {\"id\":\"%s\",\"index\":%u,\"mode\":\"%s\",\"op\":%u,\"ns\":%lld}\n", t->id, i,
@@ -1253,6 +1359,11 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
          * waits for it too, so the worker's remote section lands in it. */
         if (op->code == OP_WG_INJECT) usleep(OBSERVE_WAIT_US);
         if (op->code == OP_WG_SET || op->code == OP_WG_UP || op->code == OP_WG_XMIT) usleep(QUEUE_WAIT_US);
+        /* E-B: wait for the receive worker to drain the flood (its discarded
+         * section) in this operation's window (~1 ms drain, measured). Keep the
+         * wait short: the following injection must reach the worker within the
+         * one-second last_under_load decay (§4.1). */
+        if (op->code == OP_WG_FLOOD) usleep(QUEUE_WAIT_US);
         if (op->code == OP_WG_ADVANCE) {
             /* An advance that fails is not a trace operation the mirror can
              * follow: fail the trace. Then wait for the tick that absorbs the
@@ -1484,7 +1595,7 @@ int main(int argc, char **argv)
                 &consumed) != 9 || op->pause_ms > PAUSE_MS_MAX || op->kind > 3 || op->newkind > 3)
                 fail(trace.id, i, "invalid_input", "wire_operation");
             op->payload_len = 0;
-            if (op->code == OP_WG_SET || op->code == OP_WG_GET || op->code == OP_WG_XMIT || op->code == OP_WG_INJECT) {
+            if (op->code == OP_WG_SET || op->code == OP_WG_GET || op->code == OP_WG_XMIT || op->code == OP_WG_INJECT || op->code == OP_WG_FLOOD) {
                 /* A WireGuard operation carries its attribute payload as hex. */
                 const char *hex = line + consumed;
                 if (*hex++ != ' ') fail(trace.id, i, "invalid_input", "wire_payload");

@@ -98,39 +98,161 @@ def cookieMessageConsume (msg : List UInt8) : M Unit := do
                                        haveSentMac1 := false }
   peerPut (some pid)   -- out:
 
-/-- wg_cookie_validate_packet (cookie.c:119-154) when not under load:
-    whether MAC1 is valid. -/
-def cookieValidatePacket (msg : List UInt8) : M Bool := do
+/-- `cookie_mac_state` (cookie.h:14-19). -/
+inductive MacState where
+  | invalid | noCookie | withCookie | ratelimited
+  deriving Repr, BEq
+
+/-- `n` as `width` network-order (big-endian) bytes. -/
+def netBytes (n width : Nat) : List UInt8 :=
+  (List.range width).reverse.map fun k => UInt8.ofNat (n / 256 ^ k % 256)
+
+/-- make_cookie (cookie.c:91-117): `blake2s_128(key = checker->secret,
+    src_ip ‖ src_port)`. The secret-age read (`wg_birthdate_has_expired`,
+    cookie.c:96 → timers.h:28) is a recorded `.birthdateExpired`; the 120 s
+    rotation never fires in a 4 s trace. make_cookie is an out-of-line static
+    the check does not list, so its protocol branch is not reported; its only
+    checked effect is the cookie bytes (the reply's observable). -/
+def makeCookie (src : SkbSource) : M (List UInt8) := do
+  _ ← hiddenClock .birthdateExpired   -- wg_birthdate_has_expired(secret_birthdate, 120)
+  let secret := (← getDev).cookieSecret
+  let addr := if src.family == 4 then netBytes src.saddr 4 else netBytes src.saddr 16
+  return blake2s 16 secret (addr ++ netBytes src.sport 2)
+
+/-- Ratelimiter constants (ratelimiter.c:34-39): `NSEC_PER_SEC / 20`, times 5. -/
+def PACKET_COST : Int := 1000000000 / 20
+def TOKEN_MAX : Int := PACKET_COST * 5
+/-- `max_entries` on the 256 MiB VM (docs/2026-10-05-e-dos.md §2.6:
+    `roundup_pow_of_two((65536<<12)/(1<<14)/8) = 2048`, `* 8`). -/
+def RL_MAX_ENTRIES : Nat := 16384
+
+/-- wg_ratelimiter_allow (ratelimiter.c:84-156): the per-`(net, ip)` token
+    bucket. The `(net, ip)` hsiphash is a cut and there is one netns per trace,
+    so the mirror keys by source IP. On a bucket hit: refill
+    `min(TOKEN_MAX, tokens + now - last)`, allow iff `>= PACKET_COST`, deduct. On
+    a miss: insert (always allows the first packet). The 16384-entry table limit
+    needs 16384 distinct source IPs — out of reach (the profound reason); the GC
+    that frees stale entries arms a timer (D3), out of scope on this base. -/
+def ratelimiterAllow (src : SkbSource) : M Bool := do
+  if ← branch .rlProtoIp (src.family == 4) then pure ()
+  else unsupported "the ratelimiter on a non-IPv4 handshake (arm C is IPv4)"
+  let ip := src.saddr
+  match (← getK).ratelimiter.table.find? (·.1 == ip) with
+  | some (_, tokens, lastTime) =>
+    _ ← branch .rlEntryMatch true
+    let now ← hiddenClock .ratelimiterNow
+    let newTokens := min TOKEN_MAX (tokens + now - lastTime)
+    let ret ← branchCmp .rlAllow (newTokens ≥ PACKET_COST) newTokens PACKET_COST
+    let tokens' := if ret then newTokens - PACKET_COST else newTokens
+    modifyK fun k => { k with ratelimiter := { k.ratelimiter with
+      table := k.ratelimiter.table.map fun e => if e.1 == ip then (ip, tokens', now) else e } }
+    return ret
+  | none =>
+    let total := (← getK).ratelimiter.table.length + 1
+    if ← branchCmp .rlOverLimit (total > RL_MAX_ENTRIES) (Int.ofNat total) (Int.ofNat RL_MAX_ENTRIES) then
+      unsupported "the ratelimiter table limit (16384 distinct source IPs — out of reach)"
+    if ← branch .rlAllocFail !(← envOk .ratelimiterEntry) then
+      unsupported "a ratelimiter entry allocation failure (-ENOMEM)"
+    let now ← hiddenClock .ratelimiterInsertNow
+    modifyK fun k => { k with ratelimiter := { k.ratelimiter with
+      table := (ip, TOKEN_MAX - PACKET_COST, now) :: k.ratelimiter.table } }
+    return true
+
+/-- wg_cookie_validate_packet (cookie.c:119-154): the MAC1 check, and under
+    load the MAC2 check (make_cookie, compute_mac2) and, on a valid MAC2, the
+    ratelimiter (arm C). -/
+def cookieValidatePacket (msg : List UInt8) (src : SkbSource) (checkCookie : Bool) : M MacState := do
   let len := msg.length
   let computed := blake2s 16 (← getDev).mac1Key (msg.take (len - 32))
   let mac1 := (msg.drop (len - 32)).take 16
-  if ← branch .macInvalid (computed != mac1) then return false   -- crypto_memneq
-  if ← branch .macNoCookieCheck true then return true            -- !check_cookie
-  unsupported "unreachable"
+  if ← branch .macInvalid (computed != mac1) then return .invalid   -- crypto_memneq
+  if ← branch .macNoCookieCheck (!checkCookie) then return .noCookie   -- !check_cookie → goto out
+  -- under load: make_cookie, compute_mac2, crypto_memneq
+  let cookie ← makeCookie src
+  let computed2 := blake2s 16 cookie (msg.take (len - 16))
+  let givenMac2 := (msg.drop (len - 16)).take 16
+  if ← branch .macCookieInvalid (computed2 != givenMac2) then return .noCookie
+  -- VALID_MAC_WITH_COOKIE_BUT_RATELIMITED unless wg_ratelimiter_allow permits
+  if ← ratelimiterAllow src then return .withCookie else return .ratelimited
+
+/-- wg_socket_send_buffer_as_reply_to_skb (socket.c:203-233): the reply goes to
+    the initiating skb's endpoint (the flooding/injecting fixture sender). The
+    GFP_ATOMIC `alloc_skb` (socket.c:217) is A's `replySkb` allocation site
+    (docs/2026-10-05-a-alloc.md, 6.1); `send4`/`send6` are a cut, as in
+    `sendBufferToPeer`. The function is not listed in the correspondence map, so
+    only `wg_socket_endpoint_from_skb`'s decisions are checked for it. -/
+def sendBufferAsReplyToSkb (src : SkbSource) (buffer : List UInt8) : M Unit := do
+  let endpoint ← endpointFromSkb src
+  let some e := endpoint | invariant "a cookie reply to an skb that is neither IPv4 nor IPv6"
+  -- `alloc_skb(len + SKB_HEADER_LEN, GFP_ATOMIC)` (socket.c:217): NULL returns
+  -- -ENOMEM, which the caller ignores (receive.c), so no reply is sent. The
+  -- record is consumed as A's table declares (`replySkb`, exact 2); the arm is
+  -- not a declared decision because the function is unlisted (follow-up: list
+  -- it and declare the arm, as `.sendBufNoMem` is for socket.c:192)
+  -- [AGENT, int-e merge].
+  if !(← hiddenAlloc .replySkb) then return
+  skipCut [.ipIdentKey, .ipIdentReserve, .flowHashSecret, .sectionStart .netRx, .sectionStop .netRx]
+  let sport ← socketPort e.family
+  modify fun w => { w with sent := w.sent ++ [{ family := e.family, addr := e.addr, port := e.port, bytes := buffer, sport }] }
+
+/-- wg_cookie_message_create (cookie.c:180-196): header 3 ‖ receiver index ‖
+    nonce (`get_random_bytes_wait`, `.cookieNonce`) ‖ `xchacha20poly1305_encrypt`
+    of make_cookie's cookie under the device's cookie-encryption key, AAD =
+    the initiation's MAC1. -/
+def cookieMessageCreate (index : Nat) (src : SkbSource) (mac1 : List UInt8) : M (List UInt8) := do
+  let nonce ← hidden .cookieNonce
+  let cookie ← makeCookie src
+  let sealed := xchachaEncrypt (← getDev).cookieEncryptionKey nonce cookie mac1
+  return le32 MESSAGE_HANDSHAKE_COOKIE ++ le32 index ++ nonce ++ sealed
+
+/-- wg_packet_send_handshake_cookie (send.c:110-122): build the reply naming the
+    initiation's `sender_index`, with AAD the initiation's MAC1, and send it. -/
+def sendHandshakeCookie (msg : List UInt8) (src : SkbSource) : M Unit := do
+  let index := u32le msg 4
+  let mac1 := (msg.drop (msg.length - 32)).take 16
+  sendBufferAsReplyToSkb src (← cookieMessageCreate index src mac1)
 
 /-- wg_receive_handshake_packet (receive.c:92-204). -/
 def receiveHandshakePacket (msg : List UInt8) (src : SkbSource) : M Unit := do
   if ← branch .hsCookie (messageType msg == MESSAGE_HANDSHAKE_COOKIE) then
     cookieMessageConsume msg
     return
-  -- `under_load = handshake_queue_len >= MAX_QUEUED_INCOMING_HANDSHAKES / 8`
-  let queueLen := (← getDev).handshakeQueue.length
+  -- `under_load = handshake_queue_len >= MAX_QUEUED_INCOMING_HANDSHAKES / 8`.
+  -- A `wg_flood` adds `floodDepth` invalid packets ahead of the checked leading
+  -- packet, so its queue is over the threshold (E-B §4.1, queue-depth design).
+  let queueLen := (← getDev).handshakeQueue.length + (← get).floodDepth
+  let mut underLoad := false
   if ← branch .hsUnderLoad (queueLen ≥ MAX_QUEUED_INCOMING_HANDSHAKES / 8) then
-    unsupported "a handshake queue under load"
-  -- `else if (last_under_load)`: a kernel-global, zero while never under load
-  _ ← branch .hsWasUnderLoad false
-  let valid ← cookieValidatePacket msg
-  -- `(under_load && mac_state == VALID_MAC_WITH_COOKIE) || (!under_load && mac_state == VALID_MAC_BUT_NO_COOKIE)`
-  _ ← branch .hsLoadedOperand false
-  if !(← andM (branch .hsNotLoaded true) (branch .hsMacNoCookie valid)) then
-    -- `else if (under_load && mac_state == VALID_MAC_BUT_NO_COOKIE)`
-    _ ← branch .hsNeedsCookieLoaded false
-    return   -- invalid MAC: the packet is dropped
-  -- packet_needs_cookie = false
+    -- `last_under_load = ktime_get_coarse_boottime_ns()` (receive.c:115)
+    let now ← hiddenClock .underLoadNow
+    modify fun w => { w with lastUnderLoad := some now }
+    underLoad := true
+  -- `else if (last_under_load)`: a kernel-global, set by a flood this trace ran.
+  -- Every normal trace keeps it `none` (the constant-false decay guard, §4.2).
+  else if ← branch .hsWasUnderLoad (← get).lastUnderLoad.isSome then
+    -- `under_load = !wg_birthdate_has_expired(last_under_load, 1)` (receive.c:117):
+    -- the clock is read (`.birthdateExpired`); its comparison operand is a cut
+    -- (the flood that set `last_under_load` is discarded), and the generator
+    -- places the injection within the decay so `under_load` is true (§4.1).
+    _ ← hiddenClock .birthdateExpired
+    underLoad := true
+  let macState ← cookieValidatePacket msg src underLoad
+  -- packet_needs_cookie (receive.c:123-132):
+  -- `(under_load && mac == WITH_COOKIE) || (!under_load && mac == NO_COOKIE)`
+  let proceed ← orM (andM (branch .hsLoadedOperand underLoad) (branch .hsLoadedCookieOk (macState == .withCookie)))
+                    (andM (branch .hsNotLoaded (!underLoad)) (branch .hsMacNoCookie (macState == .noCookie)))
+  let needsCookie ← do
+    if proceed then pure false
+    -- `else if (under_load && mac == VALID_MAC_BUT_NO_COOKIE)`
+    else if ← andM (branch .hsNeedsCookieLoaded underLoad) (branch .hsNeedsCookieMac (macState == .noCookie)) then
+      pure true
+    else return   -- invalid MAC: the packet is dropped
   let t := messageType msg
   let peer ← do
     if ← branch .hsSwitchInitiation (t == MESSAGE_HANDSHAKE_INITIATION) then
-      if ← branch .hsInitNeedsCookie false then unsupported "unreachable"
+      if ← branch .hsInitNeedsCookie needsCookie then
+        sendHandshakeCookie msg src
+        return
       let peer ← consumeInitiation msg
       if ← branch .hsInitNoPeer peer.isNone then return
       let some pid := peer | invariant "unreachable"
@@ -138,7 +260,9 @@ def receiveHandshakePacket (msg : List UInt8) (src : SkbSource) : M Unit := do
       sendHandshakeResponse pid
       pure peer
     else if ← branch .hsSwitchResponse (t == MESSAGE_HANDSHAKE_RESPONSE) then
-      if ← branch .hsRespNeedsCookie false then unsupported "unreachable"
+      if ← branch .hsRespNeedsCookie needsCookie then
+        sendHandshakeCookie msg src
+        return
       let peer ← consumeResponse msg
       if ← branch .hsRespNoPeer peer.isNone then return
       let some pid := peer | invariant "unreachable"

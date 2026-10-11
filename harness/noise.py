@@ -655,6 +655,13 @@ def consume_cookie_message(message, last_mac1_sent, sender_public):
     return xchacha20poly1305_decrypt(cookie_key(sender_public), message[8:32], message[32:], last_mac1_sent)
 
 
+def make_cookie(secret, saddr_be, sport):
+    """make_cookie (cookie.c:91-117): keyed BLAKE2s-128 under the checker secret
+    over the source IP (network order) and source port (network order). E-B arm
+    C steers the secret so the fixture can compute a valid MAC2 offline."""
+    return hashlib.blake2s(saddr_be + struct.pack(">H", sport), key=secret, digest_size=16).digest()
+
+
 def mac2(handshake_message, cookie):
     """compute_mac2 (cookie.c:83-89): keyed BLAKE2s-128 under the cookie over
     the message up to mac2."""

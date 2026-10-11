@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Negative controls for steering (choice-stream strategy, step 2): every
-trace in corpus/steering-controls and corpus/lifecycle-controls must fail,
+trace in corpus/steering-controls, corpus/lifecycle-controls and corpus/underload-controls must fail,
 with the stated problem or outcome.
 
     scripts/in-bundle python3 scripts/steering-controls.py
@@ -25,6 +25,16 @@ EXPECTED = {
 # (its own suite).
 LIFECYCLE_EXPECTED = {
     'l_random_port_collision': ('unsupported_path', 'the random port draw collides with a bound port'),
+}
+
+
+# E-B (docs/2026-10-05-e-dos.md §4.1): the merged-injection control bundles a
+# valid initiation into the flood's io_uring batch, so the kernel makes a cookie
+# reply inside the flood's (discarded) receive-worker section. The mirror's
+# section-bracket discard then meets the reply's modeled records inside the flood
+# section and fails closed (the two-distinct-sections assertion).
+UNDERLOAD_EXPECTED = {
+    'e_underload_merged': ('hidden_mismatch', 'a modeled record inside the flood'),
 }
 
 
@@ -66,6 +76,16 @@ def main():
         ok &= passed
         results[trace_id] = dict(rejected=passed, outcome=f.get('outcome', 'agreement'), detail=f.get('detail'))
     ok &= set(failures) == set(LIFECYCLE_EXPECTED)
+    report = run_suite('underload-controls', len(UNDERLOAD_EXPECTED))
+    if report is None:
+        return 2
+    failures = {f.get('id') or f.get('detail', '').split(' ')[1]: f for f in report['failures']}
+    for trace_id, (outcome, detail) in UNDERLOAD_EXPECTED.items():
+        f = failures.get(trace_id) or {}
+        passed = f.get('outcome') == outcome and detail in f.get('detail', '')
+        ok &= passed
+        results[trace_id] = dict(rejected=passed, outcome=f.get('outcome', 'agreement'), detail=f.get('detail'))
+    ok &= set(failures) == set(UNDERLOAD_EXPECTED)
     print(json.dumps(results, indent=1))
     return 0 if ok else 1
 

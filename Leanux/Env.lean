@@ -789,4 +789,53 @@ def inject (family port : Nat) (msg : List UInt8) : M Int := do
   deliverSent
   return msg.length   -- udp_sendmsg returns the datagram's length
 
+/-- `wg_flood` (docs/2026-10-05-e-dos.md §8): the fixture submits an io_uring
+    batch of invalid-MAC1 initiations to wg0's port. On the kernel they cross the
+    `handshake_queue_len >= 512` threshold, set `last_under_load`, and are all
+    dropped at the MAC1 check (reply-free), in one fully-drained receive-worker
+    section. The mirror does not model the flood's scheduling-driven dynamics:
+    it discards the whole flood section's records (§4.1) and records only that
+    `under_load` was set. It requires the flood to have reached the receive
+    worker and crossed the threshold (an `.under_load_now` record); a flood that
+    did not cross, or whose section did not close in this operation (the worker
+    outliving the window, a merged injection — §4.1), fails closed. The op
+    returns 0 (the submission succeeded). -/
+def flood (count port : Nat) (messages : List (List UInt8)) : M Int := do
+  let some d := (← getK).wg | unsupported "a flood to a port other than wg0's (no wg0)"
+  if !d.running || port != d.incomingPort then unsupported "a flood to a port other than wg0's"
+  -- without records (the domain filter runs before Linux), accept the flood: it
+  -- is a natural harness input, inside the domain
+  if (← get).hidden.isNone then
+    modify fun w => { w with lastUnderLoad := some 0 }
+    return 0
+  let startW := (HiddenSite.sectionStart .receiveWorker).info.id
+  let stopW := (HiddenSite.sectionStop .receiveWorker).info.id
+  let startRx := (HiddenSite.sectionStart .netRx).info.id
+  let stopRx := (HiddenSite.sectionStop .netRx).info.id
+  let cuts := [startRx, stopRx, (HiddenSite.ipIdentKey).info.id, (HiddenSite.ipIdentReserve).info.id,
+               (HiddenSite.flowHashSecret).info.id, (HiddenSite.udpPortDraw).info.id]
+  -- before the receive worker runs: the fixture's io_uring sends' producer
+  -- `net_rx` sections and IP-layer cut draws
+  let _ ← discardFloodRecords startW cuts
+  -- the receive-worker section: the checked leading valid packets first, then
+  -- the invalid flood discarded. The leading valids go through the real worker
+  -- (which consumes the `cond_resched` records between packets); `floodDepth`
+  -- keeps them over the under_load threshold.
+  _ ← hidden (.sectionStart .receiveWorker)
+  let src ← senderSource 4
+  modifyDev fun d => { d with handshakeQueue := messages.map (fun m => (m, src)) }
+  modify fun w => { w with floodDepth := count + messages.length }
+  WG.handshakeReceiveWorker (discard <| condResched SWITCH_DEPTH .receiveWorker)
+  modify fun w => { w with floodDepth := 0 }
+  -- the remaining invalid packets' per-packet reads (under_load / decay /
+  -- reschedule), discarded; a modeled record here (a mid-flood injection) fails
+  let (_, crossed) ← discardFloodRecords stopW
+    ([(HiddenSite.underLoadNow).info.id, (HiddenSite.birthdateExpired).info.id,
+      (HiddenSite.reschedReceive).info.id] ++ cuts)
+  _ ← hidden (.sectionStop .receiveWorker)
+  if messages.isEmpty && !crossed then
+    throw (.hidden "the flood did not cross the under_load threshold (no under_load record)")
+  deliverSent
+  return 0
+
 end Leanux.Env

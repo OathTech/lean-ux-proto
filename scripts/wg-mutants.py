@@ -1,5 +1,5 @@
 """WireGuard mutants (stage A report, section 2; stages B1, B2, C, D1, D2, E arm 4,
-D3 and workstream L), and the allocation-outcome mutants of A
+E-B under load, D3 and workstream L), and the allocation-outcome mutants of A
 (docs/2026-10-05-a-alloc.md, section 7).
 
 Each mutant is applied to a clean committed tree, verified as applied, checked
@@ -327,6 +327,40 @@ D3_MUTANTS = [
    "      armTimer pid .newHandshake (KEEPALIVE_TIMEOUT_TICKS + REKEY_TIMEOUT_TICKS + jitter)\n",
    "      armTimer pid .newHandshake (KEEPALIVE_TIMEOUT_TICKS + jitter)\n"),
 ]
+# Stage E-B (under-load + cookie-reply creation; docs/2026-10-05-e-dos.md §6.B,
+# §10). Checked on the e_underload_* traces (the sixth field 'e_underload').
+E_UNDERLOAD_MUTANTS = [
+  ('E-M6-under-load-threshold-gt', 'data: under_load uses `>` not `>=` the threshold (receive.c:112). NOT '
+   'CLAIMED: the threshold is not a declared comparison and the leading packet runs with queue_len well above '
+   '512, so `>` vs `>=` is not observable (like E-M5).',
+   'Leanux/WG/Receive.lean',
+   "  if ← branch .hsUnderLoad (queueLen ≥ MAX_QUEUED_INCOMING_HANDSHAKES / 8) then\n",
+   "  if ← branch .hsUnderLoad (queueLen > MAX_QUEUED_INCOMING_HANDSHAKES / 8) then\n", 'e_underload_flood'),
+  ('E-M7-make-cookie-ignores-source-port', 'data: make_cookie hashes only the source IP, not the port '
+   '(cookie.c:113); the cookie, hence the reply bytes, differ (e_underload_cookie)', 'Leanux/WG/Receive.lean',
+   "  return blake2s 16 secret (addr ++ netBytes src.sport 2)\n",
+   "  return blake2s 16 secret addr\n", 'e_underload'),
+  ('E-M8-queue-under-load-ignored', 'behavior: the leading flood packet is treated as not under load despite '
+   'queue_len >= 512 (receive.c:112-115); it takes the no-cookie proceed arm instead of sending a cookie — no '
+   'reply where Linux sent one (e_underload_cookie)', 'Leanux/WG/Receive.lean',
+   "    modify fun w => { w with lastUnderLoad := some now }\n    underLoad := true\n",
+   "    modify fun w => { w with lastUnderLoad := some now }\n    underLoad := false\n", 'e_underload'),
+  ('E-M9-mac2-compare-inverted', 'control: wg_cookie_validate_packet treats a non-matching MAC2 as valid '
+   '(cookie.c:143); a no-cookie initiation then takes the ratelimiter/consume arm instead of a cookie reply, '
+   'so the reply records disagree (e_underload_cookie)', 'Leanux/WG/Receive.lean',
+   "  if ← branch .macCookieInvalid (computed2 != givenMac2) then return .noCookie\n",
+   "  if ← branch .macCookieInvalid (computed2 == givenMac2) then return .noCookie\n", 'e_underload'),
+  ('E-M10-ratelimiter-allow-inverted', 'control: wg_ratelimiter_allow denies a packet with tokens (the bucket '
+   'compare inverted, ratelimiter.c:126); the hit packet is dropped before consume_initiation, so its flood_now '
+   'read is missing (e_underload_ratelimit)', 'Leanux/WG/Receive.lean',
+   "    let ret ← branchCmp .rlAllow (newTokens ≥ PACKET_COST) newTokens PACKET_COST\n",
+   "    let ret ← branchCmp .rlAllow (newTokens < PACKET_COST) newTokens PACKET_COST\n", 'e_underload_ratelimit'),
+  ('E-M11-ratelimiter-insert-tokens', 'data: a new ratelimiter entry starts at TOKEN_MAX, not TOKEN_MAX - '
+   'PACKET_COST (ratelimiter.c:147); the next hit from the same IP reports a different token count '
+   '(e_underload_ratelimit, the rlAllow operands)', 'Leanux/WG/Receive.lean',
+   "      table := (ip, TOKEN_MAX - PACKET_COST, now) :: k.ratelimiter.table } }\n",
+   "      table := (ip, TOKEN_MAX, now) :: k.ratelimiter.table } }\n", 'e_underload_ratelimit'),
+]
 # Workstream L (docs/2026-10-05-l-lifecycle.md, section 8): checked on the
 # l_* traces of the wireguard suite (the sixth field), each naming the trace
 # that rejects it. L-M10 is a data-only correction nothing observes: it is
@@ -381,7 +415,7 @@ L_MUTANTS = [
    'wg_xmit (l_down_purges_staged)', 'Leanux/Env.lean',
    "  WG.wgDown\n  modify fun w => { w with routesViaWg0 := false }\n", "  WG.wgDown\n", 'l_'),
 ]
-NOT_CLAIMED = {'L-M10-update-gen-zero'}
+NOT_CLAIMED = {'L-M10-update-gen-zero', 'E-M6-under-load-threshold-gt'}
 # evaluator.check on the traces of one suite whose ids start with a prefix
 SUBSET = """import sys
 sys.path.insert(0, '.')
@@ -539,7 +573,7 @@ def run(cmd, **kw):
 def main():
     assert run(['git', 'status', '--porcelain'], capture_output=True, text=True).stdout == '', 'tree must be clean'
     head = run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()
-    mutants = MUTANTS + D1_MUTANTS + D2_MUTANTS + E_MUTANTS + D3_MUTANTS + L_MUTANTS + A_MUTANTS
+    mutants = MUTANTS + D1_MUTANTS + D2_MUTANTS + E_MUTANTS + E_UNDERLOAD_MUTANTS + D3_MUTANTS + L_MUTANTS + A_MUTANTS
     names = [m[0] for m in mutants]
     assert set(EQUIVALENT) <= set(names), 'an EQUIVALENT entry names no mutant'
     assert NOT_CLAIMED <= set(names), 'a NOT_CLAIMED entry names no mutant'

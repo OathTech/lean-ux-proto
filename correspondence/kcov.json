@@ -168,6 +168,7 @@
     "wg_pubkey_hashtable_lookup",
     "wg_pubkey_hashtable_remove",
     "wg_queued_expired_zero_key_material",
+    "wg_ratelimiter_allow",
     "wg_ratelimiter_gc_entries",
     "wg_ratelimiter_init",
     "wg_ratelimiter_uninit",

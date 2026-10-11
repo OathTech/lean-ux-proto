@@ -28,6 +28,11 @@ FIELDS = {
     "wg_inject": {"op", "family", "port", "message"},
     # D3: the virtual time advance by `ticks` jiffies (docs/2026-10-05-d3-timers.md, 4.3)
     "wg_advance": {"op", "ticks"},
+    # E-B: an io_uring flood of `count` invalid-MAC1 initiations to wg0's
+    # `port`, to cross the under_load threshold (docs/2026-10-05-e-dos.md §8).
+    # `messages` (optional, 0 or 1 entry) bundles a valid initiation into the
+    # same io_uring batch, for the merged-injection negative control.
+    "wg_flood": {"op", "count", "port"},
     # L: wg0's lifecycle (docs/2026-10-05-l-lifecycle.md section 6): RTM_NEWLINK,
     # SIOCSIFFLAGS without IFF_UP, RTM_DELLINK
     "wg_create": {"op"}, "wg_down": {"op"}, "wg_delete": {"op"},
@@ -35,28 +40,30 @@ FIELDS = {
     "pipe2": {"op", "flags"},
 }
 LIFECYCLE_OPS = ("wg_create", "wg_down", "wg_delete")
-WG_OPS = {"wg_set", "wg_get", "wg_up", "wg_xmit", "wg_observe", "wg_inject", "wg_advance"} | set(LIFECYCLE_OPS)
+WG_OPS = {"wg_set", "wg_get", "wg_up", "wg_xmit", "wg_observe", "wg_inject", "wg_advance",
+          "wg_flood"} | set(LIFECYCLE_OPS)
 # Wire opcodes: an explicit table, not FIELDS' order (a positional derivation
 # gave P's pipe2 and D3's wg_advance the same code, 14). harness/guest.c
 # mirrors it as OP_* #defines; harness/test_trace.py checks that the codes
 # are distinct and that the guest's agree. [AGENT, coordinator, D3 merge]
 # L's operations take their reserved codes 15-17 [AGENT, coordinator's
-# table, int-dl merge].
+# table, int-dl merge]; E-B's wg_flood takes its reserved code 18 [AGENT,
+# int-e merge].
 OPCODES = {
     "eventfd2": 1, "dup": 2, "dup3": 3, "close": 4, "read": 5, "write": 6, "fcntl": 7,
     "wg_set": 8, "wg_get": 9, "wg_up": 10, "wg_xmit": 11, "wg_observe": 12, "wg_inject": 13,
     "pipe2": 14,
     "wg_create": 15, "wg_down": 16, "wg_delete": 17,
-    # 18: reserved for E (wg_flood)
+    "wg_flood": 18,
     "wg_advance": 19,
 }
-RESERVED_OPCODES = {18: "wg_flood"}
+RESERVED_OPCODES = {}
 if set(OPCODES) != set(FIELDS):
     raise AssertionError(f"OPCODES and FIELDS name different operations: {set(OPCODES) ^ set(FIELDS)}")
 # The guest's KCOV area in words, task and remote (harness/guest.c CAPACITY):
 # KCOV stops at CAPACITY - 1 PCs or (CAPACITY - 1) // 4 comparison records,
 # and the guest fails an operation whose area filled.
-KCOV_CAPACITY = 256 * 1024
+KCOV_CAPACITY = 1024 * 1024
 # The optional top-level `net_fixture` (L): "bare" starts a network trace
 # without wg0; absent, the fixture creates a down wg0.
 NET_FIXTURES = ("bare",)
@@ -144,8 +151,15 @@ def validate_trace(trace):
         name = op["op"]
         if name not in FIELDS:
             raise UnsupportedTrace(f"ops[{i}]: unsupported operation {name!r}")
-        _fields({k: v for k, v in op.items() if k not in OPTIONAL_OP_FIELDS}, FIELDS[name], f"ops[{i}]")
-        pipes = name in PIPE_PRODUCERS
+        if name == "wg_flood":
+            # E-B: `messages` (leading valid initiations the mirror checks) and
+            # `control` (one mid-flood valid the mirror must not model) optional
+            if not FIELDS[name] <= set(op) <= FIELDS[name] | {"messages", "control"}:
+                raise InvalidTrace(f"ops[{i}]: expected {sorted(FIELDS[name])} and optionally messages, control")
+            pipes = False
+        else:
+            _fields({k: v for k, v in op.items() if k not in OPTIONAL_OP_FIELDS}, FIELDS[name], f"ops[{i}]")
+            pipes = name in PIPE_PRODUCERS
         if "pause_ms" in op:
             _integer(op["pause_ms"], *PAUSE_MS, f"ops[{i}].pause_ms")
             pipes = True
@@ -172,7 +186,7 @@ def validate_trace(trace):
                 _integer(fd["ref"], 0, i - 1, f"ops[{i}].{field}.ref")
                 if ops[fd["ref"]]["op"] not in PRODUCERS:
                     raise InvalidTrace(f"ops[{i}].{field}: reference must name FD producer")
-        if "count" in op:
+        if "count" in op and name != "wg_flood":
             _integer(op["count"], 0, MAX_IO, f"ops[{i}].count")
             if op["count"] > LEGACY_IO:
                 pipes = True
@@ -202,6 +216,19 @@ def validate_trace(trace):
                 raise InvalidTrace(f"ops[{i}].message: expected 1-1400 bytes of lowercase hex")
         if name == "wg_advance":
             _integer(op["ticks"], 1, 2**31, f"ops[{i}].ticks")
+        if name == "wg_flood":
+            _integer(op["count"], 1, 2**20, f"ops[{i}].count")
+            _integer(op["port"], 1, 65535, f"ops[{i}].port")
+            # the leading valids and the optional control are 148-byte (296-hex)
+            # handshake initiations (the guest submits them as fixed-size slots)
+            messages = op.get("messages", [])
+            if type(messages) is not list or len(messages) > 4 or any(
+                    type(m) is not str or not re.fullmatch(r"(?:[0-9a-f]{2}){148}", m, re.ASCII)
+                    for m in messages):
+                raise InvalidTrace(f"ops[{i}].messages: expected 0-4 leading 148-byte initiations (hex)")
+            if "control" in op and (type(op["control"]) is not str
+                                    or not re.fullmatch(r"(?:[0-9a-f]{2}){148}", op["control"], re.ASCII)):
+                raise InvalidTrace(f"ops[{i}].control: expected a 148-byte initiation (hex)")
         if name == "wg_xmit":
             try:
                 validate_packet(op["packet"], f"ops[{i}].packet")
@@ -316,6 +343,8 @@ def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False, allo
                 a, b = op["family"], op["port"]
             if op["op"] == "wg_advance":
                 a = op["ticks"]
+            if op["op"] == "wg_flood":
+                a, b = op["count"], op["port"]
             line = f"{OPCODES[op['op']]} {kind} {value} {newkind} {newvalue} {a} {b} {op.get('value', '0')}"
             if GUEST_PIPES:
                 line += f" {op.get('pause_ms', 0)}"   # the ninth field (P1)
@@ -327,6 +356,14 @@ def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False, allo
                 line += " " + packet.hex()
             elif op["op"] == "wg_inject":
                 line += " " + op["message"]
+            elif op["op"] == "wg_flood":
+                # payload = n_leading(1) ‖ control_flag(1) ‖ the leading valids
+                # then the control (each 148 bytes); the invalid template is
+                # built in the guest
+                leading = op.get("messages", [])
+                control = op.get("control")
+                header = bytes([len(leading), 1 if control else 0]).hex()
+                line += " " + header + "".join(leading) + (control or "")
             lines.append(line)
         for entry in schedule:
             # (kind, length, draw, ips, hex[, flags]); flags: 1 = match the

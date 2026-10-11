@@ -80,13 +80,15 @@ def setStaticIdentityPrivateKey (privateKey : Key) : M Unit := do
     BLAKE2s outputs nothing on this path observes. -/
 def cookiePrecomputeDeviceKeys : M Unit := do
   let identity := (← getDev).staticIdentity
-  -- precompute_key(message_mac1_key, static_public, "mac1----"); the cookie
-  -- encryption key is not read on the modeled paths
-  let key ← do
+  -- precompute_key(cookie_encryption_key, static_public, "cookie--") and
+  -- precompute_key(message_mac1_key, static_public, "mac1----"); E-B reads the
+  -- cookie encryption key when wg0 creates a cookie reply
+  let (encKey, mac1Key) ← do
     if ← branch .cookieDeviceHasIdentity identity.hasIdentity then
-      pure (blake2s 32 [] ("mac1----".toUTF8.toList ++ identity.staticPublic))
-    else pure (List.replicate 32 0)
-  modifyDev fun d => { d with mac1Key := key }
+      pure (blake2s 32 [] ("cookie--".toUTF8.toList ++ identity.staticPublic),
+            blake2s 32 [] ("mac1----".toUTF8.toList ++ identity.staticPublic))
+    else pure (List.replicate 32 0, List.replicate 32 0)
+  modifyDev fun d => { d with cookieEncryptionKey := encKey, mac1Key := mac1Key }
 
 /-- wg_noise_keypair_put (noise.c:131-140) on the NULL keypairs of a peer that
     never completed a handshake. -/

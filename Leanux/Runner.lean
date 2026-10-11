@@ -36,6 +36,11 @@ inductive Operation where
   | wgXmit (family addr : Nat) (payload : List UInt8)
   | wgObserve
   | wgInject (family port : Nat) (message : List UInt8)
+  /-- E-B: an io_uring flood of `count` invalid-MAC1 initiations to wg0's port,
+      with `messages` valid-MAC1 initiations submitted first (processed under
+      load via the queue depth, their cookie replies checked byte-exact);
+      docs/2026-10-05-e-dos.md §8. -/
+  | wgFlood (count port : Nat) (messages : List (List UInt8))
   /-- D3: the virtual time advance (harness/trace.py `wg_advance`). -/
   | wgAdvance (ticks : Nat)
   /-- L (docs/2026-10-05-l-lifecycle.md): wg0's lifecycle. -/
@@ -87,7 +92,7 @@ structure Trace where
 def Trace.net (t : Trace) : Bool :=
   t.ops.any fun
     | .wgSet _ | .wgGet | .wgUp | .wgXmit .. | .wgObserve | .wgInject .. | .wgAdvance _
-    | .wgCreate | .wgDown | .wgDelete => true
+    | .wgFlood _ _ _ | .wgCreate | .wgDown | .wgDelete => true
     | _ => false
 
 private def fields (j : Json) (expected : List String) : Except String Unit := do
@@ -289,6 +294,27 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
     if s.length == 0 || s.length % 2 != 0 || s.length > 2800 then throw "message: expected 1-1400 bytes of lowercase hex"
     let message ← hexBytes (← field j "message") s.length "message"
     return .wgInject family port message
+  | "wg_flood" =>
+    -- `messages`: the leading valid-MAC1 initiations the mirror processes and
+    -- checks (byte-exact cookie replies). `control` (a mid-flood valid packet
+    -- the mirror must NOT model) is a fixture-only field the mirror ignores: it
+    -- lands in the discarded region and makes the check fail closed.
+    let obj ← j.getObj?
+    if !(obj.all (fun k _ => ["op", "count", "port", "messages", "control"].contains k)
+        && obj.contains "op" && obj.contains "count" && obj.contains "port") then
+      throw "expected op, count, port and optionally messages, control"
+    let count ← natField j "count" (2 ^ 20)
+    if count == 0 then throw "count: expected 1-2^20"
+    let port ← natField j "port" 65535
+    if port == 0 then throw "port: expected 1-65535"
+    let messages ← match j.getObjVal? "messages" with
+      | .ok (.arr xs) => xs.toList.mapM fun m => do
+          let s ← m.getStr?
+          if s.length == 0 || s.length % 2 != 0 || s.length > 2800 then throw "messages: 1-1400 bytes hex each"
+          hexBytes m s.length "messages"
+      | .ok _ => throw "messages: expected an array"
+      | .error _ => pure []
+    return .wgFlood count port messages
   | "wg_advance" =>
     fields j ["op", "ticks"]
     let ticks ← natField j "ticks" (2 ^ 31)
@@ -532,6 +558,7 @@ def toSyscall (results : Array Int) (ends : Array (Option (Nat × Nat))) (index 
   | .wgXmit family addr payload => .wgXmit family addr payload
   | .wgObserve => .wgObserve
   | .wgInject family port message => .wgInject family port message
+  | .wgFlood count port messages => .wgFlood count port messages
   | .wgAdvance ticks => .wgAdvance ticks
   | .wgCreate => .wgCreate
   | .wgDown => .wgDown
