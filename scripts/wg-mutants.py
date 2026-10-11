@@ -517,7 +517,7 @@ SUITE_OF = {m[0]: 'alloc' for m in A_MUTANTS}
 Q_MUTANTS = [
   ('Q-M1-dispatch-order-ignored', 'dispatch order: the send worker runs the queue head, not the unit the record names',
    'Leanux/Env.lean',
-   "    | some u => resolveUnit .sendWorker u d.sendWorkQueue d.peerList\n    | none => pure headPid\n",
+   "    | some u => resolveUnit .sendWorker u d.sendWorkQueue\n    | none => pure headPid\n",
    "    | some _ => pure headPid\n    | none => pure headPid\n", 's2_'),
 ]
 

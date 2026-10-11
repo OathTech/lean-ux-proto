@@ -74,18 +74,35 @@ its owner (`peer->transmit_handshake_work`, `transmit_packet_work`,
   index (`HiddenSite.queued`): the send, receive, encrypt, tx, decrypt and
   clear workers (timers arm, softirqs are not queued). The section-start sites
   are 16 bytes, `mod_timer_arm` 24.
-- The queue records are captured out of band: `skipAmbient` moves each one
-  into `World.queuedUnits` (worker, address) where it occurs in the stream,
-  so the mirror's queueing points (owned by other streams) are unchanged.
-  Data and control flow are unchanged: the queueing happens where the C
-  queues, the record's value is an address the mirror learns.
+- `queue_work`'s PENDING bit is modeled per unit, as the C has it
+  (`queue_work_on`'s `test_and_set_bit(WORK_STRUCT_PENDING_BIT)`,
+  kernel/workqueue.c): a per-peer unit (the send, tx and clear work) is
+  pending while it is in its queue, which the mirror already tested before
+  queueing; a device-level unit (the encrypt and decrypt workers' per-CPU
+  work, `incoming_handshake_work`) is pending while its worker index is in
+  `World.pendingWork` (`queueDeviceWork`). A queue attempt of a pending
+  unit does nothing and consumes no record. One that queues consumes the
+  queue record at that point (`recordQueued`, in `Send.lean`,
+  `Receive.lean`, `Timers.lean`) and keeps the address with the unit
+  (`World.unitPeers`); a re-queue at another address is a hidden mismatch.
+  The unit's section start clears its pending bit (`hidden` of a section
+  start: `process_one_work` clears it before calling the function), so a
+  later queue attempt queues it again, with a new record, and a dispatched
+  unit may find its data queue empty and run with nothing to do. The flood
+  path discards the first flood packet's record with that packet's
+  `net_rx` section, since it fills the handshake queue itself.
 - At a dispatch, `peekUnit w` reads the unit from the start record without
-  consuming it. `resolveUnit w unit queue live` names the queued peer: an
-  address paired before is known; otherwise the captured addresses for `w`,
-  in order, are the queued units of `w` without an address, in order (both
-  follow the C's queueing order), which pairs them (`World.unitPeers`). A
-  count that differs, an address never queued, or a unit whose peer is not
-  queued is a hidden mismatch.
+  consuming it, and `resolveUnit w unit queue` names the queued peer by the
+  address its queue record gave; an address no record gave, or a unit whose
+  peer is not queued, is a hidden mismatch.
+- The first version captured the queue records out of band and paired them
+  with the queued units at dispatch, by count. The full check on the
+  dispatch-order oracle failed five transmit traces with "N queue records
+  for 1 queued units": each `wg_xmit` queues the tx worker once (one record
+  per operation, as the records show), and the tx worker dispatched at the
+  encrypt worker's `cond_resched` (`Env/Batch.lean`) never consumed them,
+  so they accumulated until a dispatch outside that path counted them.
+  Consuming the record where the C queues removes the pairing by count.
 - `runOneSendWorker`, `runOneClearWorker` and the tx loop of
   `runCryptWorkers` run the named unit and remove it from its queue; without
   an identity (the domain filter's placeholders; a record with a zero unit)
