@@ -1911,6 +1911,11 @@ def Decision.repeatable : Decision → Bool
   -- P stream 2 signal (end)
   -- E-B arm C: the ratelimiter bucket walk compares each entry
   | .rlEntryMatch => true
+  -- W12 (docs/2026-10-06-w3-w12.md, Part II): a timer callback runs once
+  -- per due peer in one pass, so its decisions repeat within the
+  -- advance's operation
+  | .retransmitGiveUp | .keepaliveNeedAnother | .zeroKeyAlive | .zeroKeyAlreadyQueued
+  | .persistentKeepaliveInterval => true
   | _ => false
 
 /-- Every decision, enumerated through the constructor index. -/

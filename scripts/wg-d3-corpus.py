@@ -72,6 +72,19 @@ INTERVAL = "wg_expired_send_persistent_keepalive.interval"
 ZERO_KEY_ALIVE = "wg_expired_zero_key_material.alive"
 
 
+# W12: the second and third keyless peers (private keys), at the listener.
+PEER_B = b"\x33" * 32
+PEER_C = b"\x44" * 32
+
+
+def w12_peer(private, net):
+    """A keyless peer at the fixture's listener with allowed IPs net/8 and a
+    25 s persistent keepalive (wg_up initiates; the keepalive timer, 6250
+    ticks in level 3, stays quiet below quiet_limit(6250) = 3975 ticks)."""
+    return {"public_key": d1.key(noise.public_key(private)), "allowed_ips": [{"family": 4, "addr": net, "cidr": 8}],
+            "endpoint": d1.LISTENER, "keepalive": 25}
+
+
 def fired(name):
     return f"fired:wg_expired_{name}"
 
@@ -306,6 +319,42 @@ def traces():
         ka_ops + [keepalive_off(), advance(ZERO_KEY_TICKS + 25), OBSERVE, GET],
         steer,
         SESSION + [fired("send_persistent_keepalive"), INTERVAL + "=0"])
+
+    # W12 (docs/2026-10-06-w3-w12.md, Part II): several peers' timers of
+    # one kind due in one pass. Two keyless peers A and B with persistent
+    # keepalives: wg_up queues both initiations; their send workers run in
+    # the up's wait (the dispatch records say which first; the draws steer
+    # whichever runs first), each arming its retransmit timer with the
+    # jitter steered to 0 (byte 0x01), so the two expiries are equal, or
+    # differ by one tick, and share a level-2 bucket (granularity 64) unless
+    # a tick between the arms straddles a 64-tick boundary. The advance
+    # fires both in one pass; the wheel runs a bucket LIFO (B then A); the
+    # section records name each timer (dispatch order, kind 303's third
+    # word), and each retry re-initiates (steered) and re-arms. Four
+    # initiations at the listener, byte-exact. The schedule is consumed in
+    # encounter order across sites (the kernel matches each steered site's
+    # encounter against the schedule's head), so each initiation's jitter
+    # entry follows its three draws.
+    jitter0 = ["retransmit_jitter", "01"]
+    w12_steers = [d1.steer_initiation(), d1.steer_initiation(ephemeral=d1.EPHEMERAL_2, clock=d1.CLOCK_2, index=SECOND_INDEX),
+                  d1.steer_initiation(ephemeral=bytes(range(0x41, 0x61)), clock=(1_790_000_004, 0), index=0x12131415),
+                  d1.steer_initiation(ephemeral=bytes(range(0x61, 0x81)), clock=(1_790_000_006, 0), index=0x16171819),
+                  d1.steer_initiation(ephemeral=bytes(range(0x21, 0x41)), clock=(1_790_000_008, 0), index=0x1a1b1c1d),
+                  d1.steer_initiation(ephemeral=bytes(range(0x01, 0x21)), clock=(1_790_000_010, 0), index=0x1e1f2021)]
+    out["w12_retransmit_lifo"] = (
+        [{"op": "wg_set", "config": {"private_key": d1.key(d1.DEVICE), "listen_port": d1.PORT,
+                                     "peers": [w12_peer(d1.PEER, "0a000000"), w12_peer(PEER_B, "0b000000")]}},
+         {"op": "wg_up"}, OBSERVE, advance(RETRANSMIT), OBSERVE, GET],
+        sum((st + [jitter0] for st in w12_steers[:4]), []),   # encounter order: the jitter ends each initiation
+        [fired("retransmit_handshake"), "wg_packet_send_queued_handshake_initiation.not_retry=0", GIVE_UP + "=0"])
+    # Three peers: a longer LIFO list in one bucket (stretch).
+    out["w12_three_retransmit"] = (
+        [{"op": "wg_set", "config": {"private_key": d1.key(d1.DEVICE), "listen_port": d1.PORT,
+                                     "peers": [w12_peer(d1.PEER, "0a000000"), w12_peer(PEER_B, "0b000000"),
+                                               w12_peer(PEER_C, "0c000000")]}},
+         {"op": "wg_up"}, OBSERVE, advance(RETRANSMIT), OBSERVE, GET],
+        sum((st + [jitter0] for st in w12_steers[:6]), []),
+        [fired("retransmit_handshake"), "wg_packet_send_queued_handshake_initiation.not_retry=0", GIVE_UP + "=0"])
 
     theirs = noise.initiation(noise.public_key(d1.DEVICE), d1.PEER, d1.PEER_EPHEMERAL, noise.tai64n(1, 0), 0x0badcafe)
     out["d3_respond_then_initiate"] = (

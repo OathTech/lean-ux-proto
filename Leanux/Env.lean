@@ -267,13 +267,18 @@ def timerWorker (t : PeerTimer) : M Worker := do
   | none => invariant "a peer timer without a callback unit"
 
 /-- `call_timer_fn` of callback `w`, whose section the next record starts.
-    Its peer is the one whose timer of that kind is pending and could be
-    due: `expires < jHi` (a timer fires no earlier than `expires + 1`, by a
-    softirq whose `jiffies` is at most `jHi`). Exactly one peer: none is a
-    hidden mismatch (Linux ran a callback the mirror has no due timer for);
-    several are outside the domain (their order in one pass follows the
-    arming order, which the mirror does not need yet). The timer is detached
-    before the call (`expire_timers`, timer.c:1828-1829). -/
+    The start record names the timer (its address, from the arm record:
+    docs/2026-10-11-dispatch-order.md), which must be of that callback's
+    kind, pending and due: `expires < jHi` (a timer fires no earlier than
+    `expires + 1`, by a softirq whose `jiffies` is at most `jHi`). So several
+    peers' timers of one kind due in one pass run in the order the records
+    show (W12, docs/2026-10-06-w3-w12.md Part II: the wheel's order is
+    `bucket_expiry` ascending, higher level first at one step, LIFO within a
+    bucket, which the records carry and the mirror need not reconstruct).
+    Without a name (the domain filter's placeholders) exactly one due peer
+    is taken; several stay outside that prediction. A section with no due
+    timer is a hidden mismatch. The timer is detached before the call
+    (`expire_timers`, timer.c:1828-1829). -/
 def fireTimer (w : Worker) (jHi : Nat) : M Unit := do
   let some t := w.timer? | invariant s!"{w.symbol} is not a timer callback"
   let d ← getDev
