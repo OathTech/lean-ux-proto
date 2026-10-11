@@ -169,12 +169,31 @@ structure RxPacket where
   ds : Nat := 0
   deriving Repr, BEq
 
+/-- W9: a peer's `endpoint_cache` (`struct dst_cache`, one CPU: one
+    per-cpu slot): `reset_ts` and the slot's `refresh_ts`, both `jiffies`
+    the kernel records (kind 306), and the cached route with the source
+    address it was made with and the generation of the tables then
+    (`rt_genid` / the IPv6 sernum: the dst's validity check). -/
+structure DstSlot where
+  src : Nat
+  gen : Nat
+  dev : Nat
+  deriving Repr, BEq
+
+structure DstCache where
+  resetTs : Nat := 0
+  refreshTs : Nat := 0
+  slot : Option DstSlot := none
+  deriving Repr, BEq
+
 /-- `struct wg_peer` with the parts of its `noise_handshake` on this path. -/
 structure Peer where
   remoteStatic : Key
   presharedKey : Key
   precomputedStaticStatic : Key
   endpoint : Option Endpoint := none
+  /-- W9: `endpoint_cache` (`dst_cache_init` in `wg_peer_create`). -/
+  dstCache : DstCache := {}
   persistentKeepaliveInterval : Nat := 0
   allowedipsList : List NodeId := []
   isDead : Bool := false

@@ -47,8 +47,14 @@ inductive Syscall where
   | wgXmit (family addr : Nat) (payload : List UInt8)
   /-- `recvfrom(4, MSG_DONTWAIT)` after the fixture waited for the workers. -/
   | wgObserve
-  /-- `sendto` of a WireGuard message from the fixture's sender to `port`. -/
-  | wgInject (family port : Nat) (message : List UInt8)
+  /-- `sendto` of a WireGuard message from the fixture's sender to `port`
+      at the destination `dest` (W9: 0 loopback, 1 wg0's own address, 2 the
+      loopback alias). -/
+  | wgInject (family port : Nat) (message : List UInt8) (dest : Nat := 0)
+  /-- W9: `RTM_DELADDR` of wg0's fixture address and `RTM_DELROUTE` of the
+      default route via wg0, per family, on a temporary rtnetlink socket. -/
+  | wgDeladdr (family : Nat)
+  | wgDelroute (family : Nat)
   /-- E-B: an io_uring flood to wg0's `port`: `count` invalid-MAC1 initiations
       with `messages` valid-MAC1 initiations submitted first. -/
   | wgFlood (count port : Nat) (messages : List (List UInt8))
@@ -157,15 +163,22 @@ def dispatch : Syscall → M Int
       return 0
   | .wgUp => socketCallOn SENDER_FD Env.wgUp
   | .wgXmit family addr payload => socketCallOn SENDER_FD do
-    -- the fixture adds wg0's routes after a successful wg_up; before that,
-    -- and after a down or a deletion, no route exists (L)
-    if !(← get).routesViaWg0 then return -ENETUNREACH
+    -- W9: the sender's `sendto` routes on the fixture's tables
+    -- (`World.route4/6`): into wg0 by the default route the guest adds after
+    -- a successful wg_up (and removes with a down, a deletion or
+    -- `wg_delroute`), else `-ENETUNREACH`; a local destination never
+    -- reaches wg0
+    match ← routeLookup family 0 addr with
+    | .error err => return err
+    | .ok r => if r.dev != WG0_IFINDEX then unsupported "a transmit to a local address (not into wg0)"
     -- udp_sendmsg returns the datagram's length once the device took it
     Env.fixtureSend
     Env.xmitMulticastLoop family addr
     let ret ← WG.wgXmit family addr (← Env.xmitPacket family addr payload)
     return if ret == 0 then payload.length else ret
-  | .wgInject family port message => socketCallOn SENDER_FD (Env.inject family port message)
+  | .wgInject family port message dest => socketCallOn SENDER_FD (Env.inject family port message dest)
+  | .wgDeladdr family => rtnetlinkRequest (Env.wgDeladdr family)
+  | .wgDelroute family => rtnetlinkRequest (Env.wgDelroute family)
   | .wgFlood count port messages => Env.flood count port messages
   | .wgObserve => socketCallOn LISTEN4_FD do
     let (ret, observed) ← Env.observe

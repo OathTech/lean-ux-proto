@@ -79,6 +79,10 @@ def ENOKEY : Int := 126
 def EDESTADDRREQ : Int := 89
 def EPROTONOSUPPORT : Int := 93
 def ENETUNREACH : Int := 101
+def ENONET : Int := 64
+def ESRCH : Int := 3
+def EADDRNOTAVAIL : Int := 99
+def EAFNOSUPPORT : Int := 97
 /-- L: `wg_create` of an existing wg0; a bind at a held port. -/
 def EEXIST : Int := 17
 def EADDRINUSE : Int := 98
@@ -653,6 +657,14 @@ inductive HiddenSite where
   /-- E-B arm C: `wg_ratelimiter_allow`'s coarse-boot-time reads, on a bucket
       hit (`ratelimiter.c:121`) and on a new-entry insert (`ratelimiter.c:146`). -/
   | ratelimiterNow | ratelimiterInsertNow
+  /-- W9 (docs/2026-10-06-w8-w9-netns-routing.md, sections 4.1 and 5): the
+      `jiffies` the dst cache stores, recorded by the kernel (kind 306):
+      at `dst_cache_reset` (include/net/dst_cache.h:79, the inline, under
+      `dst_cache_init`, `dst_cache_reset_now` and socket.c's callers) and
+      at the refresh of a miss (`dst_cache_per_cpu_get`'s fail label,
+      net/core/dst_cache.c:62). The mirror computes the cache's
+      `time_after` from them (`WG.dstCacheGet`). -/
+  | dstCacheResetTs | dstCacheRefreshTs
   -- Reserved id ranges for the W streams (the interface commit,
   -- docs/2026-10-11-interface.md), outside every range above: W5-W6
   -- 140-149 (`.inetEhashSecret`), W8-W9 150-169 (`.dstCacheResetTs`,
@@ -773,6 +785,11 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   -- IFLA_INET6_CACHEINFO and the neighbour sysctls, which the harness never
   -- reads, and read by no modeled path (unobserved)
   | .neighReachTime => ⟨126, "neigh_reach_time", "random", "net/core/neighbour.c", 115, 4, .cut⟩
+  -- W9 (ids 150-169): the dst cache's jiffies, kind 306, resolved by the
+  -- innermost frame of `_THIS_IP_` (the lines are the design's; confirmed on
+  -- the built kernel: a mismatch is an unknown site)
+  | .dstCacheResetTs => ⟨150, "dst_cache_reset_ts", "jiffies", "include/net/dst_cache.h", 79, 8, .mirror⟩
+  | .dstCacheRefreshTs => ⟨151, "dst_cache_refresh_ts", "jiffies", "net/core/dst_cache.c", 62, 8, .mirror⟩
   | .alloc s => let i := s.info
     ⟨70 + i.index, i.label, "alloc", i.file, i.line, 40, if i.count == .cut then .cut else .mirror⟩
   -- P (pipes, design section 3): id 18 is free on main and on every task
@@ -798,6 +815,7 @@ def HiddenSite.all : List HiddenSite :=
   ++ (Worker.all.filter fun w => w.timer?.isNone && w != .netRx).map .queued
   ++ [.cookieSecretBirthdate, .cookieSecret, .pubkeyHashKey, .ratelimiterKey, .ratelimiterGcNow, .udpPortDraw,
       .neighReachTime]
+  ++ [.dstCacheResetTs, .dstCacheRefreshTs]
   ++ AllocSite.all.map .alloc
   ++ [.currentTime]
   ++ [.underLoadNow, .cookieNonce, .ratelimiterNow, .ratelimiterInsertNow]
@@ -847,6 +865,9 @@ structure SentDatagram where
       0 for handshake messages). Not observed today: the fixture reads no
       TOS. -/
   ds : Nat := 0
+  /-- W9: the source address `send4`/`send6` chose (the cached or routed
+      `fl.saddr`): what the receiving fixture socket's `recvfrom` reports. -/
+  src : Nat := 0
   deriving Repr, BEq
 
 /-- A datagram at the fixture's sender socket, with its source as
@@ -935,17 +956,35 @@ structure World where
       the same value as the input's `arm_records`). Without them the mirror
       consumes none and a timer's `expires` is nominal. -/
   armRecords : Bool := false
+  /-- W9: whether this run's records include the kind-306 dst-cache jiffies
+      (every live run: the kernel writes them with the arm records; the
+      check never clears it). False only for the replay tests' captures made
+      before the record existed (`evaluator/test_model_replay.py`
+      `widen`), under which the mirror keeps the pre-W9 rule: the cache
+      always misses and no record is consumed. -/
+  dstCacheRecords : Bool := true
   /-- D3: the timer sections the environment ran in this operation, by
       callback symbol, for the trace's `fired:<symbol>` expectations
       (`Env.runTimerSection`). -/
   fired : Array String := #[]
-  /-- L, fixture state: whether the fixture's routes into wg0 exist. The
-      guest adds wg0's addresses and default routes after a successful
-      `wg_up` (`route_into_wg0`); the `NETDEV_DOWN` and `NETDEV_UNREGISTER`
-      notifiers of `wg_down` and `wg_delete` remove them (the IPv4 address
-      survives a down, which the guest checks). Without them the sender's
-      `sendto` into wg0 fails with `-ENETUNREACH`. -/
-  routesViaWg0 : Bool := false
+  /-- W9 (docs/2026-10-06-w8-w9-netns-routing.md, sections 2.6 and 4.2),
+      the fixture namespace's tables, replacing L's single `routesViaWg0`:
+      wg0's addresses (added by `route_into_wg0` after a successful
+      `wg_up`; the IPv4 one survives a down, the IPv6 one does not; both go
+      with `wg_delete` and `wg_deladdr`), the default route per family via
+      wg0 (removed by `wg_down`, `wg_delete`, `wg_delroute`, and, for IPv4,
+      with the device's last address), whether the IPv4 default route was
+      ever looked up (`FA_S_ACCESSED`: its deletion bumps the generation
+      only then), and the two route generations the dst cache's validity
+      check reads (`rt_genid`; the IPv6 fib sernum), bumped by every table
+      change. The loopback prefixes are constants (`World.route4/6`). -/
+  addrs4 : List Nat := []
+  addrs6 : List Nat := []
+  defaultRoute4 : Bool := false
+  defaultRoute6 : Bool := false
+  defaultRoute4Accessed : Bool := false
+  ipv4Gen : Nat := 0
+  ipv6Gen : Nat := 0
   /-- L, environment: whether a fixture socket holds UDP port `p` so that a
       wildcard bind there conflicts (`Env.portBound`; the runner supplies
       it, as it supplies `env`). -/
@@ -995,6 +1034,67 @@ def Stop.message : Stop → String
 
 /-- The mirror monad; `Stop` ends the execution fail-noisily. -/
 abbrev M := StateT World (Except Stop)
+
+/-! ## W9: the fixture namespace's routing (docs/2026-10-06-w8-w9-netns-routing.md, 2.6, 4.2) -/
+
+/-- A route the fixture's tables give: the output device (`lo` 1, wg0 3)
+    and the source address the lookup selects (`prefsrc`, or
+    `inet_select_addr` for the device route). -/
+structure Route where
+  dev : Nat
+  src : Nat
+  deriving Repr, BEq
+
+def LO_IFINDEX : Nat := 1
+def WG0_IFINDEX : Nat := 3
+def LOOPBACK4 : Nat := 0x7f000001
+
+/-- `ip_route_output_flow` on the fixture's tables (route.c): a set source
+    must be local (`127/8` or a wg0 address), else `-ENETUNREACH`
+    (route.c:2751-2754; the `-EINVAL` class of :2706-2712 needs a multicast
+    or zeronet source the fixture never configures); a `127/8` destination
+    or a wg0 address takes the local route over `lo` with `prefsrc`
+    (`127.0.0.1` for `127/8`, the address itself otherwise; :2833-2838);
+    anything else the default route via wg0 while it exists, with the
+    device's address as source, else `-ENETUNREACH` (:2714). -/
+def World.route4 (w : World) (saddr daddr : Nat) : Except Int Route :=
+  let isLocal (a : Nat) := a / 2 ^ 24 == 127 || w.addrs4.contains a
+  if saddr != 0 && !isLocal saddr then .error (-101)   -- -ENETUNREACH
+  else if isLocal daddr then
+    .ok { dev := LO_IFINDEX, src := if saddr != 0 then saddr else if daddr / 2 ^ 24 == 127 then LOOPBACK4 else daddr }
+  else match w.defaultRoute4, w.addrs4.head? with
+    | true, some a => .ok { dev := WG0_IFINDEX, src := if saddr != 0 then saddr else a }
+    | _, _ => .error (-101)
+
+/-- `ipv6_dst_lookup_flow` on the fixture's tables: `::1` and wg0's address
+    are local over `lo`; else the default route via wg0 (source: the
+    device's address) or `ip6_null_entry`'s `-ENETUNREACH`. -/
+def World.route6 (w : World) (saddr daddr : Nat) : Except Int Route :=
+  let isLocal (a : Nat) := a == 1 || w.addrs6.contains a
+  if saddr != 0 && !isLocal saddr then .error (-101)
+  else if isLocal daddr then .ok { dev := LO_IFINDEX, src := if saddr != 0 then saddr else daddr }
+  else match w.defaultRoute6, w.addrs6.head? with
+    | true, some a => .ok { dev := WG0_IFINDEX, src := if saddr != 0 then saddr else a }
+    | _, _ => .error (-101)
+
+/-- A lookup, noting a resolution through the IPv4 default route
+    (`fib_alias_accessed`, the `FA_S_ACCESSED` flag `wg_delroute`'s
+    generation bump depends on). -/
+def routeLookup (family saddr daddr : Nat) : M (Except Int Route) := do
+  let w ← get
+  if family == 4 then
+    let r := w.route4 saddr daddr
+    if let .ok { dev := d, .. } := r then
+      if d == WG0_IFINDEX then set { w with defaultRoute4Accessed := true }
+    return r
+  else return w.route6 saddr daddr
+
+/-- W9: whether a fixture socket receives at `addr:port` for `family`: the
+    dual-stack sender is bound to the wildcard address at `SENDER_PORT`, so
+    it receives at every local address (`127/8`, `::1`, wg0's addresses). -/
+def World.wildcardLocal (w : World) (family addr : Nat) : Bool :=
+  (family == 2 && (addr / 2 ^ 24 == 127 || w.addrs4.contains addr))
+  || (family == 10 && (addr == 1 || w.addrs6.contains addr))
 
 /-- The C leaves the modeled domain here. The site is the last decision the
     mirror recorded, which is the C condition that led here. -/
@@ -1107,6 +1207,12 @@ def hidden (s : HiddenSite) : M (List UInt8) := do
     if let .sectionStart ws := s then
       modify fun st => { st with pendingWork := st.pendingWork.filter (· != ws.index) }
     return r.bytes.take i.len
+
+/-- A record's bytes as a little-endian natural (the 8-byte `jiffies`
+    records of kind 306, W9). -/
+def hiddenU64 (s : HiddenSite) : M Nat := do
+  let bs ← hidden s
+  return bs.foldr (fun b acc => acc * 256 + b.toNat) 0
 
 /-- The site of the next record to consume (after ambient ones), without
     consuming it: how the environment's scheduler reads a recorded

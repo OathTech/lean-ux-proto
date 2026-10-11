@@ -414,18 +414,17 @@ def sendBufferToPeer (pid : PeerId) (bytes : List UInt8) : M Unit := do
   if ← branch .sendBufNoMem !(← hiddenAlloc .sendBufSkb) then return
   let p ← getPeer pid
   let family := (p.endpoint.map (·.family)).getD 0
-  let sent ← do
-    if ← branch .sendSkbInet (family == AF_INET) then pure true
-    else if ← branch .sendSkbInet6 (family == AF_INET6) then pure true
-    else pure false   -- dev_kfree_skb; -EAFNOSUPPORT
-  -- send4/send6 (a cut point) choose the IP ident; the loopback delivery
-  -- runs NET_RX in a section nested at the send (`loopbackSend`)
-  loopbackSend ([.ipIdentKey, .ipIdentReserve, .flowHashSecret] ++ allocCuts) sent
-  if ← branch .sendSkbOk sent then
-    let some e := p.endpoint | invariant "unreachable"
+  -- W9: send4/send6 are mirrored (Socket.lean), with the peer's endpoint
+  -- cache; the IP ident cut and the loopback NET_RX section are at their
+  -- transmit
+  let e := p.endpoint.getD { family := 0, addr := 0, port := 0 }
+  let ret ← do
+    if ← branch .sendSkbInet (family == AF_INET) then send4 e (some pid) bytes 0 true
+    else if ← branch .sendSkbInet6 (family == AF_INET6) then send6 e (some pid) bytes 0 true
+    else pure (-EAFNOSUPPORT)   -- dev_kfree_skb
+  if ← branch .sendSkbOk (ret == 0) then
+    let p ← getPeer pid
     setPeer pid { p with txBytes := p.txBytes + bytes.length }
-    let sport ← socketPort e.family
-    modify fun w => { w with sent := w.sent ++ [{ family := e.family, addr := e.addr, port := e.port, bytes, sport }] }
 
 /-- wg_timers_handshake_initiated (timers.c:182-187): the retransmit timer,
     with its jitter (`jitterBelowRekeyTimeout`). -/

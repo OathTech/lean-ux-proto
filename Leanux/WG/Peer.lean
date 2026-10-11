@@ -1,6 +1,7 @@
 import Leanux.WG.AllowedIps
 import Leanux.Kernel.Refcount
 import Leanux.WG.Blake2s
+import Leanux.WG.Socket
 
 /-!
 # drivers/net/wireguard/peer.c, peerlookup.c (public keys) and the noise.c
@@ -243,6 +244,9 @@ def peerCreate (publicKey : Key) (presharedKey : Option Key) : M (Except Int Pee
   handshakeInit pid presharedKey
   -- cookie init, timers, work items, queues, kref_init (refcount 1)
   resetLastSentHandshake pid   -- peer.c:55
+  -- W9: `dst_cache_init` (peer.c:36) ends with `dst_cache_reset`, whose
+  -- jiffies the kernel records (kind 306)
+  dstCacheReset pid
   -- NAPI
   modifyDev fun d => { d with peerList := d.peerList ++ [pid],   -- list_add_tail
                               peerHashtable := (publicKey, pid) :: d.peerHashtable,

@@ -138,18 +138,16 @@ def encryptWorker (checksumHelp : Packet → M Packet) (needResched : M Bool) : 
 def sendSkbToPeer (pid : PeerId) (bytes : List UInt8) (ds : Nat) : M Bool := do
   let p ← getPeer pid
   let family := (p.endpoint.map (·.family)).getD 0
-  let sent ← do
-    if ← branch .sendSkbInet (family == AF_INET) then pure true
-    else if ← branch .sendSkbInet6 (family == AF_INET6) then pure true
-    else pure false   -- dev_kfree_skb; -EAFNOSUPPORT
-  -- send4/send6 choose the IP ident; the loopback delivery is a NET_RX
-  -- section nested at the send (`loopbackSend`)
-  if sent then loopbackSend ([.ipIdentKey, .ipIdentReserve, .flowHashSecret] ++ allocCuts) true
+  -- W9: send4/send6 are mirrored (Socket.lean), with the peer's endpoint cache
+  let e := p.endpoint.getD { family := 0, addr := 0, port := 0 }
+  let ret ← do
+    if ← branch .sendSkbInet (family == AF_INET) then send4 e (some pid) bytes ds true
+    else if ← branch .sendSkbInet6 (family == AF_INET6) then send6 e (some pid) bytes ds true
+    else pure (-EAFNOSUPPORT)   -- dev_kfree_skb
+  let sent := ret == 0
   if ← branch .sendSkbOk sent then
-    let some e := p.endpoint | invariant "unreachable"
+    let p ← getPeer pid
     setPeer pid { p with txBytes := p.txBytes + bytes.length }
-    let sport ← socketPort e.family
-    modify fun w => { w with sent := w.sent ++ [{ family := e.family, addr := e.addr, port := e.port, bytes, ds, sport }] }
   return sent
 
 /-- keep_key_fresh (send.c:124-139). -/

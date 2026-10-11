@@ -86,10 +86,12 @@ def lookupInterface : M (Except Int Unit) := do
   return .ok ()
 
 /-- wg_socket_clear_peer_endpoint_src (socket.c:308-314): zeroes `src6`,
-    which overlays `src4` and `src_if4`. -/
+    which overlays `src4` and `src_if4`, then `dst_cache_reset_now` (W9:
+    the reset's record, the slot dropped). -/
 def clearPeerEndpointSrc (pid : PeerId) : M Unit := do
   let p ← getPeer pid
   setPeer pid { p with endpoint := p.endpoint.map fun e => { e with src := 0, srcIf := 0 } }
+  dstCacheResetNow pid
 
 /-- set_port (netlink.c:314-327). -/
 def setPort (port : Nat) : M Int := do
@@ -130,15 +132,17 @@ def endpointEq (a : Endpoint) (b : Option Endpoint) : M Bool := do
   if v6 then return true
   andM (branch .eqANone (a.family == 0)) (branch .eqBNone (fb == 0))
 
-/-- wg_socket_set_peer_endpoint (socket.c:273-297); `dst_cache_reset` is a
-    cut point. -/
+/-- wg_socket_set_peer_endpoint (socket.c:273-297); `dst_cache_reset`
+    (:294) stores the recorded `jiffies` (W9). -/
 def setPeerEndpoint (pid : PeerId) (e : Endpoint) : M Unit := do
   requireNotPending pid "changing the endpoint"
   if ← branch .setEndpointEq (← endpointEq e (← getPeer pid).endpoint) then return
   if ← branch .setEndpointV4 (e.family == AF_INET) then
     setPeer pid { (← getPeer pid) with endpoint := some e }
+    dstCacheReset pid
   else if ← branch .setEndpointV6 (e.family == AF_INET6) then
     setPeer pid { (← getPeer pid) with endpoint := some e }
+    dstCacheReset pid
 
 /-- set_peer (netlink.c:357-491). -/
 def setPeerCmd (a : PeerAttrs) : M Int := do

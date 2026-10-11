@@ -216,7 +216,9 @@
     "__send_signal_locked",
     "prepare_signal",
     "complete_signal",
-    "__sigqueue_alloc"
+    "__sigqueue_alloc",
+    "send4",
+    "send6"
   ],
   "known_gaps": [],
   "shared_exits": [

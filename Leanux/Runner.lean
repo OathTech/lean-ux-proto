@@ -35,7 +35,10 @@ inductive Operation where
   | wgUp
   | wgXmit (family addr : Nat) (payload : List UInt8)
   | wgObserve
-  | wgInject (family port : Nat) (message : List UInt8)
+  | wgInject (family port : Nat) (message : List UInt8) (dest : Nat)
+  /-- W9: the fixture-table operations, per family. -/
+  | wgDeladdr (family : Nat)
+  | wgDelroute (family : Nat)
   /-- E-B: an io_uring flood of `count` invalid-MAC1 initiations to wg0's port,
       with `messages` valid-MAC1 initiations submitted first (processed under
       load via the queue depth, their cookie replies checked byte-exact);
@@ -73,6 +76,9 @@ structure Trace where
   /-- D3: whether `hidden` includes the kind-303 arm records (the check sets
       it from `harness/linux.py` `ARM_RECORDS`, the wire's `A` line). -/
   armRecords : Bool := false
+  /-- W9: `"dst_cache_records": false` marks a capture made before the
+      kind-306 records (the replay tests only). -/
+  dstCacheRecords : Bool := true
   /-- The check's choice for each NAPI poll placement the records leave open
       (`World.napiBeforePut`). -/
   napiBeforePut : List Bool := []
@@ -92,7 +98,7 @@ structure Trace where
 def Trace.net (t : Trace) : Bool :=
   t.ops.any fun
     | .wgSet _ | .wgGet | .wgUp | .wgXmit .. | .wgObserve | .wgInject .. | .wgAdvance _
-    | .wgFlood _ _ _ | .wgCreate | .wgDown | .wgDelete => true
+    | .wgFlood _ _ _ | .wgCreate | .wgDown | .wgDelete | .wgDeladdr _ | .wgDelroute _ => true
     | _ => false
 
 private def fields (j : Json) (expected : List String) : Except String Unit := do
@@ -285,7 +291,11 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
     fields j ["op"]
     return .wgDelete
   | "wg_inject" =>
-    fields j ["op", "family", "port", "message"]
+    -- W9: the optional destination `to`
+    let obj ← j.getObj?
+    if !(obj.all (fun k _ => ["op", "family", "port", "message", "to"].contains k)
+        && ["op", "family", "port", "message"].all obj.contains) then
+      throw "expected op, family, port, message and optionally to"
     let family ← (← field j "family").getNat?
     if family != 4 && family != 6 then throw "family: expected 4 or 6"
     let port ← natField j "port" 65535
@@ -293,7 +303,24 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
     let s ← (← field j "message").getStr?
     if s.length == 0 || s.length % 2 != 0 || s.length > 2800 then throw "message: expected 1-1400 bytes of lowercase hex"
     let message ← hexBytes (← field j "message") s.length "message"
-    return .wgInject family port message
+    let dest ← match j.getObjVal? "to" with
+      | .error _ => pure 0
+      | .ok t => match ← t.getStr? with
+        | "loopback" => pure 0
+        | "wg0" => pure 1
+        | "loopback-alias" => if family == 4 then pure 2 else throw "to: loopback-alias is IPv4 only"
+        | _ => throw "to: expected loopback, wg0 or loopback-alias"
+    return .wgInject family port message dest
+  | "wg_deladdr" =>
+    fields j ["op", "family"]
+    let family ← (← field j "family").getNat?
+    if family != 4 && family != 6 then throw "family: expected 4 or 6"
+    return .wgDeladdr family
+  | "wg_delroute" =>
+    fields j ["op", "family"]
+    let family ← (← field j "family").getNat?
+    if family != 4 && family != 6 then throw "family: expected 4 or 6"
+    return .wgDelroute family
   | "wg_flood" =>
     -- `messages`: the leading valid-MAC1 initiations the mirror processes and
     -- checks (byte-exact cookie replies). `control` (a mid-flood valid packet
@@ -370,6 +397,7 @@ def parseTrace (j : Json) : Except String Trace := do
   let hasPlacement := (j.getObjVal? "napi_irq_before_put").isOk
   let hasFixture := (j.getObjVal? "net_fixture").isOk
   let hasArmed := (j.getObjVal? "alloc_armed").isOk
+  let hasDst := (j.getObjVal? "dst_cache_records").isOk
   let hasExtension := (j.getObjVal? "domain_extension").isOk
   fields j ((if hasLimit then ["version", "id", "ops", "rlimit_nofile"] else ["version", "id", "ops"])
     ++ (if hasHidden then ["hidden"] else []) ++ (if hasSteer then ["steer"] else [])
@@ -377,10 +405,12 @@ def parseTrace (j : Json) : Except String Trace := do
     ++ (if hasPlacement then ["napi_irq_before_put"] else [])
     ++ (if hasFixture then ["net_fixture"] else [])
     ++ (if hasArmed then ["alloc_armed"] else [])
+    ++ (if hasDst then ["dst_cache_records"] else [])
     ++ (if hasExtension then ["domain_extension"] else []))
   -- D3: the arm-record switch qualifies the records, so it comes with them
   if hasArm && !hasHidden then throw "arm_records: only with hidden records"
   let armRecords ← if hasArm then (← field j "arm_records").getBool? else pure false
+  let dstCacheRecords ← if hasDst then (← field j "dst_cache_records").getBool? else pure true
   -- The declared failslab-style extension (docs/2026-10-05-a-alloc.md,
   -- section 3, [USER 2026-10-06]): the trace forces task-context allocation
   -- failures; the host checks the schedule, the mirror only its form.
@@ -435,7 +465,7 @@ def parseTrace (j : Json) : Except String Trace := do
       pure label
     else pure []
   if hasArmed && !hasHidden then throw "alloc_armed: an armed run carries its records"
-  let trace : Trace := { id, ops, rlimit, hidden, steer, armRecords, napiBeforePut, allocArmed, pauses, bare }
+  let trace : Trace := { id, ops, rlimit, hidden, steer, armRecords, napiBeforePut, allocArmed, pauses, bare, dstCacheRecords }
   if bare && !trace.net then throw "net_fixture: only a network trace has a network fixture"
   return trace
 
@@ -557,7 +587,9 @@ def toSyscall (results : Array Int) (ends : Array (Option (Nat × Nat))) (index 
   | .wgUp => .wgUp
   | .wgXmit family addr payload => .wgXmit family addr payload
   | .wgObserve => .wgObserve
-  | .wgInject family port message => .wgInject family port message
+  | .wgInject family port message dest => .wgInject family port message dest
+  | .wgDeladdr family => .wgDeladdr family
+  | .wgDelroute family => .wgDelroute family
   | .wgFlood count port messages => .wgFlood count port messages
   | .wgAdvance ticks => .wgAdvance ticks
   | .wgCreate => .wgCreate
@@ -572,7 +604,7 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
                              allocArmed := trace.allocArmed,
                              hiddenPlaceholders := placeholders && trace.hidden.isNone,
                              steerValues := if placeholders then trace.steer else [],
-                             armRecords := trace.armRecords,
+                             armRecords := trace.armRecords, dstCacheRecords := trace.dstCacheRecords,
                              napiBeforePut := trace.napiBeforePut,
                              allocSteered := if placeholders then
                                (trace.steer.map (·.1)).filter fun l => AllocSite.all.any (·.info.label == l)

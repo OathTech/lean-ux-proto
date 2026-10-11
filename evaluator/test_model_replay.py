@@ -61,6 +61,11 @@ def widen(trace):
         for rec in op:
             if (rec[0] in starts and len(rec[1]) == 16) or (rec[0] in arms and len(rec[1]) == 32):
                 rec[1] += '0' * 16
+    # W9 (docs/2026-10-06-w8-w9-netns-routing.md 4.1): the captures predate
+    # the kind-306 dst-cache jiffies; without them the mirror keeps the pre-W9
+    # rule (the cache always misses, no record consumed). A live run never
+    # sets this: the check leaves it true and the kernel writes the records.
+    out['dst_cache_records'] = False
     return out
 
 
