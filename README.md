@@ -45,8 +45,10 @@ with it, and `scripts/build-kernel` wraps the kernel `make`; `LEANUX_CAPPED`
 overrides the wrapper's path (default `/usr/local/bin/capped`).
 
 The check builds `leanux-model` and runs the handwritten, critic, WireGuard and
-seeded generated traces on the networking oracle kernel (`.artifacts/kernel-net`,
-built as in [REPRODUCING.md](REPRODUCING.md)) and on the mirror:
+seeded generated traces on the networking oracle kernel (`LEANUX_KERNEL_DIR`,
+built as in [REPRODUCING.md](REPRODUCING.md); its identity must be the one in
+`kernel/identity-x86_64-net-choice.txt`, or the check refuses to boot it) and
+on the mirror:
 - the guest is QEMU, with a fresh child per trace in each of two KCOV modes;
 - generated traces are kept only where the mirror places them inside the
   domain.

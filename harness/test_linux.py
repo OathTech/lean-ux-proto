@@ -5,7 +5,11 @@ import tempfile
 import time
 import unittest
 
-from .linux import ARTIFACTS, GUEST_VARIANTS, LinuxRunError, _bounded_process, run_linux
+import os
+from unittest import mock
+
+from .linux import (ARTIFACTS, GUEST_VARIANTS, IDENTITY, KERNEL, LinuxRunError, _bounded_process, approved_kernel_identity,
+                    kernel_identity, run_linux, verify_kernel)
 
 
 class BoundedProcessTests(unittest.TestCase):
@@ -55,6 +59,89 @@ class GuestVariantTests(unittest.TestCase):
         trace = {"version": 1, "id": "v", "ops": [{"op": "eventfd2", "init": 0, "flags": 0}]}
         with self.assertRaises(ValueError):
             run_linux([trace], ARTIFACTS / "never-created", guest_variant="-DADVANCE_WAIT_US=0")
+
+
+class KernelIdentityTests(unittest.TestCase):
+    """The identity check before a boot (harness.linux.verify_kernel): the
+    selected build must be the approved oracle, or the build named by
+    LEANUX_KERNEL_IDENTITY; "unchecked" is the loud opt-out. The kernel this
+    test environment selects (LEANUX_KERNEL_DIR) need not be the oracle, so the
+    comparisons use a mocked identity; only the parser and the computation
+    touch real files."""
+    A = "a" * 64
+    B = "b" * 64
+
+    def test_approved_identity_is_parsed_from_the_first_non_comment_line(self):
+        self.assertRegex(approved_kernel_identity(), IDENTITY)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "identity.txt"
+            path.write_text("# comment\n\n" + self.A + "\n" + self.B + "\n")
+            self.assertEqual(approved_kernel_identity(path), self.A)
+            path.write_text("# only a comment\n")
+            with self.assertRaises(ValueError):
+                approved_kernel_identity(path)
+            path.write_text("not-an-identity\n")
+            with self.assertRaises(ValueError):
+                approved_kernel_identity(path)
+
+    def test_identity_of_the_selected_build_is_computed(self):
+        if not (KERNEL / "vmlinux").is_file():
+            self.skipTest(f"no kernel build at {KERNEL}")
+        self.assertRegex(kernel_identity(), IDENTITY)
+
+    def test_the_approved_build_passes_and_is_recorded(self):
+        with mock.patch("harness.linux.kernel_identity", return_value=self.A), \
+             mock.patch("harness.linux.approved_kernel_identity", return_value=self.A), \
+             mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("LEANUX_KERNEL_IDENTITY", None)
+            record = verify_kernel("/k")
+        self.assertEqual(record, {"kernel": "/k", "checked": True, "expected": self.A, "actual": self.A,
+                                  "source": "identity-x86_64-net-choice.txt"})
+
+    def test_another_build_is_refused_before_any_boot(self):
+        with mock.patch("harness.linux.kernel_identity", return_value=self.B), \
+             mock.patch("harness.linux.approved_kernel_identity", return_value=self.A), \
+             mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("LEANUX_KERNEL_IDENTITY", None)
+            with self.assertRaises(LinuxRunError) as caught:
+                verify_kernel("/k")
+        self.assertEqual(caught.exception.kind, "kernel_mismatch")
+        self.assertIn(self.B, str(caught.exception))
+        self.assertIn("LEANUX_KERNEL_DIR", str(caught.exception))
+
+    def test_a_control_kernel_is_named_explicitly(self):
+        with mock.patch("harness.linux.kernel_identity", return_value=self.B), \
+             mock.patch.dict(os.environ, {"LEANUX_KERNEL_IDENTITY": self.B}):
+            record = verify_kernel("/k")
+            self.assertEqual((record["checked"], record["expected"], record["source"]), (True, self.B, "LEANUX_KERNEL_IDENTITY"))
+        with mock.patch("harness.linux.kernel_identity", return_value=self.A), \
+             mock.patch.dict(os.environ, {"LEANUX_KERNEL_IDENTITY": self.B}):
+            with self.assertRaises(LinuxRunError):
+                verify_kernel("/k")
+        with mock.patch("harness.linux.kernel_identity", return_value=self.A), \
+             mock.patch.dict(os.environ, {"LEANUX_KERNEL_IDENTITY": "approved"}):
+            with self.assertRaises(LinuxRunError):   # neither an identity nor the opt-out
+                verify_kernel("/k")
+
+    def test_unchecked_is_loud_and_recorded(self):
+        with mock.patch("harness.linux.kernel_identity", return_value=self.B), \
+             mock.patch.dict(os.environ, {"LEANUX_KERNEL_IDENTITY": "unchecked"}), \
+             mock.patch("sys.stderr") as stderr:
+            record = verify_kernel("/k")
+        self.assertEqual((record["checked"], record["actual"], record["source"]), (False, self.B, "unchecked"))
+        self.assertTrue(any("UNCHECKED" in str(c) for c in stderr.write.call_args_list))
+
+    def test_run_linux_refuses_another_build_before_taking_a_slot(self):
+        trace = {"version": 1, "id": "v", "ops": [{"op": "eventfd2", "init": 0, "flags": 0}]}
+        with tempfile.TemporaryDirectory(dir=ARTIFACTS) as tmp, \
+             mock.patch("harness.linux.kernel_identity", return_value=self.B), \
+             mock.patch("harness.linux.approved_kernel_identity", return_value=self.A), \
+             mock.patch("harness.linux._run_locked", side_effect=AssertionError("a slot was taken")), \
+             mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("LEANUX_KERNEL_IDENTITY", None)
+            with self.assertRaises(LinuxRunError) as caught:
+                run_linux([trace], Path(tmp) / "run")
+            self.assertEqual(caught.exception.kind, "kernel_mismatch")
 
 
 if __name__ == "__main__":

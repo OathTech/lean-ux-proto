@@ -115,6 +115,11 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   never in `AGENTS.md`; every heavy job runs through the box-wide `capped`
   wrapper, and any local capping script is replaced by it; worktrees, `.tmp`
   and stale `.lake` directories are removed when done.
+- **2026-10-11 [USER]** The kernel identity is validated: "agree re adding
+  validation asap (once the run is over)". Every check and every guest boot
+  compare the selected build with the approved identity and refuse any other
+  build; the evidence is the D3 S2 incident and the 2026-10-11 baseline that
+  nearly ran on the pre-D3 build left in the default directory.
 - **2026-10-11 [AGENT]** This register created from the retired agent memory
   and the dated history formerly in `AGENTS.md`; the 2026-10-07 orchestration
   snapshot is superseded by the pause-state note. The checker's model build

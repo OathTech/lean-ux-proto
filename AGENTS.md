@@ -62,6 +62,12 @@ capped -- scripts/in-bundle python3 -m evaluator.check                     # eve
 LEANUX_KERNEL_PROFILE=net-choice capped -m 64G -- scripts/in-bundle scripts/build-kernel
 ```
 
+Point `LEANUX_KERNEL_DIR` at the approved oracle build (an absolute path, for
+example `.artifacts/kernel-net-choice-d3` in the main checkout). The check and
+every guest boot compare the build's identity with
+`kernel/identity-x86_64-net-choice.txt` and refuse any other build; a control
+kernel is named with `LEANUX_KERNEL_IDENTITY`.
+
 Full checks, mutant sets and kernel builds are long. Start them as tracked
 background tasks that report completion. Never detach one with `&` and poll by
 process name: the poller matches itself and never exits. Before reporting

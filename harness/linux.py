@@ -28,6 +28,61 @@ ARTIFACTS = Path(os.environ.get("LEANUX_ARTIFACTS", ROOT / ".artifacts")).resolv
 KERNEL = Path(os.environ.get("LEANUX_KERNEL_DIR", SHARED / ".artifacts/kernel-net-choice")).resolve()
 if not (KERNEL.is_relative_to(SHARED / ".artifacts") or KERNEL.is_relative_to(ARTIFACTS)):
     raise SystemExit(f"LEANUX_KERNEL_DIR outside the artifact roots: {KERNEL}")
+# The approved oracle kernel (kernel/identity-x86_64-net-choice.txt): its first
+# non-comment line is scripts/kernel-identity.py's path-independent identity.
+# Every guest boot checks the selected build against it before taking a QEMU
+# slot (verify_kernel). Without the check a run on another build is not
+# noticed: the pre-D3 build left in the default directory failed the D3
+# traces as environment_failure beside spurious hidden mismatches (D3
+# evidence, S2), and nearly ran the 2026-10-11 baseline [USER 2026-10-11:
+# add the validation]. LEANUX_KERNEL_IDENTITY names another expected identity
+# (a control kernel, never the oracle); "unchecked" boots any build, with a
+# warning, and the provenance and report record it.
+IDENTITY_FILE = ROOT / "kernel/identity-x86_64-net-choice.txt"
+IDENTITY = re.compile(r"[0-9a-f]{64}")
+
+
+def approved_kernel_identity(path=IDENTITY_FILE):
+    lines = [line.strip() for line in path.read_text().splitlines() if line.strip() and not line.startswith("#")]
+    if not lines or not IDENTITY.fullmatch(lines[0]):
+        raise ValueError(f"{path}: the first non-comment line is not a 64-digit identity")
+    return lines[0]
+
+
+def kernel_identity(kernel=None):
+    """scripts/kernel-identity.py on a build directory (about 0.3 s)."""
+    kernel = Path(kernel or KERNEL)
+    if not (kernel / "vmlinux").is_file():
+        raise LinuxRunError("kernel_mismatch", f"no vmlinux in {kernel}", ARTIFACTS)
+    out = subprocess.check_output([sys.executable, str(ROOT / "scripts/kernel-identity.py"), str(kernel)], text=True, timeout=300)
+    value = out.split()[0] if out.split() else ""
+    if not IDENTITY.fullmatch(value):
+        raise LinuxRunError("kernel_mismatch", f"kernel-identity.py gave no identity for {kernel}: {out[-200:]!r}", ARTIFACTS)
+    return value
+
+
+def verify_kernel(kernel=None, expected=None, outdir=None):
+    """The identity check before a boot. Returns the record for the provenance
+    and the report; raises LinuxRunError("kernel_mismatch") on any other build.
+    `expected`: an identity, "unchecked", or None for LEANUX_KERNEL_IDENTITY,
+    else the approved identity."""
+    kernel = Path(kernel or KERNEL)
+    setting = os.environ.get("LEANUX_KERNEL_IDENTITY") if expected is None else expected
+    actual = kernel_identity(kernel)
+    if setting == "unchecked":
+        print(f"harness: WARNING: kernel identity UNCHECKED (LEANUX_KERNEL_IDENTITY=unchecked): {kernel} is {actual}",
+              file=sys.stderr, flush=True)
+        return {"kernel": str(kernel), "checked": False, "expected": None, "actual": actual, "source": "unchecked"}
+    source = "LEANUX_KERNEL_IDENTITY" if setting else IDENTITY_FILE.name
+    expected = setting or approved_kernel_identity()
+    if not IDENTITY.fullmatch(expected):
+        raise LinuxRunError("kernel_mismatch", f"{source}: {expected!r} is not a 64-digit identity or 'unchecked'", outdir or ARTIFACTS)
+    if actual != expected:
+        raise LinuxRunError("kernel_mismatch",
+                            f"{kernel} has identity {actual}, expected {expected} ({source}): select the approved build "
+                            "with LEANUX_KERNEL_DIR, or name this build's identity with LEANUX_KERNEL_IDENTITY",
+                            outdir or ARTIFACTS)
+    return {"kernel": str(kernel), "checked": True, "expected": expected, "actual": actual, "source": source}
 OUTPUT_LIMIT = 16 * 1024 * 1024
 # The dispatch set (docs/2026-10-03-choice-stream-strategy.md, section 4.4):
 # the deferred units whose dispatch opens a KCOV section in a network trace.
@@ -525,6 +580,7 @@ def run_linux(traces, outdir, *, timeout=120, steer_wire=None, arm_records=ARM_R
         raise ValueError(f"outdir must be empty: {outdir}")
     _jsonl(outdir / "inputs.jsonl", traces)
     (outdir / "wire.txt").write_text(wire)
+    identity = verify_kernel(outdir=outdir)   # before a slot is taken: no boot of another build
     # QEMU_SLOTS guests may run at once, project-wide (each worktree's checks
     # share these lock files in the main checkout). Slot 0 is the historic
     # single lock file, so a worktree on older code still excludes slot 0.
@@ -543,7 +599,7 @@ def run_linux(traces, outdir, *, timeout=120, steer_wire=None, arm_records=ARM_R
                 lock.close()
                 continue
             with lock:
-                return _run_locked(traces, outdir, timeout, arm_records, guest_variant, alloc)
+                return _run_locked(traces, outdir, timeout, arm_records, guest_variant, alloc, identity)
         if time.monotonic() >= deadline:
             raise LinuxRunError("resource_busy", f"Other guests held all {QEMU_SLOTS} QEMU slots for {QEMU_LOCK_WAIT} s", outdir)
         if not waited:
@@ -557,7 +613,7 @@ QEMU_LOCK_WAIT = 3600
 QEMU_SLOTS = int(os.environ.get("LEANUX_QEMU_SLOTS", "3"))
 
 
-def _run_locked(traces, outdir, timeout, arm_records, guest_variant=None, alloc=None):
+def _run_locked(traces, outdir, timeout, arm_records, guest_variant=None, alloc=None, kernel_identity=None):
     build = ["gcc", "-static", "-O2", "-Wall", "-Wextra", "-Werror", "-std=c11", *GUEST_VARIANTS.get(guest_variant, ()), str(ROOT / "harness/guest.c"), "-o", str(outdir / "guest-runner")]
     started = time.monotonic()
     build_returncode = _bounded_process(build, outdir / "build.log", 60, OUTPUT_LIMIT)
@@ -586,7 +642,7 @@ def _run_locked(traces, outdir, timeout, arm_records, guest_variant=None, alloc=
     (outdir / "initramfs.cpio.gz").write_bytes(gzip.compress(cpio, mtime=0))
     command = ["qemu-system-x86_64", "-accel", "tcg,thread=single", "-machine", "pc-i440fx-8.2", "-cpu", "qemu64", "-smp", "1", "-m", "256", "-display", "none", "-monitor", "none", "-serial", "stdio", "-nic", "none", "-no-reboot", "-kernel", str(KERNEL / "arch/x86/boot/bzImage"), "-initrd", str(outdir / "initramfs.cpio.gz"), "-append", BOOT_PARAMETERS]
     identities = [ROOT / "harness/guest.c", ROOT / "harness/linux.py", ROOT / "harness/trace.py", ROOT / "contracts/trace-v1.md", ROOT / "contracts/trace.schema.json", ROOT / "contracts/observation.schema.json", ROOT / "scripts/in-bundle", ROOT / "scripts/bundle-tool", KERNEL / ".config", KERNEL / "arch/x86/boot/bzImage", KERNEL / "vmlinux", KERNEL / "usr/gen_init_cpio", SHARED / ".tools/sysroot/usr/bin/busybox", outdir / "guest-runner", outdir / "init", outdir / "wire.txt", outdir / "initramfs.cpio.gz"]
-    provenance = {"schema_version": 1, "expected_clocksource": EXPECTED_CLOCKSOURCE, "arm_records": arm_records, "guest_variant": guest_variant, "alloc": alloc or {"flags": 0, "ranges": []}, "build_command": build, "cpio_command": cpio_command, "qemu_command": command, "timeout_seconds": timeout, "captured_output_limit_bytes": OUTPUT_LIMIT, "inputs": {str(path): sha256(path) for path in identities}, "compiler": subprocess.check_output(["gcc", "--version"], text=True), "qemu": subprocess.check_output(["qemu-system-x86_64", "--version"], text=True)}
+    provenance = {"schema_version": 1, "expected_clocksource": EXPECTED_CLOCKSOURCE, "arm_records": arm_records, "guest_variant": guest_variant, "alloc": alloc or {"flags": 0, "ranges": []}, "kernel_identity": kernel_identity, "build_command": build, "cpio_command": cpio_command, "qemu_command": command, "timeout_seconds": timeout, "captured_output_limit_bytes": OUTPUT_LIMIT, "inputs": {str(path): sha256(path) for path in identities}, "compiler": subprocess.check_output(["gcc", "--version"], text=True), "qemu": subprocess.check_output(["qemu-system-x86_64", "--version"], text=True)}
     (outdir / "provenance.json").write_text(json.dumps(provenance, indent=2) + "\n")
     (outdir / "qemu-command.json").write_text(json.dumps(command, indent=2) + "\n")
     try:

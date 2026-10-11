@@ -784,8 +784,12 @@ For every mutant, control and evidence run:
 2. Make sure the path lies inside an artifact root.
 3. Verify that kernel's identity first (section 6.4).
 
-`wg-mutants.py` now scores such a run `no_verdict`. The kernel mismatch itself is still not
-detected.
+`wg-mutants.py` scores such a run `no_verdict`. Since 2026-10-11 the mismatch itself is
+detected: every guest boot and every check compare the selected build's identity
+(`scripts/kernel-identity.py`) with `kernel/identity-x86_64-net-choice.txt` and refuse any other
+build as `kernel_mismatch` before taking a QEMU slot. A control kernel is named with
+`LEANUX_KERNEL_IDENTITY=<identity>`; `LEANUX_KERNEL_IDENTITY=unchecked` boots any build, with a
+warning, recorded in the provenance and the report.
 
 ### 11.7 Further failure points on a fresh machine
 

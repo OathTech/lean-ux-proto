@@ -21,7 +21,7 @@ import re
 import subprocess
 import sys
 
-from harness.linux import (ARTIFACTS as LINUX_ARTIFACTS, ARM_RECORDS, DISPATCH_SYMBOLS, GUEST_VARIANTS, KERNEL, LinuxRunError,
+from harness.linux import (ARTIFACTS as LINUX_ARTIFACTS, ARM_RECORDS, DISPATCH_SYMBOLS, GUEST_VARIANTS, KERNEL, LinuxRunError, verify_kernel,
                           dispatch_addresses, run_linux)
 from harness.steer import SteeringError, call_sites, resolve as resolve_steering
 from harness.trace import InvalidTrace, loads_trace, uses_wireguard, validate_trace
@@ -1192,9 +1192,10 @@ def main(argv=None):
     traces, filtered = [], Counter()
     out.mkdir(parents=True, exist_ok=False)
     started = datetime.now(timezone.utc).isoformat()
-    results, gaps, build, aborted = {}, Counter(), None, None
+    results, gaps, build, aborted, identity = {}, Counter(), None, None, None
     outcomes, decisions, kcov, splits, retries = Counter(), {}, None, 0, {}
     try:
+        identity = verify_kernel()   # the oracle, or the build LEANUX_KERNEL_IDENTITY names; else no run
         build = build_model(out, rebuild=not args.no_build)
         traces = load_traces(suites, {'generated': args.generated_count, 'wireguard-generated': args.wireguard_count,
                                       'pipes-generated': args.pipes_count},
@@ -1249,7 +1250,7 @@ def main(argv=None):
         alloc_runs = {k[len('alloc runs ('):-1]: outcomes.pop(k) for k in list(outcomes) if k.startswith('alloc runs (')}
         status = write_report(out, traces, results, gaps, build, aborted, started, suites, args,
                               decision_summary(decisions, outcomes, kcov[2] if kcov else {}), matched, filtered, splits,
-                              skipped, retries, placements, alloc_runs)
+                              skipped, retries, placements, alloc_runs, kernel_identity=identity)
     return 0 if status == 'pass' else 1
 
 
@@ -1271,12 +1272,15 @@ def decision_summary(decisions, outcomes, witnesses):
 
 def write_report(out, traces, results, gaps, build, aborted, started, suites, args, decision_coverage=None,
                  operand_pairs_matched=0, domain_filtered=None, chunk_splits=0, choice_records_skipped=None,
-                 chunk_retries=None, napi_irq_placements=None, alloc_runs=None):
+                 chunk_retries=None, napi_irq_placements=None, alloc_runs=None, kernel_identity=None):
     ordered = [results.get(trace['id'], dict(id=trace['id'], outcome='not_run')) for trace in traces]
     counts = Counter(r['outcome'] for r in ordered)
     vmlinux = KERNEL / 'vmlinux'
     kernel = dict(vmlinux_sha256=sha256(vmlinux.read_bytes())) if vmlinux.is_file() else dict(missing=str(vmlinux))
-    passed = (aborted is None and bool(traces) and 'missing' not in kernel
+    # the identity check's record (harness.linux.verify_kernel): a run that
+    # never passed it (aborted before any boot) has none, and fails
+    kernel['identity'] = kernel_identity
+    passed = (aborted is None and bool(traces) and 'missing' not in kernel and kernel_identity is not None
               and counts == Counter(agreement=len(traces)))
     report = dict(
         version=1, status='pass' if passed else 'fail', aborted=aborted, build=build,
