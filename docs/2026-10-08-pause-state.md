@@ -156,6 +156,8 @@ and in the design docs.
    keep the shared opcode and record-kind tables:
    - opcodes 20–21 for W2, 22–24 for W8/W9;
    - record kind 306 for the dst-cache jiffies.
+   Done 2026-10-11: the files, owners and allocations are in
+   [the interface note](2026-10-11-interface.md).
 7. **Implementation streams**, in parallel, each from its revised design:
    - W1+W2;
    - W4+W7;
