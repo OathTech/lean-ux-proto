@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Writes the W4 traces (docs/2026-10-06-w4-w7-transmit-bulk.md, sections 6
-and 16.1: the kept transmit-shape classes) into corpus/wireguard, and the
+and 16.1: the kept transmit-shape classes) and the W7 core-tier batches
+(section 6, stream B) into corpus/wireguard, and the
 three boundary domain controls (section 8) into corpus/w47-controls.
 Each W4 class names the WireGuard line, decision or outcome it alone reaches.
 Sessions, steering and advances come from the D1-D3 corpus scripts; the
@@ -35,6 +36,25 @@ def xmit(data, gso_size=None, pmtudisc=None):
     if pmtudisc:
         packet["pmtudisc"] = pmtudisc
     return {"op": "wg_xmit", "packet": packet}
+
+
+def batch(items, wait_ms):
+    return {"op": "wg_batch", "items": items, "wait_ms": wait_ms}
+
+
+def inject_item(sess, counter, text):
+    """A data message (counter `counter`) carrying an inner IPv4 UDP datagram,
+    as a batch item to wg0's port."""
+    message = sess.to_wg0(counter, d2.inner4(text))
+    return {"kind": "inject", "family": 4, "port": d1.PORT,
+            "message": message.hex() if isinstance(message, (bytes, bytearray)) else message}
+
+
+def xmit_item(data):
+    return {"kind": "xmit", "packet": {"family": 4, "dst": DST4.hex(), "payload": data.hex()}}
+
+
+DEQUEUE_MORE = "wg_prev_queue_dequeue.more_remain=1"   # the queue held two or more items (queueing.c:91)
 
 
 def set_mtu(mtu):
@@ -89,6 +109,31 @@ def traces():
                            steer, SESSION + [fired("send_persistent_keepalive"), d3.INTERVAL + "=1",
                                              "calculate_skb_padding.no_mtu=1", "wg_open.has_inet_device=0",
                                              "wg_open.has_inet6_device=0"])
+    # W7 (section 6, the core tier): batches of n data messages under a
+    # session, injected in one io_uring_enter, so the decrypt ring and the
+    # peer's rx_queue hold n items at once: wg_prev_queue_dequeue's "more
+    # remain" arm (queueing.c:91-95), and with the poll between items an
+    # UNCRYPTED head left peeked (`.prevQueuePeeked` true). n = 8 is the
+    # instance where per-item yields and two-item polls occur.
+    for n in (2, 8):
+        ops, sess, steer = d3.session(keepalive=5)
+        items = [inject_item(sess, k, f"rx{k}") for k in range(n)]
+        out[f"w7_multi_rx_{n}"] = (ops + [batch(items, 200 if n == 2 else 400), OBSERVE, GET], steer,
+                                   SESSION + d2.DATA + [DEQUEUE_MORE])
+    # The tx-side twins: n transmits in one batch stage n ring items; the
+    # tx worker meets the tx_queue's dequeue arms, and an UNCRYPTED head
+    # when it runs between the encrypt worker's items (send.c:269-272).
+    for n in (2, 8):
+        ops, sess, steer = d3.session(keepalive=5)
+        items = [xmit_item(d2.payload(64 + k, 10 + k)) for k in range(n)]
+        out[f"w7_multi_tx_{n}"] = (ops + [batch(items, 200 if n == 2 else 400), OBSERVE, GET], steer,
+                                   SESSION + d2.DATA_SENT + [DEQUEUE_MORE])
+    # Injects and transmits in one batch: the encrypt and decrypt workers
+    # both queued, ordered by their section starts (Env.afterBatch).
+    ops, sess, steer = d3.session(keepalive=5)
+    items = [inject_item(sess, 0, "mix0"), xmit_item(d2.payload(64, 20)), inject_item(sess, 1, "mix1"),
+             xmit_item(d2.payload(65, 21))]
+    out["w7_mixed"] = (ops + [batch(items, 400), OBSERVE, GET], steer, SESSION + d2.DATA + d2.DATA_SENT + [DEQUEUE_MORE])
     return out
 
 

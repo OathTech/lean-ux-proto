@@ -179,10 +179,10 @@ class OpcodeTableTests(unittest.TestCase):
         self.assertFalse(set(OPCODES.values()) & set(RESERVED_OPCODES))
         self.assertEqual(sorted(c for n, c in OPCODES.items()
                                 if n not in ("pipe2", "wg_advance", "wg_create", "wg_down", "wg_delete", "wg_flood",
-                                             "wg_set_mtu")),
+                                             "wg_set_mtu", "wg_batch")),
                          list(range(1, 14)))
-        # W4's placeholder (the design's OP_SET_MTU), outside the reservations
-        self.assertEqual(OPCODES["wg_set_mtu"], 25)
+        # W4+W7's codes, allocated by the coordinator (docs/2026-10-11-interface.md)
+        self.assertEqual((OPCODES["wg_set_mtu"], OPCODES["wg_batch"]), (25, 26))
 
     def test_guest_defines_match(self):
         defines = {name.lower(): int(code) for name, code in re.findall(r"^#define OP_(\w+) (\d+)$", self.GUEST, re.M)}

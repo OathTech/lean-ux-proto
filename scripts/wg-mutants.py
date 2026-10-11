@@ -503,6 +503,37 @@ MISMATCH_OUTCOMES = frozenset({'semantic_mismatch', 'control_flow_mismatch', 'hi
 # A-M6, A-M9, A-M13) are rejected by the a2_* traces of the (b-task)
 # failslab-style extension [USER 2026-10-06]; A-M7/A-M8 by the a2_pipe_*
 # traces since the D3+A integration (A's pipe sites, section 19.6).
+# W7 stream B (docs/2026-10-06-w4-w7-transmit-bulk.md, section 8), on the
+# w7_ traces (the core tier: w7_multi_rx_{2,8}, w7_multi_tx_{2,8}, w7_mixed).
+# M3 and M5 reject only on a run where the poll or the tx worker met an
+# UNCRYPTED head (the peeked arm), which the scheduling of the 8-item
+# classes produces; a survival on a run without it is inconclusive, as
+# D2-M12's (the design, 5.3). M1, M2 (the 1025-item tier), M6 (the DEAD
+# break, with A's skbCowHead steer), M8 and M10 (the stretch tier) wait for
+# their traces.
+W7_MUTANTS = [
+  ('W7-M3-peeked-ignored', 'state: wg_prev_queue_peek dequeues although an item is peeked (queueing.h:145): the '
+   'peeked item is lost (rx_bytes, inner datagrams; A2 .prevQueuePeeked)',
+   'Leanux/WG/PrevQueue.lean',
+   "  if ← branch .prevQueuePeeked q.peeked.isSome then return (q.peeked, q)\n",
+   "  _ ← branch .prevQueuePeeked q.peeked.isSome\n", 'w7_'),
+  ('W7-M4-restub-skipped', 'control: the re-stub arm leaves tail off the stub (queueing.c:98-103): the next '
+   'dequeue takes tail_is_stub false where Linux takes true',
+   'Leanux/WG/PrevQueue.lean',
+   "      return (some x, { q with items := [], tailIsStub := true })   -- queue->tail = STUB; count--\n",
+   "      return (some x, { q with items := [] })\n", 'w7_'),
+  ('W7-M5-tx-past-uncrypted', 'behavior: the tx worker continues past an UNCRYPTED head (send.c:269-272) and sends '
+   'it: bytes at the listener, or a hidden mismatch, on a run where it met one',
+   'Leanux/WG/Data.lean',
+   "      branch .txNotUncrypted (h.state != .uncrypted)\n",
+   "      branch .txNotUncrypted true\n", 'w7_'),
+  ('W7-M9-resched-ignored-bulk', 'scheduling: the per-item resched record is consumed but the units it switched to '
+   'are not run here (D1-M15\'s bulk form): their sections mismatch',
+   'Leanux/Env/Batch.lean',
+   "    _ ← hidden site\n    -- W7 (5.3): any of the encrypt, tx and decrypt workers whose start is\n",
+   "    _ ← hidden site\n    if true then\n      modify fun s => { s with yieldedWorkers := s.yieldedWorkers ++ [self.index] }\n      return true\n    -- W7 (5.3): any of the encrypt, tx and decrypt workers whose start is\n", 'w7_'),
+]
+
 A_MUTANTS = [
   ('A-M3-keepalive-sends-after-nomem', 'control: wg_packet_send_keepalive calls wg_packet_send_staged_packets '
    'after a failed allocation (send.c:228-229 returns). Survives on this base: both modeled callers (wg_open, '
@@ -637,7 +668,7 @@ def run(cmd, **kw):
 def main():
     assert run(['git', 'status', '--porcelain'], capture_output=True, text=True).stdout == '', 'tree must be clean'
     head = run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()
-    mutants = MUTANTS + D1_MUTANTS + D2_MUTANTS + E_MUTANTS + E_UNDERLOAD_MUTANTS + D3_MUTANTS + L_MUTANTS + A_MUTANTS + Q_MUTANTS + W4_MUTANTS
+    mutants = MUTANTS + D1_MUTANTS + D2_MUTANTS + E_MUTANTS + E_UNDERLOAD_MUTANTS + D3_MUTANTS + L_MUTANTS + A_MUTANTS + Q_MUTANTS + W4_MUTANTS + W7_MUTANTS
     names = [m[0] for m in mutants]
     assert set(EQUIVALENT) <= set(names), 'an EQUIVALENT entry names no mutant'
     assert NOT_CLAIMED <= set(names), 'a NOT_CLAIMED entry names no mutant'

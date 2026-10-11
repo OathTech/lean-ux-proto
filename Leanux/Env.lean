@@ -140,9 +140,9 @@ def deliverSent : M Unit := do
     worker (`packet_crypt_wq`, queued by `wg_packet_create_data`), then the
     tx worker of each peer it queued (`wg_queue_enqueue_per_peer_tx`),
     oldest first. What they send is delivered. -/
-def runCryptWorkers : M Unit := do
+def runCryptWorkers (runDecrypt : M Unit := unsupported "a switch to the decrypt worker at this point (its placement is not modeled here)") : M Unit := do
   if !(← getDev).encryptQueue.isEmpty then
-    runWorker .encryptWorker (WG.encryptWorker checksumHelp (condResched SWITCH_DEPTH .encryptWorker))
+    runWorker .encryptWorker (WG.encryptWorker checksumHelp (condResched SWITCH_DEPTH .encryptWorker runDecrypt))
   for _ in [0:4096] do
     let d ← getDev
     match d.txWorkQueue.head? with
@@ -153,7 +153,7 @@ def runCryptWorkers : M Unit := do
         | some u => resolveUnit .txWorker u d.txWorkQueue d.peerList
         | none => pure headPid
       modifyDev fun d => { d with txWorkQueue := d.txWorkQueue.erase pid }
-      runWorker .txWorker (WG.txWorker pid (condResched SWITCH_DEPTH .txWorker))
+      runWorker .txWorker (WG.txWorker pid (condResched SWITCH_DEPTH .txWorker runDecrypt)) (some pid)
       if !(← getDev).encryptQueue.isEmpty then invariant "the tx worker queued encryption"
   invariant "the tx work queue did not drain"
 
@@ -634,8 +634,13 @@ def napiIrqExit : M Unit := do
 /-- The decrypt worker (`packet_crypt_wq`, queued by `consume_data` in the
     injecting operation's NET_RX), once that softirq is done, with its
     NAPI softirq placements and its `cond_resched` (receive.c:505). -/
+def runDecryptAt : Nat → M Unit
+  | 0 => invariant "worker switches nested too deep"
+  | fuel + 1 =>
+    runWorker .decryptWorker (WG.decryptWorker napiSoftirq napiIrqExit (condResched fuel .decryptWorker (runDecryptAt fuel)))
+
 def runDecryptWorker : M Unit := do
-  runWorker .decryptWorker (WG.decryptWorker napiSoftirq napiIrqExit (condResched SWITCH_DEPTH .decryptWorker))
+  runDecryptAt SWITCH_DEPTH
   if (← getDev).peers.toList.any (·.2.napiScheduled) then
     invariant "a NAPI poll pending after the decrypt worker (its ring poll runs the softirq)"
 
@@ -653,12 +658,12 @@ def inject (family port : Nat) (msg : List UInt8) : M Int := do
   runWorker .netRx (WG.wgReceive msg src)
   -- the queued receive work runs before the guest's wait ends
   if !(← getDev).handshakeQueue.isEmpty then
-    runWorker .receiveWorker (WG.handshakeReceiveWorker (discard <| condResched SWITCH_DEPTH .receiveWorker))
+    runWorker .receiveWorker (WG.handshakeReceiveWorker (discard <| condResched SWITCH_DEPTH .receiveWorker (runDecryptAt SWITCH_DEPTH)))
   -- or the decrypt worker, with the NAPI poll its packet schedules
   if !(← getDev).decryptQueue.isEmpty then runDecryptWorker
   -- then the crypt work the receive worker or the NAPI poll queued (a
   -- session's keepalive, staged packets on key confirmation)
-  runCryptWorkers
+  runCryptWorkers (runDecryptAt SWITCH_DEPTH)
   deliverSent
   return msg.length   -- udp_sendmsg returns the datagram's length
 
@@ -698,7 +703,7 @@ def flood (count port : Nat) (messages : List (List UInt8)) : M Int := do
   let src ← senderSource 4
   modifyDev fun d => { d with handshakeQueue := messages.map (fun m => (m, src)) }
   modify fun w => { w with floodDepth := count + messages.length }
-  WG.handshakeReceiveWorker (discard <| condResched SWITCH_DEPTH .receiveWorker)
+  WG.handshakeReceiveWorker (discard <| condResched SWITCH_DEPTH .receiveWorker (runDecryptAt SWITCH_DEPTH))
   modify fun w => { w with floodDepth := 0 }
   -- the remaining invalid packets' per-packet reads (under_load / decay /
   -- reschedule), discarded; a modeled record here (a mid-flood injection) fails
@@ -710,5 +715,84 @@ def flood (count port : Nat) (messages : List (List UInt8)) : M Int := do
     throw (.hidden "the flood did not cross the under_load threshold (no under_load record)")
   deliverSent
   return 0
+
+/-! ## W7 stream B: `wg_batch` (docs/2026-10-06-w4-w7-transmit-bulk.md, 5.5) -/
+
+/-- A NAPI a receive scheduled inside this NET_RX section (consume_data's
+    `-EPIPE` arm, W7 5.2): `net_rx_action`'s poll list runs it in the same
+    pass, after the receive. -/
+def pollScheduledInline : M Unit := do
+  let d ← getDev
+  let pending := d.peers.toList.filterMap fun (pid, p) => if p.napiScheduled then some pid else none
+  if pending.length > 1 then unsupported "NAPI polls of several peers in one softirq"
+  for pid in pending do
+    discard <| WG.rxPoll pid WG.NAPI_POLL_WEIGHT fun pkts => pkts.forM deliverInner
+
+/-- The deferred units a batch queued, run as the records order them: the
+    decrypt worker, the crypt workers (the encrypt worker, then the tx
+    workers by their dispatch records) and the handshake send workers,
+    whichever section the next record starts. Work left when the records
+    end outlived the guest's wait: outside the domain (its records would be
+    missing). Without records (the domain filter) a fixed order. -/
+def afterBatch : M Unit := do
+  modify fun w => { w with queuedThisCall := [] }   -- the call returned and slept
+  let startOf (w : Worker) := (HiddenSite.sectionStart w).info.id
+  if (← get).hidden.isNone then
+    if !(← getDev).decryptQueue.isEmpty then runDecryptWorker
+    runCryptWorkers (runDecryptAt SWITCH_DEPTH)
+    runSendWorkers
+    return
+  for _ in [0:4096] do
+    let d ← getDev
+    let some site ← peekNextSite | break
+    if site == startOf .decryptWorker && !d.decryptQueue.isEmpty then runDecryptWorker
+    else if (site == startOf .encryptWorker && !d.encryptQueue.isEmpty)
+         || (site == startOf .txWorker && !d.txWorkQueue.isEmpty) then runCryptWorkers (runDecryptAt SWITCH_DEPTH)
+    else if site == startOf .sendWorker && !d.sendWorkQueue.isEmpty then runOneSendWorker
+    else break
+  let d ← getDev
+  if !d.decryptQueue.isEmpty || !d.encryptQueue.isEmpty || !d.txWorkQueue.isEmpty || !d.sendWorkQueue.isEmpty then
+    unsupported "work the batch queued outlived the guest's wait (its records would be missing)"
+  deliverSent
+
+/-- `wg_batch`: the fixture's sender submits `items` as one `io_uring_enter`,
+    each an inject to wg0's port or a transmit into wg0, with no worker
+    running between them (2.7: the sends run inline in the trace task, the
+    kworkers wait for the call to return; a section between two items'
+    records would mismatch). The completions present when the call returns
+    are the operation's `cqes`: each item's length, or the sender's errno.
+    Then the deferred units, by the records (`afterBatch`). The call returns
+    the number of entries submitted. -/
+def batch (items : List BatchItem) : M Int := do
+  let some d := (← getK).wg | unsupported "a batch without wg0"
+  if !d.running then unsupported "a batch with wg0 down"
+  for pid in d.peerList do requireNotPending pid "a batch while a handshake is queued"
+  let mut cqes : List Int := []
+  for item in items do
+    match item with
+    | .inject family port msg =>
+      if port != d.incomingPort then unsupported "a batch datagram to a port other than wg0's"
+      fixtureSend
+      let src ← senderSource family
+      runWorker .netRx do
+        WG.wgReceive msg src
+        pollScheduledInline
+      cqes := cqes ++ [(msg.length : Int)]
+    | .xmit family addr payload opts =>
+      if !(← get).routesViaWg0 then
+        cqes := cqes ++ [-ENETUNREACH]
+      else
+        if (family == 4 && !d.inet4Dev) || (family == 6 && !d.inet6Dev) then
+          unsupported "a transmit after an MTU change took the family's routes into wg0 down"
+        fixtureSend
+        match ← xmitPackets family addr payload opts with
+        | .error e => cqes := cqes ++ [e]
+        | .ok (pkts, mtu) =>
+          xmitMulticastLoop family addr
+          let ret ← WG.wgXmit family addr pkts mtu
+          cqes := cqes ++ [if ret == 0 then (payload.length : Int) else ret]
+  modify fun w => { w with extraOut := [("cqes", Lean.toJson cqes)] }
+  afterBatch
+  return items.length
 
 end Leanux.Env

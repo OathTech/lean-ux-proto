@@ -62,6 +62,17 @@ def sha256(data):
     return hashlib.sha256(data).hexdigest()
 
 
+# W7: the anchored files compared for a `wg_batch` operation (above): the
+# WireGuard sources and the headers their paths inline; the file-table and
+# pipe files are the fixture's io_uring plumbing there.
+NET_HEADERS = {'include/net/ip_tunnels.h', 'include/net/inet_ecn.h', 'include/linux/if_vlan.h',
+               'include/crypto/curve25519.h', 'include/linux/refcount.h'}
+
+
+def BATCH_FILES(files):
+    return [f for f in files if f.startswith('drivers/net/wireguard/') or f in NET_HEADERS]
+
+
 def chunk_traces(traces):
     """Split traces into chunks of at most CHUNK. E-B isolation
     (docs/2026-10-05-e-dos.md §4.2): a `wg_flood` sets the kernel-global
@@ -71,7 +82,9 @@ def chunk_traces(traces):
     runs in a chunk by itself; every normal trace keeps the constant-false decay
     (the cross-trace guard). Yields `(start, chunk, name)`."""
     def under_load(trace):
-        return any(op['op'] == 'wg_flood' for op in trace['ops'])
+        # W7: a bulk trace (wg_batch) runs in a chunk by itself too, since its
+        # wall time is a large share of the trace bound (section 6)
+        return any(op['op'] in ('wg_flood', 'wg_batch') for op in trace['ops'])
     pending, current, cur_start = [], [], 0
     def flush():
         nonlocal current
@@ -820,17 +833,24 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
                 problems.append(dict(index=index,
                                      problem='flood did not reach under_load (receive.c:115 not covered)'))
             continue
+        # W7 (docs/2026-10-06-w4-w7-transmit-bulk.md, 5.5): a `wg_batch` is one
+        # io_uring_enter whose descriptor plumbing (the ring's fdget, each
+        # send's fget of the sender) is the fixture's, as the flood's is; the
+        # mirror models none of it (no socketCallOn), so only the WireGuard
+        # files and the headers its paths inline are compared for the
+        # operation. Everything WireGuard runs per item is checked as usual.
+        op_files = BATCH_FILES(config['files']) if op['op'] == 'wg_batch' else config['files']
         # Raw coverage of a span line (any function, any attribution) must be
         # mapped, and no unlisted function may run span lines of an anchored
         # C file: either means a modeled path runs outside the listed
         # functions. (Header helpers are inlined everywhere, so header span
         # lines in unlisted functions are a stated gap.)
-        unmapped = sorted((raw_lines(coverage[index], locations, config['files']) & span_lines) - instrumented)
-        foreign = sorted(unlisted_c_lines(coverage[index], locations, config['files'], set(config['functions']))
+        unmapped = sorted((raw_lines(coverage[index], locations, op_files) & span_lines) - instrumented)
+        foreign = sorted(unlisted_c_lines(coverage[index], locations, op_files, set(config['functions']))
                          & span_lines)
         if foreign:
             problems.append(dict(index=index, problem='span lines covered by an unlisted function', lines=foreign))
-        positions = line_positions(coverage[index], locations, config['files'], set(config['functions']))
+        positions = line_positions(coverage[index], locations, op_files, set(config['functions']))
         lines = set(positions)
         if not lines:
             problems.append(dict(index=index, problem='no coverage in anchored files'))
@@ -843,7 +863,10 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
             if step is None or step[0] not in decisions:
                 problems.append(dict(index=index, label=label, problem='unknown decision'))
             elif any(name == step[0] for name, _ in reported):
-                if not decisions[step[0]]['repeatable']:
+                # W7: a batch runs the receive and transmit paths once per
+                # item, so its decisions repeat; their later outcomes add to
+                # the set, as a repeatable decision's do
+                if not decisions[step[0]]['repeatable'] and op['op'] != 'wg_batch':
                     problems.append(dict(index=index, label=label, problem='decision reported more than once'))
                 reported.add(step)  # a repeatable decision: later evaluations add outcomes, not order
             else:
@@ -885,7 +908,7 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
         # counted point, in an anchored file) must have a reported decision.
         # Unobservable outcomes cannot show an omitted decision; this shows an
         # omitted function.
-        ran, shared_hits = decision_functions_run(coverage[index], locations, config, decisions)
+        ran, shared_hits = decision_functions_run(coverage[index], locations, dict(config, files=op_files), decisions)
         if shared_hits:
             gaps['shared exits reached by an early return (kcov.json)'] += shared_hits
         silent = sorted(ran - {decisions[name]['function'] for name in names})
@@ -1044,7 +1067,9 @@ def guest_timeout(traces):
     waits = GUEST_CHILDREN * (OBSERVE_WAIT_SECONDS * sum(op in ('wg_observe', 'wg_inject') for op in names)
                               + QUEUE_WAIT_SECONDS * sum(op in ('wg_set', 'wg_up', 'wg_xmit', 'wg_flood') for op in names)
                               + ADVANCE_WAIT_SECONDS * sum(op == 'wg_advance' for op in names)
-                              + PAUSE_SECONDS_PER_MS * sum(op.get('pause_ms', 0) for op in ops))
+                              + PAUSE_SECONDS_PER_MS * sum(op.get('pause_ms', 0) for op in ops)
+                              # W7: a wg_batch waits its wait_ms (default 100) after the submission
+                              + sum(op.get('wait_ms', 100) / 1000 for op in ops if op['op'] == 'wg_batch'))
     io_bytes = sum(op['count'] for op in ops if op['op'] in ('read', 'write'))
     compute = (GUEST_BOOT_SECONDS + WIREGUARD_TRACE_SECONDS * sum(uses_wireguard(t) for t in traces)
                + OPERATION_SECONDS * len(ops) + GUEST_CHILDREN * IO_SECONDS_PER_BYTE * io_bytes)

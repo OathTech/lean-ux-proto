@@ -900,6 +900,11 @@ structure World where
       the mirror before Linux recorded them (site ids): see `Env.runWorker`. -/
   yieldedWorkers : List Nat := []
   pendingStops : List Nat := []
+  /-- W7 stream B (docs/2026-10-06-w4-w7-transmit-bulk.md, 5.4, phase 1):
+      the workers whose sections are open in the mirror, innermost last
+      (worker index, the tx worker's peer), for the commuting detector in
+      `Env.condResched`. -/
+  openWorkers : List (Nat × Option Nat) := []
   /-- Dispatch order (docs/2026-10-11-dispatch-order.md): the queue records'
       work addresses captured so far (worker index, address), oldest first,
       not yet paired with a unit; the addresses paired with a peer's unit

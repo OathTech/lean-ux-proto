@@ -48,7 +48,9 @@ def keys(value, expected):
 READ_HEAD = 64
 MAX_IO = 69632
 DIGEST = re.compile(r'[0-9a-f]{64}')
-EXTRA_FIELDS = {'pipe2': ('fds',), 'read': ('digest',), 'write': ('sigpipe',)}
+# W7: a batch's completions present when io_uring_enter returned (each
+# item's length, or the sender's errno; null for an item without one)
+EXTRA_FIELDS = {'pipe2': ('fds',), 'read': ('digest',), 'write': ('sigpipe',), 'wg_batch': ('cqes',)}
 
 
 def validate_observation(trace, result):
@@ -94,6 +96,9 @@ def validate_observation(trace, result):
             raise InvalidOutput(f'observation {index}: digest')
         if 'sigpipe' in fields and (type(obs['sigpipe']) is not int or obs['sigpipe'] not in (0, 1)):
             raise InvalidOutput(f'observation {index}: sigpipe')
+        if 'cqes' in fields and (type(obs['cqes']) is not list
+                                 or not all(x is None or integer(x, -4095, 2**31 - 1) for x in obs['cqes'])):
+            raise InvalidOutput(f'observation {index}: cqes')
         if type(obs['index']) is not int or obs['index'] != index:
             raise InvalidOutput(f'observation {index}: order/index')
         ret, error, data = obs['ret'], obs['errno'], obs['bytes']
@@ -173,6 +178,8 @@ SEMANTIC_ERRNOS = {'eventfd2': {12, 22, 24}, 'dup': {9, 12, 24}, 'dup3': {9, 12,
                    'wg_advance': set(),
                    # E-B: the io_uring submission (wg_flood) fails only outside the oracle's setup
                    'wg_flood': set(),
+                   # W7: the batch's submission likewise; per-item results are its cqes
+                   'wg_batch': set(),
                    # W4: dev_validate_mtu's -ERANGE; wg_xmit's -EMSGSIZE/-EINVAL from the sender's
                    # IP layer under a route MTU or UDP_SEGMENT (no wg_xmit runs)
                    'wg_set_mtu': {19, 34},

@@ -40,10 +40,13 @@ FIELDS = {
     "pipe2": {"op", "flags"},
     # W4 (docs/2026-10-06-w4-w7-transmit-bulk.md section 6): SIOCSIFMTU on wg0
     "wg_set_mtu": {"op", "mtu"},
+    # W7 (section 5.5): one io_uring_enter of `items` (injects to wg0's port
+    # and transmits into wg0) from the fixture's sender; `wait_ms` optional
+    "wg_batch": {"op", "items"},
 }
 LIFECYCLE_OPS = ("wg_create", "wg_down", "wg_delete")
 WG_OPS = {"wg_set", "wg_get", "wg_up", "wg_xmit", "wg_observe", "wg_inject", "wg_advance",
-          "wg_flood", "wg_set_mtu"} | set(LIFECYCLE_OPS)
+          "wg_flood", "wg_set_mtu", "wg_batch"} | set(LIFECYCLE_OPS)
 # Wire opcodes: an explicit table, not FIELDS' order (a positional derivation
 # gave P's pipe2 and D3's wg_advance the same code, 14). harness/guest.c
 # mirrors it as OP_* #defines; harness/test_trace.py checks that the codes
@@ -58,10 +61,10 @@ OPCODES = {
     "wg_create": 15, "wg_down": 16, "wg_delete": 17,
     "wg_flood": 18,
     "wg_advance": 19,
-    # W4: a PLACEHOLDER code (the design's OP_SET_MTU) until the coordinator
-    # allocates it at integration (docs/2026-10-11-interface.md); 20-24 are
-    # W2's and W8/W9's reservations
+    # W4+W7: allocated by the coordinator (docs/2026-10-11-interface.md);
+    # 20-24 are W2's and W8/W9's reservations
     "wg_set_mtu": 25,
+    "wg_batch": 26,
 }
 # Reserved wire opcodes (the interface commit, docs/2026-10-11-interface.md),
 # allocated by the coordinator so the W streams' worktrees cannot clash. A
@@ -114,6 +117,60 @@ LEGACY_IO = 16
 def _integer(value, low, high, where):
     if type(value) is not int or not low <= value <= high:
         raise InvalidTrace(f"{where}: expected integer in [{low}, {high}]")
+
+
+BATCH_MAX = 1025   # the full-ring tier's size (W7 section 6); the guest's BATCH_MAX
+
+
+def validate_batch(op, where):
+    """W7: `items`, 1-1025 of `{kind: "inject", family, port, message}` or
+    `{kind: "xmit", packet}` (a wg_xmit packet without the GSO and pmtudisc
+    options: a batch item beyond that is refused here, fail-noisy), and
+    `wait_ms` 1-4000, the guest's wait after the submission."""
+    items = op["items"]
+    if type(items) is not list or not 1 <= len(items) <= BATCH_MAX:
+        raise InvalidTrace(f"{where}.items: expected 1-{BATCH_MAX} items")
+    for k, item in enumerate(items):
+        if type(item) is not dict or item.get("kind") not in ("inject", "xmit"):
+            raise InvalidTrace(f"{where}.items[{k}]: expected an inject or xmit item")
+        if item["kind"] == "inject":
+            if set(item) != {"kind", "family", "port", "message"}:
+                raise InvalidTrace(f"{where}.items[{k}]: expected kind, family, port, message")
+            if item["family"] not in (4, 6):
+                raise InvalidTrace(f"{where}.items[{k}].family: expected 4 or 6")
+            _integer(item["port"], 1, 65535, f"{where}.items[{k}].port")
+            message = item["message"]
+            if type(message) is not str or not re.fullmatch(r"(?:[0-9a-f]{2}){1,1400}", message, re.ASCII):
+                raise InvalidTrace(f"{where}.items[{k}].message: expected 1-1400 bytes of lowercase hex")
+        else:
+            if set(item) != {"kind", "packet"}:
+                raise InvalidTrace(f"{where}.items[{k}]: expected kind, packet")
+            packet = item["packet"]
+            if type(packet) is not dict or "gso_size" in packet or "pmtudisc" in packet:
+                raise InvalidTrace(f"{where}.items[{k}].packet: a batch transmit takes no gso_size or pmtudisc")
+            try:
+                validate_packet(packet, f"{where}.items[{k}].packet")
+            except InvalidConfig as exc:
+                raise InvalidTrace(str(exc)) from exc
+    if "wait_ms" in op:
+        _integer(op["wait_ms"], 1, 4000, f"{where}.wait_ms")
+
+
+def encode_batch(op):
+    """The wire payload: per item a kind byte (1 inject, 2 xmit), a 16-bit
+    big-endian body length, and the body: family(1) port(2) message for an
+    inject; the 16-byte v4-mapped destination then the payload for a
+    transmit (as wg_xmit's wire)."""
+    out = b""
+    for item in op["items"]:
+        if item["kind"] == "inject":
+            body = bytes([item["family"]]) + item["port"].to_bytes(2, "big") + bytes.fromhex(item["message"])
+            kind = 1
+        else:
+            _, body = encode_packet(item["packet"])
+            kind = 2
+        out += bytes([kind]) + len(body).to_bytes(2, "big") + body
+    return out
 
 
 def _fields(value, keys, where):
@@ -175,6 +232,11 @@ def validate_trace(trace):
             if not FIELDS[name] <= set(op) <= FIELDS[name] | {"messages", "control"}:
                 raise InvalidTrace(f"ops[{i}]: expected {sorted(FIELDS[name])} and optionally messages, control")
             pipes = False
+        elif name == "wg_batch":
+            if not FIELDS[name] <= set(op) <= FIELDS[name] | {"wait_ms"}:
+                raise InvalidTrace(f"ops[{i}]: expected {sorted(FIELDS[name])} and optionally wait_ms")
+            pipes = False
+            validate_batch(op, f"ops[{i}]")
         else:
             _fields({k: v for k, v in op.items() if k not in OPTIONAL_OP_FIELDS}, FIELDS[name], f"ops[{i}]")
             pipes = name in PIPE_PRODUCERS
@@ -255,6 +317,8 @@ def validate_trace(trace):
         if name == "wg_set_mtu":
             if type(op["mtu"]) is not int or not 0 <= op["mtu"] <= 65535:
                 raise InvalidTrace(f"ops[{i}].mtu: expected an integer 0-65535")
+        if name == "wg_batch":
+            validate_batch(op, f"ops[{i}]")
     if "net_fixture" in trace:
         fixture = trace["net_fixture"]
         if type(fixture) is dict:
@@ -399,6 +463,9 @@ def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False, allo
                 a = op["ticks"]
             if op["op"] == "wg_flood":
                 a, b = op["count"], op["port"]
+            if op["op"] == "wg_batch":
+                # W7: a = the item count, b = the guest's wait after the submission (ms)
+                a, b = len(op["items"]), op.get("wait_ms", 100)
             line = f"{OPCODES[op['op']]} {kind} {value} {newkind} {newvalue} {a} {b} {op_value}"
             if GUEST_PIPES:
                 line += f" {op.get('pause_ms', 0)}"   # the ninth field (P1)
@@ -418,6 +485,8 @@ def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False, allo
                 control = op.get("control")
                 header = bytes([len(leading), 1 if control else 0]).hex()
                 line += " " + header + "".join(leading) + (control or "")
+            elif op["op"] == "wg_batch":
+                line += " " + encode_batch(op).hex()
             lines.append(line)
         for entry in schedule:
             # (kind, length, draw, ips, hex[, flags]); flags: 1 = match the

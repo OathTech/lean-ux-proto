@@ -1,4 +1,5 @@
 import Leanux.WG.Keypair
+import Leanux.WG.PrevQueue
 
 /-!
 # drivers/net/wireguard/send.c — staging, handshake queueing, and handing
@@ -104,10 +105,10 @@ def enqueuePerPeerTx (item : List DataPacket) (state : PacketState) : M Unit := 
   -- is on the peer's tx_queue
   let same (q : List DataPacket) := q.head?.map (fun f => f.keypair == first.keypair && f.nonce == first.nonce) == some true
   let p ← getPeer pid
-  if !p.txQueue.any same then
-    invariant "an item for the tx worker that is not on its peer's tx_queue"
-  let firstWith := { first with state }
-  setPeer pid { p with txQueue := p.txQueue.map fun q => if same q then firstWith :: item.drop 1 else q }
+  -- W7: the item may be the one the tx worker peeked (an UNCRYPTED head)
+  let some txQueue := p.txQueue.updateFirst same (fun _ => { first with state } :: item.drop 1)
+    | invariant "an item for the tx worker that is not on its peer's tx_queue"
+  setPeer pid { p with txQueue }
   _ ← cpumaskChooseOnline pid
   -- queue_work_on(cpu, packet_crypt_wq, &peer->transmit_packet_work): a no-op
   -- while the work is pending
@@ -123,15 +124,13 @@ def enqueuePerDeviceAndPeer (pid : PeerId) (item : List DataPacket) : M Int := d
   -- `!wg_prev_queue_enqueue(peer_queue, skb)`: `atomic_add_unless(&count, 1,
   -- MAX_QUEUED_PACKETS)` (queueing.c, mirrored as its result)
   let p ← getPeer pid
-  if ← branch .enqueuePeerQueueFull (p.txQueue.length ≥ MAX_QUEUED_PACKETS) then return -ENOSPC
-  if !p.txQueue.isEmpty then unsupported "more than one item on a peer's tx_queue"
-  setPeer pid { p with txQueue := p.txQueue ++ [item] }
+  if ← branch .enqueuePeerQueueFull (p.txQueue.count ≥ MAX_QUEUED_PACKETS) then return -ENOSPC
+  setPeer pid { p with txQueue := p.txQueue.enqueue item }   -- W7: a multi-item queue
   let d ← getDev
   let cpu ← cpumaskNextOnlineFrom d.encryptLastCpu
   modifyDev fun d => { d with encryptLastCpu := cpu }
   -- `ptr_ring_produce_bh(&device_queue->ring, skb)` fails on a full ring
   if ← branch .enqueueRingFull (d.encryptQueue.length ≥ MAX_QUEUED_PACKETS) then return -EPIPE
-  if !d.encryptQueue.isEmpty then unsupported "more than one item in the encrypt queue"
   -- queue_work_on(cpu, wq, &per_cpu_ptr(device_queue->worker, cpu)->work):
   -- the environment runs the encrypt worker while its ring holds items
   modifyDev fun d => { d with encryptQueue := d.encryptQueue ++ [item] }

@@ -187,21 +187,21 @@ def createDataDone (pid : PeerId) (item : List DataPacket) : M Unit := do
     took. `needResched` as for `encryptWorker`. -/
 def txWorker (pid : PeerId) (needResched : M Bool) : M Unit := do
   for _ in [0:MAX_QUEUED_PACKETS + 1] do
-    -- wg_prev_queue_peek: `queue->peeked` is NULL (dropped after every
-    -- item, and never left set: see below)
-    _ ← branch .prevQueuePeeked false
-    let first := (← getPeer pid).txQueue.head?
-    -- `(first = peek) != NULL && (state = ...) != PACKET_STATE_UNCRYPTED`
+    -- `(first = wg_prev_queue_peek(&peer->tx_queue)) != NULL` (W7: the queue
+    -- as data; the peeked item stays across runs)
+    let (first, q) ← (← getPeer pid).txQueue.peek
+    setPeer pid { (← getPeer pid) with txQueue := q }
+    -- `&& (state = atomic_read_acquire(&PACKET_CB(first)->state)) != PACKET_STATE_UNCRYPTED`:
+    -- an UNCRYPTED head ends the run with the item peeked (send.c:269-272)
     let go ← andM (branch .txPacket first.isSome) do
       let some f := first | invariant "unreachable"
       let some h := f.head? | invariant "an empty ring item"
-      if h.state == .uncrypted then unsupported "the tx worker meets an uncrypted packet (it stays peeked)"
-      branch .txNotUncrypted true
+      branch .txNotUncrypted (h.state != .uncrypted)
     if !go then return
     let some item := first | invariant "unreachable"
     let some head := item.head? | invariant "an empty ring item"
     -- wg_prev_queue_drop_peeked
-    setPeer pid { (← getPeer pid) with txQueue := (← getPeer pid).txQueue.drop 1 }
+    setPeer pid { (← getPeer pid) with txQueue := (← getPeer pid).txQueue.dropPeeked }
     if ← branch .txCrypted (head.state == .crypted) then createDataDone pid item
     -- else kfree_skb_list(first)
     keypairPut (some head.keypair) false

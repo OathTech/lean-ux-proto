@@ -86,24 +86,6 @@ def decryptPacket (pkt : RxPacket) : M (Option RxPacket) := do
   if ← branch .decTrimFailed false then return none
   return some { pkt with nonce, bytes }
 
-/-- wg_queue_enqueue_per_peer_rx (queueing.h:193-203): a reference to the
-    packet's peer for the duration, the packet's state (the same skb is on
-    the peer's `rx_queue`), and `napi_schedule`. `irqExit` is the
-    environment's placement of an interrupt at `__napi_schedule`'s
-    `local_irq_restore`, whose exit may run the NET_RX just raised while
-    this function still holds its peer reference. -/
-def enqueuePerPeerRx (irqExit : M Unit) (pkt : RxPacket) (state : PacketState) : M Unit := do
-  let pid := (← getKeypair pkt.keypair).peer   -- PACKET_PEER(skb)
-  peerGet pid
-  let p ← getPeer pid
-  -- atomic_set_release(&PACKET_CB(skb)->state, state)
-  let some i := p.rxQueue.findIdx? (fun q => q.keypair == pkt.keypair && q.state == .uncrypted)
-    | invariant "a decrypted packet that is not on its peer's rx_queue"
-  -- napi_schedule: NAPI_STATE_SCHED, and NET_RX raised (a cut point)
-  setPeer pid { p with rxQueue := p.rxQueue.set i { pkt with state }, napiScheduled := true }
-  irqExit
-  peerPut (some pid)
-
 /-- wg_packet_decrypt_worker (receive.c:493-507): drains the decrypt queue.
     `softirq` is the environment's NET_RX placement (the NAPI poll the
     worker's `napi_schedule` raised, where the records put it), and
@@ -287,21 +269,21 @@ def rxPoll (pid : PeerId) (budget : Nat) (napiCompleteDone : List (List UInt8) �
   let mut gro : List (List UInt8) := []
   let mut drained := false
   for _ in [0:MAX_QUEUED_PACKETS + 1] do
-    -- wg_prev_queue_peek: `queue->peeked` is NULL (dropped after every packet)
-    _ ← branch .prevQueuePeeked false
-    let first := (← getPeer pid).rxQueue.head?
-    -- `(skb = peek) != NULL && (state = ...) != PACKET_STATE_UNCRYPTED`
+    -- `(skb = wg_prev_queue_peek(&peer->rx_queue)) != NULL` (W7: the queue as
+    -- data; an UNCRYPTED head stays peeked across polls)
+    let (first, q) ← (← getPeer pid).rxQueue.peek
+    setPeer pid { (← getPeer pid) with rxQueue := q }
+    -- `&& (state = atomic_read_acquire(&PACKET_CB(skb)->state)) != PACKET_STATE_UNCRYPTED`
     let go ← andM (branch .rxPollPacket first.isSome) do
       let some f := first | invariant "unreachable"
-      if f.state == .uncrypted then unsupported "the NAPI poll meets an uncrypted packet (it stays peeked)"
-      branch .rxPollNotUncrypted true
+      branch .rxPollNotUncrypted (f.state != .uncrypted)
     if !go then
       drained := true
       break
     let some pkt := first | invariant "unreachable"
     if pkt.peer != pid then invariant "a packet on another peer's rx_queue"
     -- wg_prev_queue_drop_peeked
-    setPeer pid { (← getPeer pid) with rxQueue := (← getPeer pid).rxQueue.drop 1 }
+    setPeer pid { (← getPeer pid) with rxQueue := (← getPeer pid).rxQueue.dropPeeked }
     let mut free := true
     if !(← branch .rxPollNotCrypted (pkt.state != .crypted)) then
       if !(← branch .rxPollCounterInvalid !(← counterValidate pkt.keypair pkt.nonce)) then

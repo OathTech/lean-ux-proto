@@ -1,4 +1,5 @@
 import Leanux.WG.Handshake
+import Leanux.WG.PrevQueue
 
 /-!
 # drivers/net/wireguard/receive.c — the receive path and the handshake worker
@@ -310,20 +311,36 @@ def enqueuePerDeviceAndPeerRx (pkt : RxPacket) : M Int := do
   let pkt := { pkt with state := .uncrypted }
   let p ← getPeer pkt.peer
   -- `!wg_prev_queue_enqueue(peer_queue, skb)`: the queue's count is at MAX_QUEUED_PACKETS
-  if ← branch .enqueuePeerQueueFull (p.rxQueue.length ≥ MAX_QUEUED_PACKETS) then
-    unsupported "a full rx_queue (-ENOSPC)"
-  if !p.rxQueue.isEmpty then unsupported "more than one packet on a peer's rx_queue"
-  setPeer pkt.peer { p with rxQueue := p.rxQueue ++ [pkt] }
+  if ← branch .enqueuePeerQueueFull (p.rxQueue.count ≥ MAX_QUEUED_PACKETS) then return -ENOSPC
+  setPeer pkt.peer { p with rxQueue := p.rxQueue.enqueue pkt }   -- W7: a multi-item queue
   let d ← getDev
   let cpu ← cpumaskNextOnlineFrom d.decryptLastCpu
   modifyDev fun d => { d with decryptLastCpu := cpu }
-  if ← branch .enqueueRingFull (d.decryptQueue.length ≥ MAX_QUEUED_PACKETS) then
-    unsupported "a full decrypt ring (-EPIPE)"
-  if !d.decryptQueue.isEmpty then unsupported "more than one item in the decrypt queue"
+  if ← branch .enqueueRingFull (d.decryptQueue.length ≥ MAX_QUEUED_PACKETS) then return -EPIPE
   -- queue_work_on(cpu, wq, &per_cpu_ptr(device_queue->worker, cpu)->work):
   -- the environment runs the decrypt worker while its ring holds packets
   modifyDev fun d => { d with decryptQueue := d.decryptQueue ++ [pkt] }
   return 0
+
+/-- wg_queue_enqueue_per_peer_rx (queueing.h:190-203): the packet's state is
+    published on its peer's `rx_queue` and the peer's NAPI scheduled. `irqExit`
+    is the environment's placement of an interrupt's exit at
+    `__napi_schedule`'s `local_irq_restore` (D2, (c')). W7: the packet may be
+    peeked (an UNCRYPTED head the poll stopped at) or queued; the oldest
+    still-UNCRYPTED packet of its keypair is the one the worker holds, since
+    both the ring and the queue are FIFO. -/
+def enqueuePerPeerRx (irqExit : M Unit) (pkt : RxPacket) (state : PacketState) : M Unit := do
+  let pid := (← getKeypair pkt.keypair).peer   -- PACKET_PEER(skb)
+  peerGet pid
+  let p ← getPeer pid
+  -- atomic_set_release(&PACKET_CB(skb)->state, state)
+  let some rxQueue := p.rxQueue.updateFirst (fun q => q.keypair == pkt.keypair && q.state == .uncrypted)
+      (fun _ => { pkt with state })
+    | invariant "a decrypted packet that is not on its peer's rx_queue"
+  -- napi_schedule: NAPI_STATE_SCHED, and NET_RX raised (a cut point)
+  setPeer pid { p with rxQueue, napiScheduled := true }
+  irqExit
+  peerPut (some pid)
 
 /-- wg_packet_consume_data (receive.c:509-540). The keypair (with its peer
     referenced by the lookup) and a keypair reference go with the skb to the
@@ -347,9 +364,12 @@ def consumeData (msg : List UInt8) (src : SkbSource) (ds : Nat) : M Unit := do
     keypairPut (some id) false
     peerPut peer
     return
-  let ret ← enqueuePerDeviceAndPeerRx { peer := pid, keypair := id, bytes := msg, source := src, ds }
-  -- `unlikely(ret == -EPIPE)`: wg_queue_enqueue_per_peer_rx(skb, PACKET_STATE_DEAD)
-  if ← branch .dataEpipe (ret == -EPIPE) then invariant "unreachable"
+  let pkt : RxPacket := { peer := pid, keypair := id, bytes := msg, source := src, ds }
+  let ret ← enqueuePerDeviceAndPeerRx pkt
+  -- `unlikely(ret == -EPIPE)`: wg_queue_enqueue_per_peer_rx(skb, PACKET_STATE_DEAD),
+  -- whose napi_schedule in this softirq is polled by the same net_rx_action
+  -- pass (W7, 5.2; the ring is full only on the 1024-item tier)
+  if ← branch .dataEpipe (ret == -EPIPE) then enqueuePerPeerRx (pure ()) pkt .dead
   -- `likely(!ret || ret == -EPIPE)`
   if ← orM (branch .dataEnqueueOk (ret == 0)) (branch .dataEnqueueOkEpipe (ret == -EPIPE)) then return
   invariant "unreachable"

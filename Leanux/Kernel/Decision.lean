@@ -213,6 +213,9 @@ inductive Decision where
   -- D1 stream C: drivers/net/wireguard/queueing.h
   | enqueuePeerQueueFull | enqueueRingFull | chooseCpuInvalid | chooseCpuOffline | chooseCpuIndexIterate
   | prevQueuePeeked
+  -- W7 stream B: drivers/net/wireguard/queueing.c, wg_prev_queue_dequeue
+  -- (docs/2026-10-06-w4-w7-transmit-bulk.md, 5.1: the queue as data)
+  | prevQueueTailIsStub | prevQueueStubEmpty | prevQueueMoreRemain | prevQueueTailNotHead | prevQueueRestubNext
   -- D2 stream B: drivers/net/wireguard/receive.c (data messages: consume_data,
   -- the decrypt worker, counter_validate, the NAPI poll, consume_data_done,
   -- the receive side of keep_key_fresh)
@@ -378,6 +381,7 @@ private def wtm := "drivers/net/wireguard/timers.c"
 private def wdv := "drivers/net/wireguard/device.c"
 private def wsd := "drivers/net/wireguard/send.c"
 private def wqh := "drivers/net/wireguard/queueing.h"
+private def wqc := "drivers/net/wireguard/queueing.c"
 private def vlh := "include/linux/if_vlan.h"
 private def iph := "include/net/ip_tunnels.h"
 private def ech := "include/net/inet_ecn.h"
@@ -1115,6 +1119,18 @@ def Decision.info : Decision → DecisionInfo
   | .chooseCpuOffline => d "wg_cpumask_choose_online.cpu_offline" wqh 110 [] []
   | .chooseCpuIndexIterate => d "wg_cpumask_choose_online.index_iterate" wqh 113 [(114, 114)] []
   | .prevQueuePeeked => d "wg_prev_queue_peek.peeked" wqh 145 [(146, 146)] [(147, 148)]
+  -- W7 stream B: wg_prev_queue_dequeue (queueing.c:80-106). The two
+  -- `queue->tail = next; atomic_dec(&queue->count); return tail;` blocks
+  -- (92-94 and 101-103) are one block in the build (tail merging), attributed
+  -- to 101-103 and reached from both `if (next)` arms, so neither true arm
+  -- has witness lines of its own: `more_remain` true is the absence of 96,
+  -- `restub_next` true the absence of 105 (observed on w7_multi_rx_2: the
+  -- first dequeue, with an item after the tail, covered 101-103).
+  | .prevQueueTailIsStub => d "wg_prev_queue_dequeue.tail_is_stub" wqc 84 [(85, 89)] []
+  | .prevQueueStubEmpty => d "wg_prev_queue_dequeue.stub_empty" wqc 85 [(86, 86)] [(87, 89)]
+  | .prevQueueMoreRemain => d "wg_prev_queue_dequeue.more_remain" wqc 91 [] [(96, 96)]
+  | .prevQueueTailNotHead => d "wg_prev_queue_dequeue.tail_not_head" wqc 96 [(97, 97)] [(98, 99)]
+  | .prevQueueRestubNext => d "wg_prev_queue_dequeue.restub_next" wqc 100 [] [(105, 105)]
   -- D2 stream B: wg_packet_consume_data (receive.c:509-540). The `goto err`
   -- targets are shared with other exits.
   | .dataPeerDead => d "wg_packet_consume_data.peer_dead" wrc 523 [(524, 524)] [(526, 527)]
@@ -1858,6 +1874,8 @@ def Decision.repeatable : Decision → Bool
   | .freshKeypair | .freshValid | .freshCounter | .freshInitiator | .freshExpired | .freshSend
   | .enqueuePeerQueueFull | .enqueueRingFull | .chooseCpuInvalid | .chooseCpuOffline | .chooseCpuIndexIterate
   | .prevQueuePeeked | .cpumaskWrap
+  -- W7 stream B: one dequeue per item of a multi-item queue
+  | .prevQueueTailIsStub | .prevQueueStubEmpty | .prevQueueMoreRemain | .prevQueueTailNotHead | .prevQueueRestubNext
   -- D2 stream B: the loops of the decrypt worker, the NAPI poll and
   -- counter_validate
   | .decWorkerConsumed | .decWorkerDecrypted | .decWorkerNeedResched

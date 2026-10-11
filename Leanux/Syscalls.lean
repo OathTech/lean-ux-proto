@@ -55,6 +55,9 @@ inductive Syscall where
   /-- E-B: an io_uring flood to wg0's `port`: `count` invalid-MAC1 initiations
       with `messages` valid-MAC1 initiations submitted first. -/
   | wgFlood (count port : Nat) (messages : List (List UInt8))
+  /-- W7: `items` submitted as one io_uring batch; the guest waits `waitMs`
+      after it (docs/2026-10-06-w4-w7-transmit-bulk.md, 5.5). -/
+  | wgBatch (items : List Env.BatchItem) (waitMs : Nat)
   /-- D3: `ioctl(3, KCOV_LEANUX_TIME_ADVANCE, &ticks)` on the trace's KCOV
       descriptor, then the guest's wait (docs/2026-10-05-d3-timers.md, 4.3). -/
   | wgAdvance (ticks : Nat)
@@ -179,6 +182,9 @@ def dispatch : Syscall → M Int
   | .wgSetMtu mtu => socketCallOn SENDER_FD (Env.setMtu mtu)
   | .wgInject family port message => socketCallOn SENDER_FD (Env.inject family port message)
   | .wgFlood count port messages => Env.flood count port messages
+  -- W7: the io_uring submission's descriptor plumbing (the ring's fdget, each
+  -- send's fget of the sender) is the fixture's, as the flood's is: not modeled
+  | .wgBatch items _ => Env.batch items
   | .wgObserve => socketCallOn LISTEN4_FD do
     let (ret, observed) ← Env.observe
     modify fun w => { w with extraOut := ["datagrams", "replies", "stats"].map fun k => (k, observed.getObjValD k) }
@@ -224,6 +230,7 @@ def syscall (call : Syscall) : M Int := do
   match call with
   | .wgSet _ | .wgUp | .wgInject .. => Env.runSendWorkers; Env.idleTimers
   | .wgXmit .. => Env.afterXmit; Env.idleTimers
+  | .wgBatch .. => Env.idleTimers   -- W7: the batch runs its queued units itself
   -- D3: the guest waits after the advance; the next tick runs the due timers
   | .wgAdvance _ => Env.afterAdvance
   | _ => pure ()

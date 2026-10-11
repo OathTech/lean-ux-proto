@@ -127,6 +127,7 @@ struct fixture_route { unsigned family; unsigned char dst[16]; unsigned mtu; };
  * A PLACEHOLDER code (the design's OP_SET_MTU) until the coordinator
  * allocates it; 20-24 are reserved for W2 and W8/W9 (harness/trace.py). */
 #define OP_WG_SET_MTU 25
+#define OP_WG_BATCH 26
 /* 20-24 are reserved for the W streams (harness/trace.py RESERVED_OPCODES,
  * docs/2026-10-11-interface.md): 20 wg_get_start and 21 wg_get_recv (W2),
  * 22 wg_netns_close (W8), 23 wg_deladdr and 24 wg_delroute (W9). No define
@@ -1079,6 +1080,116 @@ static void flood_cleanup(struct flood_state *fs)
     close(fs->ring);
 }
 
+/* W7 stream B (docs/2026-10-06-w4-w7-transmit-bulk.md, 5.5): wg_batch, one
+ * io_uring_enter of up to BATCH_MAX sends from SEND_FD: injects to wg0's
+ * port (v4-mapped 127.0.0.1 or ::1, as wg_inject) and transmits into wg0
+ * (the 16-byte destination then the payload, as wg_xmit's wire), prepared
+ * before the window as the flood is. The completions present when
+ * io_uring_enter returns are the operation's cqes (LEANUX_WGBATCH, the PC
+ * child): the send's result per item, or null. The wire payload is per item
+ * kind(1: inject, 2: xmit) ‖ length(2, big-endian) ‖ body. */
+#define BATCH_MAX 1025
+struct batch_state {
+    int ring;
+    void *sq, *cq;
+    struct io_uring_sqe *sqes;
+    size_t sqsz, sqesz, cqsz;
+    unsigned *ktail, submit, n;
+    unsigned *cqhead, *cqtail, cqmask;
+    struct io_uring_cqe *cqes;
+    struct sockaddr_in6 dst[BATCH_MAX];
+    long res[BATCH_MAX];
+    unsigned char present[BATCH_MAX];
+};
+static struct batch_state batch;
+
+static int batch_prep(struct batch_state *bs, const unsigned char *payload, size_t len)
+{
+    static const unsigned char *body[BATCH_MAX];
+    static unsigned blen[BATCH_MAX];
+    static unsigned char kind[BATCH_MAX];
+    memset(bs, 0, sizeof(*bs));
+    size_t pos = 0;
+    unsigned n = 0;
+    while (pos < len) {
+        if (pos + 3 > len || n >= BATCH_MAX) return -1;
+        unsigned k = payload[pos], l = ((unsigned)payload[pos + 1] << 8) | payload[pos + 2];
+        if (pos + 3 + l > len) return -2;
+        kind[n] = (unsigned char)k; body[n] = payload + pos + 3; blen[n] = l; n++;
+        pos += 3 + l;
+    }
+    if (!n) return -3;
+    struct io_uring_params pp; memset(&pp, 0, sizeof(pp));
+    bs->ring = syscall(SYS_io_uring_setup, n, &pp);
+    if (bs->ring < 0) return -4;
+    if (n > pp.sq_entries) { close(bs->ring); return -5; }
+    bs->sqsz = pp.sq_off.array + pp.sq_entries * sizeof(unsigned);
+    bs->sqesz = pp.sq_entries * sizeof(struct io_uring_sqe);
+    bs->cqsz = pp.cq_off.cqes + pp.cq_entries * sizeof(struct io_uring_cqe);
+    bs->sq = mmap(0, bs->sqsz, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, bs->ring, IORING_OFF_SQ_RING);
+    bs->sqes = mmap(0, bs->sqesz, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, bs->ring, IORING_OFF_SQES);
+    bs->cq = mmap(0, bs->cqsz, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, bs->ring, IORING_OFF_CQ_RING);
+    if (bs->sq == MAP_FAILED || bs->sqes == MAP_FAILED || bs->cq == MAP_FAILED) { close(bs->ring); return -6; }
+    bs->ktail = (unsigned *)((char *)bs->sq + pp.sq_off.tail);
+    unsigned *karray = (unsigned *)((char *)bs->sq + pp.sq_off.array);
+    unsigned mask = *(unsigned *)((char *)bs->sq + pp.sq_off.ring_mask);
+    bs->cqhead = (unsigned *)((char *)bs->cq + pp.cq_off.head);
+    bs->cqtail = (unsigned *)((char *)bs->cq + pp.cq_off.tail);
+    bs->cqmask = *(unsigned *)((char *)bs->cq + pp.cq_off.ring_mask);
+    bs->cqes = (struct io_uring_cqe *)((char *)bs->cq + pp.cq_off.cqes);
+    bs->submit = bs->n = n;
+    for (unsigned i = 0; i < n; i++) {
+        struct sockaddr_in6 *d = &bs->dst[i];
+        memset(d, 0, sizeof(*d));
+        d->sin6_family = AF_INET6;
+        struct io_uring_sqe *e = &bs->sqes[i]; memset(e, 0, sizeof(*e));
+        e->opcode = IORING_OP_SEND; e->fd = SEND_FD; e->user_data = i;
+        e->addr2 = (unsigned long)d; e->addr_len = sizeof(*d);
+        if (kind[i] == 1) {   /* inject: family(1) ‖ port(2) ‖ message */
+            if (blen[i] < 4) return -7;
+            unsigned family = body[i][0], port = ((unsigned)body[i][1] << 8) | body[i][2];
+            d->sin6_port = htons((uint16_t)port);
+            if (family == 4) {
+                d->sin6_addr.s6_addr[10] = d->sin6_addr.s6_addr[11] = 0xff;
+                d->sin6_addr.s6_addr[12] = 127; d->sin6_addr.s6_addr[15] = 1;
+            } else d->sin6_addr.s6_addr[15] = 1;
+            e->addr = (unsigned long)(body[i] + 3); e->len = blen[i] - 3;
+        } else if (kind[i] == 2) {   /* xmit: the destination, then the payload */
+            if (blen[i] <= sizeof(d->sin6_addr)) return -8;
+            d->sin6_port = htons(SEND_PORT);
+            memcpy(&d->sin6_addr, body[i], sizeof(d->sin6_addr));
+            e->addr = (unsigned long)(body[i] + sizeof(d->sin6_addr)); e->len = blen[i] - sizeof(d->sin6_addr);
+        } else return -9;
+        karray[i & mask] = i;
+    }
+    return 0;
+}
+
+static long batch_enter(struct batch_state *bs)
+{
+    __atomic_store_n(bs->ktail, bs->submit, __ATOMIC_RELEASE);
+    long r = syscall(SYS_io_uring_enter, bs->ring, bs->submit, 0, 0, 0, 0);
+    int saved = errno;
+    /* the completions present at the return, each at its item (user_data) */
+    unsigned head = *bs->cqhead, tail = __atomic_load_n(bs->cqtail, __ATOMIC_ACQUIRE);
+    while (head != tail) {
+        struct io_uring_cqe *c = &bs->cqes[head & bs->cqmask];
+        if (c->user_data < bs->n) { bs->res[c->user_data] = c->res; bs->present[c->user_data] = 1; }
+        head++;
+    }
+    __atomic_store_n(bs->cqhead, head, __ATOMIC_RELEASE);
+    errno = saved;
+    return r;
+}
+
+static void batch_cleanup(struct batch_state *bs)
+{
+    munmap(bs->cq, bs->cqsz);
+    munmap(bs->sqes, bs->sqesz);
+    munmap(bs->sq, bs->sqsz);
+    close(bs->ring);
+}
+
 static void execute(const struct trace *t, int input_fd, int comparisons)
 {
     fixture_routes = t->routes;   /* W4: for route_into_wg0 at every wg_up */
@@ -1182,7 +1293,8 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         if (op->code == OP_READ) memset(read_buffer, 0xa5, op->a);
         if (op->code == OP_WRITE) fill_write_buffer(i, op->value, op->a);
         int pipe_fds[2] = {-1, -1};
-        if (((op->code >= OP_WG_UP && op->code <= OP_WG_INJECT) || IS_LIFECYCLE_OP(op->code) || op->code == OP_WG_SET_MTU) && !t->net)
+        if (((op->code >= OP_WG_UP && op->code <= OP_WG_INJECT) || IS_LIFECYCLE_OP(op->code) || op->code == OP_WG_SET_MTU
+             || op->code == OP_WG_BATCH) && !t->net)
             fail(t->id, i, "invalid_input", "wireguard_without_network_fixture");
         /* wg_up and wg_down: the flags are read before the window; without
          * a device (L) they are 0 and the SIOCSIFFLAGS reports ENODEV.
@@ -1239,12 +1351,19 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
          * the window (their inode/fd setup draws non-WireGuard clock records);
          * only io_uring_enter runs in the window. */
         struct flood_state flood;
-        int flood_ready = 0;
+        int flood_ready = 0, batch_ready = 0;
         if (op->code == OP_WG_FLOOD) {
             if (!t->net) fail(t->id, i, "invalid_input", "wireguard_without_network_fixture");
             if (flood_prep(&flood, (unsigned)op->b, (unsigned)op->a, op->payload, op->payload_len))
                 fail(t->id, i, "environment_failure", "flood_prepare");
             flood_ready = 1;
+        }
+        /* W7: the batch's ring and SQEs likewise, before the window */
+        if (op->code == OP_WG_BATCH) {
+            int prep = batch_prep(&batch, op->payload, op->payload_len);
+            if (prep) { char why[32]; snprintf(why, sizeof(why), "batch_prepare_%d_errno_%d", -prep, errno); fail(t->id, i, "invalid_input", why); }
+            if (batch.n != (unsigned)op->a) fail(t->id, i, "invalid_input", "batch_prepare_count");
+            batch_ready = 1;
         }
         /* before the coverage window: the clock the advance's wait watches */
         struct timespec before_advance = {0};
@@ -1382,6 +1501,12 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             ret = flood_enter(&flood);
             break;
         }
+        case OP_WG_BATCH: {
+            /* W7: submit the prepared batch (op->a items); the completions
+             * present at the return are reported as the operation's cqes. */
+            ret = batch_enter(&batch);
+            break;
+        }
         case OP_WG_CREATE: case OP_WG_DELETE: {
             /* L: RTM_NEWLINK (wg_newlink, register_netdevice) or RTM_DELLINK
              * (unregister, netdev_run_todo, wg_destruct), both complete
@@ -1413,6 +1538,19 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
          * (the packets are already queued in wg0; the worker drains them in the
          * post-op wait regardless) so the fd teardown is outside the window. */
         if (flood_ready) flood_cleanup(&flood);
+        /* W7: the batch's completions, reported outside the window (a console
+         * write inside it would add the tty's path to the coverage) */
+        if (batch_ready) {
+            if (!comparisons) {
+                printf("LEANUX_WGBATCH {\"id\":\"%s\",\"index\":%u,\"cqes\":[", t->id, i);
+                for (unsigned j = 0; j < batch.n; ++j) {
+                    if (batch.present[j]) printf("%s%ld", j ? "," : "", batch.res[j]);
+                    else printf("%snull", j ? "," : "");
+                }
+                printf("]}\n");
+            }
+            batch_cleanup(&batch);
+        }
         if (IS_LIFECYCLE_OP(op->code)) {
             if (clock_gettime(CLOCK_MONOTONIC, &op_finished)) fail(t->id, i, "environment_failure", "timing_clock");
             printf("LEANUX_TIMING {\"id\":\"%s\",\"index\":%u,\"mode\":\"%s\",\"op\":%u,\"ns\":%lld}\n", t->id, i,
@@ -1465,6 +1603,10 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
          * wait short: the following injection must reach the worker within the
          * one-second last_under_load decay (§4.1). */
         if (op->code == OP_WG_FLOOD) usleep(QUEUE_WAIT_US);
+        /* W7: the batch's wait (op->b ms, the trace's wait_ms), in which the
+         * kworkers run what it queued; a worker outliving it shows as missing
+         * section records */
+        if (op->code == OP_WG_BATCH) usleep((useconds_t)op->b * 1000);
         if (op->code == OP_WG_ADVANCE) {
             /* An advance that fails is not a trace operation the mirror can
              * follow: fail the trace. Then wait for the tick that absorbs the
@@ -1711,7 +1853,8 @@ int main(int argc, char **argv)
                 &consumed) != 9 || op->pause_ms > PAUSE_MS_MAX || op->kind > 3 || op->newkind > 3)
                 fail(trace.id, i, "invalid_input", "wire_operation");
             op->payload_len = 0;
-            if (op->code == OP_WG_SET || op->code == OP_WG_GET || op->code == OP_WG_XMIT || op->code == OP_WG_INJECT || op->code == OP_WG_FLOOD) {
+            if (op->code == OP_WG_SET || op->code == OP_WG_GET || op->code == OP_WG_XMIT || op->code == OP_WG_INJECT || op->code == OP_WG_FLOOD
+                || op->code == OP_WG_BATCH) {
                 /* A WireGuard operation carries its attribute payload as hex. */
                 const char *hex = line + consumed;
                 if (*hex++ != ' ') fail(trace.id, i, "invalid_input", "wire_payload");
