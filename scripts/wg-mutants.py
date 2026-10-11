@@ -421,10 +421,14 @@ L_MUTANTS = [
 # one-line pattern: the reply runs inside the poll's napiCompleteDone by
 # construction (Env/Stack.lean reply4); listed as pending [AGENT, W5+W6 fork].
 W56_MUTANTS = [
-  ('W5-M1-set-ce-on-not-ect', 'rewrite: set_ce applied when the inner is not-ECT (the rc-nonzero arm rewrites)',
-   'Leanux/WG/RxData.lean',
-   "    if !(← branch .ecnDecapOuterNotEct (outer % 4 == 0)) then\n      rc := if outer % 4 == 3 then 2 else 1\n",
-   "    if !(← branch .ecnDecapOuterNotEct (outer % 4 == 0)) then\n      setCe := outer % 4 == 3\n", 'w5_'),
+  # The design's M1 ("set_ce applied when the inner is not-ECT") is doubly
+  # guarded in the C: IP_ECN_set_ce / IP6_ECN_set_ce return without a change
+  # for a not-ECT inner, so taking the rc-nonzero arm into set_ce is a no-op
+  # (it survived, run 1). Replaced by the outer test itself [AGENT, W5+W6 fork].
+  ('W5-M1-set-ce-on-any-ect-outer', 'rewrite: INET_ECN_is_ce(outer) read as INET_ECN_is_capable: set_ce for an '
+   'ECT(0) or ECT(1) outer too', 'Leanux/WG/RxData.lean',
+   "  else setCe := outer % 4 == 3   -- INET_ECN_is_ce(outer)\n",
+   "  else setCe := outer % 4 != 0   -- INET_ECN_is_ce(outer)\n", 'w5_'),
   ('W5-M2-set-ect1-on-ect1', 'rewrite: set_ect1 applied to ECT(1) too', 'Leanux/WG/RxData.lean',
    "  if ← branch .ipEcnSetEct1NotEct0 (tos % 4 != 2) then return bytes\n",
    "  if ← branch .ipEcnSetEct1NotEct0 (tos % 4 == 0) then return bytes\n", 'w5_'),
