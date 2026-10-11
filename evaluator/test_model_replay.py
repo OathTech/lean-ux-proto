@@ -210,10 +210,10 @@ class DispatchOrder(unittest.TestCase):
         self.assertIn('was never queued', out or '')
 
     def test_missing_queue_records_are_a_hidden_mismatch(self):
-        # queued units without their records: the count check
+        # a queue without its record: the mirror consumes one where the C queues
         trace = copy.deepcopy(S2_B_FIRST)
         trace['hidden'][1] = [r for r in trace['hidden'][1] if r[0] != 300]
-        self.assertIn('queue records for 2 queued units', replay(trace) or '')
+        self.assertIn('expected queued:wg_packet_handshake_send_worker', replay(trace) or '')
 
 
 if __name__ == '__main__':

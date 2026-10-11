@@ -111,7 +111,7 @@ def condResched : Nat → Worker → M Unit → M Bool
         let d ← getDev
         let some headPid := d.txWorkQueue.head? | break
         let pid ← match ← peekUnit .txWorker with
-          | some u => resolveUnit .txWorker u d.txWorkQueue d.peerList
+          | some u => resolveUnit .txWorker u d.txWorkQueue
           | none => pure headPid
         modifyDev fun d => { d with txWorkQueue := d.txWorkQueue.erase pid }
         runWorker .txWorker (WG.txWorker pid (condResched fuel .txWorker runDecrypt)) (some pid)

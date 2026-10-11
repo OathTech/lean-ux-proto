@@ -60,6 +60,7 @@ def sendQueuedHandshakeInitiation (pid : PeerId) (isRetry : Bool) : M Unit := do
     peerPut (some pid)
     return
   setPeer pid { (← getPeer pid) with handshakePending := true }
+  recordQueued .sendWorker pid   -- queue_work's record (dispatch order)
   modifyDev fun d => { d with sendWorkQueue := d.sendWorkQueue ++ [pid] }
   modify fun w => { w with queuedThisCall := pid :: w.queuedThisCall }
 
@@ -111,8 +112,10 @@ def enqueuePerPeerTx (item : List DataPacket) (state : PacketState) : M Unit := 
   setPeer pid { p with txQueue }
   _ ← cpumaskChooseOnline pid
   -- queue_work_on(cpu, packet_crypt_wq, &peer->transmit_packet_work): a no-op
-  -- while the work is pending
+  -- while the work is pending (queued, not yet started); otherwise queued,
+  -- with its record (dispatch order)
   if !(← getDev).txWorkQueue.contains pid then
+    recordQueued .txWorker pid
     modifyDev fun d => { d with txWorkQueue := d.txWorkQueue ++ [pid] }
   peerPut (some pid)
 
@@ -132,7 +135,9 @@ def enqueuePerDeviceAndPeer (pid : PeerId) (item : List DataPacket) : M Int := d
   -- `ptr_ring_produce_bh(&device_queue->ring, skb)` fails on a full ring
   if ← branch .enqueueRingFull (d.encryptQueue.length ≥ MAX_QUEUED_PACKETS) then return -EPIPE
   -- queue_work_on(cpu, wq, &per_cpu_ptr(device_queue->worker, cpu)->work):
-  -- the environment runs the encrypt worker while its ring holds items
+  -- queued iff not pending, with its record (dispatch order); the
+  -- environment runs the encrypt worker while its ring holds items
+  queueDeviceWork .encryptWorker
   modifyDev fun d => { d with encryptQueue := d.encryptQueue ++ [item] }
   return 0
 

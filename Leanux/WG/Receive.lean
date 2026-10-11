@@ -318,7 +318,9 @@ def enqueuePerDeviceAndPeerRx (pkt : RxPacket) : M Int := do
   modifyDev fun d => { d with decryptLastCpu := cpu }
   if ← branch .enqueueRingFull (d.decryptQueue.length ≥ MAX_QUEUED_PACKETS) then return -EPIPE
   -- queue_work_on(cpu, wq, &per_cpu_ptr(device_queue->worker, cpu)->work):
-  -- the environment runs the decrypt worker while its ring holds packets
+  -- queued iff not pending, with its record (dispatch order); the
+  -- environment runs the decrypt worker while its ring holds packets
+  queueDeviceWork .decryptWorker
   modifyDev fun d => { d with decryptQueue := d.decryptQueue ++ [pkt] }
   return 0
 
@@ -404,7 +406,9 @@ def packetReceive (msg : List UInt8) (src : SkbSource) : M Unit := do
     if ← branch .rxProduceFailed (queueLen ≥ MAX_QUEUED_INCOMING_HANDSHAKES) then return   -- drop
     modifyDev fun d => { d with handshakeQueue := d.handshakeQueue ++ [(msg, src)] }
     cpumaskNextOnline
-    -- queue_work_on(cpu, handshake_receive_wq, ...): the environment runs the worker
+    -- queue_work_on(cpu, handshake_receive_wq, ...): queued iff not pending,
+    -- with its record (dispatch order); the environment runs the worker
+    queueDeviceWork .receiveWorker
     return
   if ← branch .rxData (t == MESSAGE_DATA) then
     -- `PACKET_CB(skb)->ds = ip_tunnel_get_dsfield(ip_hdr(skb), skb)` (its

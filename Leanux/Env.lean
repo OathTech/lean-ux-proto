@@ -150,7 +150,7 @@ def runCryptWorkers (runDecrypt : M Unit := unsupported "a switch to the decrypt
     | some headPid =>
       -- the tx worker the dispatch record names (dispatch order), else the head
       let pid ← match ← peekUnit .txWorker with
-        | some u => resolveUnit .txWorker u d.txWorkQueue d.peerList
+        | some u => resolveUnit .txWorker u d.txWorkQueue
         | none => pure headPid
       modifyDev fun d => { d with txWorkQueue := d.txWorkQueue.erase pid }
       runWorker .txWorker (WG.txWorker pid (condResched SWITCH_DEPTH .txWorker runDecrypt)) (some pid)
@@ -174,7 +174,7 @@ def runOneSendWorker : M Unit := do
   let d ← getDev
   let some headPid := d.sendWorkQueue.head? | invariant "no queued handshake send work"
   let pid ← match ← peekUnit .sendWorker with
-    | some u => resolveUnit .sendWorker u d.sendWorkQueue d.peerList
+    | some u => resolveUnit .sendWorker u d.sendWorkQueue
     | none => pure headPid
   modifyDev fun d => { d with sendWorkQueue := d.sendWorkQueue.erase pid }
   let p ← getPeer pid
@@ -257,7 +257,7 @@ def runOneClearWorker : M Unit := do
   let d ← getDev
   let some headPid := d.clearWorkQueue.head? | invariant "no queued clear work"
   let pid ← match ← peekUnit .clearPeerWorker with
-    | some u => resolveUnit .clearPeerWorker u d.clearWorkQueue d.peerList
+    | some u => resolveUnit .clearPeerWorker u d.clearWorkQueue
     | none => pure headPid
   modifyDev fun d => { d with clearWorkQueue := d.clearWorkQueue.erase pid }
   runWorker .clearPeerWorker (WG.queuedExpiredZeroKeyMaterial pid)
@@ -691,7 +691,11 @@ def flood (count port : Nat) (messages : List (List UInt8)) : M Int := do
   let startRx := (HiddenSite.sectionStart .netRx).info.id
   let stopRx := (HiddenSite.sectionStop .netRx).info.id
   let cuts := [startRx, stopRx, (HiddenSite.ipIdentKey).info.id, (HiddenSite.ipIdentReserve).info.id,
-               (HiddenSite.flowHashSecret).info.id, (HiddenSite.udpPortDraw).info.id]
+               (HiddenSite.flowHashSecret).info.id, (HiddenSite.udpPortDraw).info.id,
+               -- the first flood packet's `queue_work_on` of the receive work
+               -- (dispatch order): its record sits in that packet's `net_rx`
+               -- section; the mirror fills `handshakeQueue` below instead
+               (HiddenSite.queued .receiveWorker).info.id]
   -- before the receive worker runs: the fixture's io_uring sends' producer
   -- `net_rx` sections and IP-layer cut draws
   let _ ← discardFloodRecords startW cuts

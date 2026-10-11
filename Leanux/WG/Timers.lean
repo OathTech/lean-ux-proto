@@ -61,6 +61,7 @@ def expiredZeroKeyMaterial (pid : PeerId) : M Unit := do
     if ← branch .zeroKeyAlreadyQueued ((← getDev).clearWorkQueue.contains pid) then
       peerPut (some pid)
     else
+      recordQueued .clearPeerWorker pid   -- queue_work's record (dispatch order)
       modifyDev fun d => { d with clearWorkQueue := d.clearWorkQueue ++ [pid] }
 
 /-- wg_expired_send_persistent_keepalive (timers.c:135-142). -/
