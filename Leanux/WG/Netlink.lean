@@ -1,5 +1,4 @@
-import Leanux.WG.Send
-import Leanux.WG.Socket
+import Leanux.WG.PeerRemove
 import Lean.Data.Json
 
 /-!
@@ -65,11 +64,6 @@ structure DeviceAttrs where
   peers : Option (List PeerAttrs) := none
   deriving Repr
 
-/-- Short-circuit `&&` and `||` over decisions: the right operand runs only
-    when the left does not decide. -/
-def andM (a b : M Bool) : M Bool := do if ← a then b else pure false
-def orM (a b : M Bool) : M Bool := do if ← a then pure true else b
-
 /-- lookup_interface (netlink.c:52-73) for the harness's `WGDEVICE_A_IFNAME`
     of the fixture's device. -/
 def lookupInterface : M (Except Int Unit) := do
@@ -84,12 +78,6 @@ def lookupInterface : M (Except Int Unit) := do
       (branch .lookupKindMismatch false)) then
     return .error (-EOPNOTSUPP)
   return .ok ()
-
-/-- wg_socket_clear_peer_endpoint_src (socket.c:308-314): zeroes `src6`,
-    which overlays `src4` and `src_if4`. -/
-def clearPeerEndpointSrc (pid : PeerId) : M Unit := do
-  let p ← getPeer pid
-  setPeer pid { p with endpoint := p.endpoint.map fun e => { e with src := 0, srcIf := 0 } }
 
 /-- set_port (netlink.c:314-327). -/
 def setPort (port : Nat) : M Int := do
@@ -115,30 +103,6 @@ def setAllowedip (pid : PeerId) (ip : AllowedIpAttrs) : M Int := do
       (andM (branch .aipV6Cidr (ip.cidr ≤ 128)) (branch .aipV6Len (ip.addrLen == 16))) then
     return ← insert 6 ip.addr ip.cidr pid
   return -EINVAL
-
-/-- endpoint_eq (socket.c:258-271). -/
-def endpointEq (a : Endpoint) (b : Option Endpoint) : M Bool := do
-  let fb := b.map (·.family) |>.getD 0
-  let field (f : Endpoint → Nat) := b.any fun e => f e == f a
-  let v4 ← andM (branch .eqA4 (a.family == AF_INET)) (andM (branch .eqB4 (fb == AF_INET))
-    (andM (branch .eqPort4 (field (·.port))) (andM (branch .eqAddr4 (field (·.addr)))
-      (andM (branch .eqSrc4 (field (·.src))) (branch .eqSrcIf4 (field (·.srcIf)))))))
-  if v4 then return true
-  let v6 ← andM (branch .eqA6 (a.family == AF_INET6)) (andM (branch .eqB6 (fb == AF_INET6))
-    (andM (branch .eqPort6 (field (·.port))) (andM (branch .eqAddr6 (field (·.addr)))
-      (andM (branch .eqScope6 (field (·.scope))) (branch .eqSrc6 (field (·.src)))))))
-  if v6 then return true
-  andM (branch .eqANone (a.family == 0)) (branch .eqBNone (fb == 0))
-
-/-- wg_socket_set_peer_endpoint (socket.c:273-297); `dst_cache_reset` is a
-    cut point. -/
-def setPeerEndpoint (pid : PeerId) (e : Endpoint) : M Unit := do
-  requireNotPending pid "changing the endpoint"
-  if ← branch .setEndpointEq (← endpointEq e (← getPeer pid).endpoint) then return
-  if ← branch .setEndpointV4 (e.family == AF_INET) then
-    setPeer pid { (← getPeer pid) with endpoint := some e }
-  else if ← branch .setEndpointV6 (e.family == AF_INET6) then
-    setPeer pid { (← getPeer pid) with endpoint := some e }
 
 /-- set_peer (netlink.c:357-491). -/
 def setPeerCmd (a : PeerAttrs) : M Int := do

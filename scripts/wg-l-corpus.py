@@ -69,6 +69,25 @@ def set_device(**config):
     return {"op": "wg_set", "config": config}
 
 
+# W3: a second peer, and the two entries of the queue-then-remove message.
+PEER_Y = b"\x33" * 32
+
+
+def W3_KEEPALIVE(private):
+    return {"public_key": d1.key(noise.public_key(private)), "keepalive": 25}
+
+
+def W3_REMOVE(private):
+    return {"public_key": d1.key(noise.public_key(private)), "remove": True}
+
+
+def configure_two():
+    """wg0 with two keyless peers at the listener (allowed IPs 10/8 and 11/8)."""
+    y = {"public_key": d1.key(noise.public_key(PEER_Y)),
+         "allowed_ips": [{"family": 4, "addr": "0b000000", "cidr": 8}], "endpoint": LISTENER}
+    return {"op": "wg_set", "config": {"private_key": d1.key(DEVICE), "listen_port": PORT, "peers": [peer(), y]}}
+
+
 def inject(message, port=PORT, family=4):
     return {"op": "wg_inject", "family": family, "port": port, "message": message.hex()}
 
@@ -167,6 +186,36 @@ def traces():
                                DELETE, GET, XMIT, OBSERVE], d1.steer_initiation(), SESSION),
         # Delete the fixture's wg0 and create another (ifindex 4), then a
         # session on it.
+        # W3 (docs/2026-10-06-w3-w12.md, Part I): one message queues the
+        # peer's handshake work (entry A sets the persistent keepalive on
+        # the up device: a staged keepalive, no keypair, the initiation
+        # queued; netlink.c:482's second send finds it already queued) and
+        # removes the peer (entry B, REMOVE_ME): the flush in
+        # peer_remove_after_dead runs the queued worker inside this call,
+        # after is_dead is set, so the initiation goes out (steered,
+        # byte-exact) but mod_peer_timer's guard fails (alive=0, no arm
+        # record); the staged keepalive is purged at the release
+        # (tx_dropped 1); the dump has no peer.
+        "l_w3_remove_queued": (None, [configure(), UP, set_device(peers=[W3_KEEPALIVE(PEER), W3_REMOVE(PEER)]),
+                                      OBSERVE, GET],
+                               d1.steer_initiation(),
+                               ["set_peer.remove_me=1", "wg_packet_send_queued_handshake_initiation.already_queued=1",
+                                "wg_packet_send_staged_packets.no_keypair=1", "mod_peer_timer.alive=0"]),
+        # The control: the same remove with nothing queued: no section, no
+        # datagram, tx_dropped 0 (unsteered, so no `expect`: the remove_me
+        # outcome is checked by coverage).
+        "l_w3_remove_only": (None, [configure(), UP, set_device(peers=[W3_REMOVE(PEER)]), OBSERVE, GET], None, None),
+        # Two peers X and Y; entries queue X's then Y's work, then remove Y:
+        # the flush_workqueue at peer.c:129 drains both, in the order the
+        # dispatch records show (the draws steer whichever worker runs
+        # first). X's initiation arms its timers (alive=1, two arm records),
+        # Y's arms none (alive=0); two datagrams; tx_dropped 1 (Y's staged
+        # keepalive; X's stays staged); the dump shows X alone.
+        "l_w3_remove_drains_other": (
+            None, [configure_two(), UP, set_device(peers=[W3_KEEPALIVE(PEER), W3_KEEPALIVE(PEER_Y), W3_REMOVE(PEER_Y)]),
+                   OBSERVE, GET],
+            d1.steer_initiation() + d1.steer_initiation(ephemeral=d1.EPHEMERAL_2, clock=d1.CLOCK_2, index=INDEX_2),
+            ["set_peer.remove_me=1", "mod_peer_timer.alive=0", "mod_peer_timer.alive=1"]),
         "l_delete_create": (None, [DELETE, CREATE, GET, configure(keepalive=25), UP, OBSERVE,
                                    inject(session_response.message), OBSERVE, GET], d1.steer_initiation(), SESSION),
         # A bare fixture's RTM_DELLINK: ENODEV from the core.

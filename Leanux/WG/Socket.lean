@@ -80,4 +80,40 @@ def socketInit (port : Nat) : M Int := do
   socketReinit (some chosen) (some chosen)
   return 0
 
+/-! ## The peer's endpoint (socket.c:258-314)
+
+Moved here from `Netlink.lean` (W3): `Handshake` sets the endpoint from a
+received message and must not import `Netlink`, which imports
+`PeerRemove`, which imports `Handshake`. -/
+
+/-- wg_socket_clear_peer_endpoint_src (socket.c:308-314): zeroes `src6`,
+    which overlays `src4` and `src_if4`. -/
+def clearPeerEndpointSrc (pid : PeerId) : M Unit := do
+  let p ← getPeer pid
+  setPeer pid { p with endpoint := p.endpoint.map fun e => { e with src := 0, srcIf := 0 } }
+
+/-- endpoint_eq (socket.c:258-271). -/
+def endpointEq (a : Endpoint) (b : Option Endpoint) : M Bool := do
+  let fb := b.map (·.family) |>.getD 0
+  let field (f : Endpoint → Nat) := b.any fun e => f e == f a
+  let v4 ← andM (branch .eqA4 (a.family == AF_INET)) (andM (branch .eqB4 (fb == AF_INET))
+    (andM (branch .eqPort4 (field (·.port))) (andM (branch .eqAddr4 (field (·.addr)))
+      (andM (branch .eqSrc4 (field (·.src))) (branch .eqSrcIf4 (field (·.srcIf)))))))
+  if v4 then return true
+  let v6 ← andM (branch .eqA6 (a.family == AF_INET6)) (andM (branch .eqB6 (fb == AF_INET6))
+    (andM (branch .eqPort6 (field (·.port))) (andM (branch .eqAddr6 (field (·.addr)))
+      (andM (branch .eqScope6 (field (·.scope))) (branch .eqSrc6 (field (·.src)))))))
+  if v6 then return true
+  andM (branch .eqANone (a.family == 0)) (branch .eqBNone (fb == 0))
+
+/-- wg_socket_set_peer_endpoint (socket.c:273-297); `dst_cache_reset` is a
+    cut point. -/
+def setPeerEndpoint (pid : PeerId) (e : Endpoint) : M Unit := do
+  requireNotPending pid "changing the endpoint"
+  if ← branch .setEndpointEq (← endpointEq e (← getPeer pid).endpoint) then return
+  if ← branch .setEndpointV4 (e.family == AF_INET) then
+    setPeer pid { (← getPeer pid) with endpoint := some e }
+  else if ← branch .setEndpointV6 (e.family == AF_INET6) then
+    setPeer pid { (← getPeer pid) with endpoint := some e }
+
 end Leanux.WG

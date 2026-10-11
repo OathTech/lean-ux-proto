@@ -514,6 +514,44 @@ SUITE_OF = {m[0]: 'alloc' for m in A_MUTANTS}
 # DispatchOrder, the capture of 2026-10-11 on the dispatch-order oracle) and,
 # live, by s2_index_collision whenever Linux dispatches peer B first (9 of 10
 # fresh-guest runs on that oracle); run on the s2_* traces.
+# W3 (docs/2026-10-06-w3-w12.md, Part I, section 7): wg_peer_remove with
+# handshake work queued by the same message. Checked on the l_w3_* traces.
+W3_MUTANTS = [
+  ('W3-M1-flush-drops-work', 'hidden: the flush dequeues the send work without running it; the worker\'s '
+   'section and its records are left unconsumed, the initiation is missing (l_w3_remove_queued)',
+   'Leanux/WG/PeerRemove.lean',
+   "      runFlushedSendWork pid   -- the flushed item runs here\n",
+   "      modifyDev fun d => { d with sendWorkQueue := d.sendWorkQueue.erase pid }\n"
+   "      setPeer pid { (← getPeer pid) with handshakePending := false }\n", 'l_w3_'),
+  ('W3-M2-flushed-worker-arms-dead', 'hidden: mod_peer_timer\'s guard ignores is_dead (timers.c:34); the dead '
+   'peer\'s flushed worker arms a timer and consumes an arm record Linux never wrote (l_w3_remove_queued)',
+   'Leanux/WG/Handshake.lean',
+   "  andM (branch .modTimerRunning running) (branch .modTimerAlive !(← getPeer pid).isDead)\n",
+   "  andM (branch .modTimerRunning running) (branch .modTimerAlive true)\n", 'l_w3_'),
+  ('W3-M3-flush-only-removed-peer', 'hidden: flush_workqueue (peer.c:129) runs only the removed peer\'s item; '
+   'the other peer\'s section and arm records are left over (l_w3_remove_drains_other)',
+   'Leanux/WG/PeerRemove.lean',
+   "  drainHandshakeSendWq none\n",
+   "  if (← getDev).sendWorkQueue.contains pid then runFlushedSendWork pid\n", 'l_w3_'),
+]
+
+# W12 (docs/2026-10-06-w3-w12.md, Part II, section 7): several peers' timers
+# of one kind in one pass, on the dispatch-order records (the section names
+# the timer, docs/2026-10-11-dispatch-order.md). Checked on the w12_* traces.
+# W12-M1 is conclusive only when the two retransmit arms share a bucket
+# (`w12_same_bucket`), as the design's bucket assertion asks.
+W12_MUTANTS = [
+  ('W12-M1-fires-first-due-not-named', 'hidden: the timer pass fires the first due timer in peer-list order '
+   'instead of the one the section names (LIFO in the bucket: B before A); the retries\' draws and queue '
+   'records then belong to the wrong peers (w12_retransmit_lifo)', 'Leanux/Env.lean',
+   "  match named with\n  | some pid =>\n    if !due.contains pid then\n",
+   "  match named with\n  | some _ =>\n    let pid := due.head!\n    if !due.contains pid then\n", 'w12_'),
+  ('W12-M2-only-first-due-fires', 'hidden: one timer section per pass; the second peer\'s section is left '
+   'unconsumed (w12_retransmit_lifo, w12_three_retransmit)', 'Leanux/Env.lean',
+   "        fireTimer w jHi\n        fired := true\n",
+   "        fireTimer w jHi\n        fired := true\n        break\n", 'w12_'),
+]
+
 Q_MUTANTS = [
   ('Q-M1-dispatch-order-ignored', 'dispatch order: the send worker runs the queue head, not the unit the record names',
    'Leanux/Env.lean',
@@ -545,6 +583,30 @@ def resched_records(out):
             if row['mode'] == 'pc':
                 n += sum(1 for r in row['records'] if r[0] & 0x7fff == 302)
     return n
+
+
+def w12_same_bucket(out, trace='w12_retransmit_lifo'):
+    """W12-M1's bucket assertion (docs/2026-10-06-w3-w12.md, II.6): the two
+    retransmit arms at wg_up (kind-303 records {jiffies, expires, timer} of
+    the pc child's first operation after the set) must share a level-2
+    bucket, `((expires >> 6) + 1) << 6` (timer.c:567-581, delta 1250..1332
+    at level 2); else the LIFO order the mutant ignores is not the kernel's
+    and the run is inconclusive. None when the records are not there."""
+    for rows in glob.glob(os.path.join(ROOT, out, 'chunk-*', 'linux', 'hidden.jsonl')):
+        for line in open(rows):
+            row = json.loads(line)
+            if row['id'] != trace or row['mode'] != 'pc' or row['stream'] != 'remote' or row['index'] != 1:
+                continue
+            arms = []
+            for r in row['records']:
+                if r[0] & 0x7fff == 303:
+                    data = bytes.fromhex(r[4])
+                    jiffies, expires = int.from_bytes(data[:8], 'little'), int.from_bytes(data[8:16], 'little')
+                    if 1250 <= expires - jiffies <= 1250 + 83:
+                        arms.append(expires)
+            if len(arms) >= 2:
+                return ((arms[0] >> 6) + 1) << 6 == ((arms[1] >> 6) + 1) << 6
+    return None
 
 
 def classify(report):
@@ -586,7 +648,7 @@ def run(cmd, **kw):
 def main():
     assert run(['git', 'status', '--porcelain'], capture_output=True, text=True).stdout == '', 'tree must be clean'
     head = run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()
-    mutants = MUTANTS + D1_MUTANTS + D2_MUTANTS + E_MUTANTS + E_UNDERLOAD_MUTANTS + D3_MUTANTS + L_MUTANTS + A_MUTANTS + Q_MUTANTS
+    mutants = MUTANTS + D1_MUTANTS + D2_MUTANTS + E_MUTANTS + E_UNDERLOAD_MUTANTS + D3_MUTANTS + L_MUTANTS + A_MUTANTS + Q_MUTANTS + W3_MUTANTS + W12_MUTANTS
     names = [m[0] for m in mutants]
     assert set(EQUIVALENT) <= set(names), 'an EQUIVALENT entry names no mutant'
     assert NOT_CLAIMED <= set(names), 'a NOT_CLAIMED entry names no mutant'
@@ -649,6 +711,11 @@ def main():
                 results[name]['status'] = 'inconclusive'   # no reschedule occurred to ignore
             if name in NOT_CLAIMED:   # L-M10: run, expected to survive, never evidence
                 results[name]['status'] = 'not-claimed-' + results[name]['status']
+            if name == 'W12-M1-fires-first-due-not-named':
+                same = w12_same_bucket(out)
+                results[name]['same_bucket'] = same
+                if status == 'survived' and not same:
+                    results[name]['status'] = 'inconclusive'   # the arms did not share a bucket
             if name == 'D2-M12-poll-outside-worker':
                 orders = napi_orders(os.path.join(ROOT, out))
                 results[name]['napi_orders'] = dict(a=orders['a'], bc=orders['bc'])
