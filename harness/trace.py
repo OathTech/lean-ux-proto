@@ -28,25 +28,38 @@ FIELDS = {
     "wg_inject": {"op", "family", "port", "message"},
     # D3: the virtual time advance by `ticks` jiffies (docs/2026-10-05-d3-timers.md, 4.3)
     "wg_advance": {"op", "ticks"},
+    # L: wg0's lifecycle (docs/2026-10-05-l-lifecycle.md section 6): RTM_NEWLINK,
+    # SIOCSIFFLAGS without IFF_UP, RTM_DELLINK
+    "wg_create": {"op"}, "wg_down": {"op"}, "wg_delete": {"op"},
     # P (pipes, docs/2026-10-05-p-pipes.md section 6)
     "pipe2": {"op", "flags"},
 }
-WG_OPS = {"wg_set", "wg_get", "wg_up", "wg_xmit", "wg_observe", "wg_inject", "wg_advance"}
+LIFECYCLE_OPS = ("wg_create", "wg_down", "wg_delete")
+WG_OPS = {"wg_set", "wg_get", "wg_up", "wg_xmit", "wg_observe", "wg_inject", "wg_advance"} | set(LIFECYCLE_OPS)
 # Wire opcodes: an explicit table, not FIELDS' order (a positional derivation
 # gave P's pipe2 and D3's wg_advance the same code, 14). harness/guest.c
 # mirrors it as OP_* #defines; harness/test_trace.py checks that the codes
 # are distinct and that the guest's agree. [AGENT, coordinator, D3 merge]
+# L's operations take their reserved codes 15-17 [AGENT, coordinator's
+# table, int-dl merge].
 OPCODES = {
     "eventfd2": 1, "dup": 2, "dup3": 3, "close": 4, "read": 5, "write": 6, "fcntl": 7,
     "wg_set": 8, "wg_get": 9, "wg_up": 10, "wg_xmit": 11, "wg_observe": 12, "wg_inject": 13,
     "pipe2": 14,
-    # 15-17: reserved for L (wg_create, wg_down, wg_delete); 18: reserved for
-    # E (wg_flood)
+    "wg_create": 15, "wg_down": 16, "wg_delete": 17,
+    # 18: reserved for E (wg_flood)
     "wg_advance": 19,
 }
-RESERVED_OPCODES = {15: "wg_create", 16: "wg_down", 17: "wg_delete", 18: "wg_flood"}
+RESERVED_OPCODES = {18: "wg_flood"}
 if set(OPCODES) != set(FIELDS):
     raise AssertionError(f"OPCODES and FIELDS name different operations: {set(OPCODES) ^ set(FIELDS)}")
+# The guest's KCOV area in words, task and remote (harness/guest.c CAPACITY):
+# KCOV stops at CAPACITY - 1 PCs or (CAPACITY - 1) // 4 comparison records,
+# and the guest fails an operation whose area filled.
+KCOV_CAPACITY = 256 * 1024
+# The optional top-level `net_fixture` (L): "bare" starts a network trace
+# without wg0; absent, the fixture creates a down wg0.
+NET_FIXTURES = ("bare",)
 # fcntl commands: the wire carries the command number itself
 # (F_LINUX_SPECIFIC_BASE = 1024: F_SETPIPE_SZ = 1031, F_GETPIPE_SZ = 1032)
 FCNTL = {"F_GETFD": 1, "F_SETFD": 2, "F_GETFL": 3, "F_SETFL": 4, "F_SETPIPE_SZ": 1031, "F_GETPIPE_SZ": 1032}
@@ -85,8 +98,8 @@ def _fields(value, keys, where):
 
 def validate_trace(trace):
     """Return a detached valid trace; reject all inputs outside trace v1."""
-    if type(trace) is not dict or not {"version", "id", "ops"} <= set(trace) <= {"version", "id", "ops", "rlimit_nofile", "steer", "expect"}:
-        raise InvalidTrace("trace: expected exactly ['id', 'ops', 'version'] and optionally 'rlimit_nofile', 'steer', 'expect'")
+    if type(trace) is not dict or not {"version", "id", "ops"} <= set(trace) <= {"version", "id", "ops", "rlimit_nofile", "steer", "expect", "net_fixture"}:
+        raise InvalidTrace("trace: expected exactly ['id', 'ops', 'version'] and optionally 'rlimit_nofile', 'steer', 'expect', 'net_fixture'")
     # A steering schedule (choice-stream strategy, step 2): [site label, value
     # hex or "draw"] in encounter order; the expected decision outcomes that
     # the steering is for. Sites, lengths and domains are checked when the
@@ -184,6 +197,11 @@ def validate_trace(trace):
                 validate_packet(op["packet"], f"ops[{i}].packet")
             except InvalidConfig as exc:
                 raise InvalidTrace(str(exc)) from exc
+    if "net_fixture" in trace:
+        if type(trace["net_fixture"]) is not str or trace["net_fixture"] not in NET_FIXTURES:
+            raise InvalidTrace(f"net_fixture: expected one of {list(NET_FIXTURES)}")
+        if not uses_wireguard(trace):
+            raise InvalidTrace("net_fixture: only a network trace has a network fixture")
     return deepcopy(trace)
 
 
@@ -192,8 +210,16 @@ def uses_wireguard(trace):
     network namespace with `lo` up and a down `wg0`; UDP listeners on
     127.0.0.1 and ::1 at descriptors 4 and 5, a dual-stack UDP sender at 6,
     and the generic-netlink socket at 7, in place of the /dev/null fillers.
-    `wg_up` also adds an address and a default route on `wg0` per family."""
+    `wg_up` also adds an address and a default route on `wg0` per family.
+    With `"net_fixture": "bare"` there is no `wg0` until a `wg_create`."""
     return any(op["op"] in WG_OPS for op in trace["ops"])
+
+
+def net_mode(trace):
+    """The wire's `net` field: 0 no network fixture, 1 with a down wg0, 2 bare."""
+    if not uses_wireguard(trace):
+        return 0
+    return 2 if trace.get("net_fixture") == "bare" else 1
 
 
 def loads_trace(line):
@@ -238,7 +264,7 @@ def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False):
              f"A {int(arm_records)}"]
     for trace in traces:
         schedule = steer_wire.get(trace["id"], []) if "steer" in trace else []
-        lines.append(f"T {trace['id']} {len(trace['ops'])} {trace.get('rlimit_nofile', 32)} {int(uses_wireguard(trace))} {len(schedule)}")
+        lines.append(f"T {trace['id']} {len(trace['ops'])} {trace.get('rlimit_nofile', 32)} {net_mode(trace)} {len(schedule)}")
         for op in trace["ops"]:
             def fd(field):
                 value = op.get(field, {"literal": -1})

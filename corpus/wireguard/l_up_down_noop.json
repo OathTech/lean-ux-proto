@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "id": "l_up_down_noop",
+  "ops": [
+    {
+      "op": "wg_set",
+      "config": {
+        "listen_port": 51820
+      }
+    },
+    {
+      "op": "wg_up"
+    },
+    {
+      "op": "wg_up"
+    },
+    {
+      "op": "wg_down"
+    },
+    {
+      "op": "wg_down"
+    },
+    {
+      "op": "wg_up"
+    },
+    {
+      "op": "wg_get"
+    }
+  ]
+}

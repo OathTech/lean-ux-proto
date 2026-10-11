@@ -5,13 +5,12 @@ from pathlib import Path
 import json
 import os
 import random
+import re
 import shutil
 import subprocess
 import unittest
 
-import re
-
-from .trace import (FIELDS, OPCODES, RESERVED_OPCODES, InvalidTrace, UnsupportedTrace, loads_trace,
+from .trace import (FIELDS, KCOV_CAPACITY, OPCODES, RESERVED_OPCODES, InvalidTrace, UnsupportedTrace, loads_trace,
                     serialize_wire, validate_trace)
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -146,8 +145,11 @@ class OpcodeTableTests(unittest.TestCase):
         self.assertEqual(len(codes), len(set(codes)))
         self.assertTrue(all(isinstance(c, int) and c >= 1 for c in codes))
         self.assertEqual((OPCODES["pipe2"], OPCODES["wg_advance"]), (14, 19))
-        self.assertEqual(RESERVED_OPCODES, {15: "wg_create", 16: "wg_down", 17: "wg_delete", 18: "wg_flood"})
-        self.assertEqual(sorted(c for n, c in OPCODES.items() if n not in ("pipe2", "wg_advance")), list(range(1, 14)))
+        self.assertEqual((OPCODES["wg_create"], OPCODES["wg_down"], OPCODES["wg_delete"]), (15, 16, 17))
+        self.assertEqual(RESERVED_OPCODES, {18: "wg_flood"})
+        self.assertEqual(sorted(c for n, c in OPCODES.items()
+                                if n not in ("pipe2", "wg_advance", "wg_create", "wg_down", "wg_delete")),
+                         list(range(1, 14)))
 
     def test_guest_defines_match(self):
         defines = {name.lower(): int(code) for name, code in re.findall(r"^#define OP_(\w+) (\d+)$", self.GUEST, re.M)}
@@ -223,6 +225,38 @@ int main(void)
         cases = [(0, 1, 8), (3, 2**64 - 1, 0), (63, 12345678901234567, 69632), (17, 5, 4097), (1, 0, 300)]
         self.assertEqual(self.run_driver([f"W {i} {v} {c}" for i, v, c in cases]),
                          [pattern(i, v, c).hex() for i, v, c in cases])
+
+
+class LifecycleWireTests(unittest.TestCase):
+    """L's operations and fixture on the wire, and the guest's KCOV area
+    against the host's bounds (moved out of GuestHashTests at the int-dl
+    merge: no compiler needed)."""
+
+    def test_lifecycle_operations_and_bare_fixture(self):
+        # L (docs/2026-10-05-l-lifecycle.md section 6): opcodes 15-17, the
+        # bare fixture as the wire's net 2, only on network traces; P's ninth
+        # wire field (pause_ms) is 0.
+        self.assertEqual([OPCODES[n] for n in ("wg_create", "wg_down", "wg_delete")], [15, 16, 17])
+        self.assertEqual(len(set(OPCODES.values())), len(OPCODES))
+        trace = {"version": 1, "id": "life", "net_fixture": "bare",
+                 "ops": [{"op": "wg_create"}, {"op": "wg_down"}, {"op": "wg_delete"}]}
+        self.assertEqual(validate_trace(trace), trace)
+        wire = serialize_wire([trace], dispatch=[1])
+        self.assertIn("\nT life 3 32 2 0\n15 0 -1 0 -1 0 0 0 0\n16 0 -1 0 -1 0 0 0 0\n17 0 -1 0 -1 0 0 0 0\n", wire)
+        del trace["net_fixture"]
+        self.assertIn("\nT life 3 32 1 0\n", serialize_wire([trace], dispatch=[1]))
+        for bad in ({"net_fixture": "wg0"}, {"net_fixture": True}, {"net_fixture": "bare", "ops": [{"op": "dup", "fd": {"literal": 8}}]}):
+            with self.subTest(bad=bad):
+                with self.assertRaises(InvalidTrace):
+                    validate_trace(dict(trace, **bad))
+        with self.assertRaises(InvalidTrace):
+            validate_trace(dict(trace, ops=[{"op": "wg_create", "extra": 1}]))
+
+    def test_guest_capacity_matches_host_bounds(self):
+        guest = (Path(__file__).resolve().parent / "guest.c").read_text()
+        match = re.search(r"#define CAPACITY \((\d+)UL \* 1024\)", guest)
+        self.assertIsNotNone(match)
+        self.assertEqual(int(match.group(1)) * 1024, KCOV_CAPACITY)
 
 
 if __name__ == '__main__':

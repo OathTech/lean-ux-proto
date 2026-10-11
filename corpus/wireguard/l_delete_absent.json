@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "id": "l_delete_absent",
+  "net_fixture": "bare",
+  "ops": [
+    {
+      "op": "wg_delete"
+    },
+    {
+      "op": "wg_observe"
+    }
+  ]
+}

@@ -9,7 +9,7 @@ from evaluator.generate import generate, identity, remove_operations
 from evaluator.protocol import InvalidOutput, compare, parse_batch, validate_coverage
 from evaluator import check
 from evaluator.check import control_flow
-from harness.trace import validate_trace
+from harness.trace import KCOV_CAPACITY, validate_trace
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -120,10 +120,23 @@ class EvaluationChecks(unittest.TestCase):
         result['observations'][0].update(ret=-24, errno=24)
         self.assertEqual(compare(self.trace, result, result)['outcome'], 'agreement')
 
+    def test_observe_without_device(self):
+        # L: wg_observe's stats are null exactly when there is no wg0; any
+        # other non-object is invalid.
+        trace = {'version': 1, 'id': 'gone', 'ops': [{'op': 'wg_observe'}]}
+        obs = {'version': 1, 'id': 'gone', 'branches': [], 'observations': [
+            {'index': 0, 'ret': -11, 'errno': 11, 'bytes': '', 'datagrams': [], 'replies': [], 'stats': None}]}
+        self.assertEqual(compare(trace, obs, obs)['outcome'], 'agreement')
+        for bad in ([], 0, 'null'):
+            altered = copy.deepcopy(obs)
+            altered['observations'][0]['stats'] = bad
+            with self.assertRaises(InvalidOutput):
+                parse_batch([trace], json.dumps(altered))
+
     def test_coverage_controls(self):
         valid = [{'id': 'check', 'index': 0, 'count': 1, 'pcs': ['0xffffffff81000001']}]
         validate_coverage([self.trace], valid)
-        for change in ({'index': False}, {'pcs': 'not-pcs'}, {'pcs': [None]}, {'count': 65535}, {'pcs': []}):
+        for change in ({'index': False}, {'pcs': 'not-pcs'}, {'pcs': [None]}, {'count': 2 * (KCOV_CAPACITY - 1)}, {'pcs': []}):
             altered = copy.deepcopy(valid)
             altered[0].update(change)
             with self.assertRaises(InvalidOutput):

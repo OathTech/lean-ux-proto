@@ -79,6 +79,9 @@ def ENOKEY : Int := 126
 def EDESTADDRREQ : Int := 89
 def EPROTONOSUPPORT : Int := 93
 def ENETUNREACH : Int := 101
+/-- L: `wg_create` of an existing wg0; a bind at a held port. -/
+def EEXIST : Int := 17
+def EADDRINUSE : Int := 98
 
 def ULLONG_MAX : UInt64 := 18446744073709551615
 /-- `NR_OPEN_DEFAULT = BITS_PER_LONG`: capacity of the embedded initial table. -/
@@ -333,6 +336,15 @@ structure Task where
   pending : SigSet := 0
   deriving BEq
 
+/-- `wg_ratelimiter`'s statics (drivers/net/wireguard/ratelimiter.c:12-18):
+    `init_refcnt` and the hsiphash `key` (zeros while unknown: drawn before
+    the trace for the fixture's wg0). The tables hold no entries on the
+    modeled paths (an entry is made only under load, E's domain). -/
+structure Ratelimiter where
+  refcnt : Nat := 0
+  key : List UInt8 := List.replicate 16 0
+  deriving Repr, BEq
+
 /-- Whole-kernel mirror state. `nrFiles`/`maxFiles` mirror the system-wide
     `nr_files` percpu counter and `files_stat.max_files`, and
     `anonInodeInodeErr` whether the boot-time `anon_inode_inode` is an error
@@ -354,6 +366,12 @@ structure Kernel where
   peerCounter : Nat := 0
   /-- `keypair_counter` (drivers/net/wireguard/noise.c), a global atomic. -/
   keypairCounter : Nat := 0
+  /-- L: the network namespace's ifindex cursor (`net->ifindex`, the
+      `xa_alloc_cyclic` cursor of `dev_by_index`, never reset): the next
+      device registered gets this index. -/
+  netIfindexNext : Nat := 4
+  /-- L: the ratelimiter's global singleton (ratelimiter.c:12-18). -/
+  ratelimiter : Ratelimiter := {}
   /-- Pipes (P): the pipefs inodes, the `pipe_inode_info`s and their data
       pages, each an owned store with its next identity. -/
   inodes : TreeMap PipefsInodeId Inode := {}
@@ -390,6 +408,11 @@ inductive EnvSite where
   -- D2 stream A: encrypt_packet's `skb_checksum_help` (a cut; its output is
   -- the environment's `Env.checksumHelp`)
   | skbChecksumHelp
+  -- L: wg_newlink's allocations (device.c:325-367) and wg_ratelimiter_init's
+  -- (ratelimiter.c:164-185); `register_netdevice` (A's domain: assumed
+  -- success in the harness)
+  | pubkeyHashtableAlloc | indexHashtableAlloc | allocWorkqueue | packetQueueInit
+  | ratelimiterCache | ratelimiterTable | registerNetdevice
   -- P (pipes, design section 5). `allocInode` is the inode-allocation cut:
   -- new_inode_pseudo -> alloc_inode -> alloc_inode_sb, inode_init_always_gfp
   -- and get_next_ino, no decisions (audit M3)
@@ -492,6 +515,13 @@ inductive HiddenSite where
   | modTimerArm | timeAdvance
   /-- E-A: `wg_cookie_message_consume`'s birthdate of a stored cookie. -/
   | cookieBirthdate
+  /-- L (docs/2026-10-05-l-lifecycle.md, section 3.1): `wg_cookie_checker_init`'s
+      clock read and secret (`wg_newlink`), the public-key hashtable's key,
+      the ratelimiter's key (first creation) and its GC's clock read (last
+      destruction), `udp_lib_get_port`'s draw for a random port, and the two
+      `neigh_rand_reach_time` draws of `register_netdevice` (a cut). -/
+  | cookieSecretBirthdate | cookieSecret | pubkeyHashKey | ratelimiterKey | ratelimiterGcNow
+  | udpPortDraw | neighReachTime
   /-- P (pipes): `current_time` (fs/inode.c:2648), the coarse real-time
       clock read through `ktime_get_coarse_real_ts64` (kind 215), shared by
       all five callers on the pipe paths (design section 3). -/
@@ -583,6 +613,22 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   -- of `kcov_ioctl`.
   | .modTimerArm => ⟨100, "mod_timer_arm", "timer", "drivers/net/wireguard/timers.c", 37, 16, .mirror⟩
   | .timeAdvance => ⟨101, "time_advance", "advance", "fs/ioctl.c", 51, 16, .mirror⟩
+  -- L (ids 120-126, outside E-A's 64-69, A's 70-99 and D3's 100-115). The
+  -- consumer frames were confirmed on the built kernel by stream G's L0 probe
+  -- (scripts/wg-l0-probe.py): kind 208 at cookie.c:23 and ratelimiter.c:57,
+  -- kind 1 at cookie.c:24, peerlookup.c:29 and ratelimiter.c:192, kind 104 at
+  -- udp.c:257, and exactly two kind-110 records at neighbour.c:115 per
+  -- creation.
+  | .cookieSecretBirthdate => ⟨120, "cookie_secret_birthdate", "clock", "drivers/net/wireguard/cookie.c", 23, 8, .mirror⟩
+  | .cookieSecret => ⟨121, "cookie_secret", "random", "drivers/net/wireguard/cookie.c", 24, 32, .mirror⟩
+  | .pubkeyHashKey => ⟨122, "pubkey_hash_key", "random", "drivers/net/wireguard/peerlookup.c", 29, 16, .mirror⟩
+  | .ratelimiterKey => ⟨123, "ratelimiter_key", "random", "drivers/net/wireguard/ratelimiter.c", 192, 16, .mirror⟩
+  | .ratelimiterGcNow => ⟨124, "ratelimiter_gc_now", "clock", "drivers/net/wireguard/ratelimiter.c", 57, 8, .mirror⟩
+  | .udpPortDraw => ⟨125, "udp_port_draw", "random", "net/ipv4/udp.c", 257, 4, .mirror⟩
+  -- `reachable_time` of the new device's ARP and ND parms: exported only in
+  -- IFLA_INET6_CACHEINFO and the neighbour sysctls, which the harness never
+  -- reads, and read by no modeled path (unobserved)
+  | .neighReachTime => ⟨126, "neigh_reach_time", "random", "net/core/neighbour.c", 115, 4, .cut⟩
   -- P (pipes, design section 3): id 18 is free on main and on every task
   -- branch (E-A uses 64-69, A 70-99); the records are consumed in sequence
   -- order by whichever of the five callers runs
@@ -596,6 +642,8 @@ def HiddenSite.all : List HiddenSite :=
   ++ [.reschedReceive, .reschedEncrypt, .reschedTx, .reschedDecrypt, .newHandshakeJitter, .walltimeLastHandshakeData,
       .cookieBirthdate]
   ++ [.modTimerArm, .timeAdvance]
+  ++ [.cookieSecretBirthdate, .cookieSecret, .pubkeyHashKey, .ratelimiterKey, .ratelimiterGcNow, .udpPortDraw,
+      .neighReachTime]
   ++ [.currentTime]
 
 /-- The resched site of a worker's `cond_resched`, for the workers that
@@ -636,6 +684,9 @@ structure SentDatagram where
   addr : Nat
   port : Nat
   bytes : List UInt8
+  /-- L: the source port, wg0's `incoming_port` when it sent (its socket's
+      bound port): what the receiving fixture socket reports. -/
+  sport : Nat := 0
   /-- The outer DS field `send4`/`send6` are given (`PACKET_CB(skb)->ds`;
       0 for handshake messages). Not observed today: the fixture reads no
       TOS. -/
@@ -720,6 +771,17 @@ structure World where
       callback symbol, for the trace's `fired:<symbol>` expectations
       (`Env.runTimerSection`). -/
   fired : Array String := #[]
+  /-- L, fixture state: whether the fixture's routes into wg0 exist. The
+      guest adds wg0's addresses and default routes after a successful
+      `wg_up` (`route_into_wg0`); the `NETDEV_DOWN` and `NETDEV_UNREGISTER`
+      notifiers of `wg_down` and `wg_delete` remove them (the IPv4 address
+      survives a down, which the guest checks). Without them the sender's
+      `sendto` into wg0 fails with `-ENETUNREACH`. -/
+  routesViaWg0 : Bool := false
+  /-- L, environment: whether a fixture socket holds UDP port `p` so that a
+      wildcard bind there conflicts (`Env.portBound`; the runner supplies
+      it, as it supplies `env`). -/
+  portBound : Nat → Bool := fun _ => false
 
 /-- Why a mirror execution stopped without an observation. -/
 inductive Stop where
@@ -888,6 +950,25 @@ def skipCutSites (sites : List HiddenSite) : M (List Nat) := do
   invariant "a cut point consumed more than 4096 records"
 
 def skipCut (sites : List HiddenSite) : M Unit := discard <| skipCutSites sites
+
+/-- A cut point whose consumer draws a fixed number of times on the modeled
+    path (`.neighReachTime`: one draw per `neigh_parms_alloc`): with records,
+    exactly `n` head records (after ambient ones) come from `site`, and are
+    dropped; without records (the domain filter), nothing. -/
+def skipCutExactly (site : HiddenSite) (n : Nat) : M Unit := do
+  for _ in [0:n] do
+    skipAmbient
+    let w ← get
+    match w.hidden with
+    | none => return
+    | some (r :: rest) =>
+      if r.site != site.info.id then
+        throw (.hidden s!"expected {site.info.label} (cut, {n} records), the record is site {r.site}")
+      set { w with hidden := some rest }
+    | some [] => throw (.hidden s!"expected {site.info.label} (cut, {n} records), no record left")
+  skipAmbient
+  if let some (r :: _) := (← get).hidden then
+    if r.site == site.info.id then throw (.hidden s!"more than {n} records of {site.info.label}")
 
 def getFile (id : FileId) : M File := do
   match (← getK).files.get? id with

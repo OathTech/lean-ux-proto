@@ -236,6 +236,18 @@ inductive Decision where
   | retransmitGiveUp | retransmitZeroKeyNotPending | keepaliveNeedAnother | zeroKeyAlive | zeroKeyAlreadyQueued
   | persistentKeepaliveInterval
   -- end D3 stream M
+  -- L stream M (docs/2026-10-05-l-lifecycle.md, section 4.3)
+  -- drivers/net/wireguard/device.c: wg_newlink, wg_stop
+  | newlinkPeerHashtableErr | newlinkIndexHashtableErr | newlinkRecvWqErr | newlinkSendWqErr | newlinkCryptWqErr
+  | newlinkEncryptQueueErr | newlinkDecryptQueueErr | newlinkHandshakeQueueErr | newlinkRatelimiterErr
+  | newlinkRegisterErr | stopPeersIter | stopDrainIter
+  -- drivers/net/wireguard/socket.c: wg_socket_reinit, sock_free
+  | reinitHasNew4 | sockFreeNull
+  -- drivers/net/wireguard/ratelimiter.c: init, uninit, and the GC walk with
+  -- an empty table (E extends it with entries)
+  | ratelimiterInitNotFirst | ratelimiterInitCacheErr | ratelimiterInitTableV4Err | ratelimiterInitTableV6Err
+  | ratelimiterUninitZero | ratelimiterUninitNotLast
+  | gcBucketIter | gcV4EntryIter | gcV6EntryIter | gcHasWork | gcRequeue
   -- P stream 2 (begin): fs/pipe.c, include/linux/pipe_fs_i.h, fs/fcntl.c,
   -- fs/read_write.c (docs/2026-10-05-p-pipes.md section 11, Appendix A)
   | anonBufReleaseSole | anonBufReleaseNoTmp | pipeBufConfirmNoConfirm | pipeReadNull | pipeReadNotEmpty
@@ -363,6 +375,7 @@ private def wqh := "drivers/net/wireguard/queueing.h"
 private def vlh := "include/linux/if_vlan.h"
 private def iph := "include/net/ip_tunnels.h"
 private def ech := "include/net/inet_ecn.h"
+private def wrl := "drivers/net/wireguard/ratelimiter.c"
 
 private def sp (file : String) (lo hi : Nat) : Span := ⟨file, lo, hi⟩
 
@@ -691,7 +704,9 @@ def Decision.info : Decision → DecisionInfo
   | .lookupNoDev => d "lookup_interface.no_dev" wnl 65 [(66, 66)] [(67, 67)]
   | .lookupNoLinkOps => d "lookup_interface.no_link_ops" wnl 67 [] []
   | .lookupNoKind => d "lookup_interface.no_kind" wnl 67 [] []
-  | .lookupKindMismatch => d "lookup_interface.kind_mismatch" wnl 68 [(69, 70)] [(72, 72)]
+  -- L: 72's point is the epilogue the `-ENODEV` return also runs (a bare
+  -- fixture's or a deleted wg0's lookup covers it): no witness of its own
+  | .lookupKindMismatch => d "lookup_interface.kind_mismatch" wnl 68 [(69, 70)] []
   | .getAipNoNest => d "get_allowedips.no_nest" wnl 81 [(82, 82)] [(84, 84)]
   | .getAipPutCidr => d "get_allowedips.put_cidr_failed" wnl 84 [] [(85, 85)]
   | .getAipPutFamily => d "get_allowedips.put_family_failed" wnl 85 [] [(86, 86)]
@@ -1178,6 +1193,43 @@ def Decision.info : Decision → DecisionInfo
   | .zeroKeyAlreadyQueued => d "wg_expired_zero_key_material.already_queued" wtm 112 [(117, 117)] []
   | .persistentKeepaliveInterval => d "wg_expired_send_persistent_keepalive.interval" wtm 140 [(141, 141)] []
   -- end D3 stream M
+  -- L stream M. wg_newlink (device.c:309-400): each `if (!x)`/`if (ret < 0)`
+  -- jumps to an unwinding label that later labels' paths also reach, so only
+  -- the last arm's label (382) is its own; the false sides are the next
+  -- statement's lines.
+  | .newlinkPeerHashtableErr => d "wg_newlink.peer_hashtable_failed" wdv 326 [] [(329, 329)]
+  | .newlinkIndexHashtableErr => d "wg_newlink.index_hashtable_failed" wdv 330 [] [(333, 334)]
+  | .newlinkRecvWqErr => d "wg_newlink.receive_wq_failed" wdv 335 [] [(338, 339)]
+  | .newlinkSendWqErr => d "wg_newlink.send_wq_failed" wdv 340 [] [(343, 344)]
+  | .newlinkCryptWqErr => d "wg_newlink.crypt_wq_failed" wdv 345 [] [(348, 349)]
+  | .newlinkEncryptQueueErr => d "wg_newlink.encrypt_queue_failed" wdv 350 [] [(353, 354)]
+  | .newlinkDecryptQueueErr => d "wg_newlink.decrypt_queue_failed" wdv 355 [] [(358, 359)]
+  | .newlinkHandshakeQueueErr => d "wg_newlink.handshake_queue_failed" wdv 360 [] [(363, 363)]
+  | .newlinkRatelimiterErr => d "wg_newlink.ratelimiter_failed" wdv 364 [] [(367, 367)]
+  | .newlinkRegisterErr => d "wg_newlink.register_failed" wdv 368 [(382, 382)] [(371, 379)]
+  -- wg_stop (device.c:115-135): the peer loop, then the handshake ring drain
+  | .stopPeersIter => d "wg_stop.peers_iterate" wdv 122 [(123, 128)] [(129, 129)]
+  | .stopDrainIter => d "wg_stop.drain_handshake_ring" wdv 130 [(131, 131)] [(132, 133)]
+  -- wg_socket_reinit (socket.c:419-437) and its inlined sock_free (334-340)
+  | .reinitHasNew4 => d "wg_socket_reinit.new4" wso 431 [(432, 432)] []
+  | .sockFreeNull => d "sock_free.null" wso 336 [(337, 337)] [(338, 339)]
+  -- wg_ratelimiter_init (ratelimiter.c:158-203): `++init_refcnt != 1` jumps to
+  -- the shared `out:`; the failure arms reach the shared `err:` labels
+  | .ratelimiterInitNotFirst => d "wg_ratelimiter_init.refcnt_not_one" wrl 161 [] [(164, 192)]
+  | .ratelimiterInitCacheErr => d "wg_ratelimiter_init.cache_failed" wrl 165 [] [(173, 192)]
+  | .ratelimiterInitTableV4Err => d "wg_ratelimiter_init.table_v4_failed" wrl 180 [(181, 181)] [(183, 192)]
+  | .ratelimiterInitTableV6Err => d "wg_ratelimiter_init.table_v6_failed" wrl 185 [(186, 187)] [(191, 192)]
+  -- wg_ratelimiter_uninit (205-221): `!init_refcnt || --init_refcnt` on one
+  -- line; both true sides jump to the shared `out:`
+  | .ratelimiterUninitZero => d "wg_ratelimiter_uninit.refcnt_zero" wrl 208 [] []
+  | .ratelimiterUninitNotLast => d "wg_ratelimiter_uninit.not_last" wrl 208 [] [(211, 218)]
+  -- wg_ratelimiter_gc_entries (55-83): the bucket loop, its two entry loops,
+  -- and the `work` tests (77, 80)
+  | .gcBucketIter => d "wg_ratelimiter_gc_entries.bucket_iterate" wrl 62 [(63, 78)] []
+  | .gcV4EntryIter => d "wg_ratelimiter_gc_entries.v4_entry_iterate" wrl 64 [(65, 67)] []
+  | .gcV6EntryIter => d "wg_ratelimiter_gc_entries.v6_entry_iterate" wrl 70 [(71, 73)] []
+  | .gcHasWork => d "wg_ratelimiter_gc_entries.has_work" wrl 77 [(78, 78)] []
+  | .gcRequeue => d "wg_ratelimiter_gc_entries.requeue" wrl 80 [(81, 81)] []
   -- P stream 2 (begin): fs/pipe.c, include/linux/pipe_fs_i.h, fs/fcntl.c,
   -- fs/read_write.c (docs/2026-10-05-p-pipes.md section 11, Appendix A)
   -- `page_count(page) == 1 && !pipe->tmp_page`: the operands share line 125 and the else arm (128)
@@ -1775,6 +1827,11 @@ def Decision.repeatable : Decision → Bool
   | .vlanTypeIsVlan | .dsfieldIp | .dsfieldIpv6 | .ecnEncapInnerCe | .padClamped => true
   -- D3 stream M (repeatable decisions; docs/2026-10-05-d3-timers.md, section 5)
   -- end D3 stream M
+  -- L stream M: loops over peers, queued messages and the ratelimiter's
+  -- buckets; wg_socket_reinit runs twice when an up device is deleted
+  -- (wg_stop, then wg_destruct), and sock_free twice per call
+  | .stopPeersIter | .stopDrainIter | .reinitHasNew4 | .sockFreeNull
+  | .gcBucketIter | .gcV4EntryIter | .gcV6EntryIter | .gcHasWork => true
   -- P interface (design section 4, audit M2): `pipe2` runs alloc_fd,
   -- alloc_empty_file, file_init_path, alloc_file and fd_install twice in one
   -- operation, and its -EMFILE unwind runs two fput/__fput in the same

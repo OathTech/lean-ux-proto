@@ -52,6 +52,12 @@ inductive Syscall where
   /-- D3: `ioctl(3, KCOV_LEANUX_TIME_ADVANCE, &ticks)` on the trace's KCOV
       descriptor, then the guest's wait (docs/2026-10-05-d3-timers.md, 4.3). -/
   | wgAdvance (ticks : Nat)
+  /-- L (docs/2026-10-05-l-lifecycle.md): `RTM_NEWLINK` of wg0 and
+      `RTM_DELLINK` of wg0 on a temporary rtnetlink socket, and
+      `ioctl(6, SIOCSIFFLAGS, flags & ~IFF_UP)` on the fixture's sender. -/
+  | wgCreate
+  | wgDown
+  | wgDelete
 
 /-- The generic-netlink socket at descriptor 7 (`NETLINK_FD` in harness/guest.c). -/
 def NETLINK_FD : Nat := 7
@@ -86,6 +92,36 @@ def netlinkRequest (handler : M Int) : M Int := do
   _ ← socketCall (pure 0)
   return ret
 
+/-- L: `wg_create` and `wg_delete`'s rtnetlink socket (design section 5). The
+    guest opens it (`socket`, no `SOCK_CLOEXEC`) before the operation's
+    window at the lowest free descriptor (`alloc_fd` from `next_fd`) and
+    closes it after; only its `send` (the request, handled inside it) and
+    `recv` (the acknowledgement, whose error code is the result) run in the
+    window. The open and the close report no decision; the close leaves
+    `next_fd` at the slot (`__put_unused_fd`). -/
+def rtnetlinkRequest (handler : M Int) : M Int := do
+  let fs ← getFiles
+  let t := fs.fdt
+  let some fd := (List.range t.maxFds).find? (fun n => n ≥ fs.nextFd && !(t.openFds.getD n true))
+    | unsupported "no free descriptor in the table for the temporary rtnetlink socket (expansion)"
+  if fd ≥ (← getK).task.rlimitNofile then
+    unsupported "no descriptor below RLIMIT_NOFILE for the temporary rtnetlink socket (the guest fails)"
+  let fid := (← getK).nextFile
+  setFile fid { fFlags := O_RDWR, fMode := FMODE_READ ||| FMODE_WRITE ||| FMODE_OPENED, fCount := 1,
+                fOp := some (.fixture "rtnetlink"), fInode := some (.fixture "rtnetlink") }
+  modifyK fun k => { k with nextFile := fid + 1 }
+  setFdtSlot fd (some fid)
+  setFdtOpen fd true
+  setFdtCloexec fd false
+  let ret ← socketCallOn fd handler
+  _ ← socketCallOn fd (pure 0)
+  -- close(fd) after the window
+  setFdtSlot fd none
+  setFdtOpen fd false
+  modifyFiles fun fs => { fs with nextFd := fd }
+  freeFile fid
+  return ret
+
 def dispatch : Syscall → M Int
   | .eventfd2 count flags => sysEventfd2 count flags
   | .dup fildes => sysDup fildes
@@ -104,8 +140,9 @@ def dispatch : Syscall → M Int
       return 0
   | .wgUp => socketCallOn SENDER_FD Env.wgUp
   | .wgXmit family addr payload => socketCallOn SENDER_FD do
-    -- the fixture adds wg0's routes at wg_up; before that no route exists
-    if !(← WG.getDev).running then return -ENETUNREACH
+    -- the fixture adds wg0's routes after a successful wg_up; before that,
+    -- and after a down or a deletion, no route exists (L)
+    if !(← get).routesViaWg0 then return -ENETUNREACH
     -- udp_sendmsg returns the datagram's length once the device took it
     Env.fixtureSend
     Env.xmitMulticastLoop family addr
@@ -125,6 +162,9 @@ def dispatch : Syscall → M Int
     let ret ← Env.advance ticks
     fdput f
     return ret
+  | .wgCreate => rtnetlinkRequest WG.wgCreate
+  | .wgDown => socketCallOn SENDER_FD Env.wgDown
+  | .wgDelete => rtnetlinkRequest Env.wgDelete
 
 /-- `task_work_run` on exit to user mode: each queued `____fput` runs `__fput`. -/
 partial def taskWorkRun : M Unit := do

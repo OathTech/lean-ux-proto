@@ -17,7 +17,7 @@ import sys
 import subprocess
 import time
 
-from .trace import uses_wireguard, InvalidTrace, loads_trace, serialize_wire, validate_trace
+from .trace import KCOV_CAPACITY, OPCODES, uses_wireguard, InvalidTrace, loads_trace, serialize_wire, validate_trace
 from .wg import decode_dump
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -272,9 +272,11 @@ def attach_observed(results, traces, records):
                 and all(type(x) is int and x >= 0 for x in r[2:6]) and r[2] < 65536 and hex_bytes(r, r[3])
                 for r in replies):
             raise ValueError("wg_observe replies")
+        # null: no wg0 (L; the guest maps exactly ENODEV to null)
         stats = record["stats"]
-        if type(stats) is not dict or set(stats) != {"tx_errors", "tx_dropped", "rx_frame_errors", "rx_length_errors"} \
-                or not all(type(v) is int and v >= 0 for v in stats.values()):
+        if stats is not None and (type(stats) is not dict
+                                  or set(stats) != {"tx_errors", "tx_dropped", "rx_frame_errors", "rx_length_errors"}
+                                  or not all(type(v) is int and v >= 0 for v in stats.values())):
             raise ValueError("wg_observe stats")
         # sorted as the mirror sorts them: by compact JSON
         compact = lambda x: json.dumps(x, separators=(",", ":"))
@@ -390,10 +392,11 @@ def _collect(outdir, traces, process_returncode):
             or sorted((r["id"], r["mode"]) for r in sections) != sorted((i, m) for i in net for m in ("pc", "cmp"))):
         raise LinuxRunError("invalid_output", "Section status rows missing or malformed", outdir)
     _jsonl(outdir / "sections.jsonl", sections)
+    _jsonl(outdir / "timing.jsonl", timing)
     _jsonl(outdir / "comparisons.jsonl", comparisons)
     _jsonl(outdir / "guest-errors.jsonl", errors + child_failures)
     (outdir / "fixture.json").write_text(json.dumps({
-        "roles": {"0": "console stdin", "1": "console stdout", "2": "console stderr", "3": "KCOV", "4-7": "/dev/null filler; in network traces 4-5 UDP listeners, 6 UDP sender, 7 generic netlink"},
+        "roles": {"0": "console stdin", "1": "console stdout", "2": "console stderr", "3": "KCOV", "4-7": "/dev/null filler; in network traces 4-5 UDP listeners, 6 UDP sender, 7 generic netlink", "8+": "wg_create/wg_delete: a temporary rtnetlink socket at the lowest free descriptor, open only around the operation"},
         "per_trace": fixtures, "kernel_releases": kernels,
     }, indent=2) + "\n")
     if errors or child_failures:
@@ -407,6 +410,28 @@ def _collect(outdir, traces, process_returncode):
         raise LinuxRunError("crash", "Missing successful guest exit", outdir)
     if len(results) != len(traces) or len(fixtures) != len(traces) or len(comparison_results) != len(traces):
         raise LinuxRunError("invalid_output", "Missing or extra trace results/fixtures", outdir)
+    # L: the wall time of each lifecycle operation (wg_create, wg_down,
+    # wg_delete), one row per child (timing.jsonl; checked once the batch
+    # completed, so a failed trace reports its own error).
+    # D3: the per-child margin to the rekey bound (`since_up_ns`, a child that
+    # brought wg0 up), at most one row per trace and child [AGENT, int-dl
+    # merge: both streams write LEANUX_TIMING rows; each kind is checked].
+    margins = [r for r in timing if type(r) is dict and "since_up_ns" in r]
+    timing = [r for r in timing if not (type(r) is dict and "since_up_ns" in r)]
+    ids = {t["id"] for t in traces}
+    if (any(set(r) != {"id", "mode", "since_up_ns"} or r["id"] not in ids or r["mode"] not in ("pc", "cmp")
+            or type(r["since_up_ns"]) is not int for r in margins)
+            or len({(r["id"], r["mode"]) for r in margins}) != len(margins)):
+        raise LinuxRunError("invalid_output", "Rekey-bound margin rows malformed or repeated", outdir)
+    lifecycle = {OPCODES[name]: name for name in ("wg_create", "wg_down", "wg_delete")}
+    expected_timing = sorted((t["id"], i, m) for t in traces for i, op in enumerate(t["ops"])
+                             if op["op"] in lifecycle.values() for m in ("pc", "cmp"))
+    if (any(type(r) is not dict or set(r) != {"id", "index", "mode", "op", "ns"} or r["op"] not in lifecycle
+            or type(r["ns"]) is not int or r["ns"] < 0 for r in timing)
+            or sorted((r["id"], r["index"], r["mode"]) for r in timing) != expected_timing
+            or any(next(t for t in traces if t["id"] == r["id"])["ops"][r["index"]]["op"] != lifecycle[r["op"]]
+                   for r in timing)):
+        raise LinuxRunError("invalid_output", "Lifecycle timing rows missing or malformed", outdir)
     expected_coverage = [(trace["id"], i) for trace in traces for i in range(len(trace["ops"]))]
     if len(coverage) != len(expected_coverage):
         raise LinuxRunError("missing_coverage", "Missing or extra per-operation coverage", outdir)
@@ -422,7 +447,9 @@ def _collect(outdir, traces, process_returncode):
             if type(row) is not dict or set(row) != {"id", "index", "count", "pcs"} or row["id"] != identifier or type(row["index"]) is not int or row["index"] != index:
                 raise ValueError("coverage identity or order")
             pcs = row["pcs"]
-            if type(row["count"]) is not int or not 1 <= row["count"] < 65535 or type(pcs) is not list or not 1 <= len(pcs) <= row["count"]:
+            # a network row adds the remote stream's count; each stream stays
+            # below CAPACITY - 1 (the guest fails a full area)
+            if type(row["count"]) is not int or not 1 <= row["count"] < 2 * (KCOV_CAPACITY - 1) or type(pcs) is not list or not 1 <= len(pcs) <= row["count"]:
                 raise ValueError("coverage count")
             if any(type(pc) is not str or not re.fullmatch(r"0x[0-9a-f]{1,16}", pc) for pc in pcs) or len(set(pcs)) != len(pcs):
                 raise ValueError("coverage addresses")
@@ -431,7 +458,7 @@ def _collect(outdir, traces, process_returncode):
         for row, (identifier, index) in zip(comparisons, expected_coverage):
             if type(row) is not dict or set(row) != {"id", "index", "count", "records"} or row["id"] != identifier or row["index"] != index:
                 raise ValueError("comparison identity or order")
-            if type(row["count"]) is not int or not 1 <= row["count"] < 65536 or not 1 <= len(row["records"]) <= row["count"]:
+            if type(row["count"]) is not int or not 1 <= row["count"] < 2 * ((KCOV_CAPACITY - 1) // 4) or not 1 <= len(row["records"]) <= row["count"]:
                 raise ValueError("comparison record count")
             if len({tuple(r) for r in row["records"]}) != len(row["records"]):
                 raise ValueError("duplicate comparison records")
