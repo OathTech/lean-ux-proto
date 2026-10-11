@@ -25,7 +25,7 @@ FIELDS = {
     # Stage B1: bring wg0 up, send a packet into it, observe what it emitted
     "wg_up": {"op"}, "wg_xmit": {"op", "packet"}, "wg_observe": {"op"},
     # Stage B2: a raw WireGuard message sent to wg0's listen port
-    "wg_inject": {"op", "family", "port", "message"},
+    "wg_inject": {"op", "family", "port", "message"},   # + optional "to" (W9), validated below
     # D3: the virtual time advance by `ticks` jiffies (docs/2026-10-05-d3-timers.md, 4.3)
     "wg_advance": {"op", "ticks"},
     # E-B: an io_uring flood of `count` invalid-MAC1 initiations to wg0's
@@ -36,12 +36,23 @@ FIELDS = {
     # L: wg0's lifecycle (docs/2026-10-05-l-lifecycle.md section 6): RTM_NEWLINK,
     # SIOCSIFFLAGS without IFF_UP, RTM_DELLINK
     "wg_create": {"op"}, "wg_down": {"op"}, "wg_delete": {"op"},
+    # W9 (docs/2026-10-06-w8-w9-netns-routing.md 4.3): RTM_DELADDR of wg0's
+    # fixture address and RTM_DELROUTE of the default route via wg0, per
+    # family, over L's temporary rtnetlink socket; the result is the ACK
+    "wg_deladdr": {"op", "family"}, "wg_delroute": {"op", "family"},
     # P (pipes, docs/2026-10-05-p-pipes.md section 6)
     "pipe2": {"op", "flags"},
 }
 LIFECYCLE_OPS = ("wg_create", "wg_down", "wg_delete")
 WG_OPS = {"wg_set", "wg_get", "wg_up", "wg_xmit", "wg_observe", "wg_inject", "wg_advance",
-          "wg_flood"} | set(LIFECYCLE_OPS)
+          "wg_flood", "wg_deladdr", "wg_delroute"} | set(LIFECYCLE_OPS)
+# W9: `wg_inject`'s optional destination ("to"): the fixture's loopback
+# address (the default, 127.0.0.1 / ::1), wg0's own fixture address
+# (10.255.254.1 / fd00:ffff::1, reached over the local route: wg0 learns an
+# endpoint at that address), or the loopback alias 127.0.0.2 (IPv4 only: a
+# local address that is not configured, so wg0's reply source check fails).
+# The wire carries the code in the operation's value field.
+INJECT_DESTINATIONS = {"loopback": 0, "wg0": 1, "loopback-alias": 2}
 # Wire opcodes: an explicit table, not FIELDS' order (a positional derivation
 # gave P's pipe2 and D3's wg_advance the same code, 14). harness/guest.c
 # mirrors it as OP_* #defines; harness/test_trace.py checks that the codes
@@ -56,6 +67,7 @@ OPCODES = {
     "wg_create": 15, "wg_down": 16, "wg_delete": 17,
     "wg_flood": 18,
     "wg_advance": 19,
+    "wg_deladdr": 23, "wg_delroute": 24,
 }
 # Reserved wire opcodes (the interface commit, docs/2026-10-11-interface.md),
 # allocated by the coordinator so the W streams' worktrees cannot clash. A
@@ -64,7 +76,7 @@ OPCODES = {
 # (harness/guest.c, the opcode switch's default) and the mirror as an
 # unknown operation. A stream moves its codes into OPCODES when it lands.
 RESERVED_OPCODES = {20: "wg_get_start (W2)", 21: "wg_get_recv (W2)",
-                    22: "wg_netns_close (W8)", 23: "wg_deladdr (W9)", 24: "wg_delroute (W9)"}
+                    22: "wg_netns_close (W8)"}   # 23-24 taken by W9 (wg_deladdr, wg_delroute)
 if set(OPCODES.values()) & set(RESERVED_OPCODES):
     raise AssertionError(f"reserved opcodes in use: {set(OPCODES.values()) & set(RESERVED_OPCODES)}")
 if set(OPCODES) != set(FIELDS):
@@ -167,7 +179,9 @@ def validate_trace(trace):
                 raise InvalidTrace(f"ops[{i}]: expected {sorted(FIELDS[name])} and optionally messages, control")
             pipes = False
         else:
-            _fields({k: v for k, v in op.items() if k not in OPTIONAL_OP_FIELDS}, FIELDS[name], f"ops[{i}]")
+            # W9: `wg_inject`'s optional destination
+            _fields({k: v for k, v in op.items() if k not in OPTIONAL_OP_FIELDS and not (name == "wg_inject" and k == "to")},
+                    FIELDS[name], f"ops[{i}]")
             pipes = name in PIPE_PRODUCERS
         if "pause_ms" in op:
             _integer(op["pause_ms"], *PAUSE_MS, f"ops[{i}].pause_ms")
@@ -223,6 +237,15 @@ def validate_trace(trace):
             message = op["message"]
             if type(message) is not str or not re.fullmatch(r"(?:[0-9a-f]{2}){1,1400}", message, re.ASCII):
                 raise InvalidTrace(f"ops[{i}].message: expected 1-1400 bytes of lowercase hex")
+            if "to" in op:
+                if op["to"] not in INJECT_DESTINATIONS:
+                    raise InvalidTrace(f"ops[{i}].to: expected one of {list(INJECT_DESTINATIONS)}")
+                if op["to"] == "loopback-alias" and op["family"] != 4:
+                    raise InvalidTrace(f"ops[{i}].to: loopback-alias is IPv4 only")
+        if name in ("wg_deladdr", "wg_delroute"):
+            _integer(op["family"], 4, 6, f"ops[{i}].family")
+            if op["family"] == 5:
+                raise InvalidTrace(f"ops[{i}].family: expected 4 or 6")
         if name == "wg_advance":
             _integer(op["ticks"], 1, 2**31, f"ops[{i}].ticks")
         if name == "wg_flood":
@@ -354,7 +377,12 @@ def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False, allo
                 a = op["ticks"]
             if op["op"] == "wg_flood":
                 a, b = op["count"], op["port"]
-            line = f"{OPCODES[op['op']]} {kind} {value} {newkind} {newvalue} {a} {b} {op.get('value', '0')}"
+            v = op.get('value', '0')
+            if op["op"] == "wg_inject":   # W9: the destination code in the value field
+                v = str(INJECT_DESTINATIONS[op.get("to", "loopback")])
+            if op["op"] in ("wg_deladdr", "wg_delroute"):
+                a = op["family"]
+            line = f"{OPCODES[op['op']]} {kind} {value} {newkind} {newvalue} {a} {b} {v}"
             if GUEST_PIPES:
                 line += f" {op.get('pause_ms', 0)}"   # the ninth field (P1)
             if op["op"] == "wg_set":

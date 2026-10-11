@@ -167,10 +167,14 @@ SEMANTIC_ERRNOS = {'eventfd2': {12, 22, 24}, 'dup': {9, 12, 24}, 'dup3': {9, 12,
                    # E-B: the io_uring submission (wg_flood) fails only outside the oracle's setup
                    'wg_flood': set(),
                    # EEXIST (a second wg0), ENODEV (no wg0)
-                   'wg_create': {17}, 'wg_down': {19}, 'wg_delete': {19}}
-# Opcodes 20-24 are reserved for the W streams (harness/trace.py
+                   'wg_create': {17}, 'wg_down': {19}, 'wg_delete': {19},
+                   # W9 (docs/2026-10-06-w8-w9-netns-routing.md 4.3): RTM_DELADDR of
+                   # wg0's fixture address (EADDRNOTAVAIL when absent) and
+                   # RTM_DELROUTE of the default route via wg0 (ESRCH when absent)
+                   'wg_deladdr': {99}, 'wg_delroute': {3}}
+# Opcodes 20-21 (W2) and 22 (W8) are reserved (harness/trace.py
 # RESERVED_OPCODES); their operations, and so their entries here, come with
-# the streams that land them.
+# the streams that land them. W9 took 23 and 24.
 # Pipes (P design section 6): EINVAL, EMFILE, ENOPKG (O_NOTIFICATION_PIPE
 # without CONFIG_WATCH_QUEUE); EPIPE on write; EBUSY from F_SETPIPE_SZ.
 # A's pipe sites (section 19.6; D3+A integration): pipe2's ENFILE (a failed

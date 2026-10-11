@@ -112,6 +112,8 @@
 #define OP_WG_DELETE 17
 #define OP_WG_FLOOD 18
 #define OP_WG_ADVANCE 19
+#define OP_WG_DELADDR 23
+#define OP_WG_DELROUTE 24
 /* 20-24 are reserved for the W streams (harness/trace.py RESERVED_OPCODES,
  * docs/2026-10-11-interface.md): 20 wg_get_start and 21 wg_get_recv (W2),
  * 22 wg_netns_close (W8), 23 wg_deladdr and 24 wg_delroute (W9). No define
@@ -397,6 +399,49 @@ static size_t dellink_wg0(unsigned char *payload, size_t size)
 static int wg_exists;
 static unsigned wg_ifindex;
 static int first_up;
+/* W9 (docs/2026-10-06-w8-w9-netns-routing.md 4.3): a `wg_deladdr 4` removed
+ * wg0's IPv4 address since the last successful up, so the next up's add is
+ * expected to succeed instead of failing EEXIST (L's rule, refined). */
+static int addr4_deleted;
+
+/* W9: the RTM_DELADDR body of wg0's fixture address and the RTM_DELROUTE
+ * body of the default route via wg0, for one family: the messages
+ * route_into_wg0 adds, deleted (sent with NLM_F_ACK; the acknowledgement's
+ * error code is the operation's result: EADDRNOTAVAIL, ESRCH when absent). */
+static size_t deladdr_wg0(int family, unsigned char *payload, size_t size)
+{
+    size_t len = sizeof(struct ifaddrmsg);
+    memset(payload, 0, size);
+    struct ifaddrmsg *ifa = (struct ifaddrmsg *)payload;
+    ifa->ifa_family = family;
+    ifa->ifa_index = wg_ifindex;
+    if (family == AF_INET) {
+        unsigned char a4[4] = {10, 255, 254, 1};
+        ifa->ifa_prefixlen = 32;
+        attr(payload, &len, IFA_LOCAL, a4, 4);
+        attr(payload, &len, IFA_ADDRESS, a4, 4);
+    } else {
+        unsigned char a6[16] = {0xfd, 0, 0xff, 0xff, [15] = 1};
+        ifa->ifa_prefixlen = 128;
+        attr(payload, &len, IFA_ADDRESS, a6, 16);
+    }
+    return len;
+}
+
+static size_t delroute_wg0(int family, unsigned char *payload, size_t size)
+{
+    size_t len = sizeof(struct rtmsg);
+    memset(payload, 0, size);
+    struct rtmsg *rt = (struct rtmsg *)payload;
+    uint32_t wg = wg_ifindex;
+    rt->rtm_family = family;
+    rt->rtm_table = RT_TABLE_MAIN;
+    rt->rtm_protocol = RTPROT_STATIC;
+    rt->rtm_scope = RT_SCOPE_LINK;
+    rt->rtm_type = RTN_UNICAST;
+    attr(payload, &len, RTA_OIF, &wg, sizeof(wg));
+    return len;
+}
 
 /* Fresh network namespace with `lo` up and, unless the trace asks for the
  * bare fixture, a down `wg0`, created over a temporary rtnetlink socket that
@@ -720,7 +765,7 @@ static void route_into_wg0(const char *id, unsigned index, int first)
         }
         rtnl_request(rtnl, id, index, RTM_NEWADDR, body, len,
                      first ? "address_on_wg0" : "address_on_wg0_after_down",
-                     !first && family == AF_INET ? -EEXIST : 0);
+                     !first && family == AF_INET && !addr4_deleted ? -EEXIST : 0);   /* W9: unless deleted since */
         len = sizeof(struct rtmsg);
         memset(body, 0, sizeof(body));
         struct rtmsg *rt = (struct rtmsg *)body;
@@ -733,6 +778,7 @@ static void route_into_wg0(const char *id, unsigned index, int first)
         rtnl_request(rtnl, id, index, RTM_NEWROUTE, body, len,
                      first ? "default_route_via_wg0" : "default_route_via_wg0_after_down", 0);
     }
+    addr4_deleted = 0;   /* W9: the address is back */
     if (close(rtnl)) fail(id, index, "environment_failure", "route_close");
 }
 
@@ -1173,6 +1219,16 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             lifecycle_len = op->code == OP_WG_CREATE ? newlink_wg0(lifecycle_body, sizeof(lifecycle_body))
                                            : dellink_wg0(lifecycle_body, sizeof(lifecycle_body));
         }
+        /* W9: the fixture-table operations, over the same temporary socket;
+         * `a` is the family. */
+        if (op->code == OP_WG_DELADDR || op->code == OP_WG_DELROUTE) {
+            if (!t->net) fail(t->id, i, "invalid_input", "wireguard_without_network_fixture");
+            if (op->a != 4 && op->a != 6) fail(t->id, i, "invalid_input", "fixture_family");
+            lifecycle_fd = rtnl_temporary(t, i);
+            lifecycle_len = op->code == OP_WG_DELADDR
+                ? deladdr_wg0(op->a == 4 ? AF_INET : AF_INET6, lifecycle_body, sizeof(lifecycle_body))
+                : delroute_wg0(op->a == 4 ? AF_INET : AF_INET6, lifecycle_body, sizeof(lifecycle_body));
+        }
         /* E-B: the flood's socket, io_uring ring and SQEs are prepared before
          * the window (their inode/fd setup draws non-WireGuard clock records);
          * only io_uring_enter runs in the window. */
@@ -1259,9 +1315,21 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             /* A WireGuard message to wg0's port on 127.0.0.1 or ::1 (the
              * fixture's sender; IPv4 as v4-mapped). */
             struct sockaddr_in6 to = {.sin6_family = AF_INET6, .sin6_port = htons((uint16_t)op->b)};
+            /* W9: the destination (the value field): 0 loopback, 1 wg0's own
+             * fixture address (the local route's prefsrc becomes the source
+             * wg0 learns), 2 the loopback alias 127.0.0.2 (IPv4 only; the
+             * harness validates). */
             if (op->a == 4) {
                 to.sin6_addr.s6_addr[10] = to.sin6_addr.s6_addr[11] = 0xff;
-                to.sin6_addr.s6_addr[12] = 127;
+                if (op->value == 1) {
+                    to.sin6_addr.s6_addr[12] = 10; to.sin6_addr.s6_addr[13] = 255;
+                    to.sin6_addr.s6_addr[14] = 254; to.sin6_addr.s6_addr[15] = 1;
+                } else {
+                    to.sin6_addr.s6_addr[12] = 127;
+                    to.sin6_addr.s6_addr[15] = op->value == 2 ? 2 : 1;
+                }
+            } else if (op->value == 1) {
+                to.sin6_addr.s6_addr[0] = 0xfd; to.sin6_addr.s6_addr[2] = 0xff; to.sin6_addr.s6_addr[3] = 0xff;
                 to.sin6_addr.s6_addr[15] = 1;
             } else {
                 to.sin6_addr.s6_addr[15] = 1;
@@ -1295,6 +1363,17 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
                                 lifecycle_len, 0);
             if (!error) error = nl_receive(lifecycle_fd, 0, NULL, 0);
             if (error < 0) { errno = -error; ret = -1; } else ret = 0;
+            break;
+        }
+        case OP_WG_DELADDR: case OP_WG_DELROUTE: {
+            /* W9: RTM_DELADDR of wg0's fixture address or RTM_DELROUTE of
+             * the default route via wg0; the acknowledgement's error code is
+             * the result (EADDRNOTAVAIL, ESRCH when absent). */
+            int error = nl_send(lifecycle_fd, op->code == OP_WG_DELADDR ? RTM_DELADDR : RTM_DELROUTE,
+                                NLM_F_REQUEST | NLM_F_ACK, 0, lifecycle_body, lifecycle_len, 0);
+            if (!error) error = nl_receive(lifecycle_fd, 0, NULL, 0);
+            if (error < 0) { errno = -error; ret = -1; } else ret = 0;
+            if (op->code == OP_WG_DELADDR && op->a == 4 && ret == 0) addr4_deleted = 1;
             break;
         }
         case OP_WG_DOWN: {

@@ -283,10 +283,11 @@ RESCHED = 302
 # ioctl's call site fs/ioctl.c:51, the only caller of kcov_ioctl).
 TIMER_ARM, TIME_ADVANCE = 303, 304
 # W9 (docs/2026-10-06-w8-w9-netns-routing.md, sections 4.1 and 5): the
-# dst-cache `jiffies` records (`dst_cache_reset_now`, the refresh), reserved
-# at the interface commit (docs/2026-10-11-interface.md) and not resolved by
-# any class yet: a record of this kind is an unknown site (fail-noisy) until
-# W9-K lands the kernel hook and W9-M its sites and the `jiffies` class.
+# dst-cache `jiffies` records (class 'jiffies', resolved by the consumer
+# frame like the clock readers): the value stored at a reset
+# (`dst_cache_reset`, the inline in include/net/dst_cache.h) and at the
+# refresh of a miss (net/core/dst_cache.c); the mirror computes the cache's
+# `time_after` from them. Written only with the arm records (W9-K).
 DST_CACHE_JIFFIES = 306
 # Dispatch order (docs/2026-10-11-dispatch-order.md): the queue record
 # {work, func} written at __queue_work for a work item of the dispatch set
@@ -306,7 +307,7 @@ def load_hidden_sites():
     sites = {}
     for entry in loads(result.stdout.decode()):
         if set(entry) != {'id', 'label', 'kind', 'file', 'line', 'len', 'role'} \
-                or entry['kind'] not in ('random', 'clock', 'section', 'resched', 'timer', 'advance', 'alloc', 'queue') \
+                or entry['kind'] not in ('random', 'clock', 'section', 'resched', 'timer', 'advance', 'alloc', 'queue', 'jiffies') \
                 or entry['role'] not in ('mirror', 'cut', 'ambient'):
             raise InvalidOutput(f'hidden site fields: {entry}')
         key = (entry['kind'], f"{entry['file']}:{entry['line']}")
@@ -401,7 +402,7 @@ def resolve_choices(per, sites, locations, dispatch=None):
                 kind_class = 'random' if kind in RANDOM_KINDS else 'clock' if 200 <= kind <= 216 \
                     else 'resched' if raw_kind == RESCHED else 'timer' if raw_kind == TIMER_ARM \
                     else 'advance' if raw_kind == TIME_ADVANCE else 'alloc' if kind == ALLOC_KIND \
-                    else 'queue' if raw_kind == QUEUE else None
+                    else 'queue' if raw_kind == QUEUE else 'jiffies' if raw_kind == DST_CACHE_JIFFIES else None
                 if kind_class == 'queue':
                     # {work, func}: the site is the queued function's symbol
                     queued_func = int.from_bytes(bytes.fromhex(data[16:32]), 'little') if length == 16 else 0

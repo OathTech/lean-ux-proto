@@ -174,11 +174,14 @@ class OpcodeTableTests(unittest.TestCase):
         # E-B took its reserved code 18 at the int-e merge; the interface commit
         # reserves 20-24 for the W streams (docs/2026-10-11-interface.md)
         self.assertEqual(OPCODES["wg_flood"], 18)
-        self.assertEqual(sorted(RESERVED_OPCODES), [20, 21, 22, 23, 24])
+        # W9 took 23 and 24 (wg_deladdr, wg_delroute)
+        self.assertEqual(sorted(RESERVED_OPCODES), [20, 21, 22])
+        self.assertEqual((OPCODES["wg_deladdr"], OPCODES["wg_delroute"]), (23, 24))
         self.assertTrue(all(isinstance(v, str) and v for v in RESERVED_OPCODES.values()))
         self.assertFalse(set(OPCODES.values()) & set(RESERVED_OPCODES))
         self.assertEqual(sorted(c for n, c in OPCODES.items()
-                                if n not in ("pipe2", "wg_advance", "wg_create", "wg_down", "wg_delete", "wg_flood")),
+                                if n not in ("pipe2", "wg_advance", "wg_create", "wg_down", "wg_delete", "wg_flood",
+                                             "wg_deladdr", "wg_delroute")),
                          list(range(1, 14)))
 
     def test_guest_defines_match(self):
