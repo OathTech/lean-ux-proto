@@ -3,7 +3,7 @@ from copy import deepcopy
 import json
 import re
 
-from .wg import InvalidConfig, encode_get, encode_packet, encode_set, validate_config, validate_packet
+from .wg import InvalidConfig, encode_get, encode_packet, encode_set, validate_config, validate_device, validate_packet
 
 
 class InvalidTrace(ValueError):
@@ -93,6 +93,10 @@ MAX_IO = 69632
 # mirror ignores it.
 OPTIONAL_OP_FIELDS = {"pause_ms"}
 PAUSE_MS = (1, 20)
+# W1 (docs/2026-10-06-w1-w2-netlink.md, 3.1): the optional device selector
+# of the netlink operations ({"ifname": s} | {"ifindex": n} | both | {};
+# absent means wg0 by name), validated by harness/wg.py.
+DEVICE_OPS = {"wg_set", "wg_get"}
 # The guest (harness/guest.c) implements the pipes contract: pipe2, the pipe
 # descriptor kinds, F_SETPIPE_SZ/F_GETPIPE_SZ, pause_ms and counts up to
 # MAX_IO (stream P1). With this off, such traces are rejected as unsupported
@@ -134,8 +138,9 @@ def validate_trace(trace):
                 type(e) is not str or not re.fullmatch(r"[A-Za-z0-9_.]+=[01]|fired:wg_expired_[a-z_]{1,40}", e)
                 for e in expect):
             raise InvalidTrace("expect: expected 1–16 'decision=0|1' or 'fired:wg_expired_*' labels")
-        if "steer" not in trace:
-            raise InvalidTrace("expect: only a steered trace states expected outcomes")
+        # W2 (4.8): an unsteered trace may state expected outcomes too (a
+        # boundary-targeting trace is self-verifying); the check enforces
+        # them on any agreeing trace.
     # The declared failslab-style extension (docs/2026-10-05-a-alloc.md,
     # section 3, [USER 2026-10-06]): the trace forces a task-context
     # (b-task) allocation failure; the forced trace as a whole is not a
@@ -167,8 +172,14 @@ def validate_trace(trace):
                 raise InvalidTrace(f"ops[{i}]: expected {sorted(FIELDS[name])} and optionally messages, control")
             pipes = False
         else:
-            _fields({k: v for k, v in op.items() if k not in OPTIONAL_OP_FIELDS}, FIELDS[name], f"ops[{i}]")
+            optional = OPTIONAL_OP_FIELDS | ({"device"} if name in DEVICE_OPS else set())
+            _fields({k: v for k, v in op.items() if k not in optional}, FIELDS[name], f"ops[{i}]")
             pipes = name in PIPE_PRODUCERS
+        if "device" in op:
+            try:
+                validate_device(op["device"], f"ops[{i}].device")
+            except InvalidConfig as exc:
+                raise InvalidTrace(str(exc)) from exc
         if "pause_ms" in op:
             _integer(op["pause_ms"], *PAUSE_MS, f"ops[{i}].pause_ms")
             pipes = True
@@ -358,9 +369,9 @@ def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False, allo
             if GUEST_PIPES:
                 line += f" {op.get('pause_ms', 0)}"   # the ninth field (P1)
             if op["op"] == "wg_set":
-                line += " " + encode_set(op["config"]).hex()
+                line += " " + encode_set(op["config"], op.get("device")).hex()
             elif op["op"] == "wg_get":
-                line += " " + encode_get().hex()
+                line += " " + encode_get(op.get("device")).hex()
             elif op["op"] == "wg_xmit":
                 line += " " + packet.hex()
             elif op["op"] == "wg_inject":

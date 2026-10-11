@@ -508,6 +508,72 @@ A_MUTANTS = [
 A_PENDING = {}
 SUITE_OF = {m[0]: 'alloc' for m in A_MUTANTS}
 
+# W1 (docs/2026-10-06-w1-w2-netlink.md, 3.5): netlink completeness. Each runs on
+# the n1_* traces (the sixth field); the column of the design says what rejects it.
+N1_MUTANTS = [
+  ('N1-M1-no-sit0-row', 'environment: the fixture device table lacks sit0, so a lookup of it is -ENODEV '
+   '(Linux: -EOPNOTSUPP, kind "sit"); n1_lookup_sit0', 'Leanux/Env.lean',
+   'def fixtureNetDevices : List (String × Nat × Option String) := [("lo", 1, none), ("sit0", 2, some "sit")]\n',
+   'def fixtureNetDevices : List (String × Nat × Option String) := [("lo", 1, none)]\n', 'n1_lookup'),
+  ('N1-M2-kind-mismatch-enodev', 'behavior: a device of another kind answers -ENODEV instead of -EOPNOTSUPP '
+   '(netlink.c:68-70); n1_lookup_sit0', 'Leanux/WG/Netlink.lean',
+   "  if ← branch .lookupNotWireguard notWireguard then return .error (-EOPNOTSUPP)\n",
+   "  if ← branch .lookupNotWireguard notWireguard then return .error (if kind.isNone then -EOPNOTSUPP else -ENODEV)\n",
+   'n1_lookup'),
+  ('N1-M3-protocol-version-2-accepted', 'behavior: WGPEER_A_PROTOCOL_VERSION 2 is accepted (netlink.c:380-384 '
+   'returns -EPFNOSUPPORT); n1_protocol_version', 'Leanux/WG/Netlink.lean',
+   "    if ← branch .peerBadProtocol (a.protocolVersion != some 1) then return ← out none (-EPFNOSUPPORT)\n",
+   "    if ← branch .peerBadProtocol false then return ← out none (-EPFNOSUPPORT)\n", 'n1_protocol'),
+  ('N1-M4-missing-pubkey-is-zero-key', 'behavior: a peer entry without WGPEER_A_PUBLIC_KEY is taken as the zero '
+   'key (netlink.c:364-369 returns -EINVAL); an extra peer in the dump; n1_no_public_key', 'Leanux/WG/Netlink.lean',
+   "  if !(← andM (branch .peerHasPubkey a.publicKey.isSome) (branch .peerPubkeyLen true)) then return ← out none (-EINVAL)\n"
+   "  let some publicKey := a.publicKey | invariant \"unreachable\"\n",
+   "  if !(← andM (branch .peerHasPubkey true) (branch .peerPubkeyLen true)) then return ← out none (-EINVAL)\n"
+   "  let publicKey := a.publicKey.getD (List.replicate 32 0)\n", 'n1_no_public'),
+  ('N1-M5-device-flag-mask-3', 'behavior: WGDEVICE_A_FLAGS accepts bit 1 (__WGDEVICE_F_ALL is 1, netlink.c:507-511); '
+   'n1_device_flags', 'Leanux/WG/Netlink.lean',
+   "  if ← branch .setDevBadFlags (flags &&& ~~~WGDEVICE_F_ALL != 0) then return ← zero (-EOPNOTSUPP)\n",
+   "  if ← branch .setDevBadFlags (flags &&& ~~~(3 : UInt32) != 0) then return ← zero (-EOPNOTSUPP)\n", 'n1_device_flags'),
+  ('N1-M6-endpoint-28-byte-inet-accepted', 'behavior: a 28-byte AF_INET endpoint is stored (netlink.c:441 requires '
+   'sizeof(struct sockaddr_in)); n1_endpoint_ignored', 'Leanux/WG/Netlink.lean',
+   "    if ← andM (branch .peerEndpointV4Len (e.len == 16)) (branch .peerEndpointV4Family (e.family == AF_INET)) then\n",
+   "    if ← andM (branch .peerEndpointV4Len (e.len == 16 || e.len == 28)) (branch .peerEndpointV4Family (e.family == AF_INET)) then\n",
+   'n1_endpoint'),
+  ('N1-M7-scope-id-dropped', 'data: set_peer stores the IPv6 endpoint without its sin6_scope_id (netlink.c:444-446 '
+   'copies the whole sockaddr_in6); the dump and a scope-only change differ; n1_flowinfo_scope', 'Leanux/WG/Netlink.lean',
+   "      setPeerEndpoint pid { family := e.family, addr := e.addr, port := e.port, scope := e.scope, flowinfo := e.flowinfo }\n",
+   "      setPeerEndpoint pid { family := e.family, addr := e.addr, port := e.port, scope := 0, flowinfo := e.flowinfo }\n",
+   'n1_flowinfo'),
+  ('N1-M8-flowinfo-dropped', 'data: set_peer stores the IPv6 endpoint without its sin6_flowinfo; the dump differs; '
+   'n1_flowinfo_scope', 'Leanux/WG/Netlink.lean',
+   "      setPeerEndpoint pid { family := e.family, addr := e.addr, port := e.port, scope := e.scope, flowinfo := e.flowinfo }\n",
+   "      setPeerEndpoint pid { family := e.family, addr := e.addr, port := e.port, scope := e.scope, flowinfo := 0 }\n",
+   'n1_flowinfo'),
+  ('N1-M9-rollback-on-einval', 'behavior: a failing allowed IP removes the ones applied before it (set_peer returns '
+   'with them in place, netlink.c:464-465); the dump after the failed set differs; n1_aip_missing', 'Leanux/WG/Netlink.lean',
+   "        if ← branch .peerAipErr (ret < 0) then return ← out peer ret\n",
+   "        if ← branch .peerAipErr (ret < 0) then\n          removeByPeer pid\n          return ← out peer ret\n", 'n1_aip'),
+  ('N1-M10-malformed-peer-skipped', 'behavior: a peer entry without NLA_F_NESTED is skipped instead of failing the set '
+   '(nla_parse_nested returns -EINVAL, netlink.c:588-591); n1_malformed_peer', 'Leanux/WG/Netlink.lean',
+   "        _ ← branch .setDevParseErr true\n        return ← zero (-EINVAL)\n",
+   "        _ ← branch .setDevParseErr false\n", 'n1_malformed_peer'),
+  ('N1-M11-both-selectors-by-name', 'behavior: a request naming the device by name and index is looked up by index '
+   '(netlink.c:57-58 returns -EBADR); n1_lookup_ebadr', 'Leanux/WG/Netlink.lean',
+   "  if ← branch .lookupBothOrNeither (ref.ifindex.isSome == ref.ifname.isSome) then return .error (-EBADR)\n",
+   "  if ← branch .lookupBothOrNeither (ref.ifindex.isNone && ref.ifname.isNone) then return .error (-EBADR)\n", 'n1_lookup_ebadr'),
+  ('N1-M12-missing-cidr-defaults', 'behavior: an allowed IP without WGALLOWEDIP_A_CIDR_MASK takes the full prefix '
+   '(netlink.c:335-337 returns -EINVAL); n1_aip_missing', 'Leanux/WG/Netlink.lean',
+   "(branch .aipNoCidr ip.cidr.isNone)) then\n    return -EINVAL\n  let family := ip.family.getD 0\n  let addr := ip.addr.getD 0\n  let cidr := ip.cidr.getD 0\n",
+   "(branch .aipNoCidr false)) then\n    return -EINVAL\n  let family := ip.family.getD 0\n  let addr := ip.addr.getD 0\n  let cidr := ip.cidr.getD (if family == AF_INET then 32 else 128)\n",
+   'n1_aip_missing'),
+  ('N1-M13-flowinfo-compared', 'behavior: endpoint_eq compares sin6_flowinfo (socket.c:258-271 does not), so a '
+   'flowinfo-only change replaces the endpoint; the dump shows the new value where Linux keeps the old; '
+   'n1_flowinfo_only', 'Leanux/WG/Netlink.lean',
+   "      (andM (branch .eqScope6 (field (·.scope))) (branch .eqSrc6 (field (·.src)))))))\n",
+   "      (andM (branch .eqScope6 (field (·.scope) && field (·.flowinfo))) (branch .eqSrc6 (field (·.src)))))))\n",
+   'n1_flowinfo_only'),
+]
+
 
 def w4(text):
     fw = ("  if ← branch .setDevFwmark a.fwmark.isSome then\n"
@@ -573,7 +639,7 @@ def run(cmd, **kw):
 def main():
     assert run(['git', 'status', '--porcelain'], capture_output=True, text=True).stdout == '', 'tree must be clean'
     head = run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()
-    mutants = MUTANTS + D1_MUTANTS + D2_MUTANTS + E_MUTANTS + E_UNDERLOAD_MUTANTS + D3_MUTANTS + L_MUTANTS + A_MUTANTS
+    mutants = MUTANTS + D1_MUTANTS + D2_MUTANTS + E_MUTANTS + E_UNDERLOAD_MUTANTS + D3_MUTANTS + L_MUTANTS + A_MUTANTS + N1_MUTANTS
     names = [m[0] for m in mutants]
     assert set(EQUIVALENT) <= set(names), 'an EQUIVALENT entry names no mutant'
     assert NOT_CLAIMED <= set(names), 'a NOT_CLAIMED entry names no mutant'

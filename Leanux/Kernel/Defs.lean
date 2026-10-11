@@ -926,6 +926,12 @@ structure World where
       wildcard bind there conflicts (`Env.portBound`; the runner supplies
       it, as it supplies `env`). -/
   portBound : Nat → Bool := fun _ => false
+  /-- W1 (docs/2026-10-06-w1-w2-netlink.md, 3.2), environment: the fixture
+      namespace's devices other than wg0, as `lookup_interface` sees them:
+      name, ifindex, `rtnl_link_ops->kind` (`none`: no link ops). The
+      runner supplies it (`Env.fixtureNetDevices`); wg0's row comes from
+      `Kernel.wg`. -/
+  fixtureNetDevices : List (String × Nat × Option String) := []
   /-- The allocation sites whose records this run carries: the sites inside
       the ranges the evaluator armed (harness/steer.py `alloc_armed_labels`).
       Every other site answers ok without a record — the transitional

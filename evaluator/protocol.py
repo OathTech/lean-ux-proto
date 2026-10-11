@@ -159,7 +159,9 @@ SEMANTIC_ERRNOS = {'eventfd2': {12, 22, 24}, 'dup': {9, 12, 24}, 'dup3': {9, 12,
                    'close': {9}, 'fcntl': {1, 9, 12, 22},
                    # L (docs/2026-10-05-l-lifecycle.md): ENODEV without wg0;
                    # EADDRINUSE binding a fixture port (wg_up, a running wg_set)
-                   'wg_set': {12, 22, 95, 19, 98}, 'wg_get': {22, 19},
+                   # W1: EBADR (both or neither selector), EPFNOSUPPORT (protocol version),
+                   # EOPNOTSUPP on wg_get (a non-WireGuard device)
+                   'wg_set': {12, 22, 95, 19, 98, 53, 96}, 'wg_get': {22, 19, 53, 95},
                    # ENOKEY, EDESTADDRREQ, EPROTONOSUPPORT, ENETUNREACH (no route before wg_up); EAGAIN when nothing arrived
                    'wg_up': {19, 98}, 'wg_xmit': {126, 89, 93, 101}, 'wg_observe': {11}, 'read': {9, 11, 22}, 'write': {9, 11, 22},
                    # D3: the advance ioctl fails only outside the oracle's setup (-EOPNOTSUPP, -EINVAL, -EPERM)

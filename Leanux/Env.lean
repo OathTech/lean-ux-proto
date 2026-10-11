@@ -48,6 +48,14 @@ def LISTEN_PORT : Nat := 51999
     `v6only` at `LISTEN_PORT`, already excluded by the IPv4 bind. -/
 def portBound (p : Nat) : Bool := p == LISTEN_PORT || p == SENDER_PORT
 
+/-- W1 (docs/2026-10-06-w1-w2-netlink.md, 2.1): the fixture namespace's
+    devices besides wg0, for `lookup_interface`: `lo` (ifindex 1, no
+    `rtnl_link_ops`, drivers/net/loopback.c) and `sit0` (ifindex 2, kind
+    "sit": the per-netns fallback device of `CONFIG_IPV6_SIT=y`,
+    net/ipv6/sit.c:1852-1860). wg0 is created third (ifindex 3; L's cursor
+    gives 4 after a delete and re-create). -/
+def fixtureNetDevices : List (String × Nat × Option String) := [("lo", 1, none), ("sit0", 2, some "sit")]
+
 /-- Whether an endpoint is the fixture's sender. -/
 def isSender (family addr port : Nat) : Bool :=
   port == SENDER_PORT && ((family == AF_INET && addr == 0x7f000001) || (family == AF_INET6 && addr == 1))
@@ -122,6 +130,16 @@ def listenerFamily (e : Endpoint) : Option Nat :=
 def deliverSent : M Unit := do
   for dg in (← get).sent do
     let loopback := (dg.family == AF_INET && dg.addr / 2 ^ 24 == 127) || (dg.family == AF_INET6 && dg.addr == 1)
+    -- W1 hand-off to W9: a datagram to an IPv6 endpoint with a nonzero
+    -- `sin6_scope_id` routes with `flowi6_oif` set (`send6`), which the
+    -- environment does not model; a v4-mapped destination is not loopback
+    -- and falls to the rule below. The endpoint is the peer's.
+    if dg.family == AF_INET6 then
+      if let some d := (← getK).wg then
+        for pid in d.peerList do
+          if let some e := (← getPeer pid).endpoint then
+            if e.family == AF_INET6 && e.addr == dg.addr && e.port == dg.port && e.scope != 0 then
+              unsupported "a datagram to a scoped IPv6 endpoint (send6's route lookup, W9)"
     if isSender dg.family dg.addr dg.port then
       -- from wg0's socket, bound to the wildcard address at its port: over
       -- loopback the source is the destination's own address

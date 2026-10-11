@@ -31,7 +31,8 @@ inductive Operation where
   /-- `pipe2(fildes, flags)` (P). -/
   | pipe2 (flags : UInt32)
   | wgSet (attrs : WG.DeviceAttrs)
-  | wgGet
+  /-- `wg_get` with its device selector (W1). -/
+  | wgGet (device : WG.DeviceRef)
   | wgUp
   | wgXmit (family addr : Nat) (payload : List UInt8)
   | wgObserve
@@ -91,7 +92,7 @@ structure Trace where
     (harness/trace.py `uses_wireguard`). -/
 def Trace.net (t : Trace) : Bool :=
   t.ops.any fun
-    | .wgSet _ | .wgGet | .wgUp | .wgXmit .. | .wgObserve | .wgInject .. | .wgAdvance _
+    | .wgSet _ | .wgGet _ | .wgUp | .wgXmit .. | .wgObserve | .wgInject .. | .wgAdvance _
     | .wgFlood _ _ _ | .wgCreate | .wgDown | .wgDelete => true
     | _ => false
 
@@ -186,41 +187,104 @@ private def address (j : Json) (withPort : Bool) (what : String) : Except String
   let last ← if withPort then natField j "port" 65535 else natField j "cidr" 255
   return (if family == 4 then WG.AF_INET else WG.AF_INET6, addr, len, last)
 
-private def parsePeer (j : Json) (i : Nat) : Except String WG.PeerAttrs := do
+/-- W1 (harness/wg.py `_endpoint`): `family`, `addr` (4 or 16 bytes, any
+    16 for IPv6), `port`; optionally `flowinfo` and `scope_id` (IPv6 only),
+    `af` (the `sa_family` bytes, overriding the family's) and `len` (16..128,
+    the attribute's length; the canonical sockaddr zero-padded or truncated). -/
+private def parseEndpoint (j : Json) (what : String) : Except String WG.EndpointAttr := do
+  subsetFields j ["family", "addr", "port", "flowinfo", "scope_id", "af", "len"] what
+  let family ← (← field j "family").getNat?
+  if family != 4 && family != 6 then throw s!"{what}.family: expected 4 or 6"
+  let len := if family == 4 then 4 else 16
+  let addr := bigEndian (← hexBytes (← field j "addr") (2 * len) s!"{what}.addr")
+  let port ← natField j "port" 65535
+  if family != 6 && ((optField j "flowinfo").isSome || (optField j "scope_id").isSome) then
+    throw s!"{what}: flowinfo and scope_id are IPv6 only"
+  let flowinfo ← if (optField j "flowinfo").isSome then natField j "flowinfo" 4294967295 else pure 0
+  let scope ← if (optField j "scope_id").isSome then natField j "scope_id" 4294967295 else pure 0
+  let af ← if (optField j "af").isSome then natField j "af" 65535
+    else pure (if family == 4 then WG.AF_INET else WG.AF_INET6)
+  -- sizeof(struct sockaddr_in) or sizeof(struct sockaddr_in6) unless `len` says otherwise
+  let attrLen ← if (optField j "len").isSome then natField j "len" 128 else pure (if family == 4 then 16 else 28)
+  if attrLen < 16 then throw s!"{what}.len: below 16 the policy rejects (P8)"
+  pure { len := attrLen, family := af, addr, port, flowinfo, scope }
+
+/-- W1 (harness/wg.py `_allowed_ip`): any subset of `family`, `addr` (4..20
+    bytes) and `cidr`; `af` overrides the family value; `malformed:
+    "not_nested"` is the entry without `NLA_F_NESTED`. -/
+private def parseAllowedIp (j : Json) (what : String) : Except String WG.AllowedIpEntry := do
+  subsetFields j ["family", "addr", "cidr", "af", "malformed"] what
+  if let some m := optField j "malformed" then
+    if (← m.getStr?) != "not_nested" then throw s!"{what}.malformed: expected \"not_nested\""
+    return .malformed
+  let family ← (optField j "family").mapM fun v => do
+    let f ← v.getNat?
+    if f != 4 && f != 6 then throw s!"{what}.family: expected 4 or 6"
+    pure (if f == 4 then WG.AF_INET else WG.AF_INET6)
+  let family ← if (optField j "af").isSome then some <$> natField j "af" 65535 else pure family
+  let addrBytes ← (optField j "addr").mapM fun v => do
+    let s ← v.getStr?
+    if s.length < 8 || s.length > 40 || s.length % 2 != 0 then throw s!"{what}.addr: expected 4-20 bytes of hex"
+    hexBytes v s.length s!"{what}.addr"
+  let cidr ← (optField j "cidr").mapM fun _ => natField j "cidr" 255
+  pure (.attrs { family, addr := addrBytes.map bigEndian, addrLen := (addrBytes.map (·.length)).getD 0, cidr })
+
+private def parsePeer (j : Json) (i : Nat) : Except String WG.PeerEntry := do
   let what := s!"config.peers[{i}]"
-  subsetFields j ["public_key", "remove", "update_only", "replace_allowed_ips", "preshared_key",
-    "endpoint", "keepalive", "allowed_ips"] what
-  let publicKey ← hexBytes (← field j "public_key") 64 s!"{what}.public_key"
-  let flags := (if ← boolField j "remove" then WG.WGPEER_F_REMOVE_ME else 0) |||
-    (if ← boolField j "update_only" then WG.WGPEER_F_UPDATE_ONLY else 0) |||
-    (if ← boolField j "replace_allowed_ips" then WG.WGPEER_F_REPLACE_ALLOWEDIPS else 0)
+  subsetFields j ["public_key", "remove", "update_only", "replace_allowed_ips", "flags", "preshared_key",
+    "endpoint", "keepalive", "allowed_ips", "protocol_version", "malformed"] what
+  if let some m := optField j "malformed" then
+    if (← m.getStr?) != "not_nested" then throw s!"{what}.malformed: expected \"not_nested\""
+    return .malformed
+  let publicKey ← (optField j "public_key").mapM (hexBytes · 64 s!"{what}.public_key")
+  let booleans := ["remove", "update_only", "replace_allowed_ips"].any fun f => (optField j f).isSome
+  let flags ← if (optField j "flags").isSome then do
+      if booleans then throw s!"{what}.flags: exclusive with remove, update_only, replace_allowed_ips"
+      some <$> u32Field j "flags"
+    else do
+      let f := (if ← boolField j "remove" then WG.WGPEER_F_REMOVE_ME else 0) |||
+        (if ← boolField j "update_only" then WG.WGPEER_F_UPDATE_ONLY else 0) |||
+        (if ← boolField j "replace_allowed_ips" then WG.WGPEER_F_REPLACE_ALLOWEDIPS else 0)
+      pure (if f != 0 then some f else none)
+  let protocolVersion ← (optField j "protocol_version").mapM fun _ => natField j "protocol_version" 4294967295
   let presharedKey ← (optField j "preshared_key").mapM (hexBytes · 64 s!"{what}.preshared_key")
-  let endpoint ← (optField j "endpoint").mapM fun e => do
-    let (family, addr, len, port) ← address e true s!"{what}.endpoint"
-    -- sizeof(struct sockaddr_in) or sizeof(struct sockaddr_in6)
-    pure ({ len := if len == 4 then 16 else 28, family, addr, port } : WG.EndpointAttr)
+  let endpoint ← (optField j "endpoint").mapM (parseEndpoint · s!"{what}.endpoint")
   let keepalive ← (optField j "keepalive").mapM fun _ => natField j "keepalive" 65535
   let allowedIps ← (optField j "allowed_ips").mapM fun a => do
     let ips ← a.getArr?
     if ips.size > 32 then throw s!"{what}.allowed_ips: expected at most 32 entries"
-    ips.toList.mapIdxM fun k ip => do
-      let (family, addr, addrLen, cidr) ← address ip false s!"{what}.allowed_ips[{k}]"
-      pure ({ family, addr, addrLen, cidr } : WG.AllowedIpAttrs)
-  return { publicKey, presharedKey, flags := if flags != 0 then some flags else none,
-           endpoint, keepalive, allowedIps }
+    ips.toList.mapIdxM fun k ip => parseAllowedIp ip s!"{what}.allowed_ips[{k}]"
+  return .attrs { publicKey, presharedKey, flags, protocolVersion, endpoint, keepalive, allowedIps }
+
+/-- W1: the device selector (harness/wg.py `validate_device`): `{"ifname":
+    s}`, `{"ifindex": n}`, both or `{}`; absent means wg0 by name. -/
+private def parseDevice (j : Json) : Except String WG.DeviceRef := do
+  match optField j "device" with
+  | none => pure {}
+  | some d =>
+    subsetFields d ["ifname", "ifindex"] "device"
+    let ifname ← (optField d "ifname").mapM fun v => do
+      let s ← v.getStr?
+      if s.isEmpty || s.length > 15 then throw "device.ifname: expected 1-15 characters"
+      pure s
+    let ifindex ← (optField d "ifindex").mapM fun _ => natField d "ifindex" 4294967295
+    pure { ifname, ifindex }
 
 private def parseConfig (j : Json) : Except String WG.DeviceAttrs := do
-  subsetFields j ["private_key", "listen_port", "fwmark", "replace_peers", "peers"] "config"
+  subsetFields j ["private_key", "listen_port", "fwmark", "replace_peers", "flags", "peers"] "config"
   let privateKey ← (optField j "private_key").mapM (hexBytes · 64 "config.private_key")
   let listenPort ← (optField j "listen_port").mapM fun _ => natField j "listen_port" 65535
   let fwmark ← (optField j "fwmark").mapM fun _ => natField j "fwmark" 4294967295
   let replace ← boolField j "replace_peers"
+  let flags ← if (optField j "flags").isSome then do
+      if (optField j "replace_peers").isSome then throw "config.flags: exclusive with replace_peers"
+      some <$> u32Field j "flags"
+    else pure (if replace then some WG.WGDEVICE_F_REPLACE_PEERS else none)
   let peers ← (optField j "peers").mapM fun p => do
     let ps ← p.getArr?
     if ps.size > 16 then throw "config.peers: expected at most 16 peers"
     ps.toList.mapIdxM fun i peer => parsePeer peer i
-  return { flags := if replace then some WG.WGDEVICE_F_REPLACE_PEERS else none,
-           privateKey, listenPort, fwmark, peers }
+  return { flags, privateKey, listenPort, fwmark, peers }
 
 private def parseOperation (j : Json) (prior : Array Operation) : Except String Operation := do
   let op ← (← field j "op").getStr?
@@ -264,11 +328,11 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
     | "F_GETPIPE_SZ" => return .fcntl fd FcntlCmd.getPipeSz arg
     | _ => throw "unsupported fcntl command"
   | "wg_set" =>
-    fields j ["op", "config"]
-    return .wgSet (← parseConfig (← field j "config"))
+    fields j (["op", "config"] ++ if (optField j "device").isSome then ["device"] else [])
+    return .wgSet { (← parseConfig (← field j "config")) with device := ← parseDevice j }
   | "wg_get" =>
-    fields j ["op"]
-    return .wgGet
+    fields j (["op"] ++ if (optField j "device").isSome then ["device"] else [])
+    return .wgGet (← parseDevice j)
   | "wg_up" =>
     fields j ["op"]
     return .wgUp
@@ -553,7 +617,7 @@ def toSyscall (results : Array Int) (ends : Array (Option (Nat × Nat))) (index 
   | .fcntl fd cmd arg => .fcntl (uint (resolveFD results ends fd)) cmd arg.toUInt64
   | .pipe2 flags => .pipe2 flags
   | .wgSet attrs => .wgSet attrs
-  | .wgGet => .wgGet
+  | .wgGet device => .wgGet device
   | .wgUp => .wgUp
   | .wgXmit family addr payload => .wgXmit family addr payload
   | .wgObserve => .wgObserve
@@ -569,6 +633,7 @@ def toSyscall (results : Array Int) (ends : Array (Option (Nat × Nat))) (index 
 def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat × Stop) Json := do
   let mut world : World := { k := initialKernel trace.rlimit trace.net trace.bare, env := harnessEnv,
                              timing := Env.timing, portBound := Env.portBound,
+                             fixtureNetDevices := Env.fixtureNetDevices,
                              allocArmed := trace.allocArmed,
                              hiddenPlaceholders := placeholders && trace.hidden.isNone,
                              steerValues := if placeholders then trace.steer else [],
