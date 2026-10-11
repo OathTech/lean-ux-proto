@@ -52,6 +52,7 @@ The agent installs none of the following. **You install them.**
 | `sha256sum`, `coreutils` | manual verification below | |
 | SSH key with access to `git@github.com:OathTech/lean-ux-proto.git` | clone | User-level |
 | Network access to `snapshot.ubuntu.com`, `www.kernel.org` and `github.com` | one-time staging | Not needed after staging |
+| `capped` (`/usr/local/bin/capped`, installed box-wide by oath-devbox) | the checker's model build, `scripts/build-kernel`, and every heavy command an agent runs | A cgroup memory cap (default 32G). It needs cgroup v2 delegation for the user scope, which the `claude-nono` alias provides; without the wrapper the checker and the kernel build refuse to run (`LEANUX_CAPPED` overrides the path). |
 | `nono` (optional) | confinement for agent sessions; `scripts/check-nono` | The old host had nono 0.79.0 at `~/.cargo/bin/nono`. How it was installed is **unverified**. |
 | Claude Code and its MCP registration (optional) | agent work; see section 10 | User-level |
 
@@ -701,13 +702,10 @@ Sources: `scripts/check-nono`, `scripts/nono-check-profile.json`, docs/nono-prof
 
 ### 10.3 Agent memory
 
-The agent's project memory lives in
-`~/.claude/projects/-home-dev-projects-lean-ux-proto/memory/`.
-- The directory name is derived from the checkout's absolute path.
-- If `$REPO` is not `/home/dev/projects/lean-ux-proto`, a copied memory directory must be renamed
-  to match.
-- The [USER] decisions in it are also recorded in the pause-state note (section 3).
-- `~/.claude/CLAUDE.md` holds the global rules. Copy it as well.
+Auto-memory is off (`~/.claude/settings.json`: `autoMemoryEnabled: false` and
+`CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`), so there is no memory directory to copy. The decisions it
+used to hold are in [decisions.md](decisions.md); the practices are in `AGENTS.md`. Copy
+`~/.claude/CLAUDE.md` (the global rules) and `~/.claude/settings.json`.
 
 ## 11. Known pitfalls
 

@@ -85,8 +85,8 @@ Keep them until the stack above lands, then prune them.
 
 ## 3. Decisions in force
 
-These are recorded with provenance in the agent memory and in the design
-docs.
+These are recorded with provenance in [the decisions register](decisions.md)
+and in the design docs.
 
 ### User decisions, 2026-10-05 to 10-08
 
