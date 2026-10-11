@@ -50,12 +50,20 @@ def kdf (second third : Bool) (chainingKey data : List UInt8) : M (List (List UI
   if ← orM (branch .kdfNoThirdDst !third) (branch .kdfNoThirdLen false) then return outs.take 2
   return outs
 
+/-- The `i`-th output `kdf` was asked for. `kdf` returns exactly the outputs
+    its caller passes destinations for, so a missing one is a mirror
+    invariant failure, never a default key (future-proof-paths note, B1). -/
+def kdfOut (outs : List (List UInt8)) (i : Nat) : M (List UInt8) :=
+  match outs[i]? with
+  | some o => pure o
+  | none => invariant s!"kdf output {i} missing ({outs.length} returned)"
+
 /-- message_ephemeral (noise.c:485-495). -/
 def messageEphemeral (copy : Bool) (e chainingKey hash : List UInt8) : M (List UInt8 × List UInt8) := do
   _ ← branch .msgEphemeralCopy copy
   let hash := noiseHash (hash ++ e)
   let outs ← kdf false false chainingKey e
-  return (outs.head!, hash)
+  return (← kdfOut outs 0, hash)
 
 /-- mix_dh (noise.c:404-417): the new chaining key and key, unless the DH
     result is the null point. -/
@@ -63,13 +71,14 @@ def mixDh (key : Bool) (chainingKey priv pub : List UInt8) : M (Option (List UIn
   let (dh, nonNull) := curve25519 priv pub
   if ← branch .mixDhNull !nonNull then return none
   let outs ← kdf key false chainingKey dh
-  return some (outs.head!, outs.getD 1 [])
+  -- without a key destination the C writes no key, and the callers read none
+  return some (← kdfOut outs 0, ← if key then kdfOut outs 1 else pure [])
 
 /-- mix_precomputed_dh (noise.c:419-430). -/
 def mixPrecomputedDh (chainingKey precomputed : List UInt8) : M (Option (List UInt8 × List UInt8)) := do
   if ← branch .mixPrecomputedNull (precomputed == zeroKey) then return none
   let outs ← kdf true false chainingKey precomputed
-  return some (outs.head!, outs.getD 1 [])
+  return some (← kdfOut outs 0, ← kdfOut outs 1)
 
 /-- message_decrypt (noise.c:473-483): the plaintext and the new hash. -/
 def messageDecrypt (sealed key hash : List UInt8) : M (Option (List UInt8 × List UInt8)) := do
@@ -209,7 +218,7 @@ def createResponse (pid : PeerId) : M (Option (List UInt8)) := do
   let some (ck, _) := se | invariant "unreachable"
   -- psk: mix_psk (kdf with three outputs, then mix_hash of the second)
   let outs ← kdf true true ck p.presharedKey
-  let (ck, tempHash, key) := (outs.head!, outs.getD 1 [], outs.getD 2 [])
+  let (ck, tempHash, key) := (← kdfOut outs 0, ← kdfOut outs 1, ← kdfOut outs 2)
   let h := noiseHash (h ++ tempHash)
   -- {}
   let encNothing := aeadEncrypt key noiseNonce [] h
@@ -246,7 +255,7 @@ def deriveKeys (kp : KeypairId) (initiator : Bool) (chainingKey : List UInt8) : 
   let birthdate ← hiddenClock .deriveKeysBirthdate
   let outs ← kdf true false chainingKey []
   let sym (key : List UInt8) : SymmetricKey := { key, birthdate, isValid := true }
-  let (first, second) := (sym (outs.getD 0 []), sym (outs.getD 1 []))
+  let (first, second) := (sym (← kdfOut outs 0), sym (← kdfOut outs 1))
   let k ← getKeypair kp
   setKeypair kp (if initiator then { k with sending := first, receiving := second }
                  else { k with receiving := first, sending := second })
@@ -305,7 +314,7 @@ def consumeResponse (msg : List UInt8) : M (Option PeerId) := do
   let some (ck, _) := se | invariant "unreachable"
   -- psk: mix_psk (kdf with three outputs, then mix_hash of the second)
   let outs ← kdf true true ck p.presharedKey
-  let (ck, tempHash, key) := (outs.getD 0 [], outs.getD 1 [], outs.getD 2 [])
+  let (ck, tempHash, key) := (← kdfOut outs 0, ← kdfOut outs 1, ← kdfOut outs 2)
   let h := noiseHash (h ++ tempHash)
   -- {}
   let dec ← messageDecrypt ((msg.drop 44).take 16) key h
