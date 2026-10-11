@@ -1,6 +1,8 @@
 # The allocation-steering control kernel (docs/2026-10-05-a-alloc.md, section 7;
 # LEANUX_KERNEL_PROFILE=net-choice-actl): kernel/patches/choice-stream-alloc-controls.patch
-# (sha256 8dd6fffee734cbdc35942d21e99dd269ebd18a6879a39e2d00b5fdbf2915671b) on the
+# (sha256 a38b3fcdc4fd7be2c40909ea8d7cdb4c8330421366f2f9c33adf0489fb41aad0 since the
+# dispatch-order capture of 2026-10-11, 8dd6fffe... before; the identity and vmlinux
+# lines below are the previous build's until the coordinator rebuilds it) on the
 # oracle's patched source; load flags for the controls K1/K4/K5 that the oracle's
 # load rejects. Never an oracle: the identity check (harness/linux.py verify_kernel)
 # refuses it unless a control script names it with LEANUX_KERNEL_IDENTITY, which
