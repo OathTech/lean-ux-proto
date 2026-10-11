@@ -301,8 +301,34 @@ static int compare_occurrence(const void *a, const void *b)
 }
 
 /* ---- Netlink (network fixture traces only) ---------------------------- */
-static unsigned char nl_buffer[1 << 16];
+/* W2 (docs/2026-10-06-w1-w2-netlink.md, 4.1): every netlink receive uses a
+ * buffer of exactly NLMSG_GOODSIZE = SKB_WITH_OVERHEAD(PAGE_SIZE) = 3776 bytes
+ * (sizeof(struct skb_shared_info) 320, the reference vmlinux's DWARF). The
+ * socket's max_recvmsg_len then never exceeds it, so every dump skb is
+ * alloc_skb(NLMSG_GOODSIZE, GFP_KERNEL) with exactly 3776 bytes of room
+ * (af_netlink.c:2279-2312): the chunk budget the mirror computes. */
+#define NL_RECV_LEN 3776
+static unsigned char nl_buffer[NL_RECV_LEN];
 static unsigned short wg_family;
+
+/* One receive of at most NL_RECV_LEN bytes (W2 4.1). A longer message is
+ * truncated by the kernel and the rest discarded (af_netlink.c:1946-1949),
+ * after which NLMSG_OK fails and the next recv would block: it is an
+ * environment failure here instead. It never happens with NETLINK_CAP_ACK
+ * on the generic-netlink socket (every ack is 36 bytes) and chunks of at
+ * most NLMSG_GOODSIZE. `id` NULL: no fail() (the best-effort teardown). */
+static ssize_t nl_recv(const char *id, int index, int fd, int flags)
+{
+    struct iovec iov = {nl_buffer, sizeof(nl_buffer)};
+    struct msghdr msg = {.msg_iov = &iov, .msg_iovlen = 1};
+    ssize_t n = recvmsg(fd, &msg, flags);
+    if (n < 0) return -errno;
+    if (msg.msg_flags & MSG_TRUNC) {
+        if (id) fail(id, index, "environment_failure", "netlink_truncated");
+        return -EMSGSIZE;
+    }
+    return n;
+}
 
 static int nl_send(int fd, unsigned short type, unsigned short flags, unsigned char cmd,
                    const unsigned char *payload, size_t len, int genl)
@@ -328,14 +354,14 @@ static int nl_send(int fd, unsigned short type, unsigned short flags, unsigned c
 /* Receive until the acknowledgement (or NLMSG_DONE for a dump). Each data
  * message's attribute payload after `skip` bytes is appended as hex to `out`
  * when it is non-NULL. Returns the kernel's error code (0 on success). */
-static int nl_receive(int fd, size_t skip, char *out, size_t out_size)
+static int nl_receive(const char *id, int index, int fd, size_t skip, char *out, size_t out_size)
 {
     size_t used = 0;
     if (out) { out[0] = 0; }
     int first = 1;
     for (;;) {
-        ssize_t n = recv(fd, nl_buffer, sizeof(nl_buffer), 0);
-        if (n < 0) return -errno;
+        ssize_t n = nl_recv(id, index, fd, 0);
+        if (n < 0) return (int)n;
         for (struct nlmsghdr *h = (struct nlmsghdr *)nl_buffer; NLMSG_OK(h, n); h = NLMSG_NEXT(h, n)) {
             if (h->nlmsg_type == NLMSG_ERROR) return ((struct nlmsgerr *)NLMSG_DATA(h))->error;
             if (h->nlmsg_type == NLMSG_DONE) {
@@ -411,7 +437,7 @@ static void network_fixture(const char *id, int bare)
     unsigned char payload[256];
     if (!bare) {
         size_t len = newlink_wg0(payload, sizeof(payload));
-        if (nl_send(rtnl, RTM_NEWLINK, NEWLINK_FLAGS, 0, payload, len, 0) || nl_receive(rtnl, 0, NULL, 0))
+        if (nl_send(rtnl, RTM_NEWLINK, NEWLINK_FLAGS, 0, payload, len, 0) || nl_receive(id, -1, rtnl, 0, NULL, 0))
             fail(id, -1, "environment_failure", "create_wg0");
         wg_exists = 1;
         first_up = 1;
@@ -419,7 +445,7 @@ static void network_fixture(const char *id, int bare)
     /* lo up: what wg0 sends to 127.0.0.1 and ::1 reaches the listeners. */
     struct ifinfomsg up = {.ifi_family = AF_UNSPEC, .ifi_index = 1, .ifi_flags = IFF_UP, .ifi_change = IFF_UP};
     if (nl_send(rtnl, RTM_NEWLINK, NLM_F_REQUEST | NLM_F_ACK, 0, (unsigned char *)&up, sizeof(up), 0) ||
-        nl_receive(rtnl, 0, NULL, 0))
+        nl_receive(id, -1, rtnl, 0, NULL, 0))
         fail(id, -1, "environment_failure", "lo_up");
     if (close(rtnl)) fail(id, -1, "environment_failure", "close_rtnetlink");
 }
@@ -437,7 +463,7 @@ static void delete_wg0(const char *id)
     if (rtnl < 0) fail(id, -1, "environment_failure", "rtnetlink_socket_teardown");
     unsigned char payload[64];
     size_t len = dellink_wg0(payload, sizeof(payload));
-    if (nl_send(rtnl, RTM_DELLINK, NLM_F_REQUEST | NLM_F_ACK, 0, payload, len, 0) || nl_receive(rtnl, 0, NULL, 0))
+    if (nl_send(rtnl, RTM_DELLINK, NLM_F_REQUEST | NLM_F_ACK, 0, payload, len, 0) || nl_receive(id, -1, rtnl, 0, NULL, 0))
         fail(id, -1, "environment_failure", "delete_wg0");
     wg_exists = 0;
     if (close(rtnl)) fail(id, -1, "environment_failure", "close_rtnetlink_teardown");
@@ -452,7 +478,7 @@ static void delete_wg0_best_effort(void)
     if (rtnl < 0) return;
     unsigned char payload[64];
     size_t len = dellink_wg0(payload, sizeof(payload));
-    if (!nl_send(rtnl, RTM_DELLINK, NLM_F_REQUEST | NLM_F_ACK, 0, payload, len, 0)) (void)nl_receive(rtnl, 0, NULL, 0);
+    if (!nl_send(rtnl, RTM_DELLINK, NLM_F_REQUEST | NLM_F_ACK, 0, payload, len, 0)) (void)nl_receive(NULL, -1, rtnl, 0, NULL, 0);
     close(rtnl);
 }
 
@@ -463,7 +489,7 @@ static void resolve_wireguard_family(const char *id, int fd)
     attr(payload, &len, CTRL_ATTR_FAMILY_NAME, WG_GENL_NAME, sizeof(WG_GENL_NAME));
     if (nl_send(fd, GENL_ID_CTRL, NLM_F_REQUEST, CTRL_CMD_GETFAMILY, payload, len, 2))
         fail(id, -1, "environment_failure", "genl_getfamily");
-    ssize_t n = recv(fd, nl_buffer, sizeof(nl_buffer), 0);
+    ssize_t n = nl_recv(id, -1, fd, 0);
     struct nlmsghdr *h = (struct nlmsghdr *)nl_buffer;
     if (n < 0 || !NLMSG_OK(h, n) || h->nlmsg_type != GENL_ID_CTRL) fail(id, -1, "environment_failure", "genl_family_reply");
     unsigned char *attrs = (unsigned char *)NLMSG_DATA(h) + GENL_HDRLEN;
@@ -682,7 +708,7 @@ static void rtnl_request(int rtnl, const char *id, unsigned index, unsigned shor
                          const char *what, int expected)
 {
     int error = nl_send(rtnl, type, NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE | NLM_F_EXCL, 0, body, len, 0);
-    if (!error) error = nl_receive(rtnl, 0, NULL, 0);
+    if (!error) error = nl_receive(id, -1, rtnl, 0, NULL, 0);
     if (error != expected) {
         errno = error < 0 ? -error : 0;
         fail(id, index, "environment_failure", what);
@@ -1082,6 +1108,12 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
          * so every fixture descriptor has close-on-exec clear. */
         if (socket(AF_NETLINK, SOCK_RAW, NETLINK_GENERIC) != NETLINK_FD)
             fail(t->id, -1, "environment_failure", "genl_socket_at_7");
+        /* W2 (4.1): an error acknowledgement carries only the nlmsgerr, not
+         * the request (af_netlink.c:2478-2481), so a failing wg_set larger
+         * than the receive buffer is acknowledged in 36 bytes. */
+        int cap_ack = 1;
+        if (setsockopt(NETLINK_FD, SOL_NETLINK, NETLINK_CAP_ACK, &cap_ack, sizeof(cap_ack)))
+            fail(t->id, -1, "environment_failure", "netlink_cap_ack");
         resolve_wireguard_family(t->id, NETLINK_FD);
         if (wg_exists) resolve_wg_ifindex(t->id, -1);
     }
@@ -1230,7 +1262,7 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             int error = nl_send(NETLINK_FD, wg_family,
                                 op->code == OP_WG_SET ? NLM_F_REQUEST | NLM_F_ACK : NLM_F_REQUEST | NLM_F_DUMP,
                                 op->code == OP_WG_SET ? WG_CMD_SET_DEVICE : WG_CMD_GET_DEVICE, op->payload, op->payload_len, 1);
-            if (!error) error = nl_receive(NETLINK_FD, GENL_HDRLEN, op->code == OP_WG_GET ? dump_hex : NULL, sizeof(dump_hex));
+            if (!error) error = nl_receive(t->id, (int)i, NETLINK_FD, GENL_HDRLEN, op->code == OP_WG_GET ? dump_hex : NULL, sizeof(dump_hex));
             if (error < 0) { errno = -error; ret = -1; } else ret = 0;
             break;
         }
@@ -1293,7 +1325,7 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             int error = nl_send(lifecycle_fd, op->code == OP_WG_CREATE ? RTM_NEWLINK : RTM_DELLINK,
                                 op->code == OP_WG_CREATE ? NEWLINK_FLAGS : NLM_F_REQUEST | NLM_F_ACK, 0, lifecycle_body,
                                 lifecycle_len, 0);
-            if (!error) error = nl_receive(lifecycle_fd, 0, NULL, 0);
+            if (!error) error = nl_receive(t->id, (int)i, lifecycle_fd, 0, NULL, 0);
             if (error < 0) { errno = -error; ret = -1; } else ret = 0;
             break;
         }
@@ -1457,6 +1489,11 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         fflush(stdout);
         task_steering_status(t, coverage_fd, comparisons);
         alloc_status(t, coverage_fd, comparisons);
+        /* W2 (4.2, C1): the netlink sockets close before wg0 is deleted, so
+         * a dump still running on one of them (netlink_release runs its
+         * `done`, dropping the device reference) can never hold RTM_DELLINK
+         * in netdev_wait_allrefs_any. Outside every window. */
+        if (t->net && close(NETLINK_FD)) fail(t->id, -1, "environment_failure", "close_netlink");
         if (t->net) delete_wg0(t->id);
         _exit(0);
     }
@@ -1475,6 +1512,7 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
     }
     printf("],\"branches\":[]}\n");
     fflush(stdout);
+    if (t->net && close(NETLINK_FD)) fail(t->id, -1, "environment_failure", "close_netlink");   /* W2 4.2 (C1) */
     if (t->net) delete_wg0(t->id);
     _exit(0);
 }
