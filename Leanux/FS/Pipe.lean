@@ -587,15 +587,19 @@ def pipeSetSize (pid : PipeId) (arg : Nat) : M Int := do
         else branch .pipeSetSizeSoft (← tooManyPipeBuffersSoft userBufs)
       if over then branch .pipeSetSizeUnpriv (← pipeIsUnprivilegedUser) else pure false
     else pure false
-  let ret ← do
-    if limited then pure (-EPERM)
-    else
-      let ret ← pipeResizeRing pid nrSlots
-      if ← branchCmp .pipeSetSizeResizeErr (ret < 0) ret 0 then pure ret
-      else return ((← getPipe pid).maxUsage * PAGE_SIZE : Nat)
-  -- out_revert_acct:
-  _ ← accountPipeBuffers nrSlots (← getPipe pid).nrAccounted
-  return ret
+  -- out_revert_acct (1377-1378) on both error paths; the success path returns
+  -- `pipe->max_usage * PAGE_SIZE` from inside the happy path (1373), with the
+  -- accounting kept
+  let outRevertAcct : M Unit := do
+    _ ← accountPipeBuffers nrSlots (← getPipe pid).nrAccounted
+  if limited then
+    outRevertAcct
+    return -EPERM
+  let ret ← pipeResizeRing pid nrSlots
+  if ← branchCmp .pipeSetSizeResizeErr (ret < 0) ret 0 then
+    outRevertAcct
+    return ret
+  return ((← getPipe pid).maxUsage * PAGE_SIZE : Nat)
 
 /-- get_pipe_info (fs/pipe.c:1386-1395) with `for_splice` false (its test
     folds away with `pipe_has_watch_queue`). -/
