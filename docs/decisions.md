@@ -120,6 +120,15 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   compare the selected build with the approved identity and refuse any other
   build; the evidence is the D3 S2 incident and the 2026-10-11 baseline that
   nearly ran on the pre-D3 build left in the default directory.
+- **2026-10-11 [USER]** Dispatch order is recorded at the source (option A):
+  "Okay, let's do (A)". The order in which Linux dispatches queued deferred
+  units is a hidden input: `__queue_work` records the work item it queues,
+  the arm record names its timer, and a dispatch section names the unit it
+  runs, so the mirror follows the records instead of assuming queue order.
+  Record-only kernel change, in the approved class; the merge's signoff
+  covers the new identity. Found by `s2_index_collision`, which failed in
+  about two of three fresh-guest runs while passing in every chunked full
+  check ([the design](2026-10-11-dispatch-order.md)).
 - **2026-10-11 [AGENT]** This register created from the retired agent memory
   and the dated history formerly in `AGENTS.md`; the 2026-10-07 orchestration
   snapshot is superseded by the pause-state note. The checker's model build
