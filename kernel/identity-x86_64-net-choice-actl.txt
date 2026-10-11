@@ -15,6 +15,6 @@
 # The identity and vmlinux lines below are the dispatch-order builds'
 # until the coordinator rebuilds with this patch.
 # Path-independent identity from scripts/kernel-identity.py:
-f6de8c4a79098339f0f42d42d6041c06e7524e8d106619a4f1c412609a7d6f1d
+ab1be9775cb202dcb01e68d457e7ceb486bc36ebdaee02c73b635013d637078f
 # vmlinux sha256 of the build the evidence used (path-dependent):
-07a67c4c35cb7ebdec04bcb6fed575281df80be299443d11b33ef5fc6d8a3fda
+b8969d093f7a26dc95d3bd4796719b5b1110c72ef3630e23a2583226a7f5c812
