@@ -221,7 +221,8 @@ def taskWorkRun : M Unit := do
 
 /-- One system call: entry, the handler, and the return-to-user work. -/
 def syscall (call : Syscall) : M Int := do
-  modify fun w => { w with steps := #[], userOut := none, userFds := none, extraOut := [], queuedThisCall := [], fired := #[] }
+  modify fun w => { w with steps := #[], userOut := none, userFds := none, extraOut := [], queuedThisCall := [], fired := #[],
+                           netRxSections := 0, netRxSection := 0 }
   let ret ← dispatch call
   taskWorkRun
   -- the guest waits inside the operations that can queue the handshake send

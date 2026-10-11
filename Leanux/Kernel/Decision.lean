@@ -339,6 +339,11 @@ structure Step where
   outcome : Bool
   operands : Option (Int × Int) := none
   excluded : Option OperandExclusion := none
+  /-- W7 stream H (docs/2026-10-06-w4-w7-transmit-bulk.md, 13.2 (ii)): the
+      NET_RX section the step ran in, counted per operation in the order the
+      mirror consumed their start records (1-based); 0 outside any. The check
+      partitions Linux's comparison records by the same sections. -/
+  netRx : Nat := 0
   deriving Repr, BEq
 
 /-- An inclusive range of source lines in one file. -/

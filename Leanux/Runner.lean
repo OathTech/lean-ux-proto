@@ -708,7 +708,9 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
       ("errno", if ret < 0 then toJson (-ret) else .null),
       ("bytes", toJson bytes)] ++ fds ++ device))
     for s in w.steps do
+      -- W7 stream H: the NET_RX section ordinal of a step inside one
       let fields := [("index", toJson index), ("label", toJson s.label)]
+        ++ (if s.netRx > 0 then [("section", toJson s.netRx)] else [])
       branches := branches.push (Json.mkObj (match s.operands, s.excluded with
         | some (a, b), _ => fields ++ [("operands", toJson [a, b])]
         | none, some x => fields ++ [("operands_excluded", toJson x.operand)]

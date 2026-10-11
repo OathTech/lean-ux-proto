@@ -303,6 +303,74 @@ class EvaluationChecks(unittest.TestCase):
         self.assertTrue(run(dict(label='alloc_fd.o_cloexec=0', operands=[0, 0]), [])[0])         # undeclared
         self.assertEqual(run(dict(label='made_up=1', operands=[1, 2]), []), ([], 0))             # left to control_flow
 
+    def test_section_agreement_two_runs(self):
+        # W7 stream H (13.2 (ii), T1): the (c') placement of an inline NAPI
+        # poll changes the operands inside that poll's NET_RX section and of
+        # the enqueue's put right after it. Linux's remote comparison
+        # records carry their block (fifth element), the mirror's branches
+        # their NET_RX section ordinal; each open poll's span agrees under
+        # one run, everything else is the same in both runs and agrees.
+        cmp = {'rel': 'ge', 'const_rhs': False, 'site': None}
+        decisions = {'poll.refcount': dict(site='net/x.c:10', comparison=cmp),
+                     'put.refcount': dict(site='net/x.c:30', comparison=cmp),
+                     'task.cmp': dict(site='fs/y.c:20', comparison=cmp)}
+        loc = {'0x1': [{'function': 'poll', 'source': '/x/.deps/linux/net/x.c:10'}],
+               '0x2': [{'function': 'task', 'source': '/x/.deps/linux/fs/y.c:20'}],
+               '0x3': [{'function': 'worker', 'source': '/x/.deps/linux/net/x.c:30'}]}
+        trace = {'id': 't', 'ops': [{'op': 'wg_inject'}]}
+        # blocks 1 and 3 are NET_RX sections (ordinals 1, 2); block 2 is the worker's
+        sections = {('t', 0): {1: 1, 3: 2}}
+        def run(poll1, put1, poll2, put2, task=(7, 9), ambiguous=2):
+            return {'branches': [dict(index=0, label='task.cmp=0', operands=list(task)),
+                                 dict(index=0, label='poll.refcount=1', operands=list(poll1), section=1),
+                                 dict(index=0, label='put.refcount=1', operands=list(put1)),
+                                 dict(index=0, label='task.cmp=0', operands=list(task)),   # the next item's work
+                                 dict(index=0, label='poll.refcount=1', operands=list(poll2), section=2),
+                                 dict(index=0, label='put.refcount=1', operands=list(put2))],
+                    'observations': [{'ret': 0}], 'napi_irq_ambiguous': ambiguous}
+        after, before = run((1, 2), (3, 2), (1, 2), (3, 2)), run((1, 3), (2, 1), (1, 3), (2, 1))
+        # Linux: poll 1 after the put (block 1: 1 vs 2; the worker's put 3 vs 2),
+        # poll 2 before it (block 3: 1 vs 3; its put 2 vs 1)
+        linux = {'records': [[4, '0x7', '0x9', '0x2'], [4, '0x1', '0x2', '0x1', '1'], [4, '0x3', '0x2', '0x3', '2'],
+                             [4, '0x1', '0x3', '0x1', '3'], [4, '0x2', '0x1', '0x3', '2']]}
+        problems, checked, before_put = check.section_agreement(trace, [after, before], [linux], sections, loc, decisions)
+        self.assertEqual((problems, checked, before_put), ([], 6, [2]))
+        # poll 2's section under the before-put run but its put under the
+        # after-put one is no execution: the span is taken as a whole
+        mixed = {'records': linux['records'][:4] + [[4, '0x3', '0x2', '0x3', '2']]}
+        self.assertTrue(check.section_agreement(trace, [after, before], [mixed], sections, loc, decisions)[0])
+        # neither placement matches poll 1: the trace fails
+        wrong = {'records': [linux['records'][0], [4, '0x1', '0x5', '0x1', '1']] + linux['records'][2:]}
+        self.assertTrue(check.section_agreement(trace, [after, before], [wrong], sections, loc, decisions)[0])
+        # the runs differ where no placement reaches: independence failed
+        elsewhere = run((1, 3), (2, 1), (1, 3), (2, 1), task=(7, 8))
+        problems, _, _ = check.section_agreement(trace, [after, elsewhere], [linux], sections, loc, decisions)
+        self.assertTrue(any(p['label'] == 'napi placement' for p in problems))
+        # a control-flow difference between the runs is never accepted
+        shifted = dict(before, branches=before['branches'][1:] + before['branches'][:1])
+        problems, _, _ = check.section_agreement(trace, [after, shifted], [linux], sections, loc, decisions)
+        self.assertTrue(any(p['label'] == 'napi placement' for p in problems))
+        # a record outside its section's block does not serve it
+        moved = {'records': [linux['records'][0], linux['records'][1], linux['records'][2],
+                             [4, '0x1', '0x3', '0x1', '2'], linux['records'][4]]}
+        problems, _, _ = check.section_agreement(trace, [after, before], [moved], sections, loc, decisions)
+        self.assertTrue(any(p['problem'] == 'no comparison recorded at condition' for p in problems))
+
+    def test_netrx_sections_from_the_remote_rows(self):
+        # the comparison child's remote rows, in area order: block numbers
+        # count every section start; NET_RX blocks get ordinals by sequence
+        start = check.SECTION_START
+        netrx, worker = 0xabc, 0xdef
+        def rec(kind, seq, func):
+            return [kind, '0x0', seq, 16, func.to_bytes(8, 'little').hex() + '00' * 8]
+        rows = [{'id': 't', 'index': 0, 'mode': 'cmp', 'stream': 'remote',
+                 'records': [rec(start, 30, netrx), [check.SECTION_STOP, '0x0', 31, 8, '00' * 8],   # block 1, later
+                             rec(start, 10, worker), [check.SECTION_STOP, '0x0', 40, 8, '00' * 8],   # block 2
+                             rec(start, 20, netrx), [check.SECTION_STOP, '0x0', 21, 8, '00' * 8]]},  # block 3, earlier
+                {'id': 't', 'index': 0, 'mode': 'pc', 'stream': 'remote', 'records': [rec(start, 1, netrx)]}]
+        self.assertEqual(check.netrx_sections(rows, {netrx: 'net_rx_action', worker: 'wg_packet_decrypt_worker'}),
+                         {('t', 0): {3: 1, 1: 2}})
+
     def test_operand_exclusion_is_one_call_site(self):
         # A declared exclusion (kcov.json operand_exclusions) stands for one
         # Linux comparison at the condition line whose outermost frame is the

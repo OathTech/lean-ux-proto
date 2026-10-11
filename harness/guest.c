@@ -302,14 +302,21 @@ struct occurrence { unsigned long pc; unsigned long position; };
 static struct occurrence order[CAPACITY];
 static unsigned char first[CAPACITY];
 
-struct record_occurrence { unsigned long record[4]; unsigned long position; };
+struct record_occurrence { unsigned long record[4]; unsigned long position; unsigned long block; };
 static struct record_occurrence records[CAPACITY / 4];
+/* W7 stream H (docs/2026-10-06-w4-w7-transmit-bulk.md, 13.2 (ii)): the
+ * dispatch-section block (1-based, in area order) each kept comparison
+ * record of the remote area lies in, 0 outside any: split_hidden fills it
+ * while compacting, print_records prints it as a fifth element and keeps
+ * equal records of different blocks apart. */
+static unsigned short cmp_block[CAPACITY / 4];
 
 static int compare_record(const void *a, const void *b)
 {
     const struct record_occurrence *x = a, *y = b;
     int order = memcmp(x->record, y->record, sizeof(x->record));
     if (order) return order;
+    if (x->block != y->block) return x->block < y->block ? -1 : 1;
     return x->position < y->position ? -1 : x->position > y->position;
 }
 
@@ -558,24 +565,52 @@ static void print_fds(const struct operation *op, const struct observation *r)
  * (KCOV_TRACE_CMP) in a second, independent child for the same trace. */
 /* Records are (type, arg1, arg2, ip). Each distinct record is printed once,
  * at its first occurrence, in execution order. */
-static void print_records(const char *tag, const char *id, unsigned i, const unsigned long *area, unsigned long count)
+static void print_records(const char *tag, const char *id, unsigned i, const unsigned long *area, unsigned long count,
+                          const unsigned short *blocks)
 {
     for (unsigned long k = 0; k < count; ++k) {
         memcpy(records[k].record, area + 1 + 4 * k, sizeof(records[k].record));
         records[k].position = k;
+        records[k].block = blocks ? blocks[k] : 0;
     }
     qsort(records, count, sizeof(*records), compare_record);
-    memset(first, 0, count);
-    for (unsigned long k = 0; k < count; ++k)
-        if (!k || memcmp(records[k].record, records[k - 1].record, sizeof(records[k].record)))
-            first[records[k].position] = 1;
     printf("%s {\"id\":\"%s\",\"index\":%u,\"count\":%lu,\"records\":[", tag, id, i, count);
     int comma = 0;
-    for (unsigned long k = 0; k < count; ++k) {
-        if (!first[k]) continue;
-        const unsigned long *r = area + 1 + 4 * k;
-        printf("%s[%lu,\"0x%lx\",\"0x%lx\",\"0x%lx\"]", comma ? "," : "", r[0], r[1], r[2], r[3]);
-        comma = 1;
+    if (!blocks) {
+        /* the task area: each distinct record once, in first-execution order */
+        memset(first, 0, count);
+        for (unsigned long k = 0; k < count; ++k)
+            if (!k || memcmp(records[k].record, records[k - 1].record, sizeof(records[k].record)))
+                first[records[k].position] = 1;
+        for (unsigned long k = 0; k < count; ++k) {
+            if (!first[k]) continue;
+            const unsigned long *r = area + 1 + 4 * k;
+            printf("%s[%lu,\"0x%lx\",\"0x%lx\",\"0x%lx\"]", comma ? "," : "", r[0], r[1], r[2], r[3]);
+            comma = 1;
+        }
+    } else {
+        /* the remote area: each distinct record once, in sorted order, with
+         * the blocks it occurred in as a fifth element ("1-3,7": ranges of
+         * block numbers), so that a record repeated in every NET_RX section
+         * of a flood costs one line, not one per section */
+        for (unsigned long k = 0; k < count;) {
+            unsigned long j = k;
+            while (j < count && !memcmp(records[j].record, records[k].record, sizeof(records[k].record))) ++j;
+            const unsigned long *r = records[k].record;
+            printf("%s[%lu,\"0x%lx\",\"0x%lx\",\"0x%lx\",\"", comma ? "," : "", r[0], r[1], r[2], r[3]);
+            unsigned long lo = records[k].block, hi = lo;
+            int first_range = 1;
+            for (unsigned long m = k + 1; m <= j; ++m) {
+                if (m < j && records[m].block <= hi + 1) { if (records[m].block > hi) hi = records[m].block; continue; }
+                if (lo == hi) printf("%s%lu", first_range ? "" : ",", lo);
+                else printf("%s%lu-%lu", first_range ? "" : ",", lo, hi);
+                first_range = 0;
+                if (m < j) lo = hi = records[m].block;
+            }
+            printf("\"]");
+            comma = 1;
+            k = j;
+        }
     }
     printf("]}\n");
 }
@@ -615,15 +650,25 @@ static unsigned long split_hidden(const char *tag, const struct trace *t, unsign
             j += 3 + n;
         }
     } else {
+        /* the dispatch-section block of each kept comparison record: a
+         * section's records reach the remote area as one block at its stop,
+         * start record first and stop record last, nested blocks before
+         * their enclosing one, so a running count of start records numbers
+         * the block and the stop record ends it (0 outside any block) */
+        unsigned long block = 0, blocks = 0;
         for (unsigned long k = 0; k < count;) {
             unsigned long *r = area + 1 + 4 * k;
             if ((r[0] >> 63) && ((r[0] >> 32) & 0xffff) == CHOICE_MAGIC + 1)
                 fail(t->id, i, "coverage_failure", "malformed_choice_record");   /* payload without header */
             if (!(r[0] >> 63) || ((r[0] >> 32) & 0xffff) != CHOICE_MAGIC) {
                 if (kept != k) memmove(area + 1 + 4 * kept, r, 4 * sizeof(*r));
+                cmp_block[kept] = (unsigned short)block;
                 ++kept; ++k; continue;
             }
             unsigned long n = r[0] & 0xffff, nrec = 1 + (n + 2) / 3;
+            unsigned long kind = (r[0] >> 16) & 0xffff;
+            if (kind == 300) block = ++blocks;
+            else if (kind == 301) block = 0;
             if (n > 5 || k + nrec > count) fail(t->id, i, "coverage_failure", "malformed_choice_record");
             unsigned long words[6] = {0};
             for (unsigned long w = 0; w < n; ++w) {
@@ -1668,8 +1713,8 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         if (comparisons) {
             /* The remote stream's comparisons: the handshake worker's peer
              * reference counts (stage C) are declared comparisons. */
-            print_records("LEANUX_CMP", t->id, i, coverage, count);
-            if (remote) print_records("LEANUX_RCMP", t->id, i, remote, remote_count);
+            print_records("LEANUX_CMP", t->id, i, coverage, count, NULL);
+            if (remote) print_records("LEANUX_RCMP", t->id, i, remote, remote_count, cmp_block);
             continue;
         }
         print_pcs("LEANUX_COVERAGE", t->id, i, coverage, count);

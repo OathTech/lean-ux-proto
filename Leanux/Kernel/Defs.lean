@@ -929,6 +929,10 @@ structure World where
       `false`. `napiAmbiguous` counts the polls met. -/
   napiBeforePut : List Bool := []
   napiAmbiguous : Nat := 0
+  /-- W7 stream H: the NET_RX sections consumed so far in the operation and
+      the one open now (0: none), stamped on every step (`Step.section`). -/
+  netRxSections : Nat := 0
+  netRxSection : Nat := 0
   /-- A steered trace's schedule (site label, value or a draw), which the
       placeholders follow: the domain filter's verdict is then exact for the
       steered sites. -/
@@ -1032,14 +1036,14 @@ def modifyFdt (f : Fdtable → Fdtable) : M Unit :=
 
 /-- Record a C decision point with its outcome and return the outcome. -/
 def branch (d : Decision) (outcome : Bool) : M Bool := do
-  modify fun w => { w with steps := w.steps.push { decision := d, outcome } }
+  modify fun w => { w with steps := w.steps.push { decision := d, outcome, netRx := w.netRxSection } }
   return outcome
 
 /-- Record a C value comparison: its outcome and the two values the C
     compares at the condition. The check matches them against
     `KCOV_TRACE_CMP` records at the condition line. -/
 def branchCmp (d : Decision) (outcome : Bool) (a b : Int) : M Bool := do
-  modify fun w => { w with steps := w.steps.push { decision := d, outcome, operands := some (a, b) } }
+  modify fun w => { w with steps := w.steps.push { decision := d, outcome, operands := some (a, b), netRx := w.netRxSection } }
   return outcome
 
 /-- Record a C value comparison at a declared operand exclusion (a call site
@@ -1047,7 +1051,7 @@ def branchCmp (d : Decision) (outcome : Bool) (a b : Int) : M Bool := do
     `OperandExclusion`): the outcome, which the contract fixes, without the
     operands. The check requires Linux's comparison at the declared call site. -/
 def branchCmpExcluded (d : Decision) (outcome : Bool) (x : OperandExclusion) : M Bool := do
-  modify fun w => { w with steps := w.steps.push { decision := d, outcome, excluded := some x } }
+  modify fun w => { w with steps := w.steps.push { decision := d, outcome, excluded := some x, netRx := w.netRxSection } }
   return outcome
 
 /-- Ask the environment oracle; the site's call count is part of the query. -/

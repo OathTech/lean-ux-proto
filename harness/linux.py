@@ -563,9 +563,15 @@ def _collect(outdir, traces, process_returncode, alloc=None):
                 raise ValueError("comparison record count")
             if len({tuple(r) for r in row["records"]}) != len(row["records"]):
                 raise ValueError("duplicate comparison records")
+            # a remote record carries the dispatch-section blocks it occurred
+            # in as a fifth element, ranges of block numbers (W7 stream H,
+            # docs/2026-10-06-w4-w7-transmit-bulk.md 13.2 (ii)); a task
+            # record has none
             if type(row["records"]) is not list or not all(
-                    type(r) is list and len(r) == 4 and type(r[0]) is int and 0 <= r[0] < 8
-                    and all(type(x) is str and re.fullmatch(r"0x[0-9a-f]{1,16}", x) for x in r[1:]) for r in row["records"]):
+                    type(r) is list and len(r) in (4, 5) and type(r[0]) is int and 0 <= r[0] < 8
+                    and all(type(x) is str and re.fullmatch(r"0x[0-9a-f]{1,16}", x) for x in r[1:4])
+                    and (len(r) == 4 or (type(r[4]) is str and re.fullmatch(r"[1-9][0-9]*(-[1-9][0-9]*)?(,[1-9][0-9]*(-[1-9][0-9]*)?)*", r[4])))
+                    for r in row["records"]):
                 raise ValueError("comparison records")
     except (ValueError, TypeError, KeyError, IndexError) as exc:
         raise LinuxRunError("invalid_output", str(exc), outdir) from exc

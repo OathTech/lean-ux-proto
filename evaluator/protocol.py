@@ -119,9 +119,13 @@ def validate_observation(trace, result):
     if type(branches) is not list or len(branches) > MAX_BRANCHES:
         raise InvalidOutput('branch report size')
     for branch in branches:
-        if not (keys(branch, ('index', 'label')) or keys(branch, ('index', 'label', 'operands'))
-                or keys(branch, ('index', 'label', 'operands_excluded'))) \
-                or not integer(branch['index'], 0, len(trace['ops']) - 1):
+        # W7 stream H (docs/2026-10-06-w4-w7-transmit-bulk.md, 13.2 (ii)): a
+        # branch inside a NET_RX section carries the section's ordinal
+        fields = ('index', 'label') + (('section',) if 'section' in branch else ())
+        if not (keys(branch, fields) or keys(branch, fields + ('operands',))
+                or keys(branch, fields + ('operands_excluded',))) \
+                or not integer(branch['index'], 0, len(trace['ops']) - 1) \
+                or ('section' in branch and not integer(branch['section'], 1, MAX_BRANCHES)):
             raise InvalidOutput('branch fields/index')
         # a declared operand exclusion (correspondence/kcov.json) names the operand
         if 'operands_excluded' in branch and not (type(branch['operands_excluded']) is str

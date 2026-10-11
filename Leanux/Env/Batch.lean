@@ -41,7 +41,13 @@ def runWorker (w : Worker) (body : M Unit) (pid : Option Nat := none) : M Unit :
   -- whether this run switched away
   modify fun s => { s with yieldedWorkers := s.yieldedWorkers.filter (· != w.index),
                            openWorkers := s.openWorkers ++ [(w.index, pid)] }
+  -- W7 stream H (13.2 (ii)): a NET_RX section's steps carry its ordinal in
+  -- the operation; a softirq never nests in a softirq, so the ordinal is
+  -- cleared at its end
+  if w == .netRx then
+    modify fun s => { s with netRxSections := s.netRxSections + 1, netRxSection := s.netRxSections + 1 }
   body
+  if w == .netRx then modify fun s => { s with netRxSection := 0 }
   modify fun s => { s with openWorkers := s.openWorkers.dropLast }
   let stop := (HiddenSite.sectionStop w).info.id
   let deferred := (← get).yieldedWorkers.contains w.index && (← peekHiddenSite).isSome
