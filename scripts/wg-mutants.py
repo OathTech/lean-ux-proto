@@ -415,6 +415,47 @@ L_MUTANTS = [
    'wg_xmit (l_down_purges_staged)', 'Leanux/Env.lean',
    "  WG.wgDown\n  modify fun w => { w with routesViaWg0 := false }\n", "  WG.wgDown\n", 'l_'),
 ]
+# W5+W6 (docs/2026-10-06-w5-w6-receive.md, section 8; v3: 11 of v2's 23): run
+# on the w5_* / w6_* traces (the sixth field: the id prefix). M24 (the RST's
+# wg_xmit after the poll instead of inside its NET_RX section) has no
+# one-line pattern: the reply runs inside the poll's napiCompleteDone by
+# construction (Env/Stack.lean reply4); listed as pending [AGENT, W5+W6 fork].
+W56_MUTANTS = [
+  ('W5-M1-set-ce-on-not-ect', 'rewrite: set_ce applied when the inner is not-ECT (the rc-nonzero arm rewrites)',
+   'Leanux/WG/RxData.lean',
+   "    if !(← branch .ecnDecapOuterNotEct (outer % 4 == 0)) then\n      rc := if outer % 4 == 3 then 2 else 1\n",
+   "    if !(← branch .ecnDecapOuterNotEct (outer % 4 == 0)) then\n      setCe := outer % 4 == 3\n", 'w5_'),
+  ('W5-M2-set-ect1-on-ect1', 'rewrite: set_ect1 applied to ECT(1) too', 'Leanux/WG/RxData.lean',
+   "  if ← branch .ipEcnSetEct1NotEct0 (tos % 4 != 2) then return bytes\n",
+   "  if ← branch .ipEcnSetEct1NotEct0 (tos % 4 == 0) then return bytes\n", 'w5_'),
+  ('W5-M3-set-ce-check-wrong', 'checksum: the IPv4 check adjustment of set_ce off by one', 'Leanux/WG/RxData.lean',
+   "  let check := csum16Add (beAt bytes 10 2) (0xfbff + ecn * 256)\n",
+   "  let check := csum16Add (beAt bytes 10 2) (0xfbff + ecn * 256 + 1)\n", 'w5_'),
+  ('W5-M4-encap-keeps-ce', 'transmit: INET_ECN_encapsulate keeps CE instead of ECT(0)', 'Leanux/WG/Send.lean',
+   "  if ← branch .ecnEncapInnerCe (inner % 4 == 3) then return 2\n",
+   "  if ← branch .ecnEncapInnerCe (inner % 4 == 3) then return 3\n", 'w5_'),
+  ('W5-M8-scope-ignored', 'endpoint: the scope id of a link-local source is not taken', 'Leanux/WG/Handshake.lean',
+   "    let scope := if src.saddr / 2 ^ 118 == 0x3fa then src.iif else 0\n",
+   "    let scope := 0\n", 'w5_'),
+  ('W5-M9-keepalive-not-counted', 'tstats: a keepalive counts its bytes but not its packet', 'Leanux/WG/RxData.lean',
+   "    updateRxStats pid MESSAGE_DATA_LEN_0   -- message_data_len(0)\n    return none\n",
+   "    modifyDev fun d => { d with rxBytes := d.rxBytes + MESSAGE_DATA_LEN_0 }\n"
+   "    setPeer pid { (← getPeer pid) with rxBytes := (← getPeer pid).rxBytes + MESSAGE_DATA_LEN_0 }\n    return none\n", 'w5_'),
+  ('W6-M10-rst-no-df', 'reply: the RST without DF', 'Leanux/Env/Stack.lean',
+   "  let ip (check : Nat) := [0x45, UInt8.ofNat tos] ++ beBytes 40 2 ++ [0, 0, 0x40, 0, 64, 6] ++ beBytes check 2\n",
+   "  let ip (check : Nat) := [0x45, UInt8.ofNat tos] ++ beBytes 40 2 ++ [0, 0, 0, 0, 64, 6] ++ beBytes check 2\n", 'w6_'),
+  ('W6-M11-rst-keeps-ecn', 'reply: the RST keeps the inner ECN bits in its TOS', 'Leanux/Env/Stack.lean',
+   "  let tos := b 1 / 4 * 4\n", "  let tos := b 1\n", 'w6_'),
+  ('W6-M12-ack-seq-without-syn', 'reply: ack_seq without + syn', 'Leanux/Env/Stack.lean',
+   "    else (0, (seq + flags / 2 % 2 + flags % 2 + payloadLen) % 2 ^ 32, 4 + 16)\n",
+   "    else (0, (seq + flags % 2 + payloadLen) % 2 ^ 32, 4 + 16)\n", 'w6_'),
+  ('W6-M19-reply-as-partial', 'reply: a CHECKSUM_NONE reply treated as CHECKSUM_PARTIAL (the checksum-help '
+   'decision taken true, the TCP check refolded)', 'Leanux/Env/Stack.lean',
+   "  discard <| WG.wgXmit 4 dst { bytes, csum := none, mtu := WG.DEVICE_MTU }\n",
+   "  discard <| WG.wgXmit 4 dst { bytes, csum := some (20, 16), mtu := WG.DEVICE_MTU }\n", 'w6_'),
+  ('W6-M24-rst-after-poll', 'placement: the RST\'s wg_xmit after the poll instead of inside its NET_RX section',
+   'Leanux/Env/Stack.lean', None, None, 'w6_'),
+]
 NOT_CLAIMED = {'L-M10-update-gen-zero', 'E-M6-under-load-threshold-gt'}
 # evaluator.check on the traces of one suite whose ids start with a prefix
 SUBSET = """import sys
@@ -425,7 +466,7 @@ load = c.load_traces
 c.load_traces = lambda *a, **k: [t for t in load(*a, **k) if t['id'].startswith(prefix)]
 sys.exit(c.main(sys.argv[2:]))
 """
-PENDING = {m[0] for m in D2_MUTANTS + D3_MUTANTS + L_MUTANTS if m[3] is None}
+PENDING = {m[0] for m in D2_MUTANTS + D3_MUTANTS + L_MUTANTS + W56_MUTANTS if m[3] is None}
 # Equivalent mutants: listed and reported as such, never run or scored as
 # survivors [AGENT 2026-10-07, review S4].
 EQUIVALENT = {
@@ -573,7 +614,7 @@ def run(cmd, **kw):
 def main():
     assert run(['git', 'status', '--porcelain'], capture_output=True, text=True).stdout == '', 'tree must be clean'
     head = run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()
-    mutants = MUTANTS + D1_MUTANTS + D2_MUTANTS + E_MUTANTS + E_UNDERLOAD_MUTANTS + D3_MUTANTS + L_MUTANTS + A_MUTANTS
+    mutants = MUTANTS + D1_MUTANTS + D2_MUTANTS + E_MUTANTS + E_UNDERLOAD_MUTANTS + D3_MUTANTS + L_MUTANTS + A_MUTANTS + W56_MUTANTS
     names = [m[0] for m in mutants]
     assert set(EQUIVALENT) <= set(names), 'an EQUIVALENT entry names no mutant'
     assert NOT_CLAIMED <= set(names), 'a NOT_CLAIMED entry names no mutant'
