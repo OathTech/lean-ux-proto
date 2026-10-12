@@ -475,6 +475,12 @@ inductive AllocSite where
   | dAllocSlabDebugfs
   -- below-cut consumer of the `__alloc_skb` range: the net device's uevents
   | allocUeventSkb
+  -- below-cut consumer of the `__alloc_skb`/`kmalloc_reserve` ranges: the
+  -- stack's own replies built with ip_append_data (W6's TCP RST)
+  | ipAppendDataSkb
+  -- below-cut consumers of the kvmalloc range: a net device's creation
+  -- (alloc_netdev_mqs, its tx and rx queue arrays, WireGuard's ptr rings)
+  | netdevAlloc | netdevTxQueues | netdevRxQueues | ptrRingInit
   -- the pipe paths' direct sites (b-task; A section 19.6, integration)
   | kzallocPipeInfo | kcallocPipeBufs | allocPipePage
   deriving Repr, BEq, DecidableEq
@@ -549,13 +555,32 @@ def AllocSite.info : AllocSite → AllocSiteInfo
   -- wg_destruct; consumed at wgNewlink's register cut and wgDelete's
   -- unregister cut when a chunk arms __alloc_skb [AGENT 2026-10-12].
   | .allocUeventSkb => ⟨27, "allocUeventSkb", "lib/kobject_uevent.c", 289, .cut⟩
+  -- __ip_append_data's alloc_skb (ip_output.c:1138) under ip_send_unicast_reply:
+  -- the skb and its data (two kind-305 records) of the TCP RST the stack sends
+  -- for an inner segment to wg0's address (W6, 2.4.1), before the reply
+  -- re-enters wg_xmit; consumed at `Env.Stack.reply4`'s cut when a chunk arms
+  -- the ranges (a chunk holding alloc traces and a stack_rst4 trace, 2026-10-12)
+  -- [AGENT, wgen].
+  | .ipAppendDataSkb => ⟨28, "ipAppendDataSkb", "net/ipv4/ip_output.c", 1138, .cut⟩
+  -- wg_create (rtnl_newlink_create -> alloc_netdev_mqs, dev.c:11245) and
+  -- register_netdevice's queue arrays (netif_alloc_netdev_queues dev.c:10419,
+  -- netif_alloc_rx_queues dev.c:10352), and wg_newlink's ptr_ring_init
+  -- (include/linux/ptr_ring.h:471): kvmalloc records when a chunk arms that
+  -- range (an fd-array trace beside a lifecycle trace, 2026-10-12), consumed
+  -- at wgNewlink's register cut. The indices skip the hidden ids the timer
+  -- sections hold (100-117): 70 + index must stay unique [AGENT, wgen].
+  | .netdevAlloc => ⟨29, "netdevAlloc", "net/core/dev.c", 11245, .cut⟩
+  | .netdevTxQueues => ⟨48, "netdevTxQueues", "net/core/dev.c", 10419, .cut⟩
+  | .netdevRxQueues => ⟨49, "netdevRxQueues", "net/core/dev.c", 10352, .cut⟩
+  | .ptrRingInit => ⟨57, "ptrRingInit", "include/linux/ptr_ring.h", 471, .cut⟩
 
 def AllocSite.all : List AllocSite :=
   [.kmallocEventfdCtx, .filpAlloc, .dAllocPseudo, .kmallocFdtable, .kvmallocFdArray, .kvmallocFdBitmaps,
    .kmemCacheZallocPeer, .allocNode190, .allocNode205, .allocNode234, .kzallocKeypair,
    .sendBufSkb, .replySkb, .keepaliveSkb, .skbCowHead, .skbChecksumHelp, .skbCowDataTx, .skbCowDataRx,
    .nlmsgNew, .netlinkAllocLargeSkb, .sockAllocSendPskb, .netlinkDump, .netlinkTrim,
-   .kzallocPipeInfo, .kcallocPipeBufs, .allocPipePage, .dAllocSlabDebugfs, .allocUeventSkb]
+   .kzallocPipeInfo, .kcallocPipeBufs, .allocPipePage, .dAllocSlabDebugfs, .allocUeventSkb, .ipAppendDataSkb,
+   .netdevAlloc, .netdevTxQueues, .netdevRxQueues, .ptrRingInit]
 
 /-- The below-cut allocation consumers (consumed at cut points). -/
 def AllocSite.cuts : List AllocSite := AllocSite.all.filter (·.info.count == .cut)
@@ -740,6 +765,10 @@ inductive HiddenSite where
       mirror runs nothing across (no other armed unit runs in the teardown),
       so ambient. -/
   | reschedNetnsCleanup
+  /-- `rhashtable_free_and_destroy`'s `cond_resched` (lib/rhashtable.c:1161),
+      scheduling inside cleanup_net's section while the exiting namespace's
+      hashtables are torn down: ambient, as `reschedNetnsCleanup` [AGENT, wgen]. -/
+  | reschedRhashtableDestroy
   -- Reserved id ranges for the W streams (the interface commit,
   -- docs/2026-10-11-interface.md), outside every range above: W5-W6
   -- 140-149 (`.inetEhashSecret`), W8-W9 150-169 (`.dstCacheResetTs`,
@@ -874,6 +903,7 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   -- pristine lines)
   | .dstCacheResetTs => ⟨150, "dst_cache_reset_ts", "jiffies", "include/net/dst_cache.h", 90, 8, .mirror⟩
   | .reschedNetnsCleanup => ⟨152, "resched:cleanup_net", "resched", "net/core/net_namespace.c", 174, 8, .ambient⟩
+  | .reschedRhashtableDestroy => ⟨153, "resched:rhashtable_free_and_destroy", "resched", "lib/rhashtable.c", 1161, 8, .ambient⟩
   | .dstCacheRefreshTs => ⟨151, "dst_cache_refresh_ts", "jiffies", "net/core/dst_cache.c", 63, 8, .mirror⟩
   | .alloc s => let i := s.info
     ⟨70 + i.index, i.label, "alloc", i.file, i.line, 40, if i.count == .cut then .cut else .mirror⟩
@@ -902,7 +932,7 @@ def HiddenSite.all : List HiddenSite :=
   ++ (Worker.all.filter fun w => w.timer?.isNone && w != .netRx).map .queued
   ++ [.cookieSecretBirthdate, .cookieSecret, .pubkeyHashKey, .ratelimiterKey, .ratelimiterGcNow, .udpPortDraw,
       .neighReachTime, .netlinkAutobindPort]
-  ++ [.dstCacheResetTs, .dstCacheRefreshTs, .reschedNetnsCleanup]
+  ++ [.dstCacheResetTs, .dstCacheRefreshTs, .reschedNetnsCleanup, .reschedRhashtableDestroy]
   ++ AllocSite.all.map .alloc
   ++ [.currentTime]
   ++ [.underLoadNow, .cookieNonce, .ratelimiterNow, .ratelimiterInsertNow]

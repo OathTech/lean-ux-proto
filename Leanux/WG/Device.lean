@@ -221,6 +221,10 @@ def wgNewlink : M Int := do
   if ← branch .newlinkEncryptQueueErr !(← envOk .packetQueueInit) then return ← unwind
   if ← branch .newlinkDecryptQueueErr !(← envOk .packetQueueInit) then return ← unwind
   if ← branch .newlinkHandshakeQueueErr !(← envOk .packetQueueInit) then return ← unwind
+  -- below the cut when the run armed kvmalloc: alloc_netdev_mqs's device
+  -- (before wg_newlink) and the encrypt and decrypt queues' ptr rings
+  -- (`AllocSite.netdevAlloc`, `.ptrRingInit`), before the ratelimiter's key
+  skipCut allocCuts
   let ret ← ratelimiterInit
   if ← branch .newlinkRatelimiterErr (ret < 0) then return ← unwind
   -- register_netdevice: the ifindex (the netns cursor, dev.c:10000-10018),

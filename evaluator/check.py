@@ -48,6 +48,13 @@ TIMERS_SHARE = 0.1
 # The share that steer allocation failures (A1, alloc_fail): the chunks that
 # hold one are armed, so every network trace in them runs armed.
 ALLOC_SHARE = 0.05
+# L (docs/2026-10-05-l-lifecycle.md, section 7): the lifecycle class, a tenth
+# of the WireGuard suite [AGENT], with W3's queue-then-remove variant inside
+LIFECYCLE_SHARE = 0.1
+# W9's routing class and W8a's netns-exit class (docs/2026-10-06-w8-w9-netns-routing.md,
+# section 10); shares the design left open, set small [AGENT]
+ROUTING_SHARE = 0.05
+NETNS_SHARE = 0.03
 # Suites run only on request: traces that must fail (negative controls).
 # (L: lifecycle-controls, the random port steered onto a fixture port, which
 # the mirror must refuse: a stopped mirror fails its whole chunk, so it runs
@@ -143,7 +150,9 @@ def load_traces(suites, counts, seed, only, filtered, alloc_share=ALLOC_SHARE):
         if suite in ('generated', 'wireguard-generated', 'pipes-generated'):
             source = {'generated': generate,
                       'wireguard-generated': lambda s, n: generate_wireguard(s, n, steered=STEERED_SHARE, data=DATA_SHARE,
-                                                                             timers=TIMERS_SHARE, alloc=alloc_share),
+                                                                             timers=TIMERS_SHARE, alloc=alloc_share,
+                                                                             lifecycle=LIFECYCLE_SHARE, routing=ROUTING_SHARE,
+                                                                             netns=NETNS_SHARE),
                       'pipes-generated': lambda s, n: generate(s, n, profile='pipes')}[suite]
             count = counts[suite]
             candidates = [validate_trace(t) for t in source(seed, count * CANDIDATES_PER_TRACE)]
