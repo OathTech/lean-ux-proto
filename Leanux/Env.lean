@@ -50,12 +50,7 @@ def LISTEN_PORT : Nat := 51999
     `v6only` at `LISTEN_PORT`, already excluded by the IPv4 bind. -/
 def portBound (p : Nat) : Bool := p == LISTEN_PORT || p == SENDER_PORT
 
-/-- W5 (docs/2026-10-06-w5-w6-receive.md, 2.5): the link-local address on
-    `lo`, fe80::ffff:1/128 (harness/guest.c `network_fixture`; not fe80::1,
-    which existing traces transmit to through wg0), the source of a
-    `from: "ll"` injection (`IPV6_PKTINFO` on the dual-stack sender: the
-    address and interface 1). -/
-def LO_LINK_LOCAL : Nat := 0xfe8000000000000000000000ffff0001
+-- `LO_LINK_LOCAL` (W5, 2.5) is in Leanux/Kernel/Defs.lean, beside W9's tables.
 
 /-- W1 (docs/2026-10-06-w1-w2-netlink.md, 2.1): the fixture namespace's
     devices besides wg0, for `lookup_interface`: `lo` (ifindex 1, no

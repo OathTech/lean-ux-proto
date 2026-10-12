@@ -251,7 +251,7 @@ def send6 (e : Endpoint) (cache : Option PeerId) (bytes : List UInt8) (ds : Nat)
   if ← branch .send6CacheMiss route.isNone then
     -- !ipv6_addr_any(saddr) && !ipv6_chk_addr(net, saddr, NULL, 0)
     let w ← get
-    let notLocal := saddr != 0 && !(saddr == 1 || w.addrs6.contains saddr)
+    let notLocal := saddr != 0 && !(saddr == 1 || saddr == LO_LINK_LOCAL || w.addrs6.contains saddr)   -- W5: the link-local address on lo
     if ← branch .send6SrcNotLocal notLocal then
       if let some pid := cache then
         let p ← getPeer pid

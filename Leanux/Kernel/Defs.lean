@@ -1125,6 +1125,12 @@ structure Route where
 def LO_IFINDEX : Nat := 1
 def WG0_IFINDEX : Nat := 3
 def LOOPBACK4 : Nat := 0x7f000001
+/-- W5 (docs/2026-10-06-w5-w6-receive.md, 2.5): the link-local address the
+    fixture adds on `lo`, fe80::ffff:1/128 (harness/guest.c `network_fixture`;
+    not fe80::1, which existing traces transmit to through wg0): a local
+    destination and source over `lo` (W9's tables), the source of a
+    `from: "ll"` injection. -/
+def LO_LINK_LOCAL : Nat := 0xfe8000000000000000000000ffff0001
 
 /-- `ip_route_output_flow` on the fixture's tables (route.c): a set source
     must be local (`127/8` or a wg0 address), else `-ENETUNREACH`
@@ -1147,7 +1153,7 @@ def World.route4 (w : World) (saddr daddr : Nat) : Except Int Route :=
     are local over `lo`; else the default route via wg0 (source: the
     device's address) or `ip6_null_entry`'s `-ENETUNREACH`. -/
 def World.route6 (w : World) (saddr daddr : Nat) : Except Int Route :=
-  let isLocal (a : Nat) := a == 1 || w.addrs6.contains a
+  let isLocal (a : Nat) := a == 1 || a == LO_LINK_LOCAL || w.addrs6.contains a   -- W5: the link-local address on lo
   if saddr != 0 && !isLocal saddr then .error (-101)
   else if isLocal daddr then .ok { dev := LO_IFINDEX, src := if saddr != 0 then saddr else daddr }
   else match w.defaultRoute6, w.addrs6.head? with
@@ -1171,7 +1177,7 @@ def routeLookup (family saddr daddr : Nat) : M (Except Int Route) := do
     it receives at every local address (`127/8`, `::1`, wg0's addresses). -/
 def World.wildcardLocal (w : World) (family addr : Nat) : Bool :=
   (family == 2 && (addr / 2 ^ 24 == 127 || w.addrs4.contains addr))
-  || (family == 10 && (addr == 1 || w.addrs6.contains addr))
+  || (family == 10 && (addr == 1 || addr == LO_LINK_LOCAL || w.addrs6.contains addr))   -- W5: the link-local address on lo
 
 /-- The C leaves the modeled domain here. The site is the last decision the
     mirror recorded, which is the C condition that led here. -/
