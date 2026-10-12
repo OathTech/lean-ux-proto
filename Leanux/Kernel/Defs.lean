@@ -143,6 +143,45 @@ abbrev CtxId := Nat
 abbrev PipeId := Nat
 abbrev PageId := Nat
 abbrev PipefsInodeId := Nat
+/-- epoll identities (docs/2026-10-12-epoll-design.md, 4.1): a `struct
+    eventpoll`, an `epitem` and an `eppoll_entry`. Their stores arrive with
+    the epoll mirror (stream S); the wait-queue service names them now. -/
+abbrev EpId := Nat
+abbrev EpiId := Nat
+abbrev PwqId := Nat
+
+/-! ## Wait queues (include/linux/wait.h, kernel/sched/wait.c; design 4.1) -/
+
+/-- `wait_queue_entry.func`, the callback a wake dispatches to. In tier 1
+    the only waiter is epoll's `ep_poll_callback` (fs/eventpoll.c), whose
+    entry is an `eppoll_entry`; tier 2 adds a sleeping task. -/
+inductive WaitFunc where
+  | epPollCallback (pwq : PwqId)
+  deriving Repr, BEq, DecidableEq
+
+/-- `struct wait_queue_entry` (wait.h:31-36). `flags` carries
+    `WQ_FLAG_EXCLUSIVE` only (no caller in the domain sets the others);
+    `private` is implied by `func`; `entry` is the position in its queue. -/
+structure WaitEntry where
+  func : WaitFunc
+  exclusive : Bool := false
+  deriving Repr, BEq
+
+/-- `struct wait_queue_head` (wait.h:38-41): the entries, head first. The
+    spinlock is a cut (one task). -/
+structure WaitQueue where
+  entries : List WaitEntry := []
+  deriving Repr, BEq
+
+/-- A `wait_queue_head_t *`: the heads the domain's objects embed. The
+    eventpoll heads (`ep->wq`, `ep->poll_wait`) arrive with the epoll mirror. -/
+inductive WaitQueueRef where
+  | pipeRd (p : PipeId)
+  | pipeWr (p : PipeId)
+  | eventfdWqh (c : CtxId)
+  | epWq (e : EpId)
+  | epPollWait (e : EpId)
+  deriving Repr, BEq, DecidableEq
 
 /-- The `struct file_operations` table a file's `f_op` points to. Fixture files
     (console, KCOV, /dev/null) are opened by the harness outside the trace; their
@@ -194,15 +233,16 @@ structure File where
   fPipe : Nat := 0
   deriving Repr, BEq
 
-/-- `struct eventfd_ctx`. `wqh` is represented only by its waiter count; the
-    single-threaded domain has no waiters. `id` is the `eventfd_ida` number. -/
+/-- `struct eventfd_ctx`. `wqh` is the wait queue head (`init_waitqueue_head`,
+    eventfd.c:398); its lock is a cut (one task). `id` is the `eventfd_ida`
+    number. -/
 structure EventfdCtx where
   kref : Nat
   count : UInt64
   flags : UInt32
   /-- `none` until `ctx->id = ida_alloc(...)` (eventfd.c:401): kmalloc leaves it unset. -/
   id : Option Int
-  waiters : Nat := 0
+  wqh : WaitQueue := {}
   deriving Repr, BEq
 
 /-- `struct timespec64` (include/linux/time64.h): 16 bytes, `tv_sec` then
@@ -230,12 +270,15 @@ inductive UserId where
 
 /-- `struct pipe_inode_info` (include/linux/pipe_fs_i.h:58-83). `head` and
     `tail` wrap as `unsigned int` and are masked with `ringSize - 1` only at
-    dereference. The mutex and the wait queues are cuts (one task, no
-    waiters); `watch_queue` and `note_loss` do not exist in this build;
-    `fasync_readers`/`fasync_writers` are NULL lists, kept as booleans. -/
+    dereference. The mutex and the queue locks are cuts (one task);
+    `rd_wait`/`wr_wait` are the wait queues (`init_waitqueue_head`,
+    fs/pipe.c:819-820); `watch_queue` and `note_loss` do not exist in this
+    build; `fasync_readers`/`fasync_writers` are NULL lists, kept as booleans. -/
 structure PipeInodeInfo where
   head : UInt32 := 0
   tail : UInt32 := 0
+  rdWait : WaitQueue := {}
+  wrWait : WaitQueue := {}
   maxUsage : Nat
   ringSize : Nat
   nrAccounted : Nat

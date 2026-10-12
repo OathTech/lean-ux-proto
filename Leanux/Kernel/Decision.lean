@@ -327,6 +327,12 @@ inductive Decision where
   | send6CacheSet
   -- W8 (section 3.3): wg_netns_pre_exit (drivers/net/wireguard/device.c:409-428)
   | preExitDevIter | preExitCreator | preExitPeerIter
+  -- epoll stream Q (docs/2026-10-12-epoll-design.md, 4.2): include/linux/poll.h
+  -- poll_wait; fs/pipe.c pipe_poll; fs/eventfd.c eventfd_poll
+  | pollWaitQproc
+  | pipePollReadWait | pipePollWriteWait | pipePollRead | pipePollNotEmpty | pipePollNoWriters
+  | pipePollHup | pipePollWrite | pipePollNotFull | pipePollNoReaders
+  | eventfdPollCountPositive | eventfdPollCountMax | eventfdPollRoom
   deriving Repr, BEq, DecidableEq, Inhabited
 
 /-- A call site of a value comparison whose operand is a guest-wide value the
@@ -404,6 +410,7 @@ private def vlh := "include/linux/if_vlan.h"
 private def iph := "include/net/ip_tunnels.h"
 private def ech := "include/net/inet_ecn.h"
 private def wrl := "drivers/net/wireguard/ratelimiter.c"
+private def plh := "include/linux/poll.h"
 
 private def sp (file : String) (lo hi : Nat) : Span := ⟨file, lo, hi⟩
 
@@ -1311,6 +1318,21 @@ def Decision.info : Decision → DecisionInfo
   | .preExitDevIter => d "wg_netns_pre_exit.devices_iterate" wdv 415 [(416, 416)] []
   | .preExitCreator => d "wg_netns_pre_exit.creator" wdv 416 [(418, 424)] []
   | .preExitPeerIter => d "wg_netns_pre_exit.peers_iterate" wdv 422 [(423, 423)] []
+  -- epoll stream Q: poll_wait (inlined into pipe_poll and eventfd_poll), pipe_poll, eventfd_poll
+  | .pollWaitQproc => d "poll_wait.qproc" plh 44 [(45, 45)] []
+  | .pipePollReadWait => d "pipe_poll.fmode_read_wait" "fs/pipe.c" 672 [(673, 673)] []
+  | .pipePollWriteWait => d "pipe_poll.fmode_write_wait" "fs/pipe.c" 674 [(675, 675)] []
+  | .pipePollRead => d "pipe_poll.fmode_read" "fs/pipe.c" 686 [(687, 690)] []
+  | .pipePollNotEmpty => d "pipe_poll.not_empty" "fs/pipe.c" 687 [(688, 688)] []
+  -- `!pipe->writers && filp->f_pipe != pipe->w_counter`: the operands share line 689
+  | .pipePollNoWriters => d "pipe_poll.no_writers" "fs/pipe.c" 689 [] []
+  | .pipePollHup => d "pipe_poll.f_pipe_ne_w_counter" "fs/pipe.c" 689 [(690, 690)] []
+  | .pipePollWrite => d "pipe_poll.fmode_write" "fs/pipe.c" 693 [(694, 701)] []
+  | .pipePollNotFull => d "pipe_poll.not_full" "fs/pipe.c" 694 [(695, 695)] []
+  | .pipePollNoReaders => d "pipe_poll.no_readers" "fs/pipe.c" 700 [(701, 701)] []
+  | .eventfdPollCountPositive => d "eventfd_poll.count_positive" ev 166 [(167, 167)] []
+  | .eventfdPollCountMax => d "eventfd_poll.count_ullong_max" ev 168 [(169, 169)] []
+  | .eventfdPollRoom => d "eventfd_poll.room" ev 170 [(171, 171)] []
   -- wg_ratelimiter_init (ratelimiter.c:158-203): `++init_refcnt != 1` jumps to
   -- the shared `out:`; the failure arms reach the shared `err:` labels
   | .ratelimiterInitNotFirst => d "wg_ratelimiter_init.refcnt_not_one" wrl 161 [] [(164, 192)]
@@ -1857,6 +1879,16 @@ def Decision.comparison : Decision → Option Comparison
   | .completeSignalPidType => some ⟨.eq, true, none, false⟩
   | .sigqueueAllocOverride => some ⟨.ne, true, none, false⟩
   -- P stream 2 signal (end)
+  -- epoll stream Q. `ULLONG_MAX - 1 > count` (eventfd.c:170) is a constant
+  -- compare, recorded as `count < ULLONG_MAX - 1` (KCOV puts the constant first)
+  | .pipePollReadWait | .pipePollWriteWait | .pipePollRead | .pipePollWrite => some ⟨.flag, true, none, false⟩
+  | .pipePollNotEmpty => some ⟨.eq, false, none, false⟩
+  | .pipePollNoWriters | .pipePollNoReaders => some ⟨.eq, true, none, false⟩
+  | .pipePollHup => some ⟨.ne, false, none, false⟩
+  | .pipePollNotFull => some ⟨.ge, false, none, false⟩
+  | .eventfdPollCountPositive => some ⟨.gt, true, none, false⟩
+  | .eventfdPollCountMax => some ⟨.eq, true, none, false⟩
+  | .eventfdPollRoom => some ⟨.lt, true, none, false⟩
   | _ => none
 
 /-- Decisions that one operation may evaluate more than once: those inside
@@ -2002,6 +2034,10 @@ def Decision.repeatable : Decision → Bool
   -- advance's operation
   | .retransmitGiveUp | .keepaliveNeedAnother | .zeroKeyAlive | .zeroKeyAlreadyQueued
   | .persistentKeepaliveInterval => true
+  -- epoll stream Q: `ep_item_poll` polls one file per item, several per operation
+  | .pollWaitQproc | .pipePollReadWait | .pipePollWriteWait | .pipePollRead | .pipePollNotEmpty
+  | .pipePollNoWriters | .pipePollHup | .pipePollWrite | .pipePollNotFull | .pipePollNoReaders
+  | .eventfdPollCountPositive | .eventfdPollCountMax | .eventfdPollRoom => true
   | _ => false
 
 /-- Every decision, enumerated through the constructor index. -/

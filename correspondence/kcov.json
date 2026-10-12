@@ -36,7 +36,8 @@
     "include/linux/pipe_fs_i.h",
     "fs/inode.c",
     "include/linux/time64.h",
-    "kernel/signal.c"
+    "kernel/signal.c",
+    "include/linux/poll.h"
   ],
   "functions": [
     "touch_atime",
@@ -221,7 +222,9 @@
     "complete_signal",
     "__sigqueue_alloc",
     "send4",
-    "send6"
+    "send6",
+    "pipe_poll",
+    "eventfd_poll"
   ],
   "known_gaps": [],
   "shared_exits": [

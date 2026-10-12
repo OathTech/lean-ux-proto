@@ -5,13 +5,15 @@ import Leanux.FS.Pipe
 # fs/eventfd.c — context and file operations
 
 `eventfd_ctx_do_read`, `eventfd_read`, `eventfd_write`, `eventfd_release`,
-`eventfd_ctx_put` and `eventfd_free_ctx`. Creation (`do_eventfd`) is in
-`Leanux.FS.Eventfd`, which needs the descriptor table.
+`eventfd_poll`, `eventfd_ctx_put` and `eventfd_free_ctx`, and the `f_op`
+dispatchers of the slice (`vfs_poll` among them). Creation (`do_eventfd`) is
+in `Leanux.FS.Eventfd`, which needs the descriptor table.
 
 Every function runs with the C's locks as stated; lock acquire/release are
-recorded in comments at the C's position. Wait-queue manipulation is a cut
-point: the domain has no waiters, so `waitqueue_active` is false and a
-waiter-present outcome is `unsupported`.
+recorded in comments at the C's position. The wake-ups are calls into the
+wait-queue service (`Leanux.FS.Wait`) walking `ctx->wqh`, and `eventfd_poll`
+registers on it through `poll_wait` (docs/2026-10-12-epoll-design.md, 2.5,
+4.2, 4.6).
 -/
 
 namespace Leanux
@@ -42,13 +44,13 @@ def eventfdCtxPut (id : CtxId) : M Unit := do
   if ← branch .krefPutLast (← refcountDecAndTest ctx.kref) then
     eventfdFreeCtx id
 
-/-- eventfd_release (eventfd.c:109-116). `wake_up_poll(&ctx->wqh, EPOLLHUP)`
-    is a cut point: with no waiters it changes no mirror state. -/
+/-- eventfd_release (eventfd.c:109-116). By the time it runs, `__fput` has
+    already called `eventpoll_release`, which removes every epoll item on the
+    file, so `wake_up_poll` walks an empty queue (design 2.5, 2.8). -/
 def eventfdRelease (fid : FileId) : M Int := do
   let file ← getFile fid
   let id ← eventfdCtxOf file  -- ctx = file->private_data
-  let ctx ← getCtx id
-  if ctx.waiters != 0 then unsupported "wake_up_poll with waiters"
+  wakeUpPoll (.eventfdWqh id) EPOLLHUP
   eventfdCtxPut id
   return 0
 
@@ -80,8 +82,8 @@ def eventfdRead (iocb : Kiocb) (iterCount : Nat) : M Int := do
     unsupported "eventfd_read blocking wait"
   let ucnt ← eventfdCtxDoRead id
   modifyK fun k => { k with task := { k.task with inEventfd := true } }
-  if ← branch .eventfdReadWaitqueueActive ((← getCtx id).waiters != 0) then
-    unsupported "wake_up_locked_poll with waiters"
+  if ← branch .eventfdReadWaitqueueActive (← waitqueueActive (.eventfdWqh id)) then
+    wakeUpLockedPoll (.eventfdWqh id) EPOLLOUT
   modifyK fun k => { k with task := { k.task with inEventfd := false } }
   -- spin_unlock_irq(&ctx->wqh.lock)
   -- `copy_to_iter`: the guest's buffer is mapped (a trace input under A-U, 6.5)
@@ -113,11 +115,30 @@ def eventfdWrite (fid : FileId) (buf : ByteArray) (count : Nat) : M Int := do
     let ctx ← getCtx id
     setCtx id { ctx with count := ctx.count + ucnt }
     modifyK fun k => { k with task := { k.task with inEventfd := true } }
-    if ← branch .eventfdWriteWaitqueueActive ((← getCtx id).waiters != 0) then
-      unsupported "wake_up_locked_poll with waiters"
+    if ← branch .eventfdWriteWaitqueueActive (← waitqueueActive (.eventfdWqh id)) then
+      wakeUpLockedPoll (.eventfdWqh id) EPOLLIN
     modifyK fun k => { k with task := { k.task with inEventfd := false } }
   -- spin_unlock_irq(&ctx->wqh.lock)
   return res
+
+/-- eventfd_poll (eventfd.c:118-174), the `poll` operation: registers on
+    `ctx->wqh`, then reads `count` outside the lock (the comment at 126-162
+    argues the order is safe; one task here). -/
+def eventfdPoll (fid : FileId) (wait : PollTable) : M UInt32 := do
+  let file ← getFile fid
+  let id ← eventfdCtxOf file  -- ctx = file->private_data
+  pollWait fid (.eventfdWqh id) wait
+  -- count = READ_ONCE(ctx->count)
+  let count := (← getCtx id).count
+  let mut events : UInt32 := 0
+  if ← branchCmp .eventfdPollCountPositive (count > 0) count.toNat 0 then
+    events := events ||| EPOLLIN
+  if ← branchCmp .eventfdPollCountMax (count == ULLONG_MAX) count.toNat ULLONG_MAX.toNat then
+    events := events ||| EPOLLERR
+  -- `ULLONG_MAX - 1 > count`, recorded as the canonical `count < ULLONG_MAX - 1`
+  if ← branchCmp .eventfdPollRoom (ULLONG_MAX - 1 > count) count.toNat (ULLONG_MAX - 1).toNat then
+    events := events ||| EPOLLOUT
+  return events
 
 /-! ## `f_op` dispatch (a cut point: indirect calls through `file->f_op`)
 
@@ -147,7 +168,7 @@ structure Fops where
 /-- `eventfd_fops` (eventfd.c:302-311): release, poll, read_iter, write,
     llseek = noop_llseek, show_fdinfo; built in, so no module owner. -/
 def eventfdFops : Fops :=
-  { llseek := true, readIter := true, write := true, release := true }
+  { llseek := true, readIter := true, write := true, release := true, poll := true }
 
 /-- `pipefifo_fops` (fs/pipe.c:1232-1241): open, read_iter, write_iter,
     poll, unlocked_ioctl, release, fasync, splice_write; no `llseek` (so no
@@ -195,5 +216,27 @@ def fopWriteIter (iocb : Kiocb) («from» : IovIter) : Option FopsId → M Int
   | some .eventfd => invariant "eventfd_fops has no write_iter (fopsOf routes it to write)"
   | some (.fixture name) => unsupported s!"write_iter of fixture file {name}"
   | none => invariant "file->f_op is NULL"
+
+/-- `f_op->poll(file, pt)`. -/
+def fopPoll (fid : FileId) (pt : PollTable) : Option FopsId → M UInt32
+  | some .eventfd => eventfdPoll fid pt
+  | some .pipefifo => pipePoll fid pt
+  | some (.fixture name) => unsupported s!"poll of fixture file {name}"
+  | none => invariant "file->f_op is NULL"
+
+/-- vfs_poll (include/linux/poll.h:88-93). A fixture file's `f_op` is
+    modelled for release only (`fopsOf`), so its poll stops before the test.
+    The `!file->f_op->poll` test (:90) is reached only from `ep_item_poll`
+    (fs/eventpoll.c, stream S) and is plain control flow until that function
+    is listed in `correspondence/kcov.json`: a declared decision must have an
+    instrumented C function (`witness_table`), and `vfs_poll` is inlined
+    nowhere listed yet. Its `DEFAULT_POLLMASK` arm is the design's `/dev/null`
+    target. -/
+def vfsPoll (fid : FileId) (pt : PollTable) : M UInt32 := do
+  let file ← getFile fid
+  if let some (.fixture name) := file.fOp then
+    unsupported s!"vfs_poll of fixture file {name} (f_op modelled for release only)"
+  if !(← fopsOf file.fOp).poll then return DEFAULT_POLLMASK
+  fopPoll fid pt file.fOp
 
 end Leanux
