@@ -914,3 +914,304 @@ recorded in `docs/decisions.md` by the coordinator: the probe set and the
 prologue rule (6.2 rule 1), the wire mapping and the sub-commands of ops
 32 and 34 (6.1), the validator's syntactic kill rule (6.1), the sentinel
 (7), the uretprobe control (7).
+
+## 14. Audit [AGENT, independent audit 2026-10-12]
+
+An independent read of sections 1-13 against `.deps/linux` (6.12.110),
+`kernel/config-x86_64-net-choice`, `correspondence/kcov.json`,
+`evaluator/check.py`, `harness/guest.c`, `harness/linux.py`,
+`kernel/patches/gen-choice-stream.py` and `Leanux/Kernel/{Defs,Signal}.lean`.
+Nothing was built or run. Severities: **high** blocks the plan as written,
+**medium** changes a decision or a stream's scope, **low** is a correction
+the builder makes in passing. The body above is unrevised; the findings
+are for the v2 revision.
+
+### 14.1 Kernel paths (C)
+
+- **C1 (high). The child's `seccomp_filter_release` is not in the child's
+  window.** `do_exit` calls `kcov_task_exit` at `kernel/exit.c:894`, before
+  `exit_signals` (:902) and `seccomp_filter_release` (:904). The child's
+  KCOV is disabled when the release runs, so 6.2 rule 2's claim that "the
+  exit's `seccomp_filter_release` (2.8) is in it" is false, and
+  `seccompFilterRelease`'s decisions (4.5) would fail "outcome not
+  witnessed" on every child probe. The same ordering puts the child's
+  `exit_files` (:949) and `do_notify_parent` outside the window, which is
+  welcome: the child's file-table teardown is never witnessed. Revision:
+  apply the release's count effects (2.8) as an environment effect of the
+  child's exit (`Leanux/Env.lean` or the runner), with no decisions
+  emitted; keep `getSeccompFilter` as a modelled, witnessed step of the
+  parent's `clone`.
+- **C2 (high). `TRAP` and the kills run the anchored signal chain, which
+  the existing mirror stops `unsupported` on.** `kernel/signal.c` is a
+  listed file, and `send_sig`, `send_sig_info`, `do_send_sig_info`,
+  `send_signal_locked`, `__send_signal_locked`, `prepare_signal`,
+  `complete_signal` and `__sigqueue_alloc` are listed decision functions
+  (the P design's SIGPIPE chain, `Leanux/Kernel/Signal.lean`, mirrored
+  "down to the pending set" with an unblocked signal, a waking thread and
+  handler dispositions `unsupported`). `force_sig_seccomp`
+  (`kernel/signal.c:1855`) enters that chain through
+  `force_sig_info_to_task` for every `TRAP` (trace process or child) and
+  for every `KILL_*`/`default` arm in the child; `SIGSYS` is unblocked with
+  a handler (`TRAP`) or fatal (`KILL`), so `complete_signal` reaches
+  `wants_signal`/`signal_wake_up`, the current `unsupported` stop, and the
+  check additionally fails "Linux ran a decision function the mirror
+  reported nothing in". Section 6.3 lists no signal.c function and 3.1 omits
+  the `sigqueue` slab allocation (`__sigqueue_alloc`, already
+  `AllocSite.sigqueueAlloc`), which every `TRAP`/`KILL` makes. Revision:
+  stream V extends `Signal.lean` with `force_sig_info_to_task` (the
+  blocked/ignored/`SIG_DFL` test, `HANDLER_EXIT` and `SA_IMMUTABLE`, the
+  `sigdelset`/`recalc_sigpending_and_wake` arm), `complete_signal`'s
+  wake arm and `signal_wake_up_state`, lists them in 6.3, adds
+  `sigqueueAlloc` to the seccomp traces' armed ranges, and 13.1's "ten
+  lines" becomes about 0.1 WU. The delivery side (`get_signal`,
+  `dequeue_signal`, `signal_setup_done`, `set_current_blocked` on
+  `rt_sigreturn`) is in the listed file but unlisted; the check tolerates
+  it unless it covers a span line of a listed decision ("span lines covered
+  by an unlisted function"). Step 0 measures that on one `TRAP` trace; a
+  collision is modelled or declared in `known_gaps`, not absorbed.
+  Widening the P design's user decision P9 (signals down to the pending
+  set) is the user's call (14.5).
+- **C3 (medium). The uretprobe control cannot observe `SIGILL`.**
+  `CONFIG_UPROBES` is not set (absent from the config; `arch/x86/kernel/
+  Makefile:154` builds `uprobes.o` only under it), so `sys_uretprobe` is
+  `COND_SYSCALL` (`kernel/sys_ni.c:394`) and call 335 returns `-ENOSYS`
+  when allowed. The exception itself is real (`seccomp_uprobe_exception`,
+  `seccomp.c:736-745`; `mode1_syscalls` :1050) and `__NR_syscalls` is 463
+  (`mseal` 462 is the last entry; there is no `uprobe` 336 on this
+  branch). The control's expectation in 7 becomes `-ENOSYS` against the
+  filter's `SIGSYS`, a cleaner witness of "the cache answers before the
+  program" than `SIGILL` would have been.
+- **C4 (medium). Ops 32 and 33 have no anchored coverage before a mode is
+  set.** `PR_SET_NO_NEW_PRIVS`/`PR_GET_NO_NEW_PRIVS` are entirely in
+  `kernel/sys.c` (:2632-2641; `task_set_no_new_privs` is a `sched.h`
+  inline) and `capset` is in `kernel/capability.c`; neither file is listed,
+  and the check fails an operation with "no coverage in anchored files"
+  and "no model decision". 6.3's "the seccomp arms are witnessed in
+  `kernel/seccomp.c`" holds only for `PR_SET_SECCOMP`/`PR_GET_SECCOMP`.
+  Revision: either list `kernel/sys.c` with `prctl`'s switch as a decision
+  (its arms are KCOV points) or declare ops 32 (nnp sub-commands) and 33
+  coverage-free in `control_flow` the way `wg_flood`/`wg_batch` are
+  special-cased, with the data check as their only evidence. The second is
+  cheaper and honest; record it as a declared unwitnessed op in
+  `kcov.json`.
+- **C5 (low). Allocation sites 2 and 10 are unrecordable by construction,
+  not by measurement.** The kind-305 hook tests the allocator entry's own
+  return address against the armed ranges (`gen-choice-stream.py`
+  :1060-1078); for `__vmalloc` that address is inside `mm/vmalloc.c`, as
+  are the `vm_struct`, `vmap_area` and page-array slab allocations
+  `__vmalloc` makes on the way. Step 0 need not measure this; the design's
+  fallback (unrecorded, assumed to succeed, `-ENOMEM` arms modelled but
+  unexercised) applies from the start, and risk 1 is settled. Sites 4-5
+  are the same case.
+- **C6 (low). Small factual slips.** `check_load_and_stores` is an
+  intersection over incoming edges: it rejects a load of a cell *some*
+  path has not stored (`masks[target] &= memvalid`), not "no path has
+  stored" (2.5). `seccomp_filter_release` (:572-585) has no early return
+  for a task without a filter: it takes `siglock`, clears the head and
+  walks nothing (6.3's "return at their first test" is wrong, harmless:
+  outside every window and after `kcov_task_exit`).
+  `__secure_computing_strict` writes `mode = SECCOMP_MODE_DEAD` before its
+  `seccomp_log` and `do_exit(SIGKILL)` (2.9 omits it). `do_seccomp`
+  requires zero flags for `GET_NOTIF_SIZES` as well as `GET_ACTION_AVAIL`
+  (2.4). By my count `chk_code_allowed`'s table has 49 entries and
+  `seccomp_check_filter` passes 38 codes besides its three rewrites (2.5
+  says 52 and 39); the builder recounts. `alloc_percpu_gfp` sites are at
+  `core.c:114` and `:151`. `ERRNO` with data 0 returns 0 with no error:
+  worth a hand-written trace beside 1 and 4095.
+- **C7 (verified, no change).** Everything else in section 2 checked
+  against the source: `__secure_computing`'s three live arms and the
+  uninstrumented entry (`kernel/entry/common.c:55`, `Makefile:7`); the
+  `__seccomp_filter` arms and `skip`; `ACTION_ONLY` as `s32`, strict
+  less-than so the newest filter wins ties; the never-cached range test;
+  `seccomp_set_mode_filter`'s three early `-EINVAL`s and the
+  `prepare_user_filter`-before-locks order; `seccomp_prepare_filter`'s
+  order (length, `-EACCES`, `kzalloc`, `bpf_prog_create_from_user`, the two
+  `refcount_set(1)`); the path budget with the four-instruction penalty on
+  eBPF lengths and `MAX_INSNS_PER_PATH` 32768; `bpf_prog_create_from_user`
+  and `bpf_prepare_filter`'s sequence including `bpf_prog_store_orig_filter`
+  before `seccomp_check_filter`'s rewrite; `bpf_prog_realloc`'s page test
+  (:257); the weak `bpf_jit_compile` (:3069); the native-only cache check
+  (`arch/x86/include/asm/seccomp.h`, `CONFIG_COMPAT` off); `copy_seccomp`'s
+  single `refs`/`users` increment and the child's cleared KCOV;
+  `kcov_reset` clearing `kcov->t` and restoring `KCOV_MODE_INIT` so a later
+  child can `KCOV_ENABLE` the same descriptor (`-EBUSY` otherwise); the
+  `TRAP` return value (`syscall_rollback` leaves `orig_ax` in `ax`, and
+  `do_syscall_64` leaves `ax` alone for `nr = -1`); `force_sig_seccomp`'s
+  fields; the strict allowlist. SIGCHLD to the parent is default-ignored
+  and dropped in the child's `do_notify_parent` (child context, outside the
+  window), so the parent's `wait4` delivers nothing.
+
+### 14.2 Mirror and seam (M)
+
+- **M1 (medium). The decision volume of 2.6 dissolves in the check's own
+  semantics; keep the emulation on the modelled path.** The check compares
+  the *set* of (decision, outcome) pairs per operation and tolerates
+  repeats only for decisions marked `repeatable`
+  (`Leanux/Kernel/Decision.lean:1868`; `control_flow`'s "decision reported
+  more than once"). Every per-instruction decision of 4.2-4.3 (the checker
+  walks, the two conversion passes) and every per-number decision of
+  `seccompCachePrepare` repeats within one install, so they must be
+  `repeatable` regardless of volume; the design does not say so. Once they
+  are, the mirror may emit each pair once per operation (dedupe at
+  emission), the Python intersection is set-sized, and risk 3's "cut with
+  bitmap as data" fallback is unnecessary. The 463 runs stay in Lean,
+  where they are cheap. KCOV's side is not a concern either: `CAPACITY` is
+  1M entries (`guest.c:46`), and even the 4096-instruction budget traces
+  stay well under it.
+- **M2 (medium). The child needs a representation; `Kernel` has one
+  task.** `Kernel.task : Task` is the only task (`Defs.lean:331-372`), and
+  `Signal.lean` states "the target is always `current`, the one task". A
+  child probe runs `force_sig_seccomp`, `__secure_computing` and strict
+  mode in a second task with its own `seccomp`, `noNewPrivs`, `blocked`
+  and `pending`. Sections 4.1 and 5 name the child but not where it
+  lives. The interface commit (step 1) should add `Kernel.child : Option
+  Task` (or a `current` selector), created at the probe from the parent's
+  state through `copy_seccomp`'s effects and destroyed at `wait4`, and
+  `Signal.lean`'s single-task assumption becomes a `current` parameter.
+  This is V's largest structural change and belongs in step 1, not step 3.
+- **M3 (low). The engine contract should state the register width
+  convention.** The translation emits 64-bit `BPF_JMP`-class comparisons
+  (`JGT`/`JGE`/`JLT`/`JLE`/`JEQ`/`JNE`/`JSET`) on registers whose upper 32
+  bits are zero because every write to `A`, `X` and `TMP` is an ALU32 or
+  `MOV32_IMM` (zero-extending). `MiniInterp` over `UInt32` is correct only
+  under that invariant; item 4 of 4.4 should say it, so an external ISA
+  model over `UInt64` is checked against the same terms. Likewise the
+  `classicRun` reference of 4.6 must define `LSH|X`/`RSH|X` with a count
+  of 32 or more as the eBPF does (count masked to 5 bits) and `DIV|X`/
+  `MOD|X` by zero as "the program returns 0": statement 4 is false under
+  the naive classic reading.
+- **M4 (low). The one core.c decision the mirror takes should be named as
+  such.** `bpf_prog_realloc` is a cut function (6.3) whose `pages <=`
+  test (`core.c:257`) the mirror nonetheless evaluates (3.1, risk 6) to
+  decide whether an allocation record is due. With C5 the record never
+  comes, so the decision has no witness and no data effect: drop the
+  `pages` field, the DWARF constant and risk 6, and treat
+  `bpf_prog_realloc` as an allocation step that is assumed to succeed. The
+  seam statement of 4.4 ("no decision inside the service is a mirror
+  decision") then holds for core.c as a whole.
+- **M5 (low). Proof shapes.** Statement 1 (chain monotonicity) also relies
+  on the uretprobe exception, since the first filter's bitmap has bit 335
+  set whatever the program says; state the exception once for both 1 and
+  2. `TSYNC` on a single-threaded task is a successful no-op in the C
+  (`seccomp_can_sync_threads` and `seccomp_sync_threads` skip the caller)
+  and is the flag every real sandbox sets; the brief's exclusion is
+  honoured, but it costs two decisions to bring in later, and the control
+  that expects `unsupported` should say that is a scope choice, not an
+  impossibility.
+- **M6 (verified).** The seam is clean: `kernel/bpf/core.c` and
+  `include/linux/filter.h` are unlisted, `seccompRunFilters` is parametric
+  in `BpfEngine`, `MiniInterp` rejects anything the translation cannot
+  emit, and the engine's only effect is `R0`'s low 32 bits. The classic
+  checker and translation are on the modelled path with their decisions,
+  which is where the thin layer wants them. The cache's emulation on
+  `orig_prog` (pre-rewrite codes) is right.
+
+### 14.3 Evidence (E)
+
+- **E1 (medium). The kind-309 record as specified cannot be carried.**
+  `kcov_choice_write` caps a record's payload at `KCOV_CHOICE_MAX_WORDS`
+  (5 words, 40 bytes; `gen-choice-stream.py:64, :182`), and records share
+  the KCOV area. "Up to 256 instructions" (13.3) is 2 KB. Two shapes fit:
+  one record per emitted eBPF instruction (one payload word each, four
+  words with header, site and sequence; about 80 per generated install)
+  or one record of the eBPF length plus a 64-bit hash of the instruction
+  bytes. The per-instruction form keeps the diagnostic local (the first
+  differing instruction) and is the one to propose; the hash form is
+  cheaper and enough for the gate. Either way the instrument needs its
+  one-off mutant under AGENTS.md's rule, with a mutant the behavioural
+  check does not catch, e.g. the inverted-condition arm for `jt == 0`
+  emitting `JLE` for `JGE` (caught only when `A == k`), run once, reported
+  in the claim commit, deleted.
+- **E2 (low). The regression claim is right but its reason is not.**
+  Listing `kernel/seccomp.c` leaves the existing corpora unchanged because
+  `copy_seccomp` and `seccomp_filter_release` run outside every window,
+  not because they return early (C6). The claim stands; the sentence
+  changes.
+- **E3 (low). Step 0 should also time a long-filter install.** The budget
+  traces (7) walk 4096 instructions through three checker passes and two
+  conversion passes; with M1 the check's cost is bounded by distinct
+  pairs, but the mirror's emission size and the Lean run time of
+  `seccompCachePrepare` on a 4096-instruction `orig_prog` (463 emulations
+  that may each walk far before a `RET`) are worth one measurement beside
+  the three-filter trace.
+
+### 14.4 Harness and scope (S)
+
+- **S1 (medium). The syntactic kill rule misses two ways a filter kills
+  the trace process.** `RET|A` returns the accumulator, which the program
+  may have loaded from `args[k]` or computed; and `DIV|X`/`MOD|X` with
+  `X = 0` returns 0 through the translation's guard, and 0 is
+  `SECCOMP_RET_KILL_THREAD`. A g2 body with "ALU with immediates and `X`"
+  and `X` never set has `X = 0`. Either on a `self` probe kills the trace
+  process and the whole batch. Revision: the validator treats any filter
+  containing `RET|A`, `DIV|X` or `MOD|X` as potentially killing (child
+  only), and the corpus exercises all three in a child so the arms are
+  witnessed rather than merely avoided.
+- **S2 (low). Observations the child needs that 6.1 lacks.** The child's
+  strict call (`SECCOMP_SET_MODE_STRICT` after an inherited filter answers
+  `-EINVAL`; 7's "strict after filter") has no field; a strict child that
+  leaves through `exit` has a normal exit status, not a `ret` or a
+  `signal`. Add `child_setup: {strict_ret}` and `exited: status` to the
+  probe's observation.
+- **S3 (low). The `-EFAULT` arms need a field.** 7 lists "a bad pointer
+  (`-EFAULT`)" for `seccomp_prepare_user_filter`'s copy of the
+  `sock_fprog`, and 9.3 calls the instruction copy's `-EFAULT`
+  unexercised; op 30's fields express neither (`filter: null` is the NULL
+  program pointer, `-EINVAL`). One field, `bad: fprog | insns`, exercises
+  both and removes an entry from 9.3.
+- **S4 (low). Descriptor 8 is W8's.** `INJECT_FD` is 8 and `PIN_FD` 9 in
+  the foreign-creator fixture (`guest.c:79-80`; `linux.py:600`); the
+  netlink socket is 7. No seccomp trace uses that fixture, but the
+  validator should reject `seccomp_child` with `net_fixture:
+  foreign-creator` explicitly rather than by accident of the corpus.
+- **S5 (low). The in-window `clone` touches a listed file.** `copy_files`
+  → `dup_fd` (`fs/file.c`, unlisted function) runs `copy_fd_bitmaps`,
+  `__clear_open_fd` and `kmem_cache_alloc(files_cachep)` inside the
+  parent's window. The check tolerates an unlisted function of a listed
+  file unless it covers a span line of a listed decision, and the
+  allocation is outside the armed ranges; step 0 confirms on one child
+  probe (`sane_fdtable_size` and the bitmap copy are the lines to watch).
+  Mention it in 6.3 so the next reader does not rediscover it.
+- **S6 (verified).** The self-sandboxing rule is sound as stated: the
+  harness's calls (glibc's `fork` is `clone` plus two `rt_sigprocmask`,
+  `waitpid` is `wait4`, the handler's `rt_sigreturn`, the KCOV `ioctl`s,
+  `write`, `mmap`, `exit_group`, and in a mixed trace the pipe profile's
+  calls) are all outside the probe set and constantly allowed by the
+  prologue, so each is a cache hit; the libc calls none of 102, 104, 107,
+  108 on its own. The `invariant` stop of 4.5 is the right backstop. The
+  kill-in-a-child plumbing is feasible: KCOV's `ENABLE`/`reset` semantics
+  (C7) support re-enabling descriptor 8 per child, the area is the
+  kernel's own pages mapped into both processes, and `RLIMIT_CORE` zero
+  makes `do_coredump` bail at its limit test with no `0x80` in the wait
+  status.
+- **S7 (estimate).** With C2 (about 0.1 WU), M2 (about 0.05), the step-0
+  additions and E1's rework, the plan is about 1.2 WU rather than 1.0;
+  the scout's 0.5-0.7 band did not count the translation mirror, the
+  child, or the signal chain.
+
+### 14.5 Which decisions are the user's (D)
+
+- **User's, by the oracle-change rule:** 13.7 (`CONFIG_SECCOMP=y`,
+  behaviour/config class; already opened) and 13.3 (a kernel record, even
+  record-only; per-merge signoff), the latter re-posed in E1's shape.
+- **User's, by precedent:** widening the P design's decision P9 (signals
+  mirrored down to the pending set) to handler delivery and fatal signals
+  (C2). It is small and the design cannot proceed without it, so it goes
+  in the same signoff as 13.7.
+- **Tactical, under the standing delegation (record as [AGENT]):** 13.1
+  (`TRAP` through a handler, now with C2's cost), 13.2 (the child probe on
+  descriptor 8), 13.4 (strict mode, child-only), 13.5 (`TRACE` without a
+  tracer), 13.6 (the typeclass with `MiniInterp`), and the five listed at
+  the end of 13, plus S1's wider kill rule and C4's coverage-free ops.
+  Nothing in 13.1-13.6 changes a trust surface; each is the thin layer's
+  natural reading of the C.
+
+### 14.6 Verdict
+
+Sound at the seam and in the kernel reading; not yet buildable at the
+boundaries it crosses into already-anchored code. C1 and C2 would fail the
+first child probe and the first `TRAP` on the scratch kernel; C4 the first
+`prctl` op. All three have mechanical fixes that fit the existing
+instruments. With those, M1-M2 settled in the interface commit, S1 in the
+validator, and 13.3 re-posed per E1, the plan is a credible 1.2 WU and
+streams U and W can start before V's signal extension lands.
