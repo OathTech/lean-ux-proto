@@ -16,6 +16,7 @@
 #include <arpa/inet.h>
 #include <time.h>
 #include <sched.h>
+#include <x86intrin.h>
 #include <signal.h>
 #include <sys/socket.h>
 #include <stdint.h>
@@ -53,6 +54,30 @@
 /* wg_observe waits this long for the handshake workers before it looks. */
 #define OBSERVE_WAIT_US 400000
 #define QUEUE_WAIT_US 100000
+/* W8 (docs/2026-10-06-w8-w9-netns-routing.md, sections 3.1-3.2): the
+ * foreign-creator fixture ("net_fixture": "foreign-creator", net 3). wg0
+ * lives in the device namespace D with the trace process, the inner sender
+ * (6) and the generic-netlink socket (7); its outer side lives in the
+ * creating namespace C: the listeners (4, 5), the injector (8, the outer
+ * sender at SENDER_PORT) and the pin (9, an open /proc/self/ns/net).
+ * wg_netns_close closes the injector and the listeners, whose put_net is
+ * RCU-deferred, lets those run (NETNS_SETTLE_US), then closes the pin: the
+ * last reference, so cleanup_net is queued inside that close (its kind-307
+ * record in this operation's task stream), and waits NETNS_WAIT_US for the
+ * teardown's section. The parked namespace descriptors and the pin
+ * handshake with the holder sit above the descriptors the fixture checks
+ * (3-31) but below NR_OPEN_DEFAULT (64), so the descriptor table never
+ * grows (its size is an operand of every close); all are closed before
+ * the first window. The settle between the closes is a TSC spin, not a
+ * sleep: a nanosleep inside the window would record its clock reads. */
+#define INJECT_FD 8
+#define PIN_FD 9
+#define NETNS_SETTLE_US 100000
+#define NETNS_WAIT_US 1000000
+#define PARK_D_FD 40
+#define PARK_C_FD 41
+#define PIN_SIGNAL_FD 42
+#define PIN_ACK_FD 43
 /* A wg_xmit payload: at most wg0's MTU (1420) less the IPv4 and UDP headers. */
 #define MAX_XMIT_PAYLOAD 1392
 /* No WireGuard timer is armed before wg_up (mod_peer_timer needs a running
@@ -112,12 +137,13 @@
 #define OP_WG_DELETE 17
 #define OP_WG_FLOOD 18
 #define OP_WG_ADVANCE 19
+#define OP_WG_NETNS_CLOSE 22
 #define OP_WG_DELADDR 23
 #define OP_WG_DELROUTE 24
-/* 20-24 are reserved for the W streams (harness/trace.py RESERVED_OPCODES,
- * docs/2026-10-11-interface.md): 20 wg_get_start and 21 wg_get_recv (W2),
- * 22 wg_netns_close (W8), 23 wg_deladdr and 24 wg_delroute (W9). No define
- * until a stream lands: the opcode switch's default fails any such code. */
+/* 20-21 are reserved for W2 (harness/trace.py RESERVED_OPCODES,
+ * docs/2026-10-11-interface.md): wg_get_start and wg_get_recv. No define
+ * until the stream lands: the opcode switch's default fails any such code.
+ * W8 took 22 (wg_netns_close), W9 23-24. */
 #define IS_LIFECYCLE_OP(code) ((code) == OP_WG_CREATE || (code) == OP_WG_DOWN || (code) == OP_WG_DELETE)
 /* The parent's per-child hang guard (P design section 6): a child still
  * running after this many seconds is killed with its process group. */
@@ -139,6 +165,46 @@ struct steer_arg { uint32_t n, pad; struct steer_entry e[STEER_MAX]; };
  * host; one per batch. */
 #define DISPATCH_MAX 32   /* the kernel's KCOV_DISPATCH_MAX */
 struct dispatch_arg { uint32_t n, flags; uint64_t funcs[DISPATCH_MAX]; };
+/* W8: the subset of the batch's dispatch set this trace arms (its `arm`
+ * bits), loaded on the remote instance; the kernel opens sections and
+ * writes queue records for these functions only. */
+static struct dispatch_arg trace_dispatch;
+/* W8: the pin holder, a process forked once by the batch, keeps an open
+ * /proc/<pid>/ns/net of every foreign-creator trace process's D until the
+ * batch ends (section 3.2, C1: D's teardown never runs while a later run is
+ * armed with cleanup_net). The pins live in the holder, not the batch, so no
+ * child inherits one (an inherited descriptor would shift the fixture and
+ * widen the descriptor table). Two pipes, made once and inherited by every
+ * child: signal (a trace process writes its pid) and ack (the holder answers
+ * 'k', or 'n' if the open failed); every child moves its ends above the
+ * descriptors a trace can see and closes the originals. */
+static int pin_pipe[4] = {-1, -1, -1, -1};
+static int netns_closed;
+/* the TSC rate (kHz) from /proc/cpuinfo, for the settle spin */
+static unsigned long long tsc_khz;
+
+static void settle_spin(unsigned long long us)
+{
+    unsigned long long end = __rdtsc() + us * tsc_khz / 1000;
+    while (__rdtsc() < end) __asm__ volatile("pause");
+}
+
+static void pin_holder(void)
+{
+    struct rlimit pins = {2 * 4096 + 64, 2 * 4096 + 64};
+    if (setrlimit(RLIMIT_NOFILE, &pins)) _exit(3);
+    if (close(pin_pipe[1]) || close(pin_pipe[2])) _exit(3);
+    for (;;) {
+        pid_t pid;
+        ssize_t n = read(pin_pipe[0], &pid, sizeof(pid));
+        if (n == 0) _exit(0);   /* the batch is gone: the pins go with this process */
+        if (n != (ssize_t)sizeof(pid)) _exit(3);
+        char path[64];
+        snprintf(path, sizeof(path), "/proc/%d/ns/net", (int)pid);
+        int pin = open(path, O_RDONLY);
+        if (write(pin_pipe[3], pin < 0 ? "n" : "k", 1) != 1) _exit(3);
+    }
+}
 /* flags: write the kind-303 arm records (D3), from the wire's A line */
 #define DISPATCH_ARM_RECORDS 1
 static struct dispatch_arg dispatch;
@@ -157,8 +223,10 @@ static struct alloc_arg alloc;
 #define KCOV_LEANUX_ALLOC_STATUS _IOR('c', 206, unsigned long)
 struct trace {
     /* net: 0 no network fixture, 1 the fixture with a down wg0, 2 the bare
-     * network fixture without wg0 (L, "net_fixture": "bare") */
-    char id[81]; unsigned count; unsigned rlimit; unsigned net; struct operation ops[MAX_OPS];
+     * network fixture without wg0 (L, "net_fixture": "bare"), 3 the
+     * foreign-creator fixture (W8); arm: the trace's subset of the batch's
+     * dispatch set, a bit per entry (W8: per-trace arming, section 3.2) */
+    char id[81]; unsigned count; unsigned rlimit; unsigned net; unsigned arm; struct operation ops[MAX_OPS];
     unsigned nsteer; struct steer_entry steer[STEER_MAX];
 };
 static char line[4 * MAX_PAYLOAD];
@@ -447,22 +515,54 @@ static size_t delroute_wg0(int family, unsigned char *payload, size_t size)
  * bare fixture, a down `wg0`, created over a temporary rtnetlink socket that
  * is closed again before the fixture descriptors are opened, so the
  * descriptor-table history matches the plain fixture. */
-static void network_fixture(const char *id, int bare)
+static void network_fixture(const char *id, int mode)
 {
     if (unshare(CLONE_NEWNET)) fail(id, -1, "environment_failure", "unshare_net");
     net_live = 1;
     int rtnl = socket(AF_NETLINK, SOCK_RAW | SOCK_CLOEXEC, NETLINK_ROUTE);
     if (rtnl < 0) fail(id, -1, "environment_failure", "rtnetlink_socket");
     unsigned char payload[256];
-    if (!bare) {
+    /* lo up: what wg0 sends to 127.0.0.1 and ::1 reaches the listeners. */
+    struct ifinfomsg up = {.ifi_family = AF_UNSPEC, .ifi_index = 1, .ifi_flags = IFF_UP, .ifi_change = IFF_UP};
+    if (mode == 3) {
+        /* W8 (section 3.1): this namespace is D, the device's; C, the
+         * creating one, is a second unshare, lo up as well; wg0 is created
+         * over a rtnetlink socket in C with IFLA_NET_NS_FD naming D, so
+         * rtnl_newlink_create registers the device in D (ifindex 3) and
+         * wg_newlink sees src_net = C: creating_net = C. Both namespaces
+         * stay parked at high descriptors for execute's socket setup. */
+        if (nl_send(rtnl, RTM_NEWLINK, NLM_F_REQUEST | NLM_F_ACK, 0, (unsigned char *)&up, sizeof(up), 0) ||
+            nl_receive(rtnl, 0, NULL, 0))
+            fail(id, -1, "environment_failure", "lo_up");
+        if (close(rtnl)) fail(id, -1, "environment_failure", "close_rtnetlink");
+        int d = open("/proc/self/ns/net", O_RDONLY);
+        if (d < 0 || dup2(d, PARK_D_FD) != PARK_D_FD || close(d)) fail(id, -1, "environment_failure", "park_netns_d");
+        if (unshare(CLONE_NEWNET)) fail(id, -1, "environment_failure", "unshare_net_c");
+        rtnl = socket(AF_NETLINK, SOCK_RAW | SOCK_CLOEXEC, NETLINK_ROUTE);
+        if (rtnl < 0) fail(id, -1, "environment_failure", "rtnetlink_socket_c");
+        if (nl_send(rtnl, RTM_NEWLINK, NLM_F_REQUEST | NLM_F_ACK, 0, (unsigned char *)&up, sizeof(up), 0) ||
+            nl_receive(rtnl, 0, NULL, 0))
+            fail(id, -1, "environment_failure", "lo_up_c");
+        size_t len = newlink_wg0(payload, sizeof(payload));
+        uint32_t ns_fd = PARK_D_FD;
+        attr(payload, &len, IFLA_NET_NS_FD, &ns_fd, sizeof(ns_fd));
+        if (nl_send(rtnl, RTM_NEWLINK, NEWLINK_FLAGS, 0, payload, len, 0) || nl_receive(rtnl, 0, NULL, 0))
+            fail(id, -1, "environment_failure", "create_wg0_in_d");
+        wg_exists = 1;
+        first_up = 1;
+        if (close(rtnl)) fail(id, -1, "environment_failure", "close_rtnetlink_c");
+        int c = open("/proc/self/ns/net", O_RDONLY);
+        if (c < 0 || dup2(c, PARK_C_FD) != PARK_C_FD || close(c)) fail(id, -1, "environment_failure", "park_netns_c");
+        if (setns(PARK_D_FD, CLONE_NEWNET)) fail(id, -1, "environment_failure", "setns_d");
+        return;
+    }
+    if (mode != 2) {
         size_t len = newlink_wg0(payload, sizeof(payload));
         if (nl_send(rtnl, RTM_NEWLINK, NEWLINK_FLAGS, 0, payload, len, 0) || nl_receive(rtnl, 0, NULL, 0))
             fail(id, -1, "environment_failure", "create_wg0");
         wg_exists = 1;
         first_up = 1;
     }
-    /* lo up: what wg0 sends to 127.0.0.1 and ::1 reaches the listeners. */
-    struct ifinfomsg up = {.ifi_family = AF_UNSPEC, .ifi_index = 1, .ifi_flags = IFF_UP, .ifi_change = IFF_UP};
     if (nl_send(rtnl, RTM_NEWLINK, NLM_F_REQUEST | NLM_F_ACK, 0, (unsigned char *)&up, sizeof(up), 0) ||
         nl_receive(rtnl, 0, NULL, 0))
         fail(id, -1, "environment_failure", "lo_up");
@@ -823,10 +923,12 @@ static void print_stats(const char *id, unsigned index)
  * state; only the PC-mode child reports. */
 static void observe(const struct trace *t, unsigned i, long first, int comparisons)
 {
-    if (!comparisons) printf("LEANUX_WGOBS {\"id\":\"%s\",\"index\":%u,\"datagrams\":[", t->id, i);
+    /* W8: after wg_netns_close the listeners and the injector are gone:
+     * their datagrams are null (the first recvfrom returned -EBADF). */
+    if (!comparisons) printf("LEANUX_WGOBS {\"id\":\"%s\",\"index\":%u,\"datagrams\":%s", t->id, i, netns_closed ? "null" : "[");
     int comma = 0;
-    if (first >= 0 && !comparisons) comma = print_datagram(comma, 4, first);
-    for (int family = 4; family <= 6; family += 2) {
+    if (!netns_closed && first >= 0 && !comparisons) comma = print_datagram(comma, 4, first);
+    for (int family = 4; family <= 6 && !netns_closed; family += 2) {
         for (;;) {
             long n = recv(family == 4 ? LISTEN4_FD : LISTEN6_FD, observe_buffer, sizeof(observe_buffer), MSG_DONTWAIT);
             if (n < 0) {
@@ -836,18 +938,21 @@ static void observe(const struct trace *t, unsigned i, long first, int compariso
             if (!comparisons) comma = print_datagram(comma, family, n);
         }
     }
-    if (!comparisons) printf("],\"replies\":[");
+    if (!comparisons) printf("%s\"replies\":[", netns_closed ? "," : "],");
     /* What the sender received (wg0's datagrams to it, and inner packets
      * delivered to it): recvfrom's source as the IPv6 socket reports it
      * (family, address as hex, port; an IPv4 source appears v4-mapped),
      * then the length, the WireGuard message type, the receiver index
      * (bytes 8-11, little-endian) and the bytes. */
     comma = 0;
-    for (;;) {
+    /* W8: the injector's inbox (wg0's datagrams to the outer sender in C)
+     * before the inner sender's; both lists are sorted by the harness and
+     * the mirror, so the order here does not matter. */
+    for (int which = (t->net == 3 && !netns_closed) ? 0 : 1; which < 2; ++which) for (;;) {
         struct sockaddr_in6 source;
         socklen_t source_len = sizeof(source);
         memset(&source, 0, sizeof(source));
-        long n = recvfrom(SEND_FD, observe_buffer, sizeof(observe_buffer), MSG_DONTWAIT | MSG_TRUNC,
+        long n = recvfrom(which ? SEND_FD : INJECT_FD, observe_buffer, sizeof(observe_buffer), MSG_DONTWAIT | MSG_TRUNC,
                           (struct sockaddr *)&source, &source_len);
         if (n < 0) {
             if (errno != EAGAIN) fail(t->id, i, "environment_failure", "drain_sender");
@@ -928,12 +1033,14 @@ static unsigned long *enable_remote(const struct trace *t, int comparisons)
         memcpy(steer.e, t->steer, t->nsteer * sizeof(steer.e[0]));
         if (ioctl(fd, KCOV_LEANUX_STEER_LOAD, &steer)) fail(t->id, -1, "coverage_failure", "load_steering");
     }
-    if (!dispatch.n) fail(t->id, -1, "invalid_input", "wire_dispatch");
-    if (ioctl(fd, KCOV_LEANUX_DISPATCH_LOAD, &dispatch)) fail(t->id, -1, "coverage_failure", "load_dispatch");
+    if (!trace_dispatch.n) fail(t->id, -1, "invalid_input", "wire_dispatch");
+    if (ioctl(fd, KCOV_LEANUX_DISPATCH_LOAD, &trace_dispatch)) fail(t->id, -1, "coverage_failure", "load_dispatch");
     pid_t child = fork();
     if (child < 0) fail(t->id, -1, "environment_failure", "fork_trace");
     if (child) {
         int status;
+        /* W8: only the trace process signals the batch */
+        if (t->net == 3 && (close(PIN_SIGNAL_FD) || close(PIN_ACK_FD))) fail(t->id, -1, "environment_failure", "pin_pipe_parent");
         if (waitpid(child, &status, 0) != child) fail(t->id, -1, "environment_failure", "wait_trace");
         if (t->nsteer) {
             uint32_t left[2];
@@ -1073,13 +1180,31 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
 {
     struct observation result[MAX_OPS] = {{0}};
     if (close(input_fd)) fail(t->id, -1, "environment_failure", "close_input");
+    /* W8: the pin handshake's ends, moved above every descriptor the trace
+     * can see; every child drops the inherited originals (the batch's low
+     * pipe descriptors would otherwise shift the fixture). */
+    if (t->net == 3 && (dup2(pin_pipe[1], PIN_SIGNAL_FD) != PIN_SIGNAL_FD || dup2(pin_pipe[2], PIN_ACK_FD) != PIN_ACK_FD))
+        fail(t->id, -1, "environment_failure", "pin_pipe_dup");
+    for (int k = 0; k < 4; ++k)
+        if (close(pin_pipe[k])) fail(t->id, -1, "environment_failure", "pin_pipe_close");
     /* The parent's watchdog: SIGALRM's handler is the parent's, not ours; and
      * this child leads its own process group, so the watchdog's kill reaches
      * a network trace's trace process too. */
     if (signal(SIGALRM, SIG_DFL) == SIG_ERR) fail(t->id, -1, "environment_failure", "reset_sigalrm");
     if (setpgid(0, 0)) fail(t->id, -1, "environment_failure", "setpgid");
     unsigned long *remote = t->net ? enable_remote(t, comparisons) : NULL;
-    if (t->net) network_fixture(t->id, t->net == 2);
+    if (t->net) network_fixture(t->id, (int)t->net);
+    if (t->net == 3) {
+        /* W8 (section 3.2, C1): the batch pins D (/proc/<pid>/ns/net) until
+         * it ends, so D's asynchronous teardown never runs while a later run
+         * is armed with cleanup_net; it learns the pid once both namespaces
+         * exist and answers before any window. */
+        pid_t self = getpid();
+        char ack = 0;
+        if (write(PIN_SIGNAL_FD, &self, sizeof(self)) != (ssize_t)sizeof(self)) fail(t->id, -1, "environment_failure", "pin_signal");
+        if (read(PIN_ACK_FD, &ack, 1) != 1 || ack != 'k') fail(t->id, -1, "environment_failure", "pin_ack");
+        if (close(PIN_SIGNAL_FD) || close(PIN_ACK_FD)) fail(t->id, -1, "environment_failure", "pin_pipe_done");
+    }
     /* Init invokes us with exactly console descriptors 0, 1, and 2. */
     for (int fd = 0; fd < 3; ++fd)
         if (fcntl(fd, F_GETFD) < 0) fail(t->id, -1, "environment_failure", "console_layout");
@@ -1103,6 +1228,9 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         a4.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
         struct sockaddr_in6 a6 = {.sin6_family = AF_INET6, .sin6_port = htons(LISTEN_PORT), .sin6_addr = IN6ADDR_LOOPBACK_INIT};
         int one = 1;
+        /* W8: the listeners are C's (wg0 sends in C, and only a socket in C
+         * receives) */
+        if (t->net == 3 && setns(PARK_C_FD, CLONE_NEWNET)) fail(t->id, -1, "environment_failure", "setns_c_listeners");
         if (socket(AF_INET, SOCK_DGRAM, 0) != LISTEN4_FD || bind(LISTEN4_FD, (struct sockaddr *)&a4, sizeof(a4)))
             fail(t->id, -1, "environment_failure", "listener4_at_4");
         if (socket(AF_INET6, SOCK_DGRAM, 0) != LISTEN6_FD ||
@@ -1110,6 +1238,8 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             bind(LISTEN6_FD, (struct sockaddr *)&a6, sizeof(a6)))
             fail(t->id, -1, "environment_failure", "listener6_at_5");
         int zero = 0;
+        /* W8: the inner sender and the generic-netlink socket are D's */
+        if (t->net == 3 && setns(PARK_D_FD, CLONE_NEWNET)) fail(t->id, -1, "environment_failure", "setns_d_sender");
         struct sockaddr_in6 from = {.sin6_family = AF_INET6, .sin6_port = htons(SENDER_PORT), .sin6_addr = IN6ADDR_ANY_INIT};
         /* D2: the IP packets the sender routes into wg0 are determined by
          * the trace (Env.xmitPacket, docs/2026-10-04-d2-data-plane.md section
@@ -1128,13 +1258,29 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
          * so every fixture descriptor has close-on-exec clear. */
         if (socket(AF_NETLINK, SOCK_RAW, NETLINK_GENERIC) != NETLINK_FD)
             fail(t->id, -1, "environment_failure", "genl_socket_at_7");
+        if (t->net == 3) {
+            /* W8: in C, the injector (the outer sender: the plain sender's
+             * wildcard bind and port, so the endpoint wg0 learns from an
+             * inject is unchanged) and the pin, the reference wg_netns_close
+             * drops last; then back to D for good. */
+            if (setns(PARK_C_FD, CLONE_NEWNET)) fail(t->id, -1, "environment_failure", "setns_c_injector");
+            if (socket(AF_INET6, SOCK_DGRAM, 0) != INJECT_FD ||
+                setsockopt(INJECT_FD, IPPROTO_IPV6, IPV6_V6ONLY, &zero, sizeof(zero)) ||
+                setsockopt(INJECT_FD, IPPROTO_IPV6, IPV6_AUTOFLOWLABEL, &zero, sizeof(zero)) ||
+                bind(INJECT_FD, (struct sockaddr *)&from, sizeof(from)))
+                fail(t->id, -1, "environment_failure", "injector_at_8");
+            if (open("/proc/self/ns/net", O_RDONLY) != PIN_FD) fail(t->id, -1, "environment_failure", "pin_at_9");
+            if (setns(PARK_D_FD, CLONE_NEWNET)) fail(t->id, -1, "environment_failure", "setns_d_final");
+            if (close(PARK_D_FD) || close(PARK_C_FD)) fail(t->id, -1, "environment_failure", "unpark_netns");
+        }
         resolve_wireguard_family(t->id, NETLINK_FD);
         if (wg_exists) resolve_wg_ifindex(t->id, -1);
     }
     struct rlimit limit = {t->rlimit, t->rlimit}, actual;
     if (setrlimit(RLIMIT_NOFILE, &limit) || getrlimit(RLIMIT_NOFILE, &actual) || actual.rlim_cur != t->rlimit || actual.rlim_max != t->rlimit)
         fail(t->id, -1, "environment_failure", "rlimit_nofile");
-    if (!comparisons) printf("LEANUX_FIXTURE {\"id\":\"%s\",\"reserved\":[0,1,2,3,4,5,6,7],\"free\":[8,%u],\"rlimit\":[%u,%u]}\n", t->id, t->rlimit - 1, t->rlimit, t->rlimit);
+    if (!comparisons) printf("LEANUX_FIXTURE {\"id\":\"%s\",\"reserved\":[%s],\"free\":[%u,%u],\"rlimit\":[%u,%u]}\n", t->id,
+                             t->net == 3 ? "0,1,2,3,4,5,6,7,8,9" : "0,1,2,3,4,5,6,7", t->net == 3 ? 10 : 8, t->rlimit - 1, t->rlimit, t->rlimit);
     /* Per-task coverage stays enabled from here to exit: KCOV_DISABLE resets
      * the task's KCOV state, including the common handle this process
      * inherited for remote coverage (kcov_task_reset). Each operation resets
@@ -1334,7 +1480,27 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             } else {
                 to.sin6_addr.s6_addr[15] = 1;
             }
-            ret = syscall(SYS_sendto, SEND_FD, op->payload, op->payload_len, 0, &to, sizeof(to));
+            /* W8: in the foreign-creator fixture the outer sender is the injector in C */
+            ret = syscall(SYS_sendto, t->net == 3 ? INJECT_FD : SEND_FD, op->payload, op->payload_len, 0, &to, sizeof(to));
+            break;
+        }
+        case OP_WG_NETNS_CLOSE: {
+            /* W8 (section 3.2): C's holders go, the injector and the listeners
+             * first (their put_net is RCU-deferred), then after NETNS_SETTLE_US
+             * the pin, the last reference: cleanup_net is queued inside this
+             * close, so its kind-307 record lands in this operation's task
+             * stream, and the teardown's section runs in the wait below. */
+            if (t->net != 3) fail(t->id, i, "invalid_input", "netns_close_outside_foreign_creator");
+            if (netns_closed) fail(t->id, i, "invalid_input", "netns_close_twice");
+            ret = syscall(SYS_close, INJECT_FD);
+            if (ret == 0) ret = syscall(SYS_close, LISTEN6_FD);
+            if (ret == 0) ret = syscall(SYS_close, LISTEN4_FD);
+            if (ret == 0) {
+                settle_spin(NETNS_SETTLE_US);   /* the RCU grace period passes at the ticks */
+                ret = syscall(SYS_close, PIN_FD);
+            }
+            if (ret != 0) fail(t->id, i, "environment_failure", "netns_close");
+            netns_closed = 1;
             break;
         }
         case OP_WG_ADVANCE: {
@@ -1457,6 +1623,8 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
          * wait short: the following injection must reach the worker within the
          * one-second last_under_load decay (§4.1). */
         if (op->code == OP_WG_FLOOD) usleep(QUEUE_WAIT_US);
+        /* W8: the netns teardown (cleanup_net's section) runs in this wait */
+        if (op->code == OP_WG_NETNS_CLOSE) usleep(NETNS_WAIT_US);
         if (op->code == OP_WG_ADVANCE) {
             /* An advance that fails is not a trace operation the mirror can
              * follow: fail the trace. Then wait for the tick that absorbs the
@@ -1623,6 +1791,11 @@ int main(int argc, char **argv)
         fail("batch", -1, "invalid_input", "wire_header");
     struct utsname identity;
     if (uname(&identity)) fail("batch", -1, "environment_failure", "uname");
+    /* W8: the pin holder and its pipes, before any trace (section 3.2) */
+    if (pipe(pin_pipe) || pipe(pin_pipe + 2)) fail("batch", -1, "environment_failure", "pin_pipe");
+    pid_t holder = fork();
+    if (holder < 0) fail("batch", -1, "environment_failure", "fork_pin_holder");
+    if (!holder) pin_holder();
     /* Block until the kernel's RNG is initialized. WireGuard's handshake
      * worker calls wait_for_random_bytes(), and its receive path drops
      * handshakes until rng_is_initialized(): neither may depend on how long
@@ -1660,24 +1833,33 @@ int main(int argc, char **argv)
         consumed += more;
     }
     if (strcmp(line + consumed, "\n")) fail("batch", -1, "invalid_input", "wire_allocation_set");
-    if (alloc.n || alloc.flags) {
-        /* the TSC rate, to convert the unwind cycles (A0) */
+    {
+        /* the TSC rate: the unwind cycles' unit (A0) and the settle spin (W8) */
         FILE *cpuinfo = fopen("/proc/cpuinfo", "r");
         char mhz[64] = "";
         while (cpuinfo && fgets(line, sizeof(line), cpuinfo))
             if (!strncmp(line, "cpu MHz", 7) && sscanf(line, "cpu MHz : %63s", mhz) == 1) break;
         if (cpuinfo) fclose(cpuinfo);
         if (!mhz[0] || strspn(mhz, "0123456789.") != strlen(mhz)) fail("batch", -1, "environment_failure", "cpu_mhz");
-        printf("LEANUX_ALLOC_TSC {\"mhz\":\"%s\"}\n", mhz);
+        tsc_khz = (unsigned long long)(strtod(mhz, NULL) * 1000.0);
+        if (tsc_khz < 100000) fail("batch", -1, "environment_failure", "cpu_mhz");
+        if (alloc.n || alloc.flags) printf("LEANUX_ALLOC_TSC {\"mhz\":\"%s\"}\n", mhz);
     }
     unsigned failures = 0;
     for (unsigned t = 0; t < total; ++t) {
         static struct trace trace;
         if (!fgets(line, sizeof(line), input) ||
-            sscanf(line, "T %80s %u %u %u %u", trace.id, &trace.count, &trace.rlimit, &trace.net, &trace.nsteer) != 5 ||
-            trace.count < 1 || trace.count > MAX_OPS || trace.rlimit < 8 || trace.rlimit > 1024 || trace.net > 2 ||
-            trace.nsteer > STEER_MAX)
+            sscanf(line, "T %80s %u %u %u %u %x", trace.id, &trace.count, &trace.rlimit, &trace.net, &trace.nsteer, &trace.arm) != 6 ||
+            trace.count < 1 || trace.count > MAX_OPS || trace.rlimit < 8 || trace.rlimit > 1024 || trace.net > 3 ||
+            trace.nsteer > STEER_MAX || (trace.arm >> dispatch.n) || (trace.net == 3 && trace.rlimit < 10))
             fail("batch", -1, "invalid_input", "wire_trace");
+        /* W8: the subset of the dispatch set this trace arms (section 3.2):
+         * a foreign-creator trace arms cleanup_net; a plain one never sees a
+         * stale teardown's section because it does not arm it. */
+        memset(&trace_dispatch, 0, sizeof(trace_dispatch));
+        trace_dispatch.flags = dispatch.flags;
+        for (unsigned k = 0; k < dispatch.n; ++k)
+            if (trace.arm & (1u << k)) trace_dispatch.funcs[trace_dispatch.n++] = dispatch.funcs[k];
         for (unsigned i = 0; i < trace.count; ++i) {
             struct operation *op = &trace.ops[i];
             int consumed = 0;

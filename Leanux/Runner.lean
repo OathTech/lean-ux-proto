@@ -50,6 +50,7 @@ inductive Operation where
   | wgCreate
   | wgDown
   | wgDelete
+  | wgNetnsClose
   deriving Repr
 
 /-- The operations a `{"ref": i}` may name. -/
@@ -84,6 +85,9 @@ structure Trace where
   napiBeforePut : List Bool := []
   /-- `"net_fixture": "bare"` (L): the network fixture without wg0. -/
   bare : Bool := false
+  /-- `"net_fixture": "foreign-creator"` (W8): wg0 created from a second
+      namespace, held by the fixture's descriptors 4, 5, 8 and 9. -/
+  foreign : Bool := false
   /-- The allocation sites the run armed (the check adds them with the
       records): their outcomes are consumed from the records. -/
   allocArmed : List String := []
@@ -98,7 +102,7 @@ structure Trace where
 def Trace.net (t : Trace) : Bool :=
   t.ops.any fun
     | .wgSet _ | .wgGet | .wgUp | .wgXmit .. | .wgObserve | .wgInject .. | .wgAdvance _
-    | .wgFlood _ _ _ | .wgCreate | .wgDown | .wgDelete | .wgDeladdr _ | .wgDelroute _ => true
+    | .wgFlood _ _ _ | .wgCreate | .wgDown | .wgDelete | .wgDeladdr _ | .wgDelroute _ | .wgNetnsClose => true
     | _ => false
 
 private def fields (j : Json) (expected : List String) : Except String Unit := do
@@ -278,6 +282,9 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
   | "wg_up" =>
     fields j ["op"]
     return .wgUp
+  | "wg_netns_close" =>
+    fields j ["op"]
+    return .wgNetnsClose
   | "wg_observe" =>
     fields j ["op"]
     return .wgObserve
@@ -454,10 +461,11 @@ def parseTrace (j : Json) : Except String Trace := do
       (← (← field j "napi_irq_before_put").getArr?).toList.mapM fun b => b.getBool?
     else pure []
   if napiBeforePut.length > 8 then throw "napi_irq_before_put: more than 8 entries"
-  let bare ← if hasFixture then do
-      if (← (← field j "net_fixture").getStr?) != "bare" then throw "net_fixture: expected \"bare\""
-      pure true
-    else pure false
+  let fixture ← if hasFixture then (← field j "net_fixture").getStr? else pure ""
+  if hasFixture && fixture != "bare" && fixture != "foreign-creator" then
+    throw "net_fixture: expected \"bare\" or \"foreign-creator\""
+  let bare := fixture == "bare"
+  let foreign := fixture == "foreign-creator"
   let allocArmed ← if hasArmed then (← (← field j "alloc_armed").getArr?).toList.mapM fun e => do
       let label ← e.getStr?
       if !(AllocSite.all.any fun s => s.info.label == label && s.info.count != .cut) then
@@ -465,8 +473,9 @@ def parseTrace (j : Json) : Except String Trace := do
       pure label
     else pure []
   if hasArmed && !hasHidden then throw "alloc_armed: an armed run carries its records"
-  let trace : Trace := { id, ops, rlimit, hidden, steer, armRecords, napiBeforePut, allocArmed, pauses, bare, dstCacheRecords }
-  if bare && !trace.net then throw "net_fixture: only a network trace has a network fixture"
+  let trace : Trace := { id, ops, rlimit, hidden, steer, armRecords, napiBeforePut, allocArmed, pauses, bare, foreign, dstCacheRecords }
+  if (bare || foreign) && !trace.net then throw "net_fixture: only a network trace has a network fixture"
+  if foreign && rlimit < 10 then throw "net_fixture: the foreign-creator fixture needs rlimit_nofile >= 10"
   return trace
 
 /-! ## Harness fixture and trace execution
@@ -489,34 +498,42 @@ Descriptors 4 and 5 are UDP listeners on 127.0.0.1 and ::1 at `LISTEN_PORT`,
 /-- A fixture file. Its mode, operations and inode are outside the slice: any
     operation that consults them is `unsupported`. -/
 def fixtureFile (name : String) (refs : Nat) : File :=
-  { fFlags := O_RDWR, fMode := FMODE_READ ||| FMODE_WRITE ||| FMODE_OPENED,
-    fCount := refs, fOp := some (.fixture name), fInode := some (.fixture name) }
+  -- W8: the pin is `open("/proc/self/ns/net", O_RDONLY)`; the others are
+  -- read-write (sockets, the console, the KCOV descriptor)
+  if name == "netns-pin" then
+    { fFlags := O_RDONLY, fMode := FMODE_READ ||| FMODE_OPENED,
+      fCount := refs, fOp := some (.fixture name), fInode := some (.fixture name) }
+  else
+    { fFlags := O_RDWR, fMode := FMODE_READ ||| FMODE_WRITE ||| FMODE_OPENED,
+      fCount := refs, fOp := some (.fixture name), fInode := some (.fixture name) }
 
-def initialKernel (rlimit : Nat) (net : Bool := false) (bare : Bool := false) : Kernel :=
+def initialKernel (rlimit : Nat) (net : Bool := false) (bare : Bool := false) (foreign : Bool := false) : Kernel :=
+  -- W8: the foreign-creator fixture adds the injector (8) and the pin (9)
+  let reserved := if foreign then 10 else 8
   let slot (fd : Nat) : Option FileId :=
-    if fd < 3 then some 0 else if fd < 8 then some (fd - 2) else none
+    if fd < 3 then some 0 else if fd < reserved then some (fd - 2) else none
   let files : Std.TreeMap FileId File := Std.TreeMap.ofList
     ([(0, fixtureFile "console" 4),   -- fds 0-2 plus init's references
       (1, fixtureFile "kcov" 2)] ++    -- fd 3 plus the coverage mapping
-     (List.range 4).map fun i =>
+     (List.range (reserved - 4)).map fun i =>
        (i + 2, fixtureFile (if !net then "/dev/null" else
          match i with
          | 0 => "udp-listener-127.0.0.1" | 1 => "udp-listener-::1" | 2 => "udp-sender"
-         | _ => "generic-netlink") 1))
+         | 3 => "generic-netlink" | 4 => "udp-injector" | _ => "netns-pin") 1))
   let slots := (List.range NR_OPEN_DEFAULT).toArray
   { task := {
-      files := { count := 1, resizeInProgress := false, nextFd := 8,
+      files := { count := 1, resizeInProgress := false, nextFd := reserved,
                  fdt := { maxFds := NR_OPEN_DEFAULT, fd := slots.map slot,
-                          openFds := slots.map (· < 8), closeOnExec := slots.map fun _ => false } }
+                          openFds := slots.map (· < reserved), closeOnExec := slots.map fun _ => false } }
       rlimitNofile := rlimit
       -- the trace child blocks SIGPIPE before the first operation and starts
       -- with no pending signal (P design section 6; the guest side is P1's)
       blocked := sigmask SIGPIPE, pending := 0 }
-    files, nextFile := 6, ctxs := {}, nextCtx := 0,
+    files, nextFile := if foreign then 8 else 6, ctxs := {}, nextCtx := 0,
     idaUsed := {},
     -- Environment facts: the system-wide open-file count and limit are not
     -- observed; the guest has few files open, far below any boot-sized limit.
-    nrFiles := 6, maxFiles := 1000000, anonInodeInodeErr := false,
+    nrFiles := if foreign then 8 else 6, maxFiles := 1000000, anonInodeInodeErr := false,
     -- Pipes (P design section 5): sysctl defaults, and `root_user`'s
     -- `pipe_bufs` at its baseline of 0 (no pipes outside the trace)
     pipeMaxSize := 1048576, pipeUserPagesSoft := 16384, pipeUserPagesHard := 0, user := { pipeBufs := 0 },
@@ -595,12 +612,15 @@ def toSyscall (results : Array Int) (ends : Array (Option (Nat × Nat))) (index 
   | .wgCreate => .wgCreate
   | .wgDown => .wgDown
   | .wgDelete => .wgDelete
+  | .wgNetnsClose => .wgNetnsClose
 
 /-- Run a trace. A `Stop` is returned with the operation index: the mirror
     never reports an observation for a path it does not model. -/
 def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat × Stop) Json := do
-  let mut world : World := { k := initialKernel trace.rlimit trace.net trace.bare, env := harnessEnv,
+  let mut world : World := { k := initialKernel trace.rlimit trace.net trace.bare trace.foreign, env := harnessEnv,
                              timing := Env.timing, portBound := Env.portBound,
+                             foreignCreator := trace.foreign,
+                             netnsCHolders := if trace.foreign then [9, 8, 5, 4] else [],
                              allocArmed := trace.allocArmed,
                              hiddenPlaceholders := placeholders && trace.hidden.isNone,
                              steerValues := if placeholders then trace.steer else [],

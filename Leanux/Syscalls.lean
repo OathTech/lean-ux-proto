@@ -67,9 +67,17 @@ inductive Syscall where
   | wgCreate
   | wgDown
   | wgDelete
+  /-- W8 (docs/2026-10-06-w8-w9-netns-routing.md, 3.2): `close` of the
+      creating namespace's holders (the injector 8, the listeners 5 and 4,
+      then the pin 9), then the guest's wait for the namespace's teardown. -/
+  | wgNetnsClose
 
 /-- The generic-netlink socket at descriptor 7 (`NETLINK_FD` in harness/guest.c). -/
 def NETLINK_FD : Nat := 7
+/-- W8: the foreign-creator fixture's injector and pin (harness/guest.c). -/
+def LISTEN6_FD : Nat := 5
+def INJECT_FD : Nat := 8
+def PIN_FD : Nat := 9
 
 /-- One call on a fixture socket: `CLASS(fd, f)(fd)` in `__sys_sendto`,
     `__sys_recvfrom` (net/socket.c) and `ioctl` (fs/ioctl.c), which is
@@ -78,7 +86,9 @@ def NETLINK_FD : Nat := 7
     they are sockets. -/
 def socketCallOn (fd : Nat) (body : M Int) : M Int := do
   let f ← fdget fd
-  if f.file.isNone then invariant "a fixture socket is not open"
+  -- W8: a closed fixture socket (the listeners after wg_netns_close):
+  -- `fd_empty(f)` -> -EBADF (net/socket.c), before any socket layer runs
+  if f.file.isNone then return -EBADF
   let ret ← body
   fdput f
   return ret
@@ -145,6 +155,40 @@ def rtnetlinkRequest (handler : M Int) : M Int := do
   freeFile fid
   return ret
 
+/-- The fuel of `taskWorkRun`: far above the files a trace can close (at most
+    `MAX_OPS` operations), never the bound the C has (none). -/
+def TASK_WORK_FUEL : Nat := 1 <<< 16
+
+/-- `task_work_run` on exit to user mode: each queued `____fput` runs `__fput`.
+    An `__fput` may queue more work (a release dropping another reference), so
+    the loop is fuel-bounded rather than bounded by the queue at entry
+    (future-proof-paths note, 3(d)). -/
+def taskWorkRun : M Unit := do
+  for _ in [0:TASK_WORK_FUEL] do
+    match (← getK).task.taskWorks with
+    | [] => return
+    | fid :: rest =>
+      modifyK fun k => { k with task := { k.task with taskWorks := rest } }
+      fputFinal fid
+  invariant "task_work_run did not drain the task's work"
+
+/-- W8 `wg_netns_close` (design 3.2): four `close` system calls on the
+    creating namespace's holders, each returning to user mode (its `____fput`
+    runs then): the injector and the listeners, whose socket release defers
+    `put_net` to RCU (the guest lets those run before the last close), then
+    the pin, whose dentry's eviction drops the last reference in task
+    context: `cleanup_net` is queued there (`fputFinal`'s pin hook consumes
+    the queue record), and its section runs in the guest's wait
+    (`Env.netnsCleanup`, after this call). -/
+def netnsClose : M Int := do
+  if !(← get).foreignCreator then unsupported "wg_netns_close outside the foreign-creator fixture"
+  if (← get).netnsCHolders.isEmpty then unsupported "wg_netns_close twice"
+  for fd in [INJECT_FD, LISTEN6_FD, LISTEN4_FD, PIN_FD] do
+    let ret ← sysClose fd
+    if ret != 0 then invariant s!"close({fd}) of a fixture holder returned {ret}"
+    taskWorkRun
+  return 0
+
 def dispatch : Syscall → M Int
   | .eventfd2 count flags => sysEventfd2 count flags
   | .dup fildes => sysDup fildes
@@ -180,10 +224,13 @@ def dispatch : Syscall → M Int
   | .wgDeladdr family => rtnetlinkRequest (Env.wgDeladdr family)
   | .wgDelroute family => rtnetlinkRequest (Env.wgDelroute family)
   | .wgFlood count port messages => Env.flood count port messages
-  | .wgObserve => socketCallOn LISTEN4_FD do
+  | .wgObserve => do
+    -- the fixture's observation happens whether or not the listener is still
+    -- open (W8: after wg_netns_close the `recvfrom(4)` is -EBADF and the
+    -- datagrams null, the sender's inbox and the stats are read as always)
     let (ret, observed) ← Env.observe
     modify fun w => { w with extraOut := ["datagrams", "replies", "stats"].map fun k => (k, observed.getObjValD k) }
-    return ret
+    socketCallOn LISTEN4_FD (pure ret)
   | .wgAdvance ticks => do
     -- `ioctl(3, KCOV_LEANUX_TIME_ADVANCE, &ticks)`: `CLASS(fd, f)(fd)`
     -- (fs/ioctl.c), then the LEANUX case of `kcov_ioctl` (a cut point but
@@ -196,23 +243,7 @@ def dispatch : Syscall → M Int
   | .wgCreate => rtnetlinkRequest WG.wgCreate
   | .wgDown => socketCallOn SENDER_FD Env.wgDown
   | .wgDelete => rtnetlinkRequest Env.wgDelete
-
-/-- The fuel of `taskWorkRun`: far above the files a trace can close (at most
-    `MAX_OPS` operations), never the bound the C has (none). -/
-def TASK_WORK_FUEL : Nat := 1 <<< 16
-
-/-- `task_work_run` on exit to user mode: each queued `____fput` runs `__fput`.
-    An `__fput` may queue more work (a release dropping another reference), so
-    the loop is fuel-bounded rather than bounded by the queue at entry
-    (future-proof-paths note, 3(d)). -/
-def taskWorkRun : M Unit := do
-  for _ in [0:TASK_WORK_FUEL] do
-    match (← getK).task.taskWorks with
-    | [] => return
-    | fid :: rest =>
-      modifyK fun k => { k with task := { k.task with taskWorks := rest } }
-      fputFinal fid
-  invariant "task_work_run did not drain the task's work"
+  | .wgNetnsClose => netnsClose
 
 /-- One system call: entry, the handler, and the return-to-user work. -/
 def syscall (call : Syscall) : M Int := do
@@ -229,6 +260,8 @@ def syscall (call : Syscall) : M Int := do
   | .wgXmit .. => Env.afterXmit; Env.idleTimers
   -- D3: the guest waits after the advance; the next tick runs the due timers
   | .wgAdvance _ => Env.afterAdvance
+  -- W8: the namespace's teardown section runs in the guest's wait
+  | .wgNetnsClose => Env.netnsCleanup
   | _ => pure ()
   return ret
 

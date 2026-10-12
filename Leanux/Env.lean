@@ -549,7 +549,10 @@ def observe : M (Int × Lean.Json) := do
     String.mk [d[b.toNat / 16]!, d[b.toNat % 16]!])
   -- the guest reports type 0 for a datagram shorter than 4 bytes
   let type (bs : List UInt8) : Nat := if bs.length ≥ 4 then WG.u32le bs 0 else 0
-  let ret : Int := match w.listenerV4 with
+  -- W8: after wg_netns_close the listeners are closed: `recvfrom(4)` is
+  -- -EBADF and the datagrams are null (the guest prints null)
+  let closed := w.foreignCreator && w.netnsCHolders.isEmpty
+  let ret : Int := if closed then -EBADF else match w.listenerV4 with
     | bs :: _ => bs.length
     | [] => -EAGAIN
   let datagrams := (w.listenerV4.map fun bs => (4, bs)) ++ (w.listenerV6.map fun bs => (6, bs))
@@ -570,7 +573,7 @@ def observe : M (Int × Lean.Json) := do
                                  ("rx_length_errors", Lean.toJson d.rxLengthErrors)]
     | none => Lean.Json.null
   return (ret, Lean.Json.mkObj [
-    ("datagrams", Lean.Json.arr (sortJson entries).toArray),
+    ("datagrams", if closed then Lean.Json.null else Lean.Json.arr (sortJson entries).toArray),
     ("replies", Lean.Json.arr (sortJson replies).toArray),
     ("stats", stats)])
 
@@ -701,6 +704,12 @@ def runDecryptWorker : M Unit := do
     Loopback delivers it in softirq inside the `sendto`, and the guest waits
     for the handshake worker. -/
 def inject (family port : Nat) (msg : List UInt8) (dest : Nat := 0) : M Int := do
+  -- W8 (design 3.1, 3.4): in the foreign-creator fixture the injector lives
+  -- in the creating namespace: gone after wg_netns_close, and wg0's own
+  -- address (in the device namespace) is unroutable from it
+  if (← get).foreignCreator then
+    if (← get).netnsCHolders.isEmpty then unsupported "wg_inject after wg_netns_close (no socket in the creating namespace)"
+    if dest == 1 then unsupported "wg_inject to wg0's address from the creating namespace (unroutable)"
   let some d := (← getK).wg | unsupported "a datagram to a port other than wg0's (no wg0)"
   if !d.running || port != d.incomingPort then unsupported "a datagram to a port other than wg0's"
   -- a pending send worker inserts an index entry under a random index
@@ -771,5 +780,27 @@ def flood (count port : Nat) (messages : List (List UInt8)) : M Int := do
     throw (.hidden "the flood did not cross the under_load threshold (no under_load record)")
   deliverSent
   return 0
+
+/-! ## W8: the creating namespace's teardown (docs/2026-10-06-w8-w9-netns-routing.md, 3.2) -/
+
+/-- The section `cleanup_net` runs in `wg_netns_close`'s wait, after the
+    pin's `__fput` queued it (`Syscalls.netnsClose`): `wg_netns_pre_exit` for
+    wg0 (device.c, anchored), then the rest of the namespace's teardown,
+    whose allocation outcomes are below the cut and which runs nothing else
+    the mirror models. Fail-noisy: a section that did not open leaves the
+    start record unmatched; a stop beyond the wait stays pending; a unit the
+    queue record did not name is a hidden mismatch. The linkwatch event the
+    carrier change queues is armed by no trace yet (W8b). -/
+def netnsCleanup : M Unit := do
+  if !(← get).foreignCreator then unsupported "wg_netns_close outside the foreign-creator fixture"
+  modify fun w => { w with netnsCHolders := [] }
+  if let some u ← peekUnit .netnsCleanup then _ ← resolveUnit .netnsCleanup u [0]
+  runWorker .netnsCleanup do
+    WG.netnsPreExit
+    -- the rest of C's teardown: `sit0`'s unregister resets its tunnel's dst
+    -- cache (net/ipv6/sit.c `ipip6_tunnel_uninit`: one kind-306 record, the
+    -- only other consumer the section showed), and the notifications' and
+    -- exits' allocations are below the cut (A)
+    skipCut ([.dstCacheResetTs] ++ allocCuts)
 
 end Leanux.Env

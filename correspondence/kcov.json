@@ -119,6 +119,7 @@
     "wg_cookie_message_consume",
     "wg_cookie_validate_packet",
     "wg_destruct",
+    "wg_netns_pre_exit",
     "wg_expired_new_handshake",
     "wg_expired_retransmit_handshake",
     "wg_expired_send_keepalive",

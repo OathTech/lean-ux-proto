@@ -40,12 +40,16 @@ FIELDS = {
     # fixture address and RTM_DELROUTE of the default route via wg0, per
     # family, over L's temporary rtnetlink socket; the result is the ACK
     "wg_deladdr": {"op", "family"}, "wg_delroute": {"op", "family"},
+    # W8 (docs/2026-10-06-w8-w9-netns-routing.md 3.2): in the foreign-creator
+    # fixture, close the creating namespace's holders (the injector, the
+    # listeners, then the pin) and wait for its teardown; the result is 0
+    "wg_netns_close": {"op"},
     # P (pipes, docs/2026-10-05-p-pipes.md section 6)
     "pipe2": {"op", "flags"},
 }
 LIFECYCLE_OPS = ("wg_create", "wg_down", "wg_delete")
 WG_OPS = {"wg_set", "wg_get", "wg_up", "wg_xmit", "wg_observe", "wg_inject", "wg_advance",
-          "wg_flood", "wg_deladdr", "wg_delroute"} | set(LIFECYCLE_OPS)
+          "wg_flood", "wg_deladdr", "wg_delroute", "wg_netns_close"} | set(LIFECYCLE_OPS)
 # W9: `wg_inject`'s optional destination ("to"): the fixture's loopback
 # address (the default, 127.0.0.1 / ::1), wg0's own fixture address
 # (10.255.254.1 / fd00:ffff::1, reached over the local route: wg0 learns an
@@ -68,6 +72,7 @@ OPCODES = {
     "wg_flood": 18,
     "wg_advance": 19,
     "wg_deladdr": 23, "wg_delroute": 24,
+    "wg_netns_close": 22,   # W8
 }
 # Reserved wire opcodes (the interface commit, docs/2026-10-11-interface.md),
 # allocated by the coordinator so the W streams' worktrees cannot clash. A
@@ -75,8 +80,7 @@ OPCODES = {
 # reaches the wire from here; the guest fails one as invalid_input
 # (harness/guest.c, the opcode switch's default) and the mirror as an
 # unknown operation. A stream moves its codes into OPCODES when it lands.
-RESERVED_OPCODES = {20: "wg_get_start (W2)", 21: "wg_get_recv (W2)",
-                    22: "wg_netns_close (W8)"}   # 23-24 taken by W9 (wg_deladdr, wg_delroute)
+RESERVED_OPCODES = {20: "wg_get_start (W2)", 21: "wg_get_recv (W2)"}   # 22 taken by W8, 23-24 by W9
 if set(OPCODES.values()) & set(RESERVED_OPCODES):
     raise AssertionError(f"reserved opcodes in use: {set(OPCODES.values()) & set(RESERVED_OPCODES)}")
 if set(OPCODES) != set(FIELDS):
@@ -86,8 +90,11 @@ if set(OPCODES) != set(FIELDS):
 # and the guest fails an operation whose area filled.
 KCOV_CAPACITY = 1024 * 1024
 # The optional top-level `net_fixture` (L): "bare" starts a network trace
-# without wg0; absent, the fixture creates a down wg0.
-NET_FIXTURES = ("bare",)
+# without wg0; absent, the fixture creates a down wg0. W8: "foreign-creator"
+# creates wg0 from a second namespace C (its creating namespace), which holds
+# the listeners (4, 5), an injector (8) and a pin (9); the trace's one
+# `wg_netns_close` drops them (docs/2026-10-06-w8-w9-netns-routing.md 3.1).
+NET_FIXTURES = ("bare", "foreign-creator")
 # fcntl commands: the wire carries the command number itself
 # (F_LINUX_SPECIFIC_BASE = 1024: F_SETPIPE_SZ = 1031, F_GETPIPE_SZ = 1032)
 FCNTL = {"F_GETFD": 1, "F_SETFD": 2, "F_GETFL": 3, "F_SETFL": 4, "F_SETPIPE_SZ": 1031, "F_GETPIPE_SZ": 1032}
@@ -271,6 +278,19 @@ def validate_trace(trace):
             raise InvalidTrace(f"net_fixture: expected one of {list(NET_FIXTURES)}")
         if not uses_wireguard(trace):
             raise InvalidTrace("net_fixture: only a network trace has a network fixture")
+    # W8: the foreign-creator fixture's shape (design 3.1, 3.4)
+    closes = [i for i, op in enumerate(trace["ops"]) if op["op"] == "wg_netns_close"]
+    if trace.get("net_fixture") == "foreign-creator":
+        if len(closes) != 1:
+            raise InvalidTrace("net_fixture foreign-creator: exactly one wg_netns_close (the namespace exits inside the trace)")
+        if trace.get("rlimit_nofile", 32) < 10:
+            raise InvalidTrace("net_fixture foreign-creator: rlimit_nofile below 10 (the fixture holds descriptors 4-9)")
+        if any(op["op"] == "wg_inject" and op.get("to", "loopback") == "wg0" for op in trace["ops"]):
+            raise InvalidTrace("wg_inject to: wg0 is unroutable from the creating namespace")
+        if any(op["op"] == "wg_inject" for op in trace["ops"][closes[0]:]):
+            raise InvalidTrace("wg_inject after wg_netns_close: no socket in the creating namespace")
+    elif closes:
+        raise InvalidTrace("wg_netns_close: only in the foreign-creator fixture")
     return deepcopy(trace)
 
 
@@ -285,10 +305,11 @@ def uses_wireguard(trace):
 
 
 def net_mode(trace):
-    """The wire's `net` field: 0 no network fixture, 1 with a down wg0, 2 bare."""
+    """The wire's `net` field: 0 no network fixture, 1 with a down wg0, 2 bare,
+    3 foreign-creator (W8)."""
     if not uses_wireguard(trace):
         return 0
-    return 2 if trace.get("net_fixture") == "bare" else 1
+    return {"bare": 2, "foreign-creator": 3}.get(trace.get("net_fixture"), 1)
 
 
 def loads_trace(line):
@@ -333,13 +354,16 @@ def alloc_line(alloc):
     return " ".join(["M", str(alloc["flags"]), str(len(ranges))] + [f"{lo:x} {hi:x}" for lo, hi in ranges])
 
 
-def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False, alloc=None):
+def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False, alloc=None, arm_masks=None):
     """`steer_wire`: each steered trace's resolved schedule
     (harness/steer.py), [(kind, length, draw, [return addresses], hex[, flags])].
     `dispatch`: the dispatch set's function addresses (harness/linux.py),
     which a batch with network traces needs. `arm_records`: whether the
     kernel writes the kind-303 arm records for the dispatch set's timers
-    (the `A` line; D3). `alloc`: the allocation set (the `M` line; A)."""
+    (the `A` line; D3). `alloc`: the allocation set (the `M` line; A).
+    `arm_masks` (W8, per-trace arming): trace id -> the subset of `dispatch`
+    the trace arms, a bit per entry (harness/linux.py `arm_masks`); absent,
+    a network trace arms the whole set."""
     traces = [validate_trace(trace) for trace in traces]
     steer_wire = steer_wire or {}
     if any("steer" in t and t["id"] not in steer_wire for t in traces):
@@ -356,9 +380,13 @@ def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False, allo
         raise InvalidTrace("arm_records")
     lines = ["LEANUX_WIRE_V2", str(len(traces)), " ".join(["D", str(len(dispatch))] + [f"{a:x}" for a in dispatch]),
              f"A {int(arm_records)}", alloc_line(alloc)]
+    arm_masks = arm_masks or {}
     for trace in traces:
         schedule = steer_wire.get(trace["id"], []) if "steer" in trace else []
-        lines.append(f"T {trace['id']} {len(trace['ops'])} {trace.get('rlimit_nofile', 32)} {net_mode(trace)} {len(schedule)}")
+        mask = arm_masks.get(trace["id"], (1 << len(dispatch)) - 1 if uses_wireguard(trace) else 0)
+        if type(mask) is not int or mask < 0 or mask >> len(dispatch):
+            raise InvalidTrace("arm mask outside the dispatch set")
+        lines.append(f"T {trace['id']} {len(trace['ops'])} {trace.get('rlimit_nofile', 32)} {net_mode(trace)} {len(schedule)} {mask:x}")
         for op in trace["ops"]:
             def fd(field):
                 value = op.get(field, {"literal": -1})

@@ -552,6 +552,12 @@ inductive Worker where
       the zero-key work item (`clear_peer_work` on `handshake_send_wq`). -/
   | timerRetransmit | timerSendKeepalive | timerNewHandshake | timerZeroKey | clearPeerWorker
   | timerPersistentKeepalive
+  /-- W8 (docs/2026-10-06-w8-w9-netns-routing.md, section 3.2): the creating
+      namespace's teardown (`cleanup_net` on `netns_wq`, armed by a
+      foreign-creator trace) and the linkwatch run its `netif_carrier_off`
+      queues (`linkwatch_event` on `system_unbound_wq`; W8b, armed by no
+      trace yet). -/
+  | netnsCleanup | linkwatch
   -- Reserved for the W streams (the interface commit,
   -- docs/2026-10-11-interface.md): W8-W9's `cleanup_net` and
   -- `linkwatch_event` units at indices 12-13, W5-W6's two units at 14-15
@@ -574,17 +580,20 @@ def Worker.symbol : Worker → String
   | .timerZeroKey => "wg_expired_zero_key_material"
   | .clearPeerWorker => "wg_queued_expired_zero_key_material"
   | .timerPersistentKeepalive => "wg_expired_send_persistent_keepalive"
+  | .netnsCleanup => "cleanup_net"
+  | .linkwatch => "linkwatch_event"
 
 def Worker.index : Worker → Nat
   | .sendWorker => 0 | .receiveWorker => 1 | .encryptWorker => 2 | .txWorker => 3 | .netRx => 4
   | .decryptWorker => 5
   | .timerRetransmit => 6 | .timerSendKeepalive => 7 | .timerNewHandshake => 8 | .timerZeroKey => 9
   | .clearPeerWorker => 10 | .timerPersistentKeepalive => 11
+  | .netnsCleanup => 12 | .linkwatch => 13
 
 def Worker.all : List Worker :=
   [.sendWorker, .receiveWorker, .encryptWorker, .txWorker, .netRx, .decryptWorker,
    .timerRetransmit, .timerSendKeepalive, .timerNewHandshake, .timerZeroKey, .clearPeerWorker,
-   .timerPersistentKeepalive]
+   .timerPersistentKeepalive, .netnsCleanup, .linkwatch]
 
 /-- D3: the timer callbacks (sections opened by `call_timer_fn`), with the
     peer timer each runs for. -/
@@ -665,6 +674,11 @@ inductive HiddenSite where
       net/core/dst_cache.c:62). The mirror computes the cache's
       `time_after` from them (`WG.dstCacheGet`). -/
   | dstCacheResetTs | dstCacheRefreshTs
+  /-- W8: `cleanup_net`'s own `cond_resched` (net/core/net_namespace.c:174,
+      the pernet exits' loop) inside its section: a scheduler choice the
+      mirror runs nothing across (no other armed unit runs in the teardown),
+      so ambient. -/
+  | reschedNetnsCleanup
   -- Reserved id ranges for the W streams (the interface commit,
   -- docs/2026-10-11-interface.md), outside every range above: W5-W6
   -- 140-149 (`.inetEhashSecret`), W8-W9 150-169 (`.dstCacheResetTs`,
@@ -795,6 +809,7 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   -- dst_cache_per_cpu_get's dst_cache.c:63 (the design's 79/62 are the
   -- pristine lines)
   | .dstCacheResetTs => ⟨150, "dst_cache_reset_ts", "jiffies", "include/net/dst_cache.h", 90, 8, .mirror⟩
+  | .reschedNetnsCleanup => ⟨152, "resched:cleanup_net", "resched", "net/core/net_namespace.c", 174, 8, .ambient⟩
   | .dstCacheRefreshTs => ⟨151, "dst_cache_refresh_ts", "jiffies", "net/core/dst_cache.c", 63, 8, .mirror⟩
   | .alloc s => let i := s.info
     ⟨70 + i.index, i.label, "alloc", i.file, i.line, 40, if i.count == .cut then .cut else .mirror⟩
@@ -821,7 +836,7 @@ def HiddenSite.all : List HiddenSite :=
   ++ (Worker.all.filter fun w => w.timer?.isNone && w != .netRx).map .queued
   ++ [.cookieSecretBirthdate, .cookieSecret, .pubkeyHashKey, .ratelimiterKey, .ratelimiterGcNow, .udpPortDraw,
       .neighReachTime]
-  ++ [.dstCacheResetTs, .dstCacheRefreshTs]
+  ++ [.dstCacheResetTs, .dstCacheRefreshTs, .reschedNetnsCleanup]
   ++ AllocSite.all.map .alloc
   ++ [.currentTime]
   ++ [.underLoadNow, .cookieNonce, .ratelimiterNow, .ratelimiterInsertNow]
@@ -933,6 +948,12 @@ structure World where
   unitPeers : List (Nat × Nat × Nat) := []
   timerUnits : List (Nat × Nat × WG.PeerTimer) := []
   pendingWork : List Nat := []
+  /-- W8 (docs/2026-10-06-w8-w9-netns-routing.md, 3.1): the foreign-creator
+      fixture, where wg0's creating namespace C is held by the fixture's
+      listeners, injector and pin (`netnsCHolders`: descriptors 9, 8, 5, 4)
+      until the trace's `wg_netns_close` drops them. -/
+  foreignCreator : Bool := false
+  netnsCHolders : List Nat := []
   /-- A NET_RX softirq raised by a loopback transmission (`netif_rx` from
       `send4`/`send6` or an ICMP error), whose section has not been consumed
       yet: see `WG.loopbackSoftirq`. An operation ends with none pending

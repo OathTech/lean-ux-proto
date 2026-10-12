@@ -315,6 +315,8 @@ inductive Decision where
   | send4ResetB | send4PutRt | send4RouteErr | send4CacheSet
   | send6SockNull | send6HasCache | send6CacheMiss | send6SrcNotLocal | send6Reset | send6RouteErr
   | send6CacheSet
+  -- W8 (section 3.3): wg_netns_pre_exit (drivers/net/wireguard/device.c:409-428)
+  | preExitDevIter | preExitCreator | preExitPeerIter
   deriving Repr, BEq, DecidableEq, Inhabited
 
 /-- A call site of a value comparison whose operand is a guest-wide value the
@@ -1261,6 +1263,11 @@ def Decision.info : Decision → DecisionInfo
   | .send6Reset => d "send6.reset" wso 136 [(137, 137)] []
   | .send6RouteErr => d "send6.route_err" wso 141 [(142, 145)] [(147, 147)]
   | .send6CacheSet => d "send6.cache_set" wso 147 [(148, 148)] []
+  -- W8: wg_netns_pre_exit (device.c:409-428): the device loop (one device),
+  -- the creating-namespace test, the peer loop
+  | .preExitDevIter => d "wg_netns_pre_exit.devices_iterate" wdv 415 [(416, 416)] []
+  | .preExitCreator => d "wg_netns_pre_exit.creator" wdv 416 [(418, 424)] []
+  | .preExitPeerIter => d "wg_netns_pre_exit.peers_iterate" wdv 422 [(423, 423)] []
   -- wg_ratelimiter_init (ratelimiter.c:158-203): `++init_refcnt != 1` jumps to
   -- the shared `out:`; the failure arms reach the shared `err:` labels
   | .ratelimiterInitNotFirst => d "wg_ratelimiter_init.refcnt_not_one" wrl 161 [] [(164, 192)]
@@ -1869,6 +1876,8 @@ def Decision.repeatable : Decision → Bool
   | .send4ResetB | .send4PutRt | .send4RouteErr | .send4CacheSet
   | .send6SockNull | .send6HasCache | .send6CacheMiss | .send6SrcNotLocal | .send6Reset | .send6RouteErr
   | .send6CacheSet
+  -- W8: the pre-exit's loops (the device test true then false, a peer each)
+  | .preExitDevIter | .preExitPeerIter
   | .sendBufNoMem | .sendSkbInet | .sendSkbInet6 | .sendSkbOk | .addMacCookieValid | .addMacCookieFresh
   -- D1 stream B: add_new_keypair and keypairs_clear put up to three live
   -- keypairs in one operation (stream C: the tx worker's put shares an

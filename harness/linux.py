@@ -96,7 +96,32 @@ DISPATCH_SYMBOLS = ("wg_packet_handshake_send_worker", "wg_packet_handshake_rece
                     "wg_packet_decrypt_worker",
                     "wg_expired_retransmit_handshake", "wg_expired_send_keepalive", "wg_expired_new_handshake",
                     "wg_expired_zero_key_material", "wg_queued_expired_zero_key_material",
-                    "wg_expired_send_persistent_keepalive")
+                    "wg_expired_send_persistent_keepalive",
+                    # W8 (docs/2026-10-06-w8-w9-netns-routing.md 3.2): the creating
+                    # namespace's teardown (netns_wq) and the linkwatch run its
+                    # carrier change queues (system_unbound_wq); armed per trace
+                    "cleanup_net", "linkwatch_event")
+
+
+def arm_masks(traces, symbols=DISPATCH_SYMBOLS):
+    """W8, per-trace arming (design 3.2, audit C1): the subset of the dispatch
+    set each trace arms, a bit per symbol. Every network trace arms the
+    WireGuard set; only a foreign-creator trace arms `cleanup_net`, so a plain
+    run never sees a stale teardown's section; `linkwatch_event` is armed by
+    no trace yet (W8b: its delay depends on the global `linkwatch_nextevent`).
+    An FS trace arms nothing."""
+    masks = {}
+    for trace in traces:
+        mask = 0
+        if uses_wireguard(trace):
+            for i, name in enumerate(symbols):
+                if name == "linkwatch_event":
+                    continue
+                if name == "cleanup_net" and trace.get("net_fixture") != "foreign-creator":
+                    continue
+                mask |= 1 << i
+        masks[trace["id"]] = mask
+    return masks
 # Whether the kernel writes the kind-303 arm records at mod_timer for the
 # dispatch set's timers (D3, section 3.3). On since the mirror consumes them
 # at every arm site (stream M); evaluator/check.py passes the same value to
@@ -315,10 +340,11 @@ def attach_observed(results, traces, records):
         def hex_bytes(entry, length):
             return (type(entry[-1]) is str and len(entry[-1]) == 2 * length
                     and all(c in "0123456789abcdef" for c in entry[-1]))
-        if type(datagrams) is not list or not all(
+        # W8: null after wg_netns_close (the listeners are gone; the mirror says null too)
+        if datagrams is not None and (type(datagrams) is not list or not all(
                 type(d) is list and len(d) == 4 and d[0] in (4, 6)
                 and all(type(x) is int and x >= 0 for x in d[:3]) and hex_bytes(d, d[1])
-                for d in datagrams):
+                for d in datagrams)):
             raise ValueError("wg_observe datagrams")
         # what the sender received: recvfrom's source (the IPv6 socket's
         # family, the address as 32 hex digits, an IPv4 source v4-mapped, the
@@ -338,7 +364,7 @@ def attach_observed(results, traces, records):
             raise ValueError("wg_observe stats")
         # sorted as the mirror sorts them: by compact JSON
         compact = lambda x: json.dumps(x, separators=(",", ":"))
-        observations[record["index"]]["datagrams"] = sorted(datagrams, key=compact)
+        observations[record["index"]]["datagrams"] = sorted(datagrams, key=compact) if datagrams is not None else None
         observations[record["index"]]["stats"] = stats
         observations[record["index"]]["replies"] = sorted(replies, key=compact)
     for trace in traces:
@@ -514,7 +540,9 @@ def _collect(outdir, traces, process_returncode, alloc=None):
         for result, trace, fixture in zip(results, traces, fixtures):
             _check_observation(result, trace)
             limit = trace.get("rlimit_nofile", 32)
-            if fixture != {"id": trace["id"], "reserved": list(range(8)), "free": [8, limit - 1], "rlimit": [limit, limit]}:
+            # W8: the foreign-creator fixture adds the injector (8) and the pin (9)
+            reserved = 10 if trace.get("net_fixture") == "foreign-creator" else 8
+            if fixture != {"id": trace["id"], "reserved": list(range(reserved)), "free": [reserved, limit - 1], "rlimit": [limit, limit]}:
                 raise ValueError("fixture mismatch")
         for row, (identifier, index) in zip(coverage, expected_coverage):
             if type(row) is not dict or set(row) != {"id", "index", "count", "pcs"} or row["id"] != identifier or type(row["index"]) is not int or row["index"] != index:
@@ -574,7 +602,7 @@ def run_linux(traces, outdir, *, timeout=120, steer_wire=None, arm_records=ARM_R
         raise ValueError(f"unknown guest variant {guest_variant!r}")
     traces = [validate_trace(trace) for trace in traces]
     dispatch = dispatch_addresses() if any(uses_wireguard(t) for t in traces) else []
-    wire = serialize_wire(traces, steer_wire, dispatch, arm_records, alloc)
+    wire = serialize_wire(traces, steer_wire, dispatch, arm_records, alloc, arm_masks(traces))
     outdir = Path(outdir).resolve()
     if not outdir.is_relative_to(ARTIFACTS):
         raise ValueError(f"outdir must be within task artifact root {ARTIFACTS}")

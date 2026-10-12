@@ -844,7 +844,10 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
             if step is None or step[0] not in decisions:
                 problems.append(dict(index=index, label=label, problem='unknown decision'))
             elif any(name == step[0] for name, _ in reported):
-                if not decisions[step[0]]['repeatable']:
+                # W8: wg_netns_close is four close system calls in one
+                # operation (the creating namespace's holders), so its
+                # decisions repeat per call; outcomes add, order is per call
+                if not decisions[step[0]]['repeatable'] and op['op'] != 'wg_netns_close':
                     problems.append(dict(index=index, label=label, problem='decision reported more than once'))
                 reported.add(step)  # a repeatable decision: later evaluations add outcomes, not order
             else:
@@ -1030,6 +1033,9 @@ GUEST_CHILDREN = 2
 OBSERVE_WAIT_SECONDS = 0.4
 QUEUE_WAIT_SECONDS = 0.1
 ADVANCE_WAIT_SECONDS = 0.15
+# W8: wg_netns_close settles the RCU-deferred socket puts (NETNS_SETTLE_US) and
+# waits for the namespace's teardown section (NETNS_WAIT_US), harness/guest.c
+NETNS_WAIT_SECONDS = 1.1
 PAUSE_SECONDS_PER_MS = 0.001
 GUEST_BOOT_SECONDS = 30
 WIREGUARD_TRACE_SECONDS = 2.0
@@ -1045,6 +1051,7 @@ def guest_timeout(traces):
     waits = GUEST_CHILDREN * (OBSERVE_WAIT_SECONDS * sum(op in ('wg_observe', 'wg_inject') for op in names)
                               + QUEUE_WAIT_SECONDS * sum(op in ('wg_set', 'wg_up', 'wg_xmit', 'wg_flood') for op in names)
                               + ADVANCE_WAIT_SECONDS * sum(op == 'wg_advance' for op in names)
+                              + NETNS_WAIT_SECONDS * sum(op == 'wg_netns_close' for op in names)
                               + PAUSE_SECONDS_PER_MS * sum(op.get('pause_ms', 0) for op in ops))
     io_bytes = sum(op['count'] for op in ops if op['op'] in ('read', 'write'))
     compute = (GUEST_BOOT_SECONDS + WIREGUARD_TRACE_SECONDS * sum(uses_wireguard(t) for t in traces)

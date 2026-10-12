@@ -60,8 +60,10 @@ def randomPortFirst (rand : Nat) : Nat :=
     conflicts with no fixture socket at a port the IPv4 bind got. -/
 def socketInit (port : Nat) : M Int := do
   let d ← getDev
-  -- `creating_net` is NULL only after wg_destruct or wg_netns_pre_exit
-  if !d.creatingNet then unsupported "wg_socket_init without creating_net (-ENONET)"
+  -- `creating_net` is NULL only after wg_destruct or wg_netns_pre_exit (W8):
+  -- socket.c:377-381, `-ENONET` without maybe_get_net (the function is
+  -- unlisted: the arm is data, witnessed by wg_open's error branch)
+  if !d.creatingNet then return -ENONET
   let bound := (← get).portBound
   -- wg0's own sockets, bound to the wildcard addresses while running
   let held (p : Nat) : Bool := bound p || d.sock4 == some p || d.sock6 == some p

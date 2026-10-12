@@ -330,6 +330,10 @@ structure Device where
   /-- `creating_net` is set (L): cleared only by `wg_destruct`; the operand
       of `wg_socket_init`'s `-ENONET` arm. -/
   creatingNet : Bool := true
+  /-- W8: `__LINK_STATE_NOCARRIER` inverted (never set by WireGuard, so the
+      device starts with carrier); `wg_netns_pre_exit`'s `netif_carrier_off`
+      clears it. Observable only on an up device (W8b). -/
+  carrier : Bool := true
   /-- `cookie_checker.secret` and `secret_birthdate` (L, `wg_cookie_checker_init`)
       and the public-key hashtable's siphash key (`wg_pubkey_hashtable_alloc`),
       from their records; zeros for the fixture's wg0, created before the

@@ -300,4 +300,27 @@ def wgXmit (family addr : Nat) (pkt : Packet) : M Int := do
   peerPut peer
   return 0   -- NETDEV_TX_OK
 
+/-! ## W8: the creating namespace's exit (docs/2026-10-06-w8-w9-netns-routing.md, 3.3) -/
+
+/-- wg_netns_pre_exit (device.c:409-428), run by `cleanup_net` for the
+    creating namespace C: over `device_list` (the fixture's one device, or
+    none after a `wg_delete`), the device whose `creating_net` is C loses its
+    carrier (`netif_carrier_off`, whose linkwatch event is W8b's), its
+    `creating_net`, its sockets (`wg_socket_reinit(NULL, NULL)`) and every
+    peer's endpoint source. -/
+def netnsPreExit : M Unit := do
+  -- rtnl_lock(); list_for_each_entry(wg, &device_list, device_list)
+  if (← getK).wg.isSome then
+    _ ← branch .preExitDevIter true
+    if ← branch .preExitCreator (← getDev).creatingNet then
+      -- netif_carrier_off(wg->dev); mutex_lock(&wg->device_update_lock);
+      -- rcu_assign_pointer(wg->creating_net, NULL)
+      modifyDev fun d => { d with carrier := false, creatingNet := false }
+      socketReinit none none
+      for pid in (← getDev).peerList do
+        _ ← branch .preExitPeerIter true
+        clearPeerEndpointSrc pid
+      _ ← branch .preExitPeerIter false
+  _ ← branch .preExitDevIter false
+
 end Leanux.WG

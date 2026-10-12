@@ -221,7 +221,9 @@ def wgSetDevice (a : DeviceAttrs) : M Int := do
   if ← branch .setDevHasFlags a.flags.isSome then flags := a.flags.getD 0
   if ← branch .setDevBadFlags (flags &&& ~~~WGDEVICE_F_ALL != 0) then return ← zero (-EOPNOTSUPP)
   if ← orM (branch .setDevHasPort a.listenPort.isSome) (branch .setDevHasFwmark a.fwmark.isSome) then
-    let denied ← orM (branch .setDevNoNet false) (branch .setDevNotCapable false)
+    -- W8: `!net` once the creating namespace exited (netlink.c:517); the
+    -- capability half is constant true on this config (section 2.2)
+    let denied ← orM (branch .setDevNoNet !(← getDev).creatingNet) (branch .setDevNotCapable false)
     if ← branch .setDevPermErr denied then return ← zero (-EPERM)
   modifyDev fun d => { d with deviceUpdateGen := d.deviceUpdateGen + 1 }
   if ← branch .setDevFwmark a.fwmark.isSome then
