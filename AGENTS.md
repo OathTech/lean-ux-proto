@@ -74,9 +74,8 @@ process name: the poller matches itself and never exits. Before reporting
 progress, check actual completion.
 
 Validation is scoped to the change:
-- mutants (`scripts/wg-mutants.py`, `scripts/pipes-mutants.py`) run for the
-  mirror files a change touches, on a reduced corpus; the full set runs once,
-  at a milestone;
+- at a claim point: the full check, the controls and the sentinel mutants
+  once; during a task, the suites the change touches;
 - every agent gets an explicit scope, a time or run budget, and a stop
   condition ("report rather than fix if ...");
 - no unrequested harness, guest or kernel changes during a validation task:
@@ -89,21 +88,34 @@ never with a retry. A rerun happens at most once, only on an infrastructure
 outcome, and is recorded in the report
 ([the contended-host note](docs/2026-10-06-contended-host.md)).
 
-## Checks must pay for themselves
+## Gates and speedbumps
 
-- The goal is data and control-flow equivalence of the executable mirror with
-  Linux. The checker (`evaluator/`, `harness/`, `correspondence/`) serves that
-  goal.
-- A new check rule or instrument must state what it catches that the existing
-  ones do not, with evidence: a real defect or a mutant it alone rejects. One
-  that cannot show this is not added, and one that stops paying is removed.
-  Finer-grained instruments are fine; checkers that merely accrete are not.
-- The one exception: a cheap check that closes a fail-open (silent-pass) hole
-  may be kept without a mutant, after the conflict and the cost are put to the
-  user and the user says yes for that check.
-- The mirror (`Leanux/FS`, `Leanux/WG`, `Leanux/Kernel`) contains only the C's
-  data and control flow. Fixture, scheduling and timing assumptions live in
-  the environment model (`Leanux/Env.lean`) or the runner.
+The claim is data and control-flow equivalence of the executable mirror with
+Linux. It rests on three gates, and only these block:
+- the model build and the unit tests, the fast tier that guards every commit;
+- the differential check on the approved oracle at a claim point (an
+  integration, a stage), with its fail-closed guards on the instruments
+  (records dropped, unconsumed or at the wrong site, an unlisted function
+  covered, a schedule not consumed exactly);
+- the kernel identity check, which refuses to boot any other build.
+
+Everything else is a speedbump: cheap, run at claim points, never blocking
+intermediate work, built to catch honest drift and not adversarial attack:
+- the negative control suites (`corpus/*-controls`, their scripts);
+- the sentinel mutants (`scripts/wg-mutants.py`, `scripts/pipes-mutants.py`):
+  one per verdict channel and record instrument, each on the smallest corpus
+  subset that rejects it, about half an hour in all.
+
+A new check rule is added when it is cheap and catches a real class of
+mistake. A new instrument on the trust surface (a record kind, a comparison
+class, a section rule) gets a one-off mutant, run once and reported in its
+commit, then deleted unless it replaces a sentinel. No evidence bundles,
+integration records or run narratives: a merge commit's message carries the
+run's counts and the user's signoff.
+
+The mirror (`Leanux/FS`, `Leanux/WG`, `Leanux/Kernel`) contains only the C's
+data and control flow. Fixture, scheduling and timing assumptions live in
+the environment model (`Leanux/Env.lean`) or the runner.
 
 ## Oracle kernel changes
 
@@ -140,11 +152,11 @@ including the coordinator.
   authorize a new merge.
 - Prepare the complete change and relevant validation in worktrees first.
   Present its branch/commit and reviewable diff, then obtain user signoff as the
-  final step before updating `main`. Record that approval with the integration
-  record (`.artifacts/runs/evidence/<id>/integration.json`). Additional
-  unapproved changes require new signoff.
-- While awaiting signoff, preserve the branch and evidence, keep `main`
-  unchanged, and follow the registered worktree cleanup policy.
+  final step before updating `main`. The merge commit's message carries the
+  run's counts and the user's words. Additional unapproved changes require
+  new signoff.
+- While awaiting signoff, preserve the branch, keep `main` unchanged, and
+  follow the registered worktree cleanup policy.
 
 This rule takes precedence over older project documents that permit autonomous
 integration or minimize human checkpoints. Autonomous work may continue within

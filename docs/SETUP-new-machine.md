@@ -95,7 +95,6 @@ the old host:
 | `.deps`: Linux source 1.6G, downloads 1.2G, go-mod 1.4G, syzkaller 0.44G, docs 0.12G | 4.8 GB |
 | One kernel build directory (`.artifacts/kernel-net-choice*`) | 0.9 GB |
 | One extracted, patched kernel source (`.artifacts/src/linux-6.12.110-*`) | 1.6 GB |
-| `.artifacts/runs/evidence` (main checkout) | 0.23 GB |
 | A worktree after several full checks and its own kernel (`.worktrees/d3-int`): `.artifacts/check` 3.3G, `.artifacts/src` 1.6G, kernel 0.9G, `.lake` 0.23G | 6 GB |
 | All 31 worktrees on the old host | 73 GB |
 
@@ -144,11 +143,8 @@ git -C $REPO merge --ff-only bundle/main    # on main: restores the already-appr
 The fast-forward restores the `main` the user approved on 2026-10-07. It integrates nothing new.
 If the hash differs, stop and ask.
 
-Untracked state is not in any bundle:
-- `.artifacts/runs/evidence/`, about 233 MB in the main checkout;
-- `.worktrees/*/.artifacts/runs/evidence/`.
-
-Copy these by hand if the integration records are to be kept (pause-state section 5). Do not copy
+Untracked state is not in any bundle: the check outputs under `.artifacts`, which are
+reproducible and not kept. Do not copy
 `.cache`, because its links hold absolute paths (docs/offline-usage.md).
 
 ## 3. Lean toolchain and the model build
@@ -345,7 +341,7 @@ Both must print `8cee19e1…5c4c`.
 
 Sources: `scripts/build-kernel`, `scripts/apply-kernel-patch.py`, `scripts/kernel-identity.py`,
 `kernel/identity-x86_64-net-choice.txt`, `harness/linux.py`,
-`.artifacts/runs/evidence/d3/integration.json` (old machine).
+the D3 merge commit `84a56fd` (old machine).
 
 ### 6.1 What is approved on `main`
 
@@ -511,7 +507,7 @@ scripts/in-bundle python3 -B -m unittest \
     harness.test_d1_keepalive harness.test_d1_keys
 ```
 
-Expected: **99 tests, OK** (`.artifacts/runs/evidence/d3/integration.json`: "unit_tests": "99/99").
+Expected: **99 tests, OK** (the D3 integration of 2026-10-07).
 The module list is the 8 modules of `docs/2026-10-05-d3-timers.md` section 17.3. Their `def test`
 counts on `main` sum to 99: 35 + 10 + 13 + 4 + 26 + 4 + 2 + 5.
 
@@ -567,41 +563,23 @@ scripts/in-bundle python3 scripts/wg-d3-controls.py      # expected tc_advance_w
 
 Both need `LEANUX_KERNEL_DIR` exported, per the `wg-d3-controls.py` docstring.
 
-### 8.5 Mutants: scope them
+### 8.5 The sentinel mutants
 
 ```sh
-scripts/in-bundle python3 scripts/wg-mutants.py [NAME ...]      # WireGuard: 70 entries
-scripts/in-bundle python3 scripts/pipes-mutants.py [NAME ...]   # pipes: 18 + baseline
+scripts/in-bundle python3 scripts/wg-mutants.py [NAME ...]      # WireGuard: the sentinel set
+scripts/in-bundle python3 scripts/pipes-mutants.py [NAME ...]   # pipes: 2 sentinels + baseline
 ```
 
 How the scripts work:
-- Each mutant is written **into the working tree**, then a check runs: `--suite wireguard` for
-  WireGuard, `pipes` for pipes. The file is then restored with `git checkout -- <file>`.
+- Each sentinel is written **into the working tree**, then a check runs on its corpus subset.
+  The file is then restored with `git checkout -- <file>`.
 - The tree must be clean, which the script asserts. Run mutants only in a dedicated worktree, and
   never in the main checkout.
 - `wg-mutants.py` writes `.artifacts/check/mutant-<NAME>/` and `.artifacts/check/mutants-summary.json`.
 - It exits 1 on any `no_verdict`: an infrastructure failure is never counted as a rejection.
 
-**A full WireGuard set takes 18 hours or more.** On the old contended host:
-- one mutant took about 16 minutes;
-- all 70 took 18.5 hours (`docs/2026-10-05-d3-timers.md` section 16.4).
-
-[USER] decision: mutant runs are scoped to the touched files, on reduced corpora. The full set
-runs once, at milestones (pause-state section 3). Always pass names. For example, the D3 set
-(8/8 rejected on `main`):
-
-```sh
-scripts/in-bundle python3 scripts/wg-mutants.py D3-M1-attempts-not-incremented D3-M2-need-another-ignored \
-    D3-M3-firing-keeps-timer D3-M4-clear-keeps-handshake D3-M5-send-fresh-at-reject \
-    D3-M6-no-lastminute-flag D3-M7-send-ignores-reject-after-time D3-M8-new-handshake-delay
-```
-
-Expected on `main`:
-- WireGuard: 68 rejected, 1 survivor (`B2-M3-length-before-type`, an instrument limit), and
-  1 equivalent (`H-M8-response-unclamped`, listed and not run). 0 without a verdict.
-- Pipes: baseline pass 23/23, **18/18 rejected**.
-
-REPRODUCING.md's "about 20 minutes" for `wg-mutants.py` is **stale**.
+The set is a speedbump run at claim points (AGENTS.md, "Gates and speedbumps"): about half an
+hour on an idle box. Expected: every sentinel rejected.
 
 Run long jobs as tracked background tasks (section 11.5).
 
@@ -627,12 +605,7 @@ The rules:
 - All development happens in worktrees on `task/*` branches.
 - `main` moves only with the user's explicit signoff on the concrete diff. This covers
   fast-forward, cherry-pick, reset and push alike.
-- Record the approval in `integration.json`, next to the evidence.
-
-**Evidence.**
-- Copy a report worth keeping (one presented for signoff, or a reproduced failure) to
-  `$REPO/.artifacts/runs/evidence/<id>/` before you remove the worktree.
-- It is untracked. Back it up by hand.
+- The merge commit's message carries the run's counts and the user's words.
 
 **Remove a worktree:**
 
@@ -748,9 +721,7 @@ Each worktree's `.artifacts/check` grows with every check and mutant run: 3.3 GB
 the old host. A worktree that builds its own kernel adds 2.5 GB (source plus build). The old disk
 reached 99 % once.
 
-Before you remove a worktree:
-- copy the evidence you need;
-- check free space before kernel builds and full mutant runs.
+Check free space before kernel builds and mutant runs.
 
 ### 11.4 Stale model binaries
 
