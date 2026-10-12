@@ -316,13 +316,14 @@ def handshakeReceiveWorker (condResched : M Unit) : M Unit :=
     decrypt queue and the peer's `rx_queue`: 0, or (outside the domain)
     `-ENOSPC` / `-EPIPE`. One item per queue is the domain (design section
     8): the decrypt worker of the previous injection has run. -/
-def enqueuePerDeviceAndPeerRx (pkt : RxPacket) : M Int := do
+def enqueuePerDeviceAndPeerRx (id : SkbId) : M Int := do
   -- atomic_set_release(&PACKET_CB(skb)->state, PACKET_STATE_UNCRYPTED)
-  let pkt := { pkt with state := .uncrypted }
+  setRxSkb id fun p => { p with state := .uncrypted }
+  let pkt ← getRxSkb id
   let p ← getPeer pkt.peer
   -- `!wg_prev_queue_enqueue(peer_queue, skb)`: the queue's count is at MAX_QUEUED_PACKETS
   if ← branch .enqueuePeerQueueFull (p.rxQueue.count ≥ MAX_QUEUED_PACKETS) then return -ENOSPC
-  setPeer pkt.peer { p with rxQueue := p.rxQueue.enqueue pkt }   -- W7: a multi-item queue
+  setPeer pkt.peer { p with rxQueue := p.rxQueue.enqueue id }   -- W7: a multi-item queue
   let d ← getDev
   let cpu ← cpumaskNextOnlineFrom d.decryptLastCpu
   modifyDev fun d => { d with decryptLastCpu := cpu }
@@ -332,7 +333,7 @@ def enqueuePerDeviceAndPeerRx (pkt : RxPacket) : M Int := do
   -- queued iff not pending, with its record (dispatch order); the
   -- environment runs the decrypt worker while its ring holds packets
   queueDeviceWork .decryptWorker
-  modifyDev fun d => { d with decryptQueue := d.decryptQueue.produce pkt }
+  modifyDev fun d => { d with decryptQueue := d.decryptQueue.produce id }
   return 0
 
 /-- wg_queue_enqueue_per_peer_rx (queueing.h:190-203): the packet's state is
@@ -342,16 +343,17 @@ def enqueuePerDeviceAndPeerRx (pkt : RxPacket) : M Int := do
     peeked (an UNCRYPTED head the poll stopped at) or queued; the oldest
     still-UNCRYPTED packet of its keypair is the one the worker holds, since
     both the ring and the queue are FIFO. -/
-def enqueuePerPeerRx (irqExit : M Unit) (pkt : RxPacket) (state : PacketState) : M Unit := do
-  let pid := (← getKeypair pkt.keypair).peer   -- PACKET_PEER(skb)
+def enqueuePerPeerRx (irqExit : M Unit) (id : SkbId) (state : PacketState) : M Unit := do
+  let pid := (← getKeypair (← getRxSkb id).keypair).peer   -- PACKET_PEER(skb)
   peerGet pid
   let p ← getPeer pid
-  -- atomic_set_release(&PACKET_CB(skb)->state, state)
-  let some rxQueue := p.rxQueue.updateFirst (fun q => q.keypair == pkt.keypair && q.state == .uncrypted)
-      (fun _ => { pkt with state })
-    | invariant "a decrypted packet that is not on its peer's rx_queue"
+  -- atomic_set_release(&PACKET_CB(skb)->state, state): the one skb the
+  -- peer's rx_queue (queued or peeked, W7) and the worker name (review 4.2)
+  if !(p.rxQueue.all.contains id) then
+    invariant "a decrypted packet that is not on its peer's rx_queue"
+  setRxSkb id fun q => { q with state }
   -- napi_schedule: NAPI_STATE_SCHED, and NET_RX raised (a cut point)
-  setPeer pid { p with rxQueue, napiScheduled := true }
+  setPeer pid { p with napiScheduled := true }
   irqExit
   peerPut (some pid)
 
@@ -377,12 +379,13 @@ def consumeData (msg : List UInt8) (src : SkbSource) (ds : Nat) : M Unit := do
     keypairPut (some id) false
     peerPut peer
     return
-  let pkt : RxPacket := { peer := pid, keypair := id, bytes := msg, source := src, ds }
-  let ret ← enqueuePerDeviceAndPeerRx pkt
+  -- PACKET_CB(skb)->keypair = keypair: the skb enters the store (review 4.2)
+  let skb ← newRxSkb { peer := pid, keypair := id, bytes := msg, source := src, ds }
+  let ret ← enqueuePerDeviceAndPeerRx skb
   -- `unlikely(ret == -EPIPE)`: wg_queue_enqueue_per_peer_rx(skb, PACKET_STATE_DEAD),
   -- whose napi_schedule in this softirq is polled by the same net_rx_action
   -- pass (W7, 5.2; the ring is full only on the 1024-item tier)
-  if ← branch .dataEpipe (ret == -EPIPE) then enqueuePerPeerRx (pure ()) pkt .dead
+  if ← branch .dataEpipe (ret == -EPIPE) then enqueuePerPeerRx (pure ()) skb .dead
   -- `likely(!ret || ret == -EPIPE)`
   if ← orM (branch .dataEnqueueOk (ret == 0)) (branch .dataEnqueueOkEpipe (ret == -EPIPE)) then return
   invariant "unreachable"

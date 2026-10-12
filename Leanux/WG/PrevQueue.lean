@@ -26,18 +26,6 @@ def PrevQueue.count (q : PrevQueue α) : Nat := q.items.length
     `atomic_set_release` of a packet's state reaches it wherever it is. -/
 def PrevQueue.all (q : PrevQueue α) : List α := q.peeked.toList ++ q.items
 
-/-- `f` applied to the first item satisfying `p`, the peeked one first;
-    `none` when no item does. -/
-def PrevQueue.updateFirst (q : PrevQueue α) (p : α → Bool) (f : α → α) : Option (PrevQueue α) :=
-  match q.peeked with
-  | some x => if p x then some { q with peeked := some (f x) } else updateItems q
-  | none => updateItems q
-where
-  updateItems (q : PrevQueue α) : Option (PrevQueue α) :=
-    match q.items.findIdx? p with
-    | some i => some { q with items := q.items.modify i f }
-    | none => none
-
 /-- wg_prev_queue_dequeue (queueing.c:80-106). `tail` is the stub, or the
     item returned next; `next` the entry after it. -/
 def PrevQueue.dequeue (q : PrevQueue α) : M (Option α × PrevQueue α) := do

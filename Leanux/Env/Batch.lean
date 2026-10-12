@@ -76,7 +76,10 @@ def queuedWork (w : Nat) (pid : Option Nat) : M Bool := do
     if !d.txWorkQueue.isEmpty then return true
     let some pid := pid | return false
     let p ← getPeer pid
-    return p.txQueue.all.any fun item => item.head?.any (·.state != .uncrypted)
+    for item in p.txQueue.all do
+      if let some id := item.head? then
+        if (← getTxSkb id).state != .uncrypted then return true
+    return false
   return false
 
 /-- The worker whose section a record starts or stops, with `true` for a

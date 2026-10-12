@@ -96,18 +96,15 @@ def cpumaskChooseOnline (pid : PeerId) : M Nat := do
     reference to its peer (`PACKET_PEER(first)`, the keypair's peer) for the
     duration, the item's state (`PACKET_CB(first)->state`), and the peer's
     `transmit_packet_work` queued on its serial CPU. -/
-def enqueuePerPeerTx (item : List DataPacket) (state : PacketState) : M Unit := do
+def enqueuePerPeerTx (item : List SkbId) (state : PacketState) : M Unit := do
   let some first := item.head? | invariant "an empty ring item"
-  let pid := (← getKeypair first.keypair).peer
+  let pid := (← getKeypair (← getTxSkb first).keypair).peer
   peerGet pid
-  -- atomic_set_release(&PACKET_CB(first)->state, state): the same skb list
-  -- is on the peer's tx_queue
-  let same (q : List DataPacket) := q.head?.map (fun f => f.keypair == first.keypair && f.nonce == first.nonce) == some true
-  let p ← getPeer pid
-  -- W7: the item may be the one the tx worker peeked (an UNCRYPTED head)
-  let some txQueue := p.txQueue.updateFirst same (fun _ => { first with state } :: item.drop 1)
-    | invariant "an item for the tx worker that is not on its peer's tx_queue"
-  setPeer pid { p with txQueue }
+  -- atomic_set_release(&PACKET_CB(first)->state, state): the one skb the
+  -- peer's tx_queue (queued or peeked, W7) and the worker name (review 4.2)
+  if !((← getPeer pid).txQueue.all.any (·.head? == some first)) then
+    invariant "an item for the tx worker that is not on its peer's tx_queue"
+  setTxSkb first fun p => { p with state }
   _ ← cpumaskChooseOnline pid
   -- queue_work_on(cpu, packet_crypt_wq, &peer->transmit_packet_work): a no-op
   -- while the work is pending (queued, not yet started); otherwise queued,
@@ -119,9 +116,10 @@ def enqueuePerPeerTx (item : List DataPacket) (state : PacketState) : M Unit := 
 
 /-- wg_queue_enqueue_per_device_and_peer (queueing.h:157-178) of a ring item:
     0, `-ENOSPC` or `-EPIPE`. -/
-def enqueuePerDeviceAndPeer (pid : PeerId) (item : List DataPacket) : M Int := do
+def enqueuePerDeviceAndPeer (pid : PeerId) (item : List SkbId) : M Int := do
   -- atomic_set_release(&PACKET_CB(first)->state, PACKET_STATE_UNCRYPTED)
-  let item := item.mapIdx fun i pkt => if i == 0 then { pkt with state := .uncrypted } else pkt
+  let some first := item.head? | invariant "an empty ring item"
+  setTxSkb first fun p => { p with state := .uncrypted }
   -- `!wg_prev_queue_enqueue(peer_queue, skb)`: `atomic_add_unless(&count, 1,
   -- MAX_QUEUED_PACKETS)` (queueing.c, mirrored as its result)
   let p ← getPeer pid
@@ -143,7 +141,7 @@ def enqueuePerDeviceAndPeer (pid : PeerId) (item : List DataPacket) : M Int := d
 /-- wg_packet_create_data (send.c:311-331) of a staged list. The list holds
     a keypair reference and a peer reference, which the tx worker drops (or
     this function, on failure). -/
-def createData (pid : PeerId) (item : List DataPacket) : M Unit := do
+def createData (pid : PeerId) (item : List SkbId) : M Unit := do
   let some first := item.head? | invariant "an empty ring item"
   let ret ← do
     if ← branch .createDataDead (← getPeer pid).isDead then pure (-EINVAL)
@@ -154,9 +152,10 @@ def createData (pid : PeerId) (item : List DataPacket) : M Unit := do
   -- `likely(!ret || ret == -EPIPE)`
   if ← branch .createDataOk (ret == 0) then return
   if ← branch .createDataOkEpipe (ret == -EPIPE) then return
-  keypairPut (some first.keypair) false
+  keypairPut (some (← getTxSkb first).keypair) false
   peerPut (some pid)
   -- kfree_skb_list(first)
+  for id in item do freeTxSkb id
 
 def ETH_P_IP : Nat := 0x0800
 def ETH_P_IPV6 : Nat := 0x86DD
@@ -233,7 +232,7 @@ def sendStagedPackets (pid : PeerId) : M Unit := do
   if ← branch .stagedBirthdateExpired (← birthdateHasExpired k.sending.birthdate REJECT_AFTER_TIME) then
     return ← outNokey true
   -- the nonces and `ds`, in queue order
-  let mut item : List DataPacket := []
+  let mut packetsCb : List DataPacket := []
   for pkt in packets do
     _ ← branch .stagedNonceIterate true
     -- `PACKET_CB(skb)->ds = ip_tunnel_ecn_encap(0, ip_hdr(skb), skb)`
@@ -242,11 +241,13 @@ def sendStagedPackets (pid : PeerId) : M Unit := do
     let nonce := k.sendingCounter   -- atomic64_inc_return(&sending_counter) - 1
     setKeypair id { k with sendingCounter := k.sendingCounter + 1 }
     if ← branch .stagedNonceRejected (nonce ≥ REJECT_AFTER_MESSAGES) then return ← outNokey true
-    item := item ++ [{ peer := pid, keypair := id, nonce, plaintext := pkt, ds }]
+    packetsCb := packetsCb ++ [{ peer := pid, keypair := id, nonce, plaintext := pkt, ds }]
   _ ← branch .stagedNonceIterate false
   -- `packets.prev->next = NULL`; wg_peer_get(keypair->entry.peer);
-  -- PACKET_CB(packets.next)->keypair = keypair
+  -- PACKET_CB(packets.next)->keypair = keypair: the skbs enter the store
+  -- (review 4.2) as the list `wg_packet_create_data` takes
   peerGet (← getKeypair id).peer
+  let item ← packetsCb.mapM newTxSkb
   createData pid item
 
 /-- wg_packet_send_keepalive (send.c:221-240): a keepalive is staged only

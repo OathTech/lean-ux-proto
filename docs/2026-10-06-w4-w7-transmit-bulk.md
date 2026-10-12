@@ -440,7 +440,10 @@ names `.ipIdentReserve` route.c:482 (`harness/steer.py:26-28`,
   `-ENOSPC` first (`queueing.h:167`), never `-EPIPE`. **`-EPIPE` needs two
   peers** sharing the device ring: e.g. 600 items for A and 425 for B fill
   the ring while each `prev_queue` holds fewer than 1024. The same holds for
-  the decrypt ring and `rx_queue` (receive.c:526-533).
+  the decrypt ring and `rx_queue` (receive.c:526-533). *Corrected in 17.16:
+  the ring's full test is on the producer's slot, which a consumed item
+  still occupies until the batch rule clears it, so one peer reaches
+  `-EPIPE` with 1023 items in the ring.*
 - **`-EPIPE` handling.** Send: `wg_queue_enqueue_per_peer_tx(first, DEAD)`
   (send.c:322-323), the tx worker frees the list (`:277-278`). Receive:
   `wg_queue_enqueue_per_peer_rx(skb, DEAD)` (receive.c:528-529) **inside the
@@ -2217,3 +2220,53 @@ activation"), and a replay fixture of a recorded resumed-outer run makes it
 deterministic. Order of work per the review: ranks 3 and 4 first (the ring
 and the packet store), then the activations (rank 6), then phase 2's
 scheduler loop; the 1025-item tier and the repoll wait for the ring.
+
+### 17.16 Ranks 3 and 4: the ring and the skb store [AGENT 2026-10-12, rings]
+
+Built on `task/rings` (`task/w7p2` with `task/lifetimes` and `main`
+merged), two commits, representation only: the same branches, records and
+observations in the same order.
+
+**The ring (review 4.1), `Leanux/WG/PtrRing.lean`.** `struct ptr_ring` as
+data: `producer`, `consumerHead`, `consumerTail`, `size`, `batch`
+(`SMP_CACHE_BYTES * 2 / 8`, 16 for 1024 slots, 1 when that exceeds half the
+size) and the slot array (`Types.lean`, `PtrRing.init`). `full` is
+`__ptr_ring_produce`'s test, the producer's slot occupied; `produce` writes
+it and wraps; `peek` reads the consumer head; `discardOne` is
+`__ptr_ring_discard_one`, which clears `consumerTail..head` and advances the
+tail only when the head has moved `batch` slots past it or reached the end,
+and resets both cursors at the end; `consume` is peek then discard.
+`count` and `items` read the occupancy (the `#guard`s; the environment's
+`queuedWork` tests `empty`). The device's
+`encryptQueue` and `decryptQueue` are rings; `enqueueRingFull` tests `full`
+and the workers `consume`. Three `#guard`s hold the review's counterexample
+(one produce, one consume, 1023 produces: full with 1023 items), the batch
+rule (15 consumes keep slot 0, the 16th clears it) and the wrap.
+
+**The accounting bullet of 2.6 was wrong** by exactly the counterexample:
+with one peer, a batch of one xmit whose worker run consumes it (head 1,
+tail 0, slot 0 still occupied), then a batch of 1024 xmits, reaches
+`-EPIPE` at the 1024th item while `tx_queue` holds 1023 (`-ENOSPC` needs
+1024). The list ring accepted it. **Not reproduced against Linux here:**
+that trace is the full-ring tier, which waits on the sender's `sk_sndbuf`
+raise (2.7, v2 M1; `SO_SNDBUFFORCE` is not in `guest.c`) and the KCOV
+capacity probe P-A (12); the `#guard` stands as the ring's evidence until
+the tier runs. The smallest live witness is two `wg_batch` ops, 1 and 1024
+`xmit` items (with 1 ≤ N ≤ 15 items in the first, 1025 − N in the second).
+
+**The skb store (review 4.2), `Types.lean`, `State.lean`.** `SkbId` names a
+packet; `Device.txSkbs : TreeMap SkbId DataPacket` and
+`Device.rxSkbs : TreeMap SkbId RxPacket` own them, `nextSkb` numbers them.
+The rings, the peers' `prev_queue`s (`txQueue : PrevQueue (List SkbId)`,
+`rxQueue : PrevQueue SkbId`), a peeked head and a worker's local all hold
+ids. `newTxSkb` is the `PACKET_CB` assignment in
+`wg_packet_send_staged_packets` (the list `wg_packet_create_data` takes),
+`newRxSkb` is `wg_packet_consume_data`'s; `freeTxSkb` is `kfree_skb_list`
+(`create_data`'s error path, the tx worker's `DEAD` path) or the stack's
+consumption after `create_data_done`, `freeRxSkb` the poll's
+`dev_kfree_skb` or `napi_gro_receive`; both are invariant failures on a
+dangling id. A publication (`wg_queue_enqueue_per_peer_tx/rx`) is one
+`setTxSkb`/`setRxSkb` of the state, with an invariant check that the id is
+on its peer's queue (queued or peeked) in place of the old search-and-copy
+(`PrevQueue.updateFirst`, removed). The encrypt and decrypt workers write
+the ciphertext or plaintext into the stored packet in place.

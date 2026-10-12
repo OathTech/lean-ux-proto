@@ -128,6 +128,12 @@ structure Keypair where
   receivingCounter : ReplayCounter := {}
   deriving Repr, BEq
 
+/-- The identity of an skb on its way out or in (simulation-target review,
+    section 4.2): the device ring, the peer's `prev_queue`, a peeked head and
+    a worker's local name the one object in the device's store
+    (`Device.txSkbs`, `Device.rxSkbs`), whose state publication changes once. -/
+abbrev SkbId := Nat
+
 /-- `enum packet_state` (queueing.h). -/
 inductive PacketState where
   | uncrypted | crypted | dead
@@ -286,12 +292,13 @@ structure Peer where
   serialWorkCpu : Option Nat := none
   /-- `tx_queue` (`struct prev_queue`, W7 stream B): ring items handed to
       the per-peer transmit worker, oldest first. An item is a staged list
-      (`skb->next`), nonempty; its first packet carries the item's
-      `PACKET_CB` state (D2 stream A). -/
-  txQueue : PrevQueue (List DataPacket) := {}
-  /-- `rx_queue` (`struct prev_queue`), oldest first, and whether its NAPI
-      poll is scheduled (`napi_schedule` without a run yet) (D2). -/
-  rxQueue : PrevQueue RxPacket := {}
+      (`skb->next`) of skb ids, nonempty; its first skb carries the item's
+      `PACKET_CB` state (D2 stream A), in `Device.txSkbs`. -/
+  txQueue : PrevQueue (List SkbId) := {}
+  /-- `rx_queue` (`struct prev_queue`), oldest first, skb ids into
+      `Device.rxSkbs`, and whether its NAPI poll is scheduled
+      (`napi_schedule` without a run yet) (D2). -/
+  rxQueue : PrevQueue SkbId := {}
   napiScheduled : Bool := false
   /-- The five `struct timer_list` (peer.h:53-55), D3 interface
       (docs/2026-10-05-d3-timers.md, section 5.1): `some expires` (absolute
@@ -459,13 +466,21 @@ structure Device where
       items queued for the encrypt worker, oldest first: each a staged list
       of packets (D2 stream A). -/
   encryptLastCpu : Int := -1
-  encryptQueue : PtrRing (List DataPacket) := PtrRing.init MAX_QUEUED_PACKETS
+  encryptQueue : PtrRing (List SkbId) := PtrRing.init MAX_QUEUED_PACKETS
   /-- Peers whose `transmit_packet_work` is queued, oldest first. -/
   txWorkQueue : List PeerId := []
   /-- `decrypt_queue.last_cpu` and the messages queued for the decrypt worker,
       oldest first (D2). -/
   decryptLastCpu : Int := -1
-  decryptQueue : PtrRing RxPacket := PtrRing.init MAX_QUEUED_PACKETS
+  decryptQueue : PtrRing SkbId := PtrRing.init MAX_QUEUED_PACKETS
+  /-- The skb store (review 4.2): every outgoing data skb from its
+      `PACKET_CB` assignment in `wg_packet_send_staged_packets` to its
+      `kfree_skb` (or its consumption by the stack), and every incoming data
+      skb from `wg_packet_consume_data` to its free, owned once; the queues
+      hold ids. `nextSkb` numbers them. -/
+  txSkbs : TreeMap SkbId DataPacket := {}
+  rxSkbs : TreeMap SkbId RxPacket := {}
+  nextSkb : SkbId := 0
   /-- D3: peers whose `clear_peer_work` (`wg_queued_expired_zero_key_material`)
       is queued on `handshake_send_wq`, oldest first
       (docs/2026-10-05-d3-timers.md, section 5.4). -/

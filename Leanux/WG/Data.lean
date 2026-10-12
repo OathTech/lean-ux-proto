@@ -110,24 +110,22 @@ def encryptStep (checksumHelp : Packet → M Packet) : M Bool := do
   | (some first, ring) =>
     _ ← branch .encWorkerConsumed true
     modifyDev fun d => { d with encryptQueue := ring }
-    let some head := first.head? | invariant "an empty ring item"
-    -- skb_list_walk_safe(first, skb, next)
+    let some headId := first.head? | invariant "an empty ring item"
+    let head ← getTxSkb headId
+    -- skb_list_walk_safe(first, skb, next): each skb encrypted in place
+    -- (the store, review 4.2)
     let mut state := PacketState.crypted
-    let mut done : List DataPacket := []
-    let mut remaining := first
-    for _ in [0:first.length] do
-      let some skb := remaining.head? | break
+    for id in first do
       _ ← branch .encWorkerSkbIterate true
-      let encrypted ← encryptPacket checksumHelp head.keypair skb
+      let encrypted ← encryptPacket checksumHelp head.keypair (← getTxSkb id)
       if ← branch .encWorkerEncrypted encrypted.isSome then
         -- wg_reset_packet(skb, true) (a cut point)
-        done := done ++ [{ skb with bytes := encrypted.getD [] }]
-        remaining := remaining.drop 1
+        setTxSkb id fun p => { p with bytes := encrypted.getD [] }
       else
         state := .dead   -- break
         break
     if state == .crypted then _ ← branch .encWorkerSkbIterate false
-    enqueuePerPeerTx (done ++ remaining) state
+    enqueuePerPeerTx first state
     return true
 
 /-- wg_packet_encrypt_worker (send.c:287-309): drains the encrypt queue
@@ -173,12 +171,13 @@ def keepKeyFresh (pid : PeerId) : M Unit := do
   if ← branch .freshSend send then sendQueuedHandshakeInitiation pid false
 
 /-- wg_packet_create_data_done (send.c:242-260) for an encrypted item. -/
-def createDataDone (pid : PeerId) (item : List DataPacket) : M Unit := do
+def createDataDone (pid : PeerId) (item : List SkbId) : M Unit := do
   timersTraversal pid
   timersAnyAuthenticatedPacketSent pid
   let mut dataSent := false
   -- skb_list_walk_safe(first, skb, next)
-  for skb in item do
+  for id in item do
+    let skb ← getTxSkb id
     _ ← branch .doneSkbIterate true
     let isKeepalive := skb.bytes.length == MESSAGE_DATA_LEN_0
     let sent ← sendSkbToPeer pid skb.bytes skb.ds   -- wg_socket_send_skb_to_peer(peer, skb, PACKET_CB(skb)->ds)
@@ -203,14 +202,17 @@ def txStep (pid : PeerId) : M Bool := do
   let go ← andM (branch .txPacket first.isSome) do
     let some f := first | invariant "unreachable"
     let some h := f.head? | invariant "an empty ring item"
-    branch .txNotUncrypted (h.state != .uncrypted)
+    branch .txNotUncrypted ((← getTxSkb h).state != .uncrypted)
   if !go then return false
   let some item := first | invariant "unreachable"
-  let some head := item.head? | invariant "an empty ring item"
+  let some headId := item.head? | invariant "an empty ring item"
+  let head ← getTxSkb headId
   -- wg_prev_queue_drop_peeked
   setPeer pid { (← getPeer pid) with txQueue := (← getPeer pid).txQueue.dropPeeked }
   if ← branch .txCrypted (head.state == .crypted) then createDataDone pid item
-  -- else kfree_skb_list(first)
+  -- else kfree_skb_list(first); either way the skbs leave the store (sent
+  -- ones are the stack's, review 4.2)
+  for id in item do freeTxSkb id
   keypairPut (some head.keypair) false
   peerPut (some pid)
   return true
