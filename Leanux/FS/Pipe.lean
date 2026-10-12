@@ -1,5 +1,6 @@
 import Leanux.FS.Kiocb
 import Leanux.FS.Inode
+import Leanux.FS.Poll
 import Leanux.Kernel.Signal
 import Leanux.Kernel.Refcount
 
@@ -11,21 +12,23 @@ import Leanux.Kernel.Refcount
 `free_pipe_info`, `alloc_pipe_info` and the buffer accounting
 (`account_pipe_buffers`, `too_many_pipe_buffers_*`,
 `pipe_is_unprivileged_user`), and `pipe_fcntl` (`get_pipe_info`,
-`pipe_set_size`, `round_pipe_size`, `pipe_resize_ring`); `kill_fasync`
-(fs/fcntl.c). Creation (`pipe2`) is in `Leanux.FS.PipeCreate`, which needs the
-descriptor table. Design: docs/2026-10-05-p-pipes.md (sections 1-6,
-Appendix A).
+`pipe_set_size`, `round_pipe_size`, `pipe_resize_ring`); `pipe_poll`;
+`kill_fasync` (fs/fcntl.c). Creation (`pipe2`) is in `Leanux.FS.PipeCreate`,
+which needs the descriptor table. Design: docs/2026-10-05-p-pipes.md
+(sections 1-6, Appendix A); the wait queues and `pipe_poll`:
+docs/2026-10-12-epoll-design.md (2.5, 4.2, 4.6).
 
 Configured-program notes: `CONFIG_WATCH_QUEUE` is unset, so
 `pipe_has_watch_queue` is the constant false (pipe_fs_i.h:134-141) and its
 tests (231, 448, 1319, 1341, 1392) are folded, as is the `note_loss` block of
 `pipe_read`. Cut points, each stated at its call: `pipe->mutex` and the
-`rd_wait` lock (one task), the wait-queue wakeups (no waiters: the domain is
-single-task, so every `wake_up_*` changes no mirror state), `capable()` (the
-guest runs as root: true), `get_current_user`'s and `free_uid`'s references
-to `root_user` (see `getCurrentUser`), `sb_start_write_trylock` (succeeds) and
-`sb_end_write`. The blocking waits (`wait_event_interruptible_exclusive`) are
-`unsupported`.
+`rd_wait` lock (one task), `capable()` (the guest runs as root: true),
+`get_current_user`'s and `free_uid`'s references to `root_user` (see
+`getCurrentUser`), `sb_start_write_trylock` (succeeds) and `sb_end_write`.
+The wake-ups (`wake_up_interruptible*`) are calls into the wait-queue service
+(`Leanux.FS.Wait`), walking `rd_wait`/`wr_wait`; `pipe_poll` registers on
+those heads through `poll_wait`. The blocking waits
+(`wait_event_interruptible_exclusive`) are `unsupported`.
 
 The ring: `head` and `tail` are free-running `unsigned int`s, masked with
 `ring_size - 1` only at dereference (`pipeBufIdx`).
@@ -44,6 +47,7 @@ def pipeOf (f : File) : M PipeId :=
   match f.privateData with
   | some (.pipe id) => return id
   | some (.eventfdCtx _) => invariant "pipe operation on an eventfd file"
+  | some (.eventpoll _) => invariant "pipe operation on an epoll file"
   | none => invariant "pipe operation on a file with NULL private_data"
 
 /-- `pipe_full(head, tail, limit)` (pipe_fs_i.h:169-173):
@@ -264,6 +268,39 @@ def freePipeInfo (pid : PipeId) : M Unit := do
   -- kfree(pipe->bufs); kfree(pipe)
   modifyK fun k => { k with pipes := k.pipes.erase pid }
 
+/-- pipe_poll (fs/pipe.c:656-705), the `poll` operation: registers on the
+    heads the file's mode allows, then reads the ring without the mutex.
+    `poll_usage` (664) is what makes `pipe_write`'s wake unconditional
+    (`.pipeWritePollUsage`). -/
+def pipePoll (fid : FileId) (wait : PollTable) : M UInt32 := do
+  let filp ← getFile fid
+  let pid ← pipeOf filp
+  -- WRITE_ONCE(pipe->poll_usage, true): epoll's historical semantics
+  setPipe pid { (← getPipe pid) with pollUsage := true }
+  -- the poll table entries first, then the racy tests (666-685)
+  if ← branchCmp .pipePollReadWait (hasFlag filp.fMode FMODE_READ) (filp.fMode &&& FMODE_READ).toNat 0 then
+    pollWait fid (.pipeRd pid) wait
+  if ← branchCmp .pipePollWriteWait (hasFlag filp.fMode FMODE_WRITE) (filp.fMode &&& FMODE_WRITE).toNat 0 then
+    pollWait fid (.pipeWr pid) wait
+  -- head = READ_ONCE(pipe->head); tail = READ_ONCE(pipe->tail)
+  let p ← getPipe pid
+  let (head, tail) := (p.head, p.tail)
+  let mut mask : UInt32 := 0
+  if ← branchCmp .pipePollRead (hasFlag filp.fMode FMODE_READ) (filp.fMode &&& FMODE_READ).toNat 0 then
+    if ← branchCmp .pipePollNotEmpty (head != tail) head.toNat tail.toNat then
+      mask := mask ||| EPOLLIN ||| EPOLLRDNORM
+    -- `!pipe->writers && filp->f_pipe != pipe->w_counter`
+    if ← branchCmp .pipePollNoWriters (p.writers == 0) p.writers 0 then
+      if ← branchCmp .pipePollHup (filp.fPipe != p.wCounter) filp.fPipe p.wCounter then
+        mask := mask ||| EPOLLHUP
+  if ← branchCmp .pipePollWrite (hasFlag filp.fMode FMODE_WRITE) (filp.fMode &&& FMODE_WRITE).toNat 0 then
+    if ← branchCmp .pipePollNotFull (!pipeFull head tail p.maxUsage) (pipeOccupancy head tail) p.maxUsage then
+      mask := mask ||| EPOLLOUT ||| EPOLLWRNORM
+    -- Linux sets EPOLLERR on pipes with no readers, like FIFOs (696-699)
+    if ← branchCmp .pipePollNoReaders (p.readers == 0) p.readers 0 then
+      mask := mask ||| EPOLLERR
+  return mask
+
 /-- put_pipe_info (fs/pipe.c:707-720), under `inode->i_lock`. -/
 def putPipeInfo (ino : PipefsInodeId) (pid : PipeId) : M Unit := do
   let p ← getPipe pid
@@ -294,7 +331,8 @@ def pipeRelease (ino : PipefsInodeId) (fid : FileId) : M Int := do
   let p ← getPipe pid
   -- `!pipe->readers != !pipe->writers`
   if ← branch .pipeReleaseOneSide ((p.readers == 0) != (p.writers == 0)) then
-    -- wake_up_interruptible_all(&pipe->rd_wait), (&pipe->wr_wait): no waiters
+    wakeUpInterruptibleAll (.pipeRd pid)
+    wakeUpInterruptibleAll (.pipeWr pid)
     killFasync p.fasyncReaders
     killFasync p.fasyncWriters
   -- mutex_unlock(&pipe->mutex)
@@ -369,9 +407,9 @@ def pipeRead (iocb : Kiocb) (count : Nat) : M Int := do
     wakeNextReader := false
   -- mutex_unlock(&pipe->mutex)
   if ← branch .pipeReadWasFull wasFull then
-    pure ()  -- wake_up_interruptible_sync_poll(&pipe->wr_wait, ...): no waiters
+    wakeUpInterruptibleSyncPoll (.pipeWr pid) (EPOLLOUT ||| EPOLLWRNORM)
   if ← branch .pipeReadWakeNextReader wakeNextReader then
-    pure ()  -- wake_up_interruptible_sync_poll(&pipe->rd_wait, ...): no waiters
+    wakeUpInterruptibleSyncPoll (.pipeRd pid) (EPOLLIN ||| EPOLLRDNORM)
   killFasync p.fasyncWriters
   if ← branchCmp .pipeReadPositive (ret > 0) ret 0 then
     fileAccessed (← getFile iocb.filp)
@@ -488,10 +526,10 @@ def pipeWrite (iocb : Kiocb) (src : IovIter) : M Int := do
   let wake ← do
     if ← branch .pipeWriteWasEmpty wasEmpty then pure true
     else branch .pipeWritePollUsage p.pollUsage
-  if wake then pure ()  -- wake_up_interruptible_sync_poll(&pipe->rd_wait, ...): no waiters
+  if wake then wakeUpInterruptibleSyncPoll (.pipeRd pid) (EPOLLIN ||| EPOLLRDNORM)
   killFasync p.fasyncReaders
   if ← branch .pipeWriteWakeNextWriter wakeNextWriter then
-    pure ()  -- wake_up_interruptible_sync_poll(&pipe->wr_wait, ...): no waiters
+    wakeUpInterruptibleSyncPoll (.pipeWr pid) (EPOLLOUT ||| EPOLLWRNORM)
   -- `ret > 0 && sb_start_write_trylock(file_inode(filp)->i_sb)`: the trylock is a
   -- cut that succeeds (design section 5)
   let update ← do
@@ -558,7 +596,9 @@ def pipeResizeRing (pid : PipeId) (nrSlots : Nat) : M Int := do
   -- max_usage = nr_accounted = nr_slots
   setPipe pid { p with bufs, ringSize := nrSlots, maxUsage, tail := 0, head := n.toUInt32 }
   setPipe pid { (← getPipe pid) with maxUsage := nrSlots, nrAccounted := nrSlots }
-  -- spin_unlock_irq; wake_up_interruptible(&pipe->wr_wait): no waiters
+  -- spin_unlock_irq(&pipe->rd_wait.lock)
+  -- This might have made more room for writers (1326-1327)
+  wakeUpInterruptible (.pipeWr pid)
   return 0
 
 /-- pipe_set_size (fs/pipe.c:1335-1380), with `pipe->mutex` held. -/
@@ -610,6 +650,7 @@ def getPipeInfo (f : File) : M (Option PipeId) := do
     | some (.pipe id) => pure (some id)
     | none => pure none
     | some (.eventfdCtx _) => invariant "a pipefifo file whose private_data is an eventfd context"
+    | some (.eventpoll _) => invariant "a pipefifo file whose private_data is an eventpoll"
   if ← branch .getPipeInfoNoPipe pipe?.isNone then return none
   return pipe?
 
