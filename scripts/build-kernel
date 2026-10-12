@@ -60,11 +60,14 @@ if [ "$PROFILE" = net-rcov ] || [ "$PROFILE" = net-hidden ] || [ "$PROFILE" = ne
     # since the dispatch-order capture (docs/2026-10-11-dispatch-order.md)
     # the identity word in the section start and arm records and the kind-307
     # queue record at __queue_work
-    CHOICE_SHA=8b34860c778d838f71ce31b11a5aad9df6a06a83ae331fdaf5e33c894312f4b1
+    # and the kind-306 dst-cache jiffies record (W9); since epoll stream R
+    # (docs/2026-10-12-epoll-design.md, 3.2) the kind-308 file-address record
+    # at ep_rbtree_insert (fs/eventpoll.c), record-only
+    CHOICE_SHA=36ce046c1204fb39d2ac1e7f7a3249ebf7bc035c203098e1a09d99c48eb456d5
     # net-choice-actl: the allocation-steering control kernel (A, section 7:
     # K1, K4, K5), the same patch with control load flags; never an oracle
     ACTL_PATCH="$LEANUX_ROOT/kernel/patches/choice-stream-alloc-controls.patch"
-    ACTL_SHA=114c2969831a2fa5566be8c40b5bfe3df831ff6c5cadc94c471454aa7430d66e
+    ACTL_SHA=d1f4304970277fc05cacaeae3765cb180a5799ecec708dabba0727949bd9e55e
     if [ "$PROFILE" = net-choice ]; then
         SOURCE="$LEANUX_ARTIFACTS/src/linux-6.12.110-choice-stream-da"
         PATCH_SHA_RECORD="$CHOICE_SHA"
