@@ -1597,12 +1597,20 @@ Deviations [AGENT]:
   batch is inherited by every later child, where it shifts the fixture and
   widens the descriptor table (an operand of every close). The batch forks
   the holder once; a trace process sends its pid and waits for the ack.
+  The handshake runs over AF_UNIX socket pairs, not pipes: a pipe's buffers
+  are charged to the user's `pipe_bufs`, an operand of every pipe trace's
+  `alloc_pipe_info` (`too_many_pipe_buffers_soft`), so two batch pipes
+  shifted every pipe trace's operands by 32 (the W batch's claim point: 581
+  `too_many_pipe_buffers_soft` operand mismatches).
 - **The close order is injector, listeners, then the pin**, the reverse of
   3.2's: a UDP socket's `put_net` is RCU-deferred, and a `cleanup_net`
   queued from an RCU callback would write no queue record (kind 307 is
   recorded in the task's context only), so the pin's synchronous put must
-  be the last. The settle in between is a TSC spin, not a sleep: a
-  `nanosleep` inside the window records its clock reads.
+  be the last. The settle in between is a spin on `CLOCK_MONOTONIC_COARSE`
+  through the vDSO, not a sleep: a `nanosleep` inside the window records
+  its clock reads, and the coarse clock's vDSO path needs no clocksource (a
+  TSC spin at `/proc/cpuinfo`'s rate failed a whole batch on a boot whose
+  TSC calibration had failed, the claim point's `cpu_mhz`).
 - **The parked descriptors sit at 40-43**, not above the table: a `dup2`
   above `NR_OPEN_DEFAULT` would grow the trace process's table to 256,
   visible as `file_close_fd_locked`'s operand.

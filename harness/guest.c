@@ -16,7 +16,6 @@
 #include <arpa/inet.h>
 #include <time.h>
 #include <sched.h>
-#include <x86intrin.h>
 #include <signal.h>
 #include <sys/socket.h>
 #include <stdint.h>
@@ -188,35 +187,32 @@ static struct dispatch_arg trace_dispatch;
  * batch ends (section 3.2, C1: D's teardown never runs while a later run is
  * armed with cleanup_net). The pins live in the holder, not the batch, so no
  * child inherits one (an inherited descriptor would shift the fixture and
- * widen the descriptor table). Two pipes, made once and inherited by every
- * child: signal (a trace process writes its pid) and ack (the holder answers
- * 'k', or 'n' if the open failed); every child moves its ends above the
- * descriptors a trace can see and closes the originals. */
-static int pin_pipe[4] = {-1, -1, -1, -1};
+ * widen the descriptor table). Two AF_UNIX socket pairs, made once and
+ * inherited by every child: signal (a trace process writes its pid on [1],
+ * the holder reads [0]) and ack (the holder answers 'k' on [3], or 'n' if
+ * the open failed; the trace reads [2]); every child moves its ends above
+ * the descriptors a trace can see and closes the originals. Socket pairs,
+ * not pipes: a pipe's buffers are charged to the user's pipe_bufs, the
+ * operand every pipe trace's alloc_pipe_info compares
+ * (too_many_pipe_buffers_soft), so two batch pipes shifted every pipe
+ * trace's operands by 32. */
+static int pin_sock[4] = {-1, -1, -1, -1};
 static int netns_closed;
-/* the TSC rate (kHz) from /proc/cpuinfo, for the settle spin */
-static unsigned long long tsc_khz;
-
-static void settle_spin(unsigned long long us)
-{
-    unsigned long long end = __rdtsc() + us * tsc_khz / 1000;
-    while (__rdtsc() < end) __asm__ volatile("pause");
-}
 
 static void pin_holder(void)
 {
     struct rlimit pins = {2 * 4096 + 64, 2 * 4096 + 64};
     if (setrlimit(RLIMIT_NOFILE, &pins)) _exit(3);
-    if (close(pin_pipe[1]) || close(pin_pipe[2])) _exit(3);
+    if (close(pin_sock[1]) || close(pin_sock[2])) _exit(3);
     for (;;) {
         pid_t pid;
-        ssize_t n = read(pin_pipe[0], &pid, sizeof(pid));
+        ssize_t n = read(pin_sock[0], &pid, sizeof(pid));
         if (n == 0) _exit(0);   /* the batch is gone: the pins go with this process */
         if (n != (ssize_t)sizeof(pid)) _exit(3);
         char path[64];
         snprintf(path, sizeof(path), "/proc/%d/ns/net", (int)pid);
         int pin = open(path, O_RDONLY);
-        if (write(pin_pipe[3], pin < 0 ? "n" : "k", 1) != 1) _exit(3);
+        if (write(pin_sock[3], pin < 0 ? "n" : "k", 1) != 1) _exit(3);
     }
 }
 /* flags: write the kind-303 arm records (D3), from the wire's A line */
@@ -1256,7 +1252,7 @@ static unsigned long *enable_remote(const struct trace *t, int comparisons)
     if (child) {
         int status;
         /* W8: only the trace process signals the batch */
-        if (t->net == 3 && (close(PIN_SIGNAL_FD) || close(PIN_ACK_FD))) fail(t->id, -1, "environment_failure", "pin_pipe_parent");
+        if (t->net == 3 && (close(PIN_SIGNAL_FD) || close(PIN_ACK_FD))) fail(t->id, -1, "environment_failure", "pin_sock_parent");
         if (waitpid(child, &status, 0) != child) fail(t->id, -1, "environment_failure", "wait_trace");
         if (t->nsteer) {
             uint32_t left[2];
@@ -1502,6 +1498,24 @@ static void batch_cleanup(struct batch_state *bs)
     close(bs->ring);
 }
 
+/* W8: a settle of `us` microseconds inside a window, by CLOCK_MONOTONIC_COARSE
+ * through the vDSO: no system call and no clocksource read, so the window
+ * records nothing (a nanosleep arms an hrtimer: clock records from an
+ * undeclared consumer; the coarse clock's vDSO path reads the tick's
+ * timestamp whatever the clocksource, so it never falls back to the system
+ * call under refined-jiffies). The coarse clock advances at the ticks, the
+ * unit the RCU grace period is counted in; nothing depends on the TSC rate,
+ * which a boot whose calibration failed reports as 0 in /proc/cpuinfo. */
+static void settle_spin(const char *id, unsigned index, unsigned long long us)
+{
+    struct timespec start, now;
+    if (clock_gettime(CLOCK_MONOTONIC_COARSE, &start)) fail(id, (int)index, "environment_failure", "settle_clock");
+    do {
+        __asm__ volatile("pause");
+        if (clock_gettime(CLOCK_MONOTONIC_COARSE, &now)) fail(id, (int)index, "environment_failure", "settle_clock");
+    } while ((now.tv_sec - start.tv_sec) * 1000000000LL + (now.tv_nsec - start.tv_nsec) < (long long)(us * 1000));
+}
+
 static void execute(const struct trace *t, int input_fd, int comparisons)
 {
     fixture_routes = t->routes;   /* W4: for route_into_wg0 at every wg_up */
@@ -1510,11 +1524,11 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
     if (close(input_fd)) fail(t->id, -1, "environment_failure", "close_input");
     /* W8: the pin handshake's ends, moved above every descriptor the trace
      * can see; every child drops the inherited originals (the batch's low
-     * pipe descriptors would otherwise shift the fixture). */
-    if (t->net == 3 && (dup2(pin_pipe[1], PIN_SIGNAL_FD) != PIN_SIGNAL_FD || dup2(pin_pipe[2], PIN_ACK_FD) != PIN_ACK_FD))
-        fail(t->id, -1, "environment_failure", "pin_pipe_dup");
+     * socket descriptors would otherwise shift the fixture). */
+    if (t->net == 3 && (dup2(pin_sock[1], PIN_SIGNAL_FD) != PIN_SIGNAL_FD || dup2(pin_sock[2], PIN_ACK_FD) != PIN_ACK_FD))
+        fail(t->id, -1, "environment_failure", "pin_sock_dup");
     for (int k = 0; k < 4; ++k)
-        if (close(pin_pipe[k])) fail(t->id, -1, "environment_failure", "pin_pipe_close");
+        if (close(pin_sock[k])) fail(t->id, -1, "environment_failure", "pin_sock_close");
     /* The parent's watchdog: SIGALRM's handler is the parent's, not ours; and
      * this child leads its own process group, so the watchdog's kill reaches
      * a network trace's trace process too. */
@@ -1531,7 +1545,7 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         char ack = 0;
         if (write(PIN_SIGNAL_FD, &self, sizeof(self)) != (ssize_t)sizeof(self)) fail(t->id, -1, "environment_failure", "pin_signal");
         if (read(PIN_ACK_FD, &ack, 1) != 1 || ack != 'k') fail(t->id, -1, "environment_failure", "pin_ack");
-        if (close(PIN_SIGNAL_FD) || close(PIN_ACK_FD)) fail(t->id, -1, "environment_failure", "pin_pipe_done");
+        if (close(PIN_SIGNAL_FD) || close(PIN_ACK_FD)) fail(t->id, -1, "environment_failure", "pin_sock_done");
     }
     /* Init invokes us with exactly console descriptors 0, 1, and 2. */
     for (int fd = 0; fd < 3; ++fd)
@@ -1938,7 +1952,7 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             if (ret == 0) ret = syscall(SYS_close, LISTEN6_FD);
             if (ret == 0) ret = syscall(SYS_close, LISTEN4_FD);
             if (ret == 0) {
-                settle_spin(NETNS_SETTLE_US);   /* the RCU grace period passes at the ticks */
+                settle_spin(t->id, i, NETNS_SETTLE_US);   /* the RCU grace period passes at the ticks */
                 ret = syscall(SYS_close, PIN_FD);
             }
             if (ret != 0) fail(t->id, i, "environment_failure", "netns_close");
@@ -2262,8 +2276,9 @@ int main(int argc, char **argv)
         fail("batch", -1, "invalid_input", "wire_header");
     struct utsname identity;
     if (uname(&identity)) fail("batch", -1, "environment_failure", "uname");
-    /* W8: the pin holder and its pipes, before any trace (section 3.2) */
-    if (pipe(pin_pipe) || pipe(pin_pipe + 2)) fail("batch", -1, "environment_failure", "pin_pipe");
+    /* W8: the pin holder and its socket pairs, before any trace (section 3.2) */
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, pin_sock) || socketpair(AF_UNIX, SOCK_STREAM, 0, pin_sock + 2))
+        fail("batch", -1, "environment_failure", "pin_sock");
     pid_t holder = fork();
     if (holder < 0) fail("batch", -1, "environment_failure", "fork_pin_holder");
     if (!holder) pin_holder();
@@ -2304,17 +2319,15 @@ int main(int argc, char **argv)
         consumed += more;
     }
     if (strcmp(line + consumed, "\n")) fail("batch", -1, "invalid_input", "wire_allocation_set");
-    {
-        /* the TSC rate: the unwind cycles' unit (A0) and the settle spin (W8) */
+    if (alloc.n || alloc.flags) {
+        /* the TSC rate, to convert the unwind cycles (A0) */
         FILE *cpuinfo = fopen("/proc/cpuinfo", "r");
         char mhz[64] = "";
         while (cpuinfo && fgets(line, sizeof(line), cpuinfo))
             if (!strncmp(line, "cpu MHz", 7) && sscanf(line, "cpu MHz : %63s", mhz) == 1) break;
         if (cpuinfo) fclose(cpuinfo);
         if (!mhz[0] || strspn(mhz, "0123456789.") != strlen(mhz)) fail("batch", -1, "environment_failure", "cpu_mhz");
-        tsc_khz = (unsigned long long)(strtod(mhz, NULL) * 1000.0);
-        if (tsc_khz < 100000) fail("batch", -1, "environment_failure", "cpu_mhz");
-        if (alloc.n || alloc.flags) printf("LEANUX_ALLOC_TSC {\"mhz\":\"%s\"}\n", mhz);
+        printf("LEANUX_ALLOC_TSC {\"mhz\":\"%s\"}\n", mhz);
     }
     unsigned failures = 0;
     for (unsigned t = 0; t < total; ++t) {
