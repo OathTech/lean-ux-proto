@@ -98,10 +98,20 @@ def sectionOf (site : Nat) : Option (Worker × Bool) :=
     kernel ran that has no section (another task) leaves no other record;
     a worker the mirror cannot run here (a caller further up its stack)
     resumes later (`runWorker`). `fuel` bounds the nesting: each level is a
-    worker run. -/
-def condResched : Nat → Worker → M Unit → M Bool
-  | 0, _, _ => invariant "worker switches nested too deep"
-  | fuel + 1, self, runDecrypt => do
+    worker run.
+
+    A NET_RX section the records place at the yield is the NAPI poll a
+    pending `napi_schedule` raised, which ksoftirqd ran when the worker
+    gave up the CPU (D2's order (a), docs/2026-10-04-d2-data-plane.md
+    section 5) before the kernel ran the crypt worker whose start follows:
+    it runs first, by the NET_RX rules (`runNetRx`, `Env.napiSoftirq`), and
+    the switch to that worker is still taken (W7, docs/2026-10-06-w4-w7-
+    transmit-bulk.md 17.14: `w7_mixed`). Any other record at the yield
+    stays with the resuming worker, whose next read it must be, else a
+    hidden mismatch. -/
+def condResched : Nat → Worker → M Unit → M Unit → M Bool
+  | 0, _, _, _ => invariant "worker switches nested too deep"
+  | fuel + 1, self, runDecrypt, runNetRx => do
     let some site := self.resched? | invariant s!"{self.symbol} has no cond_resched"
     if (← peekHiddenSite) != some site.info.id then return false
     _ ← hidden site
@@ -112,7 +122,7 @@ def condResched : Nat → Worker → M Unit → M Bool
       match (← peekHiddenSite).bind sectionOf with
       | some (.encryptWorker, true) =>
         if (← getDev).encryptQueue.isEmpty then break   -- not runnable: the record mismatches later
-        runWorker .encryptWorker (WG.encryptWorker checksumHelp (condResched fuel .encryptWorker runDecrypt))
+        runWorker .encryptWorker (WG.encryptWorker checksumHelp (condResched fuel .encryptWorker runDecrypt runNetRx))
       | some (.txWorker, true) =>
         let d ← getDev
         let some headPid := d.txWorkQueue.head? | break
@@ -120,11 +130,19 @@ def condResched : Nat → Worker → M Unit → M Bool
           | some u => resolveUnit .txWorker u d.txWorkQueue
           | none => pure headPid
         modifyDev fun d => { d with txWorkQueue := d.txWorkQueue.erase pid }
-        runWorker .txWorker (WG.txWorker pid (condResched fuel .txWorker runDecrypt)) (some pid)
+        runWorker .txWorker (WG.txWorker pid (condResched fuel .txWorker runDecrypt runNetRx)) (some pid)
       | some (.decryptWorker, true) =>
         if (← getDev).decryptQueue.isEmpty then break
         runDecrypt
-      | _ => break
+      | _ =>
+        -- the NAPI poll at the yield (the docstring): pending, with its
+        -- section's start next; `runNetRx` consumes it, or the record is
+        -- left to the caller
+        let netRx := (HiddenSite.sectionStart .netRx).info.id
+        if (← peekHiddenSite) == some netRx && (← getDev).peers.toList.any (·.2.napiScheduled) then
+          runNetRx
+          if (← peekHiddenSite) == some netRx then break
+        else break
     -- the loop ends at a record it does not run; one it could run is a
     -- run beyond its bound
     match (← peekHiddenSite).bind sectionOf with

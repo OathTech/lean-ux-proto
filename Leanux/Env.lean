@@ -178,9 +178,10 @@ def deliverSent : M Unit := do
     worker (`packet_crypt_wq`, queued by `wg_packet_create_data`), then the
     tx worker of each peer it queued (`wg_queue_enqueue_per_peer_tx`),
     oldest first. What they send is delivered. -/
-def runCryptWorkers (runDecrypt : M Unit := unsupported "a switch to the decrypt worker at this point (its placement is not modeled here)") : M Unit := do
+def runCryptWorkers (runDecrypt : M Unit := unsupported "a switch to the decrypt worker at this point (its placement is not modeled here)")
+    (runNetRx : M Unit := pure ()) : M Unit := do
   if !(← getDev).encryptQueue.isEmpty then
-    runWorker .encryptWorker (WG.encryptWorker checksumHelp (condResched SWITCH_DEPTH .encryptWorker runDecrypt))
+    runWorker .encryptWorker (WG.encryptWorker checksumHelp (condResched SWITCH_DEPTH .encryptWorker runDecrypt runNetRx))
   for _ in [0:4096] do
     let d ← getDev
     match d.txWorkQueue.head? with
@@ -191,7 +192,7 @@ def runCryptWorkers (runDecrypt : M Unit := unsupported "a switch to the decrypt
         | some u => resolveUnit .txWorker u d.txWorkQueue
         | none => pure headPid
       modifyDev fun d => { d with txWorkQueue := d.txWorkQueue.erase pid }
-      runWorker .txWorker (WG.txWorker pid (condResched SWITCH_DEPTH .txWorker runDecrypt)) (some pid)
+      runWorker .txWorker (WG.txWorker pid (condResched SWITCH_DEPTH .txWorker runDecrypt runNetRx)) (some pid)
       if !(← getDev).encryptQueue.isEmpty then invariant "the tx worker queued encryption"
   invariant "the tx work queue did not drain"
 
@@ -633,7 +634,7 @@ def napiIrqExit : M Unit := do
 def runDecryptAt : Nat → M Unit
   | 0 => invariant "worker switches nested too deep"
   | fuel + 1 =>
-    runWorker .decryptWorker (WG.decryptWorker napiSoftirq napiIrqExit (condResched fuel .decryptWorker (runDecryptAt fuel)))
+    runWorker .decryptWorker (WG.decryptWorker napiSoftirq napiIrqExit (condResched fuel .decryptWorker (runDecryptAt fuel) napiSoftirq))
 
 def runDecryptWorker : M Unit := do
   runDecryptAt SWITCH_DEPTH
@@ -654,12 +655,12 @@ def inject (family port : Nat) (msg : List UInt8) (tos : Nat := 0) (ll : Bool :=
   runWorker .netRx (WG.wgReceive msg src)
   -- the queued receive work runs before the guest's wait ends
   if !(← getDev).handshakeQueue.isEmpty then
-    runWorker .receiveWorker (WG.handshakeReceiveWorker (discard <| condResched SWITCH_DEPTH .receiveWorker (runDecryptAt SWITCH_DEPTH)))
+    runWorker .receiveWorker (WG.handshakeReceiveWorker (discard <| condResched SWITCH_DEPTH .receiveWorker (runDecryptAt SWITCH_DEPTH) napiSoftirq))
   -- or the decrypt worker, with the NAPI poll its packet schedules
   if !(← getDev).decryptQueue.isEmpty then runDecryptWorker
   -- then the crypt work the receive worker or the NAPI poll queued (a
   -- session's keepalive, staged packets on key confirmation)
-  runCryptWorkers (runDecryptAt SWITCH_DEPTH)
+  runCryptWorkers (runDecryptAt SWITCH_DEPTH) napiSoftirq
   deliverSent
   return msg.length   -- udp_sendmsg returns the datagram's length
 
@@ -703,7 +704,7 @@ def flood (count port : Nat) (messages : List (List UInt8)) : M Int := do
   let src ← senderSource 4
   modifyDev fun d => { d with handshakeQueue := messages.map (fun m => (m, src)) }
   modify fun w => { w with floodDepth := count + messages.length }
-  WG.handshakeReceiveWorker (discard <| condResched SWITCH_DEPTH .receiveWorker (runDecryptAt SWITCH_DEPTH))
+  WG.handshakeReceiveWorker (discard <| condResched SWITCH_DEPTH .receiveWorker (runDecryptAt SWITCH_DEPTH) napiSoftirq)
   modify fun w => { w with floodDepth := 0 }
   -- the remaining invalid packets' per-packet reads (under_load / decay /
   -- reschedule), discarded; a modeled record here (a mid-flood injection) fails
@@ -739,7 +740,7 @@ def afterBatch : M Unit := do
   let startOf (w : Worker) := (HiddenSite.sectionStart w).info.id
   if (← get).hidden.isNone then
     if !(← getDev).decryptQueue.isEmpty then runDecryptWorker
-    runCryptWorkers (runDecryptAt SWITCH_DEPTH)
+    runCryptWorkers (runDecryptAt SWITCH_DEPTH) napiSoftirq
     runSendWorkers
     return
   for _ in [0:4096] do
@@ -747,7 +748,7 @@ def afterBatch : M Unit := do
     let some site ← peekNextSite | break
     if site == startOf .decryptWorker && !d.decryptQueue.isEmpty then runDecryptWorker
     else if (site == startOf .encryptWorker && !d.encryptQueue.isEmpty)
-         || (site == startOf .txWorker && !d.txWorkQueue.isEmpty) then runCryptWorkers (runDecryptAt SWITCH_DEPTH)
+         || (site == startOf .txWorker && !d.txWorkQueue.isEmpty) then runCryptWorkers (runDecryptAt SWITCH_DEPTH) napiSoftirq
     else if site == startOf .sendWorker && !d.sendWorkQueue.isEmpty then runOneSendWorker
     else break
   let d ← getDev

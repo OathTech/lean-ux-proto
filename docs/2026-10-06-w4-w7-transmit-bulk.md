@@ -2133,3 +2133,36 @@ All on the dispatch-order oracle, under `capped`:
   outcome. W4 as in 17.3; W7-M3 4 `hidden_mismatch`; W7-M4 5
   `mirror_invariant`; W7-M5 1 `mirror_invariant`; **W7-M9 2 `hidden_mismatch`**
   (17.12), where stream B's run had it survive.
+
+### 17.14 The NAPI poll at a worker's yield [AGENT 2026-10-12, int-w]
+
+`w7_mixed` operation 4 on the integration branch: the decrypt worker gave
+up the CPU at its first `cond_resched` and the records then show the
+NET_RX section of the pending NAPI poll (ksoftirqd ran it: D2's order
+(a)), and only after it the encrypt and tx workers' sections, all before
+the decrypt worker's resumption. `condResched` switched to a crypt worker
+only when its start record was the very next record, so the poll's section
+blocked the switch and the resumed decrypt worker met the encrypt worker's
+start where it expected its next item's read (a hidden mismatch, site 44
+for site 6; 1 of 1 alone, 1 of 1 in the combined suite). The rule
+(`Leanux/Env/Batch.lean` `condResched`, its docstring): a NET_RX section
+the records place at the yield, with a NAPI poll pending, runs first by the
+existing NET_RX rules (`Env.napiSoftirq`, passed in as `runNetRx`), and the
+switch to the crypt worker whose start follows is still taken; any other
+record at the yield stays with the resuming worker, whose next read it must
+be. No kernel change, no new instrument. The same recording also shows the
+tx worker yielding below the suspended decrypt worker, which resumed with
+its ring item before the tx worker's rest: that is phase 1's case (5.4),
+`unsupported` fail-closed under this rule as before, and phase 2's to
+model.
+
+Validation (dispatch-order oracle `bb3e577d…`, under `capped`): `lake build
+leanux-model`; unit and replay tests 118 pass (D2-M12's pattern follows the
+new `condResched` signature); `w7_mixed` alone three times: 3/3 agreement,
+the first with the order the gap showed (poll, encrypt, tx, then the
+decrypt worker's second item); the `w7_` subset: 4 of 5 agreement,
+`w7_multi_tx_8` the phase-1 `unsupported` of 17.11 (a tx yield below the
+encrypt worker with ring items, scheduling-dependent); the combined suite
+`handwritten,wireguard` (`.artifacts/check/int-w-suites-2`): **pass,
+238/238**, 11153 operand pairs, no retries, `w7_multi_tx_8` agreeing in
+that run.
