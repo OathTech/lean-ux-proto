@@ -468,6 +468,8 @@ inductive AllocSite where
   | nlmsgNew | netlinkAllocLargeSkb | sockAllocSendPskb | netlinkDump | netlinkTrim
   -- below-cut consumer of the dentry cache's range: the last device's delete
   | dAllocSlabDebugfs
+  -- below-cut consumer of the `__alloc_skb` range: the net device's uevents
+  | allocUeventSkb
   -- the pipe paths' direct sites (b-task; A section 19.6, integration)
   | kzallocPipeInfo | kcallocPipeBufs | allocPipePage
   deriving Repr, BEq, DecidableEq
@@ -535,13 +537,20 @@ def AllocSite.info : AllocSite → AllocSiteInfo
   -- (namei.c:1730) when the dentry cache's range is armed. Consumed at
   -- `WG.ratelimiterUninit` (a cut: recorded only when a chunk arms the range).
   | .dAllocSlabDebugfs => ⟨26, "dAllocSlabDebugfs", "fs/namei.c", 1730, .cut⟩
+  -- kobject_uevent_env -> alloc_uevent_skb (kobject_uevent.c:289): the
+  -- KOBJ_ADD uevents of netdev_register_kobject (the device and its queues)
+  -- at register_netdevice, before NETDEV_REGISTER's neighbour draws, and the
+  -- KOBJ_REMOVE ones of netdev_unregister_kobject at the unregister, before
+  -- wg_destruct; consumed at wgNewlink's register cut and wgDelete's
+  -- unregister cut when a chunk arms __alloc_skb [AGENT 2026-10-12].
+  | .allocUeventSkb => ⟨27, "allocUeventSkb", "lib/kobject_uevent.c", 289, .cut⟩
 
 def AllocSite.all : List AllocSite :=
   [.kmallocEventfdCtx, .filpAlloc, .dAllocPseudo, .kmallocFdtable, .kvmallocFdArray, .kvmallocFdBitmaps,
    .kmemCacheZallocPeer, .allocNode190, .allocNode205, .allocNode234, .kzallocKeypair,
    .sendBufSkb, .replySkb, .keepaliveSkb, .skbCowHead, .skbChecksumHelp, .skbCowDataTx, .skbCowDataRx,
    .nlmsgNew, .netlinkAllocLargeSkb, .sockAllocSendPskb, .netlinkDump, .netlinkTrim,
-   .kzallocPipeInfo, .kcallocPipeBufs, .allocPipePage, .dAllocSlabDebugfs]
+   .kzallocPipeInfo, .kcallocPipeBufs, .allocPipePage, .dAllocSlabDebugfs, .allocUeventSkb]
 
 /-- The below-cut allocation consumers (consumed at cut points). -/
 def AllocSite.cuts : List AllocSite := AllocSite.all.filter (·.info.count == .cut)

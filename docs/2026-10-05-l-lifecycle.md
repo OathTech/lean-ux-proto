@@ -1142,7 +1142,11 @@ below covers the merged harness.
   two `neigh_parms_alloc` draws (`skipCutExactly`'s `between` cuts); and an
   up device's `wg_delete` has the `dev_close_many` and `NETDEV_UNREGISTER`
   notifications between `wg_stop`'s last clock read and `wg_destruct`
-  (`wgDelete`'s cut before `flush_all_backlogs`).
+  (`wgDelete`'s cut before `flush_all_backlogs`). The net device's uevents
+  (`kobject_uevent_env` -> `alloc_uevent_skb`, `lib/kobject_uevent.c:289`,
+  the device and its queues at `netdev_register_kobject` and
+  `netdev_unregister_kobject`) are the alloc cut site `allocUeventSkb`,
+  consumed at those same two cuts.
 
 ### 16.4 Evidence
 

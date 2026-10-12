@@ -211,6 +211,7 @@ def wgNewlink : M Int := do
   let ret ← ratelimiterInit
   if ← branch .newlinkRatelimiterErr (ret < 0) then return ← unwind
   -- register_netdevice: the ifindex (the netns cursor, dev.c:10000-10018),
+  -- netdev_register_kobject's uevents (alloc_uevent_skb, below the cut),
   -- then NETDEV_REGISTER, whose inetdev_init and ipv6_add_dev each draw a
   -- neighbour parms' reachable time (a cut: unobserved); between the two,
   -- devinet_sysctl_register's netconf notification (nlmsg_new, a below-cut
@@ -265,8 +266,9 @@ def wgDelete : M Int := do
   if (← getK).wg.isNone then return -ENODEV
   if (← getDev).running then wgDown
   -- the notifications of dev_close_many and of NETDEV_UNREGISTER (ifinfo,
-  -- netconf and address messages: nlmsg_new, below the cut when the run
-  -- armed __alloc_skb), then flush_all_backlogs
+  -- netconf and address messages: nlmsg_new) and netdev_unregister_kobject's
+  -- uevents (alloc_uevent_skb), below the cut when the run armed
+  -- __alloc_skb; then flush_all_backlogs
   skipCut allocCuts
   mayHaveSlept
   wgDestruct
