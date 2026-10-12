@@ -1,7 +1,7 @@
 # The allocation-steering control kernel (docs/2026-10-05-a-alloc.md, section 7;
 # LEANUX_KERNEL_PROFILE=net-choice-actl): kernel/patches/choice-stream-alloc-controls.patch
-# (sha256 d1f4304970277fc05cacaeae3765cb180a5799ecec708dabba0727949bd9e55e since
-# epoll stream R, a38b3fcd... since the dispatch-order capture of 2026-10-11,
+# (sha256 e9ff63a52b6dc8080070c4916314a313867fb3b1a643207ee7d21139ef9f9640 since
+# epoll stream T's line-preserving hook, d1f43049... with stream R's, a38b3fcd... since the dispatch-order capture of 2026-10-11,
 # 8dd6fffe... before) on the
 # oracle's patched source; load flags for the controls K1/K4/K5 that the oracle's
 # load rejects. Never an oracle: the identity check (harness/linux.py verify_kernel)
@@ -15,15 +15,18 @@
 # Built as kernel-net-choice-actl-w9 (ab1be977), superseded by e1.
 # epoll stream R (docs/2026-10-12-epoll-design.md, section 3.2): the kind-308
 # record of the struct file address an epoll item is keyed by, at
-# ep_rbtree_insert (fs/eventpoll.c:1587 in the patched source; the include
-# and the call shift the file's later lines by one and two), one per
-# successful EPOLL_CTL_ADD, 8 bytes, written in any recording context (an
+# ep_rbtree_insert (fs/eventpoll.c:1585; line-preserving since stream T, the
+# declaration and the call on rb_insert_color_cached's line, so the file keeps
+# its pristine line count), once per call, which is every EPOLL_CTL_ADD that
+# reaches the tree (one that reverse_path_check or a pwq allocation failure
+# then undoes included), 8 bytes, written in any recording context (an
 # FS trace loads no dispatch set, so the arm-record gate is not available).
 # Record-only. The patch sha256 is in scripts/build-kernel (CHOICE_SHA /
 # ACTL_SHA) [AGENT 2026-10-12, stream R]. Built 2026-10-12 as
-# .artifacts/kernel-net-choice-actl-e1: the identity and vmlinux lines below
-# are that build's [AGENT 2026-10-12, stream T].
+# .artifacts/kernel-net-choice-actl-e2 (patch sha256 e9ff63a5..., the
+# line-preserving hook; e1, be2a5786, was the shifting one): the identity and
+# vmlinux lines below are that build's [AGENT 2026-10-12, stream T].
 # Path-independent identity from scripts/kernel-identity.py:
-be2a5786b7fb5a3bdb308cb71c42693ac86a9abd9ad3d5af2d952c235ce9df17
+88e5f499b67931d438958b2b212cc9556567ab06fbb89001f2a87c546e674dcc
 # vmlinux sha256 of the build the evidence used (path-dependent):
-ed65a39e7a47a967c975514f9c27d6172a83f06b878a11de4d73ebad8f94254a
+67a5d88d4ba31f31c440c8625f3f64a4c1f0f812af703353b41a6b63c5266386

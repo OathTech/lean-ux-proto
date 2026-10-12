@@ -1781,19 +1781,12 @@
  
 --- a/fs/eventpoll.c
 +++ b/fs/eventpoll.c
-@@ -40,6 +40,7 @@
- #include <linux/capability.h>
- #include <linux/seqlock.h>
- #include <net/busy_poll.h>
-+#include <linux/kcov.h>
- 
- /*
-  * fs/eventpoll.c - Efficient event polling ("epoll") kernel implementation.
-@@ -1583,6 +1584,7 @@
+@@ -1582,7 +1582,7 @@
+ 			p = &parent->rb_left;
  	}
  	rb_link_node(&epi->rbn, parent, p);
- 	rb_insert_color_cached(&epi->rbn, &ep->rbr, leftmost);
-+	kcov_epoll_insert((unsigned long)epi->ffd.file, _THIS_IP_);	/* LEANUX epoll: kind 308 */
+-	rb_insert_color_cached(&epi->rbn, &ep->rbr, leftmost);
++	rb_insert_color_cached(&epi->rbn, &ep->rbr, leftmost); { extern void kcov_epoll_insert(unsigned long file, unsigned long ip); kcov_epoll_insert((unsigned long)epi->ffd.file, _THIS_IP_); }	/* LEANUX epoll: kind 308, line-preserving */
  }
  
  

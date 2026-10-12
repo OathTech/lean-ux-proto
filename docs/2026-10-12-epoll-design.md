@@ -1246,7 +1246,11 @@ Deviations from sections 2-6, each verified against `.deps/linux`:
    include (an `extern` declaration on the call's line) and the call on the
    line of `rb_insert_color_cached` (:1585), then one more oracle build.
    Until then a check on the e1 oracle attributes the file's points one or
-   two lines off.
+   two lines off. Done by stream T: the hook is line-preserving
+   (`gen-choice-stream.py`, the patched file has the pristine 2838 lines),
+   built as the e2 oracle (`de963aca…`, control `88e5f499…`); the record
+   resolves to :1585, once per call of `ep_rbtree_insert`, which includes
+   the ADDs that `reverse_path_check` or a `pwq` allocation failure undo.
 2. **The cut functions are inlined.** `ep_find` and `ep_rbtree_insert` have
    no symbol (both inlined into `do_epoll_ctl` and `ep_register_epitem`),
    so they cannot be listed in `functions` (the check fails on a listed

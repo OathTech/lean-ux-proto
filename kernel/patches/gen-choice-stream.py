@@ -29,8 +29,12 @@ the arm record; the mirror computes the cache's `time_after` from the two
 recorded values. Record-only.
 epoll stream R (docs/2026-10-12-epoll-design.md, section 3.2): the kind-308
 record of the `struct file` address an item is keyed by, at ep_rbtree_insert
-(fs/eventpoll.c, `_THIS_IP_`), one per successful EPOLL_CTL_ADD, 8 bytes;
-the mirror orders its items by (recorded address, fd) as ep_cmp_ffd does.
+(fs/eventpoll.c:1585, `_THIS_IP_`), once per call, which is every
+EPOLL_CTL_ADD that reaches the tree (one that reverse_path_check or a pwq
+allocation failure then undoes included), 8 bytes; the mirror orders its
+items by (recorded address, fd) as ep_cmp_ffd does. Line-preserving (stream
+T): fs/eventpoll.c keeps its pristine line count, so the oracle's DWARF lines
+for that file are the pristine tree's.
 Written in any recording context (an FS trace loads no dispatch set, so the
 arm-record gate of kinds 303/306/307 is unavailable to it). Record-only.
 """
@@ -1068,19 +1072,15 @@ sub('net/core/dst_cache.c', '''fail:
 	return NULL;''')
 # ---- epoll stream R: the tree's key order (docs/2026-10-12-epoll-design.md, 3.2) ----
 # Record-only: the file address an item is keyed by, at its insertion; kind
-# 308, one site. The include shifts fs/eventpoll.c's lines after 42 by one and
-# the call shifts those after ep_rbtree_insert by one more: the mirror's line
-# references for fs/eventpoll.c are the patched source's (the oracle's DWARF).
+# 308, one site. Line-preserving (stream T): no include, the declaration and
+# the call share rb_insert_color_cached's line (fs/eventpoll.c:1585), so the
+# patched file has the pristine line count and the checker's statement spans,
+# read from the pristine tree, stay exact; the record's site is :1585.
 EP='fs/eventpoll.c'
-sub(EP, '''#include <net/busy_poll.h>
-''', '''#include <net/busy_poll.h>
-#include <linux/kcov.h>
-''')
 sub(EP, '''	rb_link_node(&epi->rbn, parent, p);
 	rb_insert_color_cached(&epi->rbn, &ep->rbr, leftmost);
 }''', '''	rb_link_node(&epi->rbn, parent, p);
-	rb_insert_color_cached(&epi->rbn, &ep->rbr, leftmost);
-	kcov_epoll_insert((unsigned long)epi->ffd.file, _THIS_IP_);	/* LEANUX epoll: kind 308 */
+	rb_insert_color_cached(&epi->rbn, &ep->rbr, leftmost); { extern void kcov_epoll_insert(unsigned long file, unsigned long ip); kcov_epoll_insert((unsigned long)epi->ffd.file, _THIS_IP_); }	/* LEANUX epoll: kind 308, line-preserving */
 }''')
 # ---- A stream K1: allocation outcomes (docs/2026-10-05-a-alloc.md, section 4) ----
 # LEANUX_ALLOC_CONTROLS=1 generates the control kernel's patch instead
