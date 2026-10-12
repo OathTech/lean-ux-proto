@@ -45,6 +45,9 @@ def peerPut (peer : Option PeerId) : M Unit := do
     indexRemove pid .handshake
     -- wg_packet_purge_staged_packets: DEV_STATS_ADD(tx_dropped, qlen)
     modifyDev fun d => { d with txDropped := d.txDropped + p.staged.length, peers := d.peers.erase pid }
+    -- the peer's work structs and timers are freed with it (rcu_free): their
+    -- dispatch identities end here (docs/2026-10-11-dispatch-order.md, 4)
+    retirePeerUnits pid
 
 /-- wg_noise_precompute_static_static (noise.c:47-57). -/
 def precomputeStaticStatic (pid : PeerId) : M Unit := do

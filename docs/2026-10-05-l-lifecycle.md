@@ -1119,7 +1119,14 @@ below covers the merged harness.
   empty buckets' identical outcomes would exceed the protocol's bound of
   4096 branches per trace; the check treats a repeatable decision's
   outcomes as a set, so nothing is lost to it. `gcV4Expired`/`gcV6Expired`
-  are E's (never evaluated with empty tables).
+  are E's (never evaluated with empty tables). Since 2026-10-12 (the
+  simulation-target review, 5.3) the uninit walk (`work` NULL) also
+  uninitializes the entries E's flood made, one `v4_entry_iterate=1` each
+  (their buckets are a cut, so bucket 0 stands for the walk), and the
+  first `wg_ratelimiter_init` starts from empty tables; the periodic GC run
+  (the delayed work, every `HZ`) is not a dispatched unit of this harness
+  and stays outside the domain. `l_delete_ratelimited` (E's flood, then
+  `wg_delete`) agrees.
 - **`lookup_interface.kind_mismatch`'s false span (72) removed**: 72's point
   is the epilogue the `-ENODEV` return shares, which the first bare
   `wg_get` showed.

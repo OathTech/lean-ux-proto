@@ -183,3 +183,8 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   lifecycle chunks showed `nlmsg_new` records between `wg_create`'s two
   neighbour draws and before an up device's `wg_destruct`; both are cut
   points now (`docs/2026-10-05-l-lifecycle.md` 16.3).
+- **2026-10-12 [AGENT]** The simulation-target review's change 1 is
+  implemented: dispatch identities are lifetime-scoped (retired at the
+  peer's release and at `free_netdev`), and the last device's
+  `wg_ratelimiter_uninit` uninitializes populated tables as the C does; the
+  review's recommendation, not a change to any standing rule.
