@@ -507,8 +507,27 @@ def wgUp : M Int := do
     (`Syscalls.lean`). -/
 def setMtu (mtu : Nat) : M Int := do
   if (← getK).wg.isNone then return -ENODEV
+  let old := (← getDev).mtu
   let ret ← WG.setMtu mtu
   skipCut allocCuts
+  -- W9's tables (docs/2026-10-06-w8-w9-netns-routing.md, 14.3d): the
+  -- NETDEV_CHANGEMTU notifiers, which `dev_set_mtu_ext` calls only for a
+  -- changed MTU (dev.c:9090-9091 returns 0 before them for the same one).
+  -- fib_netdev_event runs fib_sync_mtu and rt_cache_flush on every change
+  -- (fib_frontend.c:1519-1522), so every cached IPv4 dst expires; below
+  -- IPV4_MIN_MTU (68) inetdev_event destroys the in_device
+  -- (devinet.c:1637-1643): the IPv4 address goes and with it the routes via
+  -- wg0 (fib_del_ifaddr, fib_disable_ip); below IPV6_MIN_MTU (1280)
+  -- addrconf_ifdown removes the IPv6 addresses and routes
+  -- (addrconf.c:3691-3695) and moves the sernum. A later wg_up re-adds
+  -- them (routeIntoWg0).
+  if ret == 0 && mtu != old then
+    modify fun w => { w with ipv4Gen := w.ipv4Gen + 1,
+                             addrs4 := if mtu < 68 then [] else w.addrs4,
+                             defaultRoute4 := mtu ≥ 68 && w.defaultRoute4,
+                             addrs6 := if mtu < 1280 then [] else w.addrs6,
+                             defaultRoute6 := mtu ≥ 1280 && w.defaultRoute6,
+                             ipv6Gen := if mtu < 1280 then w.ipv6Gen + 1 else w.ipv6Gen }
   return ret
 
 /-- W9 (design 14.3b): `route_into_wg0` after a successful flag-changing

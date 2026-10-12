@@ -1557,6 +1557,43 @@ point without `SECURITY`):
 - The ten `w9_*` traces pass alone; `s2_index_collision` and
   `w9_inject_to_alias` pass after the repeatable and witness fixes.
 
+### 14.3d `wg_set_mtu` and the tables (the W integration) [AGENT 2026-10-12]
+
+On the integration branch the claim point's `w4_set_mtu_0` failed at
+operation 5 (a `wg_advance` whose persistent-keepalive send found Linux
+refreshing the cache, site 151, where the mirror predicted a hit), in the
+replay of the comparison child's records (chunk-006ba of the claim run,
+`model-cmp`). Those records: two resets at operation 0 (jiffies 4294924046,
+the peer's creation and its endpoint), the up's refresh at operation 1
+(4294924087), at operation 3 the reset of the endpoint update (4294924251)
+and the keepalive's refresh one jiffy later (4294924252), nothing at
+operation 4 (`wg_set_mtu 0`), and operation 5's refresh (4294925757). With
+the refresh after the reset and the generation unchanged, the mirror's
+rule (14.1) hits at operation 5. Linux missed because `dev_set_mtu_ext`
+calls the `NETDEV_CHANGEMTU` notifiers for a changed MTU (dev.c:9090-9091
+returns 0 before them for the same one), and `fib_netdev_event` runs
+`fib_sync_mtu` and `rt_cache_flush` on **every** change
+(fib_frontend.c:1519-1522), so every cached IPv4 dst fails `ipv4_dst_check`
+afterwards; below `IPV4_MIN_MTU` (68) `inetdev_event` destroys the
+`in_device` (devinet.c:1637-1643), taking the IPv4 address and, with it,
+the routes via wg0; below `IPV6_MIN_MTU` (1280) `addrconf_ifdown` removes
+the IPv6 addresses and routes (addrconf.c:3691-3695) and moves the sernum.
+W4's `setMtu` modeled the device's own state (`inet4Dev`, `inet6Dev`) but
+not W9's tables, which did not exist on its base. The rule, in
+`Env.setMtu`: a successful `wg_set_mtu` to a different MTU bumps the IPv4
+generation; below 68 it empties `addrs4` and drops the IPv4 default route;
+below 1280 it empties `addrs6`, drops the IPv6 default route and bumps the
+IPv6 generation; the same MTU leaves the tables alone; a later `wg_up`
+re-adds them (`routeIntoWg0`). The records distinguish the two outcomes
+(the mirror decides the hit from the recorded jiffies and the generation it
+models), so no capture was needed: the mirror at c868631 reproduces the
+failure on the comparison child's records, the fixed one decides
+`send4.cache_miss` at operation 5 and consumes the refresh. The coverage
+child of the same chunk agreed by timing: there the reset and the refresh
+of operation 3 fell in the same jiffy (4294922240), and the same-jiffy rule
+(14.3b) misses at operation 5 whatever the MTU did; only a send after the
+MTU change that would otherwise hit shows the gap.
+
 ### 14.4 Not done
 
 - **W8b** (the device up at the exit: `linkwatch_event` armed, the
