@@ -23,6 +23,18 @@
 # Record-only. The patch sha256 is in scripts/build-kernel (CHOICE_SHA /
 # ACTL_SHA). The identity and vmlinux lines below are the W9 builds' until
 # the coordinator rebuilds with this patch [AGENT 2026-10-12, stream R].
+# seccomp stream W (docs/2026-10-12-seccomp-design.md, section 3.3): the kind-309
+# records of the eBPF program the classic-to-eBPF translation wrote, at
+# bpf_migrate_filter (net/core/filter.c:1315, the line of `fp =
+# bpf_prog_select_runtime(fp, &err);`, which the hook shares: an anchored
+# file, so the hook adds no include and no line, and the pristine and patched
+# files have the same line count): one record with the eBPF length, then one
+# per emitted bpf_insn, all 8 bytes from the one site, written in any
+# recording context like kind 308. Record-only. The patch sha256 is in
+# scripts/build-kernel (CHOICE_SHA / ACTL_SHA). The identity and vmlinux lines
+# below are the W9 builds' until the coordinator rebuilds with this patch; the
+# oracle's CONFIG_SECCOMP (section 16) is a configuration change before the
+# user, built here only as a scratch kernel [AGENT 2026-10-12, stream W].
 # Path-independent identity from scripts/kernel-identity.py:
 ab1be9775cb202dcb01e68d457e7ceb486bc36ebdaee02c73b635013d637078f
 # vmlinux sha256 of the build the evidence used (path-dependent):

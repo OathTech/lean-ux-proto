@@ -33,6 +33,21 @@ record of the `struct file` address an item is keyed by, at ep_rbtree_insert
 the mirror orders its items by (recorded address, fd) as ep_cmp_ffd does.
 Written in any recording context (an FS trace loads no dispatch set, so the
 arm-record gate of kinds 303/306/307 is unavailable to it). Record-only.
+seccomp stream W (docs/2026-10-12-seccomp-design.md, section 3.3): the kind-309
+records of the eBPF program the classic-to-eBPF translation writes, at the
+end of bpf_migrate_filter's second pass (net/core/filter.c, `_THIS_IP_`),
+before bpf_prog_select_runtime locks the pages: one record with the eBPF
+length, then one record per emitted bpf_insn (the instruction), all 8 bytes
+from one call site, in any recording context like kind 308. One site, not a
+site per record type: two `_THIS_IP_` labels a line apart resolved to one
+address under optimisation (step 0), and the check keys a site by its
+consumer frame and one record length. The mirror checks the length first,
+then its own translation instruction by instruction, so a mismatch names
+the first differing instruction. Record-only. Line-preserving: net/core/
+filter.c is an anchored file and the checker reads its statements from the
+pristine source while DWARF carries the built source's lines, so the hook
+adds no include and no line: an extern declaration and the call share the
+line of `fp = bpf_prog_select_runtime(fp, &err);` (1315 in both sources).
 """
 import sys, re, os, shutil, subprocess
 WD='.artifacts/choice-patch'; N=WD+'/new'
@@ -41,7 +56,8 @@ TOUCHED=['kernel/kcov.c','include/linux/kcov.h','include/linux/sched.h','drivers
          'kernel/time/timekeeping.c','kernel/workqueue.c','kernel/softirq.c','kernel/sched/core.c',
          'kernel/time/timer.c','mm/slub.c','mm/page_alloc.c',
          'include/net/dst_cache.h','net/core/dst_cache.c',
-         'fs/eventpoll.c']
+         'fs/eventpoll.c',
+         'net/core/filter.c']
 shutil.rmtree(WD, ignore_errors=True)
 for side in ('base', 'new'):
     for f in TOUCHED:
@@ -860,6 +876,34 @@ void notrace kcov_epoll_insert(unsigned long file, unsigned long ip)
 EXPORT_SYMBOL(kcov_epoll_insert);
 
 /*
+ * LEANUX seccomp (docs/2026-10-12-seccomp-design.md, section 3.3): the eBPF
+ * program bpf_convert_filter's second pass wrote for a classic filter, as
+ * data: one kind-309 record with the eBPF length, then one kind-309 record
+ * per bpf_insn, all 8 bytes, from bpf_migrate_filter's one call site
+ * (net/core/filter.c, _THIS_IP_), before bpf_prog_select_runtime locks the
+ * pages. A choice record carries at most KCOV_CHOICE_MAX_WORDS payload
+ * words, so the program is recorded per instruction; one site and one
+ * record width, since the check keys a site by its consumer frame and one
+ * length. The mirror checks the length, then its own translation in order,
+ * so a mismatch names the first differing instruction. Written in any
+ * recording context, like the kind-308 record. Record-only: nothing the
+ * values decide changes.
+ */
+void notrace kcov_seccomp_program(const void *insns, unsigned int len, unsigned long ip)
+{
+	const u64 *words = insns;
+	u64 v = len;
+	unsigned int i;
+
+	kcov_choice_ip(309, ip, &v, sizeof(v));
+	for (i = 0; i < len; i++) {
+		v = words[i];
+		kcov_choice_ip(309, ip, &v, sizeof(v));
+	}
+}
+EXPORT_SYMBOL(kcov_seccomp_program);
+
+/*
  * LEANUX D3 (section 4.3): the virtual time advance, on the calling task's
  * own KCOV descriptor: { unsigned long ticks; }, 1 <= ticks <= 2^31. Only
  * from a task that is collecting (the trace process), so the kind-304
@@ -958,6 +1002,8 @@ struct work_struct;
 void kcov_work_queued(struct work_struct *work, unsigned long ip);
 /* LEANUX epoll: ep_rbtree_insert's file-address record (kind 308). */
 void kcov_epoll_insert(unsigned long file, unsigned long ip);
+/* LEANUX seccomp: bpf_migrate_filter's translated-program records (kind 309). */
+void kcov_seccomp_program(const void *insns, unsigned int len, unsigned long ip);
 """)
 sub('include/linux/kcov.h', """static inline void kcov_dispatch_resched(unsigned long ip) {}
 """, """static inline void kcov_dispatch_resched(unsigned long ip) {}
@@ -965,6 +1011,7 @@ static inline void kcov_timer_arm(void *func, unsigned long now, unsigned long e
 struct work_struct;
 static inline void kcov_work_queued(struct work_struct *work, unsigned long ip) {}
 static inline void kcov_epoll_insert(unsigned long file, unsigned long ip) {}
+static inline void kcov_seccomp_program(const void *insns, unsigned int len, unsigned long ip) {}
 """)
 sub('include/linux/kcov.h', 'u64 kcov_common_handle(void);\n', 'u64 kcov_common_handle(void);\n'
     '/* LEANUX D3: the virtual time advance (kernel/time/timekeeping.c). */\n'
@@ -1082,6 +1129,20 @@ sub(EP, '''	rb_link_node(&epi->rbn, parent, p);
 	rb_insert_color_cached(&epi->rbn, &ep->rbr, leftmost);
 	kcov_epoll_insert((unsigned long)epi->ffd.file, _THIS_IP_);	/* LEANUX epoll: kind 308 */
 }''')
+# ---- seccomp stream W: the translated program (docs/2026-10-12-seccomp-design.md, 3.3) ----
+# Record-only: the eBPF length, then the instructions bpf_convert_filter's
+# second pass wrote; kind 309, one site. Line-preserving: net/core/filter.c
+# is an anchored file and the checker reads its statements from the pristine
+# source while DWARF carries the built source's lines, so no include is
+# added and the extern declaration and the call share the line of
+# bpf_migrate_filter's `fp = bpf_prog_select_runtime(fp, &err);` (1315 in
+# both sources); wc -l of the patched and pristine file agree.
+FL='net/core/filter.c'
+sub(FL, '''		goto out_err_free;
+
+	fp = bpf_prog_select_runtime(fp, &err);''', '''		goto out_err_free;
+
+	{ extern void kcov_seccomp_program(const void *insns, unsigned int len, unsigned long ip); kcov_seccomp_program(fp->insnsi, new_len, _THIS_IP_); } fp = bpf_prog_select_runtime(fp, &err);	/* LEANUX seccomp: kind 309 */''')
 # ---- A stream K1: allocation outcomes (docs/2026-10-05-a-alloc.md, section 4) ----
 # LEANUX_ALLOC_CONTROLS=1 generates the control kernel's patch instead
 # (choice-stream-alloc-controls.patch; section 7, K1, K4, K5): load flags

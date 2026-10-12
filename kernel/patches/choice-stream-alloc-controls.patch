@@ -102,7 +102,7 @@
  	case KCOV_REMOTE_ENABLE:
  		if (get_user(remote_num_handles, (unsigned __user *)(arg +
  				offsetof(struct kcov_remote_arg, num_handles))))
-@@ -1125,3 +1170,883 @@
+@@ -1125,3 +1170,911 @@
  }
  
  device_initcall(kcov_init);
@@ -647,6 +647,34 @@
 +EXPORT_SYMBOL(kcov_epoll_insert);
 +
 +/*
++ * LEANUX seccomp (docs/2026-10-12-seccomp-design.md, section 3.3): the eBPF
++ * program bpf_convert_filter's second pass wrote for a classic filter, as
++ * data: one kind-309 record with the eBPF length, then one kind-309 record
++ * per bpf_insn, all 8 bytes, from bpf_migrate_filter's one call site
++ * (net/core/filter.c, _THIS_IP_), before bpf_prog_select_runtime locks the
++ * pages. A choice record carries at most KCOV_CHOICE_MAX_WORDS payload
++ * words, so the program is recorded per instruction; one site and one
++ * record width, since the check keys a site by its consumer frame and one
++ * length. The mirror checks the length, then its own translation in order,
++ * so a mismatch names the first differing instruction. Written in any
++ * recording context, like the kind-308 record. Record-only: nothing the
++ * values decide changes.
++ */
++void notrace kcov_seccomp_program(const void *insns, unsigned int len, unsigned long ip)
++{
++	const u64 *words = insns;
++	u64 v = len;
++	unsigned int i;
++
++	kcov_choice_ip(309, ip, &v, sizeof(v));
++	for (i = 0; i < len; i++) {
++		v = words[i];
++		kcov_choice_ip(309, ip, &v, sizeof(v));
++	}
++}
++EXPORT_SYMBOL(kcov_seccomp_program);
++
++/*
 + * LEANUX D3 (section 4.3): the virtual time advance, on the calling task's
 + * own KCOV descriptor: { unsigned long ticks; }, 1 <= ticks <= 2^31. Only
 + * from a task that is collecting (the trace process), so the kind-304
@@ -988,7 +1016,7 @@
 +}
 --- a/include/linux/kcov.h
 +++ b/include/linux/kcov.h
-@@ -44,6 +44,45 @@
+@@ -44,6 +44,47 @@
  void kcov_remote_start(u64 handle);
  void kcov_remote_stop(void);
  u64 kcov_common_handle(void);
@@ -1031,10 +1059,12 @@
 +void kcov_work_queued(struct work_struct *work, unsigned long ip);
 +/* LEANUX epoll: ep_rbtree_insert's file-address record (kind 308). */
 +void kcov_epoll_insert(unsigned long file, unsigned long ip);
++/* LEANUX seccomp: bpf_migrate_filter's translated-program records (kind 309). */
++void kcov_seccomp_program(const void *insns, unsigned int len, unsigned long ip);
  
  static inline void kcov_remote_start_common(u64 id)
  {
-@@ -99,6 +138,19 @@
+@@ -99,6 +140,20 @@
  static inline void kcov_finish_switch(struct task_struct *t) {}
  static inline void kcov_remote_start(u64 handle) {}
  static inline void kcov_remote_stop(void) {}
@@ -1051,6 +1081,7 @@
 +struct work_struct;
 +static inline void kcov_work_queued(struct work_struct *work, unsigned long ip) {}
 +static inline void kcov_epoll_insert(unsigned long file, unsigned long ip) {}
++static inline void kcov_seccomp_program(const void *insns, unsigned int len, unsigned long ip) {}
  static inline u64 kcov_common_handle(void)
  {
  	return 0;
@@ -1804,4 +1835,15 @@
 +	kcov_epoll_insert((unsigned long)epi->ffd.file, _THIS_IP_);	/* LEANUX epoll: kind 308 */
  }
  
+ 
+--- a/net/core/filter.c
++++ b/net/core/filter.c
+@@ -1312,7 +1312,7 @@
+ 		 */
+ 		goto out_err_free;
+ 
+-	fp = bpf_prog_select_runtime(fp, &err);
++	{ extern void kcov_seccomp_program(const void *insns, unsigned int len, unsigned long ip); kcov_seccomp_program(fp->insnsi, new_len, _THIS_IP_); } fp = bpf_prog_select_runtime(fp, &err);	/* LEANUX seccomp: kind 309 */
+ 	if (err)
+ 		goto out_err_free;
  
