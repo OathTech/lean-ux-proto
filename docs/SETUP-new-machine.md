@@ -1,5 +1,10 @@
 # New-machine setup guide (2026-10-08) [AGENT]
 
+> Historical migration notes. For current setup and run commands, use
+> [Setup and first run](../REPRODUCING.md). The machine inventory, branch
+> status, kernel identities and expected counts below describe the migration
+> in October 2026 and are not current setup instructions.
+
 This guide takes a fresh machine to a verified copy of the project:
 - the approved D3 oracle kernel, identity `8744fcc4…`;
 - the unit tests;

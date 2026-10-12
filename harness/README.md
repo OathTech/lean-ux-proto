@@ -1,126 +1,57 @@
-# Linux experiment runner
+# Linux test runner
 
-Run from a checkout with its staged environment selected:
+The harness executes JSON operation traces in QEMU and collects Linux results
+and coverage. For a comparison with the Lean model, use
+[`evaluator.check`](../REPRODUCING.md); this runner collects only the Linux side.
 
-```
-scripts/in-bundle python3 -m harness.linux INPUT.jsonl --out "$TASK_ARTIFACTS/run-001"
-```
+## Run a trace
 
-`INPUT.jsonl` contains one trace-v1 JSON object per line. `run_linux(traces,
-outdir, timeout=120)` returns Linux observation objects in order. The output
-directory must be empty and within `LEANUX_ARTIFACTS`; paths are never reused.
-`LinuxRunError.kind` distinguishes build, guest, coverage, output, timeout, and
-resource failures. These are experiment failures, not semantic disagreements.
-Agreement is decided by `python3 -m evaluator.check`, which also builds and runs
-the mirror; see the top-level README.
+Complete the [setup](../REPRODUCING.md) and export `LEANUX_KERNEL_DIR` to the
+matching `net-choice` build. From your worktree:
 
-The runner builds only `guest.c`, then boots the accepted oracle kernel
-`.artifacts/kernel-net-rcov` (`scripts/build-kernel` with
-`LEANUX_KERNEL_PROFILE=net-rcov`: `kernel/config-x86_64-net` plus the
-remote-coverage patch; `LEANUX_KERNEL_DIR` selects another build inside
-the artifact roots) with one TCG CPU, 256 MiB memory, and no network device.
-Traces with a WireGuard operation run in a fresh network namespace holding a
-down WireGuard device `wg0`, with a generic-netlink socket at descriptor 7. A shared advisory lock reserves the one guest slot.
-With `"net_fixture": "bare"` the namespace has no `wg0` until a `wg_create`
-(L, `docs/2026-10-05-l-lifecycle.md`). `wg_create` and `wg_delete` send
-`RTM_NEWLINK`/`RTM_DELLINK` over a temporary rtnetlink socket opened at the
-lowest free descriptor before the operation's window and closed after it;
-`wg_down` clears `IFF_UP`. A trace process that fails once its namespace
-exists deletes `wg0` synchronously before exiting, so the device's teardown
-never falls into the next trace. The KCOV areas are 256 K words.
-No experimental syscall sequence runs on the host. No kernel rebuild occurs.
-Each call boots a fresh VM, and each trace runs in a fresh forked child. The
-parent only reads the wire input and manages children; it owns no eventfd.
-
-Each child verifies inherited console descriptors 0–2, closes the input-file
-descriptor, opens KCOV at 3, fills 4–7 with `/dev/null`, and sets both
-`RLIMIT_NOFILE` bounds to 32. Slots 8–31 start free. The fixture descriptors
-remain open throughout. The child allocates valid 16-byte I/O buffers and uses
-`syscall()` exactly once for each trace operation; failure is reconstructed
-immediately from errno, with no retry. Flags and initial counts are unsigned
-32-bit arguments; descriptor literals are sign-extended signed 32-bit values.
-Failed producer references become -1; successful references retain their original
-number even after closing or replacing that descriptor.
-
-KCOV is enabled and reset immediately before each operation, and its count is
-captured immediately afterwards, before disabling coverage. Empty or full
-coverage fails the experiment. Per-operation records preserve the total PC
-count and each unique address once, at its first execution, in execution order.
-
-Each trace runs twice, in two fresh children:
-- **PC mode** (`KCOV_TRACE_PC`) records coverage.
-- **Comparison mode** (`KCOV_TRACE_CMP`) records every comparison's type, two
-  operands and PC. Runs of identical records are printed once.
-
-The comparison child's return values must equal the PC child's, or the run is
-an environment failure (nondeterminism). Formatting, fixture setup, and parent
-work are outside the captured intervals. Address randomization is disabled to
-support source symbolization against the recorded `vmlinux`.
-
-The run directory retains validated JSON input, exact wire input, observation
-JSONL, per-operation coverage JSONL, fixture layout, full serial log, compiler
-log, exact QEMU command, initramfs specification/image, and SHA-256 identities
-of the runner, adapters, contracts, launcher, configured kernel, and guest files.
-Unexpected EINTR, ENOMEM, ENFILE, or internal restart results are categorized as
-environment failures. EMFILE is part of the intended descriptor-limit behavior.
-Compiler and guest output together are capped at 16 MiB while being captured;
-exceeding the cap ends the runner's process group and reports `output_limit`.
-Use smaller guest batches when coverage would exceed this cap. Guest timeout is
-120 seconds by default. Both timeout and output failures preserve captured logs.
-
-## Guest wire format
-
-The adapter is the sole wire producer. All persistent comparisons use JSON.
-The ASCII wire begins with `LEANUX_WIRE_V2`, then a decimal trace count (1–4096),
-then the dispatch set: `D N` and N hex function addresses (N ≥ 1 when a trace
-uses the network fixture; `harness/linux.py` resolves them from `System.map`),
-then `A 0` or `A 1`: whether the kernel writes the kind-303 timer arm records
-(D3; `harness/linux.py` `ARM_RECORDS`), then the allocation set: `M FLAGS N`
-and N hex `lo hi` ranges (A, docs/2026-10-05-a-alloc.md section 4.3; `M 0 0`
-disarms, the default; flag 1 is the inventory mode, with N = 0 every
-allocation in a recording context). `evaluator/check.py` passes the same
-arm-record value to the kernel (`run_linux(..., arm_records=)`) and to the
-mirror (each trace's `arm_records` next to its `hidden` records), so the two
-cannot disagree silently. Opcodes come from the explicit table `harness/trace.py`
-`OPCODES` (mirrored by `OP_*` in `harness/guest.c`; `harness/test_trace.py`
-checks both): 14 is `pipe2`, 15-18 are reserved (L, E), and 19 is
-`wg_advance`, its `a` the ticks (D3, docs/2026-10-05-d3-timers.md). `wg_observe`'s 0.4 s wait is inside its
-operation's remote window (an idle point where a timer may fire naturally,
-D3 section 5.3). A negative control may build the guest as a named variant
-(`harness/linux.py` `GUEST_VARIANTS`, `run_linux(..., guest_variant=)`,
-`evaluator.check --guest-variant`, recorded in provenance): `advance-wait-0`
-returns from `wg_advance` without waiting for the absorbing tick.
-Each trace begins `T ID N` for the validated identifier and operation count.
-Exactly N operation lines follow, each with eight decimal fields:
-
-```
-opcode fd_kind fd_value new_kind new_value a b value
+```sh
+mkdir -p .tmp
+python3 -c 'import json; print(json.dumps(json.load(open("corpus/handwritten/alias_close.json"))))' > .tmp/alias_close.jsonl
+capped -- scripts/in-bundle python3 -m harness.linux .tmp/alias_close.jsonl --out .artifacts/run-alias-close
 ```
 
-FD kinds are 0 for signed literal and 1 for earlier producer reference. Unused
-FD fields are `0 -1`. Opcodes are 1 eventfd2, 2 dup, 3 dup3, 4 close, 5 read,
-6 write, and 7 fcntl. `a` holds init/count/fcntl-command (otherwise 0); `b`
-holds flags/fcntl-arg (otherwise 0). Fcntl commands are 1 GETFD, 2 SETFD,
-3 GETFL. `value` is the uint64 write value, otherwise 0. There is one final
-newline and no trailing data. Validation applies the full normative contract,
-including cross-operation references, reserved descriptors, and NONBLOCK.
+Input is JSONL: one complete trace per line. Corpus `.json` files are formatted
+across multiple lines, hence the conversion above. The output directory must
+be new or empty and inside the worktree's `.artifacts/` (or `LEANUX_ARTIFACTS`
+if configured). Choose a new directory for another run. `--timeout` sets the
+guest timeout in seconds; the default is 120.
 
-Guest serial records have separate `LEANUX_RESULT`, `LEANUX_COVERAGE`,
-`LEANUX_FIXTURE`, and `LEANUX_ERROR` prefixes. Result objects implement the
-observation contract exactly, with an empty Linux `branches` array. The adapter
-rejects missing, repeated, out-of-order, contradictory, or malformed records.
+The Python entry point is `harness.linux.run_linux(traces, outdir, timeout=120)`.
+It returns observation objects in input order and raises `LinuxRunError` for
+build, guest, coverage, output, timing or resource failures.
 
-The handwritten corpus contains 35 traces covering ordinary/semaphore counters,
-sharing and independent objects, descriptor flags, replacement and reuse,
-invalid inputs to the kernel that remain valid trace inputs, I/O lengths,
-counter saturation, and descriptor exhaustion. Invalid trace syntax is checked
-separately by `python3 -m unittest harness.test_trace`.
+## What runs where
 
-**Remote coverage.** For network traces, the per-trace child enables
-`KCOV_REMOTE_ENABLE` with a common handle, then forks the process that runs
-the trace. That process inherits the handle, and the skbs it allocates carry
-it, so the patched kernel's receive paths (softirq and the handshake worker)
-collect into a shared mapping. Per-task coverage stays enabled for the whole
-trace, because `KCOV_DISABLE` clears the inherited handle. Each operation
-resets both buffers, and its coverage row is the task PCs followed by the
-remote ones.
+The host compiles `guest.c` and builds an initramfs. It verifies the pinned
+kernel's identity before booting a fresh VM, using single-threaded TCG, one
+x86-64 CPU and 256 MiB RAM. The VM has no external network device, shared host
+filesystem or host disk. Experimental syscall sequences run only in the guest;
+the harness never rebuilds the kernel.
+
+Each trace runs in fresh children for PC coverage and comparison coverage.
+Their observable results must agree. WireGuard traces use network-namespace
+fixtures; fixture and timing assumptions are reflected in the model's
+`Leanux/Env.lean` and `Leanux/Env/`. Three QEMU slots are shared across the
+checkout's worktrees by default (`LEANUX_QEMU_SLOTS`).
+
+Run output includes validated input, the serialized guest input, observations,
+coverage and hidden-input records, build and boot logs, and the QEMU command.
+Malformed, missing or contradictory records fail the run. Delete the run
+directory and temporary input when you no longer need them.
+
+## Input and implementation references
+
+- [Trace contract](../contracts/trace-v1.md): JSON envelope, descriptor
+  references, FD/eventfd/pipe operations and observations.
+- [`trace.py`](trace.py): validation of all operations, WireGuard fixtures,
+  opcodes and guest-wire serialization. [`guest.c`](guest.c) reads that wire
+  format; it is internal, so construct JSON traces rather than wire input.
+- [`wg.py`](wg.py), [`noise.py`](noise.py), [`steer.py`](steer.py): netlink
+  encoding, packet construction and controlled kernel inputs.
+- [`linux.py`](linux.py): VM launch, record collection and failure reporting.
+- [`corpus/`](../corpus/): working examples, including WireGuard scenarios.
