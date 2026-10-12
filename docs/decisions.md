@@ -183,6 +183,11 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   lifecycle chunks showed `nlmsg_new` records between `wg_create`'s two
   neighbour draws and before an up device's `wg_destruct`; both are cut
   points now (`docs/2026-10-05-l-lifecycle.md` 16.3).
+- **2026-10-12 [USER]** `capped` is an on-box matter: "My sense is that
+  capped is an on-box matter, and that for everyday people, they shouldn't
+  need to worry about it." The checker and the kernel build use the wrapper
+  when it is installed and run uncapped with a notice otherwise; the box rule
+  for agents is unchanged.
 - **2026-10-12 [AGENT]** The simulation-target review's change 1 is
   implemented: dispatch identities are lifetime-scoped (retired at the
   peer's release and at `free_netdev`), and the last device's

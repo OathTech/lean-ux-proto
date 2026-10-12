@@ -1,99 +1,53 @@
-# Staged offline development
+# Using a staged environment offline
 
-Dependencies for the first x86-64 prototype are staged in this repository.
-Use the existing nono agent session for confinement and `scripts/in-bundle`
-to select the local tools. No global packages, editor settings, or shared nono
-profiles need changing.
+Follow [setup and first run](../REPRODUCING.md) to obtain the required bundle.
+A Git clone contains the code and dependency locks, but not the downloaded
+tools, Linux sources or kernel build. Once staged, the normal build and check
+commands need no network access.
+
+Run commands through `scripts/in-bundle`:
 
 ```sh
-scripts/in-bundle                              # shell with local tools
 scripts/in-bundle lean --version
-scripts/in-bundle python3 scripts/probe-toolchains.py
-scripts/in-bundle scripts/build-kernel
-scripts/in-bundle python3 scripts/check-guest.py
+scripts/in-bundle lake build leanux-model
+scripts/in-bundle python3 -m evaluator.check --suite handwritten --trace alias_close
 ```
 
-The runner configures compiler sysroots, backend executables, library lookup,
-QEMU firmware, Python packages and project-local caches. It performs no mounts,
-creates no namespaces, and does not grant or remove sandbox permissions. Its
-name is retained for compatibility with the original preparation scripts.
-It does not itself block networking or make `.tools` read-only; those permissions
-are determined by the enclosing nono profile. The default agent profile permits
-selected API/download domains.
+The check requires `LEANUX_KERNEL_DIR` to name a build matching this revision's
+kernel identity. The host requirements still apply offline. `scripts/in-bundle` configures tool paths,
+compiler libraries, QEMU firmware and local caches. It neither downloads tools
+nor provides sandboxing.
 
-The host bootstrap is Linux x86-64, glibc 2.39 or newer, `/bin/sh`, Python 3.9+
-and nono. System interpreters in absolute script shebangs remain host runtime
-dependencies. The native loader and glibc stay paired with the host; additional
-libraries, compilers, target C headers/libraries, Lean, Go and QEMU come from the
-staged bundle. No host development packages or global language caches are needed.
+## What to copy to an offline machine
 
-## Bundle contents
-
-| Location | Contents |
+| Path | Purpose |
 | --- | --- |
-| `.tools/lean` | Lean 4.33.1, Lake/Std, compiled libraries and sources |
-| `.tools/go` | Go 1.26.5 |
-| `.tools/sysroot` | 222 Ubuntu packages: GCC/G++ 13.3, binutils, LLVM/Clang/LLD/clang-format 19, Python 3.12, kernel build tools, QEMU 8.2.2, firmware, BusyBox and libraries |
-| `.tools/lean-lsp` | Lean LSP MCP 0.29.0 and 41 locked Python distributions |
-| `.deps/linux` | Linux v6.12.110 source and documentation |
-| `.deps/firecracker` | Pinned v1.17.0 source and architecture policies |
-| `.deps/syzkaller` | Pinned source, generated descriptions, host tools and executor |
-| `.deps/go-mod` | Complete local module store for syzkaller; retain for offline builds |
-| `.deps/docs` | Lean reference manual, QEMU/KCOV references and syscall manual pages |
-| `.deps/downloads` | Source/package archives, toolchain snapshots and upstream metadata |
-| `.cache` | Disposable caches, local tool-wrapper links and library links |
-| `.artifacts` | Builds, guest images, coverage, probes and validation logs |
+| `.tools/lean`, `.tools/sysroot` | Lean and the packaged compiler, Python, QEMU and build tools |
+| `.deps/linux`, `.deps/downloads` | Locked Linux source and archives needed to rebuild the patched kernel |
+| A matching build under `.artifacts/` (optional) | Saves a kernel rebuild; recheck its identity on the destination |
 
-The Lean manual is the 4.33.0 reference for the 4.33 release series; the compiler
-is 4.33.1. Open `.deps/docs/lean-reference/index.html` locally. Kernel,
-Firecracker and syzkaller documentation is also in each source tree.
+Copy these alongside a checkout of the same revision, preserving symlinks.
+Keep the checked-in `dependencies/*.lock.json` files. Do not copy `.cache`:
+its generated links contain absolute paths, and `scripts/in-bundle` recreates
+it. Model builds in `.lake` and test reports are disposable too.
 
-Go uses four execution threads; the kernel build defaults to four jobs, and
-syzkaller's make driver runs serially. Go proxy and checksum-server downloads
-are disabled. Syzkaller uses its pinned revision/date rather than Go's automatic
-Git stamping of the enclosing repository. No global Git configuration is needed
-for those archive builds.
+The staging scripts reuse hash-checked cached downloads. With the appropriate
+snapshot archive in `.deps/downloads`, `scripts/restore-toolchains.py --only
+lean` restores a missing Lean installation without a download. It leaves an
+existing installation untouched.
 
-## Lean diagnostics and guest details
+## Optional tools
 
-```sh
-scripts/lean-lsp /absolute/path/to/a/Lean/project/inside/this/repository
-```
+Some older bundles also contain Go, syzkaller, Firecracker source, reference
+manuals or `.tools/lean-lsp`. These are not required for the differential check.
+Go and the Lean MCP helper have no upstream download fallback in the restore
+script; offline use requires their cached snapshots or staged directories.
+Keep `.deps/go-mod` if you use the staged syzkaller build.
 
-This starts the local stdio MCP helper with remote search tools disabled. It
-does not register anything globally. `scripts/lean-lsp-python` uses the staged
-Python interpreter and copied package directory without modifying the original
-venv. Lean's `lake serve` is also available through `scripts/in-bundle`. The
-upstream MCP helper can emit an asyncio cleanup warning (`Event loop is closed`)
-on exit after both diagnostic responses have completed successfully.
+If the Lean MCP helper is staged, `scripts/lean-lsp /absolute/path/to/project`
+starts it without a global registration. For ordinary Lean editor support,
+`scripts/in-bundle lake serve` is available with the core bundle.
 
-The kernel recipe records its configuration in `kernel/config-x86_64` and
-normally builds in `.artifacts/kernel`. `LEANUX_KERNEL_BUILD` can select another
-directory under `.artifacts`; use the same value for `check-guest.py`.
-The guest uses QEMU TCG, one CPU, 256 MiB RAM and a fixed `pc-i440fx-8.2` machine.
-It has no NIC, KVM, shared host filesystem or host disk. All experimental kernel
-execution stays in QEMU. A small C program under `harness/probes` validates the
-setup; it is not the eventual oracle harness.
-
-## Preservation and deferred dependencies
-
-Keep `.deps`, `.tools`, and the locks when moving offline. Keeping `.artifacts`
-saves rebuilding and preserves evidence. A Git clone alone does not contain the
-ignored dependency bundle. `.cache` is disposable; discard it when relocating
-the workspace because its generated tool links contain absolute paths.
-`.deps/go-mod` is not disposable.
-
-`dependencies/*.lock.json` records versions, hashes and provenance. Ubuntu
-checksums came from the existing package index; the Linux archive matched
-kernel.org's checksum. Firecracker and syzkaller use commit-addressed archives.
-Lean, Go and MCP are independent snapshots of existing local installations.
-Licenses remain with the packages and sources.
-
-`python3 scripts/restore-toolchains.py` can restore missing Lean/Go/MCP directories
-from cached snapshots. It needs host Python, tar and zstd and leaves existing
-directories untouched. The staging script can also reuse cached downloads.
-Restoring dependencies is separate from normal builds.
-
-Mathlib, SMT tools, building Firecracker itself, KVM and an AArch64 guest/cross-libc
-setup remain deferred. Firecracker's reference source is present; its Rust
-build dependencies are not included.
+Worktrees share the main checkout's `.tools/`, `.deps/` and selected kernel
+build. Their `.cache/`, `.lake/` and test output are private; see
+[worktree practices](worktree-practices.md).

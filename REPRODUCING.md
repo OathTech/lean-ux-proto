@@ -1,91 +1,124 @@
-# Reproducing the results from a clone
+# Setup and first run
 
-This takes a fresh clone to a passing `evaluator.check`, with the same kernel,
-toolchain and results the merge commits record. Every download is pinned by
-sha256. Expect about 2 GB of downloads, a few minutes of builds, and about
-1.5 hours for the full check.
+This guide builds the Lean model and runs it against the pinned Linux guest.
+Start at the root of a clone, in a path without spaces. Downloads are needed
+only for staging; builds and tests then run locally.
 
-**Host.** Linux x86-64, glibc 2.39 or newer, `/bin/sh`, Python 3.9+, `curl`,
-`tar`, `zstd`, `git`, and network access to kernel.org, snapshot.ubuntu.com
-and github.com. No root access, system packages or global configuration are
-needed; everything is staged inside the clone. The project normally runs under
-nono for confinement (see README), but reproduction does not depend on it.
+## 1. Prepare the environment
 
-## 1. Stage the pinned dependencies
+Use Linux x86-64 with glibc 2.39 or newer; Ubuntu 24.04 is the reference host.
+The bootstrap needs Python 3.12+ at `/usr/bin/python3`, `/bin/sh`, Git, curl,
+GNU tar, zstd and `dpkg-deb`. Lean, GCC, QEMU and the kernel build tools come
+from the pinned bundle. KVM and root access are not needed to run the tests.
+Budget roughly 15 GB for dependencies and builds, plus space for test output.
 
-```sh
-python3 scripts/stage-resources.py packages          # 222 Ubuntu packages -> .tools/sysroot (GCC, QEMU, Python, ...)
-python3 scripts/stage-resources.py sources --sources linux   # Linux 6.12.110 -> .deps/linux
-python3 scripts/restore-toolchains.py --only lean    # Lean 4.33.1 -> .tools/lean
-```
+The builds and the check run uncapped by default. On the project's shared
+devboxes a memory-cap wrapper is installed at `/usr/local/bin/capped` and the
+scripts use it automatically; nothing is needed elsewhere.
 
-- Packages come from the Ubuntu snapshot of 2026-09-20 and are checked against
-  `dependencies/packages.lock.json`.
-- The Linux archive is checked against `dependencies/sources.lock.json`.
-- Lean comes from its official release, which is identical to the locked
-  snapshot file by file. Its hash is in `dependencies/toolchains.lock.json`.
-
-Syzkaller, Firecracker, Go, the Lean MCP server and the reference
-documentation are not needed for the check. The first two can be staged with
-`--sources`, but GitHub archive downloads are not guaranteed byte-stable.
-
-## 2. Build and verify the oracle kernel
+Stage the locked tools and Linux source in the main checkout:
 
 ```sh
-LEANUX_KERNEL_PROFILE=net-choice LEANUX_KERNEL_BUILD=.artifacts/kernel-net-choice scripts/in-bundle scripts/build-kernel
-scripts/in-bundle python3 scripts/kernel-identity.py .artifacts/kernel-net-choice
+python3 scripts/stage-resources.py packages
+python3 scripts/stage-resources.py sources --sources linux
+python3 scripts/restore-toolchains.py --only lean
 ```
 
-The profile extracts the locked Linux archive into
-`.artifacts/src/linux-6.12.110-choice-stream-d1` and applies one patch there,
-strictly and by hash (`scripts/apply-kernel-patch.py`):
-`kernel/patches/choice-stream.patch` (generated from the locked source by
-`kernel/patches/gen-choice-stream.py`). It records every random draw and
-clock read at generic interception points into the KCOV stream
-(`kcov_choice_ip`), lets a trace steer named call sites, and collects the
-trace's deferred units in dispatch sections: `process_one_work` and the
-NET_RX vector open a KCOV remote section for each dispatch of a function in
-the dispatch set the guest arms (`harness/linux.py`, `DISPATCH_SYMBOLS`).
-It touches no WireGuard file; `kernel/patches/wireguard-kcov-remote.patch`
-(per-site sections) is used only by the older profiles.
+These download from the Ubuntu snapshot service, kernel.org and GitHub, verify
+the locked SHA-256 hashes, and extract into `.tools/` and `.deps/`. They do not
+install system packages. Lean is pinned to 4.33.1. Go, syzkaller, Firecracker
+and the Lean MCP helper are optional and not needed here.
 
-Every line number in the files the check anchors is preserved. `.deps` is
-never modified. The identity must equal the first hash in
-`kernel/identity-x86_64-net-choice.txt`.
-The `vmlinux` file hash itself differs between build directories, because the
-debug info and build IDs record the path; the identity excludes exactly that.
-If the identity differs, stop: the check's decision table was verified against
-the accepted build.
-
-## 3. Run the check
+Create a worktree for builds and experiments:
 
 ```sh
-scripts/in-bundle python3 -B -m unittest evaluator.test_evaluation harness.test_trace harness.test_wg harness.test_noise harness.test_linux
-scripts/in-bundle python3 -m evaluator.check --suite wireguard        # ~3 minutes
-scripts/in-bundle python3 -B -m unittest evaluator.test_model_replay  # recorded replays; needs the check's build
-scripts/in-bundle python3 -m evaluator.check                          # everything, ~1.5 hours
+git worktree add .worktrees/first-run -b task/first-run main
+cd .worktrees/first-run
+scripts/in-bundle lean --version
 ```
 
-The full check writes `.artifacts/check/<timestamp>/report.json` and exits
-nonzero unless every trace agrees. Compare it with the recorded result
-([stage A report](docs/2026-09-30-wireguard-stage-a-report.md), section 2):
+`scripts/in-bundle` uses the main checkout's tools and sources, with build
+outputs and caches private to this worktree. It selects tools; it is not a
+sandbox. A sandbox such as nono is optional.
 
-| Field | Expected |
-|---|---|
-| `status` | `pass` |
-| `traces` / `operations` | 1288 / 38652 |
-| `counts` | `{"agreement": 1288}` |
-| `operand_pairs_matched` | 324964 |
+## 2. Build and try the model
 
-The generated traces are seeded (`--seed 20260920`, the default), so the trace
-set is the same. The guest runs QEMU TCG with one CPU, so the coverage is
-deterministic; `chunk_splits` may vary with console output size and does not
-affect results. `chunk_retries` lists the chunks run a second time after a
-guest timeout or a busy QEMU slot (at most once each; never after a
-mismatch); on a contended host it may be non-empty.
+```sh
+scripts/in-bundle lake build leanux-model
+scripts/in-bundle .lake/build/bin/leanux-model <<'EOF'
+{"version":1,"id":"first_eventfd","ops":[{"op":"eventfd2","init":5,"flags":2048},{"op":"read","fd":{"ref":0},"count":8}]}
+EOF
+```
 
-## What is not reproduced
+The model reads one JSON trace per line and emits one result per trace. This
+example creates a nonblocking eventfd at descriptor 8 and reads its initial
+value, 5; the read bytes are `0500000000000000`. It needs no guest kernel.
+Build the explicit `leanux-model` target: plain `lake build` builds only the
+library.
 
-- The sentinel mutants: `scripts/in-bundle python3 scripts/wg-mutants.py` and
-  `scripts/pipes-mutants.py` (about half an hour in all) apply each sentinel
-  to a clean tree and require it to be rejected.
+After building, run the unit tests, including recorded model replays:
+
+```sh
+scripts/in-bundle python3 -B -m unittest \
+  evaluator.test_evaluation evaluator.test_model_replay \
+  harness.test_trace harness.test_wg harness.test_noise \
+  harness.test_d1_keys harness.test_d1_keepalive harness.test_linux
+```
+
+## 3. Build the Linux test kernel
+
+```sh
+export LEANUX_KERNEL_DIR="$PWD/.artifacts/kernel-net-choice"
+LEANUX_KERNEL_PROFILE=net-choice LEANUX_KERNEL_BUILD="$LEANUX_KERNEL_DIR" \
+  scripts/in-bundle scripts/build-kernel
+```
+
+This extracts a private copy of Linux 6.12.110, applies the pinned
+`choice-stream.patch`, and builds the `net-choice` profile with four jobs by
+default (`LEANUX_JOBS` overrides this). It also writes the generated
+configuration to `kernel/config-x86_64-net-choice`; check `git diff` afterwards.
+
+Every check and guest boot verifies the build against
+[`kernel/identity-x86_64-net-choice.txt`](kernel/identity-x86_64-net-choice.txt).
+A stock kernel or an older project kernel cannot substitute for it. To reuse
+an existing matching build, skip the build command and set
+`LEANUX_KERNEL_DIR` to its absolute path inside a checkout's `.artifacts/`
+(the current worktree or its main checkout).
+
+## 4. Compare with Linux
+
+Keep `LEANUX_KERNEL_DIR` exported in the shell where you run:
+
+```sh
+# Small smoke test
+scripts/in-bundle python3 -m evaluator.check --suite handwritten --trace alias_close
+
+# Handwritten WireGuard suite
+scripts/in-bundle python3 -m evaluator.check --suite wireguard
+
+# All default suites; allow roughly an hour, depending on host load
+scripts/in-bundle python3 -m evaluator.check
+```
+
+The checker builds the model automatically. `--no-build` reuses a build only
+if it is up to date. `--suite` accepts a comma-separated list: `handwritten`,
+`critic`, `wireguard`, `alloc`, `generated`, `wireguard-generated`, `pipes`,
+`pipes-generated`. Generated cases use a fixed default seed. Use `--trace ID`
+with the relevant suite to replay one case.
+
+A passing run exits 0 and writes `"status": "pass"` in
+`.artifacts/check/<timestamp>/report.json`, with every selected trace counted
+as `agreement`. Counts depend on the revision and selection; old stage reports
+are not current expected totals. The report also records failures, filtered
+candidates, known coverage gaps and any infrastructure retries. Detailed guest
+and model output lives beside it. These outputs are disposable; remove your
+run directories when finished.
+
+If a run fails, inspect `aborted` and `failures` in the report, then the named
+build or guest log. A missing wrapper, kernel identity mismatch, timeout,
+`KILLED` banner or model error is a failed run. Keep `LEANUX_QEMU_SLOTS` at its
+default of 3 on shared hosts; heavy contention can exhaust timing budgets.
+
+Negative controls and sentinel mutants are separate developer checks described
+in [AGENTS.md](AGENTS.md). They are not part of this first-run sequence.
+For an existing offline bundle, see [offline usage](docs/offline-usage.md).
