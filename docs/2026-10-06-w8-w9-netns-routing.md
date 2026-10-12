@@ -1529,6 +1529,16 @@ point without `SECURITY`):
   applies them). A send to an off-loopback endpoint at `wg_up` then gets
   `-ENETUNREACH` in both, as the first order gives.
 
+  **Decision [AGENT, coordinator, 2026-10-12]:** the fixture order is made
+  deterministic as proposed: the guest's existing post-up wait moves
+  before `route_into_wg0` (no added time), and the mirror applies the
+  table changes after that operation's send workers and idle timers
+  (`World.routesPending`, `Env.routeIntoWg0`). Reason: a scheduling race
+  the records cannot show (the handshake worker queued inside the ioctl
+  ran at the ioctl's return in one run and during the wait in eight
+  others), resolved as a fixture choice rather than a placement the check
+  reruns. Recorded in `docs/decisions.md`.
+
 ### 14.4 Not done
 
 - **W8** entirely (the foreign-creator fixture, `wg_netns_close` 22, the

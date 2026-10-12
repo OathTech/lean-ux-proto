@@ -451,12 +451,23 @@ def wgUp : M Int := do
   -- `dev_change_flags`' rtnetlink notifications and the fixture's routes
   -- allocate netlink skbs below the cut (allocation cut sites, A)
   skipCut allocCuts
-  -- W9: `route_into_wg0` adds wg0's addresses (the IPv4 one may survive a
-  -- down) and the default routes; every table change bumps a generation
-  if ret == 0 then modify fun w => { w with addrs4 := [WG0_ADDR4], addrs6 := [WG0_ADDR6],
-                                            defaultRoute4 := true, defaultRoute6 := true,
-                                            ipv4Gen := w.ipv4Gen + 1, ipv6Gen := w.ipv6Gen + 1 }
+  -- W9: the guest's `route_into_wg0` adds wg0's addresses and default routes
+  -- after this operation's wait (design 14.3b): `routeIntoWg0` applies them
+  -- once the send workers and the idle timers have run
+  if ret == 0 then modify fun w => { w with routesPending := true }
   return ret
+
+/-- W9 (design 14.3b): `route_into_wg0` after a successful flag-changing
+    `wg_up`, once the operation's wait is over: wg0's addresses (the IPv4
+    one may survive a down) and the default routes; every table change
+    bumps a generation (`rt_cache_flush`; the IPv6 sernum), which expires a
+    dst the handshake worker cached during the wait. The fixture puts the
+    wait before the adds so this order is the only one. -/
+def routeIntoWg0 : M Unit := do
+  if !(← get).routesPending then return
+  modify fun w => { w with routesPending := false, addrs4 := [WG0_ADDR4], addrs6 := [WG0_ADDR6],
+                           defaultRoute4 := true, defaultRoute6 := true,
+                           ipv4Gen := w.ipv4Gen + 1, ipv6Gen := w.ipv6Gen + 1 }
 
 /-- `wg_down`: `SIOCSIFFLAGS` without `IFF_UP`. `-ENODEV` without wg0; a
     down device does not change; an up one goes through `__dev_close_many`

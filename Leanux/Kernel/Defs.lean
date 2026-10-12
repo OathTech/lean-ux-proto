@@ -991,6 +991,12 @@ structure World where
   defaultRoute4Accessed : Bool := false
   ipv4Gen : Nat := 0
   ipv6Gen : Nat := 0
+  /-- W9 (design 14.3b): a successful flag-changing `wg_up` gets its
+      addresses and routes after the operation's wait (the guest's
+      `route_into_wg0` follows the wait), so the table changes apply after
+      the send workers and the idle timers of that operation
+      (`Env.routeIntoWg0`). -/
+  routesPending : Bool := false
   /-- L, environment: whether a fixture socket holds UDP port `p` so that a
       wildcard bind there conflicts (`Env.portBound`; the runner supplies
       it, as it supplies `env`). -/

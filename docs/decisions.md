@@ -129,6 +129,15 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   covers the new identity. Found by `s2_index_collision`, which failed in
   about two of three fresh-guest runs while passing in every chunked full
   check ([the design](2026-10-11-dispatch-order.md)).
+- **2026-10-12 [AGENT, coordinator]** W9's fixture order: after a successful
+  flag-changing `wg_up` the guest waits (its existing post-up wait, moved)
+  before adding wg0's addresses and routes, and the mirror applies those
+  table changes after the operation's send workers and idle timers. The
+  handshake worker queued inside the ioctl ran before the route adds in one
+  run and after them in eight others; each add flushes `rt_genid`, which
+  decides whether the dst that send cached survives, and nothing records
+  the order. A fixture choice, not a placement the check reruns
+  (docs/2026-10-06-w8-w9-netns-routing.md, section 14.3b).
 - **2026-10-11 [AGENT]** This register created from the retired agent memory
   and the dated history formerly in `AGENTS.md`; the 2026-10-07 orchestration
   snapshot is superseded by the pause-state note. The checker's model build

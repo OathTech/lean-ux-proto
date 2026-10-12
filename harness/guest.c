@@ -1428,11 +1428,21 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
          * routes (the first since creation, or again after a down); the
          * rekey bound counts from the trace's first such up, timed before
          * its window. */
+        int waited = 0;
         if (op->code == OP_WG_UP && ret == 0 && !was_up) {
             if (!up_seen) {
                 went_up = up_started;
                 up_seen = 1;
             }
+            /* W9 (docs/2026-10-06-w8-w9-netns-routing.md 14.3b): the
+             * operation's wait comes BEFORE the route adds, so the handshake
+             * worker queued inside the ioctl (wg_open's keepalives) always
+             * sends before them: each add is a rt_cache_flush, and a dst
+             * cached by that send either survives it or not depending on
+             * which ran first, an order nothing records. The fixture makes
+             * it one order. No added time: this is the wait below, moved. */
+            usleep(QUEUE_WAIT_US);
+            waited = 1;
             route_into_wg0(t->id, i, first_up);
             first_up = 0;
         }
@@ -1441,7 +1451,7 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
          * that can queue the handshake send worker (wg_set, wg_up, wg_xmit)
          * waits for it too, so the worker's remote section lands in it. */
         if (op->code == OP_WG_INJECT) usleep(OBSERVE_WAIT_US);
-        if (op->code == OP_WG_SET || op->code == OP_WG_UP || op->code == OP_WG_XMIT) usleep(QUEUE_WAIT_US);
+        if ((op->code == OP_WG_SET || op->code == OP_WG_UP || op->code == OP_WG_XMIT) && !waited) usleep(QUEUE_WAIT_US);
         /* E-B: wait for the receive worker to drain the flood (its discarded
          * section) in this operation's window (~1 ms drain, measured). Keep the
          * wait short: the following injection must reach the worker within the

@@ -223,7 +223,9 @@ def syscall (call : Syscall) : M Int := do
   -- worker (and in wg_inject); the worker runs during that wait
   -- worker; D3: a timer may fire in these waits (`Env.idleTimers`)
   match call with
-  | .wgSet _ | .wgUp | .wgInject .. => Env.runSendWorkers; Env.idleTimers
+  | .wgSet _ | .wgInject .. => Env.runSendWorkers; Env.idleTimers
+  -- W9 (design 14.3b): the guest's route adds follow the up's wait
+  | .wgUp => Env.runSendWorkers; Env.idleTimers; Env.routeIntoWg0
   | .wgXmit .. => Env.afterXmit; Env.idleTimers
   -- D3: the guest waits after the advance; the next tick runs the due timers
   | .wgAdvance _ => Env.afterAdvance
