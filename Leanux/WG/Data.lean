@@ -99,10 +99,16 @@ def encryptPacket (checksumHelp : Packet → M Packet) (keypair : KeypairId) (pk
     poll (`ptr_ring_consume_bh`; `false` when empty: the loop ends) and the
     item's packets encrypted under `PACKET_CB(first)->keypair` until one
     fails (`DEAD`: the walk breaks, and the tx worker frees the whole list).
-    W7 phase 2: the iteration is the unit the environment interleaves
-    (`workerIter`). -/
-def encryptStep (checksumHelp : Packet → M Packet) : M Bool := do
-  -- ptr_ring_consume_bh: the head's slot, discarded by the batch rule
+    `softirq` is the environment's NET_RX placement: the ring poll's
+    `spin_unlock_bh` (send.c:293) runs a pending softirq, as the decrypt
+    worker's does (`decryptStep`), so the NAPI poll the decrypt worker
+    raised runs here when the kernel switched to this worker at the decrypt
+    worker's `cond_resched` before the softirq ran (design 17.17). W7 phase
+    2: the iteration is the unit the environment interleaves (`workerIter`). -/
+def encryptStep (checksumHelp : Packet → M Packet) (softirq : M Unit) : M Bool := do
+  -- ptr_ring_consume_bh: its spin_unlock_bh runs a pending softirq; the
+  -- head's slot, discarded by the batch rule
+  softirq
   match (← getDev).encryptQueue.consume with
   | (none, _) =>
     _ ← branch .encWorkerConsumed false
@@ -129,12 +135,13 @@ def encryptStep (checksumHelp : Packet → M Packet) : M Bool := do
     return true
 
 /-- One iteration of wg_packet_encrypt_worker's loop (send.c:287-309):
-    `encryptStep`, then `cond_resched()` and its decision. `needResched` is
+    `encryptStep`, then `cond_resched()` and its decision. `softirq` is the
+    environment's NET_RX placement at the ring poll (`encryptStep`); `needResched` is
     the environment's scheduler: whether `need_resched()` holds, which
     suspends the worker's activation (W7 phase 2, `workerIter`; the loop and
     its bound are the activation's, `Env.Activation.run`). -/
-def encryptIter (checksumHelp : Packet → M Packet) (needResched : M Bool) : M IterResult :=
-  workerIter .encryptWorker none (encryptStep checksumHelp)
+def encryptIter (checksumHelp : Packet → M Packet) (softirq : M Unit) (needResched : M Bool) : M IterResult :=
+  workerIter .encryptWorker none (encryptStep checksumHelp softirq)
     (do branch .encWorkerNeedResched (← needResched))
 
 /-- wg_socket_send_skb_to_peer (socket.c:168-187) of an encrypted packet:

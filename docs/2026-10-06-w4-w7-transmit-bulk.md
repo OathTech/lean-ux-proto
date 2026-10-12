@@ -2335,3 +2335,46 @@ dangling id. A publication (`wg_queue_enqueue_per_peer_tx/rx`) is one
 on its peer's queue (queued or peeked) in place of the old search-and-copy
 (`PrevQueue.updateFirst`, removed). The encrypt and decrypt workers write
 the ciphertext or plaintext into the stored packet in place.
+
+### 17.17 The pending poll at the encrypt worker's ring poll [AGENT 2026-10-12, int-r]
+
+`w7_mixed` operation 4 in the int-r claim point's wireguard group (eight
+guests on the box), the comparison child: after the decrypt worker's
+`cond_resched` of item 1 (its resched record) the records show the encrypt
+worker's section start, then the NET_RX section of the NAPI poll the decrypt
+worker had raised (the birthdate read and two timer arms), then the encrypt
+worker's queued-tx record and its stop (sites 44, 48, 6, 100, 100, 49, 303,
+45); the coverage child of the same run and six other runs had the poll's
+section before the encrypt worker's (48, ..., 49, 44, 303, 45). The mirror
+dispatched the encrypt worker and read the NET_RX start where its step
+expected the queued record (a hidden mismatch, site 48 for site 303). Not
+the dst cache: the kind-306 record the coverage child shows one more of at
+that operation is a refresh at a miss the mirror consumes as such, and that
+child's replay agrees.
+
+The kernel: `____napi_schedule` in the decrypt worker's process context
+raises NET_RX without running it; the softirq runs at the next
+`local_bh_enable` of whichever thread the scheduler runs, or in ksoftirqd.
+At the decrypt worker's `cond_resched` the scheduler may run ksoftirqd first
+(the poll's section before the encrypt worker's: D2's order (a), 17.14) or
+the encrypt kworker first; then the encrypt worker's first
+`ptr_ring_consume_bh` (send.c:293, its `spin_unlock_bh`) runs the pending
+softirq, nested in the encrypt worker's section before its first item's
+records: D2's placement (b) in the encrypt worker, which only the decrypt
+worker's loop head modelled. The rule (`Leanux/WG/Data.lean` `encryptStep`,
+`Leanux/Env/Batch.lean` `Activation.iter`, `napiSoftirq`): the encrypt
+worker's ring poll calls the NET_RX hook as the decrypt worker's does; it
+runs the poll iff one is pending and the next record starts a NET_RX
+section, and any other record there stays with the worker's own read. No
+new record, no retry, no tolerance: a NET_RX section with no poll pending
+is the mismatch it was. The poll's reads do not depend on the encrypt
+worker's state (its ring and the tx queue), so the two placements differ
+only in where the records put the section.
+
+Validation: the failing run's comparison-child capture replays to agreement
+(`evaluator/test_model_replay.py`, `EncryptWorkerRingPoll`: the capture,
+the other runs' order, and the section a second time with nothing pending,
+a mismatch); the coverage child's capture and the passing run's both still
+agree; `w7_mixed` three times live and the claim point in the integration
+report.
+

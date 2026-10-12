@@ -79,14 +79,20 @@ def deliverInner (pkt : List UInt8) : M Unit := Stack.receive pkt
 /-- The NET_RX softirq the decrypt worker's `napi_schedule` raised
     (`____napi_schedule` → `raise_softirq_irqoff` outside `net_rx_action`,
     which wakes ksoftirqd), placed by the records (design section 5). The
-    hook is called at the worker's loop head and after its enqueue; it runs
-    the poll iff a poll is pending and the next record starts a NET_RX
-    section:
+    hook is called at the decrypt worker's loop head and after its enqueue,
+    and at the encrypt worker's loop head (its `ptr_ring_consume_bh`,
+    send.c:293, the first `spin_unlock_bh` of the worker the kernel may
+    switch to at the decrypt worker's `cond_resched` while the poll is still
+    pending: design 17.17); it runs the poll iff a poll is pending and the
+    next record starts a NET_RX section:
     - (a) ksoftirqd: the worker switched away at its `cond_resched` (a
       resched record, consumed by `condResched`, which stops at a NET_RX
       start), and ksoftirqd ran the softirq in a top-level section;
     - (b) inline: the worker's next `spin_unlock_bh` (`ptr_ring_consume_bh`)
-      ran it, nested in the worker's section, with no resched record;
+      ran it, nested in the worker's section, with no resched record; or,
+      after the decrypt worker's switch, the encrypt worker's first ring
+      poll ran it, nested in the encrypt worker's section before its first
+      item's records;
     - (c) an interrupt's exit ran it, nested, before or after the
       `need_resched()` test: the same records as (b), or a NET_RX section
       before a resched record.
@@ -149,7 +155,7 @@ def Activation.hasWork (a : Activation) : M Bool := do
     `cond_resched` decision (`workerIter`). -/
 def Activation.iter (a : Activation) : M IterResult := do
   match a.worker with
-  | .encryptWorker => WG.encryptIter checksumHelp (condResched .encryptWorker)
+  | .encryptWorker => WG.encryptIter checksumHelp napiSoftirq (condResched .encryptWorker)
   | .txWorker =>
     let some pid := a.pid | invariant "a tx activation without its peer"
     WG.txIter pid (condResched .txWorker)

@@ -240,3 +240,11 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   draw (af_netlink.c:820, the collision with the fixture socket's port id)
   is a below-cut hidden site (id 170), consumed once at the first
   `wg_get_start`.
+- **2026-10-12 [AGENT, fork of the coordinator]** The NET_RX placement rule
+  covers the encrypt worker's ring poll: a pending NAPI poll runs at any
+  worker's `ptr_ring_consume_bh` when the next record starts a NET_RX
+  section (D2's placement (b), until now the decrypt worker's loop head
+  only), because the kernel may switch from the decrypt worker's
+  `cond_resched` to the encrypt kworker before ksoftirqd (w7_mixed under
+  eight guests, design 17.17). Exact and fail-closed as before; no retry.
+
