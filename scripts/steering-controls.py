@@ -34,7 +34,7 @@ LIFECYCLE_EXPECTED = {
 # section-bracket discard then meets the reply's modeled records inside the flood
 # section and fails closed (the two-distinct-sections assertion).
 UNDERLOAD_EXPECTED = {
-    'e_underload_merged': ('hidden_mismatch', 'a modeled record inside the flood'),
+    'e_underload_merged': ('hidden_mismatch', 'inside the discarded flood region'),
 }
 
 
