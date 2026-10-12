@@ -1,3 +1,5 @@
+from unittest import mock
+import os
 import copy
 from collections import Counter
 import json
@@ -633,6 +635,42 @@ class EvaluationChecks(unittest.TestCase):
                          ['jiffies progressed beyond the real-time bound'])
         self.assertEqual(problems([good[0], [], [rec(304, 5, J + 10, J + 1460)]]),
                          ['an advance without exactly one advance record', 'an advance record outside wg_advance'])
+
+
+class CappedWrapperTests(unittest.TestCase):
+    """The memory-cap wrapper is a box matter [USER 2026-10-12]: used when
+    installed at its usual place, skipped with one notice when absent, and
+    required only when LEANUX_CAPPED names it."""
+
+    def setUp(self):
+        import evaluator.check as check
+        self.check = check
+        check._capped_notice = False
+
+    def test_named_wrapper_must_exist(self):
+        with mock.patch.dict(os.environ, {"LEANUX_CAPPED": "/nonexistent/capped"}):
+            with self.assertRaises(RuntimeError):
+                self.check.capped(["lake", "build"])
+
+    def test_named_wrapper_is_used(self):
+        with mock.patch.dict(os.environ, {"LEANUX_CAPPED": "/bin/true"}):
+            self.assertEqual(self.check.capped(["lake", "build"]), ["/bin/true", "--", "lake", "build"])
+
+    def test_installed_wrapper_is_used_by_default(self):
+        with mock.patch.dict(os.environ, {}, clear=False), \
+             mock.patch.object(self.check, "CAPPED_DEFAULT", Path("/bin/true")):
+            os.environ.pop("LEANUX_CAPPED", None)
+            self.assertEqual(self.check.capped(["lake", "build"]), ["/bin/true", "--", "lake", "build"])
+
+    def test_absent_wrapper_runs_uncapped_with_one_notice(self):
+        with mock.patch.dict(os.environ, {}, clear=False), \
+             mock.patch.object(self.check, "CAPPED_DEFAULT", Path("/nonexistent/capped")), \
+             mock.patch("sys.stderr") as stderr:
+            os.environ.pop("LEANUX_CAPPED", None)
+            self.assertEqual(self.check.capped(["lake", "build"]), ["lake", "build"])
+            self.assertEqual(self.check.capped(["lake", "build"]), ["lake", "build"])
+        notices = [c for c in stderr.write.call_args_list if "running uncapped" in str(c)]
+        self.assertEqual(len(notices), 1)
 
 
 if __name__ == '__main__':

@@ -50,10 +50,11 @@ marked "Adopt as a convention" in sections 3(a), 3(b), 3(d), 3(e) and B7 of
 
 ## Build, test and check
 
-Run every build, check, mutant set and kernel build through the box-wide
-`capped` wrapper (`~/.claude/CLAUDE.md`). A KILLED banner (exit 137) is a
-failure. The checker wraps its own model build, and `scripts/build-kernel`
-wraps the kernel `make`; `LEANUX_CAPPED` overrides the wrapper's path.
+On the shared devboxes, run every build, check, mutant set and kernel build
+through the box's `capped` wrapper (`~/.claude/CLAUDE.md`); a KILLED banner
+(exit 137) is a failure. The checker and `scripts/build-kernel` use the wrapper
+themselves when it is installed and run uncapped with a notice when it is not:
+it is a box matter, not a project requirement.
 
 ```sh
 capped -- scripts/in-bundle python3 -B -m unittest evaluator.test_evaluation harness.test_trace harness.test_wg harness.test_linux

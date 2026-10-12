@@ -181,16 +181,31 @@ def load_traces(suites, counts, seed, only, filtered, alloc_share=ALLOC_SHARE):
 
 
 MODEL = ROOT / '.lake/build/bin/leanux-model'
-# The box-wide memory-cap wrapper (cgroup memory.max; see ~/.claude/CLAUDE.md).
-# scripts/in-bundle's PATH has no /usr/local/bin, hence the absolute path.
-CAPPED = Path(os.environ.get('LEANUX_CAPPED', '/usr/local/bin/capped'))
+# The shared devboxes' memory-cap wrapper (a cgroup memory.max; the box rule
+# in ~/.claude/CLAUDE.md). It is a box matter, not a project requirement
+# [USER 2026-10-12]: when it is installed at its usual place it is used, since
+# scripts/in-bundle's PATH has no /usr/local/bin; when it is absent the build
+# runs uncapped and says so once; LEANUX_CAPPED names another path, which must
+# then exist.
+CAPPED_DEFAULT = Path('/usr/local/bin/capped')
+_capped_notice = False
 
 
 def capped(command):
-    """Prefix a heavy command with the memory-cap wrapper; no wrapper, no run."""
-    if not os.access(CAPPED, os.X_OK):
-        raise RuntimeError(f'memory-cap wrapper not found: {CAPPED} (install capped, or point LEANUX_CAPPED at it)')
-    return [str(CAPPED), '--'] + command
+    """The heavy command, under the memory-cap wrapper when one is available."""
+    global _capped_notice
+    named = os.environ.get('LEANUX_CAPPED')
+    if named:
+        if not os.access(named, os.X_OK):
+            raise RuntimeError(f'LEANUX_CAPPED names no executable: {named}')
+        return [named, '--'] + command
+    if os.access(CAPPED_DEFAULT, os.X_OK):
+        return [str(CAPPED_DEFAULT), '--'] + command
+    if not _capped_notice:
+        print(f'note: {CAPPED_DEFAULT} is not installed; running uncapped (normal off the shared devboxes)',
+              file=sys.stderr, flush=True)
+        _capped_notice = True
+    return command
 
 
 def build_model(out, rebuild):

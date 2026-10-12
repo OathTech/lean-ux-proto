@@ -30,23 +30,22 @@ and C's memory semantics are outside the current scope.
 ## Run it
 
 Follow [setup and first run](REPRODUCING.md) first. You need a Linux x86-64 host
-(Ubuntu 24.04 is the reference environment), the pinned tools, and the external
-`capped` memory-limit wrapper. Dependencies are downloaded into the checkout;
-they are not included in Git. The guide includes a model-only example before
-building the test kernel.
+(Ubuntu 24.04 is the reference environment) and the pinned tools. Dependencies
+are downloaded into the checkout; they are not included in Git. The guide
+includes a model-only example before building the test kernel.
 
 Once set up, run these from your worktree, with `LEANUX_KERNEL_DIR` pointing
 to the matching kernel build:
 
 ```sh
 # One small end-to-end test
-capped -- scripts/in-bundle python3 -m evaluator.check --suite handwritten --trace alias_close
+scripts/in-bundle python3 -m evaluator.check --suite handwritten --trace alias_close
 
 # The handwritten WireGuard cases
-capped -- scripts/in-bundle python3 -m evaluator.check --suite wireguard
+scripts/in-bundle python3 -m evaluator.check --suite wireguard
 
 # All default suites, including generated cases; allow roughly an hour
-capped -- scripts/in-bundle python3 -m evaluator.check
+scripts/in-bundle python3 -m evaluator.check
 ```
 
 The checker builds the model, boots the guest, and writes

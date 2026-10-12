@@ -9,13 +9,12 @@ Run commands through `scripts/in-bundle`:
 
 ```sh
 scripts/in-bundle lean --version
-capped -- scripts/in-bundle lake build leanux-model
-capped -- scripts/in-bundle python3 -m evaluator.check --suite handwritten --trace alias_close
+scripts/in-bundle lake build leanux-model
+scripts/in-bundle python3 -m evaluator.check --suite handwritten --trace alias_close
 ```
 
 The check requires `LEANUX_KERNEL_DIR` to name a build matching this revision's
-kernel identity. The host requirements, including the external `capped`
-wrapper, still apply offline. `scripts/in-bundle` configures tool paths,
+kernel identity. The host requirements still apply offline. `scripts/in-bundle` configures tool paths,
 compiler libraries, QEMU firmware and local caches. It neither downloads tools
 nor provides sandboxing.
 

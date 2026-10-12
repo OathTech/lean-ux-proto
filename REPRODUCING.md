@@ -12,16 +12,9 @@ GNU tar, zstd and `dpkg-deb`. Lean, GCC, QEMU and the kernel build tools come
 from the pinned bundle. KVM and root access are not needed to run the tests.
 Budget roughly 15 GB for dependencies and builds, plus space for test output.
 
-**The build currently also requires `capped`, an external memory-limit
-wrapper that is not included in this repository.** Obtain it from the project
-maintainers and use a session with working cgroup v2 delegation. The scripts
-expect `/usr/local/bin/capped`; if it lives elsewhere, set `LEANUX_CAPPED` to
-its absolute path. The commands below use that variable. Test it first:
-
-```sh
-export LEANUX_CAPPED=/usr/local/bin/capped
-"$LEANUX_CAPPED" -- true
-```
+The builds and the check run uncapped by default. On the project's shared
+devboxes a memory-cap wrapper is installed at `/usr/local/bin/capped` and the
+scripts use it automatically; nothing is needed elsewhere.
 
 Stage the locked tools and Linux source in the main checkout:
 
@@ -51,8 +44,8 @@ sandbox. A sandbox such as nono is optional.
 ## 2. Build and try the model
 
 ```sh
-"$LEANUX_CAPPED" -- scripts/in-bundle lake build leanux-model
-"$LEANUX_CAPPED" -- scripts/in-bundle .lake/build/bin/leanux-model <<'EOF'
+scripts/in-bundle lake build leanux-model
+scripts/in-bundle .lake/build/bin/leanux-model <<'EOF'
 {"version":1,"id":"first_eventfd","ops":[{"op":"eventfd2","init":5,"flags":2048},{"op":"read","fd":{"ref":0},"count":8}]}
 EOF
 ```
@@ -66,7 +59,7 @@ library.
 After building, run the unit tests, including recorded model replays:
 
 ```sh
-"$LEANUX_CAPPED" -- scripts/in-bundle python3 -B -m unittest \
+scripts/in-bundle python3 -B -m unittest \
   evaluator.test_evaluation evaluator.test_model_replay \
   harness.test_trace harness.test_wg harness.test_noise \
   harness.test_d1_keys harness.test_d1_keepalive harness.test_linux
@@ -77,7 +70,7 @@ After building, run the unit tests, including recorded model replays:
 ```sh
 export LEANUX_KERNEL_DIR="$PWD/.artifacts/kernel-net-choice"
 LEANUX_KERNEL_PROFILE=net-choice LEANUX_KERNEL_BUILD="$LEANUX_KERNEL_DIR" \
-  "$LEANUX_CAPPED" -- scripts/in-bundle scripts/build-kernel
+  scripts/in-bundle scripts/build-kernel
 ```
 
 This extracts a private copy of Linux 6.12.110, applies the pinned
@@ -98,13 +91,13 @@ Keep `LEANUX_KERNEL_DIR` exported in the shell where you run:
 
 ```sh
 # Small smoke test
-"$LEANUX_CAPPED" -- scripts/in-bundle python3 -m evaluator.check --suite handwritten --trace alias_close
+scripts/in-bundle python3 -m evaluator.check --suite handwritten --trace alias_close
 
 # Handwritten WireGuard suite
-"$LEANUX_CAPPED" -- scripts/in-bundle python3 -m evaluator.check --suite wireguard
+scripts/in-bundle python3 -m evaluator.check --suite wireguard
 
 # All default suites; allow roughly an hour, depending on host load
-"$LEANUX_CAPPED" -- scripts/in-bundle python3 -m evaluator.check
+scripts/in-bundle python3 -m evaluator.check
 ```
 
 The checker builds the model automatically. `--no-build` reuses a build only

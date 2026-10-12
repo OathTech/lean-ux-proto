@@ -57,7 +57,7 @@ The agent installs none of the following. **You install them.**
 | `sha256sum`, `coreutils` | manual verification below | |
 | SSH key with access to `git@github.com:OathTech/lean-ux-proto.git` | clone | User-level |
 | Network access to `snapshot.ubuntu.com`, `www.kernel.org` and `github.com` | one-time staging | Not needed after staging |
-| `capped` (`/usr/local/bin/capped`, installed box-wide by oath-devbox) | the checker's model build, `scripts/build-kernel`, and every heavy command an agent runs | A cgroup memory cap (default 32G). It needs cgroup v2 delegation for the user scope, which the `claude-nono` alias provides; without the wrapper the checker and the kernel build refuse to run (`LEANUX_CAPPED` overrides the path). |
+| `capped` (`/usr/local/bin/capped`, installed box-wide by oath-devbox) | the box rule for agents (`~/.claude/CLAUDE.md`): every heavy job under a cgroup memory cap | Optional for the project: the checker and `scripts/build-kernel` use it when it is installed and run uncapped with a notice when it is not; `LEANUX_CAPPED` names another path. |
 | `nono` (optional) | confinement for agent sessions | The old host had nono 0.79.0 at `~/.cargo/bin/nono`. How it was installed is **unverified**. |
 | Claude Code and its MCP registration (optional) | agent work; see section 10 | User-level |
 
