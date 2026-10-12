@@ -188,3 +188,22 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   need to worry about it." The checker and the kernel build use the wrapper
   when it is installed and run uncapped with a notice otherwise; the box rule
   for agents is unchanged.
+- **2026-10-12 [USER]** The next targets are epoll and seccomp, as parallel
+  streams ("okay, I buy it. Let's do epoll and seccomp next, as parallel
+  efforts"), chosen from the kernel scout's ranking: epoll as the readiness
+  foundation (the wait-queue and poll contract), seccomp as the security
+  target with its own theorems (chain monotonicity, checker soundness,
+  translation correctness). seccomp's `SECCOMP`/`SECCOMP_FILTER` are an
+  additive configuration change under the 2026-10-07 rule: the case is open
+  by this decision, the identity comes with the merge. The eBPF engine below
+  `seccomp_run_filters` (kernel/bpf/core.c) is a service with a stated ISA
+  contract, never anchored: the user's separate eBPF JIT project owns that
+  seam. The KVM config case (KVM, KVM_AMD, HIGH_RES_TIMERS: a
+  behaviour-and-config change needing the D3 timer re-validation) stays open.
+- **2026-10-12 [AGENT, coordinator]** Shared-table allocations for the two
+  streams, append-only per the interface note: wire opcodes 27-29 epoll
+  (`epoll_create1`, `epoll_ctl`, `epoll_wait`), 30-34 seccomp (install, the
+  filtered probe call, `prctl` no-new-privs, two spare); record kind 308
+  epoll's tree-insert file address (record-only, class-approved); HiddenSite
+  ids 190-199 epoll, 200-219 seccomp; both streams' kernel changes go into
+  one oracle rebuild after both designs are audited.
