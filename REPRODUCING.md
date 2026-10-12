@@ -1,7 +1,7 @@
 # Reproducing the results from a clone
 
 This takes a fresh clone to a passing `evaluator.check`, with the same kernel,
-toolchain and results as the recorded evidence. Every download is pinned by
+toolchain and results the merge commits record. Every download is pinned by
 sha256. Expect about 2 GB of downloads, a few minutes of builds, and about
 1.5 hours for the full check.
 
@@ -86,8 +86,6 @@ mismatch); on a contended host it may be non-empty.
 
 ## What is not reproduced
 
-- `.artifacts/runs/evidence` (the recorded reports) is not in Git. The
-  expected numbers above come from it.
-- Mutants: `scripts/in-bundle python3 scripts/wg-mutants.py` (about 20
-  minutes) applies each stage A mutant to a clean tree and requires it to be
-  rejected.
+- The sentinel mutants: `scripts/in-bundle python3 scripts/wg-mutants.py` and
+  `scripts/pipes-mutants.py` (about half an hour in all) apply each sentinel
+  to a clean tree and require it to be rejected.

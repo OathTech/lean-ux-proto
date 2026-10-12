@@ -17,8 +17,8 @@ scripts/in-bundle python3 -m evaluator.check     # or any other bundled command
 
 `scripts/in-bundle` detects a Git worktree automatically:
 
-- **Shared inputs.** `.tools`, `.deps`, the pinned kernel build and
-  `.artifacts/runs/evidence` come from the main checkout and are read-only.
+- **Shared inputs.** `.tools`, `.deps` and the pinned kernel builds come from
+  the main checkout and are read-only.
 - **Private state.** `.cache`, `.artifacts` and `.lake` are created inside the
   worktree. They are Git-ignored and disappear with it.
 - **Guests.** Only one QEMU guest runs at a time, across all checkouts, through
@@ -27,14 +27,6 @@ scripts/in-bundle python3 -m evaluator.check     # or any other bundled command
 Never copy the main checkout to create a task. Never write into `.tools`,
 `.deps` or the accepted kernel build. A kernel or dependency change needs its
 own versioned output directory, agreed with the user.
-
-## Keep evidence
-
-A check report worth keeping, such as one presented for a `main` signoff or a
-reproduced failure, is copied to
-`/<main checkout>/.artifacts/runs/evidence/<id>/` before the worktree is
-removed. Record the user's signoff for a `main` update in `integration.json`
-next to it.
 
 ## Remove
 
@@ -47,4 +39,4 @@ git branch -d task/<id>                       # -d refuses unmerged work; keep t
 ```
 
 Do not use `git clean -fdx`, and do not delete recursively over `.worktrees/`.
-Keep a ref for any unmerged commit that evidence refers to.
+Keep a ref for any unmerged commit a design doc or a commit message refers to.

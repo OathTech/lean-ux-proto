@@ -44,7 +44,7 @@ The agent installs none of the following. **You install them.**
 | Prerequisite | Needed by | Note |
 |---|---|---|
 | `/usr/bin/python3`, version **3.12 or newer** | `scripts/in-bundle` (its shebang is `#!/usr/bin/python3`); `stage-resources.py`, `restore-toolchains.py`, `verify-dependencies.py` | The docs say "Python 3.9+". That is **stale**. The scripts use `hashlib.file_digest` (3.11+) and `tarfile.extractall(filter="data")` (3.12, or a 3.11.4+ backport). Ubuntu 24.04 ships 3.12. |
-| `/bin/sh` | `scripts/build-kernel`, `bundle-tool`, `check-nono`, `lean-lsp` | |
+| `/bin/sh` | `scripts/build-kernel`, `bundle-tool`, `lean-lsp` | |
 | `git` | `in-bundle` (`git rev-parse` in worktrees), the mutant scripts, the workflow | |
 | `curl` | `stage-resources.py`, `restore-toolchains.py` | |
 | `tar` with zstd support, and `zstd` | `restore-toolchains.py` (`tar --zstd`) | |
@@ -53,7 +53,7 @@ The agent installs none of the following. **You install them.**
 | SSH key with access to `git@github.com:OathTech/lean-ux-proto.git` | clone | User-level |
 | Network access to `snapshot.ubuntu.com`, `www.kernel.org` and `github.com` | one-time staging | Not needed after staging |
 | `capped` (`/usr/local/bin/capped`, installed box-wide by oath-devbox) | the checker's model build, `scripts/build-kernel`, and every heavy command an agent runs | A cgroup memory cap (default 32G). It needs cgroup v2 delegation for the user scope, which the `claude-nono` alias provides; without the wrapper the checker and the kernel build refuse to run (`LEANUX_CAPPED` overrides the path). |
-| `nono` (optional) | confinement for agent sessions; `scripts/check-nono` | The old host had nono 0.79.0 at `~/.cargo/bin/nono`. How it was installed is **unverified**. |
+| `nono` (optional) | confinement for agent sessions | The old host had nono 0.79.0 at `~/.cargo/bin/nono`. How it was installed is **unverified**. |
 | Claude Code and its MCP registration (optional) | agent work; see section 10 | User-level |
 
 The following are **not** needed on the host, because they come from the project-local bundle:
@@ -95,7 +95,6 @@ the old host:
 | `.deps`: Linux source 1.6G, downloads 1.2G, go-mod 1.4G, syzkaller 0.44G, docs 0.12G | 4.8 GB |
 | One kernel build directory (`.artifacts/kernel-net-choice*`) | 0.9 GB |
 | One extracted, patched kernel source (`.artifacts/src/linux-6.12.110-*`) | 1.6 GB |
-| `.artifacts/runs/evidence` (main checkout) | 0.23 GB |
 | A worktree after several full checks and its own kernel (`.worktrees/d3-int`): `.artifacts/check` 3.3G, `.artifacts/src` 1.6G, kernel 0.9G, `.lake` 0.23G | 6 GB |
 | All 31 worktrees on the old host | 73 GB |
 
@@ -144,11 +143,8 @@ git -C $REPO merge --ff-only bundle/main    # on main: restores the already-appr
 The fast-forward restores the `main` the user approved on 2026-10-07. It integrates nothing new.
 If the hash differs, stop and ask.
 
-Untracked state is not in any bundle:
-- `.artifacts/runs/evidence/`, about 233 MB in the main checkout;
-- `.worktrees/*/.artifacts/runs/evidence/`.
-
-Copy these by hand if the integration records are to be kept (pause-state section 5). Do not copy
+Untracked state is not in any bundle: the check outputs under `.artifacts`, which are
+reproducible and not kept. Do not copy
 `.cache`, because its links hold absolute paths (docs/offline-usage.md).
 
 ## 3. Lean toolchain and the model build
@@ -260,7 +256,7 @@ scripts/in-bundle gcc --version                          # gcc-13 (Ubuntu 13.3.0
 scripts/in-bundle python3 --version                      # Python 3.12.3
 ```
 
-`scripts/verify-dependencies.py` and `scripts/check-offline.py` are **all-or-nothing**.
+`scripts/verify-dependencies.py` is **all-or-nothing**.
 
 `verify-dependencies.py` checks every row of every lock:
 - all 222 `.deb` files;
@@ -287,22 +283,8 @@ The command:
 scripts/in-bundle python3 scripts/verify-dependencies.py    # PASS: N staged archives ... verified.
 ```
 
-`check-offline.py` runs seven checks in order and stops at the first failure:
-toolchains, kernel, guest, syzkaller, syzkaller-program, lean-lsp, integrity.
-- Launch it through `scripts/check-nono`, which needs nono, or directly with
-  `scripts/in-bundle python3 scripts/check-offline.py --only <check>`.
-- Its `kernel` check runs `scripts/build-kernel` with the **base** profile into `.artifacts/kernel`,
-  unless `--kernel-build` is given. That build copies its config over `kernel/config-x86_64`.
-- The `syzkaller` check needs `.deps/go-mod` and refuses to run outside the main checkout.
-- `.deps/go-mod` has **no script that produces it**. It is only checked. Copy it from the old
-  machine if you want the syzkaller checks.
-
-[AGENT] For the check, the useful subsets are:
-
-```sh
-scripts/in-bundle python3 scripts/check-offline.py --only toolchains
-scripts/in-bundle python3 scripts/check-offline.py --only lean-lsp     # only after lean-lsp is restored
-```
+`check-offline.py`, `check-nono` and the syzkaller checks were removed on 2026-10-12 (AGENTS.md,
+"Gates and speedbumps"): the environment is validated by the unit tests and the check itself.
 
 ## 5. Kernel source (`.deps/linux` and the locked archive)
 
@@ -345,7 +327,7 @@ Both must print `8cee19e1…5c4c`.
 
 Sources: `scripts/build-kernel`, `scripts/apply-kernel-patch.py`, `scripts/kernel-identity.py`,
 `kernel/identity-x86_64-net-choice.txt`, `harness/linux.py`,
-`.artifacts/runs/evidence/d3/integration.json` (old machine).
+the D3 merge commit `84a56fd` (old machine).
 
 ### 6.1 What is approved on `main`
 
@@ -484,8 +466,7 @@ Neither directory is an input to the check.
   Whether this probe passes on the net-choice kernel is **unverified**: on the old host it ran
   against the base kernel.
 - **`.artifacts/provisioning`** holds logs of the original 2026-09-20 provisioning run, plus
-  `lean-lsp-check.json`, which `scripts/check-lean-lsp.py` writes. Nothing reads it. It need not be
-  recreated.
+  `lean-lsp-check.json` from a retired check. Nothing reads it. It need not be recreated.
 - `dependencies/validation.json` records that 2026-09-20 run. It is historical. Its "bootstrap
   requirements" (bwrap, user namespaces) were retired with the Bubblewrap launcher
   (docs/offline-usage.md).
@@ -511,7 +492,7 @@ scripts/in-bundle python3 -B -m unittest \
     harness.test_d1_keepalive harness.test_d1_keys
 ```
 
-Expected: **99 tests, OK** (`.artifacts/runs/evidence/d3/integration.json`: "unit_tests": "99/99").
+Expected: **99 tests, OK** (the D3 integration of 2026-10-07).
 The module list is the 8 modules of `docs/2026-10-05-d3-timers.md` section 17.3. Their `def test`
 counts on `main` sum to 99: 35 + 10 + 13 + 4 + 26 + 4 + 2 + 5.
 
@@ -567,41 +548,23 @@ scripts/in-bundle python3 scripts/wg-d3-controls.py      # expected tc_advance_w
 
 Both need `LEANUX_KERNEL_DIR` exported, per the `wg-d3-controls.py` docstring.
 
-### 8.5 Mutants: scope them
+### 8.5 The sentinel mutants
 
 ```sh
-scripts/in-bundle python3 scripts/wg-mutants.py [NAME ...]      # WireGuard: 70 entries
-scripts/in-bundle python3 scripts/pipes-mutants.py [NAME ...]   # pipes: 18 + baseline
+scripts/in-bundle python3 scripts/wg-mutants.py [NAME ...]      # WireGuard: the sentinel set
+scripts/in-bundle python3 scripts/pipes-mutants.py [NAME ...]   # pipes: 2 sentinels + baseline
 ```
 
 How the scripts work:
-- Each mutant is written **into the working tree**, then a check runs: `--suite wireguard` for
-  WireGuard, `pipes` for pipes. The file is then restored with `git checkout -- <file>`.
+- Each sentinel is written **into the working tree**, then a check runs on its corpus subset.
+  The file is then restored with `git checkout -- <file>`.
 - The tree must be clean, which the script asserts. Run mutants only in a dedicated worktree, and
   never in the main checkout.
 - `wg-mutants.py` writes `.artifacts/check/mutant-<NAME>/` and `.artifacts/check/mutants-summary.json`.
 - It exits 1 on any `no_verdict`: an infrastructure failure is never counted as a rejection.
 
-**A full WireGuard set takes 18 hours or more.** On the old contended host:
-- one mutant took about 16 minutes;
-- all 70 took 18.5 hours (`docs/2026-10-05-d3-timers.md` section 16.4).
-
-[USER] decision: mutant runs are scoped to the touched files, on reduced corpora. The full set
-runs once, at milestones (pause-state section 3). Always pass names. For example, the D3 set
-(8/8 rejected on `main`):
-
-```sh
-scripts/in-bundle python3 scripts/wg-mutants.py D3-M1-attempts-not-incremented D3-M2-need-another-ignored \
-    D3-M3-firing-keeps-timer D3-M4-clear-keeps-handshake D3-M5-send-fresh-at-reject \
-    D3-M6-no-lastminute-flag D3-M7-send-ignores-reject-after-time D3-M8-new-handshake-delay
-```
-
-Expected on `main`:
-- WireGuard: 68 rejected, 1 survivor (`B2-M3-length-before-type`, an instrument limit), and
-  1 equivalent (`H-M8-response-unclamped`, listed and not run). 0 without a verdict.
-- Pipes: baseline pass 23/23, **18/18 rejected**.
-
-REPRODUCING.md's "about 20 minutes" for `wg-mutants.py` is **stale**.
+The set is a speedbump run at claim points (AGENTS.md, "Gates and speedbumps"): about half an
+hour on an idle box. Expected: every sentinel rejected.
 
 Run long jobs as tracked background tasks (section 11.5).
 
@@ -627,12 +590,7 @@ The rules:
 - All development happens in worktrees on `task/*` branches.
 - `main` moves only with the user's explicit signoff on the concrete diff. This covers
   fast-forward, cherry-pick, reset and push alike.
-- Record the approval in `integration.json`, next to the evidence.
-
-**Evidence.**
-- Copy a report worth keeping (one presented for signoff, or a reproduced failure) to
-  `$REPO/.artifacts/runs/evidence/<id>/` before you remove the worktree.
-- It is untracked. Back it up by hand.
+- The merge commit's message carries the run's counts and the user's words.
 
 **Remove a worktree:**
 
@@ -648,7 +606,7 @@ Never use `git clean -fdx`, and never delete recursively over `.worktrees/`.
 
 ### 10.1 Lean LSP MCP
 
-Sources: `scripts/lean-lsp`, `scripts/lean-lsp-python`, `scripts/check-lean-lsp.py`.
+Sources: `scripts/lean-lsp`, `scripts/lean-lsp-python`.
 
 The project-local MCP server:
 
@@ -664,10 +622,8 @@ scripts/lean-lsp /absolute/path/to/a/Lean/project/inside/this/repository
 
 To check it:
 
-```sh
-scripts/in-bundle scripts/lean-lsp-python scripts/check-lean-lsp.py
-# PASS: offline Lean MCP diagnostics accept valid code and detect a type error.
-```
+(`scripts/check-lean-lsp.py` was removed on 2026-10-12; start `scripts/lean-lsp` and ask it for a
+diagnostic on any file to see it work.)
 
 On the old machine, Claude Code did **not** use this server. It used a user-global registration in
 `~/.claude.json`, `"lean-lsp": {"type": "stdio", "command": "lean-lsp-mcp"}`, with
@@ -683,22 +639,14 @@ On the new machine, either:
 
 ### 10.2 nono
 
-Sources: `scripts/check-nono`, `scripts/nono-check-profile.json`, docs/nono-profile-proposal.md.
+Sources: docs/nono-profile-proposal.md.
 
 - Agent sessions on the old host ran under nono. Its profiles were
   `~/.config/nono/profiles/claude-local.json` and `codex-local.json`. These are user files, and are
   **not in the repository**: copy or recreate them yourself.
 - `scripts/in-bundle` provides no confinement of its own.
-- `scripts/check-nono` runs `check-offline.py` under `nono wrap` with the repository's profile
-  fixture. That fixture extends `default`, grants the workdir read-write, reads `/usr`, `/proc`,
-  `/etc/localtime` and `/etc/python3.12`, and **blocks the network**. It is passed by filename and
-  never installed.
-- Inherits the all-or-nothing caveats of section 4. Use `--only`:
-
-  ```sh
-  scripts/check-nono --only toolchains
-  scripts/check-nono --only lean-lsp
-  ```
+- The repository's acceptance fixture (`scripts/check-nono`, `nono-check-profile.json`) was removed on
+  2026-10-12; the check run under the agent profile validates the sandbox.
 
 ### 10.3 Agent memory
 
@@ -748,9 +696,7 @@ Each worktree's `.artifacts/check` grows with every check and mutant run: 3.3 GB
 the old host. A worktree that builds its own kernel adds 2.5 GB (source plus build). The old disk
 reached 99 % once.
 
-Before you remove a worktree:
-- copy the evidence you need;
-- check free space before kernel builds and full mutant runs.
+Check free space before kernel builds and mutant runs.
 
 ### 11.4 Stale model binaries
 
@@ -795,7 +741,7 @@ warning, recorded in the provenance and the report.
 
 - **The remote lacks the D3 `main` and every `task/*` branch** (section 2). A clone from GitHub
   alone gives the pre-D3 tree, and its full-check counts differ.
-- **`verify-dependencies.py`, `check-offline.py` and `check-nono` fail** after the minimal staging
+- **`verify-dependencies.py` fails** after the minimal staging
   (section 4). This is a missing file, not corruption.
 - **Go, lean-lsp, `.deps/go-mod` and `.deps/docs`** have no fetch path. Copy them from the old
   machine, or do without them.

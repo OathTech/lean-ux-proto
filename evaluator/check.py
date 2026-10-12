@@ -1246,6 +1246,8 @@ def main(argv=None):
     parser.add_argument('--trace')
     parser.add_argument('--out', type=Path)
     parser.add_argument('--no-build', action='store_true', help='reuse the existing .lake build')
+    parser.add_argument('--decision-census', action='store_true',
+                        help='also write decision-census.json: one row per decision, its outcomes and witnesses')
     parser.add_argument('--guest-variant', choices=sorted(GUEST_VARIANTS),
                         help='a guest build variant for a negative control (never the oracle)')
     parser.add_argument('--alloc-share', type=float, default=ALLOC_SHARE,
@@ -1324,8 +1326,11 @@ def main(argv=None):
         placements = {k[len('napi placement ('):-1]: outcomes.pop(k) for k in list(outcomes)
                       if k.startswith('napi placement (')}
         alloc_runs = {k[len('alloc runs ('):-1]: outcomes.pop(k) for k in list(outcomes) if k.startswith('alloc runs (')}
+        coverage, census = decision_summary(decisions, outcomes, kcov[2] if kcov else {})
+        if getattr(args, 'decision_census', False):
+            (out / 'decision-census.json').write_text(json.dumps(census, indent=2) + '\n')
         status = write_report(out, traces, results, gaps, build, aborted, started, suites, args,
-                              decision_summary(decisions, outcomes, kcov[2] if kcov else {}), matched, filtered, splits,
+                              coverage, matched, filtered, splits,
                               skipped, retries, placements, alloc_runs, kernel_identity=identity)
     return 0 if status == 'pass' else 1
 
@@ -1338,12 +1343,14 @@ def decision_summary(decisions, outcomes, witnesses):
         rows[label] = dict(site=entry['site'], true=outcomes[f'{label}=1'], false=outcomes[f'{label}=0'],
                            witnessed_true=bool(witnesses.get(label, {}).get(True)),
                            witnessed_false=bool(witnesses.get(label, {}).get(False)))
+    # The counts and the short lists go in the report; the per-decision table
+    # (one row per decision) is the census, written beside the report on
+    # --decision-census only.
     return dict(decisions=len(rows),
                 unobservable_outcomes=sum((not r['witnessed_true']) + (not r['witnessed_false']) for r in rows.values()),
                 unobservable_decisions=sorted(l for l, r in rows.items() if not r['witnessed_true'] and not r['witnessed_false']),
                 never_evaluated=sorted(l for l, r in rows.items() if not r['true'] + r['false']),
-                one_outcome_only=sorted(l for l, r in rows.items() if bool(r['true']) != bool(r['false'])),
-                table=rows)
+                one_outcome_only=sorted(l for l, r in rows.items() if bool(r['true']) != bool(r['false']))), rows
 
 
 def write_report(out, traces, results, gaps, build, aborted, started, suites, args, decision_coverage=None,

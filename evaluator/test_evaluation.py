@@ -650,9 +650,9 @@ class AllocChecks(unittest.TestCase):
         with self.assertRaises(SteeringError):   # one of two call sites armed
             alloc_armed_labels([(0x200, 0x201)], (sites, ranges))
 class WgMutantScoringChecks(unittest.TestCase):
-    """scripts/wg-mutants.py: only a mirror-side verdict rejects a mutant; an
-    infrastructure outcome is no verdict (review S2), and H-M8 is listed as
-    equivalent (review S4)."""
+    """scripts/wg-mutants.py: only a mirror-side verdict rejects a sentinel; an
+    infrastructure outcome is no verdict; the sentinel set is one entry per
+    channel, each applicable to the tree."""
     @classmethod
     def setUpClass(cls):
         import importlib.util
@@ -684,10 +684,18 @@ class WgMutantScoringChecks(unittest.TestCase):
     def test_clean_pass_survives(self):
         self.assertEqual(self.m.classify(self.report()), ('survived', [], []))
 
-    def test_equivalent_listed_not_deleted(self):
-        names = {m[0] for m in self.m.MUTANTS}
-        self.assertIn('H-M8-response-unclamped', names)
-        self.assertIn('H-M8-response-unclamped', self.m.EQUIVALENT)
-        self.assertEqual(self.m.tally({'a': dict(status='equivalent'), 'b': dict(status='no_verdict'),
+    def test_sentinels_one_per_channel_and_applicable(self):
+        # the sentinel set: every entry names its channel, its pattern is present
+        # exactly once in the file it mutates, and the channels are distinct
+        sentinels = self.m.SENTINELS
+        self.assertGreaterEqual(len(sentinels), 10)
+        channels = [e[1] for e in sentinels]
+        self.assertEqual(len(channels), len(set(channels)))
+        for name, channel, what, path, old, new, subset, suite in sentinels:
+            text = (ROOT / path).read_text()
+            self.assertEqual(text.count(old), 1, name)
+            self.assertNotEqual(old, new, name)
+            self.assertIn(suite, ('wireguard', 'alloc', 'pipes'), name)
+        self.assertEqual(self.m.tally({'a': dict(status='survived'), 'b': dict(status='no_verdict'),
                                        'c': dict(status='rejected')}),
-                         {'equivalent': 1, 'no_verdict': 1, 'rejected': 1})
+                         {'no_verdict': 1, 'rejected': 1, 'survived': 1})

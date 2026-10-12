@@ -1,8 +1,0 @@
-#!/bin/sh
-# Validate with standalone nono. Does not modify or install any nono profile.
-set -eu
-LEANUX_CHECK_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
-cd "$LEANUX_CHECK_ROOT"
-exec nono wrap --profile "$LEANUX_CHECK_ROOT/scripts/nono-check-profile.json" \
-    --workdir "$LEANUX_CHECK_ROOT" --allow-cwd -- \
-    "$LEANUX_CHECK_ROOT/scripts/in-bundle" python3 scripts/check-offline.py "$@"
