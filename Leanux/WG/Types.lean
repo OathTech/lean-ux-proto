@@ -58,6 +58,11 @@ structure Endpoint where
   src : Nat := 0
   srcIf : Nat := 0
   scope : Nat := 0
+  /-- W1: IPv6's `sin6_flowinfo`, copied by `set_peer` with the whole
+      `sockaddr_in6` (netlink.c:444-446) and returned by the dump; never
+      compared (`endpoint_eq`, socket.c:258-271) and zeroed by
+      `wg_socket_endpoint_from_skb`. -/
+  flowinfo : Nat := 0
   deriving Repr, BEq
 
 /-- What a received skb says about its origin (`wg_socket_endpoint_from_skb`):

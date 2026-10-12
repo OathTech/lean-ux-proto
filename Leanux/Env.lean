@@ -56,6 +56,14 @@ def portBound (p : Nat) : Bool := p == LISTEN_PORT || p == SENDER_PORT
     address and interface 1). -/
 def LO_LINK_LOCAL : Nat := 0xfe8000000000000000000000ffff0001
 
+/-- W1 (docs/2026-10-06-w1-w2-netlink.md, 2.1): the fixture namespace's
+    devices besides wg0, for `lookup_interface`: `lo` (ifindex 1, no
+    `rtnl_link_ops`, drivers/net/loopback.c) and `sit0` (ifindex 2, kind
+    "sit": the per-netns fallback device of `CONFIG_IPV6_SIT=y`,
+    net/ipv6/sit.c:1852-1860). wg0 is created third (ifindex 3; L's cursor
+    gives 4 after a delete and re-create). -/
+def fixtureNetDevices : List (String × Nat × Option String) := [("lo", 1, none), ("sit0", 2, some "sit")]
+
 /-- Whether an endpoint is the fixture's sender: its port at the loopback
     addresses, or (W5) at the link-local address on `lo` (the sender is
     bound to `[::]`, so a datagram to `fe80::1` at its port reaches it). -/
@@ -142,6 +150,16 @@ def deliverSent : M Unit := do
   for dg in (← get).sent do
     let loopback := (dg.family == AF_INET && dg.addr / 2 ^ 24 == 127)
       || (dg.family == AF_INET6 && (dg.addr == 1 || dg.addr == LO_LINK_LOCAL))
+    -- W1 hand-off to W9: a datagram to an IPv6 endpoint with a nonzero
+    -- `sin6_scope_id` routes with `flowi6_oif` set (`send6`), which the
+    -- environment does not model; a v4-mapped destination is not loopback
+    -- and falls to the rule below. The endpoint is the peer's.
+    if dg.family == AF_INET6 then
+      if let some d := (← getK).wg then
+        for pid in d.peerList do
+          if let some e := (← getPeer pid).endpoint then
+            if e.family == AF_INET6 && e.addr == dg.addr && e.port == dg.port && e.scope != 0 then
+              unsupported "a datagram to a scoped IPv6 endpoint (send6's route lookup, W9)"
     if isSender dg.family dg.addr dg.port then
       -- from wg0's socket, bound to the wildcard address at its port, with
       -- the source `send4`/`send6` ask for: the endpoint's `src4`/`src6`

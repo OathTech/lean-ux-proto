@@ -29,9 +29,27 @@ DEVICE_F_REPLACE_PEERS = 1
 PEER_F_REMOVE_ME, PEER_F_REPLACE_ALLOWEDIPS, PEER_F_UPDATE_ONLY = 1, 2, 4
 AF_INET, AF_INET6 = 2, 10
 
-CONFIG_FIELDS = {"private_key", "listen_port", "fwmark", "replace_peers", "peers"}
-PEER_FIELDS = {"public_key", "remove", "update_only", "replace_allowed_ips", "preshared_key",
-               "endpoint", "keepalive", "allowed_ips"}
+# W1 (docs/2026-10-06-w1-w2-netlink.md, section 3.1): every addition is an
+# optional key; a trace without them means what it did. `flags` is the raw
+# WGDEVICE_A_FLAGS / WGPEER_A_FLAGS value, exclusive with the booleans it
+# replaces; `protocol_version` is WGPEER_A_PROTOCOL_VERSION; `malformed:
+# "not_nested"` encodes the entry without NLA_F_NESTED (the one sanctioned
+# malformation: nla_parse_nested's own check, include/net/netlink.h:1315-1318).
+CONFIG_FIELDS = {"private_key", "listen_port", "fwmark", "replace_peers", "flags", "peers"}
+PEER_FIELDS = {"public_key", "remove", "update_only", "replace_allowed_ips", "flags", "preshared_key",
+               "endpoint", "keepalive", "allowed_ips", "protocol_version", "malformed"}
+PEER_FLAG_FIELDS = ("remove", "update_only", "replace_allowed_ips")
+ENDPOINT_FIELDS = {"family", "addr", "port", "flowinfo", "scope_id", "af", "len"}
+ALLOWED_IP_FIELDS = {"family", "addr", "cidr", "af", "malformed"}
+# The device selector of wg_set, wg_get and the stepped dump ops: by name,
+# by ifindex, both (-EBADR) or neither (-EBADR); absent means wg0 by name.
+DEVICE_FIELDS_IN = {"ifname", "ifindex"}
+DEFAULT_DEVICE = {"ifname": IFNAME}
+# Policy-table limits (P8, section 5): the validator rejects what the kernel's
+# nla policy would, fail-closed, so no trace relies on a policy rejection.
+MIN_ENDPOINT_LEN, MAX_ENDPOINT_LEN = 16, 128
+MIN_AIP_ADDR, MAX_AIP_ADDR = 4, 20
+IFNAMSIZ = 16
 
 
 class InvalidConfig(ValueError):
@@ -56,10 +74,22 @@ def _bool(value, where):
     return value
 
 
-def _address(entry, where, with_port):
-    fields = {"family", "addr", "port"} if with_port else {"family", "addr", "cidr"}
-    if type(entry) is not dict or set(entry) != fields:
-        raise InvalidConfig(f"{where}: expected exactly {sorted(fields)}")
+def _hex_bytes(value, low, high, where):
+    """`low`..`high` bytes of lowercase hex."""
+    if type(value) is not str or not re.fullmatch(r"(?:[0-9a-f]{2})*", value) or not low <= len(value) // 2 <= high:
+        raise InvalidConfig(f"{where}: expected {low}-{high} bytes of lowercase hex")
+    return bytes.fromhex(value)
+
+
+def _endpoint(entry, where):
+    """A peer's endpoint: `family` 4 or 6 with `addr` (4 or 16 bytes) and
+    `port`; optionally `flowinfo` and `scope_id` (IPv6 only, u32),
+    `af` (u16: the `sa_family` bytes, overriding the family's) and `len`
+    (16..128: the attribute length; the canonical 16/28-byte sockaddr is
+    zero-padded or truncated to it). `addr` of family 6 may be any 16
+    bytes, a v4-mapped one included."""
+    if type(entry) is not dict or not {"family", "addr", "port"} <= set(entry) <= ENDPOINT_FIELDS:
+        raise InvalidConfig(f"{where}: expected family, addr, port and optionally {sorted(ENDPOINT_FIELDS - {'family', 'addr', 'port'})}")
     family = entry["family"]
     if family not in (4, 6):
         raise InvalidConfig(f"{where}.family: expected 4 or 6")
@@ -67,11 +97,52 @@ def _address(entry, where, with_port):
     addr = entry["addr"]
     if type(addr) is not str or not re.fullmatch(f"[0-9a-f]{{{digits}}}", addr):
         raise InvalidConfig(f"{where}.addr: expected {digits} lowercase hex digits")
-    if with_port:
-        _int(entry["port"], 0, 65535, f"{where}.port")
-    else:
-        _int(entry["cidr"], 0, 255, f"{where}.cidr")   # the kernel rejects > 32/128, observably
-    return bytes.fromhex(addr)
+    _int(entry["port"], 0, 65535, f"{where}.port")
+    for field in ("flowinfo", "scope_id"):
+        if field in entry:
+            if family != 6:
+                raise InvalidConfig(f"{where}.{field}: IPv6 only")
+            _int(entry[field], 0, 2**32 - 1, f"{where}.{field}")
+    if "af" in entry:
+        _int(entry["af"], 0, 65535, f"{where}.af")
+    if "len" in entry:
+        _int(entry["len"], MIN_ENDPOINT_LEN, MAX_ENDPOINT_LEN, f"{where}.len")   # below 16 the policy rejects (P8)
+    return entry
+
+
+def _allowed_ip(entry, where):
+    """An allowed IP: any subset of `family` (4 or 6), `addr` (4..20 bytes)
+    and `cidr` (u8; the kernel rejects > 32/128 observably); optionally `af`
+    (u16, overriding the family value) and `malformed: "not_nested"`."""
+    if type(entry) is not dict or not set(entry) <= ALLOWED_IP_FIELDS:
+        raise InvalidConfig(f"{where}: fields must be a subset of {sorted(ALLOWED_IP_FIELDS)}")
+    if "family" in entry and entry["family"] not in (4, 6):
+        raise InvalidConfig(f"{where}.family: expected 4 or 6")
+    if "addr" in entry:
+        _hex_bytes(entry["addr"], MIN_AIP_ADDR, MAX_AIP_ADDR, f"{where}.addr")   # below 4 the policy rejects (P8)
+    if "cidr" in entry:
+        _int(entry["cidr"], 0, 255, f"{where}.cidr")
+    if "af" in entry:
+        _int(entry["af"], 0, 65535, f"{where}.af")
+    if "malformed" in entry and entry["malformed"] != "not_nested":
+        raise InvalidConfig(f"{where}.malformed: expected \"not_nested\"")
+    return entry
+
+
+def validate_device(device, where="device"):
+    """The device selector: {"ifname": s} (1-15 characters), {"ifindex": n}
+    (u32), both or {}; absent means wg0 by name."""
+    if device is None:
+        return dict(DEFAULT_DEVICE)
+    if type(device) is not dict or not set(device) <= DEVICE_FIELDS_IN:
+        raise InvalidConfig(f"{where}: fields must be a subset of {sorted(DEVICE_FIELDS_IN)}")
+    if "ifname" in device:
+        name = device["ifname"]
+        if type(name) is not str or not 1 <= len(name) < IFNAMSIZ or not re.fullmatch(r"[A-Za-z0-9_.-]+", name):
+            raise InvalidConfig(f"{where}.ifname: expected 1-15 identifier characters")   # longer: the policy rejects (P8)
+    if "ifindex" in device:
+        _int(device["ifindex"], 0, 2**32 - 1, f"{where}.ifindex")
+    return device
 
 
 def validate_config(config, where="config"):
@@ -85,28 +156,41 @@ def validate_config(config, where="config"):
         _int(config["fwmark"], 0, 2**32 - 1, f"{where}.fwmark")
     if "replace_peers" in config:
         _bool(config["replace_peers"], f"{where}.replace_peers")
+    if "flags" in config:
+        if "replace_peers" in config:
+            raise InvalidConfig(f"{where}.flags: exclusive with replace_peers")
+        _int(config["flags"], 0, 2**32 - 1, f"{where}.flags")
     peers = config.get("peers", [])
     if type(peers) is not list or len(peers) > 16:
         raise InvalidConfig(f"{where}.peers: expected at most 16 peers")
     for i, peer in enumerate(peers):
         pw = f"{where}.peers[{i}]"
-        if type(peer) is not dict or "public_key" not in peer or not set(peer) <= PEER_FIELDS:
-            raise InvalidConfig(f"{pw}: needs public_key; fields must be a subset of {sorted(PEER_FIELDS)}")
-        _key(peer["public_key"], f"{pw}.public_key")
-        for flag in ("remove", "update_only", "replace_allowed_ips"):
+        if type(peer) is not dict or not set(peer) <= PEER_FIELDS:
+            raise InvalidConfig(f"{pw}: fields must be a subset of {sorted(PEER_FIELDS)}")
+        if "public_key" in peer:
+            _key(peer["public_key"], f"{pw}.public_key")
+        for flag in PEER_FLAG_FIELDS:
             if flag in peer:
                 _bool(peer[flag], f"{pw}.{flag}")
+        if "flags" in peer:
+            if any(flag in peer for flag in PEER_FLAG_FIELDS):
+                raise InvalidConfig(f"{pw}.flags: exclusive with {PEER_FLAG_FIELDS}")
+            _int(peer["flags"], 0, 2**32 - 1, f"{pw}.flags")
+        if "protocol_version" in peer:
+            _int(peer["protocol_version"], 0, 2**32 - 1, f"{pw}.protocol_version")
+        if "malformed" in peer and peer["malformed"] != "not_nested":
+            raise InvalidConfig(f"{pw}.malformed: expected \"not_nested\"")
         if "preshared_key" in peer:
             _key(peer["preshared_key"], f"{pw}.preshared_key")
         if "endpoint" in peer:
-            _address(peer["endpoint"], f"{pw}.endpoint", True)
+            _endpoint(peer["endpoint"], f"{pw}.endpoint")
         if "keepalive" in peer:
             _int(peer["keepalive"], 0, 65535, f"{pw}.keepalive")
         ips = peer.get("allowed_ips", [])
         if type(ips) is not list or len(ips) > 32:
             raise InvalidConfig(f"{pw}.allowed_ips: expected at most 32 entries")
         for j, ip in enumerate(ips):
-            _address(ip, f"{pw}.allowed_ips[{j}]", False)
+            _allowed_ip(ip, f"{pw}.allowed_ips[{j}]")
     return config
 
 
@@ -117,17 +201,48 @@ def _attr(kind, data, nested=False):
 
 def _sockaddr(endpoint):
     addr = bytes.fromhex(endpoint["addr"])
-    if endpoint["family"] == 4:   # struct sockaddr_in
-        return struct.pack("=H", AF_INET) + struct.pack("!H", endpoint["port"]) + addr + b"\0" * 8
-    # struct sockaddr_in6: family, port, flowinfo, addr, scope_id
-    return struct.pack("=H", AF_INET6) + struct.pack("!HI", endpoint["port"], 0) + addr + struct.pack("=I", 0)
+    family = endpoint.get("af", AF_INET if endpoint["family"] == 4 else AF_INET6)
+    if endpoint["family"] == 4:   # struct sockaddr_in (sin_zero always zero, section 5)
+        data = struct.pack("=H", family) + struct.pack("!H", endpoint["port"]) + addr + b"\0" * 8
+    else:   # struct sockaddr_in6: family, port, flowinfo (network order), addr, scope_id
+        data = struct.pack("=H", family) + struct.pack("!HI", endpoint["port"], endpoint.get("flowinfo", 0)) \
+            + addr + struct.pack("=I", endpoint.get("scope_id", 0))
+    length = endpoint.get("len", len(data))
+    return (data + b"\0" * length)[:length]
 
 
-def encode_set(config):
-    """Attribute payload of WG_CMD_SET_DEVICE for `wg0`."""
+def _device_attrs(device):
+    """WGDEVICE_A_IFNAME and/or WGDEVICE_A_IFINDEX, in that order."""
+    device = validate_device(device)
+    out = b""
+    if "ifname" in device:
+        out += _attr(DEV_IFNAME, device["ifname"].encode() + b"\0")
+    if "ifindex" in device:
+        out += _attr(DEV_IFINDEX, struct.pack("=I", device["ifindex"]))
+    return out
+
+
+def _allowed_ip_attrs(ip):
+    entry = b""
+    if "family" in ip:
+        entry += _attr(AIP_FAMILY, struct.pack("=H", ip.get("af", AF_INET if ip["family"] == 4 else AF_INET6)))
+    elif "af" in ip:
+        entry += _attr(AIP_FAMILY, struct.pack("=H", ip["af"]))
+    if "addr" in ip:
+        entry += _attr(AIP_IPADDR, bytes.fromhex(ip["addr"]))
+    if "cidr" in ip:
+        entry += _attr(AIP_CIDR, struct.pack("=B", ip["cidr"]))
+    return _attr(0, entry, nested="malformed" not in ip)
+
+
+def encode_set(config, device=None):
+    """Attribute payload of WG_CMD_SET_DEVICE for the selected device (wg0 by
+    name when `device` is None)."""
     validate_config(config)
-    out = _attr(DEV_IFNAME, IFNAME.encode() + b"\0")
-    if config.get("replace_peers"):
+    out = _device_attrs(device)
+    if "flags" in config:
+        out += _attr(DEV_FLAGS, struct.pack("=I", config["flags"]))
+    elif config.get("replace_peers"):
         out += _attr(DEV_FLAGS, struct.pack("=I", DEVICE_F_REPLACE_PEERS))
     if "private_key" in config:
         out += _attr(DEV_PRIVATE_KEY, bytes.fromhex(config["private_key"]))
@@ -138,12 +253,19 @@ def encode_set(config):
     if "peers" in config:
         peers = b""
         for peer in config["peers"]:
-            body = _attr(PEER_PUBLIC_KEY, bytes.fromhex(peer["public_key"]))
-            flags = (PEER_F_REMOVE_ME if peer.get("remove") else 0) | \
-                    (PEER_F_UPDATE_ONLY if peer.get("update_only") else 0) | \
-                    (PEER_F_REPLACE_ALLOWEDIPS if peer.get("replace_allowed_ips") else 0)
-            if flags:
+            body = b""
+            if "public_key" in peer:
+                body += _attr(PEER_PUBLIC_KEY, bytes.fromhex(peer["public_key"]))
+            if "flags" in peer:
+                flags = peer["flags"]
+            else:
+                flags = (PEER_F_REMOVE_ME if peer.get("remove") else 0) | \
+                        (PEER_F_UPDATE_ONLY if peer.get("update_only") else 0) | \
+                        (PEER_F_REPLACE_ALLOWEDIPS if peer.get("replace_allowed_ips") else 0)
+            if flags or "flags" in peer:
                 body += _attr(PEER_FLAGS, struct.pack("=I", flags))
+            if "protocol_version" in peer:
+                body += _attr(PEER_PROTOCOL_VERSION, struct.pack("=I", peer["protocol_version"]))
             if "preshared_key" in peer:
                 body += _attr(PEER_PRESHARED_KEY, bytes.fromhex(peer["preshared_key"]))
             if "endpoint" in peer:
@@ -151,22 +273,16 @@ def encode_set(config):
             if "keepalive" in peer:
                 body += _attr(PEER_KEEPALIVE, struct.pack("=H", peer["keepalive"]))
             if "allowed_ips" in peer:
-                ips = b""
-                for ip in peer["allowed_ips"]:
-                    family = AF_INET if ip["family"] == 4 else AF_INET6
-                    entry = _attr(AIP_FAMILY, struct.pack("=H", family)) + \
-                        _attr(AIP_IPADDR, bytes.fromhex(ip["addr"])) + \
-                        _attr(AIP_CIDR, struct.pack("=B", ip["cidr"]))
-                    ips += _attr(0, entry, nested=True)
+                ips = b"".join(_allowed_ip_attrs(ip) for ip in peer["allowed_ips"])
                 body += _attr(PEER_ALLOWEDIPS, ips, nested=True)
-            peers += _attr(0, body, nested=True)
+            peers += _attr(0, body, nested="malformed" not in peer)
         out += _attr(DEV_PEERS, peers, nested=True)
     return out
 
 
-def encode_get():
-    """Attribute payload of WG_CMD_GET_DEVICE (a dump) for `wg0`."""
-    return _attr(DEV_IFNAME, IFNAME.encode() + b"\0")
+def encode_get(device=None):
+    """Attribute payload of WG_CMD_GET_DEVICE (a dump) for the selected device."""
+    return _device_attrs(device)
 
 
 def _attrs(data, where):
@@ -201,15 +317,20 @@ def _set(target, key, value, where):
 
 
 def _decode_endpoint(data):
+    """The dumped `struct endpoint`: a sockaddr_in whose `sin_zero` must be
+    zero (fail-noisy: no client sets it, section 5), or a sockaddr_in6 with
+    its `sin6_flowinfo` (network order) and `sin6_scope_id`, which the
+    kernel stores from the set and returns (netlink.c:153-156)."""
     if len(data) < 2:
         raise InvalidConfig("endpoint: truncated")
     family = struct.unpack_from("=H", data)[0]
     if family == AF_INET and len(data) == 16:
+        if data[8:16] != b"\0" * 8:
+            raise InvalidConfig("endpoint: nonzero sin_zero")
         return {"family": 4, "addr": data[4:8].hex(), "port": struct.unpack_from("!H", data, 2)[0]}
     if family == AF_INET6 and len(data) == 28:
-        # W5 (2.5): the scope id (host order), nonzero for a link-local endpoint
         return {"family": 6, "addr": data[8:24].hex(), "port": struct.unpack_from("!H", data, 2)[0],
-                "scope": struct.unpack_from("=I", data, 24)[0]}
+                "flowinfo": struct.unpack_from("!I", data, 4)[0], "scope_id": struct.unpack_from("=I", data, 24)[0]}
     raise InvalidConfig(f"endpoint family {family} length {len(data)}")
 
 

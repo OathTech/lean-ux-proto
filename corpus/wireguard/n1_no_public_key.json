@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "id": "n1_no_public_key",
+  "ops": [
+    {
+      "op": "wg_set",
+      "config": {
+        "private_key": "1111111111111111111111111111111111111111111111111111111111111111",
+        "listen_port": 51820
+      }
+    },
+    {
+      "op": "wg_set",
+      "config": {
+        "peers": [
+          {
+            "allowed_ips": [
+              {
+                "family": 4,
+                "addr": "0a000000",
+                "cidr": 8
+              }
+            ],
+            "endpoint": {
+              "family": 4,
+              "addr": "7f000001",
+              "port": 51999
+            }
+          }
+        ]
+      }
+    },
+    {
+      "op": "wg_get"
+    }
+  ]
+}

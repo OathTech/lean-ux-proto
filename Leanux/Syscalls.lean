@@ -5,6 +5,7 @@ import Leanux.FS.Close
 import Leanux.FS.Inode
 import Leanux.FS.PipeCreate
 import Leanux.Env
+import Leanux.WG.NetlinkDump
 
 /-!
 # System call entry and return to user mode
@@ -40,7 +41,7 @@ inductive Syscall where
   | wgSet (attrs : WG.DeviceAttrs)
   /-- `sendmsg` of a WG_CMD_GET_DEVICE dump request, then `recvmsg` of the
       dump; the device state goes to `extraOut`. -/
-  | wgGet
+  | wgGet (device : WG.DeviceRef)
   /-- `ioctl(6, SIOCSIFFLAGS, flags | IFF_UP)` on the fixture's sender. -/
   | wgUp
   /-- `sendto` of a UDP datagram (`payload`) from the fixture's sender to `addr`
@@ -155,8 +156,8 @@ def dispatch : Syscall → M Int
   | .pipe2 flags => sysPipe2 flags
   | .fcntl fd cmd arg => sysFcntl fd cmd arg
   | .wgSet attrs => netlinkRequest (WG.wgSetDevice attrs)
-  | .wgGet => netlinkRequest do
-    match ← WG.wgGetDevice with
+  | .wgGet device => netlinkRequest do
+    match ← WG.wgGetDevice device with
     | .error e => return e
     | .ok device =>
       modify fun w => { w with extraOut := [("device", device)] }

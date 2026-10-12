@@ -28,55 +28,100 @@ def WGPEER_F_REPLACE_ALLOWEDIPS : UInt32 := 2
 def WGPEER_F_UPDATE_ONLY : UInt32 := 4
 def WGPEER_F_ALL : UInt32 := 7
 
-/-- One nested `WGALLOWEDIP_A_*` list. -/
+/-- One nested `WGALLOWEDIP_A_*` list (W1: any subset of the three). -/
 structure AllowedIpAttrs where
-  family : Nat    -- WGALLOWEDIP_A_FAMILY
-  addr : Nat      -- WGALLOWEDIP_A_IPADDR, as the big-endian integer of its bytes
-  addrLen : Nat   -- nla_len(WGALLOWEDIP_A_IPADDR)
-  cidr : Nat      -- WGALLOWEDIP_A_CIDR_MASK (u8)
+  family : Option Nat    -- WGALLOWEDIP_A_FAMILY (u16, the wire value)
+  addr : Option Nat      -- WGALLOWEDIP_A_IPADDR, as the big-endian integer of its bytes
+  addrLen : Nat          -- nla_len(WGALLOWEDIP_A_IPADDR); 0 without the attribute
+  cidr : Option Nat      -- WGALLOWEDIP_A_CIDR_MASK (u8)
   deriving Repr
 
-/-- `WGPEER_A_ENDPOINT`: a `sockaddr_in` or `sockaddr_in6` with zero flow
-    information and scope. -/
+/-- An entry of `WGPEER_A_ALLOWEDIPS`: parsed, or without `NLA_F_NESTED`,
+    which `nla_parse_nested` rejects with `-EINVAL` before any attribute is
+    read (include/net/netlink.h:1315-1318; the one sanctioned malformation,
+    W1 2.2). -/
+inductive AllowedIpEntry
+  | malformed
+  | attrs (a : AllowedIpAttrs)
+  deriving Repr
+
+/-- `WGPEER_A_ENDPOINT`: `len` bytes whose `sa_family` is `family`; a
+    `sockaddr_in` (`len` 16) or a `sockaddr_in6` (`len` 28) with its
+    `sin6_flowinfo` and `sin6_scope_id`. Any other length or family is
+    ignored by `set_peer` (netlink.c:441-447). -/
 structure EndpointAttr where
   len : Nat
   family : Nat
   addr : Nat
   port : Nat
+  flowinfo : Nat := 0
+  scope : Nat := 0
   deriving Repr
 
 /-- One nested `WGPEER_A_*` list. -/
 structure PeerAttrs where
-  publicKey : Key
+  publicKey : Option Key := none
   presharedKey : Option Key := none
   flags : Option UInt32 := none
+  protocolVersion : Option Nat := none
   endpoint : Option EndpointAttr := none
   keepalive : Option Nat := none
-  allowedIps : Option (List AllowedIpAttrs) := none
+  allowedIps : Option (List AllowedIpEntry) := none
   deriving Repr
 
-/-- The `WGDEVICE_A_*` attributes after `WGDEVICE_A_IFNAME`. -/
+/-- An entry of `WGDEVICE_A_PEERS`: parsed, or without `NLA_F_NESTED`. -/
+inductive PeerEntry
+  | malformed
+  | attrs (a : PeerAttrs)
+  deriving Repr
+
+/-- The device selector (`WGDEVICE_A_IFNAME`, `WGDEVICE_A_IFINDEX`): the
+    harness sends wg0 by name unless the trace says otherwise. -/
+structure DeviceRef where
+  ifname : Option String := some "wg0"
+  ifindex : Option Nat := none
+  deriving Repr
+
+/-- The `WGDEVICE_A_*` attributes. -/
 structure DeviceAttrs where
+  device : DeviceRef := {}
   flags : Option UInt32 := none
   privateKey : Option Key := none
   listenPort : Option Nat := none
   fwmark : Option Nat := none
-  peers : Option (List PeerAttrs) := none
+  peers : Option (List PeerEntry) := none
   deriving Repr
 
-/-- lookup_interface (netlink.c:52-73) for the harness's `WGDEVICE_A_IFNAME`
-    of the fixture's device. -/
-def lookupInterface : M (Except Int Unit) := do
+/-- The socket's namespace's device table as `lookup_interface` reads it:
+    the fixture's devices (`World.fixtureNetDevices`, from `Env`) and wg0 at
+    its current ifindex with kind "wireguard" when it exists (`Kernel.wg`:
+    L's bare fixture and `wg_delete` leave none). -/
+def netDevices : M (List (String × Nat × Option String)) := do
+  let fixture := (← get).fixtureNetDevices
+  match (← getK).wg with
+  | some d => return fixture ++ [(d.ifname, d.ifindex, some "wireguard")]
+  | none => return fixture
+
+/-- lookup_interface (netlink.c:52-73). `dev_get_by_index` and
+    `dev_get_by_name` are cut points over the device table. -/
+def lookupInterface (ref : DeviceRef) : M (Except Int Unit) := do
   -- `!attrs[WGDEVICE_A_IFINDEX] == !attrs[WGDEVICE_A_IFNAME]`
-  if ← branch .lookupBothOrNeither false then return .error (-EBADR)
-  if ← branch .lookupHasIfindex false then unsupported "lookup by ifindex"
-  _ ← branch .lookupHasIfname true
-  -- dev_get_by_name finds wg0 unless the trace's fixture has none (L: a bare
-  -- fixture, or after wg_delete); its rtnl_link_ops kind is "wireguard"
-  if ← branch .lookupNoDev (← getK).wg.isNone then return .error (-ENODEV)
-  if ← orM (branch .lookupNoLinkOps false) (orM (branch .lookupNoKind false)
-      (branch .lookupKindMismatch false)) then
-    return .error (-EOPNOTSUPP)
+  if ← branch .lookupBothOrNeither (ref.ifindex.isSome == ref.ifname.isSome) then return .error (-EBADR)
+  let devs ← netDevices
+  let row ← do
+    if ← branch .lookupHasIfindex ref.ifindex.isSome then
+      pure (devs.find? fun r => some r.2.1 == ref.ifindex)
+    else
+      _ ← branch .lookupHasIfname true
+      pure (devs.find? fun r => some r.1 == ref.ifname)
+  if ← branch .lookupNoDev row.isNone then return .error (-ENODEV)
+  let some (_, _, kind) := row | invariant "unreachable"
+  -- `!dev->rtnl_link_ops || !dev->rtnl_link_ops->kind || strcmp(kind, "wireguard")`:
+  -- `lo` has no link ops; `!kind` is structurally false (every registered
+  -- rtnl_link_ops sets .kind, rtnetlink.c:499-522; W1 2.1); `sit0` is "sit"
+  let notWireguard ← orM (branch .lookupNoLinkOps kind.isNone) (orM (branch .lookupNoKind false)
+      (branch .lookupKindMismatch (kind != some "wireguard")))
+  if ← branch .lookupNotWireguard notWireguard then return .error (-EOPNOTSUPP)
   return .ok ()
 
 /-- set_port (netlink.c:314-327). -/
@@ -94,14 +139,17 @@ def setPort (port : Nat) : M Int := do
 
 /-- set_allowedip (netlink.c:329-355). -/
 def setAllowedip (pid : PeerId) (ip : AllowedIpAttrs) : M Int := do
-  if ← orM (branch .aipNoFamily false) (orM (branch .aipNoAddr false) (branch .aipNoCidr false)) then
+  if ← orM (branch .aipNoFamily ip.family.isNone) (orM (branch .aipNoAddr ip.addr.isNone) (branch .aipNoCidr ip.cidr.isNone)) then
     return -EINVAL
-  if ← andM (branch .aipV4Family (ip.family == AF_INET))
-      (andM (branch .aipV4Cidr (ip.cidr ≤ 32)) (branch .aipV4Len (ip.addrLen == 4))) then
-    return ← insert 4 ip.addr ip.cidr pid
-  if ← andM (branch .aipV6Family (ip.family == AF_INET6))
-      (andM (branch .aipV6Cidr (ip.cidr ≤ 128)) (branch .aipV6Len (ip.addrLen == 16))) then
-    return ← insert 6 ip.addr ip.cidr pid
+  let family := ip.family.getD 0
+  let addr := ip.addr.getD 0
+  let cidr := ip.cidr.getD 0
+  if ← andM (branch .aipV4Family (family == AF_INET))
+      (andM (branch .aipV4Cidr (cidr ≤ 32)) (branch .aipV4Len (ip.addrLen == 4))) then
+    return ← insert 4 addr cidr pid
+  if ← andM (branch .aipV6Family (family == AF_INET6))
+      (andM (branch .aipV6Cidr (cidr ≤ 128)) (branch .aipV6Len (ip.addrLen == 16))) then
+    return ← insert 6 addr cidr pid
   return -EINVAL
 
 /-- set_peer (netlink.c:357-491). -/
@@ -110,24 +158,26 @@ def setPeerCmd (a : PeerAttrs) : M Int := do
     peerPut peer
     _ ← branch .peerZeroPsk a.presharedKey.isSome   -- memzero_explicit
     return ret
-  -- the policy guarantees the exact key lengths
-  if !(← andM (branch .peerHasPubkey true) (branch .peerPubkeyLen true)) then return ← out none (-EINVAL)
+  -- the policy guarantees the exact key length (P8); the attribute may be absent
+  if !(← andM (branch .peerHasPubkey a.publicKey.isSome) (branch .peerPubkeyLen true)) then return ← out none (-EINVAL)
+  let some publicKey := a.publicKey | invariant "unreachable"
   let psk ← do
     if ← andM (branch .peerHasPsk a.presharedKey.isSome) (branch .peerPskLen true) then pure a.presharedKey
     else pure none
   let mut flags : UInt32 := 0
   if ← branch .peerHasFlags a.flags.isSome then flags := a.flags.getD 0
   if ← branch .peerBadFlags (flags &&& ~~~WGPEER_F_ALL != 0) then return ← out none (-EOPNOTSUPP)
-  if ← branch .peerHasProtocol false then unsupported "WGPEER_A_PROTOCOL_VERSION"
-  let mut peer ← pubkeyLookup a.publicKey
+  if ← branch .peerHasProtocol a.protocolVersion.isSome then
+    if ← branch .peerBadProtocol (a.protocolVersion != some 1) then return ← out none (-EPFNOSUPPORT)
+  let mut peer ← pubkeyLookup publicKey
   if ← branch .peerNotFound peer.isNone then
     if ← branch .peerNewRemoveOrUpdate (flags &&& (WGPEER_F_REMOVE_ME ||| WGPEER_F_UPDATE_ONLY) != 0) then
       return ← out none 0
     flags := flags &&& ~~~WGPEER_F_REPLACE_ALLOWEDIPS
     let id := (← getDev).staticIdentity
-    if ← andM (branch .peerSelfHasIdentity id.hasIdentity) (branch .peerSelfKeyMatch (a.publicKey == id.staticPublic)) then
+    if ← andM (branch .peerSelfHasIdentity id.hasIdentity) (branch .peerSelfKeyMatch (publicKey == id.staticPublic)) then
       return ← out none 0
-    match ← peerCreate a.publicKey psk with
+    match ← peerCreate publicKey psk with
     | .error e =>
       _ ← branch .peerCreateErr true
       return ← out none e
@@ -143,18 +193,25 @@ def setPeerCmd (a : PeerAttrs) : M Int := do
     setPeer pid { (← getPeer pid) with presharedKey := psk.getD [] }
   if ← branch .peerHasEndpoint a.endpoint.isSome then
     let some e := a.endpoint | invariant "unreachable"
+    -- `endpoint.addr4 = *(struct sockaddr_in *)addr` (sin_zero is zero, W1 5);
+    -- `endpoint.addr6 = *(struct sockaddr_in6 *)addr` copies flowinfo and scope
     if ← andM (branch .peerEndpointV4Len (e.len == 16)) (branch .peerEndpointV4Family (e.family == AF_INET)) then
       setPeerEndpoint pid { family := e.family, addr := e.addr, port := e.port }
     else if ← andM (branch .peerEndpointV6Len (e.len == 28)) (branch .peerEndpointV6Family (e.family == AF_INET6)) then
-      setPeerEndpoint pid { family := e.family, addr := e.addr, port := e.port }
+      setPeerEndpoint pid { family := e.family, addr := e.addr, port := e.port, scope := e.scope, flowinfo := e.flowinfo }
   if ← branch .peerReplaceAips (flags &&& WGPEER_F_REPLACE_ALLOWEDIPS != 0) then removeByPeer pid
   let mut ret : Int := 0
   if ← branch .peerHasAips a.allowedIps.isSome then
-    for ip in a.allowedIps.getD [] do
+    for entry in a.allowedIps.getD [] do
       _ ← branch .peerAipsIter true
-      if ← branch .peerAipParseErr false then unsupported "unreachable"
-      ret ← setAllowedip pid ip
-      if ← branch .peerAipErr (ret < 0) then return ← out peer ret
+      match entry with
+      | .malformed =>   -- nla_parse_nested: NLA_F_NESTED missing, -EINVAL
+        _ ← branch .peerAipParseErr true
+        return ← out peer (-EINVAL)
+      | .attrs ip =>
+        _ ← branch .peerAipParseErr false
+        ret ← setAllowedip pid ip
+        if ← branch .peerAipErr (ret < 0) then return ← out peer ret
     _ ← branch .peerAipsIter false
   let running := (← getDev).running
   if ← branch .peerHasKeepalive a.keepalive.isSome then
@@ -173,7 +230,7 @@ def wgSetDevice (a : DeviceAttrs) : M Int := do
   let zero (ret : Int) : M Int := do
     _ ← branch .setDevZeroKey a.privateKey.isSome   -- memzero_explicit
     return ret
-  let wg ← lookupInterface
+  let wg ← lookupInterface a.device
   if ← branch .setDevLookupErr (wg matches .error _) then
     let .error e := wg | invariant "unreachable"
     return ← zero e
@@ -220,149 +277,17 @@ def wgSetDevice (a : DeviceAttrs) : M Int := do
         if ← branch .setDevSendStagedPeer sendStaged then sendStagedPackets pid
       _ ← branch .setDevKeyPeerIter false
   if ← branch .setDevHasPeers a.peers.isSome then
-    for p in a.peers.getD [] do
+    for entry in a.peers.getD [] do
       _ ← branch .setDevPeersIter true
-      if ← branch .setDevParseErr false then unsupported "unreachable"
-      let ret ← setPeerCmd p
-      if ← branch .setDevSetPeerErr (ret < 0) then return ← zero ret
+      match entry with
+      | .malformed =>   -- nla_parse_nested: NLA_F_NESTED missing, -EINVAL
+        _ ← branch .setDevParseErr true
+        return ← zero (-EINVAL)
+      | .attrs p =>
+        _ ← branch .setDevParseErr false
+        let ret ← setPeerCmd p
+        if ← branch .setDevSetPeerErr (ret < 0) then return ← zero ret
     _ ← branch .setDevPeersIter false
   zero 0
-
-/-! ## WG_CMD_GET_DEVICE -/
-
-private def hexDigit (n : Nat) : Char := "0123456789abcdef".toList[n % 16]!
-
-def hexKey (k : Key) : String :=
-  String.ofList (k.flatMap fun b => [hexDigit (b.toNat / 16), hexDigit b.toNat])
-
-/-- `len` bytes of `n`, big-endian, as lowercase hex. -/
-def hexBE (n len : Nat) : String :=
-  String.ofList ((List.range len).reverse.flatMap fun i =>
-    let b := n / 256 ^ i % 256
-    [hexDigit (b / 16), hexDigit b])
-
-/-- A conservative bound on the dump's single message: every netlink skb the
-    dump can get holds at least `NLMSG_GOODSIZE` (about 3.7 KiB) bytes. -/
-def DUMP_BOUND : Nat := 3000
-
-/-- The dump message's size: netlink and genetlink headers, then the
-    attributes `wg_get_device_dump` and `get_peer` put. -/
-def dumpSize (d : Device) : M Nat := do
-  let mut size := 16 + 4 + 8 + 8 + 8 + 8 + 4   -- headers, port, fwmark, ifindex, "wg0", peers nest
-  if d.staticIdentity.hasIdentity then size := size + 72
-  for pid in d.peerList do
-    let p ← getPeer pid
-    size := size + 4 + 36 + 36 + 20 + 8 + 12 + 12 + 8
-    size := size + match p.endpoint with
-      | some e => if e.family == AF_INET then 20 else 32
-      | none => 0
-    if !p.allowedipsList.isEmpty then size := size + 4
-    for id in p.allowedipsList do
-      size := size + 4 + 8 + 8 + (if (← getNode id).bitlen == 32 then 8 else 20)
-  return size
-
-/-- get_allowedips (netlink.c:75-94), after wg_allowedips_read_node. -/
-def getAllowedips (family masked cidr : Nat) : M Json := do
-  _ ← branch .getAipNoNest false
-  _ ← branch .getAipPutCidr false
-  _ ← branch .getAipPutFamily false
-  let inet6 ← branch .getAipFamily6 (family == 6)   -- sizeof(in6_addr) or sizeof(in_addr)
-  _ ← branch .getAipPutAddr false
-  return Json.mkObj [("family", toJson family), ("addr", toJson (hexBE masked (if inet6 then 16 else 4))),
-    ("cidr", toJson cidr)]
-
-/-- A `struct timespec64` (16 bytes: `tv_sec`, `tv_nsec`, little-endian
-    s64) as the `__kernel_timespec` the dump puts (netlink.c:124-138). -/
-def timespec (ts : List UInt8) : List Int :=
-  let s64 (bs : List UInt8) : Int :=
-    let u : Nat := bs.foldr (fun b acc => acc * 256 + b.toNat) 0
-    if u ≥ 2 ^ 63 then (u : Int) - (2 ^ 64 : Int) else (u : Int)
-  [s64 (ts.take 8), s64 ((ts.drop 8).take 8)]
-
-/-- get_peer (netlink.c:105-197) on a fresh cursor. -/
-def getPeerDump (pid : PeerId) : M Json := do
-  let p ← getPeer pid
-  _ ← branch .getPeerNoNest false
-  _ ← branch .getPeerPubkeyFail false
-  _ ← branch .getPeerFirst true   -- ctx->next_allowedip is NULL
-  _ ← branch .getPeerPskFail false
-  _ ← branch .getPeerPutHandshake false
-  _ ← branch .getPeerPutKeepalive false
-  _ ← branch .getPeerPutTx false
-  _ ← branch .getPeerPutRx false
-  _ ← branch .getPeerPutProto false
-  let family := p.endpoint.map (·.family) |>.getD 0
-  if !(← branch .getPeerEp4 (family == AF_INET)) then _ ← branch .getPeerEp6 (family == AF_INET6)
-  _ ← branch .getPeerEpFail false
-  let mut ips : Array Json := #[]
-  if !(← branch .getPeerNoAips p.allowedipsList.isEmpty) then
-    _ ← branch .getPeerSeqUnset true   -- ctx->allowedips_seq is 0 on a fresh peer
-    _ ← branch .getPeerAipsNestFail false
-    for id in p.allowedipsList do
-      _ ← branch .getPeerAipIter true
-      let (family, masked, cidr) ← readNode (← getNode id)
-      ips := ips.push (← getAllowedips family masked cidr)
-      _ ← branch .getPeerAipFail false
-    _ ← branch .getPeerAipIter false
-  let endpoint := match p.endpoint with
-    | some e =>
-      let v4 := e.family == AF_INET
-      [("endpoint", Json.mkObj ([("family", toJson (if v4 then 4 else 6)),
-        ("addr", toJson (hexBE e.addr (if v4 then 4 else 16))), ("port", toJson e.port)]
-        -- W5 (2.5): `sin6_scope_id` of an IPv6 endpoint (the dump's sockaddr_in6)
-        ++ (if v4 then [] else [("scope", toJson e.scope)])))]
-    | none => []
-  return Json.mkObj ([("public_key", toJson (hexKey p.remoteStatic)),
-    ("preshared_key", toJson (hexKey p.presharedKey)),
-    ("last_handshake", toJson (timespec p.walltimeLastHandshake)), ("keepalive", toJson p.persistentKeepaliveInterval),
-    ("tx_bytes", toJson p.txBytes), ("rx_bytes", toJson p.rxBytes), ("protocol_version", toJson 1)] ++ endpoint ++
-    [("allowed_ips", Json.arr ips)])
-
-/-- A WG_CMD_GET_DEVICE dump: wg_get_device_start (199-208), one
-    wg_get_device_dump (210-302) that completes the dump, and
-    wg_get_device_done (304-312). Returns the canonical device state. -/
-def wgGetDevice : M (Except Int Json) := do
-  let wg ← lookupInterface
-  if ← branch .getStartErr (wg matches .error _) then
-    let .error e := wg | invariant "unreachable"
-    return .error e
-  let d ← getDev
-  -- the handshake worker updates tx_bytes
-  for pid in d.peerList do requireNotPending pid "dumping the peer"
-  if (← dumpSize d) > DUMP_BOUND then unsupported "dump larger than one message"
-  _ ← branch .dumpNoHdr false
-  _ ← branch .dumpFirst true   -- ctx->next_peer is NULL
-  _ ← branch .dumpPutPort false
-  _ ← branch .dumpPutFwmark false
-  _ ← branch .dumpPutIfindex false
-  _ ← branch .dumpPutIfname false
-  let identity := d.staticIdentity
-  if ← branch .dumpHasIdentity identity.hasIdentity then
-    _ ← branch .dumpPutPrivate false
-    _ ← branch .dumpPutPublic false
-  _ ← branch .dumpNoPeersNest false
-  let mut peers : Array Json := #[]
-  if !(← orM (branch .dumpPeerListEmpty d.peerList.isEmpty)
-      (andM (branch .dumpCursorSet false) (branch .dumpCursorDead false))) then
-    for pid in d.peerList do
-      _ ← branch .dumpPeerIter true
-      peers := peers.push (← getPeerDump pid)
-      _ ← branch .dumpGetPeerFail false
-    _ ← branch .dumpPeerIter false
-  -- out: `!ret && !done && next_peer_cursor`
-  _ ← andM (branch .dumpOutRetZero true) (andM (branch .dumpOutNotDone false) (branch .dumpOutHasCursor false))
-  peerPut none   -- wg_peer_put(ctx->next_peer)
-  _ ← branch .dumpRetErr false
-  _ ← branch .dumpDone true
-  -- wg_get_device_done
-  _ ← branch .getDoneHasWg true
-  peerPut none
-  let keys := if identity.hasIdentity then
-      [("private_key", toJson (hexKey identity.staticPrivate)),
-       ("public_key", toJson (hexKey identity.staticPublic))]
-    else []
-  return .ok (Json.mkObj ([("ifindex", toJson d.ifindex), ("ifname", toJson d.ifname),
-    ("listen_port", toJson d.incomingPort), ("fwmark", toJson d.fwmark)] ++ keys ++
-    [("peers", Json.arr peers)]))
 
 end Leanux.WG

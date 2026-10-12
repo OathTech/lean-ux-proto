@@ -108,7 +108,7 @@ inductive Decision where
   | setEndpointV4 | setEndpointV6
   -- drivers/net/wireguard/netlink.c
   | lookupBothOrNeither | lookupHasIfindex | lookupHasIfname | lookupNoDev | lookupNoLinkOps
-  | lookupNoKind | lookupKindMismatch | getAipNoNest | getAipPutCidr | getAipPutFamily
+  | lookupNoKind | lookupKindMismatch | lookupNotWireguard | getAipNoNest | getAipPutCidr | getAipPutFamily
   | getAipFamily6 | getAipPutAddr | getPeerNoNest | getPeerPubkeyFail | getPeerFirst
   | getPeerPskFail | getPeerPutHandshake | getPeerPutKeepalive | getPeerPutTx | getPeerPutRx
   | getPeerPutProto | getPeerEp4 | getPeerEp6 | getPeerEpFail | getPeerNoAips
@@ -733,8 +733,12 @@ def Decision.info : Decision → DecisionInfo
   | .lookupNoLinkOps => d "lookup_interface.no_link_ops" wnl 67 [] []
   | .lookupNoKind => d "lookup_interface.no_kind" wnl 67 [] []
   -- L: 72's point is the epilogue the `-ENODEV` return also runs (a bare
-  -- fixture's or a deleted wg0's lookup covers it): no witness of its own
-  | .lookupKindMismatch => d "lookup_interface.kind_mismatch" wnl 68 [(69, 70)] []
+  -- fixture's or a deleted wg0's lookup covers it): no witness of its own.
+  -- W1: the three operands of the `||` at 67-68 are short-circuited, so
+  -- none of them owns the body at 69-70 (`lo` enters it from the first,
+  -- `sit0` from the third); the whole condition does (`lookupNotWireguard`)
+  | .lookupKindMismatch => d "lookup_interface.kind_mismatch" wnl 68 [] []
+  | .lookupNotWireguard => d "lookup_interface.not_wireguard" wnl 67 [(69, 70)] []
   | .getAipNoNest => d "get_allowedips.no_nest" wnl 81 [(82, 82)] [(84, 84)]
   | .getAipPutCidr => d "get_allowedips.put_cidr_failed" wnl 84 [] [(85, 85)]
   | .getAipPutFamily => d "get_allowedips.put_family_failed" wnl 85 [] [(86, 86)]
