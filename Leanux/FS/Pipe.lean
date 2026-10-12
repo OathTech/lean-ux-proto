@@ -286,7 +286,8 @@ def pipePoll (fid : FileId) (wait : PollTable) : M UInt32 := do
   let p ← getPipe pid
   let (head, tail) := (p.head, p.tail)
   let mut mask : UInt32 := 0
-  if ← branchCmp .pipePollRead (hasFlag filp.fMode FMODE_READ) (filp.fMode &&& FMODE_READ).toNat 0 then
+  -- the built code reuses the :672 compare of f_mode here: no operands
+  if ← branch .pipePollRead (hasFlag filp.fMode FMODE_READ) then
     if ← branchCmp .pipePollNotEmpty (head != tail) head.toNat tail.toNat then
       mask := mask ||| EPOLLIN ||| EPOLLRDNORM
     -- `!pipe->writers && filp->f_pipe != pipe->w_counter`

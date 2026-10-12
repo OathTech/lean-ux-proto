@@ -134,10 +134,11 @@ def eventfdPoll (fid : FileId) (wait : PollTable) : M UInt32 := do
   let mut events : UInt32 := 0
   if ← branchCmp .eventfdPollCountPositive (count > 0) count.toNat 0 then
     events := events ||| EPOLLIN
-  if ← branchCmp .eventfdPollCountMax (count == ULLONG_MAX) count.toNat ULLONG_MAX.toNat then
+  -- the two tests below are threaded away by the built code when `count > 0`
+  -- was false (count is then 0): no operands
+  if ← branch .eventfdPollCountMax (count == ULLONG_MAX) then
     events := events ||| EPOLLERR
-  -- `ULLONG_MAX - 1 > count`, recorded as the canonical `count < ULLONG_MAX - 1`
-  if ← branchCmp .eventfdPollRoom (ULLONG_MAX - 1 > count) count.toNat (ULLONG_MAX - 1).toNat then
+  if ← branch .eventfdPollRoom (ULLONG_MAX - 1 > count) then
     events := events ||| EPOLLOUT
   return events
 

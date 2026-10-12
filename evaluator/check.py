@@ -265,7 +265,8 @@ def load_kcov_config():
         return (type(text) is str and text.rsplit(':', 1)[0] in config['files']
                 and text.rsplit(':', 1)[-1].isdigit())
     for exit_ in config['shared_exits']:
-        if (set(exit_) != {'function', 'frames', 'unless_covered', 'note'} or type(exit_['function']) is not str
+        if (set(exit_) - {'points'} != {'function', 'frames', 'unless_covered', 'note'} or type(exit_['function']) is not str
+                or type(exit_.get('points', 1)) is not int or exit_.get('points', 1) < 1
                 or type(exit_['frames']) is not list or len(exit_['frames']) < 2
                 or not all(anchored_line(f) for f in exit_['frames'])
                 or type(exit_['unless_covered']) is not list or not exit_['unless_covered']
@@ -1457,11 +1458,13 @@ def main(argv=None):
         decisions.update(load_decisions(config))
         instrumented, functions, chains = instrumented_lines(KERNEL / 'vmlinux', config['functions'], config['files'])
         # each declared shared exit names exactly one instrumentation point
+        # (`points`, default 1: a compiler may give the test and the join after
+        # it of one inlined helper the same chain; all of them are then exits)
         for exit_ in config['shared_exits']:
-            for chain in (exit_['frames'], exit_['unless_covered']):
-                if chains[tuple(chain)] != 1:
+            for chain, expected in ((exit_['frames'], exit_.get('points', 1)), (exit_['unless_covered'], 1)):
+                if chains[tuple(chain)] != expected:
                     raise InvalidOutput(f"shared exit {exit_['frames']}: {chain} names {chains[tuple(chain)]}"
-                                        ' instrumentation points of the listed functions, not one')
+                                        f' instrumentation points of the listed functions, not {expected}')
         kcov = (config, decisions, witness_table(decisions, instrumented, functions, config['branch_free_functions']),
                 instrumented, functions)
         observable = sum(bool(w[True] or w[False]) for w in kcov[2].values())

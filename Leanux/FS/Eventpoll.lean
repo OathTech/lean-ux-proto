@@ -571,7 +571,7 @@ def epAllocEpitem (ep : EpId) (event : EpollEvent) (tfile : FileId) (fd : Int) :
   let count := k.user.epollWatches
   let max := k.maxUserWatches
   let cmp : Int ← do
-    if ← branchCmp .percpuCounterCompareGt (count > max) count max then pure 1
+    if ← branch .percpuCounterCompareGt (count > max) then pure 1   -- folded into the `<` below
     else if ← branchCmp .percpuCounterCompareLt (count < max) count max then pure (-1)
     else pure 0
   if ← branch .epAllocEpitemOverWatches (cmp >= 0) then return .error (-ENOSPC)
@@ -706,7 +706,8 @@ def epDeliverEvent (ep : EpId) (epiId : EpiId) (pt : PollTable) : M (Int × Byte
   let bytes := next.get!
   if ← branchCmp .epDeliverEventOneshot (hasFlag epi.events EPOLLONESHOT) (epi.events &&& EPOLLONESHOT).toNat 0 then
     setEpi epiId { epi with events := epi.events &&& EP_PRIVATE_BITS }
-  else if ← branchCmp .epDeliverEventLevelTriggered (!hasFlag epi.events EPOLLET) (epi.events &&& EPOLLET).toNat 0 then
+  -- `!(events & EPOLLET)`: bit 31, the sign test `(int)events >= 0` in the built code
+  else if ← branchCmp .epDeliverEventLevelTriggered (!hasFlag epi.events EPOLLET) epi.events.toNat 0 then
     -- list_add_tail(&epi->rdllink, &ep->rdllist); ep_pm_stay_awake (empty)
     let e ← getEp ep
     setEp ep { e with rdllist := e.rdllist ++ [epiId] }
@@ -726,7 +727,7 @@ def epSendEvents (ep : EpId) (maxevents : Int) : M (Int × ByteArray) := do
   let mut broke := false
   for epiId in batch do
     _ ← branch .epSendEventsIter true
-    if ← branchCmp .epSendEventsFull (res >= maxevents) res maxevents then
+    if ← branch .epSendEventsFull (res >= maxevents) then   -- folded on the first iteration
       broke := true
       break
     let (delivered, bytes) ← epDeliverEvent ep epiId pt
@@ -765,7 +766,7 @@ def epEventsAvailable (ep : EpId) : M Bool := do
   if ← branch .epEventsAvailableRdllist (!e.rdllist.isEmpty) then return true
   if ← branch .epEventsAvailableScanning e.ovflist.isSome then
     invariant "ep_events_available while the set is scanning (a second task)"
-  if ← branchCmp .readSeqcountRetryChanged ((← getEp ep).seq != seq) (← getEp ep).seq seq then
+  if ← branchCmp .epEventsAvailableSeqRetry ((← getEp ep).seq != seq) (← getEp ep).seq seq then
     invariant "a seqcount retry at ep_events_available (a concurrent scan)"
   return false
 
@@ -787,19 +788,22 @@ def epPoll (ep : EpId) (maxevents : Int) (timeout : Option Timespec64) : M (Int 
   let eavail ← epEventsAvailable ep
   -- while (1): the first iteration; a second needs a sleep or a busy loop
   let mut result : Option (Int × ByteArray) := none
-  if ← branch .epPollEavail eavail then
+  if ← branchCmp .epPollEavail eavail (if eavail then 1 else 0) 0 then
     let (res, out) ← epSendEvents ep maxevents
-    if ← branch .epPollSent (res != 0) then result := some (res, out)
+    if ← branchCmp .epPollSent (res != 0) res 0 then result := some (res, out)
   if let some r := result then return r
-  if ← branch .epPollTimedOut timedOut then return (0, ByteArray.empty)
+  if ← branchCmp .epPollTimedOut timedOut (if timedOut then 1 else 0) 0 then return (0, ByteArray.empty)
   unsupported "epoll_wait would sleep: ep_busy_loop, signal_pending and the wait on ep->wq (tier 2)"
 
 /-- `do_epoll_wait(epfd, events, maxevents, to)` (:2641-2682). The events
     delivered go to the caller's buffer (`World.userOut`). -/
 def doEpollWait (epfd : Nat) (maxevents : Int) (to : Option Timespec64) : M Int := do
+  -- one unsigned range check in the built code, `(unsigned)(maxevents - 1) >
+  -- EP_MAX_EVENTS - 1`, its operands on the second decision
   let bad ← do
-    if ← branchCmp .doEpollWaitMaxeventsNonpositive (maxevents <= 0) maxevents 0 then pure true
-    else branchCmp .doEpollWaitMaxeventsTooMany (maxevents > EP_MAX_EVENTS) maxevents EP_MAX_EVENTS
+    if ← branch .doEpollWaitMaxeventsNonpositive (maxevents <= 0) then pure true
+    else branchCmp .doEpollWaitMaxeventsTooMany (maxevents > EP_MAX_EVENTS)
+           ((maxevents - 1) % 4294967296) (EP_MAX_EVENTS - 1)
   if bad then return -EINVAL
   -- access_ok(events, maxevents * sizeof(struct epoll_event)): the guest's buffer
   if ← branch .doEpollWaitAccessNotOk false then return -EFAULT
@@ -853,8 +857,8 @@ def epLoopCheckProc : Nat → EpId → Nat → M Nat
         else
           let sub := (← epLoopCheckProc fuel tovisit (depth + 1)) + 1
           -- max(result, sub)
-          result ← if ← branchCmp .epLoopCheckProcMax (result > sub) result sub then pure result else pure sub
-        if ← branchCmp .epLoopCheckProcOver (result > EP_MAX_NESTS) result EP_MAX_NESTS then
+          result ← if ← branch .epLoopCheckProcMax (result > sub) then pure result else pure sub   -- a MAX_EXPR
+        if ← branch .epLoopCheckProcOver (result > EP_MAX_NESTS) then   -- folded on the constant path
           broke := true
           break
       else listFile epi.file
@@ -875,7 +879,7 @@ def epGetUpwardsDepthProc : Nat → EpId → Nat → M Nat
     for epiId in e.refs do
       _ ← branch .epGetUpwardsDepthProcIter true
       let sub := (← epGetUpwardsDepthProc fuel (← getEpi epiId).ep (depth + 1)) + 1
-      result ← if ← branchCmp .epGetUpwardsDepthProcMax (result > sub) result sub then pure result else pure sub
+      result ← if ← branch .epGetUpwardsDepthProcMax (result > sub) then pure result else pure sub   -- a MAX_EXPR
     _ ← branch .epGetUpwardsDepthProcIter false
     setEp ep { (← getEp ep) with gen, loopCheckDepth := result }
     return result
@@ -901,7 +905,7 @@ private def doEpollCtlBody (fId tId : FileId) (op : Int) (fd : Int) (events : UI
   if ← branch .doEpollCtlCannotPoll (!(← fopsOf tFile.fOp).poll) then return (-EPERM, false)
   let mut events := events
   -- ep_op_has_event(op): `op != EPOLL_CTL_DEL`; ep_take_care_of_epollwakeup without CONFIG_PM_SLEEP
-  if ← branch .doEpollCtlHasEvent (op != EPOLL_CTL_DEL) then events := events &&& ~~~EPOLLWAKEUP
+  if ← branchCmp .doEpollCtlHasEvent (op != EPOLL_CTL_DEL) op EPOLL_CTL_DEL then events := events &&& ~~~EPOLLWAKEUP
   -- error = -EINVAL; `fd_file(f) == fd_file(tf) || !is_file_epoll(fd_file(f))`
   let bad ← do
     if ← branch .doEpollCtlSameFile (fId == tId) then pure true
@@ -911,8 +915,8 @@ private def doEpollCtlBody (fId tId : FileId) (op : Int) (fd : Int) (events : UI
   let exclusiveBad ← do
     if ← branch .doEpollCtlExclusiveHasEvent (op != EPOLL_CTL_DEL) then
       if ← branchCmp .doEpollCtlExclusive (hasFlag events EPOLLEXCLUSIVE) (events &&& EPOLLEXCLUSIVE).toNat 0 then
-        if ← branch .doEpollCtlExclusiveMod (op == EPOLL_CTL_MOD) then pure true
-        else if ← branch .doEpollCtlExclusiveAdd (op == EPOLL_CTL_ADD) then
+        if ← branchCmp .doEpollCtlExclusiveMod (op == EPOLL_CTL_MOD) op EPOLL_CTL_MOD then pure true
+        else if ← branchCmp .doEpollCtlExclusiveAdd (op == EPOLL_CTL_ADD) op EPOLL_CTL_ADD then
           if ← branch .doEpollCtlExclusiveTargetEpoll (isFileEpoll tFile) then pure true
           else branchCmp .doEpollCtlExclusiveBadBits (events &&& ~~~EPOLLEXCLUSIVE_OK_BITS != 0)
                  (events &&& ~~~EPOLLEXCLUSIVE_OK_BITS).toNat 0
@@ -925,7 +929,7 @@ private def doEpollCtlBody (fId tId : FileId) (op : Int) (fd : Int) (events : UI
   if ← branch .doEpollCtlLockError (error != 0) then return (error, false)
   let mut fullCheck := false
   let mut tep : Option EpId := none
-  if ← branch .doEpollCtlIsAdd (op == EPOLL_CTL_ADD) then
+  if ← branchCmp .doEpollCtlIsAdd (op == EPOLL_CTL_ADD) op EPOLL_CTL_ADD then
     let e ← getEp ep
     -- `f->f_ep || ep->gen == loop_check_gen || is_file_epoll(tf)`
     let nested ← do
@@ -948,17 +952,17 @@ private def doEpollCtlBody (fId tId : FileId) (op : Int) (fd : Int) (events : UI
   let epi ← epFind ep tId fd
   let mut error : Int := -EINVAL
   -- switch (op)
-  if ← branch .doEpollCtlCaseAdd (op == EPOLL_CTL_ADD) then
+  if ← branchCmp .doEpollCtlCaseAdd (op == EPOLL_CTL_ADD) op EPOLL_CTL_ADD then
     if ← branch .doEpollCtlAddAbsent epi.isNone then
       events := events ||| EPOLLERR ||| EPOLLHUP
       error ← epInsert ep ⟨events, data⟩ tId fd fullCheck
     else error := -EEXIST
-  else if ← branch .doEpollCtlCaseDel (op == EPOLL_CTL_DEL) then
+  else if ← branchCmp .doEpollCtlCaseDel (op == EPOLL_CTL_DEL) op EPOLL_CTL_DEL then
     if ← branch .doEpollCtlDelPresent epi.isSome then
       epRemove ep epi.get!
       error := 0
     else error := -ENOENT
-  else if ← branch .doEpollCtlCaseMod (op == EPOLL_CTL_MOD) then
+  else if ← branchCmp .doEpollCtlCaseMod (op == EPOLL_CTL_MOD) op EPOLL_CTL_MOD then
     if ← branch .doEpollCtlModPresent epi.isSome then
       let item ← getEpi epi.get!
       if ← branchCmp .doEpollCtlModNotExclusive (!hasFlag item.events EPOLLEXCLUSIVE) (item.events &&& EPOLLEXCLUSIVE).toNat 0 then
@@ -983,7 +987,7 @@ def doEpollCtl (epfd : Nat) (op : Int) (fd : Int) (events : UInt32) (data : UInt
     return -EBADF
   let (error, fullCheck) ← doEpollCtlBody f.file.get! tf.file.get! op fd events data
   -- error_tgt_fput:
-  if ← branchCmp .doEpollCtlFullCheckExit fullCheck (if fullCheck then 1 else 0) 0 then
+  if ← branch .doEpollCtlFullCheckExit fullCheck then   -- threaded away on the early exits
     clearTfileCheckList
     modifyK fun k => { k with loopCheckGen := k.loopCheckGen + 1 }
     -- mutex_unlock(&epnested_mutex)
@@ -994,7 +998,7 @@ def doEpollCtl (epfd : Nat) (op : Int) (fd : Int) (events : UInt32) (data : UInt
 /-- `SYSCALL_DEFINE4(epoll_ctl, ...)` (:2626-2636): the event is copied
     from the caller for every op but DEL (the guest's buffer is valid). -/
 def sysEpollCtl (epfd : Nat) (op : Int) (fd : Int) (events : UInt32) (data : UInt64) : M Int := do
-  if ← branch .sysEpollCtlHasEvent (op != EPOLL_CTL_DEL) then
+  if ← branchCmp .sysEpollCtlHasEvent (op != EPOLL_CTL_DEL) op EPOLL_CTL_DEL then
     if ← branch .sysEpollCtlCopyFault false then return -EFAULT
   doEpollCtl epfd op fd events data
 
