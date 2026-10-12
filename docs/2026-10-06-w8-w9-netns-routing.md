@@ -1477,6 +1477,8 @@ identity). W9's core is built; W8 is not started (section 14.4).
 | `w9_deladdr6_then_send` | the IPv6 removal keeps the default route (the second `wg_delroute 6` → ESRCH) |
 | `w9_inject_to_alias` | a response from the alias: `src4 = 127.0.0.2`, rejected by `inet_confirm_addr` at the keepalive's send (W9-M2) |
 | `w9_inject_to_wg0_addr` | a response to wg0's own address: the endpoint `10.255.254.1:51998`, the cache reset, the reply from that address (W9-M10) |
+| `w9_session_two_sends` | after the session, two data sends: the second always hits the cache (the keepalive after the endpoint's reset refreshes in the same or the next jiffy) (W9-M3) |
+| `w9_session_delroute_untouched` | IPv6 inner packets, so the IPv4 default route is never looked up before `wg_delroute 4`; the outer send after the delete hits (W9-M9) |
 
 ### 14.3 Validation
 
@@ -1538,6 +1540,22 @@ point without `SECURITY`):
   ran at the ioctl's return in one run and during the wait in eight
   others), resolved as a fixture choice rather than a placement the check
   reruns. Recorded in `docs/decisions.md`.
+
+### 14.3c Final validation on the W9 build, with the fixture order [AGENT 2026-10-12]
+
+- `evaluator.check --suite handwritten,wireguard --out .artifacts/check/w9-suites-3`:
+  **pass, 190/190**, 8983 operand pairs, no chunk retries, the `e_*`
+  traces included; trace time after `wg_up` max 3.747 s of 4.5 s
+  (`d3_retransmit_gives_up`, margin 16.7%): the moved wait adds no time.
+- Mutants (`scripts/wg-mutants.py`, the `w9_` subset, no other outcome):
+  W9-M1 rejected (2 semantic), M2 (8 hidden), M5 (1 semantic), M8 (1
+  semantic), M10 (1 semantic); M3 and M9 survived the first run (the
+  initiation's dst is expired by the up's route adds, so no send hit)
+  and are rejected (10 hidden each) on the two session traces above.
+  **7/7 rejected.**
+- Unit and replay tests: 111 OK. `lake build leanux-model` OK.
+- The ten `w9_*` traces pass alone; `s2_index_collision` and
+  `w9_inject_to_alias` pass after the repeatable and witness fixes.
 
 ### 14.4 Not done
 
