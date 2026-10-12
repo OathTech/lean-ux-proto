@@ -635,6 +635,21 @@ def Worker.timer? : Worker → Option WG.PeerTimer
   | .timerPersistentKeepalive => some .persistentKeepalive
   | _ => none
 
+/-- The queued units whose work struct lives in `struct wg_peer`
+    (`transmit_handshake_work`, `transmit_packet_work`, `clear_peer_work`):
+    their dispatch identity dies with the peer. The others live in
+    `struct wg_device` (the device-level units), in the net namespace
+    (`cleanup_net`) or nowhere (a softirq, a timer callback). -/
+def Worker.perPeer : Worker → Bool
+  | .sendWorker | .txWorker | .clearPeerWorker => true
+  | _ => false
+
+/-- The queued units whose work struct lives in `struct wg_device` or in a
+    peer: both die with the device (`free_netdev`, after `peer_remove_all`). -/
+def Worker.deviceOwned : Worker → Bool
+  | .netnsCleanup | .linkwatch => false
+  | _ => true
+
 inductive HiddenSite where
   | initEphemeral | respEphemeral | tai64nNow | indexDraw
   | resetLastSent | birthdateExpired | initLastSent | initLastSentAgain | respLastSent | respLastSentAgain
@@ -998,7 +1013,15 @@ structure World where
       work units whose `WORK_STRUCT_PENDING` bit is set (`pendingWork`:
       worker indices), set by a `queue_work` that queues and cleared when
       the unit's section starts (`process_one_work`). A per-peer unit's
-      pending bit is its membership of its queue. -/
+      pending bit is its membership of its queue.
+      An association lives as long as the C object that embeds the work
+      struct or the timer: a peer's (`transmit_handshake_work`,
+      `transmit_packet_work`, `clear_peer_work`, the five timers) until the
+      peer's release (`kref_release`, `retirePeerUnits`), the device's
+      (`incoming_handshake_work`, the per-CPU crypt work) until
+      `free_netdev` (`retireDeviceUnits`). After that the address may be
+      reused by a new object with a new record, and a fresh device's peer
+      ids restart (the simulation-target review, 2026-10-12, section 4.3). -/
   unitPeers : List (Nat × Nat × Nat) := []
   timerUnits : List (Nat × Nat × WG.PeerTimer) := []
   pendingWork : List Nat := []
@@ -1408,6 +1431,28 @@ def resolveUnit (w : Worker) (unit : Nat) (queue : List Nat) : M Nat := do
     if !queue.contains pid then throw (.hidden s!"{w.symbol}: the dispatched unit is peer {pid}'s, which is not queued")
     return pid
   | none => throw (.hidden s!"{w.symbol}: the dispatched unit {unit} was never queued")
+
+/-- The release of peer `pid` (`kref_release`, peer.c:200-221, then the
+    `call_rcu` free): the work structs and timers embedded in the peer go
+    with it, so their dispatch identities are retired. A later record at
+    one of those addresses belongs to whatever object the allocator put
+    there, which starts its own association. -/
+def retirePeerUnits (pid : Nat) : M Unit :=
+  modify fun st => { st with
+    unitPeers := st.unitPeers.filter fun (e : Nat × Nat × Nat) =>
+      !((Worker.all.find? (·.index == e.2.1)).any Worker.perPeer && e.2.2 == pid),
+    timerUnits := st.timerUnits.filter (·.2.1 != pid) }
+
+/-- `free_netdev` (wg_destruct's end): the device's work structs, and every
+    peer's (all released by then), die with it; their pending bits and
+    identities are retired, and the next device starts its own. The net
+    namespace's `cleanup_net` unit outlives the device. -/
+def retireDeviceUnits : M Unit :=
+  modify fun st => { st with
+    unitPeers := st.unitPeers.filter fun (e : Nat × Nat × Nat) =>
+      !((Worker.all.find? (·.index == e.2.1)).any Worker.deviceOwned),
+    pendingWork := st.pendingWork.filter fun i => !((Worker.all.find? (·.index == i)).any Worker.deviceOwned),
+    timerUnits := [] }
 
 /-- A recorded clock read: the value, a signed 64-bit count of nanoseconds. -/
 def hiddenClock (s : HiddenSite) : M Int := do
