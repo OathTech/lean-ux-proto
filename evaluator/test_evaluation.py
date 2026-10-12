@@ -335,8 +335,10 @@ class EvaluationChecks(unittest.TestCase):
         # poll 2 before it (block 3: 1 vs 3; its put 2 vs 1)
         linux = {'records': [[4, '0x7', '0x9', '0x2'], [4, '0x1', '0x2', '0x1', '1'], [4, '0x3', '0x2', '0x3', '2'],
                              [4, '0x1', '0x3', '0x1', '3'], [4, '0x2', '0x1', '0x3', '2']]}
-        problems, checked, before_put = check.section_agreement(trace, [after, before], [linux], sections, loc, decisions)
-        self.assertEqual((problems, checked, before_put), ([], 6, [2]))
+        # poll 1 after the put, poll 2 before it: the selection the caller
+        # replays as the mirror's vector
+        self.assertEqual(check.section_agreement(trace, [after, before], [linux], sections, loc, decisions),
+                         ([], [2], [False, True]))
         # poll 2's section under the before-put run but its put under the
         # after-put one is no execution: the span is taken as a whole
         mixed = {'records': linux['records'][:4] + [[4, '0x3', '0x2', '0x3', '2']]}

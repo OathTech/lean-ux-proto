@@ -947,6 +947,22 @@ def Worker.resched? : Worker → Option HiddenSite
   | .decryptWorker => some .reschedDecrypt
   | _ => none
 
+/-- W7 phase 2 (docs/2026-10-06-w4-w7-transmit-bulk.md 17.15; the
+    simulation-target review's rank 6): a draining worker's activation, a
+    value in the world rather than a Lean call frame. Its kind, its peer (the
+    tx worker's `container_of(work, struct wg_peer, transmit_packet_work)`)
+    and its loop position: the iterations run so far, for the loop's bound.
+    Between two yields the C loop holds no other local: each iteration starts
+    at the ring or queue poll, and what a run keeps across runs (the tx
+    worker's peeked item) is in the queue, as data. An activation lives from
+    its section's start to its stop; suspended at a `cond_resched` it waits
+    in `World.suspended` until the records resume it (`Env.schedule`). -/
+structure Activation where
+  worker : Worker
+  pid : Option Nat := none
+  iterations : Nat := 0
+  deriving Repr, BEq
+
 def SiteRole.name : SiteRole → String
   | .mirror => "mirror" | .cut => "cut" | .ambient => "ambient"
 
@@ -1039,16 +1055,11 @@ structure World where
       which runs before Linux). -/
   hiddenPlaceholders : Bool := false
   placeholderCount : Nat := 0
-  /-- Workers that switched away at a `cond_resched` in this operation
-      (worker indices), and the section stops of their runs that ended in
-      the mirror before Linux recorded them (site ids): see `Env.runWorker`. -/
-  yieldedWorkers : List Nat := []
-  pendingStops : List Nat := []
-  /-- W7 stream B (docs/2026-10-06-w4-w7-transmit-bulk.md, 5.4, phase 1):
-      the workers whose sections are open in the mirror, innermost last
-      (worker index, the tx worker's peer), for the commuting detector in
-      `Env.condResched`. -/
-  openWorkers : List (Nat × Option Nat) := []
+  /-- W7 phase 2: the draining workers' activations suspended at a
+      `cond_resched`, oldest first, each resumed when the records name it
+      (`Activation`, `Env.schedule`). An operation ends with none suspended
+      (`Runner.executeTrace`). -/
+  suspended : List Activation := []
   /-- Dispatch order (docs/2026-10-11-dispatch-order.md): each work unit's
       address from its queue record (`unitPeers`: address, worker index,
       peer, 0 for a device-level unit); each armed timer's address from its
@@ -1287,27 +1298,34 @@ def branch (d : Decision) (outcome : Bool) : M Bool := do
   modify fun w => { w with steps := w.steps.push { decision := d, outcome, netRx := w.netRxSection } }
   return outcome
 
+/-- What one iteration of a draining worker's loop did (W7 phase 2): the
+    poll found nothing and the loop ended; an item was processed and the loop
+    goes on; an item was processed and the worker switched away at its
+    `cond_resched`, so its activation is suspended (`Env.schedule`). -/
+inductive IterResult where
+  | ended | continued | yielded
+  deriving Repr, BEq, DecidableEq
+
 /-- One iteration of a draining worker's loop (`wg_packet_encrypt_worker`,
     `wg_packet_tx_worker`, `wg_packet_decrypt_worker`,
     `wg_packet_handshake_receive_worker`): `step`, one ring or queue poll
-    and its item, then `afterItem`, the `cond_resched` and its decision,
-    when an item was processed. `true` when the loop goes on. The loop body
-    between two yields is the C's, direct sequential code; the iteration is
-    the unit a suspended activation would resume at (W7 phase 2, design
-    17.15: not built on this representation). `w` and `pid` name the
-    activation. -/
-def workerIter (w : Worker) (pid : Option Nat) (step : M Bool) (afterItem : M Unit) : M Bool := do
+    and its item, then `afterItem`, the `cond_resched` and its decision
+    (whether the kernel switched away), when an item was processed. The loop
+    body between two yields is the C's, direct sequential code; the iteration
+    is the unit an activation resumes at (W7 phase 2, design 17.15). `w` and
+    `pid` name the activation. -/
+def workerIter (w : Worker) (pid : Option Nat) (step : M Bool) (afterItem : M Bool) : M IterResult := do
   let _ := (w, pid)
-  if !(← step) then return false
-  afterItem
-  return true
+  if !(← step) then return .ended
+  return if ← afterItem then .yielded else .continued
 
-/-- A worker's whole loop: `workerIter` until the queue drains, under the
-    C's bound. -/
+/-- A worker's whole loop on the mirror's own stack (the flood's receive
+    worker, `Env.flood`, whose yields `Env.nestedResched` serves in place):
+    `workerIter` until the queue drains, under the C's bound. -/
 def workerLoop (w : Worker) (pid : Option Nat) (step : M Bool) (afterItem : M Unit) (bound : Nat)
     (drained : String) : M Unit := do
   for _ in [0:bound] do
-    if !(← workerIter w pid step afterItem) then return
+    if (← workerIter w pid step (do afterItem; pure false)) == .ended then return
   invariant drained
 
 /-- Record a C value comparison: its outcome and the two values the C
@@ -1341,20 +1359,11 @@ def recordWordOf (bs : List UInt8) (k : Nat) : Nat :=
 def HiddenSite.passive (site : Nat) : Bool :=
   HiddenSite.all.any fun s => s.info.id == site && s.info.role == .ambient
 
-/-- Drop ambient records at the head of the current operation's records,
-    and pending section stops (each consumes its one pending entry). -/
+/-- Drop ambient records at the head of the current operation's records. -/
 def skipAmbient : M Unit := do
   let w ← get
   if let some rs := w.hidden then
-    let rec go (rs : List HiddenRecord) (pending : List Nat) : List HiddenRecord × List Nat :=
-      match rs with
-      | r :: rest =>
-        if HiddenSite.passive r.site then go rest pending
-        else if pending.contains r.site then go rest (pending.erase r.site)
-        else (rs, pending)
-      | [] => ([], pending)
-    let (rest, pendingStops) := go rs w.pendingStops
-    set { w with hidden := some rest, pendingStops }
+    set { w with hidden := some (rs.dropWhile fun r => HiddenSite.passive r.site) }
 
 /-- Consume the next choice record, which must come from `s`. -/
 def hidden (s : HiddenSite) : M (List UInt8) := do

@@ -241,14 +241,15 @@ class DispatchOrder(unittest.TestCase):
 
 
 class SuspendedActivation(unittest.TestCase):
-    """W7 phase 1 (docs/2026-10-06-w4-w7-transmit-bulk.md 5.4, 17.15): a worker
-    that yields below an open worker with queued items is outside the modeled
-    domain until suspended activations resume by the recorded schedule. The
-    capture is the case itself; when phase 2 lands, this test flips to
-    agreement."""
+    """W7 phase 2 (docs/2026-10-06-w4-w7-transmit-bulk.md 17.15): the capture
+    where the tx worker yielded below the encrypt worker, which still had
+    seven items. The encrypt worker is a suspended activation; the records
+    resume it (its tx re-queue record), then the tx worker (its sends), then
+    the re-queued tx run finds the queue empty. Phase 1 stopped here ("a
+    worker yielded below an open worker with queued work")."""
 
-    def test_phase1_stops_on_a_resumed_outer_capture(self):
-        self.assertIn('a worker yielded below an open worker with queued work', replay_raw(W7_RESUMED_OUTER) or '')
+    def test_resumed_outer_capture_replays(self):
+        self.assertIsNone(replay_raw(W7_RESUMED_OUTER))
 
 
 if __name__ == '__main__':

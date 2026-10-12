@@ -128,14 +128,14 @@ def encryptStep (checksumHelp : Packet → M Packet) : M Bool := do
     enqueuePerPeerTx first state
     return true
 
-/-- wg_packet_encrypt_worker (send.c:287-309): drains the encrypt queue
-    (`encryptStep` per item). `needResched` is the environment's scheduler:
-    whether `need_resched()` holds, having run what the kernel ran at the
-    `cond_resched()`. -/
-def encryptWorker (checksumHelp : Packet → M Packet) (needResched : M Bool) : M Unit :=
-  workerLoop .encryptWorker none (encryptStep checksumHelp)
-    (discard <| do branch .encWorkerNeedResched (← needResched))
-    (MAX_QUEUED_PACKETS + 1) "the encrypt queue did not drain"
+/-- One iteration of wg_packet_encrypt_worker's loop (send.c:287-309):
+    `encryptStep`, then `cond_resched()` and its decision. `needResched` is
+    the environment's scheduler: whether `need_resched()` holds, which
+    suspends the worker's activation (W7 phase 2, `workerIter`; the loop and
+    its bound are the activation's, `Env.Activation.run`). -/
+def encryptIter (checksumHelp : Packet → M Packet) (needResched : M Bool) : M IterResult :=
+  workerIter .encryptWorker none (encryptStep checksumHelp)
+    (do branch .encWorkerNeedResched (← needResched))
 
 /-- wg_socket_send_skb_to_peer (socket.c:168-187) of an encrypted packet:
     whether it returned 0. `send4`/`send6` are a cut point, as in
@@ -217,12 +217,12 @@ def txStep (pid : PeerId) : M Bool := do
   peerPut (some pid)
   return true
 
-/-- wg_packet_tx_worker (send.c:262-285) for a peer: sends its encrypted
-    items in order (`txStep` per item). `needResched` as for `encryptWorker`. -/
-def txWorker (pid : PeerId) (needResched : M Bool) : M Unit :=
-  workerLoop .txWorker (some pid) (txStep pid)
-    (discard <| do branch .txNeedResched (← needResched))
-    (MAX_QUEUED_PACKETS + 1) "the tx queue did not drain"
+/-- One iteration of wg_packet_tx_worker's loop (send.c:262-285) for a
+    peer: `txStep`, then `cond_resched()` and its decision. `needResched` as
+    for `encryptIter`. -/
+def txIter (pid : PeerId) (needResched : M Bool) : M IterResult :=
+  workerIter .txWorker (some pid) (txStep pid)
+    (do branch .txNeedResched (← needResched))
 
 private def hexOf (bs : List UInt8) : String :=
   String.join (bs.map fun b => let d := "0123456789abcdef".toList; String.ofList [d[b.toNat / 16]!, d[b.toNat % 16]!])
