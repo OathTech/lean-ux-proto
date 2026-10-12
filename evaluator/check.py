@@ -1115,8 +1115,11 @@ RETRIED_OUTCOMES = ('timeout', 'resource_busy')
 # the mirror runs once more with every placement before the put; each NET_RX
 # section's operands must agree under one of the two runs, and everything
 # outside the sections and every observation must agree under both (the
-# placements' independence), else the trace fails. The cost does not grow
-# with the number of polls.
+# placements' independence), else the trace fails. That selects a placement
+# per poll; the mirror then runs once more with the selected vector, and that
+# single execution's operands are the evidence (the simulation-target review,
+# 2026-10-12, 3.5: not the two runs stitched). Three runs at most, however
+# many polls.
 
 def netrx_sections(rows, dispatch):
     """Per (trace, op) of the comparison child: the dispatch-section block
@@ -1164,8 +1167,10 @@ def section_agreement(trace, runs, comparisons, sections, locations, decisions, 
     order. Each pair agrees with Linux under one run as a whole (the
     section's branches against that section's block, the put's against the
     records outside the NET_RX blocks); every other branch agrees under
-    both. Returns (problems, checked, the polls' NET_RX ordinals taken from
-    the before-put run)."""
+    both. Returns (problems, the NET_RX ordinals of the polls selected
+    before the put, the selection as the mirror's `napi_irq_before_put`
+    vector: one entry per open poll). The caller replays the selection
+    once; that run is the evidence."""
     first, second = runs
     count = first.get('napi_irq_ambiguous', 0)
     ids = range(len(trace['ops']))
@@ -1211,7 +1216,6 @@ def section_agreement(trace, runs, comparisons, sections, locations, decisions, 
         return [dict(index=None, label='napi placement',
                      problem=f'the placement runs differ in {len(polls)} NET_RX sections and {len(groups)} other '
                              f'runs of branches for {count} open polls: the placements are not independent')], 0, []
-    chosen = {k: list(v) for k, v in a.items()}
     before_put, problems = [], []
     for j, section in enumerate(polls):
         group = groups[j] if groups else []
@@ -1224,18 +1228,9 @@ def section_agreement(trace, runs, comparisons, sections, locations, decisions, 
             found_b, _ = unit(b)
             if not found_b:
                 before_put.append(section)
-                chosen[section] = list(b[section])
-                for i in group:
-                    chosen[0][i] = b[0][i]
             else:
                 problems += found_a
-    checked = 0
-    seen = set(chosen) | {o for index in ids for o in sections.get((trace['id'], index), {}).values()}
-    for section in sorted(seen):
-        found, n = agree(chosen.get(section, []), section)
-        problems += found
-        checked += n
-    return problems, checked, before_put
+    return problems, before_put, [section in before_put for section in polls]
 
 
 def run_chunk(traces, out, kcov, guest_variant=None, alloc_flags=0, arm=()):
@@ -1366,13 +1361,38 @@ def run_chunk(traces, out, kcov, guest_variant=None, alloc_flags=0, arm=()):
                         operand_problems.append(dict(index=None, label='napi placement',
                                                      problem='the placement runs differ in their polls or returns'))
                     else:
-                        excluded = Counter()
-                        operand_problems, checked, before_put = section_agreement(
+                        selection_problems, before_put, vector = section_agreement(
                             trace, [actual_cmp, before], trace_comparisons, sections, compared['locations'],
-                            kcov[1], set(kcov[0]['functions']), kcov[0]['operand_exclusions'], excluded)
-                        if not operand_problems and before_put:
-                            # popped into the report's napi_before_put_sections
-                            outcomes[f'napi placement ({trace["id"]})'] = ','.join(map(str, before_put))
+                            kcov[1], set(kcov[0]['functions']), kcov[0]['operand_exclusions'])
+                        if selection_problems:
+                            operand_problems = selection_problems
+                        elif before_put:
+                            # the selected placements, replayed once: that single
+                            # execution is the evidence
+                            replay = out / f'model-cmp-napi-{trace["id"]}-selected'
+                            replay.mkdir()
+                            try:
+                                [selected] = run_model([dict(with_records, napi_irq_before_put=vector)], replay)
+                            except (InvalidOutput, OSError, subprocess.SubprocessError) as exc:
+                                operand_problems = [dict(index=None, label='napi placement',
+                                                         problem=f'the selected-placement run failed: {exc}')]
+                            else:
+                                def shape(run):
+                                    return [(b['index'], b['label'], b.get('section', 0)) for b in run['branches']]
+                                if selected.get('napi_irq_ambiguous') != count or shape(selected) != shape(actual_cmp) or \
+                                        [o['ret'] for o in selected['observations']] != \
+                                        [o['ret'] for o in actual_cmp['observations']]:
+                                    operand_problems = [dict(index=None, label='napi placement',
+                                                             problem='the selected-placement run differs in control '
+                                                                     'flow or returns from the placement runs')]
+                                else:
+                                    excluded = Counter()
+                                    operand_problems, checked = operand_agreement(
+                                        trace, selected, trace_comparisons, compared['locations'], kcov[1],
+                                        set(kcov[0]['functions']), kcov[0]['operand_exclusions'], excluded)
+                                    if not operand_problems:
+                                        # popped into the report's napi_before_put_sections
+                                        outcomes[f'napi placement ({trace["id"]})'] = ','.join(map(str, before_put))
             trace_gaps.update(excluded)
             problems += operand_problems + site_problems.get(trace['id'], [])
             # a steered trace states what its steering is for: the mirror's
