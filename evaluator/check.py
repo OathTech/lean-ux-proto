@@ -342,7 +342,8 @@ def load_hidden_sites():
     sites = {}
     for entry in loads(result.stdout.decode()):
         if set(entry) != {'id', 'label', 'kind', 'file', 'line', 'len', 'role'} \
-                or entry['kind'] not in ('random', 'clock', 'section', 'resched', 'timer', 'advance', 'alloc', 'queue', 'jiffies') \
+                or entry['kind'] not in ('random', 'clock', 'section', 'resched', 'timer', 'advance', 'alloc', 'queue', 'jiffies',
+                                         'address', 'program') \
                 or entry['role'] not in ('mirror', 'cut', 'ambient'):
             raise InvalidOutput(f'hidden site fields: {entry}')
         key = (entry['kind'], f"{entry['file']}:{entry['line']}")
@@ -1009,15 +1010,19 @@ def operand_agreement(trace, model_obs, comparisons, locations, decisions, funct
             continue  # control_flow reports unknown labels
         comparison = decisions[name]['comparison']
         if 'operands_excluded' in branch:
-            entry = next((e for e in exclusions
-                          if e['label'] == name and e['operand'] == branch['operands_excluded']), None)
+            # one operand may be excluded at several call sites of one decision
+            # (root_user.__count at alloc_pipe_info and at ep_alloc): the
+            # comparisons at all of them count
+            entries = [e for e in exclusions if e['label'] == name and e['operand'] == branch['operands_excluded']]
+            entry = entries[0] if entries else None
             if comparison is None or 'operands' in branch or entry is None:
                 problems.append(dict(index=branch['index'], label=branch['label'],
                                      problem='undeclared operand exclusion', operand=branch['operands_excluded']))
                 continue
             site = comparison['site'] or decisions[name]['site']
+            calls = {e['call'] for e in entries}
             at_call = sum(1 for r in comparisons[branch['index']]['records']
-                          if frame_chain(locations[r[3]])[0] == site and frame_chain(locations[r[3]])[-1] == entry['call']
+                          if frame_chain(locations[r[3]])[0] == site and frame_chain(locations[r[3]])[-1] in calls
                           and attributable(locations[r[3]])
                           and (functions is None or listed(locations[r[3]], functions)))
             used[(branch['index'], name)] += 1

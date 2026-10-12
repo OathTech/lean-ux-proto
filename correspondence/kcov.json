@@ -37,7 +37,10 @@
     "fs/inode.c",
     "include/linux/time64.h",
     "kernel/signal.c",
-    "include/linux/poll.h"
+    "include/linux/poll.h",
+    "fs/eventpoll.c",
+    "include/linux/percpu_counter.h",
+    "include/linux/seqlock.h"
   ],
   "functions": [
     "touch_atime",
@@ -224,7 +227,32 @@
     "send4",
     "send6",
     "pipe_poll",
-    "eventfd_poll"
+    "eventfd_poll",
+    "__x64_sys_epoll_create1",
+    "__x64_sys_epoll_ctl",
+    "__x64_sys_epoll_wait",
+    "do_epoll_create",
+    "do_epoll_ctl",
+    "do_epoll_wait",
+    "ep_clear_and_put",
+    "ep_done_scan",
+    "ep_eventpoll_poll",
+    "__ep_eventpoll_poll",
+    "ep_eventpoll_release",
+    "ep_get_upwards_depth_proc",
+    "ep_item_poll",
+    "ep_loop_check_proc",
+    "ep_poll_callback",
+    "ep_ptable_queue_proc",
+    "ep_refcount_dec_and_test",
+    "ep_remove",
+    "ep_remove_epi",
+    "ep_remove_file",
+    "ep_start_scan",
+    "eventpoll_release_file",
+    "list_file",
+    "reverse_path_check_proc",
+    "ep_destroy_wakeup_source"
   ],
   "known_gaps": [],
   "shared_exits": [
@@ -246,6 +274,30 @@
       "operand": "root_user.__count",
       "call": "fs/pipe.c:794",
       "note": "get_current_user() -> get_uid() -> refcount_inc(&root_user.__count) is inlined into alloc_pipe_info (fs/pipe.c:794), so __refcount_add's comparison at refcount.h:189 is recorded there with the guest-wide reference count of root_user (every root credential, kernel threads included; 26 or 27 across runs), which the mirror does not model: the precedent of alloc_empty_file.nr_files_at_max. The outcome (a live root_user: not zero) is reported and A2-checked; only the operands at this call site are excluded. Every other refcount_inc keeps its operands."
+    },
+    {
+      "label": "__refcount_add.old_zero",
+      "operand": "root_user.__count",
+      "call": "fs/eventpoll.c:1344",
+      "note": "epoll stream S: get_current_user() in ep_alloc (fs/eventpoll.c:1344, patched numbering), inlined into do_epoll_create: the same guest-wide root_user count as the fs/pipe.c:794 entry; the outcome (a live root_user) is reported, the operands at this call site excluded."
+    },
+    {
+      "label": "do_epoll_ctl.gen_matches",
+      "operand": "loop_check_gen",
+      "call": "fs/eventpoll.c:2554",
+      "note": "epoll stream S (docs/2026-10-12-epoll-design.md 3.5): fs/eventpoll.c's boot-global loop_check_gen, two higher after every full check of every trace of a boot; the mirror's counter is relative to the boot's base (2 after the fixture's warm-up). The outcome at :2554 is checked (false: a fresh set's gen of 0 and a visited set's odd gen never meet the even counter); only the operands are excluded."
+    },
+    {
+      "label": "ep_loop_check_proc.visited",
+      "operand": "loop_check_gen",
+      "call": "fs/eventpoll.c:2304",
+      "note": "epoll stream S: the in-check test of a set already visited (a diamond), fs/eventpoll.c:2304; the outcome is checked, the operands are the absolute counter."
+    },
+    {
+      "label": "ep_get_upwards_depth_proc.visited",
+      "operand": "loop_check_gen",
+      "call": "fs/eventpoll.c:2346",
+      "note": "epoll stream S: the upward walk's visited test, fs/eventpoll.c:2346 (ep_get_upwards_depth_proc.isra.0's own frame); the outcome is checked, the operands are the absolute counter."
     }
   ],
   "branch_free_functions": [
@@ -257,6 +309,8 @@
     "IP_ECN_set_ce",
     "IP_ECN_set_ect1",
     "IP6_ECN_set_ce",
-    "IP6_ECN_set_ect1"
+    "IP6_ECN_set_ect1",
+    "percpu_counter_compare",
+    "do___read_seqcount_retry"
   ]
 }
