@@ -129,6 +129,30 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   covers the new identity. Found by `s2_index_collision`, which failed in
   about two of three fresh-guest runs while passing in every chunked full
   check ([the design](2026-10-11-dispatch-order.md)).
+- **2026-10-12 [USER]** Gates and speedbumps, applying the global guidance to
+  this project: "I'm happy for you to recommend any level of gate
+  preservation so long as each gate pays its way. Strong gates protect trust
+  surfaces. Speedbumps prevent mistakes. Evertyhign else gets cut" [sic].
+  Earlier the same day: "I am highly skeptical of 'certificates' / run
+  recordings, etc for anything which is not a hard trust surface. Gates need
+  to pay their way in trust."
+- **2026-10-12 [AGENT, coordinator]** The cut list under that ruling. The
+  gates are the model build with the unit tests, the differential check on
+  the approved oracle at a claim point with its fail-closed instrument
+  guards, and the kernel identity check. The speedbumps are the negative
+  control suites and a sentinel mutant set, about ten WireGuard and two
+  pipes entries, one per verdict channel and record instrument, on reduced
+  corpora, at integration claim points only. Cut: the mutant catalogue
+  beyond the sentinels (history keeps it), the "mutant it alone rejects" bar
+  for a new check rule (now: cheap, and it catches a real class of mistake;
+  a one-off mutant only for a new instrument on the trust surface, run once
+  and reported in its commit), the integration records and evidence
+  directories (the signoff and the run's counts go in the merge commit
+  message), the per-chunk provenance hashing of inputs and tool versions
+  (the kernel identity and the commands stay), the decision-coverage table
+  in every report (an on-demand census), run-by-run validation narratives
+  in design docs (a short table per stream from now on), and the
+  environment acceptance scripts nothing uses.
 - **2026-10-11 [AGENT]** This register created from the retired agent memory
   and the dated history formerly in `AGENTS.md`; the 2026-10-07 orchestration
   snapshot is superseded by the pause-state note. The checker's model build
