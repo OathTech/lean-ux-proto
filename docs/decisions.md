@@ -243,3 +243,12 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   the kind-308 hook must keep fs/eventpoll.c's line count before the claim
   point (design 16.1), a kernel-patch change put to the coordinator, not
   made here.
+- **2026-10-12 [AGENT, stream S]** The epoll settling pass changes two
+  evaluator rules, both for facts of the built code and the guest: a
+  shared exit may name a frame chain that several instrumentation points
+  share (`points` in `correspondence/kcov.json`, the compiler giving a
+  helper's test and its join the same frames), and an operand exclusion
+  needs a comparison row at a declared call site rather than one row per
+  report, since the guest deduplicates identical rows. The mirror's control
+  flow did not change in the pass (design 16.1).
+

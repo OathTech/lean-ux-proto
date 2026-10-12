@@ -1280,3 +1280,45 @@ Deviations from sections 2-6, each verified against `.deps/linux`:
    second iteration needs a sleep or a busy loop) and `eventpoll_release`
    runs on an epoll file too (its `refs` list, the outer items).
 
+### 16.1 The settling pass on e2 [AGENT, stream S 2026-10-12]
+
+The first differential run (stream T, the e2 oracle: 43 corpus and 200
+generated traces) agreed on every observation and failed every trace on
+control flow, 2209 problems in 44 classes on the corpus. None was a mirror
+path; each was a declaration against the built code, settled in three
+batches (2209 → 148 in 10 classes → 139 in 5 → the two suites pass):
+
+- **Merged blocks.** GCC's cross-jumping makes one block of ep_insert's and
+  ep_modify's identical tails (at ep_modify:1979 under the MOD case), of
+  ep_alloc_epitem's and ep_register_epitem's `percpu_counter_dec`, of the
+  `return`s of do_epoll_create, ep_poll, reverse_path_check_proc and
+  ep_refcount_dec_and_test, of DEL's and MOD's `if (epi)` tests and their
+  `-ENOENT`s, and jumps do_epoll_wait's `-EBADF` into the error_fput
+  fdput's epilogue. Lines of such blocks are in no span; the three cases
+  that make a helper's frame appear where it did not run are `shared_exits`
+  in `correspondence/kcov.json`. A shared exit may now name a chain shared
+  by several points (`points`, do_epoll_wait's fdput: the test and the join
+  after it), since the compiler gives both the same frames.
+- **Folded and threaded compares** carry no operands: `maxevents`'s two
+  tests are one unsigned range check of `maxevents - 1`; `!(events &
+  EPOLLET)` is the sign test `(int)events >= 0`; `percpu_counter_compare`'s
+  `>` is folded into its `<`; `max()` is a MAX_EXPR; `result > EP_MAX_NESTS`
+  on the constant path, `full_check` at the exit, `res >= maxevents` on the
+  first iteration, `if (res)` after the maxevents break, `op == ADD` after
+  the exclusive block, pipe_poll's second `f_mode` test and eventfd_poll's
+  two tests after `count > 0` are threaded away on some path. The tests of
+  `op` that the built code keeps (ep_op_has_event at its callers, the
+  exclusive block's, the switch's three) carry operands.
+- **Attribution.** The last operand of do_epoll_ctl's two-line exclusive
+  condition is attributed to its first line (:2522); the seqcount retry to
+  ep_events_available's return statement (:580), not seqlock.h; the loop
+  checks' recursive calls are inlined one level, so an inner visit's
+  compare has the recursion site as its outermost frame (exclusions at
+  :2315 and :2347 beside :2302 and :2344); `ep_alloc`'s root_user count is
+  excluded at do_epoll_create:2412, the outermost frame of the inlined
+  call.
+- **Deduplicated rows.** The guest keeps one comparison row per kind,
+  operands and PC (harness/guest.c), so an exclusion reported twice for
+  identical compares (a chain of sets with equal `gen`s) has one row: the
+  check now requires a row at a declared call site, not one per report.
+

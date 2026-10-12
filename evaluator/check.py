@@ -1003,10 +1003,12 @@ def operand_agreement(trace, model_obs, comparisons, locations, decisions, funct
     the mirror reports the outcome with `operands_excluded` naming the
     operand instead of the pair. It must name a declared (label, operand),
     and Linux must have recorded the comparison at the condition line with
-    the declared call line as the outermost frame, once for each such report
-    in the operation. `excluded` (a Counter) receives the count."""
+    the declared call line as the outermost frame, in the operation. The
+    guest deduplicates comparison rows (harness/guest.c: one row per kind,
+    operands and PC), so repeated identical comparisons (a recursive walk
+    meeting the same two counters) are one row: the requirement is presence,
+    not one row per report. `excluded` (a Counter) receives the count."""
     problems, checked = [], 0
-    used = Counter()
     for branch in model_obs['branches']:
         name = branch['label'].rpartition('=')[0]
         if name not in decisions:
@@ -1028,11 +1030,10 @@ def operand_agreement(trace, model_obs, comparisons, locations, decisions, funct
                           if frame_chain(locations[r[3]])[0] == site and frame_chain(locations[r[3]])[-1] in calls
                           and attributable(locations[r[3]])
                           and (functions is None or listed(locations[r[3]], functions)))
-            used[(branch['index'], name)] += 1
-            if used[(branch['index'], name)] > at_call:
+            if not at_call:
                 problems.append(dict(index=branch['index'], label=branch['label'],
                                      problem='operand exclusion without a comparison at its declared call site',
-                                     site=site, call=entry['call'], linux_records_at_call=at_call))
+                                     site=site, calls=sorted(calls)))
             elif excluded is not None:
                 excluded[f"operands excluded: {name} at {entry['call']} ({entry['operand']})"] += 1
             continue
