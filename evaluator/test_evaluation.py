@@ -456,6 +456,44 @@ class EvaluationChecks(unittest.TestCase):
                                                   decisions)
         self.assertEqual(undeclared, ({'vfs_write', 'file_end_write'}, 0))
 
+    def test_shared_exit_witnesses_nothing_on_the_early_return_path(self):
+        # The merged-return-block class (int-r: file_update_time's "nothing"
+        # return shares its block with the inlined __file_update_time, whose
+        # frame at the call line witnesses the opposite outcome): a declared
+        # shared exit reached by an early return neither counts as the helper
+        # running nor witnesses an outcome; with the entering block covered,
+        # or undeclared, it does both.
+        config = {'files': ['fs/eventfd.c'], 'functions': ['eventfd_read'], 'known_gaps': [],
+                  'shared_exits': [{'function': 'helper', 'frames': ['fs/eventfd.c:230', 'fs/eventfd.c:222'],
+                                    'unless_covered': ['fs/eventfd.c:231', 'fs/eventfd.c:222'], 'note': ''}],
+                  'operand_exclusions': []}
+        table = check.parse_decisions([self.decision('eventfd_read.short_buffer', 220, [(221, 221)], [(222, 222)])],
+                                      config)
+        instrumented = {'fs/eventfd.c:221', 'fs/eventfd.c:222'}
+        witnesses = check.witness_table(table, instrumented, {'eventfd_read'})
+        loc = {'0xa': [{'function': 'eventfd_read', 'source': '/x/.deps/linux/fs/eventfd.c:221'}],
+               '0xs': [{'function': 'helper', 'source': '/x/.deps/linux/fs/eventfd.c:230'},
+                       {'function': 'eventfd_read', 'source': '/x/.deps/linux/fs/eventfd.c:222'}],
+               '0xe': [{'function': 'helper', 'source': '/x/.deps/linux/fs/eventfd.c:231'},
+                       {'function': 'eventfd_read', 'source': '/x/.deps/linux/fs/eventfd.c:222'}]}
+        trace = {'version': 1, 'id': 'se', 'ops': [{'op': 'read', 'fd': {'literal': 8}, 'count': 8}]}
+        def run(pcs, cfg=config):
+            model = {'branches': [{'index': 0, 'label': 'eventfd_read.short_buffer=1'}]}
+            coverage = [{'id': 'se', 'index': 0, 'count': len(pcs), 'pcs': pcs}]
+            problems, gaps = control_flow(trace, model, coverage, loc, cfg, table, witnesses, instrumented,
+                                          {'eventfd_read'})
+            return [p['problem'] for p in problems], gaps
+        self.assertEqual(check.shared_exit_points({'pcs': ['0xa', '0xs']}, loc, config), {'0xs': 'helper'})
+        self.assertEqual(check.shared_exit_points({'pcs': ['0xa', '0xs', '0xe']}, loc, config), {})
+        # the early return's path: the point is exempt and counted with the gaps
+        problems, gaps = run(['0xa', '0xs'])
+        self.assertEqual(problems, [])
+        self.assertEqual(gaps['shared exits reached by an early return (kcov.json)'], 1)
+        # the helper's own path covers the entering block: the point witnesses the opposite outcome
+        self.assertIn('opposite outcome covered', run(['0xa', '0xs', '0xe'])[0])
+        # undeclared: the same
+        self.assertIn('opposite outcome covered', run(['0xa', '0xs'], dict(config, shared_exits=[]))[0])
+
     def test_order_within_a_function(self):
         config = {'files': ['fs/eventfd.c'], 'functions': ['eventfd_write'], 'known_gaps': [],
                   'shared_exits': [], 'operand_exclusions': []}

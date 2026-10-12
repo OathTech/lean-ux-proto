@@ -783,21 +783,33 @@ def decision_functions_run(row, locations, config, decisions):
     the helper running."""
     functions = {entry['function'] for entry in decisions.values()}
     listed_functions = set(config['functions'])
-    covered = {frame_chain(locations[pc]) for pc in row['pcs']}
-    shared = {tuple(e['frames']): e['function'] for e in config['shared_exits']
-              if tuple(e['unless_covered']) not in covered}
-    ran, shared_hits = set(), 0
+    exempt_points = shared_exit_points(row, locations, config)
+    ran = set()
     for pc in row['pcs']:
         frames = locations[pc]
         if not attributable(frames) or not listed(frames, listed_functions):
             continue
-        exempt = shared.get(frame_chain(frames))
-        shared_hits += exempt is not None
+        exempt = exempt_points.get(pc)
         for frame in frames:
             source = frame['source'].split('/.deps/linux/')[-1].split(' ')[0].split(':')[0]
             if frame['function'] in functions and source in config['files'] and frame['function'] != exempt:
                 ran.add(frame['function'])
-    return ran, shared_hits
+    return ran, len(exempt_points)
+
+
+def shared_exit_points(row, locations, config):
+    """The operation's PCs that are declared shared exits reached by an early
+    return (their `unless_covered` point not covered), each with the helper
+    the line table attributes the point to. Such a point ran on the early
+    return's path, not the helper's: it neither counts as the helper running
+    (`decision_functions_run`) nor witnesses a decision outcome through the
+    helper's lines (`control_flow`: the merged-return-block class)."""
+    covered = {frame_chain(locations[pc]) for pc in row['pcs']}
+    shared = {tuple(e['frames']): e['function'] for e in config['shared_exits']
+              if tuple(e['unless_covered']) not in covered}
+    return {pc: shared[frame_chain(locations[pc])] for pc in row['pcs']
+            if attributable(locations[pc]) and listed(locations[pc], set(config['functions']))
+            and frame_chain(locations[pc]) in shared}
 
 
 def listed(frames, functions):
@@ -875,7 +887,12 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
                          & span_lines)
         if foreign:
             problems.append(dict(index=index, problem='span lines covered by an unlisted function', lines=foreign))
-        positions = line_positions(coverage[index], locations, op_files, set(config['functions']))
+        # a declared shared exit reached by an early return witnesses nothing:
+        # its lines are the inlined helper's, which did not run (kcov.json
+        # shared_exits; counted with the gaps below)
+        exempt = shared_exit_points(coverage[index], locations, dict(config, files=op_files))
+        witnessing = dict(coverage[index], pcs=[pc for pc in coverage[index]['pcs'] if pc not in exempt])
+        positions = line_positions(witnessing, locations, op_files, set(config['functions']))
         lines = set(positions)
         if not lines:
             problems.append(dict(index=index, problem='no coverage in anchored files'))
