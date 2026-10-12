@@ -1227,7 +1227,7 @@ revision, one dropped mechanism (E1) and one dropped sentinel (E2).
 
 `Leanux/FS/Eventpoll.lean` (new), `Leanux/FS/Fput.lean` (new, 4.6), the
 callback group in `Wait.lean` (4.2), `ep_ptable_queue_proc` in `Poll.lean`,
-the state in `Defs.lean`, 139 decisions in `Decision.lean`, the three
+the state in `Defs.lean`, 176 decisions in `Decision.lean` (46 with operands), the three
 operations in `Syscalls.lean` and `Runner.lean` (an `epoll_wait`'s events
 through the read channel: `bytes` and `digest` over `12·ret` bytes), the
 fixture constants in `Env.lean` (section 5), and in `correspondence/kcov.json`
