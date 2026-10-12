@@ -663,3 +663,315 @@ scheduler record exists.
 Tactical choices made here under the user's standing delegation, recorded
 in `docs/decisions.md`: the wire mapping and opcode proposal (6), the
 `max_user_watches` fixture check (3.4), the sentinel set (7).
+
+## 15. Audit [AGENT, independent audit 2026-10-12]
+
+An independent read of this design against the configured source
+(`.deps/linux`, 6.12.110: `fs/eventpoll.c`, `fs/eventfd.c`, `fs/pipe.c`,
+`kernel/sched/wait.c`, `include/linux/{wait,poll,eventpoll,percpu_counter}.h`,
+`lib/percpu_counter.c`, `lib/Makefile`), the configured options
+(`kernel/config-x86_64-net-choice`), the mirror touchpoints named in 4.6,
+the checker (`evaluator/check.py`, `correspondence/kcov.json`) and the guest
+(`harness/guest.c`, `harness/linux.py`). No build, check or guest was run.
+The design body above is unchanged; the findings are numbered by category
+with a severity (blocking / should fix / nit) and evidence.
+
+### 15.1 Kernel claims: what holds, what slipped, what was read elsewhere
+
+Holds, as written:
+- the definitions and function ranges of section 2 (`EP_MAX_NESTS` :220,
+  `EP_PRIVATE_BITS` :212, `EPOLLEXCLUSIVE_OK_BITS` :216, `do_epoll_ctl`'s
+  error order :2489-2607, `ep_insert` :1841-1901, `ep_modify` :1960-1977,
+  `ep_remove` :1081-1099, `ep_deliver_event` :2017-2055, `ep_done_scan`'s
+  head-insert of `ovflist` items :937 and head-splice of the leftovers :950,
+  `__ep_eventpoll_poll` :1187-1210, the loop and upward checks :2296-2382);
+- the tree key (`ep_cmp_ffd` :507, address first) and that no existing record
+  carries the allocated pointer (kind 305 records outcome, flags, size and
+  return addresses), so a record at `ep_rbtree_insert` is the smallest
+  instrument that fixes the order of the three walks (3.2);
+- tier-1 determinism: timeout 0 returns at :2111-2115 before the clock read
+  at :2120, `ep_poll` returns at :2205 before `ep_busy_loop`, every callback
+  runs in the caller's task, and `__fput` runs `eventpoll_release`
+  (`fs/file_table.c:459`) before `f_op->release` (:467);
+- the wait-queue rules (`wait.c:17-25` head insert, :28-36 tail insert with
+  the exclusive flag, :73-97 the walk and its two stops, :167-173 the
+  `WF_SYNC` variant) and the exclusive-item claim: `ep_poll_callback` returns
+  `ewake = 0` for an exclusive item with no sleeper (:1514-1515), so the walk
+  never stops on it;
+- the hangup delivery: `pipe_poll` sets `EPOLLHUP` on `!writers &&
+  f_pipe != w_counter` (:689); `pipe2` pipes have `w_counter = 1` (:821) and
+  `f_pipe = 0` (:948, :958), both already in the mirror (`Defs.lean:194,
+  :246`, `Pipe.lean:239`);
+- `lib/rbtree.o` uninstrumented (`lib/Makefile:12`); no `CONFIG_PM`, no
+  `CONFIG_DEBUG_LOCK_ALLOC`, `CONFIG_NR_CPUS=1`, `CONFIG_PREEMPT_NONE`.
+
+Not re-verified here: `/dev/null`'s fops lack `poll` (a grep of
+`drivers/char/mem.c`'s `null_fops` shows no `.poll` line; not read in full).
+
+Read from another revision or inferred, not from 6.12.110 (the design's
+opening claim that every line was read in the configured source does not
+hold for these):
+- `ep_poll_callback`'s inner lines (2.5, 4.4, 9.3): :1451 is :1457,
+  :1453-1458 is :1466-1471, :1459-1462 is :1472-1475; the configured code
+  chains through `epi_on_ovflist` / `ovflist_next` (:557-566);
+- `ep_events_available` (2.6): the configured form is
+  `!list_empty_careful(rdllist) || ep_is_scanning(ep) ||
+  read_seqcount_retry(&ep->seq, seq)` (:576-582); the `ovflist` sentinel
+  test is `ep_is_scanning` (:539-542), the seqcount disjunct is new (C3);
+- the per-cpu counter (3.4, risk 3, section 6): `CONFIG_SMP` is not set
+  (C2);
+- `eventfd_read`'s wake at ":207" (2.5): that line is in
+  `eventfd_ctx_remove_wait_queue` (C5);
+- the reverse-path limits "unreachable under `RLIMIT_NOFILE` 32" (2.7, 9.3):
+  reachable (C4);
+- `ep_poll_safewake` "is `wake_up_poll` either way" (2.5): the lockdep variant
+  (:776-811) is `wake_up_locked_poll` with two decisions; the configured
+  kernel takes :815-819, so the effect is as stated (C9).
+
+### 15.2 Correctness and hidden inputs
+
+**C1 (blocking). `loop_check_gen` is boot-global state shared by the traces
+of a chunk, and the first `EPOLL_CTL_ADD` of every guest boot takes the
+full-check arm.** `static u64 loop_check_gen = 0` (:394); a fresh set has
+`gen = 0` from `kzalloc`; `do_epoll_ctl` :2552 takes the full check on
+`ep->gen == loop_check_gen`, true until the first full check has run
+(:2558 and :2615 then leave the counter at 2, and every later generation is
+unequal to any set's `gen`). The guest runs up to 100 traces per boot
+(`evaluator/check.py:58`, `chunk_traces`) and does not use epoll itself
+(`harness/guest.c`: no epoll call), so in each chunk the first ADD of the
+first epoll trace runs the nested mutex, `list_file`, `reverse_path_check`
+and `clear_tfile_check_list` and covers their lines; the same ADD in any
+later trace does not. A mirror that is a function of one trace cannot
+predict this, and the `branchCmp` operands of :2552, :2302 and :2344 carry
+the absolute counter, which also differs per trace. The design's 4.1 lists
+`loopCheckGen` as a plain global and says nothing of this. Remedy: a
+fixture warm-up in the guest at boot (`epoll_create1`, ADD of a throwaway
+eventfd, close both), stated as an environment rule in section 5 and
+`Leanux/Env.lean`, so `loop_check_gen >= 2` before any trace and the arm is
+dead in the domain; `loopCheckGen` modelled relative to an unknown base,
+with the three comparisons' operands excluded (`operand_exclusions`, the
+`root_user.__count` precedent) and their outcomes still checked. Blocking
+for step 1 (the state) and step 3 (the guest), not for the record.
+
+**C2 (should fix). `CONFIG_SMP` is not set: there is no per-cpu counter.**
+`lib/percpu_counter.c` is built only under `CONFIG_SMP` (`lib/Makefile:201`);
+`percpu_counter_compare` is the inline at `include/linux/percpu_counter.h:171-179`
+(a two-way compare of `fbc->count` with `rhs`), `percpu_counter_inc`/`dec`
+are plain adds, and `percpu_counter_batch` does not exist. 3.4, risk 3,
+section 6's file list and step 0's "percpu_counter operands" measurement
+all go: `user.epollWatches : Nat`, two `branchCmp`s inlined at
+`ep_alloc_epitem` :1759-1760 with operands `(count, max_user_watches)`, no
+exclusion, no measurement. Smaller than designed.
+
+**C3 (should fix). `ep_events_available` reads `ep->seq`, which the mirror
+state lacks.** :578-581: `read_seqcount_begin` then `read_seqcount_retry`;
+`ep_start_scan` (:905, :910) and `ep_done_scan` (:942, :952) each bump the
+sequence twice. With one task the retry is always false, but the compare's
+operands are the sequence numbers. Add `seq : Nat` to `Eventpoll`, the four
+increments, and the retry as a `branchCmp` whose true arm is `invariant`;
+list `include/linux/seqlock.h` in `files` for the witness. Correct 2.5's
+callback lines (15.1) at the same time, since they are the witnesses of
+`epPollCallback`'s decisions.
+
+**C4 (should fix). The reverse-path limits are reachable within 32 fds; 2.7
+and 9.3 say the opposite.** `path_count_inc(depth)` (:1605-1614) counts
+chains through the tiers of sets above a file, not watchers of the file:
+`reverse_path_check_proc` (:1624-1643) recurses from each item of the file
+into `epi->ep->refs` and counts once per chain whose top set has no
+watcher. Five tiers of two sets each, fully connected (sets S1,S2 watch the
+eventfd; O1,O2 watch both S; T watch both O; U watch both T; V1 watches both
+U) give 16 chains at depth 4 against `path_limits[4] = 10` (:1602): the
+second insert into V1 fails with `-EINVAL` after `ep_remove` (:1850-1852),
+using 9 sets and 10 fds beyond the fixture's. Every insert on the way
+passes the loop check (depth 3, plus 1, plus 0 upward, is not above 4).
+Three tiers of five give 125 against `path_limits[2] = 100` with 15 sets.
+Model the arm as reachable and add a corpus trace per fired depth (the
+depth-4 one is the cheapest). The `depth > EP_MAX_NESTS` arm at :1629
+stays unreachable (bounded by the loop check) and is an `invariant`.
+
+**C5 (should fix). The eventfd wake lines.** `:207` is in
+`eventfd_ctx_remove_wait_queue` (:198-211), a kernel-internal API no
+syscall reaches; `eventfd_read`'s `wake_up_locked_poll(EPOLLOUT)` is :238
+under the `waitqueue_active` at :237 (the mirror's
+`eventfdReadWaitqueueActive`, `EventfdOps.lean:83`). `eventfd_signal_mask`'s
+`wake_up_locked_poll(EPOLLIN | mask)` at :76 is internal too. State both as
+outside the domain so stream R lists neither :60-80 nor :198-211 and the
+record site mapping does not point into them.
+
+**C6 (should fix). `tfile_check_list` holds a file reference the mirror
+must carry.** `list_file` (:425-444) decides `!head->next` (:430) and takes
+a reference with `atomic_long_inc_not_zero(&file->f_count)` (:438, a
+decision whose operand is the count); `unlist_file` (:446-462, absent from
+4.3) decides `p` (:451) and `!hlist_empty` (:454), frees the head when its
+list is empty (:460) and releases the reference with `fput` (:461) at
+`do_epoll_ctl`'s exit. Between the two, `ep_item_poll`'s `epi_fget` (:1013)
+and `fput` (:1237) compare `f_count` with that extra reference, so a mirror
+that skips the pair mis-predicts their operands under `full_check`. Add
+`listFile`'s two decisions, `unlistFile`, and the reference in `fCount`.
+`FEp.head` needs no "listed" flag: `v->next` non-null (:1037) is membership
+of `tfileCheckList`, which `epRemoveFile` must consult for its free
+decision. Also in `ep_attach_file`: the `!head` race arm (:1729-1731) is an
+`invariant` and `free_ephead(to_free)` (:1739) a decision on a null pointer.
+
+**C7 (should fix). Wake sites missed or under-described in 2.5.**
+`pipe_resize_ring`'s `wake_up_interruptible(&pipe->wr_wait)` (`fs/pipe.c:1327`,
+reached by `F_SETPIPE_SZ` through `fcntl`, opcode 7; the mirror's comment at
+`Pipe.lean:561`) is not in the list or the corpus: its key is NULL, so
+:1457's mask test is skipped and a write-end watcher is queued whatever its
+mask, then re-polled at delivery (a resize that makes room in a watched
+full pipe delivers `EPOLLOUT`). `pipe_release`'s two wakes are conditional
+on `!readers != !writers` (:734, the mirror's `.pipeReleaseOneSide`,
+`Pipe.lean:296`): closing the second end of a pipe wakes nothing, which the
+hangup trace's close order depends on. :381 and :577 sit on the blocking
+paths (each precedes a `wait_event_interruptible_exclusive`) and are tier 2.
+The remaining pipe sites (:1104-:1221) are FIFO opens, outside the domain.
+
+**C8 (should fix). Allocation-site lines, which fix the kind-305 return
+addresses stream R maps.** `ep_alloc_epitem`'s `kmem_cache_zalloc` is :1764
+(3.1's :1766 is the `percpu_counter_dec` on failure; the `-ENOMEM` arm is
+:1765-1768); `ep_ptable_queue_proc`'s `kmem_cache_alloc` is :1550 (3.1's
+:1547 is `unlikely(!epi)`, an `invariant` arm here since every domain file
+registers one head); `ep_attach_file`'s `kmem_cache_zalloc` is :1722 (3.1's
+:1723 is the `!to_free` test). `ep_alloc`'s `kzalloc` at :1331 is right.
+
+**C9 (nit). Other line and wording slips.** `ep_timeout_to_timespec` is
+:2104-2123; `do_epoll_ctl` ends :2619; `ep_insert` ends :1904;
+`ep_clear_and_put` is :1102-1141; `ep_send_events` ends :2102. The
+`EPOLLWAKEUP` tests at :1855 and :1927-1931 (constant false after :2461
+cleared the bit) are decisions 2.3 and 2.4 do not list; `ep_done_scan`'s
+`wq` test (:957) is missing from 4.4's `unsupported` list;
+`ep_poll_safewake` as configured is :815-819 (15.1). `ep_remove_epi` always
+returns true (:1068), so :1320's live decision is `ep_refcount_dec_and_test`,
+a refcount compare, not a `dispose` flag. The two `cond_resched` calls
+(:1120, :1135) are not record-free in general: a resched record (kind 302,
+`check.py:306`) is written when `__cond_resched` schedules, which a tick
+that woke a kernel thread can cause; treat them as the existing resched
+points are treated rather than as "no record".
+
+### 15.3 Altitude and shape, against the simulation-target review
+
+**M1 (should fix). `ep_clear_and_put` is two whole-tree walks, and
+`epClearAndPut` must keep both.** :1116-1121 unregisters every item's wait
+entries in key order; :1131-1136 then runs `ep_remove` on each, which calls
+`ep_unregister_pollwait` again on an emptied list (:1081) before the dying
+test, `epi_fget`, `ep_remove_file` and `ep_remove_epi`. 2.8's "every item in
+key order, `ep_unregister_pollwait` then `ep_remove`" reads as one walk; the
+decision order differs (all unregistrations precede the first removal), and
+a one-walk mirror would fail the coverage order. The ordered map gives both
+walks the key order the record fixes, so the cut (3.2, option b) holds for
+the three consumers named there.
+
+**M2 (nit). The walk "over a snapshot" (4.2).** The C iterates the live
+list with `list_for_each_entry_safe_from`; in the domain no callback edits
+the queue being walked (`POLLFREE` is out of scope, and a nested
+`ep_poll_safewake` walks a different head), so a snapshot is equivalent.
+Say it as an `invariant` after the walk (the queue is the snapshot) rather
+than relying on it silently; that keeps the C's shape visible for the
+proof's boundary at this service.
+
+**M3 (nit). Fields the C reads that 4.1 lacks.** `ep->seq` (C3);
+`ep->busy_poll_usecs`, read by `ep_busy_loop_on` (:612) from
+`ep_set_busy_poll_napi_id` on the insert and callback paths (:1440, :1885),
+with `net_busy_loop_on()` as the fixture constant 3.3 names: carry
+`busyPollUsecs : Nat := 0` as data so the two decisions have their operands.
+`WaitFunc` with one constructor is right for tier 1; see S2 for its tier-2
+shape.
+
+### 15.4 Evidence under the gates regime
+
+**E1 (should fix). `cut_functions` exempts nothing the checker rejects
+today, so it is a new rule, not a small exemption.** The checker requires
+that every covered `.c` line of an anchored file belongs to a listed
+function (`unlisted_c_lines`, `check.py:743-756`) and that every mirror
+decision's C function is listed or branch-free (`witness_table`,
+`check.py:711-725`); a listed function in which the mirror emits no
+decision is not reported, and operands are compared only at declared
+mirror decisions. Listing `ep_find` and `ep_rbtree_insert` in `functions`
+with no mirror decisions already does what 3.2 wants, and with no decision
+there is nothing to exclude. The review (3.2) asks that each cut be named;
+name it in `Eventpoll.lean` beside `epFind`/`epRbtreeInsert`. If the
+coordinator wants the rule the design implies (a covered listed function
+must emit a decision unless declared cut), it is a new check with its own
+case under "Checks must pay for themselves": a dropped-function mutant it
+alone rejects, and a home for decision-free helpers that
+`branch_free_functions` (inlined decision owners, the opposite case) does
+not provide. Either way `check.py:251` rejects unknown keys, fail-closed,
+so a new key means editing the validator and `test_evaluation`.
+
+**E2 (should fix). The wait-queue-order sentinel is a mirror-logic mutant
+and gets no sentinel by section 7's own rule.** Inserting at the wrong end
+of the list changes the delivery order the two-entries trace observes, so
+the differential check rejects it with no new verdict channel involved;
+the wait service is neither a record instrument nor a comparison class
+(AGENTS.md, "Gates and speedbumps"). Drop it, keep the trace. The kind-308
+one-off is the right and sufficient instrument mutant.
+
+**E3 (nit). The kind-308 one-off needs a trace that slab reuse actually
+reorders.** "The mirror ordering by `FileId`" is rejected only where the
+address order differs from allocation order; the three-item close trace
+must be preceded by a close-and-create so a recycled slot sits between
+fresh ones, which is what step 0's last measurement establishes. Name that
+trace as the mutant's subset.
+
+**E4 (nit). The `max_user_watches` fixture check is required, not
+optional, after C2:** the value is an operand at every ADD (:1759). The
+warm-up of C1 belongs in the same fixture step, and the fixture row should
+carry the value so a mismatch names both sides.
+
+### 15.5 Scope and estimate
+
+**S1 (should fix). Tier 1 grows by the reachable limit arms and shrinks by
+the counter.** C4 adds two traces and keeps one `-EINVAL` arm live (about
+0.02 WU in T); C1, C3, C6 and C7 add state, four functions' worth of
+decisions, a guest fixture step and one trace (about 0.05 WU across R and
+S); C2 removes the counter modelling and a measurement. Step 0 should
+confirm C1 (the first ADD of a boot covers `reverse_path_check`) in place
+of the percpu operands, and keep the slab-reuse probe. The total stays
+about 0.6-0.65 WU; the ownership table (12) is unchanged except that
+`Leanux/Env.lean` gains the warm-up rule (coordinator).
+
+**S2 (nit). Tier 2's `WaitFunc`.** Blocking `eventfd_read`/`write`
+(`wait_event_interruptible_locked_irq`, :230, :265) add non-exclusive task
+entries at the head; `pipe_read`/`pipe_write` add exclusive entries at the
+tail (`wait_event_interruptible_exclusive`, :390, :579); `ep_poll` adds an
+exclusive entry with `ep_autoremove_wake_function` (:2232-2252). Each
+returns a value `__wake_up_common`'s stop rules consume. 9.1 should say
+that tier 2 adds a `taskWaiter` constructor with its function's return, so
+the tier-1 `WaitEntry` is not shaped in a way that excludes it.
+
+**S3 (nit). The ovflist stays unexercised (9.3) and the design's
+correction of the scout is right:** `ep_is_scanning` is true only between
+`ep_start_scan` and `ep_done_scan` of the same task, and no callback runs
+in that window without a second context.
+
+### 15.6 Whose decisions
+
+**D1 (should fix). Only the kernel record needs the user, and only at the
+merge.** Decision 2 is record-only under "Oracle kernel changes": approved
+as a class, landing with the per-merge signoff and the new identity; it
+needs no advance ruling and should be presented as the signoff point it is.
+Decisions 1, 3 and 4 are tactical under the user's 2026-10-12 delegation
+("you are empowered to make tactical decisions towards that") and change no
+kernel behaviour or configuration; the coordinator makes them, records them
+as [AGENT] in `docs/decisions.md`, and informs the user. The one choice that
+is the user's is whether epoll is the next target at all (the scout's
+ranking, already before the user). The warm-up fixture of C1 is a guest
+change, tactical, recorded the same way.
+
+**D2 (nit). The closing paragraph's tactical list** should drop the
+sentinel set (E2 leaves the one-off only) and add the warm-up rule.
+
+### 15.7 Severity summary
+
+| Severity | Findings |
+| --- | --- |
+| blocking | C1 |
+| should fix | C2, C3, C4, C5, C6, C7, C8, M1, E1, E2, S1, D1 |
+| nit | C9, M2, M3, E3, E4, S2, S3, D2 |
+
+The design's core holds: the record-only kind-308 hook is the smallest
+instrument for the tree order, tier 1 is deterministic without a sleep
+witness, the wait-queue service is the right boundary and the cut of the
+rbtree is honest. The blocking item is a fixture fact the design did not
+see; the rest are corrections to section 2 from a closer read of this
+revision, one dropped mechanism (E1) and one dropped sentinel (E2).
