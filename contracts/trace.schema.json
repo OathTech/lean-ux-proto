@@ -31,7 +31,7 @@
             "ref"
           ],
           "additionalProperties": false,
-          "$comment": "Names an earlier eventfd2, dup or dup3."
+          "$comment": "Names an earlier eventfd2, dup, dup3 or epoll_create1."
         },
         {
           "type": "object",
@@ -255,6 +255,100 @@
             "type": "object",
             "properties": {
               "op": {
+                "const": "epoll_create1"
+              },
+              "flags": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4294967295
+              },
+              "pause_ms": {
+                "$ref": "#/$defs/pause_ms"
+              }
+            },
+            "required": [
+              "op",
+              "flags"
+            ],
+            "additionalProperties": false,
+            "$comment": "epoll (amended 2026-10-12): a descriptor producer."
+          },
+          {
+            "type": "object",
+            "properties": {
+              "op": {
+                "const": "epoll_ctl"
+              },
+              "epfd": {
+                "$ref": "#/$defs/fd"
+              },
+              "cmd": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4294967295
+              },
+              "fd": {
+                "$ref": "#/$defs/fd"
+              },
+              "events": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4294967295
+              },
+              "data": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]{0,19})$",
+                "$comment": "A canonical unsigned 64-bit decimal string, like a write's value."
+              },
+              "pause_ms": {
+                "$ref": "#/$defs/pause_ms"
+              }
+            },
+            "required": [
+              "op",
+              "epfd",
+              "cmd",
+              "fd",
+              "events",
+              "data"
+            ],
+            "additionalProperties": false,
+            "$comment": "epoll (amended 2026-10-12): cmd 1 ADD, 2 DEL, 3 MOD; any other value is observable as -EINVAL."
+          },
+          {
+            "type": "object",
+            "properties": {
+              "op": {
+                "const": "epoll_wait"
+              },
+              "epfd": {
+                "$ref": "#/$defs/fd"
+              },
+              "maxevents": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 16
+              },
+              "timeout": {
+                "const": 0
+              },
+              "pause_ms": {
+                "$ref": "#/$defs/pause_ms"
+              }
+            },
+            "required": [
+              "op",
+              "epfd",
+              "maxevents",
+              "timeout"
+            ],
+            "additionalProperties": false,
+            "$comment": "epoll (amended 2026-10-12), tier 1: 1-16 events, timeout 0; other values are unsupported, not invalid."
+          },
+          {
+            "type": "object",
+            "properties": {
+              "op": {
                 "const": "fcntl"
               },
               "fd": {
@@ -303,5 +397,5 @@
     "ops"
   ],
   "additionalProperties": false,
-  "$comment": "Additional normative range, reference, reserved-FD, NONBLOCK and pipes rules are in trace-v1.md. This schema covers the FD, eventfd and pipe operations; the WireGuard operations (wg_*) and the steering fields (steer, expect) are specified by harness/trace.py and harness/wg.py, not here."
+  "$comment": "Additional normative range, reference, reserved-FD, NONBLOCK, pipes and epoll rules are in trace-v1.md. This schema covers the FD, eventfd, pipe and epoll operations; the WireGuard operations (wg_*) and the steering fields (steer, expect) are specified by harness/trace.py and harness/wg.py, not here."
 }

@@ -324,6 +324,13 @@ DST_CACHE_JIFFIES = 306
 # timer}, so every dispatched unit is paired with its queueing or arming
 # (dispatch_problems) and the mirror runs the unit the record names.
 QUEUE = 307
+# epoll stream R (docs/2026-10-12-epoll-design.md, section 3.2): the file
+# address an epoll item is keyed by, recorded at ep_rbtree_insert (class
+# 'address', resolved by the consumer frame like the clock readers: the
+# `_THIS_IP_` in fs/eventpoll.c, 8 bytes, one per successful EPOLL_CTL_ADD);
+# the mirror orders a set's items by (recorded address, fd), ep_cmp_ffd's
+# order, which fixes the walks of ep_clear_and_put and ep_loop_check_proc.
+EPOLL_INSERT_ADDRESS = 308
 
 
 def load_hidden_sites():
@@ -430,7 +437,8 @@ def resolve_choices(per, sites, locations, dispatch=None):
                 kind_class = 'random' if kind in RANDOM_KINDS else 'clock' if 200 <= kind <= 216 \
                     else 'resched' if raw_kind == RESCHED else 'timer' if raw_kind == TIMER_ARM \
                     else 'advance' if raw_kind == TIME_ADVANCE else 'alloc' if kind == ALLOC_KIND \
-                    else 'queue' if raw_kind == QUEUE else 'jiffies' if raw_kind == DST_CACHE_JIFFIES else None
+                    else 'queue' if raw_kind == QUEUE else 'jiffies' if raw_kind == DST_CACHE_JIFFIES \
+                    else 'address' if raw_kind == EPOLL_INSERT_ADDRESS else None
                 if kind_class == 'queue':
                     # {work, func}: the site is the queued function's symbol
                     queued_func = int.from_bytes(bytes.fromhex(data[16:32]), 'little') if length == 16 else 0
