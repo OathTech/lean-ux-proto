@@ -32,7 +32,15 @@ CHOICE_HELPERS = ('drivers/char/random.c', 'include/linux/random.h', 'kernel/tim
 # get_random_u32 (net/ipv4/udp.c:257), any 4 bytes.
 # E-B arm C: the cookie secret (cookie.c:24, get_random_bytes) is steered so the
 # fixture can compute make_cookie and a valid MAC2 to reach the ratelimiter.
-STEERABLE = {'init_ephemeral', 'resp_ephemeral', 'index_draw', 'tai64n_now', 'udp_port_draw', 'cookie_secret'}
+# W12 (docs/2026-10-06-w3-w12.md, Part II, section 6): the two timer jitters
+# (timers.c:186 and :150, get_random_u8 inside get_random_u32_below(83)),
+# steered host-side so two peers' retransmit timers share a bucket. Domain: a
+# byte r the inline sampler accepts, (83 * r) mod 256 >= 7 (random.h:76-80);
+# the jitter is (83 * r) >> 8 ticks, so r = 0x01 is jitter 0 (0x00 is rejected
+# by the sampler, costing a second draw the schedule would also have to cover).
+STEERABLE = {'init_ephemeral', 'resp_ephemeral', 'index_draw', 'tai64n_now', 'udp_port_draw', 'cookie_secret',
+             'retransmit_jitter', 'new_handshake_jitter'}
+JITTER_SITES = {'retransmit_jitter', 'new_handshake_jitter'}
 TIME_SETTOD_SEC_MAX = (1 << 63) // 1_000_000_000 - 30 * 365 * 24 * 3600   # KTIME_SEC_MAX - TIME_UPTIME_SEC_MAX
 
 
@@ -135,6 +143,8 @@ def resolve(trace, site_table, sites, alloc_sites=None):
             data = bytes.fromhex(value)
             if len(data) != entry['len']:
                 raise SteeringError(f'{trace["id"]}: {label} takes {entry["len"]} bytes')
+            if label in JITTER_SITES and (83 * data[0]) % 256 < 256 % 83:
+                raise SteeringError(f'{trace["id"]}: {label} byte {data[0]:#04x} is rejected by the u8 sampler')
             if label == 'tai64n_now':
                 sec = int.from_bytes(data[:8], 'little', signed=True)
                 nsec = int.from_bytes(data[8:], 'little', signed=True)

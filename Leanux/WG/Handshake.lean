@@ -1,4 +1,5 @@
-import Leanux.WG.Netlink
+import Leanux.WG.Send
+import Leanux.WG.Socket
 import Leanux.WG.NoiseCrypto
 
 /-!

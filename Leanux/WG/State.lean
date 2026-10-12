@@ -50,6 +50,12 @@ def requireNotPending (pid : PeerId) (what : String) : M Unit := do
   if (← getPeer pid).handshakePending && !(← get).queuedThisCall.contains pid then
     unsupported s!"{what} races the pending handshake worker"
 
+/-- Short-circuit `&&` and `||` over decisions: the right operand runs only
+    when the left does not decide. (W3: moved here from `Netlink.lean`, so
+    that `Handshake` no longer imports `Netlink`.) -/
+def andM (a b : M Bool) : M Bool := do if ← a then b else pure false
+def orM (a b : M Bool) : M Bool := do if ← a then pure true else b
+
 /-- A little-endian 64-bit word of a record (`jiffies` is 64-bit from
     `INITIAL_JIFFIES` = 2^32 - 75000: never truncated). -/
 def recordWord (bs : List UInt8) (k : Nat) : Nat :=

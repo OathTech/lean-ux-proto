@@ -1,0 +1,182 @@
+{
+  "version": 1,
+  "id": "w12_three_retransmit",
+  "ops": [
+    {
+      "op": "wg_set",
+      "config": {
+        "private_key": "1111111111111111111111111111111111111111111111111111111111111111",
+        "listen_port": 51820,
+        "peers": [
+          {
+            "public_key": "0faa684ed28867b97f4a6a2dee5df8ce974e76b7018e3f22a1c4cf2678570f20",
+            "allowed_ips": [
+              {
+                "family": 4,
+                "addr": "0a000000",
+                "cidr": 8
+              }
+            ],
+            "endpoint": {
+              "family": 4,
+              "addr": "7f000001",
+              "port": 51999
+            },
+            "keepalive": 25
+          },
+          {
+            "public_key": "7b0d47d93427f8311160781c7c733fd89f88970aef490d8aa0ee19a4cb8a1b14",
+            "allowed_ips": [
+              {
+                "family": 4,
+                "addr": "0b000000",
+                "cidr": 8
+              }
+            ],
+            "endpoint": {
+              "family": 4,
+              "addr": "7f000001",
+              "port": 51999
+            },
+            "keepalive": 25
+          },
+          {
+            "public_key": "ff2ee45601ec1b67310c7790404585ae697331eee1c1f8cf2419731c1fff3e6b",
+            "allowed_ips": [
+              {
+                "family": 4,
+                "addr": "0c000000",
+                "cidr": 8
+              }
+            ],
+            "endpoint": {
+              "family": 4,
+              "addr": "7f000001",
+              "port": 51999
+            },
+            "keepalive": 25
+          }
+        ]
+      }
+    },
+    {
+      "op": "wg_up"
+    },
+    {
+      "op": "wg_observe"
+    },
+    {
+      "op": "wg_advance",
+      "ticks": 1450
+    },
+    {
+      "op": "wg_observe"
+    },
+    {
+      "op": "wg_get"
+    }
+  ],
+  "steer": [
+    [
+      "init_ephemeral",
+      "8182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0"
+    ],
+    [
+      "tai64n_now",
+      "803bb16a00000000b168de3a00000000"
+    ],
+    [
+      "index_draw",
+      "0d0c0b0a"
+    ],
+    [
+      "retransmit_jitter",
+      "01"
+    ],
+    [
+      "init_ephemeral",
+      "c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0"
+    ],
+    [
+      "tai64n_now",
+      "823bb16a00000000ffffff0000000000"
+    ],
+    [
+      "index_draw",
+      "11100f0e"
+    ],
+    [
+      "retransmit_jitter",
+      "01"
+    ],
+    [
+      "init_ephemeral",
+      "4142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f60"
+    ],
+    [
+      "tai64n_now",
+      "843bb16a000000000000000000000000"
+    ],
+    [
+      "index_draw",
+      "15141312"
+    ],
+    [
+      "retransmit_jitter",
+      "01"
+    ],
+    [
+      "init_ephemeral",
+      "6162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80"
+    ],
+    [
+      "tai64n_now",
+      "863bb16a000000000000000000000000"
+    ],
+    [
+      "index_draw",
+      "19181716"
+    ],
+    [
+      "retransmit_jitter",
+      "01"
+    ],
+    [
+      "init_ephemeral",
+      "2122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40"
+    ],
+    [
+      "tai64n_now",
+      "883bb16a000000000000000000000000"
+    ],
+    [
+      "index_draw",
+      "1d1c1b1a"
+    ],
+    [
+      "retransmit_jitter",
+      "01"
+    ],
+    [
+      "init_ephemeral",
+      "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20"
+    ],
+    [
+      "tai64n_now",
+      "8a3bb16a000000000000000000000000"
+    ],
+    [
+      "index_draw",
+      "21201f1e"
+    ],
+    [
+      "retransmit_jitter",
+      "01"
+    ]
+  ],
+  "expect": [
+    "fired:wg_expired_retransmit_handshake",
+    "wg_packet_send_queued_handshake_initiation.not_retry=0",
+    "wg_expired_retransmit_handshake.give_up=0"
+  ]
+}
