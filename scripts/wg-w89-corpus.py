@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Writes workstream W9's traces (docs/2026-10-06-w8-w9-netns-routing.md,
+"""Writes workstream W8's and W9's traces (docs/2026-10-06-w8-w9-netns-routing.md,
 sections 4.3 and 7: `send4`'s arms, the dst cache, the fixture's tables and
 the sender's wildcard bind) into corpus/wireguard.
 
@@ -124,7 +124,23 @@ def traces():
     # delete-then-send: the address removal keeps the default route
     out["w9_deladdr6_then_send"] = (d1.setup() + [OBSERVE, deladdr(6), delroute(6), delroute(6), GET],
                                     d1.steer_initiation(), [])
+    # W8a (section 3, the device down at the exit): the creating namespace C
+    # exits inside wg_netns_close (its holders closed, cleanup_net's section
+    # in the wait), and wg_netns_pre_exit NULLs creating_net and the sockets:
+    # wg_up fails -ENONET at wg_socket_init (wg_open's error branch), a
+    # wg_set with a port -EPERM before the generation moves, one without
+    # succeeds, wg_delete works, and wg_observe reports the closed listeners
+    # as null with recvfrom's -EBADF
+    close = {"op": "wg_netns_close"}
+    set_only = d1.setup()[:1]
+    other = d1.peer(public_key=d1.key(b"\x33" * 32), allowed_ips=[{"family": 4, "addr": "0b000000", "cidr": 8}])
+    del other["endpoint"]
+    out["w8_down_exit_up"] = (set_only + [close, UP, GET, OBSERVE], [], [])
+    out["w8_exit_set_port"] = (set_only + [close, {"op": "wg_set", "config": {"listen_port": d1.PORT + 1}}, GET], [], [])
+    out["w8_exit_set_peer"] = (set_only + [close, {"op": "wg_set", "config": {"peers": [other]}}, GET], [], [])
+    out["w8_exit_delete"] = (set_only + [close, {"op": "wg_delete"}, OBSERVE], [], [])
     return {name: {"version": 1, "id": name, "ops": ops,
+                   **({"net_fixture": "foreign-creator"} if name.startswith("w8_") else {}),
                    **({"steer": steer} if steer else {}), **({"expect": expect} if expect else {})}
             for name, (ops, steer, expect) in out.items()}
 

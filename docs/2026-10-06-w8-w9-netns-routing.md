@@ -1559,9 +1559,65 @@ point without `SECURITY`):
 
 ### 14.4 Not done
 
-- **W8** entirely (the foreign-creator fixture, `wg_netns_close` 22, the
-  per-trace arm subset, the batch pins, `wg_netns_pre_exit`, the live
-  `socketInit` arm, `setDevice`'s `-EPERM`, W8b): a second stream on this
-  branch, after W9's kernel is built (W8 needs no kernel change).
+- **W8b** (the device up at the exit: `linkwatch_event` armed, the
+  deactivated queue's `tx_dropped`, the timers' and keepalive sends'
+  `-ENONET`, the two-table routing of section 3.4), the generator's `netns`
+  class, and listing `wg_socket_init` with the refcount operand exclusions
+  (section 3.3): see 14.5 for what W8a built.
 - The generator classes (`routing`, `netns`); the control suite for the
   datagram routed into wg0; W9-R; the stretch items W9-S1/S2.
+
+### 14.5 W8a: the exit with the device down [AGENT 2026-10-12]
+
+Built on the W9 oracle (`313c2cc9…`), no kernel change.
+
+| Run | Result |
+|---|---|
+| unit and replay tests | 111 OK |
+| `w8_down_exit_up` alone | pass, 54 operand pairs: the `cleanup_net` section in `wg_netns_close`, `wg_up` `-ENONET`, `wg_observe` null with `-EBADF` |
+| the four `w8_*` traces | pass, 4/4, 223 operand pairs |
+| `--suite handwritten,wireguard` | see the commit |
+
+What was built (sections 3.1-3.4): the fixture mode `"net_fixture":
+"foreign-creator"` (wire `net` 3: D and C, wg0 created from C with
+`IFLA_NET_NS_FD` naming D, the listeners, the injector at 8 and the pin at
+9 in C, the sender and the generic-netlink socket in D, the fixture row
+`reserved` 0-9); `wg_netns_close` (opcode 22); per-trace arming (the `T`
+line's seventh field, a bit per dispatch entry; `cleanup_net` and
+`linkwatch_event` join `DISPATCH_SYMBOLS` at 12-13, `cleanup_net` armed by
+foreign-creator traces only); the namespace pins; the mirror's
+`wgNetnsPreExit`, `socketInit`'s live `-ENONET`, `setDevice`'s live `-EPERM`
+(`.setDevNoNet`), the closed listeners' `-EBADF` and null datagrams; the
+FS mirror closes fixture sockets (`sock_close` a cut) and the pin (its
+dentry's eviction queues `cleanup_net`); `wg_netns_pre_exit` listed in
+`kcov.json`.
+
+Deviations [AGENT]:
+- **The pins live in a holder process**, not the batch: a pin held by the
+  batch is inherited by every later child, where it shifts the fixture and
+  widens the descriptor table (an operand of every close). The batch forks
+  the holder once; a trace process sends its pid and waits for the ack.
+- **The close order is injector, listeners, then the pin**, the reverse of
+  3.2's: a UDP socket's `put_net` is RCU-deferred, and a `cleanup_net`
+  queued from an RCU callback would write no queue record (kind 307 is
+  recorded in the task's context only), so the pin's synchronous put must
+  be the last. The settle in between is a TSC spin, not a sleep: a
+  `nanosleep` inside the window records its clock reads.
+- **The parked descriptors sit at 40-43**, not above the table: a `dup2`
+  above `NR_OPEN_DEFAULT` would grow the trace process's table to 256,
+  visible as `file_close_fd_locked`'s operand.
+- **`linkwatch_event` is not armed in W8a**: its delay is
+  `linkwatch_nextevent - jiffies`, a global the previous child's run moves
+  (audit M2's caveat), so its section could land after the wait; for a down
+  device only `operstate` changes, which nothing observes. W8b decides.
+- **Inside the section** the records are the pre-exit's, one `dst_cache_reset_ts`
+  from `sit0`'s unregister (`ipip6_tunnel_uninit`, a cut consumer) and
+  `cleanup_net`'s own `cond_resched` (an ambient site, 152). The
+  allocations are below the cut (A).
+- **The check accepts repeated decisions inside `wg_netns_close`**: four
+  close system calls in one operation.
+- **`wg_socket_init` stays unlisted** (3.3's operand exclusions not built):
+  the `-ENONET` arm is data, witnessed by `wg_open.socket_init_error`.
+- The one-off mutant for the new section rule, W8-M1 (`wg_netns_pre_exit`
+  keeps `creating_net`), is run once and reported in the commit, then
+  dropped (AGENTS.md, gates and speedbumps).

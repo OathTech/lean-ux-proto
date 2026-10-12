@@ -22,7 +22,7 @@ more asks before taking it.
 Shared, coordinator-owned, allocated here and append-only per stream:
 - the wire opcode table (`harness/trace.py` `OPCODES`, `RESERVED_OPCODES`;
   `harness/guest.c` `OP_*`; `evaluator/protocol.py` `SEMANTIC_ERRNOS`):
-  20 `wg_get_start`, 21 `wg_get_recv` (W2); 22 `wg_netns_close` (W8);
+  20 `wg_get_start`, 21 `wg_get_recv` (W2); 22 `wg_netns_close` (W8, taken);
   23 `wg_deladdr`, 24 `wg_delroute` (W9); W4's `wg_set_mtu` and the
   `wg_xmit`/`wg_batch` options need codes from the coordinator when T and
   B land (`OP_SET_MTU`, `OP_BATCH` placeholders in the design);
