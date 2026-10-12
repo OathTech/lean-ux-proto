@@ -53,6 +53,16 @@
       "op": "wg_observe"
     },
     {
+      "op": "wg_xmit",
+      "packet": {
+        "family": 4,
+        "dst": "0a010203"
+      }
+    },
+    {
+      "op": "wg_observe"
+    },
+    {
       "op": "wg_get"
     }
   ],

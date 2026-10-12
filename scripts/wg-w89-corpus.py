@@ -104,13 +104,21 @@ def traces():
     # (w9_session_two_sends), or a keepalive queued by a running-device
     # wg_set after a wg_delroute 4 that was never looked up (no generation
     # bump: w9_session_delroute_untouched)
+    # The session's endpoint update resets the cache and its keepalive refreshes
+    # in the same or the next jiffy (a tick in between is the 1-5% case of
+    # section 2.4), so the first data send may miss once more; the second
+    # always hits. For W9-M9 the inner packets are IPv6 (the peer's IPv6
+    # allowed IP), so the IPv4 default route is never looked up before its
+    # deletion while the outer sends still go through send4's cache.
     response = d1.respond(d1.wg0_initiation())
-    peer_key = d1.peer()["public_key"]
-    out["w9_session_two_sends"] = (d1.setup() + [OBSERVE, d1.inject(response.message), OBSERVE, xmit(), OBSERVE, GET],
+    out["w9_session_two_sends"] = (d1.setup() + [OBSERVE, d1.inject(response.message), OBSERVE,
+                                                 xmit(), OBSERVE, xmit(), OBSERVE, GET],
                                    d1.steer_initiation(), d1.EXPECT_SESSION)
+    allowed = [{"family": 4, "addr": "0a000000", "cidr": 8}, {"family": 6, "addr": "fd000000000000000000000000000000", "cidr": 8}]
+    xmit6 = {"op": "wg_xmit", "packet": {"family": 6, "dst": "fd000000000000000000000000000001"}}
     out["w9_session_delroute_untouched"] = (
-        d1.setup() + [OBSERVE, d1.inject(response.message), OBSERVE, delroute(4),
-                      {"op": "wg_set", "config": {"peers": [{"public_key": peer_key, "keepalive": 25}]}}, OBSERVE, GET],
+        d1.setup(allowed_ips=allowed) + [OBSERVE, d1.inject(response.message), OBSERVE, xmit6, OBSERVE,
+                                         delroute(4), xmit6, OBSERVE, GET],
         d1.steer_initiation(), d1.EXPECT_SESSION)
     # the IPv6 side of the alias rule does not exist (no /8 on lo); the IPv6
     # delete-then-send: the address removal keeps the default route
