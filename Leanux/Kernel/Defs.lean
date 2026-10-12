@@ -466,6 +466,8 @@ inductive AllocSite where
   | skbCowHead | skbChecksumHelp | skbCowDataTx | skbCowDataRx
   -- below-cut consumers of the `__alloc_skb`/`kmalloc_reserve` ranges
   | nlmsgNew | netlinkAllocLargeSkb | sockAllocSendPskb | netlinkDump | netlinkTrim
+  -- below-cut consumer of the dentry cache's range: the last device's delete
+  | dAllocSlabDebugfs
   -- the pipe paths' direct sites (b-task; A section 19.6, integration)
   | kzallocPipeInfo | kcallocPipeBufs | allocPipePage
   deriving Repr, BEq, DecidableEq
@@ -504,7 +506,13 @@ def AllocSite.info : AllocSite → AllocSiteInfo
   | .netlinkAllocLargeSkb => ⟨19, "netlinkAllocLargeSkb", "net/netlink/af_netlink.c", 1180, .cut⟩
   -- sock_alloc_send_pskb: the fixture's sendto, and ICMP via ip_append_data
   | .sockAllocSendPskb => ⟨20, "sockAllocSendPskb", "net/core/sock.c", 2930, .cut⟩
-  | .netlinkDump => ⟨21, "netlinkDump", "net/netlink/af_netlink.c", 2284, .cut⟩
+  -- netlink_dump's skb: alloc_skb(alloc_min_size, GFP_KERNEL) at :2290. The
+  -- no-reclaim attempt at :2284 needs max_recvmsg_len above alloc_min_size
+  -- (NLMSG_GOODSIZE, 3776), and every netlink receive of the guest is exactly
+  -- 3776 bytes (W2's guest step, NL_RECV_LEN), so no modeled path takes it
+  -- [AGENT 2026-10-12, the coordinator's decision: the mirror follows the
+  -- guest step; docs/2026-10-06-w1-w2-netlink.md 9.5].
+  | .netlinkDump => ⟨21, "netlinkDump", "net/netlink/af_netlink.c", 2290, .cut⟩
   -- netlink_trim's pskb_expand_head (its kmalloc_reserve is in the range)
   | .netlinkTrim => ⟨22, "netlinkTrim", "net/netlink/af_netlink.c", 1294, .cut⟩
   -- Pipes (A section 19.6; D3+A integration [AGENT]): direct calls, one
@@ -520,13 +528,20 @@ def AllocSite.info : AllocSite → AllocSiteInfo
   | .kzallocPipeInfo => ⟨23, "kzallocPipeInfo", "fs/pipe.c", 798, .exact 1⟩
   | .kcallocPipeBufs => ⟨24, "kcallocPipeBufs", "fs/pipe.c", 815, .exact 1⟩
   | .allocPipePage => ⟨25, "allocPipePage", "fs/pipe.c", 513, .exact 1⟩
+  -- The last WireGuard device's wg_destruct -> wg_ratelimiter_uninit ->
+  -- kmem_cache_destroy(entry_cache) -> debugfs_slab_release ->
+  -- debugfs_lookup_and_remove -> lookup_slow -> d_alloc_parallel: the cache's
+  -- (negative) dentry under /sys/kernel/debug/slab, allocated by __lookup_slow
+  -- (namei.c:1730) when the dentry cache's range is armed. Consumed at
+  -- `WG.ratelimiterUninit` (a cut: recorded only when a chunk arms the range).
+  | .dAllocSlabDebugfs => ⟨26, "dAllocSlabDebugfs", "fs/namei.c", 1730, .cut⟩
 
 def AllocSite.all : List AllocSite :=
   [.kmallocEventfdCtx, .filpAlloc, .dAllocPseudo, .kmallocFdtable, .kvmallocFdArray, .kvmallocFdBitmaps,
    .kmemCacheZallocPeer, .allocNode190, .allocNode205, .allocNode234, .kzallocKeypair,
    .sendBufSkb, .replySkb, .keepaliveSkb, .skbCowHead, .skbChecksumHelp, .skbCowDataTx, .skbCowDataRx,
    .nlmsgNew, .netlinkAllocLargeSkb, .sockAllocSendPskb, .netlinkDump, .netlinkTrim,
-   .kzallocPipeInfo, .kcallocPipeBufs, .allocPipePage]
+   .kzallocPipeInfo, .kcallocPipeBufs, .allocPipePage, .dAllocSlabDebugfs]
 
 /-- The below-cut allocation consumers (consumed at cut points). -/
 def AllocSite.cuts : List AllocSite := AllocSite.all.filter (·.info.count == .cut)
@@ -1408,10 +1423,13 @@ def skipCut (sites : List HiddenSite) : M Unit := discard <| skipCutSites sites
 
 /-- A cut point whose consumer draws a fixed number of times on the modeled
     path (`.neighReachTime`: one draw per `neigh_parms_alloc`): with records,
-    exactly `n` head records (after ambient ones) come from `site`, and are
+    exactly `n` head records (after ambient ones, and after records of the
+    `between` cut sites, which may precede each draw: an armed run's
+    below-cut allocations between the draws) come from `site`, and are
     dropped; without records (the domain filter), nothing. -/
-def skipCutExactly (site : HiddenSite) (n : Nat) : M Unit := do
+def skipCutExactly (site : HiddenSite) (n : Nat) (between : List HiddenSite := []) : M Unit := do
   for _ in [0:n] do
+    skipCut between
     skipAmbient
     let w ← get
     match w.hidden with
@@ -1421,6 +1439,7 @@ def skipCutExactly (site : HiddenSite) (n : Nat) : M Unit := do
         throw (.hidden s!"expected {site.info.label} (cut, {n} records), the record is site {r.site}")
       set { w with hidden := some rest }
     | some [] => throw (.hidden s!"expected {site.info.label} (cut, {n} records), no record left")
+  skipCut between
   skipAmbient
   if let some (r :: _) := (← get).hidden then
     if r.site == site.info.id then throw (.hidden s!"more than {n} records of {site.info.label}")

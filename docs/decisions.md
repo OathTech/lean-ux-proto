@@ -168,3 +168,18 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   and `scripts/build-kernel`'s `make` call `capped` themselves, fail-closed
   when the wrapper is absent (`LEANUX_CAPPED` overrides its path). Pending
   the user's signoff.
+- **2026-10-12 [AGENT]** The coordinator's decision on the W batch's claim
+  point: the mirror follows W2's guest step now rather than waiting for the
+  user's W2 rulings (question 2, the 3776-byte receive, was recommended yes
+  and its guest half is on the branch). Hidden alloc site 21 (`netlinkDump`)
+  moves from `af_netlink.c:2284` to `:2290`, the allocation the kernel takes
+  when every receive is 3776 bytes; :2284 is dropped, not kept as a second
+  site, since no modeled path receives more than 3776 bytes on a netlink
+  socket. The last device's delete gains the below-cut alloc site
+  `dAllocSlabDebugfs` (`fs/namei.c:1730`, the slab cache's debugfs dentry at
+  `kmem_cache_destroy`), consumed at `ratelimiterUninit`, permissive: a
+  chunk records it only when its steered sites arm the dentry cache's
+  range, so its absence cannot be told from the records. The same armed
+  lifecycle chunks showed `nlmsg_new` records between `wg_create`'s two
+  neighbour draws and before an up device's `wg_destruct`; both are cut
+  points now (`docs/2026-10-05-l-lifecycle.md` 16.3).

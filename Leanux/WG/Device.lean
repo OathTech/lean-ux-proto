@@ -159,7 +159,11 @@ def ratelimiterUninit : M Unit := do
   -- which reads and changes nothing the mirror holds (empty tables)
   gcEntries false
   mayHaveSlept   -- rcu_barrier()
-  -- the tables and the cache are freed (cuts); `key` stays, unused
+  -- kvfree(table_v4), kvfree(table_v6); kmem_cache_destroy(entry_cache), whose
+  -- debugfs_slab_release looks the cache's debugfs entry up and allocates
+  -- its negative dentry (a below-cut allocation, recorded when a chunk arms
+  -- the dentry cache's range); `key` stays, unused
+  skipCut [.alloc .dAllocSlabDebugfs]
 
 /-- wg_setup (device.c:274-307): the net_device's ops, type, flags and MTU
     (constants of the mirror: `DEVICE_MTU`), then `memset(wg, 0)`. The
@@ -208,13 +212,16 @@ def wgNewlink : M Int := do
   if ← branch .newlinkRatelimiterErr (ret < 0) then return ← unwind
   -- register_netdevice: the ifindex (the netns cursor, dev.c:10000-10018),
   -- then NETDEV_REGISTER, whose inetdev_init and ipv6_add_dev each draw a
-  -- neighbour parms' reachable time (a cut: unobserved)
+  -- neighbour parms' reachable time (a cut: unobserved); between the two,
+  -- devinet_sysctl_register's netconf notification (nlmsg_new, a below-cut
+  -- allocation recorded when the run armed __alloc_skb), after them the
+  -- IPv6 and link notifications (consumed by rtnetlinkRequest's cut)
   let ok ← envOk .registerNetdevice
   if ← branch .newlinkRegisterErr !ok then return ← unwind
   let ifindex := (← getK).netIfindexNext
   modifyK fun k => { k with netIfindexNext := ifindex + 1 }
   modifyDev fun d => { d with ifindex }
-  skipCutExactly .neighReachTime 2
+  skipCutExactly .neighReachTime 2 allocCuts
   -- list_add(&wg->device_list, &device_list); priv_destructor = wg_destruct
   return 0
 
@@ -257,6 +264,10 @@ def wgDestruct : M Unit := do
 def wgDelete : M Int := do
   if (← getK).wg.isNone then return -ENODEV
   if (← getDev).running then wgDown
+  -- the notifications of dev_close_many and of NETDEV_UNREGISTER (ifinfo,
+  -- netconf and address messages: nlmsg_new, below the cut when the run
+  -- armed __alloc_skb), then flush_all_backlogs
+  skipCut allocCuts
   mayHaveSlept
   wgDestruct
   return 0

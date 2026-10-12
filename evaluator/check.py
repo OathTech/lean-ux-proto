@@ -1460,7 +1460,14 @@ def main(argv=None):
                 continue
             results.update(chunk_results)
             gaps.update(chunk_gaps)
-            outcomes.update(chunk_outcomes)
+            # W7's per-trace NAPI placement is a string, not a count:
+            # Counter.update adds counts into a non-empty Counter and would
+            # fail on it for every chunk merged after the first
+            for key, value in chunk_outcomes.items():
+                if isinstance(value, str):
+                    outcomes[key] = value
+                else:
+                    outcomes[key] += value
     except BaseException as exc:  # recorded as an aborted, failing run, then re-raised
         aborted = f'{type(exc).__name__}: {exc}'
         raise

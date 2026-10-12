@@ -1131,6 +1131,18 @@ below covers the merged harness.
   chunk, so it cannot share a chunk with traces that must agree.
 - Not done: the generator's `lifecycle` class (section 7) and the D3
   traces `l_down_stops_timers`, `l_delete_with_clear_work`.
+- Armed chunks with lifecycle traces [AGENT 2026-10-12], seen first at the W
+  batch's claim point, where `w8_exit_delete` was the first `wg_delete` in
+  one: the last device's `wg_delete` allocates one dentry below the cut
+  (`wg_ratelimiter_uninit` -> `kmem_cache_destroy` -> `debugfs_slab_release`
+  -> `lookup_slow`, consumer `fs/namei.c:1730`), consumed at
+  `ratelimiterUninit` as the alloc cut site `dAllocSlabDebugfs` when a chunk
+  arms the dentry cache's range; `wg_create`'s `register_netdevice` has
+  `devinet_sysctl_register`'s netconf notification (`nlmsg_new`) between its
+  two `neigh_parms_alloc` draws (`skipCutExactly`'s `between` cuts); and an
+  up device's `wg_delete` has the `dev_close_many` and `NETDEV_UNREGISTER`
+  notifications between `wg_stop`'s last clock read and `wg_destruct`
+  (`wgDelete`'s cut before `flush_all_backlogs`).
 
 ### 16.4 Evidence
 
