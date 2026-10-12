@@ -24,7 +24,7 @@ import sys
 from harness.linux import (ARTIFACTS as LINUX_ARTIFACTS, ARM_RECORDS, DISPATCH_SYMBOLS, GUEST_VARIANTS, KERNEL, LinuxRunError, verify_kernel,
                           dispatch_addresses, run_linux)
 from harness.steer import SteeringError, call_sites, resolve as resolve_steering
-from harness.trace import InvalidTrace, loads_trace, uses_wireguard, validate_trace
+from harness.trace import OPCODES, InvalidTrace, loads_trace, uses_wireguard, validate_trace
 from .coverage import attributable, instrumented_lines, symbolize
 from .generate import generate, generate_wireguard
 from .protocol import InvalidOutput, compare, loads, parse_batch, validate_coverage
@@ -249,9 +249,17 @@ class ModelStopped(InvalidOutput):
 def load_kcov_config():
     config = json.loads(ANCHORS.read_text())
     if (set(config) != {'version', 'description', 'files', 'functions', 'branch_free_functions', 'known_gaps',
-                        'shared_exits', 'operand_exclusions'}
+                        'shared_exits', 'operand_exclusions', 'data_only_operations'}
             or config['version'] != 2):
         raise ValueError('kcov config fields or version')
+    # seccomp W (design 6.3): operations whose kernel work is entirely in
+    # unlisted files (prctl's no-new-privs arms, capset), checked by their
+    # data (the next install's result, the queries' answers), so exempt from
+    # "no coverage in anchored files" and "no model decision" only; any
+    # decision they do report (the cache path once a mode is set) is checked
+    if (type(config['data_only_operations']) is not list
+            or any(type(x) is not str or x not in OPCODES for x in config['data_only_operations'])):
+        raise ValueError('data-only operations must name operations of the trace contract')
     if any(type(x) is not str or x in config['functions'] for x in config['branch_free_functions']):
         raise ValueError('branch-free functions must be names outside the instrumented functions')
     if not config['files'] or not config['functions'] or any(type(x) is not str for x in config['files'] + config['functions']):
@@ -331,6 +339,15 @@ QUEUE = 307
 # the mirror orders a set's items by (recorded address, fd), ep_cmp_ffd's
 # order, which fixes the walks of ep_clear_and_put and ep_loop_check_proc.
 EPOLL_INSERT_ADDRESS = 308
+# seccomp stream W (docs/2026-10-12-seccomp-design.md, section 3.3): the
+# eBPF program the classic-to-eBPF translation wrote, as data (class
+# 'program', resolved by the consumer frame: the `_THIS_IP_` on
+# net/core/filter.c:1315 in bpf_migrate_filter, a line the hook shares with
+# the statement already there): one record with the eBPF length, then one
+# per emitted bpf_insn, all 8 bytes, in order; the mirror checks the length,
+# then its own translation instruction by instruction, so a mismatch names
+# the first differing instruction.
+SECCOMP_PROGRAM = 309
 
 
 def load_hidden_sites():
@@ -439,7 +456,8 @@ def resolve_choices(per, sites, locations, dispatch=None):
                     else 'resched' if raw_kind == RESCHED else 'timer' if raw_kind == TIMER_ARM \
                     else 'advance' if raw_kind == TIME_ADVANCE else 'alloc' if kind == ALLOC_KIND \
                     else 'queue' if raw_kind == QUEUE else 'jiffies' if raw_kind == DST_CACHE_JIFFIES \
-                    else 'address' if raw_kind == EPOLL_INSERT_ADDRESS else None
+                    else 'address' if raw_kind == EPOLL_INSERT_ADDRESS \
+                    else 'program' if raw_kind == SECCOMP_PROGRAM else None
                 if kind_class == 'queue':
                     # {work, func}: the site is the queued function's symbol
                     queued_func = int.from_bytes(bytes.fromhex(data[16:32]), 'little') if length == 16 else 0
@@ -877,7 +895,8 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
             problems.append(dict(index=index, problem='span lines covered by an unlisted function', lines=foreign))
         positions = line_positions(coverage[index], locations, op_files, set(config['functions']))
         lines = set(positions)
-        if not lines:
+        data_only = op['op'] in config['data_only_operations']   # seccomp W (design 6.3)
+        if not lines and not data_only:
             problems.append(dict(index=index, problem='no coverage in anchored files'))
         if unmapped:
             problems.append(dict(index=index, problem='covered span lines missing from the instrumentation map',
@@ -897,7 +916,7 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
             else:
                 reported.add(step)
                 sequence.append(step)
-        if not reported:
+        if not reported and not data_only:
             problems.append(dict(index=index, problem='no model decision'))
         for name, outcome in sorted(reported):
             own, other = witnesses[name][outcome], witnesses[name][not outcome]

@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "description": "KCOV configuration for the A2 control-flow check. Witnesses are not listed here: each mirror decision (leanux-model --decisions) carries source spans for its outcomes, and the check intersects them with the lines that own a KCOV instrumentation point in these functions of the built kernel. 'files' bounds the source considered; 'functions' must include every function whose code (including inlined helpers) the modeled paths execute, and the check fails if coverage lands in a decision span the map does not know. 'known_gaps' lists C choice points KCOV observes but the mirror does not yet model; hits are reported, not failed. 'functions' scopes witnesses: only their PCs witness decisions, and a span line of an anchored C file covered by any other function fails the check; header helpers inlined into unlisted functions are not checked. 'branch_free_functions' lists C functions the compiler made branch-free (no KCOV point); only their decisions may lack an instrumented function. 'shared_exits' declares single instrumentation points, each named by its exact DWARF frame chain (file:line, innermost first; the check requires the chain to name exactly one point of the listed functions), that the compiler shares between a function's early returns and an inlined helper's exit: when the operation did not cover the 'unless_covered' point (the block entering the helper, also exactly one point), the helper's frame there does not count as the helper having run. 'operand_exclusions' declares single call sites of a comparison decision whose operand is a guest-wide value the mirror does not model: the mirror reports the outcome there with 'operands_excluded' instead of the pair, and the check requires Linux's comparison at that call site (outermost frame = 'call'). Both are documented in correspondence/README.md.",
+  "description": "KCOV configuration for the A2 control-flow check. Witnesses are not listed here: each mirror decision (leanux-model --decisions) carries source spans for its outcomes, and the check intersects them with the lines that own a KCOV instrumentation point in these functions of the built kernel. 'files' bounds the source considered; 'functions' must include every function whose code (including inlined helpers) the modeled paths execute, and the check fails if coverage lands in a decision span the map does not know. 'known_gaps' lists C choice points KCOV observes but the mirror does not yet model; hits are reported, not failed. 'functions' scopes witnesses: only their PCs witness decisions, and a span line of an anchored C file covered by any other function fails the check; header helpers inlined into unlisted functions are not checked. 'branch_free_functions' lists C functions the compiler made branch-free (no KCOV point); only their decisions may lack an instrumented function. 'shared_exits' declares single instrumentation points, each named by its exact DWARF frame chain (file:line, innermost first; the check requires the chain to name exactly one point of the listed functions), that the compiler shares between a function's early returns and an inlined helper's exit: when the operation did not cover the 'unless_covered' point (the block entering the helper, also exactly one point), the helper's frame there does not count as the helper having run. 'data_only_operations' names the operations whose kernel work lies entirely in unlisted files (seccomp design 6.3: prctl's no-new-privs arms in kernel/sys.c, capset in kernel/capability.c), checked by their data alone: they are exempt from 'no coverage in anchored files' and 'no model decision', and any decision they do report is checked as usual. 'operand_exclusions' declares single call sites of a comparison decision whose operand is a guest-wide value the mirror does not model: the mirror reports the outcome there with 'operands_excluded' instead of the pair, and the check requires Linux's comparison at that call site (outermost frame = 'call'). Both are documented in correspondence/README.md.",
   "files": [
     "fs/eventfd.c",
     "fs/file.c",
@@ -36,7 +36,9 @@
     "include/linux/pipe_fs_i.h",
     "fs/inode.c",
     "include/linux/time64.h",
-    "kernel/signal.c"
+    "kernel/signal.c",
+    "kernel/seccomp.c",
+    "net/core/filter.c"
   ],
   "functions": [
     "touch_atime",
@@ -221,7 +223,51 @@
     "complete_signal",
     "__sigqueue_alloc",
     "send4",
-    "send6"
+    "send6",
+    "__secure_computing",
+    "__seccomp_filter",
+    "seccomp_run_filters",
+    "seccomp_cache_check_allow",
+    "seccomp_cache_check_allow_bitmap",
+    "populate_seccomp_data",
+    "seccomp_log",
+    "__secure_computing_strict",
+    "seccomp_set_mode_filter",
+    "seccomp_set_mode_strict",
+    "seccomp_prepare_user_filter",
+    "seccomp_prepare_filter",
+    "seccomp_check_filter",
+    "seccomp_attach_filter",
+    "seccomp_may_assign_mode",
+    "seccomp_assign_mode",
+    "seccomp_cache_prepare",
+    "seccomp_cache_prepare_bitmap",
+    "seccomp_is_const_allow",
+    "seccomp_uprobe_exception",
+    "has_duplicate_listener",
+    "seccomp_filter_free",
+    "get_seccomp_filter",
+    "__get_seccomp_filter",
+    "do_seccomp",
+    "prctl_set_seccomp",
+    "prctl_get_seccomp",
+    "seccomp_get_action_avail",
+    "seccomp_get_notif_sizes",
+    "bpf_prog_create_from_user",
+    "bpf_prepare_filter",
+    "bpf_migrate_filter",
+    "bpf_check_basics_ok",
+    "bpf_check_classic",
+    "chk_code_allowed",
+    "check_load_and_stores",
+    "bpf_convert_filter",
+    "bpf_prog_store_orig_filter",
+    "bpf_release_orig_filter",
+    "__bpf_prog_release",
+    "bpf_prog_destroy",
+    "force_sig_seccomp",
+    "force_sig_info_to_task",
+    "signal_wake_up_state"
   ],
   "known_gaps": [],
   "shared_exits": [
@@ -236,6 +282,10 @@
       ],
       "note": "vfs_write's early returns (-EBADF 668, -EINVAL 670, -EFAULT 672, rw_verify_area's error 676) jump into the epilogue at the KCOV call of file_end_write's not-regular return block (fs.h:3018 inlined at read_write.c:691; return PC 0xffffffff811a279e in the accepted build): the point runs on those paths although file_end_write did not. On the paths that reach file_end_write, the block entering it (read_write.c:691 in vfs_write's own frame, return PC 0xffffffff811a2778) runs first and the early returns skip it, so the declaration applies only when that point is not covered. Found by the generated pipes suite (writes to a read end), deterministic in corpus/pipes/p_wrong_end. vfs_read's counterpart (567) is vfs_read's own frame and needs no declaration; the early returns' false spans leave both points out."
     }
+  ],
+  "data_only_operations": [
+    "seccomp_prctl",
+    "seccomp_capdrop"
   ],
   "operand_exclusions": [
     {

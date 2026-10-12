@@ -151,7 +151,7 @@ class EvaluationChecks(unittest.TestCase):
                 validate_coverage([self.trace], altered)
 
     CONFIG = {'files': ['fs/eventfd.c'], 'functions': ['eventfd_read', 'eventfd_ctx_do_read'], 'known_gaps': [],
-              'shared_exits': [], 'operand_exclusions': []}
+              'shared_exits': [], 'operand_exclusions': [], 'data_only_operations': []}
 
     def decision(self, label, line, true, false):
         return {'label': label, 'file': 'fs/eventfd.c', 'line': line,
@@ -428,7 +428,7 @@ class EvaluationChecks(unittest.TestCase):
 
     def test_order_within_a_function(self):
         config = {'files': ['fs/eventfd.c'], 'functions': ['eventfd_write'], 'known_gaps': [],
-                  'shared_exits': [], 'operand_exclusions': []}
+                  'shared_exits': [], 'operand_exclusions': [], 'data_only_operations': []}
         table = check.parse_decisions([
             self.decision('eventfd_write.wrong_size', 254, [(255, 255)], [(256, 256)]),
             self.decision('eventfd_write.ullong_max', 258, [(259, 259)], [(260, 260)])], config)

@@ -1,6 +1,7 @@
 """Strict, dependency-free validation and guest serialization of trace v1."""
 from copy import deepcopy
 import json
+import struct
 import re
 
 from .wg import InvalidConfig, encode_get, encode_packet, encode_set, validate_config, validate_device, validate_packet
@@ -58,7 +59,56 @@ FIELDS = {
     "epoll_create1": {"op", "flags"},
     "epoll_ctl": {"op", "epfd", "cmd", "fd", "events", "data"},
     "epoll_wait": {"op", "epfd", "maxevents", "timeout"},
+    # seccomp stream W (docs/2026-10-12-seccomp-design.md section 6.1;
+    # contracts/trace-v1.md, Seccomp): a filter install through seccomp(2) or
+    # prctl; a probe call in the trace process or a sandboxed child; the
+    # no-new-privs and mode queries; the CAP_SYS_ADMIN drop; the two
+    # seccomp(2) queries. Optional fields: SECCOMP_OPTIONAL.
+    "seccomp_install": {"op", "via", "flags", "filter"},
+    "seccomp_probe": {"op", "nr", "where"},
+    "seccomp_prctl": {"op", "cmd"},
+    "seccomp_capdrop": {"op"},
+    "seccomp_query": {"op", "cmd"},
 }
+SECCOMP_OPTIONAL = {"seccomp_install": {"len", "bad", "mode"}, "seccomp_probe": {"args", "strict"},
+                    "seccomp_prctl": {"arg2", "arg3", "arg4", "arg5"}, "seccomp_query": {"action", "flags"}}
+SECCOMP_OPS = set(SECCOMP_OPTIONAL) | {"seccomp_capdrop"}
+# the install's flags by name (the kernel's SECCOMP_FILTER_FLAG_*); an
+# integer element is a raw bit for the flag-mask arm
+SECCOMP_FLAGS = {"tsync": 1, "log": 2, "spec_allow": 4, "new_listener": 8, "tsync_esrch": 16, "wait_killable_recv": 32}
+SECCOMP_BAD = {"fprog": 1, "insns": 2}       # bad 3 is the NULL instruction pointer (filter null)
+SECCOMP_VIA = {"seccomp": 0, "prctl": 1}
+SECCOMP_WHERE = {"self": 0, "child": 1}
+SECCOMP_STRICT = {"seccomp": 1, "prctl": 2}
+SECCOMP_PRCTL = {"set_no_new_privs": 0, "get_no_new_privs": 1, "get_seccomp": 2}
+SECCOMP_QUERY = {"get_action_avail": 0, "get_notif_sizes": 1}
+BPF_MAXINSNS = 4096
+# The self-sandboxing rule (design 6.2 rule 1): a filter may restrict only
+# the probe set, so the harness's own calls are constant-allowed cache
+# hits; a strict child may probe exit (60), the one call it reports through
+SECCOMP_PROBE_SET = {102, 104, 107, 108, 1000, 335}
+SECCOMP_STRICT_PROBE_SET = SECCOMP_PROBE_SET | {60}
+# the return actions the kill scan (design 6.1) accepts for a self probe:
+# ALLOW, LOG, TRACE (no tracer: -ENOSYS), ERRNO, TRAP (a handler)
+SECCOMP_RET_ACTION_FULL = 0xffff0000
+SECCOMP_SAFE_ACTIONS = {0x7fff0000, 0x7ffc0000, 0x7ff00000, 0x00050000, 0x00030000}
+BPF_RET_K, BPF_RET_A, BPF_DIV_X = 0x06, 0x16, 0x3c
+
+
+def filter_may_kill(instructions):
+    """The validator's conservative scan (design 6.1): a RET|K whose action
+    is not one of the five safe ones (KILL_THREAD, KILL_PROCESS, USER_NOTIF
+    or a non-canonical action), a RET|A (the accumulator may hold anything,
+    0 included), or a DIV|X (a zero X returns 0 = KILL_THREAD through the
+    translation's guard). MOD is not scanned: seccomp_check_filter rejects
+    MOD|X and MOD|K at the install (kernel/seccomp.c:280-347 lists DIV, not
+    MOD), so such a program never runs."""
+    for code, _jt, _jf, k in instructions or ():
+        if code == BPF_RET_K and (k & SECCOMP_RET_ACTION_FULL) not in SECCOMP_SAFE_ACTIONS:
+            return True
+        if code in (BPF_RET_A, BPF_DIV_X):
+            return True
+    return False
 EPOLL_MAXEVENTS = (1, 16)   # tier 1's bound on epoll_wait's maxevents (the kernel's is EP_MAX_EVENTS)
 LIFECYCLE_OPS = ("wg_create", "wg_down", "wg_delete")
 WG_OPS = {"wg_set", "wg_get", "wg_up", "wg_xmit", "wg_observe", "wg_inject", "wg_advance",
@@ -92,6 +142,8 @@ OPCODES = {
     "wg_batch": 26,
     # epoll R: allocated by the coordinator (docs/2026-10-11-interface.md, next targets)
     "epoll_create1": 27, "epoll_ctl": 28, "epoll_wait": 29,
+    # seccomp W: allocated by the coordinator (docs/2026-10-11-interface.md, next targets)
+    "seccomp_install": 30, "seccomp_probe": 31, "seccomp_prctl": 32, "seccomp_capdrop": 33, "seccomp_query": 34,
 }
 # Reserved wire opcodes (the interface commit, docs/2026-10-11-interface.md),
 # allocated by the coordinator so the W streams' worktrees cannot clash. A
@@ -220,8 +272,13 @@ def _fields(value, keys, where):
 
 def validate_trace(trace):
     """Return a detached valid trace; reject all inputs outside trace v1."""
-    if type(trace) is not dict or not {"version", "id", "ops"} <= set(trace) <= {"version", "id", "ops", "rlimit_nofile", "steer", "expect", "net_fixture", "domain_extension"}:
-        raise InvalidTrace("trace: expected exactly ['id', 'ops', 'version'] and optionally 'rlimit_nofile', 'steer', 'expect', 'net_fixture', 'domain_extension'")
+    if type(trace) is not dict or not {"version", "id", "ops"} <= set(trace) <= {"version", "id", "ops", "rlimit_nofile", "steer", "expect", "net_fixture", "domain_extension", "seccomp_child"}:
+        raise InvalidTrace("trace: expected exactly ['id', 'ops', 'version'] and optionally 'rlimit_nofile', 'steer', 'expect', 'net_fixture', 'domain_extension', 'seccomp_child'")
+    # seccomp W (design 5, 6.2 rule 2): the child fixture holds the sandboxed
+    # child's KCOV descriptor at 8; declared explicitly, required by a child
+    # probe, never with a network fixture or a steering schedule
+    if "seccomp_child" in trace and trace["seccomp_child"] is not True:
+        raise InvalidTrace("seccomp_child: expected true")
     # A steering schedule (choice-stream strategy, step 2): [site label, value
     # hex or "draw"] in encounter order; the expected decision outcomes that
     # the steering is for. Sites, lengths and domains are checked when the
@@ -280,7 +337,8 @@ def validate_trace(trace):
             validate_batch(op, f"ops[{i}]")
         else:
             optional = OPTIONAL_OP_FIELDS | ({"device"} if name in DEVICE_OPS else set()) \
-                | ({"to"} if name == "wg_inject" else set())   # W1: the device selector; W9: the destination
+                | ({"to"} if name == "wg_inject" else set()) \
+                | SECCOMP_OPTIONAL.get(name, set())   # W1: the device selector; W9: the destination; seccomp W
             _fields({k: v for k, v in op.items() if k not in optional}, FIELDS[name], f"ops[{i}]")
             pipes = name in PIPE_PRODUCERS
         if "device" in op:
@@ -299,7 +357,7 @@ def validate_trace(trace):
             if name != "wg_inject" or op.get("family") != 6 or op["from"] != "ll":
                 raise InvalidTrace(f"ops[{i}].from: only an IPv6 wg_inject may be sent from \"ll\"")
         for field in ("init", "flags", "arg"):
-            if field in op:
+            if field in op and name != "seccomp_install":   # seccomp W: an install's flags are a list of names
                 _integer(op[field], 0, 2**32 - 1, f"ops[{i}].{field}")
         for field in ("fd", "newfd", "epfd"):   # epfd: epoll R, the set
             if field not in op:
@@ -400,6 +458,8 @@ def validate_trace(trace):
                 raise UnsupportedTrace(f"ops[{i}].maxevents: tier 1 waits for {EPOLL_MAXEVENTS[0]}-{EPOLL_MAXEVENTS[1]} events")
             if op["timeout"] != 0:
                 raise UnsupportedTrace(f"ops[{i}].timeout: tier 1 waits with timeout 0 only (no sleep record)")
+        if name in SECCOMP_OPS:
+            validate_seccomp_op(op, i, ops, trace)
     if "net_fixture" in trace:
         fixture = trace["net_fixture"]
         if type(fixture) is dict:
@@ -408,6 +468,23 @@ def validate_trace(trace):
             raise InvalidTrace(f"net_fixture: expected one of {list(NET_FIXTURES)} or {{'routes': [...]}}")
         if not uses_wireguard(trace):
             raise InvalidTrace("net_fixture: only a network trace has a network fixture")
+    # seccomp W: the child fixture's shape (design 5, 6.1, 6.2)
+    child_probes = [i for i, op in enumerate(ops) if op["op"] == "seccomp_probe" and op["where"] == "child"]
+    if trace.get("seccomp_child"):
+        if not child_probes:
+            raise InvalidTrace("seccomp_child: declared by a trace without a child probe")
+        if uses_wireguard(trace):
+            raise InvalidTrace("seccomp_child: never with a network fixture (descriptor 8 is the fixture's)")
+        if "steer" in trace:
+            raise InvalidTrace("seccomp_child: a steered trace has no child probe (the child loads no schedule)")
+        if trace.get("rlimit_nofile", 32) < 9:
+            raise InvalidTrace("seccomp_child: rlimit_nofile below 9 (the fixture holds descriptor 8)")
+        for i, op in enumerate(ops):
+            for field in ("fd", "newfd", "epfd"):
+                if field in op and op[field].get("literal") == 8:
+                    raise InvalidTrace(f"ops[{i}].{field}: descriptor 8 is the child fixture's")
+    elif child_probes:
+        raise InvalidTrace(f"ops[{child_probes[0]}].where: a child probe needs the trace to declare seccomp_child")
     # W8: the foreign-creator fixture's shape (design 3.1, 3.4)
     closes = [i for i, op in enumerate(trace["ops"]) if op["op"] == "wg_netns_close"]
     if trace.get("net_fixture") == "foreign-creator":
@@ -422,6 +499,77 @@ def validate_trace(trace):
     elif closes:
         raise InvalidTrace("wg_netns_close: only in the foreign-creator fixture")
     return deepcopy(trace)
+
+
+def validate_seccomp_op(op, i, ops, trace):
+    """seccomp W (design 6.1): the fields and the validator's rules. A self
+    probe is rejected once an earlier install's filter may kill (the
+    conservative scan, filter_may_kill); strict is child-only; a probe's nr
+    is in the probe set (6.2 rule 1); a filter has at most BPF_MAXINSNS
+    instructions (the length arms use `len`). The flags, actions and numbers
+    the mirror stops on (TSYNC, NEW_LISTENER, USER_NOTIF, a CTX load of
+    offsets 8..15) are valid inputs: the control suite runs them and expects
+    the mirror's unsupported stop, so the validator does not reject them."""
+    name, where = op["op"], f"ops[{i}]"
+    if name == "seccomp_install":
+        if op["via"] not in SECCOMP_VIA:
+            raise InvalidTrace(f"{where}.via: expected one of {list(SECCOMP_VIA)}")
+        flags = op["flags"]
+        if type(flags) is not list or any(not (f in SECCOMP_FLAGS or (type(f) is int and 0 <= f <= 0xffff)) for f in flags):
+            raise InvalidTrace(f"{where}.flags: expected a list of {list(SECCOMP_FLAGS)} or raw bits 0-65535")
+        if op["via"] == "prctl" and flags:
+            raise InvalidTrace(f"{where}.flags: prctl passes no flags")
+        if "mode" in op:
+            if op["via"] != "prctl":
+                raise InvalidTrace(f"{where}.mode: only a prctl install names the mode")
+            _integer(op["mode"], 0, 255, f"{where}.mode")
+        program = op["filter"]
+        if program is not None:
+            if type(program) is not list or not 1 <= len(program) <= BPF_MAXINSNS or any(
+                    type(insn) is not list or len(insn) != 4 or any(type(x) is not int for x in insn)
+                    or not 0 <= insn[0] <= 0xffff or not 0 <= insn[1] <= 0xff or not 0 <= insn[2] <= 0xff
+                    or not 0 <= insn[3] <= 0xffffffff for insn in program):
+                raise InvalidTrace(f"{where}.filter: expected null or 1-{BPF_MAXINSNS} [code, jt, jf, k] instructions")
+        if "len" in op:
+            _integer(op["len"], 0, 0xffff, f"{where}.len")
+        if "bad" in op and op["bad"] not in SECCOMP_BAD:
+            raise InvalidTrace(f"{where}.bad: expected one of {list(SECCOMP_BAD)}")
+        if "bad" in op and program is None:
+            raise InvalidTrace(f"{where}.bad: a null filter is the NULL-pointer arm already")
+    if name == "seccomp_probe":
+        if op["where"] not in SECCOMP_WHERE:
+            raise InvalidTrace(f"{where}.where: expected one of {list(SECCOMP_WHERE)}")
+        strict = op.get("strict")
+        if strict is not None:
+            if strict not in SECCOMP_STRICT:
+                raise InvalidTrace(f"{where}.strict: expected one of {list(SECCOMP_STRICT)}")
+            if op["where"] != "child":
+                raise InvalidTrace(f"{where}.strict: strict mode is child-only (the trace process could not report)")
+        _integer(op["nr"], 0, 2**31 - 1, f"{where}.nr")
+        allowed = SECCOMP_STRICT_PROBE_SET if strict else SECCOMP_PROBE_SET
+        if op["nr"] not in allowed:
+            raise InvalidTrace(f"{where}.nr: outside the probe set {sorted(allowed)} (design 6.2 rule 1)")
+        args = op.get("args", [0] * 6)
+        if type(args) is not list or len(args) != 6 or any(type(a) is not int or not 0 <= a < 2**64 for a in args):
+            raise InvalidTrace(f"{where}.args: expected six integers 0-2^64-1")
+        if op["where"] == "self" and any(
+                earlier["op"] == "seccomp_install" and filter_may_kill(earlier["filter"]) for earlier in ops[:i]):
+            raise InvalidTrace(f"{where}.where: a self probe after a filter that may kill (design 6.1: run it in a child)")
+    if name == "seccomp_prctl":
+        if op["cmd"] not in SECCOMP_PRCTL:
+            raise InvalidTrace(f"{where}.cmd: expected one of {list(SECCOMP_PRCTL)}")
+        for field in ("arg2", "arg3", "arg4", "arg5"):
+            if field in op:
+                _integer(op[field], 0, 2**64 - 1, f"{where}.{field}")
+    if name == "seccomp_query":
+        if op["cmd"] not in SECCOMP_QUERY:
+            raise InvalidTrace(f"{where}.cmd: expected one of {list(SECCOMP_QUERY)}")
+        if (op["cmd"] == "get_action_avail") != ("action" in op):
+            raise InvalidTrace(f"{where}.action: exactly get_action_avail names an action")
+        if "action" in op:
+            _integer(op["action"], 0, 2**32 - 1, f"{where}.action")
+        if "flags" in op:
+            _integer(op["flags"], 0, 2**32 - 1, f"{where}.flags")
 
 
 def uses_wireguard(trace):
@@ -540,7 +688,8 @@ def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False, allo
         if type(mask) is not int or mask < 0 or mask >> len(dispatch):
             raise InvalidTrace("arm mask outside the dispatch set")
         routes = fixture_routes(trace)
-        lines.append(f"T {trace['id']} {len(trace['ops'])} {trace.get('rlimit_nofile', 32)} {net_mode(trace)} {len(schedule)} {mask:x} {len(routes)}")
+        # seccomp W: the eighth field declares the child fixture (descriptor 8)
+        lines.append(f"T {trace['id']} {len(trace['ops'])} {trace.get('rlimit_nofile', 32)} {net_mode(trace)} {len(schedule)} {mask:x} {len(routes)} {int(bool(trace.get('seccomp_child')))}")
         # W4: the fixture's routes into wg0 (family, destination, MTU), one line each
         for route in routes:
             lines.append(f"R {route['family']} {route['dst']} {route['mtu']}")
@@ -588,6 +737,26 @@ def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False, allo
                     a, b, op_value = op["cmd"], op["events"], op["data"]
                 else:
                     a, b = op["maxevents"], op["timeout"]
+            payload = None   # seccomp W: the hex payload of install, probe and prctl
+            if op["op"] == "seccomp_install":
+                # a = via | mode << 8, b = flags | bad << 16, value = 1 << 32 | len (an override), payload = the program
+                a = SECCOMP_VIA[op["via"]] | (op.get("mode", 2) << 8)
+                flags = 0
+                for flag in op["flags"]:
+                    flags |= SECCOMP_FLAGS.get(flag, flag if type(flag) is int else 0)
+                bad = 3 if op["filter"] is None else SECCOMP_BAD.get(op.get("bad"), 0)
+                b = flags | (bad << 16)
+                op_value = str((1 << 32) | op["len"]) if "len" in op else "0"
+                payload = b"".join(struct.pack("<HBBI", *insn) for insn in (op["filter"] or ()))
+            if op["op"] == "seccomp_probe":
+                # a = nr, b = where | strict << 8, payload = the six arguments
+                a, b = op["nr"], SECCOMP_WHERE[op["where"]] | (SECCOMP_STRICT.get(op.get("strict"), 0) << 8)
+                payload = struct.pack("<6Q", *op.get("args", [0] * 6))
+            if op["op"] == "seccomp_prctl":
+                a = SECCOMP_PRCTL[op["cmd"]]
+                payload = struct.pack("<4Q", *(op.get(f, 0) for f in ("arg2", "arg3", "arg4", "arg5")))
+            if op["op"] == "seccomp_query":
+                a, b, op_value = SECCOMP_QUERY[op["cmd"]], op.get("action", 0), str(op.get("flags", 0))
             line = f"{OPCODES[op['op']]} {kind} {value} {newkind} {newvalue} {a} {b} {op_value}"
             if GUEST_PIPES:
                 line += f" {op.get('pause_ms', 0)}"   # the ninth field (P1)
@@ -609,6 +778,8 @@ def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False, allo
                 line += " " + header + "".join(leading) + (control or "")
             elif op["op"] == "wg_batch":
                 line += " " + encode_batch(op).hex()
+            elif payload is not None:
+                line += " " + payload.hex()
             lines.append(line)
         for entry in schedule:
             # (kind, length, draw, ips, hex[, flags]); flags: 1 = match the
