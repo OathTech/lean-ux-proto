@@ -820,14 +820,14 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
   let mut fired : Array Json := #[]
   for op in trace.ops do
     let index := results.size
-    world := { world with hidden := trace.hidden.map (·[index]!), yieldedWorkers := [], pendingStops := [], netRxRaised := false }
+    world := { world with hidden := trace.hidden.map (·[index]!), netRxRaised := false }
     let (ret, w) ← (syscall (toSyscall results ends index op)).run world
       |>.mapError fun e => (index, e)
     let (_, w) ← skipAmbient.run w |>.mapError fun e => (index, e)
     if let some (r :: _) := w.hidden then
       throw (index, .hidden s!"a record of site {r.site} was not consumed")
-    if let s :: _ := w.pendingStops then
-      throw (index, .hidden s!"a section stop of site {s} ended in the mirror but has no record")
+    if let a :: _ := w.suspended then
+      throw (index, .hidden s!"{a.worker.symbol} is still suspended at the end of the operation (its stop has no record)")
     if w.netRxRaised then
       throw (index, .invariant "a NET_RX softirq raised by a loopback transmission was left pending")
     world := w

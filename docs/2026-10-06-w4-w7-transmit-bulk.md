@@ -2221,6 +2221,30 @@ deterministic. Order of work per the review: ranks 3 and 4 first (the ring
 and the packet store), then the activations (rank 6), then phase 2's
 scheduler loop; the 1025-item tier and the repoll wait for the ring.
 
+**Built [AGENT 2026-10-12, activations, on the rings branch].**
+`Activation` (`Leanux/Kernel/Defs.lean`): worker, peer, iterations run; in
+`World.suspended` while suspended. On the modeled paths the C loops hold no
+other local across a yield (each iteration starts at the poll; the tx
+worker's peeked item is in the queue), and the stop is consumed where the
+records have it, so no pending stop is represented (`yieldedWorkers`,
+`pendingStops`, `openWorkers` are gone). `Env/Batch.lean`: `condResched`
+consumes the resched record and reports the switch; the NAPI poll's
+placements (`napiSoftirq`, `napiIrqExit`) are the scheduler's wherever the
+records put the decrypt worker (phase 1's "a switch to the decrypt worker at
+this point (its placement is not modeled here)" is gone; a decrypt
+activation resumed after a send worker's section needs them,
+`d3_rx_keep_key_fresh`); `Activation.run` steps
+an activation (`workerIter`: the WG `encryptIter`, `txIter`, `decryptIter`,
+`receiveStep`) until it yields or ends; `schedule` is the loop that reads
+the next record and dispatches a start, runs the NET_RX poll at a yield, or
+resumes the one suspended activation whose rest (to its yield or stop, run
+on a copy of the world) the records are consistent with; several
+consistent, or none while a stack-held worker (the flood's) has work, is
+`unsupported`. The resumption is thus named by what the resumed worker
+reads next, the only trace a resumption leaves. Phase 1's "a worker
+yielded below an open worker with queued work" is gone; the replay fixture
+`W7_RESUMED_OUTER` agrees.
+
 ### 17.16 Ranks 3 and 4: the ring and the skb store [AGENT 2026-10-12, rings]
 
 Built on `task/rings` (`task/w7p2` with `task/lifetimes` and `main`

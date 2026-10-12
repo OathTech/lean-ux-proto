@@ -85,18 +85,5 @@ def napi_orders(run_dir, kernel=None):
     return counts
 
 
-def phase1_rejections(run_dir):
-    """The traces the mirror rejected with the phase-1 nesting detector
-    (`Env/Batch.lean` condResched), from the run's report."""
-    path = os.path.join(run_dir, 'report.json')
-    if not os.path.exists(path):
-        return []
-    report = json.load(open(path))
-    return [f['id'] for f in report.get('failures', [])
-            if 'yielded below an open worker with queued work' in (f.get('detail') or '')]
-
-
 if __name__ == '__main__':
-    result = napi_orders(sys.argv[1])
-    result['phase1_rejections'] = phase1_rejections(sys.argv[1])
-    print(json.dumps(result, indent=1))
+    print(json.dumps(napi_orders(sys.argv[1]), indent=1))

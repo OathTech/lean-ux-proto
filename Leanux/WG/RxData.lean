@@ -115,13 +115,12 @@ def decryptStep (softirq irqExit : M Unit) : M Bool := do
     softirq
     return true
 
-/-- The whole loop: `decryptStep` per item, with the `cond_resched` and its
-    decision after each (W7 phase 2: the environment interleaves the
-    iterations, `workerIter`). -/
-def decryptWorker (softirq irqExit : M Unit) (needResched : M Bool) : M Unit :=
-  workerLoop .decryptWorker none (decryptStep softirq irqExit)
-    (discard <| do branch .decWorkerNeedResched (← needResched))
-    (MAX_QUEUED_PACKETS + 1) "the decrypt queue did not drain"
+/-- One iteration of the loop: `decryptStep`, then `cond_resched()` and its
+    decision (W7 phase 2: the environment's scheduler drives the iterations,
+    `workerIter`). -/
+def decryptIter (softirq irqExit : M Unit) (needResched : M Bool) : M IterResult :=
+  workerIter .decryptWorker none (decryptStep softirq irqExit)
+    (do branch .decWorkerNeedResched (← needResched))
 
 /-- counter_validate (receive.c:295-331): RFC 6479 over the keypair's
     `receiving_counter` (`counter` is the highest counter seen plus one;
