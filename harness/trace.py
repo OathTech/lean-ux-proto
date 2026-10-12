@@ -97,7 +97,7 @@ if set(OPCODES) != set(FIELDS):
 # The guest's KCOV area in words, task and remote (harness/guest.c CAPACITY):
 # KCOV stops at CAPACITY - 1 PCs or (CAPACITY - 1) // 4 comparison records,
 # and the guest fails an operation whose area filled.
-KCOV_CAPACITY = 1024 * 1024
+KCOV_CAPACITY = 4 * 1024 * 1024
 # The optional top-level `net_fixture` (L): "bare" starts a network trace
 # without wg0; absent, the fixture creates a down wg0. W8: "foreign-creator"
 # creates wg0 from a second namespace C (its creating namespace), which holds
