@@ -404,6 +404,14 @@ private def vlh := "include/linux/if_vlan.h"
 private def iph := "include/net/ip_tunnels.h"
 private def ech := "include/net/inet_ecn.h"
 private def wrl := "drivers/net/wireguard/ratelimiter.c"
+-- seccomp (docs/2026-10-12-seccomp-design.md): stream U's decisions are in
+-- net/core/filter.c (the checker and the translation), stream V's in
+-- kernel/seccomp.c, kernel/sys.c and kernel/signal.c's extension; each
+-- stream appends its own block to `Decision`, `info`, `comparison` and
+-- `repeatable` (the per-instruction and per-number decisions of 4.2-4.5
+-- are repeatable: emitted once per operation as a set of pairs).
+private def sec := "kernel/seccomp.c"
+private def nfl := "net/core/filter.c"
 
 private def sp (file : String) (lo hi : Nat) : Span := ⟨file, lo, hi⟩
 
