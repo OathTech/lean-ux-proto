@@ -169,6 +169,20 @@ structure RxPacket where
   ds : Nat := 0
   deriving Repr, BEq
 
+/-- `struct prev_queue` (queueing.h:34-39, queueing.c:50-106) as data (W7
+    stream B, docs/2026-10-06-w4-w7-transmit-bulk.md 5.1): the items
+    enqueued and not yet dequeued (`count`, oldest first), whether `tail`
+    is the stub (`queue->tail == STUB(queue)`), and the item a consumer
+    peeked (`queue->peeked`: dequeued, not yet dropped). Its operations are
+    in `Leanux/WG/PrevQueue.lean`. -/
+structure PrevQueue (α : Type) where
+  items : List α := []
+  tailIsStub : Bool := true
+  peeked : Option α := none
+  deriving Repr, BEq
+
+instance : Inhabited (PrevQueue α) := ⟨{}⟩
+
 /-- `struct wg_peer` with the parts of its `noise_handshake` on this path. -/
 structure Peer where
   remoteStatic : Key
@@ -214,13 +228,14 @@ structure Peer where
   /-- `serial_work_cpu`: `nr_cpumask_bits` until the first transmit
       (`wg_cpumask_choose_online`). -/
   serialWorkCpu : Option Nat := none
-  /-- `tx_queue`: ring items handed to the per-peer transmit worker, oldest
-      first. An item is a staged list (`skb->next`), nonempty; its first
-      packet carries the item's `PACKET_CB` state (D2 stream A). -/
-  txQueue : List (List DataPacket) := []
-  /-- `rx_queue` (`wg_prev_queue`), oldest first, and whether its NAPI poll
-      is scheduled (`napi_schedule` without a run yet) (D2). -/
-  rxQueue : List RxPacket := []
+  /-- `tx_queue` (`struct prev_queue`, W7 stream B): ring items handed to
+      the per-peer transmit worker, oldest first. An item is a staged list
+      (`skb->next`), nonempty; its first packet carries the item's
+      `PACKET_CB` state (D2 stream A). -/
+  txQueue : PrevQueue (List DataPacket) := {}
+  /-- `rx_queue` (`struct prev_queue`), oldest first, and whether its NAPI
+      poll is scheduled (`napi_schedule` without a run yet) (D2). -/
+  rxQueue : PrevQueue RxPacket := {}
   napiScheduled : Bool := false
   /-- The five `struct timer_list` (peer.h:53-55), D3 interface
       (docs/2026-10-05-d3-timers.md, section 5.1): `some expires` (absolute
@@ -336,6 +351,13 @@ structure Device where
       `tx_bytes` 148 after one initiation [AGENT, W5+W6 fork]). -/
   txPackets : Nat := 0
   txBytes : Nat := 0
+  /-- W4 (docs/2026-10-06-w4-w7-transmit-bulk.md, section 4): `dev->mtu`,
+      1420 from `wg_setup` (device.c:296), moved by `SIOCSIFMTU` (`setMtu`);
+      whether wg0 has an `in_device` (gone below 68) and an `inet6_dev` (gone
+      below 1280), the tests of `wg_open` (device.c:39, 47). -/
+  mtu : Nat := 1420
+  inet4Dev : Bool := true
+  inet6Dev : Bool := true
   /-- `dev->stats` counters. -/
   txErrors : Nat := 0
   txDropped : Nat := 0

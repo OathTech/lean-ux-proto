@@ -1722,3 +1722,414 @@ one CPU without it.
 3 → 0; harness ops/options: `wg_xmit` options 5 → 2, `wg_connect` and
 `wg_create.mtu` gone, one new item kind (`inject_gso`); W4 mutants 15 →
 10, W7 10 → 9; P-B facts 6 → 4.
+
+## 17. Results [AGENT 2026-10-11, stream T]
+
+Branch `task/w47` on the interface commit (`task/interface` b11145f: main
+with housekeeping and the `Env.lean` split). Stream T is built and
+validated at suite level; streams B and H are not started (17.5).
+
+### 17.1 What was built (sections 4, 6, 16.1)
+
+- **Mirror.** `Device.mtu`, `inet4Dev`, `inet6Dev` replace `WG.DEVICE_MTU`;
+  the keepalive reads the device's MTU (send.c:232) and `wg_open` reads the
+  two devices (device.c:39, 47). `wgXmit` takes the environment's packet
+  list and `dst_mtu`: the GSO arm (`.xmitNotGso` false, the new
+  `.xmitGsoError` at device.c:181 over `EnvSite.skbSegment`), the walk
+  with the one `mtu` per call, and the trim loop (`.xmitStagedTrimIter`,
+  device.c:211-214, `tx_dropped` per iteration) in place of the
+  `unsupported` of `.xmitStagedOverflow`, which it replaces (same line).
+  `setMtu` mirrors `dev_set_mtu` as a cut: `-ERANGE` above `max_mtu`, the
+  MTU written, the inet6_dev down below 1280 and the in_device below 68
+  (no decision in `dev.c`: the file is not anchored, and the kept classes
+  use 1300 and 0).
+- **`Env/IpStack.lean`.** `XmitOpts` (`gsoSize`, `probe`, the route MTU
+  from `World.routes`); `xmitPackets` returns one `wg_xmit` call's packets
+  and `mtu`, or the sender's errno (`-EMSGSIZE` above `cork->fragsize`,
+  which is `dst_mtu` under `DO` and `dev->mtu` under `PROBE`; `-EINVAL`
+  above 128 segments); IPv4 GSO with equal segments (`gsoSegment`: ids
+  0..n−1, DF, per-segment header and complete UDP checksums,
+  `CHECKSUM_NONE`); a payload at most `gso_size` long is one ordinary
+  packet (udp.c:1005: no GSO flag). Beyond the boundary, `unsupported`:
+  IPv6 GSO, a short last segment, an IPv6 route MTU or PROBE.
+  `multicastLoops` is the `{224.0.0.1}` set (2.4), called from
+  `Env.xmitMulticastLoop`. `MAX_XMIT_PAYLOAD4/6` take the MTU.
+- **Harness.** `wg_xmit` packets carry `gso_size` (IPv4, 2-128 whole
+  segments) and `pmtudisc` ("do" or "probe"); the guest sends with a
+  `UDP_SEGMENT` cmsg and sets `IP_MTU_DISCOVER` per send, restoring `DO`
+  after it; `wg_set_mtu {mtu}` is `SIOCSIFMTU` on the sender's socket;
+  `net_fixture: {"routes": [{family, dst, mtu}]}` adds host routes into wg0
+  with `RTAX_MTU` at every `wg_up` (wire: the `T` line's sixth field and
+  `R` lines); the fixture is MTU-aware (2.3): below 68 the IPv4 address add
+  is `-ENOBUFS`, below 1280 the IPv6 add `-EINVAL`, and the route adds
+  `-ENODEV`, expected exactly, which the `w4_set_mtu_0` run confirmed (the
+  fixture fails the trace on any other value: this is probe P-B's measurement
+  of the four errnos). `SO_SNDBUFFORCE` (8 MiB) on the sender (2.7);
+  `MAX_XMIT_PAYLOAD` 2784. `noise.gso_segments` builds the segments
+  (checked in `harness/test_noise.py`).
+- **Corpus** (`scripts/wg-w47-corpus.py`): the five kept classes of 16.1,
+  and the three boundary domain controls (`corpus/w47-controls`,
+  `scripts/wg-w47-controls.py`: the mirror alone, `--domain`, places each
+  outside the domain with the stated reason).
+- **Mutants** W4-M1, M3-M10 and M16, on the `w4_` subset.
+
+### 17.2 Deviations and judgment calls [AGENT]
+
+- **The keepalive of the MTU classes comes from the persistent-keepalive
+  timer through `wg_advance`**, not from `wg_set`/`wg_up` under a session
+  (section 4's keepalive rule). That rule changes `Env.runSendWorkers`'
+  crypt-work treatment in `Env.lean`, which belongs to the dispatch-order
+  stream at integration (docs/2026-10-11-interface.md), so stream T does
+  not touch it. The timer route reaches the same two read sites
+  (send.c:232 with 1300 and with 0, `.padNoMtu` true) and costs one
+  `wg_advance` per class; the rule stays as described for the coordinator.
+  `w4_set_mtu_0` turns the keepalive off before the down, so the up after it
+  stages nothing and sends no second initiation.
+- **`MAX_BRANCHES`** (`evaluator/protocol.py`, a shared surface) is raised
+  from 4096 to 32768: the trim class's 129-packet flush reports 2766
+  branches in one operation and 4307 in the trace. The guest's output limit
+  still bounds the whole.
+- **The placeholder wire opcode is 25** (`OP_WG_SET_MTU`, named for the
+  guest-defines test), outside the reservations 20-24; the coordinator
+  allocates the real code. `wg_batch` (stream B) needs a second code.
+- `.xmitGsoError`'s site is an `EnvSite` (assumed success, as L's and E's
+  sites) rather than an `AllocSite`: `skb_segment`'s allocations are not in
+  an armed range (A's inventory covers WireGuard's own sites).
+- The sender's `-EMSGSIZE`/`-EINVAL` are returned as results (22 and 90
+  join `wg_xmit`'s semantic errnos) rather than `unsupported`, since the
+  trace contract already refuses the shapes that would produce them.
+
+### 17.3 Validation
+
+All on the A oracle (`kernel-net-choice-a`, identity `c79e3e0c…`), under
+`capped`, at `d0f27e1`:
+- Unit tests (`evaluator.test_evaluation`, `harness.test_trace`,
+  `harness.test_wg`, `harness.test_linux`, `harness.test_noise`): 96 pass
+  (the GSO segment builder and the wire header are new cases).
+- Each `w4_*` trace alone against Linux: 5/5 agreement (the first run of
+  `w4_set_mtu_0` failed on the up's second initiation, fixed by turning
+  the keepalive off before the down; the first run of `w4_gso_trim` failed
+  the old 4096-branch bound).
+- Suites `handwritten,wireguard` (`.artifacts/check/w47-suites`): **pass,
+  187/187**, 9038 operand pairs, 3 output-limit chunk splits, no retries.
+- Boundary controls (`scripts/wg-w47-controls.py`): 3/3 placed outside the
+  domain with the stated reason.
+- Mutants W4-M1, M3-M10, M16 on the `w4_` subset: **10/10 rejected**, no
+  other outcome in any run. M1, M3, M4 (`w4_gso_4_2` and `w4_gso_trim`
+  bytes), M7 and M8 (`w4_route_mtu_probe_4` bytes) are semantic
+  mismatches; M5 and M6 are hidden mismatches at `w4_gso_trim`'s flush (the
+  stop fails the chunk, so every trace of it is listed); M9, M10 and M16
+  are control-flow mismatches at `w4_set_mtu_0` / `w4_set_mtu_1300`
+  (M16 also a semantic mismatch: the 12 bytes of padding).
+
+### 17.4 Wire opcodes needed from the coordinator
+
+`wg_set_mtu` (placeholder 25) and, for stream B, `wg_batch` (the design's
+`OP_BATCH`; `wg_flood` is 18 and would be subsumed).
+
+### 17.5 Not done: streams B and H
+
+- **B** (section 5, `Env/Batch.lean`, `wg_batch` from `wg_flood` with
+  `inject_gso` and the CQE result, `PrevQueue` as data, the multi-item
+  loops, the generic phase-1 detector, the repoll of 13.5(a), `kcov_capacity`,
+  probe P-A) is untouched: the interface commit's `Batch.lean` holds only
+  the shared runner pieces.
+- **H**: the per-section operand agreement of 13.2 (ii) in `check.py`,
+  `napi_orders.py`, the W7 corpus and mutants, the phase-1 controls.
+
+## 17.6 Stream B: what was built [AGENT 2026-10-11, stream B]
+
+Branch `task/w47` continued on the merge of the dispatch-order capture
+(`task/dispatch-order-replay` f0827f7, option A [USER 2026-10-11]: the
+oracle is now the `bb3e577d…` build, kind-307 queue records, the unit word
+in section starts). The merge conflicted only in `scripts/wg-mutants.py`'s
+run list (both lists kept).
+
+- **`prev_queue` as data (5.1).** `PrevQueue` (`Leanux/WG/Types.lean`:
+  `items`, `tailIsStub`, `peeked`) replaces the `tx_queue` and `rx_queue`
+  lists; `Leanux/WG/PrevQueue.lean` mirrors `wg_prev_queue_dequeue`
+  (queueing.c:80-106) with the five decisions `tail_is_stub` (84),
+  `stub_empty` (85), `more_remain` (91), `tail_not_head` (96, true is P5:
+  `unsupported`), `restub_next` (100), and `wg_prev_queue_peek` /
+  `wg_prev_queue_drop_peeked` (queueing.h:143-155). `queueing.c` is
+  anchored and `wg_prev_queue_dequeue` listed in `correspondence/kcov.json`.
+  The two `queue->tail = next; atomic_dec(&queue->count); return tail;`
+  blocks (92-94, 101-103) are one block in the build, attributed to
+  101-103 and reached from both `if (next)` arms (observed: the first
+  dequeue of a two-item queue covered 101-103), so neither true arm has
+  witness lines of its own; `more_remain` true is the absence of 96 and
+  `restub_next` true the absence of 105.
+- **Multi-item queues (5.2).** The one-item `unsupported`s are gone from
+  `enqueuePerDeviceAndPeer` and its receive twin; `-ENOSPC` and `-EPIPE`
+  are returned there (the receive twin's `.enqueuePeerQueueFull` and
+  `.enqueueRingFull` were `unsupported`); `consume_data`'s `-EPIPE` arm
+  marks the packet `DEAD` through `enqueuePerPeerRx` (moved to
+  `Receive.lean`), whose `napi_schedule` is polled in the same
+  `net_rx_action` pass (`Env.pollScheduledInline`, 2.6). The tx worker and
+  the NAPI poll peek through the queue; an `UNCRYPTED` head ends the run
+  with the item peeked (`.txNotUncrypted` and `.rxPollNotUncrypted` are
+  real branches now), and a producer's state update reaches a peeked item
+  (`PrevQueue.updateFirst`: the oldest still-`UNCRYPTED` packet of its
+  keypair, both queues being FIFO).
+- **Scheduling (5.3, 5.4).** `Env/Batch.lean`: `runWorker` keeps the
+  mirror's stack of open workers (`World.openWorkers`); `condResched` runs
+  any of the encrypt, tx and decrypt workers whose section start is next
+  and whose queue is non-empty, the tx worker being the unit the dispatch
+  record names (`peekUnit`/`resolveUnit`, as `Env.runCryptWorkers`), and
+  the decrypt worker through the runner the caller supplies
+  (`Env.runDecryptAt`, carrying the switch fuel). Phase 1, generic: after
+  the runnable starts, a nested unit that yields while any outer open
+  worker still has queued work (`queuedWork`: the encrypt ring, the tx
+  work queue or the tx worker's own queue with a sendable head, the
+  decrypt ring, the handshake queue) is `unsupported "a worker yielded below
+  an open worker with queued work (the mirror's stack order)"`.
+- **`wg_batch` (5.5).** `Env.batch`: the items in order with no worker
+  between them (an inject's `NET_RX` nested at the send, a transmit as
+  `wg_xmit`'s packets through `xmitPackets`), each item's result as the
+  operation's `cqes` (its length, or the sender's errno; the `io_uring_enter`
+  result is the count submitted); then `afterBatch`: the queued units as
+  the records order them (the decrypt worker, the crypt workers by their
+  section starts, the handshake send workers), work left over `unsupported`.
+  `Syscalls.wgBatch`, `Runner`'s `wg_batch {items, wait_ms}` with
+  `inject {family, port, message}` and `xmit {packet}` items
+  (`parsePacket` shared with `wg_xmit`). Not under `socketCallOn`: the
+  io_uring descriptor plumbing is the fixture's, as the flood's.
+- **Harness (6).** `harness/guest.c` `OP_WG_BATCH` 26 (`wg_set_mtu` keeps
+  25; both allocated by the coordinator, docs/2026-10-11-interface.md):
+  `batch_prep` builds the SQEs from the wire payload (per item kind,
+  length, body) before the window, `batch_enter` is the one
+  `io_uring_enter`, the completions are read from the CQ ring and reported
+  as `LEANUX_WGBATCH` outside the window (a console write inside it added
+  the tty's path to the coverage), the trace's `wait_ms` follows.
+  `harness/trace.py` `validate_batch`/`encode_batch` (a batch transmit
+  takes no `gso_size`/`pmtudisc`, refused); `harness/linux.py`
+  `attach_batches`; `evaluator/protocol.py` `cqes`; `evaluator/check.py`:
+  a batch trace runs in its own chunk (as the flood's), its `wait_ms` is in
+  the guest budget, its decisions repeat per item (their later outcomes add
+  to the set, as a repeatable decision's), and only the WireGuard files
+  and the headers their paths inline are compared for the operation
+  (`BATCH_FILES`: the file-table functions `io_uring_enter` and each send's
+  `fget`/`fput` run are the fixture's).
+- **Corpus and mutants (6, 8).** `w7_multi_rx_{2,8}`, `w7_multi_tx_{2,8}`,
+  `w7_mixed` (`scripts/wg-w47-corpus.py`, the core tier; `wait_ms` 200 for
+  two items, 400 for more); mutants W7-M3, M4, M5, M9 on the `w7_` subset.
+
+### 17.7 Deviations and judgment calls [AGENT]
+
+- **`Kernel.napiPollList`** (5.2) is not built: `napiSoftirq` keeps its
+  `unsupported` for several peers' NAPIs (v3 dropped `w7_two_napi`), and
+  every kept class schedules one peer's NAPI per softirq; the per-peer flag
+  stays the poll list's one entry.
+- **The repoll of 13.5(a)** (`net_rx_action` under a budget-exhausted poll)
+  is not built: `.rxPollBudgetDone` true stays `unsupported` at the poll
+  site (fail-noisy), pending the stretch tier's `w7_budget_dead`.
+- **`kcov_capacity` per trace, `SO_RCVBUFFORCE`, `MAX_PAYLOAD` growth and
+  probe P-A** are not done: the core tier's batches (2-8 items) fit the
+  constants; the 1025-item tier needs them and P-A's measurement first.
+- **The batch's decisions repeat per item** inside one operation. Rather
+  than marking every receive- and transmit-path decision repeatable (which
+  would loosen every other operation), the check treats a `wg_batch`
+  operation's decisions as repeatable; their first occurrences keep the
+  order check within each function.
+- **Only the WireGuard files are compared for a `wg_batch` operation.** The
+  io_uring submission's descriptor plumbing (`io_uring_enter`'s `fdget` of
+  the ring, each send's `fget`/`fput` of the sender) is the fixture's and
+  the mirror models none of it; the flood precedent skips the whole
+  operation, this one keeps everything WireGuard runs per item.
+- **`Env/Batch.lean`'s `condResched` takes the decrypt runner as an
+  argument** (`runDecryptAt`), because the decrypt worker's hooks
+  (`napiSoftirq`, `napiIrqExit`) live in `Env.lean` after the crypt runners;
+  `runCryptWorkers` without one answers `unsupported` to a switch to the
+  decrypt worker (only `inject` and `batch` supply it).
+- **W7-M3 and W7-M5 are conclusive on this corpus**: the single-trace runs
+  took the peeked arm (`wg_prev_queue_peek.peeked=1`: `w7_multi_rx_2` once,
+  `w7_multi_rx_8` seven times, `w7_multi_tx_2` once, `w7_mixed` once) and
+  the tx worker met an `UNCRYPTED` head in `w7_multi_tx_2`; resched records
+  occurred in every multi-item run (5 in `w7_multi_rx_2`, 10 in
+  `w7_multi_rx_8`), so W7-M9 is live.
+
+### 17.8 Validation (stream B)
+
+All on the dispatch-order oracle (`kernel-net-choice-q`, identity
+`bb3e577d…`), under `capped`, at `e3b11a8`:
+- Unit tests (`evaluator.test_evaluation`, `harness.test_trace`,
+  `harness.test_wg`, `harness.test_linux`, `harness.test_noise`,
+  `evaluator.test_model_replay`): 112 pass.
+- Each `w7_*` trace alone against Linux: 5/5 agreement (53, 53, 77, 125 and
+  125 operand pairs; `cqes` `[64, 64]` for the two-item receive batch). On
+  the way: the guest did not parse the batch's payload (fixed), its
+  completion report inside the window added the tty's path (moved out),
+  and the merged dequeue block (17.6) was declared.
+- Suites `handwritten,wireguard` (`.artifacts/check/w47b-suites`): **pass,
+  192/192**, 9471 operand pairs.
+- Mutants W7-M3, M4, M5, M9 on the `w7_` subset (5 traces each; the run's
+  summary file was not written because the design doc was being edited
+  while it ran, so the verdicts are read from each mutant's `report.json`):
+  - **W7-M3 rejected** (4 `hidden_mismatch`, 1 agreement): the lost peeked
+    item leaves its records unconsumed.
+  - **W7-M4 rejected** (5 `mirror_invariant`): with the tail left off the
+    stub the next dequeue finds no entry behind a non-stub tail and the
+    mirror stops on its own invariant, before the `tail_is_stub` disagreement
+    the design named; a verdict, but the weaker kind.
+  - **W7-M5 rejected** (1 `mirror_invariant` on `w7_multi_tx_2`, 4
+    agreement): the tx worker that continues past an `UNCRYPTED` head stops
+    on an invariant of the send path; the other four runs never met one.
+  - **W7-M9 survived** (5 agreement). The consumed-but-unrun switch is
+    absorbed: the units it switched to are run by `afterBatch`'s
+    record-ordered loop at their section starts, the yielding worker's
+    pending stop is reconciled as a resumed rest, and within a `wg_batch`
+    operation the repeated decisions are compared as outcome sets, so the
+    tx worker meeting an `UNCRYPTED` head mid-list or not is invisible.
+    The per-item order of those outcomes, or stream H's per-section
+    bookkeeping, is what a rejecting form needs; listed, not claimed.
+
+### 17.9 Not done: the rest of B, and H
+
+- B: the 1025-item tier (`w7_full_*`, W7-M1, M2; P-A, `kcov_capacity`,
+  `SO_RCVBUFFORCE`, `MAX_PAYLOAD`), `w7_multi_tx_dead` (W7-M6, with A's
+  `skbCowHead` steer), the stretch tier (`w7_epipe_*`, `w7_budget_dead`,
+  the repoll, W7-M8, M10), `Kernel.napiPollList`, the phase-1 detector's
+  synthetic-stream controls (section 8), phase 2 (step workers) as a
+  decision on the phase-1 count.
+- H: the per-section operand agreement of 13.2 (ii) in `check.py` and the
+  `napi_orders.py` extension (polls per decrypt-worker run, items per poll,
+  the (a)/(b/c) split), the phase-1 counter report.
+
+
+## 17.10 Stream H: what was built [AGENT 2026-10-11, stream H]
+
+Branch `task/w47` continued on the merge of `task/dispatch-order`
+`dbe9e0e` (the PENDING-bit model of queued units, `a333927`; one conflict,
+`World.openWorkers` beside the new `pendingWork`; `Env/Batch.lean`'s
+`condResched` takes `resolveUnit`'s new signature). Commit `fbf2826`.
+
+- **The per-section operand agreement (13.2 (ii), T1).** The mirror stamps
+  every step with the ordinal of the NET_RX section it ran in
+  (`Step.netRx`; `World.netRxSections`/`netRxSection`, set in
+  `Env.runWorker` for `.netRx` and cleared at its end, reset per operation;
+  the model output's `section` field, accepted by `evaluator/protocol.py`).
+  The guest tags every remote comparison record with the dispatch-section
+  blocks it occurred in: `split_hidden` numbers the blocks by their start
+  records in area order (a section's records reach the remote area as one
+  block at its stop, nested blocks before their enclosing one, so the
+  running count is the block and the stop record ends it), and
+  `print_records` prints each distinct remote record once, in sorted
+  order, with its blocks as ranges (`"1-3,7"`, a fifth element;
+  `harness/linux.py` accepts it). `evaluator/check.py`: `netrx_sections`
+  maps each operation's `net_rx_action` blocks of the comparison child to
+  the mirror's ordinals by the start records' sequence numbers;
+  `record_blocks` parses the ranges; `section_agreement` is the rule, run
+  on an operand mismatch of a trace with open placements after one more
+  mirror run with every placement before the put (`napi_irq_before_put`
+  all true). `NAPI_PLACEMENTS_MAX` and `napi_placements` are gone; the
+  report's `napi_irq_placements` is now `napi_before_put_sections`, the
+  NET_RX ordinals taken from the before-put run, per trace.
+- **The rule, as the data corrected it.** The design said the (c')
+  placement changes only the operands inside the poll's section. The first
+  replay of `rx_roam_v6` (one open poll) showed it also changes the
+  enqueue's own `wg_peer_put`, the branch right after the poll outside any
+  section (3 → 2 with the poll after it, 2 → 1 with the poll before it),
+  and it moves the section among the branches outside any section. So the
+  runs are compared per section (each NET_RX section's branches, and the
+  branches outside any, each in their own order): the control flow must be
+  the same; the operands may differ only in `count` NET_RX sections and
+  `count` adjacent runs of branches outside them, paired in order; each
+  pair (the poll's span) agrees with Linux under one run as a whole, the
+  section's branches against that section's block and the put's against
+  the records outside the NET_RX blocks; everything else agrees under
+  both. More differences than open polls fail the trace: the independence
+  premise failed.
+- **A second correction from the first live run.** The guest's
+  first-occurrence marking compared record content only, so the worker's
+  put behind the poll, identical in bytes and address to the poll's put
+  (`wg_peer_put` is one function), was dropped; records are now distinct
+  per block. The naive per-block printing then made a flood's 520 identical
+  NET_RX sections print 520 copies, past the rekey bound of the four
+  `e_underload_*` traces; hence the ranges.
+- **`evaluator/napi_orders.py`** reads the function word of the 16-byte
+  start record (the dispatch-order capture widened it; before this the (a)
+  and (b/c) counts were both zero on the new kernel), counts the NET_RX
+  polls per decrypt-worker run (`polls_per_run`), and the phase-1 nesting
+  proxy (5.4, P-C): a resched record in a unit nested in another unit, per
+  (outer, inner) pair (`nested_yields`), with the trace and operation; the
+  CLI adds the report's phase-1 rejections.
+
+### 17.11 The phase-1 counter report (5.4, 13.3)
+
+On the dispatch-order oracle (`kernel-net-choice-q`, identity `bb3e577d…`):
+
+| Run | Nesting proxy (resched in a nested unit) | Phase-1 rejections |
+|---|---|---|
+| `w47b-suites` (stream B's suite run, 192 traces) | 6: `handshake_receive_worker > tx_worker` 3, `> encrypt_worker` 3 | 0 |
+| `w47h-suites`, first run of H (192) | 9: `handshake_receive_worker > encrypt_worker` 6, `> tx_worker` 2, **`encrypt_worker > tx_worker` 1** | **1: `w7_multi_tx_8`** (operation 4, at peer.c:227) |
+
+The proxy occurs in the receive worker's nested units of ordinary traces
+(`d2_rx_deliver_v6`, `d2_xmit_after_session`, `l_delete_after_clear_work`,
+`w4_gso_trim`, …) without a rejection: the outer receive worker had no
+queued work. The one rejection is the design's case exactly: the tx worker
+yielded under the encrypt worker while the encrypt ring still held items
+(an 8-item transmit batch), fail-closed. In two runs of the five-trace W7
+core tier that is 1 of 10 bulk-trace runs; the design makes phase 2 (step
+workers) a decision on this count ("a few percent of bulk traces"), so it
+goes to the coordinator with the 1025-item tier, where the rate can only
+grow.
+
+### 17.12 Deviations and judgment calls [AGENT]
+
+- The poll's span (17.10) replaces the design's "everything outside the
+  sections agrees" test, which the data refuted; the independence test is
+  now the count of differing spans against the open-poll count, and the
+  per-section control-flow equality.
+- Remote comparison records are printed in sorted order with block ranges,
+  not in first-execution order: no consumer depends on their order
+  (`operand_agreement` matches any record at the condition; the harness
+  checks duplicates only).
+- `polls_per_run` and the (a)/(b/c) split come from the records; the items
+  per poll do not (the mirror's `wg_prev_queue_peek.peeked` outcomes in the
+  report's decision table are the measure, as 17.7 used them).
+- **W7-M9's rejecting form is not built.** The per-section bookkeeping
+  partitions *operands* by NET_RX section; W7-M9's consumed-but-unrun
+  switch is visible only in the per-item order of the tx worker's
+  outcomes, which the batch operation's repeatable decisions compare as
+  sets. A rejecting form needs per-dispatch-section coverage (the guest
+  tagging PCs by block as it now tags comparison records, and the check
+  comparing each section's decisions as its own sequence): a new check
+  rule, for a later step. The mutant is **rejected live anyway** under the
+  PENDING-bit model of the dispatch-order capture (17.13): the switch it
+  skips leaves the tx unit pending in the mirror, so the encrypt worker's
+  next item queues nothing and Linux's re-queue record (kind 307) stays
+  unconsumed, a hidden mismatch (2 of the 5 `w7_` runs; the others had no
+  mid-loop yield). It is listed as rejected by that mechanism, not by the
+  per-item order the design named.
+
+### 17.13 Validation (stream H)
+
+All on the dispatch-order oracle, under `capped`:
+- `lake build leanux-model` passes; unit tests (the six modules, with
+  `test_section_agreement_two_runs`: a synthetic two-poll trace whose
+  second poll came before the put passes with section 2 under the
+  before-put run, and a mixed span, a wrong poll, a difference outside the
+  spans, a control-flow difference and a record outside its block all
+  fail; `test_netrx_sections_from_the_remote_rows`): 114 pass.
+- Live, single traces: `rx_roam_v6` (one open poll), `d2_rx_window_boundary`,
+  `d2_rx_in_order`, `e_underload_flood` (op 3: 6378 comparison records,
+  3825 tagged, the widest in blocks 1-520; cmp child 1.79 s of the 4.5 s
+  bound, as before the change) all pass.
+- The recorded runs replayed through both placement runs and
+  `section_agreement` (`.artifacts/h/section_driver.py`, not committed):
+  `rx_roam_v6` 41 operand pairs, no problems, the after-put run (101
+  branches differ between the runs: the poll's and the put's operands, and
+  the poll's position); `d2_rx_window_boundary` 65 and `d2_rx_in_order` 68
+  pairs, no open poll, no problems.
+- Suites `handwritten,wireguard` (`.artifacts/check/w47h-suites`, at
+  `fbf2826`): **pass, 192/192**, 9471 operand pairs, no retries, no
+  before-put sections (no operand mismatch with an open poll occurred, so
+  the two-run rule was exercised by the replays above, not live). The run
+  before the commit (same code but the first guest tagging, 17.10) was
+  187/192: the four `e_underload_*` past the rekey bound from the
+  per-block copies, and `w7_multi_tx_8` the phase-1 rejection of 17.11.
+- Mutants W4-M1, M3-M10, M16 and W7-M3, M4, M5, M9 (`scripts/wg-mutants.py`,
+  `.artifacts/check/mutants-summary.json`): **14/14 rejected**, no other
+  outcome. W4 as in 17.3; W7-M3 4 `hidden_mismatch`; W7-M4 5
+  `mirror_invariant`; W7-M5 1 `mirror_invariant`; **W7-M9 2 `hidden_mismatch`**
+  (17.12), where stream B's run had it survive.

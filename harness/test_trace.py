@@ -82,7 +82,7 @@ class TraceContractTests(unittest.TestCase):
         self.assertEqual(validate_trace(trace), trace)
         plain = {k: v for k, v in trace.items() if k not in ("steer", "expect")}
         wire = serialize_wire([plain], dispatch=(1,), arm_records=True)
-        self.assertEqual(wire.splitlines()[3:7], ["A 1", "M 0 0", "T d3 1 32 1 0", f"19 0 -1 0 -1 {2**31} 0 0 0"])
+        self.assertEqual(wire.splitlines()[3:7], ["A 1", "M 0 0", "T d3 1 32 1 0 0", f"19 0 -1 0 -1 {2**31} 0 0 0"])
         for bad in ([{"op": "wg_advance", "ticks": 0}], [{"op": "wg_advance", "ticks": 2**31 + 1}],
                     [{"op": "wg_advance", "ticks": 1, "extra": 0}]):
             with self.assertRaises(InvalidTrace):
@@ -94,18 +94,19 @@ class TraceContractTests(unittest.TestCase):
     def test_wire_preserves_widths_and_reference_modes(self):
         self.trace['ops'].append({'op': 'dup3', 'fd': {'literal': -2147483648}, 'newfd': {'ref': 0}, 'flags': 4294967295})
         self.assertEqual(serialize_wire([self.trace]),
-                         'LEANUX_WIRE_V2\n1\nD 0\nA 0\nM 0 0\nT case 3 32 0 0\n1 0 -1 0 -1 0 2048 0 0\n6 1 0 0 -1 8 0 18446744073709551615 0\n3 0 -2147483648 1 0 0 4294967295 0 0\n')
+                         'LEANUX_WIRE_V2\n1\nD 0\nA 0\nM 0 0\nT case 3 32 0 0 0\n1 0 -1 0 -1 0 2048 0 0\n6 1 0 0 -1 8 0 18446744073709551615 0\n3 0 -2147483648 1 0 0 4294967295 0 0\n')
 
     def test_sender_tos_and_link_local_source(self):
         # W5 (docs/2026-10-06-w5-w6-receive.md, section 6): `tos` on wg_inject
-        # and wg_xmit, `from: "ll"` on an IPv6 wg_inject; the wire carries the
-        # TOS in wg_xmit's b field and tos | ll << 8 in wg_inject's value field
+        # and wg_xmit, `from: "ll"` on an IPv6 wg_inject; the wire carries
+        # tos | ll << 8 in wg_inject's value field and, for wg_xmit, the TOS in
+        # bits 8-15 of the value field (bit 0 is W4's IP_PMTUDISC_PROBE, b its gso_size)
         base = {"version": 1, "id": "t", "ops": [
             {"op": "wg_inject", "family": 6, "port": 51820, "message": "00", "tos": 0xb9, "from": "ll"},
             {"op": "wg_xmit", "packet": {"family": 4, "dst": "0a000001"}, "tos": 3}]}
         wire = serialize_wire([validate_trace(base)], dispatch=[1]).splitlines()
         self.assertEqual(wire[6].split()[:8], ["13", "0", "-1", "0", "-1", "6", "51820", str(0xb9 | 256)])
-        self.assertEqual(wire[7].split()[:8], ["11", "0", "-1", "0", "-1", "4", "3", "0"])
+        self.assertEqual(wire[7].split()[:8], ["11", "0", "-1", "0", "-1", "4", "0", str(3 << 8)])
         for bad in ({"op": "wg_inject", "family": 4, "port": 1, "message": "00", "from": "ll"},
                     {"op": "wg_inject", "family": 6, "port": 1, "message": "00", "from": "lo"},
                     {"op": "wg_inject", "family": 6, "port": 1, "message": "00", "tos": 256},
@@ -151,7 +152,7 @@ class TraceContractTests(unittest.TestCase):
     def test_pipes_contract(self):
         trace = validate_trace(self.PIPES)
         self.assertEqual(serialize_wire([trace]).splitlines()[5:], [
-            'T pipes 6 32 0 0', '14 0 -1 0 -1 0 2048 0 0', '6 3 0 0 -1 69632 0 7 5', '5 2 0 0 -1 69632 0 0 0',
+            'T pipes 6 32 0 0 0', '14 0 -1 0 -1 0 2048 0 0', '6 3 0 0 -1 69632 0 7 5', '5 2 0 0 -1 69632 0 0 0',
             '7 3 0 0 -1 1031 4096 0 0', '3 2 0 0 20 0 0 0 0', '7 1 4 0 -1 1032 0 0 0'])
         mutations = [
             lambda t: t['ops'][1].update(fd={"ref": 0}),                 # a ref may not name a pipe2
@@ -196,8 +197,11 @@ class OpcodeTableTests(unittest.TestCase):
         self.assertTrue(all(isinstance(v, str) and v for v in RESERVED_OPCODES.values()))
         self.assertFalse(set(OPCODES.values()) & set(RESERVED_OPCODES))
         self.assertEqual(sorted(c for n, c in OPCODES.items()
-                                if n not in ("pipe2", "wg_advance", "wg_create", "wg_down", "wg_delete", "wg_flood")),
+                                if n not in ("pipe2", "wg_advance", "wg_create", "wg_down", "wg_delete", "wg_flood",
+                                             "wg_set_mtu", "wg_batch")),
                          list(range(1, 14)))
+        # W4+W7's codes, allocated by the coordinator (docs/2026-10-11-interface.md)
+        self.assertEqual((OPCODES["wg_set_mtu"], OPCODES["wg_batch"]), (25, 26))
 
     def test_guest_defines_match(self):
         defines = {name.lower(): int(code) for name, code in re.findall(r"^#define OP_(\w+) (\d+)$", self.GUEST, re.M)}
@@ -301,9 +305,9 @@ class LifecycleWireTests(unittest.TestCase):
                  "ops": [{"op": "wg_create"}, {"op": "wg_down"}, {"op": "wg_delete"}]}
         self.assertEqual(validate_trace(trace), trace)
         wire = serialize_wire([trace], dispatch=[1])
-        self.assertIn("\nT life 3 32 2 0\n15 0 -1 0 -1 0 0 0 0\n16 0 -1 0 -1 0 0 0 0\n17 0 -1 0 -1 0 0 0 0\n", wire)
+        self.assertIn("\nT life 3 32 2 0 0\n15 0 -1 0 -1 0 0 0 0\n16 0 -1 0 -1 0 0 0 0\n17 0 -1 0 -1 0 0 0 0\n", wire)
         del trace["net_fixture"]
-        self.assertIn("\nT life 3 32 1 0\n", serialize_wire([trace], dispatch=[1]))
+        self.assertIn("\nT life 3 32 1 0 0\n", serialize_wire([trace], dispatch=[1]))
         for bad in ({"net_fixture": "wg0"}, {"net_fixture": True}, {"net_fixture": "bare", "ops": [{"op": "dup", "fd": {"literal": 8}}]}):
             with self.subTest(bad=bad):
                 with self.assertRaises(InvalidTrace):

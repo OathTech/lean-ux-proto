@@ -36,16 +36,48 @@ open Leanux Leanux.WG
     may read no hidden input (a read out of order is a mismatch) and touch
     no state the others read. On the modeled paths each rest is a worker's
     final empty ring or queue poll. -/
-def runWorker (w : Worker) (body : M Unit) : M Unit := do
+def runWorker (w : Worker) (body : M Unit) (pid : Option Nat := none) : M Unit := do
   _ ← hidden (.sectionStart w)
   -- whether this run switched away
-  modify fun s => { s with yieldedWorkers := s.yieldedWorkers.filter (· != w.index) }
+  modify fun s => { s with yieldedWorkers := s.yieldedWorkers.filter (· != w.index),
+                           openWorkers := s.openWorkers ++ [(w.index, pid)] }
+  -- W7 stream H (13.2 (ii)): a NET_RX section's steps carry its ordinal in
+  -- the operation; a softirq never nests in a softirq, so the ordinal is
+  -- cleared at its end
+  if w == .netRx then
+    modify fun s => { s with netRxSections := s.netRxSections + 1, netRxSection := s.netRxSections + 1 }
   body
+  if w == .netRx then modify fun s => { s with netRxSection := 0 }
+  modify fun s => { s with openWorkers := s.openWorkers.dropLast }
   let stop := (HiddenSite.sectionStop w).info.id
   let deferred := (← get).yieldedWorkers.contains w.index && (← peekHiddenSite).isSome
     && (← peekHiddenSite) != some stop
   if deferred then modify fun s => { s with pendingStops := s.pendingStops ++ [stop] }
   else _ ← hidden (.sectionStop w)
+
+/-- An item of `wg_batch` (W7, section 5.5): a datagram the fixture's sender
+    submits in one `io_uring_enter`, to wg0's port (`inject`) or into wg0
+    (`xmit`, as `wg_xmit`'s packet). -/
+inductive BatchItem where
+  | inject (family port : Nat) (message : List UInt8)
+  | xmit (family addr : Nat) (payload : List UInt8) (opts : XmitOpts)
+  deriving Repr
+
+/-- Whether an open worker still has queued items it would process when
+    it resumes (5.4): the encrypt ring, the tx work queue or a tx worker's
+    own queue with a head it can send, the decrypt ring, the handshake
+    queue. The test names no unit pair. -/
+def queuedWork (w : Nat) (pid : Option Nat) : M Bool := do
+  let d ← getDev
+  if w == Worker.encryptWorker.index then return !d.encryptQueue.isEmpty
+  if w == Worker.decryptWorker.index then return !d.decryptQueue.isEmpty
+  if w == Worker.receiveWorker.index then return !d.handshakeQueue.isEmpty
+  if w == Worker.txWorker.index then
+    if !d.txWorkQueue.isEmpty then return true
+    let some pid := pid | return false
+    let p ← getPeer pid
+    return p.txQueue.all.any fun item => item.head?.any (·.state != .uncrypted)
+  return false
 
 /-- The worker whose section a record starts or stops, with `true` for a
     start; `none` for other records and for `net_rx_action`, a softirq,
@@ -67,29 +99,50 @@ def sectionOf (site : Nat) : Option (Worker × Bool) :=
     a worker the mirror cannot run here (a caller further up its stack)
     resumes later (`runWorker`). `fuel` bounds the nesting: each level is a
     worker run. -/
-def condResched : Nat → Worker → M Bool
-  | 0, _ => invariant "worker switches nested too deep"
-  | fuel + 1, self => do
+def condResched : Nat → Worker → M Unit → M Bool
+  | 0, _, _ => invariant "worker switches nested too deep"
+  | fuel + 1, self, runDecrypt => do
     let some site := self.resched? | invariant s!"{self.symbol} has no cond_resched"
     if (← peekHiddenSite) != some site.info.id then return false
     _ ← hidden site
+    -- W7 (5.3): any of the encrypt, tx and decrypt workers whose start is
+    -- next and whose queue is non-empty runs here; the tx worker is the one
+    -- the dispatch record names (docs/2026-10-11-dispatch-order.md)
     for _ in [0:16] do
       match (← peekHiddenSite).bind sectionOf with
       | some (.encryptWorker, true) =>
         if (← getDev).encryptQueue.isEmpty then break   -- not runnable: the record mismatches later
-        runWorker .encryptWorker (WG.encryptWorker checksumHelp (condResched fuel .encryptWorker))
+        runWorker .encryptWorker (WG.encryptWorker checksumHelp (condResched fuel .encryptWorker runDecrypt))
       | some (.txWorker, true) =>
-        let some pid := (← getDev).txWorkQueue.head? | break
-        modifyDev fun d => { d with txWorkQueue := d.txWorkQueue.drop 1 }
-        runWorker .txWorker (WG.txWorker pid (condResched fuel .txWorker))
+        let d ← getDev
+        let some headPid := d.txWorkQueue.head? | break
+        let pid ← match ← peekUnit .txWorker with
+          | some u => resolveUnit .txWorker u d.txWorkQueue
+          | none => pure headPid
+        modifyDev fun d => { d with txWorkQueue := d.txWorkQueue.erase pid }
+        runWorker .txWorker (WG.txWorker pid (condResched fuel .txWorker runDecrypt)) (some pid)
+      | some (.decryptWorker, true) =>
+        if (← getDev).decryptQueue.isEmpty then break
+        runDecrypt
       | _ => break
     -- the loop ends at a record it does not run; one it could run is a
     -- run beyond its bound
     match (← peekHiddenSite).bind sectionOf with
-    | some (.encryptWorker, true) | some (.txWorker, true) =>
-      if !(← getDev).encryptQueue.isEmpty || !(← getDev).txWorkQueue.isEmpty then
-        invariant "more crypt worker runs at one cond_resched than the loop allows"
+    | some (.encryptWorker, true) | some (.txWorker, true) | some (.decryptWorker, true) =>
+      let d ← getDev
+      if !d.encryptQueue.isEmpty || !d.txWorkQueue.isEmpty || !d.decryptQueue.isEmpty then
+        invariant "more worker runs at one cond_resched than the loop allows"
     | _ => pure ()
+    -- W7 phase 1 (5.4): a nested unit that yields while an outer open
+    -- worker still has queued items. The mirror runs the nested unit to its
+    -- end inside the outer's call, so the outer would see its queue only
+    -- afterwards, while Linux may resume the outer first: the rests do not
+    -- commute, and the mirror's stack order is not Linux's. Fail-closed.
+    let stack := (← get).openWorkers
+    if stack.length ≥ 2 then
+      for (w, pid) in stack.dropLast do
+        if ← queuedWork w pid then
+          unsupported "a worker yielded below an open worker with queued work (the mirror's stack order)"
     modify fun s => { s with yieldedWorkers := s.yieldedWorkers ++ [self.index] }
     return true
 

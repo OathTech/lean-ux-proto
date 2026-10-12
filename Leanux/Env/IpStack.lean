@@ -29,9 +29,31 @@ def SEND_PORT : Nat := 40000
 def WG0_ADDR4 : Nat := 0x0afffe01
 def WG0_ADDR6 : Nat := 0xfd00ffff000000000000000000000001
 
-/-- The largest UDP payload whose IP packet fits wg0's MTU (1420). -/
-def MAX_XMIT_PAYLOAD4 : Nat := WG.DEVICE_MTU - 20 - 8
-def MAX_XMIT_PAYLOAD6 : Nat := WG.DEVICE_MTU - 40 - 8
+/-- The largest UDP payload whose IP packet fits `mtu` (W4: the route's
+    MTU, or wg0's). -/
+def MAX_XMIT_PAYLOAD4 (mtu : Nat) : Nat := mtu - 20 - 8
+def MAX_XMIT_PAYLOAD6 (mtu : Nat) : Nat := mtu - 40 - 8
+
+/-- W4 (docs/2026-10-06-w4-w7-transmit-bulk.md, section 6): a `wg_xmit`'s
+    options. `gsoSize`: `UDP_SEGMENT` on the sender's `sendmsg`; `probe`:
+    `IP_PMTUDISC_PROBE` instead of the sender's `IP_PMTUDISC_DO`; `routeMtu`:
+    the MTU of the fixture's route to the destination (`World.routes`). -/
+structure XmitOpts where
+  gsoSize : Option Nat := none
+  probe : Bool := false
+  routeMtu : Option Nat := none
+  /-- W5: the sender's TOS / traffic class for this send (`IP_TOS` /
+      `IPV6_TCLASS`), the inner header's TOS. -/
+  tos : Nat := 0
+  deriving Repr
+
+/-- Whether the IP output loops a copy of a datagram to a multicast
+    destination back to local receivers before `wg_xmit` (`Env.xmitMulticastLoop`):
+    IPv4 only for a group the fixture's stack has joined, which is
+    `224.0.0.1` (every up interface joins all-hosts, igmp.c; W4 section 2.4
+    corrects D3's "any 224/4"). -/
+def multicastLoops (family addr : Nat) : Bool :=
+  family == 4 && addr == 0xe0000001
 
 /-- `n` as `width` big-endian bytes. -/
 def beBytes (n width : Nat) : List UInt8 :=
@@ -80,7 +102,7 @@ def xmitBytesUnknown (family addr : Nat) : Bool :=
     the bytes are not determined: the packet carries a zero source address
     as a placeholder, and `checksumHelp`, which every such packet meets
     before its bytes are read (encryption), is `unsupported`. -/
-def xmitPacket (family addr : Nat) (payload : List UInt8) (tos : Nat := 0) : M WG.Packet := do
+def xmitPacket (family addr : Nat) (payload : List UInt8) (mtu : Nat) (tos : Nat := 0) : M WG.Packet := do
   let ulen := 8 + payload.length
   -- W5 (docs/2026-10-06-w5-w6-receive.md, 2.1): `tos` is the sender's
   -- `IP_TOS` / `IPV6_TCLASS` for this send (`__ip_make_skb` writes
@@ -88,7 +110,6 @@ def xmitPacket (family addr : Nat) (payload : List UInt8) (tos : Nat := 0) : M W
   -- keeps the ECN bits), the inner header's TOS / traffic class.
   if tos > 255 then invariant "a TOS beyond a byte"
   if family == 4 then
-    if payload.length > MAX_XMIT_PAYLOAD4 then unsupported "a transmitted payload beyond wg0's MTU"
     let src := if xmitBytesUnknown family addr then 0 else WG0_ADDR4
     let pseudo := onesSum (beBytes src 4 ++ beBytes addr 4 ++ [0, 17] ++ beBytes ulen 2)
     let udp := beBytes SENDER_PORT 2 ++ beBytes SEND_PORT 2 ++ beBytes ulen 2 ++ beBytes pseudo 2 ++ payload
@@ -96,16 +117,84 @@ def xmitPacket (family addr : Nat) (payload : List UInt8) (tos : Nat := 0) : M W
       ++ beBytes src 4 ++ beBytes addr 4
     -- ip_send_check: `ip_fast_csum` over the header with a zero check field
     let check := 0xffff - onesSum (hdr 0)
-    return { bytes := hdr check ++ udp, csum := some (20, 6), mtu := WG.DEVICE_MTU }
+    return { bytes := hdr check ++ udp, csum := some (20, 6), mtu }
   else if family == 6 then
-    if payload.length > MAX_XMIT_PAYLOAD6 then unsupported "a transmitted payload beyond wg0's MTU"
     let src := if xmitBytesUnknown family addr then 0 else WG0_ADDR6
     let pseudo := onesSum (beBytes src 16 ++ beBytes addr 16 ++ beBytes ulen 4 ++ [0, 0, 0, 17])
     let udp := beBytes SENDER_PORT 2 ++ beBytes SEND_PORT 2 ++ beBytes ulen 2 ++ beBytes pseudo 2 ++ payload
     -- version 6, the traffic class, flow label 0
     let hdr := [UInt8.ofNat (0x60 + tos / 16), UInt8.ofNat (tos % 16 * 16), 0, 0] ++ beBytes ulen 2 ++ [17, 64]
       ++ beBytes src 16 ++ beBytes addr 16
-    return { bytes := hdr ++ udp, csum := some (40, 6), mtu := WG.DEVICE_MTU }
+    return { bytes := hdr ++ udp, csum := some (40, 6), mtu }
+  else unsupported "a transmit family other than IPv4 or IPv6"
+
+/-- Segment `i` of an IPv4 UDP GSO skb as `inet_gso_segment` and
+    `__udp_gso_segment` leave it for `wg_xmit` (W4 section 2.1): the header
+    carries id `i` (the unconnected `IP_PMTUDISC_DO`/`PROBE` sender's
+    super-skb has id 0, af_inet.c:1451-1454), DF, `tot_len` of the segment and
+    its own header checksum; the UDP header the segment's length and a
+    complete checksum computed in software (`gso_make_checksum`, 0 sent as
+    `CSUM_MANGLED_0`; udp_offload.c:439-458); `ip_summed` is `CHECKSUM_NONE`
+    (`csum := none`). -/
+def gsoSegment (addr i : Nat) (slice : List UInt8) (mtu : Nat) : WG.Packet :=
+  let ulen := 8 + slice.length
+  let pseudo := beBytes WG0_ADDR4 4 ++ beBytes addr 4 ++ [0, 17] ++ beBytes ulen 2
+  let udp0 := beBytes SENDER_PORT 2 ++ beBytes SEND_PORT 2 ++ beBytes ulen 2 ++ [0, 0] ++ slice
+  let folded := 0xffff - onesSum (pseudo ++ udp0)
+  let check := if folded == 0 then 0xffff else folded
+  let udp := udp0.take 6 ++ beBytes check 2 ++ slice
+  let hdr (c : Nat) := [0x45, 0] ++ beBytes (20 + ulen) 2 ++ beBytes i 2 ++ [0x40, 0, 64, 17] ++ beBytes c 2
+    ++ beBytes WG0_ADDR4 4 ++ beBytes addr 4
+  { bytes := hdr (0xffff - onesSum (hdr 0)) ++ udp, csum := none, mtu }
+
+/-- `UDP_MAX_SEGMENTS` (include/linux/udp.h:111). -/
+def UDP_MAX_SEGMENTS : Nat := 128
+
+/-- W4: the packets one `sendto`/`sendmsg` of `payload` from the fixture's
+    sender hands `wg_xmit`, and the `mtu` `wg_xmit` computes (device.c:173,
+    `dst_mtu`: the route's `RTAX_MTU`, else `dev->mtu`), or the stack's
+    errno before any `wg_xmit`. Modeled exactly where the kept classes need
+    it (design section 16), `unsupported` beyond the WireGuard boundary:
+    - the sender's `cork->fragsize` is `dst_mtu` under `IP_PMTUDISC_DO` and
+      `dev->mtu` under `PROBE` (ip_output.c:1307-1308); a datagram above it
+      is `-EMSGSIZE` (`__ip_append_data`, DF set, no fragmentation);
+    - `UDP_SEGMENT` (udp.c:984-1014): `-EMSGSIZE` if the header plus
+      `min(len, gso_size)` exceed `fragsize`, `-EINVAL` above 128 segments;
+      a payload at most `gso_size` long is sent as one ordinary packet; a
+      `gso_size` that does not divide a longer payload (a short last
+      segment) is beyond the boundary; IPv4 only;
+    - IPv6 with `gso_size`, a route MTU or `PROBE`: beyond the boundary;
+    - the multicast and link-local destinations of `xmitBytesUnknown` keep
+      D3's treatment (a placeholder source; `checksumHelp` is `unsupported`). -/
+def xmitPackets (family addr : Nat) (payload : List UInt8) (opts : XmitOpts) :
+    M (Except Int (List WG.Packet × Nat)) := do
+  let dev ← getDev
+  -- the fixture's route to the destination, if `net_fixture.routes` names
+  -- one (its `RTAX_MTU` is `dst_mtu`; ip.h:490-492), else the device's MTU
+  let routeMtu := opts.routeMtu <|> ((← get).routes.find? fun (f, a, _) => f == family && a == addr).map (·.2.2)
+  if family == 4 then
+    let mtu := routeMtu.getD dev.mtu
+    let fragsize := if opts.probe then dev.mtu else mtu
+    match opts.gsoSize with
+    | some g =>
+      if g == 0 then unsupported "UDP_SEGMENT 0 (no segmentation)"
+      if opts.tos != 0 then unsupported "a TOS on a UDP_SEGMENT send (W5 models the TOS of ordinary sends only)"
+      if 28 + min payload.length g > fragsize then return .error (-EMSGSIZE)
+      if payload.length > g * UDP_MAX_SEGMENTS then return .error (-EINVAL)
+      if payload.length ≤ g then return .ok ([← xmitPacket family addr payload mtu opts.tos], mtu)
+      if payload.length % g != 0 then
+        unsupported "a gso_size that does not divide the payload (a short last segment): beyond the WireGuard boundary"
+      let n := payload.length / g
+      return .ok ((List.range n).map fun i => gsoSegment addr i ((payload.drop (i * g)).take g) mtu, mtu)
+    | none =>
+      if payload.length > MAX_XMIT_PAYLOAD4 fragsize then return .error (-EMSGSIZE)
+      return .ok ([← xmitPacket family addr payload mtu opts.tos], mtu)
+  else if family == 6 then
+    if opts.gsoSize.isSome then unsupported "IPv6 UDP GSO: beyond the WireGuard boundary"
+    if routeMtu.isSome || opts.probe then
+      unsupported "an IPv6 route MTU or IPV6_PMTUDISC_PROBE: beyond the WireGuard boundary"
+    if payload.length > MAX_XMIT_PAYLOAD6 dev.mtu then unsupported "a transmitted payload beyond wg0's MTU"
+    return .ok ([← xmitPacket family addr payload dev.mtu opts.tos], dev.mtu)
   else unsupported "a transmit family other than IPv4 or IPv6"
 
 /-- `skb_checksum_help` (net/core/dev.c:3384-3431, a cut) of a

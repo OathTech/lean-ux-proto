@@ -43,8 +43,11 @@ inductive Syscall where
   | wgGet
   /-- `ioctl(6, SIOCSIFFLAGS, flags | IFF_UP)` on the fixture's sender. -/
   | wgUp
-  /-- `sendto` of a UDP datagram (`payload`) from the fixture's sender to `addr`. -/
-  | wgXmit (family addr : Nat) (payload : List UInt8) (tos : Nat)
+  /-- `sendto` of a UDP datagram (`payload`) from the fixture's sender to `addr`
+      (W4: `sendmsg` with `UDP_SEGMENT` and `IP_MTU_DISCOVER` per `opts`). -/
+  | wgXmit (family addr : Nat) (payload : List UInt8) (opts : Env.XmitOpts)
+  /-- W4: `ioctl(6, SIOCSIFMTU, {"wg0", mtu})` on the fixture's sender. -/
+  | wgSetMtu (mtu : Nat)
   /-- `recvfrom(4, MSG_DONTWAIT)` after the fixture waited for the workers. -/
   | wgObserve
   /-- `sendto` of a WireGuard message from the fixture's sender to `port`. -/
@@ -52,6 +55,9 @@ inductive Syscall where
   /-- E-B: an io_uring flood to wg0's `port`: `count` invalid-MAC1 initiations
       with `messages` valid-MAC1 initiations submitted first. -/
   | wgFlood (count port : Nat) (messages : List (List UInt8))
+  /-- W7: `items` submitted as one io_uring batch; the guest waits `waitMs`
+      after it (docs/2026-10-06-w4-w7-transmit-bulk.md, 5.5). -/
+  | wgBatch (items : List Env.BatchItem) (waitMs : Nat)
   /-- D3: `ioctl(3, KCOV_LEANUX_TIME_ADVANCE, &ticks)` on the trace's KCOV
       descriptor, then the guest's wait (docs/2026-10-05-d3-timers.md, 4.3). -/
   | wgAdvance (ticks : Nat)
@@ -156,17 +162,29 @@ def dispatch : Syscall → M Int
       modify fun w => { w with extraOut := [("device", device)] }
       return 0
   | .wgUp => socketCallOn SENDER_FD Env.wgUp
-  | .wgXmit family addr payload tos => socketCallOn SENDER_FD do
+  | .wgXmit family addr payload opts => socketCallOn SENDER_FD do
     -- the fixture adds wg0's routes after a successful wg_up; before that,
     -- and after a down or a deletion, no route exists (L)
     if !(← get).routesViaWg0 then return -ENETUNREACH
+    -- W4: an MTU change below the family's floor took its routes down with
+    -- its IP device, and the fixture re-adds them only at the next wg_up
+    if let some d := (← getK).wg then
+      if (family == 4 && !d.inet4Dev) || (family == 6 && !d.inet6Dev) then
+        unsupported "a transmit after an MTU change took the family's routes into wg0 down"
     -- udp_sendmsg returns the datagram's length once the device took it
     Env.fixtureSend
-    Env.xmitMulticastLoop family addr
-    let ret ← WG.wgXmit family addr (← Env.xmitPacket family addr payload tos)
-    return if ret == 0 then payload.length else ret
+    match ← Env.xmitPackets family addr payload opts with
+    | .error e => return e   -- refused by the sender's IP layer before any output
+    | .ok (pkts, mtu) =>
+      Env.xmitMulticastLoop family addr
+      let ret ← WG.wgXmit family addr pkts mtu
+      return if ret == 0 then payload.length else ret
+  | .wgSetMtu mtu => socketCallOn SENDER_FD (Env.setMtu mtu)
   | .wgInject family port message tos ll => socketCallOn SENDER_FD (Env.inject family port message tos ll)
   | .wgFlood count port messages => Env.flood count port messages
+  -- W7: the io_uring submission's descriptor plumbing (the ring's fdget, each
+  -- send's fget of the sender) is the fixture's, as the flood's is: not modeled
+  | .wgBatch items _ => Env.batch items
   | .wgObserve => socketCallOn LISTEN4_FD do
     let (ret, observed) ← Env.observe
     modify fun w => { w with extraOut := ["datagrams", "replies", "stats"].map fun k => (k, observed.getObjValD k) }
@@ -203,7 +221,8 @@ def taskWorkRun : M Unit := do
 
 /-- One system call: entry, the handler, and the return-to-user work. -/
 def syscall (call : Syscall) : M Int := do
-  modify fun w => { w with steps := #[], userOut := none, userFds := none, extraOut := [], queuedThisCall := [], fired := #[] }
+  modify fun w => { w with steps := #[], userOut := none, userFds := none, extraOut := [], queuedThisCall := [], fired := #[],
+                           netRxSections := 0, netRxSection := 0 }
   let ret ← dispatch call
   taskWorkRun
   -- the guest waits inside the operations that can queue the handshake send
@@ -212,6 +231,7 @@ def syscall (call : Syscall) : M Int := do
   match call with
   | .wgSet _ | .wgUp | .wgInject .. => Env.runSendWorkers; Env.idleTimers
   | .wgXmit .. => Env.afterXmit; Env.idleTimers
+  | .wgBatch .. => Env.idleTimers   -- W7: the batch runs its queued units itself
   -- D3: the guest waits after the advance; the next tick runs the due timers
   | .wgAdvance _ => Env.afterAdvance
   | _ => pure ()

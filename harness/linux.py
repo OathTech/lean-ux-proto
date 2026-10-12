@@ -237,6 +237,8 @@ def _check_observation(result, trace):
             fields = fields | {"device"}
         if op["op"] == "wg_observe":
             fields = fields | {"datagrams", "replies", "stats"}
+        if op["op"] == "wg_batch":
+            fields = fields | {"cqes"}   # W7: the completions at io_uring_enter's return
         # P design section 6: a read's digest, a write's sigpipe, a pipe2's fds
         fields = fields | {"read": {"digest"}, "write": {"sigpipe"}, "pipe2": {"fds"}}.get(op["op"], set())
         if type(observation) is not dict or set(observation) != fields:
@@ -300,6 +302,30 @@ def attach_devices(results, traces, records):
             expected = op["op"] == "wg_get" and by_trace[trace["id"]]["observations"][index]["ret"] == 0
             if expected != ((trace["id"], index) in seen):
                 raise ValueError("missing or unexpected wireguard dump record")
+
+
+def attach_batches(results, traces, records):
+    """W7: each wg_batch has exactly one record, the completions present when
+    its io_uring_enter returned, by item: the send's result (its length or
+    -errno), or null for an item without a completion yet."""
+    by_trace = {result["id"]: result for result in results}
+    seen = set()
+    for record in records:
+        if type(record) is not dict or set(record) != {"id", "index", "cqes"} or record["id"] not in by_trace:
+            raise ValueError("wg_batch record fields or identity")
+        key = (record["id"], record["index"])
+        observations = by_trace[record["id"]]["observations"]
+        if key in seen or type(record["index"]) is not int or not 0 <= record["index"] < len(observations):
+            raise ValueError("duplicate or out-of-range wg_batch record")
+        seen.add(key)
+        cqes = record["cqes"]
+        if type(cqes) is not list or not all(c is None or (type(c) is int and -4095 <= c < 2**31) for c in cqes):
+            raise ValueError("wg_batch cqes")
+        observations[record["index"]]["cqes"] = cqes
+    for trace in traces:
+        for index, op in enumerate(trace["ops"]):
+            if (op["op"] == "wg_batch") != ((trace["id"], index) in seen):
+                raise ValueError("missing or unexpected wg_batch record")
 
 
 def attach_observed(results, traces, records):
@@ -403,6 +429,7 @@ def merge_remote(rows, remote, traces, key):
 def _collect(outdir, traces, process_returncode, alloc=None):
     results, coverage, fixtures, errors, child_failures, completed, kernels = [], [], [], [], [], [], []
     comparisons, comparison_results, wireguard, observed = [], [], [], []
+    batches = []   # W7: LEANUX_WGBATCH rows
     remote_coverage, remote_comparisons = [], []
     hidden, remote_hidden, steering, sections, clocksources, timing = [], [], [], [], [], []
     alloc_status, alloc_tsc = [], []
@@ -412,7 +439,7 @@ def _collect(outdir, traces, process_returncode, alloc=None):
                                ("LEANUX_FIXTURE ", fixtures), ("LEANUX_ERROR ", errors),
                                ("LEANUX_CHILD_FAILURE ", child_failures), ("LEANUX_CMP ", comparisons),
                                ("LEANUX_CMP_RESULT ", comparison_results), ("LEANUX_WG ", wireguard),
-                               ("LEANUX_WGOBS ", observed), ("LEANUX_RCOVERAGE ", remote_coverage),
+                               ("LEANUX_WGOBS ", observed), ("LEANUX_WGBATCH ", batches), ("LEANUX_RCOVERAGE ", remote_coverage),
                                ("LEANUX_RCMP ", remote_comparisons), ("LEANUX_HIDDEN ", hidden),
                                ("LEANUX_RHIDDEN ", remote_hidden), ("LEANUX_STEER ", steering),
                                ("LEANUX_SECTIONS ", sections), ("LEANUX_CLOCKSOURCE ", clocksources),
@@ -539,6 +566,7 @@ def _collect(outdir, traces, process_returncode, alloc=None):
     try:
         attach_devices(results, traces, wireguard)
         attach_observed(results, traces, observed)
+        attach_batches(results, traces, batches)
         for result, trace, fixture in zip(results, traces, fixtures):
             _check_observation(result, trace)
             limit = trace.get("rlimit_nofile", 32)
@@ -566,9 +594,15 @@ def _collect(outdir, traces, process_returncode, alloc=None):
                 raise ValueError("comparison record count")
             if len({tuple(r) for r in row["records"]}) != len(row["records"]):
                 raise ValueError("duplicate comparison records")
+            # a remote record carries the dispatch-section blocks it occurred
+            # in as a fifth element, ranges of block numbers (W7 stream H,
+            # docs/2026-10-06-w4-w7-transmit-bulk.md 13.2 (ii)); a task
+            # record has none
             if type(row["records"]) is not list or not all(
-                    type(r) is list and len(r) == 4 and type(r[0]) is int and 0 <= r[0] < 8
-                    and all(type(x) is str and re.fullmatch(r"0x[0-9a-f]{1,16}", x) for x in r[1:]) for r in row["records"]):
+                    type(r) is list and len(r) in (4, 5) and type(r[0]) is int and 0 <= r[0] < 8
+                    and all(type(x) is str and re.fullmatch(r"0x[0-9a-f]{1,16}", x) for x in r[1:4])
+                    and (len(r) == 4 or (type(r[4]) is str and re.fullmatch(r"[1-9][0-9]*(-[1-9][0-9]*)?(,[1-9][0-9]*(-[1-9][0-9]*)?)*", r[4])))
+                    for r in row["records"]):
                 raise ValueError("comparison records")
     except (ValueError, TypeError, KeyError, IndexError) as exc:
         raise LinuxRunError("invalid_output", str(exc), outdir) from exc

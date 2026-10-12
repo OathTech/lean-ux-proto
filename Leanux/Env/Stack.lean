@@ -90,7 +90,10 @@ def rst4 (pkt : List UInt8) : List UInt8 :=
     decrypt worker, or inside its `cond_resched` (`Env.condResched`). -/
 def reply4 (dst : Nat) (bytes : List UInt8) : M Unit := do
   skipCut [.inetEhashSecret]
-  discard <| WG.wgXmit 4 dst { bytes, csum := none, mtu := WG.DEVICE_MTU }
+  -- W4: `wg_xmit` reads `dst_mtu` (device.c:173): the fixture's route MTU to
+  -- the destination if `net_fixture.routes` names one, else `dev->mtu`
+  let mtu := (((← get).routes.find? fun (f, a, _) => f == 4 && a == dst).map (·.2.2)).getD (← getDev).mtu
+  discard <| WG.wgXmit 4 dst [{ bytes, csum := none, mtu }] mtu
 
 /-- The IPv4 input predicate (2.2) for an inner packet of `pkt.length`
     bytes, which `wg_packet_consume_data_done` trimmed to `tot_len` and

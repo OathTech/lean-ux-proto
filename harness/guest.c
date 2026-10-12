@@ -29,6 +29,13 @@
 #include <sys/utsname.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <netinet/udp.h>
+#ifndef UDP_SEGMENT
+#define UDP_SEGMENT 103   /* W4: linux/udp.h */
+#endif
+#ifndef SOL_UDP
+#define SOL_UDP 17
+#endif
 
 #define MAX_OPS 64
 /* The KCOV area in words, task and remote alike (L, docs/2026-10-05-l-lifecycle.md
@@ -53,8 +60,12 @@
 /* wg_observe waits this long for the handshake workers before it looks. */
 #define OBSERVE_WAIT_US 400000
 #define QUEUE_WAIT_US 100000
-/* A wg_xmit payload: at most wg0's MTU (1420) less the IPv4 and UDP headers. */
-#define MAX_XMIT_PAYLOAD 1392
+/* A wg_xmit payload: at most wg0's MTU (1420) less the IPv4 and UDP headers,
+ * or (W4) two full-size UDP_SEGMENT segments. */
+#define MAX_XMIT_PAYLOAD 2784
+/* W4: the fixture's routes into wg0 with an MTU ("net_fixture": {"routes"}). */
+#define MAX_FIXTURE_ROUTES 8
+struct fixture_route { unsigned family; unsigned char dst[16]; unsigned mtu; };
 /* No WireGuard timer is armed before wg_up (mod_peer_timer needs a running
  * device). Counted from just before the wg_up ioctl, in real time (the
  * virtual advances of wg_advance are subtracted), a trace must end within
@@ -112,6 +123,11 @@
 #define OP_WG_DELETE 17
 #define OP_WG_FLOOD 18
 #define OP_WG_ADVANCE 19
+/* W4 (docs/2026-10-06-w4-w7-transmit-bulk.md section 6): SIOCSIFMTU on wg0.
+ * A PLACEHOLDER code (the design's OP_SET_MTU) until the coordinator
+ * allocates it; 20-24 are reserved for W2 and W8/W9 (harness/trace.py). */
+#define OP_WG_SET_MTU 25
+#define OP_WG_BATCH 26
 /* 20-24 are reserved for the W streams (harness/trace.py RESERVED_OPCODES,
  * docs/2026-10-11-interface.md): 20 wg_get_start and 21 wg_get_recv (W2),
  * 22 wg_netns_close (W8), 23 wg_deladdr and 24 wg_delroute (W9). No define
@@ -158,7 +174,11 @@ struct trace {
      * network fixture without wg0 (L, "net_fixture": "bare") */
     char id[81]; unsigned count; unsigned rlimit; unsigned net; struct operation ops[MAX_OPS];
     unsigned nsteer; struct steer_entry steer[STEER_MAX];
+    unsigned nroutes; struct fixture_route routes[MAX_FIXTURE_ROUTES];
 };
+/* W4: the running trace's fixture routes, for route_into_wg0. */
+static const struct fixture_route *fixture_routes;
+static unsigned n_fixture_routes;
 static char line[4 * MAX_PAYLOAD];
 /* fds: a successful pipe2's pair; digest: BLAKE2s-256 of all bytes a read
  * returned; sigpipe: SIGPIPE pending after a write. */
@@ -282,14 +302,21 @@ struct occurrence { unsigned long pc; unsigned long position; };
 static struct occurrence order[CAPACITY];
 static unsigned char first[CAPACITY];
 
-struct record_occurrence { unsigned long record[4]; unsigned long position; };
+struct record_occurrence { unsigned long record[4]; unsigned long position; unsigned long block; };
 static struct record_occurrence records[CAPACITY / 4];
+/* W7 stream H (docs/2026-10-06-w4-w7-transmit-bulk.md, 13.2 (ii)): the
+ * dispatch-section block (1-based, in area order) each kept comparison
+ * record of the remote area lies in, 0 outside any: split_hidden fills it
+ * while compacting, print_records prints it as a fifth element and keeps
+ * equal records of different blocks apart. */
+static unsigned short cmp_block[CAPACITY / 4];
 
 static int compare_record(const void *a, const void *b)
 {
     const struct record_occurrence *x = a, *y = b;
     int order = memcmp(x->record, y->record, sizeof(x->record));
     if (order) return order;
+    if (x->block != y->block) return x->block < y->block ? -1 : 1;
     return x->position < y->position ? -1 : x->position > y->position;
 }
 
@@ -578,24 +605,52 @@ static void print_fds(const struct operation *op, const struct observation *r)
  * (KCOV_TRACE_CMP) in a second, independent child for the same trace. */
 /* Records are (type, arg1, arg2, ip). Each distinct record is printed once,
  * at its first occurrence, in execution order. */
-static void print_records(const char *tag, const char *id, unsigned i, const unsigned long *area, unsigned long count)
+static void print_records(const char *tag, const char *id, unsigned i, const unsigned long *area, unsigned long count,
+                          const unsigned short *blocks)
 {
     for (unsigned long k = 0; k < count; ++k) {
         memcpy(records[k].record, area + 1 + 4 * k, sizeof(records[k].record));
         records[k].position = k;
+        records[k].block = blocks ? blocks[k] : 0;
     }
     qsort(records, count, sizeof(*records), compare_record);
-    memset(first, 0, count);
-    for (unsigned long k = 0; k < count; ++k)
-        if (!k || memcmp(records[k].record, records[k - 1].record, sizeof(records[k].record)))
-            first[records[k].position] = 1;
     printf("%s {\"id\":\"%s\",\"index\":%u,\"count\":%lu,\"records\":[", tag, id, i, count);
     int comma = 0;
-    for (unsigned long k = 0; k < count; ++k) {
-        if (!first[k]) continue;
-        const unsigned long *r = area + 1 + 4 * k;
-        printf("%s[%lu,\"0x%lx\",\"0x%lx\",\"0x%lx\"]", comma ? "," : "", r[0], r[1], r[2], r[3]);
-        comma = 1;
+    if (!blocks) {
+        /* the task area: each distinct record once, in first-execution order */
+        memset(first, 0, count);
+        for (unsigned long k = 0; k < count; ++k)
+            if (!k || memcmp(records[k].record, records[k - 1].record, sizeof(records[k].record)))
+                first[records[k].position] = 1;
+        for (unsigned long k = 0; k < count; ++k) {
+            if (!first[k]) continue;
+            const unsigned long *r = area + 1 + 4 * k;
+            printf("%s[%lu,\"0x%lx\",\"0x%lx\",\"0x%lx\"]", comma ? "," : "", r[0], r[1], r[2], r[3]);
+            comma = 1;
+        }
+    } else {
+        /* the remote area: each distinct record once, in sorted order, with
+         * the blocks it occurred in as a fifth element ("1-3,7": ranges of
+         * block numbers), so that a record repeated in every NET_RX section
+         * of a flood costs one line, not one per section */
+        for (unsigned long k = 0; k < count;) {
+            unsigned long j = k;
+            while (j < count && !memcmp(records[j].record, records[k].record, sizeof(records[k].record))) ++j;
+            const unsigned long *r = records[k].record;
+            printf("%s[%lu,\"0x%lx\",\"0x%lx\",\"0x%lx\",\"", comma ? "," : "", r[0], r[1], r[2], r[3]);
+            unsigned long lo = records[k].block, hi = lo;
+            int first_range = 1;
+            for (unsigned long m = k + 1; m <= j; ++m) {
+                if (m < j && records[m].block <= hi + 1) { if (records[m].block > hi) hi = records[m].block; continue; }
+                if (lo == hi) printf("%s%lu", first_range ? "" : ",", lo);
+                else printf("%s%lu-%lu", first_range ? "" : ",", lo, hi);
+                first_range = 0;
+                if (m < j) lo = hi = records[m].block;
+            }
+            printf("\"]");
+            comma = 1;
+            k = j;
+        }
     }
     printf("]}\n");
 }
@@ -635,15 +690,25 @@ static unsigned long split_hidden(const char *tag, const struct trace *t, unsign
             j += 3 + n;
         }
     } else {
+        /* the dispatch-section block of each kept comparison record: a
+         * section's records reach the remote area as one block at its stop,
+         * start record first and stop record last, nested blocks before
+         * their enclosing one, so a running count of start records numbers
+         * the block and the stop record ends it (0 outside any block) */
+        unsigned long block = 0, blocks = 0;
         for (unsigned long k = 0; k < count;) {
             unsigned long *r = area + 1 + 4 * k;
             if ((r[0] >> 63) && ((r[0] >> 32) & 0xffff) == CHOICE_MAGIC + 1)
                 fail(t->id, i, "coverage_failure", "malformed_choice_record");   /* payload without header */
             if (!(r[0] >> 63) || ((r[0] >> 32) & 0xffff) != CHOICE_MAGIC) {
                 if (kept != k) memmove(area + 1 + 4 * kept, r, 4 * sizeof(*r));
+                cmp_block[kept] = (unsigned short)block;
                 ++kept; ++k; continue;
             }
             unsigned long n = r[0] & 0xffff, nrec = 1 + (n + 2) / 3;
+            unsigned long kind = (r[0] >> 16) & 0xffff;
+            if (kind == 300) block = ++blocks;
+            else if (kind == 301) block = 0;
             if (n > 5 || k + nrec > count) fail(t->id, i, "coverage_failure", "malformed_choice_record");
             unsigned long words[6] = {0};
             for (unsigned long w = 0; w < n; ++w) {
@@ -778,7 +843,20 @@ static void route_into_wg0(const char *id, unsigned index, int first)
     if (rtnl < 0) fail(id, index, "environment_failure", "route_socket");
     unsigned char body[128];
     uint32_t wg = wg_ifindex;
+    /* W4 (design section 2.3): after an MTU change below a family's floor
+     * the kernel has taken the family's IP device down (the inet6_dev below
+     * 1280, addrconf.c:3691-3695; the in_device below 68, devinet.c:1637-1643)
+     * and refuses the addresses and routes: the IPv6 address add is -EINVAL
+     * (ipv6_add_dev, addrconf.c:381-382), the IPv4 address add -ENOBUFS
+     * (devinet.c:888), the route adds -ENODEV. The refusals are expected
+     * exactly; any other value fails the trace, as every request does. */
+    struct ifreq mtu_request;
+    memset(&mtu_request, 0, sizeof(mtu_request));
+    strcpy(mtu_request.ifr_name, "wg0");
+    if (ioctl(SEND_FD, SIOCGIFMTU, &mtu_request)) fail(id, index, "environment_failure", "get_wg0_mtu");
+    int down4 = mtu_request.ifr_mtu < 68, down6 = mtu_request.ifr_mtu < 1280;
     for (int family = AF_INET; family; family = family == AF_INET ? AF_INET6 : 0) {
+        int down = family == AF_INET ? down4 : down6;
         size_t len = sizeof(struct ifaddrmsg);
         memset(body, 0, sizeof(body));
         struct ifaddrmsg *ifa = (struct ifaddrmsg *)body;
@@ -797,7 +875,7 @@ static void route_into_wg0(const char *id, unsigned index, int first)
         }
         rtnl_request(rtnl, id, index, RTM_NEWADDR, body, len,
                      first ? "address_on_wg0" : "address_on_wg0_after_down",
-                     !first && family == AF_INET ? -EEXIST : 0);
+                     down ? (family == AF_INET ? -ENOBUFS : -EINVAL) : !first && family == AF_INET ? -EEXIST : 0);
         len = sizeof(struct rtmsg);
         memset(body, 0, sizeof(body));
         struct rtmsg *rt = (struct rtmsg *)body;
@@ -808,7 +886,31 @@ static void route_into_wg0(const char *id, unsigned index, int first)
         rt->rtm_type = RTN_UNICAST;
         attr(body, &len, RTA_OIF, &wg, sizeof(wg));
         rtnl_request(rtnl, id, index, RTM_NEWROUTE, body, len,
-                     first ? "default_route_via_wg0" : "default_route_via_wg0_after_down", 0);
+                     first ? "default_route_via_wg0" : "default_route_via_wg0_after_down", down ? -ENODEV : 0);
+        /* W4: the trace's host routes into wg0 with their MTU (RTAX_MTU), one
+         * request each, after the default route of the family. */
+        for (unsigned k = 0; k < n_fixture_routes; ++k) {
+            const struct fixture_route *r = &fixture_routes[k];
+            if ((int)(r->family == 4 ? AF_INET : AF_INET6) != family) continue;
+            len = sizeof(struct rtmsg);
+            memset(body, 0, sizeof(body));
+            rt = (struct rtmsg *)body;
+            rt->rtm_family = family;
+            rt->rtm_dst_len = family == AF_INET ? 32 : 128;
+            rt->rtm_table = RT_TABLE_MAIN;
+            rt->rtm_protocol = RTPROT_STATIC;
+            rt->rtm_scope = RT_SCOPE_LINK;
+            rt->rtm_type = RTN_UNICAST;
+            attr(body, &len, RTA_DST, r->dst, family == AF_INET ? 4 : 16);
+            attr(body, &len, RTA_OIF, &wg, sizeof(wg));
+            uint32_t mtu = r->mtu;
+            unsigned char metrics[16];
+            size_t mlen = 0;
+            attr(metrics, &mlen, RTAX_MTU, &mtu, sizeof(mtu));
+            attr(body, &len, RTA_METRICS, metrics, mlen);
+            rtnl_request(rtnl, id, index, RTM_NEWROUTE, body, len,
+                         first ? "fixture_route_via_wg0" : "fixture_route_via_wg0_after_down", down ? -ENODEV : 0);
+        }
     }
     if (close(rtnl)) fail(id, index, "environment_failure", "route_close");
 }
@@ -1112,8 +1214,120 @@ static void flood_cleanup(struct flood_state *fs)
     close(fs->ring);
 }
 
+/* W7 stream B (docs/2026-10-06-w4-w7-transmit-bulk.md, 5.5): wg_batch, one
+ * io_uring_enter of up to BATCH_MAX sends from SEND_FD: injects to wg0's
+ * port (v4-mapped 127.0.0.1 or ::1, as wg_inject) and transmits into wg0
+ * (the 16-byte destination then the payload, as wg_xmit's wire), prepared
+ * before the window as the flood is. The completions present when
+ * io_uring_enter returns are the operation's cqes (LEANUX_WGBATCH, the PC
+ * child): the send's result per item, or null. The wire payload is per item
+ * kind(1: inject, 2: xmit) ‖ length(2, big-endian) ‖ body. */
+#define BATCH_MAX 1025
+struct batch_state {
+    int ring;
+    void *sq, *cq;
+    struct io_uring_sqe *sqes;
+    size_t sqsz, sqesz, cqsz;
+    unsigned *ktail, submit, n;
+    unsigned *cqhead, *cqtail, cqmask;
+    struct io_uring_cqe *cqes;
+    struct sockaddr_in6 dst[BATCH_MAX];
+    long res[BATCH_MAX];
+    unsigned char present[BATCH_MAX];
+};
+static struct batch_state batch;
+
+static int batch_prep(struct batch_state *bs, const unsigned char *payload, size_t len)
+{
+    static const unsigned char *body[BATCH_MAX];
+    static unsigned blen[BATCH_MAX];
+    static unsigned char kind[BATCH_MAX];
+    memset(bs, 0, sizeof(*bs));
+    size_t pos = 0;
+    unsigned n = 0;
+    while (pos < len) {
+        if (pos + 3 > len || n >= BATCH_MAX) return -1;
+        unsigned k = payload[pos], l = ((unsigned)payload[pos + 1] << 8) | payload[pos + 2];
+        if (pos + 3 + l > len) return -2;
+        kind[n] = (unsigned char)k; body[n] = payload + pos + 3; blen[n] = l; n++;
+        pos += 3 + l;
+    }
+    if (!n) return -3;
+    struct io_uring_params pp; memset(&pp, 0, sizeof(pp));
+    bs->ring = syscall(SYS_io_uring_setup, n, &pp);
+    if (bs->ring < 0) return -4;
+    if (n > pp.sq_entries) { close(bs->ring); return -5; }
+    bs->sqsz = pp.sq_off.array + pp.sq_entries * sizeof(unsigned);
+    bs->sqesz = pp.sq_entries * sizeof(struct io_uring_sqe);
+    bs->cqsz = pp.cq_off.cqes + pp.cq_entries * sizeof(struct io_uring_cqe);
+    bs->sq = mmap(0, bs->sqsz, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, bs->ring, IORING_OFF_SQ_RING);
+    bs->sqes = mmap(0, bs->sqesz, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, bs->ring, IORING_OFF_SQES);
+    bs->cq = mmap(0, bs->cqsz, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, bs->ring, IORING_OFF_CQ_RING);
+    if (bs->sq == MAP_FAILED || bs->sqes == MAP_FAILED || bs->cq == MAP_FAILED) { close(bs->ring); return -6; }
+    bs->ktail = (unsigned *)((char *)bs->sq + pp.sq_off.tail);
+    unsigned *karray = (unsigned *)((char *)bs->sq + pp.sq_off.array);
+    unsigned mask = *(unsigned *)((char *)bs->sq + pp.sq_off.ring_mask);
+    bs->cqhead = (unsigned *)((char *)bs->cq + pp.cq_off.head);
+    bs->cqtail = (unsigned *)((char *)bs->cq + pp.cq_off.tail);
+    bs->cqmask = *(unsigned *)((char *)bs->cq + pp.cq_off.ring_mask);
+    bs->cqes = (struct io_uring_cqe *)((char *)bs->cq + pp.cq_off.cqes);
+    bs->submit = bs->n = n;
+    for (unsigned i = 0; i < n; i++) {
+        struct sockaddr_in6 *d = &bs->dst[i];
+        memset(d, 0, sizeof(*d));
+        d->sin6_family = AF_INET6;
+        struct io_uring_sqe *e = &bs->sqes[i]; memset(e, 0, sizeof(*e));
+        e->opcode = IORING_OP_SEND; e->fd = SEND_FD; e->user_data = i;
+        e->addr2 = (unsigned long)d; e->addr_len = sizeof(*d);
+        if (kind[i] == 1) {   /* inject: family(1) ‖ port(2) ‖ message */
+            if (blen[i] < 4) return -7;
+            unsigned family = body[i][0], port = ((unsigned)body[i][1] << 8) | body[i][2];
+            d->sin6_port = htons((uint16_t)port);
+            if (family == 4) {
+                d->sin6_addr.s6_addr[10] = d->sin6_addr.s6_addr[11] = 0xff;
+                d->sin6_addr.s6_addr[12] = 127; d->sin6_addr.s6_addr[15] = 1;
+            } else d->sin6_addr.s6_addr[15] = 1;
+            e->addr = (unsigned long)(body[i] + 3); e->len = blen[i] - 3;
+        } else if (kind[i] == 2) {   /* xmit: the destination, then the payload */
+            if (blen[i] <= sizeof(d->sin6_addr)) return -8;
+            d->sin6_port = htons(SEND_PORT);
+            memcpy(&d->sin6_addr, body[i], sizeof(d->sin6_addr));
+            e->addr = (unsigned long)(body[i] + sizeof(d->sin6_addr)); e->len = blen[i] - sizeof(d->sin6_addr);
+        } else return -9;
+        karray[i & mask] = i;
+    }
+    return 0;
+}
+
+static long batch_enter(struct batch_state *bs)
+{
+    __atomic_store_n(bs->ktail, bs->submit, __ATOMIC_RELEASE);
+    long r = syscall(SYS_io_uring_enter, bs->ring, bs->submit, 0, 0, 0, 0);
+    int saved = errno;
+    /* the completions present at the return, each at its item (user_data) */
+    unsigned head = *bs->cqhead, tail = __atomic_load_n(bs->cqtail, __ATOMIC_ACQUIRE);
+    while (head != tail) {
+        struct io_uring_cqe *c = &bs->cqes[head & bs->cqmask];
+        if (c->user_data < bs->n) { bs->res[c->user_data] = c->res; bs->present[c->user_data] = 1; }
+        head++;
+    }
+    __atomic_store_n(bs->cqhead, head, __ATOMIC_RELEASE);
+    errno = saved;
+    return r;
+}
+
+static void batch_cleanup(struct batch_state *bs)
+{
+    munmap(bs->cq, bs->cqsz);
+    munmap(bs->sqes, bs->sqesz);
+    munmap(bs->sq, bs->sqsz);
+    close(bs->ring);
+}
+
 static void execute(const struct trace *t, int input_fd, int comparisons)
 {
+    fixture_routes = t->routes;   /* W4: for route_into_wg0 at every wg_up */
+    n_fixture_routes = t->nroutes;
     struct observation result[MAX_OPS] = {{0}};
     if (close(input_fd)) fail(t->id, -1, "environment_failure", "close_input");
     /* The parent's watchdog: SIGALRM's handler is the parent's, not ours; and
@@ -1165,9 +1379,13 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
          * ident generator; IPV6_AUTOFLOWLABEL = 0 keeps the flow label 0
          * rather than a hash under a boot-time secret. */
         int pmtudisc = IP_PMTUDISC_DO;
+        /* W4 (design 2.7): a large send buffer, so a batch of sends is never
+         * deferred by the socket's limit (SO_SNDBUFFORCE: root in the guest). */
+        int sndbuf = 8 * 1024 * 1024;
         if (socket(AF_INET6, SOCK_DGRAM, 0) != SEND_FD ||
             setsockopt(SEND_FD, IPPROTO_IPV6, IPV6_V6ONLY, &zero, sizeof(zero)) ||
             setsockopt(SEND_FD, IPPROTO_IP, IP_MTU_DISCOVER, &pmtudisc, sizeof(pmtudisc)) ||
+            setsockopt(SEND_FD, SOL_SOCKET, SO_SNDBUFFORCE, &sndbuf, sizeof(sndbuf)) ||
             setsockopt(SEND_FD, IPPROTO_IPV6, IPV6_AUTOFLOWLABEL, &zero, sizeof(zero)) ||
             setsockopt(SEND_FD, IPPROTO_IP, IP_RECVTOS, &one, sizeof(one)) ||
             setsockopt(SEND_FD, IPPROTO_IPV6, IPV6_RECVTCLASS, &one, sizeof(one)) ||
@@ -1223,7 +1441,8 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         if (op->code == OP_READ) memset(read_buffer, 0xa5, op->a);
         if (op->code == OP_WRITE) fill_write_buffer(i, op->value, op->a);
         int pipe_fds[2] = {-1, -1};
-        if (((op->code >= OP_WG_UP && op->code <= OP_WG_INJECT) || IS_LIFECYCLE_OP(op->code)) && !t->net)
+        if (((op->code >= OP_WG_UP && op->code <= OP_WG_INJECT) || IS_LIFECYCLE_OP(op->code) || op->code == OP_WG_SET_MTU
+             || op->code == OP_WG_BATCH) && !t->net)
             fail(t->id, i, "invalid_input", "wireguard_without_network_fixture");
         /* wg_up and wg_down: the flags are read before the window; without
          * a device (L) they are 0 and the SIOCSIFFLAGS reports ENODEV.
@@ -1280,7 +1499,7 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
          * the window (their inode/fd setup draws non-WireGuard clock records);
          * only io_uring_enter runs in the window. */
         struct flood_state flood;
-        int flood_ready = 0;
+        int flood_ready = 0, batch_ready = 0;
         if (op->code == OP_WG_FLOOD) {
             if (!t->net) fail(t->id, i, "invalid_input", "wireguard_without_network_fixture");
             if (flood_prep(&flood, (unsigned)op->b, (unsigned)op->a, op->payload, op->payload_len))
@@ -1300,13 +1519,21 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             sender_ll = (int)(op->value >> 8);
         }
         if (op->code == OP_WG_XMIT) {
-            if (op->b > 255) fail(t->id, i, "invalid_input", "wire_xmit_tos");
-            sender_tos = (int)op->b;
+            /* W4+W5 wire: b is UDP_SEGMENT's gso_size, value is probe (bit 0) | tos << 8 */
+            if (op->value > 0xff01 || (op->value & 0xfe)) fail(t->id, i, "invalid_input", "wire_xmit_options");
+            sender_tos = (int)(op->value >> 8);
         }
         if (op->code == OP_WG_INJECT || op->code == OP_WG_XMIT) {
             if (setsockopt(SEND_FD, IPPROTO_IP, IP_TOS, &sender_tos, sizeof(sender_tos)) ||
                 setsockopt(SEND_FD, IPPROTO_IPV6, IPV6_TCLASS, &sender_tos, sizeof(sender_tos)))
                 fail(t->id, i, "environment_failure", "sender_tos");
+        }
+        /* W7: the batch's ring and SQEs likewise, before the window */
+        if (op->code == OP_WG_BATCH) {
+            int prep = batch_prep(&batch, op->payload, op->payload_len);
+            if (prep) { char why[32]; snprintf(why, sizeof(why), "batch_prepare_%d_errno_%d", -prep, errno); fail(t->id, i, "invalid_input", why); }
+            if (batch.n != (unsigned)op->a) fail(t->id, i, "invalid_input", "batch_prepare_count");
+            batch_ready = 1;
         }
         /* before the coverage window: the clock the advance's wait watches */
         struct timespec before_advance = {0};
@@ -1372,11 +1599,46 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             if (op->payload_len < sizeof(to.sin6_addr) || op->payload_len > sizeof(to.sin6_addr) + MAX_XMIT_PAYLOAD)
                 fail(t->id, i, "invalid_input", "wire_address");
             memcpy(&to.sin6_addr, op->payload, sizeof(to.sin6_addr));
-            if (op->payload_len == sizeof(to.sin6_addr))
+            /* W4: b is UDP_SEGMENT's gso_size (0: none), value 1 asks for
+             * IP_PMTUDISC_PROBE for this send (restored to DO after it). */
+            int probe = IP_PMTUDISC_PROBE, do_ = IP_PMTUDISC_DO;
+            if ((op->value & 1) && setsockopt(SEND_FD, IPPROTO_IP, IP_MTU_DISCOVER, &probe, sizeof(probe)))
+                fail(t->id, i, "environment_failure", "pmtudisc_probe");
+            if (op->payload_len == sizeof(to.sin6_addr)) {
                 ret = syscall(SYS_sendto, SEND_FD, "leux", 4, 0, &to, sizeof(to));
-            else
+            } else if (op->b) {
+                struct iovec iov = {.iov_base = (void *)(op->payload + sizeof(to.sin6_addr)),
+                                    .iov_len = op->payload_len - sizeof(to.sin6_addr)};
+                char control[CMSG_SPACE(sizeof(uint16_t))];
+                memset(control, 0, sizeof(control));
+                struct msghdr msg = {.msg_name = &to, .msg_namelen = sizeof(to), .msg_iov = &iov, .msg_iovlen = 1,
+                                     .msg_control = control, .msg_controllen = sizeof(control)};
+                struct cmsghdr *cm = CMSG_FIRSTHDR(&msg);
+                cm->cmsg_level = SOL_UDP;
+                cm->cmsg_type = UDP_SEGMENT;
+                cm->cmsg_len = CMSG_LEN(sizeof(uint16_t));
+                uint16_t gso = (uint16_t)op->b;
+                memcpy(CMSG_DATA(cm), &gso, sizeof(gso));
+                ret = syscall(SYS_sendmsg, SEND_FD, &msg, 0);
+            } else {
                 ret = syscall(SYS_sendto, SEND_FD, op->payload + sizeof(to.sin6_addr),
                               op->payload_len - sizeof(to.sin6_addr), 0, &to, sizeof(to));
+            }
+            if (op->value & 1) {
+                int saved = errno;
+                if (setsockopt(SEND_FD, IPPROTO_IP, IP_MTU_DISCOVER, &do_, sizeof(do_)))
+                    fail(t->id, i, "environment_failure", "pmtudisc_restore");
+                errno = saved;
+            }
+            break;
+        }
+        case OP_WG_SET_MTU: {
+            /* W4: dev_ioctl(SIOCSIFMTU) -> dev_set_mtu(wg0, a). */
+            struct ifreq request;
+            memset(&request, 0, sizeof(request));
+            strcpy(request.ifr_name, "wg0");
+            request.ifr_mtu = (int)op->a;
+            ret = syscall(SYS_ioctl, SEND_FD, SIOCSIFMTU, &request);
             break;
         }
         case OP_WG_INJECT: {
@@ -1430,6 +1692,12 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             ret = flood_enter(&flood);
             break;
         }
+        case OP_WG_BATCH: {
+            /* W7: submit the prepared batch (op->a items); the completions
+             * present at the return are reported as the operation's cqes. */
+            ret = batch_enter(&batch);
+            break;
+        }
         case OP_WG_CREATE: case OP_WG_DELETE: {
             /* L: RTM_NEWLINK (wg_newlink, register_netdevice) or RTM_DELLINK
              * (unregister, netdev_run_todo, wg_destruct), both complete
@@ -1461,6 +1729,19 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
          * (the packets are already queued in wg0; the worker drains them in the
          * post-op wait regardless) so the fd teardown is outside the window. */
         if (flood_ready) flood_cleanup(&flood);
+        /* W7: the batch's completions, reported outside the window (a console
+         * write inside it would add the tty's path to the coverage) */
+        if (batch_ready) {
+            if (!comparisons) {
+                printf("LEANUX_WGBATCH {\"id\":\"%s\",\"index\":%u,\"cqes\":[", t->id, i);
+                for (unsigned j = 0; j < batch.n; ++j) {
+                    if (batch.present[j]) printf("%s%ld", j ? "," : "", batch.res[j]);
+                    else printf("%snull", j ? "," : "");
+                }
+                printf("]}\n");
+            }
+            batch_cleanup(&batch);
+        }
         if (IS_LIFECYCLE_OP(op->code)) {
             if (clock_gettime(CLOCK_MONOTONIC, &op_finished)) fail(t->id, i, "environment_failure", "timing_clock");
             printf("LEANUX_TIMING {\"id\":\"%s\",\"index\":%u,\"mode\":\"%s\",\"op\":%u,\"ns\":%lld}\n", t->id, i,
@@ -1513,6 +1794,10 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
          * wait short: the following injection must reach the worker within the
          * one-second last_under_load decay (§4.1). */
         if (op->code == OP_WG_FLOOD) usleep(QUEUE_WAIT_US);
+        /* W7: the batch's wait (op->b ms, the trace's wait_ms), in which the
+         * kworkers run what it queued; a worker outliving it shows as missing
+         * section records */
+        if (op->code == OP_WG_BATCH) usleep((useconds_t)op->b * 1000);
         if (op->code == OP_WG_ADVANCE) {
             /* An advance that fails is not a trace operation the mirror can
              * follow: fail the trace. Then wait for the tick that absorbs the
@@ -1574,8 +1859,8 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         if (comparisons) {
             /* The remote stream's comparisons: the handshake worker's peer
              * reference counts (stage C) are declared comparisons. */
-            print_records("LEANUX_CMP", t->id, i, coverage, count);
-            if (remote) print_records("LEANUX_RCMP", t->id, i, remote, remote_count);
+            print_records("LEANUX_CMP", t->id, i, coverage, count, NULL);
+            if (remote) print_records("LEANUX_RCMP", t->id, i, remote, remote_count, cmp_block);
             continue;
         }
         print_pcs("LEANUX_COVERAGE", t->id, i, coverage, count);
@@ -1730,10 +2015,25 @@ int main(int argc, char **argv)
     for (unsigned t = 0; t < total; ++t) {
         static struct trace trace;
         if (!fgets(line, sizeof(line), input) ||
-            sscanf(line, "T %80s %u %u %u %u", trace.id, &trace.count, &trace.rlimit, &trace.net, &trace.nsteer) != 5 ||
+            sscanf(line, "T %80s %u %u %u %u %u", trace.id, &trace.count, &trace.rlimit, &trace.net, &trace.nsteer,
+                   &trace.nroutes) != 6 ||
             trace.count < 1 || trace.count > MAX_OPS || trace.rlimit < 8 || trace.rlimit > 1024 || trace.net > 2 ||
-            trace.nsteer > STEER_MAX)
+            trace.nsteer > STEER_MAX || trace.nroutes > MAX_FIXTURE_ROUTES || (trace.nroutes && trace.net != 1))
             fail("batch", -1, "invalid_input", "wire_trace");
+        /* W4: the fixture's routes into wg0 (family, destination, MTU). */
+        for (unsigned k = 0; k < trace.nroutes; ++k) {
+            struct fixture_route *r = &trace.routes[k];
+            char hex[40];
+            if (!fgets(line, sizeof(line), input) || sscanf(line, "R %u %39s %u", &r->family, hex, &r->mtu) != 3 ||
+                (r->family != 4 && r->family != 6) || strlen(hex) != (r->family == 4 ? 8u : 32u) ||
+                r->mtu < 68 || r->mtu > 65535)
+                fail("batch", -1, "invalid_input", "wire_route");
+            for (size_t b = 0; b < strlen(hex) / 2; ++b) {
+                unsigned byte;
+                if (sscanf(hex + 2 * b, "%2x", &byte) != 1) fail("batch", -1, "invalid_input", "wire_route");
+                r->dst[b] = (unsigned char)byte;
+            }
+        }
         for (unsigned i = 0; i < trace.count; ++i) {
             struct operation *op = &trace.ops[i];
             int consumed = 0;
@@ -1744,7 +2044,8 @@ int main(int argc, char **argv)
                 &consumed) != 9 || op->pause_ms > PAUSE_MS_MAX || op->kind > 3 || op->newkind > 3)
                 fail(trace.id, i, "invalid_input", "wire_operation");
             op->payload_len = 0;
-            if (op->code == OP_WG_SET || op->code == OP_WG_GET || op->code == OP_WG_XMIT || op->code == OP_WG_INJECT || op->code == OP_WG_FLOOD) {
+            if (op->code == OP_WG_SET || op->code == OP_WG_GET || op->code == OP_WG_XMIT || op->code == OP_WG_INJECT || op->code == OP_WG_FLOOD
+                || op->code == OP_WG_BATCH) {
                 /* A WireGuard operation carries its attribute payload as hex. */
                 const char *hex = line + consumed;
                 if (*hex++ != ' ') fail(trace.id, i, "invalid_input", "wire_payload");

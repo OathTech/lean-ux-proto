@@ -629,6 +629,18 @@ def xmit_packet(family, dst, payload):
     raise ValueError("family 4 or 6")
 
 
+def gso_segments(dst, payload, gso_size):
+    """W4 (docs/2026-10-06-w4-w7-transmit-bulk.md section 2.1): the IPv4
+    packets wg_xmit receives for one UDP_SEGMENT datagram of `payload` from
+    the fixture's unconnected IP_PMTUDISC_DO/PROBE sender: equal segments of
+    `gso_size` bytes, ids 0..n-1 (the super-skb's id is 0), DF, a complete
+    UDP checksum per segment (0 as CSUM_MANGLED_0), as Env.gsoSegment."""
+    if gso_size <= 0 or len(payload) % gso_size or not 2 <= len(payload) // gso_size <= 128:
+        raise ValueError("a GSO payload is 2-128 whole segments")
+    return [ipv4_udp(WG0_ADDR4, dst, SENDER_PORT, SEND_PORT, payload[i:i + gso_size], ident=i // gso_size)
+            for i in range(0, len(payload), gso_size)]
+
+
 def wg0_data(session, counter, family, dst, payload):
     """The message_data wg0 sends for a `wg_xmit` of `payload` to `dst`
     under `session`, with nonce `counter`."""

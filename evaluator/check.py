@@ -62,6 +62,17 @@ def sha256(data):
     return hashlib.sha256(data).hexdigest()
 
 
+# W7: the anchored files compared for a `wg_batch` operation (above): the
+# WireGuard sources and the headers their paths inline; the file-table and
+# pipe files are the fixture's io_uring plumbing there.
+NET_HEADERS = {'include/net/ip_tunnels.h', 'include/net/inet_ecn.h', 'include/linux/if_vlan.h',
+               'include/crypto/curve25519.h', 'include/linux/refcount.h'}
+
+
+def BATCH_FILES(files):
+    return [f for f in files if f.startswith('drivers/net/wireguard/') or f in NET_HEADERS]
+
+
 def chunk_traces(traces):
     """Split traces into chunks of at most CHUNK. E-B isolation
     (docs/2026-10-05-e-dos.md §4.2): a `wg_flood` sets the kernel-global
@@ -71,7 +82,9 @@ def chunk_traces(traces):
     runs in a chunk by itself; every normal trace keeps the constant-false decay
     (the cross-trace guard). Yields `(start, chunk, name)`."""
     def under_load(trace):
-        return any(op['op'] == 'wg_flood' for op in trace['ops'])
+        # W7: a bulk trace (wg_batch) runs in a chunk by itself too, since its
+        # wall time is a large share of the trace bound (section 6)
+        return any(op['op'] in ('wg_flood', 'wg_batch') for op in trace['ops'])
     pending, current, cur_start = [], [], 0
     def flush():
         nonlocal current
@@ -820,17 +833,24 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
                 problems.append(dict(index=index,
                                      problem='flood did not reach under_load (receive.c:115 not covered)'))
             continue
+        # W7 (docs/2026-10-06-w4-w7-transmit-bulk.md, 5.5): a `wg_batch` is one
+        # io_uring_enter whose descriptor plumbing (the ring's fdget, each
+        # send's fget of the sender) is the fixture's, as the flood's is; the
+        # mirror models none of it (no socketCallOn), so only the WireGuard
+        # files and the headers its paths inline are compared for the
+        # operation. Everything WireGuard runs per item is checked as usual.
+        op_files = BATCH_FILES(config['files']) if op['op'] == 'wg_batch' else config['files']
         # Raw coverage of a span line (any function, any attribution) must be
         # mapped, and no unlisted function may run span lines of an anchored
         # C file: either means a modeled path runs outside the listed
         # functions. (Header helpers are inlined everywhere, so header span
         # lines in unlisted functions are a stated gap.)
-        unmapped = sorted((raw_lines(coverage[index], locations, config['files']) & span_lines) - instrumented)
-        foreign = sorted(unlisted_c_lines(coverage[index], locations, config['files'], set(config['functions']))
+        unmapped = sorted((raw_lines(coverage[index], locations, op_files) & span_lines) - instrumented)
+        foreign = sorted(unlisted_c_lines(coverage[index], locations, op_files, set(config['functions']))
                          & span_lines)
         if foreign:
             problems.append(dict(index=index, problem='span lines covered by an unlisted function', lines=foreign))
-        positions = line_positions(coverage[index], locations, config['files'], set(config['functions']))
+        positions = line_positions(coverage[index], locations, op_files, set(config['functions']))
         lines = set(positions)
         if not lines:
             problems.append(dict(index=index, problem='no coverage in anchored files'))
@@ -843,7 +863,10 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
             if step is None or step[0] not in decisions:
                 problems.append(dict(index=index, label=label, problem='unknown decision'))
             elif any(name == step[0] for name, _ in reported):
-                if not decisions[step[0]]['repeatable']:
+                # W7: a batch runs the receive and transmit paths once per
+                # item, so its decisions repeat; their later outcomes add to
+                # the set, as a repeatable decision's do
+                if not decisions[step[0]]['repeatable'] and op['op'] != 'wg_batch':
                     problems.append(dict(index=index, label=label, problem='decision reported more than once'))
                 reported.add(step)  # a repeatable decision: later evaluations add outcomes, not order
             else:
@@ -885,7 +908,7 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
         # counted point, in an anchored file) must have a reported decision.
         # Unobservable outcomes cannot show an omitted decision; this shows an
         # omitted function.
-        ran, shared_hits = decision_functions_run(coverage[index], locations, config, decisions)
+        ran, shared_hits = decision_functions_run(coverage[index], locations, dict(config, files=op_files), decisions)
         if shared_hits:
             gaps['shared exits reached by an early return (kcov.json)'] += shared_hits
         silent = sorted(ran - {decisions[name]['function'] for name in names})
@@ -1044,7 +1067,9 @@ def guest_timeout(traces):
     waits = GUEST_CHILDREN * (OBSERVE_WAIT_SECONDS * sum(op in ('wg_observe', 'wg_inject') for op in names)
                               + QUEUE_WAIT_SECONDS * sum(op in ('wg_set', 'wg_up', 'wg_xmit', 'wg_flood') for op in names)
                               + ADVANCE_WAIT_SECONDS * sum(op == 'wg_advance' for op in names)
-                              + PAUSE_SECONDS_PER_MS * sum(op.get('pause_ms', 0) for op in ops))
+                              + PAUSE_SECONDS_PER_MS * sum(op.get('pause_ms', 0) for op in ops)
+                              # W7: a wg_batch waits its wait_ms (default 100) after the submission
+                              + sum(op.get('wait_ms', 100) / 1000 for op in ops if op['op'] == 'wg_batch'))
     io_bytes = sum(op['count'] for op in ops if op['op'] in ('read', 'write'))
     compute = (GUEST_BOOT_SECONDS + WIREGUARD_TRACE_SECONDS * sum(uses_wireguard(t) for t in traces)
                + OPERATION_SECONDS * len(ops) + GUEST_CHILDREN * IO_SECONDS_PER_BYTE * io_bytes)
@@ -1060,39 +1085,137 @@ RETRIED_OUTCOMES = ('timeout', 'resource_busy')
 
 # Env.napiIrqExit: a NAPI poll whose records leave its placement open (inside
 # wg_queue_enqueue_per_peer_rx, holding its peer reference, or after it) is a
-# choice the mirror reports and the check enumerates: each choice vector is one
-# complete execution, and the comparison child's operands must agree with one
-# of them. Up to this many open placements per trace are enumerated; beyond,
-# the mismatch stands.
-NAPI_PLACEMENTS_MAX = 3
+# choice the mirror reports. The (c') placement changes only the operands
+# inside that poll's NET_RX section (docs/2026-10-06-w4-w7-transmit-bulk.md,
+# 2.8 and 13.2 (ii), T1 [USER 2026-10-07]): the mirror stamps each branch with
+# the ordinal of the NET_RX section it ran in (`section`, 1-based per
+# operation in consumption order, absent outside one), and the guest tags
+# each remote comparison record with the dispatch-section block it lies in
+# (a fifth element). On an operand mismatch of a trace with open placements
+# the mirror runs once more with every placement before the put; each NET_RX
+# section's operands must agree under one of the two runs, and everything
+# outside the sections and every observation must agree under both (the
+# placements' independence), else the trace fails. The cost does not grow
+# with the number of polls.
+
+def netrx_sections(rows, dispatch):
+    """Per (trace, op) of the comparison child: the dispatch-section block
+    number (1-based, in area order, as the guest tags comparison records) of
+    each `net_rx_action` section -> its ordinal in sequence order (1-based,
+    as the mirror counts the sections it consumes)."""
+    netrx = {a for a, name in dispatch.items() if name == 'net_rx_action'}
+    out = {}
+    for row in rows:
+        if row.get('mode') != 'cmp' or row.get('stream') != 'remote':
+            continue
+        starts, block = [], 0
+        for r in row['records']:
+            if r[0] & 0x7fff == SECTION_START:
+                block += 1
+                if int.from_bytes(bytes.fromhex(r[4][:16]), 'little') in netrx:
+                    starts.append((r[2], block))
+        out[(row['id'], row['index'])] = {b: i + 1 for i, (_, b) in enumerate(sorted(starts))}
+    return out
 
 
-def napi_placements(trace, hidden_traces, actual_cmp, out, trace_comparisons, locations, kcov):
-    """The first other placement vector under which the comparison child's
-    operands agree: (choice, observation, problems, checked, excluded), or
-    None."""
-    count = actual_cmp['napi_irq_ambiguous']
-    if count > NAPI_PLACEMENTS_MAX:
-        return None
-    with_records = next(t for t in hidden_traces if t['id'] == trace['id'])
-    for bits in range(1, 2 ** count):
-        choice = [bool(bits >> i & 1) for i in range(count)]
-        where = out / f'model-cmp-napi-{trace["id"]}-{bits}'
-        where.mkdir()
-        try:
-            [alternative] = run_model([dict(with_records, napi_irq_before_put=choice)], where)
-        except (InvalidOutput, OSError, subprocess.SubprocessError):
-            continue
-        if alternative.get('napi_irq_ambiguous') != count:
-            continue
-        if [o['ret'] for o in alternative['observations']] != [o['ret'] for o in actual_cmp['observations']]:
-            continue
-        excluded = Counter()
-        problems, checked = operand_agreement(trace, alternative, trace_comparisons, locations, kcov[1],
-                                              set(kcov[0]['functions']), kcov[0]['operand_exclusions'], excluded)
-        if not problems:
-            return choice, alternative, problems, checked, excluded
-    return None
+def record_blocks(record):
+    """The dispatch-section blocks a remote comparison record occurred in
+    (its fifth element, ranges of block numbers); none for a task record."""
+    if len(record) < 5:
+        return set()
+    out = set()
+    for part in record[4].split(','):
+        lo, _, hi = part.partition('-')
+        out.update(range(int(lo), int(hi or lo) + 1))
+    return out
+
+
+def section_agreement(trace, runs, comparisons, sections, locations, decisions, functions=None, exclusions=(),
+                      excluded=None):
+    """The per-section operand agreement over two mirror runs (`runs`: with
+    every open placement after the put, then before it). The placement of
+    open poll j reaches its NET_RX section and the enqueue's put right after
+    it (the worker's `wg_peer_put`, one lower when the poll came first), and
+    moves the section among the branches outside any section; so the runs
+    are compared per section (the branches of each NET_RX section, and the
+    branches outside any, each in their own order): their control flow must
+    be the same, and the operands may differ only in `count` sections and
+    `count` runs of adjacent branches outside the sections, paired in
+    order. Each pair agrees with Linux under one run as a whole (the
+    section's branches against that section's block, the put's against the
+    records outside the NET_RX blocks); every other branch agrees under
+    both. Returns (problems, checked, the polls' NET_RX ordinals taken from
+    the before-put run)."""
+    first, second = runs
+    count = first.get('napi_irq_ambiguous', 0)
+    ids = range(len(trace['ops']))
+    def records(section):
+        # a section's records are those of its block; the records outside
+        # the NET_RX sections are the task's and those of any other block
+        out = []
+        for index in ids:
+            ordinal = sections.get((trace['id'], index), {})
+            def inside(r):
+                blocks = record_blocks(r)
+                if section:
+                    return any(ordinal.get(b) == section for b in blocks)
+                return not blocks or any(b not in ordinal for b in blocks)
+            out.append({'records': [r for r in comparisons[index]['records'] if inside(r)]})
+        return out
+    def agree(branches, section):
+        return operand_agreement(trace, {'branches': branches}, records(section), locations, decisions,
+                                 functions, exclusions, excluded)
+    def shape(b):
+        return (b['index'], b['label'], 'operands_excluded' in b, b.get('operands_excluded'))
+    def split(run):
+        out = {}
+        for b in run['branches']:
+            out.setdefault(b.get('section', 0), []).append(b)
+        return out
+    a, b = split(first), split(second)
+    if set(a) != set(b) or any([shape(x) for x in a[k]] != [shape(x) for x in b[k]] for k in a):
+        return [dict(index=None, label='napi placement',
+                     problem='the placement runs differ in control flow, not only in operands')], 0, []
+    def differing(k):
+        return [i for i, (x, y) in enumerate(zip(a[k], b[k])) if x.get('operands') != y.get('operands')]
+    polls = sorted(k for k in a if k and differing(k))
+    groups, current = [], []
+    for i in differing(0) if 0 in a else []:
+        if current and i != current[-1] + 1:
+            groups.append(current)
+            current = []
+        current.append(i)
+    if current:
+        groups.append(current)
+    if len(polls) != count or (groups and len(groups) != count):
+        return [dict(index=None, label='napi placement',
+                     problem=f'the placement runs differ in {len(polls)} NET_RX sections and {len(groups)} other '
+                             f'runs of branches for {count} open polls: the placements are not independent')], 0, []
+    chosen = {k: list(v) for k, v in a.items()}
+    before_put, problems = [], []
+    for j, section in enumerate(polls):
+        group = groups[j] if groups else []
+        def unit(run):
+            found, n = agree(run[section], section)
+            found2, n2 = agree([run[0][i] for i in group], 0) if group else ([], 0)
+            return found + found2, n + n2
+        found_a, _ = unit(a)
+        if found_a:
+            found_b, _ = unit(b)
+            if not found_b:
+                before_put.append(section)
+                chosen[section] = list(b[section])
+                for i in group:
+                    chosen[0][i] = b[0][i]
+            else:
+                problems += found_a
+    checked = 0
+    seen = set(chosen) | {o for index in ids for o in sections.get((trace['id'], index), {}).values()}
+    for section in sorted(seen):
+        found, n = agree(chosen.get(section, []), section)
+        problems += found
+        checked += n
+    return problems, checked, before_put
 
 
 def run_chunk(traces, out, kcov, guest_variant=None, alloc_flags=0, arm=()):
@@ -1158,6 +1281,7 @@ def run_chunk(traces, out, kcov, guest_variant=None, alloc_flags=0, arm=()):
             site_problems.setdefault(trace_id, []).extend(found)
         SOFTIRQ_FUNCS.clear()
         SOFTIRQ_FUNCS.update(a for a, name in dispatch.items() if name == 'net_rx_action')
+        sections = netrx_sections(rows, dispatch)
         dispatch_found, left = dispatch_problems(per)
         for trace_id, found in dispatch_found.items():
             site_problems.setdefault(trace_id, []).extend(found)
@@ -1206,12 +1330,29 @@ def run_chunk(traces, out, kcov, guest_variant=None, alloc_flags=0, arm=()):
                                                           compared['locations'], kcov[1], set(kcov[0]['functions']),
                                                           kcov[0]['operand_exclusions'], excluded)
             if operand_problems and actual_cmp.get('napi_irq_ambiguous'):
-                placed = napi_placements(trace, with_hidden('cmp'), actual_cmp, out, trace_comparisons,
-                                         compared['locations'], kcov)
-                if placed is not None:
-                    choice, actual_cmp, operand_problems, checked, excluded = placed
-                    # popped into the report's napi_irq_placements
-                    outcomes[f'napi placement ({trace["id"]})'] = sum(1 << i for i, b in enumerate(choice) if b)
+                # the second run, every open placement before the put
+                count = actual_cmp['napi_irq_ambiguous']
+                with_records = next(t for t in with_hidden('cmp') if t['id'] == trace['id'])
+                where = out / f'model-cmp-napi-{trace["id"]}'
+                where.mkdir()
+                try:
+                    [before] = run_model([dict(with_records, napi_irq_before_put=[True] * count)], where)
+                except (InvalidOutput, OSError, subprocess.SubprocessError) as exc:
+                    operand_problems.append(dict(index=None, label='napi placement',
+                                                 problem=f'the before-put run failed: {exc}'))
+                else:
+                    if before.get('napi_irq_ambiguous') != count or \
+                            [o['ret'] for o in before['observations']] != [o['ret'] for o in actual_cmp['observations']]:
+                        operand_problems.append(dict(index=None, label='napi placement',
+                                                     problem='the placement runs differ in their polls or returns'))
+                    else:
+                        excluded = Counter()
+                        operand_problems, checked, before_put = section_agreement(
+                            trace, [actual_cmp, before], trace_comparisons, sections, compared['locations'],
+                            kcov[1], set(kcov[0]['functions']), kcov[0]['operand_exclusions'], excluded)
+                        if not operand_problems and before_put:
+                            # popped into the report's napi_before_put_sections
+                            outcomes[f'napi placement ({trace["id"]})'] = ','.join(map(str, before_put))
             trace_gaps.update(excluded)
             problems += operand_problems + site_problems.get(trace['id'], [])
             # a steered trace states what its steering is for: the mirror's
@@ -1322,8 +1463,8 @@ def main(argv=None):
         matched = outcomes.pop('operand pairs matched', 0)
         skipped = {k[len('choice records skipped ('):-1]: outcomes.pop(k) for k in list(outcomes)
                    if k.startswith('choice records skipped (')}
-        placements = {k[len('napi placement ('):-1]: outcomes.pop(k) for k in list(outcomes)
-                      if k.startswith('napi placement (')}
+        placements = {k[len('napi placement ('):-1]: [int(x) for x in outcomes.pop(k).split(',')]
+                      for k in list(outcomes) if k.startswith('napi placement (')}
         alloc_runs = {k[len('alloc runs ('):-1]: outcomes.pop(k) for k in list(outcomes) if k.startswith('alloc runs (')}
         coverage, census = decision_summary(decisions, outcomes, kcov[2] if kcov else {})
         if getattr(args, 'decision_census', False):
@@ -1354,7 +1495,7 @@ def decision_summary(decisions, outcomes, witnesses):
 
 def write_report(out, traces, results, gaps, build, aborted, started, suites, args, decision_coverage=None,
                  operand_pairs_matched=0, domain_filtered=None, chunk_splits=0, choice_records_skipped=None,
-                 chunk_retries=None, napi_irq_placements=None, alloc_runs=None, kernel_identity=None):
+                 chunk_retries=None, napi_before_put_sections=None, alloc_runs=None, kernel_identity=None):
     ordered = [results.get(trace['id'], dict(id=trace['id'], outcome='not_run')) for trace in traces]
     counts = Counter(r['outcome'] for r in ordered)
     vmlinux = KERNEL / 'vmlinux'
@@ -1391,10 +1532,10 @@ def write_report(out, traces, results, gaps, build, aborted, started, suites, ar
         # chunks rerun once after an infrastructure outcome (RETRIED_OUTCOMES),
         # by chunk: the first outcome and the rerun's outcomes
         chunk_retries=dict(chunk_retries or {}),
-        # traces whose comparison child agreed only under another placement
-        # of an open NAPI poll (Env.napiIrqExit): the choice, bit i for the
-        # trace's i-th open poll (1: inside wg_queue_enqueue_per_peer_rx)
-        napi_irq_placements=dict(sorted((napi_irq_placements or {}).items())),
+        # traces whose comparison child's operands agreed only with the
+        # mirror's before-put run in some NET_RX sections (Env.napiIrqExit,
+        # 13.2 (ii)): those sections' ordinals, per trace
+        napi_before_put_sections=dict(sorted((napi_before_put_sections or {}).items())),
         decision_coverage=decision_coverage,
         failures=[r for r in ordered if r['outcome'] != 'agreement'])
     (out / 'report.json').write_text(json.dumps(report, indent=2) + '\n')

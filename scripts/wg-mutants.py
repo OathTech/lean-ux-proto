@@ -95,8 +95,8 @@ SENTINELS = [
    'section placement: a NET_RX section outside the worker it nests in',
    "scheduling control: the NAPI poll runs after the decrypt worker's section instead of inside it (design section 5); rejected only when a run shows order (b) (timing-dependent)",
    'Leanux/Env.lean',
-   '  runWorker .decryptWorker (WG.decryptWorker napiSoftirq napiIrqExit (condResched SWITCH_DEPTH .decryptWorker))\n  if (← getDev).peers.toList.any (·.2.napiScheduled) then\n    invariant "a NAPI poll pending after the decrypt worker (its ring poll runs the softirq)"\n',
-   '  runWorker .decryptWorker (WG.decryptWorker (pure ()) (pure ()) (condResched SWITCH_DEPTH .decryptWorker))\n  napiSoftirq\n',
+   '  | fuel + 1 =>\n    runWorker .decryptWorker (WG.decryptWorker napiSoftirq napiIrqExit (condResched fuel .decryptWorker (runDecryptAt fuel)))\n',
+   '  | fuel + 1 => do\n    runWorker .decryptWorker (WG.decryptWorker (pure ()) (pure ()) (condResched fuel .decryptWorker (runDecryptAt fuel)))\n    napiSoftirq\n',
    'rx_', 'wireguard'),
   ('A-M10-sendbuf-ignores-record',
    'allocation outcome record (kind 305): the outcome is ignored',
@@ -105,6 +105,13 @@ SENTINELS = [
    '  if ← branch .sendBufNoMem !(← hiddenAlloc .sendBufSkb) then return\n',
    '  _ ← hiddenAlloc .sendBufSkb\n  if ← branch .sendBufNoMem false then return\n',
    '', 'alloc'),
+  ('W7-M9-resched-ignored-bulk',
+   'bulk scheduling (W7, Env/Batch.lean condResched): the units a resched record switched to are not run',
+   "scheduling: the per-item resched record is consumed but the units it switched to are not run here (D1-M15's bulk form)",
+   'Leanux/Env/Batch.lean',
+   "    _ ← hidden site\n    -- W7 (5.3): any of the encrypt, tx and decrypt workers whose start is\n",
+   "    _ ← hidden site\n    if true then\n      modify fun s => { s with yieldedWorkers := s.yieldedWorkers ++ [self.index] }\n      return true\n    -- W7 (5.3): any of the encrypt, tx and decrypt workers whose start is\n",
+   'w7_', 'wireguard'),
 ]
 
 # evaluator.check on the traces of one suite whose ids start with a prefix

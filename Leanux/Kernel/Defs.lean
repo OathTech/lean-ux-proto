@@ -79,6 +79,9 @@ def ENOKEY : Int := 126
 def EDESTADDRREQ : Int := 89
 def EPROTONOSUPPORT : Int := 93
 def ENETUNREACH : Int := 101
+-- W4: dev_validate_mtu's refusal, and the sender's datagram above cork->fragsize
+def ERANGE : Int := 34
+def EMSGSIZE : Int := 90
 /-- L: `wg_create` of an existing wg0; a bind at a held port. -/
 def EEXIST : Int := 17
 def EADDRINUSE : Int := 98
@@ -427,6 +430,9 @@ inductive EnvSite where
   | copyPageToIter | copyPageFromIter | sigqueueAlloc
   -- E-B arm C: wg_ratelimiter_allow's per-entry kmem_cache_alloc (ratelimiter.c:138)
   | ratelimiterEntry
+  -- W4: skb_gso_segment's allocations inside skb_segment (device.c:179), an
+  -- assumed-success site as the sites above (A's domain)
+  | skbSegment
   deriving Repr, BEq, DecidableEq
 
 inductive AllocCount where
@@ -918,6 +924,11 @@ structure World where
       the mirror before Linux recorded them (site ids): see `Env.runWorker`. -/
   yieldedWorkers : List Nat := []
   pendingStops : List Nat := []
+  /-- W7 stream B (docs/2026-10-06-w4-w7-transmit-bulk.md, 5.4, phase 1):
+      the workers whose sections are open in the mirror, innermost last
+      (worker index, the tx worker's peer), for the commuting detector in
+      `Env.condResched`. -/
+  openWorkers : List (Nat × Option Nat) := []
   /-- Dispatch order (docs/2026-10-11-dispatch-order.md): each work unit's
       address from its queue record (`unitPeers`: address, worker index,
       peer, 0 for a device-level unit); each armed timer's address from its
@@ -941,6 +952,10 @@ structure World where
       `false`. `napiAmbiguous` counts the polls met. -/
   napiBeforePut : List Bool := []
   napiAmbiguous : Nat := 0
+  /-- W7 stream H: the NET_RX sections consumed so far in the operation and
+      the one open now (0: none), stamped on every step (`Step.section`). -/
+  netRxSections : Nat := 0
+  netRxSection : Nat := 0
   /-- A steered trace's schedule (site label, value or a draw), which the
       placeholders follow: the domain filter's verdict is then exact for the
       steered sites. -/
@@ -969,6 +984,10 @@ structure World where
       survives a down, which the guest checks). Without them the sender's
       `sendto` into wg0 fails with `-ENETUNREACH`. -/
   routesViaWg0 : Bool := false
+  /-- W4, fixture state: the routes `net_fixture.routes` adds into wg0 at
+      every `wg_up` (family, destination, the route's MTU): `dst_mtu` of a
+      datagram to that destination (`Env.xmitPackets`). -/
+  routes : List (Nat × Nat × Nat) := []
   /-- L, environment: whether a fixture socket holds UDP port `p` so that a
       wildcard bind there conflicts (`Env.portBound`; the runner supplies
       it, as it supplies `env`). -/
@@ -1040,14 +1059,14 @@ def modifyFdt (f : Fdtable → Fdtable) : M Unit :=
 
 /-- Record a C decision point with its outcome and return the outcome. -/
 def branch (d : Decision) (outcome : Bool) : M Bool := do
-  modify fun w => { w with steps := w.steps.push { decision := d, outcome } }
+  modify fun w => { w with steps := w.steps.push { decision := d, outcome, netRx := w.netRxSection } }
   return outcome
 
 /-- Record a C value comparison: its outcome and the two values the C
     compares at the condition. The check matches them against
     `KCOV_TRACE_CMP` records at the condition line. -/
 def branchCmp (d : Decision) (outcome : Bool) (a b : Int) : M Bool := do
-  modify fun w => { w with steps := w.steps.push { decision := d, outcome, operands := some (a, b) } }
+  modify fun w => { w with steps := w.steps.push { decision := d, outcome, operands := some (a, b), netRx := w.netRxSection } }
   return outcome
 
 /-- Record a C value comparison at a declared operand exclusion (a call site
@@ -1055,7 +1074,7 @@ def branchCmp (d : Decision) (outcome : Bool) (a b : Int) : M Bool := do
     `OperandExclusion`): the outcome, which the contract fixes, without the
     operands. The check requires Linux's comparison at the declared call site. -/
 def branchCmpExcluded (d : Decision) (outcome : Bool) (x : OperandExclusion) : M Bool := do
-  modify fun w => { w with steps := w.steps.push { decision := d, outcome, excluded := some x } }
+  modify fun w => { w with steps := w.steps.push { decision := d, outcome, excluded := some x, netRx := w.netRxSection } }
   return outcome
 
 /-- Ask the environment oracle; the site's call count is part of the query. -/
