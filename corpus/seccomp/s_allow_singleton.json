@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "id": "s_allow_singleton",
+  "ops": [
+    {
+      "op": "seccomp_install",
+      "via": "seccomp",
+      "flags": [],
+      "filter": [
+        [
+          6,
+          0,
+          0,
+          2147418112
+        ]
+      ]
+    },
+    {
+      "op": "seccomp_probe",
+      "nr": 102,
+      "where": "self"
+    },
+    {
+      "op": "seccomp_probe",
+      "nr": 335,
+      "where": "self"
+    },
+    {
+      "op": "seccomp_prctl",
+      "cmd": "get_seccomp"
+    }
+  ]
+}

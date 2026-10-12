@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "id": "s_lang_const_forms",
+  "ops": [
+    {
+      "op": "seccomp_install",
+      "via": "seccomp",
+      "flags": [],
+      "filter": [
+        [
+          32,
+          0,
+          0,
+          0
+        ],
+        [
+          84,
+          0,
+          0,
+          4294967295
+        ],
+        [
+          21,
+          0,
+          1,
+          102
+        ],
+        [
+          6,
+          0,
+          0,
+          327681
+        ],
+        [
+          53,
+          0,
+          3,
+          1000
+        ],
+        [
+          37,
+          2,
+          0,
+          1000
+        ],
+        [
+          69,
+          0,
+          1,
+          1000
+        ],
+        [
+          6,
+          0,
+          0,
+          327682
+        ],
+        [
+          6,
+          0,
+          0,
+          2147418112
+        ]
+      ]
+    },
+    {
+      "op": "seccomp_probe",
+      "nr": 102,
+      "where": "self"
+    },
+    {
+      "op": "seccomp_probe",
+      "nr": 1000,
+      "where": "self"
+    },
+    {
+      "op": "seccomp_probe",
+      "nr": 104,
+      "where": "self"
+    },
+    {
+      "op": "seccomp_probe",
+      "nr": 335,
+      "where": "self"
+    }
+  ]
+}

@@ -890,9 +890,14 @@ profile for the generated set.
 Hand-written (about 45 traces), one per arm:
 
 - install: the `RET ALLOW` singleton; the canonical prologue alone; the
-  NULL program; length 0, 4097 and 4096; a bad `sock_fprog` pointer and a
-  bad instruction pointer (the two `-EFAULT` arms, `bad`); each flag-mask
-  arm and each invalid flag combination; `prctl` with mode 0 and 3;
+  NULL program; length 0 and 4097, and a 768-instruction program as the
+  long install (4096 is out of reach: stream W measured about 250
+  comparison records per classic instruction at an install, KCOV's switch
+  instrumentation writing one per case, against the 262,143-entry area,
+  which overflows at 1024; 768 is the safe size, X); a bad `sock_fprog`
+  pointer and a bad instruction pointer (the two `-EFAULT` arms, `bad`);
+  each flag-mask arm and each invalid flag combination; `prctl` with mode
+  0, 3 and 255;
 - checker: one trace per `-EINVAL` arm of 2.5 (unknown code, `DIV|K` 0,
   `MOD|K` 0, `LSH|K` 32, `ST` 16, `JA` past the end, `jt` past the end,
   `jf` past the end, a last instruction that is not `RET`, an unknown
@@ -905,18 +910,26 @@ Hand-written (about 45 traces), one per arm:
   `LOG`; `TRACE` (the `-ENOSYS` arm); `KILL_THREAD`, `KILL_PROCESS` and
   action `0x10000` in a child; `ALLOW` on 1000 (`-ENOSYS` from the table,
   cache miss witnessed); in a child, `RET|A` with `A` loaded from an
-  argument that is 0 and then one that is `ALLOW`, `DIV|X` and `MOD|X`
-  with `X` zero (the translation's guard: result 0, `KILL_THREAD`,
-  `SIGSYS`), and with `X` non-zero;
+  argument that is 0 and then one that is `ALLOW`, `DIV|X` with `X` zero
+  (the translation's guard: result 0, `KILL_THREAD`, `SIGSYS`), and with
+  `X` non-zero (`MOD|X` and `MOD|K` never run: `seccomp_check_filter`
+  lists `DIV` and not `MOD`, 2.5, so they are checker arms, measured by W);
 - chains: two filters where the older kills and the newer allows (the
   cache's `bitmap_copy` arm, the most-restrictive rule); the reverse; two
   with equal actions and different data (the tie rule); a third filter;
-  four 4096-instruction filters of two-instruction jumps to cross
-  `MAX_INSNS_PER_PATH` (`-ENOMEM` at the fourth);
+  four 768-instruction filters (the budget's walk over the chain, a probe
+  through four programs). Crossing `MAX_INSNS_PER_PATH` is out of reach:
+  it needs 32768 installed eBPF instructions, at least 42 installs of 768,
+  and an install's rows cost about 0.48 MB of the guest's console in the
+  cheapest shape (the chain behind the RET; X measured 5.78 MB for 12
+  installs and the 16 MB output limit hit at the 43-install trace), so the
+  `-ENOMEM` arm is modelled and unexercised (9.3);
 - modes and privilege: strict in a child then an allowed call (`exit`),
   then a killed one (`SIGKILL`); strict after filter (`-EINVAL`, the
-  child's `strict_ret`); filter after strict in a child (the `seccomp`
-  call itself is killed); `capdrop` then install (`-EACCES`), then
+  child's `strict_ret`); not filter after strict: the `seccomp` call
+  itself is killed before `seccomp_may_assign_mode` runs, and 317 is
+  outside the probe set, so the arm is unexercised (9.3); `capdrop` then
+  install (`-EACCES`), then
   `set_no_new_privs` then install (0); the `prctl` argument arms;
   `get_seccomp` before and after; `get_action_avail` for each action and
   one unknown; `get_notif_sizes`;
@@ -934,7 +947,13 @@ prologue plus a random body over the seccomp language (loads of `nr`,
 cells after stores; forward jumps; `RET` with a random action, canonical
 or not, and random data), then 2-6 probes over the probe set with random
 arguments, `self` where the validator's scan allows and `child`
-otherwise; (g3) **mixed**, g2 interleaved with the pipe profile's ops.
+otherwise, at most three child probes per trace; (g3) **mixed**, g2
+interleaved with non-blocking eventfd and pipe ops. A child probe costs
+about 1 MB of the guest's console in comparison mode (the parent's `clone`
+and `wait4` records; W), so `evaluator/check.py` chunks the suites at ten
+child probes per guest (`CHILD_PROBES_PER_CHUNK`), the 16 MB limit
+unchanged. No `ERRNO` data is one of the errnos the harness treats as its
+own infrastructure failing (4, 12, 23, 512-516, `harness/linux.py`).
 
 Controls (`corpus/seccomp-controls/`): `tsync` and `new_listener` flags,
 a `USER_NOTIF` action, a filter loading offset 8, each expected to stop
@@ -944,7 +963,8 @@ single thread is a successful no-op in the C, `seccomp_can_sync_threads`
 a scope choice honouring the brief, two decisions away if wanted later);
 and a harness unit test that the validator rejects `self` after a filter
 that may kill, `strict` in the trace process, and `seccomp_child` with a
-network fixture.
+network fixture (`harness/test_trace.py`, W). `scripts/seccomp-controls.py`
+runs each control alone and expects the `unsupported` stop at its site.
 
 One sentinel, under the at-most-one rule: `cache-forgets-prev` replaces
 `bitmap_copy` by `bitmap_fill` in `seccompCachePrepare`, so a newer filter
@@ -1010,9 +1030,13 @@ signal delivery (an environment effect, 2.2), `prctl`'s dispatch and
 The `-ENOMEM` arms of allocation sites 2, 4, 5 and 10; `bpf_convert_filter`'s
 `pass > 2` arm (the C's comment says the second pass must converge); the
 `WARN_ON` fall-off in `seccomp_is_const_allow` (impossible for a checked
-program: it ends in `RET`). Each is a decision the mirror emits and no
-trace witnesses; the check's `known_gaps` does not list them, since they
-are modelled.
+program: it ends in `RET`); the path budget's `-ENOMEM` in
+`seccomp_attach_filter` (:925: 32768 installed instructions cost more
+console than one guest may emit, 7); `seccomp_may_assign_mode`'s refusal
+of a filter after strict (:437-445: under strict the `seccomp` call is
+killed before it, and 317 is outside the probe set). Each is a decision the
+mirror emits and no trace witnesses; the check's `known_gaps` does not list
+them, since they are modelled.
 
 ## 10. Risks
 

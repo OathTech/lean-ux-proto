@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "id": "s_strict_child",
+  "ops": [
+    {
+      "op": "seccomp_probe",
+      "nr": 60,
+      "where": "child",
+      "args": [
+        7,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "strict": "seccomp"
+    },
+    {
+      "op": "seccomp_probe",
+      "nr": 102,
+      "where": "child",
+      "strict": "prctl"
+    },
+    {
+      "op": "seccomp_probe",
+      "nr": 60,
+      "where": "child",
+      "args": [
+        5,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "strict": "prctl"
+    }
+  ],
+  "seccomp_child": true
+}
