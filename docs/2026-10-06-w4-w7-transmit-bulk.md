@@ -884,6 +884,45 @@ check from D1).
     full buffer. **Its bulk value is an output of P-A** (v2, m5), which
     measures the record volume per item in both children; v1's 4M words
     (32 MiB) is the upper bound P-A starts from, not the answer.
+  - **P-A's result** [AGENT 2026-10-12, task/w7-harness, the W9 oracle,
+    `scripts/wg-w7-tier-probe.py`]: the trace `corpus/w7-tier/w7_ring_wrap`
+    (a session, a 1-item `xmit` batch, a 1024-item one, observe, get) is
+    the measurement. At the 1024-item batch the PC child writes 668,793
+    task and 855,131 remote words, the comparison child 384,517 task and
+    512,276 remote records (1,538,068 and 2,049,104 words): 1M words
+    overflows there (`empty_or_full_kcov`), 2M would leave 2 % headroom,
+    so `CAPACITY` (`guest.c`) and `KCOV_CAPACITY` (`trace.py`) are 4M
+    words, 32 MiB per area, one constant rather than a per-trace value.
+    The rows stay small because they are deduplicated (805 and 827 PCs,
+    30,176 and 14,518 records at that operation; 3.3 MB for the trace's
+    two children), so the chunk's 16 MiB output limit and the one-bulk-
+    trace-per-chunk rule stand unchanged. The kernel's own work is cheap:
+    `io_uring_enter` returns all 1024 completions (`res` 1 each) in
+    0.12 s and the workers finish inside a 600 ms wait. What exceeded the
+    4.5 s bound was the guest: its sort-based deduplication (2.3 s in the
+    PC child, 7 s in the comparison child at that operation), replaced by
+    a hash-table pass in area order with the same rows, and the serial
+    console (about 0.5 MB/s under TCG against 2.4 MB of rows for the
+    comparison child at that operation), so a bulk trace's rows are now
+    held in memory and written after its last operation. With both, the
+    children end 2.91 s and 3.02 s after `wg_up` with `wait_ms` 200 and
+    1000; **1000 ms is the full-ring tier's `wait_ms` default** (600 ms
+    sufficed for the workers). The tier is go.
+  - **What Linux does at the wrap** (the same probe; the mirror did not
+    run): every send completes at the socket; the device counters after
+    the batch read `tx_packets` 1025 and `tx_bytes` 65652 = the initiation
+    (148) + the staged keepalive (32) + 1023 data messages of 64 bytes,
+    `tx_errors` 0 and `tx_dropped` 0, and `wg_get` reports the peer's
+    `tx_bytes` 65652. So **1023 of the 1025 items went out and two were
+    dropped silently**, not the one the ring counterexample (17.16 on
+    `task/rings`) predicts; the PCs the 1024-item batch executes beyond
+    the 1-item one include the producer's wrap (`ptr_ring.h:115`), the
+    failed produce's unlock, `wg_packet_create_data`'s `-EPIPE` arm
+    (`send.c:323`, the DEAD enqueue at `queueing.h:185,188`) and
+    `wg_packet_tx_worker`'s dead-packet `kfree_skb_list` (`send.c:278`),
+    in all four runs. The second drop is for the ring stream to explain
+    against the section records (the remote area holds 2048 kind-300/301
+    records and 28 kind-302 reschedules at that operation).
 - **`harness/noise.py`:** the IPv4 GSO segment builder (headers, checksums,
   ids 0…n−1) anchored to the mirror's `Env.xmitPackets` by `#guard` vectors
   and to Linux by the A1 bytes; batches of data messages under a session
@@ -1183,7 +1222,9 @@ approved).
   with `res` = length** (no `-EAGAIN` deferral), record counts per item in
   both children, observe size, and 128-segment GSO xmit timing. **Its
   outputs are `kcov_capacity`'s bulk value and `wait_ms`'s default** (v2,
-  m5), and the full-ring tier's go/no-go (13.4).
+  m5), and the full-ring tier's go/no-go (13.4). Done 2026-10-12 as a
+  Linux-only run of the tier's first trace on the standard guest rather
+  than a throwaway C probe; the results are in section 12.
 - **P-B** fixture facts (v3, narrowed): `ip maddr show wg0` (the IPv4 set
   `{224.0.0.1}`, M3); a `PROBE` send over a `mtu 1300` route reaching
   `wg_xmit` unfragmented (one ciphertext of 1460 bytes); whether `ip link

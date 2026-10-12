@@ -43,8 +43,10 @@
  * io_uring flood crossing 512 runs ~600 UDP sends inline in the trace task with
  * KCOV on, so both streams need headroom). The host's bounds follow it
  * (harness/trace.py KCOV_CAPACITY). */
-#define CAPACITY (1024UL * 1024)
-#define MAX_PAYLOAD 32768
+#define CAPACITY (4096UL * 1024)
+/* W7 (design section 12): a wg_batch of 1025 keepalive-size items is about
+ * 55 KB on the wire; the per-operation payload and the line buffer hold it. */
+#define MAX_PAYLOAD 65536
 #define NETLINK_FD 7
 /* W2 (docs/2026-10-06-w1-w2-netlink.md 4.2): the stepped dump socket, opened
  * after the one at 7 for traces with wg_get_start or wg_get_recv. */
@@ -365,12 +367,6 @@ static void blake2s_self_test(void)
     }
 }
 
-struct occurrence { unsigned long pc; unsigned long position; };
-static struct occurrence order[CAPACITY];
-static unsigned char first[CAPACITY];
-
-struct record_occurrence { unsigned long record[4]; unsigned long position; unsigned long block; };
-static struct record_occurrence records[CAPACITY / 4];
 /* W7 stream H (docs/2026-10-06-w4-w7-transmit-bulk.md, 13.2 (ii)): the
  * dispatch-section block (1-based, in area order) each kept comparison
  * record of the remote area lies in, 0 outside any: split_hidden fills it
@@ -378,20 +374,66 @@ static struct record_occurrence records[CAPACITY / 4];
  * equal records of different blocks apart. */
 static unsigned short cmp_block[CAPACITY / 4];
 
-static int compare_record(const void *a, const void *b)
+/* Deduplication of an area before printing (W7, probe P-A, section 12 of
+ * docs/2026-10-06-w4-w7-transmit-bulk.md): an open-addressing table over
+ * area positions, one pass in area order, in place of the sort over every
+ * occurrence it replaced. At a 1024-item batch that sort cost the PC child
+ * 2.3 s and the comparison child 7 s of the 4.5 s rekey bound, against
+ * 0.12 s for the kernel's own work. A slot holds a distinct entry's index
+ * (1-based) under the pass that wrote it: a slot of an earlier pass reads
+ * as empty, so a pass clears nothing (a 16 MiB memset per pass would cost
+ * every trace tens of milliseconds under TCG). More distinct entries than
+ * half the slots fails the trace rather than degrading. */
+#define DEDUP_SLOTS (2UL * 1024 * 1024)
+#define DEDUP_MASK (DEDUP_SLOTS - 1)
+struct dedup_slot { unsigned pass, value; };
+static struct dedup_slot dedup_table[DEDUP_SLOTS];
+static unsigned dedup_pass;
+
+static void dedup_begin(void)
 {
-    const struct record_occurrence *x = a, *y = b;
-    int order = memcmp(x->record, y->record, sizeof(x->record));
-    if (order) return order;
-    if (x->block != y->block) return x->block < y->block ? -1 : 1;
-    return x->position < y->position ? -1 : x->position > y->position;
+    if (!++dedup_pass) {   /* the pass counter wrapped: clear once */
+        memset(dedup_table, 0, sizeof dedup_table);
+        dedup_pass = 1;
+    }
 }
 
-static int compare_occurrence(const void *a, const void *b)
+static unsigned dedup_at(unsigned long h)
 {
-    const struct occurrence *x = a, *y = b;
-    if (x->pc != y->pc) return x->pc < y->pc ? -1 : 1;
-    return x->position < y->position ? -1 : x->position > y->position;
+    return dedup_table[h].pass == dedup_pass ? dedup_table[h].value : 0;
+}
+
+static void dedup_set(unsigned long h, unsigned value)
+{
+    dedup_table[h] = (struct dedup_slot){ .pass = dedup_pass, .value = value };
+}
+/* a distinct comparison record: the area position of its first occurrence
+ * and, in the remote area, its blocks as a chain of ranges (area order) and
+ * whether it occurred outside any block */
+struct distinct_record { unsigned position, head, tail, zero; };
+static struct distinct_record distinct[CAPACITY / 4];
+struct block_range { unsigned short lo, hi; unsigned next; };
+static struct block_range ranges[CAPACITY / 4];
+static const unsigned long *sort_area;   /* the area compare_distinct reads */
+/* a bulk trace's rows, written after its last operation (execute) */
+static char bulk_out[16UL * 1024 * 1024];
+
+static unsigned long hash_words(const unsigned long *words, unsigned n)
+{
+    unsigned long h = 0x9E3779B97F4A7C15UL;
+    for (unsigned k = 0; k < n; ++k) {
+        h ^= words[k];
+        h *= 0xBF58476D1CE4E5B9UL;
+        h ^= h >> 29;
+    }
+    return h;
+}
+
+static int compare_distinct(const void *a, const void *b)
+{
+    const struct distinct_record *x = a, *y = b;
+    return memcmp(sort_area + 1 + 4 * (unsigned long)x->position, sort_area + 1 + 4 * (unsigned long)y->position,
+                  4 * sizeof(unsigned long));
 }
 
 /* ---- Netlink (network fixture traces only) ---------------------------- */
@@ -808,48 +850,76 @@ static void print_fds(const struct operation *op, const struct observation *r)
 static void print_records(const char *tag, const char *id, unsigned i, const unsigned long *area, unsigned long count,
                           const unsigned short *blocks)
 {
-    for (unsigned long k = 0; k < count; ++k) {
-        memcpy(records[k].record, area + 1 + 4 * k, sizeof(records[k].record));
-        records[k].position = k;
-        records[k].block = blocks ? blocks[k] : 0;
-    }
-    qsort(records, count, sizeof(*records), compare_record);
+    dedup_begin();
+    unsigned long n = 0, nranges = 0;
     printf("%s {\"id\":\"%s\",\"index\":%u,\"count\":%lu,\"records\":[", tag, id, i, count);
     int comma = 0;
-    if (!blocks) {
-        /* the task area: each distinct record once, in first-execution order */
-        memset(first, 0, count);
-        for (unsigned long k = 0; k < count; ++k)
-            if (!k || memcmp(records[k].record, records[k - 1].record, sizeof(records[k].record)))
-                first[records[k].position] = 1;
-        for (unsigned long k = 0; k < count; ++k) {
-            if (!first[k]) continue;
-            const unsigned long *r = area + 1 + 4 * k;
-            printf("%s[%lu,\"0x%lx\",\"0x%lx\",\"0x%lx\"]", comma ? "," : "", r[0], r[1], r[2], r[3]);
-            comma = 1;
+    for (unsigned long k = 0; k < count; ++k) {
+        const unsigned long *r = area + 1 + 4 * k;
+        unsigned long h = hash_words(r, 4) & DEDUP_MASK;
+        for (; dedup_at(h); h = (h + 1) & DEDUP_MASK)
+            if (!memcmp(area + 1 + 4 * (unsigned long)distinct[dedup_at(h) - 1].position, r, 4 * sizeof(*r))) break;
+        unsigned d;
+        if (dedup_at(h)) {
+            d = dedup_at(h) - 1;
+            if (!blocks) continue;
+        } else {
+            if (n >= DEDUP_SLOTS / 2) fail(id, (int)i, "coverage_failure", "dedup_table_full");
+            d = (unsigned)n++;
+            distinct[d] = (struct distinct_record){ .position = (unsigned)k, .head = 0, .tail = 0, .zero = 0 };
+            dedup_set(h, d + 1);
+            if (!blocks) {
+                /* the task area: each distinct record once, in first-execution order */
+                printf("%s[%lu,\"0x%lx\",\"0x%lx\",\"0x%lx\"]", comma ? "," : "", r[0], r[1], r[2], r[3]);
+                comma = 1;
+                continue;
+            }
         }
-    } else {
+        /* the remote area: the record's blocks as ranges, in area order
+         * (split_hidden numbers blocks in area order, so a record's non-zero
+         * blocks never decrease; a decrease is a fixture defect) */
+        unsigned short b = blocks[k];
+        if (!b) { distinct[d].zero = 1; continue; }
+        if (distinct[d].tail) {
+            struct block_range *t = &ranges[distinct[d].tail - 1];
+            if (b < t->hi) fail(id, (int)i, "coverage_failure", "blocks_out_of_order");
+            if (b <= t->hi + 1) { t->hi = b; continue; }
+        }
+        if (nranges >= CAPACITY / 4) fail(id, (int)i, "coverage_failure", "range_pool_full");
+        ranges[nranges] = (struct block_range){ .lo = b, .hi = b, .next = 0 };
+        if (distinct[d].tail) ranges[distinct[d].tail - 1].next = (unsigned)(nranges + 1);
+        else distinct[d].head = (unsigned)(nranges + 1);
+        distinct[d].tail = (unsigned)(++nranges);
+    }
+    if (blocks) {
         /* the remote area: each distinct record once, in sorted order, with
          * the blocks it occurred in as a fifth element ("1-3,7": ranges of
          * block numbers), so that a record repeated in every NET_RX section
-         * of a flood costs one line, not one per section */
-        for (unsigned long k = 0; k < count;) {
-            unsigned long j = k;
-            while (j < count && !memcmp(records[j].record, records[k].record, sizeof(records[k].record))) ++j;
-            const unsigned long *r = records[k].record;
+         * of a flood costs one line, not one per section; the sort is over
+         * the distinct records only */
+        sort_area = area;
+        qsort(distinct, n, sizeof(*distinct), compare_distinct);
+        for (unsigned long d = 0; d < n; ++d) {
+            const unsigned long *r = area + 1 + 4 * (unsigned long)distinct[d].position;
             printf("%s[%lu,\"0x%lx\",\"0x%lx\",\"0x%lx\",\"", comma ? "," : "", r[0], r[1], r[2], r[3]);
-            unsigned long lo = records[k].block, hi = lo;
             int first_range = 1;
-            for (unsigned long m = k + 1; m <= j; ++m) {
-                if (m < j && records[m].block <= hi + 1) { if (records[m].block > hi) hi = records[m].block; continue; }
-                if (lo == hi) printf("%s%lu", first_range ? "" : ",", lo);
-                else printf("%s%lu-%lu", first_range ? "" : ",", lo, hi);
+            unsigned next = distinct[d].head;
+            if (distinct[d].zero) {
+                /* block 0 sorts first and joins a range that starts at 1 */
+                if (next && ranges[next - 1].lo == 1) {
+                    printf("0-%u", ranges[next - 1].hi);
+                    next = ranges[next - 1].next;
+                } else printf("0");
                 first_range = 0;
-                if (m < j) lo = hi = records[m].block;
+            }
+            for (; next; next = ranges[next - 1].next) {
+                const struct block_range *g = &ranges[next - 1];
+                if (g->lo == g->hi) printf("%s%u", first_range ? "" : ",", g->lo);
+                else printf("%s%u-%u", first_range ? "" : ",", g->lo, g->hi);
+                first_range = 0;
             }
             printf("\"]");
             comma = 1;
-            k = j;
         }
     }
     printf("]}\n");
@@ -926,23 +996,21 @@ static unsigned long split_hidden(const char *tag, const struct trace *t, unsign
 }
 
 /* Deduplicate after capture, keeping each PC's first execution in order:
- * sort (pc, position) pairs, mark first positions, then print the marked PCs
- * in execution order. */
+ * one pass over the area through the table (slots hold positions + 1). */
 static void print_pcs(const char *tag, const char *id, unsigned i, const unsigned long *area, unsigned long count)
 {
-    for (unsigned long j = 0; j < count; ++j) {
-        order[j].pc = area[j + 1];
-        order[j].position = j;
-    }
-    qsort(order, count, sizeof(*order), compare_occurrence);
-    memset(first, 0, count);
-    for (unsigned long j = 0; j < count; ++j)
-        if (!j || order[j].pc != order[j - 1].pc) first[order[j].position] = 1;
+    dedup_begin();
     printf("%s {\"id\":\"%s\",\"index\":%u,\"count\":%lu,\"pcs\":[", tag, id, i, count);
     int comma = 0;
+    unsigned long seen = 0;
     for (unsigned long j = 0; j < count; ++j) {
-        if (!first[j]) continue;
-        printf("%s\"0x%lx\"", comma ? "," : "", area[j + 1]);
+        unsigned long pc = area[j + 1], h = hash_words(&pc, 1) & DEDUP_MASK;
+        for (; dedup_at(h); h = (h + 1) & DEDUP_MASK)
+            if (area[dedup_at(h)] == pc) break;
+        if (dedup_at(h)) continue;
+        if (++seen > DEDUP_SLOTS / 2) fail(id, (int)i, "coverage_failure", "dedup_table_full");
+        dedup_set(h, (unsigned)(j + 1));
+        printf("%s\"0x%lx\"", comma ? "," : "", pc);
         comma = 1;
     }
     printf("]}\n");
@@ -1281,6 +1349,7 @@ static unsigned long *enable_remote(const struct trace *t, int comparisons)
     }
     if (!trace_dispatch.n) fail(t->id, -1, "invalid_input", "wire_dispatch");
     if (ioctl(fd, KCOV_LEANUX_DISPATCH_LOAD, &trace_dispatch)) fail(t->id, -1, "coverage_failure", "load_dispatch");
+    fflush(stdout);   /* a bulk trace's buffered rows stay with this process */
     pid_t child = fork();
     if (child < 0) fail(t->id, -1, "environment_failure", "fork_trace");
     if (child) {
@@ -1563,6 +1632,18 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         fail(t->id, -1, "environment_failure", "pin_sock_dup");
     for (int k = 0; k < 4; ++k)
         if (close(pin_sock[k])) fail(t->id, -1, "environment_failure", "pin_sock_close");
+    /* W7 (probe P-A, section 12 of docs/2026-10-06-w4-w7-transmit-bulk.md):
+     * a bulk trace's rows are held in memory and written after its last
+     * operation. The serial console takes about 0.5 MB/s under TCG, and the
+     * comparison child of a 1024-item batch prints about 2.4 MB for that
+     * operation, which alone exceeds the 4.5 s rekey bound; the rows are
+     * unchanged. A child the watchdog kills loses its unwritten rows
+     * (fail() still writes its error row). */
+    for (unsigned k = 0; k < t->count; ++k)
+        if (t->ops[k].code == OP_WG_BATCH) {
+            if (setvbuf(stdout, bulk_out, _IOFBF, sizeof bulk_out)) fail(t->id, -1, "environment_failure", "bulk_out");
+            break;
+        }
     /* The parent's watchdog: SIGALRM's handler is the parent's, not ours; and
      * this child leads its own process group, so the watchdog's kill reaches
      * a network trace's trace process too. */
@@ -1608,12 +1689,18 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
          * receives). W5: every fixture socket reports the TOS / traffic class of
          * what it receives (recvmsg cmsg), the sender also the destination. */
         if (t->net == 3 && setns(PARK_C_FD, CLONE_NEWNET)) fail(t->id, -1, "environment_failure", "setns_c_listeners");
+        /* W7 (design section 12): the bulk tiers deliver up to 1025 datagrams
+         * to a listener in one operation; the default rmem (212992) holds about
+         * 270 small ones, so both listeners take SO_RCVBUFFORCE 8 MiB (root). */
+        int rcvbuf = 8 * 1024 * 1024;
         if (socket(AF_INET, SOCK_DGRAM, 0) != LISTEN4_FD || bind(LISTEN4_FD, (struct sockaddr *)&a4, sizeof(a4)) ||
-            setsockopt(LISTEN4_FD, IPPROTO_IP, IP_RECVTOS, &one, sizeof(one)))
+            setsockopt(LISTEN4_FD, IPPROTO_IP, IP_RECVTOS, &one, sizeof(one)) ||
+            setsockopt(LISTEN4_FD, SOL_SOCKET, SO_RCVBUFFORCE, &rcvbuf, sizeof(rcvbuf)))
             fail(t->id, -1, "environment_failure", "listener4_at_4");
         if (socket(AF_INET6, SOCK_DGRAM, 0) != LISTEN6_FD ||
             setsockopt(LISTEN6_FD, IPPROTO_IPV6, IPV6_V6ONLY, &one, sizeof(one)) ||
             setsockopt(LISTEN6_FD, IPPROTO_IPV6, IPV6_RECVTCLASS, &one, sizeof(one)) ||
+            setsockopt(LISTEN6_FD, SOL_SOCKET, SO_RCVBUFFORCE, &rcvbuf, sizeof(rcvbuf)) ||
             bind(LISTEN6_FD, (struct sockaddr *)&a6, sizeof(a6)))
             fail(t->id, -1, "environment_failure", "listener6_at_5");
         int zero = 0;
@@ -1634,6 +1721,7 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             setsockopt(SEND_FD, IPPROTO_IPV6, IPV6_V6ONLY, &zero, sizeof(zero)) ||
             setsockopt(SEND_FD, IPPROTO_IP, IP_MTU_DISCOVER, &pmtudisc, sizeof(pmtudisc)) ||
             setsockopt(SEND_FD, SOL_SOCKET, SO_SNDBUFFORCE, &sndbuf, sizeof(sndbuf)) ||
+            setsockopt(SEND_FD, SOL_SOCKET, SO_RCVBUFFORCE, &sndbuf, sizeof(sndbuf)) ||   /* W7 section 12 */
             setsockopt(SEND_FD, IPPROTO_IPV6, IPV6_AUTOFLOWLABEL, &zero, sizeof(zero)) ||
             setsockopt(SEND_FD, IPPROTO_IP, IP_RECVTOS, &one, sizeof(one)) ||
             setsockopt(SEND_FD, IPPROTO_IPV6, IPV6_RECVTCLASS, &one, sizeof(one)) ||
@@ -2272,6 +2360,7 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         dump_fd_open = 0;
         if (t->net && close(NETLINK_FD)) fail(t->id, -1, "environment_failure", "close_netlink");
         if (t->net) delete_wg0(t->id);
+        fflush(stdout);   /* a bulk trace's buffered rows */
         _exit(0);
     }
     task_steering_status(t, coverage_fd, comparisons);
@@ -2293,6 +2382,7 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
     dump_fd_open = 0;
     if (t->net && close(NETLINK_FD)) fail(t->id, -1, "environment_failure", "close_netlink");   /* W2 4.2 (C1) */
     if (t->net) delete_wg0(t->id);
+    fflush(stdout);   /* a bulk trace's buffered rows */
     _exit(0);
 }
 
