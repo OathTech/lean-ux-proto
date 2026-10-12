@@ -375,6 +375,11 @@ structure Kernel where
   anonInodeInodeErr : Bool
   /-- The fixture's WireGuard device, in traces that use the network fixture. -/
   wg : Option WG.Device := none
+  /-- W2 (docs/2026-10-06-w1-w2-netlink.md, 4.3): the dump state of the
+      fixture's generic-netlink socket (fd 7, `wg_get`) and of the stepped
+      dump socket (fd 8, `wg_get_start`/`wg_get_recv`). -/
+  nlSock7 : WG.NlSock := {}
+  nlSock8 : WG.NlSock := {}
   /-- `peer_counter` (drivers/net/wireguard/peer.c), a global atomic. -/
   peerCounter : Nat := 0
   /-- `keypair_counter` (drivers/net/wireguard/noise.c), a global atomic. -/
@@ -695,6 +700,11 @@ inductive HiddenSite where
       `neigh_rand_reach_time` draws of `register_netdevice` (a cut). -/
   | cookieSecretBirthdate | cookieSecret | pubkeyHashKey | ratelimiterKey | ratelimiterGcNow
   | udpPortDraw | neighReachTime
+  /-- W2 (id 170): `netlink_autobind`'s random port id (af_netlink.c:820) on
+      the stepped dump socket's first `sendmsg`: the process's id is the
+      fixture socket's, so the collision draws once below -4096. The port
+      id reaches no modeled path (a cut). -/
+  | netlinkAutobindPort
   /-- An allocation outcome (kind 305) at a consumer frame: ids 70-99 are
       A's (docs/2026-10-05-a-alloc.md, section 6.1). -/
   | alloc (s : AllocSite)
@@ -850,6 +860,9 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   -- IFLA_INET6_CACHEINFO and the neighbour sysctls, which the harness never
   -- reads, and read by no modeled path (unobserved)
   | .neighReachTime => ⟨126, "neigh_reach_time", "random", "net/core/neighbour.c", 115, 4, .cut⟩
+  -- W2 (ids 170-179): the stepped dump socket's autobind draw, kind 104 at
+  -- af_netlink.c:820 (`get_random_u32_below`), seen on the W9 build
+  | .netlinkAutobindPort => ⟨170, "netlink_autobind_port", "random", "net/netlink/af_netlink.c", 820, 4, .cut⟩
   -- W9 (ids 150-169): the dst cache's jiffies, kind 306, resolved by the
   -- innermost frame of the record's `_THIS_IP_` minus one (the resolver,
   -- evaluator/coverage.py symbolize, takes every address as a return
@@ -888,7 +901,7 @@ def HiddenSite.all : List HiddenSite :=
   ++ [.modTimerArm, .timeAdvance]
   ++ (Worker.all.filter fun w => w.timer?.isNone && w != .netRx).map .queued
   ++ [.cookieSecretBirthdate, .cookieSecret, .pubkeyHashKey, .ratelimiterKey, .ratelimiterGcNow, .udpPortDraw,
-      .neighReachTime]
+      .neighReachTime, .netlinkAutobindPort]
   ++ [.dstCacheResetTs, .dstCacheRefreshTs, .reschedNetnsCleanup]
   ++ AllocSite.all.map .alloc
   ++ [.currentTime]

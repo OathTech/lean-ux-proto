@@ -4,10 +4,12 @@ and decoding of WG_CMD_GET_DEVICE dumps into a canonical device state.
 The trace carries a structured configuration; this module encodes it as the
 generic-netlink attribute payload of WG_CMD_SET_DEVICE (include/uapi/linux/
 wireguard.h), which the guest sends after the family and generic-netlink
-headers. The guest returns each dump message's attribute payload; `decode_dump`
-coalesces them as the UAPI instructs receivers to (a peer continued across
-messages repeats its public key), producing the canonical state that the
-mirror computes directly.
+headers. The guest returns each dump message (W2, docs/2026-10-06-w1-w2-netlink.md
+4.5): `decode_messages` gives the messages with exactly the attributes the
+kernel put, the form the mirror reports for a stepped receive (wg_get_recv);
+`decode_dump` coalesces a whole dump (wg_get) as the UAPI instructs receivers
+to (a peer continued across messages repeats its public key), producing the
+canonical state that the mirror computes the same way.
 
 Keys and addresses are lowercase hex of their bytes in network order: 4 bytes
 for IPv4, 16 for IPv6.
@@ -355,7 +357,9 @@ def _decode_allowed_ip(entry):
 
 
 def _decode_peer(data):
-    peer, seen = {"allowed_ips": []}, set()
+    """A peer entry with exactly the attributes put: `allowed_ips` only when
+    its nest was (W2 4.5; the coalesced device restores `[]`)."""
+    peer, seen = {}, set()
     for kind, value in _attrs(data, "peer"):
         if kind in seen:
             raise InvalidConfig(f"peer: duplicate attribute {kind}")
@@ -388,53 +392,120 @@ def _decode_peer(data):
 DEVICE_FIELDS = {DEV_IFINDEX: ("ifindex", "=I"), DEV_LISTEN_PORT: ("listen_port", "=H"), DEV_FWMARK: ("fwmark", "=I")}
 
 
-def decode_dump(payloads):
-    """Coalesce the attribute payloads of a WG_CMD_GET_DEVICE dump into one
-    canonical device state. Anything the kernel's get_device_dump/get_peer
-    would not produce (unknown or repeated attributes, wrong lengths, a
-    continued peer carrying more than its key and allowed IPs) is rejected."""
+NLM_F_MULTI, NLM_F_DUMP_INTR = 2, 16
+
+
+def decode_messages(records):
+    """W2 (4.5): the guest's per-message records of one receive (or of a
+    whole wg_get) as the mirror reports them (Leanux/WG/Types.lean NlMessage):
+    {"kind": "data", "flags": F, "attrs": {device attributes, "peers": [peer
+    attributes]}} with exactly the attributes the kernel put ("peers" when its
+    nest was, a peer's "allowed_ips" when its nest was), {"kind": "done",
+    "flags": F, "error": E} or {"kind": "error", "error": E}. Anything the
+    kernel's get_device_dump/get_peer would not produce (unknown or repeated
+    attributes, wrong lengths) is rejected."""
     try:
-        return _decode_dump(payloads)
+        return _decode_messages(records)
     except (struct.error, UnicodeDecodeError) as exc:
         raise InvalidConfig(f"malformed dump: {exc}") from exc
 
 
-def _decode_dump(payloads):
-    if type(payloads) is not list or not payloads:
+def _decode_messages(records):
+    if type(records) is not list or not records:
         raise InvalidConfig("dump without messages")
-    device, peers = {}, []
-    for index, payload in enumerate(payloads):
-        if type(payload) is not str or not re.fullmatch(r"([0-9a-f]{2})*", payload):
-            raise InvalidConfig(f"dump[{index}]: payload must be lowercase hex")
-        first_peer, seen = True, set()
-        for kind, value in _attrs(bytes.fromhex(payload), f"dump[{index}]"):
-            if kind in seen:
-                raise InvalidConfig(f"dump[{index}]: duplicate attribute {kind}")
-            seen.add(kind)
-            if kind in DEVICE_FIELDS:
-                key, fmt = DEVICE_FIELDS[kind]
-                _set(device, key, _fixed(value, fmt, key)[0], "device")
-            elif kind == DEV_IFNAME:
-                if not value.endswith(b"\0") or b"\0" in value[:-1]:
-                    raise InvalidConfig("device.ifname: not a NUL-terminated string")
-                _set(device, "ifname", value[:-1].decode(), "device")
-            elif kind == DEV_PRIVATE_KEY:
-                _set(device, "private_key", _bytes(value, KEY_LEN, "device.private_key"), "device")
-            elif kind == DEV_PUBLIC_KEY:
-                _set(device, "public_key", _bytes(value, KEY_LEN, "device.public_key"), "device")
-            elif kind == DEV_PEERS:
-                for _, entry in _attrs(value, "peers"):
-                    peer, attributes = _decode_peer(entry)
-                    continued = first_peer and index > 0 and peers and peers[-1]["public_key"] == peer["public_key"]
-                    if continued:
-                        if attributes - {PEER_PUBLIC_KEY, PEER_ALLOWEDIPS}:
-                            raise InvalidConfig(f"dump[{index}]: continued peer repeats attributes")
-                        peers[-1]["allowed_ips"] += peer["allowed_ips"]
-                    else:
-                        peers.append(peer)
-                    first_peer = False
+    messages = []
+    for index, record in enumerate(records):
+        where = f"dump[{index}]"
+        if type(record) is not dict or type(record.get("kind")) is not str:
+            raise InvalidConfig(f"{where}: record")
+        kind = record["kind"]
+        if kind == "data":
+            if set(record) != {"kind", "flags", "payload"}:
+                raise InvalidConfig(f"{where}: data record fields")
+            payload = record["payload"]
+            if type(payload) is not str or not re.fullmatch(r"([0-9a-f]{2})*", payload):
+                raise InvalidConfig(f"{where}: payload must be lowercase hex")
+            messages.append({"kind": "data", "flags": _int(record["flags"], 0, 0xffff, f"{where}.flags"),
+                             "attrs": _decode_data(bytes.fromhex(payload), where)})
+        elif kind == "done":
+            if set(record) != {"kind", "flags", "error"}:
+                raise InvalidConfig(f"{where}: done record fields")
+            messages.append({"kind": "done", "flags": _int(record["flags"], 0, 0xffff, f"{where}.flags"),
+                             "error": _int(record["error"], -4095, 0, f"{where}.error")})
+        elif kind == "error":
+            if set(record) != {"kind", "error"}:
+                raise InvalidConfig(f"{where}: error record fields")
+            messages.append({"kind": "error", "error": _int(record["error"], -4095, 0, f"{where}.error")})
+        else:
+            raise InvalidConfig(f"{where}: kind {kind!r}")
+    return messages
+
+
+def _decode_data(data, where):
+    attrs, seen = {}, set()
+    for kind, value in _attrs(data, where):
+        if kind in seen:
+            raise InvalidConfig(f"{where}: duplicate attribute {kind}")
+        seen.add(kind)
+        if kind in DEVICE_FIELDS:
+            key, fmt = DEVICE_FIELDS[kind]
+            _set(attrs, key, _fixed(value, fmt, key)[0], "device")
+        elif kind == DEV_IFNAME:
+            if not value.endswith(b"\0") or b"\0" in value[:-1]:
+                raise InvalidConfig("device.ifname: not a NUL-terminated string")
+            _set(attrs, "ifname", value[:-1].decode(), "device")
+        elif kind == DEV_PRIVATE_KEY:
+            _set(attrs, "private_key", _bytes(value, KEY_LEN, "device.private_key"), "device")
+        elif kind == DEV_PUBLIC_KEY:
+            _set(attrs, "public_key", _bytes(value, KEY_LEN, "device.public_key"), "device")
+        elif kind == DEV_PEERS:
+            attrs["peers"] = [_decode_peer(entry)[0] for _, entry in _attrs(value, "peers")]
+        else:
+            raise InvalidConfig(f"unknown device attribute {kind}")
+    return attrs
+
+
+def decode_dump(messages):
+    """Coalesce the decoded messages of one whole WG_CMD_GET_DEVICE dump
+    (wg_get: data chunks then the DONE) into the canonical device state, by
+    the rules the mirror's coalesce applies (Leanux/WG/NetlinkDump.lean, W2
+    4.5): a chunk's first peer repeating the previous chunk's last public key
+    continues it (its allowed IPs are appended; it carries nothing else), a
+    repeated device part must repeat the first, and a peer without an
+    allowed-IPs nest gets `[]`. Anything one operation's dump cannot show
+    (NLM_F_DUMP_INTR, an acknowledgement, a chunk after the DONE) is rejected
+    fail-noisy: it would be a mirror invariant on the other side."""
+    if type(messages) is not list or not messages:
+        raise InvalidConfig("dump without messages")
+    device, peers, last_split = None, [], None
+    for index, message in enumerate(messages):
+        if message["kind"] != "data":
+            if message["kind"] == "error" or index != len(messages) - 1:
+                raise InvalidConfig(f"dump[{index}]: {message['kind']} in a whole dump")
+            if message["error"] != 0:
+                raise InvalidConfig(f"dump[{index}]: DONE with error {message['error']}")
+            continue
+        if message["flags"] & NLM_F_DUMP_INTR:
+            raise InvalidConfig(f"dump[{index}]: NLM_F_DUMP_INTR in one operation's dump")
+        part = {k: v for k, v in message["attrs"].items() if k != "peers"}
+        if device is None:
+            device = part
+        elif part and part != device:
+            raise InvalidConfig(f"dump[{index}]: the repeated device part differs")
+        for position, peer in enumerate(message["attrs"].get("peers", [])):
+            continued = position == 0 and last_split is not None and last_split["public_key"] == peer["public_key"]
+            if continued:
+                if "allowed_ips" not in peer:
+                    raise InvalidConfig(f"dump[{index}]: continued peer without allowed IPs")
+                if set(peer) != {"public_key", "allowed_ips"}:
+                    raise InvalidConfig(f"dump[{index}]: continued peer repeats attributes")
+                last_split["allowed_ips"] += peer["allowed_ips"]
             else:
-                raise InvalidConfig(f"unknown device attribute {kind}")
+                peer.setdefault("allowed_ips", [])
+                peers.append(peer)
+                last_split = peer
+    if device is None or messages[-1]["kind"] != "done":
+        raise InvalidConfig("dump without a data chunk or without its DONE")
     device["peers"] = peers
     return device
 

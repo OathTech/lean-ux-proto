@@ -33,6 +33,10 @@ inductive Operation where
   | wgSet (attrs : WG.DeviceAttrs)
   /-- `wg_get` with its device selector (W1). -/
   | wgGet (device : WG.DeviceRef)
+  /-- W2: the stepped dump on fd 8 (`wg_get_start` with the selector; one
+      `wg_get_recv` per chunk). -/
+  | wgGetStart (device : WG.DeviceRef)
+  | wgGetRecv
   | wgUp
   /-- `tos` (W5) rides in `opts` (`Env.XmitOpts.tos`): the sender's TOS /
       traffic class for this send, the inner TOS of the transmitted packet. -/
@@ -117,8 +121,12 @@ def Trace.net (t : Trace) : Bool :=
   t.ops.any fun
     | .wgSet _ | .wgGet _ | .wgUp | .wgXmit .. | .wgObserve | .wgInject .. | .wgAdvance _
     | .wgFlood _ _ _ | .wgCreate | .wgDown | .wgDelete | .wgSetMtu _ | .wgBatch _ _
-    | .wgDeladdr _ | .wgDelroute _ | .wgNetnsClose => true
+    | .wgDeladdr _ | .wgDelroute _ | .wgNetnsClose | .wgGetStart _ | .wgGetRecv => true
     | _ => false
+
+/-- W2: a trace with a stepped dump operation gets the dump socket at fd 8. -/
+def Trace.stepped (t : Trace) : Bool :=
+  t.ops.any fun | .wgGetStart _ | .wgGetRecv => true | _ => false
 
 private def fields (j : Json) (expected : List String) : Except String Unit := do
   let obj ← j.getObj?
@@ -415,6 +423,12 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
   | "wg_get" =>
     fields j (["op"] ++ if (optField j "device").isSome then ["device"] else [])
     return .wgGet (← parseDevice j)
+  | "wg_get_start" =>
+    fields j (["op"] ++ if (optField j "device").isSome then ["device"] else [])
+    return .wgGetStart (← parseDevice j)
+  | "wg_get_recv" =>
+    fields j ["op"]
+    return .wgGetRecv
   | "wg_up" =>
     fields j ["op"]
     return .wgUp
@@ -657,6 +671,13 @@ def parseTrace (j : Json) : Except String Trace := do
   let trace : Trace := { id, ops, rlimit, hidden, steer, armRecords, napiBeforePut, allocArmed, pauses, bare, foreign, routes, dstCacheRecords }
   if (bare || foreign || !routes.isEmpty) && !trace.net then throw "net_fixture: only a network trace has a network fixture"
   if foreign && rlimit < 10 then throw "net_fixture: the foreign-creator fixture needs rlimit_nofile >= 10"
+  -- W2 (4.2): the stepped dump socket at fd 8 (reserved 0..8); L's
+  -- temporary rtnetlink socket then lands at 9. The foreign-creator fixture
+  -- holds 8 and 9 itself, so the two are exclusive.
+  if trace.stepped && foreign then throw "a stepped dump and the foreign-creator fixture both need descriptor 8"
+  if trace.stepped && rlimit < 9 then throw "a stepped dump needs rlimit_nofile >= 9"
+  if trace.stepped && rlimit < 10 && ops.any (fun | .wgCreate | .wgDelete => true | _ => false) then
+    throw "a stepped dump with wg_create or wg_delete needs rlimit_nofile >= 10"
   return trace
 
 /-! ## Harness fixture and trace execution
@@ -688,9 +709,11 @@ def fixtureFile (name : String) (refs : Nat) : File :=
     { fFlags := O_RDWR, fMode := FMODE_READ ||| FMODE_WRITE ||| FMODE_OPENED,
       fCount := refs, fOp := some (.fixture name), fInode := some (.fixture name) }
 
-def initialKernel (rlimit : Nat) (net : Bool := false) (bare : Bool := false) (foreign : Bool := false) : Kernel :=
-  -- W8: the foreign-creator fixture adds the injector (8) and the pin (9)
-  let reserved := if foreign then 10 else 8
+def initialKernel (rlimit : Nat) (net : Bool := false) (bare : Bool := false) (foreign : Bool := false)
+    (stepped : Bool := false) : Kernel :=
+  -- W8: the foreign-creator fixture adds the injector (8) and the pin (9);
+  -- W2: a stepped trace adds the dump socket (8)
+  let reserved := if foreign then 10 else if stepped then 9 else 8
   let slot (fd : Nat) : Option FileId :=
     if fd < 3 then some 0 else if fd < reserved then some (fd - 2) else none
   let files : Std.TreeMap FileId File := Std.TreeMap.ofList
@@ -700,7 +723,8 @@ def initialKernel (rlimit : Nat) (net : Bool := false) (bare : Bool := false) (f
        (i + 2, fixtureFile (if !net then "/dev/null" else
          match i with
          | 0 => "udp-listener-127.0.0.1" | 1 => "udp-listener-::1" | 2 => "udp-sender"
-         | 3 => "generic-netlink" | 4 => "udp-injector" | _ => "netns-pin") 1))
+         | 3 => "generic-netlink" | 4 => if stepped then "generic-netlink-dump" else "udp-injector"
+         | _ => "netns-pin") 1))
   let slots := (List.range NR_OPEN_DEFAULT).toArray
   { task := {
       files := { count := 1, resizeInProgress := false, nextFd := reserved,
@@ -710,11 +734,11 @@ def initialKernel (rlimit : Nat) (net : Bool := false) (bare : Bool := false) (f
       -- the trace child blocks SIGPIPE before the first operation and starts
       -- with no pending signal (P design section 6; the guest side is P1's)
       blocked := sigmask SIGPIPE, pending := 0 }
-    files, nextFile := if foreign then 8 else 6, ctxs := {}, nextCtx := 0,
+    files, nextFile := if foreign then 8 else if stepped then 7 else 6, ctxs := {}, nextCtx := 0,
     idaUsed := {},
     -- Environment facts: the system-wide open-file count and limit are not
     -- observed; the guest has few files open, far below any boot-sized limit.
-    nrFiles := if foreign then 8 else 6, maxFiles := 1000000, anonInodeInodeErr := false,
+    nrFiles := if foreign then 8 else if stepped then 7 else 6, maxFiles := 1000000, anonInodeInodeErr := false,
     -- Pipes (P design section 5): sysctl defaults, and `root_user`'s
     -- `pipe_bufs` at its baseline of 0 (no pipes outside the trace)
     pipeMaxSize := 1048576, pipeUserPagesSoft := 16384, pipeUserPagesHard := 0, user := { pipeBufs := 0 },
@@ -782,6 +806,8 @@ def toSyscall (results : Array Int) (ends : Array (Option (Nat × Nat))) (index 
   | .pipe2 flags => .pipe2 flags
   | .wgSet attrs => .wgSet attrs
   | .wgGet device => .wgGet device
+  | .wgGetStart device => .wgGetStart device
+  | .wgGetRecv => .wgGetRecv
   | .wgUp => .wgUp
   | .wgXmit family addr payload opts => .wgXmit family addr payload opts
   | .wgSetMtu mtu => .wgSetMtu mtu
@@ -800,7 +826,7 @@ def toSyscall (results : Array Int) (ends : Array (Option (Nat × Nat))) (index 
 /-- Run a trace. A `Stop` is returned with the operation index: the mirror
     never reports an observation for a path it does not model. -/
 def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat × Stop) Json := do
-  let mut world : World := { k := initialKernel trace.rlimit trace.net trace.bare trace.foreign, env := harnessEnv,
+  let mut world : World := { k := initialKernel trace.rlimit trace.net trace.bare trace.foreign trace.stepped, env := harnessEnv,
                              timing := Env.timing, portBound := Env.portBound,
                              fixtureNetDevices := Env.fixtureNetDevices,
                              foreignCreator := trace.foreign,
