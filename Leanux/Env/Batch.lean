@@ -156,6 +156,8 @@ def condResched : Nat → Worker → M Unit → M Unit → M Bool
     -- end inside the outer's call, so the outer would see its queue only
     -- afterwards, while Linux may resume the outer first: the rests do not
     -- commute, and the mirror's stack order is not Linux's. Fail-closed.
+    -- Phase 2 (17.15) is not built on this representation: it needs
+    -- suspended activations resumed by the recorded schedule.
     let stack := (← get).openWorkers
     if stack.length ≥ 2 then
       for (w, pid) in stack.dropLast do

@@ -289,21 +289,27 @@ def receiveHandshakePacket (msg : List UInt8) (src : SkbSource) : M Unit := do
   timersTraversal pid
   peerPut peer
 
-/-- wg_packet_handshake_receive_worker (receive.c:206-218): drains the
-    handshake queue. The environment runs it when the queued work runs. -/
-def handshakeReceiveWorker (condResched : M Unit) : M Unit := do
-  for _ in [0:MAX_QUEUED_INCOMING_HANDSHAKES] do
-    match (← getDev).handshakeQueue with
-    | [] => do
-      _ ← branch .workerConsumed false
-      return
-    | (msg, src) :: _ =>
-      _ ← branch .workerConsumed true   -- ptr_ring_consume_bh
-      receiveHandshakePacket msg src
-      -- dev_kfree_skb; atomic_dec(&handshake_queue_len)
-      modifyDev fun d => { d with handshakeQueue := d.handshakeQueue.drop 1 }
-      condResched   -- receive.c:216: other kworkers may run here (the environment decides)
-  invariant "the handshake queue did not drain"
+/-- One iteration of wg_packet_handshake_receive_worker (receive.c:206-218):
+    the ring poll (`false` when empty) and the handshake packet consumed.
+    The environment runs the worker when the queued work runs. -/
+def receiveStep : M Bool := do
+  match (← getDev).handshakeQueue with
+  | [] => do
+    _ ← branch .workerConsumed false
+    return false
+  | (msg, src) :: _ =>
+    _ ← branch .workerConsumed true   -- ptr_ring_consume_bh
+    receiveHandshakePacket msg src
+    -- dev_kfree_skb; atomic_dec(&handshake_queue_len)
+    modifyDev fun d => { d with handshakeQueue := d.handshakeQueue.drop 1 }
+    return true
+
+/-- The whole loop: `receiveStep` per item, then `condResched`
+    (receive.c:216: other kworkers may run here, the environment decides;
+    W7 phase 2 interleaves the iterations, `workerIter`). -/
+def handshakeReceiveWorker (condResched : M Unit) : M Unit :=
+  workerLoop .receiveWorker none receiveStep condResched
+    MAX_QUEUED_INCOMING_HANDSHAKES "the handshake queue did not drain"
 
 /-- wg_queue_enqueue_per_device_and_peer (queueing.h:157-178) for the
     decrypt queue and the peer's `rx_queue`: 0, or (outside the domain)

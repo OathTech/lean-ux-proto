@@ -93,27 +93,33 @@ def decryptPacket (pkt : RxPacket) : M (Option RxPacket) := do
     worker's `napi_schedule` raised, where the records put it), and
     `irqExit` its placement inside `wg_queue_enqueue_per_peer_rx`;
     `needResched` its scheduler, as for the encrypt worker. -/
-def decryptWorker (softirq irqExit : M Unit) (needResched : M Bool) : M Unit := do
-  for _ in [0:MAX_QUEUED_PACKETS + 1] do
-    -- ptr_ring_consume_bh: its spin_unlock_bh runs a pending softirq
+def decryptStep (softirq irqExit : M Unit) : M Bool := do
+  -- ptr_ring_consume_bh: its spin_unlock_bh runs a pending softirq
+  softirq
+  match (← getDev).decryptQueue with
+  | [] =>
+    _ ← branch .decWorkerConsumed false
+    return false
+  | pkt :: rest =>
+    _ ← branch .decWorkerConsumed true
+    modifyDev fun d => { d with decryptQueue := rest }
+    let decrypted ← decryptPacket pkt
+    -- `likely(decrypt_packet(...)) ? PACKET_STATE_CRYPTED : PACKET_STATE_DEAD`
+    if ← branch .decWorkerDecrypted decrypted.isSome then
+      let some d := decrypted | invariant "unreachable"
+      enqueuePerPeerRx irqExit d .crypted
+    else enqueuePerPeerRx irqExit pkt .dead
+    -- an interrupt's exit may run the raised softirq before the test
     softirq
-    match (← getDev).decryptQueue with
-    | [] =>
-      _ ← branch .decWorkerConsumed false
-      return
-    | pkt :: rest =>
-      _ ← branch .decWorkerConsumed true
-      modifyDev fun d => { d with decryptQueue := rest }
-      let decrypted ← decryptPacket pkt
-      -- `likely(decrypt_packet(...)) ? PACKET_STATE_CRYPTED : PACKET_STATE_DEAD`
-      if ← branch .decWorkerDecrypted decrypted.isSome then
-        let some d := decrypted | invariant "unreachable"
-        enqueuePerPeerRx irqExit d .crypted
-      else enqueuePerPeerRx irqExit pkt .dead
-      -- an interrupt's exit may run the raised softirq before the test
-      softirq
-      _ ← branch .decWorkerNeedResched (← needResched)
-  invariant "the decrypt queue did not drain"
+    return true
+
+/-- The whole loop: `decryptStep` per item, with the `cond_resched` and its
+    decision after each (W7 phase 2: the environment interleaves the
+    iterations, `workerIter`). -/
+def decryptWorker (softirq irqExit : M Unit) (needResched : M Bool) : M Unit :=
+  workerLoop .decryptWorker none (decryptStep softirq irqExit)
+    (discard <| do branch .decWorkerNeedResched (← needResched))
+    (MAX_QUEUED_PACKETS + 1) "the decrypt queue did not drain"
 
 /-- counter_validate (receive.c:295-331): RFC 6479 over the keypair's
     `receiving_counter` (`counter` is the highest counter seen plus one;

@@ -2166,3 +2166,54 @@ encrypt worker with ring items, scheduling-dependent); the combined suite
 `handwritten,wireguard` (`.artifacts/check/int-w-suites-2`): **pass,
 238/238**, 11153 operand pairs, no retries, `w7_multi_tx_8` agreeing in
 that run.
+
+### 17.15 Phase 2: attempted, stopped at the review's course check [AGENT 2026-10-12, w7p2]
+
+Decided yes by the coordinator on the phase-1 count (17.11). What was
+built and validated on `task/w7p2`, then stopped by the coordinator's
+course check against the simulation-target review
+(`docs/2026-10-12-simulation-target-review.md`, 3.5, 4.1, 4.2 and ranked
+changes 3, 4, 6): a resume rule in `condResched` that, at a yield, picked
+the one other open worker with queued items, tried its next iteration
+against the records (a hidden-input mismatch at its first read restored the
+state: the kernel resumed something else), ran its iterations nested on the
+host call stack while they matched, and consumed its section stop there
+when its queue drained, marking it finished so its own run, further up the
+mirror's call stack, ended without another iteration. Ten single-trace
+runs of `w7_multi_tx_8` and `w7_mixed` and the `w7_` subset agreed under
+it. It is exactly the shape the review rejects: the suspended worker's
+remainder still completes on the host call stack with a bookkeeping flag in
+place of the delayed stop, on list rings whose full test is wrong (4.1) and
+on copied packet values that need identity reconciliation across yields
+(4.2). It was removed before any commit.
+
+**Kept, representation-neutral:** the four draining workers are now a
+step, the C's loop body between two yields as direct sequential code
+(`WG.encryptStep`, `WG.txStep`, `WG.decryptStep`, `WG.receiveStep`), and the
+generic loop `workerIter`/`workerLoop` (`Leanux/Kernel/Defs.lean`), with
+the `cond_resched` decision as the loop's `afterItem`. Behavior-preserving:
+the same branches, records and observations in the same order. Phase 1's
+`unsupported` stays as it was.
+
+**How phase 2 should be done, on the review's representation.** An
+activation is a value in the world, not a Lean call frame: for each open
+worker its kind, its peer, its loop position (between two yields), its
+locals that survive a yield (the peeked item, the keypair, the references
+it holds) and its pending section stop. `runWorker` becomes "push an
+activation and step it"; a step is `workerIter` over a packet store with
+identities (4.2: the device ring, the peer queue, the peeked head and the
+worker local name one packet; publication updates it once) and a ring
+with cursors, occupancy and batch clearing (4.1). At a yield the
+environment does not call anything nested: it records the activation as
+suspended and returns to the scheduler loop, which reads the next record
+and resumes the activation it names, a section start (a new activation),
+the NET_RX poll, or, by elimination among the suspended activations with
+work, a suspended one, the stop record ending an activation whose loop
+ended. The host call stack then holds no worker state, so a suspended
+worker resumes with its locals and references intact and no early
+completion is represented by a delayed stop. The one-off mutant for it is
+then the same as here ("ignore the resumption, continue the yielding
+activation"), and a replay fixture of a recorded resumed-outer run makes it
+deterministic. Order of work per the review: ranks 3 and 4 first (the ring
+and the packet store), then the activations (rank 6), then phase 2's
+scheduler loop; the 1025-item tier and the repoll wait for the ring.

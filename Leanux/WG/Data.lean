@@ -95,41 +95,48 @@ def encryptPacket (checksumHelp : Packet → M Packet) (keypair : KeypairId) (pk
   -- chacha20poly1305_encrypt_sg_inplace over the packet and its padding
   return some (dataMessage k.remoteIndex pkt.nonce k.sending.key (inner.bytes ++ List.replicate paddingLen 0))
 
-/-- wg_packet_encrypt_worker (send.c:287-309): drains the encrypt queue,
-    encrypting each item's packets under `PACKET_CB(first)->keypair` until
-    one fails (`DEAD`: the walk breaks, and the tx worker frees the whole
-    list). `needResched` is the environment's scheduler: whether
-    `need_resched()` holds, having run what the kernel ran at the
+/-- One iteration of wg_packet_encrypt_worker (send.c:287-309): the ring
+    poll (`ptr_ring_consume_bh`; `false` when empty: the loop ends) and the
+    item's packets encrypted under `PACKET_CB(first)->keypair` until one
+    fails (`DEAD`: the walk breaks, and the tx worker frees the whole list).
+    W7 phase 2: the iteration is the unit the environment interleaves
+    (`workerIter`). -/
+def encryptStep (checksumHelp : Packet → M Packet) : M Bool := do
+  match (← getDev).encryptQueue with
+  | [] =>
+    _ ← branch .encWorkerConsumed false   -- ptr_ring_consume_bh
+    return false
+  | first :: rest =>
+    _ ← branch .encWorkerConsumed true
+    modifyDev fun d => { d with encryptQueue := rest }
+    let some head := first.head? | invariant "an empty ring item"
+    -- skb_list_walk_safe(first, skb, next)
+    let mut state := PacketState.crypted
+    let mut done : List DataPacket := []
+    let mut remaining := first
+    for _ in [0:first.length] do
+      let some skb := remaining.head? | break
+      _ ← branch .encWorkerSkbIterate true
+      let encrypted ← encryptPacket checksumHelp head.keypair skb
+      if ← branch .encWorkerEncrypted encrypted.isSome then
+        -- wg_reset_packet(skb, true) (a cut point)
+        done := done ++ [{ skb with bytes := encrypted.getD [] }]
+        remaining := remaining.drop 1
+      else
+        state := .dead   -- break
+        break
+    if state == .crypted then _ ← branch .encWorkerSkbIterate false
+    enqueuePerPeerTx (done ++ remaining) state
+    return true
+
+/-- wg_packet_encrypt_worker (send.c:287-309): drains the encrypt queue
+    (`encryptStep` per item). `needResched` is the environment's scheduler:
+    whether `need_resched()` holds, having run what the kernel ran at the
     `cond_resched()`. -/
-def encryptWorker (checksumHelp : Packet → M Packet) (needResched : M Bool) : M Unit := do
-  for _ in [0:MAX_QUEUED_PACKETS + 1] do
-    match (← getDev).encryptQueue with
-    | [] =>
-      _ ← branch .encWorkerConsumed false   -- ptr_ring_consume_bh
-      return
-    | first :: rest =>
-      _ ← branch .encWorkerConsumed true
-      modifyDev fun d => { d with encryptQueue := rest }
-      let some head := first.head? | invariant "an empty ring item"
-      -- skb_list_walk_safe(first, skb, next)
-      let mut state := PacketState.crypted
-      let mut done : List DataPacket := []
-      let mut remaining := first
-      for _ in [0:first.length] do
-        let some skb := remaining.head? | break
-        _ ← branch .encWorkerSkbIterate true
-        let encrypted ← encryptPacket checksumHelp head.keypair skb
-        if ← branch .encWorkerEncrypted encrypted.isSome then
-          -- wg_reset_packet(skb, true) (a cut point)
-          done := done ++ [{ skb with bytes := encrypted.getD [] }]
-          remaining := remaining.drop 1
-        else
-          state := .dead   -- break
-          break
-      if state == .crypted then _ ← branch .encWorkerSkbIterate false
-      enqueuePerPeerTx (done ++ remaining) state
-      _ ← branch .encWorkerNeedResched (← needResched)
-  invariant "the encrypt queue did not drain"
+def encryptWorker (checksumHelp : Packet → M Packet) (needResched : M Bool) : M Unit :=
+  workerLoop .encryptWorker none (encryptStep checksumHelp)
+    (discard <| do branch .encWorkerNeedResched (← needResched))
+    (MAX_QUEUED_PACKETS + 1) "the encrypt queue did not drain"
 
 /-- wg_socket_send_skb_to_peer (socket.c:168-187) of an encrypted packet:
     whether it returned 0. `send4`/`send6` are a cut point, as in
@@ -180,32 +187,39 @@ def createDataDone (pid : PeerId) (item : List DataPacket) : M Unit := do
   if ← branch .doneDataSent dataSent then timersDataSent pid
   keepKeyFresh pid
 
+/-- One iteration of wg_packet_tx_worker (send.c:262-285) for a peer: the
+    peek (`false` when the queue is empty or its head UNCRYPTED: the run
+    ends with the item peeked) and the item sent, dropping the references
+    `wg_packet_send_staged_packets` took. W7 phase 2: the unit the
+    environment interleaves (`workerIter`). -/
+def txStep (pid : PeerId) : M Bool := do
+  -- `(first = wg_prev_queue_peek(&peer->tx_queue)) != NULL` (W7: the queue
+  -- as data; the peeked item stays across runs)
+  let (first, q) ← (← getPeer pid).txQueue.peek
+  setPeer pid { (← getPeer pid) with txQueue := q }
+  -- `&& (state = atomic_read_acquire(&PACKET_CB(first)->state)) != PACKET_STATE_UNCRYPTED`:
+  -- an UNCRYPTED head ends the run with the item peeked (send.c:269-272)
+  let go ← andM (branch .txPacket first.isSome) do
+    let some f := first | invariant "unreachable"
+    let some h := f.head? | invariant "an empty ring item"
+    branch .txNotUncrypted (h.state != .uncrypted)
+  if !go then return false
+  let some item := first | invariant "unreachable"
+  let some head := item.head? | invariant "an empty ring item"
+  -- wg_prev_queue_drop_peeked
+  setPeer pid { (← getPeer pid) with txQueue := (← getPeer pid).txQueue.dropPeeked }
+  if ← branch .txCrypted (head.state == .crypted) then createDataDone pid item
+  -- else kfree_skb_list(first)
+  keypairPut (some head.keypair) false
+  peerPut (some pid)
+  return true
+
 /-- wg_packet_tx_worker (send.c:262-285) for a peer: sends its encrypted
-    items in order, dropping the references `wg_packet_send_staged_packets`
-    took. `needResched` as for `encryptWorker`. -/
-def txWorker (pid : PeerId) (needResched : M Bool) : M Unit := do
-  for _ in [0:MAX_QUEUED_PACKETS + 1] do
-    -- `(first = wg_prev_queue_peek(&peer->tx_queue)) != NULL` (W7: the queue
-    -- as data; the peeked item stays across runs)
-    let (first, q) ← (← getPeer pid).txQueue.peek
-    setPeer pid { (← getPeer pid) with txQueue := q }
-    -- `&& (state = atomic_read_acquire(&PACKET_CB(first)->state)) != PACKET_STATE_UNCRYPTED`:
-    -- an UNCRYPTED head ends the run with the item peeked (send.c:269-272)
-    let go ← andM (branch .txPacket first.isSome) do
-      let some f := first | invariant "unreachable"
-      let some h := f.head? | invariant "an empty ring item"
-      branch .txNotUncrypted (h.state != .uncrypted)
-    if !go then return
-    let some item := first | invariant "unreachable"
-    let some head := item.head? | invariant "an empty ring item"
-    -- wg_prev_queue_drop_peeked
-    setPeer pid { (← getPeer pid) with txQueue := (← getPeer pid).txQueue.dropPeeked }
-    if ← branch .txCrypted (head.state == .crypted) then createDataDone pid item
-    -- else kfree_skb_list(first)
-    keypairPut (some head.keypair) false
-    peerPut (some pid)
-    _ ← branch .txNeedResched (← needResched)
-  invariant "the tx queue did not drain"
+    items in order (`txStep` per item). `needResched` as for `encryptWorker`. -/
+def txWorker (pid : PeerId) (needResched : M Bool) : M Unit :=
+  workerLoop .txWorker (some pid) (txStep pid)
+    (discard <| do branch .txNeedResched (← needResched))
+    (MAX_QUEUED_PACKETS + 1) "the tx queue did not drain"
 
 private def hexOf (bs : List UInt8) : String :=
   String.join (bs.map fun b => let d := "0123456789abcdef".toList; String.ofList [d[b.toNat / 16]!, d[b.toNat % 16]!])

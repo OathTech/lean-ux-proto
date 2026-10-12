@@ -183,3 +183,10 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   lifecycle chunks showed `nlmsg_new` records between `wg_create`'s two
   neighbour draws and before an up device's `wg_destruct`; both are cut
   points now (`docs/2026-10-05-l-lifecycle.md` 16.3).
+- **2026-10-12 [AGENT, coordinator]** W7 phase 2 decided yes on the phase-1
+  count (design 17.11), under the user's delegation of tactical decisions;
+  then stopped at the course check against the simulation-target review
+  (3.5, 4.1, 4.2): the nested-resume form was removed before any commit, the
+  step split of the draining workers kept, and phase 2 is to be built on
+  suspended activations over a packet store with identities and a ring with
+  cursors (design 17.15).

@@ -1227,6 +1227,29 @@ def branch (d : Decision) (outcome : Bool) : M Bool := do
   modify fun w => { w with steps := w.steps.push { decision := d, outcome, netRx := w.netRxSection } }
   return outcome
 
+/-- One iteration of a draining worker's loop (`wg_packet_encrypt_worker`,
+    `wg_packet_tx_worker`, `wg_packet_decrypt_worker`,
+    `wg_packet_handshake_receive_worker`): `step`, one ring or queue poll
+    and its item, then `afterItem`, the `cond_resched` and its decision,
+    when an item was processed. `true` when the loop goes on. The loop body
+    between two yields is the C's, direct sequential code; the iteration is
+    the unit a suspended activation would resume at (W7 phase 2, design
+    17.15: not built on this representation). `w` and `pid` name the
+    activation. -/
+def workerIter (w : Worker) (pid : Option Nat) (step : M Bool) (afterItem : M Unit) : M Bool := do
+  let _ := (w, pid)
+  if !(← step) then return false
+  afterItem
+  return true
+
+/-- A worker's whole loop: `workerIter` until the queue drains, under the
+    C's bound. -/
+def workerLoop (w : Worker) (pid : Option Nat) (step : M Bool) (afterItem : M Unit) (bound : Nat)
+    (drained : String) : M Unit := do
+  for _ in [0:bound] do
+    if !(← workerIter w pid step afterItem) then return
+  invariant drained
+
 /-- Record a C value comparison: its outcome and the two values the C
     compares at the condition. The check matches them against
     `KCOV_TRACE_CMP` records at the condition line. -/
