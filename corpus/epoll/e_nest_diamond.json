@@ -1,0 +1,124 @@
+{
+  "version": 1,
+  "id": "e_nest_diamond",
+  "ops": [
+    {
+      "op": "epoll_create1",
+      "flags": 0
+    },
+    {
+      "op": "epoll_create1",
+      "flags": 0
+    },
+    {
+      "op": "epoll_create1",
+      "flags": 0
+    },
+    {
+      "op": "eventfd2",
+      "init": 0,
+      "flags": 2048
+    },
+    {
+      "op": "epoll_ctl",
+      "epfd": {
+        "ref": 0
+      },
+      "cmd": 1,
+      "fd": {
+        "ref": 3
+      },
+      "events": 1,
+      "data": "1"
+    },
+    {
+      "op": "epoll_ctl",
+      "epfd": {
+        "ref": 1
+      },
+      "cmd": 1,
+      "fd": {
+        "ref": 3
+      },
+      "events": 1,
+      "data": "2"
+    },
+    {
+      "op": "epoll_ctl",
+      "epfd": {
+        "ref": 2
+      },
+      "cmd": 1,
+      "fd": {
+        "ref": 0
+      },
+      "events": 1,
+      "data": "10"
+    },
+    {
+      "op": "epoll_ctl",
+      "epfd": {
+        "ref": 2
+      },
+      "cmd": 1,
+      "fd": {
+        "ref": 1
+      },
+      "events": 1,
+      "data": "20"
+    },
+    {
+      "op": "write",
+      "fd": {
+        "ref": 3
+      },
+      "count": 8,
+      "value": "1"
+    },
+    {
+      "op": "epoll_wait",
+      "epfd": {
+        "ref": 2
+      },
+      "maxevents": 16,
+      "timeout": 0
+    },
+    {
+      "op": "epoll_wait",
+      "epfd": {
+        "ref": 0
+      },
+      "maxevents": 16,
+      "timeout": 0
+    },
+    {
+      "op": "epoll_wait",
+      "epfd": {
+        "ref": 2
+      },
+      "maxevents": 16,
+      "timeout": 0
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 3
+      },
+      "count": 8
+    },
+    {
+      "op": "epoll_wait",
+      "epfd": {
+        "ref": 2
+      },
+      "maxevents": 16,
+      "timeout": 0
+    },
+    {
+      "op": "close",
+      "fd": {
+        "ref": 2
+      }
+    }
+  ]
+}

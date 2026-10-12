@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "id": "e_ready_pipe_full",
+  "ops": [
+    {
+      "op": "epoll_create1",
+      "flags": 0
+    },
+    {
+      "op": "pipe2",
+      "flags": 2048
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 1,
+        "end": 1
+      },
+      "count": 65536,
+      "value": "1"
+    },
+    {
+      "op": "epoll_ctl",
+      "epfd": {
+        "ref": 0
+      },
+      "cmd": 1,
+      "fd": {
+        "pipe": 1,
+        "end": 1
+      },
+      "events": 4,
+      "data": "1"
+    },
+    {
+      "op": "epoll_wait",
+      "epfd": {
+        "ref": 0
+      },
+      "maxevents": 16,
+      "timeout": 0
+    },
+    {
+      "op": "read",
+      "fd": {
+        "pipe": 1,
+        "end": 0
+      },
+      "count": 4096
+    },
+    {
+      "op": "epoll_wait",
+      "epfd": {
+        "ref": 0
+      },
+      "maxevents": 16,
+      "timeout": 0
+    },
+    {
+      "op": "close",
+      "fd": {
+        "ref": 0
+      }
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "id": "e_create_emfile",
+  "ops": [
+    {
+      "op": "epoll_create1",
+      "flags": 0
+    },
+    {
+      "op": "epoll_create1",
+      "flags": 0
+    },
+    {
+      "op": "eventfd2",
+      "init": 0,
+      "flags": 2048
+    },
+    {
+      "op": "close",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "epoll_create1",
+      "flags": 0
+    }
+  ],
+  "rlimit_nofile": 9
+}
