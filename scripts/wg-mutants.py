@@ -524,7 +524,7 @@ W9_MUTANTS = [
    "    if ← branch .send4SrcNotLocal !confirmed then\n",
    "    if ← branch .send4SrcNotLocal false then\n", 'w9_'),
   ('W9-M3-cache-never-hits', 'data: the dst cache never hits (every send misses: socket.c:51 and the arms 53-82); '
-   'A2 on the second send of w9_two_sends when the recorded refresh is after the reset',
+   'A2 on the data send of w9_session_two_sends (the keepalive after the session cached a dst the data send hits)',
    'Leanux/WG/Socket.lean',
    "    if c.refreshTs > c.resetTs && s.gen == gen then return some s\n",
    "    if false && c.refreshTs > c.resetTs && s.gen == gen then return some s\n", 'w9_'),
@@ -538,7 +538,7 @@ W9_MUTANTS = [
    "    set { w with addrs4 := [], defaultRoute4 := false, ipv4Gen := w.ipv4Gen + 1 }\n",
    "    set { w with addrs4 := [], ipv4Gen := w.ipv4Gen + 1 }\n", 'w9_'),
   ('W9-M9-delroute-bumps-regardless', 'environment: wg_delroute 4 bumps rt_genid even when the route was never '
-   'looked up (FA_S_ACCESSED); the retransmit misses in the mirror where Linux hits (w9_delroute_untouched, A2 at :51)',
+   'looked up (FA_S_ACCESSED); the keepalive after the delete misses in the mirror where Linux hits (w9_session_delroute_untouched, A2 at :51)',
    'Leanux/Env.lean',
    "                 ipv4Gen := if w.defaultRoute4Accessed then w.ipv4Gen + 1 else w.ipv4Gen }\n",
    "                 ipv4Gen := w.ipv4Gen + 1 }\n", 'w9_'),

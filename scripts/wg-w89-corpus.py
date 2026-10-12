@@ -97,6 +97,21 @@ def traces():
     # endpoint and resets the cache, and the wildcard sender receives the
     # keepalive from it
     out["w9_inject_to_wg0_addr"] = (session_to("wg0"), d1.steer_initiation(), d1.EXPECT_SESSION)
+    # W9-M3 and W9-M9 need a cached dst that survives: the initiation's is
+    # expired by the up's route adds (the fixture's order, section 14.3b), so
+    # the first send after the session (the keepalive on the completed
+    # handshake) misses and caches, and the next send hits: a data packet
+    # (w9_session_two_sends), or a keepalive queued by a running-device
+    # wg_set after a wg_delroute 4 that was never looked up (no generation
+    # bump: w9_session_delroute_untouched)
+    response = d1.respond(d1.wg0_initiation())
+    peer_key = d1.peer()["public_key"]
+    out["w9_session_two_sends"] = (d1.setup() + [OBSERVE, d1.inject(response.message), OBSERVE, xmit(), OBSERVE, GET],
+                                   d1.steer_initiation(), d1.EXPECT_SESSION)
+    out["w9_session_delroute_untouched"] = (
+        d1.setup() + [OBSERVE, d1.inject(response.message), OBSERVE, delroute(4),
+                      {"op": "wg_set", "config": {"peers": [{"public_key": peer_key, "keepalive": 25}]}}, OBSERVE, GET],
+        d1.steer_initiation(), d1.EXPECT_SESSION)
     # the IPv6 side of the alias rule does not exist (no /8 on lo); the IPv6
     # delete-then-send: the address removal keeps the default route
     out["w9_deladdr6_then_send"] = (d1.setup() + [OBSERVE, deladdr(6), delroute(6), delroute(6), GET],
