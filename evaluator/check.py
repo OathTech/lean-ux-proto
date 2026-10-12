@@ -1162,6 +1162,41 @@ def record_blocks(record):
     return out
 
 
+def split_sections(run):
+    """A mirror run's branches by NET_RX section ordinal (0: outside any),
+    each list in branch order."""
+    out = {}
+    for b in run['branches']:
+        out.setdefault(b.get('section', 0), []).append(b)
+    return out
+
+
+def placement_shape(run):
+    """A run's control flow per section: the branches of each NET_RX section
+    and of the stretch outside any, each in their own order, without
+    operands. A poll's placement (before or after the put) moves its section
+    among the branches outside any section, so the flat branch order differs
+    between placements while this does not: it is what the placement runs
+    must share, and what the selected placement's replay must share with
+    them."""
+    return {k: [(b['index'], b['label'], 'operands_excluded' in b, b.get('operands_excluded')) for b in bs]
+            for k, bs in split_sections(run).items()}
+
+
+def replay_problem(selected, actual_cmp, count):
+    """Why the selected placement's replay is not an execution of the
+    placement runs: a different number of open polls, a different control
+    flow per section (`placement_shape`), or different returns. `None` when
+    it is one (the single execution the operand evidence is taken from)."""
+    if selected.get('napi_irq_ambiguous') != count:
+        return 'the selected-placement run differs in its open polls from the placement runs'
+    if placement_shape(selected) != placement_shape(actual_cmp):
+        return 'the selected-placement run differs in control flow per section from the placement runs'
+    if [o['ret'] for o in selected['observations']] != [o['ret'] for o in actual_cmp['observations']]:
+        return 'the selected-placement run differs in returns from the placement runs'
+    return None
+
+
 def section_agreement(trace, runs, comparisons, sections, locations, decisions, functions=None, exclusions=(),
                       excluded=None):
     """The per-section operand agreement over two mirror runs (`runs`: with
@@ -1199,15 +1234,8 @@ def section_agreement(trace, runs, comparisons, sections, locations, decisions, 
     def agree(branches, section):
         return operand_agreement(trace, {'branches': branches}, records(section), locations, decisions,
                                  functions, exclusions, excluded)
-    def shape(b):
-        return (b['index'], b['label'], 'operands_excluded' in b, b.get('operands_excluded'))
-    def split(run):
-        out = {}
-        for b in run['branches']:
-            out.setdefault(b.get('section', 0), []).append(b)
-        return out
-    a, b = split(first), split(second)
-    if set(a) != set(b) or any([shape(x) for x in a[k]] != [shape(x) for x in b[k]] for k in a):
+    a, b = split_sections(first), split_sections(second)
+    if placement_shape(first) != placement_shape(second):
         return [dict(index=None, label='napi placement',
                      problem='the placement runs differ in control flow, not only in operands')], 0, []
     def differing(k):
@@ -1386,14 +1414,13 @@ def run_chunk(traces, out, kcov, guest_variant=None, alloc_flags=0, arm=()):
                                 operand_problems = [dict(index=None, label='napi placement',
                                                          problem=f'the selected-placement run failed: {exc}')]
                             else:
-                                def shape(run):
-                                    return [(b['index'], b['label'], b.get('section', 0)) for b in run['branches']]
-                                if selected.get('napi_irq_ambiguous') != count or shape(selected) != shape(actual_cmp) or \
-                                        [o['ret'] for o in selected['observations']] != \
-                                        [o['ret'] for o in actual_cmp['observations']]:
-                                    operand_problems = [dict(index=None, label='napi placement',
-                                                             problem='the selected-placement run differs in control '
-                                                                     'flow or returns from the placement runs')]
+                                # the replay must be an execution of the placement
+                                # runs: the same control flow per section (a
+                                # before-put placement moves the poll's section
+                                # among the branches outside any) and returns
+                                problem = replay_problem(selected, actual_cmp, count)
+                                if problem:
+                                    operand_problems = [dict(index=None, label='napi placement', problem=problem)]
                                 else:
                                     excluded = Counter()
                                     operand_problems, checked = operand_agreement(

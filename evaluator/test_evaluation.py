@@ -360,6 +360,34 @@ class EvaluationChecks(unittest.TestCase):
         problems, _, _ = check.section_agreement(trace, [after, before], [moved], sections, loc, decisions)
         self.assertTrue(any(p['problem'] == 'no comparison recorded at condition' for p in problems))
 
+    def test_selected_placement_replay_compares_per_section(self):
+        # The selected placement's replay (419872d) is one execution of the
+        # placement runs: a before-put placement runs the poll's NET_RX
+        # section before the worker's put, so the flat branch order differs
+        # from the after-put run while the control flow per section is the
+        # same; that, the open polls and the returns are what the replay must
+        # share (int-r: rx_duplicate with the vector [True] was rejected
+        # against the after-put run's flat order).
+        def run(order):
+            branches = {'task': dict(index=4, label='task.cmp=0', operands=[7, 9]),
+                        'poll': dict(index=4, label='poll.refcount=1', operands=[1, 3], section=1),
+                        'put': dict(index=4, label='put.refcount=1', operands=[2, 1]),
+                        'put2': dict(index=4, label='put.refcount=0', operands=[0, 1])}
+            return {'branches': [dict(branches[k]) for k in order], 'observations': [{'ret': 0}],
+                    'napi_irq_ambiguous': 1}
+        after = run(['task', 'put', 'put2', 'poll'])
+        selected = run(['task', 'poll', 'put', 'put2'])   # the vector [True]: the poll before the put
+        self.assertEqual(check.placement_shape(after), check.placement_shape(selected))
+        self.assertIsNone(check.replay_problem(selected, after, 1))
+        self.assertIsNone(check.replay_problem(after, after, 1))
+        # a different branch, order within a section, poll count or return is not an execution of the runs
+        self.assertTrue(check.replay_problem(run(['task', 'poll', 'put2', 'put']), after, 1))
+        changed = run(['task', 'poll', 'put', 'put2'])
+        changed['branches'][1]['label'] = 'poll.refcount=0'
+        self.assertTrue(check.replay_problem(changed, after, 1))
+        self.assertTrue(check.replay_problem(selected, after, 2))
+        self.assertTrue(check.replay_problem(dict(selected, observations=[{'ret': -1}]), after, 1))
+
     def test_netrx_sections_from_the_remote_rows(self):
         # the comparison child's remote rows, in area order: block numbers
         # count every section start; NET_RX blocks get ordinals by sequence
