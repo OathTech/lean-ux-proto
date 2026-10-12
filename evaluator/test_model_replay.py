@@ -158,11 +158,12 @@ class NapiPlacement(unittest.TestCase):
 # 2008f803..., the second 3002f803.... In nine of the ten runs B ran first.
 S2_B_FIRST = json.loads(r'''{"arm_records":true,"expect":["wg_index_hashtable_insert.unlocked_collision=1"],"hidden":[[[5,"97325b8200000000"],[5,"97325b8200000000"]],[[6,"cb85768a00000000"],[300,"3002f8038088ffff70703981ffffffff"],[6,"cb85768a00000000"],[300,"2008f8038088ffff70703981ffffffff"],[40,"70703981ffffffff2008f8038088ffff"],[6,"c58fb38a00000000"],[7,"c58fb38a00000000"],[1,"5f8a25b53de4fbceef4b9c6c2d39f9bd3caa552f6915029659920b642b3a8efc"],[3,"63cccb6a000000000882b00b00000000"],[4,"0d0c0b0a00000000"],[100,"2dddfeff0000000097f5feff00000000d009f8038088ffff"],[8,"c58fb38a00000000"],[21,"149ff99a11d2fcce512981cd4279ce13"],[20,"d9c684bc00000000"],[48,"60c53f81ffffffff0000000000000000"],[49,"0000000000000000"],[14,"2900000000000000"],[100,"2eddfeff000000001de2feff000000003009f8038088ffff"],[41,"0000000000000000"],[40,"70703981ffffffff3002f8038088ffff"],[6,"b9a32d8b00000000"],[7,"b9a32d8b00000000"],[1,"200aaa8d4cd565455aa8e08777a2db4b5e99d00f734902fb6f0152c2cfd6ea11"],[3,"63cccb6a00000000fc952a0c00000000"],[4,"0d0c0b0a00000000"],[4,"4433221100000000"],[100,"2fddfeff0000000099f5feff00000000e003f8038088ffff"],[8,"b9a32d8b00000000"],[20,"0100000000000000"],[48,"60c53f81ffffffff0000000000000000"],[49,"0000000000000000"],[14,"0800000000000000"],[100,"2fddfeff0000000013e2feff000000004003f8038088ffff"],[41,"0000000000000000"]],[],[]],"id":"s2_index_collision","ops":[{"config":{"listen_port":51820,"peers":[{"allowed_ips":[{"addr":"0a000000","cidr":16,"family":4}],"endpoint":{"addr":"7f000001","family":4,"port":51999},"keepalive":25,"public_key":"0faa684ed28867b97f4a6a2dee5df8ce974e76b7018e3f22a1c4cf2678570f20"},{"allowed_ips":[{"addr":"0a010000","cidr":16,"family":4}],"endpoint":{"addr":"7f000001","family":4,"port":51999},"keepalive":25,"public_key":"ff2ee45601ec1b67310c7790404585ae697331eee1c1f8cf2419731c1fff3e6b"}],"private_key":"1111111111111111111111111111111111111111111111111111111111111111"},"op":"wg_set"},{"op":"wg_up"},{"op":"wg_observe"},{"op":"wg_get"}],"steer":[["index_draw","0d0c0b0a"],["index_draw","0d0c0b0a"],["index_draw","44332211"]],"version":1}''')
 # What the fixture's listener received at wg_observe (family, length, type,
-# bytes): B's initiation first (sender index 0d0c0b0a, the steered first
+# tos, bytes; the tos field is W5+W6's, 136 = HANDSHAKE_DSCP 0x88 for an
+# initiation): B's initiation first (sender index 0d0c0b0a, the steered first
 # draw), then A's (44332211, the redraw after the collision).
 S2_B_FIRST_DATAGRAMS = [
-    [4, 148, 1, "010000000d0c0b0a73d88b66e8165fda3724a27657b9dce798d7ff733893e1e6196115ae53d867565304e0a005391d78d1bb2c7cd4f02518bde16bb6dfdd47a0647c13fa124dea6aefb275a7232ebcf2280c4367a19657ee9c423d849138478c86c590e738ee8b8c361b84f40cef3db78e52c1d98bb15c6557087e7bee4ed8892efd0e3600000000000000000000000000000000"],
-    [4, 148, 1, "010000004433221152c98894d07a768ddf4d05d5afd6033f71c6bc39e1f8a27288c50ba4f181ba352099812d628ac67576a02a445af0e835072a06e1975997311ada3fa5d6c1fc674017f3fa0129d1ece540e9f1934abcd211a83de17d71d29d83c6a8287e80ee9e8a400aff09aa4cf0a3f8682195fc5a21b0d602b955ccc49ecb19b22b00000000000000000000000000000000"],
+    [4, 148, 1, 136, "010000000d0c0b0a73d88b66e8165fda3724a27657b9dce798d7ff733893e1e6196115ae53d867565304e0a005391d78d1bb2c7cd4f02518bde16bb6dfdd47a0647c13fa124dea6aefb275a7232ebcf2280c4367a19657ee9c423d849138478c86c590e738ee8b8c361b84f40cef3db78e52c1d98bb15c6557087e7bee4ed8892efd0e3600000000000000000000000000000000"],
+    [4, 148, 1, 136, "010000004433221152c98894d07a768ddf4d05d5afd6033f71c6bc39e1f8a27288c50ba4f181ba352099812d628ac67576a02a445af0e835072a06e1975997311ada3fa5d6c1fc674017f3fa0129d1ece540e9f1934abcd211a83de17d71d29d83c6a8287e80ee9e8a400aff09aa4cf0a3f8682195fc5a21b0d602b955ccc49ecb19b22b00000000000000000000000000000000"],
 ]
 
 
@@ -200,9 +201,9 @@ class DispatchOrder(unittest.TestCase):
         legacy = self.datagrams(self.with_sections(lambda r: [r[0], r[1][:16] + '0' * 16]))
         self.assertNotEqual(sorted(legacy), sorted(S2_B_FIRST_DATAGRAMS))
         for linux in S2_B_FIRST_DATAGRAMS:
-            same_head = [d for d in legacy if d[3][:80] == linux[3][:80]]
-            self.assertEqual(len(same_head), 1, linux[3][:16])
-            self.assertNotEqual(same_head[0][3][80:232], linux[3][80:232])
+            same_head = [d for d in legacy if d[-1][:80] == linux[-1][:80]]
+            self.assertEqual(len(same_head), 1, linux[-1][:16])
+            self.assertNotEqual(same_head[0][-1][80:232], linux[-1][80:232])
 
     def test_a_unit_never_queued_is_a_hidden_mismatch(self):
         # the first section names a unit no queue record announced
