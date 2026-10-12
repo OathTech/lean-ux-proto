@@ -150,16 +150,10 @@ def deliverSent : M Unit := do
   for dg in (← get).sent do
     let loopback := (dg.family == AF_INET && dg.addr / 2 ^ 24 == 127)
       || (dg.family == AF_INET6 && (dg.addr == 1 || dg.addr == LO_LINK_LOCAL))
-    -- W1 hand-off to W9: a datagram to an IPv6 endpoint with a nonzero
-    -- `sin6_scope_id` routes with `flowi6_oif` set (`send6`), which the
-    -- environment does not model; a v4-mapped destination is not loopback
-    -- and falls to the rule below. The endpoint is the peer's.
-    if dg.family == AF_INET6 then
-      if let some d := (← getK).wg then
-        for pid in d.peerList do
-          if let some e := (← getPeer pid).endpoint then
-            if e.family == AF_INET6 && e.addr == dg.addr && e.port == dg.port && e.scope != 0 then
-              unsupported "a datagram to a scoped IPv6 endpoint (send6's route lookup, W9)"
+    -- W1's hand-off of scoped IPv6 endpoints to W9 is superseded here: W5
+    -- (2.5, `w5_scoped_*`) models the datagram to a link-local endpoint
+    -- with its `sin6_scope_id` (the scoped outer source); W9's send6 owns
+    -- the route lookup itself when it lands [AGENT, W integration].
     if isSender dg.family dg.addr dg.port then
       -- from wg0's socket, bound to the wildcard address at its port, with
       -- the source `send4`/`send6` ask for: the endpoint's `src4`/`src6`
