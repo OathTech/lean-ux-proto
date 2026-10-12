@@ -2253,7 +2253,9 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         if (result[i].error) printf("%d", result[i].error); else printf("null");
         printf(",\"bytes\":");
         print_head(&t->ops[i], &result[i]);
-        if (t->ops[i].code == OP_READ) { printf(",\"digest\":"); print_digest(&t->ops[i], &result[i]); }
+        if (t->ops[i].code == OP_READ || t->ops[i].code == OP_EPOLL_WAIT) {   /* the contract: a read's and an epoll_wait's digest */
+            printf(",\"digest\":"); print_digest(&t->ops[i], &result[i]);
+        }
         if (t->ops[i].code == OP_WRITE) printf(",\"sigpipe\":%d", result[i].sigpipe);
         if (t->ops[i].code == OP_PIPE2) { printf(",\"fds\":"); print_fds(&t->ops[i], &result[i]); }
         printf("}");

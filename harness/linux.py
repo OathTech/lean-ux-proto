@@ -152,7 +152,8 @@ BOOT_PARAMETERS = f"console=ttyS0 panic=1 nokaslr loglevel=3 clocksource={EXPECT
 # value differs is not a run of the fixture the mirror assumes
 # (Leanux/Env.lean carries the same constant) and fails as an environment
 # failure naming both sides. Measured on the W9 oracle (313c2cc9) with the
-# guest of this commit; re-measured at every oracle change.
+# guest of this commit; re-measured at every oracle change: unchanged on the
+# e1 oracle (7c2b436b, the kind-308 hook) [stream T, 2026-10-12].
 EXPECTED_MAX_USER_WATCHES = 53092
 # Guest build variants for negative controls only (never the oracle): the
 # compiler definitions each adds. `advance-wait-0` (D3, section 8): wg_advance
@@ -277,7 +278,7 @@ def _check_observation(result, trace):
         if op["op"] == "wg_batch":
             fields = fields | {"cqes"}   # W7: the completions at io_uring_enter's return
         # P design section 6: a read's digest, a write's sigpipe, a pipe2's fds
-        fields = fields | {"read": {"digest"}, "write": {"sigpipe"}, "pipe2": {"fds"}}.get(op["op"], set())
+        fields = fields | {"read": {"digest"}, "epoll_wait": {"digest"}, "write": {"sigpipe"}, "pipe2": {"fds"}}.get(op["op"], set())
         if type(observation) is not dict or set(observation) != fields:
             raise ValueError("operation observation fields")
         ret, error, data = observation["ret"], observation["errno"], observation["bytes"]

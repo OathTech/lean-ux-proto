@@ -71,16 +71,14 @@
 # {work, func} record for a work item of the armed dispatch set (gated by
 # KCOV_DISPATCH_ARM_RECORDS like the arm record). Record-only: no path's
 # behaviour changes. The patch is now sha256
-# 9cd0a89fe6100e4b26c102930b5d0df5138f16e59a11e0a7e791c2a32ec41965; the
-# identity and vmlinux lines below are the previous build's (A, c79e3e0c)
-# until the coordinator rebuilds and records the new ones [AGENT 2026-10-11].
+# 9cd0a89fe6100e4b26c102930b5d0df5138f16e59a11e0a7e791c2a32ec41965
+# [AGENT 2026-10-11]; built as the Q oracle (bb3e577d), superseded by W9.
 # W9 (docs/2026-10-06-w8-w9-netns-routing.md, section 4.1): the kind-306
 # record of the jiffies the dst cache stores, at dst_cache_reset
 # (include/net/dst_cache.h, inline) and at the refresh of a miss
 # (net/core/dst_cache.c), gated like the arm record. Record-only. The
 # oracle's patch sha256 is in scripts/build-kernel (CHOICE_SHA / ACTL_SHA).
-# The identity and vmlinux lines below are the dispatch-order builds'
-# until the coordinator rebuilds with this patch.
+# Built as the W9 oracle (313c2cc9), superseded by e1.
 # epoll stream R (docs/2026-10-12-epoll-design.md, section 3.2): the kind-308
 # record of the struct file address an epoll item is keyed by, at
 # ep_rbtree_insert (fs/eventpoll.c:1587 in the patched source; the include
@@ -88,9 +86,11 @@
 # successful EPOLL_CTL_ADD, 8 bytes, written in any recording context (an
 # FS trace loads no dispatch set, so the arm-record gate is not available).
 # Record-only. The patch sha256 is in scripts/build-kernel (CHOICE_SHA /
-# ACTL_SHA). The identity and vmlinux lines below are the W9 builds' until
-# the coordinator rebuilds with this patch [AGENT 2026-10-12, stream R].
+# ACTL_SHA) [AGENT 2026-10-12, stream R]. Built 2026-10-12 as the e1 oracle
+# (.artifacts/kernel-net-choice-e1, choice-stream.patch sha256
+# 36ce046c1204fb39d2ac1e7f7a3249ebf7bc035c203098e1a09d99c48eb456d5): the
+# identity and vmlinux lines below are that build's [AGENT 2026-10-12, stream T].
 # Path-independent identity from scripts/kernel-identity.py:
-313c2cc92eb4d02fcc6bc1740f18ea1e5e2a5c1bbb21a75bfd1fc2c80ef303ce
+7c2b436b005654e6504195f6ab2064a2acf565ca276a653cae683fdfa9a16abe
 # vmlinux sha256 of the build the evidence used (path-dependent):
-55e966027e7e3fd60a94c4815f232e3b005040886fa5299103e8127f8a412f25
+a4b8a4bbfcf8f35bb5eb712b301d1b1c8a9f6a42d2e85ae09d65a62996e55acd
