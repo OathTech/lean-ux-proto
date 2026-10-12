@@ -207,3 +207,29 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   epoll's tree-insert file address (record-only, class-approved); HiddenSite
   ids 190-199 epoll, 200-219 seccomp; both streams' kernel changes go into
   one oracle rebuild after both designs are audited.
+- **2026-10-12 [AGENT, fork of the coordinator]** The epoll design
+  (`docs/2026-10-12-epoll-design.md`) is drafted for the user's reading, no
+  code. Its four decisions for the user (section 13): tier 1 is timeout 0
+  with blocking waits `unsupported` until a scheduler record exists; a
+  record-only kind-308 hook at `ep_rbtree_insert` carrying the file address
+  (a new oracle, class-approved under "Oracle kernel changes"); the rbtree
+  as an ordered-map cut with `ep_find` and `ep_rbtree_insert` declared cut
+  functions rather than a Lean red-black tree; nested epoll in tier 1.
+  Tactical choices made under the standing delegation: the wire mapping
+  and the opcode proposal 27-29 (the coordinator allocates), the
+  `max_user_watches` fixture check (fail-closed, like the identity), one
+  wake-order sentinel plus a one-off record mutant. The scout's profile is
+  corrected on one point: the `ovflist` has no producer in a single-task
+  domain, so it is modelled but unexercised.
+- **2026-10-12 [AGENT, coordinator]** The epoll design's tactical choices
+  are decided as recommended, not put to the user: tier 1 is timeout 0;
+  the rbtree is an ordered-map cut by listing `ep_find` and
+  `ep_rbtree_insert` as decision-free functions, no new checker rule;
+  nested epoll is in tier 1 with both arms of the reverse-path limits; the
+  guest's fixture warms `loop_check_gen` up at boot and the mirror's
+  counter is relative, its three comparisons' operands excluded; the
+  `max_user_watches` fixture check is required; the only new mutant is the
+  kind-308 one-off. The one decision that is the user's is the record-only
+  kind-308 hook, presented at the claim point's merge signoff with the new
+  identity. The design is revised to v2 (section 14, the audit response to
+  section 15) by the fork, every corrected line re-read in 6.12.110.
