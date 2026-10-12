@@ -47,6 +47,7 @@ def pipeOf (f : File) : M PipeId :=
   match f.privateData with
   | some (.pipe id) => return id
   | some (.eventfdCtx _) => invariant "pipe operation on an eventfd file"
+  | some (.eventpoll _) => invariant "pipe operation on an epoll file"
   | none => invariant "pipe operation on a file with NULL private_data"
 
 /-- `pipe_full(head, tail, limit)` (pipe_fs_i.h:169-173):
@@ -649,6 +650,7 @@ def getPipeInfo (f : File) : M (Option PipeId) := do
     | some (.pipe id) => pure (some id)
     | none => pure none
     | some (.eventfdCtx _) => invariant "a pipefifo file whose private_data is an eventfd context"
+    | some (.eventpoll _) => invariant "a pipefifo file whose private_data is an eventpoll"
   if ← branch .getPipeInfoNoPipe pipe?.isNone then return none
   return pipe?
 

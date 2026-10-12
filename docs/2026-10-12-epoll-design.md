@@ -525,6 +525,19 @@ visible at this boundary rather than relying on it silently. The pipe and
 eventfd wake comments become calls; with no entries the walk returns at
 :82-83, so the existing corpus is unchanged, and the full check says so.
 
+**The callback's module [AGENT, stream S 2026-10-12].** `ep_poll_callback`
+re-enters the walk through `ep_poll_safewake` (`wake_up_poll` on the parent
+set's `poll_wait`), a mutual recursion Lean cannot express across modules.
+The callback and `ep_poll_safewake` therefore live in `Wait.lean`, in one
+`mutual` group with `__wake_up_common`, and `Eventpoll.lean` calls them;
+`ep_ptable_queue_proc` likewise lives in `Poll.lean`, where `poll_wait`
+calls it. The group's recursion is bounded by the nesting `ep_loop_check`
+admits, a fact of the state, so the walk carries that bound as fuel
+(`WAKE_NEST_FUEL = EP_MAX_NESTS + 2` heads) and stops `invariant` if it is
+exhausted; `ep_item_poll`/`__ep_eventpoll_poll` carry the same bound. The
+alternative, parameterising the walk by a callback dispatcher, would have
+moved the C's call graph into every wake site's arguments.
+
 `Poll.lean`: `PollTable` is `{ qproc : Option EpiId, key : UInt32 }`, the
 C's function pointer as the one value it can take here (`ep_ptable_queue_proc`
 with its `epq.epi`); `pollWait fid q pt` (`poll.h:42-46`) registers when
@@ -597,6 +610,18 @@ wake comments becoming calls (`Pipe.lean` :297, :372-374, :491-494, :561;
 `EventfdOps.lean` :46-51, :83-84, :116-117); `pipe_write`'s `poll_usage`
 arm (:601) becoming reachable; `fputFinal`'s `eventpoll_release` arm.
 Nothing in `Leanux/WG` changes.
+
+Built (stream S): `__fput` and `__fput_sync` moved from `FileTable.lean` to
+a new `Leanux/FS/Fput.lean` after `Eventpoll.lean`, with the `f_op->release`
+dispatcher, because `__fput` runs `eventpoll_release_file` and an epoll
+file's release, which run `fput` and the whole slice: the module order
+follows the C's call graph. `File.fEp` is `FEp` (NULL, a head's items, a
+set's `refs`); `Kernel` gains the three stores, the statics of
+fs/eventpoll.c and the `ep_pqueue`'s live `epi`; `UserStruct` gains
+`epollWatches`. Line numbers in the mirror are the pristine source's: the
+check reads statements and spans from `.deps/linux`, so a patch of an
+anchored file must keep its line count (every existing one does; section
+16).
 
 ## 5. Environment rules (`Leanux/Env.lean`)
 
@@ -765,6 +790,12 @@ modelled); FIFOs. Each is `unsupported` at its decision.
 - `EPOLLEXCLUSIVE` ending a wake walk: needs a sleeper on `ep->wq` (tier 2).
 - `-EFAULT` from `epoll_put_uevent`: the guest's buffer is valid.
 - the seqcount retry (:581): false with one task.
+- `-EPERM` for a target without `poll` (:2498) [AGENT, coordinator
+  2026-10-12]: every producer the contract has is pollable, and widening it
+  for one arm does not pay; the arm is modelled, its trace dropped. The
+  same holds for `vfs_poll`'s `DEFAULT_POLLMASK` arm (poll.h:90).
+- `ep_attach_file`'s race arm (:1729), a NULL `f_ep` under the lock with no
+  head: `invariant`.
 
 ## 10. Risks
 
@@ -1191,3 +1222,57 @@ witness, the wait-queue service is the right boundary and the cut of the
 rbtree is honest. The blocking item is a fixture fact the design did not
 see; the rest are corrections to section 2 from a closer read of this
 revision, one dropped mechanism (E1) and one dropped sentinel (E2).
+
+## 16. Stream S: the mirror as built [AGENT, stream S 2026-10-12]
+
+`Leanux/FS/Eventpoll.lean` (new), `Leanux/FS/Fput.lean` (new, 4.6), the
+callback group in `Wait.lean` (4.2), `ep_ptable_queue_proc` in `Poll.lean`,
+the state in `Defs.lean`, 139 decisions in `Decision.lean`, the three
+operations in `Syscalls.lean` and `Runner.lean` (an `epoll_wait`'s events
+through the read channel: `bytes` and `digest` over `12·ret` bytes), the
+fixture constants in `Env.lean` (section 5), and in `correspondence/kcov.json`
+the file, 25 functions, two branch-free helpers and four operand exclusions.
+
+Deviations from sections 2-6, each verified against `.deps/linux`:
+
+1. **Line numbering.** The check reads statement and span lines from the
+   pristine tree while the kernel's DWARF is the built source's
+   (`-fdebug-prefix-map`), so every patch of an anchored file keeps its line
+   count: none of the existing hunks changes one. Stream R's kind-308 hook
+   adds an include at line 43 and a call line at 1587, shifting
+   `fs/eventpoll.c` by one and then two. The mirror's table uses pristine
+   numbers (as the check requires) and the site table names the hook at
+   :1585; the hook must be made line-preserving before the claim point: no
+   include (an `extern` declaration on the call's line) and the call on the
+   line of `rb_insert_color_cached` (:1585), then one more oracle build.
+   Until then a check on the e1 oracle attributes the file's points one or
+   two lines off.
+2. **The cut functions are inlined.** `ep_find` and `ep_rbtree_insert` have
+   no symbol (both inlined into `do_epoll_ctl` and `ep_register_epitem`),
+   so they cannot be listed in `functions` (the check fails on a listed
+   function with no symbol); the cut is the absence of decisions inside
+   them, named in the code. `percpu_counter_compare` and
+   `do___read_seqcount_retry` own no instrumentation point of their own and
+   are `branch_free_functions`.
+3. **Decisions added beyond section 2:** `epoll_mutex_lock`'s `nonblock`
+   test and the three `error` tests of its callers; `ep_op_has_event` at
+   its three callers; the `switch (op)` as three case decisions; the
+   `max()` comparisons of the two loop-check walks; `ep_busy_loop_on`'s two
+   terms; `free_ephead`'s test; the scoped `__free(fput)` of `ep_remove`;
+   `epoll_put_uevent`'s two put tests; `WARN_ON_ONCE`'s tests. Operands are
+   declared for the scalar compares the mirror holds (masks, counts, depths,
+   `maxevents`, `res`, the seqcount) and not for pointer tests, nor for the
+   compares of `op`, whose `==` tests and switch may share one comparison
+   in the built code; stream T's first run decides whether they can be
+   declared.
+4. **Allocation sites** take ids 192-195 of epoll's block (A's 70-99 has
+   two ids left before D3's 100); `harness/steer.py ALLOC_SITES` does not
+   name them yet, which stream T's steered traces need.
+5. **The evaluator:** `address` (and seccomp's `program`) joins the site
+   kinds `load_hidden_sites` accepts; an operand exclusion may be declared
+   at several call sites of one decision (`root_user.__count` at
+   `alloc_pipe_info` and at `ep_alloc`).
+6. **Unexercised arms** are listed in 9.3; `ep_poll`'s loop runs once (a
+   second iteration needs a sleep or a busy loop) and `eventpoll_release`
+   runs on an epoll file too (its `refs` list, the outer items).
+

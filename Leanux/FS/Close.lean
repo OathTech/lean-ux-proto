@@ -1,4 +1,5 @@
 import Leanux.FS.File
+import Leanux.FS.Fput
 
 /-!
 # fs/open.c — the `close` syscall

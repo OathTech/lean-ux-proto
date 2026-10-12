@@ -333,6 +333,72 @@ inductive Decision where
   | pipePollReadWait | pipePollWriteWait | pipePollRead | pipePollNotEmpty | pipePollNoWriters
   | pipePollHup | pipePollWrite | pipePollNotFull | pipePollNoReaders
   | eventfdPollCountPositive | eventfdPollCountMax | eventfdPollRoom
+  -- epoll stream S (docs/2026-10-12-epoll-design.md, 4.4): fs/eventpoll.c,
+  -- include/linux/poll.h vfs_poll, include/linux/percpu_counter.h,
+  -- include/linux/seqlock.h, include/linux/eventpoll.h epoll_put_uevent
+  -- do_epoll_create, ep_alloc
+  | doEpollCreateInvalidFlags | epAllocNoMem | doEpollCreateAllocError | doEpollCreateFdError
+  | doEpollCreateFileError
+  -- do_epoll_ctl, epoll_mutex_lock, the epoll_ctl syscall
+  | doEpollCtlEpfdEmpty | doEpollCtlFdEmpty | doEpollCtlCannotPoll | doEpollCtlHasEvent
+  | doEpollCtlSameFile | doEpollCtlNotEpoll | doEpollCtlExclusiveHasEvent | doEpollCtlExclusive
+  | doEpollCtlExclusiveMod | doEpollCtlExclusiveAdd | doEpollCtlExclusiveTargetEpoll | doEpollCtlExclusiveBadBits
+  | epollMutexLockBlocking | doEpollCtlLockError | doEpollCtlIsAdd | doEpollCtlEpfdWatched
+  | doEpollCtlGenMatches | doEpollCtlTargetEpoll | doEpollCtlNestedLockError | doEpollCtlTargetEpollLoop
+  | doEpollCtlEloop | doEpollCtlRelockError | doEpollCtlCaseAdd | doEpollCtlCaseDel | doEpollCtlCaseMod
+  | doEpollCtlAddAbsent | doEpollCtlDelPresent | doEpollCtlModPresent | doEpollCtlModNotExclusive
+  | doEpollCtlFullCheckExit | sysEpollCtlHasEvent | sysEpollCtlCopyFault
+  -- list_file, unlist_file, clear_tfile_check_list, free_ephead
+  | listFileUnlisted | listFileIncNotZeroFailed | unlistFileHasItem | unlistFileItemsRemain
+  | clearTfileCheckListIter | freeEpheadNonNull
+  -- ep_insert, ep_alloc_epitem, percpu_counter_compare, ep_register_epitem, ep_attach_file
+  | epInsertTargetEpoll | percpuCounterCompareGt | percpuCounterCompareLt | epAllocEpitemOverWatches
+  | epAllocEpitemNoMem | epInsertAllocError | epRegisterEpitemTep | epAttachFileIsEpoll | epAttachFileEp
+  | epAttachFileNoFEp | epAttachFileHeadNoMem | epAttachFileFEpNull | epAttachFileRace
+  | epRegisterEpitemAttachError | epRegisterEpitemAttachErrorTep | epRegisterEpitemFullCheck
+  | epRegisterEpitemNotTep | epRegisterEpitemTepUnlock | epInsertRegisterError | epInsertFullCheck
+  | epInsertReversePathFailed | epInsertWakeup | epInsertPwqAllocFailed | epInsertReady | epInsertNotLinked
+  | epInsertWqActive | epInsertPollWaitActive | epInsertPwake
+  -- reverse_path_check, reverse_path_check_proc, path_count_inc
+  | reversePathCheckListIter | reversePathCheckError | reversePathCheckProcTooDeep | reversePathCheckProcIter
+  | reversePathCheckProcUnwatched | reversePathCheckProcError | pathCountIncDepthZero | pathCountIncOverLimit
+  -- ep_ptable_queue_proc, ep_item_poll, epi_fget, vfs_poll, __ep_eventpoll_poll
+  | epPtableQueueProcNoEpi | epPtableQueueProcNoMem | epPtableQueueProcExclusive
+  | epItemPollNoFile | epItemPollNotEpoll | epiFgetIncNotZeroFailed | vfsPollNoPoll
+  | epEventpollPollIter | epEventpollPollReady
+  -- ep_set_busy_poll_napi_id, ep_busy_loop_on
+  | epBusyLoopOnUsecs | epBusyLoopOnNet | epSetBusyPollNotOn
+  -- ep_modify
+  | epModifyWakeup | epModifyNoWakeupSource | epModifyHasWakeupSource | epModifyReady | epModifyNotLinked
+  | epModifyWqActive | epModifyPollWaitActive | epModifyPwake
+  -- ep_remove, ep_unregister_pollwait, ep_remove_wait_queue, ep_remove_file, ep_remove_epi,
+  -- ep_refcount_dec_and_test
+  | epUnregisterPollwaitNext | epRemoveWaitQueueWhead | epRemoveDying | epRemoveNoFile | epRemoveFileSingular
+  | epRemoveFileNotEpoll | epRemoveFileHeadUnlisted | epRemoveEpiLinked | epRemoveRemoved | epRemoveRefcountZero
+  | epRemoveFreeFile | epRefcountDecAndTestNotZero | epRefcountDecAndTestTreeNotEmpty
+  -- ep_clear_and_put, ep_eventpoll_release, eventpoll_release_file
+  | epClearAndPutPollWaitActive | epClearAndPutUnregisterIter | epClearAndPutRemoveIter | epClearAndPutLast
+  | epEventpollReleaseHasEp | eventpollReleaseFileHasFEp | eventpollReleaseFileHasItem
+  | eventpollReleaseFileDispose | eventpollReleaseFileLast
+  -- ep_poll_callback
+  | epPollCallbackDisabled | epPollCallbackKey | epPollCallbackKeyMiss | epPollCallbackScanning
+  | epPollCallbackNotOnOvflist | epPollCallbackNotLinked | epPollCallbackWqActive | epPollCallbackPollWaitActive
+  | epPollCallbackPwake | epPollCallbackNotExclusive | epPollCallbackPollfree
+  -- ep_done_scan
+  | epDoneScanOvflistIter | epDoneScanNotLinked | epDoneScanRdllistNonEmpty | epDoneScanWqActive
+  -- ep_timeout_to_timespec, do_epoll_wait, ep_poll, ep_events_available, the seqcount retry
+  | epTimeoutNegative | epTimeoutZero | doEpollWaitMaxeventsNonpositive | doEpollWaitMaxeventsTooMany
+  | doEpollWaitAccessNotOk | doEpollWaitNoFile | doEpollWaitNotEpoll
+  | epPollHasTimeout | epPollTimeoutNonzero | epPollTimeoutAgain | epPollEavail | epPollSent | epPollTimedOut
+  | epEventsAvailableSeqOdd | epEventsAvailableRdllist | epEventsAvailableScanning | readSeqcountRetryChanged
+  -- ep_send_events, ep_deliver_event, epoll_put_uevent
+  | epSendEventsFatalSignal | epSendEventsIter | epSendEventsFull | epSendEventsDeliverError
+  | epSendEventsFirstError | epDeliverEventNotReady | epDeliverEventPutFault | epollPutUeventEventsFault
+  | epollPutUeventDataFault | epDeliverEventOneshot | epDeliverEventLevelTriggered
+  -- ep_loop_check, ep_loop_check_proc, ep_get_upwards_depth_proc
+  | epLoopCheckTooDeep | epLoopCheckTotalTooDeep | epLoopCheckProcVisited | epLoopCheckProcIter
+  | epLoopCheckProcItemEpoll | epLoopCheckProcSelf | epLoopCheckProcTooDeep | epLoopCheckProcMax
+  | epLoopCheckProcOver | epGetUpwardsDepthProcVisited | epGetUpwardsDepthProcIter | epGetUpwardsDepthProcMax
   deriving Repr, BEq, DecidableEq, Inhabited
 
 /-- A call site of a value comparison whose operand is a guest-wide value the
@@ -343,11 +409,16 @@ inductive OperandExclusion where
   /-- `root_user.__count`, compared by `refcount_inc` inlined into
       `alloc_pipe_info` (fs/pipe.c:794, through `get_current_user`). -/
   | rootUserCount
+  /-- fs/eventpoll.c's boot-global `loop_check_gen` (:395), compared with a
+      set's `gen` at the three sites the design (3.5) excludes: the mirror's
+      counter is relative to the boot's unknown base. -/
+  | loopCheckGen
   deriving Repr, BEq, DecidableEq, Inhabited
 
 /-- The operand's name, as `kcov.json` declares it. -/
 def OperandExclusion.operand : OperandExclusion → String
   | .rootUserCount => "root_user.__count"
+  | .loopCheckGen => "loop_check_gen"
 
 /-- A recorded step: the decision, the outcome the mirror computed, and, for
     value comparisons, the two operands the C compares (as C values; negative
@@ -411,6 +482,9 @@ private def iph := "include/net/ip_tunnels.h"
 private def ech := "include/net/inet_ecn.h"
 private def wrl := "drivers/net/wireguard/ratelimiter.c"
 private def plh := "include/linux/poll.h"
+private def epc := "fs/eventpoll.c"
+private def pch := "include/linux/percpu_counter.h"
+private def sql := "include/linux/seqlock.h"
 
 private def sp (file : String) (lo hi : Nat) : Span := ⟨file, lo, hi⟩
 
@@ -1333,6 +1407,222 @@ def Decision.info : Decision → DecisionInfo
   | .eventfdPollCountPositive => d "eventfd_poll.count_positive" ev 166 [(167, 167)] []
   | .eventfdPollCountMax => d "eventfd_poll.count_ullong_max" ev 168 [(169, 169)] []
   | .eventfdPollRoom => d "eventfd_poll.room" ev 170 [(171, 171)] []
+  -- epoll stream S: fs/eventpoll.c, pristine numbering (docs/2026-10-12-epoll-design.md,
+  -- 4.4; the kind-308 hook keeps the line count, as every edit of an anchored file must). Pointer tests (NULL, `is_file_epoll`, list emptiness, `IS_ERR`) and
+  -- the tests of locals the optimizer threads (`error` and `pwake` after an
+  -- inlined callee) carry no operands; the scalar compares do.
+  -- do_epoll_create (:2399-2439), ep_alloc (:1328-1349)
+  | .doEpollCreateInvalidFlags => d "do_epoll_create.invalid_flags" epc 2407 [(2408, 2408)] [(2412, 2412)]
+  | .epAllocNoMem => d "ep_alloc.no_mem" epc 1332 [(1333, 1333)] [(1335, 1348)]
+  | .doEpollCreateAllocError => d "do_epoll_create.alloc_error" epc 2413 [(2414, 2414)] [(2419, 2419)]
+  | .doEpollCreateFdError => d "do_epoll_create.fd_error" epc 2420 [(2421, 2422)] [(2424, 2424)]
+  | .doEpollCreateFileError => d "do_epoll_create.file_error" epc 2426 [(2427, 2428)] [(2430, 2432)]
+  -- do_epoll_ctl (:2479-2619), epoll_mutex_lock (:2467-2477), the syscall (:2626-2636)
+  | .doEpollCtlEpfdEmpty => d "do_epoll_ctl.epfd_empty" epc 2489 [(2490, 2490)] []
+  | .doEpollCtlFdEmpty => d "do_epoll_ctl.fd_empty" epc 2494 [(2495, 2495)] []
+  | .doEpollCtlCannotPoll => d "do_epoll_ctl.cannot_poll" epc 2498 [(2499, 2499)] []
+  | .doEpollCtlHasEvent => d "do_epoll_ctl.has_event" epc 2502 [(2503, 2503)] []
+  -- `fd_file(f) == fd_file(tf) || !is_file_epoll(fd_file(f))`: the operands share line 2513
+  | .doEpollCtlSameFile => d "do_epoll_ctl.same_file" epc 2511 [] []
+  | .doEpollCtlNotEpoll => d "do_epoll_ctl.not_epoll" epc 2511 [(2512, 2512)] []
+  | .doEpollCtlExclusiveHasEvent => d "do_epoll_ctl.exclusive_has_event" epc 2519 [] []
+  | .doEpollCtlExclusive => d "do_epoll_ctl.exclusive" epc 2519 [(2520, 2524)] []
+  | .doEpollCtlExclusiveMod => d "do_epoll_ctl.exclusive_mod" epc 2520 [(2521, 2521)] [(2522, 2522)]
+  | .doEpollCtlExclusiveAdd => d "do_epoll_ctl.exclusive_add" epc 2522 [] []
+  | .doEpollCtlExclusiveTargetEpoll => d "do_epoll_ctl.exclusive_target_epoll" epc 2522 [] []
+  | .doEpollCtlExclusiveBadBits => d "do_epoll_ctl.exclusive_bad_bits" epc 2523 [(2524, 2524)] []
+  | .epollMutexLockBlocking => d "epoll_mutex_lock.blocking" epc 2470 [(2471, 2472)] [(2474, 2476)]
+  | .doEpollCtlLockError => d "do_epoll_ctl.lock_error" epc 2549 [(2550, 2550)] []
+  | .doEpollCtlIsAdd => d "do_epoll_ctl.op_add" epc 2551 [(2552, 2553)] []
+  -- `f->f_ep || ep->gen == loop_check_gen || is_file_epoll(tf)`: lines 2554-2555
+  | .doEpollCtlEpfdWatched => d "do_epoll_ctl.epfd_watched" epc 2552 [] []
+  | .doEpollCtlGenMatches => d "do_epoll_ctl.gen_matches" epc 2552 [] []
+  | .doEpollCtlTargetEpoll => d "do_epoll_ctl.target_epoll" epc 2553 [(2554, 2555), (2558, 2560)] []
+  | .doEpollCtlNestedLockError => d "do_epoll_ctl.nested_lock_error" epc 2556 [(2557, 2557)] []
+  | .doEpollCtlTargetEpollLoop => d "do_epoll_ctl.target_epoll_loop" epc 2560 [(2561, 2563)] []
+  | .doEpollCtlEloop => d "do_epoll_ctl.eloop" epc 2563 [(2564, 2564)] []
+  | .doEpollCtlRelockError => d "do_epoll_ctl.relock_error" epc 2567 [(2568, 2568)] []
+  -- `switch (op)`: one decision per case, the bodies as their spans
+  | .doEpollCtlCaseAdd => d "do_epoll_ctl.case_add" epc 2580 [(2582, 2587)] []
+  | .doEpollCtlCaseDel => d "do_epoll_ctl.case_del" epc 2580 [(2589, 2599)] []
+  | .doEpollCtlCaseMod => d "do_epoll_ctl.case_mod" epc 2580 [(2601, 2608)] []
+  | .doEpollCtlAddAbsent => d "do_epoll_ctl.add_absent" epc 2582 [(2583, 2584)] [(2586, 2586)]
+  | .doEpollCtlDelPresent => d "do_epoll_ctl.del_present" epc 2589 [(2594, 2595)] [(2597, 2597)]
+  | .doEpollCtlModPresent => d "do_epoll_ctl.mod_present" epc 2601 [(2602, 2602)] [(2607, 2607)]
+  | .doEpollCtlModNotExclusive => d "do_epoll_ctl.mod_not_exclusive" epc 2602 [(2603, 2604)] []
+  | .doEpollCtlFullCheckExit => d "do_epoll_ctl.full_check_exit" epc 2613 [(2614, 2616)] []
+  | .sysEpollCtlHasEvent => d "__do_sys_epoll_ctl.has_event" epc 2631 [] []
+  | .sysEpollCtlCopyFault => d "__do_sys_epoll_ctl.copy_fault" epc 2632 [(2633, 2633)] [(2635, 2635)]
+  -- list_file (:426-444), unlist_file (:447-462), clear_tfile_check_list (:2385-2393), free_ephead (:419-423)
+  | .listFileUnlisted => d "list_file.unlisted" epc 430 [(438, 443)] []
+  | .listFileIncNotZeroFailed => d "list_file.inc_not_zero_failed" epc 438 [(439, 439)] [(440, 442)]
+  | .unlistFileHasItem => d "unlist_file.has_item" epc 451 [(452, 458)] []
+  | .unlistFileItemsRemain => d "unlist_file.items_remain" epc 454 [(455, 455)] []
+  | .clearTfileCheckListIter => d "clear_tfile_check_list.iter" epc 2387 [(2388, 2390)] []
+  | .freeEpheadNonNull => d "free_ephead.non_null" epc 421 [(422, 422)] []
+  -- ep_insert (:1829-1904), ep_alloc_epitem (:1756-1777), percpu_counter_compare
+  -- (percpu_counter.h:171-179, no CONFIG_SMP), ep_register_epitem (:1796-1822),
+  -- ep_attach_file (:1710-1741)
+  | .epInsertTargetEpoll => d "ep_insert.target_epoll" epc 1836 [(1837, 1837)] []
+  | .percpuCounterCompareGt => d "percpu_counter_compare.count_gt" pch 173 [(174, 174)] []
+  | .percpuCounterCompareLt => d "percpu_counter_compare.count_lt" pch 175 [(176, 176)] [(178, 178)]
+  | .epAllocEpitemOverWatches => d "ep_alloc_epitem.over_watches" epc 1759 [(1761, 1761)] [(1762, 1762)]
+  | .epAllocEpitemNoMem => d "ep_alloc_epitem.no_mem" epc 1765 [(1766, 1767)] [(1770, 1776)]
+  | .epInsertAllocError => d "ep_insert.alloc_error" epc 1842 [(1843, 1843)] []
+  | .epRegisterEpitemTep => d "ep_register_epitem.target_epoll" epc 1800 [(1801, 1801)] []
+  | .epAttachFileIsEpoll => d "ep_attach_file.is_epoll" epc 1715 [(1716, 1716)] []
+  | .epAttachFileEp => d "ep_attach_file.ep" epc 1718 [(1719, 1719)] []
+  | .epAttachFileNoFEp => d "ep_attach_file.no_f_ep" epc 1720 [(1722, 1725)] []
+  | .epAttachFileHeadNoMem => d "ep_attach_file.head_no_mem" epc 1723 [(1724, 1724)] [(1725, 1725)]
+  | .epAttachFileFEpNull => d "ep_attach_file.f_ep_null" epc 1728 [(1729, 1735)] []
+  | .epAttachFileRace => d "ep_attach_file.no_head_race" epc 1729 [(1730, 1731)] [(1734, 1735)]
+  | .epRegisterEpitemAttachError => d "ep_register_epitem.attach_error" epc 1804 [(1805, 1809)] []
+  | .epRegisterEpitemAttachErrorTep => d "ep_register_epitem.attach_error_tep" epc 1805 [(1806, 1806)] []
+  -- `full_check && !tep`: the operands share line 1814
+  | .epRegisterEpitemFullCheck => d "ep_register_epitem.full_check" epc 1812 [] []
+  | .epRegisterEpitemNotTep => d "ep_register_epitem.not_tep" epc 1812 [(1813, 1813)] []
+  | .epRegisterEpitemTepUnlock => d "ep_register_epitem.tep_unlock" epc 1817 [(1818, 1818)] []
+  | .epInsertRegisterError => d "ep_insert.register_error" epc 1846 [(1847, 1847)] []
+  -- `full_check && reverse_path_check()`: the operands share line 1852
+  | .epInsertFullCheck => d "ep_insert.full_check" epc 1850 [] []
+  | .epInsertReversePathFailed => d "ep_insert.reverse_path_failed" epc 1850 [(1851, 1852)] []
+  | .epInsertWakeup => d "ep_insert.epollwakeup" epc 1855 [(1856, 1860)] []
+  | .epInsertPwqAllocFailed => d "ep_insert.pwq_alloc_failed" epc 1877 [(1878, 1879)] []
+  -- `revents && !ep_is_linked(epi)`: the operands share line 1889
+  | .epInsertReady => d "ep_insert.ready" epc 1887 [] []
+  | .epInsertNotLinked => d "ep_insert.not_linked" epc 1887 [(1888, 1894)] []
+  | .epInsertWqActive => d "ep_insert.wq_active" epc 1891 [(1892, 1892)] []
+  | .epInsertPollWaitActive => d "ep_insert.poll_wait_active" epc 1893 [(1894, 1894)] []
+  | .epInsertPwake => d "ep_insert.pwake" epc 1900 [(1901, 1901)] []
+  -- reverse_path_check (:1656-1669), reverse_path_check_proc (:1625-1643), path_count_inc (:1606-1614)
+  | .reversePathCheckListIter => d "reverse_path_check.list_iter" epc 1659 [(1660, 1666)] [(1668, 1668)]
+  | .reversePathCheckError => d "reverse_path_check.error" epc 1665 [(1666, 1666)] []
+  | .reversePathCheckProcTooDeep => d "reverse_path_check_proc.too_deep" epc 1629 [(1630, 1630)] []
+  | .reversePathCheckProcIter => d "reverse_path_check_proc.items_iter" epc 1633 [(1634, 1640)] [(1642, 1642)]
+  | .reversePathCheckProcUnwatched => d "reverse_path_check_proc.unwatched_set" epc 1635 [(1636, 1636)] [(1638, 1638)]
+  | .reversePathCheckProcError => d "reverse_path_check_proc.error" epc 1639 [(1640, 1640)] []
+  | .pathCountIncDepthZero => d "path_count_inc.depth_zero" epc 1608 [(1609, 1609)] []
+  | .pathCountIncOverLimit => d "path_count_inc.over_limit" epc 1611 [(1612, 1612)] [(1613, 1613)]
+  -- ep_ptable_queue_proc (:1542-1565), ep_item_poll (:1221-1239), epi_fget (:1009-1016),
+  -- vfs_poll (poll.h:88-93), __ep_eventpoll_poll (:1177-1212)
+  | .epPtableQueueProcNoEpi => d "ep_ptable_queue_proc.no_epi" epc 1547 [(1548, 1548)] []
+  | .epPtableQueueProcNoMem => d "ep_ptable_queue_proc.no_mem" epc 1551 [(1552, 1553)] [(1556, 1564)]
+  | .epPtableQueueProcExclusive => d "ep_ptable_queue_proc.exclusive" epc 1559 [(1560, 1560)] [(1562, 1562)]
+  | .epItemPollNoFile => d "ep_item_poll.no_file" epc 1229 [(1230, 1230)] [(1232, 1238)]
+  | .epItemPollNotEpoll => d "ep_item_poll.not_epoll" epc 1233 [(1234, 1234)] [(1236, 1236)]
+  | .epiFgetIncNotZeroFailed => d "epi_fget.inc_not_zero_failed" epc 1013 [(1014, 1014)] []
+  | .vfsPollNoPoll => d "vfs_poll.no_poll" plh 90 [(91, 91)] [(92, 92)]
+  | .epEventpollPollIter => d "__ep_eventpoll_poll.batch_iter" epc 1195 [(1196, 1196)] [(1210, 1210)]
+  | .epEventpollPollReady => d "__ep_eventpoll_poll.item_ready" epc 1196 [(1197, 1198)] [(1206, 1207)]
+  -- ep_busy_loop_on (:610-613): `busy_poll_usecs || net_busy_loop_on()`, one line;
+  -- ep_set_busy_poll_napi_id (:656-685)
+  | .epBusyLoopOnUsecs => d "ep_busy_loop_on.usecs" epc 612 [] []
+  | .epBusyLoopOnNet => d "ep_busy_loop_on.net" epc 612 [] []
+  | .epSetBusyPollNotOn => d "ep_set_busy_poll_napi_id.not_busy" epc 663 [(664, 664)] [(666, 666)]
+  -- ep_modify (:1912-1980)
+  | .epModifyWakeup => d "ep_modify.epollwakeup" epc 1927 [(1928, 1929)] [(1930, 1930)]
+  | .epModifyNoWakeupSource => d "ep_modify.no_wakeup_source" epc 1928 [(1929, 1929)] []
+  | .epModifyHasWakeupSource => d "ep_modify.has_wakeup_source" epc 1930 [(1931, 1931)] []
+  | .epModifyReady => d "ep_modify.ready" epc 1960 [(1961, 1972)] []
+  | .epModifyNotLinked => d "ep_modify.not_linked" epc 1962 [(1963, 1970)] []
+  | .epModifyWqActive => d "ep_modify.wq_active" epc 1967 [(1968, 1968)] []
+  | .epModifyPollWaitActive => d "ep_modify.poll_wait_active" epc 1969 [(1970, 1970)] []
+  | .epModifyPwake => d "ep_modify.pwake" epc 1976 [(1977, 1977)] []
+  -- ep_unregister_pollwait (:845-854), ep_remove_wait_queue (:824-838), ep_remove (:1075-1100),
+  -- ep_remove_file (:1024-1044), ep_remove_epi (:1047-1069), ep_refcount_dec_and_test (:973-979)
+  | .epUnregisterPollwaitNext => d "ep_unregister_pollwait.next" epc 849 [(850, 852)] []
+  | .epRemoveWaitQueueWhead => d "ep_remove_wait_queue.whead" epc 835 [(836, 836)] []
+  | .epRemoveDying => d "ep_remove.dying" epc 1084 [(1085, 1085)] []
+  | .epRemoveNoFile => d "ep_remove.no_file" epc 1092 [(1093, 1093)] []
+  | .epRemoveFileSingular => d "ep_remove_file.singular" epc 1031 [(1033, 1040)] []
+  | .epRemoveFileNotEpoll => d "ep_remove_file.not_epoll" epc 1034 [(1036, 1038)] []
+  | .epRemoveFileHeadUnlisted => d "ep_remove_file.head_unlisted" epc 1037 [(1038, 1038)] []
+  | .epRemoveEpiLinked => d "ep_remove_epi.linked" epc 1053 [(1054, 1054)] []
+  | .epRemoveRemoved => d "ep_remove.removed" epc 1098 [(1099, 1099)] []
+  | .epRemoveRefcountZero => d "ep_remove.refcount_zero" epc 1099 [] []
+  -- the scoped `__free(fput)` of :1077, `if (_T) fput(_T)` at the return
+  | .epRemoveFreeFile => d "ep_remove.free_file" epc 1076 [] []
+  | .epRefcountDecAndTestNotZero => d "ep_refcount_dec_and_test.not_zero" epc 974 [(975, 975)] [(977, 978)]
+  | .epRefcountDecAndTestTreeNotEmpty => d "ep_refcount_dec_and_test.tree_not_empty" epc 977 [] []
+  -- ep_clear_and_put (:1103-1141), ep_eventpoll_release (:1165-1172), eventpoll_release_file (:1288-1325)
+  | .epClearAndPutPollWaitActive => d "ep_clear_and_put.poll_wait_active" epc 1108 [(1109, 1109)] []
+  | .epClearAndPutUnregisterIter => d "ep_clear_and_put.unregister_iter" epc 1116 [(1117, 1120)] []
+  | .epClearAndPutRemoveIter => d "ep_clear_and_put.remove_iter" epc 1131 [(1132, 1135)] []
+  | .epClearAndPutLast => d "ep_clear_and_put.last_reference" epc 1139 [(1140, 1140)] []
+  | .epEventpollReleaseHasEp => d "ep_eventpoll_release.has_ep" epc 1168 [(1169, 1169)] []
+  -- `file->f_ep && file->f_ep->first`: the operands share line 1301
+  | .eventpollReleaseFileHasFEp => d "eventpoll_release_file.has_f_ep" epc 1300 [] []
+  | .eventpollReleaseFileHasItem => d "eventpoll_release_file.has_item" epc 1300 [(1301, 1322)] [(1324, 1324)]
+  -- `dispose && ep_refcount_dec_and_test(ep)`: the operands share line 1321
+  | .eventpollReleaseFileDispose => d "eventpoll_release_file.dispose" epc 1320 [] []
+  | .eventpollReleaseFileLast => d "eventpoll_release_file.last_reference" epc 1320 [(1321, 1321)] []
+  -- ep_poll_callback (:1430-1534)
+  | .epPollCallbackDisabled => d "ep_poll_callback.disabled" epc 1448 [(1449, 1449)] []
+  -- `pollflags && !(pollflags & epi->event.events)`: the operands share line 1458
+  | .epPollCallbackKey => d "ep_poll_callback.key" epc 1457 [] []
+  | .epPollCallbackKeyMiss => d "ep_poll_callback.key_miss" epc 1457 [(1458, 1458)] []
+  | .epPollCallbackScanning => d "ep_poll_callback.scanning" epc 1466 [(1467, 1467)] [(1472, 1472)]
+  | .epPollCallbackNotOnOvflist => d "ep_poll_callback.not_on_ovflist" epc 1467 [(1468, 1470)] []
+  | .epPollCallbackNotLinked => d "ep_poll_callback.not_linked" epc 1472 [(1474, 1475)] []
+  | .epPollCallbackWqActive => d "ep_poll_callback.wq_active" epc 1482 [(1483, 1502)] []
+  | .epPollCallbackPollWaitActive => d "ep_poll_callback.poll_wait_active" epc 1504 [(1505, 1505)] []
+  | .epPollCallbackPwake => d "ep_poll_callback.pwake" epc 1511 [(1512, 1512)] []
+  | .epPollCallbackNotExclusive => d "ep_poll_callback.not_exclusive" epc 1514 [(1515, 1515)] []
+  | .epPollCallbackPollfree => d "ep_poll_callback.pollfree" epc 1517 [(1523, 1530)] []
+  -- ep_done_scan (:916-962)
+  | .epDoneScanOvflistIter => d "ep_done_scan.ovflist_iter" epc 925 [(926, 940)] []
+  | .epDoneScanNotLinked => d "ep_done_scan.not_linked" epc 932 [(937, 938)] []
+  | .epDoneScanRdllistNonEmpty => d "ep_done_scan.rdllist_nonempty" epc 956 [(957, 957)] []
+  | .epDoneScanWqActive => d "ep_done_scan.wq_active" epc 957 [(958, 958)] []
+  -- ep_timeout_to_timespec (:2105-2123), do_epoll_wait (:2644-2682), ep_poll (:2163-2282),
+  -- ep_events_available (:577-582), do___read_seqcount_retry (seqlock.h:365-369)
+  | .epTimeoutNegative => d "ep_timeout_to_timespec.negative" epc 2108 [(2109, 2109)] []
+  | .epTimeoutZero => d "ep_timeout_to_timespec.zero" epc 2111 [(2112, 2114)] [(2117, 2122)]
+  -- `maxevents <= 0 || maxevents > EP_MAX_EVENTS`: the operands share line 2652
+  | .doEpollWaitMaxeventsNonpositive => d "do_epoll_wait.maxevents_nonpositive" epc 2650 [] []
+  | .doEpollWaitMaxeventsTooMany => d "do_epoll_wait.maxevents_too_many" epc 2650 [(2651, 2651)] []
+  | .doEpollWaitAccessNotOk => d "do_epoll_wait.access_not_ok" epc 2654 [(2655, 2655)] []
+  | .doEpollWaitNoFile => d "do_epoll_wait.no_file" epc 2659 [(2660, 2660)] []
+  | .doEpollWaitNotEpoll => d "do_epoll_wait.not_epoll" epc 2667 [(2668, 2668)] [(2674, 2677)]
+  -- `timeout && (timeout->tv_sec | timeout->tv_nsec)`: the operands share line 2173
+  | .epPollHasTimeout => d "ep_poll.has_timeout" epc 2171 [] []
+  | .epPollTimeoutNonzero => d "ep_poll.timeout_nonzero" epc 2171 [(2172, 2174)] []
+  | .epPollTimeoutAgain => d "ep_poll.timeout_again" epc 2175 [(2180, 2180)] []
+  | .epPollEavail => d "ep_poll.eavail" epc 2194 [(2200, 2200)] []
+  | .epPollSent => d "ep_poll.sent" epc 2201 [(2202, 2202)] []
+  | .epPollTimedOut => d "ep_poll.timed_out" epc 2205 [(2206, 2206)] [(2208, 2208)]
+  | .epEventsAvailableSeqOdd => d "ep_events_available.seq_odd" epc 578 [] []
+  -- `!list_empty_careful(..) || ep_is_scanning(ep) || read_seqcount_retry(..)`: lines 581-582
+  | .epEventsAvailableRdllist => d "ep_events_available.rdllist_nonempty" epc 580 [] []
+  | .epEventsAvailableScanning => d "ep_events_available.scanning" epc 580 [] []
+  | .readSeqcountRetryChanged => d "do___read_seqcount_retry.changed" sql 368 [] []
+  -- ep_send_events (:2060-2101), ep_deliver_event (:1999-2056), epoll_put_uevent (eventpoll.h:78-86)
+  | .epSendEventsFatalSignal => d "ep_send_events.fatal_signal" epc 2071 [(2072, 2072)] []
+  | .epSendEventsIter => d "ep_send_events.batch_iter" epc 2083 [(2084, 2096)] [(2098, 2098)]
+  | .epSendEventsFull => d "ep_send_events.res_at_max" epc 2086 [(2087, 2087)] [(2089, 2089)]
+  | .epSendEventsDeliverError => d "ep_send_events.deliver_error" epc 2090 [(2091, 2093)] [(2095, 2095)]
+  | .epSendEventsFirstError => d "ep_send_events.first_error" epc 2091 [(2092, 2092)] []
+  | .epDeliverEventNotReady => d "ep_deliver_event.not_ready" epc 2026 [(2027, 2027)] [(2029, 2029)]
+  | .epDeliverEventPutFault => d "ep_deliver_event.put_fault" epc 2030 [(2036, 2038)] [(2040, 2040)]
+  -- `__put_user(revents, ..) || __put_user(data, ..)`: lines 81-82
+  | .epollPutUeventEventsFault => d "epoll_put_uevent.put_events_fault" eph 81 [] []
+  | .epollPutUeventDataFault => d "epoll_put_uevent.put_data_fault" eph 82 [(83, 83)] [(85, 85)]
+  | .epDeliverEventOneshot => d "ep_deliver_event.oneshot" epc 2042 [(2043, 2043)] []
+  | .epDeliverEventLevelTriggered => d "ep_deliver_event.level_triggered" epc 2044 [(2052, 2053)] []
+  -- ep_loop_check (:2365-2382), ep_loop_check_proc (:2297-2334), ep_get_upwards_depth_proc (:2340-2351)
+  | .epLoopCheckTooDeep => d "ep_loop_check.too_deep" epc 2374 [(2375, 2375)] [(2378, 2378)]
+  | .epLoopCheckTotalTooDeep => d "ep_loop_check.total_too_deep" epc 2381 [] []
+  | .epLoopCheckProcVisited => d "ep_loop_check_proc.visited" epc 2302 [(2303, 2303)] [(2305, 2306)]
+  | .epLoopCheckProcIter => d "ep_loop_check_proc.items_iter" epc 2307 [(2308, 2308)] [(2330, 2333)]
+  | .epLoopCheckProcItemEpoll => d "ep_loop_check_proc.item_epoll" epc 2309 [(2310, 2311)] [(2327, 2327)]
+  -- `ep_tovisit == inserting_into || depth > EP_MAX_NESTS`: the operands share line 2314
+  | .epLoopCheckProcSelf => d "ep_loop_check_proc.inserting_into" epc 2312 [] []
+  | .epLoopCheckProcTooDeep => d "ep_loop_check_proc.too_deep" epc 2312 [(2313, 2313)] [(2315, 2315)]
+  | .epLoopCheckProcMax => d "ep_loop_check_proc.max_result" epc 2315 [] []
+  | .epLoopCheckProcOver => d "ep_loop_check_proc.result_over" epc 2316 [(2317, 2317)] []
+  | .epGetUpwardsDepthProcVisited => d "ep_get_upwards_depth_proc.visited" epc 2344 [(2345, 2345)] []
+  | .epGetUpwardsDepthProcIter => d "ep_get_upwards_depth_proc.refs_iter" epc 2346 [(2347, 2347)] [(2348, 2350)]
+  | .epGetUpwardsDepthProcMax => d "ep_get_upwards_depth_proc.max_result" epc 2347 [] []
   -- wg_ratelimiter_init (ratelimiter.c:158-203): `++init_refcnt != 1` jumps to
   -- the shared `out:`; the failure arms reach the shared `err:` labels
   | .ratelimiterInitNotFirst => d "wg_ratelimiter_init.refcnt_not_one" wrl 161 [] [(164, 192)]
@@ -1889,6 +2179,35 @@ def Decision.comparison : Decision → Option Comparison
   | .eventfdPollCountPositive => some ⟨.gt, true, none, false⟩
   | .eventfdPollCountMax => some ⟨.eq, true, none, false⟩
   | .eventfdPollRoom => some ⟨.lt, true, none, false⟩
+  -- epoll stream S: the scalar compares of fs/eventpoll.c (design 4.4);
+  -- `op`'s compares stay plain: the switch at :2582 and the `==` tests of a
+  -- local parameter may share one comparison in the built code
+  | .doEpollCreateInvalidFlags => some ⟨.flag, true, none, false⟩
+  | .doEpollCreateFdError => some ⟨.lt, true, none, false⟩
+  | .doEpollCtlExclusive | .doEpollCtlExclusiveBadBits | .doEpollCtlModNotExclusive => some ⟨.flag, true, none, false⟩
+  | .doEpollCtlFullCheckExit | .epRegisterEpitemFullCheck | .epInsertFullCheck => some ⟨.ne, true, none, false⟩
+  | .doEpollCtlGenMatches | .epLoopCheckProcVisited | .epGetUpwardsDepthProcVisited => some ⟨.eq, false, none, false⟩
+  | .percpuCounterCompareGt => some ⟨.gt, false, none, false⟩
+  | .percpuCounterCompareLt => some ⟨.lt, false, none, false⟩
+  | .epInsertWakeup | .epModifyWakeup | .epPtableQueueProcExclusive => some ⟨.flag, true, none, false⟩
+  | .epInsertReady | .epEventpollPollReady | .epModifyReady => some ⟨.ne, true, none, false⟩
+  | .reversePathCheckError => some ⟨.ne, true, none, false⟩
+  | .reversePathCheckProcTooDeep | .epLoopCheckTooDeep | .epLoopCheckTotalTooDeep | .epLoopCheckProcTooDeep
+  | .epLoopCheckProcOver => some ⟨.gt, true, none, false⟩
+  | .pathCountIncDepthZero => some ⟨.eq, true, none, false⟩
+  | .pathCountIncOverLimit | .epLoopCheckProcMax | .epGetUpwardsDepthProcMax => some ⟨.gt, false, none, false⟩
+  | .epBusyLoopOnUsecs => some ⟨.ne, true, none, false⟩
+  | .epPollCallbackDisabled | .epPollCallbackKeyMiss | .epPollCallbackNotExclusive | .epPollCallbackPollfree
+  | .epDeliverEventOneshot | .epDeliverEventLevelTriggered | .epEventsAvailableSeqOdd => some ⟨.flag, true, none, false⟩
+  | .epPollCallbackKey => some ⟨.ne, true, none, false⟩
+  | .epTimeoutNegative => some ⟨.lt, true, none, false⟩
+  | .epTimeoutZero => some ⟨.eq, true, none, false⟩
+  | .doEpollWaitMaxeventsNonpositive => some ⟨.le, true, none, false⟩
+  | .doEpollWaitMaxeventsTooMany => some ⟨.gt, true, none, false⟩
+  | .epPollTimeoutNonzero => some ⟨.ne, true, none, false⟩
+  | .readSeqcountRetryChanged => some ⟨.ne, false, none, false⟩
+  | .epSendEventsFull => some ⟨.ge, false, none, false⟩
+  | .epDeliverEventNotReady => some ⟨.eq, true, none, false⟩
   | _ => none
 
 /-- Decisions that one operation may evaluate more than once: those inside
@@ -2038,6 +2357,38 @@ def Decision.repeatable : Decision → Bool
   | .pollWaitQproc | .pipePollReadWait | .pipePollWriteWait | .pipePollRead | .pipePollNotEmpty
   | .pipePollNoWriters | .pipePollHup | .pipePollWrite | .pipePollNotFull | .pipePollNoReaders
   | .eventfdPollCountPositive | .eventfdPollCountMax | .eventfdPollRoom => true
+  -- epoll stream S: the tree walks of ep_clear_and_put, the loop and
+  -- reverse-path checks, the batch loops of ep_send_events and
+  -- __ep_eventpoll_poll, the callback per wait-queue entry, and the helpers
+  -- each item runs (epi_fget, ep_item_poll, vfs_poll, fput, ep_remove and
+  -- its parts, the refcount and the wait-queue walks' decisions);
+  -- epoll_mutex_lock three times per epoll_ctl, free_ephead at three sites
+  | .epollMutexLockBlocking | .freeEpheadNonNull | .listFileUnlisted | .listFileIncNotZeroFailed
+  | .unlistFileHasItem | .unlistFileItemsRemain | .clearTfileCheckListIter
+  | .epAttachFileIsEpoll | .epAttachFileEp | .epAttachFileNoFEp | .epAttachFileHeadNoMem | .epAttachFileFEpNull
+  | .epAttachFileRace
+  | .reversePathCheckListIter | .reversePathCheckError | .reversePathCheckProcTooDeep | .reversePathCheckProcIter
+  | .reversePathCheckProcUnwatched | .reversePathCheckProcError | .pathCountIncDepthZero | .pathCountIncOverLimit
+  | .epItemPollNoFile | .epItemPollNotEpoll | .epiFgetIncNotZeroFailed | .vfsPollNoPoll
+  | .epEventpollPollIter | .epEventpollPollReady
+  | .epBusyLoopOnUsecs | .epBusyLoopOnNet | .epSetBusyPollNotOn
+  | .epUnregisterPollwaitNext | .epRemoveWaitQueueWhead | .epRemoveDying | .epRemoveNoFile
+  | .epRemoveFileSingular | .epRemoveFileNotEpoll | .epRemoveFileHeadUnlisted | .epRemoveEpiLinked
+  | .epRemoveRemoved | .epRemoveRefcountZero | .epRemoveFreeFile | .epRefcountDecAndTestNotZero
+  | .epRefcountDecAndTestTreeNotEmpty
+  | .epClearAndPutUnregisterIter | .epClearAndPutRemoveIter
+  | .eventpollReleaseFileHasFEp | .eventpollReleaseFileHasItem | .eventpollReleaseFileDispose
+  | .eventpollReleaseFileLast
+  | .epPollCallbackDisabled | .epPollCallbackKey | .epPollCallbackKeyMiss | .epPollCallbackScanning
+  | .epPollCallbackNotOnOvflist | .epPollCallbackNotLinked | .epPollCallbackWqActive
+  | .epPollCallbackPollWaitActive | .epPollCallbackPwake | .epPollCallbackNotExclusive | .epPollCallbackPollfree
+  | .epDoneScanOvflistIter | .epDoneScanNotLinked | .epDoneScanRdllistNonEmpty | .epDoneScanWqActive
+  | .epSendEventsIter | .epSendEventsFull | .epSendEventsDeliverError | .epSendEventsFirstError
+  | .epDeliverEventNotReady | .epDeliverEventPutFault | .epollPutUeventEventsFault | .epollPutUeventDataFault
+  | .epDeliverEventOneshot | .epDeliverEventLevelTriggered
+  | .epLoopCheckProcVisited | .epLoopCheckProcIter | .epLoopCheckProcItemEpoll | .epLoopCheckProcSelf
+  | .epLoopCheckProcTooDeep | .epLoopCheckProcMax | .epLoopCheckProcOver
+  | .epGetUpwardsDepthProcVisited | .epGetUpwardsDepthProcIter | .epGetUpwardsDepthProcMax => true
   | _ => false
 
 /-- Every decision, enumerated through the constructor index. -/

@@ -233,3 +233,13 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   kind-308 hook, presented at the claim point's merge signoff with the new
   identity. The design is revised to v2 (section 14, the audit response to
   section 15) by the fork, every corrected line re-read in 6.12.110.
+- **2026-10-12 [AGENT, stream S]** The epoll mirror's wake callback and
+  `ep_poll_safewake` live in `Leanux/FS/Wait.lean` in one mutual group with
+  the wait-queue walk, fuel-bounded by the nesting the loop check admits;
+  `ep_ptable_queue_proc` in `Poll.lean`; `__fput`/`__fput_sync` and the
+  release dispatcher in a new `Leanux/FS/Fput.lean` after the epoll mirror:
+  the module order follows the C's call graph (design 4.2, 4.6). The
+  mirror's line numbers are the pristine source's, which the check reads;
+  the kind-308 hook must keep fs/eventpoll.c's line count before the claim
+  point (design 16.1), a kernel-patch change put to the coordinator, not
+  made here.

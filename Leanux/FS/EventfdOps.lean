@@ -23,6 +23,7 @@ def eventfdCtxOf (file : File) : M CtxId :=
   match file.privateData with
   | some (.eventfdCtx id) => return id
   | some (.pipe _) => invariant "eventfd operation on a pipe file"
+  | some (.eventpoll _) => invariant "eventfd operation on an epoll file"
   | none => invariant "eventfd operation on a file with NULL private_data"
 
 /-- eventfd_free_ctx (eventfd.c:82-87). -/
@@ -177,35 +178,36 @@ def pipefifoFops : Fops :=
   { readIter := true, writeIter := true, release := true, fasync := true, poll := true,
     unlockedIoctl := true, «open» := true, spliceWrite := true }
 
+/-- `eventpoll_fops` (fs/eventpoll.c:1271-1280): release,
+    poll, llseek = noop_llseek, unlocked_ioctl, compat_ioctl, show_fdinfo;
+    built in. -/
+def eventpollFops : Fops :=
+  { llseek := true, release := true, poll := true, unlockedIoctl := true }
+
 def fopsOf : Option FopsId → M Fops
   | some .eventfd => return eventfdFops
   | some .pipefifo => return pipefifoFops
+  | some .eventpoll => return eventpollFops
   -- W8: a fixture socket's socket_file_ops has a release (sock_close); the
   -- pin's ns_file_operations has none (the namespace goes with the dentry)
   | some (.fixture name) => return { release := name != "netns-pin" }
   | none => invariant "file->f_op is NULL"
 
-def fopRelease (fid : FileId) : Option FopsId → M Int
-  | some .eventfd => eventfdRelease fid
-  | some .pipefifo => do
-    -- pipe_release(inode, file): `inode` is the file's pipefs inode
-    match (← getFile fid).fInode with
-    | some (.pipefs ino) => pipeRelease ino fid
-    | _ => invariant "a pipefifo file whose f_inode is not a pipefs inode"
-  -- W8: sock_close (net/socket.c, unanchored): the socket's release and its
-  -- RCU-deferred put_net are a cut point
-  | some (.fixture _) => return 0
-  | none => invariant "file->f_op is NULL"
+-- `fopRelease`, the `f_op->release` dispatcher, is in `Leanux.FS.Fput` with
+-- `__fput`: the eventpoll arm needs the epoll mirror, which follows this
+-- module (stream S).
 
 def fopReadIter (iocb : Kiocb) (count : Nat) : Option FopsId → M Int
   | some .eventfd => eventfdRead iocb count
   | some .pipefifo => pipeRead iocb count
+  | some .eventpoll => invariant "eventpoll_fops has no read_iter (FMODE_CAN_READ is never set)"
   | some (.fixture name) => unsupported s!"read_iter of fixture file {name}"
   | none => invariant "file->f_op is NULL"
 
 def fopWrite (fid : FileId) (buf : ByteArray) (count : Nat) : Option FopsId → M Int
   | some .eventfd => eventfdWrite fid buf count
   | some .pipefifo => invariant "pipefifo_fops has no write (fopsOf routes it to write_iter)"
+  | some .eventpoll => invariant "eventpoll_fops has no write (FMODE_CAN_WRITE is never set)"
   | some (.fixture name) => unsupported s!"write of fixture file {name}"
   | none => invariant "file->f_op is NULL"
 
@@ -214,29 +216,32 @@ def fopWrite (fid : FileId) (buf : ByteArray) (count : Nat) : Option FopsId → 
 def fopWriteIter (iocb : Kiocb) («from» : IovIter) : Option FopsId → M Int
   | some .pipefifo => pipeWrite iocb «from»
   | some .eventfd => invariant "eventfd_fops has no write_iter (fopsOf routes it to write)"
+  | some .eventpoll => invariant "eventpoll_fops has no write_iter (FMODE_CAN_WRITE is never set)"
   | some (.fixture name) => unsupported s!"write_iter of fixture file {name}"
   | none => invariant "file->f_op is NULL"
 
-/-- `f_op->poll(file, pt)`. -/
+/-- `f_op->poll(file, pt)`. An epoll file's `ep_eventpoll_poll` is reached
+    through `vfs_poll` only from `select`/`poll` (outside the domain):
+    `ep_item_poll` dispatches an epoll target to `__ep_eventpoll_poll`
+    itself (fs/eventpoll.c:1233-1236), in `Leanux.FS.Eventpoll`. -/
 def fopPoll (fid : FileId) (pt : PollTable) : Option FopsId → M UInt32
   | some .eventfd => eventfdPoll fid pt
   | some .pipefifo => pipePoll fid pt
+  | some .eventpoll => unsupported "ep_eventpoll_poll through vfs_poll (select/poll on an epoll file)"
   | some (.fixture name) => unsupported s!"poll of fixture file {name}"
   | none => invariant "file->f_op is NULL"
 
-/-- vfs_poll (include/linux/poll.h:88-93). A fixture file's `f_op` is
-    modelled for release only (`fopsOf`), so its poll stops before the test.
-    The `!file->f_op->poll` test (:90) is reached only from `ep_item_poll`
-    (fs/eventpoll.c, stream S) and is plain control flow until that function
-    is listed in `correspondence/kcov.json`: a declared decision must have an
-    instrumented C function (`witness_table`), and `vfs_poll` is inlined
-    nowhere listed yet. Its `DEFAULT_POLLMASK` arm is the design's `/dev/null`
-    target. -/
+/-- vfs_poll (include/linux/poll.h:88-93), reached from `ep_item_poll`
+    (fs/eventpoll.c:1234). A fixture file's `f_op` is modelled for release
+    only (`fopsOf`), so its poll stops before the test. The
+    `DEFAULT_POLLMASK` arm (:90-91) needs a pollable-by-default target, which
+    `do_epoll_ctl`'s `file_can_poll` excludes for every target the contract
+    has (design 9.3): modelled, unexercised. -/
 def vfsPoll (fid : FileId) (pt : PollTable) : M UInt32 := do
   let file ← getFile fid
   if let some (.fixture name) := file.fOp then
     unsupported s!"vfs_poll of fixture file {name} (f_op modelled for release only)"
-  if !(← fopsOf file.fOp).poll then return DEFAULT_POLLMASK
+  if ← branch .vfsPollNoPoll (!(← fopsOf file.fOp).poll) then return DEFAULT_POLLMASK
   fopPoll fid pt file.fOp
 
 end Leanux

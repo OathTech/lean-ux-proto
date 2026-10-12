@@ -5,14 +5,15 @@ import Leanux.FS.Inode
 # fs/file_table.c — `struct file` allocation and release
 
 `alloc_empty_file`/`init_file`, `file_init_path`, `alloc_file`,
-`alloc_file_pseudo`, `fput`, `__fput_sync`, `__fput` and `file_free`.
+`alloc_file_pseudo`, `fput` and `file_free`; `__fput` and `__fput_sync` are in
+`Leanux.FS.Fput`, after the epoll mirror they call into.
 
 Configured-program notes (this `.config`): `CONFIG_SECURITY=n`, so every
 `security_*` hook is the constant 0 and its error branch does not exist in the
 built code; fsnotify and dnotify are compiled out. `CONFIG_EPOLL=y` and
-`CONFIG_FILE_LOCKING=y`: `eventpoll_release`, `locks_remove_file` and
-`locks_remove_posix` are cut points (contract: the file is in no epoll set and
-holds no locks, so they change no mirror state).
+`CONFIG_FILE_LOCKING=y`: `locks_remove_file` and `locks_remove_posix` are cut
+points (contract: the file holds no locks); `eventpoll_release` is mirrored
+(`Leanux.FS.Fput`, `Leanux.FS.Eventpoll`).
 -/
 
 namespace Leanux
@@ -131,44 +132,9 @@ def putFileAccess (f : File) : M Unit := do
   else if ← branchCmp .putFileAccessWriter (hasFlag f.fMode FMODE_WRITER) (f.fMode &&& FMODE_WRITER).toNat 0 then
     unsupported "file_put_write_access"
 
-/-- __fput (file_table.c:442-482): the release of the last reference. -/
-def fputFinal (fid : FileId) : M Unit := do
-  let f ← getFile fid
-  if ← branchCmp .fputFinalNotOpened (!hasFlag f.fMode FMODE_OPENED) (f.fMode &&& FMODE_OPENED).toNat 0 then
-    fileFree fid
-    return
-  -- might_sleep(); fsnotify_close (compiled out)
-  -- eventpoll_release (include/linux/eventpoll.h:34-54)
-  if ← branch .eventpollReleaseLinked f.fEp then
-    unsupported "eventpoll_release_file"
-  -- locks_remove_file: a cut point (no locks); security_file_release (compiled out)
-  let fop ← fopsOf f.fOp
-  if ← branchCmp .fputFinalFasync (hasFlag f.fFlags FASYNC) (f.fFlags &&& FASYNC).toNat 0 then
-    unsupported "__fput with FASYNC"
-  if ← branch .fputFinalRelease fop.release then
-    _ ← fopRelease fid f.fOp
-  -- `S_ISCHR(inode->i_mode) && inode->i_cdev != NULL && !(mode & FMODE_PATH)`
-  if ← branch .fputFinalCharDevice (← inodeIsChr f.fInode) then
-    _ ← branch .fputFinalHasCdev true
-    _ ← branch .fputFinalNotPath (!hasFlag f.fMode FMODE_PATH)
-    unsupported "cdev_put"
-  -- fops_put: eventfd_fops has no module owner
-  -- file_f_owner_release (fcntl.c:116-125)
-  if ← branch .fileOwnerRelease f.fOwner then
-    unsupported "file_f_owner_release with an owner"
-  putFileAccess f
-  -- dput(dentry): a pipe file's pseudo dentry counts its references
-  -- (`dputPipefs`); the anonymous inode's dentry is a cut point
-  if let some (.pipefs id) := f.fInode then dputPipefs id
-  -- W8: the pin's nsfs dentry goes with the file's last reference
-  -- (`nsfs_evict` -> `ns->ops->put` -> `put_net`): the creating namespace's
-  -- last reference, by the fixture's order (the sockets' RCU-deferred puts
-  -- ran first), so `cleanup_net` is queued here, with its queue record
-  if let some (.fixture "netns-pin") := f.fInode then queueDeviceWork .netnsCleanup
-  if ← branchCmp .fputFinalNeedUnmount (hasFlag f.fMode FMODE_NEED_UNMOUNT) (f.fMode &&& FMODE_NEED_UNMOUNT).toNat 0 then
-    unsupported "dissolve_on_fput"
-  -- mntput(mnt)
-  fileFree fid
+-- `__fput` and `__fput_sync` are in `Leanux.FS.Fput`, after the epoll
+-- mirror: `__fput` runs `eventpoll_release_file` and `ep_eventpoll_release`,
+-- which run `fput` (below) and the whole epoll slice (stream S).
 
 /-- fput (file_table.c:517-540). The last reference queues `____fput` as task
     work, run on return to user mode (see `Leanux.Syscalls`). -/
@@ -192,12 +158,5 @@ def fput (fid : FileId) : M Unit := do
       modifyK fun k => { k with task := { k.task with taskWorks := fid :: k.task.taskWorks } }
       return
     unsupported "delayed fput"
-
-/-- __fput_sync (file_table.c:550-554). -/
-def fputSync (fid : FileId) : M Unit := do
-  let f ← getFile fid
-  setFile fid { f with fCount := f.fCount - 1 }
-  if ← branch .fputSyncLast (f.fCount == 1) then
-    fputFinal fid
 
 end Leanux
