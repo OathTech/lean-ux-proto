@@ -33,9 +33,13 @@ inductive Operation where
   | wgSet (attrs : WG.DeviceAttrs)
   | wgGet
   | wgUp
-  | wgXmit (family addr : Nat) (payload : List UInt8)
+  /-- `tos` (W5): the sender's TOS / traffic class for this send: the inner
+      TOS of the transmitted packet. -/
+  | wgXmit (family addr : Nat) (payload : List UInt8) (tos : Nat)
   | wgObserve
-  | wgInject (family port : Nat) (message : List UInt8)
+  /-- `tos` (W5): the outer DS field of the injection; `ll`: sent from the
+      link-local address on lo (`from: "ll"`, family 6). -/
+  | wgInject (family port : Nat) (message : List UInt8) (tos : Nat) (ll : Bool)
   /-- E-B: an io_uring flood of `count` invalid-MAC1 initiations to wg0's port,
       with `messages` valid-MAC1 initiations submitted first (processed under
       load via the queue depth, their cookie replies checked byte-exact);
@@ -172,6 +176,15 @@ private def subsetFields (j : Json) (allowed : List String) (what : String) : Ex
 
 private def optField (j : Json) (name : String) : Option Json := (j.getObjVal? name).toOption
 
+/-- W5: the optional `tos` of a `wg_inject` or `wg_xmit` (0-255; 0 absent). -/
+private def senderTos (j : Json) : Except String Nat :=
+  match j.getObjVal? "tos" with
+  | .ok v => do
+    let n ← v.getNat?
+    if n > 255 then throw "tos: expected 0-255"
+    pure n
+  | .error _ => pure 0
+
 private def boolField (j : Json) (name : String) : Except String Bool := do
   match optField j name with
   | none => return false
@@ -285,15 +298,26 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
     fields j ["op"]
     return .wgDelete
   | "wg_inject" =>
-    fields j ["op", "family", "port", "message"]
+    -- W5: `tos` and `from: "ll"` are optional
+    let obj ← j.getObj?
+    if !(obj.all (fun k _ => ["op", "family", "port", "message", "tos", "from"].contains k)
+        && obj.contains "family" && obj.contains "port" && obj.contains "message") then
+      throw "expected op, family, port, message and optionally tos, from"
+    let tos ← senderTos j
+    let ll ← match j.getObjVal? "from" with
+      | .ok v => do
+        if (← v.getStr?) != "ll" then throw "from: expected \"ll\""
+        pure true
+      | .error _ => pure false
     let family ← (← field j "family").getNat?
+    if ll && family != 6 then throw "from: only an IPv6 injection is sent from the link-local address"
     if family != 4 && family != 6 then throw "family: expected 4 or 6"
     let port ← natField j "port" 65535
     if port == 0 then throw "port: expected 1-65535"
     let s ← (← field j "message").getStr?
     if s.length == 0 || s.length % 2 != 0 || s.length > 2800 then throw "message: expected 1-1400 bytes of lowercase hex"
     let message ← hexBytes (← field j "message") s.length "message"
-    return .wgInject family port message
+    return .wgInject family port message tos ll
   | "wg_flood" =>
     -- `messages`: the leading valid-MAC1 initiations the mirror processes and
     -- checks (byte-exact cookie replies). `control` (a mid-flood valid packet
@@ -321,7 +345,10 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
     if ticks == 0 then throw "ticks: expected 1-2^31"
     return .wgAdvance ticks
   | "wg_xmit" =>
-    fields j ["op", "packet"]
+    let obj ← j.getObj?
+    if !(obj.all (fun k _ => ["op", "packet", "tos"].contains k) && obj.contains "packet") then
+      throw "expected op, packet and optionally tos"
+    let tos ← senderTos j   -- W5
     let p ← field j "packet"
     -- the UDP payload (D2); without one, the fixture's historic 4 bytes "leux"
     let payload ← match p.getObjVal? "payload" with
@@ -343,9 +370,10 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
     let first := addr / 2 ^ 24
     let bad4 := family == 4 && (first == 0 || first == 127 || addr == 0xffffffff || addr == 0x0afffe01)
     let bad6 := family == 6 && (addr == 0 || addr == 1 || addr == 0xfd00ffff000000000000000000000001
+                                 || addr == 0xfe8000000000000000000000ffff0001   -- the fixture's link-local address on lo (W5)
                                  || addr / 2 ^ 32 == 0xffff)
     if bad4 || bad6 then throw "packet.dst: an address the sender does not route into wg0"
-    return .wgXmit family addr payload
+    return .wgXmit family addr payload tos
   | _ => throw "unsupported operation"
 
 private def parseHidden (j : Json) (ops : Nat) : Except String (Array (List HiddenRecord)) := do
@@ -555,9 +583,9 @@ def toSyscall (results : Array Int) (ends : Array (Option (Nat × Nat))) (index 
   | .wgSet attrs => .wgSet attrs
   | .wgGet => .wgGet
   | .wgUp => .wgUp
-  | .wgXmit family addr payload => .wgXmit family addr payload
+  | .wgXmit family addr payload tos => .wgXmit family addr payload tos
   | .wgObserve => .wgObserve
-  | .wgInject family port message => .wgInject family port message
+  | .wgInject family port message tos ll => .wgInject family port message tos ll
   | .wgFlood count port messages => .wgFlood count port messages
   | .wgAdvance ticks => .wgAdvance ticks
   | .wgCreate => .wgCreate

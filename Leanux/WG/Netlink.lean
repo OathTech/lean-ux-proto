@@ -307,8 +307,10 @@ def getPeerDump (pid : PeerId) : M Json := do
   let endpoint := match p.endpoint with
     | some e =>
       let v4 := e.family == AF_INET
-      [("endpoint", Json.mkObj [("family", toJson (if v4 then 4 else 6)),
-        ("addr", toJson (hexBE e.addr (if v4 then 4 else 16))), ("port", toJson e.port)])]
+      [("endpoint", Json.mkObj ([("family", toJson (if v4 then 4 else 6)),
+        ("addr", toJson (hexBE e.addr (if v4 then 4 else 16))), ("port", toJson e.port)]
+        -- W5 (2.5): `sin6_scope_id` of an IPv6 endpoint (the dump's sockaddr_in6)
+        ++ (if v4 then [] else [("scope", toJson e.scope)])))]
     | none => []
   return Json.mkObj ([("public_key", toJson (hexKey p.remoteStatic)),
     ("preshared_key", toJson (hexKey p.presharedKey)),

@@ -243,6 +243,12 @@
   "branch_free_functions": [
     "fls128",
     "INET_ECN_decapsulate",
-    "__INET_ECN_decapsulate"
+    "__INET_ECN_decapsulate",
+    "INET_ECN_set_ce",
+    "INET_ECN_set_ect1",
+    "IP_ECN_set_ce",
+    "IP_ECN_set_ect1",
+    "IP6_ECN_set_ce",
+    "IP6_ECN_set_ect1"
   ]
 }

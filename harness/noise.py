@@ -552,6 +552,59 @@ def ipv6_udp(src, dst, sport, dport, payload, *, checksum="correct", payload_len
     return struct.pack(">IHBB", first, payload_len, next_header, hop_limit) + src + dst + udp
 
 
+def ipv4_tcp(src, dst, sport, dport, seq, ack_seq, flags, payload=b"", *, tos=0, ttl=64, ident=0, df=True,
+             window=8192, doff=5, checksum="correct"):
+    """An IPv4/TCP segment without IP options and, with `doff` 5, without
+    TCP options (W6, docs/2026-10-06-w5-w6-receive.md 2.4.1): `flags` is the
+    TCP flag byte (FIN 1, SYN 2, RST 4, PSH 8, ACK 16). A `doff` above 5
+    pads the header with zero option bytes (the stack still answers; the
+    mirror refuses the shape). The TCP checksum is correct unless
+    `checksum` is "wrong" (wg marks the skb CHECKSUM_UNNECESSARY, so Linux
+    answers either)."""
+    if len(src) != 4 or len(dst) != 4:
+        raise ValueError("IPv4 addresses are 4 bytes")
+    options = bytes(4 * (doff - 5))
+    tcp_len = 4 * doff + len(payload)
+    header = struct.pack(">HHIIBBHHH", sport, dport, seq, ack_seq, doff << 4, flags, window, 0, 0) + options
+    pseudo = src + dst + struct.pack(">BBH", 0, 6, tcp_len)
+    value = inet_checksum(pseudo + header + payload)
+    if checksum == "wrong":
+        value = 0x1234 if value != 0x1234 else 0x4321
+    tcp = header[:16] + struct.pack(">H", value) + header[18:] + payload
+    tot_len = 20 + len(tcp)
+    ip = struct.pack(">BBHHHBBH4s4s", 0x45, tos, tot_len, ident, 0x4000 if df else 0, ttl, 6, 0, src, dst)
+    ip = ip[:10] + struct.pack(">H", inet_checksum(ip)) + ip[12:]
+    return ip + tcp
+
+
+def rst4(packet):
+    """The IPv4 TCP RST Linux sends for `packet`, a segment to wg0 with no
+    socket (tcp_v4_send_reset, tcp_ipv4.c:737-920; ip_send_unicast_reply,
+    ip_output.c:1603-1677): dest/source swapped, doff 5, RST; with ACK:
+    seq = ack_seq; without: ACK set, ack_seq = seq + syn + fin + payload
+    length; window 0; the checksum folded in software; IP: tos = the inner
+    tos with the ECN bits cleared, tot_len 40, id 0, DF, TTL 64, from the
+    inner destination to the inner source. None when Linux sends nothing
+    (a segment with RST)."""
+    ihl = (packet[0] & 0xf) * 4
+    src, dst = packet[12:16], packet[16:20]
+    th = packet[ihl:]
+    sport, dport, seq, ack_seq = struct.unpack_from(">HHII", th)
+    doff, flags = th[12] >> 4, th[13]
+    if flags & 4:
+        return None
+    if flags & 16:
+        rseq, rack, rflags = ack_seq, 0, 4
+    else:
+        rseq, rack, rflags = 0, (seq + ((flags >> 1) & 1) + (flags & 1) + len(th) - 4 * doff) & 0xffffffff, 4 | 16
+    header = struct.pack(">HHIIBBHHH", dport, sport, rseq, rack, 5 << 4, rflags, 0, 0, 0)
+    pseudo = dst + src + struct.pack(">BBH", 0, 6, 20)
+    tcp = header[:16] + struct.pack(">H", inet_checksum(pseudo + header)) + header[18:]
+    ip = struct.pack(">BBHHHBBH4s4s", 0x45, packet[1] & ~3, 40, 0, 0x4000, 64, 6, 0, dst, src)
+    ip = ip[:10] + struct.pack(">H", inet_checksum(ip)) + ip[12:]
+    return ip + tcp
+
+
 def to_wg0(family, src, payload, sport=12345, **kw):
     """An inner UDP packet for wg0's local address and the sender's port
     (51998), from `src`: delivered to the fixture's sender socket when the

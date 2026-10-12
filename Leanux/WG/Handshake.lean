@@ -405,6 +405,10 @@ def timersTraversal (pid : PeerId) : M Unit := do
   if ← branch .traversalKeepalive (interval != 0) then
     discard <| modPeerTimer pid .persistentKeepalive (interval * HZ)
 
+/-- `HANDSHAKE_DSCP` (send.c:18): CS4, the DS field of every handshake
+    message `wg_socket_send_buffer_to_peer` sends (send.c:41, :105). -/
+def HANDSHAKE_DSCP : Nat := 0x88
+
 /-- wg_socket_send_buffer_to_peer (socket.c:189-200) and
     wg_socket_send_skb_to_peer (socket.c:167-187). `send4`/`send6` (routing,
     the UDP tunnel transmit) are a cut point: the datagram is recorded in
@@ -425,8 +429,10 @@ def sendBufferToPeer (pid : PeerId) (bytes : List UInt8) : M Unit := do
   if ← branch .sendSkbOk sent then
     let some e := p.endpoint | invariant "unreachable"
     setPeer pid { p with txBytes := p.txBytes + bytes.length }
+    -- iptunnel_xmit_stats: the device tstats (W5, 2.6)
+    modifyDev fun d => { d with txPackets := d.txPackets + 1, txBytes := d.txBytes + bytes.length }
     let sport ← socketPort e.family
-    modify fun w => { w with sent := w.sent ++ [{ family := e.family, addr := e.addr, port := e.port, bytes, sport }] }
+    modify fun w => { w with sent := w.sent ++ [{ family := e.family, addr := e.addr, port := e.port, bytes, sport, src := e.src, ds := HANDSHAKE_DSCP }] }
 
 /-- wg_timers_handshake_initiated (timers.c:182-187): the retransmit timer,
     with its jitter (`jitterBelowRekeyTimeout`). -/
@@ -480,10 +486,13 @@ def endpointFromSkb (src : SkbSource) : M (Option Endpoint) := do
   if ← branch .epFromSkbInet (src.family == 4) then
     return some { family := AF_INET, addr := src.saddr, port := src.sport, src := src.daddr, srcIf := src.iif }
   else if ← branch .epFromSkbInet6 (src.family == 6) then
-    -- ipv6_iface_scope_id: nonzero only for link-local and scoped multicast
-    if src.saddr / 2 ^ 118 == 0x3fa || src.saddr / 2 ^ 120 == 0xff then
-      unsupported "a scoped IPv6 source address"
-    return some { family := AF_INET6, addr := src.saddr, port := src.sport, src := src.daddr }
+    -- ipv6_iface_scope_id (ipv6.h:571-574): the arrival interface iff the
+    -- source needs a scope: a link-local unicast source (W5, 2.5: the
+    -- link-local sender on lo, scope 1); a scoped multicast source does not
+    -- occur (a multicast source is not a sender)
+    if src.saddr / 2 ^ 120 == 0xff then unsupported "a multicast IPv6 source address"
+    let scope := if src.saddr / 2 ^ 118 == 0x3fa then src.iif else 0
+    return some { family := AF_INET6, addr := src.saddr, port := src.sport, src := src.daddr, scope }
   else invariant "an skb that is neither IPv4 nor IPv6"
 
 /-- wg_socket_set_peer_endpoint_from_skb (socket.c:299-306). -/

@@ -230,6 +230,11 @@ inductive Decision where
   -- D2 stream B: INET_ECN_decapsulate inline in wg_packet_consume_data_done
   -- (include/net/inet_ecn.h)
   | ecnDecapInnerNotEct | ecnDecapOuterNotEct | ecnDecapRcZero | ecnDecapSetCe | ecnDecapOuterEct1
+  -- W5 (docs/2026-10-06-w5-w6-receive.md, 2.1): the rewrite helpers inlined
+  -- there: INET_ECN_set_ce / INET_ECN_set_ect1's protocol switch, IP_ECN_set_ce,
+  -- IP_ECN_set_ect1, IP6_ECN_set_ce, IP6_ECN_set_ect1 (include/net/inet_ecn.h)
+  | inetSetCeIp | inetSetCeIpv6 | inetSetEct1Ip | inetSetEct1Ipv6
+  | ipEcnSetCeNotCapable | ipEcnSetEct1NotEct0 | ip6EcnSetCeNotEct | ip6EcnSetEct1NotEct0
   -- D2 stream A: `ip_tunnel_ecn_encap` inline in wg_packet_send_staged_packets
   -- (include/linux/if_vlan.h, include/net/ip_tunnels.h, include/net/inet_ecn.h)
   | vlanTypeIsVlan | dsfieldIp | dsfieldIpv6 | ecnEncapInnerCe
@@ -1192,6 +1197,16 @@ def Decision.info : Decision → DecisionInfo
   | .ecnDecapRcZero => d "INET_ECN_decapsulate.rc_zero" ech 276 [] []
   | .ecnDecapSetCe => d "INET_ECN_decapsulate.set_ce" ech 277 [] []
   | .ecnDecapOuterEct1 => d "INET_ECN_decapsulate.outer_ect1" ech 279 [] []
+  -- W5: the rewrite helpers (inlined with the above; witnesses, if the build
+  -- has points in them, are declared once the first run shows them)
+  | .inetSetCeIp => d "INET_ECN_set_ce.ip" ech 176 [] []
+  | .inetSetCeIpv6 => d "INET_ECN_set_ce.ipv6" ech 182 [] []
+  | .inetSetEct1Ip => d "INET_ECN_set_ect1.ip" ech 212 [] []
+  | .inetSetEct1Ipv6 => d "INET_ECN_set_ect1.ipv6" ech 218 [] []
+  | .ipEcnSetCeNotCapable => d "IP_ECN_set_ce.not_capable" ech 89 [] []
+  | .ipEcnSetEct1NotEct0 => d "IP_ECN_set_ect1.not_ect0" ech 107 [] []
+  | .ip6EcnSetCeNotEct => d "IP6_ECN_set_ce.not_ect" ech 138 [] []
+  | .ip6EcnSetEct1NotEct0 => d "IP6_ECN_set_ect1.not_ect0" ech 154 [] []
   -- D2 stream A: `ip_tunnel_ecn_encap(0, ip_hdr(skb), skb)` (send.c:378):
   -- ip_tunnel_get_dsfield's `skb_protocol(skb, true)` is vlan_get_protocol,
   -- whose `eth_type_vlan(type)` test (one decision for the two-case switch)

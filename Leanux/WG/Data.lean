@@ -148,8 +148,10 @@ def sendSkbToPeer (pid : PeerId) (bytes : List UInt8) (ds : Nat) : M Bool := do
   if ← branch .sendSkbOk sent then
     let some e := p.endpoint | invariant "unreachable"
     setPeer pid { p with txBytes := p.txBytes + bytes.length }
+    -- iptunnel_xmit_stats: the device tstats (W5, 2.6)
+    modifyDev fun d => { d with txPackets := d.txPackets + 1, txBytes := d.txBytes + bytes.length }
     let sport ← socketPort e.family
-    modify fun w => { w with sent := w.sent ++ [{ family := e.family, addr := e.addr, port := e.port, bytes, ds, sport }] }
+    modify fun w => { w with sent := w.sent ++ [{ family := e.family, addr := e.addr, port := e.port, bytes, ds, sport, src := e.src }] }
   return sent
 
 /-- keep_key_fresh (send.c:124-139). -/

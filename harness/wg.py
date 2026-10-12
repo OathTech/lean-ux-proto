@@ -207,7 +207,9 @@ def _decode_endpoint(data):
     if family == AF_INET and len(data) == 16:
         return {"family": 4, "addr": data[4:8].hex(), "port": struct.unpack_from("!H", data, 2)[0]}
     if family == AF_INET6 and len(data) == 28:
-        return {"family": 6, "addr": data[8:24].hex(), "port": struct.unpack_from("!H", data, 2)[0]}
+        # W5 (2.5): the scope id (host order), nonzero for a link-local endpoint
+        return {"family": 6, "addr": data[8:24].hex(), "port": struct.unpack_from("!H", data, 2)[0],
+                "scope": struct.unpack_from("=I", data, 24)[0]}
     raise InvalidConfig(f"endpoint family {family} length {len(data)}")
 
 
@@ -351,7 +353,8 @@ def validate_packet(packet, where="packet"):
     # (rewritten to ::1), and v4-mapped addresses (the IPv4 path).
     if packet["family"] == 4 and (dst[0] in (0, 127) or dst == b"\xff" * 4 or dst == bytes.fromhex(FIXTURE_ADDR4)):
         raise InvalidConfig(f"{where}.dst: an address the sender does not route into wg0")
-    if packet["family"] == 6 and (dst in (bytes(16), bytes(15) + b"\x01", bytes.fromhex(FIXTURE_ADDR6))
+    if packet["family"] == 6 and (dst in (bytes(16), bytes(15) + b"\x01", bytes.fromhex(FIXTURE_ADDR6),
+                                          bytes.fromhex(FIXTURE_LINK_LOCAL6))
                                   or dst[:12] == bytes(10) + b"\xff\xff"):
         raise InvalidConfig(f"{where}.dst: an address the sender does not route into wg0")
     if "payload" in packet:
@@ -367,6 +370,7 @@ def validate_packet(packet, where="packet"):
 
 FIXTURE_ADDR4 = "0afffe01"                             # 10.255.254.1/32 on wg0
 FIXTURE_ADDR6 = "fd00ffff000000000000000000000001"     # fd00:ffff::1/128 on wg0
+FIXTURE_LINK_LOCAL6 = "fe8000000000000000000000ffff0001"   # fe80::ffff:1/64 on lo (W5)
 
 
 def encode_packet(packet):

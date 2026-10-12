@@ -91,7 +91,14 @@ MAX_IO = 69632
 # Any operation may carry "pause_ms" (1-20): the guest sleeps that long before
 # the operation's coverage reset (a ninth wire field, 0 when absent); the
 # mirror ignores it.
-OPTIONAL_OP_FIELDS = {"pause_ms"}
+# W5 (docs/2026-10-06-w5-w6-receive.md, section 6): `tos` (0-255) on
+# `wg_inject` (the outer DS field of the injection, set on the sender before
+# the operation) and `wg_xmit` (the inner TOS of the transmitted packet);
+# `from: "ll"` on an IPv6 `wg_inject`: the sender transmits from the
+# link-local address fe80::1 on lo (IPV6_PKTINFO), so wg0 learns a scoped
+# endpoint.
+OPTIONAL_OP_FIELDS = {"pause_ms", "tos", "from"}
+SENDER_TOS = (0, 255)
 PAUSE_MS = (1, 20)
 # The guest (harness/guest.c) implements the pipes contract: pipe2, the pipe
 # descriptor kinds, F_SETPIPE_SZ/F_GETPIPE_SZ, pause_ms and counts up to
@@ -172,6 +179,13 @@ def validate_trace(trace):
         if "pause_ms" in op:
             _integer(op["pause_ms"], *PAUSE_MS, f"ops[{i}].pause_ms")
             pipes = True
+        if "tos" in op:
+            if name not in ("wg_inject", "wg_xmit"):
+                raise InvalidTrace(f"ops[{i}].tos: only wg_inject and wg_xmit take a TOS")
+            _integer(op["tos"], *SENDER_TOS, f"ops[{i}].tos")
+        if "from" in op:
+            if name != "wg_inject" or op.get("family") != 6 or op["from"] != "ll":
+                raise InvalidTrace(f"ops[{i}].from: only an IPv6 wg_inject may be sent from \"ll\"")
         for field in ("init", "flags", "arg"):
             if field in op:
                 _integer(op[field], 0, 2**32 - 1, f"ops[{i}].{field}")
@@ -346,15 +360,19 @@ def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False, allo
             newkind, newvalue = fd("newfd")
             a = op.get("init", op.get("count", FCNTL.get(op.get("cmd"), 0)))
             b = op.get("flags", op.get("arg", 0))
+            opvalue = op.get("value", "0")
             if op["op"] == "wg_xmit":
                 a, packet = encode_packet(op["packet"])
+                b = op.get("tos", 0)   # the sender's TOS / traffic class for this send (W5)
             if op["op"] == "wg_inject":
                 a, b = op["family"], op["port"]
+                # the sender's TOS (bits 0-7) and the link-local source (bit 8)
+                opvalue = str(op.get("tos", 0) | (256 if op.get("from") == "ll" else 0))
             if op["op"] == "wg_advance":
                 a = op["ticks"]
             if op["op"] == "wg_flood":
                 a, b = op["count"], op["port"]
-            line = f"{OPCODES[op['op']]} {kind} {value} {newkind} {newvalue} {a} {b} {op.get('value', '0')}"
+            line = f"{OPCODES[op['op']]} {kind} {value} {newkind} {newvalue} {a} {b} {opvalue}"
             if GUEST_PIPES:
                 line += f" {op.get('pause_ms', 0)}"   # the ninth field (P1)
             if op["op"] == "wg_set":

@@ -96,6 +96,24 @@ class TraceContractTests(unittest.TestCase):
         self.assertEqual(serialize_wire([self.trace]),
                          'LEANUX_WIRE_V2\n1\nD 0\nA 0\nM 0 0\nT case 3 32 0 0\n1 0 -1 0 -1 0 2048 0 0\n6 1 0 0 -1 8 0 18446744073709551615 0\n3 0 -2147483648 1 0 0 4294967295 0 0\n')
 
+    def test_sender_tos_and_link_local_source(self):
+        # W5 (docs/2026-10-06-w5-w6-receive.md, section 6): `tos` on wg_inject
+        # and wg_xmit, `from: "ll"` on an IPv6 wg_inject; the wire carries the
+        # TOS in wg_xmit's b field and tos | ll << 8 in wg_inject's value field
+        base = {"version": 1, "id": "t", "ops": [
+            {"op": "wg_inject", "family": 6, "port": 51820, "message": "00", "tos": 0xb9, "from": "ll"},
+            {"op": "wg_xmit", "packet": {"family": 4, "dst": "0a000001"}, "tos": 3}]}
+        wire = serialize_wire([validate_trace(base)], dispatch=[1]).splitlines()
+        self.assertEqual(wire[6].split()[:8], ["13", "0", "-1", "0", "-1", "6", "51820", str(0xb9 | 256)])
+        self.assertEqual(wire[7].split()[:8], ["11", "0", "-1", "0", "-1", "4", "3", "0"])
+        for bad in ({"op": "wg_inject", "family": 4, "port": 1, "message": "00", "from": "ll"},
+                    {"op": "wg_inject", "family": 6, "port": 1, "message": "00", "from": "lo"},
+                    {"op": "wg_inject", "family": 6, "port": 1, "message": "00", "tos": 256},
+                    {"op": "wg_xmit", "packet": {"family": 4, "dst": "0a000001"}, "tos": -1},
+                    {"op": "wg_observe", "tos": 0}, {"op": "wg_up", "from": "ll"}):
+            with self.assertRaises(InvalidTrace):
+                validate_trace({"version": 1, "id": "t", "ops": [bad]})
+
     def test_failslab_extension(self):
         """A2: the (b-task) class is enabled only under the declared
         extension, and the marker only with such a failure."""

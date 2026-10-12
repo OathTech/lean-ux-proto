@@ -9,6 +9,34 @@ def attr(kind, data, nested=False):
     return wg._attr(kind, data, nested)
 
 
+class InnerPacketTests(unittest.TestCase):
+    """W5+W6 (docs/2026-10-06-w5-w6-receive.md): the TCP segment builder and
+    the IPv4 RST Linux answers it with (2.4.1)."""
+
+    def test_tcp_segment_and_its_rst(self):
+        from . import noise
+        src, dst = bytes([10, 0, 0, 2]), bytes.fromhex("0afffe01")
+        syn = noise.ipv4_tcp(src, dst, 40001, 80, 0x11223344, 0, 2, tos=0xb9)
+        self.assertEqual(len(syn), 40)
+        self.assertEqual(noise.inet_checksum(syn[:20]), 0)                    # the header checksum verifies
+        pseudo = src + dst + struct.pack(">BBH", 0, 6, 20)
+        self.assertEqual(noise.inet_checksum(pseudo + syn[20:]), 0)          # and the TCP checksum
+        rst = noise.rst4(syn)
+        self.assertEqual((rst[0], rst[1], rst[2:4], rst[4:6], rst[6:8], rst[8], rst[9]),
+                         (0x45, 0xb8, b"\x00\x28", b"\x00\x00", b"\x40\x00", 64, 6))   # tos & ~ECN, id 0, DF, TTL 64
+        self.assertEqual((rst[12:16], rst[16:20]), (dst, src))
+        th = rst[20:]
+        self.assertEqual(struct.unpack(">HHIIBBHHH", th), (80, 40001, 0, 0x11223345, 5 << 4, 4 | 16, 0, th[16] << 8 | th[17], 0))
+        self.assertEqual(noise.inet_checksum(dst + src + struct.pack(">BBH", 0, 6, 20) + th), 0)
+        # with ACK: seq = the segment's ack_seq, no ACK flag; a RST is not answered
+        ack = noise.ipv4_tcp(src, dst, 40001, 80, 5, 0x55667788, 16, b"data")
+        self.assertEqual(struct.unpack(">HHIIBB", noise.rst4(ack)[20:34]), (80, 40001, 0x55667788, 0, 5 << 4, 4))
+        self.assertIsNone(noise.rst4(noise.ipv4_tcp(src, dst, 1, 2, 0, 0, 4)))
+        # FIN and payload count into ack_seq
+        fin = noise.ipv4_tcp(src, dst, 1, 2, 100, 0, 1, b"xyz")
+        self.assertEqual(struct.unpack_from(">I", noise.rst4(fin), 28)[0], 104)
+
+
 class WireGuardTests(unittest.TestCase):
     def test_rejects_non_hex_addresses_and_bad_lengths(self):
         peer = {"public_key": "22" * 32, "allowed_ips": [{"family": 4, "addr": "10.0.0.0", "cidr": 8}]}
