@@ -412,7 +412,10 @@ def net_mode(trace):
     3 foreign-creator (W8)."""
     if not uses_wireguard(trace):
         return 0
-    return {"bare": 2, "foreign-creator": 3}.get(trace.get("net_fixture"), 1)
+    fixture = trace.get("net_fixture")
+    if type(fixture) is dict:   # W4: {"routes": [...]} keeps the plain fixture (mode 1) and adds routes
+        return 1
+    return {"bare": 2, "foreign-creator": 3}.get(fixture, 1)
 
 
 def validate_fixture_routes(fixture):
