@@ -188,3 +188,14 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   need to worry about it." The checker and the kernel build use the wrapper
   when it is installed and run uncapped with a notice otherwise; the box rule
   for agents is unchanged.
+- **2026-10-12 [AGENT, coordinator]** Review change 2 implemented as an exact
+  effect contract for the flood's invalid tail (`floodTailEffect`), not as a
+  model of the tail's packets: their bytes are not in the trace, their state
+  effects are entirely in their records. The C's `handshake_queue_len` counter
+  joins the device state; the decay is computed from the recorded clock and
+  resets the static (decision `decay_expired`). `World.floodDepth` is gone.
+  The first checked cookie reply (`e_underload_live`) showed receive.c's two
+  cookie arms cross-jumped into one block at :162; the spans now attribute it
+  to `needs_cookie_mac` and leave the switch's initiation arm unobservable,
+  rather than extending the checker (docs/2026-10-05-e-dos.md, appendix).
+

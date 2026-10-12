@@ -396,9 +396,15 @@ structure Device where
   mac1Key : Key := List.replicate 32 0
   /-- `handshake_queue.last_cpu`, initialized to -1 (queueing.c:31). -/
   handshakeLastCpu : Int := -1
-  /-- `handshake_queue.ring`: queued handshake messages, oldest first; its
-      length is `handshake_queue_len`. -/
+  /-- `handshake_queue.ring`: queued handshake messages, oldest first. -/
   handshakeQueue : List (List UInt8 × SkbSource) := []
+  /-- `handshake_queue_len` (device.h), the atomic counter beside the ring:
+      incremented by the producer after a successful produce (receive.c:567)
+      and decremented by the worker after each packet (receive.c:215), so it
+      exceeds the ring's occupancy by one while a packet is processed. The
+      under-load test reads it (receive.c:112), the busy test too (:554);
+      the ring-full test reads the ring. -/
+  handshakeQueueLen : Nat := 0
   staticIdentity : StaticIdentity := {}
   incomingPort : Nat := 0
   fwmark : Nat := 0

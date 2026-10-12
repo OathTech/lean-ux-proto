@@ -219,25 +219,26 @@ def receiveHandshakePacket (msg : List UInt8) (src : SkbSource) : M Unit := do
   if ← branch .hsCookie (messageType msg == MESSAGE_HANDSHAKE_COOKIE) then
     cookieMessageConsume msg
     return
-  -- `under_load = handshake_queue_len >= MAX_QUEUED_INCOMING_HANDSHAKES / 8`.
-  -- A `wg_flood` adds `floodDepth` invalid packets ahead of the checked leading
-  -- packet, so its queue is over the threshold (E-B §4.1, queue-depth design).
-  let queueLen := (← getDev).handshakeQueue.length + (← get).floodDepth
+  -- `under_load = handshake_queue_len >= MAX_QUEUED_INCOMING_HANDSHAKES / 8`
+  -- (receive.c:112): the counter, which a `wg_flood`'s batch has filled before
+  -- the worker runs (E-B v2, the queue-depth design).
   let mut underLoad := false
-  if ← branch .hsUnderLoad (queueLen ≥ MAX_QUEUED_INCOMING_HANDSHAKES / 8) then
+  if ← branch .hsUnderLoad ((← getDev).handshakeQueueLen ≥ MAX_QUEUED_INCOMING_HANDSHAKES / 8) then
     -- `last_under_load = ktime_get_coarse_boottime_ns()` (receive.c:115)
     let now ← hiddenClock .underLoadNow
     modify fun w => { w with lastUnderLoad := some now }
     underLoad := true
-  -- `else if (last_under_load)`: a kernel-global, set by a flood this trace ran.
-  -- Every normal trace keeps it `none` (the constant-false decay guard, §4.2).
+  -- `else if (last_under_load)`: the function-static (receive.c:100), nonzero
+  -- after a flood this trace ran (every normal trace keeps it `none`, §4.2).
   else if ← branch .hsWasUnderLoad (← get).lastUnderLoad.isSome then
-    -- `under_load = !wg_birthdate_has_expired(last_under_load, 1)` (receive.c:117):
-    -- the clock is read (`.birthdateExpired`); its comparison operand is a cut
-    -- (the flood that set `last_under_load` is discarded), and the generator
-    -- places the injection within the decay so `under_load` is true (§4.1).
-    _ ← hiddenClock .birthdateExpired
-    underLoad := true
+    let some last := (← get).lastUnderLoad | invariant "unreachable"
+    -- `under_load = !wg_birthdate_has_expired(last_under_load, 1)` (receive.c:117),
+    -- the recorded clock against the saved time; `if (!under_load)
+    -- last_under_load = 0` (receive.c:118-119): the decay's reset
+    let expired ← birthdateHasExpired last 1
+    underLoad := !expired
+    if ← branch .hsDecayExpired expired then
+      modify fun w => { w with lastUnderLoad := none }
   let macState ← cookieValidatePacket msg src underLoad
   -- packet_needs_cookie (receive.c:123-132):
   -- `(under_load && mac == WITH_COOKIE) || (!under_load && mac == NO_COOKIE)`
@@ -298,10 +299,11 @@ def handshakeReceiveWorker (condResched : M Unit) : M Unit := do
       _ ← branch .workerConsumed false
       return
     | (msg, src) :: _ =>
-      _ ← branch .workerConsumed true   -- ptr_ring_consume_bh
-      receiveHandshakePacket msg src
-      -- dev_kfree_skb; atomic_dec(&handshake_queue_len)
+      _ ← branch .workerConsumed true   -- ptr_ring_consume_bh: the ring slot is taken first
       modifyDev fun d => { d with handshakeQueue := d.handshakeQueue.drop 1 }
+      receiveHandshakePacket msg src
+      -- dev_kfree_skb; atomic_dec(&handshake_queue_len) (receive.c:215)
+      modifyDev fun d => { d with handshakeQueueLen := d.handshakeQueueLen - 1 }
       condResched   -- receive.c:216: other kworkers may run here (the environment decides)
   invariant "the handshake queue did not drain"
 
@@ -401,13 +403,15 @@ def packetReceive (msg : List UInt8) (src : SkbSource) : M Unit := do
   if ← branch .rxHandshake (t == MESSAGE_HANDSHAKE_INITIATION || t == MESSAGE_HANDSHAKE_RESPONSE
                             || t == MESSAGE_HANDSHAKE_COOKIE) then
     if ← branch .rxRngNotReady false then unsupported "unreachable"   -- the guest waits for the RNG
-    let queueLen := (← getDev).handshakeQueue.length
-    -- `handshake_queue_len > MAX_QUEUED_INCOMING_HANDSHAKES / 2`: the trylock path
-    if ← branch .rxQueueBusy (queueLen > MAX_QUEUED_INCOMING_HANDSHAKES / 2) then
+    -- `handshake_queue_len > MAX_QUEUED_INCOMING_HANDSHAKES / 2` (the counter):
+    -- the trylock path
+    if ← branch .rxQueueBusy ((← getDev).handshakeQueueLen > MAX_QUEUED_INCOMING_HANDSHAKES / 2) then
       unsupported "spin_trylock_bh on a busy handshake queue"
     -- ptr_ring_produce_bh fails when the ring (MAX_QUEUED_INCOMING_HANDSHAKES) is full
-    if ← branch .rxProduceFailed (queueLen ≥ MAX_QUEUED_INCOMING_HANDSHAKES) then return   -- drop
-    modifyDev fun d => { d with handshakeQueue := d.handshakeQueue ++ [(msg, src)] }
+    if ← branch .rxProduceFailed ((← getDev).handshakeQueue.length ≥ MAX_QUEUED_INCOMING_HANDSHAKES) then return   -- drop
+    -- atomic_inc(&wg->handshake_queue_len) (receive.c:567)
+    modifyDev fun d => { d with handshakeQueue := d.handshakeQueue ++ [(msg, src)],
+                                handshakeQueueLen := d.handshakeQueueLen + 1 }
     cpumaskNextOnline
     -- queue_work_on(cpu, handshake_receive_wq, ...): queued iff not pending,
     -- with its record (dispatch order); the environment runs the worker

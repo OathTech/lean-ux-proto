@@ -158,7 +158,7 @@ inductive Decision where
   | prepUdpLenLying | prepPullFailed | prepTrimFailed | prepLenMismatch | prepNoHeaderLen
   | prepPullHeaderFailed | rxPrepareFailed | rxHandshake | rxData | rxRngNotReady
   | rxQueueBusy | rxProduceFailed | workerConsumed | hsCookie | hsUnderLoad
-  | hsWasUnderLoad | hsLoadedOperand | hsLoadedCookieOk | hsNotLoaded | hsMacNoCookie
+  | hsWasUnderLoad | hsDecayExpired | hsLoadedOperand | hsLoadedCookieOk | hsNotLoaded | hsMacNoCookie
   | hsNeedsCookieLoaded | hsNeedsCookieMac | dataNoKeypair
   -- drivers/net/wireguard/cookie.c
   | macInvalid | macNoCookieCheck | cookieLookupMiss
@@ -957,6 +957,8 @@ def Decision.info : Decision → DecisionInfo
   | .hsCookie => d "wg_receive_handshake_packet.cookie" wrc 104 [(105, 109)] [(112, 113)]
   | .hsUnderLoad => d "wg_receive_handshake_packet.under_load" wrc 114 [(115, 115)] [(116, 116)]
   | .hsWasUnderLoad => d "wg_receive_handshake_packet.was_under_load" wrc 116 [(117, 119)] []
+  -- `if (!under_load) last_under_load = 0;` (receive.c:118-119): the decay's reset
+  | .hsDecayExpired => d "wg_receive_handshake_packet.decay_expired" wrc 118 [(119, 119)] []
   | .hsLoadedOperand => d "wg_receive_handshake_packet.loaded_and_cookie" wrc 123 [] []
   | .hsLoadedCookieOk => d "wg_receive_handshake_packet.mac_with_cookie" wrc 123 [] []
   | .hsNotLoaded => d "wg_receive_handshake_packet.not_loaded" wrc 124 [] []
@@ -966,7 +968,14 @@ def Decision.info : Decision → DecisionInfo
   -- epilogue of the table, not a witness of this operand.
   | .hsMacNoCookie => d "wg_receive_handshake_packet.mac_without_cookie" wrc 124 [(125, 125)] []
   | .hsNeedsCookieLoaded => d "wg_receive_handshake_packet.needs_cookie_loaded" wrc 126 [] []
-  | .hsNeedsCookieMac => d "wg_receive_handshake_packet.needs_cookie_mac" wrc 126 [(127, 127)] []
+  -- `packet_needs_cookie = true` (127) has no point of its own: the compiler
+  -- folds it into a copy of the switch (134) whose two cookie arms (140-142,
+  -- 162-164) are cross-jumped into one block attributed to 162, the only code
+  -- the binary runs because the packet needs a cookie, for either message
+  -- type. So 162 witnesses this operand, not the switch cases below (found by
+  -- corpus/wireguard/e_underload_live: an initiation's cookie reply covers 134
+  -- and 162 and nothing in 135-155).
+  | .hsNeedsCookieMac => d "wg_receive_handshake_packet.needs_cookie_mac" wrc 126 [(127, 127), (162, 162)] []
   | .dataNoKeypair => d "wg_packet_consume_data.no_keypair" wrc 520 [(521, 521)] [(523, 523)]
   -- drivers/net/wireguard/cookie.c
   | .macInvalid => d "wg_cookie_validate_packet.mac1_invalid" wck 132 [(133, 133)] [(135, 135)]
@@ -1027,8 +1036,13 @@ def Decision.info : Decision → DecisionInfo
   | .respCreated => d "wg_packet_send_handshake_response.created" wsd 94 [(95, 106)] []
   | .respSessionBegun => d "wg_packet_send_handshake_response.session_begun" wsd 96 [(98, 105)] []
   -- drivers/net/wireguard/receive.c
-  | .hsSwitchInitiation => d "wg_receive_handshake_packet.initiation" wrc 134 [(135, 155)] []
-  | .hsSwitchResponse => d "wg_receive_handshake_packet.response" wrc 134 [(158, 188)] []
+  -- The initiation arm owns no point before its needs-cookie test (139): its
+  -- first points (144, 150) are the needs-cookie=0 block's, and its cookie
+  -- block is the shared 162 (hsNeedsCookieMac), so the arm is unobservable.
+  -- The response arm's own point at 161 (the folded test) witnesses it on both
+  -- of its paths; 162 is excluded for the same reason.
+  | .hsSwitchInitiation => d "wg_receive_handshake_packet.initiation" wrc 134 [(135, 139)] []
+  | .hsSwitchResponse => d "wg_receive_handshake_packet.response" wrc 134 [(158, 161), (163, 188)] []
   | .hsInitNeedsCookie => d "wg_receive_handshake_packet.initiation_needs_cookie" wrc 139 [(140, 142)] [(144, 144)]
   | .hsInitNoPeer => d "wg_receive_handshake_packet.initiation_no_peer" wrc 145 [(146, 148)] [(150, 155)]
   | .hsWrongPacket => d "wg_receive_handshake_packet.wrong_packet" wrc 192 [(193, 194)] [(197, 203)]
@@ -1083,7 +1097,8 @@ def Decision.info : Decision → DecisionInfo
   -- add_new_keypair's initiator arm (noise.c:215-233)
   | .addKeypairHasNext => d "add_new_keypair.has_next_keypair" wno 215 [(225, 228)] [(232, 233)]
   -- the response arm of wg_receive_handshake_packet (receive.c:157-188)
-  | .hsRespNeedsCookie => d "wg_receive_handshake_packet.response_needs_cookie" wrc 161 [(162, 164)] [(166, 166)]
+  -- 162 is the cross-jumped cookie block of both arms (see hsNeedsCookieMac)
+  | .hsRespNeedsCookie => d "wg_receive_handshake_packet.response_needs_cookie" wrc 161 [(163, 164)] [(166, 166)]
   | .hsRespNoPeer => d "wg_receive_handshake_packet.response_no_peer" wrc 167 [(168, 170)] [(172, 176)]
   | .hsRespSessionBegun => d "wg_receive_handshake_packet.response_session_begun" wrc 176 [(178, 186)] []
   -- D1 stream C: drivers/net/wireguard/send.c

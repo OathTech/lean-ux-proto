@@ -94,7 +94,7 @@ def wgStop : M Unit := do
   if !(← getDev).handshakeQueue.isEmpty then
     unsupported "wg_stop with handshake messages queued for the receive worker (its timing)"
   _ ← branch .stopDrainIter false
-  modifyDev fun d => { d with handshakeQueue := [] }   -- atomic_set(&wg->handshake_queue_len, 0)
+  modifyDev fun d => { d with handshakeQueue := [], handshakeQueueLen := 0 }   -- atomic_set(&wg->handshake_queue_len, 0)
   socketReinit none none
 
 /-- `dev_change_flags` without IFF_UP on an up device: `__dev_close_many`
@@ -251,7 +251,7 @@ def wgDestruct : M Unit := do
   mayHaveSlept
   -- wg_packet_queue_free: the handshake ring is purged; the crypt rings are
   -- empty (WARN_ON otherwise)
-  modifyDev fun d => { d with handshakeQueue := [] }
+  modifyDev fun d => { d with handshakeQueue := [], handshakeQueueLen := 0 }
   mayHaveSlept   -- rcu_barrier()
   ratelimiterUninit
   -- memzero_explicit(&wg->static_identity); kvfree ×2; free_netdev

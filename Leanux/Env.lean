@@ -759,22 +759,27 @@ def inject (family port : Nat) (msg : List UInt8) (tos : Nat := 0) (ll : Bool :=
   deliverSent
   return msg.length   -- udp_sendmsg returns the datagram's length
 
-/-- `wg_flood` (docs/2026-10-05-e-dos.md §8): the fixture submits an io_uring
-    batch of invalid-MAC1 initiations to wg0's port. On the kernel they cross the
-    `handshake_queue_len >= 512` threshold, set `last_under_load`, and are all
-    dropped at the MAC1 check (reply-free), in one fully-drained receive-worker
-    section. The mirror does not model the flood's scheduling-driven dynamics:
-    it discards the whole flood section's records (§4.1) and records only that
-    `under_load` was set. It requires the flood to have reached the receive
-    worker and crossed the threshold (an `.under_load_now` record); a flood that
-    did not cross, or whose section did not close in this operation (the worker
-    outliving the window, a merged injection — §4.1), fails closed. The op
-    returns 0 (the submission succeeded). -/
+/-- `wg_flood` (docs/2026-10-05-e-dos.md §8, E-B v2): the fixture submits an
+    io_uring batch to wg0's port, the leading valid-MAC1 initiations first and
+    then `count` invalid ones; the whole batch is queued before the single-CPU
+    receive worker runs, so the worker sees `handshake_queue_len` at the
+    batch's size (over the `under_load` threshold) from its first packet, and
+    one fully-drained section handles the batch. The mirror holds the batch as
+    the C does: the ring with the leading valids, the counter at the batch's
+    size. The leading valids run through the real worker, each with its
+    records. The invalid tail is summarized by `floodTailEffect`'s exact
+    contract (the review's 3.4): its only state effects are the counter's drain
+    and `last_under_load`, folded from the tail's own clock records, which
+    carry the C's choices. A tail record the contract does not cover (a
+    mid-flood injection), a flood that did not cross the threshold, or a
+    section that did not close in this operation (the worker outliving the
+    window) fail closed. The op returns 0 (the submission succeeded). -/
 def flood (count port : Nat) (messages : List (List UInt8)) : M Int := do
   let some d := (← getK).wg | unsupported "a flood to a port other than wg0's (no wg0)"
   if !d.running || port != d.incomingPort then unsupported "a flood to a port other than wg0's"
   -- without records (the domain filter runs before Linux), accept the flood: it
-  -- is a natural harness input, inside the domain
+  -- is a natural harness input, inside the domain; the decay then reads the
+  -- placeholder clock (a prediction only)
   if (← get).hidden.isNone then
     modify fun w => { w with lastUnderLoad := some 0 }
     return 0
@@ -791,21 +796,24 @@ def flood (count port : Nat) (messages : List (List UInt8)) : M Int := do
   -- before the receive worker runs: the fixture's io_uring sends' producer
   -- `net_rx` sections and IP-layer cut draws
   let _ ← discardFloodRecords startW cuts
-  -- the receive-worker section: the checked leading valid packets first, then
-  -- the invalid flood discarded. The leading valids go through the real worker
-  -- (which consumes the `cond_resched` records between packets); `floodDepth`
-  -- keeps them over the under_load threshold.
+  -- the receive-worker section: the batch is queued (the ring with the
+  -- leading valids, the counter at the batch's size); the leading valids go
+  -- through the real worker (each packet's records, the `cond_resched`
+  -- between packets), which decrements the counter per packet
   _ ← hidden (.sectionStart .receiveWorker)
   let src ← senderSource 4 0
-  modifyDev fun d => { d with handshakeQueue := messages.map (fun m => (m, src)) }
-  modify fun w => { w with floodDepth := count + messages.length }
+  -- the batch's producer side (wg_packet_receive per datagram, receive.c:567-568):
+  -- the ring and the counter, and `wg_cpumask_next_online(&last_cpu)` per
+  -- packet, which on this one-CPU kernel leaves `last_cpu` at 0
+  modifyDev fun d => { d with handshakeQueue := messages.map (fun m => (m, src)),
+                              handshakeQueueLen := d.handshakeQueueLen + messages.length + count,
+                              handshakeLastCpu := 0 }
   WG.handshakeReceiveWorker (discard <| condResched SWITCH_DEPTH .receiveWorker (runDecryptAt SWITCH_DEPTH) napiSoftirq)
-  modify fun w => { w with floodDepth := 0 }
-  -- the remaining invalid packets' per-packet reads (under_load / decay /
-  -- reschedule), discarded; a modeled record here (a mid-flood injection) fails
-  let (_, crossed) ← discardFloodRecords stopW
-    ([(HiddenSite.underLoadNow).info.id, (HiddenSite.birthdateExpired).info.id,
-      (HiddenSite.reschedReceive).info.id] ++ cuts)
+  -- the invalid tail: its clock records fold into `last_under_load`; the
+  -- counter drains to 0 (every tail packet is dequeued and dropped)
+  let (last, crossed) ← floodTailEffect stopW cuts (← get).lastUnderLoad
+  modify fun w => { w with lastUnderLoad := last }
+  modifyDev fun d => { d with handshakeQueueLen := 0 }
   _ ← hidden (.sectionStop .receiveWorker)
   if messages.isEmpty && !crossed then
     throw (.hidden "the flood did not cross the under_load threshold (no under_load record)")
