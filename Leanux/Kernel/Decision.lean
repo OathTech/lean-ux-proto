@@ -1246,7 +1246,7 @@ def Decision.info : Decision → DecisionInfo
   -- outcome and are left unspanned.
   | .send4SockNull => d "send4.sock_null" wso 41 [(42, 43)] []
   | .send4HasCache => d "send4.has_cache" wso 48 [(49, 49)] []
-  | .send4CacheMiss => d "send4.cache_miss" wso 51 [(52, 52), (61, 62), (74, 74)] []
+  | .send4CacheMiss => d "send4.cache_miss" wso 51 [(53, 54), (61, 62), (74, 74)] []   -- 52 has no point (no SECURITY)
   | .send4SrcNotLocal => d "send4.src_not_local" wso 53 [(55, 57)] []
   | .send4ResetA => d "send4.reset_a" wso 58 [(59, 59)] []
   | .send4SrcIfMismatch => d "send4.src_if_mismatch" wso 62 [(65, 67), (72, 72)] []
@@ -1256,7 +1256,7 @@ def Decision.info : Decision → DecisionInfo
   | .send4CacheSet => d "send4.cache_set" wso 80 [(81, 81)] []
   | .send6SockNull => d "send6.sock_null" wso 121 [(122, 123)] []
   | .send6HasCache => d "send6.has_cache" wso 128 [(129, 129)] []
-  | .send6CacheMiss => d "send6.cache_miss" wso 131 [(132, 132), (139, 139), (141, 141)] []
+  | .send6CacheMiss => d "send6.cache_miss" wso 131 [(133, 134), (139, 140), (141, 141)] []   -- 132 has no point (no SECURITY)
   | .send6SrcNotLocal => d "send6.src_not_local" wso 133 [(135, 135)] []
   | .send6Reset => d "send6.reset" wso 136 [(137, 137)] []
   | .send6RouteErr => d "send6.route_err" wso 141 [(142, 145)] [(147, 147)]
@@ -1864,6 +1864,11 @@ def Decision.repeatable : Decision → Bool
   -- several send workers may run in one operation; bucket walks loop
   | .initRateLimited | .initCreated | .initNoIdentity | .initNoEphemeral | .initEsFailed | .initSsFailed
   | .idxInsWalk1 | .idxInsCollide1 | .idxInsWalk2 | .idxInsCollide2 | .idxWalk | .idxMatch
+  -- W9: send4/send6 run once per datagram, several per operation
+  | .send4SockNull | .send4HasCache | .send4CacheMiss | .send4SrcNotLocal | .send4ResetA | .send4SrcIfMismatch
+  | .send4ResetB | .send4PutRt | .send4RouteErr | .send4CacheSet
+  | .send6SockNull | .send6HasCache | .send6CacheMiss | .send6SrcNotLocal | .send6Reset | .send6RouteErr
+  | .send6CacheSet
   | .sendBufNoMem | .sendSkbInet | .sendSkbInet6 | .sendSkbOk | .addMacCookieValid | .addMacCookieFresh
   -- D1 stream B: add_new_keypair and keypairs_clear put up to three live
   -- keypairs in one operation (stream C: the tx worker's put shares an

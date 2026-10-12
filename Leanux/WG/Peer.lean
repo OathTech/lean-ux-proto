@@ -241,12 +241,13 @@ def peerCreate (publicKey : Key) (presharedKey : Option Key) : M (Except Int Pee
                 precomputedStaticStatic := List.replicate 32 0, internalId,
                 cookieDecryptionKey := blake2s 32 [] ("cookie--".toUTF8.toList ++ publicKey),
                 cookieMac1Key := blake2s 32 [] ("mac1----".toUTF8.toList ++ publicKey) }
+  -- W9: `dst_cache_init` (peer.c:36) ends with `dst_cache_reset`, whose
+  -- jiffies the kernel records (kind 306): before the noise handshake init
+  -- and the last-sent reset (peer.c:55) in the C's order
+  dstCacheReset pid
   handshakeInit pid presharedKey
   -- cookie init, timers, work items, queues, kref_init (refcount 1)
   resetLastSentHandshake pid   -- peer.c:55
-  -- W9: `dst_cache_init` (peer.c:36) ends with `dst_cache_reset`, whose
-  -- jiffies the kernel records (kind 306)
-  dstCacheReset pid
   -- NAPI
   modifyDev fun d => { d with peerList := d.peerList ++ [pid],   -- list_add_tail
                               peerHashtable := (publicKey, pid) :: d.peerHashtable,

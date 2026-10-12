@@ -1445,9 +1445,16 @@ identity). W9's core is built; W8 is not started (section 14.4).
   `wg_socket_send_skb_to_peer`, a stack copy for the reply path); the
   transmit keeps the IP-ident cut and the nested NET_RX section
   (`loopbackSend`), E's reply path its lax cut; a route into wg0 stays
-  `unsupported` (W9-R). Sites 150/151 (kind `jiffies`): `dst_cache.h:79`
-  and `dst_cache.c:62` as section 4.4 names them; the resolved frames are
-  confirmed on the built kernel (a mismatch is an unknown site).
+  `unsupported` (W9-R). Sites 150/151 (kind `jiffies`): on the W9 build
+  (identity `313c2cc9…`) the records resolve, as every record does, by
+  their address minus one (`evaluator/coverage.py`): the reset's four
+  callers (`dst_cache_init`, `wg_socket_set_peer_endpoint:294`,
+  `send4:59`, `dst_cache_reset_now:177`) share the inline's frame
+  `include/net/dst_cache.h:90` and the refresh is `net/core/dst_cache.c:63`
+  (the patched files' lines; section 4.4's 79/62 are the pristine ones).
+  The first run on that build failed every WireGuard chunk at the first
+  `wg_set` ("no record left for dst_cache_reset_ts") with the sites at the
+  pristine lines: the records were unknown sites.
   Captures made before the record (`evaluator/test_model_replay.py`)
   carry `"dst_cache_records": false`, under which the mirror keeps the
   pre-W9 rule (the cache always misses, no record consumed); a live run
@@ -1483,6 +1490,44 @@ On the dispatch-order oracle (`bb3e577d`), which writes no kind-306 record:
   uniform failure until the W9-K kernel exists. **The suite-level check
   of W9-M, the eight traces and the seven mutants is the coordinator's,
   on the rebuilt oracle.**
+
+### 14.3b On the W9 build (identity `313c2cc9…`) [AGENT 2026-10-12]
+
+After the sites moved to the resolved lines and the `dst_cache_init`
+record took its place in `wg_peer_create`'s order (before the handshake
+init, peer.c:36 vs :55), the send decisions became repeatable (several
+datagrams per operation) and the miss's first witness the confirm-addr
+test (line 52/132, `security_sk_classify_flow`, has no instrumentation
+point without `SECURITY`):
+- `--suite handwritten,wireguard`: 166/190 agreement; `s2_index_collision`
+  (repeatable) and `w9_inject_to_alias` (the witness order) then pass alone,
+  as do `w9_endpoint_alias`, `w9_two_sends`, `w9_unroutable`,
+  `w9_deladdr_then_send`, `w9_inject_to_wg0_addr`, `w9_delroute_untouched`
+  (8/8 single-trace runs).
+- **One open finding, a scheduling race.** `e_cookie_bad_mac1_aad`
+  operation 5 (a `wg_set` whose keepalive sends an initiation) stopped
+  with "expected the NET_RX section, the record is site 151": Linux's
+  cache missed where the mirror's hit. The records: resets at op 0
+  (jiffies 4296157671, `dst_cache_init` and the endpoint set), the first
+  send's refresh at op 1 (4296157706, after the resets: the slot valid by
+  `time_after`), no reset after, a refresh at op 5. So the dst made at op
+  1 failed `ipv4_dst_check`: `rt_genid` moved after it. The guest adds
+  wg0's addresses and routes (`route_into_wg0`, each add a
+  `rt_cache_flush`) after the `wg_up` ioctl returns and before the
+  operation's wait; the handshake worker queued inside the ioctl runs
+  either at the ioctl's return to user space (then its dst predates the
+  routes and expires) or during the wait (then it survives: the eight
+  single-trace runs above, where `w9_two_sends`'s retransmit hit). The
+  mirror bumps the generation inside `wg_up`, before the send: the second
+  order. Not recorded by anything, so not modelable fail-closed as is.
+  Proposed fix (the coordinator's call, a guest change): for a successful
+  flag-changing `wg_up`, the guest waits `QUEUE_WAIT_US` **before**
+  `route_into_wg0` (its existing wait, moved; no added time), making the
+  first order deterministic; the mirror then applies the table changes
+  after the send workers and the idle timers of that operation
+  (`Env.wgUp` queues them, the post-operation hook in `Syscalls.syscall`
+  applies them). A send to an off-loopback endpoint at `wg_up` then gets
+  `-ENETUNREACH` in both, as the first order gives.
 
 ### 14.4 Not done
 

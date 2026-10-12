@@ -786,10 +786,16 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   -- reads, and read by no modeled path (unobserved)
   | .neighReachTime => ⟨126, "neigh_reach_time", "random", "net/core/neighbour.c", 115, 4, .cut⟩
   -- W9 (ids 150-169): the dst cache's jiffies, kind 306, resolved by the
-  -- innermost frame of `_THIS_IP_` (the lines are the design's; confirmed on
-  -- the built kernel: a mismatch is an unknown site)
-  | .dstCacheResetTs => ⟨150, "dst_cache_reset_ts", "jiffies", "include/net/dst_cache.h", 79, 8, .mirror⟩
-  | .dstCacheRefreshTs => ⟨151, "dst_cache_refresh_ts", "jiffies", "net/core/dst_cache.c", 62, 8, .mirror⟩
+  -- innermost frame of the record's `_THIS_IP_` minus one (the resolver,
+  -- evaluator/coverage.py symbolize, takes every address as a return
+  -- address): the patched files' lines, confirmed on the W9 build
+  -- (identity 313c2cc9...): the reset's four callers (dst_cache_init,
+  -- wg_socket_set_peer_endpoint:294, send4:59, dst_cache_reset_now:177)
+  -- share the inline's frame dst_cache.h:90, the refresh is
+  -- dst_cache_per_cpu_get's dst_cache.c:63 (the design's 79/62 are the
+  -- pristine lines)
+  | .dstCacheResetTs => ⟨150, "dst_cache_reset_ts", "jiffies", "include/net/dst_cache.h", 90, 8, .mirror⟩
+  | .dstCacheRefreshTs => ⟨151, "dst_cache_refresh_ts", "jiffies", "net/core/dst_cache.c", 63, 8, .mirror⟩
   | .alloc s => let i := s.info
     ⟨70 + i.index, i.label, "alloc", i.file, i.line, 40, if i.count == .cut then .cut else .mirror⟩
   -- P (pipes, design section 3): id 18 is free on main and on every task
