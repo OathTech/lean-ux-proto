@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "id": "e_nest_diamond_down",
+  "ops": [
+    {
+      "op": "epoll_create1",
+      "flags": 0
+    },
+    {
+      "op": "epoll_create1",
+      "flags": 0
+    },
+    {
+      "op": "epoll_create1",
+      "flags": 0
+    },
+    {
+      "op": "epoll_create1",
+      "flags": 0
+    },
+    {
+      "op": "epoll_create1",
+      "flags": 0
+    },
+    {
+      "op": "epoll_ctl",
+      "epfd": {
+        "ref": 1
+      },
+      "cmd": 1,
+      "fd": {
+        "ref": 0
+      },
+      "events": 1,
+      "data": "0"
+    },
+    {
+      "op": "epoll_ctl",
+      "epfd": {
+        "ref": 2
+      },
+      "cmd": 1,
+      "fd": {
+        "ref": 0
+      },
+      "events": 1,
+      "data": "0"
+    },
+    {
+      "op": "epoll_ctl",
+      "epfd": {
+        "ref": 3
+      },
+      "cmd": 1,
+      "fd": {
+        "ref": 1
+      },
+      "events": 1,
+      "data": "0"
+    },
+    {
+      "op": "epoll_ctl",
+      "epfd": {
+        "ref": 3
+      },
+      "cmd": 1,
+      "fd": {
+        "ref": 2
+      },
+      "events": 1,
+      "data": "0"
+    },
+    {
+      "op": "epoll_ctl",
+      "epfd": {
+        "ref": 4
+      },
+      "cmd": 1,
+      "fd": {
+        "ref": 3
+      },
+      "events": 1,
+      "data": "0"
+    },
+    {
+      "op": "close",
+      "fd": {
+        "ref": 4
+      }
+    }
+  ]
+}

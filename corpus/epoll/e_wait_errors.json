@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "id": "e_wait_errors",
+  "ops": [
+    {
+      "op": "epoll_create1",
+      "flags": 0
+    },
+    {
+      "op": "eventfd2",
+      "init": 0,
+      "flags": 2048
+    },
+    {
+      "op": "pipe2",
+      "flags": 2048
+    },
+    {
+      "op": "epoll_wait",
+      "epfd": {
+        "literal": 20
+      },
+      "maxevents": 16,
+      "timeout": 0
+    },
+    {
+      "op": "epoll_wait",
+      "epfd": {
+        "ref": 1
+      },
+      "maxevents": 16,
+      "timeout": 0
+    },
+    {
+      "op": "epoll_wait",
+      "epfd": {
+        "pipe": 2,
+        "end": 0
+      },
+      "maxevents": 16,
+      "timeout": 0
+    },
+    {
+      "op": "epoll_wait",
+      "epfd": {
+        "ref": 0
+      },
+      "maxevents": 1,
+      "timeout": 0
+    },
+    {
+      "op": "close",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "epoll_wait",
+      "epfd": {
+        "ref": 0
+      },
+      "maxevents": 16,
+      "timeout": 0
+    }
+  ]
+}

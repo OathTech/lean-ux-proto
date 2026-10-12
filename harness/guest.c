@@ -25,6 +25,7 @@
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/resource.h>
+#include <sys/epoll.h>
 #include <sys/syscall.h>
 #include <sys/utsname.h>
 #include <sys/wait.h>
@@ -153,6 +154,13 @@ struct fixture_route { unsigned family; unsigned char dst[16]; unsigned mtu; };
 /* W4 (docs/2026-10-06-w4-w7-transmit-bulk.md section 6): SIOCSIFMTU on wg0; W7: the batch. */
 #define OP_WG_SET_MTU 25
 #define OP_WG_BATCH 26
+/* epoll stream R (docs/2026-10-12-epoll-design.md section 6; the codes from
+ * docs/2026-10-11-interface.md): fd is the set (epfd); epoll_ctl's newfd is
+ * the target, a = cmd, b = events, value = data; epoll_wait's a = maxevents,
+ * b = timeout; epoll_create1's b = flags. */
+#define OP_EPOLL_CREATE1 27
+#define OP_EPOLL_CTL 28
+#define OP_EPOLL_WAIT 29
 /* 20-21 are reserved for W2 (harness/trace.py RESERVED_OPCODES,
  * docs/2026-10-11-interface.md): wg_get_start and wg_get_recv. No define
  * until the stream lands: the opcode switch's default fails any such code.
@@ -744,19 +752,34 @@ static void print_hex_bytes(const unsigned char *data, long n)
     for (long k = 0; k < n; ++k) printf("%02x", data[k]);
 }
 
-/* An operation's observation fields beyond ret and errno: a read's head as
- * hex ("bytes") and its digest; a write's sigpipe; a pipe2's fds. The
- * comparison child prints the same values per field (LEANUX_CMP_RESULT). */
+/* The bytes an operation returns through the read channel: a read's ret
+ * bytes; an epoll_wait's ret events of sizeof(struct epoll_event) (12 on
+ * x86-64, the packed layout) bytes each (epoll stream R, design section 6);
+ * nothing else. The observation carries the first READ_HEAD of them and the
+ * digest of all. */
+static long observed_bytes(const struct operation *op, long ret)
+{
+    if (ret <= 0) return 0;
+    if (op->code == OP_READ) return ret;
+    if (op->code == OP_EPOLL_WAIT) return ret * (long)sizeof(struct epoll_event);
+    return 0;
+}
+
+/* An operation's observation fields beyond ret and errno: a read's (or
+ * epoll_wait's) head as hex ("bytes") and its digest; a write's sigpipe; a
+ * pipe2's fds. The comparison child prints the same values per field
+ * (LEANUX_CMP_RESULT). */
 static void print_head(const struct operation *op, const struct observation *r)
 {
+    long n = observed_bytes(op, r->ret);
     printf("\"");
-    if (op->code == OP_READ && r->ret > 0) print_hex_bytes(r->bytes, r->ret < READ_HEAD ? r->ret : READ_HEAD);
+    if (n > 0) print_hex_bytes(r->bytes, n < READ_HEAD ? n : READ_HEAD);
     printf("\"");
 }
 
 static void print_digest(const struct operation *op, const struct observation *r)
 {
-    if (op->code != OP_READ || r->ret <= 0) { printf("null"); return; }
+    if (observed_bytes(op, r->ret) <= 0) { printf("null"); return; }
     printf("\"");
     print_hex_bytes(r->digest, 32);
     printf("\"");
@@ -1676,6 +1699,12 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         /* A read's buffer is refilled with 0xa5; a write's is determined by
          * the trace (fill_write_buffer). */
         if (op->code == OP_READ) memset(read_buffer, 0xa5, op->a);
+        /* epoll R: the event buffer is the read buffer, refilled with 0xa5;
+         * maxevents is bounded by the buffer (the harness allows 1-16). */
+        if (op->code == OP_EPOLL_WAIT) {
+            if (op->a < 1 || op->a > MAX_IO / sizeof(struct epoll_event)) fail(t->id, i, "invalid_input", "wire_maxevents");
+            memset(read_buffer, 0xa5, op->a * sizeof(struct epoll_event));
+        }
         if (op->code == OP_WRITE) fill_write_buffer(i, op->value, op->a);
         int pipe_fds[2] = {-1, -1};
         if (((op->code >= OP_WG_UP && op->code <= OP_WG_INJECT) || IS_LIFECYCLE_OP(op->code) || op->code == OP_WG_SET_MTU
@@ -1820,6 +1849,18 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         case OP_DUP: ret = syscall(SYS_dup, fd); break;
         case OP_DUP3: ret = syscall(SYS_dup3, fd, newfd, (unsigned long)op->b); break;
         case OP_CLOSE: ret = syscall(SYS_close, fd); break;
+        /* epoll stream R (docs/2026-10-12-epoll-design.md section 6). */
+        case OP_EPOLL_CREATE1: ret = syscall(SYS_epoll_create1, (unsigned long)op->b); break;
+        case OP_EPOLL_CTL: {
+            /* fd is the set, newfd the target; the kernel reads op from the
+             * low 32 bits of its argument, as it does flags. */
+            struct epoll_event event = {.events = op->b, .data = {.u64 = op->value}};
+            ret = syscall(SYS_epoll_ctl, fd, (unsigned long)op->a, newfd, &event);
+            break;
+        }
+        case OP_EPOLL_WAIT:
+            ret = syscall(SYS_epoll_wait, fd, read_buffer, (unsigned long)op->a, (unsigned long)op->b);
+            break;
         case OP_READ: ret = syscall(SYS_read, fd, read_buffer, (unsigned long)op->a); break;
         case OP_WRITE: ret = syscall(SYS_write, fd, write_buffer, (unsigned long)op->a); break;
         case OP_FCNTL: ret = syscall(SYS_fcntl, fd, (unsigned long)op->a, (unsigned long)op->b); break;
@@ -2137,9 +2178,12 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         result[i].ret = ret == -1 ? -captured_errno : ret;
         if ((op->code == OP_READ || op->code == OP_WRITE) && ret > (long)op->a)
             fail(t->id, i, "environment_failure", "io_return_exceeds_count");
-        if (op->code == OP_READ && ret > 0) {
-            memcpy(result[i].bytes, read_buffer, (size_t)(ret < READ_HEAD ? ret : READ_HEAD));
-            blake2s256(read_buffer, (size_t)ret, result[i].digest);
+        if (op->code == OP_EPOLL_WAIT && ret > (long)op->a)
+            fail(t->id, i, "environment_failure", "epoll_return_exceeds_maxevents");
+        long observed = observed_bytes(op, ret);
+        if (observed > 0) {
+            memcpy(result[i].bytes, read_buffer, (size_t)(observed < READ_HEAD ? observed : READ_HEAD));
+            blake2s256(read_buffer, (size_t)observed, result[i].digest);
         }
         if (op->code == OP_PIPE2) {
             if (ret == 0 && (pipe_fds[0] < 0 || pipe_fds[1] < 0 || pipe_fds[0] == pipe_fds[1]))
@@ -2244,6 +2288,32 @@ static void clocksource_row(const char *at)
     fflush(stdout);
 }
 
+/* epoll stream R (docs/2026-10-12-epoll-design.md, sections 3.4 and 3.5):
+ * the batch's epoll fixture, once per boot before any trace. (1) The
+ * warm-up: fs/eventpoll.c's boot-global loop_check_gen starts at 0, so the
+ * first EPOLL_CTL_ADD of a boot finds a fresh set's gen equal to it and
+ * takes the full-check arm, which no later trace's first ADD does; one
+ * throwaway ADD here moves the counter to 2, where no fresh set's gen (0)
+ * meets it again, so every trace sees the same arm. (2) max_user_watches,
+ * computed at boot from the memory size and an operand of every ADD, is
+ * read back for the harness's fixture check (harness/linux.py
+ * EXPECTED_MAX_USER_WATCHES): a batch whose value differs is not a run of
+ * the fixture the mirror assumes. */
+static void epoll_fixture(void)
+{
+    struct epoll_event event = {.events = EPOLLIN, .data = {.u64 = 0}};
+    int ep = (int)syscall(SYS_epoll_create1, 0);
+    int efd = (int)syscall(SYS_eventfd2, 0, 0);
+    if (ep < 0 || efd < 0 || syscall(SYS_epoll_ctl, ep, EPOLL_CTL_ADD, efd, &event) || close(efd) || close(ep))
+        fail("batch", -1, "environment_failure", "epoll_warmup");
+    FILE *f = fopen("/proc/sys/fs/epoll/max_user_watches", "r");
+    long watches = 0;
+    if (!f || fscanf(f, "%ld", &watches) != 1 || watches <= 0) fail("batch", -1, "environment_failure", "read_max_user_watches");
+    fclose(f);
+    printf("LEANUX_EPOLL {\"max_user_watches\":%ld,\"warmup\":1}\n", watches);
+    fflush(stdout);
+}
+
 /* The parent's watchdog (P design section 6): SIGALRM kills the running
  * child's process group; the child's own signal state is untouched. A killed
  * child is a LEANUX_CHILD_FAILURE, which fails the chunk. */
@@ -2290,6 +2360,7 @@ int main(int argc, char **argv)
     if (syscall(SYS_getrandom, &seed, 1, 0) != 1) fail("batch", -1, "environment_failure", "getrandom");
     printf("LEANUX_KERNEL %s\n", identity.release);
     clocksource_row("start");
+    epoll_fixture();   /* epoll R: the warm-up ADD and the max_user_watches row */
     /* D n addr...: the dispatch set, in hex */
     int consumed = 0;
     if (!fgets(line, sizeof(line), input) || sscanf(line, "D %u%n", &dispatch.n, &consumed) != 1 || dispatch.n > DISPATCH_MAX)

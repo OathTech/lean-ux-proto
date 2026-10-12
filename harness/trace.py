@@ -14,7 +14,7 @@ class UnsupportedTrace(InvalidTrace):
     kind = "unsupported_input"
 
 
-PRODUCERS = {"eventfd2", "dup", "dup3"}
+PRODUCERS = {"eventfd2", "dup", "dup3", "epoll_create1"}   # epoll R: a set is a descriptor producer
 FIELDS = {
     "eventfd2": {"op", "init", "flags"}, "dup": {"op", "fd"},
     "dup3": {"op", "fd", "newfd", "flags"}, "close": {"op", "fd"},
@@ -51,7 +51,15 @@ FIELDS = {
     # W7 (section 5.5): one io_uring_enter of `items` (injects to wg0's port
     # and transmits into wg0) from the fixture's sender; `wait_ms` optional
     "wg_batch": {"op", "items"},
+    # epoll stream R (docs/2026-10-12-epoll-design.md section 6; contracts/trace-v1.md):
+    # a set (a producer); an item operation on set `epfd` for target `fd`
+    # (cmd 1 ADD, 2 DEL, 3 MOD, any u32; events u32; data a u64 decimal
+    # string); a wait of 1-16 events with timeout 0 (tier 1: no sleep record)
+    "epoll_create1": {"op", "flags"},
+    "epoll_ctl": {"op", "epfd", "cmd", "fd", "events", "data"},
+    "epoll_wait": {"op", "epfd", "maxevents", "timeout"},
 }
+EPOLL_MAXEVENTS = (1, 16)   # tier 1's bound on epoll_wait's maxevents (the kernel's is EP_MAX_EVENTS)
 LIFECYCLE_OPS = ("wg_create", "wg_down", "wg_delete")
 WG_OPS = {"wg_set", "wg_get", "wg_up", "wg_xmit", "wg_observe", "wg_inject", "wg_advance",
           "wg_flood", "wg_set_mtu", "wg_batch", "wg_deladdr", "wg_delroute", "wg_netns_close"} | set(LIFECYCLE_OPS)
@@ -82,6 +90,8 @@ OPCODES = {
     # W4+W7: allocated by the coordinator (docs/2026-10-11-interface.md)
     "wg_set_mtu": 25,
     "wg_batch": 26,
+    # epoll R: allocated by the coordinator (docs/2026-10-11-interface.md, next targets)
+    "epoll_create1": 27, "epoll_ctl": 28, "epoll_wait": 29,
 }
 # Reserved wire opcodes (the interface commit, docs/2026-10-11-interface.md),
 # allocated by the coordinator so the W streams' worktrees cannot clash. A
@@ -291,7 +301,7 @@ def validate_trace(trace):
         for field in ("init", "flags", "arg"):
             if field in op:
                 _integer(op[field], 0, 2**32 - 1, f"ops[{i}].{field}")
-        for field in ("fd", "newfd"):
+        for field in ("fd", "newfd", "epfd"):   # epfd: epoll R, the set
             if field not in op:
                 continue
             fd = op[field]
@@ -373,6 +383,23 @@ def validate_trace(trace):
                 raise InvalidTrace(f"ops[{i}].mtu: expected an integer 0-65535")
         if name == "wg_batch":
             validate_batch(op, f"ops[{i}]")
+        # epoll R (design section 6): cmd and events are u32 like flags, data
+        # the u64 the kernel copies back verbatim; tier 1 waits with timeout 0
+        # for 1-16 events, the rest is explicitly unsupported until a sleep
+        # record exists (design 9.1)
+        if name == "epoll_ctl":
+            _integer(op["cmd"], 0, 2**32 - 1, f"ops[{i}].cmd")
+            _integer(op["events"], 0, 2**32 - 1, f"ops[{i}].events")
+            data = op["data"]
+            if type(data) is not str or not re.fullmatch(r"0|[1-9][0-9]{0,19}", data, re.ASCII) or int(data) >= 2**64:
+                raise InvalidTrace(f"ops[{i}].data: expected canonical uint64 decimal string")
+        if name == "epoll_wait":
+            _integer(op["maxevents"], 0, 2**31 - 1, f"ops[{i}].maxevents")
+            _integer(op["timeout"], -(2**31), 2**31 - 1, f"ops[{i}].timeout")
+            if not EPOLL_MAXEVENTS[0] <= op["maxevents"] <= EPOLL_MAXEVENTS[1]:
+                raise UnsupportedTrace(f"ops[{i}].maxevents: tier 1 waits for {EPOLL_MAXEVENTS[0]}-{EPOLL_MAXEVENTS[1]} events")
+            if op["timeout"] != 0:
+                raise UnsupportedTrace(f"ops[{i}].timeout: tier 1 waits with timeout 0 only (no sleep record)")
     if "net_fixture" in trace:
         fixture = trace["net_fixture"]
         if type(fixture) is dict:
@@ -552,6 +579,15 @@ def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False, allo
                 a, b = len(op["items"]), op.get("wait_ms", 100)
             if op["op"] in ("wg_deladdr", "wg_delroute"):   # W9
                 a = op["family"]
+            if op["op"] in ("epoll_ctl", "epoll_wait"):
+                # epoll R (design 6): fd = the set; epoll_ctl's newfd = the target,
+                # a = cmd, b = events, value = data; epoll_wait's a = maxevents, b = timeout
+                kind, value = fd("epfd")
+                if op["op"] == "epoll_ctl":
+                    newkind, newvalue = fd("fd")
+                    a, b, op_value = op["cmd"], op["events"], op["data"]
+                else:
+                    a, b = op["maxevents"], op["timeout"]
             line = f"{OPCODES[op['op']]} {kind} {value} {newkind} {newvalue} {a} {b} {op_value}"
             if GUEST_PIPES:
                 line += f" {op.get('pause_ms', 0)}"   # the ninth field (P1)

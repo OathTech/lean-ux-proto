@@ -50,7 +50,12 @@ MAX_IO = 69632
 DIGEST = re.compile(r'[0-9a-f]{64}')
 # W7: a batch's completions present when io_uring_enter returned (each
 # item's length, or the sender's errno; null for an item without one)
-EXTRA_FIELDS = {'pipe2': ('fds',), 'read': ('digest',), 'write': ('sigpipe',), 'wg_batch': ('cqes',)}
+# epoll R (docs/2026-10-12-epoll-design.md 6): an epoll_wait's events go
+# through the read channel: `bytes` is the first 64 of the ret * 12 bytes of
+# the packed epoll_event array, `digest` the BLAKE2s-256 of all of them
+EXTRA_FIELDS = {'pipe2': ('fds',), 'read': ('digest',), 'write': ('sigpipe',), 'wg_batch': ('cqes',),
+                'epoll_wait': ('digest',)}
+EPOLL_EVENT_SIZE = 12   # sizeof(struct epoll_event) on x86-64 (packed)
 
 
 def validate_observation(trace, result):
@@ -111,7 +116,8 @@ def validate_observation(trace, result):
             raise InvalidOutput(f'observation {index}: contradictory errno')
         if type(data) is not str or not re.fullmatch(r'(?:[0-9a-f]{2}){0,%d}' % READ_HEAD, data):
             raise InvalidOutput(f'observation {index}: byte encoding')
-        expected = min(ret, READ_HEAD) if op['op'] == 'read' and ret >= 0 else 0
+        expected = min(ret, READ_HEAD) if op['op'] == 'read' and ret >= 0 else \
+            min(ret * EPOLL_EVENT_SIZE, READ_HEAD) if op['op'] == 'epoll_wait' and ret >= 0 else 0
         if len(data) != 2 * expected:
             raise InvalidOutput(f'observation {index}: byte count')
     branches = result['branches']
@@ -214,6 +220,14 @@ SEMANTIC_ERRNOS = {'eventfd2': {12, 22, 24}, 'dup': {9, 12, 24}, 'dup3': {9, 12,
 # page, `ret ? : -ENOMEM`) are compared; Linux gives them only under a
 # declared failslab trace (harness/linux.py), otherwise environment failures.
 SEMANTIC_ERRNOS['pipe2'] = {22, 23, 24, 65}
+# epoll R (docs/2026-10-12-epoll-design.md, 2.1, 2.2, 2.6): epoll_create1's
+# EINVAL (flags), EMFILE, ENOMEM (ep_alloc, the file, the fd table);
+# epoll_ctl's EBADF, EPERM (a target without poll), EINVAL, EEXIST, ENOENT,
+# ELOOP, ENOSPC (max_user_watches), ENOMEM (the item, the pwq, the head);
+# epoll_wait's EINVAL (maxevents, not an epoll file) and EBADF
+SEMANTIC_ERRNOS['epoll_create1'] = {12, 22, 24}
+SEMANTIC_ERRNOS['epoll_ctl'] = {1, 2, 9, 12, 17, 22, 28, 40}
+SEMANTIC_ERRNOS['epoll_wait'] = {9, 22}
 SEMANTIC_ERRNOS['write'] = SEMANTIC_ERRNOS['write'] | {12, 32}
 SEMANTIC_ERRNOS['fcntl'] = SEMANTIC_ERRNOS['fcntl'] | {16}
 

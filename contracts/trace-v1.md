@@ -32,7 +32,8 @@ returned are observed (see Output). Faulting pointers are outside the domain.
 
 Descriptor arguments contain exactly one of `literal` or `ref`. Literals are
 signed 32-bit integers and must be negative or at least 8. References name an
-earlier operation index whose operation is `eventfd2`, `dup`, or `dup3`. A
+earlier operation index whose operation is `eventfd2`, `dup`, or `dup3` (or
+`epoll_create1`, amended 2026-10-12, below). A
 successful producer supplies its original numeric result; closing that number
 does not invalidate the reference. A failed producer supplies the deliberately
 invalid number -1. Forward references and references to other operation kinds
@@ -86,6 +87,41 @@ is `docs/2026-10-05-p-pipes.md`, section 6.
   write ends with the producer's index as value; `pause_ms` is the ninth field
   of every operation line (0 when absent).
 
+## Epoll (amended 2026-10-12, epoll stream R)
+
+The amendment widens the domain; every earlier trace remains valid. The design
+is `docs/2026-10-12-epoll-design.md`, section 6 (tier 1).
+
+- **`{"op":"epoll_create1","flags":u32}`** creates an epoll set. It is a
+  descriptor producer: `{"ref": i}` may name an earlier `epoll_create1` as it
+  may an `eventfd2`, `dup` or `dup3`.
+- **`{"op":"epoll_ctl","epfd":fd,"cmd":u32,"fd":fd,"events":u32,"data":u64}`**
+  is `epoll_ctl(epfd, cmd, fd, &event)` with `event = {events, data}`. `epfd`
+  and `fd` take the descriptor forms above (`literal`, `ref`, `pipe`/`end`).
+  `cmd` is the kernel's operation number (1 `EPOLL_CTL_ADD`, 2 `EPOLL_CTL_DEL`,
+  3 `EPOLL_CTL_MOD`; any other value is observable as `-EINVAL`); `data` is a
+  canonical unsigned decimal string like a write's `value`, copied back
+  verbatim by the kernel, so the events a wait returns are fully predicted.
+- **`{"op":"epoll_wait","epfd":fd,"maxevents":int,"timeout":int}`** is
+  `epoll_wait(epfd, events, maxevents, timeout)`. Tier 1 accepts `maxevents`
+  1–16 and `timeout` 0 only; other values are explicitly unsupported (no
+  sleep record exists yet, design 9.1), not invalid.
+- **Observation.** A successful `epoll_wait` returns its `ret` events through
+  the read channel: the event buffer is initialised to `0xa5`, `bytes` is the
+  first `min(12·ret, 64)` bytes of the packed `epoll_event` array (12 bytes
+  each on x86-64: `events` u32, `data` u64) and `digest` the BLAKE2s-256 of
+  all `12·ret` bytes, `null` when `ret ≤ 0`. The other two operations carry
+  only `ret` and `errno`.
+- **Fixture.** Once per boot, before the first trace, the guest adds a
+  throwaway eventfd to a throwaway set and closes both (design 3.5: the
+  boot-global `loop_check_gen` leaves 0, so every trace's first ADD takes the
+  same arm), and reads `/proc/sys/fs/epoll/max_user_watches`; the harness
+  fails the batch unless the value is the one the mirror assumes
+  (`harness/linux.py EXPECTED_MAX_USER_WATCHES`, design 3.4).
+- **Wire.** Opcodes 27 `epoll_create1` (`b = flags`), 28 `epoll_ctl`
+  (`fd = epfd`, `newfd = fd`, `a = cmd`, `b = events`, `value = data`) and
+  29 `epoll_wait` (`fd = epfd`, `a = maxevents`, `b = timeout`).
+
 ## Fixture and isolation
 
 Each trace starts in a fresh process in the pinned guest. Set the soft and hard
@@ -133,6 +169,8 @@ Per operation kind, an observation carries exactly these further fields
 - `read`: `"digest"`, the lowercase hex BLAKE2s-256 of all `ret` returned
   bytes when `ret > 0`, else `null`. The evaluator recomputes it from `bytes`
   for every read of at most 64 bytes;
+- `epoll_wait`: `"digest"` likewise, over the `12·ret` bytes of the returned
+  events (amended 2026-10-12, epoll);
 - `write`: `"sigpipe"`, 1 if `SIGPIPE` is pending in the trace child after the
   call (it stays pending for the rest of the trace), else 0.
 

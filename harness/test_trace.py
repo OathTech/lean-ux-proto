@@ -173,6 +173,72 @@ class TraceContractTests(unittest.TestCase):
                     validate_trace(altered)
 
 
+class EpollContractTests(unittest.TestCase):
+    """epoll stream R (docs/2026-10-12-epoll-design.md section 6;
+    contracts/trace-v1.md, Epoll): the three operations, their wire fields and
+    the tier-1 domain."""
+
+    EPOLL = {"version": 1, "id": "epoll", "ops": [
+        {"op": "epoll_create1", "flags": 524288},                                            # 0: a set
+        {"op": "eventfd2", "init": 0, "flags": 2048},                                        # 1
+        {"op": "pipe2", "flags": 2048},                                                      # 2
+        {"op": "epoll_ctl", "epfd": {"ref": 0}, "cmd": 1, "fd": {"ref": 1}, "events": 1, "data": "18446744073709551615"},
+        {"op": "epoll_ctl", "epfd": {"ref": 0}, "cmd": 1, "fd": {"pipe": 2, "end": 1}, "events": 4, "data": "7"},
+        {"op": "epoll_wait", "epfd": {"ref": 0}, "maxevents": 16, "timeout": 0},
+        {"op": "epoll_ctl", "epfd": {"literal": 20}, "cmd": 2, "fd": {"ref": 1}, "events": 0, "data": "0"},
+        {"op": "dup", "fd": {"ref": 0}},                                                     # 7: a set may be dup'd
+        {"op": "epoll_wait", "epfd": {"ref": 7}, "maxevents": 1, "timeout": 0},
+    ]}
+
+    def test_wire(self):
+        trace = validate_trace(self.EPOLL)
+        self.assertEqual(serialize_wire([trace]).splitlines()[5:], [
+            'T epoll 9 32 0 0 0 0',
+            '27 0 -1 0 -1 0 524288 0 0',            # b = flags
+            '1 0 -1 0 -1 0 2048 0 0',
+            '14 0 -1 0 -1 0 2048 0 0',
+            '28 1 0 1 1 1 1 18446744073709551615 0',   # fd = the set, newfd = the target, a = cmd, b = events, value = data
+            '28 1 0 3 2 1 4 7 0',                   # the target as a pipe end
+            '29 1 0 0 -1 16 0 0 0',                 # a = maxevents, b = timeout
+            '28 0 20 1 1 2 0 0 0',
+            '2 1 0 0 -1 0 0 0 0',
+            '29 1 7 0 -1 1 0 0 0',
+        ])
+
+    def test_domain(self):
+        invalid = [
+            lambda t: t['ops'][3].update(epfd={"ref": 1}),            # a ref to a non-producer? eventfd2 is one: fine; a read is not
+            lambda t: t['ops'][3].update(fd={"literal": 3}),           # a reserved fixture descriptor
+            lambda t: t['ops'][3].update(cmd=-1),
+            lambda t: t['ops'][3].update(cmd=2**32),
+            lambda t: t['ops'][3].update(events=-1),
+            lambda t: t['ops'][3].update(data=5),                      # data is a decimal string
+            lambda t: t['ops'][3].update(data="18446744073709551616"),
+            lambda t: t['ops'][3].update(data="01"),
+            lambda t: t['ops'][3].pop("data"),
+            lambda t: t['ops'][5].update(maxevents="16"),
+            lambda t: t['ops'][5].update(timeout="0"),
+            lambda t: t['ops'][5].update(epfd={"ref": 5}),             # not earlier
+            lambda t: t['ops'][0].update(flags=-1),
+            lambda t: t['ops'][0].update(init=0),                      # not a field of epoll_create1
+        ]
+        invalid[0] = lambda t: t['ops'][3].update(epfd={"ref": 5})    # a forward reference
+        for mutation in invalid:
+            with self.subTest(mutation=mutation):
+                altered = deepcopy(self.EPOLL)
+                mutation(altered)
+                with self.assertRaises(InvalidTrace):
+                    validate_trace(altered)
+        # tier 1's bounds are explicit unsupported inputs, not invalid ones
+        for mutation in (lambda t: t['ops'][5].update(maxevents=0), lambda t: t['ops'][5].update(maxevents=17),
+                         lambda t: t['ops'][5].update(timeout=1), lambda t: t['ops'][5].update(timeout=-1)):
+            with self.subTest(mutation=mutation):
+                altered = deepcopy(self.EPOLL)
+                mutation(altered)
+                with self.assertRaises(UnsupportedTrace):
+                    validate_trace(altered)
+
+
 class OpcodeTableTests(unittest.TestCase):
     """The wire opcode table (harness/trace.py OPCODES, explicit since the D3
     merge: a positional derivation gave pipe2 and wg_advance the same code)
@@ -200,10 +266,13 @@ class OpcodeTableTests(unittest.TestCase):
         self.assertFalse(set(OPCODES.values()) & set(RESERVED_OPCODES))
         self.assertEqual(sorted(c for n, c in OPCODES.items()
                                 if n not in ("pipe2", "wg_advance", "wg_create", "wg_down", "wg_delete", "wg_flood",
-                                             "wg_set_mtu", "wg_batch", "wg_deladdr", "wg_delroute", "wg_netns_close")),
+                                             "wg_set_mtu", "wg_batch", "wg_deladdr", "wg_delroute", "wg_netns_close",
+                                             "epoll_create1", "epoll_ctl", "epoll_wait")),
                          list(range(1, 14)))
         # W4+W7's codes, allocated by the coordinator (docs/2026-10-11-interface.md)
         self.assertEqual((OPCODES["wg_set_mtu"], OPCODES["wg_batch"]), (25, 26))
+        # epoll R's codes (docs/2026-10-11-interface.md, next targets)
+        self.assertEqual((OPCODES["epoll_create1"], OPCODES["epoll_ctl"], OPCODES["epoll_wait"]), (27, 28, 29))
 
     def test_guest_defines_match(self):
         defines = {name.lower(): int(code) for name, code in re.findall(r"^#define OP_(\w+) (\d+)$", self.GUEST, re.M)}
