@@ -805,3 +805,29 @@ class WgMutantScoringChecks(unittest.TestCase):
         self.assertEqual(self.m.tally({'a': dict(status='survived'), 'b': dict(status='no_verdict'),
                                        'c': dict(status='rejected')}),
                          {'no_verdict': 1, 'rejected': 1, 'survived': 1})
+
+
+class SeccompChecks(unittest.TestCase):
+    """seccomp stream X: the generator profile stays inside the trace contract
+    and the chunking keeps a guest's child probes under the console budget."""
+
+    def test_seccomp_profile(self):
+        traces = generate(20260920, 60, profile='seccomp')
+        self.assertEqual(traces, generate(20260920, 60, profile='seccomp'))
+        for trace in traces:
+            validate_trace(trace)
+            self.assertLessEqual(sum(op['op'] == 'seccomp_probe' and op['where'] == 'child' for op in trace['ops']), 3)
+        kinds = Counter('checker' if not any(op['op'] == 'seccomp_probe' for op in t['ops'])
+                        else 'child' if t.get('seccomp_child') else 'self' for t in traces)
+        self.assertEqual(set(kinds), {'checker', 'child', 'self'})
+
+    def test_child_probes_per_chunk(self):
+        probe = {'op': 'seccomp_probe', 'nr': 102, 'where': 'child'}
+        child = [dict(version=1, id=f'c{i}', ops=[probe] * 3, seccomp_child=True) for i in range(9)]
+        plain = [dict(version=1, id=f'p{i}', ops=[{'op': 'seccomp_prctl', 'cmd': 'get_seccomp'}]) for i in range(5)]
+        chunks = check.chunk_traces(plain + child)
+        for _start, traces, _name in chunks:
+            self.assertLessEqual(sum(op['op'] == 'seccomp_probe' and op['where'] == 'child'
+                                     for t in traces for op in t['ops']), check.CHILD_PROBES_PER_CHUNK)
+        self.assertEqual([t['id'] for _s, ts, _n in chunks for t in ts], [t['id'] for t in plain + child])
+        self.assertEqual(len(chunks), 3)   # 5 plain + 3 child traces (9 probes), then 3, then 3

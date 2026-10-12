@@ -25,6 +25,8 @@ def generate(seed=20260920, count=1000, max_ops=64, profile='v2'):
         return generate_v2(seed, count, max_ops)
     if profile == 'pipes':
         return generate_pipes(seed, count, min(max_ops, 48))
+    if profile == 'seccomp':
+        return generate_seccomp(seed, count, min(max_ops, 24))
     if profile != 'v1':
         raise ValueError(f'unknown generator profile {profile}')
     if not 4 <= max_ops <= 64 or not 1 <= count <= 100000:
@@ -333,6 +335,240 @@ def generate_pipes(seed, count, max_ops=48):
         trace = dict(version=1, id=f'pipes-{seed}-{len(result):05}', ops=operations)
         if rlimit != 32:
             trace['rlimit_nofile'] = rlimit
+        digest = identity(trace)
+        if digest not in seen:
+            seen.add(digest)
+            result.append(trace)
+    return result
+
+
+# seccomp stream X (docs/2026-10-12-seccomp-design.md section 7): the classic
+# BPF codes (include/uapi/linux/bpf_common.h), the return actions
+# (include/uapi/linux/seccomp.h), the seccomp_data offsets and the probe set
+# (design 6.2 rule 1: the harness's own calls are constant-allowed).
+SECCOMP_PROBES = [102, 104, 107, 108, 1000, 335]
+S_LD_W_ABS, S_LD_IMM, S_LDX_IMM, S_LD_MEM, S_LDX_MEM, S_ST, S_STX = 0x20, 0x00, 0x01, 0x60, 0x61, 0x02, 0x03
+S_RET_K, S_RET_A, S_JA, S_NEG, S_TAX, S_TXA = 0x06, 0x16, 0x05, 0x84, 0x07, 0x87
+S_JMP_K = {'jeq': 0x15, 'jgt': 0x25, 'jge': 0x35, 'jset': 0x45}
+S_JMP_X = {'jeq': 0x1d, 'jgt': 0x2d, 'jge': 0x3d, 'jset': 0x4d}
+S_ALU_K = {'add': 0x04, 'sub': 0x14, 'mul': 0x24, 'div': 0x34, 'or': 0x44, 'and': 0x54, 'lsh': 0x64, 'rsh': 0x74,
+           'xor': 0xa4}
+S_ALU_X = {'add': 0x0c, 'sub': 0x1c, 'mul': 0x2c, 'div': 0x3c, 'or': 0x4c, 'and': 0x5c, 'lsh': 0x6c, 'rsh': 0x7c,
+           'xor': 0xac}
+# the 49 codes of chk_code_allowed (net/core/filter.c:981-1045), the checker
+# fuzz's biased draw: the ones seccomp_check_filter rejects are among them
+S_CLASSIC_CODES = sorted(set(S_ALU_K.values()) | set(S_ALU_X.values()) | set(S_JMP_K.values()) | set(S_JMP_X.values())
+                         | {S_NEG, 0x94, 0x9c, S_LD_W_ABS, 0x28, 0x30, 0x80, 0x40, 0x48, 0x50, S_LD_IMM, S_LD_MEM,
+                            0x81, 0xb1, S_LDX_IMM, S_LDX_MEM, S_ST, S_STX, S_TAX, S_TXA, S_RET_K, S_RET_A, S_JA})
+S_ALLOW, S_LOG, S_TRACE, S_ERRNO, S_TRAP, S_KILL_THREAD, S_KILL_PROCESS = (
+    0x7fff0000, 0x7ffc0000, 0x7ff00000, 0x00050000, 0x00030000, 0x00000000, 0x80000000)
+S_X86_64 = 0xc000003e
+S_ARG_OFFSETS = [0, 4] + [16 + 4 * i for i in range(12)]      # nr, arch, the six u64 args by word (never ip at 8)
+S_ARG_VALUES = [0, 1, 2, 5, 9, 10, 11, 64, 1 << 32, 2**32 - 1, S_ALLOW, S_ERRNO | 3, S_TRAP | 1, 2 * S_ALLOW,
+                2 * (S_ERRNO | 7)]
+S_SAFE_ACTIONS = [S_ALLOW, S_LOG, S_TRACE, S_ERRNO, S_TRAP]
+S_RESERVED_ERRNO = {4, 12, 23, 512, 513, 514, 516}   # harness/linux.py's infrastructure errnos, never ERRNO data
+
+
+def seccomp_prologue(cases, default=S_ALLOW):
+    """The canonical prologue of design 6.2 rule 1 (scripts/seccomp-corpus.py):
+    `arch` and `nr` loaded, one JEQ per probe number into its body, RET ALLOW
+    for every other number."""
+    program = [[S_LD_W_ABS, 0, 0, 4], [S_JMP_K['jeq'], 1, 0, S_X86_64], [S_RET_K, 0, 0, S_ALLOW], [S_LD_W_ABS, 0, 0, 0]]
+    for nr, body in cases:
+        if len(body) <= 255:
+            program.append([S_JMP_K['jeq'], 0, len(body), nr])
+        else:
+            program += [[S_JMP_K['jeq'], 1, 0, nr], [S_JA, 0, 0, len(body)]]
+        program += body
+    program.append([S_RET_K, 0, 0, default])
+    return program
+
+
+def seccomp_action(rng, safe):
+    """A return word: a canonical action with random data, or (unless `safe`)
+    a kill or a non-canonical action, which the validator sends to a child."""
+    if safe or rng.random() < .7:
+        action = rng.choice(S_SAFE_ACTIONS)
+        data = rng.choice([0, 1, 3, 7, 4095, 4096, 65535, rng.randrange(65536)]) if action in (S_ERRNO, S_TRAP) else 0
+        if data in S_RESERVED_ERRNO:
+            data = 7
+        return action | data
+    word = rng.choice([S_KILL_THREAD, S_KILL_PROCESS, 0x10000, 0x4abc0000 | 9, rng.randrange(2**32)])
+    if word & 0xffff0000 == S_ERRNO and word & 0xffff in S_RESERVED_ERRNO:
+        word = S_ERRNO | 7
+    return word
+
+
+def seccomp_body(rng, safe):
+    """A random body over the language seccomp_check_filter accepts, shaped
+    so the checker accepts it too: forward jumps inside the body, memory
+    loads only of cells stored before the first jump, no division by an
+    immediate zero, shifts below 32, no ip load; it ends in a RET."""
+    n = rng.randint(1, 10)
+    body, stored, jumped = [], set(), False
+    for i in range(n):
+        kinds = ['ld', 'imm', 'alu_k', 'alu_x', 'neg', 'tax', 'txa', 'st', 'ldmem', 'jmp_k', 'jmp_x', 'ret']
+        weights = [6, 3, 5, 3, 1, 2, 1, 2, 2 if stored and not jumped else 0, 4, 2, 2]
+        kind = rng.choices(kinds, weights)[0]
+        limit = n - i - 1    # a jump lands at most on the final RET
+        if kind == 'ld':
+            body.append([S_LD_W_ABS, 0, 0, rng.choice(S_ARG_OFFSETS)])
+        elif kind == 'imm':
+            body.append([rng.choice([S_LD_IMM, S_LDX_IMM]), 0, 0, rng.choice([0, 1, 2, 5, 2**32 - 1, rng.randrange(2**32)])])
+        elif kind == 'alu_k':
+            op = rng.choice(list(S_ALU_K))
+            k = {'div': rng.choice([1, 2, 3, 7]), 'lsh': rng.randrange(32), 'rsh': rng.randrange(32)}.get(
+                op, rng.choice([0, 1, 2, 3, 0xff, 2**32 - 1, rng.randrange(2**32)]))
+            body.append([S_ALU_K[op], 0, 0, k])
+        elif kind == 'alu_x':
+            op = rng.choice([o for o in S_ALU_X if o != 'div'] + ([] if safe else ['div']))
+            body.append([S_ALU_X[op], 0, 0, 0])
+        elif kind == 'neg':
+            body.append([S_NEG, 0, 0, 0])
+        elif kind == 'tax':
+            body.append([S_TAX, 0, 0, 0])
+        elif kind == 'txa':
+            body.append([S_TXA, 0, 0, 0])
+        elif kind == 'st':
+            cell = rng.randrange(16)
+            body.append([rng.choice([S_ST, S_STX]), 0, 0, cell])
+            if not jumped:
+                stored.add(cell)
+        elif kind == 'ldmem':
+            body.append([rng.choice([S_LD_MEM, S_LDX_MEM]), 0, 0, rng.choice(sorted(stored))])
+        elif kind in ('jmp_k', 'jmp_x'):
+            table = S_JMP_K if kind == 'jmp_k' else S_JMP_X
+            op = rng.choice(list(table))
+            k = rng.choice([0, 1, 2, 5, 9, 10, 0xff, rng.randrange(2**32)]) if kind == 'jmp_k' else 0
+            body.append([table[op], rng.randint(0, limit), rng.randint(0, limit), k])
+            jumped = True
+        else:
+            if safe or rng.random() < .8:
+                body.append([S_RET_K, 0, 0, seccomp_action(rng, safe)])
+            else:
+                body.append([S_RET_A, 0, 0, 0])
+    body.append([S_RET_K, 0, 0, seccomp_action(rng, safe)])
+    return body
+
+
+def seccomp_fuzz_words(rng):
+    """The checker fuzz's body: 1-24 words, codes drawn from the classic table
+    seven times in ten and from the whole code space otherwise, small jump
+    offsets mostly, k over the boundary values of the checker's arms."""
+    words = []
+    for _ in range(rng.randint(1, 24)):
+        code = rng.choice(S_CLASSIC_CODES) if rng.random() < .7 else rng.randrange(2**16)
+        jt, jf = (rng.randint(0, 3), rng.randint(0, 3)) if rng.random() < .8 else (rng.randrange(256), rng.randrange(256))
+        k = rng.choice([0, 1, 2, 4, 8, 15, 16, 31, 32, 63, 64, 0xfffff000, 0xfffff004, S_ALLOW, S_ERRNO | 1,
+                        rng.randrange(2**32)])
+        words.append([code, jt, jf, k])
+    return words
+
+
+def generate_seccomp(seed, count, max_ops=24):
+    """Seeded seccomp traces (design section 7): (g1) checker fuzz, one
+    install of the prologue plus random words, then the mode read; (g2)
+    behaviour, 1-3 chained filters from the prologue with random bodies over
+    the probe set, then 2-6 probes with random arguments, in the trace process
+    while no installed filter may kill (harness.trace.filter_may_kill) and in
+    a sandboxed child otherwise, at most three child probes per trace (stream
+    W measured about 1 MB of console output per child probe); (g3) mixed, g2
+    interleaved with non-blocking eventfd and pipe operations. The flags, actions
+    and loads the mirror stops on (TSYNC, NEW_LISTENER, USER_NOTIF, offset 8)
+    are the control suite's and never drawn here."""
+    from harness.trace import filter_may_kill
+    if not 4 <= max_ops <= 64 or not 1 <= count <= 100000:
+        raise ValueError('bounded generator parameters')
+    rng = random.Random(f'seccomp-{seed}')
+    seen, result = set(), []
+    while len(result) < count:
+        kind = rng.choices(['checker', 'behaviour', 'mixed'], [2, 6, 2])[0]
+        operations, installed, children, files, pipes = [], [], 0, [], []
+
+        def append(op):
+            if len(operations) < max_ops:
+                operations.append(op)
+                if op['op'] == 'eventfd2':
+                    files.append(len(operations) - 1)
+                elif op['op'] == 'pipe2':
+                    pipes.append(len(operations) - 1)
+
+        def install(program, safe):
+            nonlocal installed
+            via = rng.choices(['seccomp', 'prctl'], [4, 1])[0]
+            flags = [] if via == 'prctl' else rng.choices([[], ['log'], ['spec_allow'], ['log', 'spec_allow']], [6, 2, 1, 1])[0]
+            append({'op': 'seccomp_install', 'via': via, 'flags': flags, 'filter': program})
+            installed.append(program)
+
+        def probe():
+            nonlocal children
+            may_kill = any(filter_may_kill(p) for p in installed)
+            if may_kill and children >= 3:
+                return False
+            op = {'op': 'seccomp_probe', 'nr': rng.choice(SECCOMP_PROBES), 'where': 'child' if may_kill else 'self'}
+            if rng.random() < .6:
+                op['args'] = [rng.choice(S_ARG_VALUES) if rng.random() < .7 else rng.randrange(2**64) for _ in range(6)]
+            append(op)
+            children += may_kill
+            return True
+
+        def file_op():
+            draw = rng.random()
+            if not files and not pipes or draw < .15:
+                append({'op': 'eventfd2', 'init': rng.choice([0, 1, 7]), 'flags': O_NONBLOCK})
+            elif draw < .25:
+                append({'op': 'pipe2', 'flags': O_NONBLOCK})
+            elif pipes and draw < .55:
+                index = rng.choice(pipes)
+                if rng.random() < .5:
+                    append({'op': 'write', 'fd': {'pipe': index, 'end': 1}, 'count': rng.choice([1, 8, 100]),
+                            'value': str(rng.choice([0, 1, 17]))})
+                else:
+                    append({'op': 'read', 'fd': {'pipe': index, 'end': 0}, 'count': rng.choice([1, 8, 100])})
+            elif files and draw < .9:
+                target = {'ref': rng.choice(files)}
+                if rng.random() < .5:
+                    append({'op': 'write', 'fd': target, 'count': 8, 'value': str(rng.choice([1, 2, U64]))})
+                else:
+                    append({'op': 'read', 'fd': target, 'count': 8})
+            elif files:
+                append({'op': 'close', 'fd': {'ref': rng.choice(files)}})
+
+        if kind == 'checker':
+            install(seccomp_prologue([(102, seccomp_fuzz_words(rng))]), True)
+            append({'op': 'seccomp_prctl', 'cmd': 'get_seccomp'})
+        else:
+            n_filters, n_probes = rng.randint(1, 3), rng.randint(2, 6)
+            plan = ['install'] * n_filters + ['probe'] * n_probes
+            rng.shuffle(plan)
+            plan.remove('install')
+            plan.insert(0, 'install')          # a filter before the first probe
+            if kind == 'mixed':
+                for _ in range(rng.randint(2, 6)):
+                    plan.insert(rng.randrange(len(plan) + 1), 'file')
+            for step in plan:
+                if step == 'install':
+                    safe = rng.random() < .6
+                    numbers = rng.sample(SECCOMP_PROBES, rng.randint(1, 3))
+                    install(seccomp_prologue([(nr, seccomp_body(rng, safe)) for nr in numbers]), safe)
+                elif step == 'probe':
+                    probe()
+                else:
+                    file_op()
+            if rng.random() < .15:
+                append(rng.choice([{'op': 'seccomp_prctl', 'cmd': 'get_seccomp'},
+                                   {'op': 'seccomp_query', 'cmd': 'get_action_avail', 'action': rng.choice(S_SAFE_ACTIONS)},
+                                   {'op': 'seccomp_prctl', 'cmd': 'get_no_new_privs'}]))
+            if rng.random() < .05 and children < 3:
+                append({'op': 'seccomp_probe', 'nr': rng.choice([60, 102]), 'where': 'child',
+                        'strict': rng.choice(['seccomp', 'prctl']), 'args': [rng.choice([0, 3, 7])] + [0] * 5})
+                children += 1
+        if not any(op['op'] == 'seccomp_probe' for op in operations) and kind != 'checker':
+            continue
+        trace = dict(version=1, id=f'seccomp-{seed}-{len(result):05}', ops=operations)
+        if children:
+            trace['seccomp_child'] = True
         digest = identity(trace)
         if digest not in seen:
             seen.add(digest)

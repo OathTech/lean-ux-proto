@@ -1,8 +1,8 @@
 """Build the mirror, run traces on the pinned Linux guest and the mirror, compare.
 
     scripts/in-bundle python3 -m evaluator.check
-        [--suite handwritten,critic,wireguard,alloc,generated,wireguard-generated,pipes,pipes-generated]
-        [--generated-count N] [--wireguard-count N] [--pipes-count N] [--seed S] [--trace ID] [--out DIR]
+        [--suite handwritten,critic,wireguard,alloc,generated,wireguard-generated,pipes,pipes-generated,seccomp,seccomp-generated]
+        [--generated-count N] [--wireguard-count N] [--pipes-count N] [--seccomp-count N] [--seed S] [--trace ID] [--out DIR]
         [--no-build] [--alloc-share F]
 
 The command fails unless every trace agrees on observations (A1) and every
@@ -31,7 +31,8 @@ from .protocol import InvalidOutput, compare, loads, parse_batch, validate_cover
 
 ROOT = Path(__file__).resolve().parents[1]
 ANCHORS = ROOT / 'correspondence/kcov.json'
-SUITES = ('handwritten', 'critic', 'wireguard', 'alloc', 'generated', 'wireguard-generated', 'pipes', 'pipes-generated')
+SUITES = ('handwritten', 'critic', 'wireguard', 'alloc', 'generated', 'wireguard-generated', 'pipes', 'pipes-generated',
+          'seccomp', 'seccomp-generated')   # seccomp X: corpus/seccomp and the `seccomp` generator profile (design 7)
 # Corpus suites whose traces pass the domain filter first: the pipes corpus
 # holds a hang control (a blocking read) that must never reach the guest.
 # There, a trace named `*_filtered` must be outside the domain and every
@@ -54,8 +55,15 @@ ALLOC_SHARE = 0.05
 # apart)
 # (E-B: underload-controls, the merged-injection control, which the mirror's
 # section-bracket discard must reject — docs/2026-10-05-e-dos.md §4.1)
-CONTROL_SUITES = ('steering-controls', 'timer-controls', 'lifecycle-controls', 'underload-controls')
+# (seccomp X: seccomp-controls, the flags, action and load the mirror stops
+# unsupported on while the kernel runs them — design 9.1; scripts/seccomp-controls.py)
+CONTROL_SUITES = ('steering-controls', 'timer-controls', 'lifecycle-controls', 'underload-controls', 'seccomp-controls')
 CHUNK = 100
+# seccomp X: a sandboxed child probe (design 6.2 rule 2) costs about 1 MB of
+# the guest's console in comparison mode (the parent's clone and wait4
+# records; stream W's measurement, 2026-10-12), against the 16 MB output
+# limit of one guest, so a chunk holds at most this many child probes.
+CHILD_PROBES_PER_CHUNK = 10
 
 
 def sha256(data):
@@ -85,20 +93,25 @@ def chunk_traces(traces):
         # W7: a bulk trace (wg_batch) runs in a chunk by itself too, since its
         # wall time is a large share of the trace bound (section 6)
         return any(op['op'] in ('wg_flood', 'wg_batch') for op in trace['ops'])
-    pending, current, cur_start = [], [], 0
+    def child_probes(trace):
+        return sum(op['op'] == 'seccomp_probe' and op['where'] == 'child' for op in trace['ops'])
+    pending, current, cur_start, cur_children = [], [], 0, 0
     def flush():
-        nonlocal current
+        nonlocal current, cur_children
         if current:
             pending.append((cur_start, current, f'chunk-{len(pending):03}'))
-            current = []
+            current, cur_children = [], 0
     for i, trace in enumerate(traces):
         if under_load(trace):
             flush()
             pending.append((i, [trace], f'chunk-{len(pending):03}'))
         else:
+            if current and cur_children + child_probes(trace) > CHILD_PROBES_PER_CHUNK:
+                flush()
             if not current:
                 cur_start = i
             current.append(trace)
+            cur_children += child_probes(trace)
             if len(current) == CHUNK:
                 flush()
     flush()
@@ -140,11 +153,12 @@ def load_traces(suites, counts, seed, only, filtered, alloc_share=ALLOC_SHARE):
     `filtered` receives the rejected candidates' reasons."""
     traces = []
     for suite in suites:
-        if suite in ('generated', 'wireguard-generated', 'pipes-generated'):
+        if suite in ('generated', 'wireguard-generated', 'pipes-generated', 'seccomp-generated'):
             source = {'generated': generate,
                       'wireguard-generated': lambda s, n: generate_wireguard(s, n, steered=STEERED_SHARE, data=DATA_SHARE,
                                                                              timers=TIMERS_SHARE, alloc=alloc_share),
-                      'pipes-generated': lambda s, n: generate(s, n, profile='pipes')}[suite]
+                      'pipes-generated': lambda s, n: generate(s, n, profile='pipes'),
+                      'seccomp-generated': lambda s, n: generate(s, n, profile='seccomp')}[suite]
             count = counts[suite]
             candidates = [validate_trace(t) for t in source(seed, count * CANDIDATES_PER_TRACE)]
             verdicts = domain_filter(candidates)
@@ -1430,6 +1444,7 @@ def main(argv=None):
     parser.add_argument('--generated-count', type=int, default=1000)
     parser.add_argument('--wireguard-count', type=int, default=200)
     parser.add_argument('--pipes-count', type=int, default=200)
+    parser.add_argument('--seccomp-count', type=int, default=200)
     parser.add_argument('--seed', type=int, default=20260920)
     parser.add_argument('--trace')
     parser.add_argument('--out', type=Path)
@@ -1464,7 +1479,7 @@ def main(argv=None):
         identity = verify_kernel()   # the oracle, or the build LEANUX_KERNEL_IDENTITY names; else no run
         build = build_model(out, rebuild=not args.no_build)
         traces = load_traces(suites, {'generated': args.generated_count, 'wireguard-generated': args.wireguard_count,
-                                      'pipes-generated': args.pipes_count},
+                                      'pipes-generated': args.pipes_count, 'seccomp-generated': args.seccomp_count},
                              args.seed, args.trace, filtered, args.alloc_share)
         decisions.update(load_decisions(config))
         instrumented, functions, chains = instrumented_lines(KERNEL / 'vmlinux', config['functions'], config['files'])
@@ -1567,7 +1582,8 @@ def write_report(out, traces, results, gaps, build, aborted, started, suites, ar
         kernel=kernel,
         kcov_config_sha256=sha256(ANCHORS.read_bytes()),
         selection=dict(suites=suites, generated_count=args.generated_count, wireguard_count=args.wireguard_count,
-                       pipes_count=getattr(args, 'pipes_count', None), seed=args.seed, trace=args.trace,
+                       pipes_count=getattr(args, 'pipes_count', None), seccomp_count=getattr(args, 'seccomp_count', None),
+                       seed=args.seed, trace=args.trace,
                        guest_variant=getattr(args, 'guest_variant', None), alloc_share=getattr(args, 'alloc_share', None)),
         traces=len(traces), operations=sum(len(t['ops']) for t in traces),
         counts=dict(counts), known_gap_hits=dict(gaps), operand_pairs_matched=operand_pairs_matched,
