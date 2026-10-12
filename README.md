@@ -79,8 +79,7 @@ scripts/in-bundle python3 scripts/check-guest.py
 `scripts/in-bundle` selects local tools, headers, libraries, firmware and caches.
 It creates no sandbox or namespaces; nono provides confinement. Your existing
 `~/.config/nono/profiles/codex-local.json` can be used without modification.
-Run `scripts/check-nono` for an acceptance suite under a separate nono test
-profile that blocks networking. See [nono setup](docs/nono-profile-proposal.md).
+See [nono setup](docs/nono-profile-proposal.md).
 
 Bulk dependencies and build outputs are Git-ignored; preserve them when copying
 this workspace for offline use, or stage them from the locks as in

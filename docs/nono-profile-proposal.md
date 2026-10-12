@@ -16,11 +16,8 @@ built-in tool sandbox disabled. Run project commands through `scripts/in-bundle`
 The runner redirects caches and tool lookup into the project. It inherits the
 session's OS restrictions and does not alter HOME or install global tools.
 
-For reproducible offline verification, `scripts/check-nono` launches a child
-using the repository's `scripts/nono-check-profile.json`. This regression
-fixture grants project writes, runtime reads, and a full network block. It is
-passed by filename and is not installed as an agent profile in `~/.config/nono/`.
-The check deliberately needs no global Lean, Go or Python package caches.
+The check itself, run under the agent profile, is the validation of the
+sandbox: it needs no global Lean, Go or Python package caches.
 
 Compatibility was also checked using a project-local copy of `codex-local`,
 retaining its filesystem rules, environment settings and pathname Unix-socket

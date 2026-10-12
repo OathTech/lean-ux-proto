@@ -11,8 +11,6 @@ scripts/in-bundle lean --version
 scripts/in-bundle python3 scripts/probe-toolchains.py
 scripts/in-bundle scripts/build-kernel
 scripts/in-bundle python3 scripts/check-guest.py
-scripts/in-bundle scripts/build-syzkaller
-scripts/in-bundle scripts/lean-lsp-python scripts/check-lean-lsp.py
 ```
 
 The runner configures compiler sysroots, backend executables, library lookup,
@@ -21,57 +19,13 @@ creates no namespaces, and does not grant or remove sandbox permissions. Its
 name is retained for compatibility with the original preparation scripts.
 It does not itself block networking or make `.tools` read-only; those permissions
 are determined by the enclosing nono profile. The default agent profile permits
-selected API/download domains, while the acceptance test below blocks networking.
+selected API/download domains.
 
 The host bootstrap is Linux x86-64, glibc 2.39 or newer, `/bin/sh`, Python 3.9+
 and nono. System interpreters in absolute script shebangs remain host runtime
 dependencies. The native loader and glibc stay paired with the host; additional
 libraries, compilers, target C headers/libraries, Lean, Go and QEMU come from the
 staged bundle. No host development packages or global language caches are needed.
-
-## Offline acceptance test
-
-From the repository root, with nono available on the incoming PATH:
-
-```sh
-scripts/check-nono
-# For a fresh kernel build in a separate output directory:
-scripts/check-nono --kernel-build .artifacts/kernel-fresh
-# Or repeat one check:
-scripts/check-nono --only lean-lsp
-```
-
-This uses `nono wrap` with the repository's `scripts/nono-check-profile.json`
-regression fixture. It is not installed in `~/.config/nono/` and does not replace
-your agent profile. It grants project writes and system runtime reads, retains
-nono's standard runtime permissions (including temporary directories), and
-blocks networking. Build and cache paths stay in the project. The `--allow-cwd`
-flag explicitly grants the project in
-non-interactive invocations. The test uses no Bubblewrap or build worker.
-
-When validating standalone nono, run this outside Codex's separate built-in tool
-sandbox, as in the normal nono session configuration. Applying another tool
-sandbox can introduce independent restrictions and confound the result.
-
-The suite checks:
-
-- Project-local build/cache paths and denial of IPv4/IPv6 TCP/UDP socket creation.
-- A fresh Lean/Std theorem and native executable, GCC and Clang static C builds,
-  and a GCC static C++ build with standard-library headers.
-- Kernel compilation, a QEMU TCG boot, eventfd descriptor aliasing, KCOV capture,
-  and symbolization into `fs/eventfd.c` and `fs/file.c`.
-- Syzkaller tool/executor builds and module checksums, plus seeded program
-  generation, C formatting and compilation. Generated syscalls are not run on
-  the host.
-- Lean MCP diagnostics for valid and deliberately invalid code.
-- Checksums of 680 locked archives, documentation files and source samples.
-
-Per-check logs and records are in `.artifacts/nono-validation/`. The earlier
-sandbox readiness report was retired on 2026-09-29 with the isolation checks. The original
-`dependencies/validation.json` describes the earlier provisioning run; its
-mutable build outputs are not a current integrity baseline. Dependency archive
-locks remain authoritative. These checks establish development readiness,
-not formal equivalence or a completed differential harness.
 
 ## Bundle contents
 

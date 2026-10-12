@@ -44,7 +44,7 @@ The agent installs none of the following. **You install them.**
 | Prerequisite | Needed by | Note |
 |---|---|---|
 | `/usr/bin/python3`, version **3.12 or newer** | `scripts/in-bundle` (its shebang is `#!/usr/bin/python3`); `stage-resources.py`, `restore-toolchains.py`, `verify-dependencies.py` | The docs say "Python 3.9+". That is **stale**. The scripts use `hashlib.file_digest` (3.11+) and `tarfile.extractall(filter="data")` (3.12, or a 3.11.4+ backport). Ubuntu 24.04 ships 3.12. |
-| `/bin/sh` | `scripts/build-kernel`, `bundle-tool`, `check-nono`, `lean-lsp` | |
+| `/bin/sh` | `scripts/build-kernel`, `bundle-tool`, `lean-lsp` | |
 | `git` | `in-bundle` (`git rev-parse` in worktrees), the mutant scripts, the workflow | |
 | `curl` | `stage-resources.py`, `restore-toolchains.py` | |
 | `tar` with zstd support, and `zstd` | `restore-toolchains.py` (`tar --zstd`) | |
@@ -53,7 +53,7 @@ The agent installs none of the following. **You install them.**
 | SSH key with access to `git@github.com:OathTech/lean-ux-proto.git` | clone | User-level |
 | Network access to `snapshot.ubuntu.com`, `www.kernel.org` and `github.com` | one-time staging | Not needed after staging |
 | `capped` (`/usr/local/bin/capped`, installed box-wide by oath-devbox) | the checker's model build, `scripts/build-kernel`, and every heavy command an agent runs | A cgroup memory cap (default 32G). It needs cgroup v2 delegation for the user scope, which the `claude-nono` alias provides; without the wrapper the checker and the kernel build refuse to run (`LEANUX_CAPPED` overrides the path). |
-| `nono` (optional) | confinement for agent sessions; `scripts/check-nono` | The old host had nono 0.79.0 at `~/.cargo/bin/nono`. How it was installed is **unverified**. |
+| `nono` (optional) | confinement for agent sessions | The old host had nono 0.79.0 at `~/.cargo/bin/nono`. How it was installed is **unverified**. |
 | Claude Code and its MCP registration (optional) | agent work; see section 10 | User-level |
 
 The following are **not** needed on the host, because they come from the project-local bundle:
@@ -256,7 +256,7 @@ scripts/in-bundle gcc --version                          # gcc-13 (Ubuntu 13.3.0
 scripts/in-bundle python3 --version                      # Python 3.12.3
 ```
 
-`scripts/verify-dependencies.py` and `scripts/check-offline.py` are **all-or-nothing**.
+`scripts/verify-dependencies.py` is **all-or-nothing**.
 
 `verify-dependencies.py` checks every row of every lock:
 - all 222 `.deb` files;
@@ -283,22 +283,8 @@ The command:
 scripts/in-bundle python3 scripts/verify-dependencies.py    # PASS: N staged archives ... verified.
 ```
 
-`check-offline.py` runs seven checks in order and stops at the first failure:
-toolchains, kernel, guest, syzkaller, syzkaller-program, lean-lsp, integrity.
-- Launch it through `scripts/check-nono`, which needs nono, or directly with
-  `scripts/in-bundle python3 scripts/check-offline.py --only <check>`.
-- Its `kernel` check runs `scripts/build-kernel` with the **base** profile into `.artifacts/kernel`,
-  unless `--kernel-build` is given. That build copies its config over `kernel/config-x86_64`.
-- The `syzkaller` check needs `.deps/go-mod` and refuses to run outside the main checkout.
-- `.deps/go-mod` has **no script that produces it**. It is only checked. Copy it from the old
-  machine if you want the syzkaller checks.
-
-[AGENT] For the check, the useful subsets are:
-
-```sh
-scripts/in-bundle python3 scripts/check-offline.py --only toolchains
-scripts/in-bundle python3 scripts/check-offline.py --only lean-lsp     # only after lean-lsp is restored
-```
+`check-offline.py`, `check-nono` and the syzkaller checks were removed on 2026-10-12 (AGENTS.md,
+"Gates and speedbumps"): the environment is validated by the unit tests and the check itself.
 
 ## 5. Kernel source (`.deps/linux` and the locked archive)
 
@@ -480,8 +466,7 @@ Neither directory is an input to the check.
   Whether this probe passes on the net-choice kernel is **unverified**: on the old host it ran
   against the base kernel.
 - **`.artifacts/provisioning`** holds logs of the original 2026-09-20 provisioning run, plus
-  `lean-lsp-check.json`, which `scripts/check-lean-lsp.py` writes. Nothing reads it. It need not be
-  recreated.
+  `lean-lsp-check.json` from a retired check. Nothing reads it. It need not be recreated.
 - `dependencies/validation.json` records that 2026-09-20 run. It is historical. Its "bootstrap
   requirements" (bwrap, user namespaces) were retired with the Bubblewrap launcher
   (docs/offline-usage.md).
@@ -621,7 +606,7 @@ Never use `git clean -fdx`, and never delete recursively over `.worktrees/`.
 
 ### 10.1 Lean LSP MCP
 
-Sources: `scripts/lean-lsp`, `scripts/lean-lsp-python`, `scripts/check-lean-lsp.py`.
+Sources: `scripts/lean-lsp`, `scripts/lean-lsp-python`.
 
 The project-local MCP server:
 
@@ -637,10 +622,8 @@ scripts/lean-lsp /absolute/path/to/a/Lean/project/inside/this/repository
 
 To check it:
 
-```sh
-scripts/in-bundle scripts/lean-lsp-python scripts/check-lean-lsp.py
-# PASS: offline Lean MCP diagnostics accept valid code and detect a type error.
-```
+(`scripts/check-lean-lsp.py` was removed on 2026-10-12; start `scripts/lean-lsp` and ask it for a
+diagnostic on any file to see it work.)
 
 On the old machine, Claude Code did **not** use this server. It used a user-global registration in
 `~/.claude.json`, `"lean-lsp": {"type": "stdio", "command": "lean-lsp-mcp"}`, with
@@ -656,22 +639,14 @@ On the new machine, either:
 
 ### 10.2 nono
 
-Sources: `scripts/check-nono`, `scripts/nono-check-profile.json`, docs/nono-profile-proposal.md.
+Sources: docs/nono-profile-proposal.md.
 
 - Agent sessions on the old host ran under nono. Its profiles were
   `~/.config/nono/profiles/claude-local.json` and `codex-local.json`. These are user files, and are
   **not in the repository**: copy or recreate them yourself.
 - `scripts/in-bundle` provides no confinement of its own.
-- `scripts/check-nono` runs `check-offline.py` under `nono wrap` with the repository's profile
-  fixture. That fixture extends `default`, grants the workdir read-write, reads `/usr`, `/proc`,
-  `/etc/localtime` and `/etc/python3.12`, and **blocks the network**. It is passed by filename and
-  never installed.
-- Inherits the all-or-nothing caveats of section 4. Use `--only`:
-
-  ```sh
-  scripts/check-nono --only toolchains
-  scripts/check-nono --only lean-lsp
-  ```
+- The repository's acceptance fixture (`scripts/check-nono`, `nono-check-profile.json`) was removed on
+  2026-10-12; the check run under the agent profile validates the sandbox.
 
 ### 10.3 Agent memory
 
@@ -766,7 +741,7 @@ warning, recorded in the provenance and the report.
 
 - **The remote lacks the D3 `main` and every `task/*` branch** (section 2). A clone from GitHub
   alone gives the pre-D3 tree, and its full-check counts differ.
-- **`verify-dependencies.py`, `check-offline.py` and `check-nono` fail** after the minimal staging
+- **`verify-dependencies.py` fails** after the minimal staging
   (section 4). This is a missing file, not corruption.
 - **Go, lean-lsp, `.deps/go-mod` and `.deps/docs`** have no fetch path. Copy them from the old
   machine, or do without them.
