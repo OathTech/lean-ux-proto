@@ -1890,7 +1890,13 @@ def Decision.repeatable : Decision → Bool
   | .getPeerPutHandshake | .getPeerPutKeepalive | .getPeerPutTx | .getPeerPutRx | .getPeerPutProto
   | .getPeerEp4 | .getPeerEp6 | .getPeerEpFail | .getPeerNoAips | .getPeerSeqUnset
   | .getPeerSeqChanged | .getPeerAipsNestFail | .getPeerAipIter | .getPeerAipFail | .dumpPeerIter
-  | .dumpGetPeerFail | .setPortPeerIter | .aipNoFamily | .aipNoAddr | .aipNoCidr
+  | .dumpGetPeerFail | .setPortPeerIter
+  -- W2 (docs/2026-10-06-w1-w2-netlink.md, 4.3): `wg_get` (op 9) runs one
+  -- dump call per chunk, several in one operation
+  | .dumpNoHdr | .dumpFirst | .dumpPutPort | .dumpPutFwmark | .dumpPutIfindex | .dumpPutIfname
+  | .dumpHasIdentity | .dumpPutPrivate | .dumpPutPublic | .dumpNoPeersNest | .dumpPeerListEmpty
+  | .dumpCursorSet | .dumpCursorDead | .dumpOutRetZero | .dumpOutNotDone | .dumpOutHasCursor
+  | .dumpRetErr | .dumpDone | .aipNoFamily | .aipNoAddr | .aipNoCidr
   | .aipV4Family | .aipV4Cidr | .aipV4Len | .aipV6Family | .aipV6Cidr
   | .aipV6Len | .peerHasPubkey | .peerPubkeyLen | .peerHasPsk | .peerPskLen
   | .peerHasFlags | .peerBadFlags | .peerHasProtocol | .peerBadProtocol | .peerNotFound

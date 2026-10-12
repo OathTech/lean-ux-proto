@@ -1,5 +1,6 @@
 import Leanux.WG.Curve25519
 import Std.Data.TreeMap
+import Lean.Data.Json
 
 /-!
 # WireGuard state (drivers/net/wireguard)
@@ -443,5 +444,84 @@ structure Device where
 def AF_INET : Nat := 2
 def AF_INET6 : Nat := 10
 def MESSAGE_HANDSHAKE_INITIATION_LEN : Nat := 148
+
+/-! ## W2: the generic-netlink socket's dump state (docs/2026-10-06-w1-w2-netlink.md, 4.3)
+
+What `struct netlink_sock` and `struct netlink_callback` keep for a dump,
+per socket (fd 7, and the stepped socket at fd 8), and the messages a dump
+chunk carries. The put model is in `Leanux/WG/NetlinkDump.lean`. -/
+
+/-- A netlink message of a dump as user space sees it (4.2): a data message
+    (`nlmsg_flags`: `NLM_F_MULTI` 2, with `NLM_F_DUMP_INTR` 16 when the
+    device changed between two dump calls) with exactly the attributes put,
+    the `NLMSG_DONE` (flags 2, `dump_done_errno`), or an `NLMSG_ERROR`
+    acknowledgement (a start error, or `-EBUSY`). -/
+structure PeerDumpAttrs where
+  /-- `WGPEER_A_PUBLIC_KEY`, lowercase hex. -/
+  publicKey : String
+  /-- Exactly the attributes `get_peer` put, in its order (`allowed_ips`
+      present iff the nest was started, possibly empty). -/
+  attrs : List (String × Lean.Json)
+  /-- `get_peer` returned `-EMSGSIZE` after ending the nest: the peer's
+      allowed IPs continue in the next chunk (the cursor, 2.4). -/
+  split : Bool := false
+
+inductive NlMessage where
+  /-- `device`: the device part's attributes when `ctx->next_peer` was
+      `NULL` (else empty); `peers`: `none` when the nest was cancelled
+      (an empty peer list, a dead cursor), else the peers put. -/
+  | data (flags : Nat) (device : List (String × Lean.Json)) (peers : Option (List PeerDumpAttrs))
+  | done (flags : Nat) (error : Int)
+  | error (error : Int)
+
+/-- The observation of one message (4.2), as the harness decodes the guest's
+    record (`harness/wg.py decode_messages`). -/
+def NlMessage.toJson : NlMessage → Lean.Json
+  | .data flags device peers =>
+    let peersAttr := match peers with
+      | some ps => [("peers", Lean.Json.arr (ps.map fun p => Lean.Json.mkObj p.attrs).toArray)]
+      | none => []
+    Lean.Json.mkObj [("kind", "data"), ("flags", flags), ("attrs", Lean.Json.mkObj (device ++ peersAttr))]
+  | .done flags e => Lean.Json.mkObj [("kind", "done"), ("flags", flags), ("error", e)]
+  | .error e => Lean.Json.mkObj [("kind", "error"), ("error", e)]
+
+instance : Inhabited PeerDumpAttrs := ⟨{ publicKey := "", attrs := [] }⟩
+instance : BEq PeerDumpAttrs :=
+  ⟨fun a b => a.publicKey == b.publicKey && a.split == b.split
+    && (Lean.Json.mkObj a.attrs).compress == (Lean.Json.mkObj b.attrs).compress⟩
+instance : BEq NlMessage := ⟨fun a b => a.toJson.compress == b.toJson.compress⟩
+
+/-- A dump chunk's `sk_buff`: the tailroom left (`NLMSG_GOODSIZE` = 3776
+    fresh, 2.3) and its messages, oldest first. -/
+structure NlSkb where
+  room : Nat := 3776
+  messages : List NlMessage := []
+  deriving BEq
+
+/-- `struct dump_ctx` (netlink.c:97-102): the cursor peer (the last peer a
+    dump call completed; `NULL` before any), the allowed-IPs sequence taken at
+    a split peer's first visit, and the node the split peer resumes from. -/
+structure DumpCtx where
+  nextPeer : Option PeerId := none
+  allowedipsSeq : Nat := 0
+  nextAllowedip : Option NodeId := none
+  /-- `ctx->wg`: set by `wg_get_device_start`. -/
+  hasWg : Bool := false
+  deriving BEq
+
+/-- The per-socket dump state: the receive queue (chunks and
+    acknowledgements, oldest first), `cb_running`, `dump_done_errno`,
+    `cb->prev_seq` (the consistency check, 2.4) and the dump context. -/
+structure NlSock where
+  queue : List NlSkb := []
+  cbRunning : Bool := false
+  dumpDoneErrno : Int := 0
+  prevSeq : Nat := 0
+  ctx : DumpCtx := {}
+  /-- `netlink_autobind` ran (the socket's first `sendmsg`); the fixture's
+      socket at 7 binds in the fixture, the stepped one at 8 in its first
+      `wg_get_start`. -/
+  bound : Bool := false
+  deriving BEq
 
 end Leanux.WG

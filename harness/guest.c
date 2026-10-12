@@ -46,6 +46,9 @@
 #define CAPACITY (1024UL * 1024)
 #define MAX_PAYLOAD 32768
 #define NETLINK_FD 7
+/* W2 (docs/2026-10-06-w1-w2-netlink.md 4.2): the stepped dump socket, opened
+ * after the one at 7 for traces with wg_get_start or wg_get_recv. */
+#define DUMP_FD 8
 /* Stage B1 network fixture: UDP listeners that catch what wg0 sends to
  * 127.0.0.1 / ::1 at LISTEN_PORT, and a dual-stack UDP socket whose datagrams
  * the routes added at wg_up send into wg0. */
@@ -147,16 +150,16 @@ struct fixture_route { unsigned family; unsigned char dst[16]; unsigned mtu; };
 #define OP_WG_DELETE 17
 #define OP_WG_FLOOD 18
 #define OP_WG_ADVANCE 19
+/* W2 (4.2): the stepped dump on DUMP_FD. */
+#define OP_WG_GET_START 20
+#define OP_WG_GET_RECV 21
 #define OP_WG_NETNS_CLOSE 22
 #define OP_WG_DELADDR 23
 #define OP_WG_DELROUTE 24
 /* W4 (docs/2026-10-06-w4-w7-transmit-bulk.md section 6): SIOCSIFMTU on wg0; W7: the batch. */
 #define OP_WG_SET_MTU 25
 #define OP_WG_BATCH 26
-/* 20-21 are reserved for W2 (harness/trace.py RESERVED_OPCODES,
- * docs/2026-10-11-interface.md): wg_get_start and wg_get_recv. No define
- * until the stream lands: the opcode switch's default fails any such code.
- * W8 took 22 (wg_netns_close), W9 23-24, W4 25, W7 26. */
+/* W8 took 22 (wg_netns_close), W9 23-24, W4 25, W7 26, W2 20-21. */
 #define IS_LIFECYCLE_OP(code) ((code) == OP_WG_CREATE || (code) == OP_WG_DOWN || (code) == OP_WG_DELETE)
 /* The parent's per-child hang guard (P design section 6): a child still
  * running after this many seconds is killed with its process group. */
@@ -236,7 +239,7 @@ struct trace {
      * network fixture without wg0 (L, "net_fixture": "bare"), 3 the
      * foreign-creator fixture (W8); arm: the trace's subset of the batch's
      * dispatch set, a bit per entry (W8: per-trace arming, section 3.2) */
-    char id[81]; unsigned count; unsigned rlimit; unsigned net; unsigned arm; struct operation ops[MAX_OPS];
+    char id[81]; unsigned count; unsigned rlimit; unsigned net; unsigned arm; unsigned stepped; struct operation ops[MAX_OPS];
     unsigned nsteer; struct steer_entry steer[STEER_MAX];
     unsigned nroutes; struct fixture_route routes[MAX_FIXTURE_ROUTES];
 };
@@ -442,35 +445,62 @@ static int nl_send(int fd, unsigned short type, unsigned short flags, unsigned c
     return send(fd, message, header->nlmsg_len, 0) == (ssize_t)header->nlmsg_len ? 0 : -errno;
 }
 
-/* Receive until the acknowledgement (or NLMSG_DONE for a dump). Each data
- * message's attribute payload after `skip` bytes is appended as hex to `out`
- * when it is non-NULL. Returns the kernel's error code (0 on success). */
+/* W2 (4.2, 4.5): the messages of one receive (`n` bytes in nl_buffer), each
+ * appended to `out` (when non-NULL) as a record the harness decodes
+ * (harness/wg.py decode_messages): {"kind":"data","flags":F,"payload":"<the
+ * attributes after `skip` bytes, hex>"}, {"kind":"done","flags":F,"error":E}
+ * or {"kind":"error","error":E}. Returns 1 with *ack set when a DONE or an
+ * ERROR ended the receive (the dump's end, a start error, -EBUSY), 0 when
+ * only data messages were read, -1 when `out` is full. */
+static int record_messages(ssize_t n, size_t skip, char *out, size_t out_size, size_t *used, int *first, int *ack)
+{
+    for (struct nlmsghdr *h = (struct nlmsghdr *)nl_buffer; NLMSG_OK(h, n); h = NLMSG_NEXT(h, n)) {
+        if (h->nlmsg_type == NLMSG_ERROR || h->nlmsg_type == NLMSG_DONE) {
+            int done = h->nlmsg_type == NLMSG_DONE;
+            *ack = done ? *(int *)NLMSG_DATA(h) : ((struct nlmsgerr *)NLMSG_DATA(h))->error;
+            if (out) {
+                if (*used + 80 >= out_size) return -1;
+                *used += (size_t)(done
+                    ? sprintf(out + *used, "%s{\"kind\":\"done\",\"flags\":%u,\"error\":%d}", *first ? "" : ",", (unsigned)h->nlmsg_flags, *ack)
+                    : sprintf(out + *used, "%s{\"kind\":\"error\",\"error\":%d}", *first ? "" : ",", *ack));
+                *first = 0;
+            }
+            return 1;
+        }
+        if (out) {
+            size_t len = h->nlmsg_len - NLMSG_HDRLEN - skip;
+            if (*used + 2 * len + 64 >= out_size) return -1;
+            *used += (size_t)sprintf(out + *used, "%s{\"kind\":\"data\",\"flags\":%u,\"payload\":\"", *first ? "" : ",", (unsigned)h->nlmsg_flags);
+            const unsigned char *data = (const unsigned char *)NLMSG_DATA(h) + skip;
+            for (size_t k = 0; k < len; ++k) *used += (size_t)sprintf(out + *used, "%02x", data[k]);
+            *used += (size_t)sprintf(out + *used, "\"}");
+            *first = 0;
+        }
+    }
+    return 0;
+}
+
+/* Receive until the acknowledgement (or NLMSG_DONE for a dump), recording
+ * every message to `out` when it is non-NULL (W2 4.5: op 9's record is the
+ * per-message one). Returns the kernel's error code (0 on success). */
 static int nl_receive(const char *id, int index, int fd, size_t skip, char *out, size_t out_size)
 {
     size_t used = 0;
     if (out) { out[0] = 0; }
-    int first = 1;
+    int first = 1, ack = 0;
     for (;;) {
         ssize_t n = nl_recv(id, index, fd, 0);
         if (n < 0) return (int)n;
-        for (struct nlmsghdr *h = (struct nlmsghdr *)nl_buffer; NLMSG_OK(h, n); h = NLMSG_NEXT(h, n)) {
-            if (h->nlmsg_type == NLMSG_ERROR) return ((struct nlmsgerr *)NLMSG_DATA(h))->error;
-            if (h->nlmsg_type == NLMSG_DONE) {
-                int error = *(int *)NLMSG_DATA(h);
-                return error;
-            }
-            if (out) {
-                size_t len = h->nlmsg_len - NLMSG_HDRLEN - skip;
-                if (used + 2 * len + 4 >= out_size) return -EMSGSIZE;
-                used += (size_t)sprintf(out + used, "%s\"", first ? "" : ",");
-                const unsigned char *data = (const unsigned char *)NLMSG_DATA(h) + skip;
-                for (size_t k = 0; k < len; ++k) used += (size_t)sprintf(out + used, "%02x", data[k]);
-                used += (size_t)sprintf(out + used, "\"");
-                first = 0;
-            }
-        }
+        int ended = record_messages(n, skip, out, out_size, &used, &first, &ack);
+        if (ended < 0) return -EMSGSIZE;
+        if (ended) return ack;
     }
 }
+
+/* W2 (4.2): whether the stepped dump socket is open, and the dump-pending
+ * counter (C1): +1 per wg_get_start, -1 per DONE or ERROR received on it;
+ * a wg_delete with a dump pending would hang in netdev_wait_allrefs_any. */
+static int dump_fd_open, dump_pending;
 
 static void attr(unsigned char *buf, size_t *len, unsigned short type, const void *data, size_t size)
 {
@@ -681,6 +711,10 @@ static void delete_wg0(const char *id)
  * there is none) and without calling fail(). */
 static void delete_wg0_best_effort(void)
 {
+    /* W2 (4.2, C1): netlink_release runs a running dump's `done` and drops
+     * its device reference before RTM_DELLINK can wait on it. */
+    if (dump_fd_open) { close(DUMP_FD); dump_fd_open = 0; }
+    close(NETLINK_FD);
     int rtnl = socket(AF_NETLINK, SOCK_RAW | SOCK_CLOEXEC, NETLINK_ROUTE);
     if (rtnl < 0) return;
     unsigned char payload[64];
@@ -1616,6 +1650,15 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         int cap_ack = 1;
         if (setsockopt(NETLINK_FD, SOL_NETLINK, NETLINK_CAP_ACK, &cap_ack, sizeof(cap_ack)))
             fail(t->id, -1, "environment_failure", "netlink_cap_ack");
+        /* W2 (4.2): the stepped dump socket at 8, CAP_ACK too; the dump state
+         * lives in the socket, so it is a fixture descriptor. */
+        if (t->stepped) {
+            if (socket(AF_NETLINK, SOCK_RAW, NETLINK_GENERIC) != DUMP_FD)
+                fail(t->id, -1, "environment_failure", "dump_socket_at_8");
+            if (setsockopt(DUMP_FD, SOL_NETLINK, NETLINK_CAP_ACK, &cap_ack, sizeof(cap_ack)))
+                fail(t->id, -1, "environment_failure", "netlink_cap_ack_dump");
+            dump_fd_open = 1;
+        }
         if (t->net == 3) {
             /* W8: in C, the injector (the outer sender: the plain sender's
              * wildcard bind and port, so the endpoint wg0 learns from an
@@ -1639,7 +1682,8 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         fail(t->id, -1, "environment_failure", "rlimit_nofile");
     if (!comparisons) {
         printf("LEANUX_FIXTURE {\"id\":\"%s\",\"reserved\":[%s],\"free\":[%u,%u],\"rlimit\":[%u,%u]", t->id,
-               t->net == 3 ? "0,1,2,3,4,5,6,7,8,9" : "0,1,2,3,4,5,6,7", t->net == 3 ? 10 : 8, t->rlimit - 1, t->rlimit, t->rlimit);
+               t->net == 3 ? "0,1,2,3,4,5,6,7,8,9" : t->stepped ? "0,1,2,3,4,5,6,7,8" : "0,1,2,3,4,5,6,7",
+               t->net == 3 ? 10 : t->stepped ? 9 : 8, t->rlimit - 1, t->rlimit, t->rlimit);
         /* W5: the network namespace's facts, as read back; W8: the foreign-creator
          * fixture adds the injector (8) and the pin (9) */
         if (t->net)
@@ -1834,6 +1878,31 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             if (error < 0) { errno = -error; ret = -1; } else ret = 0;
             break;
         }
+        case OP_WG_GET_START: {
+            /* W2 (4.2): the dump request on the stepped socket; the start and
+             * the first dump call run inside the sendmsg. A start error or
+             * -EBUSY is an acknowledgement for a later wg_get_recv: ret 0. */
+            if (!t->net || !dump_fd_open) fail(t->id, i, "invalid_input", "wg_get_start_without_dump_socket");
+            int error = nl_send(DUMP_FD, wg_family, NLM_F_REQUEST | NLM_F_DUMP, WG_CMD_GET_DEVICE, op->payload, op->payload_len, 1);
+            if (error < 0) { errno = -error; ret = -1; } else { ret = 0; ++dump_pending; }
+            break;
+        }
+        case OP_WG_GET_RECV: {
+            /* W2 (4.2): one recvmsg of one chunk or acknowledgement; the next
+             * dump call runs inside it while the dump is running. -EAGAIN
+             * when nothing is queued. */
+            if (!t->net || !dump_fd_open) fail(t->id, i, "invalid_input", "wg_get_recv_without_dump_socket");
+            ssize_t n = nl_recv(t->id, (int)i, DUMP_FD, MSG_DONTWAIT);
+            if (n < 0) { errno = (int)-n; ret = -1; break; }
+            size_t used = 0;
+            int first = 1, ack = 0;
+            dump_hex[0] = 0;
+            int ended = record_messages(n, GENL_HDRLEN, dump_hex, sizeof(dump_hex), &used, &first, &ack);
+            if (ended < 0) fail(t->id, i, "environment_failure", "dump_record_overflow");
+            if (ended) --dump_pending;
+            ret = 0;
+            break;
+        }
         case OP_WG_UP: {
             /* dev_change_flags(wg0, flags | IFF_UP) -> wg_open. The current
              * flags were read before coverage started. */
@@ -1985,7 +2054,9 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             /* L: RTM_NEWLINK (wg_newlink, register_netdevice) or RTM_DELLINK
              * (unregister, netdev_run_todo, wg_destruct), both complete
              * inside send(); recv() reads the acknowledgement, whose error
-             * code is the result. */
+             * code is the result. W2 (C1): a delete with a stepped dump
+             * pending would hold the device reference forever. */
+            if (op->code == OP_WG_DELETE && dump_pending > 0) fail(t->id, i, "invalid_input", "wg_delete_with_dump_pending");
             int error = nl_send(lifecycle_fd, op->code == OP_WG_CREATE ? RTM_NEWLINK : RTM_DELLINK,
                                 op->code == OP_WG_CREATE ? NEWLINK_FLAGS : NLM_F_REQUEST | NLM_F_ACK, 0, lifecycle_body,
                                 lifecycle_len, 0);
@@ -2063,8 +2134,8 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
                 fail(t->id, i, "environment_failure", "unexpected_pending_signal");
         result[i].sigpipe = sigismember(&pending, SIGPIPE) == 1;
         /* Outside the coverage window: the dump's attribute payloads. */
-        if (op->code == OP_WG_GET && !comparisons && ret == 0)
-            printf("LEANUX_WG {\"id\":\"%s\",\"index\":%u,\"payloads\":[%s]}\n", t->id, i, dump_hex);
+        if ((op->code == OP_WG_GET || op->code == OP_WG_GET_RECV) && !comparisons && ret == 0)
+            printf("LEANUX_WG {\"id\":\"%s\",\"index\":%u,\"messages\":[%s]}\n", t->id, i, dump_hex);
         /* A successful up that changed the flags gets wg0's addresses and
          * routes (the first since creation, or again after a down); the
          * rekey bound counts from the trace's first such up, timed before
@@ -2197,6 +2268,8 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
          * a dump still running on one of them (netlink_release runs its
          * `done`, dropping the device reference) can never hold RTM_DELLINK
          * in netdev_wait_allrefs_any. Outside every window. */
+        if (t->stepped && close(DUMP_FD)) fail(t->id, -1, "environment_failure", "close_dump_socket");
+        dump_fd_open = 0;
         if (t->net && close(NETLINK_FD)) fail(t->id, -1, "environment_failure", "close_netlink");
         if (t->net) delete_wg0(t->id);
         _exit(0);
@@ -2216,6 +2289,8 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
     }
     printf("],\"branches\":[]}\n");
     fflush(stdout);
+    if (t->stepped && close(DUMP_FD)) fail(t->id, -1, "environment_failure", "close_dump_socket");
+    dump_fd_open = 0;
     if (t->net && close(NETLINK_FD)) fail(t->id, -1, "environment_failure", "close_netlink");   /* W2 4.2 (C1) */
     if (t->net) delete_wg0(t->id);
     _exit(0);
@@ -2371,7 +2446,7 @@ int main(int argc, char **argv)
                 fail(trace.id, i, "invalid_input", "wire_operation");
             op->payload_len = 0;
             if (op->code == OP_WG_SET || op->code == OP_WG_GET || op->code == OP_WG_XMIT || op->code == OP_WG_INJECT || op->code == OP_WG_FLOOD
-                || op->code == OP_WG_BATCH) {
+                || op->code == OP_WG_BATCH || op->code == OP_WG_GET_START) {
                 /* A WireGuard operation carries its attribute payload as hex. */
                 const char *hex = line + consumed;
                 if (*hex++ != ' ') fail(trace.id, i, "invalid_input", "wire_payload");
@@ -2384,6 +2459,17 @@ int main(int argc, char **argv)
                 }
             }
         }
+        /* W2 (4.2): a stepped trace holds the dump socket at 8, so it needs
+         * rlimit 9 (10 with a lifecycle operation, whose temporary socket
+         * takes 9) and excludes the foreign-creator fixture (fds 8-9). */
+        trace.stepped = 0;
+        int lifecycle = 0;
+        for (unsigned i = 0; i < trace.count; ++i) {
+            if (trace.ops[i].code == OP_WG_GET_START || trace.ops[i].code == OP_WG_GET_RECV) trace.stepped = 1;
+            if (IS_LIFECYCLE_OP(trace.ops[i].code)) lifecycle = 1;
+        }
+        if (trace.stepped && (trace.net == 3 || !trace.net || trace.rlimit < (lifecycle ? 10u : 9u)))
+            fail(trace.id, -1, "invalid_input", "wire_stepped_fixture");
         for (unsigned k = 0; k < trace.nsteer; ++k) {
             struct steer_entry *e = &trace.steer[k];
             int consumed = 0;

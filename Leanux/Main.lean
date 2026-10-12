@@ -44,7 +44,13 @@ def main (args : List String) : IO UInt32 := do
           return 3
       | .ok json =>
         if domainOnly then
-          output.putStrLn (Lean.Json.mkObj [("id", Lean.toJson trace.id), ("in_domain", Lean.toJson true)]).compress
+          -- W2 (docs/2026-10-06-w1-w2-netlink.md 4.7): the trace's label count,
+          -- measured offline by the generators against the check's cap
+          let branches := match json.getObjVal? "branches" with
+            | .ok (Lean.Json.arr labels) => labels.size
+            | _ => 0
+          output.putStrLn (Lean.Json.mkObj [("id", Lean.toJson trace.id), ("in_domain", Lean.toJson true),
+            ("branches", Lean.toJson branches)]).compress
         else
           output.putStrLn json.compress
         output.flush

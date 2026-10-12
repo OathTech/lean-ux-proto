@@ -42,6 +42,13 @@ inductive Syscall where
   /-- `sendmsg` of a WG_CMD_GET_DEVICE dump request, then `recvmsg` of the
       dump; the device state goes to `extraOut`. -/
   | wgGet (device : WG.DeviceRef)
+  /-- W2 (docs/2026-10-06-w1-w2-netlink.md, 4.2): the stepped dump on the
+      fixture's second generic-netlink socket (fd 8): `sendmsg` of the dump
+      request (the start and the first dump call run inside it; result 0),
+      and one `recvmsg(MSG_DONTWAIT)` of one chunk or acknowledgement, whose
+      messages go to `extraOut`. -/
+  | wgGetStart (device : WG.DeviceRef)
+  | wgGetRecv
   /-- `ioctl(6, SIOCSIFFLAGS, flags | IFF_UP)` on the fixture's sender. -/
   | wgUp
   /-- `sendto` of a UDP datagram (`payload`) from the fixture's sender to `addr`
@@ -102,6 +109,10 @@ def socketCallOn (fd : Nat) (body : M Int) : M Int := do
   return ret
 
 def socketCall (body : M Int) : M Int := socketCallOn NETLINK_FD body
+
+/-- W2: the stepped dump socket, opened by the guest after the one at 7 for
+    traces with a stepped operation (`Runner.initialKernel`). -/
+def DUMP_FD : Nat := 8
 
 /-- The trace's KCOV descriptor (harness/guest.c), on which `wg_advance`
     issues its ioctl. -/
@@ -213,6 +224,39 @@ def dispatch : Syscall → M Int
     | .ok device =>
       modify fun w => { w with extraOut := [("device", device)] }
       return 0
+  -- W2 (4.2): one system call each on the stepped socket, the netlink
+  -- core's chunk allocations below the cut as in `netlinkRequest`. The
+  -- stepped operations that run no WireGuard code are outside the domain
+  -- [AGENT, coordinator 2026-10-12: the WireGuard boundary, the af_netlink.c
+  -- loop unanchored]: `-EAGAIN` (nothing queued), and a receive that pops
+  -- only `NLMSG_DONE` or an acknowledgement (the dump call that produced
+  -- it ran in the previous operation).
+  | .wgGetStart device => socketCallOn DUMP_FD do
+    skipCut allocCuts
+    -- netlink_autobind (af_netlink.c:803-830) on the socket's first sendmsg:
+    -- its port id, the process's, is the fixture socket's, so the collision
+    -- draws once (:820); the port id reaches no modeled path (a cut)
+    let sock ← WG.getNlSock DUMP_FD
+    if !sock.bound then
+      skipCutExactly .netlinkAutobindPort 1 allocCuts
+      WG.setNlSock DUMP_FD { sock with bound := true }
+    WG.netlinkDumpStart DUMP_FD device
+    skipCut allocCuts
+    return 0
+  | .wgGetRecv => socketCallOn DUMP_FD do
+    skipCut allocCuts
+    let some messages ← WG.netlinkRecvmsg DUMP_FD
+      | unsupported "wg_get_recv with nothing queued (-EAGAIN): no WireGuard code runs"
+    skipCut allocCuts
+    -- the chunk carrying the DONE and a start error's acknowledgement run no
+    -- WireGuard code but carry the dump's data or the lookup's error code; a
+    -- lone NLMSG_DONE (one that did not fit its chunk) carries nothing and
+    -- stays outside the domain, as does the `-EBUSY` acknowledgement
+    -- (netlinkDumpStart stops at the start)
+    if messages.all (· matches .done ..) then
+      unsupported "wg_get_recv popping a lone NLMSG_DONE: no WireGuard code runs"
+    modify fun w => { w with extraOut := [("messages", Lean.Json.arr (messages.map (·.toJson)).toArray)] }
+    return 0
   | .wgUp => socketCallOn SENDER_FD Env.wgUp
   | .wgXmit family addr payload opts => socketCallOn SENDER_FD do
     -- W9: the sender's `sendto` routes on the fixture's tables

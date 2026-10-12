@@ -183,3 +183,32 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   lifecycle chunks showed `nlmsg_new` records between `wg_create`'s two
   neighbour draws and before an up device's `wg_destruct`; both are cut
   points now (`docs/2026-10-05-l-lifecycle.md` 16.3).
+- **2026-10-12 [AGENT, coordinator]** W2's rulings on section 8 of the
+  netlink design (`docs/2026-10-06-w1-w2-netlink.md`), made by the
+  coordinator under the user's direction of the same day ("you are
+  empowered to make tactical decisions" towards a control-and-data mirror).
+  Yes to 1 (descriptor 8 as the stepped dump's fixture socket, the two
+  fixture shapes, L's temporary socket at 9, `rlimit_nofile` at least 9 and
+  10 with a lifecycle operation), 2 (the 3776-byte receive with
+  `NETLINK_CAP_ACK` and `MSG_TRUNC`, already landed), 3 (`NLA_F_NESTED` as
+  the sole malformation, already landed), 4 (op 9 keeps the coalesced
+  `device`, with the `[]` restoration and the fail-noisy rejections), 5
+  (`expect` on unsteered traces) and 6 (256 allowed IPs by accumulation, 32
+  per `wg_set`, the label budget measured before the generator). No to 7
+  (model `-EBUSY`) and 8 (anchor af_netlink.c): `-EBUSY`, `-EAGAIN` and the
+  receive of a lone `NLMSG_DONE` stay explicit `unsupported` outcomes and
+  N2-M13 is dropped. Reason: the smallest anchored surface outside WireGuard
+  for a control-and-data mirror; the three af_netlink.c decisions would
+  anchor code the mirror otherwise treats as the environment.
+  Implementer's choices under them [AGENT, fork of the coordinator]: the
+  receive of a start error's acknowledgement is in the domain (it carries
+  the lookup's error code, which the start itself does not return; no
+  WireGuard code runs, as for the receive of the chunk carrying the DONE); a
+  stepped trace and the foreign-creator fixture exclude each other (both
+  need descriptor 8); no check rule for the receive that runs no dump call
+  (every socket operation reports the descriptor lookup's decisions, so the
+  existing rules apply unchanged); `MAX_BRANCHES` stays 32768 (the 256-IP
+  IPv6 trace measures 18,681 labels); the stepped socket's `netlink_autobind`
+  draw (af_netlink.c:820, the collision with the fixture socket's port id)
+  is a below-cut hidden site (id 170), consumed once at the first
+  `wg_get_start`.
