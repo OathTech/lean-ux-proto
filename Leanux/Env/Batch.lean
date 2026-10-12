@@ -69,8 +69,8 @@ inductive BatchItem where
     queue. The test names no unit pair. -/
 def queuedWork (w : Nat) (pid : Option Nat) : M Bool := do
   let d ← getDev
-  if w == Worker.encryptWorker.index then return !d.encryptQueue.isEmpty
-  if w == Worker.decryptWorker.index then return !d.decryptQueue.isEmpty
+  if w == Worker.encryptWorker.index then return !d.encryptQueue.empty
+  if w == Worker.decryptWorker.index then return !d.decryptQueue.empty
   if w == Worker.receiveWorker.index then return !d.handshakeQueue.isEmpty
   if w == Worker.txWorker.index then
     if !d.txWorkQueue.isEmpty then return true
@@ -121,7 +121,7 @@ def condResched : Nat → Worker → M Unit → M Unit → M Bool
     for _ in [0:16] do
       match (← peekHiddenSite).bind sectionOf with
       | some (.encryptWorker, true) =>
-        if (← getDev).encryptQueue.isEmpty then break   -- not runnable: the record mismatches later
+        if (← getDev).encryptQueue.empty then break   -- not runnable: the record mismatches later
         runWorker .encryptWorker (WG.encryptWorker checksumHelp (condResched fuel .encryptWorker runDecrypt runNetRx))
       | some (.txWorker, true) =>
         let d ← getDev
@@ -132,7 +132,7 @@ def condResched : Nat → Worker → M Unit → M Unit → M Bool
         modifyDev fun d => { d with txWorkQueue := d.txWorkQueue.erase pid }
         runWorker .txWorker (WG.txWorker pid (condResched fuel .txWorker runDecrypt runNetRx)) (some pid)
       | some (.decryptWorker, true) =>
-        if (← getDev).decryptQueue.isEmpty then break
+        if (← getDev).decryptQueue.empty then break
         runDecrypt
       | _ =>
         -- the NAPI poll at the yield (the docstring): pending, with its
@@ -148,7 +148,7 @@ def condResched : Nat → Worker → M Unit → M Unit → M Bool
     match (← peekHiddenSite).bind sectionOf with
     | some (.encryptWorker, true) | some (.txWorker, true) | some (.decryptWorker, true) =>
       let d ← getDev
-      if !d.encryptQueue.isEmpty || !d.txWorkQueue.isEmpty || !d.decryptQueue.isEmpty then
+      if !d.encryptQueue.empty || !d.txWorkQueue.isEmpty || !d.decryptQueue.empty then
         invariant "more worker runs at one cond_resched than the loop allows"
     | _ => pure ()
     -- W7 phase 1 (5.4): a nested unit that yields while an outer open

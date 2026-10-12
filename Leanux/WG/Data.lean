@@ -102,13 +102,14 @@ def encryptPacket (checksumHelp : Packet → M Packet) (keypair : KeypairId) (pk
     W7 phase 2: the iteration is the unit the environment interleaves
     (`workerIter`). -/
 def encryptStep (checksumHelp : Packet → M Packet) : M Bool := do
-  match (← getDev).encryptQueue with
-  | [] =>
-    _ ← branch .encWorkerConsumed false   -- ptr_ring_consume_bh
+  -- ptr_ring_consume_bh: the head's slot, discarded by the batch rule
+  match (← getDev).encryptQueue.consume with
+  | (none, _) =>
+    _ ← branch .encWorkerConsumed false
     return false
-  | first :: rest =>
+  | (some first, ring) =>
     _ ← branch .encWorkerConsumed true
-    modifyDev fun d => { d with encryptQueue := rest }
+    modifyDev fun d => { d with encryptQueue := ring }
     let some head := first.head? | invariant "an empty ring item"
     -- skb_list_walk_safe(first, skb, next)
     let mut state := PacketState.crypted

@@ -174,6 +174,38 @@ structure RxPacket where
   ds : Nat := 0
   deriving Repr, BEq
 
+/-- `SMP_CACHE_BYTES` (`CONFIG_X86_L1_CACHE_SHIFT` 6): the cache line the
+    ring's batch is sized by. -/
+def SMP_CACHE_BYTES : Nat := 64
+/-- `MAX_QUEUED_PACKETS` (messages.h:53): the crypt rings' size
+    (`wg_packet_queue_init`) and the bound of a peer's `prev_queue`. -/
+def MAX_QUEUED_PACKETS : Nat := 1024
+
+/-- `struct ptr_ring` (include/linux/ptr_ring.h:30-40) as data (simulation-
+    target review, section 4.1): the producer cursor, the consumer head (the
+    next valid entry) and tail (the next entry to invalidate), the size, the
+    batch, and the slots' occupancy. Consumed slots stay occupied until the
+    batch clears them, so the full test is occupancy, not the count. Its
+    operations are in `Leanux/WG/PtrRing.lean`. -/
+structure PtrRing (α : Type) where
+  size : Nat
+  /-- `r->batch` (:474-484): `SMP_CACHE_BYTES * 2 / sizeof(void *)`, or 1
+      when that exceeds half the size or is 0. -/
+  batch : Nat
+  producer : Nat := 0
+  consumerHead : Nat := 0
+  consumerTail : Nat := 0
+  slots : Array (Option α)
+  deriving BEq
+
+/-- `ptr_ring_init` (:470-486) of `size` entries, every slot free. -/
+def PtrRing.init (size : Nat) : PtrRing α :=
+  let batch := SMP_CACHE_BYTES * 2 / 8
+  { size, batch := if batch > size / 2 || batch == 0 then 1 else batch,
+    slots := Array.replicate size none }
+
+instance : Inhabited (PtrRing α) := ⟨PtrRing.init 0⟩
+
 /-- `struct prev_queue` (queueing.h:34-39, queueing.c:50-106) as data (W7
     stream B, docs/2026-10-06-w4-w7-transmit-bulk.md 5.1): the items
     enqueued and not yet dequeued (`count`, oldest first), whether `tail`
@@ -427,13 +459,13 @@ structure Device where
       items queued for the encrypt worker, oldest first: each a staged list
       of packets (D2 stream A). -/
   encryptLastCpu : Int := -1
-  encryptQueue : List (List DataPacket) := []
+  encryptQueue : PtrRing (List DataPacket) := PtrRing.init MAX_QUEUED_PACKETS
   /-- Peers whose `transmit_packet_work` is queued, oldest first. -/
   txWorkQueue : List PeerId := []
   /-- `decrypt_queue.last_cpu` and the messages queued for the decrypt worker,
       oldest first (D2). -/
   decryptLastCpu : Int := -1
-  decryptQueue : List RxPacket := []
+  decryptQueue : PtrRing RxPacket := PtrRing.init MAX_QUEUED_PACKETS
   /-- D3: peers whose `clear_peer_work` (`wg_queued_expired_zero_key_material`)
       is queued on `handshake_send_wq`, oldest first
       (docs/2026-10-05-d3-timers.md, section 5.4). -/

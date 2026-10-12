@@ -194,7 +194,7 @@ def deliverSent : M Unit := do
     oldest first. What they send is delivered. -/
 def runCryptWorkers (runDecrypt : M Unit := unsupported "a switch to the decrypt worker at this point (its placement is not modeled here)")
     (runNetRx : M Unit := pure ()) : M Unit := do
-  if !(← getDev).encryptQueue.isEmpty then
+  if !(← getDev).encryptQueue.empty then
     runWorker .encryptWorker (WG.encryptWorker checksumHelp (condResched SWITCH_DEPTH .encryptWorker runDecrypt runNetRx))
   for _ in [0:4096] do
     let d ← getDev
@@ -207,7 +207,7 @@ def runCryptWorkers (runDecrypt : M Unit := unsupported "a switch to the decrypt
         | none => pure headPid
       modifyDev fun d => { d with txWorkQueue := d.txWorkQueue.erase pid }
       runWorker .txWorker (WG.txWorker pid (condResched SWITCH_DEPTH .txWorker runDecrypt runNetRx)) (some pid)
-      if !(← getDev).encryptQueue.isEmpty then invariant "the tx worker queued encryption"
+      if !(← getDev).encryptQueue.empty then invariant "the tx worker queued encryption"
   invariant "the tx work queue did not drain"
 
 /-- Crypt work queued by a system call itself (a session's keepalive or
@@ -216,7 +216,7 @@ def runCryptWorkers (runDecrypt : M Unit := unsupported "a switch to the decrypt
     it. `wg_xmit` has its own (`afterXmit`). -/
 def requireNoCryptWork : M Unit := do
   let some d := (← getK).wg | return
-  if !d.encryptQueue.isEmpty || !d.txWorkQueue.isEmpty then
+  if !d.encryptQueue.empty || !d.txWorkQueue.isEmpty then
     unsupported "crypt work queued in a system call (its worker's timing)"
 
 /-- The handshake send worker whose unit the next dispatch record names
@@ -259,7 +259,7 @@ def runSendWorkers : M Unit := do
     its records would be missing from this operation. -/
 def afterXmit : M Unit := do
   let some d := (← getK).wg | return   -- L: no device (the send failed)
-  let crypt := !d.encryptQueue.isEmpty || !d.txWorkQueue.isEmpty
+  let crypt := !d.encryptQueue.empty || !d.txWorkQueue.isEmpty
   if crypt && !d.sendWorkQueue.isEmpty then
     unsupported "wg_xmit queued crypt work and a handshake (their order)"
   modify fun w => { w with queuedThisCall := [] }   -- the call returned and slept
@@ -397,12 +397,12 @@ def runTimers (jHi : Nat) : M Bool := do
     else if !fired then break
     else if site == startOf .sendWorker && !d.sendWorkQueue.isEmpty then runOneSendWorker
     else if (site == startOf .encryptWorker || site == startOf .txWorker)
-        && (!d.encryptQueue.isEmpty || !d.txWorkQueue.isEmpty) then runCryptWorkers
+        && (!d.encryptQueue.empty || !d.txWorkQueue.isEmpty) then runCryptWorkers
     else break
   if fired then
     deliverSent
     let d ← getDev
-    if !d.sendWorkQueue.isEmpty || !d.clearWorkQueue.isEmpty || !d.encryptQueue.isEmpty || !d.txWorkQueue.isEmpty then
+    if !d.sendWorkQueue.isEmpty || !d.clearWorkQueue.isEmpty || !d.encryptQueue.empty || !d.txWorkQueue.isEmpty then
       unsupported "work a timer queued outlived the guest's wait"
   return fired
 
@@ -477,7 +477,7 @@ def afterAdvance : M Unit := do
 def requireIdleDevice : M Unit := do
   requireNoCryptWork
   let d ← getDev
-  if !d.decryptQueue.isEmpty || d.peers.toList.any (·.2.napiScheduled) then
+  if !d.decryptQueue.empty || d.peers.toList.any (·.2.napiScheduled) then
     unsupported "receive work queued at wg_stop (its worker's timing)"
 
 /-- `wg_up`: `SIOCSIFFLAGS` with `IFF_UP` (`dev_ifsioc`, `dev_change_flags`).
@@ -752,7 +752,7 @@ def inject (family port : Nat) (msg : List UInt8) (tos : Nat := 0) (ll : Bool :=
   if !(← getDev).handshakeQueue.isEmpty then
     runWorker .receiveWorker (WG.handshakeReceiveWorker (discard <| condResched SWITCH_DEPTH .receiveWorker (runDecryptAt SWITCH_DEPTH) napiSoftirq))
   -- or the decrypt worker, with the NAPI poll its packet schedules
-  if !(← getDev).decryptQueue.isEmpty then runDecryptWorker
+  if !(← getDev).decryptQueue.empty then runDecryptWorker
   -- then the crypt work the receive worker or the NAPI poll queued (a
   -- session's keepalive, staged packets on key confirmation)
   runCryptWorkers (runDecryptAt SWITCH_DEPTH) napiSoftirq
@@ -834,20 +834,20 @@ def afterBatch : M Unit := do
   modify fun w => { w with queuedThisCall := [] }   -- the call returned and slept
   let startOf (w : Worker) := (HiddenSite.sectionStart w).info.id
   if (← get).hidden.isNone then
-    if !(← getDev).decryptQueue.isEmpty then runDecryptWorker
+    if !(← getDev).decryptQueue.empty then runDecryptWorker
     runCryptWorkers (runDecryptAt SWITCH_DEPTH) napiSoftirq
     runSendWorkers
     return
   for _ in [0:4096] do
     let d ← getDev
     let some site ← peekNextSite | break
-    if site == startOf .decryptWorker && !d.decryptQueue.isEmpty then runDecryptWorker
-    else if (site == startOf .encryptWorker && !d.encryptQueue.isEmpty)
+    if site == startOf .decryptWorker && !d.decryptQueue.empty then runDecryptWorker
+    else if (site == startOf .encryptWorker && !d.encryptQueue.empty)
          || (site == startOf .txWorker && !d.txWorkQueue.isEmpty) then runCryptWorkers (runDecryptAt SWITCH_DEPTH) napiSoftirq
     else if site == startOf .sendWorker && !d.sendWorkQueue.isEmpty then runOneSendWorker
     else break
   let d ← getDev
-  if !d.decryptQueue.isEmpty || !d.encryptQueue.isEmpty || !d.txWorkQueue.isEmpty || !d.sendWorkQueue.isEmpty then
+  if !d.decryptQueue.empty || !d.encryptQueue.empty || !d.txWorkQueue.isEmpty || !d.sendWorkQueue.isEmpty then
     unsupported "work the batch queued outlived the guest's wait (its records would be missing)"
   deliverSent
 

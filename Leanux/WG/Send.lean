@@ -1,5 +1,6 @@
 import Leanux.WG.Keypair
 import Leanux.WG.PrevQueue
+import Leanux.WG.PtrRing
 
 /-!
 # drivers/net/wireguard/send.c — staging, handshake queueing, and handing
@@ -32,9 +33,6 @@ open Leanux
 def MAX_STAGED_PACKETS : Nat := 128
 def ENOSPC : Int := 28
 def EPIPE : Int := 32
-/-- `MAX_QUEUED_PACKETS` (messages.h:53): the encrypt ring's size
-    (`wg_packet_queue_init`) and the bound of a peer's `tx_queue`. -/
-def MAX_QUEUED_PACKETS : Nat := 1024
 /-- `REJECT_AFTER_TIME`, `REKEY_AFTER_TIME` (seconds) and the message
     counters' bounds (messages.h:41-46). -/
 def REJECT_AFTER_TIME : Nat := 180
@@ -132,13 +130,14 @@ def enqueuePerDeviceAndPeer (pid : PeerId) (item : List DataPacket) : M Int := d
   let d ← getDev
   let cpu ← cpumaskNextOnlineFrom d.encryptLastCpu
   modifyDev fun d => { d with encryptLastCpu := cpu }
-  -- `ptr_ring_produce_bh(&device_queue->ring, skb)` fails on a full ring
-  if ← branch .enqueueRingFull (d.encryptQueue.length ≥ MAX_QUEUED_PACKETS) then return -EPIPE
+  -- `ptr_ring_produce_bh(&device_queue->ring, skb)` fails on a full ring:
+  -- the producer's slot is occupied (`__ptr_ring_produce`, `PtrRing.full`)
+  if ← branch .enqueueRingFull d.encryptQueue.full then return -EPIPE
   -- queue_work_on(cpu, wq, &per_cpu_ptr(device_queue->worker, cpu)->work):
   -- queued iff not pending, with its record (dispatch order); the
   -- environment runs the encrypt worker while its ring holds items
   queueDeviceWork .encryptWorker
-  modifyDev fun d => { d with encryptQueue := d.encryptQueue ++ [item] }
+  modifyDev fun d => { d with encryptQueue := d.encryptQueue.produce item }
   return 0
 
 /-- wg_packet_create_data (send.c:311-331) of a staged list. The list holds

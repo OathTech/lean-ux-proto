@@ -1,5 +1,6 @@
 import Leanux.WG.Handshake
 import Leanux.WG.PrevQueue
+import Leanux.WG.PtrRing
 
 /-!
 # drivers/net/wireguard/receive.c — the receive path and the handshake worker
@@ -325,12 +326,13 @@ def enqueuePerDeviceAndPeerRx (pkt : RxPacket) : M Int := do
   let d ← getDev
   let cpu ← cpumaskNextOnlineFrom d.decryptLastCpu
   modifyDev fun d => { d with decryptLastCpu := cpu }
-  if ← branch .enqueueRingFull (d.decryptQueue.length ≥ MAX_QUEUED_PACKETS) then return -EPIPE
+  -- `ptr_ring_produce_bh`: the producer's slot is occupied (`PtrRing.full`)
+  if ← branch .enqueueRingFull d.decryptQueue.full then return -EPIPE
   -- queue_work_on(cpu, wq, &per_cpu_ptr(device_queue->worker, cpu)->work):
   -- queued iff not pending, with its record (dispatch order); the
   -- environment runs the decrypt worker while its ring holds packets
   queueDeviceWork .decryptWorker
-  modifyDev fun d => { d with decryptQueue := d.decryptQueue ++ [pkt] }
+  modifyDev fun d => { d with decryptQueue := d.decryptQueue.produce pkt }
   return 0
 
 /-- wg_queue_enqueue_per_peer_rx (queueing.h:190-203): the packet's state is

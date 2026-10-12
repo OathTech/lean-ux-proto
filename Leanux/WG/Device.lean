@@ -258,8 +258,8 @@ def wgDestruct : M Unit := do
   -- destroy_workqueue ×3: drain_workqueue runs what is still queued (work
   -- the environment excludes), then the rescuer's kthread_stop (a sleep)
   let d ← getDev
-  if !d.sendWorkQueue.isEmpty || !d.encryptQueue.isEmpty || !d.txWorkQueue.isEmpty
-      || !d.decryptQueue.isEmpty || !d.clearWorkQueue.isEmpty then
+  if !d.sendWorkQueue.isEmpty || !d.encryptQueue.empty || !d.txWorkQueue.isEmpty
+      || !d.decryptQueue.empty || !d.clearWorkQueue.isEmpty then
     unsupported "wg_destruct with queued work (destroy_workqueue runs it)"
   mayHaveSlept
   -- wg_packet_queue_free: the handshake ring is purged; the crypt rings are

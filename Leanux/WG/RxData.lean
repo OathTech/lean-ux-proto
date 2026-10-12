@@ -96,13 +96,13 @@ def decryptPacket (pkt : RxPacket) : M (Option RxPacket) := do
 def decryptStep (softirq irqExit : M Unit) : M Bool := do
   -- ptr_ring_consume_bh: its spin_unlock_bh runs a pending softirq
   softirq
-  match (← getDev).decryptQueue with
-  | [] =>
+  match (← getDev).decryptQueue.consume with
+  | (none, _) =>
     _ ← branch .decWorkerConsumed false
     return false
-  | pkt :: rest =>
+  | (some pkt, ring) =>
     _ ← branch .decWorkerConsumed true
-    modifyDev fun d => { d with decryptQueue := rest }
+    modifyDev fun d => { d with decryptQueue := ring }
     let decrypted ← decryptPacket pkt
     -- `likely(decrypt_packet(...)) ? PACKET_STATE_CRYPTED : PACKET_STATE_DEAD`
     if ← branch .decWorkerDecrypted decrypted.isSome then
