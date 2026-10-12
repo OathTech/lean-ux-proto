@@ -1411,3 +1411,213 @@ until W5-W6; Q10 documented, not built.
 the learned endpoint and the reply's source for all three inject
 destinations; `tx_dropped` in W8b; the default route after `wg_deladdr`;
 the resolved frames of the inline reset sites.
+
+## 14. Results [AGENT 2026-10-11]
+
+Branch `task/w89` on the dispatch-order base (`task/dispatch-order`
+dbe9e0e: main + housekeeping + the interface commit + the dispatch
+identity). W9's core is built; W8 is not started (section 14.4).
+
+### 14.1 What was built
+
+- **W9-K** (commit 18bbdbf, record-only): `kernel/patches/gen-choice-stream.py`
+  adds `kcov_dst_cache_ts(ts, ip)` in kcov.c, gated by
+  `KCOV_DISPATCH_ARM_RECORDS` like the arm record, called with the value
+  stored from `dst_cache_reset` (include/net/dst_cache.h, the inline; the
+  prototype lives there under `CONFIG_KCOV`, an empty inline otherwise) and
+  from `dst_cache_per_cpu_get`'s fail label (net/core/dst_cache.c), both at
+  `_THIS_IP_`. Both patches regenerated; `scripts/build-kernel` CHOICE_SHA
+  `8b34860c…`, ACTL_SHA `114c2969…`. Not built here: the coordinator
+  builds both kernels and records the identities (the identity files'
+  lines are the dispatch-order builds' until then). Decision 11.11 (the
+  dispatch cap) is moot: the cap is already 32 since the D3+A integration.
+- **W9-G** (50ed61c): `wg_deladdr`/`wg_delroute` (opcodes 23/24,
+  `{op, family}`; the ACK is the result: EADDRNOTAVAIL 99, ESRCH 3);
+  `wg_inject`'s optional `to` (loopback, wg0, loopback-alias; the code in
+  the wire's value field); the guest's message builders beside
+  `route_into_wg0`'s; L's EEXIST-on-a-later-up rule refined (not after a
+  `wg_deladdr 4`). `evaluator/check.py`: kind 306 is class `jiffies`.
+- **W9-M** (8083c7c): section 4.2 as designed, with these placements:
+  the routing model is `World.route4/6` in `Leanux/Kernel/Defs.lean`
+  (not `Env`: `Leanux/WG` cannot import `Env`, and `send4` needs it), with
+  `routeLookup` noting the IPv4 default route's use; `send4`/`send6` take
+  the endpoint and an optional cache peer (`&peer->endpoint` for
+  `wg_socket_send_skb_to_peer`, a stack copy for the reply path); the
+  transmit keeps the IP-ident cut and the nested NET_RX section
+  (`loopbackSend`), E's reply path its lax cut; a route into wg0 stays
+  `unsupported` (W9-R). Sites 150/151 (kind `jiffies`): on the W9 build
+  (identity `313c2cc9…`) the records resolve, as every record does, by
+  their address minus one (`evaluator/coverage.py`): the reset's four
+  callers (`dst_cache_init`, `wg_socket_set_peer_endpoint:294`,
+  `send4:59`, `dst_cache_reset_now:177`) share the inline's frame
+  `include/net/dst_cache.h:90` and the refresh is `net/core/dst_cache.c:63`
+  (the patched files' lines; section 4.4's 79/62 are the pristine ones).
+  The first run on that build failed every WireGuard chunk at the first
+  `wg_set` ("no record left for dst_cache_reset_ts") with the sites at the
+  pristine lines: the records were unknown sites.
+  Captures made before the record (`evaluator/test_model_replay.py`)
+  carry `"dst_cache_records": false`, under which the mirror keeps the
+  pre-W9 rule (the cache always misses, no record consumed); a live run
+  never sets it.
+- **W-H** (this commit): `scripts/wg-w89-corpus.py`, eight `w9_*` traces
+  (section 14.2); mutants W9-M1, M2, M3, M5, M8, M9, M10 on the `w9_`
+  subset (`scripts/wg-mutants.py`). W9-M4 needs a roaming inject and is
+  not written; W9-M6 waits for W9-R; W9-M7 needs a deladdr-while-cached
+  trace.
+
+### 14.2 The corpus
+
+| Trace | What it reaches |
+|---|---|
+| `w9_endpoint_alias` | the initiation to `127.0.0.2:51998`: the `127/8` local route, the sender's wildcard bind, source `127.0.0.1` (W9-M1) |
+| `w9_two_sends` | the initiation (a miss after `dst_cache_init`) and the retransmit: a hit iff the recorded refresh jiffy is after the reset's (W9-M3) |
+| `w9_delroute_untouched` | `wg_delroute 4` before any lookup through the route: no generation bump (W9-M9) |
+| `w9_unroutable` | `-ENETUNREACH` at `send4`: no datagram, `tx_bytes` unchanged (W9-M5); the peer starts without an endpoint so the running-device `wg_set` queues the keepalive's initiation |
+| `w9_deladdr_then_send` | `wg_deladdr 4` takes the default route (`wg_delroute 4` → ESRCH), the inner `sendto` fails (W9-M8) |
+| `w9_deladdr6_then_send` | the IPv6 removal keeps the default route (the second `wg_delroute 6` → ESRCH) |
+| `w9_inject_to_alias` | a response from the alias: `src4 = 127.0.0.2`, rejected by `inet_confirm_addr` at the keepalive's send (W9-M2) |
+| `w9_inject_to_wg0_addr` | a response to wg0's own address: the endpoint `10.255.254.1:51998`, the cache reset, the reply from that address (W9-M10) |
+| `w9_session_two_sends` | after the session, two data sends: the second always hits the cache (the keepalive after the endpoint's reset refreshes in the same or the next jiffy) (W9-M3) |
+| `w9_session_delroute_untouched` | IPv6 inner packets, so the IPv4 default route is never looked up before `wg_delroute 4`; the outer send after the delete hits (W9-M9) |
+
+### 14.3 Validation
+
+On the dispatch-order oracle (`bb3e577d`), which writes no kind-306 record:
+- `lake build leanux-model`: OK (82 jobs); unit and replay tests: 111 OK;
+  `leanux-model --hidden-sites` lists 150/151 as kind `jiffies`.
+- `evaluator.check --suite handwritten`: pass (no WireGuard trace).
+- Every WireGuard trace with a peer fails at its first `wg_set` with
+  "no record left for dst_cache_reset_ts" (`d1_basic` and the eight
+  `w9_*` traces, each accepted by the domain filter): the expected,
+  uniform failure until the W9-K kernel exists. **The suite-level check
+  of W9-M, the eight traces and the seven mutants is the coordinator's,
+  on the rebuilt oracle.**
+
+### 14.3b On the W9 build (identity `313c2cc9…`) [AGENT 2026-10-12]
+
+After the sites moved to the resolved lines and the `dst_cache_init`
+record took its place in `wg_peer_create`'s order (before the handshake
+init, peer.c:36 vs :55), the send decisions became repeatable (several
+datagrams per operation) and the miss's first witness the confirm-addr
+test (line 52/132, `security_sk_classify_flow`, has no instrumentation
+point without `SECURITY`):
+- `--suite handwritten,wireguard`: 166/190 agreement; `s2_index_collision`
+  (repeatable) and `w9_inject_to_alias` (the witness order) then pass alone,
+  as do `w9_endpoint_alias`, `w9_two_sends`, `w9_unroutable`,
+  `w9_deladdr_then_send`, `w9_inject_to_wg0_addr`, `w9_delroute_untouched`
+  (8/8 single-trace runs).
+- **One open finding, a scheduling race.** `e_cookie_bad_mac1_aad`
+  operation 5 (a `wg_set` whose keepalive sends an initiation) stopped
+  with "expected the NET_RX section, the record is site 151": Linux's
+  cache missed where the mirror's hit. The records: resets at op 0
+  (jiffies 4296157671, `dst_cache_init` and the endpoint set), the first
+  send's refresh at op 1 (4296157706, after the resets: the slot valid by
+  `time_after`), no reset after, a refresh at op 5. So the dst made at op
+  1 failed `ipv4_dst_check`: `rt_genid` moved after it. The guest adds
+  wg0's addresses and routes (`route_into_wg0`, each add a
+  `rt_cache_flush`) after the `wg_up` ioctl returns and before the
+  operation's wait; the handshake worker queued inside the ioctl runs
+  either at the ioctl's return to user space (then its dst predates the
+  routes and expires) or during the wait (then it survives: the eight
+  single-trace runs above, where `w9_two_sends`'s retransmit hit). The
+  mirror bumps the generation inside `wg_up`, before the send: the second
+  order. Not recorded by anything, so not modelable fail-closed as is.
+  Proposed fix (the coordinator's call, a guest change): for a successful
+  flag-changing `wg_up`, the guest waits `QUEUE_WAIT_US` **before**
+  `route_into_wg0` (its existing wait, moved; no added time), making the
+  first order deterministic; the mirror then applies the table changes
+  after the send workers and the idle timers of that operation
+  (`Env.wgUp` queues them, the post-operation hook in `Syscalls.syscall`
+  applies them). A send to an off-loopback endpoint at `wg_up` then gets
+  `-ENETUNREACH` in both, as the first order gives.
+
+  **Decision [AGENT, coordinator, 2026-10-12]:** the fixture order is made
+  deterministic as proposed: the guest's existing post-up wait moves
+  before `route_into_wg0` (no added time), and the mirror applies the
+  table changes after that operation's send workers and idle timers
+  (`World.routesPending`, `Env.routeIntoWg0`). Reason: a scheduling race
+  the records cannot show (the handshake worker queued inside the ioctl
+  ran at the ioctl's return in one run and during the wait in eight
+  others), resolved as a fixture choice rather than a placement the check
+  reruns. Recorded in `docs/decisions.md`.
+
+### 14.3c Final validation on the W9 build, with the fixture order [AGENT 2026-10-12]
+
+- `evaluator.check --suite handwritten,wireguard --out .artifacts/check/w9-suites-3`:
+  **pass, 190/190**, 8983 operand pairs, no chunk retries, the `e_*`
+  traces included; trace time after `wg_up` max 3.747 s of 4.5 s
+  (`d3_retransmit_gives_up`, margin 16.7%): the moved wait adds no time.
+- Mutants (`scripts/wg-mutants.py`, the `w9_` subset, no other outcome):
+  W9-M1 rejected (2 semantic), M2 (8 hidden), M5 (1 semantic), M8 (1
+  semantic), M10 (1 semantic); M3 and M9 survived the first run (the
+  initiation's dst is expired by the up's route adds, so no send hit)
+  and are rejected (10 hidden each) on the two session traces above.
+  **7/7 rejected.**
+- Unit and replay tests: 111 OK. `lake build leanux-model` OK.
+- The ten `w9_*` traces pass alone; `s2_index_collision` and
+  `w9_inject_to_alias` pass after the repeatable and witness fixes.
+
+### 14.4 Not done
+
+- **W8b** (the device up at the exit: `linkwatch_event` armed, the
+  deactivated queue's `tx_dropped`, the timers' and keepalive sends'
+  `-ENONET`, the two-table routing of section 3.4), the generator's `netns`
+  class, and listing `wg_socket_init` with the refcount operand exclusions
+  (section 3.3): see 14.5 for what W8a built.
+- The generator classes (`routing`, `netns`); the control suite for the
+  datagram routed into wg0; W9-R; the stretch items W9-S1/S2.
+
+### 14.5 W8a: the exit with the device down [AGENT 2026-10-12]
+
+Built on the W9 oracle (`313c2cc9…`), no kernel change.
+
+| Run | Result |
+|---|---|
+| unit and replay tests | 111 OK |
+| `w8_down_exit_up` alone | pass, 54 operand pairs: the `cleanup_net` section in `wg_netns_close`, `wg_up` `-ENONET`, `wg_observe` null with `-EBADF` |
+| the four `w8_*` traces | pass, 4/4, 223 operand pairs |
+| `--suite handwritten,wireguard` | see the commit |
+
+What was built (sections 3.1-3.4): the fixture mode `"net_fixture":
+"foreign-creator"` (wire `net` 3: D and C, wg0 created from C with
+`IFLA_NET_NS_FD` naming D, the listeners, the injector at 8 and the pin at
+9 in C, the sender and the generic-netlink socket in D, the fixture row
+`reserved` 0-9); `wg_netns_close` (opcode 22); per-trace arming (the `T`
+line's seventh field, a bit per dispatch entry; `cleanup_net` and
+`linkwatch_event` join `DISPATCH_SYMBOLS` at 12-13, `cleanup_net` armed by
+foreign-creator traces only); the namespace pins; the mirror's
+`wgNetnsPreExit`, `socketInit`'s live `-ENONET`, `setDevice`'s live `-EPERM`
+(`.setDevNoNet`), the closed listeners' `-EBADF` and null datagrams; the
+FS mirror closes fixture sockets (`sock_close` a cut) and the pin (its
+dentry's eviction queues `cleanup_net`); `wg_netns_pre_exit` listed in
+`kcov.json`.
+
+Deviations [AGENT]:
+- **The pins live in a holder process**, not the batch: a pin held by the
+  batch is inherited by every later child, where it shifts the fixture and
+  widens the descriptor table (an operand of every close). The batch forks
+  the holder once; a trace process sends its pid and waits for the ack.
+- **The close order is injector, listeners, then the pin**, the reverse of
+  3.2's: a UDP socket's `put_net` is RCU-deferred, and a `cleanup_net`
+  queued from an RCU callback would write no queue record (kind 307 is
+  recorded in the task's context only), so the pin's synchronous put must
+  be the last. The settle in between is a TSC spin, not a sleep: a
+  `nanosleep` inside the window records its clock reads.
+- **The parked descriptors sit at 40-43**, not above the table: a `dup2`
+  above `NR_OPEN_DEFAULT` would grow the trace process's table to 256,
+  visible as `file_close_fd_locked`'s operand.
+- **`linkwatch_event` is not armed in W8a**: its delay is
+  `linkwatch_nextevent - jiffies`, a global the previous child's run moves
+  (audit M2's caveat), so its section could land after the wait; for a down
+  device only `operstate` changes, which nothing observes. W8b decides.
+- **Inside the section** the records are the pre-exit's, one `dst_cache_reset_ts`
+  from `sit0`'s unregister (`ipip6_tunnel_uninit`, a cut consumer) and
+  `cleanup_net`'s own `cond_resched` (an ambient site, 152). The
+  allocations are below the cut (A).
+- **The check accepts repeated decisions inside `wg_netns_close`**: four
+  close system calls in one operation.
+- **`wg_socket_init` stays unlisted** (3.3's operand exclusions not built):
+  the `-ENONET` arm is data, witnessed by `wg_open.socket_init_error`.
+- The one-off mutant for the new section rule, W8-M1 (`wg_netns_pre_exit`
+  keeps `creating_net`), is run once and reported in the commit, then
+  dropped (AGENTS.md, gates and speedbumps).

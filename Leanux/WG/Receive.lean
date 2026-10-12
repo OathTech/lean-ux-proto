@@ -192,11 +192,10 @@ def sendBufferAsReplyToSkb (src : SkbSource) (buffer : List UInt8) : M Unit := d
   -- it and declare the arm, as `.sendBufNoMem` is for socket.c:192)
   -- [AGENT, int-e merge].
   if !(← hiddenAlloc .replySkb) then return
-  skipCut [.ipIdentKey, .ipIdentReserve, .flowHashSecret, .sectionStart .netRx, .sectionStop .netRx]
-  let sport ← socketPort e.family
-  -- iptunnel_xmit_stats: the device tstats (W5, 2.6)
-  modifyDev fun d => { d with txPackets := d.txPackets + 1, txBytes := d.txBytes + buffer.length }
-  modify fun w => { w with sent := w.sent ++ [{ family := e.family, addr := e.addr, port := e.port, bytes := buffer, sport, src := e.src }] }
+  -- W9: send4/send6 (Socket.lean) with no cache (socket.c:225, :227) on the
+  -- endpoint built from the skb; E's lax NET_RX cut is kept for this path
+  -- (`exactRx := false`). The result is the caller's to ignore.
+  _ ← if e.family == AF_INET then send4 e none buffer 0 false else send6 e none buffer 0 false
 
 /-- wg_cookie_message_create (cookie.c:180-196): header 3 ‖ receiver index ‖
     nonce (`get_random_bytes_wait`, `.cookieNonce`) ‖ `xchacha20poly1305_encrypt`

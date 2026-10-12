@@ -51,8 +51,15 @@ inductive Syscall where
   | wgSetMtu (mtu : Nat)
   /-- `recvfrom(4, MSG_DONTWAIT)` after the fixture waited for the workers. -/
   | wgObserve
-  /-- `sendto` of a WireGuard message from the fixture's sender to `port`. -/
-  | wgInject (family port : Nat) (message : List UInt8) (tos : Nat) (ll : Bool)
+  /-- `sendto` of a WireGuard message from the fixture's sender to `port`
+      at the destination `dest` (W9: 0 loopback, 1 wg0's own address, 2 the
+      loopback alias), with the DS field `tos` and, with `ll`, from the
+      link-local address on lo (W5). -/
+  | wgInject (family port : Nat) (message : List UInt8) (tos : Nat) (ll : Bool) (dest : Nat := 0)
+  /-- W9: `RTM_DELADDR` of wg0's fixture address and `RTM_DELROUTE` of the
+      default route via wg0, per family, on a temporary rtnetlink socket. -/
+  | wgDeladdr (family : Nat)
+  | wgDelroute (family : Nat)
   /-- E-B: an io_uring flood to wg0's `port`: `count` invalid-MAC1 initiations
       with `messages` valid-MAC1 initiations submitted first. -/
   | wgFlood (count port : Nat) (messages : List (List UInt8))
@@ -68,9 +75,17 @@ inductive Syscall where
   | wgCreate
   | wgDown
   | wgDelete
+  /-- W8 (docs/2026-10-06-w8-w9-netns-routing.md, 3.2): `close` of the
+      creating namespace's holders (the injector 8, the listeners 5 and 4,
+      then the pin 9), then the guest's wait for the namespace's teardown. -/
+  | wgNetnsClose
 
 /-- The generic-netlink socket at descriptor 7 (`NETLINK_FD` in harness/guest.c). -/
 def NETLINK_FD : Nat := 7
+/-- W8: the foreign-creator fixture's injector and pin (harness/guest.c). -/
+def LISTEN6_FD : Nat := 5
+def INJECT_FD : Nat := 8
+def PIN_FD : Nat := 9
 
 /-- One call on a fixture socket: `CLASS(fd, f)(fd)` in `__sys_sendto`,
     `__sys_recvfrom` (net/socket.c) and `ioctl` (fs/ioctl.c), which is
@@ -79,7 +94,9 @@ def NETLINK_FD : Nat := 7
     they are sockets. -/
 def socketCallOn (fd : Nat) (body : M Int) : M Int := do
   let f ← fdget fd
-  if f.file.isNone then invariant "a fixture socket is not open"
+  -- W8: a closed fixture socket (the listeners after wg_netns_close):
+  -- `fd_empty(f)` -> -EBADF (net/socket.c), before any socket layer runs
+  if f.file.isNone then return -EBADF
   let ret ← body
   fdput f
   return ret
@@ -146,6 +163,40 @@ def rtnetlinkRequest (handler : M Int) : M Int := do
   freeFile fid
   return ret
 
+/-- The fuel of `taskWorkRun`: far above the files a trace can close (at most
+    `MAX_OPS` operations), never the bound the C has (none). -/
+def TASK_WORK_FUEL : Nat := 1 <<< 16
+
+/-- `task_work_run` on exit to user mode: each queued `____fput` runs `__fput`.
+    An `__fput` may queue more work (a release dropping another reference), so
+    the loop is fuel-bounded rather than bounded by the queue at entry
+    (future-proof-paths note, 3(d)). -/
+def taskWorkRun : M Unit := do
+  for _ in [0:TASK_WORK_FUEL] do
+    match (← getK).task.taskWorks with
+    | [] => return
+    | fid :: rest =>
+      modifyK fun k => { k with task := { k.task with taskWorks := rest } }
+      fputFinal fid
+  invariant "task_work_run did not drain the task's work"
+
+/-- W8 `wg_netns_close` (design 3.2): four `close` system calls on the
+    creating namespace's holders, each returning to user mode (its `____fput`
+    runs then): the injector and the listeners, whose socket release defers
+    `put_net` to RCU (the guest lets those run before the last close), then
+    the pin, whose dentry's eviction drops the last reference in task
+    context: `cleanup_net` is queued there (`fputFinal`'s pin hook consumes
+    the queue record), and its section runs in the guest's wait
+    (`Env.netnsCleanup`, after this call). -/
+def netnsClose : M Int := do
+  if !(← get).foreignCreator then unsupported "wg_netns_close outside the foreign-creator fixture"
+  if (← get).netnsCHolders.isEmpty then unsupported "wg_netns_close twice"
+  for fd in [INJECT_FD, LISTEN6_FD, LISTEN4_FD, PIN_FD] do
+    let ret ← sysClose fd
+    if ret != 0 then invariant s!"close({fd}) of a fixture holder returned {ret}"
+    taskWorkRun
+  return 0
+
 def dispatch : Syscall → M Int
   | .eventfd2 count flags => sysEventfd2 count flags
   | .dup fildes => sysDup fildes
@@ -164,9 +215,14 @@ def dispatch : Syscall → M Int
       return 0
   | .wgUp => socketCallOn SENDER_FD Env.wgUp
   | .wgXmit family addr payload opts => socketCallOn SENDER_FD do
-    -- the fixture adds wg0's routes after a successful wg_up; before that,
-    -- and after a down or a deletion, no route exists (L)
-    if !(← get).routesViaWg0 then return -ENETUNREACH
+    -- W9: the sender's `sendto` routes on the fixture's tables
+    -- (`World.route4/6`): into wg0 by the default route the guest adds after
+    -- a successful wg_up (and removes with a down, a deletion or
+    -- `wg_delroute`), else `-ENETUNREACH`; a local destination never
+    -- reaches wg0
+    match ← routeLookup family 0 addr with
+    | .error err => return err
+    | .ok r => if r.dev != WG0_IFINDEX then unsupported "a transmit to a local address (not into wg0)"
     -- W4: an MTU change below the family's floor took its routes down with
     -- its IP device, and the fixture re-adds them only at the next wg_up
     if let some d := (← getK).wg then
@@ -181,15 +237,20 @@ def dispatch : Syscall → M Int
       let ret ← WG.wgXmit family addr pkts mtu
       return if ret == 0 then payload.length else ret
   | .wgSetMtu mtu => socketCallOn SENDER_FD (Env.setMtu mtu)
-  | .wgInject family port message tos ll => socketCallOn SENDER_FD (Env.inject family port message tos ll)
+  | .wgInject family port message tos ll dest => socketCallOn SENDER_FD (Env.inject family port message tos ll dest)
+  | .wgDeladdr family => rtnetlinkRequest (Env.wgDeladdr family)
+  | .wgDelroute family => rtnetlinkRequest (Env.wgDelroute family)
   | .wgFlood count port messages => Env.flood count port messages
   -- W7: the io_uring submission's descriptor plumbing (the ring's fdget, each
   -- send's fget of the sender) is the fixture's, as the flood's is: not modeled
   | .wgBatch items _ => Env.batch items
-  | .wgObserve => socketCallOn LISTEN4_FD do
+  | .wgObserve => do
+    -- the fixture's observation happens whether or not the listener is still
+    -- open (W8: after wg_netns_close the `recvfrom(4)` is -EBADF and the
+    -- datagrams null, the sender's inbox and the stats are read as always)
     let (ret, observed) ← Env.observe
     modify fun w => { w with extraOut := ["datagrams", "replies", "stats"].map fun k => (k, observed.getObjValD k) }
-    return ret
+    socketCallOn LISTEN4_FD (pure ret)
   | .wgAdvance ticks => do
     -- `ioctl(3, KCOV_LEANUX_TIME_ADVANCE, &ticks)`: `CLASS(fd, f)(fd)`
     -- (fs/ioctl.c), then the LEANUX case of `kcov_ioctl` (a cut point but
@@ -202,23 +263,7 @@ def dispatch : Syscall → M Int
   | .wgCreate => rtnetlinkRequest WG.wgCreate
   | .wgDown => socketCallOn SENDER_FD Env.wgDown
   | .wgDelete => rtnetlinkRequest Env.wgDelete
-
-/-- The fuel of `taskWorkRun`: far above the files a trace can close (at most
-    `MAX_OPS` operations), never the bound the C has (none). -/
-def TASK_WORK_FUEL : Nat := 1 <<< 16
-
-/-- `task_work_run` on exit to user mode: each queued `____fput` runs `__fput`.
-    An `__fput` may queue more work (a release dropping another reference), so
-    the loop is fuel-bounded rather than bounded by the queue at entry
-    (future-proof-paths note, 3(d)). -/
-def taskWorkRun : M Unit := do
-  for _ in [0:TASK_WORK_FUEL] do
-    match (← getK).task.taskWorks with
-    | [] => return
-    | fid :: rest =>
-      modifyK fun k => { k with task := { k.task with taskWorks := rest } }
-      fputFinal fid
-  invariant "task_work_run did not drain the task's work"
+  | .wgNetnsClose => netnsClose
 
 /-- One system call: entry, the handler, and the return-to-user work. -/
 def syscall (call : Syscall) : M Int := do
@@ -230,11 +275,15 @@ def syscall (call : Syscall) : M Int := do
   -- worker (and in wg_inject); the worker runs during that wait
   -- worker; D3: a timer may fire in these waits (`Env.idleTimers`)
   match call with
-  | .wgSet _ | .wgUp | .wgInject .. => Env.runSendWorkers; Env.idleTimers
+  | .wgSet _ | .wgInject .. => Env.runSendWorkers; Env.idleTimers
+  -- W9 (design 14.3b): the guest's route adds follow the up's wait
+  | .wgUp => Env.runSendWorkers; Env.idleTimers; Env.routeIntoWg0
   | .wgXmit .. => Env.afterXmit; Env.idleTimers
   | .wgBatch .. => Env.idleTimers   -- W7: the batch runs its queued units itself
   -- D3: the guest waits after the advance; the next tick runs the due timers
   | .wgAdvance _ => Env.afterAdvance
+  -- W8: the namespace's teardown section runs in the guest's wait
+  | .wgNetnsClose => Env.netnsCleanup
   | _ => pure ()
   return ret
 

@@ -159,7 +159,9 @@ def pipefifoFops : Fops :=
 def fopsOf : Option FopsId → M Fops
   | some .eventfd => return eventfdFops
   | some .pipefifo => return pipefifoFops
-  | some (.fixture name) => unsupported s!"file operations of fixture file {name}"
+  -- W8: a fixture socket's socket_file_ops has a release (sock_close); the
+  -- pin's ns_file_operations has none (the namespace goes with the dentry)
+  | some (.fixture name) => return { release := name != "netns-pin" }
   | none => invariant "file->f_op is NULL"
 
 def fopRelease (fid : FileId) : Option FopsId → M Int
@@ -169,7 +171,9 @@ def fopRelease (fid : FileId) : Option FopsId → M Int
     match (← getFile fid).fInode with
     | some (.pipefs ino) => pipeRelease ino fid
     | _ => invariant "a pipefifo file whose f_inode is not a pipefs inode"
-  | some (.fixture name) => unsupported s!"release of fixture file {name}"
+  -- W8: sock_close (net/socket.c, unanchored): the socket's release and its
+  -- RCU-deferred put_net are a cut point
+  | some (.fixture _) => return 0
   | none => invariant "file->f_op is NULL"
 
 def fopReadIter (iocb : Kiocb) (count : Nat) : Option FopsId → M Int

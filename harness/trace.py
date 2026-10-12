@@ -25,7 +25,7 @@ FIELDS = {
     # Stage B1: bring wg0 up, send a packet into it, observe what it emitted
     "wg_up": {"op"}, "wg_xmit": {"op", "packet"}, "wg_observe": {"op"},
     # Stage B2: a raw WireGuard message sent to wg0's listen port
-    "wg_inject": {"op", "family", "port", "message"},
+    "wg_inject": {"op", "family", "port", "message"},   # + optional "to" (W9), validated below
     # D3: the virtual time advance by `ticks` jiffies (docs/2026-10-05-d3-timers.md, 4.3)
     "wg_advance": {"op", "ticks"},
     # E-B: an io_uring flood of `count` invalid-MAC1 initiations to wg0's
@@ -36,6 +36,14 @@ FIELDS = {
     # L: wg0's lifecycle (docs/2026-10-05-l-lifecycle.md section 6): RTM_NEWLINK,
     # SIOCSIFFLAGS without IFF_UP, RTM_DELLINK
     "wg_create": {"op"}, "wg_down": {"op"}, "wg_delete": {"op"},
+    # W9 (docs/2026-10-06-w8-w9-netns-routing.md 4.3): RTM_DELADDR of wg0's
+    # fixture address and RTM_DELROUTE of the default route via wg0, per
+    # family, over L's temporary rtnetlink socket; the result is the ACK
+    "wg_deladdr": {"op", "family"}, "wg_delroute": {"op", "family"},
+    # W8 (docs/2026-10-06-w8-w9-netns-routing.md 3.2): in the foreign-creator
+    # fixture, close the creating namespace's holders (the injector, the
+    # listeners, then the pin) and wait for its teardown; the result is 0
+    "wg_netns_close": {"op"},
     # P (pipes, docs/2026-10-05-p-pipes.md section 6)
     "pipe2": {"op", "flags"},
     # W4 (docs/2026-10-06-w4-w7-transmit-bulk.md section 6): SIOCSIFMTU on wg0
@@ -46,7 +54,15 @@ FIELDS = {
 }
 LIFECYCLE_OPS = ("wg_create", "wg_down", "wg_delete")
 WG_OPS = {"wg_set", "wg_get", "wg_up", "wg_xmit", "wg_observe", "wg_inject", "wg_advance",
-          "wg_flood", "wg_set_mtu", "wg_batch"} | set(LIFECYCLE_OPS)
+          "wg_flood", "wg_set_mtu", "wg_batch", "wg_deladdr", "wg_delroute", "wg_netns_close"} | set(LIFECYCLE_OPS)
+# W9: `wg_inject`'s optional destination ("to"): the fixture's loopback
+# address (the default, 127.0.0.1 / ::1), wg0's own fixture address
+# (10.255.254.1 / fd00:ffff::1, reached over the local route: wg0 learns an
+# endpoint at that address), or the loopback alias 127.0.0.2 (IPv4 only: a
+# local address that is not configured, so wg0's reply source check fails).
+# The wire carries the code in bits 9-10 of the operation's value field
+# (bits 0-7 the TOS and bit 8 the link-local source, W5).
+INJECT_DESTINATIONS = {"loopback": 0, "wg0": 1, "loopback-alias": 2}
 # Wire opcodes: an explicit table, not FIELDS' order (a positional derivation
 # gave P's pipe2 and D3's wg_advance the same code, 14). harness/guest.c
 # mirrors it as OP_* #defines; harness/test_trace.py checks that the codes
@@ -61,8 +77,9 @@ OPCODES = {
     "wg_create": 15, "wg_down": 16, "wg_delete": 17,
     "wg_flood": 18,
     "wg_advance": 19,
-    # W4+W7: allocated by the coordinator (docs/2026-10-11-interface.md);
-    # 20-24 are W2's and W8/W9's reservations
+    "wg_netns_close": 22,   # W8
+    "wg_deladdr": 23, "wg_delroute": 24,   # W9
+    # W4+W7: allocated by the coordinator (docs/2026-10-11-interface.md)
     "wg_set_mtu": 25,
     "wg_batch": 26,
 }
@@ -72,8 +89,7 @@ OPCODES = {
 # reaches the wire from here; the guest fails one as invalid_input
 # (harness/guest.c, the opcode switch's default) and the mirror as an
 # unknown operation. A stream moves its codes into OPCODES when it lands.
-RESERVED_OPCODES = {20: "wg_get_start (W2)", 21: "wg_get_recv (W2)",
-                    22: "wg_netns_close (W8)", 23: "wg_deladdr (W9)", 24: "wg_delroute (W9)"}
+RESERVED_OPCODES = {20: "wg_get_start (W2)", 21: "wg_get_recv (W2)"}   # 22 taken by W8, 23-24 by W9
 if set(OPCODES.values()) & set(RESERVED_OPCODES):
     raise AssertionError(f"reserved opcodes in use: {set(OPCODES.values()) & set(RESERVED_OPCODES)}")
 if set(OPCODES) != set(FIELDS):
@@ -83,10 +99,13 @@ if set(OPCODES) != set(FIELDS):
 # and the guest fails an operation whose area filled.
 KCOV_CAPACITY = 1024 * 1024
 # The optional top-level `net_fixture` (L): "bare" starts a network trace
-# without wg0; absent, the fixture creates a down wg0. W4: an object
-# {"routes": [{"family", "dst", "mtu"}]} keeps wg0 and adds, at every wg_up,
-# a host route into wg0 with that MTU for each destination (1-8 routes).
-NET_FIXTURES = ("bare",)
+# without wg0; absent, the fixture creates a down wg0. W8: "foreign-creator"
+# creates wg0 from a second namespace C (its creating namespace), which holds
+# the listeners (4, 5), an injector (8) and a pin (9); the trace's one
+# `wg_netns_close` drops them (docs/2026-10-06-w8-w9-netns-routing.md 3.1).
+# W4: an object {"routes": [{"family", "dst", "mtu"}]} keeps wg0 and adds, at
+# every wg_up, a host route into wg0 with that MTU for each destination (1-8).
+NET_FIXTURES = ("bare", "foreign-creator")
 MAX_FIXTURE_ROUTES = 8
 # fcntl commands: the wire carries the command number itself
 # (F_LINUX_SPECIFIC_BASE = 1024: F_SETPIPE_SZ = 1031, F_GETPIPE_SZ = 1032)
@@ -250,7 +269,8 @@ def validate_trace(trace):
             pipes = False
             validate_batch(op, f"ops[{i}]")
         else:
-            optional = OPTIONAL_OP_FIELDS | ({"device"} if name in DEVICE_OPS else set())
+            optional = OPTIONAL_OP_FIELDS | ({"device"} if name in DEVICE_OPS else set()) \
+                | ({"to"} if name == "wg_inject" else set())   # W1: the device selector; W9: the destination
             _fields({k: v for k, v in op.items() if k not in optional}, FIELDS[name], f"ops[{i}]")
             pipes = name in PIPE_PRODUCERS
         if "device" in op:
@@ -319,6 +339,15 @@ def validate_trace(trace):
             message = op["message"]
             if type(message) is not str or not re.fullmatch(r"(?:[0-9a-f]{2}){1,1400}", message, re.ASCII):
                 raise InvalidTrace(f"ops[{i}].message: expected 1-1400 bytes of lowercase hex")
+            if "to" in op:
+                if op["to"] not in INJECT_DESTINATIONS:
+                    raise InvalidTrace(f"ops[{i}].to: expected one of {list(INJECT_DESTINATIONS)}")
+                if op["to"] == "loopback-alias" and op["family"] != 4:
+                    raise InvalidTrace(f"ops[{i}].to: loopback-alias is IPv4 only")
+        if name in ("wg_deladdr", "wg_delroute"):
+            _integer(op["family"], 4, 6, f"ops[{i}].family")
+            if op["family"] == 5:
+                raise InvalidTrace(f"ops[{i}].family: expected 4 or 6")
         if name == "wg_advance":
             _integer(op["ticks"], 1, 2**31, f"ops[{i}].ticks")
         if name == "wg_flood":
@@ -352,6 +381,19 @@ def validate_trace(trace):
             raise InvalidTrace(f"net_fixture: expected one of {list(NET_FIXTURES)} or {{'routes': [...]}}")
         if not uses_wireguard(trace):
             raise InvalidTrace("net_fixture: only a network trace has a network fixture")
+    # W8: the foreign-creator fixture's shape (design 3.1, 3.4)
+    closes = [i for i, op in enumerate(trace["ops"]) if op["op"] == "wg_netns_close"]
+    if trace.get("net_fixture") == "foreign-creator":
+        if len(closes) != 1:
+            raise InvalidTrace("net_fixture foreign-creator: exactly one wg_netns_close (the namespace exits inside the trace)")
+        if trace.get("rlimit_nofile", 32) < 10:
+            raise InvalidTrace("net_fixture foreign-creator: rlimit_nofile below 10 (the fixture holds descriptors 4-9)")
+        if any(op["op"] == "wg_inject" and op.get("to", "loopback") == "wg0" for op in trace["ops"]):
+            raise InvalidTrace("wg_inject to: wg0 is unroutable from the creating namespace")
+        if any(op["op"] == "wg_inject" for op in trace["ops"][closes[0]:]):
+            raise InvalidTrace("wg_inject after wg_netns_close: no socket in the creating namespace")
+    elif closes:
+        raise InvalidTrace("wg_netns_close: only in the foreign-creator fixture")
     return deepcopy(trace)
 
 
@@ -366,10 +408,11 @@ def uses_wireguard(trace):
 
 
 def net_mode(trace):
-    """The wire's `net` field: 0 no network fixture, 1 with a down wg0, 2 bare."""
+    """The wire's `net` field: 0 no network fixture, 1 with a down wg0, 2 bare,
+    3 foreign-creator (W8)."""
     if not uses_wireguard(trace):
         return 0
-    return 2 if trace.get("net_fixture") == "bare" else 1
+    return {"bare": 2, "foreign-creator": 3}.get(trace.get("net_fixture"), 1)
 
 
 def validate_fixture_routes(fixture):
@@ -434,13 +477,16 @@ def alloc_line(alloc):
     return " ".join(["M", str(alloc["flags"]), str(len(ranges))] + [f"{lo:x} {hi:x}" for lo, hi in ranges])
 
 
-def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False, alloc=None):
+def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False, alloc=None, arm_masks=None):
     """`steer_wire`: each steered trace's resolved schedule
     (harness/steer.py), [(kind, length, draw, [return addresses], hex[, flags])].
     `dispatch`: the dispatch set's function addresses (harness/linux.py),
     which a batch with network traces needs. `arm_records`: whether the
     kernel writes the kind-303 arm records for the dispatch set's timers
-    (the `A` line; D3). `alloc`: the allocation set (the `M` line; A)."""
+    (the `A` line; D3). `alloc`: the allocation set (the `M` line; A).
+    `arm_masks` (W8, per-trace arming): trace id -> the subset of `dispatch`
+    the trace arms, a bit per entry (harness/linux.py `arm_masks`); absent,
+    a network trace arms the whole set."""
     traces = [validate_trace(trace) for trace in traces]
     steer_wire = steer_wire or {}
     if any("steer" in t and t["id"] not in steer_wire for t in traces):
@@ -457,10 +503,14 @@ def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False, allo
         raise InvalidTrace("arm_records")
     lines = ["LEANUX_WIRE_V2", str(len(traces)), " ".join(["D", str(len(dispatch))] + [f"{a:x}" for a in dispatch]),
              f"A {int(arm_records)}", alloc_line(alloc)]
+    arm_masks = arm_masks or {}
     for trace in traces:
         schedule = steer_wire.get(trace["id"], []) if "steer" in trace else []
+        mask = arm_masks.get(trace["id"], (1 << len(dispatch)) - 1 if uses_wireguard(trace) else 0)
+        if type(mask) is not int or mask < 0 or mask >> len(dispatch):
+            raise InvalidTrace("arm mask outside the dispatch set")
         routes = fixture_routes(trace)
-        lines.append(f"T {trace['id']} {len(trace['ops'])} {trace.get('rlimit_nofile', 32)} {net_mode(trace)} {len(schedule)} {len(routes)}")
+        lines.append(f"T {trace['id']} {len(trace['ops'])} {trace.get('rlimit_nofile', 32)} {net_mode(trace)} {len(schedule)} {mask:x} {len(routes)}")
         # W4: the fixture's routes into wg0 (family, destination, MTU), one line each
         for route in routes:
             lines.append(f"R {route['family']} {route['dst']} {route['mtu']}")
@@ -487,7 +537,9 @@ def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False, allo
             if op["op"] == "wg_inject":
                 a, b = op["family"], op["port"]
                 # the sender's TOS (bits 0-7) and the link-local source (bit 8)
-                op_value = str(op.get("tos", 0) | (256 if op.get("from") == "ll" else 0))
+                # W5: tos | ll << 8; W9: the destination code << 9
+                op_value = str(op.get("tos", 0) | (256 if op.get("from") == "ll" else 0)
+                               | (INJECT_DESTINATIONS[op.get("to", "loopback")] << 9))
             if op["op"] == "wg_advance":
                 a = op["ticks"]
             if op["op"] == "wg_flood":
@@ -495,6 +547,8 @@ def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False, allo
             if op["op"] == "wg_batch":
                 # W7: a = the item count, b = the guest's wait after the submission (ms)
                 a, b = len(op["items"]), op.get("wait_ms", 100)
+            if op["op"] in ("wg_deladdr", "wg_delroute"):   # W9
+                a = op["family"]
             line = f"{OPCODES[op['op']]} {kind} {value} {newkind} {newvalue} {a} {b} {op_value}"
             if GUEST_PIPES:
                 line += f" {op.get('pause_ms', 0)}"   # the ninth field (P1)

@@ -80,8 +80,11 @@ def validate_observation(trace, result):
             raise InvalidOutput(f'observation {index}: fields')
         if 'device' in fields and type(obs['device']) is not dict:
             raise InvalidOutput(f'observation {index}: device state')
-        # stats null: no wg0 (L)
-        if 'datagrams' in fields and (type(obs['datagrams']) is not list or type(obs['replies']) is not list
+        # stats null: no wg0 (L); datagrams null: the listeners closed by
+        # wg_netns_close (W8), where the recvfrom is -EBADF
+        if 'datagrams' in fields and ((obs['datagrams'] is not None and type(obs['datagrams']) is not list)
+                                      or (obs['datagrams'] is None and obs.get('ret') != -9)
+                                      or type(obs['replies']) is not list
                                       or (obs['stats'] is not None and type(obs['stats']) is not dict)):
             raise InvalidOutput(f'observation {index}: observed emissions')
         if 'fds' in fields and not (
@@ -176,10 +179,16 @@ SEMANTIC_ERRNOS = {'eventfd2': {12, 22, 24}, 'dup': {9, 12, 24}, 'dup3': {9, 12,
                    # L (docs/2026-10-05-l-lifecycle.md): ENODEV without wg0;
                    # EADDRINUSE binding a fixture port (wg_up, a running wg_set)
                    # W1: EBADR (both or neither selector), EPFNOSUPPORT (protocol version),
-                   # EOPNOTSUPP on wg_get (a non-WireGuard device)
-                   'wg_set': {12, 22, 95, 19, 98, 53, 96}, 'wg_get': {22, 19, 53, 95},
+                   # EOPNOTSUPP on wg_get (a non-WireGuard device); W8: EPERM for a port or fwmark
+                   # after the creating namespace exited
+                   'wg_set': {12, 22, 95, 19, 98, 53, 96, 1}, 'wg_get': {22, 19, 53, 95},
                    # ENOKEY, EDESTADDRREQ, EPROTONOSUPPORT, ENETUNREACH (no route before wg_up); EAGAIN when nothing arrived
-                   'wg_up': {19, 98}, 'wg_xmit': {126, 89, 93, 101, 90, 22}, 'wg_observe': {11}, 'read': {9, 11, 22}, 'write': {9, 11, 22},
+                   # W8: wg_up's ENONET after the creating namespace exited; wg_observe's
+                   # EBADF once the listeners are closed; wg_netns_close fails only
+                   # outside the oracle's setup (the holders are the fixture's);
+                   # W4: wg_xmit's EMSGSIZE and EINVAL from the sender's IP layer
+                   'wg_up': {19, 98, 64}, 'wg_xmit': {126, 89, 93, 101, 90, 22}, 'wg_observe': {11, 9}, 'read': {9, 11, 22}, 'write': {9, 11, 22},
+                   'wg_netns_close': set(),
                    # D3: the advance ioctl fails only outside the oracle's setup (-EOPNOTSUPP, -EINVAL, -EPERM)
                    'wg_advance': set(),
                    # E-B: the io_uring submission (wg_flood) fails only outside the oracle's setup
@@ -190,10 +199,14 @@ SEMANTIC_ERRNOS = {'eventfd2': {12, 22, 24}, 'dup': {9, 12, 24}, 'dup3': {9, 12,
                    # IP layer under a route MTU or UDP_SEGMENT (no wg_xmit runs)
                    'wg_set_mtu': {19, 34},
                    # EEXIST (a second wg0), ENODEV (no wg0)
-                   'wg_create': {17}, 'wg_down': {19}, 'wg_delete': {19}}
-# Opcodes 20-24 are reserved for the W streams (harness/trace.py
+                   'wg_create': {17}, 'wg_down': {19}, 'wg_delete': {19},
+                   # W9 (docs/2026-10-06-w8-w9-netns-routing.md 4.3): RTM_DELADDR of
+                   # wg0's fixture address (EADDRNOTAVAIL when absent) and
+                   # RTM_DELROUTE of the default route via wg0 (ESRCH when absent)
+                   'wg_deladdr': {99}, 'wg_delroute': {3}}
+# Opcodes 20-21 (W2) and 22 (W8) are reserved (harness/trace.py
 # RESERVED_OPCODES); their operations, and so their entries here, come with
-# the streams that land them.
+# the streams that land them. W9 took 23 and 24.
 # Pipes (P design section 6): EINVAL, EMFILE, ENOPKG (O_NOTIFICATION_PIPE
 # without CONFIG_WATCH_QUEUE); EPIPE on write; EBUSY from F_SETPIPE_SZ.
 # A's pipe sites (section 19.6; D3+A integration): pipe2's ENFILE (a failed

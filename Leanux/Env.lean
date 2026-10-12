@@ -14,9 +14,10 @@ Not a mirror of C. This module holds what the trace's environment does, so
 the mirror proper (`Leanux/WG`) contains only the C's data and control flow:
 - the network fixture's listener port and the `wg_observe` operation, which
   waits, drains the fixture's listeners and reports wg0's counters;
-- the fixture's bound ports (`portBound`) and its routes into wg0
-  (`World.routesViaWg0`), which `wg_up`, `wg_down` and `wg_delete` change
-  (docs/2026-10-05-l-lifecycle.md, section 5);
+- the fixture's bound ports (`portBound`) and its tables (W9: wg0's
+  addresses and the default routes, `World.route4/6`), which `wg_up`,
+  `wg_down`, `wg_delete`, `wg_deladdr` and `wg_delroute` change
+  (docs/2026-10-05-l-lifecycle.md, section 5; docs/2026-10-06-w8-w9-netns-routing.md, 4.2);
 - when the kworkers run: the handshake receive worker inside `wg_inject`,
   then the encrypt and tx workers it queued, and the (mirrored) handshake
   send worker at the end of the operation that queued it, which the guest
@@ -64,25 +65,40 @@ def LO_LINK_LOCAL : Nat := 0xfe8000000000000000000000ffff0001
     gives 4 after a delete and re-create). -/
 def fixtureNetDevices : List (String × Nat × Option String) := [("lo", 1, none), ("sit0", 2, some "sit")]
 
-/-- Whether an endpoint is the fixture's sender: its port at the loopback
-    addresses, or (W5) at the link-local address on `lo` (the sender is
-    bound to `[::]`, so a datagram to `fe80::1` at its port reaches it). -/
-def isSender (family addr port : Nat) : Bool :=
-  port == SENDER_PORT && ((family == AF_INET && addr == 0x7f000001)
-    || (family == AF_INET6 && (addr == 1 || addr == LO_LINK_LOCAL)))
+/-- Whether an endpoint is the fixture's sender: its port at a local address
+    the wildcard bind (`[::]:51998`, dual-stack) receives at (W9,
+    `World.wildcardLocal`: `127/8`, `::1`, wg0's addresses), or (W5) at the
+    link-local address on `lo`. -/
+def isSender (w : World) (family addr port : Nat) : Bool :=
+  port == SENDER_PORT && (w.wildcardLocal family addr || (family == AF_INET6 && addr == LO_LINK_LOCAL))
 
-/-- What the sender's datagrams carry in their skb: loopback source and
-    destination, the sender's port, the loopback interface (ifindex 1), and
-    the DS field the operation's `tos` set on the sender (W5, 2.1: `IP_TOS`
-    for a v4-mapped destination, `IPV6_TCLASS` otherwise, ECN bits kept).
-    With `ll` (W5, 2.5) the source is the link-local address on `lo`
-    (`IPV6_PKTINFO`), the destination still `::1`. -/
-def senderSource (family : Nat) (tos : Nat := 0) (ll : Bool := false) : M SkbSource :=
+/-- What the sender's datagrams carry in their skb, by destination (W9,
+    design section 2.5): the source is the route's `prefsrc` (`127.0.0.1`
+    for `127/8`, the address itself for wg0's own), the destination the
+    injected one, the loopback interface (ifindex 1); the DS field is the
+    operation's `tos` (W5, 2.1: `IP_TOS` for a v4-mapped destination,
+    `IPV6_TCLASS` otherwise, ECN bits kept); with `ll` (W5, 2.5) the source
+    is the link-local address on `lo` (`IPV6_PKTINFO`), the destination
+    `::1`. A datagram to wg0's address while it is not configured would
+    route into wg0 instead: outside the domain. -/
+def senderSource (family dest : Nat) (tos : Nat := 0) (ll : Bool := false) : M SkbSource := do
+  let w ← get
+  if ll && dest != 0 then unsupported "a link-local source with a destination other than loopback"
   if family == 4 then
     if ll then unsupported "a link-local source for an IPv4 injection"
-    else pure { family := 4, saddr := 0x7f000001, sport := SENDER_PORT, daddr := 0x7f000001, iif := 1, tos }
+    match dest with
+    | 0 => pure { family := 4, saddr := 0x7f000001, sport := SENDER_PORT, daddr := 0x7f000001, iif := 1, tos }
+    | 1 =>
+      if !w.addrs4.contains WG0_ADDR4 then unsupported "an injection to wg0's address while it is not configured"
+      pure { family := 4, saddr := WG0_ADDR4, sport := SENDER_PORT, daddr := WG0_ADDR4, iif := 1, tos }
+    | _ => pure { family := 4, saddr := 0x7f000001, sport := SENDER_PORT, daddr := 0x7f000002, iif := 1, tos }
   else if family == 6 then
-    pure { family := 6, saddr := if ll then LO_LINK_LOCAL else 1, sport := SENDER_PORT, daddr := 1, iif := 1, tos }
+    match dest with
+    | 0 => pure { family := 6, saddr := if ll then LO_LINK_LOCAL else 1, sport := SENDER_PORT, daddr := 1, iif := 1, tos }
+    | 1 =>
+      if !w.addrs6.contains WG0_ADDR6 then unsupported "an injection to wg0's address while it is not configured"
+      pure { family := 6, saddr := WG0_ADDR6, sport := SENDER_PORT, daddr := WG0_ADDR6, iif := 1, tos }
+    | _ => unsupported "the loopback alias is IPv4 only"
   else unsupported "an injection family other than IPv4 or IPv6"
 
 /-- The guest waits `OBSERVE_WAIT_US` (0.4 s) after every injection, and
@@ -141,11 +157,14 @@ def listenerFamily (e : Endpoint) : Option Nat :=
   else if e.family == AF_INET6 && e.addr == 1 then some 6
   else none
 
-/-- Deliver what wg0 sent (`World.sent`) over loopback: to the fixture's
-    sender or a listener, which keep the bytes for `wg_observe`; another
-    loopback port has no socket, so the datagram is dropped there (the send
-    itself succeeded). Any other destination routes back into wg0, which is
-    outside the domain. -/
+/-- Deliver what wg0 sent (`World.sent`) over `lo` (W9: `send4`/`send6`
+    already refused a route into wg0): to the fixture's sender (the
+    wildcard bind, at any local address) or a listener, which keep the
+    bytes for `wg_observe`; another local port has no socket, so the
+    datagram is dropped there (the send itself succeeded). The sender's
+    `recvfrom` reports the source `send4`/`send6` chose (`SentDatagram.src`:
+    the cached or routed `fl.saddr`), no longer "the destination's own
+    address" (design section 2.5). -/
 def deliverSent : M Unit := do
   for dg in (← get).sent do
     let loopback := (dg.family == AF_INET && dg.addr / 2 ^ 24 == 127)
@@ -154,7 +173,7 @@ def deliverSent : M Unit := do
     -- (2.5, `w5_scoped_*`) models the datagram to a link-local endpoint
     -- with its `sin6_scope_id` (the scoped outer source); W9's send6 owns
     -- the route lookup itself when it lands [AGENT, W integration].
-    if isSender dg.family dg.addr dg.port then
+    if isSender (← get) dg.family dg.addr dg.port then
       -- from wg0's socket, bound to the wildcard address at its port, with
       -- the source `send4`/`send6` ask for: the endpoint's `src4`/`src6`
       -- (the destination of the datagram it was learned from, a local
@@ -478,7 +497,10 @@ def wgUp : M Int := do
   -- `dev_change_flags`' rtnetlink notifications and the fixture's routes
   -- allocate netlink skbs below the cut (allocation cut sites, A)
   skipCut allocCuts
-  if ret == 0 then modify fun w => { w with routesViaWg0 := true }
+  -- W9: the guest's `route_into_wg0` adds wg0's addresses and default routes
+  -- after this operation's wait (design 14.3b): `routeIntoWg0` applies them
+  -- once the send workers and the idle timers have run
+  if ret == 0 then modify fun w => { w with routesPending := true }
   return ret
 
 /-- W4: `wg_set_mtu`, `SIOCSIFMTU` on wg0 from the fixture's sender
@@ -494,6 +516,18 @@ def setMtu (mtu : Nat) : M Int := do
   skipCut allocCuts
   return ret
 
+/-- W9 (design 14.3b): `route_into_wg0` after a successful flag-changing
+    `wg_up`, once the operation's wait is over: wg0's addresses (the IPv4
+    one may survive a down) and the default routes; every table change
+    bumps a generation (`rt_cache_flush`; the IPv6 sernum), which expires a
+    dst the handshake worker cached during the wait. The fixture puts the
+    wait before the adds so this order is the only one. -/
+def routeIntoWg0 : M Unit := do
+  if !(← get).routesPending then return
+  modify fun w => { w with routesPending := false, addrs4 := [WG0_ADDR4], addrs6 := [WG0_ADDR6],
+                           defaultRoute4 := true, defaultRoute6 := true,
+                           ipv4Gen := w.ipv4Gen + 1, ipv6Gen := w.ipv6Gen + 1 }
+
 /-- `wg_down`: `SIOCSIFFLAGS` without `IFF_UP`. `-ENODEV` without wg0; a
     down device does not change; an up one goes through `__dev_close_many`
     (`wg_stop`), and `NETDEV_DOWN` removes the routes. -/
@@ -505,7 +539,10 @@ def wgDown : M Int := do
   -- `__dev_close_many`'s rtnetlink notifications and the routes' removal
   -- allocate netlink skbs below the cut (allocation cut sites, A)
   skipCut allocCuts
-  modify fun w => { w with routesViaWg0 := false }
+  -- W9: NETDEV_DOWN flushes the IPv4 routes via wg0 (the address stays) and
+  -- removes the IPv6 address and routes (`keep_addr_on_down` 0)
+  modify fun w => { w with defaultRoute4 := false, defaultRoute6 := false, addrs6 := [],
+                           ipv4Gen := w.ipv4Gen + 1, ipv6Gen := w.ipv6Gen + 1 }
   return 0
 
 /-- `wg_delete`: `RTM_DELLINK` (the mirror's `wgDelete`); `NETDEV_DOWN` and
@@ -513,8 +550,43 @@ def wgDown : M Int := do
 def wgDelete : M Int := do
   if (← getK).wg.isSome then requireIdleDevice
   let ret ← WG.wgDelete
-  modify fun w => { w with routesViaWg0 := false }
+  -- W9: NETDEV_UNREGISTER removes every address and route via wg0
+  modify fun w => { w with addrs4 := [], addrs6 := [], defaultRoute4 := false, defaultRoute6 := false,
+                           ipv4Gen := w.ipv4Gen + 1, ipv6Gen := w.ipv6Gen + 1 }
   return ret
+
+/-- W9 `wg_deladdr` (design section 4.3): `RTM_DELADDR` of wg0's fixture
+    address; `-EADDRNOTAVAIL` when it is absent. IPv4: the device's only
+    address goes, so `fib_inetaddr_event` NETDEV_DOWN disables the device's
+    routes as well (`fib_disable_ip`, `fib_frontend.c:1461-1469`): the
+    default route via wg0 is gone and `rt_genid` moves. IPv6: the address
+    and its local route go, the default route stays, the sernum moves. -/
+def wgDeladdr (family : Nat) : M Int := do
+  if (← getK).wg.isNone then unsupported "wg_deladdr without wg0 (the request names a stale ifindex)"
+  let w ← get
+  if family == 4 then
+    if w.addrs4.isEmpty then return -EADDRNOTAVAIL
+    set { w with addrs4 := [], defaultRoute4 := false, ipv4Gen := w.ipv4Gen + 1 }
+  else
+    if w.addrs6.isEmpty then return -EADDRNOTAVAIL
+    set { w with addrs6 := [], ipv6Gen := w.ipv6Gen + 1 }
+  return 0
+
+/-- W9 `wg_delroute`: `RTM_DELROUTE` of the default route via wg0; `-ESRCH`
+    when absent. IPv4's `rt_genid` moves only if the route was ever looked
+    up (`fib_table_delete`, `fib_trie.c:1754-1755`, `FA_S_ACCESSED`); the
+    IPv6 sernum moves unconditionally (`fib6_del`). -/
+def wgDelroute (family : Nat) : M Int := do
+  if (← getK).wg.isNone then unsupported "wg_delroute without wg0 (the request names a stale ifindex)"
+  let w ← get
+  if family == 4 then
+    if !w.defaultRoute4 then return -ESRCH
+    set { w with defaultRoute4 := false, defaultRoute4Accessed := false,
+                 ipv4Gen := if w.defaultRoute4Accessed then w.ipv4Gen + 1 else w.ipv4Gen }
+  else
+    if !w.defaultRoute6 then return -ESRCH
+    set { w with defaultRoute6 := false, ipv6Gen := w.ipv6Gen + 1 }
+  return 0
 
 /-- `wg_observe`: its `recvfrom` on the IPv4 listener returns the first
     datagram there. The observation also lists every datagram both listeners
@@ -536,7 +608,10 @@ def observe : M (Int × Lean.Json) := do
     String.mk [d[b.toNat / 16]!, d[b.toNat % 16]!])
   -- the guest reports type 0 for a datagram shorter than 4 bytes
   let type (bs : List UInt8) : Nat := if bs.length ≥ 4 then WG.u32le bs 0 else 0
-  let ret : Int := match w.listenerV4 with
+  -- W8: after wg_netns_close the listeners are closed: `recvfrom(4)` is
+  -- -EBADF and the datagrams are null (the guest prints null)
+  let closed := w.foreignCreator && w.netnsCHolders.isEmpty
+  let ret : Int := if closed then -EBADF else match w.listenerV4 with
     | (_, bs) :: _ => bs.length
     | [] => -EAGAIN
   -- W5: each datagram with the TOS / traffic class the listener's cmsg
@@ -566,7 +641,7 @@ def observe : M (Int × Lean.Json) := do
                                  ("tx_packets", Lean.toJson d.txPackets), ("tx_bytes", Lean.toJson d.txBytes)]
     | none => Lean.Json.null
   return (ret, Lean.Json.mkObj [
-    ("datagrams", Lean.Json.arr (sortJson entries).toArray),
+    ("datagrams", if closed then Lean.Json.null else Lean.Json.arr (sortJson entries).toArray),
     ("replies", Lean.Json.arr (sortJson replies).toArray),
     ("stats", stats)])
 
@@ -645,13 +720,19 @@ def runDecryptWorker : M Unit := do
     or ::1. Only wg0's own socket is in the domain: wg0 up, on that port.
     Loopback delivers it in softirq inside the `sendto`, and the guest waits
     for the handshake worker. -/
-def inject (family port : Nat) (msg : List UInt8) (tos : Nat := 0) (ll : Bool := false) : M Int := do
+def inject (family port : Nat) (msg : List UInt8) (tos : Nat := 0) (ll : Bool := false) (dest : Nat := 0) : M Int := do
+  -- W8 (design 3.1, 3.4): in the foreign-creator fixture the injector lives
+  -- in the creating namespace: gone after wg_netns_close, and wg0's own
+  -- address (in the device namespace) is unroutable from it
+  if (← get).foreignCreator then
+    if (← get).netnsCHolders.isEmpty then unsupported "wg_inject after wg_netns_close (no socket in the creating namespace)"
+    if dest == 1 then unsupported "wg_inject to wg0's address from the creating namespace (unroutable)"
   let some d := (← getK).wg | unsupported "a datagram to a port other than wg0's (no wg0)"
   if !d.running || port != d.incomingPort then unsupported "a datagram to a port other than wg0's"
   -- a pending send worker inserts an index entry under a random index
   for pid in d.peerList do requireNotPending pid "receiving while a handshake is queued"
   fixtureSend
-  let src ← senderSource family tos ll
+  let src ← senderSource family dest tos ll
   runWorker .netRx (WG.wgReceive msg src)
   -- the queued receive work runs before the guest's wait ends
   if !(← getDev).handshakeQueue.isEmpty then
@@ -701,7 +782,7 @@ def flood (count port : Nat) (messages : List (List UInt8)) : M Int := do
   -- (which consumes the `cond_resched` records between packets); `floodDepth`
   -- keeps them over the under_load threshold.
   _ ← hidden (.sectionStart .receiveWorker)
-  let src ← senderSource 4
+  let src ← senderSource 4 0
   modifyDev fun d => { d with handshakeQueue := messages.map (fun m => (m, src)) }
   modify fun w => { w with floodDepth := count + messages.length }
   WG.handshakeReceiveWorker (discard <| condResched SWITCH_DEPTH .receiveWorker (runDecryptAt SWITCH_DEPTH) napiSoftirq)
@@ -774,15 +855,18 @@ def batch (items : List BatchItem) : M Int := do
     | .inject family port msg =>
       if port != d.incomingPort then unsupported "a batch datagram to a port other than wg0's"
       fixtureSend
-      let src ← senderSource family
+      let src ← senderSource family 0
       runWorker .netRx do
         WG.wgReceive msg src
         pollScheduledInline
       cqes := cqes ++ [(msg.length : Int)]
     | .xmit family addr payload opts =>
-      if !(← get).routesViaWg0 then
-        cqes := cqes ++ [-ENETUNREACH]
-      else
+      -- W9: the sender's `sendto` routes on the fixture's tables; a local
+      -- destination never reaches wg0
+      match ← routeLookup family 0 addr with
+      | .error err => cqes := cqes ++ [err]
+      | .ok r =>
+        if r.dev != WG0_IFINDEX then unsupported "a batch transmit to a local address (not into wg0)"
         if (family == 4 && !d.inet4Dev) || (family == 6 && !d.inet6Dev) then
           unsupported "a transmit after an MTU change took the family's routes into wg0 down"
         fixtureSend
@@ -795,5 +879,27 @@ def batch (items : List BatchItem) : M Int := do
   modify fun w => { w with extraOut := [("cqes", Lean.toJson cqes)] }
   afterBatch
   return items.length
+
+/-! ## W8: the creating namespace's teardown (docs/2026-10-06-w8-w9-netns-routing.md, 3.2) -/
+
+/-- The section `cleanup_net` runs in `wg_netns_close`'s wait, after the
+    pin's `__fput` queued it (`Syscalls.netnsClose`): `wg_netns_pre_exit` for
+    wg0 (device.c, anchored), then the rest of the namespace's teardown,
+    whose allocation outcomes are below the cut and which runs nothing else
+    the mirror models. Fail-noisy: a section that did not open leaves the
+    start record unmatched; a stop beyond the wait stays pending; a unit the
+    queue record did not name is a hidden mismatch. The linkwatch event the
+    carrier change queues is armed by no trace yet (W8b). -/
+def netnsCleanup : M Unit := do
+  if !(← get).foreignCreator then unsupported "wg_netns_close outside the foreign-creator fixture"
+  modify fun w => { w with netnsCHolders := [] }
+  if let some u ← peekUnit .netnsCleanup then _ ← resolveUnit .netnsCleanup u [0]
+  runWorker .netnsCleanup do
+    WG.netnsPreExit
+    -- the rest of C's teardown: `sit0`'s unregister resets its tunnel's dst
+    -- cache (net/ipv6/sit.c `ipip6_tunnel_uninit`: one kind-306 record, the
+    -- only other consumer the section showed), and the notifications' and
+    -- exits' allocations are below the cut (A)
+    skipCut ([.dstCacheResetTs] ++ allocCuts)
 
 end Leanux.Env

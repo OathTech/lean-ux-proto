@@ -41,8 +41,12 @@ inductive Operation where
   | wgSetMtu (mtu : Nat)
   | wgObserve
   /-- `tos` (W5): the outer DS field of the injection; `ll`: sent from the
-      link-local address on lo (`from: "ll"`, family 6). -/
-  | wgInject (family port : Nat) (message : List UInt8) (tos : Nat) (ll : Bool)
+      link-local address on lo (`from: "ll"`, family 6); `dest` (W9, `to`):
+      0 the loopback address, 1 wg0's own address, 2 the loopback alias. -/
+  | wgInject (family port : Nat) (message : List UInt8) (tos : Nat) (ll : Bool) (dest : Nat)
+  /-- W9: the fixture-table operations, per family. -/
+  | wgDeladdr (family : Nat)
+  | wgDelroute (family : Nat)
   /-- E-B: an io_uring flood of `count` invalid-MAC1 initiations to wg0's port,
       with `messages` valid-MAC1 initiations submitted first (processed under
       load via the queue depth, their cookie replies checked byte-exact);
@@ -56,6 +60,7 @@ inductive Operation where
   | wgCreate
   | wgDown
   | wgDelete
+  | wgNetnsClose
   deriving Repr
 
 /-- The operations a `{"ref": i}` may name. -/
@@ -82,6 +87,9 @@ structure Trace where
   /-- D3: whether `hidden` includes the kind-303 arm records (the check sets
       it from `harness/linux.py` `ARM_RECORDS`, the wire's `A` line). -/
   armRecords : Bool := false
+  /-- W9: `"dst_cache_records": false` marks a capture made before the
+      kind-306 records (the replay tests only). -/
+  dstCacheRecords : Bool := true
   /-- The check's choice for each NAPI poll placement the records leave open
       (`World.napiBeforePut`). -/
   napiBeforePut : List Bool := []
@@ -90,6 +98,9 @@ structure Trace where
   /-- W4: `"net_fixture": {"routes": [...]}`, the routes the fixture adds into
       wg0 at every `wg_up` (family, destination, MTU): `World.routes`. -/
   routes : List (Nat × Nat × Nat) := []
+  /-- `"net_fixture": "foreign-creator"` (W8): wg0 created from a second
+      namespace, held by the fixture's descriptors 4, 5, 8 and 9. -/
+  foreign : Bool := false
   /-- The allocation sites the run armed (the check adds them with the
       records): their outcomes are consumed from the records. -/
   allocArmed : List String := []
@@ -105,7 +116,8 @@ structure Trace where
 def Trace.net (t : Trace) : Bool :=
   t.ops.any fun
     | .wgSet _ | .wgGet _ | .wgUp | .wgXmit .. | .wgObserve | .wgInject .. | .wgAdvance _
-    | .wgFlood _ _ _ | .wgCreate | .wgDown | .wgDelete | .wgSetMtu _ | .wgBatch _ _ => true
+    | .wgFlood _ _ _ | .wgCreate | .wgDown | .wgDelete | .wgSetMtu _ | .wgBatch _ _
+    | .wgDeladdr _ | .wgDelroute _ | .wgNetnsClose => true
     | _ => false
 
 private def fields (j : Json) (expected : List String) : Except String Unit := do
@@ -406,6 +418,9 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
   | "wg_up" =>
     fields j ["op"]
     return .wgUp
+  | "wg_netns_close" =>
+    fields j ["op"]
+    return .wgNetnsClose
   | "wg_observe" =>
     fields j ["op"]
     return .wgObserve
@@ -419,11 +434,11 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
     fields j ["op"]
     return .wgDelete
   | "wg_inject" =>
-    -- W5: `tos` and `from: "ll"` are optional
+    -- W5: `tos` and `from: "ll"` are optional; W9: the destination `to`
     let obj ← j.getObj?
-    if !(obj.all (fun k _ => ["op", "family", "port", "message", "tos", "from"].contains k)
+    if !(obj.all (fun k _ => ["op", "family", "port", "message", "tos", "from", "to"].contains k)
         && obj.contains "family" && obj.contains "port" && obj.contains "message") then
-      throw "expected op, family, port, message and optionally tos, from"
+      throw "expected op, family, port, message and optionally tos, from, to"
     let tos ← senderTos j
     let ll ← match j.getObjVal? "from" with
       | .ok v => do
@@ -438,7 +453,24 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
     let s ← (← field j "message").getStr?
     if s.length == 0 || s.length % 2 != 0 || s.length > 2800 then throw "message: expected 1-1400 bytes of lowercase hex"
     let message ← hexBytes (← field j "message") s.length "message"
-    return .wgInject family port message tos ll
+    let dest ← match j.getObjVal? "to" with
+      | .error _ => pure 0
+      | .ok t => match ← t.getStr? with
+        | "loopback" => pure 0
+        | "wg0" => pure 1
+        | "loopback-alias" => if family == 4 then pure 2 else throw "to: loopback-alias is IPv4 only"
+        | _ => throw "to: expected loopback, wg0 or loopback-alias"
+    return .wgInject family port message tos ll dest
+  | "wg_deladdr" =>
+    fields j ["op", "family"]
+    let family ← (← field j "family").getNat?
+    if family != 4 && family != 6 then throw "family: expected 4 or 6"
+    return .wgDeladdr family
+  | "wg_delroute" =>
+    fields j ["op", "family"]
+    let family ← (← field j "family").getNat?
+    if family != 4 && family != 6 then throw "family: expected 4 or 6"
+    return .wgDelroute family
   | "wg_flood" =>
     -- `messages`: the leading valid-MAC1 initiations the mirror processes and
     -- checks (byte-exact cookie replies). `control` (a mid-flood valid packet
@@ -537,6 +569,7 @@ def parseTrace (j : Json) : Except String Trace := do
   let hasPlacement := (j.getObjVal? "napi_irq_before_put").isOk
   let hasFixture := (j.getObjVal? "net_fixture").isOk
   let hasArmed := (j.getObjVal? "alloc_armed").isOk
+  let hasDst := (j.getObjVal? "dst_cache_records").isOk
   let hasExtension := (j.getObjVal? "domain_extension").isOk
   fields j ((if hasLimit then ["version", "id", "ops", "rlimit_nofile"] else ["version", "id", "ops"])
     ++ (if hasHidden then ["hidden"] else []) ++ (if hasSteer then ["steer"] else [])
@@ -544,10 +577,12 @@ def parseTrace (j : Json) : Except String Trace := do
     ++ (if hasPlacement then ["napi_irq_before_put"] else [])
     ++ (if hasFixture then ["net_fixture"] else [])
     ++ (if hasArmed then ["alloc_armed"] else [])
+    ++ (if hasDst then ["dst_cache_records"] else [])
     ++ (if hasExtension then ["domain_extension"] else []))
   -- D3: the arm-record switch qualifies the records, so it comes with them
   if hasArm && !hasHidden then throw "arm_records: only with hidden records"
   let armRecords ← if hasArm then (← field j "arm_records").getBool? else pure false
+  let dstCacheRecords ← if hasDst then (← field j "dst_cache_records").getBool? else pure true
   -- The declared failslab-style extension (docs/2026-10-05-a-alloc.md,
   -- section 3, [USER 2026-10-06]): the trace forces task-context allocation
   -- failures; the host checks the schedule, the mirror only its form.
@@ -591,11 +626,13 @@ def parseTrace (j : Json) : Except String Trace := do
       (← (← field j "napi_irq_before_put").getArr?).toList.mapM fun b => b.getBool?
     else pure []
   if napiBeforePut.length > 8 then throw "napi_irq_before_put: more than 8 entries"
-  let (bare, routes) ← if hasFixture then do
+  -- L: "bare"; W8: "foreign-creator"; W4: {"routes": [...]}
+  let (bare, foreign, routes) ← if hasFixture then do
       let f ← field j "net_fixture"
       match f.getStr? with
-      | .ok "bare" => pure (true, [])
-      | .ok _ => throw "net_fixture: expected \"bare\" or {\"routes\": [...]}"
+      | .ok "bare" => pure (true, false, [])
+      | .ok "foreign-creator" => pure (false, true, [])
+      | .ok _ => throw "net_fixture: expected \"bare\", \"foreign-creator\" or {\"routes\": [...]}"
       | .error _ => do
         -- W4: the fixture's routes into wg0 with an MTU (section 6)
         fields f ["routes"]
@@ -608,8 +645,8 @@ def parseTrace (j : Json) : Except String Trace := do
           if mtu < 68 || mtu > 65535 then throw "net_fixture.routes[].mtu: expected 68-65535"
           pure (family, addr, mtu)
         if rs.isEmpty || rs.length > 8 then throw "net_fixture.routes: expected 1-8 routes"
-        pure (false, rs)
-    else pure (false, [])
+        pure (false, false, rs)
+    else pure (false, false, [])
   let allocArmed ← if hasArmed then (← (← field j "alloc_armed").getArr?).toList.mapM fun e => do
       let label ← e.getStr?
       if !(AllocSite.all.any fun s => s.info.label == label && s.info.count != .cut) then
@@ -617,8 +654,9 @@ def parseTrace (j : Json) : Except String Trace := do
       pure label
     else pure []
   if hasArmed && !hasHidden then throw "alloc_armed: an armed run carries its records"
-  let trace : Trace := { id, ops, rlimit, hidden, steer, armRecords, napiBeforePut, allocArmed, pauses, bare, routes }
-  if (bare || !routes.isEmpty) && !trace.net then throw "net_fixture: only a network trace has a network fixture"
+  let trace : Trace := { id, ops, rlimit, hidden, steer, armRecords, napiBeforePut, allocArmed, pauses, bare, foreign, routes, dstCacheRecords }
+  if (bare || foreign || !routes.isEmpty) && !trace.net then throw "net_fixture: only a network trace has a network fixture"
+  if foreign && rlimit < 10 then throw "net_fixture: the foreign-creator fixture needs rlimit_nofile >= 10"
   return trace
 
 /-! ## Harness fixture and trace execution
@@ -641,34 +679,42 @@ Descriptors 4 and 5 are UDP listeners on 127.0.0.1 and ::1 at `LISTEN_PORT`,
 /-- A fixture file. Its mode, operations and inode are outside the slice: any
     operation that consults them is `unsupported`. -/
 def fixtureFile (name : String) (refs : Nat) : File :=
-  { fFlags := O_RDWR, fMode := FMODE_READ ||| FMODE_WRITE ||| FMODE_OPENED,
-    fCount := refs, fOp := some (.fixture name), fInode := some (.fixture name) }
+  -- W8: the pin is `open("/proc/self/ns/net", O_RDONLY)`; the others are
+  -- read-write (sockets, the console, the KCOV descriptor)
+  if name == "netns-pin" then
+    { fFlags := O_RDONLY, fMode := FMODE_READ ||| FMODE_OPENED,
+      fCount := refs, fOp := some (.fixture name), fInode := some (.fixture name) }
+  else
+    { fFlags := O_RDWR, fMode := FMODE_READ ||| FMODE_WRITE ||| FMODE_OPENED,
+      fCount := refs, fOp := some (.fixture name), fInode := some (.fixture name) }
 
-def initialKernel (rlimit : Nat) (net : Bool := false) (bare : Bool := false) : Kernel :=
+def initialKernel (rlimit : Nat) (net : Bool := false) (bare : Bool := false) (foreign : Bool := false) : Kernel :=
+  -- W8: the foreign-creator fixture adds the injector (8) and the pin (9)
+  let reserved := if foreign then 10 else 8
   let slot (fd : Nat) : Option FileId :=
-    if fd < 3 then some 0 else if fd < 8 then some (fd - 2) else none
+    if fd < 3 then some 0 else if fd < reserved then some (fd - 2) else none
   let files : Std.TreeMap FileId File := Std.TreeMap.ofList
     ([(0, fixtureFile "console" 4),   -- fds 0-2 plus init's references
       (1, fixtureFile "kcov" 2)] ++    -- fd 3 plus the coverage mapping
-     (List.range 4).map fun i =>
+     (List.range (reserved - 4)).map fun i =>
        (i + 2, fixtureFile (if !net then "/dev/null" else
          match i with
          | 0 => "udp-listener-127.0.0.1" | 1 => "udp-listener-::1" | 2 => "udp-sender"
-         | _ => "generic-netlink") 1))
+         | 3 => "generic-netlink" | 4 => "udp-injector" | _ => "netns-pin") 1))
   let slots := (List.range NR_OPEN_DEFAULT).toArray
   { task := {
-      files := { count := 1, resizeInProgress := false, nextFd := 8,
+      files := { count := 1, resizeInProgress := false, nextFd := reserved,
                  fdt := { maxFds := NR_OPEN_DEFAULT, fd := slots.map slot,
-                          openFds := slots.map (· < 8), closeOnExec := slots.map fun _ => false } }
+                          openFds := slots.map (· < reserved), closeOnExec := slots.map fun _ => false } }
       rlimitNofile := rlimit
       -- the trace child blocks SIGPIPE before the first operation and starts
       -- with no pending signal (P design section 6; the guest side is P1's)
       blocked := sigmask SIGPIPE, pending := 0 }
-    files, nextFile := 6, ctxs := {}, nextCtx := 0,
+    files, nextFile := if foreign then 8 else 6, ctxs := {}, nextCtx := 0,
     idaUsed := {},
     -- Environment facts: the system-wide open-file count and limit are not
     -- observed; the guest has few files open, far below any boot-sized limit.
-    nrFiles := 6, maxFiles := 1000000, anonInodeInodeErr := false,
+    nrFiles := if foreign then 8 else 6, maxFiles := 1000000, anonInodeInodeErr := false,
     -- Pipes (P design section 5): sysctl defaults, and `root_user`'s
     -- `pipe_bufs` at its baseline of 0 (no pipes outside the trace)
     pipeMaxSize := 1048576, pipeUserPagesSoft := 16384, pipeUserPagesHard := 0, user := { pipeBufs := 0 },
@@ -740,24 +786,29 @@ def toSyscall (results : Array Int) (ends : Array (Option (Nat × Nat))) (index 
   | .wgXmit family addr payload opts => .wgXmit family addr payload opts
   | .wgSetMtu mtu => .wgSetMtu mtu
   | .wgObserve => .wgObserve
-  | .wgInject family port message tos ll => .wgInject family port message tos ll
+  | .wgInject family port message tos ll dest => .wgInject family port message tos ll dest
+  | .wgDeladdr family => .wgDeladdr family
+  | .wgDelroute family => .wgDelroute family
   | .wgFlood count port messages => .wgFlood count port messages
   | .wgBatch items waitMs => .wgBatch items waitMs
   | .wgAdvance ticks => .wgAdvance ticks
   | .wgCreate => .wgCreate
   | .wgDown => .wgDown
   | .wgDelete => .wgDelete
+  | .wgNetnsClose => .wgNetnsClose
 
 /-- Run a trace. A `Stop` is returned with the operation index: the mirror
     never reports an observation for a path it does not model. -/
 def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat × Stop) Json := do
-  let mut world : World := { k := initialKernel trace.rlimit trace.net trace.bare, env := harnessEnv,
+  let mut world : World := { k := initialKernel trace.rlimit trace.net trace.bare trace.foreign, env := harnessEnv,
                              timing := Env.timing, portBound := Env.portBound,
                              fixtureNetDevices := Env.fixtureNetDevices,
+                             foreignCreator := trace.foreign,
+                             netnsCHolders := if trace.foreign then [9, 8, 5, 4] else [],
                              allocArmed := trace.allocArmed, routes := trace.routes,
                              hiddenPlaceholders := placeholders && trace.hidden.isNone,
                              steerValues := if placeholders then trace.steer else [],
-                             armRecords := trace.armRecords,
+                             armRecords := trace.armRecords, dstCacheRecords := trace.dstCacheRecords,
                              napiBeforePut := trace.napiBeforePut,
                              allocSteered := if placeholders then
                                (trace.steer.map (·.1)).filter fun l => AllocSite.all.any (·.info.label == l)

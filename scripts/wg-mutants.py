@@ -112,6 +112,14 @@ SENTINELS = [
    "    _ ← hidden site\n    -- W7 (5.3): any of the encrypt, tx and decrypt workers whose start is\n",
    "    _ ← hidden site\n    if true then\n      modify fun s => { s with yieldedWorkers := s.yieldedWorkers ++ [self.index] }\n      return true\n    -- W7 (5.3): any of the encrypt, tx and decrypt workers whose start is\n",
    'w7_', 'wireguard'),
+  ('W9-M3-cache-never-hits',
+   'dst-cache jiffies record (kind 306): the recorded jiffies are ignored (the cache never hits)',
+   'data: the dst cache never hits (every send misses: socket.c:51 and the arms 53-82); the data send of '
+   'w9_session_two_sends hits in Linux (the keepalive after the session cached the dst)',
+   'Leanux/WG/Socket.lean',
+   "    if c.refreshTs > c.resetTs && s.gen == gen then return some s\n",
+   "    if false && c.refreshTs > c.resetTs && s.gen == gen then return some s\n",
+   'w9_session_two', 'wireguard'),
 ]
 
 # evaluator.check on the traces of one suite whose ids start with a prefix

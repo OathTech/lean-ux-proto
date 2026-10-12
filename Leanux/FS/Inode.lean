@@ -351,6 +351,9 @@ def inodeReadcountDec : Option InodeId → M Unit
       invariant s!"i_readcount of pipefs inode {id} below zero (BUG_ON)"
     setInode id { ino with iReadcount := ino.iReadcount - 1 }
   | some .anon => unsupported "i_readcount_dec of the anonymous inode"
+  -- W8: the pin's nsfs inode (read-only); without CONFIG_IMA the helper is
+  -- empty (fs/internal.h), so nothing to model
+  | some (.fixture "netns-pin") => pure ()
   | some (.fixture name) => unsupported s!"i_readcount_dec of fixture file {name}"
   | none => invariant "i_readcount_dec: file->f_inode is NULL"
 

@@ -27,7 +27,8 @@ def openFmode (flags : UInt32) : UInt32 :=
 def inodeIsChr : Option InodeId → M Bool
   | some .anon => return false
   | some (.pipefs id) => return (← getInode id).iMode &&& S_IFMT == S_IFCHR
-  | some (.fixture name) => unsupported s!"inode of fixture file {name}"
+  -- W8: the fixture's sockets are S_IFSOCK, the pin's nsfs inode S_IFREG
+  | some (.fixture _) => return false
   | none => invariant "file->f_inode is NULL"
 
 /-- file_free (file_table.c:87-98). `put_cred` and the slab free are cut points. -/
@@ -159,6 +160,11 @@ def fputFinal (fid : FileId) : M Unit := do
   -- dput(dentry): a pipe file's pseudo dentry counts its references
   -- (`dputPipefs`); the anonymous inode's dentry is a cut point
   if let some (.pipefs id) := f.fInode then dputPipefs id
+  -- W8: the pin's nsfs dentry goes with the file's last reference
+  -- (`nsfs_evict` -> `ns->ops->put` -> `put_net`): the creating namespace's
+  -- last reference, by the fixture's order (the sockets' RCU-deferred puts
+  -- ran first), so `cleanup_net` is queued here, with its queue record
+  if let some (.fixture "netns-pin") := f.fInode then queueDeviceWork .netnsCleanup
   if ← branchCmp .fputFinalNeedUnmount (hasFlag f.fMode FMODE_NEED_UNMOUNT) (f.fMode &&& FMODE_NEED_UNMOUNT).toNat 0 then
     unsupported "dissolve_on_fput"
   -- mntput(mnt)

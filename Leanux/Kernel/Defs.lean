@@ -82,6 +82,10 @@ def ENETUNREACH : Int := 101
 -- W4: dev_validate_mtu's refusal, and the sender's datagram above cork->fragsize
 def ERANGE : Int := 34
 def EMSGSIZE : Int := 90
+def ENONET : Int := 64
+def ESRCH : Int := 3
+def EADDRNOTAVAIL : Int := 99
+def EAFNOSUPPORT : Int := 97
 /-- L: `wg_create` of an existing wg0; a bind at a held port. -/
 def EEXIST : Int := 17
 def EADDRINUSE : Int := 98
@@ -554,6 +558,12 @@ inductive Worker where
       the zero-key work item (`clear_peer_work` on `handshake_send_wq`). -/
   | timerRetransmit | timerSendKeepalive | timerNewHandshake | timerZeroKey | clearPeerWorker
   | timerPersistentKeepalive
+  /-- W8 (docs/2026-10-06-w8-w9-netns-routing.md, section 3.2): the creating
+      namespace's teardown (`cleanup_net` on `netns_wq`, armed by a
+      foreign-creator trace) and the linkwatch run its `netif_carrier_off`
+      queues (`linkwatch_event` on `system_unbound_wq`; W8b, armed by no
+      trace yet). -/
+  | netnsCleanup | linkwatch
   -- Reserved for the W streams (the interface commit,
   -- docs/2026-10-11-interface.md): W8-W9's `cleanup_net` and
   -- `linkwatch_event` units at indices 12-13, W5-W6's two units at 14-15
@@ -576,17 +586,20 @@ def Worker.symbol : Worker → String
   | .timerZeroKey => "wg_expired_zero_key_material"
   | .clearPeerWorker => "wg_queued_expired_zero_key_material"
   | .timerPersistentKeepalive => "wg_expired_send_persistent_keepalive"
+  | .netnsCleanup => "cleanup_net"
+  | .linkwatch => "linkwatch_event"
 
 def Worker.index : Worker → Nat
   | .sendWorker => 0 | .receiveWorker => 1 | .encryptWorker => 2 | .txWorker => 3 | .netRx => 4
   | .decryptWorker => 5
   | .timerRetransmit => 6 | .timerSendKeepalive => 7 | .timerNewHandshake => 8 | .timerZeroKey => 9
   | .clearPeerWorker => 10 | .timerPersistentKeepalive => 11
+  | .netnsCleanup => 12 | .linkwatch => 13
 
 def Worker.all : List Worker :=
   [.sendWorker, .receiveWorker, .encryptWorker, .txWorker, .netRx, .decryptWorker,
    .timerRetransmit, .timerSendKeepalive, .timerNewHandshake, .timerZeroKey, .clearPeerWorker,
-   .timerPersistentKeepalive]
+   .timerPersistentKeepalive, .netnsCleanup, .linkwatch]
 
 /-- D3: the timer callbacks (sections opened by `call_timer_fn`), with the
     peer timer each runs for. -/
@@ -665,6 +678,19 @@ inductive HiddenSite where
       segment's lookup of a boot (early demux, or the socket lookup): a cut
       before the stack's RST re-enters `wg_xmit`. -/
   | inetEhashSecret
+  /-- W9 (docs/2026-10-06-w8-w9-netns-routing.md, sections 4.1 and 5): the
+      `jiffies` the dst cache stores, recorded by the kernel (kind 306):
+      at `dst_cache_reset` (include/net/dst_cache.h:79, the inline, under
+      `dst_cache_init`, `dst_cache_reset_now` and socket.c's callers) and
+      at the refresh of a miss (`dst_cache_per_cpu_get`'s fail label,
+      net/core/dst_cache.c:62). The mirror computes the cache's
+      `time_after` from them (`WG.dstCacheGet`). -/
+  | dstCacheResetTs | dstCacheRefreshTs
+  /-- W8: `cleanup_net`'s own `cond_resched` (net/core/net_namespace.c:174,
+      the pernet exits' loop) inside its section: a scheduler choice the
+      mirror runs nothing across (no other armed unit runs in the teardown),
+      so ambient. -/
+  | reschedNetnsCleanup
   -- Reserved id ranges for the W streams (the interface commit,
   -- docs/2026-10-11-interface.md), outside every range above: W5-W6
   -- 140-149 (`.inetEhashSecret`), W8-W9 150-169 (`.dstCacheResetTs`,
@@ -785,6 +811,18 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   -- IFLA_INET6_CACHEINFO and the neighbour sysctls, which the harness never
   -- reads, and read by no modeled path (unobserved)
   | .neighReachTime => ⟨126, "neigh_reach_time", "random", "net/core/neighbour.c", 115, 4, .cut⟩
+  -- W9 (ids 150-169): the dst cache's jiffies, kind 306, resolved by the
+  -- innermost frame of the record's `_THIS_IP_` minus one (the resolver,
+  -- evaluator/coverage.py symbolize, takes every address as a return
+  -- address): the patched files' lines, confirmed on the W9 build
+  -- (identity 313c2cc9...): the reset's four callers (dst_cache_init,
+  -- wg_socket_set_peer_endpoint:294, send4:59, dst_cache_reset_now:177)
+  -- share the inline's frame dst_cache.h:90, the refresh is
+  -- dst_cache_per_cpu_get's dst_cache.c:63 (the design's 79/62 are the
+  -- pristine lines)
+  | .dstCacheResetTs => ⟨150, "dst_cache_reset_ts", "jiffies", "include/net/dst_cache.h", 90, 8, .mirror⟩
+  | .reschedNetnsCleanup => ⟨152, "resched:cleanup_net", "resched", "net/core/net_namespace.c", 174, 8, .ambient⟩
+  | .dstCacheRefreshTs => ⟨151, "dst_cache_refresh_ts", "jiffies", "net/core/dst_cache.c", 63, 8, .mirror⟩
   | .alloc s => let i := s.info
     ⟨70 + i.index, i.label, "alloc", i.file, i.line, 40, if i.count == .cut then .cut else .mirror⟩
   -- P (pipes, design section 3): id 18 is free on main and on every task
@@ -812,6 +850,7 @@ def HiddenSite.all : List HiddenSite :=
   ++ (Worker.all.filter fun w => w.timer?.isNone && w != .netRx).map .queued
   ++ [.cookieSecretBirthdate, .cookieSecret, .pubkeyHashKey, .ratelimiterKey, .ratelimiterGcNow, .udpPortDraw,
       .neighReachTime]
+  ++ [.dstCacheResetTs, .dstCacheRefreshTs, .reschedNetnsCleanup]
   ++ AllocSite.all.map .alloc
   ++ [.currentTime]
   ++ [.underLoadNow, .cookieNonce, .ratelimiterNow, .ratelimiterInsertNow]
@@ -863,9 +902,8 @@ structure SentDatagram where
       (`iptunnel_xmit`, `ip6_flow_hdr`), which the fixture's listeners and
       sender report (W5). -/
   ds : Nat := 0
-  /-- W5 (2.5): the source `send4`/`send6` ask for, `endpoint->src4/src6`
-      (the destination of the datagram the endpoint was learned from); 0
-      for an endpoint set by netlink, where the route selects the source. -/
+  /-- W9: the source address `send4`/`send6` chose (the cached or routed
+      `fl.saddr`): what the receiving fixture socket's `recvfrom` reports. -/
   src : Nat := 0
   deriving Repr, BEq
 
@@ -940,6 +978,12 @@ structure World where
   unitPeers : List (Nat × Nat × Nat) := []
   timerUnits : List (Nat × Nat × WG.PeerTimer) := []
   pendingWork : List Nat := []
+  /-- W8 (docs/2026-10-06-w8-w9-netns-routing.md, 3.1): the foreign-creator
+      fixture, where wg0's creating namespace C is held by the fixture's
+      listeners, injector and pin (`netnsCHolders`: descriptors 9, 8, 5, 4)
+      until the trace's `wg_netns_close` drops them. -/
+  foreignCreator : Bool := false
+  netnsCHolders : List Nat := []
   /-- A NET_RX softirq raised by a loopback transmission (`netif_rx` from
       `send4`/`send6` or an ICMP error), whose section has not been consumed
       yet: see `WG.loopbackSoftirq`. An operation ends with none pending
@@ -973,17 +1017,41 @@ structure World where
       the same value as the input's `arm_records`). Without them the mirror
       consumes none and a timer's `expires` is nominal. -/
   armRecords : Bool := false
+  /-- W9: whether this run's records include the kind-306 dst-cache jiffies
+      (every live run: the kernel writes them with the arm records; the
+      check never clears it). False only for the replay tests' captures made
+      before the record existed (`evaluator/test_model_replay.py`
+      `widen`), under which the mirror keeps the pre-W9 rule: the cache
+      always misses and no record is consumed. -/
+  dstCacheRecords : Bool := true
   /-- D3: the timer sections the environment ran in this operation, by
       callback symbol, for the trace's `fired:<symbol>` expectations
       (`Env.runTimerSection`). -/
   fired : Array String := #[]
-  /-- L, fixture state: whether the fixture's routes into wg0 exist. The
-      guest adds wg0's addresses and default routes after a successful
-      `wg_up` (`route_into_wg0`); the `NETDEV_DOWN` and `NETDEV_UNREGISTER`
-      notifiers of `wg_down` and `wg_delete` remove them (the IPv4 address
-      survives a down, which the guest checks). Without them the sender's
-      `sendto` into wg0 fails with `-ENETUNREACH`. -/
-  routesViaWg0 : Bool := false
+  /-- W9 (docs/2026-10-06-w8-w9-netns-routing.md, sections 2.6 and 4.2),
+      the fixture namespace's tables, replacing L's single `routesViaWg0`:
+      wg0's addresses (added by `route_into_wg0` after a successful
+      `wg_up`; the IPv4 one survives a down, the IPv6 one does not; both go
+      with `wg_delete` and `wg_deladdr`), the default route per family via
+      wg0 (removed by `wg_down`, `wg_delete`, `wg_delroute`, and, for IPv4,
+      with the device's last address), whether the IPv4 default route was
+      ever looked up (`FA_S_ACCESSED`: its deletion bumps the generation
+      only then), and the two route generations the dst cache's validity
+      check reads (`rt_genid`; the IPv6 fib sernum), bumped by every table
+      change. The loopback prefixes are constants (`World.route4/6`). -/
+  addrs4 : List Nat := []
+  addrs6 : List Nat := []
+  defaultRoute4 : Bool := false
+  defaultRoute6 : Bool := false
+  defaultRoute4Accessed : Bool := false
+  ipv4Gen : Nat := 0
+  ipv6Gen : Nat := 0
+  /-- W9 (design 14.3b): a successful flag-changing `wg_up` gets its
+      addresses and routes after the operation's wait (the guest's
+      `route_into_wg0` follows the wait), so the table changes apply after
+      the send workers and the idle timers of that operation
+      (`Env.routeIntoWg0`). -/
+  routesPending : Bool := false
   /-- W4, fixture state: the routes `net_fixture.routes` adds into wg0 at
       every `wg_up` (family, destination, the route's MTU): `dst_mtu` of a
       datagram to that destination (`Env.xmitPackets`). -/
@@ -1043,6 +1111,67 @@ def Stop.message : Stop → String
 
 /-- The mirror monad; `Stop` ends the execution fail-noisily. -/
 abbrev M := StateT World (Except Stop)
+
+/-! ## W9: the fixture namespace's routing (docs/2026-10-06-w8-w9-netns-routing.md, 2.6, 4.2) -/
+
+/-- A route the fixture's tables give: the output device (`lo` 1, wg0 3)
+    and the source address the lookup selects (`prefsrc`, or
+    `inet_select_addr` for the device route). -/
+structure Route where
+  dev : Nat
+  src : Nat
+  deriving Repr, BEq
+
+def LO_IFINDEX : Nat := 1
+def WG0_IFINDEX : Nat := 3
+def LOOPBACK4 : Nat := 0x7f000001
+
+/-- `ip_route_output_flow` on the fixture's tables (route.c): a set source
+    must be local (`127/8` or a wg0 address), else `-ENETUNREACH`
+    (route.c:2751-2754; the `-EINVAL` class of :2706-2712 needs a multicast
+    or zeronet source the fixture never configures); a `127/8` destination
+    or a wg0 address takes the local route over `lo` with `prefsrc`
+    (`127.0.0.1` for `127/8`, the address itself otherwise; :2833-2838);
+    anything else the default route via wg0 while it exists, with the
+    device's address as source, else `-ENETUNREACH` (:2714). -/
+def World.route4 (w : World) (saddr daddr : Nat) : Except Int Route :=
+  let isLocal (a : Nat) := a / 2 ^ 24 == 127 || w.addrs4.contains a
+  if saddr != 0 && !isLocal saddr then .error (-101)   -- -ENETUNREACH
+  else if isLocal daddr then
+    .ok { dev := LO_IFINDEX, src := if saddr != 0 then saddr else if daddr / 2 ^ 24 == 127 then LOOPBACK4 else daddr }
+  else match w.defaultRoute4, w.addrs4.head? with
+    | true, some a => .ok { dev := WG0_IFINDEX, src := if saddr != 0 then saddr else a }
+    | _, _ => .error (-101)
+
+/-- `ipv6_dst_lookup_flow` on the fixture's tables: `::1` and wg0's address
+    are local over `lo`; else the default route via wg0 (source: the
+    device's address) or `ip6_null_entry`'s `-ENETUNREACH`. -/
+def World.route6 (w : World) (saddr daddr : Nat) : Except Int Route :=
+  let isLocal (a : Nat) := a == 1 || w.addrs6.contains a
+  if saddr != 0 && !isLocal saddr then .error (-101)
+  else if isLocal daddr then .ok { dev := LO_IFINDEX, src := if saddr != 0 then saddr else daddr }
+  else match w.defaultRoute6, w.addrs6.head? with
+    | true, some a => .ok { dev := WG0_IFINDEX, src := if saddr != 0 then saddr else a }
+    | _, _ => .error (-101)
+
+/-- A lookup, noting a resolution through the IPv4 default route
+    (`fib_alias_accessed`, the `FA_S_ACCESSED` flag `wg_delroute`'s
+    generation bump depends on). -/
+def routeLookup (family saddr daddr : Nat) : M (Except Int Route) := do
+  let w ← get
+  if family == 4 then
+    let r := w.route4 saddr daddr
+    if let .ok { dev := d, .. } := r then
+      if d == WG0_IFINDEX then set { w with defaultRoute4Accessed := true }
+    return r
+  else return w.route6 saddr daddr
+
+/-- W9: whether a fixture socket receives at `addr:port` for `family`: the
+    dual-stack sender is bound to the wildcard address at `SENDER_PORT`, so
+    it receives at every local address (`127/8`, `::1`, wg0's addresses). -/
+def World.wildcardLocal (w : World) (family addr : Nat) : Bool :=
+  (family == 2 && (addr / 2 ^ 24 == 127 || w.addrs4.contains addr))
+  || (family == 10 && (addr == 1 || w.addrs6.contains addr))
 
 /-- The C leaves the modeled domain here. The site is the last decision the
     mirror recorded, which is the C condition that led here. -/
@@ -1155,6 +1284,12 @@ def hidden (s : HiddenSite) : M (List UInt8) := do
     if let .sectionStart ws := s then
       modify fun st => { st with pendingWork := st.pendingWork.filter (· != ws.index) }
     return r.bytes.take i.len
+
+/-- A record's bytes as a little-endian natural (the 8-byte `jiffies`
+    records of kind 306, W9). -/
+def hiddenU64 (s : HiddenSite) : M Nat := do
+  let bs ← hidden s
+  return bs.foldr (fun b acc => acc * 256 + b.toNat) 0
 
 /-- The site of the next record to consume (after ambient ones), without
     consuming it: how the environment's scheduler reads a recorded

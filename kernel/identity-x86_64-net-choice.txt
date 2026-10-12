@@ -74,7 +74,14 @@
 # 9cd0a89fe6100e4b26c102930b5d0df5138f16e59a11e0a7e791c2a32ec41965; the
 # identity and vmlinux lines below are the previous build's (A, c79e3e0c)
 # until the coordinator rebuilds and records the new ones [AGENT 2026-10-11].
+# W9 (docs/2026-10-06-w8-w9-netns-routing.md, section 4.1): the kind-306
+# record of the jiffies the dst cache stores, at dst_cache_reset
+# (include/net/dst_cache.h, inline) and at the refresh of a miss
+# (net/core/dst_cache.c), gated like the arm record. Record-only. The
+# oracle's patch sha256 is in scripts/build-kernel (CHOICE_SHA / ACTL_SHA).
+# The identity and vmlinux lines below are the dispatch-order builds'
+# until the coordinator rebuilds with this patch.
 # Path-independent identity from scripts/kernel-identity.py:
-bb3e577d86173347e2fae21b743942e697ed1bb4bd6fc5fae160ec494e3c7453
+313c2cc92eb4d02fcc6bc1740f18ea1e5e2a5c1bbb21a75bfd1fc2c80ef303ce
 # vmlinux sha256 of the build the evidence used (path-dependent):
-c7a09c45699b4160d9be5726c99321091274111834d0d16601601c94c9efa1d7
+55e966027e7e3fd60a94c4815f232e3b005040886fa5299103e8127f8a412f25

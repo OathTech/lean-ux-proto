@@ -22,8 +22,8 @@ more asks before taking it.
 Shared, coordinator-owned, allocated here and append-only per stream:
 - the wire opcode table (`harness/trace.py` `OPCODES`, `RESERVED_OPCODES`;
   `harness/guest.c` `OP_*`; `evaluator/protocol.py` `SEMANTIC_ERRNOS`):
-  20 `wg_get_start`, 21 `wg_get_recv` (W2); 22 `wg_netns_close` (W8);
-  23 `wg_deladdr`, 24 `wg_delroute` (W9); 25 `wg_set_mtu` (W4 stream T),
+  20 `wg_get_start`, 21 `wg_get_recv` (W2); 22 `wg_netns_close` (W8, taken);
+  23 `wg_deladdr`, 24 `wg_delroute` (W9, taken); 25 `wg_set_mtu` (W4 stream T),
   26 `wg_batch` (W7 stream B), allocated by the coordinator at their
   landing; `wg_xmit`'s GSO and pmtudisc options ride on the existing code;
 - record kind 306, the dst-cache `jiffies` records (`evaluator/check.py`

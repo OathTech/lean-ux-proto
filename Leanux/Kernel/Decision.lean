@@ -319,6 +319,14 @@ inductive Decision where
   | sigIgnoredRealBlocked | sigIgnoredPtrace | completeSignalWants | wantsSignalBlocked
   | completeSignalPidType | sigqueueAllocNoUcounts | sigqueueAllocOverride | sigqueueAllocNull
   -- P stream 2 signal (end)
+  -- W9 (docs/2026-10-06-w8-w9-netns-routing.md, section 4.4):
+  -- drivers/net/wireguard/socket.c: send4, send6
+  | send4SockNull | send4HasCache | send4CacheMiss | send4SrcNotLocal | send4ResetA | send4SrcIfMismatch
+  | send4ResetB | send4PutRt | send4RouteErr | send4CacheSet
+  | send6SockNull | send6HasCache | send6CacheMiss | send6SrcNotLocal | send6Reset | send6RouteErr
+  | send6CacheSet
+  -- W8 (section 3.3): wg_netns_pre_exit (drivers/net/wireguard/device.c:409-428)
+  | preExitDevIter | preExitCreator | preExitPeerIter
   deriving Repr, BEq, DecidableEq, Inhabited
 
 /-- A call site of a value comparison whose operand is a guest-wide value the
@@ -1277,6 +1285,32 @@ def Decision.info : Decision → DecisionInfo
   -- wg_socket_reinit (socket.c:419-437) and its inlined sock_free (334-340)
   | .reinitHasNew4 => d "wg_socket_reinit.new4" wso 431 [(432, 432)] []
   | .sockFreeNull => d "sock_free.null" wso 336 [(337, 337)] [(338, 339)]
+  -- W9: send4 (socket.c:20-95) and send6 (97-166). The lines a decision
+  -- owns are the ones only its outcome runs; the transmit (83-87, 152-156)
+  -- and the shared `err:` label (91-92, 161-162) belong to no single
+  -- outcome and are left unspanned.
+  | .send4SockNull => d "send4.sock_null" wso 41 [(42, 43)] []
+  | .send4HasCache => d "send4.has_cache" wso 48 [(49, 49)] []
+  | .send4CacheMiss => d "send4.cache_miss" wso 51 [(53, 54), (61, 62), (74, 74)] []   -- 52 has no point (no SECURITY)
+  | .send4SrcNotLocal => d "send4.src_not_local" wso 53 [(55, 57)] []
+  | .send4ResetA => d "send4.reset_a" wso 58 [(59, 59)] []
+  | .send4SrcIfMismatch => d "send4.src_if_mismatch" wso 62 [(65, 67), (72, 72)] []
+  | .send4ResetB => d "send4.reset_b" wso 68 [(69, 69)] []
+  | .send4PutRt => d "send4.put_rt" wso 70 [(71, 71)] []
+  | .send4RouteErr => d "send4.route_err" wso 74 [(75, 78)] [(80, 80)]
+  | .send4CacheSet => d "send4.cache_set" wso 80 [(81, 81)] []
+  | .send6SockNull => d "send6.sock_null" wso 121 [(122, 123)] []
+  | .send6HasCache => d "send6.has_cache" wso 128 [(129, 129)] []
+  | .send6CacheMiss => d "send6.cache_miss" wso 131 [(133, 134), (139, 140), (141, 141)] []   -- 132 has no point (no SECURITY)
+  | .send6SrcNotLocal => d "send6.src_not_local" wso 133 [(135, 135)] []
+  | .send6Reset => d "send6.reset" wso 136 [(137, 137)] []
+  | .send6RouteErr => d "send6.route_err" wso 141 [(142, 145)] [(147, 147)]
+  | .send6CacheSet => d "send6.cache_set" wso 147 [(148, 148)] []
+  -- W8: wg_netns_pre_exit (device.c:409-428): the device loop (one device),
+  -- the creating-namespace test, the peer loop
+  | .preExitDevIter => d "wg_netns_pre_exit.devices_iterate" wdv 415 [(416, 416)] []
+  | .preExitCreator => d "wg_netns_pre_exit.creator" wdv 416 [(418, 424)] []
+  | .preExitPeerIter => d "wg_netns_pre_exit.peers_iterate" wdv 422 [(423, 423)] []
   -- wg_ratelimiter_init (ratelimiter.c:158-203): `++init_refcnt != 1` jumps to
   -- the shared `out:`; the failure arms reach the shared `err:` labels
   | .ratelimiterInitNotFirst => d "wg_ratelimiter_init.refcnt_not_one" wrl 161 [] [(164, 192)]
@@ -1880,6 +1914,13 @@ def Decision.repeatable : Decision → Bool
   -- several send workers may run in one operation; bucket walks loop
   | .initRateLimited | .initCreated | .initNoIdentity | .initNoEphemeral | .initEsFailed | .initSsFailed
   | .idxInsWalk1 | .idxInsCollide1 | .idxInsWalk2 | .idxInsCollide2 | .idxWalk | .idxMatch
+  -- W9: send4/send6 run once per datagram, several per operation
+  | .send4SockNull | .send4HasCache | .send4CacheMiss | .send4SrcNotLocal | .send4ResetA | .send4SrcIfMismatch
+  | .send4ResetB | .send4PutRt | .send4RouteErr | .send4CacheSet
+  | .send6SockNull | .send6HasCache | .send6CacheMiss | .send6SrcNotLocal | .send6Reset | .send6RouteErr
+  | .send6CacheSet
+  -- W8: the pre-exit's loops (the device test true then false, a peer each)
+  | .preExitDevIter | .preExitPeerIter
   | .sendBufNoMem | .sendSkbInet | .sendSkbInet6 | .sendSkbOk | .addMacCookieValid | .addMacCookieFresh
   -- D1 stream B: add_new_keypair and keypairs_clear put up to three live
   -- keypairs in one operation (stream C: the tx worker's put shares an
