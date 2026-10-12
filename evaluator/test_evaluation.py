@@ -654,6 +654,42 @@ class D2GeneratorChecks(unittest.TestCase):
         self.assertGreater(len(b) - len(others), 20)
         self.assertEqual(others, [t['ops'] for t in a][:len(others)])
 
+    def test_lifecycle_routing_netns_shares_keep_the_stream(self):
+        import json
+        from evaluator.generate import generate_wireguard
+        a = generate_wireguard(11, 120, steered=0.3, data=0.2)
+        self.assertEqual(a, generate_wireguard(11, 120, steered=0.3, data=0.2, lifecycle=0.0, routing=0.0, netns=0.0))
+        base = {json.dumps(t['ops'], sort_keys=True) for t in a}
+        for share in ('lifecycle', 'routing', 'netns'):
+            # the class's traces come from their own generator: the others keep
+            # their content and order, only their identifiers shift
+            b = generate_wireguard(11, 120, steered=0.3, data=0.2, **{share: 0.3})
+            others = [t['ops'] for t in b if json.dumps(t['ops'], sort_keys=True) in base]
+            self.assertGreater(len(b) - len(others), 15, share)
+            self.assertEqual(others, [t['ops'] for t in a][:len(others)], share)
+
+    def test_lifecycle_routing_netns_multi_peer_traces(self):
+        import random
+        from evaluator.generate import (WAIT_BUDGET_SECONDS, lifecycle_trace, multi_peer_timers, netns_trace,
+                                        routing_trace, wait_after_up)
+        for name, fn in (('lifecycle', lifecycle_trace), ('routing', routing_trace), ('netns', netns_trace),
+                         ('multi', multi_peer_timers)):
+            rng = random.Random(7)
+            shapes = set()
+            for i in range(200):
+                trace = validate_trace(fn(rng, f'{name}{i}'))
+                self.assertLessEqual(wait_after_up(trace['ops']), WAIT_BUDGET_SECONDS, name)
+                shapes.add(tuple(op['op'] for op in trace['ops']))
+            self.assertGreater(len(shapes), 1 if name != 'multi' else 0, name)
+        rng = random.Random(7)
+        trace = multi_peer_timers(rng, 'm')
+        sites = [s for s, _ in trace['steer']]
+        n = len(trace['ops'][0]['config']['peers'])
+        # each of the 2n initiations: three draws, then the jitter, in encounter order
+        self.assertEqual(sites, ['init_ephemeral', 'tai64n_now', 'index_draw', 'retransmit_jitter'] * (2 * n))
+        rng = random.Random(7)
+        self.assertTrue(any(t.get('net_fixture') == 'bare' for t in (lifecycle_trace(rng, f'l{i}') for i in range(100))))
+
     def test_steered_data_traces(self):
         import random
         from harness import noise

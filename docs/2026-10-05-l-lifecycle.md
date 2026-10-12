@@ -1161,3 +1161,17 @@ below covers the merged harness.
 - Controls: the three steering controls and `l_random_port_collision`
   (`unsupported_path`: "the random port draw collides with a bound port")
   are rejected.
+
+### 16.5 The generator class [AGENT 2026-10-12]
+
+`lifecycle_trace` (`evaluator/generate.py`, `LIFECYCLE_SHARE` 0.1 as section
+7 sized it): a bare start with `wg_create` (twice for `EEXIST`, or
+create-delete-create for ifindex 4) and the usual configuration and
+transmissions; a down in the middle with the observation, the dump, a
+transmission that fails and optionally an up again; a port while running
+(free, the listener's or the sender's for `EADDRINUSE`, the same, or 0 with
+`udp_port_draw` steered to 40001-40019); a delete at any point followed by
+operations on the missing device and optionally a create again; and W3's
+queue-then-remove (docs/2026-10-06-w3-w12.md V.6). 200/200 pass the domain
+filter. The counts in `wait_after_up` stay 0 for the lifecycle operations
+(no guest wait), and 1.1 s for `wg_netns_close` (W8).

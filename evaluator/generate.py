@@ -354,6 +354,9 @@ WAIT_BUDGET_SECONDS = 2.8
 # advances of a give-up chain ran 1.4-1.6 s beyond their modeled waits, about
 # 0.17 s per advance in all; counted at 0.2 s [AGENT, int-dl follow-up 1].
 ADVANCE_COST_SECONDS = 0.2
+# W8: wg_netns_close settles the socket puts and waits for the namespace's
+# teardown section (harness/guest.c; evaluator/check.py NETNS_WAIT_SECONDS)
+NETNS_CLOSE_SECONDS = 1.1
 
 
 def wait_after_up(operations):
@@ -362,11 +365,12 @@ def wait_after_up(operations):
         up = up or op['op'] == 'wg_up'
         if up:
             waits += {'wg_inject': 0.4, 'wg_observe': 0.4, 'wg_set': 0.1, 'wg_up': 0.1, 'wg_xmit': 0.1,
-                      'wg_advance': ADVANCE_COST_SECONDS}.get(op['op'], 0)
+                      'wg_advance': ADVANCE_COST_SECONDS, 'wg_netns_close': NETNS_CLOSE_SECONDS}.get(op['op'], 0)
     return waits
 
 
-def generate_wireguard(seed, count, max_ops=12, steered=0.0, data=0.0, timers=0.0, alloc=0.0):
+def generate_wireguard(seed, count, max_ops=12, steered=0.0, data=0.0, timers=0.0, alloc=0.0,
+                       lifecycle=0.0, routing=0.0, netns=0.0):
     """Seeded WireGuard traces over small pools of keys and prefixes, so that
     peers, trie nodes and identities collide often. A third are configuration
     traces (stage A), and the rest bring wg0 up and transmit (stage B1), inject
@@ -383,11 +387,22 @@ def generate_wireguard(seed, count, max_ops=12, steered=0.0, data=0.0, timers=0.
     drawn before the data-plane share from a fourth generator, with the same
     property. `alloc` is the share of allocation-failure traces (A1,
     alloc_fail), drawn after `timers` and before `data` from a fifth
-    generator, with the same property."""
+    generator, with the same property. `lifecycle` (L's class: bare starts,
+    downs, ports while running, deletes, W3's queue-then-remove), `routing`
+    (W9: endpoints off loopback and at the loopback alias, the fixture's
+    address and route deletions, the dst cache) and `netns` (W8a: the
+    foreign creator's namespace exits) are drawn before the others, each from
+    its own generator, with the same property. Within `timers`, one draw in
+    six is W12's multi-peer fixture (`multi_peer_timers`)."""
     if not 2 <= max_ops <= 64 or not 1 <= count <= 100000 or not 0 <= steered <= 1 or not 0 <= data <= 1 \
-            or not 0 <= timers <= 1 or not 0 <= alloc <= 1:
+            or not 0 <= timers <= 1 or not 0 <= alloc <= 1 or not 0 <= lifecycle <= 1 or not 0 <= routing <= 1 \
+            or not 0 <= netns <= 1:
         raise ValueError('bounded generator parameters')
     rng = random.Random(seed)
+    lifecycle_rng = random.Random(f'lifecycle-{seed}')
+    routing_rng = random.Random(f'routing-{seed}')
+    netns_rng = random.Random(f'netns-{seed}')
+    multi_rng = random.Random(f'multi-peer-{seed}')
     steered_rng = random.Random(f'steered-{seed}')
     data_rng = random.Random(f'data-{seed}')
     timers_rng = random.Random(f'timers-{seed}')
@@ -565,8 +580,28 @@ def generate_wireguard(seed, count, max_ops=12, steered=0.0, data=0.0, timers=0.
                 ops.append({'op': 'wg_get'})
         return ops + [{'op': 'wg_observe'}]
 
+    def admit(trace, what):
+        if wait_after_up(trace['ops']) > WAIT_BUDGET_SECONDS:
+            raise AssertionError(f'a {what} trace exceeds the wait budget')
+        digest = identity(trace)
+        if digest not in seen:
+            seen.add(digest)
+            result.append(trace)
+
     while len(result) < count:
+        if lifecycle and lifecycle_rng.random() < lifecycle:
+            admit(lifecycle_trace(lifecycle_rng, f'generated-wg-{seed}-{len(result):05}'), 'lifecycle')
+            continue
+        if routing and routing_rng.random() < routing:
+            admit(routing_trace(routing_rng, f'generated-wg-{seed}-{len(result):05}'), 'routing')
+            continue
+        if netns and netns_rng.random() < netns:
+            admit(netns_trace(netns_rng, f'generated-wg-{seed}-{len(result):05}'), 'netns')
+            continue
         if timers and timers_rng.random() < timers:
+            if multi_rng.random() < 1 / 6:
+                admit(multi_peer_timers(multi_rng, f'generated-wg-{seed}-{len(result):05}'), 'multi-peer timer')
+                continue
             trace = steered_timers(timers_rng, f'generated-wg-{seed}-{len(result):05}')
             if wait_after_up(trace['ops']) > WAIT_BUDGET_SECONDS:
                 raise AssertionError('a steered timer trace exceeds the wait budget')
@@ -732,6 +767,10 @@ D2_SIZES4 = [1, 15, 16, 17, 20, 1376, 1377, 1391, 1392]            # inner lengt
 D2_SIZES6 = [1, 15, 16, 17, 20, 1356, 1357, 1371, 1372]
 D2_INJECT_MAX = 1400 - 32                                           # wg_inject's message bound, less header and tag
 D2_WINDOW = noise.COUNTER_WINDOW_SIZE
+# W5 (docs/2026-10-06-w5-w6-receive.md 2.1): the ECN codepoints and the DSCP the
+# kept classes carry alongside (AF41 << 2)
+NOT_ECT, ECT1, ECT0, CE = 0, 1, 2, 3
+W5_DSCP = 0xb8
 D2_REJECT = noise.REJECT_AFTER_MESSAGES
 
 
@@ -766,7 +805,13 @@ def steered_data(rng, trace_id):
     peer_private = rng.choice(D1_PEERS)
     peer_public = noise.public_key(peer_private)
     psk = rng.choice([b'\xaa' * 32, rng.randbytes(32)]) if rng.random() < .2 else None
-    variant = rng.choices(['xmit', 'staged', 'receive', 'mixed', 'respond'], [3, 2, 5, 2, 3])[0]
+    # W5+W6 (docs/2026-10-06-w5-w6-receive.md, section 6): `rx_ecn` (the outer DS
+    # field against the inner ECN codepoint, both families, both directions through
+    # the TOS knob), `rx_scoped` (the link-local sender: a roam between the scoped
+    # and the unscoped endpoint) and `stack_rst4` (an inner IPv4 TCP segment to
+    # wg0's address, answered by a RST that re-enters wg_xmit from the NAPI poll)
+    variant = rng.choices(['xmit', 'staged', 'receive', 'mixed', 'respond', 'rx_ecn', 'rx_scoped', 'stack_rst4'],
+                          [3, 2, 5, 2, 3, 2, 1, 2])[0]
     allowed4, allowed6 = rng.choice(D2_ALLOWED4), rng.choice(D2_ALLOWED6)
 
     def source(family):
@@ -893,15 +938,74 @@ def steered_data(rng, trace_id):
         return dict(version=1, id=trace_id, ops=ops, steer=steer,
                     expect=D1_SESSION + ['wg_packet_send_staged_packets.no_keypair=1'])
     peer['keepalive'] = 25
+    expect = list(D1_SESSION)
+
+    def data_inject(counter, plaintext, family, **fields):
+        message = noise.data_message(session.receiving, session.local_index, counter, plaintext)
+        return {'op': 'wg_inject', 'family': family, 'port': 51820, 'message': message.hex(), **fields}
+
     if variant == 'xmit':
         after = [xmit() for _ in range(rng.randint(1, 4))]
     elif variant == 'receive':
         after = data_ops(session, rng.randint(1, 3))
+    elif variant == 'rx_ecn':
+        # the RFC 6040 arms as inet_ecn.h takes them (the corpus's w5_ecn_* rows),
+        # the inner DSCP alongside; the outer family is the inner's, as in the corpus
+        after = []
+        for counter in range(rng.randint(1, 3)):
+            family = rng.choice([4, 6])
+            outer = rng.choice([CE, CE, ECT1, ECT0, NOT_ECT])
+            inner_tos = rng.choice([0, W5_DSCP]) | rng.choice([ECT0, ECT1, CE, NOT_ECT])
+            text = rng.randbytes(rng.choice([0, 7, 16, rng.randint(1, 200)]))
+            sport = rng.choice([12345, rng.randrange(1, 65536)])
+            if family == 4:
+                plaintext = noise.to_wg0(4, source(4), text, sport=sport, tos=inner_tos)
+            else:
+                plaintext = noise.to_wg0(6, source(6), text, sport=sport, traffic_class=inner_tos)
+            after.append(data_inject(counter, plaintext, family, tos=outer))
+        if rng.random() < .5:   # DS on transmit (send.c:378): the outer DS from the inner ECN bits
+            transmit = xmit()
+            transmit['tos'] = rng.choice([NOT_ECT, ECT1, ECT0, CE, W5_DSCP | ECT1])
+            after.append(transmit)
+    elif variant == 'rx_scoped':
+        # an IPv6 data message from the link-local sender roams the endpoint to
+        # [fe80::1%1]:51998; a later one from ::1 roams back; wg0's transmits
+        # follow the endpoint (the sender's IPV6_PKTINFO reports the destination)
+        text = lambda: rng.randbytes(rng.choice([0, 7, 16]))   # noqa: E731
+        after = [data_inject(0, noise.to_wg0(6, source(6), text(), sport=12345), 6, **{'from': 'll'})]
+        shape = rng.choice(['probe', 'roam', 'roam_back'])
+        if shape == 'probe':
+            after.append(xmit6 := xmit())
+            xmit6['packet'] = dict(family=6, dst=destination(6).hex(), payload=rng.randbytes(24).hex())
+        elif shape == 'roam':
+            after.append(data_inject(1, noise.to_wg0(6, source(6), text(), sport=12345), 6))
+        else:
+            after.append(data_inject(1, noise.to_wg0(6, source(6), text(), sport=12345), 6))
+            after.append(data_inject(2, noise.to_wg0(6, source(6), text(), sport=12345), 6, **{'from': 'll'}))
+    elif variant == 'stack_rst4':
+        # W6 (2.4.1): a TCP segment to wg0's address finds no socket; the stack's
+        # RST re-enters wg_xmit inside the NAPI poll's NET_RX section (CHECKSUM_NONE)
+        # and reaches the sender as a data message
+        sport, dport = rng.randrange(1024, 65536), rng.choice([22, 25, 80, 443, rng.randrange(1, 65536)])
+        seq, ack = rng.randrange(2**32), rng.randrange(2**32)
+        shape = rng.choice(['syn', 'ack_payload', 'fin_payload', 'syn_ecn'])
+        inner_tos = rng.choice([0, W5_DSCP]) | (rng.choice([ECT0, ECT1, CE]) if shape == 'syn_ecn' else 0)
+        if shape == 'syn':
+            segment = noise.ipv4_tcp(source(4), noise.WG0_ADDR4, sport, dport, seq, 0, 2)
+        elif shape == 'ack_payload':
+            segment = noise.ipv4_tcp(source(4), noise.WG0_ADDR4, sport, dport, seq, ack, 16 | 8, rng.randbytes(rng.randint(1, 40)))
+        elif shape == 'fin_payload':
+            segment = noise.ipv4_tcp(source(4), noise.WG0_ADDR4, sport, dport, seq, 0, 1, rng.randbytes(rng.randint(1, 8)), tos=inner_tos)
+        else:
+            segment = noise.ipv4_tcp(source(4), noise.WG0_ADDR4, sport, dport, seq, 0, 2, tos=inner_tos)
+        fields = {'tos': CE} if shape == 'syn_ecn' and rng.random() < .5 else {}
+        after = [data_inject(0, segment, 4, **fields)]
+        expect += ['wg_packet_create_data_done.data_sent=1', 'encrypt_packet.checksum_partial=0']
     else:
         after = data_ops(session, 2) + [xmit(), xmit()]
         rng.shuffle(after)
     ops = setup() + [observe, respond] + after + [observe, get]
-    return dict(version=1, id=trace_id, ops=ops, steer=steer, expect=D1_SESSION)
+    return dict(version=1, id=trace_id, ops=ops, steer=steer, expect=expect)
 
 
 # Stage D3: WireGuard's timers under the virtual time advance
@@ -1249,3 +1353,286 @@ def alloc_fail(rng, trace_id):
         steer = entries('sendBufSkb', plan)
         expect_nomem = 'wg_socket_send_buffer_to_peer.no_mem'
     return dict(version=1, id=trace_id, ops=ops, steer=steer, expect=[f'{expect_nomem}=1'])
+
+
+# L (docs/2026-10-05-l-lifecycle.md, section 7): the lifecycle class, and W3's
+# queue-then-remove variant inside it (docs/2026-10-06-w3-w12.md, I.6).
+L_LOW, L_REMAINING = 32768, 60999 - 32768 + 1   # the ephemeral port range (udp.c:257)
+
+
+def port_draw(port):
+    """The u32 (little-endian hex) whose first candidate is `port` (scripts/wg-l-corpus.py)."""
+    rand = -(-(port - L_LOW) * 2**32 // L_REMAINING)
+    if L_LOW + (rand * L_REMAINING >> 32) != port or not 0 <= rand < 2**32:
+        raise ValueError(f'no draw for port {port}')
+    return rand.to_bytes(4, 'little').hex()
+
+
+def _steer_initiation(rng):
+    """Three steered values for one initiation wg0 sends (D1): the mirror
+    computes the datagram byte-exactly."""
+    sec = rng.choice([1, rng.randrange(2**31)])
+    return [['init_ephemeral', rng.randbytes(32).hex()], ['tai64n_now', noise.timespec64(sec, rng.randrange(10**9)).hex()],
+            ['index_draw', rng.randrange(2**32).to_bytes(4, 'little').hex()]]
+
+
+def lifecycle_trace(rng, trace_id):
+    """One lifecycle trace (L, section 7), drawing from:
+    - `bare_create`: a bare fixture, wg_create (sometimes twice: EEXIST, or
+      create-delete-create: ifindex 4), the usual configuration, an up and
+      transmissions;
+    - `down_mid`: a configured device brought down in the middle (tx_dropped,
+      the port kept, ENETUNREACH), optionally up again (a persistent
+      keepalive's fresh initiation);
+    - `port_running`: a wg_set with a new listen_port while up: a free port,
+      a fixture port (EADDRINUSE, the old sockets keep working), the same
+      port, or 0 with the draw steered;
+    - `delete`: wg_delete at any point, then operations on the missing device
+      (ENODEV, ENETUNREACH, stats null), optionally a wg_create again;
+    - `remove_queued` (W3, at most a tenth): one wg_set whose entries queue a
+      peer's handshake work and remove the peer, the flush running the
+      queued worker inside the call; optionally a second peer whose keepalive
+      entry precedes the remove and is drained by the same flush."""
+    device = rng.choice(D1_DEVICES)
+    publics = [noise.public_key(k).hex() for k in D1_PEERS]
+    allowed4 = rng.choice(D2_ALLOWED4)
+    variant = rng.choices(['bare_create', 'down_mid', 'port_running', 'delete', 'remove_queued'], [3, 3, 2, 3, 1])[0]
+    observe, get, up, down = {'op': 'wg_observe'}, {'op': 'wg_get'}, {'op': 'wg_up'}, {'op': 'wg_down'}
+    create, delete = {'op': 'wg_create'}, {'op': 'wg_delete'}
+
+    def xmit():
+        while True:
+            dst = _in_prefix(rng, *allowed4, 4)
+            if dst != noise.WG0_ADDR4:
+                return {'op': 'wg_xmit', 'packet': dict(family=4, dst=dst.hex())}
+
+    def peer(public=None, net=None, endpoint=True, **extra):
+        p = dict(public_key=public or publics[0],
+                 allowed_ips=[dict(family=4, addr=net or allowed4[0], cidr=8 if net else allowed4[1])], **extra)
+        if endpoint:
+            p['endpoint'] = D1_LISTENERS[0]
+        return p
+
+    def configure(port=51820, peers=None, **extra):
+        config = dict(private_key=device.hex(), peers=peers if peers is not None else [peer(**extra)])
+        if port is not None:
+            config['listen_port'] = port
+        return {'op': 'wg_set', 'config': config}
+
+    def set_device(**config):
+        return {'op': 'wg_set', 'config': config}
+
+    fixture, steer, expect = None, None, None
+    if variant == 'bare_create':
+        fixture = 'bare'
+        if rng.random() < .25:
+            ops = [create, delete, create, get]
+        else:
+            ops = ([get] if rng.random() < .5 else []) + [create] + ([create] if rng.random() < .2 else []) + [get]
+            ops += [configure(), up] + [rng.choice([xmit(), observe]) for _ in range(rng.randint(1, 2))] + [observe, get]
+    elif variant == 'down_mid':
+        keepalive = rng.random() < .5
+        ops = [configure(**({'keepalive': 25} if keepalive else {})), up] + ([observe] if keepalive else [])
+        ops += [xmit() for _ in range(rng.randint(0, 2))] + [down, observe, get]
+        if rng.random() < .4:
+            ops.append(xmit())   # ENETUNREACH: the routes went with the down
+        if rng.random() < .5:
+            ops += [up, observe]
+        ops.append(get)
+    elif variant == 'port_running':
+        ops = [configure(), up]
+        kind = rng.choices(['free', 'listener', 'sender', 'same', 'random'], [3, 2, 2, 1, 2])[0]
+        if kind == 'random':
+            port = rng.randrange(40001, 40020)
+            steer = [['udp_port_draw', port_draw(port)]]
+            ops.append(set_device(listen_port=0))
+        else:
+            port = {'free': 51821, 'listener': 51999, 'sender': 51998, 'same': 51820}[kind]
+            ops.append(set_device(listen_port=port, **({'fwmark': rng.randrange(1, 2**32)} if rng.random() < .3 else {})))
+        ops.append(get)
+        if rng.random() < .6:
+            ops += [xmit(), observe]
+        ops.append(get)
+    elif variant == 'delete':
+        keepalive = rng.random() < .5
+        ops = [configure(**({'keepalive': 25} if keepalive else {}))]
+        if rng.random() < .6:
+            ops.append(up)
+            if keepalive:
+                ops.append(observe)
+        ops.append(delete)
+        ops += [rng.choice([get, up, xmit(), observe]) for _ in range(rng.randint(1, 3))]
+        if rng.random() < .4:
+            ops += [create, get]
+            if rng.random() < .5:
+                ops += [configure(), up, observe]
+    else:   # W3: remove_queued
+        if rng.random() < .6:
+            ops = [configure(), up,
+                   set_device(peers=[dict(public_key=publics[0], keepalive=25), dict(public_key=publics[0], remove=True)]),
+                   observe, get]
+            steer = _steer_initiation(rng)
+            expect = ['set_peer.remove_me=1', 'wg_packet_send_queued_handshake_initiation.already_queued=1',
+                      'wg_packet_send_staged_packets.no_keypair=1', 'mod_peer_timer.alive=0']
+        else:
+            x, y = publics[0], publics[1]
+            ops = [configure(peers=[peer(x), peer(y, net='0b000000')]), up,
+                   set_device(peers=[dict(public_key=x, keepalive=25), dict(public_key=y, keepalive=25),
+                                     dict(public_key=y, remove=True)]),
+                   observe, get]
+            steer = _steer_initiation(rng) + _steer_initiation(rng)
+            expect = ['set_peer.remove_me=1', 'mod_peer_timer.alive=0', 'mod_peer_timer.alive=1']
+    trace = dict(version=1, id=trace_id)
+    if fixture:
+        trace['net_fixture'] = fixture
+    trace['ops'] = ops
+    if steer:
+        trace['steer'] = steer
+    if expect:
+        trace['expect'] = expect
+    return trace
+
+
+# W9 (docs/2026-10-06-w8-w9-netns-routing.md, sections 4.3 and 7): the routing
+# class: send4's arms, the dst cache, the fixture's tables and the wildcard
+# sender's bind.
+W9_ALIAS_SENDER = dict(family=4, addr='7f000002', port=51998)   # the wildcard sender at the loopback alias
+W9_OFF_LOOPBACK = [dict(family=4, addr='c0000201', port=51999),  # 192.0.2.1: routes into wg0 while the default route exists
+                   dict(family=4, addr='0b000001', port=51999)]
+RETRANSMIT_FIRE_TICKS = 1450   # fire_advance(REKEY_TIMEOUT + the jitter's maximum), as d3_retransmit
+
+
+def routing_trace(rng, trace_id):
+    """One W9 trace. wg0 initiates at wg_up (steered draws) toward the
+    fixture's listener or the loopback alias; then one of:
+    - `alias`: the endpoint is the wildcard sender at 127.0.0.2 (the 127/8
+      local route, the initiation received from 127.0.0.1);
+    - `two_sends`: a retransmit advance: the second send through the cache
+      (a hit iff the recorded refresh jiffy is after the reset's);
+    - `delroute_untouched`: the default route deleted before any lookup
+      through it, then the retransmit;
+    - `unroutable`: the default route deleted, then an endpoint off loopback
+      set with a keepalive: send4 returns -ENETUNREACH, no datagram;
+    - `deladdr_then_send`: wg0's only IPv4 address deleted (its routes go
+      too), then a wg_delroute (-ESRCH) and a transmission that fails;
+    - `inject_to`: the peer's response injected to the alias (src4 127.0.0.2,
+      cleared at the keepalive's send4) or to wg0's own address;
+    - `session_two_sends`: a session, then two data sends: the second hits;
+    - `deladdr6`: the IPv6 address and route deleted, the route twice."""
+    device = rng.choice(D1_DEVICES)
+    peer_private = rng.choice(D1_PEERS)
+    peer_public = noise.public_key(peer_private)
+    variant = rng.choices(['alias', 'two_sends', 'delroute_untouched', 'unroutable', 'deladdr_then_send',
+                           'inject_to', 'session_two_sends', 'deladdr6'], [2, 3, 2, 2, 2, 3, 3, 1])[0]
+    observe, get, up = {'op': 'wg_observe'}, {'op': 'wg_get'}, {'op': 'wg_up'}
+    advance = {'op': 'wg_advance', 'ticks': RETRANSMIT_FIRE_TICKS}
+    allowed = [dict(family=4, addr='0a000000', cidr=8)]
+    if variant == 'session_two_sends' and rng.random() < .3:
+        allowed.append(dict(family=6, addr='fd000000000000000000000000000000', cidr=8))
+
+    def xmit(family=4):
+        if family == 6:
+            return {'op': 'wg_xmit', 'packet': dict(family=6, dst='fd0000000000000000000000000000' + format(rng.randrange(1, 255), '02x'))}
+        return {'op': 'wg_xmit', 'packet': dict(family=4, dst='0a0102' + format(rng.randrange(1, 255), '02x'))}
+
+    def peer(endpoint=D1_LISTENERS[0], keepalive=25):
+        p = dict(public_key=peer_public.hex(), allowed_ips=allowed)
+        if endpoint:
+            p['endpoint'] = endpoint
+        if keepalive:
+            p['keepalive'] = keepalive
+        return p
+
+    def setup(endpoint=D1_LISTENERS[0], keepalive=25):
+        return [{'op': 'wg_set', 'config': dict(private_key=device.hex(), listen_port=51820, peers=[peer(endpoint, keepalive)])}, up]
+
+    ephemeral, index = rng.randbytes(32), rng.randrange(2**32)
+    sec, nsec = rng.choice([1, rng.randrange(2**31)]), rng.randrange(10**9)
+    steer = [['init_ephemeral', ephemeral.hex()], ['tai64n_now', noise.timespec64(sec, nsec).hex()],
+             ['index_draw', index.to_bytes(4, 'little').hex()]]
+    fired = ['fired:wg_expired_retransmit_handshake']
+    deladdr, delroute = lambda f: {'op': 'wg_deladdr', 'family': f}, lambda f: {'op': 'wg_delroute', 'family': f}   # noqa: E731
+    expect = None
+    if variant == 'alias':
+        ops = setup(W9_ALIAS_SENDER) + [observe, get]
+    elif variant == 'two_sends':
+        ops = setup() + [observe, advance, observe, get]
+        steer, expect = steer + D3_DRAWS, fired
+    elif variant == 'delroute_untouched':
+        ops = setup() + [observe, delroute(4), advance, observe, get]
+        steer, expect = steer + D3_DRAWS, fired
+    elif variant == 'unroutable':
+        ops = setup(endpoint=None, keepalive=0) + [delroute(4),
+                                                   {'op': 'wg_set', 'config': dict(peers=[dict(public_key=peer_public.hex(),
+                                                                                              endpoint=rng.choice(W9_OFF_LOOPBACK), keepalive=25)])},
+                                                   observe, get]
+    elif variant == 'deladdr_then_send':
+        ops = setup() + [observe, deladdr(4), delroute(4), xmit(), observe, get]
+    elif variant == 'deladdr6':
+        ops = setup() + [observe, deladdr(6), delroute(6), delroute(6), get]
+    else:
+        ours = noise.steered_initiation(peer_public, device, ephemeral, sec, nsec, index)
+        response = noise.response(ours, peer_private, rng.randbytes(32), None, rng.randrange(2**32),
+                                  initiator_public=noise.public_key(device))
+        inject = {'op': 'wg_inject', 'family': 4, 'port': 51820, 'message': response.message.hex()}
+        if variant == 'inject_to':
+            inject['to'] = rng.choice(['loopback-alias', 'wg0'])
+            ops = setup() + [observe, inject, observe, get]
+        else:
+            family = 6 if len(allowed) == 2 else 4
+            ops = setup() + [observe, inject, observe, xmit(family), observe]
+            if family == 6 and rng.random() < .5:
+                ops.append(delroute(4))   # never looked up: no generation bump, the outer send hits
+            ops += [xmit(family), observe, get]
+        expect = list(D1_SESSION)
+    trace = dict(version=1, id=trace_id, ops=ops, steer=steer)
+    if expect:
+        trace['expect'] = expect
+    return trace
+
+
+# W8a (docs/2026-10-06-w8-w9-netns-routing.md, section 3): the creating
+# namespace exits inside wg_netns_close with the device down.
+def netns_trace(rng, trace_id):
+    """One W8a trace in the foreign-creator fixture: wg0 configured and down,
+    then its creating namespace exits (wg_netns_close); afterwards wg_up fails
+    -ENONET at wg_socket_init, a wg_set with a port -EPERM, one without
+    succeeds, wg_delete works, and wg_observe reports the closed listeners as
+    null."""
+    device = rng.choice(D1_DEVICES)
+    publics = [noise.public_key(k).hex() for k in D1_PEERS]
+    observe, get, up, delete, close = {'op': 'wg_observe'}, {'op': 'wg_get'}, {'op': 'wg_up'}, {'op': 'wg_delete'}, {'op': 'wg_netns_close'}
+    peer = dict(public_key=publics[0], allowed_ips=[dict(family=4, addr='0a000000', cidr=8)], endpoint=D1_LISTENERS[0])
+    other = dict(public_key=publics[1], allowed_ips=[dict(family=4, addr='0b000000', cidr=8)])
+    configure = {'op': 'wg_set', 'config': dict(private_key=device.hex(), listen_port=51820, peers=[peer])}
+    variant = rng.choices(['up', 'set_port', 'set_peer', 'delete', 'combo'], [3, 2, 2, 2, 2])[0]
+    tail = {'up': [up, get, observe],
+            'set_port': [{'op': 'wg_set', 'config': dict(listen_port=rng.choice([51821, 51822]))}, get],
+            'set_peer': [{'op': 'wg_set', 'config': dict(peers=[other])}, get],
+            'delete': [delete, observe],
+            'combo': [up, {'op': 'wg_set', 'config': dict(listen_port=51821)}, get,
+                      {'op': 'wg_set', 'config': dict(peers=[other])}, get, delete, observe]}[variant]
+    return dict(version=1, id=trace_id, net_fixture='foreign-creator', ops=[configure, close] + tail)
+
+
+# W12 (docs/2026-10-06-w3-w12.md, II.4 and II.6): several peers' same-kind
+# timers in one pass, followed by the dispatch records.
+def multi_peer_timers(rng, trace_id):
+    """Two or three keyless peers at the listener with 25 s persistent
+    keepalives: wg_up initiates for each (steered draws per initiation, the
+    jitter steered to its first candidate); one advance past REKEY_TIMEOUT
+    fires every retransmit timer in the pass, in the order the section
+    records name them (LIFO inside a shared bucket)."""
+    device = rng.choice(D1_DEVICES)
+    n = rng.choice([2, 2, 3])
+    nets = ['0a000000', '0b000000', '0c000000']
+    peers = [dict(public_key=noise.public_key(private).hex(), allowed_ips=[dict(family=4, addr=net, cidr=8)],
+                  endpoint=D1_LISTENERS[0], keepalive=25) for private, net in zip(D1_PEERS[:n], nets)]
+    observe, get = {'op': 'wg_observe'}, {'op': 'wg_get'}
+    ops = [{'op': 'wg_set', 'config': dict(private_key=device.hex(), listen_port=51820, peers=peers)}, {'op': 'wg_up'},
+           observe, {'op': 'wg_advance', 'ticks': RETRANSMIT_FIRE_TICKS}, observe, get]
+    # encounter order: each initiation's three draws, then its jitter
+    steer = sum((_steer_initiation(rng) + [['retransmit_jitter', '01']] for _ in range(2 * n)), [])
+    return dict(version=1, id=trace_id, ops=ops, steer=steer,
+                expect=['fired:wg_expired_retransmit_handshake', 'wg_packet_send_queued_handshake_initiation.not_retry=0',
+                        'wg_expired_retransmit_handshake.give_up=0'])
