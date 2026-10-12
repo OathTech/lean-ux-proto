@@ -39,7 +39,8 @@
     "kernel/signal.c",
     "include/linux/poll.h",
     "fs/eventpoll.c",
-    "include/linux/percpu_counter.h"
+    "include/linux/percpu_counter.h",
+    "arch/x86/include/asm/irqflags.h"
   ],
   "functions": [
     "touch_atime",
@@ -289,6 +290,25 @@
       ],
       "points": 2,
       "note": "epoll stream S: do_epoll_wait's `return -EBADF` (:2660) jumps into the epilogue of the error_fput fdput (:2680), whose two points (the FDPUT_FPUT test and the join after it) share this chain; the point of :2674 (`ep = fd_file(f)->private_data`) runs only once the descriptor was found, so when it is not covered fdput did not run (the -EINVAL exit at :2668 runs it, and the mirror reports its decision)."
+    },
+    {
+      "function": "ep_register_epitem",
+      "frames": [
+        "arch/x86/include/asm/irqflags.h:42",
+        "arch/x86/include/asm/irqflags.h:119",
+        "arch/x86/include/asm/irqflags.h:159",
+        "include/linux/percpu_counter.h:194",
+        "include/linux/percpu_counter.h:272",
+        "fs/eventpoll.c:1808",
+        "fs/eventpoll.c:1845",
+        "fs/eventpoll.c:2584"
+      ],
+      "unless_covered": [
+        "fs/eventpoll.c:1800",
+        "fs/eventpoll.c:1845",
+        "fs/eventpoll.c:2584"
+      ],
+      "note": "epoll stream S: ep_alloc_epitem's percpu_counter_dec on its -ENOMEM path (:1766) and ep_register_epitem's on its attach-error path (:1808) are one block in the built code, attributed to the latter; the steered epitem failure (e_alloc_epitem_nomem) reaches it without ep_register_epitem running. ep_register_epitem's own path runs its `if (tep)` block (:1800) first. arch/x86/include/asm/irqflags.h is anchored only so this chain can be named."
     }
   ],
   "operand_exclusions": [
@@ -321,6 +341,18 @@
       "operand": "loop_check_gen",
       "call": "fs/eventpoll.c:2344",
       "note": "epoll stream S: the upward walk's visited test, fs/eventpoll.c:2344 (ep_get_upwards_depth_proc.isra.0's own frame); the outcome is checked, the operands are the absolute counter."
+    },
+    {
+      "label": "ep_loop_check_proc.visited",
+      "operand": "loop_check_gen",
+      "call": "fs/eventpoll.c:2315",
+      "note": "epoll stream S: the built code inlines ep_loop_check_proc's recursive call one level, so the inner visit's compare has the recursion site (:2315) as its outermost frame."
+    },
+    {
+      "label": "ep_get_upwards_depth_proc.visited",
+      "operand": "loop_check_gen",
+      "call": "fs/eventpoll.c:2347",
+      "note": "epoll stream S: as above for ep_get_upwards_depth_proc's recursion site (:2347)."
     }
   ],
   "branch_free_functions": [

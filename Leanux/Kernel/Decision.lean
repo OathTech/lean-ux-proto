@@ -1451,8 +1451,9 @@ def Decision.info : Decision → DecisionInfo
   -- and :2604 is ep_modify's return block, shared with ep_insert's (the
   -- shared exit in kcov.json)
   | .doEpollCtlCaseAdd => d "do_epoll_ctl.case_add" epc 2580 [(2582, 2584)] []
-  | .doEpollCtlCaseDel => d "do_epoll_ctl.case_del" epc 2580 [(2594, 2595)] []
-  | .doEpollCtlCaseMod => d "do_epoll_ctl.case_mod" epc 2580 [(2602, 2603)] []
+  -- DEL and MOD of an absent item have no block of their own: the switch's comparisons carry the case
+  | .doEpollCtlCaseDel => d "do_epoll_ctl.case_del" epc 2580 [] []
+  | .doEpollCtlCaseMod => d "do_epoll_ctl.case_mod" epc 2580 [] []
   | .doEpollCtlAddAbsent => d "do_epoll_ctl.add_absent" epc 2582 [(2583, 2584)] []
   | .doEpollCtlDelPresent => d "do_epoll_ctl.del_present" epc 2589 [(2594, 2595)] []
   | .doEpollCtlModPresent => d "do_epoll_ctl.mod_present" epc 2601 [(2602, 2603)] []
@@ -1475,7 +1476,7 @@ def Decision.info : Decision → DecisionInfo
   | .percpuCounterCompareLt => d "percpu_counter_compare.count_lt" pch 175 [(176, 176)] [(178, 178)]
   | .epAllocEpitemOverWatches => d "ep_alloc_epitem.over_watches" epc 1759 [(1761, 1761)] [(1762, 1762)]
   | .epAllocEpitemNoMem => d "ep_alloc_epitem.no_mem" epc 1765 [(1766, 1767)] [(1770, 1776)]
-  | .epInsertAllocError => d "ep_insert.alloc_error" epc 1842 [(1843, 1843)] []
+  | .epInsertAllocError => d "ep_insert.alloc_error" epc 1842 [] []   -- :1843 returns through a shared block
   | .epRegisterEpitemTep => d "ep_register_epitem.target_epoll" epc 1800 [(1801, 1801)] []
   | .epAttachFileIsEpoll => d "ep_attach_file.is_epoll" epc 1715 [(1716, 1716)] []
   | .epAttachFileEp => d "ep_attach_file.ep" epc 1718 [] []   -- :1719 is the else-if's own test
@@ -1483,7 +1484,8 @@ def Decision.info : Decision → DecisionInfo
   | .epAttachFileHeadNoMem => d "ep_attach_file.head_no_mem" epc 1723 [(1724, 1724)] [(1725, 1725)]
   | .epAttachFileFEpNull => d "ep_attach_file.f_ep_null" epc 1728 [(1729, 1735)] []
   | .epAttachFileRace => d "ep_attach_file.no_head_race" epc 1729 [(1730, 1731)] [(1734, 1735)]
-  | .epRegisterEpitemAttachError => d "ep_register_epitem.attach_error" epc 1804 [(1805, 1809)] []
+  -- :1808, percpu_counter_dec, is one block with ep_alloc_epitem's (:1766)
+  | .epRegisterEpitemAttachError => d "ep_register_epitem.attach_error" epc 1804 [(1805, 1807)] []
   | .epRegisterEpitemAttachErrorTep => d "ep_register_epitem.attach_error_tep" epc 1805 [(1806, 1806)] []
   -- `full_check && !tep`: the operands share line 1814
   | .epRegisterEpitemFullCheck => d "ep_register_epitem.full_check" epc 1812 [] []
@@ -2199,9 +2201,11 @@ def Decision.comparison : Decision → Option Comparison
   | .epRegisterEpitemFullCheck | .epInsertFullCheck => some ⟨.ne, true, none, false⟩
   -- the tests of `op`: recorded at each site, and all three of the switch's
   | .doEpollCtlHasEvent | .sysEpollCtlHasEvent => some ⟨.ne, true, none, false⟩
-  | .doEpollCtlExclusiveMod | .doEpollCtlExclusiveAdd | .doEpollCtlIsAdd => some ⟨.eq, true, none, false⟩
+  -- `op == EPOLL_CTL_ADD` at :2551 is folded after the exclusive block established `op != ADD`
+  | .doEpollCtlExclusiveMod | .doEpollCtlExclusiveAdd => some ⟨.eq, true, none, false⟩
   | .doEpollCtlCaseAdd | .doEpollCtlCaseDel | .doEpollCtlCaseMod => some ⟨.eq, true, none, false⟩
-  | .epPollEavail | .epPollSent | .epPollTimedOut => some ⟨.ne, true, none, false⟩
+  -- `if (res)` is folded when ep_send_events returned through its `res >= maxevents` break
+  | .epPollEavail | .epPollTimedOut => some ⟨.ne, true, none, false⟩
   | .doEpollCtlGenMatches | .epLoopCheckProcVisited | .epGetUpwardsDepthProcVisited => some ⟨.eq, false, none, false⟩
   -- `count > rhs` is folded into the `<` compare (the caller tests `>= 0`)
   | .percpuCounterCompareLt => some ⟨.lt, false, none, false⟩

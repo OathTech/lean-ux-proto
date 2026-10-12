@@ -790,7 +790,7 @@ def epPoll (ep : EpId) (maxevents : Int) (timeout : Option Timespec64) : M (Int 
   let mut result : Option (Int × ByteArray) := none
   if ← branchCmp .epPollEavail eavail (if eavail then 1 else 0) 0 then
     let (res, out) ← epSendEvents ep maxevents
-    if ← branchCmp .epPollSent (res != 0) res 0 then result := some (res, out)
+    if ← branch .epPollSent (res != 0) then result := some (res, out)   -- folded after the maxevents break
   if let some r := result then return r
   if ← branchCmp .epPollTimedOut timedOut (if timedOut then 1 else 0) 0 then return (0, ByteArray.empty)
   unsupported "epoll_wait would sleep: ep_busy_loop, signal_pending and the wait on ep->wq (tier 2)"
@@ -929,7 +929,7 @@ private def doEpollCtlBody (fId tId : FileId) (op : Int) (fd : Int) (events : UI
   if ← branch .doEpollCtlLockError (error != 0) then return (error, false)
   let mut fullCheck := false
   let mut tep : Option EpId := none
-  if ← branchCmp .doEpollCtlIsAdd (op == EPOLL_CTL_ADD) op EPOLL_CTL_ADD then
+  if ← branch .doEpollCtlIsAdd (op == EPOLL_CTL_ADD) then   -- folded after the exclusive block
     let e ← getEp ep
     -- `f->f_ep || ep->gen == loop_check_gen || is_file_epoll(tf)`
     let nested ← do
