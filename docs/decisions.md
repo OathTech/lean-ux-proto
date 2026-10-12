@@ -188,3 +188,17 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   need to worry about it." The checker and the kernel build use the wrapper
   when it is installed and run uncapped with a notice otherwise; the box rule
   for agents is unchanged.
+- **2026-10-12 [AGENT, fork of the coordinator]** The epoll design
+  (`docs/2026-10-12-epoll-design.md`) is drafted for the user's reading, no
+  code. Its four decisions for the user (section 13): tier 1 is timeout 0
+  with blocking waits `unsupported` until a scheduler record exists; a
+  record-only kind-308 hook at `ep_rbtree_insert` carrying the file address
+  (a new oracle, class-approved under "Oracle kernel changes"); the rbtree
+  as an ordered-map cut with `ep_find` and `ep_rbtree_insert` declared cut
+  functions rather than a Lean red-black tree; nested epoll in tier 1.
+  Tactical choices made under the standing delegation: the wire mapping
+  and the opcode proposal 27-29 (the coordinator allocates), the
+  `max_user_watches` fixture check (fail-closed, like the identity), one
+  wake-order sentinel plus a one-off record mutant. The scout's profile is
+  corrected on one point: the `ovflist` has no producer in a single-task
+  domain, so it is modelled but unexercised.
