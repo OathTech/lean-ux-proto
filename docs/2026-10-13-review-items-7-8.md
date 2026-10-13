@@ -329,7 +329,18 @@ queue. `Activation.consistent` runs the same `Activation.run`, so the
 elimination among suspended activations uses the derived bound too.
 
 What the one-off mutant and the first run established is in the commits
-and the integration record. Not written: `w7_refill_during_yield` (section
+and the integration record. The first wireguard run on s2 (249 of 250)
+exposed a dispatch-order gap older than this item: `w7_multi_tx_2`, two
+items to one peer, had the encrypt worker queue the peer's transmit work,
+yield, and queue it again after `process_one_work` had taken the item
+(PENDING cleared) but before its section started; the kernel wrote a second
+queue record and later ran a second, empty transmit section, and the
+mirror's "pending until its section starts" consumed no record for the
+second queueing. The pre-change mirror fails the capture identically. The
+rule now follows the record (`peekQueuedUnit`, `enqueuePerPeerTx`): the
+kernel writes the queue record iff the PENDING test passed, so a queue
+record for a unit the mirror holds queued is a second instance; a
+device-level unit in that situation is `unsupported` by name. Not written: `w7_refill_during_yield` (section
 7): the W7 tier's measurement showed the deferred units run only after the
 batch system call returns, so a refill during a yield needs a produce from
 a later operation, and a suspended activation across operations is outside
