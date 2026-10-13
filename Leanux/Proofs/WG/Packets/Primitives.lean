@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.Lifetimes.Actions
+import Leanux.Proofs.Framing.FSFileRefs
 
 set_option pp.structureInstances false
 
@@ -6,7 +7,7 @@ set_option pp.structureInstances false
 Packet identity is its allocation number plus one in its TX or RX slot. The
 shared frontier belongs to one device epoch; these helpers retain that epoch. -/
 namespace Leanux.Proofs.WG.Packets
-open Leanux Leanux.WG Leanux.Proofs.WG.Lifetimes
+open Leanux Leanux.WG Leanux.Proofs.WG.Lifetimes Leanux.Proofs.Framing
 
 abbrev Slot := Sum SkbId SkbId
 
@@ -21,6 +22,25 @@ def snapshot (w : World) : Store Slot :=
   | some d => deviceStore d
 
 def epoch (w : World) : Option Nat := w.k.wg.map (·.ifindex)
+
+/-- Both the packet identities and their device epoch factor through the
+shared kernel view, so filesystem frames require no new operational proofs. -/
+def lifetimesOfWGKernelView (v : WGKernelView) : Option Nat × Store Slot :=
+  (v.wg.map (·.ifindex), match v.wg with
+    | none => ⟨0, fun _ => none⟩
+    | some d => deviceStore d)
+
+abbrev SamePacketLifetimes (a : M α) : Prop :=
+  SameView (fun w => (epoch w, snapshot w)) a
+
+theorem samePacketLifetimes_of_sameWGKernel (h : SameWGKernel a) : SamePacketLifetimes a :=
+  h.of_factor lifetimesOfWGKernelView (fun w => (epoch w, snapshot w)) (fun _ => rfl)
+
+theorem fput_samePacketLifetimes (fid : FileId) : SamePacketLifetimes (fput fid) :=
+  samePacketLifetimes_of_sameWGKernel (FSFileRefs.fput_sameWGKernel fid)
+
+theorem fdput_samePacketLifetimes (f : Fd) : SamePacketLifetimes (fdput f) :=
+  samePacketLifetimes_of_sameWGKernel (FSFileRefs.fdput_sameWGKernel f)
 
 def update (w : World) (f : Device → Device) : World :=
   { w with k := { w.k with wg := w.k.wg.map f } }

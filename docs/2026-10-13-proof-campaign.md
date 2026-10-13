@@ -149,6 +149,20 @@ between peer and packet stores; preserve the fixed-device scope until the
 original device lifecycle is proved. This avoids claiming raw skb numbers
 identify allocations across device replacement.
 
+**Shared filesystem frames.** `Framing/Projection` supplies equality, composition
+and projection contracts over arbitrary World views. `WGKernel` selects the
+seven dedicated WireGuard kernel fields, including the whole device and global
+allocation counters. `FSFileRefs` proves `getFile`, `setFile`, `freeFile`,
+`fileFree`, `fput` and `fdput` over that view. The prior keypair theorem names
+now derive their contracts from these proofs; peer and packet adapters reuse
+them, including the packet device epoch. This proves preservation at successful
+return, not absence of later effects: `fput` can queue task work. No terminal
+statement changed. The remaining filesystem hierarchy has not yet been migrated.
+
+[AGENT 2026-10-13] Prove filesystem preservation once over this shared kernel
+view and derive smaller lifetime views by projection. This avoids duplicating
+the existing operational proof hierarchy for every new result.
+
 **Concrete reference finding.** An eight-operation, explicitly recorded mirror
 run creates 28 peers, starts a stepped dump, deletes wg0, creates a replacement
 wg0, creates 27 replacement peers and receives a chunk, resuming the pending
@@ -198,7 +212,7 @@ capped -- scripts/in-bundle scripts/proof-gate
 
 **Validation and effort so far.** The recorded stale-cursor replay accepts
 and all assertions pass in under one second. The current proof gate passes
-115 build jobs and 55 terminal statements (28 in R2), with only permitted
+118 build jobs and 55 terminal statements (28 in R2), with only permitted
 standard axioms. The default model build and required 88 unit tests pass,
 with one skipped test. The mirror is byte-identical to `c85e86b`; existing
 results and checked components are current, with no lag.
@@ -219,6 +233,10 @@ and inserts before those initialization helpers. The theorem follows the
 mirror's order. This is a C-correspondence limitation, not a demonstrated
 accepted-trace lifetime counterexample; no transient-access or C-simulation
 claim is made by this checkpoint.
+
+The shared-frame extension took four compile passes and passed independent
+read-only review without findings. Its six legacy interfaces are unchanged;
+the full build found no import cycle or duplicate generated matcher lemma.
 
 **Ranked mirror-shape recommendations.** (1) Restore the documented rejection
 of device deletion with a pending stepped dump: altitude-preserving fixture

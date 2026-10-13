@@ -51,8 +51,8 @@ theorem fdgetRaw_spec (P : Snapshot → Prop) (fd : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.fdgetRaw fd
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (fdgetRaw_sameSnapshot fd).wp P
 
-theorem fdput_sameSnapshot (f : Fd) : SameSnapshot (Leanux.fdput f) := by
-  frame_same [Leanux.fdput] using [fput_spec]
+theorem fdput_sameSnapshot (f : Fd) : SameSnapshot (Leanux.fdput f) :=
+  sameSnapshot_of_sameWGKernel (Framing.FSFileRefs.fdput_sameWGKernel f)
 
 theorem fdput_spec (P : Snapshot → Prop) (f : Fd) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.fdput f

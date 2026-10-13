@@ -168,8 +168,8 @@ theorem fdInstall_spec (P : Snapshot → Prop) (fd : Nat) (fid : FileId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.fdInstall fd fid
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (fdInstall_sameSnapshot fd fid).wp P
 
-theorem fileFree_sameSnapshot (fid : FileId) : SameSnapshot (Leanux.fileFree fid) := by
-  frame_same [Leanux.fileFree] using [freeFile_spec, getFile_spec]
+theorem fileFree_sameSnapshot (fid : FileId) : SameSnapshot (Leanux.fileFree fid) :=
+  sameSnapshot_of_sameWGKernel (Framing.FSFileRefs.fileFree_sameWGKernel fid)
 
 theorem fileFree_spec (P : Snapshot → Prop) (fid : FileId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.fileFree fid
@@ -499,8 +499,8 @@ theorem findNextFd_spec (P : Snapshot → Prop) (fdt : Fdtable) (start : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.findNextFd fdt start
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (findNextFd_sameSnapshot fdt start).wp P
 
-theorem fput_sameSnapshot (fid : FileId) : SameSnapshot (Leanux.fput fid) := by
-  frame_same [Leanux.fput] using [fileFree_spec, getFile_spec, setFile_spec]
+theorem fput_sameSnapshot (fid : FileId) : SameSnapshot (Leanux.fput fid) :=
+  sameSnapshot_of_sameWGKernel (Framing.FSFileRefs.fput_sameWGKernel fid)
 
 theorem fput_spec (P : Snapshot → Prop) (fid : FileId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.fput fid

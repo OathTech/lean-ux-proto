@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.Peers.Primitives
+import Leanux.Proofs.Framing.FSFileRefs
 
 set_option pp.structureInstances false
 set_option maxHeartbeats 800000
@@ -12,6 +13,18 @@ open Leanux.Proofs.WG.Lifetimes
 
 def SamePeerSnapshot (a : M α) : Prop :=
   ProjectedAction snapshot (fun s t => t = s) a
+
+def snapshotOfWGKernelView (v : WGKernelView) : Store PeerId :=
+  ⟨v.peerCounter, fun i => (v.wg.bind fun d => d.peers[i]?).map (·.internalId)⟩
+
+theorem samePeerSnapshot_of_sameWGKernel (h : SameWGKernel a) : SamePeerSnapshot a :=
+  h.of_factor snapshotOfWGKernelView snapshot (fun _ => rfl)
+
+theorem fput_samePeerSnapshot (fid : FileId) : SamePeerSnapshot (fput fid) :=
+  samePeerSnapshot_of_sameWGKernel (FSFileRefs.fput_sameWGKernel fid)
+
+theorem fdput_samePeerSnapshot (f : Fd) : SamePeerSnapshot (fdput f) :=
+  samePeerSnapshot_of_sameWGKernel (FSFileRefs.fdput_sameWGKernel f)
 
 theorem SamePeerSnapshot.wp (h : SamePeerSnapshot a) (P : Store PeerId → Prop) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ a ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ :=

@@ -1,9 +1,17 @@
 import Leanux.Proofs.WG.Keypairs.OrdinaryHot
+import Leanux.Proofs.Framing.FSFileRefs
 
 /-! Reusable verification-condition setup for helpers that preserve the
 receive-state projection. Unsolved conditions remain ordinary Lean goals. -/
 namespace Leanux.Proofs.WG.Keypairs
 open Leanux Leanux.WG Std.Do Leanux.Proofs.Framing
+
+/-- The legacy receive-state view is a pure projection of the shared frame. -/
+def snapshotOfWGKernelView (v : WGKernelView) : Snapshot :=
+  ⟨v.keypairCounter, fun i => (v.wg.bind fun d => d.keypairs[i]?).map cell⟩
+
+theorem sameSnapshot_of_sameWGKernel (h : SameWGKernel a) : SameSnapshot a :=
+  h.of_factor snapshotOfWGKernelView snapshot (fun _ => rfl)
 
 private def normalizePinnedName : Lean.Name → Lean.Name
   | .str p "0" => .num (normalizePinnedName p) 0

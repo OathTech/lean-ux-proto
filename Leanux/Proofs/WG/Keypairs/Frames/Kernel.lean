@@ -183,22 +183,22 @@ theorem discardFloodRecords_spec (P : Snapshot → Prop) (stop : Nat) (allowed :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.discardFloodRecords stop allowed
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (discardFloodRecords_sameSnapshot stop allowed).wp P
 
-theorem getFile_sameSnapshot (id : FileId) : SameSnapshot (Leanux.getFile id) := by
-  frame_same [getFile] using []
+theorem getFile_sameSnapshot (id : FileId) : SameSnapshot (Leanux.getFile id) :=
+  sameSnapshot_of_sameWGKernel (Framing.FSFileRefs.getFile_sameWGKernel id)
 
 theorem getFile_spec (P : Snapshot → Prop) (id : FileId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.getFile id
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (getFile_sameSnapshot id).wp P
 
-theorem setFile_sameSnapshot (id : FileId) (f : File) : SameSnapshot (Leanux.setFile id f) := by
-  frame_same [setFile] using []
+theorem setFile_sameSnapshot (id : FileId) (f : File) : SameSnapshot (Leanux.setFile id f) :=
+  sameSnapshot_of_sameWGKernel (Framing.FSFileRefs.setFile_sameWGKernel id f)
 
 theorem setFile_spec (P : Snapshot → Prop) (id : FileId) (f : File) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.setFile id f
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (setFile_sameSnapshot id f).wp P
 
-theorem freeFile_sameSnapshot (id : FileId) : SameSnapshot (Leanux.freeFile id) := by
-  frame_same [freeFile] using []
+theorem freeFile_sameSnapshot (id : FileId) : SameSnapshot (Leanux.freeFile id) :=
+  sameSnapshot_of_sameWGKernel (Framing.FSFileRefs.freeFile_sameWGKernel id)
 
 theorem freeFile_spec (P : Snapshot → Prop) (id : FileId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.freeFile id

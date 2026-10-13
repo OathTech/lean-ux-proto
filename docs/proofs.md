@@ -21,7 +21,11 @@ directory whose `Statements.lean` is the gated surface.
   state and monad. `Basic` says which state an action leaves unchanged, with
   the lifetime distinction a reused keypair slot needs; `WP` is the
   weakest-precondition form; `Allocation` names the mirror's private
-  allocation helpers for proofs.
+  allocation helpers for proofs. `Projection` composes and factors arbitrary
+  equality views; `WGKernel` selects the seven dedicated WireGuard kernel
+  fields, and `FSFileRefs` proves six original file-reference helpers once
+  for the keypair, peer and packet projections. These are immediate-return
+  frames, not preservation of queued work or later scheduler effects.
 - `Leanux/Proofs/Logged/`: logged copies of mirror functions with erasure
   theorems (erasing the log gives back the original run, state, result and
   failure), from the validator (`Basic`, `RxPoll`) through the workers, the
