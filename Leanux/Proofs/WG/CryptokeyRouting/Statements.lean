@@ -1,11 +1,14 @@
 import Leanux.Proofs.WG.AllowedIps.ArithmeticMirror
+import Leanux.Proofs.WG.AllowedIps.Tree
 
 /-!
-# R3: the prefix-arithmetic component of cryptokey routing
+# R3: prefix arithmetic and the pure cryptokey-routing tree
 
 These statements connect the original arithmetic helpers to leading-bit
-prefixes. Trie mutation, longest-prefix lookup over a configuration history,
-and packet admission are the remaining components of the routing result.
+prefixes and prove longest-prefix lookup in a pure tree with local edge
+conditions. Refinement of the original node-store traversal, preservation by
+trie mutations, configuration-history agreement, and packet admission remain
+separate obligations of the routing result.
 -/
 
 namespace Leanux.Proofs.WG.CryptokeyRouting
@@ -50,5 +53,30 @@ theorem choose_correct (n : WG.AipNode) (key : Nat) (w : World) (hc : n.cidr < n
   constructor
   · simpa only [bit_eq_prefix_succ] using choose_run n key w hc
   · exact Nat.mod_lt _ (by decide)
+
+/-- In the pure intermediate tree, lookup returns an owned prefix that
+matches the query and is at least as long as every matching binding, or none
+exactly when no binding matches. The premise contains only address bounds
+and immediate-child conditions; establishing it from original mutations and
+relating this lookup to `findNode` are separate, still-open refinements. -/
+theorem pureTree_lookup_correct (t : Tree) (width key : Nat) (hv : t.Valid width) :
+    Winner width key t.entries (t.lookup width key) :=
+  Tree.lookup_spec hv key
+
+/-- Local validity prevents duplicate canonical owned prefixes, including
+different unmasked addresses that denote the same prefix. This is derived
+for the pure tree without assuming global prefix uniqueness. -/
+theorem pureTree_canonical_prefixes_unique (t : Tree) (width : Nat) (hv : t.Valid width) :
+    (t.entries.map (Entry.prefixKey width)).Nodup :=
+  Tree.prefixKeys_nodup hv
+
+/-- A valid pure IPv4 or IPv6 tree has room within 130 traversal iterations
+for a longest path and one empty-cursor check. This arithmetic bound does not
+yet assert termination or correctness of the original `findNode` loop. -/
+theorem pureTree_search_depth_bound (t : Tree) (width : Nat)
+    (hw : width = 32 ∨ width = 128) (hv : t.Valid width) :
+    t.height + 1 ≤ 130 := by
+  have h := Tree.height_le hv
+  rcases hw with rfl | rfl <;> omega
 
 end Leanux.Proofs.WG.CryptokeyRouting

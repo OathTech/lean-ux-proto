@@ -10,7 +10,7 @@ campaign. No mirror or kernel edits, no integration into main, no push.
 | --- | --- |
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay, independent review and 24-statement proof gate pass over c85e86b. |
 | R2 lifetime safety | Keypair operation endpoints, peer allocation/reference helpers, packet primitives and stale-cursor finding checked (55-statement gate); caller/lifecycle and internal-access coverage in progress. This is not yet the whole R2 claim. |
-| R3 cryptokey routing | Original prefix arithmetic proved for both families (50-statement gate); trie mutation/history and path proofs remain open. Path proofs follow R2. |
+| R3 cryptokey routing | Original prefix arithmetic and pure-tree longest-prefix lookup proved (58-statement gate); original traversal/mutation/history and path refinements remain open. Path proofs follow R2. |
 | R4 delivery | Not started; drop characterisation waiting on W7 full-ring tier's explanation of the two drops. |
 | R5 key lifetime | Not started; time half waiting on review items 7 and 8 on the timer model. |
 | R6 flood resistance | Not started. |
@@ -271,15 +271,30 @@ common-prefix length, equality-based matching, and the next branch bit.
 Address bounds and CIDR bounds are explicit representation premises; no trie
 invariant or history theorem has yet discharged them for all runner inputs.
 
-**Remaining claim.** These arithmetic theorems do not establish trie mutation,
-longest-prefix lookup, remove-by-peer cleanup or either packet path. Next is a
-finite Patricia tree with node identities, unmasked addresses, CIDRs and owner
-labels; its structural validity is separate from node-store/backlink coherence.
-No R3 statement has been reshaped and no Rule Zero finding is claimed here.
+**Checked pure-tree component.** `AllowedIps/Tree` retains node labels, unmasked
+addresses, CIDRs and optional owners. Its independent flat-list `Winner`
+specification says that the result is a matching owned prefix with maximal
+CIDR, or that none matches. `Valid` requires only bounded node addresses/CIDRs
+and local edges: a child has a longer prefix, extends its parent and has the
+appropriate branch bit. Structural induction proves `lookup_spec`, canonical
+prefix-key uniqueness and unique-winner characterization. Compression and
+node-ID uniqueness are not premises of lookup correctness. Strict CIDR growth
+also proves height at most width plus one; IPv6 leaves room within 130
+iterations for every node and an empty-cursor check. The three new terminals
+explicitly describe this intermediate model, not the original traversal.
+
+**Remaining claim.** Representation in the mirror's node map and backlinks,
+refinement of `findNode`, preservation by insertion/removal, configuration
+history agreement, and both packet paths remain open. The depth theorem alone
+does not establish termination of the original loop. No R3 statement has been
+reshaped and no Rule Zero finding is claimed here.
 
 **Validation and effort.** Five compile passes over about five minutes produced
-the arithmetic layers and result surface. The full gate passes: 113 build
-jobs, 50 terminal statements, only permitted standard axioms. The default model
+the arithmetic layers. Six further compile calls over about seven minutes
+produced the 21 tree lemmas and three new terminals; three failed on proof
+elaboration or simplification details before correction. The full gate passes:
+119 build jobs, 58 terminal statements (six in R3), only permitted standard
+axioms. The default model
 build also passes. The required unit tier ran 88 tests, OK with one skip.
 The mirror remains byte-identical to `c85e86b`; all checked components are
 current, with no lag. Reproduce with
@@ -290,6 +305,12 @@ or source correspondence. The proof retains complete World effects and the
 IPv6 branch order. Address/CIDR bounds and node-family consistency still need
 propagation from parsed configuration through trie updates. Correspondence to
 C byte layout remains informal; this is not a simulation proof against C.
+Independent review of the tree found no proof defect. Its representation
+limits are explicit: node labels can repeat, owner labels need not denote live
+peers, and pure queries range over all naturals. The original-store refinement
+must supply node/data/child coherence, matching node widths and bounded queries.
+Compression is defined separately and neither required nor established by
+these lookup theorems.
 
 **Ranked mirror-shape recommendations.** None from this component. The current
 named arithmetic helpers and integer address encoding admit exact refinement
