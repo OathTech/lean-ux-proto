@@ -1783,10 +1783,17 @@ validated at suite level; streams B and H are not started (17.5).
   with the one `mtu` per call, and the trim loop (`.xmitStagedTrimIter`,
   device.c:211-214, `tx_dropped` per iteration) in place of the
   `unsupported` of `.xmitStagedOverflow`, which it replaces (same line).
-  `setMtu` mirrors `dev_set_mtu` as a cut: `-ERANGE` above `max_mtu`, the
-  MTU written, the inet6_dev down below 1280 and the in_device below 68
-  (no decision in `dev.c`: the file is not anchored, and the kept classes
-  use 1300 and 0).
+  `setMtu` mirrors `dev_set_mtu` as a cut: `-EINVAL` for a negative
+  `ifr_mtu` (the guest's `(int)op->a`) and above `max_mtu`
+  (`dev_validate_mtu`, dev.c:9061-9075; corrected from `-ERANGE` on
+  2026-10-13 by the device correspondence audit's M1, with the traces
+  `w4_set_mtu_over_max` and `w4_set_mtu_negative`), the MTU written, the
+  inet6_dev down below 1280 and the in_device below 68 (no decision in
+  `dev.c`: the file is not anchored). `wg_check_packet_protocol` is decided
+  from the packet's IP version nibble against the family's EtherType since
+  the same audit's X1; its `goto err` arm (device.c:148-150, `tx_errors`,
+  `-EPROTONOSUPPORT`) is modelled but unexercised: the kernel's IP layer
+  never hands `wg_xmit` a bad nibble and the harness has no raw socket.
 - **`Env/IpStack.lean`.** `XmitOpts` (`gsoSize`, `probe`, the route MTU
   from `World.routes`); `xmitPackets` returns one `wg_xmit` call's packets
   and `mtu`, or the sender's errno (`-EMSGSIZE` above `cork->fragsize`,
