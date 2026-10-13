@@ -1085,6 +1085,10 @@ inductive HiddenSite where
       discarded flood section; and `wg_cookie_message_create`'s nonce
       (`get_random_bytes_wait`, cookie.c:190, 24 bytes) of a cookie reply. -/
   | underLoadNow | cookieNonce
+  /-- make_cookie's secret rotation (cookie.c:96-102, COOKIE_SECRET_MAX_AGE
+      120 s): the new birthdate's coarse clock read and the 32 random bytes.
+      Reachable only after a `wg_advance` (the receive audit's F7). -/
+  | cookieSecretRotateNow | cookieSecretRotated
   /-- E-B arm C: `wg_ratelimiter_allow`'s coarse-boot-time reads, on a bucket
       hit (`ratelimiter.c:121`) and on a new-entry insert (`ratelimiter.c:146`). -/
   | ratelimiterNow | ratelimiterInsertNow
@@ -1280,6 +1284,8 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   -- discarded flood section; cookie.c:190 is the cookie reply's nonce.
   | .underLoadNow => ⟨130, "under_load_now", "clock", "drivers/net/wireguard/receive.c", 115, 8, .mirror⟩
   | .cookieNonce => ⟨131, "cookie_nonce", "random", "drivers/net/wireguard/cookie.c", 190, 24, .mirror⟩
+  | .cookieSecretRotateNow => ⟨129, "cookie_secret_rotate_now", "clock", "drivers/net/wireguard/cookie.c", 99, 8, .mirror⟩
+  | .cookieSecretRotated => ⟨134, "cookie_secret_rotated", "random", "drivers/net/wireguard/cookie.c", 100, 32, .mirror⟩
   | .ratelimiterNow => ⟨132, "ratelimiter_now", "clock", "drivers/net/wireguard/ratelimiter.c", 121, 8, .mirror⟩
   | .ratelimiterInsertNow => ⟨133, "ratelimiter_insert_now", "clock", "drivers/net/wireguard/ratelimiter.c", 146, 8, .mirror⟩
   -- W5+W6 (ids 140-149)
@@ -1303,7 +1309,7 @@ def HiddenSite.all : List HiddenSite :=
   ++ [.dstCacheResetTs, .dstCacheRefreshTs, .reschedNetnsCleanup, .reschedRhashtableDestroy]
   ++ AllocSite.all.map .alloc
   ++ [.currentTime]
-  ++ [.underLoadNow, .cookieNonce, .ratelimiterNow, .ratelimiterInsertNow]
+  ++ [.underLoadNow, .cookieNonce, .ratelimiterNow, .ratelimiterInsertNow, .cookieSecretRotateNow, .cookieSecretRotated]
   ++ [.bpfProgInsn, .forkStartTime, .forkStartBoottime]
   ++ [.inetEhashSecret]
   ++ [.epollInsertAddress]
