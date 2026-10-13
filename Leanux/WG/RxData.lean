@@ -331,14 +331,93 @@ def consumeDataDone (pid : PeerId) (pkt : RxPacket) (endpoint : Endpoint) : M (O
   updateRxStats pid (lenBeforeTrim + MESSAGE_DATA_LEN_0)   -- message_data_len(len_before_trim)
   return some (bytes.take ipLen)
 
+/-! ### GRO on `peer->napi` (include/net/gro.h, net/core/gro.c, net/ipv4/tcp_offload.c)
+
+`napi_gro_receive` (receive.c:411) hands each inner packet to GRO, which
+either takes it to the stack's input list at once (`GRO_NORMAL`:
+`gro_normal_one`, gro.h: `list_add_tail(&napi->rx_list)`, `rx_count +=
+segs`, and `gro_normal_list` to the stack once `rx_count >=
+gro_normal_batch`, 8 on this kernel, net/core/hotdata.c:11) or holds it in
+a `gro_hash` chain (`GRO_HELD`) until `napi_complete_done`, which flushes
+the chains (`napi_gro_flush` → `napi_gro_complete` → `gro_normal_one`,
+dev.c:6385) and then the list (`gro_normal_list`, dev.c:6388). UDP is taken
+at once (`udp_gro_receive` flushes without a GRO socket, udp_offload.c); a
+lone TCP segment is taken at once iff one of URG, PSH, RST, SYN or FIN is
+set (`tcp_gro_receive`'s `out_check_final`: mss 1 for a lone segment, so
+only the flags decide), else held; every other protocol has no
+`gro_receive` and is taken at once (`inet_gro_receive`'s initial `flush =
+1`). A second held segment in one poll would coalesce (same flow,
+`skb_gro_receive`) or flush in hash-bucket order (different flows):
+outside the domain, fail-noisy. The state lives on the NAPI struct but is
+empty between polls: `napi_complete_done` flushes all of it, and the
+repoll arm that would carry it over is `unsupported`. None of these files
+is anchored, so this is plain mirror control flow. (The receive
+correspondence audit's F6b: the mirror delivered everything at
+completion.) -/
+structure GroState where
+  /-- `napi->rx_list`, in order. -/
+  rxList : List (List UInt8) := []
+  /-- `napi->rx_count` (segments; one per packet here). -/
+  rxCount : Nat := 0
+  /-- The `gro_hash` chains' packets (`GRO_HELD`), at most one in the domain. -/
+  held : List (List UInt8) := []
+
+/-- `net_hotdata.gro_normal_batch` (net/core/hotdata.c:11). -/
+def GRO_NORMAL_BATCH : Nat := 8
+
+/-- gro_normal_list (gro.h): the list to the stack, if it holds anything. -/
+def groNormalList (toStack : List (List UInt8) → M Unit) (gro : GroState) : M GroState := do
+  if gro.rxCount == 0 then return gro   -- `if (!napi->rx_count) return;`
+  toStack gro.rxList
+  return { gro with rxList := [], rxCount := 0 }
+
+/-- gro_normal_one (gro.h): to the list, and the list to the stack at the batch. -/
+def groNormalOne (toStack : List (List UInt8) → M Unit) (gro : GroState) (pkt : List UInt8) (segs : Nat) :
+    M GroState := do
+  let gro := { gro with rxList := gro.rxList ++ [pkt], rxCount := gro.rxCount + segs }
+  if gro.rxCount ≥ GRO_NORMAL_BATCH then groNormalList toStack gro else return gro
+
+/-- Whether dev_gro_receive takes the packet to `normal` at once: everything
+    but a lone TCP segment without URG, PSH, RST, SYN or FIN. IPv4 is TCP at
+    offset 20 when the header is a plain `0x45` (inet_gro_receive takes any
+    other first byte at once) with protocol 6; IPv6 when the next header is
+    6 (ipv6_gro_receive, offset 40). -/
+def groTakenAtOnce (pkt : List UInt8) : Bool :=
+  let byte (i : Nat) : Nat := (pkt.getD i 0).toNat
+  let version := byte 0 / 16
+  let tcpAt : Option Nat :=
+    if version == 4 && byte 0 == 0x45 && byte 9 == 6 then some 20
+    else if version == 6 && byte 6 == 6 then some 40
+    else none
+  match tcpAt with
+  | none => true
+  | some off => (byte (off + 13) &&& 0x2f) != 0   -- FIN 1, SYN 2, RST 4, PSH 8, URG 32
+
+/-- napi_gro_receive (gro.c): `GRO_NORMAL` at once, or `GRO_HELD`. -/
+def napiGroReceive (toStack : List (List UInt8) → M Unit) (gro : GroState) (pkt : List UInt8) : M GroState := do
+  if groTakenAtOnce pkt then groNormalOne toStack gro pkt 1
+  else
+    if !gro.held.isEmpty then
+      unsupported "GRO holds a second TCP segment in one poll (coalescing, or the hash buckets' flush order)"
+    return { gro with held := gro.held ++ [pkt] }
+
+/-- napi_complete_done's flushes (dev.c:6385-6388): the held chains through
+    `napi_gro_complete` (`gro_normal_one` with the segment count, 1), then
+    the list. -/
+def napiGroFlushAll (toStack : List (List UInt8) → M Unit) (gro : GroState) : M Unit := do
+  let mut g := gro
+  for pkt in gro.held do g ← groNormalOne toStack g pkt 1
+  g := { g with held := [] }
+  _ ← groNormalList toStack g
+
 /-- wg_packet_rx_poll (receive.c:438-491), the peer's NAPI poll, with the
-    budget `napi_poll` passes. `napiCompleteDone` is the environment's cut
-    at `napi_complete_done`: GRO's flush delivers the packets
-    `napi_gro_receive` received. -/
-def rxPoll (pid : PeerId) (budget : Nat) (napiCompleteDone : List (List UInt8) → M Unit) : M Nat := do
+    budget `napi_poll` passes. `toStack` is the environment's cut where
+    GRO's `gro_normal_list` hands a flushed list to the stack: at the batch
+    of 8 inside the poll, and at `napi_complete_done`. -/
+def rxPoll (pid : PeerId) (budget : Nat) (toStack : List (List UInt8) → M Unit) : M Nat := do
   if ← branch .rxPollNoBudget (budget == 0) then return 0
   let mut workDone := 0
-  let mut gro : List (List UInt8) := []
+  let mut gro : GroState := {}
   let mut drained := false
   for _ in [0:MAX_QUEUED_PACKETS + 1] do
     -- `(skb = wg_prev_queue_peek(&peer->rx_queue)) != NULL` (W7: the queue as
@@ -364,7 +443,8 @@ def rxPoll (pid : PeerId) (budget : Nat) (napiCompleteDone : List (List UInt8) �
         if !(← branch .rxPollEndpointFailed endpoint.isNone) then
           let some e := endpoint | invariant "unreachable"
           -- wg_reset_packet(skb, false) (a cut point)
-          gro := gro ++ (← consumeDataDone pid pkt e).toList
+          for inner in (← consumeDataDone pid pkt e).toList do
+            gro ← napiGroReceive toStack gro inner   -- napi_gro_receive(&peer->napi, skb)
           free := false
     -- next:
     keypairPut (some pkt.keypair) false
@@ -377,7 +457,7 @@ def rxPoll (pid : PeerId) (budget : Nat) (napiCompleteDone : List (List UInt8) �
   if ← branch .rxPollComplete (workDone < budget) then
     -- napi_complete_done: NAPI_STATE_SCHED cleared, GRO flushed
     setPeer pid { (← getPeer pid) with napiScheduled := false }
-    napiCompleteDone gro
+    napiGroFlushAll toStack gro
   else unsupported "a NAPI poll that used its whole budget (a repoll)"
   return workDone
 

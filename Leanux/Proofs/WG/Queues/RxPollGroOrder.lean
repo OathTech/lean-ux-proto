@@ -4,9 +4,10 @@ import Leanux.Proofs.WG.Queues.RxPollOrder
 set_option maxHeartbeats 2000000
 set_option pp.structureInstances false
 
-/-! Callback entries are exactly a visited prefix of the outer poll's tagged
-GRO buffer. Completion returning none contributes no buffer occurrence;
-stopping before the callback retains the outstanding buffer observations. -/
+/-! The chronological predicate and completion/list-callback helper contracts.
+The former whole-poll chronological theorem held over 2c7a076; real GRO in
+f45bde8 invalidates it. GroSafe deliberately keeps its original meaning.
+ReplayGro reproduces the reorder through the original accepted runner. -/
 namespace Leanux.Proofs.WG.Queues
 open Leanux Leanux.WG Leanux.Proofs.Logged
 
@@ -116,42 +117,13 @@ theorem gro_flush_bind (gro : List GroEntry) (f : Unit → PrefixM GroEvent α)
     PrefixEnsures (GroInv gro) GroSafe (flushGro gro >>= f) Q :=
   PrefixEnsures.bind (flushGro_spec gro) hf
 
-/-- For the complete original poll and its actual stack callback, the entered
-occurrences are a prefix of the exact successful completion buffers. Errors
-retain both the visited prefix and every buffered but unvisited occurrence. -/
-theorem rxPollGro_spec (pid : PeerId) (budget : Nat) :
-    PrefixEnsures (GroInv []) GroSafe (rxPollGro pid budget) (fun _ h _ => GroSafe h) := by
-  unfold rxPollGro
-  apply gro_lift_bind
-  intro noBudget
-  split
-  · exact PrefixEnsures.pure (fun _ _ hi => hi.safe) (fun _ _ hi => hi.safe)
-  · apply PrefixEnsures.bind (Q := fun acc => GroInv acc.2.1)
-    · rw [Std.Legacy.Range.forIn_eq_forIn_range']
-      apply PrefixEnsures.forInInvariant _ (0, [], false) _ (fun acc : Nat × List GroEntry × Bool => GroInv acc.2.1) GroSafe
-        (fun _ _ _ hi => hi.safe)
-      intro n acc
-      repeat' first
-        | with_reducible apply gro_lift_bind
-        | with_reducible apply gro_drop_bind
-        | with_reducible apply gro_consume_bind
-        | with_reducible apply PrefixEnsures.ite
-        | with_reducible exact PrefixEnsures.pure (fun _ _ hi => hi.safe) (fun _ _ hi => hi)
-        | (with_reducible intro x; try dsimp only [ForInStep.value])
-        | (with_reducible split)
-    · intro acc
-      repeat' first
-        | with_reducible apply gro_lift_bind
-        | with_reducible apply gro_flush_bind
-        | with_reducible apply PrefixEnsures.ite
-        | with_reducible exact PrefixEnsures.pure (fun _ _ hi => hi.safe) (fun _ _ hi => hi.safe)
-        | with_reducible exact PrefixEnsures.pure (fun _ _ hi => hi) (fun _ _ hi => hi)
-        | (with_reducible intro x; try dsimp only)
-        | (with_reducible split)
-
-theorem rxPollGro_callback_prefix (pid : PeerId) (budget : Nat) (w : World) :
-    GroSafe (runPrefix (rxPollGro pid budget) w []).2 := by
-  have hi : GroInv [] [] w := ⟨rfl, rfl⟩
-  exact (rxPollGro_spec pid budget w [] hi).choose_spec.2.1
+/-- The replacement order to be established for the complete current poll.
+Normal offers precede held offers, preserving each class's internal order.
+This is a definition of the remaining obligation, not an exported theorem. -/
+def SelectedGroSafe (h : List GroEvent) : Prop :=
+  ∃ remaining,
+    ((bufferedEntries h).filter (fun e => groTakenAtOnce e.bytes) ++
+      (bufferedEntries h).filter (fun e => !groTakenAtOnce e.bytes)) =
+    enteredEntries h ++ remaining
 
 end Leanux.Proofs.WG.Queues

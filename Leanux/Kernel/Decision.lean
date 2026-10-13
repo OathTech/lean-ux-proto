@@ -175,7 +175,7 @@ inductive Decision where
   -- E-A: wg_cookie_message_consume beyond the lookup
   | cookieNoMac1Sent | cookieDecryptOk
   -- drivers/net/wireguard/peerlookup.c
-  | idxMatch | idxFound
+  | idxMatch | idxFound | idxInsertHashed | idxRemoveHashed
   -- drivers/net/wireguard/queueing.h
   | cpumaskWrap
   -- drivers/net/wireguard/noise.c
@@ -188,6 +188,8 @@ inductive Decision where
   | sessionAlive | addKeypairInitiator
   -- drivers/net/wireguard/cookie.c
   | addMacCookieValid | addMacCookieFresh
+  -- make_cookie (cookie.c:91-117), listed since the receive audit (F7, F4)
+  | cookieSecretExpired | cookieProtoIp | cookieProtoIpv6
   -- drivers/net/wireguard/send.c
   | respCreated | respSessionBegun
   -- drivers/net/wireguard/receive.c
@@ -1162,6 +1164,13 @@ def Decision.info : Decision → DecisionInfo
   -- drivers/net/wireguard/peerlookup.c
   | .idxMatch => d "wg_index_hashtable_lookup.index_matches" wpl 211 [(212, 214)] []
   | .idxFound => d "wg_index_hashtable_lookup.found" wpl 217 [(218, 222)] []
+  -- `hlist_del_init_rcu`'s `if (!hlist_unhashed(n))` (rculist.h:183), inlined at
+  -- the insert's first step (:125) and in the remove (:196). Plain: the
+  -- inlined test's only body lines are rculist.h:184-185, shared by both
+  -- copies, so a witness there cannot tell the insert's copy from the
+  -- remove's when both run in one operation (handshake audit I2).
+  | .idxInsertHashed => d "wg_index_hashtable_insert.entry_hashed" wpl 125 [] []
+  | .idxRemoveHashed => d "wg_index_hashtable_remove.entry_hashed" wpl 196 [] []
   -- drivers/net/wireguard/queueing.h
   | .cpumaskWrap => d "wg_cpumask_next_online.wrap" wqh 128 [(129, 129)] []
   -- drivers/net/wireguard/noise.c
@@ -1204,6 +1213,9 @@ def Decision.info : Decision → DecisionInfo
   -- drivers/net/wireguard/cookie.c
   | .addMacCookieValid => d "wg_cookie_add_mac_to_packet.cookie_valid" wck 170 [(171, 171)] []
   | .addMacCookieFresh => d "wg_cookie_add_mac_to_packet.cookie_fresh" wck 171 [(173, 174)] []
+  | .cookieSecretExpired => d "make_cookie.secret_expired" wck 96 [(97, 101)] []
+  | .cookieProtoIp => d "make_cookie.ipv4" wck 107 [(108, 109)] []
+  | .cookieProtoIpv6 => d "make_cookie.ipv6" wck 110 [(111, 112)] []
   -- drivers/net/wireguard/send.c
   | .respCreated => d "wg_packet_send_handshake_response.created" wsd 94 [(95, 106)] []
   | .respSessionBegun => d "wg_packet_send_handshake_response.session_begun" wsd 96 [(98, 105)] []
@@ -2426,6 +2438,9 @@ def Decision.comparison : Decision → Option Comparison
   -- noise.c:635-637 (DWARF puts the compare at 635); the condition at 639
   -- tests flood_attack
   | .consumeFlood => some ⟨.gt, false, some 635, true⟩
+  -- `(s64)(handshake->last_initiation_consumption - initiation_consumption) < 0`
+  -- (noise.c:651): the signed difference against 0 (handshake audit I5)
+  | .consumeLaterTime => some ⟨.lt, true, none, false⟩
   -- Review item 8 (docs/2026-10-13-review-items-7-8.md, section 4): the
   -- age tests `wg_birthdate_has_expired(birthday, seconds)` (timers.h:25-29)
   -- are `(s64)(birthday + seconds * NSEC_PER_SEC) <= (s64)now`, inlined
@@ -2440,6 +2455,8 @@ def Decision.comparison : Decision → Option Comparison
   | .freshCounter => some ⟨.gt, true, some 131, false⟩
   | .freshExpired => some ⟨.le, false, some 133, false⟩
   | .stagedBirthdateExpired => some ⟨.le, false, none, false⟩
+  -- make_cookie's secret age test (cookie.c:96-97), the same shape
+  | .cookieSecretExpired => some ⟨.le, false, none, false⟩
   -- decrypt_packet's `if (unlikely(!is_valid || expired || ...))` spans
   -- receive.c:252-254: the age test is recorded at 252 (measured,
   -- d3_rx_expired_key op 6: `(0x5567fb1de8, 0x55d18fece8)`)
@@ -2885,6 +2902,11 @@ def Decision.comparison : Decision → Option Comparison
     allowed IPs or trie nodes. Only these may be reported more than
     once in one operation. -/
 def Decision.repeatable : Decision → Bool
+  | .idxInsertHashed | .idxRemoveHashed
+  -- W7: a batch's receive poll evaluates the endpoint's family once per packet, both
+  -- outcomes in one NET_RX section when IPv4 and IPv6 datagrams share a poll
+  -- (w7_multi_rx_9_rst_roam, the receive audit's F6b trace)
+  | .epFromSkbInet | .epFromSkbInet6
   | .allocFdBelowNextFd | .allocFdSearch | .findNextFdAllFull | .findNextFdSkipFullWords
   | .allocFdLimit | .expandFilesFits | .allocFdExpandError | .allocFdExpanded
   | .fgetLightSingleOwner | .fgetLightNoFile | .fgetLightMasked | .fdputFput
@@ -2947,6 +2969,7 @@ def Decision.repeatable : Decision → Bool
   -- W8: the pre-exit's loops (the device test true then false, a peer each)
   | .preExitDevIter | .preExitPeerIter
   | .sendBufNoMem | .sendSkbInet | .sendSkbInet6 | .sendSkbOk | .addMacCookieValid | .addMacCookieFresh
+  | .cookieSecretExpired | .cookieProtoIp | .cookieProtoIpv6
   -- D1 stream B: add_new_keypair and keypairs_clear put up to three live
   -- keypairs in one operation (stream C: the tx worker's put shares an
   -- operation with the receive path's)

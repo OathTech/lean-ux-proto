@@ -193,12 +193,55 @@ theorem decryptIterLogged_evolves (softirq irq : GhostM Unit) (needResched : Gho
   refine workerIterLogged_evolves _ _ _ _ (decryptStepLogged_evolves _ _ hs hi) ?_
   repeat' evolves_step
 
+theorem groNormalListLogged_evolves
+    (callback : List (List UInt8) → GhostM Unit)
+    (hc : ∀ packets, Evolves (callback packets)) (gro : GroState) :
+    Evolves (groNormalListLogged callback gro) := by
+  unfold groNormalListLogged
+  repeat' first
+    | with_reducible exact hc _
+    | evolves_step
+
+theorem groNormalOneLogged_evolves
+    (callback : List (List UInt8) → GhostM Unit)
+    (hc : ∀ packets, Evolves (callback packets)) (gro : GroState) (pkt : List UInt8) (segs : Nat) :
+    Evolves (groNormalOneLogged callback gro pkt segs) := by
+  unfold groNormalOneLogged
+  repeat' first
+    | (evolves_head groNormalListLogged; exact groNormalListLogged_evolves callback hc _)
+    | with_reducible exact hc _
+    | evolves_step
+
+theorem napiGroReceiveLogged_evolves
+    (callback : List (List UInt8) → GhostM Unit)
+    (hc : ∀ packets, Evolves (callback packets)) (gro : GroState) (pkt : List UInt8) :
+    Evolves (napiGroReceiveLogged callback gro pkt) := by
+  unfold napiGroReceiveLogged
+  repeat' first
+    | (evolves_head groNormalListLogged; exact groNormalListLogged_evolves callback hc _)
+    | (evolves_head groNormalOneLogged; exact groNormalOneLogged_evolves callback hc _ _ _)
+    | with_reducible exact hc _
+    | evolves_step
+
+theorem napiGroFlushAllLogged_evolves
+    (callback : List (List UInt8) → GhostM Unit)
+    (hc : ∀ packets, Evolves (callback packets)) (gro : GroState) :
+    Evolves (napiGroFlushAllLogged callback gro) := by
+  unfold napiGroFlushAllLogged
+  repeat' first
+    | (evolves_head groNormalListLogged; exact groNormalListLogged_evolves callback hc _)
+    | (evolves_head groNormalOneLogged; exact groNormalOneLogged_evolves callback hc _ _ _)
+    | with_reducible exact hc _
+    | evolves_step
+
 theorem rxPollLogged_evolves (pid : PeerId) (budget : Nat)
     (complete : List (List UInt8) → GhostM Unit)
     (hc : ∀ packets, Evolves (complete packets)) :
     Evolves (rxPollLogged pid budget complete) := by
   unfold rxPollLogged
   repeat' first
+    | (evolves_head napiGroReceiveLogged; exact napiGroReceiveLogged_evolves complete hc _ _)
+    | (evolves_head napiGroFlushAllLogged; exact napiGroFlushAllLogged_evolves complete hc _)
     | with_reducible exact hc _
     | evolves_step
 

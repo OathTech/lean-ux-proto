@@ -151,7 +151,7 @@ theorem mapM_snapshot_spec (P : Snapshot → Prop) {α β : Type}
   exact loop xs []
 
 theorem indexRemove_sameSnapshot (pid : PeerId) (kind : IndexKind) : SameSnapshot (Leanux.WG.indexRemove pid kind) := by
-  frame_same [Leanux.WG.indexRemove] using []
+  frame_same [Leanux.WG.indexRemove, _private.Leanux.WG.Peer.«0».Leanux.WG.unhashEntry] using [getDev_spec]
 
 theorem indexRemove_spec (P : Snapshot → Prop) (pid : PeerId) (kind : IndexKind) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.indexRemove pid kind
@@ -495,7 +495,7 @@ theorem free_spec (P : Snapshot → Prop)  :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (free_sameSnapshot ).wp P
 
 theorem indexInsert_sameSnapshot (pid : PeerId) (kind : IndexKind) : SameSnapshot (Leanux.WG.indexInsert pid kind) := by
-  frame_same [Leanux.WG.indexInsert] using [recordBudget_spec, budgetExhausted_spec, bucketHas_spec, hidden_snapshot_spec, indexRemove_spec]
+  frame_same [Leanux.WG.indexInsert, _private.Leanux.WG.Peer.«0».Leanux.WG.unhashEntry] using [getDev_spec, recordBudget_spec, budgetExhausted_spec, bucketHas_spec, hidden_snapshot_spec, indexRemove_spec]
 
 theorem indexInsert_spec (P : Snapshot → Prop) (pid : PeerId) (kind : IndexKind) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.indexInsert pid kind

@@ -102,6 +102,16 @@ theorem prefix_lift_safe (a : M α) (entry : List SkbId) :
       (liftPrefix a) (fun _ h _ => RemovalPrefix entry h) :=
   PrefixEnsures.lift a (fun _ _ hi => hi) (fun _ _ _ _ hi _ => hi)
 
+theorem prefix_flush_safe (callback : List (List UInt8) → M Unit)
+    (entry : List SkbId) (gro : GroState) :
+    PrefixEnsures (fun h _ => RemovalPrefix entry h) (RemovalPrefix entry)
+      (napiGroFlushAllPrefix (fun bytes => liftPrefix (callback bytes)) gro)
+      (fun _ h _ => RemovalPrefix entry h) := by
+  apply napiGroFlushAllPrefix_preserves (I := fun h _ => RemovalPrefix entry h)
+    (S := RemovalPrefix entry) _ (fun _ _ hi => hi)
+  intro bytes
+  exact prefix_lift_safe (callback bytes) entry
+
 theorem prefix_invariant (why : String) (f : Unit → PrefixM SkbId α)
     (hs : ∀ h w, P h w → S h) :
     PrefixEnsures P S (liftPrefix (invariant why) >>= f) Q := by
@@ -120,10 +130,11 @@ theorem invariant_rxQueues (why : String) : SameView rxQueues (invariant (α := 
   simp [invariant] at hr
 
 /-- The complete original poll retains removal order on success and failure.
-The callback is arbitrary; queue effects after the last removal do not change
-the already observed prefix. -/
+Batch callbacks can precede later removals, so every successful callback must
+retain surviving receive queues. Deletion remains permitted. -/
 theorem rxPollRemovals_spec (pid : PeerId) (budget : Nat)
-    (callback : List (List UInt8) → M Unit) (entry : List SkbId) :
+    (callback : List (List UInt8) → M Unit)
+    (hc : ∀ bytes, RetainsRx (callback bytes)) (entry : List SkbId) :
     PrefixEnsures (PollInv pid entry) (RemovalPrefix entry)
       (rxPollRemovals pid budget callback) (fun _ h _ => RemovalPrefix entry h) := by
   unfold rxPollRemovals
@@ -156,6 +167,8 @@ theorem rxPollRemovals_spec (pid : PeerId) (budget : Nat)
             intro dropped
             change PrefixPreserves (PollInv pid entry) (RemovalPrefix entry) _
             repeat' first
+              | with_reducible exact (napiGroReceivePrefix_preserves _ (fun _ _ hi => hi.safe)
+                  (fun bytes => poll_lift_retains (hc bytes) pid entry) _ _)
               | with_reducible exact poll_lift_retains (RetainsRx.of_same (rxQueues_kernel (sameKernel_branch _ _))) pid entry
               | with_reducible exact poll_lift_retains (RetainsRx.of_same (counterValidate_rxQueues _ _)) pid entry
               | with_reducible exact poll_lift_retains (RetainsRx.of_same (endpoint_rxQueues _)) pid entry
@@ -167,6 +180,7 @@ theorem rxPollRemovals_spec (pid : PeerId) (budget : Nat)
               | with_reducible exact PrefixPreserves.pure (fun _ _ hi => hi.safe) _
               | with_reducible apply PrefixPreserves.bind
               | with_reducible apply PrefixPreserves.ite
+              | with_reducible apply PrefixPreserves.forIn _ _ _ (fun _ _ hi => hi.safe)
               | (with_reducible intro x; try dsimp only)
               | (with_reducible split)
         | none =>
@@ -176,6 +190,7 @@ theorem rxPollRemovals_spec (pid : PeerId) (budget : Nat)
       apply PrefixEnsures.consequence (P := fun h _ => RemovalPrefix entry h)
         (Q := fun _ h _ => RemovalPrefix entry h)
       · repeat' first
+          | with_reducible exact prefix_flush_safe callback entry _
           | with_reducible exact prefix_lift_safe _ entry
           | with_reducible exact PrefixEnsures.pure (fun _ _ hi => hi) (fun _ _ hi => hi)
           | with_reducible apply PrefixEnsures.bind
@@ -189,10 +204,11 @@ theorem rxPollRemovals_spec (pid : PeerId) (budget : Nat)
 a failed poll's retained log, is a prefix of those exact entry occurrences. -/
 theorem rxPollRemovals_prefix (pid : PeerId) (budget : Nat)
     (callback : List (List UInt8) → M Unit) (w : World) (cell : RxQueueCell)
+    (hcallback : ∀ bytes, RetainsRx (callback bytes))
     (hc : rxQueues w pid = some cell) :
     RemovalPrefix cell.queue.all (runPrefix (rxPollRemovals pid budget callback) w []).2 := by
   have hi : PollInv pid cell.queue.all [] w :=
     ⟨cell.queue.all, rfl, queueIs_of_at pid _ w cell hc rfl⟩
-  exact (rxPollRemovals_spec pid budget callback cell.queue.all w [] hi).choose_spec.2.1
+  exact (rxPollRemovals_spec pid budget callback hcallback cell.queue.all w [] hi).choose_spec.2.1
 
 end Leanux.Proofs.WG.Queues

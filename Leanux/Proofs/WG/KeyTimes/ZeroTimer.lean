@@ -21,7 +21,8 @@ theorem expiredZeroKeyMaterial_store (pid : PeerId) :
       (fun s => s = before)
   have queued := ((KernelFrames.recordQueued_sameWGKernel .clearPeerWorker pid).factor
     (fun s => s.wg.map (·.keypairs))).wp (fun s => s = before)
-  mvcgen [expiredZeroKeyMaterial, peerGet, peerPut, requireNotPending, getPeer,
+  simp only [expiredZeroKeyMaterial, peerPut, indexRemove_eq]
+  mvcgen [indexUnhash, peerGet, requireNotPending, getPeer,
     getDev, getK, setPeer, modifyDev, modifyK, indexRemove, retirePeerUnits,
     branch, invariant, unsupported, countInc, countDec, queued]
   all_goals dsimp +zetaDelta only at *

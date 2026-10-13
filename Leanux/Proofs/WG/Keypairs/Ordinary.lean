@@ -146,11 +146,12 @@ theorem keypairPut_ordinary (kp : Option KeypairId) (now : Bool) :
     OrdinaryAction (keypairPut kp now) := by
   apply ordinaryAction_of_wp
   intro s
-  mvcgen [keypairPut, getKeypair, getDev, getK, setKeypair, modifyDev, modifyK,
+  simp only [keypairPut, indexRemoveKeypair_eq]
+  mvcgen [indexUnhash, getKeypair, getDev, getK, setKeypair, modifyDev, modifyK,
     branch, branchCmp, refcountDecAndTest, unsupported, invariant]
   all_goals try dsimp +zetaDelta only at *
   all_goals try simp_all [snapshot]
-  all_goals try subst s
+  all_goals subst_vars
   all_goals first
   | exact .refl _
   | exact ordinary_map_insert_erase _ _ _ _

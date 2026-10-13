@@ -26,10 +26,22 @@ def peerGet (pid : PeerId) : M Unit := do
   refcountInc p.refcount
   setPeer pid { p with refcount := p.refcount + 1 }
 
-/-- `hlist_del_init_rcu` of a peer's entry of this kind (a no-op if unhashed):
-    wg_index_hashtable_remove (peerlookup.c:192-198). -/
+/-- `hlist_del_init_rcu(&entry->index_hash)` (rculist.h:182-188): the
+    `hlist_unhashed` test is the decision `d`, true when the entry is in the
+    table; the unhash leaves it absent either way. -/
+private def unhashEntry (d : Decision) (hashed : IndexEntry → Bool) : M Unit := do
+  _ ← branch d ((← getDev).indexTable.any hashed)
+  modifyDev fun dev => { dev with indexTable := dev.indexTable.filter fun e => !hashed e }
+
+/-- wg_index_hashtable_remove (peerlookup.c:192-198) of a peer's entry of
+    this kind: `hlist_del_init_rcu`, a no-op if unhashed. -/
 def indexRemove (pid : PeerId) (kind : IndexKind) : M Unit :=
-  modifyDev fun d => { d with indexTable := d.indexTable.filter fun e => !(e.peer == pid && e.kind == kind) }
+  unhashEntry .idxRemoveHashed fun e => e.peer == pid && e.kind == kind
+
+/-- wg_index_hashtable_remove (peerlookup.c:192-198) of a keypair's entry
+    (noise.c:126, :136). -/
+def indexRemoveKeypair (id : KeypairId) : M Unit :=
+  unhashEntry .idxRemoveHashed fun e => e.keypair == some id
 
 /-- wg_peer_put (peer.c:223-228) and kref_release (200-221): the release
     removes the handshake's index entry (which `peer_remove_after_dead`
@@ -126,7 +138,8 @@ private def bucketHas (walk collide : Decision) (index : Nat) : M Bool := do
 /-- wg_index_hashtable_insert (peerlookup.c:109-153): a fresh random index
     (a recorded hidden input) not in use, inserted at the head. -/
 def indexInsert (pid : PeerId) (kind : IndexKind) : M Nat := do
-  indexRemove pid kind
+  -- `hlist_del_init_rcu(&entry->index_hash)` first (peerlookup.c:125)
+  unhashEntry .idxInsertHashed fun e => e.peer == pid && e.kind == kind
   -- `goto search_unused_slot` draws again; nothing else inserts meanwhile
   -- (one CPU), so the locked walk agrees with the unlocked one. The C loop
   -- is unbounded; the draws are records, so the loop is record-driven

@@ -5,7 +5,7 @@ set_option pp.structureInstances false
 
 /-! Complete data receive entry and device/peer enqueue. Queue scheduling,
 CPU selection and scalar queue updates are inspected access-free operations.
-The original ENOSPC invariant error and EPIPE dead-packet enqueue are retained.
+The original ENOSPC reference releases/free and EPIPE dead-packet enqueue are retained.
 No index consistency, ownership or packet-delivery property is assumed. -/
 namespace Leanux.Proofs.WG.Lifetimes
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Std.Do
@@ -163,7 +163,9 @@ def consumeDataPrefix (msg : List UInt8) (src : SkbSource) (ds : Nat) : MixedM U
   let ret ← enqueuePerDeviceAndPeerRxPrefix skb
   if ← liftPrefix (branch .dataEpipe (ret == -EPIPE)) then enqueuePerPeerRxPrefix (pure ()) skb .dead
   if ← liftPrefix (WG.orM (branch .dataEnqueueOk (ret == 0)) (branch .dataEnqueueOkEpipe (ret == -EPIPE))) then return
-  liftPrefix (invariant "unreachable")
+  keypairPutPrefix (some id) false
+  peerPutMixed peer
+  freeRxSkbPrefix skb
 
 theorem consumeDataPrefix_erases (msg : List UInt8) (src : SkbSource) (ds : Nat) :
     ErasesPrefix (consumeDataPrefix msg src ds) (consumeData msg src ds) := by
@@ -206,15 +208,20 @@ theorem consumeDataPrefix_erases (msg : List UInt8) (src : SkbSource) (ds : Nat)
           have tail : ErasesPrefix (Event := LifetimeEvent)
               (do if ← liftPrefix (WG.orM (branch .dataEnqueueOk (ret == 0))
                     (branch .dataEnqueueOkEpipe (ret == -EPIPE))) then return
-                  liftPrefix (invariant "unreachable"))
+                  keypairPutPrefix (some id) false
+                  peerPutMixed (some e.peer)
+                  freeRxSkbPrefix skb)
               (do if ← WG.orM (branch .dataEnqueueOk (ret == 0))
                     (branch .dataEnqueueOkEpipe (ret == -EPIPE)) then return
-                  invariant "unreachable") := by
+                  keypairPut (some id) false
+                  peerPut (some e.peer)
+                  freeRxSkb skb) := by
             apply erasesPrefix_bind (erasesPrefix_lift _)
             intro okay
             split
             · exact erasesPrefix_pure _
-            · exact erasesPrefix_lift _
+            · exact erasesPrefix_bind (keypairPutPrefix_erases _ _) (fun _ =>
+                erasesPrefix_bind (peerPutMixed_erases _) (fun _ => freeRxSkbPrefix_erases _))
           split
           · exact erasesPrefix_bind (enqueuePerPeerRxPrefix_pure_erases skb .dead) (fun _ => tail)
           · exact tail
@@ -222,6 +229,7 @@ theorem consumeDataPrefix_erases (msg : List UInt8) (src : SkbSource) (ds : Nat)
 theorem consumeDataPrefix_preserves_ambient (c : AmbientContracts I)
     (put : ∀ kp now, PrefixPreserves I LifetimeEvent.Safe (keypairPutPrefix kp now))
     (alloc : ∀ p, PrefixPreserves I LifetimeEvent.Safe (newRxSkbPrefix p))
+    (free : ∀ id, PrefixPreserves I LifetimeEvent.Safe (freeRxSkbPrefix id))
     (hc : ∀ cpu, PrefixPreserves I LifetimeEvent.Safe
       (liftPrefix (modifyDev fun d => {d with decryptLastCpu := cpu})))
     (hq : ∀ id, PrefixPreserves I LifetimeEvent.Safe
@@ -267,13 +275,16 @@ theorem consumeDataPrefix_preserves_ambient (c : AmbientContracts I)
           have tail : PrefixPreserves I LifetimeEvent.Safe
               (do if ← liftPrefix (WG.orM (branch .dataEnqueueOk (ret == 0))
                     (branch .dataEnqueueOkEpipe (ret == -EPIPE))) then return
-                  liftPrefix (invariant "unreachable")) := by
+                  keypairPutPrefix (some id) false
+                  peerPutMixed (some e.peer)
+                  freeRxSkbPrefix skb) := by
             apply PrefixPreserves.bind (AmbientContracts.drop (c.kernel (fun _ => True) _
               (orM_sameKernel (sameKernel_branch _ _) (sameKernel_branch _ _))))
             intro okay
             split
             · exact PrefixPreserves.pure c.safe ()
-            · exact AmbientContracts.drop (c.invariant (fun _ => True) _)
+            · exact PrefixPreserves.bind (put _ _) (fun _ =>
+                PrefixPreserves.bind (c.peerPut _) (fun _ => free _))
           split
           · exact PrefixPreserves.bind
               (enqueuePerPeerRxPrefix_preserves_ambient c (PrefixPreserves.pure c.safe ()) skb .dead)
@@ -283,6 +294,6 @@ theorem consumeDataPrefix_preserves_ambient (c : AmbientContracts I)
 theorem consumeDataPrefix_allocation (msg : List UInt8) (src : SkbSource) (ds : Nat) :
     PrefixPreserves AllocationInv LifetimeEvent.Safe (consumeDataPrefix msg src ds) :=
   consumeDataPrefix_preserves_ambient allocationAmbient keypairPutPrefix_allocation
-    (fun p => PacketAllocation.preserves (.rx p)) decryptLastCpu_allocation decryptProduce_allocation msg src ds
+    (fun p => PacketAllocation.preserves (.rx p)) freeRxSkbPrefix_allocation decryptLastCpu_allocation decryptProduce_allocation msg src ds
 
 end Leanux.Proofs.WG.Lifetimes

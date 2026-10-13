@@ -1,10 +1,12 @@
 import Leanux.Proofs.WG.Lifetimes.ReceiveCompletion
+import Leanux.Proofs.Logged.PrefixGro
 
 set_option maxHeartbeats 1000000
 set_option pp.structureInstances false
 
-/-! The complete original poll with an explicit observed completion callback.
-Resident accesses and releases precede the callback in the original order.
+/-! The complete original poll with an explicit observed stack-flush callback.
+The callback follows the original GRO batch and completion flushes; releases
+and callbacks retain their source order.
 This is neither a concrete IP-stack callback proof nor a delivery property. -/
 namespace Leanux.Proofs.WG.Lifetimes
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Std.Do
@@ -37,10 +39,10 @@ theorem rxDropPeekedPrefix_preserves (c : AmbientContracts I) (pid : PeerId) :
   intro q
   exact c.setPeer (fun _ => True) pid {p with rxQueue := q.rxQueue.dropPeeked}
 
-def rxPollPrefix (pid : PeerId) (budget : Nat) (napiCompleteDone : List (List UInt8) → MixedM Unit) : MixedM Nat := do
+def rxPollPrefix (pid : PeerId) (budget : Nat) (toStack : List (List UInt8) → MixedM Unit) : MixedM Nat := do
   if ← rxBranch .rxPollNoBudget (budget == 0) then return 0
   let mut workDone := 0
-  let mut gro : List (List UInt8) := []
+  let mut gro : GroState := {}
   let mut drained := false
   for _ in [0:MAX_QUEUED_PACKETS + 1] do
     -- `(skb = wg_prev_queue_peek(&peer->rx_queue)) != NULL` (W7: the queue as
@@ -66,7 +68,8 @@ def rxPollPrefix (pid : PeerId) (budget : Nat) (napiCompleteDone : List (List UI
         if !(← rxBranch .rxPollEndpointFailed endpoint.isNone) then
           let some e := endpoint | liftPrefix (invariant "unreachable")
           -- wg_reset_packet(skb, false) (a cut point)
-          gro := gro ++ (← consumeDataDonePrefix pid pkt e).toList
+          for inner in (← consumeDataDonePrefix pid pkt e).toList do
+            gro ← napiGroReceivePrefix toStack gro inner
           free := false
     -- next:
     keypairPutPrefix (some pkt.keypair) false
@@ -79,7 +82,7 @@ def rxPollPrefix (pid : PeerId) (budget : Nat) (napiCompleteDone : List (List UI
   if ← rxBranch .rxPollComplete (workDone < budget) then
     -- napi_complete_done: NAPI_STATE_SCHED cleared, GRO flushed
     modifyPeerKeysPrefix pid fun p => {p with napiScheduled := false}
-    napiCompleteDone gro
+    napiGroFlushAllPrefix toStack gro
   else liftPrefix (unsupported "a NAPI poll that used its whole budget (a repoll)")
   return workDone
 
@@ -93,6 +96,8 @@ theorem rxPollPrefix_erases (pid : PeerId) (budget : Nat)
     | with_reducible apply erasesPrefix_bind
     | with_reducible apply erasesPrefix_ite
     | (with_reducible intro x; try dsimp only)
+    | with_reducible exact napiGroReceivePrefix_erases callback original hc _ _
+    | with_reducible exact napiGroFlushAllPrefix_erases callback original hc _
     | with_reducible exact hc _
     | with_reducible exact getPeerMixed_erases _
     | with_reducible exact setPeerMixed_erases _ _
@@ -107,6 +112,7 @@ theorem rxPollPrefix_erases (pid : PeerId) (budget : Nat)
     | with_reducible exact erasesPrefix_lift _
     | with_reducible exact erasesPrefix_pure _
     | with_reducible apply andPrefix_erases
+    | with_reducible apply erasesPrefix_forIn
     | with_reducible apply erasesPrefix_range
     | with_reducible apply erasesPrefix_bind
     | (with_reducible split)
@@ -129,6 +135,8 @@ theorem rxPollPrefix_preserves_ambient (c : AmbientContracts I) (t : TxContracts
     | with_reducible apply PrefixPreserves.bind
     | with_reducible apply PrefixPreserves.ite
     | (with_reducible intro x; try dsimp only)
+    | with_reducible exact napiGroReceivePrefix_preserves callback c.safe hc _ _
+    | with_reducible exact napiGroFlushAllPrefix_preserves callback c.safe hc _
     | with_reducible exact hc _
     | with_reducible exact AmbientContracts.drop (c.getPeer_frame (fun _ => True) _)
     | with_reducible exact AmbientContracts.drop (c.getRx (fun _ => True) _)
@@ -146,6 +154,7 @@ theorem rxPollPrefix_preserves_ambient (c : AmbientContracts I) (t : TxContracts
     | with_reducible exact AmbientContracts.drop (c.unsupported (fun _ => True) _)
     | with_reducible exact PrefixPreserves.pure c.safe _
     | with_reducible apply andPrefix_preserves c.safe
+    | with_reducible apply PrefixPreserves.forIn _ _ _ c.safe
     | with_reducible apply PrefixPreserves.range _ _ _ c.safe
     | with_reducible apply PrefixPreserves.bind
     | (with_reducible split)

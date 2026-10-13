@@ -375,3 +375,57 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   turn bound named as its own (`DOMAIN_FILTER_TURNS`, `unsupported "runner
   budget: …"`), never an `invariant`; `Timing`'s constants kept for the
   filter's prediction only.
+- **2026-10-13 [USER]** While the proof campaign runs, the mirror work is
+  fidelity improvements, audits and the census's gaps rather than new
+  targets: "let's plan to work on fidelity improvements / audit / census
+  gaps while the proof campaign is running". The audits, in the order
+  proposed and accepted: a mechanical mutation campaign against the
+  check, a scratch oracle built at a different optimisation level to
+  separate compiler-bound declarations from C semantics, correspondence
+  audits of the oldest WireGuard modules by fresh agents, and a
+  generated-trace soak with fresh seeds. New targets (the FIB trie, the
+  timer wheel, KVM) wait.
+- **2026-10-13 [AGENT, fork of the coordinator]** A mirror defect found by
+  the device correspondence audit (docs/2026-10-13-audit-device.md, M1)
+  and never exercised by the corpus: `setMtu` answered `-ERANGE` above
+  `max_mtu` and nothing below zero where `dev_validate_mtu` answers
+  `-EINVAL` for both (net/core/dev.c:9061-9075). Fixed with the cut's rule
+  over the ioctl's int (the guest's `(int)op->a` applied in `Env.setMtu`),
+  two traces at the arms (`w4_set_mtu_over_max`, `w4_set_mtu_negative`:
+  semantic_mismatch before, agreement after, on s2), the trace field and
+  the expected errno set corrected. With it the audit's X1
+  (`wg_check_packet_protocol` decided from the packet, its error arm
+  modelled and unexercised) and D1 (the handshake ring in `wg_destruct`'s
+  guard, an invariant). The audit's other items stay as reported.
+- **2026-10-13 [AGENT, fork of the coordinator]** The netlink correspondence
+  audit's F1 (docs/2026-10-13-audit-netlink.md): the trace contract admitted
+  a peer endpoint whose `af` and `len` present one family's bytes under the
+  other `sockaddr` layout (family-4 bytes with `af` 10 and `len` 28, or
+  family-6 bytes with `af` 2 and `len` 16), which `set_peer`
+  (netlink.c:441-446) reads by `len` and `sa_family` alone and stores as an
+  endpoint the mirror's parsed fields cannot express (the dump then
+  differs). Closed fail-closed: the validator and `Runner.parseEndpoint`
+  refuse exactly those two combinations; the ignored combinations of the W2
+  design's 3.3 rows stay admitted; `corpus/netlink-controls` holds the two
+  traces as expected rejections (`scripts/wg-netlink-controls.py`). A
+  harness admission found by reading, never by a trace: the corpus had only
+  the ignored combinations.
+- **2026-10-13 [AGENT, fork of the coordinator]** Three defects of the
+  receive path found by the correspondence audit
+  (docs/2026-10-13-audit-receive.md), none ever exercised by the corpus,
+  fixed on the mirror's side only: F1, `wg_packet_consume_data`'s `-ENOSPC`
+  arm (receive.c:534-539) was an `invariant` stop and is the C's puts and
+  silent free (`w7_ring_rx_1025`, held back from the tier suite: its 1024
+  inline polls exceed the protocol's 64 ambiguous placements per trace); F7, `make_cookie`'s secret rotation
+  (cookie.c:96-102) discarded the age test's outcome and is modelled from
+  the records with the test a declared comparison
+  (`e_underload_cookie_rotated`: the reply's bytes differed before); F6b,
+  GRO's `rx_list` batch of 8 and the held lone TCP segment, where the
+  mirror delivered everything at `napi_complete_done` (modelled,
+  unexercised: the one-CPU kernel polls inline at every decrypt, so no poll
+  holds 8 packets; `w7_multi_rx_9_rst_roam` was written for it and agrees
+  under both mirrors, the endpoint-family decision marked repeatable). The exclusion
+  reasons of the E design's §11 are corrected: the `> 2048` trylock arm is
+  reachable since `wg_batch`/`wg_flood` but stays `unsupported` (the lock's
+  state is unrecorded); the rotation is in. F10 (the handshake ring as a
+  `List`) is deferred to its own task.

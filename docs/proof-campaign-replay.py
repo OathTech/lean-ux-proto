@@ -6,6 +6,7 @@ import argparse
 import ast
 import copy
 import json
+import sys
 from pathlib import Path
 
 
@@ -106,8 +107,18 @@ def stale_dump_cursor_orphan():
     return trace
 
 
-def receive_wire_limit():
-    """Reconstructed capture records plus an existing authenticated limit packet."""
+def fixture_session():
+    """Derive the tracked D1 session with the harness's actual Noise helper."""
+    sys.path.insert(0, str(ROOT))
+    from harness import noise
+    device, peer = bytes([0x11]) * 32, bytes([0x22]) * 32
+    initiation = noise.steered_initiation(noise.public_key(peer), device,
+        bytes(range(0x81, 0xa1)), 1790000000, 987654321, 0x0a0b0c0d)
+    return noise.response(initiation, peer, bytes([0x44]) * 32, None, 0x01020304)
+
+
+def receive_wire_limit(strict=False):
+    """Reconstructed records with the existing R packet or generated R+1 packet."""
     trace = recorded_fixture("CONTENDED_ROAM_CMP")
     limit = json.loads((ROOT / "corpus/wireguard/d2_rx_reject_after_messages.json").read_text())
     records = copy.deepcopy(trace["hidden"][4])
@@ -118,6 +129,16 @@ def receive_wire_limit():
     del records[clocks[1]]
     trace["id"] = "r5_rx_wire_limit"
     trace["ops"] = trace["ops"][:4] + [limit["ops"][4]]
+    if strict:
+        response = fixture_session()
+        from harness import noise
+        if response.message.hex() != trace["ops"][3]["message"]:
+            raise ValueError("derived Noise session differs from tracked response")
+        reject_after_messages = (2**64 - 1) - (8192 - 64) - 1
+        counter = reject_after_messages + 1
+        trace["id"] = "r5_rx_wire_past_limit"
+        trace["ops"][4]["message"] = noise.data_message(
+            response.initiator_receiving, response.initiator_index, counter, b"").hex()
     trace["hidden"] = trace["hidden"][:4] + [records]
     for operation in trace["hidden"]:
         for record in operation:
@@ -156,12 +177,202 @@ def post_clear_transport():
     return trace
 
 
+def delayed_encryption(clear=False):
+    """Generated coherent coarse/jiffies inputs, not a captured kernel run."""
+    trace = recorded_fixture("CONTENDED_ROAM_CMP")
+    data = json.loads((ROOT / "corpus/wireguard/d3_keepalive_rearm_deleted.json").read_text())
+    initial_jiffies = 2**32 - 75000
+    after_expiry = 673 if clear else 322
+    wait_end = after_expiry + 1
+    jiffies = lambda seconds: initial_jiffies + seconds * 250
+    def record(site, *words):
+        return [site, b"".join(word.to_bytes(8, "little") for word in words).hex()]
+    def clock(seconds):
+        return record(6, seconds * 10**9)
+    arm_delays = {17: 1000 * 250, 18: 1250, 19: 135000, 20: 2500}
+    def arm(seconds, timer, extra=0):
+        now = jiffies(seconds)
+        delay = arm_delays[timer] + extra
+        result = record(100, now, now + delay, timer)
+        return result
+    def retime(records, seconds):
+        result = copy.deepcopy(records)
+        for r in result:
+            if r[0] in {5, 6, 7, 8, 13}:
+                r[1] = (seconds * 10**9).to_bytes(8, "little").hex()
+            if r[0] in {40, 42, 44, 46, 48, 50} and len(r[1]) == 16:
+                r[1] += "0000000000000000"
+        return result
+    setup = retime(trace["hidden"][0], 130)
+    up = []
+    for r in retime(trace["hidden"][1], 131):
+        if r[0] == 8:
+            up.append(arm(131, 17))
+        up.append(r)
+        if r[0] == 14:
+            up.append(arm(131, 18, 83 * bytes.fromhex(r[1])[0] // 256))
+    response, clocks = [], 0
+    for r in retime(trace["hidden"][3], 132):
+        response.append(r)
+        if r[0] == 13:
+            response.append(arm(132, 19))
+        if r[0] == 6:
+            clocks += 1
+            if clocks == 1:
+                response.append(arm(132, 17))
+        if r[0] == 46:
+            response.append(arm(132, 17))
+    receives = []
+    for seconds in [133, 134]:
+        records, clocks = [], 0
+        for r in retime(trace["hidden"][4], seconds):
+            records.append(r)
+            if r[0] == 6:
+                clocks += 1
+                if clocks == 2:
+                    records.append(arm(seconds, 17))
+                    if seconds == 133:
+                        records.append(arm(seconds, 20))
+        if clocks != 2:
+            raise ValueError("receive fixture no longer has two age reads")
+        receives.append(records)
+    tail = [record(101, jiffies(134), jiffies(311)),
+            record(104, 0, 20), clock(311), arm(311, 20), record(105, 0),
+            record(104, 0, 20), clock(after_expiry), clock(after_expiry), record(105, 0),
+            record(44, 0, 0), record(45, 0), record(46, 0, 0), arm(after_expiry, 17),
+            record(20, 0), record(48, 0, 0), record(49, 0), record(47, 0)]
+    # The old keypair occupies the original index. The new handshake uses
+    # a fresh draw and runs only after the old packet's encryption/transmit.
+    for r in retime(trace["hidden"][1][1:], after_expiry):
+        if r[0] == 1:
+            r[1] = bytes(range(0xc1, 0xe1)).hex()
+        if r[0] == 3:
+            r = record(3, 1790000000 + after_expiry - 131, 987654321)
+        if r[0] == 4:
+            r = record(4, 0x11223344)
+        if r[0] == 14:
+            r = record(14, 1)
+        if r[0] == 21:
+            continue
+        if r[0] == 8:
+            tail.append(arm(after_expiry, 17))
+        tail.append(r)
+        if r[0] == 14:
+            tail.append(arm(after_expiry, 18))
+    # ARM_RECORDS also requires queue-work records. Each work unit keeps
+    # one identity across queueing and dispatch; timer identities are separate.
+    def before(records, site, queued, occurrence=1):
+        indices = [i for i, r in enumerate(records) if r[0] == site]
+        if len(indices) < occurrence:
+            raise ValueError(f"missing insertion boundary {site}/{occurrence}")
+        records.insert(indices[occurrence - 1], queued)
+    before(up, 40, record(300, 1, 0))
+    before(response, 49, record(301, 2, 0))
+    before(response, 100, record(302, 3, 0), 2)
+    before(response, 45, record(303, 4, 0))
+    for records in receives:
+        before(records, 49, record(305, 5, 0))
+    before(tail, 100, record(302, 3, 0))
+    before(tail, 105, record(300, 1, 0), 2)
+    before(tail, 45, record(303, 4, 0))
+    if clear:
+        crypt_start = next(i for i, r in enumerate(tail) if r[0] == 44)
+        tail[crypt_start:crypt_start] = [record(108, 0, 19), record(310, 6, 0),
+            record(109, 0), record(110, 0, 6), record(111, 0)]
+    units = {40: 1, 42: 2, 44: 3, 46: 4, 50: 5}
+    for records in [up, response, *receives, tail]:
+        for r in records:
+            if r[0] in units:
+                r[1] = r[1][:16] + units[r[0]].to_bytes(8, "little").hex()
+    trace["id"] = "r5_coherent_post_clear" if clear else "r5_delayed_encryption"
+    trace["ops"] = trace["ops"][:4] + copy.deepcopy(data["ops"][4:6]) + [
+        {"op": "wg_advance", "ticks": (311 - 134) * 250}]
+    trace["ops"][0]["config"]["peers"][0]["keepalive"] = 1000
+    trace["hidden"] = [setup, up, [], response, *receives, tail]
+    for records, seconds in zip(trace["hidden"], [130, 131, 131, 132, 133, 134, wait_end]):
+        records.append(record(128, jiffies(seconds)))
+    trace.pop("steer")
+    trace["arm_records"] = True
+    trace["dst_cache_records"] = False
+    # Check the generated clock discipline and every explicit arm. These
+    # arithmetic checks do not establish that Linux produced this schedule.
+    def check_clock(condition, message):
+        if not condition:
+            raise ValueError(message)
+    last_ns, last_jiffies = 0, initial_jiffies
+    for records in trace["hidden"]:
+        for site, encoded in records:
+            raw = bytes.fromhex(encoded)
+            words = [int.from_bytes(raw[n:n+8], "little") for n in range(0, len(raw), 8)]
+            if site in {5, 6, 7, 8, 13}:
+                check_clock(words[0] >= last_ns, "coarse clock moved backward")
+                last_ns = words[0]
+            if site == 100:
+                now, expiry, timer = words
+                check_clock(now >= last_jiffies, "timer-arm jiffies moved backward")
+                check_clock(expiry - now in ({1250, 1269} if timer == 18 else {arm_delays[timer]}),
+                    "timer arm has the wrong delay")
+                check_clock(now == initial_jiffies + last_ns // 4000000,
+                    "timer-arm jiffies disagree with the preceding coarse clock")
+                last_jiffies = now
+            if site == 101:
+                check_clock(words[0] >= last_jiffies and words[1] - words[0] == 44250,
+                    "advance record has the wrong start or duration")
+                last_jiffies = words[1]
+            if site == 128:
+                check_clock(words[0] >= last_jiffies, "end-of-wait jiffies moved backward")
+                check_clock(words[0] >= initial_jiffies + last_ns // 4000000,
+                    "end-of-wait precedes the last coarse clock")
+                last_jiffies = words[0]
+    return trace
+
+
+def gro_reorder():
+    """Generated explicit schedule, not a Linux capture: held ACK then normal SYN."""
+    trace = recorded_fixture("CONTENDED_ROAM_CMP")
+    response = fixture_session()
+    from harness import noise
+    if response.message.hex() != trace["ops"][3]["message"]:
+        raise ValueError("derived Noise session differs from tracked response")
+    src = bytes.fromhex("0a000002")
+    held = noise.ipv4_tcp(src, noise.WG0_ADDR4, 40001, 80, 7, 0x55667788, 16, b"H")
+    normal = noise.ipv4_tcp(src, noise.WG0_ADDR4, 40002, 443, 0x11223344, 0, 2)
+    items = [{"kind": "inject", "family": 4, "port": 51820,
+              "message": noise.data_message(response.initiator_receiving,
+                  response.initiator_index, nonce, packet).hex()}
+             for nonce, packet in enumerate([held, normal])]
+    def record(site, value=0):
+        size = 16 if site in {40, 42, 44, 46, 48, 50} else 8
+        return [site, value.to_bytes(size, "little").hex()]
+    sites = [48, 49, 48, 49, 50, 6, 6, 48, 6, 6, 6, 6, 49,
+             51, 44, 45, 46, 48, 49, 16, 6, 48, 49, 6, 47]
+    records = [record(site, 133000000000 if site == 6 else 160 if site == 16 else 0)
+               for site in sites]
+    trace["id"] = "r4_gro_reorder"
+    trace["ops"] = trace["ops"][:4] + [{"op": "wg_batch", "items": items,
+                                               "wait_ms": 400}, {"op": "wg_observe"}]
+    trace["hidden"] = trace["hidden"][:4] + [records, []]
+    for operation in trace["hidden"]:
+        for r in operation:
+            if r[0] in {40, 42, 44, 46, 48, 50} and len(r[1]) == 16:
+                r[1] += "0000000000000000"
+    trace.pop("steer")
+    trace["dst_cache_records"] = False
+    trace["arm_records"] = False
+    add_wait_bounds(trace, range(len(trace["ops"])))
+    return trace
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     cases = {"r1-inclusive-floor": inclusive_floor,
              "r2-stale-dump-cursor": stale_dump_cursor,
              "r2-stale-dump-cursor-orphan": stale_dump_cursor_orphan,
+             "r4-gro-reorder": gro_reorder,
              "r5-rx-wire-limit": receive_wire_limit,
+             "r5-rx-wire-past-limit": lambda: receive_wire_limit(True),
+             "r5-delayed-encryption": delayed_encryption,
+             "r5-coherent-post-clear": lambda: delayed_encryption(True),
              "r5-post-clear-transport": post_clear_transport}
     parser.add_argument("case", choices=cases)
     args = parser.parse_args()

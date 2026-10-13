@@ -71,4 +71,19 @@ theorem erasesTo_range (p : β → γ) (r : Std.Legacy.Range) (b : β)
   rw [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.forIn_eq_forIn_range']
   exact erasesTo_forIn p _ b g a ha
 
+/-- Project both the loop entries and its proof-side accumulator. -/
+theorem erasesTo_forIn_map (p : β → γ) (f : α → δ) (xs : List α) (b : β)
+    (g : α → β → PrefixM Event (ForInStep β)) (a : δ → γ → M (ForInStep γ))
+    (ha : ∀ x b, ErasesTo (projectStep p) (g x b) (a (f x) (p b))) :
+    ErasesTo p (forIn xs b g) (forIn (xs.map f) (p b) a) := by
+  induction xs generalizing b with
+  | nil => simpa only [List.map_nil, List.forIn_nil] using erasesTo_pure p b
+  | cons x xs ih =>
+    rw [List.map_cons, List.forIn_cons, List.forIn_cons]
+    apply erasesTo_bind (projectStep p) p (ha x b)
+    intro step
+    cases step with
+    | done b => exact erasesTo_pure p b
+    | yield b => exact ih b
+
 end Leanux.Proofs.Logged

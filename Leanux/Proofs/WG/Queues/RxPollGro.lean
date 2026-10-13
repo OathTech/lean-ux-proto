@@ -1,12 +1,14 @@
 import Leanux.Proofs.WG.Queues.RxPollPrefix
 import Leanux.Proofs.WG.Queues.GroCallback
+import Leanux.Proofs.WG.Queues.GroState
 
 set_option maxHeartbeats 2000000
 set_option pp.structureInstances false
 
-/-! The original poll with tagged GRO buffering and actual stack callback
-entry observations. Tags are local removal ordinals and skb values, never
-payload identities. Buffered events remain visible when the poll later stops. -/
+/-! The original poll with tagged completion offers, actual normal/held GRO
+state, and stack callback entry observations. Tags use local workDone and skb
+values, never payload identities. The buffered event precedes GRO admission
+and remains visible if that admission or a later operation stops. -/
 namespace Leanux.Proofs.WG.Queues
 open Leanux Leanux.WG Leanux.Proofs.Logged
 
@@ -43,13 +45,21 @@ theorem consumeGro_erases (pid : PeerId) (occurrence : Nat) (id : SkbId)
     rcases out with ⟨bytes, v⟩
     cases bytes <;> rfl
 
-def pollProject (s : Nat × List GroEntry × Bool) : Nat × List (List UInt8) × Bool :=
-  (s.1, s.2.1.map GroEntry.bytes, s.2.2)
+def pollProject (s : Nat × TaggedGro × Bool) : Nat × GroState × Bool :=
+  (s.1, s.2.1.erase, s.2.2)
+
+theorem groOption_erases (g : TaggedGro) (out : Option GroEntry) :
+    ErasesTo TaggedGro.erase (out.elim (pure g) (napiGroReceiveTagged g))
+      ((out.toList.map GroEntry.bytes).foldlM
+        (fun g bytes => napiGroReceive (fun bs => bs.forM Leanux.Env.deliverInner) g bytes) g.erase) := by
+  cases out with
+  | none => exact erasesTo_pure TaggedGro.erase g
+  | some e => simpa using napiGroReceiveTagged_erases g e
 
 def rxPollGro (pid : PeerId) (budget : Nat) : PrefixM GroEvent Nat := do
   if ← liftPrefix (branch .rxPollNoBudget (budget == 0)) then return 0
   let mut workDone := 0
-  let mut gro : List GroEntry := []
+  let mut gro : TaggedGro := {}
   let mut drained := false
   for _ in [0:MAX_QUEUED_PACKETS + 1] do
     let first ← liftPrefix (peekRxQueue pid)
@@ -69,7 +79,8 @@ def rxPollGro (pid : PeerId) (budget : Nat) : PrefixM GroEvent Nat := do
         let endpoint ← liftPrefix (endpointFromSkb pkt.source)
         if !(← liftPrefix (branch .rxPollEndpointFailed endpoint.isNone)) then
           let some e := endpoint | liftPrefix (invariant "unreachable")
-          gro := gro ++ (← consumeGro pid workDone id pkt e).toList
+          for entry in (← consumeGro pid workDone id pkt e).toList do
+            gro ← napiGroReceiveTagged gro entry
           free := false
     liftPrefix (keypairPut (some pkt.keypair) false)
     liftPrefix (peerPut (some pid))
@@ -80,7 +91,7 @@ def rxPollGro (pid : PeerId) (budget : Nat) : PrefixM GroEvent Nat := do
   if !drained && workDone < budget then liftPrefix (invariant "the rx_queue did not drain")
   if ← liftPrefix (branch .rxPollComplete (workDone < budget)) then
     liftPrefix (completeRxQueue pid)
-    flushGro gro
+    napiGroFlushAllTagged gro
   else liftPrefix (unsupported "a NAPI poll that used its whole budget (a repoll)")
   return workDone
 
@@ -104,19 +115,25 @@ theorem rxPollGro_erases (pid : PeerId) (budget : Nat) :
         | with_reducible exact ErasesPrefix.to_projected (erasesPrefix_lift _)
         | with_reducible exact ErasesPrefix.to_projected (dropGroPrefix_erases _ _ _)
         | with_reducible exact consumeGro_erases _ _ _ _ _
+        | with_reducible exact napiGroReceiveTagged_erases _ _
+        | with_reducible exact groOption_erases _ _
+        | with_reducible apply erasesTo_forIn_map TaggedGro.erase GroEntry.bytes
+        | with_reducible apply erasesTo_bind TaggedGro.erase
         | with_reducible apply erasesTo_bind (Option.map GroEntry.bytes)
         | with_reducible apply erasesTo_bind id
         | with_reducible apply erasesTo_ite
-        | (with_reducible intro x; try dsimp only [id, pollProject])
+        | (with_reducible intro x; try dsimp only [id, pollProject]; try simp only [Option.toList_map])
         | (with_reducible split)
         | (simpa [pollProject, projectStep, List.map_append, Option.toList_map] using
             erasesTo_pure (projectStep pollProject) _)
+        | with_reducible exact erasesTo_pure (projectStep TaggedGro.erase) _
       all_goals simp_all [ErasesTo, projectStep, pollProject, List.map_append, Option.toList_map, Except.map]
+      all_goals exact groOption_erases _ _
     · intro acc
       dsimp only [pollProject]
       repeat' first
         | with_reducible exact ErasesPrefix.to_projected (erasesPrefix_lift _)
-        | with_reducible exact ErasesPrefix.to_projected (flushGro_erases _)
+        | with_reducible exact ErasesPrefix.to_projected (napiGroFlushAllTagged_erases _)
         | with_reducible exact erasesTo_pure id _
         | with_reducible apply erasesTo_bind id
         | with_reducible apply erasesTo_ite

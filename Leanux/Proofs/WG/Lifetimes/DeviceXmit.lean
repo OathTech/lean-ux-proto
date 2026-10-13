@@ -100,9 +100,17 @@ theorem xmitTrimPrefix_preserves (c : AmbientContracts I) (t : TxContracts I) (p
     exact PrefixPreserves.pure c.safe _
 
 def wgXmitSource (family addr : Nat) (pkts : List Packet) (mtu : Nat) : M Int := do
+  let some first := pkts.head? | invariant "wg_xmit without a packet"
+  let realProtocol := match first.bytes with
+    | b :: _ => if b.toNat / 16 == 4 then ETH_P_IP else if b.toNat / 16 == 6 then ETH_P_IPV6 else 0
+    | [] => 0
+  let skbProtocol := if family == 4 then ETH_P_IP else ETH_P_IPV6
   -- `real_protocol && skb->protocol == real_protocol`
-  let ok ← WG.andM (branch .checkProtoParsed true) (branch .checkProtoMatches true)
-  if ← branch .xmitBadProtocol !ok then unsupported "unreachable"
+  let ok ← WG.andM (branch .checkProtoParsed (realProtocol != 0))
+    (branch .checkProtoMatches (skbProtocol == realProtocol))
+  if ← branch .xmitBadProtocol !ok then
+    modifyDev fun d => {d with txErrors := d.txErrors + 1}
+    return -EPROTONOSUPPORT
   let err (ret : Int) : M Int := do
     -- err_icmp: icmp_ndo_send / icmpv6_ndo_send (cut points, whose rate limit
     -- and IP output draw cut-site choices), then err. The error is sent iff
@@ -156,9 +164,17 @@ theorem wgXmitSource_eq (family addr : Nat) (pkts : List Packet) (mtu : Nat) :
   congr 1
 
 def wgXmitPrefix (family addr : Nat) (pkts : List Packet) (mtu : Nat) : MixedM Int := do
+  let some first := pkts.head? | liftPrefix (invariant "wg_xmit without a packet")
+  let realProtocol := match first.bytes with
+    | b :: _ => if b.toNat / 16 == 4 then ETH_P_IP else if b.toNat / 16 == 6 then ETH_P_IPV6 else 0
+    | [] => 0
+  let skbProtocol := if family == 4 then ETH_P_IP else ETH_P_IPV6
   -- `real_protocol && skb->protocol == real_protocol`
-  let ok ← andPrefix (rxBranch .checkProtoParsed true) (rxBranch .checkProtoMatches true)
-  if ← rxBranch .xmitBadProtocol !ok then liftPrefix (unsupported "unreachable")
+  let ok ← andPrefix (rxBranch .checkProtoParsed (realProtocol != 0))
+    (rxBranch .checkProtoMatches (skbProtocol == realProtocol))
+  if ← rxBranch .xmitBadProtocol !ok then
+    liftPrefix (modifyDev fun d => {d with txErrors := d.txErrors + 1})
+    return -EPROTONOSUPPORT
   let err (ret : Int) : MixedM Int := do
     -- err_icmp: icmp_ndo_send / icmpv6_ndo_send (cut points, whose rate limit
     -- and IP output draw cut-site choices), then err. The error is sent iff

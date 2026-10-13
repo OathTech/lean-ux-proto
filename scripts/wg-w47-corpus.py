@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from evaluator.generate import HZ, WAIT_BUDGET_SECONDS, fire_advance, wait_after_up  # noqa: E402
 from harness.trace import validate_trace  # noqa: E402
+from harness import noise  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location("wg_d3_corpus", ROOT / "scripts" / "wg-d3-corpus.py")
 d3 = importlib.util.module_from_spec(_spec)
@@ -109,6 +110,15 @@ def traces():
                            steer, SESSION + [fired("send_persistent_keepalive"), d3.INTERVAL + "=1",
                                              "calculate_skb_padding.no_mtu=1", "wg_open.has_inet_device=0",
                                              "wg_open.has_inet6_device=0"])
+    # dev_validate_mtu's two -EINVAL arms (net/core/dev.c:9061-9075), found by
+    # the device correspondence audit (docs/2026-10-13-audit-device.md, M1):
+    # above wg0's max_mtu (2147483552, device.c:297), and at 2^31, which the
+    # guest's `(int)op->a` makes negative (guest.c:2393). Both leave the MTU
+    # and the session untouched, so the GET afterwards is the same as before.
+    ops, sess, steer = d3.session(keepalive=5)
+    out["w4_set_mtu_over_max"] = (ops + [set_mtu(2147483553), OBSERVE, GET], steer, SESSION)
+    ops, sess, steer = d3.session(keepalive=5)
+    out["w4_set_mtu_negative"] = (ops + [set_mtu(2147483648), OBSERVE, GET], steer, SESSION)
     # W7 (section 6, the core tier): batches of n data messages under a
     # session, injected in one io_uring_enter, so the decrypt ring and the
     # peer's rx_queue hold n items at once: wg_prev_queue_dequeue's "more
@@ -134,6 +144,25 @@ def traces():
     items = [inject_item(sess, 0, "mix0"), xmit_item(d2.payload(64, 20)), inject_item(sess, 1, "mix1"),
              xmit_item(d2.payload(65, 21))]
     out["w7_mixed"] = (ops + [batch(items, 400), OBSERVE, GET], steer, SESSION + d2.DATA + d2.DATA_SENT + [DEQUEUE_MORE])
+    # Nine data messages in one batch, the 8th an inner IPv4 TCP SYN (the
+    # stack's RST goes back through wg_xmit inside the poll, with its
+    # records) and the 9th from the IPv6 sender (the endpoint roams inside
+    # the batch: dst_cache_reset's jiffies record; the endpoint family
+    # decision is evaluated with both outcomes in one operation, hence its
+    # `repeatable` mark). Written for the receive audit's F6b (GRO's flush at
+    # a batch of 8 inside one poll); on this one-CPU kernel the NET_RX
+    # softirq runs inline at every decrypt (19 polls for 9 packets here), so
+    # no poll holds 8 packets and the flush point is not observable, but the
+    # roam-in-batch and RST-in-batch combination was new to the corpus.
+    ops, sess, steer = d3.session(keepalive=5)
+    syn = noise.ipv4_tcp(d2.SRC4, noise.WG0_ADDR4, 40009, 80, 0x11223344, 0, 2)
+    items = [inject_item(sess, k, f"rx{k}") for k in range(7)]
+    items.append({"kind": "inject", "family": 4, "port": d1.PORT, "message": sess.to_wg0(7, syn).hex()})
+    items.append({"kind": "inject", "family": 6, "port": d1.PORT, "message": sess.to_wg0(8, d2.inner4("rx8")).hex()})
+    out["w7_multi_rx_9_rst_roam"] = (ops + [batch(items, 400), OBSERVE, GET], steer,
+                                     SESSION + d2.DATA + [DEQUEUE_MORE, "wg_timers_data_received.not_pending=1",
+                                                          "wg_packet_create_data_done.data_sent=1",
+                                                          "encrypt_packet.checksum_partial=0"])
     return out
 
 
@@ -173,6 +202,30 @@ def tier():
     # slots 0..15 at the 16th consume: nothing carried, all 1024 fit
     trace("w7_ring_batch_clear", 15, 1024, fits)
     return out
+
+
+def rx_1025_pending():
+    """The receive twin of the queue limit (receive.c:534-539, the receive
+    audit's F1): 1025 data messages to one peer in one batch, all queued
+    before the decrypt worker runs; the 1025th finds the peer's rx_queue at
+    MAX_QUEUED_PACKETS and wg_prev_queue_enqueue refuses it (-ENOSPC): the
+    keypair and peer puts and a silent dev_kfree_skb, no counter. Keepalive-
+    sized data messages (32 bytes, an empty inner), since the guest's
+    MAX_PAYLOAD (65536 bytes per operation) cannot carry 1025 items with an
+    inner datagram each. Not written into the tier: Linux runs it (the 1025th
+    dropped silently, 15.6 s) and the mirror is in domain (`leanux-model
+    --domain`), but the 1024 inline NAPI polls that follow meet the (c')
+    placement ambiguity 1019 times, beyond the protocol's bound of 64 open
+    polls per trace (evaluator/protocol.py), so the check reports
+    `invalid_output`. Enable once the placement machinery scales (or a
+    record settles (c'))."""
+    ops, sess, steer = d3.session()
+    items = [{"kind": "inject", "family": 4, "port": d1.PORT, "message": sess.to_wg0(k, b"").hex()}
+             for k in range(1025)]
+    return {"w7_ring_rx_1025": (ops + [batch(items, 1000), OBSERVE, GET], steer,
+                                SESSION + ["wg_queue_enqueue_per_device_and_peer.peer_queue_full=1",
+                                           "wg_packet_consume_data.enqueued=0",
+                                           "wg_packet_consume_data.enqueued_epipe=0"])}
 
 
 def controls():

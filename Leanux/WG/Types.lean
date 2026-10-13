@@ -272,8 +272,9 @@ structure Peer where
       clock reads (`wg_noise_reset_last_sent_handshake` sets it
       `REKEY_TIMEOUT + 1` seconds in the past). -/
   lastSentHandshake : Int64 := 0
-  /-- `handshake.last_initiation_consumption` (ns, s64). -/
-  lastInitiationConsumption : Int := 0
+  /-- `handshake.last_initiation_consumption` (ns, the C's `u64`, compared
+      through `s64` casts at noise.c:635 and :651; handshake audit I5). -/
+  lastInitiationConsumption : Int64 := 0
   txBytes : Nat := 0
   /-- `handshake.state`: ZEROED 0, CREATED_INITIATION 1, CONSUMED_INITIATION 2,
       CREATED_RESPONSE 3, CONSUMED_RESPONSE 4. -/

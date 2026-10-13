@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.Queues.RxQueueView
 import Leanux.WG.RxData
+import Leanux.Proofs.Framing.Index
 
 set_option maxHeartbeats 1000000
 set_option pp.structureInstances false
@@ -27,10 +28,13 @@ theorem keypairPut_rxQueues (kp : Option KeypairId) (now : Bool) :
     SameView rxQueues (keypairPut kp now) := by
   apply SameView.of_wp
   intro s
-  mvcgen [keypairPut, getKeypair, getDev, getK, setKeypair, modifyDev, modifyK,
+  simp only [keypairPut, indexRemoveKeypair_eq]
+  mvcgen [indexUnhash, getKeypair, getDev, getK, setKeypair, modifyDev, modifyK,
     refcountDecAndTest, branch, branchCmp, invariant, unsupported]
   all_goals dsimp +zetaDelta only at *
-  all_goals unfold rxQueues at *; simp_all only [Option.bind_some, Option.bind_map, Function.comp_def]
+  all_goals unfold rxQueues at *; simp_all [Option.bind_some, Option.bind_map, Function.comp_def]
+  all_goals subst_vars
+  all_goals simp_all
 
 theorem freeRxSkb_rxQueues (id : SkbId) : SameView rxQueues (freeRxSkb id) := by
   apply SameView.of_wp
@@ -70,8 +74,9 @@ theorem peerGetMaybeZero_rxQueues (pid : Option PeerId) :
 theorem peerPut_rxQueues (pid : Option PeerId) : RetainsRx (peerPut pid) := by
   apply ProjectedAction.of_wp
   intro s
-  mvcgen [peerPut, requireNotPending, Peers.getPeer_spec, getDev, getK, setPeer,
-    modifyDev, modifyK, refcountDecAndTest, indexRemove, retirePeerUnits,
+  simp only [peerPut, indexRemove_eq]
+  mvcgen [indexUnhash, requireNotPending, Peers.getPeer_spec, getDev, getK, setPeer,
+    modifyDev, modifyK, refcountDecAndTest, retirePeerUnits,
     branch, branchCmp, invariant, unsupported]
   all_goals try dsimp +zetaDelta only at *
   all_goals try solve | unfold rxQueues at *; simp_all only [Option.bind_map, Function.comp_def]; exact rx_retained_refl _
@@ -80,6 +85,8 @@ theorem peerPut_rxQueues (pid : Option PeerId) : RetainsRx (peerPut pid) := by
   all_goals try obtain ⟨_, _, _, _⟩ := ‹_ ∧ ∃ _, _ ∧ _›
   all_goals try unfold rxQueues at *; simp_all only [Option.bind_some, Option.bind_map, Function.comp_def]
   all_goals try subst s
+  all_goals try simp_all [Option.bind_map, Function.comp_def]
+  all_goals try subst_vars
   all_goals first
     | exact rx_retained_refl _
     | exact rxMap_insert_erase _ _ _ _

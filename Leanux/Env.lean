@@ -565,7 +565,10 @@ def wgUp : M Int := do
 def setMtu (mtu : Nat) : M Int := do
   if (← getK).wg.isNone then return -ENODEV
   let old := (← getDev).mtu
-  let ret ← WG.setMtu mtu
+  -- the guest fills `ifr_mtu` with `(int)op->a` (guest.c): the trace's u32
+  -- word reaches `dev_set_mtu` negative at or above 2^31
+  let newMtu : Int := if mtu ≥ 2 ^ 31 then (mtu : Int) - 2 ^ 32 else mtu
+  let ret ← WG.setMtu newMtu
   skipCut allocCuts
   -- W9's tables (docs/2026-10-06-w8-w9-netns-routing.md, 14.3d): the
   -- NETDEV_CHANGEMTU notifiers, which `dev_set_mtu_ext` calls only for a

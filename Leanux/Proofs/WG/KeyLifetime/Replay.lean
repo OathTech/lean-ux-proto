@@ -16,8 +16,10 @@ def main : IO UInt32 := do
   let trace ← match Json.parse (← input.getLine) >>= parseTrace with
     | .error message => throw (IO.userError s!"invalid witness: {message}")
     | .ok t => pure t
-  if trace.id != "r5_rx_wire_limit" || trace.hidden.isNone || trace.ops.size != 5 then
-    throw (IO.userError "expected r5-rx-wire-limit with five operations and explicit records")
+  if !(trace.id == "r5_rx_wire_limit" || trace.id == "r5_rx_wire_past_limit") ||
+      trace.hidden.isNone || trace.ops.size != 5 then
+    throw (IO.userError "expected a five-operation wire-limit witness with explicit records")
+  let wireCounter := REJECT_AFTER_MESSAGES + if trace.id == "r5_rx_wire_past_limit" then 1 else 0
   let original ← match executeTrace trace false with
     | .error (index, stop) => throw (IO.userError s!"original operation {index}: {stop.message}")
     | .ok json => pure json
@@ -48,7 +50,7 @@ def main : IO UInt32 := do
           | .error message => throw (IO.userError message)
           | .ok xs => pure xs
         let expected : List Int := if label == "decrypt_packet.counter_limit=0" then
-          [0, REJECT_AFTER_MESSAGES] else [REJECT_AFTER_MESSAGES, REJECT_AFTER_MESSAGES]
+          [0, REJECT_AFTER_MESSAGES] else [wireCounter, REJECT_AFTER_MESSAGES]
         if operands != expected then
           throw (IO.userError s!"unexpected comparison operands at {label}: {repr operands}")
   if selected != selectedLabels then
@@ -56,7 +58,7 @@ def main : IO UInt32 := do
   let output ← IO.getStdout
   output.putStrLn (Json.mkObj [("id", toJson trace.id), ("accepted", toJson true),
     ("original_json_matches", toJson true), ("record_origin", toJson "reconstructed; synthetic wait bounds"),
-    ("wire_counter", toJson REJECT_AFTER_MESSAGES), ("validator_acceptances", toJson history.length),
-    ("finding", toJson "wire nonce at the limit decrypts successfully, then replay validation rejects it"),
+    ("wire_counter", toJson wireCounter), ("validator_acceptances", toJson history.length),
+    ("finding", toJson "wire nonce at or past the limit decrypts successfully, then replay validation rejects it"),
     ("branches", .arr evidence)]).compress
   return 0

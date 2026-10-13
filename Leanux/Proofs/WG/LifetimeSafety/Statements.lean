@@ -794,7 +794,8 @@ theorem receive_lookup_allocation_access_preserves (peer : Option PeerId)
 
 /-- Complete device/peer receive enqueue and consumeData preserve the original
 outcomes and successful Worlds after erasure. This includes the ENOSPC
-invariant Stop and the EPIPE dead-packet enqueue with its original pure callback. -/
+reference releases and packet free, and the EPIPE dead-packet enqueue with its
+original pure callback. -/
 theorem receive_entry_access_erasure (id : SkbId) (msg : List UInt8)
     (src : SkbSource) (ds : Nat) :
     ErasesPrefix (Lifetimes.enqueuePerDeviceAndPeerRxPrefix id) (enqueuePerDeviceAndPeerRx id) ∧
@@ -970,7 +971,8 @@ theorem receive_completion_allocation_access_preserves (pid : PeerId) (pkt : RxP
     Lifetimes.allocationTx Lifetimes.allocationRx pid pkt e
 
 /-- The whole original NAPI poll is observed for arbitrary budgets and Worlds,
-provided the named callback observer erases to its original callback. -/
+provided the named stack callback observer erases to its original callback,
+including the GRO batch flushes inside the poll and the completion flush. -/
 theorem receive_poll_access_erasure (pid : PeerId) (budget : Nat)
     (callback : List (List UInt8) → Lifetimes.MixedM Unit)
     (original : List (List UInt8) → M Unit)

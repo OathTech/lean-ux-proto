@@ -158,6 +158,22 @@ one `wg_batch` cannot let the consumer ahead (the kworkers run after
 `io_uring_enter`), but a first batch that completes a batch of 16 consumes
 does, and yields zero drops.
 
+### The receive twin, pending (2026-10-13)
+
+The receive correspondence audit's F1 (`docs/2026-10-13-audit-receive.md`)
+found `wg_packet_consume_data`'s `-ENOSPC` arm (receive.c:534-539, the
+peer's `rx_queue` at `MAX_QUEUED_PACKETS`) ending in an `invariant` stop;
+the mirror now has the C's puts and silent free. Its trace,
+`w7_ring_rx_1025` (`rx_1025_pending` in `scripts/wg-w47-corpus.py`: 1025
+keepalive-sized data messages in one batch, since the guest's `MAX_PAYLOAD`
+of 65536 bytes cannot carry 1025 inner datagrams), runs on Linux (the
+1025th dropped silently, 15.6 s) and is in domain for the mirror, but the
+1024 inline NAPI polls that follow meet the (c') placement ambiguity 1019
+times, beyond the protocol's bound of 64 open polls per trace
+(`evaluator/protocol.py`), so the check reports `invalid_output`. It is not
+written into the tier until the placement machinery scales or a record
+settles (c').
+
 ## Estimate and the actual cost
 
 The reconnaissance estimated about 1.0 WU, half of it a control-flow

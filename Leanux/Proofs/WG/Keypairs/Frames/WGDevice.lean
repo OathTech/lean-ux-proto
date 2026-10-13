@@ -175,10 +175,10 @@ theorem wgXmit_spec (P : Snapshot → Prop) (hp : Stable P) (family addr : Nat) 
     ⦃fun w => ⌜P (snapshot w)⌝⦄ (wgXmit family addr pkts mtu)
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (wgXmit_ordinary family addr pkts mtu).wp P hp
 
-theorem setMtu_sameSnapshot (mtu : Nat) : SameSnapshot (setMtu mtu) := by
+theorem setMtu_sameSnapshot (mtu : Int) : SameSnapshot (setMtu mtu) := by
   frame_same [setMtu] using []
 
-theorem setMtu_spec (P : Snapshot → Prop) (mtu : Nat) :
+theorem setMtu_spec (P : Snapshot → Prop) (mtu : Int) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ (setMtu mtu)
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (setMtu_sameSnapshot mtu).wp P
 

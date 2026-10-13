@@ -48,12 +48,15 @@ theorem peerFocus_preserves (hg : PrefixPreserves Peers.AccessInv AccessEvent.Sa
 theorem peerPut_otherResidents (id : Option PeerId) : SameView otherResidents (peerPut id) := by
   apply SameView.of_wp
   intro s
+  simp only [peerPut, indexRemove_eq, indexUnhash]
   mvcgen [peerPut, requireNotPending, getPeer, getDev, getK, setPeer,
     modifyDev, modifyK, refcountDecAndTest, branch, branchCmp,
     indexRemove, retirePeerUnits, invariant, unsupported]
   all_goals dsimp +zetaDelta only at *
   all_goals unfold otherResidents at *
   all_goals unfold keypairResidents packetResidents at *
+  all_goals simp_all
+  all_goals subst_vars
   all_goals simp_all
 
 theorem peerPutMixed_preserves (id : Option PeerId) :

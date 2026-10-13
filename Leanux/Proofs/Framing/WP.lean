@@ -1,5 +1,6 @@
 import Leanux.Proofs.Framing.Basic
 import Leanux.Proofs.Framing.Allocation
+import Leanux.Proofs.Framing.Index
 import Std.Tactic.Do
 
 set_option pp.structureInstances false
@@ -131,21 +132,36 @@ theorem keypairGet_preserves (kp : Option KeypairId) (slot stamp : Nat)
   split at hk <;> simp_all
   all_goals grind only
 
+theorem indexUnhash_protected (d : Decision) (hashed : IndexEntry → Bool)
+    (slot stamp : Nat) (counter : ReplayCounter) :
+    ⦃fun w => ⌜Protected slot stamp counter w⌝⦄ indexUnhash d hashed
+    ⦃⇓? _ w => ⌜Protected slot stamp counter w⌝⦄ := by
+  mvcgen [indexUnhash, getDev, getK, branch, modifyDev, modifyK, invariant]
+  all_goals dsimp +zetaDelta only at *
+  all_goals simp_all [Protected]
+  intro d k hd hk hi
+  subst d
+  grind only
+
 theorem keypairPut_preserves (kp : Option KeypairId) (now : Bool) (slot stamp : Nat)
     (counter : ReplayCounter) :
     Preserves (Protected slot stamp counter) (keypairPut kp now) := by
   unfold Preserves
   refine (hoare_iff_triple (keypairPut kp now) _ _).mpr ?_
-  mvcgen [keypairPut, getKeypair, getDev, getK, setKeypair, modifyDev, modifyK,
+  simp only [keypairPut, indexRemoveKeypair_eq]
+  have hu := fun d hashed => indexUnhash_protected d hashed slot stamp counter
+  have hg := fun query => getKeypair_wp query slot stamp counter
+  have hs := fun query k => setKeypair_wp query slot stamp counter k
+  mvcgen [hu, hg, hs, getDev, getK, modifyDev, modifyK,
     branch, branchCmp, refcountDecAndTest, unsupported, invariant]
   all_goals try dsimp +zetaDelta only at *
   all_goals try simp_all [Protected]
+  all_goals try assumption
   all_goals
-    intro d k hd hk hid
+    intro d k x hx hd hk hi
     subst d
-    simp only [Std.TreeMap.getElem?_erase, Std.TreeMap.getElem?_insert] at hk
-    repeat' (split at hk <;> simp_all)
-    all_goals grind only
+    simp only [Std.TreeMap.getElem?_erase] at hk
+    split at hk <;> simp_all
 
 theorem keypairCreate_preserves (pid : PeerId) (slot stamp : Nat)
     (counter : ReplayCounter) :

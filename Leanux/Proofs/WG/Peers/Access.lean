@@ -11,7 +11,7 @@ set_option maxHeartbeats 1000000
 dump-completion callback. Both reads inside peerPut are explicit, including
 requireNotPending's read. Errors retain the prefix already observed. -/
 namespace Leanux.Proofs.WG.Peers
-open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.WG.Lifetimes
+open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.WG.Lifetimes Leanux.Proofs.Framing
 
 abbrev PeerEvent := AccessEvent PeerId Nat
 
@@ -158,7 +158,7 @@ theorem peerPutPrefix_events (peer : Option PeerId) (w : World) (h : List PeerEv
             all_goals simp [peerPutPrefix, peerPutEvents, requireNotPendingPrefix,
               runPrefix_bind, getPeer, getDev, getK,
               hd, hp, hpend, hz, ho, hpos, setPeer, modifyDev, modifyK, refcountDecAndTest,
-              branch, branchCmp, invariant, unsupported, indexRemove, retirePeerUnits, snapshot,
+              branch, branchCmp, invariant, unsupported, indexRemove_eq, indexUnhash, retirePeerUnits, snapshot,
               StateT.run_bind, StateT.run_modify, StateT.run_pure, StateT.run_get,
               Std.TreeMap.getElem?_insert, List.append_assoc]
 
@@ -237,7 +237,7 @@ theorem peerPut_release_snapshot (pid : PeerId) (w w' : World) (p : Peer)
         StateT.run_get] at hr
     · simp [peerPut, requireNotPending, getPeer, getDev, getK, hd, hp, hc, pending,
         setPeer, modifyDev, modifyK, refcountDecAndTest, branch, branchCmp,
-        indexRemove, retirePeerUnits, StateT.run_bind, StateT.run_modify,
+        indexRemove_eq, indexUnhash, retirePeerUnits, StateT.run_bind, StateT.run_modify,
         StateT.run_pure, StateT.run_get] at hr
       cases hr
       apply Store.ext

@@ -173,14 +173,16 @@ theorem original_poll_removal_erasure (pid : PeerId) (budget : Nat)
 /-- The outer poll body removes an initial segment of the current resident's exact
 entry queue, in order, even when a later helper or callback stops. Events are
 emitted after the original two-getter drop. Repeated entry IDs remain possible;
-callback-internal removals are outside this log. This theorem does not assert
+callback-internal removals are outside this log. Successful batch callbacks
+must explicitly retain surviving queues. This theorem does not assert
 packet ownership or stack delivery. -/
 theorem original_poll_removal_prefix (pid : PeerId) (budget : Nat)
     (callback : List (List UInt8) → M Unit) (w : World) (cell : Queues.RxQueueCell)
+    (hcallback : ∀ bytes, Queues.RetainsRx (callback bytes))
     (hc : Queues.rxQueues w pid = some cell) :
     Queues.RemovalPrefix cell.queue.all
       (Logged.runPrefix (Queues.rxPollRemovals pid budget callback) w []).2 :=
-  Queues.rxPollRemovals_prefix pid budget callback w cell hc
+  Queues.rxPollRemovals_prefix pid budget callback w cell hcallback hc
 
 /-- At the outer poll's original two-getter drop site, normal completion
 appends exactly its one skb ID, while a failed update appends nothing. -/
@@ -212,13 +214,19 @@ theorem original_poll_completion_buffer (pid : PeerId) (occurrence : Nat) (id : 
         (.ok (some ⟨occurrence, id, bytes⟩, v), h ++ [.buffered ⟨occurrence, id, bytes⟩]) :=
   Queues.consumeGro_run pid occurrence id pkt endpoint w h
 
-/-- In the complete original poll with the actual stack callback, callback
-entries form a prefix of tagged successful completion buffers. This holds on
-every Stop as well as success, without identifying equal payloads or asserting
-that entering the stack means the stack accepts the packet. -/
-theorem original_poll_callback_prefix (pid : PeerId) (budget : Nat) (w : World) :
-    Queues.GroSafe (Logged.runPrefix (Queues.rxPollGro pid budget) w []).2 :=
-  Queues.rxPollGro_callback_prefix pid budget w
+/-- The former `original_poll_callback_prefix` (2c7a076) is false after real
+GRO landed in f45bde8; GroSafe retains its chronological meaning. This original
+helper equation identifies the cause: a held packet then a normal packet are
+passed to the actual callback in reverse order. ReplayGro separately checks an
+accepted original runner witness. No universal selected-order or conservation
+replacement is claimed by this equation. -/
+theorem original_gro_held_then_normal (callback : List (List UInt8) → M Unit)
+    (held normal : List UInt8) (hh : groTakenAtOnce held = false)
+    (hn : groTakenAtOnce normal = true) :
+    (do let g ← napiGroReceive callback {} held
+        let g ← napiGroReceive callback g normal
+        napiGroFlushAll callback g) = callback [normal, held] :=
+  Queues.held_then_normal callback held normal hh hn
 
 /-- The actual stack forM visits a prefix of its supplied tagged occurrences;
 a failed call retains its own entry event and leaves the suffix unvisited.

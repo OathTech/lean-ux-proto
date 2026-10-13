@@ -3,35 +3,33 @@
 ## Progress
 
 Worktree `.worktrees/proofs-campaign`, branch `proofs/campaign`. The
-[charter](2026-10-13-charter-proof-campaign.md) defines the campaign. Main
-`2c7a076` includes both named prerequisites and has been merged into this
-worktree on the user's landing instruction. The proof gate passes over that
-commit, including the R4 full-ring and receive-queue components, R5 staging
-admission, RX-attempt coverage and both R5 replay witnesses. All registered
-components are current.
-The mirror and kernel match it exactly; R4 and R5's dependent work is now unblocked. No integration into main, push, differential check or guest run.
+[charter](2026-10-13-charter-proof-campaign.md) defines the campaign. Both named
+prerequisites were carried over `2c7a076`; the audit wave at `f45bde8` is now
+carried, with the mirror exactly matching the landed source. All existing
+result rows are current over `f45bde8`; component rows retain their explicit
+open obligations. R5 is resolved through checked Rule Zero counterexamples.
+No integration into main, push, differential check or guest run.
 
 | Result | Progress |
 | --- | --- |
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay and independent review checked. Seccomp frame carry checked. |
 | R2 lifetime safety | Store identities, failure-retaining allocation/release and caller composition cover session/rotation, peer creation, receive entry/maintenance/completion, receive polling with the actual stack callback, transmit entry, TX staging, decrypt iteration and ten socket/cache/loopback calls; stale-cursor finding checked. Remaining callers, lifecycle and whole-run internal-access coverage remain in progress. |
 | R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion, original empty-root, arbitrary-depth empty-child and exact-prefix insertion with sequence wrappers, and total original placement proved. Selected-root graft normal endpoints and rollback effects checked; successful graft representation, general mutation/history and path refinements remain open. Path proofs follow R2. |
-| R4 delivery | The full-ring witness, original enqueue refusal projection, original PrevQueue FIFO/peek/drop laws and retained receive-queue helper frames pass the gate and independent review. Complete receive-completion retention passes the gate and independent review. New checked outer-poll components give removal-prefix order and tagged completion-buffer/actual-callback prefix order, retaining failures. Their local bridge and recorded-schedule delivery/conservation remain open. |
-| R5 key lifetime | Original clock/operand equations, successful RX decryption admission, validator wire limit and zero-timer transport-store frame pass the gate and independent review. TX submission certificates and exact timer-pass observation pass the gate and independent review. Accepted replays show nonce R decrypting before rejection and a packet-held key used after clear in synthetic, incoherent-clock legacy mode. RX-attempt admission, exact coverage and failed-tag endpoints pass the gate and independent review. Admission-to-encryption transport, whole-run attempt composition and coherent-clock post-clearance exclusion remain open. |
+| R4 delivery | Accepted original replay over f45bde8 refutes chronological post-GRO stack order: a held ACK followed by a distinct-flow SYN produces the SYN's RST first under the same key lifetime. Exact current poll erasure and removal-prefix order with an explicit callback queue contract pass the gate, as does the original-helper reorder equation. The former chronological callback theorem is retired, with its predicate unchanged. Selected-order/source-tag closure and pipeline conservation remain open. |
+| R5 key lifetime | Resolved through Rule Zero counterexamples, with 13 positive local contracts. Original/observed replays show nonce R+1 authenticating before rejection, queued transport keepalive encryption after recorded expiry, and packet-held material used after zero/clear before a new handshake. The new time inputs have coherent coarse/jiffies/arm arithmetic; Linux schedule reachability is not claimed. Validated over f45bde8. |
 | R6 flood resistance | Not started. |
 
-**Current validation.** The full proof gate passes 246 build jobs and 206
-terminal statements (ReplayWindow 15, R1 9, R2 116, R3 27, R4 26, R5 13), with only permitted
-axioms. Stock `leanchecker --fresh Leanux.Proofs` passes. The default model
-build passes 60 jobs; the unit tier passes 93 tests in 21.539 seconds with one
-skip. The R1 explicit-record witness and both R2 checkpoint variants pass on
-`2c7a076`, with original/observed JSON equality; the R1 history remains
-`[(1, 8200), (1, 72)]`. The reconstructed/synthetic streams now supply the
-required site-128 end-of-wait records, without adding timer sections. The new
-five-operation R5 wire-limit replay also passes with original/observed JSON
-equality and no validator acceptance. The new synthetic post-clear replay passes
-its original/checkpoint equality, timer-unit and retained-key assertions, as
-detailed below.
+**Last validated mirror: `f45bde8`.** The full proof gate passed 249 build jobs
+and 206 terminal statements (ReplayWindow 15, R1 9, R2 116, R3 27, R4 26,
+R5 13), with only permitted axioms. Stock
+`leanchecker --fresh Leanux.Proofs` passes. The default model build passes
+60 jobs; the unit tier passes 94 tests in 21.624 seconds with one skip.
+Nine sequential original/observed replay checks pass: R1's inclusive floor,
+both R2 stale-cursor variants, R4's GRO reordering, R5's boundary and strict
+counter, delayed encryption, coherent post-clear and legacy post-clear cases.
+Each asserts its witness and exact original/observed JSON equality. The new
+R4 and R5 streams are generated mirror inputs, not Linux captures; their
+scope and provenance are recorded below.
 Independent reviews cover peer creation, the seccomp carry, mixed enqueue,
 decrypt execution, keypair/packet releases, ambient caller composition,
 allocation and release-bound composition, session creation and rotation,
@@ -41,7 +39,7 @@ insertion, original empty-root and arbitrary-depth empty-child insertion with
 its wrapper, exact-prefix replacement, list deletion, placement and selected-root
 graft endpoints/rollback, saved-peer scans, the ten-call socket family,
 transmit entry, actual stack/poll composition, the prerequisite carry, and the
-full-ring, receive-queue, complete receive-completion and outer-poll components, R5 receive/key-time, RX attempt and TX admission components, and both
+full-ring, receive-queue, complete receive-completion and outer-poll components, R5 receive/key-time, RX attempt and TX admission components, and the
 R5 replays with the timer-pass observer.
 The final source and contract reviews have no unresolved correctness findings;
 their frozen file hashes matched before the checkpoints.
@@ -68,6 +66,20 @@ interrupted build's completion handle was unavailable; its log reported a
 normal proof failure, and subsequent collected builds and the gate passed.
 The earlier transmit/stack implementation used five local attempts before this
 carry. No cap was hit. R4/R5 property proofs are separate from these frames.
+
+**Audit carry.** The index-unhash equations retain both the recorded decision
+and missing-device failure; cookie frames retain rotation's extra clock and
+randomness. Signed MTU and initiation-consumption inputs use the landed types.
+Receive refusal now accounts for the C-shaped puts and packet free. Logged
+polls retain the actual GRO batches, held packets and callback timing.
+Independent source reviews covered the shared frames, R2 caller repairs and
+R4 erasure/order work; all findings were corrected and frozen source hashes
+reconciled. The R4 chronology claim failed and is reported below rather than
+carried as a theorem. This checkpoint used fourteen root carry builds, six R2
+builds and sixteen R4 builds/probes before the final passing gates and nine
+witness reruns; intermediate failures were ordinary proof or assertion failures,
+with no cap or interruption. Temporary logs and generated axiom files were
+removed after checking their collected exit statuses.
 
 ## R1 — anti-replay uniqueness and the inclusive floor
 
@@ -218,7 +230,8 @@ clock failure, and allocation/write before peer initialization's first cache
 clock failure. Receive queue-record failure retains exactly five accesses,
 including the packet setter's nested read. These equations are not accepted-run
 witnesses. Lookup preserves the first matching index's exit even if its kind is
-wrong; receive entry preserves the ENOSPC Stop and EPIPE's pure callback.
+wrong; receive entry preserves ENOSPC's keypair put, peer put and packet free,
+and EPIPE's pure callback.
 Handshake-completion clock failure retains four accesses before the Stop.
 The timer guard's nested peer getter is evaluated unconditionally before
 `andM`; its observer preserves that elaborated order. Coverage is
@@ -230,8 +243,9 @@ Stop after an earlier free. The keepalive allocation-record failure equation
 retains its initial peer read. Plain staged packet values have no resident
 TX/RX store identity until `newTxSkb` runs. Shared filesystem frames
 also end at return, leaving queued task work for its later caller proof.
-The poll retains both `dropPeeked` getters, releases keypair then peer then RX
-packet, and invokes its callback only after the final peer update. Its budget
+The poll retains both `dropPeeked` getters and releases keypair then peer then RX
+packet. GRO invokes batch callbacks before the current packet's cleanup and
+flushes the remaining GRO state after the final peer update. Its budget
 and malformed-queue Stops remain in domain. An exact empty-bitmap failure equation
 retains the validator's initial keypair read and no write; this is an original
 getter-conditioned failure, not an accepted-trace finding. Safe access prefixes
@@ -504,7 +518,9 @@ four frozen modules, exports and report/register found no unresolved issue;
 reviewed source hashes matched. Named temporary logs and axiom outputs were
 removed after collection. Reproduce with the proof gate command above.
 
-**Outer poll and stack callback components.** `RxPollPrimitives` names exactly
+**Outer poll and stack callback components over 2c7a076.** The following describes
+the earlier checked component; the f45bde8 carry and invalidated chronological
+claim are recorded immediately below. `RxPollPrimitives` names exactly
 original peek/cache and two-getter drop sequences. `RxPollPrefix` observes the
 outer poll body's explicit drop site, emitting only after the update succeeds.
 Its exact local run law appends one ID on success and none on failure. Its
@@ -539,9 +555,81 @@ separate at their actual source boundaries, with failure-retaining histories.
 Use explicit ordinal/skb/payload records for buffered entries, rather than
 identifying occurrences by nonce or payload equality. All additions are proof-side.
 
-**Remaining local bridge.** The two complete observers currently have separate
-invariants: entry-queue removal-prefix order, and callback-entry prefix order
-relative to completion buffers. Two links remain open: buffered tags must form
+**GRO audit carry and Rule Zero finding (f45bde8).** The original wording was
+"callback entries form a prefix of tagged successful completion buffers",
+exported as `original_poll_callback_prefix` over `2c7a076`. Real GRO invalidates
+that chronological statement. `GroSafe` retains its original definition; the
+false whole-poll theorem is retired, not silently assigned a different meaning.
+
+`docs/proof-campaign-replay.py r4-gro-reorder` constructs six operations with
+explicit records. The batch receives nonce 0 carrying a one-byte ACK-only TCP
+segment (source port 40001, destination 80), then nonce 1 carrying a SYN on a
+different flow (source port 40002, destination 443). Both share one peer and key
+allocation lifetime. `DeliveryOrder/ReplayGro.lean` checks original
+`executeTrace trace false` acceptance, identical checkpoint/acceptance-observer
+JSON, exact validator history `(lifetime, 0), (lifetime, 1)`, and the input
+ciphertexts against that lifetime's receiving key. The actual output appends
+the SYN's RST encrypted with outgoing nonce 1, then the ACK's RST with nonce 2;
+both byte-exact ciphertexts also occur in the original runner's final observable
+rows. Peer/key lifetime preservation, counters and receive-store cleanup are
+checked. These are generated accepted mirror inputs, not a Linux capture or
+proof of kernel schedule reachability.
+
+The source mechanism is GRO selection: the first segment remains held while
+the SYN enters the normal list; completion appends the held segment behind it.
+The original-helper theorem `original_gro_held_then_normal` proves precisely
+`napiGroReceive H; napiGroReceive N; napiGroFlushAll = callback [N,H]`, assuming
+the original byte classifier holds H and takes N normally. This is a design
+nuance at the post-GRO stack boundary, not evidence that WireGuard's receive
+queue or decrypt FIFO reversed. C source agrees on the different-flow inputs,
+with a nonempty held ACK payload and a header-only SYN
+(tcp_offload.c:261,318,379-381; gro.h:528;
+dev.c:6385,6388). Two other source-reading concerns remain separate and
+unconfirmed: the classifier ignores the zero-payload `len < mss` flush, and it
+does not inspect an existing same-flow held segment on the normal arm. Neither
+is reported as a differential finding.
+
+`Queues/GroState` carries tagged `rxList`, `rxCount` and `held` through all four
+original helpers. Their erasure and the complete tagged poll's erasure preserve
+every result, successful World and Stop, without a validity premise. Callbacks
+now run at batch flushes inside the loop and at completion. The removal-prefix
+theorem therefore explicitly requires every successful callback to `RetainsRx`;
+the old arbitrary-callback premise is no longer valid. The concrete stack's
+queue-frame discharge remains open. The completion event still means a
+successful `consumeDataDone` output, before GRO admission; a second held offer
+can be observed before GRO refuses it. It is not silently classified as a drop
+or as a resident queued item.
+
+The distinct replacement predicate `SelectedGroSafe` specifies a visited prefix
+of normal completion offers followed by held offers, each class in its source
+order. Its universal whole-poll theorem is still open. The original per-list
+actual-callback visited-prefix theorem remains checked, including a failed
+call's entry and the unvisited suffix. Reproduce the accepted witness with:
+
+```sh
+capped -- scripts/in-bundle sh -c 'python3 -B docs/proof-campaign-replay.py r4-gro-reorder | lake env lean --run Leanux/Proofs/WG/DeliveryOrder/ReplayGro.lean'
+```
+
+[AGENT 2026-10-13] Preserve the failed chronological predicate and finding,
+carry observers to actual GRO state, and give any selected-order theorem a
+distinct name. Input/output occurrence provenance and pipeline conservation
+remain obligations rather than consequences of erasure.
+
+**Audit-carry local validation.** The current R4 target passes 156 jobs and
+contains 26 terminal theorems: the former chronological poll export is retired
+and the original-helper reorder equation has a distinct name. Sixteen capped
+build/probe invocations comprise five passes and eleven ordinary compilation
+or assertion failures, all corrected and collected. The replay's final run
+passes every exact assertion above. Independent read-only review of its frozen
+generator and checker found no correctness defect and confirmed the scope is
+post-GRO stack order on generated accepted mirror inputs. No interruption or
+cap failure occurred. The subsequent whole-tree gate and fresh kernel replay pass, as recorded
+in the progress section.
+
+**Remaining local bridge.** The complete observers still have separate
+contracts: callback-framed entry-queue removal-prefix order and exact tagged
+GRO erasure. Besides the selected-order invariant, two links remain open:
+buffered tags must form
 a subsequence of `rxPollGro`'s own removed tags, with distinct ordinals, and
 those removed tags must agree with the `rxPollRemovals` log. Event counts and
 composition with receive enqueue and recorded scheduler activations also remain
@@ -552,7 +640,7 @@ whole-schedule ordering or speculation/rollback claim follows from these local
 components. The scheduler's discarded activation trials must eventually discard
 history together with their trial Worlds.
 
-**Outer-poll effort and current validation.** Thirty sequential capped local
+**Earlier outer-poll effort and validation (2c7a076).** Thirty sequential capped local
 build/elaboration invocations over about twenty-three minutes comprised eleven
 passes and nineteen ordinary compilation failures, all collected. The failures
 were proof elaboration, tuple/continuation matching and simplifier issues; none
@@ -619,208 +707,135 @@ proof-side named boundaries plus projected accumulator erasure handle the poll
 without a mirror change.
 
 
-## R5 — receive admission and key-time boundaries (in progress)
+## R5 — key lifetime enforcement: Rule Zero findings
 
-**Checked component.** `KeyTimes/Clock` gives exact run equivalences for
-`birthdateTest` and `branchExpired`: the original clock consumer's result,
-the wrapped `Int64` deadline, the signed comparison, both integer operands
-and the complete comparison-record World. Equality is expired. No range or
-no-wrap premise replaces the original operation. The contracts also hold in
-placeholder mode with that consumer's value; an explicit-record execution
-uses its consumed clock word.
+**Disposition.** The original unconditional encryption-age and post-zero-use
+claims are false in the mirror's accepted-record domain. Authenticated reception
+also precedes the packet's wire-counter limit check. These findings resolve R5
+under Rule Zero; the original statement remains unproved. The thirteen positive
+local contracts below describe the boundaries the code actually enforces.
+They do not assert universal transport of TX admission certificates through
+all subsequent operations, or whole-run AEAD observation coverage.
 
-`KeyTimes/Receive` factors the original `decryptPacket` definition by a
-checked equality, keeping the rejection expression and remaining body intact.
-Every successful authenticated decryption recovers its original entry keypair
-lookup, receiving validity, stored receiving counter strictly below
-`REJECT_AFTER_MESSAGES`, and the exact original clock-read execution after
-the two preceding branch records. The clock's comparison must be unexpired.
-The guard contract separately holds without assuming successful authentication.
-Those two contracts alone do not observe all AEAD attempts; the new observer
-below covers that local boundary. The later
-original `counterValidate` can return true only for a wire nonce strictly
-below the limit, without a bitmap-shape or entry-residency premise.
+| Original wording | Checked result and reason |
+| --- | --- |
+| No data encryption or decryption under a key older than `REJECT_AFTER_TIME` | RX attempts require an actual unexpired recorded comparison. TX checks age at staging; an already admitted transport keepalive can encrypt after a later recorded expiry. |
+| No use past `REJECT_AFTER_MESSAGES` on its counter | RX checks the stored receiving counter before AEAD, then checks the packet's wire nonce during replay validation. Nonces R and R+1 authenticate before rejection. This refutes the wire-nonce reading, not the stored-counter guard. TX staging certificates bound assigned nonces strictly below R. |
+| No peer key-material use after its zero timer until a new handshake | The timer queues clear work. Even after that work removes the published slots and index, a queued packet's reference retains the same material until encryption/transmission releases it. |
 
-**RX attempt extension.** `KeyTimes/ReceiveAttempts` captures
-the original key lookup and rejection-guard executions and emits immediately
-before the original AEAD suffix, after allocation and fragment checks. The
-observed packet and captured key determine the exact wire nonce, ciphertext
-and key bytes passed to AEAD. All-input erasure retains the complete original
-return World or exact Stop. Every event carries a valid receiving key, stored
-counter below R and an actual unexpired recorded-clock execution, with no
-residency invariant or authentication-success premise.
+The time witnesses use **type-4 transport keepalives with empty plaintext**,
+not nonempty inner IP payloads. All are generated/reconstructed accepted mirror
+inputs, not new Linux captures or evidence that Linux can realize their schedules.
+The mechanisms match Linux `receive.c:242–331`, `send.c:162–219,342–414`,
+`noise.c:112–177` and `timers.c:105–133`: authentication before replay validation,
+admission-time TX checks, and reference-counted clearance. We judge these
+boundaries to be design nuances, not demonstrated Linux security defects.
 
-Coverage is an exact equation, not only a conditional property of emitted
-events: successful original getter, false guard and `skbCowDataRx = true`
-produce exactly one event. A separate failed-tag equation returns `none`,
-keeps that same event, and identifies the exact four preparation/authentication
-branch records after allocation. Guard rejection and allocation failure still
-follow the source before the event. The shared failure-retaining observation
-semantics preserve it when a later enclosing continuation stops. This is one
-original `decryptPacket` call; composing attempt histories through workers,
-scheduling and the whole runner remains open. It neither bounds the packet's
-wire nonce nor proves acceptance or delivery.
+**Architecture and refinement.** `KeyTimes/Clock` proves exact original
+`birthdateTest`/`branchExpired` executions, including wrapped signed64 deadlines,
+actual clock-consumption Worlds and comparison operands. Equality is expired.
+`Receive` factors original decryption by equality and recovers the successful
+entry key lookup, validity, stored counter and unexpired clock. The later original
+validator's true return implies a wire nonce below R, without bitmap-shape premises.
 
-`KeyTimes/ZeroTimer` projects the entire transport-keypair store, including
-key bytes: the original zero-key timer callback preserves it on every normal
-return. Its live, unqueued arm queues separate clear work; this frame proves
-neither that the worker ran nor that later key use is excluded.
+`ReceiveAttempts` emits immediately before actual AEAD, after the original getter,
+guard, allocation and fragment checks. All-input erasure preserves the complete
+World or exact Stop. Every event satisfies admission, including failed tags;
+exact singleton coverage and the failed-authentication endpoint prevent a
+vacuous empty-log result. `Staging` similarly emits after the original allocation
+map, immediately before `createData` receives its IDs. Certificates retain actual
+key/clock/allocation executions and bounded assigned arguments on a later Stop.
+They do not prove the later store contents or immutable material transport.
+`ZeroTimer` frames the entire transport-keypair store through the original callback.
 
-**Checked TX admission component.** `KeyTimes/Staging` follows the
-original `sendStagedPackets` and emits one batch after its original
-`packetsCb.mapM newTxSkb` succeeds, immediately before `createData` receives
-the returned IDs. All-input erasure preserves the entire normal-return World
-and exact Stop. Every emitted certificate contains successful executions of
-the actual original key getter, clock consumer and allocation map, the
-initial key's sending validity and unexpired signed deadline, and the
-peer/keypair fields and strict nonce bound of every allocated argument.
-The observation survives a failure in subsequent submission. Empty staging,
-key/age rejection, nonce rejection and allocation failure follow the original
-paths; no certificate is emitted before allocation completes. Thus an empty
-observation does not rule out partial allocation effects before a Stop.
+The shared `Logged/TimerPass` observer records completed original timer, clear,
+send-worker and crypt-scheduler units, with exact result/World/Stop erasure.
+The runtime witnesses reconstruct the literal next-operation reset from an
+accepted runner checkpoint, execute the original advance where present, and
+compare the observed timer endpoint with the accepted runner's final Kernel.
+Crypt observations are scheduler calls, not per-packet AEAD events. Each time
+witness checks the retained packet/material and a newly appearing exact ciphertext.
 
-These certificates are attached to source arguments and the completed map,
-not to hypothetical comparison values. They do not establish final packet-store
-contents or immutable key material through later work. The source increments
-`sendingCounter` before checking the assigned nonce: admitting nonce `R - 1`
-may therefore leave the mutable counter at `R`. A strict bound on that later
-counter is not the admission contract. Shared `Logged/Capture` supplies exact
-run witnesses and erasure/contracts; `Logged/PrefixLoops` supplies the list
-accumulator invariant. Neither adds history to mirror state.
+**Counter witness.** `r5-rx-wire-limit` reconstructs the tracked five-operation
+session and an existing authenticated nonce-R packet. `r5-rx-wire-past-limit`
+derives that same session with the harness's Noise helper, checks its response
+against the tracked response, and generates authenticated nonce R+1. Here
+`R = 18446744073709543486`. Both original and validator-observed runners accept
+with equal JSON. Their final stored-counter operands are `[0,R]`; AEAD succeeds;
+the subsequent validator rejects `[R,R]` or `[R+1,R]`; the acceptance history
+is empty. This is decryption followed by an explicit drop, not delivery.
 
-**Original wording and precise boundary.** The charter says no encrypt or
-decrypt under a keypair older than `REJECT_AFTER_TIME` or “past
-`REJECT_AFTER_MESSAGES` on its counter.” The proved receive wording is:
-*every AEAD attempt passes the key's stored-counter and recorded-age gates;
-subsequent validator acceptance passes the packet's wire-counter gate*.
-The interpretation “wire nonce strictly below R before decryption” is false.
-The witness below uses equality at R, so it does not refute a strict
-“wire nonce greater than R” reading or the stored-counter reading. This is
-an intentional separation visible in Linux `receive.c:242–331`, not a mirror
-mismatch. TX checks age and assigned nonce while staging; carrying that
-admission to the later encryption call remains open. The unconditional
-post-zero-timer prohibition is false for accepted legacy-mode mirror inputs,
-as the separate post-clear replay below shows. Exclusion for physically
-coherent clocks remains unproved.
+**Time witness.** `r5-delayed-encryption` establishes a session born at 132 seconds
+and uses two nonempty receives to set the keepalive timer's second-fire flag.
+The first callback admits nonce 1 at 311 seconds, with age operands
+`[312000000000,311000000000]`, and rearms the timer. The next callback records
+`[312000000000,322000000000]`, invalidates sending, stages another keepalive and
+queues a handshake. Before that handshake runs, the crypt worker encrypts and
+transmits the earlier packet using unchanged key material. Exact unit order,
+packet identity, complete key value, reference counts and ciphertext arrival
+are asserted against original executions.
 
-**Concrete boundary replay.** `r5-rx-wire-limit` reconstructs a five-operation
-explicit-record input from `CONTENDED_ROAM_CMP`, the existing
-`d2_rx_reject_after_messages` ciphertext, and synthetic monotone end-of-wait
-bounds. It is not a new Linux capture. The original runner and the proved
-validator observer both accept it and produce equal JSON. At the final
-operation, the stored-counter check has operands `[0, R]` and passes; the
-age comparison has operands `[312288452009, 132804484259]` and is unexpired.
-AEAD succeeds and the decrypt worker marks the packet decrypted. The later
-validator sees operands `[R, R]`, rejects the wire nonce, and RX polling
-records the counter-invalid drop. The acceptance history is empty, so this
-is successful decryption followed by rejection, not delivery or an accepted
-counter at the limit. Here `R = 18446744073709543486`.
+**Post-clear witness.** `r5-coherent-post-clear` follows the same seven-operation
+construction, with the second expiry comparison at 673 seconds. The zero timer
+(expiry 132+540=672 seconds) and actual clear worker then run before crypt.
+After clear, all three peer keypair slots are empty, the key index is absent,
+and handshake state is zero. The same allocated packet retains exactly one
+reference to the same key material. Its new ciphertext appears before the
+queued handshake worker; transmission removes the packet and final key reference.
+No new handshake intervenes. The older `r5-post-clear-transport` remains a separate
+five-operation legacy-mode witness with deliberately incoherent coarse/jiffies
+clocks and disabled arm records; its provenance is not upgraded by the new case.
+
+The two new time variants enable arm records and check monotonically ordered
+coarse-nanosecond and UInt64-jiffies words, exact timer delays and the relation
+`J(t) = 2^32 - 75000 + 250*t`. Their windows end at 323 and 674 seconds via
+site 128 (kind 310). Queue-work and timer identities are explicit and stable.
+The later TAI read also advances by the elapsed coarse seconds. This arithmetic
+coherence does **not** establish kernel scheduling reachability; the original
+runner's accepted domain is the claim being tested. Cache-clock records remain
+disabled. The second callback may run long after its expiry, as accepted by the
+mirror's recorded timer-window rule.
 
 ```sh
 set -o pipefail
-python3 -B docs/proof-campaign-replay.py r5-rx-wire-limit |
+python3 -B docs/proof-campaign-replay.py r5-rx-wire-past-limit |
   capped -- scripts/in-bundle lake env lean --run Leanux/Proofs/WG/KeyLifetime/Replay.lean
+python3 -B docs/proof-campaign-replay.py r5-delayed-encryption |
+  capped -- scripts/in-bundle lake env lean --run Leanux/Proofs/WG/KeyLifetime/ReplayDelayed.lean
+python3 -B docs/proof-campaign-replay.py r5-coherent-post-clear |
+  capped -- scripts/in-bundle lake env lean --run Leanux/Proofs/WG/KeyLifetime/ReplayDelayed.lean
 ```
 
-**Validated receive/key-time checkpoint.** The reproduction passed with exit 0 in 0.837 seconds.
-Six terminal theorems compile and the complete `LeanuxProofs` target passes
-228 jobs. Seventeen capped build invocations comprised ten ordinary proof
-failures and seven passes; no cap was hit and no process was interrupted.
-The proof gate passes 180 terminal statements with only permitted axioms;
-stock kernel replay, the 60-job model build and 93-test unit tier pass.
-Independent review checked the exact source contracts, statement scope and
-replay provenance with no correctness finding. Its stale validation-label
-finding was corrected by this completed-check update. Frozen code hashes
-match the review. No mirror, kernel or harness change was made.
+For the earlier cases, use `r5-rx-wire-limit` with `Replay.lean`, or
+`r5-post-clear-transport` with `ReplayPostClear.lean`.
 
-[AGENT 2026-10-13] Keep this first R5 layer at original operation boundaries:
-exact clock executions, receive admission and the callback's immediate store
-frame. Defer TX admission transport and post-clearance schedule exclusion
-instead of inferring them from the identity frames.
+**Effort and validation.** Earlier local proof checkpoints used 17 receive/time
+builds (10 ordinary failures), 10 staging builds (6 failures), 4 RX-attempt builds
+(1 failure), and 4 timer-observer builds (2 failures); their gates, stock kernel
+replay, model build, units and independent reviews passed. This extension used
+13 replay executions: eight passed, two failed on Lean syntax, and three rejected
+incorrect generated record placement/jitter. All five final reproductions pass:
+0.838s, 0.862s, 8.566s, 8.437s and 2.018s respectively for boundary, strict counter,
+delayed, post-clear with arm records, and legacy post-clear. Original/observed
+JSON equality and all assertions pass in each. One provider interruption left
+no running job; every dirty worktree was preserved to snapshot refs before
+further edits. No cap was hit. The first checkpoint gate failed because its forbidden-token
+scan found the word `admit` in a replay diagnostic string; that wording was
+corrected. The proof gate now passes 246 build jobs and all 206 terminal
+statements with permitted axioms only. The unit tier passes 93 tests in 22.231s
+with one skip. Stock fresh kernel replay and the 60-job model build pass.
+Independent source, assertion and report review found no unresolved defect;
+its wording findings were corrected and frozen hashes matched before commit.
+The mirror remains byte-identical to main `2c7a076`. No QEMU, differential
+check, integration into main or push was performed.
 
-[AGENT 2026-10-13] Certify TX staging at its actual completed allocation /
-submission boundary using exact captured original runs. Keep later store,
-identity, key-material and scheduled-encryption transport as explicit follow-on
-obligations; preserve source early-return and failure behavior.
+[AGENT 2026-10-13] Resolve R5's false original statement through the accepted
+counterexamples permitted by Rule Zero. Keep the positive local contracts at
+their proved boundaries; stronger replacement transport theorems are follow-on
+work, not claims of this result. Distinguish generated clock arithmetic from
+measured kernel execution.
 
-**TX extension validation.** Eight R5 terminal theorems compile, and the full
-`LeanuxProofs` target passes 230 jobs. Ten capped build invocations over about
-16 minutes comprised six ordinary proof failures and four passes; all exits
-were collected, no cap was hit and no process was interrupted. The extension's
-combined checkpoint passes the proof gate (183 statements, 231 build jobs),
-stock kernel replay, the 60-job model build and 93-test unit tier.
-Independent review found no mathematical or source-refinement defect. Its
-duplicated report-paragraph finding was corrected before handoff.
-
-[AGENT 2026-10-13] Observe original receive attempts immediately before AEAD,
-using exact getter/guard execution witnesses and singleton coverage independent
-of authentication success. Keep whole-run composition separate from this local
-source contract; do not infer a wire-nonce bound from the stored-counter gate.
-
-**RX attempt validation.** Thirteen R5 terminal theorems compile, and the full
-`LeanuxProofs` target passes 235 jobs. Four capped builds comprised one ordinary
-proof failure and three passes over 4m57s; every exit was collected, with no
-cap hit or interruption. The proof gate passes all 196 terminal statements
-with only permitted axioms; stock kernel replay, the 60-job model build and
-93-test unit tier pass. Independent review of the frozen source and report
-found no unresolved issue. The named build log was removed after collection.
-
-**Rule Zero: post-clear use in the accepted-input domain.** The charter's
-wording forbids peer key-material use after its zero timer fires until a new
-handshake. `r5-post-clear-transport` is an accepted five-operation input:
-the first four operations establish the captured session, and `wg_observe`
-replays persistent keepalive admission, the zero timer, the actual clear
-worker, then encryption and transmission. The admitted nonce is 1. Immediately
-after clear, the current/next/previous peer slots are empty, its handshake
-state is zero and the keypair index is gone. The packet still holds lifetime
-1 with reference count 1 and exactly the original key material. The later
-crypt scheduler produces the expected ciphertext under that retained key,
-then releases both packet and keypair; no new handshake intervenes.
-
-This is a **synthetic runner-domain finding, not a Linux execution**. It
-deliberately copies an unexpired coarse-clock read while the end-of-wait
-jiffies word makes both timers due, and sets `arm_records=false` and
-`dst_cache_records=false` for legacy replay mode. The admission comparison
-is `[312288452009, 132288452009]`; the end bound is 135005. Those clocks are
-not asserted physically coherent. The mechanism of retaining material while
-an in-flight packet owns a reference matches `keypair_put`/`keypairs_clear`
-in Linux `noise.c:112–177`; it is reference-counted lifetime behavior. This
-witness establishes neither a Linux security bug nor reachability with
-coherent recorded clocks. A clock/schedule premise is needed for that stronger
-interpretation; the callback's name alone cannot establish revocation.
-
-The replay asserts full original/checkpoint JSON equality. `Logged/TimerPass`
-additionally observes completed original timer/worker/scheduler calls, with
-all-input result/World/Stop erasure and an exact unit-emission equation.
-From the original session checkpoint, the replay reconstructs the literal
-next-operation reset and runs that observer at the original timer-pass entry.
-It checks the after-clear store, packet and key bytes, scheduler entry,
-derived ciphertext and final releases. Its final Kernel equals the accepted
-runner checkpoint, and only the caller's end-of-wait word remains. Original
-branch order independently shows clear's retained reference, encryption,
-transmission and final keypair release. Crypt observations include the final
-empty scheduler call; they are not per-packet AEAD events.
-
-```sh
-set -o pipefail
-python3 -B docs/proof-campaign-replay.py r5-post-clear-transport |
-  capped -- scripts/in-bundle lake env lean --run Leanux/Proofs/WG/KeyLifetime/ReplayPostClear.lean
-```
-
-The original-run probe and the completed assertion replay passed. The timer
-observer took four capped module builds: two ordinary proof failures and two
-passes; the standalone assertion replay had one syntax failure before its
-passing run. No cap hit, interruption or mirror change occurred. The combined
-gate, stock kernel replay, model build and unit tier pass. Independent review
-checked source correspondence, exact entry reconstruction, assertions and
-provenance; no finding remains.
-
-[AGENT 2026-10-13] Keep the post-clear finding scoped to the accepted legacy
-record domain and expose its incoherent-clock trigger. Use exact timer-unit
-observations to inspect the retained reference; do not infer Linux reachability
-or a general AEAD event history from it.
-
-**Ranked mirror-shape recommendations.** None from this component. The
-landed signed clock helper and operand-bearing branch expose the required
-semantics directly. A proof-specific age guard in the later encryption
-worker would alter the C's control flow and is not altitude-preserving.
+**Ranked mirror-shape recommendations.** None is required for these findings.
+The landed signed clock helpers and operand-bearing branches expose the relevant
+semantics. Adding a proof-motivated age guard to the later encrypt worker would
+change the C's control flow and is not altitude-preserving.

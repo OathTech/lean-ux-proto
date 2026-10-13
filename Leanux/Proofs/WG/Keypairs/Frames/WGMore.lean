@@ -301,7 +301,7 @@ theorem lookupSrc_spec (P : Snapshot → Prop) (protocol : Nat) (bytes : List UI
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (lookupSrc_sameSnapshot protocol bytes).wp P
 
 theorem makeCookie_sameSnapshot (src : SkbSource) : SameSnapshot (Leanux.WG.makeCookie src) := by
-  frame_same [Leanux.WG.makeCookie] using [getDev_spec, hiddenClock_spec]
+  frame_same [Leanux.WG.makeCookie] using [getDev_spec, branchExpired_spec, hiddenClock64_spec, hidden_snapshot_spec]
 
 theorem makeCookie_spec (P : Snapshot → Prop) (src : SkbSource) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.makeCookie src
@@ -378,7 +378,7 @@ theorem validateHeaderLen_spec (P : Snapshot → Prop) (msg : List UInt8) :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (validateHeaderLen_sameSnapshot msg).wp P
 
 theorem consumeData_ordinary (msg : List UInt8) (src : SkbSource) (ds : Nat) : OrdinaryAction (Leanux.WG.consumeData msg src ds) := by
-  frame_ordinary [Leanux.WG.consumeData] using [enqueuePerDeviceAndPeerRx_spec, enqueuePerPeerRx_pure_spec, getPeer_spec, indexLookup_spec, keypairGetCurrent_spec, keypairGet_snapshot_spec, peerPut_spec, newRxSkb_spec] ordinary [keypairPut_ordinary_spec]
+  frame_ordinary [Leanux.WG.consumeData] using [freeRxSkb_spec, enqueuePerDeviceAndPeerRx_spec, enqueuePerPeerRx_pure_spec, getPeer_spec, indexLookup_spec, keypairGetCurrent_spec, keypairGet_snapshot_spec, peerPut_spec, newRxSkb_spec] ordinary [keypairPut_ordinary_spec]
 
 theorem consumeData_spec (P : Snapshot → Prop) (hp : Stable P) (msg : List UInt8) (src : SkbSource) (ds : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.consumeData msg src ds

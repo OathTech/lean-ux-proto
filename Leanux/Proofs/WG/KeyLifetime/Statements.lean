@@ -5,8 +5,9 @@ import Leanux.Proofs.WG.KeyTimes.Staging
 import Leanux.Proofs.Logged.TimerPass
 
 /-! R5's original receive/staging admission and clock boundaries. These are local
-operation contracts; TX admission-to-encryption transport and post-clearance
-schedule exclusion remain separate obligations. -/
+operation contracts. Accepted-run counterexamples in the accompanying replays
+refute the original unconditional age/use claim; universal TX admission transport
+and whole-run attempt coverage are not asserted here. -/
 namespace Leanux.Proofs.WG.KeyLifetime
 open Leanux Leanux.WG Leanux.Proofs.WG.CounterWindow
 

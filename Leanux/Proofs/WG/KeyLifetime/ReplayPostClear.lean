@@ -84,7 +84,8 @@ def main : IO UInt32 := do
   require (crypt.execution.before.k == cleared.execution.after.k)
     "kernel state changed between clear completion and crypt scheduler entry"
   let expected := dataMessage retained.remoteIndex packet.nonce retained.sending.key []
-  require (crypt.execution.after.senderInbox.any (·.bytes == expected))
+  require (!(crypt.execution.before.senderInbox.any (·.bytes == expected)) &&
+    crypt.execution.after.senderInbox.any (·.bytes == expected))
     "crypt scheduler did not transmit the ciphertext under the retained key"
   let afterCrypt ← getDevice crypt.execution.after
   require (afterCrypt.keypairs[slot]?.isNone && afterCrypt.txSkbs[packetId]?.isNone)

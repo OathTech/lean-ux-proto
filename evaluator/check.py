@@ -65,7 +65,11 @@ NETNS_SHARE = 0.03
 # section-bracket discard must reject — docs/2026-10-05-e-dos.md §4.1)
 # (seccomp X: seccomp-controls, the flags, action and load the mirror stops
 # unsupported on while the kernel runs them — design 9.1; scripts/seccomp-controls.py)
-CONTROL_SUITES = ('steering-controls', 'timer-controls', 'lifecycle-controls', 'underload-controls', 'seccomp-controls')
+# (netlink audit F1, 2026-10-13: netlink-controls, endpoint attributes whose
+# bytes set_peer would read under the other sockaddr layout; the validator
+# refuses them, so the suite loads only before that rule: scripts/wg-netlink-controls.py)
+CONTROL_SUITES = ('steering-controls', 'timer-controls', 'lifecycle-controls', 'underload-controls', 'seccomp-controls',
+                  'netlink-controls')
 # The W7 full-ring tier (docs/2026-10-13-w7-full-ring-tier.md): corpus/w7-tier,
 # the 1024-slot encrypt ring filled by one wg_batch; run on request, outside
 # the default list, since each of its traces is a chunk by itself (a bulk

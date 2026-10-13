@@ -280,6 +280,14 @@ private def parseEndpoint (j : Json) (what : String) : Except String WG.Endpoint
   -- sizeof(struct sockaddr_in) or sizeof(struct sockaddr_in6) unless `len` says otherwise
   let attrLen ← if (optField j "len").isSome then natField j "len" 128 else pure (if family == 4 then 16 else 28)
   if attrLen < 16 then throw s!"{what}.len: below 16 the policy rejects (P8)"
+  -- netlink audit F1 (docs/2026-10-13-audit-netlink.md): `set_peer`
+  -- (netlink.c:441-446) reads the bytes by `len` and `sa_family` alone; one
+  -- family's bytes under the other layout are an endpoint these parsed
+  -- fields cannot express, so the trace is refused (the validator agrees)
+  if family == 4 && af == WG.AF_INET6 && attrLen == 28 then
+    throw s!"{what}: af 10 with len 28 presents family-4 bytes under the sockaddr_in6 layout: not modelled, refused"
+  if family == 6 && af == WG.AF_INET && attrLen == 16 then
+    throw s!"{what}: af 2 with len 16 presents family-6 bytes under the sockaddr_in layout: not modelled, refused"
   pure { len := attrLen, family := af, addr, port, flowinfo, scope }
 
 /-- W1 (harness/wg.py `_allowed_ip`): any subset of `family`, `addr` (4..20
@@ -705,7 +713,9 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
   | "wg_set_mtu" =>
     fields j ["op", "mtu"]
     let mtu ← (← field j "mtu").getNat?
-    if mtu > 65535 then throw "mtu: expected 0-65535"
+    -- the ioctl's `ifr_mtu` is an int the guest fills with `(int)op->a`: a u32
+    -- word, negative to the kernel at or above 2^31 (`Env.setMtu`)
+    if mtu > 0xFFFFFFFF then throw "mtu: expected 0-4294967295"
     return .wgSetMtu mtu
   | _ => throw "unsupported operation"
 

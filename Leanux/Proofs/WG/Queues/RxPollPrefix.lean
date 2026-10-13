@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.Queues.RxPollPrimitives
 import Leanux.Proofs.Logged.PrefixLoops
+import Leanux.Proofs.Logged.PrefixGro
 
 set_option maxHeartbeats 2000000
 set_option pp.structureInstances false
@@ -44,7 +45,7 @@ def rxPollGrouped (pid : PeerId) (budget : Nat)
     (callback : List (List UInt8) → M Unit) : M Nat := do
   if ← branch .rxPollNoBudget (budget == 0) then return 0
   let mut workDone := 0
-  let mut gro : List (List UInt8) := []
+  let mut gro : GroState := {}
   let mut drained := false
   for _ in [0:MAX_QUEUED_PACKETS + 1] do
     let first ← peekRxQueue pid
@@ -64,7 +65,8 @@ def rxPollGrouped (pid : PeerId) (budget : Nat)
         let endpoint ← endpointFromSkb pkt.source
         if !(← branch .rxPollEndpointFailed endpoint.isNone) then
           let some e := endpoint | invariant "unreachable"
-          gro := gro ++ (← consumeDataDone pid pkt e).toList
+          for inner in (← consumeDataDone pid pkt e).toList do
+            gro ← napiGroReceive callback gro inner
           free := false
     keypairPut (some pkt.keypair) false
     peerPut (some pid)
@@ -75,7 +77,7 @@ def rxPollGrouped (pid : PeerId) (budget : Nat)
   if !drained && workDone < budget then invariant "the rx_queue did not drain"
   if ← branch .rxPollComplete (workDone < budget) then
     completeRxQueue pid
-    callback gro
+    napiGroFlushAll callback gro
   else unsupported "a NAPI poll that used its whole budget (a repoll)"
   return workDone
 
@@ -89,7 +91,7 @@ def rxPollRemovals (pid : PeerId) (budget : Nat)
     (callback : List (List UInt8) → M Unit) : PrefixM SkbId Nat := do
   if ← liftPrefix (branch .rxPollNoBudget (budget == 0)) then return 0
   let mut workDone := 0
-  let mut gro : List (List UInt8) := []
+  let mut gro : GroState := {}
   let mut drained := false
   for _ in [0:MAX_QUEUED_PACKETS + 1] do
     let first ← liftPrefix (peekRxQueue pid)
@@ -109,7 +111,8 @@ def rxPollRemovals (pid : PeerId) (budget : Nat)
         let endpoint ← liftPrefix (endpointFromSkb pkt.source)
         if !(← liftPrefix (branch .rxPollEndpointFailed endpoint.isNone)) then
           let some e := endpoint | liftPrefix (invariant "unreachable")
-          gro := gro ++ (← liftPrefix (consumeDataDone pid pkt e)).toList
+          for inner in (← liftPrefix (consumeDataDone pid pkt e)).toList do
+            gro ← napiGroReceivePrefix (fun bytes => liftPrefix (callback bytes)) gro inner
           free := false
     liftPrefix (keypairPut (some pkt.keypair) false)
     liftPrefix (peerPut (some pid))
@@ -120,7 +123,7 @@ def rxPollRemovals (pid : PeerId) (budget : Nat)
   if !drained && workDone < budget then liftPrefix (invariant "the rx_queue did not drain")
   if ← liftPrefix (branch .rxPollComplete (workDone < budget)) then
     liftPrefix (completeRxQueue pid)
-    liftPrefix (callback gro)
+    napiGroFlushAllPrefix (fun bytes => liftPrefix (callback bytes)) gro
   else liftPrefix (unsupported "a NAPI poll that used its whole budget (a repoll)")
   return workDone
 
@@ -132,12 +135,15 @@ theorem rxPollRemovals_erases (pid : PeerId) (budget : Nat)
   rw [← rxPollGrouped_eq]
   unfold rxPollRemovals rxPollGrouped
   repeat' first
+    | with_reducible exact napiGroReceivePrefix_erases _ _ (fun _ => erasesPrefix_lift _) _ _
+    | with_reducible exact napiGroFlushAllPrefix_erases _ _ (fun _ => erasesPrefix_lift _) _
     | with_reducible exact erasesPrefix_lift _
     | with_reducible exact erasesPrefix_pure _
     | with_reducible exact dropRxPrefix_erases _ _
     | with_reducible apply erasesPrefix_ite
     | with_reducible apply erasesPrefix_bind
     | with_reducible apply erasesPrefix_range
+    | with_reducible apply erasesPrefix_forIn
     | (with_reducible intro x; try dsimp only)
     | (with_reducible split)
   all_goals simp_all

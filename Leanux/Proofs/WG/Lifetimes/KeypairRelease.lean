@@ -9,14 +9,18 @@ The index-table filter contains scalar references and resolves no keypair. -/
 namespace Leanux.Proofs.WG.Lifetimes
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
 
-def removeKeypairIndex (id : KeypairId) : M Unit := modifyDev fun d =>
-  { d with indexTable := d.indexTable.filter fun e => e.keypair != some id }
+def removeKeypairIndex (id : KeypairId) : M Unit := indexRemoveKeypair id
 
 theorem removeKeypairIndex_identity (id : KeypairId) : SameView identityView (removeKeypairIndex id) := by
   intro w x v hr
-  cases hr
-  unfold identityView Peers.snapshot keypairResidents packetResidents
-  simp [Option.bind_map, Function.comp_def]
+  cases hd : w.k.wg with
+  | none => simp [removeKeypairIndex, indexRemoveKeypair_eq, indexUnhash, getDev, getK, hd, invariant] at hr
+  | some d =>
+    simp [removeKeypairIndex, indexRemoveKeypair_eq, indexUnhash, getDev, getK, hd, branch,
+      modifyDev, modifyK] at hr
+    cases hr
+    unfold identityView Peers.snapshot keypairResidents packetResidents
+    simp [hd]
 
 /-- This leaf emits a supplied stamp. Its resolved-release interpretation
 requires the current-resident premise in eraseKeypairPrefix_spec. -/
@@ -231,13 +235,13 @@ theorem keypairPutPrefix_events (kp : Option KeypairId) (now : Bool)
         · cases now <;>
             simp [keypairPutPrefix, keypairPutEvents, runPrefix_bind, branch, branchCmp,
               getKeypair, getDev, getK, hd, hk, hz, refcountDecAndTest, unsupported,
-              setKeypair, modifyDev, modifyK, removeKeypairIndex, List.append_assoc]
+              setKeypair, modifyDev, modifyK, removeKeypairIndex, indexRemoveKeypair_eq, indexUnhash, List.append_assoc]
         · by_cases ho : k.refcount = 1
           all_goals have pos : 0 < k.refcount := by omega
           all_goals cases now <;>
             simp [keypairPutPrefix, keypairPutEvents, runPrefix_bind, branch, branchCmp,
               getKeypair, getDev, getK, hd, hk, hz, ho, pos, refcountDecAndTest, unsupported,
-              setKeypair, modifyDev, modifyK, removeKeypairIndex, List.append_assoc]
+              setKeypair, modifyDev, modifyK, removeKeypairIndex, indexRemoveKeypair_eq, indexUnhash, List.append_assoc]
 
 theorem keypairGetPrefix_run (kp : Option KeypairId) (w : World) (h : List LifetimeEvent) :
     runPrefix (keypairGetPrefix kp) w h = ((keypairGet kp).run w, h ++ keypairGetEvents kp w) :=
@@ -260,6 +264,7 @@ theorem keypairPutPrefix_zero_failure (id : KeypairId) (now : Bool)
   rw [keypairPutPrefix_run]
   cases now <;>
     simp [keypairPut, keypairPutEvents, branch, branchCmp, getKeypair, getDev, getK,
-      hd, hk, hz, setKeypair, modifyDev, modifyK, refcountDecAndTest, unsupported]
+      hd, hk, hz, setKeypair, modifyDev, modifyK, refcountDecAndTest, unsupported,
+      indexRemoveKeypair_eq, indexUnhash]
 
 end Leanux.Proofs.WG.Lifetimes

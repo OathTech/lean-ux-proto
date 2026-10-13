@@ -259,7 +259,26 @@ theorem beginSession_spec (P : Snapshot → Prop) (hp : Stable P) (pid : PeerId)
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (beginSession_ordinary pid).wp P hp
 
 theorem consumeInitiation_sameSnapshot (msg : List UInt8) : SameSnapshot (Leanux.WG.consumeInitiation msg) := by
-  frame_same [Leanux.WG.consumeInitiation] using [getDev_spec, getPeer_spec, hiddenClock_spec, hiddenClock64_spec, messageDecrypt_spec, messageEphemeral_spec, mixDh_spec, mixPrecomputedDh_spec, peerPut_spec, pubkeyLookup_spec, setPeer_spec]
+  apply sameSnapshot_of_wp
+  intro initial
+  have h0 := @branch_spec (fun s => s = initial)
+  have h1 := @branchCmp_spec (fun s => s = initial)
+  have h2 := @getDev_spec (fun s => s = initial)
+  have h3 := @getPeer_spec (fun s => s = initial)
+  have h4 := @hiddenClock_spec (fun s => s = initial)
+  have h5 := @hiddenClock64_spec (fun s => s = initial)
+  have h6 := @messageDecrypt_spec (fun s => s = initial)
+  have h7 := @messageEphemeral_spec (fun s => s = initial)
+  have h8 := @mixDh_spec (fun s => s = initial)
+  have h9 := @mixPrecomputedDh_spec (fun s => s = initial)
+  have h10 := @peerPut_spec (fun s => s = initial)
+  have h11 := @pubkeyLookup_spec (fun s => s = initial)
+  have h12 := @setPeer_spec (fun s => s = initial)
+  mvcgen -trivial [consumeInitiation, WG.andM, WG.orM, invariant, unsupported, h0, h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12]
+  all_goals mleave
+  all_goals try dsimp +zetaDelta only at *
+  all_goals simp_all [snapshot]
+  all_goals trivial
 
 theorem consumeInitiation_spec (P : Snapshot → Prop) (msg : List UInt8) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.consumeInitiation msg

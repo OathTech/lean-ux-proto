@@ -42,10 +42,13 @@ theorem peerGet_metadata (id : PeerId) : SameView allocationMetadata (peerGet id
 theorem peerPut_metadata (id : Option PeerId) : SameView allocationMetadata (peerPut id) := by
   apply SameView.of_wp
   intro s
+  simp only [peerPut, indexRemove_eq, indexUnhash]
   mvcgen [peerPut, requireNotPending, getPeer, getDev, getK, setPeer,
     modifyDev, modifyK, refcountDecAndTest, branch, branchCmp,
     indexRemove, retirePeerUnits, invariant, unsupported]
   all_goals dsimp +zetaDelta only at *
+  all_goals simp_all [allocationMetadata, deviceAllocationMetadata]
+  all_goals subst_vars
   all_goals simp_all [allocationMetadata, deviceAllocationMetadata]
 
 def keypairReleaseRest (w : World) := (Peers.snapshot w, packetResidents w, allocationMetadata w)
@@ -54,10 +57,13 @@ theorem keypairPut_rest (kp : Option KeypairId) (now : Bool) :
     SameView keypairReleaseRest (keypairPut kp now) := by
   apply SameView.of_wp
   intro s
+  simp only [keypairPut, indexRemoveKeypair_eq, indexUnhash]
   mvcgen [keypairPut, getKeypair, getDev, getK, setKeypair, modifyDev, modifyK,
     branch, branchCmp, refcountDecAndTest, unsupported, invariant]
   all_goals dsimp +zetaDelta only at *
   all_goals unfold keypairReleaseRest Peers.snapshot packetResidents allocationMetadata at *
+  all_goals simp_all [deviceAllocationMetadata]
+  all_goals subst_vars
   all_goals simp_all [deviceAllocationMetadata]
 
 theorem ordinary_same_frontier (ho : Keypairs.Ordinary s t) (hf : t.frontier = s.frontier) :
