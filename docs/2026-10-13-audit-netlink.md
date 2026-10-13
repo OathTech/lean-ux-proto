@@ -161,7 +161,7 @@ undeclared (the seven fixed values are in section 3). Class 5 (hidden input
 not consumed): none (section 3). Class 6 (mirror-only behaviour): none
 undeclared (the stops are in section 3). Class 4 (data shape): two.
 
-**F1 (class 4, observable).** `EndpointAttr` (N:52-59) holds the attribute
+**F1 (class 4, observable).** Fixed in d5ea0ab (2026-10-13): the validator and `parseEndpoint` refuse the two cross-layout combinations; `corpus/netlink-controls`, `scripts/wg-netlink-controls.py`. `EndpointAttr` (N:52-59) holds the attribute
 as parsed fields: `family` (the `sa_family` bytes), `addr` as the 4- or
 16-byte integer of the trace's `family`, `port`, `flowinfo`, `scope`, `len`.
 The C (441-446) reads `nla_data` as a `sockaddr_in` or a `sockaddr_in6` by
@@ -182,12 +182,12 @@ combinations, so this is not a recorded exclusion. Fix: fail closed in
 is that family's size (the only combinations the C accepts under the
 reinterpretation), or carry the attribute's bytes.
 
-**F2 (class 4, internal only).** `DumpCall.ret := 1` (D:276) stands for the
+**F2 (class 4, internal only).** Fixed in 0dd655f (2026-10-13): `ret` is the chunk's length. `DumpCall.ret := 1` (D:276) stood for the
 C's `skb->len` (296); only its sign is read (`netlinkDump`, D:298, 304), so
 no observable changes, but the per-socket `dumpDoneErrno` is a flag where
 the C's is a length.
 
-Outside the count (transport): on a start error `netlinkDumpStart`
+Outside the count (transport; fixed in 0dd655f, 2026-10-13: the context and `prev_seq` zeroed on a start error): on a start error `netlinkDumpStart`
 (D:326-330) keeps the socket's `ctx` and `prevSeq`, where
 `__netlink_dump_start` zeroes `nlk->cb` (af_netlink.c:2417) before `start`
 (2431). Nothing reads them before the next start re-zeroes them; internal
@@ -205,7 +205,7 @@ path never reads (`WGDEVICE_A_PUBLIC_KEY`, `WGPEER_A_LAST_HANDSHAKE_TIME`,
 
 | Fixed value or cut | Lean | Reason, where recorded |
 |---|---|---|
-| `lookupHasIfname` = true | N:115 | the `-EBADR` test (57) leaves exactly one selector; the `else if` is implied. Not written down anywhere |
+| `lookupHasIfname` = true | N:115 | the `-EBADR` test (57) leaves exactly one selector; the `else if` is implied. Not written down anywhere. Fixed in 83cdb0f (2026-10-13): decided from the attribute, the other arm an `invariant` |
 | `lookupNoKind` = false | N:122 | every registered `rtnl_link_ops` sets `.kind` (design 2.1, 5) |
 | `peerPubkeyLen`, `peerPskLen`, `setDevPrivateKeyLen` = true | N:162, 165, 256 | `NLA_POLICY_EXACT_LEN`, P8 (design 2.1, 5) |
 | `setDevNotCapable` = false | N:243 | `CONFIG_USER_NS` unset; `GENL_UNS_ADMIN_PERM` passed with the same credential; the capdrop op drops `CAP_SYS_ADMIN` only (W8 note 2.2; seccomp design, op 33) |
