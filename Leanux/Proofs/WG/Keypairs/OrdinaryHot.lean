@@ -1,29 +1,17 @@
 import Leanux.Proofs.WG.Keypairs.Ordinary
+import Leanux.Proofs.Framing.KernelEffects
 
 set_option pp.structureInstances false
 
 namespace Leanux.Proofs.WG.Keypairs
 open Leanux Leanux.WG Std.Do Leanux.Proofs.Framing Leanux.Proofs.Framing.Allocation
 
-/-- The same decreasing encounter count applies at every allocation site. -/
-theorem hiddenAlloc_sameKernel (site : AllocSite) : SameKernel (hiddenAlloc site) := by
-  apply sameKernel_of_wp
-  intro k
-  rw [← allocationOutcome_eq]
-  mvcgen [allocationOutcome, recordOutcome, placeholderOutcome, hidden, skipAmbient, invariant, unsupported]
-  invariants
-  | inv1 _ n _ _ _ _ _ _ => fun r _ => ⟨n - r.2 + 1⟩
-  | inv2 => ((⇓? _ w => ⌜w.k = k⌝) : PostCond _ (.arg World (.except Stop .pure)))
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try (letI : Nonempty World := ⟨by assumption⟩; infer_instance)
-  all_goals try simp_all [WhileVariant.eval, SVal.evalsTo, SVal.uncurry]
-  all_goals omega
+/-- Compatibility names for the shared original-effect contracts. -/
+theorem hiddenAlloc_sameKernel (site : AllocSite) : SameKernel (hiddenAlloc site) :=
+  Framing.hiddenAlloc_sameKernel site
 
-theorem hiddenClock_sameKernel (site : HiddenSite) : SameKernel (hiddenClock site) := by
-  apply sameKernel_of_wp
-  intro k
-  have hs := sameKernel_wp _ (hidden_sameKernel site) (fun k' => k' = k)
-  mvcgen [hiddenClock, hs]
+theorem hiddenClock_sameKernel (site : HiddenSite) : SameKernel (hiddenClock site) :=
+  Framing.hiddenClock_sameKernel site
 
 theorem birthdateHasExpired_sameKernel (birthday : Int) (seconds : Nat) :
     SameKernel (birthdateHasExpired birthday seconds) := by

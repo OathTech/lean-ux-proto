@@ -131,7 +131,13 @@ Raw skb numbers alone do not identify allocations across device replacement.
 helpers once over the seven dedicated WG kernel fields, then derive keypair,
 peer and packet contracts by projection. These frames end at successful return:
 `fput` can queue task work whose later effects require separate proof. The
-remaining filesystem hierarchy has not yet been migrated.
+remaining filesystem hierarchy has not yet been migrated. `KernelEffects`
+now shares the hidden-allocation/clock and four refcount contracts; `Kernel`
+frames 42 original helpers over the full WG view. All 277 theorem signatures
+in the four affected legacy modules are unchanged projection interfaces.
+Shared loop/map tooling and private-name references have no dependency back
+into that legacy hierarchy. These contracts likewise prove endpoint equality,
+not internal-access coverage.
 
 [AGENT 2026-10-13] Share filesystem preservation over the full WG kernel view
 rather than duplicate its operational proof hierarchy for each lifetime view.
@@ -193,15 +199,16 @@ capped -- scripts/in-bundle scripts/proof-gate
 ```
 
 **Validation and effort.** The recorded replay accepts and checks its assertions
-in under one second. The latest access-observer build passes 122 jobs; its four
-new exports bring R2 to 32 terminal theorems. The gate passes all 62 terminal
+in under one second. The current proof build passes 125 jobs, with 32 terminal
+theorems in R2. The gate passes all 62 terminal
 statements with only permitted axioms; the default model build passes 51 jobs,
-and the required unit tier passes 88 tests in 21.537 seconds with one skip.
+and the required unit tier passes 88 tests in 21.453 seconds with one skip.
 Earlier checkpoint commits carry their own counts. No mirror semantics or
 kernel source changed; checked components remain over `c85e86b`, with no lag.
 
 Most effort is caller coverage and reusable framing. Peer allocation took six
-compile passes, shared file frames four, and failure-prefix observation nine.
+compile passes, shared file frames four, failure-prefix observation nine,
+and the shared kernel-frame migration three.
 Failed passes exposed proof elaboration or simplification errors. One earlier
 anonymous-hypothesis tactic loop was stopped by verified PID and repaired.
 Independent read-only reviews found no correctness defect in these components;

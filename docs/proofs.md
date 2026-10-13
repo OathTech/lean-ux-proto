@@ -26,6 +26,10 @@ directory whose `Statements.lean` is the gated surface.
   fields, and `FSFileRefs` proves six original file-reference helpers once
   for the keypair, peer and packet projections. These are immediate-return
   frames, not preservation of queued work or later scheduler effects.
+  `KernelEffects` shares record-consumer and refcount contracts; `Kernel`
+  proves 42 original kernel helpers over the full WG view, with the old keypair
+  interfaces derived by projection. `Tools` shares loop/map contracts and proof
+  setup without depending on the keypair frame hierarchy.
 - `Leanux/Proofs/Logged/`: logged copies of mirror functions with erasure
   theorems (erasing the log gives back the original run, state, result and
   failure), from the validator (`Basic`, `RxPoll`) through the workers, the

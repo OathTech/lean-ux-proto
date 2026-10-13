@@ -191,29 +191,29 @@ theorem swapEndian_spec (P : Snapshot → Prop) (bits : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.swapEndian bits
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (swapEndian_sameSnapshot bits).wp P
 
-theorem refcountDecAndTest_sameSnapshot (old : Nat) : SameSnapshot (Leanux.refcountDecAndTest old) := by
-  frame_same [Leanux.refcountDecAndTest] using []
+theorem refcountDecAndTest_sameSnapshot (old : Nat) : SameSnapshot (Leanux.refcountDecAndTest old) :=
+  sameSnapshot_of_sameKernel (Framing.refcountDecAndTest_sameKernel old)
 
 theorem refcountDecAndTest_spec (P : Snapshot → Prop) (old : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.refcountDecAndTest old
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (refcountDecAndTest_sameSnapshot old).wp P
 
-theorem refcountInc_sameSnapshot (old : Nat) : SameSnapshot (Leanux.refcountInc old) := by
-  frame_same [Leanux.refcountInc] using []
+theorem refcountInc_sameSnapshot (old : Nat) : SameSnapshot (Leanux.refcountInc old) :=
+  sameSnapshot_of_sameKernel (Framing.refcountInc_sameKernel old)
 
 theorem refcountInc_spec (P : Snapshot → Prop) (old : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.refcountInc old
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (refcountInc_sameSnapshot old).wp P
 
-theorem refcountIncGuestWide_sameSnapshot (x : OperandExclusion) : SameSnapshot (Leanux.refcountIncGuestWide x) := by
-  frame_same [Leanux.refcountIncGuestWide] using []
+theorem refcountIncGuestWide_sameSnapshot (x : OperandExclusion) : SameSnapshot (Leanux.refcountIncGuestWide x) :=
+  sameSnapshot_of_sameKernel (Framing.refcountIncGuestWide_sameKernel x)
 
 theorem refcountIncGuestWide_spec (P : Snapshot → Prop) (x : OperandExclusion) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.refcountIncGuestWide x
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (refcountIncGuestWide_sameSnapshot x).wp P
 
-theorem refcountIncNotZero_sameSnapshot (old : Nat) : SameSnapshot (Leanux.refcountIncNotZero old) := by
-  frame_same [Leanux.refcountIncNotZero] using []
+theorem refcountIncNotZero_sameSnapshot (old : Nat) : SameSnapshot (Leanux.refcountIncNotZero old) :=
+  sameSnapshot_of_sameKernel (Framing.refcountIncNotZero_sameKernel old)
 
 theorem refcountIncNotZero_spec (P : Snapshot → Prop) (old : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.refcountIncNotZero old

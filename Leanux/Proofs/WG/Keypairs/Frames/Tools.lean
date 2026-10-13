@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.Keypairs.OrdinaryHot
 import Leanux.Proofs.Framing.FSFileRefs
+import Leanux.Proofs.Framing.Tools
 
 /-! Reusable verification-condition setup for helpers that preserve the
 receive-state projection. Unsolved conditions remain ordinary Lean goals. -/
@@ -12,17 +13,6 @@ def snapshotOfWGKernelView (v : WGKernelView) : Snapshot :=
 
 theorem sameSnapshot_of_sameWGKernel (h : SameWGKernel a) : SameSnapshot a :=
   h.of_factor snapshotOfWGKernelView snapshot (fun _ => rfl)
-
-private def normalizePinnedName : Lean.Name → Lean.Name
-  | .str p "0" => .num (normalizePinnedName p) 0
-  | .str p s => .str (normalizePinnedName p) s
-  | .num p n => .num (normalizePinnedName p) n
-  | .anonymous => .anonymous
-
-/-- A checked reference to a constant in the pinned mirror, including its
-private numeric name component. It introduces no new definition or assumption. -/
-macro "pinned_const " n:ident : term =>
-  pure (Lean.mkCIdent (normalizePinnedName n.getId))
 
 theorem modifyDev_snapshot_spec (P : Snapshot → Prop) (f : Device → Device)
     (hf : ∀ d, (f d).keypairs = d.keypairs) :
@@ -38,38 +28,20 @@ theorem list_snapshot_spec (P : Snapshot → Prop) {α β : Type}
     (hf : ∀ x b, ⦃fun w => ⌜P (snapshot w)⌝⦄ f x b
       ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ forIn xs init f
-    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := by
-  let inv : PostCond β (.arg World (.except Stop .pure)) :=
-    (⇓? _ w => ⌜P (snapshot w)⌝)
-  change Triple (forIn xs init f) (inv.1 init) inv
-  refine Std.Do.Spec.forIn_list_const_inv (inv := inv) ?_
-  intro x b
-  apply Triple.entails_wp_of_post (hf x b)
-  constructor
-  · intro r
-    cases r <;> exact .rfl
-  · exact .rfl
+    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ :=
+  list_view_spec snapshot P xs init f hf
 
 theorem map_snapshot_spec (P : Snapshot → Prop) {α β : Type}
     (f : α → β) (a : M α)
     (ha : ⦃fun w => ⌜P (snapshot w)⌝⦄ a ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ StateT.map f a
-    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := by
-  apply (hoare_iff_triple _ _ _).mp
-  intro w b w' hp hr
-  change (a.run w >>= fun out => pure (f out.1, out.2)) = .ok (b, w') at hr
-  cases he : a.run w with
-  | error e => simp [he] at hr
-  | ok out =>
-    rcases out with ⟨x, t⟩
-    simp [he] at hr
-    rcases hr with ⟨rfl, rfl⟩
-    exact (hoare_iff_triple _ _ _).mpr ha w x t hp he
+    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ :=
+  map_view_spec snapshot P f a ha
 
 theorem discard_snapshot_spec (P : Snapshot → Prop) {α : Type} (a : M α)
     (ha : ⦃fun w => ⌜P (snapshot w)⌝⦄ a ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ discard a
-    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := map_snapshot_spec P (fun _ => ()) a ha
+    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := discard_view_spec snapshot P a ha
 
 
 macro "frame_same" "[" fs:ident,* "]" "using" "[" specs:ident,* "]" : tactic => do
