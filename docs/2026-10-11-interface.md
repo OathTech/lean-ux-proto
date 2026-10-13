@@ -48,7 +48,19 @@ created by the streams that own them.
 | Stream | Design | Owns | Shared allocations |
 |---|---|---|---|
 | epoll | `docs/2026-10-12-epoll-design.md` | `Leanux/FS/Epoll.lean`, the wait-queue service module it creates, its guest ops and harness decoding, `corpus/epoll*`, `scripts/epoll-corpus.py` | opcodes 27-29; record kind 308; HiddenSite ids 190-199 |
-| seccomp | `docs/2026-10-12-seccomp-design.md` | `Leanux/Seccomp/*` (new), the classic checker and translation mirror, its guest ops, `corpus/seccomp*`, `scripts/seccomp-corpus.py` | opcodes 30-34; HiddenSite ids 200-219; config `SECCOMP`, `SECCOMP_FILTER` |
+| seccomp | `docs/2026-10-12-seccomp-design.md` | `Leanux/Seccomp/*` (new), the classic checker and translation mirror, its guest ops, `corpus/seccomp*`, `scripts/seccomp-corpus.py` | opcodes 30-34 (`seccomp_install` 30, `seccomp_probe` 31, `seccomp_prctl` 32, `seccomp_capdrop` 33, `seccomp_query` 34); record kind 309 (class `program`); HiddenSite ids 400-419 (400-410 the kind-305 sites by `AllocSite.hiddenId`, 411 the kind-309 site); config `SECCOMP`, `SECCOMP_FILTER` |
+
+seccomp's HiddenSite block moved from 200-219 to 400-419 in the interface
+commit [AGENT 2026-10-12]: 200-219 is where `Worker.sectionId` places the
+section ids from worker index 15 (W5-W6's second unit), and 300-319 the
+queue ids. The seccomp allocation sites keep `AllocSite` indices 28-38 and
+take their hidden-site ids from the new block rather than A's 70-99, which
+ends at index 29.
+
+Fixture exclusivity: a trace with the `seccomp_child` fixture (the child's
+KCOV on descriptor 8, design 6.2 rule 2) uses no network fixture, since
+W8's `INJECT_FD` and W2's stepped-dump socket also hold descriptor 8; the
+validator rejects the pair (design 5, audit S4).
 
 The eBPF engine (`kernel/bpf/core.c`) is a service at `seccomp_run_filters`'s
 call: never anchored, its ISA semantics a stated contract.

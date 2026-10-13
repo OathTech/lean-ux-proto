@@ -226,48 +226,20 @@
   "send6",
   "__secure_computing",
   "__seccomp_filter",
-  "seccomp_run_filters",
-  "seccomp_cache_check_allow",
-  "seccomp_cache_check_allow_bitmap",
-  "populate_seccomp_data",
-  "seccomp_log",
-  "__secure_computing_strict",
   "seccomp_set_mode_filter",
-  "seccomp_set_mode_strict",
-  "seccomp_prepare_user_filter",
-  "seccomp_prepare_filter",
   "seccomp_check_filter",
-  "seccomp_attach_filter",
-  "seccomp_may_assign_mode",
-  "seccomp_assign_mode",
-  "seccomp_cache_prepare",
-  "seccomp_cache_prepare_bitmap",
-  "seccomp_is_const_allow",
-  "seccomp_uprobe_exception",
-  "has_duplicate_listener",
-  "seccomp_filter_free",
   "get_seccomp_filter",
-  "__get_seccomp_filter",
-  "do_seccomp",
   "prctl_set_seccomp",
   "prctl_get_seccomp",
-  "seccomp_get_action_avail",
-  "seccomp_get_notif_sizes",
   "bpf_prog_create_from_user",
   "bpf_prepare_filter",
-  "bpf_migrate_filter",
-  "bpf_check_basics_ok",
-  "bpf_check_classic",
-  "chk_code_allowed",
-  "check_load_and_stores",
   "bpf_convert_filter",
   "bpf_prog_store_orig_filter",
-  "bpf_release_orig_filter",
-  "__bpf_prog_release",
   "bpf_prog_destroy",
   "force_sig_seccomp",
   "force_sig_info_to_task",
-  "signal_wake_up_state"
+  "signal_wake_up_state",
+  "__x64_sys_seccomp"
  ],
  "known_gaps": [],
  "shared_exits": [
@@ -296,6 +268,10 @@
    "note": "The merged-return-block class (the cookie arms of receive.c:140-164, vfs_write's epilogue above): file_update_time's early return (ret <= 0 at inode.c:2272-2273, the \"nothing\" outcome) shares its return block with the inlined __file_update_time's (inode.c:2240 inlined at :2275; return PC 0xffffffff811cfd8f in the accepted build), so the point is covered on the nothing path although __file_update_time did not run, and its frame at :2275 witnesses the opposite outcome. On the paths that reach __file_update_time its entering block (file_inode at fs.h:1166 inlined at inode.c:2241, return PC 0xffffffff811cfd6c) runs first and the early return skips it, so the declaration applies only when that point is not covered; then the point neither counts as the helper running nor witnesses a decision outcome. Reached when two writes to a pipe fall in the same 4 ms tick (one coarse clock read, equal stamps): found by the generated pipes suite in the int-r claim point, pipes-20260920-00110 (seed 20260920) operation 16, under eight guests; timing-dependent, not deterministic in any corpus trace."
   }
  ],
+ "data_only_operations": [
+  "seccomp_prctl",
+  "seccomp_capdrop"
+ ],
  "operand_exclusions": [
   {
    "label": "__refcount_add.old_zero",
@@ -313,10 +289,8 @@
   "IP_ECN_set_ce",
   "IP_ECN_set_ect1",
   "IP6_ECN_set_ce",
-  "IP6_ECN_set_ect1"
- ],
- "data_only_operations": [
-  "seccomp_prctl",
-  "seccomp_capdrop"
+  "IP6_ECN_set_ect1",
+  "seccomp_may_assign_mode",
+  "seccomp_log"
  ]
 }

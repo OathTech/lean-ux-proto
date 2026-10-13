@@ -463,7 +463,7 @@ class EvaluationChecks(unittest.TestCase):
         # shared exit reached by an early return neither counts as the helper
         # running nor witnesses an outcome; with the entering block covered,
         # or undeclared, it does both.
-        config = {'files': ['fs/eventfd.c'], 'functions': ['eventfd_read'], 'known_gaps': [],
+        config = {'files': ['fs/eventfd.c'], 'functions': ['eventfd_read'], 'known_gaps': [], 'data_only_operations': [],
                   'shared_exits': [{'function': 'helper', 'frames': ['fs/eventfd.c:230', 'fs/eventfd.c:222'],
                                     'unless_covered': ['fs/eventfd.c:231', 'fs/eventfd.c:222'], 'note': ''}],
                   'operand_exclusions': []}

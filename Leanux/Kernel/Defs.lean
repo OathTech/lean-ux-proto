@@ -2,6 +2,7 @@ import Leanux.Kernel.Decision
 import Leanux.WG.Types
 import Std.Data.TreeMap
 import Std.Data.TreeSet
+import Std.Data.HashSet
 import Lean.Data.Json
 
 /-!
@@ -326,6 +327,105 @@ structure FilesStruct where
   fdtGeneration : Nat := 0
   deriving BEq
 
+/-! ## seccomp: the shared names (docs/2026-10-12-seccomp-design.md, 4.1)
+
+The interface commit's data: the classic and translated programs (the
+functions over them are stream U's, `Leanux/Seccomp/Classic.lean` and
+`Translate.lean`), the filter and the task's seccomp state (stream V's
+functions, `Leanux/Seccomp/Filter.lean`), and the child task of a child
+probe with the `current` selector. The five operations on the wire
+(`harness/trace.py`, design 6.1): `seccomp_install` 30, `seccomp_probe` 31,
+`seccomp_prctl` 32, `seccomp_capdrop` 33, `seccomp_query` 34; their
+constructors are the runner's (stream V). -/
+
+/-- `struct sock_filter` (include/uapi/linux/filter.h:24-29). -/
+structure SockFilter where
+  code : UInt16
+  jt : UInt8
+  jf : UInt8
+  k : UInt32
+  deriving Repr, BEq, DecidableEq
+
+/-- A classic program as the user passed it (`sock_fprog.filter`, `len` is
+    the array's size). -/
+abbrev ClassicProg := Array SockFilter
+
+/-- `struct bpf_insn` (include/uapi/linux/bpf.h:72-78): the 8-byte eBPF
+    instruction, `dst_reg` and `src_reg` the two 4-bit fields. -/
+structure BpfInsn where
+  code : UInt8
+  dst : UInt8
+  src : UInt8
+  off : Int16
+  imm : Int32
+  deriving Repr, BEq, DecidableEq
+
+/-- The translated program (design 4.3): `bpf_prog.insnsi` and `len`, and
+    `aux->stack_depth` as the conversion leaves it. -/
+structure BpfProg where
+  insns : Array BpfInsn := #[]
+  stackDepth : Nat := 0
+  len : Nat := 0
+  deriving Repr, BEq
+
+/-- A filter's allocation identity (the `sfilter` record of
+    `AllocSite.kzallocSfilter`), the key of `Kernel.seccompFilters`. -/
+abbrev FilterId := Nat
+
+/-- `seccomp.mode`: `SECCOMP_MODE_DISABLED`, `_STRICT`, `_FILTER`, and
+    `SECCOMP_MODE_DEAD` (kernel/seccomp.c:52). -/
+inductive SeccompMode where
+  | disabled | strict | filter | dead
+  deriving Repr, BEq, DecidableEq
+
+/-- `__NR_syscalls` of x86-64 in 6.12.110 (`mseal` 462 is the last entry):
+    the width of `action_cache.allow_native`. -/
+def NR_syscalls : Nat := 463
+
+/-- `struct seccomp_filter` (kernel/seccomp.c:192-241) on the modelled
+    paths: the refcounts, the flags, the cache, the chain and the two
+    programs. The notifier, lock and wait-queue fields are not mirrored
+    (design 9.2). -/
+structure SeccompFilter where
+  id : FilterId
+  /-- `refcount_t refs` and `users`. -/
+  refs : Nat := 1
+  users : Nat := 1
+  log : Bool := false
+  waitKillableRecv : Bool := false
+  /-- `cache.allow_native`: bit `nr` set when the chain is constantly
+      `ALLOW` for `nr` (`seccomp_cache_prepare`). -/
+  allowNative : BitVec NR_syscalls := 0
+  /-- `prev`, the chain towards the first installed filter. -/
+  prev : Option FilterId := none
+  /-- `prog`, the translated program (4.3). -/
+  prog : BpfProg := {}
+  /-- `prog->orig_prog`, the user's program as copied. -/
+  origProg : ClassicProg := #[]
+  deriving Repr, BEq
+
+/-- `struct seccomp` (include/linux/seccomp.h): `mode`, `filter_count` and
+    the head of the chain. -/
+structure SeccompState where
+  mode : SeccompMode := .disabled
+  filterCount : Nat := 0
+  filter : Option FilterId := none
+  deriving Repr, BEq
+
+/-- `sighand->action[SIGSYS - 1]` as the seccomp paths read it: the guest's
+    handler (`SA_SIGINFO`, installed at setup), the default, or the default
+    made immutable by `force_sig_info_to_task`'s `HANDLER_EXIT` arm. -/
+inductive SigDisposition where
+  | handler | dfl | dflImmutable
+  deriving Repr, BEq, DecidableEq
+
+/-- Which task a kernel path targets (design 4.1): the trace process
+    (`Kernel.task`) or the sandboxed child of a child probe
+    (`Kernel.child`), which exists only while the probe's steps run. -/
+inductive TaskRef where
+  | task | child
+  deriving Repr, BEq, DecidableEq
+
 /-- The parts of `struct task_struct` on these paths. `taskWorks` is the
     `task_work` list (deferred `____fput`), run on return to user mode. -/
 structure Task where
@@ -341,6 +441,14 @@ structure Task where
       set is mirrored (`legacy_queue` tests it, nothing dequeues). -/
   blocked : SigSet := 0
   pending : SigSet := 0
+  /-- seccomp (design 4.1): `current->seccomp`; `task_no_new_privs`;
+      `CAP_SYS_ADMIN` in the effective set (root with every capability at
+      trace start); the `SIGSYS` disposition; `TIF_SIGPENDING`. -/
+  seccomp : SeccompState := {}
+  noNewPrivs : Bool := false
+  capSysAdmin : Bool := true
+  sigsys : SigDisposition := .handler
+  sigpending : Bool := false
   deriving BEq
 
 /-- `wg_ratelimiter`'s statics (drivers/net/wireguard/ratelimiter.c:12-18):
@@ -407,6 +515,16 @@ structure Kernel where
   pipeMaxSize : Nat := 1048576
   pipeUserPagesSoft : Nat := 16384
   pipeUserPagesHard : Nat := 0
+  /-- seccomp (design 4.1): every filter any task holds, by allocation
+      identity (the chain runs through `prev`); the sandboxed child of a
+      child probe, created from `task` by `copy_seccomp`'s effects and
+      dropped at the parent's `wait4`; and `current`, the task the runner
+      is executing (the child only while a child probe's steps run). -/
+  seccompFilters : TreeMap FilterId SeccompFilter := {}
+  child : Option Task := none
+  current : TaskRef := .task
+  /-- The next filter's allocation identity (stream V): monotone, never reused. -/
+  nextFilter : FilterId := 0
   deriving BEq
 
 /-! ## Allocation outcomes (docs/2026-10-05-a-alloc.md, section 6)
@@ -458,6 +576,13 @@ inductive AllocCount where
       records are consumed at the cut point that contains it (`skipCut`),
       any number; a failed one is `unsupported`. -/
   | cut
+  /-- seccomp (docs/2026-10-12-seccomp-design.md, section 3.1): a site the
+      hook never records by construction (the allocator is reached from
+      inside `mm/vmalloc.c`, or is the percpu allocator, so the range test
+      sees no armed frame). Assumed ok; consumes nothing; a record of it
+      would be left over and fail the run. Its `-ENOMEM` arm is modelled but
+      unexercised (design section 9.3). -/
+  | unrecorded
   deriving Repr, BEq, DecidableEq
 
 inductive AllocSite where
@@ -483,6 +608,12 @@ inductive AllocSite where
   | netdevAlloc | netdevTxQueues | netdevRxQueues | ptrRingInit
   -- the pipe paths' direct sites (b-task; A section 19.6, integration)
   | kzallocPipeInfo | kcallocPipeBufs | allocPipePage
+  -- seccomp (docs/2026-10-12-seccomp-design.md, section 3.1; the interface
+  -- commit): one install's sites in the C's order, indices 28-38, hidden-site
+  -- ids 400-410 (`AllocSite.hiddenId`)
+  | kzallocSfilter | vmallocBpfProg | kzallocBpfAux | percpuBpfActive | percpuBpfStats
+  | kmallocOrigFprog | kmemdupOrigFilter | kmallocArrayMasks | kmemdupOldProg | vmallocBpfProgRealloc
+  | kcallocAddrs
   deriving Repr, BEq, DecidableEq
 
 structure AllocSiteInfo where
@@ -573,6 +704,27 @@ def AllocSite.info : AllocSite → AllocSiteInfo
   | .netdevTxQueues => ⟨48, "netdevTxQueues", "net/core/dev.c", 10419, .cut⟩
   | .netdevRxQueues => ⟨49, "netdevRxQueues", "net/core/dev.c", 10352, .cut⟩
   | .ptrRingInit => ⟨57, "ptrRingInit", "include/linux/ptr_ring.h", 471, .cut⟩
+  -- seccomp (design section 3.1; indices 58-68, since 28-57 hold A's and
+  -- wgen's `70 + index` ids, see AllocSite.hiddenId), one install in order: seccomp_prepare_filter's
+  -- kzalloc (seccomp.c:688); bpf_prog_alloc_no_stats's __vmalloc (core.c:105,
+  -- unrecorded: reached from mm/vmalloc.c), kzalloc of aux (:109) and
+  -- alloc_percpu_gfp of active (:114, unrecorded: percpu); bpf_prog_alloc's
+  -- alloc_percpu_gfp of stats (:151, unrecorded); bpf_prog_store_orig_filter's
+  -- kmalloc (filter.c:1156) and kmemdup (:1163); check_load_and_stores's
+  -- kmalloc_array of masks (:935); bpf_migrate_filter's kmemdup_array
+  -- (:1277); bpf_prog_realloc's __vmalloc (core.c:260, unrecorded, below the
+  -- cut); bpf_convert_filter's second-pass kcalloc of addrs (filter.c:594).
+  | .kzallocSfilter => ⟨58, "kzallocSfilter", "kernel/seccomp.c", 688, .exact 1⟩
+  | .vmallocBpfProg => ⟨59, "vmallocBpfProg", "kernel/bpf/core.c", 105, .unrecorded⟩
+  | .kzallocBpfAux => ⟨60, "kzallocBpfAux", "kernel/bpf/core.c", 109, .exact 1⟩
+  | .percpuBpfActive => ⟨61, "percpuBpfActive", "kernel/bpf/core.c", 114, .unrecorded⟩
+  | .percpuBpfStats => ⟨62, "percpuBpfStats", "kernel/bpf/core.c", 151, .unrecorded⟩
+  | .kmallocOrigFprog => ⟨63, "kmallocOrigFprog", "net/core/filter.c", 1156, .exact 1⟩
+  | .kmemdupOrigFilter => ⟨64, "kmemdupOrigFilter", "net/core/filter.c", 1163, .exact 1⟩
+  | .kmallocArrayMasks => ⟨65, "kmallocArrayMasks", "net/core/filter.c", 935, .exact 1⟩
+  | .kmemdupOldProg => ⟨66, "kmemdupOldProg", "net/core/filter.c", 1277, .exact 1⟩
+  | .vmallocBpfProgRealloc => ⟨67, "vmallocBpfProgRealloc", "kernel/bpf/core.c", 260, .unrecorded⟩
+  | .kcallocAddrs => ⟨68, "kcallocAddrs", "net/core/filter.c", 594, .exact 1⟩
 
 def AllocSite.all : List AllocSite :=
   [.kmallocEventfdCtx, .filpAlloc, .dAllocPseudo, .kmallocFdtable, .kvmallocFdArray, .kvmallocFdBitmaps,
@@ -580,7 +732,20 @@ def AllocSite.all : List AllocSite :=
    .sendBufSkb, .replySkb, .keepaliveSkb, .skbCowHead, .skbChecksumHelp, .skbCowDataTx, .skbCowDataRx,
    .nlmsgNew, .netlinkAllocLargeSkb, .sockAllocSendPskb, .netlinkDump, .netlinkTrim,
    .kzallocPipeInfo, .kcallocPipeBufs, .allocPipePage, .dAllocSlabDebugfs, .allocUeventSkb, .ipAppendDataSkb,
-   .netdevAlloc, .netdevTxQueues, .netdevRxQueues, .ptrRingInit]
+   .netdevAlloc, .netdevTxQueues, .netdevRxQueues, .ptrRingInit,
+   .kzallocSfilter, .vmallocBpfProg, .kzallocBpfAux, .percpuBpfActive, .percpuBpfStats,
+   .kmallocOrigFprog, .kmemdupOrigFilter, .kmallocArrayMasks, .kmemdupOldProg, .vmallocBpfProgRealloc,
+   .kcallocAddrs]
+
+/-- An allocation site's hidden-site id: A's block 70-99 by index
+    (docs/2026-10-05-a-alloc.md, section 6.1) and wgen's `70 + index` above it
+    (indices 48, 49, 57: ids 118, 119, 127, clear of the timer sections'
+    100-117); seccomp's sites, indices 58-68, take 400 + (index - 58), in
+    seccomp's block 400-419 (docs/2026-10-11-interface.md; 200-219 would meet
+    `Worker.sectionId`'s ids from index 15) [AGENT, seccomp X merge]. -/
+def AllocSite.hiddenId (s : AllocSite) : Nat :=
+  let i := s.info.index
+  if 58 ≤ i ∧ i ≤ 68 then 400 + (i - 58) else 70 + i
 
 /-- The below-cut allocation consumers (consumed at cut points). -/
 def AllocSite.cuts : List AllocSite := AllocSite.all.filter (·.info.count == .cut)
@@ -733,6 +898,24 @@ inductive HiddenSite where
   /-- An allocation outcome (kind 305) at a consumer frame: ids 70-99 are
       A's (docs/2026-10-05-a-alloc.md, section 6.1). -/
   | alloc (s : AllocSite)
+  /-- seccomp (docs/2026-10-12-seccomp-design.md, section 3.3; id 411 of
+      the stream's 400-419): the kind-309 record of the translated program,
+      class `program`, one per emitted `bpf_insn` (its eight bytes) and then
+      one with the eBPF length, written in `bpf_migrate_filter` after the
+      second pass and before `bpf_prog_select_runtime` (net/core/filter.c,
+      between :1305 and :1315 of the locked source; stream W's line-preserving
+      hook fixes the consumer at :1315). The length record comes first, then
+      one per instruction (stream W's measurement); consumed in order at the
+      end of the mirror's translation (4.3) through the bridge, which reads
+      the length first and holds it in `World.translatedLen`. -/
+  | bpfProgInsn
+  /-- seccomp (stream V, measured on stream W's scratch kernel): the two
+      clock reads of `copy_process` in the parent's window of a child probe,
+      `p->start_time = ktime_get_ns()` at `kernel/fork.c:2532` (kind 206) and
+      `p->start_boottime = ktime_get_boottime_ns()` at :2533 (kind 207),
+      8 bytes each, consumed in that order at the child's creation
+      (`Env.forkClocks`). -/
+  | forkStartTime | forkStartBoottime
   /-- P (pipes): `current_time` (fs/inode.c:2648), the coarse real-time
       clock read through `ktime_get_coarse_real_ts64` (kind 215), shared by
       all five callers on the pipe paths (design section 3). -/
@@ -906,7 +1089,7 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   | .reschedRhashtableDestroy => ⟨153, "resched:rhashtable_free_and_destroy", "resched", "lib/rhashtable.c", 1161, 8, .ambient⟩
   | .dstCacheRefreshTs => ⟨151, "dst_cache_refresh_ts", "jiffies", "net/core/dst_cache.c", 63, 8, .mirror⟩
   | .alloc s => let i := s.info
-    ⟨70 + i.index, i.label, "alloc", i.file, i.line, 40, if i.count == .cut then .cut else .mirror⟩
+    ⟨s.hiddenId, i.label, "alloc", i.file, i.line, 40, if i.count == .cut then .cut else .mirror⟩
   -- P (pipes, design section 3): id 18 is free on main and on every task
   -- branch (E-A uses 64-69, A 70-99); the records are consumed in sequence
   -- order by whichever of the five callers runs
@@ -920,6 +1103,10 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   | .ratelimiterInsertNow => ⟨133, "ratelimiter_insert_now", "clock", "drivers/net/wireguard/ratelimiter.c", 146, 8, .mirror⟩
   -- W5+W6 (ids 140-149)
   | .inetEhashSecret => ⟨140, "inet_ehash_secret", "random", "net/ipv4/inet_hashtables.c", 36, 4, .cut⟩
+  -- seccomp (ids 400-419; 400-410 are `AllocSite.hiddenId`'s)
+  | .bpfProgInsn => ⟨411, "bpf_prog_insn", "program", "net/core/filter.c", 1315, 8, .mirror⟩
+  | .forkStartTime => ⟨412, "fork_start_time", "clock", "kernel/fork.c", 2532, 8, .mirror⟩
+  | .forkStartBoottime => ⟨413, "fork_start_boottime", "clock", "kernel/fork.c", 2533, 8, .mirror⟩
 
 def HiddenSite.all : List HiddenSite :=
   [.initEphemeral, .respEphemeral, .tai64nNow, .indexDraw, .resetLastSent, .birthdateExpired, .initLastSent,
@@ -936,6 +1123,7 @@ def HiddenSite.all : List HiddenSite :=
   ++ AllocSite.all.map .alloc
   ++ [.currentTime]
   ++ [.underLoadNow, .cookieNonce, .ratelimiterNow, .ratelimiterInsertNow]
+  ++ [.bpfProgInsn, .forkStartTime, .forkStartBoottime]
   ++ [.inetEhashSecret]
 
 /-- The resched site of a worker's `cond_resched`, for the workers that
@@ -1029,6 +1217,14 @@ structure World where
   timing : Timing
   envCalls : List (EnvSite × Nat) := []
   steps : Array Step := #[]
+  /-- seccomp (design 4.2, 4.5): the repeatable decisions of the checker,
+      the translation, the cache's emulation and the entry path are emitted
+      once per operation as a set of (decision, outcome, operands); the keys
+      emitted so far in this operation (`Seccomp.Bridge`). -/
+  emitted : Std.HashSet String := {}
+  /-- seccomp: the kind-309 length record, read before the instructions
+      (stream W's order) and answered to the translation after them. -/
+  translatedLen : Option Nat := none
   /-- The caller's buffer (user memory), as written by `copy_to_iter` (an
       eventfd read's 8 bytes) or `copy_page_to_iter` (a pipe read). -/
   userOut : Option ByteArray := none
@@ -1287,6 +1483,30 @@ def invariant (what : String) : M α := throw (.invariant what)
 
 def getK : M Kernel := return (← get).k
 def modifyK (f : Kernel → Kernel) : M Unit := modify fun w => { w with k := f w.k }
+
+/-- The task `t` names (design 4.1). Reading the child while none exists
+    is a runner invariant: no path reaches a child outside its probe. -/
+def getTask (t : TaskRef) : M Task := do
+  let k ← getK
+  match t with
+  | .task => return k.task
+  | .child =>
+    match k.child with
+    | some c => return c
+    | none => invariant "a kernel path targets the child, and there is no child"
+
+/-- Update the task `t` names; the missing child is the same invariant. -/
+def modifyTask (t : TaskRef) (f : Task → Task) : M Unit := do
+  let k ← getK
+  match t with
+  | .task => modifyK fun k => { k with task := f k.task }
+  | .child =>
+    match k.child with
+    | some c => modifyK fun k => { k with child := some (f c) }
+    | none => invariant "a kernel path targets the child, and there is no child"
+
+/-- The task the runner is executing: `Kernel.current` resolved. -/
+def getCurrent : M Task := do getTask (← getK).current
 def getFiles : M FilesStruct := return (← getK).task.files
 def modifyFiles (f : FilesStruct → FilesStruct) : M Unit :=
   modifyK fun k => { k with task := { k.task with files := f k.task.files } }
@@ -1614,6 +1834,7 @@ def hiddenAlloc (s : AllocSite) : M Bool := do
   let i := s.info
   match i.count with
   | .laxZero => return true
+  | .unrecorded => return true   -- never recorded by construction (seccomp, section 3.1)
   | .cut => invariant s!"{i.label} is a below-cut consumer, consumed only at a cut point"
   | .exact n =>
     let w ← get

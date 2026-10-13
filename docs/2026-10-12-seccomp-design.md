@@ -8,7 +8,9 @@ and 4.4), the user's seam of 2026-10-12 (`docs/decisions.md`: the eBPF
 engine below `seccomp_run_filters` is a service with a stated ISA contract,
 never anchored; the user's separate eBPF JIT project owns that seam) and the
 interface allocations on `task/next-targets` (`docs/2026-10-11-interface.md`:
-opcodes 30-34, HiddenSite ids 200-219, config `SECCOMP`/`SECCOMP_FILTER`).
+opcodes 30-34, HiddenSite ids 400-419 (moved from 200-219 by the interface
+commit: that block is `Worker.sectionId`'s from index 15), config
+`SECCOMP`/`SECCOMP_FILTER`).
 Every kernel claim below was read in the configured source, `.deps/linux`
 (6.12.110), with the line numbers given; none has been run against a build,
 and the current oracle has `CONFIG_SECCOMP` unset, so section 11's step 0 is
@@ -1081,7 +1083,7 @@ them, since they are modelled.
 | Step | Stream | Work | WU |
 | --- | --- | --- | --- |
 | 0 | coordinator | A scratch build with `CONFIG_SECCOMP=y` (not the oracle; under `capped`); the child-probe plumbing prototyped in the guest against it; one child probe's coverage read for `dup_fd` span lines and the window's end; one `TRAP` trace's coverage read for delivery-side span lines in `kernel/signal.c`; `TRAP`'s return value; the mirror's emission size and run time on a three-filter trace and on a 4096-instruction install. | 0.07 |
-| 1 | coordinator | The interface commit: opcodes 30-34 named, `AllocSite` and `HiddenSite` ids in 200-219 (the kind-305 sites of 3.1 and the kind-309 site), `SeccompState`, the `Task` fields, `Kernel.seccompFilters` and `Kernel.child` with the `current` selector and `Signal.lean`'s target as a parameter, the repeatable marks for the per-instruction and per-number decisions, `cut_functions`, the files and functions of 6.3, the data-only op list, the `seccomp_child` fixture flag and its exclusivity in the interface table, `CONFIG_SECCOMP=y` in `kernel/config-x86_64-net-choice`. | 0.05 |
+| 1 | coordinator | The interface commit: opcodes 30-34 named, `AllocSite` and `HiddenSite` ids in 400-419 (the kind-305 sites of 3.1 and the kind-309 site; 200-219 is taken by `Worker.sectionId` from index 15), `SeccompState`, the `Task` fields, `Kernel.seccompFilters` and `Kernel.child` with the `current` selector and `Signal.lean`'s target as a parameter, the repeatable marks for the per-instruction and per-number decisions, `cut_functions`, the files and functions of 6.3, the data-only op list, the `seccomp_child` fixture flag and its exclusivity in the interface table, `CONFIG_SECCOMP=y` in `kernel/config-x86_64-net-choice`. | 0.05 |
 | 2 | U | `Classic.lean`, `Translate.lean`, `Engine.lean` with `MiniInterp` and `classicRun`; the Lean-side equality check of 8; unit tests on the hand-written rejection set. | 0.25 |
 | 3 | V | `Filter.lean`, `Syscalls.lean`, the per-op `secureComputing` pre-step in dispatch, the child's creation and exit effect and the `TRAP` delivery effect in the runner and `Env.lean`, the observations; the `Signal.lean` extension of 4.5 (about 0.1). Depends on 1 and U's types (not U's bodies). | 0.4 |
 | 4 | W | The five operations, both probe modes, the handler, descriptor 8, `RLIMIT_CORE`, `capset`, the `bad` pointers; `trace.py` fields and the validator rules of 6.1; `linux.py`'s fixture row; the contract; `kcov.json`; the kind-309 hook in `gen-choice-stream.py`; the data-only exemption in `check.py`; the oracle rebuild shared with epoll and its identity. | 0.25 |
