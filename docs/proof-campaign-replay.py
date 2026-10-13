@@ -106,11 +106,36 @@ def stale_dump_cursor_orphan():
     return trace
 
 
+def receive_wire_limit():
+    """Reconstructed capture records plus an existing authenticated limit packet."""
+    trace = recorded_fixture("CONTENDED_ROAM_CMP")
+    limit = json.loads((ROOT / "corpus/wireguard/d2_rx_reject_after_messages.json").read_text())
+    records = copy.deepcopy(trace["hidden"][4])
+    clocks = [i for i, record in enumerate(records) if record[0] == 6]
+    if len(clocks) != 2:
+        raise ValueError("recorded data path no longer has exactly two clock reads")
+    # Replay rejection skips receive completion and its second age-test read.
+    del records[clocks[1]]
+    trace["id"] = "r5_rx_wire_limit"
+    trace["ops"] = trace["ops"][:4] + [limit["ops"][4]]
+    trace["hidden"] = trace["hidden"][:4] + [records]
+    for operation in trace["hidden"]:
+        for record in operation:
+            if record[0] in {40, 42, 44, 46, 48, 50} and len(record[1]) == 16:
+                record[1] += "0000000000000000"
+    trace.pop("steer")
+    trace["dst_cache_records"] = False
+    trace["arm_records"] = False
+    add_wait_bounds(trace, range(len(trace["ops"])))
+    return trace
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     cases = {"r1-inclusive-floor": inclusive_floor,
              "r2-stale-dump-cursor": stale_dump_cursor,
-             "r2-stale-dump-cursor-orphan": stale_dump_cursor_orphan}
+             "r2-stale-dump-cursor-orphan": stale_dump_cursor_orphan,
+             "r5-rx-wire-limit": receive_wire_limit}
     parser.add_argument("case", choices=cases)
     args = parser.parse_args()
     print(json.dumps(cases[args.case](), separators=(",", ":")))
