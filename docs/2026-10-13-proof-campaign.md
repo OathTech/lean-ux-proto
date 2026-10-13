@@ -15,20 +15,20 @@ No integration into main, push, differential check or guest run.
 | --- | --- |
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay and independent review checked. Seccomp frame carry checked. |
 | R2 lifetime safety | Store identities, failure-retaining allocation/release and caller composition cover session/rotation, peer creation, receive entry/maintenance/completion, receive polling with the actual stack callback, transmit entry, TX staging, decrypt iteration and ten socket/cache/loopback calls; stale-cursor finding checked. Remaining callers, lifecycle and whole-run internal-access coverage remain in progress. |
-| R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion, original empty-root, arbitrary-depth empty-child and exact-prefix insertion with sequence wrappers, and total original placement proved. Selected-root graft normal endpoints and rollback effects checked; successful graft representation, general mutation/history and path refinements remain open. Path proofs follow R2. |
+| R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion, original empty-root, arbitrary-depth empty-child and exact-prefix insertion with sequence wrappers, and total original placement proved. Selected-root graft normal endpoints and rollback effects are checked; successful graft representation and actual-root lookup pass the coordinated gate. Deeper grafts, removal, general mutation/history and path refinements remain open. Path proofs follow R2. |
 | R4 delivery | Accepted original replay over f45bde8 refutes chronological post-GRO stack order: a held ACK followed by a distinct-flow SYN produces the SYN's RST first under the same key lifetime. Exact current poll erasure and removal-prefix order with an explicit callback queue contract pass the gate, as does the original-helper reorder equation. The former chronological callback theorem is retired, with its predicate unchanged. Selected-order/source-tag closure and pipeline conservation remain open. |
 | R5 key lifetime | Resolved through Rule Zero counterexamples, with 13 positive local contracts. Original/observed replays show nonce R+1 authenticating before rejection, queued transport keepalive encryption after recorded expiry, and packet-held material used after zero/clear before a new handshake. The new time inputs have coherent coarse/jiffies/arm arithmetic; Linux schedule reachability is not claimed. Validated over a39aded. |
 | R6 flood resistance | Original under-load cookie exclusion and full Noise-state frame proved; a generated accepted episode refutes the literal retry limit (19 retries, 20 total initiations with MAX=18). Six terminal theorems, the combined gate, fresh kernel replay and exact witness rerun pass. |
 
 **Last validated mirror: `a39aded` (source unchanged from `f45bde8`).** The
-full proof gate passes 254 build jobs and 212 terminal statements (ReplayWindow
-15, R1 9, R2 116, R3 27, R4 26, R5 13, R6 6), with only permitted axioms.
+full proof gate passes 255 build jobs and 215 terminal statements (ReplayWindow
+15, R1 9, R2 116, R3 30, R4 26, R5 13, R6 6), with only permitted axioms.
 Stock `leanchecker --fresh Leanux.Proofs` passes. The default model build passes
-60 jobs; the unit tier passes 94 tests in 24.967 seconds with one skip.
-The changed retry, delayed-encryption and coherent post-clear witnesses each
-pass with exact original/observed JSON and their strengthened syscall endpoint
-checks. The nine original/observed cases passed the preceding audit checkpoint;
-the unchanged R1, R2, R4 and other R5 witnesses were not repeated here.
+60 jobs; the unit tier passes 94 tests in 23.092 seconds with one skip.
+The unchanged replay witnesses were not repeated for this pure trie extension.
+The retry, delayed-encryption and coherent post-clear witnesses passed the
+preceding checkpoint with exact original/observed JSON and strengthened syscall
+endpoint checks; all nine cases passed the earlier audit carry.
 The generated R4–R6 streams establish accepted mirror behavior, not new Linux
 captures or kernel scheduling reachability.
 Independent reviews cover peer creation, the seccomp carry, mixed enqueue,
@@ -38,7 +38,7 @@ the mixed peer-creation bridge, receive entry, maintenance, completion and polli
 TX staging, pure trie
 insertion, original empty-root and arbitrary-depth empty-child insertion with
 its wrapper, exact-prefix replacement, list deletion, placement and selected-root
-graft endpoints/rollback, saved-peer scans, the ten-call socket family,
+graft endpoints/rollback and successful representation, saved-peer scans, the ten-call socket family,
 transmit entry, actual stack/poll composition, the prerequisite carry, and the
 full-ring, receive-queue, complete receive-completion and outer-poll components, R5 receive/key-time, RX attempt and TX admission components, and the
 R5 replays with the timer-pass observer, the whole-advance factor, and both
@@ -416,9 +416,23 @@ whole-device equality and peer-list freshness are not assumed. Bad records may
 Stop: these are normal-return endpoint contracts, not failed-prefix observers
 or reachability claims for all alternatives.
 
-**Remaining claim.** Successful nonempty-graft representation, post-success
-freshness and lookup, deeper grafts, removal and general configuration histories
-remain open. Parsed-input
+`GraftSuccess` now refines both successful selected-root endpoints to the
+existing pure insertion: the requested node becomes a parent, or a second fresh
+ownerless node splits the old subtree and requested leaf. Whole-store freshness
+and duplicate-free represented IDs justify the exact reparenting and descendant
+frames. Split-bit separation is derived from the prefix geometry. Successful
+original `add` and `insert` retain the actual root link, validity, unique IDs,
+conditional compression, exact allocation count, and the opposite root value
+and any supplied opposite-family representation. `insert` advances the sequence
+once. Original lookup at the resulting device root terminates and satisfies
+`Winner` over the independently updated flat bindings. Only the target peer is
+required resident; no old-owner liveness or list coherence is assumed. The
+success premise is an actual original return of zero, not a post-state
+representation assumption. Normal refusal/rollback contracts remain unchanged;
+record Stops remain outside these normal-return claims.
+
+**Remaining claim.** Nonempty grafts below the selected root, removal and general
+configuration histories remain open. Parsed-input
 bounds and history invariants still need propagation through all mutations.
 Both packet paths follow R2. Owners are raw peer slots, not allocation or
 cryptographic identities; no liveness/ownership claim follows from tree lookup.
@@ -440,8 +454,13 @@ and rollback took 40 capped invocations over 35m28s: six passed and 34 failed
 during proof compilation, with no cap hits; the final full build passed 208
 jobs. Independent review corrected a draft `freeNode` contract that omitted
 node residency, and wording that confused normal-return classification with
-reachability. Successful graft refinement remains a follow-on, with no semantic
-obstruction identified. Independent reviews checked each layer
+reachability. The successful selected-root extension adds three terminal
+contracts (R3 now has 30). It took seven capped invocations over about eight
+minutes: four passed and three failed during ordinary proof normalization,
+with no cap hit or interruption. The final full build passed 255 jobs; all exits
+were collected. Independent review corrected wording that incorrectly grouped
+record Stops with classified normal-return outcomes. Final hashes were reconciled;
+the coordinated proof gate passes all 215 terminals. Independent reviews checked each layer
 and final terminal scopes; no correctness finding remains. Reporting corrections
 separated root values from linkage, endpoint equations from event order, and
 successful Worlds from failing Stops. Current validation is above; reproduce

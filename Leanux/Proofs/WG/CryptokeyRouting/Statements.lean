@@ -7,7 +7,7 @@ import Leanux.Proofs.WG.AllowedIps.PlacementMirror
 import Leanux.Proofs.WG.AllowedIps.ChildStore
 import Leanux.Proofs.WG.AllowedIps.DeepChildStore
 import Leanux.Proofs.WG.AllowedIps.ExactStore
-import Leanux.Proofs.WG.AllowedIps.GraftStore
+import Leanux.Proofs.WG.AllowedIps.GraftSuccess
 
 /-!
 # R3: prefix arithmetic, pure insertion and represented-tree operations
@@ -20,8 +20,8 @@ invariants and implements canonical-prefix replacement. Original insertion
 into an empty selected root or empty child, and exact-prefix replacement at
 any represented depth, refine that pure insertion and preserve a supplied
 opposite-family representation. Selected-root nonempty grafts have exact original
-normal-return endpoints, including allocation refusal and rollback; their success
-representation refinement remains open. General mutation refinement, configuration-history
+normal-return endpoints, including allocation refusal and rollback, and successful
+returns refine pure insertion and longest-prefix lookup. General mutation refinement, configuration-history
 agreement, and packet admission remain separate obligations of the result.
 -/
 
@@ -651,7 +651,7 @@ theorem original_insert_context_exact_correct (w : World) (d : WG.Device)
 /-- Every normal return of original add at a nonempty selected root is one of:
 first allocation refusal, second allocation refusal with source rollback, or
 installation of the source-shaped one-node or two-node graft. The represented
-input and actual root link justify traversal; this component does not yet prove
+input and actual root link justify traversal; the separate success theorem proves
 that either successful endpoint represents the pure inserted tree. A missing or
 rejected choice record may Stop and is not a normal allocation refusal. -/
 theorem original_add_root_graft_endpoints (w w' : World) (d : WG.Device)
@@ -698,8 +698,8 @@ theorem original_root_graft_rollback_effects (d : WG.Device) (width addr cidr pi
 
 /-- The original family wrapper increments the sequence before grafting. Every
 normal endpoint retains that increment, including either allocation refusal.
-Success endpoints are exact source updates; their pure-tree refinement and
-configuration-history composition are still separate obligations. -/
+Success endpoints are exact source updates. The separate success theorem gives
+pure-tree refinement; general configuration-history composition remains open. -/
 theorem original_insert_root_graft_endpoints (w w' : World) (d : WG.Device)
     (hd : w.k.wg = some d) (family : Nat) (n : NodeData) (l r : Tree)
     (addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
@@ -727,5 +727,119 @@ theorem original_insert_root_graft_endpoints (w w' : World) (d : WG.Device)
   · exact ⟨_, hs.2, (graftInstalled_metadata (bumpSeq d) (family == 4) n.id
       (encode (rootWidth (family == 4)) (rootSlot (family == 4)) n l r) addr cidr pid p).2.2.2,
       .inr (.inr ⟨hs.1, rfl⟩)⟩
+
+/-- A successful original add stopped before a nonempty selected root represents
+exactly the existing pure insertion result, for IPv4 or IPv6. Its actual root
+link, local validity, duplicate-free node identifiers, whole-store allocation
+bound and a supplied opposite-family representation are preserved. Compression
+is preserved when present initially. Owners may be absent from the peer store;
+only the target peer must be resident. This is one insertion case, not a general
+configuration-history or packet-admission theorem. -/
+theorem original_add_root_graft_correct (w w' : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (v4 : Bool) (n : NodeData) (l r : Tree)
+    (addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
+    (hroot : rootValue d v4 = some n.id) (hb : NodesBelow d)
+    (hr : RepAt d.nodes (rootWidth v4) (rootSlot v4) (.node n l r))
+    (hn : (Tree.node n l r).nodeIds.Nodup)
+    (hv : (Tree.node n l r).Valid (rootWidth v4))
+    (ha : addr < 2 ^ rootWidth v4) (hc : cidr ≤ rootWidth v4)
+    (hstop : ¬ (n.cidr ≤ cidr ∧ prefixBits (rootWidth v4) n.cidr n.addr =
+      prefixBits (rootWidth v4) n.cidr addr))
+    (other : Tree) (ho : RepAt d.nodes (rootWidth (!v4)) (rootSlot (!v4)) other)
+    (hreturn : (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w = .ok (0, w')) :
+    let inserted := (Tree.node n l r).insertFresh (rootWidth v4) d.nextNode addr cidr pid
+    let installed := graftInstalled d v4 n.id (encode (rootWidth v4) (rootSlot v4) n l r) addr cidr pid p
+    w'.k = { w.k with wg := some installed } ∧ NodesBelow installed ∧
+      rootValue installed v4 = inserted.tree.root ∧
+      RepAt installed.nodes (rootWidth v4) (rootSlot v4) inserted.tree ∧
+      inserted.tree.Valid (rootWidth v4) ∧ inserted.tree.nodeIds.Nodup ∧
+      ((Tree.node n l r).Compressed → inserted.tree.Compressed) ∧
+      installed.nextNode = d.nextNode + inserted.allocations ∧
+      rootValue installed (!v4) = rootValue d (!v4) ∧
+      installed.peerAllowedips.seq = d.peerAllowedips.seq ∧
+      RepAt installed.nodes (rootWidth (!v4)) (rootSlot (!v4)) other := by
+  have outcome := original_add_root_graft_endpoints w w' d hd v4 n l r addr cidr pid p
+    hp hroot hb hr hv ha hc hstop 0 hreturn
+  rcases outcome with hf | hf | hs
+  · simp [ENOMEM] at hf
+  · simp [ENOMEM] at hf
+  have hm := graftInstalled_insert_metadata d v4 n l r addr cidr pid p hstop
+  exact ⟨hs.2, graftInstalled_below d v4 n.id _ addr cidr pid p hb (hb n.id _ hr.1),
+    hm.2.1, graftInstalled_rep d v4 n l r addr cidr pid p hb hr hn hv ha hstop,
+    Tree.insertFresh_valid hv ha hc d.nextNode pid,
+    Tree.insertFresh_nodeIds_nodup hn (hr.ids_below hb) (rootWidth v4) addr cidr pid,
+    fun h => Tree.insertFresh_compressed h (rootWidth v4) d.nextNode addr cidr pid,
+    hm.1, hm.2.2.1, hm.2.2.2, graftInstalled_other_rep d v4 n l r addr cidr pid p hb hr other ho⟩
+
+/-- Following a successful original selected-root graft, original findNode starts
+at the actual resulting device root, terminates, and returns a longest-prefix
+winner in the independently updated flat binding list. The result retains raw
+owner labels and does not assert their lifetime or packet-admission properties. -/
+theorem original_add_root_graft_lookup (w w' : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (v4 : Bool) (n : NodeData) (l r : Tree)
+    (addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
+    (hroot : rootValue d v4 = some n.id) (hb : NodesBelow d)
+    (hr : RepAt d.nodes (rootWidth v4) (rootSlot v4) (.node n l r))
+    (hn : (Tree.node n l r).nodeIds.Nodup)
+    (hv : (Tree.node n l r).Valid (rootWidth v4))
+    (ha : addr < 2 ^ rootWidth v4) (hc : cidr ≤ rootWidth v4)
+    (hstop : ¬ (n.cidr ≤ cidr ∧ prefixBits (rootWidth v4) n.cidr n.addr =
+      prefixBits (rootWidth v4) n.cidr addr)) (key : Nat) (hk : key < 2 ^ rootWidth v4)
+    (hreturn : (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w = .ok (0, w')) :
+    let old := Tree.node n l r
+    let inserted := old.insertFresh (rootWidth v4) d.nextNode addr cidr pid
+    ∃ d' final, w'.k.wg = some d' ∧
+      (WG.findNode (rootValue d' v4) (rootWidth v4) key).run w' =
+        .ok ((inserted.tree.lookup (rootWidth v4) key).map Entry.id, final) ∧
+      Winner (rootWidth v4) key
+        (inserted.binding :: old.entries.filter
+          (fun e => e.prefixKey (rootWidth v4) != (cidr, prefixBits (rootWidth v4) cidr addr)))
+        (inserted.tree.lookup (rootWidth v4) key) ∧ final.k = w'.k := by
+  obtain ⟨hkernel, _, hroot', hrep, hvalid, _⟩ := original_add_root_graft_correct
+    w w' d hd v4 n l r addr cidr pid p hp hroot hb hr hn hv ha hc hstop .empty trivial hreturn
+  have hdev : w'.k.wg = some (graftInstalled d v4 n.id
+      (encode (rootWidth v4) (rootSlot v4) n l r) addr cidr pid p) := by rw [hkernel]
+  have hw : rootWidth v4 = 32 ∨ rootWidth v4 = 128 := by cases v4 <;> simp [rootWidth]
+  obtain ⟨final, he, hframe⟩ := findNode_run w' _ (rootWidth v4) key hw hk hdev
+    ((Tree.node n l r).insertFresh (rootWidth v4) d.nextNode addr cidr pid).tree
+    (rootSlot v4) hrep hvalid
+  refine ⟨_, final, hdev, ?_, Tree.insertFresh_lookup_spec hv ha hc d.nextNode pid key, hframe⟩
+  simpa only [hroot', Tree.lookupId] using he
+
+/-- A successful original configuration insert that grafts before the nonempty
+selected root increments the sequence once, implements pure insertion with its
+exact allocation count, and preserves a supplied opposite-family representation.
+The premise is an actual successful original run. Both normal allocation refusals
+are classified separately by the endpoint theorem. Rejected or missing records
+may Stop and are outside these normal-return contracts. -/
+theorem original_insert_root_graft_correct (w w' : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (family : Nat) (n : NodeData) (l r : Tree)
+    (addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
+    (hroot : rootValue d (family == 4) = some n.id) (hb : NodesBelow d)
+    (hr : RepAt d.nodes (rootWidth (family == 4)) (rootSlot (family == 4)) (.node n l r))
+    (hn : (Tree.node n l r).nodeIds.Nodup)
+    (hv : (Tree.node n l r).Valid (rootWidth (family == 4)))
+    (ha : addr < 2 ^ rootWidth (family == 4)) (hc : cidr ≤ rootWidth (family == 4))
+    (hstop : ¬ (n.cidr ≤ cidr ∧ prefixBits (rootWidth (family == 4)) n.cidr n.addr =
+      prefixBits (rootWidth (family == 4)) n.cidr addr))
+    (other : Tree) (ho : RepAt d.nodes (rootWidth (!(family == 4))) (rootSlot (!(family == 4))) other)
+    (hreturn : (WG.insert family addr cidr pid).run w = .ok (0, w')) :
+    let v4 := family == 4
+    let inserted := (Tree.node n l r).insertFresh (rootWidth v4) d.nextNode addr cidr pid
+    ∃ d', w'.k = { w.k with wg := some d' } ∧
+      d'.peerAllowedips.seq = d.peerAllowedips.seq + 1 ∧ NodesBelow d' ∧
+      rootValue d' v4 = inserted.tree.root ∧
+      RepAt d'.nodes (rootWidth v4) (rootSlot v4) inserted.tree ∧
+      inserted.tree.Valid (rootWidth v4) ∧ inserted.tree.nodeIds.Nodup ∧
+      ((Tree.node n l r).Compressed → inserted.tree.Compressed) ∧
+      d'.nextNode = d.nextNode + inserted.allocations ∧
+      rootValue d' (!v4) = rootValue d (!v4) ∧
+      RepAt d'.nodes (rootWidth (!v4)) (rootSlot (!v4)) other := by
+  rw [insert_run_bump w d hd family addr cidr pid] at hreturn
+  obtain ⟨hk, hb', hroot', hr', hv', hn', hcomp, hnext, hotherRoot, hseq, hother⟩ :=
+    original_add_root_graft_correct
+      { w with k := { w.k with wg := some (bumpSeq d) } } w' (bumpSeq d) rfl
+      (family == 4) n l r addr cidr pid p hp hroot hb hr hn hv ha hc hstop other ho hreturn
+  exact ⟨_, hk, hseq, hb', hroot', hr', hv', hn', hcomp, hnext, hotherRoot, hother⟩
 
 end Leanux.Proofs.WG.CryptokeyRouting
