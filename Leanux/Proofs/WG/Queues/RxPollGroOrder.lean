@@ -117,9 +117,9 @@ theorem gro_flush_bind (gro : List GroEntry) (f : Unit → PrefixM GroEvent α)
     PrefixEnsures (GroInv gro) GroSafe (flushGro gro >>= f) Q :=
   PrefixEnsures.bind (flushGro_spec gro) hf
 
-/-- The replacement order to be established for the complete current poll.
+/-- The distinct selected order for the complete current poll.
 Normal offers precede held offers, preserving each class's internal order.
-This is a definition of the remaining obligation, not an exported theorem. -/
+`SelectedGro` establishes this predicate without changing `GroSafe`. -/
 def SelectedGroSafe (h : List GroEvent) : Prop :=
   ∃ remaining,
     ((bufferedEntries h).filter (fun e => groTakenAtOnce e.bytes) ++

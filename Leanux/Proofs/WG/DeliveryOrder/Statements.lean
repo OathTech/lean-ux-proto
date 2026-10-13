@@ -4,6 +4,7 @@ import Leanux.Proofs.WG.Queues.PrevQueue
 import Leanux.Proofs.WG.Queues.RxCompletionFrame
 import Leanux.Proofs.WG.Queues.RxPollOrder
 import Leanux.Proofs.WG.Queues.RxPollGroOrder
+import Leanux.Proofs.WG.Queues.SelectedGro
 
 /-! R4 queue components: physical-ring refusal, original prev_queue FIFO laws,
 and successful-endpoint receive-queue helper frames. Whole recorded-schedule delivery,
@@ -237,5 +238,28 @@ theorem original_stack_callback_visited_prefix (entries : List Queues.GroEntry)
       (Logged.runPrefix (Queues.flushGro entries) w h).2 = h ++ visited.map Queues.GroEvent.entered ∧
       (∀ x v, (Logged.runPrefix (Queues.flushGro entries) w h).1 = .ok (x, v) → remaining = []) :=
   Queues.flushGro_prefix entries w h
+
+/-- For one complete original poll's exact observer, callback entries form a
+prefix of normal completion offers followed by held offers, preserving each
+class's order. This holds for every input World, including every Stop and the
+entry of a callback which fails. History starts empty for this poll; the result
+does not assert chronological order, completed delivery or source-tag uniqueness. -/
+theorem original_poll_selected_callback_prefix (pid : PeerId) (budget : Nat) (w : World) :
+    Queues.SelectedGroSafe (Logged.runPrefix (Queues.rxPollGro pid budget) w []).2 :=
+  Queues.rxPollGro_selected_prefix pid budget w
+
+/-- If the actual original poll with the concrete stack callback returns
+normally, every buffered completion offer has exactly its callback entry in
+the selected normal-then-held order, including multiplicity. The premise is
+the original run, not observer success or a caller-supplied history invariant.
+This is per-poll callback-entry conservation, not completed stack delivery,
+receive-queue occurrence provenance or whole-schedule conservation. -/
+theorem original_poll_selected_callback_complete (pid : PeerId) (budget : Nat)
+    (w v : World) (n : Nat)
+    (hr : (rxPoll pid budget (fun bytes => bytes.forM Leanux.Env.deliverInner)).run w = .ok (n, v)) :
+    Queues.selectedEntries (Queues.bufferedEntries
+      (Logged.runPrefix (Queues.rxPollGro pid budget) w []).2) =
+      Queues.enteredEntries (Logged.runPrefix (Queues.rxPollGro pid budget) w []).2 :=
+  Queues.rxPollGro_selected_complete pid budget w v n hr
 
 end Leanux.Proofs.WG.DeliveryOrder

@@ -25,6 +25,17 @@ theorem PrefixEnsures.forInInvariant (xs : List α) (b : β)
     | done b => exact PrefixEnsures.pure (hs b) (fun _ _ hi => hi)
     | yield b => exact ih b
 
+/-- A finite range loop retains an accumulator-dependent invariant on either
+normal exhaustion or early return, and history safety on every failure. -/
+theorem PrefixEnsures.rangeInvariant (r : Std.Legacy.Range) (b : β)
+    (g : Nat → β → PrefixM Event (ForInStep β))
+    (I : β → List Event → World → Prop) (S : List Event → Prop)
+    (hs : ∀ b h w, I b h w → S h)
+    (hg : ∀ x b, PrefixEnsures (I b) S (g x b) (fun step => I step.value)) :
+    PrefixEnsures (I b) S (forIn r b g) I := by
+  rw [Std.Legacy.Range.forIn_eq_forIn_range']
+  exact PrefixEnsures.forInInvariant _ b g I S hs hg
+
 theorem erasesPrefix_range (r : Std.Legacy.Range) (b : β)
     (g : Nat → β → PrefixM Event (ForInStep β)) (a : Nat → β → M (ForInStep β))
     (ha : ∀ x b, ErasesPrefix (g x b) (a x b)) :
