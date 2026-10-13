@@ -1,14 +1,16 @@
 import Leanux.Proofs.WG.AllowedIps.ArithmeticMirror
 import Leanux.Proofs.WG.AllowedIps.Tree
+import Leanux.Proofs.WG.AllowedIps.LookupMirror
 
 /-!
-# R3: prefix arithmetic and the pure cryptokey-routing tree
+# R3: prefix arithmetic and represented-tree cryptokey lookup
 
 These statements connect the original arithmetic helpers to leading-bit
 prefixes and prove longest-prefix lookup in a pure tree with local edge
-conditions. Refinement of the original node-store traversal, preservation by
-trie mutations, configuration-history agreement, and packet admission remain
-separate obligations of the routing result.
+conditions. Original node-store traversals terminate and refine this lookup
+under an exact structural representation. Preservation by trie mutations,
+configuration-history agreement, and packet admission remain separate
+obligations of the routing result.
 -/
 
 namespace Leanux.Proofs.WG.CryptokeyRouting
@@ -57,8 +59,8 @@ theorem choose_correct (n : WG.AipNode) (key : Nat) (w : World) (hc : n.cidr < n
 /-- In the pure intermediate tree, lookup returns an owned prefix that
 matches the query and is at least as long as every matching binding, or none
 exactly when no binding matches. The premise contains only address bounds
-and immediate-child conditions; establishing it from original mutations and
-relating this lookup to `findNode` are separate, still-open refinements. -/
+and immediate-child conditions; establishing it from original mutations is
+a separate, still-open refinement. -/
 theorem pureTree_lookup_correct (t : Tree) (width key : Nat) (hv : t.Valid width) :
     Winner width key t.entries (t.lookup width key) :=
   Tree.lookup_spec hv key
@@ -71,12 +73,42 @@ theorem pureTree_canonical_prefixes_unique (t : Tree) (width : Nat) (hv : t.Vali
   Tree.prefixKeys_nodup hv
 
 /-- A valid pure IPv4 or IPv6 tree has room within 130 traversal iterations
-for a longest path and one empty-cursor check. This arithmetic bound does not
-yet assert termination or correctness of the original `findNode` loop. -/
+for a longest path and one empty-cursor check. The original traversal theorem
+below uses this bound to rule out its explicit exhaustion error. -/
 theorem pureTree_search_depth_bound (t : Tree) (width : Nat)
     (hw : width = 32 ∨ width = 128) (hv : t.Valid width) :
     t.height + 1 ≤ 130 := by
   have h := Tree.height_le hv
   rcases hw with rfl | rfl <;> omega
+
+/-- The original traversal always returns normally on an exactly represented
+valid IPv4 or IPv6 tree. It returns the longest matching owned prefix's node
+ID, or none when no owned prefix matches, and preserves the whole Kernel.
+The representation premise describes the actual node map and backlinks;
+establishing it from configuration mutations remains a separate obligation. -/
+theorem original_findNode_lookup_correct (w : World) (d : WG.Device)
+    (width key : Nat) (hw : width = 32 ∨ width = 128) (hk : key < 2 ^ width)
+    (hd : w.k.wg = some d) (t : Tree) (parent : WG.Slot)
+    (hr : RepAt d.nodes width parent t) (hv : t.Valid width) :
+    ∃ w', (WG.findNode t.root width key).run w =
+        .ok ((t.lookup width key).map Entry.id, w') ∧
+      Winner width key t.entries (t.lookup width key) ∧ w'.k = w.k := by
+  obtain ⟨w', he, hframe⟩ := findNode_run w d width key hw hk hd t parent hr hv
+  exact ⟨w', he, Tree.lookup_spec hv key, hframe⟩
+
+/-- Any successful execution of the original traversal on an exactly
+represented valid IPv4 or IPv6 tree returns its longest matching owned
+prefix's node ID, or none when no owned prefix matches. This theorem assumes
+the structural representation at entry; it does not establish that mutations
+produce it. It is the successful-run corollary of the total result above. -/
+theorem original_findNode_successful_lookup_correct (w w' : World) (d : WG.Device)
+    (width key : Nat) (hw : width = 32 ∨ width = 128) (hk : key < 2 ^ width)
+    (hd : w.k.wg = some d) (t : Tree) (parent : WG.Slot)
+    (hr : RepAt d.nodes width parent t) (hv : t.Valid width) (result : Option Nat)
+    (hreturn : (WG.findNode t.root width key).run w = .ok (result, w')) :
+    result = (t.lookup width key).map Entry.id ∧
+      Winner width key t.entries (t.lookup width key) ∧ w'.k = w.k := by
+  have h := findNode_refines w w' d width key hw hk hd t parent hr hv result hreturn
+  exact ⟨h.1, Tree.lookup_spec hv key, h.2⟩
 
 end Leanux.Proofs.WG.CryptokeyRouting

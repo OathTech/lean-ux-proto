@@ -28,6 +28,31 @@ theorem hoare_iff_triple (a : M α) (P : World → Prop) (Q : α → World → P
     change a w = .ok (x, w') at hr
     simpa [WP.wp, PredTrans.pushArg, PredTrans.pushExcept, PredTrans.apply, StateT.run, Except.instWP._aux_1, ExceptT.run, Id.run, PredTrans.pure, Pure.pure, ExceptConds.true, ExceptConds.const, hr] using hh
 
+/-- A total weakest-precondition triple is equivalent to normal execution
+with its stated postcondition in this StateT/Except mirror. -/
+theorem total_iff_run (a : M α) (P : World → Prop) (Q : α → World → Prop) :
+    (⦃fun w => ⌜P w⌝⦄ a ⦃⇓ x w => ⌜Q x w⌝⦄) ↔
+      ∀ w, P w → ∃ x w', a.run w = .ok (x, w') ∧ Q x w' := by
+  constructor
+  · intro h w hp
+    have hh := h w hp
+    cases hr : a w with
+    | error e =>
+      simp [WP.wp, PredTrans.pushArg, PredTrans.pushExcept, PredTrans.apply,
+        StateT.run, Except.instWP._aux_1, ExceptT.run, Id.run, PredTrans.pure,
+        Pure.pure, ExceptConds.false, ExceptConds.const, hr] at hh
+    | ok out =>
+      refine ⟨out.1, out.2, hr, ?_⟩
+      simpa [WP.wp, PredTrans.pushArg, PredTrans.pushExcept, PredTrans.apply,
+        StateT.run, Except.instWP._aux_1, ExceptT.run, Id.run, PredTrans.pure,
+        Pure.pure, ExceptConds.false, ExceptConds.const, hr] using hh
+  · intro h w hp
+    rcases h w hp with ⟨x, w', hr, hq⟩
+    change a w = .ok (x, w') at hr
+    simpa [WP.wp, PredTrans.pushArg, PredTrans.pushExcept, PredTrans.apply,
+      StateT.run, Except.instWP._aux_1, ExceptT.run, Id.run, PredTrans.pure,
+      Pure.pure, ExceptConds.false, ExceptConds.const, hr] using hq
+
 theorem branch_wp (d : Decision) (b : Bool) (P : Kernel → Prop) :
     ⦃fun w => ⌜P w.k⌝⦄ branch d b ⦃⇓? x w => ⌜x = b ∧ P w.k⌝⦄ := by
   unfold branch

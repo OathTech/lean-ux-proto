@@ -10,9 +10,9 @@ are unchanged by that carry, so all existing results remain current.
 
 | Result | Progress |
 | --- | --- |
-| R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay, independent review and 24-statement proof gate pass over c85e86b. |
-| R2 lifetime safety | Keypair operation endpoints, peer allocation/reference helpers, packet primitives, failure-retaining peer release observations and stale-cursor finding checked (62-statement gate); caller/lifecycle and whole-run internal-access coverage remain in progress. |
-| R3 cryptokey routing | Original prefix arithmetic and pure-tree longest-prefix lookup proved (58-statement gate); original traversal/mutation/history and path refinements remain open. Path proofs follow R2. |
+| R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay and independent review checked. Current over 618034e. |
+| R2 lifetime safety | Keypair operation endpoints, peer allocation/reference helpers, packet primitives, failure-retaining peer release observations and stale-cursor finding checked; caller/lifecycle and whole-run internal-access coverage remain in progress. |
+| R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees proved; device-root linkage, mutation/history and path refinements remain open. Path proofs follow R2. |
 | R4 delivery | Not started; drop characterisation waiting on W7 full-ring tier's explanation of the two drops. |
 | R5 key lifetime | Not started; time half waiting on review items 7 and 8 on the timer model. |
 | R6 flood resistance | Not started. |
@@ -262,34 +262,41 @@ also proves height at most width plus one; IPv6 leaves room within 130
 iterations for every node and an empty-cursor check. The three new terminals
 explicitly describe this intermediate model, not the original traversal.
 
-**Remaining claim.** Representation in the mirror's node map and backlinks,
-refinement of `findNode`, preservation by insertion/removal, configuration
-history agreement, and both packet paths remain open. The depth theorem alone
-does not establish termination of the original loop. No R3 statement has been
-reshaped and no Rule Zero finding is claimed here.
+**Original traversal.** `Store.RepAt` records exact reachable node values,
+children and parent backlinks, permitting unrelated store entries. It contains
+no lookup premise. `LookupMirror` proves total correctness of the original
+`findNode`, with exceptions forbidden: every represented valid IPv4/IPv6 tree
+and bounded query returns the pure longest-prefix answer normally and preserves
+the whole Kernel. Its loop invariant keeps the current subtree, earlier best
+match and actual remaining-range budget. Strict height decrease rules out
+exhaustion of the 130-iteration loop. The action retains its branch effects in
+the returned World; the export does not separately characterize those records.
 
-**Validation and effort.** Five compile passes over about five minutes produced
-the arithmetic layers. Six further compile calls over about seven minutes
-produced the 21 tree lemmas and three new terminals; three failed on proof
-elaboration or simplification details before correction. The full gate passes:
-119 build jobs, 58 terminal statements (six in R3), only permitted standard
-axioms. The default model
-build also passes. The required unit tier ran 88 tests, OK with one skip.
-The mirror remains byte-identical to `c85e86b`; all checked components are
+**Remaining claim.** The traversal starts at the represented tree's root;
+linkage to device root4/root6, preservation by insertion/removal, configuration
+history agreement and both packet paths remain open. Owners are raw peer slots,
+not cryptographic identities or allocation stamps. Peer liveness and reference
+ownership are not asserted. No R3 statement has been reshaped and no Rule Zero
+finding is claimed here.
+
+**Validation and effort.** The arithmetic took five compile passes, the pure
+tree six, and the store/traversal refinement twenty over about eighteen minutes.
+Failed passes exposed proof elaboration or simplification errors. The full gate
+passes 127 build jobs and 64 terminal statements (eight in R3), with only the
+permitted standard axioms. The default model build passes 51 jobs; the required
+unit tier passes 88 tests with one skip. The mirror remains byte-identical to
+`618034e`, whose executable inputs equal `c85e86b`; all checked components are
 current, with no lag. Reproduce with
 `capped -- scripts/in-bundle scripts/proof-gate`.
 
-**Independent review.** A read-only worker found no defect in the arithmetic
-or source correspondence. The proof retains complete World effects and the
-IPv6 branch order. Address/CIDR bounds and node-family consistency still need
-propagation from parsed configuration through trie updates. Correspondence to
-C byte layout remains informal; this is not a simulation proof against C.
-Independent review of the tree found no proof defect. Its representation
-limits are explicit: node labels can repeat, owner labels need not denote live
-peers, and pure queries range over all naturals. The original-store refinement
-must supply node/data/child coherence, matching node widths and bounded queries.
-Compression is defined separately and neither required nor established by
-these lookup theorems.
+**Independent review.** Read-only reviews found no correctness defect in the
+arithmetic, pure tree or total original traversal. The arithmetic retains exact
+World effects and IPv6 branch order. The traversal derives normal completion
+rather than assuming it, and its representation supplies actual node/data/child
+coherence and node widths. Bounds still need propagation from parsed inputs
+through mutations. Compression and globally unique node labels are neither
+required nor established here; owner labels need not denote live peers.
+Correspondence to C byte layout remains informal: this is not a C simulation.
 
 **Ranked mirror-shape recommendations.** None from this component. The current
 named arithmetic helpers and integer address encoding admit exact refinement
