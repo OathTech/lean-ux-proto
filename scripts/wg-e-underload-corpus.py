@@ -118,6 +118,15 @@ def traces():
         "e_underload_cookie": base_ops() + [flood(leading=[v1]), OBSERVE, GET],
         # two leading valids under load -> two byte-exact cookie replies
         "e_underload_two_replies": base_ops() + [flood(leading=[v1, v2]), OBSERVE, GET],
+        # make_cookie's secret rotation (cookie.c:96-102, COOKIE_SECRET_MAX_AGE
+        # 120 s): a `wg_advance` of 124 s (HZ=250: 31000 ticks) after the
+        # checker's init puts the secret's birthdate past the age, so the
+        # leading valid's MAC2 check (the first make_cookie under load) rotates
+        # the secret (a coarse clock read and 32 random bytes, both recorded)
+        # and the cookie reply is sealed under the new secret. Found by the
+        # receive correspondence audit (docs/2026-10-13-audit-receive.md F7).
+        "e_underload_cookie_rotated": base_ops() + [{"op": "wg_advance", "ticks": 31000},
+                                                    flood(leading=[v1]), OBSERVE, GET],
         # The decay (receive.c:116-119; the simulation-target review's 3.4): the
         # flood's invalid tail leaves `last_under_load` at its last under-load
         # read. An initiation injected after the flood, inside the one-second
