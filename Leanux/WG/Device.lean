@@ -265,6 +265,11 @@ def wgDestruct : M Unit := do
   if !d.sendWorkQueue.isEmpty || !d.encryptQueue.empty || !d.txWorkQueue.isEmpty
       || !d.decryptQueue.empty || !d.clearWorkQueue.isEmpty then
     unsupported "wg_destruct with queued work (destroy_workqueue runs it)"
+  -- the handshake ring too (device.c:255 would run its receive worker before
+  -- the purge at :258): unreachable, since wg_stop stops `unsupported` on a
+  -- nonempty ring and a device never brought up receives nothing
+  if !d.handshakeQueue.isEmpty then
+    invariant "wg_destruct with handshake messages queued (wg_stop drains the ring)"
   mayHaveSlept
   -- wg_packet_queue_free: the handshake ring is purged; the crypt rings are
   -- empty (WARN_ON otherwise)
@@ -299,9 +304,24 @@ def wgDelete : M Int := do
     segments of a GSO skb, two or more; W4) and `mtu`, the `dst_mtu` of the
     datagram's route (device.c:173; `Env.xmitPackets`). -/
 def wgXmit (family addr : Nat) (pkts : List Packet) (mtu : Nat) : M Int := do
+  -- wg_check_packet_protocol (queueing.h:70-74): `real_protocol` is the
+  -- EtherType of the skb's IP version nibble (ip_tunnel_parse_protocol,
+  -- ip_tunnel_core.c:1109-1120; 0 for neither 4 nor 6) and `skb->protocol`
+  -- the one the sender's IP layer set from the datagram's family. A GSO skb
+  -- is checked whole, before its segments: every segment carries its nibble.
+  let some first := pkts.head? | invariant "wg_xmit without a packet"
+  let realProtocol := match first.bytes with
+    | b :: _ => if b.toNat / 16 == 4 then ETH_P_IP else if b.toNat / 16 == 6 then ETH_P_IPV6 else 0
+    | [] => 0
+  let skbProtocol := if family == 4 then ETH_P_IP else ETH_P_IPV6
   -- `real_protocol && skb->protocol == real_protocol`
-  let ok ← andM (branch .checkProtoParsed true) (branch .checkProtoMatches true)
-  if ← branch .xmitBadProtocol !ok then unsupported "unreachable"
+  let ok ← andM (branch .checkProtoParsed (realProtocol != 0)) (branch .checkProtoMatches (skbProtocol == realProtocol))
+  if ← branch .xmitBadProtocol !ok then
+    -- `goto err` (device.c:148-150, 230-233): no ICMP; tx_errors, kfree_skb,
+    -- `-EPROTONOSUPPORT`. Modelled, unexercised: the harness has no raw
+    -- socket, and the kernel's own IP layer never hands wg_xmit a bad nibble.
+    modifyDev fun d => { d with txErrors := d.txErrors + 1 }
+    return -EPROTONOSUPPORT
   let err (ret : Int) : M Int := do
     -- err_icmp: icmp_ndo_send / icmpv6_ndo_send (cut points, whose rate limit
     -- and IP output draw cut-site choices), then err. The error is sent iff
@@ -360,14 +380,22 @@ def wgXmit (family addr : Nat) (pkts : List Packet) (mtu : Nat) : M Int := do
     - overhead`, the overhead being 32 + 8 + 40. -/
 def MAX_MTU : Nat := 2147483647 / 16 * 16 - 80
 
-/-- `dev_set_mtu` (net/core/dev.c:9085-9122) of wg0, a cut: `dev_validate_mtu`
-    refuses above `max_mtu` (`-ERANGE`; wg sets no `min_mtu`, so 0 is
-    accepted), `__dev_set_mtu` writes `dev->mtu`, and `NETDEV_CHANGEMTU`'s
-    notifiers take the `inet6_dev` down below 1280 (addrconf.c:3691-3695)
-    and the `in_device` down below 68 (devinet.c:1637-1643); a later valid
-    MTU re-creates each, empty. -/
-def setMtu (mtu : Nat) : M Int := do
-  if mtu > MAX_MTU then return -ERANGE
+/-- `dev_set_mtu` (net/core/dev.c:9085-9122) of wg0 with the ioctl's
+    `new_mtu` (an int), a cut: `dev_validate_mtu` (dev.c:9061-9075) refuses a
+    negative value (`new_mtu < 0 || new_mtu < dev->min_mtu`, the latter 0 for
+    wg0, so 0 is accepted) and a value above `max_mtu`, both with `-EINVAL`;
+    `__dev_set_mtu` writes `dev->mtu`, and `NETDEV_CHANGEMTU`'s notifiers
+    take the `inet6_dev` down below 1280 (addrconf.c:3691-3695) and the
+    `in_device` down below 68 (devinet.c:1637-1643); a later valid MTU
+    re-creates each, empty. The two tests are plain decisions: `net/core/dev.c`
+    is not an anchored file. (Until 2026-10-13 the mirror answered `-ERANGE`
+    above `max_mtu` and nothing below zero; the device correspondence audit's
+    M1, never exercised by the corpus before `w4_set_mtu_over_max` and
+    `w4_set_mtu_negative`.) -/
+def setMtu (newMtu : Int) : M Int := do
+  if newMtu < 0 then return -EINVAL          -- dev.c:9065-9068
+  if newMtu > MAX_MTU then return -EINVAL    -- dev.c:9070-9073
+  let mtu := newMtu.toNat
   modifyDev fun d => { d with mtu, inet6Dev := mtu ≥ 1280, inet4Dev := mtu ≥ 68 }
   return 0
 
