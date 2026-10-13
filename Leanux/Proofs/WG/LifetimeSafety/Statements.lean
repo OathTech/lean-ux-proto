@@ -2,13 +2,92 @@ import Leanux.Proofs.WG.Keypairs.Identity
 import Leanux.Proofs.WG.ReplayWindow.Statements
 import Leanux.Proofs.Logged.Checkpoints
 import Leanux.Proofs.WG.LifetimeSafety.CursorWitness
+import Leanux.Proofs.WG.Packets.Primitives
+import Leanux.Proofs.WG.Peers.Primitives
 
-/-! R2's keypair-store lifetime component. These statements concern allocation
-identities in the store; reference ownership, peers and packet identities
-require their own claims and are not premises hidden in this projection. -/
+/-! R2's store-identity components: whole-operation keypair evolution,
+peer-reference helper sequences, and packet primitive sequences within a device
+epoch. Full caller and lifecycle coverage remain separate obligations. -/
 namespace Leanux.Proofs.WG.LifetimeSafety
 open Leanux Leanux.WG Leanux.Proofs.Logged
 open Leanux.Proofs.WG.Keypairs Leanux.Proofs.WG.ReplayWindow
+
+/-- Every successful actual peer getter resolves the identity resident in its
+slot now. It does not certify that a caller's raw slot reference owns a ref. -/
+theorem peer_lookup_current (i : PeerId) (w w' : World) (p : Peer)
+    (hr : (getPeer i).run w = .ok (p, w')) :
+    w' = w ∧ (Peers.snapshot w).slots i = some p.internalId :=
+  Peers.getPeer_current i w w' p hr
+
+/-- The actual unconditional peer setter preserves store identities when its
+replacement has the same identity as the current resident of that slot. -/
+theorem peer_set_current_identity (i : PeerId) (p : Peer) (w w' : World)
+    (hl : (Peers.snapshot w).slots i = some p.internalId)
+    (hr : (setPeer i p).run w = .ok ((), w')) : Peers.snapshot w' = Peers.snapshot w :=
+  Peers.setPeer_same i p w w' hl hr
+
+/-- Finite successful sequences of the original getPeer, peerGet and peerPut
+retain or remove store identities and leave the allocation frontier unchanged.
+This is a helper-family statement, without a whole-run coverage premise. -/
+theorem peer_reference_sequence_retains_identities (w w' : World)
+    (h : Peers.Sequence w w') : Lifetimes.Retained (Peers.snapshot w) (Peers.snapshot w') :=
+  Peers.sequence_retained h
+
+/-- An identity absent before a finite original peer-reference helper sequence
+cannot reappear afterward; these helpers perform no peer allocation. -/
+theorem peer_reference_sequence_no_resurrection (w w' : World) (stamp : Nat)
+    (h : Peers.Sequence w w') (ha : Lifetimes.Absent (Peers.snapshot w) stamp) :
+    Lifetimes.Absent (Peers.snapshot w') stamp :=
+  fun i hi => ha i ((Peers.sequence_retained h).2 i stamp hi)
+
+/-- Any finite sequence of successful original packet-store primitives keeps
+the device epoch, the allocation bound and every surviving old slot identity.
+The named family is exactly the eight TX/RX helpers, not the whole runner. -/
+theorem packet_primitive_sequence_lifetimes (w w' : World)
+    (h : Packets.Sequence w w') (hi : Packets.Inv w) :
+    Packets.Inv w' ∧ Packets.epoch w' = Packets.epoch w ∧
+      Lifetimes.Transition (Packets.snapshot w) (Packets.snapshot w') :=
+  Packets.sequence_contract h hi
+
+/-- A previously allocated packet identity absent before a finite successful
+sequence of original store primitives remains absent afterward. Device resets
+and internal accesses in composite callers are outside this helper family. -/
+theorem packet_primitive_sequence_no_resurrection (w w' : World) (stamp : Nat)
+    (h : Packets.Sequence w w') (hi : Packets.Inv w)
+    (hb : stamp ≤ (Packets.snapshot w).frontier)
+    (ha : Lifetimes.Absent (Packets.snapshot w) stamp) :
+    Lifetimes.Absent (Packets.snapshot w') stamp :=
+  (Packets.sequence_contract h hi).2.2.absent hb ha
+
+/-- Filling an empty packet slot through these original primitive executions
+requires an allocation identity newer than their initial allocation frontier. -/
+theorem packet_primitive_sequence_empty_slot_fresh (w w' : World)
+    (slot : Packets.Slot) (stamp : Nat) (h : Packets.Sequence w w')
+    (hi : Packets.Inv w) (he : (Packets.snapshot w).slots slot = none)
+    (hl : (Packets.snapshot w').slots slot = some stamp) :
+    (Packets.snapshot w).frontier < stamp :=
+  (Packets.sequence_contract h hi).2.2.empty_fresh he hl
+
+/-- Bounded packet stores make the shared next allocation slot empty in both
+directions, so either original allocation helper allocates a fresh slot. -/
+theorem packet_next_allocation_slots_empty (w : World) (d : Device)
+    (hd : w.k.wg = some d) (hi : Packets.Inv w) :
+    d.txSkbs[d.nextSkb]? = none ∧ d.rxSkbs[d.nextSkb]? = none :=
+  Packets.allocation_slots_empty w d hd hi
+
+/-- A successful original TX getter returns the current resident packet and
+leaves the entire World unchanged. -/
+theorem packet_tx_lookup_current (i : SkbId) (w w' : World) (p : DataPacket)
+    (hr : (getTxSkb i).run w = .ok (p, w')) :
+    w' = w ∧ ∃ d, w.k.wg = some d ∧ d.txSkbs[i]? = some p :=
+  Packets.getTxSkb_current i w w' p hr
+
+/-- A successful original RX getter returns the current resident packet and
+leaves the entire World unchanged. -/
+theorem packet_rx_lookup_current (i : SkbId) (w w' : World) (p : RxPacket)
+    (hr : (getRxSkb i).run w = .ok (p, w')) :
+    w' = w ∧ ∃ d, w.k.wg = some d ∧ d.rxSkbs[i]? = some p :=
+  Packets.getRxSkb_current i w w' p hr
 
 /-- A retained cursor slot 26 makes the actual dump-done callback release the
 live replacement peer, allocation identity 55 with one reference, while its
@@ -19,6 +98,24 @@ theorem stale_cursor_retargets_replacement :
     CursorWitness.before = some (55, 1, false) ∧
     CursorWitness.afterDone = some (none, [26], [26]) := by
   decide
+
+/-- After an actual TX free, no successful sequence of the eight original
+packet primitives can make a later original getter at that slot succeed.
+This statement covers one device epoch, without assuming TX/RX disjointness. -/
+theorem packet_tx_free_prevents_later_lookup (i : SkbId) (w v u out : World)
+    (p : DataPacket) (hi : Packets.Inv w)
+    (hf : (freeTxSkb i).run w = .ok ((), v)) (hs : Packets.Sequence v u) :
+    (getTxSkb i).run u ≠ .ok (p, out) :=
+  Packets.freedTx_unreadable i w v u out p hi hf hs
+
+/-- After an actual RX free, no successful sequence of the eight original
+packet primitives can make a later original getter at that slot succeed.
+This statement covers one device epoch, without assuming TX/RX disjointness. -/
+theorem packet_rx_free_prevents_later_lookup (i : SkbId) (w v u out : World)
+    (p : RxPacket) (hi : Packets.Inv w)
+    (hf : (freeRxSkb i).run w = .ok ((), v)) (hs : Packets.Sequence v u) :
+    (getRxSkb i).run u ≠ .ok (p, out) :=
+  Packets.freedRx_unreadable i w v u out p hi hf hs
 
 /-- The checkpoint observer used by concrete lifetime witnesses returns the
 original runner's full JSON or exact indexed error after its observation list

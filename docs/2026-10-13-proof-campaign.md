@@ -9,7 +9,7 @@ campaign. No mirror or kernel edits, no integration into main, no push.
 | Result | Progress |
 | --- | --- |
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay, independent review and 24-statement proof gate pass over c85e86b. |
-| R2 lifetime safety | Keypair store component and concrete stale-cursor finding checked (35-statement gate); peer/packet components and internal-access coverage in progress. This is not yet the whole R2 claim. |
+| R2 lifetime safety | Keypair operation endpoints, peer reference helpers, packet primitives and stale-cursor finding checked (47-statement gate); caller/lifecycle and internal-access coverage in progress. This is not yet the whole R2 claim. |
 | R3 cryptokey routing | Read-only trie investigation; path proofs follow R2. |
 | R4 delivery | Not started; drop characterisation waiting on W7 full-ring tier's explanation of the two drops. |
 | R5 key lifetime | Not started; time half waiting on review items 7 and 8 on the timer model. |
@@ -109,8 +109,34 @@ A subsequent successful original getter cannot return an already absent,
 previously allocated identity. The reachable-state `Inv` premise supplies the
 frontier bound when starting with a resident identity. These are keypair-store
 and operation-endpoint statements. They do not assert safety of every transient
-access inside an operation, or cover peers and packets yet. Those obligations
-remain in progress, not hidden hypotheses of a completed R2 result.
+access inside an operation. The peer and packet components below cover named
+helper families; caller/lifecycle and internal-access obligations remain in
+progress, not hidden hypotheses of a completed R2 result.
+
+**Peer and packet primitive checkpoint.** `WG/Lifetimes/Store` is a reusable
+allocation-frontier model. `Transition` preserves the provenance of every old
+identity that remains; `Retained` only removes identities, with an unchanged
+frontier. `Actions` composes contracts over finite sequences of **actual
+successful original helper executions**, rather than assuming abstract store
+steps. `Peers/Primitives` proves current getter identity, a conditional setter
+contract, and retention/removal through `getPeer`, `peerGet`, and `peerPut`.
+The raw setter is unconditional in the mirror: its proof therefore requires
+that the replacement's identity equals the current resident's identity.
+
+`Packets/Primitives` proves exact executions and contracts for all eight
+TX/RX allocation, lookup, update and free helpers. Its independently stated
+invariant bounds resident ids by the shared `nextSkb` allocation frontier.
+It proves freshness, absence preservation and, directly, that after an actual
+free no later successful primitive sequence can make a getter at that slot
+succeed. These packet statements keep one device epoch; they do not cover
+device deletion/recreation. The invariant does not assume TX/RX disjointness,
+and the post-free proof uses same-slot emptiness rather than global absence.
+Peer allocation, other callers and every internal access still need closure.
+
+[AGENT 2026-10-13] Share projection contracts and allocation-frontier algebra
+between peer and packet stores; preserve the fixed-device scope until the
+original device lifecycle is proved. This avoids claiming raw skb numbers
+identify allocations across device replacement.
 
 **Concrete reference finding.** An eight-operation, explicitly recorded mirror
 run creates 28 peers, starts a stepped dump, deletes wg0, creates a replacement
@@ -167,6 +193,19 @@ results are current with no lag. This checkpoint took about half an hour of
 source investigation, three keypair compile passes and first-pass builds of
 the checkpoint observer and local witness. The campaign continues with peer
 and packet identity projections before claiming whole-result completion.
+
+**Primitive checkpoint validation.** The full proof gate passes with 110
+build jobs and 47 terminal statements (23 in R2), using only permitted standard
+axioms. A separate read-only review found no defect in the shared store,
+original-helper contracts or post-free corollaries; its requested scope limits
+and module-heading correction are incorporated above. The implementation took
+about 40 minutes and 19 compile/gate passes. A repeated anonymous hypothesis
+unpacking tactic looped; that build was stopped by its verified PID and the
+proof repaired. Other failed passes were proof elaboration/interface errors,
+including duplicate generated match lemmas fixed by importing the existing
+frame module before proving the peer contracts. No mirror semantics changed.
+The required fast unit tier ran 88 tests, OK with one skip. R1, ReplayWindow and
+the checked R2 components remain current over `c85e86b`; no result lag.
 
 **Ranked mirror-shape recommendations.** (1) Restore the documented rejection
 of device deletion with a pending stepped dump: altitude-preserving fixture
