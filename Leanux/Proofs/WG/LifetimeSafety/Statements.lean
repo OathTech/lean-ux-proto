@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Lifetimes.TxStagingCalls
 import Leanux.Proofs.WG.Keypairs.Identity
 import Leanux.Proofs.WG.ReplayWindow.Statements
 import Leanux.Proofs.Logged.Checkpoints
@@ -875,5 +876,51 @@ theorem receive_maintenance_clock_failure_prefix (pid : PeerId) (site : HiddenSi
         .peer (.read pid q.internalId), .peer (.write pid q.internalId)]) :=
   Lifetimes.timersHandshakeCompletePrefix_clock_failure pid site w afterDelete clockEntry p q h e
     hp hdel hq hreset hclock
+
+
+/-- All seven TX staging-family observers erase to the original result,
+Stop, and complete successful World on every input. CPU selection and device
+enqueue retain their Nat and Int results. Queued workers are not executed. -/
+theorem tx_staging_access_erasure (call : Lifetimes.TxStagingCall) :
+    ErasesPrefix call.observed call.original := call.erases
+
+/-- Generic resolved-store access safety for the complete staging family,
+with explicit TX allocation/release and scalar device-update contracts.
+Cached identity predicates are preserved where the original writes require them. -/
+theorem tx_staging_ambient_access_preserves (c : Lifetimes.AmbientContracts I)
+    (t : Lifetimes.TxContracts I) (call : Lifetimes.TxStagingCall) :
+    PrefixPreserves I Lifetimes.LifetimeEvent.Safe call.observed :=
+  call.preserves_ambient c t
+
+/-- The concrete AllocationInv instance retains safe histories on every
+outcome and allocation bounds on success. No distinct-packet-ID, ownership,
+queue-coherence, delivery, or whole-scheduler premise or conclusion is added. -/
+theorem tx_staging_allocation_access_preserves (call : Lifetimes.TxStagingCall) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed :=
+  call.allocation
+
+/-- The original TX setter reads its resident before writing. A failing
+getter emits nothing; successful resolution emits the read and write in order. -/
+theorem tx_setter_exact_observation (id : SkbId) (f : DataPacket → DataPacket)
+    (w : World) (h : List Lifetimes.LifetimeEvent) :
+    runPrefix (Lifetimes.setTxSkbPrefix id f) w h =
+      match (getTxSkb id).run w with
+      | .error e => (.error e, h)
+      | .ok (_, _) => ((setTxSkb id f).run w,
+          h ++ [.packet (.read (.inl id) (Lifetimes.packetStamp w id)),
+            .packet (.write (.inl id) (Lifetimes.packetStamp w id))]) :=
+  Lifetimes.setTxSkbPrefix_run id f w h
+
+/-- Conditional whole-call equation for a keepalive allocation-record Stop:
+the initial peer read remains in the history. Premises describe original
+operations; this is not a recorded runner reproduction or normal refusal. -/
+theorem tx_keepalive_allocation_failure_prefix (pid : PeerId) (w checked : World) (p : Peer)
+    (h : List Lifetimes.LifetimeEvent) (e : Stop)
+    (hp : (getPeer pid).run w = .ok (p, w))
+    (hb : (branch .keepaliveStagedEmpty p.staged.isEmpty).run w = .ok (true, checked))
+    (ha : (hiddenAlloc .keepaliveSkb).run checked = .error e) :
+    runPrefix (Lifetimes.sendKeepalivePrefix pid) w h =
+      (.error e, h ++ [.peer (.read pid p.internalId)]) :=
+  Lifetimes.sendKeepalivePrefix_alloc_failure pid w checked p h e hp hb ha
 
 end Leanux.Proofs.WG.LifetimeSafety

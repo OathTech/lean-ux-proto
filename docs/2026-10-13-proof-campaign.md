@@ -14,21 +14,22 @@ differential check or guest run.
 | Result | Progress |
 | --- | --- |
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay and independent review checked. Seccomp frame carry checked. |
-| R2 lifetime safety | Keypair operation endpoints, peer allocation/reference helpers, packet primitives, failure-retaining peer creation/release, mixed receive-enqueue/decrypt iteration, keypair/packet release families, and complete keypair/TX/RX allocation with fixture initialization, allocation-aware release/caller composition and complete session/rotation, peer-creation, receive-entry and receive-maintenance calls, plus stale-cursor finding checked; caller/lifecycle and whole-run internal-access coverage remain in progress. |
-| R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion, original empty-root and arbitrary-depth empty-child insertion with sequence wrappers, exact-prefix replacement with sequence wrappers, and total original placement proved; general mutation/history and path refinements remain open. Path proofs follow R2. |
+| R2 lifetime safety | Keypair operation endpoints, peer allocation/reference helpers, packet primitives, failure-retaining peer creation/release, mixed receive-enqueue/decrypt iteration, keypair/packet release families, and complete keypair/TX/RX allocation with fixture initialization, allocation-aware release/caller composition and complete session/rotation, peer-creation, receive-entry, receive-maintenance and TX-staging calls, plus stale-cursor finding checked; caller/lifecycle and whole-run internal-access coverage remain in progress. |
+| R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion, original empty-root, arbitrary-depth empty-child and exact-prefix insertion with sequence wrappers, and total original placement proved; general mutation/history and path refinements remain open. Path proofs follow R2. |
 | R4 delivery | Not started; drop characterisation waiting on W7 full-ring tier's explanation of the two drops. |
 | R5 key lifetime | Not started; time half waiting on review items 7 and 8 on the timer model. |
 | R6 flood resistance | Not started. |
 
-**Current validation.** The full proof gate passes 195 build jobs and 135
-terminal statements (ReplayWindow 15, R1 9, R2 87, R3 24), with only permitted
+**Current validation.** The full proof gate passes 201 build jobs and 140
+terminal statements (ReplayWindow 15, R1 9, R2 92, R3 24), with only permitted
 axioms. The default model build passes 60 jobs; the unit tier passes 93 tests
-in 21.516 seconds with one skip. The R1 explicit-record witness was rechecked at the seccomp carry; both R2
-variants were rechecked at this checkpoint. All agree with the original runner.
+in 21.089 seconds with one skip. The R1 explicit-record witness was rechecked
+at the seccomp carry; both R2 variants were rechecked with the exact-prefix
+checkpoint. All agree with the original runner.
 Independent reviews cover peer creation, the seccomp carry, mixed enqueue,
 decrypt execution, keypair/packet releases, ambient caller composition,
 allocation and release-bound composition, session creation and rotation,
-the mixed peer-creation bridge, receive entry and maintenance, pure trie
+the mixed peer-creation bridge, receive entry and maintenance, TX staging, pure trie
 insertion, original empty-root and arbitrary-depth empty-child insertion with
 its wrapper, exact-prefix replacement, list deletion and placement.
 
@@ -149,7 +150,12 @@ allocation and free, optional-peer/index/public-key lookup, complete receive
 enqueue and `consumeData`, packet decryption and one decrypt-worker
 iteration. Twelve endpoint/cache, timer, queued-handshake and receive-key-refresh
 calls also preserve safe prefixes; Boolean guard/modifier results are retained.
-Finite release-call families compose them. Generic enqueue/decrypt
+Seven complete TX staging calls cover CPU selection, peer/device enqueue,
+`createData`, staged-packet purge/send and keepalive. Their `TxContracts`
+companion retains cached identity predicates through scalar device updates,
+with a concrete allocation-invariant instance; CPU and enqueue results remain
+`Nat` and `Int`. `PrefixLoops` shares finite range and map composition.
+Shared bind and finite-loop laws compose these per-call contracts. Generic enqueue/decrypt
 contracts admit explicit observed softirq, IRQ-exit and rescheduling callbacks;
 they are instantiated at the allocation invariant. Peer creation reuses its
 existing observer unchanged, with original slot/metadata geometry transporting
@@ -168,12 +174,18 @@ Handshake-completion clock failure retains four accesses before the Stop.
 The timer guard's nested peer getter is evaluated unconditionally before
 `andM`; its observer preserves that elaborated order. Coverage is
 checked against actual source calls; erasure or an unchanged-Kernel theorem
-cannot certify that a lifted helper contains no reads. Shared filesystem frames
+cannot certify that a lifted helper contains no reads. TX observations retain
+the setter's read/write pair, both restoration getters and the nonce write
+before rejection. Duplicate cleanup IDs remain admitted, including a later
+Stop after an earlier free. The keepalive allocation-record failure equation
+retains its initial peer read. Plain staged packet values have no resident
+TX/RX store identity until `newTxSkb` runs. Shared filesystem frames
 also end at return, leaving queued task work for its later caller proof.
 
 **Remaining claim.** Full caller, device-lifecycle and scheduler closure remain
-unproved. Receive completion/poll, TX, handshake execution and timer callbacks,
-peer removal, netlink and direct resident scans need coverage. Saved scalar-reference
+unproved. Receive completion/poll, encrypt/TX workers and sockets, handshake
+execution and timer callbacks, peer removal, netlink and direct resident scans
+need coverage. Saved scalar-reference
 ownership is a separate obligation: aliased or dangling IDs may legitimately
 stop after earlier safe accesses. No distinct-keypair-slot premise is hidden in
 rotation or clearing. The stale cursor below does not resurrect the old stamp,
@@ -222,9 +234,9 @@ python3 -B docs/proof-campaign-replay.py r2-stale-dump-cursor-orphan |
 ```
 
 **Effort and review.** Each reproduction takes under one second. The main caller
-checkpoints took roughly 6–25 minutes each, with 4–19 compile passes; the latest
-receive-maintenance checkpoint took seven passes over 15.7 minutes (five
-elaboration failures, then targeted and full builds passing). Counts and failed
+checkpoints took roughly 6–25 minutes each, with 4–19 compile passes; TX
+staging took fourteen passes over 24m44s: two passed and twelve failed before
+correction, with the full 201-job build passing at the end. Counts and failed
 passes are retained in the checkpoint history; current validation is above.
 Failures were proof elaboration/simplification failures, not passes or mirror
 findings. One earlier tactic loop was stopped by its verified PID and repaired.
@@ -232,8 +244,10 @@ Independent source reviews cover every listed checkpoint and its final deltas.
 They corrected scope wording and identified an unused impossible KDF-failure
 premise; that vacuous lemma was deleted. The maintenance review also corrected
 the draft no-device frame argument to `modifyDev`'s actual no-op behavior.
-No remaining correctness finding is
-reported for the checked components. C initializes cache/handshake before its
+The TX review checked the seven callers against the mirror and C, and clarified
+that the per-call contracts compose through existing laws without exporting a
+new sequence runner. No remaining correctness finding is reported for the
+checked components. C initializes cache/handshake before its
 peer-counter increment, whereas the mirror increments/inserts first: the proof
 follows the mirror, without claiming a C simulation or a lifetime counterexample.
 
