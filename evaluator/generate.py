@@ -571,6 +571,13 @@ def generate_seccomp(seed, count, max_ops=24):
         trace = dict(version=1, id=f'seccomp-{seed}-{len(result):05}', ops=operations)
         if children:
             trace['seccomp_child'] = True
+        digest = identity(trace)
+        if digest not in seen:
+            seen.add(digest)
+            result.append(trace)
+    return result
+
+
 # Profile `epoll` (docs/2026-10-12-epoll-design.md section 7, tier 1).
 EPOLLIN, EPOLLPRI, EPOLLOUT, EPOLLERR, EPOLLHUP, EPOLLRDHUP = 0x1, 0x2, 0x4, 0x8, 0x10, 0x2000
 EPOLLEXCLUSIVE, EPOLLWAKEUP, EPOLLONESHOT, EPOLLET = 1 << 28, 1 << 29, 1 << 30, 1 << 31
