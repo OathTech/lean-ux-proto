@@ -168,7 +168,10 @@ def seccompIsConstAllow (prog : _root_.Leanux.ClassicProg) (sd : SeccompData) : 
           kbranchCmp .constAllowJgtRes (reg > k) (u32 reg) (u32 k)
         else
           _ ← kbranch .constAllowJset true
-          kbranchCmp .constAllowJsetRes ((reg &&& k) != 0) (u32 reg) (u32 k)
+          -- `!!(reg_value & k)` is compiled as `(reg_value & k) != 0`: the variable is the
+          -- masked value, the constant 0 (measured on sc2 by X, seccomp-generated: records
+          -- (0x0, 0x0) and (0x0, 0x68))
+          kbranchCmp .constAllowJsetRes ((reg &&& k) != 0) (u32 (reg &&& k)) 0
       -- `pc += op_res ? insn->jt : insn->jf`
       pc := pc + (if ← kbranch .constAllowJumpTaken res then insn.jt.toNat else insn.jf.toNat)
     | .andK =>

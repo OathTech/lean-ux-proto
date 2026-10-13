@@ -2321,7 +2321,7 @@ def Decision.comparison : Decision → Option Comparison
   | .constAllowJeqRes => some ⟨.eq, false, none, false⟩
   | .constAllowJgeRes => some ⟨.ge, false, none, false⟩
   | .constAllowJgtRes => some ⟨.gt, false, none, false⟩
-  | .constAllowJsetRes => some ⟨.flag, false, none, false⟩
+  | .constAllowJsetRes => some ⟨.ne, true, none, false⟩   -- the masked value against 0 (X)
   | .wantsSignalSigkill => some ⟨.eq, true, none, false⟩
   | .forceSigNotCurrent => some ⟨.ne, true, none, false⟩
   | .forceSigHandlerExit => some ⟨.eq, true, none, false⟩
