@@ -2385,3 +2385,57 @@ a mismatch); the coverage child's capture and the passing run's both still
 agree; `w7_mixed` three times live and the claim point in the integration
 report.
 
+### 17.18 The encrypt worker's yield position, by elimination [AGENT 2026-10-13, robustness]
+
+The audit wave's claim point (2026-10-13) failed `w7_ring_fresh_1024` in
+its tier group under seven concurrent guests with `expected
+section_stop:wg_packet_tx_worker (site 47), the record is site 100`, and
+the trace passed alone on both trees. Site 100 is the `mod_timer_arm`
+record (kind 303), not a timer section: `wg_timers_any_authenticated_packet_
+traversal` re-arms the persistent keepalive at the start of every packet
+`wg_packet_create_data_done` sends, so the arm is the first record of each
+item the tx worker sends. The mirror's tx worker expected its section's
+stop while the kernel's sent another item.
+
+The cause is a recordless loop. The encrypt worker reads no record per item
+(encryption has no hidden input; the tx work's queue record is written once,
+at the first enqueue of a not-pending unit), so its resched record says
+that it yielded, not after how many items, and the mirror's activation
+yields at the first `cond_resched` that sees the record (17.15). That is
+exact while nothing runs between the yield and the resumption, which is
+every claim point until this one; it is wrong when the kernel dispatches
+the tx worker at that yield (the records then show the tx section start
+right after the resched), since the tx worker sends every item the kernel's
+encrypt worker had crypted before yielding, and the mirror's has crypted
+one.
+
+The rule (`Leanux/Env/Batch.lean`, `cryptAhead`, called before each tx
+iteration): when the tx worker's head is still uncrypted in the mirror and
+the next record is an arm rather than the tx section's stop, the suspended
+encrypt activation crypted that item before its yield, so one encrypt
+iteration runs there, consuming no record (its `cond_resched` sees the arm,
+not a resched), with the tx unit held queued for that iteration (it was
+pending when the kernel's encrypt worker enqueued the item, so no queue
+record was written), and the tx step then sends the item. The position is
+thus the number of items the tx worker sent before its stop, exactly
+determined by the records whenever it matters; when the tx worker does not
+run between two yields the position is unobservable and the first-item
+yield stands. Fail-closed: no suspended encrypt activation, or an empty
+encrypt queue, with an arm next is a hidden mismatch; another peer's first
+enqueue inside the crypt-ahead would need a queue record the mirror has
+passed and mismatches there (single-peer batches are the tier's domain).
+
+Evidence: the deterministic instance `W7_CRYPT_AHEAD` in
+`evaluator/test_model_replay.py`, `W7_RESUMED_OUTER`'s operation 4
+rearranged to the claim point's schedule (the encrypt worker yields after
+two items, the tx worker sends both and stops at the uncrypted third, the
+encrypt worker resumes, re-queues the tx work at its third enqueue and
+finishes, the tx worker's second run sends the rest; every value the
+capture's own). Before the rule the replay fails with the claim point's
+message; with it the replay agrees. The schedule did not recur live in six
+runs of the tier trace at load 6 to 9 (the claim point's seven guests were
+not available); the instance is the evidence. The replay tests' captures
+predate review item 7's end-of-wait record (kind 310) and the module had
+been failing on every capture since; `with_jiffies_end` appends the record
+each such operation's wait now carries, with the capture's last jiffies, as
+a fixture of the replay.

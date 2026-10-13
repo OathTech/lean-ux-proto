@@ -442,3 +442,23 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   02 the receive-side silent drops at a full peer queue or decrypt ring
   (`rx_dropped` untouched, the free is `consume_skb`; the queue fills before
   authentication, put as a question).
+- **2026-10-13 [AGENT, fork of the coordinator]** Claim-point robustness, three
+  rules. (1) The encrypt worker's yield position is determined by
+  elimination (`Leanux/Env/Batch.lean`, `cryptAhead`; W7 design 17.18):
+  its loop reads no record per item, so when the records dispatch the tx
+  worker at its yield and the tx section carries an item the mirror has
+  not crypted (the per-item arm where the stop was expected), the
+  suspended encrypt activation crypted it before yielding and one encrypt
+  iteration runs there; fail-closed otherwise. The audit wave's tier
+  failure was this, not a timer: site 100 is the arm record. (2) The
+  protocol's ceiling on open NAPI placements is the trace's injected-
+  message count (`evaluator/protocol.py`, `injected_messages`), one (c')
+  placement per delivered data message, replacing the bound of 64; the
+  receive-side 1025-item trace joins the tier. (3) `Q-M1-dispatch-order-
+  ignored` has the inconclusive rule `D2-M12` has, from the recorded
+  dispatch order (`evaluator/dispatch_orders.py`: a dispatch that was not
+  the FIFO head with two pending distinguishes it); the sentinel subsets
+  take several id prefixes. The replay tests' captures predate the kind-310
+  record and the module had failed on every capture since item 7;
+  `with_jiffies_end` appends the record as a replay fixture.
+

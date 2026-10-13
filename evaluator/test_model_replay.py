@@ -84,10 +84,38 @@ def run(trace):
     return result.returncode, result.stdout.decode(), result.stderr.decode()
 
 
+# The operations whose wait the mirror ends with the end-of-wait jiffies read
+# (review item 7, kind 310, Leanux/Syscalls.lean): the captures above predate
+# the instrument, so the replays append the record the guest now writes at the
+# end of each such wait, with the operation's last recorded jiffies (the arm
+# records' first word, the dst-cache stamps, an advance's `after`) carried
+# forward: no timer the capture did not show fires, and jiffies never goes
+# back. A fixture of the replay, not a mirror rule.
+JIFFIES_END_OPS = ('wg_set', 'wg_inject', 'wg_up', 'wg_xmit', 'wg_batch', 'wg_observe', 'wg_advance')
+JIFFIES_END_SITE = 128
+JIFFIES_SITES = {100: 0, 150: 0, 151: 0, 101: 8}   # site -> byte offset of its jiffies word
+
+
+def with_jiffies_end(trace):
+    trace = copy.deepcopy(trace)
+    if 'hidden' not in trace:
+        return trace
+    jiffies = 0
+    for op, records in zip(trace['ops'], trace['hidden']):
+        for site, value in records:
+            if site in JIFFIES_SITES and site != JIFFIES_END_SITE:
+                offset = JIFFIES_SITES[site]
+                jiffies = max(jiffies, int.from_bytes(bytes.fromhex(value[2 * offset:2 * offset + 16]), 'little'))
+        if op['op'] in JIFFIES_END_OPS and not any(site == JIFFIES_END_SITE for site, _ in records):
+            records.append([JIFFIES_END_SITE, jiffies.to_bytes(8, 'little').hex()])
+    return trace
+
+
 def replay(trace):
     if not MODEL.is_file():
         raise AssertionError(f'{MODEL} is missing: run `lake build leanux-model` first')
-    result = subprocess.run([MODEL], input=json.dumps(widen(trace)).encode(), capture_output=True, timeout=120)
+    result = subprocess.run([MODEL], input=json.dumps(with_jiffies_end(widen(trace))).encode(), capture_output=True,
+                            timeout=120)
     out = (result.stdout + result.stderr).decode()
     return None if result.returncode == 0 and out.startswith('{') and not result.stderr else out.strip()
 
@@ -95,13 +123,33 @@ def replay_raw(trace):
     """`replay` without `widen`: a capture made on the current kernel (the identity words, the kind-306 records)."""
     if not MODEL.is_file():
         raise AssertionError(f'{MODEL} is missing: run `lake build leanux-model` first')
-    result = subprocess.run([MODEL], input=json.dumps(trace).encode(), capture_output=True, timeout=120)
+    result = subprocess.run([MODEL], input=json.dumps(with_jiffies_end(trace)).encode(), capture_output=True, timeout=120)
     out = (result.stdout + result.stderr).decode()
     return None if result.returncode == 0 and out.startswith('{') and not result.stderr else out.strip()
 
 
 def sites(op):
     return [r[0] for r in op]
+
+
+# W7_RESUMED_OUTER's operation 4 rearranged to the schedule the audit wave's
+# claim point met under seven guests (2026-10-13, w7_ring_fresh_1024 in the
+# tier group): the encrypt worker yields after two items; the tx worker,
+# dispatched at that yield, sends both (two record groups) and stops at the
+# uncrypted third; the encrypt worker resumes, re-queues the tx work at its
+# third enqueue and finishes; the tx worker's second run sends items 3 to 8.
+# Every record value is the capture's own.
+def _crypt_ahead_instance():
+    trace = copy.deepcopy(W7_RESUMED_OUTER)
+    h = W7_RESUMED_OUTER['hidden'][4]
+    head, item1, item2, rest = h[:13], h[13:21], h[24:29], h[29:53]
+    tx_stop, queued_tx, enc_stop, tx_start = h[53], h[22], h[23], h[54]
+    trace['hidden'][4] = head + item1 + item2 + [tx_stop, queued_tx, enc_stop, tx_start] + rest + [tx_stop]
+    trace['id'] = 'w7_crypt_ahead'
+    return trace
+
+
+W7_CRYPT_AHEAD = _crypt_ahead_instance()
 
 
 class LoopbackNetRx(unittest.TestCase):
@@ -250,6 +298,22 @@ class SuspendedActivation(unittest.TestCase):
 
     def test_resumed_outer_capture_replays(self):
         self.assertIsNone(replay_raw(W7_RESUMED_OUTER))
+
+    def test_crypt_ahead_replays(self):
+        """The encrypt worker's yield position by elimination (Env/Batch.lean
+        `cryptAhead`, claim-point robustness 2026-10-13). The audit wave's
+        claim point failed w7_ring_fresh_1024 in its tier group under seven
+        guests with "expected section_stop:wg_packet_tx_worker (site 47), the
+        record is site 100": the kernel dispatched the tx worker at an encrypt
+        yield and it sent more items than the mirror's encrypt activation,
+        which yields at its first item, had crypted. The instance is
+        W7_RESUMED_OUTER's operation 4 rearranged to that schedule: the
+        encrypt worker yields after two items, the tx worker sends both and
+        stops at the uncrypted third, the encrypt worker resumes, re-queues
+        the tx work at its third item and finishes, and the tx worker's second
+        run sends the rest. Without the rule the replay fails as the claim
+        point did; with it the replay agrees."""
+        self.assertIsNone(replay_raw(W7_CRYPT_AHEAD))
 
 
 if __name__ == '__main__':

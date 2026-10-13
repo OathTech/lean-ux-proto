@@ -151,6 +151,49 @@ def Activation.hasWork (a : Activation) : M Bool := do
     return (← getTxSkb id).state != .uncrypted
   | w => invariant s!"{w.symbol} is not a draining worker"
 
+/-- The encrypt worker's yield position, by elimination (claim-point
+    robustness, 2026-10-13; docs/2026-10-06-w4-w7-transmit-bulk.md 17.18).
+    The encrypt worker's loop reads no record per item (encryption has no
+    hidden input, and the tx work's queue record is written once, at the
+    first enqueue of a not-pending unit), so its resched record says that it
+    yielded, not after how many items; the mirror's activation yields at the
+    first `cond_resched` that sees the record. That is exact while nothing
+    runs between the yield and the resumption, and wrong when the records
+    then dispatch the tx worker, which sends every item the kernel's encrypt
+    worker had crypted before yielding: its section carries one record group
+    per item (the persistent keepalive's arm, `wg_timers_any_authenticated_
+    packet_traversal`, is the first record of each), so the kernel's count
+    is in the records. Hence, when the tx worker's head is still uncrypted
+    in the mirror and the next record is an arm rather than the tx section's
+    stop, the suspended encrypt activation crypted that item before its
+    yield: one encrypt iteration runs here, consuming no record (its
+    `cond_resched` sees the arm, not a resched), and the tx step then sends
+    the item. Fail-closed: no suspended encrypt activation, or an empty
+    encrypt queue, with an arm next is a hidden mismatch; an item whose
+    encryption would consume a record (another peer's first enqueue) stays
+    a mismatch at that record. -/
+def cryptAhead (pid : PeerId) : M Unit := do
+  if (← get).hidden.isNone then return
+  let some item := (← getPeer pid).txQueue.all.head? | return
+  let some id := item.head? | invariant "an empty ring item"
+  if (← getTxSkb id).state != .uncrypted then return
+  if (← peekHiddenSite) != some HiddenSite.modTimerArm.info.id then return
+  let w ← get
+  let some enc := w.suspended.find? (·.worker == .encryptWorker)
+    | throw (.hidden "the tx worker's head is uncrypted and no encrypt activation is suspended, but the next record is a timer arm (site 100)")
+  -- the item was crypted before the tx worker's dispatch, while its work was
+  -- still pending (queued at the first enqueue): the enqueue's `queue_work`
+  -- then wrote no record, so the unit is held queued for this iteration
+  modifyDev fun d => { d with txWorkQueue := d.txWorkQueue ++ [pid] }
+  let r ← WG.encryptIter checksumHelp napiSoftirq (condResched .encryptWorker)
+  modifyDev fun d => { d with txWorkQueue := d.txWorkQueue.erase pid }
+  match r with
+  | .continued =>
+    modify fun s => { s with suspended := s.suspended.map fun x =>
+      if x == enc then { x with iterations := x.iterations + 1 } else x }
+  | .ended => throw (.hidden "the encrypt activation's queue is empty, but the next record is a timer arm (site 100)")
+  | .yielded => invariant "the encrypt activation yielded on a record that is not a resched"
+
 /-- One iteration of the activation's C loop: the worker's step and its
     `cond_resched` decision (`workerIter`). -/
 def Activation.iter (a : Activation) : M IterResult := do
@@ -158,6 +201,7 @@ def Activation.iter (a : Activation) : M IterResult := do
   | .encryptWorker => WG.encryptIter checksumHelp napiSoftirq (condResched .encryptWorker)
   | .txWorker =>
     let some pid := a.pid | invariant "a tx activation without its peer"
+    cryptAhead pid
     WG.txIter pid (condResched .txWorker)
   | .decryptWorker => WG.decryptIter napiSoftirq napiIrqExit (condResched .decryptWorker)
   | .receiveWorker => workerIter .receiveWorker none WG.receiveStep (condResched .receiveWorker)
