@@ -172,7 +172,7 @@ def keepKeyFresh (pid : PeerId) : M Unit := do
     let some id := current | invariant "unreachable"
     let k ← getKeypair id
     andM (branch .freshValid k.sending.isValid) do
-      orM (branch .freshCounter (k.sendingCounter > REKEY_AFTER_MESSAGES)) do
+      orM (branchCmp .freshCounter (k.sendingCounter > REKEY_AFTER_MESSAGES) k.sendingCounter REKEY_AFTER_MESSAGES) do
         andM (branch .freshInitiator k.iAmTheInitiator) do
           branchExpired .freshExpired k.sending.birthdate REKEY_AFTER_TIME
   if ← branch .freshSend send then sendQueuedHandshakeInitiation pid false
