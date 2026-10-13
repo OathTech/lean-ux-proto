@@ -10,11 +10,14 @@ The sentinel, `cache-forgets-prev`, replaces bitmap_copy by bitmap_fill in the
 mirror's seccomp_cache_prepare, so a newer filter that is constant-allow for a
 number hides an older filter's kill; s_chain_older_kills_child catches it as a
 data mismatch (ALLOW against SIGSYS) and a control-flow mismatch (the cache-hit
-arm against the loop). The one-off, `jt-zero-jle`, makes the `jt == 0` arm of
-the classic-to-eBPF conversion emit JLE for JGE (net/core/filter.c:761-779):
-the kind-309 record rejects it at the first install. Each runs on the one trace
-that rejects it (the baseline on the same trace, so a known failure there does
-not count); a pattern of None is pending and reported, not run.
+arm against the loop). The kind-309 instrument's one-off,
+`S-M2-jt-zero-jle` (the `jt == 0` arm of the classic-to-eBPF conversion
+emitting JLE for JGE, net/core/filter.c:761-779), ran once on the sc2 scratch
+kernel on 2026-10-13 and was rejected through the hidden-mismatch channel on
+s_lang_jumps_k (JGE|K 10 with jt 0); it is deleted, as the rule for a new
+instrument says. The sentinel runs on the one trace that rejects it (the
+baseline on the same trace, so a known failure there does not count); a
+pattern of None is pending and reported, not run.
 """
 import json
 import os
@@ -33,13 +36,6 @@ MUTANTS = [
    "    if ← kbranch .cachePrepareHasPrev prev.isSome then pure prev.get!   -- bitmap_copy\n",
    "    if ← kbranch .cachePrepareHasPrev prev.isSome then pure (BitVec.allOnes NR_syscalls)   -- bitmap_copy\n",
    's_chain_older_kills_child'),
-  ('S-M2-jt-zero-jle', 'bpf_convert_filter: the jt == 0 arm emits JLE for JGE (filter.c:761-779): the kind-309 '
-   'record rejects it at the install of s_lang_jumps_k (JGE|K 10 with jt 0); a one-off for the instrument, '
-   'deleted after the claim point',
-   TRANSLATE,
-   "              cur := { cur with code := BPF_JMP.toUInt8 ||| BPF_JLT ||| bsrc }\n",
-   "              cur := { cur with code := BPF_JMP.toUInt8 ||| BPF_JLE ||| bsrc }\n",
-   's_lang_jumps_k'),
 ]
 PENDING = {m[0] for m in MUTANTS if m[3] is None}
 
