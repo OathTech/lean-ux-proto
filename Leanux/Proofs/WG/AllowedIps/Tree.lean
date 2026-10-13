@@ -3,7 +3,7 @@ import Leanux.Proofs.WG.AllowedIps.Prefix
 /-!
 # A pure allowed-IP tree
 
-Nodes retain the mirror's unmasked addresses and allocation labels. Validity
+Nodes retain the mirror's unmasked addresses and node identifiers. Validity
 contains address bounds and local edge conditions only. Lookup correctness is
 derived against the independent flat list of owned prefixes. The relation to
 the mirror's node store and its mutation history is a separate obligation.

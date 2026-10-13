@@ -15,17 +15,18 @@ differential check or guest run.
 | --- | --- |
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay and independent review checked. Seccomp frame carry checked. |
 | R2 lifetime safety | Keypair operation endpoints, peer allocation/reference helpers, packet primitives, failure-retaining peer creation/release and mixed receive-enqueue observations, plus stale-cursor finding checked; caller/lifecycle and whole-run internal-access coverage remain in progress. |
-| R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees proved; device-root linkage, mutation/history and path refinements remain open. Path proofs follow R2. |
+| R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, plus pure insertion structure and last-writer lookup, proved; device-root linkage, original mutation/history and path refinements remain open. Path proofs follow R2. |
 | R4 delivery | Not started; drop characterisation waiting on W7 full-ring tier's explanation of the two drops. |
 | R5 key lifetime | Not started; time half waiting on review items 7 and 8 on the timer model. |
 | R6 flood resistance | Not started. |
 
-**Current validation.** The full proof gate passes 152 build jobs and 74
-terminal statements (ReplayWindow 15, R1 9, R2 42, R3 8), with only permitted
+**Current validation.** The full proof gate passes 153 build jobs and 76
+terminal statements (ReplayWindow 15, R1 9, R2 42, R3 10), with only permitted
 axioms. The default model build passes 60 jobs; the unit tier passes 93 tests
-in 21.436 seconds with one skip. Both explicit-record witness replays below
+in 22.042 seconds with one skip. Both explicit-record witness replays below
 were rechecked at the seccomp carry and agree with the original runner.
-Independent reviews cover peer creation, the seccomp carry, and mixed enqueue.
+Independent reviews cover peer creation, the seccomp carry, mixed enqueue,
+and pure trie insertion.
 
 **Shared carry.** Signal/task and pipe helper frames, seccomp entry/tail frames
 and arbitrary prefill preservation keep the seven-field WG projection intact.
@@ -330,8 +331,28 @@ not cryptographic identities or allocation stamps. Peer liveness and reference
 ownership are not asserted. No R3 statement has been reshaped and no Rule Zero
 finding is claimed here.
 
+**Pure insertion.** `Insertion` adds one recursive Patricia insertion algorithm,
+using a local graft at stopped placement. It preserves local validity and
+compression and replaces exactly the requested canonical prefix's owner.
+Lookup agrees with the independently specified flat binding list after that
+replacement. Exact-prefix overwrite retains the old node ID and unmasked
+address. A new owned node receives the first fresh ID; when needed, the
+ownerless intermediate receives the second. A permutation theorem accounts
+for every old and new node ID, deriving uniqueness and the advanced frontier
+from explicit initial uniqueness and freshness premises. These are pure-tree
+results: original `add`, peer lists, backlinks, allocation failure and history
+refinement remain open. In particular, freshness within this tree does not
+imply freshness throughout the node store, which may also hold the other
+address-family tree and unrelated entries.
+
+[AGENT 2026-10-13] Keep the insertion algorithm singular; recursive structural
+evidence describes it without introducing a second executable tree model.
+Preserve raw addresses and allocation order for later original-store refinement.
+
 **Validation and effort.** The arithmetic took five compile passes, the pure
 tree six, and the store/traversal refinement twenty over about eighteen minutes.
+Pure insertion took thirteen build invocations over about sixteen and a half
+minutes, including its targeted and full builds.
 Failed passes exposed proof elaboration or simplification errors. Current
 validation is recorded above. Reproduce with
 `capped -- scripts/in-bundle scripts/proof-gate`.
@@ -341,9 +362,14 @@ arithmetic, pure tree or total original traversal. The arithmetic retains exact
 World effects and IPv6 branch order. The traversal derives normal completion
 rather than assuming it, and its representation supplies actual node/data/child
 coherence and node widths. Bounds still need propagation from parsed inputs
-through mutations. Compression and globally unique node labels are neither
-required nor established here; owner labels need not denote live peers.
+through original mutations. Compression and globally unique node identifiers
+are not required by lookup; pure insertion preserves them from explicit
+premises, without yet establishing reachability. Owner labels need not denote live peers.
 Correspondence to C byte layout remains informal: this is not a C simulation.
+A separate read-only insertion review checked the successful structural cases,
+canonical-prefix replacement, exact fresh-ID permutation and final terminal
+scope, finding no defect. Its whole-store freshness obligation is retained
+above; it did not run builds or the gate.
 
 **Ranked mirror-shape recommendations.** None from this component. The current
 named arithmetic helpers and integer address encoding admit exact refinement

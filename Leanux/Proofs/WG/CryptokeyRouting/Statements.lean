@@ -1,16 +1,18 @@
 import Leanux.Proofs.WG.AllowedIps.ArithmeticMirror
 import Leanux.Proofs.WG.AllowedIps.Tree
 import Leanux.Proofs.WG.AllowedIps.LookupMirror
+import Leanux.Proofs.WG.AllowedIps.Insertion
 
 /-!
-# R3: prefix arithmetic and represented-tree cryptokey lookup
+# R3: prefix arithmetic, pure insertion and represented-tree lookup
 
 These statements connect the original arithmetic helpers to leading-bit
 prefixes and prove longest-prefix lookup in a pure tree with local edge
 conditions. Original node-store traversals terminate and refine this lookup
-under an exact structural representation. Preservation by trie mutations,
-configuration-history agreement, and packet admission remain separate
-obligations of the routing result.
+under an exact structural representation. Pure insertion preserves the local
+invariants and implements canonical-prefix replacement. Refinement of original
+mutations, configuration-history agreement, and packet admission remain
+separate obligations of the routing result.
 -/
 
 namespace Leanux.Proofs.WG.CryptokeyRouting
@@ -110,5 +112,43 @@ theorem original_findNode_successful_lookup_correct (w w' : World) (d : WG.Devic
       Winner width key t.entries (t.lookup width key) ∧ w'.k = w.k := by
   have h := findNode_refines w w' d width key hw hk hd t parent hr hv result hreturn
   exact ⟨h.1, Tree.lookup_spec hv key, h.2⟩
+
+/-- Pure Patricia insertion replaces the owner of exactly the requested
+canonical prefix, retaining unmasked addresses and old node identifiers on
+overwrite. Lookup afterward chooses the longest match in that updated flat
+binding list. This is a theorem about the intermediate recursive algorithm;
+refinement of original `add` and its allocation failures remains open. -/
+theorem pureTree_insert_lookup_correct (t : Tree) (width fresh addr cidr peer key : Nat)
+    (hv : t.Valid width) (ha : addr < 2 ^ width) (hc : cidr ≤ width) :
+    let result := t.insertFresh width fresh addr cidr peer
+    result.binding.peer = peer ∧
+      result.binding.prefixKey width = (cidr, prefixBits width cidr addr) ∧
+      Winner width key
+        (result.binding :: t.entries.filter
+          (fun e => e.prefixKey width != (cidr, prefixBits width cidr addr)))
+        (result.tree.lookup width key) := by
+  exact ⟨Tree.insertFresh_peer t width fresh addr cidr peer,
+    Tree.insertFresh_prefixKey t width fresh addr cidr peer,
+    Tree.insertFresh_lookup_spec hv ha hc fresh peer key⟩
+
+/-- The same pure insertion preserves local validity and Patricia compression.
+From unique old node identifiers below the fresh frontier, the result keeps
+unique identifiers below the advanced frontier and adds exactly zero, one or
+two consecutive identifiers, including any ownerless intermediate node. -/
+theorem pureTree_insert_preserves_structure (t : Tree) (width fresh addr cidr peer : Nat)
+    (hv : t.Valid width) (ha : addr < 2 ^ width) (hc : cidr ≤ width)
+    (hcomp : t.Compressed) (hn : t.nodeIds.Nodup)
+    (hf : ∀ id ∈ t.nodeIds, id < fresh) :
+    let result := t.insertFresh width fresh addr cidr peer
+    result.tree.Valid width ∧ result.tree.Compressed ∧ result.allocations ≤ 2 ∧
+      result.tree.nodeIds.Nodup ∧
+      result.tree.nodeIds.Perm (List.range' fresh result.allocations ++ t.nodeIds) ∧
+      ∀ id ∈ result.tree.nodeIds, id < fresh + result.allocations := by
+  exact ⟨Tree.insertFresh_valid hv ha hc fresh peer,
+    Tree.insertFresh_compressed hcomp width fresh addr cidr peer,
+    Tree.insertFresh_allocations t width fresh addr cidr peer,
+    Tree.insertFresh_nodeIds_nodup hn hf width addr cidr peer,
+    Tree.insertFresh_nodeIds_perm t width fresh addr cidr peer,
+    Tree.insertFresh_nodeIds_bounded hf width addr cidr peer⟩
 
 end Leanux.Proofs.WG.CryptokeyRouting
