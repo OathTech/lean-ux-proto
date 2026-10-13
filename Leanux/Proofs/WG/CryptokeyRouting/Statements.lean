@@ -7,6 +7,7 @@ import Leanux.Proofs.WG.AllowedIps.PlacementMirror
 import Leanux.Proofs.WG.AllowedIps.ChildStore
 import Leanux.Proofs.WG.AllowedIps.DeepChildStore
 import Leanux.Proofs.WG.AllowedIps.ExactStore
+import Leanux.Proofs.WG.AllowedIps.GraftStore
 
 /-!
 # R3: prefix arithmetic, pure insertion and represented-tree operations
@@ -18,7 +19,9 @@ under an exact structural representation. Pure insertion preserves the local
 invariants and implements canonical-prefix replacement. Original insertion
 into an empty selected root or empty child, and exact-prefix replacement at
 any represented depth, refine that pure insertion and preserve a supplied
-opposite-family representation. General mutation refinement, configuration-history
+opposite-family representation. Selected-root nonempty grafts have exact original
+normal-return endpoints, including allocation refusal and rollback; their success
+representation refinement remains open. General mutation refinement, configuration-history
 agreement, and packet admission remain separate obligations of the result.
 -/
 
@@ -644,5 +647,85 @@ theorem original_insert_context_exact_correct (w : World) (d : WG.Device)
   refine ⟨w', ?_, hkernel, rfl, rfl, hroot', hrep, hvalid, hnodup'⟩
   rw [insert_run_bump w d hd family addr cidr pid]
   exact hrun
+
+/-- Every normal return of original add at a nonempty selected root is one of:
+first allocation refusal, second allocation refusal with source rollback, or
+installation of the source-shaped one-node or two-node graft. The represented
+input and actual root link justify traversal; this component does not yet prove
+that either successful endpoint represents the pure inserted tree. A missing or
+rejected choice record may Stop and is not a normal allocation refusal. -/
+theorem original_add_root_graft_endpoints (w w' : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (v4 : Bool) (n : NodeData) (l r : Tree)
+    (addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
+    (hroot : rootValue d v4 = some n.id) (hb : NodesBelow d)
+    (hr : RepAt d.nodes (rootWidth v4) (rootSlot v4) (.node n l r))
+    (hv : (Tree.node n l r).Valid (rootWidth v4))
+    (ha : addr < 2 ^ rootWidth v4) (hc : cidr ≤ rootWidth v4)
+    (hstop : ¬ (n.cidr ≤ cidr ∧ prefixBits (rootWidth v4) n.cidr n.addr =
+      prefixBits (rootWidth v4) n.cidr addr)) (result : Int)
+    (hreturn : (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w = .ok (result, w')) :
+    (result = -ENOMEM ∧ w'.k = w.k) ∨
+      (result = -ENOMEM ∧ min cidr (common (rootWidth v4) n.addr addr) ≠ cidr ∧
+        w'.k = { w.k with wg := some (graftRolledBack d (rootWidth v4) addr cidr pid p) }) ∨
+      (result = 0 ∧ w'.k = { w.k with wg := some (graftInstalled d v4 n.id
+        (encode (rootWidth v4) (rootSlot v4) n l r) addr cidr pid p) }) :=
+  (Leanux.Proofs.Framing.hoare_iff_triple _ _ _).mpr
+    (add_root_graft_wp w.k d hd v4 n l r addr cidr pid p hp hroot hb hr hv ha hc hstop)
+    w result w' rfl hreturn
+
+/-- The rollback endpoint consumes one node identifier, restores node lookups
+under whole-store freshness, and removes the allocated identifier from every
+resident peer list. It preserves roots, sequence and every supplied tree
+representation. No peer-list freshness or ownership is assumed, so structural
+Device/TreeMap equality with the initial state is not asserted. -/
+theorem original_root_graft_rollback_effects (d : WG.Device) (width addr cidr pid : Nat)
+    (p : WG.Peer) (hp : d.peers[pid]? = some p) (hb : NodesBelow d)
+    (family : Nat) (base : WG.Slot) (t : Tree) (hr : RepAt d.nodes family base t) :
+    let rolled := graftRolledBack d width addr cidr pid p
+    rolled.nextNode = d.nextNode + 1 ∧ rolled.peerAllowedips.seq = d.peerAllowedips.seq ∧
+      (∀ f, rootValue rolled f = rootValue d f) ∧
+      (∀ id : Nat, rolled.nodes[id]? = d.nodes[id]?) ∧
+      (∀ q : Nat, rolled.peers[q]? = (d.peers[q]?).map (unlist d.nextNode)) ∧
+      NodesBelow rolled ∧ RepAt rolled.nodes family base t := by
+  refine ⟨?_, ?_, ?_, graftRolledBack_nodes d width addr cidr pid p hb,
+    graftRolledBack_peer d width addr cidr pid p hp,
+    graftRolledBack_below d width addr cidr pid p hb,
+    graftRolledBack_rep d width addr cidr pid p hb t family base hr⟩
+  · simp only [graftRolledBack, unlisted, graftListed, allocated]
+  · simp only [graftRolledBack, unlisted, graftListed, allocated]
+  · intro f
+    simp only [graftRolledBack, unlisted, graftListed, allocated, rootValue]
+
+/-- The original family wrapper increments the sequence before grafting. Every
+normal endpoint retains that increment, including either allocation refusal.
+Success endpoints are exact source updates; their pure-tree refinement and
+configuration-history composition are still separate obligations. -/
+theorem original_insert_root_graft_endpoints (w w' : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (family : Nat) (n : NodeData) (l r : Tree)
+    (addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
+    (hroot : rootValue d (family == 4) = some n.id) (hb : NodesBelow d)
+    (hr : RepAt d.nodes (rootWidth (family == 4)) (rootSlot (family == 4)) (.node n l r))
+    (hv : (Tree.node n l r).Valid (rootWidth (family == 4)))
+    (ha : addr < 2 ^ rootWidth (family == 4)) (hc : cidr ≤ rootWidth (family == 4))
+    (hstop : ¬ (n.cidr ≤ cidr ∧ prefixBits (rootWidth (family == 4)) n.cidr n.addr =
+      prefixBits (rootWidth (family == 4)) n.cidr addr)) (result : Int)
+    (hreturn : (WG.insert family addr cidr pid).run w = .ok (result, w')) :
+    let v4 := family == 4
+    ∃ d', w'.k = { w.k with wg := some d' } ∧ d'.peerAllowedips.seq = d.peerAllowedips.seq + 1 ∧
+      ((result = -ENOMEM ∧ d' = bumpSeq d) ∨
+        (result = -ENOMEM ∧ min cidr (common (rootWidth v4) n.addr addr) ≠ cidr ∧
+          d' = graftRolledBack (bumpSeq d) (rootWidth v4) addr cidr pid p) ∨
+        (result = 0 ∧ d' = graftInstalled (bumpSeq d) v4 n.id
+          (encode (rootWidth v4) (rootSlot v4) n l r) addr cidr pid p)) := by
+  rw [insert_run_bump w d hd family addr cidr pid] at hreturn
+  have outcome := original_add_root_graft_endpoints
+    { w with k := { w.k with wg := some (bumpSeq d) } } w' (bumpSeq d) rfl
+    (family == 4) n l r addr cidr pid p hp hroot hb hr hv ha hc hstop result hreturn
+  rcases outcome with hf | hf | hs
+  · exact ⟨bumpSeq d, hf.2, rfl, .inl ⟨hf.1, rfl⟩⟩
+  · exact ⟨_, hf.2.2, rfl, .inr (.inl ⟨hf.1, hf.2.1, rfl⟩)⟩
+  · exact ⟨_, hs.2, (graftInstalled_metadata (bumpSeq d) (family == 4) n.id
+      (encode (rootWidth (family == 4)) (rootSlot (family == 4)) n l r) addr cidr pid p).2.2.2,
+      .inr (.inr ⟨hs.1, rfl⟩)⟩
 
 end Leanux.Proofs.WG.CryptokeyRouting

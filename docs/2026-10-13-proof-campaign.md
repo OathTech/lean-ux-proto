@@ -15,15 +15,15 @@ differential check or guest run.
 | --- | --- |
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay and independent review checked. Seccomp frame carry checked. |
 | R2 lifetime safety | Store identities, failure-retaining allocation/release and caller composition cover session/rotation, peer creation, receive entry/maintenance/completion, callback-parametric receive polling, TX staging and decrypt iteration; stale-cursor finding checked. Actual stack callbacks, remaining callers, lifecycle and whole-run internal-access coverage remain in progress. |
-| R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion, original empty-root, arbitrary-depth empty-child and exact-prefix insertion with sequence wrappers, and total original placement proved; general mutation/history and path refinements remain open. Path proofs follow R2. |
+| R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion, original empty-root, arbitrary-depth empty-child and exact-prefix insertion with sequence wrappers, and total original placement proved. Selected-root graft normal endpoints and rollback effects checked; successful graft representation, general mutation/history and path refinements remain open. Path proofs follow R2. |
 | R4 delivery | Not started; drop characterisation waiting on W7 full-ring tier's explanation of the two drops. |
 | R5 key lifetime | Not started; time half waiting on review items 7 and 8 on the timer model. |
 | R6 flood resistance | Not started. |
 
-**Current validation.** The full proof gate passes 206 build jobs and 149
-terminal statements (ReplayWindow 15, R1 9, R2 101, R3 24), with only permitted
+**Current validation.** The full proof gate passes 208 build jobs and 152
+terminal statements (ReplayWindow 15, R1 9, R2 101, R3 27), with only permitted
 axioms. The default model build passes 60 jobs; the unit tier passes 93 tests
-in 21.553 seconds with one skip. The R1 explicit-record witness was rechecked
+in 21.336 seconds with one skip. The R1 explicit-record witness was rechecked
 at the seccomp carry; both R2 variants were rechecked with the exact-prefix
 checkpoint. All agree with the original runner.
 Independent reviews cover peer creation, the seccomp carry, mixed enqueue,
@@ -32,7 +32,8 @@ allocation and release-bound composition, session creation and rotation,
 the mixed peer-creation bridge, receive entry, maintenance, completion and polling,
 TX staging, pure trie
 insertion, original empty-root and arbitrary-depth empty-child insertion with
-its wrapper, exact-prefix replacement, list deletion and placement.
+its wrapper, exact-prefix replacement, list deletion, placement and selected-root
+graft endpoints/rollback.
 
 **Shared carry.** Signal/task and pipe helper frames, seccomp entry/tail frames
 and arbitrary prefill preservation keep the seven-field WG projection intact.
@@ -338,8 +339,20 @@ no old-owner liveness or coherent peer-list premise. Total original `add`,
 actual-root lookup and `insert` sequence advancement refine the same pure
 insertion. This remains an endpoint refinement, not a resident-access observer.
 
-**Remaining claim.** Nonempty grafts, second-allocation
-rollback, removal and general configuration histories remain open. Parsed-input
+`GraftMirror` stages the original selected-root nonempty graft; `GraftStore`
+derives placement from the represented input and classifies every normal return.
+It distinguishes first allocation refusal, second refusal with exact source
+rollback, and the one-node/two-node success endpoints. The `insert` wrapper
+retains its sequence increment in each case. Rollback advances the node frontier
+once, restores node lookups under whole-store freshness, and filters that ID
+from every resident peer list. It preserves any supplied tree representation;
+whole-device equality and peer-list freshness are not assumed. Bad records may
+Stop: these are normal-return endpoint contracts, not failed-prefix observers
+or reachability claims for all alternatives.
+
+**Remaining claim.** Successful nonempty-graft representation, post-success
+freshness and lookup, deeper grafts, removal and general configuration histories
+remain open. Parsed-input
 bounds and history invariants still need propagation through all mutations.
 Both packet paths follow R2. Owners are raw peer slots, not allocation or
 cryptographic identities; no liveness/ownership claim follows from tree lookup.
@@ -356,7 +369,13 @@ Arbitrary-depth insertion plus its wrapper took eight capped builds over 11m49s:
 five passed, three failed during ordinary proof development, with no cap hits.
 Exact-prefix replacement and list deletion took 21 capped builds over about
 eighteen minutes: seven passed and fourteen proof iterations failed before
-correction; the final full build passed 195 jobs. Independent reviews checked each layer
+correction; the final full build passed 195 jobs. Selected-root graft endpoints
+and rollback took 40 capped invocations over 35m28s: six passed and 34 failed
+during proof compilation, with no cap hits; the final full build passed 208
+jobs. Independent review corrected a draft `freeNode` contract that omitted
+node residency, and wording that confused normal-return classification with
+reachability. Successful graft refinement remains a follow-on, with no semantic
+obstruction identified. Independent reviews checked each layer
 and final terminal scopes; no correctness finding remains. Reporting corrections
 separated root values from linkage, endpoint equations from event order, and
 successful Worlds from failing Stops. Current validation is above; reproduce
