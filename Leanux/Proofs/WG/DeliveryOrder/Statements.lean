@@ -1,8 +1,10 @@
 import Leanux.Proofs.WG.Queues.FullRing
 import Leanux.Proofs.WG.Queues.Enqueue
+import Leanux.Proofs.WG.Queues.PrevQueue
+import Leanux.Proofs.WG.Queues.RxHelperFrames
 
-/-! R4's full-ring component. These statements concern a producer-only ring
-segment and the original enqueue helper. Whole recorded-schedule delivery,
+/-! R4 queue components: physical-ring refusal, original prev_queue FIFO laws,
+and successful-endpoint receive-queue helper frames. Whole recorded-schedule delivery,
 pipeline conservation, and callback/scheduler ownership are separate obligations. -/
 namespace Leanux.Proofs.WG.DeliveryOrder
 open Leanux Leanux.WG
@@ -62,5 +64,73 @@ theorem original_enqueue_epipe (pid : PeerId) (item : List SkbId) (w v : World)
     Queues.encryptRing v = Queues.encryptRing w ∧
       ∃ r, Queues.encryptRing w = some r ∧ r.full = true :=
   Queues.enqueue_epipe pid item w v hr
+
+/-- Original enqueue appends after all logically held items, including a
+cached peek. It does not itself perform the caller's capacity check. -/
+theorem original_prev_enqueue (q : PrevQueue α) (x : α) :
+    (q.enqueue x).all = q.all ++ [x] := Queues.prev_enqueue_all q x
+
+/-- Every normal original dequeue removes the first underlying item and
+preserves the cached peek and Kernel. No queue-validity premise is imposed. -/
+theorem original_prev_dequeue (q : PrevQueue α) (w v : World)
+    (head : Option α) (q' : PrevQueue α)
+    (hr : q.dequeue.run w = .ok ((head, q'), v)) :
+    head = q.items.head? ∧ q'.items = q.items.tail ∧
+      q'.peeked = q.peeked ∧ v.k = w.k :=
+  Queues.prev_dequeue_normal q w v head q' hr
+
+/-- A normal original peek returns the logical first item and preserves all
+logical contents. Its cached result agrees with that item. -/
+theorem original_prev_peek (q : PrevQueue α) (w v : World)
+    (head : Option α) (q' : PrevQueue α)
+    (hr : q.peek.run w = .ok ((head, q'), v)) :
+    head = q.all.head? ∧ q'.all = q.all ∧ q'.peeked = head ∧ v.k = w.k :=
+  Queues.prev_peek_normal q w v head q' hr
+
+/-- Peeking a present item and dropping the peek removes exactly the logical
+head. This local queue statement does not yet describe original rxPoll. -/
+theorem original_prev_peek_drop (q : PrevQueue α) (w v : World)
+    (x : α) (q' : PrevQueue α)
+    (hr : q.peek.run w = .ok ((some x, q'), v)) :
+    q.all = x :: q'.dropPeeked.all := Queues.prev_peek_then_drop q w v x q' hr
+
+/-- Structurally coherent queues have ordinary dequeue and peek results. -/
+theorem original_prev_total (q : PrevQueue α) (w : World) (hc : Queues.PrevCoherent q) :
+    (∃ head q' v, q.dequeue.run w = .ok ((head, q'), v)) ∧
+    (∃ head q' v, q.peek.run w = .ok ((head, q'), v)) :=
+  ⟨Queues.prev_dequeue_total q w hc, Queues.prev_peek_total q w hc⟩
+
+/-- The malformed nonstub empty queue fails at the original invariant,
+unless an existing cached peek avoids the dequeue. -/
+theorem original_prev_malformed (q : PrevQueue α) (w : World)
+    (hp : q.peeked = none) (ht : q.tailIsStub = false) (hi : q.items = []) :
+    q.peek.run w = .error (.invariant "prev_queue: a tail item without an entry") :=
+  Queues.prev_peek_malformed q w hp ht hi
+
+/-- Complete original reference-acquisition, keypair-release and RX-free
+helpers preserve every peer's full receive queue with its epoch and identity.
+These are successful-endpoint frames, not internal access-history claims. -/
+theorem original_reference_queue_frames (pid : PeerId) (peer : Option PeerId)
+    (kp : Option KeypairId) (now : Bool) (id : SkbId) :
+    Framing.SameView Queues.rxQueues (peerGet pid) ∧
+    Framing.SameView Queues.rxQueues (peerGetMaybeZero peer) ∧
+    Framing.SameView Queues.rxQueues (keypairGet kp) ∧
+    Framing.SameView Queues.rxQueues (keypairPut kp now) ∧
+    Framing.SameView Queues.rxQueues (freeRxSkb id) :=
+  ⟨Queues.peerGet_rxQueues pid, Queues.peerGetMaybeZero_rxQueues peer,
+    Queues.keypairGet_rxQueues kp, Queues.keypairPut_rxQueues kp now,
+    Queues.freeRxSkb_rxQueues id⟩
+
+/-- Peer release may delete an entry; every surviving entry retains its exact
+queue, peer identity and device epoch. No reference-ownership premise is used. -/
+theorem original_peer_release_retains_queues (peer : Option PeerId) :
+    Queues.RetainsRx (peerPut peer) := Queues.peerPut_rxQueues peer
+
+/-- Replay validation and key confirmation preserve the full receive-queue
+view on normal return. Malformed replay bitmaps remain admitted and may Stop. -/
+theorem original_validation_queue_frames (pid : PeerId) (kp : KeypairId) (nonce : Nat) :
+    Framing.SameView Queues.rxQueues (counterValidate kp nonce) ∧
+    Framing.SameView Queues.rxQueues (receivedWithKeypair pid kp) :=
+  ⟨Queues.counterValidate_rxQueues kp nonce, Queues.receivedWithKeypair_rxQueues pid kp⟩
 
 end Leanux.Proofs.WG.DeliveryOrder
