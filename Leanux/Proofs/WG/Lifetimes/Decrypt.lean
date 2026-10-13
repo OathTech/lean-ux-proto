@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.Lifetimes.KeypairAccess
+import Leanux.Proofs.WG.Lifetimes.Enqueue
 
 set_option maxHeartbeats 1000000
 set_option pp.structureInstances false
@@ -61,44 +61,48 @@ theorem decryptPacketPrefix_erases (pkt : RxPacket) :
     | split
   all_goals simp_all [runPrefix_pure, runPrefix_lift]
 
-theorem decryptPacketPrefix_spec (P : IdentityView → Prop) (pkt : RxPacket) :
-    MixedSpec P (decryptPacketPrefix pkt) (fun _ => P) := by
+theorem decryptPacketPrefix_spec_ambient (c : AmbientContracts I) (P : IdentityView → Prop) (pkt : RxPacket) :
+    AmbientSpec I P (decryptPacketPrefix pkt) (fun _ => P) := by
   unfold decryptPacketPrefix
-  apply PrefixEnsures.bind (mixed_branch P _ _)
+  apply PrefixEnsures.bind (c.branch P _ _)
   intro noKey
   split
-  · exact mixed_pure P none
-  · apply PrefixEnsures.bind (mixed_getKeypair_frame P pkt.keypair)
+  · exact c.pure P none
+  · apply PrefixEnsures.bind (c.getKeypair_frame P pkt.keypair)
     intro k
-    apply PrefixEnsures.bind (mixed_kernel P _ (decryptKeyReject_sameKernel k))
+    apply PrefixEnsures.bind (c.kernel P _ (decryptKeyReject_sameKernel k))
     intro reject
     split
-    · apply PrefixEnsures.bind (mixed_getKeypair P pkt.keypair)
+    · apply PrefixEnsures.bind (c.getKeypair P pkt.keypair)
       intro fresh
-      apply PrefixEnsures.bind (mixed_setKeypair P pkt.keypair
+      apply PrefixEnsures.bind (c.setKeypair P pkt.keypair
         {fresh with receiving := {fresh.receiving with isValid := false}})
       intro _
-      exact mixed_pure P none
-    · apply PrefixEnsures.bind (mixed_kernel P _ (hiddenAlloc_sameKernel .skbCowDataRx))
+      exact c.pure P none
+    · apply PrefixEnsures.bind (c.kernel P _ (hiddenAlloc_sameKernel .skbCowDataRx))
       intro cowOk
-      apply PrefixEnsures.bind (mixed_kernel P _
+      apply PrefixEnsures.bind (c.kernel P _
         (orM_sameKernel (sameKernel_branch _ _) (sameKernel_branch _ _)))
       intro cowBad
       split
-      · exact mixed_pure P none
-      · apply PrefixEnsures.bind (mixed_branch P _ _)
+      · exact c.pure P none
+      · apply PrefixEnsures.bind (c.branch P _ _)
         intro sgBad
         split
-        · exact mixed_pure P none
-        · apply PrefixEnsures.bind (mixed_branch P _ _)
+        · exact c.pure P none
+        · apply PrefixEnsures.bind (c.branch P _ _)
           intro decryptBad
           split
-          · exact mixed_pure P none
+          · exact c.pure P none
           · split
-            · apply PrefixEnsures.bind (mixed_branch P _ _)
+            · apply PrefixEnsures.bind (c.branch P _ _)
               intro trimBad
-              split <;> exact mixed_pure P _
-            · exact mixed_invariant P _
+              split <;> exact c.pure P _
+            · exact c.invariant P _
+
+theorem decryptPacketPrefix_spec (P : IdentityView → Prop) (pkt : RxPacket) :
+    MixedSpec P (decryptPacketPrefix pkt) (fun _ => P) :=
+  decryptPacketPrefix_spec_ambient mixedAmbient P pkt
 
 theorem decryptPacketPrefix_preserves (pkt : RxPacket) :
     PrefixPreserves MixedInv LifetimeEvent.Safe (decryptPacketPrefix pkt) :=

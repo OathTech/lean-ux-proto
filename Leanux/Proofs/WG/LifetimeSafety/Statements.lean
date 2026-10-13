@@ -9,6 +9,7 @@ import Leanux.Proofs.WG.Peers.CreationAccess
 import Leanux.Proofs.WG.Lifetimes.Enqueue
 import Leanux.Proofs.WG.Lifetimes.DecryptWorker
 import Leanux.Proofs.WG.Lifetimes.ReleaseCalls
+import Leanux.Proofs.WG.Lifetimes.ReleaseAmbient
 
 /-! R2's store-identity components: whole-operation keypair evolution,
 peer allocation/reference sequences, and packet primitive sequences within a device
@@ -509,5 +510,28 @@ theorem free_rx_access_observation (id : SkbId) (w : World) (h : List Lifetimes.
           h ++ [.packet (.read (.inr id) (Lifetimes.packetStamp w id)),
                 .packet (.release (.inr id) (Lifetimes.packetStamp w id))]) :=
   Lifetimes.freeRxSkbPrefix_run id w h
+
+/-- Receive enqueue supports callbacks preserving the stronger release
+invariant. Every outcome retains a safe prefix; success preserves uniqueness
+and released-identity absence. The callback may change resident identities. -/
+theorem enqueue_release_access_preserves (irq : Lifetimes.MixedM Unit)
+    (hi : PrefixPreserves Lifetimes.ReleaseInv Lifetimes.LifetimeEvent.Safe irq)
+    (id : SkbId) (state : PacketState) :
+    PrefixPreserves Lifetimes.ReleaseInv Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.enqueuePerPeerRxPrefix irq id state) :=
+  Lifetimes.enqueuePerPeerRxPrefix_release hi id state
+
+/-- One original decrypt iteration supports softirq, IRQ, and rescheduling
+observers preserving ReleaseInv. It retains safe failed prefixes and preserves
+the stronger invariant on success. Concrete callback coverage, allocation,
+device lifecycle, and whole scheduler closure remain separate obligations. -/
+theorem decrypt_iteration_release_access_preserves (softirq irq : Lifetimes.MixedM Unit)
+    (resched : Lifetimes.MixedM Bool)
+    (hs : PrefixPreserves Lifetimes.ReleaseInv Lifetimes.LifetimeEvent.Safe softirq)
+    (hi : PrefixPreserves Lifetimes.ReleaseInv Lifetimes.LifetimeEvent.Safe irq)
+    (hr : PrefixPreserves Lifetimes.ReleaseInv Lifetimes.LifetimeEvent.Safe resched) :
+    PrefixPreserves Lifetimes.ReleaseInv Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.decryptIterPrefix softirq irq resched) :=
+  Lifetimes.decryptIterPrefix_release hs hi hr
 
 end Leanux.Proofs.WG.LifetimeSafety

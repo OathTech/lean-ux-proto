@@ -79,11 +79,13 @@ theorem decryptIterPrefix_erases (hs : ErasesPrefix softirq originalSoftirq)
   · exact decryptStepPrefix_erases hs hi
   · exact erasesPrefix_bind hr (fun _ => erasesPrefix_lift _)
 
-theorem getDev_identity : SameView identityView getDev := by
-  apply identity_sameKernel
+theorem getDev_sameKernel : SameKernel getDev := by
   apply sameKernel_of_wp
   intro k
   mvcgen [getDev, getK, invariant]
+
+theorem getDev_identity : SameView identityView getDev :=
+  identity_sameKernel getDev_sameKernel
 
 theorem decryptQueue_identity (ring : PtrRing SkbId) :
     SameView identityView (modifyDev fun d => {d with decryptQueue := ring}) := by
@@ -92,54 +94,73 @@ theorem decryptQueue_identity (ring : PtrRing SkbId) :
   unfold identityView Peers.snapshot keypairResidents packetResidents
   simp [Option.bind_map, Function.comp_def]
 
-theorem decryptStepPrefix_preserves
-    (hs : PrefixPreserves MixedInv LifetimeEvent.Safe softirq)
-    (hi : PrefixPreserves MixedInv LifetimeEvent.Safe irq) :
-    PrefixPreserves MixedInv LifetimeEvent.Safe (decryptStepPrefix softirq irq) := by
+theorem decryptStepPrefix_preserves_ambient (c : AmbientContracts I)
+    (hq : ∀ ring, PrefixPreserves I LifetimeEvent.Safe
+      (liftPrefix (modifyDev fun d => {d with decryptQueue := ring})))
+    (hs : PrefixPreserves I LifetimeEvent.Safe softirq)
+    (hi : PrefixPreserves I LifetimeEvent.Safe irq) :
+    PrefixPreserves I LifetimeEvent.Safe (decryptStepPrefix softirq irq) := by
   unfold decryptStepPrefix
   apply PrefixPreserves.bind hs
   intro _
-  apply PrefixPreserves.bind (mixed_drop (mixed_lift (fun _ => True) _ getDev_identity))
+  apply PrefixPreserves.bind (AmbientContracts.drop (c.kernel (fun _ => True) getDev getDev_sameKernel))
   intro dev
   split
-  · apply PrefixPreserves.bind (mixed_drop (mixed_branch (fun _ => True) _ _))
+  · apply PrefixPreserves.bind (AmbientContracts.drop (c.branch (fun _ => True) _ _))
     intro _
-    exact PrefixPreserves.pure (fun _ _ h => h.safe) _
-  · apply PrefixPreserves.bind (mixed_drop (mixed_branch (fun _ => True) _ _))
+    exact PrefixPreserves.pure (fun h w hi => c.safe h w hi) _
+  · apply PrefixPreserves.bind (AmbientContracts.drop (c.branch (fun _ => True) _ _))
     intro _
-    apply PrefixPreserves.bind (mixed_drop (mixed_lift (fun _ => True) _ (decryptQueue_identity _)))
+    apply PrefixPreserves.bind (hq _)
     intro _
-    apply PrefixPreserves.bind (mixed_drop (mixed_getRxSkb (fun _ => True) _))
+    apply PrefixPreserves.bind (AmbientContracts.drop (c.getRx (fun _ => True) _))
     intro pkt
-    apply PrefixPreserves.bind (decryptPacketPrefix_preserves pkt)
+    apply PrefixPreserves.bind (AmbientContracts.drop (decryptPacketPrefix_spec_ambient c (fun _ => True) pkt))
     intro decrypted
-    apply PrefixPreserves.bind (mixed_drop (mixed_branch (fun _ => True) _ _))
+    apply PrefixPreserves.bind (AmbientContracts.drop (c.branch (fun _ => True) _ _))
     intro yes
     dsimp only
     split
     · split
-      · apply PrefixPreserves.bind (mixed_drop (mixed_setRxSkb (fun _ => True) _ _))
+      · apply PrefixPreserves.bind (AmbientContracts.drop (c.setRx (fun _ => True) _ _))
         intro _
-        apply PrefixPreserves.bind (enqueuePerPeerRxPrefix_preserves hi _ _)
+        apply PrefixPreserves.bind (enqueuePerPeerRxPrefix_preserves_ambient c hi _ _)
         intro _
         apply PrefixPreserves.bind hs
         intro _
-        exact PrefixPreserves.pure (fun _ _ h => h.safe) _
-      · exact mixed_drop (mixed_invariant (fun _ => True) _)
-    · apply PrefixPreserves.bind (enqueuePerPeerRxPrefix_preserves hi _ _)
+        exact PrefixPreserves.pure (fun h w hi => c.safe h w hi) _
+      · exact AmbientContracts.drop (c.invariant (fun _ => True) _)
+    · apply PrefixPreserves.bind (enqueuePerPeerRxPrefix_preserves_ambient c hi _ _)
       intro _
       apply PrefixPreserves.bind hs
       intro _
-      exact PrefixPreserves.pure (fun _ _ h => h.safe) _
+      exact PrefixPreserves.pure (fun h w hi => c.safe h w hi) _
+
+theorem decryptIterPrefix_preserves_ambient (c : AmbientContracts I)
+    (hq : ∀ ring, PrefixPreserves I LifetimeEvent.Safe
+      (liftPrefix (modifyDev fun d => {d with decryptQueue := ring})))
+    (hs : PrefixPreserves I LifetimeEvent.Safe softirq)
+    (hi : PrefixPreserves I LifetimeEvent.Safe irq)
+    (hr : PrefixPreserves I LifetimeEvent.Safe needResched) :
+    PrefixPreserves I LifetimeEvent.Safe (decryptIterPrefix softirq irq needResched) := by
+  apply workerIterPrefix_preserves _ _ (fun h w hi => c.safe h w hi)
+    (decryptStepPrefix_preserves_ambient c hq hs hi)
+  exact PrefixPreserves.bind hr (fun _ => AmbientContracts.drop (c.branch (fun _ => True) _ _))
+
+theorem decryptStepPrefix_preserves
+    (hs : PrefixPreserves MixedInv LifetimeEvent.Safe softirq)
+    (hi : PrefixPreserves MixedInv LifetimeEvent.Safe irq) :
+    PrefixPreserves MixedInv LifetimeEvent.Safe (decryptStepPrefix softirq irq) :=
+  decryptStepPrefix_preserves_ambient mixedAmbient
+    (fun ring => mixed_drop (mixed_lift (fun _ => True) _ (decryptQueue_identity ring))) hs hi
 
 theorem decryptIterPrefix_preserves
     (hs : PrefixPreserves MixedInv LifetimeEvent.Safe softirq)
     (hi : PrefixPreserves MixedInv LifetimeEvent.Safe irq)
     (hr : PrefixPreserves MixedInv LifetimeEvent.Safe needResched) :
-    PrefixPreserves MixedInv LifetimeEvent.Safe (decryptIterPrefix softirq irq needResched) := by
-  apply workerIterPrefix_preserves _ _ (fun _ _ h => h.safe)
-    (decryptStepPrefix_preserves hs hi)
-  exact PrefixPreserves.bind hr (fun _ => mixed_drop (mixed_branch (fun _ => True) _ _))
+    PrefixPreserves MixedInv LifetimeEvent.Safe (decryptIterPrefix softirq irq needResched) :=
+  decryptIterPrefix_preserves_ambient mixedAmbient
+    (fun ring => mixed_drop (mixed_lift (fun _ => True) _ (decryptQueue_identity ring))) hs hi hr
 
 theorem decryptIterPrefix_pure_erases (resched : Bool) :
     ErasesPrefix (decryptIterPrefix (pure ()) (pure ()) (pure resched))

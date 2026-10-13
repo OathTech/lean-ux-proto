@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.Lifetimes.Enqueue
+import Leanux.Proofs.WG.Lifetimes.MixedFrames
 
 set_option maxHeartbeats 1000000
 set_option pp.structureInstances false

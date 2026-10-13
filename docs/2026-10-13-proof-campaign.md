@@ -20,13 +20,14 @@ differential check or guest run.
 | R5 key lifetime | Not started; time half waiting on review items 7 and 8 on the timer model. |
 | R6 flood resistance | Not started. |
 
-**Current validation.** The full proof gate passes 165 build jobs and 93
-terminal statements (ReplayWindow 15, R1 9, R2 54, R3 15), with only permitted
+**Current validation.** The full proof gate passes 167 build jobs and 95
+terminal statements (ReplayWindow 15, R1 9, R2 56, R3 15), with only permitted
 axioms. The default model build passes 60 jobs; the unit tier passes 93 tests
-in 23.097 seconds with one skip. Both explicit-record witness replays below
+in 21.846 seconds with one skip. Both explicit-record witness replays below
 were rechecked at the seccomp carry and agree with the original runner.
 Independent reviews cover peer creation, the seccomp carry, mixed enqueue,
-decrypt execution, keypair/packet releases, pure trie insertion, and original
+decrypt execution, keypair/packet releases, ambient caller composition, pure
+trie insertion, and original
 empty-root insertion and placement.
 
 **Shared carry.** Signal/task and pipe helper frames, seccomp entry/tail frames
@@ -258,6 +259,25 @@ identity-predicate parameter in a separate `ReleaseInv`. Getters and same-stamp
 updates need less than release, so existing enqueue/decrypt callback contracts
 retain their weaker invariant; no additional generic framing mechanism is needed.
 
+**Release-aware caller composition.** `Ambient` separates a history-dependent
+invariant from the temporary identity predicates used for cached getter results.
+Its contracts cover the actual getter/setter, peer-reference and access-free
+kernel actions used by enqueue and decrypt. The decrypt queue update has its
+own explicit preservation premise: identity-view equality alone cannot preserve
+an arbitrary allocation or release-history invariant. `ReleaseAmbient`
+instantiates these contracts with `ReleaseInv`; two terminal exports compose
+enqueue and decrypt iteration with callbacks at that stronger invariant. The
+original observer definitions, erasure proofs and weaker `MixedInv` terminal
+contracts are unchanged. Concrete callbacks, allocation and scheduler closure
+remain open.
+
+[AGENT 2026-10-13] Generalize the enqueue/decrypt preservation bodies once over
+explicit ambient primitive contracts, then instantiate release uniqueness. The
+earlier separate `ReleaseInv` remains sufficient for primitive release proofs;
+caller composition additionally needs callbacks to receive that stronger
+invariant. A callback requiring uniqueness cannot be supplied through a contract
+that assumes only `MixedInv`.
+
 **Concrete reference finding.** An eight-operation, explicit-record accepted
 mirror run creates 28 peers, starts a stepped dump, deletes wg0, creates a new
 wg0 and 27 replacement peers, then receives a chunk. The receive returns the
@@ -304,7 +324,9 @@ about twenty-five minutes. Decrypt execution took ten compile passes over
 fourteen minutes and twenty-two seconds. The release checkpoint took thirteen
 compile passes over fifteen minutes and twenty-three seconds. One full build
 failed after a proof-script simplification cleanup; explicit rewrites repaired
-it, and the next full build passed.
+it, and the next full build passed. The ambient generalization took four
+compile passes over six minutes: three passed, and one predicate-shape
+elaboration failure was repaired before the full 167-job build.
 Failed passes exposed proof elaboration or simplification errors. One earlier
 anonymous-hypothesis tactic loop was stopped by verified PID and repaired.
 Independent read-only reviews found no correctness defect in these components;
@@ -315,7 +337,9 @@ does not establish raw-reference provenance. Its final review also checked the
 new failure equation and terminal scopes. The release review checked exact source
 accesses, failing prefixes, packet epochs, the clear caller and all seven exports;
 it found no defect. Its raw erase-leaf interpretation caveat is documented above.
-A final proof-script cleanup delta was independently reread.
+A final proof-script cleanup delta was independently reread. The ambient review
+checked primitive contracts, source order, failed prefixes, both stronger
+exports and unchanged weaker APIs; it found no correctness or scope defect.
 
 One source-order limitation remains: C `peer.c` initializes destination cache
 and handshake before incrementing `peer_counter`; the mirror increments and
