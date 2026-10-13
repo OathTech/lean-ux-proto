@@ -9,7 +9,7 @@ campaign. No mirror or kernel edits, no integration into main, no push.
 | Result | Progress |
 | --- | --- |
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay, independent review and 24-statement proof gate pass over c85e86b. |
-| R2 lifetime safety | Keypair operation endpoints, peer reference helpers, packet primitives and stale-cursor finding checked (47-statement gate); caller/lifecycle and internal-access coverage in progress. This is not yet the whole R2 claim. |
+| R2 lifetime safety | Keypair operation endpoints, peer allocation/reference helpers, packet primitives and stale-cursor finding checked (55-statement gate); caller/lifecycle and internal-access coverage in progress. This is not yet the whole R2 claim. |
 | R3 cryptokey routing | Original prefix arithmetic proved for both families (50-statement gate); trie mutation/history and path proofs remain open. Path proofs follow R2. |
 | R4 delivery | Not started; drop characterisation waiting on W7 full-ring tier's explanation of the two drops. |
 | R5 key lifetime | Not started; time half waiting on review items 7 and 8 on the timer model. |
@@ -131,7 +131,18 @@ free no later successful primitive sequence can make a getter at that slot
 succeed. These packet statements keep one device epoch; they do not cover
 device deletion/recreation. The invariant does not assume TX/RX disjointness,
 and the post-free proof uses same-slot emptiness rather than global absence.
-Peer allocation, other callers and every internal access still need closure.
+`Peers/Frames` now provides arbitrary-predicate live getter/setter contracts:
+a cached record can be written back only while its allocation stamp is still
+resident. Those contracts frame the initialization helpers. `Peers/Allocation`
+proves the exact identity-store effect of the complete original `peerCreate`:
+ordinary error results leave it unchanged; success increments the frontier once
+and places that new identity in the returned slot. It makes no assumption that
+`nextPeer` was empty in an arbitrary malformed starting World. The allocation
+and insertion are proved atomically, with the original mirror's counter update order.
+Finite original helper sequences now include creation and get-unless-zero as
+well as lookup, acquisition and release; they preserve boundedness and prevent
+old absent identities from returning. Other callers, device lifecycle and
+every internal access still need closure.
 
 [AGENT 2026-10-13] Share projection contracts and allocation-frontier algebra
 between peer and packet stores; preserve the fixed-device scope until the
@@ -185,27 +196,29 @@ python3 -B docs/proof-campaign-replay.py r2-stale-dump-cursor |
 capped -- scripts/in-bundle scripts/proof-gate
 ```
 
-**Validation and effort so far.** The replay accepts and all assertions pass
-in under one second. The gate passes 35 terminal statements (11 in R2), with
-106 build jobs and only permitted standard axioms. The required fast unit tier
-ran 88 tests, OK with one skip. The mirror remains byte-identical to `c85e86b`, and the existing
-results are current with no lag. This checkpoint took about half an hour of
-source investigation, three keypair compile passes and first-pass builds of
-the checkpoint observer and local witness. The campaign continues with peer
-and packet identity projections before claiming whole-result completion.
+**Validation and effort so far.** The recorded stale-cursor replay accepts
+and all assertions pass in under one second. The current proof gate passes
+115 build jobs and 55 terminal statements (28 in R2), with only permitted
+standard axioms. The default model build and required 88 unit tests pass,
+with one skipped test. The mirror is byte-identical to `c85e86b`; existing
+results and checked components are current, with no lag.
 
-**Primitive checkpoint validation.** The full proof gate passes with 110
-build jobs and 47 terminal statements (23 in R2), using only permitted standard
-axioms. A separate read-only review found no defect in the shared store,
-original-helper contracts or post-free corollaries; its requested scope limits
-and module-heading correction are incorporated above. The implementation took
-about 40 minutes and 19 compile/gate passes. A repeated anonymous hypothesis
-unpacking tactic looped; that build was stopped by its verified PID and the
-proof repaired. Other failed passes were proof elaboration/interface errors,
-including duplicate generated match lemmas fixed by importing the existing
-frame module before proving the peer contracts. No mirror semantics changed.
-The required fast unit tier ran 88 tests, OK with one skip. R1, ReplayWindow and
-the checked R2 components remain current over `c85e86b`; no result lag.
+The peer allocation extension took six compile passes. Earlier checkpoint
+commits carry their validation counts; most work was the reusable projections
+and caller contracts. One repeated anonymous-hypothesis tactic looped and its
+build was stopped by verified PID, then repaired. Other failed passes exposed
+proof elaboration/interface errors, including duplicate generated match lemmas
+resolved by importing their existing frame module. No mirror semantics changed.
+A read-only review of the primitive checkpoint found no defect; its scope and
+module-heading corrections are incorporated above. The allocation review likewise
+found no proof defect. It confirms that freshness here means the next frontier
+value, not global uniqueness in an arbitrary unbounded malformed starting store.
+It also found a source-order limitation: C `peer.c` initializes the destination
+cache and handshake before incrementing `peer_counter`; the mirror increments
+and inserts before those initialization helpers. The theorem follows the
+mirror's order. This is a C-correspondence limitation, not a demonstrated
+accepted-trace lifetime counterexample; no transient-access or C-simulation
+claim is made by this checkpoint.
 
 **Ranked mirror-shape recommendations.** (1) Restore the documented rejection
 of device deletion with a pending stepped dump: altitude-preserving fixture

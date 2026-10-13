@@ -3,14 +3,64 @@ import Leanux.Proofs.WG.ReplayWindow.Statements
 import Leanux.Proofs.Logged.Checkpoints
 import Leanux.Proofs.WG.LifetimeSafety.CursorWitness
 import Leanux.Proofs.WG.Packets.Primitives
-import Leanux.Proofs.WG.Peers.Primitives
+import Leanux.Proofs.WG.Peers.Allocation
 
 /-! R2's store-identity components: whole-operation keypair evolution,
-peer-reference helper sequences, and packet primitive sequences within a device
+peer allocation/reference sequences, and packet primitive sequences within a device
 epoch. Full caller and lifecycle coverage remain separate obligations. -/
 namespace Leanux.Proofs.WG.LifetimeSafety
 open Leanux Leanux.WG Leanux.Proofs.Logged
 open Leanux.Proofs.WG.Keypairs Leanux.Proofs.WG.ReplayWindow
+
+/-- The complete original peerCreate call has an exact identity-store effect:
+an ordinary error result leaves it unchanged, while success increments the
+frontier and inserts that fresh stamp at the returned slot. No assumption that
+the old nextPeer slot was empty is made by this refinement. -/
+theorem peer_create_exact (publicKey : Key) (psk : Option Key)
+    (w w' : World) (result : Except Int PeerId)
+    (hr : (peerCreate publicKey psk).run w = .ok (result, w')) :
+    Peers.snapshot w' = match result with
+      | .error _ => Peers.snapshot w
+      | .ok pid => (Peers.snapshot w).allocate pid := by
+  cases result <;> exact Peers.peerCreate_exact publicKey psk w w' _ hr
+
+/-- A successful original peerCreate returns a slot containing the next global
+peer allocation identity, strictly beyond the call's initial frontier. -/
+theorem peer_create_fresh_identity (publicKey : Key) (psk : Option Key)
+    (w w' : World) (pid : PeerId)
+    (hr : (peerCreate publicKey psk).run w = .ok (.ok pid, w')) :
+    (Peers.snapshot w').frontier = (Peers.snapshot w).frontier + 1 ∧
+      (Peers.snapshot w').slots pid = some ((Peers.snapshot w).frontier + 1) :=
+  Peers.peerCreate_fresh publicKey psk w w' pid hr
+
+/-- Across a finite sequence of actual peer lookup, reference acquisition
+(including get-unless-zero), release and atomic creation calls, every identity remains
+within the allocation frontier. This is a primitive-call sequence contract,
+not yet whole-syscall or internal-access coverage. -/
+theorem peer_allocation_sequence_bounded (w w' : World)
+    (h : Peers.AllocationSequence w w')
+    (hb : Lifetimes.Bounded (Peers.snapshot w)) :
+    Lifetimes.Bounded (Peers.snapshot w') :=
+  (Peers.allocation_sequence_contract h hb).1
+
+/-- An already allocated peer identity absent before such a finite sequence
+cannot return through any mixture of those lookup, reference and creation calls.
+The frontier bound excludes identities first allocated during the sequence. -/
+theorem peer_allocation_sequence_no_resurrection (w w' : World)
+    (h : Peers.AllocationSequence w w')
+    (hb : Lifetimes.Bounded (Peers.snapshot w)) (stamp : Nat)
+    (hs : stamp ≤ (Peers.snapshot w).frontier)
+    (ha : Lifetimes.Absent (Peers.snapshot w) stamp) :
+    Lifetimes.Absent (Peers.snapshot w') stamp :=
+  (Peers.allocation_sequence_contract h hb).2.absent hs ha
+
+/-- The original conditional reference-acquisition helper, including its null
+and zero-count branches, preserves the complete peer identity projection. -/
+theorem peer_get_unless_zero_preserves_identities (peer : Option PeerId)
+    (w w' : World) (result : Option PeerId)
+    (hr : (peerGetMaybeZero peer).run w = .ok (result, w')) :
+    Peers.snapshot w' = Peers.snapshot w :=
+  Peers.peerGetMaybeZero_samePeerSnapshot peer w result w' hr
 
 /-- Every successful actual peer getter resolves the identity resident in its
 slot now. It does not certify that a caller's raw slot reference owns a ref. -/
