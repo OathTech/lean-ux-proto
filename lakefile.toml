@@ -7,8 +7,8 @@ moreLeanArgs = ["-j1"]
 name = "Leanux"
 
 [[lean_lib]]
-name = "WindowSpike"
-roots = ["Leanux.Spikes.Axioms"]
+name = "LeanuxProofs"
+roots = ["Leanux.Proofs"]
 
 [[lean_exe]]
 name = "leanux-model"
