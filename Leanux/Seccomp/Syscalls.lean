@@ -187,7 +187,7 @@ def sysSeccompProbeChild (nr : Int) (args : Array UInt64) (strict : Option Stric
       record := record ++ [("signal", toJson sig)]
   if alive && !exited then
     -- the child writes `ret` into the shared page (memory), then leaves
-    let exitNr := Env.childExitCall ((← getCurrent).seccomp.mode == .strict)
+    let exitNr := Env.childExitCall strict.isSome
     match ← enterSyscall exitNr with
     | .proceed => record := record ++ [("ret", toJson ret)]
     | .killed sig => record := record ++ [("signal", toJson sig)]

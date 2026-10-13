@@ -23,15 +23,15 @@ EXPECTED = {
     'sk_new_listener': ('unsupported_path', 'NEW_LISTENER'),   # seccomp_set_mode_filter
     'sk_wait_killable': ('unsupported_path', 'NEW_LISTENER'),  # the same listener arm
     'sk_user_notif': ('unsupported_path', 'USER_NOTIF'),       # __seccomp_filter
-    'sk_ip_load': ('unsupported_path', 'instruction_pointer'), # the engine's unsupportedRead (offset 8)
+    'sk_ip_load': ('unsupported_path', 'instruction pointer'), # the engine's unsupportedRead (offset 8)
 }
 
 
-def run_one(trace_id):
+def run_one(trace_id, no_build=False):
     out = ROOT / f'.artifacts/check/seccomp-controls-{trace_id}'
     subprocess.run(['rm', '-rf', str(out)], check=True)
     subprocess.run([sys.executable, '-m', 'evaluator.check', '--suite', 'seccomp-controls', '--trace', trace_id,
-                    '--out', str(out)], cwd=ROOT, capture_output=True)
+                    '--out', str(out)] + (['--no-build'] if no_build else []), cwd=ROOT, capture_output=True)
     path = out / 'report.json'
     if not path.exists():
         return None
@@ -39,9 +39,10 @@ def run_one(trace_id):
 
 
 def main():
+    no_build = '--no-build' in sys.argv[1:]   # reuse the built model (a run beside another check)
     results, ok = {}, True
     for trace_id, (outcome, detail) in EXPECTED.items():
-        report = run_one(trace_id)
+        report = run_one(trace_id, no_build)
         if report is None or report.get('aborted') or report['traces'] != 1:
             results[trace_id] = dict(rejected=False, error='the control run did not run its trace',
                                      aborted=(report or {}).get('aborted'))

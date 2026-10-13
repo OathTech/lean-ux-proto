@@ -170,7 +170,7 @@ def SDecision.info : SDecision → SDecisionInfo
   | .clsCaseLoad => rep <| d "check_load_and_stores.case_load" fc 949 [] []
   | .clsCaseJa => rep <| d "check_load_and_stores.case_ja" fc 956 [(958, 960)] []
   | .clsCaseJcond => rep <| d "check_load_and_stores.case_jcond" fc 961 [(970, 973)] []
-  | .clsLoadUnstored => rep <| c "check_load_and_stores.load_unstored" fc 951 .flag false [(952, 953)] [(955, 955)]
+  | .clsLoadUnstored => rep <| c "check_load_and_stores.load_unstored" fc 951 .ne true [(952, 953)] [(955, 955)]
   | .scfCaseLdAbsW => rep <| d "seccomp_check_filter.case_ld_w_abs" sc 289 [(290, 292)] []
   | .scfCaseLdLen => rep <| d "seccomp_check_filter.case_ld_w_len" sc 295 [(296, 298)] []
   | .scfCaseLdxLen => rep <| d "seccomp_check_filter.case_ldx_w_len" sc 299 [(300, 302)] []
@@ -213,7 +213,8 @@ def SDecision.info : SDecision → SDecisionInfo
   -- `fp->code == DIV|X || fp->code == MOD|X` over two lines
   | .convCodeDivX => rep <| c "bpf_convert_filter.code_div_x" fc 686 .eq true [] [(687, 687)]
   -- the body 688-694 and 697 run for either operand of the `||`: no witness of one
-  | .convCodeModX => rep <| c "bpf_convert_filter.code_mod_x" fc 687 .eq true [] []
+  -- both compares of the two-line `if` (:686-687) are attributed to its first line (measured, X)
+  | .convCodeModX => rep <| c "bpf_convert_filter.code_mod_x" fc 686 .eq true [] []
   -- `BPF_SRC(fp->code) == BPF_K && (int) fp->k < 0` on one line
   | .convJmpSrcK => rep <| c "bpf_convert_filter.jmp_src_k" fc 736 .eq true [] []
   | .convJmpKNegative => rep <| c "bpf_convert_filter.jmp_k_negative" fc 736 .lt true [(741, 745)] [(747, 750)]

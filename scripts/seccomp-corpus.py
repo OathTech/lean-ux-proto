@@ -598,16 +598,16 @@ trace("s_chain_three", [
     probe(1000),                               # 7: -ENOSYS
 ])
 
-# Four 768-instruction filters: the path budget's walk over the chain
-# (:921-926, 773 eBPF instructions plus 4 each, far under 32768) and a probe
-# through all four programs; 104 is a cache hit through four bitmaps.
+# Three 768-instruction filters (four would be a 65 KB trace line, over the
+# mirror's input limit): the path budget's walk over the chain (:921-926,
+# 775 eBPF instructions plus 4 each, far under 32768) and a probe through all
+# three programs; 104 is a cache hit through three bitmaps.
 trace("s_chain_big", [
     install(long_filter(102, ERRNO | 5)),      # 0: 0
     install(long_filter(102, ERRNO | 6)),      # 1: 0
     install(long_filter(102, ERRNO | 7)),      # 2: 0
-    install(long_filter(102, ERRNO | 8)),      # 3: 0
-    probe(104),                                # 4: 0
-    probe(102),                                # 5: -8
+    probe(104),                                # 3: 0
+    probe(102),                                # 4: -7
 ])
 
 # The path budget (2.4, :921-926) through the prefill fixture [USER 2026-10-12:

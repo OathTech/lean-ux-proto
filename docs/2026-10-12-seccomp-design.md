@@ -1595,3 +1595,37 @@ For the user [the paste]:
 >    handler frame, `rt_sigreturn`) stays an environment effect; stop and
 >    continue signals, group delivery, real-time signals and a second thread
 >    stay unsupported.
+
+## 17. Phase 2a settling on the scratch kernel [AGENT, stream X, 2026-10-13]
+
+The first differential runs of the three suites on sc2 (`CONFIG_SECCOMP=y`,
+not the oracle) settled these, each from the built code's evidence:
+
+- `__seccomp_filter`'s errno cap (:1270): the compiler tests
+  `(data & ~0xfff) != 0`; the mirror's operands are the masked data and 0
+  (the record is `(0x0, 0x1000)` for data 4096). V had declared a shift.
+- `check_load_and_stores`' load test (filter.c:951): `((memvalid >> k) & 1)
+  != 0`, the variable the shifted bit and the constant 0 (records `(0x0,
+  0x1)` for a stored cell, `(0x0, 0x0)` for an unstored one); V had declared
+  a mask test over `(memvalid, bit)`.
+- `bpf_convert_filter`'s `DIV|X || MOD|X` guard (:686-687): both compares
+  are attributed to the `if`'s first line, so the `MOD|X` decision's line is
+  686.
+- The child's exit call: the guest leaves with `exit` (60) whenever the probe
+  asked for strict mode, whether or not the strict call succeeded
+  (`harness/guest.c:1782`); the mirror had chosen by the resulting mode. A
+  semantics change in the environment rule (`Env.childExitCall`), from the
+  evidence of `s_strict_after_filter_child` (the cache check for 60 recorded
+  after a refused strict call).
+- Two shared exits declared in `correspondence/kcov.json` (V's open items):
+  `bpf_migrate_filter`'s `out_err` block (filter.c:1320 at :1363), covered
+  by `bpf_prepare_filter`'s error return on every install
+  `seccomp_check_filter` refuses, unless the function's entry (:1263) was
+  covered; and `seccomp_get_notif_sizes`'s `return 0` (seccomp.c:2088 at
+  do_seccomp :2111), shared with do_seccomp's return on every other
+  sub-command, unless the sizes' initialisation (:2079) was covered.
+- A four-filter trace of 768-instruction programs is a 65 KB line, over the
+  mirror's input limit (`Leanux/Main.lean`); `s_chain_big` holds three.
+- The control suite's stop messages, as the mirror words them: the TSYNC arm
+  at seccomp.c:2004, the listener arm at :1985, the USER_NOTIF arm at :1326,
+  the instruction-pointer read at :425.

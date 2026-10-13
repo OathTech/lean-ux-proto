@@ -266,6 +266,36 @@
     "fs/inode.c:2275"
    ],
    "note": "The merged-return-block class (the cookie arms of receive.c:140-164, vfs_write's epilogue above): file_update_time's early return (ret <= 0 at inode.c:2272-2273, the \"nothing\" outcome) shares its return block with the inlined __file_update_time's (inode.c:2240 inlined at :2275; return PC 0xffffffff811cfd8f in the accepted build), so the point is covered on the nothing path although __file_update_time did not run, and its frame at :2275 witnesses the opposite outcome. On the paths that reach __file_update_time its entering block (file_inode at fs.h:1166 inlined at inode.c:2241, return PC 0xffffffff811cfd6c) runs first and the early return skips it, so the declaration applies only when that point is not covered; then the point neither counts as the helper running nor witnesses a decision outcome. Reached when two writes to a pipe fall in the same 4 ms tick (one coarse clock read, equal stamps): found by the generated pipes suite in the int-r claim point, pipes-20260920-00110 (seed 20260920) operation 16, under eight guests; timing-dependent, not deterministic in any corpus trace."
+  },
+  {
+   "function": "bpf_migrate_filter",
+   "frames": [
+    "net/core/filter.c:1320",
+    "net/core/filter.c:1363"
+   ],
+   "unless_covered": [
+    "net/core/filter.c:1263",
+    "net/core/filter.c:1363"
+   ],
+   "note": "bpf_prepare_filter's error return after the trans hook refused the program (filter.c:1348-1350: __bpf_prog_release and ERR_PTR) shares its block with the inlined bpf_migrate_filter's out_err (filter.c:1320 inlined at :1363; PC 0xffffffff8143a8de on the sc2 scratch build), so the point is covered on a rejected install although bpf_migrate_filter did not run. On the installs that reach bpf_migrate_filter its entry block (filter.c:1263 at :1363, PC 0xffffffff8143a7b5) runs first and the refused path skips it, so the declaration applies only when that point is not covered. Found by corpus/seccomp s_chk_anc_known and every other install seccomp_check_filter refuses (stream V's open item, settled by X on sc2, 2026-10-13)."
+  },
+  {
+   "function": "seccomp_get_notif_sizes",
+   "frames": [
+    "kernel/seccomp.c:2088",
+    "kernel/seccomp.c:2111",
+    "kernel/seccomp.c:2120",
+    "kernel/seccomp.c:2117",
+    "kernel/seccomp.c:2117"
+   ],
+   "unless_covered": [
+    "kernel/seccomp.c:2079",
+    "kernel/seccomp.c:2111",
+    "kernel/seccomp.c:2120",
+    "kernel/seccomp.c:2117",
+    "kernel/seccomp.c:2117"
+   ],
+   "note": "do_seccomp's return block (seccomp.c:2111) is shared with the inlined seccomp_get_notif_sizes's `return 0` (seccomp.c:2088 at :2111; PC 0xffffffff810f7f15 on the sc2 scratch build), so every GET_ACTION_AVAIL and every refused flag covers the point although seccomp_get_notif_sizes did not run. On a GET_NOTIF_SIZES the sizes' initialisation (seccomp.c:2079 at :2111, PC 0xffffffff810f7ed8) runs first and the other paths skip it, so the declaration applies only when that point is not covered. Found by corpus/seccomp s_queries (stream V's open item, settled by X on sc2, 2026-10-13)."
   }
  ],
  "data_only_operations": [

@@ -187,7 +187,9 @@ def checkLoadAndStores [SeccompM m] (filter : ClassicProg) : m (Except Int Unit)
       memvalid := memvalid ||| bit
     else if f.code == (BPF_LD ||| BPF_MEM) || f.code == (BPF_LDX ||| BPF_MEM) then
       let _ ← branch .clsCaseLoad true
-      if ← branchCmp .clsLoadUnstored ((memvalid &&& bit) == 0) memvalid.toNat bit.toNat then
+      -- `!(memvalid & (1 << k))` is compiled as `((memvalid >> k) & 1) != 0`: the variable is
+      -- the shifted bit, the constant 0 (measured on sc2, X: (0x0, 0x1) stored, (0x0, 0x0) not)
+      if ← branchCmp .clsLoadUnstored ((memvalid &&& bit) == 0) ((memvalid >>> f.k.toUInt16) &&& 1).toNat 0 then
         return .error errEINVAL
     else if f.code == (BPF_JMP ||| BPF_JA) then
       let _ ← branch .clsCaseJa true

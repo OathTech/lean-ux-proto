@@ -860,9 +860,12 @@ which of them fall inside a window, is fixture knowledge kept here. -/
     `rt_sigprocmask` around it in the guest's window). -/
 def forkCalls : List Int := [56]
 
-/-- The child leaves with `exit_group` (231), or with `exit` (60) under
-    strict mode, which `exit_group` is not allowed by (design 2.9). -/
-def childExitCall (strict : Bool) : Int := if strict then 60 else 231
+/-- The child leaves with `exit_group` (231), or with `exit` (60) when the
+    probe asked for strict mode (harness/guest.c:1782 chooses by the request,
+    not by the strict call's result; `exit_group` is not allowed under strict,
+    design 2.9). Measured on sc2 (X): after a refused strict call the child
+    still leaves with `exit`. -/
+def childExitCall (strictRequested : Bool) : Int := if strictRequested then 60 else 231
 
 /-- Harness calls whose entry falls inside the window after the operation's
     own call: none known yet. Stream W's measurement fixes this list (the
