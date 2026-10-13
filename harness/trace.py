@@ -91,6 +91,9 @@ BPF_MAXINSNS = 4096
 # the probe set, so the harness's own calls are constant-allowed cache
 # hits; a strict child may probe exit (60), the one call it reports through
 SECCOMP_PROBE_SET = {102, 104, 107, 108, 1000, 335}
+# seccomp X (design 5): the prefill fixture's bound; the ninth copy of the
+# 3990-instruction program would itself exceed MAX_INSNS_PER_PATH
+SECCOMP_PREFILL_MAX = 8
 SECCOMP_STRICT_PROBE_SET = SECCOMP_PROBE_SET | {60}
 # the return actions the kill scan (design 6.1) accepts for a self probe:
 # ALLOW, LOG, TRACE (no tracer: -ENOSYS), ERRNO, TRAP (a handler)
@@ -279,8 +282,16 @@ def _fields(value, keys, where):
 
 def validate_trace(trace):
     """Return a detached valid trace; reject all inputs outside trace v1."""
-    if type(trace) is not dict or not {"version", "id", "ops"} <= set(trace) <= {"version", "id", "ops", "rlimit_nofile", "steer", "expect", "net_fixture", "domain_extension", "seccomp_child"}:
-        raise InvalidTrace("trace: expected exactly ['id', 'ops', 'version'] and optionally 'rlimit_nofile', 'steer', 'expect', 'net_fixture', 'domain_extension', 'seccomp_child'")
+    if type(trace) is not dict or not {"version", "id", "ops"} <= set(trace) <= {"version", "id", "ops", "rlimit_nofile", "steer", "expect", "net_fixture", "domain_extension", "seccomp_child", "seccomp_prefill"}:
+        raise InvalidTrace("trace: expected exactly ['id', 'ops', 'version'] and optionally 'rlimit_nofile', 'steer', 'expect', 'net_fixture', 'domain_extension', 'seccomp_child', 'seccomp_prefill'")
+    # seccomp X (design 5; [USER 2026-10-12]): the prefill fixture installs N
+    # copies of a fixed program in the trace process before the window; it is
+    # the trace process's own state, never with a network fixture or a
+    # steering schedule
+    if "seccomp_prefill" in trace:
+        _integer(trace["seccomp_prefill"], 1, SECCOMP_PREFILL_MAX, "seccomp_prefill")
+        if trace.get("net_fixture") or "steer" in trace:
+            raise InvalidTrace("seccomp_prefill: never with a network fixture or a steering schedule")
     # seccomp W (design 5, 6.2 rule 2): the child fixture holds the sandboxed
     # child's KCOV descriptor at 8; declared explicitly, required by a child
     # probe, never with a network fixture or a steering schedule
@@ -572,6 +583,14 @@ def validate_seccomp_op(op, i, ops, trace):
         if op["where"] == "self" and any(
                 earlier["op"] == "seccomp_install" and filter_may_kill(earlier["filter"]) for earlier in ops[:i]):
             raise InvalidTrace(f"{where}.where: a self probe after a filter that may kill (design 6.1: run it in a child)")
+        # seccomp X (design 6.3): with no mode set the syscall entry never
+        # reaches __secure_computing, so a probe before any install covers
+        # nothing in the anchored files and the check fails it; a strict child
+        # sets its own mode. Installs that the kernel rejects leave no mode
+        # either: the check catches those (fail-closed), the corpus avoids them.
+        if not strict and not trace.get("seccomp_prefill") and not any(earlier["op"] == "seccomp_install" for earlier in ops[:i]):
+            raise InvalidTrace(f"{where}: a probe before any install covers nothing anchored (design 6.3: install first, "
+                               "or probe from a strict child)")
     if name == "seccomp_prctl":
         if op["cmd"] not in SECCOMP_PRCTL:
             raise InvalidTrace(f"{where}.cmd: expected one of {list(SECCOMP_PRCTL)}")
@@ -713,7 +732,7 @@ def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False, allo
             raise InvalidTrace("arm mask outside the dispatch set")
         routes = fixture_routes(trace)
         # seccomp W: the eighth field declares the child fixture (descriptor 8)
-        lines.append(f"T {trace['id']} {len(trace['ops'])} {trace.get('rlimit_nofile', 32)} {net_mode(trace)} {len(schedule)} {mask:x} {len(routes)} {int(bool(trace.get('seccomp_child')))}")
+        lines.append(f"T {trace['id']} {len(trace['ops'])} {trace.get('rlimit_nofile', 32)} {net_mode(trace)} {len(schedule)} {mask:x} {len(routes)} {int(bool(trace.get('seccomp_child')))} {trace.get('seccomp_prefill', 0)}")
         # W4: the fixture's routes into wg0 (family, destination, MTU), one line each
         for route in routes:
             lines.append(f"R {route['family']} {route['dst']} {route['mtu']}")

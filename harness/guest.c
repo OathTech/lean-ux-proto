@@ -195,6 +195,17 @@ struct fixture_route { unsigned family; unsigned char dst[16]; unsigned mtu; };
  * the sandboxed child's own KCOV descriptor at 8 (never with a network
  * fixture: 8 is W8's injector). */
 #define CHILD_KCOV_FD 8
+/* seccomp X (design 5): the prefill fixture ("seccomp_prefill": N, the T
+ * line's ninth field): N copies of a fixed program installed under
+ * no-new-privs before the window. The program loads nr, branches to a JA
+ * chain only for a dummy number outside the probe set and the cached
+ * range, and allows everything else, so every probe is a cache hit; its
+ * 3995 eBPF instructions (3999 with the walk's penalty) leave eight copies
+ * 776 short of MAX_INSNS_PER_PATH. Leanux/Seccomp/Prefill.lean holds the
+ * same program. */
+#define SECCOMP_PREFILL_MAX 8
+#define SECCOMP_PREFILL_LEN 3990
+#define SECCOMP_PREFILL_DUMMY 100000u
 #ifndef SYS_SECCOMP
 #define SYS_SECCOMP 1
 #endif
@@ -280,6 +291,7 @@ struct trace {
      * dispatch set, a bit per entry (W8: per-trace arming, section 3.2) */
     char id[81]; unsigned count; unsigned rlimit; unsigned net; unsigned arm; unsigned stepped; struct operation ops[MAX_OPS];
     unsigned child;   /* seccomp W: the trace declares seccomp_child (descriptor 8) */
+    unsigned prefill; /* seccomp X: copies of the prefill program installed at setup */
     unsigned nsteer; struct steer_entry steer[STEER_MAX];
     unsigned nroutes; struct fixture_route routes[MAX_FIXTURE_ROUTES];
 };
@@ -2009,6 +2021,21 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
     child_shared = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
     if (child_shared == MAP_FAILED) fail(t->id, -1, "environment_failure", "map_child_page");
     memset(child_shared, 0, 4096);
+    /* seccomp X (design 5): the prefill fixture, outside every window: no-new-privs,
+     * then t->prefill installs of the fixed program; any failure is the
+     * fixture's, not the trace's. */
+    if (t->prefill) {
+        static struct sock_filter prefill[SECCOMP_PREFILL_LEN];
+        prefill[0] = (struct sock_filter){BPF_LD | BPF_W | BPF_ABS, 0, 0, 0};
+        prefill[1] = (struct sock_filter){BPF_JMP | BPF_JEQ | BPF_K, 1, 0, SECCOMP_PREFILL_DUMMY};
+        prefill[2] = (struct sock_filter){BPF_RET | BPF_K, 0, 0, SECCOMP_RET_ALLOW};
+        for (unsigned i = 3; i + 1 < SECCOMP_PREFILL_LEN; ++i) prefill[i] = (struct sock_filter){BPF_JMP | BPF_JA, 0, 0, 0};
+        prefill[SECCOMP_PREFILL_LEN - 1] = (struct sock_filter){BPF_RET | BPF_K, 0, 0, SECCOMP_RET_ALLOW};
+        struct sock_fprog prefill_prog = {.len = SECCOMP_PREFILL_LEN, .filter = prefill};
+        if (syscall(SYS_prctl, PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0)) fail(t->id, -1, "environment_failure", "prefill_no_new_privs");
+        for (unsigned i = 0; i < t->prefill; ++i)
+            if (syscall(SYS_seccomp, SECCOMP_SET_MODE_FILTER, 0, &prefill_prog)) fail(t->id, -1, "environment_failure", "seccomp_prefill");
+    }
     if (t->child) {
         if (open("/sys/kernel/debug/kcov", O_RDWR) != CHILD_KCOV_FD) fail(t->id, -1, "coverage_failure", "open_child_kcov_at_8");
         if (ioctl(CHILD_KCOV_FD, KCOV_INIT_TRACE, CAPACITY)) fail(t->id, -1, "coverage_failure", "initialize_child_kcov");
@@ -2839,15 +2866,18 @@ int main(int argc, char **argv)
     for (unsigned t = 0; t < total; ++t) {
         static struct trace trace;
         if (!fgets(line, sizeof(line), input) ||
-            sscanf(line, "T %80s %u %u %u %u %x %u %u", trace.id, &trace.count, &trace.rlimit, &trace.net, &trace.nsteer,
-                   &trace.arm, &trace.nroutes, &trace.child) != 8 ||
+            sscanf(line, "T %80s %u %u %u %u %x %u %u %u", trace.id, &trace.count, &trace.rlimit, &trace.net, &trace.nsteer,
+                   &trace.arm, &trace.nroutes, &trace.child, &trace.prefill) != 9 ||
             trace.count < 1 || trace.count > MAX_OPS || trace.rlimit < 8 || trace.rlimit > 1024 || trace.net > 3 ||
             trace.nsteer > STEER_MAX || (trace.arm >> dispatch.n) || (trace.net == 3 && trace.rlimit < 10) ||
             trace.nroutes > MAX_FIXTURE_ROUTES || (trace.nroutes && trace.net != 1) ||
             /* seccomp W: the child fixture (descriptor 8) never with a network
              * fixture, never with a steering schedule (the child loads none),
              * and with room for descriptor 8 */
-            trace.child > 1 || (trace.child && (trace.net || trace.nsteer || trace.rlimit < 9)))
+            trace.child > 1 || (trace.child && (trace.net || trace.nsteer || trace.rlimit < 9)) ||
+            /* seccomp X: the prefill fixture is the trace process's own state,
+             * never with a network fixture or a steering schedule */
+            trace.prefill > SECCOMP_PREFILL_MAX || (trace.prefill && (trace.net || trace.nsteer)))
             fail("batch", -1, "invalid_input", "wire_trace");
         /* W8: the subset of the dispatch set this trace arms (section 3.2):
          * a foreign-creator trace arms cleanup_net; a plain one never sees a

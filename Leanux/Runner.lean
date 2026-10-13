@@ -125,6 +125,10 @@ structure Trace where
       descriptor, 8, opened and mapped by the trace process at setup for the
       sandboxed children; exclusive with a network fixture (design 5). -/
   seccompChild : Bool := false
+  /-- `"seccomp_prefill": N` (design 5): the guest installed `N` copies of the
+      prefill program under no-new-privs before the window; the initial task
+      state carries the chain (`Env.seccompPrefill`). -/
+  seccompPrefill : Nat := 0
   deriving Repr
 
 /-- The network fixture runs for traces with a WireGuard operation
@@ -704,6 +708,7 @@ def parseTrace (j : Json) : Except String Trace := do
   let hasDst := (j.getObjVal? "dst_cache_records").isOk
   let hasExtension := (j.getObjVal? "domain_extension").isOk
   let hasSeccompChild := (j.getObjVal? "seccomp_child").isOk
+  let hasSeccompPrefill := (j.getObjVal? "seccomp_prefill").isOk
   fields j ((if hasLimit then ["version", "id", "ops", "rlimit_nofile"] else ["version", "id", "ops"])
     ++ (if hasHidden then ["hidden"] else []) ++ (if hasSteer then ["steer"] else [])
     ++ (if hasExpect then ["expect"] else []) ++ (if hasArm then ["arm_records"] else [])
@@ -712,7 +717,8 @@ def parseTrace (j : Json) : Except String Trace := do
     ++ (if hasArmed then ["alloc_armed"] else [])
     ++ (if hasDst then ["dst_cache_records"] else [])
     ++ (if hasExtension then ["domain_extension"] else [])
-    ++ (if hasSeccompChild then ["seccomp_child"] else []))
+    ++ (if hasSeccompChild then ["seccomp_child"] else [])
+    ++ (if hasSeccompPrefill then ["seccomp_prefill"] else []))
   -- D3: the arm-record switch qualifies the records, so it comes with them
   if hasArm && !hasHidden then throw "arm_records: only with hidden records"
   let armRecords ← if hasArm then (← field j "arm_records").getBool? else pure false
@@ -789,7 +795,14 @@ def parseTrace (j : Json) : Except String Trace := do
     else pure []
   if hasArmed && !hasHidden then throw "alloc_armed: an armed run carries its records"
   let seccompChild ← if hasSeccompChild then (← field j "seccomp_child").getBool? else pure false
-  let trace : Trace := { id, ops, rlimit, hidden, steer, armRecords, napiBeforePut, allocArmed, pauses, bare, foreign, routes, dstCacheRecords, seccompChild }
+  let seccompPrefill ← if hasSeccompPrefill then (← field j "seccomp_prefill").getNat? else pure 0
+  let trace : Trace := { id, ops, rlimit, hidden, steer, armRecords, napiBeforePut, allocArmed, pauses, bare, foreign, routes, dstCacheRecords, seccompChild, seccompPrefill }
+  -- seccomp design 5: the prefill fixture is the trace process's, outside every
+  -- window: never with a network fixture or a steering schedule
+  if hasSeccompPrefill && (seccompPrefill == 0 || seccompPrefill > Leanux.Seccomp.Prefill.PREFILL_MAX) then
+    throw s!"seccomp_prefill: expected 1..{Leanux.Seccomp.Prefill.PREFILL_MAX}"
+  if seccompPrefill > 0 && (trace.net || !steer.isEmpty) then
+    throw "seccomp_prefill: never with a network fixture or a steering schedule"
   if (bare || foreign || !routes.isEmpty) && !trace.net then throw "net_fixture: only a network trace has a network fixture"
   -- seccomp design 5: descriptor 8 is the child's KCOV or W8's injector, never both
   if seccompChild && trace.net then throw "seccomp_child: exclusive with a network fixture"
@@ -970,6 +983,11 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
                              allocSteered := if placeholders then
                                (trace.steer.map (·.1)).filter fun l => AllocSite.all.any (·.info.label == l)
                              else [] }
+  -- the seccomp prefill fixture (design 5): the chain the guest installed before the window
+  if trace.seccompPrefill > 0 then
+    match Env.seccompPrefill trace.seccompPrefill world.k with
+    | .ok k => world := { world with k }
+    | .error e => throw (0, .invariant e)
   let mut results : Array Int := #[]
   let mut ends : Array (Option (Nat × Nat)) := #[]
   let mut observations : Array Json := #[]

@@ -7,6 +7,7 @@ import Leanux.Env.IpStack
 import Leanux.Env.Batch
 import Leanux.Env.Stack
 import Leanux.Kernel.Signal
+import Leanux.Seccomp.Prefill
 
 /-!
 # The environment model: the harness fixture and the WireGuard kworker
@@ -916,5 +917,16 @@ def childDrop : M Unit := do
 def trapDelivered : M Unit := do
   let t := (← getK).current
   modifyTask t fun tk => { tk with pending := sigdelset tk.pending SIGSYS, sigpending := false }
+
+/-- The seccomp prefill fixture (`"seccomp_prefill": N`; design section 5)
+    [USER 2026-10-12: "Yes, let's queue it"]: the guest set no-new-privs and
+    installed `N` copies of `Seccomp.Prefill.program` before the window. The
+    initial task state carries that chain, reconstructed by the mirror's own
+    translation of the same program and the decision-free cache emulation
+    (`Leanux/Seccomp/Prefill.lean`): a fixture assumption, outside every
+    window, like the fixture descriptors; the kernel's `total_insns` at the
+    next recorded install is the evidence that the reconstruction's lengths
+    are the kernel's. -/
+def seccompPrefill (n : Nat) (k : Kernel) : Except String Kernel := Leanux.Seccomp.Prefill.apply n k
 
 end Leanux.Env

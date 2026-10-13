@@ -298,8 +298,10 @@ def seccompFilter {E : Type} [BpfEngine E] (e : E) (nr : Int) (sd : SeccompData)
     return outcome
   if action == SECCOMP_RET_ERRNO then
     _ ← kbranch .filterCaseErrno true
-    -- `data > MAX_ERRNO` is compiled as `(data >> 12) != 0` (measured): those are the operands
-    let data ← if ← kbranchCmp .filterErrnoCap (data > MAX_ERRNO) (data / 4096) 0 then pure MAX_ERRNO else pure data
+    -- `data > MAX_ERRNO` is compiled as `(data & ~0xfff) != 0`: the variable is the masked
+    -- data, the constant 0 (measured on sc2, X: the record is (0x0, 0x1000) for 4096 and
+    -- (0x0, 0xf000) for 65535, KCOV's constant first)
+    let data ← if ← kbranchCmp .filterErrnoCap (data > MAX_ERRNO) (Int.ofNat (data.toNat &&& 0xfffff000)) 0 then pure MAX_ERRNO else pure data
     -- syscall_set_return_value(current, regs, -data, 0)
     skip (.skip (-data))
   else if action == SECCOMP_RET_TRAP then

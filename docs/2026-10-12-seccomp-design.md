@@ -723,6 +723,21 @@ interface between the two projects.
   rejects the combination and the interface document's table records the
   exclusivity (the coordinator's, 12).
 - `actions_logged` is the kernel default, checked by the fixture row.
+- The prefill fixture [USER 2026-10-12: "Yes, let's queue it"]: a trace
+  declaring `"seccomp_prefill": N` (1-8; never with a network fixture or a
+  steering schedule) starts with no-new-privs set and `N` copies of a fixed
+  3990-instruction program on its chain, installed by the guest before the
+  window (`harness/guest.c` `SECCOMP_PREFILL_*`): `nr` loaded, a `JA` chain
+  only for a dummy number outside the probe set and the cached range,
+  `ALLOW` otherwise, so every probe is a cache hit through the chain. The
+  mirror's initial task state carries the chain, reconstructed by its own
+  translation of the same program under the record-free local instance and
+  the decision-free cache emulation (`Leanux/Seccomp/Prefill.lean`,
+  `Env.seccompPrefill`): a fixture assumption like the descriptors, outside
+  every window; the kernel's `total_insns` at the first recorded install is
+  the evidence that the reconstruction's lengths are the kernel's. Each copy
+  is 3995 eBPF instructions, 3999 with the walk's penalty: eight leave 776
+  of `MAX_INSNS_PER_PATH` for the recorded installs (7).
 - The child's exit effect (2.8): one `users` and one `refs` decrement on the
   head filter the parent holds; the child's task object is dropped at the
   parent's `wait4`. The `TRAP` delivery effect (2.2): `SIGSYS` removed
@@ -836,6 +851,18 @@ has not used. Noted, not chosen (13).
 
 ### 6.3 Coverage
 
+A probe with no mode set covers nothing anchored: the syscall entry's fast
+path never reaches `__secure_computing` (2.1), so the check's "no coverage
+in anchored files" rule fails the operation. The validator therefore
+requires every probe to follow an install, or to be a strict child (which
+sets its own mode), and the corpus never probes after only rejected
+installs (`scripts/seccomp-corpus.py` checks its own traces; the generator
+installs first). Chosen over declaring such probes data-only because
+data-only is by operation name (`data_only_operations`) while this is a
+property of the trace's state, and a rule the validator and the corpus
+carry keeps the check fail-closed on the case it cannot tell apart (an
+install the kernel rejected) [AGENT, X].
+
 `correspondence/kcov.json` gains the files `kernel/seccomp.c`,
 `net/core/filter.c`; the functions of section 2 (`__secure_computing`,
 `__seccomp_filter`, `seccomp_run_filters`, `seccomp_cache_check_allow`,
@@ -920,12 +947,19 @@ Hand-written (about 45 traces), one per arm:
   cache's `bitmap_copy` arm, the most-restrictive rule); the reverse; two
   with equal actions and different data (the tie rule); a third filter;
   four 768-instruction filters (the budget's walk over the chain, a probe
-  through four programs). Crossing `MAX_INSNS_PER_PATH` is out of reach:
-  it needs 32768 installed eBPF instructions, at least 42 installs of 768,
-  and an install's rows cost about 0.48 MB of the guest's console in the
-  cheapest shape (the chain behind the RET; X measured 5.78 MB for 12
-  installs and the 16 MB output limit hit at the 43-install trace), so the
-  `-ENOMEM` arm is modelled and unexercised (9.3);
+  through four programs); and the budget itself through the prefill
+  fixture (5) [USER 2026-10-12: "Yes, let's queue it"]: recorded installs
+  alone cannot reach it (32768 installed eBPF instructions are at least 42
+  installs of 768, at about 0.48 MB of console each in the cheapest shape;
+  X measured 5.78 MB for 12 and the 16 MB limit at 43), so eight prefilled
+  copies (31992 with the walk's penalty) leave 776, and `s_budget_enomem`'s
+  772-instruction install (779 eBPF: the arch test's negative constant costs
+  the conversion one more, `filter.c:755-760`) is `-ENOMEM` at 32771, while
+  `s_budget_edge`'s 768 (775) fits at 32767 and the next is refused at
+  33546; the kernel's records at `seccomp.c:925` read (0x8000, 0x8003),
+  (0x8000, 0x7fff) and (0x8000, 0x830a) (X, on sc2). The compare's operand,
+  Linux's `total_insns` against the mirror's, is the fixture's acceptance
+  evidence;
 - modes and privilege: strict in a child then an allowed call (`exit`),
   then a killed one (`SIGKILL`); strict after filter (`-EINVAL`, the
   child's `strict_ret`); not filter after strict: the `seccomp` call
@@ -951,11 +985,15 @@ or not, and random data), then 2-6 probes over the probe set with random
 arguments, `self` where the validator's scan allows and `child`
 otherwise, at most three child probes per trace; (g3) **mixed**, g2
 interleaved with non-blocking eventfd and pipe ops. A child probe costs
-about 1 MB of the guest's console in comparison mode (the parent's `clone`
-and `wait4` records; W), so `evaluator/check.py` chunks the suites at ten
-child probes per guest (`CHILD_PROBES_PER_CHUNK`), the 16 MB limit
-unchanged. No `ERRNO` data is one of the errnos the harness treats as its
-own infrastructure failing (4, 12, 23, 512-516, `harness/linux.py`).
+about 4.3 MB of the guest's console in the check's comparison mode (the
+parent's `clone` and `wait4` records and the child's streams; measured on
+sc2 by X: three probes in 13.1-13.6 MB; W's 1.1 MB was the Linux-only
+harness's), and an install about 0.6 KB per classic instruction, so
+`evaluator/check.py` chunks the suites by an estimated console cost
+(`seccomp_console_cost`, budget 12 MB per guest), the 16 MB limit
+unchanged and its split the backstop. No `ERRNO` data is one of the errnos
+the harness treats as its own infrastructure failing (4, 12, 23, 512-516,
+`harness/linux.py`).
 
 Controls (`corpus/seccomp-controls/`): `tsync` and `new_listener` flags,
 a `USER_NOTIF` action, a filter loading offset 8, each expected to stop
@@ -1032,13 +1070,12 @@ signal delivery (an environment effect, 2.2), `prctl`'s dispatch and
 The `-ENOMEM` arms of allocation sites 2, 4, 5 and 10; `bpf_convert_filter`'s
 `pass > 2` arm (the C's comment says the second pass must converge); the
 `WARN_ON` fall-off in `seccomp_is_const_allow` (impossible for a checked
-program: it ends in `RET`); the path budget's `-ENOMEM` in
-`seccomp_attach_filter` (:925: 32768 installed instructions cost more
-console than one guest may emit, 7); `seccomp_may_assign_mode`'s refusal
-of a filter after strict (:437-445: under strict the `seccomp` call is
-killed before it, and 317 is outside the probe set). Each is a decision the
-mirror emits and no trace witnesses; the check's `known_gaps` does not list
-them, since they are modelled.
+program: it ends in `RET`); `seccomp_may_assign_mode`'s refusal of a
+filter after strict (:437-445: under strict the `seccomp` call is killed
+before it, and 317 is outside the probe set). Each is a decision the mirror
+emits and no trace witnesses; the check's `known_gaps` does not list them,
+since they are modelled. The path budget's `-ENOMEM` (:925) left this list
+with the prefill fixture (5, 7).
 
 ## 10. Risks
 

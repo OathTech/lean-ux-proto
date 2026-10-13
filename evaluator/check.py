@@ -66,11 +66,31 @@ NETNS_SHARE = 0.03
 # unsupported on while the kernel runs them — design 9.1; scripts/seccomp-controls.py)
 CONTROL_SUITES = ('steering-controls', 'timer-controls', 'lifecycle-controls', 'underload-controls', 'seccomp-controls')
 CHUNK = 100
-# seccomp X: a sandboxed child probe (design 6.2 rule 2) costs about 1 MB of
-# the guest's console in comparison mode (the parent's clone and wait4
-# records; stream W's measurement, 2026-10-12), against the 16 MB output
-# limit of one guest, so a chunk holds at most this many child probes.
-CHILD_PROBES_PER_CHUNK = 10
+# seccomp X: the guest's console per chunk is bounded (OUTPUT_LIMIT, 16 MB),
+# and seccomp traces are the costly ones in comparison mode: a sandboxed
+# child probe (design 6.2 rule 2) about 4.3 MB (the parent's clone and wait4
+# records, the child's stream; measured in the check on sc2, 2026-10-13:
+# three probes in 13.1-13.6 MB), an install about 0.6 KB per classic
+# instruction (the checker's and the translation's per-instruction compares;
+# W measured 0.48 MB for 768), and a trace's other rows under 0.1 MB. A
+# chunk is flushed before its estimate would pass the budget; the output
+# limit's split stays as the backstop.
+CHILD_PROBE_CONSOLE = 4_400_000
+INSTALL_INSN_CONSOLE = 640
+TRACE_CONSOLE = 100_000
+CHUNK_CONSOLE_BUDGET = 12_000_000
+
+
+def seccomp_console_cost(trace):
+    """The estimated console bytes of a trace's seccomp operations in
+    comparison mode (zero for a trace without them)."""
+    cost = 0
+    for op in trace['ops']:
+        if op['op'] == 'seccomp_probe' and op['where'] == 'child':
+            cost += CHILD_PROBE_CONSOLE
+        elif op['op'] == 'seccomp_install' and op['filter']:
+            cost += INSTALL_INSN_CONSOLE * len(op['filter'])
+    return cost + TRACE_CONSOLE if cost else 0
 
 
 def sha256(data):
@@ -100,25 +120,24 @@ def chunk_traces(traces):
         # W7: a bulk trace (wg_batch) runs in a chunk by itself too, since its
         # wall time is a large share of the trace bound (section 6)
         return any(op['op'] in ('wg_flood', 'wg_batch') for op in trace['ops'])
-    def child_probes(trace):
-        return sum(op['op'] == 'seccomp_probe' and op['where'] == 'child' for op in trace['ops'])
-    pending, current, cur_start, cur_children = [], [], 0, 0
+    pending, current, cur_start, cur_cost = [], [], 0, 0
     def flush():
-        nonlocal current, cur_children
+        nonlocal current, cur_cost
         if current:
             pending.append((cur_start, current, f'chunk-{len(pending):03}'))
-            current, cur_children = [], 0
+            current, cur_cost = [], 0
     for i, trace in enumerate(traces):
         if under_load(trace):
             flush()
             pending.append((i, [trace], f'chunk-{len(pending):03}'))
         else:
-            if current and cur_children + child_probes(trace) > CHILD_PROBES_PER_CHUNK:
+            cost = seccomp_console_cost(trace)
+            if current and cur_cost + cost > CHUNK_CONSOLE_BUDGET:
                 flush()
             if not current:
                 cur_start = i
             current.append(trace)
-            cur_children += child_probes(trace)
+            cur_cost += cost
             if len(current) == CHUNK:
                 flush()
     flush()

@@ -90,6 +90,35 @@ def prologue(cases, default=ALLOW, arch_check=True):
     return program
 
 
+def ebpf_len(program):
+    """The translated length of a program over the shapes used here
+    (net/core/filter.c bpf_convert_filter, measured by W and X: the
+    three-instruction prologue; LD|W|ABS one; a conditional jump one when jt
+    or jf is zero, two otherwise, plus one when its k is negative as an int
+    (:755-760, the constant goes through BPF_REG_TMP: the arch test's
+    0xc000003e); JA one; RET two)."""
+    n = 3
+    for code, jt, jf, k in program:
+        if code == RET_K:
+            n += 2
+        elif code in (JEQ_K, JGT_K, JGE_K, JSET_K):
+            n += (1 if jt == 0 or jf == 0 else 2) + (1 if k >= 0x80000000 else 0)
+        elif code in (LD_W_ABS, JA):
+            n += 1
+        else:
+            raise ValueError(f"ebpf_len: shape not measured for code {code:#x}")
+    return n
+
+
+# The prefill fixture's program (design 5; harness/guest.c SECCOMP_PREFILL_*,
+# Leanux/Seccomp/Prefill.lean): 3990 classic, 3995 eBPF instructions; eight
+# copies on the chain cost 8 * (3995 + 4) = 31992 of MAX_INSNS_PER_PATH's 32768.
+PREFILL_LEN, PREFILL_DUMMY, PREFILL_MAX = 3990, 100000, 8
+PREFILL_PROGRAM = [ld(NR), jeq(PREFILL_DUMMY, 1, 0), ret(ALLOW)] + [insn(JA)] * (PREFILL_LEN - 4) + [ret(ALLOW)]
+MAX_INSNS_PER_PATH = 32768
+assert ebpf_len(PREFILL_PROGRAM) == 3995
+
+
 def long_filter(nr, action, length=768, reachable=True):
     """A `length`-instruction filter: the prologue, then for `nr` a chain of
     `JA 0` ending in `RET action`. With `reachable` false the chain sits
@@ -581,6 +610,30 @@ trace("s_chain_big", [
     probe(102),                                # 5: -8
 ])
 
+# The path budget (2.4, :921-926) through the prefill fixture [USER 2026-10-12:
+# "Yes, let's queue it"]: eight prefilled copies (31992 with the walk's
+# penalty) leave 776 instructions; a 772-instruction install (779 eBPF) is
+# -ENOMEM at seccomp_attach_filter, the chain and the mode (set by the
+# fixture, no-new-privs with it) untouched. The compare's operand, Linux's
+# total_insns 32771 against 32768 (measured, X), is the acceptance evidence.
+trace("s_budget_enomem", [
+    install(long_filter(102, ERRNO | 7, 772)),  # 0: -ENOMEM (32771 > 32768)
+    prctl("get_seccomp"),                      # 1: 2 (the prefill's mode)
+    prctl("get_no_new_privs"),                 # 2: 1 (the prefill's step)
+    probe(102),                                # 3: 0 (a cache hit through eight bitmaps)
+], seccomp_prefill=PREFILL_MAX)
+
+# The edge: a 768-instruction install (775 eBPF) fits, 32767 of 32768; the
+# next one does not, 33546; the first stays on the chain and answers 102.
+trace("s_budget_edge", [
+    install(long_filter(102, ERRNO | 7)),      # 0: 0 (32767 <= 32768)
+    install(long_filter(102, ERRNO | 9)),      # 1: -ENOMEM (33546 > 32768)
+    probe(102),                                # 2: -7
+    probe(104),                                # 3: 0
+    prctl("get_seccomp"),                      # 4: 2
+], seccomp_prefill=PREFILL_MAX)
+
+
 # ---- modes and privilege (2.9, 2.10) ---------------------------------------
 
 # Strict in a child: exit (60) is allowed and leaves with its status; getuid
@@ -713,10 +766,35 @@ def check_rules():
         installs = [op["filter"] for op in t["ops"] if op["op"] == "seccomp_install" and op["filter"]]
         assert not any(i[0] == RET_K and i[3] & 0xffff0000 == ERRNO and i[3] & 0xffff in RESERVED_ERRNO
                        for p in installs for i in p), t["id"]
-        assert all(len(p) <= 768 for p in installs), t["id"]
+        assert all(len(p) <= 772 for p in installs), t["id"]   # 772: the budget trace's smallest crossing install
         assert sum(op["op"] == "seccomp_probe" and op["where"] == "child" for op in t["ops"]) <= 3, t["id"]
         assert not any(op["op"] == "seccomp_probe" and op["where"] == "self" and any(
             filter_may_kill(p) for p in installs) for op in t["ops"]), t["id"]
+        # a probe only once a mode is set (design 6.3): after an install whose
+        # comment says it succeeds, or as a strict child
+        accepted = bool(t.get("seccomp_prefill"))   # the fixture sets the mode before the window
+        for op in t["ops"]:
+            if (op["op"] == "seccomp_install" and op["filter"] is not None and "len" not in op and "bad" not in op
+                    and op.get("mode", 2) == 2
+                    and all(isinstance(f, str) for f in op["flags"])   # a raw bit is the mask arm
+                    and not ("tsync" in op["flags"] and "new_listener" in op["flags"] and "tsync_esrch" not in op["flags"])
+                    and not ("wait_killable_recv" in op["flags"] and "new_listener" not in op["flags"])):
+                accepted = True
+            if op["op"] == "seccomp_probe":
+                assert accepted or op.get("strict"), f"{t['id']}: a probe before an accepted install"
+
+
+def check_budget():
+    """The budget traces' arithmetic against the kernel's rule (:921-926):
+    the new program's eBPF length plus, per filter on the chain, its length
+    and 4."""
+    chain = PREFILL_MAX * (ebpf_len(PREFILL_PROGRAM) + 4)
+    assert chain == 31992, chain
+    a = TRACES["s_budget_enomem"]["ops"][0]["filter"]
+    assert ebpf_len(a) + chain == 32771 > MAX_INSNS_PER_PATH     # the kernel's record: (0x8000, 0x8003)
+    b1, b2 = (op["filter"] for op in TRACES["s_budget_edge"]["ops"][:2])
+    assert ebpf_len(b1) + chain == 32767 <= MAX_INSNS_PER_PATH   # (0x8000, 0x7fff)
+    assert ebpf_len(b2) + chain + ebpf_len(b1) + 4 == 33546 > MAX_INSNS_PER_PATH   # (0x8000, 0x830a)
 
 
 def main():
@@ -724,6 +802,7 @@ def main():
     parser.add_argument("--check", action="store_true", help="verify the committed files instead of writing")
     args = parser.parse_args()
     check_rules()
+    check_budget()
     for out, table in ((OUT, TRACES), (CONTROLS, CONTROL_TRACES)):
         expected = {f"{name}.json": render(t) for name, t in table.items()}
         if args.check:

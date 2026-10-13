@@ -151,7 +151,12 @@ descriptor arguments:
   may kill: a `RET|K` whose action is not `ALLOW`, `LOG`, `TRACE`, `ERRNO`
   or `TRAP`, a `RET|A`, or a `DIV|X` (the validator's conservative scan,
   `harness/trace.py filter_may_kill`; `MOD` is rejected at the install by
-  `seccomp_check_filter`, so it is not scanned).
+  `seccomp_check_filter`, so it is not scanned). A probe is valid only after
+  an earlier `seccomp_install` in the trace, or as a strict child: with no
+  mode set the syscall entry never reaches seccomp and the operation covers
+  nothing anchored (design 6.3; stream X). An install the kernel rejects
+  leaves no mode either; the check fails such a probe, and the corpus and
+  the generator never write one.
 - **`{"op":"seccomp_prctl","cmd":"set_no_new_privs"|"get_no_new_privs"|"get_seccomp"}`**
   is `prctl(PR_SET_NO_NEW_PRIVS | PR_GET_NO_NEW_PRIVS | PR_GET_SECCOMP, arg2, arg3,
   arg4, arg5)` with the optional u64 arguments (default 0; the `-EINVAL`
@@ -169,6 +174,17 @@ descriptor arguments:
   (the child loads none). Every trace process starts with a `SIGSYS`
   handler (`SA_SIGINFO`, no `SA_NODEFER`), `RLIMIT_CORE` 0, and its
   capability sets read for `seccomp_capdrop`.
+- **Prefill fixture** (stream X; [USER 2026-10-12]). A trace may declare
+  `"seccomp_prefill": N` (1–8) at the top level: before the window the trace
+  process sets no-new-privs and installs `N` copies of a fixed
+  3990-instruction program (`harness/guest.c` `SECCOMP_PREFILL_*`,
+  `Leanux/Seccomp/Prefill.lean`: `nr` loaded, a `JA` chain only for a dummy
+  number outside the probe set, `ALLOW` otherwise, so every probe is a cache
+  hit), and the mirror's initial task state carries that chain and the
+  no-new-privs bit. Never with a network fixture or a steering schedule.
+  Its purpose is `seccomp_attach_filter`'s path budget: eight copies leave
+  776 of `MAX_INSNS_PER_PATH`'s 32768 instructions for the recorded
+  installs. The `T` line's ninth field carries `N` (0 without the key).
 - **Observation.** Every operation carries `ret` and `errno` as above; a
   child probe's `ret` is 0 (the parent's wait). `seccomp_probe` adds
   `sigsys`: `{"nr","data","arch"}` from the handler after a `TRAP`

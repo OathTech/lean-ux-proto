@@ -925,13 +925,15 @@ class SeccompChecks(unittest.TestCase):
                         else 'child' if t.get('seccomp_child') else 'self' for t in traces)
         self.assertEqual(set(kinds), {'checker', 'child', 'self'})
 
-    def test_child_probes_per_chunk(self):
+    def test_seccomp_console_budget_per_chunk(self):
         probe = {'op': 'seccomp_probe', 'nr': 102, 'where': 'child'}
-        child = [dict(version=1, id=f'c{i}', ops=[probe] * 3, seccomp_child=True) for i in range(9)]
+        install = {'op': 'seccomp_install', 'via': 'seccomp', 'flags': [], 'filter': [[6, 0, 0, 0x7fff0000]] * 768}
+        child = [dict(version=1, id=f'c{i}', ops=[probe] * 2, seccomp_child=True) for i in range(6)]
+        long = [dict(version=1, id=f'l{i}', ops=[install] * 4) for i in range(3)]
         plain = [dict(version=1, id=f'p{i}', ops=[{'op': 'seccomp_prctl', 'cmd': 'get_seccomp'}]) for i in range(5)]
-        chunks = check.chunk_traces(plain + child)
+        chunks = check.chunk_traces(plain + child + long)
         for _start, traces, _name in chunks:
-            self.assertLessEqual(sum(op['op'] == 'seccomp_probe' and op['where'] == 'child'
-                                     for t in traces for op in t['ops']), check.CHILD_PROBES_PER_CHUNK)
-        self.assertEqual([t['id'] for _s, ts, _n in chunks for t in ts], [t['id'] for t in plain + child])
-        self.assertEqual(len(chunks), 3)   # 5 plain + 3 child traces (9 probes), then 3, then 3
+            self.assertLessEqual(sum(check.seccomp_console_cost(t) for t in traces), check.CHUNK_CONSOLE_BUDGET)
+        self.assertEqual([t['id'] for _s, ts, _n in chunks for t in ts], [t['id'] for t in plain + child + long])
+        # two child probes are 8.9 MB: one child trace per chunk, and a 2.1 MB install trace (four of 768) joins the last
+        self.assertEqual([len(ts) for _s, ts, _n in chunks], [6, 1, 1, 1, 1, 2, 2])
