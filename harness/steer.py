@@ -222,6 +222,13 @@ ALLOC_SITES = {
     'kzallocPipeInfo': dict(consumer='fs/pipe.c:798', cls='task', helper=None, count=1),
     'kcallocPipeBufs': dict(consumer='fs/pipe.c:815', cls='task', helper=None, count=1),
     'allocPipePage': dict(consumer='fs/pipe.c:513', cls='task', helper=None, count=1),
+    # epoll (docs/2026-10-12-epoll-design.md 3.1; Leanux/Kernel/Defs.lean
+    # AllocSite 28-31, HiddenSite ids 192-195): direct calls, task context,
+    # pristine line numbers (the kind-308 hook is line-preserving)
+    'kzallocEp': dict(consumer='fs/eventpoll.c:1331', cls='task', helper=None, count=1),
+    'kmemCacheZallocEpi': dict(consumer='fs/eventpoll.c:1764', cls='task', helper=None, count=1),
+    'kmemCacheAllocPwq': dict(consumer='fs/eventpoll.c:1550', cls='task', helper=None, count=1),
+    'kmemCacheZallocEphead': dict(consumer='fs/eventpoll.c:1722', cls='task', helper=None, count=1),
 }
 ALLOC_KIND = 305
 ALLOC_FAIL = '00' * 8      # a fail entry's value: word 0 with outcome 0

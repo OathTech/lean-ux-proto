@@ -42,3 +42,13 @@ Not in this commit, by design: W5+W6's own interface step (its stream H,
 above) and W8-G's per-trace arm subset on the wire are those streams'
 first commits; `Leanux/Env/Stack.lean` and `Leanux/WG/PeerRemove.lean` are
 created by the streams that own them.
+
+## Next targets (2026-10-12)
+
+| Stream | Design | Owns | Shared allocations |
+|---|---|---|---|
+| epoll | `docs/2026-10-12-epoll-design.md` | `Leanux/FS/Epoll.lean`, the wait-queue service module it creates, its guest ops and harness decoding, `corpus/epoll*`, `scripts/epoll-corpus.py` | opcodes 27-29; record kind 308; HiddenSite ids 190-199 |
+| seccomp | `docs/2026-10-12-seccomp-design.md` | `Leanux/Seccomp/*` (new), the classic checker and translation mirror, its guest ops, `corpus/seccomp*`, `scripts/seccomp-corpus.py` | opcodes 30-34; HiddenSite ids 200-219; config `SECCOMP`, `SECCOMP_FILTER` |
+
+The eBPF engine (`kernel/bpf/core.c`) is a service at `seccomp_run_filters`'s
+call: never anchored, its ISA semantics a stated contract.

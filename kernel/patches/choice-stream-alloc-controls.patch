@@ -102,7 +102,7 @@
  	case KCOV_REMOTE_ENABLE:
  		if (get_user(remote_num_handles, (unsigned __user *)(arg +
  				offsetof(struct kcov_remote_arg, num_handles))))
-@@ -1125,3 +1170,861 @@
+@@ -1125,3 +1170,883 @@
  }
  
  device_initcall(kcov_init);
@@ -625,6 +625,28 @@
 +EXPORT_SYMBOL(kcov_dst_cache_ts);
 +
 +/*
++ * LEANUX epoll (docs/2026-10-12-epoll-design.md, section 3.2): the address
++ * of the struct file an epoll item is keyed by (ep_cmp_ffd: the file
++ * pointer, then the fd), recorded at ep_rbtree_insert (fs/eventpoll.c,
++ * _THIS_IP_) once per successful EPOLL_CTL_ADD, kind 308, 8 bytes. Slab
++ * placement is a hidden input: it fixes the walk order of the set's tree
++ * (ep_clear_and_put's two walks, ep_loop_check_proc), so the mirror orders
++ * its items by the recorded address instead of assuming allocation order.
++ * Written in any recording context, like the random and clock records: an
++ * FS trace loads no dispatch set, so the KCOV_DISPATCH_ARM_RECORDS gate of
++ * the arm, queue and dst-cache records is not available to it; outside a
++ * trace kcov_choice_ip returns at its mode check. Record-only: nothing the
++ * value decides changes.
++ */
++void notrace kcov_epoll_insert(unsigned long file, unsigned long ip)
++{
++	u64 v = file;
++
++	kcov_choice_ip(308, ip, &v, sizeof(v));
++}
++EXPORT_SYMBOL(kcov_epoll_insert);
++
++/*
 + * LEANUX D3 (section 4.3): the virtual time advance, on the calling task's
 + * own KCOV descriptor: { unsigned long ticks; }, 1 <= ticks <= 2^31. Only
 + * from a task that is collecting (the trace process), so the kind-304
@@ -966,7 +988,7 @@
 +}
 --- a/include/linux/kcov.h
 +++ b/include/linux/kcov.h
-@@ -44,6 +44,43 @@
+@@ -44,6 +44,45 @@
  void kcov_remote_start(u64 handle);
  void kcov_remote_stop(void);
  u64 kcov_common_handle(void);
@@ -1007,10 +1029,12 @@
 +/* LEANUX dispatch order: __queue_work's queue record (kind 307). */
 +struct work_struct;
 +void kcov_work_queued(struct work_struct *work, unsigned long ip);
++/* LEANUX epoll: ep_rbtree_insert's file-address record (kind 308). */
++void kcov_epoll_insert(unsigned long file, unsigned long ip);
  
  static inline void kcov_remote_start_common(u64 id)
  {
-@@ -99,6 +136,18 @@
+@@ -99,6 +138,19 @@
  static inline void kcov_finish_switch(struct task_struct *t) {}
  static inline void kcov_remote_start(u64 handle) {}
  static inline void kcov_remote_stop(void) {}
@@ -1026,6 +1050,7 @@
 +static inline void kcov_alloc_post(struct kcov_alloc_ctx *ctx, bool ok) {}
 +struct work_struct;
 +static inline void kcov_work_queued(struct work_struct *work, unsigned long ip) {}
++static inline void kcov_epoll_insert(unsigned long file, unsigned long ip) {}
  static inline u64 kcov_common_handle(void)
  {
  	return 0;
@@ -1761,4 +1786,15 @@
 +	kcov_dst_cache_ts(idst->refresh_ts, _THIS_IP_);	/* LEANUX W9: kind 306 */
  	return NULL;
  }
+ 
+--- a/fs/eventpoll.c
++++ b/fs/eventpoll.c
+@@ -1582,7 +1582,7 @@
+ 			p = &parent->rb_left;
+ 	}
+ 	rb_link_node(&epi->rbn, parent, p);
+-	rb_insert_color_cached(&epi->rbn, &ep->rbr, leftmost);
++	rb_insert_color_cached(&epi->rbn, &ep->rbr, leftmost); { extern void kcov_epoll_insert(unsigned long file, unsigned long ip); kcov_epoll_insert((unsigned long)epi->ffd.file, _THIS_IP_); }	/* LEANUX epoll: kind 308, line-preserving */
+ }
+ 
  

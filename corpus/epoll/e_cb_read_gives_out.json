@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "id": "e_cb_read_gives_out",
+  "ops": [
+    {
+      "op": "epoll_create1",
+      "flags": 0
+    },
+    {
+      "op": "eventfd2",
+      "init": 0,
+      "flags": 2048
+    },
+    {
+      "op": "write",
+      "fd": {
+        "ref": 1
+      },
+      "count": 8,
+      "value": "18446744073709551614"
+    },
+    {
+      "op": "epoll_ctl",
+      "epfd": {
+        "ref": 0
+      },
+      "cmd": 1,
+      "fd": {
+        "ref": 1
+      },
+      "events": 4,
+      "data": "1"
+    },
+    {
+      "op": "epoll_wait",
+      "epfd": {
+        "ref": 0
+      },
+      "maxevents": 16,
+      "timeout": 0
+    },
+    {
+      "op": "write",
+      "fd": {
+        "ref": 1
+      },
+      "count": 8,
+      "value": "1"
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 1
+      },
+      "count": 8
+    },
+    {
+      "op": "epoll_wait",
+      "epfd": {
+        "ref": 0
+      },
+      "maxevents": 16,
+      "timeout": 0
+    },
+    {
+      "op": "close",
+      "fd": {
+        "ref": 0
+      }
+    }
+  ]
+}

@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "id": "e_cb_pipe_both_ends",
+  "ops": [
+    {
+      "op": "epoll_create1",
+      "flags": 0
+    },
+    {
+      "op": "pipe2",
+      "flags": 2048
+    },
+    {
+      "op": "epoll_ctl",
+      "epfd": {
+        "ref": 0
+      },
+      "cmd": 1,
+      "fd": {
+        "pipe": 1,
+        "end": 0
+      },
+      "events": 1,
+      "data": "1"
+    },
+    {
+      "op": "epoll_ctl",
+      "epfd": {
+        "ref": 0
+      },
+      "cmd": 1,
+      "fd": {
+        "pipe": 1,
+        "end": 1
+      },
+      "events": 4,
+      "data": "2"
+    },
+    {
+      "op": "epoll_wait",
+      "epfd": {
+        "ref": 0
+      },
+      "maxevents": 16,
+      "timeout": 0
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 1,
+        "end": 1
+      },
+      "count": 3,
+      "value": "1"
+    },
+    {
+      "op": "epoll_wait",
+      "epfd": {
+        "ref": 0
+      },
+      "maxevents": 16,
+      "timeout": 0
+    },
+    {
+      "op": "read",
+      "fd": {
+        "pipe": 1,
+        "end": 0
+      },
+      "count": 3
+    },
+    {
+      "op": "epoll_wait",
+      "epfd": {
+        "ref": 0
+      },
+      "maxevents": 16,
+      "timeout": 0
+    },
+    {
+      "op": "close",
+      "fd": {
+        "ref": 0
+      }
+    }
+  ]
+}

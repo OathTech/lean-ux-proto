@@ -30,6 +30,12 @@ inductive Operation where
   | fcntl (fd : FDArg) (cmd : FcntlCmd) (arg : UInt32)
   /-- `pipe2(fildes, flags)` (P). -/
   | pipe2 (flags : UInt32)
+  /-- epoll (contracts/trace-v1.md, Epoll): a set (a producer); an item
+      operation on set `epfd` for target `fd` (`cmd` and `events` u32, `data`
+      a u64); a wait for `maxevents` events with `timeout`. -/
+  | epollCreate1 (flags : UInt32)
+  | epollCtl (epfd : FDArg) (cmd : UInt32) (fd : FDArg) (events : UInt32) (data : UInt64)
+  | epollWait (epfd : FDArg) (maxevents timeout : Int)
   | wgSet (attrs : WG.DeviceAttrs)
   /-- `wg_get` with its device selector (W1). -/
   | wgGet (device : WG.DeviceRef)
@@ -69,7 +75,7 @@ inductive Operation where
 
 /-- The operations a `{"ref": i}` may name. -/
 def Operation.isProducer : Operation → Bool
-  | .eventfd2 .. | .dup .. | .dup3 .. => true
+  | .eventfd2 .. | .dup .. | .dup3 .. | .epollCreate1 .. => true
   | _ => false
 
 /-- The operations a `{"pipe": i, "end": e}` may name. -/
@@ -169,12 +175,20 @@ private def parseFD (j : Json) (prior : Array Operation) : Except String FDArg :
     | none => throw "reference must name an earlier operation"
   else throw "unknown descriptor field"
 
-private def parseValue (j : Json) : Except String UInt64 := do
-  let s ← (← field j "value").getStr?
-  let some n := s.toNat? | throw "write value must be decimal"
+private def parseU64Field (j : Json) (name : String) : Except String UInt64 := do
+  let s ← (← field j name).getStr?
+  let some n := s.toNat? | throw s!"{name} must be decimal"
   if toString n != s || n > 18446744073709551615 then
-    throw "write value must be canonical UInt64 decimal"
+    throw s!"{name} must be canonical UInt64 decimal"
   return UInt64.ofNat n
+
+private def parseValue (j : Json) : Except String UInt64 := parseU64Field j "value"
+
+/-- A signed 32-bit integer field (the kernel's `int`). -/
+private def int32Field (j : Json) (name : String) : Except String Int := do
+  let n ← (← field j name).getInt?
+  if n < -2147483648 || n > 2147483647 then throw s!"{name} out of range"
+  return n
 
 
 /-! ## WireGuard configurations
@@ -404,6 +418,18 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
   | "pipe2" =>
     fields j ["op", "flags"]
     return .pipe2 (← u32Field j "flags")
+  | "epoll_create1" =>
+    fields j ["op", "flags"]
+    return .epollCreate1 (← u32Field j "flags")
+  | "epoll_ctl" =>
+    fields j ["op", "epfd", "cmd", "fd", "events", "data"]
+    return .epollCtl (← parseFD (← field j "epfd") prior) (← u32Field j "cmd")
+      (← parseFD (← field j "fd") prior) (← u32Field j "events") (← parseU64Field j "data")
+  | "epoll_wait" =>
+    -- the kernel's `int maxevents` and `int timeout`; tier 1's bounds
+    -- (1-16, timeout 0) are the validator's, the mirror follows the C
+    fields j ["op", "epfd", "maxevents", "timeout"]
+    return .epollWait (← parseFD (← field j "epfd") prior) (← int32Field j "maxevents") (← int32Field j "timeout")
   | "fcntl" =>
     fields j ["op", "fd", "cmd", "arg"]
     let fd ← parseFD (← field j "fd") prior
@@ -747,7 +773,10 @@ def initialKernel (rlimit : Nat) (net : Bool := false) (bare : Bool := false) (f
     -- the ratelimiter's reference count (the fixture's wg0 holds one; every
     -- earlier trace process deleted its devices)
     netIfindexNext := if net && !bare then 4 else 3,
-    ratelimiter := { refcnt := if net && !bare then 1 else 0 } }
+    ratelimiter := { refcnt := if net && !bare then 1 else 0 },
+    -- epoll: the fixture facts of Leanux/Env.lean (the warm-up's relative
+    -- counter, the boot's max_user_watches)
+    loopCheckGen := Env.LOOP_CHECK_GEN_BASE, maxUserWatches := Env.MAX_USER_WATCHES }
 
 /-- The harness environment for the pipe sites (`EnvSite`): every allocation
     and user-memory access succeeds. -/
@@ -804,6 +833,12 @@ def toSyscall (results : Array Int) (ends : Array (Option (Nat × Nat))) (index 
   | .write fd count value => .write (uint (resolveFD results ends fd)) count (writeBuffer index value count)
   | .fcntl fd cmd arg => .fcntl (uint (resolveFD results ends fd)) cmd arg.toUInt64
   | .pipe2 flags => .pipe2 flags
+  | .epollCreate1 flags => .epollCreate1 flags
+  -- `int op` and `int fd` from the wire's u32s: two's complement
+  | .epollCtl epfd cmd fd events data =>
+    let int32 (u : UInt32) : Int := if u.toNat ≥ 2 ^ 31 then (u.toNat : Int) - 2 ^ 32 else u.toNat
+    .epollCtl (uint (resolveFD results ends epfd)) (int32 cmd) (resolveFD results ends fd) events data
+  | .epollWait epfd maxevents timeout => .epollWait (uint (resolveFD results ends epfd)) maxevents timeout
   | .wgSet attrs => .wgSet attrs
   | .wgGet device => .wgGet device
   | .wgGetStart device => .wgGetStart device
@@ -859,9 +894,11 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
     world := w
     results := results.push ret
     ends := ends.push (if ret == 0 then w.userFds else none)
-    -- a read's first READ_HEAD bytes in the clear (eventfd reads: all 8)
+    -- a read's first READ_HEAD bytes in the clear (eventfd reads: all 8);
+    -- an epoll_wait's `ret` events of 12 bytes (epoll, the read channel)
     let bytes := match op, w.userOut with
       | .read .., some v => if ret > 0 then hexBytesOf (v.extract 0 (min ret.toNat READ_HEAD)) else ""
+      | .epollWait .., some v => if ret > 0 then hexBytesOf (v.extract 0 (min (ret.toNat * 12) READ_HEAD)) else ""
       | _, _ => ""
     -- pipe2: the pair copied to the caller, or null on failure; a read's
     -- digest; a write's sigpipe (P design section 6)
@@ -870,6 +907,7 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
           | some (r, wr) => if ret == 0 then toJson [r, wr] else .null
           | none => .null)]
       | .read .. => [("digest", readDigest w.userOut ret)]
+      | .epollWait .. => [("digest", readDigest w.userOut (ret * 12))]
       | .write .. => [("sigpipe", writeSigpipe w.k)]
       | _ => []
     let device := w.extraOut

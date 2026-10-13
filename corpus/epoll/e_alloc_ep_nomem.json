@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "id": "e_alloc_ep_nomem",
+  "ops": [
+    {
+      "op": "epoll_create1",
+      "flags": 0
+    },
+    {
+      "op": "epoll_create1",
+      "flags": 0
+    },
+    {
+      "op": "eventfd2",
+      "init": 0,
+      "flags": 2048
+    },
+    {
+      "op": "epoll_ctl",
+      "epfd": {
+        "ref": 1
+      },
+      "cmd": 1,
+      "fd": {
+        "ref": 2
+      },
+      "events": 1,
+      "data": "2"
+    },
+    {
+      "op": "write",
+      "fd": {
+        "ref": 2
+      },
+      "count": 8,
+      "value": "1"
+    },
+    {
+      "op": "epoll_wait",
+      "epfd": {
+        "ref": 1
+      },
+      "maxevents": 16,
+      "timeout": 0
+    }
+  ],
+  "steer": [
+    [
+      "kzallocEp",
+      "0000000000000000"
+    ],
+    [
+      "kzallocEp",
+      "draw"
+    ]
+  ],
+  "expect": [
+    "ep_alloc.no_mem=1",
+    "ep_alloc.no_mem=0"
+  ],
+  "domain_extension": "failslab"
+}

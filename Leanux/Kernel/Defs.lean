@@ -143,6 +143,45 @@ abbrev CtxId := Nat
 abbrev PipeId := Nat
 abbrev PageId := Nat
 abbrev PipefsInodeId := Nat
+/-- epoll identities (docs/2026-10-12-epoll-design.md, 4.1): a `struct
+    eventpoll`, an `epitem` and an `eppoll_entry`. Their stores arrive with
+    the epoll mirror (stream S); the wait-queue service names them now. -/
+abbrev EpId := Nat
+abbrev EpiId := Nat
+abbrev PwqId := Nat
+
+/-! ## Wait queues (include/linux/wait.h, kernel/sched/wait.c; design 4.1) -/
+
+/-- `wait_queue_entry.func`, the callback a wake dispatches to. In tier 1
+    the only waiter is epoll's `ep_poll_callback` (fs/eventpoll.c), whose
+    entry is an `eppoll_entry`; tier 2 adds a sleeping task. -/
+inductive WaitFunc where
+  | epPollCallback (pwq : PwqId)
+  deriving Repr, BEq, DecidableEq
+
+/-- `struct wait_queue_entry` (wait.h:31-36). `flags` carries
+    `WQ_FLAG_EXCLUSIVE` only (no caller in the domain sets the others);
+    `private` is implied by `func`; `entry` is the position in its queue. -/
+structure WaitEntry where
+  func : WaitFunc
+  exclusive : Bool := false
+  deriving Repr, BEq
+
+/-- `struct wait_queue_head` (wait.h:38-41): the entries, head first. The
+    spinlock is a cut (one task). -/
+structure WaitQueue where
+  entries : List WaitEntry := []
+  deriving Repr, BEq
+
+/-- A `wait_queue_head_t *`: the heads the domain's objects embed. The
+    eventpoll heads (`ep->wq`, `ep->poll_wait`) arrive with the epoll mirror. -/
+inductive WaitQueueRef where
+  | pipeRd (p : PipeId)
+  | pipeWr (p : PipeId)
+  | eventfdWqh (c : CtxId)
+  | epWq (e : EpId)
+  | epPollWait (e : EpId)
+  deriving Repr, BEq, DecidableEq
 
 /-- The `struct file_operations` table a file's `f_op` points to. Fixture files
     (console, KCOV, /dev/null) are opened by the harness outside the trace; their
@@ -151,6 +190,8 @@ inductive FopsId where
   | eventfd
   /-- `pipefifo_fops` (fs/pipe.c:1232-1241). -/
   | pipefifo
+  /-- `eventpoll_fops` (fs/eventpoll.c:1271-1280). -/
+  | eventpoll
   | fixture (name : String)
   deriving Repr, BEq, DecidableEq
 
@@ -159,6 +200,18 @@ inductive PrivateData where
   | eventfdCtx (ctx : CtxId)
   /-- A pipe file's `private_data` is its `pipe_inode_info` (fs/pipe.c:947,957). -/
   | pipe (id : PipeId)
+  /-- An epoll file's `private_data` is its `struct eventpoll` (fs/eventpoll.c:2424). -/
+  | eventpoll (ep : EpId)
+  deriving Repr, BEq, DecidableEq
+
+/-- `file->f_ep` (include/linux/fs.h): NULL; a non-epoll file's
+    `epitems_head` (its `epitems` hlist, head first; the head's `next` and
+    `file`, the `tfile_check_list` membership, are `Kernel.tfileCheckList`); or
+    an epoll file's own `ep->refs` (`ep_attach_file`, fs/eventpoll.c:1718). -/
+inductive FEp where
+  | null
+  | head (items : List EpiId)
+  | epRefs (ep : EpId)
   deriving Repr, BEq, DecidableEq
 
 /-- The inode a file's `f_inode` points to: the shared anonymous inode, or a
@@ -187,22 +240,23 @@ structure File where
   fIocbFlags : UInt32 := 0
   /-- `f_owner` is non-NULL only after F_SETOWN-style calls (outside the slice). -/
   fOwner : Bool := false
-  /-- `f_ep`: the file is linked into an epoll set (never, in this slice). -/
-  fEp : Bool := false
+  /-- `f_ep` (include/linux/fs.h): NULL, or the file's epoll links (`FEp`). -/
+  fEp : FEp := .null
   /-- `f_pipe` (include/linux/fs.h:1092), written at fs/pipe.c:948,958 and
       read only by `pipe_poll`. -/
   fPipe : Nat := 0
   deriving Repr, BEq
 
-/-- `struct eventfd_ctx`. `wqh` is represented only by its waiter count; the
-    single-threaded domain has no waiters. `id` is the `eventfd_ida` number. -/
+/-- `struct eventfd_ctx`. `wqh` is the wait queue head (`init_waitqueue_head`,
+    eventfd.c:398); its lock is a cut (one task). `id` is the `eventfd_ida`
+    number. -/
 structure EventfdCtx where
   kref : Nat
   count : UInt64
   flags : UInt32
   /-- `none` until `ctx->id = ida_alloc(...)` (eventfd.c:401): kmalloc leaves it unset. -/
   id : Option Int
-  waiters : Nat := 0
+  wqh : WaitQueue := {}
   deriving Repr, BEq
 
 /-- `struct timespec64` (include/linux/time64.h): 16 bytes, `tv_sec` then
@@ -230,12 +284,15 @@ inductive UserId where
 
 /-- `struct pipe_inode_info` (include/linux/pipe_fs_i.h:58-83). `head` and
     `tail` wrap as `unsigned int` and are masked with `ringSize - 1` only at
-    dereference. The mutex and the wait queues are cuts (one task, no
-    waiters); `watch_queue` and `note_loss` do not exist in this build;
-    `fasync_readers`/`fasync_writers` are NULL lists, kept as booleans. -/
+    dereference. The mutex and the queue locks are cuts (one task);
+    `rd_wait`/`wr_wait` are the wait queues (`init_waitqueue_head`,
+    fs/pipe.c:819-820); `watch_queue` and `note_loss` do not exist in this
+    build; `fasync_readers`/`fasync_writers` are NULL lists, kept as booleans. -/
 structure PipeInodeInfo where
   head : UInt32 := 0
   tail : UInt32 := 0
+  rdWait : WaitQueue := {}
+  wrWait : WaitQueue := {}
   maxUsage : Nat
   ringSize : Nat
   nrAccounted : Nat
@@ -287,6 +344,69 @@ structure Inode where
     these paths use; one instance, `root_user`. -/
 structure UserStruct where
   pipeBufs : Nat := 0
+  /-- `epoll_watches`: a plain count without `CONFIG_SMP` (design 3.4),
+      tracked from a baseline of 0 (no epoll item outside the trace: the
+      fixture's warm-up closed its own). -/
+  epollWatches : Nat := 0
+  deriving Repr, BEq
+
+/-! ## epoll (fs/eventpoll.c; docs/2026-10-12-epoll-design.md, 4.1)
+
+Line numbers are the pristine source's (`.deps/linux`): the kind-308 hook
+keeps the file's line count, as every patch of an anchored file does, since
+the check reads statements and spans from the pristine tree. -/
+
+/-- `struct eppoll_entry` (fs/eventpoll.c:234-249): `whead` is NULL only
+    after a `POLLFREE` wake (out of the domain); `base` the item; its `wait`
+    entry sits on `whead` with `func = ep_poll_callback`; `next` chains it in
+    `Epitem.pwqlist`. -/
+structure EppollEntry where
+  whead : Option WaitQueueRef
+  base : EpiId
+  deriving Repr, BEq
+
+/-- `struct epitem` (fs/eventpoll.c:257-300). `ffd` is `(file, fd)` with the
+    file's address from the kind-308 record (`ep_cmp_ffd`'s first key);
+    `linked` is `ep_is_linked` (`rdllink` on the set's `rdllist`), `onOvflist`
+    is `epi_on_ovflist` (`ovflist_next != EP_UNACTIVE_PTR`); `pwqlist` is
+    head first, as `next` chains them (:1563-1564); `ws` is NULL (no
+    `CONFIG_PM`). -/
+structure Epitem where
+  ep : EpId
+  file : FileId
+  fd : Int
+  fileAddr : Nat
+  events : UInt32
+  data : UInt64
+  linked : Bool := false
+  onOvflist : Bool := false
+  pwqlist : List PwqId := []
+  dying : Bool := false
+  deriving Repr, BEq
+
+/-- `struct eventpoll` (fs/eventpoll.c:307-377). `ovflist` is `none` for
+    `EP_UNACTIVE_PTR` (not scanning) and `some chain` while scanning, the
+    chain head first as `ovflist_next` links it (LIFO); `seq` is the
+    `seqcount_spinlock_t`, bumped twice by each `ep_start_scan` and
+    `ep_done_scan`; `rbr` is the rbtree as an ordered map keyed by
+    `(fileAddr, fd)` ascending, `ep_cmp_ffd`'s order (the cut of design 3.2,
+    named at `Eventpoll.lean`'s `epFind`/`epRbtreeInsert`); `refs` the outer
+    items watching this set, head first; `file` the set's own file
+    (:2430); `ws` is NULL; the mutex and locks are cuts (one task). -/
+structure Eventpoll where
+  wq : WaitQueue := {}
+  pollWait : WaitQueue := {}
+  rdllist : List EpiId := []
+  ovflist : Option (List EpiId) := none
+  seq : Nat := 0
+  rbr : List ((Nat × Int) × EpiId) := []
+  refs : List EpiId := []
+  refcount : Nat := 1
+  gen : Nat := 0
+  loopCheckDepth : Nat := 0
+  busyPollUsecs : Nat := 0
+  user : UserId := .root
+  file : Option FileId := none
   deriving Repr, BEq
 
 /-- A signal set of one word (`_NSIG_WORDS == 1`): bit `sig - 1`. -/
@@ -407,6 +527,30 @@ structure Kernel where
   pipeMaxSize : Nat := 1048576
   pipeUserPagesSoft : Nat := 16384
   pipeUserPagesHard : Nat := 0
+  /-- epoll (design 4.1): the `struct eventpoll`, `epitem` and `eppoll_entry`
+      stores, each with its next identity (lifetime identities: never
+      reused). -/
+  eps : TreeMap EpId Eventpoll := {}
+  nextEp : EpId := 0
+  epis : TreeMap EpiId Epitem := {}
+  nextEpi : EpiId := 0
+  pwqs : TreeMap PwqId EppollEntry := {}
+  nextPwq : PwqId := 0
+  /-- fs/eventpoll.c's statics: `loop_check_gen` (:394) relative to the
+      boot's unknown base (`Env.LOOP_CHECK_GEN_BASE`, design 3.5),
+      `inserting_into` (:397), `tfile_check_list` (:415: the listed heads'
+      files, newest first, each holding one `f_count` reference) and
+      `path_count` (:1603). `max_user_watches` (:389) is the fixture
+      constant `Env.MAX_USER_WATCHES`, set by the runner. -/
+  loopCheckGen : Nat := 0
+  insertingInto : Option EpId := none
+  tfileCheckList : List FileId := []
+  pathCount : Array Nat := #[0, 0, 0, 0, 0]
+  maxUserWatches : Nat := 0
+  /-- The `epi` field of the `ep_pqueue` of an `ep_insert` in progress
+      (:1833, :1865): `ep_ptable_queue_proc` reads it and clears it when its
+      `pwq` allocation fails (:1551-1553), which `ep_insert` tests (:1877). -/
+  epqEpi : Option EpiId := none
   deriving BEq
 
 /-! ## Allocation outcomes (docs/2026-10-05-a-alloc.md, section 6)
@@ -483,6 +627,9 @@ inductive AllocSite where
   | netdevAlloc | netdevTxQueues | netdevRxQueues | ptrRingInit
   -- the pipe paths' direct sites (b-task; A section 19.6, integration)
   | kzallocPipeInfo | kcallocPipeBufs | allocPipePage
+  -- epoll (docs/2026-10-12-epoll-design.md, 3.1; b-task): the four consumer
+  -- frames of fs/eventpoll.c
+  | kzallocEp | kmemCacheZallocEpi | kmemCacheAllocPwq | kmemCacheZallocEphead
   deriving Repr, BEq, DecidableEq
 
 structure AllocSiteInfo where
@@ -573,6 +720,16 @@ def AllocSite.info : AllocSite → AllocSiteInfo
   | .netdevTxQueues => ⟨48, "netdevTxQueues", "net/core/dev.c", 10419, .cut⟩
   | .netdevRxQueues => ⟨49, "netdevRxQueues", "net/core/dev.c", 10352, .cut⟩
   | .ptrRingInit => ⟨57, "ptrRingInit", "include/linux/ptr_ring.h", 471, .cut⟩
+  -- epoll (design 3.1), direct calls, one record per consultation:
+  -- ep_alloc's kzalloc (:1331), ep_alloc_epitem's kmem_cache_zalloc (:1764),
+  -- ep_ptable_queue_proc's kmem_cache_alloc (:1550), ep_attach_file's
+  -- kmem_cache_zalloc (:1722). Their site ids are 192-195 of epoll's block
+  -- (docs/2026-10-11-interface.md): indices 122-125 under the 70 + index rule
+  -- [merge of the representation batch, stream T 2026-10-13].
+  | .kzallocEp => ⟨122, "kzallocEp", "fs/eventpoll.c", 1331, .exact 1⟩
+  | .kmemCacheZallocEpi => ⟨123, "kmemCacheZallocEpi", "fs/eventpoll.c", 1764, .exact 1⟩
+  | .kmemCacheAllocPwq => ⟨124, "kmemCacheAllocPwq", "fs/eventpoll.c", 1550, .exact 1⟩
+  | .kmemCacheZallocEphead => ⟨125, "kmemCacheZallocEphead", "fs/eventpoll.c", 1722, .exact 1⟩
 
 def AllocSite.all : List AllocSite :=
   [.kmallocEventfdCtx, .filpAlloc, .dAllocPseudo, .kmallocFdtable, .kvmallocFdArray, .kvmallocFdBitmaps,
@@ -580,7 +737,8 @@ def AllocSite.all : List AllocSite :=
    .sendBufSkb, .replySkb, .keepaliveSkb, .skbCowHead, .skbChecksumHelp, .skbCowDataTx, .skbCowDataRx,
    .nlmsgNew, .netlinkAllocLargeSkb, .sockAllocSendPskb, .netlinkDump, .netlinkTrim,
    .kzallocPipeInfo, .kcallocPipeBufs, .allocPipePage, .dAllocSlabDebugfs, .allocUeventSkb, .ipAppendDataSkb,
-   .netdevAlloc, .netdevTxQueues, .netdevRxQueues, .ptrRingInit]
+   .netdevAlloc, .netdevTxQueues, .netdevRxQueues, .ptrRingInit,
+   .kzallocEp, .kmemCacheZallocEpi, .kmemCacheAllocPwq, .kmemCacheZallocEphead]
 
 /-- The below-cut allocation consumers (consumed at cut points). -/
 def AllocSite.cuts : List AllocSite := AllocSite.all.filter (·.info.count == .cut)
@@ -769,6 +927,15 @@ inductive HiddenSite where
       scheduling inside cleanup_net's section while the exiting namespace's
       hashtables are torn down: ambient, as `reschedNetnsCleanup` [AGENT, wgen]. -/
   | reschedRhashtableDestroy
+  /-- epoll (docs/2026-10-12-epoll-design.md, 3.2; id 190 of epoll's block
+      190-199): the kind-308 record of the `struct file` address an epoll
+      item is keyed by, written by `kcov_epoll_insert` at the end of
+      `ep_rbtree_insert` (fs/eventpoll.c:1585, on the line of
+      `rb_insert_color_cached` so the file's numbering is kept), once per call: at
+      every ADD that reaches the insert, including the ones
+      `reverse_path_check` or a `pwq` allocation failure undo. Consumed by
+      `epRbtreeInsert`. -/
+  | epollInsertAddress
   -- Reserved id ranges for the W streams (the interface commit,
   -- docs/2026-10-11-interface.md), outside every range above: W5-W6
   -- 140-149 (`.inetEhashSecret`), W8-W9 150-169 (`.dstCacheResetTs`,
@@ -906,7 +1073,12 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   | .reschedRhashtableDestroy => ⟨153, "resched:rhashtable_free_and_destroy", "resched", "lib/rhashtable.c", 1161, 8, .ambient⟩
   | .dstCacheRefreshTs => ⟨151, "dst_cache_refresh_ts", "jiffies", "net/core/dst_cache.c", 63, 8, .mirror⟩
   | .alloc s => let i := s.info
+    -- 70 + index, unique by construction (the indices skip D3's 100-117 and
+    -- the epoll sites sit at 122-125 for their block's 192-195)
     ⟨70 + i.index, i.label, "alloc", i.file, i.line, 40, if i.count == .cut then .cut else .mirror⟩
+  -- epoll: kind 308, class `address` (evaluator/check.py EPOLL_INSERT_ADDRESS),
+  -- the consumer frame the `_THIS_IP_` of the hook resolves to
+  | .epollInsertAddress => ⟨190, "epoll_insert_address", "address", "fs/eventpoll.c", 1585, 8, .mirror⟩
   -- P (pipes, design section 3): id 18 is free on main and on every task
   -- branch (E-A uses 64-69, A 70-99); the records are consumed in sequence
   -- order by whichever of the five callers runs
@@ -937,6 +1109,7 @@ def HiddenSite.all : List HiddenSite :=
   ++ [.currentTime]
   ++ [.underLoadNow, .cookieNonce, .ratelimiterNow, .ratelimiterInsertNow]
   ++ [.inetEhashSecret]
+  ++ [.epollInsertAddress]
 
 /-- The resched site of a worker's `cond_resched`, for the workers that
     have one on the modeled paths. -/
@@ -1740,6 +1913,41 @@ def getPage (id : PageId) : M Page := do
 
 def setPage (id : PageId) (p : Page) : M Unit :=
   modifyK fun k => { k with pages := k.pages.insert id p }
+
+/-! ## epoll stores (lifetime identities) -/
+
+def getEp (id : EpId) : M Eventpoll := do
+  match (← getK).eps.get? id with
+  | some e => return e
+  | none => invariant s!"dangling eventpoll identity {id}"
+
+def setEp (id : EpId) (e : Eventpoll) : M Unit :=
+  modifyK fun k => { k with eps := k.eps.insert id e }
+
+def freeEp (id : EpId) : M Unit :=
+  modifyK fun k => { k with eps := k.eps.erase id }
+
+def getEpi (id : EpiId) : M Epitem := do
+  match (← getK).epis.get? id with
+  | some e => return e
+  | none => invariant s!"dangling epitem identity {id}"
+
+def setEpi (id : EpiId) (e : Epitem) : M Unit :=
+  modifyK fun k => { k with epis := k.epis.insert id e }
+
+def freeEpi (id : EpiId) : M Unit :=
+  modifyK fun k => { k with epis := k.epis.erase id }
+
+def getPwq (id : PwqId) : M EppollEntry := do
+  match (← getK).pwqs.get? id with
+  | some p => return p
+  | none => invariant s!"dangling eppoll_entry identity {id}"
+
+def setPwq (id : PwqId) (p : EppollEntry) : M Unit :=
+  modifyK fun k => { k with pwqs := k.pwqs.insert id p }
+
+def freePwq (id : PwqId) : M Unit :=
+  modifyK fun k => { k with pwqs := k.pwqs.erase id }
 
 /-! ## Bounds-checked descriptor-table access -/
 

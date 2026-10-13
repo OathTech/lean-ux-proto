@@ -143,6 +143,18 @@ EXPECTED_CLOCKSOURCE = "refined-jiffies"
 # not fe80::1, a transmit destination of existing traces).
 EXPECTED_NET_FIXTURE = {"auto_flowlabels": 0, "icmp_ratelimit": 0, "icmp6_ratelimit": 0, "lo_link_local": "fe80::ffff:1"}
 BOOT_PARAMETERS = f"console=ttyS0 panic=1 nokaslr loglevel=3 clocksource={EXPECTED_CLOCKSOURCE}"
+# epoll stream R (docs/2026-10-12-epoll-design.md, 3.4): fs/eventpoll.c's
+# max_user_watches, computed at boot from the memory the kernel manages when
+# eventpoll_init runs (the QEMU memory above, less the kernel's and the
+# initramfs's reserved pages, so a rebuilt oracle or a larger initramfs can
+# move it) and an operand of every EPOLL_CTL_ADD. The guest reads it back
+# once per boot (LEANUX_EPOLL, with its warm-up ADD, 3.5); a batch whose
+# value differs is not a run of the fixture the mirror assumes
+# (Leanux/Env.lean carries the same constant) and fails as an environment
+# failure naming both sides. Measured on the W9 oracle (313c2cc9) with the
+# guest of this commit; re-measured at every oracle change: unchanged on the
+# e1 oracle (7c2b436b, the kind-308 hook) [stream T, 2026-10-12].
+EXPECTED_MAX_USER_WATCHES = 53092
 # Guest build variants for negative controls only (never the oracle): the
 # compiler definitions each adds. `advance-wait-0` (D3, section 8): wg_advance
 # neither waits for the absorbing tick nor sleeps, so the timer sections land
@@ -245,6 +257,7 @@ def _bounded_process(command, output, timeout, limit):
 # A read's observation: the hex of its first READ_HEAD bytes and the
 # BLAKE2s-256 digest of all of them (P design section 6).
 READ_HEAD = 64
+EPOLL_EVENT_SIZE = 12   # epoll R: sizeof(struct epoll_event) on x86-64 (packed)
 
 
 def _check_observation(result, trace):
@@ -267,7 +280,7 @@ def _check_observation(result, trace):
         if op["op"] == "wg_batch":
             fields = fields | {"cqes"}   # W7: the completions at io_uring_enter's return
         # P design section 6: a read's digest, a write's sigpipe, a pipe2's fds
-        fields = fields | {"read": {"digest"}, "write": {"sigpipe"}, "pipe2": {"fds"}}.get(op["op"], set())
+        fields = fields | {"read": {"digest"}, "epoll_wait": {"digest"}, "write": {"sigpipe"}, "pipe2": {"fds"}}.get(op["op"], set())
         if type(observation) is not dict or set(observation) != fields:
             raise ValueError("operation observation fields")
         ret, error, data = observation["ret"], observation["errno"], observation["bytes"]
@@ -282,18 +295,23 @@ def _check_observation(result, trace):
             raise ValueError("read output encoding")
         if op["op"] in ("read", "write") and ret > op["count"]:
             raise ValueError("read or write returned more than its count")
-        expected = min(ret, READ_HEAD) if op["op"] == "read" and ret >= 0 else 0
-        if len(data) != 2 * expected:
+        # epoll R: an epoll_wait returns ret events of EPOLL_EVENT_SIZE bytes
+        # through the read channel (contracts/trace-v1.md, Epoll)
+        if op["op"] == "epoll_wait" and ret > op["maxevents"]:
+            raise ValueError("epoll_wait returned more events than maxevents")
+        observed = ret if op["op"] == "read" and ret >= 0 else \
+            ret * EPOLL_EVENT_SIZE if op["op"] == "epoll_wait" and ret >= 0 else 0
+        if len(data) != 2 * min(observed, READ_HEAD):
             raise ValueError("read output byte count")
-        if op["op"] == "read":
+        if op["op"] in ("read", "epoll_wait"):
             digest = observation["digest"]
-            if ret <= 0:
+            if observed <= 0:
                 if digest is not None:
                     raise ValueError("digest of an empty or failed read")
             elif type(digest) is not str or not re.fullmatch(r"[0-9a-f]{64}", digest):
                 raise ValueError("read digest encoding")
             # every bytes in the clear: the guest's BLAKE2s against hashlib's
-            elif ret <= READ_HEAD and digest != hashlib.blake2s(bytes.fromhex(data)).hexdigest():
+            elif observed <= READ_HEAD and digest != hashlib.blake2s(bytes.fromhex(data)).hexdigest():
                 raise ValueError("read digest disagrees with hashlib.blake2s over its bytes")
         if op["op"] == "write" and (type(observation["sigpipe"]) is not int or observation["sigpipe"] not in (0, 1)):
             raise ValueError("write sigpipe")
@@ -465,6 +483,7 @@ def _collect(outdir, traces, process_returncode, alloc=None):
     remote_coverage, remote_comparisons = [], []
     hidden, remote_hidden, steering, sections, clocksources, timing = [], [], [], [], [], []
     alloc_status, alloc_tsc = [], []
+    epoll_rows = []   # epoll R: the warm-up and max_user_watches, once per boot
     for line in (outdir / "boot.log").read_text(errors="strict").splitlines():
         line = line.rstrip("\r")
         for prefix, target in (("LEANUX_RESULT ", results), ("LEANUX_COVERAGE ", coverage),
@@ -476,7 +495,8 @@ def _collect(outdir, traces, process_returncode, alloc=None):
                                ("LEANUX_RHIDDEN ", remote_hidden), ("LEANUX_STEER ", steering),
                                ("LEANUX_SECTIONS ", sections), ("LEANUX_CLOCKSOURCE ", clocksources),
                                ("LEANUX_TIMING ", timing),
-                               ("LEANUX_ALLOC ", alloc_status), ("LEANUX_ALLOC_TSC ", alloc_tsc)):
+                               ("LEANUX_ALLOC ", alloc_status), ("LEANUX_ALLOC_TSC ", alloc_tsc),
+                               ("LEANUX_EPOLL ", epoll_rows)):
             if line.startswith(prefix):
                 try:
                     target.append(_decode_json(line[len(prefix):]))
@@ -495,6 +515,16 @@ def _collect(outdir, traces, process_returncode, alloc=None):
     if (len(clocksources) != 2 or [r.get("at") if type(r) is dict else None for r in clocksources] != ["start", "end"]
             or any(set(r) != {"at", "current", "available"} or r["current"] != EXPECTED_CLOCKSOURCE for r in clocksources)):
         raise LinuxRunError("environment_failure", f"Timekeeper clocksource is not {EXPECTED_CLOCKSOURCE} at batch start and end", outdir)
+    # epoll R: exactly one fixture row per boot, the warm-up done and
+    # max_user_watches the value the mirror assumes (fail-closed, like the
+    # clocksource and the kernel identity)
+    _jsonl(outdir / "epoll-fixture.jsonl", epoll_rows)
+    if len(epoll_rows) != 1 or type(epoll_rows[0]) is not dict or set(epoll_rows[0]) != {"max_user_watches", "warmup"} \
+            or epoll_rows[0]["warmup"] != 1 or type(epoll_rows[0]["max_user_watches"]) is not int:
+        raise LinuxRunError("invalid_output", "epoll fixture row missing or malformed", outdir)
+    if epoll_rows[0]["max_user_watches"] != EXPECTED_MAX_USER_WATCHES:
+        raise LinuxRunError("environment_failure", f"max_user_watches is {epoll_rows[0]['max_user_watches']} in this boot, "
+                            f"not the {EXPECTED_MAX_USER_WATCHES} the mirror assumes (harness/linux.py EXPECTED_MAX_USER_WATCHES)", outdir)
     try:
         coverage = merge_remote(coverage, remote_coverage, traces, "pcs")
         comparisons = merge_remote(comparisons, remote_comparisons, traces, "records")
@@ -548,6 +578,7 @@ def _collect(outdir, traces, process_returncode, alloc=None):
     (outdir / "fixture.json").write_text(json.dumps({
         "roles": {"0": "console stdin", "1": "console stdout", "2": "console stderr", "3": "KCOV", "4-7": "/dev/null filler; in network traces 4-5 UDP listeners, 6 UDP sender, 7 generic netlink", "8+": "wg_create/wg_delete: a temporary rtnetlink socket at the lowest free descriptor, open only around the operation"},
         "per_trace": fixtures, "kernel_releases": kernels,
+        "epoll": epoll_rows[0],   # epoll R: the boot's warm-up and max_user_watches
     }, indent=2) + "\n")
     if errors or child_failures:
         # (a dropped section is a guest error: coverage_failure, dropped_sections)

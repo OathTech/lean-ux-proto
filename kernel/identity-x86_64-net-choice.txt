@@ -71,17 +71,29 @@
 # {work, func} record for a work item of the armed dispatch set (gated by
 # KCOV_DISPATCH_ARM_RECORDS like the arm record). Record-only: no path's
 # behaviour changes. The patch is now sha256
-# 9cd0a89fe6100e4b26c102930b5d0df5138f16e59a11e0a7e791c2a32ec41965; the
-# identity and vmlinux lines below are the previous build's (A, c79e3e0c)
-# until the coordinator rebuilds and records the new ones [AGENT 2026-10-11].
+# 9cd0a89fe6100e4b26c102930b5d0df5138f16e59a11e0a7e791c2a32ec41965
+# [AGENT 2026-10-11]; built as the Q oracle (bb3e577d), superseded by W9.
 # W9 (docs/2026-10-06-w8-w9-netns-routing.md, section 4.1): the kind-306
 # record of the jiffies the dst cache stores, at dst_cache_reset
 # (include/net/dst_cache.h, inline) and at the refresh of a miss
 # (net/core/dst_cache.c), gated like the arm record. Record-only. The
 # oracle's patch sha256 is in scripts/build-kernel (CHOICE_SHA / ACTL_SHA).
-# The identity and vmlinux lines below are the dispatch-order builds'
-# until the coordinator rebuilds with this patch.
+# Built as the W9 oracle (313c2cc9), superseded by e1.
+# epoll stream R (docs/2026-10-12-epoll-design.md, section 3.2): the kind-308
+# record of the struct file address an epoll item is keyed by, at
+# ep_rbtree_insert (fs/eventpoll.c:1585; line-preserving since stream T, the
+# declaration and the call on rb_insert_color_cached's line, so the file keeps
+# its pristine line count), once per call, which is every EPOLL_CTL_ADD that
+# reaches the tree (one that reverse_path_check or a pwq allocation failure
+# then undoes included), 8 bytes, written in any recording context (an
+# FS trace loads no dispatch set, so the arm-record gate is not available).
+# Record-only. The patch sha256 is in scripts/build-kernel (CHOICE_SHA /
+# ACTL_SHA) [AGENT 2026-10-12, stream R]. Built 2026-10-12 as the e2 oracle
+# (.artifacts/kernel-net-choice-e2, choice-stream.patch sha256
+# cd24d15b7dc81253156895cfd46fae98a739ecdf1d9e3fb4297d1fff2166b876, the
+# line-preserving hook; e1, 7c2b436b, was the shifting one): the identity
+# and vmlinux lines below are that build's [AGENT 2026-10-12, stream T].
 # Path-independent identity from scripts/kernel-identity.py:
-313c2cc92eb4d02fcc6bc1740f18ea1e5e2a5c1bbb21a75bfd1fc2c80ef303ce
+de963aca80d09a5104ec5efac8ab92d3abe1ef2278489c66e67915e4ef7403b0
 # vmlinux sha256 of the build the evidence used (path-dependent):
-55e966027e7e3fd60a94c4815f232e3b005040886fa5299103e8127f8a412f25
+5978c7a918962c3ae8f5410c1a5baad3a7c424dd63ee689cb56563a1ba23137e

@@ -27,6 +27,16 @@ through the inline chain) and at the refresh on a miss (net/core/dst_cache.c,
 `dst_cache_per_cpu_get`'s fail label), gated by KCOV_DISPATCH_ARM_RECORDS like
 the arm record; the mirror computes the cache's `time_after` from the two
 recorded values. Record-only.
+epoll stream R (docs/2026-10-12-epoll-design.md, section 3.2): the kind-308
+record of the `struct file` address an item is keyed by, at ep_rbtree_insert
+(fs/eventpoll.c:1585, `_THIS_IP_`), once per call, which is every
+EPOLL_CTL_ADD that reaches the tree (one that reverse_path_check or a pwq
+allocation failure then undoes included), 8 bytes; the mirror orders its
+items by (recorded address, fd) as ep_cmp_ffd does. Line-preserving (stream
+T): fs/eventpoll.c keeps its pristine line count, so the oracle's DWARF lines
+for that file are the pristine tree's.
+Written in any recording context (an FS trace loads no dispatch set, so the
+arm-record gate of kinds 303/306/307 is unavailable to it). Record-only.
 """
 import sys, re, os, shutil, subprocess
 WD='.artifacts/choice-patch'; N=WD+'/new'
@@ -34,7 +44,8 @@ SOURCE=os.environ.get('LEANUX_SHARED_ROOT', '.') + '/.deps/linux'
 TOUCHED=['kernel/kcov.c','include/linux/kcov.h','include/linux/sched.h','drivers/char/random.c',
          'kernel/time/timekeeping.c','kernel/workqueue.c','kernel/softirq.c','kernel/sched/core.c',
          'kernel/time/timer.c','mm/slub.c','mm/page_alloc.c',
-         'include/net/dst_cache.h','net/core/dst_cache.c']
+         'include/net/dst_cache.h','net/core/dst_cache.c',
+         'fs/eventpoll.c']
 shutil.rmtree(WD, ignore_errors=True)
 for side in ('base', 'new'):
     for f in TOUCHED:
@@ -831,6 +842,28 @@ void notrace kcov_dst_cache_ts(unsigned long ts, unsigned long ip)
 EXPORT_SYMBOL(kcov_dst_cache_ts);
 
 /*
+ * LEANUX epoll (docs/2026-10-12-epoll-design.md, section 3.2): the address
+ * of the struct file an epoll item is keyed by (ep_cmp_ffd: the file
+ * pointer, then the fd), recorded at ep_rbtree_insert (fs/eventpoll.c,
+ * _THIS_IP_) once per successful EPOLL_CTL_ADD, kind 308, 8 bytes. Slab
+ * placement is a hidden input: it fixes the walk order of the set's tree
+ * (ep_clear_and_put's two walks, ep_loop_check_proc), so the mirror orders
+ * its items by the recorded address instead of assuming allocation order.
+ * Written in any recording context, like the random and clock records: an
+ * FS trace loads no dispatch set, so the KCOV_DISPATCH_ARM_RECORDS gate of
+ * the arm, queue and dst-cache records is not available to it; outside a
+ * trace kcov_choice_ip returns at its mode check. Record-only: nothing the
+ * value decides changes.
+ */
+void notrace kcov_epoll_insert(unsigned long file, unsigned long ip)
+{
+	u64 v = file;
+
+	kcov_choice_ip(308, ip, &v, sizeof(v));
+}
+EXPORT_SYMBOL(kcov_epoll_insert);
+
+/*
  * LEANUX D3 (section 4.3): the virtual time advance, on the calling task's
  * own KCOV descriptor: { unsigned long ticks; }, 1 <= ticks <= 2^31. Only
  * from a task that is collecting (the trace process), so the kind-304
@@ -927,12 +960,15 @@ void kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsign
 /* LEANUX dispatch order: __queue_work's queue record (kind 307). */
 struct work_struct;
 void kcov_work_queued(struct work_struct *work, unsigned long ip);
+/* LEANUX epoll: ep_rbtree_insert's file-address record (kind 308). */
+void kcov_epoll_insert(unsigned long file, unsigned long ip);
 """)
 sub('include/linux/kcov.h', """static inline void kcov_dispatch_resched(unsigned long ip) {}
 """, """static inline void kcov_dispatch_resched(unsigned long ip) {}
 static inline void kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsigned long ip, void *timer) {}
 struct work_struct;
 static inline void kcov_work_queued(struct work_struct *work, unsigned long ip) {}
+static inline void kcov_epoll_insert(unsigned long file, unsigned long ip) {}
 """)
 sub('include/linux/kcov.h', 'u64 kcov_common_handle(void);\n', 'u64 kcov_common_handle(void);\n'
     '/* LEANUX D3: the virtual time advance (kernel/time/timekeeping.c). */\n'
@@ -1034,6 +1070,18 @@ sub('net/core/dst_cache.c', '''fail:
 	idst->refresh_ts = jiffies;
 	kcov_dst_cache_ts(idst->refresh_ts, _THIS_IP_);	/* LEANUX W9: kind 306 */
 	return NULL;''')
+# ---- epoll stream R: the tree's key order (docs/2026-10-12-epoll-design.md, 3.2) ----
+# Record-only: the file address an item is keyed by, at its insertion; kind
+# 308, one site. Line-preserving (stream T): no include, the declaration and
+# the call share rb_insert_color_cached's line (fs/eventpoll.c:1585), so the
+# patched file has the pristine line count and the checker's statement spans,
+# read from the pristine tree, stay exact; the record's site is :1585.
+EP='fs/eventpoll.c'
+sub(EP, '''	rb_link_node(&epi->rbn, parent, p);
+	rb_insert_color_cached(&epi->rbn, &ep->rbr, leftmost);
+}''', '''	rb_link_node(&epi->rbn, parent, p);
+	rb_insert_color_cached(&epi->rbn, &ep->rbr, leftmost); { extern void kcov_epoll_insert(unsigned long file, unsigned long ip); kcov_epoll_insert((unsigned long)epi->ffd.file, _THIS_IP_); }	/* LEANUX epoll: kind 308, line-preserving */
+}''')
 # ---- A stream K1: allocation outcomes (docs/2026-10-05-a-alloc.md, section 4) ----
 # LEANUX_ALLOC_CONTROLS=1 generates the control kernel's patch instead
 # (choice-stream-alloc-controls.patch; section 7, K1, K4, K5): load flags
