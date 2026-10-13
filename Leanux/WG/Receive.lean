@@ -95,7 +95,7 @@ def cookieMessageConsume (msg : List UInt8) : M Unit := do
   let cookie := xchachaDecrypt p.cookieDecryptionKey ((msg.drop 8).take 24) ((msg.drop 32).take 32) p.lastMac1Sent
   if ← branch .cookieDecryptOk cookie.isSome then
     let some c := cookie | invariant "unreachable"
-    let birthdate ← hiddenClock .cookieBirthdate
+    let birthdate ← hiddenClock64 .cookieBirthdate
     setPeer pid { (← getPeer pid) with cookie := c, cookieBirthdate := birthdate, cookieIsValid := true,
                                        haveSentMac1 := false }
   peerPut (some pid)   -- out:
@@ -226,7 +226,7 @@ def receiveHandshakePacket (msg : List UInt8) (src : SkbSource) : M Unit := do
   let mut underLoad := false
   if ← branch .hsUnderLoad ((← getDev).handshakeQueueLen ≥ MAX_QUEUED_INCOMING_HANDSHAKES / 8) then
     -- `last_under_load = ktime_get_coarse_boottime_ns()` (receive.c:115)
-    let now ← hiddenClock .underLoadNow
+    let now ← hiddenClock64 .underLoadNow
     modify fun w => { w with lastUnderLoad := some now }
     underLoad := true
   -- `else if (last_under_load)`: the function-static (receive.c:100), nonzero
@@ -236,9 +236,10 @@ def receiveHandshakePacket (msg : List UInt8) (src : SkbSource) : M Unit := do
     -- `under_load = !wg_birthdate_has_expired(last_under_load, 1)` (receive.c:117),
     -- the recorded clock against the saved time; `if (!under_load)
     -- last_under_load = 0` (receive.c:118-119): the decay's reset
-    let expired ← birthdateHasExpired last 1
+    let (expired, lhs, now) ← birthdateTest last 1
     underLoad := !expired
-    if ← branch .hsDecayExpired expired then
+    -- the age test's operands are recorded at receive.c:117 (`Decision.comparison`'s site)
+    if ← branchCmp .hsDecayExpired expired lhs now then
       modify fun w => { w with lastUnderLoad := none }
   let macState ← cookieValidatePacket msg src underLoad
   -- packet_needs_cookie (receive.c:123-132):

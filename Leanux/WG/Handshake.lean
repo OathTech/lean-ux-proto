@@ -243,7 +243,7 @@ def addMacToPacket (pid : PeerId) (msg : List UInt8) : M (List UInt8) := do
   -- `is_valid && !wg_birthdate_has_expired(birthdate, ...)`: the clock read
   -- happens only when the cookie is valid (`&&` short-circuits)
   if ← andM (branch .addMacCookieValid p.cookieIsValid)
-      (do branch .addMacCookieFresh !(← birthdateHasExpired p.cookieBirthdate COOKIE_FRESH_SECONDS)) then
+      (branchExpired .addMacCookieFresh p.cookieBirthdate COOKIE_FRESH_SECONDS (!·)) then
     -- compute_mac2: keyed by the cookie, over the message up to mac2
     return body ++ mac1 ++ blake2s 16 p.cookie (body ++ mac1)
   return body ++ mac1 ++ List.replicate 16 0
@@ -253,7 +253,7 @@ def addMacToPacket (pid : PeerId) (msg : List UInt8) : M (List UInt8) := do
     input. The initiator's first output is its sending key, the responder's
     its receiving key (noise.c:834-839). -/
 def deriveKeys (kp : KeypairId) (initiator : Bool) (chainingKey : List UInt8) : M Unit := do
-  let birthdate ← hiddenClock .deriveKeysBirthdate
+  let birthdate ← hiddenClock64 .deriveKeysBirthdate
   let outs ← kdf true false chainingKey []
   let sym (key : List UInt8) : SymmetricKey := { key, birthdate, isValid := true }
   let (first, second) := (sym (← kdfOut outs 0), sym (← kdfOut outs 1))
@@ -402,7 +402,8 @@ def timersSessionDerived (pid : PeerId) : M Unit :=
 /-- wg_timers_any_authenticated_packet_traversal (timers.c:212-217). -/
 def timersTraversal (pid : PeerId) : M Unit := do
   let interval := (← getPeer pid).persistentKeepaliveInterval
-  if ← branch .traversalKeepalive (interval != 0) then
+  -- `peer->persistent_keepalive_interval` (u16) against 0: a recorded 2-byte compare
+  if ← branchCmp .traversalKeepalive (interval != 0) interval 0 then
     discard <| modPeerTimer pid .persistentKeepalive (interval * HZ)
 
 /-- `HANDSHAKE_DSCP` (send.c:18): CS4, the DS field of every handshake
@@ -440,7 +441,7 @@ def timersHandshakeInitiated (pid : PeerId) : M Unit := do
 
 /-- wg_packet_send_handshake_response (send.c:85-108). -/
 def sendHandshakeResponse (pid : PeerId) : M Unit := do
-  let now ← hiddenClock .respLastSent   -- last_sent_handshake = now
+  let now ← hiddenClock64 .respLastSent   -- last_sent_handshake = now
   setPeer pid { (← getPeer pid) with lastSentHandshake := now }
   let created ← createResponse pid
   if ← branch .respCreated created.isSome then
@@ -450,15 +451,15 @@ def sendHandshakeResponse (pid : PeerId) : M Unit := do
       timersSessionDerived pid
       timersTraversal pid
       timersAnyAuthenticatedPacketSent pid
-      let now ← hiddenClock .respLastSentAgain
+      let now ← hiddenClock64 .respLastSentAgain
       setPeer pid { (← getPeer pid) with lastSentHandshake := now }
       sendBufferToPeer pid msg
 
 /-- wg_packet_send_handshake_initiation (send.c:21-44). -/
 def sendHandshakeInitiation (pid : PeerId) : M Unit := do
   -- `!wg_birthdate_has_expired(last_sent_handshake, REKEY_TIMEOUT)`
-  if ← branch .initRateLimited !(← birthdateHasExpired (← getPeer pid).lastSentHandshake REKEY_TIMEOUT) then return
-  let now ← hiddenClock .initLastSent   -- last_sent_handshake = now
+  if ← branchExpired .initRateLimited (← getPeer pid).lastSentHandshake REKEY_TIMEOUT (!·) then return
+  let now ← hiddenClock64 .initLastSent   -- last_sent_handshake = now
   setPeer pid { (← getPeer pid) with lastSentHandshake := now }
   let created ← createInitiation pid
   if ← branch .initCreated created.isSome then
@@ -466,7 +467,7 @@ def sendHandshakeInitiation (pid : PeerId) : M Unit := do
     let msg ← addMacToPacket pid msg
     timersTraversal pid
     timersAnyAuthenticatedPacketSent pid
-    let now ← hiddenClock .initLastSentAgain
+    let now ← hiddenClock64 .initLastSentAgain
     setPeer pid { (← getPeer pid) with lastSentHandshake := now }
     sendBufferToPeer pid msg
     timersHandshakeInitiated pid

@@ -198,6 +198,43 @@ firing rule before any record is the domain filter's prediction only. This
 stays as is, stated: every time-dependent rule reads a recorded value or a
 declared fixture constant, never a default.
 
+**Implemented (2026-10-13, branch `task/item-8`) [AGENT, fork of the
+coordinator].** As designed, with these corrections from the coverage reads
+on s1, each a DWARF attribution of a multi-line condition, none a change of
+meaning:
+- `keep_key_fresh` (send.c:131-134): the age test is recorded at **133**,
+  not 134, and the counter test `sending_counter > REKEY_AFTER_MESSAGES` is
+  **recorded** as a 64-bit constant compare at **131** (`(2^60, counter)`,
+  `d3_zero_key` op 3), not branchless as the table above says: `freshCounter`
+  is declared `gt` against the constant.
+- `decrypt_packet` (receive.c:252-254): both the age test and the counter
+  limit are recorded at **252** (the `if (unlikely(` line), 102 and 94
+  records over the wireguard suite.
+- `counter_validate` (receive.c:302-303): both limits at **302** (196
+  records); `keep_key_fresh` on receive (receive.c:230-233): the age test at
+  **231** (78 records); `wg_cookie_add_mac_to_packet` (cookie.c:170-172): at
+  **170** (`e_cookie_then_reinitiate`); `wg_receive_handshake_packet`'s decay
+  test at 117 as designed (and a duplicate record at 118, unused).
+- `timers.c:46` and `:214` as designed (25 and 16-bit records).
+The arm rule's gap test is asymmetric, which the design left implicit: a
+negative `J_m - J_c` (the mirror's delay too small) cannot come from a stall
+and stays a hidden mismatch, so the D3-M8 sentinel keeps its channel; a gap
+above 1 (a stall, or a delay too large: the record cannot tell them apart)
+is `unsupported`. The sentinel patterns B1-M5 and W9-M3 follow the changed
+lines. `dstCacheHit` is **not** declared: `net/core/dst_cache.c` is not an
+anchored file, and anchoring it is a small stream of its own (its functions,
+the `!dst` and `obsolete` tests beside the `time_after`, their witnesses);
+the hit test is the C's `time_after` on `UInt64` regardless, which is the
+semantic point. Measured on s1: `d3_zero_key` (the 2^32 crossing, a
+non-event), `d3_retransmit` (the arm rule with jitter), `d3_rx_expired_key`,
+`b1_trie_routing`, then the `wireguard` and `alloc` suites and the D3 and
+steering controls.
+The one-off mutant I8-M1 (the age test's left operand computed with
+`NSEC_PER_SEC - 1`, so every outcome stays Linux's and only the operands
+move) was rejected on `d3_zero_key` through the operand channel alone, at
+all six age tests the trace exercises (send.c:25, 66, 133, 365), with no
+other channel reporting; run once, then deleted.
+
 ## 5. Item 7: the budgets
 
 Each bound, its source, and what it becomes. The rule: a C bound stays an
