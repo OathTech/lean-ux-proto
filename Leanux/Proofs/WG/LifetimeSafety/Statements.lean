@@ -13,6 +13,7 @@ import Leanux.Proofs.WG.Lifetimes.ReleaseAmbient
 import Leanux.Proofs.WG.Lifetimes.AllocationInitial
 import Leanux.Proofs.WG.Lifetimes.AllocationAmbient
 import Leanux.Proofs.WG.Lifetimes.SessionFailure
+import Leanux.Proofs.WG.Lifetimes.PeerAllocationFailure
 
 /-! R2's store-identity components: whole-operation keypair evolution,
 peer allocation/reference sequences, and packet primitive sequences within a device
@@ -709,5 +710,52 @@ theorem begin_session_birthdate_failure_prefix (pid : PeerId) (kp : KeypairId)
         .keypair (.write kp k.internalId)]) :=
   Lifetimes.beginSessionPrefix_clock_failure pid kp w allocEntry allocated guarded configured clockEntry
     h before current k selected e hbefore hstate hcreate hguard hpeer hkey hwrite hselect hclock
+
+
+/-- Focusing the existing complete peer-creation observer into the mixed
+history preserves the exact original result, Stop, and successful World for
+all inputs. The event stream comes from the existing complete peer observer. -/
+theorem peer_create_mixed_access_erasure (key : Key) (psk : Option Key) :
+    ErasesPrefix (Lifetimes.peerCreateMixed key psk) (peerCreate key psk) :=
+  Lifetimes.peerCreateMixed_erases key psk
+
+/-- Complete peer creation retains safe mixed histories on failure and
+preserves AllocationInv on success. The slot bound supplies vacancy in this
+safety domain; no lifecycle or scalar-reference ownership claim is made. -/
+theorem peer_create_allocation_access_preserves (key : Key) (psk : Option Key) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.peerCreateMixed key psk) :=
+  Lifetimes.peerCreateMixed_preserves key psk
+
+/-- Original successful execution preserves other-family residents and
+allocation metadata except nextPeer. A created ID is the old nextPeer, whose
+final value advances to ID+1; ordinary refusal leaves the metadata unchanged.
+This exact geometry does not itself assume a vacant destination. -/
+theorem peer_create_allocation_geometry (key : Key) (psk : Option Key)
+    (w v : World) (result : Except Int PeerId)
+    (hr : (peerCreate key psk).run w = .ok (result, v)) :
+    Lifetimes.PeerCreationGeometry w result v :=
+  Lifetimes.peerCreate_geometry key psk w v result hr
+
+/-- A conditional whole-call equation: the first initializer's clock failure
+retains the allocation and initial peer write. Premises execute the original
+prelude; this is not a recorded runner reproduction. -/
+theorem peer_create_cache_clock_failure_prefix (key : Key) (psk : Option Key)
+    (w guarded allocated reserved entry : World) (d : Device)
+    (h : List Lifetimes.LifetimeEvent) (e : Stop)
+    (hdev : getDev.run w = .ok (d, w))
+    (hfull : (branchCmp .peerCreateMaxPeers (d.numPeers ≥ MAX_PEERS_PER_DEVICE)
+      d.numPeers MAX_PEERS_PER_DEVICE).run w = .ok (false, guarded))
+    (halloc : (hiddenAlloc .kmemCacheZallocPeer).run guarded = .ok (true, allocated))
+    (hmem : (branch .peerCreateNoMem false).run allocated = .ok (false, reserved))
+    (hcache : (branch .peerCreateDstCacheFail false).run reserved = .ok (false, entry))
+    (ha : entry.armRecords = true) (hc : entry.dstCacheRecords = true)
+    (hclock : (hiddenU64 .dstCacheResetTs).run
+      (Peers.creationCoreWorld entry d.nextPeer key) = .error e) :
+    runPrefix (Lifetimes.peerCreateMixed key psk) w h =
+      (.error e, h ++ [.peer (.allocate d.nextPeer (entry.k.peerCounter + 1)),
+        .peer (.write d.nextPeer (entry.k.peerCounter + 1))]) :=
+  Lifetimes.peerCreateMixed_cache_clock_failure key psk w guarded allocated reserved entry d h e
+    hdev hfull halloc hmem hcache ha hc hclock
 
 end Leanux.Proofs.WG.LifetimeSafety

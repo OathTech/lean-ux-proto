@@ -14,20 +14,21 @@ differential check or guest run.
 | Result | Progress |
 | --- | --- |
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay and independent review checked. Seccomp frame carry checked. |
-| R2 lifetime safety | Keypair operation endpoints, peer allocation/reference helpers, packet primitives, failure-retaining peer creation/release, mixed receive-enqueue/decrypt iteration, keypair/packet release families, and complete keypair/TX/RX allocation with fixture initialization, allocation-aware release/caller composition and complete session/rotation calls, plus stale-cursor finding checked; caller/lifecycle and whole-run internal-access coverage remain in progress. |
+| R2 lifetime safety | Keypair operation endpoints, peer allocation/reference helpers, packet primitives, failure-retaining peer creation/release, mixed receive-enqueue/decrypt iteration, keypair/packet release families, and complete keypair/TX/RX allocation with fixture initialization, allocation-aware release/caller composition and complete session/rotation and peer-creation calls, plus stale-cursor finding checked; caller/lifecycle and whole-run internal-access coverage remain in progress. |
 | R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion, original empty-root and immediate-empty-child insertion, and total original placement proved; general mutation/history and path refinements remain open. Path proofs follow R2. |
 | R4 delivery | Not started; drop characterisation waiting on W7 full-ring tier's explanation of the two drops. |
 | R5 key lifetime | Not started; time half waiting on review items 7 and 8 on the timer model. |
 | R6 flood resistance | Not started. |
 
-**Current validation.** The full proof gate passes 181 build jobs and 115
-terminal statements (ReplayWindow 15, R1 9, R2 74, R3 17), with only permitted
+**Current validation.** The full proof gate passes 184 build jobs and 119
+terminal statements (ReplayWindow 15, R1 9, R2 78, R3 17), with only permitted
 axioms. The default model build passes 60 jobs; the unit tier passes 93 tests
-in 21.105 seconds with one skip. Both explicit-record witness replays below
+in 21.796 seconds with one skip. Both explicit-record witness replays below
 were rechecked at the seccomp carry and agree with the original runner.
 Independent reviews cover peer creation, the seccomp carry, mixed enqueue,
 decrypt execution, keypair/packet releases, ambient caller composition,
 allocation and release-bound composition, session creation and rotation,
+and the mixed peer-creation bridge,
 pure trie insertion, original empty-root and immediate-empty-child
 insertion, and placement.
 
@@ -352,6 +353,19 @@ in arbitrary invariant-satisfying states without a subsequent resolution, so
 these theorems make no ownership or reference-integrity claim. Handshake
 callers, device lifecycle and whole-scheduler closure remain open.
 
+**Complete peer creation at the allocation invariant.** `PeerAllocationFrames`
+proves original creation geometry: other-family residents and allocation metadata
+are unchanged except that successful creation advances `nextPeer` from the
+created slot. `PeerAllocation` reuses the existing complete peer observer through
+`peerFocus`; there is no second observer body. Old peer-history preservation,
+original slot geometry and the entry slot bound transport every field of
+`AllocationInv`. All-input erasure includes malformed occupied-slot inputs;
+safety requires the invariant that supplies vacancy. `PeerAllocationFailure`
+proves a conditional whole-call cache-clock failure equation retaining exactly
+the allocation and initial write. This is source-execution evidence, not an
+accepted recorded-run witness. Lifecycle and scalar-reference ownership remain
+open.
+
 **Concrete reference finding.** An eight-operation, explicit-record accepted
 mirror run creates 28 peers, starts a stepped dump, deletes wg0, creates a new
 wg0 and 27 replacement peers, then receives a chunk. The receive returns the
@@ -410,6 +424,9 @@ needed routine elaboration repairs, with no invariant obstruction.
 Session and rotation took eleven capped compile passes over twelve minutes and
 five seconds: three passed and eight failed during elaboration. The final full
 build passed 181 jobs.
+The mixed peer-creation bridge took nine capped compile passes over 10.44
+minutes; five early passes failed on ordinary elaboration obligations and the
+final full build passed 184 jobs.
 Failed passes exposed proof elaboration or simplification errors. One earlier
 anonymous-hypothesis tactic loop was stopped by verified PID and repaired.
 Independent read-only reviews found no correctness defect in these components;
@@ -435,6 +452,11 @@ It found an unused KDF-failure lemma whose premise was impossible for the curren
 nonthrowing KDF; that vacuous lemma was deleted and supplies no coverage evidence.
 The actual clock-failure equation and all five final exports passed review, with
 no remaining finding. This proof correction is not a Rule Zero mirror finding.
+
+The peer-creation bridge review checked original initialization order, all
+allocation-invariant fields, reuse of the existing observer, all four exports
+and the conditional failure equation. No correctness or coverage finding
+remains. Its final reviewed hashes match the gated files.
 
 One source-order limitation remains: C `peer.c` initializes destination cache
 and handshake before incrementing `peer_counter`; the mirror increments and
