@@ -14,9 +14,12 @@ scripts/in-bundle python3 -m evaluator.check --suite handwritten --trace alias_c
 ```
 
 The check requires `LEANUX_KERNEL_DIR` to name a build matching this revision's
-kernel identity. The host requirements still apply offline. `scripts/in-bundle` configures tool paths,
-compiler libraries, QEMU firmware and local caches. It neither downloads tools
-nor provides sandboxing.
+kernel identity (`kernel/identity-x86_64-net-choice.txt`). The proof tree
+needs no guest: `scripts/in-bundle lake build LeanuxProofs` and
+`scripts/in-bundle scripts/proof-gate` work offline once Lean is staged. The
+host requirements still apply offline. `scripts/in-bundle` configures tool
+paths, compiler libraries, QEMU firmware and local caches. It neither
+downloads tools nor provides sandboxing.
 
 ## What to copy to an offline machine
 
@@ -24,7 +27,7 @@ nor provides sandboxing.
 | --- | --- |
 | `.tools/lean`, `.tools/sysroot` | Lean and the packaged compiler, Python, QEMU and build tools |
 | `.deps/linux`, `.deps/downloads` | Locked Linux source and archives needed to rebuild the patched kernel |
-| A matching build under `.artifacts/` (optional) | Saves a kernel rebuild; recheck its identity on the destination |
+| A matching build under `.artifacts/` (optional, `kernel-net-choice-e2` at this revision) | Saves a kernel rebuild; the check recomputes its identity on the destination |
 
 Copy these alongside a checkout of the same revision, preserving symlinks.
 Keep the checked-in `dependencies/*.lock.json` files. Do not copy `.cache`:
