@@ -32,8 +32,7 @@ def keypairPut (kp : Option KeypairId) (unreferenceNow : Bool) : M Unit := do
   if ← branch .keypairPutNull kp.isNone then return
   let some id := kp | invariant "unreachable"
   let k ← getKeypair id
-  let removeEntry : M Unit := modifyDev fun d =>
-    { d with indexTable := d.indexTable.filter fun e => e.keypair != some id }
+  let removeEntry : M Unit := indexRemoveKeypair id
   if ← branch .keypairPutUnreferenceNow unreferenceNow then removeEntry
   setKeypair id { k with refcount := k.refcount - 1 }
   if ← branch .keypairKrefPutReleased (← refcountDecAndTest k.refcount) then
