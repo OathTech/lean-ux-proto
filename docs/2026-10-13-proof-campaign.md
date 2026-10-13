@@ -14,22 +14,23 @@ differential check or guest run.
 | Result | Progress |
 | --- | --- |
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay and independent review checked. Seccomp frame carry checked. |
-| R2 lifetime safety | Keypair operation endpoints, peer allocation/reference helpers, packet primitives, failure-retaining peer creation/release, mixed receive-enqueue/decrypt iteration, keypair/packet release families, and complete keypair/TX/RX allocation with fixture initialization, allocation-aware release/caller composition and complete session/rotation, peer-creation, receive-entry, receive-maintenance and TX-staging calls, plus stale-cursor finding checked; caller/lifecycle and whole-run internal-access coverage remain in progress. |
+| R2 lifetime safety | Store identities, failure-retaining allocation/release and caller composition cover session/rotation, peer creation, receive entry/maintenance/completion, callback-parametric receive polling, TX staging and decrypt iteration; stale-cursor finding checked. Actual stack callbacks, remaining callers, lifecycle and whole-run internal-access coverage remain in progress. |
 | R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion, original empty-root, arbitrary-depth empty-child and exact-prefix insertion with sequence wrappers, and total original placement proved; general mutation/history and path refinements remain open. Path proofs follow R2. |
 | R4 delivery | Not started; drop characterisation waiting on W7 full-ring tier's explanation of the two drops. |
 | R5 key lifetime | Not started; time half waiting on review items 7 and 8 on the timer model. |
 | R6 flood resistance | Not started. |
 
-**Current validation.** The full proof gate passes 201 build jobs and 140
-terminal statements (ReplayWindow 15, R1 9, R2 92, R3 24), with only permitted
+**Current validation.** The full proof gate passes 206 build jobs and 149
+terminal statements (ReplayWindow 15, R1 9, R2 101, R3 24), with only permitted
 axioms. The default model build passes 60 jobs; the unit tier passes 93 tests
-in 21.089 seconds with one skip. The R1 explicit-record witness was rechecked
+in 21.553 seconds with one skip. The R1 explicit-record witness was rechecked
 at the seccomp carry; both R2 variants were rechecked with the exact-prefix
 checkpoint. All agree with the original runner.
 Independent reviews cover peer creation, the seccomp carry, mixed enqueue,
 decrypt execution, keypair/packet releases, ambient caller composition,
 allocation and release-bound composition, session creation and rotation,
-the mixed peer-creation bridge, receive entry and maintenance, TX staging, pure trie
+the mixed peer-creation bridge, receive entry, maintenance, completion and polling,
+TX staging, pure trie
 insertion, original empty-root and arbitrary-depth empty-child insertion with
 its wrapper, exact-prefix replacement, list deletion and placement.
 
@@ -155,6 +156,12 @@ Seven complete TX staging calls cover CPU selection, peer/device enqueue,
 companion retains cached identity predicates through scalar device updates,
 with a concrete allocation-invariant instance; CPU and enqueue results remain
 `Nat` and `Int`. `PrefixLoops` shares finite range and map composition.
+`CounterAccess` observes the complete validator on all inputs, with no bitmap-size
+premise. `AllowedLookupAccess` observes peer acquisition after the original node
+search. `ReceiveCompletion` composes rotation, staging, maintenance, source lookup,
+reference release and statistics; `ReceivePoll` adds the original queue traversal
+and cleanup with an explicit observed callback. Its ambient and allocation
+contracts require callback preservation; the actual stack remains a follow-on.
 Shared bind and finite-loop laws compose these per-call contracts. Generic enqueue/decrypt
 contracts admit explicit observed softirq, IRQ-exit and rescheduling callbacks;
 they are instantiated at the allocation invariant. Peer creation reuses its
@@ -181,9 +188,15 @@ Stop after an earlier free. The keepalive allocation-record failure equation
 retains its initial peer read. Plain staged packet values have no resident
 TX/RX store identity until `newTxSkb` runs. Shared filesystem frames
 also end at return, leaving queued task work for its later caller proof.
+The poll retains both `dropPeeked` getters, releases keypair then peer then RX
+packet, and invokes its callback only after the final peer update. Its budget
+and malformed-queue Stops remain in domain. An exact empty-bitmap failure equation
+retains the validator's initial keypair read and no write; this is an original
+getter-conditioned failure, not an accepted-trace finding. Safe access prefixes
+do not establish delivery, order or reference ownership.
 
 **Remaining claim.** Full caller, device-lifecycle and scheduler closure remain
-unproved. Receive completion/poll, encrypt/TX workers and sockets, handshake
+unproved. The actual stack callback, encrypt/TX workers and sockets, handshake
 execution and timer callbacks, peer removal, netlink and direct resident scans
 need coverage. Saved scalar-reference
 ownership is a separate obligation: aliased or dangling IDs may legitimately
@@ -236,7 +249,9 @@ python3 -B docs/proof-campaign-replay.py r2-stale-dump-cursor-orphan |
 **Effort and review.** Each reproduction takes under one second. The main caller
 checkpoints took roughly 6–25 minutes each, with 4–19 compile passes; TX
 staging took fourteen passes over 24m44s: two passed and twelve failed before
-correction, with the full 201-job build passing at the end. Counts and failed
+correction. Receive completion/poll took fourteen passes over 23m50s: three
+passed and eleven failed before correction, ending with the full 206-job build.
+Counts and failed
 passes are retained in the checkpoint history; current validation is above.
 Failures were proof elaboration/simplification failures, not passes or mirror
 findings. One earlier tactic loop was stopped by its verified PID and repaired.
@@ -247,7 +262,10 @@ the draft no-device frame argument to `modifyDev`'s actual no-op behavior.
 The TX review checked the seven callers against the mirror and C, and clarified
 that the per-call contracts compose through existing laws without exporting a
 new sequence runner. No remaining correctness finding is reported for the
-checked components. C initializes cache/handshake before its
+checked components. The completion/poll review checked all-input source order
+and callback scope; it moved a generic conditional law into `Logged/Prefix`
+and narrowed a docstring to the safety theorem's actual conclusion.
+C initializes cache/handshake before its
 peer-counter increment, whereas the mirror increments/inserts first: the proof
 follows the mirror, without claiming a C simulation or a lifetime counterexample.
 

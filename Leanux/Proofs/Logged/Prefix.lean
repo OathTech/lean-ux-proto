@@ -192,6 +192,14 @@ theorem PrefixPreserves.bind (hg : PrefixPreserves I S g)
       · simpa only [runPrefix_bind, hr] using hsafe
       · simpa only [runPrefix_bind, hr] using hend
 
+/-- Conditional composition retains the chosen branch's failed prefix. -/
+theorem PrefixPreserves.ite (p : Prop) [Decidable p]
+    (ht : p → PrefixPreserves I S gt) (he : ¬p → PrefixPreserves I S ge) :
+    PrefixPreserves I S (if p then gt else ge) := by
+  by_cases hp : p <;> simp only [hp, ↓reduceIte]
+  · exact ht hp
+  · exact he hp
+
 theorem PrefixPreserves.forIn (xs : List α) (b : β)
     (g : α → β → PrefixM Event (ForInStep β))
     (hs : ∀ h w, I h w → S h) (hg : ∀ x b, PrefixPreserves I S (g x b)) :

@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Lifetimes.ReceivePoll
+import Leanux.Proofs.WG.Lifetimes.ReceiveFailure
 import Leanux.Proofs.WG.Lifetimes.TxStagingCalls
 import Leanux.Proofs.WG.Keypairs.Identity
 import Leanux.Proofs.WG.ReplayWindow.Statements
@@ -922,5 +924,77 @@ theorem tx_keepalive_allocation_failure_prefix (pid : PeerId) (w checked : World
     runPrefix (Lifetimes.sendKeepalivePrefix pid) w h =
       (.error e, h ++ [.peer (.read pid p.internalId)]) :=
   Lifetimes.sendKeepalivePrefix_alloc_failure pid w checked p h e hp hb ha
+
+
+/-- Counter observation erases to the original validator on every World,
+including malformed bitmaps and early rejections. -/
+theorem counter_validate_access_erasure (kp : KeypairId) (nonce : Nat) :
+    ErasesPrefix (Lifetimes.counterValidatePrefix kp nonce) (counterValidate kp nonce) :=
+  Lifetimes.counterValidatePrefix_erases kp nonce
+
+/-- Counter access safety has no 128-word bitmap premise. It includes the
+original duplicate-bit rejection path; errors retain safe appended histories. -/
+theorem counter_validate_access_preserves (c : Lifetimes.AmbientContracts I)
+    (kp : KeypairId) (nonce : Nat) :
+    PrefixPreserves I Lifetimes.LifetimeEvent.Safe (Lifetimes.counterValidatePrefix kp nonce) :=
+  Lifetimes.AmbientContracts.drop (Lifetimes.counterValidatePrefix_spec c (fun _ => True) kp nonce)
+
+/-- Node search and subsequent peer acquisition erase to the original lookup
+without a valid-trie assumption. This is an access contract, not a routing result. -/
+theorem allowed_lookup_access_erasure (root : Option NodeId) (bits key : Nat) :
+    ErasesPrefix (Lifetimes.lookupPrefix root bits key) (lookup root bits key) :=
+  Lifetimes.lookupPrefix_erases root bits key
+
+/-- The original lookup's resolved peer accesses preserve AllocationInv.
+Malformed nodes and missing or dying peers remain admitted error paths. -/
+theorem allowed_lookup_allocation_access_preserves (root : Option NodeId) (bits key : Nat) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.lookupPrefix root bits key) :=
+  Lifetimes.AmbientContracts.drop
+    (Lifetimes.lookupPrefix_spec Lifetimes.allocationAmbient (fun _ => True) root bits key)
+
+/-- Complete receive completion, including source lookup, maintenance and
+staged sending, has exactly the original result, Stop, and successful World. -/
+theorem receive_completion_access_erasure (pid : PeerId) (pkt : RxPacket) (e : Endpoint) :
+    ErasesPrefix (Lifetimes.consumeDataDonePrefix pid pkt e) (consumeDataDone pid pkt e) :=
+  Lifetimes.consumeDataDonePrefix_erases pid pkt e
+
+/-- Receive completion retains safe histories on all outcomes and AllocationInv
+on success. Returned bytes do not themselves establish stack delivery. -/
+theorem receive_completion_allocation_access_preserves (pid : PeerId) (pkt : RxPacket) (e : Endpoint) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.consumeDataDonePrefix pid pkt e) :=
+  Lifetimes.consumeDataDonePrefix_preserves_ambient Lifetimes.allocationAmbient
+    Lifetimes.allocationTx Lifetimes.allocationRx pid pkt e
+
+/-- The whole original NAPI poll is observed for arbitrary budgets and Worlds,
+provided the named callback observer erases to its original callback. -/
+theorem receive_poll_access_erasure (pid : PeerId) (budget : Nat)
+    (callback : List (List UInt8) → Lifetimes.MixedM Unit)
+    (original : List (List UInt8) → M Unit)
+    (hc : ∀ gro, ErasesPrefix (callback gro) (original gro)) :
+    ErasesPrefix (Lifetimes.rxPollPrefix pid budget callback) (rxPoll pid budget original) :=
+  Lifetimes.rxPollPrefix_erases pid budget callback original hc
+
+/-- All poll prefixes are safe under an explicit AllocationInv-preserving
+callback. The final World satisfies AllocationInv on success. This does not
+close the actual Stack callback, scheduling, delivery, or order obligations. -/
+theorem receive_poll_allocation_access_preserves (pid : PeerId) (budget : Nat)
+    (callback : List (List UInt8) → Lifetimes.MixedM Unit)
+    (hc : ∀ gro, PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe (callback gro)) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.rxPollPrefix pid budget callback) :=
+  Lifetimes.rxPollPrefix_preserves_ambient Lifetimes.allocationAmbient Lifetimes.allocationTx
+    Lifetimes.allocationRx pid budget callback hc
+
+/-- A malformed empty bitmap gives an actual invariant Stop after the keypair
+read, with no write. Premises describe the original getter and counter value. -/
+theorem counter_bitmap_failure_prefix (kp : KeypairId) (w : World) (k : Keypair)
+    (h : List Lifetimes.LifetimeEvent) (hg : (getKeypair kp).run w = .ok (k, w))
+    (hc : k.receivingCounter = ⟨0, #[]⟩) :
+    runPrefix (Lifetimes.counterValidatePrefix kp 0) w h =
+      (.error (.invariant "backtrack[0] beyond the bitmap"),
+        h ++ [.keypair (.read kp k.internalId)]) :=
+  Lifetimes.counterValidatePrefix_empty_bitmap kp w k h hg hc
 
 end Leanux.Proofs.WG.LifetimeSafety
