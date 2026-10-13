@@ -32,9 +32,10 @@ Since the interface commit (docs/2026-10-11-interface.md) two parts live in
 their own files, each owned by one W4+W7 stream: the transmit-side IP stack
 (`Leanux/Env/IpStack.lean`: `xmitPacket`, `checksumHelp`, the ports and
 addresses the packets carry) and the deferred units' shared machinery
-(`Leanux/Env/Batch.lean`: `runWorker`, `sectionOf`, `condResched`). This
-file keeps the fixture, the operations, the worker runners, the timers and
-the lifecycle: the hooks the streams meet at.
+(`Leanux/Env/Batch.lean`: `runWorker`, `sectionOf`, the NAPI poll's
+placements, the activations and `schedule`). This file keeps the fixture,
+the operations, the worker runners, the timers and the lifecycle: the hooks
+the streams meet at.
 -/
 
 namespace Leanux.Env
@@ -213,28 +214,27 @@ def deliverSent : M Unit := do
       | none => if !loopback then unsupported "a datagram routed back into wg0"
   modify fun w => { w with sent := [] }
 
-/-- The crypt work a deferred unit queued that has not run at one of its
-    `cond_resched`s, on the kernel's one CPU after that unit: the encrypt
-    worker (`packet_crypt_wq`, queued by `wg_packet_create_data`), then the
-    tx worker of each peer it queued (`wg_queue_enqueue_per_peer_tx`),
-    oldest first. What they send is delivered. -/
-def runCryptWorkers (runDecrypt : M Unit := unsupported "a switch to the decrypt worker at this point (its placement is not modeled here)")
-    (runNetRx : M Unit := pure ()) : M Unit := do
-  if !(← getDev).encryptQueue.isEmpty then
-    runWorker .encryptWorker (WG.encryptWorker checksumHelp (condResched SWITCH_DEPTH .encryptWorker runDecrypt runNetRx))
-  for _ in [0:4096] do
-    let d ← getDev
-    match d.txWorkQueue.head? with
-    | none => deliverSent; return
-    | some headPid =>
-      -- the tx worker the dispatch record names (dispatch order), else the head
-      let pid ← match ← peekUnit .txWorker with
-        | some u => resolveUnit .txWorker u d.txWorkQueue
-        | none => pure headPid
-      modifyDev fun d => { d with txWorkQueue := d.txWorkQueue.erase pid }
-      runWorker .txWorker (WG.txWorker pid (condResched SWITCH_DEPTH .txWorker runDecrypt runNetRx)) (some pid)
-      if !(← getDev).encryptQueue.isEmpty then invariant "the tx worker queued encryption"
-  invariant "the tx work queue did not drain"
+/-- The crypt work a deferred unit queued, on the kernel's one CPU after
+    that unit: the encrypt worker (`packet_crypt_wq`, queued by
+    `wg_packet_create_data`) and the tx worker of each peer it queued
+    (`wg_queue_enqueue_per_peer_tx`), as the records order them, with what
+    they switched to (`schedule`). What they send is delivered. -/
+def runCryptWorkers : M Unit := do
+  schedule
+  deliverSent
+
+/-- After a wait's deferred units ran (`schedule`): work still queued
+    outlived the guest's wait, outside the domain (its records would be
+    missing). An activation suspended with an empty queue stays suspended:
+    the records resume it at the scheduler's next turn (after a send worker
+    or a timer section), and the operation ends with none (`Runner`). A NAPI
+    poll still pending is a mirror defect: the decrypt worker's ring poll
+    runs the softirq. -/
+def requireDrained (what : String) (queues : List Bool) : M Unit := do
+  if queues.any id then
+    unsupported s!"work {what} outlived the guest's wait (its records would be missing)"
+  if (← getDev).peers.toList.any (·.2.napiScheduled) then
+    invariant "a NAPI poll pending after the decrypt worker (its ring poll runs the softirq)"
 
 /-- Crypt work queued by a system call itself (a session's keepalive or
     staged packets sent from `wg_set` or `wg_up`): when the kworker runs it
@@ -242,7 +242,7 @@ def runCryptWorkers (runDecrypt : M Unit := unsupported "a switch to the decrypt
     it. `wg_xmit` has its own (`afterXmit`). -/
 def requireNoCryptWork : M Unit := do
   let some d := (← getK).wg | return
-  if !d.encryptQueue.isEmpty || !d.txWorkQueue.isEmpty then
+  if !d.encryptQueue.empty || !d.txWorkQueue.isEmpty then
     unsupported "crypt work queued in a system call (its worker's timing)"
 
 /-- The handshake send worker whose unit the next dispatch record names
@@ -272,6 +272,7 @@ def runSendWorkers : M Unit := do
   for _ in [0:4096] do
     if (← getDev).sendWorkQueue.isEmpty then deliverSent; return
     runOneSendWorker
+    schedule   -- a crypt activation the records resume after the section
   invariant "the send work queue did not drain"
 
 /-- After `wg_xmit` returns: the guest waits `QUEUE_WAIT_US` (0.1 s), in
@@ -285,11 +286,14 @@ def runSendWorkers : M Unit := do
     its records would be missing from this operation. -/
 def afterXmit : M Unit := do
   let some d := (← getK).wg | return   -- L: no device (the send failed)
-  let crypt := !d.encryptQueue.isEmpty || !d.txWorkQueue.isEmpty
+  let crypt := !d.encryptQueue.empty || !d.txWorkQueue.isEmpty
   if crypt && !d.sendWorkQueue.isEmpty then
     unsupported "wg_xmit queued crypt work and a handshake (their order)"
   modify fun w => { w with queuedThisCall := [] }   -- the call returned and slept
-  if crypt then runCryptWorkers
+  if crypt then
+    runCryptWorkers
+    let d ← getDev
+    requireDrained "wg_xmit queued" [!d.encryptQueue.empty, !d.txWorkQueue.isEmpty]
   runSendWorkers
 
 /-! ## D3: timers and the time advance (docs/2026-10-05-d3-timers.md, section 5.3)
@@ -301,18 +305,11 @@ what order, is captured by their sections; a section is accepted iff its
 timer is pending and could be due (`fireTimer`). A timer section anywhere
 else is a hidden mismatch: the mirror cannot run a callback mid-body. -/
 
-/-- The site of the next record that is not ambient and not a pending
-    section stop, without consuming anything (unlike `peekHiddenSite`). -/
+/-- The site of the next record that is not ambient, without consuming
+    anything (unlike `peekHiddenSite`). -/
 def peekNextSite : M (Option Nat) := do
-  let w ← get
-  let some rs := w.hidden | return none
-  let rec go : List HiddenRecord → List Nat → Option Nat
-    | r :: rest, pending =>
-      if HiddenSite.passive r.site then go rest pending   -- ambient, or a queue record
-      else if pending.contains r.site then go rest (pending.erase r.site)
-      else some r.site
-    | [], _ => none
-  return go rs w.pendingStops
+  let some rs := (← get).hidden | return none
+  return (rs.find? fun r => !HiddenSite.passive r.site).map (·.site)
 
 /-- The D3 unit whose section a record starts: a timer callback or the
     clear worker. -/
@@ -422,13 +419,15 @@ def runTimers (jHi : Nat) : M Bool := do
         fired := true
     else if !fired then break
     else if site == startOf .sendWorker && !d.sendWorkQueue.isEmpty then runOneSendWorker
-    else if (site == startOf .encryptWorker || site == startOf .txWorker)
-        && (!d.encryptQueue.isEmpty || !d.txWorkQueue.isEmpty) then runCryptWorkers
-    else break
+    else
+      -- the crypt work a timer queued, as the records order it, and a crypt
+      -- activation the records resume after a section (`schedule`)
+      runCryptWorkers
+      if (← peekNextSite) == some site then break
   if fired then
     deliverSent
     let d ← getDev
-    if !d.sendWorkQueue.isEmpty || !d.clearWorkQueue.isEmpty || !d.encryptQueue.isEmpty || !d.txWorkQueue.isEmpty then
+    if !d.sendWorkQueue.isEmpty || !d.clearWorkQueue.isEmpty || !d.encryptQueue.empty || !d.txWorkQueue.isEmpty then
       unsupported "work a timer queued outlived the guest's wait"
   return fired
 
@@ -503,7 +502,7 @@ def afterAdvance : M Unit := do
 def requireIdleDevice : M Unit := do
   requireNoCryptWork
   let d ← getDev
-  if !d.decryptQueue.isEmpty || d.peers.toList.any (·.2.napiScheduled) then
+  if !d.decryptQueue.empty || d.peers.toList.any (·.2.napiScheduled) then
     unsupported "receive work queued at wg_stop (its worker's timing)"
 
 /-- `wg_up`: `SIOCSIFFLAGS` with `IFF_UP` (`dev_ifsioc`, `dev_change_flags`).
@@ -685,77 +684,6 @@ def observe : M (Int × Lean.Json) := do
     ("replies", Lean.Json.arr (sortJson replies).toArray),
     ("stats", stats)])
 
-/-- The delivery of an inner packet that GRO flushed at `napi_complete_done`
-    (a cut point): the receive-side stack model, `Leanux/Env/Stack.lean`
-    (W5+W6), decides fail-closed what Linux does with it. -/
-def deliverInner (pkt : List UInt8) : M Unit := Stack.receive pkt
-
-/-- The NET_RX softirq the decrypt worker's `napi_schedule` raised
-    (`____napi_schedule` → `raise_softirq_irqoff` outside `net_rx_action`,
-    which wakes ksoftirqd), placed by the records (design section 5). The
-    hook is called at the worker's loop head and after its enqueue; it runs
-    the poll iff a poll is pending and the next record starts a NET_RX
-    section:
-    - (a) ksoftirqd: the worker switched away at its `cond_resched` (a
-      resched record, consumed by `condResched`, which stops at a NET_RX
-      start), and ksoftirqd ran the softirq in a top-level section;
-    - (b) inline: the worker's next `spin_unlock_bh` (`ptr_ring_consume_bh`)
-      ran it, nested in the worker's section, with no resched record;
-    - (c) an interrupt's exit ran it, nested, before or after the
-      `need_resched()` test: the same records as (b), or a NET_RX section
-      before a resched record.
-    These placements differ only by the worker's state, which the poll does
-    not read (the worker's remaining work is its next ring poll). A fourth,
-    (c') inside `wg_queue_enqueue_per_peer_rx`, differs in the peer's
-    reference count and is not told apart by the records (`napiIrqExit`).
-    Without records (the domain filter) the poll runs at the first hook. -/
-def napiSoftirq : M Unit := do
-  let d ← getDev
-  let pending := d.peers.toList.filterMap fun (pid, p) => if p.napiScheduled then some pid else none
-  if pending.isEmpty then return
-  if (← get).hidden.isSome && (← peekHiddenSite) != some (HiddenSite.sectionStart .netRx).info.id then return
-  if pending.length > 1 then unsupported "NAPI polls of several peers in one softirq"
-  -- net_rx_action → napi_poll(n, &repoll) → n->poll(n, n->weight)
-  runWorker .netRx do
-    for pid in pending do
-      discard <| WG.rxPoll pid WG.NAPI_POLL_WEIGHT fun pkts => pkts.forM deliverInner
-
-/-- (c') An interrupt at `__napi_schedule`'s `local_irq_restore`: its exit
-    (`irq_exit_rcu` → `invoke_softirq`, `in_interrupt()` false in the
-    worker) runs the NET_RX just raised **before** `wg_queue_enqueue_per_peer_rx`
-    drops its peer reference (queueing.h:199-202). The records are those of
-    (c) after the function (and of (b) at the next ring poll): a NET_RX
-    section right after the enqueue. The poll's reads differ only in the
-    peer's reference count, one higher here: its `kref_get_unless_zero` in
-    the allowed-IPs lookup and its `wg_peer_put` compare it (KCOV operands;
-    seen on a contended host, rx_roam_v6 and rx_in_order, 2026-10-06:
-    Linux 1, 1, 3 where (c) gives 1, 1, 2). No record tells the two apart,
-    so the placement is a choice the check enumerates
-    (`World.napiBeforePut`): each choice is one complete execution, and
-    the comparison child's operands must agree with one of them. Without
-    records (the domain filter) the poll is placed by `napiSoftirq`. -/
-def napiIrqExit : M Unit := do
-  if (← get).hidden.isNone then return
-  if !(← getDev).peers.toList.any (·.2.napiScheduled) then return
-  if (← peekHiddenSite) != some (HiddenSite.sectionStart .netRx).info.id then return
-  let w ← get
-  let here := w.napiBeforePut.headD false
-  set { w with napiBeforePut := w.napiBeforePut.drop 1, napiAmbiguous := w.napiAmbiguous + 1 }
-  if here then napiSoftirq
-
-/-- The decrypt worker (`packet_crypt_wq`, queued by `consume_data` in the
-    injecting operation's NET_RX), once that softirq is done, with its
-    NAPI softirq placements and its `cond_resched` (receive.c:505). -/
-def runDecryptAt : Nat → M Unit
-  | 0 => invariant "worker switches nested too deep"
-  | fuel + 1 =>
-    runWorker .decryptWorker (WG.decryptWorker napiSoftirq napiIrqExit (condResched fuel .decryptWorker (runDecryptAt fuel) napiSoftirq))
-
-def runDecryptWorker : M Unit := do
-  runDecryptAt SWITCH_DEPTH
-  if (← getDev).peers.toList.any (·.2.napiScheduled) then
-    invariant "a NAPI poll pending after the decrypt worker (its ring poll runs the softirq)"
-
 /-- `wg_inject`: the fixture's sender sends one datagram to `port` on 127.0.0.1
     or ::1. Only wg0's own socket is in the domain: wg0 up, on that port.
     Loopback delivers it in softirq inside the `sendto`, and the guest waits
@@ -774,33 +702,37 @@ def inject (family port : Nat) (msg : List UInt8) (tos : Nat := 0) (ll : Bool :=
   fixtureSend
   let src ← senderSource family dest tos ll
   runWorker .netRx (WG.wgReceive msg src)
-  -- the queued receive work runs before the guest's wait ends
-  if !(← getDev).handshakeQueue.isEmpty then
-    runWorker .receiveWorker (WG.handshakeReceiveWorker (discard <| condResched SWITCH_DEPTH .receiveWorker (runDecryptAt SWITCH_DEPTH) napiSoftirq))
-  -- or the decrypt worker, with the NAPI poll its packet schedules
-  if !(← getDev).decryptQueue.isEmpty then runDecryptWorker
-  -- then the crypt work the receive worker or the NAPI poll queued (a
-  -- session's keepalive, staged packets on key confirmation)
-  runCryptWorkers (runDecryptAt SWITCH_DEPTH) napiSoftirq
-  deliverSent
+  -- the queued work runs before the guest's wait ends: the receive worker,
+  -- the decrypt worker with the NAPI poll its packet schedules, and the
+  -- crypt work they queue (a session's keepalive, staged packets on key
+  -- confirmation), as the records order them
+  runCryptWorkers
+  let d ← getDev
+  requireDrained "the datagram queued"
+    [!d.handshakeQueue.isEmpty, !d.decryptQueue.empty, !d.encryptQueue.empty, !d.txWorkQueue.isEmpty]
   return msg.length   -- udp_sendmsg returns the datagram's length
 
-/-- `wg_flood` (docs/2026-10-05-e-dos.md §8): the fixture submits an io_uring
-    batch of invalid-MAC1 initiations to wg0's port. On the kernel they cross the
-    `handshake_queue_len >= 512` threshold, set `last_under_load`, and are all
-    dropped at the MAC1 check (reply-free), in one fully-drained receive-worker
-    section. The mirror does not model the flood's scheduling-driven dynamics:
-    it discards the whole flood section's records (§4.1) and records only that
-    `under_load` was set. It requires the flood to have reached the receive
-    worker and crossed the threshold (an `.under_load_now` record); a flood that
-    did not cross, or whose section did not close in this operation (the worker
-    outliving the window, a merged injection — §4.1), fails closed. The op
-    returns 0 (the submission succeeded). -/
+/-- `wg_flood` (docs/2026-10-05-e-dos.md §8, E-B v2): the fixture submits an
+    io_uring batch to wg0's port, the leading valid-MAC1 initiations first and
+    then `count` invalid ones; the whole batch is queued before the single-CPU
+    receive worker runs, so the worker sees `handshake_queue_len` at the
+    batch's size (over the `under_load` threshold) from its first packet, and
+    one fully-drained section handles the batch. The mirror holds the batch as
+    the C does: the ring with the leading valids, the counter at the batch's
+    size. The leading valids run through the real worker, each with its
+    records. The invalid tail is summarized by `floodTailEffect`'s exact
+    contract (the review's 3.4): its only state effects are the counter's drain
+    and `last_under_load`, folded from the tail's own clock records, which
+    carry the C's choices. A tail record the contract does not cover (a
+    mid-flood injection), a flood that did not cross the threshold, or a
+    section that did not close in this operation (the worker outliving the
+    window) fail closed. The op returns 0 (the submission succeeded). -/
 def flood (count port : Nat) (messages : List (List UInt8)) : M Int := do
   let some d := (← getK).wg | unsupported "a flood to a port other than wg0's (no wg0)"
   if !d.running || port != d.incomingPort then unsupported "a flood to a port other than wg0's"
   -- without records (the domain filter runs before Linux), accept the flood: it
-  -- is a natural harness input, inside the domain
+  -- is a natural harness input, inside the domain; the decay then reads the
+  -- placeholder clock (a prediction only)
   if (← get).hidden.isNone then
     modify fun w => { w with lastUnderLoad := some 0 }
     return 0
@@ -817,21 +749,24 @@ def flood (count port : Nat) (messages : List (List UInt8)) : M Int := do
   -- before the receive worker runs: the fixture's io_uring sends' producer
   -- `net_rx` sections and IP-layer cut draws
   let _ ← discardFloodRecords startW cuts
-  -- the receive-worker section: the checked leading valid packets first, then
-  -- the invalid flood discarded. The leading valids go through the real worker
-  -- (which consumes the `cond_resched` records between packets); `floodDepth`
-  -- keeps them over the under_load threshold.
+  -- the receive-worker section: the batch is queued (the ring with the
+  -- leading valids, the counter at the batch's size); the leading valids go
+  -- through the real worker (each packet's records, the `cond_resched`
+  -- between packets), which decrements the counter per packet
   _ ← hidden (.sectionStart .receiveWorker)
   let src ← senderSource 4 0
-  modifyDev fun d => { d with handshakeQueue := messages.map (fun m => (m, src)) }
-  modify fun w => { w with floodDepth := count + messages.length }
-  WG.handshakeReceiveWorker (discard <| condResched SWITCH_DEPTH .receiveWorker (runDecryptAt SWITCH_DEPTH) napiSoftirq)
-  modify fun w => { w with floodDepth := 0 }
-  -- the remaining invalid packets' per-packet reads (under_load / decay /
-  -- reschedule), discarded; a modeled record here (a mid-flood injection) fails
-  let (_, crossed) ← discardFloodRecords stopW
-    ([(HiddenSite.underLoadNow).info.id, (HiddenSite.birthdateExpired).info.id,
-      (HiddenSite.reschedReceive).info.id] ++ cuts)
+  -- the batch's producer side (wg_packet_receive per datagram, receive.c:567-568):
+  -- the ring and the counter, and `wg_cpumask_next_online(&last_cpu)` per
+  -- packet, which on this one-CPU kernel leaves `last_cpu` at 0
+  modifyDev fun d => { d with handshakeQueue := messages.map (fun m => (m, src)),
+                              handshakeQueueLen := d.handshakeQueueLen + messages.length + count,
+                              handshakeLastCpu := 0 }
+  WG.handshakeReceiveWorker (nestedResched .receiveWorker)
+  -- the invalid tail: its clock records fold into `last_under_load`; the
+  -- counter drains to 0 (every tail packet is dequeued and dropped)
+  let (last, crossed) ← floodTailEffect stopW cuts (← get).lastUnderLoad
+  modify fun w => { w with lastUnderLoad := last }
+  modifyDev fun d => { d with handshakeQueueLen := 0 }
   _ ← hidden (.sectionStop .receiveWorker)
   if messages.isEmpty && !crossed then
     throw (.hidden "the flood did not cross the under_load threshold (no under_load record)")
@@ -858,23 +793,18 @@ def pollScheduledInline : M Unit := do
     missing). Without records (the domain filter) a fixed order. -/
 def afterBatch : M Unit := do
   modify fun w => { w with queuedThisCall := [] }   -- the call returned and slept
-  let startOf (w : Worker) := (HiddenSite.sectionStart w).info.id
   if (← get).hidden.isNone then
-    if !(← getDev).decryptQueue.isEmpty then runDecryptWorker
-    runCryptWorkers (runDecryptAt SWITCH_DEPTH) napiSoftirq
+    runCryptWorkers
     runSendWorkers
     return
   for _ in [0:4096] do
-    let d ← getDev
-    let some site ← peekNextSite | break
-    if site == startOf .decryptWorker && !d.decryptQueue.isEmpty then runDecryptWorker
-    else if (site == startOf .encryptWorker && !d.encryptQueue.isEmpty)
-         || (site == startOf .txWorker && !d.txWorkQueue.isEmpty) then runCryptWorkers (runDecryptAt SWITCH_DEPTH) napiSoftirq
-    else if site == startOf .sendWorker && !d.sendWorkQueue.isEmpty then runOneSendWorker
+    schedule
+    if (← peekNextSite) == some (HiddenSite.sectionStart .sendWorker).info.id && !(← getDev).sendWorkQueue.isEmpty then
+      runOneSendWorker
     else break
   let d ← getDev
-  if !d.decryptQueue.isEmpty || !d.encryptQueue.isEmpty || !d.txWorkQueue.isEmpty || !d.sendWorkQueue.isEmpty then
-    unsupported "work the batch queued outlived the guest's wait (its records would be missing)"
+  requireDrained "the batch queued"
+    [!d.decryptQueue.empty, !d.encryptQueue.empty, !d.txWorkQueue.isEmpty, !d.sendWorkQueue.isEmpty]
   deliverSent
 
 /-- `wg_batch`: the fixture's sender submits `items` as one `io_uring_enter`,

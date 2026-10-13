@@ -259,15 +259,17 @@ class OpcodeTableTests(unittest.TestCase):
         # E-B took its reserved code 18 at the int-e merge; the interface commit
         # reserves 20-24 for the W streams (docs/2026-10-11-interface.md)
         self.assertEqual(OPCODES["wg_flood"], 18)
-        # W9 took 23 and 24 (wg_deladdr, wg_delroute), W8 took 22 (wg_netns_close)
-        self.assertEqual(sorted(RESERVED_OPCODES), [20, 21])
+        # W9 took 23 and 24 (wg_deladdr, wg_delroute), W8 took 22 (wg_netns_close),
+        # W2 took 20 and 21 (wg_get_start, wg_get_recv): nothing stays reserved
+        self.assertEqual(RESERVED_OPCODES, {})
+        self.assertEqual((OPCODES["wg_get_start"], OPCODES["wg_get_recv"]), (20, 21))
         self.assertEqual((OPCODES["wg_deladdr"], OPCODES["wg_delroute"], OPCODES["wg_netns_close"]), (23, 24, 22))
         self.assertTrue(all(isinstance(v, str) and v for v in RESERVED_OPCODES.values()))
         self.assertFalse(set(OPCODES.values()) & set(RESERVED_OPCODES))
         self.assertEqual(sorted(c for n, c in OPCODES.items()
                                 if n not in ("pipe2", "wg_advance", "wg_create", "wg_down", "wg_delete", "wg_flood",
                                              "wg_set_mtu", "wg_batch", "wg_deladdr", "wg_delroute", "wg_netns_close",
-                                             "epoll_create1", "epoll_ctl", "epoll_wait")),
+                                             "wg_get_start", "wg_get_recv", "epoll_create1", "epoll_ctl", "epoll_wait")),
                          list(range(1, 14)))
         # W4+W7's codes, allocated by the coordinator (docs/2026-10-11-interface.md)
         self.assertEqual((OPCODES["wg_set_mtu"], OPCODES["wg_batch"]), (25, 26))

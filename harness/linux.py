@@ -17,8 +17,8 @@ import sys
 import subprocess
 import time
 
-from .trace import KCOV_CAPACITY, OPCODES, uses_wireguard, InvalidTrace, loads_trace, serialize_wire, validate_trace
-from .wg import decode_dump
+from .trace import KCOV_CAPACITY, OPCODES, is_stepped, uses_wireguard, InvalidTrace, loads_trace, serialize_wire, validate_trace
+from .wg import decode_dump, decode_messages
 
 ROOT = Path(__file__).resolve().parents[1]
 SHARED = Path(os.environ.get("LEANUX_SHARED_ROOT", ROOT)).resolve()
@@ -273,6 +273,8 @@ def _check_observation(result, trace):
         fields = {"index", "ret", "errno", "bytes"}
         if op["op"] == "wg_get" and type(observation) is dict and observation.get("ret") == 0:
             fields = fields | {"device"}
+        if op["op"] == "wg_get_recv" and type(observation) is dict and observation.get("ret") == 0:
+            fields = fields | {"messages"}   # W2: the messages of one receive
         if op["op"] == "wg_observe":
             fields = fields | {"datagrams", "replies", "stats"}
         if op["op"] == "wg_batch":
@@ -325,24 +327,28 @@ def _check_observation(result, trace):
 
 
 def attach_devices(results, traces, records):
-    """Each successful wg_get has exactly one dump record; its payloads are
-    decoded (coalesced) into the observation's canonical `device`."""
+    """Each successful wg_get and wg_get_recv has exactly one record of its
+    messages (W2 4.5): a wg_get's are coalesced into the observation's
+    canonical `device`; a wg_get_recv's are its `messages`, as decoded."""
     by_trace = {result["id"]: result for result in results}
+    traced = {trace["id"]: trace for trace in traces}
     seen = set()
     for record in records:
-        if type(record) is not dict or set(record) != {"id", "index", "payloads"} or record["id"] not in by_trace:
+        if type(record) is not dict or set(record) != {"id", "index", "messages"} or record["id"] not in by_trace:
             raise ValueError("wireguard record fields or identity")
         key = (record["id"], record["index"])
         observations = by_trace[record["id"]]["observations"]
         if key in seen or type(record["index"]) is not int or not 0 <= record["index"] < len(observations):
             raise ValueError("duplicate or out-of-range wireguard record")
         seen.add(key)
-        if type(record["payloads"]) is not list or not all(type(p) is str for p in record["payloads"]):
-            raise ValueError("wireguard payloads")
-        observations[record["index"]]["device"] = decode_dump(record["payloads"])
+        messages = decode_messages(record["messages"])
+        if traced[record["id"]]["ops"][record["index"]]["op"] == "wg_get_recv":
+            observations[record["index"]]["messages"] = messages
+        else:
+            observations[record["index"]]["device"] = decode_dump(messages)
     for trace in traces:
         for index, op in enumerate(trace["ops"]):
-            expected = op["op"] == "wg_get" and by_trace[trace["id"]]["observations"][index]["ret"] == 0
+            expected = op["op"] in ("wg_get", "wg_get_recv") and by_trace[trace["id"]]["observations"][index]["ret"] == 0
             if expected != ((trace["id"], index) in seen):
                 raise ValueError("missing or unexpected wireguard dump record")
 
@@ -627,8 +633,9 @@ def _collect(outdir, traces, process_returncode, alloc=None):
         for result, trace, fixture in zip(results, traces, fixtures):
             _check_observation(result, trace)
             limit = trace.get("rlimit_nofile", 32)
-            # W8: the foreign-creator fixture adds the injector (8) and the pin (9)
-            reserved = 10 if trace.get("net_fixture") == "foreign-creator" else 8
+            # W8: the foreign-creator fixture adds the injector (8) and the pin (9);
+            # W2: a stepped dump's socket is 8
+            reserved = 10 if trace.get("net_fixture") == "foreign-creator" else 9 if is_stepped(trace) else 8
             expected = {"id": trace["id"], "reserved": list(range(reserved)), "free": [reserved, limit - 1], "rlimit": [limit, limit]}
             if uses_wireguard(trace):
                 expected["net"] = EXPECTED_NET_FIXTURE   # W5: the network namespace's facts

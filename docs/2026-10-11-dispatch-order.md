@@ -95,6 +95,20 @@ its owner (`peer->transmit_handshake_work`, `transmit_packet_work`,
   consuming it, and `resolveUnit w unit queue` names the queued peer by the
   address its queue record gave; an address no record gave, or a unit whose
   peer is not queued, is a hidden mismatch.
+- An association lives as long as the C object that embeds the work struct
+  or the timer (the simulation-target review, 2026-10-12, section 4.3): a
+  peer's units (`transmit_handshake_work`, `transmit_packet_work`,
+  `clear_peer_work`, the five timers) are retired at the peer's release
+  (`kref_release`, `retirePeerUnits` in `peerPut`), the device's at
+  `free_netdev` (`retireDeviceUnits` at the end of `wgDestruct`, with the
+  pending bits). A later record at one of those addresses belongs to the
+  new object the allocator put there, which starts its own association; a
+  fresh device's peer ids restart. Before the rule, a peer re-added at its
+  predecessor's address resolved to the released peer ("the dispatched
+  unit is peer 0's, which is not queued"); `l_remove_readd_queued` and
+  `l_delete_create_send` show the reuse (the same address in the records)
+  and agree. The net namespace's `cleanup_net` unit outlives the device
+  and is not retired (one namespace per trace).
 - The first version captured the queue records out of band and paired them
   with the queued units at dispatch, by count. The full check on the
   dispatch-order oracle failed five transmit traces with "N queue records

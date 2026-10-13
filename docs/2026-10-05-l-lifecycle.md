@@ -1119,7 +1119,14 @@ below covers the merged harness.
   empty buckets' identical outcomes would exceed the protocol's bound of
   4096 branches per trace; the check treats a repeatable decision's
   outcomes as a set, so nothing is lost to it. `gcV4Expired`/`gcV6Expired`
-  are E's (never evaluated with empty tables).
+  are E's (never evaluated with empty tables). Since 2026-10-12 (the
+  simulation-target review, 5.3) the uninit walk (`work` NULL) also
+  uninitializes the entries E's flood made, one `v4_entry_iterate=1` each
+  (their buckets are a cut, so bucket 0 stands for the walk), and the
+  first `wg_ratelimiter_init` starts from empty tables; the periodic GC run
+  (the delayed work, every `HZ`) is not a dispatched unit of this harness
+  and stays outside the domain. `l_delete_ratelimited` (E's flood, then
+  `wg_delete`) agrees.
 - **`lookup_interface.kind_mismatch`'s false span (72) removed**: 72's point
   is the epilogue the `-ENODEV` return shares, which the first bare
   `wg_get` showed.
@@ -1161,3 +1168,17 @@ below covers the merged harness.
 - Controls: the three steering controls and `l_random_port_collision`
   (`unsupported_path`: "the random port draw collides with a bound port")
   are rejected.
+
+### 16.5 The generator class [AGENT 2026-10-12]
+
+`lifecycle_trace` (`evaluator/generate.py`, `LIFECYCLE_SHARE` 0.1 as section
+7 sized it): a bare start with `wg_create` (twice for `EEXIST`, or
+create-delete-create for ifindex 4) and the usual configuration and
+transmissions; a down in the middle with the observation, the dump, a
+transmission that fails and optionally an up again; a port while running
+(free, the listener's or the sender's for `EADDRINUSE`, the same, or 0 with
+`udp_port_draw` steered to 40001-40019); a delete at any point followed by
+operations on the missing device and optionally a create again; and W3's
+queue-then-remove (docs/2026-10-06-w3-w12.md V.6). 200/200 pass the domain
+filter. The counts in `wait_after_up` stay 0 for the lifecycle operations
+(no guest wait), and 1.1 s for `wg_netns_close` (W8).

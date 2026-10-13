@@ -94,7 +94,7 @@ def wgStop : M Unit := do
   if !(← getDev).handshakeQueue.isEmpty then
     unsupported "wg_stop with handshake messages queued for the receive worker (its timing)"
   _ ← branch .stopDrainIter false
-  modifyDev fun d => { d with handshakeQueue := [] }   -- atomic_set(&wg->handshake_queue_len, 0)
+  modifyDev fun d => { d with handshakeQueue := [], handshakeQueueLen := 0 }   -- atomic_set(&wg->handshake_queue_len, 0)
   socketReinit none none
 
 /-- `dev_change_flags` without IFF_UP on an up device: `__dev_close_many`
@@ -124,25 +124,37 @@ def ratelimiterInit : M Int := do
   if ← branch .ratelimiterInitTableV6Err !(← envOk .ratelimiterTable) then return ← undo
   -- queue_delayed_work(system_power_efficient_wq, &gc_work, HZ)
   let key ← hidden .ratelimiterKey
-  modifyK fun k => { k with ratelimiter := { k.ratelimiter with key } }
+  -- the tables are kvcalloc'ed: empty (the last uninit's GC emptied them too)
+  modifyK fun k => { k with ratelimiter := { k.ratelimiter with key, table := [] } }
   return 0
 
-/-- wg_ratelimiter_gc_entries (ratelimiter.c:55-83) on the empty tables of the
-    modeled paths (an entry is made only under load, E's domain, which
-    extends this walk with entries). `work` is NULL on the uninit path: its
-    clock read's value is unused there. -/
+/-- wg_ratelimiter_gc_entries (ratelimiter.c:55-83). With `work` NULL (the
+    uninit path) every entry is uninitialized: `hlist_del_rcu` and the
+    `call_rcu` free, so the tables end empty; the clock read's value is
+    unused there. The periodic run (`work` set: the delayed work, every
+    `HZ`) removes the entries idle for more than a second; it is not a
+    dispatched unit of this harness, so a run inside a trace is outside the
+    domain (E's note: entries persist for the trace). The entries are IPv4
+    (`ratelimiterAllow`: an IPv6 handshake is `unsupported`), and their
+    buckets are a cut (the hsiphash of `(net, ip)` under the random key),
+    so which iteration meets an entry is unknown: the outcomes are reported
+    as a set per operation (a repeatable decision's outcomes are a set in
+    the check), bucket 0 standing for the walk, and the report of a trace
+    is bounded (4096 branches, evaluator/protocol.py). -/
 def gcEntries (work : Bool) : M Unit := do
   let _now ← hiddenClock .ratelimiterGcNow
-  -- The buckets are alike (all empty), so the first iteration's outcomes are
-  -- reported and the rest evaluated silently: a repeatable decision's
-  -- outcomes are a set per operation in the check, and the report of a
-  -- trace is bounded (4096 branches, evaluator/protocol.py).
   for i in [0:RATELIMITER_TABLE_SIZE] do
     let report (dec : Decision) (outcome : Bool) : M Bool :=
       if i == 0 then branch dec outcome else pure outcome
     _ ← report .gcBucketIter true
-    -- hlist_for_each_entry_safe over table_v4[i], then table_v6[i]: empty
+    -- hlist_for_each_entry_safe over table_v4[i]: on the uninit walk every
+    -- entry, wherever its bucket, is met once and uninitialized (65-67)
+    if i == 0 && !work then
+      for _ in (← getK).ratelimiter.table do
+        _ ← branch .gcV4EntryIter true
+      modifyK fun k => { k with ratelimiter := { k.ratelimiter with table := [] } }
     _ ← report .gcV4EntryIter false
+    -- table_v6[i]: no IPv6 entry on the modeled paths
     _ ← report .gcV6EntryIter false
     if ← report .gcHasWork work then unsupported "the ratelimiter GC's cond_resched (a work run)"
   _ ← branch .gcBucketIter false
@@ -155,8 +167,9 @@ def ratelimiterUninit : M Unit := do
   if ← branch .ratelimiterUninitZero (r == 0) then return
   modifyK fun k => { k with ratelimiter := { k.ratelimiter with refcnt := r - 1 } }
   if ← branch .ratelimiterUninitNotLast (r - 1 != 0) then return
-  -- cancel_delayed_work_sync(&gc_work): waits only for a GC run in progress,
-  -- which reads and changes nothing the mirror holds (empty tables)
+  -- cancel_delayed_work_sync(&gc_work): waits only for a GC run in
+  -- progress (not a dispatched unit of this harness; outside the domain)
+  -- wg_ratelimiter_gc_entries(NULL): every entry uninitialized
   gcEntries false
   mayHaveSlept   -- rcu_barrier()
   -- kvfree(table_v4), kvfree(table_v6); kmem_cache_destroy(entry_cache), whose
@@ -208,6 +221,10 @@ def wgNewlink : M Int := do
   if ← branch .newlinkEncryptQueueErr !(← envOk .packetQueueInit) then return ← unwind
   if ← branch .newlinkDecryptQueueErr !(← envOk .packetQueueInit) then return ← unwind
   if ← branch .newlinkHandshakeQueueErr !(← envOk .packetQueueInit) then return ← unwind
+  -- below the cut when the run armed kvmalloc: alloc_netdev_mqs's device
+  -- (before wg_newlink) and the encrypt and decrypt queues' ptr rings
+  -- (`AllocSite.netdevAlloc`, `.ptrRingInit`), before the ratelimiter's key
+  skipCut allocCuts
   let ret ← ratelimiterInit
   if ← branch .newlinkRatelimiterErr (ret < 0) then return ← unwind
   -- register_netdevice: the ifindex (the netns cursor, dev.c:10000-10018),
@@ -245,17 +262,20 @@ def wgDestruct : M Unit := do
   -- destroy_workqueue ×3: drain_workqueue runs what is still queued (work
   -- the environment excludes), then the rescuer's kthread_stop (a sleep)
   let d ← getDev
-  if !d.sendWorkQueue.isEmpty || !d.encryptQueue.isEmpty || !d.txWorkQueue.isEmpty
-      || !d.decryptQueue.isEmpty || !d.clearWorkQueue.isEmpty then
+  if !d.sendWorkQueue.isEmpty || !d.encryptQueue.empty || !d.txWorkQueue.isEmpty
+      || !d.decryptQueue.empty || !d.clearWorkQueue.isEmpty then
     unsupported "wg_destruct with queued work (destroy_workqueue runs it)"
   mayHaveSlept
   -- wg_packet_queue_free: the handshake ring is purged; the crypt rings are
   -- empty (WARN_ON otherwise)
-  modifyDev fun d => { d with handshakeQueue := [] }
+  modifyDev fun d => { d with handshakeQueue := [], handshakeQueueLen := 0 }
   mayHaveSlept   -- rcu_barrier()
   ratelimiterUninit
-  -- memzero_explicit(&wg->static_identity); kvfree ×2; free_netdev
+  -- memzero_explicit(&wg->static_identity); kvfree ×2; free_netdev: the
+  -- device's work structs die with it, as every peer's did at its release
+  -- (docs/2026-10-11-dispatch-order.md, 4)
   modifyK fun k => { k with wg := none }
+  retireDeviceUnits
 
 /-- `RTM_DELLINK` of "wg0" (rtnetlink.c:3383-3436): `-ENODEV` without one;
     else `unregister_netdevice_many_notify` (dev.c:11493-): `dev_close_many`

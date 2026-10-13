@@ -251,4 +251,63 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   needs a comparison row at a declared call site rather than one row per
   report, since the guest deduplicates identical rows. The mirror's control
   flow did not change in the pass (design 16.1).
+- **2026-10-12 [AGENT]** The simulation-target review's change 1 is
+  implemented: dispatch identities are lifetime-scoped (retired at the
+  peer's release and at `free_netdev`), and the last device's
+  `wg_ratelimiter_uninit` uninitializes populated tables as the C does; the
+  review's recommendation, not a change to any standing rule.
+- **2026-10-12 [AGENT, coordinator]** W7 phase 2 decided yes on the phase-1
+  count (design 17.11), under the user's delegation of tactical decisions;
+  then stopped at the course check against the simulation-target review
+  (3.5, 4.1, 4.2): the nested-resume form was removed before any commit, the
+  step split of the draining workers kept, and phase 2 is to be built on
+  suspended activations over a packet store with identities and a ring with
+  cursors (design 17.15).
+- **2026-10-12 [AGENT, coordinator]** Review change 2 implemented as an exact
+  effect contract for the flood's invalid tail (`floodTailEffect`), not as a
+  model of the tail's packets: their bytes are not in the trace, their state
+  effects are entirely in their records. The C's `handshake_queue_len` counter
+  joins the device state; the decay is computed from the recorded clock and
+  resets the static (decision `decay_expired`). `World.floodDepth` is gone.
+  The first checked cookie reply (`e_underload_live`) showed receive.c's two
+  cookie arms cross-jumped into one block at :162; the spans now attribute it
+  to `needs_cookie_mac` and leave the switch's initiation arm unobservable,
+  rather than extending the checker (docs/2026-10-05-e-dos.md, appendix).
+
+- **2026-10-12 [AGENT, coordinator]** W2's rulings on section 8 of the
+  netlink design (`docs/2026-10-06-w1-w2-netlink.md`), made by the
+  coordinator under the user's direction of the same day ("you are
+  empowered to make tactical decisions" towards a control-and-data mirror).
+  Yes to 1 (descriptor 8 as the stepped dump's fixture socket, the two
+  fixture shapes, L's temporary socket at 9, `rlimit_nofile` at least 9 and
+  10 with a lifecycle operation), 2 (the 3776-byte receive with
+  `NETLINK_CAP_ACK` and `MSG_TRUNC`, already landed), 3 (`NLA_F_NESTED` as
+  the sole malformation, already landed), 4 (op 9 keeps the coalesced
+  `device`, with the `[]` restoration and the fail-noisy rejections), 5
+  (`expect` on unsteered traces) and 6 (256 allowed IPs by accumulation, 32
+  per `wg_set`, the label budget measured before the generator). No to 7
+  (model `-EBUSY`) and 8 (anchor af_netlink.c): `-EBUSY`, `-EAGAIN` and the
+  receive of a lone `NLMSG_DONE` stay explicit `unsupported` outcomes and
+  N2-M13 is dropped. Reason: the smallest anchored surface outside WireGuard
+  for a control-and-data mirror; the three af_netlink.c decisions would
+  anchor code the mirror otherwise treats as the environment.
+  Implementer's choices under them [AGENT, fork of the coordinator]: the
+  receive of a start error's acknowledgement is in the domain (it carries
+  the lookup's error code, which the start itself does not return; no
+  WireGuard code runs, as for the receive of the chunk carrying the DONE); a
+  stepped trace and the foreign-creator fixture exclude each other (both
+  need descriptor 8); no check rule for the receive that runs no dump call
+  (every socket operation reports the descriptor lookup's decisions, so the
+  existing rules apply unchanged); `MAX_BRANCHES` stays 32768 (the 256-IP
+  IPv6 trace measures 18,681 labels); the stepped socket's `netlink_autobind`
+  draw (af_netlink.c:820, the collision with the fixture socket's port id)
+  is a below-cut hidden site (id 170), consumed once at the first
+  `wg_get_start`.
+- **2026-10-12 [AGENT, fork of the coordinator]** The NET_RX placement rule
+  covers the encrypt worker's ring poll: a pending NAPI poll runs at any
+  worker's `ptr_ring_consume_bh` when the next record starts a NET_RX
+  section (D2's placement (b), until now the decrypt worker's loop head
+  only), because the kernel may switch from the decrypt worker's
+  `cond_resched` to the encrypt kworker before ksoftirqd (w7_mixed under
+  eight guests, design 17.17). Exact and fail-closed as before; no retry.
 

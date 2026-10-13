@@ -1,5 +1,6 @@
 import Leanux.WG.Handshake
 import Leanux.WG.PrevQueue
+import Leanux.WG.PtrRing
 
 /-!
 # drivers/net/wireguard/receive.c — the receive path and the handshake worker
@@ -219,25 +220,26 @@ def receiveHandshakePacket (msg : List UInt8) (src : SkbSource) : M Unit := do
   if ← branch .hsCookie (messageType msg == MESSAGE_HANDSHAKE_COOKIE) then
     cookieMessageConsume msg
     return
-  -- `under_load = handshake_queue_len >= MAX_QUEUED_INCOMING_HANDSHAKES / 8`.
-  -- A `wg_flood` adds `floodDepth` invalid packets ahead of the checked leading
-  -- packet, so its queue is over the threshold (E-B §4.1, queue-depth design).
-  let queueLen := (← getDev).handshakeQueue.length + (← get).floodDepth
+  -- `under_load = handshake_queue_len >= MAX_QUEUED_INCOMING_HANDSHAKES / 8`
+  -- (receive.c:112): the counter, which a `wg_flood`'s batch has filled before
+  -- the worker runs (E-B v2, the queue-depth design).
   let mut underLoad := false
-  if ← branch .hsUnderLoad (queueLen ≥ MAX_QUEUED_INCOMING_HANDSHAKES / 8) then
+  if ← branch .hsUnderLoad ((← getDev).handshakeQueueLen ≥ MAX_QUEUED_INCOMING_HANDSHAKES / 8) then
     -- `last_under_load = ktime_get_coarse_boottime_ns()` (receive.c:115)
     let now ← hiddenClock .underLoadNow
     modify fun w => { w with lastUnderLoad := some now }
     underLoad := true
-  -- `else if (last_under_load)`: a kernel-global, set by a flood this trace ran.
-  -- Every normal trace keeps it `none` (the constant-false decay guard, §4.2).
+  -- `else if (last_under_load)`: the function-static (receive.c:100), nonzero
+  -- after a flood this trace ran (every normal trace keeps it `none`, §4.2).
   else if ← branch .hsWasUnderLoad (← get).lastUnderLoad.isSome then
-    -- `under_load = !wg_birthdate_has_expired(last_under_load, 1)` (receive.c:117):
-    -- the clock is read (`.birthdateExpired`); its comparison operand is a cut
-    -- (the flood that set `last_under_load` is discarded), and the generator
-    -- places the injection within the decay so `under_load` is true (§4.1).
-    _ ← hiddenClock .birthdateExpired
-    underLoad := true
+    let some last := (← get).lastUnderLoad | invariant "unreachable"
+    -- `under_load = !wg_birthdate_has_expired(last_under_load, 1)` (receive.c:117),
+    -- the recorded clock against the saved time; `if (!under_load)
+    -- last_under_load = 0` (receive.c:118-119): the decay's reset
+    let expired ← birthdateHasExpired last 1
+    underLoad := !expired
+    if ← branch .hsDecayExpired expired then
+      modify fun w => { w with lastUnderLoad := none }
   let macState ← cookieValidatePacket msg src underLoad
   -- packet_needs_cookie (receive.c:123-132):
   -- `(under_load && mac == WITH_COOKIE) || (!under_load && mac == NO_COOKIE)`
@@ -289,42 +291,51 @@ def receiveHandshakePacket (msg : List UInt8) (src : SkbSource) : M Unit := do
   timersTraversal pid
   peerPut peer
 
-/-- wg_packet_handshake_receive_worker (receive.c:206-218): drains the
-    handshake queue. The environment runs it when the queued work runs. -/
-def handshakeReceiveWorker (condResched : M Unit) : M Unit := do
-  for _ in [0:MAX_QUEUED_INCOMING_HANDSHAKES] do
-    match (← getDev).handshakeQueue with
-    | [] => do
-      _ ← branch .workerConsumed false
-      return
-    | (msg, src) :: _ =>
-      _ ← branch .workerConsumed true   -- ptr_ring_consume_bh
-      receiveHandshakePacket msg src
-      -- dev_kfree_skb; atomic_dec(&handshake_queue_len)
-      modifyDev fun d => { d with handshakeQueue := d.handshakeQueue.drop 1 }
-      condResched   -- receive.c:216: other kworkers may run here (the environment decides)
-  invariant "the handshake queue did not drain"
+/-- One iteration of wg_packet_handshake_receive_worker (receive.c:206-218):
+    the ring poll (`false` when empty) and the handshake packet consumed.
+    The environment runs the worker when the queued work runs. -/
+def receiveStep : M Bool := do
+  match (← getDev).handshakeQueue with
+  | [] => do
+    _ ← branch .workerConsumed false
+    return false
+  | (msg, src) :: _ =>
+    _ ← branch .workerConsumed true   -- ptr_ring_consume_bh: the ring slot is taken first
+    modifyDev fun d => { d with handshakeQueue := d.handshakeQueue.drop 1 }
+    receiveHandshakePacket msg src
+    -- dev_kfree_skb; atomic_dec(&handshake_queue_len) (receive.c:215)
+    modifyDev fun d => { d with handshakeQueueLen := d.handshakeQueueLen - 1 }
+    return true
+
+/-- The whole loop: `receiveStep` per item, then `condResched`
+    (receive.c:216: other kworkers may run here, the environment decides;
+    W7 phase 2 interleaves the iterations, `workerIter`). -/
+def handshakeReceiveWorker (condResched : M Unit) : M Unit :=
+  workerLoop .receiveWorker none receiveStep condResched
+    MAX_QUEUED_INCOMING_HANDSHAKES "the handshake queue did not drain"
 
 /-- wg_queue_enqueue_per_device_and_peer (queueing.h:157-178) for the
     decrypt queue and the peer's `rx_queue`: 0, or (outside the domain)
     `-ENOSPC` / `-EPIPE`. One item per queue is the domain (design section
     8): the decrypt worker of the previous injection has run. -/
-def enqueuePerDeviceAndPeerRx (pkt : RxPacket) : M Int := do
+def enqueuePerDeviceAndPeerRx (id : SkbId) : M Int := do
   -- atomic_set_release(&PACKET_CB(skb)->state, PACKET_STATE_UNCRYPTED)
-  let pkt := { pkt with state := .uncrypted }
+  setRxSkb id fun p => { p with state := .uncrypted }
+  let pkt ← getRxSkb id
   let p ← getPeer pkt.peer
   -- `!wg_prev_queue_enqueue(peer_queue, skb)`: the queue's count is at MAX_QUEUED_PACKETS
   if ← branch .enqueuePeerQueueFull (p.rxQueue.count ≥ MAX_QUEUED_PACKETS) then return -ENOSPC
-  setPeer pkt.peer { p with rxQueue := p.rxQueue.enqueue pkt }   -- W7: a multi-item queue
+  setPeer pkt.peer { p with rxQueue := p.rxQueue.enqueue id }   -- W7: a multi-item queue
   let d ← getDev
   let cpu ← cpumaskNextOnlineFrom d.decryptLastCpu
   modifyDev fun d => { d with decryptLastCpu := cpu }
-  if ← branch .enqueueRingFull (d.decryptQueue.length ≥ MAX_QUEUED_PACKETS) then return -EPIPE
+  -- `ptr_ring_produce_bh`: the producer's slot is occupied (`PtrRing.full`)
+  if ← branch .enqueueRingFull d.decryptQueue.full then return -EPIPE
   -- queue_work_on(cpu, wq, &per_cpu_ptr(device_queue->worker, cpu)->work):
   -- queued iff not pending, with its record (dispatch order); the
   -- environment runs the decrypt worker while its ring holds packets
   queueDeviceWork .decryptWorker
-  modifyDev fun d => { d with decryptQueue := d.decryptQueue ++ [pkt] }
+  modifyDev fun d => { d with decryptQueue := d.decryptQueue.produce id }
   return 0
 
 /-- wg_queue_enqueue_per_peer_rx (queueing.h:190-203): the packet's state is
@@ -334,16 +345,17 @@ def enqueuePerDeviceAndPeerRx (pkt : RxPacket) : M Int := do
     peeked (an UNCRYPTED head the poll stopped at) or queued; the oldest
     still-UNCRYPTED packet of its keypair is the one the worker holds, since
     both the ring and the queue are FIFO. -/
-def enqueuePerPeerRx (irqExit : M Unit) (pkt : RxPacket) (state : PacketState) : M Unit := do
-  let pid := (← getKeypair pkt.keypair).peer   -- PACKET_PEER(skb)
+def enqueuePerPeerRx (irqExit : M Unit) (id : SkbId) (state : PacketState) : M Unit := do
+  let pid := (← getKeypair (← getRxSkb id).keypair).peer   -- PACKET_PEER(skb)
   peerGet pid
   let p ← getPeer pid
-  -- atomic_set_release(&PACKET_CB(skb)->state, state)
-  let some rxQueue := p.rxQueue.updateFirst (fun q => q.keypair == pkt.keypair && q.state == .uncrypted)
-      (fun _ => { pkt with state })
-    | invariant "a decrypted packet that is not on its peer's rx_queue"
+  -- atomic_set_release(&PACKET_CB(skb)->state, state): the one skb the
+  -- peer's rx_queue (queued or peeked, W7) and the worker name (review 4.2)
+  if !(p.rxQueue.all.contains id) then
+    invariant "a decrypted packet that is not on its peer's rx_queue"
+  setRxSkb id fun q => { q with state }
   -- napi_schedule: NAPI_STATE_SCHED, and NET_RX raised (a cut point)
-  setPeer pid { p with rxQueue, napiScheduled := true }
+  setPeer pid { p with napiScheduled := true }
   irqExit
   peerPut (some pid)
 
@@ -369,12 +381,13 @@ def consumeData (msg : List UInt8) (src : SkbSource) (ds : Nat) : M Unit := do
     keypairPut (some id) false
     peerPut peer
     return
-  let pkt : RxPacket := { peer := pid, keypair := id, bytes := msg, source := src, ds }
-  let ret ← enqueuePerDeviceAndPeerRx pkt
+  -- PACKET_CB(skb)->keypair = keypair: the skb enters the store (review 4.2)
+  let skb ← newRxSkb { peer := pid, keypair := id, bytes := msg, source := src, ds }
+  let ret ← enqueuePerDeviceAndPeerRx skb
   -- `unlikely(ret == -EPIPE)`: wg_queue_enqueue_per_peer_rx(skb, PACKET_STATE_DEAD),
   -- whose napi_schedule in this softirq is polled by the same net_rx_action
   -- pass (W7, 5.2; the ring is full only on the 1024-item tier)
-  if ← branch .dataEpipe (ret == -EPIPE) then enqueuePerPeerRx (pure ()) pkt .dead
+  if ← branch .dataEpipe (ret == -EPIPE) then enqueuePerPeerRx (pure ()) skb .dead
   -- `likely(!ret || ret == -EPIPE)`
   if ← orM (branch .dataEnqueueOk (ret == 0)) (branch .dataEnqueueOkEpipe (ret == -EPIPE)) then return
   invariant "unreachable"
@@ -401,13 +414,15 @@ def packetReceive (msg : List UInt8) (src : SkbSource) : M Unit := do
   if ← branch .rxHandshake (t == MESSAGE_HANDSHAKE_INITIATION || t == MESSAGE_HANDSHAKE_RESPONSE
                             || t == MESSAGE_HANDSHAKE_COOKIE) then
     if ← branch .rxRngNotReady false then unsupported "unreachable"   -- the guest waits for the RNG
-    let queueLen := (← getDev).handshakeQueue.length
-    -- `handshake_queue_len > MAX_QUEUED_INCOMING_HANDSHAKES / 2`: the trylock path
-    if ← branch .rxQueueBusy (queueLen > MAX_QUEUED_INCOMING_HANDSHAKES / 2) then
+    -- `handshake_queue_len > MAX_QUEUED_INCOMING_HANDSHAKES / 2` (the counter):
+    -- the trylock path
+    if ← branch .rxQueueBusy ((← getDev).handshakeQueueLen > MAX_QUEUED_INCOMING_HANDSHAKES / 2) then
       unsupported "spin_trylock_bh on a busy handshake queue"
     -- ptr_ring_produce_bh fails when the ring (MAX_QUEUED_INCOMING_HANDSHAKES) is full
-    if ← branch .rxProduceFailed (queueLen ≥ MAX_QUEUED_INCOMING_HANDSHAKES) then return   -- drop
-    modifyDev fun d => { d with handshakeQueue := d.handshakeQueue ++ [(msg, src)] }
+    if ← branch .rxProduceFailed ((← getDev).handshakeQueue.length ≥ MAX_QUEUED_INCOMING_HANDSHAKES) then return   -- drop
+    -- atomic_inc(&wg->handshake_queue_len) (receive.c:567)
+    modifyDev fun d => { d with handshakeQueue := d.handshakeQueue ++ [(msg, src)],
+                                handshakeQueueLen := d.handshakeQueueLen + 1 }
     cpumaskNextOnline
     -- queue_work_on(cpu, handshake_receive_wq, ...): queued iff not pending,
     -- with its record (dispatch order); the environment runs the worker

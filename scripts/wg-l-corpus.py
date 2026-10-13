@@ -220,7 +220,35 @@ def traces():
                                    inject(session_response.message), OBSERVE, GET], d1.steer_initiation(), SESSION),
         # A bare fixture's RTM_DELLINK: ENODEV from the core.
         "l_delete_absent": (BARE, [DELETE, OBSERVE], None, None),
+        # Lifetime-scoped dispatch identities (the simulation-target review,
+        # 2026-10-12, section 4.3; docs/2026-10-11-dispatch-order.md, 4). The
+        # keepalive peer's initiation at wg_up queues and runs its handshake
+        # work (the first steer); the peer is removed (its release retires
+        # the association of its work struct's address); a new peer object,
+        # which the slab allocator may put at the same address, is added
+        # with the keepalive and its initiation runs (the second steer): the
+        # dispatch names the new peer, not the released one.
+        "l_remove_readd_queued": (
+            None, [configure(keepalive=25), UP, OBSERVE, set_device(peers=[W3_REMOVE(PEER)]),
+                   set_device(peers=[peer(keepalive=25)]), OBSERVE, GET],
+            d1.steer_initiation() + second_steer,
+            ["set_peer.remove_me=1", "wg_packet_send_staged_packets.no_keypair=1"]),
+        # The device deleted and recreated: the second device's peer 0 is a
+        # new object (its address may differ) whose handshake work the
+        # dispatch names afresh; free_netdev retired the first device's
+        # identities and pending bits.
+        "l_delete_create_send": (
+            BARE, [CREATE, configure(keepalive=25), UP, OBSERVE, DELETE, CREATE, configure(keepalive=25), UP,
+                   OBSERVE, GET],
+            d1.steer_initiation() + second_steer, ["wg_packet_send_staged_packets.no_keypair=1"]),
     }
+    # The last device deleted with a populated ratelimiter table (the review's
+    # 5.3): E's flood made an entry (e_underload_ratelimit, its first five
+    # operations verbatim); wg_ratelimiter_uninit's GC walk with a NULL work
+    # uninitializes it (v4_entry_iterate=1), and the dump finds no device.
+    e = json.loads((ROOT / "corpus/wireguard/e_underload_ratelimit.json").read_text())
+    out["l_delete_ratelimited"] = ({"net_fixture": e["net_fixture"]}, e["ops"][:5] + [DELETE, GET], e["steer"],
+                                   e["expect"] + ["wg_ratelimiter_gc_entries.v4_entry_iterate=1"])
     # With D3 (section 7) [AGENT, int-dl follow-up 2].
     retransmit_steer = d2_initiator_steer()
     zk_ops, _, zk_steer = d3.session()

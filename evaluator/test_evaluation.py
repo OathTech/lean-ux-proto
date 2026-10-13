@@ -335,8 +335,10 @@ class EvaluationChecks(unittest.TestCase):
         # poll 2 before it (block 3: 1 vs 3; its put 2 vs 1)
         linux = {'records': [[4, '0x7', '0x9', '0x2'], [4, '0x1', '0x2', '0x1', '1'], [4, '0x3', '0x2', '0x3', '2'],
                              [4, '0x1', '0x3', '0x1', '3'], [4, '0x2', '0x1', '0x3', '2']]}
-        problems, checked, before_put = check.section_agreement(trace, [after, before], [linux], sections, loc, decisions)
-        self.assertEqual((problems, checked, before_put), ([], 6, [2]))
+        # poll 1 after the put, poll 2 before it: the selection the caller
+        # replays as the mirror's vector
+        self.assertEqual(check.section_agreement(trace, [after, before], [linux], sections, loc, decisions),
+                         ([], [2], [False, True]))
         # poll 2's section under the before-put run but its put under the
         # after-put one is no execution: the span is taken as a whole
         mixed = {'records': linux['records'][:4] + [[4, '0x3', '0x2', '0x3', '2']]}
@@ -357,6 +359,34 @@ class EvaluationChecks(unittest.TestCase):
                              [4, '0x1', '0x3', '0x1', '2'], linux['records'][4]]}
         problems, _, _ = check.section_agreement(trace, [after, before], [moved], sections, loc, decisions)
         self.assertTrue(any(p['problem'] == 'no comparison recorded at condition' for p in problems))
+
+    def test_selected_placement_replay_compares_per_section(self):
+        # The selected placement's replay (419872d) is one execution of the
+        # placement runs: a before-put placement runs the poll's NET_RX
+        # section before the worker's put, so the flat branch order differs
+        # from the after-put run while the control flow per section is the
+        # same; that, the open polls and the returns are what the replay must
+        # share (int-r: rx_duplicate with the vector [True] was rejected
+        # against the after-put run's flat order).
+        def run(order):
+            branches = {'task': dict(index=4, label='task.cmp=0', operands=[7, 9]),
+                        'poll': dict(index=4, label='poll.refcount=1', operands=[1, 3], section=1),
+                        'put': dict(index=4, label='put.refcount=1', operands=[2, 1]),
+                        'put2': dict(index=4, label='put.refcount=0', operands=[0, 1])}
+            return {'branches': [dict(branches[k]) for k in order], 'observations': [{'ret': 0}],
+                    'napi_irq_ambiguous': 1}
+        after = run(['task', 'put', 'put2', 'poll'])
+        selected = run(['task', 'poll', 'put', 'put2'])   # the vector [True]: the poll before the put
+        self.assertEqual(check.placement_shape(after), check.placement_shape(selected))
+        self.assertIsNone(check.replay_problem(selected, after, 1))
+        self.assertIsNone(check.replay_problem(after, after, 1))
+        # a different branch, order within a section, poll count or return is not an execution of the runs
+        self.assertTrue(check.replay_problem(run(['task', 'poll', 'put2', 'put']), after, 1))
+        changed = run(['task', 'poll', 'put', 'put2'])
+        changed['branches'][1]['label'] = 'poll.refcount=0'
+        self.assertTrue(check.replay_problem(changed, after, 1))
+        self.assertTrue(check.replay_problem(selected, after, 2))
+        self.assertTrue(check.replay_problem(dict(selected, observations=[{'ret': -1}]), after, 1))
 
     def test_netrx_sections_from_the_remote_rows(self):
         # the comparison child's remote rows, in area order: block numbers
@@ -428,6 +458,44 @@ class EvaluationChecks(unittest.TestCase):
         undeclared = check.decision_functions_run({'pcs': ['0xa', '0xc']}, loc, dict(config, shared_exits=[]),
                                                   decisions)
         self.assertEqual(undeclared, ({'vfs_write', 'file_end_write'}, 0))
+
+    def test_shared_exit_witnesses_nothing_on_the_early_return_path(self):
+        # The merged-return-block class (int-r: file_update_time's "nothing"
+        # return shares its block with the inlined __file_update_time, whose
+        # frame at the call line witnesses the opposite outcome): a declared
+        # shared exit reached by an early return neither counts as the helper
+        # running nor witnesses an outcome; with the entering block covered,
+        # or undeclared, it does both.
+        config = {'files': ['fs/eventfd.c'], 'functions': ['eventfd_read'], 'known_gaps': [],
+                  'shared_exits': [{'function': 'helper', 'frames': ['fs/eventfd.c:230', 'fs/eventfd.c:222'],
+                                    'unless_covered': ['fs/eventfd.c:231', 'fs/eventfd.c:222'], 'note': ''}],
+                  'operand_exclusions': []}
+        table = check.parse_decisions([self.decision('eventfd_read.short_buffer', 220, [(221, 221)], [(222, 222)])],
+                                      config)
+        instrumented = {'fs/eventfd.c:221', 'fs/eventfd.c:222'}
+        witnesses = check.witness_table(table, instrumented, {'eventfd_read'})
+        loc = {'0xa': [{'function': 'eventfd_read', 'source': '/x/.deps/linux/fs/eventfd.c:221'}],
+               '0xs': [{'function': 'helper', 'source': '/x/.deps/linux/fs/eventfd.c:230'},
+                       {'function': 'eventfd_read', 'source': '/x/.deps/linux/fs/eventfd.c:222'}],
+               '0xe': [{'function': 'helper', 'source': '/x/.deps/linux/fs/eventfd.c:231'},
+                       {'function': 'eventfd_read', 'source': '/x/.deps/linux/fs/eventfd.c:222'}]}
+        trace = {'version': 1, 'id': 'se', 'ops': [{'op': 'read', 'fd': {'literal': 8}, 'count': 8}]}
+        def run(pcs, cfg=config):
+            model = {'branches': [{'index': 0, 'label': 'eventfd_read.short_buffer=1'}]}
+            coverage = [{'id': 'se', 'index': 0, 'count': len(pcs), 'pcs': pcs}]
+            problems, gaps = control_flow(trace, model, coverage, loc, cfg, table, witnesses, instrumented,
+                                          {'eventfd_read'})
+            return [p['problem'] for p in problems], gaps
+        self.assertEqual(check.shared_exit_points({'pcs': ['0xa', '0xs']}, loc, config), {'0xs': 'helper'})
+        self.assertEqual(check.shared_exit_points({'pcs': ['0xa', '0xs', '0xe']}, loc, config), {})
+        # the early return's path: the point is exempt and counted with the gaps
+        problems, gaps = run(['0xa', '0xs'])
+        self.assertEqual(problems, [])
+        self.assertEqual(gaps['shared exits reached by an early return (kcov.json)'], 1)
+        # the helper's own path covers the entering block: the point witnesses the opposite outcome
+        self.assertIn('opposite outcome covered', run(['0xa', '0xs', '0xe'])[0])
+        # undeclared: the same
+        self.assertIn('opposite outcome covered', run(['0xa', '0xs'], dict(config, shared_exits=[]))[0])
 
     def test_order_within_a_function(self):
         config = {'files': ['fs/eventfd.c'], 'functions': ['eventfd_write'], 'known_gaps': [],
@@ -694,6 +762,42 @@ class D2GeneratorChecks(unittest.TestCase):
         others = [t['ops'] for t in b if not d2(t)]
         self.assertGreater(len(b) - len(others), 20)
         self.assertEqual(others, [t['ops'] for t in a][:len(others)])
+
+    def test_lifecycle_routing_netns_shares_keep_the_stream(self):
+        import json
+        from evaluator.generate import generate_wireguard
+        a = generate_wireguard(11, 120, steered=0.3, data=0.2)
+        self.assertEqual(a, generate_wireguard(11, 120, steered=0.3, data=0.2, lifecycle=0.0, routing=0.0, netns=0.0))
+        base = {json.dumps(t['ops'], sort_keys=True) for t in a}
+        for share in ('lifecycle', 'routing', 'netns'):
+            # the class's traces come from their own generator: the others keep
+            # their content and order, only their identifiers shift
+            b = generate_wireguard(11, 120, steered=0.3, data=0.2, **{share: 0.3})
+            others = [t['ops'] for t in b if json.dumps(t['ops'], sort_keys=True) in base]
+            self.assertGreater(len(b) - len(others), 15, share)
+            self.assertEqual(others, [t['ops'] for t in a][:len(others)], share)
+
+    def test_lifecycle_routing_netns_multi_peer_traces(self):
+        import random
+        from evaluator.generate import (WAIT_BUDGET_SECONDS, lifecycle_trace, multi_peer_timers, netns_trace,
+                                        routing_trace, wait_after_up)
+        for name, fn in (('lifecycle', lifecycle_trace), ('routing', routing_trace), ('netns', netns_trace),
+                         ('multi', multi_peer_timers)):
+            rng = random.Random(7)
+            shapes = set()
+            for i in range(200):
+                trace = validate_trace(fn(rng, f'{name}{i}'))
+                self.assertLessEqual(wait_after_up(trace['ops']), WAIT_BUDGET_SECONDS, name)
+                shapes.add(tuple(op['op'] for op in trace['ops']))
+            self.assertGreater(len(shapes), 1 if name != 'multi' else 0, name)
+        rng = random.Random(7)
+        trace = multi_peer_timers(rng, 'm')
+        sites = [s for s, _ in trace['steer']]
+        n = len(trace['ops'][0]['config']['peers'])
+        # each of the 2n initiations: three draws, then the jitter, in encounter order
+        self.assertEqual(sites, ['init_ephemeral', 'tai64n_now', 'index_draw', 'retransmit_jitter'] * (2 * n))
+        rng = random.Random(7)
+        self.assertTrue(any(t.get('net_fixture') == 'bare' for t in (lifecycle_trace(rng, f'l{i}') for i in range(100))))
 
     def test_steered_data_traces(self):
         import random

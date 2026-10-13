@@ -89,7 +89,9 @@ def rst4 (pkt : List UInt8) : List UInt8 :=
     where D2 picks up the confirmation flush: `runCryptWorkers` after the
     decrypt worker, or inside its `cond_resched` (`Env.condResched`). -/
 def reply4 (dst : Nat) (bytes : List UInt8) : M Unit := do
-  skipCut [.inetEhashSecret]
+  -- the ehash secret, and the reply's own skb allocations (ip_append_data:
+  -- `AllocSite.ipAppendDataSkb`, recorded when a chunk arms the ranges)
+  skipCut ([.inetEhashSecret] ++ allocCuts)
   -- W4: `wg_xmit` reads `dst_mtu` (device.c:173): the fixture's route MTU to
   -- the destination if `net_fixture.routes` names one, else `dev->mtu`
   let mtu := (((← get).routes.find? fun (f, a, _) => f == 4 && a == dst).map (·.2.2)).getD (← getDev).mtu

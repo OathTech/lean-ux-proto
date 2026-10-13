@@ -137,6 +137,26 @@ def traces():
     return out
 
 
+def tier():
+    """The full-ring tier's first trace (section 17.16, the review's ring
+    counterexample): one transmit in a batch, consumed by the tx worker during
+    the wait (ptr_ring head 1, tail 0, slot 0 still occupied until the batch
+    rule clears it), then a batch of 1024 transmits: the 1024th produce wraps
+    to slot 0 and fails in C (-ENOSPC from __ptr_ring_produce, mapped to
+    -EPIPE by wg_queue_enqueue_per_device_and_peer) with 1023 items staged.
+    Written to corpus/w7-tier, outside the default suites, until the mirror's
+    rings (task/rings) land; the Linux-only probe scripts/wg-w7-tier-probe.py
+    reads it. Keepalive-size payloads (one byte) keep the wire and the
+    listeners' drain small."""
+    out = {}
+    ops, sess, steer = d3.session(keepalive=5)
+    first = [xmit_item(d2.payload(1, 1))]
+    rest = [xmit_item(d2.payload(1, 2 + k)) for k in range(1024)]
+    out["w7_ring_wrap"] = (ops + [batch(first, 200), batch(rest, 1000), OBSERVE, GET], steer,
+                           SESSION + d2.DATA_SENT)
+    return out
+
+
 def controls():
     """Beyond the WireGuard boundary (section 16): the mirror answers
     `unsupported` (fail-noisy), never a prediction. Each is a well-formed
@@ -170,7 +190,8 @@ def finish(out, validate=True):
 
 def main():
     for directory, written in ((ROOT / "corpus" / "wireguard", finish(traces())),
-                               (ROOT / "corpus" / "w47-controls", finish(controls(), validate=False))):
+                               (ROOT / "corpus" / "w47-controls", finish(controls(), validate=False)),
+                               (ROOT / "corpus" / "w7-tier", finish(tier()))):
         directory.mkdir(exist_ok=True)
         for name, trace in written.items():
             (directory / f"{name}.json").write_text(json.dumps(trace, indent=2) + "\n")
