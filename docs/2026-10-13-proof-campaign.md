@@ -14,19 +14,19 @@ differential check or guest run.
 | Result | Progress |
 | --- | --- |
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay and independent review checked. Seccomp frame carry checked. |
-| R2 lifetime safety | Keypair operation endpoints, peer allocation/reference helpers, packet primitives, failure-retaining peer creation/release and mixed receive-enqueue observations, plus stale-cursor finding checked; caller/lifecycle and whole-run internal-access coverage remain in progress. |
+| R2 lifetime safety | Keypair operation endpoints, peer allocation/reference helpers, packet primitives, failure-retaining peer creation/release and mixed receive-enqueue/decrypt-iteration observations, plus stale-cursor finding checked; caller/lifecycle and whole-run internal-access coverage remain in progress. |
 | R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, plus pure insertion structure and last-writer lookup, proved; device-root linkage, original mutation/history and path refinements remain open. Path proofs follow R2. |
 | R4 delivery | Not started; drop characterisation waiting on W7 full-ring tier's explanation of the two drops. |
 | R5 key lifetime | Not started; time half waiting on review items 7 and 8 on the timer model. |
 | R6 flood resistance | Not started. |
 
-**Current validation.** The full proof gate passes 153 build jobs and 76
-terminal statements (ReplayWindow 15, R1 9, R2 42, R3 10), with only permitted
+**Current validation.** The full proof gate passes 157 build jobs and 81
+terminal statements (ReplayWindow 15, R1 9, R2 47, R3 10), with only permitted
 axioms. The default model build passes 60 jobs; the unit tier passes 93 tests
-in 22.042 seconds with one skip. Both explicit-record witness replays below
+in 21.515 seconds with one skip. Both explicit-record witness replays below
 were rechecked at the seccomp carry and agree with the original runner.
 Independent reviews cover peer creation, the seccomp carry, mixed enqueue,
-and pure trie insertion.
+decrypt execution, and pure trie insertion.
 
 **Shared carry.** Signal/task and pipe helper frames, seccomp entry/tail frames
 and arbitrary prefill preservation keep the seven-field WG projection intact.
@@ -221,6 +221,19 @@ scheduler closure and retained-reference ownership remain open. In particular,
 unobserved internal accesses. The independent review checked those uses in this
 helper and its exact source-call order.
 
+**Decrypt execution.** `KeypairAccess` proves the mixed setter contract from
+equality with the current resident stamp. `Decrypt` observes the original
+`decryptPacket`, including its second keypair read before a rejection update.
+The lifted clock, allocation and branch helpers contain no lifetime-store
+accesses. An exact failure equation retains the first keypair read if the
+rejection expression fails; it is a helper equation, not a new trace finding.
+`DecryptWorker` observes the complete original step and iteration, with softirq,
+IRQ-exit and rescheduling callbacks in source order. `Logged/PrefixWorkers`
+shares the generic iteration composition. Callback contracts require safe
+appended histories and the mixed invariant on success, permitting identity
+changes. Five terminals export packet and iteration erasure/preservation plus
+the failure equation. Concrete callbacks and whole scheduler closure remain open.
+
 **Concrete reference finding.** An eight-operation, explicit-record accepted
 mirror run creates 28 peers, starts a stepped dump, deletes wg0, creates a new
 wg0 and 27 replacement peers, then receives a chunk. The receive returns the
@@ -263,12 +276,16 @@ Most effort is caller coverage and reusable framing. Peer allocation took six
 compile passes, shared file frames four, failure-prefix observation nine,
 the shared kernel-frame migration three, and peer creation ten over about
 twenty-one minutes. Mixed receive enqueue took nineteen compile passes over
-about twenty-five minutes.
+about twenty-five minutes. Decrypt execution took ten compile passes over
+fourteen minutes and twenty-two seconds.
 Failed passes exposed proof elaboration or simplification errors. One earlier
 anonymous-hypothesis tactic loop was stopped by verified PID and repaired.
 Independent read-only reviews found no correctness defect in these components;
 their scope corrections and allocation-history requirement are incorporated
 above. Coverage is checked against source calls, not inferred from erasure.
+The decrypt review corrected one wording issue: the setter's same-stamp premise
+does not establish raw-reference provenance. Its final review also checked the
+new failure equation and terminal scopes.
 
 One source-order limitation remains: C `peer.c` initializes destination cache
 and handshake before incrementing `peer_counter`; the mirror increments and

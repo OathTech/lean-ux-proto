@@ -7,6 +7,7 @@ import Leanux.Proofs.WG.Peers.Allocation
 import Leanux.Proofs.WG.Peers.Access
 import Leanux.Proofs.WG.Peers.CreationAccess
 import Leanux.Proofs.WG.Lifetimes.Enqueue
+import Leanux.Proofs.WG.Lifetimes.DecryptWorker
 
 /-! R2's store-identity components: whole-operation keypair evolution,
 peer allocation/reference sequences, and packet primitive sequences within a device
@@ -393,5 +394,52 @@ theorem peer_acquire_access_exact (id : PeerId) (w : World) (h : List Peers.Peer
     runPrefix (Lifetimes.peerGetLocal id) w h =
       ((peerGet id).run w, h ++ Lifetimes.peerGetEvents id w) :=
   Lifetimes.peerGetLocal_run id w h
+
+/-- The mixed packet-decryption observer preserves the original complete
+result and World, or exact error, for every input packet and World. -/
+theorem decrypt_packet_access_erasure (pkt : RxPacket) :
+    ErasesPrefix (Lifetimes.decryptPacketPrefix pkt) (decryptPacket pkt) :=
+  Lifetimes.decryptPacketPrefix_erases pkt
+
+/-- From the mixed store invariant, packet decryption appends a safe access
+prefix on every outcome and preserves that invariant on success. The rejection
+update uses the stamp resolved by its fresh second keypair getter. -/
+theorem decrypt_packet_access_preserves (pkt : RxPacket) :
+    PrefixPreserves Lifetimes.MixedInv Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.decryptPacketPrefix pkt) :=
+  Lifetimes.decryptPacketPrefix_preserves pkt
+
+/-- Failure in decryption's access-free rejection expression retains exactly
+the first keypair read; no validity write has occurred. -/
+theorem decrypt_rejection_failure_prefix (pkt : RxPacket) (w entered : World)
+    (h : List Lifetimes.LifetimeEvent) (k : Keypair) (e : Stop)
+    (hb : (branch .decNoKeypair false).run w = .ok (false, entered))
+    (hg : (getKeypair pkt.keypair).run entered = .ok (k, entered))
+    (hr : (Lifetimes.decryptKeyReject k).run entered = .error e) :
+    runPrefix (Lifetimes.decryptPacketPrefix pkt) w h =
+      (.error e, h ++ [.keypair (.read pkt.keypair k.internalId)]) :=
+  Lifetimes.decryptPacketPrefix_reject_failure pkt w entered h k e hb hg hr
+
+/-- Callback erasure contracts give all-input erasure for one original decrypt
+worker iteration, including its enqueue, softirq, IRQ and rescheduling calls. -/
+theorem decrypt_iteration_access_erasure (softirq irq : Lifetimes.MixedM Unit)
+    (resched : Lifetimes.MixedM Bool) (originalSoftirq originalIrq : M Unit)
+    (originalResched : M Bool) (hs : ErasesPrefix softirq originalSoftirq)
+    (hi : ErasesPrefix irq originalIrq) (hr : ErasesPrefix resched originalResched) :
+    ErasesPrefix (Lifetimes.decryptIterPrefix softirq irq resched)
+      (decryptIter originalSoftirq originalIrq originalResched) :=
+  Lifetimes.decryptIterPrefix_erases hs hi hr
+
+/-- If each callback preserves the mixed access invariant, one decrypt worker
+iteration retains a safe appended prefix even on failure. No identity-equality
+frame across callbacks or whole-run scheduler coverage is assumed. -/
+theorem decrypt_iteration_access_preserves (softirq irq : Lifetimes.MixedM Unit)
+    (resched : Lifetimes.MixedM Bool)
+    (hs : PrefixPreserves Lifetimes.MixedInv Lifetimes.LifetimeEvent.Safe softirq)
+    (hi : PrefixPreserves Lifetimes.MixedInv Lifetimes.LifetimeEvent.Safe irq)
+    (hr : PrefixPreserves Lifetimes.MixedInv Lifetimes.LifetimeEvent.Safe resched) :
+    PrefixPreserves Lifetimes.MixedInv Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.decryptIterPrefix softirq irq resched) :=
+  Lifetimes.decryptIterPrefix_preserves hs hi hr
 
 end Leanux.Proofs.WG.LifetimeSafety
