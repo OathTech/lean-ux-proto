@@ -42,6 +42,52 @@ def getKeypair (id : KeypairId) : M Keypair := do
 def setKeypair (id : KeypairId) (k : Keypair) : M Unit :=
   modifyDev fun d => { d with keypairs := d.keypairs.insert id k }
 
+/-! ## The skb store (simulation-target review, section 4.2)
+
+A packet on its way out or in is one object, owned once: the device ring, the
+peer's `prev_queue`, a peeked head and a worker's local name it by its id, and
+a publication (`PACKET_CB(skb)->state`) changes the one entry. `newTxSkb` is
+the mirror's allocation point (the `PACKET_CB` assignments of
+`wg_packet_send_staged_packets`), `freeTxSkb` its `kfree_skb` or its
+consumption by the stack; `newRxSkb` is `wg_packet_consume_data`'s, `freeRxSkb`
+the poll's `dev_kfree_skb` or `napi_gro_receive`. -/
+
+def newTxSkb (p : DataPacket) : M SkbId := do
+  let id := (← getDev).nextSkb
+  modifyDev fun d => { d with txSkbs := d.txSkbs.insert id p, nextSkb := id + 1 }
+  return id
+
+def getTxSkb (id : SkbId) : M DataPacket := do
+  match (← getDev).txSkbs.get? id with
+  | some p => return p
+  | none => invariant s!"dangling tx skb {id}"
+
+def setTxSkb (id : SkbId) (f : DataPacket → DataPacket) : M Unit := do
+  let p ← getTxSkb id
+  modifyDev fun d => { d with txSkbs := d.txSkbs.insert id (f p) }
+
+def freeTxSkb (id : SkbId) : M Unit := do
+  let _ ← getTxSkb id   -- freeing twice is an invariant failure
+  modifyDev fun d => { d with txSkbs := d.txSkbs.erase id }
+
+def newRxSkb (p : RxPacket) : M SkbId := do
+  let id := (← getDev).nextSkb
+  modifyDev fun d => { d with rxSkbs := d.rxSkbs.insert id p, nextSkb := id + 1 }
+  return id
+
+def getRxSkb (id : SkbId) : M RxPacket := do
+  match (← getDev).rxSkbs.get? id with
+  | some p => return p
+  | none => invariant s!"dangling rx skb {id}"
+
+def setRxSkb (id : SkbId) (f : RxPacket → RxPacket) : M Unit := do
+  let p ← getRxSkb id
+  modifyDev fun d => { d with rxSkbs := d.rxSkbs.insert id (f p) }
+
+def freeRxSkb (id : SkbId) : M Unit := do
+  let _ ← getRxSkb id
+  modifyDev fun d => { d with rxSkbs := d.rxSkbs.erase id }
+
 /-- A path that reads or changes state the pending handshake worker also
     touches: its outcome depends on when the worker runs. Work queued earlier
     in this same system call, before it slept, has certainly not run

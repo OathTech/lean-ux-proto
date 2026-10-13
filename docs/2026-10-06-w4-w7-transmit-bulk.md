@@ -440,7 +440,10 @@ names `.ipIdentReserve` route.c:482 (`harness/steer.py:26-28`,
   `-ENOSPC` first (`queueing.h:167`), never `-EPIPE`. **`-EPIPE` needs two
   peers** sharing the device ring: e.g. 600 items for A and 425 for B fill
   the ring while each `prev_queue` holds fewer than 1024. The same holds for
-  the decrypt ring and `rx_queue` (receive.c:526-533).
+  the decrypt ring and `rx_queue` (receive.c:526-533). *Corrected in 17.16:
+  the ring's full test is on the producer's slot, which a consumed item
+  still occupies until the batch rule clears it, so one peer reaches
+  `-EPIPE` with 1023 items in the ring.*
 - **`-EPIPE` handling.** Send: `wg_queue_enqueue_per_peer_tx(first, DEAD)`
   (send.c:322-323), the tx worker frees the list (`:277-278`). Receive:
   `wg_queue_enqueue_per_peer_rx(skb, DEAD)` (receive.c:528-529) **inside the
@@ -881,6 +884,45 @@ check from D1).
     full buffer. **Its bulk value is an output of P-A** (v2, m5), which
     measures the record volume per item in both children; v1's 4M words
     (32 MiB) is the upper bound P-A starts from, not the answer.
+  - **P-A's result** [AGENT 2026-10-12, task/w7-harness, the W9 oracle,
+    `scripts/wg-w7-tier-probe.py`]: the trace `corpus/w7-tier/w7_ring_wrap`
+    (a session, a 1-item `xmit` batch, a 1024-item one, observe, get) is
+    the measurement. At the 1024-item batch the PC child writes 668,793
+    task and 855,131 remote words, the comparison child 384,517 task and
+    512,276 remote records (1,538,068 and 2,049,104 words): 1M words
+    overflows there (`empty_or_full_kcov`), 2M would leave 2 % headroom,
+    so `CAPACITY` (`guest.c`) and `KCOV_CAPACITY` (`trace.py`) are 4M
+    words, 32 MiB per area, one constant rather than a per-trace value.
+    The rows stay small because they are deduplicated (805 and 827 PCs,
+    30,176 and 14,518 records at that operation; 3.3 MB for the trace's
+    two children), so the chunk's 16 MiB output limit and the one-bulk-
+    trace-per-chunk rule stand unchanged. The kernel's own work is cheap:
+    `io_uring_enter` returns all 1024 completions (`res` 1 each) in
+    0.12 s and the workers finish inside a 600 ms wait. What exceeded the
+    4.5 s bound was the guest: its sort-based deduplication (2.3 s in the
+    PC child, 7 s in the comparison child at that operation), replaced by
+    a hash-table pass in area order with the same rows, and the serial
+    console (about 0.5 MB/s under TCG against 2.4 MB of rows for the
+    comparison child at that operation), so a bulk trace's rows are now
+    held in memory and written after its last operation. With both, the
+    children end 2.91 s and 3.02 s after `wg_up` with `wait_ms` 200 and
+    1000; **1000 ms is the full-ring tier's `wait_ms` default** (600 ms
+    sufficed for the workers). The tier is go.
+  - **What Linux does at the wrap** (the same probe; the mirror did not
+    run): every send completes at the socket; the device counters after
+    the batch read `tx_packets` 1025 and `tx_bytes` 65652 = the initiation
+    (148) + the staged keepalive (32) + 1023 data messages of 64 bytes,
+    `tx_errors` 0 and `tx_dropped` 0, and `wg_get` reports the peer's
+    `tx_bytes` 65652. So **1023 of the 1025 items went out and two were
+    dropped silently**, not the one the ring counterexample (17.16 on
+    `task/rings`) predicts; the PCs the 1024-item batch executes beyond
+    the 1-item one include the producer's wrap (`ptr_ring.h:115`), the
+    failed produce's unlock, `wg_packet_create_data`'s `-EPIPE` arm
+    (`send.c:323`, the DEAD enqueue at `queueing.h:185,188`) and
+    `wg_packet_tx_worker`'s dead-packet `kfree_skb_list` (`send.c:278`),
+    in all four runs. The second drop is for the ring stream to explain
+    against the section records (the remote area holds 2048 kind-300/301
+    records and 28 kind-302 reschedules at that operation).
 - **`harness/noise.py`:** the IPv4 GSO segment builder (headers, checksums,
   ids 0…n−1) anchored to the mirror's `Env.xmitPackets` by `#guard` vectors
   and to Linux by the A1 bytes; batches of data messages under a session
@@ -1180,7 +1222,9 @@ approved).
   with `res` = length** (no `-EAGAIN` deferral), record counts per item in
   both children, observe size, and 128-segment GSO xmit timing. **Its
   outputs are `kcov_capacity`'s bulk value and `wait_ms`'s default** (v2,
-  m5), and the full-ring tier's go/no-go (13.4).
+  m5), and the full-ring tier's go/no-go (13.4). Done 2026-10-12 as a
+  Linux-only run of the tier's first trace on the standard guest rather
+  than a throwaway C probe; the results are in section 12.
 - **P-B** fixture facts (v3, narrowed): `ip maddr show wg0` (the IPv4 set
   `{224.0.0.1}`, M3); a `PROBE` send over a `mtu 1300` route reaching
   `wg_xmit` unfragmented (one ciphertext of 1460 bytes); whether `ip link
@@ -2166,3 +2210,171 @@ encrypt worker with ring items, scheduling-dependent); the combined suite
 `handwritten,wireguard` (`.artifacts/check/int-w-suites-2`): **pass,
 238/238**, 11153 operand pairs, no retries, `w7_multi_tx_8` agreeing in
 that run.
+
+### 17.15 Phase 2: attempted, stopped at the review's course check [AGENT 2026-10-12, w7p2]
+
+Decided yes by the coordinator on the phase-1 count (17.11). What was
+built and validated on `task/w7p2`, then stopped by the coordinator's
+course check against the simulation-target review
+(`docs/2026-10-12-simulation-target-review.md`, 3.5, 4.1, 4.2 and ranked
+changes 3, 4, 6): a resume rule in `condResched` that, at a yield, picked
+the one other open worker with queued items, tried its next iteration
+against the records (a hidden-input mismatch at its first read restored the
+state: the kernel resumed something else), ran its iterations nested on the
+host call stack while they matched, and consumed its section stop there
+when its queue drained, marking it finished so its own run, further up the
+mirror's call stack, ended without another iteration. Ten single-trace
+runs of `w7_multi_tx_8` and `w7_mixed` and the `w7_` subset agreed under
+it. It is exactly the shape the review rejects: the suspended worker's
+remainder still completes on the host call stack with a bookkeeping flag in
+place of the delayed stop, on list rings whose full test is wrong (4.1) and
+on copied packet values that need identity reconciliation across yields
+(4.2). It was removed before any commit.
+
+**Kept, representation-neutral:** the four draining workers are now a
+step, the C's loop body between two yields as direct sequential code
+(`WG.encryptStep`, `WG.txStep`, `WG.decryptStep`, `WG.receiveStep`), and the
+generic loop `workerIter`/`workerLoop` (`Leanux/Kernel/Defs.lean`), with
+the `cond_resched` decision as the loop's `afterItem`. Behavior-preserving:
+the same branches, records and observations in the same order. Phase 1's
+`unsupported` stays as it was.
+
+**How phase 2 should be done, on the review's representation.** An
+activation is a value in the world, not a Lean call frame: for each open
+worker its kind, its peer, its loop position (between two yields), its
+locals that survive a yield (the peeked item, the keypair, the references
+it holds) and its pending section stop. `runWorker` becomes "push an
+activation and step it"; a step is `workerIter` over a packet store with
+identities (4.2: the device ring, the peer queue, the peeked head and the
+worker local name one packet; publication updates it once) and a ring
+with cursors, occupancy and batch clearing (4.1). At a yield the
+environment does not call anything nested: it records the activation as
+suspended and returns to the scheduler loop, which reads the next record
+and resumes the activation it names, a section start (a new activation),
+the NET_RX poll, or, by elimination among the suspended activations with
+work, a suspended one, the stop record ending an activation whose loop
+ended. The host call stack then holds no worker state, so a suspended
+worker resumes with its locals and references intact and no early
+completion is represented by a delayed stop. The one-off mutant for it is
+then the same as here ("ignore the resumption, continue the yielding
+activation"), and a replay fixture of a recorded resumed-outer run makes it
+deterministic. Order of work per the review: ranks 3 and 4 first (the ring
+and the packet store), then the activations (rank 6), then phase 2's
+scheduler loop; the 1025-item tier and the repoll wait for the ring.
+
+**Built [AGENT 2026-10-12, activations, on the rings branch].**
+`Activation` (`Leanux/Kernel/Defs.lean`): worker, peer, iterations run; in
+`World.suspended` while suspended. On the modeled paths the C loops hold no
+other local across a yield (each iteration starts at the poll; the tx
+worker's peeked item is in the queue), and the stop is consumed where the
+records have it, so no pending stop is represented (`yieldedWorkers`,
+`pendingStops`, `openWorkers` are gone). `Env/Batch.lean`: `condResched`
+consumes the resched record and reports the switch; the NAPI poll's
+placements (`napiSoftirq`, `napiIrqExit`) are the scheduler's wherever the
+records put the decrypt worker (phase 1's "a switch to the decrypt worker at
+this point (its placement is not modeled here)" is gone; a decrypt
+activation resumed after a send worker's section needs them,
+`d3_rx_keep_key_fresh`); `Activation.run` steps
+an activation (`workerIter`: the WG `encryptIter`, `txIter`, `decryptIter`,
+`receiveStep`) until it yields or ends; `schedule` is the loop that reads
+the next record and dispatches a start, runs the NET_RX poll at a yield, or
+resumes the one suspended activation whose rest (to its yield or stop, run
+on a copy of the world) the records are consistent with; several
+consistent, or none while a stack-held worker (the flood's) has work, is
+`unsupported`. The resumption is thus named by what the resumed worker
+reads next, the only trace a resumption leaves. Phase 1's "a worker
+yielded below an open worker with queued work" is gone; the replay fixture
+`W7_RESUMED_OUTER` agrees.
+
+### 17.16 Ranks 3 and 4: the ring and the skb store [AGENT 2026-10-12, rings]
+
+Built on `task/rings` (`task/w7p2` with `task/lifetimes` and `main`
+merged), two commits, representation only: the same branches, records and
+observations in the same order.
+
+**The ring (review 4.1), `Leanux/WG/PtrRing.lean`.** `struct ptr_ring` as
+data: `producer`, `consumerHead`, `consumerTail`, `size`, `batch`
+(`SMP_CACHE_BYTES * 2 / 8`, 16 for 1024 slots, 1 when that exceeds half the
+size) and the slot array (`Types.lean`, `PtrRing.init`). `full` is
+`__ptr_ring_produce`'s test, the producer's slot occupied; `produce` writes
+it and wraps; `peek` reads the consumer head; `discardOne` is
+`__ptr_ring_discard_one`, which clears `consumerTail..head` and advances the
+tail only when the head has moved `batch` slots past it or reached the end,
+and resets both cursors at the end; `consume` is peek then discard.
+`count` and `items` read the occupancy (the `#guard`s; the environment's
+`queuedWork` tests `empty`). The device's
+`encryptQueue` and `decryptQueue` are rings; `enqueueRingFull` tests `full`
+and the workers `consume`. Three `#guard`s hold the review's counterexample
+(one produce, one consume, 1023 produces: full with 1023 items), the batch
+rule (15 consumes keep slot 0, the 16th clears it) and the wrap.
+
+**The accounting bullet of 2.6 was wrong** by exactly the counterexample:
+with one peer, a batch of one xmit whose worker run consumes it (head 1,
+tail 0, slot 0 still occupied), then a batch of 1024 xmits, reaches
+`-EPIPE` at the 1024th item while `tx_queue` holds 1023 (`-ENOSPC` needs
+1024). The list ring accepted it. **Not reproduced against Linux here:**
+that trace is the full-ring tier, which waits on the sender's `sk_sndbuf`
+raise (2.7, v2 M1; `SO_SNDBUFFORCE` is not in `guest.c`) and the KCOV
+capacity probe P-A (12); the `#guard` stands as the ring's evidence until
+the tier runs. The smallest live witness is two `wg_batch` ops, 1 and 1024
+`xmit` items (with 1 ≤ N ≤ 15 items in the first, 1025 − N in the second).
+
+**The skb store (review 4.2), `Types.lean`, `State.lean`.** `SkbId` names a
+packet; `Device.txSkbs : TreeMap SkbId DataPacket` and
+`Device.rxSkbs : TreeMap SkbId RxPacket` own them, `nextSkb` numbers them.
+The rings, the peers' `prev_queue`s (`txQueue : PrevQueue (List SkbId)`,
+`rxQueue : PrevQueue SkbId`), a peeked head and a worker's local all hold
+ids. `newTxSkb` is the `PACKET_CB` assignment in
+`wg_packet_send_staged_packets` (the list `wg_packet_create_data` takes),
+`newRxSkb` is `wg_packet_consume_data`'s; `freeTxSkb` is `kfree_skb_list`
+(`create_data`'s error path, the tx worker's `DEAD` path) or the stack's
+consumption after `create_data_done`, `freeRxSkb` the poll's
+`dev_kfree_skb` or `napi_gro_receive`; both are invariant failures on a
+dangling id. A publication (`wg_queue_enqueue_per_peer_tx/rx`) is one
+`setTxSkb`/`setRxSkb` of the state, with an invariant check that the id is
+on its peer's queue (queued or peeked) in place of the old search-and-copy
+(`PrevQueue.updateFirst`, removed). The encrypt and decrypt workers write
+the ciphertext or plaintext into the stored packet in place.
+
+### 17.17 The pending poll at the encrypt worker's ring poll [AGENT 2026-10-12, int-r]
+
+`w7_mixed` operation 4 in the int-r claim point's wireguard group (eight
+guests on the box), the comparison child: after the decrypt worker's
+`cond_resched` of item 1 (its resched record) the records show the encrypt
+worker's section start, then the NET_RX section of the NAPI poll the decrypt
+worker had raised (the birthdate read and two timer arms), then the encrypt
+worker's queued-tx record and its stop (sites 44, 48, 6, 100, 100, 49, 303,
+45); the coverage child of the same run and six other runs had the poll's
+section before the encrypt worker's (48, ..., 49, 44, 303, 45). The mirror
+dispatched the encrypt worker and read the NET_RX start where its step
+expected the queued record (a hidden mismatch, site 48 for site 303). Not
+the dst cache: the kind-306 record the coverage child shows one more of at
+that operation is a refresh at a miss the mirror consumes as such, and that
+child's replay agrees.
+
+The kernel: `____napi_schedule` in the decrypt worker's process context
+raises NET_RX without running it; the softirq runs at the next
+`local_bh_enable` of whichever thread the scheduler runs, or in ksoftirqd.
+At the decrypt worker's `cond_resched` the scheduler may run ksoftirqd first
+(the poll's section before the encrypt worker's: D2's order (a), 17.14) or
+the encrypt kworker first; then the encrypt worker's first
+`ptr_ring_consume_bh` (send.c:293, its `spin_unlock_bh`) runs the pending
+softirq, nested in the encrypt worker's section before its first item's
+records: D2's placement (b) in the encrypt worker, which only the decrypt
+worker's loop head modelled. The rule (`Leanux/WG/Data.lean` `encryptStep`,
+`Leanux/Env/Batch.lean` `Activation.iter`, `napiSoftirq`): the encrypt
+worker's ring poll calls the NET_RX hook as the decrypt worker's does; it
+runs the poll iff one is pending and the next record starts a NET_RX
+section, and any other record there stays with the worker's own read. No
+new record, no retry, no tolerance: a NET_RX section with no poll pending
+is the mismatch it was. The poll's reads do not depend on the encrypt
+worker's state (its ring and the tx queue), so the two placements differ
+only in where the records put the section.
+
+Validation: the failing run's comparison-child capture replays to agreement
+(`evaluator/test_model_replay.py`, `EncryptWorkerRingPoll`: the capture,
+the other runs' order, and the section a second time with nothing pending,
+a mismatch); the coverage child's capture and the passing run's both still
+agree; `w7_mixed` three times live and the claim point in the integration
+report.
+

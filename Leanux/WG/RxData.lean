@@ -93,27 +93,34 @@ def decryptPacket (pkt : RxPacket) : M (Option RxPacket) := do
     worker's `napi_schedule` raised, where the records put it), and
     `irqExit` its placement inside `wg_queue_enqueue_per_peer_rx`;
     `needResched` its scheduler, as for the encrypt worker. -/
-def decryptWorker (softirq irqExit : M Unit) (needResched : M Bool) : M Unit := do
-  for _ in [0:MAX_QUEUED_PACKETS + 1] do
-    -- ptr_ring_consume_bh: its spin_unlock_bh runs a pending softirq
+def decryptStep (softirq irqExit : M Unit) : M Bool := do
+  -- ptr_ring_consume_bh: its spin_unlock_bh runs a pending softirq
+  softirq
+  match (← getDev).decryptQueue.consume with
+  | (none, _) =>
+    _ ← branch .decWorkerConsumed false
+    return false
+  | (some id, ring) =>
+    _ ← branch .decWorkerConsumed true
+    modifyDev fun d => { d with decryptQueue := ring }
+    let decrypted ← decryptPacket (← getRxSkb id)
+    -- `likely(decrypt_packet(...)) ? PACKET_STATE_CRYPTED : PACKET_STATE_DEAD`:
+    -- the plaintext replaces the message in the one skb (review 4.2)
+    if ← branch .decWorkerDecrypted decrypted.isSome then
+      let some d := decrypted | invariant "unreachable"
+      setRxSkb id fun _ => d
+      enqueuePerPeerRx irqExit id .crypted
+    else enqueuePerPeerRx irqExit id .dead
+    -- an interrupt's exit may run the raised softirq before the test
     softirq
-    match (← getDev).decryptQueue with
-    | [] =>
-      _ ← branch .decWorkerConsumed false
-      return
-    | pkt :: rest =>
-      _ ← branch .decWorkerConsumed true
-      modifyDev fun d => { d with decryptQueue := rest }
-      let decrypted ← decryptPacket pkt
-      -- `likely(decrypt_packet(...)) ? PACKET_STATE_CRYPTED : PACKET_STATE_DEAD`
-      if ← branch .decWorkerDecrypted decrypted.isSome then
-        let some d := decrypted | invariant "unreachable"
-        enqueuePerPeerRx irqExit d .crypted
-      else enqueuePerPeerRx irqExit pkt .dead
-      -- an interrupt's exit may run the raised softirq before the test
-      softirq
-      _ ← branch .decWorkerNeedResched (← needResched)
-  invariant "the decrypt queue did not drain"
+    return true
+
+/-- One iteration of the loop: `decryptStep`, then `cond_resched()` and its
+    decision (W7 phase 2: the environment's scheduler drives the iterations,
+    `workerIter`). -/
+def decryptIter (softirq irqExit : M Unit) (needResched : M Bool) : M IterResult :=
+  workerIter .decryptWorker none (decryptStep softirq irqExit)
+    (do branch .decWorkerNeedResched (← needResched))
 
 /-- counter_validate (receive.c:295-331): RFC 6479 over the keypair's
     `receiving_counter` (`counter` is the highest counter seen plus one;
@@ -341,11 +348,12 @@ def rxPoll (pid : PeerId) (budget : Nat) (napiCompleteDone : List (List UInt8) �
     -- `&& (state = atomic_read_acquire(&PACKET_CB(skb)->state)) != PACKET_STATE_UNCRYPTED`
     let go ← andM (branch .rxPollPacket first.isSome) do
       let some f := first | invariant "unreachable"
-      branch .rxPollNotUncrypted (f.state != .uncrypted)
+      branch .rxPollNotUncrypted ((← getRxSkb f).state != .uncrypted)
     if !go then
       drained := true
       break
-    let some pkt := first | invariant "unreachable"
+    let some id := first | invariant "unreachable"
+    let pkt ← getRxSkb id
     if pkt.peer != pid then invariant "a packet on another peer's rx_queue"
     -- wg_prev_queue_drop_peeked
     setPeer pid { (← getPeer pid) with rxQueue := (← getPeer pid).rxQueue.dropPeeked }
@@ -362,6 +370,7 @@ def rxPoll (pid : PeerId) (budget : Nat) (napiCompleteDone : List (List UInt8) �
     keypairPut (some pkt.keypair) false
     peerPut (some pid)
     _ ← branch .rxPollFree free   -- dev_kfree_skb
+    freeRxSkb id   -- freed, or napi_gro_receive's (review 4.2)
     workDone := workDone + 1
     if ← branch .rxPollBudgetDone (workDone ≥ budget) then break
   if !drained && workDone < budget then invariant "the rx_queue did not drain"

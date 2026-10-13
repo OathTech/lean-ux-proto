@@ -375,6 +375,11 @@ structure Kernel where
   anonInodeInodeErr : Bool
   /-- The fixture's WireGuard device, in traces that use the network fixture. -/
   wg : Option WG.Device := none
+  /-- W2 (docs/2026-10-06-w1-w2-netlink.md, 4.3): the dump state of the
+      fixture's generic-netlink socket (fd 7, `wg_get`) and of the stepped
+      dump socket (fd 8, `wg_get_start`/`wg_get_recv`). -/
+  nlSock7 : WG.NlSock := {}
+  nlSock8 : WG.NlSock := {}
   /-- `peer_counter` (drivers/net/wireguard/peer.c), a global atomic. -/
   peerCounter : Nat := 0
   /-- `keypair_counter` (drivers/net/wireguard/noise.c), a global atomic. -/
@@ -470,6 +475,12 @@ inductive AllocSite where
   | dAllocSlabDebugfs
   -- below-cut consumer of the `__alloc_skb` range: the net device's uevents
   | allocUeventSkb
+  -- below-cut consumer of the `__alloc_skb`/`kmalloc_reserve` ranges: the
+  -- stack's own replies built with ip_append_data (W6's TCP RST)
+  | ipAppendDataSkb
+  -- below-cut consumers of the kvmalloc range: a net device's creation
+  -- (alloc_netdev_mqs, its tx and rx queue arrays, WireGuard's ptr rings)
+  | netdevAlloc | netdevTxQueues | netdevRxQueues | ptrRingInit
   -- the pipe paths' direct sites (b-task; A section 19.6, integration)
   | kzallocPipeInfo | kcallocPipeBufs | allocPipePage
   deriving Repr, BEq, DecidableEq
@@ -544,13 +555,32 @@ def AllocSite.info : AllocSite → AllocSiteInfo
   -- wg_destruct; consumed at wgNewlink's register cut and wgDelete's
   -- unregister cut when a chunk arms __alloc_skb [AGENT 2026-10-12].
   | .allocUeventSkb => ⟨27, "allocUeventSkb", "lib/kobject_uevent.c", 289, .cut⟩
+  -- __ip_append_data's alloc_skb (ip_output.c:1138) under ip_send_unicast_reply:
+  -- the skb and its data (two kind-305 records) of the TCP RST the stack sends
+  -- for an inner segment to wg0's address (W6, 2.4.1), before the reply
+  -- re-enters wg_xmit; consumed at `Env.Stack.reply4`'s cut when a chunk arms
+  -- the ranges (a chunk holding alloc traces and a stack_rst4 trace, 2026-10-12)
+  -- [AGENT, wgen].
+  | .ipAppendDataSkb => ⟨28, "ipAppendDataSkb", "net/ipv4/ip_output.c", 1138, .cut⟩
+  -- wg_create (rtnl_newlink_create -> alloc_netdev_mqs, dev.c:11245) and
+  -- register_netdevice's queue arrays (netif_alloc_netdev_queues dev.c:10419,
+  -- netif_alloc_rx_queues dev.c:10352), and wg_newlink's ptr_ring_init
+  -- (include/linux/ptr_ring.h:471): kvmalloc records when a chunk arms that
+  -- range (an fd-array trace beside a lifecycle trace, 2026-10-12), consumed
+  -- at wgNewlink's register cut. The indices skip the hidden ids the timer
+  -- sections hold (100-117): 70 + index must stay unique [AGENT, wgen].
+  | .netdevAlloc => ⟨29, "netdevAlloc", "net/core/dev.c", 11245, .cut⟩
+  | .netdevTxQueues => ⟨48, "netdevTxQueues", "net/core/dev.c", 10419, .cut⟩
+  | .netdevRxQueues => ⟨49, "netdevRxQueues", "net/core/dev.c", 10352, .cut⟩
+  | .ptrRingInit => ⟨57, "ptrRingInit", "include/linux/ptr_ring.h", 471, .cut⟩
 
 def AllocSite.all : List AllocSite :=
   [.kmallocEventfdCtx, .filpAlloc, .dAllocPseudo, .kmallocFdtable, .kvmallocFdArray, .kvmallocFdBitmaps,
    .kmemCacheZallocPeer, .allocNode190, .allocNode205, .allocNode234, .kzallocKeypair,
    .sendBufSkb, .replySkb, .keepaliveSkb, .skbCowHead, .skbChecksumHelp, .skbCowDataTx, .skbCowDataRx,
    .nlmsgNew, .netlinkAllocLargeSkb, .sockAllocSendPskb, .netlinkDump, .netlinkTrim,
-   .kzallocPipeInfo, .kcallocPipeBufs, .allocPipePage, .dAllocSlabDebugfs, .allocUeventSkb]
+   .kzallocPipeInfo, .kcallocPipeBufs, .allocPipePage, .dAllocSlabDebugfs, .allocUeventSkb, .ipAppendDataSkb,
+   .netdevAlloc, .netdevTxQueues, .netdevRxQueues, .ptrRingInit]
 
 /-- The below-cut allocation consumers (consumed at cut points). -/
 def AllocSite.cuts : List AllocSite := AllocSite.all.filter (·.info.count == .cut)
@@ -635,6 +665,21 @@ def Worker.timer? : Worker → Option WG.PeerTimer
   | .timerPersistentKeepalive => some .persistentKeepalive
   | _ => none
 
+/-- The queued units whose work struct lives in `struct wg_peer`
+    (`transmit_handshake_work`, `transmit_packet_work`, `clear_peer_work`):
+    their dispatch identity dies with the peer. The others live in
+    `struct wg_device` (the device-level units), in the net namespace
+    (`cleanup_net`) or nowhere (a softirq, a timer callback). -/
+def Worker.perPeer : Worker → Bool
+  | .sendWorker | .txWorker | .clearPeerWorker => true
+  | _ => false
+
+/-- The queued units whose work struct lives in `struct wg_device` or in a
+    peer: both die with the device (`free_netdev`, after `peer_remove_all`). -/
+def Worker.deviceOwned : Worker → Bool
+  | .netnsCleanup | .linkwatch => false
+  | _ => true
+
 inductive HiddenSite where
   | initEphemeral | respEphemeral | tai64nNow | indexDraw
   | resetLastSent | birthdateExpired | initLastSent | initLastSentAgain | respLastSent | respLastSentAgain
@@ -680,6 +725,11 @@ inductive HiddenSite where
       `neigh_rand_reach_time` draws of `register_netdevice` (a cut). -/
   | cookieSecretBirthdate | cookieSecret | pubkeyHashKey | ratelimiterKey | ratelimiterGcNow
   | udpPortDraw | neighReachTime
+  /-- W2 (id 170): `netlink_autobind`'s random port id (af_netlink.c:820) on
+      the stepped dump socket's first `sendmsg`: the process's id is the
+      fixture socket's, so the collision draws once below -4096. The port
+      id reaches no modeled path (a cut). -/
+  | netlinkAutobindPort
   /-- An allocation outcome (kind 305) at a consumer frame: ids 70-99 are
       A's (docs/2026-10-05-a-alloc.md, section 6.1). -/
   | alloc (s : AllocSite)
@@ -715,6 +765,10 @@ inductive HiddenSite where
       mirror runs nothing across (no other armed unit runs in the teardown),
       so ambient. -/
   | reschedNetnsCleanup
+  /-- `rhashtable_free_and_destroy`'s `cond_resched` (lib/rhashtable.c:1161),
+      scheduling inside cleanup_net's section while the exiting namespace's
+      hashtables are torn down: ambient, as `reschedNetnsCleanup` [AGENT, wgen]. -/
+  | reschedRhashtableDestroy
   -- Reserved id ranges for the W streams (the interface commit,
   -- docs/2026-10-11-interface.md), outside every range above: W5-W6
   -- 140-149 (`.inetEhashSecret`), W8-W9 150-169 (`.dstCacheResetTs`,
@@ -835,6 +889,9 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   -- IFLA_INET6_CACHEINFO and the neighbour sysctls, which the harness never
   -- reads, and read by no modeled path (unobserved)
   | .neighReachTime => ⟨126, "neigh_reach_time", "random", "net/core/neighbour.c", 115, 4, .cut⟩
+  -- W2 (ids 170-179): the stepped dump socket's autobind draw, kind 104 at
+  -- af_netlink.c:820 (`get_random_u32_below`), seen on the W9 build
+  | .netlinkAutobindPort => ⟨170, "netlink_autobind_port", "random", "net/netlink/af_netlink.c", 820, 4, .cut⟩
   -- W9 (ids 150-169): the dst cache's jiffies, kind 306, resolved by the
   -- innermost frame of the record's `_THIS_IP_` minus one (the resolver,
   -- evaluator/coverage.py symbolize, takes every address as a return
@@ -846,6 +903,7 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   -- pristine lines)
   | .dstCacheResetTs => ⟨150, "dst_cache_reset_ts", "jiffies", "include/net/dst_cache.h", 90, 8, .mirror⟩
   | .reschedNetnsCleanup => ⟨152, "resched:cleanup_net", "resched", "net/core/net_namespace.c", 174, 8, .ambient⟩
+  | .reschedRhashtableDestroy => ⟨153, "resched:rhashtable_free_and_destroy", "resched", "lib/rhashtable.c", 1161, 8, .ambient⟩
   | .dstCacheRefreshTs => ⟨151, "dst_cache_refresh_ts", "jiffies", "net/core/dst_cache.c", 63, 8, .mirror⟩
   | .alloc s => let i := s.info
     ⟨70 + i.index, i.label, "alloc", i.file, i.line, 40, if i.count == .cut then .cut else .mirror⟩
@@ -873,8 +931,8 @@ def HiddenSite.all : List HiddenSite :=
   ++ [.modTimerArm, .timeAdvance]
   ++ (Worker.all.filter fun w => w.timer?.isNone && w != .netRx).map .queued
   ++ [.cookieSecretBirthdate, .cookieSecret, .pubkeyHashKey, .ratelimiterKey, .ratelimiterGcNow, .udpPortDraw,
-      .neighReachTime]
-  ++ [.dstCacheResetTs, .dstCacheRefreshTs, .reschedNetnsCleanup]
+      .neighReachTime, .netlinkAutobindPort]
+  ++ [.dstCacheResetTs, .dstCacheRefreshTs, .reschedNetnsCleanup, .reschedRhashtableDestroy]
   ++ AllocSite.all.map .alloc
   ++ [.currentTime]
   ++ [.underLoadNow, .cookieNonce, .ratelimiterNow, .ratelimiterInsertNow]
@@ -888,6 +946,22 @@ def Worker.resched? : Worker → Option HiddenSite
   | .txWorker => some .reschedTx
   | .decryptWorker => some .reschedDecrypt
   | _ => none
+
+/-- W7 phase 2 (docs/2026-10-06-w4-w7-transmit-bulk.md 17.15; the
+    simulation-target review's rank 6): a draining worker's activation, a
+    value in the world rather than a Lean call frame. Its kind, its peer (the
+    tx worker's `container_of(work, struct wg_peer, transmit_packet_work)`)
+    and its loop position: the iterations run so far, for the loop's bound.
+    Between two yields the C loop holds no other local: each iteration starts
+    at the ring or queue poll, and what a run keeps across runs (the tx
+    worker's peeked item) is in the queue, as data. An activation lives from
+    its section's start to its stop; suspended at a `cond_resched` it waits
+    in `World.suspended` until the records resume it (`Env.schedule`). -/
+structure Activation where
+  worker : Worker
+  pid : Option Nat := none
+  iterations : Nat := 0
+  deriving Repr, BEq
 
 def SiteRole.name : SiteRole → String
   | .mirror => "mirror" | .cut => "cut" | .ambient => "ambient"
@@ -981,16 +1055,11 @@ structure World where
       which runs before Linux). -/
   hiddenPlaceholders : Bool := false
   placeholderCount : Nat := 0
-  /-- Workers that switched away at a `cond_resched` in this operation
-      (worker indices), and the section stops of their runs that ended in
-      the mirror before Linux recorded them (site ids): see `Env.runWorker`. -/
-  yieldedWorkers : List Nat := []
-  pendingStops : List Nat := []
-  /-- W7 stream B (docs/2026-10-06-w4-w7-transmit-bulk.md, 5.4, phase 1):
-      the workers whose sections are open in the mirror, innermost last
-      (worker index, the tx worker's peer), for the commuting detector in
-      `Env.condResched`. -/
-  openWorkers : List (Nat × Option Nat) := []
+  /-- W7 phase 2: the draining workers' activations suspended at a
+      `cond_resched`, oldest first, each resumed when the records name it
+      (`Activation`, `Env.schedule`). An operation ends with none suspended
+      (`Runner.executeTrace`). -/
+  suspended : List Activation := []
   /-- Dispatch order (docs/2026-10-11-dispatch-order.md): each work unit's
       address from its queue record (`unitPeers`: address, worker index,
       peer, 0 for a device-level unit); each armed timer's address from its
@@ -998,7 +1067,15 @@ structure World where
       work units whose `WORK_STRUCT_PENDING` bit is set (`pendingWork`:
       worker indices), set by a `queue_work` that queues and cleared when
       the unit's section starts (`process_one_work`). A per-peer unit's
-      pending bit is its membership of its queue. -/
+      pending bit is its membership of its queue.
+      An association lives as long as the C object that embeds the work
+      struct or the timer: a peer's (`transmit_handshake_work`,
+      `transmit_packet_work`, `clear_peer_work`, the five timers) until the
+      peer's release (`kref_release`, `retirePeerUnits`), the device's
+      (`incoming_handshake_work`, the per-CPU crypt work) until
+      `free_netdev` (`retireDeviceUnits`). After that the address may be
+      reused by a new object with a new record, and a fresh device's peer
+      ids restart (the simulation-target review, 2026-10-12, section 4.3). -/
   unitPeers : List (Nat × Nat × Nat) := []
   timerUnits : List (Nat × Nat × WG.PeerTimer) := []
   pendingWork : List Nat := []
@@ -1099,21 +1176,15 @@ structure World where
   /-- In the domain filter: the allocation sites the steering schedule
       names. Their every encounter needs an entry (design section 5.1). -/
   allocSteered : List String := []
-  /-- E-B, fixture knowledge (docs/2026-10-05-e-dos.md §4): the kernel-global
-      `last_under_load` (receive.c:100), set by a flood that crossed the queue
-      threshold and live for one second of decay. `some _` after a `wg_flood`
-      in this trace; its exact value is a declared cut (the flood section that
-      set it is discarded). Per trace: a leak into another trace is a
-      control-flow mismatch (every normal trace keeps the constant-false decay,
-      §4.2). -/
+  /-- The function-static `last_under_load` of `wg_receive_handshake_packet`
+      (receive.c:100): the coarse boot time of the last under-load handshake,
+      or `none` for the C's 0 (never under load, or reset by the decay at
+      receive.c:119). Kernel-global and never reset by teardown; per trace
+      here because the checker runs each flooding trace in its own guest
+      (docs/2026-10-05-e-dos.md §4.2), so a leak between traces is a
+      control-flow mismatch. A flood's invalid tail sets it to that tail's
+      last under-load read (`floodTailEffect`). -/
   lastUnderLoad : Option Int := none
-  /-- E-B, the queue depth a flood added (`wg_flood`'s invalid packets, not
-      modeled individually). The receive worker sees `handshakeQueue.length +
-      floodDepth`, so the leading valid packet the mirror checks is processed
-      with the queue over the `under_load` threshold (deterministic on both
-      guest children, no dependence on the one-second decay). Set only while a
-      flood's leading packets are processed; 0 otherwise. -/
-  floodDepth : Nat := 0
 
 /-- Why a mirror execution stopped without an observation. -/
 inductive Stop where
@@ -1227,6 +1298,36 @@ def branch (d : Decision) (outcome : Bool) : M Bool := do
   modify fun w => { w with steps := w.steps.push { decision := d, outcome, netRx := w.netRxSection } }
   return outcome
 
+/-- What one iteration of a draining worker's loop did (W7 phase 2): the
+    poll found nothing and the loop ended; an item was processed and the loop
+    goes on; an item was processed and the worker switched away at its
+    `cond_resched`, so its activation is suspended (`Env.schedule`). -/
+inductive IterResult where
+  | ended | continued | yielded
+  deriving Repr, BEq, DecidableEq
+
+/-- One iteration of a draining worker's loop (`wg_packet_encrypt_worker`,
+    `wg_packet_tx_worker`, `wg_packet_decrypt_worker`,
+    `wg_packet_handshake_receive_worker`): `step`, one ring or queue poll
+    and its item, then `afterItem`, the `cond_resched` and its decision
+    (whether the kernel switched away), when an item was processed. The loop
+    body between two yields is the C's, direct sequential code; the iteration
+    is the unit an activation resumes at (W7 phase 2, design 17.15). `w` and
+    `pid` name the activation. -/
+def workerIter (w : Worker) (pid : Option Nat) (step : M Bool) (afterItem : M Bool) : M IterResult := do
+  let _ := (w, pid)
+  if !(← step) then return .ended
+  return if ← afterItem then .yielded else .continued
+
+/-- A worker's whole loop on the mirror's own stack (the flood's receive
+    worker, `Env.flood`, whose yields `Env.nestedResched` serves in place):
+    `workerIter` until the queue drains, under the C's bound. -/
+def workerLoop (w : Worker) (pid : Option Nat) (step : M Bool) (afterItem : M Unit) (bound : Nat)
+    (drained : String) : M Unit := do
+  for _ in [0:bound] do
+    if (← workerIter w pid step (do afterItem; pure false)) == .ended then return
+  invariant drained
+
 /-- Record a C value comparison: its outcome and the two values the C
     compares at the condition. The check matches them against
     `KCOV_TRACE_CMP` records at the condition line. -/
@@ -1258,20 +1359,11 @@ def recordWordOf (bs : List UInt8) (k : Nat) : Nat :=
 def HiddenSite.passive (site : Nat) : Bool :=
   HiddenSite.all.any fun s => s.info.id == site && s.info.role == .ambient
 
-/-- Drop ambient records at the head of the current operation's records,
-    and pending section stops (each consumes its one pending entry). -/
+/-- Drop ambient records at the head of the current operation's records. -/
 def skipAmbient : M Unit := do
   let w ← get
   if let some rs := w.hidden then
-    let rec go (rs : List HiddenRecord) (pending : List Nat) : List HiddenRecord × List Nat :=
-      match rs with
-      | r :: rest =>
-        if HiddenSite.passive r.site then go rest pending
-        else if pending.contains r.site then go rest (pending.erase r.site)
-        else (rs, pending)
-      | [] => ([], pending)
-    let (rest, pendingStops) := go rs w.pendingStops
-    set { w with hidden := some rest, pendingStops }
+    set { w with hidden := some (rs.dropWhile fun r => HiddenSite.passive r.site) }
 
 /-- Consume the next choice record, which must come from `s`. -/
 def hidden (s : HiddenSite) : M (List UInt8) := do
@@ -1385,6 +1477,28 @@ def resolveUnit (w : Worker) (unit : Nat) (queue : List Nat) : M Nat := do
     if !queue.contains pid then throw (.hidden s!"{w.symbol}: the dispatched unit is peer {pid}'s, which is not queued")
     return pid
   | none => throw (.hidden s!"{w.symbol}: the dispatched unit {unit} was never queued")
+
+/-- The release of peer `pid` (`kref_release`, peer.c:200-221, then the
+    `call_rcu` free): the work structs and timers embedded in the peer go
+    with it, so their dispatch identities are retired. A later record at
+    one of those addresses belongs to whatever object the allocator put
+    there, which starts its own association. -/
+def retirePeerUnits (pid : Nat) : M Unit :=
+  modify fun st => { st with
+    unitPeers := st.unitPeers.filter fun (e : Nat × Nat × Nat) =>
+      !((Worker.all.find? (·.index == e.2.1)).any Worker.perPeer && e.2.2 == pid),
+    timerUnits := st.timerUnits.filter (·.2.1 != pid) }
+
+/-- `free_netdev` (wg_destruct's end): the device's work structs, and every
+    peer's (all released by then), die with it; their pending bits and
+    identities are retired, and the next device starts its own. The net
+    namespace's `cleanup_net` unit outlives the device. -/
+def retireDeviceUnits : M Unit :=
+  modify fun st => { st with
+    unitPeers := st.unitPeers.filter fun (e : Nat × Nat × Nat) =>
+      !((Worker.all.find? (·.index == e.2.1)).any Worker.deviceOwned),
+    pendingWork := st.pendingWork.filter fun i => !((Worker.all.find? (·.index == i)).any Worker.deviceOwned),
+    timerUnits := [] }
 
 /-- A recorded clock read: the value, a signed 64-bit count of nanoseconds. -/
 def hiddenClock (s : HiddenSite) : M Int := do
@@ -1522,28 +1636,63 @@ def dropHiddenRecord : M (Option Nat) := do
     return some r.site
   | _ => return none
 
-/-- E-B, the section-bracket discard (docs/2026-10-05-e-dos.md §4.1, as
-    superseded by the queue-depth design): drop head records whose site is in
-    `allowed` until the next record is `stop` (then stop) or the stream is
-    exhausted. A record outside `allowed` before `stop` is a hidden mismatch —
-    a packet the flood produced that the mirror did not model where it stands
-    (a mid-flood injection). Returns how many were dropped and whether an
-    `.under_load_now` record was seen (so the flood crossed the threshold). The
-    loop is bounded by the operation's record count. -/
-def discardFloodRecords (stop : Nat) (allowed : List Nat) : M (Nat × Bool) := do
-  let underLoad := (HiddenSite.underLoadNow).info.id
+/-- E-B, the producer-side discard before a flood's receive-worker section
+    (docs/2026-10-05-e-dos.md §4.1): drop head records whose site is in
+    `allowed` (the fixture's sends' cut draws and NET_RX brackets) until the
+    next record is `stop`, or the stream is exhausted. A record outside
+    `allowed` is a hidden mismatch (something the mirror would have modeled
+    where it stands). Bounded by the operation's record count. -/
+def discardFloodRecords (stop : Nat) (allowed : List Nat) : M Nat := do
   let mut dropped := 0
+  for _ in [0:4000000] do
+    match ← peekHiddenSite with
+    | some s =>
+      if s == stop then return dropped
+      if !allowed.contains s then
+        throw (.hidden s!"flood: a modeled record (site {s}) inside the discarded flood region (a mid-flood injection)")
+      _ ← dropHiddenRecord
+      dropped := dropped + 1
+    | none => return dropped
+  throw (.hidden "flood: the record stream did not drain")
+
+/-- The effect contract of a flood's invalid tail (the review's 3.4): the
+    packets the receive worker drops at the MAC1 check after the leading
+    valids, up to the section's `stop`. Each one runs
+    `wg_receive_handshake_packet` to the MAC check: with the counter at or
+    over the threshold it saves the clock (`under_load_now`, receive.c:115);
+    below it, with `last_under_load` set, it reads the clock for the decay
+    (`birthdate_has_expired`, receive.c:117) and resets `last_under_load` when
+    the decay has expired (:119); then `cond_resched` (`resched_receive`). The
+    contract folds exactly those records, in order, into the new
+    `last_under_load`, from `last` (the value the leading valids left): no
+    other state changes (a dropped packet is freed; `handshake_queue_len` is
+    decremented per packet, to 0 at the drain, which the caller sets). Any
+    other record is a hidden mismatch (a mid-flood injection, or a decay read
+    with no saved time). Returns the new value and whether an under-load read
+    occurred (the flood crossed the threshold). -/
+def floodTailEffect (stop : Nat) (cuts : List Nat) (last : Option Int) : M (Option Int × Bool) := do
+  let underLoad := (HiddenSite.underLoadNow).info.id
+  let decay := (HiddenSite.birthdateExpired).info.id
+  let resched := (HiddenSite.reschedReceive).info.id
+  let mut last := last
   let mut crossed := false
   for _ in [0:4000000] do
     match ← peekHiddenSite with
     | some s =>
-      if s == stop then return (dropped, crossed)
-      if !allowed.contains s then
+      if s == stop then return (last, crossed)
+      if s == underLoad then
+        last := some (← hiddenClock .underLoadNow)
+        crossed := true
+      else if s == decay then
+        let some saved := last
+          | throw (.hidden "flood: a decay clock read with no saved under-load time (a mid-flood injection)")
+        let now ← hiddenClock .birthdateExpired
+        if saved + 1000000000 ≤ now then last := none   -- wg_birthdate_has_expired(last_under_load, 1)
+      else if s == resched || cuts.contains s then
+        _ ← dropHiddenRecord
+      else
         throw (.hidden s!"flood: a modeled record (site {s}) inside the discarded flood region (a mid-flood injection)")
-      if s == underLoad then crossed := true
-      _ ← dropHiddenRecord
-      dropped := dropped + 1
-    | none => return (dropped, crossed)
+    | none => return (last, crossed)
   throw (.hidden "flood: the record stream did not drain")
 
 def getFile (id : FileId) : M File := do

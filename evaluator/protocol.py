@@ -83,6 +83,8 @@ def validate_observation(trace, result):
         fields = ('index', 'ret', 'errno', 'bytes') + EXTRA_FIELDS.get(op['op'], ())
         if op['op'] == 'wg_get' and type(obs) is dict and obs.get('ret') == 0:
             fields += ('device',)   # the canonical device state (harness/wg.py)
+        if op['op'] == 'wg_get_recv' and type(obs) is dict and obs.get('ret') == 0:
+            fields += ('messages',)   # W2: one receive's messages, as put (harness/wg.py decode_messages)
         if op['op'] == 'wg_observe':
             fields += ('datagrams', 'replies', 'stats')   # what wg0 emitted, replies to the sender, counters
         if not keys(obs, fields):
@@ -228,10 +230,11 @@ SEMANTIC_ERRNOS = {'eventfd2': {12, 22, 24}, 'dup': {9, 12, 24}, 'dup3': {9, 12,
                    # W9 (docs/2026-10-06-w8-w9-netns-routing.md 4.3): RTM_DELADDR of
                    # wg0's fixture address (EADDRNOTAVAIL when absent) and
                    # RTM_DELROUTE of the default route via wg0 (ESRCH when absent)
-                   'wg_deladdr': {99}, 'wg_delroute': {3}}
-# Opcodes 20-21 (W2) and 22 (W8) are reserved (harness/trace.py
-# RESERVED_OPCODES); their operations, and so their entries here, come with
-# the streams that land them. W9 took 23 and 24.
+                   'wg_deladdr': {99}, 'wg_delroute': {3},
+                   # W2 (docs/2026-10-06-w1-w2-netlink.md 4.2): the stepped dump's
+                   # request is acknowledged on a later receive, never failed; a
+                   # receive with nothing queued is EAGAIN (the mirror's unsupported)
+                   'wg_get_start': set(), 'wg_get_recv': {11}}
 # Pipes (P design section 6): EINVAL, EMFILE, ENOPKG (O_NOTIFICATION_PIPE
 # without CONFIG_WATCH_QUEUE); EPIPE on write; EBUSY from F_SETPIPE_SZ.
 # A's pipe sites (section 19.6; D3+A integration): pipe2's ENFILE (a failed

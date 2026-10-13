@@ -23,6 +23,10 @@ FIELDS = {
     "fcntl": {"op", "fd", "cmd", "arg"},
     # WireGuard configuration of the fixture's `wg0` (harness/wg.py)
     "wg_set": {"op", "config"}, "wg_get": {"op"},
+    # W2 (docs/2026-10-06-w1-w2-netlink.md 4.2): the stepped dump on the
+    # fixture's second generic-netlink socket (fd 8): the request (+ optional
+    # "device" selector) and one recvmsg of one chunk or acknowledgement
+    "wg_get_start": {"op"}, "wg_get_recv": {"op"},
     # Stage B1: bring wg0 up, send a packet into it, observe what it emitted
     "wg_up": {"op"}, "wg_xmit": {"op", "packet"}, "wg_observe": {"op"},
     # Stage B2: a raw WireGuard message sent to wg0's listen port
@@ -112,7 +116,9 @@ def filter_may_kill(instructions):
 EPOLL_MAXEVENTS = (1, 16)   # tier 1's bound on epoll_wait's maxevents (the kernel's is EP_MAX_EVENTS)
 LIFECYCLE_OPS = ("wg_create", "wg_down", "wg_delete")
 WG_OPS = {"wg_set", "wg_get", "wg_up", "wg_xmit", "wg_observe", "wg_inject", "wg_advance",
-          "wg_flood", "wg_set_mtu", "wg_batch", "wg_deladdr", "wg_delroute", "wg_netns_close"} | set(LIFECYCLE_OPS)
+          "wg_flood", "wg_set_mtu", "wg_batch", "wg_deladdr", "wg_delroute", "wg_netns_close",
+          "wg_get_start", "wg_get_recv"} | set(LIFECYCLE_OPS)
+STEPPED_OPS = ("wg_get_start", "wg_get_recv")
 # W9: `wg_inject`'s optional destination ("to"): the fixture's loopback
 # address (the default, 127.0.0.1 / ::1), wg0's own fixture address
 # (10.255.254.1 / fd00:ffff::1, reached over the local route: wg0 learns an
@@ -135,6 +141,7 @@ OPCODES = {
     "wg_create": 15, "wg_down": 16, "wg_delete": 17,
     "wg_flood": 18,
     "wg_advance": 19,
+    "wg_get_start": 20, "wg_get_recv": 21,   # W2
     "wg_netns_close": 22,   # W8
     "wg_deladdr": 23, "wg_delroute": 24,   # W9
     # W4+W7: allocated by the coordinator (docs/2026-10-11-interface.md)
@@ -151,7 +158,7 @@ OPCODES = {
 # reaches the wire from here; the guest fails one as invalid_input
 # (harness/guest.c, the opcode switch's default) and the mirror as an
 # unknown operation. A stream moves its codes into OPCODES when it lands.
-RESERVED_OPCODES = {20: "wg_get_start (W2)", 21: "wg_get_recv (W2)"}   # 22 taken by W8, 23-24 by W9
+RESERVED_OPCODES = {}   # W2 took 20-21, W8 22, W9 23-24, W4 25, W7 26
 if set(OPCODES.values()) & set(RESERVED_OPCODES):
     raise AssertionError(f"reserved opcodes in use: {set(OPCODES.values()) & set(RESERVED_OPCODES)}")
 if set(OPCODES) != set(FIELDS):
@@ -159,7 +166,7 @@ if set(OPCODES) != set(FIELDS):
 # The guest's KCOV area in words, task and remote (harness/guest.c CAPACITY):
 # KCOV stops at CAPACITY - 1 PCs or (CAPACITY - 1) // 4 comparison records,
 # and the guest fails an operation whose area filled.
-KCOV_CAPACITY = 1024 * 1024
+KCOV_CAPACITY = 4 * 1024 * 1024
 # The optional top-level `net_fixture` (L): "bare" starts a network trace
 # without wg0; absent, the fixture creates a down wg0. W8: "foreign-creator"
 # creates wg0 from a second namespace C (its creating namespace), which holds
@@ -196,7 +203,7 @@ PAUSE_MS = (1, 20)
 # W1 (docs/2026-10-06-w1-w2-netlink.md, 3.1): the optional device selector
 # of the netlink operations ({"ifname": s} | {"ifindex": n} | both | {};
 # absent means wg0 by name), validated by harness/wg.py.
-DEVICE_OPS = {"wg_set", "wg_get"}
+DEVICE_OPS = {"wg_set", "wg_get", "wg_get_start"}
 # The guest (harness/guest.c) implements the pipes contract: pipe2, the pipe
 # descriptor kinds, F_SETPIPE_SZ/F_GETPIPE_SZ, pause_ms and counts up to
 # MAX_IO (stream P1). With this off, such traces are rejected as unsupported
@@ -498,6 +505,16 @@ def validate_trace(trace):
             raise InvalidTrace("wg_inject after wg_netns_close: no socket in the creating namespace")
     elif closes:
         raise InvalidTrace("wg_netns_close: only in the foreign-creator fixture")
+    # W2 (design 4.2, 8.1): a stepped dump holds the fixture's second
+    # generic-netlink socket at descriptor 8, so it needs rlimit 9 (10 with a
+    # lifecycle operation, whose temporary socket takes 9) and excludes the
+    # foreign-creator fixture, whose descriptors 8-9 are the namespace's.
+    if is_stepped(trace):
+        if trace.get("net_fixture") == "foreign-creator":
+            raise InvalidTrace("wg_get_start/wg_get_recv: the stepped dump and the foreign-creator fixture both need descriptor 8")
+        need = 10 if any(op["op"] in LIFECYCLE_OPS for op in trace["ops"]) else 9
+        if trace.get("rlimit_nofile", 32) < need:
+            raise InvalidTrace(f"wg_get_start/wg_get_recv: rlimit_nofile below {need} (the dump socket is descriptor 8)")
     return deepcopy(trace)
 
 
@@ -570,6 +587,13 @@ def validate_seccomp_op(op, i, ops, trace):
             _integer(op["action"], 0, 2**32 - 1, f"{where}.action")
         if "flags" in op:
             _integer(op["flags"], 0, 2**32 - 1, f"{where}.flags")
+
+
+def is_stepped(trace):
+    """W2: whether the trace drives a dump step by step (wg_get_start /
+    wg_get_recv), which gives the fixture its second generic-netlink socket
+    at descriptor 8."""
+    return any(op["op"] in STEPPED_OPS for op in trace["ops"])
 
 
 def uses_wireguard(trace):
@@ -762,7 +786,7 @@ def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False, allo
                 line += f" {op.get('pause_ms', 0)}"   # the ninth field (P1)
             if op["op"] == "wg_set":
                 line += " " + encode_set(op["config"], op.get("device")).hex()
-            elif op["op"] == "wg_get":
+            elif op["op"] in ("wg_get", "wg_get_start"):
                 line += " " + encode_get(op.get("device")).hex()
             elif op["op"] == "wg_xmit":
                 line += " " + packet.hex()

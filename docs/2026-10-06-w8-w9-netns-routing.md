@@ -1666,3 +1666,28 @@ Deviations [AGENT]:
 - The one-off mutant for the new section rule, W8-M1 (`wg_netns_pre_exit`
   keeps `creating_net`), is run once and reported in the commit, then
   dropped (AGENTS.md, gates and speedbumps).
+
+### 14.6 The generator classes, and the re-entry probe [AGENT 2026-10-12]
+
+- `routing_trace` (`evaluator/generate.py`, `ROUTING_SHARE` 0.05 of the
+  WireGuard suite): the alias endpoint, two sends through the cache with
+  the retransmit advance, the default route deleted before any lookup, the
+  unroutable endpoint off loopback, the address then route deletion with a
+  failing transmission, the response injected to the alias or to wg0's
+  address, a session with two data sends (optionally IPv6 with a
+  `wg_delroute 4` between them), and the IPv6 deletions; each from a
+  steered initiation at `wg_up`. 200/200 pass the domain filter.
+- `netns_trace` (`NETNS_SHARE` 0.03): the foreign-creator fixture with
+  wg0 configured and down, `wg_netns_close`, then an up (`-ENONET`), a port
+  (`-EPERM`), a peer, a delete, or all four. 200/200 pass the domain filter.
+- **W9-R is not built.** The probe `corpus/w9-controls/w9_reentry_no_peer`
+  (the endpoint 192.0.2.1, a transmission after the up's routes exist) shows
+  the re-entry's footprint in the send worker's section on the W9 oracle:
+  after the dst cache's refresh (kind 306), a kind-1 draw at the ICMP
+  credit, two kind-110 identifiers (the outer datagram's, the ICMP's) and
+  two kind-101 records at two chains, no NET_RX section, then the arm
+  record; `tx_errors` 1 at the observation. The mirror stops `unsupported`
+  at `socket.c:80`, now a domain control (`scripts/wg-w9-controls.py`):
+  the stop is checked, never a silent delivery. A transmission at `wg_up`
+  does not reach the re-entry: the up's routes follow the operation's wait
+  (14.3b), so that send fails `-ENETUNREACH` on both sides.

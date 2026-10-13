@@ -1,5 +1,6 @@
 import Leanux.WG.Curve25519
 import Std.Data.TreeMap
+import Lean.Data.Json
 
 /-!
 # WireGuard state (drivers/net/wireguard)
@@ -128,6 +129,12 @@ structure Keypair where
   receivingCounter : ReplayCounter := {}
   deriving Repr, BEq
 
+/-- The identity of an skb on its way out or in (simulation-target review,
+    section 4.2): the device ring, the peer's `prev_queue`, a peeked head and
+    a worker's local name the one object in the device's store
+    (`Device.txSkbs`, `Device.rxSkbs`), whose state publication changes once. -/
+abbrev SkbId := Nat
+
 /-- `enum packet_state` (queueing.h). -/
 inductive PacketState where
   | uncrypted | crypted | dead
@@ -173,6 +180,38 @@ structure RxPacket where
   /-- `PACKET_CB(skb)->ds`: the outer header's DS field (D2 stream B). -/
   ds : Nat := 0
   deriving Repr, BEq
+
+/-- `SMP_CACHE_BYTES` (`CONFIG_X86_L1_CACHE_SHIFT` 6): the cache line the
+    ring's batch is sized by. -/
+def SMP_CACHE_BYTES : Nat := 64
+/-- `MAX_QUEUED_PACKETS` (messages.h:53): the crypt rings' size
+    (`wg_packet_queue_init`) and the bound of a peer's `prev_queue`. -/
+def MAX_QUEUED_PACKETS : Nat := 1024
+
+/-- `struct ptr_ring` (include/linux/ptr_ring.h:30-40) as data (simulation-
+    target review, section 4.1): the producer cursor, the consumer head (the
+    next valid entry) and tail (the next entry to invalidate), the size, the
+    batch, and the slots' occupancy. Consumed slots stay occupied until the
+    batch clears them, so the full test is occupancy, not the count. Its
+    operations are in `Leanux/WG/PtrRing.lean`. -/
+structure PtrRing (α : Type) where
+  size : Nat
+  /-- `r->batch` (:474-484): `SMP_CACHE_BYTES * 2 / sizeof(void *)`, or 1
+      when that exceeds half the size or is 0. -/
+  batch : Nat
+  producer : Nat := 0
+  consumerHead : Nat := 0
+  consumerTail : Nat := 0
+  slots : Array (Option α)
+  deriving BEq
+
+/-- `ptr_ring_init` (:470-486) of `size` entries, every slot free. -/
+def PtrRing.init (size : Nat) : PtrRing α :=
+  let batch := SMP_CACHE_BYTES * 2 / 8
+  { size, batch := if batch > size / 2 || batch == 0 then 1 else batch,
+    slots := Array.replicate size none }
+
+instance : Inhabited (PtrRing α) := ⟨PtrRing.init 0⟩
 
 /-- `struct prev_queue` (queueing.h:34-39, queueing.c:50-106) as data (W7
     stream B, docs/2026-10-06-w4-w7-transmit-bulk.md 5.1): the items
@@ -254,12 +293,13 @@ structure Peer where
   serialWorkCpu : Option Nat := none
   /-- `tx_queue` (`struct prev_queue`, W7 stream B): ring items handed to
       the per-peer transmit worker, oldest first. An item is a staged list
-      (`skb->next`), nonempty; its first packet carries the item's
-      `PACKET_CB` state (D2 stream A). -/
-  txQueue : PrevQueue (List DataPacket) := {}
-  /-- `rx_queue` (`struct prev_queue`), oldest first, and whether its NAPI
-      poll is scheduled (`napi_schedule` without a run yet) (D2). -/
-  rxQueue : PrevQueue RxPacket := {}
+      (`skb->next`) of skb ids, nonempty; its first skb carries the item's
+      `PACKET_CB` state (D2 stream A), in `Device.txSkbs`. -/
+  txQueue : PrevQueue (List SkbId) := {}
+  /-- `rx_queue` (`struct prev_queue`), oldest first, skb ids into
+      `Device.rxSkbs`, and whether its NAPI poll is scheduled
+      (`napi_schedule` without a run yet) (D2). -/
+  rxQueue : PrevQueue SkbId := {}
   napiScheduled : Bool := false
   /-- The five `struct timer_list` (peer.h:53-55), D3 interface
       (docs/2026-10-05-d3-timers.md, section 5.1): `some expires` (absolute
@@ -396,9 +436,15 @@ structure Device where
   mac1Key : Key := List.replicate 32 0
   /-- `handshake_queue.last_cpu`, initialized to -1 (queueing.c:31). -/
   handshakeLastCpu : Int := -1
-  /-- `handshake_queue.ring`: queued handshake messages, oldest first; its
-      length is `handshake_queue_len`. -/
+  /-- `handshake_queue.ring`: queued handshake messages, oldest first. -/
   handshakeQueue : List (List UInt8 × SkbSource) := []
+  /-- `handshake_queue_len` (device.h), the atomic counter beside the ring:
+      incremented by the producer after a successful produce (receive.c:567)
+      and decremented by the worker after each packet (receive.c:215), so it
+      exceeds the ring's occupancy by one while a packet is processed. The
+      under-load test reads it (receive.c:112), the busy test too (:554);
+      the ring-full test reads the ring. -/
+  handshakeQueueLen : Nat := 0
   staticIdentity : StaticIdentity := {}
   incomingPort : Nat := 0
   fwmark : Nat := 0
@@ -427,13 +473,21 @@ structure Device where
       items queued for the encrypt worker, oldest first: each a staged list
       of packets (D2 stream A). -/
   encryptLastCpu : Int := -1
-  encryptQueue : List (List DataPacket) := []
+  encryptQueue : PtrRing (List SkbId) := PtrRing.init MAX_QUEUED_PACKETS
   /-- Peers whose `transmit_packet_work` is queued, oldest first. -/
   txWorkQueue : List PeerId := []
   /-- `decrypt_queue.last_cpu` and the messages queued for the decrypt worker,
       oldest first (D2). -/
   decryptLastCpu : Int := -1
-  decryptQueue : List RxPacket := []
+  decryptQueue : PtrRing SkbId := PtrRing.init MAX_QUEUED_PACKETS
+  /-- The skb store (review 4.2): every outgoing data skb from its
+      `PACKET_CB` assignment in `wg_packet_send_staged_packets` to its
+      `kfree_skb` (or its consumption by the stack), and every incoming data
+      skb from `wg_packet_consume_data` to its free, owned once; the queues
+      hold ids. `nextSkb` numbers them. -/
+  txSkbs : TreeMap SkbId DataPacket := {}
+  rxSkbs : TreeMap SkbId RxPacket := {}
+  nextSkb : SkbId := 0
   /-- D3: peers whose `clear_peer_work` (`wg_queued_expired_zero_key_material`)
       is queued on `handshake_send_wq`, oldest first
       (docs/2026-10-05-d3-timers.md, section 5.4). -/
@@ -443,5 +497,84 @@ structure Device where
 def AF_INET : Nat := 2
 def AF_INET6 : Nat := 10
 def MESSAGE_HANDSHAKE_INITIATION_LEN : Nat := 148
+
+/-! ## W2: the generic-netlink socket's dump state (docs/2026-10-06-w1-w2-netlink.md, 4.3)
+
+What `struct netlink_sock` and `struct netlink_callback` keep for a dump,
+per socket (fd 7, and the stepped socket at fd 8), and the messages a dump
+chunk carries. The put model is in `Leanux/WG/NetlinkDump.lean`. -/
+
+/-- A netlink message of a dump as user space sees it (4.2): a data message
+    (`nlmsg_flags`: `NLM_F_MULTI` 2, with `NLM_F_DUMP_INTR` 16 when the
+    device changed between two dump calls) with exactly the attributes put,
+    the `NLMSG_DONE` (flags 2, `dump_done_errno`), or an `NLMSG_ERROR`
+    acknowledgement (a start error, or `-EBUSY`). -/
+structure PeerDumpAttrs where
+  /-- `WGPEER_A_PUBLIC_KEY`, lowercase hex. -/
+  publicKey : String
+  /-- Exactly the attributes `get_peer` put, in its order (`allowed_ips`
+      present iff the nest was started, possibly empty). -/
+  attrs : List (String × Lean.Json)
+  /-- `get_peer` returned `-EMSGSIZE` after ending the nest: the peer's
+      allowed IPs continue in the next chunk (the cursor, 2.4). -/
+  split : Bool := false
+
+inductive NlMessage where
+  /-- `device`: the device part's attributes when `ctx->next_peer` was
+      `NULL` (else empty); `peers`: `none` when the nest was cancelled
+      (an empty peer list, a dead cursor), else the peers put. -/
+  | data (flags : Nat) (device : List (String × Lean.Json)) (peers : Option (List PeerDumpAttrs))
+  | done (flags : Nat) (error : Int)
+  | error (error : Int)
+
+/-- The observation of one message (4.2), as the harness decodes the guest's
+    record (`harness/wg.py decode_messages`). -/
+def NlMessage.toJson : NlMessage → Lean.Json
+  | .data flags device peers =>
+    let peersAttr := match peers with
+      | some ps => [("peers", Lean.Json.arr (ps.map fun p => Lean.Json.mkObj p.attrs).toArray)]
+      | none => []
+    Lean.Json.mkObj [("kind", "data"), ("flags", flags), ("attrs", Lean.Json.mkObj (device ++ peersAttr))]
+  | .done flags e => Lean.Json.mkObj [("kind", "done"), ("flags", flags), ("error", e)]
+  | .error e => Lean.Json.mkObj [("kind", "error"), ("error", e)]
+
+instance : Inhabited PeerDumpAttrs := ⟨{ publicKey := "", attrs := [] }⟩
+instance : BEq PeerDumpAttrs :=
+  ⟨fun a b => a.publicKey == b.publicKey && a.split == b.split
+    && (Lean.Json.mkObj a.attrs).compress == (Lean.Json.mkObj b.attrs).compress⟩
+instance : BEq NlMessage := ⟨fun a b => a.toJson.compress == b.toJson.compress⟩
+
+/-- A dump chunk's `sk_buff`: the tailroom left (`NLMSG_GOODSIZE` = 3776
+    fresh, 2.3) and its messages, oldest first. -/
+structure NlSkb where
+  room : Nat := 3776
+  messages : List NlMessage := []
+  deriving BEq
+
+/-- `struct dump_ctx` (netlink.c:97-102): the cursor peer (the last peer a
+    dump call completed; `NULL` before any), the allowed-IPs sequence taken at
+    a split peer's first visit, and the node the split peer resumes from. -/
+structure DumpCtx where
+  nextPeer : Option PeerId := none
+  allowedipsSeq : Nat := 0
+  nextAllowedip : Option NodeId := none
+  /-- `ctx->wg`: set by `wg_get_device_start`. -/
+  hasWg : Bool := false
+  deriving BEq
+
+/-- The per-socket dump state: the receive queue (chunks and
+    acknowledgements, oldest first), `cb_running`, `dump_done_errno`,
+    `cb->prev_seq` (the consistency check, 2.4) and the dump context. -/
+structure NlSock where
+  queue : List NlSkb := []
+  cbRunning : Bool := false
+  dumpDoneErrno : Int := 0
+  prevSeq : Nat := 0
+  ctx : DumpCtx := {}
+  /-- `netlink_autobind` ran (the socket's first `sendmsg`); the fixture's
+      socket at 7 binds in the fixture, the stepped one at 8 in its first
+      `wg_get_start`. -/
+  bound : Bool := false
+  deriving BEq
 
 end Leanux.WG

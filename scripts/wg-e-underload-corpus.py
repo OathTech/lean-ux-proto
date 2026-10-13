@@ -118,7 +118,39 @@ def traces():
         "e_underload_cookie": base_ops() + [flood(leading=[v1]), OBSERVE, GET],
         # two leading valids under load -> two byte-exact cookie replies
         "e_underload_two_replies": base_ops() + [flood(leading=[v1, v2]), OBSERVE, GET],
+        # The decay (receive.c:116-119; the simulation-target review's 3.4): the
+        # flood's invalid tail leaves `last_under_load` at its last under-load
+        # read. An initiation injected after the flood, inside the one-second
+        # decay (the guest's 0.1 s post-flood wait), is under load by the decay:
+        # a cookie reply, `last_under_load` kept.
+        "e_underload_live": dict(
+            ops=[CREATE, configure_peer(), UP, flood(), inject(v1), OBSERVE, GET],
+            expect=["wg_receive_handshake_packet.was_under_load=1",
+                    "wg_receive_handshake_packet.decay_expired=0"]),
+        # ... and one injected after a `wg_advance` past the decay (HZ=250: 260
+        # ticks is 1.04 s) is not: the decay has expired, `last_under_load` is
+        # reset to 0 (receive.c:119), the initiation is consumed and answered
+        # with a handshake response, and a second initiation after it never
+        # enters the decay branch (the static is 0 again).
+        "e_underload_decayed": dict(
+            ops=[CREATE, configure_peer(), UP, flood(), {"op": "wg_advance", "ticks": 260},
+                 inject(v1), inject(later_initiation(0x2222_2222, b"\x52" * 32)), OBSERVE, GET],
+            expect=["wg_receive_handshake_packet.was_under_load=1",
+                    "wg_receive_handshake_packet.decay_expired=1",
+                    "wg_receive_handshake_packet.was_under_load=0",
+                    "wg_noise_handshake_consume_initiation.flood=0"]),
     }
+
+
+def inject(message):
+    return {"op": "wg_inject", "family": 4, "port": PORT, "message": message.hex()}
+
+
+def later_initiation(index, ephemeral):
+    """A second consumable initiation from the peer: a later TAI64N timestamp,
+    so consume_initiation's replay test passes (the guest's 0.4 s wait after an
+    injection keeps it out of noise.c's flood test)."""
+    return noise.initiation(noise.public_key(DEVICE), PEER, ephemeral, noise.tai64n(2, 0), index)
 
 
 def controls():
@@ -158,9 +190,10 @@ def ratelimit_traces():
 def write_suite(subdir, cases):
     out = ROOT / "corpus" / subdir
     out.mkdir(exist_ok=True)
-    for name, ops in cases.items():
-        (out / f"{name}.json").write_text(json.dumps({"version": 1, "id": name, "net_fixture": "bare", "ops": ops},
-                                                     indent=2) + "\n")
+    for name, case in cases.items():
+        trace = {"version": 1, "id": name, "net_fixture": "bare"}
+        trace.update(case if isinstance(case, dict) else {"ops": case})
+        (out / f"{name}.json").write_text(json.dumps(trace, indent=2) + "\n")
 
 
 def write_steered(subdir, cases):

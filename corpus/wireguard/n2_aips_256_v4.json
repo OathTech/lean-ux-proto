@@ -1,0 +1,1409 @@
+{
+  "version": 1,
+  "id": "n2_aips_256_v4",
+  "ops": [
+    {
+      "op": "wg_set",
+      "config": {
+        "private_key": "1111111111111111111111111111111111111111111111111111111111111111",
+        "listen_port": 51820,
+        "peers": [
+          {
+            "public_key": "d7b5e81d336e578b13b8d706e82d061e3038c96bce66cdcf50d566b96ddbba10",
+            "allowed_ips": [
+              {
+                "family": 4,
+                "addr": "0a000000",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a000100",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a000200",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a000300",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a000400",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a000500",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a000600",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a000700",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a000800",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a000900",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a000a00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a000b00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a000c00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a000d00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a000e00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a000f00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a001000",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a001100",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a001200",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a001300",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a001400",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a001500",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a001600",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a001700",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a001800",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a001900",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a001a00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a001b00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a001c00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a001d00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a001e00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a001f00",
+                "cidr": 24
+              }
+            ],
+            "endpoint": {
+              "family": 6,
+              "addr": "00000000000000000000000000000001",
+              "port": 51999
+            }
+          }
+        ]
+      }
+    },
+    {
+      "op": "wg_set",
+      "config": {
+        "peers": [
+          {
+            "public_key": "d7b5e81d336e578b13b8d706e82d061e3038c96bce66cdcf50d566b96ddbba10",
+            "allowed_ips": [
+              {
+                "family": 4,
+                "addr": "0a002000",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a002100",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a002200",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a002300",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a002400",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a002500",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a002600",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a002700",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a002800",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a002900",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a002a00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a002b00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a002c00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a002d00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a002e00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a002f00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a003000",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a003100",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a003200",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a003300",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a003400",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a003500",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a003600",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a003700",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a003800",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a003900",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a003a00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a003b00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a003c00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a003d00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a003e00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a003f00",
+                "cidr": 24
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "op": "wg_set",
+      "config": {
+        "peers": [
+          {
+            "public_key": "d7b5e81d336e578b13b8d706e82d061e3038c96bce66cdcf50d566b96ddbba10",
+            "allowed_ips": [
+              {
+                "family": 4,
+                "addr": "0a004000",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a004100",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a004200",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a004300",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a004400",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a004500",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a004600",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a004700",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a004800",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a004900",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a004a00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a004b00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a004c00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a004d00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a004e00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a004f00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a005000",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a005100",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a005200",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a005300",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a005400",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a005500",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a005600",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a005700",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a005800",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a005900",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a005a00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a005b00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a005c00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a005d00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a005e00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a005f00",
+                "cidr": 24
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "op": "wg_set",
+      "config": {
+        "peers": [
+          {
+            "public_key": "d7b5e81d336e578b13b8d706e82d061e3038c96bce66cdcf50d566b96ddbba10",
+            "allowed_ips": [
+              {
+                "family": 4,
+                "addr": "0a006000",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a006100",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a006200",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a006300",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a006400",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a006500",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a006600",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a006700",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a006800",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a006900",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a006a00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a006b00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a006c00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a006d00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a006e00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a006f00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a007000",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a007100",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a007200",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a007300",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a007400",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a007500",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a007600",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a007700",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a007800",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a007900",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a007a00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a007b00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a007c00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a007d00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a007e00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a007f00",
+                "cidr": 24
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "op": "wg_set",
+      "config": {
+        "peers": [
+          {
+            "public_key": "d7b5e81d336e578b13b8d706e82d061e3038c96bce66cdcf50d566b96ddbba10",
+            "allowed_ips": [
+              {
+                "family": 4,
+                "addr": "0a008000",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a008100",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a008200",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a008300",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a008400",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a008500",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a008600",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a008700",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a008800",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a008900",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a008a00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a008b00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a008c00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a008d00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a008e00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a008f00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a009000",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a009100",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a009200",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a009300",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a009400",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a009500",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a009600",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a009700",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a009800",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a009900",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a009a00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a009b00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a009c00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a009d00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a009e00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a009f00",
+                "cidr": 24
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "op": "wg_set",
+      "config": {
+        "peers": [
+          {
+            "public_key": "d7b5e81d336e578b13b8d706e82d061e3038c96bce66cdcf50d566b96ddbba10",
+            "allowed_ips": [
+              {
+                "family": 4,
+                "addr": "0a00a000",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00a100",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00a200",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00a300",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00a400",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00a500",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00a600",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00a700",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00a800",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00a900",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00aa00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00ab00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00ac00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00ad00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00ae00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00af00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00b000",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00b100",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00b200",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00b300",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00b400",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00b500",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00b600",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00b700",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00b800",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00b900",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00ba00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00bb00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00bc00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00bd00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00be00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00bf00",
+                "cidr": 24
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "op": "wg_set",
+      "config": {
+        "peers": [
+          {
+            "public_key": "d7b5e81d336e578b13b8d706e82d061e3038c96bce66cdcf50d566b96ddbba10",
+            "allowed_ips": [
+              {
+                "family": 4,
+                "addr": "0a00c000",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00c100",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00c200",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00c300",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00c400",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00c500",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00c600",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00c700",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00c800",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00c900",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00ca00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00cb00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00cc00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00cd00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00ce00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00cf00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00d000",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00d100",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00d200",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00d300",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00d400",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00d500",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00d600",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00d700",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00d800",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00d900",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00da00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00db00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00dc00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00dd00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00de00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00df00",
+                "cidr": 24
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "op": "wg_set",
+      "config": {
+        "peers": [
+          {
+            "public_key": "d7b5e81d336e578b13b8d706e82d061e3038c96bce66cdcf50d566b96ddbba10",
+            "allowed_ips": [
+              {
+                "family": 4,
+                "addr": "0a00e000",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00e100",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00e200",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00e300",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00e400",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00e500",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00e600",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00e700",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00e800",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00e900",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00ea00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00eb00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00ec00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00ed00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00ee00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00ef00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00f000",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00f100",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00f200",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00f300",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00f400",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00f500",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00f600",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00f700",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00f800",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00f900",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00fa00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00fb00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00fc00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00fd00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00fe00",
+                "cidr": 24
+              },
+              {
+                "family": 4,
+                "addr": "0a00ff00",
+                "cidr": 24
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "op": "wg_get"
+    },
+    {
+      "op": "wg_get_start"
+    },
+    {
+      "op": "wg_get_recv"
+    },
+    {
+      "op": "wg_get_recv"
+    },
+    {
+      "op": "wg_get_recv"
+    }
+  ],
+  "expect": [
+    "get_peer.get_allowedips_failed=1",
+    "get_peer.get_allowedips_failed=0",
+    "wg_get_device_dump.first_part=1"
+  ]
+}

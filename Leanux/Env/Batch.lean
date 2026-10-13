@@ -1,46 +1,37 @@
 import Leanux.WG.Device
 import Leanux.WG.Data
+import Leanux.WG.RxData
 import Leanux.Env.IpStack
+import Leanux.Env.Stack
 
 /-!
 # Deferred units: dispatch sections and the scheduler's choices
 
-Split out of `Leanux/Env.lean` at the interface commit (docs/2026-10-11-interface.md).
-Owned by W4+W7's stream B (docs/2026-10-06-w4-w7-transmit-bulk.md, sections
-12 and 15): `batch` (from E-B's `flood`), `napiSoftirq` with the per-peer
-poll list and `net_rx_action`'s repoll, the `condResched` generalization and
-the generic phase-1 nesting detector land here; `Env.lean` keeps the hooks
-(`batch`, the worker runners `runCryptWorkers`, `runSendWorkers`,
-`runDecryptWorker`, `napiSoftirq`, `napiIrqExit`, which deliver over the
-loopback and so stay with the fixture). This file holds what every runner
-shares: a unit's section (`runWorker`), the section sites (`sectionOf`) and
-the recorded `cond_resched` switches (`condResched`, `SWITCH_DEPTH`).
+Split out of `Leanux/Env.lean` at the interface commit (docs/2026-10-11-interface.md);
+W7 phase 2 (docs/2026-10-06-w4-w7-transmit-bulk.md 17.15, the simulation-target
+review's rank 6) made it the scheduler. This file holds what every runner
+shares: a unit's section (`runWorker`), the section sites (`sectionOf`), the
+draining workers' activations (`Activation`, in `World.suspended`) and the
+NAPI poll's placements (`napiSoftirq`, `napiIrqExit`) and the scheduler loop
+that dispatches and resumes the activations by the records (`schedule`,
+`condResched`, `nestedResched`). `Env.lean` keeps the runners that deliver
+over the loopback (`runCryptWorkers`, `runSendWorkers`, `afterBatch`) and so
+stay with the fixture.
 -/
 
 namespace Leanux.Env
 open Leanux Leanux.WG
 
-/-- A deferred unit's run. The kernel (the `net-choice` profile since the
-    D1 sprint) opens a dispatch section per dispatch of a function in the
-    armed set (`harness/linux.py`, `DISPATCH_SYMBOLS`); its start and
+/-- A deferred unit's run, for the units that run to their end without a
+    `cond_resched` (the handshake send worker, the clear work, a timer
+    callback, a softirq, `cleanup_net`); the draining workers, which yield,
+    run as activations (`schedule`). The kernel (the `net-choice` profile
+    since the D1 sprint) opens a dispatch section per dispatch of a function
+    in the armed set (`harness/linux.py`, `DISPATCH_SYMBOLS`); its start and
     stop records bracket it in the choice stream, so the order in which the
-    kernel ran deferred units is checked rather than assumed.
-
-    A worker that switched away at a `cond_resched` (`condResched`) resumes
-    when the kernel's scheduler picks it again, which may be after workers
-    the mirror cannot run first: its own callers, preempted further up the
-    mirror's call stack. The mirror runs the rest of such a worker at once
-    and leaves its stop pending; the stop's record is consumed where Linux
-    recorded it (`skipAmbient`), and an operation ends with none pending
-    (`Runner.executeTrace`). This assumes the resumed rests commute: they
-    may read no hidden input (a read out of order is a mismatch) and touch
-    no state the others read. On the modeled paths each rest is a worker's
-    final empty ring or queue poll. -/
-def runWorker (w : Worker) (body : M Unit) (pid : Option Nat := none) : M Unit := do
+    kernel ran deferred units is checked rather than assumed. -/
+def runWorker (w : Worker) (body : M Unit) : M Unit := do
   _ ← hidden (.sectionStart w)
-  -- whether this run switched away
-  modify fun s => { s with yieldedWorkers := s.yieldedWorkers.filter (· != w.index),
-                           openWorkers := s.openWorkers ++ [(w.index, pid)] }
   -- W7 stream H (13.2 (ii)): a NET_RX section's steps carry its ordinal in
   -- the operation; a softirq never nests in a softirq, so the ordinal is
   -- cleared at its end
@@ -48,12 +39,7 @@ def runWorker (w : Worker) (body : M Unit) (pid : Option Nat := none) : M Unit :
     modify fun s => { s with netRxSections := s.netRxSections + 1, netRxSection := s.netRxSections + 1 }
   body
   if w == .netRx then modify fun s => { s with netRxSection := 0 }
-  modify fun s => { s with openWorkers := s.openWorkers.dropLast }
-  let stop := (HiddenSite.sectionStop w).info.id
-  let deferred := (← get).yieldedWorkers.contains w.index && (← peekHiddenSite).isSome
-    && (← peekHiddenSite) != some stop
-  if deferred then modify fun s => { s with pendingStops := s.pendingStops ++ [stop] }
-  else _ ← hidden (.sectionStop w)
+  _ ← hidden (.sectionStop w)
 
 /-- An item of `wg_batch` (W7, section 5.5): a datagram the fixture's sender
     submits in one `io_uring_enter`, to wg0's port (`inject`) or into wg0
@@ -62,22 +48,6 @@ inductive BatchItem where
   | inject (family port : Nat) (message : List UInt8)
   | xmit (family addr : Nat) (payload : List UInt8) (opts : XmitOpts)
   deriving Repr
-
-/-- Whether an open worker still has queued items it would process when
-    it resumes (5.4): the encrypt ring, the tx work queue or a tx worker's
-    own queue with a head it can send, the decrypt ring, the handshake
-    queue. The test names no unit pair. -/
-def queuedWork (w : Nat) (pid : Option Nat) : M Bool := do
-  let d ← getDev
-  if w == Worker.encryptWorker.index then return !d.encryptQueue.isEmpty
-  if w == Worker.decryptWorker.index then return !d.decryptQueue.isEmpty
-  if w == Worker.receiveWorker.index then return !d.handshakeQueue.isEmpty
-  if w == Worker.txWorker.index then
-    if !d.txWorkQueue.isEmpty then return true
-    let some pid := pid | return false
-    let p ← getPeer pid
-    return p.txQueue.all.any fun item => item.head?.any (·.state != .uncrypted)
-  return false
 
 /-- The worker whose section a record starts or stops, with `true` for a
     start; `none` for other records and for `net_rx_action`, a softirq,
@@ -90,82 +60,227 @@ def sectionOf (site : Nat) : Option (Worker × Bool) :=
     else none
 
 /-- `need_resched()` and `cond_resched()` in worker `self`, on the kernel's
-    one CPU (`CONFIG_PREEMPT_NONE`): whether the kernel switched away, having
-    run here what it ran. A scheduling choice, recorded: the kernel writes a
-    resched record when `__cond_resched` is about to schedule. Then each
-    following record that starts a crypt worker with queued work is that
-    worker's run here (and so on, for what it switched to in turn). What the
-    kernel ran that has no section (another task) leaves no other record;
-    a worker the mirror cannot run here (a caller further up its stack)
-    resumes later (`runWorker`). `fuel` bounds the nesting: each level is a
-    worker run.
+    one CPU (`CONFIG_PREEMPT_NONE`): whether the kernel switched away. A
+    scheduling choice, recorded: the kernel writes a resched record when
+    `__cond_resched` is about to schedule. What it ran then, and when this
+    worker resumed, is the scheduler loop's reading of the records that
+    follow (`schedule`); the worker's activation is suspended meanwhile. -/
+def condResched (self : Worker) : M Bool := do
+  let some site := self.resched? | invariant s!"{self.symbol} has no cond_resched"
+  if (← peekHiddenSite) != some site.info.id then return false
+  _ ← hidden site
+  return true
 
-    A NET_RX section the records place at the yield is the NAPI poll a
-    pending `napi_schedule` raised, which ksoftirqd ran when the worker
-    gave up the CPU (D2's order (a), docs/2026-10-04-d2-data-plane.md
-    section 5) before the kernel ran the crypt worker whose start follows:
-    it runs first, by the NET_RX rules (`runNetRx`, `Env.napiSoftirq`), and
-    the switch to that worker is still taken (W7, docs/2026-10-06-w4-w7-
-    transmit-bulk.md 17.14: `w7_mixed`). Any other record at the yield
-    stays with the resuming worker, whose next read it must be, else a
-    hidden mismatch. -/
-def condResched : Nat → Worker → M Unit → M Unit → M Bool
-  | 0, _, _, _ => invariant "worker switches nested too deep"
-  | fuel + 1, self, runDecrypt, runNetRx => do
-    let some site := self.resched? | invariant s!"{self.symbol} has no cond_resched"
-    if (← peekHiddenSite) != some site.info.id then return false
-    _ ← hidden site
-    -- W7 (5.3): any of the encrypt, tx and decrypt workers whose start is
-    -- next and whose queue is non-empty runs here; the tx worker is the one
-    -- the dispatch record names (docs/2026-10-11-dispatch-order.md)
-    for _ in [0:16] do
-      match (← peekHiddenSite).bind sectionOf with
-      | some (.encryptWorker, true) =>
-        if (← getDev).encryptQueue.isEmpty then break   -- not runnable: the record mismatches later
-        runWorker .encryptWorker (WG.encryptWorker checksumHelp (condResched fuel .encryptWorker runDecrypt runNetRx))
-      | some (.txWorker, true) =>
-        let d ← getDev
-        let some headPid := d.txWorkQueue.head? | break
-        let pid ← match ← peekUnit .txWorker with
-          | some u => resolveUnit .txWorker u d.txWorkQueue
-          | none => pure headPid
-        modifyDev fun d => { d with txWorkQueue := d.txWorkQueue.erase pid }
-        runWorker .txWorker (WG.txWorker pid (condResched fuel .txWorker runDecrypt runNetRx)) (some pid)
-      | some (.decryptWorker, true) =>
-        if (← getDev).decryptQueue.isEmpty then break
-        runDecrypt
-      | _ =>
-        -- the NAPI poll at the yield (the docstring): pending, with its
-        -- section's start next; `runNetRx` consumes it, or the record is
-        -- left to the caller
-        let netRx := (HiddenSite.sectionStart .netRx).info.id
-        if (← peekHiddenSite) == some netRx && (← getDev).peers.toList.any (·.2.napiScheduled) then
-          runNetRx
-          if (← peekHiddenSite) == some netRx then break
-        else break
-    -- the loop ends at a record it does not run; one it could run is a
-    -- run beyond its bound
-    match (← peekHiddenSite).bind sectionOf with
-    | some (.encryptWorker, true) | some (.txWorker, true) | some (.decryptWorker, true) =>
+/-- The delivery of an inner packet that GRO flushed at `napi_complete_done`
+    (a cut point): the receive-side stack model, `Leanux/Env/Stack.lean`
+    (W5+W6), decides fail-closed what Linux does with it. -/
+def deliverInner (pkt : List UInt8) : M Unit := Stack.receive pkt
+
+/-- The NET_RX softirq the decrypt worker's `napi_schedule` raised
+    (`____napi_schedule` → `raise_softirq_irqoff` outside `net_rx_action`,
+    which wakes ksoftirqd), placed by the records (design section 5). The
+    hook is called at the decrypt worker's loop head and after its enqueue,
+    and at the encrypt worker's loop head (its `ptr_ring_consume_bh`,
+    send.c:293, the first `spin_unlock_bh` of the worker the kernel may
+    switch to at the decrypt worker's `cond_resched` while the poll is still
+    pending: design 17.17); it runs the poll iff a poll is pending and the
+    next record starts a NET_RX section:
+    - (a) ksoftirqd: the worker switched away at its `cond_resched` (a
+      resched record, consumed by `condResched`, which stops at a NET_RX
+      start), and ksoftirqd ran the softirq in a top-level section;
+    - (b) inline: the worker's next `spin_unlock_bh` (`ptr_ring_consume_bh`)
+      ran it, nested in the worker's section, with no resched record; or,
+      after the decrypt worker's switch, the encrypt worker's first ring
+      poll ran it, nested in the encrypt worker's section before its first
+      item's records;
+    - (c) an interrupt's exit ran it, nested, before or after the
+      `need_resched()` test: the same records as (b), or a NET_RX section
+      before a resched record.
+    These placements differ only by the worker's state, which the poll does
+    not read (the worker's remaining work is its next ring poll). A fourth,
+    (c') inside `wg_queue_enqueue_per_peer_rx`, differs in the peer's
+    reference count and is not told apart by the records (`napiIrqExit`).
+    Without records (the domain filter) the poll runs at the first hook. -/
+def napiSoftirq : M Unit := do
+  let d ← getDev
+  let pending := d.peers.toList.filterMap fun (pid, p) => if p.napiScheduled then some pid else none
+  if pending.isEmpty then return
+  if (← get).hidden.isSome && (← peekHiddenSite) != some (HiddenSite.sectionStart .netRx).info.id then return
+  if pending.length > 1 then unsupported "NAPI polls of several peers in one softirq"
+  -- net_rx_action → napi_poll(n, &repoll) → n->poll(n, n->weight)
+  runWorker .netRx do
+    for pid in pending do
+      discard <| WG.rxPoll pid WG.NAPI_POLL_WEIGHT fun pkts => pkts.forM deliverInner
+
+/-- (c') An interrupt at `__napi_schedule`'s `local_irq_restore`: its exit
+    (`irq_exit_rcu` → `invoke_softirq`, `in_interrupt()` false in the
+    worker) runs the NET_RX just raised **before** `wg_queue_enqueue_per_peer_rx`
+    drops its peer reference (queueing.h:199-202). The records are those of
+    (c) after the function (and of (b) at the next ring poll): a NET_RX
+    section right after the enqueue. The poll's reads differ only in the
+    peer's reference count, one higher here: its `kref_get_unless_zero` in
+    the allowed-IPs lookup and its `wg_peer_put` compare it (KCOV operands;
+    seen on a contended host, rx_roam_v6 and rx_in_order, 2026-10-06:
+    Linux 1, 1, 3 where (c) gives 1, 1, 2). No record tells the two apart,
+    so the placement is a choice the check enumerates
+    (`World.napiBeforePut`): each choice is one complete execution, and
+    the comparison child's operands must agree with one of them. Without
+    records (the domain filter) the poll is placed by `napiSoftirq`. -/
+def napiIrqExit : M Unit := do
+  if (← get).hidden.isNone then return
+  if !(← getDev).peers.toList.any (·.2.napiScheduled) then return
+  if (← peekHiddenSite) != some (HiddenSite.sectionStart .netRx).info.id then return
+  let w ← get
+  let here := w.napiBeforePut.headD false
+  set { w with napiBeforePut := w.napiBeforePut.drop 1, napiAmbiguous := w.napiAmbiguous + 1 }
+  if here then napiSoftirq
+
+/-- Whether the activation's loop condition holds: its ring or queue has an
+    item it would process when it resumes (the tx worker's: a head it can
+    send, send.c:269-272). -/
+def Activation.hasWork (a : Activation) : M Bool := do
+  let d ← getDev
+  match a.worker with
+  | .encryptWorker => return !d.encryptQueue.empty
+  | .decryptWorker => return !d.decryptQueue.empty
+  | .receiveWorker => return !d.handshakeQueue.isEmpty
+  | .txWorker =>
+    let some pid := a.pid | invariant "a tx activation without its peer"
+    let some item := (← getPeer pid).txQueue.all.head? | return false
+    let some id := item.head? | invariant "an empty ring item"
+    return (← getTxSkb id).state != .uncrypted
+  | w => invariant s!"{w.symbol} is not a draining worker"
+
+/-- One iteration of the activation's C loop: the worker's step and its
+    `cond_resched` decision (`workerIter`). -/
+def Activation.iter (a : Activation) : M IterResult := do
+  match a.worker with
+  | .encryptWorker => WG.encryptIter checksumHelp napiSoftirq (condResched .encryptWorker)
+  | .txWorker =>
+    let some pid := a.pid | invariant "a tx activation without its peer"
+    WG.txIter pid (condResched .txWorker)
+  | .decryptWorker => WG.decryptIter napiSoftirq napiIrqExit (condResched .decryptWorker)
+  | .receiveWorker => workerIter .receiveWorker none WG.receiveStep (condResched .receiveWorker)
+  | w => invariant s!"{w.symbol} is not a draining worker"
+
+/-- The loop's bound in iterations (the C bound on the queue's occupancy,
+    one iteration per item and the poll that ends the loop) and what
+    exceeding it means. -/
+def Activation.bound (a : Activation) : Nat × String :=
+  match a.worker with
+  | .receiveWorker => (MAX_QUEUED_INCOMING_HANDSHAKES, "the handshake queue did not drain")
+  | .encryptWorker => (MAX_QUEUED_PACKETS + 1, "the encrypt queue did not drain")
+  | .txWorker => (MAX_QUEUED_PACKETS + 1, "the tx queue did not drain")
+  | .decryptWorker => (MAX_QUEUED_PACKETS + 1, "the decrypt queue did not drain")
+  | w => (0, s!"{w.symbol} is not a draining worker")
+
+/-- Run the activation from its loop position until its loop ends (its
+    section stop, consumed where the records have it) or it yields
+    (suspended, `World.suspended`). -/
+def Activation.run (a : Activation) : M Unit := do
+  let (bound, drained) := Activation.bound a
+  let mut act := a
+  for _ in [a.iterations:bound] do
+    match ← Activation.iter act with
+    | .ended => _ ← hidden (.sectionStop act.worker); return
+    | .continued => act := { act with iterations := act.iterations + 1 }
+    | .yielded =>
+      modify fun s => { s with suspended := s.suspended ++ [{ act with iterations := act.iterations + 1 }] }
+      return
+  invariant drained
+
+/-- Whether the records are consistent with the activation resuming now: its
+    run from here, to its yield or its stop, on a copy of the world, reads
+    them without a mismatch. A resumption leaves no record of its own, so
+    the records name it by what the resumed worker reads next; this is the
+    elimination among the suspended activations (`schedule`). -/
+def Activation.consistent (a : Activation) : M Bool := do
+  match (Activation.run a).run (← get) with
+  | .ok _ => return true
+  | .error (.hidden _) => return false
+  | .error e => throw e
+
+/-- The unit of worker `w` whose section the next record starts, when it has
+    work: a new activation, dispatched (`process_one_work`; the tx worker the
+    record names leaves the work queue, docs/2026-10-11-dispatch-order.md)
+    and run. `false` when the unit has no work: the record is not this
+    dispatch, and mismatches in the consumer that meets it. -/
+def dispatch (w : Worker) : M Bool := do
+  let d ← getDev
+  let mut pid : Option Nat := none
+  match w with
+  | .encryptWorker => if d.encryptQueue.empty then return false
+  | .decryptWorker => if d.decryptQueue.empty then return false
+  | .receiveWorker => if d.handshakeQueue.isEmpty then return false
+  | .txWorker =>
+    let some headPid := d.txWorkQueue.head? | return false
+    let p ← match ← peekUnit .txWorker with
+      | some u => resolveUnit .txWorker u d.txWorkQueue
+      | none => pure headPid
+    modifyDev fun d => { d with txWorkQueue := d.txWorkQueue.erase p }
+    pid := some p
+  | _ => return false
+  _ ← hidden (.sectionStart w)
+  Activation.run { worker := w, pid }
+  return true
+
+/-- The scheduler loop (W7 phase 2, design 17.15): the schedule of the
+    deferred units, read from the records. Each turn reads the next record
+    and runs what it names:
+    - a section start of a draining worker with work: a new activation
+      (`dispatch`), run until it yields or ends;
+    - a NET_RX section while a NAPI poll is pending: the poll ksoftirqd ran
+      at a yield (D2's order (a), `napiSoftirq`);
+    - else the suspended activation whose resumption the records are
+      consistent with (`Activation.consistent`), by elimination: one, and it
+      resumes (its own stop record, when its queue is empty, ends it); none,
+      and the loop ends at a record it does not run (the caller's: a send
+      worker, a timer, the operation's end); several, and the records do not
+      determine the kernel's choice: fail-closed.
+    A worker the caller holds on the mirror's own stack (`stack`: the flood's
+    receive worker, whose section the flood manages) resumes when the loop
+    ends; with work of its own it is a candidate too, and a consistent
+    suspended one beside it is the same undetermined choice.
+    Without records (the domain filter, which runs before Linux) nothing
+    yields and the order is fixed: the receive worker, the decrypt worker,
+    the encrypt worker, then each queued tx worker. -/
+def schedule (stack : Option Worker := none) : M Unit := do
+  let netRx := (HiddenSite.sectionStart .netRx).info.id
+  for _ in [0:4096] do
+    if (← get).hidden.isNone then
       let d ← getDev
-      if !d.encryptQueue.isEmpty || !d.txWorkQueue.isEmpty || !d.decryptQueue.isEmpty then
-        invariant "more worker runs at one cond_resched than the loop allows"
-    | _ => pure ()
-    -- W7 phase 1 (5.4): a nested unit that yields while an outer open
-    -- worker still has queued items. The mirror runs the nested unit to its
-    -- end inside the outer's call, so the outer would see its queue only
-    -- afterwards, while Linux may resume the outer first: the rests do not
-    -- commute, and the mirror's stack order is not Linux's. Fail-closed.
-    let stack := (← get).openWorkers
-    if stack.length ≥ 2 then
-      for (w, pid) in stack.dropLast do
-        if ← queuedWork w pid then
-          unsupported "a worker yielded below an open worker with queued work (the mirror's stack order)"
-    modify fun s => { s with yieldedWorkers := s.yieldedWorkers ++ [self.index] }
-    return true
+      let next := [Worker.receiveWorker, .decryptWorker, .encryptWorker, .txWorker].find? fun w =>
+        match w with
+        | .receiveWorker => !d.handshakeQueue.isEmpty
+        | .decryptWorker => !d.decryptQueue.empty
+        | .encryptWorker => !d.encryptQueue.empty
+        | _ => !d.txWorkQueue.isEmpty
+      let some w := next | return
+      if !(← dispatch w) then invariant s!"{w.symbol} has work but was not dispatched"
+      continue
+    let next ← peekHiddenSite
+    if let some (w, true) := next.bind sectionOf then
+      if ← dispatch w then continue else return
+    if next == some netRx && (← getDev).peers.toList.any (·.2.napiScheduled) then
+      napiSoftirq
+      if (← peekHiddenSite) == some netRx then return   -- left to the caller
+      continue
+    match ← (← get).suspended.filterM Activation.consistent with
+    | [] => return
+    | [a] =>
+      if let some w := stack then
+        if ← Activation.hasWork { worker := w } then
+          unsupported "the records do not determine which suspended worker resumed"
+      modify fun s => { s with suspended := s.suspended.filter (· != a) }
+      Activation.run a
+    | _ => unsupported "the records do not determine which suspended worker resumed"
+  invariant "the scheduler loop did not converge"
 
-/-- The bound on `condResched`'s nesting: a worker kind runs at most once
-    per level on the modeled paths. -/
-def SWITCH_DEPTH : Nat := 4
+/-- `cond_resched()` in a worker the environment runs on the mirror's own
+    stack (the flood's receive worker, `Env.flood`, whose section the flood
+    manages around `workerLoop`): at a switch the scheduler runs what the
+    records name, and the worker resumes when the loop ends. -/
+def nestedResched (self : Worker) : M Unit := do
+  if ← condResched self then schedule (stack := some self)
 
 end Leanux.Env
