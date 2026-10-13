@@ -103,6 +103,22 @@ class WireGuardTests(unittest.TestCase):
         self.assertIn(attr(0, attr(wg.AIP_FAMILY, struct.pack("=H", wg.AF_INET)) + attr(wg.AIP_IPADDR, bytes.fromhex("0a000000")), nested=True), ips)
         self.assertIn(attr(wg.AIP_FAMILY, struct.pack("=H", 0)), ips)
 
+    def test_netlink_f1_rejects_cross_layout_endpoints(self):
+        # netlink audit F1 (docs/2026-10-13-audit-netlink.md): set_peer reads the
+        # attribute by len and sa_family alone, so family-4 bytes with af 10 and
+        # len 28, or family-6 bytes with af 2 and len 16, would be stored under
+        # the other sockaddr layout; the validator refuses exactly those two
+        v4 = {"family": 4, "addr": "7f000001", "port": 51820}
+        v6 = {"family": 6, "addr": "00" * 15 + "01", "port": 51820, "flowinfo": 0x7f000001}
+        with self.assertRaisesRegex(wg.InvalidConfig, "af 10 with len 28 presents family-4 bytes"):
+            wg._endpoint(dict(v4, af=10, len=28), "e")
+        with self.assertRaisesRegex(wg.InvalidConfig, "af 2 with len 16 presents family-6 bytes"):
+            wg._endpoint(dict(v6, af=2, len=16), "e")
+        # the ignored combinations of the W2 design's 3.3 rows stay admitted
+        for entry in (dict(v4, len=28), dict(v6, len=16), dict(v4, af=0), dict(v4, len=20),
+                      dict(v4, af=10), dict(v6, af=2), dict(v4, af=10, len=16), dict(v6, af=2, len=28)):
+            wg._endpoint(entry, "e")
+
     def test_w1_decodes_ipv6_endpoint_fields_and_rejects_sin_zero(self):
         v6 = struct.pack("=H", wg.AF_INET6) + struct.pack("!HI", 51820, 0x12345) + b"\0" * 15 + b"\1" + struct.pack("=I", 7)
         self.assertEqual(wg._decode_endpoint(v6), {"family": 6, "addr": "00" * 15 + "01", "port": 51820,
