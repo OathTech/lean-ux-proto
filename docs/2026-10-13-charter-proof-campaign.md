@@ -44,7 +44,10 @@ user wants to know.
   from `Leanux/Proofs.lean`, plus a row in the register; material another
   result could use goes in a layer (`Framing`, `Logged`, `WG/Keypairs`, or a
   new one), not in the result. The register's "Adding a result" section is
-  the procedure.
+  the procedure. Form is corrected, never stopped on: a result in the wrong
+  place, a missing import or register row, a layer that should have been a
+  result or the reverse, is fixed in your next commit when you or the gate
+  notice it; the gate is the checker of form, not the judge of the campaign.
 - Read first: `AGENTS.md`; [docs/proofs.md](proofs.md) (the layers, the first
   result, lag and repair); [the window-proof conventions](2026-10-13-window-proof-conventions.md)
   (five items, all proof-side or altitude-preserving); the independent
@@ -193,9 +196,11 @@ Per result, all required:
    altitude-preserving or not.
 
 For the campaign: every result current over the `main` commit you end on, or
-left with its blocker precisely written after at least two architectures. A
-Rule Zero finding with its counterexample and the rest proved is a success. A
-reshaped statement that keeps the meaning is a success.
+left with its blocker precisely written after a second architecture has been
+tried. A Rule Zero finding with its counterexample and the rest proved is a
+success. A reshaped statement that keeps the meaning is a success. A missed
+item of the list above is a correction in the next commit, not a failed
+result: nothing in this charter is a reason to stop except the user's word.
 
 ## 6. Working conditions
 
@@ -254,5 +259,6 @@ code-to-mirror simulation, which the user opens separately.
 > something no result needs (seccomp, docs, harness), merge and pay the
 > frames without asking; for a named prerequisite (section 4's table), do the
 > independent parts, pause that part with "waiting on <prerequisite>", move
-> on, and merge only when I send the paste saying it landed. No hard stops;
-> no merge, no push; `capped` for builds.
+> on, and merge only when I send the paste saying it landed. Mistakes in form
+> are yours to correct in the next commit; nothing in the charter is a reason
+> to stop. No merge, no push; `capped` for builds.
