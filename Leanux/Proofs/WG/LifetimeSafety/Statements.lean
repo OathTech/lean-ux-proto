@@ -6,6 +6,7 @@ import Leanux.Proofs.WG.Packets.Primitives
 import Leanux.Proofs.WG.Peers.Allocation
 import Leanux.Proofs.WG.Peers.Access
 import Leanux.Proofs.WG.Peers.CreationAccess
+import Leanux.Proofs.WG.Lifetimes.Enqueue
 
 /-! R2's store-identity components: whole-operation keypair evolution,
 peer allocation/reference sequences, and packet primitive sequences within a device
@@ -350,5 +351,47 @@ theorem keypair_ambient_reused_slot_fresh (call : Syscall) (w mid out : World)
     (snapshot w).frontier < k.internalId := by
   obtain ⟨_, _, hev⟩ := S3_syscall_ambient call w mid ret history hi hr
   exact hev.empty_slot_fresh he (getKeypair_current i mid out k hq).2
+
+/-- Given callback erasure, the mixed receive-enqueue observer has the complete
+original result and World, or the exact original error, on every input. -/
+theorem enqueue_mixed_access_erasure (irq : Lifetimes.MixedM Unit) (original : M Unit)
+    (he : ErasesPrefix irq original) (id : SkbId) (state : PacketState) :
+    ErasesPrefix (Lifetimes.enqueuePerPeerRxPrefix irq id state)
+      (enqueuePerPeerRx original id state) :=
+  Lifetimes.enqueuePerPeerRxPrefix_erases he id state
+
+/-- A callback satisfying the same invariant contract gives a safe appended
+mixed access prefix on every enqueue outcome and preserves the store invariants
+on success. These are identities actually resolved, not raw-reference provenance. -/
+theorem enqueue_mixed_access_preserves (irq : Lifetimes.MixedM Unit)
+    (hi : PrefixPreserves Lifetimes.MixedInv Lifetimes.LifetimeEvent.Safe irq)
+    (id : SkbId) (state : PacketState) :
+    PrefixPreserves Lifetimes.MixedInv Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.enqueuePerPeerRxPrefix irq id state) :=
+  Lifetimes.enqueuePerPeerRxPrefix_preserves hi id state
+
+/-- With the original no-op callback, receive enqueue preserves the mixed
+access invariant and retains a safe observation prefix even when it fails. -/
+theorem enqueue_mixed_access_pure (id : SkbId) (state : PacketState) :
+    PrefixPreserves Lifetimes.MixedInv Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.enqueuePerPeerRxPrefix (pure ()) id state) :=
+  Lifetimes.enqueuePerPeerRxPrefix_pure_preserves id state
+
+/-- Keypair lookup failure during enqueue retains exactly the preceding RX
+packet read and the prior mixed history, for every input World and callback. -/
+theorem enqueue_keypair_failure_prefix (irq : Lifetimes.MixedM Unit) (id : SkbId)
+    (state : PacketState) (w : World) (h : List Lifetimes.LifetimeEvent)
+    (pkt : RxPacket) (e : Stop) (hr : (getRxSkb id).run w = .ok (pkt, w))
+    (hk : (getKeypair pkt.keypair).run w = .error e) :
+    runPrefix (Lifetimes.enqueuePerPeerRxPrefix irq id state) w h =
+      (.error e, h ++ [.packet (.read (.inr id) (Lifetimes.packetStamp w id))]) :=
+  Lifetimes.enqueuePerPeerRxPrefix_keypair_failure irq id state w h pkt e hr hk
+
+/-- Original peer acquisition emits its two reads and conditional write in
+source order, retaining the exact prefix on pending-worker or refcount failure. -/
+theorem peer_acquire_access_exact (id : PeerId) (w : World) (h : List Peers.PeerEvent) :
+    runPrefix (Lifetimes.peerGetLocal id) w h =
+      ((peerGet id).run w, h ++ Lifetimes.peerGetEvents id w) :=
+  Lifetimes.peerGetLocal_run id w h
 
 end Leanux.Proofs.WG.LifetimeSafety

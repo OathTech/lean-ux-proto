@@ -14,28 +14,28 @@ differential check or guest run.
 | Result | Progress |
 | --- | --- |
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay and independent review checked. Seccomp frame carry checked. |
-| R2 lifetime safety | Keypair operation endpoints, peer allocation/reference helpers, packet primitives, failure-retaining peer creation/release observations and stale-cursor finding checked; caller/lifecycle and whole-run internal-access coverage remain in progress. |
+| R2 lifetime safety | Keypair operation endpoints, peer allocation/reference helpers, packet primitives, failure-retaining peer creation/release and mixed receive-enqueue observations, plus stale-cursor finding checked; caller/lifecycle and whole-run internal-access coverage remain in progress. |
 | R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees proved; device-root linkage, mutation/history and path refinements remain open. Path proofs follow R2. |
 | R4 delivery | Not started; drop characterisation waiting on W7 full-ring tier's explanation of the two drops. |
 | R5 key lifetime | Not started; time half waiting on review items 7 and 8 on the timer model. |
 | R6 flood resistance | Not started. |
 
-**Current validation.** The full proof gate passes 146 build jobs and 69
-terminal statements (ReplayWindow 15, R1 9, R2 37, R3 8), with only permitted
+**Current validation.** The full proof gate passes 152 build jobs and 74
+terminal statements (ReplayWindow 15, R1 9, R2 42, R3 8), with only permitted
 axioms. The default model build passes 60 jobs; the unit tier passes 93 tests
-in 21.463 seconds with one skip. Both explicit-record witness replays below
-still accept and agree with the original runner. Independent reviews cover
-the peer-creation addition and all seccomp carry files. The toolchain kernel
-replay also passes:
-`capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs`.
+in 21.436 seconds with one skip. Both explicit-record witness replays below
+were rechecked at the seccomp carry and agree with the original runner.
+Independent reviews cover peer creation, the seccomp carry, and mixed enqueue.
 
 **Shared carry.** Signal/task and pipe helper frames, seccomp entry/tail frames
 and arbitrary prefill preservation keep the seven-field WG projection intact.
 The runner observers include the child fixture and prefill success/error paths;
 no seccomp-free trace premise was added. The BPF converter proof shares compiler
 continuations and proves progress of its integer pass counter before framing
-the repeat loop. This carry took 17 compile passes over 36m34s; two independent
-read-only reviews checked source correspondence and the final deltas.
+the repeat loop. This carry took 17 compile passes over 36m34s; an independent
+reviewer checked source correspondence and final deltas in two passes, and
+another worker checked the loop architecture. That checkpoint also passed
+`capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs`.
 
 ## R1 — anti-replay uniqueness and the inclusive floor
 
@@ -195,6 +195,31 @@ a saved raw slot reference. The stale-cursor finding below can satisfy them.
 Whole-run coverage, dump-resume cleanup, other callers and device lifecycle remain
 open.
 
+**Mixed receive enqueue.** `Logged/Focus` injects only a local observer's new
+suffix, preserving prior interleaving. `Lifetimes/Tagged` uses a sum of complete
+peer/keypair/packet event families; packet stamps are `(device ifindex, id + 1)`.
+`MixedAccess` and `MixedFrames` give exact getter/setter observations and preserve
+the other families' identity views. `Acquire` records the original `peerGet`:
+no resolved access on lookup failure, one read before pending-worker rejection,
+two reads before refcount rejection, and two reads plus a write on success.
+
+`Enqueue` observes the complete original `enqueuePerPeerRx`. Its proof retains
+the cached peer's identity through the RX update and checks the peer write
+before the interrupt callback. Afterward, `peerPut` uses fresh getters; the
+callback need only preserve the mixed invariant, not the entire identity view.
+Five terminal exports cover all-input erasure, callback-parameterized safety,
+the no-op specialization, exact acquisition events and a keypair-lookup failure
+retaining the preceding packet read. The last is a helper failure equation,
+not an accepted-trace counterexample.
+
+The mixed invariant requires safe histories and absence of released identities,
+plus the peer uniqueness needed for release. It does not establish packet/keypair
+allocation freshness or uniqueness. Concrete callback coverage, device lifecycle,
+scheduler closure and retained-reference ownership remain open. In particular,
+`mixed_lift` is an endpoint frame; every concrete use must also be checked for
+unobserved internal accesses. The independent review checked those uses in this
+helper and its exact source-call order.
+
 **Concrete reference finding.** An eight-operation, explicit-record accepted
 mirror run creates 28 peers, starts a stepped dump, deletes wg0, creates a new
 wg0 and 27 replacement peers, then receives a chunk. The receive returns the
@@ -236,7 +261,8 @@ commits carry their own counts. No mirror semantics or kernel source changed.
 Most effort is caller coverage and reusable framing. Peer allocation took six
 compile passes, shared file frames four, failure-prefix observation nine,
 the shared kernel-frame migration three, and peer creation ten over about
-twenty-one minutes.
+twenty-one minutes. Mixed receive enqueue took nineteen compile passes over
+about twenty-five minutes.
 Failed passes exposed proof elaboration or simplification errors. One earlier
 anonymous-hypothesis tactic loop was stopped by verified PID and repaired.
 Independent read-only reviews found no correctness defect in these components;
