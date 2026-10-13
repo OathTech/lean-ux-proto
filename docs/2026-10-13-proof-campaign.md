@@ -15,22 +15,21 @@ differential check or guest run.
 | --- | --- |
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay and independent review checked. Seccomp frame carry checked. |
 | R2 lifetime safety | Keypair operation endpoints, peer allocation/reference helpers, packet primitives, failure-retaining peer creation/release, mixed receive-enqueue/decrypt iteration, keypair/packet release families, and complete keypair/TX/RX allocation with fixture initialization, allocation-aware release/caller composition and complete session/rotation and peer-creation calls, plus stale-cursor finding checked; caller/lifecycle and whole-run internal-access coverage remain in progress. |
-| R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion, original empty-root and immediate-empty-child insertion, and total original placement proved; general mutation/history and path refinements remain open. Path proofs follow R2. |
+| R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion, original empty-root and arbitrary-depth empty-child insertion with sequence wrappers, and total original placement proved; general mutation/history and path refinements remain open. Path proofs follow R2. |
 | R4 delivery | Not started; drop characterisation waiting on W7 full-ring tier's explanation of the two drops. |
 | R5 key lifetime | Not started; time half waiting on review items 7 and 8 on the timer model. |
 | R6 flood resistance | Not started. |
 
-**Current validation.** The full proof gate passes 184 build jobs and 119
-terminal statements (ReplayWindow 15, R1 9, R2 78, R3 17), with only permitted
+**Current validation.** The full proof gate passes 186 build jobs and 122
+terminal statements (ReplayWindow 15, R1 9, R2 78, R3 20), with only permitted
 axioms. The default model build passes 60 jobs; the unit tier passes 93 tests
-in 21.796 seconds with one skip. Both explicit-record witness replays below
+in 21.273 seconds with one skip. Both explicit-record witness replays below
 were rechecked at the seccomp carry and agree with the original runner.
 Independent reviews cover peer creation, the seccomp carry, mixed enqueue,
 decrypt execution, keypair/packet releases, ambient caller composition,
 allocation and release-bound composition, session creation and rotation,
-and the mixed peer-creation bridge,
-pure trie insertion, original empty-root and immediate-empty-child
-insertion, and placement.
+the mixed peer-creation bridge, pure trie insertion, original empty-root and arbitrary-depth empty-child
+insertion with its wrapper, and placement.
 
 **Shared carry.** Signal/task and pipe helper frames, seccomp entry/tail frames
 and arbitrary prefill preservation keep the seven-field WG projection intact.
@@ -117,281 +116,77 @@ would not preserve altitude and is not proposed.
 
 ## R2 — lifetime identity and retained references (in progress)
 
-[AGENT 2026-10-13] Separate store identity from retained-reference provenance.
-Absence of a released allocation does not establish that a saved numeric slot
-still denotes the allocation whose reference was acquired. Keep both obligations
-visible; a finding about the latter does not settle the former.
+**Architecture decisions [AGENT 2026-10-13].** Separate resolved allocation
+identity from ownership of saved numeric references. Share frontier algebra
+between stores, and frame unrelated operations once over the seven-field WG
+kernel projection. Keep observation history outside the exception layer so
+failed prefixes survive. Strengthen access safety separately with release
+uniqueness and then allocation/epoch bounds; share caller proofs through
+explicit ambient contracts instead of duplicating each invariant's proof.
 
-**Architecture and checked scope.** `Keypairs/Identity` derives allocation
-frontier monotonicity, old-identity provenance, absence preservation and fresh
-reuse from the existing `Evolution`. ReplayWindow's S3 discharges its contracts
-for original syscalls and their ambient step. A later successful getter cannot
-return an already absent, previously allocated identity. These are operation
-endpoint statements, not safety of every internal access.
+**Checked model and refinement.** `Lifetimes/Store` and `Actions` describe
+slot/stamp transitions over original executions. `Keypairs/Identity` uses the
+existing whole-syscall evolution to exclude reintroduction of absent old keypair
+identities at operation endpoints. Peer and packet primitive contracts extend
+that algebra; the packet primitive result is within one device epoch. These
+endpoint results alone do not establish internal-access coverage.
 
-`Lifetimes/Store` abstracts slots and allocation stamps. `Transition` preserves
-old-identity provenance; `Retained` permits only removal. `Actions` composes
-contracts over actual original executions. `Peers/Primitives` covers lookup and
-reference helpers; its raw setter contract requires the replacement's stamp to
-match the current resident. `Peers/Frames` carries that correspondence through
-initialization. `Peers/Allocation` proves the complete original `peerCreate`:
-an ordinary error result leaves the identity store unchanged; success advances
-the frontier once and inserts the fresh stamp. It does not assume an empty
-`nextPeer` slot in arbitrary malformed Worlds. Finite helper sequences include
-creation and get-unless-zero and preserve boundedness and old-identity absence.
+`Logged/Prefix` preserves the exact original result, successful World or Stop
+while retaining prior events on failure. `Focus` injects local suffixes into one
+mixed peer/keypair/packet stream. Packet stamps include `(ifindex, id + 1)`.
+`LifetimeEvent.Safe` excludes reads and writes after release of the same stamp.
+Failed getters resolve no object and emit no access. `ReleaseInv` adds resident
+uniqueness across each family, including both packet stores. `AllocationInv`
+adds separate slot and lifetime frontiers, current packet-frontier bounds and
+past-epoch bounds. Those premises supply allocator vacancy; all-input erasure
+still reproduces malformed occupied-slot overwrites without calling them safe.
+Every runner fixture initializes the invariant, and seccomp prefill preserves it.
 
-`Packets/Primitives` gives exact runs for all eight TX/RX allocation, lookup,
-update and free helpers. Its invariant bounds stored ids by `nextSkb`. Following
-an actual free, no successful primitive sequence can make a getter at that slot
-succeed. This covers one device epoch and does not assume TX/RX disjointness;
-post-free exclusion uses same-slot emptiness.
+The source-observed complete calls currently cover `peerCreate`, `peerGet`, `peerPut`, dump completion,
+keypair creation/acquisition/release/clearing/rotation/session creation, TX/RX
+allocation and free, receive enqueue, packet decryption and one decrypt-worker
+iteration. Finite release-call families compose them. Generic enqueue/decrypt
+contracts admit explicit observed softirq, IRQ-exit and rescheduling callbacks;
+they are instantiated at the allocation invariant. Peer creation reuses its
+existing observer unchanged, with original slot/metadata geometry transporting
+the stronger invariant. `AllocationRetention` uses surviving entry residents
+and explicit release origins to retain bounds through releases.
 
-[AGENT 2026-10-13] Share allocation-frontier algebra and projection contracts
-between stores; retain the fixed-device packet scope until lifecycle closure.
-Raw skb numbers alone do not identify allocations across device replacement.
+Exact event equations cover pending-worker and refcount failures, including
+writes before zero-refcount rejection and releases only after successful final
+puts. Conditional whole-call equations retain six events before session birthdate
+clock failure, and allocation/write before peer initialization's first cache
+clock failure. These equations are not accepted-run witnesses. Coverage is
+checked against actual source calls; erasure or an unchanged-Kernel theorem
+cannot certify that a lifted helper contains no reads. Shared filesystem frames
+also end at return, leaving queued task work for its later caller proof.
 
-`Framing/Projection`, `WGKernel` and `FSFileRefs` prove six original file-reference
-helpers once over the seven dedicated WG kernel fields, then derive keypair,
-peer and packet contracts by projection. These frames end at successful return:
-`fput` can queue task work whose later effects require separate proof. The
-remaining filesystem hierarchy has not yet been migrated. `KernelEffects`
-now shares the hidden-allocation/clock and four refcount contracts; `Kernel`
-frames 42 original helpers over the full WG view. All 277 theorem signatures
-in the four affected legacy modules are unchanged projection interfaces.
-Shared loop/map tooling and private-name references have no dependency back
-into that legacy hierarchy. These contracts likewise prove endpoint equality,
-not internal-access coverage.
+**Remaining claim.** Full caller, device-lifecycle and scheduler closure remain
+unproved. Receive entry, completion/poll, TX, handshake/timer callers, peer
+removal, netlink and direct resident scans need coverage. Saved scalar-reference
+ownership is a separate obligation: aliased or dangling IDs may legitimately
+stop after earlier safe accesses. No distinct-keypair-slot premise is hidden in
+rotation or clearing. The stale cursor below does not resurrect the old stamp,
+so it does not refute the endpoint identity theorem or settle charter R2.
 
-[AGENT 2026-10-13] Share filesystem preservation over the full WG kernel view
-rather than duplicate its operational proof hierarchy for each lifetime view.
-
-**Internal access prefixes.** `Logged/Prefix` puts observations outside the
-exception layer: failure retains events already made, while erasure returns the
-exact original error or successful value and World. `Lifetimes/Events` forbids a
-read or write after release of the same allocation stamp. `Peers/Access`
-observes the original `peerPut` at both getters (including `requireNotPending`),
-the setter and the inline store erasure; `wgGetDeviceDone` uses that observer.
-The exact event equation covers every input: a pending-worker rejection retains
-one read, a zero refcount retains two reads and the write before rejection, and
-a successful last-reference release has read/read/write/release. Failed getters
-resolve no object and emit no access event.
-
-The release-only exports give exact result/log equality and safety of every
-prefix of finite sequences of those two complete original calls, including
-failures. Their invariant states safe past history, unique resident stamps and
-absence of previously released stamps; it does not assert future safety.
-
-`Peers/CreationAccess` adds the complete original `peerCreate`, observing its
-first insertion as allocation/write and every getter/setter in destination-cache
-reset, handshake-clock reset, static-key precomputation and handshake
-initialization. `PrefixEnsures` carries result-dependent contracts through
-failures. The stronger invariant bounds resident and previously released stamps
-by the allocation frontier, so an arbitrary initial history cannot label a future
-allocation as already released. Five terminal exports cover exact erasure, core
-allocation observations, an initializer record-failure prefix, and finite sequences
-of creation, put and dump completion. The failure-prefix theorem concerns the
-helper after core creation, not a whole-runner counterexample. Ordinary create
-errors and `Stop` failures retain their actual effects and observations.
-
-These contracts do not require an empty `nextPeer` slot: a malformed occupied
-slot can be overwritten without an old-object release event. They prove ordered
-resolved-stamp accesses, not vacancy, complete release coverage or ownership of
-a saved raw slot reference. The stale-cursor finding below can satisfy them.
-Whole-run coverage, dump-resume cleanup, other callers and device lifecycle remain
-open.
-
-**Mixed receive enqueue.** `Logged/Focus` injects only a local observer's new
-suffix, preserving prior interleaving. `Lifetimes/Tagged` uses a sum of complete
-peer/keypair/packet event families; packet stamps are `(device ifindex, id + 1)`.
-`MixedAccess` and `MixedFrames` give exact getter/setter observations and preserve
-the other families' identity views. `Acquire` records the original `peerGet`:
-no resolved access on lookup failure, one read before pending-worker rejection,
-two reads before refcount rejection, and two reads plus a write on success.
-
-`Enqueue` observes the complete original `enqueuePerPeerRx`. Its proof retains
-the cached peer's identity through the RX update and checks the peer write
-before the interrupt callback. Afterward, `peerPut` uses fresh getters; the
-callback need only preserve the mixed invariant, not the entire identity view.
-Five terminal exports cover all-input erasure, callback-parameterized safety,
-the no-op specialization, exact acquisition events and a keypair-lookup failure
-retaining the preceding packet read. The last is a helper failure equation,
-not an accepted-trace counterexample.
-
-The mixed invariant requires safe histories and absence of released identities,
-plus the peer uniqueness needed for release. It does not establish packet/keypair
-allocation freshness or uniqueness. Concrete callback coverage, device lifecycle,
-scheduler closure and retained-reference ownership remain open. In particular,
-`mixed_lift` is an endpoint frame; every concrete use must also be checked for
-unobserved internal accesses. The independent review checked those uses in this
-helper and its exact source-call order.
-
-**Decrypt execution.** `KeypairAccess` proves the mixed setter contract from
-equality with the current resident stamp. `Decrypt` observes the original
-`decryptPacket`, including its second keypair read before a rejection update.
-The lifted clock, allocation and branch helpers contain no lifetime-store
-accesses. An exact failure equation retains the first keypair read if the
-rejection expression fails; it is a helper equation, not a new trace finding.
-`DecryptWorker` observes the complete original step and iteration, with softirq,
-IRQ-exit and rescheduling callbacks in source order. `Logged/PrefixWorkers`
-shares the generic iteration composition. Callback contracts require safe
-appended histories and the mixed invariant on success, permitting identity
-changes. Five terminals export packet and iteration erasure/preservation plus
-the failure equation. Concrete callbacks and whole scheduler closure remain open.
-
-**Keypair and packet releases.** `ReleaseInvariant` adds keypair and packet
-resident uniqueness to the mixed invariant. Packet uniqueness spans both TX and
-RX slots. `KeypairRelease` observes every original `keypairGet` and `keypairPut`
-access, with all-input event equations. A zero-count put reads and writes before
-its refcount error, without a release; a count of one releases after the write.
-`PacketRelease` records the successful getter before each TX/RX free. A failed
-getter records neither access nor release. Raw erase leaves require current
-residency to interpret their release labels; the complete callers establish it.
-
-`ReleaseCalls` follows the complete next→previous→current `keypairsClear` caller,
-including both peer getters and its setter in each round. Its five-constructor
-family composes acquisition, put, both packet frees and clear, retaining safe
-histories on every outcome and the invariant on successful return. Repeated
-keypair references need no distinctness premise: a later dangling lookup stops
-with its earlier events retained. Seven terminals export the finite-family
-contracts and exact helper equations. The allocation-aware specialization below
-adds frontier preservation; device lifecycle, concrete callbacks and whole-run
-closure remain open.
-
-[AGENT 2026-10-13] Carry release uniqueness through the existing `MixedSpec`
-identity-predicate parameter in a separate `ReleaseInv`. Getters and same-stamp
-updates need less than release, so existing enqueue/decrypt callback contracts
-retain their weaker invariant; no additional generic framing mechanism is needed.
-
-**Release-aware caller composition.** `Ambient` separates a history-dependent
-invariant from the temporary identity predicates used for cached getter results.
-Its contracts cover the actual getter/setter, peer-reference and access-free
-kernel actions used by enqueue and decrypt. The decrypt queue update has its
-own explicit preservation premise: identity-view equality alone cannot preserve
-an arbitrary allocation or release-history invariant. `ReleaseAmbient`
-instantiates these contracts with `ReleaseInv`; two terminal exports compose
-enqueue and decrypt iteration with callbacks at that stronger invariant. The
-original observer definitions, erasure proofs and weaker `MixedInv` terminal
-contracts are unchanged. The allocation instance is described below; concrete
-callbacks and scheduler closure remain open.
-
-[AGENT 2026-10-13] Generalize the enqueue/decrypt preservation bodies once over
-explicit ambient primitive contracts, then instantiate release uniqueness. The
-earlier separate `ReleaseInv` remains sufficient for primitive release proofs;
-caller composition additionally needs callbacks to receive that stronger
-invariant. A callback requiring uniqueness cannot be supplied through a contract
-that assumes only `MixedInv`.
-
-**Allocation and initial state.** `AllocationInvariant` adds separate slot
-and lifetime frontiers to `ReleaseInv`, including peer creation bounds and
-released-history bounds. Peer/keypair slot bounds and the shared TX/RX packet
-frontier imply all four destination slots are vacant. Packet identities retain
-the device epoch; current-epoch released stamps are bounded by `nextSkb`, and
-all released epochs precede `netIfindexNext`.
-
-`KeypairAllocation` factors the complete original creation into the hidden
-allocation choice and its exact insertion core. `PacketAllocation` shares one
-proof between the original TX/RX helpers. Both record allocation followed by
-initialization write, preserve safe prefixes and the stronger invariant, and
-have all-input erasure and event equations. Failed creation and normal keypair
-allocation refusal retain the incoming history exactly. Emitting these events
-at successful return is valid because the exact source equations show no
-possible failure or further object access between insertion and return. Unlike
-peer creation, these helpers have no fallible post-insertion initialization.
-Malformed occupied-slot worlds are still reproduced by the equations; those
-equations do not certify release coverage for an overwritten old object.
-Safety separately assumes the invariant that excludes occupied destinations.
-
-`AllocationFrames` separates identity equality, a small metadata projection and
-transport of released-history sets. Its access contract permits a conditional
-frame, needed for raw setters whose same-stamp premise comes from a getter.
-`AllocationInitial` establishes the invariant for every original runner fixture
-and preserves it through successful seccomp prefill. Eight terminals expose the
-allocator contracts, vacancy and fixture initialization. Concrete caller and
-device lifecycle closure remain open.
-
-[AGENT 2026-10-13] Keep allocation safety in a separate stronger invariant with
-both slot and stamp frontiers, rather than strengthening existing access-only
-interfaces. Track packet epoch and per-device frontier independently so later
-device creation can distinguish old released identities from new slots.
-
-**Allocation-aware releases and callers.** `AllocationRetention` transports
-the stronger invariant through calls with unchanged allocation metadata. Every
-surviving identity must remain at its entry slot, and each newly released stamp
-must name an entry resident. Existing `ReleaseInv` proofs supply safe histories
-on all outcomes; the additional bounds are reconstructed only on successful
-returns. `AllocationReleaseFrames` proves these state properties for the actual
-reference helpers. The existing keypair ordinary transition is used together
-with equal frontiers, which excludes its allocation constructor.
-
-`AllocationReleases` obtains release origins from the exact earlier event
-equations for peer/keypair puts and packet frees. `AllocationAmbient` combines
-those contracts with access-only leaves, whose identity/metadata frames and
-unchanged release sets are explicit. It instantiates the existing enqueue and
-decrypt proofs, including their callback premises. Acquisition and keypair-clear
-proof bodies are now generic over ambient contracts, while their old signatures,
-observer definitions and erasure proofs are retained. Five exports add peer
-references, finite acquire/put/free/clear sequences, enqueue, packet decryption
-and one decrypt iteration at `AllocationInv`. This establishes resolved-store
-access safety; it does not establish ownership or validity of stored scalar
-references. Lifecycle and scheduler callers remain open.
-
-**Complete session and rotation calls.** `KeypairRotation` observes original
-`addNewKeypair` and `receivedWithKeypair`, retaining fresh peer getters around
-keypair releases. `Session` observes handshake zeroing, key derivation and the
-complete `beginSession` body. Generic preservation uses explicit allocation,
-put and scalar index-update contracts, then instantiates `AllocationInv`.
-The index-table action resolves no peer/keypair object; its frame preserves
-both identities and allocation metadata. Five exports state all-input erasure,
-resolved-access safety and a conditional whole-session failure equation.
-
-`SessionFailure` identifies the exact six-event prefix retained if the birthdate
-clock fails after allocation and configuration: two peer reads, allocation,
-initialization write, keypair read and configuration write, in source order.
-Its premises are consecutive original executions; it is not a recorded runner
-witness. No distinct-slot premise is imposed. Scalar references can be invalid
-in arbitrary invariant-satisfying states without a subsequent resolution, so
-these theorems make no ownership or reference-integrity claim. Handshake
-callers, device lifecycle and whole-scheduler closure remain open.
-
-**Complete peer creation at the allocation invariant.** `PeerAllocationFrames`
-proves original creation geometry: other-family residents and allocation metadata
-are unchanged except that successful creation advances `nextPeer` from the
-created slot. `PeerAllocation` reuses the existing complete peer observer through
-`peerFocus`; there is no second observer body. Old peer-history preservation,
-original slot geometry and the entry slot bound transport every field of
-`AllocationInv`. All-input erasure includes malformed occupied-slot inputs;
-safety requires the invariant that supplies vacancy. `PeerAllocationFailure`
-proves a conditional whole-call cache-clock failure equation retaining exactly
-the allocation and initial write. This is source-execution evidence, not an
-accepted recorded-run witness. Lifecycle and scalar-reference ownership remain
-open.
-
-**Concrete reference finding.** An eight-operation, explicit-record accepted
-mirror run creates 28 peers, starts a stepped dump, deletes wg0, creates a new
-wg0 and 27 replacement peers, then receives a chunk. The receive returns the
-already queued first chunk; its continuation generation performs the destructive
-release. The dump retained slot 26, old identity 27, with two references. Device
-deletion leaves the cursor active. Replacement slot 26 has identity 55 and one
-reference; resumed cleanup calls `peerPut` on it, removing its store entry while
-the configured peer list and public-key table still name slot 26. Old identity
-27 does not return. This is reference retargeting and table incoherence, not
-reading a released old object.
+**Concrete reference finding.** An eight-operation accepted mirror run creates
+28 peers, starts a stepped dump, deletes wg0, creates a new wg0 and 27 replacement
+peers, then receives a chunk. The dump retained slot 26, old identity 27, with
+two references. Its continuation cleanup releases replacement identity 55,
+which has one reference, removing it while the peer list and public-key table
+still name slot 26. The received message is the already queued first chunk;
+continuation generation performs the destructive release. Old identity 27 does
+not return: this is reference retargeting and table incoherence.
 
 The guest rejects deletion with a pending dump (`wg_delete_with_dump_pending`),
-and the W1/W2 design calls for the mirror to do likewise. `Env.wgDelete` checks
-worker idleness but not the dump. Linux retains `ctx->wg`; the mirror retains a
-Boolean and resumes against the current device. This is an accepted-mirror
-domain bug, not evidence of a Linux lifetime bug. No kernel experiment was run.
-
-`Logged/Checkpoints` observes one projection after each original operation,
-including ambient processing and guards; erasure preserves the complete JSON or
-indexed error, and a separate theorem proves exact singleton append. The replay
-checks five relevant checkpoints, their total count and original JSON equality.
-Its records are synthetic, explicit and non-placeholder, not a Linux capture.
-The terminal `stale_cursor_retargets_replacement` is a separate kernel-reduced
-witness of the actual `wgGetDeviceDone` callback. The full replay reaches the
-same bad `peerPut` through `wgGetDeviceDump` resume cleanup; these are distinct
-call sites.
+and the W1/W2 design requires that restriction. `Env.wgDelete` checks worker
+idleness but omits the dump guard. C retains `ctx->wg`; the mirror resumes a
+Boolean-held cursor against the current device. This is an accepted-mirror
+domain bug, not evidence of a Linux lifetime bug. The explicit non-placeholder
+records are synthetic, not a fresh capture. Five runner checkpoints, their count
+and original JSON equality are checked. The kernel-reduced
+`stale_cursor_retargets_replacement` separately exercises `wgGetDeviceDone`;
+the full replay reaches the same bad put through dump-resume cleanup.
 
 ```sh
 set -o pipefail
@@ -400,245 +195,98 @@ python3 -B docs/proof-campaign-replay.py r2-stale-dump-cursor |
 capped -- scripts/in-bundle scripts/proof-gate
 ```
 
-**Validation and effort.** Current validation is recorded above. The recorded
-replay accepts and checks its assertions in under one second. Earlier checkpoint
-commits carry their own counts. No mirror semantics or kernel source changed.
+**Effort and review.** Reproduction takes under one second. The main caller
+checkpoints took roughly 6–25 minutes each, with 4–19 compile passes; the latest
+peer-creation bridge took nine passes over 10.44 minutes. Counts and failed
+passes are retained in the checkpoint history; current validation is above.
+Failures were proof elaboration/simplification failures, not passes or mirror
+findings. One earlier tactic loop was stopped by its verified PID and repaired.
+Independent source reviews cover every listed checkpoint and its final deltas.
+They corrected scope wording and identified an unused impossible KDF-failure
+premise; that vacuous lemma was deleted. No remaining correctness finding is
+reported for the checked components. C initializes cache/handshake before its
+peer-counter increment, whereas the mirror increments/inserts first: the proof
+follows the mirror, without claiming a C simulation or a lifetime counterexample.
 
-Most effort is caller coverage and reusable framing. Peer allocation took six
-compile passes, shared file frames four, failure-prefix observation nine,
-the shared kernel-frame migration three, and peer creation ten over about
-twenty-one minutes. Mixed receive enqueue took nineteen compile passes over
-about twenty-five minutes. Decrypt execution took ten compile passes over
-fourteen minutes and twenty-two seconds. The release checkpoint took thirteen
-compile passes over fifteen minutes and twenty-three seconds. One full build
-failed after a proof-script simplification cleanup; explicit rewrites repaired
-it, and the next full build passed. The ambient generalization took four
-compile passes over six minutes: three passed, and one predicate-shape
-elaboration failure was repaired before the full 167-job build. Allocation
-took eighteen compile passes over twenty minutes and thirty-one seconds;
-projection and elaboration failures were repaired before two passing full
-172-job builds.
-Allocation-aware release composition took eleven capped compile passes over
-about fourteen minutes; the final full build passed 178 jobs. Early passes
-needed routine elaboration repairs, with no invariant obstruction.
-Session and rotation took eleven capped compile passes over twelve minutes and
-five seconds: three passed and eight failed during elaboration. The final full
-build passed 181 jobs.
-The mixed peer-creation bridge took nine capped compile passes over 10.44
-minutes; five early passes failed on ordinary elaboration obligations and the
-final full build passed 184 jobs.
-Failed passes exposed proof elaboration or simplification errors. One earlier
-anonymous-hypothesis tactic loop was stopped by verified PID and repaired.
-Independent read-only reviews found no correctness defect in these components;
-their scope corrections and allocation-history requirement are incorporated
-above. Coverage is checked against source calls, not inferred from erasure.
-The decrypt review corrected one wording issue: the setter's same-stamp premise
-does not establish raw-reference provenance. Its final review also checked the
-new failure equation and terminal scopes. The release review checked exact source
-accesses, failing prefixes, packet epochs, the clear caller and all seven exports;
-it found no defect. Its raw erase-leaf interpretation caveat is documented above.
-A final proof-script cleanup delta was independently reread. The ambient review
-checked primitive contracts, source order, failed prefixes, both stronger
-exports and unchanged weaker APIs; it found no correctness or scope defect.
-The allocation review checked all five modules and eight exports. Its one
-wording finding was fixed: packet allocation increments the frontier while
-preserving allocation bounds. No correctness or source-coverage finding remains.
-The release-composition review checked all seven changed proof files and five
-new exports, including the unchanged observer bodies and old interfaces. It
-found no defect and confirmed that successful-state bounds and error-prefix
-safety remain separate obligations.
-The session review checked all four files against the mirror and local `noise.c`.
-It found an unused KDF-failure lemma whose premise was impossible for the current
-nonthrowing KDF; that vacuous lemma was deleted and supplies no coverage evidence.
-The actual clock-failure equation and all five final exports passed review, with
-no remaining finding. This proof correction is not a Rule Zero mirror finding.
-
-The peer-creation bridge review checked original initialization order, all
-allocation-invariant fields, reuse of the existing observer, all four exports
-and the conditional failure equation. No correctness or coverage finding
-remains. Its final reviewed hashes match the gated files.
-
-One source-order limitation remains: C `peer.c` initializes destination cache
-and handshake before incrementing `peer_counter`; the mirror increments and
-inserts before those helpers. The allocation theorem follows the mirror. This
-is a C-correspondence limitation, not an accepted-trace lifetime counterexample
-or a C-simulation claim.
-
-**Ranked mirror-shape recommendations.** (1) Restore the documented rejection
-of deletion with a pending dump: altitude-preserving fixture-domain enforcement.
-(2) If that domain is intentionally expanded, retain the actual device lifetime
-in the cursor, following C: altitude-preserving, requiring separate mirror
-validation. (3) Keep named allocation, deletion and same-object field-update
-boundaries: altitude-preserving operational structure that reduces framing.
-No production history field is proposed. All mirror changes are outside this
-campaign's edit authority.
+**Ranked mirror-shape recommendations.** (1) Restore the documented pending-dump
+deletion rejection: altitude-preserving fixture-domain enforcement. (2) If that
+domain is expanded, retain the actual device lifetime in the cursor as C does:
+altitude-preserving, requiring separate validation. (3) Keep named allocation,
+deletion and same-object update boundaries: altitude-preserving operational
+structure. No production history field is proposed; mirror edits remain outside
+this campaign.
 
 ## R3 — cryptokey routing (in progress)
 
-[AGENT 2026-10-13] Prove width-parametric prefix arithmetic before constructing
-an inductive Patricia tree and its representation in the original node store.
-The independent trie half can proceed while R2 caller coverage is in progress.
+**Architecture decisions [AGENT 2026-10-13].** Use width-parametric prefix
+arithmetic, one inductive Patricia tree and one pure insertion algorithm.
+Contexts describe structural paths without adding another executable algorithm.
+Keep raw addresses and original allocation order. At original mutation boundaries,
+require freshness throughout the node store, including unrelated entries and
+the opposite address family.
 
-**Checked arithmetic component.** `WG/AllowedIps/Prefix` models a prefix by
-integer division and the following branch bit by quotient parity. Its 23
-lemmas establish highest-set-bit bounds, the IPv6 high/low split, prefix
-nesting and opposite branches at the common prefix of distinct addresses.
-`ArithmeticMirror` proves exact execution equations for the original
-`commonBits`, `prefixMatches` and `choose`, including every branch record and
-the entire resulting World. The three terminal statements export maximal
-common-prefix length, equality-based matching, and the next branch bit.
-Address bounds and CIDR bounds are explicit representation premises; no trie
-invariant or history theorem has yet discharged them for all runner inputs.
+**Checked model and refinement.** `Prefix` defines leading bits and branch
+selection arithmetically. `ArithmeticMirror` refines original `commonBits`,
+`prefixMatches` and `choose`, retaining their branch effects and entire Worlds.
+`Tree.Valid` requires bounded addresses/CIDRs and local edge constraints. The
+independent flat-list `Winner` specification selects a longest matching owned
+prefix. Pure lookup satisfies it without compression or node-ID uniqueness.
+Strict CIDR growth bounds height by width plus one.
 
-**Checked pure-tree component.** `AllowedIps/Tree` retains node labels, unmasked
-addresses, CIDRs and optional owners. Its independent flat-list `Winner`
-specification says that the result is a matching owned prefix with maximal
-CIDR, or that none matches. `Valid` requires only bounded node addresses/CIDRs
-and local edges: a child has a longer prefix, extends its parent and has the
-appropriate branch bit. Structural induction proves `lookup_spec`, canonical
-prefix-key uniqueness and unique-winner characterization. Compression and
-node-ID uniqueness are not premises of lookup correctness. Strict CIDR growth
-also proves height at most width plus one; IPv6 leaves room within 130
-iterations for every node and an empty-cursor check. The three new terminals
-explicitly describe this intermediate model, not the original traversal.
+`Store.RepAt` gives exact node values, children and backlinks, allowing unrelated
+store entries. `LookupMirror` proves that original `findNode` terminates normally,
+returns the pure answer and preserves the Kernel; the actual 130-iteration bound
+is discharged rather than assumed. Original `nodePlacement` likewise terminates
+and yields an exact or stopped context, preserving the source's ordered exits
+and allowing exact matches on ownerless nodes. External root linkage remains an
+explicit caller obligation, not part of `RepAt`.
 
-**Original traversal.** `Store.RepAt` records exact reachable node values,
-children and parent backlinks, permitting unrelated store entries. It contains
-no lookup premise. `LookupMirror` proves total correctness of the original
-`findNode`, with exceptions forbidden: every represented valid IPv4/IPv6 tree
-and bounded query returns the pure longest-prefix answer normally and preserves
-the whole Kernel. Its loop invariant keeps the current subtree, earlier best
-match and actual remaining-range budget. Strict height decrease rules out
-exhaustion of the 130-iteration loop. The action retains its branch effects in
-the returned World; the export does not separately characterize those records.
+`Insertion` preserves validity/compression, replaces exactly the requested
+canonical-prefix owner and accounts for all old/new node IDs by permutation.
+The first fresh ID names the requested node; a needed ownerless intermediate
+gets the second. Exact overwrite retains the old ID and raw address. Lookup
+agrees with the independently updated flat binding list.
 
-**Remaining claim.** The traversal starts at the represented tree's root;
-general mutation histories must establish device-root linkage and preservation
-by insertion/removal. Configuration-history agreement and both packet paths
-remain open. Owners are raw peer slots,
-not cryptographic identities or allocation stamps. Peer liveness and reference
-ownership are not asserted. No R3 statement has been reshaped and no Rule Zero
-finding is claimed here.
+`MutationMirror` refines original empty-root insertion. `ChildMutation` and
+`ChildStore` handle the root's immediate empty child; `DeepChild` and
+`DeepChildStore` extend that case to arbitrary represented depth. Context
+replacement requires the local root ID to remain fixed. Initial whole-tree
+`Nodup` separates the changed parent from retained ancestors/siblings, while
+`NodesBelow` protects them from fresh allocation. Exact source-stage contracts
+compose allocation, peer-list append and connection; original traversal derives
+the placement premise. The resulting state represents the existing pure
+insertion, retains validity/unique IDs and links to the actual device root.
+Original lookup from that root satisfies the updated flat-list `Winner`.
 
-**Pure insertion.** `Insertion` adds one recursive Patricia insertion algorithm,
-using a local graft at stopped placement. It preserves local validity and
-compression and replaces exactly the requested canonical prefix's owner.
-Lookup agrees with the independently specified flat binding list after that
-replacement. Exact-prefix overwrite retains the old node ID and unmasked
-address. A new owned node receives the first fresh ID; when needed, the
-ownerless intermediate receives the second. A permutation theorem accounts
-for every old and new node ID, deriving uniqueness and the advanced frontier
-from explicit initial uniqueness and freshness premises. These are pure-tree
-results: general original `add`, peer lists, backlinks, allocation failure and
-history refinement remain open. In particular, freshness within this tree does not
-imply freshness throughout the node store, which may also hold the other
-address-family tree and unrelated entries.
+These mutation contracts distinguish normal allocation refusal from success;
+arbitrary bad records may still Stop. `add` refusal preserves the Kernel.
+The original `insert` wrapper advances the sequence once before either normal
+outcome, including refusal. Exact equations preserve opposite root values and
+any supplied opposite-family representation; existing opposite-root linkage
+is preserved, not inferred. The statements describe exact endpoint states,
+not mutation-event order. Peer-list append is exact without yet proving list
+coherence or ownership.
 
-[AGENT 2026-10-13] Keep the insertion algorithm singular; recursive structural
-evidence describes it without introducing a second executable tree model.
-Preserve raw addresses and allocation order for later original-store refinement.
+**Remaining claim.** Exact-prefix replacement, nonempty grafts, second-allocation
+rollback, removal and general configuration histories remain open. Parsed-input
+bounds and history invariants still need propagation through all mutations.
+Both packet paths follow R2. Owners are raw peer slots, not allocation or
+cryptographic identities; no liveness/ownership claim follows from tree lookup.
+No R3 statement has been reshaped and no Rule Zero finding is claimed.
 
-**Original empty-root insertion.** `StoreMutation` supplies lookup-based
-representation framing and `NodesBelow`, which bounds every stored node ID by
-the allocation frontier. `MutationMirror` proves original allocation, list-tail
-and root-connection contracts, then normal-execution equations for `add` and
-`insert` on an empty selected root. Successful insertion installs exactly the
-pure leaf, appends its ID to the existing target peer, and connects its backlink
-to the chosen root. The exact Kernel equation retains allocation's initial
-root4 backlink write and connection's subsequent write, including for IPv6.
-Normal `add` allocation refusal preserves the Kernel; `insert` increments the
-sequence number before either outcome. Missing or malformed records may still
-produce `Stop`; normal completion is not asserted for arbitrary record streams.
+**Effort and review.** Arithmetic, pure-tree and original traversal work took
+5, 6 and 20 compile passes; pure insertion took 13. Empty-root insertion took
+12 passes over 11m44s. Placement took 21 over about thirty minutes, including a
+failed monolithic child-insertion attempt. Its staged replacement closed in
+19 passes over eighteen minutes; that proof failure was not a mirror finding.
+Arbitrary-depth insertion plus its wrapper took eight capped builds over 11m49s:
+five passed, three failed during ordinary proof development, with no cap hits.
+The final full build passed 186 jobs. Independent reviews checked each layer
+and final terminal scopes; no correctness finding remains. Reporting corrections
+separated root values from linkage, endpoint equations from event order, and
+successful Worlds from failing Stops. Current validation is above; reproduce
+with `capped -- scripts/in-bundle scripts/proof-gate`.
 
-The two terminal exports establish the new root's linkage and valid represented
-tree and preserve both the opposite root value and any supplied opposite-family
-tree representation. They preserve a caller's existing opposite-root linkage;
-they do not derive that linkage without a premise. Whole-store freshness protects
-unrelated entries as well as the opposite family. General nonempty insertion,
-intermediate-allocation rollback, removal, owner liveness and history remain open.
-
-[AGENT 2026-10-13] Require whole-store node freshness at the original mutation
-boundary: freshness only within the selected tree cannot protect other stored
-nodes from allocation overwrite.
-
-**Original placement.** `Context` records a hole along the request's path,
-with strictly shorter matching ancestors and their selected bits. `PlacementEnd`
-keeps the original exit order: empty focus, CIDR too long, prefix mismatch, then
-exact match after updating the parent. Exactness includes ownerless nodes.
-`PlacementMirror` proves total original `nodePlacement` using the represented
-subtree and its height against the actual remaining loop range. Its false
-exception post rules out dangling getters, invalid selectors and exhaustion.
-
-Three exports connect this traversal to insertion: the exact flag agrees with
-zero pure allocations; a nonexact result identifies the structurally graftable
-focus and its reconstructed insertion; and a known empty focus determines the
-precise returned parent. These calls start at the supplied tree's root. `RepAt`
-does not itself establish that a device root field or external slot points there;
-an `add` caller still needs that linkage. No second executable placement
-algorithm was introduced.
-
-**Original immediate-empty-child insertion.** The first attempt failed to close
-repeated getter and Kernel-state equality goals and was removed. The second
-architecture in `ChildMutation` composes exact allocation, peer-list, getter and
-child-connection contracts with explicit state substitutions between stages;
-it closes the original `add` path. `ChildStore` proves that its exact installed
-state represents the existing pure `insertFresh`, with a valid tree and advanced
-frontier. Both root values and the sequence number are preserved. Any supplied
-opposite-family representation survives: whole-store freshness protects it from
-the allocation, and its node width excludes the modified parent.
-
-Two exports distinguish unchanged-Kernel allocation refusal from successful
-installation, then compose successful insertion with original `findNode` at the
-actual resulting root to obtain the independent flat-list longest-prefix answer.
-Selected-root linkage and parent/sibling separation are explicit premises.
-These are endpoint properties, not an observed mutation-event-order theorem.
-Peer-list append is exact, but peer-list coherence is neither assumed nor proved.
-This case is the root's immediate empty child; arbitrary-depth mutation, the
-`insert` wrapper for this case, rollback and history remain open. Failure of the
-first proof architecture was not a Rule Zero finding.
-
-**Validation and effort.** The arithmetic took five compile passes, the pure
-tree six, and the store/traversal refinement twenty over about eighteen minutes.
-Pure insertion took thirteen build invocations over about sixteen and a half
-minutes, including its targeted and full builds.
-The original empty-root bridge took twelve capped builds over eleven minutes
-and forty-four seconds, including seven corrected compile failures.
-Placement took twenty-one capped builds over about thirty minutes: five passed
-and sixteen failed during proof development, including the failed optional
-mutation attempt. The final full proof build passed.
-The second child-insertion architecture took nineteen capped builds over eighteen
-minutes: six passed and thirteen failed during proof development, with no cap
-hits. Its final full build passed 174 jobs.
-Failed passes exposed proof elaboration or simplification errors. Current
-validation is recorded above. Reproduce with
-`capped -- scripts/in-bundle scripts/proof-gate`.
-
-**Independent review.** Read-only reviews found no correctness defect in the
-arithmetic, pure tree or total original traversal. The arithmetic retains exact
-World effects and IPv6 branch order. The traversal derives normal completion
-rather than assuming it, and its representation supplies actual node/data/child
-coherence and node widths. Bounds still need propagation from parsed inputs
-through original mutations. Compression and globally unique node identifiers
-are not required by lookup; pure insertion preserves them from explicit
-premises, without yet establishing reachability. Owner labels need not denote live peers.
-Correspondence to C byte layout remains informal: this is not a C simulation.
-A separate read-only insertion review checked the successful structural cases,
-canonical-prefix replacement, exact fresh-ID permutation and final terminal
-scope, finding no defect. Its whole-store freshness obligation is retained
-above; it did not run builds or the gate.
-A separate read-only review checked the original empty-root helper, wrapper and
-terminal contracts, including the normal-error sequence update and IPv6 backlink.
-It found no mathematical defect and corrected one wording issue: the opposite
-root value and supplied representation are preserved separately; their initial
-linkage is not derived by the theorem.
-The placement review checked source condition order, totality, context/insertion
-correspondence, empty-focus uniqueness and the three final exports, finding no
-defect. It retained the same external-root linkage obligation for later mutation.
-The child-insertion review checked the exact source helpers, represented insertion,
-opposite-family preservation and composed original lookup, with no unresolved
-finding. It corrected a docstring that described an endpoint theorem as an
-event-order property; the theorem and report now state the narrower exact claim.
-
-**Ranked mirror-shape recommendations.** None from this component. The current
-named arithmetic helpers and integer address encoding admit exact refinement
-without production changes.
+**Ranked mirror-shape recommendations.** None from these components. The named
+arithmetic helpers and integer address encoding admit refinement without
+production changes; correspondence to C byte layout remains informal.

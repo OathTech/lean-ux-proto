@@ -113,6 +113,19 @@ theorem add_empty_wp (k : Kernel) (d : WG.Device) (hd : k.wg = some d)
 def bumpSeq (d : WG.Device) : WG.Device :=
   { d with peerAllowedips := { d.peerAllowedips with seq := d.peerAllowedips.seq + 1 } }
 
+/-- The original wrapper delegates with the sequence already incremented.
+The equation preserves the exact result and complete World on success, and
+the exact Stop on failure; a failed run does not return a World. -/
+theorem insert_run_bump (w : World) (d : WG.Device) (hd : w.k.wg = some d)
+    (family addr cidr pid : Nat) :
+    (WG.insert family addr cidr pid).run w =
+      (WG.add (rootSlot (family == 4)) (rootWidth (family == 4)) addr cidr (some pid)).run
+        { w with k := { w.k with wg := some (bumpSeq d) } } := by
+  by_cases hf : family = 4
+  · subst family
+    simp [WG.insert, WG.modifyDev, modifyK, hd, rootSlot, rootWidth, bumpSeq]
+  · simp [WG.insert, WG.modifyDev, modifyK, hd, hf, rootSlot, rootWidth, bumpSeq]
+
 theorem insert_empty_wp (k : Kernel) (d : WG.Device) (hd : k.wg = some d)
     (family addr cidr pid : Nat) (p : WG.Peer)
     (hp : d.peers[pid]? = some p) (he : rootValue d (family == 4) = none)

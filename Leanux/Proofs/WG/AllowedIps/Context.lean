@@ -261,4 +261,76 @@ theorem PlacementWitness.empty_result {c : Context} {result : Option Nat × Bool
   obtain ⟨observed, u, ht, ho, he⟩ := h
   exact c.empty_result observed u none hf ho ht he
 
+/-- Replacing a focus without changing its root leaves each ancestor's
+encoded child pointers unchanged. -/
+theorem Context.root_congr (c : Context) {before after : Tree}
+    (h : after.root = before.root) : (c.plug after).root = (c.plug before).root := by
+  cases c <;> first | exact h | rfl
+
+theorem Context.mem_plug_nodeIds (c : Context) (u : Tree) (id : Nat) :
+    id ∈ (c.plug u).nodeIds ↔ id ∈ (c.plug .empty).nodeIds ∨ id ∈ u.nodeIds := by
+  induction c with
+  | here => simp [Context.plug, Tree.nodeIds]
+  | left n c r ih => simp only [Context.plug, Tree.nodeIds, List.mem_cons, List.mem_append, ih]; grind
+  | right n l c ih => simp only [Context.plug, Tree.nodeIds, List.mem_cons, List.mem_append, ih]; grind
+
+/-- Exact store replacement at a focus whose node identifier stays fixed.
+Only nodes outside the focus must retain their old values. -/
+theorem Context.rep_replace_sameRoot (c : Context) (before after : Tree)
+    (base : WG.Slot) (hwhole : RepAt nodes width base (c.plug before))
+    (hfocus : RepAt nodes' width (c.slot base) after)
+    (hroot : after.root = before.root)
+    (hframe : ∀ id ∈ (c.plug .empty).nodeIds, nodes'[id]? = nodes[id]?) :
+    RepAt nodes' width base (c.plug after) := by
+  induction c generalizing base with
+  | here => exact hfocus
+  | left n c r ih =>
+    refine ⟨?_, ih _ hwhole.2.1 hfocus ?_, ?_⟩
+    · have he := hframe n.id (by simp [Context.plug, Tree.nodeIds])
+      rw [he, hwhole.1]
+      simp only [encode, c.root_congr hroot]
+    · intro id hi
+      exact hframe id (by simp [Context.plug, Tree.nodeIds, hi])
+    · exact hwhole.2.2.congr (fun id hi => hframe id (by simp [Context.plug, Tree.nodeIds, hi]))
+  | right n l c ih =>
+    refine ⟨?_, ?_, ih _ hwhole.2.2 hfocus ?_⟩
+    · have he := hframe n.id (by simp [Context.plug, Tree.nodeIds])
+      rw [he, hwhole.1]
+      simp only [encode, c.root_congr hroot]
+    · exact hwhole.2.1.congr (fun id hi => hframe id (by simp [Context.plug, Tree.nodeIds, hi]))
+    · intro id hi
+      exact hframe id (by simp [Context.plug, Tree.nodeIds, hi])
+
+/-- No identifier of a duplicate-free focus occurs outside that focus. -/
+theorem Context.focus_disjoint (c : Context) (u : Tree)
+    (hn : (c.plug u).nodeIds.Nodup) :
+    ∀ id ∈ u.nodeIds, id ∉ (c.plug .empty).nodeIds := by
+  induction c with
+  | here => simp [Context.plug, Tree.nodeIds]
+  | left n c r ih =>
+    simp only [Context.plug, Tree.nodeIds, List.nodup_cons, List.nodup_append] at hn
+    intro id hi hout
+    have hin := (c.mem_plug_nodeIds u id).mpr (.inr hi)
+    simp only [Context.plug, Tree.nodeIds, List.mem_cons, List.mem_append] at hout
+    rcases hout with rfl | hc | hr
+    · exact hn.1 (List.mem_append_left _ hin)
+    · exact ih hn.2.1 id hi hc
+    · exact hn.2.2.2 id hin id hr rfl
+  | right n l c ih =>
+    simp only [Context.plug, Tree.nodeIds, List.nodup_cons, List.nodup_append] at hn
+    intro id hi hout
+    have hin := (c.mem_plug_nodeIds u id).mpr (.inr hi)
+    simp only [Context.plug, Tree.nodeIds, List.mem_cons, List.mem_append] at hout
+    rcases hout with rfl | hl | hc
+    · exact hn.1 (List.mem_append_right _ hin)
+    · exact hn.2.2.2 id hl id hin rfl
+    · exact ih hn.2.2.1 id hi hc
+
+theorem Context.focus_nodup (c : Context) (u : Tree)
+    (hn : (c.plug u).nodeIds.Nodup) : u.nodeIds.Nodup := by
+  induction c with
+  | here => exact hn
+  | left n c r ih => exact ih (List.nodup_append.mp (List.nodup_cons.mp hn).2).1
+  | right n l c ih => exact ih (List.nodup_append.mp (List.nodup_cons.mp hn).2).2.1
+
 end Leanux.Proofs.WG.AllowedIps
