@@ -284,6 +284,57 @@ to make it a fact:
 remain the harness's; none of them is consulted by a mirror rule after this
 change, except the firing window under the first option.
 
+### 5.1 What was done (2026-10-13) [AGENT, fork of the coordinator]
+
+The recommended option, with one correction to its placement. The task's
+KCOV window closes at the operation's return (`harness/guest.c` captures the
+task count right after the system call), before the waits; the waits' timer
+sections land in the remote row, which is captured after them. So the
+end-of-wait read cannot be a task-stream record: `KCOV_LEANUX_JIFFIES`
+(ioctl 207, `kcov_jiffies_read`) reads `jiffies_64` and appends kind 310
+`{jiffies}` (8 bytes) to the **remote** area of the process's common
+handle, under that kcov's lock like `kcov_remote_stop`'s move, in one
+critical section with the read, so no tick separates the value from the
+record's sequence number. `kcov_choice_write` is split into an area writer
+(`kcov_choice_write_area`: task, mode, area, size) and its wrapper. The
+guest reads once at every wait the mirror treats as an idle point: after
+`wg_inject`'s, `wg_set`'s, `wg_up`'s (the first up's early wait, before the
+route adds), `wg_xmit`'s and `wg_batch`'s waits, after the wait before
+`wg_observe`, and after `wg_advance`'s. The checker keys the site by its
+consumer frame, `fs/ioctl.c:51`, beside the advance's, and takes the read
+into the never-goes-back rule. No new site elsewhere; `kernel/kcov.c` is not
+anchored; the anchored files keep their pristine line counts. Oracle pair
+s2: identity `cea1e9a3…`, control `04432df8…`; patches `15f67b48…` and
+`fdb1306f…`; the s1 configuration unchanged.
+
+The mirror (`Leanux/Env.lean`): `idleTimers` and `afterAdvance` read the
+operation's kind-310 value ahead (`peekSiteU64`, the record follows the
+sections it bounds), run the timers with it as the window's end
+(`timeBefore expires J_end`), then consume the record and carry it as the
+last known `jiffies`. No record in the operation is a hidden mismatch (a
+capture without the instrument); without records the domain filter's
+prediction uses `Timing`'s constants, which are now the filter's and nothing
+else's.
+
+The budgets, each as the table says: `Activation.bound` (capacity plus one)
+replaced by `Activation.occupancy`, the queue's items at the run's start,
+with exhaustion a genuine `invariant`; `schedule`, `runSendWorkers`,
+`runTimers`, `afterBatch` and `skipCutSites` record-driven
+(`recordBudget`: one turn per remaining record plus one; exhaustion an
+`invariant`, or `unsupported "runner budget: … (domain filter)"` without
+records, `DOMAIN_FILTER_TURNS`); the index and jitter draws record-driven,
+their caps of 64 and 256 gone; the two trie walks bounded by the node
+count; `runTimersPlaceholder`'s loops by the pending timers and the clear
+queue. `Activation.consistent` runs the same `Activation.run`, so the
+elimination among suspended activations uses the derived bound too.
+
+What the one-off mutant and the first run established is in the commits
+and the integration record. Not written: `w7_refill_during_yield` (section
+7): the W7 tier's measurement showed the deferred units run only after the
+batch system call returns, so a refill during a yield needs a produce from
+a later operation, and a suspended activation across operations is outside
+the domain already; the derived bound is validated by the existing suites.
+
 ## 6. Decisions and operands, hidden inputs, environment
 
 - Decisions: no new outcome-level decision except `dstCacheHit` (a C

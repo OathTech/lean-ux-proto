@@ -28,6 +28,10 @@ Shared, coordinator-owned, allocated here and append-only per stream:
   landing; `wg_xmit`'s GSO and pmtudisc options ride on the existing code;
 - record kind 306, the dst-cache `jiffies` records (`evaluator/check.py`
   `DST_CACHE_JIFFIES`; W9's class `jiffies`);
+- record kind 310, the end-of-wait `jiffies` read (`JIFFIES_END`, class
+  `jiffies`, written into the remote stream by `KCOV_LEANUX_JIFFIES`, ioctl
+  207; `HiddenSite.jiffiesEnd`, id 128, the first free id after L's 120-127;
+  review item 7, `docs/2026-10-13-review-items-7-8.md` section 5);
 - `HiddenSite` ids: W5-W6 140-149, W8-W9 150-169, W1-W2 170-179, W3-W12
   180-189 (`Leanux/Kernel/Defs.lean`, each stream's own block);
 - `Worker` indices 12-13 (W8-W9) and 14-15 (W5-W6), with their section
