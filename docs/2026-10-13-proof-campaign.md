@@ -6,22 +6,23 @@ Worktree `.worktrees/proofs-campaign`, branch `proofs/campaign`. The
 [charter](2026-10-13-charter-proof-campaign.md) defines the campaign. Main
 `2c7a076` includes both named prerequisites and has been merged into this
 worktree on the user's landing instruction. The proof gate passes over that
-commit and every registered component is current. The mirror and kernel
-match it exactly; R4 and R5's dependent work is now unblocked. No integration into main, push, differential check or guest run.
+commit, including the new R4 full-ring component; every registered component
+is current.
+The mirror and kernel match it exactly; R4 and R5's dependent work is now unblocked. No integration into main, push, differential check or guest run.
 
 | Result | Progress |
 | --- | --- |
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay and independent review checked. Seccomp frame carry checked. |
 | R2 lifetime safety | Store identities, failure-retaining allocation/release and caller composition cover session/rotation, peer creation, receive entry/maintenance/completion, receive polling with the actual stack callback, transmit entry, TX staging, decrypt iteration and ten socket/cache/loopback calls; stale-cursor finding checked. Remaining callers, lifecycle and whole-run internal-access coverage remain in progress. |
 | R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion, original empty-root, arbitrary-depth empty-child and exact-prefix insertion with sequence wrappers, and total original placement proved. Selected-root graft normal endpoints and rollback effects checked; successful graft representation, general mutation/history and path refinements remain open. Path proofs follow R2. |
-| R4 delivery | The W7 prerequisite has landed: two carried slots explain the two drops, with no ring-model change. The dependent drop characterisation and whole-schedule delivery proof remain to be completed. |
+| R4 delivery | The full-ring component proves the two-carried-slot ring witness and original enqueue refusal projection; gate and independent review pass. Whole recorded-schedule delivery and conservation remain open. |
 | R5 key lifetime | Review items 7 and 8 have landed. Clock/budget carry passes; time, counter and cleanup claims remain to be completed. |
 | R6 flood resistance | Not started. |
 
-**Current validation.** The full proof gate passes 219 build jobs and 167
-terminal statements (ReplayWindow 15, R1 9, R2 116, R3 27), with only permitted
+**Current validation.** The full proof gate passes 224 build jobs and 174
+terminal statements (ReplayWindow 15, R1 9, R2 116, R3 27, R4 7), with only permitted
 axioms. Stock `leanchecker --fresh Leanux.Proofs` passes. The default model
-build passes 60 jobs; the unit tier passes 93 tests in 23.162 seconds with one
+build passes 60 jobs; the unit tier passes 93 tests in 23.353 seconds with one
 skip. The R1 explicit-record witness and both R2 checkpoint variants pass on
 `2c7a076`, with original/observed JSON equality; the R1 history remains
 `[(1, 8200), (1, 72)]`. The reconstructed/synthetic streams now supply the
@@ -34,9 +35,10 @@ TX staging, pure trie
 insertion, original empty-root and arbitrary-depth empty-child insertion with
 its wrapper, exact-prefix replacement, list deletion, placement and selected-root
 graft endpoints/rollback, saved-peer scans, the ten-call socket family,
-transmit entry, actual stack/poll composition, and the prerequisite carry.
-The final carried source and contract review found no defect; its frozen
-file hashes matched before the checkpoint.
+transmit entry, actual stack/poll composition, the prerequisite carry, and the
+full-ring component.
+The final source and contract reviews have no unresolved correctness findings;
+their frozen file hashes matched before the checkpoints.
 
 **Shared carry.** Signal/task and pipe helper frames, seccomp entry/tail frames
 and arbitrary prefill preservation keep the seven-field WG projection intact.
@@ -426,3 +428,61 @@ with `capped -- scripts/in-bundle scripts/proof-gate`.
 **Ranked mirror-shape recommendations.** None from these components. The named
 arithmetic helpers and integer address encoding admit refinement without
 production changes; correspondence to C byte layout remains informal.
+
+
+## R4 — full-ring drop component (in progress)
+
+**Checked component.** `Queues/PtrRing` applies the original `full` guard and
+`produce` operation to each attempted item. A full ring rejects every attempt
+and remains exactly unchanged. `Queues/Fill` proves symbolic filling and
+consumption below the batch-retirement threshold. `Queues/FullRing` starts
+from the original size-1024 ring and performs two literal produce/consume
+pairs. Its logical count is zero, while slots 0 and 1 remain occupied. The
+next 1024 guarded production attempts accept exactly 1022 items and reject
+the final two. The final producer is 0, consumer head 2, consumer tail 0 and
+logical count 1022; its logical FIFO contains exactly the accepted new items
+in order, excluding the old consumed items and both rejected items.
+
+`Queues/Enqueue` classifies normal returns of the complete original
+`enqueuePerDeviceAndPeer`: success produces the item, `-ENOSPC` leaves the
+ring unchanged, and `-EPIPE` means the entry ring was physically full and
+remains unchanged. The earlier peer-queue capacity test retains priority;
+peer-queue and packet-state updates may precede `-EPIPE`. Missing objects and
+queue-work failures remain Stops. These contracts impose no ownership or
+queue-validity premise and do not assert unchanged peer state.
+
+**Measurement and formal scope.** The landed
+[W7 full-ring tier](2026-10-13-w7-full-ring-tier.md) records the Linux/mirror
+measurement provenance: two prior consumed slots remain occupied, and all
+1024 producers run before worker consumption. The new kernel theorem is a
+closed ring-operation witness, not a replay or refinement of that whole
+recorded execution. Its separate original-enqueue theorem does not yet
+compose the ring witness with a real peer queue or an accepted runner trace.
+No mirror change was needed. Whole recorded-schedule delivery, PrevQueue and
+worker-local ownership, and pipeline conservation remain open, following R2's
+remaining caller/lifecycle closure. This component establishes no packet
+arrival, cryptographic, scheduler-fairness or delivery-order claim.
+
+[AGENT 2026-10-13] Use symbolic filling and pointwise slot algebra rather than
+reducing 1024 concrete array updates in the kernel. The proof still uses the
+original ring operations; this makes the witness cheap to recheck without
+changing the mirror or adding trusted computation.
+
+**Validation and effort.** The complete `LeanuxProofs` build passed 224 jobs;
+seven R4 terminal theorems are imported by the root. The proof gate passes all
+174 terminal statements with only permitted axioms; stock kernel replay, the
+60-job default build and 93-test unit tier pass. Independent review checked
+the code, source correspondence, report and register; its table-format finding
+was corrected, and no correctness finding remains. Reproduce with
+`capped -- scripts/in-bundle scripts/proof-gate`. Twelve capped build
+invocations over about twenty minutes comprised two passes, nine ordinary
+proof-compilation failures and one deliberately terminated large-reduction
+attempt; no cap was hit. The writer initially resumed after that deliberate
+interruption without the required preservation step. Work then stopped, the
+coordinator snapshotted all six dirty worktrees including untracked files with
+branches and real indexes unchanged, and implementation resumed only after
+preservation. The symbolic replacement compiled without large reduction.
+No QEMU, differential check or new recorded replay was run in this slice.
+
+**Ranked mirror-shape recommendations.** None from this component. Original
+physical-slot fullness and batched retirement already explain the witness.
