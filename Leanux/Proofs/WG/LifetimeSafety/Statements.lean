@@ -5,6 +5,7 @@ import Leanux.Proofs.WG.LifetimeSafety.CursorWitness
 import Leanux.Proofs.WG.Packets.Primitives
 import Leanux.Proofs.WG.Peers.Allocation
 import Leanux.Proofs.WG.Peers.Access
+import Leanux.Proofs.WG.Peers.CreationAccess
 
 /-! R2's store-identity components: whole-operation keypair evolution,
 peer allocation/reference sequences, and packet primitive sequences within a device
@@ -12,6 +13,59 @@ epoch. Full caller and lifecycle coverage remain separate obligations. -/
 namespace Leanux.Proofs.WG.LifetimeSafety
 open Leanux Leanux.WG Leanux.Proofs.Logged
 open Leanux.Proofs.WG.Keypairs Leanux.Proofs.WG.ReplayWindow
+
+/-- Erasing all observations of peerCreate, including its cache, handshake and
+clock initialization helpers, returns the exact original result or Stop for
+every World and initial history. -/
+theorem peer_create_access_erasure (key : Key) (psk : Option Key) :
+    ErasesPrefix (Peers.peerCreatePrefix key psk) (peerCreate key psk) :=
+  Peers.peerCreatePrefix_erases key psk
+
+/-- The original creation core increments the identity counter and performs
+the first insertion before any initializer runs. A present device emits exactly
+allocation then write; the original no-device setter is a no-op. This all-input
+statement does not assume an empty destination or log overwritten objects as
+released. -/
+theorem peer_creation_core_observation (pid : PeerId) (key : Key)
+    (w : World) (h : List Peers.PeerEvent) :
+    runPrefix (Peers.peerCreateCorePrefix pid key) w h =
+      (.ok ((), Peers.creationCoreWorld w pid key),
+        if w.k.wg.isSome then
+          h ++ [.allocate pid (w.k.peerCounter + 1), .write pid (w.k.peerCounter + 1)]
+        else h) := by
+  rw [Peers.peerCreateCorePrefix_run, Peers.peerCreateCore_run]
+
+/-- At the creation core followed by the first initializer, a failed recorded
+cache-clock read retains the prior allocation and write observations. The
+failure exposes no final World; this is the source's initialization cut, not a
+whole-runner claim. -/
+theorem peer_creation_record_failure_prefix (pid : PeerId) (key : Key)
+    (w : World) (h : List Peers.PeerEvent) (e : Stop)
+    (hd : w.k.wg.isSome = true) (ha : w.armRecords = true)
+    (hc : w.dstCacheRecords = true)
+    (hr : (hiddenU64 .dstCacheResetTs).run (Peers.creationCoreWorld w pid key) = .error e) :
+    runPrefix (do Peers.peerCreateCorePrefix pid key; Peers.dstCacheResetPrefix pid) w h =
+      (.error e, h ++ [.allocate pid (w.k.peerCounter + 1), .write pid (w.k.peerCounter + 1)]) :=
+  Peers.creation_core_clock_failure pid key w h e hd ha hc hr
+
+/-- Finite sequences of complete peerCreate, peerPut and wgGetDeviceDone calls
+preserve the original execution and first Stop after observation erasure. The
+family discards ordinary return values, including create's ordinary error code,
+and retains the full World on success. -/
+theorem peer_creation_call_sequence_erasure (calls : List Peers.CreationCall) :
+    ErasesPrefix (Peers.CreationCall.observe calls) (Peers.CreationCall.execute calls) :=
+  Peers.CreationCall.observe_erases calls
+
+/-- In this finite creation/reference caller family, no read, write or new
+allocation follows a release of the same identity, including prefixes ending in
+failure. Initial resident identities are unique and frontier-bounded, and every
+previously released identity is absent and frontier-bounded. This covers the
+listed callers' internal accesses, not cursor provenance, other callers or
+complete release reporting when malformed allocation slots overwrite peers. -/
+theorem peer_creation_call_sequence_prefix_safe (calls : List Peers.CreationCall)
+    (w : World) (h : List Peers.PeerEvent) (n : Nat) (hi : Peers.CreationInv h w) :
+    Lifetimes.AccessEvent.Safe ((runPrefix (Peers.CreationCall.observe calls) w h).2.take n) :=
+  (Peers.CreationCall.observe_preserves calls w h hi).choose_spec.2.1.take n
 
 /-- The complete original peerPut is observed at both successful getter sites,
 the actual setter and the inline release. For every World, erasing observations

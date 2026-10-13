@@ -23,8 +23,11 @@ def main (args : List String) : IO UInt32 := do
   repeat
     let line ← input.getLine
     if line.isEmpty then return 0
-    if line.utf8ByteSize > 65536 then
-      errors.putStrLn "invalid input: trace line exceeds 65536 bytes"
+    -- a bound on one trace's line: 1 MiB holds a trace with the longest programs
+    -- the harness carries (three 768-instruction seccomp installs with their
+    -- kind-309 records are about 80 KB; the old 64 KB refused them, X 2026-10-13)
+    if line.utf8ByteSize > 1048576 then
+      errors.putStrLn "invalid input: trace line exceeds 1048576 bytes"
       return 2
     match Lean.Json.parse line >>= Leanux.Runner.parseTrace with
     | .error message =>

@@ -53,8 +53,12 @@ DIGEST = re.compile(r'[0-9a-f]{64}')
 # epoll R (docs/2026-10-12-epoll-design.md 6): an epoll_wait's events go
 # through the read channel: `bytes` is the first 64 of the ret * 12 bytes of
 # the packed epoll_event array, `digest` the BLAKE2s-256 of all of them
+# seccomp W (docs/2026-10-12-seccomp-design.md 6.1): a probe carries `sigsys`
+# (the SIGSYS handler's {nr, data, arch} after a TRAP, else null) and
+# `child` (a child probe's record: an optional strict_ret, then exactly one
+# of ret, exited or signal; null for a self probe)
 EXTRA_FIELDS = {'pipe2': ('fds',), 'read': ('digest',), 'write': ('sigpipe',), 'wg_batch': ('cqes',),
-                'epoll_wait': ('digest',)}
+                'epoll_wait': ('digest',), 'seccomp_probe': ('sigsys', 'child')}
 EPOLL_EVENT_SIZE = 12   # sizeof(struct epoll_event) on x86-64 (packed)
 
 
@@ -109,6 +113,21 @@ def validate_observation(trace, result):
         if 'cqes' in fields and (type(obs['cqes']) is not list
                                  or not all(x is None or integer(x, -4095, 2**31 - 1) for x in obs['cqes'])):
             raise InvalidOutput(f'observation {index}: cqes')
+        if 'sigsys' in fields and not (obs['sigsys'] is None or (
+                keys(obs['sigsys'], ('nr', 'data', 'arch')) and integer(obs['sigsys']['nr'], -2**31, 2**31 - 1)
+                and integer(obs['sigsys']['data'], -2**31, 2**31 - 1) and integer(obs['sigsys']['arch'], 0, 2**32 - 1))):
+            raise InvalidOutput(f'observation {index}: sigsys')
+        if 'child' in fields:
+            child = obs['child']
+            if child is not None and not (type(child) is dict and (
+                    (set(child) - {'strict_ret'}) in ({'ret'}, {'exited'}, {'signal'})
+                    and ('strict_ret' not in child or integer(child['strict_ret'], -4095, 2**31 - 1))
+                    and ('ret' not in child or integer(child['ret'], -2**63, 2**63 - 1))
+                    and ('exited' not in child or integer(child['exited'], 0, 255))
+                    and ('signal' not in child or integer(child['signal'], 1, 64)))):
+                raise InvalidOutput(f'observation {index}: child')
+            if (op['op'] == 'seccomp_probe') and ((op['where'] == 'child') != (child is not None)):
+                raise InvalidOutput(f'observation {index}: child record of a {op["where"]} probe')
         if type(obs['index']) is not int or obs['index'] != index:
             raise InvalidOutput(f'observation {index}: order/index')
         ret, error, data = obs['ret'], obs['errno'], obs['bytes']
@@ -231,6 +250,18 @@ SEMANTIC_ERRNOS['pipe2'] = {22, 23, 24, 65}
 SEMANTIC_ERRNOS['epoll_create1'] = {12, 22, 24}
 SEMANTIC_ERRNOS['epoll_ctl'] = {1, 2, 9, 12, 17, 22, 28, 40}
 SEMANTIC_ERRNOS['epoll_wait'] = {9, 22}
+# seccomp W (docs/2026-10-12-seccomp-design.md 2.2, 2.4, 2.9, 2.10): an
+# install's EINVAL (flags, length, checker, mode), EFAULT (the bad pointers),
+# EACCES (no no-new-privs and no CAP_SYS_ADMIN), ENOMEM (the path budget
+# MAX_INSNS_PER_PATH; a real allocation failure surfaces as a mirror mismatch);
+# a self probe's ENOSYS (TRACE without a tracer, call 1000, call 335), or the
+# errno a filter returns (ERRNO's data 1..4095); the prctl queries' EINVAL;
+# capset's EPERM/EINVAL; the queries' EINVAL and EOPNOTSUPP
+SEMANTIC_ERRNOS['seccomp_install'] = {22, 14, 13, 12}
+SEMANTIC_ERRNOS['seccomp_probe'] = set(range(1, 4096))
+SEMANTIC_ERRNOS['seccomp_prctl'] = {22}
+SEMANTIC_ERRNOS['seccomp_capdrop'] = {1, 22, 14}
+SEMANTIC_ERRNOS['seccomp_query'] = {22, 95, 14}
 SEMANTIC_ERRNOS['write'] = SEMANTIC_ERRNOS['write'] | {12, 32}
 SEMANTIC_ERRNOS['fcntl'] = SEMANTIC_ERRNOS['fcntl'] | {16}
 

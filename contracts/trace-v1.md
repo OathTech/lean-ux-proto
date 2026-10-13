@@ -122,6 +122,91 @@ is `docs/2026-10-12-epoll-design.md`, section 6 (tier 1).
   (`fd = epfd`, `newfd = fd`, `a = cmd`, `b = events`, `value = data`) and
   29 `epoll_wait` (`fd = epfd`, `a = maxevents`, `b = timeout`).
 
+## Seccomp (amended 2026-10-12, seccomp stream W)
+
+The amendment widens the domain; every earlier trace remains valid. The design
+is `docs/2026-10-12-seccomp-design.md`, section 6. Five operations, no
+descriptor arguments:
+
+- **`{"op":"seccomp_install","via":"seccomp"|"prctl","flags":[...],"filter":[[code,jt,jf,k],...]|null}`**
+  is `seccomp(SECCOMP_SET_MODE_FILTER, flags, &prog)` or
+  `prctl(PR_SET_SECCOMP, mode, &prog)` with `prog = {len, filter}`. `flags`
+  lists `SECCOMP_FILTER_FLAG_*` names (`tsync`, `log`, `spec_allow`,
+  `new_listener`, `tsync_esrch`, `wait_killable_recv`) or raw bits 0–65535
+  (the flag-mask arm); it is empty with `prctl`. Optional: `len` (0–65535)
+  overrides the program's length for the length arms; `bad` (`fprog` or
+  `insns`) passes an unmapped pointer for the `sock_fprog` or the
+  instructions (the two `-EFAULT` arms); a `null` filter is the NULL
+  instruction pointer; `mode` (0–255, `prctl` only, default 2) is
+  `prctl_set_seccomp`'s mode argument. A program has 1–4096 instructions.
+- **`{"op":"seccomp_probe","nr":n,"where":"self"|"child"}`** issues system
+  call `nr` with six u64 `args` (optional, default zeros): in the trace
+  process (`self`), or in a sandboxed child (`child`) that inherits the
+  trace's filters, records its own coverage on descriptor 8, optionally sets
+  strict mode first (`strict`: `seccomp` or `prctl`), and reports through a
+  shared page. `nr` is in the probe set {102, 104, 107, 108, 1000, 335}, and
+  60 (`exit`) for a strict child (design 6.2 rule 1: every other number is
+  constant-allowed by a corpus filter's prologue, so the harness's own calls
+  are cache hits). A self probe is invalid once an earlier install's filter
+  may kill: a `RET|K` whose action is not `ALLOW`, `LOG`, `TRACE`, `ERRNO`
+  or `TRAP`, a `RET|A`, or a `DIV|X` (the validator's conservative scan,
+  `harness/trace.py filter_may_kill`; `MOD` is rejected at the install by
+  `seccomp_check_filter`, so it is not scanned). A probe is valid only after
+  an earlier `seccomp_install` in the trace, or as a strict child: with no
+  mode set the syscall entry never reaches seccomp and the operation covers
+  nothing anchored (design 6.3; stream X). An install the kernel rejects
+  leaves no mode either; the check fails such a probe, and the corpus and
+  the generator never write one.
+- **`{"op":"seccomp_prctl","cmd":"set_no_new_privs"|"get_no_new_privs"|"get_seccomp"}`**
+  is `prctl(PR_SET_NO_NEW_PRIVS | PR_GET_NO_NEW_PRIVS | PR_GET_SECCOMP, arg2, arg3,
+  arg4, arg5)` with the optional u64 arguments (default 0; the `-EINVAL`
+  arms).
+- **`{"op":"seccomp_capdrop"}`** is `capset` with `CAP_SYS_ADMIN` cleared from
+  the effective, permitted and inheritable sets the process had at setup.
+- **`{"op":"seccomp_query","cmd":"get_action_avail"|"get_notif_sizes"}`** is
+  `seccomp(SECCOMP_GET_ACTION_AVAIL, flags, &action)` (`action`, a u32,
+  required) or `seccomp(SECCOMP_GET_NOTIF_SIZES, flags, &sizes)`; `flags`
+  optional, default 0.
+- **Fixture.** A trace with a child probe declares `"seccomp_child": true`
+  at the top level: descriptor 8 is then the child's KCOV descriptor
+  (reserved, `rlimit_nofile` at least 9), never with a network fixture
+  (8 and 9 are W8's injector and pin) and never with a steering schedule
+  (the child loads none). Every trace process starts with a `SIGSYS`
+  handler (`SA_SIGINFO`, no `SA_NODEFER`), `RLIMIT_CORE` 0, and its
+  capability sets read for `seccomp_capdrop`.
+- **Prefill fixture** (stream X; [USER 2026-10-12]). A trace may declare
+  `"seccomp_prefill": N` (1–8) at the top level: before the window the trace
+  process sets no-new-privs and installs `N` copies of a fixed
+  3990-instruction program (`harness/guest.c` `SECCOMP_PREFILL_*`,
+  `Leanux/Seccomp/Prefill.lean`: `nr` loaded, a `JA` chain only for a dummy
+  number outside the probe set, `ALLOW` otherwise, so every probe is a cache
+  hit), and the mirror's initial task state carries that chain and the
+  no-new-privs bit. Never with a network fixture or a steering schedule.
+  Its purpose is `seccomp_attach_filter`'s path budget: eight copies leave
+  776 of `MAX_INSNS_PER_PATH`'s 32768 instructions for the recorded
+  installs. The `T` line's ninth field carries `N` (0 without the key).
+- **Observation.** Every operation carries `ret` and `errno` as above; a
+  child probe's `ret` is 0 (the parent's wait). `seccomp_probe` adds
+  `sigsys`: `{"nr","data","arch"}` from the handler after a `TRAP`
+  (`si_syscall`, `si_errno`, `si_arch`), else `null`; and `child`: `null`
+  for a self probe, else an object with `strict_ret` (present exactly when
+  `strict` was asked: the child's own strict call's result) and exactly one
+  of `ret` (the child wrote its result and left normally), `exited`
+  (the exit status of a child that left without writing) or `signal`
+  (the signal that killed it: 31 `SIGSYS`, 9 `SIGKILL`). The child's
+  coverage, choice records and comparison records reach the harness as
+  `LEANUX_CCOVERAGE`, `LEANUX_CHIDDEN` and `LEANUX_CCMP` rows and are
+  merged into the operation's rows after the parent's (stream `child`).
+- **Wire.** Opcodes 30 `seccomp_install` (`a = via | mode << 8`, `b = flags
+  | bad << 16` with `bad` 1 `fprog`, 2 `insns`, 3 null; `value = 1 << 32 |
+  len` when `len` is given; payload the program, 8 bytes per instruction:
+  `code` u16, `jt` u8, `jf` u8, `k` u32, little-endian), 31 `seccomp_probe`
+  (`a = nr`, `b = where | strict << 8` with `strict` 1 `seccomp`, 2 `prctl`;
+  payload the six u64 arguments), 32 `seccomp_prctl` (`a = cmd` 0–2; payload
+  `arg2..arg5` as four u64), 33 `seccomp_capdrop`, 34 `seccomp_query`
+  (`a = cmd` 0–1, `b = action`, `value = flags`). The `T` line's eighth
+  field is 1 for a trace that declares `seccomp_child`.
+
 ## Fixture and isolation
 
 Each trace starts in a fresh process in the pinned guest. Set the soft and hard
@@ -172,7 +257,9 @@ Per operation kind, an observation carries exactly these further fields
 - `epoll_wait`: `"digest"` likewise, over the `12·ret` bytes of the returned
   events (amended 2026-10-12, epoll);
 - `write`: `"sigpipe"`, 1 if `SIGPIPE` is pending in the trace child after the
-  call (it stays pending for the rest of the trace), else 0.
+  call (it stays pending for the rest of the trace), else 0;
+- `seccomp_probe`: `"sigsys"` and `"child"` (amended 2026-10-12, seccomp;
+  the Seccomp section above).
 
 The WireGuard operations' observations are specified by `evaluator/protocol.py`
 and `harness/wg.py`, as are those operations' inputs (`harness/trace.py`); the

@@ -151,7 +151,7 @@ class EvaluationChecks(unittest.TestCase):
                 validate_coverage([self.trace], altered)
 
     CONFIG = {'files': ['fs/eventfd.c'], 'functions': ['eventfd_read', 'eventfd_ctx_do_read'], 'known_gaps': [],
-              'shared_exits': [], 'operand_exclusions': []}
+              'shared_exits': [], 'operand_exclusions': [], 'data_only_operations': []}
 
     def decision(self, label, line, true, false):
         return {'label': label, 'file': 'fs/eventfd.c', 'line': line,
@@ -466,7 +466,7 @@ class EvaluationChecks(unittest.TestCase):
         # shared exit reached by an early return neither counts as the helper
         # running nor witnesses an outcome; with the entering block covered,
         # or undeclared, it does both.
-        config = {'files': ['fs/eventfd.c'], 'functions': ['eventfd_read'], 'known_gaps': [],
+        config = {'files': ['fs/eventfd.c'], 'functions': ['eventfd_read'], 'known_gaps': [], 'data_only_operations': [],
                   'shared_exits': [{'function': 'helper', 'frames': ['fs/eventfd.c:230', 'fs/eventfd.c:222'],
                                     'unless_covered': ['fs/eventfd.c:231', 'fs/eventfd.c:222'], 'note': ''}],
                   'operand_exclusions': []}
@@ -499,7 +499,7 @@ class EvaluationChecks(unittest.TestCase):
 
     def test_order_within_a_function(self):
         config = {'files': ['fs/eventfd.c'], 'functions': ['eventfd_write'], 'known_gaps': [],
-                  'shared_exits': [], 'operand_exclusions': []}
+                  'shared_exits': [], 'operand_exclusions': [], 'data_only_operations': []}
         table = check.parse_decisions([
             self.decision('eventfd_write.wrong_size', 254, [(255, 255)], [(256, 256)]),
             self.decision('eventfd_write.ullong_max', 258, [(259, 259)], [(260, 260)])], config)
@@ -912,3 +912,31 @@ class WgMutantScoringChecks(unittest.TestCase):
         self.assertEqual(self.m.tally({'a': dict(status='survived'), 'b': dict(status='no_verdict'),
                                        'c': dict(status='rejected')}),
                          {'no_verdict': 1, 'rejected': 1, 'survived': 1})
+
+
+class SeccompChecks(unittest.TestCase):
+    """seccomp stream X: the generator profile stays inside the trace contract
+    and the chunking keeps a guest's child probes under the console budget."""
+
+    def test_seccomp_profile(self):
+        traces = generate(20260920, 60, profile='seccomp')
+        self.assertEqual(traces, generate(20260920, 60, profile='seccomp'))
+        for trace in traces:
+            validate_trace(trace)
+            self.assertLessEqual(sum(op['op'] == 'seccomp_probe' and op['where'] == 'child' for op in trace['ops']), 3)
+        kinds = Counter('checker' if not any(op['op'] == 'seccomp_probe' for op in t['ops'])
+                        else 'child' if t.get('seccomp_child') else 'self' for t in traces)
+        self.assertEqual(set(kinds), {'checker', 'child', 'self'})
+
+    def test_seccomp_console_budget_per_chunk(self):
+        probe = {'op': 'seccomp_probe', 'nr': 102, 'where': 'child'}
+        install = {'op': 'seccomp_install', 'via': 'seccomp', 'flags': [], 'filter': [[6, 0, 0, 0x7fff0000]] * 768}
+        child = [dict(version=1, id=f'c{i}', ops=[probe] * 2, seccomp_child=True) for i in range(6)]
+        long = [dict(version=1, id=f'l{i}', ops=[install] * 4) for i in range(3)]
+        plain = [dict(version=1, id=f'p{i}', ops=[{'op': 'seccomp_prctl', 'cmd': 'get_seccomp'}]) for i in range(5)]
+        chunks = check.chunk_traces(plain + child + long)
+        for _start, traces, _name in chunks:
+            self.assertLessEqual(sum(check.seccomp_console_cost(t) for t in traces), check.CHUNK_CONSOLE_BUDGET)
+        self.assertEqual([t['id'] for _s, ts, _n in chunks for t in ts], [t['id'] for t in plain + child + long])
+        # two child probes are 8.9 MB: one child trace per chunk, and a 2.1 MB install trace (four of 768) joins the last
+        self.assertEqual([len(ts) for _s, ts, _n in chunks], [6, 1, 1, 1, 1, 2, 2])

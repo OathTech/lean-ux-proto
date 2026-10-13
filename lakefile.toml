@@ -13,3 +13,10 @@ roots = ["Leanux.Proofs"]
 [[lean_exe]]
 name = "leanux-model"
 root = "Leanux.Main"
+
+# seccomp stream U: the hand-written checker, translation and engine set
+# (docs/2026-10-12-seccomp-design.md, 8); `lake build leanux-seccomp-tests && .lake/build/bin/leanux-seccomp-tests`
+[[lean_exe]]
+name = "leanux-seccomp-tests"
+root = "SeccompTests"
+srcDir = "tests"

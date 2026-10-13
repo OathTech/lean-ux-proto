@@ -17,8 +17,9 @@ the tested paths, not a proof of equivalence or a model of all of Linux.
 - **A Lean model:** file descriptors, eventfd, pipes and epoll; WireGuard
   configuration, handshakes, encrypted traffic, timers, device and peer
   lifecycle, routing and allocation-failure paths, with the packet queues and
-  worker scheduling represented as the kernel keeps them. Seccomp is being
-  integrated.
+  worker scheduling represented as the kernel keeps them. Seccomp landed on
+  2026-10-13: the filter chain and its cache, the classic-BPF checker and
+  translation, strict mode, and the sandboxed child probe.
 - **A Linux test runner:** executes operation traces in a single-CPU x86-64
   guest, using Linux 6.12.110 with coverage and input-recording patches. The
   approved build is named by an identity file; any other build is refused.

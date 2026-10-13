@@ -65,7 +65,7 @@ it is history, not setup instructions. Setup is
 | [2026-10-05-pipes-reconnaissance.md](2026-10-05-pipes-reconnaissance.md) | Pipes as the scale test, reconnaissance |
 | [2026-10-05-p-pipes.md](2026-10-05-p-pipes.md) | P: pipes stage 1 design, including the signal decision P9 |
 | [2026-10-12-epoll-design.md](2026-10-12-epoll-design.md) | Epoll over the FS slice: design v2 with its independent audit and audit response; landed 2026-10-13 |
-| seccomp | The design and its audit land with the seccomp integration |
+| [2026-10-12-seccomp-design.md](2026-10-12-seccomp-design.md) | Seccomp as a single-task mirror with the eBPF engine as a service: design v2 with its independent audit, audit response and the user's config case (approved 2026-10-13) |
 
 ## Proofs
 

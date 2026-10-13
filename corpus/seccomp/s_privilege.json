@@ -1,0 +1,130 @@
+{
+  "version": 1,
+  "id": "s_privilege",
+  "ops": [
+    {
+      "op": "seccomp_prctl",
+      "cmd": "get_seccomp"
+    },
+    {
+      "op": "seccomp_prctl",
+      "cmd": "get_no_new_privs"
+    },
+    {
+      "op": "seccomp_capdrop"
+    },
+    {
+      "op": "seccomp_install",
+      "via": "seccomp",
+      "flags": [],
+      "filter": [
+        [
+          32,
+          0,
+          0,
+          4
+        ],
+        [
+          21,
+          1,
+          0,
+          3221225534
+        ],
+        [
+          6,
+          0,
+          0,
+          2147418112
+        ],
+        [
+          32,
+          0,
+          0,
+          0
+        ],
+        [
+          6,
+          0,
+          0,
+          2147418112
+        ]
+      ]
+    },
+    {
+      "op": "seccomp_prctl",
+      "cmd": "set_no_new_privs",
+      "arg2": 2
+    },
+    {
+      "op": "seccomp_prctl",
+      "cmd": "set_no_new_privs",
+      "arg2": 1,
+      "arg3": 1
+    },
+    {
+      "op": "seccomp_prctl",
+      "cmd": "get_no_new_privs",
+      "arg2": 1
+    },
+    {
+      "op": "seccomp_prctl",
+      "cmd": "set_no_new_privs",
+      "arg2": 1
+    },
+    {
+      "op": "seccomp_prctl",
+      "cmd": "get_no_new_privs"
+    },
+    {
+      "op": "seccomp_install",
+      "via": "seccomp",
+      "flags": [],
+      "filter": [
+        [
+          32,
+          0,
+          0,
+          4
+        ],
+        [
+          21,
+          1,
+          0,
+          3221225534
+        ],
+        [
+          6,
+          0,
+          0,
+          2147418112
+        ],
+        [
+          32,
+          0,
+          0,
+          0
+        ],
+        [
+          6,
+          0,
+          0,
+          2147418112
+        ]
+      ]
+    },
+    {
+      "op": "seccomp_prctl",
+      "cmd": "get_seccomp"
+    },
+    {
+      "op": "seccomp_prctl",
+      "cmd": "set_no_new_privs",
+      "arg2": 1
+    },
+    {
+      "op": "seccomp_probe",
+      "nr": 102,
+      "where": "self"
+    }
+  ]
+}

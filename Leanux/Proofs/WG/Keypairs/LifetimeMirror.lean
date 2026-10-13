@@ -64,13 +64,19 @@ theorem cExecution_snapshot (w : World) (d : Device) (i : Nat) (k : Keypair)
         simp [cExecution, h1, h2, h3]
 
 /-- The initial runner fixture has no allocated keypair lifetime. -/
-theorem initial_snapshot (rlimit : Nat) (net bare foreign stepped : Bool) (w : World)
-    (hk : w.k = Runner.initialKernel rlimit net bare foreign stepped) :
+theorem initial_snapshot_withSeccomp (rlimit : Nat) (net bare foreign stepped : Bool) (w : World) (seccompChild : Bool := false)
+    (hk : w.k = Runner.initialKernel rlimit net bare foreign stepped seccompChild) :
     snapshot w = ⟨0, fun _ => none⟩ := by
   apply Snapshot.ext
   · simp [snapshot, hk, Runner.initialKernel]
   · funext i
     simp [snapshot, hk, Runner.initialKernel]
+
+/-- Compatibility statement for the original fixture without a seccomp child. -/
+theorem initial_snapshot (rlimit : Nat) (net bare foreign stepped : Bool) (w : World)
+    (hk : w.k = Runner.initialKernel rlimit net bare foreign stepped) :
+    snapshot w = ⟨0, fun _ => none⟩ :=
+  initial_snapshot_withSeccomp rlimit net bare foreign stepped w false hk
 
 /-- Successful original validator calls realize one evolution step and one
 exact history append, including false returns that still update the bitmap. -/

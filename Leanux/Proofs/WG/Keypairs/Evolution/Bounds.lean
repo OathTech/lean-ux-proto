@@ -114,17 +114,34 @@ theorem executeTraceLogged_floor_wp
     exact ((⇓? _ h => ⌜FloorInv (snapshot r.2) h⌝) :
       Invariant r.2.fired.toList (Array Json)
         (.arg History (.except (Nat × Stop) .pure)))
+  case inv4 =>
+    exact ((⇓? out h => ⌜FloorInv (snapshot out.2.1) h⌝) :
+      Invariant trace.ops.toList
+        (World × Array Int × Array (Option (Nat × Nat)) × Array Json × Array Json × Array Json)
+        (.arg History (.except (Nat × Stop) .pure)))
+  case inv5 =>
+    let r : Unit × World := by assumption
+    exact ((⇓? _ h => ⌜FloorInv (snapshot r.2) h⌝) :
+      Invariant r.2.steps.toList (Array Json)
+        (.arg History (.except (Nat × Stop) .pure)))
+  case inv6 =>
+    let r : Unit × World := by assumption
+    exact ((⇓? _ h => ⌜FloorInv (snapshot r.2) h⌝) :
+      Invariant r.2.fired.toList (Array Json)
+        (.arg History (.except (Nat × Stop) .pure)))
   all_goals try dsimp +zetaDelta only at *
   all_goals try trivial
   all_goals try exact And.right (by assumption)
   all_goals try exact id
-  rename_i history hh
-  subst history
-  change FloorInv _ []
-  constructor
-  · rw [initial_snapshot trace.rlimit trace.net trace.bare trace.foreign trace.stepped _ rfl]
-    exact inv_empty 0
-  · simp [FloorHistory]
+  all_goals
+    rename_i history hh
+    subst history
+    change FloorInv _ []
+    constructor
+    · first
+      | (rw [initial_snapshot_withSeccomp trace.rlimit trace.net trace.bare trace.foreign trace.stepped _ (seccompChild := trace.seccompChild) rfl]; exact inv_empty 0)
+      | (rw [RunnerProof.prefill_initial_snapshot trace _ (by assumption)]; exact inv_empty 0)
+    · simp [FloorHistory]
 
 /-- Every successful observer run obeys the bound once its concrete syscall
 contracts are supplied; the terminal result discharges that premise. -/

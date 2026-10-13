@@ -11,6 +11,10 @@
 #include <linux/rtnetlink.h>
 #include <linux/wireguard.h>
 #include <linux/io_uring.h>
+#include <linux/capability.h>
+#include <linux/filter.h>
+#include <linux/prctl.h>
+#include <linux/seccomp.h>
 #include <net/if.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -169,6 +173,42 @@ struct fixture_route { unsigned family; unsigned char dst[16]; unsigned mtu; };
 #define OP_EPOLL_CREATE1 27
 #define OP_EPOLL_CTL 28
 #define OP_EPOLL_WAIT 29
+/* seccomp stream W (docs/2026-10-12-seccomp-design.md section 6; the codes
+ * from docs/2026-10-11-interface.md). install: a = via | mode << 8 (via 0
+ * seccomp(2), 1 prctl; mode is prctl's PR_SET_SECCOMP argument, 2 unless
+ * the trace names another for prctl_set_seccomp's -EINVAL arm), b = flags |
+ * bad << 16 (bad 1: an unmapped sock_fprog; 2: an unmapped instruction
+ * pointer; 3: a NULL instruction pointer), payload = the classic program (8
+ * bytes per instruction), value = 1 << 32 | len when the trace overrides the
+ * length. probe: a = nr, b = where | strict << 8 (where 0 self, 1 child;
+ * strict 0 none, 1 seccomp(2), 2 prctl; child only), payload = the six u64
+ * arguments. prctl: a = cmd (0 PR_SET_NO_NEW_PRIVS, 1 PR_GET_NO_NEW_PRIVS,
+ * 2 PR_GET_SECCOMP), payload = arg2..arg5 as four u64. capdrop: nothing.
+ * query: a = cmd (0 GET_ACTION_AVAIL, 1 GET_NOTIF_SIZES), b = action, value
+ * = flags. */
+#define OP_SECCOMP_INSTALL 30
+#define OP_SECCOMP_PROBE 31
+#define OP_SECCOMP_PRCTL 32
+#define OP_SECCOMP_CAPDROP 33
+#define OP_SECCOMP_QUERY 34
+/* seccomp W (design 6.2 rule 2): a trace that declares `seccomp_child` holds
+ * the sandboxed child's own KCOV descriptor at 8 (never with a network
+ * fixture: 8 is W8's injector). */
+#define CHILD_KCOV_FD 8
+/* seccomp X (design 5): the prefill fixture ("seccomp_prefill": N, the T
+ * line's ninth field): N copies of a fixed program installed under
+ * no-new-privs before the window. The program loads nr, branches to a JA
+ * chain only for a dummy number outside the probe set and the cached
+ * range, and allows everything else, so every probe is a cache hit; its
+ * 3995 eBPF instructions (3999 with the walk's penalty) leave eight copies
+ * 776 short of MAX_INSNS_PER_PATH. Leanux/Seccomp/Prefill.lean holds the
+ * same program. */
+#define SECCOMP_PREFILL_MAX 8
+#define SECCOMP_PREFILL_LEN 3990
+#define SECCOMP_PREFILL_DUMMY 100000u
+#ifndef SYS_SECCOMP
+#define SYS_SECCOMP 1
+#endif
 /* W8 took 22 (wg_netns_close), W9 23-24, W4 25, W7 26, W2 20-21, epoll 27-29. */
 #define IS_LIFECYCLE_OP(code) ((code) == OP_WG_CREATE || (code) == OP_WG_DOWN || (code) == OP_WG_DELETE)
 /* The parent's per-child hang guard (P design section 6): a child still
@@ -250,6 +290,8 @@ struct trace {
      * foreign-creator fixture (W8); arm: the trace's subset of the batch's
      * dispatch set, a bit per entry (W8: per-trace arming, section 3.2) */
     char id[81]; unsigned count; unsigned rlimit; unsigned net; unsigned arm; unsigned stepped; struct operation ops[MAX_OPS];
+    unsigned child;   /* seccomp W: the trace declares seccomp_child (descriptor 8) */
+    unsigned prefill; /* seccomp X: copies of the prefill program installed at setup */
     unsigned nsteer; struct steer_entry steer[STEER_MAX];
     unsigned nroutes; struct fixture_route routes[MAX_FIXTURE_ROUTES];
 };
@@ -259,8 +301,38 @@ static unsigned n_fixture_routes;
 static char line[4 * MAX_PAYLOAD];
 /* fds: a successful pipe2's pair; digest: BLAKE2s-256 of all bytes a read
  * returned; sigpipe: SIGPIPE pending after a write. */
+/* seccomp W (design 6.1): a probe's sigsys record (the SIGSYS handler's
+ * si_syscall, si_errno, si_arch, when a TRAP ran) and its child record
+ * (child_kind 0 none: a self probe; 1 ret: the child wrote its result and
+ * left normally; 2 exited: the child left without writing, child_value its
+ * exit status; 3 signal: child_value the signal), with the child's own
+ * strict call's result when the trace asked for one. */
 struct observation { long ret; int error; unsigned char bytes[READ_HEAD]; unsigned char digest[32];
-                     int fds[2]; int sigpipe; };
+                     int fds[2]; int sigpipe;
+                     int sigsys_set, sigsys_nr, sigsys_data; unsigned sigsys_arch;
+                     int child_kind, child_strict; long child_strict_ret, child_value; };
+/* seccomp W: the page the sandboxed child reports through (MAP_SHARED,
+ * mapped before the clone, written by the parent first so no fault lands
+ * in a window), its KCOV area (descriptor 8), the handler's record, the
+ * unmapped page for the -EFAULT arms and the process's capability sets at
+ * setup (for capdrop). */
+struct child_page { volatile int setup_failure, done, strict_done, sigsys_set, sigsys_nr, sigsys_data;
+                    volatile unsigned sigsys_arch; volatile long ret, strict_ret; };
+static struct child_page *child_shared;
+static unsigned long *child_area;
+static volatile struct { int set, nr, data; unsigned arch; } sigsys_seen;
+static void *bad_page;
+static struct __user_cap_header_struct cap_header = {.version = _LINUX_CAPABILITY_VERSION_3, .pid = 0};
+static struct __user_cap_data_struct cap_data[2];
+
+static void on_sigsys(int sig, siginfo_t *info, void *context)
+{
+    (void)sig; (void)context;
+    sigsys_seen.nr = info->si_syscall;
+    sigsys_seen.data = info->si_errno;
+    sigsys_seen.arch = info->si_arch;
+    sigsys_seen.set = info->si_code == SYS_SECCOMP;
+}
 /* The caller's buffers for read and write, page-aligned; every page is
  * written once in each trace child before KCOV_ENABLE, so no page fault lands
  * in a coverage window. */
@@ -1642,6 +1714,149 @@ static void settle_spin(const char *id, unsigned index, unsigned long long us)
     } while ((now.tv_sec - start.tv_sec) * 1000000000LL + (now.tv_nsec - start.tv_nsec) < (long long)(us * 1000));
 }
 
+/* seccomp stream W (docs/2026-10-12-seccomp-design.md, section 6). */
+static long seccomp_install(const struct operation *op)
+{
+    unsigned via = op->a & 0xff, mode = op->a >> 8, flags = op->b & 0xffff, bad = op->b >> 16;
+    struct sock_fprog prog = {.len = (unsigned short)(op->payload_len / sizeof(struct sock_filter)),
+                              .filter = (struct sock_filter *)op->payload};
+    if (op->value >> 32) prog.len = (unsigned short)(op->value & 0xffff);
+    if (bad == 3) prog.filter = NULL;
+    if (bad == 2) prog.filter = bad_page;
+    struct sock_fprog *arg = bad == 1 ? (struct sock_fprog *)bad_page : &prog;
+    if (via == 0) return syscall(SYS_seccomp, SECCOMP_SET_MODE_FILTER, (unsigned long)flags, arg);
+    return syscall(SYS_prctl, PR_SET_SECCOMP, (unsigned long)mode, arg);
+}
+
+/* The sandboxed child (design 6.2 rule 2): a raw clone (no atfork handlers,
+ * no libc bookkeeping), the allocation set and KCOV on descriptor 8, an
+ * optional strict call, the probe, its result through the shared page, then
+ * exit_group (exit under strict, the only exit strict allows). The parent
+ * waits and reads the child's area. The child never calls fail(): a setup
+ * failure is a code in the page the parent reports. */
+static void seccomp_child_probe(const struct trace *t, unsigned i, const struct operation *op, struct observation *r,
+                                int comparisons)
+{
+    unsigned strict = op->b >> 8;
+    uint64_t args[6];
+    memcpy(args, op->payload, sizeof(args));
+    memset(child_shared, 0, sizeof(*child_shared));
+    pid_t child = (pid_t)syscall(SYS_clone, (unsigned long)SIGCHLD, 0, 0, 0, 0);
+    if (child < 0) fail(t->id, (int)i, "environment_failure", "clone_seccomp_child");
+    if (!child) {
+        if ((alloc.n || alloc.flags) && syscall(SYS_ioctl, CHILD_KCOV_FD, KCOV_LEANUX_ALLOC_LOAD, &alloc)) {
+            child_shared->setup_failure = 1;
+            syscall(SYS_exit_group, 99);
+        }
+        /* A shared mapping's page tables are not copied at fork, so the
+         * child's first write to the report page (shmem) and to its area is
+         * a fault that runs fault_dirty_shared_page -> file_update_time
+         * (fs/inode.c's timestamp path, with clock records when the tick
+         * moved since the inode's last update): both happen here, before
+         * KCOV_ENABLE opens the window; the writes after it hit writable
+         * PTEs (step 0, measured). */
+        child_shared->done = 0;
+        __atomic_store_n(&child_area[0], 0, __ATOMIC_RELAXED);
+        if (syscall(SYS_ioctl, CHILD_KCOV_FD, KCOV_ENABLE, comparisons ? KCOV_TRACE_CMP : KCOV_TRACE_PC)) {
+            child_shared->setup_failure = 2;
+            syscall(SYS_exit_group, 99);
+        }
+        __atomic_store_n(&child_area[0], 0, __ATOMIC_RELAXED);
+        if (strict) {
+            errno = 0;
+            long s = strict == 1 ? syscall(SYS_seccomp, SECCOMP_SET_MODE_STRICT, 0, NULL)
+                                 : syscall(SYS_prctl, PR_SET_SECCOMP, (unsigned long)SECCOMP_MODE_STRICT, NULL);
+            child_shared->strict_ret = s == -1 ? -errno : s;
+            child_shared->strict_done = 1;
+        }
+        sigsys_seen.set = 0;
+        errno = 0;
+        long ret = syscall((long)op->a, args[0], args[1], args[2], args[3], args[4], args[5]);
+        int e = errno;
+        child_shared->ret = ret == -1 ? -e : ret;
+        child_shared->sigsys_set = sigsys_seen.set;
+        child_shared->sigsys_nr = sigsys_seen.nr;
+        child_shared->sigsys_data = sigsys_seen.data;
+        child_shared->sigsys_arch = sigsys_seen.arch;
+        child_shared->done = 1;
+        syscall(strict ? SYS_exit : SYS_exit_group, 0);
+        for (;;) ;
+    }
+    int status;
+    if (waitpid(child, &status, 0) != child) fail(t->id, (int)i, "environment_failure", "wait_seccomp_child");
+    if (child_shared->setup_failure)
+        fail(t->id, (int)i, "coverage_failure", child_shared->setup_failure == 1 ? "child_alloc_load" : "child_enable_kcov");
+    if (child_shared->done && (!WIFEXITED(status) || WEXITSTATUS(status)))
+        fail(t->id, (int)i, "environment_failure", "child_exit_after_result");
+    if (!child_shared->done && !WIFEXITED(status) && !WIFSIGNALED(status))
+        fail(t->id, (int)i, "environment_failure", "child_neither_exited_nor_signalled");
+    r->child_kind = child_shared->done ? 1 : WIFSIGNALED(status) ? 3 : 2;
+    r->child_value = child_shared->done ? child_shared->ret : WIFSIGNALED(status) ? WTERMSIG(status) : WEXITSTATUS(status);
+    r->child_strict = child_shared->strict_done;
+    r->child_strict_ret = child_shared->strict_ret;
+    r->sigsys_set = child_shared->sigsys_set;
+    r->sigsys_nr = child_shared->sigsys_nr;
+    r->sigsys_data = child_shared->sigsys_data;
+    r->sigsys_arch = child_shared->sigsys_arch;
+}
+
+static long seccomp_capdrop(void)
+{
+    struct __user_cap_data_struct data[2];
+    memcpy(data, cap_data, sizeof(data));
+    /* CAP_SYS_ADMIN is 21: word 0 */
+    data[0].effective &= ~(1u << CAP_SYS_ADMIN);
+    data[0].permitted &= ~(1u << CAP_SYS_ADMIN);
+    data[0].inheritable &= ~(1u << CAP_SYS_ADMIN);
+    return syscall(SYS_capset, &cap_header, data);
+}
+
+static long seccomp_query(const struct operation *op)
+{
+    if (op->a == 0) {
+        uint32_t action = op->b;
+        return syscall(SYS_seccomp, SECCOMP_GET_ACTION_AVAIL, (unsigned long)op->value, &action);
+    }
+    struct seccomp_notif_sizes sizes;
+    return syscall(SYS_seccomp, SECCOMP_GET_NOTIF_SIZES, (unsigned long)op->value, &sizes);
+}
+
+static long seccomp_prctl(const struct operation *op)
+{
+    static const int commands[] = {PR_SET_NO_NEW_PRIVS, PR_GET_NO_NEW_PRIVS, PR_GET_SECCOMP};
+    uint64_t args[4];
+    memcpy(args, op->payload, sizeof(args));
+    return syscall(SYS_prctl, commands[op->a], args[0], args[1], args[2], args[3]);
+}
+
+static void print_sigsys(const struct operation *op, const struct observation *r)
+{
+    if (op->code != OP_SECCOMP_PROBE || !r->sigsys_set) { printf("null"); return; }
+    printf("{\"nr\":%d,\"data\":%d,\"arch\":%u}", r->sigsys_nr, r->sigsys_data, r->sigsys_arch);
+}
+
+static void print_child(const struct operation *op, const struct observation *r)
+{
+    if (op->code != OP_SECCOMP_PROBE || !r->child_kind) { printf("null"); return; }
+    printf("{");
+    if (r->child_strict) printf("\"strict_ret\":%ld,", r->child_strict_ret);
+    printf("\"%s\":%ld}", r->child_kind == 1 ? "ret" : r->child_kind == 2 ? "exited" : "signal", r->child_value);
+}
+
+/* The child's streams after a child probe, outside the parent's window: its
+ * choice records and PCs (or comparison records) from its own area, which
+ * the harness merges into the operation's rows (harness/linux.py). */
+static void seccomp_child_streams(const struct trace *t, unsigned i, const struct observation *r, int comparisons)
+{
+    if (!r->child_kind) return;
+    unsigned long count = __atomic_load_n(&child_area[0], __ATOMIC_RELAXED);
+    if (!count || count >= (comparisons ? (CAPACITY - 1) / 4 : CAPACITY - 1))
+        fail(t->id, (int)i, "coverage_failure", "empty_or_full_child_kcov");
+    count = split_hidden("LEANUX_CHIDDEN", t, i, child_area, count, comparisons);
+    if (comparisons) print_records("LEANUX_CCMP", t->id, i, child_area, count, NULL);
+    else print_pcs("LEANUX_CCOVERAGE", t->id, i, child_area, count);
+}
+
 static void execute(const struct trace *t, int input_fd, int comparisons)
 {
     fixture_routes = t->routes;   /* W4: for route_into_wg0 at every wg_up */
@@ -1788,13 +2003,52 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         resolve_wireguard_family(t->id, NETLINK_FD);
         if (wg_exists) resolve_wg_ifindex(t->id, -1);
     }
+    /* seccomp W (design 5, 6.2): every trace process starts with a SIGSYS
+     * handler (a TRAP returns to the operation), RLIMIT_CORE 0 (a SIGSYS
+     * death attempts no core file), its capability sets read for capdrop,
+     * an unmapped page for the -EFAULT arms and the child's report page; a
+     * trace that declares seccomp_child also holds the child's KCOV
+     * descriptor at 8, initialised and mapped MAP_SHARED here, before the
+     * descriptor rlimit, so the parent reads the child's area after
+     * waitpid. All of it outside every window. */
+    struct sigaction sigsys = {.sa_sigaction = on_sigsys, .sa_flags = SA_SIGINFO};
+    if (sigemptyset(&sigsys.sa_mask) || sigaction(SIGSYS, &sigsys, NULL)) fail(t->id, -1, "environment_failure", "sigsys_handler");
+    struct rlimit core = {0, 0};
+    if (setrlimit(RLIMIT_CORE, &core)) fail(t->id, -1, "environment_failure", "rlimit_core");
+    if (syscall(SYS_capget, &cap_header, cap_data)) fail(t->id, -1, "environment_failure", "capget");
+    bad_page = mmap(NULL, 4096, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (bad_page == MAP_FAILED) fail(t->id, -1, "environment_failure", "map_bad_page");
+    child_shared = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    if (child_shared == MAP_FAILED) fail(t->id, -1, "environment_failure", "map_child_page");
+    memset(child_shared, 0, 4096);
+    /* seccomp X (design 5): the prefill fixture, outside every window: no-new-privs,
+     * then t->prefill installs of the fixed program; any failure is the
+     * fixture's, not the trace's. */
+    if (t->prefill) {
+        static struct sock_filter prefill[SECCOMP_PREFILL_LEN];
+        prefill[0] = (struct sock_filter){BPF_LD | BPF_W | BPF_ABS, 0, 0, 0};
+        prefill[1] = (struct sock_filter){BPF_JMP | BPF_JEQ | BPF_K, 1, 0, SECCOMP_PREFILL_DUMMY};
+        prefill[2] = (struct sock_filter){BPF_RET | BPF_K, 0, 0, SECCOMP_RET_ALLOW};
+        for (unsigned i = 3; i + 1 < SECCOMP_PREFILL_LEN; ++i) prefill[i] = (struct sock_filter){BPF_JMP | BPF_JA, 0, 0, 0};
+        prefill[SECCOMP_PREFILL_LEN - 1] = (struct sock_filter){BPF_RET | BPF_K, 0, 0, SECCOMP_RET_ALLOW};
+        struct sock_fprog prefill_prog = {.len = SECCOMP_PREFILL_LEN, .filter = prefill};
+        if (syscall(SYS_prctl, PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0)) fail(t->id, -1, "environment_failure", "prefill_no_new_privs");
+        for (unsigned i = 0; i < t->prefill; ++i)
+            if (syscall(SYS_seccomp, SECCOMP_SET_MODE_FILTER, 0, &prefill_prog)) fail(t->id, -1, "environment_failure", "seccomp_prefill");
+    }
+    if (t->child) {
+        if (open("/sys/kernel/debug/kcov", O_RDWR) != CHILD_KCOV_FD) fail(t->id, -1, "coverage_failure", "open_child_kcov_at_8");
+        if (ioctl(CHILD_KCOV_FD, KCOV_INIT_TRACE, CAPACITY)) fail(t->id, -1, "coverage_failure", "initialize_child_kcov");
+        child_area = mmap(NULL, CAPACITY * sizeof(*child_area), PROT_READ | PROT_WRITE, MAP_SHARED, CHILD_KCOV_FD, 0);
+        if (child_area == MAP_FAILED) fail(t->id, -1, "coverage_failure", "map_child_kcov");
+    }
     struct rlimit limit = {t->rlimit, t->rlimit}, actual;
     if (setrlimit(RLIMIT_NOFILE, &limit) || getrlimit(RLIMIT_NOFILE, &actual) || actual.rlim_cur != t->rlimit || actual.rlim_max != t->rlimit)
         fail(t->id, -1, "environment_failure", "rlimit_nofile");
     if (!comparisons) {
         printf("LEANUX_FIXTURE {\"id\":\"%s\",\"reserved\":[%s],\"free\":[%u,%u],\"rlimit\":[%u,%u]", t->id,
-               t->net == 3 ? "0,1,2,3,4,5,6,7,8,9" : t->stepped ? "0,1,2,3,4,5,6,7,8" : "0,1,2,3,4,5,6,7",
-               t->net == 3 ? 10 : t->stepped ? 9 : 8, t->rlimit - 1, t->rlimit, t->rlimit);
+               t->net == 3 ? "0,1,2,3,4,5,6,7,8,9" : (t->stepped || t->child) ? "0,1,2,3,4,5,6,7,8" : "0,1,2,3,4,5,6,7",
+               t->net == 3 ? 10 : (t->stepped || t->child) ? 9 : 8, t->rlimit - 1, t->rlimit, t->rlimit);
         /* W5: the network namespace's facts, as read back; W8: the foreign-creator
          * fixture adds the injector (8) and the pin (9) */
         if (t->net)
@@ -1838,6 +2092,19 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             memset(read_buffer, 0xa5, op->a * sizeof(struct epoll_event));
         }
         if (op->code == OP_WRITE) fill_write_buffer(i, op->value, op->a);
+        /* seccomp W: the wire's bounds (harness/trace.py enforces the
+         * contract; the guest fails anything else before the window) */
+        if (op->code == OP_SECCOMP_INSTALL &&
+            (op->payload_len % sizeof(struct sock_filter) || op->payload_len / sizeof(struct sock_filter) > BPF_MAXINSNS ||
+             (op->a & 0xff) > 1 || (op->a >> 8) > 255 || (op->b >> 16) > 3 || (op->value >> 32) > 1 ||
+             ((op->value >> 32) && (op->value & 0xffffffff) > 0xffff)))
+            fail(t->id, i, "invalid_input", "wire_seccomp_install");
+        if (op->code == OP_SECCOMP_PROBE &&
+            (op->payload_len != 48 || (op->b & 0xff) > 1 || (op->b >> 8) > 2 || ((op->b & 0xff) == 1 && !t->child) ||
+             ((op->b >> 8) && (op->b & 0xff) != 1)))
+            fail(t->id, i, "invalid_input", "wire_seccomp_probe");
+        if (op->code == OP_SECCOMP_PRCTL && (op->payload_len != 32 || op->a > 2)) fail(t->id, i, "invalid_input", "wire_seccomp_prctl");
+        if (op->code == OP_SECCOMP_QUERY && (op->a > 1 || op->value >> 32)) fail(t->id, i, "invalid_input", "wire_seccomp_query");
         int pipe_fds[2] = {-1, -1};
         if (((op->code >= OP_WG_UP && op->code <= OP_WG_INJECT) || IS_LIFECYCLE_OP(op->code) || op->code == OP_WG_SET_MTU
              || op->code == OP_WG_BATCH) && !t->net)
@@ -1993,6 +2260,26 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         case OP_EPOLL_WAIT:
             ret = syscall(SYS_epoll_wait, fd, read_buffer, (unsigned long)op->a, (unsigned long)op->b);
             break;
+        /* seccomp stream W (docs/2026-10-12-seccomp-design.md section 6). */
+        case OP_SECCOMP_INSTALL: ret = seccomp_install(op); break;
+        case OP_SECCOMP_PROBE:
+            if ((op->b & 0xff) == 1) {
+                seccomp_child_probe(t, i, op, &result[i], comparisons);
+                ret = 0;
+            } else {
+                uint64_t args[6];
+                memcpy(args, op->payload, sizeof(args));
+                sigsys_seen.set = 0;
+                ret = syscall((long)op->a, args[0], args[1], args[2], args[3], args[4], args[5]);
+                result[i].sigsys_set = sigsys_seen.set;
+                result[i].sigsys_nr = sigsys_seen.nr;
+                result[i].sigsys_data = sigsys_seen.data;
+                result[i].sigsys_arch = sigsys_seen.arch;
+            }
+            break;
+        case OP_SECCOMP_PRCTL: ret = seccomp_prctl(op); break;
+        case OP_SECCOMP_CAPDROP: ret = seccomp_capdrop(); break;
+        case OP_SECCOMP_QUERY: ret = seccomp_query(op); break;
         case OP_READ: ret = syscall(SYS_read, fd, read_buffer, (unsigned long)op->a); break;
         case OP_WRITE: ret = syscall(SYS_write, fd, write_buffer, (unsigned long)op->a); break;
         case OP_FCNTL: ret = syscall(SYS_fcntl, fd, (unsigned long)op->a, (unsigned long)op->b); break;
@@ -2370,10 +2657,12 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
              * reference counts (stage C) are declared comparisons. */
             print_records("LEANUX_CMP", t->id, i, coverage, count, NULL);
             if (remote) print_records("LEANUX_RCMP", t->id, i, remote, remote_count, cmp_block);
+            seccomp_child_streams(t, i, &result[i], comparisons);
             continue;
         }
         print_pcs("LEANUX_COVERAGE", t->id, i, coverage, count);
         if (remote) print_pcs("LEANUX_RCOVERAGE", t->id, i, remote, remote_count);
+        seccomp_child_streams(t, i, &result[i], comparisons);
     }
     if (up_seen)
         printf("LEANUX_TIMING {\"id\":\"%s\",\"mode\":\"%s\",\"since_up_ns\":%lld}\n", t->id,
@@ -2392,6 +2681,10 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         printf("],\"sigpipe\":[");
         for (unsigned i = 0; i < t->count; ++i)
             if (t->ops[i].code == OP_WRITE) printf("%s%d", i ? "," : "", result[i].sigpipe); else printf("%snull", i ? "," : "");
+        printf("],\"sigsys\":[");
+        for (unsigned i = 0; i < t->count; ++i) { printf("%s", i ? "," : ""); print_sigsys(&t->ops[i], &result[i]); }
+        printf("],\"child\":[");
+        for (unsigned i = 0; i < t->count; ++i) { printf("%s", i ? "," : ""); print_child(&t->ops[i], &result[i]); }
         printf("]}\n");
         fflush(stdout);
         task_steering_status(t, coverage_fd, comparisons);
@@ -2420,6 +2713,10 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         }
         if (t->ops[i].code == OP_WRITE) printf(",\"sigpipe\":%d", result[i].sigpipe);
         if (t->ops[i].code == OP_PIPE2) { printf(",\"fds\":"); print_fds(&t->ops[i], &result[i]); }
+        if (t->ops[i].code == OP_SECCOMP_PROBE) {
+            printf(",\"sigsys\":"); print_sigsys(&t->ops[i], &result[i]);
+            printf(",\"child\":"); print_child(&t->ops[i], &result[i]);
+        }
         printf("}");
     }
     printf("],\"branches\":[]}\n");
@@ -2571,11 +2868,18 @@ int main(int argc, char **argv)
     for (unsigned t = 0; t < total; ++t) {
         static struct trace trace;
         if (!fgets(line, sizeof(line), input) ||
-            sscanf(line, "T %80s %u %u %u %u %x %u", trace.id, &trace.count, &trace.rlimit, &trace.net, &trace.nsteer,
-                   &trace.arm, &trace.nroutes) != 7 ||
+            sscanf(line, "T %80s %u %u %u %u %x %u %u %u", trace.id, &trace.count, &trace.rlimit, &trace.net, &trace.nsteer,
+                   &trace.arm, &trace.nroutes, &trace.child, &trace.prefill) != 9 ||
             trace.count < 1 || trace.count > MAX_OPS || trace.rlimit < 8 || trace.rlimit > 1024 || trace.net > 3 ||
             trace.nsteer > STEER_MAX || (trace.arm >> dispatch.n) || (trace.net == 3 && trace.rlimit < 10) ||
-            trace.nroutes > MAX_FIXTURE_ROUTES || (trace.nroutes && trace.net != 1))
+            trace.nroutes > MAX_FIXTURE_ROUTES || (trace.nroutes && trace.net != 1) ||
+            /* seccomp W: the child fixture (descriptor 8) never with a network
+             * fixture, never with a steering schedule (the child loads none),
+             * and with room for descriptor 8 */
+            trace.child > 1 || (trace.child && (trace.net || trace.nsteer || trace.rlimit < 9)) ||
+            /* seccomp X: the prefill fixture is the trace process's own state,
+             * never with a network fixture or a steering schedule */
+            trace.prefill > SECCOMP_PREFILL_MAX || (trace.prefill && (trace.net || trace.nsteer)))
             fail("batch", -1, "invalid_input", "wire_trace");
         /* W8: the subset of the dispatch set this trace arms (section 3.2):
          * a foreign-creator trace arms cleanup_net; a plain one never sees a
@@ -2609,7 +2913,8 @@ int main(int argc, char **argv)
                 fail(trace.id, i, "invalid_input", "wire_operation");
             op->payload_len = 0;
             if (op->code == OP_WG_SET || op->code == OP_WG_GET || op->code == OP_WG_XMIT || op->code == OP_WG_INJECT || op->code == OP_WG_FLOOD
-                || op->code == OP_WG_BATCH || op->code == OP_WG_GET_START) {
+                || op->code == OP_WG_BATCH || op->code == OP_WG_GET_START
+                || op->code == OP_SECCOMP_INSTALL || op->code == OP_SECCOMP_PROBE || op->code == OP_SECCOMP_PRCTL) {
                 /* A WireGuard operation carries its attribute payload as hex. */
                 const char *hex = line + consumed;
                 if (*hex++ != ' ') fail(trace.id, i, "invalid_input", "wire_payload");

@@ -1,0 +1,174 @@
+{
+  "version": 1,
+  "id": "s_flag_arms",
+  "ops": [
+    {
+      "op": "seccomp_install",
+      "via": "seccomp",
+      "flags": [
+        64
+      ],
+      "filter": [
+        [
+          6,
+          0,
+          0,
+          2147418112
+        ]
+      ]
+    },
+    {
+      "op": "seccomp_install",
+      "via": "seccomp",
+      "flags": [
+        256
+      ],
+      "filter": [
+        [
+          6,
+          0,
+          0,
+          2147418112
+        ]
+      ]
+    },
+    {
+      "op": "seccomp_install",
+      "via": "seccomp",
+      "flags": [
+        32768
+      ],
+      "filter": [
+        [
+          6,
+          0,
+          0,
+          2147418112
+        ]
+      ]
+    },
+    {
+      "op": "seccomp_install",
+      "via": "seccomp",
+      "flags": [
+        "tsync",
+        "new_listener"
+      ],
+      "filter": [
+        [
+          6,
+          0,
+          0,
+          2147418112
+        ]
+      ]
+    },
+    {
+      "op": "seccomp_install",
+      "via": "seccomp",
+      "flags": [
+        "wait_killable_recv"
+      ],
+      "filter": [
+        [
+          6,
+          0,
+          0,
+          2147418112
+        ]
+      ]
+    },
+    {
+      "op": "seccomp_prctl",
+      "cmd": "get_seccomp"
+    },
+    {
+      "op": "seccomp_install",
+      "via": "seccomp",
+      "flags": [
+        "spec_allow"
+      ],
+      "filter": [
+        [
+          32,
+          0,
+          0,
+          4
+        ],
+        [
+          21,
+          1,
+          0,
+          3221225534
+        ],
+        [
+          6,
+          0,
+          0,
+          2147418112
+        ],
+        [
+          32,
+          0,
+          0,
+          0
+        ],
+        [
+          6,
+          0,
+          0,
+          2147418112
+        ]
+      ]
+    },
+    {
+      "op": "seccomp_install",
+      "via": "seccomp",
+      "flags": [
+        "log",
+        "spec_allow"
+      ],
+      "filter": [
+        [
+          32,
+          0,
+          0,
+          4
+        ],
+        [
+          21,
+          1,
+          0,
+          3221225534
+        ],
+        [
+          6,
+          0,
+          0,
+          2147418112
+        ],
+        [
+          32,
+          0,
+          0,
+          0
+        ],
+        [
+          6,
+          0,
+          0,
+          2147418112
+        ]
+      ]
+    },
+    {
+      "op": "seccomp_prctl",
+      "cmd": "get_seccomp"
+    },
+    {
+      "op": "seccomp_probe",
+      "nr": 102,
+      "where": "self"
+    }
+  ]
+}

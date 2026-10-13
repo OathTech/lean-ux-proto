@@ -1,6 +1,6 @@
 {
  "version": 2,
- "description": "KCOV configuration for the A2 control-flow check. Witnesses are not listed here: each mirror decision (leanux-model --decisions) carries source spans for its outcomes, and the check intersects them with the lines that own a KCOV instrumentation point in these functions of the built kernel. 'files' bounds the source considered; 'functions' must include every function whose code (including inlined helpers) the modeled paths execute, and the check fails if coverage lands in a decision span the map does not know. 'known_gaps' lists C choice points KCOV observes but the mirror does not yet model; hits are reported, not failed. 'functions' scopes witnesses: only their PCs witness decisions, and a span line of an anchored C file covered by any other function fails the check; header helpers inlined into unlisted functions are not checked. 'branch_free_functions' lists C functions the compiler made branch-free (no KCOV point); only their decisions may lack an instrumented function. 'shared_exits' declares single instrumentation points, each named by its exact DWARF frame chain (file:line, innermost first; the check requires the chain to name exactly one point of the listed functions), that the compiler shares between a function's early returns and an inlined helper's exit: when the operation did not cover the 'unless_covered' point (the block entering the helper, also exactly one point), the helper's frame there does not count as the helper having run. 'operand_exclusions' declares single call sites of a comparison decision whose operand is a guest-wide value the mirror does not model: the mirror reports the outcome there with 'operands_excluded' instead of the pair, and the check requires Linux's comparison at that call site (outermost frame = 'call'). Both are documented in correspondence/README.md.",
+ "description": "KCOV configuration for the A2 control-flow check. Witnesses are not listed here: each mirror decision (leanux-model --decisions) carries source spans for its outcomes, and the check intersects them with the lines that own a KCOV instrumentation point in these functions of the built kernel. 'files' bounds the source considered; 'functions' must include every function whose code (including inlined helpers) the modeled paths execute, and the check fails if coverage lands in a decision span the map does not know. 'known_gaps' lists C choice points KCOV observes but the mirror does not yet model; hits are reported, not failed. 'functions' scopes witnesses: only their PCs witness decisions, and a span line of an anchored C file covered by any other function fails the check; header helpers inlined into unlisted functions are not checked. 'branch_free_functions' lists C functions the compiler made branch-free (no KCOV point); only their decisions may lack an instrumented function. 'shared_exits' declares single instrumentation points, each named by its exact DWARF frame chain (file:line, innermost first; the check requires the chain to name exactly one point of the listed functions), that the compiler shares between a function's early returns and an inlined helper's exit: when the operation did not cover the 'unless_covered' point (the block entering the helper, also exactly one point), the helper's frame there does not count as the helper having run. 'data_only_operations' names the operations whose kernel work lies entirely in unlisted files (seccomp design 6.3: prctl's no-new-privs arms in kernel/sys.c, capset in kernel/capability.c), checked by their data alone: they are exempt from 'no coverage in anchored files' and 'no model decision', and any decision they do report is checked as usual. 'operand_exclusions' declares single call sites of a comparison decision whose operand is a guest-wide value the mirror does not model: the mirror reports the outcome there with 'operands_excluded' instead of the pair, and the check requires Linux's comparison at that call site (outermost frame = 'call'). Both are documented in correspondence/README.md.",
  "files": [
   "fs/eventfd.c",
   "fs/file.c",
@@ -37,6 +37,8 @@
   "fs/inode.c",
   "include/linux/time64.h",
   "kernel/signal.c",
+  "kernel/seccomp.c",
+  "net/core/filter.c",
   "include/linux/poll.h",
   "fs/eventpoll.c",
   "include/linux/percpu_counter.h",
@@ -226,6 +228,22 @@
   "__sigqueue_alloc",
   "send4",
   "send6",
+  "__secure_computing",
+  "__seccomp_filter",
+  "seccomp_set_mode_filter",
+  "seccomp_check_filter",
+  "get_seccomp_filter",
+  "prctl_set_seccomp",
+  "prctl_get_seccomp",
+  "bpf_prog_create_from_user",
+  "bpf_prepare_filter",
+  "bpf_convert_filter",
+  "bpf_prog_store_orig_filter",
+  "bpf_prog_destroy",
+  "force_sig_seccomp",
+  "force_sig_info_to_task",
+  "signal_wake_up_state",
+  "__x64_sys_seccomp",
   "pipe_poll",
   "eventfd_poll",
   "__x64_sys_epoll_create1",
@@ -279,6 +297,36 @@
     "fs/inode.c:2275"
    ],
    "note": "The merged-return-block class (the cookie arms of receive.c:140-164, vfs_write's epilogue above): file_update_time's early return (ret <= 0 at inode.c:2272-2273, the \"nothing\" outcome) shares its return block with the inlined __file_update_time's (inode.c:2240 inlined at :2275; return PC 0xffffffff811cfd8f in the accepted build), so the point is covered on the nothing path although __file_update_time did not run, and its frame at :2275 witnesses the opposite outcome. On the paths that reach __file_update_time its entering block (file_inode at fs.h:1166 inlined at inode.c:2241, return PC 0xffffffff811cfd6c) runs first and the early return skips it, so the declaration applies only when that point is not covered; then the point neither counts as the helper running nor witnesses a decision outcome. Reached when two writes to a pipe fall in the same 4 ms tick (one coarse clock read, equal stamps): found by the generated pipes suite in the int-r claim point, pipes-20260920-00110 (seed 20260920) operation 16, under eight guests; timing-dependent, not deterministic in any corpus trace."
+  },
+  {
+   "function": "bpf_migrate_filter",
+   "frames": [
+    "net/core/filter.c:1320",
+    "net/core/filter.c:1363"
+   ],
+   "unless_covered": [
+    "net/core/filter.c:1263",
+    "net/core/filter.c:1363"
+   ],
+   "note": "bpf_prepare_filter's error return after the trans hook refused the program (filter.c:1348-1350: __bpf_prog_release and ERR_PTR) shares its block with the inlined bpf_migrate_filter's out_err (filter.c:1320 inlined at :1363; PC 0xffffffff8143a8de on the sc2 scratch build), so the point is covered on a rejected install although bpf_migrate_filter did not run. On the installs that reach bpf_migrate_filter its entry block (filter.c:1263 at :1363, PC 0xffffffff8143a7b5) runs first and the refused path skips it, so the declaration applies only when that point is not covered. Found by corpus/seccomp s_chk_anc_known and every other install seccomp_check_filter refuses (stream V's open item, settled by X on sc2, 2026-10-13)."
+  },
+  {
+   "function": "seccomp_get_notif_sizes",
+   "frames": [
+    "kernel/seccomp.c:2088",
+    "kernel/seccomp.c:2111",
+    "kernel/seccomp.c:2120",
+    "kernel/seccomp.c:2117",
+    "kernel/seccomp.c:2117"
+   ],
+   "unless_covered": [
+    "kernel/seccomp.c:2079",
+    "kernel/seccomp.c:2111",
+    "kernel/seccomp.c:2120",
+    "kernel/seccomp.c:2117",
+    "kernel/seccomp.c:2117"
+   ],
+   "note": "do_seccomp's return block (seccomp.c:2111) is shared with the inlined seccomp_get_notif_sizes's `return 0` (seccomp.c:2088 at :2111; PC 0xffffffff810f7f15 on the sc2 scratch build), so every GET_ACTION_AVAIL and every refused flag covers the point although seccomp_get_notif_sizes did not run. On a GET_NOTIF_SIZES the sizes' initialisation (seccomp.c:2079 at :2111, PC 0xffffffff810f7ed8) runs first and the other paths skip it, so the declaration applies only when that point is not covered. Found by corpus/seccomp s_queries (stream V's open item, settled by X on sc2, 2026-10-13)."
   },
   {
    "function": "ep_modify",
@@ -378,6 +426,12 @@
   "IP_ECN_set_ect1",
   "IP6_ECN_set_ce",
   "IP6_ECN_set_ect1",
+  "seccomp_may_assign_mode",
+  "seccomp_log",
   "percpu_counter_compare"
+ ],
+ "data_only_operations": [
+  "seccomp_prctl",
+  "seccomp_capdrop"
  ]
 }

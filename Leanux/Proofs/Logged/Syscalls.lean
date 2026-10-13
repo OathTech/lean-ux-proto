@@ -53,8 +53,14 @@ theorem dispatchLogged_erases (call : Syscall) : Erases (dispatchLogged call) (L
 
 def syscallLogged (call : Syscall) : GhostM Int := do
   modifyWorld fun w => { w with steps := #[], userOut := none, userFds := none, extraOut := [], queuedThisCall := [], fired := #[],
-                                netRxSections := 0, netRxSection := 0 }
+                                netRxSections := 0, netRxSection := 0, emitted := {}, translatedLen := none }
+  match syscallNr call with
+  | some nr => Seccomp.enterHarnessCall nr
+  | none =>
+    if call.isNet && (← getCurrent).seccomp.mode != .disabled then
+      unsupported "a network operation after a seccomp mode was set (the fixture's calls are not modelled under a filter)"
   let ret ← dispatchLogged call
+  for c in Env.windowTailCalls do Seccomp.enterHarnessCall c
   taskWorkRun
   -- the guest waits inside the operations that can queue the handshake send
   -- worker (and in wg_inject); the worker runs during that wait

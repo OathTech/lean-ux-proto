@@ -31,8 +31,9 @@ Matching only syscall results is insufficient. The design rules are in section
 
 The mirror covers single-CPU WireGuard, stopping at WireGuard's boundary (the
 IP stack only where WireGuard's paths or observables depend on it), with
-pipes, eventfd and epoll over the file-descriptor slice; seccomp is being
-integrated. A gap is excluded only for a profound reason, recorded in the
+pipes, eventfd and epoll over the file-descriptor slice, and seccomp (the
+filter chain, the classic-BPF checker and translation, the sandboxed child).
+A gap is excluded only for a profound reason, recorded in the
 design doc. The next targets and the proof campaign are recorded in
 [docs/decisions.md](docs/decisions.md) and
 [the campaign charter](docs/2026-10-13-charter-proof-campaign.md); the dated
@@ -96,8 +97,8 @@ Validation is scoped to the change:
 - no unrequested harness, guest or kernel changes during a validation task:
   report the finding instead.
 
-The host is shared. Keep `LEANUX_QEMU_SLOTS` at 3 and budget timeouts with
-headroom. A failure that depends on scheduling order is a modeling gap: fix it
+The host is shared. Keep `LEANUX_QEMU_SLOTS` at 8 (the default) and budget
+timeouts with headroom. A failure that depends on scheduling order is a modeling gap: fix it
 in the environment model (`Leanux/Env.lean`) with an exact, fail-closed rule,
 never with a retry. A rerun happens at most once, only on an infrastructure
 outcome, and is recorded in the report

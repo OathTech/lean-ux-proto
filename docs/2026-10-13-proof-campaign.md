@@ -2,20 +2,40 @@
 
 ## Progress
 
-Worktree `.worktrees/proofs-campaign`, branch `proofs/campaign`; base mirror
-`618034e` (documentation-only carry from `c85e86b`). The [charter](2026-10-13-charter-proof-campaign.md) defines the
-campaign. No mirror or kernel edits, no integration into main, no push. Main’s approved
-documentation refresh is merged into this branch; executable and proof inputs
-are unchanged by that carry, so all existing results remain current.
+Worktree `.worktrees/proofs-campaign`, branch `proofs/campaign`. The
+[charter](2026-10-13-charter-proof-campaign.md) defines the campaign. Main
+`57f8f34` (seccomp and the QEMU-default update) is carried into this branch
+under the charter's non-prerequisite authorization. The mirror and kernel
+match it exactly; all registered components are current. Subsequent main
+`d65288d` adds the two named-prerequisite design documents only and is not
+merged pending the user's landing paste. No integration into main, push,
+differential check or guest run.
 
 | Result | Progress |
 | --- | --- |
-| R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay and independent review checked. Current over 618034e. |
-| R2 lifetime safety | Keypair operation endpoints, peer allocation/reference helpers, packet primitives, failure-retaining peer release observations and stale-cursor finding checked; caller/lifecycle and whole-run internal-access coverage remain in progress. |
+| R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay and independent review checked. Seccomp frame carry checked. |
+| R2 lifetime safety | Keypair operation endpoints, peer allocation/reference helpers, packet primitives, failure-retaining peer creation/release observations and stale-cursor finding checked; caller/lifecycle and whole-run internal-access coverage remain in progress. |
 | R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees proved; device-root linkage, mutation/history and path refinements remain open. Path proofs follow R2. |
 | R4 delivery | Not started; drop characterisation waiting on W7 full-ring tier's explanation of the two drops. |
 | R5 key lifetime | Not started; time half waiting on review items 7 and 8 on the timer model. |
 | R6 flood resistance | Not started. |
+
+**Current validation.** The full proof gate passes 146 build jobs and 69
+terminal statements (ReplayWindow 15, R1 9, R2 37, R3 8), with only permitted
+axioms. The default model build passes 60 jobs; the unit tier passes 93 tests
+in 21.463 seconds with one skip. Both explicit-record witness replays below
+still accept and agree with the original runner. Independent reviews cover
+the peer-creation addition and all seccomp carry files. The toolchain kernel
+replay also passes:
+`capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs`.
+
+**Shared carry.** Signal/task and pipe helper frames, seccomp entry/tail frames
+and arbitrary prefill preservation keep the seven-field WG projection intact.
+The runner observers include the child fixture and prefill success/error paths;
+no seccomp-free trace premise was added. The BPF converter proof shares compiler
+continuations and proves progress of its integer pass counter before framing
+the repeat loop. This carry took 17 compile passes over 36m34s; two independent
+read-only reviews checked source correspondence and the final deltas.
 
 ## R1 — anti-replay uniqueness and the inclusive floor
 
@@ -71,13 +91,9 @@ python3 -B docs/proof-campaign-replay.py r1-inclusive-floor |
 capped -- scripts/in-bundle scripts/proof-gate
 ```
 
-**Validation and effort.** The proof gate passes: 102 build jobs, 24 terminal
-declarations (9 new R1 theorems), dependencies confined to the three permitted
-standard axioms, token/import/default-target checks clean. The mirror is
-byte-identical to `c85e86b`; ReplayWindow and R1 are current, no result lag.
-The required fast unit tier ran 88 tests in 21 seconds, OK with one skip.
-The initial build failed because its dependency scan preceded the newly added
-root import; a fresh build resolved that dependency. Five local compile passes
+**Validation and effort.** Current validation is recorded above. The initial
+build failed because its dependency scan preceded the newly added root import;
+a fresh build resolved that dependency. Five local compile passes
 resolved proof syntax and elaboration issues. R1 took roughly fifteen elapsed
 minutes with bounded worker investigation and proof implementation; replay itself
 took under one second. No differential check or guest was run.
@@ -155,16 +171,29 @@ one read, a zero refcount retains two reads and the write before rejection, and
 a successful last-reference release has read/read/write/release. Failed getters
 resolve no object and emit no access event.
 
-Four terminal exports give exact result/log equality and safety of every prefix
-of finite sequences of those two complete original calls, including failures.
-The initial invariant states safe past history, unique resident stamps and
-absence of previously released stamps. It is not a premise asserting future
-safety. This family allocates nothing. Extending it with creation will also
-require resident and released-history frontier bounds: current absence alone
-cannot distinguish a dead stamp from one that will first be allocated later.
-Resolved-stamp ordering does not prove ownership of a raw slot reference; the
-stale-cursor finding below can satisfy it. Whole-run coverage, dump-resume
-cleanup, other callers and device lifecycle remain open.
+The release-only exports give exact result/log equality and safety of every
+prefix of finite sequences of those two complete original calls, including
+failures. Their invariant states safe past history, unique resident stamps and
+absence of previously released stamps; it does not assert future safety.
+
+`Peers/CreationAccess` adds the complete original `peerCreate`, observing its
+first insertion as allocation/write and every getter/setter in destination-cache
+reset, handshake-clock reset, static-key precomputation and handshake
+initialization. `PrefixEnsures` carries result-dependent contracts through
+failures. The stronger invariant bounds resident and previously released stamps
+by the allocation frontier, so an arbitrary initial history cannot label a future
+allocation as already released. Five terminal exports cover exact erasure, core
+allocation observations, an initializer record-failure prefix, and finite sequences
+of creation, put and dump completion. The failure-prefix theorem concerns the
+helper after core creation, not a whole-runner counterexample. Ordinary create
+errors and `Stop` failures retain their actual effects and observations.
+
+These contracts do not require an empty `nextPeer` slot: a malformed occupied
+slot can be overwritten without an old-object release event. They prove ordered
+resolved-stamp accesses, not vacancy, complete release coverage or ownership of
+a saved raw slot reference. The stale-cursor finding below can satisfy them.
+Whole-run coverage, dump-resume cleanup, other callers and device lifecycle remain
+open.
 
 **Concrete reference finding.** An eight-operation, explicit-record accepted
 mirror run creates 28 peers, starts a stepped dump, deletes wg0, creates a new
@@ -200,18 +229,14 @@ python3 -B docs/proof-campaign-replay.py r2-stale-dump-cursor |
 capped -- scripts/in-bundle scripts/proof-gate
 ```
 
-**Validation and effort.** The recorded replay accepts and checks its assertions
-in under one second. The current proof build passes 125 jobs, with 32 terminal
-theorems in R2. The gate passes all 62 terminal
-statements with only permitted axioms; the default model build passes 51 jobs,
-and the required unit tier passes 88 tests in 21.453 seconds with one skip.
-Earlier checkpoint commits carry their own counts. No mirror semantics or
-kernel source changed; checked components are current over `618034e`, whose
-mirror is identical to `c85e86b`, with no lag.
+**Validation and effort.** Current validation is recorded above. The recorded
+replay accepts and checks its assertions in under one second. Earlier checkpoint
+commits carry their own counts. No mirror semantics or kernel source changed.
 
 Most effort is caller coverage and reusable framing. Peer allocation took six
 compile passes, shared file frames four, failure-prefix observation nine,
-and the shared kernel-frame migration three.
+the shared kernel-frame migration three, and peer creation ten over about
+twenty-one minutes.
 Failed passes exposed proof elaboration or simplification errors. One earlier
 anonymous-hypothesis tactic loop was stopped by verified PID and repaired.
 Independent read-only reviews found no correctness defect in these components;
@@ -281,12 +306,8 @@ finding is claimed here.
 
 **Validation and effort.** The arithmetic took five compile passes, the pure
 tree six, and the store/traversal refinement twenty over about eighteen minutes.
-Failed passes exposed proof elaboration or simplification errors. The full gate
-passes 127 build jobs and 64 terminal statements (eight in R3), with only the
-permitted standard axioms. The default model build passes 51 jobs; the required
-unit tier passes 88 tests with one skip. The mirror remains byte-identical to
-`618034e`, whose executable inputs equal `c85e86b`; all checked components are
-current, with no lag. Reproduce with
+Failed passes exposed proof elaboration or simplification errors. Current
+validation is recorded above. Reproduce with
 `capped -- scripts/in-bundle scripts/proof-gate`.
 
 **Independent review.** Read-only reviews found no correctness defect in the

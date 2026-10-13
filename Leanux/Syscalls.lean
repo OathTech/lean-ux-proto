@@ -8,6 +8,7 @@ import Leanux.FS.Inode
 import Leanux.FS.PipeCreate
 import Leanux.Env
 import Leanux.WG.NetlinkDump
+import Leanux.Seccomp.Syscalls
 
 /-!
 # System call entry and return to user mode
@@ -85,6 +86,16 @@ inductive Syscall where
   /-- D3: `ioctl(3, KCOV_LEANUX_TIME_ADVANCE, &ticks)` on the trace's KCOV
       descriptor, then the guest's wait (docs/2026-10-05-d3-timers.md, 4.3). -/
   | wgAdvance (ticks : Nat)
+  /-- seccomp (docs/2026-10-12-seccomp-design.md 6.1), ops 30-34:
+      `seccomp(2)` or `prctl(PR_SET_SECCOMP)` with a `sock_fprog`; one probe
+      call in the trace process or in a sandboxed child; `prctl`'s three
+      companions; `capset` dropping `CAP_SYS_ADMIN`; the two queries. -/
+  | seccompInstall (via : Seccomp.InstallVia) (flags : UInt32) (filter : Option ClassicProg)
+      (len : Option Nat) (bad : Seccomp.BadPtr) (mode : Nat)
+  | seccompProbe (nr : Int) (args : Array UInt64) (where_ : Seccomp.ProbeWhere) (strict : Option Seccomp.StrictVia)
+  | seccompPrctl (cmd : Seccomp.PrctlCmd) (args : Array UInt64)
+  | seccompCapdrop
+  | seccompQuery (cmd : Seccomp.QueryCmd) (action flags : UInt32)
   /-- L (docs/2026-10-05-l-lifecycle.md): `RTM_NEWLINK` of wg0 and
       `RTM_DELLINK` of wg0 on a temporary rtnetlink socket, and
       `ioctl(6, SIOCSIFFLAGS, flags & ~IFF_UP)` on the fixture's sender. -/
@@ -320,12 +331,52 @@ def dispatch : Syscall → M Int
   | .wgDown => socketCallOn SENDER_FD Env.wgDown
   | .wgDelete => rtnetlinkRequest Env.wgDelete
   | .wgNetnsClose => netnsClose
+  | .seccompInstall via flags filter len bad mode => Seccomp.sysSeccompInstall via flags filter len bad mode
+  | .seccompProbe nr args .self _ => Seccomp.sysSeccompProbeSelf nr args
+  | .seccompProbe nr args .child strict => Seccomp.sysSeccompProbeChild nr args strict
+  | .seccompPrctl cmd args => Seccomp.sysSeccompPrctl cmd args
+  | .seccompCapdrop => Seccomp.sysSeccompCapdrop
+  | .seccompQuery cmd action flags => Seccomp.sysSeccompQuery cmd action flags
+
+/-- The x86-64 number of the system call an operation makes, for the entry
+    path once a seccomp mode is set (`__secure_computing`, design 4.5):
+    `none` for a probe, whose handler enters itself with the probe's
+    arguments, and for the network operations, which make several calls
+    through the fixture's sockets and are outside the seccomp domain. -/
+def syscallNr : Syscall → Option Int
+  | .eventfd2 .. => some 290
+  | .dup _ => some 32
+  | .dup3 .. => some 292
+  | .close _ => some 3
+  | .read .. => some 0
+  | .write .. => some 1
+  | .pipe2 _ => some 293
+  | .fcntl .. => some 72
+  | .seccompInstall .seccomp .. | .seccompQuery .. => some Seccomp.NR_seccomp
+  | .seccompInstall .prctl .. | .seccompPrctl .. => some Seccomp.NR_prctl
+  | .seccompCapdrop => some Seccomp.NR_capset
+  | .seccompProbe .. => none
+  | _ => none
+
+def Syscall.isNet : Syscall → Bool
+  | .seccompInstall .. | .seccompProbe .. | .seccompPrctl .. | .seccompCapdrop | .seccompQuery .. => false
+  | .eventfd2 .. | .dup _ | .dup3 .. | .close _ | .read .. | .write .. | .pipe2 _ | .fcntl .. => false
+  | _ => true
 
 /-- One system call: entry, the handler, and the return-to-user work. -/
 def syscall (call : Syscall) : M Int := do
   modify fun w => { w with steps := #[], userOut := none, userFds := none, extraOut := [], queuedThisCall := [], fired := #[],
-                           netRxSections := 0, netRxSection := 0 }
+                           netRxSections := 0, netRxSection := 0, emitted := {}, translatedLen := none }
+  -- seccomp: the entry path of the operation's own call once a mode is set
+  -- (a harness call by design 6.2 rule 1: a cache hit); a probe enters itself
+  match syscallNr call with
+  | some nr => Seccomp.enterHarnessCall nr
+  | none =>
+    if call.isNet && (← getCurrent).seccomp.mode != .disabled then
+      unsupported "a network operation after a seccomp mode was set (the fixture's calls are not modelled under a filter)"
   let ret ← dispatch call
+  -- harness calls whose entry falls inside the window after the operation's (fixture knowledge)
+  for c in Env.windowTailCalls do Seccomp.enterHarnessCall c
   taskWorkRun
   -- the guest waits inside the operations that can queue the handshake send
   -- worker (and in wg_inject); the worker runs during that wait

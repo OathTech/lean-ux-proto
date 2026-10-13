@@ -131,8 +131,8 @@ If a run fails, inspect `aborted` and `failures` in the report, then the named
 build or guest log. A missing wrapper, kernel identity mismatch, timeout,
 `KILLED` banner or model error is a failed run. `LEANUX_QEMU_SLOTS` bounds the
 guests running at once across every checkout, through lock files in the main
-checkout's `.artifacts/runs/`; the default is 3, and a quiet 32-core host runs
-8 comfortably. Heavy contention can exhaust timing budgets.
+checkout's `.artifacts/runs/`; the default is 8, which a 32-core host runs
+comfortably; lower it on a smaller or busier machine. Heavy contention can exhaust timing budgets.
 
 Negative controls and sentinel mutants are separate developer checks described
 in [AGENTS.md](AGENTS.md). They are not part of this first-run sequence.

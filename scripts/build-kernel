@@ -25,6 +25,17 @@ else
 fi
 PROFILE="${LEANUX_KERNEL_PROFILE:-base}"
 case "$PROFILE" in base|net|net-rcov|net-hidden|net-probe|net-choice|net-choice-actl) ;; *) echo "Unknown kernel profile: $PROFILE" >&2; exit 1 ;; esac
+# A scratch build (never an oracle): LEANUX_KERNEL_EXTRA_ENABLE names further
+# configuration options to enable, space-separated (seccomp design, section
+# 11 step 0: a measurement kernel with SECCOMP before the user's ruling on
+# the oracle's configuration). Each must resolve to =y or the build fails;
+# the build directory gets a `.leanux-scratch` marker naming them, the
+# profile's config record in kernel/ is not written, and the identity check
+# refuses the build unless a run names it with LEANUX_KERNEL_IDENTITY.
+SCRATCH_OPTIONS="${LEANUX_KERNEL_EXTRA_ENABLE:-}"
+for option in $SCRATCH_OPTIONS; do
+    case "$option" in *[!A-Z0-9_]*|"") echo "LEANUX_KERNEL_EXTRA_ENABLE: not a configuration option name: $option" >&2; exit 1 ;; esac
+done
 LEANUX_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
 LEANUX_SHARED_ROOT="${LEANUX_SHARED_ROOT:-$LEANUX_ROOT}"
 LEANUX_ARTIFACTS="${LEANUX_ARTIFACTS:-$LEANUX_ROOT/.artifacts}"
@@ -62,12 +73,16 @@ if [ "$PROFILE" = net-rcov ] || [ "$PROFILE" = net-hidden ] || [ "$PROFILE" = ne
     # queue record at __queue_work
     # and the kind-306 dst-cache jiffies record (W9); since epoll stream R
     # (docs/2026-10-12-epoll-design.md, 3.2) the kind-308 file-address record
-    # at ep_rbtree_insert (fs/eventpoll.c), record-only
-    CHOICE_SHA=cd24d15b7dc81253156895cfd46fae98a739ecdf1d9e3fb4297d1fff2166b876
+    # at ep_rbtree_insert (fs/eventpoll.c), record-only; since seccomp stream W
+    # (docs/2026-10-12-seccomp-design.md, 3.3) the kind-309 records of the
+    # translated eBPF program and its length at bpf_migrate_filter
+    # (net/core/filter.c), record-only; both hooks line-preserving. The hashes
+    # are the merged patches' (X, phase 2b).
+    CHOICE_SHA=e8e221374338778204609be01435b1e0478e627abcddb9fdd9518e5ce484cc29
     # net-choice-actl: the allocation-steering control kernel (A, section 7:
     # K1, K4, K5), the same patch with control load flags; never an oracle
     ACTL_PATCH="$LEANUX_ROOT/kernel/patches/choice-stream-alloc-controls.patch"
-    ACTL_SHA=e9ff63a52b6dc8080070c4916314a313867fb3b1a643207ee7d21139ef9f9640
+    ACTL_SHA=182d265c517a1953eba8476210708334a50c3b8f371209c2e687502f54bc6e1d
     if [ "$PROFILE" = net-choice ]; then
         SOURCE="$LEANUX_ARTIFACTS/src/linux-6.12.110-choice-stream-da"
         PATCH_SHA_RECORD="$CHOICE_SHA"
@@ -123,12 +138,17 @@ export KBUILD_BUILD_USER=leanux KBUILD_BUILD_HOST=offline KBUILD_BUILD_VERSION=1
 export KBUILD_BUILD_TIMESTAMP='2026-09-20 00:00:00 UTC'
 make -s -C "$SOURCE" O="$LEANUX_BUILD" ARCH=x86_64 allnoconfig
 LEANUX_CONFIG="$SOURCE/scripts/config"
+# SECCOMP (and with it SECCOMP_FILTER: arch/Kconfig's def_bool under
+# HAVE_ARCH_SECCOMP_FILTER && SECCOMP && NET) joins the oracle's configuration
+# [USER 2026-10-13: "Agree, sounds good - approved"; docs/2026-10-12-seccomp-design.md
+# section 16]: nothing else changes, and the full differential check on the
+# rebuilt oracle is the re-validation.
 for option in 64BIT BINFMT_ELF BINFMT_SCRIPT PRINTK BUG MULTIUSER POSIX_TIMERS FUTEX \
     EVENTFD EPOLL SIGNALFD TIMERFD SHMEM TMPFS PROC_FS SYSFS \
     BLK_DEV_INITRD RD_GZIP DEVTMPFS DEVTMPFS_MOUNT TTY \
     SERIAL_8250 SERIAL_8250_CONSOLE DEBUG_KERNEL DEBUG_FS \
     DEBUG_INFO_DWARF4 KALLSYMS KCOV KCOV_INSTRUMENT_ALL \
-    KCOV_ENABLE_COMPARISONS; do
+    KCOV_ENABLE_COMPARISONS SECCOMP; do
     "$LEANUX_CONFIG" --file "$LEANUX_BUILD/.config" --enable "$option"
 done
 if [ "$PROFILE" != base ]; then
@@ -140,6 +160,16 @@ fi
 for option in MODULES SMP RANDOMIZE_BASE DEBUG_INFO_NONE LOCALVERSION_AUTO; do
     "$LEANUX_CONFIG" --file "$LEANUX_BUILD/.config" --disable "$option"
 done
+if [ -n "$SCRATCH_OPTIONS" ]; then
+    echo "SCRATCH BUILD (never an oracle): LEANUX_KERNEL_EXTRA_ENABLE=$SCRATCH_OPTIONS" >&2
+    for option in $SCRATCH_OPTIONS; do
+        "$LEANUX_CONFIG" --file "$LEANUX_BUILD/.config" --enable "$option"
+    done
+    echo "$SCRATCH_OPTIONS" > "$LEANUX_BUILD/.leanux-scratch"
+elif [ -e "$LEANUX_BUILD/.leanux-scratch" ]; then
+    echo "Build directory holds a scratch build ($(cat "$LEANUX_BUILD/.leanux-scratch")); use another directory for an oracle build" >&2
+    exit 1
+fi
 SUFFIX='-leanux-kcov'; [ "$PROFILE" = net ] && SUFFIX='-leanux-kcov-net'
 [ "$PROFILE" = net-rcov ] && SUFFIX='-leanux-kcov-net-rcov'
 [ "$PROFILE" = net-hidden ] && SUFFIX='-leanux-kcov-net-hidden'
@@ -150,6 +180,7 @@ SUFFIX='-leanux-kcov'; [ "$PROFILE" = net ] && SUFFIX='-leanux-kcov-net'
 make -s -C "$SOURCE" O="$LEANUX_BUILD" ARCH=x86_64 olddefconfig
 REQUIRED="64BIT BINFMT_ELF BINFMT_SCRIPT EVENTFD BLK_DEV_INITRD SERIAL_8250_CONSOLE DEBUG_FS DEBUG_INFO_DWARF4 KCOV"
 [ "$PROFILE" != base ] && REQUIRED="$REQUIRED NET INET IPV6 NET_NS VETH WIREGUARD"
+REQUIRED="$REQUIRED $SCRATCH_OPTIONS"
 for option in $REQUIRED; do
     grep -qx "CONFIG_${option}=y" "$LEANUX_BUILD/.config" || {
         echo "Required kernel configuration did not resolve: $option" >&2
@@ -159,7 +190,9 @@ done
 $CAPPED make -C "$SOURCE" O="$LEANUX_BUILD" ARCH=x86_64 KCFLAGS="$KCFLAGS_EXTRA" \
     -j"${LEANUX_JOBS:-4}" bzImage vmlinux
 mkdir -p "$LEANUX_ROOT/kernel"
-if [ "$PROFILE" = net-choice ]; then
+if [ -n "$SCRATCH_OPTIONS" ]; then
+    :   # a scratch build records no configuration: it is never an oracle
+elif [ "$PROFILE" = net-choice ]; then
     cp "$LEANUX_BUILD/.config" "$LEANUX_ROOT/kernel/config-x86_64-net-choice"
 elif [ "$PROFILE" = net-probe ] || [ "$PROFILE" = net-choice-actl ]; then
     :   # a probe or control kernel records no configuration

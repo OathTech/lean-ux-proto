@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "id": "s_chk_ctx_64",
+  "ops": [
+    {
+      "op": "seccomp_install",
+      "via": "seccomp",
+      "flags": [],
+      "filter": [
+        [
+          32,
+          0,
+          0,
+          64
+        ],
+        [
+          6,
+          0,
+          0,
+          2147418112
+        ]
+      ]
+    },
+    {
+      "op": "seccomp_prctl",
+      "cmd": "get_seccomp"
+    }
+  ]
+}

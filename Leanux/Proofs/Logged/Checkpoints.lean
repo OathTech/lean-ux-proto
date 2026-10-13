@@ -39,7 +39,7 @@ theorem emitCheckpoint_then_erases (project : Nat → World → α)
 /-- The original runner with one projected observation at each operation's
 successful commit boundary. Final trace guards still control acceptance. -/
 def executeTraceCheckpoints (project : Nat → World → α) (trace : Trace) (placeholders : Bool := false) : StateT (List α) (Except (Nat × Stop)) Json := do
-  let mut world : World := { k := initialKernel trace.rlimit trace.net trace.bare trace.foreign trace.stepped, env := harnessEnv,
+  let mut world : World := { k := initialKernel trace.rlimit trace.net trace.bare trace.foreign trace.stepped trace.seccompChild, env := harnessEnv,
                              timing := Env.timing, portBound := Env.portBound,
                              fixtureNetDevices := Env.fixtureNetDevices,
                              foreignCreator := trace.foreign,
@@ -52,6 +52,10 @@ def executeTraceCheckpoints (project : Nat → World → α) (trace : Trace) (pl
                              allocSteered := if placeholders then
                                (trace.steer.map (·.1)).filter fun l => AllocSite.all.any (·.info.label == l)
                              else [] }
+  if trace.seccompPrefill > 0 then
+    match Env.seccompPrefill trace.seccompPrefill world.k with
+    | .ok k => world := { world with k }
+    | .error e => throw (0, .invariant e)
   let mut results : Array Int := #[]
   let mut ends : Array (Option (Nat × Nat)) := #[]
   let mut observations : Array Json := #[]

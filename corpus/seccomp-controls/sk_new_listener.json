@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "id": "sk_new_listener",
+  "ops": [
+    {
+      "op": "seccomp_install",
+      "via": "seccomp",
+      "flags": [
+        "new_listener"
+      ],
+      "filter": [
+        [
+          32,
+          0,
+          0,
+          4
+        ],
+        [
+          21,
+          1,
+          0,
+          3221225534
+        ],
+        [
+          6,
+          0,
+          0,
+          2147418112
+        ],
+        [
+          32,
+          0,
+          0,
+          0
+        ],
+        [
+          6,
+          0,
+          0,
+          2147418112
+        ]
+      ]
+    },
+    {
+      "op": "seccomp_probe",
+      "nr": 102,
+      "where": "self"
+    }
+  ]
+}

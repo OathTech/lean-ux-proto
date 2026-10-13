@@ -1,4 +1,5 @@
 import Leanux.Proofs.Logged.Runner
+import Leanux.Proofs.Framing.Prefill
 import Leanux.Proofs.WG.Keypairs.Evolution.Rules
 
 /-! The explicit-World outer runner carries the proved lifetime invariant
@@ -35,6 +36,17 @@ theorem ordinary_runAt_inv_wp {a : M α} (ha : OrdinaryAction a)
     rcases hr with ⟨rfl, rfl⟩
     exact (ha w _ _ he).preserves hp
 
+theorem prefill_initial_snapshot (trace : Trace) (w : World)
+    (h : Env.seccompPrefill trace.seccompPrefill
+      (initialKernel trace.rlimit trace.net trace.bare trace.foreign trace.stepped trace.seccompChild) = .ok w.k) :
+    snapshot w = ⟨0, fun _ => none⟩ := by
+  have hv := prefill_wgKernel _ _ _ h
+  have hs := congrArg (fun v : WGKernelView =>
+    (⟨v.keypairCounter, fun i => (v.wg.bind fun d => d.keypairs[i]?).map cell⟩ : Snapshot)) hv
+  exact hs.trans (initial_snapshot_withSeccomp trace.rlimit trace.net trace.bare trace.foreign
+    trace.stepped { w with k := initialKernel trace.rlimit trace.net trace.bare trace.foreign trace.stepped trace.seccompChild }
+    trace.seccompChild rfl)
+
 theorem executeTraceLogged_nodup_wp
     (calls : ∀ call, Evolves (syscallLogged call))
     (trace : Trace) (placeholders : Bool) :
@@ -62,15 +74,32 @@ theorem executeTraceLogged_nodup_wp
     exact ((⇓? _ h => ⌜Inv (snapshot r.2) h⌝) :
       Invariant r.2.fired.toList (Array Json)
         (.arg History (.except (Nat × Stop) .pure)))
+  case inv4 =>
+    exact ((⇓? out h => ⌜Inv (snapshot out.2.1) h⌝) :
+      Invariant trace.ops.toList
+        (World × Array Int × Array (Option (Nat × Nat)) × Array Json × Array Json × Array Json)
+        (.arg History (.except (Nat × Stop) .pure)))
+  case inv5 =>
+    let r : Unit × World := by assumption
+    exact ((⇓? _ h => ⌜Inv (snapshot r.2) h⌝) :
+      Invariant r.2.steps.toList (Array Json)
+        (.arg History (.except (Nat × Stop) .pure)))
+  case inv6 =>
+    let r : Unit × World := by assumption
+    exact ((⇓? _ h => ⌜Inv (snapshot r.2) h⌝) :
+      Invariant r.2.fired.toList (Array Json)
+        (.arg History (.except (Nat × Stop) .pure)))
   all_goals try dsimp +zetaDelta only at *
   all_goals try trivial
   all_goals try exact Inv.nodup (by assumption)
   all_goals try exact id
-  rename_i history hh
-  subst history
-  change Inv _ []
-  rw [initial_snapshot trace.rlimit trace.net trace.bare trace.foreign trace.stepped _ rfl]
-  exact inv_empty 0
+  all_goals
+    rename_i history hh
+    subst history
+    change Inv _ []
+    first
+    | (rw [initial_snapshot_withSeccomp trace.rlimit trace.net trace.bare trace.foreign trace.stepped _ (seccompChild := trace.seccompChild) rfl]; exact inv_empty 0)
+    | (rw [prefill_initial_snapshot trace _ (by assumption)]; exact inv_empty 0)
 
 /-- Successful runner histories have no repeated event once the concrete
 syscall observer contracts are supplied. This is an intermediate composition

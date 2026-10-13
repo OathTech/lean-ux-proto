@@ -279,8 +279,10 @@ def _check_observation(result, trace):
             fields = fields | {"datagrams", "replies", "stats"}
         if op["op"] == "wg_batch":
             fields = fields | {"cqes"}   # W7: the completions at io_uring_enter's return
-        # P design section 6: a read's digest, a write's sigpipe, a pipe2's fds
-        fields = fields | {"read": {"digest"}, "epoll_wait": {"digest"}, "write": {"sigpipe"}, "pipe2": {"fds"}}.get(op["op"], set())
+        # P design section 6: a read's digest, a write's sigpipe, a pipe2's fds; epoll's
+        # wait digest; seccomp W (design 6.1): a probe's sigsys and child records
+        fields = fields | {"read": {"digest"}, "epoll_wait": {"digest"}, "write": {"sigpipe"}, "pipe2": {"fds"},
+                           "seccomp_probe": {"sigsys", "child"}}.get(op["op"], set())
         if type(observation) is not dict or set(observation) != fields:
             raise ValueError("operation observation fields")
         ret, error, data = observation["ret"], observation["errno"], observation["bytes"]
@@ -315,6 +317,19 @@ def _check_observation(result, trace):
                 raise ValueError("read digest disagrees with hashlib.blake2s over its bytes")
         if op["op"] == "write" and (type(observation["sigpipe"]) is not int or observation["sigpipe"] not in (0, 1)):
             raise ValueError("write sigpipe")
+        if op["op"] == "seccomp_probe":
+            sigsys, child = observation["sigsys"], observation["child"]
+            if sigsys is not None and (type(sigsys) is not dict or set(sigsys) != {"nr", "data", "arch"}
+                                       or any(type(v) is not int for v in sigsys.values())):
+                raise ValueError("seccomp probe sigsys record")
+            if (op["where"] == "child") != (child is not None):
+                raise ValueError("seccomp child record presence")
+            if child is not None and (type(child) is not dict or (set(child) - {"strict_ret"}) not in ({"ret"}, {"exited"}, {"signal"})
+                                      or any(type(v) is not int for v in child.values())
+                                      or ("strict_ret" in child) != ("strict" in op)):
+                raise ValueError("seccomp child record")
+            if child is not None and "ret" in child and ret != 0:
+                raise ValueError("seccomp child probe's own result")
         if op["op"] == "pipe2":
             fds = observation["fds"]
             limit = trace.get("rlimit_nofile", 32)
@@ -448,21 +463,33 @@ def merge_remote(rows, remote, traces, key):
     appended to that operation's row: task entries first, then remote ones,
     each deduplicated in first-execution order."""
     net = {trace["id"] for trace in traces if uses_wireguard(trace)}
+    required = {(row["id"], row["index"]) for row in rows if type(row) is dict and row.get("id") in net}
+    return merge_stream(rows, remote, required, key)
+
+
+def merge_stream(rows, extra, required, key):
+    """Append a second stream's record to each operation row in `required`
+    ((id, index) keys), exactly one per such operation and none elsewhere:
+    the row's entries first, then the stream's, deduplicated in
+    first-execution order; the counts add. The remote stream (merge_remote)
+    and the sandboxed child's stream (seccomp W) both merge this way."""
     by_key = {}
-    for record in remote:
-        if type(record) is not dict or set(record) != {"id", "index", "count", key} or record["id"] not in net:
-            raise ValueError("remote record fields or identity")
+    for record in extra:
+        if type(record) is not dict or set(record) != {"id", "index", "count", key}:
+            raise ValueError("stream record fields")
         k = (record["id"], record["index"])
+        if k not in required:
+            raise ValueError(f"stream record for an operation without one: {k}")
         if k in by_key or type(record[key]) is not list:
-            raise ValueError("duplicate remote record")
+            raise ValueError("duplicate stream record")
         by_key[k] = record
     merged, used = [], set()
     for row in rows:
         k = (row.get("id"), row.get("index")) if type(row) is dict else None
-        if k and k[0] in net:
+        if k and k in required:
             record = by_key.get(k)
             if record is None:
-                raise ValueError(f"missing remote record for {k}")
+                raise ValueError(f"missing stream record for {k}")
             used.add(k)
             row = dict(row)
             seen = {json.dumps(x) for x in row[key]}
@@ -472,7 +499,7 @@ def merge_remote(rows, remote, traces, key):
             row["count"] = row["count"] + record["count"]
         merged.append(row)
     if used != set(by_key):
-        raise ValueError("remote records without an operation")
+        raise ValueError("stream records without an operation")
     return merged
 
 
@@ -484,6 +511,7 @@ def _collect(outdir, traces, process_returncode, alloc=None):
     hidden, remote_hidden, steering, sections, clocksources, timing = [], [], [], [], [], []
     alloc_status, alloc_tsc = [], []
     epoll_rows = []   # epoll R: the warm-up and max_user_watches, once per boot
+    child_coverage, child_comparisons, child_hidden = [], [], []   # seccomp W: the sandboxed child's streams
     for line in (outdir / "boot.log").read_text(errors="strict").splitlines():
         line = line.rstrip("\r")
         for prefix, target in (("LEANUX_RESULT ", results), ("LEANUX_COVERAGE ", coverage),
@@ -496,7 +524,9 @@ def _collect(outdir, traces, process_returncode, alloc=None):
                                ("LEANUX_SECTIONS ", sections), ("LEANUX_CLOCKSOURCE ", clocksources),
                                ("LEANUX_TIMING ", timing),
                                ("LEANUX_ALLOC ", alloc_status), ("LEANUX_ALLOC_TSC ", alloc_tsc),
-                               ("LEANUX_EPOLL ", epoll_rows)):
+                               ("LEANUX_EPOLL ", epoll_rows),
+                               ("LEANUX_CCOVERAGE ", child_coverage), ("LEANUX_CCMP ", child_comparisons),
+                               ("LEANUX_CHIDDEN ", child_hidden)):
             if line.startswith(prefix):
                 try:
                     target.append(_decode_json(line[len(prefix):]))
@@ -528,13 +558,20 @@ def _collect(outdir, traces, process_returncode, alloc=None):
     try:
         coverage = merge_remote(coverage, remote_coverage, traces, "pcs")
         comparisons = merge_remote(comparisons, remote_comparisons, traces, "records")
+        # seccomp W (design 6.2 rule 2): a child probe's operation carries the
+        # sandboxed child's stream too (its own KCOV area), merged like the
+        # remote stream: exactly one child row per child-probe operation
+        child_ops = {(t["id"], i) for t in traces for i, op in enumerate(t["ops"])
+                     if op["op"] == "seccomp_probe" and op["where"] == "child"}
+        coverage = merge_stream(coverage, child_coverage, child_ops, "pcs")
+        comparisons = merge_stream(comparisons, child_comparisons, child_ops, "records")
     except ValueError as exc:
-        raise LinuxRunError("invalid_output", f"Remote coverage: {exc}", outdir) from exc
+        raise LinuxRunError("invalid_output", f"Remote or child coverage: {exc}", outdir) from exc
     _jsonl(outdir / "coverage.jsonl", coverage)
     # Choices (docs/2026-10-03-choice-stream-strategy.md): one task row and,
     # with remote coverage, one remote row per network operation and child;
     # each record is [kind, call site, sequence number, length, value hex].
-    for row in hidden + remote_hidden:
+    for row in hidden + remote_hidden + child_hidden:
         if (type(row) is not dict or set(row) != {"id", "index", "mode", "records"} or row["mode"] not in ("pc", "cmp")
                 or type(row["records"]) is not list
                 or any(type(r) is not list or len(r) != 5 or type(r[0]) is not int or type(r[1]) is not str
@@ -542,7 +579,10 @@ def _collect(outdir, traces, process_returncode, alloc=None):
                        or len(r[4]) != 2 * min(r[3], 40)
                        for r in row["records"])):
             raise LinuxRunError("invalid_output", "Malformed hidden-input record", outdir)
-    _jsonl(outdir / "hidden.jsonl", [dict(r, stream="task") for r in hidden] + [dict(r, stream="remote") for r in remote_hidden])
+    if sorted((r["id"], r["index"], r["mode"]) for r in child_hidden) != sorted((i, k, m) for i, k in child_ops for m in ("pc", "cmp")):
+        raise LinuxRunError("invalid_output", "Child choice rows missing, extra or repeated", outdir)
+    _jsonl(outdir / "hidden.jsonl", [dict(r, stream="task") for r in hidden] + [dict(r, stream="remote") for r in remote_hidden]
+           + [dict(r, stream="child") for r in child_hidden])
     # Steering status per steered trace and child: entries left, mismatches.
     steered = {t["id"] for t in traces if "steer" in t}
     if (any(type(r) is not dict or set(r) != {"id", "mode", "remaining", "mismatches"} or r["id"] not in steered
@@ -634,8 +674,10 @@ def _collect(outdir, traces, process_returncode, alloc=None):
             _check_observation(result, trace)
             limit = trace.get("rlimit_nofile", 32)
             # W8: the foreign-creator fixture adds the injector (8) and the pin (9);
-            # W2: a stepped dump's socket is 8
-            reserved = 10 if trace.get("net_fixture") == "foreign-creator" else 9 if is_stepped(trace) else 8
+            # W2: a stepped dump's socket is 8; seccomp W: the child fixture's KCOV
+            # descriptor is 8 (the validator keeps the two apart)
+            reserved = 10 if trace.get("net_fixture") == "foreign-creator" \
+                else 9 if is_stepped(trace) or trace.get("seccomp_child") else 8
             expected = {"id": trace["id"], "reserved": list(range(reserved)), "free": [reserved, limit - 1], "rlimit": [limit, limit]}
             if uses_wireguard(trace):
                 expected["net"] = EXPECTED_NET_FIXTURE   # W5: the network namespace's facts
@@ -679,7 +721,9 @@ def _collect(outdir, traces, process_returncode, alloc=None):
         if again != {"id": result["id"], "rets": [o["ret"] for o in observations],
                      "bytes": [o["bytes"] for o in observations], "fds": [o.get("fds") for o in observations],
                      "digest": [o.get("digest") for o in observations],
-                     "sigpipe": [o.get("sigpipe") for o in observations]}:
+                     "sigpipe": [o.get("sigpipe") for o in observations],
+                     "sigsys": [o.get("sigsys") for o in observations],   # seccomp W
+                     "child": [o.get("child") for o in observations]}:
             raise LinuxRunError("environment_failure", f"Nondeterministic rerun of {result['id']}", outdir)
     unexpected_errors = {4, 12, 23, 512, 513, 514, 516}
     # A2: a trace under the declared failslab-style extension forces
@@ -688,7 +732,11 @@ def _collect(outdir, traces, process_returncode, alloc=None):
     # allocator pressure; so is pipe2's ENFILE (a forced alloc_pipe_info
     # failure, A section 19.6). Every other trace still fails on them.
     forced = {12, 23}
+    # seccomp W (design 2.4): an install's ENOMEM is the path budget
+    # (MAX_INSNS_PER_PATH), a semantic result the mirror predicts; a real
+    # allocation failure there shows as a mirror mismatch, not as pressure
     if any(row["errno"] in unexpected_errors - (forced if trace.get("domain_extension") == "failslab" else set())
+           - ({12} if trace["ops"][row["index"]]["op"] == "seccomp_install" else set())
            for result, trace in zip(results, traces) for row in result["observations"]):
         raise LinuxRunError("environment_failure", "Unexpected interruption or allocator resource failure", outdir)
     return results
@@ -744,7 +792,7 @@ def run_linux(traces, outdir, *, timeout=120, steer_wire=None, arm_records=ARM_R
 
 QEMU_LOCK_WAIT = 3600
 # Concurrent guests (single-threaded TCG, 256 MiB each); LEANUX_QEMU_SLOTS overrides.
-QEMU_SLOTS = int(os.environ.get("LEANUX_QEMU_SLOTS", "3"))
+QEMU_SLOTS = int(os.environ.get("LEANUX_QEMU_SLOTS", "8"))
 
 
 def _run_locked(traces, outdir, timeout, arm_records, guest_variant=None, alloc=None, kernel_identity=None):

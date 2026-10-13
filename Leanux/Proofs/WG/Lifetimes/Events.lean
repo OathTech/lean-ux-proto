@@ -6,6 +6,7 @@ separate parameters, so device epochs can be part of a future packet stamp. -/
 namespace Leanux.Proofs.WG.Lifetimes
 
 inductive AccessEvent (Slot Stamp : Type) where
+  | allocate (slot : Slot) (stamp : Stamp)
   | read (slot : Slot) (stamp : Stamp)
   | write (slot : Slot) (stamp : Stamp)
   | release (slot : Slot) (stamp : Stamp)
@@ -14,6 +15,7 @@ inductive AccessEvent (Slot Stamp : Type) where
 namespace AccessEvent
 
 def Ordered : AccessEvent Slot Stamp → AccessEvent Slot Stamp → Prop
+  | .release _ old, .allocate _ now => old ≠ now
   | .release _ old, .read _ now => old ≠ now
   | .release _ old, .write _ now => old ≠ now
   | _, _ => True
@@ -33,6 +35,26 @@ def Released (events : List (AccessEvent Slot Stamp)) (stamp : Stamp) : Prop :=
 
 theorem safe_nil : Safe ([] : List (AccessEvent Slot Stamp)) := List.Pairwise.nil
 
+theorem safe_append_allocate (hs : Safe h) (hn : ¬ Released h stamp) :
+    Safe (h ++ [.allocate slot stamp]) := by
+  apply List.pairwise_append.mpr
+  refine ⟨hs, by simp, ?_⟩
+  intro e he b hb
+  simp only [List.mem_singleton] at hb
+  subst b
+  cases e with
+  | allocate _ _ => trivial
+  | read _ _ => trivial
+  | write _ _ => trivial
+  | release i old =>
+    intro hid
+    subst old
+    exact hn ⟨i, he⟩
+
+@[simp] theorem released_append_allocate :
+    Released (h ++ [.allocate slot value]) stamp ↔ Released h stamp := by
+  simp [Released]
+
 theorem safe_append_read (hs : Safe h) (hn : ¬ Released h stamp) :
     Safe (h ++ [.read slot stamp]) := by
   apply List.pairwise_append.mpr
@@ -41,6 +63,7 @@ theorem safe_append_read (hs : Safe h) (hn : ¬ Released h stamp) :
   simp only [List.mem_singleton] at hb
   subst b
   cases e with
+  | allocate _ _ => trivial
   | read _ _ => trivial
   | write _ _ => trivial
   | release i old =>
@@ -56,6 +79,7 @@ theorem safe_append_write (hs : Safe h) (hn : ¬ Released h stamp) :
   simp only [List.mem_singleton] at hb
   subst b
   cases e with
+  | allocate _ _ => trivial
   | read _ _ => trivial
   | write _ _ => trivial
   | release i old =>

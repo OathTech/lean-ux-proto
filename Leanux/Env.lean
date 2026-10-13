@@ -6,6 +6,8 @@ import Leanux.WG.Timers
 import Leanux.Env.IpStack
 import Leanux.Env.Batch
 import Leanux.Env.Stack
+import Leanux.Kernel.Signal
+import Leanux.Seccomp.Prefill
 
 /-!
 # The environment model: the harness fixture and the WireGuard kworker
@@ -871,5 +873,89 @@ def netnsCleanup : M Unit := do
     -- only other consumer the section showed), and the notifications' and
     -- exits' allocations are below the cut (A)
     skipCut ([.dstCacheResetTs] ++ allocCuts)
+
+/-! ## seccomp (docs/2026-10-12-seccomp-design.md, section 5): fixture knowledge and the two effects
+
+The trace process starts as root with every capability, no-new-privs clear,
+no mode, the `SIGSYS` handler installed by the guest at setup and
+`RLIMIT_CORE` 0 (`Task`'s defaults). What the harness's own calls are, and
+which of them fall inside a window, is fixture knowledge kept here. -/
+
+/-- The trace process's fork: one `clone` (x86-64 56) at system-call entry
+    inside the probe's window (design 6.2 rule 2; measured: no
+    `rt_sigprocmask` around it in the guest's window). -/
+def forkCalls : List Int := [56]
+
+/-- The child leaves with `exit_group` (231), or with `exit` (60) when the
+    probe asked for strict mode (harness/guest.c:1782 chooses by the request,
+    not by the strict call's result; `exit_group` is not allowed under strict,
+    design 2.9). Measured on sc2 (X): after a refused strict call the child
+    still leaves with `exit`. -/
+def childExitCall (strictRequested : Bool) : Int := if strictRequested then 60 else 231
+
+/-- Harness calls whose entry falls inside the window after the operation's
+    own call: none known yet. Stream W's measurement fixes this list (the
+    KCOV-disable ioctl, 16, would be here if the guest read the area's count
+    after it rather than before). -/
+def windowTailCalls : List Int := []
+
+/-- `copy_process`'s two clock reads (`start_time` at kernel/fork.c:2532,
+    `start_boottime` at :2533) in the parent's window: consumed, not observed. -/
+def forkClocks : M Unit := do
+  _ ← hidden .forkStartTime
+  _ ← hidden .forkStartBoottime
+
+/-- The child of a child probe, from the parent by `copy_seccomp`'s effects
+    (design 2.8, 4.1; `get_seccomp_filter`'s counts are the mirror's,
+    `Seccomp.getSeccompFilter`, witnessed in the parent's window): the
+    seccomp state, no-new-privs, the capability set and the action table
+    copied; the pending set empty; the signal mask inherited. The child has
+    no file table of its own: no modelled path in it touches a file. -/
+def childCreate : M Unit := do
+  let p := (← getK).task
+  let c : Task := { p with pending := 0, sigpending := false, taskWorks := [], inEventfd := false, exited := false }
+  modifyK fun k => { k with child := some c }
+
+/-- The child's exit: `seccomp_filter_release` (kernel/seccomp.c:572-585)
+    runs after `kcov_task_exit`, in no window (design 2.8, audit C1): one
+    `users` and one `refs` decrement on the head filter the child holds,
+    nothing freed, since the parent holds it too; a task without a filter
+    walks nothing. No decisions. -/
+def childExit : M Unit := do
+  let k ← getK
+  match k.child with
+  | none => invariant "the child's exit effect without a child"
+  | some c =>
+    if let some id := c.seccomp.filter then
+      match k.seccompFilters.get? id with
+      | none => invariant s!"the child's head filter {id} is not allocated"
+      | some f =>
+        if f.users < 2 || f.refs < 2 then
+          invariant s!"the child's exit would drop the parent's reference on filter {id}"
+        modifyK fun k => { k with seccompFilters := k.seccompFilters.insert id { f with users := f.users - 1, refs := f.refs - 1 } }
+
+/-- The parent's `wait4` reaped the child: its task object is dropped. -/
+def childDrop : M Unit := do
+  if (← getK).child.isNone then invariant "wait4 without a child"
+  modifyK fun k => { k with child := none }
+
+/-- A `TRAP`'s delivery to the current task (design 2.2, 5): `get_signal`
+    dequeues the `SIGSYS` (the pending set and `TIF_SIGPENDING` clear), the
+    handler runs on its frame and `rt_sigreturn` restores the mask, which is
+    as before. No decisions: the delivery side is not anchored. -/
+def trapDelivered : M Unit := do
+  let t := (← getK).current
+  modifyTask t fun tk => { tk with pending := sigdelset tk.pending SIGSYS, sigpending := false }
+
+/-- The seccomp prefill fixture (`"seccomp_prefill": N`; design section 5)
+    [USER 2026-10-12: "Yes, let's queue it"]: the guest set no-new-privs and
+    installed `N` copies of `Seccomp.Prefill.program` before the window. The
+    initial task state carries that chain, reconstructed by the mirror's own
+    translation of the same program and the decision-free cache emulation
+    (`Leanux/Seccomp/Prefill.lean`): a fixture assumption, outside every
+    window, like the fixture descriptors; the kernel's `total_insns` at the
+    next recorded install is the evidence that the reconstruction's lengths
+    are the kernel's. -/
+def seccompPrefill (n : Nat) (k : Kernel) : Except String Kernel := Leanux.Seccomp.Prefill.apply n k
 
 end Leanux.Env

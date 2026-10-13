@@ -1,8 +1,8 @@
 """Build the mirror, run traces on the pinned Linux guest and the mirror, compare.
 
     scripts/in-bundle python3 -m evaluator.check
-        [--suite handwritten,critic,wireguard,alloc,generated,wireguard-generated,pipes,pipes-generated,epoll,epoll-generated]
-        [--generated-count N] [--wireguard-count N] [--pipes-count N] [--epoll-count N] [--seed S] [--trace ID] [--out DIR]
+        [--suite handwritten,critic,wireguard,alloc,generated,wireguard-generated,pipes,pipes-generated,epoll,epoll-generated,seccomp,seccomp-generated]
+        [--generated-count N] [--wireguard-count N] [--pipes-count N] [--epoll-count N] [--seccomp-count N] [--seed S] [--trace ID] [--out DIR]
         [--no-build] [--alloc-share F]
 
 The command fails unless every trace agrees on observations (A1) and every
@@ -24,7 +24,7 @@ import sys
 from harness.linux import (ARTIFACTS as LINUX_ARTIFACTS, ARM_RECORDS, DISPATCH_SYMBOLS, GUEST_VARIANTS, KERNEL, LinuxRunError, verify_kernel,
                           dispatch_addresses, run_linux)
 from harness.steer import SteeringError, call_sites, resolve as resolve_steering
-from harness.trace import InvalidTrace, loads_trace, uses_wireguard, validate_trace
+from harness.trace import OPCODES, InvalidTrace, loads_trace, uses_wireguard, validate_trace
 from .coverage import attributable, instrumented_lines, symbolize
 from .generate import generate, generate_wireguard
 from .protocol import InvalidOutput, compare, loads, parse_batch, validate_coverage
@@ -32,7 +32,8 @@ from .protocol import InvalidOutput, compare, loads, parse_batch, validate_cover
 ROOT = Path(__file__).resolve().parents[1]
 ANCHORS = ROOT / 'correspondence/kcov.json'
 SUITES = ('handwritten', 'critic', 'wireguard', 'alloc', 'generated', 'wireguard-generated', 'pipes', 'pipes-generated',
-          'epoll', 'epoll-generated')   # epoll T: corpus/epoll and the `epoll` generator profile (design section 7)
+          'epoll', 'epoll-generated',   # epoll T: corpus/epoll and the `epoll` generator profile (design section 7)
+          'seccomp', 'seccomp-generated')   # seccomp X: corpus/seccomp and the `seccomp` generator profile (design 7)
 # Corpus suites whose traces pass the domain filter first: the pipes corpus
 # holds a hang control (a blocking read) that must never reach the guest.
 # There, a trace named `*_filtered` must be outside the domain and every
@@ -62,8 +63,35 @@ NETNS_SHARE = 0.03
 # apart)
 # (E-B: underload-controls, the merged-injection control, which the mirror's
 # section-bracket discard must reject — docs/2026-10-05-e-dos.md §4.1)
-CONTROL_SUITES = ('steering-controls', 'timer-controls', 'lifecycle-controls', 'underload-controls')
+# (seccomp X: seccomp-controls, the flags, action and load the mirror stops
+# unsupported on while the kernel runs them — design 9.1; scripts/seccomp-controls.py)
+CONTROL_SUITES = ('steering-controls', 'timer-controls', 'lifecycle-controls', 'underload-controls', 'seccomp-controls')
 CHUNK = 100
+# seccomp X: the guest's console per chunk is bounded (OUTPUT_LIMIT, 16 MB),
+# and seccomp traces are the costly ones in comparison mode: a sandboxed
+# child probe (design 6.2 rule 2) about 4.3 MB (the parent's clone and wait4
+# records, the child's stream; measured in the check on sc2, 2026-10-13:
+# three probes in 13.1-13.6 MB), an install about 0.6 KB per classic
+# instruction (the checker's and the translation's per-instruction compares;
+# W measured 0.48 MB for 768), and a trace's other rows under 0.1 MB. A
+# chunk is flushed before its estimate would pass the budget; the output
+# limit's split stays as the backstop.
+CHILD_PROBE_CONSOLE = 4_400_000
+INSTALL_INSN_CONSOLE = 640
+TRACE_CONSOLE = 100_000
+CHUNK_CONSOLE_BUDGET = 12_000_000
+
+
+def seccomp_console_cost(trace):
+    """The estimated console bytes of a trace's seccomp operations in
+    comparison mode (zero for a trace without them)."""
+    cost = 0
+    for op in trace['ops']:
+        if op['op'] == 'seccomp_probe' and op['where'] == 'child':
+            cost += CHILD_PROBE_CONSOLE
+        elif op['op'] == 'seccomp_install' and op['filter']:
+            cost += INSTALL_INSN_CONSOLE * len(op['filter'])
+    return cost + TRACE_CONSOLE if cost else 0
 
 
 def sha256(data):
@@ -93,20 +121,24 @@ def chunk_traces(traces):
         # W7: a bulk trace (wg_batch) runs in a chunk by itself too, since its
         # wall time is a large share of the trace bound (section 6)
         return any(op['op'] in ('wg_flood', 'wg_batch') for op in trace['ops'])
-    pending, current, cur_start = [], [], 0
+    pending, current, cur_start, cur_cost = [], [], 0, 0
     def flush():
-        nonlocal current
+        nonlocal current, cur_cost
         if current:
             pending.append((cur_start, current, f'chunk-{len(pending):03}'))
-            current = []
+            current, cur_cost = [], 0
     for i, trace in enumerate(traces):
         if under_load(trace):
             flush()
             pending.append((i, [trace], f'chunk-{len(pending):03}'))
         else:
+            cost = seccomp_console_cost(trace)
+            if current and cur_cost + cost > CHUNK_CONSOLE_BUDGET:
+                flush()
             if not current:
                 cur_start = i
             current.append(trace)
+            cur_cost += cost
             if len(current) == CHUNK:
                 flush()
     flush()
@@ -148,14 +180,15 @@ def load_traces(suites, counts, seed, only, filtered, alloc_share=ALLOC_SHARE):
     `filtered` receives the rejected candidates' reasons."""
     traces = []
     for suite in suites:
-        if suite in ('generated', 'wireguard-generated', 'pipes-generated', 'epoll-generated'):
+        if suite in ('generated', 'wireguard-generated', 'pipes-generated', 'epoll-generated', 'seccomp-generated'):
             source = {'generated': generate,
                       'wireguard-generated': lambda s, n: generate_wireguard(s, n, steered=STEERED_SHARE, data=DATA_SHARE,
                                                                              timers=TIMERS_SHARE, alloc=alloc_share,
                                                                              lifecycle=LIFECYCLE_SHARE, routing=ROUTING_SHARE,
                                                                              netns=NETNS_SHARE),
                       'pipes-generated': lambda s, n: generate(s, n, profile='pipes'),
-                      'epoll-generated': lambda s, n: generate(s, n, profile='epoll')}[suite]
+                      'epoll-generated': lambda s, n: generate(s, n, profile='epoll'),
+                      'seccomp-generated': lambda s, n: generate(s, n, profile='seccomp')}[suite]
             count = counts[suite]
             candidates = [validate_trace(t) for t in source(seed, count * CANDIDATES_PER_TRACE)]
             verdicts = domain_filter(candidates)
@@ -260,9 +293,17 @@ class ModelStopped(InvalidOutput):
 def load_kcov_config():
     config = json.loads(ANCHORS.read_text())
     if (set(config) != {'version', 'description', 'files', 'functions', 'branch_free_functions', 'known_gaps',
-                        'shared_exits', 'operand_exclusions'}
+                        'shared_exits', 'operand_exclusions', 'data_only_operations'}
             or config['version'] != 2):
         raise ValueError('kcov config fields or version')
+    # seccomp W (design 6.3): operations whose kernel work is entirely in
+    # unlisted files (prctl's no-new-privs arms, capset), checked by their
+    # data (the next install's result, the queries' answers), so exempt from
+    # "no coverage in anchored files" and "no model decision" only; any
+    # decision they do report (the cache path once a mode is set) is checked
+    if (type(config['data_only_operations']) is not list
+            or any(type(x) is not str or x not in OPCODES for x in config['data_only_operations'])):
+        raise ValueError('data-only operations must name operations of the trace contract')
     if any(type(x) is not str or x in config['functions'] for x in config['branch_free_functions']):
         raise ValueError('branch-free functions must be names outside the instrumented functions')
     if not config['files'] or not config['functions'] or any(type(x) is not str for x in config['files'] + config['functions']):
@@ -343,6 +384,15 @@ QUEUE = 307
 # the mirror orders a set's items by (recorded address, fd), ep_cmp_ffd's
 # order, which fixes the walks of ep_clear_and_put and ep_loop_check_proc.
 EPOLL_INSERT_ADDRESS = 308
+# seccomp stream W (docs/2026-10-12-seccomp-design.md, section 3.3): the
+# eBPF program the classic-to-eBPF translation wrote, as data (class
+# 'program', resolved by the consumer frame: the `_THIS_IP_` on
+# net/core/filter.c:1315 in bpf_migrate_filter, a line the hook shares with
+# the statement already there): one record with the eBPF length, then one
+# per emitted bpf_insn, all 8 bytes, in order; the mirror checks the length,
+# then its own translation instruction by instruction, so a mismatch names
+# the first differing instruction.
+SECCOMP_PROGRAM = 309
 
 
 def load_hidden_sites():
@@ -451,7 +501,8 @@ def resolve_choices(per, sites, locations, dispatch=None):
                     else 'resched' if raw_kind == RESCHED else 'timer' if raw_kind == TIMER_ARM \
                     else 'advance' if raw_kind == TIME_ADVANCE else 'alloc' if kind == ALLOC_KIND \
                     else 'queue' if raw_kind == QUEUE else 'jiffies' if raw_kind == DST_CACHE_JIFFIES \
-                    else 'address' if raw_kind == EPOLL_INSERT_ADDRESS else None
+                    else 'address' if raw_kind == EPOLL_INSERT_ADDRESS \
+                    else 'program' if raw_kind == SECCOMP_PROGRAM else None
                 if kind_class == 'queue':
                     # {work, func}: the site is the queued function's symbol
                     queued_func = int.from_bytes(bytes.fromhex(data[16:32]), 'little') if length == 16 else 0
@@ -906,7 +957,8 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
         witnessing = dict(coverage[index], pcs=[pc for pc in coverage[index]['pcs'] if pc not in exempt])
         positions = line_positions(witnessing, locations, op_files, set(config['functions']))
         lines = set(positions)
-        if not lines:
+        data_only = op['op'] in config['data_only_operations']   # seccomp W (design 6.3)
+        if not lines and not data_only:
             problems.append(dict(index=index, problem='no coverage in anchored files'))
         if unmapped:
             problems.append(dict(index=index, problem='covered span lines missing from the instrumentation map',
@@ -926,7 +978,7 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
             else:
                 reported.add(step)
                 sequence.append(step)
-        if not reported:
+        if not reported and not data_only:
             problems.append(dict(index=index, problem='no model decision'))
         for name, outcome in sorted(reported):
             own, other = witnesses[name][outcome], witnesses[name][not outcome]
@@ -1493,6 +1545,7 @@ def main(argv=None):
     parser.add_argument('--wireguard-count', type=int, default=200)
     parser.add_argument('--pipes-count', type=int, default=200)
     parser.add_argument('--epoll-count', type=int, default=200)
+    parser.add_argument('--seccomp-count', type=int, default=200)
     parser.add_argument('--seed', type=int, default=20260920)
     parser.add_argument('--trace')
     parser.add_argument('--out', type=Path)
@@ -1527,7 +1580,8 @@ def main(argv=None):
         identity = verify_kernel()   # the oracle, or the build LEANUX_KERNEL_IDENTITY names; else no run
         build = build_model(out, rebuild=not args.no_build)
         traces = load_traces(suites, {'generated': args.generated_count, 'wireguard-generated': args.wireguard_count,
-                                      'pipes-generated': args.pipes_count, 'epoll-generated': args.epoll_count},
+                                      'pipes-generated': args.pipes_count, 'epoll-generated': args.epoll_count,
+                                      'seccomp-generated': args.seccomp_count},
                              args.seed, args.trace, filtered, args.alloc_share)
         decisions.update(load_decisions(config))
         instrumented, functions, chains = instrumented_lines(KERNEL / 'vmlinux', config['functions'], config['files'])
@@ -1633,6 +1687,7 @@ def write_report(out, traces, results, gaps, build, aborted, started, suites, ar
         kcov_config_sha256=sha256(ANCHORS.read_bytes()),
         selection=dict(suites=suites, generated_count=args.generated_count, wireguard_count=args.wireguard_count,
                        pipes_count=getattr(args, 'pipes_count', None), epoll_count=getattr(args, 'epoll_count', None),
+                       seccomp_count=getattr(args, 'seccomp_count', None),
                        seed=args.seed, trace=args.trace,
                        guest_variant=getattr(args, 'guest_variant', None), alloc_share=getattr(args, 'alloc_share', None)),
         traces=len(traces), operations=sum(len(t['ops']) for t in traces),

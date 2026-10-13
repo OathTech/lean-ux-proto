@@ -1,0 +1,127 @@
+{
+  "version": 1,
+  "id": "s_mixed_files",
+  "ops": [
+    {
+      "op": "eventfd2",
+      "init": 0,
+      "flags": 2048
+    },
+    {
+      "op": "pipe2",
+      "flags": 2048
+    },
+    {
+      "op": "seccomp_install",
+      "via": "seccomp",
+      "flags": [],
+      "filter": [
+        [
+          32,
+          0,
+          0,
+          4
+        ],
+        [
+          21,
+          1,
+          0,
+          3221225534
+        ],
+        [
+          6,
+          0,
+          0,
+          2147418112
+        ],
+        [
+          32,
+          0,
+          0,
+          0
+        ],
+        [
+          21,
+          0,
+          1,
+          102
+        ],
+        [
+          6,
+          0,
+          0,
+          327682
+        ],
+        [
+          6,
+          0,
+          0,
+          2147418112
+        ]
+      ]
+    },
+    {
+      "op": "write",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8,
+      "value": "3"
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 1,
+        "end": 1
+      },
+      "count": 5,
+      "value": "1"
+    },
+    {
+      "op": "read",
+      "fd": {
+        "ref": 0
+      },
+      "count": 8
+    },
+    {
+      "op": "seccomp_probe",
+      "nr": 102,
+      "where": "self"
+    },
+    {
+      "op": "read",
+      "fd": {
+        "pipe": 1,
+        "end": 0
+      },
+      "count": 5
+    },
+    {
+      "op": "seccomp_probe",
+      "nr": 104,
+      "where": "self"
+    },
+    {
+      "op": "close",
+      "fd": {
+        "ref": 0
+      }
+    },
+    {
+      "op": "close",
+      "fd": {
+        "pipe": 1,
+        "end": 1
+      }
+    },
+    {
+      "op": "read",
+      "fd": {
+        "pipe": 1,
+        "end": 0
+      },
+      "count": 5
+    }
+  ]
+}

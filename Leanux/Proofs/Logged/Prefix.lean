@@ -97,6 +97,62 @@ theorem erasesPrefix_forIn (xs : List α) (b : β)
     | done b => exact erasesPrefix_pure b
     | yield b => exact ih b
 
+/-- A result-dependent contract retaining the event prefix on every failure.
+The success postcondition can pass a resolved identity to the next operation. -/
+def PrefixEnsures (P : List Event → World → Prop) (S : List Event → Prop)
+    (g : PrefixM Event α) (Q : α → List Event → World → Prop) : Prop :=
+  ∀ w h, P h w →
+    ∃ suffix, (runPrefix g w h).2 = h ++ suffix ∧ S (runPrefix g w h).2 ∧
+      match (runPrefix g w h).1 with
+      | .error _ => True
+      | .ok (x, w') => Q x (runPrefix g w h).2 w'
+
+theorem PrefixEnsures.pure (hs : ∀ h w, P h w → S h)
+    (hq : ∀ h w, P h w → Q x h w) : PrefixEnsures P S (pure x) Q := by
+  intro w h hp
+  exact ⟨[], by simp, hs h w hp, hq h w hp⟩
+
+theorem PrefixEnsures.lift (a : M α) (hs : ∀ h w, P h w → S h)
+    (hq : ∀ h w x v, P h w → a.run w = .ok (x, v) → Q x h v) :
+    PrefixEnsures P S (liftPrefix a) Q := by
+  intro w h hp
+  refine ⟨[], by simp, hs h w hp, ?_⟩
+  simp only [runPrefix_lift]
+  cases hr : a.run w with
+  | error _ => trivial
+  | ok out => exact hq h w out.1 out.2 hp hr
+
+theorem PrefixEnsures.consequence (hg : PrefixEnsures P S g Q)
+    (hp : ∀ h w, P' h w → P h w)
+    (hq : ∀ x h w, Q x h w → Q' x h w) : PrefixEnsures P' S g Q' := by
+  intro w h hi
+  obtain ⟨suffix, he, hs, ho⟩ := hg w h (hp h w hi)
+  refine ⟨suffix, he, hs, ?_⟩
+  cases hr : (runPrefix g w h).1 with
+  | error _ => trivial
+  | ok out => exact hq out.1 _ out.2 (by simpa only [hr] using ho)
+
+theorem PrefixEnsures.bind (hg : PrefixEnsures P S g Q)
+    (hf : ∀ x, PrefixEnsures (Q x) S (f x) R) : PrefixEnsures P S (g >>= f) R := by
+  intro w h hi
+  obtain ⟨s, he, hs, hout⟩ := hg w h hi
+  cases hr : runPrefix g w h with
+  | mk result hist =>
+    simp only [hr] at he hs hout
+    cases result with
+    | error e =>
+      simpa only [runPrefix_bind, hr] using (show ∃ suffix,
+        hist = h ++ suffix ∧ S hist ∧ True from ⟨s, he, hs, True.intro⟩)
+    | ok out =>
+      rcases out with ⟨x, v⟩
+      obtain ⟨t, ht, hsafe, hend⟩ := hf x v hist hout
+      refine ⟨s ++ t, ?_, ?_, ?_⟩
+      · rw [runPrefix_bind, hr]
+        change (runPrefix (f x) v hist).2 = h ++ (s ++ t)
+        rw [ht, he, List.append_assoc]
+      · simpa only [runPrefix_bind, hr] using hsafe
+      · simpa only [runPrefix_bind, hr] using hend
+
 /-- Every outcome has a safe appended event prefix. Only successful outcomes
 also have a final World on which to require the state invariant. -/
 def PrefixPreserves (I : List Event → World → Prop) (S : List Event → Prop)
@@ -106,6 +162,9 @@ def PrefixPreserves (I : List Event → World → Prop) (S : List Event → Prop
       match (runPrefix g w h).1 with
       | .error _ => True
       | .ok (_, w') => I (runPrefix g w h).2 w'
+
+theorem PrefixEnsures.preserves (hg : PrefixEnsures I S g (fun _ => I)) :
+    PrefixPreserves I S g := hg
 
 theorem PrefixPreserves.pure (hs : ∀ h w, I h w → S h) (x : α) :
     PrefixPreserves I S (pure x) := by

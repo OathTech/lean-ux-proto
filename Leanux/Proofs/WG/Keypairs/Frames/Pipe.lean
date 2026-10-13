@@ -204,7 +204,7 @@ def writeLoop (iocb : Kiocb) (filp : File) (pid : PipeId) (src : IovIter)
   repeat
     let p ← getPipe pid
     if ← branch .pipeWriteLoopNoReaders (p.readers == 0) then
-      _ ← sendSig SIGPIPE 0
+      _ ← sendSig .task SIGPIPE 0
       if ← branchCmp .pipeWriteLoopNoRet (ret == 0) ret 0 then ret := -EPIPE
       break
     let head := p.head
@@ -262,7 +262,7 @@ def writeToOut (iocb : Kiocb) (filp : File) (pid : PipeId) (src : IovIter) : M (
   -- mutex_lock(&pipe->mutex)
   let p ← getPipe pid
   if ← branchCmp .pipeWriteNoReaders (p.readers == 0) p.readers 0 then
-    _ ← sendSig SIGPIPE 0
+    _ ← sendSig .task SIGPIPE 0
     return (-EPIPE, false)
   -- If it wasn't empty we try to merge new data into the last buffer.
   let head := p.head

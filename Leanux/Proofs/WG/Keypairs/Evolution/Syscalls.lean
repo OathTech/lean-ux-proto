@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.Keypairs.Evolution.Operations
+import Leanux.Proofs.WG.Keypairs.Frames.Seccomp
 import Leanux.Proofs.WG.Keypairs.Frames.Env
 import Leanux.Proofs.WG.Keypairs.Frames.Syscalls
 import Leanux.Proofs.WG.Keypairs.Frames.EventpollCalls
@@ -60,6 +61,14 @@ def NoReceiveCall : Syscall → Prop
 
 macro "syscall_ordinary_step" : tactic => `(tactic|
   first
+    | (ordinary_head Leanux.Seccomp.enterHarnessCall; exact (SeccompFrames.enterHarnessCall_sameSnapshot _).ordinary)
+    | (ordinary_head Leanux.Seccomp.sysSeccompProbeSelf; exact (SeccompFrames.sysSeccompProbeSelf_sameSnapshot _ _).ordinary)
+    | (ordinary_head Leanux.Seccomp.sysSeccompProbeChild; exact (SeccompFrames.sysSeccompProbeChild_sameSnapshot _ _ _).ordinary)
+    | (ordinary_head Leanux.Seccomp.sysSeccompInstall; exact (SeccompFrames.sysSeccompInstall_sameSnapshot _ _ _ _ _ _).ordinary)
+    | (ordinary_head Leanux.Seccomp.sysSeccompPrctl; exact (SeccompFrames.sysSeccompPrctl_sameSnapshot _ _).ordinary)
+    | (ordinary_head Leanux.Seccomp.sysSeccompCapdrop; exact SeccompFrames.sysSeccompCapdrop_sameSnapshot.ordinary)
+    | (ordinary_head Leanux.Seccomp.sysSeccompQuery; exact (SeccompFrames.sysSeccompQuery_sameSnapshot _ _ _).ordinary)
+    | (ordinary_head Leanux.getCurrent; exact SeccompFrames.getCurrent_sameSnapshot.ordinary)
     | (ordinary_head Leanux.sysEventfd2; exact (sysEventfd2_sameSnapshot _ _).ordinary)
     | (ordinary_head Leanux.sysDup; exact (sysDup_sameSnapshot _).ordinary)
     | (ordinary_head Leanux.ksysDup3; exact (ksysDup3_sameSnapshot _ _ _).ordinary)

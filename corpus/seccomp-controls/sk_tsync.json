@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "id": "sk_tsync",
+  "ops": [
+    {
+      "op": "seccomp_install",
+      "via": "seccomp",
+      "flags": [
+        "tsync"
+      ],
+      "filter": [
+        [
+          32,
+          0,
+          0,
+          4
+        ],
+        [
+          21,
+          1,
+          0,
+          3221225534
+        ],
+        [
+          6,
+          0,
+          0,
+          2147418112
+        ],
+        [
+          32,
+          0,
+          0,
+          0
+        ],
+        [
+          6,
+          0,
+          0,
+          2147418112
+        ]
+      ]
+    },
+    {
+      "op": "seccomp_prctl",
+      "cmd": "get_seccomp"
+    }
+  ]
+}

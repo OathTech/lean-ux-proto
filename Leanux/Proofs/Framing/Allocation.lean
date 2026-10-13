@@ -48,6 +48,7 @@ def allocationOutcome (s : AllocSite) : M Bool := do
   let i := s.info
   match i.count with
   | .laxZero => return true
+  | .unrecorded => return true
   | .cut => invariant s!"{i.label} is a below-cut consumer, consumed only at a cut point"
   | .exact n =>
     let w ← get

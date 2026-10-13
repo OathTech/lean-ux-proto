@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "id": "s_queries",
+  "ops": [
+    {
+      "op": "seccomp_query",
+      "cmd": "get_action_avail",
+      "action": 2147483648
+    },
+    {
+      "op": "seccomp_query",
+      "cmd": "get_action_avail",
+      "action": 0
+    },
+    {
+      "op": "seccomp_query",
+      "cmd": "get_action_avail",
+      "action": 196608
+    },
+    {
+      "op": "seccomp_query",
+      "cmd": "get_action_avail",
+      "action": 327680
+    },
+    {
+      "op": "seccomp_query",
+      "cmd": "get_action_avail",
+      "action": 2143289344
+    },
+    {
+      "op": "seccomp_query",
+      "cmd": "get_action_avail",
+      "action": 2146435072
+    },
+    {
+      "op": "seccomp_query",
+      "cmd": "get_action_avail",
+      "action": 2147221504
+    },
+    {
+      "op": "seccomp_query",
+      "cmd": "get_action_avail",
+      "action": 2147418112
+    },
+    {
+      "op": "seccomp_query",
+      "cmd": "get_action_avail",
+      "action": 65536
+    },
+    {
+      "op": "seccomp_query",
+      "cmd": "get_action_avail",
+      "action": 2147418113
+    },
+    {
+      "op": "seccomp_query",
+      "cmd": "get_action_avail",
+      "action": 2147418112,
+      "flags": 1
+    },
+    {
+      "op": "seccomp_query",
+      "cmd": "get_notif_sizes"
+    },
+    {
+      "op": "seccomp_query",
+      "cmd": "get_notif_sizes",
+      "flags": 2
+    }
+  ]
+}
