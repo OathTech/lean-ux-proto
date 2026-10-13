@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.KeyTimes.Receive
+import Leanux.Proofs.WG.KeyTimes.ReceiveAttempts
 import Leanux.Proofs.WG.KeyTimes.ZeroTimer
 import Leanux.Proofs.WG.KeyTimes.Staging
 import Leanux.Proofs.Logged.TimerPass
@@ -101,5 +102,52 @@ theorem original_timer_pass_erasure (jHi : UInt64) :
     Leanux.Proofs.Logged.ErasesPrefix
       (Leanux.Proofs.Logged.timerPassObserved jHi) (Leanux.Env.runTimers jHi) :=
   Leanux.Proofs.Logged.timerPassObserved_erases jHi
+
+/-- Observing the original AEAD boundary preserves every normal return and
+its complete World, and every exact original Stop. The event precedes the
+AEAD call and the subsequent authentication-result branch. -/
+theorem original_receive_attempt_erasure (pkt : RxPacket) :
+    Leanux.Proofs.Logged.ErasesPrefix (KeyTimes.receiveAttemptsObserved pkt) (decryptPacket pkt) :=
+  KeyTimes.receiveAttemptsObserved_erases pkt
+
+/-- Every original AEAD attempt uses the observed key lookup and false guard:
+receiving validity, stored counter below the limit, and an actual unexpired
+signed-clock read hold regardless of authentication success. This does not
+bound the packet's wire nonce or assert later delivery. -/
+theorem original_receive_attempt_admission (pkt : RxPacket) (w : World) :
+    ∀ attempt ∈ (Leanux.Proofs.Logged.runPrefix (KeyTimes.receiveAttemptsObserved pkt) w []).2,
+      attempt.Valid := by
+  have hs := KeyTimes.ReceiveAttempts.safe pkt w []
+    (show KeyTimes.ReceiveAttempts.Keep True [] w from
+      ⟨by simp [KeyTimes.ReceiveAttempts.Good], trivial⟩)
+  exact hs.choose_spec.2.1
+
+/-- A successful original getter, false rejection guard and successful RX
+copy allocation produce exactly one attempt event. No authentication-success
+premise is needed; the result component remains the complete original run. -/
+theorem original_receive_attempt_coverage (pkt : RxPacket)
+    (w entered checked allocated : World) (k : Keypair) (h : List KeyTimes.RxAttempt)
+    (hg : (getKeypair pkt.keypair).run (record w .decNoKeypair false) = .ok (k, entered))
+    (hr : (KeyTimes.receiveReject k).run entered = .ok (false, checked))
+    (ha : (hiddenAlloc .skbCowDataRx).run checked = .ok (true, allocated)) :
+    Leanux.Proofs.Logged.runPrefix (KeyTimes.receiveAttemptsObserved pkt) w h =
+      ((decryptPacket pkt).run w, h ++ [KeyTimes.receiveAttemptWitness pkt w entered checked k]) :=
+  KeyTimes.receiveAttemptsObserved_singleton pkt w entered checked allocated k h hg hr ha
+
+/-- Failed authentication still records the attempt and returns none with
+the exact original preparation and failed-authentication branch records.
+The premises are actual original guard/allocation runs and the actual pure
+AEAD result, with no residency invariant or cryptographic security assumption. -/
+theorem original_receive_failed_authentication (pkt : RxPacket)
+    (w entered checked allocated : World) (k : Keypair) (h : List KeyTimes.RxAttempt)
+    (hg : (getKeypair pkt.keypair).run (record w .decNoKeypair false) = .ok (k, entered))
+    (hr : (KeyTimes.receiveReject k).run entered = .ok (false, checked))
+    (ha : (hiddenAlloc .skbCowDataRx).run checked = .ok (true, allocated))
+    (hbad : aeadDecrypt k.receiving.key (counterNonce (u64le pkt.bytes 8)) (pkt.bytes.drop 16) [] = none) :
+    Leanux.Proofs.Logged.runPrefix (KeyTimes.receiveAttemptsObserved pkt) w h =
+      (.ok (none, record (record (record (record allocated .decCowDataFailed false)
+        .decTooManyFrags false) .decSgvecFailed false) .decDecryptFailed true),
+        h ++ [KeyTimes.receiveAttemptWitness pkt w entered checked k]) :=
+  KeyTimes.receiveAttemptsObserved_failed_tag pkt w entered checked allocated k h hg hr ha hbad
 
 end Leanux.Proofs.WG.KeyLifetime
