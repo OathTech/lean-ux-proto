@@ -243,11 +243,14 @@ def main():
     json.dump(dict(results, totals=totals), open(os.path.join(ROOT, '.artifacts/check/mutants-summary.json'), 'w'),
               indent=2)
     print('totals', totals, flush=True)
-    bad = sorted(n for n, r in results.items() if r['status'] != 'rejected')
+    inconclusive = sorted(n for n, r in results.items() if r['status'] == 'inconclusive')
+    bad = sorted(n for n, r in results.items() if r['status'] not in ('rejected', 'inconclusive'))
+    if inconclusive:
+        print('INCONCLUSIVE (the recorded order did not distinguish the mutant this run; rerun alone, where it must '
+              'reject):', ' '.join(inconclusive), flush=True)
     if bad:
         print('NOT REJECTED (a survivor is a defect in the check; no verdict is infrastructure, rerun):', ' '.join(bad), flush=True)
-        return 1
-    return 0
+    return 1 if bad or inconclusive else 0
 
 
 if __name__ == '__main__':
