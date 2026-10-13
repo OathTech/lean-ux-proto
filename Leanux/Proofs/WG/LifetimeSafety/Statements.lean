@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.Lifetimes.SocketCalls
+import Leanux.Proofs.WG.Lifetimes.EncryptWorker
 import Leanux.Proofs.WG.Lifetimes.ReceivePoll
 import Leanux.Proofs.WG.Lifetimes.ReceiveFailure
 import Leanux.Proofs.WG.Lifetimes.TxStagingCalls
@@ -1134,5 +1135,95 @@ theorem actual_receive_poll_allocation_safety (pid : PeerId) (budget : Nat) :
       (Lifetimes.rxPollStackPrefix pid budget) :=
   Lifetimes.rxPollStackPrefix_preserves Lifetimes.allocationAmbient Lifetimes.allocationTx
     Lifetimes.allocationRx Lifetimes.allocationWgXmit pid budget
+
+/-- Packet encryption preserves the complete original result, successful
+World and Stop on all inputs, with an explicitly observed checksum callback. -/
+theorem encrypt_packet_access_erasure
+    (checksum : Packet → Lifetimes.MixedM Packet) (originalChecksum : Packet → M Packet)
+    (hc : ∀ pkt, ErasesPrefix (checksum pkt) (originalChecksum pkt)) (kp : KeypairId) (pkt : DataPacket) :
+    ErasesPrefix (Lifetimes.encryptPacketPrefix checksum kp pkt) (encryptPacket originalChecksum kp pkt) :=
+  Lifetimes.encryptPacketPrefix_erases hc kp pkt
+
+/-- Callback preservation suffices for resolved-current-store access safety.
+No continued association with the caller's saved keypair ID is asserted. -/
+theorem encrypt_packet_ambient_access_preserves (c : Lifetimes.AmbientContracts I)
+    (checksum : Packet → Lifetimes.MixedM Packet)
+    (hc : ∀ pkt, PrefixPreserves I Lifetimes.LifetimeEvent.Safe (checksum pkt))
+    (kp : KeypairId) (pkt : DataPacket) :
+    PrefixPreserves I Lifetimes.LifetimeEvent.Safe (Lifetimes.encryptPacketPrefix checksum kp pkt) :=
+  Lifetimes.encryptPacketPrefix_preserves_ambient c hc kp pkt
+
+/-- The concrete checksum helper's complete-Kernel frame discharges its
+callback contract, including rejected packet inputs and their Stops. -/
+theorem encrypt_packet_allocation_access_preserves (kp : KeypairId) (pkt : DataPacket) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.encryptPacketPrefix (fun p => liftPrefix (Leanux.Env.checksumHelp p)) kp pkt) :=
+  Lifetimes.encryptPacketPrefix_allocation kp pkt
+
+/-- The original encrypt step retains softirq-first execution, the consumed
+ring replacement, every packet getter/setter, and dead-break whole-item enqueue. -/
+theorem encrypt_step_access_erasure
+    (checksum : Packet → Lifetimes.MixedM Packet) (originalChecksum : Packet → M Packet)
+    (softirq : Lifetimes.MixedM Unit) (originalSoftirq : M Unit)
+    (hc : ∀ pkt, ErasesPrefix (checksum pkt) (originalChecksum pkt))
+    (hs : ErasesPrefix softirq originalSoftirq) :
+    ErasesPrefix (Lifetimes.encryptStepPrefix checksum softirq) (encryptStep originalChecksum originalSoftirq) :=
+  Lifetimes.encryptStepPrefix_erases hc hs
+
+/-- Ring replacement has an explicit contract distinct from produce.
+Callbacks may change identities; malformed and duplicate item IDs are admitted. -/
+theorem encrypt_step_ambient_access_preserves (c : Lifetimes.AmbientContracts I)
+    (t : Lifetimes.TxContracts I) (checksum : Packet → Lifetimes.MixedM Packet)
+    (softirq : Lifetimes.MixedM Unit)
+    (hq : ∀ ring : PtrRing (List SkbId), PrefixPreserves I Lifetimes.LifetimeEvent.Safe
+      (liftPrefix (modifyDev fun d => {d with encryptQueue := ring})))
+    (hc : ∀ pkt, PrefixPreserves I Lifetimes.LifetimeEvent.Safe (checksum pkt))
+    (hs : PrefixPreserves I Lifetimes.LifetimeEvent.Safe softirq) :
+    PrefixPreserves I Lifetimes.LifetimeEvent.Safe (Lifetimes.encryptStepPrefix checksum softirq) :=
+  Lifetimes.encryptStepPrefix_preserves_ambient c t hq hc hs
+
+/-- Complete encrypt-step safety at AllocationInv, retaining failed prefixes.
+Only the explicitly supplied softirq observer remains a callback obligation. -/
+theorem encrypt_step_allocation_access_preserves (softirq : Lifetimes.MixedM Unit)
+    (hs : PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe softirq) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.encryptStepPrefix (fun p => liftPrefix (Leanux.Env.checksumHelp p)) softirq) :=
+  Lifetimes.encryptStepPrefix_allocation hs
+
+/-- Exact worker iteration includes ended/yielded/continued results and calls
+the rescheduling callback only after a true step. Erasure has no validity premise. -/
+theorem encrypt_iteration_access_erasure
+    (checksum : Packet → Lifetimes.MixedM Packet) (originalChecksum : Packet → M Packet)
+    (softirq : Lifetimes.MixedM Unit) (originalSoftirq : M Unit)
+    (needResched : Lifetimes.MixedM Bool) (originalResched : M Bool)
+    (hc : ∀ pkt, ErasesPrefix (checksum pkt) (originalChecksum pkt))
+    (hs : ErasesPrefix softirq originalSoftirq) (hr : ErasesPrefix needResched originalResched) :
+    ErasesPrefix (Lifetimes.encryptIterPrefix checksum softirq needResched)
+      (encryptIter originalChecksum originalSoftirq originalResched) :=
+  Lifetimes.encryptIterPrefix_erases hc hs hr
+
+/-- Explicit callback and ring-replacement contracts compose through the
+original iteration, without queue geometry, ownership or batch homogeneity. -/
+theorem encrypt_iteration_ambient_access_preserves (c : Lifetimes.AmbientContracts I)
+    (t : Lifetimes.TxContracts I) (checksum : Packet → Lifetimes.MixedM Packet)
+    (softirq : Lifetimes.MixedM Unit) (needResched : Lifetimes.MixedM Bool)
+    (hq : ∀ ring : PtrRing (List SkbId), PrefixPreserves I Lifetimes.LifetimeEvent.Safe
+      (liftPrefix (modifyDev fun d => {d with encryptQueue := ring})))
+    (hc : ∀ pkt, PrefixPreserves I Lifetimes.LifetimeEvent.Safe (checksum pkt))
+    (hs : PrefixPreserves I Lifetimes.LifetimeEvent.Safe softirq)
+    (hr : PrefixPreserves I Lifetimes.LifetimeEvent.Safe needResched) :
+    PrefixPreserves I Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.encryptIterPrefix checksum softirq needResched) :=
+  Lifetimes.encryptIterPrefix_preserves_ambient c t hq hc hs hr
+
+/-- The concrete checksum and consumed-ring update preserve AllocationInv;
+softirq and rescheduling remain explicit. This is not full scheduler closure. -/
+theorem encrypt_iteration_allocation_access_preserves (softirq : Lifetimes.MixedM Unit)
+    (needResched : Lifetimes.MixedM Bool)
+    (hs : PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe softirq)
+    (hr : PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe needResched) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.encryptIterPrefix (fun p => liftPrefix (Leanux.Env.checksumHelp p)) softirq needResched) :=
+  Lifetimes.encryptIterPrefix_allocation hs hr
 
 end Leanux.Proofs.WG.LifetimeSafety

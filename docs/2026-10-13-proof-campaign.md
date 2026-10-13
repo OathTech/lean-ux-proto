@@ -14,19 +14,20 @@ No integration into main, push, differential check or guest run.
 | Result | Progress |
 | --- | --- |
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay and independent review checked. Seccomp frame carry checked. |
-| R2 lifetime safety | Store identities, failure-retaining allocation/release and caller composition cover session/rotation, peer creation, receive entry/maintenance/completion, receive polling with the actual stack callback, transmit entry, TX staging, decrypt iteration and eleven socket/cache/loopback calls, including staged IPv4 send; stale-cursor finding checked. Remaining callers, lifecycle and whole-run internal-access coverage remain in progress. |
+| R2 lifetime safety | Store identities, failure-retaining allocation/release and caller composition cover session/rotation, peer creation, receive entry/maintenance/completion, receive polling with the actual stack callback, transmit entry, TX staging, decrypt and encrypt iteration with explicit scheduler callbacks, and eleven socket/cache/loopback calls, including staged IPv4 send; stale-cursor finding checked. Remaining callers, lifecycle and whole-run internal-access coverage remain in progress. |
 | R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion, original empty-root, arbitrary-depth empty-child and exact-prefix insertion with sequence wrappers, and total original placement proved. Selected-root graft normal endpoints and rollback effects are checked; successful graft representation and actual-root lookup pass the coordinated gate. Deeper grafts, removal, general mutation/history and path refinements remain open. Path proofs follow R2. |
 | R4 delivery | Accepted original replay over f45bde8 refutes chronological post-GRO stack order: a held ACK followed by a distinct-flow SYN produces the SYN's RST first under the same key lifetime. Exact current poll erasure and removal-prefix order with an explicit callback queue contract pass the gate, as does the original-helper reorder equation. The former chronological callback theorem is retired, with its predicate unchanged. Per-poll selected callback order and exact callback-entry multiplicity pass the coordinated gate and independent review. Source-tag closure and pipeline conservation remain open. |
 | R5 key lifetime | Resolved through Rule Zero counterexamples, with 13 positive local contracts. Original/observed replays show nonce R+1 authenticating before rejection, queued transport keepalive encryption after recorded expiry, and packet-held material used after zero/clear before a new handshake. The new time inputs have coherent coarse/jiffies/arm arithmetic; Linux schedule reachability is not claimed. Validated over a39aded. |
 | R6 flood resistance | Original under-load cookie exclusion and full Noise-state frame proved; a generated accepted episode refutes the literal retry limit (19 retries, 20 total initiations with MAX=18). Six terminal theorems, the combined gate, fresh kernel replay and exact witness rerun pass. |
 
 **Last validated mirror: `a39aded` (source unchanged from `f45bde8`).** The
-full proof gate passes 257 build jobs and 218 terminal statements (ReplayWindow
-15, R1 9, R2 117, R3 30, R4 28, R5 13, R6 6), with only permitted axioms.
+full proof gate passes 259 build jobs and 227 terminal statements (ReplayWindow
+15, R1 9, R2 126, R3 30, R4 28, R5 13, R6 6), with only permitted axioms.
 Stock `leanchecker --fresh Leanux.Proofs` passes. The default model build passes
-60 jobs; the unit tier passes 94 tests in 22.144 seconds with one skip.
-The unchanged replay witnesses were not repeated for the trie, IPv4 socket and
-selected-GRO proof extensions; their executable observers are unchanged.
+60 jobs; the unit tier passes 94 tests in 21.960 seconds with one skip.
+The unchanged replay witnesses were not repeated for the trie, IPv4 socket,
+selected-GRO and encrypt-worker extensions; the observers those witnesses use
+are unchanged.
 The retry, delayed-encryption and coherent post-clear witnesses passed the
 preceding checkpoint with exact original/observed JSON and strengthened syscall
 endpoint checks; all nine cases passed the earlier audit carry.
@@ -44,7 +45,8 @@ transmit entry, actual stack/poll composition, the prerequisite carry, and the
 full-ring, receive-queue, complete receive-completion and outer-poll components, R5 receive/key-time, RX attempt and TX admission components, and the
 R5 replays with the timer-pass observer, the whole-advance factor, both
 R6 cookie-rejection cases with actual rotating-cookie witnesses, and the
-per-poll selected-GRO order and callback-entry conservation contracts.
+per-poll selected-GRO order and callback-entry conservation contracts, and
+complete encryption-worker access observers and their shared frames.
 The final source and contract reviews have no unresolved correctness findings;
 their frozen file hashes matched before the checkpoints.
 
@@ -231,7 +233,32 @@ socket-port Stop after earlier cache/stat effects; such a Stop is not an
 accepted-domain execution.
 A conditional clear-source/reset equation retains the endpoint read and write
 before a reset-clock Stop; it is a source segment equation, not an accepted
-runner witness. Generic record-consumer frames live once in
+runner witness.
+
+`EncryptWorker` adds complete original packet encryption, worker step and
+iteration observers, with nine terminal exports. Erasure retains every result,
+successful World and Stop under explicit callback erasures. Safety retains
+failed prefixes and preserves the ambient invariant on success; a stronger
+packet contract also transports any identity predicate preserved by its
+checksum callback. The concrete checksum helper is discharged by a full-Kernel
+frame in `Framing/WGData`, alongside the padding frame. The legacy checksum
+snapshot theorem keeps its statement and derives from that shared frame,
+avoiding duplicate generated source-matcher declarations on combined import.
+The consumed-ring replacement has a separate contract and concrete
+allocation-invariant proof; the existing TX produce contract is unchanged.
+The observer preserves softirq-first execution, padding before checksum,
+the later keypair lookup, the packet setter's reread, and dead-break enqueue
+of the entire item. Empty items fail after ring replacement; empty rings have
+no replacement. Duplicate IDs and malformed items require no new premise and
+retain their original Stops. Checksum, softirq and rescheduling observers may
+change identities subject to their explicit preservation contracts. This proves
+resolved-current-store access safety, not saved head/keypair association,
+batch homogeneity or reference ownership. The actual outer scheduler callbacks
+remain open. The coordinated gate passes 259 jobs and 227 terminal statements;
+fresh kernel replay and independent frozen-source review pass. The review's
+documentation status finding is corrected in the progress and register update.
+
+Generic record-consumer frames live once in
 `Framing/KernelEffects`, with older interfaces derived by projection.
 Shared bind and finite-loop laws compose these per-call contracts. Generic enqueue/decrypt
 contracts admit explicit observed softirq, IRQ-exit and rescheduling callbacks;
@@ -269,7 +296,8 @@ getter-conditioned failure, not an accepted-trace finding. Safe access prefixes
 do not establish delivery, order or reference ownership.
 
 **Remaining claim.** Full caller, device-lifecycle and scheduler closure remain
-unproved. Encrypt/TX workers, socket setup/reinitialization, handshake
+unproved. TX workers, concrete encrypt-worker scheduler callbacks,
+socket setup/reinitialization, handshake
 execution and timer callbacks, peer removal, netlink and direct resident scans
 need coverage. Saved scalar-reference
 ownership is a separate obligation: aliased or dangling IDs may legitimately
@@ -335,15 +363,20 @@ The IPv4 addition took eight capped invocations over about eight minutes:
 five passed and three failed before correction. The failures were an unfinished
 source simplification, premature tactic introduction in erasure, and a missing
 explicit World-get contract during safety composition. No interruption occurred.
-The 130-job caller and 195-job terminal targets passed; the coordinated gate
-passes 256 jobs and all 216 terminal statements. Independent frozen-source review found no
+At the IPv4 checkpoint, the 130-job caller and 195-job terminal targets passed,
+as did the coordinated gate with 256 jobs and 216 terminal statements. Independent frozen-source review found no
 correctness defect and confirmed the failure equation's conditional segment
 scope and the distinction between ordinary negative returns and Stops. Review
 corrected wording that had confused arbitrary-input erasure with accepted-domain
 behavior; the former includes outside-domain Stops. Counts and failed
 passes are retained in the checkpoint history; current validation is above.
-Failures were proof elaboration/simplification failures, not passes or mirror
-findings. One earlier tactic loop was stopped by its verified PID and repaired.
+The encryption-worker addition took four capped invocations in six minutes:
+two passes and two corrected failures (option-case/metadata inference and a
+duplicate generated checksum matcher). Its final terminal target passed 197
+jobs with 126 R2 theorems; the combined validation is reported above. No
+interruption or cap failure occurred.
+Failures were proof elaboration/simplification or integration failures, not
+passes or mirror findings. One earlier tactic loop was stopped by its verified PID and repaired.
 Independent source reviews cover every listed checkpoint and its final deltas.
 They corrected scope wording and identified an unused impossible KDF-failure
 premise; that vacuous lemma was deleted. The maintenance review also corrected

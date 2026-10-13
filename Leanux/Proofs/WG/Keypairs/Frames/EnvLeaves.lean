@@ -1,6 +1,7 @@
 import Leanux.Proofs.WG.Keypairs.Frames.WGDevice
 import Leanux.Env
 import Leanux.Proofs.Framing.Stack
+import Leanux.Proofs.Framing.WGData
 import Leanux.Proofs.WG.Keypairs.SnapshotRules
 
 /-! Framing the inner IP delivery cut and scheduler/environment leaves. -/
@@ -52,8 +53,8 @@ theorem deliverInner_spec (P : Snapshot → Prop) (hp : Stable P) (pkt : List UI
     ⦃fun w => ⌜P (snapshot w)⌝⦄ (Leanux.Env.deliverInner pkt)
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (deliverInner_ordinary pkt).wp P hp
 
-theorem checksumHelp_sameSnapshot (pkt : Packet) : SameSnapshot (Leanux.Env.checksumHelp pkt) := by
-  frame_same [Leanux.Env.checksumHelp] using []
+theorem checksumHelp_sameSnapshot (pkt : Packet) : SameSnapshot (Leanux.Env.checksumHelp pkt) :=
+  sameSnapshot_of_sameWGKernel (Framing.sameWGKernel_of_sameKernel (Framing.checksumHelp_sameKernel pkt))
 
 theorem checksumHelp_spec (P : Snapshot → Prop) (pkt : Packet) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ (Leanux.Env.checksumHelp pkt)
