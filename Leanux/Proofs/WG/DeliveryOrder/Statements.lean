@@ -1,7 +1,7 @@
 import Leanux.Proofs.WG.Queues.FullRing
 import Leanux.Proofs.WG.Queues.Enqueue
 import Leanux.Proofs.WG.Queues.PrevQueue
-import Leanux.Proofs.WG.Queues.RxHelperFrames
+import Leanux.Proofs.WG.Queues.RxCompletionFrame
 
 /-! R4 queue components: physical-ring refusal, original prev_queue FIFO laws,
 and successful-endpoint receive-queue helper frames. Whole recorded-schedule delivery,
@@ -132,5 +132,33 @@ theorem original_validation_queue_frames (pid : PeerId) (kp : KeypairId) (nonce 
     Framing.SameView Queues.rxQueues (counterValidate kp nonce) ∧
     Framing.SameView Queues.rxQueues (receivedWithKeypair pid kp) :=
   ⟨Queues.counterValidate_rxQueues kp nonce, Queues.receivedWithKeypair_rxQueues pid kp⟩
+
+/-- Original endpoint and receive-timer maintenance preserve every complete
+receive queue, its epoch and peer identity on normal return. -/
+theorem original_receive_maintenance_queue_frames (pid : PeerId) (endpoint : Endpoint)
+    (site : HiddenSite) :
+    Framing.SameView Queues.rxQueues (setPeerEndpoint pid endpoint) ∧
+    Framing.SameView Queues.rxQueues (timersHandshakeComplete pid site) ∧
+    Framing.SameView Queues.rxQueues (timersAnyAuthenticatedPacketReceived pid) ∧
+    Framing.SameView Queues.rxQueues (timersDataReceived pid) ∧
+    Framing.SameView Queues.rxQueues (timersTraversal pid) :=
+  ⟨Queues.setPeerEndpoint_rxQueues pid endpoint,
+    Queues.timersHandshakeComplete_rxQueues pid site,
+    Queues.timersAnyAuthenticatedPacketReceived_rxQueues pid,
+    Queues.timersDataReceived_rxQueues pid, Queues.timersTraversal_rxQueues pid⟩
+
+/-- Complete original staged transmission and receive-side key refresh retain
+the exact old receive-queue cell of every post-state resident. They may delete
+peers; no reference-ownership premise is added. -/
+theorem original_transmit_retains_receive_queues (pid : PeerId) :
+    Queues.RetainsRx (sendStagedPackets pid) ∧ Queues.RetainsRx (keepKeyFreshRx pid) :=
+  ⟨Queues.sendStagedPackets_rxQueues pid, Queues.keepKeyFreshRx_rxQueues pid⟩
+
+/-- Complete original receive completion retains the exact queue, epoch and
+peer identity of every post-state resident. This normal-return projection
+does not yet establish poll order, delivery or packet conservation. -/
+theorem original_receive_completion_retains_queues (pid : PeerId) (pkt : RxPacket)
+    (endpoint : Endpoint) : Queues.RetainsRx (consumeDataDone pid pkt endpoint) :=
+  Queues.consumeDataDone_rxQueues pid pkt endpoint
 
 end Leanux.Proofs.WG.DeliveryOrder

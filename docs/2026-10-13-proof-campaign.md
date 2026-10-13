@@ -16,14 +16,14 @@ The mirror and kernel match it exactly; R4 and R5's dependent work is now unbloc
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay and independent review checked. Seccomp frame carry checked. |
 | R2 lifetime safety | Store identities, failure-retaining allocation/release and caller composition cover session/rotation, peer creation, receive entry/maintenance/completion, receive polling with the actual stack callback, transmit entry, TX staging, decrypt iteration and ten socket/cache/loopback calls; stale-cursor finding checked. Remaining callers, lifecycle and whole-run internal-access coverage remain in progress. |
 | R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion, original empty-root, arbitrary-depth empty-child and exact-prefix insertion with sequence wrappers, and total original placement proved. Selected-root graft normal endpoints and rollback effects checked; successful graft representation, general mutation/history and path refinements remain open. Path proofs follow R2. |
-| R4 delivery | The full-ring witness, original enqueue refusal projection, original PrevQueue FIFO/peek/drop laws and retained receive-queue helper frames pass the gate and independent review. Whole-poll and recorded-schedule delivery/conservation remain open. |
+| R4 delivery | The full-ring witness, original enqueue refusal projection, original PrevQueue FIFO/peek/drop laws and retained receive-queue helper frames pass the gate and independent review. Complete receive-completion retention passes the gate and independent review. Whole-poll and recorded-schedule delivery/conservation remain open. |
 | R5 key lifetime | Original clock/operand equations, successful RX decryption admission, validator wire limit and zero-timer transport-store frame pass the gate and independent review. TX submission certificates and exact timer-pass observation pass the gate and independent review. Accepted replays show nonce R decrypting before rejection and a packet-held key used after clear in synthetic, incoherent-clock legacy mode. RX-attempt admission, exact coverage and failed-tag endpoints pass the gate and independent review. Admission-to-encryption transport, whole-run attempt composition and coherent-clock post-clearance exclusion remain open. |
 | R6 flood resistance | Not started. |
 
-**Current validation.** The full proof gate passes 235 build jobs and 196
-terminal statements (ReplayWindow 15, R1 9, R2 116, R3 27, R4 16, R5 13), with only permitted
+**Current validation.** The full proof gate passes 239 build jobs and 199
+terminal statements (ReplayWindow 15, R1 9, R2 116, R3 27, R4 19, R5 13), with only permitted
 axioms. Stock `leanchecker --fresh Leanux.Proofs` passes. The default model
-build passes 60 jobs; the unit tier passes 93 tests in 22.938 seconds with one
+build passes 60 jobs; the unit tier passes 93 tests in 22.711 seconds with one
 skip. The R1 explicit-record witness and both R2 checkpoint variants pass on
 `2c7a076`, with original/observed JSON equality; the R1 history remains
 `[(1, 8200), (1, 72)]`. The reconstructed/synthetic streams now supply the
@@ -41,7 +41,7 @@ insertion, original empty-root and arbitrary-depth empty-child insertion with
 its wrapper, exact-prefix replacement, list deletion, placement and selected-root
 graft endpoints/rollback, saved-peer scans, the ten-call socket family,
 transmit entry, actual stack/poll composition, the prerequisite carry, and the
-full-ring and receive-queue components, R5 receive/key-time, RX attempt and TX admission components, and both
+full-ring, receive-queue and complete receive-completion components, R5 receive/key-time, RX attempt and TX admission components, and both
 R5 replays with the timer-pass observer.
 The final source and contract reviews have no unresolved correctness findings;
 their frozen file hashes matched before the checkpoints.
@@ -478,6 +478,31 @@ establish internal access coverage, error-state equality or full `rxPoll` order.
 identity, and permit deletion in the release relation. This avoids treating
 lifetime-safety contracts as queue-preservation contracts or silently assuming
 reference ownership. Full poll observation is the next separate obligation.
+
+**Complete receive-completion frames.** `RxQueuePrimitives` gives exact
+consecutive-read equality and fresh getter/setter contracts over the full queue
+view. `RxMaintenanceFrames` preserves queues through original endpoint/cache
+and receive-timer operations, including their hidden-input checks and eager
+peer reads. `RxTxFrames` composes the original staged-transmit, enqueue,
+allocation and cleanup actions. `RxCompletionFrame` covers original source
+lookup, statistics and the complete `consumeDataDone` body. Each post-state
+resident retains its entry queue, epoch and peer identity; deletion is allowed.
+The contracts make no assertion about a World after a Stop, internal accesses,
+packet stores or delivery. Whole-poll observation remains a separate obligation.
+No mirror code or clock/ownership premise was changed.
+
+**Completion-frame effort.** Thirteen sequential capped local builds comprised
+two passes and eleven ordinary compilation failures, all collected. The worker
+had two provider interruptions during implementation and one during read-only
+reporting; after each interruption, all dirty worktrees including nonignored
+untracked files were preserved to snapshot refs before edits or rebuilds, with
+branches and real indexes unchanged. The coordinator finished the component.
+No cap was hit. The proof gate passes 239 build jobs and all 199 terminal
+statements, including three new R4 exports. Stock fresh kernel replay, the
+60-job model build and the 93-test unit tier pass. Independent review of the
+four frozen modules, exports and report/register found no unresolved issue;
+reviewed source hashes matched. Named temporary logs and axiom outputs were
+removed after collection. Reproduce with the proof gate command above.
 
 **Measurement and formal scope.** The landed
 [W7 full-ring tier](2026-10-13-w7-full-ring-tier.md) records the Linux/mirror
