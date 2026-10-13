@@ -108,8 +108,12 @@ def enqueuePerPeerTx (item : List SkbId) (state : PacketState) : M Unit := do
   _ ← cpumaskChooseOnline pid
   -- queue_work_on(cpu, packet_crypt_wq, &peer->transmit_packet_work): a no-op
   -- while the work is pending (queued, not yet started); otherwise queued,
-  -- with its record (dispatch order)
-  if !(← getDev).txWorkQueue.contains pid then
+  -- with its record (dispatch order). The PENDING test's outcome is the
+  -- kernel's: a queue record for a unit the mirror still holds queued means
+  -- process_one_work had taken it (PENDING cleared) before its section
+  -- started, so this queueing is a second instance, whose own section
+  -- follows the first's (`peekQueuedUnit`; w7_multi_tx_2, 2026-10-13)
+  if !(← getDev).txWorkQueue.contains pid || (← peekQueuedUnit .txWorker pid) then
     recordQueued .txWorker pid
     modifyDev fun d => { d with txWorkQueue := d.txWorkQueue ++ [pid] }
   peerPut (some pid)

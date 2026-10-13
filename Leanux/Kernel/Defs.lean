@@ -1915,12 +1915,40 @@ def recordQueued (w : Worker) (pid : Nat) : M Unit := do
     if a' != a then throw (.hidden s!"{w.symbol} of peer {pid}: queued at address {a}, before at {a'}")
   | none => set { st with unitPeers := st.unitPeers ++ [(a, w.index, pid)] }
 
+/-- Dispatch order: whether the next record is the queue record of the unit
+    of worker `w` for `pid`, by the address its earlier queue record gave
+    (`unitPeers`). The kernel writes the record iff `queue_work`'s PENDING
+    test passed; `process_one_work` clears PENDING when it takes the item,
+    before the function's section starts. So a unit the mirror still holds
+    queued whose queue record comes next was dequeued by the kernel and is
+    being queued a second time: the record is the kernel's statement of the
+    test's outcome, and the mirror follows it (w7_multi_tx_2 under eight
+    guests, 2026-10-13). `false` without records, for a record of another
+    site, or for a unit whose address no record gave yet. -/
+def peekQueuedUnit (w : Worker) (pid : Nat) : M Bool := do
+  if !(← get).armRecords then return false
+  skipAmbient
+  let st ← get
+  match st.hidden with
+  | some (r :: _) =>
+    if r.site != (HiddenSite.queued w).info.id || r.bytes.length < 8 then return false
+    let some (a, _, _) := st.unitPeers.find? (fun (e : Nat × Nat × Nat) => e.2.1 == w.index && e.2.2 == pid)
+      | return false
+    return recordWordOf r.bytes 0 == a
+  | _ => return false
+
 /-- `queue_work_on` of a device-level unit (one work struct: the encrypt and
     decrypt workers' per-CPU work on the one CPU, `incoming_handshake_work`):
     `test_and_set_bit(WORK_STRUCT_PENDING_BIT)` queues it iff it was not
-    pending, with its record; pending until its section starts. -/
+    pending, with its record; pending until its section starts. A second
+    queueing after the kernel's dequeue and before the section
+    (`peekQueuedUnit`) would need a second instance of the device-level
+    unit, which the mirror does not hold: fail-noisy. -/
 def queueDeviceWork (w : Worker) : M Unit := do
-  if (← get).pendingWork.contains w.index then return
+  if (← get).pendingWork.contains w.index then
+    if ← peekQueuedUnit w 0 then
+      unsupported s!"{w.symbol} queued again after its dequeue, before its section (a second instance of a device-level unit)"
+    return
   recordQueued w 0
   modify fun st => { st with pendingWork := st.pendingWork ++ [w.index] }
 
