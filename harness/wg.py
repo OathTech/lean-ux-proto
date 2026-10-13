@@ -109,6 +109,22 @@ def _endpoint(entry, where):
         _int(entry["af"], 0, 65535, f"{where}.af")
     if "len" in entry:
         _int(entry["len"], MIN_ENDPOINT_LEN, MAX_ENDPOINT_LEN, f"{where}.len")   # below 16 the policy rejects (P8)
+    # netlink audit F1 (docs/2026-10-13-audit-netlink.md): set_peer
+    # (netlink.c:441-446) reads the attribute as a sockaddr_in when len is 16
+    # and sa_family AF_INET, as a sockaddr_in6 when len is 28 and sa_family
+    # AF_INET6, by those two fields alone. One family's bytes presented under
+    # the other layout (family-4 bytes with af 10 and len 28; family-6 bytes
+    # with af 2 and len 16) are stored by the kernel as an endpoint the
+    # mirror's parsed fields cannot express, so the trace is refused. Every
+    # other af/len combination is ignored by both (the W2 design's 3.3 rows).
+    af = entry.get("af", AF_INET if family == 4 else AF_INET6)
+    length = entry.get("len", 16 if family == 4 else 28)
+    if family == 4 and af == AF_INET6 and length == 28:
+        raise InvalidConfig(f"{where}: af 10 with len 28 presents family-4 bytes under the sockaddr_in6 layout "
+                            f"(set_peer, netlink.c:444-446, would store [::]:port with the address as flowinfo): not modelled, refused")
+    if family == 6 and af == AF_INET and length == 16:
+        raise InvalidConfig(f"{where}: af 2 with len 16 presents family-6 bytes under the sockaddr_in layout "
+                            f"(set_peer, netlink.c:441-443, would store the flowinfo bytes as the IPv4 address): not modelled, refused")
     return entry
 
 

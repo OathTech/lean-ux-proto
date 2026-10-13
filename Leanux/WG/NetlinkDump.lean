@@ -273,7 +273,9 @@ def wgGetDeviceDump (ctx0 : DumpCtx) (prevSeq0 : Nat) (skb0 : NlSkb) : M DumpCal
   skb := { skb with messages := skb.messages ++ [message] }
   if ← branch .dumpDone done then
     return { ret := 0, skb, ctx := { ctx with nextPeer := none }, prevSeq := seq }
-  return { ret := 1, skb, ctx := { ctx with nextPeer := nextCursor }, prevSeq := seq }
+  -- `return skb->len` (:296): the chunk's bytes so far, positive once the
+  -- data message is in; `netlink_dump` reads its sign (audit F2)
+  return { ret := Int.ofNat (NLMSG_GOODSIZE - skb.room), skb, ctx := { ctx with nextPeer := nextCursor }, prevSeq := seq }
 
 /-! ### The netlink dump loop (af_netlink.c), per socket -/
 
@@ -326,7 +328,9 @@ def netlinkDumpStart (fd : Nat) (ref : DeviceRef) : M Unit := do
   let wg ← lookupInterface ref
   if ← branch .getStartErr (wg matches .error _) then
     let .error e := wg | invariant "unreachable"
-    setNlSock fd { sock with queue := sock.queue ++ [{ messages := [.error e] }] }
+    -- `cb` is zeroed (:2417) before `start` (:2431), so the context and
+    -- `prev_seq` are gone on a start error too (audit, the transport note)
+    setNlSock fd { sock with queue := sock.queue ++ [{ messages := [.error e] }], ctx := {}, prevSeq := 0 }
     return
   -- cb zeroed (:2422), then cb_running and dump_done_errno = INT_MAX (:2436-2437)
   setNlSock fd { sock with cbRunning := true, dumpDoneErrno := INT_MAX, prevSeq := 0, ctx := { hasWg := true } }

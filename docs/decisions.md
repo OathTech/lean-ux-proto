@@ -397,3 +397,16 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   (`wg_check_packet_protocol` decided from the packet, its error arm
   modelled and unexercised) and D1 (the handshake ring in `wg_destruct`'s
   guard, an invariant). The audit's other items stay as reported.
+- **2026-10-13 [AGENT, fork of the coordinator]** The netlink correspondence
+  audit's F1 (docs/2026-10-13-audit-netlink.md): the trace contract admitted
+  a peer endpoint whose `af` and `len` present one family's bytes under the
+  other `sockaddr` layout (family-4 bytes with `af` 10 and `len` 28, or
+  family-6 bytes with `af` 2 and `len` 16), which `set_peer`
+  (netlink.c:441-446) reads by `len` and `sa_family` alone and stores as an
+  endpoint the mirror's parsed fields cannot express (the dump then
+  differs). Closed fail-closed: the validator and `Runner.parseEndpoint`
+  refuse exactly those two combinations; the ignored combinations of the W2
+  design's 3.3 rows stay admitted; `corpus/netlink-controls` holds the two
+  traces as expected rejections (`scripts/wg-netlink-controls.py`). A
+  harness admission found by reading, never by a trace: the corpus had only
+  the ignored combinations.
