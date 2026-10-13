@@ -14,19 +14,20 @@ differential check or guest run.
 | Result | Progress |
 | --- | --- |
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay and independent review checked. Seccomp frame carry checked. |
-| R2 lifetime safety | Keypair operation endpoints, peer allocation/reference helpers, packet primitives, failure-retaining peer creation/release and mixed receive-enqueue/decrypt-iteration observations, plus stale-cursor finding checked; caller/lifecycle and whole-run internal-access coverage remain in progress. |
+| R2 lifetime safety | Keypair operation endpoints, peer allocation/reference helpers, packet primitives, failure-retaining peer creation/release, mixed receive-enqueue/decrypt iteration, and keypair/packet release families, plus stale-cursor finding checked; caller/lifecycle and whole-run internal-access coverage remain in progress. |
 | R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion and original empty-root insertion proved; general mutation/history and path refinements remain open. Path proofs follow R2. |
 | R4 delivery | Not started; drop characterisation waiting on W7 full-ring tier's explanation of the two drops. |
 | R5 key lifetime | Not started; time half waiting on review items 7 and 8 on the timer model. |
 | R6 flood resistance | Not started. |
 
-**Current validation.** The full proof gate passes 159 build jobs and 83
-terminal statements (ReplayWindow 15, R1 9, R2 47, R3 12), with only permitted
+**Current validation.** The full proof gate passes 163 build jobs and 90
+terminal statements (ReplayWindow 15, R1 9, R2 54, R3 12), with only permitted
 axioms. The default model build passes 60 jobs; the unit tier passes 93 tests
-in 21.656 seconds with one skip. Both explicit-record witness replays below
+in 21.383 seconds with one skip. Both explicit-record witness replays below
 were rechecked at the seccomp carry and agree with the original runner.
 Independent reviews cover peer creation, the seccomp carry, mixed enqueue,
-decrypt execution, pure trie insertion, and original empty-root insertion.
+decrypt execution, keypair/packet releases, pure trie insertion, and original
+empty-root insertion.
 
 **Shared carry.** Signal/task and pipe helper frames, seccomp entry/tail frames
 and arbitrary prefill preservation keep the seven-field WG projection intact.
@@ -234,6 +235,29 @@ appended histories and the mixed invariant on success, permitting identity
 changes. Five terminals export packet and iteration erasure/preservation plus
 the failure equation. Concrete callbacks and whole scheduler closure remain open.
 
+**Keypair and packet releases.** `ReleaseInvariant` adds keypair and packet
+resident uniqueness to the mixed invariant. Packet uniqueness spans both TX and
+RX slots. `KeypairRelease` observes every original `keypairGet` and `keypairPut`
+access, with all-input event equations. A zero-count put reads and writes before
+its refcount error, without a release; a count of one releases after the write.
+`PacketRelease` records the successful getter before each TX/RX free. A failed
+getter records neither access nor release. Raw erase leaves require current
+residency to interpret their release labels; the complete callers establish it.
+
+`ReleaseCalls` follows the complete next→previous→current `keypairsClear` caller,
+including both peer getters and its setter in each round. Its five-constructor
+family composes acquisition, put, both packet frees and clear, retaining safe
+histories on every outcome and the invariant on successful return. Repeated
+keypair references need no distinctness premise: a later dangling lookup stops
+with its earlier events retained. Seven terminals export the finite-family
+contracts and exact helper equations. Allocation freshness, device lifecycle,
+concrete callbacks and whole-run closure remain open.
+
+[AGENT 2026-10-13] Carry release uniqueness through the existing `MixedSpec`
+identity-predicate parameter in a separate `ReleaseInv`. Getters and same-stamp
+updates need less than release, so existing enqueue/decrypt callback contracts
+retain their weaker invariant; no additional generic framing mechanism is needed.
+
 **Concrete reference finding.** An eight-operation, explicit-record accepted
 mirror run creates 28 peers, starts a stepped dump, deletes wg0, creates a new
 wg0 and 27 replacement peers, then receives a chunk. The receive returns the
@@ -277,7 +301,10 @@ compile passes, shared file frames four, failure-prefix observation nine,
 the shared kernel-frame migration three, and peer creation ten over about
 twenty-one minutes. Mixed receive enqueue took nineteen compile passes over
 about twenty-five minutes. Decrypt execution took ten compile passes over
-fourteen minutes and twenty-two seconds.
+fourteen minutes and twenty-two seconds. The release checkpoint took thirteen
+compile passes over fifteen minutes and twenty-three seconds. One full build
+failed after a proof-script simplification cleanup; explicit rewrites repaired
+it, and the next full build passed.
 Failed passes exposed proof elaboration or simplification errors. One earlier
 anonymous-hypothesis tactic loop was stopped by verified PID and repaired.
 Independent read-only reviews found no correctness defect in these components;
@@ -285,7 +312,10 @@ their scope corrections and allocation-history requirement are incorporated
 above. Coverage is checked against source calls, not inferred from erasure.
 The decrypt review corrected one wording issue: the setter's same-stamp premise
 does not establish raw-reference provenance. Its final review also checked the
-new failure equation and terminal scopes.
+new failure equation and terminal scopes. The release review checked exact source
+accesses, failing prefixes, packet epochs, the clear caller and all seven exports;
+it found no defect. Its raw erase-leaf interpretation caveat is documented above.
+A final proof-script cleanup delta was independently reread.
 
 One source-order limitation remains: C `peer.c` initializes destination cache
 and handshake before incrementing `peer_counter`; the mirror increments and

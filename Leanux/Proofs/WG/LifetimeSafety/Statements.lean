@@ -8,6 +8,7 @@ import Leanux.Proofs.WG.Peers.Access
 import Leanux.Proofs.WG.Peers.CreationAccess
 import Leanux.Proofs.WG.Lifetimes.Enqueue
 import Leanux.Proofs.WG.Lifetimes.DecryptWorker
+import Leanux.Proofs.WG.Lifetimes.ReleaseCalls
 
 /-! R2's store-identity components: whole-operation keypair evolution,
 peer allocation/reference sequences, and packet primitive sequences within a device
@@ -441,5 +442,72 @@ theorem decrypt_iteration_access_preserves (softirq irq : Lifetimes.MixedM Unit)
     PrefixPreserves Lifetimes.MixedInv Lifetimes.LifetimeEvent.Safe
       (Lifetimes.decryptIterPrefix softirq irq resched) :=
   Lifetimes.decryptIterPrefix_preserves hs hi hr
+
+/-- Finite sequences of complete keypairGet/keypairPut, freeTxSkb/freeRxSkb
+and keypairsClear calls erase to the original outcome and first Stop. The
+sequence API discards keypairGet's optional result; the helper equation below
+retains it. No arbitrary caller or scheduler coverage is claimed. -/
+theorem release_call_sequence_erasure (calls : List Lifetimes.ReleaseCall) :
+    ErasesPrefix (Lifetimes.ReleaseCall.observe calls) (Lifetimes.ReleaseCall.execute calls) :=
+  Lifetimes.ReleaseCall.observe_erases calls
+
+/-- Every outcome of this release-only family retains a safe appended mixed
+history. Successful outcomes also preserve released-identity absence and
+resident uniqueness. ReleaseInv adds keypair and cross-TX/RX uniqueness to
+MixedInv; it assumes no allocation frontier and makes no allocation or device
+lifecycle claim. -/
+theorem release_call_sequence_preserves (calls : List Lifetimes.ReleaseCall) :
+    PrefixPreserves Lifetimes.ReleaseInv Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.ReleaseCall.observe calls) :=
+  Lifetimes.ReleaseCall.observe_preserves calls
+
+/-- Keypair acquisition's exact result and observations on every input:
+null/missing has no resolved access; zero and overflow retain only the read;
+a successful increment also records the write. -/
+theorem keypair_get_access_observation (kp : Option KeypairId) (w : World)
+    (h : List Lifetimes.LifetimeEvent) :
+    runPrefix (Lifetimes.keypairGetPrefix kp) w h =
+      ((keypairGet kp).run w, h ++ Lifetimes.keypairGetEvents kp w) :=
+  Lifetimes.keypairGetPrefix_run kp w h
+
+/-- Keypair put reads and writes a resolved resident, then releases exactly
+when its original count was one. The equation includes failing executions. -/
+theorem keypair_put_access_observation (kp : Option KeypairId) (now : Bool)
+    (w : World) (h : List Lifetimes.LifetimeEvent) :
+    runPrefix (Lifetimes.keypairPutPrefix kp now) w h =
+      ((keypairPut kp now).run w, h ++ Lifetimes.keypairPutEvents kp w) :=
+  Lifetimes.keypairPutPrefix_run kp now w h
+
+/-- A zero-count keypair put fails after the read and decrementing write.
+Its retained prefix has no release; failure exposes no final World. -/
+theorem keypair_zero_refcount_failure_prefix (id : KeypairId) (now : Bool)
+    (w : World) (h : List Lifetimes.LifetimeEvent) (d : Device) (k : Keypair)
+    (hd : w.k.wg = some d) (hk : d.keypairs[id]? = some k) (hz : k.refcount = 0) :
+    runPrefix (Lifetimes.keypairPutPrefix (some id) now) w h =
+      (.error (.outsideDomain
+        s!"{Decision.refcountSubNonpositive.info.file}:{Decision.refcountSubNonpositive.info.line}"
+        "refcount_warn_saturate (use after free)"),
+        h ++ [.keypair (.read id k.internalId), .keypair (.write id k.internalId)]) :=
+  Lifetimes.keypairPutPrefix_zero_failure id now w h d k hd hk hz
+
+/-- TX free records its successful getter before the epoch-tagged release.
+An unsuccessful getter records neither access nor release. -/
+theorem free_tx_access_observation (id : SkbId) (w : World) (h : List Lifetimes.LifetimeEvent) :
+    runPrefix (Lifetimes.freeTxSkbPrefix id) w h = match (getTxSkb id).run w with
+      | .error e => (.error e, h)
+      | .ok (_, _) => ((freeTxSkb id).run w,
+          h ++ [.packet (.read (.inl id) (Lifetimes.packetStamp w id)),
+                .packet (.release (.inl id) (Lifetimes.packetStamp w id))]) :=
+  Lifetimes.freeTxSkbPrefix_run id w h
+
+/-- RX free has the same getter-before-release order and preserves the
+original failure when its packet is absent. -/
+theorem free_rx_access_observation (id : SkbId) (w : World) (h : List Lifetimes.LifetimeEvent) :
+    runPrefix (Lifetimes.freeRxSkbPrefix id) w h = match (getRxSkb id).run w with
+      | .error e => (.error e, h)
+      | .ok (_, _) => ((freeRxSkb id).run w,
+          h ++ [.packet (.read (.inr id) (Lifetimes.packetStamp w id)),
+                .packet (.release (.inr id) (Lifetimes.packetStamp w id))]) :=
+  Lifetimes.freeRxSkbPrefix_run id w h
 
 end Leanux.Proofs.WG.LifetimeSafety
