@@ -6,6 +6,7 @@ import Leanux.Proofs.WG.Queues.RxPollOrder
 import Leanux.Proofs.WG.Queues.RxPollGroOrder
 import Leanux.Proofs.WG.Queues.SelectedGro
 import Leanux.Proofs.WG.Queues.RxPollProjection
+import Leanux.Proofs.WG.Queues.RxPollProvenance
 
 /-! R4 queue components: physical-ring refusal, original prev_queue FIFO laws,
 and successful-endpoint receive-queue helper frames. Whole recorded-schedule delivery,
@@ -293,5 +294,45 @@ theorem original_poll_removal_projection (pid : PeerId) (budget : Nat) (w : Worl
       ((Logged.runPrefix (Queues.rxPollGro pid budget) w []).1,
        (Queues.removedTags (Logged.runPrefix (Queues.rxPollGro pid budget) w []).2).map Prod.snd) :=
   Queues.rxPollGro_removals_agree pid budget w
+
+/-- Every normal return of the actual packet-list stack callback retains
+the exact receive queue, epoch and peer identity of every surviving resident.
+IPv4 TCP replies may re-enter transmit and delete peers during cleanup; this
+contract permits deletion and requires no packet-validity or ownership premise. -/
+theorem original_stack_callback_retains_receive_queues (packets : List (List UInt8)) :
+    Queues.RetainsRx (packets.forM Leanux.Env.deliverInner) :=
+  Queues.stackForM_rxQueues packets
+
+/-- With the concrete stack callback, outer removals are a prefix of the
+initial resident's exact entry queue for every normal or stopped poll.
+The initial cell identifies that queue; no callback frame, live-peer or
+packet-ID-validity assumption is required from the caller. -/
+theorem original_poll_concrete_removal_prefix (pid : PeerId) (budget : Nat)
+    (w : World) (cell : Queues.RxQueueCell) (hc : Queues.rxQueues w pid = some cell) :
+    Queues.RemovalPrefix cell.queue.all
+      ((Queues.removedTags (Logged.runPrefix (Queues.rxPollGro pid budget) w []).2).map Prod.snd) :=
+  Queues.rxPollGro_entry_prefix pid budget w cell hc
+
+/-- Callback entries within one poll have distinct local ordinals, and each
+is an exact buffered completion entry whose ordinal/skb tag came from an outer
+queue removal. This includes entry into a failing callback, on arbitrary
+Worlds and Stops. It asserts neither completed delivery, allocation identity,
+chronological callback order nor uniqueness across separate polls. -/
+theorem original_poll_callback_occurrence_provenance (pid : PeerId) (budget : Nat) (w : World) :
+    let h := (Logged.runPrefix (Queues.rxPollGro pid budget) w []).2
+    ((Queues.enteredEntries h).map Queues.GroEntry.occurrence).Nodup ∧
+      ∀ e ∈ Queues.enteredEntries h,
+        e ∈ Queues.bufferedEntries h ∧ (e.occurrence, e.skb) ∈ Queues.removedTags h :=
+  Queues.rxPollGro_callback_provenance pid budget w
+
+/-- Buffered completion skb occurrences form a subsequence of the initial
+resident's exact entry queue under the actual stack callback, even if the poll
+stops. Repeated skb IDs remain possible; GRO may later select callback entries
+in another order. This is an occurrence/order statement, not no-loss delivery. -/
+theorem original_poll_buffered_entry_subsequence (pid : PeerId) (budget : Nat)
+    (w : World) (cell : Queues.RxQueueCell) (hc : Queues.rxQueues w pid = some cell) :
+    ((Queues.bufferedEntries (Logged.runPrefix (Queues.rxPollGro pid budget) w []).2).map
+      Queues.GroEntry.skb).Sublist cell.queue.all :=
+  Queues.rxPollGro_buffered_sublist pid budget w cell hc
 
 end Leanux.Proofs.WG.DeliveryOrder
