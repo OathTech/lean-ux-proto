@@ -375,3 +375,13 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   turn bound named as its own (`DOMAIN_FILTER_TURNS`, `unsupported "runner
   budget: …"`), never an `invariant`; `Timing`'s constants kept for the
   filter's prediction only.
+- **2026-10-13 [USER]** While the proof campaign runs, the mirror work is
+  fidelity improvements, audits and the census's gaps rather than new
+  targets: "let's plan to work on fidelity improvements / audit / census
+  gaps while the proof campaign is running". The audits, in the order
+  proposed and accepted: a mechanical mutation campaign against the
+  check, a scratch oracle built at a different optimisation level to
+  separate compiler-bound declarations from C semantics, correspondence
+  audits of the oldest WireGuard modules by fresh agents, and a
+  generated-trace soak with fresh seeds. New targets (the FIB trie, the
+  timer wheel, KVM) wait.
