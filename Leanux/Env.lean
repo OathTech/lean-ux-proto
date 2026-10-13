@@ -359,12 +359,12 @@ def timerWorker (t : PeerTimer) : M Worker := do
     is taken; several stay outside that prediction. A section with no due
     timer is a hidden mismatch. The timer is detached before the call
     (`expire_timers`, timer.c:1828-1829). -/
-def fireTimer (w : Worker) (jHi : Nat) : M Unit := do
+def fireTimer (w : Worker) (jHi : UInt64) : M Unit := do
   let some t := w.timer? | invariant s!"{w.symbol} is not a timer callback"
   let d ← getDev
   let due := d.peerList.filter fun pid =>
     match d.peers.get? pid >>= (·.timer t) with
-    | some e => e < jHi
+    | some e => timeBefore e jHi   -- `time_before(expires, jHi)`, the C's comparison (review item 8)
     | none => false
   -- dispatch order (docs/2026-10-11-dispatch-order.md): the timer the
   -- section names, by the address its arm record carried
@@ -401,7 +401,7 @@ def fireTimer (w : Worker) (jHi : Nat) : M Unit := do
     timer fired. Work a timer queued that has not run when the records end
     outlived the guest's wait: outside the domain. Without records (the
     domain filter) nothing fires here. -/
-def runTimers (jHi : Nat) : M Bool := do
+def runTimers (jHi : UInt64) : M Bool := do
   modify fun w => { w with queuedThisCall := [] }   -- the guest slept
   -- L: without wg0 (bare fixture, or after wg_delete) no WireGuard timer
   -- exists; a timer section in the records stays unconsumed and mismatches
@@ -438,17 +438,17 @@ def runTimers (jHi : Nat) : M Bool := do
     order), then the crypt workers, the send workers and the clear work. A
     prediction for the filter's verdict only; the check follows the
     records. -/
-def runTimersPlaceholder (jHi : Nat) : M Unit := do
+def runTimersPlaceholder (jHi : UInt64) : M Unit := do
   modify fun w => { w with queuedThisCall := [] }
   if (← getK).wg.isNone then return   -- L: no wg0, no timers [AGENT, int-dl merge]
   for _ in [0:64] do
     let d ← getDev
     let due := d.peerList.flatMap fun pid =>
       match d.peers.get? pid with
-      | some p => PeerTimer.all.filterMap fun t => (p.timer t).bind fun e => if e < jHi then some (e, pid, t) else none
+      | some p => PeerTimer.all.filterMap fun t => (p.timer t).bind fun e => if timeBefore e jHi then some (e, pid, t) else none
       | none => []
     let first := due.foldl (fun acc c => match acc with
-      | some a => if c.1 < a.1 then some c else some a
+      | some a => if timeBefore c.1 a.1 then some c else some a
       | none => some c) none
     let some (_, pid, t) := first | break
     delTimer pid t
@@ -465,7 +465,7 @@ def runTimersPlaceholder (jHi : Nat) : M Unit := do
     bound plus a wait (`Timing`). -/
 def idleTimers : M Unit := do
   let w ← get
-  discard <| runTimers (w.jiffiesLast.getD 0 + w.timing.traceBound + w.timing.advanceWait)
+  discard <| runTimers (w.jiffiesLast.getD 0 + w.timing.traceBound.toUInt64 + w.timing.advanceWait.toUInt64)
 
 /-- `wg_advance`'s ioctl: `leanux_time_advance` moves `jiffies_64` by
     `ticks` (`do_timer`), and the ioctl records kind 304 `{before, after}`
@@ -478,12 +478,14 @@ def advance (ticks : Nat) : M Int := do
   let w ← get
   let (j0, j1) ← if w.hidden.isNone && w.hiddenPlaceholders then
       let j0 := w.jiffiesLast.getD 0
-      pure (j0, j0 + ticks)
+      pure (j0, j0 + ticks.toUInt64)
     else do
       if !w.armRecords then unsupported "a time advance without arm records (the timers' expiries are unknown)"
       let bs ← hidden .timeAdvance
-      pure (WG.recordWord bs 0, WG.recordWord bs 1)
-  if j1 < j0 || j1 - j0 != ticks then
+      pure (WG.recordWord64 bs 0, WG.recordWord64 bs 1)
+  -- `jiffies_64 += ticks` on `unsigned long` (review item 8): the difference
+  -- is exact modulo 2^64, as the kernel's
+  if j1 - j0 != ticks.toUInt64 then
     throw (.hidden s!"the advance moved jiffies from {j0} to {j1}, not by {ticks}")
   modify fun w => { w with jiffiesLast := some j1 }
   return 0
@@ -494,7 +496,7 @@ def advance (ticks : Nat) : M Int := do
     then the work they queue, all in this operation's records. -/
 def afterAdvance : M Unit := do
   let w ← get
-  let jHi := w.jiffiesLast.getD 0 + w.timing.advanceWait
+  let jHi := w.jiffiesLast.getD 0 + w.timing.advanceWait.toUInt64
   if w.hidden.isNone && w.hiddenPlaceholders then runTimersPlaceholder jHi
   else discard <| runTimers jHi
 

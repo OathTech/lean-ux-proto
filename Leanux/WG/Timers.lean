@@ -25,7 +25,9 @@ def MAX_TIMER_HANDSHAKES : Nat := 90 / REKEY_TIMEOUT
 
 /-- wg_expired_retransmit_handshake (timers.c:41-77). -/
 def expiredRetransmitHandshake (pid : PeerId) : M Unit := do
-  if ← branch .retransmitGiveUp ((← getPeer pid).timerHandshakeAttempts > MAX_TIMER_HANDSHAKES) then
+  let attempts := (← getPeer pid).timerHandshakeAttempts
+  -- `timer_handshake_attempts > MAX_TIMER_HANDSHAKES`: a 4-byte compare against the constant 18
+  if ← branchCmp .retransmitGiveUp (attempts > MAX_TIMER_HANDSHAKES) attempts MAX_TIMER_HANDSHAKES then
     delTimer pid .sendKeepalive
     -- we drop all packets without a keypair and don't try again
     purgeStagedPackets pid

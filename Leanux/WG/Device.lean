@@ -187,7 +187,7 @@ def wgSetup : M Unit :=
 
 /-- wg_cookie_checker_init (cookie.c:19-26). -/
 def cookieCheckerInit : M Unit := do
-  let birthdate ← hiddenClock .cookieSecretBirthdate
+  let birthdate ← hiddenClock64 .cookieSecretBirthdate
   let secret ← hidden .cookieSecret
   modifyDev fun d => { d with cookieSecretBirthdate := birthdate, cookieSecret := secret }
 

@@ -67,8 +67,9 @@ def decryptPacket (pkt : RxPacket) : M (Option RxPacket) := do
   -- `!is_valid || wg_birthdate_has_expired(birthdate, REJECT_AFTER_TIME) ||
   -- receiving_counter.counter >= REJECT_AFTER_MESSAGES`
   let reject ← orM (branch .decKeyInvalid !k.receiving.isValid) do
-    orM (do branch .decKeyExpired (← birthdateHasExpired k.receiving.birthdate REJECT_AFTER_TIME))
-      (branch .decCounterLimit (k.receivingCounter.counter ≥ REJECT_AFTER_MESSAGES))
+    orM (branchExpired .decKeyExpired k.receiving.birthdate REJECT_AFTER_TIME)
+      (branchCmp .decCounterLimit (k.receivingCounter.counter ≥ REJECT_AFTER_MESSAGES)
+        k.receivingCounter.counter REJECT_AFTER_MESSAGES)
   if reject then
     let k ← getKeypair pkt.keypair
     setKeypair pkt.keypair { k with receiving := { k.receiving with isValid := false } }
@@ -129,8 +130,8 @@ def counterValidate (kp : KeypairId) (theirs : Nat) : M Bool := do
   let k ← getKeypair kp
   let c := k.receivingCounter
   -- `counter->counter >= REJECT_AFTER_MESSAGES + 1 || their_counter >= REJECT_AFTER_MESSAGES`
-  if ← orM (branch .ctrRejectCounter (c.counter ≥ REJECT_AFTER_MESSAGES + 1))
-      (branch .ctrRejectTheirs (theirs ≥ REJECT_AFTER_MESSAGES)) then return false
+  if ← orM (branchCmp .ctrRejectCounter (c.counter ≥ REJECT_AFTER_MESSAGES + 1) c.counter (REJECT_AFTER_MESSAGES + 1))
+      (branchCmp .ctrRejectTheirs (theirs ≥ REJECT_AFTER_MESSAGES) theirs REJECT_AFTER_MESSAGES) then return false
   let theirs := theirs + 1   -- ++their_counter
   if ← branch .ctrTooOld (COUNTER_WINDOW_SIZE + theirs < c.counter) then return false
   let words := COUNTER_BITS_TOTAL / BITS_PER_LONG
@@ -177,8 +178,7 @@ def keepKeyFreshRx (pid : PeerId) : M Unit := do
     let k ← getKeypair id
     andM (branch .rxFreshValid k.sending.isValid) do
       andM (branch .rxFreshInitiator k.iAmTheInitiator) do
-        branch .rxFreshExpired
-          (← birthdateHasExpired k.sending.birthdate (REJECT_AFTER_TIME - KEEPALIVE_TIMEOUT - REKEY_TIMEOUT))
+        branchExpired .rxFreshExpired k.sending.birthdate (REJECT_AFTER_TIME - KEEPALIVE_TIMEOUT - REKEY_TIMEOUT)
   if ← branch .rxFreshSend send then
     setPeer pid { (← getPeer pid) with sentLastminuteHandshake := true }
     sendQueuedHandshakeInitiation pid false

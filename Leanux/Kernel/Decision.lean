@@ -2426,6 +2426,35 @@ def Decision.comparison : Decision → Option Comparison
   -- noise.c:635-637 (DWARF puts the compare at 635); the condition at 639
   -- tests flood_attack
   | .consumeFlood => some ⟨.gt, false, some 635, true⟩
+  -- Review item 8 (docs/2026-10-13-review-items-7-8.md, section 4): the
+  -- age tests `wg_birthdate_has_expired(birthday, seconds)` (timers.h:25-29)
+  -- are `(s64)(birthday + seconds * NSEC_PER_SEC) <= (s64)now`, inlined
+  -- into their callers; the built code records both s64 operands at the
+  -- caller's line, never at timers.h:28 (measured on s1, `d3_zero_key`
+  -- op 3 at send.c:365: `(0xace35d722e, 0x82fa876a2e)`).
+  | .initRateLimited => some ⟨.le, false, none, false⟩
+  | .queuedNotExpired => some ⟨.le, false, none, false⟩
+  | .freshExpired => some ⟨.le, false, none, false⟩
+  | .stagedBirthdateExpired => some ⟨.le, false, none, false⟩
+  | .decKeyExpired => some ⟨.le, false, none, false⟩
+  | .rxFreshExpired => some ⟨.le, false, none, false⟩
+  | .addMacCookieFresh => some ⟨.le, false, none, false⟩
+  -- `under_load = !wg_birthdate_has_expired(last_under_load, 1)` is at
+  -- receive.c:117; the decision's line is the `if (!under_load)` at 118
+  | .hsDecayExpired => some ⟨.le, false, some 117, false⟩
+  -- the u64 counter limits (messages.h:41-42): `x >= REJECT_AFTER_MESSAGES`
+  -- is compiled as `x > R - 1` (measured: send.c:381 records
+  -- `(0xffffffffffffe03d, nonce)`), which the check's `ge` shift absorbs
+  | .stagedNonceRejected => some ⟨.ge, true, none, false⟩
+  | .decCounterLimit => some ⟨.ge, true, none, false⟩
+  | .ctrRejectCounter => some ⟨.ge, true, none, false⟩
+  | .ctrRejectTheirs => some ⟨.ge, true, none, false⟩
+  -- `timer_handshake_attempts > MAX_TIMER_HANDSHAKES` (timers.c:46): a
+  -- 4-byte compare with the constant 18 as written (measured `(0x12, 0)`)
+  | .retransmitGiveUp => some ⟨.gt, true, none, false⟩
+  -- `peer->persistent_keepalive_interval` (u16) against 0 (timers.c:214,
+  -- measured `(0, 0x19)`)
+  | .traversalKeepalive => some ⟨.ne, true, none, false⟩
   -- E-B arm C: `tokens >= PACKET_COST` (ratelimiter.c:126) and
   -- `atomic_inc_return(&total_entries) > max_entries` (ratelimiter.c:135)
   | .rlAllow => some ⟨.ge, true, none, false⟩

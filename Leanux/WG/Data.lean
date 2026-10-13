@@ -174,7 +174,7 @@ def keepKeyFresh (pid : PeerId) : M Unit := do
     andM (branch .freshValid k.sending.isValid) do
       orM (branch .freshCounter (k.sendingCounter > REKEY_AFTER_MESSAGES)) do
         andM (branch .freshInitiator k.iAmTheInitiator) do
-          branch .freshExpired (← birthdateHasExpired k.sending.birthdate REKEY_AFTER_TIME)
+          branchExpired .freshExpired k.sending.birthdate REKEY_AFTER_TIME
   if ← branch .freshSend send then sendQueuedHandshakeInitiation pid false
 
 /-- wg_packet_create_data_done (send.c:242-260) for an encrypted item. -/

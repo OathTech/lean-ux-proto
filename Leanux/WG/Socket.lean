@@ -104,7 +104,7 @@ def dstCacheReset (pid : PeerId) : M Unit := do
   -- the pre-W9 rule for captures without the records (`World.dstCacheRecords`)
   let w ← get
   if !(w.armRecords && w.dstCacheRecords) then return
-  let ts ← hiddenU64 .dstCacheResetTs
+  let ts ← hiddenJiffies .dstCacheResetTs
   let p ← getPeer pid
   setPeer pid { p with dstCache := { p.dstCache with resetTs := ts } }
 
@@ -150,9 +150,11 @@ def setPeerEndpoint (pid : PeerId) (e : Endpoint) : M Unit := do
     dstCacheReset pid
 
 /-- `dst_cache_per_cpu_get` (dst_cache.c:39-64): a hit needs a cached dst,
-    `time_after(refresh_ts, reset_ts)` and a dst the check accepts (its
-    generation is the tables'); otherwise the slot is dropped and
-    `refresh_ts = jiffies` (the recorded value) is stored: the miss. -/
+    `time_after(refresh_ts, reset_ts)` (the C's macro, `timeAfter`: a
+    refresh in the same jiffy as the reset is a miss, review item 8) and a
+    dst the check accepts (its generation is the tables'); otherwise the
+    slot is dropped and `refresh_ts = jiffies` (the recorded value) is
+    stored: the miss. -/
 def dstCacheGet (pid : PeerId) (gen : Nat) : M (Option DstSlot) := do
   -- the pre-W9 rule for captures without the records: every access misses
   let w ← get
@@ -160,8 +162,8 @@ def dstCacheGet (pid : PeerId) (gen : Nat) : M (Option DstSlot) := do
   let p ← getPeer pid
   let c := p.dstCache
   if let some s := c.slot then
-    if c.refreshTs > c.resetTs && s.gen == gen then return some s
-  let ts ← hiddenU64 .dstCacheRefreshTs
+    if timeAfter c.refreshTs c.resetTs && s.gen == gen then return some s
+  let ts ← hiddenJiffies .dstCacheRefreshTs
   setPeer pid { p with dstCache := { c with slot := none, refreshTs := ts } }
   return none
 

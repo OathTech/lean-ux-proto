@@ -1481,9 +1481,9 @@ structure World where
       worker cannot have run yet. -/
   queuedThisCall : List Nat := []
   /-- D3, fixture knowledge (docs/2026-10-05-d3-timers.md, section 5.4): the
-      last `jiffies` a record told (kinds 303 and 304), 64-bit, never
-      truncated; `none` before the first. -/
-  jiffiesLast : Option Nat := none
+      last `jiffies` a record told (kinds 303 and 304), the C's `unsigned
+      long` (64-bit on x86_64, review item 8); `none` before the first. -/
+  jiffiesLast : Option UInt64 := none
   /-- D3: whether this run's records include the kind-303 arm records (the
       wire's `A` line, `harness/linux.py` `ARM_RECORDS`; the check passes
       the same value as the input's `arm_records`). Without them the mirror
@@ -1555,7 +1555,7 @@ structure World where
       (docs/2026-10-05-e-dos.md §4.2), so a leak between traces is a
       control-flow mismatch. A flood's invalid tail sets it to that tail's
       last under-load read (`floodTailEffect`). -/
-  lastUnderLoad : Option Int := none
+  lastUnderLoad : Option Int64 := none
 
 /-- Why a mirror execution stopped without an observation. -/
 inductive Stop where
@@ -1738,6 +1738,19 @@ def branchCmpExcluded (d : Decision) (outcome : Bool) (x : OperandExclusion) : M
   modify fun w => { w with steps := w.steps.push { decision := d, outcome, excluded := some x, netRx := w.netRxSection } }
   return outcome
 
+/-- The kernel's `jiffies` comparisons (include/linux/jiffies.h:127-150,
+    review item 8): `time_after(a, b)` is `(long)((b) - (a)) < 0` on
+    `unsigned long`, a signed 64-bit difference, so a wrapped `jiffies`
+    compares as the C compares it. These are the C's macros, not
+    approximations of them. -/
+def timeAfter (a b : UInt64) : Bool := (b - a).toInt64 < 0
+/-- `time_before(a, b)` is `time_after(b, a)` (jiffies.h:138). -/
+def timeBefore (a b : UInt64) : Bool := timeAfter b a
+/-- `time_after_eq(a, b)` is `(long)((a) - (b)) >= 0` (jiffies.h:147-150). -/
+def timeAfterEq (a b : UInt64) : Bool := (a - b).toInt64 ≥ 0
+/-- `time_before_eq(a, b)` is `time_after_eq(b, a)` (jiffies.h:151). -/
+def timeBeforeEq (a b : UInt64) : Bool := timeAfterEq b a
+
 /-- Ask the environment oracle; the site's call count is part of the query. -/
 def envOk (site : EnvSite) : M Bool := do
   let w ← get
@@ -1900,6 +1913,23 @@ def hiddenClock (s : HiddenSite) : M Int := do
   let bs ← hidden s
   let u : Nat := bs.foldr (fun b acc => acc * 256 + b.toNat) 0
   return if u ≥ 2 ^ 63 then (u : Int) - (2 ^ 64 : Int) else (u : Int)
+
+/-- A recorded clock read as the C's `s64` (review item 8,
+    docs/2026-10-13-review-items-7-8.md section 4): the 8 bytes as a
+    little-endian 64-bit word, reinterpreted signed. The age tests
+    (`wg_birthdate_has_expired`, timers.h:25-29) compute and compare in this
+    type, wrapping as the C's `s64` does. -/
+def hiddenClock64 (s : HiddenSite) : M Int64 := do
+  let bs ← hidden s
+  let u : Nat := bs.foldr (fun b acc => acc * 256 + b.toNat) 0
+  return u.toUInt64.toInt64
+
+/-- A recorded `jiffies` (kinds 303, 304, 306) as the C's `unsigned long`:
+    an 8-byte little-endian word, 64 bits on x86_64 (review item 8). -/
+def hiddenJiffies (s : HiddenSite) : M UInt64 := do
+  let bs ← hidden s
+  let u : Nat := bs.foldr (fun b acc => acc * 256 + b.toNat) 0
+  return u.toUInt64
 
 /-- A recorded `struct timespec64` (16 bytes: `tv_sec`, then `tv_nsec`,
     little-endian signed 64-bit words). -/
@@ -2066,7 +2096,7 @@ def discardFloodRecords (stop : Nat) (allowed : List Nat) : M Nat := do
     other record is a hidden mismatch (a mid-flood injection, or a decay read
     with no saved time). Returns the new value and whether an under-load read
     occurred (the flood crossed the threshold). -/
-def floodTailEffect (stop : Nat) (cuts : List Nat) (last : Option Int) : M (Option Int × Bool) := do
+def floodTailEffect (stop : Nat) (cuts : List Nat) (last : Option Int64) : M (Option Int64 × Bool) := do
   let underLoad := (HiddenSite.underLoadNow).info.id
   let decay := (HiddenSite.birthdateExpired).info.id
   let resched := (HiddenSite.reschedReceive).info.id
@@ -2077,13 +2107,13 @@ def floodTailEffect (stop : Nat) (cuts : List Nat) (last : Option Int) : M (Opti
     | some s =>
       if s == stop then return (last, crossed)
       if s == underLoad then
-        last := some (← hiddenClock .underLoadNow)
+        last := some (← hiddenClock64 .underLoadNow)
         crossed := true
       else if s == decay then
         let some saved := last
           | throw (.hidden "flood: a decay clock read with no saved under-load time (a mid-flood injection)")
-        let now ← hiddenClock .birthdateExpired
-        if saved + 1000000000 ≤ now then last := none   -- wg_birthdate_has_expired(last_under_load, 1)
+        let now ← hiddenClock64 .birthdateExpired
+        if saved + 1000000000 ≤ now then last := none   -- wg_birthdate_has_expired(last_under_load, 1), in s64
       else if s == resched || cuts.contains s then
         _ ← dropHiddenRecord
       else
