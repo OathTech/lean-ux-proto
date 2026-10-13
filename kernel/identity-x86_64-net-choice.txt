@@ -110,6 +110,11 @@
 # [USER 2026-10-13: "Agree, sounds good - approved"; docs/2026-10-12-seccomp-design.md section 16],
 # both record hooks line-preserving (patch sha256 e8e221374338778204609be01435b1e0478e627abcddb9fdd9518e5ce484cc29): the identity and
 # vmlinux lines below are that build's [AGENT 2026-10-13, stream X, phase 2b].
-f098cf9ef0eb70904dfc9102c21a305686a4f988ea9d6b00f5014f945d1b032a
+# Built 2026-10-13 as .artifacts/kernel-net-choice-s2: the s1 configuration (CONFIG_SECCOMP=y, unchanged)
+# with the kind-310 end-of-wait jiffies record (KCOV_LEANUX_JIFFIES, kernel/kcov.c only; review item 7,
+# docs/2026-10-13-review-items-7-8.md section 5), record-only under the approved class; patch sha256
+# 15f67b482fe446d0ed5bcdba075fa5f382677f3c6dafa448dc7dc306f8cc2bf9. The identity and vmlinux lines below
+# are that build's [AGENT 2026-10-13, review item 7].
+cea1e9a3a5e2a55782008594d9ff5e9bc7bcfe5348258ac92bf07f87e1875295
 # vmlinux sha256 of the build the evidence used (path-dependent):
-17b112ed4fc9313d1a39a938a29b5caa38db7ac4337dc5f73777fee429f4fd33
+c711e27d74504184f317bec4414a0f1fa1472821635855954f64763c384aeff0
