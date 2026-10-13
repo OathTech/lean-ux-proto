@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.Lifetimes.SocketCalls
 import Leanux.Proofs.WG.Lifetimes.EncryptWorker
+import Leanux.Proofs.WG.Lifetimes.TxWorker
 import Leanux.Proofs.WG.Lifetimes.ReceivePoll
 import Leanux.Proofs.WG.Lifetimes.ReceiveFailure
 import Leanux.Proofs.WG.Lifetimes.TxStagingCalls
@@ -1225,5 +1226,59 @@ theorem encrypt_iteration_allocation_access_preserves (softirq : Lifetimes.Mixed
     PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe
       (Lifetimes.encryptIterPrefix (fun p => liftPrefix (Leanux.Env.checksumHelp p)) softirq needResched) :=
   Lifetimes.encryptIterPrefix_allocation hs hr
+
+/-- Five complete TX completion helpers and the complete worker step erase
+to their originals on every World and history, with no validity premise. -/
+theorem tx_family_access_erasure (call : Lifetimes.TxCall) :
+    ErasesPrefix call.observed call.original := call.erases
+
+/-- Explicit ambient, TX and socket contracts compose resolved access safety
+through the complete TX family, including failed prefixes and cleanup. -/
+theorem tx_family_ambient_access_preserves (c : Lifetimes.AmbientContracts I)
+    (t : Lifetimes.TxContracts I) (sc : Lifetimes.SocketContracts I) (call : Lifetimes.TxCall) :
+    PrefixPreserves I Lifetimes.LifetimeEvent.Safe call.observed :=
+  call.preserves_ambient c t sc
+
+/-- Concrete allocation contracts discharge all TX-family leaves. Duplicate
+packet IDs and saved-head references gain no ownership or identity premise. -/
+theorem tx_family_allocation_access_preserves (call : Lifetimes.TxCall) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed := call.allocation
+
+/-- The original TX iteration retains ended/yielded/continued results and
+invokes rescheduling only after a true, completely cleaned-up worker step. -/
+theorem tx_iteration_access_erasure (pid : PeerId)
+    (needResched : Lifetimes.MixedM Bool) (originalResched : M Bool)
+    (hr : ErasesPrefix needResched originalResched) :
+    ErasesPrefix (Lifetimes.txIterPrefix pid needResched) (txIter pid originalResched) :=
+  Lifetimes.txIterPrefix_erases pid hr
+
+/-- The explicit rescheduling observer may change identities while preserving
+the ambient invariant; saved-reference association is not asserted. -/
+theorem tx_iteration_ambient_access_preserves (c : Lifetimes.AmbientContracts I)
+    (t : Lifetimes.TxContracts I) (sc : Lifetimes.SocketContracts I) (pid : PeerId)
+    (needResched : Lifetimes.MixedM Bool)
+    (hr : PrefixPreserves I Lifetimes.LifetimeEvent.Safe needResched) :
+    PrefixPreserves I Lifetimes.LifetimeEvent.Safe (Lifetimes.txIterPrefix pid needResched) :=
+  Lifetimes.txIterPrefix_preserves_ambient c t sc pid hr
+
+/-- Complete TX-iteration safety at AllocationInv, with failure history
+retained. The actual outer rescheduling caller remains a separate obligation. -/
+theorem tx_iteration_allocation_access_preserves (pid : PeerId)
+    (needResched : Lifetimes.MixedM Bool)
+    (hr : PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe needResched) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.txIterPrefix pid needResched) := Lifetimes.txIterPrefix_allocation pid hr
+
+/-- An original jitter Stop retains the preceding peer read and occurs before
+the timer guard. These are original-run premises, not a desired-prefix premise
+or an accepted-run witness. -/
+theorem tx_timer_jitter_failure (pid : PeerId) (w entered : World)
+    (p : Peer) (h : List Lifetimes.LifetimeEvent) (e : Stop)
+    (hp : (getPeer pid).run w = .ok (p, w))
+    (hb : (branch .timersDataSentNotPending !(p.timerPending .newHandshake)).run w = .ok (true, entered))
+    (hj : (jitterBelowRekeyTimeout .newHandshakeJitter).run entered = .error e) :
+    runPrefix (Lifetimes.timersDataSentPrefix pid) w h =
+      (.error e, h ++ [.peer (.read pid p.internalId)]) :=
+  Lifetimes.timersDataSentPrefix_jitter_failure pid w entered p h e hp hb hj
 
 end Leanux.Proofs.WG.LifetimeSafety

@@ -6,28 +6,29 @@ Worktree `.worktrees/proofs-campaign`, branch `proofs/campaign`. The
 [charter](2026-10-13-charter-proof-campaign.md) defines the campaign. Both named
 prerequisites were carried over `2c7a076`; the audit wave at `f45bde8` is now
 carried, followed by the documentation-only `a39aded` review/tray update. The
-mirror exactly matches main. Every result row is current over `a39aded`;
-component rows retain their explicit open obligations. R5 and R6 are resolved
+mirror exactly matches main. The proof tree is current over `a39aded`, including
+the R2 TX extension below.
+Component rows retain their explicit open obligations. R5 and R6 are resolved
 through their proved local contracts and checked Rule Zero counterexamples.
 No integration into main, push, differential check or guest run.
 
 | Result | Progress |
 | --- | --- |
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay and independent review checked. Seccomp frame carry checked. |
-| R2 lifetime safety | Store identities, failure-retaining allocation/release and caller composition cover session/rotation, peer creation, receive entry/maintenance/completion, receive polling with the actual stack callback, transmit entry, TX staging, decrypt and encrypt iteration with explicit scheduler callbacks, and eleven socket/cache/loopback calls, including staged IPv4 send; stale-cursor finding checked. Remaining callers, lifecycle and whole-run internal-access coverage remain in progress. |
+| R2 lifetime safety | Store identities, failure-retaining allocation/release and caller composition cover session/rotation, peer creation, receive entry/maintenance/completion, receive polling with the actual stack callback, transmit entry, TX staging and completion, decrypt, encrypt and TX iteration with explicit scheduler callbacks, and eleven socket/cache/loopback calls, including staged IPv4 send; stale-cursor finding checked. Remaining callers, lifecycle and whole-run internal-access coverage remain in progress. |
 | R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion, original empty-root, arbitrary-depth empty-child and exact-prefix insertion with sequence wrappers, and total original placement proved. Selected-root graft normal endpoints and rollback effects are checked; successful graft representation and actual-root lookup pass the coordinated gate. Deeper grafts, removal, general mutation/history and path refinements remain open. Path proofs follow R2. |
 | R4 delivery | Accepted original replay over f45bde8 refutes chronological post-GRO stack order: a held ACK followed by a distinct-flow SYN produces the SYN's RST first under the same key lifetime. Exact current poll erasure and removal-prefix order with an explicit callback queue contract pass the gate, as does the original-helper reorder equation. The former chronological callback theorem is retired, with its predicate unchanged. Per-poll selected callback order and exact callback-entry multiplicity pass the coordinated gate and independent review. Buffered-tag provenance and exact removal-observer agreement pass the coordinated gate and independent review. Concrete callback queue framing and pipeline conservation remain open. |
 | R5 key lifetime | Resolved through Rule Zero counterexamples, with 13 positive local contracts. Original/observed replays show nonce R+1 authenticating before rejection, queued transport keepalive encryption after recorded expiry, and packet-held material used after zero/clear before a new handshake. The new time inputs have coherent coarse/jiffies/arm arithmetic; Linux schedule reachability is not claimed. Validated over a39aded. |
 | R6 flood resistance | Original under-load cookie exclusion and full Noise-state frame proved; a generated accepted episode refutes the literal retry limit (19 retries, 20 total initiations with MAX=18). Six terminal theorems, the combined gate, fresh kernel replay and exact witness rerun pass. |
 
 **Last validated mirror: `a39aded` (source unchanged from `f45bde8`).** The
-full proof gate passes 262 build jobs and 230 terminal statements (ReplayWindow
-15, R1 9, R2 126, R3 30, R4 31, R5 13, R6 6), with only permitted axioms.
+full proof gate passes 264 build jobs and 237 terminal statements (ReplayWindow
+15, R1 9, R2 133, R3 30, R4 31, R5 13, R6 6), with only permitted axioms.
 Stock `leanchecker --fresh Leanux.Proofs` passes. The default model build passes
-60 jobs; the unit tier passes 94 tests in 21.645 seconds with one skip.
+60 jobs; the unit tier passes 94 tests in 22.551 seconds with one skip.
 The unchanged replay witnesses were not repeated for the trie, IPv4 socket,
-selected-GRO, encrypt-worker and tag/projection extensions; the observers those witnesses use
-are unchanged.
+selected-GRO, encrypt-worker, tag/projection and TX extensions; the observers
+those witnesses use are unchanged.
 The retry, delayed-encryption and coherent post-clear witnesses passed the
 preceding checkpoint with exact original/observed JSON and strengthened syscall
 endpoint checks; all nine cases passed the earlier audit carry.
@@ -47,7 +48,8 @@ R5 replays with the timer-pass observer, the whole-advance factor, both
 R6 cookie-rejection cases with actual rotating-cookie witnesses, and the
 per-poll selected-GRO order and callback-entry conservation contracts, and
 complete encryption-worker access observers and their shared frames, and
-local poll-tag provenance and exact removal-observer projection.
+local poll-tag provenance and exact removal-observer projection, and the complete
+TX completion/worker family with its accumulating-fold erasure and jitter frame.
 The final source and contract reviews have no unresolved correctness findings;
 their frozen file hashes matched before the checkpoints.
 
@@ -176,6 +178,10 @@ the saved stamp and proving it remains resident; do not insert a new getter.
 Factor IPv4 send into explicit source and observer tail stages to share
 continuations without expanding the whole branch tree during each proof;
 retain the entry route through every stage.
+Use the existing ambient, TX and socket contracts for TX completion and worker
+accesses, with rescheduling explicit. Prove jitter's full-Kernel frame once and
+derive the legacy snapshot statement by projection, sharing its generated
+source matcher instead of duplicating the loop proof.
 
 **Checked model and refinement.** `Lifetimes/Store` and `Actions` describe
 slot/stamp transitions over original executions. `Keypairs/Identity` uses the
@@ -259,6 +265,37 @@ remain open. The coordinated gate passes 259 jobs and 227 terminal statements;
 fresh kernel replay and independent frozen-source review pass. The review's
 documentation status finding is corrected in the progress and register update.
 
+**TX completion and worker.** `TxCompletion` observes complete
+`sendSkbToPeer`, `timersDataSent`, `timersAnyAuthenticatedPacketSent`,
+`keepKeyFresh` and `createDataDone`; `TxWorker` adds the complete original
+`txStep` and `txIter`. The six-call family and iteration have exact erasure,
+ambient and concrete allocation contracts. Seven new terminal statements also
+include the exact pending-timer peer read retained when the original jitter
+call Stops. That conditional whole-call equation is not an accepted-run witness.
+Both socket families use their complete observers, including loopback's
+saved-peer scan. Negative socket returns remain ordinary Boolean send failures;
+actual Stops retain their preceding accesses and skip later cleanup. The
+pending-timer read precedes jitter, which precedes the unconditional timer-guard
+read. Key freshness keeps the original short-circuit tests and queued handshake
+call. TX polling preserves the peeked-queue write on empty/uncrypted exits,
+both head reads, both drop-site peer reads, dead-head cleanup, every packet
+free, and keypair/peer puts. Rescheduling runs only after a true completed step.
+Duplicate IDs and malformed queues retain their original behavior without
+ownership, homogeneous-batch or saved-head identity premises. The concrete
+allocation instance discharges helper leaves; only the iteration's explicit
+rescheduling callback remains a caller contract. `Framing/WGTime` supplies
+the full-Kernel jitter frame; the old snapshot theorem keeps its statement and
+projects this frame to avoid duplicate generated matcher declarations.
+`PrefixLoops` adds exact accumulating-fold erasure, used for the packet-free
+loop. The targeted `lake build Leanux.Proofs.WG.LifetimeSafety.Statements`
+passes 199 jobs and covers all 133 R2 terminals. The coordinated proof gate,
+fresh kernel replay, model build and unit tier pass at the counts above.
+Independent frozen-source review found no correctness defect. The extension
+took six capped invocations over 21m03s: one passed and five ordinary proof
+failures were corrected, including broad-reduction heartbeat failures, bind
+reassociation and the cleanup loop's accumulating-fold form. No interruption
+or cap failure occurred.
+
 Generic record-consumer frames live once in
 `Framing/KernelEffects`, with older interfaces derived by projection.
 Shared bind and finite-loop laws compose these per-call contracts. Generic enqueue/decrypt
@@ -297,7 +334,7 @@ getter-conditioned failure, not an accepted-trace finding. Safe access prefixes
 do not establish delivery, order or reference ownership.
 
 **Remaining claim.** Full caller, device-lifecycle and scheduler closure remain
-unproved. TX workers, concrete encrypt-worker scheduler callbacks,
+unproved. Concrete encrypt/TX-worker scheduler callbacks,
 socket setup/reinitialization, handshake
 execution and timer callbacks, peer removal, netlink and direct resident scans
 need coverage. Saved scalar-reference

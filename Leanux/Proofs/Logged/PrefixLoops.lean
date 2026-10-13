@@ -58,6 +58,15 @@ theorem erasesPrefix_mapM (xs : List α) (g : α → PrefixM Event β) (a : α �
     simp only [List.mapM_cons]
     exact erasesPrefix_bind (ha x) (fun y => erasesPrefix_bind ih (fun ys => erasesPrefix_pure (y :: ys)))
 
+/-- Accumulating list folds preserve the exact original outcome and World. -/
+theorem erasesPrefix_foldlM (xs : List α) (b : β)
+    (g : β → α → PrefixM Event β) (a : β → α → M β)
+    (ha : ∀ b x, ErasesPrefix (g b x) (a b x)) :
+    ErasesPrefix (xs.foldlM g b) (xs.foldlM a b) := by
+  induction xs generalizing b with
+  | nil => exact erasesPrefix_pure b
+  | cons x xs ih => exact erasesPrefix_bind (ha b x) (fun b' => ih b')
+
 theorem PrefixPreserves.mapM (xs : List α) (g : α → PrefixM Event β)
     (hs : ∀ h w, I h w → S h) (hg : ∀ x, PrefixPreserves I S (g x)) :
     PrefixPreserves I S (xs.mapM g) := by

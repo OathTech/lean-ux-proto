@@ -1,7 +1,7 @@
 import Leanux.Proofs.Framing.KernelEffects
-import Leanux.WG.Peer
+import Leanux.WG.Handshake
 
-/-! Original recorded age tests preserve the complete kernel. -/
+/-! Original recorded age tests and timer jitter preserve the complete kernel. -/
 namespace Leanux.Proofs.Framing
 open Leanux Leanux.WG Std.Do
 
@@ -25,5 +25,17 @@ theorem branchExpired_sameKernel (d : Decision) (birthday : Int64) (seconds : Na
   intro k
   have hs := sameKernel_wp _ (birthdateTest_sameKernel birthday seconds) (fun k' => k' = k)
   mvcgen [branchExpired, hs, branchCmp]
+
+theorem jitterBelowRekeyTimeout_sameKernel (site : HiddenSite) :
+    SameKernel (jitterBelowRekeyTimeout site) := by
+  apply sameKernel_of_wp
+  intro k
+  have hh := sameKernel_wp _ (hidden_sameKernel site) (fun k' => k' = k)
+  have hb := sameKernel_wp _ recordBudget_sameKernel (fun k' => k' = k)
+  have he := sameKernel_wp _ (budgetExhausted_sameKernel (α := Nat) "jitter draws") (fun k' => k' = k)
+  mvcgen [jitterBelowRekeyTimeout, hh, hb, he]
+  all_goals try exact ((⇓? _ w => ⌜w.k = k⌝) : PostCond _ (.arg World (.except Stop .pure)))
+  all_goals try dsimp +zetaDelta only at *
+  all_goals simp_all
 
 end Leanux.Proofs.Framing

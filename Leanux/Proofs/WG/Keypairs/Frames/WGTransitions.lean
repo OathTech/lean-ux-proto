@@ -62,8 +62,8 @@ theorem ipTunnelGetDsfield_spec (P : Snapshot → Prop) (protocol : Nat) (hdr : 
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.ipTunnelGetDsfield protocol hdr
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (ipTunnelGetDsfield_sameSnapshot protocol hdr).wp P
 
-theorem jitterBelowRekeyTimeout_sameSnapshot (site : HiddenSite) : SameSnapshot (Leanux.WG.jitterBelowRekeyTimeout site) := by
-  frame_same [Leanux.WG.jitterBelowRekeyTimeout] using [hidden_snapshot_spec, recordBudget_spec, budgetExhausted_spec]
+theorem jitterBelowRekeyTimeout_sameSnapshot (site : HiddenSite) : SameSnapshot (Leanux.WG.jitterBelowRekeyTimeout site) :=
+  sameSnapshot_of_sameWGKernel (Framing.sameWGKernel_of_sameKernel (Framing.jitterBelowRekeyTimeout_sameKernel site))
 
 theorem jitterBelowRekeyTimeout_spec (P : Snapshot → Prop) (site : HiddenSite) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.jitterBelowRekeyTimeout site
