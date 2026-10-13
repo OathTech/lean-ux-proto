@@ -53,7 +53,7 @@ kind-110. The encrypt worker consumed and encrypted 1024 items but only
 **1022** reached the tx-worker queue; the 2 missing are the drops, matching
 the 1022 data messages op5 contributed to `tx_bytes`.
 
-## Why two, not one
+## Why two, not one [corrected at implementation, AGENT 2026-10-13]
 
 The 17.16 counterexample is a **produce-all-then-consume** account: op4's one
 item leaves slot 0 occupied but uncleared (one consume, `consumer_head` 1,
@@ -61,30 +61,40 @@ item leaves slot 0 occupied but uncleared (one consume, `consumer_head` 1,
 the 1024th wraps onto the still-occupied slot 0 and takes `-EPIPE` — exactly
 one drop, 1023 in the ring.
 
-The records refute produce-all-then-consume: the encrypt worker runs
-**interleaved** with the producer (1024 consume sections and 14 reschedules
-fall among op5's produces, not after them). With interleaving, the producer
-wrapping past slot 0 also meets slots the consumer has advanced over but whose
-batch of 16 has **not yet been zeroed** — the deferred-clear window of up to
-`batch`-1 slots. For this trace and this recorded schedule the collision count
-is two: op4's carried slot plus one slot inside the consumer's unflushed batch
-at the instant the producer wraps. The count is therefore **a deterministic
-function of (the prior batch's uncleared residue) + (the produce/consume
-interleave) + (the batch-clear rule)**, not a constant; "two" is what this
-schedule yields, and a different interleave would yield a different count.
+The reconnaissance above read the 1024 kind-300 sections as encrypt-worker
+consumes interleaved with the produces. The sequence numbers refute that
+reading: every record carries the kernel's global sequence number
+(`kcov_choice_seq`, `kernel/patches/gen-choice-stream.py`), and at op 5 the
+task stream's 1024 clock reads and 2 queue records are sequence 76 to 1101
+while the first remote record is 1102. **Nothing of the kworkers ran between
+two produces.** The 1024 sections are one `wg_packet_encrypt_worker` section
+(with 5 of the 14 reschedules), one `wg_packet_tx_worker` section, and 1022
+`net_rx_action` sections, the loopback delivery of each datagram the tx worker
+sent, nested in its section (the three function addresses in the kind-300
+payloads resolve so in `vmlinux`). The second queue record falls after the
+1023rd clock read and before the 1024th: the `-EPIPE` arm's
+`wg_queue_enqueue_per_peer_tx` queued the tx work at item 1023, and item 1024's
+queue was the no-op of a pending work. Items 1023 **and** 1024 failed.
+
+The account produce-all-then-consume is right; what it missed is the slot the
+**session's keepalive** took. The response to the initiation (op 3) completes
+the session and sends the staged keepalive through the same ring
+(`wg_packet_send_keepalive` → `wg_packet_send_staged_packets` →
+`wg_packet_create_data`): slot 0, consumed by the encrypt worker, uncleared
+(`consumer_head` 1, `consumer_tail` 0). Op 4's item takes slot 1, consumed,
+uncleared (head 2, tail 0, two below `batch`). Op 5's items 1..1022 take slots
+2..1023; item 1023 wraps onto slot 0, occupied, `-EPIPE`; and because a failed
+`__ptr_ring_produce` leaves `r->producer` where it is (:104-116), item 1024
+meets the same slot and fails too. **Drops = items − (1024 − the uncleared
+slots carried into the batch)**, a function of the ring's state at the batch,
+not of any interleave; for this trace, 1024 − 1022 = 2.
 
 ## No new kernel instrument is needed
 
-The producer's steps are deterministic in trace order (the mirror produces
-in order). The only hidden fact is **when each encrypt-worker consume happens
-relative to the produces**, and that is already carried by the existing remote
-section records (kind-300 starts with the worker's unit word, 301 ends, 302
-reschedules, 303 arms) that the scheduler loop replays. So the mirror can
-reproduce both drops from records it already consumes; the tier adds no record
-kind and no kernel patch. (The one sub-fact the implementer must still pin from
-the existing coverage stream is the exact produce-vs-consume ordering within
-op5's BH region — the PC order in `coverage.jsonl` settles it; it is an
-implementation detail of the tier, not a missing instrument.)
+The producer's steps are deterministic in trace order, the kworkers run after
+`io_uring_enter` returns, and the carried slots are the ring's own state, which
+the mirror holds exactly (`Leanux/WG/PtrRing.lean`). The tier adds no record
+kind and no kernel patch; the oracle stays s1.
 
 ## What the mirror must represent
 
@@ -100,53 +110,68 @@ each produce matches Linux and the `-EPIPE` decision
 `send.c:322-323`) fires the correct number of times. No new decision, no new
 ring semantics.
 
-## The mirror's current divergence
+## The mirror's divergence: none [measured at implementation, AGENT 2026-10-13]
 
-Per 17.16 the mirror's account of this trace yields **one** `-EPIPE`
-(1023 in the ring), because its staged-send path does not interleave the
-encrypt-worker consume at the recorded granularity. Confirming the live count
-needs the trace inside a suite: the Linux-only probe
-(`scripts/wg-w7-tier-probe.py`) runs it today, but `evaluator.check --trace`
-rejects a trace that is in no suite (`ValueError: no trace '...' in the
-selected suites`). The tier's first step is therefore to register a
-`w7-tier` suite so the mirror replays the recorded schedule; the expected
-pre-fix result at op 5 is a control-flow/`-EPIPE`-count mismatch, and the
-post-fix result agreement.
+The reconnaissance expected the mirror to yield one `-EPIPE`; it had not run
+the mirror. With the trace registered in a suite (`w7-tier`,
+`evaluator/check.py`), the mirror as landed on main (the ring of
+`Leanux/WG/PtrRing.lean`, the staged-send path, the scheduler loop)
+reproduces both drops without any change: the keepalive's and op 4's slots
+are carried exactly as the C carries them, `enqueuePerDeviceAndPeer` leaves
+the producer in place on `-EPIPE`, and the kworkers run after the batch as
+the records order them. Two things stood between the trace and the check,
+both budgets: the mirror's branch report of the 1024-item batch is 126,531
+labels against `MAX_BRANCHES` 32768 (`evaluator/protocol.py`, now 2^18), and
+the session's 5 s persistent keepalive fired during the comparison child's
+console drain after the batch (2.4 MB at about 0.5 MB/s), opening four
+sections after the readout (the timer, the encrypt and tx workers, NET_RX:
+"dispatch sections opened but not recorded", 1038 against 1034, in the
+reconnaissance probe's own `sections.jsonl` too); the tier's sessions use
+the 25 s keepalive.
 
 ## The tier
 
-A `w7-tier` suite and `tier()` traces in the corpus script, outside the
-default suites (the per-trace cost is large; each bulk child is a separate
-chunk):
+The `w7-tier` suite (`evaluator/check.py`, `TIER_SUITES`, run on request and
+outside the default list; each trace is a bulk chunk by itself) and
+`tier()` in `scripts/wg-w47-corpus.py`, five traces on the s1 oracle, each
+with the ring-full and `-EPIPE` outcomes in its expectations. Drops = items
+− (1024 − the uncleared slots carried into the batch):
 
-| Trace | Shape | Checks |
-| --- | --- | --- |
-| `w7_ring_wrap` | op4 one item, op5 1024 (exists) | the two-drop interleave; 1023 sent |
-| `w7_ring_1023` | op5 1023 after the one-item op4 | the boundary that still fits (one carried slot, no extra drop): 1023 sent, zero dropped on the wrap |
-| `w7_ring_1025` | op5 1025 | drops grow with the overflow; the count the interleave yields |
-| `w7_ring_fresh_1024` | 1024 with **no** prior op4 item | the ring with no carried residue: tests whether the interleave alone drops any |
-| `w7_ring_consumer_ahead` | op5 1024 with a `wait` that lets the encrypt worker drain before the producer wraps | the batch-clear catches up; fewer or zero drops |
+| Trace | Shape | Carried | Linux and the mirror |
+| --- | --- | --- | --- |
+| `w7_ring_wrap` | op4 one item, op5 1024 | 2 (the keepalive's slot 0, op4's slot 1) | 1022 sent; items 1023 and 1024 `-EPIPE` at slot 0 |
+| `w7_ring_1023` | op4 one item, op5 1023 | 2 | 1022 sent; item 1023 `-EPIPE` |
+| `w7_ring_1025` | op4 one item, op5 1025 | 2 | 1022 sent; items 1023 and 1024 `-EPIPE`; item 1025 `-ENOSPC` from `wg_prev_queue_enqueue` (the peer's `tx_queue` at `MAX_QUEUED_PACKETS`, 1024, holding the 1022 crypted and 2 dead items), freed by `wg_packet_create_data`'s error path |
+| `w7_ring_fresh_1024` | no op4, op5 1024 | 1 (the keepalive's) | 1023 sent; item 1024 `-EPIPE` |
+| `w7_ring_batch_clear` | op4 15 items, op5 1024 | 0 (16 consumed: the batch rule clears slots 0..15 at the 16th) | all 1024 sent |
 
-Decisions and operands: `createDataEpipe` (`send.c:322`) fires per drop;
-the `-EPIPE` operand is the ring-full test's occupancy, already an
-`A3` comparison through `PtrRing.full`. Hidden inputs: none new; the dst
-clock (kind-208), the workqueue arms (307/303) and the section schedule
-(300/301/302) are the existing instruments. Harness budget: the dedup'd rows
-are 3.3 MB for the two children at the wrap (P-A), inside the 16 MiB limit at
-one bulk trace per chunk; `wait_ms` 1000 is the default; each new bulk trace
-is its own chunk. The `consumer_ahead` and `1025` traces must be re-measured
-with the probe for their row volume before they join (P-A is per-trace).
+All five agree (`.artifacts/check/tier-*-1`, 12,317 to 12,497 operand pairs
+each). Decisions: `createDataEpipe` (`send.c:322`) per `-EPIPE`,
+`enqueueRingFull` (`queueing.h:174`) per produce, `enqueuePeerQueueFull`
+(`queueing.h:167`) at the 1025th. Hidden inputs: none new; the dst clock
+(kind-208), the queue records (307), the arms (303) and the section schedule
+(300/301/302) are the existing instruments. Harness budget: at one bulk
+trace per chunk every trace stays inside the 16 MiB output limit;
+`wait_ms` 1000 for the big batch, 200 for the first. The `consumer_ahead`
+shape the reconnaissance proposed is replaced by `batch_clear`: a wait inside
+one `wg_batch` cannot let the consumer ahead (the kworkers run after
+`io_uring_enter`), but a first batch that completes a batch of 16 consumes
+does, and yields zero drops.
 
-## Estimate
+## Estimate and the actual cost
 
-About 1.0 WU: the suite and four new traces (0.2), the probe re-measurement of
-the two new bulk shapes (0.1), the control-flow interleave in the batch/scheduler
-path with the existing ring primitives (0.5), and the claim point plus a one-off
-mutant that drops one `-EPIPE` and must be rejected (0.2). No kernel rebuild
-(no instrument change); the oracle stays s1.
+The reconnaissance estimated about 1.0 WU, half of it a control-flow
+interleave in the scheduler. There was no interleave to build: the mirror
+change is nil, and the tier cost the suite registration, the five traces,
+one evaluator bound, the sessions' keepalive, the design's correction and
+the one-off mutant, about 0.2 WU, with no kernel rebuild; the oracle stays
+s1. What the reconnaissance got wrong was reading the kind-300 count as
+interleaved consumes without ordering the two streams by their sequence
+numbers; the sequence number is the instrument that settles such questions
+and should be the first thing read.
 
 ## Leftovers
 
-`.worktrees/w7-tier/.artifacts/w7-tier/wrap-s1-{1,2}` (the two probe runs and
-their reports), `.artifacts/check/wrap-s1` (the aborted check), `.lake` (copied);
-all ephemeral.
+The implementation worktree's `.artifacts/check/tier-*` (the five runs, the
+two wrap attempts before the budgets, the regression run) and `.lake`
+(copied); the reconnaissance worktree's probe runs; all ephemeral.
