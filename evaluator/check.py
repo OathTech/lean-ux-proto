@@ -66,6 +66,11 @@ NETNS_SHARE = 0.03
 # (seccomp X: seccomp-controls, the flags, action and load the mirror stops
 # unsupported on while the kernel runs them — design 9.1; scripts/seccomp-controls.py)
 CONTROL_SUITES = ('steering-controls', 'timer-controls', 'lifecycle-controls', 'underload-controls', 'seccomp-controls')
+# The W7 full-ring tier (docs/2026-10-13-w7-full-ring-tier.md): corpus/w7-tier,
+# the 1024-slot encrypt ring filled by one wg_batch; run on request, outside
+# the default list, since each of its traces is a chunk by itself (a bulk
+# trace) and its guest time is a large share of the trace bound.
+TIER_SUITES = ('w7-tier',)
 CHUNK = 100
 # seccomp X: the guest's console per chunk is bounded (OUTPUT_LIMIT, 16 MB),
 # and seccomp traces are the costly ones in comparison mode: a sandboxed
@@ -1558,8 +1563,8 @@ def main(argv=None):
                         help='share of alloc_fail traces among the generated WireGuard traces (0: none, as before A1)')
     args = parser.parse_args(argv)
     suites = args.suite.split(',')
-    if not suites or any(s not in SUITES + CONTROL_SUITES for s in suites):
-        parser.error(f'--suite must be a comma-separated subset of {SUITES + CONTROL_SUITES}')
+    if not suites or any(s not in SUITES + CONTROL_SUITES + TIER_SUITES for s in suites):
+        parser.error(f'--suite must be a comma-separated subset of {SUITES + CONTROL_SUITES + TIER_SUITES}')
     if args.guest_variant and set(suites) - set(CONTROL_SUITES):
         parser.error('--guest-variant runs control suites only')
     artifacts = Path(os.environ.get('LEANUX_ARTIFACTS', ROOT / '.artifacts')).resolve()
