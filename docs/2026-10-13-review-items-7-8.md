@@ -229,6 +229,11 @@ semantic point. Measured on s1: `d3_zero_key` (the 2^32 crossing, a
 non-event), `d3_retransmit` (the arm rule with jitter), `d3_rx_expired_key`,
 `b1_trie_routing`, then the `wireguard` and `alloc` suites and the D3 and
 steering controls.
+The one-off mutant I8-M1 (the age test's left operand computed with
+`NSEC_PER_SEC - 1`, so every outcome stays Linux's and only the operands
+move) was rejected on `d3_zero_key` through the operand channel alone, at
+all six age tests the trace exercises (send.c:25, 66, 133, 365), with no
+other channel reporting; run once, then deleted.
 
 ## 5. Item 7: the budgets
 
