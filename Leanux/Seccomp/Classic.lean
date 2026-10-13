@@ -236,8 +236,9 @@ def bpfCheckClassic [SeccompM m] (filter : ClassicProg) : m (Except Int Unit) :=
         || code == (BPF_LD ||| BPF_B ||| BPF_ABS) then
       let _ ← branch .checkCaseLdAbs true
       let helper := bpfAncHelper ftest
-      let ancFound ← branchCmp .checkAncFound ((helper &&& 0x8000) != 0) helper 0x8000
-      if ← cmpEq .checkAncNotFound (if ancFound then 1 else 0) 0 then
+      -- no comparison records (measured): plain tests
+      let ancFound ← branch .checkAncFound ((helper &&& 0x8000) != 0)
+      if ← branch .checkAncNotFound (!ancFound) then
         if ← cmpGe .checkAncOffset (u32 ftest.k) (u32 SKF_AD_OFF) then return .error errEINVAL
   let last := filter[flen - 1]!
   if ← branch .checkLastRet (last.code == (BPF_RET ||| BPF_K) || last.code == (BPF_RET ||| BPF_A)) then
@@ -249,8 +250,9 @@ def bpfCheckClassic [SeccompM m] (filter : ClassicProg) : m (Except Int Unit) :=
 /-- `filter` is the user pointer (`none`: NULL), `flen` the length given. -/
 def bpfCheckBasicsOk [SeccompM m] (filter : Option ClassicProg) (flen : Nat) : m Bool := do
   if ← branch .basicsFilterNull filter.isNone then return false
-  if ← cmpEq .basicsLenZero flen 0 then return false
-  if ← cmpGt .basicsLenOverMax flen BPF_MAXINSNS then return false
+  -- `flen == 0 || flen > BPF_MAXINSNS` is one unsigned compare `(flen - 1) > 0xfff` (measured)
+  if ← branchCmp .basicsLenZero (flen == 0 || flen > BPF_MAXINSNS) (minusOneU flen 32) 0xfff then return false
+  if ← branch .basicsLenOverMax (flen > BPF_MAXINSNS) then return false
   return true
 
 /-! ## `seccomp_check_filter` (seccomp.c:280-347) -/
@@ -294,7 +296,7 @@ def seccompCheckFilter [SeccompM m] (filter : ClassicProg) : m (Except Int Class
       let _ ← branch .scfCaseLdAbsW true
       out := out.set! pc { ftest with code := BPF_LDX ||| BPF_W ||| BPF_ABS }
       if ← cmpGe .scfCtxOffsetRange (u32 k) SECCOMP_DATA_SIZE then return .error errEINVAL
-      if ← branchCmp .scfCtxMisaligned ((k &&& 3) != 0) (u32 k) 3 then return .error errEINVAL
+      if ← cmpFlag .scfCtxMisaligned (u32 k) 3 then return .error errEINVAL
     else if code == (BPF_LD ||| BPF_W ||| BPF_LEN) then
       let _ ← branch .scfCaseLdLen true
       out := out.set! pc { ftest with code := BPF_LD ||| BPF_IMM, k := SECCOMP_DATA_SIZE.toUInt32 }

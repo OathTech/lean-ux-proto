@@ -125,14 +125,32 @@ def emitJmp [SeccompM m] (site : EmitSite) (target : Int) (len : Nat) (addrs : O
     (i emitted : Nat) : m (Except Int Int) := do
   let (dOver, dNeg, dHas, dMin, dMax) := emitDecisions site
   if ← cmpGe dOver target len then return .error errEINVAL
-  if ← cmpLt dNeg target 0 then return .error errEINVAL
+  -- `target < 0` is recorded at :725 only; elsewhere it is folded into the
+  -- unsigned `target >= len` (measured)
+  let negative ← match site with
+    | .ja => cmpLt dNeg target 0
+    | _ => branch dNeg (target < 0)
+  if negative then return .error errEINVAL
   let mut off : Int := 0
   if ← branch dHas addrs.isSome then
     let a := addrs.get!
     off := (a[target.toNat]! : Int) - (a[i]! : Int) - 1
   off := off - emitted
-  if ← cmpLt dMin off S16_MIN then return .error errEINVAL
-  if ← cmpGt dMax off S16_MAX then return .error errEINVAL
+  -- `off < S16_MIN || off > S16_MAX` is one compare `(u32)(off + 32768) > 0xffff`
+  -- at :725, :778, :785, :790, and folded away at :757 (measured)
+  let offU : Int := ((off + 32768) % 4294967296 + 4294967296) % 4294967296
+  -- ... and in the length-only pass (no addrs) the compare is folded at every site (measured):
+  -- a plain twin decision then
+  let outsideOff := off < S16_MIN || off > S16_MAX
+  let outside ← match site, addrs with
+    | .jfZero, _ => branch dMin outsideOff
+    | .ja, none => branch .emitOffRangeJaPass1 outsideOff
+    | .jtZero, none => branch .emitOffRangeJtPass1 outsideOff
+    | .rest, none => branch .emitOffRangeRestPass1 outsideOff
+    | .restJa, none => branch .emitOffRangeRestJaPass1 outsideOff
+    | _, some _ => branchCmp dMin outsideOff offU 0xffff
+  if outside then return .error errEINVAL
+  if ← branch dMax (off > S16_MAX) then return .error errEINVAL
   return .ok off
 
 /-! ## `bpf_convert_filter` (filter.c:576-919) -/
@@ -172,8 +190,9 @@ def convAluLoadCodes : List UInt16 :=
 def bpfConvertFilter [SeccompM m] (prog : ClassicProg) (newProg : Option Nat) (seenLdAbsIn : Bool)
     (newLenIn : Nat) : m (Except Int ConvertOut) := do
   let len := prog.size
-  if ← cmpLe .convLenNonpositive len 0 then return .error errEINVAL
-  if ← cmpGt .convLenOverMax len BPF_MAXINSNS then return .error errEINVAL
+  -- `len <= 0 || len > BPF_MAXINSNS` is one unsigned compare `(len - 1) > 0xfff` (measured)
+  if ← branchCmp .convLenNonpositive (len ≤ 0 || len > BPF_MAXINSNS) (minusOneU len 32) 0xfff then return .error errEINVAL
+  if ← branch .convLenOverMax (len > BPF_MAXINSNS) then return .error errEINVAL
   let mut hasAddrs := false
   let mut addrs : Array Nat := #[]
   if ← branch .convHasNewProg newProg.isSome then
@@ -205,8 +224,9 @@ def bpfConvertFilter [SeccompM m] (prog : ClassicProg) (newProg : Option Nat) (s
       if convAluLoadCodes.contains code then
         let _ ← branch .convCaseAluLoad true
         -- `BPF_CLASS(fp->code) == BPF_LD && BPF_MODE(fp->code) == BPF_ABS && convert_bpf_extensions(fp, &insn)`
-        if ← cmpEq .convAluClassLd (bpfClass code).toNat BPF_LD.toNat then
-          if ← cmpEq .convAluModeAbs (bpfMode code).toNat BPF_ABS.toNat then
+        -- one compiled test `(code & 0xe7) == 0x20` (measured), carried by the first decision
+        if ← cmpEq .convAluClassLd (code &&& 0xe7).toNat (BPF_LD ||| BPF_ABS).toNat then
+          if ← branch .convAluModeAbs true then
             invariant "bpf_convert_filter: convert_bpf_extensions reached; an LD|ABS survived seccomp_check_filter"
         -- `BPF_CLASS(fp->code) == BPF_LD && convert_bpf_ld_abs(fp, &insn)`
         if ← cmpEq .convAluClassLd2 (bpfClass code).toNat BPF_LD.toNat then
@@ -238,7 +258,8 @@ def bpfConvertFilter [SeccompM m] (prog : ClassicProg) (newProg : Option Nat) (s
         else
           cur := { cur with dst := BPF_REG_A, imm := immOf fp.k }
           bsrc := (bpfSrc code).toUInt8
-          let isX ← cmpEq .convJmpSrcX bsrc.toNat BPF_X.toNat
+          -- plain since stream W's measurement: no comparison record at :750
+          let isX ← branch .convJmpSrcX (bsrc == BPF_X.toUInt8)
           cur := { cur with src := if isX then BPF_REG_X else 0 }
         let op := (bpfOp code).toUInt8
         if ← cmpEq .convJfZero fp.jf.toNat 0 then
@@ -391,6 +412,9 @@ def bpfPrepareFilter [SeccompM m] (insns : ClassicProg) (orig : ClassicProg) : m
   match ← bpfCheckClassic insns with
   | .error e =>
     let _ ← branch .prepCheckClassicErr true
+    -- __bpf_prog_release(fp): the type is BPF_PROG_TYPE_UNSPEC, orig_prog is saved
+    let _ ← branch .releaseSocketFilter false
+    let _ ← branch .releaseOrigHasFprog true
     return .error e
   | .ok () =>
     let _ ← branch .prepCheckClassicErr false
@@ -399,6 +423,8 @@ def bpfPrepareFilter [SeccompM m] (insns : ClassicProg) (orig : ClassicProg) : m
     match ← seccompCheckFilter fp with
     | .error e =>
       let _ ← branch .prepTransErr true
+      let _ ← branch .releaseSocketFilter false
+      let _ ← branch .releaseOrigHasFprog true
       return .error e
     | .ok rewritten =>
       let _ ← branch .prepTransErr false

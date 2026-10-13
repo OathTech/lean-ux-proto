@@ -136,7 +136,8 @@ def rejects (p : ClassicProg) (e : Int) (lastLabel : String) : Check := do
     if got != e then fail s!"errno {got}, expected {e}" else
     -- the rejecting arm is the last step before the callers' error arms
     let inner := st.labels.filter fun l =>
-      !(l.startsWith "bpf_prog_create_from_user." || l.startsWith "bpf_prepare_filter.")
+      !(l.startsWith "bpf_prog_create_from_user." || l.startsWith "bpf_prepare_filter."
+        || l.startsWith "__bpf_prog_release." || l.startsWith "bpf_release_orig_filter.")
     match inner.getLast? with
     | some l => ensure (l == lastLabel) s!"last checker step {l}, expected {lastLabel}"
     | none => fail "no checker step recorded"
@@ -192,10 +193,10 @@ def checkerRejections : List (String × Check) :=
      | .ok (.error e, st) => ensure (e == errEINVAL && st.labels.getLast? == some "bpf_prog_create_from_user.basics_not_ok=1") s!"{e} {st.labels}"
      | _ => fail "not rejected"),
    ("len 0", match installFprog { len := 0, filter := some #[] } with
-     | .ok (.error e, st) => ensure (e == errEINVAL && st.labels.contains "bpf_check_basics_ok.flen_zero=1") s!"{e}"
+     | .ok (.error e, st) => ensure (e == errEINVAL && st.labels.contains "bpf_check_basics_ok.flen_outside_range=1") s!"{e}"
      | _ => fail "not rejected"),
    ("len 4097", match installFprog { len := 4097, filter := some #[] } with
-     | .ok (.error e, st) => ensure (e == errEINVAL && st.labels.contains "bpf_check_basics_ok.flen_over_max=1") s!"{e}"
+     | .ok (.error e, st) => ensure (e == errEINVAL && st.labels.contains "bpf_check_basics_ok.flen_outside_range=1") s!"{e}"
      | _ => fail "not rejected"),
    ("a faulting instruction pointer", match installFprog { len := 1, filter := some allowAll, insnsFault := true } with
      | .ok (.error e, st) => ensure (e == errEFAULT && st.labels.getLast? == some "bpf_prog_create_from_user.copy_from_user_fault=1") s!"{e}"

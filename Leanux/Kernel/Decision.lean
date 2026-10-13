@@ -1,3 +1,5 @@
+import Leanux.Seccomp.Decisions
+
 /-!
 # C decision points
 
@@ -327,6 +329,75 @@ inductive Decision where
   | send6CacheSet
   -- W8 (section 3.3): wg_netns_pre_exit (drivers/net/wireguard/device.c:409-428)
   | preExitDevIter | preExitCreator | preExitPeerIter
+  -- seccomp stream V (docs/2026-10-12-seccomp-design.md 2.1-2.4, 2.8-2.10, 4.5): kernel/seccomp.c
+  | secureComputingStrict | secureComputingFilter | secureComputingDead
+  | strictAllowedMatch | strictMoreEntries
+  | filterNoSd | filterCaseErrno | filterErrnoCap | filterCaseTrap | filterCaseTrace | filterTraceRecheck
+  | filterTraceNoTracer | filterCaseUserNotif | filterCaseLog | filterCaseAllow | filterCaseKill
+  | filterKillNotThread | filterKillLastThread | filterSkipMatchLog
+  | runFiltersNullHead | runFiltersCacheHit | runFiltersLoop | runFiltersLower
+  | cacheNrNegative | cacheNrOverSize | cacheBitSet
+  | mayAssignModeSet | mayAssignModeCmpFilter | mayAssignModeCmpStrict | mayAssignModeDiffers
+  | assignModeSpecAllow | assignModeSpecAllowCmp
+  | attachWalker | attachOverBudget | attachTsync | attachLog | attachWaitKillable | attachTsyncSync
+  | getFilterNone
+  | logCaseAllow | logCaseTrap | logCaseErrno | logCaseTrace | logCaseUserNotif | logCaseLog
+  | logCaseKillThread | logCaseKillProcess | logTrapRequested | logErrnoRequested | logTraceRequested
+  | logUserNotifRequested | logNotLogged
+  | prepareLenZero | prepareLenOverMax | prepareNoNnp | prepareNotCapable | prepareSfilterNoMem
+  | prepareCreateErr | userFilterCopyFault
+  | setFilterBadFlags | setFilterTsync | setFilterNewListener | setFilterTsyncEsrch | setFilterWaitKillable
+  | setFilterWaitNewListener | setFilterPrepareErr | setFilterNewListenerFlag | setFilterTsyncLock
+  | setFilterCannotAssign | setFilterDuplicateListener | setFilterAttachErr | setFilterTsyncUnlock
+  | setFilterNewListenerOut | dupListenerNoNotif | filterFreeHasFilter
+  | setStrictCannotAssign
+  | doSeccompCaseStrict | doSeccompStrictFlags | doSeccompStrictArgs | doSeccompCaseFilter
+  | doSeccompCaseActionAvail | doSeccompActionAvailFlags | doSeccompCaseNotifSizes | doSeccompNotifSizesFlags
+  | doSeccompCaseDefault | actionAvailCopyFault | actionAvailKnown | notifSizesCopyFault
+  | prctlSetCaseStrict | prctlSetCaseFilter | prctlSetCaseDefault
+  | uprobeExceptionUretprobe
+  | constAllowNoFprog | constAllowException | constAllowLoop | constAllowCaseLdAbs | constAllowLdNr
+  | constAllowLdArch | constAllowLdOther | constAllowCaseRet | constAllowRetAllow | constAllowCaseJa
+  | constAllowCaseJcond | constAllowJeq | constAllowJeqRes | constAllowJge | constAllowJgeRes
+  | constAllowJgt | constAllowJgtRes | constAllowJset | constAllowJsetRes | constAllowJcondDefault
+  | constAllowJumpTaken | constAllowCaseAnd | constAllowCaseDefault
+  | cachePrepareHasPrev | cachePrepareNr | cachePrepareBitClear | cachePrepareConstAllow
+  -- seccomp stream V: kernel/signal.c, the extension of design 4.5 (the P9 widening, design 16)
+  | sigTaskIgnoredGlobalInit | sigTaskIgnoredUnkillable | sigTaskIgnoredKthread | sigHandlerIgn | sigHandlerDflIgnore
+  | wantsSignalExiting | wantsSignalSigkill | wantsSignalStopped | wantsSignalCurr | wantsSignalNotPending
+  | completeSignalFatal | completeSignalNoGroupExit | completeSignalNotRealBlocked | completeSignalSigkill
+  | completeSignalNotPtraced | completeSignalNotCoredump | wakeUpStateFailed
+  | forceSigBlocked | forceSigIgnored | forceSigNotCurrent | forceSigHandlerExit | forceSigWasBlocked
+  | forceSigActionDfl | forceSigNotPtraced | forceSigNotPending
+  | sendSignalLockedHasPidUid | sendSignalSiCodeNonneg | sendSignalCopyInfo
+  -- seccomp stream U (docs/2026-10-12-seccomp-design.md 4.2-4.3): one constructor per
+  -- `Leanux.Seccomp.SDecision`, in its order (the info, comparison and repeatable entries
+  -- delegate to U's table, `SDecision.info`; `SDecision.toDecision` is the bridge's map)
+  | uBasicsFilterNull | uBasicsLenZero | uBasicsLenOverMax | uCreateBasicsNotOk | uCreateProgAllocNoMem
+  | uCreateCopyFault | uCreateSaveOrig | uCreateStoreOrigErr | uCreatePrepareErr | uStoreOrigNoMem
+  | uStoreOrigFilterNoMem | uPrepCheckClassicErr | uPrepHasTrans | uPrepTransErr | uPrepNotJited
+  | uChkCodeOverTable | uCheckCodeNotAllowed | uCheckCaseDivModK | uCheckCaseShiftK | uCheckCaseMem
+  | uCheckCaseJa | uCheckCaseJcond | uCheckCaseLdAbs | uCheckDivModKZero | uCheckShiftKRange
+  | uCheckMemIndex | uCheckJaRange | uCheckJtRange | uCheckJfRange | uCheckAncFound | uCheckAncNotFound
+  | uCheckAncOffset | uCheckLastRet | uClsMasksNoMem | uClsCaseStore | uClsCaseLoad | uClsCaseJa
+  | uClsCaseJcond | uClsLoadUnstored | uScfCaseLdAbsW | uScfCaseLdLen | uScfCaseLdxLen | uScfCaseAllowed
+  | uScfCaseDefault | uScfCtxOffsetRange | uScfCtxMisaligned | uConvLenNonpositive | uConvLenOverMax
+  | uConvHasNewProg | uConvAddrsNoMem | uConvPrologue | uConvSeenLdAbs | uConvHasAddrs | uConvCaseAluLoad
+  | uConvCaseJa | uConvCaseJcond | uConvCaseLdxMsh | uConvCaseRet | uConvCaseStore | uConvCaseLoadMem
+  | uConvCaseImm | uConvCaseTax | uConvCaseTxa | uConvCaseLen | uConvCaseLdxAbsW | uConvCaseDefault
+  | uConvAluClassLd | uConvAluModeAbs | uConvAluClassLd2 | uConvCodeDivX | uConvCodeModX | uConvJmpSrcK
+  | uConvJmpKNegative | uConvJmpSrcX | uConvJfZero | uConvJtZero | uConvJtZeroJeq | uConvJtZeroJgt
+  | uConvJtZeroJge | uConvJtZeroDefault | uEmitTargetOverLenJa | uEmitTargetNegativeJa | uEmitHasAddrsJa
+  | uEmitOffBelowMinJa | uEmitOffAboveMaxJa | uEmitTargetOverLenJf | uEmitTargetNegativeJf
+  | uEmitHasAddrsJf | uEmitOffBelowMinJf | uEmitOffAboveMaxJf | uEmitTargetOverLenJt
+  | uEmitTargetNegativeJt | uEmitHasAddrsJt | uEmitOffBelowMinJt | uEmitOffAboveMaxJt
+  | uEmitTargetOverLenRest | uEmitTargetNegativeRest | uEmitHasAddrsRest | uEmitOffBelowMinRest
+  | uEmitOffAboveMaxRest | uEmitTargetOverLenRestJa | uEmitTargetNegativeRestJa | uEmitHasAddrsRestJa
+  | uEmitOffBelowMinRestJa | uEmitOffAboveMaxRestJa | uConvRetIsK | uConvStoreHasNewProg
+  | uConvStackDepthBelow | uConvEmitCopy | uConvOnlyLength | uConvSeenLdAbsLen | uConvPassChanged
+  | uConvPassOverflow | uMigOldProgNoMem | uMigConvert1Err | uMigReallocNoMem | uMigConvert2Err
+  | uMigSelectRuntimeErr | uReleaseSocketFilter | uReleaseOrigHasFprog | uEmitOffRangeJaPass1
+  | uEmitOffRangeJtPass1 | uEmitOffRangeRestPass1 | uEmitOffRangeRestJaPass1
   deriving Repr, BEq, DecidableEq, Inhabited
 
 /-- A call site of a value comparison whose operand is a guest-wide value the
@@ -418,6 +489,13 @@ private def sp (file : String) (lo hi : Nat) : Span := ⟨file, lo, hi⟩
 private def d (label file : String) (line : Nat) (t f : List (Nat × Nat)) : DecisionInfo :=
   { label, file, line, whenTrue := t.map fun (a, b) => sp file a b,
     whenFalse := f.map fun (a, b) => sp file a b }
+
+/-- A stream-U decision's info (`Leanux.Seccomp.SDecisionInfo`), its spans in its file. -/
+private def ofS (sd : Seccomp.SDecision) : DecisionInfo :=
+  let i := sd.info
+  { label := i.label, file := i.file, line := i.line,
+    whenTrue := i.whenTrue.map fun (a, b) => sp i.file a b,
+    whenFalse := i.whenFalse.map fun (a, b) => sp i.file a b }
 
 def Decision.info : Decision → DecisionInfo
   -- fs/eventfd.c
@@ -1640,6 +1718,336 @@ def Decision.info : Decision → DecisionInfo
   | .rlAllow => d "wg_ratelimiter_allow.allow" wrl 126 [] []
   | .rlOverLimit => d "wg_ratelimiter_allow.over_max_entries" wrl 135 [(136, 136)] [(138, 138)]
   | .rlAllocFail => d "wg_ratelimiter_allow.alloc_failed" wrl 139 [(140, 140)] [(142, 142)]
+  -- seccomp stream V: kernel/seccomp.c (docs/2026-10-12-seccomp-design.md, 2.1-2.4, 2.8-2.10).
+  -- __secure_computing (:1378-1404): the switch on the mode
+  | .secureComputingStrict => d "__secure_computing.case_strict" sec 1391 [(1392, 1393)] []
+  | .secureComputingFilter => d "__secure_computing.case_filter" sec 1394 [(1395, 1395)] []
+  | .secureComputingDead => d "__secure_computing.case_dead" sec 1397 [(1398, 1400)] []
+  -- __secure_computing_strict (:1059-1077): the do-while over mode1_syscalls
+  | .strictAllowedMatch => d "__secure_computing_strict.allowed_match" sec 1067 [(1068, 1068)] []
+  | .strictMoreEntries => d "__secure_computing_strict.more_entries" sec 1069 [] [(1074, 1076)]
+  -- __seccomp_filter (:1244-1366)
+  | .filterNoSd => d "__seccomp_filter.no_sd" sec 1258 [(1259, 1260)] []
+  | .filterCaseErrno => d "__seccomp_filter.case_errno" sec 1268 [(1270, 1274)] []
+  -- `data > MAX_ERRNO` is compiled as `(data >> 12) != 0` (measured): the operands are so reported
+  | .filterErrnoCap => d "__seccomp_filter.errno_over_max" sec 1270 [(1271, 1271)] []
+  | .filterCaseTrap => d "__seccomp_filter.case_trap" sec 1276 [(1278, 1281)] []
+  | .filterCaseTrace => d "__seccomp_filter.case_trace" sec 1283 [(1285, 1285)] []
+  -- 1286's `return 0` is the compiler's shared return of the ALLOW and LOG arms too (measured): no witness
+  | .filterTraceRecheck => d "__seccomp_filter.trace_recheck" sec 1285 [] [(1289, 1289)]
+  | .filterTraceNoTracer => d "__seccomp_filter.trace_no_tracer" sec 1289 [(1290, 1293)] [(1308, 1308)]
+  | .filterCaseUserNotif => d "__seccomp_filter.case_user_notif" sec 1326 [(1327, 1330)] []
+  | .filterCaseLog => d "__seccomp_filter.case_log" sec 1332 [(1333, 1334)] []
+  | .filterCaseAllow => d "__seccomp_filter.case_allow" sec 1336 [(1342, 1342)] []
+  | .filterCaseKill => d "__seccomp_filter.case_kill" sec 1344 [(1347, 1348)] []
+  -- `action != SECCOMP_RET_KILL_THREAD || (atomic_read(&current->signal->live) == 1)` over two lines
+  -- the body 1353-1355 runs for either operand: no witness of one; `live == 1` records no
+  -- comparison (measured)
+  | .filterKillNotThread => d "__seccomp_filter.kill_not_thread" sec 1350 [] []
+  | .filterKillLastThread => d "__seccomp_filter.kill_last_thread" sec 1351 [] [(1357, 1357)]
+  -- `match ? match->log : false`: a select
+  | .filterSkipMatchLog => d "__seccomp_filter.skip_match" sec 1365 [] []
+  -- seccomp_run_filters (:406-434)
+  | .runFiltersNullHead => d "seccomp_run_filters.null_head" sec 415 [(416, 416)] [(418, 418)]
+  -- the loop at 425 is rotated: its point is hit after the body (measured), so it witnesses no cache miss
+  | .runFiltersCacheHit => d "seccomp_run_filters.cache_allow" sec 418 [(419, 419)] []
+  | .runFiltersLoop => d "seccomp_run_filters.next_filter" sec 425 [(426, 428)] [(433, 433)]
+  | .runFiltersLower => d "seccomp_run_filters.action_lower" sec 428 [(429, 430)] []
+  -- seccomp_cache_check_allow_bitmap (:351-360); `syscall_nr < 0 || syscall_nr >= bitmap_size` on one line
+  | .cacheNrNegative => d "seccomp_cache_check_allow_bitmap.nr_negative" sec 355 [] []
+  | .cacheNrOverSize => d "seccomp_cache_check_allow_bitmap.nr_over_size" sec 355 [(356, 356)] [(357, 359)]
+  | .cacheBitSet => d "seccomp_cache_check_allow_bitmap.bit_set" sec 359 [] []
+  -- seccomp_may_assign_mode (:437-445): `current->seccomp.mode && current->seccomp.mode != seccomp_mode`
+  -- is one compiled test per inlined caller (measured): `(mode & 1) == 0` in the filter
+  -- caller, `mode != 1` in the strict caller. The plain decision carries the outcome and the
+  -- witnesses on both paths; each caller's comparison is a spanless companion decision
+  | .mayAssignModeSet => d "seccomp_may_assign_mode.mode_set_and_differs" sec 441 [(442, 442)] [(444, 444)]
+  | .mayAssignModeCmpFilter => d "seccomp_may_assign_mode.mode_set_and_differs_filter" sec 441 [] []
+  | .mayAssignModeCmpStrict => d "seccomp_may_assign_mode.mode_set_and_differs_strict" sec 441 [] []
+  | .mayAssignModeDiffers => d "seccomp_may_assign_mode.mode_differs" sec 441 [] []
+  -- seccomp_assign_mode (:449-465): outcome true when SPEC_ALLOW is set (the mitigation skipped);
+  -- the plain decision on both paths, the comparison companion on the filter path only (the
+  -- strict caller's constant flags fold it, measured)
+  | .assignModeSpecAllow => d "seccomp_assign_mode.spec_allow" sec 462 [] [(463, 463)]
+  | .assignModeSpecAllowCmp => d "seccomp_assign_mode.spec_allow_filter" sec 462 [] []
+  -- seccomp_attach_filter (:913-963)
+  | .attachWalker => d "seccomp_attach_filter.walker" sec 923 [(924, 924)] [(925, 925)]
+  | .attachOverBudget => d "seccomp_attach_filter.over_insns_per_path" sec 925 [(926, 926)] [(929, 929)]
+  | .attachTsync => d "seccomp_attach_filter.tsync" sec 929 [(932, 932)] []
+  | .attachLog => d "seccomp_attach_filter.log" sec 942 [(943, 943)] []
+  | .attachWaitKillable => d "seccomp_attach_filter.wait_killable_recv" sec 946 [(947, 947)] []
+  | .attachTsyncSync => d "seccomp_attach_filter.tsync_sync" sec 959 [(960, 960)] []
+  -- get_seccomp_filter (:971-980), in the parent's clone
+  | .getFilterNone => d "get_seccomp_filter.no_filter" sec 974 [(975, 975)] [(976, 977)]
+  -- seccomp_log (:1000-1041): the switch on the action, the `requested &&` operands and the final test;
+  -- `audit_seccomp` is empty with AUDIT unset, so the compiler may drop every point here (design 2.2)
+  | .logCaseAllow => d "seccomp_log.case_allow" sec 1006 [(1007, 1007)] []
+  | .logCaseTrap => d "seccomp_log.case_trap" sec 1008 [(1009, 1009)] []
+  | .logCaseErrno => d "seccomp_log.case_errno" sec 1011 [(1012, 1012)] []
+  | .logCaseTrace => d "seccomp_log.case_trace" sec 1014 [(1015, 1015)] []
+  | .logCaseUserNotif => d "seccomp_log.case_user_notif" sec 1017 [(1018, 1018)] []
+  | .logCaseLog => d "seccomp_log.case_log" sec 1020 [(1021, 1021)] []
+  | .logCaseKillThread => d "seccomp_log.case_kill_thread" sec 1023 [(1024, 1024)] []
+  | .logCaseKillProcess => d "seccomp_log.case_kill_process" sec 1026 [(1028, 1028)] []
+  | .logTrapRequested => d "seccomp_log.trap_requested" sec 1009 [] []
+  | .logErrnoRequested => d "seccomp_log.errno_requested" sec 1012 [] []
+  | .logTraceRequested => d "seccomp_log.trace_requested" sec 1015 [] []
+  | .logUserNotifRequested => d "seccomp_log.user_notif_requested" sec 1018 [] []
+  | .logNotLogged => d "seccomp_log.not_logged" sec 1037 [(1038, 1038)] [(1040, 1040)]
+  -- seccomp_prepare_filter (:661-705); `fprog->len == 0 || fprog->len > BPF_MAXINSNS` on one line;
+  -- `!task_no_new_privs(current) && !ns_capable_noaudit(...)` over two lines
+  -- `fprog->len == 0 || fprog->len > BPF_MAXINSNS` is one unsigned 16-bit compare
+  -- `(len - 1) > 0xfff` (measured): the first decision carries it, the second is plain
+  | .prepareLenZero => d "seccomp_prepare_filter.len_outside_range" sec 672 [(673, 673)] [(683, 683)]
+  | .prepareLenOverMax => d "seccomp_prepare_filter.len_over_max" sec 672 [] []
+  | .prepareNoNnp => d "seccomp_prepare_filter.no_new_privs_clear" sec 683 [] []
+  | .prepareNotCapable => d "seccomp_prepare_filter.not_capable" sec 684 [(685, 685)] []
+  | .prepareSfilterNoMem => d "seccomp_prepare_filter.sfilter_nomem" sec 689 [(690, 690)] [(692, 693)]
+  | .prepareCreateErr => d "seccomp_prepare_filter.create_err" sec 695 [(696, 697)] [(700, 704)]
+  -- seccomp_prepare_user_filter (:714-733)
+  | .userFilterCopyFault => d "seccomp_prepare_user_filter.copy_fault" sec 728 [(729, 729)] [(730, 730)]
+  -- seccomp_set_mode_filter (:1947-2044). The compiled flag tests (measured): `flags & ~MASK`
+  -- is `flags > 0x3f`; `TSYNC && NEW_LISTENER` is `(flags & 9) == 9`, carried by the first
+  -- decision with the second plain; `WAIT_KILLABLE_RECV && !NEW_LISTENER` is
+  -- `(flags & 0x28) == 0x20`, likewise; a single flag is `(flags & F) == 0`
+  | .setFilterBadFlags => d "seccomp_set_mode_filter.flags_outside_mask" sec 1957 [(1958, 1958)] [(1967, 1967)]
+  | .setFilterTsync => d "seccomp_set_mode_filter.tsync_listener_no_esrch" sec 1967 [] []
+  | .setFilterNewListener => d "seccomp_set_mode_filter.new_listener_with_tsync" sec 1968 [] []
+  | .setFilterTsyncEsrch => d "seccomp_set_mode_filter.tsync_esrch" sec 1969 [] [(1970, 1970)]
+  | .setFilterWaitKillable => d "seccomp_set_mode_filter.wait_killable_without_listener" sec 1976 [(1978, 1978)] []
+  | .setFilterWaitNewListener => d "seccomp_set_mode_filter.new_listener_for_wait" sec 1977 [] []
+  -- 1983's return has no point of its own (measured: merged with the function's exit)
+  | .setFilterPrepareErr => d "seccomp_set_mode_filter.prepare_err" sec 1982 [] [(1985, 1985)]
+  | .setFilterNewListenerFlag => d "seccomp_set_mode_filter.new_listener" sec 1985 [(1986, 1986)] []
+  | .setFilterTsyncLock => d "seccomp_set_mode_filter.tsync_lock" sec 2004 [(2005, 2005)] []
+  | .setFilterCannotAssign => d "seccomp_set_mode_filter.cannot_assign" sec 2010 [(2011, 2011)] [(2013, 2013)]
+  | .setFilterDuplicateListener => d "seccomp_set_mode_filter.duplicate_listener" sec 2013 [(2014, 2015)] [(2018, 2018)]
+  | .setFilterAttachErr => d "seccomp_set_mode_filter.attach_err" sec 2019 [(2020, 2020)] [(2022, 2023)]
+  | .setFilterTsyncUnlock => d "seccomp_set_mode_filter.tsync_unlock" sec 2027 [(2028, 2028)] []
+  | .setFilterNewListenerOut => d "seccomp_set_mode_filter.new_listener_out" sec 2030 [(2031, 2031)] [(2042, 2042)]
+  -- has_duplicate_listener (:1917-1925)
+  | .dupListenerNoNotif => d "has_duplicate_listener.no_notif" sec 1924 [(1925, 1925)] []
+  -- seccomp_filter_free (:526-531), at a failed attach, and bpf_prog_destroy's release (filter.c)
+  | .filterFreeHasFilter => d "seccomp_filter_free.has_filter" sec 528 [(529, 530)] []
+  -- seccomp_set_mode_strict (:1419-1439)
+  | .setStrictCannotAssign => d "seccomp_set_mode_strict.cannot_assign" sec 1426 [(1427, 1427)] [(1432, 1433)]
+  -- do_seccomp (:2092-2115); `flags != 0 || uargs != NULL` on one line
+  -- the strict op's `flags != 0 || uargs != NULL` records no comparison and 2097 no point
+  -- on its path (measured)
+  | .doSeccompCaseStrict => d "do_seccomp.case_set_mode_strict" sec 2096 [] []
+  | .doSeccompStrictFlags => d "do_seccomp.strict_flags" sec 2097 [] []
+  | .doSeccompStrictArgs => d "do_seccomp.strict_args" sec 2097 [(2098, 2098)] [(2099, 2099)]
+  | .doSeccompCaseFilter => d "do_seccomp.case_set_mode_filter" sec 2100 [(2101, 2101)] []
+  | .doSeccompCaseActionAvail => d "do_seccomp.case_get_action_avail" sec 2102 [(2103, 2103)] []
+  | .doSeccompActionAvailFlags => d "do_seccomp.action_avail_flags" sec 2103 [(2104, 2104)] [(2106, 2106)]
+  | .doSeccompCaseNotifSizes => d "do_seccomp.case_get_notif_sizes" sec 2107 [(2108, 2108)] []
+  -- 2111 and 2088 are shared returns the action-avail query also reaches (measured): no witness
+  | .doSeccompNotifSizesFlags => d "do_seccomp.notif_sizes_flags" sec 2108 [(2109, 2109)] []
+  | .doSeccompCaseDefault => d "do_seccomp.case_default" sec 2113 [(2113, 2113)] []
+  -- seccomp_get_action_avail (:2053-2075), seccomp_get_notif_sizes (:2077-2089)
+  | .actionAvailCopyFault => d "seccomp_get_action_avail.copy_fault" sec 2057 [(2058, 2058)] [(2060, 2060)]
+  | .actionAvailKnown => d "seccomp_get_action_avail.known_action" sec 2060 [(2074, 2074)] [(2071, 2071)]
+  | .notifSizesCopyFault => d "seccomp_get_notif_sizes.copy_fault" sec 2085 [(2086, 2086)] []
+  -- prctl_set_seccomp (:2130-2155)
+  | .prctlSetCaseStrict => d "prctl_set_seccomp.case_strict" sec 2136 [(2137, 2143)] []
+  | .prctlSetCaseFilter => d "prctl_set_seccomp.case_filter" sec 2145 [(2146, 2148)] []
+  | .prctlSetCaseDefault => d "prctl_set_seccomp.case_default" sec 2150 [(2150, 2150)] []
+  -- seccomp_uprobe_exception (:736-754) and seccomp_is_const_allow (:762-836), the cache's emulation;
+  -- a `default:` label owns no code (the check's `non_statement` rule), so a default arm is
+  -- anchored on its first statement
+  | .uprobeExceptionUretprobe => d "seccomp_uprobe_exception.uretprobe" sec 744 [(745, 745)] [(753, 753)]
+  | .constAllowNoFprog => d "seccomp_is_const_allow.no_fprog" sec 769 [(770, 770)] [(773, 773)]
+  | .constAllowException => d "seccomp_is_const_allow.uprobe_exception" sec 773 [(774, 774)] [(776, 776)]
+  | .constAllowLoop => d "seccomp_is_const_allow.next_insn" sec 776 [(777, 779)] [(835, 836)]
+  | .constAllowCaseLdAbs => d "seccomp_is_const_allow.case_ld_w_abs" sec 782 [(783, 783)] []
+  | .constAllowLdNr => d "seccomp_is_const_allow.ld_nr" sec 784 [(785, 786)] []
+  | .constAllowLdArch => d "seccomp_is_const_allow.ld_arch" sec 787 [(788, 789)] []
+  | .constAllowLdOther => d "seccomp_is_const_allow.ld_other" sec 792 [(792, 792)] []
+  | .constAllowCaseRet => d "seccomp_is_const_allow.case_ret_k" sec 795 [(797, 797)] []
+  -- `k == SECCOMP_RET_ALLOW` (:797) is inlined into seccomp_cache_prepare_bitmap and DWARF
+  -- attributes its compare to the call line 864 (measured); the decision is anchored there
+  | .constAllowRetAllow => d "seccomp_is_const_allow.ret_is_allow" sec 864 [] []
+  | .constAllowCaseJa => d "seccomp_is_const_allow.case_ja" sec 798 [(799, 800)] []
+  | .constAllowCaseJcond => d "seccomp_is_const_allow.case_jcond_k" sec 801 [(805, 805)] []
+  | .constAllowJeq => d "seccomp_is_const_allow.case_jeq" sec 806 [(807, 808)] []
+  -- `reg_value == k` (:807) is attributed to the `pc +=` line 823 (measured)
+  | .constAllowJeqRes => d "seccomp_is_const_allow.jeq_res" sec 823 [] []
+  | .constAllowJge => d "seccomp_is_const_allow.case_jge" sec 809 [(810, 811)] []
+  | .constAllowJgeRes => d "seccomp_is_const_allow.jge_res" sec 810 [] []
+  | .constAllowJgt => d "seccomp_is_const_allow.case_jgt" sec 812 [(813, 814)] []
+  | .constAllowJgtRes => d "seccomp_is_const_allow.jgt_res" sec 813 [] []
+  | .constAllowJset => d "seccomp_is_const_allow.case_jset" sec 815 [(816, 817)] []
+  | .constAllowJsetRes => d "seccomp_is_const_allow.jset_res" sec 816 [] []
+  | .constAllowJcondDefault => d "seccomp_is_const_allow.jcond_default" sec 820 [(820, 820)] []
+  | .constAllowJumpTaken => d "seccomp_is_const_allow.op_res" sec 823 [] []
+  | .constAllowCaseAnd => d "seccomp_is_const_allow.case_and_k" sec 825 [(826, 827)] []
+  | .constAllowCaseDefault => d "seccomp_is_const_allow.case_default" sec 830 [(830, 830)] []
+  -- seccomp_cache_prepare_bitmap (:839-873)
+  | .cachePrepareHasPrev => d "seccomp_cache_prepare_bitmap.has_prev" sec 847 [(849, 849)] [(852, 852)]
+  | .cachePrepareNr => d "seccomp_cache_prepare_bitmap.next_nr" sec 855 [(857, 857)] []
+  | .cachePrepareBitClear => d "seccomp_cache_prepare_bitmap.bit_clear" sec 857 [(858, 858)] [(860, 861)]
+  | .cachePrepareConstAllow => d "seccomp_cache_prepare_bitmap.const_allow" sec 864 [(865, 865)] [(871, 871)]
+  -- seccomp stream V: kernel/signal.c, the extension of design 4.5 (the P9 widening, design 16):
+  -- sig_task_ignored (:82-102) and sig_handler_ignored (:75-80), past sig_ignored's ptrace test
+  | .sigTaskIgnoredGlobalInit => d "sig_task_ignored.global_init" "kernel/signal.c" 89 [(90, 90)] [(92, 92)]
+  | .sigTaskIgnoredUnkillable => d "sig_task_ignored.unkillable" "kernel/signal.c" 92 [] [(97, 97)]
+  | .sigTaskIgnoredKthread => d "sig_task_ignored.kthread" "kernel/signal.c" 97 [] [(101, 101)]
+  | .sigHandlerIgn => d "sig_handler_ignored.sig_ign" "kernel/signal.c" 78 [] []
+  | .sigHandlerDflIgnore => d "sig_handler_ignored.dfl_ignored" "kernel/signal.c" 79 [] []
+  -- wants_signal (:977-992), the unblocked arms; `task_curr(p) || !task_sigpending(p)` on one line
+  | .wantsSignalExiting => d "wants_signal.exiting" "kernel/signal.c" 982 [(983, 983)] [(985, 985)]
+  | .wantsSignalSigkill => d "wants_signal.sigkill" "kernel/signal.c" 985 [(986, 986)] [(988, 988)]
+  | .wantsSignalStopped => d "wants_signal.stopped_or_traced" "kernel/signal.c" 988 [(989, 989)] [(991, 991)]
+  | .wantsSignalCurr => d "wants_signal.task_curr" "kernel/signal.c" 991 [] []
+  | .wantsSignalNotPending => d "wants_signal.not_sigpending" "kernel/signal.c" 991 [] []
+  -- complete_signal (:994-1066), the wake arm: the four-line fatal condition, then the coredump test
+  | .completeSignalFatal => d "complete_signal.sig_fatal" "kernel/signal.c" 1034 [] []
+  | .completeSignalNoGroupExit => d "complete_signal.no_group_exit" "kernel/signal.c" 1035 [] []
+  | .completeSignalNotRealBlocked => d "complete_signal.not_real_blocked" "kernel/signal.c" 1036 [] []
+  | .completeSignalSigkill => d "complete_signal.sigkill" "kernel/signal.c" 1037 [] []
+  | .completeSignalNotPtraced => d "complete_signal.not_ptraced" "kernel/signal.c" 1037 [(1041, 1041)] []
+  | .completeSignalNotCoredump => d "complete_signal.not_coredump" "kernel/signal.c" 1041 [(1048, 1056)] []
+  -- signal_wake_up_state (:759-774): wake_up_state fails on a running task, kick_process follows
+  | .wakeUpStateFailed => d "signal_wake_up_state.wake_failed" "kernel/signal.c" 772 [(773, 773)] []
+  -- force_sig_info_to_task (:1328-1363); `blocked || ignored || (handler != HANDLER_CURRENT)` on one line;
+  -- `action->sa.sa_handler == SIG_DFL && (!t->ptrace || ...)` over two lines
+  | .forceSigBlocked => d "force_sig_info_to_task.blocked" "kernel/signal.c" 1341 [] []
+  | .forceSigIgnored => d "force_sig_info_to_task.ignored" "kernel/signal.c" 1341 [] []
+  | .forceSigNotCurrent => d "force_sig_info_to_task.handler_not_current" "kernel/signal.c" 1341 [(1342, 1342)] []
+  | .forceSigHandlerExit => d "force_sig_info_to_task.handler_exit" "kernel/signal.c" 1343 [(1344, 1344)] []
+  | .forceSigWasBlocked => d "force_sig_info_to_task.was_blocked" "kernel/signal.c" 1345 [(1346, 1346)] []
+  | .forceSigActionDfl => d "force_sig_info_to_task.action_dfl" "kernel/signal.c" 1352 [] []
+  | .forceSigNotPtraced => d "force_sig_info_to_task.not_ptraced" "kernel/signal.c" 1353 [(1354, 1354)] []
+  | .forceSigNotPending => d "force_sig_info_to_task.not_sigpending" "kernel/signal.c" 1357 [(1358, 1358)] []
+  -- send_signal_locked (:1214-1252), the third arm; __send_signal_locked's real-siginfo arms
+  | .sendSignalLockedHasPidUid => d "send_signal_locked.has_si_pid_and_uid" "kernel/signal.c" 1227 [(1231, 1249)] []
+  | .sendSignalSiCodeNonneg => d "__send_signal_locked.si_code_nonneg" "kernel/signal.c" 1114 [] []
+  | .sendSignalCopyInfo => d "__send_signal_locked.case_copy_siginfo" "kernel/signal.c" 1145 [(1145, 1145)] []
+  -- seccomp stream U: delegated to `Leanux.Seccomp.SDecision.info`
+  | .uBasicsFilterNull => ofS .basicsFilterNull
+  | .uBasicsLenZero => ofS .basicsLenZero
+  | .uBasicsLenOverMax => ofS .basicsLenOverMax
+  | .uCreateBasicsNotOk => ofS .createBasicsNotOk
+  | .uCreateProgAllocNoMem => ofS .createProgAllocNoMem
+  | .uCreateCopyFault => ofS .createCopyFault
+  | .uCreateSaveOrig => ofS .createSaveOrig
+  | .uCreateStoreOrigErr => ofS .createStoreOrigErr
+  | .uCreatePrepareErr => ofS .createPrepareErr
+  | .uStoreOrigNoMem => ofS .storeOrigNoMem
+  | .uStoreOrigFilterNoMem => ofS .storeOrigFilterNoMem
+  | .uPrepCheckClassicErr => ofS .prepCheckClassicErr
+  | .uPrepHasTrans => ofS .prepHasTrans
+  | .uPrepTransErr => ofS .prepTransErr
+  | .uPrepNotJited => ofS .prepNotJited
+  | .uChkCodeOverTable => ofS .chkCodeOverTable
+  | .uCheckCodeNotAllowed => ofS .checkCodeNotAllowed
+  | .uCheckCaseDivModK => ofS .checkCaseDivModK
+  | .uCheckCaseShiftK => ofS .checkCaseShiftK
+  | .uCheckCaseMem => ofS .checkCaseMem
+  | .uCheckCaseJa => ofS .checkCaseJa
+  | .uCheckCaseJcond => ofS .checkCaseJcond
+  | .uCheckCaseLdAbs => ofS .checkCaseLdAbs
+  | .uCheckDivModKZero => ofS .checkDivModKZero
+  | .uCheckShiftKRange => ofS .checkShiftKRange
+  | .uCheckMemIndex => ofS .checkMemIndex
+  | .uCheckJaRange => ofS .checkJaRange
+  | .uCheckJtRange => ofS .checkJtRange
+  | .uCheckJfRange => ofS .checkJfRange
+  | .uCheckAncFound => ofS .checkAncFound
+  | .uCheckAncNotFound => ofS .checkAncNotFound
+  | .uCheckAncOffset => ofS .checkAncOffset
+  | .uCheckLastRet => ofS .checkLastRet
+  | .uClsMasksNoMem => ofS .clsMasksNoMem
+  | .uClsCaseStore => ofS .clsCaseStore
+  | .uClsCaseLoad => ofS .clsCaseLoad
+  | .uClsCaseJa => ofS .clsCaseJa
+  | .uClsCaseJcond => ofS .clsCaseJcond
+  | .uClsLoadUnstored => ofS .clsLoadUnstored
+  | .uScfCaseLdAbsW => ofS .scfCaseLdAbsW
+  | .uScfCaseLdLen => ofS .scfCaseLdLen
+  | .uScfCaseLdxLen => ofS .scfCaseLdxLen
+  | .uScfCaseAllowed => ofS .scfCaseAllowed
+  | .uScfCaseDefault => ofS .scfCaseDefault
+  | .uScfCtxOffsetRange => ofS .scfCtxOffsetRange
+  | .uScfCtxMisaligned => ofS .scfCtxMisaligned
+  | .uConvLenNonpositive => ofS .convLenNonpositive
+  | .uConvLenOverMax => ofS .convLenOverMax
+  | .uConvHasNewProg => ofS .convHasNewProg
+  | .uConvAddrsNoMem => ofS .convAddrsNoMem
+  | .uConvPrologue => ofS .convPrologue
+  | .uConvSeenLdAbs => ofS .convSeenLdAbs
+  | .uConvHasAddrs => ofS .convHasAddrs
+  | .uConvCaseAluLoad => ofS .convCaseAluLoad
+  | .uConvCaseJa => ofS .convCaseJa
+  | .uConvCaseJcond => ofS .convCaseJcond
+  | .uConvCaseLdxMsh => ofS .convCaseLdxMsh
+  | .uConvCaseRet => ofS .convCaseRet
+  | .uConvCaseStore => ofS .convCaseStore
+  | .uConvCaseLoadMem => ofS .convCaseLoadMem
+  | .uConvCaseImm => ofS .convCaseImm
+  | .uConvCaseTax => ofS .convCaseTax
+  | .uConvCaseTxa => ofS .convCaseTxa
+  | .uConvCaseLen => ofS .convCaseLen
+  | .uConvCaseLdxAbsW => ofS .convCaseLdxAbsW
+  | .uConvCaseDefault => ofS .convCaseDefault
+  | .uConvAluClassLd => ofS .convAluClassLd
+  | .uConvAluModeAbs => ofS .convAluModeAbs
+  | .uConvAluClassLd2 => ofS .convAluClassLd2
+  | .uConvCodeDivX => ofS .convCodeDivX
+  | .uConvCodeModX => ofS .convCodeModX
+  | .uConvJmpSrcK => ofS .convJmpSrcK
+  | .uConvJmpKNegative => ofS .convJmpKNegative
+  | .uConvJmpSrcX => ofS .convJmpSrcX
+  | .uConvJfZero => ofS .convJfZero
+  | .uConvJtZero => ofS .convJtZero
+  | .uConvJtZeroJeq => ofS .convJtZeroJeq
+  | .uConvJtZeroJgt => ofS .convJtZeroJgt
+  | .uConvJtZeroJge => ofS .convJtZeroJge
+  | .uConvJtZeroDefault => ofS .convJtZeroDefault
+  | .uEmitTargetOverLenJa => ofS .emitTargetOverLenJa
+  | .uEmitTargetNegativeJa => ofS .emitTargetNegativeJa
+  | .uEmitHasAddrsJa => ofS .emitHasAddrsJa
+  | .uEmitOffBelowMinJa => ofS .emitOffBelowMinJa
+  | .uEmitOffAboveMaxJa => ofS .emitOffAboveMaxJa
+  | .uEmitTargetOverLenJf => ofS .emitTargetOverLenJf
+  | .uEmitTargetNegativeJf => ofS .emitTargetNegativeJf
+  | .uEmitHasAddrsJf => ofS .emitHasAddrsJf
+  | .uEmitOffBelowMinJf => ofS .emitOffBelowMinJf
+  | .uEmitOffAboveMaxJf => ofS .emitOffAboveMaxJf
+  | .uEmitTargetOverLenJt => ofS .emitTargetOverLenJt
+  | .uEmitTargetNegativeJt => ofS .emitTargetNegativeJt
+  | .uEmitHasAddrsJt => ofS .emitHasAddrsJt
+  | .uEmitOffBelowMinJt => ofS .emitOffBelowMinJt
+  | .uEmitOffAboveMaxJt => ofS .emitOffAboveMaxJt
+  | .uEmitTargetOverLenRest => ofS .emitTargetOverLenRest
+  | .uEmitTargetNegativeRest => ofS .emitTargetNegativeRest
+  | .uEmitHasAddrsRest => ofS .emitHasAddrsRest
+  | .uEmitOffBelowMinRest => ofS .emitOffBelowMinRest
+  | .uEmitOffAboveMaxRest => ofS .emitOffAboveMaxRest
+  | .uEmitTargetOverLenRestJa => ofS .emitTargetOverLenRestJa
+  | .uEmitTargetNegativeRestJa => ofS .emitTargetNegativeRestJa
+  | .uEmitHasAddrsRestJa => ofS .emitHasAddrsRestJa
+  | .uEmitOffBelowMinRestJa => ofS .emitOffBelowMinRestJa
+  | .uEmitOffAboveMaxRestJa => ofS .emitOffAboveMaxRestJa
+  | .uConvRetIsK => ofS .convRetIsK
+  | .uConvStoreHasNewProg => ofS .convStoreHasNewProg
+  | .uConvStackDepthBelow => ofS .convStackDepthBelow
+  | .uConvEmitCopy => ofS .convEmitCopy
+  | .uConvOnlyLength => ofS .convOnlyLength
+  | .uConvSeenLdAbsLen => ofS .convSeenLdAbsLen
+  | .uConvPassChanged => ofS .convPassChanged
+  | .uConvPassOverflow => ofS .convPassOverflow
+  | .uMigOldProgNoMem => ofS .migOldProgNoMem
+  | .uMigConvert1Err => ofS .migConvert1Err
+  | .uMigReallocNoMem => ofS .migReallocNoMem
+  | .uMigConvert2Err => ofS .migConvert2Err
+  | .uMigSelectRuntimeErr => ofS .migSelectRuntimeErr
+  | .uReleaseSocketFilter => ofS .releaseSocketFilter
+  | .uReleaseOrigHasFprog => ofS .releaseOrigHasFprog
+  | .uEmitOffRangeJaPass1 => ofS .emitOffRangeJaPass1
+  | .uEmitOffRangeJtPass1 => ofS .emitOffRangeJtPass1
+  | .uEmitOffRangeRestPass1 => ofS .emitOffRangeRestPass1
+  | .uEmitOffRangeRestJaPass1 => ofS .emitOffRangeRestJaPass1
 
 /-- The relation of a C value comparison, as written in the source
     (`lhs rel rhs`); `flag` is a mask test `(x & MASK)` against zero. -/
@@ -1661,6 +2069,13 @@ structure Comparison where
   /-- The comparison's value is assigned to a local that the condition tests
       (`x = a > b; ... if (... || x)`): the site precedes the condition. -/
   assigned : Bool := false
+
+private def relOfS : Seccomp.SRel → Rel
+  | .lt => .lt | .le => .le | .gt => .gt | .ge => .ge | .eq => .eq | .ne => .ne | .flag => .flag
+
+/-- A stream-U decision's comparison, delegated. -/
+private def cmpOfS (sd : Seccomp.SDecision) : Option Comparison :=
+  sd.info.comparison.map fun (r, c) => ⟨relOfS r, c, sd.info.site, false⟩
 
 /-- The decisions that are value comparisons. Exactly these report operands
     (`branchCmp`, as `(lhs, rhs)` in source order); the check requires it. -/
@@ -1864,6 +2279,163 @@ def Decision.comparison : Decision → Option Comparison
   | .prepareSignalCont => some ⟨.eq, true, none, false⟩
   | .completeSignalPidType => some ⟨.eq, true, none, false⟩
   | .sigqueueAllocOverride => some ⟨.ne, true, none, false⟩
+  -- seccomp stream V (kernel/seccomp.c and the signal extension)
+  | .strictAllowedMatch => some ⟨.eq, false, none, false⟩
+  | .strictMoreEntries => some ⟨.ne, true, none, false⟩
+  | .filterErrnoCap => some ⟨.ne, true, none, false⟩
+  | .filterKillNotThread => some ⟨.ne, true, none, false⟩
+  | .runFiltersLower => some ⟨.lt, false, none, false⟩
+  | .cacheNrNegative => some ⟨.lt, true, none, false⟩
+  | .cacheNrOverSize => some ⟨.ge, true, none, false⟩
+  | .mayAssignModeCmpFilter => some ⟨.flag, true, none, false⟩
+  | .mayAssignModeCmpStrict => some ⟨.ne, true, none, false⟩
+  | .assignModeSpecAllowCmp => some ⟨.flag, true, none, false⟩
+  | .attachOverBudget => some ⟨.gt, true, none, false⟩
+  | .attachTsync | .attachLog | .attachWaitKillable | .attachTsyncSync => some ⟨.flag, true, none, false⟩
+  | .prepareLenZero => some ⟨.gt, true, none, false⟩
+  | .prepareCreateErr => some ⟨.lt, true, none, false⟩
+  | .setFilterBadFlags => some ⟨.gt, true, none, false⟩
+  | .setFilterTsync | .setFilterWaitKillable => some ⟨.eq, true, none, false⟩
+  | .setFilterNewListenerFlag | .setFilterTsyncLock
+  | .setFilterTsyncUnlock | .setFilterNewListenerOut => some ⟨.flag, true, none, false⟩
+  | .doSeccompActionAvailFlags | .doSeccompNotifSizesFlags => some ⟨.ne, true, none, false⟩
+  | .uprobeExceptionUretprobe => some ⟨.eq, true, none, false⟩
+  -- inlined into seccomp_cache_prepare_bitmap: DWARF attributes the RET compare to the
+  -- call line 864 and the JEQ compare to the `pc +=` line 823 (measured)
+  | .constAllowRetAllow => some ⟨.eq, true, none, false⟩
+  | .constAllowJeqRes => some ⟨.eq, false, none, false⟩
+  | .constAllowJgeRes => some ⟨.ge, false, none, false⟩
+  | .constAllowJgtRes => some ⟨.gt, false, none, false⟩
+  | .constAllowJsetRes => some ⟨.flag, false, none, false⟩
+  | .wantsSignalSigkill => some ⟨.eq, true, none, false⟩
+  | .forceSigNotCurrent => some ⟨.ne, true, none, false⟩
+  | .forceSigHandlerExit => some ⟨.eq, true, none, false⟩
+  | .sendSignalSiCodeNonneg => some ⟨.ge, true, none, false⟩
+  -- seccomp stream U: delegated
+  | .uBasicsFilterNull => cmpOfS .basicsFilterNull
+  | .uBasicsLenZero => cmpOfS .basicsLenZero
+  | .uBasicsLenOverMax => cmpOfS .basicsLenOverMax
+  | .uCreateBasicsNotOk => cmpOfS .createBasicsNotOk
+  | .uCreateProgAllocNoMem => cmpOfS .createProgAllocNoMem
+  | .uCreateCopyFault => cmpOfS .createCopyFault
+  | .uCreateSaveOrig => cmpOfS .createSaveOrig
+  | .uCreateStoreOrigErr => cmpOfS .createStoreOrigErr
+  | .uCreatePrepareErr => cmpOfS .createPrepareErr
+  | .uStoreOrigNoMem => cmpOfS .storeOrigNoMem
+  | .uStoreOrigFilterNoMem => cmpOfS .storeOrigFilterNoMem
+  | .uPrepCheckClassicErr => cmpOfS .prepCheckClassicErr
+  | .uPrepHasTrans => cmpOfS .prepHasTrans
+  | .uPrepTransErr => cmpOfS .prepTransErr
+  | .uPrepNotJited => cmpOfS .prepNotJited
+  | .uChkCodeOverTable => cmpOfS .chkCodeOverTable
+  | .uCheckCodeNotAllowed => cmpOfS .checkCodeNotAllowed
+  | .uCheckCaseDivModK => cmpOfS .checkCaseDivModK
+  | .uCheckCaseShiftK => cmpOfS .checkCaseShiftK
+  | .uCheckCaseMem => cmpOfS .checkCaseMem
+  | .uCheckCaseJa => cmpOfS .checkCaseJa
+  | .uCheckCaseJcond => cmpOfS .checkCaseJcond
+  | .uCheckCaseLdAbs => cmpOfS .checkCaseLdAbs
+  | .uCheckDivModKZero => cmpOfS .checkDivModKZero
+  | .uCheckShiftKRange => cmpOfS .checkShiftKRange
+  | .uCheckMemIndex => cmpOfS .checkMemIndex
+  | .uCheckJaRange => cmpOfS .checkJaRange
+  | .uCheckJtRange => cmpOfS .checkJtRange
+  | .uCheckJfRange => cmpOfS .checkJfRange
+  | .uCheckAncFound => cmpOfS .checkAncFound
+  | .uCheckAncNotFound => cmpOfS .checkAncNotFound
+  | .uCheckAncOffset => cmpOfS .checkAncOffset
+  | .uCheckLastRet => cmpOfS .checkLastRet
+  | .uClsMasksNoMem => cmpOfS .clsMasksNoMem
+  | .uClsCaseStore => cmpOfS .clsCaseStore
+  | .uClsCaseLoad => cmpOfS .clsCaseLoad
+  | .uClsCaseJa => cmpOfS .clsCaseJa
+  | .uClsCaseJcond => cmpOfS .clsCaseJcond
+  | .uClsLoadUnstored => cmpOfS .clsLoadUnstored
+  | .uScfCaseLdAbsW => cmpOfS .scfCaseLdAbsW
+  | .uScfCaseLdLen => cmpOfS .scfCaseLdLen
+  | .uScfCaseLdxLen => cmpOfS .scfCaseLdxLen
+  | .uScfCaseAllowed => cmpOfS .scfCaseAllowed
+  | .uScfCaseDefault => cmpOfS .scfCaseDefault
+  | .uScfCtxOffsetRange => cmpOfS .scfCtxOffsetRange
+  | .uScfCtxMisaligned => cmpOfS .scfCtxMisaligned
+  | .uConvLenNonpositive => cmpOfS .convLenNonpositive
+  | .uConvLenOverMax => cmpOfS .convLenOverMax
+  | .uConvHasNewProg => cmpOfS .convHasNewProg
+  | .uConvAddrsNoMem => cmpOfS .convAddrsNoMem
+  | .uConvPrologue => cmpOfS .convPrologue
+  | .uConvSeenLdAbs => cmpOfS .convSeenLdAbs
+  | .uConvHasAddrs => cmpOfS .convHasAddrs
+  | .uConvCaseAluLoad => cmpOfS .convCaseAluLoad
+  | .uConvCaseJa => cmpOfS .convCaseJa
+  | .uConvCaseJcond => cmpOfS .convCaseJcond
+  | .uConvCaseLdxMsh => cmpOfS .convCaseLdxMsh
+  | .uConvCaseRet => cmpOfS .convCaseRet
+  | .uConvCaseStore => cmpOfS .convCaseStore
+  | .uConvCaseLoadMem => cmpOfS .convCaseLoadMem
+  | .uConvCaseImm => cmpOfS .convCaseImm
+  | .uConvCaseTax => cmpOfS .convCaseTax
+  | .uConvCaseTxa => cmpOfS .convCaseTxa
+  | .uConvCaseLen => cmpOfS .convCaseLen
+  | .uConvCaseLdxAbsW => cmpOfS .convCaseLdxAbsW
+  | .uConvCaseDefault => cmpOfS .convCaseDefault
+  | .uConvAluClassLd => cmpOfS .convAluClassLd
+  | .uConvAluModeAbs => cmpOfS .convAluModeAbs
+  | .uConvAluClassLd2 => cmpOfS .convAluClassLd2
+  | .uConvCodeDivX => cmpOfS .convCodeDivX
+  | .uConvCodeModX => cmpOfS .convCodeModX
+  | .uConvJmpSrcK => cmpOfS .convJmpSrcK
+  | .uConvJmpKNegative => cmpOfS .convJmpKNegative
+  | .uConvJmpSrcX => cmpOfS .convJmpSrcX
+  | .uConvJfZero => cmpOfS .convJfZero
+  | .uConvJtZero => cmpOfS .convJtZero
+  | .uConvJtZeroJeq => cmpOfS .convJtZeroJeq
+  | .uConvJtZeroJgt => cmpOfS .convJtZeroJgt
+  | .uConvJtZeroJge => cmpOfS .convJtZeroJge
+  | .uConvJtZeroDefault => cmpOfS .convJtZeroDefault
+  | .uEmitTargetOverLenJa => cmpOfS .emitTargetOverLenJa
+  | .uEmitTargetNegativeJa => cmpOfS .emitTargetNegativeJa
+  | .uEmitHasAddrsJa => cmpOfS .emitHasAddrsJa
+  | .uEmitOffBelowMinJa => cmpOfS .emitOffBelowMinJa
+  | .uEmitOffAboveMaxJa => cmpOfS .emitOffAboveMaxJa
+  | .uEmitTargetOverLenJf => cmpOfS .emitTargetOverLenJf
+  | .uEmitTargetNegativeJf => cmpOfS .emitTargetNegativeJf
+  | .uEmitHasAddrsJf => cmpOfS .emitHasAddrsJf
+  | .uEmitOffBelowMinJf => cmpOfS .emitOffBelowMinJf
+  | .uEmitOffAboveMaxJf => cmpOfS .emitOffAboveMaxJf
+  | .uEmitTargetOverLenJt => cmpOfS .emitTargetOverLenJt
+  | .uEmitTargetNegativeJt => cmpOfS .emitTargetNegativeJt
+  | .uEmitHasAddrsJt => cmpOfS .emitHasAddrsJt
+  | .uEmitOffBelowMinJt => cmpOfS .emitOffBelowMinJt
+  | .uEmitOffAboveMaxJt => cmpOfS .emitOffAboveMaxJt
+  | .uEmitTargetOverLenRest => cmpOfS .emitTargetOverLenRest
+  | .uEmitTargetNegativeRest => cmpOfS .emitTargetNegativeRest
+  | .uEmitHasAddrsRest => cmpOfS .emitHasAddrsRest
+  | .uEmitOffBelowMinRest => cmpOfS .emitOffBelowMinRest
+  | .uEmitOffAboveMaxRest => cmpOfS .emitOffAboveMaxRest
+  | .uEmitTargetOverLenRestJa => cmpOfS .emitTargetOverLenRestJa
+  | .uEmitTargetNegativeRestJa => cmpOfS .emitTargetNegativeRestJa
+  | .uEmitHasAddrsRestJa => cmpOfS .emitHasAddrsRestJa
+  | .uEmitOffBelowMinRestJa => cmpOfS .emitOffBelowMinRestJa
+  | .uEmitOffAboveMaxRestJa => cmpOfS .emitOffAboveMaxRestJa
+  | .uConvRetIsK => cmpOfS .convRetIsK
+  | .uConvStoreHasNewProg => cmpOfS .convStoreHasNewProg
+  | .uConvStackDepthBelow => cmpOfS .convStackDepthBelow
+  | .uConvEmitCopy => cmpOfS .convEmitCopy
+  | .uConvOnlyLength => cmpOfS .convOnlyLength
+  | .uConvSeenLdAbsLen => cmpOfS .convSeenLdAbsLen
+  | .uConvPassChanged => cmpOfS .convPassChanged
+  | .uConvPassOverflow => cmpOfS .convPassOverflow
+  | .uMigOldProgNoMem => cmpOfS .migOldProgNoMem
+  | .uMigConvert1Err => cmpOfS .migConvert1Err
+  | .uMigReallocNoMem => cmpOfS .migReallocNoMem
+  | .uMigConvert2Err => cmpOfS .migConvert2Err
+  | .uMigSelectRuntimeErr => cmpOfS .migSelectRuntimeErr
+  | .uReleaseSocketFilter => cmpOfS .releaseSocketFilter
+  | .uReleaseOrigHasFprog => cmpOfS .releaseOrigHasFprog
+  | .uEmitOffRangeJaPass1 => cmpOfS .emitOffRangeJaPass1
+  | .uEmitOffRangeJtPass1 => cmpOfS .emitOffRangeJtPass1
+  | .uEmitOffRangeRestPass1 => cmpOfS .emitOffRangeRestPass1
+  | .uEmitOffRangeRestJaPass1 => cmpOfS .emitOffRangeRestJaPass1
   -- P stream 2 signal (end)
   | _ => none
 
@@ -2010,6 +2582,149 @@ def Decision.repeatable : Decision → Bool
   -- advance's operation
   | .retransmitGiveUp | .keepaliveNeedAnother | .zeroKeyAlive | .zeroKeyAlreadyQueued
   | .persistentKeepaliveInterval => true
+  -- seccomp stream V: the entry path runs once per system call inside a window (the harness's own
+  -- calls included), the strict table, the chain walk and the cache's emulation are loops
+  | .secureComputingStrict | .secureComputingFilter | .secureComputingDead | .strictAllowedMatch | .strictMoreEntries
+  | .filterNoSd | .filterCaseErrno | .filterErrnoCap | .filterCaseTrap | .filterCaseTrace | .filterTraceRecheck
+  | .filterTraceNoTracer | .filterCaseUserNotif | .filterCaseLog | .filterCaseAllow | .filterCaseKill
+  | .filterKillNotThread | .filterKillLastThread | .filterSkipMatchLog
+  | .runFiltersNullHead | .runFiltersCacheHit | .runFiltersLoop | .runFiltersLower
+  | .cacheNrNegative | .cacheNrOverSize | .cacheBitSet | .attachWalker
+  | .logCaseAllow | .logCaseTrap | .logCaseErrno | .logCaseTrace | .logCaseUserNotif | .logCaseLog
+  | .logCaseKillThread | .logCaseKillProcess | .logTrapRequested | .logErrnoRequested | .logTraceRequested
+  | .logUserNotifRequested | .logNotLogged
+  | .uprobeExceptionUretprobe
+  | .constAllowNoFprog | .constAllowException | .constAllowLoop | .constAllowCaseLdAbs | .constAllowLdNr
+  | .constAllowLdArch | .constAllowLdOther | .constAllowCaseRet | .constAllowRetAllow | .constAllowCaseJa
+  | .constAllowCaseJcond | .constAllowJeq | .constAllowJeqRes | .constAllowJge | .constAllowJgeRes
+  | .constAllowJgt | .constAllowJgtRes | .constAllowJset | .constAllowJsetRes | .constAllowJcondDefault
+  | .constAllowJumpTaken | .constAllowCaseAnd | .constAllowCaseDefault
+  | .cachePrepareNr | .cachePrepareBitClear | .cachePrepareConstAllow => true
+  -- seccomp stream U: delegated
+  | .uBasicsFilterNull => (Seccomp.SDecision.info .basicsFilterNull).repeatable
+  | .uBasicsLenZero => (Seccomp.SDecision.info .basicsLenZero).repeatable
+  | .uBasicsLenOverMax => (Seccomp.SDecision.info .basicsLenOverMax).repeatable
+  | .uCreateBasicsNotOk => (Seccomp.SDecision.info .createBasicsNotOk).repeatable
+  | .uCreateProgAllocNoMem => (Seccomp.SDecision.info .createProgAllocNoMem).repeatable
+  | .uCreateCopyFault => (Seccomp.SDecision.info .createCopyFault).repeatable
+  | .uCreateSaveOrig => (Seccomp.SDecision.info .createSaveOrig).repeatable
+  | .uCreateStoreOrigErr => (Seccomp.SDecision.info .createStoreOrigErr).repeatable
+  | .uCreatePrepareErr => (Seccomp.SDecision.info .createPrepareErr).repeatable
+  | .uStoreOrigNoMem => (Seccomp.SDecision.info .storeOrigNoMem).repeatable
+  | .uStoreOrigFilterNoMem => (Seccomp.SDecision.info .storeOrigFilterNoMem).repeatable
+  | .uPrepCheckClassicErr => (Seccomp.SDecision.info .prepCheckClassicErr).repeatable
+  | .uPrepHasTrans => (Seccomp.SDecision.info .prepHasTrans).repeatable
+  | .uPrepTransErr => (Seccomp.SDecision.info .prepTransErr).repeatable
+  | .uPrepNotJited => (Seccomp.SDecision.info .prepNotJited).repeatable
+  | .uChkCodeOverTable => (Seccomp.SDecision.info .chkCodeOverTable).repeatable
+  | .uCheckCodeNotAllowed => (Seccomp.SDecision.info .checkCodeNotAllowed).repeatable
+  | .uCheckCaseDivModK => (Seccomp.SDecision.info .checkCaseDivModK).repeatable
+  | .uCheckCaseShiftK => (Seccomp.SDecision.info .checkCaseShiftK).repeatable
+  | .uCheckCaseMem => (Seccomp.SDecision.info .checkCaseMem).repeatable
+  | .uCheckCaseJa => (Seccomp.SDecision.info .checkCaseJa).repeatable
+  | .uCheckCaseJcond => (Seccomp.SDecision.info .checkCaseJcond).repeatable
+  | .uCheckCaseLdAbs => (Seccomp.SDecision.info .checkCaseLdAbs).repeatable
+  | .uCheckDivModKZero => (Seccomp.SDecision.info .checkDivModKZero).repeatable
+  | .uCheckShiftKRange => (Seccomp.SDecision.info .checkShiftKRange).repeatable
+  | .uCheckMemIndex => (Seccomp.SDecision.info .checkMemIndex).repeatable
+  | .uCheckJaRange => (Seccomp.SDecision.info .checkJaRange).repeatable
+  | .uCheckJtRange => (Seccomp.SDecision.info .checkJtRange).repeatable
+  | .uCheckJfRange => (Seccomp.SDecision.info .checkJfRange).repeatable
+  | .uCheckAncFound => (Seccomp.SDecision.info .checkAncFound).repeatable
+  | .uCheckAncNotFound => (Seccomp.SDecision.info .checkAncNotFound).repeatable
+  | .uCheckAncOffset => (Seccomp.SDecision.info .checkAncOffset).repeatable
+  | .uCheckLastRet => (Seccomp.SDecision.info .checkLastRet).repeatable
+  | .uClsMasksNoMem => (Seccomp.SDecision.info .clsMasksNoMem).repeatable
+  | .uClsCaseStore => (Seccomp.SDecision.info .clsCaseStore).repeatable
+  | .uClsCaseLoad => (Seccomp.SDecision.info .clsCaseLoad).repeatable
+  | .uClsCaseJa => (Seccomp.SDecision.info .clsCaseJa).repeatable
+  | .uClsCaseJcond => (Seccomp.SDecision.info .clsCaseJcond).repeatable
+  | .uClsLoadUnstored => (Seccomp.SDecision.info .clsLoadUnstored).repeatable
+  | .uScfCaseLdAbsW => (Seccomp.SDecision.info .scfCaseLdAbsW).repeatable
+  | .uScfCaseLdLen => (Seccomp.SDecision.info .scfCaseLdLen).repeatable
+  | .uScfCaseLdxLen => (Seccomp.SDecision.info .scfCaseLdxLen).repeatable
+  | .uScfCaseAllowed => (Seccomp.SDecision.info .scfCaseAllowed).repeatable
+  | .uScfCaseDefault => (Seccomp.SDecision.info .scfCaseDefault).repeatable
+  | .uScfCtxOffsetRange => (Seccomp.SDecision.info .scfCtxOffsetRange).repeatable
+  | .uScfCtxMisaligned => (Seccomp.SDecision.info .scfCtxMisaligned).repeatable
+  | .uConvLenNonpositive => (Seccomp.SDecision.info .convLenNonpositive).repeatable
+  | .uConvLenOverMax => (Seccomp.SDecision.info .convLenOverMax).repeatable
+  | .uConvHasNewProg => (Seccomp.SDecision.info .convHasNewProg).repeatable
+  | .uConvAddrsNoMem => (Seccomp.SDecision.info .convAddrsNoMem).repeatable
+  | .uConvPrologue => (Seccomp.SDecision.info .convPrologue).repeatable
+  | .uConvSeenLdAbs => (Seccomp.SDecision.info .convSeenLdAbs).repeatable
+  | .uConvHasAddrs => (Seccomp.SDecision.info .convHasAddrs).repeatable
+  | .uConvCaseAluLoad => (Seccomp.SDecision.info .convCaseAluLoad).repeatable
+  | .uConvCaseJa => (Seccomp.SDecision.info .convCaseJa).repeatable
+  | .uConvCaseJcond => (Seccomp.SDecision.info .convCaseJcond).repeatable
+  | .uConvCaseLdxMsh => (Seccomp.SDecision.info .convCaseLdxMsh).repeatable
+  | .uConvCaseRet => (Seccomp.SDecision.info .convCaseRet).repeatable
+  | .uConvCaseStore => (Seccomp.SDecision.info .convCaseStore).repeatable
+  | .uConvCaseLoadMem => (Seccomp.SDecision.info .convCaseLoadMem).repeatable
+  | .uConvCaseImm => (Seccomp.SDecision.info .convCaseImm).repeatable
+  | .uConvCaseTax => (Seccomp.SDecision.info .convCaseTax).repeatable
+  | .uConvCaseTxa => (Seccomp.SDecision.info .convCaseTxa).repeatable
+  | .uConvCaseLen => (Seccomp.SDecision.info .convCaseLen).repeatable
+  | .uConvCaseLdxAbsW => (Seccomp.SDecision.info .convCaseLdxAbsW).repeatable
+  | .uConvCaseDefault => (Seccomp.SDecision.info .convCaseDefault).repeatable
+  | .uConvAluClassLd => (Seccomp.SDecision.info .convAluClassLd).repeatable
+  | .uConvAluModeAbs => (Seccomp.SDecision.info .convAluModeAbs).repeatable
+  | .uConvAluClassLd2 => (Seccomp.SDecision.info .convAluClassLd2).repeatable
+  | .uConvCodeDivX => (Seccomp.SDecision.info .convCodeDivX).repeatable
+  | .uConvCodeModX => (Seccomp.SDecision.info .convCodeModX).repeatable
+  | .uConvJmpSrcK => (Seccomp.SDecision.info .convJmpSrcK).repeatable
+  | .uConvJmpKNegative => (Seccomp.SDecision.info .convJmpKNegative).repeatable
+  | .uConvJmpSrcX => (Seccomp.SDecision.info .convJmpSrcX).repeatable
+  | .uConvJfZero => (Seccomp.SDecision.info .convJfZero).repeatable
+  | .uConvJtZero => (Seccomp.SDecision.info .convJtZero).repeatable
+  | .uConvJtZeroJeq => (Seccomp.SDecision.info .convJtZeroJeq).repeatable
+  | .uConvJtZeroJgt => (Seccomp.SDecision.info .convJtZeroJgt).repeatable
+  | .uConvJtZeroJge => (Seccomp.SDecision.info .convJtZeroJge).repeatable
+  | .uConvJtZeroDefault => (Seccomp.SDecision.info .convJtZeroDefault).repeatable
+  | .uEmitTargetOverLenJa => (Seccomp.SDecision.info .emitTargetOverLenJa).repeatable
+  | .uEmitTargetNegativeJa => (Seccomp.SDecision.info .emitTargetNegativeJa).repeatable
+  | .uEmitHasAddrsJa => (Seccomp.SDecision.info .emitHasAddrsJa).repeatable
+  | .uEmitOffBelowMinJa => (Seccomp.SDecision.info .emitOffBelowMinJa).repeatable
+  | .uEmitOffAboveMaxJa => (Seccomp.SDecision.info .emitOffAboveMaxJa).repeatable
+  | .uEmitTargetOverLenJf => (Seccomp.SDecision.info .emitTargetOverLenJf).repeatable
+  | .uEmitTargetNegativeJf => (Seccomp.SDecision.info .emitTargetNegativeJf).repeatable
+  | .uEmitHasAddrsJf => (Seccomp.SDecision.info .emitHasAddrsJf).repeatable
+  | .uEmitOffBelowMinJf => (Seccomp.SDecision.info .emitOffBelowMinJf).repeatable
+  | .uEmitOffAboveMaxJf => (Seccomp.SDecision.info .emitOffAboveMaxJf).repeatable
+  | .uEmitTargetOverLenJt => (Seccomp.SDecision.info .emitTargetOverLenJt).repeatable
+  | .uEmitTargetNegativeJt => (Seccomp.SDecision.info .emitTargetNegativeJt).repeatable
+  | .uEmitHasAddrsJt => (Seccomp.SDecision.info .emitHasAddrsJt).repeatable
+  | .uEmitOffBelowMinJt => (Seccomp.SDecision.info .emitOffBelowMinJt).repeatable
+  | .uEmitOffAboveMaxJt => (Seccomp.SDecision.info .emitOffAboveMaxJt).repeatable
+  | .uEmitTargetOverLenRest => (Seccomp.SDecision.info .emitTargetOverLenRest).repeatable
+  | .uEmitTargetNegativeRest => (Seccomp.SDecision.info .emitTargetNegativeRest).repeatable
+  | .uEmitHasAddrsRest => (Seccomp.SDecision.info .emitHasAddrsRest).repeatable
+  | .uEmitOffBelowMinRest => (Seccomp.SDecision.info .emitOffBelowMinRest).repeatable
+  | .uEmitOffAboveMaxRest => (Seccomp.SDecision.info .emitOffAboveMaxRest).repeatable
+  | .uEmitTargetOverLenRestJa => (Seccomp.SDecision.info .emitTargetOverLenRestJa).repeatable
+  | .uEmitTargetNegativeRestJa => (Seccomp.SDecision.info .emitTargetNegativeRestJa).repeatable
+  | .uEmitHasAddrsRestJa => (Seccomp.SDecision.info .emitHasAddrsRestJa).repeatable
+  | .uEmitOffBelowMinRestJa => (Seccomp.SDecision.info .emitOffBelowMinRestJa).repeatable
+  | .uEmitOffAboveMaxRestJa => (Seccomp.SDecision.info .emitOffAboveMaxRestJa).repeatable
+  | .uConvRetIsK => (Seccomp.SDecision.info .convRetIsK).repeatable
+  | .uConvStoreHasNewProg => (Seccomp.SDecision.info .convStoreHasNewProg).repeatable
+  | .uConvStackDepthBelow => (Seccomp.SDecision.info .convStackDepthBelow).repeatable
+  | .uConvEmitCopy => (Seccomp.SDecision.info .convEmitCopy).repeatable
+  | .uConvOnlyLength => (Seccomp.SDecision.info .convOnlyLength).repeatable
+  | .uConvSeenLdAbsLen => (Seccomp.SDecision.info .convSeenLdAbsLen).repeatable
+  | .uConvPassChanged => (Seccomp.SDecision.info .convPassChanged).repeatable
+  | .uConvPassOverflow => (Seccomp.SDecision.info .convPassOverflow).repeatable
+  | .uMigOldProgNoMem => (Seccomp.SDecision.info .migOldProgNoMem).repeatable
+  | .uMigConvert1Err => (Seccomp.SDecision.info .migConvert1Err).repeatable
+  | .uMigReallocNoMem => (Seccomp.SDecision.info .migReallocNoMem).repeatable
+  | .uMigConvert2Err => (Seccomp.SDecision.info .migConvert2Err).repeatable
+  | .uMigSelectRuntimeErr => (Seccomp.SDecision.info .migSelectRuntimeErr).repeatable
+  | .uReleaseSocketFilter => (Seccomp.SDecision.info .releaseSocketFilter).repeatable
+  | .uReleaseOrigHasFprog => (Seccomp.SDecision.info .releaseOrigHasFprog).repeatable
+  | .uEmitOffRangeJaPass1 => (Seccomp.SDecision.info .emitOffRangeJaPass1).repeatable
+  | .uEmitOffRangeJtPass1 => (Seccomp.SDecision.info .emitOffRangeJtPass1).repeatable
+  | .uEmitOffRangeRestPass1 => (Seccomp.SDecision.info .emitOffRangeRestPass1).repeatable
+  | .uEmitOffRangeRestJaPass1 => (Seccomp.SDecision.info .emitOffRangeRestJaPass1).repeatable
   | _ => false
 
 /-- Every decision, enumerated through the constructor index. -/
@@ -2017,6 +2732,136 @@ def Decision.all : List Decision :=
   (List.range 4096).filterMap fun i =>
     let x := Decision.ofNat i
     if x.ctorIdx == i then some x else none
+
+
+/-- The bridge's map (docs/2026-10-12-seccomp-design.md; stream U's deviation 1): each
+    `SDecision` to its `Decision`, used by the `SeccompM` instance over `M`
+    (`Leanux/Seccomp/Bridge.lean`). -/
+def Seccomp.SDecision.toDecision : Seccomp.SDecision → Decision
+  | .basicsFilterNull => .uBasicsFilterNull
+  | .basicsLenZero => .uBasicsLenZero
+  | .basicsLenOverMax => .uBasicsLenOverMax
+  | .createBasicsNotOk => .uCreateBasicsNotOk
+  | .createProgAllocNoMem => .uCreateProgAllocNoMem
+  | .createCopyFault => .uCreateCopyFault
+  | .createSaveOrig => .uCreateSaveOrig
+  | .createStoreOrigErr => .uCreateStoreOrigErr
+  | .createPrepareErr => .uCreatePrepareErr
+  | .storeOrigNoMem => .uStoreOrigNoMem
+  | .storeOrigFilterNoMem => .uStoreOrigFilterNoMem
+  | .prepCheckClassicErr => .uPrepCheckClassicErr
+  | .prepHasTrans => .uPrepHasTrans
+  | .prepTransErr => .uPrepTransErr
+  | .prepNotJited => .uPrepNotJited
+  | .chkCodeOverTable => .uChkCodeOverTable
+  | .checkCodeNotAllowed => .uCheckCodeNotAllowed
+  | .checkCaseDivModK => .uCheckCaseDivModK
+  | .checkCaseShiftK => .uCheckCaseShiftK
+  | .checkCaseMem => .uCheckCaseMem
+  | .checkCaseJa => .uCheckCaseJa
+  | .checkCaseJcond => .uCheckCaseJcond
+  | .checkCaseLdAbs => .uCheckCaseLdAbs
+  | .checkDivModKZero => .uCheckDivModKZero
+  | .checkShiftKRange => .uCheckShiftKRange
+  | .checkMemIndex => .uCheckMemIndex
+  | .checkJaRange => .uCheckJaRange
+  | .checkJtRange => .uCheckJtRange
+  | .checkJfRange => .uCheckJfRange
+  | .checkAncFound => .uCheckAncFound
+  | .checkAncNotFound => .uCheckAncNotFound
+  | .checkAncOffset => .uCheckAncOffset
+  | .checkLastRet => .uCheckLastRet
+  | .clsMasksNoMem => .uClsMasksNoMem
+  | .clsCaseStore => .uClsCaseStore
+  | .clsCaseLoad => .uClsCaseLoad
+  | .clsCaseJa => .uClsCaseJa
+  | .clsCaseJcond => .uClsCaseJcond
+  | .clsLoadUnstored => .uClsLoadUnstored
+  | .scfCaseLdAbsW => .uScfCaseLdAbsW
+  | .scfCaseLdLen => .uScfCaseLdLen
+  | .scfCaseLdxLen => .uScfCaseLdxLen
+  | .scfCaseAllowed => .uScfCaseAllowed
+  | .scfCaseDefault => .uScfCaseDefault
+  | .scfCtxOffsetRange => .uScfCtxOffsetRange
+  | .scfCtxMisaligned => .uScfCtxMisaligned
+  | .convLenNonpositive => .uConvLenNonpositive
+  | .convLenOverMax => .uConvLenOverMax
+  | .convHasNewProg => .uConvHasNewProg
+  | .convAddrsNoMem => .uConvAddrsNoMem
+  | .convPrologue => .uConvPrologue
+  | .convSeenLdAbs => .uConvSeenLdAbs
+  | .convHasAddrs => .uConvHasAddrs
+  | .convCaseAluLoad => .uConvCaseAluLoad
+  | .convCaseJa => .uConvCaseJa
+  | .convCaseJcond => .uConvCaseJcond
+  | .convCaseLdxMsh => .uConvCaseLdxMsh
+  | .convCaseRet => .uConvCaseRet
+  | .convCaseStore => .uConvCaseStore
+  | .convCaseLoadMem => .uConvCaseLoadMem
+  | .convCaseImm => .uConvCaseImm
+  | .convCaseTax => .uConvCaseTax
+  | .convCaseTxa => .uConvCaseTxa
+  | .convCaseLen => .uConvCaseLen
+  | .convCaseLdxAbsW => .uConvCaseLdxAbsW
+  | .convCaseDefault => .uConvCaseDefault
+  | .convAluClassLd => .uConvAluClassLd
+  | .convAluModeAbs => .uConvAluModeAbs
+  | .convAluClassLd2 => .uConvAluClassLd2
+  | .convCodeDivX => .uConvCodeDivX
+  | .convCodeModX => .uConvCodeModX
+  | .convJmpSrcK => .uConvJmpSrcK
+  | .convJmpKNegative => .uConvJmpKNegative
+  | .convJmpSrcX => .uConvJmpSrcX
+  | .convJfZero => .uConvJfZero
+  | .convJtZero => .uConvJtZero
+  | .convJtZeroJeq => .uConvJtZeroJeq
+  | .convJtZeroJgt => .uConvJtZeroJgt
+  | .convJtZeroJge => .uConvJtZeroJge
+  | .convJtZeroDefault => .uConvJtZeroDefault
+  | .emitTargetOverLenJa => .uEmitTargetOverLenJa
+  | .emitTargetNegativeJa => .uEmitTargetNegativeJa
+  | .emitHasAddrsJa => .uEmitHasAddrsJa
+  | .emitOffBelowMinJa => .uEmitOffBelowMinJa
+  | .emitOffAboveMaxJa => .uEmitOffAboveMaxJa
+  | .emitTargetOverLenJf => .uEmitTargetOverLenJf
+  | .emitTargetNegativeJf => .uEmitTargetNegativeJf
+  | .emitHasAddrsJf => .uEmitHasAddrsJf
+  | .emitOffBelowMinJf => .uEmitOffBelowMinJf
+  | .emitOffAboveMaxJf => .uEmitOffAboveMaxJf
+  | .emitTargetOverLenJt => .uEmitTargetOverLenJt
+  | .emitTargetNegativeJt => .uEmitTargetNegativeJt
+  | .emitHasAddrsJt => .uEmitHasAddrsJt
+  | .emitOffBelowMinJt => .uEmitOffBelowMinJt
+  | .emitOffAboveMaxJt => .uEmitOffAboveMaxJt
+  | .emitTargetOverLenRest => .uEmitTargetOverLenRest
+  | .emitTargetNegativeRest => .uEmitTargetNegativeRest
+  | .emitHasAddrsRest => .uEmitHasAddrsRest
+  | .emitOffBelowMinRest => .uEmitOffBelowMinRest
+  | .emitOffAboveMaxRest => .uEmitOffAboveMaxRest
+  | .emitTargetOverLenRestJa => .uEmitTargetOverLenRestJa
+  | .emitTargetNegativeRestJa => .uEmitTargetNegativeRestJa
+  | .emitHasAddrsRestJa => .uEmitHasAddrsRestJa
+  | .emitOffBelowMinRestJa => .uEmitOffBelowMinRestJa
+  | .emitOffAboveMaxRestJa => .uEmitOffAboveMaxRestJa
+  | .convRetIsK => .uConvRetIsK
+  | .convStoreHasNewProg => .uConvStoreHasNewProg
+  | .convStackDepthBelow => .uConvStackDepthBelow
+  | .convEmitCopy => .uConvEmitCopy
+  | .convOnlyLength => .uConvOnlyLength
+  | .convSeenLdAbsLen => .uConvSeenLdAbsLen
+  | .convPassChanged => .uConvPassChanged
+  | .convPassOverflow => .uConvPassOverflow
+  | .migOldProgNoMem => .uMigOldProgNoMem
+  | .migConvert1Err => .uMigConvert1Err
+  | .migReallocNoMem => .uMigReallocNoMem
+  | .migConvert2Err => .uMigConvert2Err
+  | .migSelectRuntimeErr => .uMigSelectRuntimeErr
+  | .releaseSocketFilter => .uReleaseSocketFilter
+  | .releaseOrigHasFprog => .uReleaseOrigHasFprog
+  | .emitOffRangeJaPass1 => .uEmitOffRangeJaPass1
+  | .emitOffRangeJtPass1 => .uEmitOffRangeJtPass1
+  | .emitOffRangeRestPass1 => .uEmitOffRangeRestPass1
+  | .emitOffRangeRestJaPass1 => .uEmitOffRangeRestJaPass1
 
 def Step.label (s : Step) : String :=
   s!"{s.decision.info.label}={if s.outcome then 1 else 0}"

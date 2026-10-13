@@ -2,6 +2,7 @@ import Leanux.Kernel.Decision
 import Leanux.WG.Types
 import Std.Data.TreeMap
 import Std.Data.TreeSet
+import Std.Data.HashSet
 import Lean.Data.Json
 
 /-!
@@ -517,6 +518,8 @@ structure Kernel where
   seccompFilters : TreeMap FilterId SeccompFilter := {}
   child : Option Task := none
   current : TaskRef := .task
+  /-- The next filter's allocation identity (stream V): monotone, never reused. -/
+  nextFilter : FilterId := 0
   deriving BEq
 
 /-! ## Allocation outcomes (docs/2026-10-05-a-alloc.md, section 6)
@@ -848,10 +851,19 @@ inductive HiddenSite where
       class `program`, one per emitted `bpf_insn` (its eight bytes) and then
       one with the eBPF length, written in `bpf_migrate_filter` after the
       second pass and before `bpf_prog_select_runtime` (net/core/filter.c,
-      between :1305 and :1315 of the locked source; stream W's hook fixes
-      the consumer line in the patched source and this entry follows it).
-      Consumed in order at the end of the mirror's translation (4.3). -/
+      between :1305 and :1315 of the locked source; stream W's line-preserving
+      hook fixes the consumer at :1315). The length record comes first, then
+      one per instruction (stream W's measurement); consumed in order at the
+      end of the mirror's translation (4.3) through the bridge, which reads
+      the length first and holds it in `World.translatedLen`. -/
   | bpfProgInsn
+  /-- seccomp (stream V, measured on stream W's scratch kernel): the two
+      clock reads of `copy_process` in the parent's window of a child probe,
+      `p->start_time = ktime_get_ns()` at `kernel/fork.c:2532` (kind 206) and
+      `p->start_boottime = ktime_get_boottime_ns()` at :2533 (kind 207),
+      8 bytes each, consumed in that order at the child's creation
+      (`Env.forkClocks`). -/
+  | forkStartTime | forkStartBoottime
   /-- P (pipes): `current_time` (fs/inode.c:2648), the coarse real-time
       clock read through `ktime_get_coarse_real_ts64` (kind 215), shared by
       all five callers on the pipe paths (design section 3). -/
@@ -1032,7 +1044,9 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   -- W5+W6 (ids 140-149)
   | .inetEhashSecret => ⟨140, "inet_ehash_secret", "random", "net/ipv4/inet_hashtables.c", 36, 4, .cut⟩
   -- seccomp (ids 400-419; 400-410 are `AllocSite.hiddenId`'s)
-  | .bpfProgInsn => ⟨411, "bpf_prog_insn", "program", "net/core/filter.c", 1314, 8, .mirror⟩
+  | .bpfProgInsn => ⟨411, "bpf_prog_insn", "program", "net/core/filter.c", 1315, 8, .mirror⟩
+  | .forkStartTime => ⟨412, "fork_start_time", "clock", "kernel/fork.c", 2532, 8, .mirror⟩
+  | .forkStartBoottime => ⟨413, "fork_start_boottime", "clock", "kernel/fork.c", 2533, 8, .mirror⟩
 
 def HiddenSite.all : List HiddenSite :=
   [.initEphemeral, .respEphemeral, .tai64nNow, .indexDraw, .resetLastSent, .birthdateExpired, .initLastSent,
@@ -1049,7 +1063,7 @@ def HiddenSite.all : List HiddenSite :=
   ++ AllocSite.all.map .alloc
   ++ [.currentTime]
   ++ [.underLoadNow, .cookieNonce, .ratelimiterNow, .ratelimiterInsertNow]
-  ++ [.bpfProgInsn]
+  ++ [.bpfProgInsn, .forkStartTime, .forkStartBoottime]
   ++ [.inetEhashSecret]
 
 /-- The resched site of a worker's `cond_resched`, for the workers that
@@ -1127,6 +1141,14 @@ structure World where
   timing : Timing
   envCalls : List (EnvSite × Nat) := []
   steps : Array Step := #[]
+  /-- seccomp (design 4.2, 4.5): the repeatable decisions of the checker,
+      the translation, the cache's emulation and the entry path are emitted
+      once per operation as a set of (decision, outcome, operands); the keys
+      emitted so far in this operation (`Seccomp.Bridge`). -/
+  emitted : Std.HashSet String := {}
+  /-- seccomp: the kind-309 length record, read before the instructions
+      (stream W's order) and answered to the translation after them. -/
+  translatedLen : Option Nat := none
   /-- The caller's buffer (user memory), as written by `copy_to_iter` (an
       eventfd read's 8 bytes) or `copy_page_to_iter` (a pipe read). -/
   userOut : Option ByteArray := none

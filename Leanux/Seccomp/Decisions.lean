@@ -43,6 +43,9 @@ structure SDecisionInfo where
   /-- A value comparison: the relation and whether the right-hand operand is
       a compile-time constant. -/
   comparison : Option (SRel × Bool) := none
+  /-- The line DWARF attributes the comparison to, when it differs from the
+      condition's line (a two-line condition, an inlined compare). -/
+  site : Option Nat := none
   repeatable : Bool := false
   deriving Repr
 
@@ -82,6 +85,12 @@ inductive SDecision where
   | convOnlyLength | convSeenLdAbsLen | convPassChanged | convPassOverflow
   -- bpf_migrate_filter (:1259)
   | migOldProgNoMem | migConvert1Err | migReallocNoMem | migConvert2Err | migSelectRuntimeErr
+  -- __bpf_prog_release (:1183) and bpf_release_orig_filter (:1173): the release on
+  -- bpf_prepare_filter's two error arms (stream V's measurement; also at a failed attach)
+  | releaseSocketFilter | releaseOrigHasFprog
+  -- the length-only pass folds BPF_EMIT_JMP's offset range test (measured): plain twins of
+  -- the four merged compares for that pass
+  | emitOffRangeJaPass1 | emitOffRangeJtPass1 | emitOffRangeRestPass1 | emitOffRangeRestJaPass1
   deriving Repr, BEq, DecidableEq, Inhabited
 
 /-- The five expansion sites of `BPF_EMIT_JMP` in `bpf_convert_filter`. -/
@@ -101,31 +110,43 @@ private def c (label file : String) (line : Nat) (rel : SRel) (constRhs : Bool)
   { label, file, line, whenTrue := t, whenFalse := f, comparison := some (rel, constRhs) }
 
 private def rep (i : SDecisionInfo) : SDecisionInfo := { i with repeatable := true }
+/-- A comparison DWARF attributes to another line. -/
+private def at_ (line : Nat) (i : SDecisionInfo) : SDecisionInfo := { i with site := some line }
+
+/-! Stream V's differential measurement on stream W's scratch kernel (the
+hand-written set, 2026-10-13) corrected the compiled shape of several tests:
+`x == 0 || x > N` is one unsigned compare `(x - 1) > N - 1` (filter.c:589,
+:1052); `BPF_EMIT_JMP`'s `off < S16_MIN || off > S16_MAX` is one compare
+`(off + 32768) > 0xffff` at :725, :778, :785, :790 and is folded away at
+:757, and its `target < 0` is folded into the unsigned `target >= len` at
+every site but :725; the `anc_found` tests record no comparison; the `jf`
+range compare is attributed to :1124; a line whose point the false path
+also hits is no witness (:590, :951, :1091, :1340, :1363, :1462, :1320). -/
 
 def SDecision.info : SDecision → SDecisionInfo
   -- bpf_check_basics_ok, inlined into bpf_prog_create_from_user; `flen == 0 ||
   -- flen > BPF_MAXINSNS` is one line, the first operand's body is shared
   -- a pointer test: no operands (the mirror does not hold user addresses)
   | .basicsFilterNull => d "bpf_check_basics_ok.filter_null" fc 1050 [(1051, 1051)] [(1052, 1052)]
-  | .basicsLenZero => c "bpf_check_basics_ok.flen_zero" fc 1052 .eq true [] []
-  | .basicsLenOverMax => c "bpf_check_basics_ok.flen_over_max" fc 1052 .gt true [(1053, 1053)] [(1055, 1055)]
+  | .basicsLenZero => c "bpf_check_basics_ok.flen_outside_range" fc 1052 .gt true [(1053, 1053)] [(1055, 1055)]
+  | .basicsLenOverMax => d "bpf_check_basics_ok.flen_over_max" fc 1052 [] []
   | .createBasicsNotOk => d "bpf_prog_create_from_user.basics_not_ok" fc 1431 [(1432, 1432)] [(1434, 1434)]
   | .createProgAllocNoMem => d "bpf_prog_create_from_user.prog_alloc_nomem" fc 1435 [(1436, 1436)] [(1438, 1438)]
   | .createCopyFault => d "bpf_prog_create_from_user.copy_from_user_fault" fc 1438 [(1439, 1440)] [(1442, 1446)]
   | .createSaveOrig => d "bpf_prog_create_from_user.save_orig" fc 1446 [(1447, 1448)] []
   | .createStoreOrigErr => d "bpf_prog_create_from_user.store_orig_err" fc 1448 [(1449, 1450)] [(1457, 1457)]
-  | .createPrepareErr => d "bpf_prog_create_from_user.prepare_err" fc 1458 [(1459, 1459)] [(1461, 1462)]
+  | .createPrepareErr => d "bpf_prog_create_from_user.prepare_err" fc 1458 [(1459, 1459)] [(1461, 1461)]
   | .storeOrigNoMem => d "bpf_prog_store_orig_filter.fkprog_nomem" fc 1157 [(1158, 1158)] [(1160, 1163)]
   | .storeOrigFilterNoMem => d "bpf_prog_store_orig_filter.filter_nomem" fc 1165 [(1166, 1167)] [(1170, 1170)]
-  | .prepCheckClassicErr => d "bpf_prepare_filter.check_classic_err" fc 1338 [(1339, 1340)] [(1346, 1346)]
+  | .prepCheckClassicErr => d "bpf_prepare_filter.check_classic_err" fc 1338 [(1339, 1339)] [(1346, 1346)]
   | .prepHasTrans => d "bpf_prepare_filter.has_trans" fc 1346 [(1347, 1347)] []
   | .prepTransErr => d "bpf_prepare_filter.trans_err" fc 1348 [(1349, 1350)] [(1357, 1357)]
-  | .prepNotJited => d "bpf_prepare_filter.not_jited" fc 1362 [(1363, 1363)] []
+  | .prepNotJited => d "bpf_prepare_filter.not_jited" fc 1362 [] []
   -- chk_code_allowed: `code_to_probe >= ARRAY_SIZE(codes)`, 0xb2 (the table's
   -- last initialised index is BPF_LDX | BPF_B | BPF_MSH = 0xb1)
   | .chkCodeOverTable => rep <| c "chk_code_allowed.over_table" fc 1041 .ge true [(1042, 1042)] [(1044, 1044)]
   | .checkCodeNotAllowed => rep <| d "bpf_check_classic.code_not_allowed" fc 1083 [(1084, 1084)] [(1087, 1087)]
-  | .checkCaseDivModK => rep <| d "bpf_check_classic.case_div_mod_k" fc 1088 [(1091, 1091)] []
+  | .checkCaseDivModK => rep <| d "bpf_check_classic.case_div_mod_k" fc 1088 [] []
   | .checkCaseShiftK => rep <| d "bpf_check_classic.case_shift_k" fc 1094 [(1096, 1096)] []
   | .checkCaseMem => rep <| d "bpf_check_classic.case_mem" fc 1099 [(1104, 1104)] []
   | .checkCaseJa => rep <| d "bpf_check_classic.case_ja" fc 1107 [(1112, 1112)] []
@@ -137,16 +158,16 @@ def SDecision.info : SDecision → SDecisionInfo
   | .checkJaRange => rep <| c "bpf_check_classic.ja_over_end" fc 1112 .ge false [(1113, 1113)] [(1114, 1114)]
   -- `pc + jt + 1 >= flen || pc + jf + 1 >= flen` over two lines, body shared
   | .checkJtRange => rep <| c "bpf_check_classic.jt_over_end" fc 1124 .ge false [] [(1125, 1125)]
-  | .checkJfRange => rep <| c "bpf_check_classic.jf_over_end" fc 1125 .ge false [(1126, 1126)] [(1127, 1127)]
-  | .checkAncFound => rep <| c "bpf_check_classic.anc_found" fc 1132 .flag true [(1133, 1133)] []
+  | .checkJfRange => rep <| at_ 1124 <| c "bpf_check_classic.jf_over_end" fc 1125 .ge false [(1126, 1126)] [(1127, 1127)]
+  | .checkAncFound => rep <| d "bpf_check_classic.anc_found" fc 1132 [(1133, 1133)] []
   -- `anc_found == false && ftest->k >= SKF_AD_OFF` on one line
-  | .checkAncNotFound => rep <| c "bpf_check_classic.anc_not_found" fc 1135 .eq true [] []
+  | .checkAncNotFound => rep <| d "bpf_check_classic.anc_not_found" fc 1135 [] []
   | .checkAncOffset => rep <| c "bpf_check_classic.k_over_skf_ad_off" fc 1135 .ge true [(1136, 1136)] []
   -- the switch on the last instruction's code: both arms share one body
   | .checkLastRet => d "bpf_check_classic.last_is_ret" fc 1141 [(1144, 1144)] [(1147, 1147)]
   | .clsMasksNoMem => d "check_load_and_stores.masks_nomem" fc 936 [(937, 937)] [(939, 939)]
   | .clsCaseStore => rep <| d "check_load_and_stores.case_store" fc 945 [(947, 948)] []
-  | .clsCaseLoad => rep <| d "check_load_and_stores.case_load" fc 949 [(951, 951)] []
+  | .clsCaseLoad => rep <| d "check_load_and_stores.case_load" fc 949 [] []
   | .clsCaseJa => rep <| d "check_load_and_stores.case_ja" fc 956 [(958, 960)] []
   | .clsCaseJcond => rep <| d "check_load_and_stores.case_jcond" fc 961 [(970, 973)] []
   | .clsLoadUnstored => rep <| c "check_load_and_stores.load_unstored" fc 951 .flag false [(952, 953)] [(955, 955)]
@@ -154,15 +175,19 @@ def SDecision.info : SDecision → SDecisionInfo
   | .scfCaseLdLen => rep <| d "seccomp_check_filter.case_ld_w_len" sc 295 [(296, 298)] []
   | .scfCaseLdxLen => rep <| d "seccomp_check_filter.case_ldx_w_len" sc 299 [(300, 302)] []
   | .scfCaseAllowed => rep <| d "seccomp_check_filter.case_allowed" sc 304 [(342, 342)] []
-  | .scfCaseDefault => rep <| d "seccomp_check_filter.case_default" sc 343 [(344, 344)] []
+  -- the three `default:` arms are anchored on their first statement: a label line owns no code
+  -- (evaluator/check.py `non_statement`), which only a bridged table meets (stream V)
+  | .scfCaseDefault => rep <| d "seccomp_check_filter.case_default" sc 344 [(344, 344)] []
   -- `k >= sizeof(struct seccomp_data) || k & 3` on one line
   | .scfCtxOffsetRange => rep <| c "seccomp_check_filter.k_over_data_size" sc 292 .ge true [] []
-  | .scfCtxMisaligned => rep <| c "seccomp_check_filter.k_misaligned" sc 292 .flag true [(293, 293)] [(294, 294)]
+  -- 293's return has a point the aligned path also hits (measured): no witness
+  | .scfCtxMisaligned => rep <| c "seccomp_check_filter.k_misaligned" sc 292 .flag true [] [(294, 294)]
   -- `len <= 0 || len > BPF_MAXINSNS` on one line
-  | .convLenNonpositive => c "bpf_convert_filter.len_nonpositive" fc 589 .le true [] []
-  | .convLenOverMax => c "bpf_convert_filter.len_over_max" fc 589 .gt true [(590, 590)] [(592, 592)]
-  | .convHasNewProg => d "bpf_convert_filter.has_new_prog" fc 592 [(593, 596)] []
-  | .convAddrsNoMem => d "bpf_convert_filter.addrs_nomem" fc 596 [(597, 597)] []
+  -- the two calls of one install evaluate these: repeatable
+  | .convLenNonpositive => rep <| c "bpf_convert_filter.len_outside_range" fc 589 .gt true [] [(592, 592)]
+  | .convLenOverMax => rep <| d "bpf_convert_filter.len_over_max" fc 589 [] []
+  | .convHasNewProg => rep <| d "bpf_convert_filter.has_new_prog" fc 592 [(593, 596)] []
+  | .convAddrsNoMem => rep <| d "bpf_convert_filter.addrs_nomem" fc 596 [(597, 597)] []
   | .convPrologue => rep <| d "bpf_convert_filter.prologue" fc 605 [(609, 617)] [(633, 633)]
   | .convSeenLdAbs => rep <| d "bpf_convert_filter.seen_ld_abs" fc 617 [(622, 630)] []
   | .convHasAddrs => rep <| d "bpf_convert_filter.has_addrs" fc 640 [(641, 641)] []
@@ -178,51 +203,56 @@ def SDecision.info : SDecision → SDecisionInfo
   | .convCaseTxa => rep <| d "bpf_convert_filter.case_txa" fc 867 [(868, 868)] []
   | .convCaseLen => rep <| d "bpf_convert_filter.case_len" fc 872 [(874, 876)] []
   | .convCaseLdxAbsW => rep <| d "bpf_convert_filter.case_ldx_abs_w" fc 880 [(882, 882)] []
-  | .convCaseDefault => rep <| d "bpf_convert_filter.case_default" fc 886 [(887, 887)] []
+  | .convCaseDefault => rep <| d "bpf_convert_filter.case_default" fc 887 [(887, 887)] []
   -- `BPF_CLASS(fp->code) == BPF_LD && BPF_MODE(fp->code) == BPF_ABS && convert_bpf_extensions(...)`
-  | .convAluClassLd => rep <| c "bpf_convert_filter.alu_class_ld" fc 676 .eq true [] [(680, 680)]
-  | .convAluModeAbs => rep <| c "bpf_convert_filter.alu_mode_abs" fc 677 .eq true [] []
+  -- `BPF_CLASS(code) == BPF_LD && BPF_MODE(code) == BPF_ABS` is one compiled test
+  -- `(code & 0xe7) == 0x20` (measured), carried by the first decision
+  | .convAluClassLd => rep <| c "bpf_convert_filter.alu_class_ld_mode_abs" fc 676 .eq true [] [(680, 680)]
+  | .convAluModeAbs => rep <| d "bpf_convert_filter.alu_mode_abs" fc 677 [] []
   | .convAluClassLd2 => rep <| c "bpf_convert_filter.alu_class_ld_abs_load" fc 680 .eq true [] [(686, 686)]
   -- `fp->code == DIV|X || fp->code == MOD|X` over two lines
   | .convCodeDivX => rep <| c "bpf_convert_filter.code_div_x" fc 686 .eq true [] [(687, 687)]
-  | .convCodeModX => rep <| c "bpf_convert_filter.code_mod_x" fc 687 .eq true [(688, 694)] [(697, 697)]
+  -- the body 688-694 and 697 run for either operand of the `||`: no witness of one
+  | .convCodeModX => rep <| c "bpf_convert_filter.code_mod_x" fc 687 .eq true [] []
   -- `BPF_SRC(fp->code) == BPF_K && (int) fp->k < 0` on one line
   | .convJmpSrcK => rep <| c "bpf_convert_filter.jmp_src_k" fc 736 .eq true [] []
   | .convJmpKNegative => rep <| c "bpf_convert_filter.jmp_k_negative" fc 736 .lt true [(741, 745)] [(747, 750)]
-  | .convJmpSrcX => rep <| c "bpf_convert_filter.jmp_src_is_x" fc 750 .eq true [] []
+  -- stream W's step-0 measurement (the scratch kernel, task/seccomp-w): no comparison record at
+  -- pristine :750 (folded or branchless), so this test is plain, not a declared comparison
+  | .convJmpSrcX => rep <| d "bpf_convert_filter.jmp_src_is_x" fc 750 [] []
   | .convJfZero => rep <| c "bpf_convert_filter.jf_zero" fc 754 .eq true [(755, 758)] [(762, 762)]
   | .convJtZero => rep <| c "bpf_convert_filter.jt_zero" fc 762 .eq true [(763, 763)] []
   | .convJtZeroJeq => rep <| d "bpf_convert_filter.jt_zero_case_jeq" fc 764 [(765, 766)] []
   | .convJtZeroJgt => rep <| d "bpf_convert_filter.jt_zero_case_jgt" fc 767 [(768, 769)] []
   | .convJtZeroJge => rep <| d "bpf_convert_filter.jt_zero_case_jge" fc 770 [(771, 772)] []
-  | .convJtZeroDefault => rep <| d "bpf_convert_filter.jt_zero_case_default" fc 773 [(774, 774)] []
+  | .convJtZeroDefault => rep <| d "bpf_convert_filter.jt_zero_case_default" fc 774 [(774, 774)] []
   -- BPF_EMIT_JMP: the statements of the macro take the expansion line; its
   -- outcomes are told apart by the operands, not by lines
   | .emitTargetOverLenJa => rep <| c "bpf_convert_filter.emit_ja.target_over_len" fc 725 .ge false [] []
   | .emitTargetNegativeJa => rep <| c "bpf_convert_filter.emit_ja.target_negative" fc 725 .lt true [] []
   | .emitHasAddrsJa => rep <| d "bpf_convert_filter.emit_ja.has_addrs" fc 725 [] []
-  | .emitOffBelowMinJa => rep <| c "bpf_convert_filter.emit_ja.off_below_min" fc 725 .lt true [] []
-  | .emitOffAboveMaxJa => rep <| c "bpf_convert_filter.emit_ja.off_above_max" fc 725 .gt true [] []
+  | .emitOffBelowMinJa => rep <| c "bpf_convert_filter.emit_ja.off_outside_s16" fc 725 .gt true [] []
+  | .emitOffAboveMaxJa => rep <| d "bpf_convert_filter.emit_ja.off_above_max" fc 725 [] []
   | .emitTargetOverLenJf => rep <| c "bpf_convert_filter.emit_jf_zero.target_over_len" fc 757 .ge false [] []
-  | .emitTargetNegativeJf => rep <| c "bpf_convert_filter.emit_jf_zero.target_negative" fc 757 .lt true [] []
+  | .emitTargetNegativeJf => rep <| d "bpf_convert_filter.emit_jf_zero.target_negative" fc 757 [] []
   | .emitHasAddrsJf => rep <| d "bpf_convert_filter.emit_jf_zero.has_addrs" fc 757 [] []
-  | .emitOffBelowMinJf => rep <| c "bpf_convert_filter.emit_jf_zero.off_below_min" fc 757 .lt true [] []
-  | .emitOffAboveMaxJf => rep <| c "bpf_convert_filter.emit_jf_zero.off_above_max" fc 757 .gt true [] []
+  | .emitOffBelowMinJf => rep <| d "bpf_convert_filter.emit_jf_zero.off_below_min" fc 757 [] []
+  | .emitOffAboveMaxJf => rep <| d "bpf_convert_filter.emit_jf_zero.off_above_max" fc 757 [] []
   | .emitTargetOverLenJt => rep <| c "bpf_convert_filter.emit_jt_zero.target_over_len" fc 778 .ge false [] []
-  | .emitTargetNegativeJt => rep <| c "bpf_convert_filter.emit_jt_zero.target_negative" fc 778 .lt true [] []
+  | .emitTargetNegativeJt => rep <| d "bpf_convert_filter.emit_jt_zero.target_negative" fc 778 [] []
   | .emitHasAddrsJt => rep <| d "bpf_convert_filter.emit_jt_zero.has_addrs" fc 778 [] []
-  | .emitOffBelowMinJt => rep <| c "bpf_convert_filter.emit_jt_zero.off_below_min" fc 778 .lt true [] []
-  | .emitOffAboveMaxJt => rep <| c "bpf_convert_filter.emit_jt_zero.off_above_max" fc 778 .gt true [] []
+  | .emitOffBelowMinJt => rep <| c "bpf_convert_filter.emit_jt_zero.off_outside_s16" fc 778 .gt true [] []
+  | .emitOffAboveMaxJt => rep <| d "bpf_convert_filter.emit_jt_zero.off_above_max" fc 778 [] []
   | .emitTargetOverLenRest => rep <| c "bpf_convert_filter.emit_rest.target_over_len" fc 785 .ge false [] []
-  | .emitTargetNegativeRest => rep <| c "bpf_convert_filter.emit_rest.target_negative" fc 785 .lt true [] []
+  | .emitTargetNegativeRest => rep <| d "bpf_convert_filter.emit_rest.target_negative" fc 785 [] []
   | .emitHasAddrsRest => rep <| d "bpf_convert_filter.emit_rest.has_addrs" fc 785 [] []
-  | .emitOffBelowMinRest => rep <| c "bpf_convert_filter.emit_rest.off_below_min" fc 785 .lt true [] []
-  | .emitOffAboveMaxRest => rep <| c "bpf_convert_filter.emit_rest.off_above_max" fc 785 .gt true [] []
+  | .emitOffBelowMinRest => rep <| c "bpf_convert_filter.emit_rest.off_outside_s16" fc 785 .gt true [] []
+  | .emitOffAboveMaxRest => rep <| d "bpf_convert_filter.emit_rest.off_above_max" fc 785 [] []
   | .emitTargetOverLenRestJa => rep <| c "bpf_convert_filter.emit_rest_ja.target_over_len" fc 790 .ge false [] []
-  | .emitTargetNegativeRestJa => rep <| c "bpf_convert_filter.emit_rest_ja.target_negative" fc 790 .lt true [] []
+  | .emitTargetNegativeRestJa => rep <| d "bpf_convert_filter.emit_rest_ja.target_negative" fc 790 [] []
   | .emitHasAddrsRestJa => rep <| d "bpf_convert_filter.emit_rest_ja.has_addrs" fc 790 [] []
-  | .emitOffBelowMinRestJa => rep <| c "bpf_convert_filter.emit_rest_ja.off_below_min" fc 790 .lt true [] []
-  | .emitOffAboveMaxRestJa => rep <| c "bpf_convert_filter.emit_rest_ja.off_above_max" fc 790 .gt true [] []
+  | .emitOffBelowMinRestJa => rep <| c "bpf_convert_filter.emit_rest_ja.off_outside_s16" fc 790 .gt true [] []
+  | .emitOffAboveMaxRestJa => rep <| d "bpf_convert_filter.emit_rest_ja.off_above_max" fc 790 [] []
   | .convRetIsK => rep <| c "bpf_convert_filter.ret_is_k" fc 824 .eq true [(825, 826)] []
   -- `new_prog && new_prog->aux->stack_depth < stack_off` on one line
   | .convStoreHasNewProg => rep <| d "bpf_convert_filter.store_has_new_prog" fc 841 [] []
@@ -236,7 +266,13 @@ def SDecision.info : SDecision → SDecisionInfo
   | .migConvert1Err => d "bpf_migrate_filter.convert1_err" fc 1287 [(1288, 1288)] [(1291, 1292)]
   | .migReallocNoMem => d "bpf_migrate_filter.realloc_nomem" fc 1293 [(1297, 1299)] [(1302, 1305)]
   | .migConvert2Err => d "bpf_migrate_filter.convert2_err" fc 1307 [(1313, 1313)] [(1315, 1315)]
-  | .migSelectRuntimeErr => d "bpf_migrate_filter.select_runtime_err" fc 1316 [(1317, 1317)] [(1319, 1320)]
+  | .migSelectRuntimeErr => d "bpf_migrate_filter.select_runtime_err" fc 1316 [(1317, 1317)] [(1319, 1319)]
+  | .releaseSocketFilter => d "__bpf_prog_release.socket_filter" fc 1185 [(1186, 1186)] [(1188, 1189)]
+  | .releaseOrigHasFprog => d "bpf_release_orig_filter.has_fprog" fc 1177 [(1178, 1179)] []
+  | .emitOffRangeJaPass1 => rep <| d "bpf_convert_filter.emit_ja.off_outside_s16_pass1" fc 725 [] []
+  | .emitOffRangeJtPass1 => rep <| d "bpf_convert_filter.emit_jt_zero.off_outside_s16_pass1" fc 778 [] []
+  | .emitOffRangeRestPass1 => rep <| d "bpf_convert_filter.emit_rest.off_outside_s16_pass1" fc 785 [] []
+  | .emitOffRangeRestJaPass1 => rep <| d "bpf_convert_filter.emit_rest_ja.off_outside_s16_pass1" fc 790 [] []
 
 def SDecision.all : List SDecision :=
   (List.range 512).filterMap fun i =>
@@ -331,8 +367,13 @@ def cmpLt (d : SDecision) (a b : Int) : m Bool := branchCmp d (a < b) a b
 def cmpLe (d : SDecision) (a b : Int) : m Bool := branchCmp d (a ≤ b) a b
 def cmpGt (d : SDecision) (a b : Int) : m Bool := branchCmp d (a > b) a b
 def cmpGe (d : SDecision) (a b : Int) : m Bool := branchCmp d (a ≥ b) a b
-/-- A flag test `a & b`, reported with the C's operands. -/
-def cmpFlag (d : SDecision) (a b : Int) : m Bool := branchCmp d ((a.toNat &&& b.toNat) != 0) a b
+/-- A flag test `a & b`, reported as the compiler compares it: the masked
+    value against zero (`Leanux/FS/File.lean`'s convention). -/
+def cmpFlag (d : SDecision) (a b : Int) : m Bool := branchCmp d ((a.toNat &&& b.toNat) != 0) (a.toNat &&& b.toNat) 0
+
+/-- `(unsigned)(x - 1)` in `bits` bits: the compiled form of `x == 0 || x > n`
+    (the measured shape of filter.c:589, :1052 and seccomp.c:672). -/
+def minusOneU (x : Int) (bits : Nat) : Int := ((x - 1) % (2 ^ bits) + 2 ^ bits) % (2 ^ bits)
 
 end Helpers
 

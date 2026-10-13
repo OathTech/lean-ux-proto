@@ -61,6 +61,15 @@ inductive Operation where
   | wgDown
   | wgDelete
   | wgNetnsClose
+  /-- seccomp (docs/2026-10-12-seccomp-design.md 6.1): `seccomp_install` 30,
+      `seccomp_probe` 31, `seccomp_prctl` 32 (`args` is `arg2..arg5`),
+      `seccomp_capdrop` 33, `seccomp_query` 34. -/
+  | seccompInstall (via : Seccomp.InstallVia) (flags : UInt32) (filter : Option ClassicProg)
+      (len : Option Nat) (bad : Seccomp.BadPtr) (mode : Nat)
+  | seccompProbe (nr : Int) (args : Array UInt64) (where_ : Seccomp.ProbeWhere) (strict : Option Seccomp.StrictVia)
+  | seccompPrctl (cmd : Seccomp.PrctlCmd) (args : Array UInt64)
+  | seccompCapdrop
+  | seccompQuery (cmd : Seccomp.QueryCmd) (action flags : UInt32)
   deriving Repr
 
 /-- The operations a `{"ref": i}` may name. -/
@@ -108,6 +117,10 @@ structure Trace where
       operation's coverage window, ignored by the mirror (only the clock
       advances). -/
   pauses : Array Nat := #[]
+  /-- `"seccomp_child": true` (seccomp design 6.2 rule 2): the second KCOV
+      descriptor, 8, opened and mapped by the trace process at setup for the
+      sandboxed children; exclusive with a network fixture (design 5). -/
+  seccompChild : Bool := false
   deriving Repr
 
 /-- The network fixture runs for traces with a WireGuard operation
@@ -368,6 +381,43 @@ private def parsePacket (p : Json) : Except String (Nat × Nat × List UInt8 × 
   -- `Env.xmitPackets` answers `unsupported` (the boundary control wc_gso_ipv6)
   return (family, addr, payload, { gsoSize, probe, routeMtu := none })
 
+/-- A classic program as the trace lists it: `[code, jt, jf, k]` per instruction. -/
+private def parseClassicProg (j : Json) : Except String ClassicProg := do
+  let rows ← j.getArr?
+  rows.mapM fun r => do
+    let xs ← r.getArr?
+    if xs.size != 4 then throw "seccomp_install.filter: expected [code, jt, jf, k] rows"
+    let code ← xs[0]!.getNat?
+    let jt ← xs[1]!.getNat?
+    let jf ← xs[2]!.getNat?
+    let k ← xs[3]!.getNat?
+    if code > 65535 || jt > 255 || jf > 255 || k > 4294967295 then throw "seccomp_install.filter: a field is out of range"
+    pure { code := UInt16.ofNat code, jt := UInt8.ofNat jt, jf := UInt8.ofNat jf, k := UInt32.ofNat k }
+
+/-- `flags` of a `seccomp_install` (design 6.1): absent (0), a number, or a
+    list of names and raw bits, OR'ed. -/
+private def parseSeccompFlags (j : Json) : Except String UInt32 := do
+  match optField j "flags" with
+  | none => pure 0
+  | some v =>
+    match v.getNat? with
+    | .ok n => if n > 4294967295 then throw "seccomp_install.flags: out of range" else pure (UInt32.ofNat n)
+    | .error _ =>
+      let entries ← v.getArr?
+      entries.foldlM (init := (0 : UInt32)) fun acc e => do
+        match e.getNat? with
+        | .ok n => if n > 4294967295 then throw "seccomp_install.flags: out of range" else pure (acc ||| UInt32.ofNat n)
+        | .error _ =>
+          let bit : UInt32 ← match ← e.getStr? with
+            | "tsync" => pure 1
+            | "log" => pure 2
+            | "spec_allow" => pure 4
+            | "new_listener" => pure 8
+            | "tsync_esrch" => pure 16
+            | "wait_killable_recv" => pure 32
+            | other => throw s!"seccomp_install.flags: unknown flag {other}"
+          pure (acc ||| bit)
+
 private def parseOperation (j : Json) (prior : Array Operation) : Except String Operation := do
   let op ← (← field j "op").getStr?
   match op with
@@ -409,6 +459,74 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
     | "F_SETPIPE_SZ" => return .fcntl fd FcntlCmd.setPipeSz arg
     | "F_GETPIPE_SZ" => return .fcntl fd FcntlCmd.getPipeSz arg
     | _ => throw "unsupported fcntl command"
+  | "seccomp_install" =>
+    subsetFields j ["op", "via", "flags", "filter", "len", "bad", "mode"] "seccomp_install"
+    let via ← match ← (← field j "via").getStr? with
+      | "seccomp" => pure Seccomp.InstallVia.seccomp
+      | "prctl" => pure Seccomp.InstallVia.prctl
+      | _ => throw "seccomp_install.via: expected \"seccomp\" or \"prctl\""
+    let flags ← parseSeccompFlags j
+    let filter ← match optField j "filter" with
+      | none | some .null => pure none
+      | some f => some <$> parseClassicProg f
+    let len ← if (optField j "len").isSome then some <$> natField j "len" 65535 else pure none
+    let bad ← match optField j "bad" with
+      | none => pure Seccomp.BadPtr.none
+      | some b => match ← b.getStr? with
+        | "fprog" => pure Seccomp.BadPtr.fprog
+        | "insns" => pure Seccomp.BadPtr.insns
+        | _ => throw "seccomp_install.bad: expected \"fprog\" or \"insns\""
+    -- `mode` (contract): prctl_set_seccomp's mode argument, prctl only, default 2
+    let mode ← if (optField j "mode").isSome then natField j "mode" 255 else pure 2
+    if (optField j "mode").isSome && via != .prctl then throw "seccomp_install.mode: prctl only"
+    return .seccompInstall via flags filter len bad mode
+  | "seccomp_probe" =>
+    subsetFields j ["op", "nr", "args", "where", "strict"] "seccomp_probe"
+    let nr ← (← field j "nr").getInt?
+    if nr < -2147483648 || nr > 2147483647 then throw "seccomp_probe.nr: expected an int"
+    let args ← match optField j "args" with
+      | none => pure Seccomp.zeroArgs
+      | some a => do
+        let xs ← (← a.getArr?).toList.mapM fun v => do
+          let n ← v.getNat?
+          if n > 18446744073709551615 then throw "seccomp_probe.args: expected u64 entries"
+          pure (UInt64.ofNat n)
+        if xs.length > 6 then throw "seccomp_probe.args: at most six"
+        pure ((xs ++ List.replicate (6 - xs.length) 0).toArray)
+    let where_ ← match ← (← field j "where").getStr? with
+      | "self" => pure Seccomp.ProbeWhere.self
+      | "child" => pure Seccomp.ProbeWhere.child
+      | _ => throw "seccomp_probe.where: expected \"self\" or \"child\""
+    let strict ← match optField j "strict" with
+      | none | some .null => pure none
+      | some v => match ← v.getStr? with
+        | "seccomp" => pure (some Seccomp.StrictVia.seccomp)
+        | "prctl" => pure (some Seccomp.StrictVia.prctl)
+        | _ => throw "seccomp_probe.strict: expected null, \"seccomp\" or \"prctl\""
+    if strict.isSome && where_ != .child then throw "seccomp_probe.strict: child only"
+    return .seccompProbe nr args where_ strict
+  | "seccomp_prctl" =>
+    subsetFields j ["op", "cmd", "arg2", "arg3", "arg4", "arg5"] "seccomp_prctl"
+    let cmd ← match ← (← field j "cmd").getStr? with
+      | "set_no_new_privs" => pure Seccomp.PrctlCmd.setNoNewPrivs
+      | "get_no_new_privs" => pure Seccomp.PrctlCmd.getNoNewPrivs
+      | "get_seccomp" => pure Seccomp.PrctlCmd.getSeccomp
+      | _ => throw "seccomp_prctl.cmd: expected set_no_new_privs, get_no_new_privs or get_seccomp"
+    let arg (name : String) : Except String UInt64 := do
+      if (optField j name).isSome then UInt64.ofNat <$> natField j name 18446744073709551615 else pure 0
+    return .seccompPrctl cmd #[← arg "arg2", ← arg "arg3", ← arg "arg4", ← arg "arg5"]
+  | "seccomp_capdrop" =>
+    fields j ["op"]
+    return .seccompCapdrop
+  | "seccomp_query" =>
+    subsetFields j ["op", "cmd", "action", "flags"] "seccomp_query"
+    let cmd ← match ← (← field j "cmd").getStr? with
+      | "get_action_avail" => pure Seccomp.QueryCmd.getActionAvail
+      | "get_notif_sizes" => pure Seccomp.QueryCmd.getNotifSizes
+      | _ => throw "seccomp_query.cmd: expected get_action_avail or get_notif_sizes"
+    let action ← if (optField j "action").isSome then u32Field j "action" else pure 0
+    let flags ← if (optField j "flags").isSome then u32Field j "flags" else pure 0
+    return .seccompQuery cmd action flags
   | "wg_set" =>
     fields j (["op", "config"] ++ if (optField j "device").isSome then ["device"] else [])
     return .wgSet { (← parseConfig (← field j "config")) with device := ← parseDevice j }
@@ -571,6 +689,7 @@ def parseTrace (j : Json) : Except String Trace := do
   let hasArmed := (j.getObjVal? "alloc_armed").isOk
   let hasDst := (j.getObjVal? "dst_cache_records").isOk
   let hasExtension := (j.getObjVal? "domain_extension").isOk
+  let hasSeccompChild := (j.getObjVal? "seccomp_child").isOk
   fields j ((if hasLimit then ["version", "id", "ops", "rlimit_nofile"] else ["version", "id", "ops"])
     ++ (if hasHidden then ["hidden"] else []) ++ (if hasSteer then ["steer"] else [])
     ++ (if hasExpect then ["expect"] else []) ++ (if hasArm then ["arm_records"] else [])
@@ -578,7 +697,8 @@ def parseTrace (j : Json) : Except String Trace := do
     ++ (if hasFixture then ["net_fixture"] else [])
     ++ (if hasArmed then ["alloc_armed"] else [])
     ++ (if hasDst then ["dst_cache_records"] else [])
-    ++ (if hasExtension then ["domain_extension"] else []))
+    ++ (if hasExtension then ["domain_extension"] else [])
+    ++ (if hasSeccompChild then ["seccomp_child"] else []))
   -- D3: the arm-record switch qualifies the records, so it comes with them
   if hasArm && !hasHidden then throw "arm_records: only with hidden records"
   let armRecords ← if hasArm then (← field j "arm_records").getBool? else pure false
@@ -654,8 +774,13 @@ def parseTrace (j : Json) : Except String Trace := do
       pure label
     else pure []
   if hasArmed && !hasHidden then throw "alloc_armed: an armed run carries its records"
-  let trace : Trace := { id, ops, rlimit, hidden, steer, armRecords, napiBeforePut, allocArmed, pauses, bare, foreign, routes, dstCacheRecords }
+  let seccompChild ← if hasSeccompChild then (← field j "seccomp_child").getBool? else pure false
+  let trace : Trace := { id, ops, rlimit, hidden, steer, armRecords, napiBeforePut, allocArmed, pauses, bare, foreign, routes, dstCacheRecords, seccompChild }
   if (bare || foreign || !routes.isEmpty) && !trace.net then throw "net_fixture: only a network trace has a network fixture"
+  -- seccomp design 5: descriptor 8 is the child's KCOV or W8's injector, never both
+  if seccompChild && trace.net then throw "seccomp_child: exclusive with a network fixture"
+  if trace.ops.any (fun | .seccompProbe _ _ .child _ => true | _ => false) && !seccompChild then
+    throw "seccomp_probe in a child needs the seccomp_child fixture"
   if foreign && rlimit < 10 then throw "net_fixture: the foreign-creator fixture needs rlimit_nofile >= 10"
   return trace
 
@@ -688,16 +813,18 @@ def fixtureFile (name : String) (refs : Nat) : File :=
     { fFlags := O_RDWR, fMode := FMODE_READ ||| FMODE_WRITE ||| FMODE_OPENED,
       fCount := refs, fOp := some (.fixture name), fInode := some (.fixture name) }
 
-def initialKernel (rlimit : Nat) (net : Bool := false) (bare : Bool := false) (foreign : Bool := false) : Kernel :=
-  -- W8: the foreign-creator fixture adds the injector (8) and the pin (9)
-  let reserved := if foreign then 10 else 8
+def initialKernel (rlimit : Nat) (net : Bool := false) (bare : Bool := false) (foreign : Bool := false)
+    (seccompChild : Bool := false) : Kernel :=
+  -- W8: the foreign-creator fixture adds the injector (8) and the pin (9);
+  -- seccomp (design 6.2 rule 2): the children's KCOV descriptor (8)
+  let reserved := if foreign then 10 else if seccompChild then 9 else 8
   let slot (fd : Nat) : Option FileId :=
     if fd < 3 then some 0 else if fd < reserved then some (fd - 2) else none
   let files : Std.TreeMap FileId File := Std.TreeMap.ofList
     ([(0, fixtureFile "console" 4),   -- fds 0-2 plus init's references
       (1, fixtureFile "kcov" 2)] ++    -- fd 3 plus the coverage mapping
      (List.range (reserved - 4)).map fun i =>
-       (i + 2, fixtureFile (if !net then "/dev/null" else
+       (i + 2, fixtureFile (if !net then (if seccompChild && i == 4 then "kcov-child" else "/dev/null") else
          match i with
          | 0 => "udp-listener-127.0.0.1" | 1 => "udp-listener-::1" | 2 => "udp-sender"
          | 3 => "generic-netlink" | 4 => "udp-injector" | _ => "netns-pin") 1))
@@ -710,11 +837,11 @@ def initialKernel (rlimit : Nat) (net : Bool := false) (bare : Bool := false) (f
       -- the trace child blocks SIGPIPE before the first operation and starts
       -- with no pending signal (P design section 6; the guest side is P1's)
       blocked := sigmask SIGPIPE, pending := 0 }
-    files, nextFile := if foreign then 8 else 6, ctxs := {}, nextCtx := 0,
+    files, nextFile := if foreign then 8 else if seccompChild then 7 else 6, ctxs := {}, nextCtx := 0,
     idaUsed := {},
     -- Environment facts: the system-wide open-file count and limit are not
     -- observed; the guest has few files open, far below any boot-sized limit.
-    nrFiles := if foreign then 8 else 6, maxFiles := 1000000, anonInodeInodeErr := false,
+    nrFiles := if foreign then 8 else if seccompChild then 7 else 6, maxFiles := 1000000, anonInodeInodeErr := false,
     -- Pipes (P design section 5): sysctl defaults, and `root_user`'s
     -- `pipe_bufs` at its baseline of 0 (no pipes outside the trace)
     pipeMaxSize := 1048576, pipeUserPagesSoft := 16384, pipeUserPagesHard := 0, user := { pipeBufs := 0 },
@@ -796,11 +923,16 @@ def toSyscall (results : Array Int) (ends : Array (Option (Nat × Nat))) (index 
   | .wgDown => .wgDown
   | .wgDelete => .wgDelete
   | .wgNetnsClose => .wgNetnsClose
+  | .seccompInstall via flags filter len bad mode => .seccompInstall via flags filter len bad mode
+  | .seccompProbe nr args where_ strict => .seccompProbe nr args where_ strict
+  | .seccompPrctl cmd args => .seccompPrctl cmd args
+  | .seccompCapdrop => .seccompCapdrop
+  | .seccompQuery cmd action flags => .seccompQuery cmd action flags
 
 /-- Run a trace. A `Stop` is returned with the operation index: the mirror
     never reports an observation for a path it does not model. -/
 def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat × Stop) Json := do
-  let mut world : World := { k := initialKernel trace.rlimit trace.net trace.bare trace.foreign, env := harnessEnv,
+  let mut world : World := { k := initialKernel trace.rlimit trace.net trace.bare trace.foreign trace.seccompChild, env := harnessEnv,
                              timing := Env.timing, portBound := Env.portBound,
                              fixtureNetDevices := Env.fixtureNetDevices,
                              foreignCreator := trace.foreign,
