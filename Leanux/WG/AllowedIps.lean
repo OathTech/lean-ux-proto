@@ -227,11 +227,12 @@ def removeByPeer (pid : PeerId) : M Unit := do
 
 /-- The node and all nodes below it (root_free_rcu's walk, a cut point), in
     the recursion's order: the node, then bit[0]'s subtree, then bit[1]'s. An
-    explicit stack, fuel-bounded (future-proof-paths note, 3(d)). -/
+    explicit stack, fuel-bounded (future-proof-paths note, 3(d)) by the
+    trie's node count: each node is pushed once (review item 7). -/
 def subtree (id : NodeId) : M (List NodeId) := do
   let mut out := #[]
   let mut stack := [id]
-  for _ in [0:1 <<< 20] do
+  for _ in [0:(← getDev).nodes.size + 1] do
     match stack with
     | [] => return out.toList
     | n :: rest =>
@@ -247,7 +248,8 @@ def subtree (id : NodeId) : M (List NodeId) := do
     explicit stack, pushing bit[0] then bit[1]. -/
 def rootRemovePeerLists (root : NodeId) : M Unit := do
   let mut stack := [root]
-  for _ in [0:1 <<< 20] do
+  -- each node is pushed once: the trie's node count bounds the walk (review item 7)
+  for _ in [0:(← getDev).nodes.size + 1] do
     -- while (len > 0 && (node = stack[--len]))
     match stack with
     | [] => do _ ← branch .rootRemoveLenPositive false; return

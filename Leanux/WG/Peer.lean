@@ -128,8 +128,10 @@ private def bucketHas (walk collide : Decision) (index : Nat) : M Bool := do
 def indexInsert (pid : PeerId) (kind : IndexKind) : M Nat := do
   indexRemove pid kind
   -- `goto search_unused_slot` draws again; nothing else inserts meanwhile
-  -- (one CPU), so the locked walk agrees with the unlocked one
-  for _ in [0:64] do
+  -- (one CPU), so the locked walk agrees with the unlocked one. The C loop
+  -- is unbounded; the draws are records, so the loop is record-driven
+  -- (review item 7): it ends when the records do
+  for _ in [0:(← recordBudget)] do
     let draw ← hidden .indexDraw
     let index := draw.foldr (fun b acc => acc * 256 + b.toNat) 0   -- __le32
     if ← bucketHas .idxInsWalk1 .idxInsCollide1 index then continue
@@ -138,7 +140,7 @@ def indexInsert (pid : PeerId) (kind : IndexKind) : M Nat := do
     if ← bucketHas .idxInsWalk2 .idxInsCollide2 index then unsupported "an index stolen during insertion"
     modifyDev fun d => { d with indexTable := { index, peer := pid, kind } :: d.indexTable }
     return index
-  unsupported "64 colliding index draws"
+  budgetExhausted "index draws"
 
 /-- wg_index_hashtable_replace (peerlookup.c:166-190) of a peer's handshake
     entry by its new keypair's, in place: the keypair's entry takes the

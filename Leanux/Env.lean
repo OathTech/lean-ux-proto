@@ -271,11 +271,13 @@ def runSendWorkers : M Unit := do
   if (← getK).wg.isNone then return   -- L: no device, no worker
   requireNoCryptWork
   modify fun w => { w with queuedThisCall := [] }   -- the call returned and slept
-  for _ in [0:4096] do
+  -- record-driven (review item 7): every turn runs a worker whose section
+  -- consumes records; the queue may grow meanwhile (a response's initiation)
+  for _ in [0:(← recordBudget)] do
     if (← getDev).sendWorkQueue.isEmpty then deliverSent; return
     runOneSendWorker
     schedule   -- a crypt activation the records resume after the section
-  invariant "the send work queue did not drain"
+  budgetExhausted "the send work queue"
 
 /-- After `wg_xmit` returns: the guest waits `QUEUE_WAIT_US` (0.1 s), in
     which the kworkers run what the call queued: the encrypt worker and the
@@ -409,7 +411,8 @@ def runTimers (jHi : UInt64) : M Bool := do
   if (← getK).wg.isNone then return false
   let startOf (w : Worker) := (HiddenSite.sectionStart w).info.id
   let mut fired := false
-  for _ in [0:4096] do
+  -- record-driven (review item 7): every turn consumes a section or breaks
+  for _ in [0:(← recordBudget)] do
     let some site ← peekNextSite | break
     let d ← getDev
     if let some w := timerSectionOf site then
@@ -441,7 +444,9 @@ def runTimers (jHi : UInt64) : M Bool := do
 def runTimersPlaceholder (jHi : UInt64) : M Unit := do
   modify fun w => { w with queuedThisCall := [] }
   if (← getK).wg.isNone then return   -- L: no wg0, no timers [AGENT, int-dl merge]
-  for _ in [0:64] do
+  -- the filter's own loop (review item 7): one turn per pending timer at most
+  let pending := (← getDev).peers.size * PeerTimer.all.length
+  for _ in [0:pending + 1] do
     let d ← getDev
     let due := d.peerList.flatMap fun pid =>
       match d.peers.get? pid with
@@ -455,17 +460,31 @@ def runTimersPlaceholder (jHi : UInt64) : M Unit := do
     runTimerSection (← timerWorker t) (WG.timerCallback pid t)
   runCryptWorkers
   runSendWorkers
-  for _ in [0:64] do
+  for _ in [0:(← getDev).clearWorkQueue.length + 1] do
     if (← getDev).clearWorkQueue.isEmpty then break
     runOneClearWorker
 
 /-- An idle point (the guest's waits after `wg_set`, `wg_up`, `wg_inject`,
-    `wg_xmit`, and before `wg_observe`), where a timer may fire naturally:
-    `jiffies` is at most the last recorded one plus the trace's real-time
-    bound plus a wait (`Timing`). -/
+    `wg_xmit` and `wg_batch`, and before `wg_observe`), where a timer may
+    fire naturally. Review item 7: the guest reads `jiffies` at the end of
+    the wait (kind 310, `HiddenSite.jiffiesEnd`, in the remote stream after
+    the wait's sections), so a callback that ran did so at a tick with
+    `jiffies ≤ J_end`, and a timer with recorded expiry `e` fired only if
+    `e < J_end`: the window's end is exact, read ahead of the sections it
+    bounds and consumed after them. No record of the read in the operation
+    is a hidden mismatch (a capture without the instrument). Without records
+    (the domain filter) the filter's prediction uses `Timing`'s constants. -/
 def idleTimers : M Unit := do
   let w ← get
-  discard <| runTimers (w.jiffiesLast.getD 0 + w.timing.traceBound.toUInt64 + w.timing.advanceWait.toUInt64)
+  if w.hidden.isNone then
+    discard <| runTimers (w.jiffiesLast.getD 0 + w.timing.traceBound.toUInt64 + w.timing.advanceWait.toUInt64)
+    return
+  let some jEnd ← peekSiteU64 .jiffiesEnd
+    | throw (.hidden "no end-of-wait jiffies record (kind 310) in this operation")
+  discard <| runTimers jEnd
+  let j ← hiddenJiffies .jiffiesEnd
+  if j != jEnd then invariant "the end-of-wait jiffies record changed between the peek and the read"
+  modify fun w => { w with jiffiesLast := some j }
 
 /-- `wg_advance`'s ioctl: `leanux_time_advance` moves `jiffies_64` by
     `ticks` (`do_timer`), and the ioctl records kind 304 `{before, after}`
@@ -496,9 +515,18 @@ def advance (ticks : Nat) : M Int := do
     then the work they queue, all in this operation's records. -/
 def afterAdvance : M Unit := do
   let w ← get
-  let jHi := w.jiffiesLast.getD 0 + w.timing.advanceWait.toUInt64
-  if w.hidden.isNone && w.hiddenPlaceholders then runTimersPlaceholder jHi
-  else discard <| runTimers jHi
+  if w.hidden.isNone then
+    -- the domain filter's prediction (no records): the fixture's wait
+    let jHi := w.jiffiesLast.getD 0 + w.timing.advanceWait.toUInt64
+    if w.hiddenPlaceholders then runTimersPlaceholder jHi else discard <| runTimers jHi
+    return
+  -- review item 7: the window ends at the recorded end of the advance's wait
+  let some jEnd ← peekSiteU64 .jiffiesEnd
+    | throw (.hidden "no end-of-wait jiffies record (kind 310) in this wg_advance")
+  discard <| runTimers jEnd
+  let j ← hiddenJiffies .jiffiesEnd
+  if j != jEnd then invariant "the end-of-wait jiffies record changed between the peek and the read"
+  modify fun w => { w with jiffiesLast := some j }
 
 /-- Work a down or a deletion would leave behind: crypt work (its worker's
     timing) and a decrypt queue or NAPI poll still pending
@@ -801,7 +829,8 @@ def afterBatch : M Unit := do
     runCryptWorkers
     runSendWorkers
     return
-  for _ in [0:4096] do
+  -- record-driven (review item 7): every turn runs a unit whose section consumes records
+  for _ in [0:(← recordBudget)] do
     schedule
     if (← peekNextSite) == some (HiddenSite.sectionStart .sendWorker).info.id && !(← getDev).sendWorkQueue.isEmpty then
       runOneSendWorker

@@ -352,10 +352,11 @@ def ZERO_KEY_MATERIAL_TICKS : Nat := REJECT_AFTER_TIME * 3 * HZ
     `(83 * r) >> 8`, in ticks. -/
 def jitterBelowRekeyTimeout (site : HiddenSite) : M Nat := do
   let ceil := HZ / 3   -- REKEY_TIMEOUT_JITTER_MAX_JIFFIES; at most 256: the u8 path
-  for _ in [0:256] do
+  -- the C's `for (;;)`: record-driven (review item 7), the draws are records
+  for _ in [0:(← recordBudget)] do
     let r := (← hidden site)[0]!.toNat
     if (ceil * r) % 256 ≥ 256 % ceil then return ceil * r / 256
-  unsupported "256 rejected jitter draws"
+  budgetExhausted "jitter draws"
 
 /-- wg_timers_data_sent (timers.c:145-151). The expiry argument (with its
     jitter draw) is evaluated before `mod_peer_timer`'s test. -/

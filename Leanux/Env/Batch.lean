@@ -163,31 +163,39 @@ def Activation.iter (a : Activation) : M IterResult := do
   | .receiveWorker => workerIter .receiveWorker none WG.receiveStep (condResched .receiveWorker)
   | w => invariant s!"{w.symbol} is not a draining worker"
 
-/-- The loop's bound in iterations (the C bound on the queue's occupancy,
-    one iteration per item and the poll that ends the loop) and what
-    exceeding it means. -/
-def Activation.bound (a : Activation) : Nat × String :=
+/-- The items the activation's loop can consume before it finds its queue
+    empty: the queue's occupancy now (review item 7). The C loop runs while
+    the ring or queue yields an item; on the modelled paths nothing refills a
+    worker's own queue inside its run (refills happen while it is suspended,
+    and each resumption is a new run), so a run makes at most one iteration
+    per item present at its start, plus the poll that finds none. -/
+def Activation.occupancy (a : Activation) : M Nat := do
+  let d ← getDev
   match a.worker with
-  | .receiveWorker => (MAX_QUEUED_INCOMING_HANDSHAKES, "the handshake queue did not drain")
-  | .encryptWorker => (MAX_QUEUED_PACKETS + 1, "the encrypt queue did not drain")
-  | .txWorker => (MAX_QUEUED_PACKETS + 1, "the tx queue did not drain")
-  | .decryptWorker => (MAX_QUEUED_PACKETS + 1, "the decrypt queue did not drain")
-  | w => (0, s!"{w.symbol} is not a draining worker")
+  | .encryptWorker => return d.encryptQueue.count
+  | .decryptWorker => return d.decryptQueue.count
+  | .receiveWorker => return d.handshakeQueue.length
+  | .txWorker =>
+    let some pid := a.pid | invariant "a tx activation without its peer"
+    return (← getPeer pid).txQueue.all.length
+  | w => invariant s!"{w.symbol} is not a draining worker"
 
 /-- Run the activation from its loop position until its loop ends (its
     section stop, consumed where the records have it) or it yields
-    (suspended, `World.suspended`). -/
+    (suspended, `World.suspended`). The fuel is derived from the state the
+    loop drains (`Activation.occupancy`), so its exhaustion is a genuine
+    invariant: more items consumed than were ever queued. -/
 def Activation.run (a : Activation) : M Unit := do
-  let (bound, drained) := Activation.bound a
+  let occupancy ← Activation.occupancy a
   let mut act := a
-  for _ in [a.iterations:bound] do
+  for _ in [0:occupancy + 1] do
     match ← Activation.iter act with
     | .ended => _ ← hidden (.sectionStop act.worker); return
     | .continued => act := { act with iterations := act.iterations + 1 }
     | .yielded =>
       modify fun s => { s with suspended := s.suspended ++ [{ act with iterations := act.iterations + 1 }] }
       return
-  invariant drained
+  invariant s!"{a.worker.symbol} consumed more items than its queue held ({occupancy}) in one run"
 
 /-- Whether the records are consistent with the activation resuming now: its
     run from here, to its yield or its stop, on a copy of the world, reads
@@ -246,7 +254,10 @@ def dispatch (w : Worker) : M Bool := do
     the encrypt worker, then each queued tx worker. -/
 def schedule (stack : Option Worker := none) : M Unit := do
   let netRx := (HiddenSite.sectionStart .netRx).info.id
-  for _ in [0:4096] do
+  -- record-driven (review item 7): every turn consumes a record (a section
+  -- start, a NET_RX section, a resumption's records) or returns; without
+  -- records the filter's bound
+  for _ in [0:(← recordBudget)] do
     if (← get).hidden.isNone then
       let d ← getDev
       let next := [Worker.receiveWorker, .decryptWorker, .encryptWorker, .txWorker].find? fun w =>
@@ -274,7 +285,7 @@ def schedule (stack : Option Worker := none) : M Unit := do
       modify fun s => { s with suspended := s.suspended.filter (· != a) }
       Activation.run a
     | _ => unsupported "the records do not determine which suspended worker resumed"
-  invariant "the scheduler loop did not converge"
+  budgetExhausted "the scheduler loop"
 
 /-- `cond_resched()` in a worker the environment runs on the mirror's own
     stack (the flood's receive worker, `Env.flood`, whose section the flood

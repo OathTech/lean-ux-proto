@@ -1032,7 +1032,7 @@ inductive HiddenSite where
       `harness/linux.py` `ARM_RECORDS`), and the kind-304 record
       `{jiffies before, jiffies after}` of the `wg_advance` operation, in
       the trace process's task stream. -/
-  | modTimerArm | timeAdvance
+  | modTimerArm | timeAdvance | jiffiesEnd
   /-- Dispatch order (docs/2026-10-11-dispatch-order.md): the kind-307 queue
       record `{work, func}` written at `__queue_work` for a work item of the
       dispatch set; its site is the work function. Consumed where the mirror
@@ -1224,6 +1224,13 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   -- of `kcov_ioctl`.
   | .modTimerArm => ⟨100, "mod_timer_arm", "timer", "drivers/net/wireguard/timers.c", 37, 24, .mirror⟩
   | .timeAdvance => ⟨101, "time_advance", "advance", "fs/ioctl.c", 51, 16, .mirror⟩
+  -- Review item 7 (docs/2026-10-13-review-items-7-8.md, section 5): the end of
+  -- a guest idle wait, `jiffies` read by the KCOV_LEANUX_JIFFIES ioctl and
+  -- written as kind 310 (class `jiffies`) into the remote stream from the
+  -- same call site as the advance; consumed by `Env.idleTimers` and
+  -- `Env.afterAdvance` as the firing window's exact end. Id 128: the first
+  -- free id after L's block (120-127).
+  | .jiffiesEnd => ⟨128, "jiffies_end", "jiffies", "fs/ioctl.c", 51, 8, .mirror⟩
   -- L (ids 120-126, outside E-A's 64-69, A's 70-99 and D3's 100-115). The
   -- consumer frames were confirmed on the built kernel by stream G's L0 probe
   -- (scripts/wg-l0-probe.py): kind 208 at cookie.c:23 and ratelimiter.c:57,
@@ -1289,7 +1296,7 @@ def HiddenSite.all : List HiddenSite :=
   ++ Worker.all.flatMap (fun w => [.sectionStart w, .sectionStop w])
   ++ [.reschedReceive, .reschedEncrypt, .reschedTx, .reschedDecrypt, .newHandshakeJitter, .walltimeLastHandshakeData,
       .cookieBirthdate]
-  ++ [.modTimerArm, .timeAdvance]
+  ++ [.modTimerArm, .timeAdvance, .jiffiesEnd]
   ++ (Worker.all.filter fun w => w.timer?.isNone && w != .netRx).map .queued
   ++ [.cookieSecretBirthdate, .cookieSecret, .pubkeyHashKey, .ratelimiterKey, .ratelimiterGcNow, .udpPortDraw,
       .neighReachTime, .netlinkAutobindPort]
@@ -1337,10 +1344,13 @@ structure HiddenRecord where
 
 /-- Timing facts the environment supplies (`Leanux/Env.lean`); the mirror has
     no clock. D3 (docs/2026-10-05-d3-timers.md, section 5.3): the bounds of
-    the firing window, in ticks. A timer section is accepted iff its timer is
-    pending with `expires < J_hi`, where `J_hi` is the advance's `jiffies`
-    after plus `advanceWait` inside `wg_advance`, and the last recorded
-    `jiffies` plus `traceBound` plus `advanceWait` at the other idle points. -/
+    the firing window, in ticks, for the domain filter's prediction only
+    (review item 7): with records the window ends at the recorded end of the
+    wait (kind 310, `HiddenSite.jiffiesEnd`), and these constants are not
+    consulted. Without records the filter predicts a firing iff the timer is
+    pending with `expires < J_hi`, `J_hi` the advance's `jiffies` after plus
+    `advanceWait` inside `wg_advance`, and the last known `jiffies` plus
+    `traceBound` plus `advanceWait` at the other idle points. -/
 structure Timing where
   /-- The guest's wait after an advance has been absorbed (`W`). -/
   advanceWait : Nat
@@ -1830,6 +1840,45 @@ def peekHiddenSite : M (Option Nat) := do
     | some (r :: _) => some r.site
     | _ => none
 
+/-- The records of the current operation not yet consumed (0 without
+    records). The measure of the record-driven loops (review item 7). -/
+def recordsLeft : M Nat := do
+  return ((← get).hidden.map (·.length)).getD 0
+
+/-- The value of the first record of site `s` among the operation's remaining
+    records, without consuming it (`none` if there is none, or without
+    records): how `Env.idleTimers` learns the end of a wait before it
+    consumes the timer sections that precede the read. -/
+def peekSiteU64 (s : HiddenSite) : M (Option UInt64) := do
+  let i := s.info
+  return match (← get).hidden with
+    | some rs =>
+      (rs.find? (·.site == i.id)).map fun r =>
+        ((r.bytes.take i.len).foldr (fun (b : UInt8) (acc : Nat) => acc * 256 + b.toNat) 0).toUInt64
+    | none => none
+
+/-- The domain filter's own turn bound for the loops that the records drive
+    when there are records (review item 7): without records (the filter runs
+    before Linux) a loop has no measure but the filter's patience, and its
+    exhaustion is the filter's `unsupported`, never an `invariant`. -/
+def DOMAIN_FILTER_TURNS : Nat := 4096
+
+/-- The fuel of a record-driven loop: with records, one turn per remaining
+    record plus the turn that finds none (every productive turn consumes at
+    least one record); without records, the filter's bound. -/
+def recordBudget : M Nat := do
+  let w ← get
+  return match w.hidden with
+    | some rs => rs.length + 1
+    | none => DOMAIN_FILTER_TURNS
+
+/-- A record-driven loop ran out of fuel: with records that is a turn that
+    consumed nothing, a genuine non-progress (`invariant`); without records
+    the filter's bound (`unsupported "runner budget: ..."`). -/
+def budgetExhausted (name : String) : M α := do
+  if (← get).hidden.isSome then invariant s!"{name}: a turn consumed no record"
+  else unsupported s!"runner budget: {name} (domain filter)"
+
 /-- Dispatch order: the unit the next record names, if it starts `w`'s
     section with the identity word (kind 300 since 2026-10-11): the work
     item's or the timer's address. `none` without records, for a record of
@@ -1954,7 +2003,8 @@ def skipCutSites (sites : List HiddenSite) : M (List Nat) := do
   let ids := sites.map (·.info.id)
   let allocIds := AllocSite.cuts.map fun s => (HiddenSite.alloc s).info
   let mut taken := []
-  for _ in [0:4096] do
+  -- record-driven (review item 7): every turn consumes one record or returns
+  for _ in [0:(← recordBudget)] do
     skipAmbient
     let w ← get
     match w.hidden with
@@ -1965,7 +2015,7 @@ def skipCutSites (sites : List HiddenSite) : M (List Nat) := do
       set { w with hidden := some rest }
       taken := taken ++ [r.site]
     | _ => return taken
-  invariant "a cut point consumed more than 4096 records"
+  budgetExhausted "a cut point's records"
 
 def skipCut (sites : List HiddenSite) : M Unit := discard <| skipCutSites sites
 
