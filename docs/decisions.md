@@ -347,3 +347,7 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   the lag-and-repair maintenance rule) is the coordinator's proposal under
   this decision and takes effect with the user's approval of the text at
   the landing of the carried-over spike.
+- **2026-10-13 [USER]** `LEANUX_QEMU_SLOTS` is 8 as the standing value and
+  the harness default, up from 3: "yes, that sounds reasonable, given we
+  have more resources now", after four claim points ran at 8 on
+  2026-10-12/13 with no guest-side disturbance.

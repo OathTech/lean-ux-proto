@@ -21,7 +21,7 @@ scripts/in-bundle python3 -m evaluator.check     # or any other bundled command
   the main checkout and are read-only.
 - **Private state.** `.cache`, `.artifacts` and `.lake` are created inside the
   worktree. They are Git-ignored and disappear with it.
-- **Guests.** At most `LEANUX_QEMU_SLOTS` guests run at a time (default 3),
+- **Guests.** At most `LEANUX_QEMU_SLOTS` guests run at a time (default 8),
   across all checkouts, through the `qemu.lock*` files in the main checkout's
   `.artifacts/runs/`.
 
