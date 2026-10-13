@@ -15,18 +15,18 @@ differential check or guest run.
 | --- | --- |
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay and independent review checked. Seccomp frame carry checked. |
 | R2 lifetime safety | Keypair operation endpoints, peer allocation/reference helpers, packet primitives, failure-retaining peer creation/release and mixed receive-enqueue/decrypt-iteration observations, plus stale-cursor finding checked; caller/lifecycle and whole-run internal-access coverage remain in progress. |
-| R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, plus pure insertion structure and last-writer lookup, proved; device-root linkage, original mutation/history and path refinements remain open. Path proofs follow R2. |
+| R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion and original empty-root insertion proved; general mutation/history and path refinements remain open. Path proofs follow R2. |
 | R4 delivery | Not started; drop characterisation waiting on W7 full-ring tier's explanation of the two drops. |
 | R5 key lifetime | Not started; time half waiting on review items 7 and 8 on the timer model. |
 | R6 flood resistance | Not started. |
 
-**Current validation.** The full proof gate passes 157 build jobs and 81
-terminal statements (ReplayWindow 15, R1 9, R2 47, R3 10), with only permitted
+**Current validation.** The full proof gate passes 159 build jobs and 83
+terminal statements (ReplayWindow 15, R1 9, R2 47, R3 12), with only permitted
 axioms. The default model build passes 60 jobs; the unit tier passes 93 tests
-in 21.515 seconds with one skip. Both explicit-record witness replays below
+in 21.656 seconds with one skip. Both explicit-record witness replays below
 were rechecked at the seccomp carry and agree with the original runner.
 Independent reviews cover peer creation, the seccomp carry, mixed enqueue,
-decrypt execution, and pure trie insertion.
+decrypt execution, pure trie insertion, and original empty-root insertion.
 
 **Shared carry.** Signal/task and pipe helper frames, seccomp entry/tail frames
 and arbitrary prefill preservation keep the seven-field WG projection intact.
@@ -342,8 +342,9 @@ exhaustion of the 130-iteration loop. The action retains its branch effects in
 the returned World; the export does not separately characterize those records.
 
 **Remaining claim.** The traversal starts at the represented tree's root;
-linkage to device root4/root6, preservation by insertion/removal, configuration
-history agreement and both packet paths remain open. Owners are raw peer slots,
+general mutation histories must establish device-root linkage and preservation
+by insertion/removal. Configuration-history agreement and both packet paths
+remain open. Owners are raw peer slots,
 not cryptographic identities or allocation stamps. Peer liveness and reference
 ownership are not asserted. No R3 statement has been reshaped and no Rule Zero
 finding is claimed here.
@@ -357,8 +358,8 @@ address. A new owned node receives the first fresh ID; when needed, the
 ownerless intermediate receives the second. A permutation theorem accounts
 for every old and new node ID, deriving uniqueness and the advanced frontier
 from explicit initial uniqueness and freshness premises. These are pure-tree
-results: original `add`, peer lists, backlinks, allocation failure and history
-refinement remain open. In particular, freshness within this tree does not
+results: general original `add`, peer lists, backlinks, allocation failure and
+history refinement remain open. In particular, freshness within this tree does not
 imply freshness throughout the node store, which may also hold the other
 address-family tree and unrelated entries.
 
@@ -366,10 +367,35 @@ address-family tree and unrelated entries.
 evidence describes it without introducing a second executable tree model.
 Preserve raw addresses and allocation order for later original-store refinement.
 
+**Original empty-root insertion.** `StoreMutation` supplies lookup-based
+representation framing and `NodesBelow`, which bounds every stored node ID by
+the allocation frontier. `MutationMirror` proves original allocation, list-tail
+and root-connection contracts, then normal-execution equations for `add` and
+`insert` on an empty selected root. Successful insertion installs exactly the
+pure leaf, appends its ID to the existing target peer, and connects its backlink
+to the chosen root. The exact Kernel equation retains allocation's initial
+root4 backlink write and connection's subsequent write, including for IPv6.
+Normal `add` allocation refusal preserves the Kernel; `insert` increments the
+sequence number before either outcome. Missing or malformed records may still
+produce `Stop`; normal completion is not asserted for arbitrary record streams.
+
+The two terminal exports establish the new root's linkage and valid represented
+tree and preserve both the opposite root value and any supplied opposite-family
+tree representation. They preserve a caller's existing opposite-root linkage;
+they do not derive that linkage without a premise. Whole-store freshness protects
+unrelated entries as well as the opposite family. General nonempty insertion,
+intermediate-allocation rollback, removal, owner liveness and history remain open.
+
+[AGENT 2026-10-13] Require whole-store node freshness at the original mutation
+boundary: freshness only within the selected tree cannot protect other stored
+nodes from allocation overwrite.
+
 **Validation and effort.** The arithmetic took five compile passes, the pure
 tree six, and the store/traversal refinement twenty over about eighteen minutes.
 Pure insertion took thirteen build invocations over about sixteen and a half
 minutes, including its targeted and full builds.
+The original empty-root bridge took twelve capped builds over eleven minutes
+and forty-four seconds, including seven corrected compile failures.
 Failed passes exposed proof elaboration or simplification errors. Current
 validation is recorded above. Reproduce with
 `capped -- scripts/in-bundle scripts/proof-gate`.
@@ -387,6 +413,11 @@ A separate read-only insertion review checked the successful structural cases,
 canonical-prefix replacement, exact fresh-ID permutation and final terminal
 scope, finding no defect. Its whole-store freshness obligation is retained
 above; it did not run builds or the gate.
+A separate read-only review checked the original empty-root helper, wrapper and
+terminal contracts, including the normal-error sequence update and IPv6 backlink.
+It found no mathematical defect and corrected one wording issue: the opposite
+root value and supplied representation are preserved separately; their initial
+linkage is not derived by the theorem.
 
 **Ranked mirror-shape recommendations.** None from this component. The current
 named arithmetic helpers and integer address encoding admit exact refinement

@@ -2,17 +2,19 @@ import Leanux.Proofs.WG.AllowedIps.ArithmeticMirror
 import Leanux.Proofs.WG.AllowedIps.Tree
 import Leanux.Proofs.WG.AllowedIps.LookupMirror
 import Leanux.Proofs.WG.AllowedIps.Insertion
+import Leanux.Proofs.WG.AllowedIps.MutationMirror
 
 /-!
-# R3: prefix arithmetic, pure insertion and represented-tree lookup
+# R3: prefix arithmetic, pure insertion and represented-tree operations
 
 These statements connect the original arithmetic helpers to leading-bit
 prefixes and prove longest-prefix lookup in a pure tree with local edge
 conditions. Original node-store traversals terminate and refine this lookup
 under an exact structural representation. Pure insertion preserves the local
-invariants and implements canonical-prefix replacement. Refinement of original
-mutations, configuration-history agreement, and packet admission remain
-separate obligations of the routing result.
+invariants and implements canonical-prefix replacement. Original insertion
+into an empty selected root refines that pure insertion and preserves the
+opposite represented tree. General mutation refinement, configuration-history
+agreement, and packet admission remain separate obligations of the result.
 -/
 
 namespace Leanux.Proofs.WG.CryptokeyRouting
@@ -117,7 +119,7 @@ theorem original_findNode_successful_lookup_correct (w w' : World) (d : WG.Devic
 canonical prefix, retaining unmasked addresses and old node identifiers on
 overwrite. Lookup afterward chooses the longest match in that updated flat
 binding list. This is a theorem about the intermediate recursive algorithm;
-refinement of original `add` and its allocation failures remains open. -/
+general refinement of original `add` and its allocation failures remains open. -/
 theorem pureTree_insert_lookup_correct (t : Tree) (width fresh addr cidr peer key : Nat)
     (hv : t.Valid width) (ha : addr < 2 ^ width) (hc : cidr ≤ width) :
     let result := t.insertFresh width fresh addr cidr peer
@@ -150,5 +152,71 @@ theorem pureTree_insert_preserves_structure (t : Tree) (width fresh addr cidr pe
     Tree.insertFresh_nodeIds_nodup hn hf width addr cidr peer,
     Tree.insertFresh_nodeIds_perm t width fresh addr cidr peer,
     Tree.insertFresh_nodeIds_bounded hf width addr cidr peer⟩
+
+/-- On an empty selected root, the original `add` either refuses allocation
+without changing the Kernel or installs precisely the pure insertion's tree.
+Whole-store freshness protects every represented node of the opposite family;
+the target peer must exist. This classifies normal executions, without
+asserting that missing or malformed allocation records complete normally. -/
+theorem original_add_empty_root_correct (w w' : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (v4 : Bool) (addr cidr pid : Nat) (p : WG.Peer)
+    (hp : d.peers[pid]? = some p) (he : rootValue d v4 = none)
+    (ha : addr < 2 ^ rootWidth v4) (hc : cidr ≤ rootWidth v4)
+    (hb : NodesBelow d) (other : Tree)
+    (ho : RepAt d.nodes (rootWidth (!v4)) (rootSlot (!v4)) other) (result : Int)
+    (hr : (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w = .ok (result, w')) :
+    let installed := emptyInstalled d v4 addr cidr pid p
+    let tree := (Tree.empty.insertFresh (rootWidth v4) d.nextNode addr cidr pid).tree
+    (result = -ENOMEM ∧ w'.k = w.k) ∨
+      (result = 0 ∧ w'.k = { w.k with wg := some installed } ∧
+        NodesBelow installed ∧ rootValue installed v4 = tree.root ∧
+        RepAt installed.nodes (rootWidth v4) (rootSlot v4) tree ∧ tree.Valid (rootWidth v4) ∧
+        rootValue installed (!v4) = rootValue d (!v4) ∧
+        RepAt installed.nodes (rootWidth (!v4)) (rootSlot (!v4)) other) := by
+  rcases add_empty_exact w w' d hd v4 addr cidr pid p hp he hc result hr with hf | hs
+  · exact .inl hf
+  · refine .inr ⟨hs.1, hs.2, emptyInstalled_below d hb v4 addr cidr pid p, ?_,
+      emptyInstalled_rep d v4 addr cidr pid p,
+      Tree.insertFresh_valid (by trivial) ha hc d.nextNode pid,
+      emptyInstalled_other_root d v4 addr cidr pid p,
+      emptyInstalled_other_rep d hb v4 addr cidr pid p other ho⟩
+    exact emptyInstalled_root d v4 addr cidr pid p
+
+/-- The original `insert` increments the table sequence on both normal
+outcomes. Success into an empty selected root agrees with pure insertion;
+allocation refusal preserves the device apart from that sequence increment.
+The whole Kernel equation frames unrelated state. The opposite root's value
+and any supplied opposite-family representation survive either outcome.
+An existing caller linkage between them is preserved, not established here.
+As in the original wrapper,
+family 4 selects IPv4 and every other value selects IPv6. General insertion
+history, owner liveness, and packet admission are not asserted here. -/
+theorem original_insert_empty_root_correct (w w' : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (family addr cidr pid : Nat) (p : WG.Peer)
+    (hp : d.peers[pid]? = some p) (he : rootValue d (family == 4) = none)
+    (ha : addr < 2 ^ rootWidth (family == 4)) (hc : cidr ≤ rootWidth (family == 4))
+    (hb : NodesBelow d) (other : Tree)
+    (ho : RepAt d.nodes (rootWidth (!(family == 4))) (rootSlot (!(family == 4))) other)
+    (result : Int) (hr : (WG.insert family addr cidr pid).run w = .ok (result, w')) :
+    let v4 := family == 4
+    let tree := (Tree.empty.insertFresh (rootWidth v4) d.nextNode addr cidr pid).tree
+    ∃ d', w'.k = { w.k with wg := some d' } ∧
+      d'.peerAllowedips.seq = d.peerAllowedips.seq + 1 ∧ NodesBelow d' ∧
+      rootValue d' (!v4) = rootValue d (!v4) ∧
+      RepAt d'.nodes (rootWidth (!v4)) (rootSlot (!v4)) other ∧
+      ((result = -ENOMEM ∧ d' = bumpSeq d) ∨
+        (result = 0 ∧ d' = emptyInstalled (bumpSeq d) v4 addr cidr pid p ∧
+          rootValue d' v4 = tree.root ∧ RepAt d'.nodes (rootWidth v4) (rootSlot v4) tree ∧
+          tree.Valid (rootWidth v4))) := by
+  rcases insert_empty_exact w w' d hd family addr cidr pid p hp he hc result hr with hf | hs
+  · exact ⟨bumpSeq d, hf.2, rfl, hb, rfl, ho, .inl ⟨hf.1, rfl⟩⟩
+  · refine ⟨emptyInstalled (bumpSeq d) (family == 4) addr cidr pid p, hs.2,
+      emptyInstalled_seq (bumpSeq d) (family == 4) addr cidr pid p,
+      emptyInstalled_below (bumpSeq d) hb (family == 4) addr cidr pid p,
+      emptyInstalled_other_root (bumpSeq d) (family == 4) addr cidr pid p,
+      emptyInstalled_other_rep (bumpSeq d) hb (family == 4) addr cidr pid p other ho,
+      .inr ⟨hs.1, rfl, emptyInstalled_root (bumpSeq d) (family == 4) addr cidr pid p,
+        emptyInstalled_rep (bumpSeq d) (family == 4) addr cidr pid p,
+        Tree.insertFresh_valid (by trivial) ha hc d.nextNode pid⟩⟩
 
 end Leanux.Proofs.WG.CryptokeyRouting
