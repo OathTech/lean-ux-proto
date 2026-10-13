@@ -15,6 +15,7 @@ import Leanux.Proofs.WG.Lifetimes.AllocationAmbient
 import Leanux.Proofs.WG.Lifetimes.SessionFailure
 import Leanux.Proofs.WG.Lifetimes.PeerAllocationFailure
 import Leanux.Proofs.WG.Lifetimes.ReceiveEntryFailure
+import Leanux.Proofs.WG.Lifetimes.MaintenanceCalls
 
 /-! R2's store-identity components: whole-operation keypair evolution,
 peer allocation/reference sequences, and packet primitive sequences within a device
@@ -834,5 +835,45 @@ theorem receive_enqueue_queue_failure_prefix (id : SkbId)
         .peer (.read pkt.peer p.internalId), .peer (.write pkt.peer p.internalId)]) :=
   Lifetimes.enqueuePerDeviceAndPeerRxPrefix_queue_failure id w marked checked queued selected cpuSet queueEntry
     h initial pkt p d cpu e hfirst hmark hpacket hpeer hfull hwrite hdev hcpu hset hring hqueue
+
+/-- Every call in the receive-maintenance family erases to its original
+result, Stop, and successful World on all inputs, retaining Boolean results
+for the timer guard and modifier. This does not execute queued workers. -/
+theorem receive_maintenance_access_erasure (call : Lifetimes.MaintenanceCall) :
+    ErasesPrefix call.observed call.original := call.erases
+
+/-- Generic resolved-access safety requires an explicit frame for appending
+the send-work queue. The ambient contract may include allocation frontiers
+and released identities; no time bound or scheduler closure is asserted. -/
+theorem receive_maintenance_ambient_access_preserves
+    (c : Lifetimes.AmbientContracts I)
+    (hq : ∀ pid, PrefixPreserves I Lifetimes.LifetimeEvent.Safe
+      (liftPrefix (modifyDev fun d => {d with sendWorkQueue := d.sendWorkQueue ++ [pid]})))
+    (call : Lifetimes.MaintenanceCall) :
+    PrefixPreserves I Lifetimes.LifetimeEvent.Safe call.observed :=
+  call.preserves_ambient c hq
+
+/-- Complete endpoint/cache, timer, queued-handshake and receive-key-refresh
+calls retain safe access histories on every outcome and AllocationInv on
+success. The concrete queue frame is discharged over the original update. -/
+theorem receive_maintenance_allocation_access_preserves (call : Lifetimes.MaintenanceCall) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed :=
+  call.allocation
+
+/-- Conditional whole-call failure equation: a handshake-completion clock
+Stop retains the two preceding peer reads and writes. Premises name only
+consecutive original executions, not an observed history or invariant. -/
+theorem receive_maintenance_clock_failure_prefix (pid : PeerId) (site : HiddenSite)
+    (w afterDelete clockEntry : World) (p q : Peer) (h : List Lifetimes.LifetimeEvent) (e : Stop)
+    (hp : (getPeer pid).run w = .ok (p, w))
+    (hdel : (setPeer pid (p.setTimer .retransmitHandshake none)).run w = .ok ((), afterDelete))
+    (hq : (getPeer pid).run afterDelete = .ok (q, afterDelete))
+    (hreset : (setPeer pid {q with timerHandshakeAttempts := 0, sentLastminuteHandshake := false}).run afterDelete = .ok ((), clockEntry))
+    (hclock : (hidden site).run clockEntry = .error e) :
+    runPrefix (Lifetimes.timersHandshakeCompletePrefix pid site) w h =
+      (.error e, h ++ [.peer (.read pid p.internalId), .peer (.write pid p.internalId),
+        .peer (.read pid q.internalId), .peer (.write pid q.internalId)]) :=
+  Lifetimes.timersHandshakeCompletePrefix_clock_failure pid site w afterDelete clockEntry p q h e
+    hp hdel hq hreset hclock
 
 end Leanux.Proofs.WG.LifetimeSafety
