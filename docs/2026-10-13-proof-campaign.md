@@ -14,21 +14,20 @@ differential check or guest run.
 | Result | Progress |
 | --- | --- |
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay and independent review checked. Seccomp frame carry checked. |
-| R2 lifetime safety | Keypair operation endpoints, peer allocation/reference helpers, packet primitives, failure-retaining peer creation/release, mixed receive-enqueue/decrypt iteration, and keypair/packet release families, plus stale-cursor finding checked; caller/lifecycle and whole-run internal-access coverage remain in progress. |
+| R2 lifetime safety | Keypair operation endpoints, peer allocation/reference helpers, packet primitives, failure-retaining peer creation/release, mixed receive-enqueue/decrypt iteration, keypair/packet release families, and complete keypair/TX/RX allocation with fixture initialization, plus stale-cursor finding checked; caller/lifecycle and whole-run internal-access coverage remain in progress. |
 | R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion, original empty-root insertion and total original placement proved; general mutation/history and path refinements remain open. Path proofs follow R2. |
 | R4 delivery | Not started; drop characterisation waiting on W7 full-ring tier's explanation of the two drops. |
 | R5 key lifetime | Not started; time half waiting on review items 7 and 8 on the timer model. |
 | R6 flood resistance | Not started. |
 
-**Current validation.** The full proof gate passes 167 build jobs and 95
-terminal statements (ReplayWindow 15, R1 9, R2 56, R3 15), with only permitted
+**Current validation.** The full proof gate passes 172 build jobs and 103
+terminal statements (ReplayWindow 15, R1 9, R2 64, R3 15), with only permitted
 axioms. The default model build passes 60 jobs; the unit tier passes 93 tests
-in 21.846 seconds with one skip. Both explicit-record witness replays below
+in 22.566 seconds with one skip. Both explicit-record witness replays below
 were rechecked at the seccomp carry and agree with the original runner.
 Independent reviews cover peer creation, the seccomp carry, mixed enqueue,
-decrypt execution, keypair/packet releases, ambient caller composition, pure
-trie insertion, and original
-empty-root insertion and placement.
+decrypt execution, keypair/packet releases, ambient caller composition,
+allocation, pure trie insertion, and original empty-root insertion and placement.
 
 **Shared carry.** Signal/task and pipe helper frames, seccomp entry/tail frames
 and arbitrary prefill preservation keep the seven-field WG projection intact.
@@ -278,6 +277,40 @@ caller composition additionally needs callbacks to receive that stronger
 invariant. A callback requiring uniqueness cannot be supplied through a contract
 that assumes only `MixedInv`.
 
+**Allocation and initial state.** `AllocationInvariant` adds separate slot
+and lifetime frontiers to `ReleaseInv`, including peer creation bounds and
+released-history bounds. Peer/keypair slot bounds and the shared TX/RX packet
+frontier imply all four destination slots are vacant. Packet identities retain
+the device epoch; current-epoch released stamps are bounded by `nextSkb`, and
+all released epochs precede `netIfindexNext`.
+
+`KeypairAllocation` factors the complete original creation into the hidden
+allocation choice and its exact insertion core. `PacketAllocation` shares one
+proof between the original TX/RX helpers. Both record allocation followed by
+initialization write, preserve safe prefixes and the stronger invariant, and
+have all-input erasure and event equations. Failed creation and normal keypair
+allocation refusal retain the incoming history exactly. Emitting these events
+at successful return is valid because the exact source equations show no
+possible failure or further object access between insertion and return. Unlike
+peer creation, these helpers have no fallible post-insertion initialization.
+Malformed occupied-slot worlds are still reproduced by the equations; those
+equations do not certify release coverage for an overwritten old object.
+Safety separately assumes the invariant that excludes occupied destinations.
+
+`AllocationFrames` separates identity equality, a small metadata projection and
+transport of released-history sets. Its access contract permits a conditional
+frame, needed for raw setters whose same-stamp premise comes from a getter.
+`AllocationInitial` establishes the invariant for every original runner fixture
+and preserves it through successful seccomp prefill. Eight terminals expose the
+allocator contracts, vacancy and fixture initialization. An allocation-aware
+ambient instance, release-family composition, concrete callers and device
+lifecycle remain open.
+
+[AGENT 2026-10-13] Keep allocation safety in a separate stronger invariant with
+both slot and stamp frontiers, rather than strengthening existing access-only
+interfaces. Track packet epoch and per-device frontier independently so later
+device creation can distinguish old released identities from new slots.
+
 **Concrete reference finding.** An eight-operation, explicit-record accepted
 mirror run creates 28 peers, starts a stepped dump, deletes wg0, creates a new
 wg0 and 27 replacement peers, then receives a chunk. The receive returns the
@@ -326,7 +359,10 @@ compile passes over fifteen minutes and twenty-three seconds. One full build
 failed after a proof-script simplification cleanup; explicit rewrites repaired
 it, and the next full build passed. The ambient generalization took four
 compile passes over six minutes: three passed, and one predicate-shape
-elaboration failure was repaired before the full 167-job build.
+elaboration failure was repaired before the full 167-job build. Allocation
+took eighteen compile passes over twenty minutes and thirty-one seconds;
+projection and elaboration failures were repaired before two passing full
+172-job builds.
 Failed passes exposed proof elaboration or simplification errors. One earlier
 anonymous-hypothesis tactic loop was stopped by verified PID and repaired.
 Independent read-only reviews found no correctness defect in these components;
@@ -340,6 +376,9 @@ it found no defect. Its raw erase-leaf interpretation caveat is documented above
 A final proof-script cleanup delta was independently reread. The ambient review
 checked primitive contracts, source order, failed prefixes, both stronger
 exports and unchanged weaker APIs; it found no correctness or scope defect.
+The allocation review checked all five modules and eight exports. Its one
+wording finding was fixed: packet allocation increments the frontier while
+preserving allocation bounds. No correctness or source-coverage finding remains.
 
 One source-order limitation remains: C `peer.c` initializes destination cache
 and handshake before incrementing `peer_counter`; the mirror increments and

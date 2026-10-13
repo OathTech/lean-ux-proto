@@ -10,6 +10,7 @@ import Leanux.Proofs.WG.Lifetimes.Enqueue
 import Leanux.Proofs.WG.Lifetimes.DecryptWorker
 import Leanux.Proofs.WG.Lifetimes.ReleaseCalls
 import Leanux.Proofs.WG.Lifetimes.ReleaseAmbient
+import Leanux.Proofs.WG.Lifetimes.AllocationInitial
 
 /-! R2's store-identity components: whole-operation keypair evolution,
 peer allocation/reference sequences, and packet primitive sequences within a device
@@ -533,5 +534,71 @@ theorem decrypt_iteration_release_access_preserves (softirq irq : Lifetimes.Mixe
     PrefixPreserves Lifetimes.ReleaseInv Lifetimes.LifetimeEvent.Safe
       (Lifetimes.decryptIterPrefix softirq irq resched) :=
   Lifetimes.decryptIterPrefix_release hs hi hr
+
+/-- Complete keypair creation, including hidden-input failures and ordinary
+allocation refusal, erases to the original outcome and complete final World. -/
+theorem keypair_allocation_access_erasure (pid : PeerId) :
+    ErasesPrefix (Lifetimes.keypairCreatePrefix pid) (keypairCreate pid) :=
+  Lifetimes.keypairCreatePrefix_erases pid
+
+/-- Complete keypair creation retains safe failure prefixes and preserves the
+allocation invariant on success. No caller, lifecycle, or scheduler closure is
+assumed from this helper theorem. -/
+theorem keypair_allocation_access_preserves (pid : PeerId) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.keypairCreatePrefix pid) :=
+  Lifetimes.keypairCreatePrefix_preserves pid
+
+/-- A successful insertion records allocation then initialization write. Failed
+creation and normal memory refusal retain the incoming history exactly. -/
+theorem keypair_allocation_access_observation (pid : PeerId) (w : World)
+    (h : List Lifetimes.LifetimeEvent) :
+    runPrefix (Lifetimes.keypairCreatePrefix pid) w h = match (keypairCreate pid).run w with
+      | .error e => (.error e, h)
+      | .ok (none, v) => (.ok (none, v), h)
+      | .ok (some id, v) => (.ok (some id, v), h ++
+          [.keypair (.allocate id (w.k.keypairCounter + 1)),
+           .keypair (.write id (w.k.keypairCounter + 1))]) :=
+  Lifetimes.keypairCreatePrefix_observation pid w h
+
+/-- The two constructors name exactly newTxSkb and newRxSkb, with their real
+packet argument. Their observer preserves every original outcome. -/
+theorem packet_allocation_access_erasure (a : Lifetimes.PacketAllocation) :
+    ErasesPrefix a.observed a.original := a.erases
+
+/-- Both original packet allocators preserve the allocation bounds and tagged
+lifetime invariant. This is a helper contract, not device lifecycle closure. -/
+theorem packet_allocation_access_preserves (a : Lifetimes.PacketAllocation) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe a.observed :=
+  a.preserves
+
+/-- Packet allocation has no resolved read. Successful creation records the
+epoch-tagged allocation and initializing write; failure records neither.
+All-input equations do not assume vacant destinations; the preservation theorem
+requires AllocationInv, which supplies vacancy. -/
+theorem packet_allocation_access_observation (a : Lifetimes.PacketAllocation) (w : World)
+    (h : List Lifetimes.LifetimeEvent) :
+    runPrefix a.observed w h = match a.original.run w with
+      | .error e => (.error e, h)
+      | .ok (id, v) => (.ok (id, v), h ++
+          [.packet (.allocate (a.slot id) (Lifetimes.packetStamp w id)),
+           .packet (.write (a.slot id) (Lifetimes.packetStamp w id))]) :=
+  a.observation w h
+
+/-- The stronger invariant makes all four allocator destination slots vacant.
+Peer lifetime bounds alone would not imply the peer slot fact. -/
+theorem allocation_destinations_vacant (w : World) (d : Device)
+    (h : List Lifetimes.LifetimeEvent) (hi : Lifetimes.AllocationInv h w)
+    (hd : w.k.wg = some d) :
+    d.peers[d.nextPeer]? = none ∧ d.keypairs[d.nextKeypairId]? = none ∧
+    d.txSkbs[d.nextSkb]? = none ∧ d.rxSkbs[d.nextSkb]? = none :=
+  ⟨hi.peer_vacant hd, hi.key_vacant hd, hi.packet_vacant hd⟩
+
+/-- Every original runner fixture starts with the stronger allocation
+invariant. All fixture flags are arbitrary, including seccompChild. -/
+theorem allocation_initial_fixture (rlimit : Nat) (net bare foreign stepped seccompChild : Bool)
+    (w : World) (hw : w.k = Runner.initialKernel rlimit net bare foreign stepped seccompChild) :
+    Lifetimes.AllocationInv [] w :=
+  Lifetimes.allocation_initial rlimit net bare foreign stepped seccompChild w hw
 
 end Leanux.Proofs.WG.LifetimeSafety
