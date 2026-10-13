@@ -109,16 +109,31 @@ inductive MacState where
 def netBytes (n width : Nat) : List UInt8 :=
   (List.range width).reverse.map fun k => UInt8.ofNat (n / 256 ^ k % 256)
 
-/-- make_cookie (cookie.c:91-117): `blake2s_128(key = checker->secret,
-    src_ip ‖ src_port)`. The secret-age read (`wg_birthdate_has_expired`,
-    cookie.c:96 → timers.h:28) is a recorded `.birthdateExpired`; the 120 s
-    rotation never fires in a 4 s trace. make_cookie is an out-of-line static
-    the check does not list, so its protocol branch is not reported; its only
-    checked effect is the cookie bytes (the reply's observable). -/
+/-- `COOKIE_SECRET_MAX_AGE` (cookie.h / messages.h): 120 s. -/
+def COOKIE_SECRET_MAX_AGE : Nat := 120
+
+/-- make_cookie (cookie.c:91-117): the secret rotated when older than
+    `COOKIE_SECRET_MAX_AGE` (:96-102: the age test's clock read, declared
+    as the comparison at the caller's line as review item 8 did for its
+    siblings; the new birthdate's read at :99 and the 32 random bytes at
+    :100 are records, consumed here), then `blake2s_128(key = secret,
+    src_ip ‖ src_port)` with the source address by `skb->protocol`
+    (:107-112, two decisions). The rotation is reachable only after a
+    `wg_advance` of the age (`e_underload_cookie_rotated`); the function is
+    listed in kcov.json since the receive correspondence audit (F7, F4). -/
 def makeCookie (src : SkbSource) : M (List UInt8) := do
-  _ ← hiddenClock .birthdateExpired   -- wg_birthdate_has_expired(secret_birthdate, 120)
+  -- `if (wg_birthdate_has_expired(checker->secret_birthdate, COOKIE_SECRET_MAX_AGE))`
+  if ← branchExpired .cookieSecretExpired (← getDev).cookieSecretBirthdate COOKIE_SECRET_MAX_AGE then
+    -- down_write; `secret_birthdate = ktime_get_coarse_boottime_ns()`;
+    -- `get_random_bytes(checker->secret, NOISE_HASH_LEN)`; up_write
+    let birthdate ← hiddenClock64 .cookieSecretRotateNow
+    let secret ← hidden .cookieSecretRotated
+    modifyDev fun d => { d with cookieSecretBirthdate := birthdate, cookieSecret := secret }
   let secret := (← getDev).cookieSecret
-  let addr := if src.family == 4 then netBytes src.saddr 4 else netBytes src.saddr 16
+  let addr ← do
+    if ← branch .cookieProtoIp (src.family == 4) then pure (netBytes src.saddr 4)
+    else if ← branch .cookieProtoIpv6 (src.family == 6) then pure (netBytes src.saddr 16)
+    else pure []   -- neither branch: the port alone (the skb came from one of the two UDP sockets)
   return blake2s 16 secret (addr ++ netBytes src.sport 2)
 
 /-- Ratelimiter constants (ratelimiter.c:34-39): `NSEC_PER_SEC / 20`, times 5. -/
@@ -316,9 +331,10 @@ def handshakeReceiveWorker (condResched : M Unit) : M Unit :=
     MAX_QUEUED_INCOMING_HANDSHAKES "the handshake queue did not drain"
 
 /-- wg_queue_enqueue_per_device_and_peer (queueing.h:157-178) for the
-    decrypt queue and the peer's `rx_queue`: 0, or (outside the domain)
-    `-ENOSPC` / `-EPIPE`. One item per queue is the domain (design section
-    8): the decrypt worker of the previous injection has run. -/
+    decrypt queue and the peer's `rx_queue`: 0, `-ENOSPC` when the peer's
+    `rx_queue` holds `MAX_QUEUED_PACKETS` (the 1025th item of one batch, the
+    tier's `w7_ring_rx_1025`), or `-EPIPE` when the decrypt ring's slot is
+    occupied (the 1024-item tier). -/
 def enqueuePerDeviceAndPeerRx (id : SkbId) : M Int := do
   -- atomic_set_release(&PACKET_CB(skb)->state, PACKET_STATE_UNCRYPTED)
   setRxSkb id fun p => { p with state := .uncrypted }
@@ -391,7 +407,14 @@ def consumeData (msg : List UInt8) (src : SkbSource) (ds : Nat) : M Unit := do
   if ← branch .dataEpipe (ret == -EPIPE) then enqueuePerPeerRx (pure ()) skb .dead
   -- `likely(!ret || ret == -EPIPE)`
   if ← orM (branch .dataEnqueueOk (ret == 0)) (branch .dataEnqueueOkEpipe (ret == -EPIPE)) then return
-  invariant "unreachable"
+  -- err: (receive.c:534-539; `-ENOSPC`, the peer's rx_queue at
+  -- MAX_QUEUED_PACKETS): the keypair's put, err_keypair's peer put, and
+  -- dev_kfree_skb; a silent drop, no counter (the tx twin: `createData`).
+  -- Found by the receive correspondence audit (F1): the arm was an
+  -- `invariant` stop while the enqueue above returns `-ENOSPC`.
+  keypairPut (some id) false
+  peerPut peer
+  freeRxSkb skb
 
 /-- wg_cpumask_next_online (queueing.h:125-132) on this single-CPU kernel:
     `cpumask_next(n)` is `n + 1` and `nr_cpu_ids` is 1. -/

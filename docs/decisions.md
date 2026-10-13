@@ -410,3 +410,22 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   traces as expected rejections (`scripts/wg-netlink-controls.py`). A
   harness admission found by reading, never by a trace: the corpus had only
   the ignored combinations.
+- **2026-10-13 [AGENT, fork of the coordinator]** Three defects of the
+  receive path found by the correspondence audit
+  (docs/2026-10-13-audit-receive.md), none ever exercised by the corpus,
+  fixed on the mirror's side only: F1, `wg_packet_consume_data`'s `-ENOSPC`
+  arm (receive.c:534-539) was an `invariant` stop and is the C's puts and
+  silent free (`w7_ring_rx_1025`, held back from the tier suite: its 1024
+  inline polls exceed the protocol's 64 ambiguous placements per trace); F7, `make_cookie`'s secret rotation
+  (cookie.c:96-102) discarded the age test's outcome and is modelled from
+  the records with the test a declared comparison
+  (`e_underload_cookie_rotated`: the reply's bytes differed before); F6b,
+  GRO's `rx_list` batch of 8 and the held lone TCP segment, where the
+  mirror delivered everything at `napi_complete_done` (modelled,
+  unexercised: the one-CPU kernel polls inline at every decrypt, so no poll
+  holds 8 packets; `w7_multi_rx_9_rst_roam` was written for it and agrees
+  under both mirrors, the endpoint-family decision marked repeatable). The exclusion
+  reasons of the E design's §11 are corrected: the `> 2048` trylock arm is
+  reachable since `wg_batch`/`wg_flood` but stays `unsupported` (the lock's
+  state is unrecorded); the rotation is in. F10 (the handshake ring as a
+  `List`) is deferred to its own task.

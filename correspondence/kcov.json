@@ -125,6 +125,7 @@
   "wg_cookie_checker_precompute_peer_keys",
   "wg_cookie_message_consume",
   "wg_cookie_validate_packet",
+  "make_cookie",
   "wg_destruct",
   "wg_netns_pre_exit",
   "wg_expired_new_handshake",
