@@ -207,3 +207,25 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   epoll's tree-insert file address (record-only, class-approved); HiddenSite
   ids 190-199 epoll, 200-219 seccomp; both streams' kernel changes go into
   one oracle rebuild after both designs are audited.
+- **2026-10-13 [USER]** The seccomp config case and the P9 widening, put as
+  one case (`docs/2026-10-12-seccomp-design.md` section 16): "Agree, sounds
+  good - approved". So the oracle gains `CONFIG_SECCOMP=y` (and with it
+  `CONFIG_SECCOMP_FILTER=y`, nothing else), a configuration change under the
+  2026-10-07 rule, re-validated by the full differential check on the new
+  oracle at seccomp's claim point; and the P design's user decision P9
+  (`kernel/signal.c` mirrored down to the pending set) widens to the
+  generation of an unblocked `SIGSYS`: `force_sig_info_to_task`,
+  `complete_signal`'s wake arm for one task, its sigqueue allocation and the
+  pending flag; delivery stays an environment effect; stop and continue
+  signals, group delivery, real-time signals and a second thread stay
+  unsupported. Recorded by stream X at phase 2a.
+- **2026-10-12 [USER]** The seccomp prefill fixture, queued: "Yes, let's
+  queue it". A `seccomp_prefill: N` top-level fixture key: the guest installs
+  N copies of a fixed 4096-instruction filter before the window, under the
+  no-new-privs step, shaped so the cache marks every probed number
+  constant-allow; the mirror's initial task state carries the chain,
+  reconstructed by its own translation of the same program (an `Env.lean`
+  fixture assumption). It makes `seccomp_attach_filter`'s path budget
+  (`MAX_INSNS_PER_PATH`, `-ENOMEM`) reachable within the guest's console
+  limit, which 42 recorded installs of 768 instructions are not
+  (section 7). Recorded by stream X at phase 2a.

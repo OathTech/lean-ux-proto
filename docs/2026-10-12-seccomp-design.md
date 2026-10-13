@@ -1530,6 +1530,11 @@ adjusted below).
 
 ## 16. The user's case
 
+**Approved** [USER 2026-10-13: "Agree, sounds good - approved"]: both
+rulings below, recorded in `docs/decisions.md`. The oracle is rebuilt with
+`CONFIG_SECCOMP=y` at phase 2b of stream X; the P9 widening is stream V's
+signal extension (4.5).
+
 For the user [the paste]:
 
 > Two rulings in one, for the seccomp stream (`docs/2026-10-12-seccomp-design.md`, v2).
