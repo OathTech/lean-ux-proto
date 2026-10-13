@@ -15,7 +15,7 @@ it is history, not setup instructions. Setup is
 | [2026-10-11-interface.md](2026-10-11-interface.md) | The shared tables: wire opcodes, record kinds, hidden-site and allocation-site ids, fixture flags, file ownership by stream |
 | [worktree-practices.md](worktree-practices.md) | Worktrees, shared inputs, private outputs, cleanup |
 | [offline-usage.md](offline-usage.md) | Reusing a staged environment without network access |
-| [SETUP-new-machine.md](SETUP-new-machine.md) | The October 2026 machine migration notes, kept for their checklist; the commands and counts in it are of that date |
+| [history/SETUP-new-machine.md](history/SETUP-new-machine.md) | Retired on 2026-10-13: the October 2026 machine migration notes, kept for their checklist; the commands and counts in it are of that date |
 | [nono-profile-proposal.md](nono-profile-proposal.md) | The sandbox profile the project's devboxes run under; devbox-specific |
 
 ## Plans and strategy
