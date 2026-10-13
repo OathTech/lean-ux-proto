@@ -385,3 +385,15 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   audits of the oldest WireGuard modules by fresh agents, and a
   generated-trace soak with fresh seeds. New targets (the FIB trie, the
   timer wheel, KVM) wait.
+- **2026-10-13 [AGENT, fork of the coordinator]** A mirror defect found by
+  the device correspondence audit (docs/2026-10-13-audit-device.md, M1)
+  and never exercised by the corpus: `setMtu` answered `-ERANGE` above
+  `max_mtu` and nothing below zero where `dev_validate_mtu` answers
+  `-EINVAL` for both (net/core/dev.c:9061-9075). Fixed with the cut's rule
+  over the ioctl's int (the guest's `(int)op->a` applied in `Env.setMtu`),
+  two traces at the arms (`w4_set_mtu_over_max`, `w4_set_mtu_negative`:
+  semantic_mismatch before, agreement after, on s2), the trace field and
+  the expected errno set corrected. With it the audit's X1
+  (`wg_check_packet_protocol` decided from the packet, its error arm
+  modelled and unexercised) and D1 (the handshake ring in `wg_destruct`'s
+  guard, an invariant). The audit's other items stay as reported.

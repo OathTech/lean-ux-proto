@@ -705,7 +705,9 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
   | "wg_set_mtu" =>
     fields j ["op", "mtu"]
     let mtu ← (← field j "mtu").getNat?
-    if mtu > 65535 then throw "mtu: expected 0-65535"
+    -- the ioctl's `ifr_mtu` is an int the guest fills with `(int)op->a`: a u32
+    -- word, negative to the kernel at or above 2^31 (`Env.setMtu`)
+    if mtu > 0xFFFFFFFF then throw "mtu: expected 0-4294967295"
     return .wgSetMtu mtu
   | _ => throw "unsupported operation"
 

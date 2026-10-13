@@ -455,8 +455,10 @@ def validate_trace(trace):
             except InvalidConfig as exc:
                 raise InvalidTrace(str(exc)) from exc
         if name == "wg_set_mtu":
-            if type(op["mtu"]) is not int or not 0 <= op["mtu"] <= 65535:
-                raise InvalidTrace(f"ops[{i}].mtu: expected an integer 0-65535")
+            # the guest writes `(int)op->a` into ifr_mtu (guest.c), so the field
+            # is a u32 whose values at or above 2^31 reach the kernel negative
+            if type(op["mtu"]) is not int or not 0 <= op["mtu"] <= 0xFFFFFFFF:
+                raise InvalidTrace(f"ops[{i}].mtu: expected an integer 0-4294967295")
         if name == "wg_batch":
             validate_batch(op, f"ops[{i}]")
         # epoll R (design section 6): cmd and events are u32 like flags, data

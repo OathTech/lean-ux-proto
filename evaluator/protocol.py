@@ -225,9 +225,9 @@ SEMANTIC_ERRNOS = {'eventfd2': {12, 22, 24}, 'dup': {9, 12, 24}, 'dup3': {9, 12,
                    'wg_flood': set(),
                    # W7: the batch's submission likewise; per-item results are its cqes
                    'wg_batch': set(),
-                   # W4: dev_validate_mtu's -ERANGE; wg_xmit's -EMSGSIZE/-EINVAL from the sender's
-                   # IP layer under a route MTU or UDP_SEGMENT (no wg_xmit runs)
-                   'wg_set_mtu': {19, 34},
+                   # W4: dev_validate_mtu's -EINVAL (net/core/dev.c:9061-9075: negative, or
+                   # above max_mtu; the audit of 2026-10-13 corrected this from -ERANGE)
+                   'wg_set_mtu': {19, 22},
                    # EEXIST (a second wg0), ENODEV (no wg0)
                    'wg_create': {17}, 'wg_down': {19}, 'wg_delete': {19},
                    # W9 (docs/2026-10-06-w8-w9-netns-routing.md 4.3): RTM_DELADDR of

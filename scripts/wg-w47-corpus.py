@@ -109,6 +109,15 @@ def traces():
                            steer, SESSION + [fired("send_persistent_keepalive"), d3.INTERVAL + "=1",
                                              "calculate_skb_padding.no_mtu=1", "wg_open.has_inet_device=0",
                                              "wg_open.has_inet6_device=0"])
+    # dev_validate_mtu's two -EINVAL arms (net/core/dev.c:9061-9075), found by
+    # the device correspondence audit (docs/2026-10-13-audit-device.md, M1):
+    # above wg0's max_mtu (2147483552, device.c:297), and at 2^31, which the
+    # guest's `(int)op->a` makes negative (guest.c:2393). Both leave the MTU
+    # and the session untouched, so the GET afterwards is the same as before.
+    ops, sess, steer = d3.session(keepalive=5)
+    out["w4_set_mtu_over_max"] = (ops + [set_mtu(2147483553), OBSERVE, GET], steer, SESSION)
+    ops, sess, steer = d3.session(keepalive=5)
+    out["w4_set_mtu_negative"] = (ops + [set_mtu(2147483648), OBSERVE, GET], steer, SESSION)
     # W7 (section 6, the core tier): batches of n data messages under a
     # session, injected in one io_uring_enter, so the decrypt ring and the
     # peer's rx_queue hold n items at once: wg_prev_queue_dequeue's "more
