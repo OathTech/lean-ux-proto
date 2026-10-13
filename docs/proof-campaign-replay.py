@@ -80,10 +80,20 @@ def stale_dump_cursor():
     }
 
 
+def stale_dump_cursor_orphan():
+    """Retain a trie owner after the stale cursor releases its replacement peer."""
+    trace = stale_dump_cursor()
+    trace["id"] = "r2_stale_dump_cursor_orphan"
+    trace["ops"][6]["config"]["peers"][-1]["allowed_ips"] = [
+        {"family": 4, "addr": "0a000000", "cidr": 8}]
+    return trace
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     cases = {"r1-inclusive-floor": inclusive_floor,
-             "r2-stale-dump-cursor": stale_dump_cursor}
+             "r2-stale-dump-cursor": stale_dump_cursor,
+             "r2-stale-dump-cursor-orphan": stale_dump_cursor_orphan}
     parser.add_argument("case", choices=cases)
     args = parser.parse_args()
     print(json.dumps(cases[args.case](), separators=(",", ":")))

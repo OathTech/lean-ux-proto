@@ -333,4 +333,78 @@ theorem Context.focus_nodup (c : Context) (u : Tree)
   | left n c r ih => exact ih (List.nodup_append.mp (List.nodup_cons.mp hn).2).1
   | right n l c ih => exact ih (List.nodup_append.mp (List.nodup_cons.mp hn).2).2.1
 
+theorem Context.exact_result (c observed : Context) (n : NodeData) (l r u : Tree) (previous : Option Nat)
+    (hn : n.cidr = cidr)
+    (hm : prefixBits width n.cidr n.addr = prefixBits width n.cidr key)
+    (hf : c.Follows width key cidr) (ho : observed.Follows width key cidr)
+    (ht : c.plug (.node n l r) = observed.plug u)
+    (he : PlacementEnd width key cidr (observed.lastParent previous) u result) :
+    result = (some n.id, true) := by
+  induction c generalizing observed u previous with
+  | here =>
+    cases observed with
+    | here =>
+      change Tree.node n l r = u at ht
+      subst u
+      rcases he with ⟨hlt, _⟩ | ⟨_, hmiss, _⟩ | ⟨_, _, hret⟩
+      · omega
+      · exact False.elim (hmiss hm)
+      · exact hret
+    | left m inner right =>
+      have heq := (Tree.node.inj ht).1
+      subst m
+      have := ho.1
+      omega
+    | right m left inner =>
+      have heq := (Tree.node.inj ht).1
+      subst m
+      have := ho.1
+      omega
+  | left a c sibling ih =>
+    cases observed with
+    | here =>
+      change Tree.node a (c.plug (.node n l r)) sibling = u at ht
+      subst u
+      rcases he with ⟨hlt, _⟩ | ⟨_, hm, _⟩ | ⟨heq, _, _⟩
+      · have := hf.1; omega
+      · exact False.elim (hm hf.2.1)
+      · have := hf.1; omega
+    | left m inner right =>
+      obtain ⟨hn, hl, hr⟩ := Tree.node.inj ht
+      subst m
+      exact ih inner u (some a.id) hf.2.2.2 ho.2.2.2 hl he
+    | right m left inner =>
+      have hn := (Tree.node.inj ht).1
+      subst m
+      have h0 := hf.2.2.1
+      have h1 := ho.2.2.1
+      omega
+  | right a sibling c ih =>
+    cases observed with
+    | here =>
+      change Tree.node a sibling (c.plug (.node n l r)) = u at ht
+      subst u
+      rcases he with ⟨hlt, _⟩ | ⟨_, hm, _⟩ | ⟨heq, _, _⟩
+      · have := hf.1; omega
+      · exact False.elim (hm hf.2.1)
+      · have := hf.1; omega
+    | left m inner right =>
+      have hn := (Tree.node.inj ht).1
+      subst m
+      have h1 := hf.2.2.1
+      have h0 := ho.2.2.1
+      omega
+    | right m left inner =>
+      obtain ⟨hn, hl, hr⟩ := Tree.node.inj ht
+      subst m
+      exact ih inner u (some a.id) hf.2.2.2 ho.2.2.2 hr he
+
+theorem PlacementWitness.exact_result {c : Context} {n : NodeData} {l r : Tree}
+    (hf : c.Follows width key cidr) (hn : n.cidr = cidr)
+    (hm : prefixBits width n.cidr n.addr = prefixBits width n.cidr key)
+    (h : PlacementWitness (c.plug (.node n l r)) width key cidr result) :
+    result = (some n.id, true) := by
+  obtain ⟨observed, u, ht, ho, he⟩ := h
+  exact c.exact_result observed n l r u none hn hm hf ho ht he
+
 end Leanux.Proofs.WG.AllowedIps

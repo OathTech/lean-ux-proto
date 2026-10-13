@@ -135,4 +135,18 @@ theorem nodePlacement_empty_focus_wp (k : Kernel) (d : WG.Device) (width key cid
     (hkw ▸ hd) (c.plug .empty) base hr hv
   exact ⟨result, v, he, hp.empty_result hf, hframe.trans hkw⟩
 
+theorem nodePlacement_exact_focus_wp (k : Kernel) (d : WG.Device) (width key cidr : Nat)
+    (hw : width = 32 ∨ width = 128) (hk : key < 2 ^ width) (hc : cidr ≤ width)
+    (hd : k.wg = some d) (c : Context) (base : WG.Slot) (n : NodeData) (l r : Tree)
+    (hr : RepAt d.nodes width base (c.plug (.node n l r)))
+    (hv : (c.plug (.node n l r)).Valid width) (hf : c.Follows width key cidr)
+    (hn : n.cidr = cidr) (hm : prefixBits width n.cidr n.addr = prefixBits width n.cidr key) :
+    ⦃fun w => ⌜w.k = k⌝⦄ WG.nodePlacement (c.plug (.node n l r)).root key cidr width
+    ⦃⇓ result w => ⌜result = (some n.id, true) ∧ w.k = k⌝⦄ := by
+  apply (total_iff_run _ _ _).mpr
+  intro w hkw
+  obtain ⟨result, v, he, hframe, hp⟩ := nodePlacement_run w d width key cidr hw hk hc
+    (hkw ▸ hd) (c.plug (.node n l r)) base hr hv
+  exact ⟨result, v, he, hp.exact_result hf hn hm, hframe.trans hkw⟩
+
 end Leanux.Proofs.WG.AllowedIps

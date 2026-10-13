@@ -15,22 +15,22 @@ differential check or guest run.
 | --- | --- |
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay and independent review checked. Seccomp frame carry checked. |
 | R2 lifetime safety | Keypair operation endpoints, peer allocation/reference helpers, packet primitives, failure-retaining peer creation/release, mixed receive-enqueue/decrypt iteration, keypair/packet release families, and complete keypair/TX/RX allocation with fixture initialization, allocation-aware release/caller composition and complete session/rotation, peer-creation, receive-entry and receive-maintenance calls, plus stale-cursor finding checked; caller/lifecycle and whole-run internal-access coverage remain in progress. |
-| R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion, original empty-root and arbitrary-depth empty-child insertion with sequence wrappers, and total original placement proved; general mutation/history and path refinements remain open. Path proofs follow R2. |
+| R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion, original empty-root and arbitrary-depth empty-child insertion with sequence wrappers, exact-prefix replacement with sequence wrappers, and total original placement proved; general mutation/history and path refinements remain open. Path proofs follow R2. |
 | R4 delivery | Not started; drop characterisation waiting on W7 full-ring tier's explanation of the two drops. |
 | R5 key lifetime | Not started; time half waiting on review items 7 and 8 on the timer model. |
 | R6 flood resistance | Not started. |
 
-**Current validation.** The full proof gate passes 192 build jobs and 131
-terminal statements (ReplayWindow 15, R1 9, R2 87, R3 20), with only permitted
+**Current validation.** The full proof gate passes 195 build jobs and 135
+terminal statements (ReplayWindow 15, R1 9, R2 87, R3 24), with only permitted
 axioms. The default model build passes 60 jobs; the unit tier passes 93 tests
-in 21.323 seconds with one skip. Both explicit-record witness replays below
-were rechecked at the seccomp carry and agree with the original runner.
+in 21.516 seconds with one skip. The R1 explicit-record witness was rechecked at the seccomp carry; both R2
+variants were rechecked at this checkpoint. All agree with the original runner.
 Independent reviews cover peer creation, the seccomp carry, mixed enqueue,
 decrypt execution, keypair/packet releases, ambient caller composition,
 allocation and release-bound composition, session creation and rotation,
 the mixed peer-creation bridge, receive entry and maintenance, pure trie
 insertion, original empty-root and arbitrary-depth empty-child insertion with
-its wrapper, and placement.
+its wrapper, exact-prefix replacement, list deletion and placement.
 
 **Shared carry.** Signal/task and pipe helper frames, seccomp entry/tail frames
 and arbitrary prefill preservation keep the seven-field WG projection intact.
@@ -205,7 +205,23 @@ python3 -B docs/proof-campaign-replay.py r2-stale-dump-cursor |
 capped -- scripts/in-bundle scripts/proof-gate
 ```
 
-**Effort and review.** Reproduction takes under one second. The main caller
+A second accepted eight-operation variant gives replacement peer 26 an IPv4
+`10.0.0.0/8` binding before the stale continuation releases it. The final
+checkpoint follows the actual device root: that prefix still names slot 26,
+while resident identity 55 is absent. It checks eight checkpoint emissions,
+five specified projections and original-runner JSON equality. The records are
+again synthetic and explicit. This rules out unconditional owner-residency
+invariants; it neither resurrects identity 27 nor by itself demonstrates
+packet misrouting or disagreement with insert/remove history. The original
+witness is unchanged.
+
+```sh
+set -o pipefail
+python3 -B docs/proof-campaign-replay.py r2-stale-dump-cursor-orphan |
+  capped -- scripts/in-bundle lake env lean --run Leanux/Proofs/WG/LifetimeSafety/ReplayOrphan.lean
+```
+
+**Effort and review.** Each reproduction takes under one second. The main caller
 checkpoints took roughly 6–25 minutes each, with 4–19 compile passes; the latest
 receive-maintenance checkpoint took seven passes over 15.7 minutes (five
 elaboration failures, then targeted and full builds passing). Counts and failed
@@ -280,12 +296,24 @@ is preserved, not inferred. The statements describe exact endpoint states,
 not mutation-event order. Peer-list append is exact without yet proving list
 coherence or ownership.
 
-**Remaining claim.** Exact-prefix replacement, nonempty grafts, second-allocation
+`ListsMirror` gives the total original `listDel` endpoint as the source's
+saved-peer fold, with pointwise filtered lists and unchanged identities and
+allocation metadata. `ExactMutation` and `ExactStore` handle exact-prefix
+replacement at arbitrary represented depth. They preserve the old node ID,
+unmasked address and structure, allocate nothing, and append once to the
+post-filter target list. They require representation and unique node IDs, but
+no old-owner liveness or coherent peer-list premise. Total original `add`,
+actual-root lookup and `insert` sequence advancement refine the same pure
+insertion. This remains an endpoint refinement, not a resident-access observer.
+
+**Remaining claim.** Nonempty grafts, second-allocation
 rollback, removal and general configuration histories remain open. Parsed-input
 bounds and history invariants still need propagation through all mutations.
 Both packet paths follow R2. Owners are raw peer slots, not allocation or
 cryptographic identities; no liveness/ownership claim follows from tree lookup.
-No R3 statement has been reshaped and no Rule Zero finding is claimed.
+The R2 orphan-owner replay above is a constraint on any proposed ownership
+invariant, not yet an R3 counterexample. No R3 statement has been reshaped
+and no Rule Zero finding is claimed.
 
 **Effort and review.** Arithmetic, pure-tree and original traversal work took
 5, 6 and 20 compile passes; pure insertion took 13. Empty-root insertion took
@@ -294,7 +322,9 @@ failed monolithic child-insertion attempt. Its staged replacement closed in
 19 passes over eighteen minutes; that proof failure was not a mirror finding.
 Arbitrary-depth insertion plus its wrapper took eight capped builds over 11m49s:
 five passed, three failed during ordinary proof development, with no cap hits.
-The final full build passed 186 jobs. Independent reviews checked each layer
+Exact-prefix replacement and list deletion took 21 capped builds over about
+eighteen minutes: seven passed and fourteen proof iterations failed before
+correction; the final full build passed 195 jobs. Independent reviews checked each layer
 and final terminal scopes; no correctness finding remains. Reporting corrections
 separated root values from linkage, endpoint equations from event order, and
 successful Worlds from failing Stops. Current validation is above; reproduce

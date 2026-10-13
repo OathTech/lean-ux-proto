@@ -6,6 +6,7 @@ import Leanux.Proofs.WG.AllowedIps.MutationMirror
 import Leanux.Proofs.WG.AllowedIps.PlacementMirror
 import Leanux.Proofs.WG.AllowedIps.ChildStore
 import Leanux.Proofs.WG.AllowedIps.DeepChildStore
+import Leanux.Proofs.WG.AllowedIps.ExactStore
 
 /-!
 # R3: prefix arithmetic, pure insertion and represented-tree operations
@@ -15,8 +16,9 @@ prefixes and prove longest-prefix lookup in a pure tree with local edge
 conditions. Original node-store traversals terminate and refine this lookup
 under an exact structural representation. Pure insertion preserves the local
 invariants and implements canonical-prefix replacement. Original insertion
-into an empty selected root or immediate child refines that pure insertion
-and preserves a supplied opposite-family representation. General mutation refinement, configuration-history
+into an empty selected root or empty child, and exact-prefix replacement at
+any represented depth, refine that pure insertion and preserve a supplied
+opposite-family representation. General mutation refinement, configuration-history
 agreement, and packet admission remain separate obligations of the result.
 -/
 
@@ -500,5 +502,147 @@ theorem original_insert_context_empty_child_correct (w w' : World) (d : WG.Devic
       .inr ⟨hret, rfl, hroot', hrep, hvalid, hnodup', hnext⟩⟩
     intro f
     exact (hroots f).trans (by cases f <;> rfl)
+
+/-- Original list deletion completes for a present device. Its exact endpoint
+is the source's fold over saved peer values, and every resident peer list is
+filtered pointwise. Resident identities and all allocation counters remain
+unchanged. This endpoint theorem does not claim internal-access coverage. -/
+theorem original_listDel_correct (w : World) (d : WG.Device) (hd : w.k.wg = some d) (id : Nat) :
+    ∃ w', (WG.listDel id).run w = .ok ((), w') ∧
+      w'.k = { w.k with wg := some (unlisted d id) } ∧
+      (∀ pid : Nat, (unlisted d id).peers[pid]? = (d.peers[pid]?).map (unlist id)) ∧
+      (∀ pid : Nat, ((unlisted d id).peers[pid]?).map WG.Peer.internalId =
+        (d.peers[pid]?).map WG.Peer.internalId) ∧
+      (unlisted d id).nextPeer = d.nextPeer ∧ (unlisted d id).nextNode = d.nextNode ∧
+      (unlisted d id).nextKeypairId = d.nextKeypairId ∧ (unlisted d id).nextSkb = d.nextSkb := by
+  obtain ⟨result, w', hr, _, hk⟩ := (Leanux.Proofs.Framing.total_iff_run _ _ _).mp
+    (listDel_wp w.k d hd id) w rfl
+  exact ⟨w', hr, hk, unlisted_get d id, unlisted_identity d id, rfl, rfl, rfl, rfl⟩
+
+/-- Original exact-prefix insertion terminates at any represented depth and
+refines the same pure insertion used for lookup correctness. It preserves the
+old node's identifier, unmasked address and structural fields, filters every
+peer list, and appends the ID once to the filtered target list. Previous
+ownership and coherent peer lists are not prerequisites. Root linkage,
+duplicate-free represented IDs and local validity are explicit premises;
+configuration histories and packet admission are separate obligations. -/
+theorem original_add_context_exact_correct (w : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (v4 : Bool) (c : Context) (n : NodeData) (l r : Tree)
+    (addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
+    (hroot : rootValue d v4 = (c.plug (.node n l r)).root)
+    (hr : RepAt d.nodes (rootWidth v4) (rootSlot v4) (c.plug (.node n l r)))
+    (hv : (c.plug (.node n l r)).Valid (rootWidth v4))
+    (hnodup : (c.plug (.node n l r)).nodeIds.Nodup)
+    (ha : addr < 2 ^ rootWidth v4) (hc : cidr ≤ rootWidth v4)
+    (hf : c.Follows (rootWidth v4) addr cidr) (hn : n.cidr = cidr)
+    (hm : prefixBits (rootWidth v4) n.cidr n.addr = prefixBits (rootWidth v4) n.cidr addr)
+    (other : Tree) (ho : RepAt d.nodes (rootWidth (!v4)) (rootSlot (!v4)) other) :
+    let installed := exactInstalled d n.id (encode (rootWidth v4) (c.slot (rootSlot v4)) n l r) pid p
+    let inserted := (c.plug (.node n l r)).insertFresh (rootWidth v4) d.nextNode addr cidr pid
+    ∃ w', (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w = .ok (0, w') ∧
+      w'.k = { w.k with wg := some installed } ∧
+      rootValue installed v4 = inserted.tree.root ∧
+      RepAt installed.nodes (rootWidth v4) (rootSlot v4) inserted.tree ∧
+      inserted.tree.Valid (rootWidth v4) ∧ inserted.tree.nodeIds = (c.plug (.node n l r)).nodeIds ∧
+      inserted.tree.nodeIds.Nodup ∧ inserted.allocations = 0 ∧
+      installed.nextNode = d.nextNode ∧ installed.peerAllowedips.seq = d.peerAllowedips.seq ∧
+      (∀ f, rootValue installed f = rootValue d f) ∧
+      RepAt installed.nodes (rootWidth (!v4)) (rootSlot (!v4)) other ∧
+      installed.peers[pid]? = some { p with allowedipsList := WG.listRemove p.allowedipsList n.id ++ [n.id] } ∧
+      (∀ q : Nat, pid ≠ q → installed.peers[q]? = (d.peers[q]?).map (unlist n.id)) ∧
+      (∀ q : Nat, (installed.peers[q]?).map WG.Peer.internalId = (d.peers[q]?).map WG.Peer.internalId) ∧
+      (NodesBelow d → NodesBelow installed) := by
+  obtain ⟨result, w', hrun, hret, hk⟩ := (Leanux.Proofs.Framing.total_iff_run _ _ _).mp
+    (add_context_exact_wp w.k d hd v4 c n l r addr cidr pid p hp hroot hr hv ha hc hf hn hm) w rfl
+  subst result
+  have shape := context_exact_insertFresh c n l r (rootWidth v4) d.nextNode addr cidr pid hf hn hm
+  have hids : ((c.plug (.node n l r)).insertFresh (rootWidth v4) d.nextNode addr cidr pid).tree.nodeIds =
+      (c.plug (.node n l r)).nodeIds := by
+    rw [shape]
+    exact c.nodeIds_congr rfl
+  refine ⟨w', hrun, hk, ?_, ?_, Tree.insertFresh_valid hv ha hc d.nextNode pid,
+    hids, hids ▸ hnodup, ?_, rfl, rfl, ?_, ?_, exactInstalled_peer ..,
+    exactInstalled_other_peer d n.id _ pid p,
+    exactInstalled_identity d n.id _ pid p hp, ?_⟩
+  · rw [shape]
+    exact hroot.trans (c.root_congr (before := .node n l r)
+      (after := .node { n with peer := some pid } l r) rfl).symm
+  · rw [shape]
+    exact exactInstalled_context_rep d (rootWidth v4) (rootSlot v4) c n l r pid p hr hnodup
+  · rw [shape]
+  · intro f
+    cases f <;> rfl
+  · exact exactInstalled_other_rep d v4 (c.slot (rootSlot v4)) n l r pid p
+      (c.focus_rep _ _ hr) other ho
+  · intro hb
+    exact exactInstalled_below d n.id _ pid p hb (hb n.id _ (c.focus_rep _ _ hr).1)
+
+/-- After original exact-prefix insertion, lookup from the actual resulting
+root terminates and satisfies the independent canonical-prefix replacement
+specification. The inserted binding retains the old stored address and ID. -/
+theorem original_add_context_exact_lookup (w : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (v4 : Bool) (c : Context) (n : NodeData) (l r : Tree)
+    (addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
+    (hroot : rootValue d v4 = (c.plug (.node n l r)).root)
+    (hr : RepAt d.nodes (rootWidth v4) (rootSlot v4) (c.plug (.node n l r)))
+    (hv : (c.plug (.node n l r)).Valid (rootWidth v4))
+    (hnodup : (c.plug (.node n l r)).nodeIds.Nodup)
+    (ha : addr < 2 ^ rootWidth v4) (hc : cidr ≤ rootWidth v4)
+    (hf : c.Follows (rootWidth v4) addr cidr) (hn : n.cidr = cidr)
+    (hm : prefixBits (rootWidth v4) n.cidr n.addr = prefixBits (rootWidth v4) n.cidr addr)
+    (key : Nat) (hk : key < 2 ^ rootWidth v4) :
+    let old := c.plug (.node n l r)
+    let inserted := old.insertFresh (rootWidth v4) d.nextNode addr cidr pid
+    ∃ w' d' final,
+      (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w = .ok (0, w') ∧
+      w'.k.wg = some d' ∧
+      (WG.findNode (rootValue d' v4) (rootWidth v4) key).run w' =
+        .ok ((inserted.tree.lookup (rootWidth v4) key).map Entry.id, final) ∧
+      Winner (rootWidth v4) key
+        (inserted.binding :: old.entries.filter
+          (fun e => e.prefixKey (rootWidth v4) != (cidr, prefixBits (rootWidth v4) cidr addr)))
+        (inserted.tree.lookup (rootWidth v4) key) ∧ final.k = w'.k := by
+  obtain ⟨w', hrun, hkernel, hroot', hrep, hvalid, _⟩ :=
+    original_add_context_exact_correct w d hd v4 c n l r addr cidr pid p hp hroot hr hv hnodup
+      ha hc hf hn hm .empty trivial
+  let installed := exactInstalled d n.id (encode (rootWidth v4) (c.slot (rootSlot v4)) n l r) pid p
+  have hdev : w'.k.wg = some installed := by rw [hkernel]
+  have hw : rootWidth v4 = 32 ∨ rootWidth v4 = 128 := by cases v4 <;> simp [rootWidth]
+  obtain ⟨final, he, hframe⟩ := findNode_run w' installed (rootWidth v4) key hw hk hdev
+    ((c.plug (.node n l r)).insertFresh (rootWidth v4) d.nextNode addr cidr pid).tree
+    (rootSlot v4) hrep hvalid
+  refine ⟨w', installed, final, hrun, hdev, ?_, Tree.insertFresh_lookup_spec hv ha hc d.nextNode pid key, hframe⟩
+  change rootValue installed v4 = _ at hroot'
+  rw [hroot']
+  simpa only [Tree.lookupId] using he
+
+/-- The original family wrapper increments the sequence exactly once, then
+completes the exact-prefix update without allocating a node. The endpoint is
+the same owner replacement and peer-list movement used by the add theorem. -/
+theorem original_insert_context_exact_correct (w : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (family : Nat) (c : Context) (n : NodeData) (l r : Tree)
+    (addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
+    (hroot : rootValue d (family == 4) = (c.plug (.node n l r)).root)
+    (hr : RepAt d.nodes (rootWidth (family == 4)) (rootSlot (family == 4)) (c.plug (.node n l r)))
+    (hv : (c.plug (.node n l r)).Valid (rootWidth (family == 4)))
+    (hnodup : (c.plug (.node n l r)).nodeIds.Nodup)
+    (ha : addr < 2 ^ rootWidth (family == 4)) (hc : cidr ≤ rootWidth (family == 4))
+    (hf : c.Follows (rootWidth (family == 4)) addr cidr) (hn : n.cidr = cidr)
+    (hm : prefixBits (rootWidth (family == 4)) n.cidr n.addr = prefixBits (rootWidth (family == 4)) n.cidr addr) :
+    let v4 := family == 4
+    let installed := exactInstalled (bumpSeq d) n.id (encode (rootWidth v4) (c.slot (rootSlot v4)) n l r) pid p
+    let inserted := (c.plug (.node n l r)).insertFresh (rootWidth v4) d.nextNode addr cidr pid
+    ∃ w', (WG.insert family addr cidr pid).run w = .ok (0, w') ∧
+      w'.k = { w.k with wg := some installed } ∧
+      installed.peerAllowedips.seq = d.peerAllowedips.seq + 1 ∧ installed.nextNode = d.nextNode ∧
+      rootValue installed v4 = inserted.tree.root ∧
+      RepAt installed.nodes (rootWidth v4) (rootSlot v4) inserted.tree ∧
+      inserted.tree.Valid (rootWidth v4) ∧ inserted.tree.nodeIds.Nodup := by
+  obtain ⟨w', hrun, hkernel, hroot', hrep, hvalid, _, hnodup', _⟩ :=
+    original_add_context_exact_correct { w with k := { w.k with wg := some (bumpSeq d) } }
+      (bumpSeq d) rfl (family == 4) c n l r addr cidr pid p hp hroot hr hv hnodup ha hc hf hn hm .empty trivial
+  refine ⟨w', ?_, hkernel, rfl, rfl, hroot', hrep, hvalid, hnodup'⟩
+  rw [insert_run_bump w d hd family addr cidr pid]
+  exact hrun
 
 end Leanux.Proofs.WG.CryptokeyRouting
