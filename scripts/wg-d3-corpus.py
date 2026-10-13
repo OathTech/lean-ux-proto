@@ -363,6 +363,18 @@ def traces():
          {"op": "wg_up"}, inject(theirs), advance(RATE_LIMIT), xmit(), OBSERVE, inject(message), OBSERVE, GET],
         [["resp_ephemeral", d1.RESP_EPHEMERAL.hex()], ["index_draw", d1.le32(d1.INDEX_RESPONDER_SIDE)]] + steer,
         ["wg_receive_handshake_packet.initiation=1", "wg_packet_send_staged_packets.no_keypair=1"] + SESSION)
+    # A session, then wg0's private key is changed (set_device, netlink.c:575;
+    # wg_set with a new private_key runs wg_noise_expire_current_peer_keypairs
+    # over each existing peer). The peer holds a current keypair from the
+    # session, so .current_keypair fires (noise.c:193) and the keypair's
+    # sending half is invalidated; the handshake index entry is cleared. GET
+    # shows wg0's new public key. No new draw: the per-peer static-static DH
+    # and the cookie device-key recompute are crypto cut points.
+    out["d3_privkey_change_expires"] = (
+        ka_ops + [{"op": "wg_set", "config": {"private_key": d1.key(d1.OTHER_DEVICE)}}, OBSERVE, GET],
+        steer,
+        ["wg_noise_expire_current_peer_keypairs.current_keypair=1"])
+
     return out
 
 
