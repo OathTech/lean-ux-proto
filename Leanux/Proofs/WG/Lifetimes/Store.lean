@@ -15,6 +15,11 @@ def Bounded (s : Store Slot) : Prop :=
 def Absent (s : Store Slot) (stamp : Nat) : Prop :=
   ∀ i, s.slots i ≠ some stamp
 
+/-- One allocation identity has at most one resident slot. Boundedness alone
+does not imply this property for arbitrary stores. -/
+def Unique (s : Store Slot) : Prop :=
+  ∀ i j stamp, s.slots i = some stamp → s.slots j = some stamp → i = j
+
 def Transition (s t : Store Slot) : Prop :=
   s.frontier ≤ t.frontier ∧
   ∀ i stamp, t.slots i = some stamp → stamp ≤ s.frontier → s.slots i = some stamp
@@ -36,6 +41,12 @@ theorem Retained.bounded (h : Retained s t) (hb : Bounded s) : Bounded t := by
   intro i stamp hi
   rw [h.1]
   exact hb i stamp (h.2 i stamp hi)
+
+theorem Retained.unique (h : Retained s t) (hu : Unique s) : Unique t :=
+  fun i j stamp hi hj => hu i j stamp (h.2 i stamp hi) (h.2 j stamp hj)
+
+theorem Retained.absent (h : Retained s t) (ha : Absent s stamp) : Absent t stamp :=
+  fun i hi => ha i (h.2 i stamp hi)
 
 theorem Transition.refl (s : Store Slot) : Transition s s :=
   ⟨Nat.le_refl _, fun _ _ h _ => h⟩
@@ -89,6 +100,14 @@ theorem erase_bounded [DecidableEq Slot] (s : Store Slot) (i : Slot)
     (hb : Bounded s) : Bounded (s.put i none) := by
   exact (erase_retained s i).bounded hb
 
+theorem Unique.erase_absent [DecidableEq Slot] {s : Store Slot} (hu : Unique s)
+    (hi : s.slots i = some stamp) : Absent (s.put i none) stamp := by
+  intro j hj
+  by_cases he : j = i
+  · simp [Store.put, he] at hj
+  · have old : s.slots j = some stamp := by simpa [Store.put, he] using hj
+    exact he (hu j i stamp old hi)
+
 theorem allocate_transition [DecidableEq Slot] (s : Store Slot) (i : Slot) :
     Transition s (s.allocate i) := by
   refine ⟨by simp [Store.allocate], ?_⟩
@@ -107,5 +126,21 @@ theorem allocate_bounded [DecidableEq Slot] (s : Store Slot) (i : Slot)
   · have := hb j stamp (by simpa [Store.allocate, h] using hj)
     simp only [Store.allocate]
     omega
+
+theorem allocate_unique [DecidableEq Slot] (s : Store Slot) (i : Slot)
+    (hb : Bounded s) (hu : Unique s) : Unique (s.allocate i) := by
+  intro j k stamp hj hk
+  by_cases hji : j = i <;> by_cases hki : k = i
+  · exact hji.trans hki.symm
+  · simp [Store.allocate, hji] at hj
+    have old : s.slots k = some stamp := by simpa [Store.allocate, hki] using hk
+    have := hb k stamp old
+    omega
+  · simp [Store.allocate, hki] at hk
+    have old : s.slots j = some stamp := by simpa [Store.allocate, hji] using hj
+    have := hb j stamp old
+    omega
+  · exact hu j k stamp (by simpa [Store.allocate, hji] using hj)
+      (by simpa [Store.allocate, hki] using hk)
 
 end Leanux.Proofs.WG.Lifetimes

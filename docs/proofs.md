@@ -33,7 +33,9 @@ directory whose `Statements.lean` is the gated surface.
   (`Runner`). The erasure core (`Outer`, `Tools`) is independent of what is
   logged. Validator observations carry acceptance events; `Checkpoints` observes
   arbitrary projections at committed operation boundaries, with exact erasure
-  to the original runner and an exact singleton-append theorem.
+  to the original runner and an exact singleton-append theorem. `Prefix`
+  instead retains observations when execution fails, with exact original
+  result/World or error erasure and compositional prefix-safety contracts.
 - `Leanux/Proofs/WG/CounterWindow/`: the receive counter window as a pure
   model of `counter_validate` (`Model`), its refinement to the mirror's
   `counterValidate` (`Refinement`, the S2 theorems), and replay freedom for
@@ -57,7 +59,11 @@ directory whose `Statements.lean` is the gated surface.
   `WG/Peers/Primitives` covers getter/setter identity and reference helpers;
   `Peers/Frames` carries live identities through initialization, and
   `Peers/Allocation` gives exact original peer creation and finite-sequence
-  allocation/reference contracts.
+  allocation/reference contracts. `Lifetimes/Events` expresses
+  release-before-access exclusion over allocation stamps. `Peers/Access`
+  observes every peer-store access in the original `peerPut` and
+  `wgGetDeviceDone`, including prefixes ending in errors; its finite caller
+  family contains no allocation or device lifecycle.
 - `Leanux/Proofs/WG/LifetimeSafety/`: campaign R2 in progress: keypair store
   absence/freshness at original operation endpoints (`Keypairs/Identity`),
   peer/packet helper-family contracts, and a checked stale dump-cursor finding.
@@ -80,7 +86,7 @@ ReplayWindow. The conventions that keep proof work cheap are in
 | --- | --- | --- | --- | --- | --- | --- |
 | Receive counter window: replay freedom (S1, S2, S3) | S1: every accepted execution has its exact acceptance history, and no two events share an allocation lifetime and a wire counter. S2: `counterValidate` returns exactly what receive.c's rule returns and leaves exactly its replay state. S3: every non-receive syscall and every validator call leave every other keypair's window unchanged, per call and for whole syscalls including the runner's ambient step. | `Leanux/Proofs/WG/ReplayWindow/` (`Statements.lean`, 15 terminal declarations; `Counterexamples.lean`) | [charter](2026-10-12-charter-window-proof.md) | [independent review, two parts](2026-10-12-spike-window-review.md); the spike's [report](2026-10-13-spike-window.md) and [self-review](2026-10-13-spike-window-self-review.md) | c85e86b | current (R1 gate rechecked the unchanged result; earlier epoll carry from ef7c535 to 6f1f84c remains as reviewed) |
 | R1: anti-replay uniqueness and inclusive floor | No wire counter is accepted twice in one allocation lifetime; every accepted counter is at or above the inclusive lower edge, for pure runs, original validator calls and accepted runner histories. Equality at the charter's floor is intentionally permitted, with a concrete recorded replay. | `Leanux/Proofs/WG/AntiReplay/` (`Statements.lean`, 9 terminal theorems) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r1--anti-replay-uniqueness-and-the-inclusive-floor) | c85e86b | current |
-| R2 components: store identities; stale dump-cursor finding | Successful original operations do not reintroduce absent, previously allocated keypair identities; reuse of an empty slot is fresh. Original peer allocation/reference helper sequences preserve old-identity provenance, with exact fresh creation; the eight packet primitives preserve lifetimes within one device epoch, and a freed slot cannot be read afterward. Exact runner checkpoints reproduce a retained dump cursor releasing a replacement peer. Full caller/lifecycle and internal-access safety remain unproved. | `Leanux/Proofs/WG/LifetimeSafety/` (`Statements.lean`, 28 terminal theorems) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r2--lifetime-identity-and-retained-references-in-progress) | c85e86b | current component; R2 in progress |
+| R2 components: store identities; access prefixes; stale dump-cursor finding | Successful original operations do not reintroduce absent, previously allocated keypair identities; reuse of an empty slot is fresh. Peer allocation/reference and packet primitive families preserve identity provenance. Exact observations of peerPut and dump completion establish release/access ordering through failed prefixes of finite sequences of those calls. Exact runner checkpoints reproduce a retained dump cursor releasing a replacement peer. Full caller/lifecycle and internal-access safety remain unproved. | `Leanux/Proofs/WG/LifetimeSafety/` (`Statements.lean`, 32 terminal theorems) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r2--lifetime-identity-and-retained-references-in-progress) | c85e86b | current component; R2 in progress |
 | R3 components: prefix arithmetic and pure-tree lookup | Original IPv4/IPv6 prefix helpers agree with leading-bit arithmetic, including exact branch-record effects. A locally valid pure tree returns the longest matching owned prefix, has unique canonical prefixes and fits the traversal depth bound. Original node-store traversal, mutation/history and packet-path refinements remain unproved. | `Leanux/Proofs/WG/CryptokeyRouting/` (`Statements.lean`, 6 terminal theorems) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r3--cryptokey-routing-in-progress) | c85e86b | current component; R3 in progress |
 
 The gate for every row: `capped -- scripts/in-bundle scripts/proof-gate`

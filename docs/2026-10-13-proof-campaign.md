@@ -9,7 +9,7 @@ campaign. No mirror or kernel edits, no integration into main, no push.
 | Result | Progress |
 | --- | --- |
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay, independent review and 24-statement proof gate pass over c85e86b. |
-| R2 lifetime safety | Keypair operation endpoints, peer allocation/reference helpers, packet primitives and stale-cursor finding checked (55-statement gate); caller/lifecycle and internal-access coverage in progress. This is not yet the whole R2 claim. |
+| R2 lifetime safety | Keypair operation endpoints, peer allocation/reference helpers, packet primitives, failure-retaining peer release observations and stale-cursor finding checked (62-statement gate); caller/lifecycle and whole-run internal-access coverage remain in progress. |
 | R3 cryptokey routing | Original prefix arithmetic and pure-tree longest-prefix lookup proved (58-statement gate); original traversal/mutation/history and path refinements remain open. Path proofs follow R2. |
 | R4 delivery | Not started; drop characterisation waiting on W7 full-ring tier's explanation of the two drops. |
 | R5 key lifetime | Not started; time half waiting on review items 7 and 8 on the timer model. |
@@ -95,113 +95,95 @@ would not preserve altitude and is not proposed.
 ## R2 — lifetime identity and retained references (in progress)
 
 [AGENT 2026-10-13] Separate store identity from retained-reference provenance.
-The existing keypair evolution can establish that a released allocation does
-not return to the store, but this does not establish that a saved numeric slot
-still denotes the allocation for which its reference was acquired. Keep both
-obligations visible; do not count a counterexample to the latter as a proof or
-refutation of the former.
+Absence of a released allocation does not establish that a saved numeric slot
+still denotes the allocation whose reference was acquired. Keep both obligations
+visible; a finding about the latter does not settle the former.
 
-**Checked component.** `Keypairs/Identity` derives monotonic allocation
-frontiers, old-identity provenance, absence preservation and fresh reuse from
-the existing `Evolution` relation. Its original-syscall and syscall-plus-ambient
-corollaries discharge the evolution contract through ReplayWindow's S3.
-A subsequent successful original getter cannot return an already absent,
-previously allocated identity. The reachable-state `Inv` premise supplies the
-frontier bound when starting with a resident identity. These are keypair-store
-and operation-endpoint statements. They do not assert safety of every transient
-access inside an operation. The peer and packet components below cover named
-helper families; caller/lifecycle and internal-access obligations remain in
-progress, not hidden hypotheses of a completed R2 result.
+**Architecture and checked scope.** `Keypairs/Identity` derives allocation
+frontier monotonicity, old-identity provenance, absence preservation and fresh
+reuse from the existing `Evolution`. ReplayWindow's S3 discharges its contracts
+for original syscalls and their ambient step. A later successful getter cannot
+return an already absent, previously allocated identity. These are operation
+endpoint statements, not safety of every internal access.
 
-**Peer and packet primitive checkpoint.** `WG/Lifetimes/Store` is a reusable
-allocation-frontier model. `Transition` preserves the provenance of every old
-identity that remains; `Retained` only removes identities, with an unchanged
-frontier. `Actions` composes contracts over finite sequences of **actual
-successful original helper executions**, rather than assuming abstract store
-steps. `Peers/Primitives` proves current getter identity, a conditional setter
-contract, and retention/removal through `getPeer`, `peerGet`, and `peerPut`.
-The raw setter is unconditional in the mirror: its proof therefore requires
-that the replacement's identity equals the current resident's identity.
+`Lifetimes/Store` abstracts slots and allocation stamps. `Transition` preserves
+old-identity provenance; `Retained` permits only removal. `Actions` composes
+contracts over actual original executions. `Peers/Primitives` covers lookup and
+reference helpers; its raw setter contract requires the replacement's stamp to
+match the current resident. `Peers/Frames` carries that correspondence through
+initialization. `Peers/Allocation` proves the complete original `peerCreate`:
+an ordinary error result leaves the identity store unchanged; success advances
+the frontier once and inserts the fresh stamp. It does not assume an empty
+`nextPeer` slot in arbitrary malformed Worlds. Finite helper sequences include
+creation and get-unless-zero and preserve boundedness and old-identity absence.
 
-`Packets/Primitives` proves exact executions and contracts for all eight
-TX/RX allocation, lookup, update and free helpers. Its independently stated
-invariant bounds resident ids by the shared `nextSkb` allocation frontier.
-It proves freshness, absence preservation and, directly, that after an actual
-free no later successful primitive sequence can make a getter at that slot
-succeed. These packet statements keep one device epoch; they do not cover
-device deletion/recreation. The invariant does not assume TX/RX disjointness,
-and the post-free proof uses same-slot emptiness rather than global absence.
-`Peers/Frames` now provides arbitrary-predicate live getter/setter contracts:
-a cached record can be written back only while its allocation stamp is still
-resident. Those contracts frame the initialization helpers. `Peers/Allocation`
-proves the exact identity-store effect of the complete original `peerCreate`:
-ordinary error results leave it unchanged; success increments the frontier once
-and places that new identity in the returned slot. It makes no assumption that
-`nextPeer` was empty in an arbitrary malformed starting World. The allocation
-and insertion are proved atomically, with the original mirror's counter update order.
-Finite original helper sequences now include creation and get-unless-zero as
-well as lookup, acquisition and release; they preserve boundedness and prevent
-old absent identities from returning. Other callers, device lifecycle and
-every internal access still need closure.
+`Packets/Primitives` gives exact runs for all eight TX/RX allocation, lookup,
+update and free helpers. Its invariant bounds stored ids by `nextSkb`. Following
+an actual free, no successful primitive sequence can make a getter at that slot
+succeed. This covers one device epoch and does not assume TX/RX disjointness;
+post-free exclusion uses same-slot emptiness.
 
-[AGENT 2026-10-13] Share projection contracts and allocation-frontier algebra
-between peer and packet stores; preserve the fixed-device scope until the
-original device lifecycle is proved. This avoids claiming raw skb numbers
-identify allocations across device replacement.
+[AGENT 2026-10-13] Share allocation-frontier algebra and projection contracts
+between stores; retain the fixed-device packet scope until lifecycle closure.
+Raw skb numbers alone do not identify allocations across device replacement.
 
-**Shared filesystem frames.** `Framing/Projection` supplies equality, composition
-and projection contracts over arbitrary World views. `WGKernel` selects the
-seven dedicated WireGuard kernel fields, including the whole device and global
-allocation counters. `FSFileRefs` proves `getFile`, `setFile`, `freeFile`,
-`fileFree`, `fput` and `fdput` over that view. The prior keypair theorem names
-now derive their contracts from these proofs; peer and packet adapters reuse
-them, including the packet device epoch. This proves preservation at successful
-return, not absence of later effects: `fput` can queue task work. No terminal
-statement changed. The remaining filesystem hierarchy has not yet been migrated.
+`Framing/Projection`, `WGKernel` and `FSFileRefs` prove six original file-reference
+helpers once over the seven dedicated WG kernel fields, then derive keypair,
+peer and packet contracts by projection. These frames end at successful return:
+`fput` can queue task work whose later effects require separate proof. The
+remaining filesystem hierarchy has not yet been migrated.
 
-[AGENT 2026-10-13] Prove filesystem preservation once over this shared kernel
-view and derive smaller lifetime views by projection. This avoids duplicating
-the existing operational proof hierarchy for every new result.
+[AGENT 2026-10-13] Share filesystem preservation over the full WG kernel view
+rather than duplicate its operational proof hierarchy for each lifetime view.
 
-**Concrete reference finding.** An eight-operation, explicitly recorded mirror
-run creates 28 peers, starts a stepped dump, deletes wg0, creates a replacement
-wg0, creates 27 replacement peers and receives a chunk, resuming the pending
-dump. The receive returns the already queued first chunk; continuation
-generation performs the destructive release. The first
-dump retains raw peer slot 26, allocation identity 27, with two references.
-Deletion removes the device while leaving the socket's dump cursor active.
-The replacement device reuses slot 26 for allocation identity 55, live with
-one reference. Resuming the dump calls `peerPut` on that new peer: its store
-entry disappears while both the configured peer list and public-key table
-still name slot 26. The old allocation does **not** reappear. This is a
-retained-reference retargeting and table-coherence bug, not the charter's
-narrower example of reading an old object after release.
+**Internal access prefixes.** `Logged/Prefix` puts observations outside the
+exception layer: failure retains events already made, while erasure returns the
+exact original error or successful value and World. `Lifetimes/Events` forbids a
+read or write after release of the same allocation stamp. `Peers/Access`
+observes the original `peerPut` at both getters (including `requireNotPending`),
+the setter and the inline store erasure; `wgGetDeviceDone` uses that observer.
+The exact event equation covers every input: a pending-worker rejection retains
+one read, a zero refcount retains two reads and the write before rejection, and
+a successful last-reference release has read/read/write/release. Failed getters
+resolve no object and emit no access event.
 
-The divergence is between accepted mirror input and the declared fixture
-domain. `harness/guest.c` rejects deletion while a stepped dump is pending
-(`wg_delete_with_dump_pending`); the W1/W2 design already calls for a
-corresponding mirror rejection. `Env.wgDelete` currently checks worker idleness
-but not the pending dump. Linux's dump context retains `ctx->wg`, whereas the
-mirror context retains a Boolean and the resumed operation obtains the current
-device. This is a mirror-domain finding, not evidence of a Linux lifetime bug.
-No kernel experiment was run.
+Four terminal exports give exact result/log equality and safety of every prefix
+of finite sequences of those two complete original calls, including failures.
+The initial invariant states safe past history, unique resident stamps and
+absence of previously released stamps. It is not a premise asserting future
+safety. This family allocates nothing. Extending it with creation will also
+require resident and released-history frontier bounds: current absence alone
+cannot distinguish a dead stamp from one that will first be allocated later.
+Resolved-stamp ordering does not prove ownership of a raw slot reference; the
+stale-cursor finding below can satisfy it. Whole-run coverage, dump-resume
+cleanup, other callers and device lifecycle remain open.
 
-**Witness and refinement.** `Logged/Checkpoints` adds one read-only projection
-after each original syscall, ambient step and all per-operation guards.
-`checkpoint_runner_erasure` proves equality with the original runner's entire
-JSON or indexed error for arbitrary projections and initial logs.
-`checkpoint_observation_exact` proves the exact singleton append. Independent
-source review confirms that this is the only added executable line; the
-one-per-operation source coverage is not inferred from erasure alone.
-`LifetimeSafety/Replay.lean` asserts the five relevant committed checkpoints,
-the total checkpoint count and exact original JSON equality. The generated
-record stream is synthetic, explicit and non-placeholder, not a Linux capture.
+**Concrete reference finding.** An eight-operation, explicit-record accepted
+mirror run creates 28 peers, starts a stepped dump, deletes wg0, creates a new
+wg0 and 27 replacement peers, then receives a chunk. The receive returns the
+already queued first chunk; its continuation generation performs the destructive
+release. The dump retained slot 26, old identity 27, with two references. Device
+deletion leaves the cursor active. Replacement slot 26 has identity 55 and one
+reference; resumed cleanup calls `peerPut` on it, removing its store entry while
+the configured peer list and public-key table still name slot 26. Old identity
+27 does not return. This is reference retargeting and table incoherence, not
+reading a released old object.
 
+The guest rejects deletion with a pending dump (`wg_delete_with_dump_pending`),
+and the W1/W2 design calls for the mirror to do likewise. `Env.wgDelete` checks
+worker idleness but not the dump. Linux retains `ctx->wg`; the mirror retains a
+Boolean and resumes against the current device. This is an accepted-mirror
+domain bug, not evidence of a Linux lifetime bug. No kernel experiment was run.
+
+`Logged/Checkpoints` observes one projection after each original operation,
+including ambient processing and guards; erasure preserves the complete JSON or
+indexed error, and a separate theorem proves exact singleton append. The replay
+checks five relevant checkpoints, their total count and original JSON equality.
+Its records are synthetic, explicit and non-placeholder, not a Linux capture.
 The terminal `stale_cursor_retargets_replacement` is a separate kernel-reduced
-local witness: the actual `wgGetDeviceDone` callback on a retained cursor
-releases replacement identity 55 and leaves the list/hash entries. The full
-recorded trace reaches the same erroneous `peerPut` through the resume cleanup
-in `wgGetDeviceDump`; these are distinct call sites and are not conflated.
+witness of the actual `wgGetDeviceDone` callback. The full replay reaches the
+same bad `peerPut` through `wgGetDeviceDump` resume cleanup; these are distinct
+call sites.
 
 ```sh
 set -o pipefail
@@ -210,49 +192,36 @@ python3 -B docs/proof-campaign-replay.py r2-stale-dump-cursor |
 capped -- scripts/in-bundle scripts/proof-gate
 ```
 
-**Validation and effort so far.** The recorded stale-cursor replay accepts
-and all assertions pass in under one second. The current proof gate passes
-118 build jobs and 55 terminal statements (28 in R2), with only permitted
-standard axioms. The default model build and required 88 unit tests pass,
-with one skipped test. The mirror is byte-identical to `c85e86b`; existing
-results and checked components are current, with no lag.
+**Validation and effort.** The recorded replay accepts and checks its assertions
+in under one second. The latest access-observer build passes 122 jobs; its four
+new exports bring R2 to 32 terminal theorems. The gate passes all 62 terminal
+statements with only permitted axioms; the default model build passes 51 jobs,
+and the required unit tier passes 88 tests in 21.537 seconds with one skip.
+Earlier checkpoint commits carry their own counts. No mirror semantics or
+kernel source changed; checked components remain over `c85e86b`, with no lag.
 
-The peer allocation extension took six compile passes. Earlier checkpoint
-commits carry their validation counts; most work was the reusable projections
-and caller contracts. One repeated anonymous-hypothesis tactic looped and its
-build was stopped by verified PID, then repaired. Other failed passes exposed
-proof elaboration/interface errors, including duplicate generated match lemmas
-resolved by importing their existing frame module. No mirror semantics changed.
-A read-only review of the primitive checkpoint found no defect; its scope and
-module-heading corrections are incorporated above. The allocation review likewise
-found no proof defect. It confirms that freshness here means the next frontier
-value, not global uniqueness in an arbitrary unbounded malformed starting store.
-It also found a source-order limitation: C `peer.c` initializes the destination
-cache and handshake before incrementing `peer_counter`; the mirror increments
-and inserts before those initialization helpers. The theorem follows the
-mirror's order. This is a C-correspondence limitation, not a demonstrated
-accepted-trace lifetime counterexample; no transient-access or C-simulation
-claim is made by this checkpoint.
+Most effort is caller coverage and reusable framing. Peer allocation took six
+compile passes, shared file frames four, and failure-prefix observation nine.
+Failed passes exposed proof elaboration or simplification errors. One earlier
+anonymous-hypothesis tactic loop was stopped by verified PID and repaired.
+Independent read-only reviews found no correctness defect in these components;
+their scope corrections and allocation-history requirement are incorporated
+above. Coverage is checked against source calls, not inferred from erasure.
 
-The shared-frame extension took four compile passes and passed independent
-read-only review without findings. Its six legacy interfaces are unchanged;
-the full build found no import cycle or duplicate generated matcher lemma.
+One source-order limitation remains: C `peer.c` initializes destination cache
+and handshake before incrementing `peer_counter`; the mirror increments and
+inserts before those helpers. The allocation theorem follows the mirror. This
+is a C-correspondence limitation, not an accepted-trace lifetime counterexample
+or a C-simulation claim.
 
 **Ranked mirror-shape recommendations.** (1) Restore the documented rejection
-of device deletion with a pending stepped dump: altitude-preserving fixture
-domain enforcement, outside this proof campaign's edit authority. (2) If that
-domain is intentionally expanded, retain the actual device lifetime in the
-dump context and discharge its reference at completion, following the C:
-altitude-preserving, but a separate mirror design and differential-check task.
-(3) Keep named allocation, deletion and same-object field-update boundaries
-for all three stores: altitude-preserving operational structure that reduces
-proof-side framing. No production history field is proposed.
-
-**Independent checkpoint review.** A read-only worker found no defect in the
-identity lemmas, generalized erasure or replay assertions. Its scope findings
-are retained above: endpoint absence is not internal-access safety, and the
-isolated callback is not the replay's call site. Its correction to the final
-receive's queue behavior is incorporated; no finding is left undispositioned.
+of deletion with a pending dump: altitude-preserving fixture-domain enforcement.
+(2) If that domain is intentionally expanded, retain the actual device lifetime
+in the cursor, following C: altitude-preserving, requiring separate mirror
+validation. (3) Keep named allocation, deletion and same-object field-update
+boundaries: altitude-preserving operational structure that reduces framing.
+No production history field is proposed. All mirror changes are outside this
+campaign's edit authority.
 
 ## R3 — cryptokey routing (in progress)
 

@@ -4,6 +4,7 @@ import Leanux.Proofs.Logged.Checkpoints
 import Leanux.Proofs.WG.LifetimeSafety.CursorWitness
 import Leanux.Proofs.WG.Packets.Primitives
 import Leanux.Proofs.WG.Peers.Allocation
+import Leanux.Proofs.WG.Peers.Access
 
 /-! R2's store-identity components: whole-operation keypair evolution,
 peer allocation/reference sequences, and packet primitive sequences within a device
@@ -11,6 +12,38 @@ epoch. Full caller and lifecycle coverage remain separate obligations. -/
 namespace Leanux.Proofs.WG.LifetimeSafety
 open Leanux Leanux.WG Leanux.Proofs.Logged
 open Leanux.Proofs.WG.Keypairs Leanux.Proofs.WG.ReplayWindow
+
+/-- The complete original peerPut is observed at both successful getter sites,
+the actual setter and the inline release. For every World, erasing observations
+returns the exact original result or Stop, while errors retain the exact prefix. -/
+theorem peer_put_access_exact (peer : Option PeerId) (w : World) (h : List Peers.PeerEvent) :
+    runPrefix (Peers.peerPutPrefix peer) w h =
+      ((peerPut peer).run w, h ++ Peers.peerPutEvents peer w) :=
+  Peers.peerPutPrefix_run peer w h
+
+/-- The actual dump-completion callback has the same complete peer-access
+observations as its peerPut call, including every failure prefix. This statement
+neither asserts cursor provenance nor covers the separate dump-body caller. -/
+theorem dump_done_access_exact (ctx : DumpCtx) (w : World) (h : List Peers.PeerEvent) :
+    runPrefix (Peers.wgGetDeviceDonePrefix ctx) w h =
+      ((wgGetDeviceDone ctx).run w, h ++ Peers.peerPutEvents ctx.nextPeer w) :=
+  Peers.wgGetDeviceDonePrefix_run ctx w h
+
+/-- Observation of a finite sequence drawn from peerPut and wgGetDeviceDone
+preserves the complete original execution result, including its first error.
+The family contains no allocation, device lifecycle or other WG caller. -/
+theorem peer_release_call_sequence_erasure (calls : List Peers.AccessCall) :
+    ErasesPrefix (Peers.AccessCall.observe calls) (Peers.AccessCall.execute calls) :=
+  Peers.AccessCall.observe_erases calls
+
+/-- For this finite no-allocation caller family, no observed access follows a
+release of the same identity, even in a prefix ending in an error. The initial
+invariant requires unique resident identities and absence of previously released
+ones; it does not assume the desired property of future execution. -/
+theorem peer_release_call_sequence_prefix_safe (calls : List Peers.AccessCall)
+    (w : World) (h : List Peers.PeerEvent) (n : Nat) (hi : Peers.AccessInv h w) :
+    Lifetimes.AccessEvent.Safe ((runPrefix (Peers.AccessCall.observe calls) w h).2.take n) :=
+  (Peers.AccessCall.observe_preserves calls w h hi).choose_spec.2.1.take n
 
 /-- The complete original peerCreate call has an exact identity-store effect:
 an ordinary error result leaves it unchanged, while success increments the
