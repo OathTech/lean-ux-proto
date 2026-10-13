@@ -175,7 +175,7 @@ inductive Decision where
   -- E-A: wg_cookie_message_consume beyond the lookup
   | cookieNoMac1Sent | cookieDecryptOk
   -- drivers/net/wireguard/peerlookup.c
-  | idxMatch | idxFound
+  | idxMatch | idxFound | idxInsertHashed | idxRemoveHashed
   -- drivers/net/wireguard/queueing.h
   | cpumaskWrap
   -- drivers/net/wireguard/noise.c
@@ -1162,6 +1162,13 @@ def Decision.info : Decision → DecisionInfo
   -- drivers/net/wireguard/peerlookup.c
   | .idxMatch => d "wg_index_hashtable_lookup.index_matches" wpl 211 [(212, 214)] []
   | .idxFound => d "wg_index_hashtable_lookup.found" wpl 217 [(218, 222)] []
+  -- `hlist_del_init_rcu`'s `if (!hlist_unhashed(n))` (rculist.h:183), inlined at
+  -- the insert's first step (:125) and in the remove (:196). Plain: the
+  -- inlined test's only body lines are rculist.h:184-185, shared by both
+  -- copies, so a witness there cannot tell the insert's copy from the
+  -- remove's when both run in one operation (handshake audit I2).
+  | .idxInsertHashed => d "wg_index_hashtable_insert.entry_hashed" wpl 125 [] []
+  | .idxRemoveHashed => d "wg_index_hashtable_remove.entry_hashed" wpl 196 [] []
   -- drivers/net/wireguard/queueing.h
   | .cpumaskWrap => d "wg_cpumask_next_online.wrap" wqh 128 [(129, 129)] []
   -- drivers/net/wireguard/noise.c
@@ -2426,6 +2433,9 @@ def Decision.comparison : Decision → Option Comparison
   -- noise.c:635-637 (DWARF puts the compare at 635); the condition at 639
   -- tests flood_attack
   | .consumeFlood => some ⟨.gt, false, some 635, true⟩
+  -- `(s64)(handshake->last_initiation_consumption - initiation_consumption) < 0`
+  -- (noise.c:651): the signed difference against 0 (handshake audit I5)
+  | .consumeLaterTime => some ⟨.lt, true, none, false⟩
   -- Review item 8 (docs/2026-10-13-review-items-7-8.md, section 4): the
   -- age tests `wg_birthdate_has_expired(birthday, seconds)` (timers.h:25-29)
   -- are `(s64)(birthday + seconds * NSEC_PER_SEC) <= (s64)now`, inlined
@@ -2885,6 +2895,7 @@ def Decision.comparison : Decision → Option Comparison
     allowed IPs or trie nodes. Only these may be reported more than
     once in one operation. -/
 def Decision.repeatable : Decision → Bool
+  | .idxInsertHashed | .idxRemoveHashed
   | .allocFdBelowNextFd | .allocFdSearch | .findNextFdAllFull | .findNextFdSkipFullWords
   | .allocFdLimit | .expandFilesFits | .allocFdExpandError | .allocFdExpanded
   | .fgetLightSingleOwner | .fgetLightNoFile | .fgetLightMasked | .fdputFput

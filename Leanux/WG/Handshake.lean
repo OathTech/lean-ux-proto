@@ -119,9 +119,9 @@ def consumeInitiation (msg : List UInt8) : M (Option PeerId) := do
   let replay := memcmp t p.latestTimestamp != .gt
   -- `(s64)last_initiation_consumption + NSEC_PER_SEC / INITIATIONS_PER_SECOND
   -- > (s64)ktime_get_coarse_boottime_ns()`, computed before the test
-  let floodLhs := p.lastInitiationConsumption + NSEC_PER_SEC / INITIATIONS_PER_SECOND
-  let now ← hiddenClock .floodNow
-  if ← orM (branch .consumeReplay replay) (branchCmp .consumeFlood (floodLhs > now) floodLhs now) then
+  let floodLhs : Int64 := p.lastInitiationConsumption + NSEC_PER_SEC64 / INITIATIONS_PER_SECOND.toInt64
+  let now ← hiddenClock64 .floodNow
+  if ← orM (branch .consumeReplay replay) (branchCmp .consumeFlood (floodLhs > now) floodLhs.toInt now.toInt) then
     return ← out peer none
   -- Success! Copy everything to peer
   setPeer pid { (← getPeer pid) with remoteEphemeral := e }
@@ -129,9 +129,10 @@ def consumeInitiation (msg : List UInt8) : M (Option PeerId) := do
     setPeer pid { (← getPeer pid) with latestTimestamp := t }
   setPeer pid { (← getPeer pid) with hash := hashT, chainingKey := ckSs, remoteIndex := u32le msg 4 }
   -- `(s64)(last_initiation_consumption - (initiation_consumption = now)) < 0`
-  let consumption ← hiddenClock .consumptionNow
+  let consumption ← hiddenClock64 .consumptionNow
   let last := (← getPeer pid).lastInitiationConsumption
-  if ← branch .consumeLaterTime (last - consumption < 0) then
+  let diff : Int64 := last - consumption
+  if ← branchCmp .consumeLaterTime (diff < 0) diff.toInt 0 then
     setPeer pid { (← getPeer pid) with lastInitiationConsumption := consumption }
   setPeer pid { (← getPeer pid) with handshakeState := HANDSHAKE_CONSUMED_INITIATION }
   out peer (some pid)
