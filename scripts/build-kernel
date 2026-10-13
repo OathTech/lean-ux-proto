@@ -36,6 +36,14 @@ SCRATCH_OPTIONS="${LEANUX_KERNEL_EXTRA_ENABLE:-}"
 for option in $SCRATCH_OPTIONS; do
     case "$option" in *[!A-Z0-9_]*|"") echo "LEANUX_KERNEL_EXTRA_ENABLE: not a configuration option name: $option" >&2; exit 1 ;; esac
 done
+# LEANUX_KERNEL_EXTRA_DISABLE names options a scratch build turns off (a
+# Kconfig choice such as CC_OPTIMIZE_FOR_PERFORMANCE cannot be left on while
+# its sibling is enabled); each must resolve to not set or the build fails.
+# Either variable makes the build a scratch build.
+SCRATCH_DISABLE="${LEANUX_KERNEL_EXTRA_DISABLE:-}"
+for option in $SCRATCH_DISABLE; do
+    case "$option" in *[!A-Z0-9_]*|"") echo "LEANUX_KERNEL_EXTRA_DISABLE: not a configuration option name: $option" >&2; exit 1 ;; esac
+done
 LEANUX_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
 LEANUX_SHARED_ROOT="${LEANUX_SHARED_ROOT:-$LEANUX_ROOT}"
 LEANUX_ARTIFACTS="${LEANUX_ARTIFACTS:-$LEANUX_ROOT/.artifacts}"
@@ -160,12 +168,15 @@ fi
 for option in MODULES SMP RANDOMIZE_BASE DEBUG_INFO_NONE LOCALVERSION_AUTO; do
     "$LEANUX_CONFIG" --file "$LEANUX_BUILD/.config" --disable "$option"
 done
-if [ -n "$SCRATCH_OPTIONS" ]; then
-    echo "SCRATCH BUILD (never an oracle): LEANUX_KERNEL_EXTRA_ENABLE=$SCRATCH_OPTIONS" >&2
+if [ -n "$SCRATCH_OPTIONS" ] || [ -n "$SCRATCH_DISABLE" ]; then
+    echo "SCRATCH BUILD (never an oracle): LEANUX_KERNEL_EXTRA_ENABLE=$SCRATCH_OPTIONS LEANUX_KERNEL_EXTRA_DISABLE=$SCRATCH_DISABLE" >&2
+    for option in $SCRATCH_DISABLE; do
+        "$LEANUX_CONFIG" --file "$LEANUX_BUILD/.config" --disable "$option"
+    done
     for option in $SCRATCH_OPTIONS; do
         "$LEANUX_CONFIG" --file "$LEANUX_BUILD/.config" --enable "$option"
     done
-    echo "$SCRATCH_OPTIONS" > "$LEANUX_BUILD/.leanux-scratch"
+    echo "enable: $SCRATCH_OPTIONS disable: $SCRATCH_DISABLE" > "$LEANUX_BUILD/.leanux-scratch"
 elif [ -e "$LEANUX_BUILD/.leanux-scratch" ]; then
     echo "Build directory holds a scratch build ($(cat "$LEANUX_BUILD/.leanux-scratch")); use another directory for an oracle build" >&2
     exit 1
@@ -187,10 +198,16 @@ for option in $REQUIRED; do
         exit 1
     }
 done
+for option in $SCRATCH_DISABLE; do
+    if grep -qx "CONFIG_${option}=y" "$LEANUX_BUILD/.config"; then
+        echo "LEANUX_KERNEL_EXTRA_DISABLE: option still enabled after olddefconfig: $option" >&2
+        exit 1
+    fi
+done
 $CAPPED make -C "$SOURCE" O="$LEANUX_BUILD" ARCH=x86_64 KCFLAGS="$KCFLAGS_EXTRA" \
     -j"${LEANUX_JOBS:-4}" bzImage vmlinux
 mkdir -p "$LEANUX_ROOT/kernel"
-if [ -n "$SCRATCH_OPTIONS" ]; then
+if [ -n "$SCRATCH_OPTIONS" ] || [ -n "$SCRATCH_DISABLE" ]; then
     :   # a scratch build records no configuration: it is never an oracle
 elif [ "$PROFILE" = net-choice ]; then
     cp "$LEANUX_BUILD/.config" "$LEANUX_ROOT/kernel/config-x86_64-net-choice"
