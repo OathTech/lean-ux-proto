@@ -4,6 +4,7 @@ import Leanux.Proofs.WG.AllowedIps.LookupMirror
 import Leanux.Proofs.WG.AllowedIps.Insertion
 import Leanux.Proofs.WG.AllowedIps.MutationMirror
 import Leanux.Proofs.WG.AllowedIps.PlacementMirror
+import Leanux.Proofs.WG.AllowedIps.ChildStore
 
 /-!
 # R3: prefix arithmetic, pure insertion and represented-tree operations
@@ -13,8 +14,8 @@ prefixes and prove longest-prefix lookup in a pure tree with local edge
 conditions. Original node-store traversals terminate and refine this lookup
 under an exact structural representation. Pure insertion preserves the local
 invariants and implements canonical-prefix replacement. Original insertion
-into an empty selected root refines that pure insertion and preserves the
-opposite represented tree. General mutation refinement, configuration-history
+into an empty selected root or immediate child refines that pure insertion
+and preserves a supplied opposite-family representation. General mutation refinement, configuration-history
 agreement, and packet admission remain separate obligations of the result.
 -/
 
@@ -272,5 +273,89 @@ theorem original_nodePlacement_empty_focus (w : World) (d : WG.Device) (width ke
       (nodePlacement_empty_focus_wp w.k d width key cidr hw hk hc hd c base hr hv hf) w rfl
   rcases hp with ⟨rfl, hframe⟩
   exact ⟨w', he, hframe⟩
+
+/-- On a represented root whose requested immediate child is empty, original
+`add` either refuses allocation without a Kernel change or installs exactly
+the existing pure insertion result. The exact installed state includes
+the new backlink, parent slot update, and peer-list append. Whole-store freshness and explicit
+parent/sibling separation support the representation; no peer-list coherence
+or general insertion-history premise is assumed or concluded. Both root
+values and the sequence counter are preserved, as is any supplied
+opposite-family representation. Record errors remain errors. -/
+theorem original_add_empty_child_correct (w w' : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (v4 : Bool) (n : NodeData) (side : Nat) (sibling : Tree)
+    (addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
+    (hroot : rootValue d v4 = some n.id) (hb : side < 2) (hbelow : NodesBelow d)
+    (hparent : n.id ∉ sibling.nodeIds)
+    (hr : RepAt d.nodes (rootWidth v4) (rootSlot v4) (Tree.fork n side .empty sibling))
+    (hv : (Tree.fork n side .empty sibling).Valid (rootWidth v4))
+    (ha : addr < 2 ^ rootWidth v4) (hc : cidr ≤ rootWidth v4) (hlt : n.cidr < cidr)
+    (hm : prefixBits (rootWidth v4) n.cidr n.addr = prefixBits (rootWidth v4) n.cidr addr)
+    (hbit : bit (rootWidth v4) n.cidr addr = side)
+    (other : Tree) (ho : RepAt d.nodes (rootWidth (!v4)) (rootSlot (!v4)) other) (result : Int)
+    (hreturn : (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w = .ok (result, w')) :
+    let installed := gapInstalled d v4 n side sibling addr cidr pid p
+    let inserted := (Tree.fork n side .empty sibling).insertFresh (rootWidth v4) d.nextNode addr cidr pid
+    (result = -ENOMEM ∧ w'.k = w.k) ∨
+      (result = 0 ∧ w'.k = { w.k with wg := some installed } ∧ NodesBelow installed ∧
+        rootValue installed v4 = inserted.tree.root ∧
+        RepAt installed.nodes (rootWidth v4) (rootSlot v4) inserted.tree ∧
+        inserted.tree.Valid (rootWidth v4) ∧ installed.nextNode = d.nextNode + 1 ∧
+        installed.peerAllowedips.seq = d.peerAllowedips.seq ∧
+        (∀ family, rootValue installed family = rootValue d family) ∧
+        RepAt installed.nodes (rootWidth (!v4)) (rootSlot (!v4)) other) := by
+  have outcome := (Leanux.Proofs.Framing.hoare_iff_triple _ _ _).mpr
+    (add_root_gap_wp w.k d hd v4 n side sibling addr cidr pid p hp hroot hb hbelow hr hv ha hc hlt hm hbit)
+    w result w' rfl hreturn
+  rcases outcome with hf | hs
+  · exact .inl hf
+  have shape := gap_insertFresh n side sibling (rootWidth v4) d.nextNode addr cidr pid hb hlt hm hbit
+  have hn := (gap_rep_parts hb hr).1
+  refine .inr ⟨hs.1, hs.2, gapInstalled_below d v4 n side sibling addr cidr pid p hbelow
+    (hbelow n.id _ hn), ?_, ?_, Tree.insertFresh_valid hv ha hc d.nextNode pid,
+    rfl, rfl, (fun family => gapInstalled_roots d v4 family n side sibling addr cidr pid p),
+    gapInstalled_other_rep d v4 n side sibling addr cidr pid p hb hbelow hr other ho⟩
+  · simpa only [shape, Tree.fork_root] using
+      (gapInstalled_roots d v4 v4 n side sibling addr cidr pid p).trans hroot
+  · simpa only [shape] using gapInstalled_rep d v4 n side sibling addr cidr pid p hb hbelow hparent hr
+
+/-- After successful original insertion into an immediate empty child, original
+lookup from the resulting selected root terminates and returns a longest
+matching binding in the independently updated flat list. This composes the
+mutation representation with the previously proved original traversal. -/
+theorem original_add_empty_child_lookup (w w' : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (v4 : Bool) (n : NodeData) (side : Nat) (sibling : Tree)
+    (addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
+    (hroot : rootValue d v4 = some n.id) (hb : side < 2) (hbelow : NodesBelow d)
+    (hparent : n.id ∉ sibling.nodeIds)
+    (hr : RepAt d.nodes (rootWidth v4) (rootSlot v4) (Tree.fork n side .empty sibling))
+    (hv : (Tree.fork n side .empty sibling).Valid (rootWidth v4))
+    (ha : addr < 2 ^ rootWidth v4) (hc : cidr ≤ rootWidth v4) (hlt : n.cidr < cidr)
+    (hm : prefixBits (rootWidth v4) n.cidr n.addr = prefixBits (rootWidth v4) n.cidr addr)
+    (hbit : bit (rootWidth v4) n.cidr addr = side) (key : Nat) (hk : key < 2 ^ rootWidth v4)
+    (hreturn : (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w = .ok (0, w')) :
+    let old := Tree.fork n side .empty sibling
+    let inserted := old.insertFresh (rootWidth v4) d.nextNode addr cidr pid
+    ∃ d' final, w'.k.wg = some d' ∧
+      (WG.findNode (rootValue d' v4) (rootWidth v4) key).run w' =
+        .ok ((inserted.tree.lookup (rootWidth v4) key).map Entry.id, final) ∧
+      Winner (rootWidth v4) key
+        (inserted.binding :: old.entries.filter
+          (fun e => e.prefixKey (rootWidth v4) != (cidr, prefixBits (rootWidth v4) cidr addr)))
+        (inserted.tree.lookup (rootWidth v4) key) ∧ final.k = w'.k := by
+  have outcome := original_add_empty_child_correct w w' d hd v4 n side sibling addr cidr pid p
+    hp hroot hb hbelow hparent hr hv ha hc hlt hm hbit .empty trivial 0 hreturn
+  rcases outcome with hf | hs
+  · simp [ENOMEM] at hf
+  obtain ⟨_, hkernel, _, hroot', hrep, hvalid, _⟩ := hs
+  have hdev : w'.k.wg = some (gapInstalled d v4 n side sibling addr cidr pid p) := by
+    rw [hkernel]
+  have hw : rootWidth v4 = 32 ∨ rootWidth v4 = 128 := by cases v4 <;> simp [rootWidth]
+  obtain ⟨final, he, hframe⟩ := findNode_run w'
+    (gapInstalled d v4 n side sibling addr cidr pid p) (rootWidth v4) key hw hk hdev
+    ((Tree.fork n side .empty sibling).insertFresh (rootWidth v4) d.nextNode addr cidr pid).tree
+    (rootSlot v4) hrep hvalid
+  refine ⟨_, final, hdev, ?_, Tree.insertFresh_lookup_spec hv ha hc d.nextNode pid key, hframe⟩
+  simpa only [hroot', Tree.lookupId] using he
 
 end Leanux.Proofs.WG.CryptokeyRouting

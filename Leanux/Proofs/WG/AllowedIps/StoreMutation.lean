@@ -62,4 +62,19 @@ theorem NodesBelow.allocate {d : WG.Device} (h : NodesBelow d) (n : WG.AipNode) 
     simp_all
   · exact Nat.lt_trans (h id value hv) (Nat.lt_succ_self _)
 
+/-- Every represented identifier names a node of this family's width,
+including ownerless internal nodes. -/
+theorem RepAt.resident_bitlen {nodes : Std.TreeMap Nat WG.AipNode} {width : Nat}
+    {parent : WG.Slot} {t : Tree} (h : RepAt nodes width parent t)
+    {id : Nat} (hi : id ∈ t.nodeIds) :
+    ∃ n, nodes[id]? = some n ∧ n.bitlen = width := by
+  induction t generalizing parent with
+  | empty => simp [Tree.nodeIds] at hi
+  | node n l r ihl ihr =>
+    simp only [Tree.nodeIds, List.mem_cons, List.mem_append] at hi
+    rcases hi with rfl | hi | hi
+    · exact ⟨_, h.1, rfl⟩
+    · exact ihl h.2.1 hi
+    · exact ihr h.2.2 hi
+
 end Leanux.Proofs.WG.AllowedIps

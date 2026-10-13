@@ -15,19 +15,20 @@ differential check or guest run.
 | --- | --- |
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay and independent review checked. Seccomp frame carry checked. |
 | R2 lifetime safety | Keypair operation endpoints, peer allocation/reference helpers, packet primitives, failure-retaining peer creation/release, mixed receive-enqueue/decrypt iteration, keypair/packet release families, and complete keypair/TX/RX allocation with fixture initialization, plus stale-cursor finding checked; caller/lifecycle and whole-run internal-access coverage remain in progress. |
-| R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion, original empty-root insertion and total original placement proved; general mutation/history and path refinements remain open. Path proofs follow R2. |
+| R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion, original empty-root and immediate-empty-child insertion, and total original placement proved; general mutation/history and path refinements remain open. Path proofs follow R2. |
 | R4 delivery | Not started; drop characterisation waiting on W7 full-ring tier's explanation of the two drops. |
 | R5 key lifetime | Not started; time half waiting on review items 7 and 8 on the timer model. |
 | R6 flood resistance | Not started. |
 
-**Current validation.** The full proof gate passes 172 build jobs and 103
-terminal statements (ReplayWindow 15, R1 9, R2 64, R3 15), with only permitted
+**Current validation.** The full proof gate passes 174 build jobs and 105
+terminal statements (ReplayWindow 15, R1 9, R2 64, R3 17), with only permitted
 axioms. The default model build passes 60 jobs; the unit tier passes 93 tests
-in 22.566 seconds with one skip. Both explicit-record witness replays below
+in 21.142 seconds with one skip. Both explicit-record witness replays below
 were rechecked at the seccomp carry and agree with the original runner.
 Independent reviews cover peer creation, the seccomp carry, mixed enqueue,
 decrypt execution, keypair/packet releases, ambient caller composition,
-allocation, pure trie insertion, and original empty-root insertion and placement.
+allocation, pure trie insertion, original empty-root and immediate-empty-child
+insertion, and placement.
 
 **Shared carry.** Signal/task and pipe helper frames, seccomp entry/tail frames
 and arbitrary prefill preservation keep the seven-field WG projection intact.
@@ -499,11 +500,25 @@ does not itself establish that a device root field or external slot points there
 an `add` caller still needs that linkage. No second executable placement
 algorithm was introduced.
 
-The optional proof of insertion at an empty immediate child **failed** to close
-its repeated getter and Kernel-state equality goals and was removed. It establishes
-no new mutation case and supplies no Rule Zero finding. The next attempt will
-compose exact allocation, peer-list, getter and child-connection contracts in
-smaller stages. The checked empty-focus traversal lemma is retained.
+**Original immediate-empty-child insertion.** The first attempt failed to close
+repeated getter and Kernel-state equality goals and was removed. The second
+architecture in `ChildMutation` composes exact allocation, peer-list, getter and
+child-connection contracts with explicit state substitutions between stages;
+it closes the original `add` path. `ChildStore` proves that its exact installed
+state represents the existing pure `insertFresh`, with a valid tree and advanced
+frontier. Both root values and the sequence number are preserved. Any supplied
+opposite-family representation survives: whole-store freshness protects it from
+the allocation, and its node width excludes the modified parent.
+
+Two exports distinguish unchanged-Kernel allocation refusal from successful
+installation, then compose successful insertion with original `findNode` at the
+actual resulting root to obtain the independent flat-list longest-prefix answer.
+Selected-root linkage and parent/sibling separation are explicit premises.
+These are endpoint properties, not an observed mutation-event-order theorem.
+Peer-list append is exact, but peer-list coherence is neither assumed nor proved.
+This case is the root's immediate empty child; arbitrary-depth mutation, the
+`insert` wrapper for this case, rollback and history remain open. Failure of the
+first proof architecture was not a Rule Zero finding.
 
 **Validation and effort.** The arithmetic took five compile passes, the pure
 tree six, and the store/traversal refinement twenty over about eighteen minutes.
@@ -514,6 +529,9 @@ and forty-four seconds, including seven corrected compile failures.
 Placement took twenty-one capped builds over about thirty minutes: five passed
 and sixteen failed during proof development, including the failed optional
 mutation attempt. The final full proof build passed.
+The second child-insertion architecture took nineteen capped builds over eighteen
+minutes: six passed and thirteen failed during proof development, with no cap
+hits. Its final full build passed 174 jobs.
 Failed passes exposed proof elaboration or simplification errors. Current
 validation is recorded above. Reproduce with
 `capped -- scripts/in-bundle scripts/proof-gate`.
@@ -539,6 +557,10 @@ linkage is not derived by the theorem.
 The placement review checked source condition order, totality, context/insertion
 correspondence, empty-focus uniqueness and the three final exports, finding no
 defect. It retained the same external-root linkage obligation for later mutation.
+The child-insertion review checked the exact source helpers, represented insertion,
+opposite-family preservation and composed original lookup, with no unresolved
+finding. It corrected a docstring that described an endpoint theorem as an
+event-order property; the theorem and report now state the narrower exact claim.
 
 **Ranked mirror-shape recommendations.** None from this component. The current
 named arithmetic helpers and integer address encoding admit exact refinement
