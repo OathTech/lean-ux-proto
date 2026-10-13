@@ -3,6 +3,7 @@ import Leanux.Proofs.WG.AllowedIps.Tree
 import Leanux.Proofs.WG.AllowedIps.LookupMirror
 import Leanux.Proofs.WG.AllowedIps.Insertion
 import Leanux.Proofs.WG.AllowedIps.MutationMirror
+import Leanux.Proofs.WG.AllowedIps.PlacementMirror
 
 /-!
 # R3: prefix arithmetic, pure insertion and represented-tree operations
@@ -218,5 +219,58 @@ theorem original_insert_empty_root_correct (w w' : World) (d : WG.Device)
       .inr ⟨hs.1, rfl, emptyInstalled_root (bumpSeq d) (family == 4) addr cidr pid p,
         emptyInstalled_rep (bumpSeq d) (family == 4) addr cidr pid p,
         Tree.insertFresh_valid (by trivial) ha hc d.nextNode pid⟩⟩
+
+/-- The original placement loop terminates on an exactly represented valid
+IPv4 or IPv6 tree. Its result has a context whose ancestors strictly cover
+the requested prefix and choose the requested branch, ending at an exact
+node or the first stopped subtree. Exact nodes include ownerless nodes.
+The exact flag agrees with zero allocations in the existing pure insertion;
+the theorem does not yet refine nonempty original mutation or history. -/
+theorem original_nodePlacement_correct (w : World) (d : WG.Device) (width key cidr : Nat)
+    (hw : width = 32 ∨ width = 128) (hk : key < 2 ^ width) (hc : cidr ≤ width)
+    (hd : w.k.wg = some d) (t : Tree) (base : WG.Slot)
+    (hr : RepAt d.nodes width base t) (hv : t.Valid width) :
+    ∃ result w', (WG.nodePlacement t.root key cidr width).run w = .ok (result, w') ∧
+      w'.k = w.k ∧ PlacementWitness t width key cidr result ∧
+      ∀ fresh peer, result.2 = true ↔
+        (t.insertFresh width fresh key cidr peer).allocations = 0 := by
+  obtain ⟨result, w', he, hf, hp⟩ := nodePlacement_run w d width key cidr hw hk hc hd t base hr hv
+  exact ⟨result, w', he, hf, hp, hp.allocations⟩
+
+/-- A nonexact original placement identifies a structurally graftable focus.
+Pure insertion of any fresh node identifiers at that focus, rebuilt through
+the context, is exactly the existing recursive `insertFresh` result. This
+links the original traversal to the pure mutation's stopped case without
+assuming an insertion-history or peer-list invariant. -/
+theorem original_nodePlacement_stopped (w w' : World) (d : WG.Device) (width key cidr : Nat)
+    (hw : width = 32 ∨ width = 128) (hk : key < 2 ^ width) (hc : cidr ≤ width)
+    (hd : w.k.wg = some d) (t : Tree) (base : WG.Slot)
+    (hr : RepAt d.nodes width base t) (hv : t.Valid width) (parent : Option Nat)
+    (hreturn : (WG.nodePlacement t.root key cidr width).run w = .ok ((parent, false), w')) :
+    w'.k = w.k ∧ ∃ (c : Context) (u : Tree), t = c.plug u ∧ c.Follows width key cidr ∧
+      parent = c.lastParent none ∧ Graftable width key cidr u ∧
+      ∀ fresh peer, t.insertFresh width fresh key cidr peer =
+        let localResult := graft width fresh key cidr peer u
+        { localResult with tree := c.plug localResult.tree } := by
+  obtain ⟨hf, hp⟩ := nodePlacement_refines w w' d width key cidr hw hk hc hd t base hr hv
+    (parent, false) hreturn
+  exact ⟨hf, hp.stopped rfl hv hk⟩
+
+/-- If the requested path ends at a known empty focus, the original placement
+loop completes with precisely its enclosing parent and a false exact flag.
+This traversal fact supplies the missing-child case for future mutation
+refinement; it does not assert that the subsequent allocation completes. -/
+theorem original_nodePlacement_empty_focus (w : World) (d : WG.Device) (width key cidr : Nat)
+    (hw : width = 32 ∨ width = 128) (hk : key < 2 ^ width) (hc : cidr ≤ width)
+    (hd : w.k.wg = some d) (c : Context) (base : WG.Slot)
+    (hr : RepAt d.nodes width base (c.plug .empty))
+    (hv : (c.plug .empty).Valid width) (hf : c.Follows width key cidr) :
+    ∃ w', (WG.nodePlacement (c.plug .empty).root key cidr width).run w =
+      .ok ((c.lastParent none, false), w') ∧ w'.k = w.k := by
+  obtain ⟨result, w', he, hp⟩ :=
+    (Leanux.Proofs.Framing.total_iff_run _ _ _).mp
+      (nodePlacement_empty_focus_wp w.k d width key cidr hw hk hc hd c base hr hv hf) w rfl
+  rcases hp with ⟨rfl, hframe⟩
+  exact ⟨w', he, hframe⟩
 
 end Leanux.Proofs.WG.CryptokeyRouting

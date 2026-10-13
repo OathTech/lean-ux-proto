@@ -15,19 +15,19 @@ differential check or guest run.
 | --- | --- |
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay and independent review checked. Seccomp frame carry checked. |
 | R2 lifetime safety | Keypair operation endpoints, peer allocation/reference helpers, packet primitives, failure-retaining peer creation/release, mixed receive-enqueue/decrypt iteration, and keypair/packet release families, plus stale-cursor finding checked; caller/lifecycle and whole-run internal-access coverage remain in progress. |
-| R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion and original empty-root insertion proved; general mutation/history and path refinements remain open. Path proofs follow R2. |
+| R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion, original empty-root insertion and total original placement proved; general mutation/history and path refinements remain open. Path proofs follow R2. |
 | R4 delivery | Not started; drop characterisation waiting on W7 full-ring tier's explanation of the two drops. |
 | R5 key lifetime | Not started; time half waiting on review items 7 and 8 on the timer model. |
 | R6 flood resistance | Not started. |
 
-**Current validation.** The full proof gate passes 163 build jobs and 90
-terminal statements (ReplayWindow 15, R1 9, R2 54, R3 12), with only permitted
+**Current validation.** The full proof gate passes 165 build jobs and 93
+terminal statements (ReplayWindow 15, R1 9, R2 54, R3 15), with only permitted
 axioms. The default model build passes 60 jobs; the unit tier passes 93 tests
-in 21.383 seconds with one skip. Both explicit-record witness replays below
+in 23.097 seconds with one skip. Both explicit-record witness replays below
 were rechecked at the seccomp carry and agree with the original runner.
 Independent reviews cover peer creation, the seccomp carry, mixed enqueue,
 decrypt execution, keypair/packet releases, pure trie insertion, and original
-empty-root insertion.
+empty-root insertion and placement.
 
 **Shared carry.** Signal/task and pipe helper frames, seccomp entry/tail frames
 and arbitrary prefill preservation keep the seven-field WG projection intact.
@@ -420,12 +420,37 @@ intermediate-allocation rollback, removal, owner liveness and history remain ope
 boundary: freshness only within the selected tree cannot protect other stored
 nodes from allocation overwrite.
 
+**Original placement.** `Context` records a hole along the request's path,
+with strictly shorter matching ancestors and their selected bits. `PlacementEnd`
+keeps the original exit order: empty focus, CIDR too long, prefix mismatch, then
+exact match after updating the parent. Exactness includes ownerless nodes.
+`PlacementMirror` proves total original `nodePlacement` using the represented
+subtree and its height against the actual remaining loop range. Its false
+exception post rules out dangling getters, invalid selectors and exhaustion.
+
+Three exports connect this traversal to insertion: the exact flag agrees with
+zero pure allocations; a nonexact result identifies the structurally graftable
+focus and its reconstructed insertion; and a known empty focus determines the
+precise returned parent. These calls start at the supplied tree's root. `RepAt`
+does not itself establish that a device root field or external slot points there;
+an `add` caller still needs that linkage. No second executable placement
+algorithm was introduced.
+
+The optional proof of insertion at an empty immediate child **failed** to close
+its repeated getter and Kernel-state equality goals and was removed. It establishes
+no new mutation case and supplies no Rule Zero finding. The next attempt will
+compose exact allocation, peer-list, getter and child-connection contracts in
+smaller stages. The checked empty-focus traversal lemma is retained.
+
 **Validation and effort.** The arithmetic took five compile passes, the pure
 tree six, and the store/traversal refinement twenty over about eighteen minutes.
 Pure insertion took thirteen build invocations over about sixteen and a half
 minutes, including its targeted and full builds.
 The original empty-root bridge took twelve capped builds over eleven minutes
 and forty-four seconds, including seven corrected compile failures.
+Placement took twenty-one capped builds over about thirty minutes: five passed
+and sixteen failed during proof development, including the failed optional
+mutation attempt. The final full proof build passed.
 Failed passes exposed proof elaboration or simplification errors. Current
 validation is recorded above. Reproduce with
 `capped -- scripts/in-bundle scripts/proof-gate`.
@@ -448,6 +473,9 @@ terminal contracts, including the normal-error sequence update and IPv6 backlink
 It found no mathematical defect and corrected one wording issue: the opposite
 root value and supplied representation are preserved separately; their initial
 linkage is not derived by the theorem.
+The placement review checked source condition order, totality, context/insertion
+correspondence, empty-focus uniqueness and the three final exports, finding no
+defect. It retained the same external-root linkage obligation for later mutation.
 
 **Ranked mirror-shape recommendations.** None from this component. The current
 named arithmetic helpers and integer address encoding admit exact refinement
