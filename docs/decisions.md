@@ -205,8 +205,11 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   (`epoll_create1`, `epoll_ctl`, `epoll_wait`), 30-34 seccomp (install, the
   filtered probe call, `prctl` no-new-privs, two spare); record kind 308
   epoll's tree-insert file address (record-only, class-approved); HiddenSite
-  ids 190-199 epoll, 200-219 seccomp; both streams' kernel changes go into
-  one oracle rebuild after both designs are audited.
+  ids 190-199 epoll, 200-219 seccomp (moved to 400-419 by the interface
+  commit of 2026-10-12, since 200-219 is a worker section range); both
+  streams' kernel changes go into one oracle rebuild after both designs are
+  audited (in the event two: e2 for epoll, s1 for both with the seccomp
+  config).
 - **2026-10-13 [USER]** The seccomp config case and the P9 widening, put as
   one case (`docs/2026-10-12-seccomp-design.md` section 16): "Agree, sounds
   good - approved". So the oracle gains `CONFIG_SECCOMP=y` (and with it
