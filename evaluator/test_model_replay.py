@@ -37,13 +37,15 @@ CONTENDED_B1 = json.loads(r'''{"hidden":[[[5,"5b31367705000000"],[5,"5b313677050
 # draw). The old error-path cut absorbed that section.
 MULTICAST = json.loads(r'''{"hidden":[[[5,"a0579b4b04000000"]],[],[[48,"e0b33f81ffffffff"],[49,"0000000000000000"]],[],[]],"id":"generated-wg-20260920-00136","ops":[{"config":{"listen_port":51820,"peers":[{"allowed_ips":[{"addr":"20010db9000000000000000000000000","cidr":32,"family":6}],"endpoint":{"addr":"00000000000000000000000000000001","family":6,"port":51999},"public_key":"2222222222222222222222222222222222222222222222222222222222222222"}],"replace_peers":true},"op":"wg_set"},{"op":"wg_up"},{"op":"wg_xmit","packet":{"dst":"e0000001","family":4}},{"op":"wg_observe"},{"op":"wg_get"}],"version":1}''')
 
-# rx_roam_v6's comparison child as recorded on a contended host (load average
-# 50-80, 2026-10-06, .worktrees/flake before-3 chunk-000b): operation 4's NAPI
-# poll is a NET_RX section right after the decrypt worker's enqueue, with no
-# resched record. Linux's kref_get_unless_zero operands were 1, 1, 3: the poll
-# ran at the interrupt exit inside wg_queue_enqueue_per_peer_rx, holding its
-# peer reference (Env.napiIrqExit); the placement after it gives 1, 1, 2.
-CONTENDED_ROAM_CMP = json.loads(r'''{"hidden":[[[5,"a152759a1e000000"]],[[6,"9909f3a41e000000"],[40,"f05e3981ffffffff"],[6,"9909f3a41e000000"],[7,"9909f3a41e000000"],[1,"8182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0"],[3,"803bb16a00000000b168de3a00000000"],[4,"0d0c0b0a00000000"],[8,"9909f3a41e000000"],[21,"23496d285f2d34c75cb861a51ec9230c"],[20,"01b25d3c00000000"],[48,"e0b33f81ffffffff"],[49,"0000000000000000"],[14,"3d00000000000000"],[41,"0000000000000000"]],[],[[48,"e0b33f81ffffffff"],[49,"0000000000000000"],[42,"807c3981ffffffff"],[13,"a99501cd1e000000"],[15,"8560c46a000000005316763a00000000"],[6,"a99501cd1e000000"],[60,"0000000000000000"],[44,"c0643981ffffffff"],[45,"0000000000000000"],[46,"00623981ffffffff"],[20,"7000000000000000"],[48,"e0b33f81ffffffff"],[49,"0000000000000000"],[6,"a99501cd1e000000"],[47,"0000000000000000"],[43,"0000000000000000"]],[[48,"e0b33f81ffffffff"],[49,"0000000000000000"],[50,"008c3981ffffffff"],[6,"a39cc3eb1e000000"],[48,"e0b33f81ffffffff"],[6,"9da600ec1e000000"],[49,"0000000000000000"],[63,"0000000000000000"],[51,"0000000000000000"]],[],[]],"id":"rx_roam_v6","ops":[{"config":{"listen_port":51820,"peers":[{"allowed_ips":[{"addr":"0a000000","cidr":8,"family":4}],"endpoint":{"addr":"7f000001","family":4,"port":51999},"keepalive":25,"public_key":"0faa684ed28867b97f4a6a2dee5df8ce974e76b7018e3f22a1c4cf2678570f20"}],"private_key":"1111111111111111111111111111111111111111111111111111111111111111"},"op":"wg_set"},{"op":"wg_up"},{"op":"wg_observe"},{"family":4,"message":"02000000040302010d0c0b0aff2ee45601ec1b67310c7790404585ae697331eee1c1f8cf2419731c1fff3e6bc50a223d86b8a86bf41a2bd3a1ab84f892fd9bacbc45bda46dc025e6cac665a500000000000000000000000000000000","op":"wg_inject","port":51820},{"family":6,"message":"040000000d0c0b0a0000000000000000973bf9043cd64074998eeaaf05b9f8acd9ac555ca8099f9adfd3b40e88941a5d98b87fb01b15950d9b40eed7d7f7e394ee18c53077613a5d3e5a2bb979c5a98e","op":"wg_inject","port":51820},{"op":"wg_observe"},{"op":"wg_get"}],"steer":[["init_ephemeral","8182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0"],["tai64n_now","803bb16a00000000b168de3a00000000"],["index_draw","0d0c0b0a"]],"version":1}''')
+# rx_roam_v6's comparison child, as recorded on a contended host (load 50-80,
+# 2026-10-06), showed the NAPI poll at the interrupt exit inside
+# wg_queue_enqueue_per_peer_rx (placement (c'), Env.napiIrqExit) and carried
+# the NapiPlacement tests. Retired 2026-10-13: the capture predates the
+# dst-cache records (kind 306) and the 16-byte section-start records of the
+# dispatch-order capture, and the (c') placement did not recur in two
+# single-trace runs on the s2 oracle (the poll ran at the worker's yield).
+# The placement machinery is exercised live by the W7 tier's
+# w7_ring_rx_1025 (about a thousand open placements, selected by the check).
 
 
 # w7_multi_tx_8's coverage child as recorded on the W9 oracle (2026-10-12,
@@ -81,6 +83,15 @@ def widen(trace):
 
 def run(trace):
     result = subprocess.run([MODEL], input=json.dumps(widen(trace)).encode(), capture_output=True, timeout=120)
+    return result.returncode, result.stdout.decode(), result.stderr.decode()
+
+
+def run_raw(trace):
+    """`run` without `widen`, for a capture made on the current kernel (its
+    section starts and arms already carry their identity words; `widen` would
+    mis-pad them)."""
+    result = subprocess.run([MODEL], input=json.dumps(with_jiffies_end(trace)).encode(), capture_output=True,
+                            timeout=120)
     return result.returncode, result.stdout.decode(), result.stderr.decode()
 
 
@@ -195,46 +206,31 @@ class LoopbackNetRx(unittest.TestCase):
         self.assertIn('raised NET_RX: expected its section', replay(self.mutated(MULTICAST, 2, lambda op: [])) or '')
 
 
-class NapiPlacement(unittest.TestCase):
-    def lookups(self, trace):
-        if not MODEL.is_file():
-            raise AssertionError(f'{MODEL} is missing: run `lake build leanux-model` first')
-        code, out, err = run(trace)
-        self.assertEqual((code, err), (0, ''))
-        result = json.loads(out)
-        return result.get('napi_irq_ambiguous'), [b['operands'] for b in result['branches']
-                                                  if b['index'] == 4 and b['label'] == '__refcount_add_not_zero.old_zero=0']
-
-    def test_open_placement_is_reported(self):
-        self.assertEqual(self.lookups(CONTENDED_ROAM_CMP), (1, [[1, 0], [1, 0], [2, 0]]))
-
-    def test_placement_inside_the_enqueue_holds_its_reference(self):
-        self.assertEqual(self.lookups(dict(CONTENDED_ROAM_CMP, napi_irq_before_put=[True])),
-                         (1, [[1, 0], [1, 0], [3, 0]]))
-
-    def test_a_choice_for_a_poll_that_does_not_exist_fails(self):
-        code, _, err = run(dict(CONTENDED_ROAM_CMP, napi_irq_before_put=[True, True]))
-        self.assertEqual(code, 4)
-        self.assertIn('names more NAPI polls than the trace has', err)
+# The NapiPlacement tests went with CONTENDED_ROAM_CMP (above).
 
 
-# s2_index_collision as recorded on the dispatch-order oracle (identity
-# bb3e577d, task/dispatch-order 57d56b7, 2026-10-11, the coordinator's
-# single-trace run 1 of 10; copied from .artifacts/runs/evidence/dispatch-order/
-# s2-captures/s2-1-chunk-000/model/inputs.jsonl, with Linux's wg_observe
-# datagrams from that chunk's LEANUX_WGOBS row). wg_up queues both peers'
-# handshake work (the kind-307 queue records at site 300: peer A's item
-# 3002f803..., then peer B's 2008f803...); handshake_send_wq, unbound, ran
-# B's item first: the first send-worker section (site 40) names unit
-# 2008f803..., the second 3002f803.... In nine of the ten runs B ran first.
-S2_B_FIRST = json.loads(r'''{"arm_records":true,"expect":["wg_index_hashtable_insert.unlocked_collision=1"],"hidden":[[[5,"97325b8200000000"],[5,"97325b8200000000"]],[[6,"cb85768a00000000"],[300,"3002f8038088ffff70703981ffffffff"],[6,"cb85768a00000000"],[300,"2008f8038088ffff70703981ffffffff"],[40,"70703981ffffffff2008f8038088ffff"],[6,"c58fb38a00000000"],[7,"c58fb38a00000000"],[1,"5f8a25b53de4fbceef4b9c6c2d39f9bd3caa552f6915029659920b642b3a8efc"],[3,"63cccb6a000000000882b00b00000000"],[4,"0d0c0b0a00000000"],[100,"2dddfeff0000000097f5feff00000000d009f8038088ffff"],[8,"c58fb38a00000000"],[21,"149ff99a11d2fcce512981cd4279ce13"],[20,"d9c684bc00000000"],[48,"60c53f81ffffffff0000000000000000"],[49,"0000000000000000"],[14,"2900000000000000"],[100,"2eddfeff000000001de2feff000000003009f8038088ffff"],[41,"0000000000000000"],[40,"70703981ffffffff3002f8038088ffff"],[6,"b9a32d8b00000000"],[7,"b9a32d8b00000000"],[1,"200aaa8d4cd565455aa8e08777a2db4b5e99d00f734902fb6f0152c2cfd6ea11"],[3,"63cccb6a00000000fc952a0c00000000"],[4,"0d0c0b0a00000000"],[4,"4433221100000000"],[100,"2fddfeff0000000099f5feff00000000e003f8038088ffff"],[8,"b9a32d8b00000000"],[20,"0100000000000000"],[48,"60c53f81ffffffff0000000000000000"],[49,"0000000000000000"],[14,"0800000000000000"],[100,"2fddfeff0000000013e2feff000000004003f8038088ffff"],[41,"0000000000000000"]],[],[]],"id":"s2_index_collision","ops":[{"config":{"listen_port":51820,"peers":[{"allowed_ips":[{"addr":"0a000000","cidr":16,"family":4}],"endpoint":{"addr":"7f000001","family":4,"port":51999},"keepalive":25,"public_key":"0faa684ed28867b97f4a6a2dee5df8ce974e76b7018e3f22a1c4cf2678570f20"},{"allowed_ips":[{"addr":"0a010000","cidr":16,"family":4}],"endpoint":{"addr":"7f000001","family":4,"port":51999},"keepalive":25,"public_key":"ff2ee45601ec1b67310c7790404585ae697331eee1c1f8cf2419731c1fff3e6b"}],"private_key":"1111111111111111111111111111111111111111111111111111111111111111"},"op":"wg_set"},{"op":"wg_up"},{"op":"wg_observe"},{"op":"wg_get"}],"steer":[["index_draw","0d0c0b0a"],["index_draw","0d0c0b0a"],["index_draw","44332211"]],"version":1}''')
+# s2_index_collision as recorded on the s2 oracle (identity cea1e9a3,
+# task/robustness, 2026-10-13, the coverage child of a single-trace run,
+# .artifacts/check/cap-s2-1/chunk-000/model/inputs.jsonl, with Linux's
+# wg_observe datagrams from that chunk's LEANUX_WGOBS row; three runs alone
+# gave B first; the earlier capture, on the dispatch-order oracle of
+# 2026-10-11, predated the dst-cache records and the 16-byte section
+# starts). wg_up queues both peers' handshake work (the kind-307 queue
+# records at site 300: peer A's item 3002e706..., then peer B's
+# 2008e706...); handshake_send_wq, unbound, ran B's item first: the first
+# send-worker section (site 40) names unit 2008e706..., the second
+# 3002e706....
+S2_B_FIRST = json.loads(r'''{"arm_records":true,"expect":["wg_index_hashtable_insert.unlocked_collision=1"],"hidden":[[[150,"3bddfeff00000000"],[5,"e932c68e00000000"],[150,"3cddfeff00000000"],[150,"3cddfeff00000000"],[5,"e932c68e00000000"],[150,"3cddfeff00000000"],[128,"55ddfeff00000000"]],[[6,"f9c14f9800000000"],[300,"3002e7068088fffff0ab3981ffffffff"],[6,"f9c14f9800000000"],[300,"2008e7068088fffff0ab3981ffffffff"],[40,"f0ab3981ffffffff2008e7068088ffff"],[6,"edd5c99800000000"],[7,"edd5c99800000000"],[1,"35371410366587f25a8ba3a4bf4ce1699ed42450d47b8ba792e15baf0324ae27"],[3,"a197ce6a00000000cab6471900000000"],[4,"0d0c0b0a00000000"],[100,"66ddfeff00000000d0f5feff00000000d009e7068088ffff"],[8,"edd5c99800000000"],[151,"66ddfeff00000000"],[21,"7527a079b9d49f0917c84d8139a00f7e"],[20,"f934cb2f00000000"],[48,"20014081ffffffff0000000000000000"],[49,"0000000000000000"],[14,"f300000000000000"],[100,"68ddfeff0000000098e2feff000000003009e7068088ffff"],[41,"0000000000000000"],[40,"f0ab3981ffffffff3002e7068088ffff"],[6,"dbf3809900000000"],[7,"dbf3809900000000"],[1,"ef6e87ef491a6ca1198e214d24d0c19c61039e3887483fb7fad157042a2d83c7"],[3,"a197ce6a00000000b8d4fe1900000000"],[4,"0d0c0b0a00000000"],[4,"4433221100000000"],[100,"69ddfeff00000000d3f5feff00000000e003e7068088ffff"],[8,"dbf3809900000000"],[151,"69ddfeff00000000"],[20,"0100000000000000"],[48,"20014081ffffffff0000000000000000"],[49,"0000000000000000"],[14,"8200000000000000"],[100,"69ddfeff0000000075e2feff000000004003e7068088ffff"],[41,"0000000000000000"],[128,"7dddfeff00000000"]],[[128,"08defeff00000000"]],[]],"id":"s2_index_collision","ops":[{"config":{"listen_port":51820,"peers":[{"allowed_ips":[{"addr":"0a000000","cidr":16,"family":4}],"endpoint":{"addr":"7f000001","family":4,"port":51999},"keepalive":25,"public_key":"0faa684ed28867b97f4a6a2dee5df8ce974e76b7018e3f22a1c4cf2678570f20"},{"allowed_ips":[{"addr":"0a010000","cidr":16,"family":4}],"endpoint":{"addr":"7f000001","family":4,"port":51999},"keepalive":25,"public_key":"ff2ee45601ec1b67310c7790404585ae697331eee1c1f8cf2419731c1fff3e6b"}],"private_key":"1111111111111111111111111111111111111111111111111111111111111111"},"op":"wg_set"},{"op":"wg_up"},{"op":"wg_observe"},{"op":"wg_get"}],"steer":[["index_draw","0d0c0b0a"],["index_draw","0d0c0b0a"],["index_draw","44332211"]],"version":1}''')
 # What the fixture's listener received at wg_observe (family, length, type,
 # tos, bytes; the tos field is W5+W6's, 136 = HANDSHAKE_DSCP 0x88 for an
 # initiation): B's initiation first (sender index 0d0c0b0a, the steered first
 # draw), then A's (44332211, the redraw after the collision).
+# the unit the first send-worker section names (peer B's work item)
+S2_B_UNIT = next(v[16:32] for site, v in S2_B_FIRST['hidden'][1] if site == 40)
+
 S2_B_FIRST_DATAGRAMS = [
-    [4, 148, 1, 136, "010000000d0c0b0a73d88b66e8165fda3724a27657b9dce798d7ff733893e1e6196115ae53d867565304e0a005391d78d1bb2c7cd4f02518bde16bb6dfdd47a0647c13fa124dea6aefb275a7232ebcf2280c4367a19657ee9c423d849138478c86c590e738ee8b8c361b84f40cef3db78e52c1d98bb15c6557087e7bee4ed8892efd0e3600000000000000000000000000000000"],
-    [4, 148, 1, 136, "010000004433221152c98894d07a768ddf4d05d5afd6033f71c6bc39e1f8a27288c50ba4f181ba352099812d628ac67576a02a445af0e835072a06e1975997311ada3fa5d6c1fc674017f3fa0129d1ece540e9f1934abcd211a83de17d71d29d83c6a8287e80ee9e8a400aff09aa4cf0a3f8682195fc5a21b0d602b955ccc49ecb19b22b00000000000000000000000000000000"],
+    [4, 148, 1, 136, "010000000d0c0b0a9df254beb83fa776c4cff00b66fec10a3c38d4e7c1e70690d0f42dea2ab9a12fc013832213c18ff988b8753d64de72b3f9b2c76dd9e52916f1d05ad17128d088830461c86674faa158c29b3a1c79e0275577801ed1492bc4e6073c69940634d282f051b79938b7cdf64015347405e26899108db7b09f5e6725f5711200000000000000000000000000000000"],
+    [4, 148, 1, 136, "01000000443322117f39d6d6b2b98c2b1ddc9072217e4699f34609bc7046d94d30a6c27e91deaa20991601efe334ebf5ad9f6b914589efa1a4ccf5c97e4c91ef97f9c8ec109d718d7b5c589f557fa864e454a70e7bff3cc913ac82a47c2365399fcdc6c365a8c03e7e3f529d02692a857721045b8b46e4edb71fda4dbf21c6da0a14789800000000000000000000000000000000"],
 ]
 
 
@@ -250,7 +246,7 @@ class DispatchOrder(unittest.TestCase):
     def datagrams(self, trace):
         if not MODEL.is_file():
             raise AssertionError(f'{MODEL} is missing: run `lake build leanux-model` first')
-        code, out, err = run(trace)
+        code, out, err = run_raw(trace)
         self.assertEqual((code, err), (0, ''), err)
         return json.loads(out)['observations'][2]['datagrams']
 
@@ -278,14 +274,14 @@ class DispatchOrder(unittest.TestCase):
 
     def test_a_unit_never_queued_is_a_hidden_mismatch(self):
         # the first section names a unit no queue record announced
-        out = replay(self.with_sections(lambda r: [r[0], r[1][:16] + 'f1f1f1f1f1f1f1f1'] if r[1].endswith('2008f8038088ffff') else r))
+        out = replay_raw(self.with_sections(lambda r: [r[0], r[1][:16] + 'f1f1f1f1f1f1f1f1'] if r[1].endswith(S2_B_UNIT) else r))
         self.assertIn('was never queued', out or '')
 
     def test_missing_queue_records_are_a_hidden_mismatch(self):
         # a queue without its record: the mirror consumes one where the C queues
         trace = copy.deepcopy(S2_B_FIRST)
         trace['hidden'][1] = [r for r in trace['hidden'][1] if r[0] != 300]
-        self.assertIn('expected queued:wg_packet_handshake_send_worker', replay(trace) or '')
+        self.assertIn('expected queued:wg_packet_handshake_send_worker', replay_raw(trace) or '')
 
 
 class SuspendedActivation(unittest.TestCase):

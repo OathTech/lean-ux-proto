@@ -182,6 +182,10 @@ receive.c:531 before the repeatable marks).
 
 ### The claim point's failure, and a timer that is not one [AGENT 2026-10-13]
 
+The audit wave's integration record (main f45bde8) named the gap "a timer
+section inside a batch is not yet placeable by the scheduler"; the gap was
+the crypt-ahead schedule below, and that wording is superseded.
+
 The audit wave's claim point failed `w7_ring_fresh_1024` in this group
 under seven guests with `expected section_stop:wg_packet_tx_worker (site
 47), the record is site 100`, read at the time as a timer firing inside the
