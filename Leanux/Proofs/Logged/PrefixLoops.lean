@@ -5,6 +5,26 @@ import Leanux.Proofs.Logged.Prefix
 namespace Leanux.Proofs.Logged
 open Leanux
 
+/-- A finite list loop may carry an invariant of its changing accumulator,
+while retaining the history safety condition on failures and early returns. -/
+theorem PrefixEnsures.forInInvariant (xs : List α) (b : β)
+    (g : α → β → PrefixM Event (ForInStep β))
+    (I : β → List Event → World → Prop) (S : List Event → Prop)
+    (hs : ∀ b h w, I b h w → S h)
+    (hg : ∀ x b, PrefixEnsures (I b) S (g x b) (fun step => I step.value)) :
+    PrefixEnsures (I b) S (forIn xs b g) I := by
+  induction xs generalizing b with
+  | nil =>
+    simpa only [List.forIn_nil] using
+      PrefixEnsures.pure (hs b) (fun _ _ hi => hi)
+  | cons x xs ih =>
+    rw [List.forIn_cons]
+    apply PrefixEnsures.bind (hg x b)
+    intro step
+    cases step with
+    | done b => exact PrefixEnsures.pure (hs b) (fun _ _ hi => hi)
+    | yield b => exact ih b
+
 theorem erasesPrefix_range (r : Std.Legacy.Range) (b : β)
     (g : Nat → β → PrefixM Event (ForInStep β)) (a : Nat → β → M (ForInStep β))
     (ha : ∀ x b, ErasesPrefix (g x b) (a x b)) :

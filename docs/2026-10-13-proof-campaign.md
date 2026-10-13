@@ -5,9 +5,10 @@
 Worktree `.worktrees/proofs-campaign`, branch `proofs/campaign`. The
 [charter](2026-10-13-charter-proof-campaign.md) defines the campaign. Main
 `2c7a076` includes both named prerequisites and has been merged into this
-worktree on the user's landing instruction. The proof gate passes over that
-commit, including the R4 full-ring and R5 receive/key-time components;
-every registered component is current.
+worktree on the user's landing instruction. The last proof gate passes over that
+commit, including the R4 full-ring and R5 receive/key-time components. The new
+R5 staging-admission extension compiles and awaits its gate; all other registered
+components are current.
 The mirror and kernel match it exactly; R4 and R5's dependent work is now unblocked. No integration into main, push, differential check or guest run.
 
 | Result | Progress |
@@ -16,19 +17,21 @@ The mirror and kernel match it exactly; R4 and R5's dependent work is now unbloc
 | R2 lifetime safety | Store identities, failure-retaining allocation/release and caller composition cover session/rotation, peer creation, receive entry/maintenance/completion, receive polling with the actual stack callback, transmit entry, TX staging, decrypt iteration and ten socket/cache/loopback calls; stale-cursor finding checked. Remaining callers, lifecycle and whole-run internal-access coverage remain in progress. |
 | R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion, original empty-root, arbitrary-depth empty-child and exact-prefix insertion with sequence wrappers, and total original placement proved. Selected-root graft normal endpoints and rollback effects checked; successful graft representation, general mutation/history and path refinements remain open. Path proofs follow R2. |
 | R4 delivery | The full-ring component proves the two-carried-slot ring witness and original enqueue refusal projection; gate and independent review pass. Whole recorded-schedule delivery and conservation remain open. |
-| R5 key lifetime | Original clock/operand equations, successful RX decryption admission, validator wire limit and zero-timer transport-store frame pass the gate and independent review. An accepted reconstructed replay decrypts nonce R, then rejects it at validation. TX certificates, attempted-AEAD coverage and post-clearance schedule exclusion remain open. |
+| R5 key lifetime | Original clock/operand equations, successful RX decryption admission, validator wire limit and zero-timer transport-store frame pass the gate and independent review. TX submission certificates and exact timer-pass observation pass the gate and independent review. Accepted replays show nonce R decrypting before rejection and a packet-held key used after clear in synthetic, incoherent-clock legacy mode. Admission-to-encryption transport, attempted-AEAD coverage and coherent-clock post-clearance exclusion remain open. |
 | R6 flood resistance | Not started. |
 
-**Current validation.** The full proof gate passes 228 build jobs and 180
-terminal statements (ReplayWindow 15, R1 9, R2 116, R3 27, R4 7, R5 6), with only permitted
+**Current validation.** The full proof gate passes 231 build jobs and 183
+terminal statements (ReplayWindow 15, R1 9, R2 116, R3 27, R4 7, R5 9), with only permitted
 axioms. Stock `leanchecker --fresh Leanux.Proofs` passes. The default model
-build passes 60 jobs; the unit tier passes 93 tests in 22.137 seconds with one
+build passes 60 jobs; the unit tier passes 93 tests in 21.983 seconds with one
 skip. The R1 explicit-record witness and both R2 checkpoint variants pass on
 `2c7a076`, with original/observed JSON equality; the R1 history remains
 `[(1, 8200), (1, 72)]`. The reconstructed/synthetic streams now supply the
 required site-128 end-of-wait records, without adding timer sections. The new
 five-operation R5 wire-limit replay also passes with original/observed JSON
-equality and no validator acceptance, as detailed below.
+equality and no validator acceptance. The new synthetic post-clear replay passes
+its original/checkpoint equality, timer-unit and retained-key assertions, as
+detailed below.
 Independent reviews cover peer creation, the seccomp carry, mixed enqueue,
 decrypt execution, keypair/packet releases, ambient caller composition,
 allocation and release-bound composition, session creation and rotation,
@@ -38,7 +41,8 @@ insertion, original empty-root and arbitrary-depth empty-child insertion with
 its wrapper, exact-prefix replacement, list deletion, placement and selected-root
 graft endpoints/rollback, saved-peer scans, the ten-call socket family,
 transmit entry, actual stack/poll composition, the prerequisite carry, and the
-full-ring component and R5 receive/key-time component and replay.
+full-ring component, R5 receive/key-time and TX admission components, and both
+R5 replays with the timer-pass observer.
 The final source and contract reviews have no unresolved correctness findings;
 their frozen file hashes matched before the checkpoints.
 
@@ -515,6 +519,28 @@ key bytes: the original zero-key timer callback preserves it on every normal
 return. Its live, unqueued arm queues separate clear work; this frame proves
 neither that the worker ran nor that later key use is excluded.
 
+**TX admission extension (gate pending).** `KeyTimes/Staging` follows the
+original `sendStagedPackets` and emits one batch after its original
+`packetsCb.mapM newTxSkb` succeeds, immediately before `createData` receives
+the returned IDs. All-input erasure preserves the entire normal-return World
+and exact Stop. Every emitted certificate contains successful executions of
+the actual original key getter, clock consumer and allocation map, the
+initial key's sending validity and unexpired signed deadline, and the
+peer/keypair fields and strict nonce bound of every allocated argument.
+The observation survives a failure in subsequent submission. Empty staging,
+key/age rejection, nonce rejection and allocation failure follow the original
+paths; no certificate is emitted before allocation completes. Thus an empty
+observation does not rule out partial allocation effects before a Stop.
+
+These certificates are attached to source arguments and the completed map,
+not to hypothetical comparison values. They do not establish final packet-store
+contents or immutable key material through later work. The source increments
+`sendingCounter` before checking the assigned nonce: admitting nonce `R - 1`
+may therefore leave the mutable counter at `R`. A strict bound on that later
+counter is not the admission contract. Shared `Logged/Capture` supplies exact
+run witnesses and erasure/contracts; `Logged/PrefixLoops` supplies the list
+accumulator invariant. Neither adds history to mirror state.
+
 **Original wording and precise boundary.** The charter says no encrypt or
 decrypt under a keypair older than `REJECT_AFTER_TIME` or “past
 `REJECT_AFTER_MESSAGES` on its counter.” The proved receive wording is:
@@ -525,9 +551,10 @@ The witness below uses equality at R, so it does not refute a strict
 “wire nonce greater than R” reading or the stored-counter reading. This is
 an intentional separation visible in Linux `receive.c:242–331`, not a mirror
 mismatch. TX checks age and assigned nonce while staging; carrying that
-admission to the later encryption call remains open. Likewise, the charter's
-post-zero-timer prohibition remains unproved: the callback/worker distinction
-alone is not an accepted-run witness of post-fire key use.
+admission to the later encryption call remains open. The unconditional
+post-zero-timer prohibition is false for accepted legacy-mode mirror inputs,
+as the separate post-clear replay below shows. Exclusion for physically
+coherent clocks remains unproved.
 
 **Concrete boundary replay.** `r5-rx-wire-limit` reconstructs a five-operation
 explicit-record input from `CONTENDED_ROAM_CMP`, the existing
@@ -548,7 +575,7 @@ python3 -B docs/proof-campaign-replay.py r5-rx-wire-limit |
   capped -- scripts/in-bundle lake env lean --run Leanux/Proofs/WG/KeyLifetime/Replay.lean
 ```
 
-**Validation and effort.** The reproduction passed with exit 0 in 0.837 seconds.
+**Validated receive/key-time checkpoint.** The reproduction passed with exit 0 in 0.837 seconds.
 Six terminal theorems compile and the complete `LeanuxProofs` target passes
 228 jobs. Seventeen capped build invocations comprised ten ordinary proof
 failures and seven passes; no cap was hit and no process was interrupted.
@@ -563,6 +590,75 @@ match the review. No mirror, kernel or harness change was made.
 exact clock executions, receive admission and the callback's immediate store
 frame. Defer TX admission transport and post-clearance schedule exclusion
 instead of inferring them from the identity frames.
+
+[AGENT 2026-10-13] Certify TX staging at its actual completed allocation /
+submission boundary using exact captured original runs. Keep later store,
+identity, key-material and scheduled-encryption transport as explicit follow-on
+obligations; preserve source early-return and failure behavior.
+
+**TX extension validation.** Eight R5 terminal theorems compile, and the full
+`LeanuxProofs` target passes 230 jobs. Ten capped build invocations over about
+16 minutes comprised six ordinary proof failures and four passes; all exits
+were collected, no cap was hit and no process was interrupted. The extension's
+combined checkpoint passes the proof gate (183 statements, 231 build jobs),
+stock kernel replay, the 60-job model build and 93-test unit tier.
+Independent review found no mathematical or source-refinement defect. Its
+duplicated report-paragraph finding was corrected before handoff.
+
+**Rule Zero: post-clear use in the accepted-input domain.** The charter's
+wording forbids peer key-material use after its zero timer fires until a new
+handshake. `r5-post-clear-transport` is an accepted five-operation input:
+the first four operations establish the captured session, and `wg_observe`
+replays persistent keepalive admission, the zero timer, the actual clear
+worker, then encryption and transmission. The admitted nonce is 1. Immediately
+after clear, the current/next/previous peer slots are empty, its handshake
+state is zero and the keypair index is gone. The packet still holds lifetime
+1 with reference count 1 and exactly the original key material. The later
+crypt scheduler produces the expected ciphertext under that retained key,
+then releases both packet and keypair; no new handshake intervenes.
+
+This is a **synthetic runner-domain finding, not a Linux execution**. It
+deliberately copies an unexpired coarse-clock read while the end-of-wait
+jiffies word makes both timers due, and sets `arm_records=false` and
+`dst_cache_records=false` for legacy replay mode. The admission comparison
+is `[312288452009, 132288452009]`; the end bound is 135005. Those clocks are
+not asserted physically coherent. The mechanism of retaining material while
+an in-flight packet owns a reference matches `keypair_put`/`keypairs_clear`
+in Linux `noise.c:112–177`; it is reference-counted lifetime behavior. This
+witness establishes neither a Linux security bug nor reachability with
+coherent recorded clocks. A clock/schedule premise is needed for that stronger
+interpretation; the callback's name alone cannot establish revocation.
+
+The replay asserts full original/checkpoint JSON equality. `Logged/TimerPass`
+additionally observes completed original timer/worker/scheduler calls, with
+all-input result/World/Stop erasure and an exact unit-emission equation.
+From the original session checkpoint, the replay reconstructs the literal
+next-operation reset and runs that observer at the original timer-pass entry.
+It checks the after-clear store, packet and key bytes, scheduler entry,
+derived ciphertext and final releases. Its final Kernel equals the accepted
+runner checkpoint, and only the caller's end-of-wait word remains. Original
+branch order independently shows clear's retained reference, encryption,
+transmission and final keypair release. Crypt observations include the final
+empty scheduler call; they are not per-packet AEAD events.
+
+```sh
+set -o pipefail
+python3 -B docs/proof-campaign-replay.py r5-post-clear-transport |
+  capped -- scripts/in-bundle lake env lean --run Leanux/Proofs/WG/KeyLifetime/ReplayPostClear.lean
+```
+
+The original-run probe and the completed assertion replay passed. The timer
+observer took four capped module builds: two ordinary proof failures and two
+passes; the standalone assertion replay had one syntax failure before its
+passing run. No cap hit, interruption or mirror change occurred. The combined
+gate, stock kernel replay, model build and unit tier pass. Independent review
+checked source correspondence, exact entry reconstruction, assertions and
+provenance; no finding remains.
+
+[AGENT 2026-10-13] Keep the post-clear finding scoped to the accepted legacy
+record domain and expose its incoherent-clock trigger. Use exact timer-unit
+observations to inspect the retained reference; do not infer Linux reachability
+or a general AEAD event history from it.
 
 **Ranked mirror-shape recommendations.** None from this component. The
 landed signed clock helper and operand-bearing branch expose the required

@@ -130,12 +130,39 @@ def receive_wire_limit():
     return trace
 
 
+def post_clear_transport():
+    """Synthetic timer ordering with deliberately incoherent coarse/jiffies clocks."""
+    trace = recorded_fixture("CONTENDED_ROAM_CMP")
+    response = copy.deepcopy(trace["hidden"][3])
+    if [r[0] for r in response] != [48, 49, 42, 13, 15, 6, 60, 44, 45, 46, 20, 48, 49, 6, 47, 43]:
+        raise ValueError("recorded response operation no longer matches the source recipe")
+    def zero(site, words=1):
+        return [site, "00" * (8 * words)]
+    tail = [zero(112, 2), copy.deepcopy(response[5]), zero(113),
+            zero(108, 2), zero(109), zero(110, 2), zero(111)]
+    tail += copy.deepcopy(response[7:13] + [response[14]])
+    trace["id"] = "r5_post_clear_transport"
+    trace["ops"] = trace["ops"][:4] + [{"op": "wg_observe"}]
+    trace["hidden"] = trace["hidden"][:4] + [tail]
+    for operation in trace["hidden"]:
+        for record in operation:
+            if record[0] in {40, 42, 44, 46, 48, 50} and len(record[1]) == 16:
+                record[1] += "0000000000000000"
+    trace.pop("steer")
+    trace["dst_cache_records"] = False
+    trace["arm_records"] = False
+    add_wait_bounds(trace, range(4))
+    trace["hidden"][4].append([128, (135005).to_bytes(8, "little").hex()])
+    return trace
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     cases = {"r1-inclusive-floor": inclusive_floor,
              "r2-stale-dump-cursor": stale_dump_cursor,
              "r2-stale-dump-cursor-orphan": stale_dump_cursor_orphan,
-             "r5-rx-wire-limit": receive_wire_limit}
+             "r5-rx-wire-limit": receive_wire_limit,
+             "r5-post-clear-transport": post_clear_transport}
     parser.add_argument("case", choices=cases)
     args = parser.parse_args()
     print(json.dumps(cases[args.case](), separators=(",", ":")))

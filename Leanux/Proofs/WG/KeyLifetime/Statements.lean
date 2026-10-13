@@ -1,7 +1,9 @@
 import Leanux.Proofs.WG.KeyTimes.Receive
 import Leanux.Proofs.WG.KeyTimes.ZeroTimer
+import Leanux.Proofs.WG.KeyTimes.Staging
+import Leanux.Proofs.Logged.TimerPass
 
-/-! R5's original receive admission and clock boundaries. These are local
+/-! R5's original receive/staging admission and clock boundaries. These are local
 operation contracts; TX admission-to-encryption transport and post-clearance
 schedule exclusion remain separate obligations. -/
 namespace Leanux.Proofs.WG.KeyLifetime
@@ -70,5 +72,34 @@ theorem original_zero_timer_preserves_transport_keys (pid : PeerId) (w v : World
     (hr : (expiredZeroKeyMaterial pid).run w = .ok ((), v)) :
     KeyTimes.keypairStore v = KeyTimes.keypairStore w :=
   KeyTimes.expiredZeroKeyMaterial_store pid w () v hr
+
+/-- The staging observer executes the original action exactly on every World:
+normal returns retain the complete original World and failures retain the
+exact original Stop. Its sole event is the completed allocation batch at the
+boundary immediately preceding original createData with those allocated IDs. -/
+theorem original_staging_erasure (pid : PeerId) :
+    Leanux.Proofs.Logged.ErasesPrefix (KeyTimes.stagingObserved pid) (sendStagedPackets pid) :=
+  KeyTimes.stagingObserved_erases pid
+
+/-- Every batch observed at original staging submission has a captured original
+key lookup with sending validity, an actual unexpired signed-clock read, bounded
+assigned nonces and the original completed newTxSkb map execution. The event
+prefix survives a later Stop. This certifies submitted arguments, not their
+final store contents, subsequent encryption, or immutable key material. -/
+theorem original_staging_admissions (pid : PeerId) (w : World) :
+    ∀ admission ∈ (Leanux.Proofs.Logged.runPrefix (KeyTimes.stagingObserved pid) w []).2,
+      admission.Valid := by
+  have hs := KeyTimes.stagingObserved_safe pid w []
+    (show KeyTimes.keep True [] w from ⟨by simp [KeyTimes.admissionsGood], trivial⟩)
+  exact hs.choose_spec.2.1
+
+/-- Observing completed timer, clear/send-worker and crypt-scheduler units
+preserves the exact original timer-pass result and World on success, and its
+exact Stop on failure. Each unit observation records the original before/after
+Worlds; a crypt scheduler call may be empty. This is not a non-use theorem. -/
+theorem original_timer_pass_erasure (jHi : UInt64) :
+    Leanux.Proofs.Logged.ErasesPrefix
+      (Leanux.Proofs.Logged.timerPassObserved jHi) (Leanux.Env.runTimers jHi) :=
+  Leanux.Proofs.Logged.timerPassObserved_erases jHi
 
 end Leanux.Proofs.WG.KeyLifetime

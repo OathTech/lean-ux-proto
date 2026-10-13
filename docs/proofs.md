@@ -46,8 +46,12 @@ directory whose `Statements.lean` is the gated surface.
   result/World or error erasure and compositional prefix-safety contracts.
   `Focus` injects a local observer's new suffix into a combined event stream
   without changing the previous interleaving. `PrefixLoops` gives finite range
-  and map composition for failure-retaining observers. `PrefixWorkers` composes one
+  and map composition plus accumulator-dependent list-loop contracts for
+  failure-retaining observers. `Capture` retains exact original-action run
+  witnesses with erasure and prefix contracts. `PrefixWorkers` composes one
   original worker iteration with explicit step and rescheduling contracts.
+  `TimerPass` observes completed original timer, clear/send-worker and crypt
+  scheduler calls, retaining exact before/after Worlds and failure erasure.
 - `Leanux/Proofs/WG/CounterWindow/`: the receive counter window as a pure
   model of `counter_validate` (`Model`), its refinement to the mirror's
   `counterValidate` (`Refinement`, the S2 theorems), and replay freedom for
@@ -158,9 +162,14 @@ directory whose `Statements.lean` is the gated surface.
 - `Leanux/Proofs/WG/KeyTimes/`: exact original signed clock-test and comparison
   records (`Clock`), receive admission guards and the later wire-counter
   acceptance bound (`Receive`), and the zero-timer callback's complete
-  transport-keypair-store frame (`ZeroTimer`). `WG/KeyLifetime/` exports R5's
-  local components and a reconstructed accepted-run wire-limit witness;
-  TX admission transport and post-clearance schedule exclusion remain open.
+  transport-keypair-store frame (`ZeroTimer`). `Staging` certifies actual
+  completed TX allocations and submitted arguments with original key/clock
+  witnesses and assigned-nonce bounds, retaining events on subsequent failure.
+  `WG/KeyLifetime/` exports R5's local components and a reconstructed accepted-run
+  wire-limit witness. A separate accepted legacy-mode replay uses packet-held
+  key material after clear, with deliberately incoherent coarse/jiffies clocks.
+  Admission-to-encryption transport, attempted-AEAD coverage and coherent-clock
+  post-clearance schedule exclusion remain open.
 
 The dependency order is CounterWindow, Logged, Framing, Keypairs,
 ReplayWindow. The conventions that keep proof work cheap are in
@@ -176,7 +185,7 @@ ReplayWindow. The conventions that keep proof work cheap are in
 | R2 components: store identities; access prefixes; stale dump-cursor finding | Original operation endpoints preserve identity provenance and fresh slot reuse. Failure-retaining observations cover complete peer creation/reference calls, keypair allocation/acquisition/release/rotation/session creation, packet allocation/free, receive entry/maintenance/completion, receive polling with the actual stack callback, transmit entry, TX staging, decrypt iteration and ten cache/endpoint/loopback/tunnel/IPv6 calls. Saved-peer scans retain the demanded prefix with explicit residency. Explicit ambient callback contracts compose access safety, resident uniqueness and allocation bounds initialized by runner fixtures. Exact runner checkpoints reproduce a retained dump cursor releasing a replacement peer, including a variant that leaves its trie binding orphaned. Remaining callers, lifecycle and whole-run internal-access safety remain unproved. | `Leanux/Proofs/WG/LifetimeSafety/` (`Statements.lean`, 116 terminal theorems) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r2--lifetime-identity-and-retained-references-in-progress) | 2c7a076 | current components; R2 in progress |
 | R3 components: prefix arithmetic, insertion and represented-tree lookup | Original IPv4/IPv6 prefix helpers refine leading-bit arithmetic. Valid pure trees have bounded depth and longest-prefix lookup; pure insertion preserves structure and replaces exactly the canonical-prefix binding. Original placement terminates with the corresponding context. Original empty-root, arbitrary-depth empty-child and exact-prefix insertion refine that tree and lookup from the actual device root, with exact allocation/refusal and sequence effects and preservation of any supplied opposite-family representation. Original list deletion terminates with pointwise filtered peer lists and unchanged identities. Selected-root graft normal returns have exact source endpoints and rollback effects; successful graft representation, general mutation/history and packet-path refinements remain unproved. | `Leanux/Proofs/WG/CryptokeyRouting/` (`Statements.lean`, 27 terminal theorems) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r3--cryptokey-routing-in-progress) | 2c7a076 | current components; R3 in progress |
 | R4 component: physical full-ring refusal | Two original produce/consume pairs leave slots 0 and 1 occupied but logically consumed. The next 1024 guarded producer attempts accept 1022 and reject two, with exact FIFO contents and cursor/count geometry. Every normal original enqueue return has its source ring effect; -EPIPE implies an entry-full, unchanged encrypt ring. Whole recorded-schedule delivery and conservation remain unproved. | `Leanux/Proofs/WG/DeliveryOrder/` (`Statements.lean`, 7 terminal theorems) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r4--full-ring-drop-component-in-progress) | 2c7a076 | current component; R4 in progress |
-| R5 component: receive admission and key-time boundaries | Original age tests retain the exact consumed clock, signed64 comparison and operands. Successful authenticated decryption requires receiving validity, an unexpired recorded predicate and stored counter below R; later validator acceptance requires wire nonce below R. The zero-key timer callback preserves the whole transport-keypair store. A reconstructed accepted run decrypts nonce R and then rejects it. TX certificates, attempted-AEAD coverage and post-clearance schedule exclusion remain unproved. | `Leanux/Proofs/WG/KeyLifetime/` (`Statements.lean`, 6 terminal theorems; `Replay.lean`) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r5--receive-admission-and-key-time-boundaries-in-progress) | 2c7a076 | current component; R5 in progress |
+| R5 component: receive admission and key-time boundaries | Original age tests retain the exact consumed clock, signed64 comparison and operands. Successful authenticated decryption requires receiving validity, an unexpired recorded predicate and stored counter below R; later validator acceptance requires wire nonce below R. The zero-key timer callback preserves the whole transport-keypair store. Original staging submission carries actual key/clock executions, assigned nonce bounds and completed allocation witnesses, even on a later Stop. A reconstructed accepted run decrypts nonce R and then rejects it. Exact timer-unit observations support a second accepted replay using packet-held material after clear in synthetic, incoherent-clock legacy mode. Admission-to-encryption transport, attempted-AEAD coverage and coherent-clock post-clearance exclusion remain unproved. | `Leanux/Proofs/WG/KeyLifetime/` (`Statements.lean`, 9 terminal theorems; `Replay.lean`, `ReplayPostClear.lean`) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r5--receive-admission-and-key-time-boundaries-in-progress) | 2c7a076 | current components; R5 in progress |
 
 The gate for every row: `capped -- scripts/in-bundle scripts/proof-gate`
 (the build, the axioms of every terminal statement, the forbidden tokens,
