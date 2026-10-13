@@ -16,17 +16,17 @@ No integration into main, push, differential check or guest run.
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay and independent review checked. Seccomp frame carry checked. |
 | R2 lifetime safety | Store identities, failure-retaining allocation/release and caller composition cover session/rotation, peer creation, receive entry/maintenance/completion, receive polling with the actual stack callback, transmit entry, TX staging, decrypt and encrypt iteration with explicit scheduler callbacks, and eleven socket/cache/loopback calls, including staged IPv4 send; stale-cursor finding checked. Remaining callers, lifecycle and whole-run internal-access coverage remain in progress. |
 | R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion, original empty-root, arbitrary-depth empty-child and exact-prefix insertion with sequence wrappers, and total original placement proved. Selected-root graft normal endpoints and rollback effects are checked; successful graft representation and actual-root lookup pass the coordinated gate. Deeper grafts, removal, general mutation/history and path refinements remain open. Path proofs follow R2. |
-| R4 delivery | Accepted original replay over f45bde8 refutes chronological post-GRO stack order: a held ACK followed by a distinct-flow SYN produces the SYN's RST first under the same key lifetime. Exact current poll erasure and removal-prefix order with an explicit callback queue contract pass the gate, as does the original-helper reorder equation. The former chronological callback theorem is retired, with its predicate unchanged. Per-poll selected callback order and exact callback-entry multiplicity pass the coordinated gate and independent review. Source-tag closure and pipeline conservation remain open. |
+| R4 delivery | Accepted original replay over f45bde8 refutes chronological post-GRO stack order: a held ACK followed by a distinct-flow SYN produces the SYN's RST first under the same key lifetime. Exact current poll erasure and removal-prefix order with an explicit callback queue contract pass the gate, as does the original-helper reorder equation. The former chronological callback theorem is retired, with its predicate unchanged. Per-poll selected callback order and exact callback-entry multiplicity pass the coordinated gate and independent review. Buffered-tag provenance and exact removal-observer agreement pass the coordinated gate and independent review. Concrete callback queue framing and pipeline conservation remain open. |
 | R5 key lifetime | Resolved through Rule Zero counterexamples, with 13 positive local contracts. Original/observed replays show nonce R+1 authenticating before rejection, queued transport keepalive encryption after recorded expiry, and packet-held material used after zero/clear before a new handshake. The new time inputs have coherent coarse/jiffies/arm arithmetic; Linux schedule reachability is not claimed. Validated over a39aded. |
 | R6 flood resistance | Original under-load cookie exclusion and full Noise-state frame proved; a generated accepted episode refutes the literal retry limit (19 retries, 20 total initiations with MAX=18). Six terminal theorems, the combined gate, fresh kernel replay and exact witness rerun pass. |
 
 **Last validated mirror: `a39aded` (source unchanged from `f45bde8`).** The
-full proof gate passes 259 build jobs and 227 terminal statements (ReplayWindow
-15, R1 9, R2 126, R3 30, R4 28, R5 13, R6 6), with only permitted axioms.
+full proof gate passes 262 build jobs and 230 terminal statements (ReplayWindow
+15, R1 9, R2 126, R3 30, R4 31, R5 13, R6 6), with only permitted axioms.
 Stock `leanchecker --fresh Leanux.Proofs` passes. The default model build passes
-60 jobs; the unit tier passes 94 tests in 21.960 seconds with one skip.
+60 jobs; the unit tier passes 94 tests in 21.645 seconds with one skip.
 The unchanged replay witnesses were not repeated for the trie, IPv4 socket,
-selected-GRO and encrypt-worker extensions; the observers those witnesses use
+selected-GRO, encrypt-worker and tag/projection extensions; the observers those witnesses use
 are unchanged.
 The retry, delayed-encryption and coherent post-clear witnesses passed the
 preceding checkpoint with exact original/observed JSON and strengthened syscall
@@ -46,7 +46,8 @@ full-ring, receive-queue, complete receive-completion and outer-poll components,
 R5 replays with the timer-pass observer, the whole-advance factor, both
 R6 cookie-rejection cases with actual rotating-cookie witnesses, and the
 per-poll selected-GRO order and callback-entry conservation contracts, and
-complete encryption-worker access observers and their shared frames.
+complete encryption-worker access observers and their shared frames, and
+local poll-tag provenance and exact removal-observer projection.
 The final source and contract reviews have no unresolved correctness findings;
 their frozen file hashes matched before the checkpoints.
 
@@ -702,9 +703,9 @@ as an unvisited cursor. A small generic `PrefixEnsures.rangeInvariant` composes
 these contracts through the unchanged original observer loop.
 
 These are per-poll callback-entry order and multiplicity claims. They do not
-assert completed stack delivery, source-tag uniqueness, or normal-before-held
-order across multiple polls. The observer and `GroSafe` retain their prior
-meaning; the chronological counterexample remains valid. Reproduce it with:
+assert completed stack delivery or normal-before-held order across multiple
+polls. The separate tag component below establishes local occurrence provenance.
+The observer and `GroSafe` retain their prior meaning; the chronological counterexample remains valid. Reproduce it with:
 
 ```sh
 capped -- scripts/in-bundle sh -c 'python3 -B docs/proof-campaign-replay.py r4-gro-reorder | lake env lean --run Leanux/Proofs/WG/DeliveryOrder/ReplayGro.lean'
@@ -736,16 +737,46 @@ post-GRO stack order on generated accepted mirror inputs. No interruption or
 cap failure occurred. The subsequent whole-tree gate and fresh kernel replay pass, as recorded
 in the progress section.
 
-**Remaining local bridge.** The complete observers still have separate
-contracts: callback-framed entry-queue removal-prefix order and exact tagged
-GRO erasure and per-poll selected callback order. Two links remain open:
-buffered tags must form
-a subsequence of `rxPollGro`'s own removed tags, with distinct ordinals, and
-those removed tags must agree with the `rxPollRemovals` log. Event counts and
-composition with receive enqueue and recorded scheduler activations also remain
-open. The actual
-stack callback may perform other work internally; its entry observer claims
-only this supplied `forM`'s entry sites. No packet-store emptiness, no-loss,
+**Local tag and removal-log closure.** `Queues/RxPollTags` proves for every
+input World and every normal or stopped poll that buffered `(ordinal, skb)`
+tags form a subsequence of that poll's outer removal tags. Removal ordinals are
+exactly the range from zero to the number of drops, and buffered ordinals are
+distinct. The invariant starts from empty history and tracks a pending removed
+occurrence until completion either emits its one buffered offer or returns
+none. A Stop before `workDone` increments retains the actual removal. Repeated
+skb IDs remain possible; local ordinals are not allocation identities.
+
+`Logged/ProjectsPrefix` is a compositional relation between two existing
+failure-retaining observers, projecting their results and event histories.
+`Queues/RxPollProjection` uses it to prove that the complete `rxPollGro` and
+`rxPollRemovals` with the actual stack callback have identical results, full
+successful Worlds and Stops, and identical outer-removal logs after projection.
+Normal and held GRO helpers preserve this relation through callbacks, including
+callback failure. This log equality is proved directly; it is not inferred
+from the observers' separate original-result erasures. Neither bridge assumes
+queue retention, packet-ID uniqueness, a successful run or a history property
+at entry. The existing observer and chronological predicate are unchanged.
+
+[AGENT 2026-10-13] Relate the existing observers with a generic event/result
+projection and derive per-poll tag provenance internally. Keep concrete stack
+queue framing and whole-pipeline claims separate from these local log contracts.
+
+**Tag/projection local validation.** The R4 target passes 160 jobs with 31
+terminal theorems; the full `LeanuxProofs` build passes 262 jobs. Nine sequential
+capped invocations from 21:50:10 to 21:57:56 UTC (7m46s) comprise four passes and
+five ordinary compilation failures, all corrected and collected. No interruption
+or cap failure occurred. Independent frozen-source review found no correctness
+or scope issue; the coordinated gate, fresh stock kernel replay, model build
+and unit tier all pass as recorded above. Reproduce with
+`capped -- scripts/in-bundle lake build Leanux.Proofs.WG.DeliveryOrder.Statements`.
+
+**Remaining local bridge.** The complete observers now agree on removal logs,
+and buffered occurrences have local removal provenance. Composing the
+entry-queue prefix theorem with the concrete stack still requires its explicit
+`RetainsRx` contract. Composition with receive enqueue and recorded scheduler
+activations, pipeline counts and ownership remain open. The actual stack
+callback may perform other work internally; its entry observer claims only
+this supplied `forM`'s entry sites. No packet-store emptiness, no-loss,
 whole-schedule ordering or speculation/rollback claim follows from these local
 components. The scheduler's discarded activation trials must eventually discard
 history together with their trial Worlds.

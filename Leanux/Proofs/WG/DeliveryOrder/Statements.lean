@@ -5,6 +5,7 @@ import Leanux.Proofs.WG.Queues.RxCompletionFrame
 import Leanux.Proofs.WG.Queues.RxPollOrder
 import Leanux.Proofs.WG.Queues.RxPollGroOrder
 import Leanux.Proofs.WG.Queues.SelectedGro
+import Leanux.Proofs.WG.Queues.RxPollProjection
 
 /-! R4 queue components: physical-ring refusal, original prev_queue FIFO laws,
 and successful-endpoint receive-queue helper frames. Whole recorded-schedule delivery,
@@ -261,5 +262,36 @@ theorem original_poll_selected_callback_complete (pid : PeerId) (budget : Nat)
       (Logged.runPrefix (Queues.rxPollGro pid budget) w []).2) =
       Queues.enteredEntries (Logged.runPrefix (Queues.rxPollGro pid budget) w []).2 :=
   Queues.rxPollGro_selected_complete pid budget w v n hr
+
+/-- In one poll starting with empty observation history, every buffered
+completion's exact ordinal/skb tag is a subsequence occurrence of an outer
+queue removal. Buffered ordinals are distinct even on failure, including a
+second held offer rejected by GRO. Repeated skb IDs remain possible; these
+local ordinals are neither allocation identities nor completed deliveries. -/
+theorem original_poll_buffered_tag_provenance (pid : PeerId) (budget : Nat) (w : World) :
+    let h := (Logged.runPrefix (Queues.rxPollGro pid budget) w []).2
+    (Queues.bufferedTags h).Sublist (Queues.removedTags h) ∧
+      ((Queues.bufferedEntries h).map Queues.GroEntry.occurrence).Nodup := by
+  have hs := Queues.rxPollGro_tags_properties pid budget w
+  exact ⟨hs.1, hs.2.2⟩
+
+/-- Successful outer drops receive consecutive local ordinals starting at
+zero, even if the poll later stops before incrementing its local workDone.
+This all-input statement counts observed drops, not successful delivery. -/
+theorem original_poll_removal_ordinals (pid : PeerId) (budget : Nat) (w : World) :
+    let h := (Logged.runPrefix (Queues.rxPollGro pid budget) w []).2
+    (Queues.removedTags h).map Prod.fst = List.range (Queues.removedTags h).length :=
+  (Queues.rxPollGro_tags_properties pid budget w).2.1
+
+/-- The two existing complete-poll observers have exactly the same result,
+full successful World and Stop, and their outer-removal logs agree after
+discarding tag ordinals and non-removal events. This includes every actual
+GRO callback and its failures, with no queue-retention or input-state premise. -/
+theorem original_poll_removal_projection (pid : PeerId) (budget : Nat) (w : World) :
+    Logged.runPrefix (Queues.rxPollRemovals pid budget
+      (fun bytes => bytes.forM Leanux.Env.deliverInner)) w [] =
+      ((Logged.runPrefix (Queues.rxPollGro pid budget) w []).1,
+       (Queues.removedTags (Logged.runPrefix (Queues.rxPollGro pid budget) w []).2).map Prod.snd) :=
+  Queues.rxPollGro_removals_agree pid budget w
 
 end Leanux.Proofs.WG.DeliveryOrder
