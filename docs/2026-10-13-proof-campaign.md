@@ -14,18 +14,19 @@ No integration into main, push, differential check or guest run.
 | Result | Progress |
 | --- | --- |
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay and independent review checked. Seccomp frame carry checked. |
-| R2 lifetime safety | Store identities, failure-retaining allocation/release and caller composition cover session/rotation, peer creation, receive entry/maintenance/completion, receive polling with the actual stack callback, transmit entry, TX staging, decrypt iteration and ten socket/cache/loopback calls; stale-cursor finding checked. Remaining callers, lifecycle and whole-run internal-access coverage remain in progress. |
+| R2 lifetime safety | Store identities, failure-retaining allocation/release and caller composition cover session/rotation, peer creation, receive entry/maintenance/completion, receive polling with the actual stack callback, transmit entry, TX staging, decrypt iteration and eleven socket/cache/loopback calls, including staged IPv4 send; stale-cursor finding checked. Remaining callers, lifecycle and whole-run internal-access coverage remain in progress. |
 | R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion, original empty-root, arbitrary-depth empty-child and exact-prefix insertion with sequence wrappers, and total original placement proved. Selected-root graft normal endpoints and rollback effects are checked; successful graft representation and actual-root lookup pass the coordinated gate. Deeper grafts, removal, general mutation/history and path refinements remain open. Path proofs follow R2. |
 | R4 delivery | Accepted original replay over f45bde8 refutes chronological post-GRO stack order: a held ACK followed by a distinct-flow SYN produces the SYN's RST first under the same key lifetime. Exact current poll erasure and removal-prefix order with an explicit callback queue contract pass the gate, as does the original-helper reorder equation. The former chronological callback theorem is retired, with its predicate unchanged. Selected-order/source-tag closure and pipeline conservation remain open. |
 | R5 key lifetime | Resolved through Rule Zero counterexamples, with 13 positive local contracts. Original/observed replays show nonce R+1 authenticating before rejection, queued transport keepalive encryption after recorded expiry, and packet-held material used after zero/clear before a new handshake. The new time inputs have coherent coarse/jiffies/arm arithmetic; Linux schedule reachability is not claimed. Validated over a39aded. |
 | R6 flood resistance | Original under-load cookie exclusion and full Noise-state frame proved; a generated accepted episode refutes the literal retry limit (19 retries, 20 total initiations with MAX=18). Six terminal theorems, the combined gate, fresh kernel replay and exact witness rerun pass. |
 
 **Last validated mirror: `a39aded` (source unchanged from `f45bde8`).** The
-full proof gate passes 255 build jobs and 215 terminal statements (ReplayWindow
-15, R1 9, R2 116, R3 30, R4 26, R5 13, R6 6), with only permitted axioms.
+full proof gate passes 256 build jobs and 216 terminal statements (ReplayWindow
+15, R1 9, R2 117, R3 30, R4 26, R5 13, R6 6), with only permitted axioms.
 Stock `leanchecker --fresh Leanux.Proofs` passes. The default model build passes
-60 jobs; the unit tier passes 94 tests in 23.092 seconds with one skip.
-The unchanged replay witnesses were not repeated for this pure trie extension.
+60 jobs; the unit tier passes 94 tests in 22.363 seconds with one skip.
+The unchanged replay witnesses were not repeated for these proof-only trie and
+IPv4 socket extensions.
 The retry, delayed-encryption and coherent post-clear witnesses passed the
 preceding checkpoint with exact original/observed JSON and strengthened syscall
 endpoint checks; all nine cases passed the earlier audit carry.
@@ -38,7 +39,7 @@ the mixed peer-creation bridge, receive entry, maintenance, completion and polli
 TX staging, pure trie
 insertion, original empty-root and arbitrary-depth empty-child insertion with
 its wrapper, exact-prefix replacement, list deletion, placement and selected-root
-graft endpoints/rollback and successful representation, saved-peer scans, the ten-call socket family,
+graft endpoints/rollback and successful representation, saved-peer scans, the eleven-call socket family, including staged IPv4 send,
 transmit entry, actual stack/poll composition, the prerequisite carry, and the
 full-ring, receive-queue, complete receive-completion and outer-poll components, R5 receive/key-time, RX attempt and TX admission components, and the
 R5 replays with the timer-pass observer, the whole-advance factor, and both
@@ -168,6 +169,9 @@ uniqueness and then allocation/epoch bounds; share caller proofs through
 explicit ambient contracts instead of duplicating each invariant's proof.
 Observe saved peer-map entries at the demanded predicate evaluation, retaining
 the saved stamp and proving it remains resident; do not insert a new getter.
+Factor IPv4 send into explicit source and observer tail stages to share
+continuations without expanding the whole branch tree during each proof;
+retain the entry route through every stage.
 
 **Checked model and refinement.** `Lifetimes/Store` and `Actions` describe
 slot/stamp transitions over original executions. `Keypairs/Identity` uses the
@@ -212,11 +216,21 @@ Stops and the prior history, and `PrefixLoops` shares list-iteration laws.
 These concrete callbacks discharge the allocation-invariant contracts without
 adding a field to the earlier TX contract.
 `SavedPeers` gives exact short-circuit scan events under an explicit saved-stamp
-residency premise. `LoopbackAccess`, `SocketCache`, `SocketSend` and `SocketCalls`
-cover ten complete cache/endpoint/loopback/tunnel/IPv6 calls. Their all-input
+residency premise. `LoopbackAccess`, `SocketCache`, `SocketSend`, `SocketSend4`
+and `SocketCalls` cover eleven complete cache/endpoint/loopback/tunnel/IPv4/IPv6 calls. Their all-input
 erasure retains results and Stops; generic safety has an explicit device-statistics
 contract, instantiated for allocation bounds. A cache-miss clock failure retains
-exactly its preceding peer read. Generic record-consumer frames live once in
+exactly its preceding peer read. IPv4 send factors into source tail stages
+proved equal to the original call, each paired with an observer erasure and
+ambient safety contract. Both reset paths retain their original ordering;
+nonlocal-source clearing resets the local interface before the mismatch test,
+and the second route lookup keeps its full World effect. The route-error
+false fallthrough retains the entry route. Erasure has no endpoint-family-validity premise and preserves a later
+socket-port Stop after earlier cache/stat effects; such a Stop is not an
+accepted-domain execution.
+A conditional clear-source/reset equation retains the endpoint read and write
+before a reset-clock Stop; it is a source segment equation, not an accepted
+runner witness. Generic record-consumer frames live once in
 `Framing/KernelEffects`, with older interfaces derived by projection.
 Shared bind and finite-loop laws compose these per-call contracts. Generic enqueue/decrypt
 contracts admit explicit observed softirq, IRQ-exit and rescheduling callbacks;
@@ -254,7 +268,7 @@ getter-conditioned failure, not an accepted-trace finding. Safe access prefixes
 do not establish delivery, order or reference ownership.
 
 **Remaining claim.** Full caller, device-lifecycle and scheduler closure remain
-unproved. Encrypt/TX workers, IPv4 socket send/setup, handshake
+unproved. Encrypt/TX workers, socket setup/reinitialization, handshake
 execution and timer callbacks, peer removal, netlink and direct resident scans
 need coverage. Saved scalar-reference
 ownership is a separate obligation: aliased or dangling IDs may legitimately
@@ -311,11 +325,21 @@ correction. Receive completion/poll took fourteen passes over 23m50s: three
 passed and eleven failed before correction, ending with the full 206-job build.
 Saved scans and the ten-call socket checkpoint took twenty invocations over
 about 43 minutes: three passed and seventeen failed before the final 214-job
-build. IPv4 send erasure/safety attempts failed at proof-search heartbeat
-limits; its unused observer was removed. It remains an open caller obligation,
-with a second architecture prepared using explicit tail-call stages to retain
-shared continuations. This is a proof failure, not a mirror finding.
-Counts and failed
+build. Initial IPv4 send erasure/safety attempts failed at proof-search
+heartbeat limits; that unused observer was removed. Those failures remain
+proof failures, not mirror findings. The second architecture uses explicit
+tail-call stages with a source-equivalence theorem and compiled stage
+erasure/safety contracts. Its new module builds in about two seconds.
+The IPv4 addition took eight capped invocations over about eight minutes:
+five passed and three failed before correction. The failures were an unfinished
+source simplification, premature tactic introduction in erasure, and a missing
+explicit World-get contract during safety composition. No interruption occurred.
+The 130-job caller and 195-job terminal targets passed; the coordinated gate
+passes 256 jobs and all 216 terminal statements. Independent frozen-source review found no
+correctness defect and confirmed the failure equation's conditional segment
+scope and the distinction between ordinary negative returns and Stops. Review
+corrected wording that had confused arbitrary-input erasure with accepted-domain
+behavior; the former includes outside-domain Stops. Counts and failed
 passes are retained in the checkpoint history; current validation is above.
 Failures were proof elaboration/simplification failures, not passes or mirror
 findings. One earlier tactic loop was stopped by its verified PID and repaired.

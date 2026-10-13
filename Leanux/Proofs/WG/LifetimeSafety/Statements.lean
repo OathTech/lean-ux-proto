@@ -1020,8 +1020,8 @@ theorem saved_peer_scan_safety (I : List Lifetimes.LifetimeEvent → World → P
   Lifetimes.savedPeerAny_spec c P test xs
 
 /-- Every named cache, endpoint, loopback or socket-send call erases to its
-complete original result/World or exact Stop on arbitrary inputs. IPv4 send, setup and
-reinitialization are not members of this family. -/
+complete original result/World or exact Stop on arbitrary inputs, including both
+IPv4 and IPv6 sends. Socket setup and reinitialization remain separate callers. -/
 theorem socket_family_erasure (call : Lifetimes.SocketCall) :
     ErasesPrefix call.observed call.original := call.erases
 
@@ -1051,6 +1051,20 @@ theorem socket_cache_clock_failure (pid gen : Nat) (w : World) (p : Peer)
     runPrefix (Lifetimes.dstCacheGetPrefix pid gen) w h =
       (.error e, h ++ [.peer (.read pid p.internalId)]) :=
   Lifetimes.dstCacheGetPrefix_clock_failure pid gen w p h e ha hc hp hs hf
+
+/-- In the IPv4 source-clear/reset segment, the endpoint read and write
+survive a later reset-clock Stop. This uses original operation executions;
+it is a conditional segment equation, not an accepted runner witness. -/
+theorem socket_ipv4_clear_reset_failure (pid : PeerId) (w v : World) (p : Peer)
+    (h : List Lifetimes.LifetimeEvent) (err : Stop)
+    (hd : w.k.wg.isSome = true)
+    (hp : (getPeer pid).run w = .ok (p, w))
+    (hw : (setPeer pid {p with endpoint := p.endpoint.map fun e => {e with src := 0, srcIf := 0}}).run w = .ok ((), v))
+    (ha : v.armRecords = true) (hc : v.dstCacheRecords = true)
+    (hf : (hiddenJiffies .dstCacheResetTs).run v = .error err) :
+    runPrefix (do Lifetimes.send4ClearSrcPrefix (some pid); Lifetimes.dstCacheResetMixed pid) w h =
+      (.error err, h ++ [.peer (.read pid p.internalId), .peer (.write pid p.internalId)]) :=
+  Lifetimes.send4_clear_reset_clock_failure pid w v p h err hd hp hw ha hc hf
 
 /-- The observed complete wgXmit entry returns the original result, World or
 Stop on every input, including all error and staged-queue paths. -/

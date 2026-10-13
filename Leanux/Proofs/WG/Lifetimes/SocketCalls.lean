@@ -1,9 +1,8 @@
-import Leanux.Proofs.WG.Lifetimes.SocketSend
+import Leanux.Proofs.WG.Lifetimes.SocketSend4
 
 /-! Named complete calls in the cache, endpoint and socket transmission family.
 Results are retained; per-call safety composes through the shared bind rules.
-IPv4 send, socket setup/reinitialization and the outer scheduler remain separate
-callers. -/
+Socket setup/reinitialization and the outer scheduler remain separate callers. -/
 namespace Leanux.Proofs.WG.Lifetimes
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
 
@@ -17,13 +16,14 @@ inductive SocketCall where
   | softirq
   | loopback (sites : List HiddenSite) (raised : Bool)
   | tunnel (e : Endpoint) (bytes : List UInt8) (ds : Nat) (r : Route) (exactRx : Bool)
+  | send4 (e : Endpoint) (cache : Option PeerId) (bytes : List UInt8) (ds : Nat) (exactRx : Bool)
   | send6 (e : Endpoint) (cache : Option PeerId) (bytes : List UInt8) (ds : Nat) (exactRx : Bool)
 
 namespace SocketCall
 
 def Result : SocketCall → Type
   | .cacheGet _ _ => Option DstSlot
-  | .send6 .. => Int
+  | .send4 .. | .send6 .. => Int
   | _ => Unit
 
 def original (call : SocketCall) : M call.Result := match call with
@@ -36,6 +36,7 @@ def original (call : SocketCall) : M call.Result := match call with
   | .softirq => loopbackSoftirq
   | .loopback sites raised => loopbackSend sites raised
   | .tunnel e bytes ds r exactRx => (pinned_const _private.Leanux.WG.Socket.«0».Leanux.WG.tunnelXmit) e bytes ds r exactRx
+  | .send4 e cache bytes ds exactRx => WG.send4 e cache bytes ds exactRx
   | .send6 e cache bytes ds exactRx => WG.send6 e cache bytes ds exactRx
 
 def observed (call : SocketCall) : MixedM call.Result := match call with
@@ -48,6 +49,7 @@ def observed (call : SocketCall) : MixedM call.Result := match call with
   | .softirq => loopbackSoftirqPrefix
   | .loopback sites raised => loopbackSendPrefix sites raised
   | .tunnel e bytes ds r exactRx => tunnelXmitPrefix e bytes ds r exactRx
+  | .send4 e cache bytes ds exactRx => send4Prefix e cache bytes ds exactRx
   | .send6 e cache bytes ds exactRx => send6Prefix e cache bytes ds exactRx
 
 theorem erases (call : SocketCall) : ErasesPrefix call.observed call.original := by
@@ -61,6 +63,7 @@ theorem erases (call : SocketCall) : ErasesPrefix call.observed call.original :=
   | softirq => exact loopbackSoftirqPrefix_erases
   | loopback sites raised => exact loopbackSendPrefix_erases sites raised
   | tunnel e bytes ds r exactRx => exact tunnelXmitPrefix_erases e bytes ds r exactRx
+  | send4 e cache bytes ds exactRx => exact send4Prefix_erases e cache bytes ds exactRx
   | send6 e cache bytes ds exactRx => exact send6Prefix_erases e cache bytes ds exactRx
 
 theorem spec (c : AmbientContracts I) (sc : SocketContracts I) (P : IdentityView → Prop)
@@ -75,6 +78,7 @@ theorem spec (c : AmbientContracts I) (sc : SocketContracts I) (P : IdentityView
   | softirq => exact loopbackSoftirqPrefix_spec c P
   | loopback sites raised => exact loopbackSendPrefix_spec c P sites raised
   | tunnel e bytes ds r exactRx => exact tunnelXmitPrefix_spec c sc P e bytes ds r exactRx
+  | send4 e cache bytes ds exactRx => exact send4Prefix_spec c sc P e cache bytes ds exactRx
   | send6 e cache bytes ds exactRx => exact send6Prefix_spec c sc P e cache bytes ds exactRx
 
 theorem allocation (call : SocketCall) : PrefixPreserves AllocationInv LifetimeEvent.Safe call.observed :=

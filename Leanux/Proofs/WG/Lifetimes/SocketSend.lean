@@ -1,8 +1,8 @@
 import Leanux.Proofs.WG.Lifetimes.SocketCache
 import Leanux.Proofs.WG.Lifetimes.AllocationAmbient
 
-/-! Complete tunnel and IPv6 socket send paths. IPv4 send remains a separate
-caller obligation. Routing and record effects are lifted only
+/-! Complete tunnel and IPv6 socket send paths. The IPv4 observer is
+in SocketSend4. Routing and record effects are lifted only
 where source inspection shows no peer/keypair/packet access. -/
 set_option maxHeartbeats 400000
 set_option maxRecDepth 4096
