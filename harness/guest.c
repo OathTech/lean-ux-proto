@@ -209,7 +209,7 @@ struct fixture_route { unsigned family; unsigned char dst[16]; unsigned mtu; };
 #ifndef SYS_SECCOMP
 #define SYS_SECCOMP 1
 #endif
-/* W8 took 22 (wg_netns_close), W9 23-24, W4 25, W7 26, W2 20-21. */
+/* W8 took 22 (wg_netns_close), W9 23-24, W4 25, W7 26, W2 20-21, epoll 27-29. */
 #define IS_LIFECYCLE_OP(code) ((code) == OP_WG_CREATE || (code) == OP_WG_DOWN || (code) == OP_WG_DELETE)
 /* The parent's per-child hang guard (P design section 6): a child still
  * running after this many seconds is killed with its process group. */
@@ -2708,7 +2708,9 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         if (result[i].error) printf("%d", result[i].error); else printf("null");
         printf(",\"bytes\":");
         print_head(&t->ops[i], &result[i]);
-        if (t->ops[i].code == OP_READ) { printf(",\"digest\":"); print_digest(&t->ops[i], &result[i]); }
+        if (t->ops[i].code == OP_READ || t->ops[i].code == OP_EPOLL_WAIT) {   /* the contract: a read's and an epoll_wait's digest */
+            printf(",\"digest\":"); print_digest(&t->ops[i], &result[i]);
+        }
         if (t->ops[i].code == OP_WRITE) printf(",\"sigpipe\":%d", result[i].sigpipe);
         if (t->ops[i].code == OP_PIPE2) { printf(",\"fds\":"); print_fds(&t->ops[i], &result[i]); }
         if (t->ops[i].code == OP_SECCOMP_PROBE) {

@@ -15,9 +15,8 @@ An `epoll_wait`'s observation is its events through the read channel: the
 first 64 bytes of the packed 12-byte `epoll_event` array and the BLAKE2s digest
 of all of them, so the order of returned events is checked, not just the count.
 `data` is the u64 the kernel copies back, so each item's identity is visible
-in the events. Not here: the four steered allocation failures (section 7),
-which wait for the AllocSite ids of the interface commit and the mirror's
-sites (stream T).
+in the events. The four steered allocation failures (section 7) are the
+`e_alloc_*` traces at the end, under the failslab-style extension (stream T).
 """
 import argparse
 import json
@@ -872,6 +871,76 @@ trace("e_release_dup3_over_set", [
     wait(ref(0)),                              # 6: -EINVAL
     read(ref(0)),                              # 7: 8
 ])
+
+
+# ---- allocation failures (3.1, 7), steered (the A machinery) ----------------
+
+# Each site fails once under the declared failslab-style extension
+# (docs/2026-10-05-a-alloc.md, A2), then draws, so the operation after the
+# failure shows the state is whole: the schedule lists every consultation of
+# the site it names (harness/steer.py ALLOC_SITES; the kind-305 records are
+# consumed by the mirror at Leanux/Kernel/Defs.lean AllocSite 28-31).
+FAIL = "00" * 8
+
+
+def steered(name, ops, site, outcome, **extra):
+    """The site's first consultation fails, its second draws; `outcome` names
+    the mirror's decision (Leanux/Kernel/Decision.lean)."""
+    trace(name, ops, steer=[[site, FAIL], [site, "draw"]], expect=[f"{outcome}=1", f"{outcome}=0"],
+          domain_extension="failslab", **extra)
+
+
+# do_epoll_create -> ep_alloc (:1331): kzalloc fails, -ENOMEM (:1332-1333)
+# before any descriptor; the next create succeeds and the set works.
+steered("e_alloc_ep_nomem", [
+    epoll_create1(),                           # 0: -ENOMEM
+    epoll_create1(),                           # 1: 8
+    eventfd2(),                                # 2: 9
+    add(ref(1), ref(2), data=2),               # 3: 0
+    write(ref(2), 8),                          # 4: 8
+    wait(ref(1)),                              # 5: 1 [IN, 2]
+], "kzallocEp", "ep_alloc.no_mem")
+
+# ep_insert -> ep_alloc_epitem (:1764): the item's cache allocation fails,
+# -ENOMEM (:1765-1767) with nothing registered (ep_find then misses, so the
+# second ADD is a fresh insert, not -EEXIST).
+steered("e_alloc_epitem_nomem", [
+    epoll_create1(),                           # 0: 8
+    eventfd2(),                                # 1: 9
+    add(ref(0), ref(1), data=1),               # 2: -ENOMEM
+    add(ref(0), ref(1), data=1),               # 3: 0
+    write(ref(1), 8),                          # 4: 8
+    wait(ref(0)),                              # 5: 1 [IN, 1]
+    close(ref(0)),                             # 6: 0
+], "kmemCacheZallocEpi", "ep_alloc_epitem.no_mem")
+
+# ep_insert -> ep_register_epitem -> ep_attach_file (:1722): the file's
+# first watch allocates its epitems head; the failure returns -ENOMEM
+# (:1723-1724), and ep_register_epitem frees the item and undoes the watch
+# count (:1803-1810) before the tree, so no kind-308 record is written.
+steered("e_alloc_ephead_nomem", [
+    epoll_create1(),                           # 0: 8
+    eventfd2(),                                # 1: 9
+    add(ref(0), ref(1), data=1),               # 2: -ENOMEM
+    add(ref(0), ref(1), data=1),               # 3: 0
+    write(ref(1), 8),                          # 4: 8
+    wait(ref(0)),                              # 5: 1 [IN, 1]
+    close(ref(0)),                             # 6: 0
+], "kmemCacheZallocEphead", "ep_attach_file.head_no_mem")
+
+# ep_item_poll -> ep_ptable_queue_proc (:1550): the wait-queue entry's
+# allocation fails after the item is in the tree (a kind-308 record is
+# written and consumed), epq.epi is cleared (:1552-1553), ep_insert removes
+# the item and returns -ENOMEM (:1877-1879); the second ADD inserts again.
+steered("e_alloc_pwq_nomem", [
+    epoll_create1(),                           # 0: 8
+    eventfd2(),                                # 1: 9
+    add(ref(0), ref(1), data=1),               # 2: -ENOMEM
+    add(ref(0), ref(1), data=1),               # 3: 0
+    write(ref(1), 8),                          # 4: 8
+    wait(ref(0)),                              # 5: 1 [IN, 1]
+    close(ref(0)),                             # 6: 0
+], "kmemCacheAllocPwq", "ep_ptable_queue_proc.no_mem")
 
 
 def render(t):

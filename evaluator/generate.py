@@ -27,6 +27,8 @@ def generate(seed=20260920, count=1000, max_ops=64, profile='v2'):
         return generate_pipes(seed, count, min(max_ops, 48))
     if profile == 'seccomp':
         return generate_seccomp(seed, count, min(max_ops, 24))
+    if profile == 'epoll':
+        return generate_epoll(seed, count, min(max_ops, 48))
     if profile != 'v1':
         raise ValueError(f'unknown generator profile {profile}')
     if not 4 <= max_ops <= 64 or not 1 <= count <= 100000:
@@ -569,6 +571,162 @@ def generate_seccomp(seed, count, max_ops=24):
         trace = dict(version=1, id=f'seccomp-{seed}-{len(result):05}', ops=operations)
         if children:
             trace['seccomp_child'] = True
+# Profile `epoll` (docs/2026-10-12-epoll-design.md section 7, tier 1).
+EPOLLIN, EPOLLPRI, EPOLLOUT, EPOLLERR, EPOLLHUP, EPOLLRDHUP = 0x1, 0x2, 0x4, 0x8, 0x10, 0x2000
+EPOLLEXCLUSIVE, EPOLLWAKEUP, EPOLLONESHOT, EPOLLET = 1 << 28, 1 << 29, 1 << 30, 1 << 31
+EPOLL_CLOEXEC = O_CLOEXEC
+EPOLL_ADD, EPOLL_DEL, EPOLL_MOD = 1, 2, 3
+# interest masks: plain level-triggered reads and writes most often, then the
+# edge, one-shot and exclusive variants, EPOLLWAKEUP (masked by the kernel)
+# and a mask of nothing (EPOLLERR and EPOLLHUP are always reported)
+EPOLL_MASKS = [EPOLLIN, EPOLLOUT, EPOLLIN | EPOLLOUT, EPOLLIN | EPOLLET, EPOLLIN | EPOLLONESHOT,
+               EPOLLIN | EPOLLEXCLUSIVE, EPOLLOUT | EPOLLET, EPOLLIN | EPOLLRDHUP, EPOLLIN | EPOLLWAKEUP,
+               EPOLLIN | EPOLLPRI, 0, EPOLLERR | EPOLLHUP, EPOLLIN | EPOLLEXCLUSIVE | EPOLLET]
+EPOLL_MASK_WEIGHTS = [16, 8, 6, 4, 4, 3, 2, 2, 1, 1, 1, 1, 1]
+EPOLL_MAXEVENTS_CHOICES = [16, 16, 16, 8, 4, 2, 1, 1]
+
+
+def generate_epoll(seed, count, max_ops=48):
+    """Seeded epoll traces (tier 1): a pool of non-blocking eventfds and
+    pipes, up to three sets, and random mixes weighted towards
+    `epoll_ctl`/`write`/`epoll_wait` triples. Sets watch producers and other
+    sets (nesting, a 2-cycle ELOOP), are dup'd, modified, drained with a
+    short `maxevents`, and closed with items registered. Every wait has
+    timeout 0 and every producer is non-blocking, so no operation sleeps;
+    the domain filter drops what tier 1 does not model."""
+    if not 4 <= max_ops <= 64 or not 1 <= count <= 100000:
+        raise ValueError('bounded generator parameters')
+    rng = random.Random(f'epoll-{seed}')
+    seen, result = set(), []
+    while len(result) < count:
+        operations, sets, events, pipes = [], [], [], []
+        rlimit = rng.choices([32, 10, 64], [24, 1, 1])[0]
+        literals = [-1, 8, 9, 10, 15, 31, 2**31 - 1]   # 0-7 are the fixture's
+
+        def append(operation):
+            if len(operations) < max_ops:
+                operations.append(operation)
+                index = len(operations) - 1
+                if operation['op'] == 'epoll_create1':
+                    sets.append(index)
+                elif operation['op'] == 'pipe2':
+                    pipes.append(index)
+                elif operation['op'] in ('eventfd2', 'dup'):
+                    events.append(index)
+
+        def end(index=None, which=None):
+            index = rng.choice(pipes) if index is None else index
+            return {'pipe': index, 'end': rng.choice([0, 1]) if which is None else which}
+
+        def set_fd():
+            draw = rng.random()
+            if sets and draw < .93:
+                return {'ref': rng.choice(sets)}
+            if (events or pipes) and draw < .97:   # a non-epoll epfd: -EINVAL
+                return target(nested=False)
+            return {'literal': rng.choice(literals)}
+
+        def target(nested=True):
+            draw = rng.random()
+            if events and draw < .5:
+                return {'ref': rng.choice(events)}
+            if pipes and draw < .82:
+                return end()
+            if nested and sets and draw < .95:
+                return {'ref': rng.choice(sets)}
+            if events:
+                return {'ref': rng.choice(events)}
+            if pipes:
+                return end()
+            return {'literal': rng.choice(literals)}
+
+        def data():
+            return str(rng.choice([0, 1, 2, 7, len(operations), 2**32, U64, rng.randrange(U64)]))
+
+        def ctl(cmd=None, fd=None):
+            if cmd is None:
+                cmd = rng.choices([EPOLL_ADD, EPOLL_MOD, EPOLL_DEL, 0, 4], [10, 3, 3, 1, 1])[0]
+            return dict(op='epoll_ctl', epfd=set_fd(), cmd=cmd, fd=target() if fd is None else fd,
+                        events=rng.choices(EPOLL_MASKS, EPOLL_MASK_WEIGHTS)[0], data=data())
+
+        def wait():
+            return dict(op='epoll_wait', epfd=set_fd(), maxevents=rng.choice(EPOLL_MAXEVENTS_CHOICES), timeout=0)
+
+        def producer():
+            kind = rng.choices(['eventfd2', 'pipe2'], [3, 2])[0]
+            if kind == 'eventfd2':
+                return dict(op='eventfd2', init=rng.choice([0, 0, 1, 7]), flags=O_NONBLOCK | rng.choice([0, 0, O_CLOEXEC, 1]))
+            return dict(op='pipe2', flags=O_NONBLOCK | rng.choice([0, 0, O_CLOEXEC, O_DIRECT]))
+
+        def write(fd=None):
+            if fd is None:
+                fd = target(nested=False)
+            if 'pipe' in fd:
+                return dict(op='write', fd=fd, count=rng.choice([1, 7, 8, 100, 4096, 65536]), value=str(rng.choice([0, 1, 17, U64])))
+            return dict(op='write', fd=fd, count=rng.choice([8, 8, 8, 7]), value=str(rng.choice([1, 1, 2, 7, U64 - 1, U64 - 2])))
+
+        def read(fd=None):
+            if fd is None:
+                fd = target(nested=False)
+            return dict(op='read', fd=fd, count=rng.choice([8, 8, 100, 1, 4096]))
+
+        length = rng.randint(4, max_ops)
+        append(dict(op='epoll_create1', flags=rng.choices([0, EPOLL_CLOEXEC, 1], [6, 3, 1])[0]))
+        append(producer())
+        while len(operations) < length:
+            burst = rng.random()
+            if burst < .3:
+                # the triple: register, make ready, drain
+                fd = target(nested=False)
+                append(ctl(EPOLL_ADD, fd))
+                append(write(fd) if rng.random() < .8 else read(fd))
+                append(wait())
+                continue
+            if burst < .36 and sets:
+                # drain a set twice with a short maxevents (leftovers first)
+                epfd = {'ref': rng.choice(sets)}
+                append(dict(op='epoll_wait', epfd=epfd, maxevents=rng.choice([1, 2]), timeout=0))
+                append(dict(op='epoll_wait', epfd=epfd, maxevents=16, timeout=0))
+                continue
+            if burst < .4 and len(sets) >= 2:
+                # nest two sets, both ways on occasion (a 2-cycle: -ELOOP)
+                outer, inner = rng.sample(sets, 2)
+                append(dict(op='epoll_ctl', epfd={'ref': outer}, cmd=EPOLL_ADD, fd={'ref': inner},
+                            events=EPOLLIN, data=data()))
+                if rng.random() < .4:
+                    append(dict(op='epoll_ctl', epfd={'ref': inner}, cmd=EPOLL_ADD, fd={'ref': outer},
+                                events=EPOLLIN, data=data()))
+                continue
+            if burst < .43 and pipes:
+                # room in a watched full pipe: F_SETPIPE_SZ's key-NULL wake
+                index = rng.choice(pipes)
+                append(ctl(EPOLL_ADD, end(index, 1)))
+                for _ in range(rng.choice([1, 17])):
+                    append(dict(op='write', fd=end(index, 1), count=4096, value='1'))
+                append(dict(op='fcntl', fd=end(index, 1), cmd='F_SETPIPE_SZ', arg=rng.choice([4096, 8192, 1048576])))
+                append(wait())
+                continue
+            kind = rng.choices(['epoll_create1', 'producer', 'dup', 'close', 'epoll_ctl', 'epoll_wait', 'write', 'read'],
+                               [2 if len(sets) < 3 else 0, 3, 1, 3, 8, 6, 5, 3])[0]
+            if kind == 'epoll_create1':
+                append(dict(op='epoll_create1', flags=rng.choices([0, EPOLL_CLOEXEC, 1], [6, 3, 1])[0]))
+            elif kind == 'producer':
+                append(producer())
+            elif kind == 'dup':
+                append(dict(op='dup', fd=target()))
+            elif kind == 'close':
+                append(dict(op='close', fd=target() if rng.random() < .9 else {'literal': rng.choice(literals)}))
+            elif kind == 'epoll_ctl':
+                append(ctl())
+            elif kind == 'epoll_wait':
+                append(wait())
+            elif kind == 'write':
+                append(write())
+            else:
+                append(read())
+        trace = dict(version=1, id=f'epoll-{seed}-{len(result):05}', ops=operations)
+        if rlimit != 32:
+            trace['rlimit_nofile'] = rlimit
         digest = identity(trace)
         if digest not in seen:
             seen.add(digest)

@@ -1,5 +1,7 @@
 # Charter: the receive counter window, proved over the mirror
 
+> Restructured 2026-10-13: the proof tree moved from `Leanux/Spikes/` to `Leanux/Proofs/`, laid out by layer and result; the map and the results register are [docs/proofs.md](proofs.md). The names below are the historical ones.
+
 A long-cycle proof assignment for a Codex agent and its subagents: days, not
 hours, left alone to cook. It sets one challenge problem with a clear success
 criterion and leaves the proof architecture to the agent.
@@ -110,7 +112,7 @@ All required:
    top-level statement is the check.
 2. `capped -- scripts/in-bundle lake build` succeeds for the whole project with
    the spike included; `git diff <pin> -- Leanux ':!Leanux/Spikes'` is empty.
-3. `docs/2026-10-xx-spike-window.md` records: the pin; the proof architecture
+3. `docs/2026-10-13-spike-window.md` records: the pin; the proof architecture
    (each intermediate model, what it abstracts, the refinement theorem for it);
    any reshaped statement with the original and the reason; any Rule Zero
    finding with its counterexample; the effort; and a ranked list of mirror

@@ -2,6 +2,8 @@ import Leanux.FS.Eventfd
 import Leanux.FS.ReadWrite
 import Leanux.FS.Fcntl
 import Leanux.FS.Close
+import Leanux.FS.Fput
+import Leanux.FS.Eventpoll
 import Leanux.FS.Inode
 import Leanux.FS.PipeCreate
 import Leanux.Env
@@ -37,6 +39,13 @@ inductive Syscall where
   /-- `pipe2(fildes, flags)` with a valid `fildes` (P). -/
   | pipe2 (flags : UInt32)
   | fcntl (fd : Nat) (cmd : FcntlCmd) (arg : UInt64)
+  /-- epoll (docs/2026-10-12-epoll-design.md, section 6): `epoll_create1(flags)`;
+      `epoll_ctl(epfd, op, fd, &{events, data})` with `op` and `fd` the
+      kernel's `int`s (the low 32 bits of the wire's u32, signed);
+      `epoll_wait(epfd, events, maxevents, timeout)` into the guest's buffer. -/
+  | epollCreate1 (flags : UInt32)
+  | epollCtl (epfd : Nat) (op : Int) (fd : Int) (events : UInt32) (data : UInt64)
+  | epollWait (epfd : Nat) (maxevents timeout : Int)
   /-- `sendmsg` of WG_CMD_SET_DEVICE on the fixture's generic-netlink socket,
       then `recvmsg` of the acknowledgement: the result is its error code. -/
   | wgSet (attrs : WG.DeviceAttrs)
@@ -228,6 +237,9 @@ def dispatch : Syscall → M Int
   | .write fd count buf => ksysWrite fd buf count
   | .pipe2 flags => sysPipe2 flags
   | .fcntl fd cmd arg => sysFcntl fd cmd arg
+  | .epollCreate1 flags => sysEpollCreate1 flags
+  | .epollCtl epfd op fd events data => sysEpollCtl epfd op fd events data
+  | .epollWait epfd maxevents timeout => sysEpollWait epfd maxevents timeout
   | .wgSet attrs => netlinkRequest (WG.wgSetDevice attrs)
   | .wgGet device => netlinkRequest do
     match ← WG.wgGetDevice device with

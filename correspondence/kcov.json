@@ -38,7 +38,11 @@
   "include/linux/time64.h",
   "kernel/signal.c",
   "kernel/seccomp.c",
-  "net/core/filter.c"
+  "net/core/filter.c",
+  "include/linux/poll.h",
+  "fs/eventpoll.c",
+  "include/linux/percpu_counter.h",
+  "arch/x86/include/asm/irqflags.h"
  ],
  "functions": [
   "touch_atime",
@@ -239,7 +243,34 @@
   "force_sig_seccomp",
   "force_sig_info_to_task",
   "signal_wake_up_state",
-  "__x64_sys_seccomp"
+  "__x64_sys_seccomp",
+  "pipe_poll",
+  "eventfd_poll",
+  "__x64_sys_epoll_create1",
+  "__x64_sys_epoll_ctl",
+  "__x64_sys_epoll_wait",
+  "do_epoll_create",
+  "do_epoll_ctl",
+  "do_epoll_wait",
+  "ep_clear_and_put",
+  "ep_done_scan",
+  "ep_eventpoll_poll",
+  "__ep_eventpoll_poll",
+  "ep_eventpoll_release",
+  "ep_get_upwards_depth_proc",
+  "ep_item_poll",
+  "ep_loop_check_proc",
+  "ep_poll_callback",
+  "ep_ptable_queue_proc",
+  "ep_refcount_dec_and_test",
+  "ep_remove",
+  "ep_remove_epi",
+  "ep_remove_file",
+  "ep_start_scan",
+  "eventpoll_release_file",
+  "list_file",
+  "reverse_path_check_proc",
+  "ep_destroy_wakeup_source"
  ],
  "known_gaps": [],
  "shared_exits": [
@@ -296,11 +327,50 @@
     "kernel/seccomp.c:2117"
    ],
    "note": "do_seccomp's return block (seccomp.c:2111) is shared with the inlined seccomp_get_notif_sizes's `return 0` (seccomp.c:2088 at :2111; PC 0xffffffff810f7f15 on the sc2 scratch build), so every GET_ACTION_AVAIL and every refused flag covers the point although seccomp_get_notif_sizes did not run. On a GET_NOTIF_SIZES the sizes' initialisation (seccomp.c:2079 at :2111, PC 0xffffffff810f7ed8) runs first and the other paths skip it, so the declaration applies only when that point is not covered. Found by corpus/seccomp s_queries (stream V's open item, settled by X on sc2, 2026-10-13)."
+  },
+  {
+   "function": "ep_modify",
+   "frames": [
+    "fs/eventpoll.c:1979",
+    "fs/eventpoll.c:2604"
+   ],
+   "unless_covered": [
+    "fs/eventpoll.c:1952",
+    "fs/eventpoll.c:2604"
+   ],
+   "note": "epoll stream S: ep_insert's and ep_modify's identical tails (`if (pwake) ep_poll_safewake(ep, NULL, 0); return 0;`) are one block in the built code, attributed to ep_modify's return (:1979 under do_epoll_ctl's MOD case :2604), reached at the end of every EPOLL_CTL_ADD. ep_modify's own path runs its smp_mb() block (:1952) first; when that point is not covered, ep_modify did not run."
+  },
+  {
+   "function": "fdput",
+   "frames": [
+    "include/linux/file.h:62",
+    "fs/eventpoll.c:2680"
+   ],
+   "unless_covered": [
+    "fs/eventpoll.c:2674"
+   ],
+   "points": 2,
+   "note": "epoll stream S: do_epoll_wait's `return -EBADF` (:2660) jumps into the epilogue of the error_fput fdput (:2680), whose two points (the FDPUT_FPUT test and the join after it) share this chain; the point of :2674 (`ep = fd_file(f)->private_data`) runs only once the descriptor was found, so when it is not covered fdput did not run (the -EINVAL exit at :2668 runs it, and the mirror reports its decision)."
+  },
+  {
+   "function": "ep_register_epitem",
+   "frames": [
+    "arch/x86/include/asm/irqflags.h:42",
+    "arch/x86/include/asm/irqflags.h:119",
+    "arch/x86/include/asm/irqflags.h:159",
+    "include/linux/percpu_counter.h:194",
+    "include/linux/percpu_counter.h:272",
+    "fs/eventpoll.c:1808",
+    "fs/eventpoll.c:1845",
+    "fs/eventpoll.c:2584"
+   ],
+   "unless_covered": [
+    "fs/eventpoll.c:1800",
+    "fs/eventpoll.c:1845",
+    "fs/eventpoll.c:2584"
+   ],
+   "note": "epoll stream S: ep_alloc_epitem's percpu_counter_dec on its -ENOMEM path (:1766) and ep_register_epitem's on its attach-error path (:1808) are one block in the built code, attributed to the latter; the steered epitem failure (e_alloc_epitem_nomem) reaches it without ep_register_epitem running. ep_register_epitem's own path runs its `if (tep)` block (:1800) first. arch/x86/include/asm/irqflags.h is anchored only so this chain can be named."
   }
- ],
- "data_only_operations": [
-  "seccomp_prctl",
-  "seccomp_capdrop"
  ],
  "operand_exclusions": [
   {
@@ -308,6 +378,42 @@
    "operand": "root_user.__count",
    "call": "fs/pipe.c:794",
    "note": "get_current_user() -> get_uid() -> refcount_inc(&root_user.__count) is inlined into alloc_pipe_info (fs/pipe.c:794), so __refcount_add's comparison at refcount.h:189 is recorded there with the guest-wide reference count of root_user (every root credential, kernel threads included; 26 or 27 across runs), which the mirror does not model: the precedent of alloc_empty_file.nr_files_at_max. The outcome (a live root_user: not zero) is reported and A2-checked; only the operands at this call site are excluded. Every other refcount_inc keeps its operands."
+  },
+  {
+   "label": "__refcount_add.old_zero",
+   "operand": "root_user.__count",
+   "call": "fs/eventpoll.c:2412",
+   "note": "epoll stream S: get_current_user() in ep_alloc (fs/eventpoll.c:1343), inlined into do_epoll_create, whose frame at :2412 is the outermost: the same guest-wide root_user count as the fs/pipe.c:794 entry; the outcome (a live root_user) is reported, the operands at this call site excluded."
+  },
+  {
+   "label": "do_epoll_ctl.gen_matches",
+   "operand": "loop_check_gen",
+   "call": "fs/eventpoll.c:2552",
+   "note": "epoll stream S (docs/2026-10-12-epoll-design.md 3.5): fs/eventpoll.c's boot-global loop_check_gen, two higher after every full check of every trace of a boot; the mirror's counter is relative to the boot's base (2 after the fixture's warm-up). The outcome at :2552 is checked (false: a fresh set's gen of 0 and a visited set's odd gen never meet the even counter); only the operands are excluded."
+  },
+  {
+   "label": "ep_loop_check_proc.visited",
+   "operand": "loop_check_gen",
+   "call": "fs/eventpoll.c:2302",
+   "note": "epoll stream S: the in-check test of a set already visited (a diamond), fs/eventpoll.c:2302; the outcome is checked, the operands are the absolute counter."
+  },
+  {
+   "label": "ep_get_upwards_depth_proc.visited",
+   "operand": "loop_check_gen",
+   "call": "fs/eventpoll.c:2344",
+   "note": "epoll stream S: the upward walk's visited test, fs/eventpoll.c:2344 (ep_get_upwards_depth_proc.isra.0's own frame); the outcome is checked, the operands are the absolute counter."
+  },
+  {
+   "label": "ep_loop_check_proc.visited",
+   "operand": "loop_check_gen",
+   "call": "fs/eventpoll.c:2315",
+   "note": "epoll stream S: the built code inlines ep_loop_check_proc's recursive call one level, so the inner visit's compare has the recursion site (:2315) as its outermost frame."
+  },
+  {
+   "label": "ep_get_upwards_depth_proc.visited",
+   "operand": "loop_check_gen",
+   "call": "fs/eventpoll.c:2347",
+   "note": "epoll stream S: as above for ep_get_upwards_depth_proc's recursion site (:2347)."
   }
  ],
  "branch_free_functions": [
@@ -321,6 +427,11 @@
   "IP6_ECN_set_ce",
   "IP6_ECN_set_ect1",
   "seccomp_may_assign_mode",
-  "seccomp_log"
+  "seccomp_log",
+  "percpu_counter_compare"
+ ],
+ "data_only_operations": [
+  "seccomp_prctl",
+  "seccomp_capdrop"
  ]
 }

@@ -1,8 +1,8 @@
 """Build the mirror, run traces on the pinned Linux guest and the mirror, compare.
 
     scripts/in-bundle python3 -m evaluator.check
-        [--suite handwritten,critic,wireguard,alloc,generated,wireguard-generated,pipes,pipes-generated,seccomp,seccomp-generated]
-        [--generated-count N] [--wireguard-count N] [--pipes-count N] [--seccomp-count N] [--seed S] [--trace ID] [--out DIR]
+        [--suite handwritten,critic,wireguard,alloc,generated,wireguard-generated,pipes,pipes-generated,epoll,epoll-generated,seccomp,seccomp-generated]
+        [--generated-count N] [--wireguard-count N] [--pipes-count N] [--epoll-count N] [--seccomp-count N] [--seed S] [--trace ID] [--out DIR]
         [--no-build] [--alloc-share F]
 
 The command fails unless every trace agrees on observations (A1) and every
@@ -32,6 +32,7 @@ from .protocol import InvalidOutput, compare, loads, parse_batch, validate_cover
 ROOT = Path(__file__).resolve().parents[1]
 ANCHORS = ROOT / 'correspondence/kcov.json'
 SUITES = ('handwritten', 'critic', 'wireguard', 'alloc', 'generated', 'wireguard-generated', 'pipes', 'pipes-generated',
+          'epoll', 'epoll-generated',   # epoll T: corpus/epoll and the `epoll` generator profile (design section 7)
           'seccomp', 'seccomp-generated')   # seccomp X: corpus/seccomp and the `seccomp` generator profile (design 7)
 # Corpus suites whose traces pass the domain filter first: the pipes corpus
 # holds a hang control (a blocking read) that must never reach the guest.
@@ -179,13 +180,14 @@ def load_traces(suites, counts, seed, only, filtered, alloc_share=ALLOC_SHARE):
     `filtered` receives the rejected candidates' reasons."""
     traces = []
     for suite in suites:
-        if suite in ('generated', 'wireguard-generated', 'pipes-generated', 'seccomp-generated'):
+        if suite in ('generated', 'wireguard-generated', 'pipes-generated', 'epoll-generated', 'seccomp-generated'):
             source = {'generated': generate,
                       'wireguard-generated': lambda s, n: generate_wireguard(s, n, steered=STEERED_SHARE, data=DATA_SHARE,
                                                                              timers=TIMERS_SHARE, alloc=alloc_share,
                                                                              lifecycle=LIFECYCLE_SHARE, routing=ROUTING_SHARE,
                                                                              netns=NETNS_SHARE),
                       'pipes-generated': lambda s, n: generate(s, n, profile='pipes'),
+                      'epoll-generated': lambda s, n: generate(s, n, profile='epoll'),
                       'seccomp-generated': lambda s, n: generate(s, n, profile='seccomp')}[suite]
             count = counts[suite]
             candidates = [validate_trace(t) for t in source(seed, count * CANDIDATES_PER_TRACE)]
@@ -313,7 +315,8 @@ def load_kcov_config():
         return (type(text) is str and text.rsplit(':', 1)[0] in config['files']
                 and text.rsplit(':', 1)[-1].isdigit())
     for exit_ in config['shared_exits']:
-        if (set(exit_) != {'function', 'frames', 'unless_covered', 'note'} or type(exit_['function']) is not str
+        if (set(exit_) - {'points'} != {'function', 'frames', 'unless_covered', 'note'} or type(exit_['function']) is not str
+                or type(exit_.get('points', 1)) is not int or exit_.get('points', 1) < 1
                 or type(exit_['frames']) is not list or len(exit_['frames']) < 2
                 or not all(anchored_line(f) for f in exit_['frames'])
                 or type(exit_['unless_covered']) is not list or not exit_['unless_covered']
@@ -1078,32 +1081,37 @@ def operand_agreement(trace, model_obs, comparisons, locations, decisions, funct
     the mirror reports the outcome with `operands_excluded` naming the
     operand instead of the pair. It must name a declared (label, operand),
     and Linux must have recorded the comparison at the condition line with
-    the declared call line as the outermost frame, once for each such report
-    in the operation. `excluded` (a Counter) receives the count."""
+    the declared call line as the outermost frame, in the operation. The
+    guest deduplicates comparison rows (harness/guest.c: one row per kind,
+    operands and PC), so repeated identical comparisons (a recursive walk
+    meeting the same two counters) are one row: the requirement is presence,
+    not one row per report. `excluded` (a Counter) receives the count."""
     problems, checked = [], 0
-    used = Counter()
     for branch in model_obs['branches']:
         name = branch['label'].rpartition('=')[0]
         if name not in decisions:
             continue  # control_flow reports unknown labels
         comparison = decisions[name]['comparison']
         if 'operands_excluded' in branch:
-            entry = next((e for e in exclusions
-                          if e['label'] == name and e['operand'] == branch['operands_excluded']), None)
+            # one operand may be excluded at several call sites of one decision
+            # (root_user.__count at alloc_pipe_info and at ep_alloc): the
+            # comparisons at all of them count
+            entries = [e for e in exclusions if e['label'] == name and e['operand'] == branch['operands_excluded']]
+            entry = entries[0] if entries else None
             if comparison is None or 'operands' in branch or entry is None:
                 problems.append(dict(index=branch['index'], label=branch['label'],
                                      problem='undeclared operand exclusion', operand=branch['operands_excluded']))
                 continue
             site = comparison['site'] or decisions[name]['site']
+            calls = {e['call'] for e in entries}
             at_call = sum(1 for r in comparisons[branch['index']]['records']
-                          if frame_chain(locations[r[3]])[0] == site and frame_chain(locations[r[3]])[-1] == entry['call']
+                          if frame_chain(locations[r[3]])[0] == site and frame_chain(locations[r[3]])[-1] in calls
                           and attributable(locations[r[3]])
                           and (functions is None or listed(locations[r[3]], functions)))
-            used[(branch['index'], name)] += 1
-            if used[(branch['index'], name)] > at_call:
+            if not at_call:
                 problems.append(dict(index=branch['index'], label=branch['label'],
                                      problem='operand exclusion without a comparison at its declared call site',
-                                     site=site, call=entry['call'], linux_records_at_call=at_call))
+                                     site=site, calls=sorted(calls)))
             elif excluded is not None:
                 excluded[f"operands excluded: {name} at {entry['call']} ({entry['operand']})"] += 1
             continue
@@ -1536,6 +1544,7 @@ def main(argv=None):
     parser.add_argument('--generated-count', type=int, default=1000)
     parser.add_argument('--wireguard-count', type=int, default=200)
     parser.add_argument('--pipes-count', type=int, default=200)
+    parser.add_argument('--epoll-count', type=int, default=200)
     parser.add_argument('--seccomp-count', type=int, default=200)
     parser.add_argument('--seed', type=int, default=20260920)
     parser.add_argument('--trace')
@@ -1571,16 +1580,19 @@ def main(argv=None):
         identity = verify_kernel()   # the oracle, or the build LEANUX_KERNEL_IDENTITY names; else no run
         build = build_model(out, rebuild=not args.no_build)
         traces = load_traces(suites, {'generated': args.generated_count, 'wireguard-generated': args.wireguard_count,
-                                      'pipes-generated': args.pipes_count, 'seccomp-generated': args.seccomp_count},
+                                      'pipes-generated': args.pipes_count, 'epoll-generated': args.epoll_count,
+                                      'seccomp-generated': args.seccomp_count},
                              args.seed, args.trace, filtered, args.alloc_share)
         decisions.update(load_decisions(config))
         instrumented, functions, chains = instrumented_lines(KERNEL / 'vmlinux', config['functions'], config['files'])
         # each declared shared exit names exactly one instrumentation point
+        # (`points`, default 1: a compiler may give the test and the join after
+        # it of one inlined helper the same chain; all of them are then exits)
         for exit_ in config['shared_exits']:
-            for chain in (exit_['frames'], exit_['unless_covered']):
-                if chains[tuple(chain)] != 1:
+            for chain, expected in ((exit_['frames'], exit_.get('points', 1)), (exit_['unless_covered'], 1)):
+                if chains[tuple(chain)] != expected:
                     raise InvalidOutput(f"shared exit {exit_['frames']}: {chain} names {chains[tuple(chain)]}"
-                                        ' instrumentation points of the listed functions, not one')
+                                        f' instrumentation points of the listed functions, not {expected}')
         kcov = (config, decisions, witness_table(decisions, instrumented, functions, config['branch_free_functions']),
                 instrumented, functions)
         observable = sum(bool(w[True] or w[False]) for w in kcov[2].values())
@@ -1674,7 +1686,8 @@ def write_report(out, traces, results, gaps, build, aborted, started, suites, ar
         kernel=kernel,
         kcov_config_sha256=sha256(ANCHORS.read_bytes()),
         selection=dict(suites=suites, generated_count=args.generated_count, wireguard_count=args.wireguard_count,
-                       pipes_count=getattr(args, 'pipes_count', None), seccomp_count=getattr(args, 'seccomp_count', None),
+                       pipes_count=getattr(args, 'pipes_count', None), epoll_count=getattr(args, 'epoll_count', None),
+                       seccomp_count=getattr(args, 'seccomp_count', None),
                        seed=args.seed, trace=args.trace,
                        guest_variant=getattr(args, 'guest_variant', None), alloc_share=getattr(args, 'alloc_share', None)),
         traces=len(traces), operations=sum(len(t['ops']) for t in traces),

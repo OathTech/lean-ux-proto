@@ -229,6 +229,50 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   (`MAX_INSNS_PER_PATH`, `-ENOMEM`) reachable within the guest's console
   limit, which 42 recorded installs of 768 instructions are not
   (section 7). Recorded by stream X at phase 2a.
+- **2026-10-12 [AGENT, fork of the coordinator]** The epoll design
+  (`docs/2026-10-12-epoll-design.md`) is drafted for the user's reading, no
+  code. Its four decisions for the user (section 13): tier 1 is timeout 0
+  with blocking waits `unsupported` until a scheduler record exists; a
+  record-only kind-308 hook at `ep_rbtree_insert` carrying the file address
+  (a new oracle, class-approved under "Oracle kernel changes"); the rbtree
+  as an ordered-map cut with `ep_find` and `ep_rbtree_insert` declared cut
+  functions rather than a Lean red-black tree; nested epoll in tier 1.
+  Tactical choices made under the standing delegation: the wire mapping
+  and the opcode proposal 27-29 (the coordinator allocates), the
+  `max_user_watches` fixture check (fail-closed, like the identity), one
+  wake-order sentinel plus a one-off record mutant. The scout's profile is
+  corrected on one point: the `ovflist` has no producer in a single-task
+  domain, so it is modelled but unexercised.
+- **2026-10-12 [AGENT, coordinator]** The epoll design's tactical choices
+  are decided as recommended, not put to the user: tier 1 is timeout 0;
+  the rbtree is an ordered-map cut by listing `ep_find` and
+  `ep_rbtree_insert` as decision-free functions, no new checker rule;
+  nested epoll is in tier 1 with both arms of the reverse-path limits; the
+  guest's fixture warms `loop_check_gen` up at boot and the mirror's
+  counter is relative, its three comparisons' operands excluded; the
+  `max_user_watches` fixture check is required; the only new mutant is the
+  kind-308 one-off. The one decision that is the user's is the record-only
+  kind-308 hook, presented at the claim point's merge signoff with the new
+  identity. The design is revised to v2 (section 14, the audit response to
+  section 15) by the fork, every corrected line re-read in 6.12.110.
+- **2026-10-12 [AGENT, stream S]** The epoll mirror's wake callback and
+  `ep_poll_safewake` live in `Leanux/FS/Wait.lean` in one mutual group with
+  the wait-queue walk, fuel-bounded by the nesting the loop check admits;
+  `ep_ptable_queue_proc` in `Poll.lean`; `__fput`/`__fput_sync` and the
+  release dispatcher in a new `Leanux/FS/Fput.lean` after the epoll mirror:
+  the module order follows the C's call graph (design 4.2, 4.6). The
+  mirror's line numbers are the pristine source's, which the check reads;
+  the kind-308 hook must keep fs/eventpoll.c's line count before the claim
+  point (design 16.1), a kernel-patch change put to the coordinator, not
+  made here.
+- **2026-10-12 [AGENT, stream S]** The epoll settling pass changes two
+  evaluator rules, both for facts of the built code and the guest: a
+  shared exit may name a frame chain that several instrumentation points
+  share (`points` in `correspondence/kcov.json`, the compiler giving a
+  helper's test and its join the same frames), and an operand exclusion
+  needs a comparison row at a declared call site rather than one row per
+  report, since the guest deduplicates identical rows. The mirror's control
+  flow did not change in the pass (design 16.1).
 - **2026-10-12 [AGENT]** The simulation-target review's change 1 is
   implemented: dispatch identities are lifetime-scoped (retired at the
   peer's release and at `free_netdev`), and the last device's
@@ -289,3 +333,14 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   `cond_resched` to the encrypt kworker before ksoftirqd (w7_mixed under
   eight guests, design 17.17). Exact and fail-closed as before; no retry.
 
+- **2026-10-13 [USER]** Proofs land on `main`, in a proof tree outside the
+  mirror, once they hold over the mirror as it is on `main`: "If it lands
+  clean, and the theorems are what we want, I think we should land it on
+  main. Then Codex#2 as a follow on should figure out how to rebase on the
+  updated mirror" (2026-10-12), refined the same day: "we should make the
+  proofs run on the actual main-branch model first before landing it. That
+  can be the next step - Codex#2 in a new worktree once the review comes
+  back." The standing rule's new text (AGENTS.md: the proof tree, its gate,
+  the lag-and-repair maintenance rule) is the coordinator's proposal under
+  this decision and takes effect with the user's approval of the text at
+  the landing of the carried-over spike.

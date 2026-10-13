@@ -404,9 +404,12 @@ class EvaluationChecks(unittest.TestCase):
                          {('t', 0): {3: 1, 1: 2}})
 
     def test_operand_exclusion_is_one_call_site(self):
-        # A declared exclusion (kcov.json operand_exclusions) stands for one
+        # A declared exclusion (kcov.json operand_exclusions) stands for a
         # Linux comparison at the condition line whose outermost frame is the
-        # declared call line; nothing else is accepted without operands.
+        # declared call line; nothing else is accepted without operands. The
+        # guest keeps one row per (kind, operands, PC), so two reports of one
+        # exclusion may share one row (epoll stream S: a recursive walk
+        # meeting the same two counters twice).
         cmp = {'rel': 'eq', 'const_rhs': True, 'site': None}
         decisions = {'__refcount_add.old_zero': dict(site='include/linux/refcount.h:189', comparison=cmp),
                      'alloc_fd.o_cloexec': dict(site='fs/file.c:532', comparison=None)}
@@ -428,7 +431,7 @@ class EvaluationChecks(unittest.TestCase):
         self.assertEqual(run([ok], [at_call]), ([], 0, 1))
         self.assertTrue(run([ok], [elsewhere])[0])                     # the comparison at another call site
         self.assertTrue(run([ok], [])[0])                              # no comparison recorded
-        self.assertTrue(run([ok, ok], [at_call])[0])                   # two exclusions, one comparison
+        self.assertEqual(run([ok, ok], [at_call]), ([], 0, 2))         # two exclusions, one deduplicated row
         self.assertTrue(run([dict(ok, operands_excluded='nr_files')], [at_call])[0])     # undeclared operand
         self.assertTrue(run([dict(ok, operands=[2, 0])], [at_call])[0])                  # both forms at once
         self.assertTrue(run([dict(label='alloc_fd.o_cloexec=0', operands_excluded='root_user.__count')], [])[0])

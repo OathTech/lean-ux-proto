@@ -46,6 +46,32 @@ open Leanux Leanux.WG
 /-- The fixture's UDP listeners are on 127.0.0.1 and ::1 at this port. -/
 def LISTEN_PORT : Nat := 51999
 
+/-! ## epoll (docs/2026-10-12-epoll-design.md, sections 3.4, 3.5 and 5)
+
+Fixture facts the epoll mirror depends on, none of them kernel state:
+- the guest's fixture runs one `epoll_create1`, one ADD of a throwaway
+  eventfd and two closes before the first trace of a boot (the warm-up,
+  harness/guest.c `epoll_fixture`), so fs/eventpoll.c's boot-global
+  `loop_check_gen` is at least 2 when a trace starts, a fresh set's `gen` of
+  0 never equals it, and a set marked during one check holds an odd value no
+  later even counter meets: the first-ADD arm of `do_epoll_ctl` (:2554) is
+  dead in the domain. The mirror's counter is relative to the boot's unknown
+  base; the three comparisons against it are operand exclusions;
+- `max_user_watches`, computed at boot from the guest's memory, is read back
+  by the fixture and checked by the harness (`EXPECTED_MAX_USER_WATCHES`,
+  fail-closed) against the value here: an operand of every ADD;
+- no task sleeps in `epoll_wait` (tier 1 waits with timeout 0), no signal
+  is pending, `net.core.busy_poll` is 0, and the epoll paths touch no
+  deferred unit. -/
+
+/-- `loop_check_gen` at the start of every trace, relative (design 3.5). -/
+def LOOP_CHECK_GEN_BASE : Nat := 2
+/-- `/proc/sys/fs/epoll/max_user_watches` on the e1 oracle (the same as on
+    W9): `((totalram - totalhigh) / 25 << PAGE_SHIFT) / EP_ITEM_COST`
+    (fs/eventpoll.c:2814-2815). Re-measured at every oracle change, with
+    harness/linux.py `EXPECTED_MAX_USER_WATCHES`. -/
+def MAX_USER_WATCHES : Nat := 53092
+
 /-- L (docs/2026-10-05-l-lifecycle.md, section 2.3): the ports where a
     wildcard UDP bind of wg0's conflicts with a fixture socket (no
     `SO_REUSEADDR`; a wildcard address matches any): the `127.0.0.1`

@@ -76,12 +76,13 @@ if [ "$PROFILE" = net-rcov ] || [ "$PROFILE" = net-hidden ] || [ "$PROFILE" = ne
     # at ep_rbtree_insert (fs/eventpoll.c), record-only; since seccomp stream W
     # (docs/2026-10-12-seccomp-design.md, 3.3) the kind-309 records of the
     # translated eBPF program and its length at bpf_migrate_filter
-    # (net/core/filter.c), record-only
-    CHOICE_SHA=dd85a7ce762994cdc2f8edb6910f2b8f6042ca7e1d97e59c6a0799033c449e16
+    # (net/core/filter.c), record-only; both hooks line-preserving. The hashes
+    # are the merged patches' (X, phase 2b).
+    CHOICE_SHA=e8e221374338778204609be01435b1e0478e627abcddb9fdd9518e5ce484cc29
     # net-choice-actl: the allocation-steering control kernel (A, section 7:
     # K1, K4, K5), the same patch with control load flags; never an oracle
     ACTL_PATCH="$LEANUX_ROOT/kernel/patches/choice-stream-alloc-controls.patch"
-    ACTL_SHA=5e4faefecd499d48e36cded60de3dd5fe3fe846ab94cb3b1cf4d72092b8b6ef9
+    ACTL_SHA=182d265c517a1953eba8476210708334a50c3b8f371209c2e687502f54bc6e1d
     if [ "$PROFILE" = net-choice ]; then
         SOURCE="$LEANUX_ARTIFACTS/src/linux-6.12.110-choice-stream-da"
         PATCH_SHA_RECORD="$CHOICE_SHA"
@@ -137,12 +138,17 @@ export KBUILD_BUILD_USER=leanux KBUILD_BUILD_HOST=offline KBUILD_BUILD_VERSION=1
 export KBUILD_BUILD_TIMESTAMP='2026-09-20 00:00:00 UTC'
 make -s -C "$SOURCE" O="$LEANUX_BUILD" ARCH=x86_64 allnoconfig
 LEANUX_CONFIG="$SOURCE/scripts/config"
+# SECCOMP (and with it SECCOMP_FILTER: arch/Kconfig's def_bool under
+# HAVE_ARCH_SECCOMP_FILTER && SECCOMP && NET) joins the oracle's configuration
+# [USER 2026-10-13: "Agree, sounds good - approved"; docs/2026-10-12-seccomp-design.md
+# section 16]: nothing else changes, and the full differential check on the
+# rebuilt oracle is the re-validation.
 for option in 64BIT BINFMT_ELF BINFMT_SCRIPT PRINTK BUG MULTIUSER POSIX_TIMERS FUTEX \
     EVENTFD EPOLL SIGNALFD TIMERFD SHMEM TMPFS PROC_FS SYSFS \
     BLK_DEV_INITRD RD_GZIP DEVTMPFS DEVTMPFS_MOUNT TTY \
     SERIAL_8250 SERIAL_8250_CONSOLE DEBUG_KERNEL DEBUG_FS \
     DEBUG_INFO_DWARF4 KALLSYMS KCOV KCOV_INSTRUMENT_ALL \
-    KCOV_ENABLE_COMPARISONS; do
+    KCOV_ENABLE_COMPARISONS SECCOMP; do
     "$LEANUX_CONFIG" --file "$LEANUX_BUILD/.config" --enable "$option"
 done
 if [ "$PROFILE" != base ]; then
