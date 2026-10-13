@@ -111,9 +111,11 @@ def lookupInterface (ref : DeviceRef) : M (Except Int Unit) := do
   let row ← do
     if ← branch .lookupHasIfindex ref.ifindex.isSome then
       pure (devs.find? fun r => some r.2.1 == ref.ifindex)
-    else
-      _ ← branch .lookupHasIfname true
+    else if ← branch .lookupHasIfname ref.ifname.isSome then
       pure (devs.find? fun r => some r.1 == ref.ifname)
+    else
+      -- the `-EBADR` test above leaves exactly one selector (netlink.c:57-64)
+      invariant "unreachable: neither ifindex nor ifname after the -EBADR test"
   if ← branch .lookupNoDev row.isNone then return .error (-ENODEV)
   let some (_, _, kind) := row | invariant "unreachable"
   -- `!dev->rtnl_link_ops || !dev->rtnl_link_ops->kind || strcmp(kind, "wireguard")`:
