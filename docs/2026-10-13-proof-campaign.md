@@ -10,7 +10,7 @@ campaign. No mirror or kernel edits, no integration into main, no push.
 | --- | --- |
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay, independent review and 24-statement proof gate pass over c85e86b. |
 | R2 lifetime safety | Keypair operation endpoints, peer reference helpers, packet primitives and stale-cursor finding checked (47-statement gate); caller/lifecycle and internal-access coverage in progress. This is not yet the whole R2 claim. |
-| R3 cryptokey routing | Read-only trie investigation; path proofs follow R2. |
+| R3 cryptokey routing | Original prefix arithmetic proved for both families (50-statement gate); trie mutation/history and path proofs remain open. Path proofs follow R2. |
 | R4 delivery | Not started; drop characterisation waiting on W7 full-ring tier's explanation of the two drops. |
 | R5 key lifetime | Not started; time half waiting on review items 7 and 8 on the timer model. |
 | R6 flood resistance | Not started. |
@@ -222,3 +222,44 @@ identity lemmas, generalized erasure or replay assertions. Its scope findings
 are retained above: endpoint absence is not internal-access safety, and the
 isolated callback is not the replay's call site. Its correction to the final
 receive's queue behavior is incorporated; no finding is left undispositioned.
+
+## R3 — cryptokey routing (in progress)
+
+[AGENT 2026-10-13] Prove width-parametric prefix arithmetic before constructing
+an inductive Patricia tree and its representation in the original node store.
+The independent trie half can proceed while R2 caller coverage is in progress.
+
+**Checked arithmetic component.** `WG/AllowedIps/Prefix` models a prefix by
+integer division and the following branch bit by quotient parity. Its 23
+lemmas establish highest-set-bit bounds, the IPv6 high/low split, prefix
+nesting and opposite branches at the common prefix of distinct addresses.
+`ArithmeticMirror` proves exact execution equations for the original
+`commonBits`, `prefixMatches` and `choose`, including every branch record and
+the entire resulting World. The three terminal statements export maximal
+common-prefix length, equality-based matching, and the next branch bit.
+Address bounds and CIDR bounds are explicit representation premises; no trie
+invariant or history theorem has yet discharged them for all runner inputs.
+
+**Remaining claim.** These arithmetic theorems do not establish trie mutation,
+longest-prefix lookup, remove-by-peer cleanup or either packet path. Next is a
+finite Patricia tree with node identities, unmasked addresses, CIDRs and owner
+labels; its structural validity is separate from node-store/backlink coherence.
+No R3 statement has been reshaped and no Rule Zero finding is claimed here.
+
+**Validation and effort.** Five compile passes over about five minutes produced
+the arithmetic layers and result surface. The full gate passes: 113 build
+jobs, 50 terminal statements, only permitted standard axioms. The default model
+build also passes. The required unit tier ran 88 tests, OK with one skip.
+The mirror remains byte-identical to `c85e86b`; all checked components are
+current, with no lag. Reproduce with
+`capped -- scripts/in-bundle scripts/proof-gate`.
+
+**Independent review.** A read-only worker found no defect in the arithmetic
+or source correspondence. The proof retains complete World effects and the
+IPv6 branch order. Address/CIDR bounds and node-family consistency still need
+propagation from parsed configuration through trie updates. Correspondence to
+C byte layout remains informal; this is not a simulation proof against C.
+
+**Ranked mirror-shape recommendations.** None from this component. The current
+named arithmetic helpers and integer address encoding admit exact refinement
+without production changes.

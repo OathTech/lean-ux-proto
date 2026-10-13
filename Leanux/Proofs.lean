@@ -2,6 +2,7 @@ import Leanux.Proofs.WG.ReplayWindow.Statements
 import Leanux.Proofs.WG.ReplayWindow.Counterexamples
 import Leanux.Proofs.WG.AntiReplay.Statements
 import Leanux.Proofs.WG.LifetimeSafety.Statements
+import Leanux.Proofs.WG.CryptokeyRouting.Statements
 
 /-! The proof tree's root: the terminal statements of every result, one import
 per result directory, and the checked counterexamples. `lake build LeanuxProofs`
