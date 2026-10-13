@@ -9,7 +9,7 @@ callers, including generic finite bit search and list predicates. -/
 namespace Leanux.Proofs.WG.Keypairs.FSFrames
 open Leanux Leanux.WG Std.Do Leanux.Proofs.WG.Keypairs Leanux.Proofs.Framing
 open Leanux.Proofs.WG.Keypairs.KernelFrames Leanux.Proofs.WG.Keypairs.WGFrames
-open Leanux.Proofs.WG.Keypairs.PipeFrames Leanux.Proofs.WG.Keypairs.PipeAux
+open Leanux.Proofs.WG.Keypairs.PipeFrames Leanux.Proofs.WG.Keypairs.PipeAux Leanux.Proofs.WG.Keypairs.WaitFrames
 
 set_option maxHeartbeats 800000
 set_option pp.structureInstances false
@@ -417,7 +417,8 @@ theorem eventfdCtxPut_spec (P : Snapshot → Prop) (id : CtxId) :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (eventfdCtxPut_sameSnapshot id).wp P
 
 theorem eventfdRead_sameSnapshot (iocb : Kiocb) (iterCount : Nat) : SameSnapshot (Leanux.eventfdRead iocb iterCount) := by
-  frame_same [Leanux.eventfdRead] using [eventfdCtxDoRead_spec, eventfdCtxOf_spec, getCtx_spec, getFile_spec]
+  frame_same [Leanux.eventfdRead] using [eventfdCtxDoRead_spec, eventfdCtxOf_spec, getCtx_spec, getFile_spec,
+    waitqueueActive_spec, wakeUpLockedPoll_spec]
 
 theorem eventfdRead_spec (P : Snapshot → Prop) (iocb : Kiocb) (iterCount : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.eventfdRead iocb iterCount
@@ -430,6 +431,8 @@ theorem eventfdWrite_sameSnapshot (fid : FileId) (buf : ByteArray) (count : Nat)
     | (snapshot_head Leanux.getCtx; with_reducible exact @getCtx_sameSnapshot _)
     | (snapshot_head Leanux.getFile; with_reducible exact @getFile_sameSnapshot _)
     | (snapshot_head Leanux.setCtx; with_reducible exact @setCtx_sameSnapshot _ _)
+    | (snapshot_head Leanux.wakeUpLockedPoll; with_reducible exact @wakeUpLockedPoll_sameSnapshot _ _)
+    | (snapshot_head Leanux.waitqueueActive; with_reducible exact @waitqueueActive_sameSnapshot _)
     | (snapshot_head Leanux.getK; with_reducible exact @getK_sameSnapshot)
     | (snapshot_head Leanux.branch; with_reducible exact @branch_sameSnapshot _ _)
     | (snapshot_head Leanux.branchCmp; with_reducible exact @branchCmp_sameSnapshot _ _ _ _)
@@ -511,7 +514,8 @@ theorem newSyncWrite_spec (P : Snapshot → Prop) (fid : FileId) (buf : ByteArra
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (newSyncWrite_sameSnapshot fid buf len ppos).wp P
 
 theorem pipeResizeRing_sameSnapshot (pid : PipeId) (nrSlots : Nat) : SameSnapshot (Leanux.pipeResizeRing pid nrSlots) := by
-  frame_same [Leanux.pipeResizeRing] using [copyPipeBufs_spec, envOk_spec, getPipe_spec, setPipe_spec]
+  frame_same [Leanux.pipeResizeRing] using [copyPipeBufs_spec, envOk_spec, getPipe_spec, setPipe_spec,
+    wakeUpInterruptible_spec]
 
 theorem pipeResizeRing_spec (P : Snapshot → Prop) (pid : PipeId) (nrSlots : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.pipeResizeRing pid nrSlots

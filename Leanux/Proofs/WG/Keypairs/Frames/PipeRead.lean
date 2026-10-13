@@ -3,7 +3,7 @@ import Leanux.Proofs.WG.Keypairs.Frames.Pipe
 namespace Leanux.Proofs.WG.Keypairs.PipeFrames
 open Leanux Leanux.WG Std.Do Leanux.Proofs.Framing
 open Leanux.Proofs.WG.Keypairs Leanux.Proofs.WG.Keypairs.KernelFrames
-open Leanux.Proofs.WG.Keypairs.PipeAux
+open Leanux.Proofs.WG.Keypairs.PipeAux Leanux.Proofs.WG.Keypairs.WaitFrames
 
 set_option pp.structureInstances false
 set_option maxHeartbeats 1500000
@@ -84,9 +84,9 @@ def read (iocb : Kiocb) (count : Nat) : M Int := do
     wakeNextReader := false
   -- mutex_unlock(&pipe->mutex)
   if ← branch .pipeReadWasFull wasFull then
-    pure ()  -- wake_up_interruptible_sync_poll(&pipe->wr_wait, ...): no waiters
+    wakeUpInterruptibleSyncPoll (.pipeWr pid) (EPOLLOUT ||| EPOLLWRNORM)
   if ← branch .pipeReadWakeNextReader wakeNextReader then
-    pure ()  -- wake_up_interruptible_sync_poll(&pipe->rd_wait, ...): no waiters
+    wakeUpInterruptibleSyncPoll (.pipeRd pid) (EPOLLIN ||| EPOLLRDNORM)
   killFasync p.fasyncWriters
   if ← branchCmp .pipeReadPositive (result > 0) result 0 then
     fileAccessed (← getFile iocb.filp)
@@ -159,7 +159,7 @@ theorem pipeRead_sameSnapshot (iocb : Kiocb) (count : Nat) :
   have loop_spec := fun P iocb filp pid count totalLen ret =>
     (readLoop_sameSnapshot iocb filp pid count totalLen ret).wp P
   frame_same [read] using [getFile_spec, pipeOf_spec, getPipe_spec, loop_spec,
-    killFasync_spec, fileAccessed_spec]
+    killFasync_spec, fileAccessed_spec, wakeUpInterruptibleSyncPoll_spec]
 
 theorem pipeRead_spec (P : Snapshot → Prop) (iocb : Kiocb) (count : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ pipeRead iocb count

@@ -1,5 +1,6 @@
 import Leanux.Syscalls
 import Leanux.Proofs.WG.Keypairs.Frames.FSBase
+import Leanux.Proofs.WG.Keypairs.Frames.Eventpoll
 import Leanux.Proofs.WG.Keypairs.Frames.WGBase
 
 /-! Receive-snapshot framing through descriptor, file and pipe syscall callers,
@@ -8,7 +9,8 @@ and the original deferred file-release loop. -/
 namespace Leanux.Proofs.WG.Keypairs.FSFrames
 open Leanux Leanux.WG Std.Do Leanux.Proofs.WG.Keypairs Leanux.Proofs.Framing
 open Leanux.Proofs.WG.Keypairs.KernelFrames Leanux.Proofs.WG.Keypairs.WGFrames
-open Leanux.Proofs.WG.Keypairs.PipeFrames Leanux.Proofs.WG.Keypairs.PipeAux
+open Leanux.Proofs.WG.Keypairs.PipeFrames Leanux.Proofs.WG.Keypairs.PipeAux Leanux.Proofs.WG.Keypairs.WaitFrames
+open Leanux.Proofs.WG.Keypairs.EventpollFrames
 
 set_option maxHeartbeats 800000
 set_option pp.structureInstances false
@@ -21,7 +23,8 @@ theorem allocFile_spec (P : Snapshot → Prop) (flags : UInt32) (fopId : FopsId)
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (allocFile_sameSnapshot flags fopId inode).wp P
 
 theorem eventfdRelease_sameSnapshot (fid : FileId) : SameSnapshot (Leanux.eventfdRelease fid) := by
-  frame_same [Leanux.eventfdRelease] using [eventfdCtxOf_spec, eventfdCtxPut_spec, getCtx_spec, getFile_spec]
+  frame_same [Leanux.eventfdRelease] using [eventfdCtxOf_spec, eventfdCtxPut_spec, getCtx_spec, getFile_spec,
+    wakeUpPoll_spec]
 
 theorem eventfdRelease_spec (P : Snapshot → Prop) (fid : FileId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.eventfdRelease fid
@@ -174,7 +177,8 @@ theorem fileCloseFd_spec (P : Snapshot → Prop) (fd : Nat) :
 theorem fopRelease_sameSnapshot (fid : FileId) (which : Option FopsId) : SameSnapshot (Leanux.fopRelease fid which) := by
   cases which with
   | none => frame_same [Leanux.fopRelease] using [eventfdRelease_spec, getFile_spec, pipeRelease_spec]
-  | some k => cases k <;> frame_same [Leanux.fopRelease] using [eventfdRelease_spec, getFile_spec, pipeRelease_spec]
+  | some k => cases k <;> frame_same [Leanux.fopRelease] using [eventfdRelease_spec, getFile_spec, pipeRelease_spec,
+      epEventpollRelease_spec]
 
 theorem fopRelease_spec (P : Snapshot → Prop) (fid : FileId) (which : Option FopsId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.fopRelease fid which
@@ -223,7 +227,8 @@ theorem doFcntl_spec (P : Snapshot → Prop) (fd : Nat) (cmd : FcntlCmd) (arg : 
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (doFcntl_sameSnapshot fd cmd arg fid).wp P
 
 theorem fputFinal_sameSnapshot (fid : FileId) : SameSnapshot (Leanux.fputFinal fid) := by
-  frame_same [Leanux.fputFinal] using [dputPipefs_spec, fileFree_spec, fopRelease_spec, fopsOf_spec, getFile_spec, inodeIsChr_spec, putFileAccess_spec, queueDeviceWork_spec]
+  frame_same [Leanux.fputFinal] using [dputPipefs_spec, fileFree_spec, fopRelease_spec, fopsOf_spec, getFile_spec, inodeIsChr_spec, putFileAccess_spec, queueDeviceWork_spec,
+    eventpollReleaseFile_spec]
 
 theorem fputFinal_spec (P : Snapshot → Prop) (fid : FileId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.fputFinal fid

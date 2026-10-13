@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.Keypairs.Frames.PipeAux
+import Leanux.Proofs.WG.Keypairs.Frames.Wait
 import Leanux.FS.Pipe
 
 set_option pp.structureInstances false
@@ -9,7 +10,7 @@ states; inconsistent inputs may stop in the original helpers. -/
 namespace Leanux.Proofs.WG.Keypairs.PipeFrames
 open Leanux Leanux.WG Std.Do Leanux.Proofs.Framing
 open Leanux.Proofs.WG.Keypairs Leanux.Proofs.WG.Keypairs.KernelFrames
-open Leanux.Proofs.WG.Keypairs.PipeAux
+open Leanux.Proofs.WG.Keypairs.PipeAux Leanux.Proofs.WG.Keypairs.WaitFrames
 
 set_option maxHeartbeats 1200000
 
@@ -192,7 +193,7 @@ theorem putPipeInfo_spec (P : Snapshot → Prop) (ino : PipefsInodeId) (pid : Pi
 theorem pipeRelease_sameSnapshot (ino : PipefsInodeId) (fid : FileId) :
     SameSnapshot (pipeRelease ino fid) := by
   frame_same [pipeRelease] using [getFile_spec, pipeOf_spec, getPipe_spec,
-    setPipe_spec, killFasync_spec, putPipeInfo_spec]
+    setPipe_spec, killFasync_spec, putPipeInfo_spec, wakeUpInterruptibleAll_spec]
 
 /-- Proof-side name for the exact original write-loop continuation. The
 following equality checks the factoring against the pinned operational body. -/
@@ -353,7 +354,7 @@ theorem pipeWriteToOut_spec (P : Snapshot → Prop) (iocb : Kiocb) (filp : File)
 theorem pipeWrite_sameSnapshot (iocb : Kiocb) (src : IovIter) :
     SameSnapshot (pipeWrite iocb src) := by
   frame_same [pipeWrite] using [getFile_spec, pipeOf_spec, pipeWriteToOut_spec,
-    getPipe_spec, killFasync_spec, fileUpdateTime_spec]
+    getPipe_spec, killFasync_spec, fileUpdateTime_spec, wakeUpInterruptibleSyncPoll_spec]
 
 theorem pipeWrite_spec (P : Snapshot → Prop) (iocb : Kiocb) (src : IovIter) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ pipeWrite iocb src

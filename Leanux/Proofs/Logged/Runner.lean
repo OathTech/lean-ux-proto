@@ -42,9 +42,11 @@ def executeTraceLogged (trace : Trace) (placeholders : Bool := false) : StateT H
     world := w
     results := results.push ret
     ends := ends.push (if ret == 0 then w.userFds else none)
-    -- a read's first READ_HEAD bytes in the clear (eventfd reads: all 8)
+    -- a read's first READ_HEAD bytes in the clear (eventfd reads: all 8);
+    -- an epoll_wait's `ret` events of 12 bytes (epoll, the read channel)
     let bytes := match op, w.userOut with
       | .read .., some v => if ret > 0 then hexBytesOf (v.extract 0 (min ret.toNat READ_HEAD)) else ""
+      | .epollWait .., some v => if ret > 0 then hexBytesOf (v.extract 0 (min (ret.toNat * 12) READ_HEAD)) else ""
       | _, _ => ""
     -- pipe2: the pair copied to the caller, or null on failure; a read's
     -- digest; a write's sigpipe (P design section 6)
@@ -53,6 +55,7 @@ def executeTraceLogged (trace : Trace) (placeholders : Bool := false) : StateT H
           | some (r, wr) => if ret == 0 then toJson [r, wr] else .null
           | none => .null)]
       | .read .. => [("digest", readDigest w.userOut ret)]
+      | .epollWait .. => [("digest", readDigest w.userOut (ret * 12))]
       | .write .. => [("sigpipe", writeSigpipe w.k)]
       | _ => []
     let device := w.extraOut
