@@ -12,6 +12,7 @@ import Leanux.Proofs.WG.Lifetimes.ReleaseCalls
 import Leanux.Proofs.WG.Lifetimes.ReleaseAmbient
 import Leanux.Proofs.WG.Lifetimes.AllocationInitial
 import Leanux.Proofs.WG.Lifetimes.AllocationAmbient
+import Leanux.Proofs.WG.Lifetimes.SessionFailure
 
 /-! R2's store-identity components: whole-operation keypair evolution,
 peer allocation/reference sequences, and packet primitive sequences within a device
@@ -651,5 +652,62 @@ theorem decrypt_iteration_allocation_access_preserves (softirq irq : Lifetimes.M
     PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe
       (Lifetimes.decryptIterPrefix softirq irq resched) :=
   Lifetimes.decryptIterPrefix_allocation hs hi hr
+
+/-- Both complete original rotation calls preserve their exact outcomes and
+Worlds after observations are erased. Scalar keypair slots may alias. -/
+theorem keypair_rotation_access_erasure (pid : PeerId) (kp : KeypairId) :
+    ErasesPrefix (Lifetimes.addNewKeypairPrefix pid kp) (addNewKeypair pid kp) ∧
+    ErasesPrefix (Lifetimes.receivedWithKeypairPrefix pid kp) (receivedWithKeypair pid kp) :=
+  ⟨Lifetimes.addNewKeypairPrefix_erases pid kp, Lifetimes.receivedWithKeypairPrefix_erases pid kp⟩
+
+/-- Rotation and responder confirmation retain safe access prefixes on every
+outcome and preserve allocation bounds on success. This does not establish
+ownership or validity of scalar keypair references stored in a peer. -/
+theorem keypair_rotation_access_preserves (pid : PeerId) (kp : KeypairId) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.addNewKeypairPrefix pid kp) ∧
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.receivedWithKeypairPrefix pid kp) :=
+  ⟨Lifetimes.addNewKeypairPrefix_allocation pid kp, Lifetimes.receivedWithKeypairPrefix_allocation pid kp⟩
+
+/-- The complete original beginSession call, including allocation, initialization,
+rotation, and scalar index replacement, is recovered on every input World. -/
+theorem begin_session_access_erasure (pid : PeerId) :
+    ErasesPrefix (Lifetimes.beginSessionPrefix pid) (beginSession pid) :=
+  Lifetimes.beginSessionPrefix_erases pid
+
+/-- Session creation observes all resolved peer and keypair accesses, retaining
+safe prefixes on failure and AllocationInv on success. Caller, scheduler,
+device-lifecycle, and scalar-reference integrity remain separate obligations. -/
+theorem begin_session_access_preserves (pid : PeerId) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.beginSessionPrefix pid) :=
+  Lifetimes.beginSessionPrefix_allocation pid
+
+/-- A conditional whole-call equation for the actual birthdate-clock failure
+path. The consecutive original-run premises determine the retained allocation
+and access prefix; this is not a recorded runner reproduction. -/
+theorem begin_session_birthdate_failure_prefix (pid : PeerId) (kp : KeypairId)
+    (w allocEntry allocated guarded configured clockEntry : World)
+    (h : List Lifetimes.LifetimeEvent) (before current : Peer) (k : Keypair)
+    (selected : Bool) (e : Stop)
+    (hbefore : (getPeer pid).run w = .ok (before, w))
+    (hstate : (Lifetimes.sessionStateRejected before.handshakeState).run w = .ok (false, allocEntry))
+    (hcreate : (keypairCreate pid).run allocEntry = .ok (some kp, allocated))
+    (hguard : (branch .sessionNoKeypair (Option.isNone (some kp))).run allocated = .ok (false, guarded))
+    (hpeer : (getPeer pid).run guarded = .ok (current, guarded))
+    (hkey : (getKeypair kp).run guarded = .ok (k, guarded))
+    (hwrite : (setKeypair kp {k with iAmTheInitiator := before.handshakeState == HANDSHAKE_CONSUMED_RESPONSE, remoteIndex := current.remoteIndex}).run guarded = .ok ((), configured))
+    (hselect : (branch .sessionInitiator (before.handshakeState == HANDSHAKE_CONSUMED_RESPONSE)).run configured =
+      .ok (selected, clockEntry))
+    (hclock : (hiddenClock .deriveKeysBirthdate).run clockEntry = .error e) :
+    runPrefix (Lifetimes.beginSessionPrefix pid) w h =
+      (.error e, h ++ [.peer (.read pid before.internalId),
+        .keypair (.allocate kp (allocEntry.k.keypairCounter + 1)),
+        .keypair (.write kp (allocEntry.k.keypairCounter + 1)),
+        .peer (.read pid current.internalId), .keypair (.read kp k.internalId),
+        .keypair (.write kp k.internalId)]) :=
+  Lifetimes.beginSessionPrefix_clock_failure pid kp w allocEntry allocated guarded configured clockEntry
+    h before current k selected e hbefore hstate hcreate hguard hpeer hkey hwrite hselect hclock
 
 end Leanux.Proofs.WG.LifetimeSafety

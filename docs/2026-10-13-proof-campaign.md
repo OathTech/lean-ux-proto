@@ -14,20 +14,21 @@ differential check or guest run.
 | Result | Progress |
 | --- | --- |
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay and independent review checked. Seccomp frame carry checked. |
-| R2 lifetime safety | Keypair operation endpoints, peer allocation/reference helpers, packet primitives, failure-retaining peer creation/release, mixed receive-enqueue/decrypt iteration, keypair/packet release families, and complete keypair/TX/RX allocation with fixture initialization, allocation-aware release/caller composition, plus stale-cursor finding checked; caller/lifecycle and whole-run internal-access coverage remain in progress. |
+| R2 lifetime safety | Keypair operation endpoints, peer allocation/reference helpers, packet primitives, failure-retaining peer creation/release, mixed receive-enqueue/decrypt iteration, keypair/packet release families, and complete keypair/TX/RX allocation with fixture initialization, allocation-aware release/caller composition and complete session/rotation calls, plus stale-cursor finding checked; caller/lifecycle and whole-run internal-access coverage remain in progress. |
 | R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion, original empty-root and immediate-empty-child insertion, and total original placement proved; general mutation/history and path refinements remain open. Path proofs follow R2. |
 | R4 delivery | Not started; drop characterisation waiting on W7 full-ring tier's explanation of the two drops. |
 | R5 key lifetime | Not started; time half waiting on review items 7 and 8 on the timer model. |
 | R6 flood resistance | Not started. |
 
-**Current validation.** The full proof gate passes 178 build jobs and 110
-terminal statements (ReplayWindow 15, R1 9, R2 69, R3 17), with only permitted
+**Current validation.** The full proof gate passes 181 build jobs and 115
+terminal statements (ReplayWindow 15, R1 9, R2 74, R3 17), with only permitted
 axioms. The default model build passes 60 jobs; the unit tier passes 93 tests
-in 21.501 seconds with one skip. Both explicit-record witness replays below
+in 21.105 seconds with one skip. Both explicit-record witness replays below
 were rechecked at the seccomp carry and agree with the original runner.
 Independent reviews cover peer creation, the seccomp carry, mixed enqueue,
 decrypt execution, keypair/packet releases, ambient caller composition,
-allocation and release-bound composition, pure trie insertion, original empty-root and immediate-empty-child
+allocation and release-bound composition, session creation and rotation,
+pure trie insertion, original empty-root and immediate-empty-child
 insertion, and placement.
 
 **Shared carry.** Signal/task and pipe helper frames, seccomp entry/tail frames
@@ -331,7 +332,25 @@ observer definitions and erasure proofs are retained. Five exports add peer
 references, finite acquire/put/free/clear sequences, enqueue, packet decryption
 and one decrypt iteration at `AllocationInv`. This establishes resolved-store
 access safety; it does not establish ownership or validity of stored scalar
-references. Complete session, lifecycle and scheduler callers remain open.
+references. Lifecycle and scheduler callers remain open.
+
+**Complete session and rotation calls.** `KeypairRotation` observes original
+`addNewKeypair` and `receivedWithKeypair`, retaining fresh peer getters around
+keypair releases. `Session` observes handshake zeroing, key derivation and the
+complete `beginSession` body. Generic preservation uses explicit allocation,
+put and scalar index-update contracts, then instantiates `AllocationInv`.
+The index-table action resolves no peer/keypair object; its frame preserves
+both identities and allocation metadata. Five exports state all-input erasure,
+resolved-access safety and a conditional whole-session failure equation.
+
+`SessionFailure` identifies the exact six-event prefix retained if the birthdate
+clock fails after allocation and configuration: two peer reads, allocation,
+initialization write, keypair read and configuration write, in source order.
+Its premises are consecutive original executions; it is not a recorded runner
+witness. No distinct-slot premise is imposed. Scalar references can be invalid
+in arbitrary invariant-satisfying states without a subsequent resolution, so
+these theorems make no ownership or reference-integrity claim. Handshake
+callers, device lifecycle and whole-scheduler closure remain open.
 
 **Concrete reference finding.** An eight-operation, explicit-record accepted
 mirror run creates 28 peers, starts a stepped dump, deletes wg0, creates a new
@@ -388,6 +407,9 @@ projection and elaboration failures were repaired before two passing full
 Allocation-aware release composition took eleven capped compile passes over
 about fourteen minutes; the final full build passed 178 jobs. Early passes
 needed routine elaboration repairs, with no invariant obstruction.
+Session and rotation took eleven capped compile passes over twelve minutes and
+five seconds: three passed and eight failed during elaboration. The final full
+build passed 181 jobs.
 Failed passes exposed proof elaboration or simplification errors. One earlier
 anonymous-hypothesis tactic loop was stopped by verified PID and repaired.
 Independent read-only reviews found no correctness defect in these components;
@@ -408,6 +430,11 @@ The release-composition review checked all seven changed proof files and five
 new exports, including the unchanged observer bodies and old interfaces. It
 found no defect and confirmed that successful-state bounds and error-prefix
 safety remain separate obligations.
+The session review checked all four files against the mirror and local `noise.c`.
+It found an unused KDF-failure lemma whose premise was impossible for the current
+nonthrowing KDF; that vacuous lemma was deleted and supplies no coverage evidence.
+The actual clock-failure equation and all five final exports passed review, with
+no remaining finding. This proof correction is not a Rule Zero mirror finding.
 
 One source-order limitation remains: C `peer.c` initializes destination cache
 and handshake before incrementing `peer_counter`; the mirror increments and
