@@ -110,7 +110,7 @@ All required:
    top-level statement is the check.
 2. `capped -- scripts/in-bundle lake build` succeeds for the whole project with
    the spike included; `git diff <pin> -- Leanux ':!Leanux/Spikes'` is empty.
-3. `docs/2026-10-xx-spike-window.md` records: the pin; the proof architecture
+3. `docs/2026-10-13-spike-window.md` records: the pin; the proof architecture
    (each intermediate model, what it abstracts, the refinement theorem for it);
    any reshaped statement with the original and the reason; any Rule Zero
    finding with its counterexample; the effort; and a ranked list of mirror

@@ -2,7 +2,7 @@
 
 [AGENT, independent review 2026-10-12]. Reviewed against
 [the charter](2026-10-12-charter-window-proof.md), the spike's report
-(`docs/2026-10-xx-spike-window.md` on the branch) and the code under
+(`docs/2026-10-13-spike-window.md`, named `2026-10-xx-` on the branch) and the code under
 `Leanux/Spikes/`, with every claim rebuilt or re-derived here. Nothing on the
 spike branch was edited. The user decides whether proofs land on `main`; this
 review is the evidence for that decision and recommends nothing on the rule.

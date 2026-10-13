@@ -8,7 +8,7 @@ The full build passed (94 jobs); all 1,240 declaration axiom prints use only the
 three permitted axioms. Units passed: 85 passed and one optional kernel-build
 test skipped. The mirror diff is empty. Independent review found no unresolved
 proof or source-coverage defect; its findings and dispositions are recorded in
-the [port review](2026-10-13-spike-window-r-review.md). There is no remaining
+the [port review](2026-10-13-spike-window-self-review.md). There is no remaining
 proof blocker. The port is complete and remains on its unmerged task branch.
 
 The eight terminal statement names are retained. The added `S3_syscall` and
