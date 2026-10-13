@@ -153,6 +153,14 @@ theorem PrefixEnsures.bind (hg : PrefixEnsures P S g Q)
       · simpa only [runPrefix_bind, hr] using hsafe
       · simpa only [runPrefix_bind, hr] using hend
 
+/-- Branch composition retains the chosen branch's result-dependent contract. -/
+theorem PrefixEnsures.ite (p : Prop) [Decidable p]
+    (ht : p → PrefixEnsures P S gt Q) (he : ¬p → PrefixEnsures P S ge Q) :
+    PrefixEnsures P S (if p then gt else ge) Q := by
+  by_cases hp : p <;> simp only [hp, ↓reduceIte]
+  · exact ht hp
+  · exact he hp
+
 /-- Every outcome has a safe appended event prefix. Only successful outcomes
 also have a final World on which to require the state invariant. -/
 def PrefixPreserves (I : List Event → World → Prop) (S : List Event → Prop)

@@ -14,16 +14,16 @@ differential check or guest run.
 | Result | Progress |
 | --- | --- |
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay and independent review checked. Seccomp frame carry checked. |
-| R2 lifetime safety | Store identities, failure-retaining allocation/release and caller composition cover session/rotation, peer creation, receive entry/maintenance/completion, callback-parametric receive polling, TX staging and decrypt iteration; stale-cursor finding checked. Actual stack callbacks, remaining callers, lifecycle and whole-run internal-access coverage remain in progress. |
+| R2 lifetime safety | Store identities, failure-retaining allocation/release and caller composition cover session/rotation, peer creation, receive entry/maintenance/completion, callback-parametric receive polling, TX staging, decrypt iteration and ten socket/cache/loopback calls; stale-cursor finding checked. Actual stack callbacks, remaining callers, lifecycle and whole-run internal-access coverage remain in progress. |
 | R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion, original empty-root, arbitrary-depth empty-child and exact-prefix insertion with sequence wrappers, and total original placement proved. Selected-root graft normal endpoints and rollback effects checked; successful graft representation, general mutation/history and path refinements remain open. Path proofs follow R2. |
 | R4 delivery | Not started; drop characterisation waiting on W7 full-ring tier's explanation of the two drops. |
 | R5 key lifetime | Not started; time half waiting on review items 7 and 8 on the timer model. |
 | R6 flood resistance | Not started. |
 
-**Current validation.** The full proof gate passes 208 build jobs and 152
-terminal statements (ReplayWindow 15, R1 9, R2 101, R3 27), with only permitted
+**Current validation.** The full proof gate passes 214 build jobs and 158
+terminal statements (ReplayWindow 15, R1 9, R2 107, R3 27), with only permitted
 axioms. The default model build passes 60 jobs; the unit tier passes 93 tests
-in 21.336 seconds with one skip. The R1 explicit-record witness was rechecked
+in 22.077 seconds with one skip. The R1 explicit-record witness was rechecked
 at the seccomp carry; both R2 variants were rechecked with the exact-prefix
 checkpoint. All agree with the original runner.
 Independent reviews cover peer creation, the seccomp carry, mixed enqueue,
@@ -33,7 +33,7 @@ the mixed peer-creation bridge, receive entry, maintenance, completion and polli
 TX staging, pure trie
 insertion, original empty-root and arbitrary-depth empty-child insertion with
 its wrapper, exact-prefix replacement, list deletion, placement and selected-root
-graft endpoints/rollback.
+graft endpoints/rollback, saved-peer scans and the ten-call socket family.
 
 **Shared carry.** Signal/task and pipe helper frames, seccomp entry/tail frames
 and arbitrary prefill preservation keep the seven-field WG projection intact.
@@ -127,6 +127,8 @@ kernel projection. Keep observation history outside the exception layer so
 failed prefixes survive. Strengthen access safety separately with release
 uniqueness and then allocation/epoch bounds; share caller proofs through
 explicit ambient contracts instead of duplicating each invariant's proof.
+Observe saved peer-map entries at the demanded predicate evaluation, retaining
+the saved stamp and proving it remains resident; do not insert a new getter.
 
 **Checked model and refinement.** `Lifetimes/Store` and `Actions` describe
 slot/stamp transitions over original executions. `Keypairs/Identity` uses the
@@ -163,6 +165,13 @@ search. `ReceiveCompletion` composes rotation, staging, maintenance, source look
 reference release and statistics; `ReceivePoll` adds the original queue traversal
 and cleanup with an explicit observed callback. Its ambient and allocation
 contracts require callback preservation; the actual stack remains a follow-on.
+`SavedPeers` gives exact short-circuit scan events under an explicit saved-stamp
+residency premise. `LoopbackAccess`, `SocketCache`, `SocketSend` and `SocketCalls`
+cover ten complete cache/endpoint/loopback/tunnel/IPv6 calls. Their all-input
+erasure retains results and Stops; generic safety has an explicit device-statistics
+contract, instantiated for allocation bounds. A cache-miss clock failure retains
+exactly its preceding peer read. Generic record-consumer frames live once in
+`Framing/KernelEffects`, with older interfaces derived by projection.
 Shared bind and finite-loop laws compose these per-call contracts. Generic enqueue/decrypt
 contracts admit explicit observed softirq, IRQ-exit and rescheduling callbacks;
 they are instantiated at the allocation invariant. Peer creation reuses its
@@ -197,7 +206,7 @@ getter-conditioned failure, not an accepted-trace finding. Safe access prefixes
 do not establish delivery, order or reference ownership.
 
 **Remaining claim.** Full caller, device-lifecycle and scheduler closure remain
-unproved. The actual stack callback, encrypt/TX workers and sockets, handshake
+unproved. The actual stack callback, encrypt/TX workers, IPv4 socket send/setup, handshake
 execution and timer callbacks, peer removal, netlink and direct resident scans
 need coverage. Saved scalar-reference
 ownership is a separate obligation: aliased or dangling IDs may legitimately
@@ -252,6 +261,12 @@ checkpoints took roughly 6–25 minutes each, with 4–19 compile passes; TX
 staging took fourteen passes over 24m44s: two passed and twelve failed before
 correction. Receive completion/poll took fourteen passes over 23m50s: three
 passed and eleven failed before correction, ending with the full 206-job build.
+Saved scans and the ten-call socket checkpoint took twenty invocations over
+about 43 minutes: three passed and seventeen failed before the final 214-job
+build. IPv4 send erasure/safety attempts failed at proof-search heartbeat
+limits; its unused observer was removed. It remains an open caller obligation,
+with a second architecture prepared using explicit tail-call stages to retain
+shared continuations. This is a proof failure, not a mirror finding.
 Counts and failed
 passes are retained in the checkpoint history; current validation is above.
 Failures were proof elaboration/simplification failures, not passes or mirror
@@ -266,6 +281,9 @@ new sequence runner. No remaining correctness finding is reported for the
 checked components. The completion/poll review checked all-input source order
 and callback scope; it moved a generic conditional law into `Logged/Prefix`
 and narrowed a docstring to the safety theorem's actual conclusion.
+The socket review corrected saved-stamp and cache-flag scope wording, checked
+all ten calls and their six exports, and reconciled the shared frame and
+conditional-law moves. Its frozen source hashes match the validated tree.
 C initializes cache/handshake before its
 peer-counter increment, whereas the mirror increments/inserts first: the proof
 follows the mirror, without claiming a C simulation or a lifetime counterexample.

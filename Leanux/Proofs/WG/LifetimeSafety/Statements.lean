@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Lifetimes.SocketCalls
 import Leanux.Proofs.WG.Lifetimes.ReceivePoll
 import Leanux.Proofs.WG.Lifetimes.ReceiveFailure
 import Leanux.Proofs.WG.Lifetimes.TxStagingCalls
@@ -996,5 +997,56 @@ theorem counter_bitmap_failure_prefix (kp : KeypairId) (w : World) (k : Keypair)
       (.error (.invariant "backtrack[0] beyond the bitmap"),
         h ++ [.keypair (.read kp k.internalId)]) :=
   Lifetimes.counterValidatePrefix_empty_bitmap kp w k h hg hc
+
+/-- The saved-map any scan returns the original Boolean and records exactly
+its demanded prefix, including the first true entry. This all-input equation
+records supplied stamps; current residency is a separate safety premise. -/
+theorem saved_peer_scan_observation (test : Peer → Bool) (xs : List (PeerId × Peer))
+    (w : World) (h : List Lifetimes.LifetimeEvent) :
+    runPrefix (Lifetimes.savedPeerAny test xs) w h =
+      (.ok (xs.any (fun x => test x.2), w), h ++ Lifetimes.savedPeerAnyEvents test xs) :=
+  Lifetimes.savedPeerAny_run test xs w h
+
+/-- A saved-map scan has a safe appended prefix when every supplied entry's
+stamp is still resident. The observer performs no additional getter lookup. -/
+theorem saved_peer_scan_safety (I : List Lifetimes.LifetimeEvent → World → Prop)
+    (c : Lifetimes.AmbientContracts I) (P : Lifetimes.IdentityView → Prop)
+    (test : Peer → Bool) (xs : List (PeerId × Peer)) :
+    Lifetimes.AmbientSpec I (fun s => P s ∧ Lifetimes.SavedPeers xs s)
+      (Lifetimes.savedPeerAny test xs) (fun _ => P) :=
+  Lifetimes.savedPeerAny_spec c P test xs
+
+/-- Every named cache, endpoint, loopback or socket-send call erases to its
+complete original result/World or exact Stop on arbitrary inputs. IPv4 send, setup and
+reinitialization are not members of this family. -/
+theorem socket_family_erasure (call : Lifetimes.SocketCall) :
+    ErasesPrefix call.observed call.original := call.erases
+
+/-- The complete named Socket calls retain a safe event prefix and carry the
+ambient invariant and cached identity predicates on success. Device-statistics
+preservation is an explicit extra contract, separate from access coverage. -/
+theorem socket_family_ambient_safety (I : List Lifetimes.LifetimeEvent → World → Prop)
+    (c : Lifetimes.AmbientContracts I) (sc : Lifetimes.SocketContracts I)
+    (P : Lifetimes.IdentityView → Prop) (call : Lifetimes.SocketCall) :
+    Lifetimes.AmbientSpec I P call.observed (fun _ => P) := call.spec c sc P
+
+/-- Concrete allocation-bound and resolved-store lifetime safety for each
+named Socket call, including failed prefixes. This does not assert reference
+ownership, outer-scheduler coverage or packet delivery. -/
+theorem socket_family_allocation_safety (call : Lifetimes.SocketCall) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed :=
+  call.allocation
+
+/-- A cache-get refresh-clock Stop follows the peer read and precedes the
+cache write. The conditional complete-call equation uses original operation
+premises and is not a recorded runner reproduction. -/
+theorem socket_cache_clock_failure (pid gen : Nat) (w : World) (p : Peer)
+    (h : List Lifetimes.LifetimeEvent) (e : Stop)
+    (ha : w.armRecords = true) (hc : w.dstCacheRecords = true)
+    (hp : (getPeer pid).run w = .ok (p, w)) (hs : p.dstCache.slot = none)
+    (hf : (hiddenU64 .dstCacheRefreshTs).run w = .error e) :
+    runPrefix (Lifetimes.dstCacheGetPrefix pid gen) w h =
+      (.error e, h ++ [.peer (.read pid p.internalId)]) :=
+  Lifetimes.dstCacheGetPrefix_clock_failure pid gen w p h e ha hc hp hs hf
 
 end Leanux.Proofs.WG.LifetimeSafety

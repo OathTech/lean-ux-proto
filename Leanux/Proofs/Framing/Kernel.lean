@@ -17,8 +17,8 @@ theorem skipAmbient_spec (P : WGKernelView → Prop) :
     ⦃⇓? _ w => ⌜P (wgKernelView w)⌝⦄ :=
   (sameWGKernel_of_sameKernel skipAmbient_sameKernel).wp P
 
-theorem routeLookup_sameWGKernel (family saddr daddr : Nat) : SameWGKernel (Leanux.routeLookup family saddr daddr) := by
-  frame_wg [routeLookup] using []
+theorem routeLookup_sameWGKernel (family saddr daddr : Nat) : SameWGKernel (Leanux.routeLookup family saddr daddr) :=
+  sameWGKernel_of_sameKernel (Framing.routeLookup_sameKernel family saddr daddr)
 
 theorem routeLookup_spec (P : WGKernelView → Prop) (family saddr daddr : Nat) :
     ⦃fun w => ⌜P (wgKernelView w)⌝⦄ Leanux.routeLookup family saddr daddr
@@ -101,8 +101,8 @@ theorem hiddenU64_spec (P : WGKernelView → Prop) (s : HiddenSite) :
     ⦃fun w => ⌜P (wgKernelView w)⌝⦄ Leanux.hiddenU64 s
     ⦃⇓? _ w => ⌜P (wgKernelView w)⌝⦄ := (hiddenU64_sameWGKernel s).wp P
 
-theorem peekHiddenSite_sameWGKernel  : SameWGKernel (Leanux.peekHiddenSite) := by
-  frame_wg [peekHiddenSite] using [skipAmbient_spec]
+theorem peekHiddenSite_sameWGKernel  : SameWGKernel (Leanux.peekHiddenSite) :=
+  sameWGKernel_of_sameKernel (Framing.peekHiddenSite_sameKernel)
 
 theorem peekHiddenSite_spec (P : WGKernelView → Prop)  :
     ⦃fun w => ⌜P (wgKernelView w)⌝⦄ Leanux.peekHiddenSite
@@ -150,25 +150,15 @@ theorem hiddenTimespec_spec (P : WGKernelView → Prop) (s : HiddenSite) :
     ⦃fun w => ⌜P (wgKernelView w)⌝⦄ Leanux.hiddenTimespec s
     ⦃⇓? _ w => ⌜P (wgKernelView w)⌝⦄ := (hiddenTimespec_sameWGKernel s).wp P
 
-theorem skipCutSites_sameWGKernel (sites : List HiddenSite) : SameWGKernel (Leanux.skipCutSites sites) := by
-  frame_wg [skipCutSites] using [skipAmbient_spec]
+theorem skipCutSites_sameWGKernel (sites : List HiddenSite) : SameWGKernel (Leanux.skipCutSites sites) :=
+  sameWGKernel_of_sameKernel (Framing.skipCutSites_sameKernel sites)
 
 theorem skipCutSites_spec (P : WGKernelView → Prop) (sites : List HiddenSite) :
     ⦃fun w => ⌜P (wgKernelView w)⌝⦄ Leanux.skipCutSites sites
     ⦃⇓? _ w => ⌜P (wgKernelView w)⌝⦄ := (skipCutSites_sameWGKernel sites).wp P
 
-theorem skipCut_sameWGKernel (sites : List HiddenSite) : SameWGKernel (Leanux.skipCut sites) := by
-  intro w x w' h
-  change ((Leanux.skipCutSites sites).run w >>= fun r =>
-    pure ((), r.2)) = Except.ok (x, w') at h
-  cases hr : (Leanux.skipCutSites sites).run w with
-  | error e => simp [hr] at h
-  | ok result =>
-    rcases result with ⟨v, t⟩
-    have hh := skipCutSites_sameWGKernel sites w v t hr
-    simp [hr] at h
-    rcases h with ⟨rfl, rfl⟩
-    exact hh
+theorem skipCut_sameWGKernel (sites : List HiddenSite) : SameWGKernel (Leanux.skipCut sites) :=
+  sameWGKernel_of_sameKernel (Framing.skipCut_sameKernel sites)
 
 theorem skipCut_spec (P : WGKernelView → Prop) (sites : List HiddenSite) :
     ⦃fun w => ⌜P (wgKernelView w)⌝⦄ Leanux.skipCut sites

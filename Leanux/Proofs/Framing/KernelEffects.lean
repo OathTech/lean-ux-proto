@@ -45,4 +45,34 @@ theorem refcountIncNotZero_sameKernel (old : Nat) : SameKernel (refcountIncNotZe
   intro k
   mvcgen [refcountIncNotZero, branchCmp, branchCmpExcluded, branch, unsupported]
 
+
+theorem routeLookup_sameKernel (family src dst : Nat) : SameKernel (routeLookup family src dst) := by
+  apply sameKernel_of_wp
+  intro k
+  mvcgen [routeLookup]
+
+theorem peekHiddenSite_sameKernel : SameKernel peekHiddenSite := by
+  apply sameKernel_of_wp
+  intro k
+  have hs := sameKernel_wp _ skipAmbient_sameKernel (fun s => s = k)
+  mvcgen [peekHiddenSite, hs]
+
+theorem skipCutSites_sameKernel (sites : List HiddenSite) : SameKernel (skipCutSites sites) := by
+  apply sameKernel_of_wp
+  intro k
+  have hs := sameKernel_wp _ skipAmbient_sameKernel (fun s => s = k)
+  mvcgen [skipCutSites, hs, unsupported, invariant]
+  all_goals try exact ((⇓? _ w => ⌜w.k = k⌝) : PostCond _ (.arg World (.except Stop .pure)))
+  all_goals try dsimp +zetaDelta only at *
+  all_goals try simp_all
+  all_goals trivial
+
+theorem skipCut_sameKernel (sites : List HiddenSite) : SameKernel (skipCut sites) := by
+  apply sameKernel_of_wp
+  intro k
+  have hs := sameKernel_wp _ (skipCutSites_sameKernel sites) (fun s => s = k)
+  unfold skipCut
+  simp only [Functor.discard, map_const, Function.comp_apply, Function.const, map_eq_pure_bind]
+  exact sameKernel_wp _ (sameKernel_bind (skipCutSites_sameKernel sites) (fun _ => sameKernel_pure ())) (fun s => s = k)
+
 end Leanux.Proofs.Framing
