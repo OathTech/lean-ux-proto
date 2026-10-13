@@ -248,3 +248,14 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   `cond_resched` to the encrypt kworker before ksoftirqd (w7_mixed under
   eight guests, design 17.17). Exact and fail-closed as before; no retry.
 
+- **2026-10-13 [USER]** Proofs land on `main`, in a proof tree outside the
+  mirror, once they hold over the mirror as it is on `main`: "If it lands
+  clean, and the theorems are what we want, I think we should land it on
+  main. Then Codex#2 as a follow on should figure out how to rebase on the
+  updated mirror" (2026-10-12), refined the same day: "we should make the
+  proofs run on the actual main-branch model first before landing it. That
+  can be the next step - Codex#2 in a new worktree once the review comes
+  back." The standing rule's new text (AGENTS.md: the proof tree, its gate,
+  the lag-and-repair maintenance rule) is the coordinator's proposal under
+  this decision and takes effect with the user's approval of the text at
+  the landing of the carried-over spike.
