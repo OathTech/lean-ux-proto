@@ -1,6 +1,7 @@
 import Leanux.Proofs.WG.Keypairs.Evolution.Operations
 import Leanux.Proofs.WG.Keypairs.Frames.Env
 import Leanux.Proofs.WG.Keypairs.Frames.Syscalls
+import Leanux.Proofs.WG.Keypairs.Frames.EventpollCalls
 import Leanux.Proofs.WG.Keypairs.Evolution.Runner
 
 /-! Complete syscall composition. Nonreceive calls have a direct frame over
@@ -9,7 +10,7 @@ acceptance-history invariant through every dispatch and return-to-user branch. -
 namespace Leanux.Proofs.WG.Keypairs.SyscallObservers
 open Leanux Leanux.WG Leanux.Env Leanux.Proofs.Logged
 open Leanux.Proofs.WG.Keypairs Observers SchedulerObservers OperationObservers
-open KernelFrames WGFrames WGTransitions WGMore WGConfig EnvFrames FSFrames SyscallFrames
+open KernelFrames WGFrames WGTransitions WGMore WGConfig EnvFrames FSFrames SyscallFrames EventpollFrames
 
 set_option maxHeartbeats 500000
 set_option pp.structureInstances false
@@ -67,6 +68,9 @@ macro "syscall_ordinary_step" : tactic => `(tactic|
     | (ordinary_head Leanux.ksysWrite; exact (ksysWrite_sameSnapshot _ _ _).ordinary)
     | (ordinary_head Leanux.sysPipe2; exact (sysPipe2_sameSnapshot _).ordinary)
     | (ordinary_head Leanux.sysFcntl; exact (sysFcntl_sameSnapshot _ _ _).ordinary)
+    | (ordinary_head Leanux.sysEpollCreate1; exact (sysEpollCreate1_sameSnapshot _).ordinary)
+    | (ordinary_head Leanux.sysEpollCtl; exact (sysEpollCtl_sameSnapshot _ _ _ _ _).ordinary)
+    | (ordinary_head Leanux.sysEpollWait; exact (sysEpollWait_sameSnapshot _ _ _).ordinary)
     | (ordinary_head Leanux.fdget; exact (fdget_sameSnapshot _).ordinary)
     | (ordinary_head Leanux.fdput; exact (fdput_sameSnapshot _).ordinary)
     | (ordinary_head Leanux.taskWorkRun; exact taskWorkRun_sameSnapshot.ordinary)
