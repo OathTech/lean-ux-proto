@@ -41,6 +41,9 @@ directory whose `Statements.lean` is the gated surface.
   carries the acceptance-history invariant through the observers, the
   scheduler, the operations, the runner and the syscalls.
 - `Leanux/Proofs/WG/ReplayWindow/`: the first result (below).
+- `Leanux/Proofs/WG/AntiReplay/`: campaign R1, uniqueness and the inclusive
+  lower edge; reusable arithmetic is in `CounterWindow/Bounds`, and ordered
+  acceptance-history bounds in `Keypairs/Evolution/Bounds`.
 
 The dependency order is CounterWindow, Logged, Framing, Keypairs,
 ReplayWindow. The conventions that keep proof work cheap are in
@@ -51,7 +54,8 @@ ReplayWindow. The conventions that keep proof work cheap are in
 
 | Result | Statements | Directory | Charter | Review | Mirror commit | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| Receive counter window: replay freedom (S1, S2, S3) | S1: every accepted execution has its exact acceptance history, and no two events share an allocation lifetime and a wire counter. S2: `counterValidate` returns exactly what receive.c's rule returns and leaves exactly its replay state. S3: every non-receive syscall and every validator call leave every other keypair's window unchanged, per call and for whole syscalls including the runner's ambient step. | `Leanux/Proofs/WG/ReplayWindow/` (`Statements.lean`, 15 terminal declarations; `Counterexamples.lean`) | [charter](2026-10-12-charter-window-proof.md) | [independent review, two parts](2026-10-12-spike-window-review.md); the spike's [report](2026-10-13-spike-window.md) and [self-review](2026-10-13-spike-window-self-review.md) | 6f1f84c | current (carried from ef7c535 over the epoll landing on 2026-10-13: the wait-queue, epoll release and epoll system-call frames) |
+| Receive counter window: replay freedom (S1, S2, S3) | S1: every accepted execution has its exact acceptance history, and no two events share an allocation lifetime and a wire counter. S2: `counterValidate` returns exactly what receive.c's rule returns and leaves exactly its replay state. S3: every non-receive syscall and every validator call leave every other keypair's window unchanged, per call and for whole syscalls including the runner's ambient step. | `Leanux/Proofs/WG/ReplayWindow/` (`Statements.lean`, 15 terminal declarations; `Counterexamples.lean`) | [charter](2026-10-12-charter-window-proof.md) | [independent review, two parts](2026-10-12-spike-window-review.md); the spike's [report](2026-10-13-spike-window.md) and [self-review](2026-10-13-spike-window-self-review.md) | c85e86b | current (R1 gate rechecked the unchanged result; earlier epoll carry from ef7c535 to 6f1f84c remains as reviewed) |
+| R1: anti-replay uniqueness and inclusive floor | No wire counter is accepted twice in one allocation lifetime; every accepted counter is at or above the inclusive lower edge, for pure runs, original validator calls and accepted runner histories. Equality at the charter's floor is intentionally permitted, with a concrete recorded replay. | `Leanux/Proofs/WG/AntiReplay/` (`Statements.lean`, 9 terminal theorems) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r1--anti-replay-uniqueness-and-the-inclusive-floor) | c85e86b | current |
 
 The gate for every row: `capped -- scripts/in-bundle scripts/proof-gate`
 (the build, the axioms of every terminal statement, the forbidden tokens,
