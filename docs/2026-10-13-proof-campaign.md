@@ -5,9 +5,10 @@
 Worktree `.worktrees/proofs-campaign`, branch `proofs/campaign`. The
 [charter](2026-10-13-charter-proof-campaign.md) defines the campaign. Both named
 prerequisites were carried over `2c7a076`; the audit wave at `f45bde8` is now
-carried, with the mirror exactly matching the landed source. All existing
-result rows are current over `f45bde8`; component rows retain their explicit
-open obligations. R5 is resolved through checked Rule Zero counterexamples.
+carried, followed by the documentation-only `a39aded` review/tray update. The
+mirror exactly matches main. Every result row is current over `a39aded`;
+component rows retain their explicit open obligations. R5 and R6 are resolved
+through their proved local contracts and checked Rule Zero counterexamples.
 No integration into main, push, differential check or guest run.
 
 | Result | Progress |
@@ -16,20 +17,20 @@ No integration into main, push, differential check or guest run.
 | R2 lifetime safety | Store identities, failure-retaining allocation/release and caller composition cover session/rotation, peer creation, receive entry/maintenance/completion, receive polling with the actual stack callback, transmit entry, TX staging, decrypt iteration and ten socket/cache/loopback calls; stale-cursor finding checked. Remaining callers, lifecycle and whole-run internal-access coverage remain in progress. |
 | R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion, original empty-root, arbitrary-depth empty-child and exact-prefix insertion with sequence wrappers, and total original placement proved. Selected-root graft normal endpoints and rollback effects checked; successful graft representation, general mutation/history and path refinements remain open. Path proofs follow R2. |
 | R4 delivery | Accepted original replay over f45bde8 refutes chronological post-GRO stack order: a held ACK followed by a distinct-flow SYN produces the SYN's RST first under the same key lifetime. Exact current poll erasure and removal-prefix order with an explicit callback queue contract pass the gate, as does the original-helper reorder equation. The former chronological callback theorem is retired, with its predicate unchanged. Selected-order/source-tag closure and pipeline conservation remain open. |
-| R5 key lifetime | Resolved through Rule Zero counterexamples, with 13 positive local contracts. Original/observed replays show nonce R+1 authenticating before rejection, queued transport keepalive encryption after recorded expiry, and packet-held material used after zero/clear before a new handshake. The new time inputs have coherent coarse/jiffies/arm arithmetic; Linux schedule reachability is not claimed. Validated over f45bde8. |
-| R6 flood resistance | Not started. |
+| R5 key lifetime | Resolved through Rule Zero counterexamples, with 13 positive local contracts. Original/observed replays show nonce R+1 authenticating before rejection, queued transport keepalive encryption after recorded expiry, and packet-held material used after zero/clear before a new handshake. The new time inputs have coherent coarse/jiffies/arm arithmetic; Linux schedule reachability is not claimed. Validated over a39aded. |
+| R6 flood resistance | Original under-load cookie exclusion and full Noise-state frame proved; a generated accepted episode refutes the literal retry limit (19 retries, 20 total initiations with MAX=18). Six terminal theorems, the combined gate, fresh kernel replay and exact witness rerun pass. |
 
-**Last validated mirror: `f45bde8`.** The full proof gate passed 249 build jobs
-and 206 terminal statements (ReplayWindow 15, R1 9, R2 116, R3 27, R4 26,
-R5 13), with only permitted axioms. Stock
-`leanchecker --fresh Leanux.Proofs` passes. The default model build passes
-60 jobs; the unit tier passes 94 tests in 21.624 seconds with one skip.
-Nine sequential original/observed replay checks pass: R1's inclusive floor,
-both R2 stale-cursor variants, R4's GRO reordering, R5's boundary and strict
-counter, delayed encryption, coherent post-clear and legacy post-clear cases.
-Each asserts its witness and exact original/observed JSON equality. The new
-R4 and R5 streams are generated mirror inputs, not Linux captures; their
-scope and provenance are recorded below.
+**Last validated mirror: `a39aded` (source unchanged from `f45bde8`).** The
+full proof gate passes 254 build jobs and 212 terminal statements (ReplayWindow
+15, R1 9, R2 116, R3 27, R4 26, R5 13, R6 6), with only permitted axioms.
+Stock `leanchecker --fresh Leanux.Proofs` passes. The default model build passes
+60 jobs; the unit tier passes 94 tests in 24.967 seconds with one skip.
+The changed retry, delayed-encryption and coherent post-clear witnesses each
+pass with exact original/observed JSON and their strengthened syscall endpoint
+checks. The nine original/observed cases passed the preceding audit checkpoint;
+the unchanged R1, R2, R4 and other R5 witnesses were not repeated here.
+The generated R4–R6 streams establish accepted mirror behavior, not new Linux
+captures or kernel scheduling reachability.
 Independent reviews cover peer creation, the seccomp carry, mixed enqueue,
 decrypt execution, keypair/packet releases, ambient caller composition,
 allocation and release-bound composition, session creation and rotation,
@@ -40,7 +41,8 @@ its wrapper, exact-prefix replacement, list deletion, placement and selected-roo
 graft endpoints/rollback, saved-peer scans, the ten-call socket family,
 transmit entry, actual stack/poll composition, the prerequisite carry, and the
 full-ring, receive-queue, complete receive-completion and outer-poll components, R5 receive/key-time, RX attempt and TX admission components, and the
-R5 replays with the timer-pass observer.
+R5 replays with the timer-pass observer, the whole-advance factor, and both
+R6 cookie-rejection cases with actual rotating-cookie witnesses.
 The final source and contract reviews have no unresolved correctness findings;
 their frozen file hashes matched before the checkpoints.
 
@@ -728,8 +730,36 @@ not nonempty inner IP payloads. All are generated/reconstructed accepted mirror
 inputs, not new Linux captures or evidence that Linux can realize their schedules.
 The mechanisms match Linux `receive.c:242–331`, `send.c:162–219,342–414`,
 `noise.c:112–177` and `timers.c:105–133`: authentication before replay validation,
-admission-time TX checks, and reference-counted clearance. We judge these
-boundaries to be design nuances, not demonstrated Linux security defects.
+admission-time TX checks, and reference-counted clearance. These are statement
+artefacts relative to the charter's unconditional wording, explained by the
+implementation's admission and reference-release boundaries, not demonstrated
+Linux security defects.
+
+**Independent R5 review disposition.** The [review of 7fc444d](2026-10-13-review-r5-counterexamples.md)
+agrees with those classifications and the thirteen local theorem statements.
+Its requested clock-domain qualification is recorded in the
+[timer-model note](2026-10-13-review-items-7-8.md#proof-domain-qualification):
+the environment imposes no elapsed-virtual-time bound between staging and a
+recorded crypt-worker activation. The three witnesses uncommitted at that
+review's snapshot were committed in `3d50a4a`, and all five R5 reproductions
+passed the audit-carry checkpoint. The current two time replays strengthen
+their observer connection to the complete original advance syscall.
+No upstream-tray entry is justified by this evidence.
+
+Two supporting assertions in the review are not adopted: authenticate-then-check
+is the actual receive order, not the only logically possible order (a numeric
+limit could reject an untrusted nonce without updating replay state); and no
+measured or universal Linux worker-latency bound follows from these witnesses.
+Kernel reachability is unestablished, rather than proved impossible. Likewise,
+the rejected nonce does not advance the receiving counter or reach the stack;
+its queue, packet, reference and record effects are not an unchanged-World claim.
+Nor does the review's proposed 128-packet bound hold per staging call: C
+`device.c:207–217` trims the old queue before splicing the new batch, deliberately
+retaining excess GSO segments; the mirror follows that order. The 1024 crypt-ring
+slots count batch entries, not a global bound on retained packets. Finally,
+three of the thirteen R5 terminals are erasure results (staging, timer pass and
+receive attempt), correcting the review's count of two. These corrections do
+not change the proved statements or the no-tray disposition.
 
 **Architecture and refinement.** `KeyTimes/Clock` proves exact original
 `birthdateTest`/`branchExpired` executions, including wrapped signed64 deadlines,
@@ -750,9 +780,11 @@ They do not prove the later store contents or immutable material transport.
 
 The shared `Logged/TimerPass` observer records completed original timer, clear,
 send-worker and crypt-scheduler units, with exact result/World/Stop erasure.
-The runtime witnesses reconstruct the literal next-operation reset from an
-accepted runner checkpoint, execute the original advance where present, and
-compare the observed timer endpoint with the accepted runner's final Kernel.
+`Logged/Advance` factors the complete original advance syscall, retaining its
+descriptor, seccomp and task-work effects. The two current time witnesses
+start at an accepted runner checkpoint, load the next operation's records,
+execute that observer and compare its final Kernel, decisions, receiving
+endpoint, jiffies and exhausted records with the accepted runner's checkpoint.
 Crypt observations are scheduler calls, not per-packet AEAD events. Each time
 witness checks the retained packet/material and a newly appearing exact ciphertext.
 
@@ -821,12 +853,13 @@ JSON equality and all assertions pass in each. One provider interruption left
 no running job; every dirty worktree was preserved to snapshot refs before
 further edits. No cap was hit. The first checkpoint gate failed because its forbidden-token
 scan found the word `admit` in a replay diagnostic string; that wording was
-corrected. The proof gate now passes 246 build jobs and all 206 terminal
+corrected. That historical checkpoint's proof gate passed 246 build jobs and all 206 terminal
 statements with permitted axioms only. The unit tier passes 93 tests in 22.231s
 with one skip. Stock fresh kernel replay and the 60-job model build pass.
 Independent source, assertion and report review found no unresolved defect;
 its wording findings were corrected and frozen hashes matched before commit.
-The mirror remains byte-identical to main `2c7a076`. No QEMU, differential
+Its mirror was byte-identical to main `2c7a076`; current carry validation is
+in the progress section. No QEMU, differential
 check, integration into main or push was performed.
 
 [AGENT 2026-10-13] Resolve R5's false original statement through the accepted
@@ -839,3 +872,95 @@ measured kernel execution.
 The landed signed clock helpers and operand-bearing branches expose the relevant
 semantics. Adding a proof-motivated age guard to the later encrypt worker would
 change the C's control flow and is not altitude-preserving.
+
+
+## R6 — cookie exclusion and retry-limit finding
+
+**Original claims and disposition.** The charter requires that an initiation
+without valid MAC2 under load never reaches Noise, and that retransmission
+stops after `MAX_TIMER_HANDSHAKES` attempts. The first has an original-source
+cookie-only path theorem and complete Noise-state preservation on ordinary
+completion. The second is false literally: the accepted episode below sends
+19 retries, 20 initiations including the first, with `MAX_TIMER_HANDSHAKES=18`.
+This is the C's strict `attempts > MAX_TIMER_HANDSHAKES` design;
+`timers.c:49` itself reports `MAX_TIMER_HANDSHAKES + 2`. It is a wording/design
+nuance resolved by Rule Zero, not evidence of a mirror/C disagreement.
+
+**Cookie proof.** `Cookies/Gate` factors the original
+`receiveHandshakePacket` without changing its control flow. `FailedMac2`
+contains actual load and `makeCookie` execution witnesses, MAC1 equality, and
+an explicit MAC2 inequality against the cookie that invocation returned.
+The derived original validator result is `noCookie`; seven subsequent original
+branch records lead exactly to `sendHandshakeCookie`. The selected source
+suffix contains no Noise consume/create call. Its complete result equation
+retains reply failures as the original Stop. Invalid MAC1 instead takes the
+original five-record drop suffix before cookie creation or Noise.
+`Cookies/Load` constructs the active-load result from either queue depth at
+least 512 or the actual unexpired recorded decay clock, retaining signed wrap.
+
+`Cookies/Frames` preserves the complete device after removing exactly cookie
+secret/birthdate and TX packet/byte statistics from its view, together with
+both global peer/keypair allocation counters. Full peer and keypair records,
+static identity, indices, device peer/keypair/packet/node frontiers and all
+other device fields remain visible. Both `makeCookie` calls may independently
+rotate. IPv4/IPv6, reply allocation refusal and ordinary socket errors are
+covered. Missing records before a witness completes can Stop; these theorems
+do not assert that every input completes. The frame is per original
+`receiveHandshakePacket` call, not the enclosing queue worker or arbitrary
+later scheduler activity. Valid-MAC2 rate limiting is a different path.
+
+**Accepted retry episode.** `r6-retransmit-limit` derives a 23-operation input
+from tracked `d3_retransmit_gives_up` and initiation draws. It uses explicit
+records, coherent coarse/jiffies/timer-arm arithmetic and advancing TAI values,
+with cache-clock records disabled. `FloodResistance/Replay.lean` checks original
+runner acceptance, exact checkpoint JSON agreement, stable peer identity,
+empty keypair store, timer/counter/queue boundaries and actual new initiation
+bytes. The first 19 timer callbacks increment and queue the original send worker;
+each worker transmits one new initiation and rearms. The twentieth callback
+compares `[19,18]`, gives up without transmitting, purges the staged packet and
+arms deferred zeroing. The preceding callback compares `[18,18]` and rearms.
+These are generated accepted mirror inputs, not a Linux capture or proof of
+kernel schedule reachability. Counts describe this episode only: resets,
+rate/dead/allocation/socket branches can change other episodes.
+
+`Logged/Advance` connects observations to the complete original advance syscall,
+including its seccomp/dispatch/task-work prefix, result, successful World and
+Stop. Recorded timer units are observed; the placeholder path is deliberately
+lifted without a unit-coverage claim. Its erasure is the sixth R6 terminal and
+is also used by both current R5 time replays.
+
+```sh
+set -o pipefail
+python3 -B docs/proof-campaign-replay.py r6-retransmit-limit |
+  capped -- scripts/in-bundle lake env lean --run Leanux/Proofs/WG/FloodResistance/Replay.lean
+capped -- scripts/in-bundle scripts/proof-gate
+```
+
+[AGENT 2026-10-13] State the cookie result over actual original rejection runs
+and retain the literal retry-limit counterexample. Do not replace the false
+limit with an unproved universal episode bound or promote generated records
+to measured kernel schedules.
+
+**Local validation and effort.** The cookie tranche used thirteen sequential
+capped builds: three passes and ten ordinary compilation failures (header
+elaboration, monad factorization and simplifier normalization), all collected.
+The abstract load-continuation factor avoided broad congruence expansion;
+no mirror change or weakened state view was needed. The terminal target passes
+96 jobs; the full `LeanuxProofs` build passes 254 jobs with six new R6 terminals.
+The preceding retry/Advance tranche used nine capped invocations: five passes
+and four ordinary compilation/assertion failures, including correction of a
+wrong reply-endpoint assertion. Its final strengthened retry replay and both
+R5 time replays pass. No interruption or cap failure occurred. Independent source/contract review
+found no correctness defect; its two report corrections are incorporated.
+The coordinated proof gate passes 254 jobs and 212 terminals, fresh stock
+kernel replay passes, the model build passes 60 jobs and units pass 94 tests
+with one skip. The retry and both strengthened R5 time witnesses pass again.
+The docs-only `a39aded` carry adds the independent R5 review and tray rule;
+every register row is current. Owned logs and generated axiom files were
+removed after their exit statuses and conclusions were collected.
+
+**Ranked mirror-shape recommendations.** None. The existing load, validator,
+cookie-reply and retry-callback boundaries suffice: proof-side source factors
+and the full device projection establish cookie exclusion. Changing the retry
+comparison to make the charter's literal limit true would alter the C's
+behavior and is not altitude-preserving; it is not proposed.

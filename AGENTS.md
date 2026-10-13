@@ -196,3 +196,17 @@ A decision is logged where it is made, with its provenance (user or agent):
 in the commit message, in the design doc it belongs to, and in
 [docs/decisions.md](docs/decisions.md) when it is a standing one. This file
 carries no decision history and no session state.
+
+## Kernel findings
+
+A kernel behaviour that might concern its maintainers, found by the
+differential check, a correspondence audit or the proof campaign, is written
+up in [docs/upstream-tray/](docs/upstream-tray/INDEX.md) as a numbered
+report: the C lines in the pristine source, the classification (true bug,
+design nuance, observability gap or question) with its argument, the
+reproducer in this repository's corpus and what a reader without it would
+do, the impact, and how it was found. The tray holds reports only: no patch
+branches, no upstream pull requests from this repository; filing is the
+user's call. A finding never changes the mirror, which follows the code as
+it is, and the trace that shows it stays in the corpus so the behaviour
+remains checked.

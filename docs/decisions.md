@@ -429,3 +429,16 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   reachable since `wg_batch`/`wg_flood` but stays `unsupported` (the lock's
   state is unrecorded); the rotation is in. F10 (the handshake ring as a
   `List`) is deferred to its own task.
+- **2026-10-13 [USER]** Kernel findings are filed in a tray: "We should adopt
+  the 'tray' style of filing used in cerberus-lean amongst others. That
+  is, **if** we find things in the kernel that might be of concern, we
+  write a report in the repo for future analysis and filing."
+  `docs/upstream-tray/` with its index, in the form of cerberus-lean's
+  `lem-lean/doc/upstream-tray/` [AGENT, fork of the coordinator: the form
+  copied, the states Draft/Filed/Withdrawn, reports only and no patch
+  branches]. The rule is in AGENTS.md ("Kernel findings"). First entries:
+  01 the send-side silent drops at a full encrypt ring or peer queue
+  (`tx_dropped` untouched; the ring refuses consumed-but-uncleared slots),
+  02 the receive-side silent drops at a full peer queue or decrypt ring
+  (`rx_dropped` untouched, the free is `consume_skb`; the queue fills before
+  authentication, put as a question).

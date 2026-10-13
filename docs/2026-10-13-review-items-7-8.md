@@ -348,6 +348,26 @@ the domain already; the derived bound is validated by the existing suites.
 
 ## 6. Decisions and operands, hidden inputs, environment
 
+### Proof-domain qualification
+
+The R5 proof campaign's generated accepted replays expose a further domain
+qualification: the recorded scheduler/timer rules impose no elapsed-virtual-time
+bound between TX staging and a crypt-worker activation. A queued packet can
+therefore retain its staging key while later recorded timer callbacks observe
+expiry or clear the peer's published references. `Env.afterAdvance` uses the
+kind-310 window end; `fireTimer` checks `timeBefore expiry J_end`; `runTimers`
+follows recorded section order and rejects leftover timer-queued work. Those
+eligibility, ordering and drain checks do not bound a packet's staging-to-crypt
+latency; they also do not license queued work across arbitrary accepted
+operation boundaries. Coherent coarse-clock,
+jiffies and timer-arm arithmetic does not establish that Linux can realize
+that latency or schedule. This is a qualification of the accepted-record
+domain, not a measured Linux scheduling behavior or a proposed new restriction.
+See the [R5 report](2026-10-13-proof-campaign.md#r5--key-lifetime-enforcement-rule-zero-findings)
+for the original-runner witnesses and the independent review's disposition.
+
+### Instrument changes
+
 - Decisions: no new outcome-level decision except `dstCacheHit` (a C
   condition today modelled as a plain `if`); eleven comparison declarations
   added (section 4), each verified on s1 by a coverage read at

@@ -1,5 +1,5 @@
 import Leanux.Proofs.Logged.Checkpoints
-import Leanux.Proofs.Logged.TimerPass
+import Leanux.Proofs.Logged.Advance
 
 /-! A generated record stream admits a packet before expiry and encrypts it
 after a later original guard records expiry. Coarse time and jiffies are
@@ -48,26 +48,13 @@ def main : IO UInt32 := do
     "two nonempty receives did not establish the expected key/timer state"
   let entry := { before with
     hidden := trace.hidden.map (·[6]!)
-    netRxRaised := false
-    steps := #[]
-    userOut := none
-    userFds := none
-    extraOut := []
-    queuedThisCall := []
-    fired := #[]
-    netRxSections := 0
-    netRxSection := 0
-    emitted := {}
-    translatedLen := none }
-  let timerEntry ← match (Leanux.Env.advance 44250).run entry with
-    | .error e => throw (IO.userError s!"original advance: {e.message}")
-    | .ok (_, w) => pure w
+    netRxRaised := false }
   let jEnd : UInt64 := if clears then 4295060796 else 4294973046
-  let (result, units) := runPrefix (timerPassObserved jEnd) timerEntry []
-  let (fired, final) ← match result with
-    | .error e => throw (IO.userError s!"observed timer pass: {e.message}")
+  let (result, units) := runPrefix (advanceSyscallObserved 44250) entry []
+  let (ret, final) ← match result with
+    | .error e => throw (IO.userError s!"observed advance syscall: {e.message}")
     | .ok r => pure r
-  require fired "no timer fired"
+  require (ret == 0 && !units.isEmpty) "advance failed or no timer fired"
   let expectedUnits := if clears then
       [some .timerSendKeepalive, some .timerSendKeepalive, some .timerZeroKey,
        some .clearPeerWorker, none, some .sendWorker, none]
@@ -120,10 +107,10 @@ def main : IO UInt32 := do
     dc.txSkbs[packetId]?.isNone && pc.handshakePending &&
     pc.handshakeState == (if clears then 0 else pe.handshakeState))
     "transmission did not release its packet/reference before the queued handshake"
-  require (final.hidden.map (List.map (·.site)) == some [128])
-    "timer pass left records other than the end-of-wait word"
+  require (final.hidden == some []) "observed advance left unconsumed records"
   let some last := checkpoints[6]? | throw (IO.userError "missing final checkpoint")
-  require (last.k == final.k && last.jiffiesLast == some jEnd && last.hidden == some [])
+  require (last.k == final.k && last.steps == final.steps && last.senderInbox == final.senderInbox &&
+    last.jiffiesLast == final.jiffiesLast && last.jiffiesLast == some jEnd && last.hidden == some [])
     "observed timer endpoint disagrees with original runner"
   let branches ← match original.getObjValAs? (Array Json) "branches" with
     | .error e => throw (IO.userError e)

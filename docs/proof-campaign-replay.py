@@ -363,12 +363,90 @@ def gro_reorder():
     return trace
 
 
+def retransmit_limit():
+    """Generated retry episode with explicit coherent clocks/arms, not a capture."""
+    trace = json.loads((ROOT / "corpus/wireguard/d3_retransmit_gives_up.json").read_text())
+    fixture = recorded_fixture("CONTENDED_ROAM_CMP")
+    draws = {site: encoded for site, encoded in fixture["hidden"][1] if site in {1, 4}}
+    if set(draws) != {1, 4}:
+        raise ValueError("tracked initiation draws changed")
+    trace["id"] = "r6_retransmit_limit"
+    trace["ops"] = trace["ops"][:23]
+    if [op["op"] for op in trace["ops"]] != ["wg_set", "wg_up", "wg_xmit"] + ["wg_advance"] * 20:
+        raise ValueError("retry corpus no longer has the expected episode")
+    trace["ops"][0]["config"]["peers"][0]["keepalive"] = 0
+    trace.pop("steer")
+    trace.pop("expect")
+    trace["arm_records"] = True
+    trace["dst_cache_records"] = False
+    initial_jiffies = 2**32 - 75000
+    first = initial_jiffies + 2500
+    tick = lambda i: first + 1451 * i
+    coarse = lambda i: (tick(i) - initial_jiffies) * 4000000
+
+    def record(site, *words):
+        return [site, b"".join(word.to_bytes(8, "little") for word in words).hex()]
+
+    def send(i):
+        # Wall time advances by the same elapsed duration as the coarse clock.
+        elapsed = coarse(i) - coarse(0)
+        seconds, nanos = divmod(123000000 + elapsed, 10**9)
+        return [record(40, 0, 1), record(6, coarse(i)), record(7, coarse(i)),
+                [1, draws[1]], record(3, 1700000000 + seconds, nanos), [4, draws[4]],
+                record(8, coarse(i)), record(48, 0, 0), record(49, 0),
+                record(14, 1), record(100, tick(i), tick(i) + 1250, 2), record(41, 0)]
+
+    trace["hidden"] = [[record(5, coarse(0) - 8000000), record(128, first - 2)],
+                       [record(128, first - 1)],
+                       [record(6, coarse(0)), record(300, 1, 0)] + send(0) + [record(128, first + 1)]]
+    for i in range(1, 21):
+        records = [record(101, tick(i - 1) + 1, tick(i)), record(102, 0, 2)]
+        if i < 20:
+            records += [record(6, coarse(i)), record(300, 1, 0), record(103, 0)] + send(i)
+        else:
+            records += [record(100, tick(i), tick(i) + 135000, 3), record(103, 0)]
+        records.append(record(128, tick(i) + 1))
+        trace["hidden"].append(records)
+        if trace["ops"][i + 2]["ticks"] != tick(i) - (tick(i - 1) + 1):
+            raise ValueError("advance duration differs from the generated jiffies")
+        if tick(i - 1) + 1250 >= tick(i) + 1:
+            raise ValueError("retry timer is not due in its recorded firing window")
+    # Validate source clocks and each original mod_timer arm, including the
+    # final zero-key timer. These checks do not establish Linux provenance.
+    last_ns, last_tick = 0, initial_jiffies
+    for records in trace["hidden"]:
+        for site, encoded in records:
+            raw = bytes.fromhex(encoded)
+            words = [int.from_bytes(raw[n:n+8], "little") for n in range(0, len(raw), 8)]
+            if site in {5, 6, 7, 8}:
+                if words[0] < last_ns:
+                    raise ValueError("retry coarse clock moved backward")
+                last_ns = words[0]
+            if site == 100:
+                now, expiry, timer = words
+                if now < last_tick or expiry - now != (1250 if timer == 2 else 135000):
+                    raise ValueError("retry timer arm has inconsistent jiffies or delay")
+                if timer == 2 and now != initial_jiffies + last_ns // 4000000:
+                    raise ValueError("retry arm disagrees with its coarse clock")
+                last_tick = now
+            if site == 101:
+                if words[0] < last_tick or words[1] - words[0] != 1450:
+                    raise ValueError("retry time advance is inconsistent")
+                last_tick = words[1]
+            if site == 128:
+                if words[0] < last_tick or words[0] < initial_jiffies + last_ns // 4000000:
+                    raise ValueError("retry end-of-wait precedes the last clock")
+                last_tick = words[0]
+    return trace
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     cases = {"r1-inclusive-floor": inclusive_floor,
              "r2-stale-dump-cursor": stale_dump_cursor,
              "r2-stale-dump-cursor-orphan": stale_dump_cursor_orphan,
              "r4-gro-reorder": gro_reorder,
+             "r6-retransmit-limit": retransmit_limit,
              "r5-rx-wire-limit": receive_wire_limit,
              "r5-rx-wire-past-limit": lambda: receive_wire_limit(True),
              "r5-delayed-encryption": delayed_encryption,

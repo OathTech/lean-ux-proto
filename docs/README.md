@@ -11,6 +11,7 @@ it is history, not setup instructions. Setup is
 | Document | Contents |
 | --- | --- |
 | [decisions.md](decisions.md) | The register of decisions, dated, each tagged with its provenance (user or agent) |
+| [upstream-tray/INDEX.md](upstream-tray/INDEX.md) | The tray of kernel findings: numbered reports on kernel behaviour that might concern its maintainers, for future analysis and filing; reports only, no patches |
 | [proofs.md](proofs.md) | The proof tree's map, the register of proved results with the mirror commit each holds over, how a result is added |
 | [2026-10-11-interface.md](2026-10-11-interface.md) | The shared tables: wire opcodes, record kinds, hidden-site and allocation-site ids, fixture flags, file ownership by stream |
 | [worktree-practices.md](worktree-practices.md) | Worktrees, shared inputs, private outputs, cleanup |
