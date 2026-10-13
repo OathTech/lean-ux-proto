@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.Lifetimes.KeypairRotation
+import Leanux.Proofs.Framing.WGIndex
 
 set_option maxHeartbeats 1000000
 set_option pp.structureInstances false
@@ -158,10 +159,8 @@ theorem indexLookupPrefix_erases (kinds : List IndexKind) (index : Nat) :
     · exact erasesPrefix_bind (erasesPrefix_lift _) (fun _ => tail)
     · exact tail
 
-theorem indexBucket_sameKernel (index : Nat) : SameKernel (indexBucket index) := by
-  apply sameKernel_of_wp
-  intro k
-  mvcgen [indexBucket, getDev, getK, invariant]
+theorem indexBucket_sameKernel (index : Nat) : SameKernel (indexBucket index) :=
+  Framing.indexBucket_sameKernel index
 
 theorem indexLookupPrefix_preserves_ambient (c : AmbientContracts I)
     (kinds : List IndexKind) (index : Nat) :

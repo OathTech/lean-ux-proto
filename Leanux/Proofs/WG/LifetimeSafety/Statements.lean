@@ -1,6 +1,7 @@
 import Leanux.Proofs.WG.Lifetimes.SocketCalls
 import Leanux.Proofs.WG.Lifetimes.EncryptWorker
 import Leanux.Proofs.WG.Lifetimes.TxWorker
+import Leanux.Proofs.WG.Lifetimes.HandshakeCalls
 import Leanux.Proofs.WG.Lifetimes.ReceivePoll
 import Leanux.Proofs.WG.Lifetimes.ReceiveFailure
 import Leanux.Proofs.WG.Lifetimes.TxStagingCalls
@@ -1280,5 +1281,38 @@ theorem tx_timer_jitter_failure (pid : PeerId) (w entered : World)
     runPrefix (Lifetimes.timersDataSentPrefix pid) w h =
       (.error e, h ++ [.peer (.read pid p.internalId)]) :=
   Lifetimes.timersDataSentPrefix_jitter_failure pid w entered p h e hp hb hj
+
+
+/-- The two Noise constructors, both consumers and MAC addition retain their
+original result types and exact World/Stop behavior for every input/history. -/
+theorem handshake_family_access_erasure (call : Lifetimes.HandshakeCall) :
+    ErasesPrefix call.observed call.original := call.erases
+
+/-- Complete local handshake access prefixes are safe under the ambient
+contracts and an explicit original scalar-index-insertion contract. This does
+not assert the lookup table's ownership or an outer worker's execution. -/
+theorem handshake_family_ambient_access_preserves (c : Lifetimes.AmbientContracts I)
+    (hi : ∀ pid kind, PrefixPreserves I Lifetimes.LifetimeEvent.Safe
+      (liftPrefix (indexInsert pid kind))) (call : Lifetimes.HandshakeCall) :
+    PrefixPreserves I Lifetimes.LifetimeEvent.Safe call.observed := call.preserves_ambient c hi
+
+/-- The concrete allocation invariant discharges every named handshake leaf,
+including index insertion, reference-taking lookups and failure releases.
+Normal rejection and later Stops both retain preceding resolved accesses. -/
+theorem handshake_family_allocation_access_preserves (call : Lifetimes.HandshakeCall) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed := call.allocation
+
+/-- A failed original cookie-age test retains the earlier MAC1 peer read and
+write. Consecutive original-run premises locate this failure; they do not assume
+the desired history or claim an accepted runner witness. -/
+theorem handshake_mac_clock_failure (pid : PeerId) (msg : List UInt8)
+    (w written clockEntry : World) (p : Peer) (h : List Lifetimes.LifetimeEvent) (e : Stop)
+    (hp : (getPeer pid).run w = .ok (p, w))
+    (hw : (setPeer pid {p with lastMac1Sent := blake2s 16 p.cookieMac1Key (msg.take (msg.length - 32)), haveSentMac1 := true}).run w = .ok ((), written))
+    (hb : (branch .addMacCookieValid p.cookieIsValid).run written = .ok (true, clockEntry))
+    (hc : (branchExpired .addMacCookieFresh p.cookieBirthdate COOKIE_FRESH_SECONDS (!·)).run clockEntry = .error e) :
+    runPrefix (Lifetimes.addMacToPacketPrefix pid msg) w h =
+      (.error e, h ++ [.peer (.read pid p.internalId), .peer (.write pid p.internalId)]) :=
+  Lifetimes.addMacToPacketPrefix_clock_failure pid msg w written clockEntry p h e hp hw hb hc
 
 end Leanux.Proofs.WG.LifetimeSafety

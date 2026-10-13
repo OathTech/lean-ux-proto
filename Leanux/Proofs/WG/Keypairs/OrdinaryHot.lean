@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.Keypairs.Ordinary
 import Leanux.Proofs.Framing.WGTime
+import Leanux.Proofs.Framing.WGHandshake
 
 set_option pp.structureInstances false
 
@@ -18,16 +19,12 @@ theorem birthdateHasExpired_sameKernel (birthday : Int64) (seconds : Nat) :
   Framing.birthdateHasExpired_sameKernel birthday seconds
 
 theorem kdf_sameKernel (second third : Bool) (chainingKey data : List UInt8) :
-    SameKernel (kdf second third chainingKey data) := by
-  apply sameKernel_of_wp
-  intro k
-  mvcgen [kdf, Leanux.WG.orM, branch]
+    SameKernel (kdf second third chainingKey data) :=
+  Framing.kdf_sameKernel second third chainingKey data
 
 theorem kdfOut_sameKernel (outs : List (List UInt8)) (i : Nat) :
-    SameKernel (kdfOut outs i) := by
-  apply sameKernel_of_wp
-  intro k
-  mvcgen [kdfOut, invariant]
+    SameKernel (kdfOut outs i) :=
+  Framing.kdfOut_sameKernel outs i
 
 theorem deriveKeys_sameSnapshot (kp : KeypairId) (initiator : Bool) (chainingKey : List UInt8) :
     SameSnapshot (deriveKeys kp initiator chainingKey) := by

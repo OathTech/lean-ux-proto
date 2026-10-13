@@ -69,15 +69,15 @@ theorem jitterBelowRekeyTimeout_spec (P : Snapshot → Prop) (site : HiddenSite)
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.jitterBelowRekeyTimeout site
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (jitterBelowRekeyTimeout_sameSnapshot site).wp P
 
-theorem kdf_sameSnapshot (second third : Bool) (chainingKey data : List UInt8) : SameSnapshot (Leanux.WG.kdf second third chainingKey data) := by
-  frame_same [Leanux.WG.kdf] using []
+theorem kdf_sameSnapshot (second third : Bool) (chainingKey data : List UInt8) : SameSnapshot (Leanux.WG.kdf second third chainingKey data) :=
+  sameSnapshot_of_sameKernel (Framing.kdf_sameKernel second third chainingKey data)
 
 theorem kdf_spec (P : Snapshot → Prop) (second third : Bool) (chainingKey data : List UInt8) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.kdf second third chainingKey data
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (kdf_sameSnapshot second third chainingKey data).wp P
 
-theorem kdfOut_sameSnapshot (outs : List (List UInt8)) (i : Nat) : SameSnapshot (Leanux.WG.kdfOut outs i) := by
-  frame_same [Leanux.WG.kdfOut] using []
+theorem kdfOut_sameSnapshot (outs : List (List UInt8)) (i : Nat) : SameSnapshot (Leanux.WG.kdfOut outs i) :=
+  sameSnapshot_of_sameKernel (Framing.kdfOut_sameKernel outs i)
 
 theorem kdfOut_spec (P : Snapshot → Prop) (outs : List (List UInt8)) (i : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.kdfOut outs i
@@ -90,8 +90,8 @@ theorem keypairGetCurrent_spec (P : Snapshot → Prop)  :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.keypairGetCurrent
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (keypairGetCurrent_sameSnapshot ).wp P
 
-theorem messageDecrypt_sameSnapshot (sealed key hash : List UInt8) : SameSnapshot (Leanux.WG.messageDecrypt sealed key hash) := by
-  frame_same [Leanux.WG.messageDecrypt] using []
+theorem messageDecrypt_sameSnapshot (sealed key hash : List UInt8) : SameSnapshot (Leanux.WG.messageDecrypt sealed key hash) :=
+  sameSnapshot_of_sameKernel (Framing.messageDecrypt_sameKernel sealed key hash)
 
 theorem messageDecrypt_spec (P : Snapshot → Prop) (sealed key hash : List UInt8) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.messageDecrypt sealed key hash
@@ -202,22 +202,22 @@ theorem keypairsClear_spec (P : Snapshot → Prop) (hp : Stable P) (pid : PeerId
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.keypairsClear pid
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (keypairsClear_ordinary pid).wp P hp
 
-theorem messageEphemeral_sameSnapshot (copy : Bool) (e chainingKey hash : List UInt8) : SameSnapshot (Leanux.WG.messageEphemeral copy e chainingKey hash) := by
-  frame_same [Leanux.WG.messageEphemeral] using [kdfOut_spec, kdf_spec]
+theorem messageEphemeral_sameSnapshot (copy : Bool) (e chainingKey hash : List UInt8) : SameSnapshot (Leanux.WG.messageEphemeral copy e chainingKey hash) :=
+  sameSnapshot_of_sameKernel (Framing.messageEphemeral_sameKernel copy e chainingKey hash)
 
 theorem messageEphemeral_spec (P : Snapshot → Prop) (copy : Bool) (e chainingKey hash : List UInt8) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.messageEphemeral copy e chainingKey hash
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (messageEphemeral_sameSnapshot copy e chainingKey hash).wp P
 
-theorem mixDh_sameSnapshot (key : Bool) (chainingKey priv pub : List UInt8) : SameSnapshot (Leanux.WG.mixDh key chainingKey priv pub) := by
-  frame_same [Leanux.WG.mixDh] using [kdfOut_spec, kdf_spec]
+theorem mixDh_sameSnapshot (key : Bool) (chainingKey priv pub : List UInt8) : SameSnapshot (Leanux.WG.mixDh key chainingKey priv pub) :=
+  sameSnapshot_of_sameKernel (Framing.mixDh_sameKernel key chainingKey priv pub)
 
 theorem mixDh_spec (P : Snapshot → Prop) (key : Bool) (chainingKey priv pub : List UInt8) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.mixDh key chainingKey priv pub
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (mixDh_sameSnapshot key chainingKey priv pub).wp P
 
-theorem mixPrecomputedDh_sameSnapshot (chainingKey precomputed : List UInt8) : SameSnapshot (Leanux.WG.mixPrecomputedDh chainingKey precomputed) := by
-  frame_same [Leanux.WG.mixPrecomputedDh] using [kdfOut_spec, kdf_spec]
+theorem mixPrecomputedDh_sameSnapshot (chainingKey precomputed : List UInt8) : SameSnapshot (Leanux.WG.mixPrecomputedDh chainingKey precomputed) :=
+  sameSnapshot_of_sameKernel (Framing.mixPrecomputedDh_sameKernel chainingKey precomputed)
 
 theorem mixPrecomputedDh_spec (P : Snapshot → Prop) (chainingKey precomputed : List UInt8) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.mixPrecomputedDh chainingKey precomputed

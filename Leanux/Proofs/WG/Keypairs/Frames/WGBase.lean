@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.Keypairs.Frames.Kernel
 import Leanux.Proofs.Framing.WGTime
+import Leanux.Proofs.Framing.WGIndex
 
 set_option pp.structureInstances false
 set_option maxHeartbeats 800000
@@ -66,8 +67,8 @@ theorem endpointEq_spec (P : Snapshot → Prop) (a : Endpoint) (b : Option Endpo
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.endpointEq a b
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (endpointEq_sameSnapshot a b).wp P
 
-theorem generatePublic_sameSnapshot (secret : Key) : SameSnapshot (Leanux.WG.generatePublic secret) := by
-  frame_same [Leanux.WG.generatePublic] using []
+theorem generatePublic_sameSnapshot (secret : Key) : SameSnapshot (Leanux.WG.generatePublic secret) :=
+  sameSnapshot_of_sameKernel (Framing.generatePublic_sameKernel secret)
 
 theorem generatePublic_spec (P : Snapshot → Prop) (secret : Key) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.generatePublic secret
@@ -277,8 +278,8 @@ theorem getPeer_spec (P : Snapshot → Prop) (id : PeerId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.getPeer id
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (getPeer_sameSnapshot id).wp P
 
-theorem indexBucket_sameSnapshot (index : Nat) : SameSnapshot (Leanux.WG.indexBucket index) := by
-  frame_same [Leanux.WG.indexBucket] using [getDev_spec]
+theorem indexBucket_sameSnapshot (index : Nat) : SameSnapshot (Leanux.WG.indexBucket index) :=
+  sameSnapshot_of_sameKernel (Framing.indexBucket_sameKernel index)
 
 theorem indexBucket_spec (P : Snapshot → Prop) (index : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.indexBucket index
@@ -466,8 +467,8 @@ theorem subtree_spec (P : Snapshot → Prop) (id : NodeId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.subtree id
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (subtree_sameSnapshot id).wp P
 
-theorem bucketHas_sameSnapshot (walk collide : Decision) (index : Nat) : SameSnapshot ((pinned_const _private.Leanux.WG.Peer.«0».Leanux.WG.bucketHas) walk collide index) := by
-  frame_same [_private.Leanux.WG.Peer.«0».Leanux.WG.bucketHas] using [indexBucket_spec]
+theorem bucketHas_sameSnapshot (walk collide : Decision) (index : Nat) : SameSnapshot ((pinned_const _private.Leanux.WG.Peer.«0».Leanux.WG.bucketHas) walk collide index) :=
+  sameSnapshot_of_sameKernel (Framing.bucketHas_sameKernel walk collide index)
 
 theorem bucketHas_spec (P : Snapshot → Prop) (walk collide : Decision) (index : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ (pinned_const _private.Leanux.WG.Peer.«0».Leanux.WG.bucketHas) walk collide index
@@ -494,8 +495,13 @@ theorem free_spec (P : Snapshot → Prop)  :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.free
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (free_sameSnapshot ).wp P
 
-theorem indexInsert_sameSnapshot (pid : PeerId) (kind : IndexKind) : SameSnapshot (Leanux.WG.indexInsert pid kind) := by
-  frame_same [Leanux.WG.indexInsert, _private.Leanux.WG.Peer.«0».Leanux.WG.unhashEntry] using [getDev_spec, recordBudget_spec, budgetExhausted_spec, bucketHas_spec, hidden_snapshot_spec, indexRemove_spec]
+theorem indexInsert_sameSnapshot (pid : PeerId) (kind : IndexKind) : SameSnapshot (Leanux.WG.indexInsert pid kind) :=
+  by
+  intro w x v hr
+  have hf := Framing.indexInsert_sameIndexKernel pid kind w x v hr
+  have hs := congrArg (fun k => snapshotOfWGKernelView (Framing.WGKernelView.ofKernel k)) hf
+  simpa [snapshotOfWGKernelView, Framing.indexKernelView, Framing.indexKernel,
+    Framing.WGKernelView.ofKernel, snapshot, Option.bind_map, Function.comp_def] using hs
 
 theorem indexInsert_spec (P : Snapshot → Prop) (pid : PeerId) (kind : IndexKind) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.indexInsert pid kind

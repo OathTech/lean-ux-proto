@@ -7,7 +7,8 @@ Worktree `.worktrees/proofs-campaign`, branch `proofs/campaign`. The
 prerequisites were carried over `2c7a076`; the audit wave at `f45bde8` is now
 carried, followed by the documentation-only `a39aded` review/tray update. The
 mirror exactly matches main. The proof tree is current over `a39aded`, including
-the R2 TX and R4 concrete stack/callback-provenance extensions below.
+the R2 five-call handshake and R4 concrete stack/callback-provenance extensions
+below.
 Component rows retain their explicit open obligations. R5 and R6 are resolved
 through their proved local contracts and checked Rule Zero counterexamples.
 No integration into main, push, differential check or guest run.
@@ -15,20 +16,20 @@ No integration into main, push, differential check or guest run.
 | Result | Progress |
 | --- | --- |
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay and independent review checked. Seccomp frame carry checked. |
-| R2 lifetime safety | Store identities, failure-retaining allocation/release and caller composition cover session/rotation, peer creation, receive entry/maintenance/completion, receive polling with the actual stack callback, transmit entry, TX staging and completion, decrypt, encrypt and TX iteration with explicit scheduler callbacks, and eleven socket/cache/loopback calls, including staged IPv4 send; stale-cursor finding checked. Remaining callers, lifecycle and whole-run internal-access coverage remain in progress. |
+| R2 lifetime safety | Store identities, failure-retaining allocation/release and caller composition cover session/rotation, peer creation, receive entry/maintenance/completion, receive polling with the actual stack callback, transmit entry, TX staging and completion, decrypt, encrypt and TX iteration with explicit scheduler callbacks, and eleven socket/cache/loopback calls, including staged IPv4 send; stale-cursor finding checked. The five-call handshake extension passes coordinated validation and independent source review. Remaining callers, lifecycle and whole-run internal-access coverage remain in progress. |
 | R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion, original empty-root, arbitrary-depth empty-child and exact-prefix insertion with sequence wrappers, and total original placement proved. Selected-root graft normal endpoints and rollback effects are checked; successful graft representation and actual-root lookup pass the coordinated gate. Deeper grafts, removal, general mutation/history and path refinements remain open. Path proofs follow R2. |
 | R4 delivery | Accepted original replay over f45bde8 refutes chronological post-GRO stack order: a held ACK followed by a distinct-flow SYN produces the SYN's RST first under the same key lifetime. Exact current poll erasure and removal-prefix order with an explicit callback queue contract pass the gate, as does the original-helper reorder equation. The former chronological callback theorem is retired, with its predicate unchanged. Per-poll selected callback order and exact callback-entry multiplicity pass the coordinated gate and independent review. Buffered-tag provenance and exact removal-observer agreement pass the coordinated gate and independent review. Concrete stack retention, initial-queue subsequence and callback occurrence provenance pass the coordinated gate and independent review. Pipeline conservation remains open. |
 | R5 key lifetime | Resolved through Rule Zero counterexamples, with 13 positive local contracts. Original/observed replays show nonce R+1 authenticating before rejection, queued transport keepalive encryption after recorded expiry, and packet-held material used after zero/clear before a new handshake. The new time inputs have coherent coarse/jiffies/arm arithmetic; Linux schedule reachability is not claimed. Validated over a39aded. |
 | R6 flood resistance | Original under-load cookie exclusion and full Noise-state frame proved; a generated accepted episode refutes the literal retry limit (19 retries, 20 total initiations with MAX=18). Six terminal theorems, the combined gate, fresh kernel replay and exact witness rerun pass. |
 
 **Last validated mirror: `a39aded` (source unchanged from `f45bde8`).** The
-full proof gate passes 266 build jobs and 241 terminal statements (ReplayWindow
-15, R1 9, R2 133, R3 30, R4 35, R5 13, R6 6), with only permitted axioms.
+full proof gate passes 271 build jobs and 245 terminal statements (ReplayWindow
+15, R1 9, R2 137, R3 30, R4 35, R5 13, R6 6), with only permitted axioms.
 Stock `leanchecker --fresh Leanux.Proofs` passes. The default model build passes
-60 jobs; the unit tier passes 94 tests in 21.802 seconds with one skip.
+60 jobs; the unit tier passes 94 tests in 21.887 seconds with one skip.
 The unchanged replay witnesses were not repeated for the trie, IPv4 socket,
-selected-GRO, encrypt-worker, tag/projection, TX and concrete stack/provenance
-extensions; the observers those witnesses use are unchanged.
+selected-GRO, encrypt-worker, tag/projection, TX, concrete stack/provenance
+and handshake extensions; the observers those witnesses use are unchanged.
 The retry, delayed-encryption and coherent post-clear witnesses passed the
 preceding checkpoint with exact original/observed JSON and strengthened syscall
 endpoint checks; all nine cases passed the earlier audit carry.
@@ -50,7 +51,8 @@ per-poll selected-GRO order and callback-entry conservation contracts, and
 complete encryption-worker access observers and their shared frames, and
 local poll-tag provenance and exact removal-observer projection, and the complete
 TX completion/worker family with its accumulating-fold erasure and jitter frame,
-and concrete stack queue retention and callback occurrence provenance.
+concrete stack queue retention and callback occurrence provenance, and the
+five-call handshake family with canonical crypto/index frames.
 The final source and contract reviews have no unresolved correctness findings;
 their frozen file hashes matched before the checkpoints.
 
@@ -297,6 +299,48 @@ failures were corrected, including broad-reduction heartbeat failures, bind
 reassociation and the cleanup loop's accumulating-fold form. No interruption
 or cap failure occurred.
 
+**Handshake construction, consumption and MAC.** `HandshakeConstruct`,
+`HandshakeConsume` and `HandshakeCalls` observe the complete original
+`createInitiation`, `createResponse`, `consumeInitiation`, `consumeResponse`
+and `addMacToPacket`. The typed five-call family retains each original result,
+World and Stop on every input/history. Its ambient contract names the original
+scalar index insertion explicitly; the concrete `AllocationInv` instance
+discharges it, both reference-taking lookups and failure puts. All resolved peer
+accesses remain visible. This is local resolved-identity safety, not ownership
+of the tables' scalar references or closure of the outer handshake worker.
+
+The constructors keep private `setChain`'s fresh getter/setter and the later
+state-write rereads. Initiation consumption obtains the flood clock before the
+replay/flood disjunction, keeps the signed comparison operands, and obtains the
+consumption clock after the preceding writes. Response consumption retains both
+the final state-check getter and the setter's fresh getter. Ordinary rejection
+runs its original cleanup; a Stop does not run a later failure put. MAC addition
+uses its original immediate saved-peer write before the short-circuited age
+test. A fourth terminal equation states exactly the preceding peer read/write
+when that original age test Stops, under consecutive original-run premises;
+it is not an accepted-run witness.
+
+`Framing/WGHandshake` owns the seven full-kernel crypto frames.
+`Framing/WGIndex` retains the complete kernel except the scalar index table,
+including device presence, resident values and allocation frontiers. Its source
+still checks the device and consumes the original collision/draw records.
+The older frame signatures are preserved by projection, including the lookup's
+index-bucket frame; access-free coverage follows source inspection separately
+from those endpoint frames. The four new terminal statements compile in the complete R2 target:
+`capped -- scripts/in-bundle lake build Leanux.Proofs.WG.LifetimeSafety.Statements`
+passes 204 jobs and all 137 R2 terminals. Independent frozen-source review matched
+all twelve final file hashes and reported no findings. The coordinated gate
+passes 271 jobs and 245 terminals; fresh stock kernel replay, the 60-job model
+build and 94-test unit tier also pass. Seven capped invocations completed in about 15 minutes:
+one passed and six ordinary failures were corrected (private-name normalization,
+projection unfolding, bind/match proof alignment and record/namespace syntax).
+Every process exit was collected; no interruption or cap failure occurred.
+
+[AGENT 2026-10-13] Keep the five-call handshake proof at exact local call
+boundaries and share canonical crypto/index frames, preserving legacy theorem
+signatures. This avoids duplicate generated matcher proofs while keeping
+scheduler and reference-ownership obligations explicit.
+
 Generic record-consumer frames live once in
 `Framing/KernelEffects`, with older interfaces derived by projection.
 Shared bind and finite-loop laws compose these per-call contracts. Generic enqueue/decrypt
@@ -336,7 +380,7 @@ do not establish delivery, order or reference ownership.
 
 **Remaining claim.** Full caller, device-lifecycle and scheduler closure remain
 unproved. Concrete encrypt/TX-worker scheduler callbacks,
-socket setup/reinitialization, handshake
+socket setup/reinitialization, outer handshake
 execution and timer callbacks, peer removal, netlink and direct resident scans
 need coverage. Saved scalar-reference
 ownership is a separate obligation: aliased or dangling IDs may legitimately
@@ -484,7 +528,8 @@ insertion, retains validity/unique IDs and links to the actual device root.
 Original lookup from that root satisfies the updated flat-list `Winner`.
 
 These mutation contracts distinguish normal allocation refusal from success;
-arbitrary bad records may still Stop. `add` refusal preserves the Kernel.
+arbitrary bad records may still Stop. In these empty-root/empty-child branches,
+`add` refusal preserves the Kernel.
 The original `insert` wrapper advances the sequence once before either normal
 outcome, including refusal. Exact equations preserve opposite root values and
 any supplied opposite-family representation; existing opposite-root linkage
