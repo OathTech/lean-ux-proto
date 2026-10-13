@@ -351,3 +351,27 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   the harness default, up from 3: "yes, that sounds reasonable, given we
   have more resources now", after four claim points ran at 8 on
   2026-10-12/13 with no guest-side disturbance.
+- **2026-10-13 [AGENT, fork of the coordinator]** Review item 8
+  (docs/2026-10-13-review-items-7-8.md, section 4), under the standing
+  delegation: `jiffies` and the timer expiries are `UInt64` and compared by
+  the C's `time_after` family written out (`Leanux/Kernel/Defs.lean`), the
+  boot-clock birthdays `Int64` with the age test computed as the C's s64;
+  the arm rule is split into the caller's read recovered from the record
+  (`expires - delay`) and an environment admissibility condition on the gap
+  to `mod_timer`'s read (negative: hidden mismatch; above one tick:
+  `unsupported`, a stall); the age and counter tests declare their
+  operands. No oracle change; no new decision (`dstCacheHit` deferred with
+  the anchoring of `net/core/dst_cache.c`).
+- **2026-10-13 [AGENT, coordinator]** Review item 8's counters stay `Nat`
+  (its author's choice, endorsed): the operand evidence is delivered without
+  the type change, and retyping would reach the proof tree's counter-window
+  model under construction by the campaign.
+- **2026-10-13 [AGENT, fork of the coordinator]** Review item 7, under the
+  standing delegation (design section 10): the record-driven loop measures
+  and the derived activation bound; the record-only kind-310 end-of-wait
+  `jiffies` read over the explicit-fixture option for the firing window,
+  written into the remote stream (the task's window closes before the
+  waits), consumed by `idleTimers` and `afterAdvance`; the domain filter's
+  turn bound named as its own (`DOMAIN_FILTER_TURNS`, `unsupported "runner
+  budget: …"`), never an `invariant`; `Timing`'s constants kept for the
+  filter's prediction only.

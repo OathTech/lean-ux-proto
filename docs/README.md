@@ -56,6 +56,8 @@ it is history, not setup instructions. Setup is
 | [2026-10-06-w4-w7-transmit-bulk.md](2026-10-06-w4-w7-transmit-bulk.md) | W4 and W7: transmit shapes and bulk queues; the full-ring tier and the open two-drop finding |
 | [2026-10-06-w5-w6-receive.md](2026-10-06-w5-w6-receive.md) | W5 and W6: receive shapes and the stack's reactions to inner packets |
 | [2026-10-06-w8-w9-netns-routing.md](2026-10-06-w8-w9-netns-routing.md) | W8 and W9: netns exit, socket errors and routing |
+| [2026-10-13-w7-full-ring-tier.md](2026-10-13-w7-full-ring-tier.md) | The W7 full-ring tier: the two silent drops at the 1024-item wrap explained from the records (two uncleared carried slots, no interleave), the tier's five traces |
+| [2026-10-13-review-items-7-8.md](2026-10-13-review-items-7-8.md) | Review items 7 and 8: the runner's budgets as derived or record-driven measures with the kind-310 end-of-wait read, and jiffies as the C's 64-bit type with its comparisons declared |
 
 ## Pipes, epoll and seccomp
 

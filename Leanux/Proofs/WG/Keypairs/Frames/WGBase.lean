@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.Keypairs.Frames.Kernel
+import Leanux.Proofs.Framing.WGTime
 
 set_option pp.structureInstances false
 set_option maxHeartbeats 800000
@@ -23,12 +24,26 @@ theorem PrevQueue_dequeue_spec (P : Snapshot → Prop) {α : Type} (q : PrevQueu
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.PrevQueue.dequeue (α := α) q
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (PrevQueue_dequeue_sameSnapshot (α := α) q).wp P
 
-theorem birthdateHasExpired_sameSnapshot (birthday : Int) (seconds : Nat) : SameSnapshot (Leanux.WG.birthdateHasExpired birthday seconds) := by
-  frame_same [Leanux.WG.birthdateHasExpired] using [hiddenClock_spec]
+theorem birthdateTest_sameSnapshot (birthday : Int64) (seconds : Nat) : SameSnapshot (Leanux.WG.birthdateTest birthday seconds) :=
+  sameSnapshot_of_sameKernel (Framing.birthdateTest_sameKernel birthday seconds)
 
-theorem birthdateHasExpired_spec (P : Snapshot → Prop) (birthday : Int) (seconds : Nat) :
+theorem birthdateTest_spec (P : Snapshot → Prop) (birthday : Int64) (seconds : Nat) :
+    ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.birthdateTest birthday seconds
+    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (birthdateTest_sameSnapshot birthday seconds).wp P
+
+theorem birthdateHasExpired_sameSnapshot (birthday : Int64) (seconds : Nat) : SameSnapshot (Leanux.WG.birthdateHasExpired birthday seconds) :=
+  sameSnapshot_of_sameKernel (Framing.birthdateHasExpired_sameKernel birthday seconds)
+
+theorem birthdateHasExpired_spec (P : Snapshot → Prop) (birthday : Int64) (seconds : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.birthdateHasExpired birthday seconds
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (birthdateHasExpired_sameSnapshot birthday seconds).wp P
+
+theorem branchExpired_sameSnapshot (d : Decision) (birthday : Int64) (seconds : Nat) (f : Bool → Bool := id) : SameSnapshot (Leanux.WG.branchExpired d birthday seconds f) :=
+  sameSnapshot_of_sameKernel (Framing.branchExpired_sameKernel d birthday seconds f)
+
+theorem branchExpired_spec (P : Snapshot → Prop) (d : Decision) (birthday : Int64) (seconds : Nat) (f : Bool → Bool := id) :
+    ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.branchExpired d birthday seconds f
+    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (branchExpired_sameSnapshot d birthday seconds f).wp P
 
 theorem choose_sameSnapshot (node : AipNode) (key : Nat) : SameSnapshot (Leanux.WG.choose node key) := by
   frame_same [Leanux.WG.choose] using []
@@ -333,14 +348,14 @@ theorem delTimer_spec (P : Snapshot → Prop) (pid : PeerId) (t : PeerTimer) :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (delTimer_sameSnapshot pid t).wp P
 
 theorem dstCacheGet_sameSnapshot (pid : PeerId) (gen : Nat) : SameSnapshot (Leanux.WG.dstCacheGet pid gen) := by
-  frame_same [Leanux.WG.dstCacheGet] using [getPeer_spec, hiddenU64_spec, setPeer_spec]
+  frame_same [Leanux.WG.dstCacheGet] using [getPeer_spec, hiddenJiffies_spec, setPeer_spec]
 
 theorem dstCacheGet_spec (P : Snapshot → Prop) (pid : PeerId) (gen : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.dstCacheGet pid gen
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (dstCacheGet_sameSnapshot pid gen).wp P
 
 theorem dstCacheReset_sameSnapshot (pid : PeerId) : SameSnapshot (Leanux.WG.dstCacheReset pid) := by
-  frame_same [Leanux.WG.dstCacheReset] using [getPeer_spec, hiddenU64_spec, setPeer_spec]
+  frame_same [Leanux.WG.dstCacheReset] using [getPeer_spec, hiddenJiffies_spec, setPeer_spec]
 
 theorem dstCacheReset_spec (P : Snapshot → Prop) (pid : PeerId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.dstCacheReset pid
@@ -410,14 +425,14 @@ theorem requireNotPending_spec (P : Snapshot → Prop) (pid : PeerId) (what : St
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (requireNotPending_sameSnapshot pid what).wp P
 
 theorem resetLastSentHandshake_sameSnapshot (pid : PeerId) : SameSnapshot (Leanux.WG.resetLastSentHandshake pid) := by
-  frame_same [Leanux.WG.resetLastSentHandshake] using [getPeer_spec, hiddenClock_spec, setPeer_spec]
+  frame_same [Leanux.WG.resetLastSentHandshake] using [getPeer_spec, hiddenClock64_spec, setPeer_spec]
 
 theorem resetLastSentHandshake_spec (P : Snapshot → Prop) (pid : PeerId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.resetLastSentHandshake pid
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (resetLastSentHandshake_sameSnapshot pid).wp P
 
 theorem rootRemovePeerLists_sameSnapshot (root : NodeId) : SameSnapshot (Leanux.WG.rootRemovePeerLists root) := by
-  frame_same [Leanux.WG.rootRemovePeerLists] using [getNode_spec, getPeer_spec, listDel_spec]
+  frame_same [Leanux.WG.rootRemovePeerLists] using [getDev_spec, getNode_spec, getPeer_spec, listDel_spec]
 
 theorem rootRemovePeerLists_spec (P : Snapshot → Prop) (root : NodeId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.rootRemovePeerLists root
@@ -445,7 +460,7 @@ theorem socketInit_spec (P : Snapshot → Prop) (port : Nat) :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (socketInit_sameSnapshot port).wp P
 
 theorem subtree_sameSnapshot (id : NodeId) : SameSnapshot (Leanux.WG.subtree id) := by
-  frame_same [Leanux.WG.subtree] using [getNode_spec]
+  frame_same [Leanux.WG.subtree] using [getDev_spec, getNode_spec]
 
 theorem subtree_spec (P : Snapshot → Prop) (id : NodeId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.subtree id
@@ -480,7 +495,7 @@ theorem free_spec (P : Snapshot → Prop)  :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (free_sameSnapshot ).wp P
 
 theorem indexInsert_sameSnapshot (pid : PeerId) (kind : IndexKind) : SameSnapshot (Leanux.WG.indexInsert pid kind) := by
-  frame_same [Leanux.WG.indexInsert] using [bucketHas_spec, hidden_snapshot_spec, indexRemove_spec]
+  frame_same [Leanux.WG.indexInsert] using [recordBudget_spec, budgetExhausted_spec, bucketHas_spec, hidden_snapshot_spec, indexRemove_spec]
 
 theorem indexInsert_spec (P : Snapshot → Prop) (pid : PeerId) (kind : IndexKind) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.indexInsert pid kind

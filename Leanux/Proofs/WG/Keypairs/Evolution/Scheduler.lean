@@ -68,6 +68,7 @@ macro "scheduler_worker_step" : tactic => `(tactic|
     | (ordinary_head Leanux.peekUnit; exact (peekUnit_sameSnapshot _).ordinary)
     | (ordinary_head Leanux.resolveUnit; exact (resolveUnit_sameSnapshot _ _ _).ordinary)
     | (ordinary_head Env.condResched; exact (condResched_sameSnapshot _).ordinary)
+    | (ordinary_head Env.Activation.occupancy; exact (activationOccupancy_sameSnapshot _).ordinary)
     | (ordinary_head Env.Activation.hasWork; exact (activationHasWork_sameSnapshot _).ordinary)
     | (ordinary_head List.filterM;
         exact (filterM_sameSnapshot Env.Activation.consistent activationConsistent_sameSnapshot _).ordinary)

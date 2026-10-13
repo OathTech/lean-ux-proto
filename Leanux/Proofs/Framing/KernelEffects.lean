@@ -25,6 +25,49 @@ theorem hiddenClock_sameKernel (site : HiddenSite) : SameKernel (hiddenClock sit
   have hs := sameKernel_wp _ (hidden_sameKernel site) (fun k' => k' = k)
   mvcgen [hiddenClock, hs]
 
+theorem hiddenClock64_sameKernel (site : HiddenSite) : SameKernel (hiddenClock64 site) := by
+  apply sameKernel_of_wp
+  intro k
+  have hs := sameKernel_wp _ (hidden_sameKernel site) (fun k' => k' = k)
+  mvcgen [hiddenClock64, hs]
+
+theorem hiddenJiffies_sameKernel (site : HiddenSite) : SameKernel (hiddenJiffies site) := by
+  apply sameKernel_of_wp
+  intro k
+  have hs := sameKernel_wp _ (hidden_sameKernel site) (fun k' => k' = k)
+  mvcgen [hiddenJiffies, hs]
+
+theorem branchCmp_sameKernel (d : Decision) (outcome : Bool) (a b : Int) : SameKernel (branchCmp d outcome a b) := by
+  apply sameKernel_of_wp
+  intro k
+  mvcgen [branchCmp]
+
+theorem recordBudget_sameKernel  : SameKernel (recordBudget) := by
+  apply sameKernel_of_wp
+  intro k
+  mvcgen [recordBudget]
+
+theorem budgetExhausted_sameKernel {α : Type} (name : String) : SameKernel (budgetExhausted (α := α) name) := by
+  apply sameKernel_of_wp
+  intro k
+  mvcgen [budgetExhausted, invariant, unsupported]
+
+theorem recordsLeft_sameKernel  : SameKernel (recordsLeft) := by
+  apply sameKernel_of_wp
+  intro k
+  mvcgen [recordsLeft]
+
+theorem peekSiteU64_sameKernel (site : HiddenSite) : SameKernel (peekSiteU64 site) := by
+  apply sameKernel_of_wp
+  intro k
+  mvcgen [peekSiteU64]
+
+theorem peekQueuedUnit_sameKernel (w : Worker) (pid : Nat) : SameKernel (peekQueuedUnit w pid) := by
+  apply sameKernel_of_wp
+  intro k
+  have hs := sameKernel_wp _ skipAmbient_sameKernel (fun s => s = k)
+  mvcgen [peekQueuedUnit, hs]
+
 theorem refcountDecAndTest_sameKernel (old : Nat) : SameKernel (refcountDecAndTest old) := by
   apply sameKernel_of_wp
   intro k
@@ -51,6 +94,11 @@ theorem routeLookup_sameKernel (family src dst : Nat) : SameKernel (routeLookup 
   intro k
   mvcgen [routeLookup]
 
+theorem envOk_sameKernel (site : EnvSite) : SameKernel (envOk site) := by
+  apply sameKernel_of_wp
+  intro k
+  mvcgen [envOk]
+
 theorem peekHiddenSite_sameKernel : SameKernel peekHiddenSite := by
   apply sameKernel_of_wp
   intro k
@@ -61,7 +109,7 @@ theorem skipCutSites_sameKernel (sites : List HiddenSite) : SameKernel (skipCutS
   apply sameKernel_of_wp
   intro k
   have hs := sameKernel_wp _ skipAmbient_sameKernel (fun s => s = k)
-  mvcgen [skipCutSites, hs, unsupported, invariant]
+  mvcgen [skipCutSites, hs, recordBudget, budgetExhausted, unsupported, invariant]
   all_goals try exact ((⇓? _ w => ⌜w.k = k⌝) : PostCond _ (.arg World (.except Stop .pure)))
   all_goals try dsimp +zetaDelta only at *
   all_goals try simp_all

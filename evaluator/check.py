@@ -66,6 +66,11 @@ NETNS_SHARE = 0.03
 # (seccomp X: seccomp-controls, the flags, action and load the mirror stops
 # unsupported on while the kernel runs them — design 9.1; scripts/seccomp-controls.py)
 CONTROL_SUITES = ('steering-controls', 'timer-controls', 'lifecycle-controls', 'underload-controls', 'seccomp-controls')
+# The W7 full-ring tier (docs/2026-10-13-w7-full-ring-tier.md): corpus/w7-tier,
+# the 1024-slot encrypt ring filled by one wg_batch; run on request, outside
+# the default list, since each of its traces is a chunk by itself (a bulk
+# trace) and its guest time is a large share of the trace bound.
+TIER_SUITES = ('w7-tier',)
 CHUNK = 100
 # seccomp X: the guest's console per chunk is bounded (OUTPUT_LIMIT, 16 MB),
 # and seccomp traces are the costly ones in comparison mode: a sandboxed
@@ -393,6 +398,13 @@ EPOLL_INSERT_ADDRESS = 308
 # then its own translation instruction by instruction, so a mismatch names
 # the first differing instruction.
 SECCOMP_PROGRAM = 309
+# Review item 7 (docs/2026-10-13-review-items-7-8.md, section 5): the end of
+# a guest idle wait, {jiffies} (8 bytes, class 'jiffies' like kind 306,
+# resolved by the consumer frame: the ioctl's call site fs/ioctl.c:51 as
+# the advance record), written into the remote stream by KCOV_LEANUX_JIFFIES
+# at the end of every wait the mirror treats as an idle point; the mirror's
+# firing window ends at this value instead of a fixture bound.
+JIFFIES_END = 310
 
 
 def load_hidden_sites():
@@ -500,7 +512,7 @@ def resolve_choices(per, sites, locations, dispatch=None):
                 kind_class = 'random' if kind in RANDOM_KINDS else 'clock' if 200 <= kind <= 216 \
                     else 'resched' if raw_kind == RESCHED else 'timer' if raw_kind == TIMER_ARM \
                     else 'advance' if raw_kind == TIME_ADVANCE else 'alloc' if kind == ALLOC_KIND \
-                    else 'queue' if raw_kind == QUEUE else 'jiffies' if raw_kind == DST_CACHE_JIFFIES \
+                    else 'queue' if raw_kind == QUEUE else 'jiffies' if raw_kind in (DST_CACHE_JIFFIES, JIFFIES_END) \
                     else 'address' if raw_kind == EPOLL_INSERT_ADDRESS \
                     else 'program' if raw_kind == SECCOMP_PROGRAM else None
                 if kind_class == 'queue':
@@ -647,12 +659,21 @@ def jiffies_problems(traces, per):
                                   kinds=[r[0] for r in records[:records.index(advances[0])]][:8]))
             floor = None
             for kind, _ip, _seq, length, data, _func in records:
-                if kind not in (TIMER_ARM, TIME_ADVANCE):
+                if kind not in (TIMER_ARM, TIME_ADVANCE, JIFFIES_END):
                     continue
-                if length != (24 if kind == TIMER_ARM else 16):
+                if length != (24 if kind == TIMER_ARM else 16 if kind == TIME_ADVANCE else 8):
                     found.append(dict(index=index, problem=f'record kind {kind} length {length}'))
                     continue
-                first, second = (int.from_bytes(bytes.fromhex(data[k:k + 16]), 'little') for k in (0, 16))
+                first = int.from_bytes(bytes.fromhex(data[:16]), 'little')
+                if kind == JIFFIES_END:
+                    # the end-of-wait read (item 7): never behind the last known value
+                    if last is not None and first < last:
+                        found.append(dict(index=index, problem='jiffies went back', last=last, jiffies=first, kind=kind))
+                    elif last is not None:
+                        natural += first - last
+                    last = first
+                    continue
+                second = int.from_bytes(bytes.fromhex(data[16:32]), 'little')
                 if last is not None and first < last:
                     found.append(dict(index=index, problem='jiffies went back', last=last, jiffies=first, kind=kind))
                 elif last is not None:
@@ -1558,8 +1579,8 @@ def main(argv=None):
                         help='share of alloc_fail traces among the generated WireGuard traces (0: none, as before A1)')
     args = parser.parse_args(argv)
     suites = args.suite.split(',')
-    if not suites or any(s not in SUITES + CONTROL_SUITES for s in suites):
-        parser.error(f'--suite must be a comma-separated subset of {SUITES + CONTROL_SUITES}')
+    if not suites or any(s not in SUITES + CONTROL_SUITES + TIER_SUITES for s in suites):
+        parser.error(f'--suite must be a comma-separated subset of {SUITES + CONTROL_SUITES + TIER_SUITES}')
     if args.guest_variant and set(suites) - set(CONTROL_SUITES):
         parser.error('--guest-variant runs control suites only')
     artifacts = Path(os.environ.get('LEANUX_ARTIFACTS', ROOT / '.artifacts')).resolve()

@@ -15,7 +15,7 @@ def handshakeZeroPrefix (pid : PeerId) : MixedM Unit := do
   setPeerMixed pid {p with ephemeralPrivate := z, remoteEphemeral := z, hash := z, chainingKey := z, remoteIndex := 0, handshakeState := 0}
 
 def deriveKeysPrefix (kp : KeypairId) (initiator : Bool) (chainingKey : List UInt8) : MixedM Unit := do
-  let birthdate ← liftPrefix (hiddenClock .deriveKeysBirthdate)
+  let birthdate ← liftPrefix (hiddenClock64 .deriveKeysBirthdate)
   let outs ← liftPrefix (kdf true false chainingKey [])
   let sym (key : List UInt8) : SymmetricKey := {key, birthdate, isValid := true}
   let (first, second) := (sym (← liftPrefix (kdfOut outs 0)), sym (← liftPrefix (kdfOut outs 1)))
@@ -52,7 +52,7 @@ theorem deriveKeysPrefix_spec_ambient (c : AmbientContracts I) (P : IdentityView
     (kp : KeypairId) (initiator : Bool) (key : List UInt8) :
     AmbientSpec I P (deriveKeysPrefix kp initiator key) (fun _ => P) := by
   unfold deriveKeysPrefix
-  apply PrefixEnsures.bind (c.kernel P _ (hiddenClock_sameKernel .deriveKeysBirthdate))
+  apply PrefixEnsures.bind (c.kernel P _ (hiddenClock64_sameKernel .deriveKeysBirthdate))
   intro birthdate
   apply PrefixEnsures.bind (c.kernel P _ (Keypairs.kdf_sameKernel true false key []))
   intro outs
@@ -69,7 +69,7 @@ theorem deriveKeysPrefix_spec_ambient (c : AmbientContracts I) (P : IdentityView
 /-- No store access occurs before derive_keys obtains its birthdate. -/
 theorem deriveKeysPrefix_clock_failure (kp : KeypairId) (initiator : Bool) (key : List UInt8)
     (w : World) (h : List LifetimeEvent) (e : Stop)
-    (he : (hiddenClock .deriveKeysBirthdate).run w = .error e) :
+    (he : (hiddenClock64 .deriveKeysBirthdate).run w = .error e) :
     runPrefix (deriveKeysPrefix kp initiator key) w h = (.error e, h) := by
   simp only [deriveKeysPrefix, runPrefix_bind, runPrefix_lift, he]
 

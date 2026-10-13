@@ -20,6 +20,7 @@ import Leanux.Proofs.WG.Lifetimes.SessionFailure
 import Leanux.Proofs.WG.Lifetimes.PeerAllocationFailure
 import Leanux.Proofs.WG.Lifetimes.ReceiveEntryFailure
 import Leanux.Proofs.WG.Lifetimes.MaintenanceCalls
+import Leanux.Proofs.WG.Lifetimes.StackAccess
 
 /-! R2's store-identity components: whole-operation keypair evolution,
 peer allocation/reference sequences, and packet primitive sequences within a device
@@ -57,7 +58,7 @@ theorem peer_creation_record_failure_prefix (pid : PeerId) (key : Key)
     (w : World) (h : List Peers.PeerEvent) (e : Stop)
     (hd : w.k.wg.isSome = true) (ha : w.armRecords = true)
     (hc : w.dstCacheRecords = true)
-    (hr : (hiddenU64 .dstCacheResetTs).run (Peers.creationCoreWorld w pid key) = .error e) :
+    (hr : (hiddenJiffies .dstCacheResetTs).run (Peers.creationCoreWorld w pid key) = .error e) :
     runPrefix (do Peers.peerCreateCorePrefix pid key; Peers.dstCacheResetPrefix pid) w h =
       (.error e, h ++ [.allocate pid (w.k.peerCounter + 1), .write pid (w.k.peerCounter + 1)]) :=
   Peers.creation_core_clock_failure pid key w h e hd ha hc hr
@@ -707,7 +708,7 @@ theorem begin_session_birthdate_failure_prefix (pid : PeerId) (kp : KeypairId)
     (hwrite : (setKeypair kp {k with iAmTheInitiator := before.handshakeState == HANDSHAKE_CONSUMED_RESPONSE, remoteIndex := current.remoteIndex}).run guarded = .ok ((), configured))
     (hselect : (branch .sessionInitiator (before.handshakeState == HANDSHAKE_CONSUMED_RESPONSE)).run configured =
       .ok (selected, clockEntry))
-    (hclock : (hiddenClock .deriveKeysBirthdate).run clockEntry = .error e) :
+    (hclock : (hiddenClock64 .deriveKeysBirthdate).run clockEntry = .error e) :
     runPrefix (Lifetimes.beginSessionPrefix pid) w h =
       (.error e, h ++ [.peer (.read pid before.internalId),
         .keypair (.allocate kp (allocEntry.k.keypairCounter + 1)),
@@ -756,7 +757,7 @@ theorem peer_create_cache_clock_failure_prefix (key : Key) (psk : Option Key)
     (hmem : (branch .peerCreateNoMem false).run allocated = .ok (false, reserved))
     (hcache : (branch .peerCreateDstCacheFail false).run reserved = .ok (false, entry))
     (ha : entry.armRecords = true) (hc : entry.dstCacheRecords = true)
-    (hclock : (hiddenU64 .dstCacheResetTs).run
+    (hclock : (hiddenJiffies .dstCacheResetTs).run
       (Peers.creationCoreWorld entry d.nextPeer key) = .error e) :
     runPrefix (Lifetimes.peerCreateMixed key psk) w h =
       (.error e, h ++ [.peer (.allocate d.nextPeer (entry.k.peerCounter + 1)),
@@ -1044,9 +1045,78 @@ theorem socket_cache_clock_failure (pid gen : Nat) (w : World) (p : Peer)
     (h : List Lifetimes.LifetimeEvent) (e : Stop)
     (ha : w.armRecords = true) (hc : w.dstCacheRecords = true)
     (hp : (getPeer pid).run w = .ok (p, w)) (hs : p.dstCache.slot = none)
-    (hf : (hiddenU64 .dstCacheRefreshTs).run w = .error e) :
+    (hf : (hiddenJiffies .dstCacheRefreshTs).run w = .error e) :
     runPrefix (Lifetimes.dstCacheGetPrefix pid gen) w h =
       (.error e, h ++ [.peer (.read pid p.internalId)]) :=
   Lifetimes.dstCacheGetPrefix_clock_failure pid gen w p h e ha hc hp hs hf
+
+/-- The observed complete wgXmit entry returns the original result, World or
+Stop on every input, including all error and staged-queue paths. -/
+theorem transmit_entry_erasure (family addr : Nat) (pkts : List Packet) (mtu : Nat) :
+    ErasesPrefix (Lifetimes.wgXmitPrefix family addr pkts mtu) (wgXmit family addr pkts mtu) :=
+  Lifetimes.wgXmitPrefix_erases family addr pkts mtu
+
+/-- Transmit entry retains a safe prefix under explicit ambient, staging and
+error-statistics contracts. No queue-ownership or routing theorem is assumed. -/
+theorem transmit_entry_ambient_safety (I : List Lifetimes.LifetimeEvent → World → Prop)
+    (c : Lifetimes.AmbientContracts I) (t : Lifetimes.TxContracts I)
+    (x : Lifetimes.WgXmitContracts I) (family addr : Nat) (pkts : List Packet) (mtu : Nat) :
+    PrefixPreserves I Lifetimes.LifetimeEvent.Safe (Lifetimes.wgXmitPrefix family addr pkts mtu) :=
+  Lifetimes.wgXmitPrefix_preserves c t x family addr pkts mtu
+
+/-- Complete transmit entry has safe resolved-store accesses, including every
+failed prefix, and preserves allocation bounds on success. -/
+theorem transmit_entry_allocation_safety (family addr : Nat) (pkts : List Packet) (mtu : Nat) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.wgXmitPrefix family addr pkts mtu) :=
+  Lifetimes.wgXmitPrefix_preserves Lifetimes.allocationAmbient Lifetimes.allocationTx
+    Lifetimes.allocationWgXmit family addr pkts mtu
+
+/-- The actual inner-packet stack observer erases to Env.deliverInner on every
+input, retaining the original input exclusions and TCP reply re-entry. -/
+theorem actual_stack_erasure (pkt : List UInt8) :
+    ErasesPrefix (Lifetimes.stackReceivePrefix pkt) (Leanux.Env.deliverInner pkt) :=
+  Lifetimes.stackReceivePrefix_erases pkt
+
+/-- The actual stack callback satisfies the ambient lifetime contract, with
+TCP replies composed through the complete transmit entry. -/
+theorem actual_stack_ambient_safety (I : List Lifetimes.LifetimeEvent → World → Prop)
+    (c : Lifetimes.AmbientContracts I) (t : Lifetimes.TxContracts I)
+    (x : Lifetimes.WgXmitContracts I) (pkt : List UInt8) :
+    PrefixPreserves I Lifetimes.LifetimeEvent.Safe (Lifetimes.stackReceivePrefix pkt) :=
+  Lifetimes.stackReceivePrefix_preserves c t x pkt
+
+/-- The actual stack callback has safe failure prefixes and preserves allocation
+bounds on success. This states lifetime safety, not successful delivery. -/
+theorem actual_stack_allocation_safety (pkt : List UInt8) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.stackReceivePrefix pkt) :=
+  Lifetimes.stackReceivePrefix_preserves Lifetimes.allocationAmbient Lifetimes.allocationTx
+    Lifetimes.allocationWgXmit pkt
+
+/-- Polling with the actual List.forM deliverInner callback returns the original
+result, World or Stop, for any peer, budget and input World. -/
+theorem actual_receive_poll_erasure (pid : PeerId) (budget : Nat) :
+    ErasesPrefix (Lifetimes.rxPollStackPrefix pid budget)
+      (rxPoll pid budget (fun pkts => pkts.forM Leanux.Env.deliverInner)) :=
+  Lifetimes.rxPollStackPrefix_erases pid budget
+
+/-- Polling and its concrete stack callback compose under the ambient lifetime
+contracts; callback behavior is discharged rather than assumed separately. -/
+theorem actual_receive_poll_ambient_safety (I : List Lifetimes.LifetimeEvent → World → Prop)
+    (c : Lifetimes.AmbientContracts I) (t : Lifetimes.TxContracts I)
+    (r : Lifetimes.RxContracts I) (x : Lifetimes.WgXmitContracts I)
+    (pid : PeerId) (budget : Nat) :
+    PrefixPreserves I Lifetimes.LifetimeEvent.Safe (Lifetimes.rxPollStackPrefix pid budget) :=
+  Lifetimes.rxPollStackPrefix_preserves c t r x pid budget
+
+/-- Complete receive polling with its actual stack callback has safe failure
+prefixes and preserves allocation bounds on success. Surrounding scheduling
+and delivery-order obligations remain separate. -/
+theorem actual_receive_poll_allocation_safety (pid : PeerId) (budget : Nat) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.rxPollStackPrefix pid budget) :=
+  Lifetimes.rxPollStackPrefix_preserves Lifetimes.allocationAmbient Lifetimes.allocationTx
+    Lifetimes.allocationRx Lifetimes.allocationWgXmit pid budget
 
 end Leanux.Proofs.WG.LifetimeSafety

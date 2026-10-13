@@ -1032,7 +1032,7 @@ inductive HiddenSite where
       `harness/linux.py` `ARM_RECORDS`), and the kind-304 record
       `{jiffies before, jiffies after}` of the `wg_advance` operation, in
       the trace process's task stream. -/
-  | modTimerArm | timeAdvance
+  | modTimerArm | timeAdvance | jiffiesEnd
   /-- Dispatch order (docs/2026-10-11-dispatch-order.md): the kind-307 queue
       record `{work, func}` written at `__queue_work` for a work item of the
       dispatch set; its site is the work function. Consumed where the mirror
@@ -1224,6 +1224,13 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   -- of `kcov_ioctl`.
   | .modTimerArm => ⟨100, "mod_timer_arm", "timer", "drivers/net/wireguard/timers.c", 37, 24, .mirror⟩
   | .timeAdvance => ⟨101, "time_advance", "advance", "fs/ioctl.c", 51, 16, .mirror⟩
+  -- Review item 7 (docs/2026-10-13-review-items-7-8.md, section 5): the end of
+  -- a guest idle wait, `jiffies` read by the KCOV_LEANUX_JIFFIES ioctl and
+  -- written as kind 310 (class `jiffies`) into the remote stream from the
+  -- same call site as the advance; consumed by `Env.idleTimers` and
+  -- `Env.afterAdvance` as the firing window's exact end. Id 128: the first
+  -- free id after L's block (120-127).
+  | .jiffiesEnd => ⟨128, "jiffies_end", "jiffies", "fs/ioctl.c", 51, 8, .mirror⟩
   -- L (ids 120-126, outside E-A's 64-69, A's 70-99 and D3's 100-115). The
   -- consumer frames were confirmed on the built kernel by stream G's L0 probe
   -- (scripts/wg-l0-probe.py): kind 208 at cookie.c:23 and ratelimiter.c:57,
@@ -1289,7 +1296,7 @@ def HiddenSite.all : List HiddenSite :=
   ++ Worker.all.flatMap (fun w => [.sectionStart w, .sectionStop w])
   ++ [.reschedReceive, .reschedEncrypt, .reschedTx, .reschedDecrypt, .newHandshakeJitter, .walltimeLastHandshakeData,
       .cookieBirthdate]
-  ++ [.modTimerArm, .timeAdvance]
+  ++ [.modTimerArm, .timeAdvance, .jiffiesEnd]
   ++ (Worker.all.filter fun w => w.timer?.isNone && w != .netRx).map .queued
   ++ [.cookieSecretBirthdate, .cookieSecret, .pubkeyHashKey, .ratelimiterKey, .ratelimiterGcNow, .udpPortDraw,
       .neighReachTime, .netlinkAutobindPort]
@@ -1337,10 +1344,13 @@ structure HiddenRecord where
 
 /-- Timing facts the environment supplies (`Leanux/Env.lean`); the mirror has
     no clock. D3 (docs/2026-10-05-d3-timers.md, section 5.3): the bounds of
-    the firing window, in ticks. A timer section is accepted iff its timer is
-    pending with `expires < J_hi`, where `J_hi` is the advance's `jiffies`
-    after plus `advanceWait` inside `wg_advance`, and the last recorded
-    `jiffies` plus `traceBound` plus `advanceWait` at the other idle points. -/
+    the firing window, in ticks, for the domain filter's prediction only
+    (review item 7): with records the window ends at the recorded end of the
+    wait (kind 310, `HiddenSite.jiffiesEnd`), and these constants are not
+    consulted. Without records the filter predicts a firing iff the timer is
+    pending with `expires < J_hi`, `J_hi` the advance's `jiffies` after plus
+    `advanceWait` inside `wg_advance`, and the last known `jiffies` plus
+    `traceBound` plus `advanceWait` at the other idle points. -/
 structure Timing where
   /-- The guest's wait after an advance has been absorbed (`W`). -/
   advanceWait : Nat
@@ -1481,9 +1491,9 @@ structure World where
       worker cannot have run yet. -/
   queuedThisCall : List Nat := []
   /-- D3, fixture knowledge (docs/2026-10-05-d3-timers.md, section 5.4): the
-      last `jiffies` a record told (kinds 303 and 304), 64-bit, never
-      truncated; `none` before the first. -/
-  jiffiesLast : Option Nat := none
+      last `jiffies` a record told (kinds 303 and 304), the C's `unsigned
+      long` (64-bit on x86_64, review item 8); `none` before the first. -/
+  jiffiesLast : Option UInt64 := none
   /-- D3: whether this run's records include the kind-303 arm records (the
       wire's `A` line, `harness/linux.py` `ARM_RECORDS`; the check passes
       the same value as the input's `arm_records`). Without them the mirror
@@ -1555,7 +1565,7 @@ structure World where
       (docs/2026-10-05-e-dos.md §4.2), so a leak between traces is a
       control-flow mismatch. A flood's invalid tail sets it to that tail's
       last under-load read (`floodTailEffect`). -/
-  lastUnderLoad : Option Int := none
+  lastUnderLoad : Option Int64 := none
 
 /-- Why a mirror execution stopped without an observation. -/
 inductive Stop where
@@ -1738,6 +1748,19 @@ def branchCmpExcluded (d : Decision) (outcome : Bool) (x : OperandExclusion) : M
   modify fun w => { w with steps := w.steps.push { decision := d, outcome, excluded := some x, netRx := w.netRxSection } }
   return outcome
 
+/-- The kernel's `jiffies` comparisons (include/linux/jiffies.h:127-150,
+    review item 8): `time_after(a, b)` is `(long)((b) - (a)) < 0` on
+    `unsigned long`, a signed 64-bit difference, so a wrapped `jiffies`
+    compares as the C compares it. These are the C's macros, not
+    approximations of them. -/
+def timeAfter (a b : UInt64) : Bool := (b - a).toInt64 < 0
+/-- `time_before(a, b)` is `time_after(b, a)` (jiffies.h:138). -/
+def timeBefore (a b : UInt64) : Bool := timeAfter b a
+/-- `time_after_eq(a, b)` is `(long)((a) - (b)) >= 0` (jiffies.h:147-150). -/
+def timeAfterEq (a b : UInt64) : Bool := (a - b).toInt64 ≥ 0
+/-- `time_before_eq(a, b)` is `time_after_eq(b, a)` (jiffies.h:151). -/
+def timeBeforeEq (a b : UInt64) : Bool := timeAfterEq b a
+
 /-- Ask the environment oracle; the site's call count is part of the query. -/
 def envOk (site : EnvSite) : M Bool := do
   let w ← get
@@ -1817,6 +1840,45 @@ def peekHiddenSite : M (Option Nat) := do
     | some (r :: _) => some r.site
     | _ => none
 
+/-- The records of the current operation not yet consumed (0 without
+    records). The measure of the record-driven loops (review item 7). -/
+def recordsLeft : M Nat := do
+  return ((← get).hidden.map (·.length)).getD 0
+
+/-- The value of the first record of site `s` among the operation's remaining
+    records, without consuming it (`none` if there is none, or without
+    records): how `Env.idleTimers` learns the end of a wait before it
+    consumes the timer sections that precede the read. -/
+def peekSiteU64 (s : HiddenSite) : M (Option UInt64) := do
+  let i := s.info
+  return match (← get).hidden with
+    | some rs =>
+      (rs.find? (·.site == i.id)).map fun r =>
+        ((r.bytes.take i.len).foldr (fun (b : UInt8) (acc : Nat) => acc * 256 + b.toNat) 0).toUInt64
+    | none => none
+
+/-- The domain filter's own turn bound for the loops that the records drive
+    when there are records (review item 7): without records (the filter runs
+    before Linux) a loop has no measure but the filter's patience, and its
+    exhaustion is the filter's `unsupported`, never an `invariant`. -/
+def DOMAIN_FILTER_TURNS : Nat := 4096
+
+/-- The fuel of a record-driven loop: with records, one turn per remaining
+    record plus the turn that finds none (every productive turn consumes at
+    least one record); without records, the filter's bound. -/
+def recordBudget : M Nat := do
+  let w ← get
+  return match w.hidden with
+    | some rs => rs.length + 1
+    | none => DOMAIN_FILTER_TURNS
+
+/-- A record-driven loop ran out of fuel: with records that is a turn that
+    consumed nothing, a genuine non-progress (`invariant`); without records
+    the filter's bound (`unsupported "runner budget: ..."`). -/
+def budgetExhausted (name : String) : M α := do
+  if (← get).hidden.isSome then invariant s!"{name}: a turn consumed no record"
+  else unsupported s!"runner budget: {name} (domain filter)"
+
 /-- Dispatch order: the unit the next record names, if it starts `w`'s
     section with the identity word (kind 300 since 2026-10-11): the work
     item's or the timer's address. `none` without records, for a record of
@@ -1853,12 +1915,40 @@ def recordQueued (w : Worker) (pid : Nat) : M Unit := do
     if a' != a then throw (.hidden s!"{w.symbol} of peer {pid}: queued at address {a}, before at {a'}")
   | none => set { st with unitPeers := st.unitPeers ++ [(a, w.index, pid)] }
 
+/-- Dispatch order: whether the next record is the queue record of the unit
+    of worker `w` for `pid`, by the address its earlier queue record gave
+    (`unitPeers`). The kernel writes the record iff `queue_work`'s PENDING
+    test passed; `process_one_work` clears PENDING when it takes the item,
+    before the function's section starts. So a unit the mirror still holds
+    queued whose queue record comes next was dequeued by the kernel and is
+    being queued a second time: the record is the kernel's statement of the
+    test's outcome, and the mirror follows it (w7_multi_tx_2 under eight
+    guests, 2026-10-13). `false` without records, for a record of another
+    site, or for a unit whose address no record gave yet. -/
+def peekQueuedUnit (w : Worker) (pid : Nat) : M Bool := do
+  if !(← get).armRecords then return false
+  skipAmbient
+  let st ← get
+  match st.hidden with
+  | some (r :: _) =>
+    if r.site != (HiddenSite.queued w).info.id || r.bytes.length < 8 then return false
+    let some (a, _, _) := st.unitPeers.find? (fun (e : Nat × Nat × Nat) => e.2.1 == w.index && e.2.2 == pid)
+      | return false
+    return recordWordOf r.bytes 0 == a
+  | _ => return false
+
 /-- `queue_work_on` of a device-level unit (one work struct: the encrypt and
     decrypt workers' per-CPU work on the one CPU, `incoming_handshake_work`):
     `test_and_set_bit(WORK_STRUCT_PENDING_BIT)` queues it iff it was not
-    pending, with its record; pending until its section starts. -/
+    pending, with its record; pending until its section starts. A second
+    queueing after the kernel's dequeue and before the section
+    (`peekQueuedUnit`) would need a second instance of the device-level
+    unit, which the mirror does not hold: fail-noisy. -/
 def queueDeviceWork (w : Worker) : M Unit := do
-  if (← get).pendingWork.contains w.index then return
+  if (← get).pendingWork.contains w.index then
+    if ← peekQueuedUnit w 0 then
+      unsupported s!"{w.symbol} queued again after its dequeue, before its section (a second instance of a device-level unit)"
+    return
   recordQueued w 0
   modify fun st => { st with pendingWork := st.pendingWork ++ [w.index] }
 
@@ -1901,6 +1991,23 @@ def hiddenClock (s : HiddenSite) : M Int := do
   let u : Nat := bs.foldr (fun b acc => acc * 256 + b.toNat) 0
   return if u ≥ 2 ^ 63 then (u : Int) - (2 ^ 64 : Int) else (u : Int)
 
+/-- A recorded clock read as the C's `s64` (review item 8,
+    docs/2026-10-13-review-items-7-8.md section 4): the 8 bytes as a
+    little-endian 64-bit word, reinterpreted signed. The age tests
+    (`wg_birthdate_has_expired`, timers.h:25-29) compute and compare in this
+    type, wrapping as the C's `s64` does. -/
+def hiddenClock64 (s : HiddenSite) : M Int64 := do
+  let bs ← hidden s
+  let u : Nat := bs.foldr (fun b acc => acc * 256 + b.toNat) 0
+  return u.toUInt64.toInt64
+
+/-- A recorded `jiffies` (kinds 303, 304, 306) as the C's `unsigned long`:
+    an 8-byte little-endian word, 64 bits on x86_64 (review item 8). -/
+def hiddenJiffies (s : HiddenSite) : M UInt64 := do
+  let bs ← hidden s
+  let u : Nat := bs.foldr (fun b acc => acc * 256 + b.toNat) 0
+  return u.toUInt64
+
 /-- A recorded `struct timespec64` (16 bytes: `tv_sec`, then `tv_nsec`,
     little-endian signed 64-bit words). -/
 def hiddenTimespec (s : HiddenSite) : M Timespec64 := do
@@ -1924,7 +2031,8 @@ def skipCutSites (sites : List HiddenSite) : M (List Nat) := do
   let ids := sites.map (·.info.id)
   let allocIds := AllocSite.cuts.map fun s => (HiddenSite.alloc s).info
   let mut taken := []
-  for _ in [0:4096] do
+  -- record-driven (review item 7): every turn consumes one record or returns
+  for _ in [0:(← recordBudget)] do
     skipAmbient
     let w ← get
     match w.hidden with
@@ -1935,7 +2043,7 @@ def skipCutSites (sites : List HiddenSite) : M (List Nat) := do
       set { w with hidden := some rest }
       taken := taken ++ [r.site]
     | _ => return taken
-  invariant "a cut point consumed more than 4096 records"
+  budgetExhausted "a cut point's records"
 
 def skipCut (sites : List HiddenSite) : M Unit := discard <| skipCutSites sites
 
@@ -2066,7 +2174,7 @@ def discardFloodRecords (stop : Nat) (allowed : List Nat) : M Nat := do
     other record is a hidden mismatch (a mid-flood injection, or a decay read
     with no saved time). Returns the new value and whether an under-load read
     occurred (the flood crossed the threshold). -/
-def floodTailEffect (stop : Nat) (cuts : List Nat) (last : Option Int) : M (Option Int × Bool) := do
+def floodTailEffect (stop : Nat) (cuts : List Nat) (last : Option Int64) : M (Option Int64 × Bool) := do
   let underLoad := (HiddenSite.underLoadNow).info.id
   let decay := (HiddenSite.birthdateExpired).info.id
   let resched := (HiddenSite.reschedReceive).info.id
@@ -2077,13 +2185,13 @@ def floodTailEffect (stop : Nat) (cuts : List Nat) (last : Option Int) : M (Opti
     | some s =>
       if s == stop then return (last, crossed)
       if s == underLoad then
-        last := some (← hiddenClock .underLoadNow)
+        last := some (← hiddenClock64 .underLoadNow)
         crossed := true
       else if s == decay then
         let some saved := last
           | throw (.hidden "flood: a decay clock read with no saved under-load time (a mid-flood injection)")
-        let now ← hiddenClock .birthdateExpired
-        if saved + 1000000000 ≤ now then last := none   -- wg_birthdate_has_expired(last_under_load, 1)
+        let now ← hiddenClock64 .birthdateExpired
+        if saved + 1000000000 ≤ now then last := none   -- wg_birthdate_has_expired(last_under_load, 1), in s64
       else if s == resched || cuts.contains s then
         _ ← dropHiddenRecord
       else

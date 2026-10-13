@@ -26,11 +26,11 @@ theorem requireDrained_spec (P : Snapshot → Prop) (what : String) (queues : Li
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Env.requireDrained what queues
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (requireDrained_sameSnapshot what queues).wp P
 
-theorem floodTailEffect_sameSnapshot (stop : Nat) (cuts : List Nat) (last : Option Int) :
+theorem floodTailEffect_sameSnapshot (stop : Nat) (cuts : List Nat) (last : Option Int64) :
     SameSnapshot (Leanux.floodTailEffect stop cuts last) := by
-  frame_same [Leanux.floodTailEffect] using [peekHiddenSite_spec, hiddenClock_spec, dropHiddenRecord_spec]
+  frame_same [Leanux.floodTailEffect] using [peekHiddenSite_spec, hiddenClock64_spec, dropHiddenRecord_spec]
 
-theorem floodTailEffect_spec (P : Snapshot → Prop) (stop : Nat) (cuts : List Nat) (last : Option Int) :
+theorem floodTailEffect_spec (P : Snapshot → Prop) (stop : Nat) (cuts : List Nat) (last : Option Int64) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.floodTailEffect stop cuts last
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (floodTailEffect_sameSnapshot stop cuts last).wp P
 
@@ -75,7 +75,7 @@ theorem timerWorker_spec (P : Snapshot → Prop) (timer : PeerTimer) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ (Env.timerWorker timer)
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (timerWorker_sameSnapshot timer).wp P
 
-theorem fireTimer_ordinary (worker : Worker) (jHi : Nat) : OrdinaryAction (Env.fireTimer worker jHi) := by
+theorem fireTimer_ordinary (worker : Worker) (jHi : UInt64) : OrdinaryAction (Env.fireTimer worker jHi) := by
   unfold Env.fireTimer
   repeat' first
     | (ordinary_head WG.delTimer; exact (delTimer_sameSnapshot _ _).ordinary)
@@ -85,7 +85,7 @@ theorem fireTimer_ordinary (worker : Worker) (jHi : Nat) : OrdinaryAction (Env.f
   all_goals exact ordinary_throw _
 
 
-theorem fireTimer_spec (P : Snapshot → Prop) (hp : Stable P) (worker : Worker) (jHi : Nat) :
+theorem fireTimer_spec (P : Snapshot → Prop) (hp : Stable P) (worker : Worker) (jHi : UInt64) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ (Env.fireTimer worker jHi)
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (fireTimer_ordinary worker jHi).wp P hp
 

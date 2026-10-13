@@ -54,14 +54,14 @@ theorem afterXmitLogged_evolves  : Evolves (afterXmitLogged) := by
     | (evolves_head runSendWorkersLogged; exact runSendWorkersLogged_evolves)
     | operation_leaf_step
 
-theorem runTimersLogged_evolves (jHi : Nat) : Evolves (runTimersLogged jHi) := by
+theorem runTimersLogged_evolves (jHi : UInt64) : Evolves (runTimersLogged jHi) := by
   unfold runTimersLogged
   repeat' first
     | (evolves_head runSendWorkersLogged; exact runSendWorkersLogged_evolves)
     | (evolves_head afterXmitLogged; exact afterXmitLogged_evolves)
     | operation_leaf_step
 
-theorem runTimersPlaceholderLogged_evolves (jHi : Nat) : Evolves (runTimersPlaceholderLogged jHi) := by
+theorem runTimersPlaceholderLogged_evolves (jHi : UInt64) : Evolves (runTimersPlaceholderLogged jHi) := by
   unfold runTimersPlaceholderLogged
   repeat' first
     | (evolves_head runSendWorkersLogged; exact runSendWorkersLogged_evolves)
@@ -77,6 +77,7 @@ theorem idleTimersLogged_evolves  : Evolves (idleTimersLogged) := by
     | (evolves_head runTimersLogged; exact runTimersLogged_evolves _)
     | (evolves_head runTimersPlaceholderLogged; exact runTimersPlaceholderLogged_evolves _)
     | operation_leaf_step
+  all_goals exact evolves_throw _
 
 theorem afterAdvanceLogged_evolves  : Evolves (afterAdvanceLogged) := by
   unfold afterAdvanceLogged
@@ -87,6 +88,7 @@ theorem afterAdvanceLogged_evolves  : Evolves (afterAdvanceLogged) := by
     | (evolves_head runTimersPlaceholderLogged; exact runTimersPlaceholderLogged_evolves _)
     | (evolves_head idleTimersLogged; exact idleTimersLogged_evolves)
     | operation_leaf_step
+  all_goals exact evolves_throw _
 
 theorem observeLogged_evolves  : Evolves (observeLogged) := by
   unfold observeLogged

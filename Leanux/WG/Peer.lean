@@ -128,8 +128,10 @@ private def bucketHas (walk collide : Decision) (index : Nat) : M Bool := do
 def indexInsert (pid : PeerId) (kind : IndexKind) : M Nat := do
   indexRemove pid kind
   -- `goto search_unused_slot` draws again; nothing else inserts meanwhile
-  -- (one CPU), so the locked walk agrees with the unlocked one
-  for _ in [0:64] do
+  -- (one CPU), so the locked walk agrees with the unlocked one. The C loop
+  -- is unbounded; the draws are records, so the loop is record-driven
+  -- (review item 7): it ends when the records do
+  for _ in [0:(← recordBudget)] do
     let draw ← hidden .indexDraw
     let index := draw.foldr (fun b acc => acc * 256 + b.toNat) 0   -- __le32
     if ← bucketHas .idxInsWalk1 .idxInsCollide1 index then continue
@@ -138,7 +140,7 @@ def indexInsert (pid : PeerId) (kind : IndexKind) : M Nat := do
     if ← bucketHas .idxInsWalk2 .idxInsCollide2 index then unsupported "an index stolen during insertion"
     modifyDev fun d => { d with indexTable := { index, peer := pid, kind } :: d.indexTable }
     return index
-  unsupported "64 colliding index draws"
+  budgetExhausted "index draws"
 
 /-- wg_index_hashtable_replace (peerlookup.c:166-190) of a peer's handshake
     entry by its new keypair's, in place: the keypair's entry takes the
@@ -152,19 +154,38 @@ def indexReplaceHandshake (pid : PeerId) (kp : KeypairId) : M Bool := do
   return true
 
 def NSEC_PER_SEC : Int := 1000000000
+/-- `NSEC_PER_SEC` in the age test's `s64` (review item 8). -/
+def NSEC_PER_SEC64 : Int64 := 1000000000
 def REKEY_TIMEOUT : Nat := 5
 def KEEPALIVE_TIMEOUT : Nat := 10
 
 /-- wg_noise_reset_last_sent_handshake (noise.h:100-104): the recorded coarse
-    boot time, `REKEY_TIMEOUT + 1` seconds back. -/
+    boot time, `REKEY_TIMEOUT + 1` seconds back, in `u64` (held as the s64
+    the age test casts it to). -/
 def resetLastSentHandshake (pid : PeerId) : M Unit := do
-  let now ← hiddenClock .resetLastSent
-  setPeer pid { (← getPeer pid) with lastSentHandshake := now - (REKEY_TIMEOUT + 1 : Nat) * NSEC_PER_SEC }
+  let now ← hiddenClock64 .resetLastSent
+  setPeer pid { (← getPeer pid) with lastSentHandshake := now - (REKEY_TIMEOUT + 1 : Nat).toInt64 * NSEC_PER_SEC64 }
 
-/-- wg_birthdate_has_expired (timers.h:25-29), with the recorded clock. -/
-def birthdateHasExpired (birthday : Int) (seconds : Nat) : M Bool := do
-  let now ← hiddenClock .birthdateExpired
-  return birthday + seconds * NSEC_PER_SEC ≤ now
+/-- wg_birthdate_has_expired (timers.h:25-29), with the recorded clock:
+    `(s64)(birthday + seconds * NSEC_PER_SEC) <= (s64)now`, computed in
+    `Int64` as the C computes it (review item 8). Returns the outcome and
+    the two `s64` operands, which the built code records at the caller's
+    line (never at timers.h:28: the inline is folded into its caller). -/
+def birthdateTest (birthday : Int64) (seconds : Nat) : M (Bool × Int × Int) := do
+  let now ← hiddenClock64 .birthdateExpired
+  let lhs := birthday + seconds.toInt64 * NSEC_PER_SEC64
+  return (lhs ≤ now, lhs.toInt, now.toInt)
+
+/-- The age test where no comparison is declared (a cut's own read). -/
+def birthdateHasExpired (birthday : Int64) (seconds : Nat) : M Bool := do
+  return (← birthdateTest birthday seconds).1
+
+/-- The age test as the declared comparison `d` (`Decision.comparison`:
+    `lhs <= now`, both non-constant): the decision's outcome is `f expired`
+    (`f` negates where the C does), the operands are the test's. -/
+def branchExpired (d : Decision) (birthday : Int64) (seconds : Nat) (f : Bool → Bool := id) : M Bool := do
+  let (expired, lhs, now) ← birthdateTest birthday seconds
+  branchCmp d (f expired) lhs now
 
 /-- `handshake_zero` (noise.c:78-86). -/
 def handshakeZero (pid : PeerId) : M Unit := do

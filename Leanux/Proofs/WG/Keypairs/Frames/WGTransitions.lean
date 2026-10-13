@@ -14,7 +14,7 @@ theorem Packet_protocol_spec (P : Snapshot → Prop) (pkt : Packet) :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (Packet_protocol_sameSnapshot pkt).wp P
 
 theorem addMacToPacket_sameSnapshot (pid : PeerId) (msg : List UInt8) : SameSnapshot (Leanux.WG.addMacToPacket pid msg) := by
-  frame_same [Leanux.WG.addMacToPacket] using [birthdateHasExpired_spec, getPeer_spec, setPeer_spec]
+  frame_same [Leanux.WG.addMacToPacket] using [branchExpired_spec, getPeer_spec, setPeer_spec]
 
 theorem addMacToPacket_spec (P : Snapshot → Prop) (pid : PeerId) (msg : List UInt8) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.addMacToPacket pid msg
@@ -63,7 +63,7 @@ theorem ipTunnelGetDsfield_spec (P : Snapshot → Prop) (protocol : Nat) (hdr : 
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (ipTunnelGetDsfield_sameSnapshot protocol hdr).wp P
 
 theorem jitterBelowRekeyTimeout_sameSnapshot (site : HiddenSite) : SameSnapshot (Leanux.WG.jitterBelowRekeyTimeout site) := by
-  frame_same [Leanux.WG.jitterBelowRekeyTimeout] using [hidden_snapshot_spec]
+  frame_same [Leanux.WG.jitterBelowRekeyTimeout] using [hidden_snapshot_spec, recordBudget_spec, budgetExhausted_spec]
 
 theorem jitterBelowRekeyTimeout_spec (P : Snapshot → Prop) (site : HiddenSite) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.jitterBelowRekeyTimeout site
@@ -119,7 +119,7 @@ theorem sendBufferToPeer_spec (P : Snapshot → Prop) (pid : PeerId) (bytes : Li
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (sendBufferToPeer_sameSnapshot pid bytes).wp P
 
 theorem sendQueuedHandshakeInitiation_sameSnapshot (pid : PeerId) (isRetry : Bool) : SameSnapshot (Leanux.WG.sendQueuedHandshakeInitiation pid isRetry) := by
-  frame_same [Leanux.WG.sendQueuedHandshakeInitiation] using [birthdateHasExpired_spec, getPeer_spec, peerGet_spec, peerPut_spec, recordQueued_spec, requireNotPending_spec, setPeer_spec]
+  frame_same [Leanux.WG.sendQueuedHandshakeInitiation] using [branchExpired_spec, getPeer_spec, peerGet_spec, peerPut_spec, recordQueued_spec, requireNotPending_spec, setPeer_spec]
 
 theorem sendQueuedHandshakeInitiation_spec (P : Snapshot → Prop) (pid : PeerId) (isRetry : Bool) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.sendQueuedHandshakeInitiation pid isRetry
@@ -182,7 +182,7 @@ theorem enqueuePerDeviceAndPeer_spec (P : Snapshot → Prop) (pid : PeerId) (ite
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (enqueuePerDeviceAndPeer_sameSnapshot pid item).wp P
 
 theorem enqueuePerPeerTx_sameSnapshot (item : List SkbId) (state : PacketState) : SameSnapshot (Leanux.WG.enqueuePerPeerTx item state) := by
-  frame_same [Leanux.WG.enqueuePerPeerTx] using [cpumaskChooseOnline_spec, getDev_spec, getKeypair_live_spec, getPeer_spec, peerGet_spec, peerPut_spec, recordQueued_spec, setPeer_spec, getTxSkb_spec, setTxSkb_spec]
+  frame_same [Leanux.WG.enqueuePerPeerTx] using [peekQueuedUnit_spec, cpumaskChooseOnline_spec, getDev_spec, getKeypair_live_spec, getPeer_spec, peerGet_spec, peerPut_spec, recordQueued_spec, setPeer_spec, getTxSkb_spec, setTxSkb_spec]
 
 theorem enqueuePerPeerTx_spec (P : Snapshot → Prop) (item : List SkbId) (state : PacketState) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.enqueuePerPeerTx item state
@@ -259,7 +259,7 @@ theorem beginSession_spec (P : Snapshot → Prop) (hp : Stable P) (pid : PeerId)
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (beginSession_ordinary pid).wp P hp
 
 theorem consumeInitiation_sameSnapshot (msg : List UInt8) : SameSnapshot (Leanux.WG.consumeInitiation msg) := by
-  frame_same [Leanux.WG.consumeInitiation] using [getDev_spec, getPeer_spec, hiddenClock_spec, messageDecrypt_spec, messageEphemeral_spec, mixDh_spec, mixPrecomputedDh_spec, peerPut_spec, pubkeyLookup_spec, setPeer_spec]
+  frame_same [Leanux.WG.consumeInitiation] using [getDev_spec, getPeer_spec, hiddenClock_spec, hiddenClock64_spec, messageDecrypt_spec, messageEphemeral_spec, mixDh_spec, mixPrecomputedDh_spec, peerPut_spec, pubkeyLookup_spec, setPeer_spec]
 
 theorem consumeInitiation_spec (P : Snapshot → Prop) (msg : List UInt8) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.consumeInitiation msg
@@ -329,21 +329,21 @@ theorem timersTraversal_spec (P : Snapshot → Prop) (pid : PeerId) :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (timersTraversal_sameSnapshot pid).wp P
 
 theorem sendHandshakeInitiation_sameSnapshot (pid : PeerId) : SameSnapshot (Leanux.WG.sendHandshakeInitiation pid) := by
-  frame_same [Leanux.WG.sendHandshakeInitiation] using [addMacToPacket_spec, birthdateHasExpired_spec, createInitiation_spec, getPeer_spec, hiddenClock_spec, sendBufferToPeer_spec, setPeer_spec, timersAnyAuthenticatedPacketSent_spec, timersHandshakeInitiated_spec, timersTraversal_spec]
+  frame_same [Leanux.WG.sendHandshakeInitiation] using [addMacToPacket_spec, branchExpired_spec, createInitiation_spec, getPeer_spec, hiddenClock_spec, hiddenClock64_spec, sendBufferToPeer_spec, setPeer_spec, timersAnyAuthenticatedPacketSent_spec, timersHandshakeInitiated_spec, timersTraversal_spec]
 
 theorem sendHandshakeInitiation_spec (P : Snapshot → Prop) (pid : PeerId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.sendHandshakeInitiation pid
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (sendHandshakeInitiation_sameSnapshot pid).wp P
 
 theorem sendHandshakeResponse_ordinary (pid : PeerId) : OrdinaryAction (Leanux.WG.sendHandshakeResponse pid) := by
-  frame_ordinary [Leanux.WG.sendHandshakeResponse] using [addMacToPacket_spec, createResponse_spec, getPeer_spec, hiddenClock_spec, sendBufferToPeer_spec, setPeer_spec, timersAnyAuthenticatedPacketSent_spec, timersSessionDerived_spec, timersTraversal_spec] ordinary [beginSession_spec]
+  frame_ordinary [Leanux.WG.sendHandshakeResponse] using [addMacToPacket_spec, createResponse_spec, getPeer_spec, hiddenClock_spec, hiddenClock64_spec, sendBufferToPeer_spec, setPeer_spec, timersAnyAuthenticatedPacketSent_spec, timersSessionDerived_spec, timersTraversal_spec] ordinary [beginSession_spec]
 
 theorem sendHandshakeResponse_spec (P : Snapshot → Prop) (hp : Stable P) (pid : PeerId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.sendHandshakeResponse pid
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (sendHandshakeResponse_ordinary pid).wp P hp
 
 theorem sendStagedPackets_ordinary (pid : PeerId) : OrdinaryAction (Leanux.WG.sendStagedPackets pid) := by
-  frame_ordinary [Leanux.WG.sendStagedPackets] using [mapM_snapshot_spec, birthdateHasExpired_spec, getKeypair_live_spec, getPeer_spec, ipTunnelEcnEncap_spec, keypairGet_snapshot_spec, peerGet_spec, sendQueuedHandshakeInitiation_spec, setKeypair_live_spec, setPeer_spec, newTxSkb_spec] ordinary [createData_spec, keypairPut_ordinary_spec]
+  frame_ordinary [Leanux.WG.sendStagedPackets] using [mapM_snapshot_spec, branchExpired_spec, getKeypair_live_spec, getPeer_spec, ipTunnelEcnEncap_spec, keypairGet_snapshot_spec, peerGet_spec, sendQueuedHandshakeInitiation_spec, setKeypair_live_spec, setPeer_spec, newTxSkb_spec] ordinary [createData_spec, keypairPut_ordinary_spec]
 
 theorem sendStagedPackets_spec (P : Snapshot → Prop) (hp : Stable P) (pid : PeerId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.sendStagedPackets pid

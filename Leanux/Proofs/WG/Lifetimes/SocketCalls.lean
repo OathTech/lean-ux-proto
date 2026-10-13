@@ -88,7 +88,7 @@ theorem dstCacheGetPrefix_clock_failure (pid gen : Nat) (w : World) (p : Peer)
     (h : List LifetimeEvent) (e : Stop)
     (ha : w.armRecords = true) (hc : w.dstCacheRecords = true)
     (hp : (getPeer pid).run w = .ok (p, w)) (hs : p.dstCache.slot = none)
-    (hf : (hiddenU64 .dstCacheRefreshTs).run w = .error e) :
+    (hf : (hiddenJiffies .dstCacheRefreshTs).run w = .error e) :
     runPrefix (dstCacheGetPrefix pid gen) w h =
       (.error e, h ++ [.peer (.read pid p.internalId)]) := by
   simp [dstCacheGetPrefix, runPrefix_bind, getPeerMixed_run, hp, hs, ha, hc, hf]

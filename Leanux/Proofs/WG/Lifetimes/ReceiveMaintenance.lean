@@ -13,7 +13,7 @@ def sendQueuedHandshakeInitiationPrefix (pid : PeerId) (isRetry : Bool) : MixedM
   if ← liftPrefix (branch .queuedNotRetry !isRetry) then
     modifyPeerKeysPrefix pid fun p => {p with timerHandshakeAttempts := 0}
   let p ← getPeerMixed pid
-  if ← liftPrefix (branch .queuedNotExpired !(← liftPrefix (birthdateHasExpired p.lastSentHandshake REKEY_TIMEOUT))) then return
+  if ← liftPrefix (branchExpired .queuedNotExpired p.lastSentHandshake REKEY_TIMEOUT not) then return
   if ← liftPrefix (branch .queuedDead p.isDead) then return
   peerGetMixed pid
   if ← liftPrefix (branch .queuedAlreadyQueued p.handshakePending) then
@@ -41,8 +41,6 @@ theorem sendQueuedHandshakeInitiationPrefix_erases (pid : PeerId) (retry : Bool)
   all_goals
     apply erasesPrefix_bind (getPeerMixed_erases _)
     intro p
-    apply erasesPrefix_bind (erasesPrefix_lift _)
-    intro expiry
     apply erasesPrefix_bind (erasesPrefix_lift _)
     intro fresh
     split
@@ -75,7 +73,7 @@ theorem sendQueuedHandshakeInitiationPrefix_preserves_ambient (c : AmbientContra
   intro notRetry
   have tail : PrefixPreserves I LifetimeEvent.Safe (do
       let p ← getPeerMixed pid
-      if ← liftPrefix (branch .queuedNotExpired !(← liftPrefix (birthdateHasExpired p.lastSentHandshake REKEY_TIMEOUT))) then return
+      if ← liftPrefix (branchExpired .queuedNotExpired p.lastSentHandshake REKEY_TIMEOUT not) then return
       if ← liftPrefix (branch .queuedDead p.isDead) then return
       peerGetMixed pid
       if ← liftPrefix (branch .queuedAlreadyQueued p.handshakePending) then
@@ -87,9 +85,7 @@ theorem sendQueuedHandshakeInitiationPrefix_preserves_ambient (c : AmbientContra
       liftPrefix (modify fun w => {w with queuedThisCall := pid :: w.queuedThisCall})) := by
     apply PrefixPreserves.bind (AmbientContracts.drop (c.getPeer_frame (fun _ => True) pid))
     intro p
-    apply PrefixPreserves.bind (AmbientContracts.drop (c.kernel (fun _ => True) _ (Keypairs.birthdateHasExpired_sameKernel _ _)))
-    intro expired
-    apply PrefixPreserves.bind (AmbientContracts.drop (c.branch (fun _ => True) _ _))
+    apply PrefixPreserves.bind (AmbientContracts.drop (c.kernel (fun _ => True) _ (branchExpired_sameKernel _ _ _ _)))
     intro fresh
     split
     · exact PrefixPreserves.pure c.safe ()
@@ -145,8 +141,7 @@ def keepKeyFreshRxPrefix (pid : PeerId) : MixedM Unit := do
     let k ← getKeypairPrefix id
     andPrefix (liftPrefix (branch .rxFreshValid k.sending.isValid)) do
       andPrefix (liftPrefix (branch .rxFreshInitiator k.iAmTheInitiator)) do
-        liftPrefix (branch .rxFreshExpired
-          (← liftPrefix (birthdateHasExpired k.sending.birthdate (REJECT_AFTER_TIME - KEEPALIVE_TIMEOUT - REKEY_TIMEOUT))))
+        liftPrefix (branchExpired .rxFreshExpired k.sending.birthdate (REJECT_AFTER_TIME - KEEPALIVE_TIMEOUT - REKEY_TIMEOUT))
   if ← liftPrefix (branch .rxFreshSend send) then
     modifyPeerKeysPrefix pid fun p => {p with sentLastminuteHandshake := true}
     sendQueuedHandshakeInitiationPrefix pid false
@@ -171,7 +166,7 @@ theorem keepKeyFreshRxPrefix_erases (pid : PeerId) :
         intro k
         exact andPrefix_erases (erasesPrefix_lift _)
           (andPrefix_erases (erasesPrefix_lift _)
-            (erasesPrefix_bind (erasesPrefix_lift _) (fun _ => erasesPrefix_lift _)))
+            (erasesPrefix_lift _))
     · intro send
       apply erasesPrefix_bind (erasesPrefix_lift _)
       intro yes
@@ -191,7 +186,7 @@ theorem keepKeyFreshRxPrefix_preserves_ambient (c : AmbientContracts I)
     | exact AmbientContracts.drop (c.getKeypair_frame (fun _ => True) _)
     | exact AmbientContracts.drop (c.branch (fun _ => True) _ _)
     | exact AmbientContracts.drop (c.invariant (fun _ => True) _)
-    | exact AmbientContracts.drop (c.kernel (fun _ => True) _ (Keypairs.birthdateHasExpired_sameKernel _ _))
+    | exact AmbientContracts.drop (c.kernel (fun _ => True) _ (branchExpired_sameKernel _ _ _))
     | exact AmbientContracts.drop (modifyPeerKeysPrefix_spec_ambient c (fun _ => True) pid
         (fun p => {p with sentLastminuteHandshake := true}) (fun _ => rfl))
     | exact sendQueuedHandshakeInitiationPrefix_preserves_ambient c hq _ _

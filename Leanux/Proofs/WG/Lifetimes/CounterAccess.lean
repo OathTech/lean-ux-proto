@@ -12,8 +12,8 @@ def counterValidatePrefix (kp : KeypairId) (theirs : Nat) : MixedM Bool := do
   let k ← getKeypairPrefix kp
   let c := k.receivingCounter
   -- `counter->counter >= REJECT_AFTER_MESSAGES + 1 || their_counter >= REJECT_AFTER_MESSAGES`
-  if ← liftPrefix (WG.orM (branch .ctrRejectCounter (c.counter ≥ REJECT_AFTER_MESSAGES + 1))
-      (branch .ctrRejectTheirs (theirs ≥ REJECT_AFTER_MESSAGES))) then return false
+  if ← liftPrefix (WG.orM (branchCmp .ctrRejectCounter (c.counter ≥ REJECT_AFTER_MESSAGES + 1) c.counter (REJECT_AFTER_MESSAGES + 1))
+      (branchCmp .ctrRejectTheirs (theirs ≥ REJECT_AFTER_MESSAGES) theirs REJECT_AFTER_MESSAGES)) then return false
   let theirs := theirs + 1   -- ++their_counter
   if ← liftPrefix (branch .ctrTooOld (COUNTER_WINDOW_SIZE + theirs < c.counter)) then return false
   let words := COUNTER_BITS_TOTAL / BITS_PER_LONG
@@ -70,7 +70,7 @@ theorem counterValidatePrefix_spec (c : AmbientContracts I) (P : IdentityView �
       (hf : ∀ i a, AmbientSpec I Q (f i a) (fun _ => Q)) :
       AmbientSpec I Q (forIn r a f) (fun _ => Q) :=
     PrefixPreserves.range r a f (fun h w hi => c.safe h w hi.1) hf
-  apply PrefixEnsures.bind (c.kernel Q _ (orM_sameKernel (sameKernel_branch _ _) (sameKernel_branch _ _)))
+  apply PrefixEnsures.bind (c.kernel Q _ (orM_sameKernel (branchCmp_sameKernel _ _ _ _) (branchCmp_sameKernel _ _ _ _)))
   intro rejected
   split
   · exact AmbientContracts.forget (c.pure Q false) (fun _ _ hi => hi.1)

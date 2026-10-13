@@ -18,6 +18,13 @@ def record (w : World) (d : Decision) (outcome : Bool) : World :=
 @[simp] theorem branch_run (w : World) (d : Decision) (outcome : Bool) :
     (branch d outcome).run w = .ok (outcome, record w d outcome) := rfl
 
+/-- A comparison record retains the mirror's two concrete operands. -/
+def recordCmp (w : World) (d : Decision) (outcome : Bool) (a b : Int) : World :=
+  {w with steps := w.steps.push {decision := d, outcome, operands := some (a,b), netRx := w.netRxSection}}
+
+@[simp] theorem branchCmp_run (w : World) (d : Decision) (outcome : Bool) (a b : Int) :
+    (branchCmp d outcome a b).run w = .ok (outcome, recordCmp w d outcome a b) := rfl
+
 /-- The actual body of the mirror's word-clearing loop. -/
 def clearBody (current : Nat) (i : Nat) (a : Array Nat) : M (ForInStep (Array Nat)) := do
   _ ← branch .ctrClearIter true
@@ -71,9 +78,9 @@ def store (w : World) (kp : KeypairId) (k : Keypair) : World :=
 The result includes the mirror's bookkeeping, to make the refinement exact. -/
 def cExecution (kp : KeypairId) (nonce : Nat) (k : Keypair) (w : World) : Bool × World :=
   let c := k.receivingCounter
-  let w := record w .ctrRejectCounter (c.counter ≥ REJECT_AFTER_MESSAGES + 1)
+  let w := recordCmp w .ctrRejectCounter (c.counter ≥ REJECT_AFTER_MESSAGES + 1) c.counter (REJECT_AFTER_MESSAGES + 1)
   if c.counter ≥ REJECT_AFTER_MESSAGES + 1 then (false, w) else
-  let w := record w .ctrRejectTheirs (nonce ≥ REJECT_AFTER_MESSAGES)
+  let w := recordCmp w .ctrRejectTheirs (nonce ≥ REJECT_AFTER_MESSAGES) nonce REJECT_AFTER_MESSAGES
   if nonce ≥ REJECT_AFTER_MESSAGES then (false, w) else
   let n := nonce + 1
   let w := record w .ctrTooOld (8128 + n < c.counter)
@@ -113,13 +120,14 @@ theorem counterValidate_execution (w : World) (d : Device) (kp : KeypairId)
           cExecution, COUNTER_WINDOW_SIZE]
       · by_cases h4 : nonce + 1 > k.receivingCounter.counter
         · simp only [counterValidate, StateT.run_bind, getKeypair_run w d kp k hd hk,
-            except_ok_bind, WG.orM, branch_run, h1, h2, h3, h4, decide_false, decide_true,
+            except_ok_bind, WG.orM, branch_run, branchCmp_run, h1, h2, h3, h4, decide_false, decide_true,
             Bool.false_eq_true, if_false, if_true, COUNTER_WINDOW_SIZE,
             COUNTER_BITS_TOTAL, BITS_PER_LONG, cExecution]
           simp only [show 8192 / 64 = 128 from rfl]
           have hloop := mirror_clear_loop _ (k.receivingCounter.counter / 64)
             (min ((nonce + 1) / 64 - k.receivingCounter.counter / 64) 128)
-            (record (record (record (record w .ctrRejectCounter false) .ctrRejectTheirs false)
+            (record (record (recordCmp (recordCmp w .ctrRejectCounter false k.receivingCounter.counter
+              (REJECT_AFTER_MESSAGES + 1)) .ctrRejectTheirs false nonce REJECT_AFTER_MESSAGES)
               .ctrTooOld false) .ctrAdvance true) hsize
           unfold clearBody at hloop
           rw [hloop]
@@ -128,7 +136,7 @@ theorem counterValidate_execution (w : World) (d : Device) (kp : KeypairId)
           · rfl
           · simp [hsize, Nat.mod_lt _ (by decide : 0 < 128)]
         · simp only [counterValidate, StateT.run_bind, getKeypair_run w d kp k hd hk,
-            except_ok_bind, WG.orM, branch_run, h1, h2, h3, h4, decide_false,
+            except_ok_bind, WG.orM, branch_run, branchCmp_run, h1, h2, h3, h4, decide_false,
             Bool.false_eq_true, if_false, COUNTER_WINDOW_SIZE,
             COUNTER_BITS_TOTAL, BITS_PER_LONG, cExecution]
           simp only [show 8192 / 64 = 128 from rfl]
@@ -150,6 +158,13 @@ def counterAt (w : World) (kp : KeypairId) : Option ReplayCounter :=
 
 @[simp] theorem record_counterAt (w : World) (d : Decision) (b : Bool) (kp : KeypairId) :
     counterAt (record w d b) kp = counterAt w kp := rfl
+
+@[simp] theorem recordCmp_counterAt (w : World) (d : Decision) (outcome : Bool)
+    (a b : Int) (kp : KeypairId) :
+    counterAt (recordCmp w d outcome a b) kp = counterAt w kp := rfl
+
+@[simp] theorem recordCmp_k (w : World) (d : Decision) (outcome : Bool) (a b : Int) :
+    (recordCmp w d outcome a b).k = w.k := rfl
 
 @[simp] theorem clearRecords_counterAt (w : World) (xs : List Nat) (kp : KeypairId) :
     counterAt (clearRecords w xs) kp = counterAt w kp := by
@@ -181,10 +196,10 @@ theorem cExecution_refines_step (w : World) (d : Device) (kp : KeypairId)
     by_cases h4 : nonce + 1 > k.receivingCounter.counter
     · simp [cExecution, h1, h2, h3, h4, fresh, prepared, update,
         zero_bit_equiv, Nat.max_eq_right (by omega : k.receivingCounter.counter ≤ nonce + 1),
-        counterAt, store, record, clearRecords_k, hd]
+        counterAt, store, record, recordCmp, clearRecords_k, hd]
     · simp [cExecution, h1, h2, h3, h4, fresh, prepared, update,
         zero_bit_equiv, Nat.max_eq_left (by omega : nonce + 1 ≤ k.receivingCounter.counter),
-        counterAt, store, record, hd]
+        counterAt, store, record, recordCmp, hd]
   · rw [step, if_neg he]
     by_cases h1 : k.receivingCounter.counter ≥ REJECT_AFTER_MESSAGES + 1
     · simp [cExecution, h1, hlookup]

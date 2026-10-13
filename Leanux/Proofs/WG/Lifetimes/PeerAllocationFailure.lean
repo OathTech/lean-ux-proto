@@ -19,7 +19,7 @@ theorem peerCreateMixed_cache_clock_failure (key : Key) (psk : Option Key)
     (hmem : (branch .peerCreateNoMem false).run allocated = .ok (false, reserved))
     (hcache : (branch .peerCreateDstCacheFail false).run reserved = .ok (false, entry))
     (ha : entry.armRecords = true) (hc : entry.dstCacheRecords = true)
-    (hclock : (hiddenU64 .dstCacheResetTs).run
+    (hclock : (hiddenJiffies .dstCacheResetTs).run
       (Peers.creationCoreWorld entry d.nextPeer key) = .error e) :
     runPrefix (peerCreateMixed key psk) w h =
       (.error e, h ++ [.peer (.allocate d.nextPeer (entry.k.peerCounter + 1)),

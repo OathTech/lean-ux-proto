@@ -52,6 +52,12 @@ filter.c is an anchored file and the checker reads its statements from the
 pristine source while DWARF carries the built source's lines, so the hook
 adds no include and no line: an extern declaration and the call share the
 line of `fp = bpf_prog_select_runtime(fp, &err);` (1315 in both sources).
+Review item 7 (docs/2026-10-13-review-items-7-8.md, section 5): the end of
+a guest wait as a record, KCOV_LEANUX_JIFFIES (207): jiffies_64 read and
+written as kind 310 {jiffies} (8 bytes) into the remote area of the
+process's common handle (kcov_jiffies_read; kcov_choice_write split into
+the area writer and its wrapper). In any recording context. Record-only;
+kernel/kcov.c is not an anchored file.
 """
 import sys, re, os, shutil, subprocess
 WD='.artifacts/choice-patch'; N=WD+'/new'
@@ -202,23 +208,26 @@ void notrace kcov_choice_ip(u32 kind, unsigned long ip, void *data, unsigned int
 }
 EXPORT_SYMBOL(kcov_choice_ip);
 
-static void notrace kcov_choice_write(struct task_struct *t, u32 kind, unsigned long ip, const void *data, unsigned int len)
+/* LEANUX review item 7 (docs/2026-10-13-review-items-7-8.md, section 5): the
+ * writer over an explicit area, mode and size, so that the trace task can
+ * also append a record to the remote area of its common handle (kind 310,
+ * kcov_jiffies_read). kcov_choice_write is the wrapper over the task's own. */
+static void notrace kcov_choice_write_area(struct task_struct *t, enum kcov_mode mode, u64 *area, unsigned int size, u32 kind, unsigned long ip, const void *data, unsigned int len)
 {
 	const u8 *bytes = data;
 	u64 words[KCOV_CHOICE_MAX_WORDS + 1] = {0};
 	unsigned int n = len > 8 * KCOV_CHOICE_MAX_WORDS ? 8 * KCOV_CHOICE_MAX_WORDS : len;
 	unsigned int nwords = DIV_ROUND_UP(n, 8), i;
-	u64 *area, seq;
+	u64 seq;
 
-	if (check_kcov_mode(KCOV_MODE_TRACE_PC, t)) {
+	if (mode == KCOV_MODE_TRACE_PC) {
 		u64 pos;
 
 		for (i = 0; i < n; i++)
 			words[i / 8] |= (u64)bytes[i] << (8 * (i % 8));
-		area = (u64 *)t->kcov_area;
 		pos = READ_ONCE(area[0]);
-		if (pos + 3 + nwords >= t->kcov_size) {
-			WRITE_ONCE(area[0], t->kcov_size - 1);
+		if (pos + 3 + nwords >= size) {
+			WRITE_ONCE(area[0], size - 1);
 			return;
 		}
 		seq = atomic64_inc_return(&kcov_choice_seq);
@@ -231,17 +240,16 @@ static void notrace kcov_choice_write(struct task_struct *t, u32 kind, unsigned 
 		for (i = 0; i < nwords; i++)
 			area[pos + 4 + i] = words[i];
 	} else if (IS_ENABLED(CONFIG_KCOV_ENABLE_COMPARISONS) &&
-		   check_kcov_mode(KCOV_MODE_TRACE_CMP, t)) {
+		   mode == KCOV_MODE_TRACE_CMP) {
 		u64 count, start, nrec = 1 + DIV_ROUND_UP(nwords, 3), r;
 
 		for (i = 0; i < n; i++)
 			words[i / 8] |= (u64)bytes[i] << (8 * (i % 8));
-		area = (u64 *)t->kcov_area;
 		count = READ_ONCE(area[0]);
 		start = 1 + count * KCOV_WORDS_PER_CMP;
 		if ((start + nrec * KCOV_WORDS_PER_CMP) * sizeof(u64) >
-		    t->kcov_size * sizeof(unsigned long)) {
-			WRITE_ONCE(area[0], (t->kcov_size - 1) / KCOV_WORDS_PER_CMP);
+		    size * sizeof(unsigned long)) {
+			WRITE_ONCE(area[0], (size - 1) / KCOV_WORDS_PER_CMP);
 			return;
 		}
 		seq = atomic64_inc_return(&kcov_choice_seq);
@@ -260,6 +268,14 @@ static void notrace kcov_choice_write(struct task_struct *t, u32 kind, unsigned 
 			rec[3] = 3 * r + 2 <= KCOV_CHOICE_MAX_WORDS ? words[3 * r + 2] : 0;
 		}
 	}
+}
+
+static void notrace kcov_choice_write(struct task_struct *t, u32 kind, unsigned long ip, const void *data, unsigned int len)
+{
+	if (check_kcov_mode(KCOV_MODE_TRACE_PC, t))
+		kcov_choice_write_area(t, KCOV_MODE_TRACE_PC, (u64 *)t->kcov_area, t->kcov_size, kind, ip, data, len);
+	else if (IS_ENABLED(CONFIG_KCOV_ENABLE_COMPARISONS) && check_kcov_mode(KCOV_MODE_TRACE_CMP, t))
+		kcov_choice_write_area(t, KCOV_MODE_TRACE_CMP, (u64 *)t->kcov_area, t->kcov_size, kind, ip, data, len);
 }
 '''
 wr('kernel/kcov.c', s)
@@ -634,19 +650,19 @@ static long kcov_section_status(struct kcov *kcov, void __user *arg)
 }
 '''
 wr('kernel/kcov.c', s)
-sub('kernel/kcov.c', """		if (pos + 3 + nwords >= t->kcov_size) {
-			WRITE_ONCE(area[0], t->kcov_size - 1);
+sub('kernel/kcov.c', """		if (pos + 3 + nwords >= size) {
+			WRITE_ONCE(area[0], size - 1);
 			return;
-		}""", """		if (pos + 3 + nwords >= t->kcov_size) {
-			WRITE_ONCE(area[0], t->kcov_size - 1);
+		}""", """		if (pos + 3 + nwords >= size) {
+			WRITE_ONCE(area[0], size - 1);
 			t->kcov_leanux_dropped++;
 			return;
 		}""")
-sub('kernel/kcov.c', """		    t->kcov_size * sizeof(unsigned long)) {
-			WRITE_ONCE(area[0], (t->kcov_size - 1) / KCOV_WORDS_PER_CMP);
+sub('kernel/kcov.c', """		    size * sizeof(unsigned long)) {
+			WRITE_ONCE(area[0], (size - 1) / KCOV_WORDS_PER_CMP);
 			return;
-		}""", """		    t->kcov_size * sizeof(unsigned long)) {
-			WRITE_ONCE(area[0], (t->kcov_size - 1) / KCOV_WORDS_PER_CMP);
+		}""", """		    size * sizeof(unsigned long)) {
+			WRITE_ONCE(area[0], (size - 1) / KCOV_WORDS_PER_CMP);
 			t->kcov_leanux_dropped++;
 			return;
 		}""")
@@ -938,6 +954,53 @@ static long kcov_time_advance(unsigned long __user *arg)
 		kcov_choice_write(t, 304, _RET_IP_, v, sizeof(v));
 	local_irq_restore(flags);
 	return ret;
+}
+
+/*
+ * LEANUX review item 7 (docs/2026-10-13-review-items-7-8.md, section 5): the
+ * end of a guest wait as a record. KCOV_LEANUX_JIFFIES reads jiffies_64 and
+ * appends kind 310 {jiffies} (8 bytes) to the REMOTE area of this process's
+ * common handle, where the waits' timer sections already land (the task's
+ * own window closed at the operation's return), under the remote kcov's lock
+ * like kcov_remote_stop's move; jiffies is read inside that critical section,
+ * so no tick separates the value from the record's sequence number. The
+ * remote kcov is looked up under kcov_remote_lock and held by a reference
+ * across its own lock (kcov_remote_enable nests the locks the other way).
+ * No remote coverage enabled: -ENOENT, so the guest fails noisily rather
+ * than the mirror missing a record silently. Record-only.
+ */
+static long kcov_jiffies_read(unsigned long __user *arg)
+{
+	struct task_struct *t = current;
+	struct kcov_remote *remote;
+	struct kcov *kcov = NULL;
+	unsigned long flags;
+	u64 j;
+	int written = 0;
+
+	spin_lock_irqsave(&kcov_remote_lock, flags);
+	remote = kcov_remote_find(t->kcov_handle);
+	if (remote) {
+		kcov = remote->kcov;
+		kcov_get(kcov);
+	}
+	spin_unlock_irqrestore(&kcov_remote_lock, flags);
+	if (!kcov)
+		return -ENOENT;
+	spin_lock_irqsave(&kcov->lock, flags);
+	j = get_jiffies_64();
+	if (kcov->remote && kcov->area &&
+	    (kcov->mode == KCOV_MODE_TRACE_PC || kcov->mode == KCOV_MODE_TRACE_CMP)) {
+		kcov_choice_write_area(t, kcov->mode, (u64 *)kcov->area, kcov->size, 310, _RET_IP_, &j, sizeof(j));
+		written = 1;
+	}
+	spin_unlock_irqrestore(&kcov->lock, flags);
+	kcov_put(kcov);
+	if (!written)
+		return -ENOENT;
+	if (put_user((unsigned long)j, arg))
+		return -EFAULT;
+	return 0;
 }
 """
 wr('kernel/kcov.c', s)
@@ -1491,6 +1554,8 @@ static long kcov_time_advance(unsigned long __user *arg);
 #define KCOV_LEANUX_ALLOC_STATUS	_IOR('c', 206, unsigned long)
 static long kcov_alloc_load(struct kcov *kcov, void __user *arg);
 static long kcov_alloc_status(struct kcov *kcov, void __user *arg);
+#define KCOV_LEANUX_JIFFIES		_IOR('c', 207, unsigned long)
+static long kcov_jiffies_read(unsigned long __user *arg);
 """)
 sub('kernel/kcov.c', """	case KCOV_LEANUX_TIME_ADVANCE:
 		return kcov_time_advance((unsigned long __user *)arg);
@@ -1500,6 +1565,8 @@ sub('kernel/kcov.c', """	case KCOV_LEANUX_TIME_ADVANCE:
 		return kcov_alloc_load(kcov, (void __user *)arg);
 	case KCOV_LEANUX_ALLOC_STATUS:
 		return kcov_alloc_status(kcov, (void __user *)arg);
+	case KCOV_LEANUX_JIFFIES:
+		return kcov_jiffies_read((unsigned long __user *)arg);
 """)
 sub('kernel/kcov.c', """	u32 draw;
 	u32 pad;

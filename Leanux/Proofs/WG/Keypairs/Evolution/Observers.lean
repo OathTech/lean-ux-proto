@@ -98,6 +98,14 @@ elab "evolves_join_use" : tactic => withMainContext do
 macro "observer_ordinary_leaf" : tactic => `(tactic|
   first
     | (ordinary_head Leanux.hidden; exact (sameSnapshot_of_sameKernel (hidden_sameKernel _)).ordinary)
+    | (ordinary_head Leanux.hiddenClock64; exact (hiddenClock64_sameSnapshot _).ordinary)
+    | (ordinary_head Leanux.hiddenJiffies; exact (hiddenJiffies_sameSnapshot _).ordinary)
+    | (ordinary_head Leanux.recordBudget; exact recordBudget_sameSnapshot.ordinary)
+    | (ordinary_head Leanux.budgetExhausted; exact (budgetExhausted_sameSnapshot _).ordinary)
+    | (ordinary_head Leanux.recordsLeft; exact recordsLeft_sameSnapshot.ordinary)
+    | (ordinary_head Leanux.peekSiteU64; exact (peekSiteU64_sameSnapshot _).ordinary)
+    | (ordinary_head Leanux.peekQueuedUnit; exact (peekQueuedUnit_sameSnapshot _ _).ordinary)
+    | (ordinary_head Leanux.branchCmp; exact (branchCmp_sameSnapshot _ _ _ _).ordinary)
     | (ordinary_head Leanux.branch; exact (branch_sameSnapshot _ _).ordinary)
     | (ordinary_head Leanux.peekHiddenSite; exact peekHiddenSite_sameSnapshot.ordinary)
     | (ordinary_head Leanux.invariant; exact (invariant_sameSnapshot _).ordinary)

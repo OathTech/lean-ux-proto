@@ -55,7 +55,7 @@ def sendStagedPacketsPrefix (pid : PeerId) : MixedM Unit := do
   let some id := keypair | liftPrefix (invariant "unreachable")
   let k ← getKeypairPrefix id
   if ← liftPrefix (branch .stagedKeyInvalid !k.sending.isValid) then return ← outNokey false
-  if ← liftPrefix (branch .stagedBirthdateExpired (← liftPrefix (birthdateHasExpired k.sending.birthdate REJECT_AFTER_TIME))) then
+  if ← liftPrefix (branchExpired .stagedBirthdateExpired k.sending.birthdate REJECT_AFTER_TIME) then
     return ← outNokey true
   let mut packetsCb : List DataPacket := []
   for pkt in packets do
@@ -64,7 +64,7 @@ def sendStagedPacketsPrefix (pid : PeerId) : MixedM Unit := do
     let k ← getKeypairPrefix id
     let nonce := k.sendingCounter
     setKeypairPrefix id { k with sendingCounter := k.sendingCounter + 1 }
-    if ← liftPrefix (branch .stagedNonceRejected (nonce ≥ REJECT_AFTER_MESSAGES)) then return ← outNokey true
+    if ← liftPrefix (branchCmp .stagedNonceRejected (nonce ≥ REJECT_AFTER_MESSAGES) nonce REJECT_AFTER_MESSAGES) then return ← outNokey true
     packetsCb := packetsCb ++ [{ peer := pid, keypair := id, nonce, plaintext := pkt, ds }]
   _ ← liftPrefix (branch .stagedNonceIterate false)
   peerGetMixed (← getKeypairPrefix id).peer
@@ -206,8 +206,6 @@ theorem sendStagedPacketsPrefix_erases (pid : PeerId) :
         · exact hout false
         · apply erasesPrefix_bind (erasesPrefix_lift _)
           intro expired
-          apply erasesPrefix_bind (erasesPrefix_lift _)
-          intro expired
           split
           · exact hout true
           · repeat' first
@@ -266,15 +264,14 @@ theorem sendStagedPacketsPrefix_preserves_ambient (c : AmbientContracts I) (t : 
         split
         · exact hout false
         · apply PrefixPreserves.bind (AmbientContracts.drop
-            (c.kernel (fun _ => True) _ (Keypairs.birthdateHasExpired_sameKernel _ _)))
-          intro expired
-          apply PrefixPreserves.bind (AmbientContracts.drop (c.branch (fun _ => True) _ _))
+            (c.kernel (fun _ => True) _ (branchExpired_sameKernel _ _ _)))
           intro expired
           split
           · exact hout true
           · repeat' first
               | with_reducible exact AmbientContracts.drop (c.getKeypair_frame (fun _ => True) _)
               | with_reducible exact AmbientContracts.drop (c.branch (fun _ => True) _ _)
+              | with_reducible exact AmbientContracts.drop (c.branchCmp (fun _ => True) _ _ _ _)
               | with_reducible exact AmbientContracts.drop (c.kernel (fun _ => True) _ (ipTunnelEcnEncap_sameKernel _))
               | with_reducible exact c.peerGet _
               | with_reducible exact t.alloc _

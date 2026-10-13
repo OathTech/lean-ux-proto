@@ -198,8 +198,11 @@ def parse_batch(traces, output, max_bytes=16 * 1024 * 1024):
 # fcntl (F_DUPFD*: the fd table), wg_set (peer and allowed-ips nodes). A
 # Linux ENOMEM the mirror did not take is a semantic mismatch, and its
 # record is unconsumed or absent: fail-noisy on both sides.
-# The mirror's branches per trace (W4: raised from 4096 for multi-packet items)
-MAX_BRANCHES = 32768
+# The mirror's branches per trace (W4: raised from 4096 for multi-packet items;
+# the W7 full-ring tier: a 1024-item wg_batch reports 126,531 labels on the
+# wrap trace, docs/2026-10-13-w7-full-ring-tier.md, so 2^18 with headroom
+# for the 1025-item trace)
+MAX_BRANCHES = 262144
 
 SEMANTIC_ERRNOS = {'eventfd2': {12, 22, 24}, 'dup': {9, 12, 24}, 'dup3': {9, 12, 22},
                    'close': {9}, 'fcntl': {1, 9, 12, 22},

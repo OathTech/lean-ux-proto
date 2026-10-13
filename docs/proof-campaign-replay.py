@@ -27,6 +27,20 @@ def recorded_fixture(name):
     raise ValueError(f"missing recorded fixture {name}")
 
 
+def add_wait_bounds(trace, operation_indices):
+    """Synthetic monotone wait bounds, site 128 (record kind 310).
+
+    These are reconstructed inputs, not clock words from the Linux capture.
+    No timer section occurs in these witnesses; the bounds precede every
+    placeholder-armed expiry.
+    """
+    for bound, index in enumerate(operation_indices, 1):
+        records = trace["hidden"][index]
+        if any(record[0] == 128 for record in records):
+            raise ValueError(f"operation {index} already contains an end-of-wait record")
+        records.append([128, bound.to_bytes(8, "little").hex()])
+
+
 def inclusive_floor():
     trace = recorded_fixture("CONTENDED_ROAM_CMP")
     window = json.loads((ROOT / "corpus/wireguard/rx_window.json").read_text())
@@ -47,6 +61,7 @@ def inclusive_floor():
     trace.pop("steer")
     trace["dst_cache_records"] = False
     trace["arm_records"] = False
+    add_wait_bounds(trace, range(len(trace["ops"])))
     return trace
 
 
@@ -61,7 +76,7 @@ def stale_dump_cursor():
     def zero(site, size=8):
         return [site, "00" * size]
 
-    return {
+    trace = {
         "version": 1,
         "id": "r2_stale_dump_cursor",
         "dst_cache_records": False,
@@ -78,6 +93,8 @@ def stale_dump_cursor():
             [zero(5) for _ in range(13)], [],
         ],
     }
+    add_wait_bounds(trace, [0, 1, 5, 6])
+    return trace
 
 
 def stale_dump_cursor_orphan():

@@ -132,6 +132,55 @@ theorem hiddenClock_spec (P : Snapshot → Prop) (s : HiddenSite) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.hiddenClock s
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (hiddenClock_sameSnapshot s).wp P
 
+theorem peekQueuedUnit_sameSnapshot (w : Worker) (pid : Nat) : SameSnapshot (Leanux.peekQueuedUnit w pid) :=
+  sameSnapshot_of_sameWGKernel (Framing.KernelFrames.peekQueuedUnit_sameWGKernel w pid)
+
+theorem peekQueuedUnit_spec (P : Snapshot → Prop) (w : Worker) (pid : Nat) :
+    ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.peekQueuedUnit w pid
+    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (peekQueuedUnit_sameSnapshot w pid).wp P
+
+theorem hiddenClock64_sameSnapshot (s : HiddenSite) : SameSnapshot (Leanux.hiddenClock64 s) :=
+  sameSnapshot_of_sameWGKernel (Framing.KernelFrames.hiddenClock64_sameWGKernel s)
+
+theorem hiddenClock64_spec (P : Snapshot → Prop) (s : HiddenSite) :
+    ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.hiddenClock64 s
+    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (hiddenClock64_sameSnapshot s).wp P
+
+theorem hiddenJiffies_sameSnapshot (s : HiddenSite) : SameSnapshot (Leanux.hiddenJiffies s) :=
+  sameSnapshot_of_sameWGKernel (Framing.KernelFrames.hiddenJiffies_sameWGKernel s)
+
+theorem hiddenJiffies_spec (P : Snapshot → Prop) (s : HiddenSite) :
+    ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.hiddenJiffies s
+    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (hiddenJiffies_sameSnapshot s).wp P
+
+theorem recordBudget_sameSnapshot  : SameSnapshot (Leanux.recordBudget ) :=
+  sameSnapshot_of_sameWGKernel (Framing.KernelFrames.recordBudget_sameWGKernel )
+
+theorem recordBudget_spec (P : Snapshot → Prop)  :
+    ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.recordBudget
+    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (recordBudget_sameSnapshot ).wp P
+
+theorem budgetExhausted_sameSnapshot {α : Type} (name : String) : SameSnapshot (Leanux.budgetExhausted (α := α) name) :=
+  sameSnapshot_of_sameWGKernel (Framing.KernelFrames.budgetExhausted_sameWGKernel (α := α) name)
+
+theorem budgetExhausted_spec (P : Snapshot → Prop) {α : Type} (name : String) :
+    ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.budgetExhausted (α := α) name
+    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (budgetExhausted_sameSnapshot (α := α) name).wp P
+
+theorem recordsLeft_sameSnapshot  : SameSnapshot (Leanux.recordsLeft ) :=
+  sameSnapshot_of_sameWGKernel (Framing.KernelFrames.recordsLeft_sameWGKernel )
+
+theorem recordsLeft_spec (P : Snapshot → Prop)  :
+    ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.recordsLeft
+    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (recordsLeft_sameSnapshot ).wp P
+
+theorem peekSiteU64_sameSnapshot (s : HiddenSite) : SameSnapshot (Leanux.peekSiteU64 s) :=
+  sameSnapshot_of_sameWGKernel (Framing.KernelFrames.peekSiteU64_sameWGKernel s)
+
+theorem peekSiteU64_spec (P : Snapshot → Prop) (s : HiddenSite) :
+    ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.peekSiteU64 s
+    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (peekSiteU64_sameSnapshot s).wp P
+
 theorem hiddenTimespec_sameSnapshot (s : HiddenSite) : SameSnapshot (Leanux.hiddenTimespec s) :=
   sameSnapshot_of_sameWGKernel (Framing.KernelFrames.hiddenTimespec_sameWGKernel s)
 

@@ -10,8 +10,9 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Std.Do
 
 def decryptKeyReject (k : Keypair) : M Bool :=
   WG.orM (branch .decKeyInvalid !k.receiving.isValid) do
-    WG.orM (do branch .decKeyExpired (← birthdateHasExpired k.receiving.birthdate REJECT_AFTER_TIME))
-      (branch .decCounterLimit (k.receivingCounter.counter ≥ REJECT_AFTER_MESSAGES))
+    WG.orM (branchExpired .decKeyExpired k.receiving.birthdate REJECT_AFTER_TIME)
+      (branchCmp .decCounterLimit (k.receivingCounter.counter ≥ REJECT_AFTER_MESSAGES)
+        k.receivingCounter.counter REJECT_AFTER_MESSAGES)
 
 theorem orM_sameKernel (ha : SameKernel a) (hb : SameKernel b) : SameKernel (WG.orM a b) := by
   unfold WG.orM
@@ -25,9 +26,8 @@ theorem decryptKeyReject_sameKernel (k : Keypair) : SameKernel (decryptKeyReject
   unfold decryptKeyReject
   apply orM_sameKernel (sameKernel_branch _ _)
   apply orM_sameKernel
-  · exact sameKernel_bind (Keypairs.birthdateHasExpired_sameKernel _ _)
-      (fun _ => sameKernel_branch _ _)
-  · exact sameKernel_branch _ _
+  · exact branchExpired_sameKernel _ _ _
+  · exact branchCmp_sameKernel _ _ _ _
 
 def decryptPacketPrefix (pkt : RxPacket) : MixedM (Option RxPacket) := do
   if ← liftPrefix (branch .decNoKeypair false) then return none

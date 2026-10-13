@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.Lifetimes.KeypairAccess
 import Leanux.Proofs.WG.Lifetimes.Acquire
+import Leanux.Proofs.Framing.WGTime
 
 /-! Caller contracts separate a history-dependent ambient invariant from
 temporary predicates about identities resolved by local getters. These laws
@@ -55,6 +56,11 @@ theorem kernel (c : AmbientContracts I) (P : IdentityView → Prop)
 theorem branch (c : AmbientContracts I) (P : IdentityView → Prop) (d : Decision) (b : Bool) :
     AmbientSpec I P (liftPrefix (Leanux.branch d b)) (fun _ => P) :=
   c.kernel P _ (sameKernel_branch d b)
+
+theorem branchCmp (c : AmbientContracts I) (P : IdentityView → Prop)
+    (d : Decision) (b : Bool) (lhs rhs : Int) :
+    AmbientSpec I P (liftPrefix (Leanux.branchCmp d b lhs rhs)) (fun _ => P) :=
+  c.kernel P _ (branchCmp_sameKernel d b lhs rhs)
 
 theorem invariant (c : AmbientContracts I) (P : IdentityView → Prop) (why : String) :
     AmbientSpec I P (liftPrefix (Leanux.invariant (α := α) why)) (fun _ => P) := by

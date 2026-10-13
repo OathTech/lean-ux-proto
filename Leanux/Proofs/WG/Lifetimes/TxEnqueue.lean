@@ -28,7 +28,7 @@ def enqueuePerPeerTxPrefix (item : List SkbId) (state : PacketState) : MixedM Un
     liftPrefix (invariant "an item for the tx worker that is not on its peer's tx_queue")
   setTxSkbPrefix first fun p => { p with state }
   _ ← cpumaskChooseOnlinePrefix pid
-  if !(← liftPrefix getDev).txWorkQueue.contains pid then
+  if !(← liftPrefix getDev).txWorkQueue.contains pid || (← liftPrefix (peekQueuedUnit .txWorker pid)) then
     liftPrefix (recordQueued .txWorker pid)
     liftPrefix (modifyDev fun d => { d with txWorkQueue := d.txWorkQueue ++ [pid] })
   peerPutMixed (some pid)
@@ -101,6 +101,8 @@ theorem enqueuePerPeerTxPrefix_erases (item : List SkbId) (state : PacketState) 
       intro _
       apply erasesPrefix_bind (erasesPrefix_lift _)
       intro d
+      apply erasesPrefix_bind (erasesPrefix_lift _)
+      intro queued
       split
       · apply erasesPrefix_bind (erasesPrefix_lift _)
         intro _
@@ -229,6 +231,8 @@ theorem enqueuePerPeerTxPrefix_preserves_ambient (c : AmbientContracts I) (t : T
       intro _
       apply PrefixPreserves.bind (AmbientContracts.drop (c.kernel (fun _ => True) _ getDev_sameKernel))
       intro d
+      apply PrefixPreserves.bind (AmbientContracts.drop (c.kernel (fun _ => True) _ (peekQueuedUnit_sameKernel _ _)))
+      intro queued
       split
       · apply PrefixPreserves.bind (AmbientContracts.drop (c.kernel (fun _ => True) _ (recordQueued_sameKernel _ _)))
         intro _

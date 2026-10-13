@@ -43,6 +43,10 @@
 # [USER 2026-10-13: "Agree, sounds good - approved"; docs/2026-10-12-seccomp-design.md section 16],
 # both record hooks line-preserving (patch sha256 182d265c517a1953eba8476210708334a50c3b8f371209c2e687502f54bc6e1d): the identity and
 # vmlinux lines below are that build's [AGENT 2026-10-13, stream X, phase 2b].
-6b4205dfccaaf9e8900cbe516fa46b3186d926a838224a086d8f473eeb4dd4b4
+# Built 2026-10-13 as .artifacts/kernel-net-choice-actl-s2 with the kind-310 end-of-wait jiffies record
+# (review item 7, record-only under the approved class); control patch sha256
+# fdb1306f7699f7206baa1281ae9ee1cd3ba4f4e1a55fb742c2f8ede5bef0a0c1. The identity and vmlinux lines below
+# are that build's [AGENT 2026-10-13, review item 7].
+04432df82a517ecb023b029c5e29efd6dc9351124e8d9fbfba4d274a74ee5f75
 # vmlinux sha256 of the build the evidence used (path-dependent):
-26c65369001bae5e657401e343f55ceba4931ea2c5e8428bd5c2d2385afb3e2d
+44f1c971db514de7d71945dcdb9a0616f5c1c9f8b384649dee45b567af0c7b98

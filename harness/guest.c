@@ -115,6 +115,15 @@ struct fixture_route { unsigned family; unsigned char dst[16]; unsigned mtu; };
  * absorbed the jump: a sleep begun before it would end at that same tick),
  * then ADVANCE_WAIT_US for the callbacks' work and loopback delivery. */
 #define KCOV_LEANUX_TIME_ADVANCE _IOW('c', 204, unsigned long)
+/* Review item 7 (docs/2026-10-13-review-items-7-8.md, section 5): the end of
+ * an idle wait as a record. The kernel reads jiffies and appends kind 310
+ * {jiffies} to the remote area of this process's common handle (the task's
+ * own window closed at the operation's return; the wait's timer sections
+ * land in the remote row too). Read once at every wait the mirror treats as
+ * an idle point (Env.idleTimers, Env.afterAdvance): after wg_inject's,
+ * wg_set's, wg_up's, wg_xmit's and wg_batch's waits, after the wait before
+ * wg_observe, and after wg_advance's. */
+#define KCOV_LEANUX_JIFFIES _IOR('c', 207, unsigned long)
 /* The wait-0 control (docs/2026-10-05-d3-timers.md, section 8) builds the
  * guest with -DADVANCE_WAIT_US=0 -DADVANCE_ABSORB=0 (harness/linux.py,
  * GUEST_VARIANTS): wg_advance returns at once, so the callbacks' sections and
@@ -1324,6 +1333,15 @@ static void print_stats(const char *id, unsigned index)
 /* After wg_observe's recvfrom: drain both listeners and read the counters.
  * The comparison-mode child does the same, so both children end in the same
  * state; only the PC-mode child reports. */
+/* The end-of-wait jiffies read (KCOV_LEANUX_JIFFIES, kind 310), on this
+ * process's own KCOV descriptor (fd 3) like the advance; a failure is the
+ * environment's (no remote coverage, or the record did not fit). */
+static void jiffies_end(const struct trace *t, unsigned i)
+{
+    unsigned long j;
+    if (syscall(SYS_ioctl, 3, KCOV_LEANUX_JIFFIES, &j)) fail(t->id, (int)i, "environment_failure", "jiffies_end");
+}
+
 static void observe(const struct trace *t, unsigned i, long first, int comparisons)
 {
     /* W8: after wg_netns_close the listeners and the injector are gone:
@@ -2149,6 +2167,7 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         if (op->code == OP_WG_OBSERVE) {
             if (remote) __atomic_store_n(&remote[0], 0, __ATOMIC_RELAXED);
             usleep(OBSERVE_WAIT_US);
+            jiffies_end(t, i);   /* the end of the idle wait (kind 310) */
         }
         /* wg_create and wg_delete: the temporary socket and the
          * request are prepared before the window. */
@@ -2570,6 +2589,7 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
              * which ran first, an order nothing records. The fixture makes
              * it one order. No added time: this is the wait below, moved. */
             usleep(QUEUE_WAIT_US);
+            jiffies_end(t, i);   /* the end of the idle wait (kind 310), before the route adds */
             waited = 1;
             route_into_wg0(t->id, i, first_up);
             first_up = 0;
@@ -2578,8 +2598,8 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         /* The handshake worker runs after the send returns. An operation
          * that can queue the handshake send worker (wg_set, wg_up, wg_xmit)
          * waits for it too, so the worker's remote section lands in it. */
-        if (op->code == OP_WG_INJECT) usleep(OBSERVE_WAIT_US);
-        if ((op->code == OP_WG_SET || op->code == OP_WG_UP || op->code == OP_WG_XMIT) && !waited) usleep(QUEUE_WAIT_US);
+        if (op->code == OP_WG_INJECT) { usleep(OBSERVE_WAIT_US); jiffies_end(t, i); }
+        if ((op->code == OP_WG_SET || op->code == OP_WG_UP || op->code == OP_WG_XMIT) && !waited) { usleep(QUEUE_WAIT_US); jiffies_end(t, i); }
         /* E-B: wait for the receive worker to drain the flood (its discarded
          * section) in this operation's window (~1 ms drain, measured). Keep the
          * wait short: the following injection must reach the worker within the
@@ -2588,7 +2608,7 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         /* W7: the batch's wait (op->b ms, the trace's wait_ms), in which the
          * kworkers run what it queued; a worker outliving it shows as missing
          * section records */
-        if (op->code == OP_WG_BATCH) usleep((useconds_t)op->b * 1000);
+        if (op->code == OP_WG_BATCH) { usleep((useconds_t)op->b * 1000); jiffies_end(t, i); }
         /* W8: the netns teardown (cleanup_net's section) runs in this wait */
         if (op->code == OP_WG_NETNS_CLOSE) usleep(NETNS_WAIT_US);
         if (op->code == OP_WG_ADVANCE) {
@@ -2607,6 +2627,7 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
                 usleep(1000);
             }
             if (ADVANCE_WAIT_US) usleep(ADVANCE_WAIT_US);
+            jiffies_end(t, i);   /* the end of the advance's wait (kind 310) */
             advanced_ns += jump;
         }
         if (up_seen) {

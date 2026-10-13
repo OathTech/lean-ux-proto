@@ -2426,6 +2426,51 @@ def Decision.comparison : Decision → Option Comparison
   -- noise.c:635-637 (DWARF puts the compare at 635); the condition at 639
   -- tests flood_attack
   | .consumeFlood => some ⟨.gt, false, some 635, true⟩
+  -- Review item 8 (docs/2026-10-13-review-items-7-8.md, section 4): the
+  -- age tests `wg_birthdate_has_expired(birthday, seconds)` (timers.h:25-29)
+  -- are `(s64)(birthday + seconds * NSEC_PER_SEC) <= (s64)now`, inlined
+  -- into their callers; the built code records both s64 operands at the
+  -- caller's line, never at timers.h:28 (measured on s1, `d3_zero_key`
+  -- op 3 at send.c:365: `(0xace35d722e, 0x82fa876a2e)`).
+  | .initRateLimited => some ⟨.le, false, none, false⟩
+  | .queuedNotExpired => some ⟨.le, false, none, false⟩
+  -- keep_key_fresh's `send = ...` spans send.c:131-134: DWARF puts the
+  -- counter compare at 131 and the age test at 133 (measured, d3_zero_key
+  -- op 3: `(0x1000000000000000, 1)` const and `(0x9ee6aedaca, 0x82f6d748b8)`)
+  | .freshCounter => some ⟨.gt, true, some 131, false⟩
+  | .freshExpired => some ⟨.le, false, some 133, false⟩
+  | .stagedBirthdateExpired => some ⟨.le, false, none, false⟩
+  -- decrypt_packet's `if (unlikely(!is_valid || expired || ...))` spans
+  -- receive.c:252-254: the age test is recorded at 252 (measured,
+  -- d3_rx_expired_key op 6: `(0x5567fb1de8, 0x55d18fece8)`)
+  | .decKeyExpired => some ⟨.le, false, some 252, false⟩
+  -- the receive-side keep_key_fresh's `send = ...` spans receive.c:230-233:
+  -- the age test is recorded at 231 (measured over the wireguard suite:
+  -- 78 records, d2_rx_deliver_v4 among them)
+  | .rxFreshExpired => some ⟨.le, false, some 231, false⟩
+  -- `is_valid && !expired` spans cookie.c:170-172: the age test is recorded
+  -- at 170 with the `is_valid` byte test (measured, e_cookie_then_reinitiate)
+  | .addMacCookieFresh => some ⟨.le, false, some 170, false⟩
+  -- `under_load = !wg_birthdate_has_expired(last_under_load, 1)` is at
+  -- receive.c:117; the decision's line is the `if (!under_load)` at 118
+  | .hsDecayExpired => some ⟨.le, false, some 117, false⟩
+  -- the u64 counter limits (messages.h:41-42): `x >= REJECT_AFTER_MESSAGES`
+  -- is compiled as `x > R - 1` (measured: send.c:381 records
+  -- `(0xffffffffffffe03d, nonce)`), which the check's `ge` shift absorbs
+  | .stagedNonceRejected => some ⟨.ge, true, none, false⟩
+  -- decrypt_packet's condition (receive.c:252-254) records its counter
+  -- limit at 252 too (measured, 102 records over the suite)
+  | .decCounterLimit => some ⟨.ge, true, some 252, false⟩
+  -- counter_validate's `||` (receive.c:302-303): both limits recorded at
+  -- 302 (measured, 196 records over the suite)
+  | .ctrRejectCounter => some ⟨.ge, true, none, false⟩
+  | .ctrRejectTheirs => some ⟨.ge, true, some 302, false⟩
+  -- `timer_handshake_attempts > MAX_TIMER_HANDSHAKES` (timers.c:46): a
+  -- 4-byte compare with the constant 18 as written (measured `(0x12, 0)`)
+  | .retransmitGiveUp => some ⟨.gt, true, none, false⟩
+  -- `peer->persistent_keepalive_interval` (u16) against 0 (timers.c:214,
+  -- measured `(0, 0x19)`)
+  | .traversalKeepalive => some ⟨.ne, true, none, false⟩
   -- E-B arm C: `tokens >= PACKET_COST` (ratelimiter.c:126) and
   -- `atomic_inc_return(&total_entries) > max_entries` (ratelimiter.c:135)
   | .rlAllow => some ⟨.ge, true, none, false⟩

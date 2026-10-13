@@ -1,5 +1,5 @@
 import Leanux.Proofs.WG.Keypairs.Ordinary
-import Leanux.Proofs.Framing.KernelEffects
+import Leanux.Proofs.Framing.WGTime
 
 set_option pp.structureInstances false
 
@@ -13,12 +13,9 @@ theorem hiddenAlloc_sameKernel (site : AllocSite) : SameKernel (hiddenAlloc site
 theorem hiddenClock_sameKernel (site : HiddenSite) : SameKernel (hiddenClock site) :=
   Framing.hiddenClock_sameKernel site
 
-theorem birthdateHasExpired_sameKernel (birthday : Int) (seconds : Nat) :
-    SameKernel (birthdateHasExpired birthday seconds) := by
-  apply sameKernel_of_wp
-  intro k
-  have hs := sameKernel_wp _ (hiddenClock_sameKernel .birthdateExpired) (fun k' => k' = k)
-  mvcgen [birthdateHasExpired, hs]
+theorem birthdateHasExpired_sameKernel (birthday : Int64) (seconds : Nat) :
+    SameKernel (birthdateHasExpired birthday seconds) :=
+  Framing.birthdateHasExpired_sameKernel birthday seconds
 
 theorem kdf_sameKernel (second third : Bool) (chainingKey data : List UInt8) :
     SameKernel (kdf second third chainingKey data) := by
@@ -36,7 +33,7 @@ theorem deriveKeys_sameSnapshot (kp : KeypairId) (initiator : Bool) (chainingKey
     SameSnapshot (deriveKeys kp initiator chainingKey) := by
   apply sameSnapshot_of_wp
   intro s
-  have clock_spec := (sameSnapshot_of_sameKernel (hiddenClock_sameKernel .deriveKeysBirthdate)).wp (fun t => t = s)
+  have clock_spec := (sameSnapshot_of_sameKernel (Framing.hiddenClock64_sameKernel .deriveKeysBirthdate)).wp (fun t => t = s)
   have kdf_spec := (sameSnapshot_of_sameKernel (kdf_sameKernel true false chainingKey [])).wp (fun t => t = s)
   have out_spec := fun outs i => (sameSnapshot_of_sameKernel (kdfOut_sameKernel outs i)).wp (fun t => t = s)
   mvcgen [deriveKeys, clock_spec, kdf_spec, out_spec,
@@ -74,12 +71,12 @@ theorem setKeypair_snapshot_wp (i : Nat) (k : Keypair) (P : Snapshot → Prop) :
 theorem decryptPacket_sameSnapshot (pkt : RxPacket) : SameSnapshot (decryptPacket pkt) := by
   apply sameSnapshot_of_wp
   intro s
-  have birthday_spec := fun birth seconds =>
-    (sameSnapshot_of_sameKernel (birthdateHasExpired_sameKernel birth seconds)).wp (fun t => t = s)
+  have birthday_spec := fun d birth seconds f =>
+    (sameSnapshot_of_sameKernel (Framing.branchExpired_sameKernel d birth seconds f)).wp (fun t => t = s)
   have alloc_spec := (sameSnapshot_of_sameKernel (hiddenAlloc_sameKernel .skbCowDataRx)).wp (fun t => t = s)
   have get_spec := fun i => getKeypair_snapshot_wp i (fun t => t = s)
   have set_spec := fun i k => setKeypair_snapshot_wp i k (fun t => t = s)
-  mvcgen [decryptPacket, birthday_spec, alloc_spec, Leanux.WG.orM, branch,
+  mvcgen [decryptPacket, birthday_spec, alloc_spec, Leanux.WG.orM, branch, branchCmp,
     get_spec, set_spec, invariant]
   all_goals try dsimp +zetaDelta only at *
   all_goals simp_all [snapshot, cell]

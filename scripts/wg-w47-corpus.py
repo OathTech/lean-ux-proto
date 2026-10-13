@@ -138,22 +138,40 @@ def traces():
 
 
 def tier():
-    """The full-ring tier's first trace (section 17.16, the review's ring
-    counterexample): one transmit in a batch, consumed by the tx worker during
-    the wait (ptr_ring head 1, tail 0, slot 0 still occupied until the batch
-    rule clears it), then a batch of 1024 transmits: the 1024th produce wraps
-    to slot 0 and fails in C (-ENOSPC from __ptr_ring_produce, mapped to
-    -EPIPE by wg_queue_enqueue_per_device_and_peer) with 1023 items staged.
-    Written to corpus/w7-tier, outside the default suites, until the mirror's
-    rings (task/rings) land; the Linux-only probe scripts/wg-w7-tier-probe.py
-    reads it. Keepalive-size payloads (one byte) keep the wire and the
-    listeners' drain small."""
+    """The full-ring tier (docs/2026-10-13-w7-full-ring-tier.md): the 1024-slot
+    encrypt ring filled by one wg_batch of transmits, on the ring the session
+    already used. The session's first keepalive (op 3, under the response)
+    takes slot 0 and is consumed; `__ptr_ring_discard_one` zeroes consumed
+    slots only once a batch of 16 has accrued (or at the ring's end), so the
+    slot stays physically occupied, as does each later consumed slot below
+    the batch, and `__ptr_ring_produce`'s full test (occupancy, not the
+    count) fails the producer that wraps onto it; a failed produce leaves the
+    producer index where it is, so every later item of the same batch fails
+    at the same slot. Drops per trace = items - (1024 - the uncleared slots
+    carried into the batch). Sessions with the 25 s persistent keepalive: the
+    comparison child's console drain after the batch runs past 5 s, and a 5 s
+    keepalive would open sections after the readout. Keepalive-size payloads
+    (one byte) keep the wire and the listeners' drain small; the second
+    batch's wait is the tier's 1000 ms default (section 12, P-A)."""
     out = {}
-    ops, sess, steer = d3.session(keepalive=5)
-    first = [xmit_item(d2.payload(1, 1))]
-    rest = [xmit_item(d2.payload(1, 2 + k)) for k in range(1024)]
-    out["w7_ring_wrap"] = (ops + [batch(first, 200), batch(rest, 1000), OBSERVE, GET], steer,
-                           SESSION + d2.DATA_SENT)
+    def trace(name, first, count, expect):
+        ops, sess, steer = d3.session()
+        batches = [batch([xmit_item(d2.payload(1, 1 + k)) for k in range(first)], 200)] if first else []
+        batches.append(batch([xmit_item(d2.payload(1, 100 + k)) for k in range(count)], 1000))
+        out[name] = (ops + batches + [OBSERVE, GET], steer, SESSION + d2.DATA_SENT + expect)
+    full = ["wg_queue_enqueue_per_device_and_peer.ring_full=1", "wg_packet_create_data.epipe=1"]
+    fits = ["wg_queue_enqueue_per_device_and_peer.ring_full=0", "wg_packet_create_data.epipe=0"]
+    # the keepalive's slot 0 and op 4's slot 1 carried: 1022 fit, items 1023 and 1024 fail at slot 0
+    trace("w7_ring_wrap", 1, 1024, full)
+    # the same two carried slots, one fewer item: 1022 fit, item 1023 fails
+    trace("w7_ring_1023", 1, 1023, full)
+    # one more item: 1022 fit, items 1023, 1024 and 1025 fail
+    trace("w7_ring_1025", 1, 1025, full)
+    # no op 4: only the keepalive's slot carried: 1023 fit, item 1024 fails
+    trace("w7_ring_fresh_1024", 0, 1024, full)
+    # 15 items in op 4: with the keepalive, 16 consumed, the batch rule clears
+    # slots 0..15 at the 16th consume: nothing carried, all 1024 fit
+    trace("w7_ring_batch_clear", 15, 1024, fits)
     return out
 
 

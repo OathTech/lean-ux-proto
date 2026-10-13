@@ -22,7 +22,7 @@ theorem beginSessionPrefix_clock_failure (pid : PeerId) (kp : KeypairId)
     (hwrite : (setKeypair kp {k with iAmTheInitiator := before.handshakeState == HANDSHAKE_CONSUMED_RESPONSE, remoteIndex := current.remoteIndex}).run guarded = .ok ((), configured))
     (hselect : (branch .sessionInitiator (before.handshakeState == HANDSHAKE_CONSUMED_RESPONSE)).run configured =
       .ok (selected, clockEntry))
-    (hclock : (hiddenClock .deriveKeysBirthdate).run clockEntry = .error e) :
+    (hclock : (hiddenClock64 .deriveKeysBirthdate).run clockEntry = .error e) :
     runPrefix (beginSessionPrefix pid) w h =
       (.error e, h ++ [.peer (.read pid before.internalId),
         .keypair (.allocate kp (allocEntry.k.keypairCounter + 1)),

@@ -61,16 +61,16 @@ theorem activationIterLogged_erases (a : Activation) : Erases (activationIterLog
     | ghost_step
 
 def activationRunLogged (a : Activation) : GhostM Unit := do
-  let (bound, drained) := Activation.bound a
+  let occupancy ← liftM (Activation.occupancy a)
   let mut act := a
-  for _ in [a.iterations:bound] do
+  for _ in [0:occupancy + 1] do
     match ← activationIterLogged act with
     | .ended => _ ← hidden (.sectionStop act.worker); return
     | .continued => act := { act with iterations := act.iterations + 1 }
     | .yielded =>
       modifyWorld fun s => { s with suspended := s.suspended ++ [{ act with iterations := act.iterations + 1 }] }
       return
-  invariant drained
+  invariant s!"{a.worker.symbol} consumed more items than its queue held ({occupancy}) in one run"
 
 theorem activationRunLogged_erases (a : Activation) : Erases (activationRunLogged a) (Env.Activation.run a) := by
   unfold activationRunLogged Env.Activation.run
@@ -105,7 +105,7 @@ theorem dispatchActivationLogged_erases (w : Worker) : Erases (dispatchActivatio
 
 def scheduleLogged (stack : Option Worker := none) : GhostM Unit := do
   let netRx := (HiddenSite.sectionStart .netRx).info.id
-  for _ in [0:4096] do
+  for _ in [0:(← liftM recordBudget)] do
     if (← getWorld).hidden.isNone then
       let d ← getDev
       let next := [Worker.receiveWorker, .decryptWorker, .encryptWorker, .txWorker].find? fun w =>
@@ -133,7 +133,7 @@ def scheduleLogged (stack : Option Worker := none) : GhostM Unit := do
       modifyWorld fun s => { s with suspended := s.suspended.filter (· != a) }
       activationRunLogged a
     | _ => unsupported "the records do not determine which suspended worker resumed"
-  invariant "the scheduler loop did not converge"
+  liftM (budgetExhausted "the scheduler loop")
 
 theorem scheduleLogged_erases (stack : Option Worker) : Erases (scheduleLogged stack) (Env.schedule stack) := by
   unfold scheduleLogged Env.schedule

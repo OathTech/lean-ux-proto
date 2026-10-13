@@ -18,7 +18,7 @@ theorem endpointEq_sameKernel (a : Endpoint) (b : Option Endpoint) :
 def dstCacheResetMixed (pid : PeerId) : MixedM Unit := do
   let w ← liftPrefix (get : M World)
   if !(w.armRecords && w.dstCacheRecords) then return
-  let ts ← liftPrefix (hiddenU64 .dstCacheResetTs)
+  let ts ← liftPrefix (hiddenJiffies .dstCacheResetTs)
   modifyPeerKeysPrefix pid fun p => {p with dstCache := {p.dstCache with resetTs := ts}}
 
 theorem dstCacheResetMixed_erases (pid : PeerId) :
@@ -38,7 +38,7 @@ theorem dstCacheResetMixed_spec (c : AmbientContracts I) (P : IdentityView → P
   intro w
   split
   · exact c.pure P _
-  · apply PrefixEnsures.bind (c.kernel P _ (Peers.hiddenU64_sameKernel _))
+  · apply PrefixEnsures.bind (c.kernel P _ (hiddenJiffies_sameKernel _))
     intro ts
     exact modifyPeerKeysPrefix_spec_ambient c P pid _ (fun _ => rfl)
 
@@ -89,6 +89,7 @@ theorem setPeerEndpointPrefix_spec (c : AmbientContracts I) (P : IdentityView �
     | exact c.getPeer_frame P _
     | exact c.kernel P _ (endpointEq_sameKernel _ _)
     | exact c.branch P _ _
+    | exact c.branchCmp P _ _ _ _
     | exact modifyPeerKeysPrefix_spec_ambient c P _ _ (fun _ => rfl)
     | exact dstCacheResetMixed_spec c P _
     | exact c.pure P _
@@ -98,25 +99,29 @@ theorem setPeerEndpointPrefix_spec (c : AmbientContracts I) (P : IdentityView �
 
 /-- The access-free prelude of the original timer arm. Its world updates and
 hidden-input failures occur before the first resolved peer read. -/
-def timerArmExpiry (pid : PeerId) (t : PeerTimer) (delay : Nat) : M Nat := do
+def timerArmExpiry (pid : PeerId) (t : PeerTimer) (delay : Nat) : M UInt64 := do
   let w ← get
   if w.armRecords then
     let bs ← hidden .modTimerArm
-    let (j, e) := (recordWord bs 0, recordWord bs 1)
-    if e < j || (e - j != delay && e - j + 1 != delay) then
-      throw (.hidden s!"timer expiry differs from Linux: mod_timer at jiffies {j} to {e}, the mirror's delay is {delay}")
-    modify fun w => {w with jiffiesLast := some j}
+    let (jm, e) := (recordWord64 bs 0, recordWord64 bs 1)
+    let jc := e - delay.toUInt64
+    let gap := (jm - jc).toInt64
+    if gap < 0 then
+      throw (.hidden s!"timer expiry differs from Linux: mod_timer at jiffies {jm} to {e}, the mirror's delay is {delay} (the caller's read would be {jc}, after mod_timer's)")
+    if gap > 1 then
+      unsupported s!"a stall between a timer's two jiffies reads: the caller's {jc}, mod_timer's {jm} (delay {delay}, expires {e})"
+    modify fun w => {w with jiffiesLast := some jm}
     let u := recordWord bs 2
     if u != 0 then modify fun w => {w with timerUnits := (u, pid, t) :: w.timerUnits.filter (·.1 != u)}
-    return e
-  else return w.jiffiesLast.getD 0 + delay
+    return jc + delay.toUInt64
+  else return w.jiffiesLast.getD 0 + delay.toUInt64
 
 theorem timerArmExpiry_sameKernel (pid : PeerId) (t : PeerTimer) (delay : Nat) :
     SameKernel (timerArmExpiry pid t delay) := by
   apply sameKernel_of_wp
   intro k
   have hs := sameKernel_wp _ (hidden_sameKernel .modTimerArm) (fun k' => k' = k)
-  mvcgen [timerArmExpiry, hs]
+  mvcgen [timerArmExpiry, hs, unsupported]
 
 theorem armTimer_source (pid : PeerId) (t : PeerTimer) (delay : Nat) :
     armTimer pid t delay = (do
@@ -129,7 +134,9 @@ theorem armTimer_source (pid : PeerId) (t : PeerTimer) (delay : Nat) :
   · simp only [bind_assoc]
     congr 1
     funext bs
-    split <;> simp only [bind_assoc]
+    split <;> try simp only [bind_assoc]
+    all_goals first | rfl | skip
+    split <;> try simp only [bind_assoc]
     all_goals congr 1
     all_goals first | funext u | skip
     all_goals split <;> simp only [bind_assoc, pure_bind]
@@ -228,7 +235,7 @@ def timersDataReceivedPrefix (pid : PeerId) : MixedM Unit := do
 
 def timersTraversalPrefix (pid : PeerId) : MixedM Unit := do
   let interval := (← getPeerMixed pid).persistentKeepaliveInterval
-  if ← liftPrefix (branch .traversalKeepalive (interval != 0)) then
+  if ← liftPrefix (branchCmp .traversalKeepalive (interval != 0) interval 0) then
     discard <| modPeerTimerPrefix pid .persistentKeepalive (interval * HZ)
 
 theorem timersHandshakeCompletePrefix_erases (pid : PeerId) (site : HiddenSite) :
@@ -300,6 +307,7 @@ theorem timersDataReceivedPrefix_spec (c : AmbientContracts I) (P : IdentityView
     | exact c.kernel P _ getDev_sameKernel
     | exact c.getPeer_frame P _
     | exact c.branch P _ _
+    | exact c.branchCmp P _ _ _ _
     | exact modPeerTimerPrefix_spec c P _ _ _
     | exact modifyPeerKeysPrefix_spec_ambient c P _ _ (fun _ => rfl)
     | exact c.pure P _
@@ -314,6 +322,7 @@ theorem timersTraversalPrefix_spec (c : AmbientContracts I) (P : IdentityView �
   repeat' first
     | exact c.getPeer_frame P _
     | exact c.branch P _ _
+    | exact c.branchCmp P _ _ _ _
     | exact modPeerTimerPrefix_spec c P _ _ _
     | exact c.pure P _
     | apply PrefixEnsures.bind

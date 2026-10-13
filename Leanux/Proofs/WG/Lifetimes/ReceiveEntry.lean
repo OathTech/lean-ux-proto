@@ -22,7 +22,8 @@ theorem queueDeviceWork_sameKernel (worker : Worker) : SameKernel (queueDeviceWo
   apply sameKernel_of_wp
   intro k
   have hq := sameKernel_wp _ (recordQueued_sameKernel worker 0) (fun k' => k' = k)
-  mvcgen [queueDeviceWork, hq]
+  have hp := sameKernel_wp _ (peekQueuedUnit_sameKernel worker 0) (fun k' => k' = k)
+  mvcgen [queueDeviceWork, hq, hp, unsupported]
 
 theorem cpumaskNextOnlineFrom_sameKernel (last : Int) : SameKernel (cpumaskNextOnlineFrom last) := by
   apply sameKernel_of_wp

@@ -35,4 +35,22 @@ theorem PrefixPreserves.mapM (xs : List α) (g : α → PrefixM Event β)
   | cons x xs ih =>
     simp only [List.mapM_cons]
     exact PrefixPreserves.bind (hg x) (fun y => PrefixPreserves.bind ih (fun ys => PrefixPreserves.pure hs (y :: ys)))
+
+theorem erasesPrefix_forM (xs : List α) (g : α → PrefixM Event Unit) (a : α → M Unit)
+    (ha : ∀ x, ErasesPrefix (g x) (a x)) : ErasesPrefix (xs.forM g) (xs.forM a) := by
+  induction xs with
+  | nil => simpa only [List.forM_eq_forM, List.forM_nil] using erasesPrefix_pure (Event := Event) ()
+  | cons x xs ih =>
+    simp only [List.forM_eq_forM, List.forM_cons] at *
+    exact erasesPrefix_bind (ha x) (fun _ => ih)
+
+theorem PrefixPreserves.forM (xs : List α) (g : α → PrefixM Event Unit)
+    (hs : ∀ h w, I h w → S h) (hg : ∀ x, PrefixPreserves I S (g x)) :
+    PrefixPreserves I S (xs.forM g) := by
+  induction xs with
+  | nil => simpa only [List.forM_eq_forM, List.forM_nil] using PrefixPreserves.pure hs ()
+  | cons x xs ih =>
+    simp only [List.forM_eq_forM, List.forM_cons] at *
+    exact PrefixPreserves.bind (hg x) (fun _ => ih)
+
 end Leanux.Proofs.Logged

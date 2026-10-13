@@ -22,8 +22,8 @@ def dstCacheGetPrefix (pid : PeerId) (gen : Nat) : MixedM (Option DstSlot) := do
   let p ← getPeerMixed pid
   let c := p.dstCache
   if let some s := c.slot then
-    if c.refreshTs > c.resetTs && s.gen == gen then return some s
-  let ts ← liftPrefix (hiddenU64 .dstCacheRefreshTs)
+    if timeAfter c.refreshTs c.resetTs && s.gen == gen then return some s
+  let ts ← liftPrefix (hiddenJiffies .dstCacheRefreshTs)
   setPeerMixed pid {p with dstCache := {c with slot := none, refreshTs := ts}}
   return none
 
@@ -79,11 +79,11 @@ theorem dstCacheGetPrefix_spec (c : AmbientContracts I) (P : IdentityView → Pr
   · apply PrefixEnsures.bind (c.getPeer P pid)
     intro p
     have miss : AmbientSpec I (fun s => P s ∧ s.1.slots pid = some p.internalId)
-        (do let ts ← liftPrefix (hiddenU64 .dstCacheRefreshTs)
+        (do let ts ← liftPrefix (hiddenJiffies .dstCacheRefreshTs)
             setPeerMixed pid {p with dstCache := {p.dstCache with slot := none, refreshTs := ts}}
             pure (none : Option DstSlot)) (fun _ => P) := by
       exact PrefixEnsures.bind (c.kernel (fun s => P s ∧ s.1.slots pid = some p.internalId)
-        (hiddenU64 .dstCacheRefreshTs) (Peers.hiddenU64_sameKernel _))
+        (hiddenJiffies .dstCacheRefreshTs) (hiddenJiffies_sameKernel _))
         (fun ts => PrefixEnsures.bind (c.setPeer P pid {p with dstCache := {p.dstCache with slot := none, refreshTs := ts}})
           (fun _ => c.pure P (none : Option DstSlot)))
     dsimp only

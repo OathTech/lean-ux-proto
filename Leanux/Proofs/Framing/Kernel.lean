@@ -87,8 +87,8 @@ theorem branchCmpExcluded_spec (P : WGKernelView → Prop) (d : Decision) (outco
     ⦃fun w => ⌜P (wgKernelView w)⌝⦄ Leanux.branchCmpExcluded d outcome x
     ⦃⇓? _ w => ⌜P (wgKernelView w)⌝⦄ := (branchCmpExcluded_sameWGKernel d outcome x).wp P
 
-theorem envOk_sameWGKernel (site : EnvSite) : SameWGKernel (Leanux.envOk site) := by
-  frame_wg [envOk] using []
+theorem envOk_sameWGKernel (site : EnvSite) : SameWGKernel (Leanux.envOk site) :=
+  sameWGKernel_of_sameKernel (Framing.envOk_sameKernel site)
 
 theorem envOk_spec (P : WGKernelView → Prop) (site : EnvSite) :
     ⦃fun w => ⌜P (wgKernelView w)⌝⦄ Leanux.envOk site
@@ -122,8 +122,57 @@ theorem recordQueued_spec (P : WGKernelView → Prop) (w : Worker) (pid : Nat) :
     ⦃fun w => ⌜P (wgKernelView w)⌝⦄ Leanux.recordQueued w pid
     ⦃⇓? _ w => ⌜P (wgKernelView w)⌝⦄ := (recordQueued_sameWGKernel w pid).wp P
 
+theorem peekQueuedUnit_sameWGKernel (w : Worker) (pid : Nat) : SameWGKernel (Leanux.peekQueuedUnit w pid) :=
+  sameWGKernel_of_sameKernel (Framing.peekQueuedUnit_sameKernel w pid)
+
+theorem peekQueuedUnit_spec (P : WGKernelView → Prop) (w : Worker) (pid : Nat) :
+    ⦃fun w => ⌜P (wgKernelView w)⌝⦄ Leanux.peekQueuedUnit w pid
+    ⦃⇓? _ w => ⌜P (wgKernelView w)⌝⦄ := (peekQueuedUnit_sameWGKernel w pid).wp P
+
+theorem hiddenClock64_sameWGKernel (s : HiddenSite) : SameWGKernel (Leanux.hiddenClock64 s) :=
+  sameWGKernel_of_sameKernel (Framing.hiddenClock64_sameKernel s)
+
+theorem hiddenClock64_spec (P : WGKernelView → Prop) (s : HiddenSite) :
+    ⦃fun w => ⌜P (wgKernelView w)⌝⦄ Leanux.hiddenClock64 s
+    ⦃⇓? _ w => ⌜P (wgKernelView w)⌝⦄ := (hiddenClock64_sameWGKernel s).wp P
+
+theorem hiddenJiffies_sameWGKernel (s : HiddenSite) : SameWGKernel (Leanux.hiddenJiffies s) :=
+  sameWGKernel_of_sameKernel (Framing.hiddenJiffies_sameKernel s)
+
+theorem hiddenJiffies_spec (P : WGKernelView → Prop) (s : HiddenSite) :
+    ⦃fun w => ⌜P (wgKernelView w)⌝⦄ Leanux.hiddenJiffies s
+    ⦃⇓? _ w => ⌜P (wgKernelView w)⌝⦄ := (hiddenJiffies_sameWGKernel s).wp P
+
+theorem recordBudget_sameWGKernel  : SameWGKernel (Leanux.recordBudget) :=
+  sameWGKernel_of_sameKernel (Framing.recordBudget_sameKernel )
+
+theorem recordBudget_spec (P : WGKernelView → Prop)  :
+    ⦃fun w => ⌜P (wgKernelView w)⌝⦄ Leanux.recordBudget
+    ⦃⇓? _ w => ⌜P (wgKernelView w)⌝⦄ := (recordBudget_sameWGKernel ).wp P
+
+theorem budgetExhausted_sameWGKernel {α : Type} (name : String) : SameWGKernel (Leanux.budgetExhausted (α := α) name) :=
+  sameWGKernel_of_sameKernel (Framing.budgetExhausted_sameKernel (α := α) name)
+
+theorem budgetExhausted_spec (P : WGKernelView → Prop) {α : Type} (name : String) :
+    ⦃fun w => ⌜P (wgKernelView w)⌝⦄ Leanux.budgetExhausted (α := α) name
+    ⦃⇓? _ w => ⌜P (wgKernelView w)⌝⦄ := (budgetExhausted_sameWGKernel (α := α) name).wp P
+
+theorem recordsLeft_sameWGKernel  : SameWGKernel (Leanux.recordsLeft) :=
+  sameWGKernel_of_sameKernel (Framing.recordsLeft_sameKernel )
+
+theorem recordsLeft_spec (P : WGKernelView → Prop)  :
+    ⦃fun w => ⌜P (wgKernelView w)⌝⦄ Leanux.recordsLeft
+    ⦃⇓? _ w => ⌜P (wgKernelView w)⌝⦄ := (recordsLeft_sameWGKernel ).wp P
+
+theorem peekSiteU64_sameWGKernel (s : HiddenSite) : SameWGKernel (Leanux.peekSiteU64 s) :=
+  sameWGKernel_of_sameKernel (Framing.peekSiteU64_sameKernel s)
+
+theorem peekSiteU64_spec (P : WGKernelView → Prop) (s : HiddenSite) :
+    ⦃fun w => ⌜P (wgKernelView w)⌝⦄ Leanux.peekSiteU64 s
+    ⦃⇓? _ w => ⌜P (wgKernelView w)⌝⦄ := (peekSiteU64_sameWGKernel s).wp P
+
 theorem queueDeviceWork_sameWGKernel (w : Worker) : SameWGKernel (Leanux.queueDeviceWork w) := by
-  frame_wg [queueDeviceWork] using [recordQueued_spec]
+  frame_wg [queueDeviceWork] using [recordQueued_spec, peekQueuedUnit_spec]
 
 theorem queueDeviceWork_spec (P : WGKernelView → Prop) (w : Worker) :
     ⦃fun w => ⌜P (wgKernelView w)⌝⦄ Leanux.queueDeviceWork w

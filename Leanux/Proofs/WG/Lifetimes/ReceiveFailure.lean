@@ -13,7 +13,7 @@ theorem counterValidatePrefix_empty_bitmap (kp : KeypairId) (w : World)
       (.error (.invariant "backtrack[0] beyond the bitmap"),
         h ++ [.keypair (.read kp k.internalId)]) := by
   simp [counterValidatePrefix, runPrefix_bind, getKeypairPrefix_run, hg, hc,
-    runPrefix_lift, WG.orM, branch, invariant, StateT.run_bind,
+    runPrefix_lift, WG.orM, branch, branchCmp, invariant, StateT.run_bind,
     StateT.run_modify, COUNTER_WINDOW_SIZE, REJECT_AFTER_MESSAGES,
     COUNTER_BITS_TOTAL, BITS_PER_LONG, Std.Legacy.Range.forIn_eq_forIn_range']
   decide

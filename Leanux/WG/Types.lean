@@ -101,7 +101,9 @@ structure IndexEntry where
 /-- `struct noise_symmetric_key`. -/
 structure SymmetricKey where
   key : List UInt8 := List.replicate 32 0
-  birthdate : Int := 0
+  /-- `birthdate`, `u64` nanoseconds of the coarse boot clock, held as the
+      `s64` the age test casts it to (timers.h:27-28, review item 8). -/
+  birthdate : Int64 := 0
   isValid : Bool := false
   deriving Repr, BEq
 
@@ -239,8 +241,10 @@ structure DstSlot where
   deriving Repr, BEq
 
 structure DstCache where
-  resetTs : Nat := 0
-  refreshTs : Nat := 0
+  /-- `reset_ts` and the per-cpu `refresh_ts`: `unsigned long` `jiffies`
+      (dst_cache.h, dst_cache.c:63), compared by `time_after` (review item 8). -/
+  resetTs : UInt64 := 0
+  refreshTs : UInt64 := 0
   slot : Option DstSlot := none
   deriving Repr, BEq
 
@@ -267,7 +271,7 @@ structure Peer where
   /-- `last_sent_handshake` (ns of coarse boot time, s64): from recorded
       clock reads (`wg_noise_reset_last_sent_handshake` sets it
       `REKEY_TIMEOUT + 1` seconds in the past). -/
-  lastSentHandshake : Int := 0
+  lastSentHandshake : Int64 := 0
   /-- `handshake.last_initiation_consumption` (ns, s64). -/
   lastInitiationConsumption : Int := 0
   txBytes : Nat := 0
@@ -303,16 +307,17 @@ structure Peer where
   napiScheduled : Bool := false
   /-- The five `struct timer_list` (peer.h:53-55), D3 interface
       (docs/2026-10-05-d3-timers.md, section 5.1): `some expires` (absolute
-      64-bit `jiffies`, never truncated) while the timer is pending, `none`
+      `jiffies`, the C's `unsigned long`, 64-bit on x86_64, compared by the
+      `time_after` family: review item 8) while the timer is pending, `none`
       otherwise; `timer_pending` is `isSome` (`Peer.timerPending`). The
       expiry comes from the kind-303 arm record once the mirror consumes it
       (stream M); until then it is the nominal `jiffies + delay`
       (`WG.armTimer`), which nothing reads. -/
-  timerRetransmitHandshake : Option Nat := none
-  timerSendKeepalive : Option Nat := none
-  timerNewHandshake : Option Nat := none
-  timerZeroKeyMaterial : Option Nat := none
-  timerPersistentKeepalive : Option Nat := none
+  timerRetransmitHandshake : Option UInt64 := none
+  timerSendKeepalive : Option UInt64 := none
+  timerNewHandshake : Option UInt64 := none
+  timerZeroKeyMaterial : Option UInt64 := none
+  timerPersistentKeepalive : Option UInt64 := none
   /-- `timer_handshake_attempts` (peer.h:56). -/
   timerHandshakeAttempts : Nat := 0
   /-- `timer_need_another_keepalive` and `sent_lastminute_handshake`
@@ -337,7 +342,7 @@ structure Peer where
       (ns of coarse boot time, a recorded clock read) and `is_valid`. -/
   cookieDecryptionKey : Key := List.replicate 32 0
   cookie : List UInt8 := List.replicate 16 0
-  cookieBirthdate : Int := 0
+  cookieBirthdate : Int64 := 0
   cookieIsValid : Bool := false
   deriving Repr, BEq
 
@@ -351,7 +356,7 @@ def PeerTimer.all : List PeerTimer :=
   [.retransmitHandshake, .sendKeepalive, .newHandshake, .zeroKeyMaterial, .persistentKeepalive]
 
 /-- The timer's `expires` while pending. -/
-def Peer.timer (p : Peer) : PeerTimer → Option Nat
+def Peer.timer (p : Peer) : PeerTimer → Option UInt64
   | .retransmitHandshake => p.timerRetransmitHandshake
   | .sendKeepalive => p.timerSendKeepalive
   | .newHandshake => p.timerNewHandshake
@@ -361,7 +366,7 @@ def Peer.timer (p : Peer) : PeerTimer → Option Nat
 /-- `timer_pending(&peer->timer_x)` (timer.h:145-148): hashed in a bucket. -/
 def Peer.timerPending (p : Peer) (t : PeerTimer) : Bool := (p.timer t).isSome
 
-def Peer.setTimer (p : Peer) (t : PeerTimer) (v : Option Nat) : Peer :=
+def Peer.setTimer (p : Peer) (t : PeerTimer) (v : Option UInt64) : Peer :=
   match t with
   | .retransmitHandshake => { p with timerRetransmitHandshake := v }
   | .sendKeepalive => { p with timerSendKeepalive := v }
@@ -399,7 +404,7 @@ structure Device where
       from their records; zeros for the fixture's wg0, created before the
       trace (unknown). -/
   cookieSecret : List UInt8 := List.replicate 32 0
-  cookieSecretBirthdate : Int := 0
+  cookieSecretBirthdate : Int64 := 0
   /-- `cookie_checker.cookie_encryption_key` (E-B): `blake2s("cookie--" ‖
       static_public)` (`wg_cookie_checker_precompute_device_keys`, cookie.c:48),
       under which `wg_cookie_message_create` seals a cookie reply; zero until an

@@ -131,14 +131,14 @@ theorem creation_require (P : Store PeerId → Prop) (pid : PeerId) (what : Stri
 def dstCacheResetPrefix (pid : PeerId) : PrefixM PeerEvent Unit := do
   let w ← liftPrefix (get : M World)
   if !(w.armRecords && w.dstCacheRecords) then return
-  let ts ← liftPrefix (hiddenU64 .dstCacheResetTs)
+  let ts ← liftPrefix (hiddenJiffies .dstCacheResetTs)
   let p ← getPeerPrefix pid
   setPeerPrefix pid { p with dstCache := { p.dstCache with resetTs := ts } }
 
 def resetLastSentHandshakePrefix (pid : PeerId) : PrefixM PeerEvent Unit := do
-  let now ← liftPrefix (hiddenClock .resetLastSent)
+  let now ← liftPrefix (hiddenClock64 .resetLastSent)
   setPeerPrefix pid { (← getPeerPrefix pid) with
-    lastSentHandshake := now - (REKEY_TIMEOUT + 1 : Nat) * NSEC_PER_SEC }
+    lastSentHandshake := now - (REKEY_TIMEOUT + 1 : Nat).toInt64 * NSEC_PER_SEC64 }
 
 def precomputeStaticStaticPrefix (pid : PeerId) : PrefixM PeerEvent Unit := do
   requireNotPendingPrefix pid "recomputing the static-static key"
@@ -218,7 +218,7 @@ theorem dstCacheResetPrefix_spec (P : Store PeerId → Prop) (pid : PeerId) :
   intro w
   split
   · exact creation_pure _ ()
-  · apply PrefixEnsures.bind (creation_kernel P _ (hiddenU64_sameKernel _))
+  · apply PrefixEnsures.bind (creation_kernel P _ (hiddenJiffies_sameKernel _))
     intro ts
     apply PrefixEnsures.bind (creation_get P pid)
     intro p
@@ -227,11 +227,11 @@ theorem dstCacheResetPrefix_spec (P : Store PeerId → Prop) (pid : PeerId) :
 theorem resetLastSentHandshakePrefix_spec (P : Store PeerId → Prop) (pid : PeerId) :
     CreationSpec P (resetLastSentHandshakePrefix pid) (fun _ => P) := by
   unfold resetLastSentHandshakePrefix
-  apply PrefixEnsures.bind (creation_kernel P _ (Framing.hiddenClock_sameKernel _))
+  apply PrefixEnsures.bind (creation_kernel P _ (Framing.hiddenClock64_sameKernel _))
   intro now
   apply PrefixEnsures.bind (creation_get P pid)
   intro p
-  exact creation_set P pid { p with lastSentHandshake := now - (REKEY_TIMEOUT + 1 : Nat) * NSEC_PER_SEC }
+  exact creation_set P pid { p with lastSentHandshake := now - (REKEY_TIMEOUT + 1 : Nat).toInt64 * NSEC_PER_SEC64 }
 
 theorem precomputeStaticStaticPrefix_spec (P : Store PeerId → Prop) (pid : PeerId) :
     CreationSpec P (precomputeStaticStaticPrefix pid) (fun _ => P) := by
@@ -509,7 +509,7 @@ theorem wgGetDeviceDonePrefix_creation_preserves (ctx : DumpCtx) :
 
 theorem dstCacheResetPrefix_hidden_failure (pid : PeerId) (w : World) (h : List PeerEvent)
     (e : Stop) (ha : w.armRecords = true) (hc : w.dstCacheRecords = true)
-    (hr : (hiddenU64 .dstCacheResetTs).run w = .error e) :
+    (hr : (hiddenJiffies .dstCacheResetTs).run w = .error e) :
     runPrefix (dstCacheResetPrefix pid) w h = (.error e, h) := by
   simp [dstCacheResetPrefix, runPrefix_bind, StateT.run_get, ha, hc, hr]
 
@@ -518,7 +518,7 @@ initial write, which remain visible despite the absence of a final World. -/
 theorem creation_core_clock_failure (pid : PeerId) (key : Key) (w : World)
     (h : List PeerEvent) (e : Stop) (hd : w.k.wg.isSome = true)
     (ha : w.armRecords = true) (hc : w.dstCacheRecords = true)
-    (hr : (hiddenU64 .dstCacheResetTs).run (creationCoreWorld w pid key) = .error e) :
+    (hr : (hiddenJiffies .dstCacheResetTs).run (creationCoreWorld w pid key) = .error e) :
     runPrefix (do peerCreateCorePrefix pid key; dstCacheResetPrefix pid) w h =
       (.error e, h ++ [.allocate pid (w.k.peerCounter + 1), .write pid (w.k.peerCounter + 1)]) := by
   rw [runPrefix_bind, peerCreateCorePrefix_run, peerCreateCore_run]

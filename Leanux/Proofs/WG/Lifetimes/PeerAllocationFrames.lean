@@ -20,7 +20,7 @@ theorem peerInit_sameKernel (ha : SameKernel a) : SameView peerInitView a := by
 theorem dstCacheReset_peerInitView (pid : PeerId) : SameView peerInitView (dstCacheReset pid) := by
   apply SameView.of_wp
   intro s
-  have time_spec := (peerInit_sameKernel (Peers.hiddenU64_sameKernel .dstCacheResetTs)).wp (fun t => t = s)
+  have time_spec := (peerInit_sameKernel (hiddenJiffies_sameKernel .dstCacheResetTs)).wp (fun t => t = s)
   mvcgen [dstCacheReset, time_spec, getPeer, getDev, getK, setPeer, modifyDev, modifyK, invariant]
   all_goals dsimp +zetaDelta only at *
   all_goals try unfold peerInitView at *
@@ -36,7 +36,7 @@ theorem resetLastSentHandshake_peerInitView (pid : PeerId) :
     SameView peerInitView (resetLastSentHandshake pid) := by
   apply SameView.of_wp
   intro s
-  have time_spec := (peerInit_sameKernel (hiddenClock_sameKernel .resetLastSent)).wp (fun t => t = s)
+  have time_spec := (peerInit_sameKernel (hiddenClock64_sameKernel .resetLastSent)).wp (fun t => t = s)
   mvcgen [resetLastSentHandshake, time_spec, getPeer, getDev, getK, setPeer, modifyDev, modifyK, invariant]
   all_goals dsimp +zetaDelta only at *
   all_goals try unfold peerInitView at *

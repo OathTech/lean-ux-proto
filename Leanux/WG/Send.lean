@@ -49,7 +49,7 @@ def sendQueuedHandshakeInitiation (pid : PeerId) (isRetry : Bool) : M Unit := do
     setPeer pid { (← getPeer pid) with timerHandshakeAttempts := 0 }
   let p ← getPeer pid
   -- `!wg_birthdate_has_expired(last_sent_handshake, REKEY_TIMEOUT) || is_dead`
-  if ← branch .queuedNotExpired !(← birthdateHasExpired p.lastSentHandshake REKEY_TIMEOUT) then return
+  if ← branchExpired .queuedNotExpired p.lastSentHandshake REKEY_TIMEOUT (!·) then return
   if ← branch .queuedDead p.isDead then return
   peerGet pid
   -- `!queue_work(...)`: false iff the work is still queued (queued earlier in
@@ -108,8 +108,12 @@ def enqueuePerPeerTx (item : List SkbId) (state : PacketState) : M Unit := do
   _ ← cpumaskChooseOnline pid
   -- queue_work_on(cpu, packet_crypt_wq, &peer->transmit_packet_work): a no-op
   -- while the work is pending (queued, not yet started); otherwise queued,
-  -- with its record (dispatch order)
-  if !(← getDev).txWorkQueue.contains pid then
+  -- with its record (dispatch order). The PENDING test's outcome is the
+  -- kernel's: a queue record for a unit the mirror still holds queued means
+  -- process_one_work had taken it (PENDING cleared) before its section
+  -- started, so this queueing is a second instance, whose own section
+  -- follows the first's (`peekQueuedUnit`; w7_multi_tx_2, 2026-10-13)
+  if !(← getDev).txWorkQueue.contains pid || (← peekQueuedUnit .txWorker pid) then
     recordQueued .txWorker pid
     modifyDev fun d => { d with txWorkQueue := d.txWorkQueue ++ [pid] }
   peerPut (some pid)
@@ -229,7 +233,7 @@ def sendStagedPackets (pid : PeerId) : M Unit := do
   let some id := keypair | invariant "unreachable"
   let k ← getKeypair id
   if ← branch .stagedKeyInvalid !k.sending.isValid then return ← outNokey false
-  if ← branch .stagedBirthdateExpired (← birthdateHasExpired k.sending.birthdate REJECT_AFTER_TIME) then
+  if ← branchExpired .stagedBirthdateExpired k.sending.birthdate REJECT_AFTER_TIME then
     return ← outNokey true
   -- the nonces and `ds`, in queue order
   let mut packetsCb : List DataPacket := []
@@ -240,7 +244,9 @@ def sendStagedPackets (pid : PeerId) : M Unit := do
     let k ← getKeypair id
     let nonce := k.sendingCounter   -- atomic64_inc_return(&sending_counter) - 1
     setKeypair id { k with sendingCounter := k.sendingCounter + 1 }
-    if ← branch .stagedNonceRejected (nonce ≥ REJECT_AFTER_MESSAGES) then return ← outNokey true
+    -- `nonce >= REJECT_AFTER_MESSAGES`, a u64 compare against the constant
+    -- (the built code tests `> R - 1`; the check's `ge` shift absorbs it)
+    if ← branchCmp .stagedNonceRejected (nonce ≥ REJECT_AFTER_MESSAGES) nonce REJECT_AFTER_MESSAGES then return ← outNokey true
     packetsCb := packetsCb ++ [{ peer := pid, keypair := id, nonce, plaintext := pkt, ds }]
   _ ← branch .stagedNonceIterate false
   -- `packets.prev->next = NULL`; wg_peer_get(keypair->entry.peer);

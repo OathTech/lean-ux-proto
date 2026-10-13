@@ -4,28 +4,28 @@
 
 Worktree `.worktrees/proofs-campaign`, branch `proofs/campaign`. The
 [charter](2026-10-13-charter-proof-campaign.md) defines the campaign. Main
-`57f8f34` (seccomp and the QEMU-default update) is carried into this branch
-under the charter's non-prerequisite authorization. The mirror and kernel
-match it exactly; all registered components are current. Subsequent main
-`d65288d` adds the two named-prerequisite design documents only and is not
-merged pending the user's landing paste. No integration into main, push,
-differential check or guest run.
+`2c7a076` includes both named prerequisites and has been merged into this
+worktree on the user's landing instruction. The proof gate passes over that
+commit and every registered component is current. The mirror and kernel
+match it exactly; R4 and R5's dependent work is now unblocked. No integration into main, push, differential check or guest run.
 
 | Result | Progress |
 | --- | --- |
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay and independent review checked. Seccomp frame carry checked. |
-| R2 lifetime safety | Store identities, failure-retaining allocation/release and caller composition cover session/rotation, peer creation, receive entry/maintenance/completion, callback-parametric receive polling, TX staging, decrypt iteration and ten socket/cache/loopback calls; stale-cursor finding checked. Actual stack callbacks, remaining callers, lifecycle and whole-run internal-access coverage remain in progress. |
+| R2 lifetime safety | Store identities, failure-retaining allocation/release and caller composition cover session/rotation, peer creation, receive entry/maintenance/completion, receive polling with the actual stack callback, transmit entry, TX staging, decrypt iteration and ten socket/cache/loopback calls; stale-cursor finding checked. Remaining callers, lifecycle and whole-run internal-access coverage remain in progress. |
 | R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion, original empty-root, arbitrary-depth empty-child and exact-prefix insertion with sequence wrappers, and total original placement proved. Selected-root graft normal endpoints and rollback effects checked; successful graft representation, general mutation/history and path refinements remain open. Path proofs follow R2. |
-| R4 delivery | Not started; drop characterisation waiting on W7 full-ring tier's explanation of the two drops. |
-| R5 key lifetime | Not started; time half waiting on review items 7 and 8 on the timer model. |
+| R4 delivery | The W7 prerequisite has landed: two carried slots explain the two drops, with no ring-model change. The dependent drop characterisation and whole-schedule delivery proof remain to be completed. |
+| R5 key lifetime | Review items 7 and 8 have landed. Clock/budget carry passes; time, counter and cleanup claims remain to be completed. |
 | R6 flood resistance | Not started. |
 
-**Current validation.** The full proof gate passes 214 build jobs and 158
-terminal statements (ReplayWindow 15, R1 9, R2 107, R3 27), with only permitted
-axioms. The default model build passes 60 jobs; the unit tier passes 93 tests
-in 22.077 seconds with one skip. The R1 explicit-record witness was rechecked
-at the seccomp carry; both R2 variants were rechecked with the exact-prefix
-checkpoint. All agree with the original runner.
+**Current validation.** The full proof gate passes 219 build jobs and 167
+terminal statements (ReplayWindow 15, R1 9, R2 116, R3 27), with only permitted
+axioms. Stock `leanchecker --fresh Leanux.Proofs` passes. The default model
+build passes 60 jobs; the unit tier passes 93 tests in 23.162 seconds with one
+skip. The R1 explicit-record witness and both R2 checkpoint variants pass on
+`2c7a076`, with original/observed JSON equality; the R1 history remains
+`[(1, 8200), (1, 72)]`. The reconstructed/synthetic streams now supply the
+required site-128 end-of-wait records, without adding timer sections.
 Independent reviews cover peer creation, the seccomp carry, mixed enqueue,
 decrypt execution, keypair/packet releases, ambient caller composition,
 allocation and release-bound composition, session creation and rotation,
@@ -33,7 +33,10 @@ the mixed peer-creation bridge, receive entry, maintenance, completion and polli
 TX staging, pure trie
 insertion, original empty-root and arbitrary-depth empty-child insertion with
 its wrapper, exact-prefix replacement, list deletion, placement and selected-root
-graft endpoints/rollback, saved-peer scans and the ten-call socket family.
+graft endpoints/rollback, saved-peer scans, the ten-call socket family,
+transmit entry, actual stack/poll composition, and the prerequisite carry.
+The final carried source and contract review found no defect; its frozen
+file hashes matched before the checkpoint.
 
 **Shared carry.** Signal/task and pipe helper frames, seccomp entry/tail frames
 and arbitrary prefill preservation keep the seven-field WG projection intact.
@@ -44,6 +47,19 @@ the repeat loop. This carry took 17 compile passes over 36m34s; an independent
 reviewer checked source correspondence and final deltas in two passes, and
 another worker checked the loop architecture. That checkpoint also passed
 `capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs`.
+
+**Prerequisite carry.** Comparison records retain their exact operands;
+`CounterWindow.counterValidate_execution` still identifies the full original
+World. Clock consumers use the landed `Int64`/`UInt64` operations, timer arms
+retain both signed-gap failures, and logged scheduling retains occupancy and
+record-derived bounds plus kind-310 peek/read validation. No arbitrary-record
+or malformed-World case was excluded. The carry took about forty minutes and
+twelve local build invocations before the final gate; one worker interruption
+was recovered after preserving all dirty worktrees to snapshot refs. The
+interrupted build's completion handle was unavailable; its log reported a
+normal proof failure, and subsequent collected builds and the gate passed.
+The earlier transmit/stack implementation used five local attempts before this
+carry. No cap was hit. R4/R5 property proofs are separate from these frames.
 
 ## R1 — anti-replay uniqueness and the inclusive floor
 
@@ -83,8 +99,9 @@ wg0, observes its initiation, injects the recorded response, then injects valid
 keepalives with wire counters 8200 and 72. Both return true in allocation
 lifetime 1. The second is exactly at `8200 − 8128`. The record stream is a
 reconstruction from the tracked `CONTENDED_ROAM_CMP` capture, with the two
-authenticated datagrams from `rx_window.json`, widened legacy section identities
-and monotonically adjusted clocks for the second data operation. This is an
+authenticated datagrams from `rx_window.json`, widened legacy section identities,
+monotonically adjusted clocks for the second data operation, and synthetic
+site-128 end-of-wait bounds added for the current timer interface. This is an
 accepted **non-placeholder mirror replay**, not a new Linux capture. The
 original and logged runners produce identical JSON. The terminal theorem
 `inclusive_boundary_witness` separately proves, by kernel reduction, that the
@@ -164,7 +181,14 @@ premise. `AllowedLookupAccess` observes peer acquisition after the original node
 search. `ReceiveCompletion` composes rotation, staging, maintenance, source lookup,
 reference release and statistics; `ReceivePoll` adds the original queue traversal
 and cleanup with an explicit observed callback. Its ambient and allocation
-contracts require callback preservation; the actual stack remains a follow-on.
+contracts require callback preservation. `DeviceXmit` now observes the complete
+original transmit entry, including its trimming/splice loops, lookup, packet
+staging and reference cleanup. `StackAccess` supplies the actual IPv4/IPv6
+callback and composes it with the original receive poll; TCP replies use the
+observed transmit entry. `PrefixControl` preserves exact state-dependent
+Stops and the prior history, and `PrefixLoops` shares list-iteration laws.
+These concrete callbacks discharge the allocation-invariant contracts without
+adding a field to the earlier TX contract.
 `SavedPeers` gives exact short-circuit scan events under an explicit saved-stamp
 residency premise. `LoopbackAccess`, `SocketCache`, `SocketSend` and `SocketCalls`
 cover ten complete cache/endpoint/loopback/tunnel/IPv6 calls. Their all-input
@@ -206,7 +230,7 @@ getter-conditioned failure, not an accepted-trace finding. Safe access prefixes
 do not establish delivery, order or reference ownership.
 
 **Remaining claim.** Full caller, device-lifecycle and scheduler closure remain
-unproved. The actual stack callback, encrypt/TX workers, IPv4 socket send/setup, handshake
+unproved. Encrypt/TX workers, IPv4 socket send/setup, handshake
 execution and timer callbacks, peer removal, netlink and direct resident scans
 need coverage. Saved scalar-reference
 ownership is a separate obligation: aliased or dangling IDs may legitimately

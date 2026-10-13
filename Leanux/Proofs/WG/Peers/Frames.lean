@@ -79,6 +79,16 @@ theorem hiddenClock_peer_spec (P : Store PeerId → Prop) (site : HiddenSite) :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ :=
   (samePeerSnapshot_of_sameKernel (Keypairs.hiddenClock_sameKernel site)).wp P
 
+theorem hiddenJiffies_peer_spec (P : Store PeerId → Prop) (site : HiddenSite) :
+    ⦃fun w => ⌜P (snapshot w)⌝⦄ hiddenJiffies site
+    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ :=
+  (samePeerSnapshot_of_sameKernel (Framing.hiddenJiffies_sameKernel site)).wp P
+
+theorem hiddenClock64_peer_spec (P : Store PeerId → Prop) (site : HiddenSite) :
+    ⦃fun w => ⌜P (snapshot w)⌝⦄ hiddenClock64 site
+    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ :=
+  (samePeerSnapshot_of_sameKernel (Framing.hiddenClock64_sameKernel site)).wp P
+
 theorem hiddenAlloc_peer_spec (P : Store PeerId → Prop) (site : AllocSite) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ hiddenAlloc site
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ :=
@@ -114,7 +124,7 @@ theorem dstCacheReset_samePeerSnapshot (pid : PeerId) : SamePeerSnapshot (dstCac
   intro s
   have get_spec := getPeer_live_spec (fun t => t = s)
   have set_spec := setPeer_live_spec (fun t => t = s)
-  have time_spec := hiddenU64_peer_spec (fun t => t = s)
+  have time_spec := hiddenJiffies_peer_spec (fun t => t = s)
   mvcgen [dstCacheReset, get_spec, set_spec, time_spec]
   all_goals simp_all
 
@@ -124,7 +134,7 @@ theorem resetLastSentHandshake_samePeerSnapshot (pid : PeerId) :
   intro s
   have get_spec := getPeer_live_spec (fun t => t = s)
   have set_spec := setPeer_live_spec (fun t => t = s)
-  have time_spec := hiddenClock_peer_spec (fun t => t = s)
+  have time_spec := hiddenClock64_peer_spec (fun t => t = s)
   mvcgen [resetLastSentHandshake, get_spec, set_spec, time_spec]
   all_goals simp_all
 

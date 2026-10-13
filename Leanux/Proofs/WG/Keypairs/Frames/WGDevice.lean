@@ -64,7 +64,7 @@ theorem ratelimiterUninit_spec (P : Snapshot → Prop)  :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (ratelimiterUninit_sameSnapshot ).wp P
 
 theorem cookieCheckerInit_sameSnapshot  : SameSnapshot cookieCheckerInit := by
-  frame_same [cookieCheckerInit] using [hiddenClock_spec, hidden_snapshot_spec]
+  frame_same [cookieCheckerInit] using [hiddenClock64_spec, hidden_snapshot_spec]
 
 theorem cookieCheckerInit_spec (P : Snapshot → Prop)  :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ cookieCheckerInit

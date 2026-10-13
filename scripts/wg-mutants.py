@@ -39,8 +39,8 @@ SENTINELS = [
    'control-flow mismatch: decisions reordered (decision order differs from Linux)',
    'behavior-preserving: is_dead tested before the expiry',
    'Leanux/WG/Send.lean',
-   '  if ← branch .queuedNotExpired !(← birthdateHasExpired p.lastSentHandshake REKEY_TIMEOUT) then return\n  if ← branch .queuedDead p.isDead then return\n',
-   '  if ← branch .queuedDead p.isDead then return\n  if ← branch .queuedNotExpired !(← birthdateHasExpired p.lastSentHandshake REKEY_TIMEOUT) then return\n',
+   '  if ← branchExpired .queuedNotExpired p.lastSentHandshake REKEY_TIMEOUT (!·) then return\n  if ← branch .queuedDead p.isDead then return\n',
+   '  if ← branch .queuedDead p.isDead then return\n  if ← branchExpired .queuedNotExpired p.lastSentHandshake REKEY_TIMEOUT (!·) then return\n',
    'b1_', 'wireguard'),
   ('H-M7-flood-threshold',
    'operand comparison: operands differ from Linux on a declared comparison',
@@ -117,8 +117,8 @@ SENTINELS = [
    'data: the dst cache never hits (every send misses: socket.c:51 and the arms 53-82); the data send of '
    'w9_session_two_sends hits in Linux (the keepalive after the session cached the dst)',
    'Leanux/WG/Socket.lean',
-   "    if c.refreshTs > c.resetTs && s.gen == gen then return some s\n",
-   "    if false && c.refreshTs > c.resetTs && s.gen == gen then return some s\n",
+   "    if timeAfter c.refreshTs c.resetTs && s.gen == gen then return some s\n",
+   "    if false && timeAfter c.refreshTs c.resetTs && s.gen == gen then return some s\n",
    'w9_session_two', 'wireguard'),
 ]
 

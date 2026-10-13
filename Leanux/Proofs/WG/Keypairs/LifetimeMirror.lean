@@ -9,6 +9,9 @@ open Leanux Leanux.WG Leanux.Proofs.WG.CounterWindow Leanux.Proofs.Logged
 @[simp] theorem snapshot_record (w : World) (d : Decision) (b : Bool) :
     snapshot (record w d b) = snapshot w := rfl
 
+@[simp] theorem snapshot_recordCmp (w : World) (d : Decision) (outcome : Bool) (a b : Int) :
+    snapshot (recordCmp w d outcome a b) = snapshot w := rfl
+
 @[simp] theorem snapshot_clearRecords (w : World) (xs : List Nat) :
     snapshot (clearRecords w xs) = snapshot w := by
   simp [snapshot, clearRecords_k]
@@ -49,10 +52,10 @@ theorem cExecution_snapshot (w : World) (d : Device) (i : Nat) (k : Keypair)
     by_cases h4 : nonce + 1 > k.receivingCounter.counter
     · simp [cExecution, h1, h2, h3, h4, cell, update, prepared,
         Nat.max_eq_right (by omega : k.receivingCounter.counter ≤ nonce + 1),
-        snapshot_store, record_k, clearRecords_k, hd]
+        snapshot_store, record_k, recordCmp_k, clearRecords_k, hd]
     · simp [cExecution, h1, h2, h3, h4, cell, update, prepared,
         Nat.max_eq_left (by omega : nonce + 1 ≤ k.receivingCounter.counter),
-        snapshot_store, record_k, hd]
+        snapshot_store, record_k, recordCmp_k, hd]
   · have hv : validate (snapshot w) i (cell k) nonce = snapshot w := by
       simpa [validate, cell, step, he] using put_existing (snapshot w) i (cell k) hc
     rw [hv]

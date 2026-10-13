@@ -107,30 +107,48 @@ def orM (a b : M Bool) : M Bool := do if ← a then pure true else b
 def recordWord (bs : List UInt8) (k : Nat) : Nat :=
   ((bs.drop (8 * k)).take 8).foldr (fun b acc => acc * 256 + b.toNat) 0
 
+/-- The same word as the C's `unsigned long` (review item 8). -/
+def recordWord64 (bs : List UInt8) (k : Nat) : UInt64 := (recordWord bs k).toUInt64
+
 /-- D3 (docs/2026-10-05-d3-timers.md, sections 3.3 and 5.1): `mod_timer(&peer->
     timer_x, jiffies + delay)`, once `mod_peer_timer`'s guard has passed.
-    With arm records (`World.armRecords`) the expiry is the kind-303
-    record's `{jiffies, expires}`: the caller computed `jiffies + delay`
-    before `mod_timer` read `jiffies`, and a tick may land in between, so
-    `expires - jiffies` is `delay` or `delay - 1`; anything else is a hidden
-    mismatch. The record's `jiffies` becomes the last known one. Without
-    records (the domain filter) the expiry is the nominal `jiffies + delay`
-    from the last known `jiffies` (0 before any). `mod_timer` of a pending
-    timer moves it (`__mod_timer`), so the field is overwritten. -/
+    With arm records (`World.armRecords`) the kind-303 record carries
+    `mod_timer`'s own read `J_m` and `expires`. Review item 8
+    (docs/2026-10-13-review-items-7-8.md, section 4) splits the rule into
+    its two facts. The caller's read `J_c` is the source input and
+    `expires = J_c + delay` exactly (timers.c:62,87,149,159,185,206,216),
+    so `J_c := expires - delay` is recovered from the record and the
+    mirror's own delay, and the expiry the mirror stores is `J_c + delay`.
+    `J_m - J_c` is then an admissibility condition of the environment: a
+    tick may land between the two reads, so the gap is 0 or 1 on this
+    one-CPU kernel. A negative gap cannot come from a stall (a stall only
+    raises `J_m`): it is the mirror's delay being too small, a hidden
+    mismatch (the D3-M8 channel). A gap above 1 is either a stall between
+    the reads, outside the fixture's timing domain, or a delay too large;
+    the record cannot tell them apart and it is reported as `unsupported`.
+    `J_m` becomes the last known `jiffies`. All arithmetic is the C's,
+    on `unsigned long`. Without records (the domain filter) the expiry is
+    the nominal `jiffies + delay` from the last known `jiffies` (0 before
+    any). `mod_timer` of a pending timer moves it (`__mod_timer`), so the
+    field is overwritten. -/
 def armTimer (pid : PeerId) (t : PeerTimer) (delay : Nat) : M Unit := do
   let w ← get
   let e ← if w.armRecords then
       let bs ← hidden .modTimerArm
-      let (j, e) := (recordWord bs 0, recordWord bs 1)
-      if e < j || (e - j != delay && e - j + 1 != delay) then
-        throw (.hidden s!"timer expiry differs from Linux: mod_timer at jiffies {j} to {e}, the mirror's delay is {delay}")
-      modify fun w => { w with jiffiesLast := some j }
+      let (jm, e) := (recordWord64 bs 0, recordWord64 bs 1)
+      let jc := e - delay.toUInt64          -- the caller's read, recovered
+      let gap := (jm - jc).toInt64          -- `(long)(J_m - J_c)`
+      if gap < 0 then
+        throw (.hidden s!"timer expiry differs from Linux: mod_timer at jiffies {jm} to {e}, the mirror's delay is {delay} (the caller's read would be {jc}, after mod_timer's)")
+      if gap > 1 then
+        unsupported s!"a stall between a timer's two jiffies reads: the caller's {jc}, mod_timer's {jm} (delay {delay}, expires {e})"
+      modify fun w => { w with jiffiesLast := some jm }
       -- dispatch order (docs/2026-10-11-dispatch-order.md): the record's
       -- third word is the timer's address, which its section names
       let u := recordWord bs 2
       if u != 0 then modify fun w => { w with timerUnits := (u, pid, t) :: w.timerUnits.filter (·.1 != u) }
-      pure e
-    else pure (w.jiffiesLast.getD 0 + delay)
+      pure (jc + delay.toUInt64)            -- `expires = J_c + delay`, the record's by construction
+    else pure (w.jiffiesLast.getD 0 + delay.toUInt64)
   setPeer pid ((← getPeer pid).setTimer t (some e))
 
 /-- `del_timer(&peer->timer_x)` (timer.c:1407-1430): detach if pending. -/

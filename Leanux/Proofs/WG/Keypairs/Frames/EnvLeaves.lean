@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.Keypairs.Frames.WGDevice
 import Leanux.Env
+import Leanux.Proofs.Framing.Stack
 import Leanux.Proofs.WG.Keypairs.SnapshotRules
 
 /-! Framing the inner IP delivery cut and scheduler/environment leaves. -/
@@ -9,8 +10,8 @@ open KernelFrames WGFrames WGTransitions WGMore WGConfig WGDevice
 
 set_option maxHeartbeats 400000
 
-theorem excluded_sameSnapshot (row : String) : SameSnapshot (Leanux.Env.Stack.excluded row) := by
-  frame_same [Leanux.Env.Stack.excluded] using []
+theorem excluded_sameSnapshot (row : String) : SameSnapshot (Leanux.Env.Stack.excluded row) :=
+  sameSnapshot_of_sameWGKernel (Framing.sameWGKernel_of_sameKernel (Framing.stackExcluded_sameKernel row))
 
 theorem excluded_spec (P : Snapshot → Prop) (row : String) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ (Leanux.Env.Stack.excluded row)
@@ -30,8 +31,8 @@ theorem receive4_spec (P : Snapshot → Prop) (hp : Stable P) (pkt : List UInt8)
     ⦃fun w => ⌜P (snapshot w)⌝⦄ (Leanux.Env.Stack.receive4 pkt)
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (receive4_ordinary pkt).wp P hp
 
-theorem receive6_sameSnapshot (pkt : List UInt8) : SameSnapshot (Leanux.Env.Stack.receive6 pkt) := by
-  frame_same [Leanux.Env.Stack.receive6, Leanux.Env.Stack.excluded] using []
+theorem receive6_sameSnapshot (pkt : List UInt8) : SameSnapshot (Leanux.Env.Stack.receive6 pkt) :=
+  sameSnapshot_of_sameWGKernel (Framing.sameWGKernel_of_sameKernel (Framing.stackReceive6_sameKernel pkt))
 
 theorem receive6_spec (P : Snapshot → Prop) (pkt : List UInt8) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ (Leanux.Env.Stack.receive6 pkt)
@@ -100,6 +101,9 @@ theorem activationHasWork_sameSnapshot (a : Activation) : SameSnapshot (Env.Acti
 theorem activationHasWork_spec (P : Snapshot → Prop) (a : Activation) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Env.Activation.hasWork a
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (activationHasWork_sameSnapshot a).wp P
+
+theorem activationOccupancy_sameSnapshot (a : Activation) : SameSnapshot (Env.Activation.occupancy a) := by
+  frame_same [Env.Activation.occupancy] using [getDev_spec, getPeer_spec]
 
 /-- The trial executes on a copy; its returned World is discarded. -/
 theorem activationConsistent_sameSnapshot (a : Activation) : SameSnapshot (Env.Activation.consistent a) := by

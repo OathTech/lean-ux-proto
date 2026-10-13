@@ -21,11 +21,11 @@ def runSendWorkersLogged : GhostM Unit := do
   if (← getK).wg.isNone then return   -- L: no device, no worker
   requireNoCryptWork
   modifyWorld fun w => { w with queuedThisCall := [] }   -- the call returned and slept
-  for _ in [0:4096] do
+  for _ in [0:(← liftM recordBudget)] do
     if (← getDev).sendWorkQueue.isEmpty then deliverSent; return
     runOneSendWorker
     scheduleLogged   -- a crypt activation the records resume after the section
-  invariant "the send work queue did not drain"
+  liftM (budgetExhausted "the send work queue")
 
 theorem runSendWorkersLogged_erases  :
     Erases (runSendWorkersLogged) (Env.runSendWorkers) := by
@@ -52,7 +52,7 @@ theorem afterXmitLogged_erases  :
     | with_reducible exact runSendWorkersLogged_erases
     | ghost_env_step
 
-def runTimersLogged (jHi : Nat) : GhostM Bool := do
+def runTimersLogged (jHi : UInt64) : GhostM Bool := do
   modifyWorld fun w => { w with queuedThisCall := [] }   -- the guest slept
   -- L: without wg0 (bare fixture, or after wg_delete) no WireGuard timer
   -- exists; a timer section in the records stays unconsumed and mismatches
@@ -60,7 +60,7 @@ def runTimersLogged (jHi : Nat) : GhostM Bool := do
   if (← getK).wg.isNone then return false
   let startOf (w : Worker) := (HiddenSite.sectionStart w).info.id
   let mut fired := false
-  for _ in [0:4096] do
+  for _ in [0:(← liftM recordBudget)] do
     let some site ← peekNextSite | break
     let d ← getDev
     if let some w := timerSectionOf site then
@@ -84,7 +84,7 @@ def runTimersLogged (jHi : Nat) : GhostM Bool := do
       unsupported "work a timer queued outlived the guest's wait"
   return fired
 
-theorem runTimersLogged_erases (jHi : Nat) :
+theorem runTimersLogged_erases (jHi : UInt64) :
     Erases (runTimersLogged jHi) (Env.runTimers jHi) := by
   unfold runTimersLogged Env.runTimers
   repeat' first
@@ -92,28 +92,29 @@ theorem runTimersLogged_erases (jHi : Nat) :
     | with_reducible exact afterXmitLogged_erases
     | ghost_env_step
 
-def runTimersPlaceholderLogged (jHi : Nat) : GhostM Unit := do
+def runTimersPlaceholderLogged (jHi : UInt64) : GhostM Unit := do
   modifyWorld fun w => { w with queuedThisCall := [] }
   if (← getK).wg.isNone then return   -- L: no wg0, no timers [AGENT, int-dl merge]
-  for _ in [0:64] do
+  let pending := (← getDev).peers.size * PeerTimer.all.length
+  for _ in [0:pending + 1] do
     let d ← getDev
     let due := d.peerList.flatMap fun pid =>
       match d.peers.get? pid with
-      | some p => PeerTimer.all.filterMap fun t => (p.timer t).bind fun e => if e < jHi then some (e, pid, t) else none
+      | some p => PeerTimer.all.filterMap fun t => (p.timer t).bind fun e => if timeBefore e jHi then some (e, pid, t) else none
       | none => []
     let first := due.foldl (fun acc c => match acc with
-      | some a => if c.1 < a.1 then some c else some a
+      | some a => if timeBefore c.1 a.1 then some c else some a
       | none => some c) none
     let some (_, pid, t) := first | break
     delTimer pid t
     runTimerSection (← timerWorker t) (WG.timerCallback pid t)
   runCryptWorkersLogged
   runSendWorkersLogged
-  for _ in [0:64] do
+  for _ in [0:(← getDev).clearWorkQueue.length + 1] do
     if (← getDev).clearWorkQueue.isEmpty then break
     runOneClearWorker
 
-theorem runTimersPlaceholderLogged_erases (jHi : Nat) :
+theorem runTimersPlaceholderLogged_erases (jHi : UInt64) :
     Erases (runTimersPlaceholderLogged jHi) (Env.runTimersPlaceholder jHi) := by
   unfold runTimersPlaceholderLogged Env.runTimersPlaceholder
   repeat' first
@@ -125,7 +126,15 @@ theorem runTimersPlaceholderLogged_erases (jHi : Nat) :
 
 def idleTimersLogged : GhostM Unit := do
   let w ← getWorld
-  discard <| runTimersLogged (w.jiffiesLast.getD 0 + w.timing.traceBound + w.timing.advanceWait)
+  if w.hidden.isNone then
+    discard <| runTimersLogged (w.jiffiesLast.getD 0 + w.timing.traceBound.toUInt64 + w.timing.advanceWait.toUInt64)
+    return
+  let some jEnd ← liftM (peekSiteU64 .jiffiesEnd)
+    | throw (.hidden "no end-of-wait jiffies record (kind 310) in this operation")
+  discard <| runTimersLogged jEnd
+  let j ← liftM (hiddenJiffies .jiffiesEnd)
+  if j != jEnd then invariant "the end-of-wait jiffies record changed between the peek and the read"
+  modifyWorld fun w => { w with jiffiesLast := some j }
 
 theorem idleTimersLogged_erases  :
     Erases (idleTimersLogged) (Env.idleTimers) := by
@@ -139,9 +148,16 @@ theorem idleTimersLogged_erases  :
 
 def afterAdvanceLogged : GhostM Unit := do
   let w ← getWorld
-  let jHi := w.jiffiesLast.getD 0 + w.timing.advanceWait
-  if w.hidden.isNone && w.hiddenPlaceholders then runTimersPlaceholderLogged jHi
-  else discard <| runTimersLogged jHi
+  if w.hidden.isNone then
+    let jHi := w.jiffiesLast.getD 0 + w.timing.advanceWait.toUInt64
+    if w.hiddenPlaceholders then runTimersPlaceholderLogged jHi else discard <| runTimersLogged jHi
+    return
+  let some jEnd ← liftM (peekSiteU64 .jiffiesEnd)
+    | throw (.hidden "no end-of-wait jiffies record (kind 310) in this wg_advance")
+  discard <| runTimersLogged jEnd
+  let j ← liftM (hiddenJiffies .jiffiesEnd)
+  if j != jEnd then invariant "the end-of-wait jiffies record changed between the peek and the read"
+  modifyWorld fun w => { w with jiffiesLast := some j }
 
 theorem afterAdvanceLogged_erases  :
     Erases (afterAdvanceLogged) (Env.afterAdvance) := by
@@ -340,7 +356,7 @@ def afterBatchLogged : GhostM Unit := do
     runCryptWorkersLogged
     runSendWorkersLogged
     return
-  for _ in [0:4096] do
+  for _ in [0:(← liftM recordBudget)] do
     scheduleLogged
     if (← peekNextSite) == some (HiddenSite.sectionStart .sendWorker).info.id && !(← getDev).sendWorkQueue.isEmpty then
       runOneSendWorker

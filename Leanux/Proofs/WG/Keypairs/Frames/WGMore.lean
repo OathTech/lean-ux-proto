@@ -174,7 +174,7 @@ theorem calculateSkbPadding_spec (P : Snapshot → Prop) (len mtu : Nat) :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (calculateSkbPadding_sameSnapshot len mtu).wp P
 
 theorem cookieMessageConsume_sameSnapshot (msg : List UInt8) : SameSnapshot (Leanux.WG.cookieMessageConsume msg) := by
-  frame_same [Leanux.WG.cookieMessageConsume] using [getPeer_spec, hiddenClock_spec, indexLookup_spec, peerPut_spec, setPeer_spec]
+  frame_same [Leanux.WG.cookieMessageConsume] using [getPeer_spec, hiddenClock64_spec, indexLookup_spec, peerPut_spec, setPeer_spec]
 
 theorem cookieMessageConsume_spec (P : Snapshot → Prop) (msg : List UInt8) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.cookieMessageConsume msg
@@ -280,14 +280,14 @@ theorem ipEcnSetEct1_spec (P : Snapshot → Prop) (bytes : List UInt8) :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (ipEcnSetEct1_sameSnapshot bytes).wp P
 
 theorem keepKeyFresh_sameSnapshot (pid : PeerId) : SameSnapshot (Leanux.WG.keepKeyFresh pid) := by
-  frame_same [Leanux.WG.keepKeyFresh] using [birthdateHasExpired_spec, getKeypair_live_spec, getPeer_spec, sendQueuedHandshakeInitiation_spec]
+  frame_same [Leanux.WG.keepKeyFresh] using [branchExpired_spec, getKeypair_live_spec, getPeer_spec, sendQueuedHandshakeInitiation_spec]
 
 theorem keepKeyFresh_spec (P : Snapshot → Prop) (pid : PeerId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.keepKeyFresh pid
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (keepKeyFresh_sameSnapshot pid).wp P
 
 theorem keepKeyFreshRx_sameSnapshot (pid : PeerId) : SameSnapshot (Leanux.WG.keepKeyFreshRx pid) := by
-  frame_same [Leanux.WG.keepKeyFreshRx] using [birthdateHasExpired_spec, getKeypair_live_spec, getPeer_spec, sendQueuedHandshakeInitiation_spec, setPeer_spec]
+  frame_same [Leanux.WG.keepKeyFreshRx] using [branchExpired_spec, getKeypair_live_spec, getPeer_spec, sendQueuedHandshakeInitiation_spec, setPeer_spec]
 
 theorem keepKeyFreshRx_spec (P : Snapshot → Prop) (pid : PeerId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.keepKeyFreshRx pid
@@ -586,6 +586,9 @@ theorem receiveHandshakePacket_ordinary (msg : List UInt8) (src : SkbSource) : O
     | (ordinary_head Leanux.WG.cookieValidatePacket; refine SameSnapshot.ordinary ?_; with_reducible exact @cookieValidatePacket_sameSnapshot _ _ _)
     | (ordinary_head Leanux.WG.getDev; refine SameSnapshot.ordinary ?_; with_reducible exact @getDev_sameSnapshot)
     | (ordinary_head Leanux.WG.getPeer; refine SameSnapshot.ordinary ?_; with_reducible exact @getPeer_sameSnapshot _)
+    | (ordinary_head Leanux.hiddenClock64; exact (hiddenClock64_sameSnapshot _).ordinary)
+    | (ordinary_head Leanux.WG.birthdateTest; exact (birthdateTest_sameSnapshot _ _).ordinary)
+    | (ordinary_head Leanux.WG.branchExpired; exact (branchExpired_sameSnapshot _ _ _ _).ordinary)
     | (ordinary_head Leanux.hiddenClock; refine SameSnapshot.ordinary ?_; with_reducible exact @hiddenClock_sameSnapshot _)
     | (ordinary_head Leanux.WG.birthdateHasExpired; exact (birthdateHasExpired_sameSnapshot _ _).ordinary)
     | (ordinary_head Leanux.WG.peerPut; refine SameSnapshot.ordinary ?_; with_reducible exact @peerPut_sameSnapshot _)
