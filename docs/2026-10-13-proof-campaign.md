@@ -9,7 +9,7 @@ campaign. No mirror or kernel edits, no integration into main, no push.
 | Result | Progress |
 | --- | --- |
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay, independent review and 24-statement proof gate pass over c85e86b. |
-| R2 lifetime safety | Read-only architecture investigation. |
+| R2 lifetime safety | Keypair store component and concrete stale-cursor finding checked (35-statement gate); peer/packet components and internal-access coverage in progress. This is not yet the whole R2 claim. |
 | R3 cryptokey routing | Read-only trie investigation; path proofs follow R2. |
 | R4 delivery | Not started; drop characterisation waiting on W7 full-ring tier's explanation of the two drops. |
 | R5 key lifetime | Not started; time half waiting on review items 7 and 8 on the timer model. |
@@ -91,3 +91,95 @@ run the build or gate; those results are the coordinator's checks.
 replay-state projection and proof-side lifetime evolution already make R1
 routine. An observer/history field or a changed comparison in the mirror
 would not preserve altitude and is not proposed.
+
+## R2 — lifetime identity and retained references (in progress)
+
+[AGENT 2026-10-13] Separate store identity from retained-reference provenance.
+The existing keypair evolution can establish that a released allocation does
+not return to the store, but this does not establish that a saved numeric slot
+still denotes the allocation for which its reference was acquired. Keep both
+obligations visible; do not count a counterexample to the latter as a proof or
+refutation of the former.
+
+**Checked component.** `Keypairs/Identity` derives monotonic allocation
+frontiers, old-identity provenance, absence preservation and fresh reuse from
+the existing `Evolution` relation. Its original-syscall and syscall-plus-ambient
+corollaries discharge the evolution contract through ReplayWindow's S3.
+A subsequent successful original getter cannot return an already absent,
+previously allocated identity. The reachable-state `Inv` premise supplies the
+frontier bound when starting with a resident identity. These are keypair-store
+and operation-endpoint statements. They do not assert safety of every transient
+access inside an operation, or cover peers and packets yet. Those obligations
+remain in progress, not hidden hypotheses of a completed R2 result.
+
+**Concrete reference finding.** An eight-operation, explicitly recorded mirror
+run creates 28 peers, starts a stepped dump, deletes wg0, creates a replacement
+wg0, creates 27 replacement peers and receives a chunk, resuming the pending
+dump. The receive returns the already queued first chunk; continuation
+generation performs the destructive release. The first
+dump retains raw peer slot 26, allocation identity 27, with two references.
+Deletion removes the device while leaving the socket's dump cursor active.
+The replacement device reuses slot 26 for allocation identity 55, live with
+one reference. Resuming the dump calls `peerPut` on that new peer: its store
+entry disappears while both the configured peer list and public-key table
+still name slot 26. The old allocation does **not** reappear. This is a
+retained-reference retargeting and table-coherence bug, not the charter's
+narrower example of reading an old object after release.
+
+The divergence is between accepted mirror input and the declared fixture
+domain. `harness/guest.c` rejects deletion while a stepped dump is pending
+(`wg_delete_with_dump_pending`); the W1/W2 design already calls for a
+corresponding mirror rejection. `Env.wgDelete` currently checks worker idleness
+but not the pending dump. Linux's dump context retains `ctx->wg`, whereas the
+mirror context retains a Boolean and the resumed operation obtains the current
+device. This is a mirror-domain finding, not evidence of a Linux lifetime bug.
+No kernel experiment was run.
+
+**Witness and refinement.** `Logged/Checkpoints` adds one read-only projection
+after each original syscall, ambient step and all per-operation guards.
+`checkpoint_runner_erasure` proves equality with the original runner's entire
+JSON or indexed error for arbitrary projections and initial logs.
+`checkpoint_observation_exact` proves the exact singleton append. Independent
+source review confirms that this is the only added executable line; the
+one-per-operation source coverage is not inferred from erasure alone.
+`LifetimeSafety/Replay.lean` asserts the five relevant committed checkpoints,
+the total checkpoint count and exact original JSON equality. The generated
+record stream is synthetic, explicit and non-placeholder, not a Linux capture.
+
+The terminal `stale_cursor_retargets_replacement` is a separate kernel-reduced
+local witness: the actual `wgGetDeviceDone` callback on a retained cursor
+releases replacement identity 55 and leaves the list/hash entries. The full
+recorded trace reaches the same erroneous `peerPut` through the resume cleanup
+in `wgGetDeviceDump`; these are distinct call sites and are not conflated.
+
+```sh
+set -o pipefail
+python3 -B docs/proof-campaign-replay.py r2-stale-dump-cursor |
+  capped -- scripts/in-bundle lake env lean --run Leanux/Proofs/WG/LifetimeSafety/Replay.lean
+capped -- scripts/in-bundle scripts/proof-gate
+```
+
+**Validation and effort so far.** The replay accepts and all assertions pass
+in under one second. The gate passes 35 terminal statements (11 in R2), with
+106 build jobs and only permitted standard axioms. The required fast unit tier
+ran 88 tests, OK with one skip. The mirror remains byte-identical to `c85e86b`, and the existing
+results are current with no lag. This checkpoint took about half an hour of
+source investigation, three keypair compile passes and first-pass builds of
+the checkpoint observer and local witness. The campaign continues with peer
+and packet identity projections before claiming whole-result completion.
+
+**Ranked mirror-shape recommendations.** (1) Restore the documented rejection
+of device deletion with a pending stepped dump: altitude-preserving fixture
+domain enforcement, outside this proof campaign's edit authority. (2) If that
+domain is intentionally expanded, retain the actual device lifetime in the
+dump context and discharge its reference at completion, following the C:
+altitude-preserving, but a separate mirror design and differential-check task.
+(3) Keep named allocation, deletion and same-object field-update boundaries
+for all three stores: altitude-preserving operational structure that reduces
+proof-side framing. No production history field is proposed.
+
+**Independent checkpoint review.** A read-only worker found no defect in the
+identity lemmas, generalized erasure or replay assertions. Its scope findings
+are retained above: endpoint absence is not internal-access safety, and the
+isolated callback is not the replay's call site. Its correction to the final
+receive's queue behavior is incorporated; no finding is left undispositioned.

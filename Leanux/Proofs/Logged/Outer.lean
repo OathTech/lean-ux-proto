@@ -1,30 +1,30 @@
 import Leanux.Proofs.Logged.Tools
 import Init.Data.Array.Lemmas
 
-/-! History erasure over a general base monad. This also covers the outer
+/-! Observer-state erasure over a general base monad. This also covers the outer
 runner's exception monad, whose World is an explicit loop variable. -/
 namespace Leanux.Proofs.Logged
 open Leanux
 
-def ErasesT {m : Type → Type} [Functor m] (g : StateT History m α) (o : m α) : Prop :=
+def ErasesT {σ : Type} {m : Type → Type} [Functor m] (g : StateT σ m α) (o : m α) : Prop :=
   ∀ history, Prod.fst <$> g.run history = o
 
 section Generic
 variable {m : Type → Type} [Monad m] [LawfulMonad m]
 
-theorem erasesT_pure (a : α) : ErasesT (pure a : StateT History m α) (pure a) := by
+theorem erasesT_pure (a : α) : ErasesT (pure a : StateT σ m α) (pure a) := by
   intro history
   simp only [StateT.run_pure, map_pure]
 
-theorem erasesT_lift (o : m α) : ErasesT (StateT.lift o : StateT History m α) o := by
+theorem erasesT_lift (o : m α) : ErasesT (StateT.lift o : StateT σ m α) o := by
   intro history
   simp only [StateT.run_lift, map_bind, map_pure, bind_pure]
 
-theorem erasesT_liftM (o : m α) : ErasesT (liftM o : StateT History m α) o :=
+theorem erasesT_liftM (o : m α) : ErasesT (liftM o : StateT σ m α) o :=
   erasesT_lift o
 
-theorem erasesT_bind {g : StateT History m α} {o : m α}
-    {gf : α → StateT History m β} {ofn : α → m β}
+theorem erasesT_bind {g : StateT σ m α} {o : m α}
+    {gf : α → StateT σ m β} {ofn : α → m β}
     (ha : ErasesT g o) (hb : ∀ a, ErasesT (gf a) (ofn a)) :
     ErasesT (g >>= gf) (o >>= ofn) := by
   intro history
@@ -35,13 +35,13 @@ theorem erasesT_bind {g : StateT History m α} {o : m α}
     _ = (Prod.fst <$> g.run history) >>= ofn := (bind_map_left _ _ _).symm
     _ = o >>= ofn := by rw [ha history]
 
-theorem erasesT_map {g : StateT History m α} {o : m α}
+theorem erasesT_map {g : StateT σ m α} {o : m α}
     (f : α → β) (h : ErasesT g o) : ErasesT (f <$> g) (f <$> o) := by
   simpa only [map_eq_pure_bind] using erasesT_bind h (fun a => erasesT_pure (f a))
 
 omit [LawfulMonad m] in
 theorem erasesT_ite (p : Prop) [Decidable p]
-    {gt ge : StateT History m α} {ot oe : m α}
+    {gt ge : StateT σ m α} {ot oe : m α}
     (ht : p → ErasesT gt ot) (he : ¬ p → ErasesT ge oe) :
     ErasesT (if p then gt else ge) (if p then ot else oe) := by
   by_cases hp : p
@@ -49,7 +49,7 @@ theorem erasesT_ite (p : Prop) [Decidable p]
   · simpa only [if_neg hp] using he hp
 
 theorem erasesT_forIn (xs : List α) (b : β)
-    (g : α → β → StateT History m (ForInStep β))
+    (g : α → β → StateT σ m (ForInStep β))
     (o : α → β → m (ForInStep β))
     (h : ∀ a b, ErasesT (g a b) (o a b)) :
     ErasesT (forIn xs b g) (forIn xs b o) := by
@@ -64,7 +64,7 @@ theorem erasesT_forIn (xs : List α) (b : β)
     | yield b => exact ih b
 
 theorem erasesT_array (xs : Array α) (b : β)
-    (g : α → β → StateT History m (ForInStep β))
+    (g : α → β → StateT σ m (ForInStep β))
     (o : α → β → m (ForInStep β))
     (h : ∀ a b, ErasesT (g a b) (o a b)) :
     ErasesT (forIn xs b g) (forIn xs b o) := by
@@ -74,7 +74,7 @@ theorem erasesT_array (xs : Array α) (b : β)
 end Generic
 
 theorem erasesT_throw (e : ε) :
-    ErasesT (throw e : StateT History (Except ε) α) (throw e : Except ε α) := by
+    ErasesT (throw e : StateT σ (Except ε) α) (throw e : Except ε α) := by
   intro history
   rfl
 
@@ -99,8 +99,8 @@ theorem runAtLogged_erases (index : Nat) (world : World) (g : GhostM α) (o : M 
 
 /-- A successful original result has an observed result with exactly the same
 value, and conversely. This does not assert any invariant of the history. -/
-theorem erasesT_success_iff {g : StateT History (Except ε) α} {o : Except ε α}
-    (h : ErasesT g o) (a : α) (history : History) :
+theorem erasesT_success_iff {g : StateT σ (Except ε) α} {o : Except ε α}
+    (h : ErasesT g o) (a : α) (history : σ) :
     o = .ok a ↔ ∃ history', g.run history = .ok (a, history') := by
   have he := h history
   cases hg : g.run history with

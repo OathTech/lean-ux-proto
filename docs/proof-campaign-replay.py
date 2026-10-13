@@ -50,8 +50,40 @@ def inclusive_floor():
     return trace
 
 
+def stale_dump_cursor():
+    """Exact synthetic choice records; this is not a Linux capture."""
+    def peers(first, count):
+        return {"op": "wg_set", "config": {"peers": [
+            {"public_key": bytes([n]).hex() + "00" * 31}
+            for n in range(first, first + count)
+        ]}}
+
+    def zero(site, size=8):
+        return [site, "00" * size]
+
+    return {
+        "version": 1,
+        "id": "r2_stale_dump_cursor",
+        "dst_cache_records": False,
+        "ops": [peers(1, 14), peers(15, 14), {"op": "wg_get_start"},
+                {"op": "wg_delete"}, {"op": "wg_create"},
+                peers(101, 14), peers(115, 13), {"op": "wg_get_recv"}],
+        "hidden": [
+            [zero(5) for _ in range(14)],
+            [zero(5) for _ in range(14)],
+            [zero(170)], [zero(124)],
+            [zero(120), zero(121, 32), zero(122, 16), zero(123, 16),
+             zero(126), zero(126)],
+            [zero(5) for _ in range(14)],
+            [zero(5) for _ in range(13)], [],
+        ],
+    }
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("case", choices=["r1-inclusive-floor"])
+    cases = {"r1-inclusive-floor": inclusive_floor,
+             "r2-stale-dump-cursor": stale_dump_cursor}
+    parser.add_argument("case", choices=cases)
     args = parser.parse_args()
-    print(json.dumps(inclusive_floor(), separators=(",", ":")))
+    print(json.dumps(cases[args.case](), separators=(",", ":")))
