@@ -3,8 +3,10 @@
 ## Progress
 
 Worktree `.worktrees/proofs-campaign`, branch `proofs/campaign`; base mirror
-`c85e86b`. The [charter](2026-10-13-charter-proof-campaign.md) defines the
-campaign. No mirror or kernel edits, no integration into main, no push.
+`618034e` (documentation-only carry from `c85e86b`). The [charter](2026-10-13-charter-proof-campaign.md) defines the
+campaign. No mirror or kernel edits, no integration into main, no push. Main’s approved
+documentation refresh is merged into this branch; executable and proof inputs
+are unchanged by that carry, so all existing results remain current.
 
 | Result | Progress |
 | --- | --- |
@@ -204,7 +206,8 @@ theorems in R2. The gate passes all 62 terminal
 statements with only permitted axioms; the default model build passes 51 jobs,
 and the required unit tier passes 88 tests in 21.453 seconds with one skip.
 Earlier checkpoint commits carry their own counts. No mirror semantics or
-kernel source changed; checked components remain over `c85e86b`, with no lag.
+kernel source changed; checked components are current over `618034e`, whose
+mirror is identical to `c85e86b`, with no lag.
 
 Most effort is caller coverage and reusable framing. Peer allocation took six
 compile passes, shared file frames four, failure-prefix observation nine,

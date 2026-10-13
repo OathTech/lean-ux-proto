@@ -8,7 +8,7 @@ The project is paused while it moves to a new machine (user request,
 - how to move the work across.
 
 The setup procedure for the new machine is in
-[SETUP-new-machine.md](SETUP-new-machine.md).
+[SETUP-new-machine.md](history/SETUP-new-machine.md).
 
 ## 1. What is on `main`
 
@@ -129,7 +129,7 @@ and in the design docs.
 
 ## 4. Resume order on the new machine
 
-1. Set up per [SETUP-new-machine.md](SETUP-new-machine.md). Rebuild the
+1. Set up per [SETUP-new-machine.md](history/SETUP-new-machine.md). Rebuild the
    D3 oracle kernel and check that its identity is `8744fcc4…`. Run the
    unit tests and one full check to confirm 1611/1611 on the new
    hardware. Re-measure the trace-time margin: the give-up class ran

@@ -21,8 +21,9 @@ scripts/in-bundle python3 -m evaluator.check     # or any other bundled command
   the main checkout and are read-only.
 - **Private state.** `.cache`, `.artifacts` and `.lake` are created inside the
   worktree. They are Git-ignored and disappear with it.
-- **Guests.** Only one QEMU guest runs at a time, across all checkouts, through
-  `.artifacts/runs/qemu.lock` in the main checkout.
+- **Guests.** At most `LEANUX_QEMU_SLOTS` guests run at a time (default 3),
+  across all checkouts, through the `qemu.lock*` files in the main checkout's
+  `.artifacts/runs/`.
 
 Never copy the main checkout to create a task. Never write into `.tools`,
 `.deps` or the accepted kernel build. A kernel or dependency change needs its
