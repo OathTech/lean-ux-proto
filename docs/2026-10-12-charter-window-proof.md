@@ -1,5 +1,7 @@
 # Charter: the receive counter window, proved over the mirror
 
+> Restructured 2026-10-13: the proof tree moved from `Leanux/Spikes/` to `Leanux/Proofs/`, laid out by layer and result; the map and the results register are [docs/proofs.md](proofs.md). The names below are the historical ones.
+
 A long-cycle proof assignment for a Codex agent and its subagents: days, not
 hours, left alone to cook. It sets one challenge problem with a clear success
 criterion and leaves the proof architecture to the agent.

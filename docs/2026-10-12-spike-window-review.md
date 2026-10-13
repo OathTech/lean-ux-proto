@@ -1,5 +1,7 @@
 # Independent review of the window-proof spike (`spike/window` at ed069ba)
 
+> Restructured 2026-10-13: the proof tree moved from `Leanux/Spikes/` to `Leanux/Proofs/`, laid out by layer and result; the map and the results register are [docs/proofs.md](proofs.md). The names below are the historical ones.
+
 [AGENT, independent review 2026-10-12]. Reviewed against
 [the charter](2026-10-12-charter-window-proof.md), the spike's report
 (`docs/2026-10-13-spike-window.md`, named `2026-10-xx-` on the branch) and the code under

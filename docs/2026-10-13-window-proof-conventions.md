@@ -1,5 +1,7 @@
 # Conventions for cheaper mirror-proof ports
 
+> Restructured 2026-10-13: the proof tree moved from `Leanux/Spikes/` to `Leanux/Proofs/`, laid out by layer and result; the map and the results register are [docs/proofs.md](proofs.md). The names below are the historical ones.
+
 These are recommendations from the `fb2c29c` → `ef7c535` window-proof port,
 not changes to the executable mirror or its standing no-proof policy.
 Keep all C choice points, ordering, failures and observable state effects.

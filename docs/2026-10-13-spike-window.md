@@ -1,5 +1,7 @@
 # Receive counter window proof spike
 
+> Restructured 2026-10-13: the proof tree moved from `Leanux/Spikes/` to `Leanux/Proofs/`, laid out by layer and result; the map and the results register are [docs/proofs.md](proofs.md). The names below are the historical ones.
+
 ## Progress — 2026-10-13
 
 All eight terminal statements and both added whole-syscall statements compile
