@@ -16,14 +16,14 @@ The mirror and kernel match it exactly; R4 and R5's dependent work is now unbloc
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay and independent review checked. Seccomp frame carry checked. |
 | R2 lifetime safety | Store identities, failure-retaining allocation/release and caller composition cover session/rotation, peer creation, receive entry/maintenance/completion, receive polling with the actual stack callback, transmit entry, TX staging, decrypt iteration and ten socket/cache/loopback calls; stale-cursor finding checked. Remaining callers, lifecycle and whole-run internal-access coverage remain in progress. |
 | R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion, original empty-root, arbitrary-depth empty-child and exact-prefix insertion with sequence wrappers, and total original placement proved. Selected-root graft normal endpoints and rollback effects checked; successful graft representation, general mutation/history and path refinements remain open. Path proofs follow R2. |
-| R4 delivery | The full-ring witness, original enqueue refusal projection, original PrevQueue FIFO/peek/drop laws and retained receive-queue helper frames pass the gate and independent review. Complete receive-completion retention passes the gate and independent review. Whole-poll and recorded-schedule delivery/conservation remain open. |
+| R4 delivery | The full-ring witness, original enqueue refusal projection, original PrevQueue FIFO/peek/drop laws and retained receive-queue helper frames pass the gate and independent review. Complete receive-completion retention passes the gate and independent review. New checked outer-poll components give removal-prefix order and tagged completion-buffer/actual-callback prefix order, retaining failures. Their local bridge and recorded-schedule delivery/conservation remain open. |
 | R5 key lifetime | Original clock/operand equations, successful RX decryption admission, validator wire limit and zero-timer transport-store frame pass the gate and independent review. TX submission certificates and exact timer-pass observation pass the gate and independent review. Accepted replays show nonce R decrypting before rejection and a packet-held key used after clear in synthetic, incoherent-clock legacy mode. RX-attempt admission, exact coverage and failed-tag endpoints pass the gate and independent review. Admission-to-encryption transport, whole-run attempt composition and coherent-clock post-clearance exclusion remain open. |
 | R6 flood resistance | Not started. |
 
-**Current validation.** The full proof gate passes 239 build jobs and 199
-terminal statements (ReplayWindow 15, R1 9, R2 116, R3 27, R4 19, R5 13), with only permitted
+**Current validation.** The full proof gate passes 246 build jobs and 206
+terminal statements (ReplayWindow 15, R1 9, R2 116, R3 27, R4 26, R5 13), with only permitted
 axioms. Stock `leanchecker --fresh Leanux.Proofs` passes. The default model
-build passes 60 jobs; the unit tier passes 93 tests in 22.711 seconds with one
+build passes 60 jobs; the unit tier passes 93 tests in 21.539 seconds with one
 skip. The R1 explicit-record witness and both R2 checkpoint variants pass on
 `2c7a076`, with original/observed JSON equality; the R1 history remains
 `[(1, 8200), (1, 72)]`. The reconstructed/synthetic streams now supply the
@@ -41,7 +41,7 @@ insertion, original empty-root and arbitrary-depth empty-child insertion with
 its wrapper, exact-prefix replacement, list deletion, placement and selected-root
 graft endpoints/rollback, saved-peer scans, the ten-call socket family,
 transmit entry, actual stack/poll composition, the prerequisite carry, and the
-full-ring, receive-queue and complete receive-completion components, R5 receive/key-time, RX attempt and TX admission components, and both
+full-ring, receive-queue, complete receive-completion and outer-poll components, R5 receive/key-time, RX attempt and TX admission components, and both
 R5 replays with the timer-pass observer.
 The final source and contract reviews have no unresolved correctness findings;
 their frozen file hashes matched before the checkpoints.
@@ -488,7 +488,7 @@ allocation and cleanup actions. `RxCompletionFrame` covers original source
 lookup, statistics and the complete `consumeDataDone` body. Each post-state
 resident retains its entry queue, epoch and peer identity; deletion is allowed.
 The contracts make no assertion about a World after a Stop, internal accesses,
-packet stores or delivery. Whole-poll observation remains a separate obligation.
+packet stores or delivery. The outer-poll observations below compose these queue frames.
 No mirror code or clock/ownership premise was changed.
 
 **Completion-frame effort.** Thirteen sequential capped local builds comprised
@@ -504,6 +504,70 @@ four frozen modules, exports and report/register found no unresolved issue;
 reviewed source hashes matched. Named temporary logs and axiom outputs were
 removed after collection. Reproduce with the proof gate command above.
 
+**Outer poll and stack callback components.** `RxPollPrimitives` names exactly
+original peek/cache and two-getter drop sequences. `RxPollPrefix` observes the
+outer poll body's explicit drop site, emitting only after the update succeeds.
+Its exact local run law appends one ID on success and none on failure. Its
+complete erasure preserves every result, full success World and original Stop.
+`RxPollOrder` proves that the retained removal log is an initial segment of the
+current resident's entry queue, even if a subsequent helper or callback stops.
+No queue-coherence, reference-ownership or normal-return premise is imposed.
+The invariant is `entry = removed ++ remaining`, with each resident's current
+queue equal to `remaining`; exact queue retention permits deletion and the next
+successful getter restores residency. Repeated entry IDs remain admitted, so
+this is not a no-duplication theorem. This log does not observe operations
+inside its opaque arbitrary callback.
+
+`Logged/Projected` permits proof-side local accumulators to carry extra data
+while erasing to the original loop. `RxPollGro` uses it to carry GRO entries
+with the local `workDone` ordinal, skb value and exact bytes returned by the
+original `consumeDataDone`. A successful `some bytes` return emits that buffer
+entry; a `none` return, including keepalives, emits none. In particular,
+`rxPollFree = false` is not treated as delivery. The complete tagged observer
+erases to original `rxPoll` with the actual `forM deliverInner` callback.
+`GroCallback` emits immediately before each original `deliverInner` call;
+failure retains that call's entry but never fabricates visits to the remaining
+suffix. `RxPollGroOrder` proves for every input World and outcome that callback
+entries are a prefix of the exact tagged completion buffers. The accumulator
+invariant equates the logged buffers with the local GRO list; before flushing,
+no callback entries exist. Full-budget Stop therefore keeps buffered obligations,
+and a callback failure keeps the unvisited suffix. Entry to the stack is the
+observed boundary, not a claim that the stack accepts the packet.
+
+[AGENT 2026-10-13] Keep original queue removal and GRO/stack callback observations
+separate at their actual source boundaries, with failure-retaining histories.
+Use explicit ordinal/skb/payload records for buffered entries, rather than
+identifying occurrences by nonce or payload equality. All additions are proof-side.
+
+**Remaining local bridge.** The two complete observers currently have separate
+invariants: entry-queue removal-prefix order, and callback-entry prefix order
+relative to completion buffers. Two links remain open: buffered tags must form
+a subsequence of `rxPollGro`'s own removed tags, with distinct ordinals, and
+those removed tags must agree with the `rxPollRemovals` log. Event counts and
+composition with receive enqueue and recorded scheduler activations also remain
+open. The actual
+stack callback may perform other work internally; its entry observer claims
+only this supplied `forM`'s entry sites. No packet-store emptiness, no-loss,
+whole-schedule ordering or speculation/rollback claim follows from these local
+components. The scheduler's discarded activation trials must eventually discard
+history together with their trial Worlds.
+
+**Outer-poll effort and current validation.** Thirty sequential capped local
+build/elaboration invocations over about twenty-three minutes comprised eleven
+passes and nineteen ordinary compilation failures, all collected. The failures
+were proof elaboration, tuple/continuation matching and simplifier issues; none
+was a cap failure or a mirror finding. No process was interrupted. The final
+`capped -- scripts/in-bundle lake build Leanux.Proofs.WG.DeliveryOrder.Statements`
+passes 153 jobs and includes all 26 R4 terminal declarations. The complete proof
+gate passes 246 jobs and 206 terminal statements with only permitted axioms;
+stock fresh kernel replay passes. The model build passes 60 jobs and the unit
+tier passes 93 tests in 21.539 seconds with one skip. Independent source and
+contract review found no unresolved defect; the frozen file hashes matched.
+The review confirmed that the two remaining correspondence links are explicit
+limitations, not consequences of erasure alone. Temporary compiler and check
+logs were removed after collection. No QEMU, differential check, mirror edit,
+integration into main or push was performed.
+
 **Measurement and formal scope.** The landed
 [W7 full-ring tier](2026-10-13-w7-full-ring-tier.md) records the Linux/mirror
 measurement provenance: two prior consumed slots remain occupied, and all
@@ -511,7 +575,7 @@ measurement provenance: two prior consumed slots remain occupied, and all
 closed ring-operation witness, not a replay or refinement of that whole
 recorded execution. Its separate original-enqueue theorem does not yet
 compose the ring witness with a real peer queue or an accepted runner trace.
-No mirror change was needed. Whole-poll and recorded-schedule delivery,
+No mirror change was needed. Whole recorded-schedule delivery,
 worker-local ownership and pipeline conservation remain open, following R2's
 remaining caller/lifecycle closure. This component establishes no packet
 arrival, cryptographic, scheduler-fairness or delivery-order claim.
@@ -549,8 +613,10 @@ branches and real indexes unchanged, and implementation resumed only after
 preservation. The symbolic replacement compiled without large reduction.
 No QEMU, differential check or new recorded replay was run in this slice.
 
-**Ranked mirror-shape recommendations.** None from this component. Original
-physical-slot fullness and batched retirement already explain the witness.
+**Ranked mirror-shape recommendations.** None from these components. Original
+physical-slot fullness and batched retirement explain the ring witness, and
+proof-side named boundaries plus projected accumulator erasure handle the poll
+without a mirror change.
 
 
 ## R5 — receive admission and key-time boundaries (in progress)

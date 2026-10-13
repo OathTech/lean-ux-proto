@@ -2,6 +2,8 @@ import Leanux.Proofs.WG.Queues.FullRing
 import Leanux.Proofs.WG.Queues.Enqueue
 import Leanux.Proofs.WG.Queues.PrevQueue
 import Leanux.Proofs.WG.Queues.RxCompletionFrame
+import Leanux.Proofs.WG.Queues.RxPollOrder
+import Leanux.Proofs.WG.Queues.RxPollGroOrder
 
 /-! R4 queue components: physical-ring refusal, original prev_queue FIFO laws,
 and successful-endpoint receive-queue helper frames. Whole recorded-schedule delivery,
@@ -160,5 +162,72 @@ does not yet establish poll order, delivery or packet conservation. -/
 theorem original_receive_completion_retains_queues (pid : PeerId) (pkt : RxPacket)
     (endpoint : Endpoint) : Queues.RetainsRx (consumeDataDone pid pkt endpoint) :=
   Queues.consumeDataDone_rxQueues pid pkt endpoint
+
+/-- The complete poll's failure-retaining removal observer has exactly the
+original result, full success World and Stop for every input and callback. -/
+theorem original_poll_removal_erasure (pid : PeerId) (budget : Nat)
+    (callback : List (List UInt8) → M Unit) :
+    Logged.ErasesPrefix (Queues.rxPollRemovals pid budget callback) (rxPoll pid budget callback) :=
+  Queues.rxPollRemovals_erases pid budget callback
+
+/-- The outer poll body removes an initial segment of the current resident's exact
+entry queue, in order, even when a later helper or callback stops. Events are
+emitted after the original two-getter drop. Repeated entry IDs remain possible;
+callback-internal removals are outside this log. This theorem does not assert
+packet ownership or stack delivery. -/
+theorem original_poll_removal_prefix (pid : PeerId) (budget : Nat)
+    (callback : List (List UInt8) → M Unit) (w : World) (cell : Queues.RxQueueCell)
+    (hc : Queues.rxQueues w pid = some cell) :
+    Queues.RemovalPrefix cell.queue.all
+      (Logged.runPrefix (Queues.rxPollRemovals pid budget callback) w []).2 :=
+  Queues.rxPollRemovals_prefix pid budget callback w cell hc
+
+/-- At the outer poll's original two-getter drop site, normal completion
+appends exactly its one skb ID, while a failed update appends nothing. -/
+theorem original_poll_drop_observation (pid : PeerId) (id : SkbId)
+    (w : World) (h : List SkbId) :
+    Logged.runPrefix (Queues.dropRxPrefix pid id) w h =
+      match (Queues.dropRxQueue pid).run w with
+      | .error stop => (.error stop, h)
+      | .ok (_, v) => (.ok ((), v), h ++ [id]) :=
+  Queues.dropRxPrefix_run pid id w h
+
+/-- Tagged GRO buffering and entry observations for the actual stack callback
+erase to the complete original poll, including every original World and Stop. -/
+theorem original_poll_gro_erasure (pid : PeerId) (budget : Nat) :
+    Logged.ErasesPrefix (Queues.rxPollGro pid budget)
+      (rxPoll pid budget (fun bytes => bytes.forM Leanux.Env.deliverInner)) :=
+  Queues.rxPollGro_erases pid budget
+
+/-- Only an original completion returning bytes emits a buffered occurrence,
+carrying those exact bytes and the caller's explicit ordinal and skb ID.
+Keepalives and other none returns emit none; failures retain the old history. -/
+theorem original_poll_completion_buffer (pid : PeerId) (occurrence : Nat) (id : SkbId)
+    (pkt : RxPacket) (endpoint : Endpoint) (w : World) (h : List Queues.GroEvent) :
+    Logged.runPrefix (Queues.consumeGro pid occurrence id pkt endpoint) w h =
+      match (consumeDataDone pid pkt endpoint).run w with
+      | .error stop => (.error stop, h)
+      | .ok (none, v) => (.ok (none, v), h)
+      | .ok (some bytes, v) =>
+        (.ok (some ⟨occurrence, id, bytes⟩, v), h ++ [.buffered ⟨occurrence, id, bytes⟩]) :=
+  Queues.consumeGro_run pid occurrence id pkt endpoint w h
+
+/-- In the complete original poll with the actual stack callback, callback
+entries form a prefix of tagged successful completion buffers. This holds on
+every Stop as well as success, without identifying equal payloads or asserting
+that entering the stack means the stack accepts the packet. -/
+theorem original_poll_callback_prefix (pid : PeerId) (budget : Nat) (w : World) :
+    Queues.GroSafe (Logged.runPrefix (Queues.rxPollGro pid budget) w []).2 :=
+  Queues.rxPollGro_callback_prefix pid budget w
+
+/-- The actual stack forM visits a prefix of its supplied tagged occurrences;
+a failed call retains its own entry event and leaves the suffix unvisited.
+A normal callback-list return has no unvisited remainder. -/
+theorem original_stack_callback_visited_prefix (entries : List Queues.GroEntry)
+    (w : World) (h : List Queues.GroEvent) :
+    ∃ visited remaining, entries = visited ++ remaining ∧
+      (Logged.runPrefix (Queues.flushGro entries) w h).2 = h ++ visited.map Queues.GroEvent.entered ∧
+      (∀ x v, (Logged.runPrefix (Queues.flushGro entries) w h).1 = .ok (x, v) → remaining = []) :=
+  Queues.flushGro_prefix entries w h
 
 end Leanux.Proofs.WG.DeliveryOrder

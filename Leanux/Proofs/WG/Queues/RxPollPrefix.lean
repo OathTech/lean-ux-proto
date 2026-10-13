@@ -1,0 +1,145 @@
+import Leanux.Proofs.WG.Queues.RxPollPrimitives
+import Leanux.Proofs.Logged.PrefixLoops
+
+set_option maxHeartbeats 2000000
+set_option pp.structureInstances false
+
+/-! Removal observations at the original receive-poll queue update. The log
+contains skb occurrences in removal order and survives every later Stop.
+It does not classify completion results as stack delivery. -/
+namespace Leanux.Proofs.WG.Queues
+open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
+open Leanux.Proofs.WG.Lifetimes
+
+def dropRxPrefix (pid : PeerId) (id : SkbId) : PrefixM SkbId Unit := do
+  liftPrefix (dropRxQueue pid)
+  emitPrefix id
+
+theorem dropRxPrefix_erases (pid : PeerId) (id : SkbId) :
+    ErasesPrefix (dropRxPrefix pid id) (dropRxQueue pid) := by
+  intro w h
+  simp only [dropRxPrefix, runPrefix_bind, runPrefix_lift]
+  cases hr : (dropRxQueue pid).run w with
+  | error e => rfl
+  | ok out => cases out; rfl
+
+/-- A successful original drop emits exactly one event; a failed drop emits
+none. This is the local source-coverage boundary used by the poll observer. -/
+theorem dropRxPrefix_run (pid : PeerId) (id : SkbId) (w : World) (h : List SkbId) :
+    runPrefix (dropRxPrefix pid id) w h =
+      match (dropRxQueue pid).run w with
+      | .error stop => (.error stop, h)
+      | .ok (_, v) => (.ok ((), v), h ++ [id]) := by
+  simp only [dropRxPrefix, runPrefix_bind, runPrefix_lift]
+  cases (dropRxQueue pid).run w with
+  | error e => rfl
+  | ok out => cases out; rfl
+
+def completeRxQueue (pid : PeerId) : M Unit := do
+  setPeer pid { (← getPeer pid) with napiScheduled := false }
+
+/-- A source grouping with the original result and complete World/Stop.
+Its only change is naming the peek/cache and two-getter drop boundaries. -/
+def rxPollGrouped (pid : PeerId) (budget : Nat)
+    (callback : List (List UInt8) → M Unit) : M Nat := do
+  if ← branch .rxPollNoBudget (budget == 0) then return 0
+  let mut workDone := 0
+  let mut gro : List (List UInt8) := []
+  let mut drained := false
+  for _ in [0:MAX_QUEUED_PACKETS + 1] do
+    let first ← peekRxQueue pid
+    let go ← WG.andM (branch .rxPollPacket first.isSome) do
+      let some f := first | invariant "unreachable"
+      branch .rxPollNotUncrypted ((← getRxSkb f).state != .uncrypted)
+    if !go then
+      drained := true
+      break
+    let some id := first | invariant "unreachable"
+    let pkt ← getRxSkb id
+    if pkt.peer != pid then invariant "a packet on another peer's rx_queue"
+    dropRxQueue pid
+    let mut free := true
+    if !(← branch .rxPollNotCrypted (pkt.state != .crypted)) then
+      if !(← branch .rxPollCounterInvalid !(← counterValidate pkt.keypair pkt.nonce)) then
+        let endpoint ← endpointFromSkb pkt.source
+        if !(← branch .rxPollEndpointFailed endpoint.isNone) then
+          let some e := endpoint | invariant "unreachable"
+          gro := gro ++ (← consumeDataDone pid pkt e).toList
+          free := false
+    keypairPut (some pkt.keypair) false
+    peerPut (some pid)
+    _ ← branch .rxPollFree free
+    freeRxSkb id
+    workDone := workDone + 1
+    if ← branch .rxPollBudgetDone (workDone ≥ budget) then break
+  if !drained && workDone < budget then invariant "the rx_queue did not drain"
+  if ← branch .rxPollComplete (workDone < budget) then
+    completeRxQueue pid
+    callback gro
+  else unsupported "a NAPI poll that used its whole budget (a repoll)"
+  return workDone
+
+theorem rxPollGrouped_eq (pid : PeerId) (budget : Nat)
+    (callback : List (List UInt8) → M Unit) :
+    rxPollGrouped pid budget callback = rxPoll pid budget callback := by
+  simp only [rxPollGrouped, rxPoll, peekRxQueue, dropRxQueue, completeRxQueue, bind_assoc, pure_bind]
+  repeat' first | rfl | (congr 1) | (intro x; try cases x)
+
+def rxPollRemovals (pid : PeerId) (budget : Nat)
+    (callback : List (List UInt8) → M Unit) : PrefixM SkbId Nat := do
+  if ← liftPrefix (branch .rxPollNoBudget (budget == 0)) then return 0
+  let mut workDone := 0
+  let mut gro : List (List UInt8) := []
+  let mut drained := false
+  for _ in [0:MAX_QUEUED_PACKETS + 1] do
+    let first ← liftPrefix (peekRxQueue pid)
+    let go ← liftPrefix (WG.andM (branch .rxPollPacket first.isSome) do
+      let some f := first | invariant "unreachable"
+      branch .rxPollNotUncrypted ((← getRxSkb f).state != .uncrypted))
+    if !go then
+      drained := true
+      break
+    let some id := first | liftPrefix (invariant "unreachable")
+    let pkt ← liftPrefix (getRxSkb id)
+    if pkt.peer != pid then liftPrefix (invariant "a packet on another peer's rx_queue")
+    dropRxPrefix pid id
+    let mut free := true
+    if !(← liftPrefix (branch .rxPollNotCrypted (pkt.state != .crypted))) then
+      if !(← liftPrefix (branch .rxPollCounterInvalid !(← liftPrefix (counterValidate pkt.keypair pkt.nonce)))) then
+        let endpoint ← liftPrefix (endpointFromSkb pkt.source)
+        if !(← liftPrefix (branch .rxPollEndpointFailed endpoint.isNone)) then
+          let some e := endpoint | liftPrefix (invariant "unreachable")
+          gro := gro ++ (← liftPrefix (consumeDataDone pid pkt e)).toList
+          free := false
+    liftPrefix (keypairPut (some pkt.keypair) false)
+    liftPrefix (peerPut (some pid))
+    _ ← liftPrefix (branch .rxPollFree free)
+    liftPrefix (freeRxSkb id)
+    workDone := workDone + 1
+    if ← liftPrefix (branch .rxPollBudgetDone (workDone ≥ budget)) then break
+  if !drained && workDone < budget then liftPrefix (invariant "the rx_queue did not drain")
+  if ← liftPrefix (branch .rxPollComplete (workDone < budget)) then
+    liftPrefix (completeRxQueue pid)
+    liftPrefix (callback gro)
+  else liftPrefix (unsupported "a NAPI poll that used its whole budget (a repoll)")
+  return workDone
+
+/-- Erasure covers every input, including missing peers, malformed queues,
+full-budget refusal and a callback that itself fails. -/
+theorem rxPollRemovals_erases (pid : PeerId) (budget : Nat)
+    (callback : List (List UInt8) → M Unit) :
+    ErasesPrefix (rxPollRemovals pid budget callback) (rxPoll pid budget callback) := by
+  rw [← rxPollGrouped_eq]
+  unfold rxPollRemovals rxPollGrouped
+  repeat' first
+    | with_reducible exact erasesPrefix_lift _
+    | with_reducible exact erasesPrefix_pure _
+    | with_reducible exact dropRxPrefix_erases _ _
+    | with_reducible apply erasesPrefix_ite
+    | with_reducible apply erasesPrefix_bind
+    | with_reducible apply erasesPrefix_range
+    | (with_reducible intro x; try dsimp only)
+    | (with_reducible split)
+  all_goals simp_all
+
+end Leanux.Proofs.WG.Queues
