@@ -107,8 +107,14 @@ witness lies in a merged block or an after-loop line, witnessable in
 principle, reached only together with its sibling; **(c)** a gap nobody has
 written down.
 
-139 unexercised witnessable outcomes: 90 of class (a), 49 of class (c); none of class (b) survives,
-since a merged-block or after-loop witness that the sibling reaches is counted as unobservable, not unexercised.
+The rows the census run marked **(c)** in the table below are resolved in
+section 3.1; most are in fact **(a)** (structurally dead or fixture-excluded).
+
+139 unexercised witnessable outcomes from the census run (138 after this task's
+`d3_privkey_change_expires` trace): originally 90 of class (a) and 49 of class (c).
+Section 3.1 resolves the 49, leaving 127 of class (a) and 11 of class (c). None of
+class (b) survives, since a merged-block or after-loop witness that the sibling
+reaches is counted as unobservable, not unexercised.
 
 | Decision | Outcome | Site | Class | Reason |
 | --- | --- | --- | --- | --- |
@@ -252,33 +258,60 @@ since a merged-block or after-loop witness that the sibling reaches is counted a
 | `bpf_convert_filter.case_len` | true | `net/core/filter.c:872` | (a) | [seccomp](2026-10-12-seccomp-design.md) 9.2: as above |
 | `bpf_convert_filter.seen_ld_abs_len` | true | `net/core/filter.c:900` | (a) | [seccomp](2026-10-12-seccomp-design.md) 9.2: as above |
 
-### 3.1 Category (c): unexercised outcomes with no written reason
+### 3.1 Category (c) resolved
 
-**regular-file arms in shared FS code** (16 outcomes)
-- sixteen arms that only a regular file reaches (position checks, `O_SYNC`/`O_DSYNC`, relatime, `s_version`, an `update_time` op, timestamp granularity, `pipe_buf_confirm`); the fixture opens pipes, eventfds, anonymous inodes and sockets only. One sentence in the P design's section 9 would make them (a).
+The 49 rows the run marked (c) were examined one by one [AGENT, fork of the
+coordinator 2026-10-13]: one was reachable and is closed by a trace, 37 had a
+reason and are (a), 2 are closed on `task/receive-fixes`, and 9 remain,
+each reachable only with a harness, steering or guest change named below. The
+section 1-2 raw counts predate the trace and shift by one (842 -> 843
+exercised, 139 -> 138 witnessable-unexercised, `noise.c` by one).
 
-**file kinds absent from the fixture (O_PATH, mounts, character devices, backing files, files with a flush op)** (9 outcomes)
-- nine arms; the same remedy.
+**Closed by a trace (1).**
+- `wg_noise_expire_current_peer_keypairs.current_keypair` (noise.c:193):
+  `d3_privkey_change_expires` (scripts/wg-d3-corpus.py) -- a session, then a
+  private-key change (set_device, netlink.c:575) expires the peer's current
+  keypair. Agrees on s2 (1 trace, 7 ops, 40 operand pairs); commit 9193c5e.
 
-**second-task and table-resize arms of the descriptor table** (9 outcomes)
-- `do_dup2.fd_is_open` (file.c:1229): `dup2` onto an open descriptor, reachable with the current operation set.
-- the rest need a second task or a table resize beyond the fixture (`expand_fdtable.files_shared`, `expand_files.resize_in_progress`, `fd_install.resize_in_progress`, `__fget_light.single_owner`, `pipe_write.loop_no_readers`, the `wake_next_*` arms) or are invariants (`alloc_fd.slot_not_null`).
+**Reclassified to (a): structurally dead, the reason in the mirror (4).**
 
-**signal arms outside the widening's written list** (5 outcomes)
-- `complete_signal.not_coredump`, `__send_signal_locked.case_priv` (kernel-originated signals), `send_signal_locked.has_si_pid_and_uid`, `force_sig_info_to_task.was_blocked` and `not_sigpending` (SIGSYS blocked or already pending before a `TRAP`): a blocked-SIGSYS trace is one guest operation away; the others belong on the section 16 list.
+| Decision | Outcome | Site | Reason |
+|---|---|---|---|
+| `wg_noise_handshake_consume_response.state_changed` | true | noise.c:790 | single-CPU: the state re-check under the write lock cannot differ from the pre-copy state, nothing runs between the two reads in a softirq (Handshake.lean `consumeResponse`). As P14. |
+| `wg_noise_received_with_keypair.changed` | true | noise.c:269 | single-CPU: the double-check under `keypair_update_lock` sees the same `next_keypair` (Keypair.lean `receivedWithKeypair`). |
+| `wg_socket_send_skb_to_peer.inet6` | false | socket.c:181 | a data send needs a current keypair, which a peer obtains only with an endpoint (configured, or learned from the initiation that created the session); the endpoint-less `else` arm is unreachable on the data path. |
+| `do_dup2.fd_is_open` | true | file.c:1229 | the `-EBUSY` arm needs a reserved-but-uninstalled fd slot (bitmap set, `fd[]` NULL), which only a concurrent opener produces; single-task it is unreachable. The `false` arm is exercised by `p_dup_ends`. |
 
-**WireGuard paths no trace drives** (6 outcomes)
-- `wg_noise_handshake_consume_response.state_changed` (noise.c:790): a response arriving when the handshake is not awaiting one (a duplicate or late response).
-- `wg_noise_received_with_keypair.changed` (noise.c:269): the responder's key confirmation by a received data packet, the `next` keypair sliding to current.
-- `wg_noise_expire_current_peer_keypairs.current_keypair` (noise.c:193): a private-key change after a session (`wg_set_device`, netlink.c:575) expiring a current keypair; the other caller, `wg_pm_notification` (device.c:106), is census P1.
-- `wg_packet_consume_data.epipe` and `enqueued_epipe` (receive.c:528-530): the receive-side decrypt ring full; the W7 tier built the send side only.
-- `wg_socket_send_skb_to_peer.inet6=false` (socket.c:181): `-EAFNOSUPPORT` for a peer with no endpoint, reached by a persistent keepalive or a configured handshake to such a peer.
+**Reclassified to (a): fixture-excluded, one sentence each in the P design section 9 (33).**
+- regular-file arms in shared FS code (16): the fixture opens pipes, eventfds, anonymous inodes and sockets only, never a regular file (P 1, P 9).
+- file kinds absent from the fixture (9): O_PATH, mounts, character devices, backing files, files with a flush op -- the same (P 9).
+- second-task and table-resize arms (8): `expand_fdtable.files_shared`, `expand_files.resize_in_progress`, `fd_install.resize_in_progress`, `__fget_light.single_owner`, `pipe_write.loop_no_readers`, the `wake_next_*` arms, and `alloc_fd.slot_not_null` (an invariant) -- all need a second task or a descriptor-table resize beyond the single-task fixture (P 9).
 
-**epoll nested-set release orders and the nested attach failure** (4 outcomes)
-- `ep_clear_and_put.poll_wait_active` (eventpoll.c:1108): an inner set closed while an outer set still watches it.
-- `eventpoll_release_file.last_reference` (:1320): the set closed before a file it watches.
-- `ep_register_epitem.attach_error_tep` (:1805): the nested target's `ep_attach_file` failing; the steered site exists for the primary attach only.
-- `epoll_mutex_lock.blocking=false` (:2470): the non-blocking lock variant.
+**Closed on `task/receive-fixes` (2).**
+- `wg_packet_consume_data.epipe` and `enqueued_epipe` (receive.c:528-530): the
+  receive-side decrypt-ring-full drop, modelled with a 1025-message trace by
+  the receive correspondence-audit fix fork.
+
+**Residual (c): reachable only with a harness, steer or guest change (9), reported not built.**
+
+| Decision | Site | What it needs |
+|---|---|---|
+| `ep_clear_and_put.poll_wait_active` | eventpoll.c:1108 | a nested set reaching its last reference while still poll-watched; the existing nested traces keep the inner alive through the outer's epitem, so the drop-outer-link-then-inner-last-ref ordering with the wait still active is not hit -- a constructed nested-release trace. |
+| `eventpoll_release_file.last_reference` | eventpoll.c:1320 | the same nested-release ordering. |
+| `ep_register_epitem.attach_error_tep` | eventpoll.c:1805 | the nested target's `ep_attach_file` failing; `harness/steer.py` has an alloc site for the primary attach only -- a steer site for the nested attach. |
+| `epoll_mutex_lock.blocking` | eventpoll.c:2470 | the non-blocking (`trylock`) variant, reached only from a call site passing `nonblock=true`; no in-domain trace drives one -- confirm a call site or move to (a). |
+| `force_sig_info_to_task.was_blocked` | signal.c | SIGSYS blocked in the child before a TRAP -- a guest op to block the signal in the sandboxed child. |
+| `force_sig_info_to_task.not_sigpending` | signal.c | SIGSYS already pending before a TRAP -- two TRAPs before delivery. |
+| `complete_signal.not_coredump` | signal.c | a default-action (coredumping) SIGSYS, i.e. a seccomp kill with SIG_DFL, not a handler. |
+| `__send_signal_locked.case_priv` | signal.c | a kernel-originated (SEND_SIG_PRIV) signal path beyond the forced SIGSYS the corpus drives. |
+| `send_signal_locked.has_si_pid_and_uid` | signal.c | the same; the signal's `si_pid`/`si_uid` metadata arm. |
+
+The five signal arms belong to the seccomp signal path and the section-16
+widening (seccomp design); each needs the blocked/pending precondition or a
+default-action kill, a guest or corpus extension. The four epoll arms are
+nested-set release and lock orderings a constructed trace or a steer site
+would reach. None is a mirror defect: every residual arm is modelled with an
+explicit outcome, only unexercised.
 
 
 ## 4. Unobservable outcomes
