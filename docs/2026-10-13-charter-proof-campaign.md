@@ -29,7 +29,7 @@ user wants to know.
 
 ## 2. Setup
 
-- Repository `/home/dev/projects/lean-ux-proto`. Worktree
+- The repository's main checkout. Worktree
   `.worktrees/proofs-campaign`, branch `proofs/campaign` from `main`, created
   for you; work only there. Other agents work in other `.worktrees/*`; do not
   touch them, and do not touch `main`.
