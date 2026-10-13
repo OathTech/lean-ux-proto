@@ -5,18 +5,20 @@ Run through the bundle: `capped -- scripts/in-bundle scripts/proof-gate`.
 Four checks, every one fail-closed and fail-noisy; the exit status is 0 only
 when all four pass:
 
-1. `lake build WindowSpike` (the proof tree's own lake target, outside the
-   default build), under the box's `capped` wrapper when it is installed.
-2. `#print axioms` for every terminal statement: each declaration of
-   `Leanux/Spikes/Statements.lean` plus `S2`, `S2_acceptance` and `S2_update`
-   in `Leanux/Spikes/Refinement.lean`, which Statements.lean points at. Each
-   printed set must be a subset of {propext, Classical.choice, Quot.sound};
-   `sorryAx`, any other axiom, a name that does not print, or any output line
-   the parser does not recognise fails the gate.
+1. `lake build LeanuxProofs` (the proof tree's own lake target, root
+   `Leanux/Proofs.lean`, outside the default build), under the box's `capped`
+   wrapper when it is installed.
+2. `#print axioms` for every terminal statement: each declaration of every
+   `Statements.lean` under `Leanux/Proofs/` (one per result directory; the
+   map is `docs/proofs.md`). Each printed set must be a subset of {propext,
+   Classical.choice, Quot.sound}; `sorryAx`, any other axiom, a name that does
+   not print, or any output line the parser does not recognise fails the gate.
 3. No `sorry`, `admit`, `axiom`, `native_decide`, `unsafe`, `implemented_by`
    or `extern` token anywhere in the proof tree outside comments.
-4. Nothing outside `Leanux/Spikes/` imports `Leanux.Spikes`, and `WindowSpike`
-   is not a default lake target (the mirror's fast gate stays the mirror's).
+4. Nothing outside `Leanux/Proofs/` imports `Leanux.Proofs`, the root
+   `Leanux/Proofs.lean` imports every result's `Statements` module (so a new
+   result cannot be left out of the build), and `LeanuxProofs` is not a
+   default lake target (the mirror's fast gate stays the mirror's).
 """
 import os
 import re
@@ -25,9 +27,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SPIKES = ROOT / 'Leanux' / 'Spikes'
-STATEMENTS = SPIKES / 'Statements.lean'
-REFINEMENT = SPIKES / 'Refinement.lean'
+PROOFS = ROOT / 'Leanux' / 'Proofs'
+PROOFS_ROOT = ROOT / 'Leanux' / 'Proofs.lean'
+TARGET = 'LeanuxProofs'
 PERMITTED = {'propext', 'Classical.choice', 'Quot.sound'}
 FORBIDDEN = re.compile(r'\b(sorry|admit|axiom|native_decide|unsafe|implemented_by|extern)\b')
 DECL = re.compile(r'^(?:theorem|lemma|def|abbrev|instance)\s+([A-Za-z_][\w\'.]*)')
@@ -89,25 +91,34 @@ def namespace_of(path):
     return names[0]
 
 
+def module_name(path):
+    return '.'.join(path.relative_to(ROOT).with_suffix('').parts)
+
+
+def statement_files():
+    files = sorted(PROOFS.rglob('Statements.lean'))
+    if not files:
+        raise SystemExit(f'no Statements.lean under {PROOFS.relative_to(ROOT)}')
+    return files
+
+
 def terminal_statements():
-    ns = namespace_of(STATEMENTS)
-    names = [f'{ns}.{m.group(1)}' for line in STATEMENTS.read_text().splitlines() if (m := DECL.match(line))]
-    if not names:
-        raise SystemExit(f'{STATEMENTS.relative_to(ROOT)} declares nothing the gate recognises')
-    rns = namespace_of(REFINEMENT)
-    wanted = ['S2', 'S2_acceptance', 'S2_update']
-    found = {m.group(1) for line in REFINEMENT.read_text().splitlines() if (m := DECL.match(line))}
-    missing = [w for w in wanted if w not in found]
-    if missing:
-        raise SystemExit(f'{REFINEMENT.relative_to(ROOT)} lacks {missing}')
-    return names + [f'{rns}.{w}' for w in wanted]
+    """Every declaration of every result's Statements.lean, fully qualified."""
+    names = []
+    for path in statement_files():
+        ns = namespace_of(path)
+        found = [f'{ns}.{m.group(1)}' for line in path.read_text().splitlines() if (m := DECL.match(line))]
+        if not found:
+            raise SystemExit(f'{path.relative_to(ROOT)} declares nothing the gate recognises')
+        names.extend(found)
+    return names
 
 
 def check_build():
-    print('[1/4] lake build WindowSpike', flush=True)
-    result = subprocess.run(capped(['lake', 'build', 'WindowSpike']), cwd=ROOT)
+    print(f'[1/4] lake build {TARGET}', flush=True)
+    result = subprocess.run(capped(['lake', 'build', TARGET]), cwd=ROOT)
     if result.returncode != 0:
-        fail(f'lake build WindowSpike exited {result.returncode}')
+        fail(f'lake build {TARGET} exited {result.returncode}')
 
 
 def check_axioms(names):
@@ -115,7 +126,7 @@ def check_axioms(names):
     artifacts = Path(os.environ.get('LEANUX_ARTIFACTS', ROOT / '.artifacts')) / 'proof-gate'
     artifacts.mkdir(parents=True, exist_ok=True)
     scratch = artifacts / 'axioms.lean'
-    scratch.write_text('import Leanux.Spikes.Statements\nimport Leanux.Spikes.Refinement\n'
+    scratch.write_text(''.join(f'import {module_name(path)}\n' for path in statement_files())
                        + ''.join(f'#print axioms {name}\n' for name in names))
     result = subprocess.run(['lake', 'env', 'lean', str(scratch)], cwd=ROOT, capture_output=True, text=True)
     (artifacts / 'axioms.out').write_text(result.stdout + result.stderr)
@@ -158,9 +169,9 @@ def check_axioms(names):
 
 def check_tokens():
     print('[3/4] forbidden tokens in the proof tree', flush=True)
-    files = sorted(SPIKES.rglob('*.lean'))
-    if not files:
-        fail(f'no .lean files under {SPIKES.relative_to(ROOT)}')
+    files = [PROOFS_ROOT] + sorted(PROOFS.rglob('*.lean'))
+    if len(files) < 2:
+        fail(f'no .lean files under {PROOFS.relative_to(ROOT)}')
     for path in files:
         for number, line in enumerate(strip_comments(path.read_text()).splitlines(), 1):
             for m in FORBIDDEN.finditer(line):
@@ -168,21 +179,30 @@ def check_tokens():
 
 
 def check_imports():
-    print('[4/4] imports of the proof tree and the default targets', flush=True)
+    print('[4/4] imports of the proof tree, the root, and the default targets', flush=True)
     skip = {'.lake', '.artifacts', '.tmp', '.worktrees', '.cache', '.deps', '.tools'}
     for path in sorted(ROOT.rglob('*.lean')):
         rel = path.relative_to(ROOT)
-        if rel.parts[0] in skip or rel.parts[:2] == ('Leanux', 'Spikes'):
+        if rel.parts[0] in skip or rel.parts[:2] == ('Leanux', 'Proofs') or path == PROOFS_ROOT:
             continue
         for number, line in enumerate(path.read_text().splitlines(), 1):
-            if re.match(r'^import\s+Leanux\.Spikes(\.|\s|$)', line):
+            if re.match(r'^import\s+Leanux\.Proofs(\.|\s|$)', line):
                 fail(f'{rel}:{number} imports the proof tree')
+    if not PROOFS_ROOT.exists():
+        fail(f'{PROOFS_ROOT.relative_to(ROOT)} is missing')
+    else:
+        imported = {line.split()[1] for line in PROOFS_ROOT.read_text().splitlines() if line.startswith('import ')}
+        for path in statement_files():
+            if module_name(path) not in imported:
+                fail(f'{PROOFS_ROOT.relative_to(ROOT)} does not import {module_name(path)}')
     lakefile = (ROOT / 'lakefile.toml').read_text()
     m = re.search(r'^defaultTargets\s*=\s*\[([^\]]*)\]', lakefile, re.M)
     if not m:
         fail('lakefile.toml has no defaultTargets line')
-    elif 'WindowSpike' in m.group(1):
-        fail('WindowSpike is a default lake target')
+    elif TARGET in m.group(1):
+        fail(f'{TARGET} is a default lake target')
+    if not re.search(r'^name\s*=\s*"' + TARGET + r'"\s*$', lakefile, re.M):
+        fail(f'lakefile.toml declares no lean_lib named {TARGET}')
 
 
 def main():
