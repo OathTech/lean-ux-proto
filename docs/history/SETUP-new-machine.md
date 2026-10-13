@@ -3,7 +3,11 @@
 > Historical migration notes. For current setup and run commands, use
 > [Setup and first run](../REPRODUCING.md). The machine inventory, branch
 > status, kernel identities and expected counts below describe the migration
-> in October 2026 and are not current setup instructions.
+> in October 2026 and are not current setup instructions: the approved oracle
+> has moved on (the identity file names it), the check now verifies the
+> identity itself, the proof tree and its gate did not exist, and the test
+> and trace counts have grown. [docs/README.md](README.md) indexes the
+> current documents.
 
 This guide takes a fresh machine to a verified copy of the project:
 - the approved D3 oracle kernel, identity `8744fcc4…`;
@@ -135,7 +139,7 @@ were not run.
 
 ```sh
 # On the old machine (read-only for the repository; writes one file outside it):
-git -C /home/dev/projects/lean-ux-proto bundle create /tmp/lean-ux-proto.bundle --branches
+git -C <main checkout> bundle create /tmp/lean-ux-proto.bundle --branches
 git bundle verify /tmp/lean-ux-proto.bundle
 
 # On the new machine, after cloning from GitHub:

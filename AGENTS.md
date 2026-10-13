@@ -29,11 +29,14 @@ Matching only syscall results is insufficient. The design rules are in section
 3 of [the way-forward plan](docs/2026-09-29-way-forward.md) and in
 [the choice-stream strategy](docs/2026-10-03-choice-stream-strategy.md).
 
-The current target is complete coverage of single-CPU WireGuard, stopping at
-WireGuard's boundary (the IP stack only where WireGuard's paths or observables
-depend on it), with pipes as the scale test. A gap is excluded only for a
-profound reason, recorded in the design doc. The stage order and the work on
-branches are in [the pause-state note](docs/2026-10-08-pause-state.md).
+The mirror covers single-CPU WireGuard, stopping at WireGuard's boundary (the
+IP stack only where WireGuard's paths or observables depend on it), with
+pipes, eventfd and epoll over the file-descriptor slice; seccomp is being
+integrated. A gap is excluded only for a profound reason, recorded in the
+design doc. The next targets and the proof campaign are recorded in
+[docs/decisions.md](docs/decisions.md) and
+[the campaign charter](docs/2026-10-13-charter-proof-campaign.md); the dated
+documents are indexed in [docs/README.md](docs/README.md).
 
 Theorems live only in the proof tree, `Leanux/Proofs/`, its own lake target
 `LeanuxProofs` outside the default build; its map and its register of
@@ -75,7 +78,7 @@ LEANUX_KERNEL_PROFILE=net-choice capped -m 64G -- scripts/in-bundle scripts/buil
 ```
 
 Point `LEANUX_KERNEL_DIR` at the approved oracle build (an absolute path, for
-example `.artifacts/kernel-net-choice-d3` in the main checkout). The check and
+example `.artifacts/kernel-net-choice-e2` in the main checkout). The check and
 every guest boot compare the build's identity with
 `kernel/identity-x86_64-net-choice.txt` and refuse any other build; a control
 kernel is named with `LEANUX_KERNEL_IDENTITY`.

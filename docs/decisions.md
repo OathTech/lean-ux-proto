@@ -103,7 +103,7 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   a milestone; no unrequested harness or guest changes during validation.
 - **2026-10-08 [USER]** The project pauses for the move to a new machine
   ([pause-state note](2026-10-08-pause-state.md),
-  [setup guide](SETUP-new-machine.md)).
+  [setup guide](history/SETUP-new-machine.md)).
 - **2026-10-08 [AGENT, coordinator]** Scope rulings under the boundary
   decision: MTU 0 and poll-budget exhaustion in scope; `ip_error`, suspend
   and the ICMPv4 identifier capture deferred; link flags in W8b dropped;
