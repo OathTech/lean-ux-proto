@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.Lifetimes.ReleaseInvariant
+import Leanux.Proofs.WG.Lifetimes.Ambient
 
 set_option maxHeartbeats 1000000
 set_option pp.structureInstances false
@@ -99,28 +100,32 @@ theorem keypairPutPrefix_erases (kp : Option KeypairId) (now : Bool) :
     | split
   all_goals simp_all
 
-theorem keypairGetPrefix_spec (P : IdentityView → Prop) (kp : Option KeypairId) :
-    MixedSpec P (keypairGetPrefix kp) (fun _ => P) := by
+theorem keypairGetPrefix_spec_ambient (c : AmbientContracts I) (P : IdentityView → Prop) (kp : Option KeypairId) :
+    AmbientSpec I P (keypairGetPrefix kp) (fun _ => P) := by
   unfold keypairGetPrefix
-  apply PrefixEnsures.bind (mixed_branch P _ _)
+  apply PrefixEnsures.bind (c.branch P _ _)
   intro isNull
   split
-  · exact mixed_pure P _
+  · exact c.pure P _
   · cases kp with
     | some id =>
-      apply PrefixEnsures.bind (mixed_getKeypair P id)
+      apply PrefixEnsures.bind (c.getKeypair P id)
       intro k
       let Q := fun s : IdentityView => P s ∧ s.2.1 id = some k.internalId
-      apply PrefixEnsures.bind (mixed_kernel Q _ (refcountIncNotZero_sameKernel _))
+      apply PrefixEnsures.bind (c.kernel Q _ (refcountIncNotZero_sameKernel _))
       intro nz
-      apply PrefixEnsures.bind (mixed_branch Q _ _)
+      apply PrefixEnsures.bind (c.branch Q _ _)
       intro zero
       split
-      · exact (mixed_pure Q none).consequence (fun _ _ hi => hi) (fun _ _ _ hi => ⟨hi.1, hi.2.1⟩)
-      · apply PrefixEnsures.bind (mixed_setKeypair P id {k with refcount := k.refcount + 1})
+      · exact (c.pure Q none).consequence (fun _ _ hi => hi) (fun _ _ _ hi => ⟨hi.1, hi.2.1⟩)
+      · apply PrefixEnsures.bind (c.setKeypair P id {k with refcount := k.refcount + 1})
         intro _
-        exact mixed_pure P _
-    | none => exact mixed_invariant P _
+        exact c.pure P _
+    | none => exact c.invariant P _
+
+theorem keypairGetPrefix_spec (P : IdentityView → Prop) (kp : Option KeypairId) :
+    MixedSpec P (keypairGetPrefix kp) (fun _ => P) :=
+  keypairGetPrefix_spec_ambient mixedAmbient P kp
 
 theorem keypairPutPrefix_preserves (kp : Option KeypairId) (now : Bool) :
     PrefixPreserves ReleaseInv LifetimeEvent.Safe (keypairPutPrefix kp now) := by

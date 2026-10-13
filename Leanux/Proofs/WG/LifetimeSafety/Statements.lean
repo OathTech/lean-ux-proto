@@ -11,6 +11,7 @@ import Leanux.Proofs.WG.Lifetimes.DecryptWorker
 import Leanux.Proofs.WG.Lifetimes.ReleaseCalls
 import Leanux.Proofs.WG.Lifetimes.ReleaseAmbient
 import Leanux.Proofs.WG.Lifetimes.AllocationInitial
+import Leanux.Proofs.WG.Lifetimes.AllocationAmbient
 
 /-! R2's store-identity components: whole-operation keypair evolution,
 peer allocation/reference sequences, and packet primitive sequences within a device
@@ -600,5 +601,55 @@ theorem allocation_initial_fixture (rlimit : Nat) (net bare foreign stepped secc
     (w : World) (hw : w.k = Runner.initialKernel rlimit net bare foreign stepped seccompChild) :
     Lifetimes.AllocationInv [] w :=
   Lifetimes.allocation_initial rlimit net bare foreign stepped seccompChild w hw
+
+
+/-- The actual peer reference helpers retain allocation frontiers and released
+stamp bounds, as well as safe history. This does not cover peer creation or
+bulk device destruction. -/
+theorem peer_reference_allocation_preserves (id : PeerId) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.peerGetMixed id) ∧
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.peerPutMixed (some id)) :=
+  ⟨Lifetimes.peerGetMixed_allocation id, Lifetimes.peerPutMixed_allocation (some id)⟩
+
+/-- Finite sequences of the five original acquire/put/free/clear calls preserve
+AllocationInv on success and retain safe histories on every outcome. The
+existing exact erasure and event equations still apply, including refcount
+failures after writes. Allocation and lifecycle callers are separate families. -/
+theorem release_family_allocation_preserves (cs : List Lifetimes.ReleaseCall) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.ReleaseCall.observe cs) :=
+  Lifetimes.ReleaseCall.observe_preserves_allocation cs
+
+/-- Receive enqueue carries allocation metadata and history bounds through a
+callback that itself preserves AllocationInv. No identity-equality premise is
+imposed on the callback. -/
+theorem enqueue_allocation_access_preserves (irq : Lifetimes.MixedM Unit)
+    (hi : PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe irq)
+    (id : SkbId) (state : PacketState) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.enqueuePerPeerRxPrefix irq id state) :=
+  Lifetimes.enqueuePerPeerRxPrefix_allocation hi id state
+
+/-- Complete packet decryption preserves the allocation-aware invariant and
+retains safe error prefixes. Its observation and erasure definitions are the
+same as in the earlier mixed-access result. -/
+theorem decrypt_packet_allocation_access_preserves (pkt : RxPacket) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.decryptPacketPrefix pkt) :=
+  Lifetimes.decryptPacketPrefix_allocation pkt
+
+/-- One decrypt iteration carries AllocationInv through explicitly contracted
+callbacks. Concrete callback coverage, device epochs across destruction and
+creation, and whole-scheduler closure remain separate obligations. -/
+theorem decrypt_iteration_allocation_access_preserves (softirq irq : Lifetimes.MixedM Unit)
+    (resched : Lifetimes.MixedM Bool)
+    (hs : PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe softirq)
+    (hi : PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe irq)
+    (hr : PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe resched) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.decryptIterPrefix softirq irq resched) :=
+  Lifetimes.decryptIterPrefix_allocation hs hi hr
 
 end Leanux.Proofs.WG.LifetimeSafety

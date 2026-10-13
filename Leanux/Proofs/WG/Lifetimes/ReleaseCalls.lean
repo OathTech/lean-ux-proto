@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.Lifetimes.KeypairRelease
 import Leanux.Proofs.WG.Lifetimes.PacketRelease
+import Leanux.Proofs.WG.Lifetimes.ReleaseAmbient
 
 /-! The complete keypair-clear caller and finite sequences of the listed
 reference/free calls. Allocation, device teardown and scheduler closure are
@@ -14,14 +15,19 @@ theorem modifyPeerKeysPrefix_erases (pid : PeerId) (f : Peer → Peer) :
     ErasesPrefix (modifyPeerKeysPrefix pid f) (do setPeer pid (f (← getPeer pid))) :=
   erasesPrefix_bind (getPeerMixed_erases pid) (fun p => setPeerMixed_erases pid (f p))
 
-theorem modifyPeerKeysPrefix_spec (P : IdentityView → Prop) (pid : PeerId) (f : Peer → Peer)
+theorem modifyPeerKeysPrefix_spec_ambient (c : AmbientContracts I) (P : IdentityView → Prop) (pid : PeerId) (f : Peer → Peer)
     (hf : ∀ p, (f p).internalId = p.internalId) :
-    MixedSpec P (modifyPeerKeysPrefix pid f) (fun _ => P) := by
-  apply PrefixEnsures.bind (mixed_getPeer P pid)
+    AmbientSpec I P (modifyPeerKeysPrefix pid f) (fun _ => P) := by
+  apply PrefixEnsures.bind (c.getPeer P pid)
   intro p
-  exact (mixed_setPeer P pid (f p)).consequence
+  exact (c.setPeer P pid (f p)).consequence
     (fun _ _ hi => ⟨hi.1, hi.2.1, by simpa only [hf p] using hi.2.2⟩)
     (fun _ _ _ hi => hi)
+
+theorem modifyPeerKeysPrefix_spec (P : IdentityView → Prop) (pid : PeerId) (f : Peer → Peer)
+    (hf : ∀ p, (f p).internalId = p.internalId) :
+    MixedSpec P (modifyPeerKeysPrefix pid f) (fun _ => P) :=
+  modifyPeerKeysPrefix_spec_ambient mixedAmbient P pid f hf
 
 def keypairsClearPrefix (pid : PeerId) : MixedM Unit := do
   let old := (← getPeerMixed pid).keypairNext
@@ -60,29 +66,35 @@ theorem release_getPeer (pid : PeerId) :
   ((mixed_getPeer ReleaseUnique pid).consequence (fun _ _ hi => hi)
     (fun _ _ _ hi => ⟨hi.1, hi.2.1⟩)).preserves
 
-theorem keypairsClearPrefix_preserves (pid : PeerId) :
-    PrefixPreserves ReleaseInv LifetimeEvent.Safe (keypairsClearPrefix pid) := by
+theorem keypairsClearPrefix_preserves_ambient (c : AmbientContracts I)
+    (put : ∀ kp now, PrefixPreserves I LifetimeEvent.Safe (keypairPutPrefix kp now))
+    (pid : PeerId) :
+    PrefixPreserves I LifetimeEvent.Safe (keypairsClearPrefix pid) := by
   unfold keypairsClearPrefix
-  apply PrefixPreserves.bind (release_getPeer pid)
+  apply PrefixPreserves.bind (AmbientContracts.drop (c.getPeer (fun _ => True) pid))
   intro p
-  apply PrefixPreserves.bind ((modifyPeerKeysPrefix_spec ReleaseUnique pid
-    (fun p => {p with keypairNext := none}) (fun _ => rfl)).preserves)
+  apply PrefixPreserves.bind (AmbientContracts.drop (modifyPeerKeysPrefix_spec_ambient c (fun _ => True) pid
+    (fun p => {p with keypairNext := none}) (fun _ => rfl)))
   intro _
-  apply PrefixPreserves.bind (keypairPutPrefix_preserves p.keypairNext true)
+  apply PrefixPreserves.bind (put p.keypairNext true)
   intro _
-  apply PrefixPreserves.bind (release_getPeer pid)
+  apply PrefixPreserves.bind (AmbientContracts.drop (c.getPeer (fun _ => True) pid))
   intro p
-  apply PrefixPreserves.bind ((modifyPeerKeysPrefix_spec ReleaseUnique pid
-    (fun p => {p with keypairPrevious := none}) (fun _ => rfl)).preserves)
+  apply PrefixPreserves.bind (AmbientContracts.drop (modifyPeerKeysPrefix_spec_ambient c (fun _ => True) pid
+    (fun p => {p with keypairPrevious := none}) (fun _ => rfl)))
   intro _
-  apply PrefixPreserves.bind (keypairPutPrefix_preserves p.keypairPrevious true)
+  apply PrefixPreserves.bind (put p.keypairPrevious true)
   intro _
-  apply PrefixPreserves.bind (release_getPeer pid)
+  apply PrefixPreserves.bind (AmbientContracts.drop (c.getPeer (fun _ => True) pid))
   intro p
-  apply PrefixPreserves.bind ((modifyPeerKeysPrefix_spec ReleaseUnique pid
-    (fun p => {p with keypairCurrent := none}) (fun _ => rfl)).preserves)
+  apply PrefixPreserves.bind (AmbientContracts.drop (modifyPeerKeysPrefix_spec_ambient c (fun _ => True) pid
+    (fun p => {p with keypairCurrent := none}) (fun _ => rfl)))
   intro _
-  exact keypairPutPrefix_preserves p.keypairCurrent true
+  exact put p.keypairCurrent true
+
+theorem keypairsClearPrefix_preserves (pid : PeerId) :
+    PrefixPreserves ReleaseInv LifetimeEvent.Safe (keypairsClearPrefix pid) :=
+  keypairsClearPrefix_preserves_ambient releaseAmbient keypairPutPrefix_preserves pid
 
 /-- These constructors name complete original calls, not arbitrary mirror
 steps. Acquisition's optional result is discarded only by this sequence API. -/
