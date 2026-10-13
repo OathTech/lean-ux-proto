@@ -109,11 +109,13 @@ Linux. It rests on three gates, and only these block:
 - the kernel identity check, which refuses to boot any other build.
 
 The proof tree makes a separate claim and has its own gate, run at its
-claim points (a merge of the tree) and not on mirror commits: its build
-(`capped lake build WindowSpike`, about three minutes) and the axiom check,
-every statement printing exactly `propext`, `Classical.choice` and
-`Quot.sound` and the tree free of `sorry`, `admit`, `axiom`, `native_decide`,
-`unsafe`, `implemented_by` and `extern`.
+claim points (a merge of the tree) and not on mirror commits:
+`capped -- scripts/in-bundle scripts/proof-gate`, which builds `WindowSpike`
+(about three minutes), prints the axioms of every terminal statement and
+fails on any beyond `propext`, `Classical.choice` and `Quot.sound`, fails on
+`sorry`, `admit`, `axiom`, `native_decide`, `unsafe`, `implemented_by` or
+`extern` anywhere in the tree, and fails if anything outside the tree
+imports it or if `WindowSpike` is a default lake target.
 
 Everything else is a speedbump: cheap, run at claim points, never blocking
 intermediate work, built to catch honest drift and not adversarial attack:
