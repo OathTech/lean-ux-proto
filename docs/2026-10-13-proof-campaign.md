@@ -14,21 +14,21 @@ differential check or guest run.
 | Result | Progress |
 | --- | --- |
 | R1 anti-replay | Complete with the intentional inclusive-floor correction; recorded replay and independent review checked. Seccomp frame carry checked. |
-| R2 lifetime safety | Keypair operation endpoints, peer allocation/reference helpers, packet primitives, failure-retaining peer creation/release, mixed receive-enqueue/decrypt iteration, keypair/packet release families, and complete keypair/TX/RX allocation with fixture initialization, allocation-aware release/caller composition and complete session/rotation and peer-creation calls, plus stale-cursor finding checked; caller/lifecycle and whole-run internal-access coverage remain in progress. |
+| R2 lifetime safety | Keypair operation endpoints, peer allocation/reference helpers, packet primitives, failure-retaining peer creation/release, mixed receive-enqueue/decrypt iteration, keypair/packet release families, and complete keypair/TX/RX allocation with fixture initialization, allocation-aware release/caller composition and complete session/rotation, peer-creation and receive-entry calls, plus stale-cursor finding checked; caller/lifecycle and whole-run internal-access coverage remain in progress. |
 | R3 cryptokey routing | Original prefix arithmetic and total longest-prefix lookup over represented trees, pure insertion, original empty-root and arbitrary-depth empty-child insertion with sequence wrappers, and total original placement proved; general mutation/history and path refinements remain open. Path proofs follow R2. |
 | R4 delivery | Not started; drop characterisation waiting on W7 full-ring tier's explanation of the two drops. |
 | R5 key lifetime | Not started; time half waiting on review items 7 and 8 on the timer model. |
 | R6 flood resistance | Not started. |
 
-**Current validation.** The full proof gate passes 186 build jobs and 122
-terminal statements (ReplayWindow 15, R1 9, R2 78, R3 20), with only permitted
+**Current validation.** The full proof gate passes 189 build jobs and 127
+terminal statements (ReplayWindow 15, R1 9, R2 83, R3 20), with only permitted
 axioms. The default model build passes 60 jobs; the unit tier passes 93 tests
-in 21.273 seconds with one skip. Both explicit-record witness replays below
+in 21.237 seconds with one skip. Both explicit-record witness replays below
 were rechecked at the seccomp carry and agree with the original runner.
 Independent reviews cover peer creation, the seccomp carry, mixed enqueue,
 decrypt execution, keypair/packet releases, ambient caller composition,
 allocation and release-bound composition, session creation and rotation,
-the mixed peer-creation bridge, pure trie insertion, original empty-root and arbitrary-depth empty-child
+the mixed peer-creation bridge, receive entry, pure trie insertion, original empty-root and arbitrary-depth empty-child
 insertion with its wrapper, and placement.
 
 **Shared carry.** Signal/task and pipe helper frames, seccomp entry/tail frames
@@ -144,7 +144,8 @@ Every runner fixture initializes the invariant, and seccomp prefill preserves it
 
 The source-observed complete calls currently cover `peerCreate`, `peerGet`, `peerPut`, dump completion,
 keypair creation/acquisition/release/clearing/rotation/session creation, TX/RX
-allocation and free, receive enqueue, packet decryption and one decrypt-worker
+allocation and free, optional-peer/index/public-key lookup, complete receive
+enqueue and `consumeData`, packet decryption and one decrypt-worker
 iteration. Finite release-call families compose them. Generic enqueue/decrypt
 contracts admit explicit observed softirq, IRQ-exit and rescheduling callbacks;
 they are instantiated at the allocation invariant. Peer creation reuses its
@@ -156,13 +157,16 @@ Exact event equations cover pending-worker and refcount failures, including
 writes before zero-refcount rejection and releases only after successful final
 puts. Conditional whole-call equations retain six events before session birthdate
 clock failure, and allocation/write before peer initialization's first cache
-clock failure. These equations are not accepted-run witnesses. Coverage is
+clock failure. Receive queue-record failure retains exactly five accesses,
+including the packet setter's nested read. These equations are not accepted-run
+witnesses. Lookup preserves the first matching index's exit even if its kind is
+wrong; receive entry preserves the ENOSPC Stop and EPIPE's pure callback. Coverage is
 checked against actual source calls; erasure or an unchanged-Kernel theorem
 cannot certify that a lifted helper contains no reads. Shared filesystem frames
 also end at return, leaving queued task work for its later caller proof.
 
 **Remaining claim.** Full caller, device-lifecycle and scheduler closure remain
-unproved. Receive entry, completion/poll, TX, handshake/timer callers, peer
+unproved. Receive completion/poll, TX, handshake/timer callers, peer
 removal, netlink and direct resident scans need coverage. Saved scalar-reference
 ownership is a separate obligation: aliased or dangling IDs may legitimately
 stop after earlier safe accesses. No distinct-keypair-slot premise is hidden in
@@ -197,7 +201,8 @@ capped -- scripts/in-bundle scripts/proof-gate
 
 **Effort and review.** Reproduction takes under one second. The main caller
 checkpoints took roughly 6–25 minutes each, with 4–19 compile passes; the latest
-peer-creation bridge took nine passes over 10.44 minutes. Counts and failed
+receive-entry checkpoint took eight passes over 19m34s (six elaboration
+failures, then targeted and full builds passing). Counts and failed
 passes are retained in the checkpoint history; current validation is above.
 Failures were proof elaboration/simplification failures, not passes or mirror
 findings. One earlier tactic loop was stopped by its verified PID and repaired.

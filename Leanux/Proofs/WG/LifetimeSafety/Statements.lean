@@ -14,6 +14,7 @@ import Leanux.Proofs.WG.Lifetimes.AllocationInitial
 import Leanux.Proofs.WG.Lifetimes.AllocationAmbient
 import Leanux.Proofs.WG.Lifetimes.SessionFailure
 import Leanux.Proofs.WG.Lifetimes.PeerAllocationFailure
+import Leanux.Proofs.WG.Lifetimes.ReceiveEntryFailure
 
 /-! R2's store-identity components: whole-operation keypair evolution,
 peer allocation/reference sequences, and packet primitive sequences within a device
@@ -757,5 +758,81 @@ theorem peer_create_cache_clock_failure_prefix (key : Key) (psk : Option Key)
         .peer (.write d.nextPeer (entry.k.peerCounter + 1))]) :=
   Lifetimes.peerCreateMixed_cache_clock_failure key psk w guarded allocated reserved entry d h e
     hdev hfull halloc hmem hcache ha hc hclock
+
+/-- Complete optional-peer acquisition and scalar index/public-key lookup
+recover the original result, Stop, and successful World on every input.
+Index lookup stops at the first equal index even when its kind is rejected. -/
+theorem receive_lookup_access_erasure (peer : Option PeerId) (kinds : List IndexKind)
+    (index : Nat) (key : Key) :
+    ErasesPrefix (Lifetimes.peerGetMaybeZeroPrefix peer) (peerGetMaybeZero peer) ∧
+    ErasesPrefix (Lifetimes.indexLookupPrefix kinds index) (indexLookup kinds index) ∧
+    ErasesPrefix (Lifetimes.pubkeyLookupPrefix key) (pubkeyLookup key) :=
+  ⟨Lifetimes.peerGetMaybeZeroPrefix_erases peer,
+    Lifetimes.indexLookupPrefix_erases kinds index, Lifetimes.pubkeyLookupPrefix_erases key⟩
+
+/-- Lookup retains safe resolved-store access prefixes on every outcome and
+preserves AllocationInv on success. No scalar-index consistency or ownership
+premise is required or established. -/
+theorem receive_lookup_allocation_access_preserves (peer : Option PeerId)
+    (kinds : List IndexKind) (index : Nat) (key : Key) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.peerGetMaybeZeroPrefix peer) ∧
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.indexLookupPrefix kinds index) ∧
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.pubkeyLookupPrefix key) :=
+  ⟨Lifetimes.AmbientContracts.drop
+      (Lifetimes.peerGetMaybeZeroPrefix_spec_ambient Lifetimes.allocationAmbient (fun _ => True) peer),
+    Lifetimes.indexLookupPrefix_preserves_ambient Lifetimes.allocationAmbient kinds index,
+    Lifetimes.pubkeyLookupPrefix_preserves_ambient Lifetimes.allocationAmbient key⟩
+
+/-- Complete device/peer receive enqueue and consumeData preserve the original
+outcomes and successful Worlds after erasure. This includes the ENOSPC
+invariant Stop and the EPIPE dead-packet enqueue with its original pure callback. -/
+theorem receive_entry_access_erasure (id : SkbId) (msg : List UInt8)
+    (src : SkbSource) (ds : Nat) :
+    ErasesPrefix (Lifetimes.enqueuePerDeviceAndPeerRxPrefix id) (enqueuePerDeviceAndPeerRx id) ∧
+    ErasesPrefix (Lifetimes.consumeDataPrefix msg src ds) (consumeData msg src ds) :=
+  ⟨Lifetimes.enqueuePerDeviceAndPeerRxPrefix_erases id,
+    Lifetimes.consumeDataPrefix_erases msg src ds⟩
+
+/-- Both complete receive-entry calls retain safe access histories on failure
+and AllocationInv on success. This is resolved-store lifetime safety, not
+packet delivery, reference ownership, lifecycle, or whole-scheduler closure. -/
+theorem receive_entry_allocation_access_preserves (id : SkbId) (msg : List UInt8)
+    (src : SkbSource) (ds : Nat) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.enqueuePerDeviceAndPeerRxPrefix id) ∧
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.consumeDataPrefix msg src ds) :=
+  ⟨Lifetimes.enqueuePerDeviceAndPeerRxPrefix_allocation id,
+    Lifetimes.consumeDataPrefix_allocation msg src ds⟩
+
+/-- A conditional whole-call equation for device-work queue-record failure:
+the original-run premises, including the setter's nested getter, determine
+five retained accesses. This is not a recorded runner reproduction. -/
+theorem receive_enqueue_queue_failure_prefix (id : SkbId)
+    (w marked checked queued selected cpuSet queueEntry : World)
+    (h : List Lifetimes.LifetimeEvent) (initial pkt : RxPacket) (p : Peer) (d : Device)
+    (cpu : Int) (e : Stop)
+    (hfirst : (getRxSkb id).run w = .ok (initial, w))
+    (hmark : (setRxSkb id fun p => {p with state := .uncrypted}).run w = .ok ((), marked))
+    (hpacket : (getRxSkb id).run marked = .ok (pkt, marked))
+    (hpeer : (getPeer pkt.peer).run marked = .ok (p, marked))
+    (hfull : (branch .enqueuePeerQueueFull (p.rxQueue.count ≥ MAX_QUEUED_PACKETS)).run marked =
+      .ok (false, checked))
+    (hwrite : (setPeer pkt.peer {p with rxQueue := p.rxQueue.enqueue id}).run checked = .ok ((), queued))
+    (hdev : getDev.run queued = .ok (d, queued))
+    (hcpu : (cpumaskNextOnlineFrom d.decryptLastCpu).run queued = .ok (cpu, selected))
+    (hset : (modifyDev fun d => {d with decryptLastCpu := cpu}).run selected = .ok ((), cpuSet))
+    (hring : (branch .enqueueRingFull d.decryptQueue.full).run cpuSet = .ok (false, queueEntry))
+    (hqueue : (queueDeviceWork .decryptWorker).run queueEntry = .error e) :
+    runPrefix (Lifetimes.enqueuePerDeviceAndPeerRxPrefix id) w h =
+      (.error e, h ++ [.packet (.read (.inr id) (Lifetimes.packetStamp w id)),
+        .packet (.write (.inr id) (Lifetimes.packetStamp w id)),
+        .packet (.read (.inr id) (Lifetimes.packetStamp marked id)),
+        .peer (.read pkt.peer p.internalId), .peer (.write pkt.peer p.internalId)]) :=
+  Lifetimes.enqueuePerDeviceAndPeerRxPrefix_queue_failure id w marked checked queued selected cpuSet queueEntry
+    h initial pkt p d cpu e hfirst hmark hpacket hpeer hfull hwrite hdev hcpu hset hring hqueue
 
 end Leanux.Proofs.WG.LifetimeSafety
