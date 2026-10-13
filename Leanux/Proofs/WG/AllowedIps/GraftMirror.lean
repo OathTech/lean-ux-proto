@@ -114,6 +114,242 @@ def graftInstalled (d : WG.Device) (v4 : Bool) (id : Nat) (old : WG.AipNode)
   else graftTwo d v4 id old addr cidr pid split p
 
 
+/-- The original final recorded root/parent choice, shared by both graft arms. -/
+def finishGraft (decision : Decision) (root : WG.Slot) (placed : Option Nat) (id : Nat) : M Int := do
+  if ← branch decision placed.isNone then WG.connectNode root id
+  else if let some parent := placed then WG.chooseAndConnectNode parent id
+  return 0
+
+/-- The exact source suffix after a nonempty node below placement is known. -/
+def graftTail (root : WG.Slot) (bits key cidr : Nat) (placed : Option Nat)
+    (newnode downId : Nat) : M Int := do
+  let common ← WG.commonBits (← WG.getNode downId) key bits
+  let cidr := min cidr common
+  if ← branch .addNewnodeCoversDown ((← WG.getNode newnode).cidr == cidr) then
+    WG.chooseAndConnectNode newnode downId
+    return ← finishGraft .addNewnodeAtRoot root placed newnode
+  let nodeAlloc ← WG.allocNode .allocNode234 (WG.newNode (← WG.getNode newnode).bits cidr bits none)
+  if ← branch .addIntermediateNoMem nodeAlloc.isNone then
+    WG.listDel newnode
+    WG.freeNode newnode
+    return -ENOMEM
+  let some node := nodeAlloc | invariant "unreachable"
+  WG.chooseAndConnectNode node downId
+  WG.chooseAndConnectNode node newnode
+  finishGraft .addIntermediateAtRoot root placed node
+
+open WG in
+def addWithTail (root : Slot) (bits key cidr : Nat) (peer : Option PeerId) : M Int := do
+  -- `unlikely(cidr > bits || !peer)`
+  if ← branchCmp .addCidrTooLong (cidr > bits) cidr bits then return -EINVAL
+  if ← branch .addNoPeer peer.isNone then return -EINVAL
+  let some pid := peer | invariant "unreachable"
+  let trie ← slotGet root
+  if ← branch .addEmptyTrie trie.isNone then
+    let some id ← (do
+        let r ← allocNode .allocNode190 (newNode key cidr bits (some pid))
+        if ← branch .addRootNoMem r.isNone then return none
+        pure r) | return -ENOMEM
+    listAddTail pid id
+    connectNode root id
+    return 0
+  let (placed, exact) ← nodePlacement trie key cidr bits
+  if ← branch .addExact exact then
+    let some id := placed | invariant "exact placement without a node"
+    setNode id { (← getNode id) with peer := some pid }
+    listDel id              -- list_move_tail
+    listAddTail pid id
+    return 0
+  let newnodeAlloc ← allocNode .allocNode205 (newNode key cidr bits (some pid))
+  if ← branch .addNewnodeNoMem newnodeAlloc.isNone then return -ENOMEM
+  let some newnode := newnodeAlloc | invariant "unreachable"
+  listAddTail pid newnode
+  let down ← do
+    if ← branch .addNoParentNode placed.isNone then slotGet root
+    else
+      let some node := placed | invariant "unreachable"
+      let bit ← choose (← getNode node) key
+      let down ← (← getNode node).bitAt bit
+      if ← branch .addNoDown down.isNone then
+        connectNode (.child node bit) newnode
+        return 0
+      pure down
+  let some downId := down | invariant "add: no node below the placement"
+  graftTail root bits key cidr placed newnode downId
+
+/-- Exact source equality retains all original prefix choices and Stops. -/
+theorem addWithTail_eq (root : WG.Slot) (bits key cidr : Nat) (peer : Option Nat) :
+    addWithTail root bits key cidr peer = WG.add root bits key cidr peer := by
+  rfl
+
+def graftOneReady (d : WG.Device) (v4 : Bool) (id : Nat) (old : WG.AipNode)
+    (addr cidr pid : Nat) (p : WG.Peer) : WG.Device :=
+  connectedChild (graftListed d (rootWidth v4) addr cidr pid p) d.nextNode
+    (bit (rootWidth v4) cidr old.bits) id (WG.newNode addr cidr (rootWidth v4) (some pid)) old
+
+def graftOneHead (v4 : Bool) (id : Nat) (old : WG.AipNode) (addr cidr pid : Nat) : WG.AipNode :=
+  let leaf := WG.newNode addr cidr (rootWidth v4) (some pid)
+  { leaf with bit := leaf.bit.set! (bit (rootWidth v4) cidr old.bits) (some id) }
+
+def graftTwoReady (d : WG.Device) (v4 : Bool) (id : Nat) (old : WG.AipNode)
+    (addr cidr pid split : Nat) (p : WG.Peer) : WG.Device :=
+  let leaf := WG.newNode addr cidr (rootWidth v4) (some pid)
+  let mid := WG.newNode addr split (rootWidth v4) none
+  let sd := bit (rootWidth v4) split old.bits
+  let sn := bit (rootWidth v4) split addr
+  let a := allocated (graftListed d (rootWidth v4) addr cidr pid p) mid
+  let b := connectedChild a (d.nextNode + 1) sd id mid old
+  connectedChild b (d.nextNode + 1) sn d.nextNode { mid with bit := mid.bit.set! sd (some id) } leaf
+
+def graftTwoHead (d : WG.Device) (v4 : Bool) (id : Nat) (old : WG.AipNode)
+    (addr split : Nat) : WG.AipNode :=
+  let mid := WG.newNode addr split (rootWidth v4) none
+  { mid with bit := (mid.bit.set! (bit (rootWidth v4) split old.bits) (some id)).set! (bit (rootWidth v4) split addr) (some d.nextNode) }
+
+theorem finishGraft_root_wp (k : Kernel) (d : WG.Device) (hd : k.wg = some d)
+    (decision : Decision) (v4 : Bool) (id : Nat) (n : WG.AipNode) (hn : d.nodes[id]? = some n) :
+    ⦃fun w => ⌜w.k = k⌝⦄ finishGraft decision (rootSlot v4) none id
+    ⦃⇓ x w => ⌜x = 0 ∧ w.k = { k with wg := some (connectedRoot d v4 id n) }⌝⦄ := by
+  have h := connectNode_root_wp k d hd v4 id n hn
+  mvcgen [finishGraft, branch, h]
+  all_goals simp_all [connectedRoot]
+
+theorem finishGraft_child_wp (k : Kernel) (d : WG.Device) (hd : k.wg = some d)
+    (decision : Decision) (root : WG.Slot) (parent id : Nat) (pn n : WG.AipNode)
+    (hp : d.nodes[parent]? = some pn) (hn : d.nodes[id]? = some n)
+    (hne : id ≠ parent) (hc : pn.cidr < pn.bitlen) :
+    ⦃fun w => ⌜w.k = k⌝⦄ finishGraft decision root (some parent) id
+    ⦃⇓ x w => ⌜x = 0 ∧ w.k = { k with wg := some (connectedChild d parent (bit pn.bitlen pn.cidr n.bits) id pn n) }⌝⦄ := by
+  have h := chooseAndConnectNode_wp k d hd parent id pn n hp hn hne hc
+  mvcgen [finishGraft, branch, h]
+  all_goals simp_all
+
+theorem graftTail_wp (k : Kernel) (d : WG.Device) (v4 : Bool)
+    (id : Nat) (old : WG.AipNode) (addr cidr pid : Nat) (p : WG.Peer) (placed : Option Nat)
+    (hn : d.nodes[id]? = some old) (hid : id < d.nextNode)
+    (hs : min cidr (common (rootWidth v4) old.bits addr) < rootWidth v4)
+    (outOne outTwo : WG.Device)
+    (hfinishOne : ⦃fun w => ⌜w.k = { k with wg := some (graftOneReady d v4 id old addr cidr pid p) }⌝⦄
+      finishGraft .addNewnodeAtRoot (rootSlot v4) placed d.nextNode
+      ⦃⇓ x w => ⌜x = 0 ∧ w.k = { k with wg := some outOne }⌝⦄)
+    (hfinishTwo : ⦃fun w => ⌜w.k = { k with wg := some (graftTwoReady d v4 id old addr cidr pid
+          (min cidr (common (rootWidth v4) old.bits addr)) p) }⌝⦄
+      finishGraft .addIntermediateAtRoot (rootSlot v4) placed (d.nextNode+1)
+      ⦃⇓ x w => ⌜x = 0 ∧ w.k = { k with wg := some outTwo }⌝⦄) :
+    ⦃fun w => ⌜w.k = { k with wg := some (graftListed d (rootWidth v4) addr cidr pid p) }⌝⦄
+      graftTail (rootSlot v4) (rootWidth v4) addr cidr placed d.nextNode id
+    ⦃⇓? result w => ⌜(result = -ENOMEM ∧ w.k = k) ∨
+      (result = -ENOMEM ∧ min cidr (common (rootWidth v4) old.bits addr) ≠ cidr ∧
+        w.k = { k with wg := some (graftRolledBack d (rootWidth v4) addr cidr pid p) }) ∨
+      (result = 0 ∧ w.k = { k with wg := some (if min cidr (common (rootWidth v4) old.bits addr) = cidr then outOne else outTwo) })⌝⦄ := by
+  have hw : rootWidth v4 = 32 ∨ rootWidth v4 = 128 := by cases v4 <;> simp [rootWidth]
+  let leaf := WG.newNode addr cidr (rootWidth v4) (some pid)
+  let dl := graftListed d (rootWidth v4) addr cidr pid p
+  let kl : Kernel := { k with wg := some dl }
+  have hne : d.nextNode ≠ id := Nat.ne_of_gt hid
+  have hnl : dl.nodes[id]? = some old := by
+    simp [dl, graftListed, allocated, Std.TreeMap.getElem?_insert, hne, hn]
+  have hg := getNode_wp kl dl id old rfl hnl
+  mvcgen [graftTail, hg, branch, invariant]
+  all_goals try assumption
+  obtain ⟨hold, holdFrame⟩ := (show _ = old ∧ _ = kl from by assumption)
+  cases hold
+  have hcommon := commonBits_wp kl old addr (rootWidth v4) hw
+  mvcgen [hcommon]
+  all_goals try exact holdFrame
+  obtain ⟨hcommonValue, hcommonFrame⟩ := (show _ = common (rootWidth v4) old.bits addr ∧ _ = kl from by assumption)
+  cases hcommonValue
+  let leaf := WG.newNode addr cidr (rootWidth v4) (some pid)
+  have hleaf : dl.nodes[d.nextNode]? = some leaf := by simp [dl, graftListed, allocated, leaf]
+  have hglf := getNode_wp kl dl d.nextNode leaf rfl hleaf
+  mvcgen [hglf, branch, invariant]
+  all_goals try exact hcommonFrame
+  all_goals try exact (show _ = leaf ∧ _ = kl from by assumption).2
+  all_goals obtain ⟨hleafValue, hleafFrame⟩ := (show _ = leaf ∧ _ = kl from by assumption)
+  all_goals cases hleafValue
+  all_goals try dsimp only [leaf, WG.newNode] at *
+  all_goals try
+    obtain ⟨hprev, hprevFrame⟩ := (show _ = leaf ∧ _ = kl from by assumption)
+    cases hprev
+  all_goals try dsimp only [leaf, WG.newNode] at *
+  · have he : min cidr (common (rootWidth v4) old.bits addr) = cidr := by grind
+    have hconn := chooseAndConnectNode_wp kl dl rfl d.nextNode id leaf old hleaf hnl
+      (Ne.symm hne) (by change cidr < rootWidth v4; omega)
+    mvcgen [hconn]
+    all_goals try exact hleafFrame
+    intro currentConn hconnFrame
+    let side := bit (rootWidth v4) cidr old.bits
+    let dc := connectedChild dl d.nextNode side id leaf old
+    let kc : Kernel := { k with wg := some dc }
+    have hnc : dc.nodes[d.nextNode]? = some { leaf with bit := leaf.bit.set! side (some id) } := by
+      simp [dc, connectedChild]
+    mvcgen [hfinishOne]
+    all_goals try exact hconnFrame
+    all_goals try dsimp only at *
+    all_goals simp_all [if_pos he, graftOneReady]
+  · have he : min cidr (common (rootWidth v4) old.bits addr) ≠ cidr := by grind
+    let split := min cidr (common (rootWidth v4) old.bits addr)
+    let mid := WG.newNode addr split (rootWidth v4) none
+    have halloc2 := allocNode_wp kl dl rfl .allocNode234 mid
+    simp only [mid, WG.newNode] at halloc2
+    mvcgen [halloc2, branch, invariant]
+    all_goals try exact hleafFrame
+    all_goals try dsimp only at *
+    all_goals try simp_all
+    · rename_i hNoFrame
+      have hdel := listDel_wp kl dl rfl d.nextNode
+      mvcgen [hdel]
+      all_goals try exact hNoFrame
+      intro currentDel hdelFrame
+      let dr := unlisted dl d.nextNode
+      let kr : Kernel := { k with wg := some dr }
+      let leaf := WG.newNode addr cidr (rootWidth v4) (some pid)
+      have hnr : dr.nodes[d.nextNode]? = some leaf := hleaf
+      have hfree := freeNode_wp kr dr rfl d.nextNode leaf hnr
+      mvcgen [hfree]
+      all_goals try dsimp +zetaDelta only at *
+      all_goals simp_all [graftRolledBack, he]
+    · let mid := WG.newNode addr split (rootWidth v4) none
+      obtain ⟨hmId, hYesFrame⟩ := (show _ = dl.nextNode ∧ _ = { kl with wg := some (allocated dl mid) } from by assumption)
+      change _ = d.nextNode + 1 at hmId
+      cases hmId
+      simp only [show dl.nextNode = d.nextNode + 1 from rfl]
+      let dm := allocated dl mid
+      let km : Kernel := { k with wg := some dm }
+      have hmid : dm.nodes[d.nextNode + 1]? = some mid := by simp [dm, allocated, dl, graftListed]
+      have hne2 : d.nextNode + 1 ≠ id := Nat.ne_of_gt (Nat.lt_trans hid (Nat.lt_succ_self _))
+      have hdown : dm.nodes[id]? = some old := by
+        simp [dm, allocated, dl, graftListed, Std.TreeMap.getElem?_insert, hne, hn, hne2]
+      have hconn1 := chooseAndConnectNode_wp km dm rfl (d.nextNode + 1) id mid old hmid hdown
+        (Ne.symm hne2) hs
+      mvcgen [hconn1]
+      all_goals try exact hYesFrame
+      intro currentConn1 hconn1Frame
+      let sd := bit (rootWidth v4) split old.bits
+      let sn := bit (rootWidth v4) split addr
+      let mid' := { mid with bit := mid.bit.set! sd (some id) }
+      let dc := connectedChild dm (d.nextNode + 1) sd id mid old
+      let kc : Kernel := { k with wg := some dc }
+      have hmid' : dc.nodes[d.nextNode + 1]? = some mid' := by simp [dc, connectedChild, mid']
+      let leaf := WG.newNode addr cidr (rootWidth v4) (some pid)
+      have hleaf' : dc.nodes[d.nextNode]? = some leaf := by
+        simp [dc, connectedChild, dm, allocated, dl, graftListed, Std.TreeMap.getElem?_insert,
+          Ne.symm hne, Nat.ne_of_gt (Nat.lt_succ_self d.nextNode), leaf, Std.TreeMap.getElem_insert]
+      have hconn2 := chooseAndConnectNode_wp kc dc rfl (d.nextNode + 1) d.nextNode mid' leaf hmid' hleaf'
+        (by omega) hs
+      mvcgen [hconn2]
+      all_goals try exact hconn1Frame
+      intro currentConn2 hconn2Frame
+      let sn := bit (rootWidth v4) split addr
+      let db := connectedChild dc (d.nextNode + 1) sn d.nextNode mid' leaf
+      let kb : Kernel := { k with wg := some db }
+      have hmid'' : db.nodes[d.nextNode + 1]? = some { mid' with bit := mid'.bit.set! sn (some d.nextNode) } := by
+        simp [db, connectedChild]
+      mvcgen [hfinishTwo]
+      all_goals try exact hconn2Frame
+      all_goals try dsimp only at *
+      all_goals simp_all [if_neg he, graftTwoReady]
+
 theorem add_placed_root_graft_wp (k : Kernel) (d : WG.Device) (hd : k.wg = some d)
     (v4 : Bool) (id : Nat) (old : WG.AipNode) (addr cidr pid : Nat) (p : WG.Peer)
     (hp : d.peers[pid]? = some p) (hn : d.nodes[id]? = some old)

@@ -118,6 +118,33 @@ theorem Context.edge_follows (n : NodeData) (l r : Tree)
   · have hb := bit_lt_two width n.cidr key
     exact ⟨hlt, hm, by omega, trivial⟩
 
+/-- Every nonempty path has a final edge. The unused sibling argument in
+`edge` carries no extra traversal or mutation algorithm. -/
+theorem Context.last_edge (c : Context) (hc : c ≠ .here) :
+    ∃ (outer : Context) (n : NodeData) (l r : Tree) (side : Nat),
+      side < 2 ∧ c = outer.append (Context.edge n l r side) := by
+  induction c with
+  | here => exact False.elim (hc rfl)
+  | left n inner r ih =>
+    by_cases he : inner = .here
+    · subst inner
+      exact ⟨.here, n, .empty, r, 0, by omega, rfl⟩
+    · obtain ⟨outer, m, l', r', side, hb, ht⟩ := ih he
+      exact ⟨.left n outer r, m, l', r', side, hb,
+        congrArg (fun x => Context.left n x r) ht⟩
+  | right n l inner ih =>
+    by_cases he : inner = .here
+    · subst inner
+      exact ⟨.here, n, l, .empty, 1, by omega, rfl⟩
+    · obtain ⟨outer, m, l', r', side, hb, ht⟩ := ih he
+      exact ⟨.right n l outer, m, l', r', side, hb,
+        congrArg (fun x => Context.right n l x) ht⟩
+
+theorem Context.follows_append_iff (c inner : Context) :
+    (c.append inner).Follows width key cidr ↔
+      c.Follows width key cidr ∧ inner.Follows width key cidr := by
+  induction c <;> simp_all [Context.append, Context.Follows, and_assoc]
+
 /-- The four source exits, retaining the CIDR-before-prefix test order.
 Exactness does not require the node to have an owner. -/
 def PlacementEnd (width key cidr : Nat) (parent : Option Nat) :

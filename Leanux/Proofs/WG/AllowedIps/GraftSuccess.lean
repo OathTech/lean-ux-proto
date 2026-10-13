@@ -6,18 +6,18 @@ set_option maxHeartbeats 1000000
 namespace Leanux.Proofs.WG.AllowedIps
 open Leanux
 
-theorem graftOne_rep (d : WG.Device) (v4 : Bool) (n : NodeData) (l r : Tree)
+theorem graftOne_rep_at (d : WG.Device) (v4 : Bool) (base : WG.Slot) (n : NodeData) (l r : Tree)
     (addr cidr pid : Nat) (p : WG.Peer) (hb : NodesBelow d)
-    (hr : RepAt d.nodes (rootWidth v4) (rootSlot v4) (.node n l r))
+    (hr : RepAt d.nodes (rootWidth v4) base (.node n l r))
     (hn : (Tree.node n l r).nodeIds.Nodup) :
-    RepAt (graftOne d v4 n.id (encode (rootWidth v4) (rootSlot v4) n l r)
+    RepAt (graftOne d v4 n.id (encode (rootWidth v4) base n l r)
       addr cidr pid p).nodes (rootWidth v4) (rootSlot v4)
       (Tree.fork (requestedNode d.nextNode addr cidr pid)
         (bit (rootWidth v4) cidr n.addr) (.node n l r) .empty) := by
   have hid := hb n.id _ hr.1
   have hne : d.nextNode ≠ n.id := Nat.ne_of_gt hid
   have hdesc : n.id ∉ l.nodeIds ++ r.nodeIds := (List.nodup_cons.mp hn).1
-  let out := graftOne d v4 n.id (encode (rootWidth v4) (rootSlot v4) n l r) addr cidr pid p
+  let out := graftOne d v4 n.id (encode (rootWidth v4) base n l r) addr cidr pid p
   have hf : ∀ id ∈ l.nodeIds ++ r.nodeIds, out.nodes[id]? = d.nodes[id]? := by
     intro id hi
     have hi' : id ∈ (Tree.node n l r).nodeIds := List.mem_cons_of_mem _ hi
@@ -42,12 +42,22 @@ theorem graftOne_rep (d : WG.Device) (v4 : Bool) (n : NodeData) (l r : Tree)
         encode, requestedNode, WG.newNode, Tree.root, hs]
     · simpa only [out, hs, requestedNode] using hold
 
-theorem graftTwo_rep (d : WG.Device) (v4 : Bool) (n : NodeData) (l r : Tree)
-    (addr cidr pid split : Nat) (p : WG.Peer) (hb : NodesBelow d)
+theorem graftOne_rep (d : WG.Device) (v4 : Bool) (n : NodeData) (l r : Tree)
+    (addr cidr pid : Nat) (p : WG.Peer) (hb : NodesBelow d)
     (hr : RepAt d.nodes (rootWidth v4) (rootSlot v4) (.node n l r))
+    (hn : (Tree.node n l r).nodeIds.Nodup) :
+    RepAt (graftOne d v4 n.id (encode (rootWidth v4) (rootSlot v4) n l r)
+      addr cidr pid p).nodes (rootWidth v4) (rootSlot v4)
+      (Tree.fork (requestedNode d.nextNode addr cidr pid)
+        (bit (rootWidth v4) cidr n.addr) (.node n l r) .empty) :=
+  graftOne_rep_at d v4 (rootSlot v4) n l r addr cidr pid p hb hr hn
+
+theorem graftTwo_rep_at (d : WG.Device) (v4 : Bool) (base : WG.Slot) (n : NodeData) (l r : Tree)
+    (addr cidr pid split : Nat) (p : WG.Peer) (hb : NodesBelow d)
+    (hr : RepAt d.nodes (rootWidth v4) base (.node n l r))
     (hn : (Tree.node n l r).nodeIds.Nodup)
     (hbits : bit (rootWidth v4) split n.addr ≠ bit (rootWidth v4) split addr) :
-    RepAt (graftTwo d v4 n.id (encode (rootWidth v4) (rootSlot v4) n l r)
+    RepAt (graftTwo d v4 n.id (encode (rootWidth v4) base n l r)
       addr cidr pid split p).nodes (rootWidth v4) (rootSlot v4)
       (Tree.fork ⟨d.nextNode + 1, addr, split, none⟩
         (bit (rootWidth v4) split n.addr) (.node n l r) (requestedLeaf d.nextNode addr cidr pid)) := by
@@ -55,7 +65,7 @@ theorem graftTwo_rep (d : WG.Device) (v4 : Bool) (n : NodeData) (l r : Tree)
   have hne : d.nextNode ≠ n.id := Nat.ne_of_gt hid
   have hme : d.nextNode + 1 ≠ n.id := Nat.ne_of_gt (Nat.lt_succ_of_lt hid)
   have hdesc : n.id ∉ l.nodeIds ++ r.nodeIds := (List.nodup_cons.mp hn).1
-  let out := graftTwo d v4 n.id (encode (rootWidth v4) (rootSlot v4) n l r) addr cidr pid split p
+  let out := graftTwo d v4 n.id (encode (rootWidth v4) base n l r) addr cidr pid split p
   have hf : ∀ id ∈ l.nodeIds ++ r.nodeIds, out.nodes[id]? = d.nodes[id]? := by
     intro id hi
     have hi' : id ∈ (Tree.node n l r).nodeIds := List.mem_cons_of_mem _ hi
@@ -90,6 +100,17 @@ theorem graftTwo_rep (d : WG.Device) (v4 : Bool) (n : NodeData) (l r : Tree)
         encode, requestedNode, requestedLeaf, WG.newNode, Tree.root, hs, ht]
     · simpa only [out, ht] using hleaf
     · simpa only [out, hs, requestedNode] using hold
+
+theorem graftTwo_rep (d : WG.Device) (v4 : Bool) (n : NodeData) (l r : Tree)
+    (addr cidr pid split : Nat) (p : WG.Peer) (hb : NodesBelow d)
+    (hr : RepAt d.nodes (rootWidth v4) (rootSlot v4) (.node n l r))
+    (hn : (Tree.node n l r).nodeIds.Nodup)
+    (hbits : bit (rootWidth v4) split n.addr ≠ bit (rootWidth v4) split addr) :
+    RepAt (graftTwo d v4 n.id (encode (rootWidth v4) (rootSlot v4) n l r)
+      addr cidr pid split p).nodes (rootWidth v4) (rootSlot v4)
+      (Tree.fork ⟨d.nextNode + 1, addr, split, none⟩
+        (bit (rootWidth v4) split n.addr) (.node n l r) (requestedLeaf d.nextNode addr cidr pid)) :=
+  graftTwo_rep_at d v4 (rootSlot v4) n l r addr cidr pid split p hb hr hn hbits
 
 theorem root_graft_insertFresh (width fresh addr cidr pid : Nat) (n : NodeData) (l r : Tree)
     (hstop : ¬ (n.cidr ≤ cidr ∧ prefixBits width n.cidr n.addr = prefixBits width n.cidr addr)) :
