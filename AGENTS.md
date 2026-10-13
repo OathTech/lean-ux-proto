@@ -35,21 +35,24 @@ depend on it), with pipes as the scale test. A gap is excluded only for a
 profound reason, recorded in the design doc. The stage order and the work on
 branches are in [the pause-state note](docs/2026-10-08-pause-state.md).
 
-Theorems live only in the proof tree, `Leanux/Spikes/`, its own lake
-target outside the default build. The mirror (`Leanux/FS`, `Leanux/WG`,
-`Leanux/Kernel`, `Leanux/Env`, `Leanux/Runner.lean`) carries no theorem, no
-proof-shaped restructuring, and no change made to let a proof close: a proof
-that cannot close is a report against the mirror, settled by the
-differential check, never by editing the mirror to fit the statement.
-Proofs about the mirror and about models layered on it are in scope; a
-simulation proof against the C is not, until the user opens it. No
-proof-audit infrastructure beyond the axiom check below, and no theorem is
-an acceptance gate for mirror work.
+Theorems live only in the proof tree, `Leanux/Proofs/`, its own lake target
+`LeanuxProofs` outside the default build; its map and its register of
+results are [docs/proofs.md](docs/proofs.md). Proofs are a validation
+channel for the models beside the differential check. The mirror
+(`Leanux/FS`, `Leanux/WG`, `Leanux/Kernel`, `Leanux/Env`,
+`Leanux/Runner.lean`) carries no theorem, no proof-shaped restructuring, and
+no change made to let a proof close: a proof that cannot close is a report
+against the mirror, settled by the differential check, never by editing the
+mirror to fit the statement. Proofs about the mirror and about models
+layered on it are in scope; a simulation proof against the C is not, until
+the user opens it. No proof-audit infrastructure beyond the axiom check
+below, and no theorem is an acceptance gate for mirror work.
 
-The proof tree names the mirror commit it holds over (the report's header).
-A mirror change may land while the tree lags; its integration record says
-so, and the repair is a follow-on task on the proof tree, not a condition
-on the mirror change. Every claim point reports the lag.
+The register names, per result, the mirror commit it holds over and whether
+it is current or lagging. A mirror change may land while a result lags; its
+integration record says so, and the repair is a follow-on task on the proof
+tree, not a condition on the mirror change. Every claim point reports the
+lag.
 
 Keep later proof work cheap: follow the conventions marked "Adopt as a
 convention" in sections 3(a), 3(b), 3(d), 3(e) and B7 of
@@ -110,12 +113,14 @@ Linux. It rests on three gates, and only these block:
 
 The proof tree makes a separate claim and has its own gate, run at its
 claim points (a merge of the tree) and not on mirror commits:
-`capped -- scripts/in-bundle scripts/proof-gate`, which builds `WindowSpike`
-(about three minutes), prints the axioms of every terminal statement and
-fails on any beyond `propext`, `Classical.choice` and `Quot.sound`, fails on
-`sorry`, `admit`, `axiom`, `native_decide`, `unsafe`, `implemented_by` or
-`extern` anywhere in the tree, and fails if anything outside the tree
-imports it or if `WindowSpike` is a default lake target.
+`capped -- scripts/in-bundle scripts/proof-gate`, which builds `LeanuxProofs`
+(about three minutes), prints the axioms of every declaration of every
+`Statements.lean` under `Leanux/Proofs/` and fails on any beyond `propext`,
+`Classical.choice` and `Quot.sound`, fails on `sorry`, `admit`, `axiom`,
+`native_decide`, `unsafe`, `implemented_by` or `extern` anywhere in the
+tree, and fails if anything outside the tree imports it, if the root
+`Leanux/Proofs.lean` misses a result's `Statements`, or if `LeanuxProofs` is
+a default lake target.
 
 Everything else is a speedbump: cheap, run at claim points, never blocking
 intermediate work, built to catch honest drift and not adversarial attack:
