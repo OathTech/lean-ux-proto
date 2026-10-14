@@ -5,9 +5,9 @@ audit items I1 ([the handshake audit](2026-10-13-audit-handshake.md)) and F10
 ([the receive audit](2026-10-13-audit-receive.md)). Written by a fork of the
 coordinator [AGENT]. Version 2 answers [the independent review](2026-10-15-design-b1-review.md)
 (b826285, 13 findings, "build with the named changes"): section 15 takes
-the findings one by one, and sections 2 to 13 carry the corrections. Two
-Linux-only probes on the s4 oracle (section 8) settle what they could. No
-implementation here.
+the findings one by one, and sections 2 to 13 carry the corrections. Three
+Linux-only probes on the s4 oracle (section 8) settle the evidence plan:
+the twin traces exist at the named sizes. No implementation here.
 
 ## 1. Target
 
@@ -280,6 +280,13 @@ limits that stand between such a flood and the comparison child:
   sections opened, none dropped) and was then killed by the overflow
   before printing the operation's rows: the remote wrapper exits 1 for a
   signalled trace process (:1489), which the parent reports as status 256.
+- **The host's merged bound.** With the table sized too (probe 3), both
+  children completed both traces, and the host rejected the run:
+  `harness/linux.py:585` merges the task and remote comparison rows of an
+  operation into one, and :726-727 bounds the merged count by
+  `2 * ((KCOV_CAPACITY - 1) // 4)` = 2,097,150, the sum of two streams at
+  the old limit; `e_ring_full`'s flood has 1,411,041 + 764,762 = 2,175,803.
+  The bound becomes the sum of the two streams' new limits, 3,145,725.
 
 **The change** is therefore wider than a constant. One `CAPACITY` sizes
 the task area (:1935, :1939), the remote area (:1447-1451, and
@@ -293,11 +300,14 @@ by `harness/test_trace.py:520-524` and `evaluator/test_evaluation.py:147`.
 Doubling the task comparison area alone takes: a second guest constant
 for that area and its full check; `cmp_block` sized by it, or not written
 for the task area at all (the cleaner fix: the blocks are a remote-area
-notion); a second host bound for comparison rows, with the per-stream
-guards kept for every area (they are instrument guards on the trust
-surface, and a single raised bound would loosen them); the two tests
-extended. About 40 lines across the guest, `trace.py`, `linux.py`,
-`protocol.py` and the tests.
+notion); the host's merged comparison bound raised to the sum of the two
+streams' limits, with the per-stream full checks kept in the guest for
+every area (they are instrument guards on the trust surface, and the
+merged bound alone would not catch one stream overflowing into the other's
+headroom); the two tests extended. About 40 lines across the guest,
+`trace.py`, `linux.py`, `protocol.py` and the tests. Probe 3 ran with the
+guest side of exactly this change (the constant, the area, its check, the
+table) and the host side untouched, which is why the host rejected it.
 
 **Memory, measured.** `KCOV_INIT_TRACE` allocates with `vmalloc_user`
 (`kcov.c:718`), which is `__GFP_ZERO` (`mm/vmalloc.c:4063-4069`): the pages
@@ -307,22 +317,27 @@ the worker's remote section allocates (`kcov_remote_area_get`, cached by
 `kcov_remote_area_put`): 96 MiB today, 128 MiB with the doubled task area,
 beside the guest's touched tables (`dedup_table` 16 MiB, fully touched by
 a 1.4 M-record pass; `distinct` and `bulk_out` 16 MiB each, partly;
-`cmp_block` 2 MiB) in the 256 MiB guest. Probe 2 shows it fits: the 64 MiB
-task area was allocated (operations 0 to 2 ran under it), the remote area
-with it, and the worker's section opened and recorded through the flood
-(none dropped), which means its area was allocated too. The guest's
+`cmp_block` 2 MiB) in the 256 MiB guest (`MemTotal` 241,748 kB once the kernel has
+its own). Measured in probe 3 from `/proc/meminfo`, outside every window:
+in the comparison child `VmallocUsed` goes from 67,728 kB before the task
+area (the remote area and the worker's section area, which the kernel
+caches across children) to 133,392 kB at the end of the flood, the 128 MiB
+of areas plus 2 MiB; `MemFree` ends at 76,816 kB and `MemAvailable` at
+73,136 kB. The coverage child ends at 100,560 kB of vmalloc and 120,744 kB
+free. The areas fit with about 75 MiB to spare. The guest's
 memory (`-m 256`, `harness/linux.py:867`) does not move: it sets
 `max_user_watches` (`EXPECTED_MAX_USER_WATCHES`, `linux.py:146-157`) and
 the rate limiter's table (`ratelimiter.c:173-177`), both from total
 memory; `EXPECTED_MAX_USER_WATCHES` is re-checked after the guest rebuild
 all the same, since a changed initramfs can move it.
 
-**Remote comparison area, projected.** The cookie trace's flood has 99,582
-remote comparison records for 521 packets; the remote coverage count
-scales linearly with the sends (182,841 at 521, 1,423,652 at 4097: 7.79
-against 7.86), so the remote comparison count at 4097 is about 783 K of
-the 1,048,575-record limit, a margin of 1.34. Unmeasured: no comparison
-child has yet completed a flood of that size.
+**Remote comparison area, measured.** The comparison child's flood has
+764,762 remote comparison records at 4097 sends (`e_ring_full`) and
+763,008 at 4088 (`e_ring_carry`'s second flood), of the 1,048,575-record
+limit: a margin of 1.37, so the remote area stays at its size. The task
+comparison stream is 1,411,041 and 1,407,912 of the doubled limit
+2,097,151, a margin of 1.49. The projection from the cookie trace (783 K)
+was 2 percent high.
 
 ## 7. Corpus
 
@@ -425,17 +440,56 @@ Read from the table:
   trace's drain is the same 4 ms in both children, so the comparison
   child's drain is expected near the coverage child's. A margin of about
   3, host-load dependent: an overrun leaks the worker section into no
-  operation and `Env.flood` fails closed. Unmeasured in the comparison
-  child.
-- **The remote comparison count** in the comparison child: unmeasured
-  (section 6, projected 783 K of 1.05 M).
+  operation and `Env.flood` fails closed. The comparison child's drain
+  is measured in probe 3 below.
+- **The remote comparison count** in the comparison child: measured in
+  probe 3 below (the projection from the cookie trace was 783 K).
 
-So: the twin traces are **feasible on every axis measured** (the coverage
-child's time with a margin of 4 to 7, the memory, the ring's behaviour,
-the first stage at 25) and **not yet shown** on the comparison child's
-time, remote count and drain, which the next probe measures after the
-block table is sized (two guest lines). Two probes, two guest limits,
-each found by the run that hit it.
+After probe 2 the twin traces were feasible on every axis measured (the
+coverage child's time, the memory, the ring's behaviour, the first stage
+at 25) and not yet shown on the comparison child's time, remote count and
+drain, which the block-table overflow had cut off.
+
+**Probe 3** (the two committed forms only; one boot; the task comparison
+area doubled and `cmp_block` sized by it in the guest for the run only,
+plus a `/proc/meminfo` readout before the task area and at the end of
+each child, outside every window; `.tmp/b1-probe/probe3.py`, output
+`.artifacts/b1-probe/run-3`; the box was running a full check and the
+sentinels at the time):
+
+| trace | child | `since_up` | flood | consumed | dropped | drain | task / remote comparison records | vmalloc at end | free at end |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `e_ring_full` | pc | 0.66 s | 4097 | 4096 | 1 | 28 ms | (2.32 M / 1.42 M coverage words) | 100,560 kB | 120,744 kB |
+| `e_ring_full` | cmp | **0.67 s** | 4097 | 4096 | 1 | **28 ms** | **1,411,041 / 764,762** | **133,392 kB** | **76,816 kB** |
+| `e_ring_carry` | pc | 1.02 s | 25, then 4088 | 25, then 4087 | 0, then 1 | 24 ms | (coverage) | 100,560 kB | 119,508 kB |
+| `e_ring_carry` | cmp | **1.21 s** | 25, then 4088 | 25, then 4087 | 0, then 1 | **28 ms** | **1,407,912 / 763,008** | **133,392 kB** | **78,592 kB** |
+
+Both children completed both traces; the host then rejected the run on
+its merged comparison bound (section 6), the one host line the change
+must raise. Read from the table:
+
+- **Time, comparison child**: 0.67 s and 1.21 s against the 4.5 s bound,
+  margins of 6.7 and 3.7, on a loaded host; the comparison child costs
+  2 to 19 percent more than the coverage child here, not the 1.6 of the
+  cookie trace, since the trace ends at the flood and the flood's
+  post-processing falls after the last timing check.
+- **Drain**: 28 ms in both children against the 100 ms wait, a margin of
+  3.6 (the coarse clock quantises to 4 ms).
+- **Remote comparison count**: 764,762 of 1,048,575 (margin 1.37); the
+  task comparison count 1,411,041 of the doubled 2,097,151 (margin 1.49).
+- **Memory**: the areas peak at 128 MiB (`VmallocUsed` 133,392 kB) in the
+  comparison child with 75 MiB free.
+- **Console**: the comparison child prints about 3 MB per big flood (the
+  remote comparison row 1.40 MB, the task row 0.78 MB, the records
+  0.73 MB), after the timing check; each twin is a chunk of its own, so a
+  chunk's output stays well inside the 16 MiB limit.
+
+So: the twin traces **exist at the named sizes**: the task comparison
+area at 8 M words, `cmp_block` at the task area's size (or not written for
+the task area), the remote area unchanged, the host's merged comparison
+bound at 3,145,725. Three probes, three limits (the area, the table, the
+host bound), each found by the run that hit it, and the third run clean
+on every axis.
 
 ## 9. Out of scope (fail-noisy), and why
 
@@ -538,24 +592,21 @@ not retyped.
 - **The trace bound.** The guest fails a trace whose time from its first
   `wg_up` to the end of its last operation exceeds `REKEY_BOUND_NS` = 4.5 s
   (`guest.c:110, 2640-2645`), in each child separately; the mirror's
-  `TRACE_BOUND_MS` (`Env.lean:134`) is the same bound. The coverage child
-  is at 0.66 s and 1.09 s; the comparison child is projected at 1.1 to
-  2.5 s and not measured (section 8). TCG guest time follows host time
-  ([the contended-host note](2026-10-06-contended-host.md)): the margin is
-  what absorbs the load. If the comparison child exceeds the bound on the
-  next probe, the traces do not exist at this bound; raising it for
-  peerless traces (no timer is armed) would be a harness and environment
-  change of its own, for the user.
+  `TRACE_BOUND_MS` (`Env.lean:134`) is the same bound. Measured on a
+  loaded host: the coverage child at 0.66 s and 1.02 s, the comparison
+  child at 0.67 s and 1.21 s (section 8), margins of 3.7 to 6.7. TCG guest
+  time follows host time ([the contended-host note](2026-10-06-contended-host.md)):
+  the margin is what absorbs the load, and a bound failure is an
+  infrastructure outcome, rerun at most once under the standing rule.
 - **The flood's 100 ms wait.** The worker's drain of 4096 packets is
-  about 30 ms in the coverage child (section 8), a margin of about 3
-  that a loaded host eats into; the comparison child is unmeasured. An
-  overrun is a fail-closed `Env.flood` outcome, not a wrong verdict. If the
-  next probe shows the margin thin, the flood's wait becomes a trace field
-  like `wg_batch`'s `wait_ms` (a guest and `trace.py` change) at the cost
-  of trace time.
-- **The comparison child's remaining unknowns**: its time, its remote
-  comparison count (projected 783 K of 1.05 M), its drain. One more probe
-  after the block table is sized settles all three.
+  28 ms in both children (section 8), a margin of 3.6 that a loaded host
+  eats into. An overrun is a fail-closed `Env.flood` outcome, not a wrong
+  verdict. If the claim point shows the margin thin, the flood's wait
+  becomes a trace field like `wg_batch`'s `wait_ms` (a guest and
+  `trace.py` change) at the cost of trace time.
+- **The remote comparison margin** is 1.37 at 4097 sends; a kernel
+  rebuild that adds comparisons on the receive path narrows it. The
+  per-stream full check in the guest is the guard.
 - **The tail contract's exactness at the threshold.** The per-packet rule
   of section 5 must match the C at 512 and at the expiry; the boundary
   traces (`e_underload_511/512/513`) and `e_underload_decayed` are the
@@ -580,18 +631,17 @@ In WU (one WU is WireGuard, about three weeks, [the scout](2026-10-12-kernel-sco
   consume, the per-packet contract, `floodExact`) and the Logged copy on
   `main`: about 0.07 WU, a day and a half; the environment rework is the
   part that is not mechanical;
-- the comparison-capacity change (section 6: guest, host bounds, tests,
-  about 40 lines), its probe, the two traces, the one-off mutant (section
-  7): about 0.04 WU, a day, with one probe boot of uncertain outcome
-  (section 8) before the traces are known to exist;
+- the comparison-capacity change (section 6: guest, host bound, tests,
+  about 40 lines), the two traces, the one-off mutant (section 7): about
+  0.03 WU, half a day to a day; the probe that showed the traces exist is
+  done (section 8), so no boot of uncertain outcome remains;
 - the claim point and controls: the usual hour at eight slots, plus the
   under-load chunks;
 - campaign 1's carry: about a day (section 10); campaign 2's: hours.
 
-About 0.11 WU with the traces, three to four days; about 0.07 WU, two
-days, without them; plus the carries. Order: the probe of section 6 first
-(it decides whether the traces exist), then the mirror change on `main`'s
-tree, then the traces.
+About 0.10 WU with the traces, three days; about 0.07 WU, two days,
+without them; plus the carries. Order: the mirror change on `main`'s tree,
+then the capacity change with its tests, then the traces and the mutant.
 
 ## 13. Decisions
 
@@ -600,19 +650,20 @@ For the user:
 1. **The comparison-capacity change for the twin traces** (section 6): a
    second guest constant for the task comparison area and its full check,
    `cmp_block` sized by it or dropped for the task area, a second host
-   bound with every per-stream guard kept, two tests extended; no kernel
-   change, no identity change, no guest-memory change. Measured so far:
-   the memory fits (the three areas were allocated and the flood ran under
-   them), the coverage child is at 0.66 s and 1.09 s of 4.5 s, the ring's
-   behaviour is exact at a 25-packet first stage. Not yet measured: the
-   comparison child's time (projected 1.1 to 2.5 s), its remote comparison
-   count (projected 783 K of 1.05 M) and its drain; one more probe boot
-   settles them, and if it fails the bound the traces do not exist at this
-   bound. The alternative is to leave the capacity arms at unit-level
-   evidence (4.4) and the strengthened contract, and keep the corpus at
-   floods of 520. Recommended: the change, conditional on that probe; the
-   two traces are the only differential evidence of the handshake ring's
-   occupancy, and the change is about 40 lines in the harness.
+   bound raised to the sum of the two streams' limits with every
+   per-stream guard kept, two tests extended; no kernel change, no
+   identity change, no guest-memory change. **Settled by probe 3: the twin
+   traces are feasible at these sizes.** Measured on a loaded host, in
+   the comparison child: 0.67 s and 1.21 s of the 4.5 s bound, a 28 ms
+   drain of the 100 ms wait, 764,762 remote comparison records of
+   1,048,575 and 1,411,041 task records of the doubled 2,097,151, the
+   areas at 128 MiB with 75 MiB free; the ring's behaviour exact at a
+   25-packet first stage, across a `wg_down`/`wg_up`. The alternative is
+   to leave the capacity arms at unit-level evidence (4.4) and the
+   strengthened contract, and keep the corpus at floods of 520.
+   Recommended: the change; the two traces are the only differential
+   evidence of the handshake ring's occupancy, and the change is about 40
+   lines in the harness with no open question left.
 
 Tactical [AGENT], stated for the record:
 
@@ -631,13 +682,14 @@ Tactical [AGENT], stated for the record:
 
 ## 14. Artifacts
 
-`.tmp/b1-probe/` (the two probe scripts and their logs) and
-`.artifacts/b1-probe/` (`run-1`, `run-2`: `boot.log`, `hidden.jsonl`,
-`probe.json`) in the design worktree: ephemeral, deleted with the worktree.
-The guest change of probe 2 (the task comparison area doubled, three lines
-in `harness/guest.c`) was reverted after the run and is not on the branch.
-The commands, for a rebuild (probe 2 needs that guest change applied by
-hand first):
+`.tmp/b1-probe/` (the three probe scripts and their logs) and
+`.artifacts/b1-probe/` (`run-1`, `run-2`, `run-3`: `boot.log`,
+`hidden.jsonl`, `probe.json`) in the design worktree: ephemeral, deleted
+with the worktree. The guest changes of probes 2 and 3 (the task
+comparison area doubled; for probe 3 also `cmp_block` sized by it and the
+`/proc/meminfo` readout) were reverted after each run and are not on the
+branch. The commands, for a rebuild (probes 2 and 3 need their guest
+change applied by hand first):
 
 ```sh
 LEANUX_SHARED_ROOT=/home/dev/projects/lean-ux-proto \
@@ -646,6 +698,9 @@ capped -- scripts/in-bundle python3 .tmp/b1-probe/probe.py --out .artifacts/b1-p
 LEANUX_SHARED_ROOT=/home/dev/projects/lean-ux-proto \
 LEANUX_KERNEL_DIR=/home/dev/projects/lean-ux-proto/.artifacts/kernel-net-choice-s4 \
 capped -- scripts/in-bundle python3 .tmp/b1-probe/probe2.py --out .artifacts/b1-probe/run-2
+LEANUX_SHARED_ROOT=/home/dev/projects/lean-ux-proto \
+LEANUX_KERNEL_DIR=/home/dev/projects/lean-ux-proto/.artifacts/kernel-net-choice-s4 \
+capped -- scripts/in-bundle python3 .tmp/b1-probe/probe3.py --out .artifacts/b1-probe/run-3
 ```
 
 ## 15. Review dispositions [AGENT, fork of the coordinator, v2]
@@ -656,11 +711,10 @@ the finding asked, at the section named.
 1. **The 4.5 s trace bound** (blocking for the evidence plan). Fixed and
    measured as far as one boot allowed: the traces now end at their last
    flood and the carry twin's first stage is 25 (section 7); the coverage
-   child is at 0.66 s and 1.09 s (section 8); the comparison child's time
-   is projected at 1.1 to 2.5 s and not measured, because its run was cut
-   by the block-table overflow (section 6); decision 13.1 is rewritten as
-   conditional on the next probe, and the bound is named in section 11
-   with the user's option of raising it for peerless traces.
+   child is at 0.66 s and 1.02 s and, after the block table was sized,
+   the comparison child at 0.67 s and 1.21 s on a loaded host (probe 3,
+   section 8); decision 13.1 is settled on the measured numbers, and the
+   bound is named in section 11.
 2. **The worker over the tail** (blocking). Fixed: section 5 adopts the
    review's shape, produce the whole batch, `workerIter` exactly `leading`
    times, the tail consume with the contract, one final `receiveStep`
@@ -688,11 +742,13 @@ the finding asked, at the section named.
    the host's single `KCOV_CAPACITY` and its two tests, the per-stream
    guards that must stay, and the second guest limit probe 2 found
    (`cmp_block`); the memory argument is corrected to `vmalloc_user`'s
-   up-front zeroed pages, 96 MiB today and 128 MiB after, and is now
-   measured to fit; `EXPECTED_MAX_USER_WATCHES` and the rate limiter's
-   table are named as total-memory quantities, unchanged at `-m 256`; the
-   remote comparison count is stated as a projection (783 K) with its
-   basis.
+   up-front zeroed pages, 96 MiB today and 128 MiB after, measured in
+   probe 3 at 133,392 kB of vmalloc with 76,816 kB free;
+   `EXPECTED_MAX_USER_WATCHES` and the rate limiter's table are named as
+   total-memory quantities, unchanged at `-m 256`; the remote comparison
+   count is measured at 764,762 of 1,048,575, and the host's merged bound
+   (`linux.py:585, 726-727`) is added to the change's scope after probe 3
+   hit it.
 8. **What the figures support.** Fixed: the batch is now shown by the
    25-packet first stage (4087, where batch 32 gives 4071) in probe 2 and
    the `#guard` uses the same number (4.4, section 7); the sections are
@@ -703,9 +759,9 @@ the finding asked, at the section named.
 9. **Mutant arithmetic.** Fixed: at batch 1 the second flood of 4088 is
    produced whole, 4088 against 4087, rejected by the operand and by one
    tail packet too many (section 7).
-10. **The drain margin.** Fixed: 32 ms and 28 ms in the coverage child
-    against the 100 ms wait, a margin of about 3, the comparison child
-    unmeasured, with the mitigation named (section 8, section 11).
+10. **The drain margin.** Fixed and measured: 28 ms in both children
+    against the 100 ms wait, a margin of 3.6, with the mitigation named
+    (section 8, section 11).
 11. **Citation slips.** Fixed: the ":845 stop drain" is gone (the stop's
     test is `Device.lean:94`, 4.2); the probe script's docstring now names
     the kinds, not the mirror's site ids.
