@@ -262,15 +262,13 @@ def pending():
     recorded, not steered, since no later message depends on them. A
     sequential variant then injects the peer's response to wg0's
     now-replaced initiation: the index lookup finds nothing
-    (consume_response's no_handshake arm). The suite holds the two traces
-    whose two guest children agree on the order; `held()` has the two whose
-    order differed between the children on s2 (2026-10-14), which the
-    harness's determinism rule refuses although the mirror reproduces each
-    child's returns on its own capture."""
+    (consume_response's no_handshake arm). The suite holds the sequential
+    trace; `held()` has the three batch traces, whose worker order differed
+    between the two guest children on s2 (2026-10-14; each in at least one
+    of two runs), which the harness's determinism rule refuses although the
+    mirror reproduces each child's returns on its own capture."""
     out = {}
     setup = d2.setup(keepalive=False)
-    out["p_sim_init_batch_recv_first"] = (setup + [batch([inject_raw_item(theirs()), xmit_item(d2.payload(64, 11))], 400),
-                                                    OBSERVE, GET], [], [INIT, NO_KEYPAIR])
     stale = d1.respond(d1.wg0_initiation()).message   # the peer's response to wg0's steered initiation
     out["p_sim_init_seq_stale_response"] = (setup + [xmit(d2.payload(64, 15)), OBSERVE, d1.inject(theirs()), OBSERVE,
                                                      d1.inject(stale), OBSERVE, GET],
@@ -284,12 +282,16 @@ def pending():
 def held():
     """Simultaneous-initiation traces outside every suite: the order of the
     unbound send worker and the receive worker varied between the two guest
-    children on s2 (send_first: pc send-first and observe 148, cmp
-    receive-first and observe -EAGAIN; two_peers: 148 and -EAGAIN likewise),
-    which `harness/linux.py`'s determinism rule reports as an environment
-    failure. Written with `--held DIR` for the replay evidence."""
+    children on s2 (observe 148 when the send worker ran first, -EAGAIN when
+    the receive worker did: the response roams the endpoint to the injector
+    before the initiation goes out; recv_first agreed in one run and
+    disagreed in the next), which `harness/linux.py`'s determinism rule
+    reports as an environment failure. Written with `--held DIR` for the
+    replay evidence."""
     out = {}
     setup = d2.setup(keepalive=False)
+    out["p_sim_init_batch_recv_first"] = (setup + [batch([inject_raw_item(theirs()), xmit_item(d2.payload(64, 11))], 400),
+                                                    OBSERVE, GET], [], [INIT, NO_KEYPAIR])
     out["p_sim_init_batch_send_first"] = (setup + [batch([xmit_item(d2.payload(64, 12)), inject_raw_item(theirs())], 400),
                                                     OBSERVE, GET], [], [INIT, NO_KEYPAIR])
     peer_q = {"public_key": d1.key(noise.public_key(PEER2)),

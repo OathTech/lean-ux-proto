@@ -173,10 +173,10 @@ injected initiation (queues the receive worker). The remote stream at the
 batch, by sequence number, ran the send worker first in some children and
 the receive worker first in others:
 
-- `p_sim_init_batch_recv_first`: both children `net_rx_action` (the
-  inject's queue record), the task's queue record (the xmit's), then
-  `wg_packet_handshake_send_worker` (seq 17), `net_rx_action`,
-  `wg_packet_handshake_receive_worker` (seq 33): send first, observe 148.
+- `p_sim_init_batch_recv_first`: in one run both children ran the send
+  worker first (seq 17, the receive worker at seq 33; observe 148 twice,
+  the trace agreed); in the next run the pc child ran the receive worker
+  first (observe -EAGAIN) and the cmp child the send worker first (148).
 - `p_sim_init_batch_send_first`: the pc child send first (seq 17, 32), the
   cmp child receive first (`wg_packet_handshake_receive_worker` seq 75,
   `wg_packet_handshake_send_worker` seq 91); observe 148 against -EAGAIN
@@ -190,11 +190,11 @@ On every receive-first capture the old mirror stopped at peer.c:75
 handshake worker also changes races the pending handshake worker"); with
 the guard retired it replays each child's capture to that child's returns
 ([0, 0, 4, 148, 0] and [0, 0, 4, -11, 0] for the two-peer trace). The two
-traces whose children disagree are outside the harness's domain by its
-determinism rule (`harness/linux.py`, the comparison child must rerun to
-identical observations), not the mirror's: the review's finding 5. They
-are held outside every suite with that reason; the two whose children
-agreed are in the `wireguard` suite.
+three batch traces are outside the harness's domain by its determinism
+rule (`harness/linux.py`, the comparison child must rerun to identical
+observations), not the mirror's: the review's finding 5. They are held
+outside every suite with that reason (`--held`); the sequential trace is
+in the `wireguard` suite.
 
 The guard is a no-op; its callers and `World.queuedThisCall` are dead and
 go in a later cleanup. A section the scheduler cannot place stays a hidden
