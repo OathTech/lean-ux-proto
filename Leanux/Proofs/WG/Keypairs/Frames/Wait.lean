@@ -1,7 +1,8 @@
 import Leanux.Proofs.WG.Keypairs.Frames.Kernel
+import Leanux.Proofs.Framing.Wait
 import Leanux.FS.Wait
 
-/-! Receive-state framing for the wait-queue service (`Leanux/FS/Wait.lean`,
+/-! Compatibility receive-state framing for the wait-queue service (`Leanux/FS/Wait.lean`,
 the epoll carry-over of 2026-10-13): the epoll stores, the heads, queueing,
 and the wake walk with the callback it runs. The walk and the callback are
 one mutual group bounded by a nesting fuel, so they are framed together by
@@ -12,63 +13,72 @@ open Leanux Leanux.WG Std.Do Leanux.Proofs.WG.Keypairs Leanux.Proofs.WG.Keypairs
 /-! ## The epoll stores (`Leanux/Kernel/Defs.lean`) -/
 
 theorem getEp_sameSnapshot (id : EpId) : SameSnapshot (Leanux.getEp id) := by
-  frame_same [getEp] using []
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.WaitFrames.getEp_sameWGKernel
 
 theorem getEp_spec (P : Snapshot → Prop) (id : EpId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.getEp id
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (getEp_sameSnapshot id).wp P
 
 theorem setEp_sameSnapshot (id : EpId) (e : Eventpoll) : SameSnapshot (Leanux.setEp id e) := by
-  frame_same [setEp] using []
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.WaitFrames.setEp_sameWGKernel
 
 theorem setEp_spec (P : Snapshot → Prop) (id : EpId) (e : Eventpoll) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.setEp id e
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (setEp_sameSnapshot id e).wp P
 
 theorem freeEp_sameSnapshot (id : EpId) : SameSnapshot (Leanux.freeEp id) := by
-  frame_same [freeEp] using []
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.WaitFrames.freeEp_sameWGKernel
 
 theorem freeEp_spec (P : Snapshot → Prop) (id : EpId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.freeEp id
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (freeEp_sameSnapshot id).wp P
 
 theorem getEpi_sameSnapshot (id : EpiId) : SameSnapshot (Leanux.getEpi id) := by
-  frame_same [getEpi] using []
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.WaitFrames.getEpi_sameWGKernel
 
 theorem getEpi_spec (P : Snapshot → Prop) (id : EpiId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.getEpi id
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (getEpi_sameSnapshot id).wp P
 
 theorem setEpi_sameSnapshot (id : EpiId) (e : Epitem) : SameSnapshot (Leanux.setEpi id e) := by
-  frame_same [setEpi] using []
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.WaitFrames.setEpi_sameWGKernel
 
 theorem setEpi_spec (P : Snapshot → Prop) (id : EpiId) (e : Epitem) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.setEpi id e
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (setEpi_sameSnapshot id e).wp P
 
 theorem freeEpi_sameSnapshot (id : EpiId) : SameSnapshot (Leanux.freeEpi id) := by
-  frame_same [freeEpi] using []
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.WaitFrames.freeEpi_sameWGKernel
 
 theorem freeEpi_spec (P : Snapshot → Prop) (id : EpiId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.freeEpi id
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (freeEpi_sameSnapshot id).wp P
 
 theorem getPwq_sameSnapshot (id : PwqId) : SameSnapshot (Leanux.getPwq id) := by
-  frame_same [getPwq] using []
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.WaitFrames.getPwq_sameWGKernel
 
 theorem getPwq_spec (P : Snapshot → Prop) (id : PwqId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.getPwq id
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (getPwq_sameSnapshot id).wp P
 
 theorem setPwq_sameSnapshot (id : PwqId) (p : EppollEntry) : SameSnapshot (Leanux.setPwq id p) := by
-  frame_same [setPwq] using []
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.WaitFrames.setPwq_sameWGKernel
 
 theorem setPwq_spec (P : Snapshot → Prop) (id : PwqId) (p : EppollEntry) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.setPwq id p
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (setPwq_sameSnapshot id p).wp P
 
 theorem freePwq_sameSnapshot (id : PwqId) : SameSnapshot (Leanux.freePwq id) := by
-  frame_same [freePwq] using []
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.WaitFrames.freePwq_sameWGKernel
 
 theorem freePwq_spec (P : Snapshot → Prop) (id : PwqId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.freePwq id
@@ -77,29 +87,32 @@ theorem freePwq_spec (P : Snapshot → Prop) (id : PwqId) :
 /-! ## The heads and queueing -/
 
 theorem getWaitQueue_sameSnapshot (r : WaitQueueRef) : SameSnapshot (Leanux.getWaitQueue r) := by
-  cases r <;> frame_same [getWaitQueue] using [getPipe_spec, getCtx_spec, getEp_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.WaitFrames.getWaitQueue_sameWGKernel
 
 theorem getWaitQueue_spec (P : Snapshot → Prop) (r : WaitQueueRef) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.getWaitQueue r
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (getWaitQueue_sameSnapshot r).wp P
 
 theorem setWaitQueue_sameSnapshot (r : WaitQueueRef) (q : WaitQueue) : SameSnapshot (Leanux.setWaitQueue r q) := by
-  cases r <;> frame_same [setWaitQueue] using [getPipe_spec, setPipe_spec, getCtx_spec, setCtx_spec,
-    getEp_spec, setEp_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.WaitFrames.setWaitQueue_sameWGKernel
 
 theorem setWaitQueue_spec (P : Snapshot → Prop) (r : WaitQueueRef) (q : WaitQueue) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.setWaitQueue r q
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (setWaitQueue_sameSnapshot r q).wp P
 
 theorem waitqueueActive_sameSnapshot (r : WaitQueueRef) : SameSnapshot (Leanux.waitqueueActive r) := by
-  frame_same [waitqueueActive] using [getWaitQueue_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.WaitFrames.waitqueueActive_sameWGKernel
 
 theorem waitqueueActive_spec (P : Snapshot → Prop) (r : WaitQueueRef) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.waitqueueActive r
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (waitqueueActive_sameSnapshot r).wp P
 
 theorem addWaitQueue_sameSnapshot (r : WaitQueueRef) (e : WaitEntry) : SameSnapshot (Leanux.addWaitQueue r e) := by
-  frame_same [addWaitQueue] using [getWaitQueue_spec, setWaitQueue_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.WaitFrames.addWaitQueue_sameWGKernel
 
 theorem addWaitQueue_spec (P : Snapshot → Prop) (r : WaitQueueRef) (e : WaitEntry) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.addWaitQueue r e
@@ -107,7 +120,8 @@ theorem addWaitQueue_spec (P : Snapshot → Prop) (r : WaitQueueRef) (e : WaitEn
 
 theorem addWaitQueueExclusive_sameSnapshot (r : WaitQueueRef) (e : WaitEntry) :
     SameSnapshot (Leanux.addWaitQueueExclusive r e) := by
-  frame_same [addWaitQueueExclusive] using [getWaitQueue_spec, setWaitQueue_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.WaitFrames.addWaitQueueExclusive_sameWGKernel
 
 theorem addWaitQueueExclusive_spec (P : Snapshot → Prop) (r : WaitQueueRef) (e : WaitEntry) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.addWaitQueueExclusive r e
@@ -115,7 +129,8 @@ theorem addWaitQueueExclusive_spec (P : Snapshot → Prop) (r : WaitQueueRef) (e
 
 theorem removeWaitQueue_sameSnapshot (r : WaitQueueRef) (e : WaitEntry) :
     SameSnapshot (Leanux.removeWaitQueue r e) := by
-  frame_same [removeWaitQueue] using [getWaitQueue_spec, setWaitQueue_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.WaitFrames.removeWaitQueue_sameWGKernel
 
 theorem removeWaitQueue_spec (P : Snapshot → Prop) (r : WaitQueueRef) (e : WaitEntry) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.removeWaitQueue r e
@@ -143,21 +158,14 @@ theorem chain_of_common (fuel : Nat)
     (∀ (P : Snapshot → Prop) (e : WaitEntry) (mode wakeFlags : UInt32) (key : Option UInt32),
       ⦃fun w => ⌜P (snapshot w)⌝⦄ e.callAt fuel mode wakeFlags key
       ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄) := by
-  have safewake : ∀ ep epi pollflags, SameSnapshot (Leanux.epPollSafewakeAt fuel ep epi pollflags) := by
-    intro ep epi pollflags
-    frame_same [epPollSafewakeAt] using [hcommon]
-  have safewake_spec := fun P ep epi pollflags => (safewake ep epi pollflags).wp P
-  have callback : ∀ pwq mode wakeFlags key,
-      SameSnapshot (Leanux.epPollCallbackAt fuel pwq mode wakeFlags key) := by
-    intro pwq mode wakeFlags key
-    frame_same [epPollCallbackAt] using [getPwq_spec, getEpi_spec, getEp_spec, setEp_spec,
-      setEpi_spec, waitqueueActive_spec, safewake_spec]
-  have callback_spec := fun P pwq mode wakeFlags key => (callback pwq mode wakeFlags key).wp P
-  have call : ∀ (e : WaitEntry) mode wakeFlags key, SameSnapshot (e.callAt fuel mode wakeFlags key) := by
-    intro e mode wakeFlags key
-    obtain ⟨⟨pwq⟩, exclusive⟩ := e
-    frame_same [WaitEntry.callAt] using [callback_spec]
-  exact ⟨safewake_spec, callback_spec, fun P e mode wakeFlags key => (call e mode wakeFlags key).wp P⟩
+  have hs := Framing.WaitFrames.chain_of_common fuel (Framing.WaitFrames.wakeAt_specs fuel).1
+  refine ⟨?_, ?_, ?_⟩
+  · intro P ep epi pollflags
+    exact hs.1 (fun v => P (snapshotOfWGKernelView v)) ep epi pollflags
+  · intro P pwq mode wakeFlags key
+    exact hs.2.1 (fun v => P (snapshotOfWGKernelView v)) pwq mode wakeFlags key
+  · intro P e mode wakeFlags key
+    exact hs.2.2 (fun v => P (snapshotOfWGKernelView v)) e mode wakeFlags key
 
 /-- The walk at fuel `n + 1`, given the entry call at fuel `n`. -/
 theorem common_succ (n : Nat)
@@ -165,12 +173,16 @@ theorem common_succ (n : Nat)
       ⦃fun w => ⌜P (snapshot w)⌝⦄ e.callAt n mode wakeFlags key ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄)
     (r : WaitQueueRef) (mode : UInt32) (nrExclusive : Int) (wakeFlags : UInt32) (key : Option UInt32) :
     SameSnapshot (Leanux.wakeUpCommonAt (n + 1) r mode nrExclusive wakeFlags key) := by
-  frame_same [wakeUpCommonAt] using [getWaitQueue_spec, hcall]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.SameView.of_wp
+  intro initial
+  exact (Framing.WaitFrames.wakeAt_specs (n + 1)).1 (fun v => v = initial) r mode nrExclusive wakeFlags key
 
 /-- The walk at fuel `0` makes no call. -/
 theorem common_zero (r : WaitQueueRef) (mode : UInt32) (nrExclusive : Int) (wakeFlags : UInt32)
     (key : Option UInt32) : SameSnapshot (Leanux.wakeUpCommonAt 0 r mode nrExclusive wakeFlags key) := by
-  frame_same [wakeUpCommonAt] using [getWaitQueue_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.WaitFrames.common_zero
 
 theorem wakeAt_specs (fuel : Nat) :
     (∀ (P : Snapshot → Prop) (r : WaitQueueRef) (mode : UInt32) (nrExclusive : Int)
@@ -180,15 +192,11 @@ theorem wakeAt_specs (fuel : Nat) :
     (∀ (P : Snapshot → Prop) (e : WaitEntry) (mode wakeFlags : UInt32) (key : Option UInt32),
       ⦃fun w => ⌜P (snapshot w)⌝⦄ e.callAt fuel mode wakeFlags key
       ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄) := by
-  induction fuel with
-  | zero =>
-    have common_spec := fun P r mode nrExclusive wakeFlags key =>
-      (common_zero r mode nrExclusive wakeFlags key).wp P
-    exact ⟨common_spec, (chain_of_common 0 common_spec).2.2⟩
-  | succ n ih =>
-    have common_spec := fun P r mode nrExclusive wakeFlags key =>
-      (common_succ n ih.2 r mode nrExclusive wakeFlags key).wp P
-    exact ⟨common_spec, (chain_of_common (n + 1) common_spec).2.2⟩
+  constructor
+  · intro P r mode nrExclusive wakeFlags key
+    exact (Framing.WaitFrames.wakeAt_specs fuel).1 (fun v => P (snapshotOfWGKernelView v)) r mode nrExclusive wakeFlags key
+  · intro P e mode wakeFlags key
+    exact (Framing.WaitFrames.wakeAt_specs fuel).2 (fun v => P (snapshotOfWGKernelView v)) e mode wakeFlags key
 
 theorem wakeUpCommonAt_spec (P : Snapshot → Prop) (fuel : Nat) (r : WaitQueueRef) (mode : UInt32)
     (nrExclusive : Int) (wakeFlags : UInt32) (key : Option UInt32) :
@@ -211,7 +219,8 @@ theorem epPollCallbackAt_spec (P : Snapshot → Prop) (fuel : Nat) (pwq : PwqId)
 
 theorem wakeUpCommon_sameSnapshot (r : WaitQueueRef) (mode : UInt32) (nrExclusive : Int) (wakeFlags : UInt32)
     (key : Option UInt32) : SameSnapshot (Leanux.wakeUpCommon r mode nrExclusive wakeFlags key) := by
-  frame_same [wakeUpCommon] using [wakeUpCommonAt_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.WaitFrames.wakeUpCommon_sameWGKernel
 
 theorem wakeUpCommon_spec (P : Snapshot → Prop) (r : WaitQueueRef) (mode : UInt32) (nrExclusive : Int)
     (wakeFlags : UInt32) (key : Option UInt32) :
@@ -220,7 +229,8 @@ theorem wakeUpCommon_spec (P : Snapshot → Prop) (r : WaitQueueRef) (mode : UIn
 
 theorem epPollSafewake_sameSnapshot (ep : EpId) (epi : Option EpiId) (pollflags : UInt32) :
     SameSnapshot (Leanux.epPollSafewake ep epi pollflags) := by
-  frame_same [epPollSafewake] using [epPollSafewakeAt_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.WaitFrames.epPollSafewake_sameWGKernel
 
 theorem epPollSafewake_spec (P : Snapshot → Prop) (ep : EpId) (epi : Option EpiId) (pollflags : UInt32) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.epPollSafewake ep epi pollflags
@@ -229,7 +239,8 @@ theorem epPollSafewake_spec (P : Snapshot → Prop) (ep : EpId) (epi : Option Ep
 theorem wakeUpCommonLock_sameSnapshot (r : WaitQueueRef) (mode : UInt32) (nrExclusive : Int)
     (wakeFlags : UInt32) (key : Option UInt32) :
     SameSnapshot (Leanux.wakeUpCommonLock r mode nrExclusive wakeFlags key) := by
-  frame_same [wakeUpCommonLock] using [wakeUpCommon_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.WaitFrames.wakeUpCommonLock_sameWGKernel
 
 theorem wakeUpCommonLock_spec (P : Snapshot → Prop) (r : WaitQueueRef) (mode : UInt32) (nrExclusive : Int)
     (wakeFlags : UInt32) (key : Option UInt32) :
@@ -238,7 +249,8 @@ theorem wakeUpCommonLock_spec (P : Snapshot → Prop) (r : WaitQueueRef) (mode :
 
 theorem wakeUpBase_sameSnapshot (r : WaitQueueRef) (mode : UInt32) (nr : Int) (key : Option UInt32) :
     SameSnapshot (Leanux.wakeUpBase r mode nr key) := by
-  frame_same [wakeUpBase] using [wakeUpCommonLock_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.WaitFrames.wakeUpBase_sameWGKernel
 
 theorem wakeUpBase_spec (P : Snapshot → Prop) (r : WaitQueueRef) (mode : UInt32) (nr : Int) (key : Option UInt32) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.wakeUpBase r mode nr key
@@ -246,7 +258,8 @@ theorem wakeUpBase_spec (P : Snapshot → Prop) (r : WaitQueueRef) (mode : UInt3
 
 theorem wakeUpLockedKey_sameSnapshot (r : WaitQueueRef) (mode : UInt32) (key : Option UInt32) :
     SameSnapshot (Leanux.wakeUpLockedKey r mode key) := by
-  frame_same [wakeUpLockedKey] using [wakeUpCommon_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.WaitFrames.wakeUpLockedKey_sameWGKernel
 
 theorem wakeUpLockedKey_spec (P : Snapshot → Prop) (r : WaitQueueRef) (mode : UInt32) (key : Option UInt32) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.wakeUpLockedKey r mode key
@@ -254,35 +267,40 @@ theorem wakeUpLockedKey_spec (P : Snapshot → Prop) (r : WaitQueueRef) (mode : 
 
 theorem wakeUpSyncKey_sameSnapshot (r : WaitQueueRef) (mode : UInt32) (key : Option UInt32) :
     SameSnapshot (Leanux.wakeUpSyncKey r mode key) := by
-  frame_same [wakeUpSyncKey] using [wakeUpCommonLock_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.WaitFrames.wakeUpSyncKey_sameWGKernel
 
 theorem wakeUpSyncKey_spec (P : Snapshot → Prop) (r : WaitQueueRef) (mode : UInt32) (key : Option UInt32) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.wakeUpSyncKey r mode key
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (wakeUpSyncKey_sameSnapshot r mode key).wp P
 
 theorem wakeUp_sameSnapshot (r : WaitQueueRef) : SameSnapshot (Leanux.wakeUp r) := by
-  frame_same [wakeUp] using [wakeUpBase_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.WaitFrames.wakeUp_sameWGKernel
 
 theorem wakeUp_spec (P : Snapshot → Prop) (r : WaitQueueRef) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.wakeUp r
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (wakeUp_sameSnapshot r).wp P
 
 theorem wakeUpAll_sameSnapshot (r : WaitQueueRef) : SameSnapshot (Leanux.wakeUpAll r) := by
-  frame_same [wakeUpAll] using [wakeUpBase_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.WaitFrames.wakeUpAll_sameWGKernel
 
 theorem wakeUpAll_spec (P : Snapshot → Prop) (r : WaitQueueRef) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.wakeUpAll r
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (wakeUpAll_sameSnapshot r).wp P
 
 theorem wakeUpSync_sameSnapshot (r : WaitQueueRef) : SameSnapshot (Leanux.wakeUpSync r) := by
-  frame_same [wakeUpSync] using [wakeUpSyncKey_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.WaitFrames.wakeUpSync_sameWGKernel
 
 theorem wakeUpSync_spec (P : Snapshot → Prop) (r : WaitQueueRef) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.wakeUpSync r
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (wakeUpSync_sameSnapshot r).wp P
 
 theorem wakeUpInterruptible_sameSnapshot (r : WaitQueueRef) : SameSnapshot (Leanux.wakeUpInterruptible r) := by
-  frame_same [wakeUpInterruptible] using [wakeUpBase_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.WaitFrames.wakeUpInterruptible_sameWGKernel
 
 theorem wakeUpInterruptible_spec (P : Snapshot → Prop) (r : WaitQueueRef) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.wakeUpInterruptible r
@@ -290,14 +308,16 @@ theorem wakeUpInterruptible_spec (P : Snapshot → Prop) (r : WaitQueueRef) :
 
 theorem wakeUpInterruptibleAll_sameSnapshot (r : WaitQueueRef) :
     SameSnapshot (Leanux.wakeUpInterruptibleAll r) := by
-  frame_same [wakeUpInterruptibleAll] using [wakeUpBase_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.WaitFrames.wakeUpInterruptibleAll_sameWGKernel
 
 theorem wakeUpInterruptibleAll_spec (P : Snapshot → Prop) (r : WaitQueueRef) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.wakeUpInterruptibleAll r
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (wakeUpInterruptibleAll_sameSnapshot r).wp P
 
 theorem wakeUpPoll_sameSnapshot (r : WaitQueueRef) (m : UInt32) : SameSnapshot (Leanux.wakeUpPoll r m) := by
-  frame_same [wakeUpPoll] using [wakeUpBase_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.WaitFrames.wakeUpPoll_sameWGKernel
 
 theorem wakeUpPoll_spec (P : Snapshot → Prop) (r : WaitQueueRef) (m : UInt32) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.wakeUpPoll r m
@@ -305,7 +325,8 @@ theorem wakeUpPoll_spec (P : Snapshot → Prop) (r : WaitQueueRef) (m : UInt32) 
 
 theorem wakeUpLockedPoll_sameSnapshot (r : WaitQueueRef) (m : UInt32) :
     SameSnapshot (Leanux.wakeUpLockedPoll r m) := by
-  frame_same [wakeUpLockedPoll] using [wakeUpLockedKey_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.WaitFrames.wakeUpLockedPoll_sameWGKernel
 
 theorem wakeUpLockedPoll_spec (P : Snapshot → Prop) (r : WaitQueueRef) (m : UInt32) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.wakeUpLockedPoll r m
@@ -313,7 +334,8 @@ theorem wakeUpLockedPoll_spec (P : Snapshot → Prop) (r : WaitQueueRef) (m : UI
 
 theorem wakeUpInterruptibleSyncPoll_sameSnapshot (r : WaitQueueRef) (m : UInt32) :
     SameSnapshot (Leanux.wakeUpInterruptibleSyncPoll r m) := by
-  frame_same [wakeUpInterruptibleSyncPoll] using [wakeUpSyncKey_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.WaitFrames.wakeUpInterruptibleSyncPoll_sameWGKernel
 
 theorem wakeUpInterruptibleSyncPoll_spec (P : Snapshot → Prop) (r : WaitQueueRef) (m : UInt32) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.wakeUpInterruptibleSyncPoll r m

@@ -94,6 +94,13 @@ theorem envOk_spec (P : WGKernelView → Prop) (site : EnvSite) :
     ⦃fun w => ⌜P (wgKernelView w)⌝⦄ Leanux.envOk site
     ⦃⇓? _ w => ⌜P (wgKernelView w)⌝⦄ := (envOk_sameWGKernel site).wp P
 
+theorem hiddenAlloc_sameWGKernel (site : AllocSite) : SameWGKernel (hiddenAlloc site) :=
+  sameWGKernel_of_sameKernel (Framing.hiddenAlloc_sameKernel site)
+
+theorem hiddenAlloc_spec (P : WGKernelView → Prop) (site : AllocSite) :
+    ⦃fun w => ⌜P (wgKernelView w)⌝⦄ hiddenAlloc site
+    ⦃⇓? _ w => ⌜P (wgKernelView w)⌝⦄ := (hiddenAlloc_sameWGKernel site).wp P
+
 theorem hiddenU64_sameWGKernel (s : HiddenSite) : SameWGKernel (Leanux.hiddenU64 s) := by
   frame_wg [hiddenU64] using [hidden_spec]
 
