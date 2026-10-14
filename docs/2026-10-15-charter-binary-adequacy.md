@@ -270,6 +270,20 @@ justification, the effort.
 
 ## 6. Rule Zero at this level
 
+[USER 2026-10-14] "In general, the purpose of the verification should be
+to validate the mirror, and detect discrepancies. Not to conform to mistakes
+in the mirror. The binary (ie the real kernel) is the source of truth here
+of course." So the direction of every discrepancy is fixed: the mirror
+conforms to the binary, never the reverse. A region that will not close
+because the mirror's data or control flow differs from the machine's is a
+mirror defect, fixed on the mirror lane by the project's normal process (a
+settling pass, the differential check, the register), and the region's
+lemma closes against the fixed mirror. Neither `Pre_f` nor `R` is narrowed
+or bent to make a mismatched region close, and the theorem's statement is
+not weakened for it. The first instance: the index lookup's dead-peer
+branch, where the kernel stores the null peer back into the entry and the
+mirror kept the stale id, found at milestone 1 and fixed on the mirror.
+
 A region lemma that will not close is one of three findings, and the report
 says which with the evidence: the mirror differs from the machine on that
 region (a mirror defect, reported with the trace that would show it
