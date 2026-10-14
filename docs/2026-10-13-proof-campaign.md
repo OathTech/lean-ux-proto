@@ -4,7 +4,7 @@
 
 Work is on `.worktrees/proofs-campaign`, branch `proofs/campaign`, under
 [the charter](2026-10-13-charter-proof-campaign.md). The mirror remains byte-identical
-to `ca6b22e`; the Lean 4.35 carry and coordinated validation pass.
+to `ca6b22e`; initialized R2 Runner proofs and coordinated validation pass.
 The [proof register](proofs.md#results) holds current declarations and
 pins; its [model map](proofs.md#layers) supplies the complete module inventory.
 Current components are not completion of the open charter properties. This campaign
@@ -15,13 +15,27 @@ retains current architecture, findings, reproduction provenance, effort and limi
 | Result | Current disposition |
 | --- | --- |
 | R1 | Uniqueness and the intentional inclusive-floor correction are proved, with pure and accepted-run witnesses. |
-| R2 | Endpoint identity and failure-retaining access contracts cover the listed families, concrete Batch scheduling and isolated trials. All seven original dump calls have exact typed erasure and concrete allocation-safe failed prefixes. The audit scheduler now derives allocation validity at each recorded consistency-filter entry, including failed histories, and links those entries to safe copied trials. Fifteen original deferred-worker/guard/timer calls now carry that audit contract through dispatch, idle and advance, preserving demanded saved-map access order. Fifteen further control/observation/ingress/batch calls now retain AuditInv through actual multicast/inline scans, both flood modes and namespace cleanup. All typed dispatcher/syscall constructors now compose those calls through exact descriptor wrappers and postworker tails. Initialized whole-run allocation-identity access closure remains open through Runner; raw-reference affiliation/credit is a separate stronger property. |
+| R2 | Initialized allocation-identity access safety now holds for every typed Runner trace and both placeholder/flood modes, including failed histories. Every reached consistency-filter entry derives its own allocation invariant and safe isolated trials with exact ordered filter correspondence. No parser, array-length, progress or success premise is added. Raw-reference affiliation/credit remains a separate stronger property. Coordinated validation of the three new exports passes. |
 | R3 | Initialized finite normal call histories refine flat-prefix updates and reached-root lookup, including full normal clear. Completed setAllowedip/removal events now cover the entire acquired-peer update, with concrete send/flush/cleanup frames and separately derived lookup/create residency. Public setPeerCmd preflight composition, enclosing configuration/Runner closure and packet paths remain open. |
 | R4 | Physical rings, finite/source journals, per-poll provenance and selected GRO order, and concrete RX scheduling are checked. Accepted input refutes chronological post-GRO order. Joint pipeline conservation remains open. |
 | R5 | The unconditional age/post-zero and wire-nonce readings are false in accepted mirror inputs. Rule Zero resolution retains thirteen positive local contracts, without universal replacement transport claims. |
 | R6 | Cookie exclusion is proved at its original call boundary. A 19-retry/20-initiation episode refutes literal MAX=18; no universal corrected retry bound is claimed. |
 
-**Validation status.** The Lean 4.35 carry passes the 147-job and 182-job scoped
+**Validation status.** The initialized Runner extension passes the 33-job outer
+foundation, 242-job observer, 243-job safety and 280-job terminal targets; the
+full proof target passes 423 jobs. Three new exports give 208 R2 / 420 total
+terminal declarations (418 theorems and two definitions). The capped exact check
+passes the six-file scope, census, whitespace, unchanged mirror and all 417 prior
+declaration statements/proof bodies; stale local-scope comments are corrected.
+Independent frozen export/documentation and bounded source-coverage reviews are
+clear; their stale-comment findings are corrected. Sequential coordinated
+validation passes the 423-job proof gate (all 420 terminal declarations use only
+permitted axioms), fresh stock kernel replay, the 60-job default build and
+124 unit tests (23.215 seconds, one skip). The coordinator's capped exact
+scope/census/compatibility/whitespace/mirror check passes and confirms all four
+frozen Lean hashes. R3/R4 closures remain open.
+
+**Preceding Lean 4.35 carry (`ca6b22e`).** The Lean 4.35 carry passes the 147-job and 182-job scoped
 targets and the 420-job full proof target. Five proof files repair collection
 type inference, generated VC goal selection and automatic VC simplification;
 no theorem statement or source operation changes. The capped exact check passes
@@ -44,7 +58,7 @@ default targets, which exclude `LeanuxProofs`. The first attempt failed before
 checking because the bundle PATH omitted `git`; one infrastructure retry appended
 `/usr/bin` only in that command's environment and passed within its 900-second
 bound (19:44:08 to result collection at 19:50:45 UTC). No global state changed.
-Initialized whole-run R2 and remaining R3/R4 closures stay open.
+At that checkpoint, initialized whole-run R2 and remaining R3/R4 closures remained open.
 
 **Preceding syscall checkpoint (`43c7549`, Lean 4.33).** The syscall extension has 417 terminal declarations
 (415 theorems and two definitions), including 205 R2 theorems. Wrapper/compatibility,
@@ -59,8 +73,8 @@ axioms, fresh stock kernel replay, the 60-job default build and 124 unit tests
 (22.751 seconds, one skip). The capped scope/census/whitespace check confirms all
 six frozen Lean hashes. Its first run failed only because a non-trust assertion
 pinned the moving shared main head; checking ancestry instead passes. At that checkpoint the mirror was byte-identical
-to `43c7549`; no reproduction recipe or runtime behavior changes. Initialized
-whole-run R2 and remaining R3/R4 closures stay open.
+to `43c7549`; no reproduction recipe or runtime behavior changed. At that checkpoint,
+initialized whole-run R2 and remaining R3/R4 closures remained open.
 
 ```sh
 capped -- scripts/in-bundle scripts/proof-gate
@@ -194,19 +208,24 @@ validation is above; no remaining R1 obligation is recorded.
 and proof-side lifetime evolution suffice. A proof-driven comparison change
 or production history field would not preserve altitude and is not proposed.
 
-## R2 — lifetime identity and retained references (in progress)
+## R2 — lifetime identity and retained references
 
-**Original versus proved.** The charter requires safety of every internal access
-after release across every run. Checked components establish endpoint identity
-evolution and local failure-retaining access safety; initialized whole-run
-composition remains open. Raw-reference affiliation and credit accounting are
-separate stronger properties. The historical findings below
-retarget a replacement identity, rather than resurrecting a released identity.
+**Original versus proved.** The charter requires that no later access resolves
+an identity released earlier. Initialized whole-run allocation-identity access
+safety now follows for every typed Trace and both placeholder/flood modes,
+including failure prefixes. No parser, hidden-array length, progress, successful
+execution or initial-invariant premise appears in the three Runner exports.
+Raw-reference affiliation and credit accounting remain stronger separate
+properties. Historical stale-cursor findings retarget a replacement identity;
+they do not resurrect the released identity.
 
 **Architecture/refinement.** [Terminal contracts](../Leanux/Proofs/WG/LifetimeSafety/Statements.lean)
-retain exact original result, successful World and Stop; safety has its stated
-invariant/callback premises. An unchanged endpoint alone does not prove access-free
-execution; lifted helper coverage is separately checked against source.
+retain exact original results and indexed Stops. Concrete syscall contracts,
+original fixture initialization and successful prefill discharge the local
+invariant premises in the initialized theorem. A failed execution retains its
+history, not a final World. Unchanged endpoints or erasure alone do not prove
+access coverage; the literal observers and lifted helpers are separately
+inspected against source.
 
 | Model | Abstraction and refinement boundary |
 | --- | --- |
@@ -217,9 +236,10 @@ execution; lifted helper coverage is separately checked against source.
 | `SavedPeers`, prefix loops/workers | Observe demanded captured entries, including predicate misses, with saved-stamp residency obligations; exact bounded-loop erasure retains callback/exhaustion Stops. |
 | `BatchTrials`, `BatchCalls` | `scheduler_family_access_erasure`, `scheduler_family_allocation_access` and `scheduler_trial_filter_access` separate committed calls from copied-World trials. The ordered filter propagates its first non-hidden Stop; each reached trial has an isolated safe prefix from the same entry invariant. |
 | `Audit`, `BatchAudit` | [AGENT 2026-10-14] Carry saved consistency-filter entry facts in `AuditM` through remaining callers, avoiding separate reachability threading while retaining failed histories and separate trials. The sum event stream projects to committed lifetime events and records the actual current World/projected history immediately before each original filter, including empty filters and Stops. `AuditInv` combines current `AllocationInv` with validity of every saved entry. Result-dependent focus preserves cached predicates and old probe facts. Literal scheduler/nested-reschedule/receive-worker observers have unconditional source erasure, allocation-conditional committed projection and concrete failed-prefix safety. Empty-history local allocation validity derives safe trials at every recorded entry; exact filter correspondence preserves order and early failure without asserting unevaluated candidates ran. The literal source placement and exact filter-entry equation supply coverage; projection alone does not. |
-| Deferred environment workers and timers | [AGENT 2026-10-14] Reuse Audit composition for actual scheduling and focused local lifetime calls; share captured-map optional lookups so each present peer-list occurrence emits its saved-identity read and missing entries emit none. Complete scans precede callback effects; original short circuits, section records, timer detachment, finite bounds and failures remain exact. Full-Kernel bookkeeping frames project legacy APIs, and literal timer source cuts share the original pure scan/fold. Fifteen typed calls have unconditional erasure, concrete AuditInv prefix safety and reached-trial facts from local allocation-valid entries; initialized Runner closure remains open. |
-| Remaining environment callers | [AGENT 2026-10-14] Share source-only observation and per-item batch cuts, while keeping concrete Audit observers at actual device, receive, multicast and inline-poll calls. Full-Kernel leaves and an MTU/inet scalar mask retain residents/frontiers; flood queue updates preserve identity and metadata while allowing byte/source queue changes. Both flood modes keep audit-aware nested receive callbacks; complete saved-map scans, partial CQEs, delete guards, finite budgets and failed histories remain exact. Fifteen typed calls have unconditional erasure and concrete local AuditInv/reached-trial contracts; initialized Runner composition remains open. |
-| Complete syscall callers | Literal callback-parametric socket/netlink/rtnetlink observers preserve source cleanup only on ordinary returns, including negative results. Shared full-WG framing covers the four holder closes/taskWorkRun; actual namespace cleanup remains in the postworker suffix. All 34 typed constructors/35 dispatch arms retain exact descriptor/route/MTU/dump guards, observation-before-fdcheck, source resets and seccomp/postworker order. Three grouped contracts give unconditional erasure, concrete AuditInv failed-prefix preservation and reached-trial facts from local entry AllocationInv. Arbitrary typed arguments need no parser-validity premise; initialized Runner composition remains open. |
+| Deferred environment workers and timers | [AGENT 2026-10-14] Reuse Audit composition for actual scheduling and focused local lifetime calls; share captured-map optional lookups so each present peer-list occurrence emits its saved-identity read and missing entries emit none. Complete scans precede callback effects; original short circuits, section records, timer detachment, finite bounds and failures remain exact. Full-Kernel bookkeeping frames project legacy APIs, and literal timer source cuts share the original pure scan/fold. Fifteen typed calls have unconditional erasure, concrete AuditInv prefix safety and reached-trial facts from local allocation-valid entries; initialized entry is discharged by RunnerSafety. |
+| Remaining environment callers | [AGENT 2026-10-14] Share source-only observation and per-item batch cuts, while keeping concrete Audit observers at actual device, receive, multicast and inline-poll calls. Full-Kernel leaves and an MTU/inet scalar mask retain residents/frontiers; flood queue updates preserve identity and metadata while allowing byte/source queue changes. Both flood modes keep audit-aware nested receive callbacks; complete saved-map scans, partial CQEs, delete guards, finite budgets and failed histories remain exact. Fifteen typed calls have unconditional erasure and concrete local AuditInv/reached-trial contracts; initialized entry is discharged by RunnerSafety. |
+| Complete syscall callers | Literal callback-parametric socket/netlink/rtnetlink observers preserve source cleanup only on ordinary returns, including negative results. Shared full-WG framing covers the four holder closes/taskWorkRun; actual namespace cleanup remains in the postworker suffix. All 34 typed constructors/35 dispatch arms retain exact descriptor/route/MTU/dump guards, observation-before-fdcheck, source resets and seccomp/postworker order. Three grouped contracts give unconditional erasure, concrete AuditInv failed-prefix preservation and reached-trial facts from local entry AllocationInv. Arbitrary typed arguments need no parser-validity premise; initialized entry is discharged by RunnerSafety. |
+| `PrefixOuter`, `RunnerAudit`, `RunnerSafety` | History is outside indexed exceptions. The literal Runner retains initialization, seccomp prefill, defaulted hidden-array lookup, syscall/ambient order, all five postchecks, output loops and exact JSON. Explicit success and exception WP postconditions retain AuditSafe; the operation-loop invariant carries AuditInv on its actual World. Original fixture/prefill and concrete syscall/ambient contracts discharge every helper premise. Reached markers supply their saved World/history to exact ordered filters and isolated trial safety; unevaluated candidates are not claimed to have run. |
 | `PeerRemoval` | [AGENT 2026-10-14] Reuse fixed send/clear `runWorkerPrefix` wrappers and scalar queue/count frames to compose all seven original flush/removal calls. Exact erasure retains the 4096 drain, dispatch/placeholder order, early returns and saved-ID loops; concrete allocation safety adds no ownership or progress premise. |
 | `DeviceControls` | [AGENT 2026-10-14] Compose eight original socket/device controls using a full-Kernel mask of only socket labels/incoming port and legacy frame projections. Separate source inspection justifies access-free socket lifts; saved-ID loops retain actual peer accesses, negative-return cleanup and Stop prefixes. Concrete allocation safety needs no list-validity, progress or credit assumption. |
 | `DeviceCreation`/`DeviceRetirement`/`DeviceLifecycle` | [AGENT 2026-10-14] Observe guarded creation as one resident-access-free action and prove its normal allocation endpoint, avoiding an invariant at provisional epoch 0. At the original final `wg := none`, append logical releases from every actual pre-drop resident map, with packet stamps `(ifindex, id + 1)`; this accounts for store retirement, not per-object kernel frees or reference credits. Compose complete destruction/deletion with exact socket/peer-removal prefixes and queue-guard Stops. |
@@ -248,7 +268,7 @@ frame from one full-Kernel mask.
 access safety, including saved-object writes, demanded map reads and actual final
 resident retirement. Raw-reference affiliation/credit accounting is a stronger
 separate property, required where later R3/R4 arguments depend on it. This boundary
-preserves every source-coverage obligation and does not claim current completion.
+preserves every source-coverage obligation; the initialized Runner theorem now supplies this composition.
 
 **Covered original families.** The map lists every module; grouped contracts cover
 allocation/reference/lookup, receive enqueue/decrypt/completion/poll/stack, TX
@@ -314,23 +334,30 @@ python3 -B docs/proof-campaign-replay.py r2-stale-dump-cursor-orphan |
   capped -- scripts/in-bundle lake env lean --run Leanux/Proofs/WG/LifetimeSafety/ReplayOrphan.lean
 ```
 
-**Remaining obligations.** Initialized outer Runner composition remains open.
-The complete dispatcher, literal socket wrappers and exact syscall postworkers
-now preserve AuditInv, including actual resident scans and namespace cleanup.
-BatchTrials retains its conditional entry contract; audit markers derive that
-invariant at each actual filter entry reached through these callers.
-Activation.run uses plain condResched callbacks and introduces no nested
-consistency trials; flood and receive-worker callers carry nestedReschedAudit.
-The full FS frames and taskWorkRun still do not themselves execute queued cleanup;
-the separate Env cleanup observer covers that body at the syscall's original
-postworker cut. These local contracts do not assert failed-World invariants or
-supply initialized Runner entry facts. Complete wgSetDevice, all seven dump calls
-and the three WG lifecycle calls are now composed through their actual wrappers.
-Saved scalar
-affiliation and reference credits are stronger separate properties:
-dangling/aliased IDs can Stop after safe accesses. C initializes cache/handshake before incrementing the peer counter;
-the mirror increments/inserts first. Proofs follow the mirror; this difference
-alone is not a lifetime counterexample or C simulation.
+**Scope and remaining properties.** The initialized Runner composition closes
+the stated allocation-identity access property. `BatchTrials` retains its useful
+conditional local contract; the initialized audit now derives that condition at
+every actual reached filter entry. Activation.run uses plain condResched and
+has no nested consistency trial; flood/receive-worker callers carry audit-aware
+nested rescheduling. Actual queued namespace cleanup runs at the original
+postworker cut. Failed histories remain safe without asserting a failed World.
+Raw-reference affiliation and credits remain separate: a stale scalar reference
+may resolve a fresh replacement identity or Stop. R3 routing and R4 conservation
+are not consequences of this access theorem. C initializes cache/handshake before
+incrementing the peer counter; the mirror increments/inserts first. The theorem
+follows the mirror and is not a C simulation or physical-memory-safety claim.
+
+The original `trace.hidden.map (·[index]!)` is retained for arbitrary typed traces.
+Lean's pure defaulted lookup semantics supplies `[]` outside array bounds; no
+parser-validity premise is added. Exact erasure concerns JSON and indexed Stops,
+not executable diagnostic output from a defaulted lookup.
+
+[AGENT 2026-10-14] Reuse the established Logged.Runner local 2,000,000-heartbeat
+setting for the new Runner modules after the default 200,000-heartbeat erasure
+attempt failed. This preserves the existing proof architecture; capped process
+limits and global settings are unchanged. Explicit exception-history WP branches
+and the established ordinary mvcgen loop rules close safety; enabling join-point
+sharing initially left additional continuation predicates unresolved.
 
 **Effort.** Counts are per checkpoint, not an inferred campaign total. Earlier
 caller checkpoints used roughly 6–25m and 4–19 invocations each. Historical cursor
@@ -363,6 +390,7 @@ replays and both current rejection checks each took under one second.
 | Deferred workers and timer dispatch | 15 calls: 14 builds (5 PASS / 9 ordinary FAIL) plus one passing scope/census/compatibility check | 26m29s from grant 17:37:28 through full-result collection at 18:03:57. Foundation/worker/timer/scoped/full targets 139/191/194/266/409; fifteen original calls and three grouped exports. Failures involved leaf-loop framing, captured-map normalization, post-scan contract matching and deterministic heartbeat exhaustion in a monolithic timer erasure. Literal source cuts and shared pure scan/fold functions closed the latter without changed behavior or premises. No cap/interruption or runtime replay; all build exits collected. The exact eleven-file scope, all nine Lean hashes, 75 unchanged legacy theorem signatures, prior terminal statements, 411 declarations (199 R2), whitespace and mirror equality to 43c7549 pass. Independent frozen source/export review is clear; review clarified predicate misses versus absent-map slots. Sequential coordinated proof gate, fresh kernel replay, default build and 124 unit tests pass; all nine frozen Lean hashes remain unchanged. Token returned at 18:05:55 (28m27s ownership). |
 | Remaining environment callers | 17 calls: 16 builds (5 PASS / 11 ordinary FAIL) plus one passing check | 30m45s from grant 18:10:58 through full-result collection 18:41:43. Control/traffic/batch/scoped/full targets 205/207/209/273/416; fifteen originals and three grouped exports, 202 R2 / 414 declarations. Ordinary failures involved leaf framing, import/layout, constructor equality normalization, and deterministic heartbeat exhaustion in monolithic batch erasure. A source-only ForInStep item cut closed the original equation by rfl without changed behavior or premises. No cap/interruption or runtime replay; all build exits collected. Independent frozen source/export review is clear; stale environment-limit wording is corrected to the remaining syscall/initialized Runner scope. The capped exact fifteen-file scope/census/whitespace/mirror check passes, with all 218 compatibility theorem signatures and 199 prior R2 terminals unchanged. Sequential coordinated proof gate, fresh stock kernel replay, default build and 124 unit tests pass. Token returned at 18:43:29 (32m31s ownership). |
 | Complete syscall callers | 11 capped calls: nine builds (5 PASS / 4 ordinary FAIL) plus two passing checks | 11m55s from grant 18:49:32 through full-result collection 19:01:27. Wrapper/compatibility, dispatch, syscall, scoped/full targets 228/239/240/277/420; all 34 typed constructors (35 dispatch arms), three grouped exports, 205 R2 / 417 declarations. Ordinary failures involved record layout, macro forward-name resolution, callback-family reduction, the dump socket lift and branch contradiction normalization. Calls 1/2/4/6 failed; 3/5/7/8/9 passed; call 10 passes exact scope/census/signatures/whitespace/mirror and all six Lean hashes; call 11 confirms the documentation corrections, whitespace and unchanged Lean hashes. All ten compatibility signatures and 202 prior R2 terminals are unchanged. No changed premises, cap kill, interruption or runtime replay; all eleven exits collected. The reviewer found stale current declaration-table counts and two syscall-open scope clauses; all are corrected. Independent frozen source/export/documentation review is clear; a separate lower/Env/syscall source-coverage audit found no defect in its inspected surfaces. Sequential coordinated proof gate, fresh stock kernel replay, default build and 124 unit tests pass. All six frozen Lean hashes remain unchanged. Token returned at 19:08:01 (18m29s ownership). |
+| Initialized Runner | 16 capped calls: 13 builds (6 PASS / 7 ordinary FAIL) plus three checks (2 PASS / 1 ordinary FAIL) | First full result at 20:02:50 UTC, 10m18s from grant 19:52:32; final full result after comment corrections at 20:07:54, 15m22s. Foundation/observer/safety/terminal/full targets 33/242/243/280/423; three new exports, 208 R2 / 420 declarations. Four initial failures concerned generic transformer reduction/type inference, one hit the default erasure heartbeat limit, and two concerned WP continuation/prefill/reset elaboration. No source-contract gap, changed premise, cap kill, interruption, recovery admission diagnostic or runtime replay; all exits collected. Call 14 passes exact six-file scope/census/whitespace/mirror and compatibility: all 417 prior declaration statements/proof bodies are unchanged, with stale local-scope comments corrected. Check 15 failed only because a prose substring assertion did not allow a line break; removing that unnecessary formatting assertion gives passing check 16. The final check confirms all four frozen Lean hashes and the current source census/scope; this ledger count is the subsequent documentation-only delta. Independent frozen export/documentation and bounded source-coverage reviews are clear, with stale-comment findings corrected. Sequential coordinated proof gate, fresh stock kernel replay, default build and 124 unit tests pass; the capped exact check confirms all four frozen Lean hashes. Token returned at 20:13:04 UTC (20m32s ownership). |
 
 Earlier monolithic IPv4 proof search failed at heartbeat limits; explicit source
 tails replaced it. An earlier tactic loop was deliberately stopped by its verified

@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Lifetimes.RunnerSafety
 import Leanux.Proofs.WG.Lifetimes.SyscallsAudit
 import Leanux.Proofs.WG.Lifetimes.EnvRemainingCalls
 import Leanux.Proofs.WG.Lifetimes.EnvDeferredCalls
@@ -45,7 +46,7 @@ import Leanux.Proofs.WG.Lifetimes.StackAccess
 
 /-! R2's store-identity components: whole-operation keypair evolution,
 peer allocation/reference sequences, and packet primitive sequences within a device
-epoch. Full caller and lifecycle coverage remain separate obligations. -/
+epoch. The final three exports supply initialized caller and lifecycle closure. -/
 namespace Leanux.Proofs.WG.LifetimeSafety
 open Leanux Leanux.WG Leanux.Proofs.Logged
 open Leanux.Proofs.WG.Keypairs Leanux.Proofs.WG.ReplayWindow
@@ -1610,7 +1611,8 @@ theorem device_control_family_ambient_access_preserves (c : Lifetimes.AmbientCon
     PrefixPreserves I Lifetimes.LifetimeEvent.Safe call.observed := call.preserves_ambient c r
 
 /-- Concrete allocation geometry discharges all eight controls and keeps the
-actual failed access prefixes. Timer firing, Netlink/environment and initialized whole-run composition remain separate;
+actual failed access prefixes. Timer, Netlink/environment and initialized composition
+are supplied separately below;
 reference affiliation is a stronger property, not a premise of this contract. -/
 theorem device_control_family_allocation_access_preserves (call : Lifetimes.DeviceControlCall) :
     PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed := call.allocation
@@ -1633,7 +1635,7 @@ theorem device_lifecycle_family_ambient_access_preserves (c : Lifetimes.AmbientC
 /-- Concrete allocation identity safety covers all three original lifecycle
 calls and their failed access prefixes. Successful creation registers a fresh
 empty epoch without requiring the invariant at provisional setup. Netlink, timer
-firing and initialized enclosing environment/Runner composition remain open. -/
+and initialized environment/Runner composition are supplied separately below. -/
 theorem device_lifecycle_family_allocation_access_preserves (call : Lifetimes.DeviceLifecycleCall) :
     PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed := call.allocation
 
@@ -1695,8 +1697,8 @@ theorem configuration_family_ambient_access_preserves (c : Lifetimes.AmbientCont
     PrefixPreserves I Lifetimes.LifetimeEvent.Safe call.observed := call.preserves_ambient c hs r d
 
 /-- Concrete allocation geometry discharges all four configuration calls and
-their failed access prefixes. Syscall tails and
-initialized whole-run environment/Runner composition remain separate work. -/
+their failed access prefixes. Syscall tails and initialized whole-run composition
+are supplied separately below. -/
 theorem configuration_family_allocation_access_preserves (call : Lifetimes.ConfigurationCall) :
     PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed := call.allocation
 
@@ -1717,7 +1719,7 @@ theorem filesystem_local_family_exact_lift (call : Lifetimes.FilesystemLocalCall
 /-- The full WG frame discharges concrete allocation preservation. Incoming
 safe history survives every original Stop; a normal return also preserves the
 resident/allocation invariant. The complete filesystem family is framed separately
-below; initialized outer-run closure remains open and no failed World is asserted. -/
+below, as is initialized outer-run closure; no failed World is asserted. -/
 theorem filesystem_local_family_allocation_preserves (call : Lifetimes.FilesystemLocalCall) :
     PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed :=
   call.allocation
@@ -1740,7 +1742,7 @@ theorem filesystem_family_exact_lift (call : Lifetimes.FilesystemCall) :
 /-- Concrete allocation geometry transports through the full WG frame. On Stop
 only the unchanged safe history is claimed, not a failed World. The pin's final
 file release may queue netnsCleanup; its later Env execution and the enclosing
-syscall/Runner composition remain separate lifetime obligations. -/
+syscall/Runner composition are supplied separately below. -/
 theorem filesystem_family_allocation_preserves (call : Lifetimes.FilesystemCall) :
     PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed :=
   call.allocation
@@ -1800,7 +1802,7 @@ committed accesses and every recorded filter entry's copied trials, including
 failed prefixes. The exact filter equality retains candidate order, hidden-error
 false decisions and the first non-hidden Stop; certification of all candidates
 does not assert that unevaluated candidates ran. Enclosing initialized Env,
-syscall and Runner composition remains separate. -/
+syscall and Runner composition is supplied separately below. -/
 theorem scheduler_audit_reached_trials (call : Lifetimes.BatchAuditCall) (w : World)
     (hi : Lifetimes.AllocationInv [] w) :
     Lifetimes.AuditSafe (runPrefix call.observed w []).2 ∧
@@ -1861,7 +1863,7 @@ theorem environment_remaining_family_preserves (call : Lifetimes.EnvRemainingCal
 /-- Each actual reached consistency-filter entry has its own allocation-valid
 World/history and exact ordered copied-filter result, including failed trials.
 Speculative histories remain separate from committed lifetime accesses. This is
-a local-entry theorem; initialized whole-Runner closure remains open. -/
+a local-entry theorem; initialized whole-Runner closure is supplied separately below. -/
 theorem environment_remaining_reached_trials (call : Lifetimes.EnvRemainingCall) (w : World)
     (hi : Lifetimes.AllocationInv [] w) :
     Lifetimes.AuditSafe (runPrefix call.observed w []).2 ∧
@@ -1889,7 +1891,7 @@ theorem syscall_family_preserves (call : Lifetimes.SyscallAuditCall) :
 /-- Actual reached filter entries derive allocation validity from the syscall's
 local entry, including postworker failures. The copied filter has exact order
 and Stops; its speculative access histories stay separate from committed ones.
-Initialized outer Runner composition remains an independent obligation. -/
+Initialized outer Runner composition is supplied separately below. -/
 theorem syscall_reached_trials (call : Lifetimes.SyscallAuditCall) (w : World)
     (hi : Lifetimes.AllocationInv [] w) :
     Lifetimes.AuditSafe (runPrefix call.observed w []).2 ∧
@@ -1901,5 +1903,42 @@ theorem syscall_reached_trials (call : Lifetimes.SyscallAuditCall) (w : World)
       ∀ a ∈ p.world.suspended,
         Lifetimes.LifetimeEvent.Safe (runPrefix (Lifetimes.activationRunPrefix a) p.world p.history).2 :=
   call.from_allocation w hi
+
+/-! The initialized Runner exports discharge the caller obligations that remain
+explicit in the preceding local contracts. They retain histories on Stop as well
+as success, and treat consistency trials separately from committed accesses. -/
+
+/-- The complete initialized observer preserves the original JSON or exact
+indexed Stop for every typed Trace, both placeholder/flood modes and arbitrary
+incoming audit history. This is source erasure, separately from access safety. -/
+theorem runner_audit_erasure (trace : Runner.Trace) (placeholders floodExact : Bool) :
+    ErasesOuter (Lifetimes.executeTraceAudit trace placeholders floodExact)
+      (Runner.executeTrace trace placeholders floodExact) :=
+  Lifetimes.executeTraceAudit_erases trace placeholders floodExact
+
+/-- Starting from the original fixture, no committed peer, keypair or packet
+read/write resolves an identity released earlier in that history. Every actual
+saved filter entry is allocation-valid. This includes failed prefill, syscalls,
+postworkers and end guards, with no parser, length, progress or success premise. -/
+theorem runner_initialized_access_safety (trace : Runner.Trace) (placeholders floodExact : Bool) :
+    Lifetimes.AuditSafe
+      (runPrefixOuter (Lifetimes.executeTraceAudit trace placeholders floodExact) []).2 :=
+  Lifetimes.executeTraceAudit_safe trace placeholders floodExact
+
+/-- Actual initialized execution supplies each reached consistency-filter
+entry's allocation invariant. Its copied filter has the original order and
+early Stops, and each candidate's isolated access prefix is safe. Certifying
+unevaluated candidates does not assert they ran or commit their observations. -/
+theorem runner_initialized_reached_trials (trace : Runner.Trace) (placeholders floodExact : Bool) :
+    ∀ p ∈ Lifetimes.probeEntries
+      (runPrefixOuter (Lifetimes.executeTraceAudit trace placeholders floodExact) []).2,
+      Lifetimes.AllocationInv p.history p.world ∧
+      (p.world.suspended.filterM Env.Activation.consistent).run p.world =
+        (p.world.suspended.filterM (fun a => Lifetimes.activationTrialDecision a p.world p.history)).map
+          (fun ys => (ys, p.world)) ∧
+      ∀ a ∈ p.world.suspended,
+        Lifetimes.LifetimeEvent.Safe
+          (runPrefix (Lifetimes.activationRunPrefix a) p.world p.history).2 :=
+  Lifetimes.executeTraceAudit_trials trace placeholders floodExact
 
 end Leanux.Proofs.WG.LifetimeSafety

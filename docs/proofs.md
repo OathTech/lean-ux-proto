@@ -70,6 +70,8 @@ original checkpoints. The current mirror/toolchain carry status is in
   to the original runner and an exact singleton-append theorem. `Prefix`
   instead retains observations when execution fails, with exact original
   result/World or error erasure and compositional prefix-safety contracts.
+  `PrefixOuter` retains observer history outside indexed Runner exceptions,
+  with exact run/bind/erasure rules and an explicit two-branch WP bridge.
   `Focus` injects a local observer's new suffix into a combined event stream
   without changing the previous interleaving. `Projected` erases extra local
   accumulator data while retaining the original result, complete World and Stop.
@@ -141,8 +143,8 @@ original checkpoints. The current mirror/toolchain carry status is in
   taskWorkRun with its pop-before-release order and exhaustion Stop. Source-audited
   exact lifts retain arbitrary incoming history; full-WG frames transport
   AllocationInv without valid-FS, fuel/drain or callback-ownership assumptions.
-  fputFinal may queue netnsCleanup; its later Env execution and enclosing
-  syscall/Runner composition remain separate.
+  fputFinal may queue netnsCleanup; the later Env, syscall and Runner layers
+  supply its eventual execution and enclosing composition.
   `AllocationRetention`, `AllocationReleaseFrames` and `AllocationReleases`
   retain allocation bounds across reference/free calls using entry-resident
   release origins. `AllocationAmbient` instantiates shared caller contracts
@@ -168,7 +170,7 @@ original checkpoints. The current mirror/toolchain carry status is in
   encrypt-ring replacement has its own allocation frame, separate from produce.
   Failed prefixes retain every resolved access; saved-head association and
   ownership are not asserted. Concrete Batch composition now discharges those
-  worker callbacks; initialized Runner composition remains open.
+  worker callbacks; initialized Runner composition is supplied by RunnerSafety.
   `TxCompletion` and `TxWorker` add the five TX completion helpers, worker step
   and iteration, with complete socket observers and explicit rescheduling.
   Exact failed prefixes include the peer read before a jitter Stop. The shared
@@ -184,7 +186,7 @@ original checkpoints. The current mirror/toolchain carry status is in
   `HandshakeSend` composes the original buffer send, two timer helpers, initiation,
   response and send worker, retaining ordinary refusals and failed access prefixes.
   Its explicit socket/index/session contracts have concrete allocation instances;
-  initialized Runner composition remains open; saved-reference affiliation is a
+  initialized Runner composition is supplied by RunnerSafety; saved-reference affiliation is a
   separate stronger property.
   `CookieAccess` covers make/create/validate/consume with exact result and failed
   prefix preservation. `Framing/WGCookie` retains the full Kernel except cookie
@@ -206,8 +208,8 @@ original checkpoints. The current mirror/toolchain carry status is in
   premise of the exact ordered trial-filter and isolated trial-safety contracts.
   Coverage comes from the source placement and exact filter-entry equation,
   separately from projection. Result-dependent focus and generic finite-loop
-  projection support later callers. Initialized whole-run Runner
-  access closure remains open; reference affiliation is a separate stronger property.
+  projection support later callers. RunnerSafety supplies initialized whole-run
+  access closure; reference affiliation is a separate stronger property.
   `SavedPeerLookup` observes captured-map lookups per scalar peer-list occurrence:
   Some emits one saved read, None emits none, and duplicates repeat. `EnvWorkersAudit`
   composes original queue guards and deferred send/clear/crypt workers through the
@@ -238,14 +240,14 @@ original checkpoints. The current mirror/toolchain carry status is in
   netlink autobind socket records use the dump mask. `SyscallsAudit` preserves
   the original reset, seccomp entry/tail calls, task work and postworkers.
   Three grouped contracts retain unconditional erasure, AuditInv failed-prefix
-  safety and actual reached-trial facts. Initialized Runner composition remains
-  open; no parser, ownership, valid-descriptor or drain premise replaces it.
+  safety and actual reached-trial facts. RunnerSafety supplies initialized composition without parser, ownership,
+  valid-descriptor or drain premises.
   `AllowedIpsAccess` observes six original list/removal calls, including every
   demanded saved-map entry interleaved with its hit write, original owner reads,
   and exact failed prefixes. `Framing/WGAllowedIps` masks only nodes/trie roots
   and sequence, retaining full resident stores and all allocation frontiers;
   legacy frames project the canonical contracts. Concrete `AllocationInv`
-  discharges node stability and scalar peer-list/hash updates. Initialized Runner composition remains open. This extension's
+  discharges node stability and scalar peer-list/hash updates. RunnerSafety supplies initialized composition. This extension's
   coordinated gate, fresh kernel replay and fast-tier validation pass.
   `AllowedIpsInsert` covers complete original add/insert, including exact-owner
   rewrites, demanded saved-map reads, allocation refusals and partial rollback.
@@ -269,7 +271,7 @@ original checkpoints. The current mirror/toolchain carry status is in
   valid-attribute, routing, ownership or progress premises. Component/scoped/full
   targets pass 178/246/386 jobs. Independent frozen source/documentation review
   is clear; coordinated proof gate, fresh kernel replay and fast-tier validation pass.
-  Initialized Runner composition remains open.
+  RunnerSafety supplies initialized composition.
   `KeyMaintenance` covers reset, handshake clearing, current-key expiration and
   queued clearing; `TimerCallbacks` covers all five expired callbacks and their
   dispatcher. Exact erasure retains clock/getter order and all failed prefixes;
@@ -302,7 +304,7 @@ original checkpoints. The current mirror/toolchain carry status is in
   initialization/ratelimiter frames supply unchanged legacy projections.
   Four grouped exports pass scoped/full targets of 233/362 jobs, independent
   frozen review and coordinated validation.
-  Initialized Runner coverage remains open.
+  RunnerSafety supplies initialized caller coverage.
   `CounterAccess`, `AllowedLookupAccess`, `ReceiveCompletion` and `ReceivePoll`
   cover the complete validator, routing lookup, receive completion and polling
   with an explicit callback contract; `ReceiveFailure` retains the exact
@@ -313,7 +315,7 @@ original checkpoints. The current mirror/toolchain carry status is in
   The IPv4 observer uses exact source tail stages and retains both endpoint
   accesses before a reset-clock failure. `DeviceXmit` and `StackAccess` observe the
   complete transmit entry, actual stack callback and receive poll using that
-  callback. Initialized Runner coverage remains open.
+  callback. RunnerSafety supplies initialized caller coverage.
 - `Leanux/Proofs/WG/NetlinkDump/{Source,DeviceSource}` retain literal original
   serialization/header/peer-walk cuts. `Framing/WGDump` proves complete read-only
   Kernel frames and masks only the two netlink socket records, with unchanged
@@ -324,14 +326,20 @@ original checkpoints. The current mirror/toolchain carry status is in
   no cursor-affiliation or drain premise is introduced. Component/scoped/full
   builds pass 176/255/401 jobs and independent frozen source/export review is
   clear; coordinated gate, fresh kernel replay and fast-tier validation pass.
-- `Leanux/Proofs/WG/LifetimeSafety/`: campaign R2 in progress: keypair store
+- `Leanux/Proofs/WG/LifetimeSafety/`: campaign R2 lifetime safety: keypair store
   absence/freshness at original operation endpoints (`Keypairs/Identity`),
   peer/packet helper-family contracts, and a checked local stale dump-cursor finding with historical runner reachability; its full recipe is now rejected.
   Complete local handshake receive/worker and UDP/packet ingress compose the
   existing observers with explicit rescheduling contracts; concrete Batch scheduling
   discharges its internal worker callbacks. The audit scheduler derives reached
   copied-trial entry invariants locally; the syscall layer carries these facts.
-  Initialized outer Runner composition remains unproved.
+  `RunnerAudit` retains the literal initialized Runner, indexed errors and JSON;
+  `RunnerSafety` discharges initialization/prefill and every concrete syscall,
+  preserving AuditSafe on success and failure. Its three grouped exports cover
+  every typed Trace and both booleans, with no parser, length, progress or success
+  premise. Actual reached markers yield saved-entry validity, exact ordered
+  filter correspondence and safe isolated trial histories. Source coverage
+  remains distinct from erasure; scalar affiliation/credit is not asserted.
 - `Leanux/Proofs/WG/AllowedIps/`: width-parametric prefix arithmetic (`Prefix`)
   and exact original-helper execution equations (`ArithmeticMirror`); `Tree`
   proves longest-prefix lookup, canonical-prefix uniqueness and depth bounds
@@ -565,7 +573,7 @@ ReplayWindow. The conventions that keep proof work cheap are in
 | --- | --- | --- | --- | --- | --- | --- |
 | Receive counter window: replay freedom (S1, S2, S3) | S1: every accepted execution has its exact acceptance history, and no two events share an allocation lifetime and a wire counter. S2: `counterValidate` returns exactly what receive.c's rule returns and leaves exactly its replay state. S3: every non-receive syscall and every validator call leave every other keypair's window unchanged, per call and for whole syscalls including the runner's ambient step. | `Leanux/Proofs/WG/ReplayWindow/` (`Statements.lean`, 15 terminal declarations; `Counterexamples.lean`) | [charter](2026-10-12-charter-window-proof.md) | [independent review, two parts](2026-10-12-spike-window-review.md); the spike's [report](2026-10-13-spike-window.md) and [self-review](2026-10-13-spike-window-self-review.md) | ca6b22e | current |
 | R1: anti-replay uniqueness and inclusive floor | No wire counter is accepted twice in one allocation lifetime; every accepted counter is at or above the inclusive lower edge, for pure runs, original validator calls and accepted runner histories. Equality at the charter's floor is intentionally permitted, with a concrete recorded replay. | `Leanux/Proofs/WG/AntiReplay/` (`Statements.lean`, 9 terminal theorems) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r1--anti-replay-uniqueness-and-the-inclusive-floor) | ca6b22e | current |
-| R2 components: store identities; access prefixes; stale dump-cursor finding | Original endpoints preserve fresh lifetime identity, and failure-retaining observations cover the listed allocation, reference, receive, transmit, socket, polling, handshake, cookie, complete handshake receive/worker, thin UDP/packet ingress, concrete Batch scheduler, six allowed-IP list/removal calls, key maintenance, all expired timer callbacks, seven flush/peer-removal calls, eight socket/device controls, guarded create/destruct/delete, complete add/insert and setPort/setAllowedip/setPeerCmd/wgSetDevice under explicit ambient/callback contracts. Device configuration preserves exact early errors, key installation and cleanup order with concrete allocation discharge. Six local wait/pipe calls and all eleven FS dispatch arms plus actual taskWorkRun have full WG frames and source-audited unchanged-history allocation-safe lifts. All seven dump calls now have exact typed erasure and concrete allocation-safe failed prefixes, retaining actual cursor/reference/queue ordering without affiliation or progress premises. Cookie-state framing retains all resident objects and allocator geometry. Historically accepted runner witnesses exposed a stale dump cursor releasing a replacement peer, including an orphaned trie binding; c047e64 now rejects both recipes before deletion, checked against the original and observer. Copied consistency trials have separate exact filter and safe-prefix contracts. The audit scheduler now records actual filter entries and derives their allocation validity from local entry AllocationInv, with unconditional source erasure, conditional committed projection and failure-retaining trial facts. Fifteen deferred-worker/guard/timer calls propagate AuditInv through actual dispatch, idle and advance. Fifteen further controls/observation/ingress/batch calls now preserve that contract, including multicast and inline saved-peer scans, both flood modes and namespace cleanup. All typed dispatcher and complete syscall calls now compose these observers, including descriptor wrappers and exact postworker tails. Initialized whole-run allocation-identity access closure remains open through Runner; actual final device-store retirement is covered locally. Raw-reference affiliation/credit is a separate stronger property, needed where R3/R4 rely on it. | `Leanux/Proofs/WG/LifetimeSafety/` (`Statements.lean`, 205 terminal theorems) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r2--lifetime-identity-and-retained-references-in-progress) | ca6b22e | current components; initialized whole-run closure open |
+| R2: initialized lifetime safety | For every typed Runner trace and both placeholder/flood modes, committed peer/keypair/packet access histories are safe from release-before-access, including failed prefixes. Every actual reached consistency-filter entry is allocation-valid and supplies exact ordered filter correspondence and safe isolated copied-trial histories. The observer preserves exact original JSON or indexed Stop without parser, array-length, progress or success premises. Original local contracts and endpoint identity refinements remain available. Historical stale-cursor inputs retargeted replacement identities; their current full recipes reject at operation 3 under the pending-dump guard. Raw-reference affiliation/credit is a separate stronger property. | `Leanux/Proofs/WG/LifetimeSafety/` (`Statements.lean`, 208 terminal theorems) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r2--lifetime-identity-and-retained-references) | ca6b22e | current |
 | R3 components: prefix arithmetic, pure mutations and represented forests | Original IPv4/IPv6 helpers and all bounded-input normal insertion cases refine pure insertion and represented-tree longest-prefix lookup, retaining exact refusal/rollback endpoints. Original removal has an all-input loop equation and exact raw endpoints, including late Stops. From ForestRep, Compressed, Nodup and explicit target membership, unified removal-step dispatch derives all seven cases and gives total source execution, both-family pure erasure, exact retired-node absence, all-peer list filtering and full outside-forest/device/Kernel frames. Validity and actual-root longest-prefix lookup follow. Explicit resident-only list coherence additionally yields total complete original removeByPeer, preserved coherence, exact peer-owner filtering and conditional sequence/list effects. The combined routing invariant now preserves resident-list coherence and raw owner/frontier bounds through original normal insertion, both refusals and complete removal. Original creation/refusal and raw release preserve the invariant; finite actual normal calls from the configured fixture refine canonical flat updates without node IDs and reached-root longest-prefix lookup. Actual local parsed attributes now justify setAllowedip bounds and normal insertion composition. Complete original normal WG.free empties both represented families and resident lists, preserves other fields/frontiers, increments sequence once and only deletes nodes; clear now participates in finite flat histories and actual-root lookup. Whole-setAllowedip/removal completions and the actual acquired-peer configuration stage now preserve semantically valid completed prefixes on later Stop and derive normal reached-state flat agreement, through concrete deletion-permitting send/flush/cleanup frames. Actual lookup/create raw-slot residency is proved separately; public setPeerCmd preflight composition remains open. Entry routing/residency and local address shape remain explicit. Enclosing configuration/Netlink/Runner closure and packet paths remain open; clear totality and physical-node emptiness are not claimed. | `Leanux/Proofs/WG/CryptokeyRouting/` (`Statements.lean`, 90 terminal theorems) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r3--cryptokey-routing-in-progress) | ca6b22e | current; enclosing configuration and packet paths open |
 | R4 components and GRO order finding | Exact physical-ring laws and finite journals conserve admitted occurrences across consumed/live and retired/stale contents; tag erasure permits duplicate payloads. RX enqueue/consumeData/decrypt and TX enqueue/createData/encryption refine those journals on reached prefixes under explicit callback contracts; initialized calls inherit conservation and ordinal distinctness. TX occurrences are whole batches, not constituent packet identities. Original TX/RX success independently implies an entry ring that is not full. Queue/poll and concrete stack contracts establish per-poll removal prefixes, selected GRO callback order and occurrence provenance. An accepted generated replay refutes chronological post-GRO stack order. Concrete RX scheduler calls now discharge their callbacks; copied trials have separate exact decisions/filter and initialized prefix conservation. The adjacent source lookup/reference repayment restores the semantic Kernel on normal return, with exact access-prefix erasure and conditional slot-affiliation preservation. Joint TX disposition observations now project exactly to createData ring/access histories; full-step access projection uses entry AllocationInv. Source-derived normal endpoints now retain the EPIPE queue item and DEAD head with unchanged ring, erase ENOSPC packet slots, and dispose the actual DEAD txStep head without socket output. Publication retains every peer TX queue through its temporary reference interval without a peer-affiliation premise. Transport between these endpoints under arbitrary schedules remains open. RX carrier preservation, outer runner/lifecycle and joint receive-pipeline conservation remain open. | `Leanux/Proofs/WG/DeliveryOrder/` (`Statements.lean`, 79 terminal theorems; `ReplayGro.lean`) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r4--queue-poll-and-delivery-order-components-in-progress) | ca6b22e | current components; pipeline closure open |
 | R5: key lifetime enforcement; Rule Zero findings | Thirteen local theorems identify exact original clock tests, RX AEAD admission and failed-tag coverage, accepted-wire-nonce bounds, TX staging certificates, zero-timer store framing and timer-pass erasure. Accepted original/observed replays authenticate nonce R+1 before rejection and encrypt queued transport keepalives after recorded expiry or zero/clear before a new handshake, using the same packet-held material. New time inputs have coherent coarse/jiffies/arm arithmetic, without a Linux schedule claim. The original unconditional statement is false; universal replacement transport theorems are not claimed. | `Leanux/Proofs/WG/KeyLifetime/` (`Statements.lean`, 13 terminal theorems; `Replay.lean`, `ReplayDelayed.lean`, `ReplayPostClear.lean`) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r5--key-lifetime-enforcement-rule-zero-findings) | ca6b22e | current |
@@ -575,8 +583,21 @@ The gate for every row: `capped -- scripts/in-bundle scripts/proof-gate`
 (the build, the axioms of every terminal statement, the forbidden tokens,
 the imports and the default targets).
 
-The `ca6b22e` / Lean 4.35 carry passes scoped targets of 147 and 182 jobs and the
-420-job full proof target. Five proof files carry the dump list annotation and
+The initialized Runner extension passes foundation/observer/safety/terminal
+builds of 33/242/243/280 jobs and the 423-job full proof target. Three exports
+bring the current census to 208 R2 / 420 declarations (418 theorems, two definitions).
+The capped exact check passes scope, census, whitespace, mirror equality and all
+417 prior declaration statements/proof bodies; stale local-scope comments are
+corrected. Independent frozen export/documentation and bounded source-coverage
+reviews are clear. Sequential coordinated validation passes the 423-job proof
+gate (all 420 terminal declarations use only permitted axioms), fresh stock
+kernel replay, the 60-job default build and 124 unit tests (23.215 seconds, one
+skip). The coordinator's capped exact scope/census/compatibility/whitespace/mirror
+check passes and confirms all four frozen Lean hashes.
+The mirror remains `ca6b22e`, with reproduction recipes unchanged.
+
+At the preceding `ca6b22e` / Lean 4.35 carry checkpoint, scoped targets of 147 and 182 jobs and the
+420-job full proof target pass. Five proof files carry the dump list annotation and
 repair generated-VC selection/automatic simplification without changing source
 operations or theorem statements. The capped exact check passes all seven files,
 417 byte-identical terminal declarations (205 R2), 240 unchanged declaration
@@ -605,7 +626,7 @@ on permitted axioms, fresh stock kernel replay, the 60-job default build and
 124 unit tests (22.751 seconds, one skip). The capped exact scope/census/whitespace
 check confirms all six frozen Lean hashes.
 That checkpoint was pinned to `43c7549`; reproduction recipes are unchanged.
-Initialized Runner closure remains open.
+Initialized Runner closure remained open at that checkpoint.
 The runner/anti-replay contracts include both floodExact modes, and timer source
 contracts retain explicit caller-jiffies records and their failure order.
 The R6 report also records an IPv6 rate-table lifecycle
@@ -626,7 +647,7 @@ representative exports; each result's `Statements.lean` gives the complete surfa
 | ReplayWindow S2 | `counterValidate` returns the receive.c rule's result and replay state | `S2`, `S2_acceptance`, `S2_update` | Original validator versus the Lean `CounterWindow.step` rule | A resident keypair with a 128-word bitmap, established by reachable allocation | No remaining S2 obligation. Identifying `step` with the C rule is a source correspondence claim; the refinement is within Lean |
 | ReplayWindow S3 | Nonreceive calls and validator calls preserve the other keypairs' windows | `S3`, `S3_nonreceive`, `S3_validator`, `S3_surviving`, `S3_syscall`, `S3_syscall_ambient` | Surviving old cells; other cells at a validator; whole-syscall evolution including ambient work | The stated lifetime-aware invariant and successful original execution; the nonreceive specialization uses its explicit call classification | Allocation/deletion are permitted and reused slots denote new lifetimes; equality of every store cell was never claimed |
 | R1 anti-replay | No repeated acceptance under one lifetime; nothing at or below the floor accepted | `pure_uniqueness`, `mirror_uniqueness`, `runner_uniqueness`, `pure_run_floor`, `mirror_floor`, `mirror_run_floor`, `runner_floor`, `pure_run_below_floor` | Pure window runs, original validator calls and accepted runner histories | The corresponding S1/S2 premises | `inclusive_boundary_witness` and an accepted replay show equality at highest minus 8128 may be accepted. The proved exclusion is strictly below the floor |
-| R2 lifetime safety | No dead identity is resolved after release | `keypair_no_resurrection`, `peer_create_fresh_identity`, `packet_*_free_prevents_later_lookup`, access-safety families, `scheduler_family_allocation_access`, `allowedips_family_allocation_access_preserves`, `key_maintenance_family_allocation_access_preserves`, `timer_callback_family_allocation_access_preserves`, `peer_removal_family_allocation_access_preserves`, `device_control_family_allocation_access_preserves`, `device_lifecycle_family_allocation_access_preserves`, `device_retirement_actual_maps`, `allowed_ip_insertion_family_allocation_access_preserves`, `configuration_family_allocation_access_preserves`, `filesystem_local_family_wg_frame`, `filesystem_local_family_exact_lift`, `filesystem_local_family_allocation_preserves`, `filesystem_family_wg_frame`, `filesystem_family_exact_lift`, `filesystem_family_allocation_preserves`, `dump_family_access_erasure`, `dump_family_ambient_access_preserves`, `dump_family_allocation_access_preserves`, `scheduler_audit_family_erasure`, `scheduler_audit_committed_projection`, `scheduler_audit_prefix_preserves`, `scheduler_audit_filter_entry`, `scheduler_audit_reached_trials`, `environment_deferred_family_erasure`, `environment_deferred_family_preserves`, `environment_deferred_reached_trials`, `environment_remaining_family_erasure`, `environment_remaining_family_preserves`, `environment_remaining_reached_trials`, `syscall_family_erasure`, `syscall_family_preserves`, `syscall_reached_trials` | Operation endpoints and failure-retaining access prefixes of the covered original call families, including concrete Batch scheduling; isolated copied trials have separate contracts; local wait/pipe, all eleven FS dispatch arms and taskWorkRun lifts preserve incoming history exactly; all seven dump calls retain demanded access prefixes and exact source outcomes; audit markers capture each actual filter entry, while copied access histories remain isolated | Resident uniqueness/allocation bounds and each stated callback or ambient contract; FS allocation lifts and concrete dump safety use AllocationInv; dump ambient safety separately requires socket-record stability. Audit preservation assumes AuditInv; the local reached-trials theorem derives each marker invariant from empty history and entry AllocationInv. Committed projection requires projected entry AllocationInv, while source erasure is unconditional. Frame/erasure need no valid-FS-state, cursor-affiliation or fuel-sufficiency premise | All typed dispatcher and complete syscall calls now compose these observers, including descriptor wrappers and exact postworker tails. Initialized whole-run allocation-identity access closure remains open through Runner carrying the now-local reached-trial contract; actual final device-store retirement is now covered locally. Raw-reference affiliation/credit is a separate stronger property, needed where R3/R4 rely on it. `stale_cursor_retargets_replacement` is a raw local counterexample; its historically accepted runner recipes now reject at operation 3 under the pending-dump guard |
+| R2 lifetime safety | No dead identity is resolved after release | `runner_audit_erasure`, `runner_initialized_access_safety`, `runner_initialized_reached_trials`; prior store, access and caller-family contracts | Original initialized Runner, every typed Trace and both placeholder/flood modes; committed failed histories and separately certified copied trials at actual reached filter entries | No parser, hidden-array length, progress, success or initial allocation premise on the initialized exports. Local helper premises are discharged by original initialization, successful prefill and concrete caller contracts. Erasure holds for arbitrary incoming history; initialized safety starts from empty history | The stated allocation-identity access property is closed; coordinated validation passes. No failed World is asserted. Reference affiliation/credit, routing authorization, pipeline conservation, C memory safety and executable diagnostic output are separate. The raw stale-cursor witness retargets a replacement identity; its historical runner recipes now reject before deletion |
 | R3 cryptokey routing | Lookup follows insertion/removal history; incoming and outgoing packets are bound to the owning peer | `pureTree_lookup_correct`, `original_findNode_lookup_correct`, `original_insert_longest_prefix`, `original_add_all_cases`, `original_insert_all_cases`, `pure_removal_entries_and_lookup`, `original_removal_*`, `original_removeStep_forest_*`, `original_removeStep_then_findNode`, `original_removeByPeer_forest_*`, `original_removeByPeer_then_findNode`, `original_insert_routing_preserved`, `original_insert_coherent_peer_maps`, `original_insert_refusal_coherent`, `original_removeByPeer_routing_preserved`, `original_peerCreate_routing_*`, `original_peerPut_routing_preserved`, `original_initialized_routing_history`, `original_initialized_history_findNode`, `parsed_setAllowedip_bounded_call`, `parsed_setAllowedip_routing_preserved`, `original_rootRemove_lists_normal`, `original_free_routing_endpoint`, `original_free_then_findNode`, `original_routing_silent_frames`, `routing_completion_source_erasure`, `setAllowedip_completion_routing`, `original_peerConfigTail_routing_prefix`, `original_peer_update_completion_erasure`, `original_peer_removal_routing_prefix`, `original_peer_update_routing_prefix`, `original_configuration_acquisition_routing` | Represented tries versus an independent flat-prefix winner; pure removal, every raw original removal arm, unified represented-forest target removal and complete coherent peer removal; initialized finite original-call histories and reached-root lookup; local actual-parser/guard insertion cuts and complete normally returned WG.free; whole-setAllowedip/removal completion journal and actual original acquired-peer update, retaining safe earlier completions on Stop; lookup/create residency proved separately | Insertion uses the stated address bounds, fresh IDs and resident target. Removal derives local linkage/separation from ForestRep, Compressed, Nodup and explicit target membership; validity additionally supports lookup. Complete peer removal also assumes a resident target and explicit resident-only list coherence, which it preserves. Original insertion covers bounded-input normal returns, including allocation refusals. Explicit RoutingInvariant additionally supplies resident list coherence and node/peer/owner frontier bounds, all preserved by these insertion/removal calls; owner bounds do not imply residency. Finite histories instead derive this invariant from the original configured fixture and actual normal create/insert/remove/release/clear calls; only insertion carries reached-input bounds/residency, and query bounds are explicit. Local parser success derives address shape; setAllowedip guards derive family/CIDR/width bounds. Root-list clearing uses resident-list ownership and a represented subtree. Full clear uses the explicit entry RoutingInvariant and original normal return; its source-derived endpoint empties represented roots/lists, preserves complete peers except lists and other Kernel/device fields except roots/sequence, and permits only node deletions. Neither requires owner residency. Completion-stage semantics use explicit entry RoutingInvariant/flat agreement, resident insertion target and local attribute shape; actual insertion outcomes preserve loop residency, while concrete send/flush/cleanup frames permit later deletion. Acquisition contracts derive actual returned-slot residency separately; they are not yet composed through public setPeerCmd preflight. Erasure has no such premises; failed outcomes carry safe completed history, not a returned World | Enclosing parser/configuration/Netlink/Runner closure and both packet paths remain open. Clear totality and physical-node emptiness are not asserted. A raw peer-slot winner is not yet identity authorization; no accepted misrouting counterexample is claimed |
 | R4 delivery | Per-peer/key delivery follows receive order for every recorded schedule; loss occurs only at explicit arms | `two_carried_slots_*`, `original_enqueue_epipe`, `original_poll_selected_callback_complete`, `original_poll_removal_ordinals`, RX/TX ring-journal families, `original_rx_scheduler_*`, `original_rx_consistency_*`, `original_lookup_*`, `original_tx_disposition_*`, `original_tx_strict_reference_cut`, `original_create_data_*_endpoint`, `original_dead_tx_step_disposal` | Physical ring mutations, reached prefixes, poll removals and selected GRO callback entries; concrete RX scheduler and separate trial filters | Explicit callbacks for the local worker families; concrete RX scheduling discharges its callbacks. Initialized conservation uses a prior refined ring history; retired/stale structural representation requires positive ring size. The W7 endpoint contracts assume normal return and their stated entry live-peer/capacity/full-ring or actual logical-DEAD-head conditions | Accepted `r4-gro-reorder` refutes chronological post-GRO order; selected normal-before-held order is proved. Local W7 source cuts and normal EPIPE/ENOSPC/DEAD-step endpoints are checked; initialized transport between those endpoints, RX carrier preservation, outer lifecycle/runner and joint receive-pipeline conservation remain open. Universal outgoing conservation is additional scope. Callback entry is not delivery, local ordinals are not global identities, and a stopped prefix has no retained World |
 | R5 key lifetime | No encryption/decryption past the reject time or counter; no use after zeroing | `original_decryption_admission`, `original_accepted_wire_nonce`, `original_staging_admissions`, `original_zero_timer_preserves_transport_keys`, `receive_guard`, `original_age_*`, `original_receive_attempt_*` | Decryption/staging admission, exact recorded clocks, the zero timer's local effect and observed attempts | The stated original-call, recorded-clock and counter premises; the environment admits worker latency unbounded by virtual time | Accepted replays authenticate a past-limit nonce before rejection and encrypt queued material after expiry or clear. These follow the C's order and were [reviewed as statement artefacts](2026-10-13-review-r5-counterexamples.md). Rule Zero resolution does not assert universal enforcement or a universal replacement bound |
@@ -643,12 +664,12 @@ checked separately and are not included in the terminal declaration count.
 | --- | ---: | ---: | ---: |
 | ReplayWindow | 15 | 13 | 2 |
 | AntiReplay | 9 | 9 | 0 |
-| LifetimeSafety | 205 | 205 | 0 |
+| LifetimeSafety | 208 | 208 | 0 |
 | CryptokeyRouting | 90 | 90 | 0 |
 | DeliveryOrder | 79 | 79 | 0 |
 | KeyLifetime | 13 | 13 | 0 |
 | FloodResistance | 6 | 6 | 0 |
-| Total | 417 | 415 | 2 |
+| Total | 420 | 418 | 2 |
 
 C memory safety, constant time, cryptographic security and the physical
 erasure of secrets are separate claims that no row makes.
