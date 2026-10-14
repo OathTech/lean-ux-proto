@@ -36,7 +36,7 @@ private def unhashEntry (d : Decision) (hashed : IndexEntry → Bool) : M Unit :
 /-- wg_index_hashtable_remove (peerlookup.c:192-198) of a peer's entry of
     this kind: `hlist_del_init_rcu`, a no-op if unhashed. -/
 def indexRemove (pid : PeerId) (kind : IndexKind) : M Unit :=
-  unhashEntry .idxRemoveHashed fun e => e.peer == pid && e.kind == kind
+  unhashEntry .idxRemoveHashed fun e => e.peer == (some pid) && e.kind == kind
 
 /-- wg_index_hashtable_remove (peerlookup.c:192-198) of a keypair's entry
     (noise.c:126, :136). -/
@@ -124,7 +124,7 @@ def indexBucket (index : Nat) : M (List IndexEntry) := do
 
 /-- Whether a peer's entry of this kind is hashed. -/
 def indexHashed (pid : PeerId) (kind : IndexKind) : M Bool :=
-  return (← getDev).indexTable.any fun e => e.peer == pid && e.kind == kind
+  return (← getDev).indexTable.any fun e => e.peer == (some pid) && e.kind == kind
 
 /-- A walk over a bucket for `index`, reporting the loop and the compare:
     whether some entry has this index. -/
@@ -139,7 +139,7 @@ private def bucketHas (walk collide : Decision) (index : Nat) : M Bool := do
     (a recorded hidden input) not in use, inserted at the head. -/
 def indexInsert (pid : PeerId) (kind : IndexKind) : M Nat := do
   -- `hlist_del_init_rcu(&entry->index_hash)` first (peerlookup.c:125)
-  unhashEntry .idxInsertHashed fun e => e.peer == pid && e.kind == kind
+  unhashEntry .idxInsertHashed fun e => e.peer == (some pid) && e.kind == kind
   -- `goto search_unused_slot` draws again; nothing else inserts meanwhile
   -- (one CPU), so the locked walk agrees with the unlocked one. The C loop
   -- is unbounded; the draws are records, so the loop is record-driven
@@ -151,7 +151,7 @@ def indexInsert (pid : PeerId) (kind : IndexKind) : M Nat := do
     -- the locked walk's collision (stolen meanwhile, peerlookup.c:148) needs
     -- a concurrent insert
     if ← bucketHas .idxInsWalk2 .idxInsCollide2 index then unsupported "an index stolen during insertion"
-    modifyDev fun d => { d with indexTable := { index, peer := pid, kind } :: d.indexTable }
+    modifyDev fun d => { d with indexTable := { index, peer := some pid, kind } :: d.indexTable }
     return index
   budgetExhausted "index draws"
 
@@ -163,7 +163,7 @@ def indexReplaceHandshake (pid : PeerId) (kp : KeypairId) : M Bool := do
   let hashed ← indexHashed pid .handshake
   if ← branch .idxReplaceUnhashed !hashed then return false
   modifyDev fun d => { d with indexTable := d.indexTable.map fun e =>
-    if e.peer == pid && e.kind == .handshake then { e with kind := .keypair, keypair := some kp } else e }
+    if e.peer == (some pid) && e.kind == .handshake then { e with kind := .keypair, keypair := some kp } else e }
   return true
 
 def NSEC_PER_SEC : Int := 1000000000
@@ -234,8 +234,17 @@ def indexLookup (kinds : List IndexKind) (index : Nat) : M (Option IndexEntry) :
   if !stopped then _ ← branch .idxWalk false
   if ← branch .idxFound entry.isSome then
     let some e := entry | invariant "unreachable"
-    let peer ← peerGetMaybeZero (some e.peer)
-    if ← branch .idxPeerAlive peer.isSome then return entry
+    -- `entry->peer = wg_peer_get_maybe_zero(entry->peer)` (peerlookup.c:218):
+    -- the get's result is stored back into the table entry, so a failed get
+    -- leaves NULL there and a later lookup of the same entry takes
+    -- wg_peer_get_maybe_zero's `!peer` arm (found by the binary adequacy
+    -- grind, 2026-10-14). The failed get is unreachable on one CPU without
+    -- preemption (docs/2026-10-05-l-lifecycle.md, the index lookup's dead
+    -- arm); the data flow is the C's regardless.
+    let peer ← peerGetMaybeZero e.peer
+    modifyDev fun d => { d with indexTable := d.indexTable.map fun x =>
+      if x.index == e.index && x.kind == e.kind then { x with peer } else x }
+    if ← branch .idxPeerAlive peer.isSome then return some { e with peer }
   return none
 
 /-- `wg_pubkey_hashtable_lookup` (peerlookup.c:53-71): a map lookup (the

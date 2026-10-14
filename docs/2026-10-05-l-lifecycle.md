@@ -1182,3 +1182,48 @@ operations on the missing device and optionally a create again; and W3's
 queue-then-remove (docs/2026-10-06-w3-w12.md V.6). 200/200 pass the domain
 filter. The counts in `wait_after_up` stay 0 for the lifecycle operations
 (no guest wait), and 1.1 s for `wg_netns_close` (W8).
+
+### 16.6 The index lookup's dead arm [AGENT 2026-10-14]
+
+`wg_index_hashtable_lookup` (`peerlookup.c:202-226`) stores the result of
+`wg_peer_get_maybe_zero` back into the entry (`:218`): a failed get leaves
+`entry->peer` NULL, and a later lookup that finds the same entry takes the
+get's `!peer` arm (`peer.c:75`) instead of the `kref_get_unless_zero` arm.
+Until 2026-10-14 the mirror's entry kept its peer id across a failed get, so
+a second lookup of a dead entry reported `peerGetMaybeZeroDead` where the C
+reports `peerGetMaybeZeroNull`. Found by the binary adequacy grind's region
+lemma over the lookup, the first Rule Zero finding at the binary level;
+fixed by `IndexEntry.peer : Option PeerId` and the store-back in
+`indexLookup` (`Leanux/WG/Peer.lean`), with a two-lookup witness in the
+fixing commit.
+
+The arm is modelled and unexercised: in this configuration
+(`CONFIG_NR_CPUS=1`, `CONFIG_PREEMPT_NONE=y`) no lookup finds an entry whose
+peer's reference count is zero.
+
+- A handshake entry is unhashed by `kref_release` (`peer.c:197-221`, the
+  removal at `:211-212`) inside the `kref_put` (`:223-227`) that brings the
+  count to zero, with no scheduling point between the decrement and the
+  removal. The lookups that ask for handshake entries, the cookie consume
+  (`cookie.c:205-208`) and the response consume (`noise.c:747-749`), run in
+  the handshake receive worker (`receive.c:92-112`, a kworker), which cannot
+  run between those two points: it does not preempt the task doing the put,
+  and when it is itself that task the removal precedes its next lookup.
+- A keypair entry is hashed only while its keypair is in a slot: every put
+  inside `noise.c` is `unreference_now` (`:164`, `:169`, `:174`, `:228`,
+  `:237`, `:246`, `:248`, `:285`; the removal at `:135-138`), and the
+  per-packet puts in `send.c` and `receive.c` are not, but the keypair's
+  final free removes too (`keypair_free_kref`, `:126-127`).
+  `wg_noise_keypairs_clear` (`peer.c:101`) empties the slots before the
+  device's reference is dropped (`:149`), and `is_dead` forbids new keypairs
+  (`noise.c:844`), so while a keypair entry is hashed the count is at least
+  one. The data path's lookup (`receive.c:517-519`, NET_RX softirq, keypair
+  kind only) never takes the arm, even when it interrupts the put.
+
+The kernel's own comment (`peer.c:131-146`) expects the arm in
+`wg_cookie_message_consume` on SMP, where another CPU's lookup runs between
+the decrement and the removal. The same holds of the get in
+`wg_pubkey_hashtable_lookup` (`peerlookup.c:53-71`; the mirror's
+`pubkeyLookup`): `peer_make_dead` removes the pubkey entry (`peer.c:86`)
+while the count is still at least one. Both arms stay as decisions without a
+witness, the C's control flow; neither is a scope cut.

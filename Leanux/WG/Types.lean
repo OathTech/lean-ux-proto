@@ -91,7 +91,9 @@ abbrev KeypairId := Nat
     handshake or one of its keypairs, under a random index. -/
 structure IndexEntry where
   index : Nat
-  peer : PeerId
+  /-- `entry->peer`: NULL once a lookup's `wg_peer_get_maybe_zero` failed on it
+      (peerlookup.c:218 stores the get's result back into the entry). -/
+  peer : Option PeerId
   kind : IndexKind
   /-- For a keypair entry, which keypair (an initiator peer can hold a
       current and a next keypair, each with its own entry). -/
