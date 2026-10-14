@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.Queues.FullRing
-import Leanux.Proofs.WG.Queues.RingSteps
+import Leanux.Proofs.WG.Queues.RingOccurrences
+import Leanux.Proofs.WG.Queues.EnqueueAdmission
 import Leanux.Proofs.WG.Queues.Enqueue
 import Leanux.Proofs.WG.Queues.PrevQueue
 import Leanux.Proofs.WG.Queues.RxCompletionFrame
@@ -401,5 +402,75 @@ theorem original_poll_buffered_entry_subsequence (pid : PeerId) (budget : Nat)
     ((Queues.bufferedEntries (Logged.runPrefix (Queues.rxPollGro pid budget) w []).2).map
       Queues.GroEntry.skb).Sublist cell.queue.all :=
   Queues.rxPollGro_buffered_sublist pid budget w cell hc
+
+/-- Every finite sequence of guarded offers and polls preserves the exact
+physical representation and both conservation equations. The entry invariant
+is explicit; batch is arbitrary, including zero and values above size. -/
+theorem original_ring_journal_preserves (n batch : Nat)
+    (h : List (Queues.Ring.Journal.Event α)) (r : PtrRing α)
+    (cs : List (Queues.Ring.Journal.Command α))
+    (hi : Queues.Ring.Journal.Inv n batch h r) :
+    Queues.Ring.Journal.Inv n batch
+      (h ++ (Queues.Ring.Journal.run r cs).1) (Queues.Ring.Journal.run r cs).2 :=
+  Queues.Ring.Journal.run_inv hi cs
+
+/-- Starting from the original initializer, admissions are exactly consumed
+occurrences followed by live items, for every size. Positive size additionally
+retains a physical retired/stale/live witness at the initializer's actual batch.
+This is a finite pure ring journal, not whole-pipeline or eventual delivery. -/
+theorem original_initialized_ring_journal_conservation (n : Nat)
+    (cs : List (Queues.Ring.Journal.Command α)) :
+    let out := Queues.Ring.Journal.run (PtrRing.init n) cs
+    Queues.Ring.Journal.admitted out.1 = Queues.Ring.Journal.consumed out.1 ++ out.2.items ∧
+      (0 < n → Queues.Ring.Journal.Inv n (PtrRing.init (α := α) n).batch out.1 out.2) :=
+  ⟨Queues.Ring.Journal.conservation_all n cs, fun hn => Queues.Ring.Journal.initialized hn cs⟩
+
+/-- A zero-size ring refuses every offer and returns none for every poll,
+recording every outcome and preserving the complete arbitrary starting ring. -/
+theorem original_zero_size_ring_journal (r : PtrRing α) (hz : r.size = 0)
+    (cs : List (Queues.Ring.Journal.Command α)) :
+    Queues.Ring.Journal.run r cs = (cs.map Queues.Ring.Journal.zeroEvent, r) :=
+  Queues.Ring.Journal.run_zero r hz cs
+
+/-- Forgetting occurrence ordinals preserves all original guarded offer and
+consume outcomes and the full physical ring. This erasure holds on arbitrary
+starting rings; no freshness or injectivity is assumed for their contents. -/
+theorem original_tagged_ring_journal_erasure (r : PtrRing (Nat × α)) (next : Nat)
+    (cs : List (Queues.Ring.Journal.Command α)) :
+    Queues.Ring.Journal.run (Queues.Ring.mapRing Prod.snd r) cs =
+      ((Queues.Ring.Journal.run r (Queues.Ring.Journal.tagCommands next cs)).1.map
+        (Queues.Ring.Journal.Event.map Prod.snd),
+       Queues.Ring.mapRing Prod.snd
+        (Queues.Ring.Journal.run r (Queues.Ring.Journal.tagCommands next cs)).2) :=
+  Queues.Ring.Journal.tagged_erasure r next cs
+
+/-- Every offer receives the next ordinal, including refusals. From an empty
+initialized ring, consumed and live occurrences partition admissions and their
+joint ordinal list is duplicate-free. Payload duplication remains unrestricted;
+these tags are local journal occurrences, not allocation identities. -/
+theorem original_tagged_ring_journal_occurrences (n next : Nat)
+    (cs : List (Queues.Ring.Journal.Command α)) :
+    let out := Queues.Ring.Journal.run (PtrRing.init n) (Queues.Ring.Journal.tagCommands next cs)
+    (Queues.Ring.Journal.offered out.1).map Prod.fst =
+        List.range' next (Queues.Ring.Journal.inputs cs).length ∧
+      Queues.Ring.Journal.admitted out.1 = Queues.Ring.Journal.consumed out.1 ++ out.2.items ∧
+      ((Queues.Ring.Journal.consumed out.1 ++ out.2.items).map Prod.fst).Nodup :=
+  ⟨Queues.Ring.Journal.tagged_offers (PtrRing.init n) next cs,
+    Queues.Ring.Journal.tagged_conservation n next cs⟩
+
+/-- Original TX enqueue returning zero independently establishes that its
+entry physical ring existed and was not full. EnqueueResult remains unchanged.
+No admitted event is inferred from a guard followed by a queue-work Stop. -/
+theorem original_tx_admission_not_full (pid : PeerId) (item : List SkbId) (w v : World)
+    (hr : (enqueuePerDeviceAndPeer pid item).run w = .ok (0, v)) :
+    ∃ r, Queues.encryptRing w = some r ∧ r.full = false :=
+  Queues.enqueue_success_free pid item w v hr
+
+/-- The same independent successful-admission guard for original RX enqueue,
+without queue geometry, ownership or packet-ID validity assumptions. -/
+theorem original_rx_admission_not_full (id : SkbId) (w v : World)
+    (hr : (enqueuePerDeviceAndPeerRx id).run w = .ok (0, v)) :
+    ∃ r, Queues.decryptRing w = some r ∧ r.full = false :=
+  Queues.enqueue_rx_success_free id w v hr
 
 end Leanux.Proofs.WG.DeliveryOrder

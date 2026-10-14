@@ -3,7 +3,6 @@
 Print one runner JSON input; no guest, kernel run, or retained run artifact.
 """
 import argparse
-import ast
 import copy
 import json
 import sys
@@ -13,19 +12,48 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def recorded_fixture(name):
-    tree = ast.parse((ROOT / "evaluator/test_model_replay.py").read_text())
-    for node in tree.body:
-        if (isinstance(node, ast.Assign)
-                and any(isinstance(t, ast.Name) and t.id == name for t in node.targets)):
-            call = node.value
-            if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute)
-                    and isinstance(call.func.value, ast.Name)
-                    and call.func.value.id == "json" and call.func.attr == "loads"
-                    and len(call.args) == 1):
-                raise ValueError(f"fixture {name} is no longer a literal json.loads call")
-            return json.loads(ast.literal_eval(call.args[0]))
-    raise ValueError(f"missing recorded fixture {name}")
+def historical_session_seed():
+    """Corpus operations plus the historical record words used by these recipes.
+
+    Former CONTENDED_ROAM_CMP in evaluator/test_model_replay.py at 615fb7c:
+    rx_roam_v6 comparison child, 2026-10-06, contended host load 50–80,
+    .worktrees/flake before-3 chunk-000b. Its data NAPI poll ran inside enqueue;
+    captured kref operands were 1, 1, 3 rather than after-enqueue's 1, 1, 2.
+    The campaign transforms these old records explicitly below (including
+    section widths, cache/arm flags and synthetic wait bounds). Retaining this
+    compact seed repairs reproduction after the old evaluator fixture's
+    removal; it does not make the resulting witnesses fresh kernel captures.
+    """
+    trace = json.loads((ROOT / "corpus/wireguard/rx_roam_v6.json").read_text())
+    trace["hidden"] = [
+        [[5, "a152759a1e000000"]],
+        [[6, "9909f3a41e000000"], [40, "f05e3981ffffffff"],
+         [6, "9909f3a41e000000"], [7, "9909f3a41e000000"],
+         [1, "8182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0"],
+         [3, "803bb16a00000000b168de3a00000000"], [4, "0d0c0b0a00000000"],
+         [8, "9909f3a41e000000"], [21, "23496d285f2d34c75cb861a51ec9230c"],
+         [20, "01b25d3c00000000"], [48, "e0b33f81ffffffff"],
+         [49, "0000000000000000"], [14, "3d00000000000000"],
+         [41, "0000000000000000"]],
+        [],
+        [[48, "e0b33f81ffffffff"], [49, "0000000000000000"],
+         [42, "807c3981ffffffff"], [13, "a99501cd1e000000"],
+         [15, "8560c46a000000005316763a00000000"], [6, "a99501cd1e000000"],
+         [60, "0000000000000000"], [44, "c0643981ffffffff"],
+         [45, "0000000000000000"], [46, "00623981ffffffff"],
+         [20, "7000000000000000"], [48, "e0b33f81ffffffff"],
+         [49, "0000000000000000"], [6, "a99501cd1e000000"],
+         [47, "0000000000000000"], [43, "0000000000000000"]],
+        [[48, "e0b33f81ffffffff"], [49, "0000000000000000"],
+         [50, "008c3981ffffffff"], [6, "a39cc3eb1e000000"],
+         [48, "e0b33f81ffffffff"], [6, "9da600ec1e000000"],
+         [49, "0000000000000000"], [63, "0000000000000000"],
+         [51, "0000000000000000"]],
+        [], [],
+    ]
+    if len(trace["ops"]) != len(trace["hidden"]):
+        raise ValueError("historical seed no longer matches the corpus operation count")
+    return trace
 
 
 def add_wait_bounds(trace, operation_indices):
@@ -43,7 +71,7 @@ def add_wait_bounds(trace, operation_indices):
 
 
 def inclusive_floor():
-    trace = recorded_fixture("CONTENDED_ROAM_CMP")
+    trace = historical_session_seed()
     window = json.loads((ROOT / "corpus/wireguard/rx_window.json").read_text())
     data_records = trace["hidden"][4]
     trace["id"] = "r1_inclusive_floor"
@@ -119,7 +147,7 @@ def fixture_session():
 
 def receive_wire_limit(strict=False):
     """Reconstructed records with the existing R packet or generated R+1 packet."""
-    trace = recorded_fixture("CONTENDED_ROAM_CMP")
+    trace = historical_session_seed()
     limit = json.loads((ROOT / "corpus/wireguard/d2_rx_reject_after_messages.json").read_text())
     records = copy.deepcopy(trace["hidden"][4])
     clocks = [i for i, record in enumerate(records) if record[0] == 6]
@@ -153,7 +181,7 @@ def receive_wire_limit(strict=False):
 
 def post_clear_transport():
     """Synthetic timer ordering with deliberately incoherent coarse/jiffies clocks."""
-    trace = recorded_fixture("CONTENDED_ROAM_CMP")
+    trace = historical_session_seed()
     response = copy.deepcopy(trace["hidden"][3])
     if [r[0] for r in response] != [48, 49, 42, 13, 15, 6, 60, 44, 45, 46, 20, 48, 49, 6, 47, 43]:
         raise ValueError("recorded response operation no longer matches the source recipe")
@@ -179,7 +207,7 @@ def post_clear_transport():
 
 def delayed_encryption(clear=False):
     """Generated coherent coarse/jiffies inputs, not a captured kernel run."""
-    trace = recorded_fixture("CONTENDED_ROAM_CMP")
+    trace = historical_session_seed()
     data = json.loads((ROOT / "corpus/wireguard/d3_keepalive_rearm_deleted.json").read_text())
     initial_jiffies = 2**32 - 75000
     after_expiry = 673 if clear else 322
@@ -329,7 +357,7 @@ def delayed_encryption(clear=False):
 
 def gro_reorder():
     """Generated explicit schedule, not a Linux capture: held ACK then normal SYN."""
-    trace = recorded_fixture("CONTENDED_ROAM_CMP")
+    trace = historical_session_seed()
     response = fixture_session()
     from harness import noise
     if response.message.hex() != trace["ops"][3]["message"]:
@@ -366,7 +394,7 @@ def gro_reorder():
 def retransmit_limit():
     """Generated retry episode with explicit coherent clocks/arms, not a capture."""
     trace = json.loads((ROOT / "corpus/wireguard/d3_retransmit_gives_up.json").read_text())
-    fixture = recorded_fixture("CONTENDED_ROAM_CMP")
+    fixture = historical_session_seed()
     draws = {site: encoded for site, encoded in fixture["hidden"][1] if site in {1, 4}}
     if set(draws) != {1, 4}:
         raise ValueError("tracked initiation draws changed")

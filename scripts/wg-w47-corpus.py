@@ -183,8 +183,8 @@ def tier():
     (one byte) keep the wire and the listeners' drain small; the second
     batch's wait is the tier's 1000 ms default (section 12, P-A)."""
     out = {}
-    def trace(name, first, count, expect):
-        ops, sess, steer = d3.session()
+    def trace(name, first, count, expect, keepalive=25):
+        ops, sess, steer = d3.session(keepalive=keepalive)
         batches = [batch([xmit_item(d2.payload(1, 1 + k)) for k in range(first)], 200)] if first else []
         batches.append(batch([xmit_item(d2.payload(1, 100 + k)) for k in range(count)], 1000))
         out[name] = (ops + batches + [OBSERVE, GET], steer, SESSION + d2.DATA_SENT + expect)
@@ -201,10 +201,18 @@ def tier():
     # 15 items in op 4: with the keepalive, 16 consumed, the batch rule clears
     # slots 0..15 at the 16th consume: nothing carried, all 1024 fit
     trace("w7_ring_batch_clear", 15, 1024, fits)
+    # Shorter keepalives (1, 2 and 5 s, tried 2026-10-13 for the claim-point
+    # robustness work) do not put a timer inside the batch: the persistent
+    # keepalive is re-armed at every authenticated packet, so it fires only
+    # after the last send, in the console drain between operations, where no
+    # window records it (the 2 s and 5 s variants fail the guest's opened-
+    # sections guard, the 1 s one as a bare observation difference). The 25 s
+    # session stays; the variants are not written.
+    out.update(rx_1025())
     return out
 
 
-def rx_1025_pending():
+def rx_1025():
     """The receive twin of the queue limit (receive.c:534-539, the receive
     audit's F1): 1025 data messages to one peer in one batch, all queued
     before the decrypt worker runs; the 1025th finds the peer's rx_queue at
@@ -212,13 +220,11 @@ def rx_1025_pending():
     keypair and peer puts and a silent dev_kfree_skb, no counter. Keepalive-
     sized data messages (32 bytes, an empty inner), since the guest's
     MAX_PAYLOAD (65536 bytes per operation) cannot carry 1025 items with an
-    inner datagram each. Not written into the tier: Linux runs it (the 1025th
-    dropped silently, 15.6 s) and the mirror is in domain (`leanux-model
-    --domain`), but the 1024 inline NAPI polls that follow meet the (c')
-    placement ambiguity 1019 times, beyond the protocol's bound of 64 open
-    polls per trace (evaluator/protocol.py), so the check reports
-    `invalid_output`. Enable once the placement machinery scales (or a
-    record settles (c'))."""
+    inner datagram each. The 1024 inline NAPI polls that follow meet the
+    (c') placement ambiguity about a thousand times; the protocol's ceiling
+    on open placements is the trace's injected-message count, so the check's
+    placement selection runs over all of them (claim-point robustness,
+    2026-10-13)."""
     ops, sess, steer = d3.session()
     items = [{"kind": "inject", "family": 4, "port": d1.PORT, "message": sess.to_wg0(k, b"").hex()}
              for k in range(1025)]

@@ -2907,6 +2907,10 @@ def Decision.repeatable : Decision → Bool
   -- outcomes in one NET_RX section when IPv4 and IPv6 datagrams share a poll
   -- (w7_multi_rx_9_rst_roam, the receive audit's F6b trace)
   | .epFromSkbInet | .epFromSkbInet6
+  -- the receive-side batch (the W7 tier's w7_ring_rx_1025, claim-point
+  -- robustness 2026-10-13): consume_data's enqueue succeeds once per item and
+  -- fails once at the full rx_queue, both outcomes in one operation
+  | .dataEnqueueOk | .dataEnqueueOkEpipe
   | .allocFdBelowNextFd | .allocFdSearch | .findNextFdAllFull | .findNextFdSkipFullWords
   | .allocFdLimit | .expandFilesFits | .allocFdExpandError | .allocFdExpanded
   | .fgetLightSingleOwner | .fgetLightNoFile | .fgetLightMasked | .fdputFput

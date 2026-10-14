@@ -133,7 +133,7 @@ the 25 s keepalive.
 
 The `w7-tier` suite (`evaluator/check.py`, `TIER_SUITES`, run on request and
 outside the default list; each trace is a bulk chunk by itself) and
-`tier()` in `scripts/wg-w47-corpus.py`, five traces on the s1 oracle, each
+`tier()` in `scripts/wg-w47-corpus.py`, five traces on the s1 oracle (six with the receive twin below), each
 with the ring-full and `-EPIPE` outcomes in its expectations. Drops = items
 − (1024 − the uncleared slots carried into the batch):
 
@@ -158,21 +158,51 @@ one `wg_batch` cannot let the consumer ahead (the kworkers run after
 `io_uring_enter`), but a first batch that completes a batch of 16 consumes
 does, and yields zero drops.
 
-### The receive twin, pending (2026-10-13)
+### The receive twin [registered 2026-10-13, robustness]
 
 The receive correspondence audit's F1 (`docs/2026-10-13-audit-receive.md`)
 found `wg_packet_consume_data`'s `-ENOSPC` arm (receive.c:534-539, the
 peer's `rx_queue` at `MAX_QUEUED_PACKETS`) ending in an `invariant` stop;
-the mirror now has the C's puts and silent free. Its trace,
-`w7_ring_rx_1025` (`rx_1025_pending` in `scripts/wg-w47-corpus.py`: 1025
-keepalive-sized data messages in one batch, since the guest's `MAX_PAYLOAD`
-of 65536 bytes cannot carry 1025 inner datagrams), runs on Linux (the
-1025th dropped silently, 15.6 s) and is in domain for the mirror, but the
-1024 inline NAPI polls that follow meet the (c') placement ambiguity 1019
-times, beyond the protocol's bound of 64 open polls per trace
-(`evaluator/protocol.py`), so the check reports `invalid_output`. It is not
-written into the tier until the placement machinery scales or a record
-settles (c').
+the mirror has the C's puts and silent free. Its trace, `w7_ring_rx_1025`
+(`rx_1025()` in `scripts/wg-w47-corpus.py`: 1025 keepalive-sized data
+messages in one batch, since the guest's `MAX_PAYLOAD` of 65536 bytes cannot
+carry 1025 inner datagrams), is the tier's sixth trace. The 1024 inline NAPI
+polls that follow meet the (c') placement ambiguity 1019 times; the
+protocol's ceiling on open placements (`evaluator/protocol.py`,
+`injected_messages`) is the trace's injected-message count, since one (c')
+placement arises per `wg_queue_enqueue_per_peer_rx`, that is per data
+message the fixture delivered, and a count above it is an invalid output;
+the bound of 64 it replaces was a guess. The check's placement selection
+(`section_agreement`) is two runs and a replay whatever the count, so the
+selection runs over all of them. `wg_packet_consume_data.enqueued` and
+`enqueued_epipe` are `repeatable` (both outcomes in one operation: 1024
+successes and the refusal). On s2 the trace agrees (15,404 operand pairs;
+`invalid_output` before the ceiling, `opposite outcome covered` at
+receive.c:531 before the repeatable marks).
+
+### The claim point's failure, and a timer that is not one [AGENT 2026-10-13]
+
+The audit wave's integration record (main f45bde8) named the gap "a timer
+section inside a batch is not yet placeable by the scheduler"; the gap was
+the crypt-ahead schedule below, and that wording is superseded.
+
+The audit wave's claim point failed `w7_ring_fresh_1024` in this group
+under seven guests with `expected section_stop:wg_packet_tx_worker (site
+47), the record is site 100`, read at the time as a timer firing inside the
+batch. Site 100 is the arm record: the kernel dispatched the tx worker at
+an encrypt yield and it sent more items than the mirror's encrypt
+activation had crypted; the rule is 17.18 of the W7 design (`cryptAhead`).
+Shorter keepalives (1, 2 and 5 s) were tried to put a timer inside the
+batch and cannot: the persistent keepalive is re-armed at every
+authenticated packet, so it fires only after the last send, in the console
+drain between operations, where no window records it; the 2 s and 5 s
+variants fail the guest's opened-sections guard (`opened 1036, recorded
+1032`) and the 1 s one as a bare observation difference (`tx_packets` 1026
+against 1025, the keepalive sent between the batch's readout and the
+observe, with no section in either window and the guard silent). A timer
+whose effects fall between windows is outside the domain by construction;
+the 1 s case shows the guard does not cover every such gap, a harness
+matter noted, not changed.
 
 ## Estimate and the actual cost
 

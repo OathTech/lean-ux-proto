@@ -11,7 +11,11 @@ Every sentinel must be rejected: its run must end in a mirror-side verdict
 (MISMATCH_OUTCOMES) with no other outcome. A run that fails only on the
 infrastructure (an environment failure, a timeout, a busy QEMU slot, an
 aborted run, no report) is "no_verdict", never a rejection, and the script
-exits 1.
+exits 1. Two sentinels' rejection depends on an order the kernel chose
+(D2-M12's NAPI placement, Q-M1's dispatch order): a run in which the
+recorded order cannot distinguish the mutant is "inconclusive", with the
+distinguishing counts in the summary, not a survival (claim-point
+robustness, 2026-10-13).
 
 The catalogue this set was chosen from (about a hundred entries, one per
 design item, 2026-09-30 to 2026-10-11) is in git history before this file's
@@ -26,6 +30,7 @@ import json, os, subprocess, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from evaluator.napi_orders import napi_orders  # noqa: E402
+from evaluator.dispatch_orders import dispatch_orders  # noqa: E402
 
 SENTINELS = [
   ('C-M2-receiver-is-sender',
@@ -79,7 +84,8 @@ SENTINELS = [
    'b1_', 'wireguard'),
   ('Q-M1-dispatch-order-ignored',
    'dispatch identity: the unit a section names (kind 307, the start record)',
-   'dispatch order: the send worker runs the queue head, not the unit the record names',
+   'dispatch order: the send worker runs the queue head, not the unit the record names; rejected only when a run '
+   'shows a dispatch that was not the FIFO head with two pending (timing-dependent, evaluator/dispatch_orders.py)',
    'Leanux/Env.lean',
    '    | some u => resolveUnit .sendWorker u d.sendWorkQueue\n    | none => pure headPid\n',
    '    | some _ => pure headPid\n    | none => pure headPid\n',
@@ -126,7 +132,7 @@ SENTINELS = [
 SUBSET = """import sys
 sys.path.insert(0, '.')
 import evaluator.check as c
-prefix = sys.argv[1]
+prefix = tuple(sys.argv[1].split(','))   # one id prefix, or several comma-separated
 load = c.load_traces
 c.load_traces = lambda *a, **k: [t for t in load(*a, **k) if t['id'].startswith(prefix)]
 sys.exit(c.main(sys.argv[2:]))
@@ -219,6 +225,15 @@ def main():
                 results[name]['napi_orders'] = dict(a=orders['a'], bc=orders['bc'])
                 if status == 'survived' and not orders['bc']:
                     results[name]['status'] = 'inconclusive'   # only order (a) occurred, which cannot reject it
+            if name == 'Q-M1-dispatch-order-ignored':
+                # the same class: the recorded dispatch order distinguishes the
+                # mutant only when a dispatch ran a unit that was not the FIFO
+                # head with two pending (evaluator/dispatch_orders.py)
+                orders = dispatch_orders(os.path.join(ROOT, out))
+                results[name]['dispatch_orders'] = dict(fifo=orders['fifo'], non_fifo=orders['non_fifo'],
+                                                        single=orders['single'])
+                if status == 'survived' and not orders['non_fifo']:
+                    results[name]['status'] = 'inconclusive'   # every dispatch ran the FIFO head, which cannot reject it
             print(name, results[name]['status'], report['counts'], kinds, 'other', other, flush=True)
         finally:
             run(['git', 'checkout', '--', path])
@@ -228,11 +243,14 @@ def main():
     json.dump(dict(results, totals=totals), open(os.path.join(ROOT, '.artifacts/check/mutants-summary.json'), 'w'),
               indent=2)
     print('totals', totals, flush=True)
-    bad = sorted(n for n, r in results.items() if r['status'] != 'rejected')
+    inconclusive = sorted(n for n, r in results.items() if r['status'] == 'inconclusive')
+    bad = sorted(n for n, r in results.items() if r['status'] not in ('rejected', 'inconclusive'))
+    if inconclusive:
+        print('INCONCLUSIVE (the recorded order did not distinguish the mutant this run; rerun alone, where it must '
+              'reject):', ' '.join(inconclusive), flush=True)
     if bad:
         print('NOT REJECTED (a survivor is a defect in the check; no verdict is infrastructure, rerun):', ' '.join(bad), flush=True)
-        return 1
-    return 0
+    return 1 if bad or inconclusive else 0
 
 
 if __name__ == '__main__':

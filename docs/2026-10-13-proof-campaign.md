@@ -5,10 +5,11 @@
 Worktree `.worktrees/proofs-campaign`, branch `proofs/campaign`; governed by
 [the charter](2026-10-13-charter-proof-campaign.md). Both prerequisites were
 carried from `2c7a076`, then the audit at `f45bde8` and documentation-only
-`a39aded`. The mirror is byte-identical to main. Components at the current coordinated checkpoint hold
-over `a39aded`, including the R2 cookie, R3 unified-insertion and R4
-general-ring extensions.
-Open obligations below remain explicit. No integration into main,
+`a39aded`, then the scheduler robustness change at `7a92672`.
+All registered components are current over `7a92672`, including the R2 cookie,
+R3 unified-insertion and R4 finite ring-journal extensions. The new `cryptAhead`
+call is observed and framed, and the historical witness seed no longer depends
+on the removed evaluator fixture. Open obligations below remain explicit. No integration into main,
 push, differential check or guest run has been performed by this campaign.
 
 | Result | Disposition |
@@ -20,25 +21,25 @@ push, differential check or guest run has been performed by this campaign.
 | R5 key lifetime | Resolved under Rule Zero by counter-limit, delayed-encryption and post-clear-use witnesses, with 13 local positive contracts. |
 | R6 flood resistance | Cookie exclusion proved at the original call boundary; accepted 19-retry/20-initiation episode resolves the literal limit through Rule Zero. Six terminal contracts. |
 
-**Current coordinated validation.** `a39aded` has mirror source unchanged from `f45bde8`.
-The proof gate passes 280 jobs and 266 terminal statements
-(ReplayWindow 15; R1 9; R2 143; R3 39; R4 41; R5 13; R6 6), using only `propext`, `Classical.choice` and `Quot.sound`.
-Fresh stock kernel replay passes, as do the 60-job default model build and
-94-test unit tier (22.079 seconds; one skip). Independent frozen-source
+**Last coordinated validation.** The mirror is byte-identical to `7a92672`.
+The proof gate passes 284 jobs and 273 terminal statements
+(ReplayWindow 15; R1 9; R2 143; R3 39; R4 48; R5 13; R6 6), using only `propext`, `Classical.choice` and `Quot.sound`.
+Fresh stock kernel replay passes, as do the 118-job model executable build and
+expanded 110-test unit tier (22.585 seconds; one skip). Independent frozen-source
 and scope reviews have no unresolved correctness findings in these components.
 
 ```sh
 capped -- scripts/in-bundle scripts/proof-gate
 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs
-capped -- scripts/in-bundle lake build
-capped -- scripts/in-bundle python3 -B -m unittest evaluator.test_evaluation harness.test_trace harness.test_wg harness.test_linux
+capped -- scripts/in-bundle lake build leanux-model
+capped -- scripts/in-bundle python3 -B -m unittest evaluator.test_evaluation evaluator.test_model_replay harness.test_trace harness.test_wg harness.test_linux
 ```
 
-Unchanged runtime witnesses were not rerun for later proof-only extensions.
-All nine cases passed the audit carry; the retry and two current time witnesses
-also passed the stronger complete-advance check. Generated R4–R6 streams prove
-accepted mirror behavior, not Linux capture or schedule reachability. Distinct
-reproduction commands and provenance are retained in each result below.
+All ten campaign witnesses and the new scheduler `W7_CRYPT_AHEAD` case pass
+against this mirror, including exact original/observed output comparison.
+The retry and two current time witnesses include complete-advance checks.
+Generated streams prove accepted mirror behavior, not Linux capture or schedule
+reachability. Reproduction commands and provenance are retained below.
 
 **Carries and review history.**
 
@@ -47,6 +48,33 @@ reproduction commands and provenance are retained in each result below.
 | Seccomp/shared frames | Seven-field WG projection, child fixture and prefill success/error paths; no seccomp-free premise. BPF continuation sharing and loop-counter progress. 17 compile passes over 36m34s, with independent source and architecture review. |
 | Prerequisites (`2c7a076`) | Exact comparison operands and validator World, signed/unsigned clock operations, both timer-arm signed-gap failures, occupancy/record bounds and kind-310 peek/read validation. About 40 minutes and 12 local builds; earlier transmit/stack work used five attempts. |
 | Audit (`f45bde8`) | Index decisions and missing-device failure; cookie rotation clock/randomness; signed MTU/initiation fields; receive-refusal cleanup; actual GRO state and callback timing. Fourteen root, six R2 and sixteen R4 build/probe calls preceded passing gates and nine replay checks. The failed chronology theorem was retired explicitly. |
+| Scheduler (`7a92672`) | The committed `cryptAhead` observer includes the original encrypt iteration and logged NAPI callback, exact temporary TX queue changes and Stops. Copied-World consistency trials still execute the original action and discard its returned World; no trial acceptance history is appended. Existing acceptance evolution composes through the new TX prefix; this adds no whole-scheduler R2 access or ownership claim. Local validation is recorded below; coordinated trust and fast-tier checks pass. |
+
+**Decision [AGENT 2026-10-14].** Reconstruct the campaign's common seed from
+tracked `rx_roam_v6` operations and the 40 historical hidden records formerly
+in `CONTENDED_ROAM_CMP`, rather than depend on the removed evaluator fixture.
+The generator documents that capture's provenance and retains each recipe's
+explicit transformations. Seed migration is a reproduction repair, not new
+kernel evidence. The seed and all ten generated JSON values equal their
+pre-carry versions. Independent review corrected an overbroad history-retention
+docstring: successful committed execution retains acceptance events; exact
+Stop erasure does not imply a retained failed history.
+
+The scheduler carry's targeted build passes 101 jobs and full `LeanuxProofs`
+passes 284 jobs. All ten campaign replayers and the existing `W7_CRYPT_AHEAD`
+case pass, including original/observed output agreement; no existing witness
+event or endpoint assertion changed. The W7 input rearranges captured records
+and adds synthetic end-of-wait bounds; it is not a fresh kernel capture.
+Fifteen sequential capped invocations used 16m20s through the final check:
+fourteen passed and the first compile failed on two explicit Stop proof goals,
+then closed using the existing `evolves_throw` lemma. All exits were collected;
+there was no cap or interruption. Total writer-token ownership was 17m22s.
+The four coordinated trust/fast checks above also pass.
+The W7 observer check is reproduced by:
+
+```sh
+capped -- scripts/in-bundle bash -o pipefail -c 'python3 -B -c "import json; from evaluator.test_model_replay import W7_CRYPT_AHEAD, with_jiffies_end; print(json.dumps(with_jiffies_end(W7_CRYPT_AHEAD)))" | lake env lean --run Leanux/Proofs/Logged/Replay.lean'
+```
 
 A prerequisite-carry worker interruption required preserving all dirty worktrees
 before resumption. Its build handle was unavailable; its log reported a normal
@@ -83,8 +111,9 @@ added; committed calls and discarded probes retain ReplayWindow's reviewed scope
 proved by kernel reduction. Separately, a six-operation accepted runner trace
 establishes a session and accepts authenticated keepalive counters 8200 and 72
 in lifetime 1: `72 = 8200 - 8128`. Original and logged JSON agree. Its explicit
-records are reconstructed from tracked `CONTENDED_ROAM_CMP`, with datagrams
-from `rx_window.json`, widened legacy section identities, adjusted second-data
+records use `historical_session_seed`: tracked `rx_roam_v6` operations and the
+40 historical record words documented in the generator, with datagrams from
+`rx_window.json`, widened legacy section identities, adjusted second-data
 clocks and synthetic site-128 end-of-wait bounds for the current timer interface.
 This is an accepted non-placeholder mirror replay, not a fresh Linux capture.
 
@@ -512,13 +541,38 @@ No distinct-payload, endpoint-validity, or ownership premise is added. The six n
 pass the local target (176 jobs), coordinated proof gate, fresh stock kernel replay and frozen review.
 
 [AGENT 2026-10-14] Use direct tail-relative slot offsets and exact `ringOf` equalities to separate
-physical stale occupancy from logical live contents; defer finite journals to the next slice.
+physical stale occupancy from logical live contents; the geometry checkpoint deferred finite journals to a separate slice.
+
+**Finite ring journals.** `RingJournal` executes the existing `tryProduce` and original `consume`
+for each command, recording every accepted/refused offer and successful/empty poll. Its invariant
+retains the exact physical `ringOf` and proves `admitted = consumed ++ live` and
+`consumed = retired ++ stale`. Retirement therefore clears already-consumed physical slots; it
+is not a packet-loss disposition. `run_inv` supports any represented entry ring and every batch value.
+Initialized conservation uses the actual original `PtrRing.init n` batch; for size zero, an exact
+history equation records only refusals/empty polls and preserves the complete arbitrary entry ring.
+Finite conservation permits a nonempty live suffix and implies no eventual consumption.
+
+`RingMap` proves payload mapping commutes with original full/peek/produce/clear/discard/consume,
+count/items, guarded production and initialization, on arbitrary rings without injectivity.
+`RingOccurrences` increments an ordinal for every offer, including refusal, and proves exact erasure
+of all journal outcomes and the final physical ring. From initialization, consumed and live
+occurrences partition admissions, with distinct ordinals across their joint list. Duplicate payloads
+are unrestricted. Arbitrary-ring erasure does not assert freshness relative to preexisting contents;
+journal ordinals are neither packet allocation identities nor lifetime stamps.
+
+[AGENT 2026-10-14] Keep finite occurrence journals separate from packet identity and scheduling;
+derive source admission guards independently, retaining the existing `EnqueueResult` API.
 
 **Original enqueue and queues.** `Queues/Enqueue` classifies complete `enqueuePerDeviceAndPeer` normal
 returns: success produces the item; `-ENOSPC` leaves the ring unchanged; `-EPIPE` means physical
 fullness and an unchanged ring. The earlier peer-capacity test retains priority, and
 peer-queue/packet-state updates may precede `-EPIPE`. Missing objects and queue-work failures remain
 Stops. No ownership or queue-validity premise, or unchanged-peer-state conclusion, is imposed.
+`EnqueueAdmission` independently derives from each original TX/RX body that a zero return requires
+an existing, non-full entry ring. The older success alternative alone does not establish that guard.
+These are successful-return implications, not scheduler event observations: a future observer must
+emit admission after the ring update is installed, and consumption after its replacement is installed.
+Passing the full test and then stopping in queue-work emits no admission.
 
 `PrevQueue` proves original dequeue, peek, peek/drop and enqueue laws. Contents are `peeked.toList ++
 items`; original `count` excludes the cache. Normal peeks preserve contents, and dropping a present peek
@@ -616,17 +670,19 @@ Failing callback entry counts. These results establish neither allocation identi
 between polls. The checkpoint is `c0713d8`; observer definitions and the original chronological
 predicate remain unchanged.
 
-**Remaining scope.** Receive enqueue, finite ring journals, worker-local ownership, pipeline
-conservation and recorded scheduler composition remain open, alongside R2’s caller/lifecycle closure.
+**Remaining scope.** Composition of original receive/transmit enqueue and worker operations with
+the finite journal, worker-local ownership, pipeline conservation and recorded scheduler composition
+remain open, alongside R2’s caller/lifecycle closure.
 Discarded speculative activations must discard history with their trial Worlds. Local observations imply
 neither packet-store emptiness nor whole-schedule no-loss/no-duplication. Finite-prefix conservation
 must account for pending obligations rather than infer eventual delivery from a finite run. The ring
 witness is not yet composed with original enqueue and a real peer queue; it alone makes no
 packet-arrival, cryptographic, fairness or delivery-order claim.
 
-**Validation and effort.** R4 now has 41 terminal theorems. The six new ring exports pass the
-coordinated proof gate, fresh stock kernel replay, model build, unit tier and independent frozen-source
-review. Current whole-tree counts are recorded above. Before this ring extension,
+**Validation and effort.** R4 now has 48 terminal theorems. Seven journal/map/admission exports pass
+the 181-job local target. Independent frozen review has no findings; the combined
+proof gate, fresh stock kernel replay and fast tier above include this extension and the `7a92672` carry.
+The prior 41-terminal checkpoint is `15a56ad`. Before that geometry extension,
 **105 capped local invocations comprise
 36 passes, 68 ordinary failures and one deliberate termination**. All outcomes were collected; no memory
 cap was hit. Corrected failures concerned elaboration, matching, simplification or replay assertions.
@@ -637,7 +693,13 @@ The general ring extension took 7m42s and used 13 capped invocations: four passe
 Failures concerned Boolean simplification, inferred type parameters, list/array lookup normalization,
 and dependent-match export elaboration. All exits were collected; no cap or interruption occurred.
 Review corrected the report’s “live ownership” wording to “live contents”; no unresolved finding remains.
-Its exact one-step laws are a prerequisite for conservation, not a finite-journal or pipeline theorem.
+Its exact one-step laws were the prerequisite for the new finite-journal component; pipeline conservation remains open.
+The journal extension used 12 capped builds (four passes, eight ordinary failures) and one passing
+scoped check, taking 11m11s through local validation and 12m02s of writer-token ownership. Failures concerned
+Option/conditional normalization, inferred payload types and batch, induction unfolding, WP simplification,
+and existential-witness elaboration/tactic syntax. All exits were collected, with no cap or interruption.
+Independent review reconciled the source, seven exports and scoped documentation with no findings.
+No scheduler observer or mutation-event placement has been claimed.
 
 The completion-frame worker had two provider interruptions during implementation and one during
 read-only reporting; all dirty worktrees, including nonignored untracked files, were preserved before

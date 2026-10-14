@@ -94,9 +94,19 @@ theorem napiIrqExitLogged_evolves : Evolves napiIrqExitLogged := by
   unfold napiIrqExitLogged
   repeat' first | with_reducible exact tail | evolves_step
 
+theorem cryptAheadLogged_evolves (pid : PeerId) : Evolves (cryptAheadLogged pid) := by
+  unfold cryptAheadLogged
+  repeat' first
+    | with_reducible exact evolves_throw _
+    | (evolves_head encryptIterLogged;
+        refine encryptIterLogged_evolves _ _ _ (fun p => (checksumHelp_sameSnapshot p).ordinary)
+          napiSoftirqLogged_evolves ?_)
+    | scheduler_worker_step
+
 theorem activationIterLogged_evolves (a : Activation) : Evolves (activationIterLogged a) := by
   unfold activationIterLogged
   repeat' first
+    | (evolves_head cryptAheadLogged; exact cryptAheadLogged_evolves _)
     | (evolves_head encryptIterLogged;
         refine encryptIterLogged_evolves _ _ _ (fun p => (checksumHelp_sameSnapshot p).ordinary)
           napiSoftirqLogged_evolves ?_)

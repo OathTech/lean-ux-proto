@@ -39,11 +39,43 @@ theorem napiIrqExitLogged_erases : Erases (napiIrqExitLogged) (Env.napiIrqExit) 
     | with_reducible apply napiSoftirqLogged_erases
     | ghost_step
 
+/-- The committed repair iteration observes its original softirq callback
+through `napiSoftirqLogged`; successful execution retains its acceptance events.
+Copied-World consistency trials remain original
+actions and discard their trial state rather than appending this history. -/
+def cryptAheadLogged (pid : PeerId) : GhostM Unit := do
+  if (← getWorld).hidden.isNone then return
+  let some item := (← getPeer pid).txQueue.all.head? | return
+  let some id := item.head? | invariant "an empty ring item"
+  if (← getTxSkb id).state != .uncrypted then return
+  if (← peekHiddenSite) != some HiddenSite.modTimerArm.info.id then return
+  let w ← getWorld
+  let some enc := w.suspended.find? (·.worker == .encryptWorker)
+    | throw (.hidden "the tx worker's head is uncrypted and no encrypt activation is suspended, but the next record is a timer arm (site 100)")
+  modifyDev fun d => { d with txWorkQueue := d.txWorkQueue ++ [pid] }
+  let r ← encryptIterLogged checksumHelp napiSoftirqLogged (liftM (condResched .encryptWorker))
+  modifyDev fun d => { d with txWorkQueue := d.txWorkQueue.erase pid }
+  match r with
+  | .continued =>
+    modifyWorld fun s => { s with suspended := s.suspended.map fun x =>
+      if x == enc then { x with iterations := x.iterations + 1 } else x }
+  | .ended => throw (.hidden "the encrypt activation's queue is empty, but the next record is a timer arm (site 100)")
+  | .yielded => invariant "the encrypt activation yielded on a record that is not a resched"
+
+theorem cryptAheadLogged_erases (pid : PeerId) :
+    Erases (cryptAheadLogged pid) (Env.cryptAhead pid) := by
+  unfold cryptAheadLogged Env.cryptAhead
+  repeat' first
+    | with_reducible exact napiSoftirqLogged_erases
+    | with_reducible apply encryptIterLogged_erases
+    | ghost_step
+
 def activationIterLogged (a : Activation) : GhostM IterResult := do
   match a.worker with
   | .encryptWorker => encryptIterLogged checksumHelp napiSoftirqLogged (liftM (condResched .encryptWorker))
   | .txWorker =>
     let some pid := a.pid | invariant "a tx activation without its peer"
+    cryptAheadLogged pid
     txIterLogged pid (liftM (condResched .txWorker))
   | .decryptWorker => decryptIterLogged napiSoftirqLogged napiIrqExitLogged (liftM (condResched .decryptWorker))
   | .receiveWorker => workerIterLogged .receiveWorker none (liftM WG.receiveStep) (liftM (condResched .receiveWorker))
@@ -54,6 +86,7 @@ theorem activationIterLogged_erases (a : Activation) : Erases (activationIterLog
   repeat' first
     | with_reducible exact napiSoftirqLogged_erases
     | with_reducible exact napiIrqExitLogged_erases
+    | with_reducible apply cryptAheadLogged_erases
     | with_reducible apply encryptIterLogged_erases
     | with_reducible apply txIterLogged_erases
     | with_reducible apply decryptIterLogged_erases

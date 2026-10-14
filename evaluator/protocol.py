@@ -62,6 +62,31 @@ EXTRA_FIELDS = {'pipe2': ('fds',), 'read': ('digest',), 'write': ('sigpipe',), '
 EPOLL_EVENT_SIZE = 12   # sizeof(struct epoll_event) on x86-64 (packed)
 
 
+def injected_messages(trace):
+    """The ceiling on the mirror's open NAPI placements in a trace: one (c')
+    placement arises per `wg_queue_enqueue_per_peer_rx`, that is per data
+    message the fixture delivered to wg0, so the count can never exceed the
+    messages the trace injects (`wg_inject`, a `wg_flood`'s count and its
+    leading `messages`, a `wg_batch`'s inject items). A 1024-item receive
+    batch legitimately opens about a thousand (the receive-side ring-full
+    trace of the W7 tier); a count above this ceiling is an invalid output
+    (claim-point robustness, 2026-10-13). At least 1, the field's floor."""
+    total = 0
+    for op in trace.get('ops', ()):
+        name = op.get('op')
+        if name == 'wg_inject':
+            total += 1
+        elif name == 'wg_flood':
+            total += integer_or(op.get('count'), 0) + len(op.get('messages') or ())
+        elif name == 'wg_batch':
+            total += sum(1 for item in (op.get('items') or ()) if type(item) is dict and item.get('kind') == 'inject')
+    return max(1, total)
+
+
+def integer_or(value, default):
+    return value if type(value) is int and value >= 0 else default
+
+
 def validate_observation(trace, result):
     """Check protocol shape, not whether the claimed semantics are correct."""
     # D3: the mirror adds `fired` (the timer sections its environment ran,
@@ -72,7 +97,7 @@ def validate_observation(trace, result):
     if not any(keys(result, base + extra) for extra in
                ((), ('fired',), ('napi_irq_ambiguous',), ('fired', 'napi_irq_ambiguous'))):
         raise InvalidOutput('observation fields')
-    if 'napi_irq_ambiguous' in result and not integer(result['napi_irq_ambiguous'], 1, 64):
+    if 'napi_irq_ambiguous' in result and not integer(result['napi_irq_ambiguous'], 1, injected_messages(trace)):
         raise InvalidOutput('napi_irq_ambiguous')
     if type(result['version']) is not int or result['version'] != 1 or result['id'] != trace['id']:
         raise InvalidOutput('version or trace identity')
