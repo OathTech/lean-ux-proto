@@ -1,8 +1,9 @@
+import Leanux.Proofs.Framing.EventpollCalls
 import Leanux.Proofs.WG.Keypairs.Frames.FS
 import Leanux.Proofs.WG.Keypairs.Frames.Eventpoll
 import Leanux.FS.Eventpoll
 
-/-! Receive-state framing for the epoll system calls (`Leanux/FS/Eventpoll.lean`,
+/-! Compatibility receive-state framing for the epoll system calls (`Leanux/FS/Eventpoll.lean`,
 `Poll.lean`, the `poll` operations of pipes and eventfds): create, ctl and
 wait, with the three bounded recursions of the mirror framed by induction on
 their fuel in the pattern of `Frames/Wait.lean`: the reverse-path walk, the
@@ -20,35 +21,40 @@ set_option maxHeartbeats 1000000
 /-! ## Scans, the busy-poll stub, allocation, references -/
 
 theorem epStartScan_sameSnapshot (ep : EpId) : SameSnapshot (Leanux.epStartScan ep) := by
-  frame_same [epStartScan] using [getEp_spec, setEp_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.epStartScan_sameWGKernel
 
 theorem epStartScan_spec (P : Snapshot → Prop) (ep : EpId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.epStartScan ep
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (epStartScan_sameSnapshot ep).wp P
 
 theorem epDoneScan_sameSnapshot (ep : EpId) (batch : List EpiId) : SameSnapshot (Leanux.epDoneScan ep batch) := by
-  frame_same [epDoneScan] using [getEp_spec, setEp_spec, getEpi_spec, setEpi_spec, waitqueueActive_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.epDoneScan_sameWGKernel
 
 theorem epDoneScan_spec (P : Snapshot → Prop) (ep : EpId) (batch : List EpiId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.epDoneScan ep batch
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (epDoneScan_sameSnapshot ep batch).wp P
 
 theorem epSetBusyPollNapiId_sameSnapshot (epiId : EpiId) : SameSnapshot (Leanux.epSetBusyPollNapiId epiId) := by
-  frame_same [epSetBusyPollNapiId] using [getEp_spec, getEpi_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.epSetBusyPollNapiId_sameWGKernel
 
 theorem epSetBusyPollNapiId_spec (P : Snapshot → Prop) (epiId : EpiId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.epSetBusyPollNapiId epiId
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (epSetBusyPollNapiId_sameSnapshot epiId).wp P
 
 theorem epAlloc_sameSnapshot : SameSnapshot Leanux.epAlloc := by
-  frame_same [epAlloc] using [hiddenAlloc_snapshot_spec, refcountIncGuestWide_spec, setEp_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.epAlloc_sameWGKernel
 
 theorem epAlloc_spec (P : Snapshot → Prop) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.epAlloc
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := epAlloc_sameSnapshot.wp P
 
 theorem epGet_sameSnapshot (ep : EpId) : SameSnapshot (Leanux.epGet ep) := by
-  frame_same [epGet] using [getEp_spec, setEp_spec, refcountInc_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.epGet_sameWGKernel
 
 theorem epGet_spec (P : Snapshot → Prop) (ep : EpId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.epGet ep
@@ -57,21 +63,24 @@ theorem epGet_spec (P : Snapshot → Prop) (ep : EpId) :
 /-! ## tfile_check_list -/
 
 theorem listFile_sameSnapshot (fid : FileId) : SameSnapshot (Leanux.listFile fid) := by
-  frame_same [listFile] using [fileIncNotZero_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.listFile_sameWGKernel
 
 theorem listFile_spec (P : Snapshot → Prop) (fid : FileId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.listFile fid
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (listFile_sameSnapshot fid).wp P
 
 theorem unlistFile_sameSnapshot (fid : FileId) : SameSnapshot (Leanux.unlistFile fid) := by
-  frame_same [unlistFile] using [getFile_spec, fEpItems_spec, freeEphead_spec, fput_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.unlistFile_sameWGKernel
 
 theorem unlistFile_spec (P : Snapshot → Prop) (fid : FileId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.unlistFile fid
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (unlistFile_sameSnapshot fid).wp P
 
 theorem clearTfileCheckList_sameSnapshot : SameSnapshot Leanux.clearTfileCheckList := by
-  frame_same [clearTfileCheckList] using [unlistFile_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.clearTfileCheckList_sameWGKernel
 
 theorem clearTfileCheckList_spec (P : Snapshot → Prop) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.clearTfileCheckList
@@ -80,14 +89,16 @@ theorem clearTfileCheckList_spec (P : Snapshot → Prop) :
 /-! ## The tree -/
 
 theorem epFind_sameSnapshot (ep : EpId) (fid : FileId) (fd : Int) : SameSnapshot (Leanux.epFind ep fid fd) := by
-  frame_same [epFind] using [getEp_spec, getEpi_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.epFind_sameWGKernel
 
 theorem epFind_spec (P : Snapshot → Prop) (ep : EpId) (fid : FileId) (fd : Int) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.epFind ep fid fd
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (epFind_sameSnapshot ep fid fd).wp P
 
 theorem epRbtreeInsert_sameSnapshot (ep : EpId) (epiId : EpiId) : SameSnapshot (Leanux.epRbtreeInsert ep epiId) := by
-  frame_same [epRbtreeInsert] using [getEpi_spec, setEpi_spec, hiddenU64_spec, getEp_spec, setEp_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.epRbtreeInsert_sameWGKernel
 
 theorem epRbtreeInsert_spec (P : Snapshot → Prop) (ep : EpId) (epiId : EpiId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.epRbtreeInsert ep epiId
@@ -96,7 +107,8 @@ theorem epRbtreeInsert_spec (P : Snapshot → Prop) (ep : EpId) (epiId : EpiId) 
 /-! ## Reverse paths, by induction on the walk's fuel -/
 
 theorem pathCountInc_sameSnapshot (nests : Nat) : SameSnapshot (Leanux.pathCountInc nests) := by
-  frame_same [pathCountInc] using []
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.pathCountInc_sameWGKernel
 
 theorem pathCountInc_spec (P : Snapshot → Prop) (nests : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.pathCountInc nests
@@ -105,21 +117,12 @@ theorem pathCountInc_spec (P : Snapshot → Prop) (nests : Nat) :
 theorem reversePathCheckProc_spec (fuel : Nat) : ∀ (P : Snapshot → Prop) (refs : List EpiId) (depth : Nat),
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.reversePathCheckProc fuel refs depth
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := by
-  induction fuel with
-  | zero =>
-    intro P refs depth
-    have h : SameSnapshot (Leanux.reversePathCheckProc 0 refs depth) := by
-      frame_same [reversePathCheckProc] using []
-    exact h.wp P
-  | succ n ih =>
-    intro P refs depth
-    have h : SameSnapshot (Leanux.reversePathCheckProc (n + 1) refs depth) := by
-      frame_same [reversePathCheckProc] using [getEp_spec, getEpi_spec, pathCountInc_spec, ih]
-    exact h.wp P
+  intro P a b
+  exact Framing.EventpollFrames.reversePathCheckProc_spec fuel (fun v => P (snapshotOfWGKernelView v)) a b
 
 theorem reversePathCheck_sameSnapshot : SameSnapshot Leanux.reversePathCheck := by
-  have proc_spec := reversePathCheckProc_spec (EP_MAX_NESTS + 2)
-  frame_same [reversePathCheck] using [getFile_spec, fEpItems_spec, proc_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.reversePathCheck_sameWGKernel
 
 theorem reversePathCheck_spec (P : Snapshot → Prop) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.reversePathCheck
@@ -128,8 +131,8 @@ theorem reversePathCheck_spec (P : Snapshot → Prop) :
 /-! ## Attaching, allocating and registering an item -/
 
 theorem epAttachFile_sameSnapshot (fid : FileId) (epiId : EpiId) : SameSnapshot (Leanux.epAttachFile fid epiId) := by
-  frame_same [epAttachFile] using [getFile_spec, setFile_spec, epOf_spec, hiddenAlloc_snapshot_spec,
-    getEp_spec, setEp_spec, freeEphead_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.epAttachFile_sameWGKernel
 
 theorem epAttachFile_spec (P : Snapshot → Prop) (fid : FileId) (epiId : EpiId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.epAttachFile fid epiId
@@ -137,7 +140,8 @@ theorem epAttachFile_spec (P : Snapshot → Prop) (fid : FileId) (epiId : EpiId)
 
 theorem epAllocEpitem_sameSnapshot (ep : EpId) (event : EpollEvent) (tfile : FileId) (fd : Int) :
     SameSnapshot (Leanux.epAllocEpitem ep event tfile fd) := by
-  frame_same [epAllocEpitem] using [hiddenAlloc_snapshot_spec, setEpi_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.epAllocEpitem_sameWGKernel
 
 theorem epAllocEpitem_spec (P : Snapshot → Prop) (ep : EpId) (event : EpollEvent) (tfile : FileId) (fd : Int) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.epAllocEpitem ep event tfile fd
@@ -145,8 +149,8 @@ theorem epAllocEpitem_spec (P : Snapshot → Prop) (ep : EpId) (event : EpollEve
 
 theorem epRegisterEpitem_sameSnapshot (ep : EpId) (epiId : EpiId) (tep : Option EpId) (fullCheck : Bool) :
     SameSnapshot (Leanux.epRegisterEpitem ep epiId tep fullCheck) := by
-  frame_same [epRegisterEpitem] using [getEpi_spec, epAttachFile_spec, freeEpi_spec, listFile_spec,
-    epRbtreeInsert_spec, epGet_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.epRegisterEpitem_sameWGKernel
 
 theorem epRegisterEpitem_spec (P : Snapshot → Prop) (ep : EpId) (epiId : EpiId) (tep : Option EpId) (fullCheck : Bool) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.epRegisterEpitem ep epiId tep fullCheck
@@ -156,8 +160,8 @@ theorem epRegisterEpitem_spec (P : Snapshot → Prop) (ep : EpId) (epiId : EpiId
 
 theorem epPtableQueueProc_sameSnapshot (file : FileId) (whead : WaitQueueRef) (pt : PollTable) :
     SameSnapshot (Leanux.epPtableQueueProc file whead pt) := by
-  frame_same [epPtableQueueProc] using [hiddenAlloc_snapshot_spec, setPwq_spec, getEpi_spec, setEpi_spec,
-    addWaitQueue_spec, addWaitQueueExclusive_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.epPtableQueueProc_sameWGKernel
 
 theorem epPtableQueueProc_spec (P : Snapshot → Prop) (file : FileId) (whead : WaitQueueRef) (pt : PollTable) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.epPtableQueueProc file whead pt
@@ -165,21 +169,24 @@ theorem epPtableQueueProc_spec (P : Snapshot → Prop) (file : FileId) (whead : 
 
 theorem pollWait_sameSnapshot (filp : FileId) (waitAddress : WaitQueueRef) (p : PollTable) :
     SameSnapshot (Leanux.pollWait filp waitAddress p) := by
-  frame_same [pollWait] using [epPtableQueueProc_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.pollWait_sameWGKernel
 
 theorem pollWait_spec (P : Snapshot → Prop) (filp : FileId) (waitAddress : WaitQueueRef) (p : PollTable) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.pollWait filp waitAddress p
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (pollWait_sameSnapshot filp waitAddress p).wp P
 
 theorem eventfdPoll_sameSnapshot (fid : FileId) (wait : PollTable) : SameSnapshot (Leanux.eventfdPoll fid wait) := by
-  frame_same [eventfdPoll] using [getFile_spec, eventfdCtxOf_spec, pollWait_spec, getCtx_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.eventfdPoll_sameWGKernel
 
 theorem eventfdPoll_spec (P : Snapshot → Prop) (fid : FileId) (wait : PollTable) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.eventfdPoll fid wait
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (eventfdPoll_sameSnapshot fid wait).wp P
 
 theorem pipePoll_sameSnapshot (fid : FileId) (wait : PollTable) : SameSnapshot (Leanux.pipePoll fid wait) := by
-  frame_same [pipePoll] using [getFile_spec, pipeOf_spec, getPipe_spec, setPipe_spec, pollWait_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.pipePoll_sameWGKernel
 
 theorem pipePoll_spec (P : Snapshot → Prop) (fid : FileId) (wait : PollTable) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.pipePoll fid wait
@@ -187,16 +194,16 @@ theorem pipePoll_spec (P : Snapshot → Prop) (fid : FileId) (wait : PollTable) 
 
 theorem fopPoll_sameSnapshot (fid : FileId) (pt : PollTable) (which : Option FopsId) :
     SameSnapshot (Leanux.fopPoll fid pt which) := by
-  cases which with
-  | none => frame_same [Leanux.fopPoll] using [eventfdPoll_spec, pipePoll_spec]
-  | some k => cases k <;> frame_same [Leanux.fopPoll] using [eventfdPoll_spec, pipePoll_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.fopPoll_sameWGKernel
 
 theorem fopPoll_spec (P : Snapshot → Prop) (fid : FileId) (pt : PollTable) (which : Option FopsId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.fopPoll fid pt which
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (fopPoll_sameSnapshot fid pt which).wp P
 
 theorem vfsPoll_sameSnapshot (fid : FileId) (pt : PollTable) : SameSnapshot (Leanux.vfsPoll fid pt) := by
-  frame_same [vfsPoll] using [getFile_spec, fopsOf_spec, fopPoll_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.vfsPoll_sameWGKernel
 
 theorem vfsPoll_spec (P : Snapshot → Prop) (fid : FileId) (pt : PollTable) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.vfsPoll fid pt
@@ -209,35 +216,39 @@ poll calls `ep_item_poll` at the same fuel `n`. -/
 
 theorem epItemPoll_zero (epiId : EpiId) (pt : PollTable) (depth : Nat) :
     SameSnapshot (Leanux.epItemPoll 0 epiId pt depth) := by
-  frame_same [epItemPoll] using [getEpi_spec, fileIncNotZero_spec, getFile_spec, vfsPoll_spec, fput_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.epItemPoll_zero
 
 theorem epItemPoll_succ (n : Nat)
     (hinner : ∀ (P : Snapshot → Prop) (fid : FileId) (wait : PollTable) (depth : Nat),
       ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.epEventpollPollInner n fid wait depth ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄)
     (epiId : EpiId) (pt : PollTable) (depth : Nat) :
     SameSnapshot (Leanux.epItemPoll (n + 1) epiId pt depth) := by
-  frame_same [epItemPoll] using [getEpi_spec, fileIncNotZero_spec, getFile_spec, vfsPoll_spec, fput_spec, hinner]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.SameView.of_wp
+  intro initial
+  exact (Framing.EventpollFrames.epPollAt_specs (n + 1)).1 (fun v => v = initial) epiId pt depth
 
 theorem epEventpollPollInner_of_item (fuel : Nat)
     (hitem : ∀ (P : Snapshot → Prop) (epiId : EpiId) (pt : PollTable) (depth : Nat),
       ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.epItemPoll fuel epiId pt depth ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄)
     (fid : FileId) (wait : PollTable) (depth : Nat) :
     SameSnapshot (Leanux.epEventpollPollInner fuel fid wait depth) := by
-  frame_same [epEventpollPollInner] using [getFile_spec, epOf_spec, pollWait_spec, epStartScan_spec,
-    getEpi_spec, setEpi_spec, epDoneScan_spec, hitem]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.SameView.of_wp
+  intro initial
+  exact (Framing.EventpollFrames.epPollAt_specs fuel).2 (fun v => v = initial) fid wait depth
 
 theorem epPollAt_specs (fuel : Nat) :
     (∀ (P : Snapshot → Prop) (epiId : EpiId) (pt : PollTable) (depth : Nat),
       ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.epItemPoll fuel epiId pt depth ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄) ∧
     (∀ (P : Snapshot → Prop) (fid : FileId) (wait : PollTable) (depth : Nat),
       ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.epEventpollPollInner fuel fid wait depth ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄) := by
-  induction fuel with
-  | zero =>
-    have item := fun P epiId pt depth => (epItemPoll_zero epiId pt depth).wp P
-    exact ⟨item, fun P fid wait depth => (epEventpollPollInner_of_item 0 item fid wait depth).wp P⟩
-  | succ n ih =>
-    have item := fun P epiId pt depth => (epItemPoll_succ n ih.2 epiId pt depth).wp P
-    exact ⟨item, fun P fid wait depth => (epEventpollPollInner_of_item (n + 1) item fid wait depth).wp P⟩
+  constructor
+  · intro P epiId pt depth
+    exact (Framing.EventpollFrames.epPollAt_specs fuel).1 (fun v => P (snapshotOfWGKernelView v)) epiId pt depth
+  · intro P fid wait depth
+    exact (Framing.EventpollFrames.epPollAt_specs fuel).2 (fun v => P (snapshotOfWGKernelView v)) fid wait depth
 
 theorem epItemPoll_spec (P : Snapshot → Prop) (fuel : Nat) (epiId : EpiId) (pt : PollTable) (depth : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.epItemPoll fuel epiId pt depth
@@ -245,7 +256,8 @@ theorem epItemPoll_spec (P : Snapshot → Prop) (fuel : Nat) (epiId : EpiId) (pt
 
 theorem epItemPollAt_sameSnapshot (epiId : EpiId) (pt : PollTable) (depth : Nat) :
     SameSnapshot (Leanux.epItemPollAt epiId pt depth) := by
-  frame_same [epItemPollAt] using [epItemPoll_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.epItemPollAt_sameWGKernel
 
 theorem epItemPollAt_spec (P : Snapshot → Prop) (epiId : EpiId) (pt : PollTable) (depth : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.epItemPollAt epiId pt depth
@@ -255,9 +267,8 @@ theorem epItemPollAt_spec (P : Snapshot → Prop) (epiId : EpiId) (pt : PollTabl
 
 theorem epInsert_sameSnapshot (ep : EpId) (event : EpollEvent) (tfile : FileId) (fd : Int) (fullCheck : Bool) :
     SameSnapshot (Leanux.epInsert ep event tfile fd fullCheck) := by
-  frame_same [epInsert] using [getFile_spec, epOf_spec, epAllocEpitem_spec, epRegisterEpitem_spec,
-    reversePathCheck_spec, epRemove_spec, getEpi_spec, setEpi_spec, epItemPollAt_spec,
-    epSetBusyPollNapiId_spec, getEp_spec, setEp_spec, waitqueueActive_spec, epPollSafewake_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.epInsert_sameWGKernel
 
 theorem epInsert_spec (P : Snapshot → Prop) (ep : EpId) (event : EpollEvent) (tfile : FileId) (fd : Int) (fullCheck : Bool) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.epInsert ep event tfile fd fullCheck
@@ -265,8 +276,8 @@ theorem epInsert_spec (P : Snapshot → Prop) (ep : EpId) (event : EpollEvent) (
 
 theorem epModify_sameSnapshot (ep : EpId) (epiId : EpiId) (event : EpollEvent) :
     SameSnapshot (Leanux.epModify ep epiId event) := by
-  frame_same [epModify] using [getEpi_spec, setEpi_spec, epItemPollAt_spec, getEp_spec, setEp_spec,
-    waitqueueActive_spec, epPollSafewake_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.epModify_sameWGKernel
 
 theorem epModify_spec (P : Snapshot → Prop) (ep : EpId) (epiId : EpiId) (event : EpollEvent) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.epModify ep epiId event
@@ -274,7 +285,8 @@ theorem epModify_spec (P : Snapshot → Prop) (ep : EpId) (epiId : EpiId) (event
 
 theorem epollPutUevent_sameSnapshot (revents : UInt32) (data : UInt64) :
     SameSnapshot (Leanux.epollPutUevent revents data) := by
-  frame_same [epollPutUevent] using []
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.epollPutUevent_sameWGKernel
 
 theorem epollPutUevent_spec (P : Snapshot → Prop) (revents : UInt32) (data : UInt64) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.epollPutUevent revents data
@@ -282,15 +294,16 @@ theorem epollPutUevent_spec (P : Snapshot → Prop) (revents : UInt32) (data : U
 
 theorem epDeliverEvent_sameSnapshot (ep : EpId) (epiId : EpiId) (pt : PollTable) :
     SameSnapshot (Leanux.epDeliverEvent ep epiId pt) := by
-  frame_same [epDeliverEvent] using [getEpi_spec, setEpi_spec, epItemPollAt_spec, epollPutUevent_spec,
-    getEp_spec, setEp_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.epDeliverEvent_sameWGKernel
 
 theorem epDeliverEvent_spec (P : Snapshot → Prop) (ep : EpId) (epiId : EpiId) (pt : PollTable) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.epDeliverEvent ep epiId pt
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (epDeliverEvent_sameSnapshot ep epiId pt).wp P
 
 theorem epSendEvents_sameSnapshot (ep : EpId) (maxevents : Int) : SameSnapshot (Leanux.epSendEvents ep maxevents) := by
-  frame_same [epSendEvents] using [epStartScan_spec, epDeliverEvent_spec, epDoneScan_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.epSendEvents_sameWGKernel
 
 theorem epSendEvents_spec (P : Snapshot → Prop) (ep : EpId) (maxevents : Int) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.epSendEvents ep maxevents
@@ -299,14 +312,16 @@ theorem epSendEvents_spec (P : Snapshot → Prop) (ep : EpId) (maxevents : Int) 
 /-! ## Waiting -/
 
 theorem epTimeoutToTimespec_sameSnapshot (ms : Int) : SameSnapshot (Leanux.epTimeoutToTimespec ms) := by
-  frame_same [epTimeoutToTimespec] using []
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.epTimeoutToTimespec_sameWGKernel
 
 theorem epTimeoutToTimespec_spec (P : Snapshot → Prop) (ms : Int) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.epTimeoutToTimespec ms
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (epTimeoutToTimespec_sameSnapshot ms).wp P
 
 theorem epEventsAvailable_sameSnapshot (ep : EpId) : SameSnapshot (Leanux.epEventsAvailable ep) := by
-  frame_same [epEventsAvailable] using [getEp_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.epEventsAvailable_sameWGKernel
 
 theorem epEventsAvailable_spec (P : Snapshot → Prop) (ep : EpId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.epEventsAvailable ep
@@ -314,7 +329,8 @@ theorem epEventsAvailable_spec (P : Snapshot → Prop) (ep : EpId) :
 
 theorem epPoll_sameSnapshot (ep : EpId) (maxevents : Int) (timeout : Option Timespec64) :
     SameSnapshot (Leanux.epPoll ep maxevents timeout) := by
-  frame_same [epPoll] using [epEventsAvailable_spec, epSendEvents_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.epPoll_sameWGKernel
 
 theorem epPoll_spec (P : Snapshot → Prop) (ep : EpId) (maxevents : Int) (timeout : Option Timespec64) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.epPoll ep maxevents timeout
@@ -322,7 +338,8 @@ theorem epPoll_spec (P : Snapshot → Prop) (ep : EpId) (maxevents : Int) (timeo
 
 theorem doEpollWait_sameSnapshot (epfd : Nat) (maxevents : Int) (to : Option Timespec64) :
     SameSnapshot (Leanux.doEpollWait epfd maxevents to) := by
-  frame_same [doEpollWait] using [fdget_spec, fdput_spec, getFile_spec, epOf_spec, epPoll_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.doEpollWait_sameWGKernel
 
 theorem doEpollWait_spec (P : Snapshot → Prop) (epfd : Nat) (maxevents : Int) (to : Option Timespec64) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.doEpollWait epfd maxevents to
@@ -331,8 +348,8 @@ theorem doEpollWait_spec (P : Snapshot → Prop) (epfd : Nat) (maxevents : Int) 
 /-! ## Creation -/
 
 theorem doEpollCreate_sameSnapshot (flags : UInt32) : SameSnapshot (Leanux.doEpollCreate flags) := by
-  frame_same [doEpollCreate] using [epAlloc_spec, getUnusedFdFlags_spec, epClearAndPut_spec,
-    anonInodeGetfile_spec, putUnusedFd_spec, getEp_spec, setEp_spec, fdInstall_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.doEpollCreate_sameWGKernel
 
 theorem doEpollCreate_spec (P : Snapshot → Prop) (flags : UInt32) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.doEpollCreate flags
@@ -341,7 +358,8 @@ theorem doEpollCreate_spec (P : Snapshot → Prop) (flags : UInt32) :
 /-! ## The loop checks, by induction on their fuel -/
 
 theorem epollMutexLock_sameSnapshot (nonblock : Bool) : SameSnapshot (Leanux.epollMutexLock nonblock) := by
-  frame_same [epollMutexLock] using []
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.epollMutexLock_sameWGKernel
 
 theorem epollMutexLock_spec (P : Snapshot → Prop) (nonblock : Bool) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.epollMutexLock nonblock
@@ -350,38 +368,18 @@ theorem epollMutexLock_spec (P : Snapshot → Prop) (nonblock : Bool) :
 theorem epLoopCheckProc_spec (fuel : Nat) : ∀ (P : Snapshot → Prop) (ep : EpId) (depth : Nat),
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.epLoopCheckProc fuel ep depth
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := by
-  induction fuel with
-  | zero =>
-    intro P ep depth
-    have h : SameSnapshot (Leanux.epLoopCheckProc 0 ep depth) := by
-      frame_same [epLoopCheckProc] using []
-    exact h.wp P
-  | succ n ih =>
-    intro P ep depth
-    have h : SameSnapshot (Leanux.epLoopCheckProc (n + 1) ep depth) := by
-      frame_same [epLoopCheckProc] using [getEp_spec, setEp_spec, getEpi_spec, getFile_spec, epOf_spec,
-        listFile_spec, ih]
-    exact h.wp P
+  intro P a b
+  exact Framing.EventpollFrames.epLoopCheckProc_spec fuel (fun v => P (snapshotOfWGKernelView v)) a b
 
 theorem epGetUpwardsDepthProc_spec (fuel : Nat) : ∀ (P : Snapshot → Prop) (ep : EpId) (depth : Nat),
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.epGetUpwardsDepthProc fuel ep depth
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := by
-  induction fuel with
-  | zero =>
-    intro P ep depth
-    have h : SameSnapshot (Leanux.epGetUpwardsDepthProc 0 ep depth) := by
-      frame_same [epGetUpwardsDepthProc] using []
-    exact h.wp P
-  | succ n ih =>
-    intro P ep depth
-    have h : SameSnapshot (Leanux.epGetUpwardsDepthProc (n + 1) ep depth) := by
-      frame_same [epGetUpwardsDepthProc] using [getEp_spec, setEp_spec, getEpi_spec, ih]
-    exact h.wp P
+  intro P a b
+  exact Framing.EventpollFrames.epGetUpwardsDepthProc_spec fuel (fun v => P (snapshotOfWGKernelView v)) a b
 
 theorem epLoopCheck_sameSnapshot (ep to : EpId) : SameSnapshot (Leanux.epLoopCheck ep to) := by
-  have loop_spec := epLoopCheckProc_spec (EP_MAX_NESTS + 2)
-  have up_spec := epGetUpwardsDepthProc_spec (EP_MAX_NESTS + 2)
-  frame_same [epLoopCheck] using [loop_spec, up_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.epLoopCheck_sameWGKernel
 
 theorem epLoopCheck_spec (P : Snapshot → Prop) (ep to : EpId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.epLoopCheck ep to
@@ -391,9 +389,8 @@ theorem epLoopCheck_spec (P : Snapshot → Prop) (ep to : EpId) :
 
 theorem doEpollCtlBody_sameSnapshot (fId tId : FileId) (op : Int) (fd : Int) (events : UInt32) (data : UInt64) :
     SameSnapshot ((pinned_const _private.Leanux.FS.Eventpoll.«0».Leanux.doEpollCtlBody) fId tId op fd events data) := by
-  frame_same [_private.Leanux.FS.Eventpoll.«0».Leanux.doEpollCtlBody] using [getFile_spec, fopsOf_spec,
-    epOf_spec, epollMutexLock_spec, getEp_spec, epLoopCheck_spec, epFind_spec, epInsert_spec, epRemove_spec,
-    getEpi_spec, epModify_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.doEpollCtlBody_sameWGKernel
 
 theorem doEpollCtlBody_spec (P : Snapshot → Prop) (fId tId : FileId) (op : Int) (fd : Int) (events : UInt32) (data : UInt64) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ (pinned_const _private.Leanux.FS.Eventpoll.«0».Leanux.doEpollCtlBody) fId tId op fd events data
@@ -401,7 +398,8 @@ theorem doEpollCtlBody_spec (P : Snapshot → Prop) (fId tId : FileId) (op : Int
 
 theorem doEpollCtl_sameSnapshot (epfd : Nat) (op : Int) (fd : Int) (events : UInt32) (data : UInt64) :
     SameSnapshot (Leanux.doEpollCtl epfd op fd events data) := by
-  frame_same [doEpollCtl] using [fdget_spec, fdput_spec, doEpollCtlBody_spec, clearTfileCheckList_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.doEpollCtl_sameWGKernel
 
 theorem doEpollCtl_spec (P : Snapshot → Prop) (epfd : Nat) (op : Int) (fd : Int) (events : UInt32) (data : UInt64) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.doEpollCtl epfd op fd events data
@@ -410,7 +408,8 @@ theorem doEpollCtl_spec (P : Snapshot → Prop) (epfd : Nat) (op : Int) (fd : In
 /-! ## The system calls -/
 
 theorem sysEpollCreate1_sameSnapshot (flags : UInt32) : SameSnapshot (Leanux.sysEpollCreate1 flags) := by
-  frame_same [sysEpollCreate1] using [doEpollCreate_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.sysEpollCreate1_sameWGKernel
 
 theorem sysEpollCreate1_spec (P : Snapshot → Prop) (flags : UInt32) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.sysEpollCreate1 flags
@@ -418,7 +417,8 @@ theorem sysEpollCreate1_spec (P : Snapshot → Prop) (flags : UInt32) :
 
 theorem sysEpollCtl_sameSnapshot (epfd : Nat) (op : Int) (fd : Int) (events : UInt32) (data : UInt64) :
     SameSnapshot (Leanux.sysEpollCtl epfd op fd events data) := by
-  frame_same [sysEpollCtl] using [doEpollCtl_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.sysEpollCtl_sameWGKernel
 
 theorem sysEpollCtl_spec (P : Snapshot → Prop) (epfd : Nat) (op : Int) (fd : Int) (events : UInt32) (data : UInt64) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.sysEpollCtl epfd op fd events data
@@ -426,7 +426,8 @@ theorem sysEpollCtl_spec (P : Snapshot → Prop) (epfd : Nat) (op : Int) (fd : I
 
 theorem sysEpollWait_sameSnapshot (epfd : Nat) (maxevents timeout : Int) :
     SameSnapshot (Leanux.sysEpollWait epfd maxevents timeout) := by
-  frame_same [sysEpollWait] using [epTimeoutToTimespec_spec, doEpollWait_spec]
+  apply sameSnapshot_of_sameWGKernel
+  apply Framing.EventpollFrames.sysEpollWait_sameWGKernel
 
 theorem sysEpollWait_spec (P : Snapshot → Prop) (epfd : Nat) (maxevents timeout : Int) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.sysEpollWait epfd maxevents timeout

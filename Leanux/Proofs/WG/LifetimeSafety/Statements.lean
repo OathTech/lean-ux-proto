@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Lifetimes.FilesystemCalls
 import Leanux.Proofs.WG.Lifetimes.FilesystemLocal
 import Leanux.Proofs.WG.Lifetimes.PeerRemoval
 import Leanux.Proofs.WG.Lifetimes.DeviceControls
@@ -1710,9 +1711,32 @@ theorem filesystem_local_family_exact_lift (call : Lifetimes.FilesystemLocalCall
 
 /-- The full WG frame discharges concrete allocation preservation. Incoming
 safe history survives every original Stop; a normal return also preserves the
-resident/allocation invariant. Whole-FS and initialized outer-run closure remain
-separate, and no failed World is asserted. -/
+resident/allocation invariant. The complete filesystem family is framed separately
+below; initialized outer-run closure remains open and no failed World is asserted. -/
 theorem filesystem_local_family_allocation_preserves (call : Lifetimes.FilesystemLocalCall) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed :=
+  call.allocation
+
+/-- All eleven original filesystem dispatch arms and actual taskWorkRun retain
+all seven dedicated WireGuard Kernel fields on normal return. This covers the
+actual nested epoll/wait/release calls without valid-FS, sufficient-fuel or
+work-drain premises; it does not frame later namespace-cleanup execution. -/
+theorem filesystem_family_wg_frame (call : Lifetimes.FilesystemCall) :
+    Framing.SameWGKernel call.original := call.frame
+
+/-- The source-audited filesystem family preserves exact original results,
+successful Worlds and Stops, with unchanged incoming lifetime history on either
+outcome. Task work retains pop-before-release and its original exhaustion Stop. -/
+theorem filesystem_family_exact_lift (call : Lifetimes.FilesystemCall) :
+    ErasesPrefix call.observed call.original ∧
+      ∀ w h, runPrefix call.observed w h = (call.original.run w, h) :=
+  ⟨call.erases, call.run⟩
+
+/-- Concrete allocation geometry transports through the full WG frame. On Stop
+only the unchanged safe history is claimed, not a failed World. The pin's final
+file release may queue netnsCleanup; its later Env execution and the enclosing
+syscall/Runner composition remain separate lifetime obligations. -/
+theorem filesystem_family_allocation_preserves (call : Lifetimes.FilesystemCall) :
     PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed :=
   call.allocation
 
