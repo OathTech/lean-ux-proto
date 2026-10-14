@@ -7,7 +7,7 @@ Worktree `.worktrees/proofs-campaign`, branch `proofs/campaign`; governed by
 carried from `2c7a076`, then the audit at `f45bde8` and documentation-only
 `a39aded`, then the scheduler robustness change at `7a92672`.
 All registered components are current over `7a92672`, including the R2 handshake
-receive/worker and thin ingress, R3 insertion/pure-removal and R4 finite and RX source
+receive/worker and thin ingress, R3 insertion/pure-removal/local removal steps and R4 finite and RX source
 ring-journal extensions. The new `cryptAhead` call is observed and framed, and the historical
 witness seed no longer depends on the removed evaluator fixture.
 Open obligations below remain explicit. No integration into main,
@@ -17,16 +17,16 @@ push, differential check or guest run has been performed by this campaign.
 | --- | --- |
 | R1 anti-replay | Complete: uniqueness and the intentional inclusive-floor correction, with pure and accepted-run witnesses. |
 | R2 lifetimes | Endpoint identity and failure-retaining access contracts cover the listed call families. Whole-run caller/lifecycle/scheduler closure and saved-reference ownership remain open. The stale-cursor finding is checked. |
-| R3 routing | Prefix arithmetic, represented-tree lookup and unified bounded-input normal insertion dispatch are checked. Pure removal and its locality laws are checked. Original removal, configuration-history and packet-path refinements remain open. |
+| R3 routing | Prefix arithmetic, represented-tree lookup and unified bounded-input normal insertion dispatch are checked. Pure removal/locality and total binary/root-tagged leaf/unary source steps are checked. General removal, saved-list coherence, configuration-history and packet-path refinements remain open. |
 | R4 delivery | W7's two full-ring drops are explained. An accepted replay refutes chronological post-GRO stack order. Per-poll selected order, removal/provenance, concrete stack frames and RX source ring journals are checked; pipeline conservation remains open. |
 | R5 key lifetime | Resolved under Rule Zero by counter-limit, delayed-encryption and post-clear-use witnesses, with 13 local positive contracts. |
 | R6 flood resistance | Cookie exclusion proved at the original call boundary; accepted 19-retry/20-initiation episode resolves the literal limit through Rule Zero. Six terminal contracts. |
 
 **Last coordinated validation.** The mirror is byte-identical to `7a92672`.
-The proof gate passes 295 jobs and 293 terminal statements
-(ReplayWindow 15; R1 9; R2 152; R3 45; R4 53; R5 13; R6 6), using only `propext`, `Classical.choice` and `Quot.sound`.
+The proof gate passes 298 jobs and 301 terminal statements
+(ReplayWindow 15; R1 9; R2 152; R3 53; R4 53; R5 13; R6 6), using only `propext`, `Classical.choice` and `Quot.sound`.
 Fresh stock kernel replay passes, as do the 60-job default model build and
-expanded 110-test unit tier (23.618 seconds; one skip). The model executable
+expanded 110-test unit tier (23.540 seconds; one skip). The model executable
 was rebuilt at the scheduler carry (118 jobs); its source is unchanged. Independent frozen-source
 and scope reviews have no unresolved correctness findings in these components.
 
@@ -42,7 +42,7 @@ against this mirror, including exact original/observed output comparison.
 The retry and two current time witnesses include complete-advance checks.
 Generated streams prove accepted mirror behavior, not Linux capture or schedule
 reachability. These replayers were last run at the scheduler carry; the subsequent
-pure-removal, receive and RX ring-journal extensions change none of their code. Reproduction commands and
+pure/local removal, receive and RX ring-journal extensions change none of their code. Reproduction commands and
 provenance are retained below.
 
 **Carries and review history.**
@@ -501,7 +501,43 @@ Six new terminal exports pass the local 110-job target and full 286-job proof
 build. Independent frozen-source and documentation review found no issue; the
 coordinated proof gate, fresh stock kernel replay and fast tier above pass.
 
-**Remaining claim.** Original removal and general configuration histories remain open.
+**Local original removal.** `RemovalSource` imports only the original
+`WG.AllowedIps` and factors the exact node-only suffix after `listDel`; this
+keeps later R2 access/frame proofs independent of the higher list-mutation
+proof imports [AGENT 2026-10-14]. Its unconditional `rfl` equation reproduces
+original `removeByPeer`, including the saved peer list, empty test, pre-loop
+sequence increment, both continues and final iteration record. It covers all
+inputs and Stops as an equation; it does not expose a failed-prefix World.
+The pristine C removal at `allowedips.c:303–341` was inspected read-only. No
+simulation against the C or mirror change is claimed.
+
+`RemovalMirror` proves total exact endpoints for a binary target and a leaf or
+unary target whose saved parent tag selects a device root. Binary removal needs
+only a resident target with two populated child slots; those children are not
+read. Unary removal additionally needs a distinct resident child. Each step
+retains source list deletion before target lookup and the exact branch order.
+The full resulting kernel is specified, with every peer list filtered at the
+removed ID and other raw owner labels preserved. The binary target remains resident
+with no owner; leaf and unary targets are erased. The sole child's complete
+record changes only at its backlink. Root-tagged contracts do
+not require or infer that the input root points to the target.
+
+`RemovalStore` gives pointwise whole-node-map equations, selected/opposite root,
+frontier and sequence effects, and local representation transport. Binary owner
+clearing represents pure erasure under compression and uniqueness. Unary
+promotion derives parent/descendant separation from tree uniqueness and represents
+the surviving subtree. These are separate local execution and structural facts;
+the selected-root/whole-forest bridge, non-root detach/parent collapse and complete
+saved-list loop are still open. No arbitrary-world saved-list coherence, owner
+residency, history invariant or packet authorization is inferred. One step keeps
+the sequence unchanged; the source equation retains the original loop's increment.
+
+Eight new terminals pass the 113-job scoped target. Independent frozen source
+and documentation review has no unresolved findings; its owner-label wording
+correction is fixed. The coordinated proof gate, fresh stock kernel replay and
+fast tier above pass and include these eight terminals.
+
+**Remaining claim.** General original removal and configuration histories remain open.
 Parsed-input bounds and history invariants still need propagation through all mutations.
 Both packet paths follow R2. Owners are raw peer slots, not allocation or
 cryptographic identities; no liveness/ownership claim follows from tree lookup.
@@ -525,6 +561,7 @@ following tranche counts are separate, not an inferred campaign total.
 | Arbitrary-depth nonempty graft | 30: 4 / 26 | 36m47s |
 | Unified insertion dispatch | 11: 8 / 3 | 12m08s |
 | Pure removal and context locality | 9: 6 / 3 | 9m05s validation; 10m16s writer-token ownership |
+| Local removal source and endpoints | 7: 2 / 5 | 14m17s through source freeze; 14m49s through handoff receipt |
 
 The staged child architecture replaced a failed monolithic proof; this was not
 a mirror finding. Three deep-graft source-factor attempts hit Lean heartbeat
@@ -538,6 +575,16 @@ error and two default-heartbeat failures in rollback metadata. Projection-only
 simplification closed the latter without raising limits. All exits were collected;
 no cap or interruption occurred. Earlier checkpoint validation is retained in the
 corresponding commits; current combined validation is above.
+
+Local removal used seven capped builds: two passes and five failures. The first
+broad body proof hit simplifier/heartbeat limits; concrete execution equations
+closed without changing the source. The remaining collected diagnostics were
+residual definitional `Except.map` goals, missing peer-index binder types and
+unfolded metadata projections. Invocation three returned failure but its `/tmp`
+log was read-denied by nono; its diagnostics are unavailable and that owned file
+was deleted. No sandbox/global setting changed. All process exits were collected;
+no cap hit or interruption occurred. The final scoped target passed 113 jobs;
+there was no separate full build in this worker slice.
 
 Pure removal used nine capped builds, six passing and three ordinary failures.
 The failures concerned namespace/implicit-ID elaboration, simplified conjunction

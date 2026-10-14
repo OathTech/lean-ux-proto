@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.AllowedIps.InsertionDispatch
 import Leanux.Proofs.WG.AllowedIps.ContextRemoval
+import Leanux.Proofs.WG.AllowedIps.RemovalStore
 import Leanux.Proofs.WG.AllowedIps.ArithmeticMirror
 import Leanux.Proofs.WG.AllowedIps.Tree
 import Leanux.Proofs.WG.AllowedIps.LookupMirror
@@ -24,8 +25,10 @@ return is classified as success or one of two allocation refusals; successful
 returns refine pure insertion and actual-root longest-prefix lookup. A supplied
 opposite-family representation is preserved. Pure removal implements exact
 entry filtering and preserves the structural invariants, with local compaction
-laws under compression and distinct IDs. Original removal, configuration-history
-agreement, and packet admission remain separate obligations of the result.
+laws under compression and distinct IDs. The original removal loop has an
+all-input source equation; binary and root-tagged leaf/unary iterations have
+total exact endpoints and local store representation facts. General removal,
+configuration-history agreement, and packet admission remain separate obligations.
 -/
 
 namespace Leanux.Proofs.WG.CryptokeyRouting
@@ -1095,5 +1098,110 @@ theorem pure_removal_leaf_context (c : Context) (parent n : NodeData)
     (c.plug (Tree.fork parent side (.node n .empty .empty) sibling)).eraseId n.id =
       c.plug (if parent.peer = none then sibling else Tree.fork parent side .empty sibling) :=
   c.eraseId_leaf_parent parent n side sibling hc hn
+
+/-- The original saved-list loop is definitionally the proof-side step loop.
+This is an all-input equation, including Stops, and retains both continues. -/
+theorem original_removal_source_equation (pid : Nat) :
+    removeByPeerWithStep pid = WG.removeByPeer pid := removeByPeerWithStep_eq pid
+
+/-- One original loop iteration with two nonempty child slots terminates,
+filters every peer list and clears only the target owner. Child residency is
+unnecessary in this arm; no saved-list coherence is inferred. -/
+theorem original_removal_binary_step (w : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (id left right : Nat) (n : WG.AipNode)
+    (hn : d.nodes[id]? = some n) (hbits : n.bit = #[some left, some right]) :
+    ∃ w', (removeStep id).run w = .ok (.yield (), w') ∧
+      w'.k = { w.k with wg := some (removalCleared (unlisted d id) id n) } := by
+  obtain ⟨result, w', he, hx, hk⟩ := (Leanux.Proofs.Framing.total_iff_run _ _ _).mp
+    (removeStep_binary_wp w.k d hd id left right n hn hbits) w rfl
+  subst result
+  exact ⟨w', he, hk⟩
+
+/-- A leaf whose saved parent tag selects a device root terminates with that
+root cleared and the target freed. The input root need not point at the target;
+this raw endpoint is not a whole-tree selection or configuration-history claim. -/
+theorem original_removal_root_leaf_step (w : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (v4 : Bool) (id : Nat) (n : WG.AipNode)
+    (hn : d.nodes[id]? = some n) (hbits : n.bit = #[none, none])
+    (hparent : n.parent = rootSlot v4) :
+    ∃ w', (removeStep id).run w = .ok (.yield (), w') ∧
+      w'.k = { w.k with wg := some (removalRootLeaf (unlisted d id) v4 id n) } := by
+  obtain ⟨result, w', he, hx, hk⟩ := (Leanux.Proofs.Framing.total_iff_run _ _ _).mp
+    (removeStep_root_leaf_wp w.k d hd v4 id n hn hbits hparent) w rfl
+  subst result
+  exact ⟨w', he, hk⟩
+
+/-- A root-tagged unary target terminates when its distinct child is resident.
+The exact endpoint promotes that child and changes only its backlink. Owners
+remain raw labels, including any orphan labels. -/
+theorem original_removal_root_unary_step (w : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (v4 left : Bool) (id child : Nat) (n cn : WG.AipNode)
+    (hn : d.nodes[id]? = some n) (hc : d.nodes[child]? = some cn) (hne : id ≠ child)
+    (hbits : n.bit = if left then #[some child, none] else #[none, some child])
+    (hparent : n.parent = rootSlot v4) :
+    ∃ w', (removeStep id).run w = .ok (.yield (), w') ∧
+      w'.k = { w.k with wg := some (removalRootUnary (unlisted d id) v4 id n child cn) } := by
+  obtain ⟨result, w', he, hx, hk⟩ := (Leanux.Proofs.Framing.total_iff_run _ _ _).mp
+    (removeStep_root_unary_wp w.k d hd v4 left id child n cn hn hc hne hbits hparent) w rfl
+  subst result
+  exact ⟨w', he, hk⟩
+
+/-- Pointwise equations describe the entire resulting node map, including
+unrelated resident nodes, the retired target and the promoted child's backlink. -/
+theorem local_removal_node_store (d : WG.Device) (v4 : Bool) (id child : Nat)
+    (n cn : WG.AipNode) (q : Nat) :
+    (removalCleared d id n).nodes[q]? =
+      (if id = q then some {n with peer := none} else d.nodes[q]?) ∧
+    (removalRootLeaf d v4 id n).nodes[q]? =
+      (if id = q then none else d.nodes[q]?) ∧
+    (removalRootUnary d v4 id n child cn).nodes[q]? =
+      (if id = q then none else if child = q then
+        some {cn with parent := rootSlot v4} else d.nodes[q]?) :=
+  ⟨removalCleared_node .., removalRootLeaf_node .., removalRootUnary_node ..⟩
+
+/-- Both root-tagged endpoints retain the frontier, opposite root and sequence
+and implement pointwise filtering of every resident peer's allowed-IP list. -/
+theorem local_removal_root_metadata (d : WG.Device) (v4 : Bool) (id child : Nat)
+    (n cn : WG.AipNode) :
+    let leaf := removalRootLeaf (unlisted d id) v4 id n
+    let unary := removalRootUnary (unlisted d id) v4 id n child cn
+    (leaf.nextNode = d.nextNode ∧ rootValue leaf v4 = none ∧
+      rootValue leaf (!v4) = rootValue d (!v4) ∧
+      leaf.peerAllowedips.seq = d.peerAllowedips.seq ∧
+      ∀ q : Nat, leaf.peers[q]? = (d.peers[q]?).map (unlist id)) ∧
+    (unary.nextNode = d.nextNode ∧ rootValue unary v4 = some child ∧
+      rootValue unary (!v4) = rootValue d (!v4) ∧
+      unary.peerAllowedips.seq = d.peerAllowedips.seq ∧
+      ∀ q : Nat, unary.peers[q]? = (d.peers[q]?).map (unlist id)) :=
+  ⟨removalRootLeaf_metadata .., removalRootUnary_metadata ..⟩
+
+/-- Binary owner clearing represents pure ID erasure under compression and
+unique IDs. Neither old-owner residency nor peer-list coherence is required. -/
+theorem local_removal_binary_representation (d : WG.Device) (width : Nat)
+    (base : WG.Slot) (n : NodeData) (l r : Tree)
+    (hr : RepAt d.nodes width base (.node n l r))
+    (hn : (Tree.node n l r).nodeIds.Nodup) (hc : (Tree.node n l r).Compressed)
+    (hl : l.root.isSome) (hh : r.root.isSome) :
+    RepAt (removalCleared d n.id (encode width base n l r)).nodes width base
+      ((Tree.node n l r).eraseId n.id) := by
+  rw [Tree.eraseId_binary hc hn hl hh]
+  exact removalCleared_rep d width base n l r hr hn
+
+/-- The root-unary endpoint represents its promoted subtree, with separation
+of the retired parent and child descendants derived from tree uniqueness.
+This structural transport is separate from selection of the original root. -/
+theorem local_removal_unary_representation (d : WG.Device) (v4 : Bool) (n c : NodeData)
+    (l r : Tree) (left : Bool)
+    (hr : RepAt d.nodes (rootWidth v4) (rootSlot v4)
+      (if left then .node n (.node c l r) .empty else .node n .empty (.node c l r)))
+    (hn : (if left then Tree.node n (.node c l r) .empty
+      else Tree.node n .empty (.node c l r)).nodeIds.Nodup) :
+    let t := Tree.node c l r
+    let old := encode (rootWidth v4) (rootSlot v4) n
+      (if left then t else .empty) (if left then .empty else t)
+    let child := encode (rootWidth v4) (.child n.id (if left then 0 else 1)) c l r
+    RepAt (removalRootUnary d v4 n.id old c.id child).nodes
+      (rootWidth v4) (rootSlot v4) t :=
+  removalRootUnary_rep d v4 n c l r left hr hn
 
 end Leanux.Proofs.WG.CryptokeyRouting
