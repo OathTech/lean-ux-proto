@@ -755,7 +755,10 @@ def dispatch_problems(per):
     timer}) names a unit; the section start that dispatches it (300: {func,
     unit}) must name a unit queued or armed earlier in the trace and not
     dispatched since, which it then consumes (a re-arm moves a timer, a
-    re-queue of a running item queues it again). A softirq section (unit
+    re-queue of a running item queues it again; a second queue record while
+    an instance is pending is a second instance, the kernel's PENDING bit
+    cleared by process_one_work before the first section, which the mirror
+    accepts since the claim-point robustness landing). A softirq section (unit
     0 for net_rx_action) is paired with nothing; any other section without
     a unit is a kernel without the identity. Returns the problems, and per
     (trace, mode) the units still queued or armed at the trace's end
@@ -763,17 +766,20 @@ def dispatch_problems(per):
     refuses as having outlived the guest's wait)."""
     problems, leftovers = {}, {}
     for (trace_id, mode), ops in per.items():
-        pending, found = {}, []
+        pending, found = {}, []   # unit -> ['work', instances] or ['timer', 1]
         for index, records in enumerate(ops):
             for kind, _ip, _seq, length, data, func in records:
                 raw = kind & 0x7fff
                 if raw == QUEUE and length == 16:
+                    # the kernel's PENDING test succeeded: a second record while an
+                    # instance is pending is a second instance (process_one_work cleared
+                    # the bit before the first section started; the mirror's rule)
                     unit = int.from_bytes(bytes.fromhex(data[:16]), 'little')
-                    if unit in pending and pending[unit] == 'work':
-                        found.append(dict(index=index, problem='a work item queued while already queued', unit=hex(unit)))
-                    pending[unit] = 'work'
+                    entry = pending.setdefault(unit, ['work', 0])
+                    entry[0] = 'work'
+                    entry[1] += 1
                 elif raw == TIMER_ARM and length == 24:
-                    pending[int.from_bytes(bytes.fromhex(data[32:48]), 'little')] = 'timer'
+                    pending[int.from_bytes(bytes.fromhex(data[32:48]), 'little')] = ['timer', 1]
                 elif raw == SECTION_START and length == 16:
                     unit = int.from_bytes(bytes.fromhex(data[16:32]), 'little')
                     if unit == 0:
@@ -782,11 +788,13 @@ def dispatch_problems(per):
                     elif unit not in pending:
                         found.append(dict(index=index, problem='a dispatched unit that was never queued or armed', unit=hex(unit)))
                     else:
-                        del pending[unit]
+                        pending[unit][1] -= 1
+                        if pending[unit][1] == 0:
+                            del pending[unit]
         if found:
             problems.setdefault(trace_id, []).extend(dict(p, label='dispatch', mode=mode) for p in found)
         if pending:
-            leftovers[(trace_id, mode)] = dict(Counter(pending.values()))
+            leftovers[(trace_id, mode)] = dict(Counter(k for k, n in pending.values() for _ in range(n)))
     return problems, leftovers
 
 

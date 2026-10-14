@@ -62,7 +62,8 @@ its owner (`peer->transmit_handshake_work`, `transmit_packet_work`,
   record names a unit; a section start must name a unit queued or armed
   earlier and not dispatched since, and consumes it. Problems (the trace
   fails): a dispatched unit never queued or armed; a work item queued while
-  already queued; a non-softirq section without its unit. Units still queued
+  already queued (since the claim-point robustness landing, a second
+  instance, consumed by its own section); a non-softirq section without its unit. Units still queued
   or armed at the trace's end are counted in the report (`dispatch units left
   queued/armed`), not failed: an unfired timer is normal, and work that outlived
   the guest's wait is the mirror's existing refusal.

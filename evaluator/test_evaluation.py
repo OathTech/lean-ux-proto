@@ -622,6 +622,16 @@ class EvaluationChecks(unittest.TestCase):
         queued = [[307, '0x9', 1, 16, le(w1) + le(f), None]]
         found, left = check.dispatch_problems({('t', 'pc'): [queued]})
         self.assertEqual((found, left), ({}, {('t', 'pc'): {'work': 1}}))
+        # a second queue record while an instance is pending is a second instance (the
+        # kernel's PENDING bit cleared by process_one_work before the first section):
+        # two sections consume two instances; one section leaves one; a third is never queued
+        twice = [[307, '0x9', 1, 16, le(w1) + le(f), None], [307, '0x9', 2, 16, le(w1) + le(f), None],
+                 [300, '0x1', 3, 16, le(f) + le(w1), f], [301, '0x2', 4, 8, le(0), f],
+                 [300, '0x1', 5, 16, le(f) + le(w1), f], [301, '0x2', 6, 8, le(0), f]]
+        self.assertEqual(check.dispatch_problems({('t', 'pc'): [twice]}), ({}, {}))
+        self.assertEqual(check.dispatch_problems({('t', 'pc'): [twice[:4]]}), ({}, {('t', 'pc'): {'work': 1}}))
+        found, _ = check.dispatch_problems({('t', 'pc'): [twice + twice[2:4]]})
+        self.assertEqual([p['problem'] for p in found['t']], ['a dispatched unit that was never queued or armed'])
         # a timer: armed (24 bytes, its address last), then its section; an unfired one is left armed
         t1 = 0xffff888000003000
         armed = [[303, '0xa', 1, 24, le(5) + le(9) + le(t1), None], [300, '0x1', 2, 16, le(f) + le(t1), f],
