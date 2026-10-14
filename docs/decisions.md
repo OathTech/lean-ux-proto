@@ -461,4 +461,15 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   take several id prefixes. The replay tests' captures predate the kind-310
   record and the module had failed on every capture since item 7;
   `with_jiffies_end` appends the record as a replay fixture.
+- **2026-10-14 [AGENT, fork of the coordinator]** `requireNotPending` is
+  retired (a no-op; `docs/2026-10-11-dispatch-order.md`, the last section),
+  the pre-release review's finding 3: with the section records and the
+  scheduler loop the queued handshake send worker runs exactly where its
+  section is, so a receive the kernel ran before it is determined; the stop
+  excluded ordinary simultaneous initiation. Evidence: the receive-first
+  captures of `p_sim_init_*` on s2, which the old mirror refused at
+  peer.c:75 and the new one replays to each child's returns. Two of the
+  four traces stay outside the suites because the two guest children ran
+  the unbound send worker and the receive worker in different orders, the
+  harness's determinism rule (the review's finding 5), not the mirror's.
 
