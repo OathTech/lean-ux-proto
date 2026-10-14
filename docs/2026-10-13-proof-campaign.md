@@ -4,9 +4,9 @@
 
 Work is on `.worktrees/proofs-campaign`, branch `proofs/campaign`, under
 [the charter](2026-10-13-charter-proof-campaign.md). The mirror remains byte-identical
-to `ca6b22e`. The current R3 optional-device/lifecycle extension passes scoped/full
+to `ca6b22e`. The current R4 direct-NAPI caller extension passes scoped/full
 builds, exact checks, independent frozen review and coordinated validation.
-The preceding R4 suffix/composition checkpoint passed coordinated validation.
+The preceding R3 optional-device/lifecycle checkpoint passed coordinated validation.
 The [proof register](proofs.md#results) holds current declarations and
 pins; its [model map](proofs.md#layers) supplies the complete module inventory.
 Current components are not completion of the open charter properties. This campaign
@@ -19,13 +19,25 @@ retains current architecture, findings, reproduction provenance, effort and limi
 | R1 | Uniqueness and the intentional inclusive-floor correction are proved, with pure and accepted-run witnesses. |
 | R2 | Initialized allocation-identity access safety now holds for every typed Runner trace and both placeholder/flood modes, including failed histories. Every reached consistency-filter entry derives its own allocation invariant and safe isolated trials with exact ordered filter correspondence. No parser, array-length, progress or success premise is added. Raw-reference affiliation/credit remains a separate stronger property. Coordinated validation of the three new exports passes. |
 | R3 | Initialized finite normal call histories refine flat-prefix updates and reached-root lookup, including full normal clear. Completed setAllowedip/removal events now cover the complete public peer command, with source-derived acquisition and concrete send/flush/cleanup frames. Successful public parseTrace supplies every configured peer's address shape. The complete original device command now composes clear/removal/peer-command completions; normal clear/remove-all leaves the folded tables empty. Optional routing now includes absent devices, guarded creation, down, destruction/deletion and all fixture/prefill modes. Whole absent peer/device commands retain their entry journals, without assuming interface lookup failure. Enclosing syscall/Runner execution and packet paths remain open. |
-| R4 | Physical rings, finite/source journals, selected GRO order and concrete RX scheduling are checked. A joint stamped poll proves full callback/removal provenance, per-poll stamp uniqueness on every prefix and observed release on normal return, from valid prior lifetime history. Accepted input refutes chronological post-GRO order. Capture reads now support removal and entry stamps in the new suffix, excluding prior releases. Finite original-poll sequences compose distinct entry stamps with a direct audit projection. Initialized concrete caller/Runner coverage and joint pipeline conservation remain open. |
+| R4 | Physical rings, finite/source journals, selected GRO order and concrete RX scheduling are checked. A joint stamped poll proves full callback/removal provenance, per-poll stamp uniqueness on every prefix and observed release on normal return, from valid prior lifetime history. Accepted input refutes chronological post-GRO order. Capture reads now support removal and entry stamps in the new suffix, excluding prior releases. Finite original-poll sequences compose distinct entry stamps with a direct audit projection. Both direct poll sites and the IRQ-exit wrapper now preserve this boundary with exact original erasure and direct R2 audit projection. Enclosing worker/scheduler/ingress/lifecycle and initialized Runner coverage plus joint pipeline conservation remain open. |
 | R5 | The unconditional age/post-zero and wire-nonce readings are false in accepted mirror inputs. Rule Zero resolution retains thirteen positive local contracts, without universal replacement transport claims. |
 | R6 | Cookie exclusion is proved at its original call boundary. A 19-retry/20-initiation episode refutes literal MAX=18; no universal corrected retry bound is claimed. |
 
-**Validation status.** The current R3 optional-device/lifecycle extension passes
+**Validation status.** The current R4 direct-NAPI caller extension passes its
+283-job scoped Statements and 442-job full proof builds. Three exports give
+93 R4 / 443 source declarations (441 theorems and two definitions). The capped
+exact six-file check preserves all 440 prior terminal statements/proof bodies
+and passes census, empty-index, tracked/new-file/EOF whitespace, comment-aware
+token/import and mirror checks. Independent frozen source/export/documentation
+review is clear at 23:16:32 UTC. Sequential coordinated validation passes the
+442-job proof gate on all 443 permitted-axiom declarations, fresh stock kernel
+replay, the 60-job default build and 124 unit tests (22.155 seconds, one skip).
+The coordinator exact check confirms frozen hashes, six-file scope, all 440
+prior terminal bodies, census, tracked/new-file whitespace and mirror equality.
+
+The preceding R3 optional-device/lifecycle extension passed
 293-job scoped Statements and 439-job full proof builds. Three exports give
-99 R3 / 440 current-source declarations (438 theorems and two definitions).
+99 R3 / 440 declarations at that checkpoint (438 theorems and two definitions).
 The capped exact six-file check passes all 437 prior terminal statements/proof
 bodies, census, whitespace, empty index, the existing comment-aware token/import
 checks and mirror equality. Independent frozen source/export/documentation review is
@@ -946,8 +958,31 @@ journal invariant and append fresh local poll suffixes at identical lifetime
 histories; this reuses the existing allocation/cell phase and avoids a stronger
 history-independence assumption.
 
+**Direct NAPI callers.** `RxNapiHistory` now invokes the stamped poll at both
+actual direct sites: `Env.napiSoftirq` and `Env.pollScheduledInline`. The IRQ-exit
+wrapper observes its actual true-arm softirq rescan. The complete captured-map
+filter scan remains before the empty/hidden/multi-peer guards; IRQ's `any` scan
+short-circuits, and placement is consumed only after its three guards. Inline
+polling adds no section wrapper. NET_RX start, ordinal installation, normal
+section reset and stop remain in their original order; a body Stop retains its
+prefix without executing the closing operations.
+
+Three grouped terminal contracts give unconditional source erasure, direct
+projection to the existing focused R2 caller at the identical incoming lifetime
+history, and normal-boundary/failed-prefix preservation. Interleaved saved probes
+are preserved. Empty-history safety needs only local AllocationInv, not an
+assumed callback, freshness or successful return. Focus composition uses actual
+lower append contracts and transports the allocation invariant through continuations;
+independent erasures and history neutrality are not used. No additional getter,
+source action or speculative delivery event is inserted. Callback entry remains
+attempted handoff, including an entry followed by callback Stop.
+
+[AGENT 2026-10-14] Factor the scan and section wrappers in the proof tree and
+reuse existing lower preservation for conditional focus composition, avoiding a
+second lifetime observer or a stronger unconditional-append assumption.
+
 **Remaining obligations.** Initialized whole-schedule duplicate freedom needs
-the finite concrete caller spine to connect the persistent stamped journal to
+the enclosing concrete caller spine to connect the persistent stamped journal to
 R2's initialized Runner audit. Whole-call access frames alone do not observe
 nested callbacks. RX carrier preservation through relevant transmit
 callbacks, enclosing ingress/runner/lifecycle, worker-local ownership and joint
@@ -983,6 +1018,7 @@ staged-to-socket conservation is not claimed or required by this receive result.
 | W7 normal endpoints | 21 calls: 20 builds (four passes/16 ordinary failures) plus a passing scoped check; scoped/full targets 243/365 | 20m51s from grant 12:09:19 through measured full-result collection 12:30:10; 23m18s total token ownership through handback 12:32:37. No cap/interruption, all exits collected. Independent frozen review and coordinated gate, fresh kernel replay, default build and 114 unit tests pass. |
 | Joint stamped rxPoll | 32 capped calls: 30 builds (13 PASS / 17 FAIL) and two passing exact checks. Failures included simplifier recursion depth at call 10 and the existing 2,000,000-heartbeat limit at call 20; narrower composition and explicit bind adapters closed them without raising limits. Every exit is collected; no memory-cap failure. | Grant 21:15:22 UTC; full-target collection 21:50:33 (35m11s), token return 21:59:01 (43m39s ownership). Scoped/full 257/431; frozen review and final documentation reconciliation are clear after the reporting amendment. Sequential coordinated proof gate, fresh kernel replay, default build, 124 unit tests and exact scope/hash/compatibility checks pass. All seven frozen Lean hashes are unchanged. |
 | Capture suffix and finite poll composition | 13 capped calls, 11 builds (6 PASS / 5 ordinary FAIL) and two passing exact checks; scoped/full 261/436 | Grant 22:27:43 UTC; full-result collection 22:34:04 (6m21s); token returned 22:37:34 (9m51s ownership). Five exports, 90 R4 / 437 source declarations. Failures were local reserved-field/identifier syntax, list/filter normalization, dependent bind/loop inference and a let-unfold repair. No cap/limit failure, interruption, source admission or runtime change/replay; all exits collected. The exact check preserves all 432 prior declarations and confirms scope, census, whitespace, source tokens/imports and mirror equality. Independent frozen review is clear at 22:36:44 UTC with no finding. Sequential coordinated proof gate, fresh kernel replay, default build, 124 unit tests and exact scope/hash/compatibility checks pass. All four frozen Lean hashes are unchanged; all 13 worker logs are removed. |
+| Direct NAPI callers | 17 capped calls: 13 builds (8 PASS / 5 FAIL), four exact checks (FAIL / PASS / PASS / PASS); scoped/full 283/442 | Acceptance 23:05:30 UTC; final full-result collection 23:14:55 (9m25s). Three exports, 93 R4 / 443 source declarations. Call 1 failed at the existing simplifier recursion limit after a self-rewriting equation; directed rewrites close it. Call 6 failed at the existing 200,000-heartbeat limit in expanded softirq focus; factoring the exact section wrapper closes it without raising limits. Other failures were dotted-constructor inference, tactic-macro hygiene/parser and explicit history-parameter inference. No source admission, recovery placeholder diagnostic, cap/interruption or runtime change/replay. Every exit is collected. Check 12 failed because its temporary script required zero from a clean new-file `git diff --no-index --check`, whose difference exit is one; checks 13/16 accept the normal difference status only with empty diagnostics and independently inspect every line and EOF. The exact six-file check preserves all 440 old terminal bodies and confirms census, empty index, whitespace, source tokens/imports and mirror equality. The exports keep the allocation premise inside only the local empty-history corollary; erasure, direct conditional projection and invariant preservation remain unconditional contracts. Independent frozen review is clear with no finding (final pass 23:16:15–23:16:32). Final metadata/hash check 17 passes. Token returned 23:17:24 UTC (11m54s from acceptance; 12m19s from root grant at 23:05:05); all 17 worker logs are removed. Sequential coordinated proof gate (442 jobs, 443 permitted-axiom declarations), fresh stock kernel replay, default build (60 jobs), unit suite (124, 22.155 seconds, one skip), and exact frozen-hash/scope/compatibility/census/whitespace/mirror checks pass. All four frozen Lean hashes remain unchanged. |
 
 Failed joint-poll calls 16 and 23 also printed Lean elaborator-recovery
 `sorry ()` / `[sorry]` goal terms after ambiguous constructor/type errors and an

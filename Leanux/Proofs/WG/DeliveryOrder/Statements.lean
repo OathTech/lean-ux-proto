@@ -18,6 +18,7 @@ import Leanux.Proofs.WG.Queues.TxDispositionEndpoints
 
 import Leanux.Proofs.WG.Queues.RxPollStampPhase
 import Leanux.Proofs.WG.Queues.RxPollComposition
+import Leanux.Proofs.WG.Queues.RxNapiHistory
 
 /-! R4 queue components: physical-ring refusal, original prev_queue FIFO laws,
 and successful-endpoint receive-queue helper frames. Whole recorded-schedule delivery,
@@ -1013,5 +1014,51 @@ theorem joint_poll_finite_sequence (calls : List (PeerId × Nat)) (w : World)
     Queues.RxHistory.BoundarySafe (runPrefix (Queues.RxHistory.polls calls) w []).2 :=
   ⟨Queues.RxHistory.polls_erases calls, Queues.RxHistory.polls_preserves calls,
     Queues.RxHistory.polls_safe calls w hi⟩
+
+/-- The actual NET_RX softirq caller observes every reached direct poll.
+Original guards, saved-map reads, section framing and callback Stops survive
+exact source erasure and audit projection at the same incoming history.
+Entry stamps stay distinct on failures; only normal returns restore releases. -/
+theorem original_napi_softirq_joint :
+    ErasesPrefix Queues.RxHistory.napiSoftirq Leanux.Env.napiSoftirq ∧
+    ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent
+      Queues.RxHistory.napiSoftirq (Lifetimes.auditFocus Lifetimes.napiSoftirqPrefix) ∧
+    PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe
+      Queues.RxHistory.napiSoftirq ∧
+    ∀ w, Lifetimes.AllocationInv [] w →
+      Queues.RxHistory.BoundarySafe (runPrefix Queues.RxHistory.napiSoftirq w []).2 :=
+  ⟨Queues.RxHistory.napiSoftirq_erases, Queues.RxHistory.napiSoftirq_projects,
+    Queues.RxHistory.napiSoftirq_preserves,
+    fun w hi => (Queues.RxHistory.napiSoftirq_preserves w [] (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1⟩
+
+/-- Inline scheduled polling observes its direct source calls without adding
+a worker section. The complete scan and multi-peer refusal remain exact.
+The allocation-valid local entry is not an initialized Runner theorem. -/
+theorem original_inline_poll_joint :
+    ErasesPrefix Queues.RxHistory.pollScheduledInline Leanux.Env.pollScheduledInline ∧
+    ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent
+      Queues.RxHistory.pollScheduledInline (Lifetimes.auditFocus Lifetimes.pollScheduledInlinePrefix) ∧
+    PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe
+      Queues.RxHistory.pollScheduledInline ∧
+    ∀ w, Lifetimes.AllocationInv [] w →
+      Queues.RxHistory.BoundarySafe (runPrefix Queues.RxHistory.pollScheduledInline w []).2 :=
+  ⟨Queues.RxHistory.pollScheduledInline_erases, Queues.RxHistory.pollScheduledInline_projects,
+    Queues.RxHistory.pollScheduledInline_preserves,
+    fun w hi => (Queues.RxHistory.pollScheduledInline_preserves w [] (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1⟩
+
+/-- IRQ exit retains short-circuit peer reads, all placement guards and the
+actual true-arm softirq rescan. Prior probe markers remain interleaved in the
+direct audit projection. Callback entry does not assert successful delivery. -/
+theorem original_napi_irq_exit_joint :
+    ErasesPrefix Queues.RxHistory.napiIrqExit Leanux.Env.napiIrqExit ∧
+    ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent
+      Queues.RxHistory.napiIrqExit (Lifetimes.auditFocus Lifetimes.napiIrqExitPrefix) ∧
+    PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe
+      Queues.RxHistory.napiIrqExit ∧
+    ∀ w, Lifetimes.AllocationInv [] w →
+      Queues.RxHistory.BoundarySafe (runPrefix Queues.RxHistory.napiIrqExit w []).2 :=
+  ⟨Queues.RxHistory.napiIrqExit_erases, Queues.RxHistory.napiIrqExit_projects,
+    Queues.RxHistory.napiIrqExit_preserves,
+    fun w hi => (Queues.RxHistory.napiIrqExit_preserves w [] (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1⟩
 
 end Leanux.Proofs.WG.DeliveryOrder
