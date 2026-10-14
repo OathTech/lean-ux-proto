@@ -951,18 +951,20 @@ private def doEpollCtlBody (fId tId : FileId) (op : Int) (fd : Int) (events : UI
       if ← branch .doEpollCtlRelockError (error != 0) then return (error, true)
   let epi ← epFind ep tId fd
   let mut error : Int := -EINVAL
-  -- switch (op)
-  if ← branchCmp .doEpollCtlCaseAdd (op == EPOLL_CTL_ADD) op EPOLL_CTL_ADD then
+  -- switch (op): one choice point in the C, lowered to one compare and a jump table;
+  -- the three arms are plain decisions (no per-arm compare exists in the built code:
+  -- the same-record rule of the mutation campaign showed all three matching one record)
+  if ← branch .doEpollCtlCaseAdd (op == EPOLL_CTL_ADD) then
     if ← branch .doEpollCtlAddAbsent epi.isNone then
       events := events ||| EPOLLERR ||| EPOLLHUP
       error ← epInsert ep ⟨events, data⟩ tId fd fullCheck
     else error := -EEXIST
-  else if ← branchCmp .doEpollCtlCaseDel (op == EPOLL_CTL_DEL) op EPOLL_CTL_DEL then
+  else if ← branch .doEpollCtlCaseDel (op == EPOLL_CTL_DEL) then
     if ← branch .doEpollCtlDelPresent epi.isSome then
       epRemove ep epi.get!
       error := 0
     else error := -ENOENT
-  else if ← branchCmp .doEpollCtlCaseMod (op == EPOLL_CTL_MOD) op EPOLL_CTL_MOD then
+  else if ← branch .doEpollCtlCaseMod (op == EPOLL_CTL_MOD) then
     if ← branch .doEpollCtlModPresent epi.isSome then
       let item ← getEpi epi.get!
       if ← branchCmp .doEpollCtlModNotExclusive (!hasFlag item.events EPOLLEXCLUSIVE) (item.events &&& EPOLLEXCLUSIVE).toNat 0 then

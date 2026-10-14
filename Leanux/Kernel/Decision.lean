@@ -2918,7 +2918,8 @@ def Decision.comparison : Decision → Option Comparison
   | .doEpollCtlHasEvent | .sysEpollCtlHasEvent => some ⟨.ne, true, none, false⟩
   -- `op == EPOLL_CTL_ADD` at :2551 is folded after the exclusive block established `op != ADD`
   | .doEpollCtlExclusiveMod | .doEpollCtlExclusiveAdd => some ⟨.eq, true, none, false⟩
-  | .doEpollCtlCaseAdd | .doEpollCtlCaseDel | .doEpollCtlCaseMod => some ⟨.eq, true, none, false⟩
+  -- `switch (op)` at :2580: the three case arms share one compiled compare (the jump
+  -- table's range check), so they carry no operands (the same-record rule)
   -- `if (res)` is folded when ep_send_events returned through its `res >= maxevents` break
   | .epPollEavail | .epPollTimedOut => some ⟨.ne, true, none, false⟩
   | .doEpollCtlGenMatches | .epLoopCheckProcVisited | .epGetUpwardsDepthProcVisited => some ⟨.eq, false, none, false⟩

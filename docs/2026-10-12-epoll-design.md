@@ -1267,8 +1267,10 @@ Deviations from sections 2-6, each verified against `.deps/linux`:
    declared for the scalar compares the mirror holds (masks, counts, depths,
    `maxevents`, `res`, the seqcount) and not for pointer tests, nor for the
    compares of `op`, whose `==` tests and switch may share one comparison
-   in the built code; stream T's first run decides whether they can be
-   declared.
+   in the built code. T's settling pass declared the three `switch (op)` arms
+   with operands; the mutation campaign's same-record rule (2026-10-14)
+   showed all three matching the one compiled compare, so they are plain
+   decisions again, their outcomes witnessed by the arms' spans.
 4. **Allocation sites** take ids 192-195 of epoll's block (A's 70-99 has
    two ids left before D3's 100); `harness/steer.py ALLOC_SITES` does not
    name them yet, which stream T's steered traces need.
