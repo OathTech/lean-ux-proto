@@ -1033,6 +1033,18 @@ inductive HiddenSite where
       `{jiffies before, jiffies after}` of the `wg_advance` operation, in
       the trace process's task stream. -/
   | modTimerArm | timeAdvance | jiffiesEnd
+  /-- Pre-release review, finding 2 (docs/2026-10-14-pre-release-review.md,
+      section 2): the caller's `jiffies` read that computes a peer timer's
+      expiry, recorded as kind 311 `{jiffies}` on the caller's own line in
+      timers.c (`kcov_timer_jiffies`, an identity through which each of
+      `mod_peer_timer`'s seven callers reads). Consumed before the guard,
+      as the C evaluates the argument; `armTimer` computes the expiry from
+      it and compares with the arm record's published expiry, so a delay
+      wrong by one tick no longer disappears into a reconstructed read.
+      One site per caller: ids 420-426. -/
+  | timerJiffiesRetransmitZeroKey | timerJiffiesExpiredKeepalive | timerJiffiesDataSent
+  | timerJiffiesDataReceived | timerJiffiesHandshakeInitiated | timerJiffiesSessionDerived
+  | timerJiffiesTraversal
   /-- Dispatch order (docs/2026-10-11-dispatch-order.md): the kind-307 queue
       record `{work, func}` written at `__queue_work` for a work item of the
       dispatch set; its site is the work function. Consumed where the mirror
@@ -1235,6 +1247,16 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   -- `Env.afterAdvance` as the firing window's exact end. Id 128: the first
   -- free id after L's block (120-127).
   | .jiffiesEnd => ⟨128, "jiffies_end", "jiffies", "fs/ioctl.c", 51, 8, .mirror⟩
+  -- Pre-release review finding 2: the caller's jiffies read before each
+  -- mod_peer_timer, kind 311, 8 bytes, at the caller's line (the `_THIS_IP_`
+  -- of the `kcov_timer_jiffies(jiffies, _THIS_IP_)` expression); ids 420-426.
+  | .timerJiffiesRetransmitZeroKey => ⟨420, "timer_jiffies_retransmit_zero_key", "jiffies", "drivers/net/wireguard/timers.c", 62, 8, .mirror⟩
+  | .timerJiffiesExpiredKeepalive => ⟨421, "timer_jiffies_expired_keepalive", "jiffies", "drivers/net/wireguard/timers.c", 87, 8, .mirror⟩
+  | .timerJiffiesDataSent => ⟨422, "timer_jiffies_data_sent", "jiffies", "drivers/net/wireguard/timers.c", 149, 8, .mirror⟩
+  | .timerJiffiesDataReceived => ⟨423, "timer_jiffies_data_received", "jiffies", "drivers/net/wireguard/timers.c", 159, 8, .mirror⟩
+  | .timerJiffiesHandshakeInitiated => ⟨424, "timer_jiffies_handshake_initiated", "jiffies", "drivers/net/wireguard/timers.c", 185, 8, .mirror⟩
+  | .timerJiffiesSessionDerived => ⟨425, "timer_jiffies_session_derived", "jiffies", "drivers/net/wireguard/timers.c", 206, 8, .mirror⟩
+  | .timerJiffiesTraversal => ⟨426, "timer_jiffies_traversal", "jiffies", "drivers/net/wireguard/timers.c", 216, 8, .mirror⟩
   -- L (ids 120-126, outside E-A's 64-69, A's 70-99 and D3's 100-115). The
   -- consumer frames were confirmed on the built kernel by stream G's L0 probe
   -- (scripts/wg-l0-probe.py): kind 208 at cookie.c:23 and ratelimiter.c:57,
@@ -1303,6 +1325,8 @@ def HiddenSite.all : List HiddenSite :=
   ++ [.reschedReceive, .reschedEncrypt, .reschedTx, .reschedDecrypt, .newHandshakeJitter, .walltimeLastHandshakeData,
       .cookieBirthdate]
   ++ [.modTimerArm, .timeAdvance, .jiffiesEnd]
+  ++ [.timerJiffiesRetransmitZeroKey, .timerJiffiesExpiredKeepalive, .timerJiffiesDataSent, .timerJiffiesDataReceived,
+      .timerJiffiesHandshakeInitiated, .timerJiffiesSessionDerived, .timerJiffiesTraversal]
   ++ (Worker.all.filter fun w => w.timer?.isNone && w != .netRx).map .queued
   ++ [.cookieSecretBirthdate, .cookieSecret, .pubkeyHashKey, .ratelimiterKey, .ratelimiterGcNow, .udpPortDraw,
       .neighReachTime, .netlinkAutobindPort]

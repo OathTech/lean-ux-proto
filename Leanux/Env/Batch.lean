@@ -161,15 +161,16 @@ def Activation.hasWork (a : Activation) : M Bool := do
     runs between the yield and the resumption, and wrong when the records
     then dispatch the tx worker, which sends every item the kernel's encrypt
     worker had crypted before yielding: its section carries one record group
-    per item (the persistent keepalive's arm, `wg_timers_any_authenticated_
-    packet_traversal`, is the first record of each), so the kernel's count
-    is in the records. Hence, when the tx worker's head is still uncrypted
-    in the mirror and the next record is an arm rather than the tx section's
-    stop, the suspended encrypt activation crypted that item before its
-    yield: one encrypt iteration runs here, consuming no record (its
-    `cond_resched` sees the arm, not a resched), and the tx step then sends
-    the item. Fail-closed: no suspended encrypt activation, or an empty
-    encrypt queue, with an arm next is a hidden mismatch; an item whose
+    per item (the persistent keepalive's caller read, kind 311, then its arm,
+    `wg_timers_any_authenticated_packet_traversal`, are the first records of
+    each), so the kernel's count is in the records. Hence, when the tx
+    worker's head is still uncrypted in the mirror and the next record is
+    that caller read or arm rather than the tx section's stop, the suspended
+    encrypt activation crypted that item before its yield: one encrypt
+    iteration runs here, consuming no record (its `cond_resched` sees the
+    read, not a resched), and the tx step then sends the item. Fail-closed:
+    no suspended encrypt activation, or an empty encrypt queue, with the
+    read or arm next is a hidden mismatch; an item whose
     encryption would consume a record (another peer's first enqueue) stays
     a mismatch at that record. -/
 def cryptAhead (pid : PeerId) : M Unit := do
@@ -177,10 +178,11 @@ def cryptAhead (pid : PeerId) : M Unit := do
   let some item := (← getPeer pid).txQueue.all.head? | return
   let some id := item.head? | invariant "an empty ring item"
   if (← getTxSkb id).state != .uncrypted then return
-  if (← peekHiddenSite) != some HiddenSite.modTimerArm.info.id then return
+  let next ← peekHiddenSite
+  unless next == some HiddenSite.modTimerArm.info.id || next == some HiddenSite.timerJiffiesTraversal.info.id do return
   let w ← get
   let some enc := w.suspended.find? (·.worker == .encryptWorker)
-    | throw (.hidden "the tx worker's head is uncrypted and no encrypt activation is suspended, but the next record is a timer arm (site 100)")
+    | throw (.hidden "the tx worker's head is uncrypted and no encrypt activation is suspended, but the next record is the traversal timer's caller read or arm (site 426 or 100)")
   -- the item was crypted before the tx worker's dispatch, while its work was
   -- still pending (queued at the first enqueue): the enqueue's `queue_work`
   -- then wrote no record, so the unit is held queued for this iteration
@@ -191,7 +193,7 @@ def cryptAhead (pid : PeerId) : M Unit := do
   | .continued =>
     modify fun s => { s with suspended := s.suspended.map fun x =>
       if x == enc then { x with iterations := x.iterations + 1 } else x }
-  | .ended => throw (.hidden "the encrypt activation's queue is empty, but the next record is a timer arm (site 100)")
+  | .ended => throw (.hidden "the encrypt activation's queue is empty, but the next record is the traversal timer's caller read or arm (site 426 or 100)")
   | .yielded => invariant "the encrypt activation yielded on a record that is not a resched"
 
 /-- One iteration of the activation's C loop: the worker's step and its

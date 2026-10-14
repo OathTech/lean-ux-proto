@@ -106,7 +106,7 @@
  	case KCOV_REMOTE_ENABLE:
  		if (get_user(remote_num_handles, (unsigned __user *)(arg +
  				offsetof(struct kcov_remote_arg, num_handles))))
-@@ -1125,3 +1174,968 @@
+@@ -1125,3 +1174,991 @@
  }
  
  device_initcall(kcov_init);
@@ -639,6 +639,29 @@
 +EXPORT_SYMBOL(kcov_dst_cache_ts);
 +
 +/*
++ * LEANUX pre-release review, finding 2 (docs/2026-10-14-pre-release-review.md,
++ * section 2): the caller's jiffies read that computes a peer timer's expiry.
++ * mod_peer_timer's seven callers in drivers/net/wireguard/timers.c compute
++ * `jiffies + delay` before the call; the arm record (kind 303, at mod_timer)
++ * carries mod_timer's own later read and the expiry, so the caller's read
++ * could only be recovered from the expiry and the mirror's delay, which
++ * absorbs a delay wrong by one tick. Each caller's read now passes through
++ * this identity function, which records it as kind 311 {jiffies} (8 bytes)
++ * at the caller's own address (_THIS_IP_ on the caller's line), gated like
++ * the arm record (KCOV_DISPATCH_ARM_RECORDS); outside a trace one load and
++ * the value is returned unchanged. Record-only.
++ */
++unsigned long notrace kcov_timer_jiffies(unsigned long j, unsigned long ip)
++{
++	u64 v = j;
++
++	if (READ_ONCE(kcov_dispatch_kcov) && (READ_ONCE(kcov_dispatch.flags) & KCOV_DISPATCH_ARM_RECORDS))
++		kcov_choice_ip(311, ip, &v, sizeof(v));
++	return j;
++}
++EXPORT_SYMBOL(kcov_timer_jiffies);
++
++/*
 + * LEANUX epoll (docs/2026-10-12-epoll-design.md, section 3.2): the address
 + * of the struct file an epoll item is keyed by (ep_cmp_ffd: the file
 + * pointer, then the fd), recorded at ep_rbtree_insert (fs/eventpoll.c,
@@ -1077,7 +1100,7 @@
 +}
 --- a/include/linux/kcov.h
 +++ b/include/linux/kcov.h
-@@ -44,6 +44,47 @@
+@@ -44,6 +44,49 @@
  void kcov_remote_start(u64 handle);
  void kcov_remote_stop(void);
  u64 kcov_common_handle(void);
@@ -1093,6 +1116,8 @@
 +void kcov_dispatch_resched(unsigned long ip);
 +/* LEANUX D3: mod_timer's arm record (kind 303). */
 +void kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsigned long ip, void *timer);
++/* LEANUX review finding 2: a peer timer caller's jiffies read (kind 311). */
++unsigned long kcov_timer_jiffies(unsigned long j, unsigned long ip);
 +/*
 + * LEANUX A (docs/2026-10-05-a-alloc.md, section 4): the allocation hook, in
 + * slab_alloc_node and __alloc_pages_noprof. Unarmed, one load. pre returns
@@ -1125,7 +1150,7 @@
  
  static inline void kcov_remote_start_common(u64 id)
  {
-@@ -99,6 +140,20 @@
+@@ -99,6 +142,21 @@
  static inline void kcov_finish_switch(struct task_struct *t) {}
  static inline void kcov_remote_start(u64 handle) {}
  static inline void kcov_remote_stop(void) {}
@@ -1135,6 +1160,7 @@
 +static inline void kcov_dispatch_stop(struct kcov_dispatch_section *s) {}
 +static inline void kcov_dispatch_resched(unsigned long ip) {}
 +static inline void kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsigned long ip, void *timer) {}
++static inline unsigned long kcov_timer_jiffies(unsigned long j, unsigned long ip) { return j; }
 +struct kcov_alloc_ctx { };
 +static inline bool kcov_alloc_pre(struct kcov_alloc_ctx *ctx, unsigned long addr, gfp_t gfp,
 +				  unsigned long size, bool page) { return false; }
@@ -1901,3 +1927,77 @@
  	if (err)
  		goto out_err_free;
  
+--- a/drivers/net/wireguard/timers.c
++++ b/drivers/net/wireguard/timers.c
+@@ -27,7 +27,7 @@
+  * specified seconds.
+  */
+ 
+-static inline void mod_peer_timer(struct wg_peer *peer,
++unsigned long kcov_timer_jiffies(unsigned long j, unsigned long ip); static inline void mod_peer_timer(struct wg_peer *peer,
+ 				  struct timer_list *timer,
+ 				  unsigned long expires)
+ {
+@@ -59,7 +59,7 @@
+ 		 */
+ 		if (!timer_pending(&peer->timer_zero_key_material))
+ 			mod_peer_timer(peer, &peer->timer_zero_key_material,
+-				       jiffies + REJECT_AFTER_TIME * 3 * HZ);
++				       kcov_timer_jiffies(jiffies, _THIS_IP_) + REJECT_AFTER_TIME * 3 * HZ);
+ 	} else {
+ 		++peer->timer_handshake_attempts;
+ 		pr_debug("%s: Handshake for peer %llu (%pISpfsc) did not complete after %d seconds, retrying (try %d)\n",
+@@ -84,7 +84,7 @@
+ 	if (peer->timer_need_another_keepalive) {
+ 		peer->timer_need_another_keepalive = false;
+ 		mod_peer_timer(peer, &peer->timer_send_keepalive,
+-			       jiffies + KEEPALIVE_TIMEOUT * HZ);
++			       kcov_timer_jiffies(jiffies, _THIS_IP_) + KEEPALIVE_TIMEOUT * HZ);
+ 	}
+ }
+ 
+@@ -146,7 +146,7 @@
+ {
+ 	if (!timer_pending(&peer->timer_new_handshake))
+ 		mod_peer_timer(peer, &peer->timer_new_handshake,
+-			jiffies + (KEEPALIVE_TIMEOUT + REKEY_TIMEOUT) * HZ +
++			kcov_timer_jiffies(jiffies, _THIS_IP_) + (KEEPALIVE_TIMEOUT + REKEY_TIMEOUT) * HZ +
+ 			get_random_u32_below(REKEY_TIMEOUT_JITTER_MAX_JIFFIES));
+ }
+ 
+@@ -156,7 +156,7 @@
+ 	if (likely(netif_running(peer->device->dev))) {
+ 		if (!timer_pending(&peer->timer_send_keepalive))
+ 			mod_peer_timer(peer, &peer->timer_send_keepalive,
+-				       jiffies + KEEPALIVE_TIMEOUT * HZ);
++				       kcov_timer_jiffies(jiffies, _THIS_IP_) + KEEPALIVE_TIMEOUT * HZ);
+ 		else
+ 			peer->timer_need_another_keepalive = true;
+ 	}
+@@ -182,7 +182,7 @@
+ void wg_timers_handshake_initiated(struct wg_peer *peer)
+ {
+ 	mod_peer_timer(peer, &peer->timer_retransmit_handshake,
+-		       jiffies + REKEY_TIMEOUT * HZ +
++		       kcov_timer_jiffies(jiffies, _THIS_IP_) + REKEY_TIMEOUT * HZ +
+ 		       get_random_u32_below(REKEY_TIMEOUT_JITTER_MAX_JIFFIES));
+ }
+ 
+@@ -203,7 +203,7 @@
+ void wg_timers_session_derived(struct wg_peer *peer)
+ {
+ 	mod_peer_timer(peer, &peer->timer_zero_key_material,
+-		       jiffies + REJECT_AFTER_TIME * 3 * HZ);
++		       kcov_timer_jiffies(jiffies, _THIS_IP_) + REJECT_AFTER_TIME * 3 * HZ);
+ }
+ 
+ /* Should be called before a packet with authentication, whether
+@@ -213,7 +213,7 @@
+ {
+ 	if (peer->persistent_keepalive_interval)
+ 		mod_peer_timer(peer, &peer->timer_persistent_keepalive,
+-			jiffies + peer->persistent_keepalive_interval * HZ);
++			kcov_timer_jiffies(jiffies, _THIS_IP_) + peer->persistent_keepalive_interval * HZ);
+ }
+ 
+ void wg_timers_init(struct wg_peer *peer)

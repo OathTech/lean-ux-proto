@@ -84,13 +84,15 @@ if [ "$PROFILE" = net-rcov ] || [ "$PROFILE" = net-hidden ] || [ "$PROFILE" = ne
     # at ep_rbtree_insert (fs/eventpoll.c), record-only; since seccomp stream W
     # (docs/2026-10-12-seccomp-design.md, 3.3) the kind-309 records of the
     # translated eBPF program and its length at bpf_migrate_filter
-    # (net/core/filter.c), record-only; both hooks line-preserving. The hashes
-    # are the merged patches' (X, phase 2b).
-    CHOICE_SHA=15f67b482fe446d0ed5bcdba075fa5f382677f3c6dafa448dc7dc306f8cc2bf9
+    # (net/core/filter.c), record-only; both hooks line-preserving; since the
+    # pre-release review's finding 2 the kind-311 record of each peer timer
+    # caller's jiffies read (drivers/net/wireguard/timers.c, line-preserving),
+    # record-only.
+    CHOICE_SHA=908b2e6a02369b38f19192868b87bec4aa80c5561cfff76ed4a5c8a6ad573f41
     # net-choice-actl: the allocation-steering control kernel (A, section 7:
     # K1, K4, K5), the same patch with control load flags; never an oracle
     ACTL_PATCH="$LEANUX_ROOT/kernel/patches/choice-stream-alloc-controls.patch"
-    ACTL_SHA=fdb1306f7699f7206baa1281ae9ee1cd3ba4f4e1a55fb742c2f8ede5bef0a0c1
+    ACTL_SHA=51afb2d9b4bdd43a18cbfad3130bd53748b3ba906bce331a701760bfd1ac5cd1
     if [ "$PROFILE" = net-choice ]; then
         SOURCE="$LEANUX_ARTIFACTS/src/linux-6.12.110-choice-stream-da"
         PATCH_SHA_RECORD="$CHOICE_SHA"
