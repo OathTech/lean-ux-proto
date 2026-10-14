@@ -14,21 +14,24 @@ retains current architecture, findings, reproduction provenance, effort and limi
 | Result | Current disposition |
 | --- | --- |
 | R1 | Uniqueness and the intentional inclusive-floor correction are proved, with pure and accepted-run witnesses. |
-| R2 | Endpoint identity and failure-retaining access contracts cover the listed families, concrete Batch scheduling and isolated trials. The maintenance/timer and flush/removal extensions pass coordinated validation. Whole-run environment/lifecycle closure and saved-reference ownership remain open. |
+| R2 | Endpoint identity and failure-retaining access contracts cover the listed families, concrete Batch scheduling and isolated trials. The socket/device control extension passes scoped and coordinated validation and independent review. Initialized whole-run allocation-identity access closure remains open; raw-reference affiliation/credit is a separate stronger property. |
 | R3 | The checked insertion/removal invariant now extends to original peer creation/release and finite normal call histories from the configured fixture, refining independent flat-prefix updates and reached-root lookup. The five new exports pass scoped and coordinated validation. Enclosing configuration/Runner closure and packet paths remain open. |
 | R4 | Physical rings, finite/source journals, per-poll provenance and selected GRO order, and concrete RX scheduling are checked. The local balanced lookup/release extension passes coordinated validation. Accepted input refutes chronological post-GRO order. Joint pipeline conservation remains open. |
 | R5 | The unconditional age/post-zero and wire-nonce readings are false in accepted mirror inputs. Rule Zero resolution retains thirteen positive local contracts, without universal replacement transport claims. |
 | R6 | Cookie exclusion is proved at its original call boundary. A 19-retry/20-initiation episode refutes literal MAX=18; no universal corrected retry bound is claimed. |
 
-**Validation status.** The current coordinated checkpoint passes 347 jobs and
-357 terminal declarations: 355 theorems and two definitions (ReplayWindow 15;
-R1 9; R2 169; R3 77; R4 68; R5 13; R6 6), using only `propext`,
+**Validation status.** The current coordinated checkpoint passes 349 jobs and
+360 terminal declarations: 358 theorems and two definitions (ReplayWindow 15;
+R1 9; R2 172; R3 77; R4 68; R5 13; R6 6), using only `propext`,
 `Classical.choice` and `Quot.sound`. Fresh stock kernel replay, the 60-job
-default build and 114 unit tests (22.702 seconds, one skip) also pass.
+default build and 114 unit tests (22.762 seconds, one skip) also pass.
 The five-export R3 initialized-call-history extension passes scoped/full targets
 of 150/347 jobs. Independent frozen review has no unresolved finding; the stale
 scope wording, flat-model dependency and node-ID wording corrections are verified.
-These coordinated checks also cover the preceding R2/R3/R4 components.
+The three-export socket/device control extension passes the 229-job scoped and
+349-job full targets and independent frozen-source review, with no unresolved
+finding. The coordinated checks cover this extension and the preceding R2/R3/R4
+components over mirror `c047e64`.
 The preceding `c047e64` carry's 118-job executable build and eleven reproduction
 checks remain applicable to unchanged runtime; they were not rerun for proof-only
 extensions. Frozen reviews have no unresolved defect in the checked components;
@@ -135,8 +138,9 @@ or production history field would not preserve altitude and is not proposed.
 
 **Original versus proved.** The charter requires safety of every internal access
 after release across every run. Checked components establish endpoint identity
-evolution and local failure-retaining access safety; they do not establish saved
-numeric-reference ownership or whole-run closure. The historical findings below
+evolution and local failure-retaining access safety; initialized whole-run
+composition remains open. Raw-reference affiliation and credit accounting are
+separate stronger properties. The historical findings below
 retarget a replacement identity, rather than resurrecting a released identity.
 
 **Architecture/refinement.** [Terminal contracts](../Leanux/Proofs/WG/LifetimeSafety/Statements.lean)
@@ -153,6 +157,7 @@ execution; lifted helper coverage is separately checked against source.
 | `SavedPeers`, prefix loops/workers | Observe demanded captured entries, including misses, with saved-stamp residency obligations; exact bounded-loop erasure retains callback/exhaustion Stops. |
 | `BatchTrials`, `BatchCalls` | `scheduler_family_access_erasure`, `scheduler_family_allocation_access` and `scheduler_trial_filter_access` separate committed calls from copied-World trials. The ordered filter propagates its first non-hidden Stop; each reached trial has an isolated safe prefix from the same entry invariant. |
 | `PeerRemoval` | [AGENT 2026-10-14] Reuse fixed send/clear `runWorkerPrefix` wrappers and scalar queue/count frames to compose all seven original flush/removal calls. Exact erasure retains the 4096 drain, dispatch/placeholder order, early returns and saved-ID loops; concrete allocation safety adds no ownership or progress premise. |
+| `DeviceControls` | [AGENT 2026-10-14] Compose eight original socket/device controls using a full-Kernel mask of only socket labels/incoming port and legacy frame projections. Separate source inspection justifies access-free socket lifts; saved-ID loops retain actual peer accesses, negative-return cleanup and Stop prefixes. Concrete allocation safety needs no list-validity, progress or credit assumption. |
 
 [AGENT 2026-10-13] Separate identity from saved-reference ownership, share frontier
 algebra and the WG projection, and retain history outside exceptions. Observe saved
@@ -169,6 +174,12 @@ interleave every demanded saved-map read with its hit write. Reuse concrete
 index/release/staging/queue contracts for maintenance and project the legacy index
 frame from one full-Kernel mask.
 
+[AGENT 2026-10-14] R2 closes with initialized whole-run allocation-identity
+access safety, including saved-object writes, demanded map reads and actual final
+resident retirement. Raw-reference affiliation/credit accounting is a stronger
+separate property, required where later R3/R4 arguments depend on it. This boundary
+preserves every source-coverage obligation and does not claim current completion.
+
 **Covered original families.** The map lists every module; grouped contracts cover
 allocation/reference/lookup, receive enqueue/decrypt/completion/poll/stack, TX
 staging/encryption/completion/workers, both socket families and loopback, five Noise
@@ -176,7 +187,8 @@ constructor/consumer/MAC calls, six handshake-send calls, four cookie calls,
 handshake receive/bounded workers/UDP ingress, concrete Batch scheduling, six
 allowed-IP list/removal calls, and now four key-maintenance calls plus all five
 expired timer callbacks and their dispatcher, plus both flushed workers, the workqueue
-drain, timer stop and after-dead/optional/all-peer removal. Concrete `AllocationInv` discharges
+drain, timer stop and after-dead/optional/all-peer removal; socket free/reinit/init,
+device open/up/stop/down and namespace pre-exit. Concrete `AllocationInv` discharges
 these local ambient contracts; source Stops and ordinary negative returns differ.
 Batch callbacks are discharged, without implying R4 journal or conservation closure.
 
@@ -230,11 +242,11 @@ python3 -B docs/proof-campaign-replay.py r2-stale-dump-cursor-orphan |
   capped -- scripts/in-bundle lake env lean --run Leanux/Proofs/WG/LifetimeSafety/ReplayOrphan.lean
 ```
 
-**Remaining obligations.** Outer runners/deferred-unit callers, socket setup and
-reinitialization, timer firing, netlink, insertion and
-remaining resident scans/lifecycle composition are open. Saved scalar affiliation
-and reference credits are separate: dangling/aliased IDs can Stop after safe
-accesses. C initializes cache/handshake before incrementing the peer counter;
+**Remaining obligations.** Initialized outer runners/deferred-unit callers,
+timer firing, Netlink, insertion, remaining resident scans and device
+creation/destruction with actual final retirement are open. Saved scalar
+affiliation and reference credits are stronger separate properties:
+dangling/aliased IDs can Stop after safe accesses. C initializes cache/handshake before incrementing the peer counter;
 the mirror increments/inserts first. Proofs follow the mirror; this difference
 alone is not a lifetime counterexample or C simulation.
 
@@ -258,6 +270,7 @@ replays and both current rejection checks each took under one second.
 | Allowed-IP list/removal access | 6: 3 / 3 | 17m17s through scoped-target collection |
 | Key maintenance and expired timers | 5: 3 / 2 | 20m07s through collected full-build result; component/scoped/full targets 144/226/334 |
 | Inline flush and peer removal | 5: 3 / 2 | 9m53s through collected full build; 14m57s ownership including recovery freezes; component/scoped/full 158/227/340. Two ordinary elaboration failures; two read-only reviewer capacity interruptions caused freezes/all-dirty snapshots, with no build interrupted. |
+| Socket/device controls | 6: 4 / 2 | 18m20s from token acceptance through full-target collection; 19m18s total token ownership; component/scoped/full 160/229/349. Two ordinary proof elaboration failures, no cap/interruption; all exits collected. Coordinated gate, fresh kernel replay, default build and 114 unit tests pass. |
 
 Earlier monolithic IPv4 proof search failed at heartbeat limits; explicit source
 tails replaced it. An earlier tactic loop was deliberately stopped by its verified
@@ -270,6 +283,8 @@ interruption, 20m07s to full validation and 21m53s total ownership; all five log
 were removed. Earlier scheduler and allowed-IP ownership totals were 30m55s
 and 17m56s respectively.
 
+The socket/device review qualified the reset after a negative open result as
+`wgUp`’s continuation; `wgOpen` itself does not reset running.
 Reviews deleted an unused impossible KDF-failure premise; corrected no-device
 `modifyDev` framing, saved-stamp/cache scope, original-run versus accepted-domain
 wording and an overbroad docstring; and shared a conditional law in `Prefix`.

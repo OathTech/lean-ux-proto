@@ -2,6 +2,7 @@ import Leanux.Proofs.WG.Keypairs.Frames.Kernel
 import Leanux.Proofs.Framing.WGTime
 import Leanux.Proofs.Framing.WGIndex
 import Leanux.Proofs.Framing.WGAllowedIps
+import Leanux.Proofs.Framing.WGSocketLifecycle
 
 set_option pp.structureInstances false
 set_option maxHeartbeats 800000
@@ -18,6 +19,14 @@ theorem sameSnapshot_of_sameNodeKernel (h : Framing.SameNodeKernel a) : SameSnap
   have hf := congrArg (fun k => snapshot {w with k}) (h w x v hr)
   simpa [snapshot, Framing.nodeKernelView, Framing.nodeKernel,
     Framing.nodeDevice, Option.bind_map, Function.comp_def] using hf
+
+
+/-- The socket-control mask retains the legacy receive-state view. -/
+theorem sameSnapshot_of_sameSocketKernel (h : Framing.SameSocketKernel a) : SameSnapshot a := by
+  intro w x v hr
+  have hf := congrArg (fun k => snapshot {w with k}) (h w x v hr)
+  simpa [snapshot, Framing.socketKernelView, Framing.socketKernel,
+    Framing.socketDevice, Option.bind_map, Function.comp_def] using hf
 
 
 theorem AipNode_bitAt_sameSnapshot (n : AipNode) (i : Nat) : SameSnapshot (Leanux.WG.AipNode.bitAt n i) := by
@@ -207,7 +216,7 @@ theorem setPeer_spec (P : Snapshot → Prop) (id : PeerId) (p : Peer) :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (setPeer_sameSnapshot id p).wp P
 
 theorem sockFree_sameSnapshot (sock : Option Nat) : SameSnapshot (Leanux.WG.sockFree sock) := by
-  frame_same [Leanux.WG.sockFree] using []
+  exact sameSnapshot_of_sameKernel (Framing.sockFree_sameKernel sock)
 
 theorem sockFree_spec (P : Snapshot → Prop) (sock : Option Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.sockFree sock
@@ -341,7 +350,7 @@ theorem socketPort_spec (P : Snapshot → Prop) (family : Nat) :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (socketPort_sameSnapshot family).wp P
 
 theorem socketReinit_sameSnapshot (new4 new6 : Option Nat) : SameSnapshot (Leanux.WG.socketReinit new4 new6) := by
-  frame_same [Leanux.WG.socketReinit] using [getDev_spec, sockFree_spec]
+  exact sameSnapshot_of_sameSocketKernel (Framing.socketReinit_sameSocketKernel new4 new6)
 
 theorem socketReinit_spec (P : Snapshot → Prop) (new4 new6 : Option Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.socketReinit new4 new6
@@ -467,7 +476,7 @@ theorem slotSet_spec (P : Snapshot → Prop) (s : Slot) (v : Option NodeId) :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (slotSet_sameSnapshot s v).wp P
 
 theorem socketInit_sameSnapshot (port : Nat) : SameSnapshot (Leanux.WG.socketInit port) := by
-  frame_same [Leanux.WG.socketInit] using [getDev_spec, hidden_snapshot_spec, socketReinit_spec]
+  exact sameSnapshot_of_sameSocketKernel (Framing.socketInit_sameSocketKernel port)
 
 theorem socketInit_spec (P : Snapshot → Prop) (port : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.socketInit port

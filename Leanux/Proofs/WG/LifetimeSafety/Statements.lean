@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.Lifetimes.PeerRemoval
+import Leanux.Proofs.WG.Lifetimes.DeviceControls
 import Leanux.Proofs.WG.Lifetimes.TimerCallbacks
 import Leanux.Proofs.WG.Lifetimes.AllowedIpsAccess
 import Leanux.Proofs.WG.Lifetimes.BatchCalls
@@ -1580,6 +1581,29 @@ contract, retaining safe access prefixes after failures and the invariant on
 normal completion. This is resolved-store safety, not reference-credit ownership,
 eventual queue draining, device destruction or whole-run environment closure. -/
 theorem peer_removal_family_allocation_access_preserves (call : Lifetimes.PeerRemovalCall) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed := call.allocation
+
+/-- Eight complete original socket/device controls retain their exact result,
+successful World and Stop on every input. Socket installation/freeing and
+saved peer-ID loops keep source order; the up wrapper resets running after
+a negative open return, whereas a Stop skips that later reset. Lifted socket helpers are separately
+source-inspected as free of resident peer/keypair/packet accesses. -/
+theorem device_control_family_access_erasure (call : Lifetimes.DeviceControlCall) :
+    ErasesPrefix call.observed call.original := call.erases
+
+/-- Explicit socket-scalar, TX, peer-removal and device-bookkeeping contracts
+compose all device controls. Socket framing retains full resident stores and
+allocation geometry; it does not substitute for internal access coverage.
+No valid-list, distinctness, queue-progress or reference-credit premise is used. -/
+theorem device_control_family_ambient_access_preserves (c : Lifetimes.AmbientContracts I)
+    (r : Lifetimes.DeviceControlContracts I) (call : Lifetimes.DeviceControlCall) :
+    PrefixPreserves I Lifetimes.LifetimeEvent.Safe call.observed := call.preserves_ambient c r
+
+/-- Concrete allocation geometry discharges all eight controls and keeps the
+actual failed access prefixes. Device creation/destruction, timer firing,
+Netlink/environment and initialized whole-run composition remain separate;
+reference affiliation is a stronger property, not a premise of this contract. -/
+theorem device_control_family_allocation_access_preserves (call : Lifetimes.DeviceControlCall) :
     PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed := call.allocation
 
 end Leanux.Proofs.WG.LifetimeSafety
