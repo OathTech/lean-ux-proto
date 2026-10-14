@@ -692,10 +692,11 @@ def main(argv=None):
     if args.run:
         global ONLY_SUITE
         ONLY_SUITE = args.only_suite
-        dirty = subprocess.run(['git', 'status', '--porcelain', '--untracked-files=no'], cwd=ROOT,
+        # the ids are of the committed mirror: only the mirror files must be clean
+        dirty = subprocess.run(['git', 'status', '--porcelain', '--untracked-files=no', '--', *MIRROR], cwd=ROOT,
                                capture_output=True, text=True).stdout
         if dirty:
-            raise SystemExit('the campaign tree must be clean (the ids are of the committed tree)')
+            raise SystemExit('the campaign tree\'s mirror files must be clean (the ids are of the committed tree)')
         results_path = ROOT / args.results
         results_path.parent.mkdir(parents=True, exist_ok=True)
         run_campaign(mutants, args.workers, results_path, args.timeout, args.confirm_survivors, args.scratch_offset)

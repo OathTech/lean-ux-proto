@@ -302,7 +302,61 @@ ORDER_SWAPPED_PLACEHOLDER
 
 ## 7. What each channel caught: behaviour-changing examples
 
-EXAMPLES_PLACEHOLDER
+Each example changes behaviour with the logging intact unless marked
+logging-only; the channel named is the one the report carries.
+
+- **Semantic mismatch (an observation differs).** `Env.lean:47`
+  `LISTEN_PORT` 51999 → 52000: the device listens on another port and the
+  first datagram's observation differs. `FS/Close.lean:25` `if restart
+  then return -EINTR` negated: every close returns `-EINTR`.
+  `Seccomp/Syscalls.lean:73` `mode == .disabled` → `!=`: the filter runs on
+  every call of an unfiltered task; the first probe's return differs.
+  `FS/EventfdOps.lean:76` `iterCount < 8` → `≤ 8`: an 8-byte eventfd read
+  returns `-EINVAL`.
+- **Control-flow mismatch (a decision's outcome against its witness).**
+  `FS/EventfdOps.lean:33` `.eventfdFreeCtxHasId` negated: "opposite outcome
+  covered" at `eventfd_free_ctx`. `FS/File.lean:29` `.clearCloexecWasSet`
+  negated: "outcome not witnessed". The order change: `FS/ReadWrite.lean:41`
+  two adjacent early returns exchanged (an `order-swapped` mutant), rejected
+  as control flow and, because the second test's arm now runs first, as a
+  semantic mismatch; `Kernel/Signal.lean:178` the same class, rejected as
+  control flow alone (decision order differs from Linux). The
+  placement-evidence rule: `Env/Batch.lean:38` `w != .netRx`, "the placement
+  runs differ in control flow, not only in operands".
+- **Hidden-input mismatch (a record consumed wrongly or left over).**
+  `Env.lean:503` the time-advance record replaced by zeros: "the advance
+  moved jiffies from 0 to 0, not by 135025", a behaviour change (no
+  virtual time passes) caught at the record. `Env/Batch.lean:70` the
+  resched peek's early return removed: "expected resched:wg_packet_tx_worker,
+  the record is …", the scheduler consumes the wrong record.
+  `Seccomp/Classic.lean:88` `BPF_MEMWORDS` 16 → 17: a program the checker
+  now accepts is translated, and "no record left for bpf_prog_insn" on the
+  per-instruction records. Logging-only examples in the same channel:
+  `FS/Eventfd.lean:25` the invalid-flags compare's constant 0 → 1 with the
+  outcome intact on every trace, caught because the mirror then skips a
+  `current_time` clock read on the next path ("no record left for
+  current_time"); the W9 sentinel's dst-cache jiffies ignored.
+- **Operand mismatch (a declared comparison's values).**
+  `Seccomp/Filter.lean:42` `SECCOMP_FILTER_FLAG_TSYNC` 1 → 2: the flag test's
+  operands differ from the kernel's record on every install; the sentinel
+  I8-M1 (the age test's left operand skewed by one nanosecond, every
+  outcome unchanged) is the canonical logging-only case of this channel.
+  TIMER_TICK_EXAMPLE
+- **Mirror invariant (the mutated mirror stops itself).** `Env.lean:271` the
+  "no device" early return removed: the worker runs without a device and
+  the invariant "no WireGuard device in this trace's fixture" fires.
+  `FS/Fput.lean:32` `.fputFinalNotOpened` negated: "dangling file identity".
+- **Unsupported path (the mutated mirror leaves its domain).**
+  `Kernel/Signal.lean:119` `sig == SIGSYS` negated: every other signal's
+  disposition is asked for and the stop "the disposition of signal 31 is not
+  mirrored" fires on the first `SIGSYS`. `FS/Poll.lean:36`
+  `.epPtableQueueProcNoEpi` negated.
+- **Domain filter (every corpus trace falls out of the domain before Linux
+  runs).** `FS/Close.lean:13` `.closeNoFile` negated: every close of a real
+  descriptor is treated as `-EBADF`'s path; `FS/Eventfd.lean:19` the ida
+  stop's condition negated: every eventfd creation stops. Thirteen such
+  mutants; the check reports them as an abort naming the stop, which the
+  tool counts as a rejection by the mirror's own stop.
 
 ## 8. Conclusion
 
