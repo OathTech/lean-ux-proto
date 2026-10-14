@@ -237,8 +237,8 @@ theorem skipCutExactly_spec (P : WGKernelView → Prop) (site : HiddenSite) (n :
     ⦃fun w => ⌜P (wgKernelView w)⌝⦄ Leanux.skipCutExactly site n between
     ⦃⇓? _ w => ⌜P (wgKernelView w)⌝⦄ := (skipCutExactly_sameWGKernel site n between).wp P
 
-theorem dropHiddenRecord_sameWGKernel  : SameWGKernel (Leanux.dropHiddenRecord) := by
-  frame_wg [dropHiddenRecord] using [skipAmbient_spec, noteNetRxStart_spec]
+theorem dropHiddenRecord_sameWGKernel  : SameWGKernel (Leanux.dropHiddenRecord) :=
+  sameWGKernel_of_sameKernel Framing.dropHiddenRecord_sameKernel
 
 theorem dropHiddenRecord_spec (P : WGKernelView → Prop)  :
     ⦃fun w => ⌜P (wgKernelView w)⌝⦄ Leanux.dropHiddenRecord

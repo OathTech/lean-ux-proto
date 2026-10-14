@@ -140,4 +140,11 @@ theorem resolveUnit_sameKernel (worker : Worker) (unit : Nat) (queue : List Nat)
   intro k
   mvcgen [resolveUnit, invariant, unsupported]
 
+theorem dropHiddenRecord_sameKernel : SameKernel dropHiddenRecord := by
+  apply sameKernel_of_wp
+  intro k
+  have hs := sameKernel_wp _ skipAmbient_sameKernel (fun s => s = k)
+  have hn := fun site => sameKernel_wp _ (noteNetRxStart_sameKernel site) (fun s => s = k)
+  mvcgen [dropHiddenRecord, hs, hn]
+
 end Leanux.Proofs.Framing

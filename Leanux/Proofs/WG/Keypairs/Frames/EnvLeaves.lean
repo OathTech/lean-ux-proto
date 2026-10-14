@@ -1,3 +1,4 @@
+import Leanux.Proofs.Framing.EnvOperations
 import Leanux.Proofs.WG.Keypairs.Frames.WGDevice
 import Leanux.Env
 import Leanux.Proofs.Framing.Stack
@@ -77,15 +78,15 @@ theorem peekNextSite_spec (P : Snapshot → Prop)  :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (peekNextSite_sameSnapshot ).wp P
 
 theorem senderSource_sameSnapshot (family dest tos : Nat) (ll : Bool) :
-    SameSnapshot (Leanux.Env.senderSource family dest tos ll) := by
-  frame_same [Leanux.Env.senderSource] using []
+    SameSnapshot (Leanux.Env.senderSource family dest tos ll) :=
+  sameSnapshot_of_sameWGKernel (Framing.sameWGKernel_of_sameKernel (Framing.senderSource_sameKernel family dest tos ll))
 
 theorem senderSource_spec (P : Snapshot → Prop) (family dest tos : Nat) (ll : Bool) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.Env.senderSource family dest tos ll
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (senderSource_sameSnapshot family dest tos ll).wp P
 
-theorem fixtureSend_sameSnapshot : SameSnapshot Leanux.Env.fixtureSend := by
-  frame_same [Leanux.Env.fixtureSend] using [skipCut_spec]
+theorem fixtureSend_sameSnapshot : SameSnapshot Leanux.Env.fixtureSend :=
+  sameSnapshot_of_sameWGKernel (Framing.sameWGKernel_of_sameKernel (Framing.fixtureSend_sameKernel))
 
 theorem fixtureSend_spec (P : Snapshot → Prop) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.Env.fixtureSend

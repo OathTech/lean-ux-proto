@@ -1,3 +1,4 @@
+import Leanux.Proofs.Framing.EnvOperations
 import Leanux.Proofs.WG.Keypairs.Frames.WGConfig
 import Leanux.Proofs.Framing.WGDeviceLifecycle
 
@@ -190,7 +191,11 @@ theorem wgXmit_spec (P : Snapshot → Prop) (hp : Stable P) (family addr : Nat) 
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (wgXmit_ordinary family addr pkts mtu).wp P hp
 
 theorem setMtu_sameSnapshot (mtu : Int) : SameSnapshot (setMtu mtu) := by
-  frame_same [setMtu] using []
+  intro w x v hr
+  have he := Framing.wgSetMtu_sameEnvScalar mtu w x v hr
+  have hp := congrArg (fun k => snapshot {w with k}) he
+  simpa [snapshot, Framing.envScalarView, Framing.envScalarKernel,
+    Framing.envScalarDevice, Option.bind_map, Function.comp_def] using hp
 
 theorem setMtu_spec (P : Snapshot → Prop) (mtu : Int) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ (setMtu mtu)

@@ -1,3 +1,4 @@
+import Leanux.Proofs.Framing.EnvOperations
 import Leanux.Proofs.WG.Keypairs.Frames.EnvWorkers
 import Leanux.Proofs.WG.Keypairs.SnapshotRules
 
@@ -27,8 +28,8 @@ theorem requireDrained_spec (P : Snapshot → Prop) (what : String) (queues : Li
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (requireDrained_sameSnapshot what queues).wp P
 
 theorem floodTailEffect_sameSnapshot (stop : Nat) (cuts : List Nat) (last : Option Int64) :
-    SameSnapshot (Leanux.floodTailEffect stop cuts last) := by
-  frame_same [Leanux.floodTailEffect] using [peekHiddenSite_spec, hiddenClock64_spec, dropHiddenRecord_spec]
+    SameSnapshot (Leanux.floodTailEffect stop cuts last) :=
+  sameSnapshot_of_sameWGKernel (Framing.sameWGKernel_of_sameKernel (Framing.floodTailEffect_sameKernel stop cuts last))
 
 theorem floodTailEffect_spec (P : Snapshot → Prop) (stop : Nat) (cuts : List Nat) (last : Option Int64) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.floodTailEffect stop cuts last
@@ -111,14 +112,18 @@ theorem wgUp_spec (P : Snapshot → Prop) (hp : Stable P)  :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (wgUp_ordinary ).wp P hp
 
 theorem setMtu_sameSnapshot (mtu : Nat) : SameSnapshot (Env.setMtu mtu) := by
-  frame_same [Env.setMtu] using [getDev_spec, WGDevice.setMtu_spec, skipCut_spec]
+  intro w x v hr
+  have he := Framing.setMtu_sameEnvScalar mtu w x v hr
+  have hp := congrArg (fun k => snapshot {w with k}) he
+  simpa [snapshot, Framing.envScalarView, Framing.envScalarKernel,
+    Framing.envScalarDevice, Option.bind_map, Function.comp_def] using hp
 
 theorem setMtu_spec (P : Snapshot → Prop) (mtu : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ (Env.setMtu mtu)
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (setMtu_sameSnapshot mtu).wp P
 
-theorem routeIntoWg0_sameSnapshot  : SameSnapshot Env.routeIntoWg0 := by
-  frame_same [Env.routeIntoWg0] using []
+theorem routeIntoWg0_sameSnapshot  : SameSnapshot Env.routeIntoWg0 :=
+  sameSnapshot_of_sameWGKernel (Framing.sameWGKernel_of_sameKernel (Framing.routeIntoWg0_sameKernel))
 
 theorem routeIntoWg0_spec (P : Snapshot → Prop)  :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Env.routeIntoWg0
@@ -138,15 +143,15 @@ theorem wgDelete_spec (P : Snapshot → Prop) (hp : Stable P)  :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Env.wgDelete
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (wgDelete_ordinary ).wp P hp
 
-theorem wgDeladdr_sameSnapshot (family : Nat) : SameSnapshot (Env.wgDeladdr family) := by
-  frame_same [Env.wgDeladdr] using []
+theorem wgDeladdr_sameSnapshot (family : Nat) : SameSnapshot (Env.wgDeladdr family) :=
+  sameSnapshot_of_sameWGKernel (Framing.sameWGKernel_of_sameKernel (Framing.wgDeladdr_sameKernel family))
 
 theorem wgDeladdr_spec (P : Snapshot → Prop) (family : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ (Env.wgDeladdr family)
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (wgDeladdr_sameSnapshot family).wp P
 
-theorem wgDelroute_sameSnapshot (family : Nat) : SameSnapshot (Env.wgDelroute family) := by
-  frame_same [Env.wgDelroute] using []
+theorem wgDelroute_sameSnapshot (family : Nat) : SameSnapshot (Env.wgDelroute family) :=
+  sameSnapshot_of_sameWGKernel (Framing.sameWGKernel_of_sameKernel (Framing.wgDelroute_sameKernel family))
 
 theorem wgDelroute_spec (P : Snapshot → Prop) (family : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ (Env.wgDelroute family)
@@ -159,15 +164,15 @@ theorem netnsCleanup_spec (P : Snapshot → Prop)  :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Env.netnsCleanup
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (netnsCleanup_sameSnapshot ).wp P
 
-theorem xmitPacket_sameSnapshot (family addr : Nat) (payload : List UInt8) (mtu tos : Nat) : SameSnapshot (Env.xmitPacket family addr payload mtu tos) := by
-  frame_same [Env.xmitPacket] using []
+theorem xmitPacket_sameSnapshot (family addr : Nat) (payload : List UInt8) (mtu tos : Nat) : SameSnapshot (Env.xmitPacket family addr payload mtu tos) :=
+  sameSnapshot_of_sameWGKernel (Framing.sameWGKernel_of_sameKernel (Framing.xmitPacket_sameKernel family addr payload mtu tos))
 
 theorem xmitPacket_spec (P : Snapshot → Prop) (family addr : Nat) (payload : List UInt8) (mtu tos : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ (Env.xmitPacket family addr payload mtu tos)
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (xmitPacket_sameSnapshot family addr payload mtu tos).wp P
 
-theorem xmitPackets_sameSnapshot (family addr : Nat) (payload : List UInt8) (opts : Env.XmitOpts) : SameSnapshot (Env.xmitPackets family addr payload opts) := by
-  frame_same [Env.xmitPackets] using [getDev_spec, xmitPacket_spec]
+theorem xmitPackets_sameSnapshot (family addr : Nat) (payload : List UInt8) (opts : Env.XmitOpts) : SameSnapshot (Env.xmitPackets family addr payload opts) :=
+  sameSnapshot_of_sameWGKernel (Framing.sameWGKernel_of_sameKernel (Framing.xmitPackets_sameKernel family addr payload opts))
 
 theorem xmitPackets_spec (P : Snapshot → Prop) (family addr : Nat) (payload : List UInt8) (opts : Env.XmitOpts) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ (Env.xmitPackets family addr payload opts)
