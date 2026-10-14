@@ -2,7 +2,7 @@ import Leanux.Proofs.WG.AllowedIps.RoutingRetains
 import Leanux.Proofs.WG.AllowedIps.ConfigurationInputs
 import Leanux.Proofs.Logged.PrefixLoops
 
-/-! Completed whole setAllowedip and removeByPeer calls, including attribute
+/-! Completed whole setAllowedip, removeByPeer and free calls, including attribute
 guard rejection and normal allocation refusals. The explicit call sum carries
 actual views and signed attribute returns; semantic validity
 is proved separately from unconditional erasure. No event or World is returned
@@ -14,6 +14,7 @@ set_option pp.structureInstances false
 inductive RoutingCompletedCall where
   | allowedIp (pid : PeerId) (attrs : AllowedIpAttrs) (result : Int)
   | removePeer (pid : PeerId)
+  | clear
 
 structure RoutingCompletion where
   call : RoutingCompletedCall
@@ -26,6 +27,7 @@ def RoutingCompletion.flat (e : RoutingCompletion) (xs : FlatTable × FlatTable)
     (RoutingCall.insert (attrs.family.getD 0 == AF_INET)
       (attrs.addr.getD 0) (attrs.cidr.getD 0) pid result).flat xs
   | .removePeer pid => (RoutingCall.remove pid).flat xs
+  | .clear => ([], [])
 
 def completionFold (h : List RoutingCompletion) (xs : FlatTable × FlatTable) :=
   h.foldl (fun tables e => e.flat tables) xs
@@ -47,6 +49,10 @@ def RoutingCompletion.Valid (xs : FlatTable × FlatTable) (e : RoutingCompletion
     RoutedView e.before xs ∧ RoutedView e.after (e.flat xs) ∧
     ∃ w v, routingView w = e.before ∧ routingView v = e.after ∧
       (removeByPeer pid).run w = .ok ((), v)
+  | .clear =>
+    RoutedView e.before xs ∧ RoutedView e.after (e.flat xs) ∧
+    ∃ w v, routingView w = e.before ∧ routingView v = e.after ∧
+      WG.free.run w = .ok ((), v)
 
 inductive CompletionSafe (initial : FlatTable × FlatTable) : List RoutingCompletion → Prop where
   | nil : CompletionSafe initial []
@@ -55,6 +61,11 @@ inductive CompletionSafe (initial : FlatTable × FlatTable) : List RoutingComple
 
 def CompletionState (initial : FlatTable × FlatTable) (h : List RoutingCompletion) (w : World) : Prop :=
   CompletionSafe initial h ∧ RoutedView (routingView w) (completionFold h initial)
+
+/-- The completed journal denotes empty tables, while the physical node store
+may retain unreachable entries. This is useful before later device destruction. -/
+def CompletionEmpty (initial : FlatTable × FlatTable) (h : List RoutingCompletion) (w : World) : Prop :=
+  CompletionState initial h w ∧ completionFold h initial = ([], [])
 
 def CompletionTarget (initial : FlatTable × FlatTable) (pid : PeerId)
     (h : List RoutingCompletion) (w : World) : Prop :=
@@ -201,5 +212,78 @@ theorem completedRemovePeer_spec (initial : FlatTable × FlatTable) (pid : PeerI
     have safe := CompletionSafe.snoc hi.1 hv
     refine ⟨[e], rfl, safe, ⟨⟨safe, ?_⟩, hout.2⟩⟩
     simpa [completionFold, List.foldl_append, e, RoutingCompletion.flat] using hout.1
+
+
+/-- Only a normal original free emits a completed clear; a failed traversal can
+have performed effects, but its unavailable World is not invented here. -/
+def completedFree : PrefixM RoutingCompletion Unit :=
+  fun w => ExceptT.mk fun h =>
+    match WG.free.run w with
+    | .error err => (.error err, h)
+    | .ok ((), v) => (.ok ((), v), h ++ [⟨.clear, routingView w, routingView v⟩])
+
+theorem completedFree_run (w : World) (h : List RoutingCompletion) :
+    runPrefix completedFree w h =
+      match WG.free.run w with
+      | .error err => (.error err, h)
+      | .ok ((), v) => (.ok ((), v), h ++ [⟨.clear, routingView w, routingView v⟩]) := rfl
+
+theorem completedFree_erases : ErasesPrefix completedFree WG.free := by
+  intro w h
+  rw [completedFree_run]
+  cases hr : WG.free.run w with
+  | error e => rfl
+  | ok out => cases out with | mk u v => cases u; rfl
+
+theorem completedFree_empty_spec (initial : FlatTable × FlatTable) :
+    PrefixEnsures (CompletionState initial) (CompletionSafe initial)
+      completedFree (fun _ => CompletionEmpty initial) := by
+  intro w h hi
+  rw [completedFree_run]
+  cases hr : WG.free.run w with
+  | error err => exact ⟨[], by simp, hi.1, trivial⟩
+  | ok out =>
+    obtain ⟨u, v⟩ := out
+    cases u
+    obtain ⟨d, t4, t6, hd, hinv, h4, h6⟩ := hi.2.realize
+    have step : RoutingStep w .clear v := .clear hr
+    obtain ⟨out, u4, u6, hout, ho, he4, he6⟩ := step.refines hd hinv h4 h6
+    let e : RoutingCompletion := ⟨.clear, routingView w, routingView v⟩
+    have routed : RoutedView (routingView v) ([], []) :=
+      ⟨out, u4, u6, by simp [routingView, hout], ho, he4, he6⟩
+    have hv : e.Valid (completionFold h initial) := ⟨hi.2, routed, w, v, rfl, rfl, hr⟩
+    have safe := CompletionSafe.snoc hi.1 hv
+    refine ⟨[e], rfl, safe, ⟨⟨safe, ?_⟩, ?_⟩⟩
+    · simpa [completionFold, List.foldl_append, e, RoutingCompletion.flat] using routed
+    · simp [completionFold, List.foldl_append, e, RoutingCompletion.flat]
+
+theorem completedFree_spec (initial : FlatTable × FlatTable) :
+    PrefixEnsures (CompletionState initial) (CompletionSafe initial)
+      completedFree (fun _ => CompletionState initial) :=
+  (completedFree_empty_spec initial).consequence (fun _ _ h => h) (fun _ _ _ h => h.1)
+
+theorem completion_empty_lift (initial : FlatTable × FlatTable) (a : M α)
+    (ha : RetainsRoutingCall a) :
+    PrefixPreserves (CompletionEmpty initial) (CompletionSafe initial) (liftPrefix a) := by
+  apply PrefixEnsures.preserves
+  apply PrefixEnsures.lift _ (fun _ _ hi => hi.1.1)
+  intro h w x v hi hr
+  exact ⟨⟨hi.1.1, hi.1.2.retains (ha w x v hr)⟩, hi.2⟩
+
+theorem completedRemovePeer_empty_spec (initial : FlatTable × FlatTable) (pid : PeerId) :
+    PrefixPreserves (CompletionEmpty initial) (CompletionSafe initial) (completedRemovePeer pid) := by
+  intro w h hi
+  have hs := completedRemovePeer_spec initial pid w h hi.1
+  rw [completedRemovePeer_run] at hs ⊢
+  cases hr : (removeByPeer pid).run w with
+  | error err => simpa only [hr] using hs
+  | ok out =>
+    obtain ⟨u, v⟩ := out
+    cases u
+    simp only [hr] at hs ⊢
+    obtain ⟨suffix, he, safe, post⟩ := hs
+    refine ⟨suffix, he, safe, ⟨post.1, ?_⟩⟩
+    rw [completionFold_append, hi.2]
+    rfl
 
 end Leanux.Proofs.WG.AllowedIps

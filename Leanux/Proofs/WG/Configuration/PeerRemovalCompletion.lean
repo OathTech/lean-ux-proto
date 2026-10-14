@@ -73,4 +73,87 @@ theorem peerRemoveObserved_spec (initial : FlatTable × FlatTable) (peer : Optio
       intro _
       exact completion_lift_retains initial _ (peerRemoveAfterDead_routing pid)
 
+
+/-- The saved list is captured after the completed clear and used unchanged by
+both loops. Stale entries retain their original Stops. -/
+def peerRemoveAllObserved : PrefixM RoutingCompletion Unit := do
+  completedFree
+  let dead := (← liftPrefix getDev).peerList
+  for pid in dead do
+    _ ← liftPrefix (branch .peerRemoveAllIter1 true)
+    peerMakeDeadObserved pid
+  _ ← liftPrefix (branch .peerRemoveAllIter1 false)
+  for pid in dead do
+    _ ← liftPrefix (branch .peerRemoveAllIter2 true)
+    liftPrefix (peerRemoveAfterDead pid)
+  _ ← liftPrefix (branch .peerRemoveAllIter2 false)
+
+theorem peerRemoveAllObserved_erases : ErasesPrefix peerRemoveAllObserved peerRemoveAll := by
+  unfold peerRemoveAllObserved peerRemoveAll
+  simp only [bind_assoc, pure_bind]
+  repeat' first
+    | with_reducible exact completedFree_erases
+    | with_reducible exact peerMakeDeadObserved_erases _
+    | with_reducible exact erasesPrefix_lift _
+    | with_reducible exact erasesPrefix_pure _
+    | with_reducible apply erasesPrefix_forIn
+    | with_reducible apply erasesPrefix_bind
+    | (with_reducible intro x; try dsimp only)
+
+theorem peerRemoveAllObserved_spec (initial : FlatTable × FlatTable) :
+    PrefixEnsures (CompletionState initial) (CompletionSafe initial)
+      peerRemoveAllObserved (fun _ => CompletionState initial) := by
+  change PrefixPreserves (CompletionState initial) (CompletionSafe initial) _
+  have safe : ∀ h w, CompletionState initial h w → CompletionSafe initial h := fun _ _ h => h.1
+  have hf := (completedFree_spec initial).preserves
+  have hm := fun pid => (peerMakeDeadObserved_spec initial pid).preserves
+  have hg := completion_lift_retains initial _ (.of_same (routing_kernel _ Leanux.Proofs.WG.Lifetimes.getDev_sameKernel))
+  have hb := fun dec value => completion_lift_retains initial _ (.of_same (routing_kernel _ (sameKernel_branch dec value)))
+  unfold peerRemoveAllObserved
+  repeat' first
+    | with_reducible exact hf
+    | with_reducible exact hm _
+    | with_reducible exact hg
+    | with_reducible exact hb _ _
+    | with_reducible exact completion_lift_retains initial _ (peerRemoveAfterDead_routing _)
+    | with_reducible exact PrefixPreserves.pure safe _
+    | with_reducible apply PrefixPreserves.forIn _ _ _ safe
+    | with_reducible apply PrefixPreserves.bind
+    | (with_reducible intro x; try dsimp only)
+
+private theorem peerMakeDeadObserved_empty_spec (initial : FlatTable × FlatTable) (pid : PeerId) :
+    PrefixPreserves (CompletionEmpty initial) (CompletionSafe initial) (peerMakeDeadObserved pid) := by
+  unfold peerMakeDeadObserved
+  apply PrefixPreserves.bind (completion_empty_lift initial _ (.of_same (modifyDev_routing (fun d => {d with peerList := d.peerList.filter (· != pid)}) (fun _ => rfl))))
+  intro _
+  apply PrefixPreserves.bind (completedRemovePeer_empty_spec initial pid)
+  intro _
+  apply PrefixPreserves.bind (completion_empty_lift initial _ (.of_same (modifyDev_routing (fun d => {d with peerHashtable := d.peerHashtable.filter (·.2 != pid)}) (fun _ => rfl))))
+  intro _
+  exact completion_empty_lift initial _ (.of_same
+    (modifyPeer_routing pid (fun p => {p with isDead := true}) (fun _ => rfl)))
+
+/-- A normal whole remove-all leaves the journal's flat tables empty even if
+later cleanup deletes residents. No traversal totality is asserted. -/
+theorem peerRemoveAllObserved_empty_spec (initial : FlatTable × FlatTable) :
+    PrefixEnsures (CompletionState initial) (CompletionSafe initial)
+      peerRemoveAllObserved (fun _ => CompletionEmpty initial) := by
+  unfold peerRemoveAllObserved
+  apply PrefixEnsures.bind (completedFree_empty_spec initial)
+  intro _
+  change PrefixPreserves (CompletionEmpty initial) (CompletionSafe initial) _
+  have safe : ∀ h w, CompletionEmpty initial h w → CompletionSafe initial h := fun _ _ h => h.1.1
+  have hm := fun pid => peerMakeDeadObserved_empty_spec initial pid
+  have hg := completion_empty_lift initial _ (.of_same (routing_kernel _ Leanux.Proofs.WG.Lifetimes.getDev_sameKernel))
+  have hb := fun dec value => completion_empty_lift initial _ (.of_same (routing_kernel _ (sameKernel_branch dec value)))
+  repeat' first
+    | with_reducible exact hm _
+    | with_reducible exact hg
+    | with_reducible exact hb _ _
+    | with_reducible exact completion_empty_lift initial _ (peerRemoveAfterDead_routing _)
+    | with_reducible exact PrefixPreserves.pure safe _
+    | with_reducible apply PrefixPreserves.forIn _ _ _ safe
+    | with_reducible apply PrefixPreserves.bind
+    | (with_reducible intro x; try dsimp only)
+
 end Leanux.Proofs.WG.Configuration

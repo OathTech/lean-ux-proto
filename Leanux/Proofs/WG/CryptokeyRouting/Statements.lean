@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Configuration.DeviceCompletion
 import Leanux.Proofs.WG.Configuration.PeerCommandCompletion
 import Leanux.Proofs.WG.Configuration.ParserShape
 import Leanux.Proofs.WG.Configuration.PeerUpdateCompletion
@@ -53,8 +54,10 @@ send/flush/cleanup routing frames that permit peer deletion. Actual lookup/creat
 contracts derive raw-slot residency through the complete public setPeerCmd
 preflight, without a whole-command target-residency premise. Successful public
 parseTrace supplies every configured peer's address shape, including malformed
-entry alternatives. Entry routing remains explicit; enclosing device configuration,
-Runner closure and packet admission remain separate.
+entry alternatives. The complete original device configuration now composes
+these cuts, including completed clear before remove-all cleanup. Entry routing
+remains explicit; enclosing lifecycle/Runner closure and packet admission remain
+separate.
 Actual local parser output now discharges address shape for the setAllowedip
 guards and its selected bounded insertion. Complete original free normally
 clears both represented families and every resident list, preserving the other
@@ -402,7 +405,8 @@ validity and duplicate-free node identifiers are retained. Premises explicitly
 supply the requested path, initial root linkage and whole-store freshness.
 Both root values, the sequence, and any supplied opposite-family representation
 are framed. Separate dispatch, coherence and finite-call history contracts below
-cover those additional boundaries; enclosing configuration and packet paths remain open. -/
+cover those additional boundaries; whole device-command composition is supplied
+separately below. Enclosing lifecycle/Runner execution and packet paths remain open. -/
 theorem original_add_context_empty_child_correct (w w' : World) (d : WG.Device)
     (hd : w.k.wg = some d) (v4 : Bool) (c : Context) (n : NodeData) (side : Nat) (sibling : Tree)
     (addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
@@ -1841,5 +1845,47 @@ theorem parsed_trace_peer_commands_routing (j : Lean.Json) (trace : Runner.Trace
   refine ⟨hs, ?_⟩
   intro attrs hop peer hp
   exact Configuration.setPeerCmdObserved_spec initial peer (hs (.wgSet attrs) hop peer hp)
+
+/-- All-input device observers preserve the original returns and Stops. The
+clear marker occurs after WG.free normally completes, before either remove-all
+loop; no event represents a failed primitive's unavailable World. -/
+theorem original_device_configuration_completion_erasure (a : WG.DeviceAttrs) :
+    Logged.ErasesPrefix completedFree WG.free ∧
+    Logged.ErasesPrefix Configuration.peerRemoveAllObserved WG.peerRemoveAll ∧
+    Logged.ErasesPrefix (Configuration.wgSetDeviceObserved a) (WG.wgSetDevice a) :=
+  ⟨completedFree_erases, Configuration.peerRemoveAllObserved_erases,
+    Configuration.wgSetDeviceObserved_erases a⟩
+
+/-- From routed entry, clear and remove-all normally leave the journal's flat
+tables empty; this does not assert physical node-store emptiness or totality.
+The complete original device configuration retains valid completed prefixes on
+Stop and derives reached routing/flat agreement on normal returns, including
+ordinary negative results. Only local address shape is added: no target-residency,
+saved-list validity, drain, credit or identity-affiliation premise is needed. -/
+theorem original_device_configuration_routing_prefix (initial : FlatTable × FlatTable)
+    (a : WG.DeviceAttrs) (shape : Configuration.DeviceAddressShape a) :
+    Logged.PrefixEnsures (CompletionState initial) (CompletionSafe initial)
+      completedFree (fun _ => CompletionEmpty initial) ∧
+    Logged.PrefixEnsures (CompletionState initial) (CompletionSafe initial)
+      Configuration.peerRemoveAllObserved (fun _ => CompletionEmpty initial) ∧
+    Logged.PrefixEnsures (CompletionState initial) (CompletionSafe initial)
+      (Configuration.wgSetDeviceObserved a) (fun _ => CompletionState initial) :=
+  ⟨completedFree_empty_spec initial, Configuration.peerRemoveAllObserved_empty_spec initial,
+    Configuration.wgSetDeviceObserved_spec initial a shape⟩
+
+/-- Actual successful public parsing discharges address shape for every wgSet
+operation's complete device-command contract. Malformed entries retain their
+original error paths. Routed entry remains explicit; this is not enclosing
+Runner execution, device lifecycle closure or packet authorization. -/
+theorem parsed_trace_device_configuration_routing (j : Lean.Json) (trace : Runner.Trace)
+    (hparse : Runner.parseTrace j = .ok trace) (initial : FlatTable × FlatTable) :
+    Configuration.TraceAddressShape trace ∧
+      ∀ attrs, Runner.Operation.wgSet attrs ∈ trace.ops →
+        Logged.PrefixEnsures (CompletionState initial) (CompletionSafe initial)
+          (Configuration.wgSetDeviceObserved attrs) (fun _ => CompletionState initial) := by
+  have hs := Configuration.parseTrace_shape j trace hparse
+  refine ⟨hs, ?_⟩
+  intro attrs hop
+  exact Configuration.wgSetDeviceObserved_spec initial attrs (hs (.wgSet attrs) hop)
 
 end Leanux.Proofs.WG.CryptokeyRouting
