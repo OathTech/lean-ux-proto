@@ -6,24 +6,24 @@ Worktree `.worktrees/proofs-campaign`, branch `proofs/campaign`; governed by
 [the charter](2026-10-13-charter-proof-campaign.md). Both prerequisites were
 carried from `2c7a076`, then the audit at `f45bde8` and documentation-only
 `a39aded`. The mirror is byte-identical to main. Checked components are current
-over `a39aded`, including the R2 handshake-send and R4 general-ring extensions. Open
-obligations below remain explicit. No integration into main,
+over `a39aded`, including the R2 handshake-send, R3 unified-insertion and R4
+general-ring extensions. Open obligations below remain explicit. No integration into main,
 push, differential check or guest run has been performed by this campaign.
 
 | Result | Disposition |
 | --- | --- |
 | R1 anti-replay | Complete: uniqueness and the intentional inclusive-floor correction, with pure and accepted-run witnesses. |
 | R2 lifetimes | Endpoint identity and failure-retaining access contracts cover the listed call families. Whole-run caller/lifecycle/scheduler closure and saved-reference ownership remain open. The stale-cursor finding is checked. |
-| R3 routing | Prefix arithmetic, represented-tree lookup and the listed insertion cases are checked. Removal, general mutation/history and packet-path refinements remain open. |
+| R3 routing | Prefix arithmetic, represented-tree lookup and unified bounded-input normal insertion dispatch are checked. Removal, configuration-history and packet-path refinements remain open. |
 | R4 delivery | W7's two full-ring drops are explained. An accepted replay refutes chronological post-GRO stack order. Current per-poll selected order, removal/provenance and concrete callback frames are checked; pipeline conservation remains open. |
 | R5 key lifetime | Resolved under Rule Zero by counter-limit, delayed-encryption and post-clear-use witnesses, with 13 local positive contracts. |
 | R6 flood resistance | Cookie exclusion proved at the original call boundary; accepted 19-retry/20-initiation episode resolves the literal limit through Rule Zero. Six terminal contracts. |
 
 **Current validation.** `a39aded` has mirror source unchanged from `f45bde8`.
-The proof gate passes 276 jobs and 258 terminal statements
-(ReplayWindow 15; R1 9; R2 140; R3 34; R4 41; R5 13; R6 6), using only `propext`, `Classical.choice` and `Quot.sound`.
+The proof gate passes 278 jobs and 263 terminal statements
+(ReplayWindow 15; R1 9; R2 140; R3 39; R4 41; R5 13; R6 6), using only `propext`, `Classical.choice` and `Quot.sound`.
 Fresh stock kernel replay passes, as do the 60-job default model build and
-94-test unit tier (21.965 seconds; one skip). Independent frozen-source
+94-test unit tier (21.822 seconds; one skip). Independent frozen-source
 and scope reviews have no unresolved correctness findings in these components.
 
 ```sh
@@ -381,7 +381,7 @@ freshness separate the parent, old focus and fresh nodes. The source-shaped
 back to original `add` is an all-input equality. Original placement, including
 its stopping condition, is derived from the represented path.
 
-Four new terminals classify normal `add` endpoints and prove successful `add`,
+The four deep-graft terminals classify normal `add` endpoints and prove successful `add`,
 actual-root lookup and `insert` refinement. They preserve both roots, supplied
 opposite-family representation, validity, unique IDs, conditional compression
 and exact frontier/sequence effects. Second-allocation refusal still consumes
@@ -390,8 +390,26 @@ Only the requested peer must be resident; old owner labels may be orphaned.
 These normal-return contracts do not classify record Stops. Independent source
 review, the coordinated gate and fresh kernel replay pass.
 
-**Remaining claim.** Unified insertion dispatch, removal and general configuration
-histories remain open. Parsed-input bounds and history invariants still need propagation through all mutations.
+`InsertionCases` factors seven established case proofs into reusable contracts;
+public signatures and the stronger branch-specific exact endpoints are retained.
+`InsertionDispatch` derives all five cases from the original total placement
+witness and the final context edge [AGENT 2026-10-14]. No path/exactness/stopping
+predicate is assumed by its callers. Five new terminals classify normal `add`
+and `insert` returns, establish refusal effects, and connect successful insertion
+to actual-root longest-prefix lookup over independently updated flat bindings.
+The common success contract gives representation, root/frontier/sequence,
+validity, unique IDs and conditional compression; it does not unify every Device
+field or peer-list effect. Both refusal endpoints remain exact, including the
+second refusal's consumed ID and pointwise all-peer filtering. The opposite root
+value and any supplied opposite-family representation are preserved; linkage of
+that supplied tree is not inferred. Input address/CIDR bounds, valid representation,
+unique node IDs, whole-store freshness and resident target peer remain explicit.
+Old owner labels may be orphaned. Invalid-input returns and record Stops are
+outside the bounded-input normal-return classification. Independent frozen-source
+review found no correctness issue; the coordinated gate and fresh stock kernel replay pass.
+
+**Remaining claim.** Removal and general configuration histories remain open.
+Parsed-input bounds and history invariants still need propagation through all mutations.
 Both packet paths follow R2. Owners are raw peer slots, not allocation or
 cryptographic identities; no liveness/ownership claim follows from tree lookup.
 The R2 orphan-owner replay above is a constraint on any proposed ownership
@@ -412,14 +430,20 @@ following tranche counts are separate, not an inferred campaign total.
 | Selected-root graft endpoints/rollback | 40: 6 / 34 | 35m28s |
 | Selected-root successful refinement | 7: 4 / 3 | About 8m |
 | Arbitrary-depth nonempty graft | 30: 4 / 26 | 36m47s |
+| Unified insertion dispatch | 11: 8 / 3 | 12m08s |
 
 The staged child architecture replaced a failed monolithic proof; this was not
 a mirror finding. Three deep-graft source-factor attempts hit Lean heartbeat
 limits. Including the original final return in the proof-side cut point made
 the all-input equality close by `rfl`. The final targeted/full builds passed
 106/273 jobs; all exits were collected, with no cap or interruption.
-Earlier checkpoint validation is retained in the corresponding commits;
-current combined validation is above.
+Unified dispatch's final targeted/full builds passed 108/278 jobs. One failed
+pre-write relocation script changed no files; its following unchanged-target
+build passed and is included in the ledger. Three Lean builds failed: one binder
+error and two default-heartbeat failures in rollback metadata. Projection-only
+simplification closed the latter without raising limits. All exits were collected;
+no cap or interruption occurred. Earlier checkpoint validation is retained in the
+corresponding commits; current combined validation is above.
 
 Independent reviews corrected a `freeNode` contract missing node residency,
 and distinguished normal-return classification from reachability, root values
