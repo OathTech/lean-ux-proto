@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "id": "e_underload_511",
+  "net_fixture": "bare",
+  "ops": [
+    {
+      "op": "wg_create"
+    },
+    {
+      "op": "wg_set",
+      "config": {
+        "private_key": "1111111111111111111111111111111111111111111111111111111111111111",
+        "listen_port": 51820,
+        "peers": [
+          {
+            "public_key": "0faa684ed28867b97f4a6a2dee5df8ce974e76b7018e3f22a1c4cf2678570f20",
+            "allowed_ips": [
+              {
+                "family": 4,
+                "addr": "0a000000",
+                "cidr": 8
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "op": "wg_up"
+    },
+    {
+      "op": "wg_flood",
+      "count": 510,
+      "port": 51820,
+      "messages": [
+        "0100000011111111ad908a8a708aca07588cda7c4ed3e44d4966a80a9abb2f1e4bbac53c67414e34096206718cb438f17a472d726a3cc44bfe211f767bd23aa23e3a696c1bb258bf74c5477918a49047168c4511399ec5a33e586625b8600a3ac5dee2e17084a5cc42a31e7a23fc6b7715cab6433e28ded627b37d4d4eb551104553d79e00000000000000000000000000000000"
+      ]
+    },
+    {
+      "op": "wg_observe"
+    },
+    {
+      "op": "wg_get"
+    }
+  ],
+  "expect": [
+    "wg_receive_handshake_packet.under_load=0",
+    "wg_receive_handshake_packet.initiation=1",
+    "wg_noise_handshake_consume_initiation.flood=0"
+  ]
+}

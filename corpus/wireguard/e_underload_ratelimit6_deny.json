@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "id": "e_underload_ratelimit6_deny",
+  "net_fixture": "bare",
+  "ops": [
+    {
+      "op": "wg_create"
+    },
+    {
+      "op": "wg_set",
+      "config": {
+        "private_key": "1111111111111111111111111111111111111111111111111111111111111111",
+        "listen_port": 51820,
+        "peers": [
+          {
+            "public_key": "0faa684ed28867b97f4a6a2dee5df8ce974e76b7018e3f22a1c4cf2678570f20",
+            "allowed_ips": [
+              {
+                "family": 4,
+                "addr": "0a000000",
+                "cidr": 8
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "op": "wg_up"
+    },
+    {
+      "op": "wg_flood",
+      "count": 520,
+      "port": 51820,
+      "messages": [
+        "0100000000000006199bea70e109c6967244583589615474eb7042a0e8d2ca6ccd8f56c086621f06edc79f8467b1be6f49b4195a81b7c42d3550865f38ac1c9af6e80bf961039a952671695838795947a1b491d99699183d71a8ac35b5043cd9d71767534e9064f212e8acda72aaae03487e67449d9012446e4d0bd9313209cfa56d17a894c57cd1f586de0f944d99eb5da7131a",
+        "01000000010000064049502db92ca2342c3f92dac5d6de7c85db5df5407a5b4996ce39f2efb7e8271987dd014c95af7c3d6326eee6376c7c1af2457baa875a311c43a07d6cf2fd34ffedb8a22e9e25f4e13c37582a457de728e522a346cdb23e924f60af41b6d9fdc311ba2127250a89b979847026ab4d0191aca6e30300ec4c21189b736ce0b57a638b444bfd5591fc6fe68f14",
+        "01000000020000064a4f8ccde198d66e99b4c014418a3223ce256c98900ae4a6811fd10f7eb84c2c4aee6cfb30ad9941c1a0aba48845ea442926832e8b1ce21303c207ba7ce002d9b72f7d712cd1347a6adac500e75a4d4892678dbcdb0d2f542c251f1826d816a55d216e47a0d74326971fc7db6e835e8ae2f94328b5333b8d68eb99ef22b6f3499c14da17e47842c7450be757",
+        "0100000003000006815fb6314405e007d04ed215c223d5cd4b799d07bb7189ad10dbf324ea534271ec6ecab1b757db2aad251b0343726270946174f1e688b25dc66c0075d077091e9af785386978460ba749b260a335360a42bd0cd9d9e866d0bd7dafdbc556b9947719d8cddaf558a81e575ffb74e3a48126900084697703552eb3922c3faca2feab3e1f8f5893d7fc68aec5d5",
+        "01000000040000066b3d57762f8badb69433f9c6d060f85f5e5c6b6803a816d141c075f63541ad1098ad9cd3e4abecbb237e94b79ca3c359ab3fa1d8b1fe32e5daacd3567368068e737cbc4860a88fd5e2273cf902c4363fe0cbde260a3492899493e2df02d548d90a8bd8cdd58dc7c6a3cdbd3c92ab77e4b9f6313a394c2e0fc9e1d6b489360df43a5f3be19eb6c74741e81a63",
+        "0100000005000006fb41b1fcf75c1227fa08876056a5ed07ac44fe0c116ec2de80b8e523959d7824972820134173ab51ca0e2729d11727378627b36b71f6c041c1c1f9f4819a233b066db9dc5ebfbbaa2a6a4e231c52f762319f995edabed5914991d67dee62f1d7c41965bb90351cb2a68693a02fd61b89164c2fe032c253b1f07ff26cb66ad137f2eb092a1d6f80cd70cb7805"
+      ],
+      "family": 6
+    },
+    {
+      "op": "wg_observe"
+    },
+    {
+      "op": "wg_get"
+    }
+  ],
+  "steer": [
+    [
+      "cookie_secret",
+      "909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeaf"
+    ],
+    [
+      "resp_ephemeral",
+      "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20"
+    ],
+    [
+      "index_draw",
+      "44332211"
+    ]
+  ],
+  "expect": [
+    "wg_ratelimiter_allow.inet6=1",
+    "wg_ratelimiter_allow.allow=1",
+    "wg_ratelimiter_allow.allow=0",
+    "wg_cookie_validate_packet.ratelimited=1"
+  ]
+}
