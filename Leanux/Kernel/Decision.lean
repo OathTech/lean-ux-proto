@@ -536,6 +536,9 @@ structure DecisionInfo where
   line : Nat
   whenTrue : List Span := []
   whenFalse : List Span := []
+  /-- The outcomes at which the C function returns (an early return arm):
+      the check knows the function's next decision is a new call. -/
+  terminal : List Bool := []
 
 private def ev := "fs/eventfd.c"
 private def ft := "fs/file_table.c"
@@ -936,9 +939,11 @@ def Decision.info : Decision → DecisionInfo
   -- `sit0` from the third); the whole condition does (`lookupNotWireguard`)
   | .lookupKindMismatch => d "lookup_interface.kind_mismatch" wnl 68 [] []
   | .lookupNotWireguard => d "lookup_interface.not_wireguard" wnl 67 [(69, 70)] []
-  | .getAipNoNest => d "get_allowedips.no_nest" wnl 81 [(82, 82)] [(84, 84)]
-  | .getAipPutCidr => d "get_allowedips.put_cidr_failed" wnl 84 [] [(85, 85)]
-  | .getAipPutFamily => d "get_allowedips.put_family_failed" wnl 85 [] [(86, 86)]
+  -- each failed put returns -EMSGSIZE (the mutation campaign's finding 3,
+  -- 2026-10-14: a return removed from the mirror reported the next put)
+  | .getAipNoNest => { d "get_allowedips.no_nest" wnl 81 [(82, 82)] [(84, 84)] with terminal := [true] }
+  | .getAipPutCidr => { d "get_allowedips.put_cidr_failed" wnl 84 [] [(85, 85)] with terminal := [true] }
+  | .getAipPutFamily => { d "get_allowedips.put_family_failed" wnl 85 [] [(86, 86)] with terminal := [true] }
   | .getAipFamily6 => d "get_allowedips.inet6_length" wnl 86 [] []
   | .getAipPutAddr => d "get_allowedips.put_addr_failed" wnl 86 [] [(92, 93)]
   | .getPeerNoNest => d "get_peer.no_nest" wnl 113 [(114, 114)] [(116, 118)]

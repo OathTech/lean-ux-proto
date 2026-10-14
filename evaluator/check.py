@@ -25,7 +25,7 @@ from harness.linux import (ARTIFACTS as LINUX_ARTIFACTS, ARM_RECORDS, DISPATCH_S
                           dispatch_addresses, run_linux)
 from harness.steer import SteeringError, call_sites, resolve as resolve_steering
 from harness.trace import OPCODES, InvalidTrace, loads_trace, uses_wireguard, validate_trace
-from .coverage import attributable, instrumented_points, symbolize
+from .coverage import attributable, instrumented_lines, symbolize
 from .generate import generate, generate_wireguard
 from .protocol import InvalidOutput, compare, loads, parse_batch, validate_coverage
 
@@ -816,7 +816,7 @@ def parse_decisions(decisions, config):
         raise InvalidOutput('empty decision table')
     table = {}
     for entry in decisions:
-        if set(entry) != {'label', 'file', 'line', 'when_true', 'when_false', 'repeatable', 'comparison'} \
+        if set(entry) != {'label', 'file', 'line', 'when_true', 'when_false', 'repeatable', 'comparison', 'terminal'} \
                 or type(entry['repeatable']) is not bool:
             raise InvalidOutput(f'decision fields: {entry}')
         label = entry['label']
@@ -856,8 +856,12 @@ def parse_decisions(decisions, config):
             spans[outcome] = {line for line in lines if not non_statement(line)}
         if spans[True] & spans[False]:
             raise InvalidOutput(f'decision {label}: outcome spans overlap')
+        # the outcomes at which the C function returns (an early return arm)
+        if type(entry['terminal']) is not list or any(type(t) is not bool for t in entry['terminal']):
+            raise InvalidOutput(f'decision {label}: terminal outcomes')
         table[label] = dict(site=f"{entry['file']}:{entry['line']}", spans=spans,
-                            function=label.split('.', 1)[0], comparison=comparison, repeatable=entry['repeatable'])
+                            function=label.split('.', 1)[0], comparison=comparison, repeatable=entry['repeatable'],
+                            terminal=set(entry['terminal']))
     return table
 
 
@@ -1012,8 +1016,7 @@ def parse_step(label):
     return name, outcome == '1'
 
 
-def control_flow(trace, model_obs, coverage, locations, config, decisions, witnesses, instrumented, functions,
-                 by_symbol=None):
+def control_flow(trace, model_obs, coverage, locations, config, decisions, witnesses, instrumented, functions):
     """A2: the mirror's decision outcomes agree with Linux KCOV coverage.
 
     For each operation: each decision is reported at most once; a reported
@@ -1105,33 +1108,29 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
                 sequence.append(step)
         if not reported and not data_only:
             problems.append(dict(index=index, problem='no model decision'))
-        # The copies of each decision function the operation ran: the symbols
-        # (outermost frames) of the witnessing points that carry a frame of
-        # the function. A helper inlined into several callers is instrumented
-        # differently in each copy (`by_symbol`, evaluator/coverage.py).
-        copies = {}
-        for pc in witnessing['pcs']:
-            if not attributable(locations[pc]) or not listed(locations[pc], set(config['functions'])):
+        # Terminal outcomes (the decision table's `terminal`: the C function
+        # returns at that arm): after one, the function's next reported
+        # decision is a new call, which starts again from the top, so its
+        # line is at or before the terminal decision's; a later line is a
+        # decision the mirror evaluated past Linux's return (a removed early
+        # return), which no witness can show when that outcome is unwitnessed
+        # and a line-level rule cannot either, a line owning several blocks
+        # (the mutation campaign's finding 3, 2026-10-14).
+        returned = {}
+        for label in steps.get(index, []):
+            step = parse_step(label)
+            if step is None or step[0] not in decisions:
                 continue
-            symbol = locations[pc][-1]['function'].split('.')[0]
-            for frame in locations[pc]:
-                copies.setdefault(frame['function'].split('.')[0], set()).add(symbol)
+            entry = decisions[step[0]]
+            function, line = entry['function'], int(entry['site'].rsplit(':', 1)[1])
+            if function in returned and line > returned[function][1]:
+                problems.append(dict(index=index, label=label, problem='decision reported after the function returned',
+                                     after=returned[function][0]))
+            returned.pop(function, None)
+            if step[1] in entry['terminal']:
+                returned[function] = (label, line)
         for name, outcome in sorted(reported):
             own, other = witnesses[name][outcome], witnesses[name][not outcome]
-            # A reported decision whose condition line owns a point in every
-            # copy of its function the operation ran must have run it: a
-            # decision the mirror evaluates past the point where Linux
-            # returned (a removed early return) reports an outcome at a line
-            # Linux never reached, which no witness of the outcome itself can
-            # show when the outcome is unwitnessed (the mutation campaign's
-            # finding 3, 2026-10-14).
-            site, function = decisions[name]['site'], decisions[name]['function']
-            ran = copies.get(function, set()) if by_symbol is not None else set()
-            if not data_only and site.split(':')[0] in op_files and ran and site not in lines \
-                    and all((function, site) in by_symbol.get(symbol, ()) for symbol in ran):
-                problems.append(dict(index=index, label=f'{name}={int(outcome)}',
-                                     problem='reported decision at a line Linux never reached', site=site,
-                                     copies=sorted(ran)))
             if own and not (lines & own):
                 problems.append(dict(index=index, label=f'{name}={int(outcome)}', problem='outcome not witnessed',
                                      witnesses=sorted(own)))
@@ -1784,8 +1783,7 @@ def main(argv=None):
                   f"{account['selected']} selected; rejected: "
                   + (', '.join(f'{k} ({v})' for k, v in account['rejected'].items()) or 'none'), file=sys.stderr)
         decisions.update(load_decisions(config))
-        instrumented, functions, chains, by_symbol = instrumented_points(KERNEL / 'vmlinux', config['functions'],
-                                                                          config['files'])
+        instrumented, functions, chains = instrumented_lines(KERNEL / 'vmlinux', config['functions'], config['files'])
         # each declared shared exit names exactly one instrumentation point
         # (`points`, default 1: a compiler may give the test and the join after
         # it of one inlined helper the same chain; all of them are then exits)
@@ -1795,7 +1793,7 @@ def main(argv=None):
                     raise InvalidOutput(f"shared exit {exit_['frames']}: {chain} names {chains[tuple(chain)]}"
                                         f' instrumentation points of the listed functions, not {expected}')
         kcov = (config, decisions, witness_table(decisions, instrumented, functions, config['branch_free_functions']),
-                instrumented, functions, by_symbol)
+                instrumented, functions)
         observable = sum(bool(w[True] or w[False]) for w in kcov[2].values())
         print(f'{len(decisions)} decisions, {observable} with KCOV witnesses', file=sys.stderr)
         pending = list(chunk_traces(traces))

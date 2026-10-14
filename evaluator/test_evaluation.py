@@ -154,11 +154,11 @@ class EvaluationChecks(unittest.TestCase):
               'shared_exits': [], 'operand_exclusions': [], 'data_only_operations': [],
               'branch_free_functions': [], 'helper_cuts': []}
 
-    def decision(self, label, line, true, false):
+    def decision(self, label, line, true, false, terminal=None, repeatable=False):
         return {'label': label, 'file': 'fs/eventfd.c', 'line': line,
                 'when_true': [{'file': 'fs/eventfd.c', 'lo': lo, 'hi': hi} for lo, hi in true],
                 'when_false': [{'file': 'fs/eventfd.c', 'lo': lo, 'hi': hi} for lo, hi in false],
-                'repeatable': False, 'comparison': None}
+                'repeatable': repeatable, 'comparison': None, 'terminal': terminal or []}
 
     def control_flow_fixture(self):
         table = check.parse_decisions([
@@ -380,35 +380,30 @@ class EvaluationChecks(unittest.TestCase):
                                                  [{'records': [[4, '0x8', '0x20', '0x1', '3']]}], loc, decisions),
                          ([], 1))                # without the map, the old relation
 
-    def test_reported_decision_must_reach_its_line_in_the_copy_that_ran(self):
+    def test_decision_after_the_function_returned(self):
         # The mutation campaign's finding 3: a removed early return makes the
-        # mirror report a decision past the point where Linux returned; when
-        # that outcome is unwitnessed nothing else shows it. A reported
-        # decision whose condition line owns a point in every copy of its
-        # function the operation ran must have run it; a copy without a point
-        # at that line (a helper inlined elsewhere) says nothing.
+        # mirror report a decision past the point where Linux returned, which
+        # no witness shows when that outcome is unwitnessed. After a terminal
+        # outcome the function's next decision is a new call, from the top.
         table = check.parse_decisions([
-            self.decision('eventfd_read.short_buffer', 220, [(221, 221)], [(222, 222)]),
-            self.decision('eventfd_read.late', 230, [], [])], self.CONFIG)
-        instrumented = {'fs/eventfd.c:221', 'fs/eventfd.c:222', 'fs/eventfd.c:230'}
+            self.decision('eventfd_read.short_buffer', 220, [(221, 221)], [(222, 222)], terminal=[True], repeatable=True),
+            self.decision('eventfd_read.empty', 223, [], [(224, 224)], terminal=[True], repeatable=True)], self.CONFIG)
+        instrumented = {'fs/eventfd.c:221', 'fs/eventfd.c:222', 'fs/eventfd.c:224'}
         functions = {'eventfd_read'}
         witnesses = check.witness_table(table, instrumented, functions)
         loc = {f'0x{n}': [{'function': 'eventfd_read', 'source': f'/x/.deps/linux/fs/eventfd.c:{n}'}]
-               for n in (221, 222, 230)}
-        trace = {'version': 1, 'id': 'rl', 'ops': [{'op': 'read', 'fd': {'literal': 8}, 'count': 8}]}
-        def run(labels, lines, by_symbol):
+               for n in (221, 222, 224)}
+        trace = {'version': 1, 'id': 'tr', 'ops': [{'op': 'read', 'fd': {'literal': 8}, 'count': 8}]}
+        def run(labels, lines):
             model = {'branches': [{'index': 0, 'label': l} for l in labels]}
-            coverage = [{'id': 'rl', 'index': 0, 'count': len(lines), 'pcs': [f'0x{n}' for n in lines]}]
-            return control_flow(trace, model, coverage, loc, self.CONFIG, table, witnesses, instrumented, functions,
-                                by_symbol)[0]
-        labels = ['eventfd_read.short_buffer=1', 'eventfd_read.late=1']
-        owning = {'eventfd_read': {('eventfd_read', 'fs/eventfd.c:221'), ('eventfd_read', 'fs/eventfd.c:230')}}
-        self.assertEqual(run(labels, [221, 230], owning), [])
-        self.assertEqual([p['problem'] for p in run(labels, [221], owning)],
-                         ['reported decision at a line Linux never reached'])
-        elsewhere = {'eventfd_read': {('eventfd_read', 'fs/eventfd.c:221')}}   # this copy has no point at 230
-        self.assertEqual(run(labels, [221], elsewhere), [])
-        self.assertEqual(run(labels, [221], None), [])                          # no map: the old relation
+            coverage = [{'id': 'tr', 'index': 0, 'count': len(lines), 'pcs': [f'0x{n}' for n in lines]}]
+            return control_flow(trace, model, coverage, loc, self.CONFIG, table, witnesses, instrumented, functions)[0]
+        self.assertEqual(run(['eventfd_read.short_buffer=1'], [221]), [])
+        self.assertEqual([p['problem'] for p in run(['eventfd_read.short_buffer=1', 'eventfd_read.empty=1'], [221])],
+                         ['decision reported after the function returned'])
+        # a second call after the return starts from the top
+        self.assertEqual(run(['eventfd_read.short_buffer=1', 'eventfd_read.short_buffer=0', 'eventfd_read.empty=0'],
+                             [221, 222, 224]), [])
 
     def test_section_agreement_two_runs(self):
         # W7 stream H (13.2 (ii), T1): the (c') placement of an inline NAPI
