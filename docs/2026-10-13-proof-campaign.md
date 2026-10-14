@@ -7,8 +7,8 @@ Worktree `.worktrees/proofs-campaign`, branch `proofs/campaign`; governed by
 carried from `2c7a076`, then the audit at `f45bde8` and documentation-only
 `a39aded`, then the scheduler robustness change at `7a92672`.
 All registered components are current over `7a92672`, including the R2 handshake
-receive/worker and thin ingress, R3 insertion/pure-removal and R4 finite ring-journal
-extensions. The new `cryptAhead` call is observed and framed, and the historical
+receive/worker and thin ingress, R3 insertion/pure-removal and R4 finite and RX source
+ring-journal extensions. The new `cryptAhead` call is observed and framed, and the historical
 witness seed no longer depends on the removed evaluator fixture.
 Open obligations below remain explicit. No integration into main,
 push, differential check or guest run has been performed by this campaign.
@@ -18,15 +18,15 @@ push, differential check or guest run has been performed by this campaign.
 | R1 anti-replay | Complete: uniqueness and the intentional inclusive-floor correction, with pure and accepted-run witnesses. |
 | R2 lifetimes | Endpoint identity and failure-retaining access contracts cover the listed call families. Whole-run caller/lifecycle/scheduler closure and saved-reference ownership remain open. The stale-cursor finding is checked. |
 | R3 routing | Prefix arithmetic, represented-tree lookup and unified bounded-input normal insertion dispatch are checked. Pure removal and its locality laws are checked. Original removal, configuration-history and packet-path refinements remain open. |
-| R4 delivery | W7's two full-ring drops are explained. An accepted replay refutes chronological post-GRO stack order. Current per-poll selected order, removal/provenance and concrete callback frames are checked; pipeline conservation remains open. |
+| R4 delivery | W7's two full-ring drops are explained. An accepted replay refutes chronological post-GRO stack order. Per-poll selected order, removal/provenance, concrete stack frames and RX source ring journals are checked; pipeline conservation remains open. |
 | R5 key lifetime | Resolved under Rule Zero by counter-limit, delayed-encryption and post-clear-use witnesses, with 13 local positive contracts. |
 | R6 flood resistance | Cookie exclusion proved at the original call boundary; accepted 19-retry/20-initiation episode resolves the literal limit through Rule Zero. Six terminal contracts. |
 
 **Last coordinated validation.** The mirror is byte-identical to `7a92672`.
-The proof gate passes 290 jobs and 288 terminal statements
-(ReplayWindow 15; R1 9; R2 152; R3 45; R4 48; R5 13; R6 6), using only `propext`, `Classical.choice` and `Quot.sound`.
+The proof gate passes 295 jobs and 293 terminal statements
+(ReplayWindow 15; R1 9; R2 152; R3 45; R4 53; R5 13; R6 6), using only `propext`, `Classical.choice` and `Quot.sound`.
 Fresh stock kernel replay passes, as do the 60-job default model build and
-expanded 110-test unit tier (23.463 seconds; one skip). The model executable
+expanded 110-test unit tier (23.618 seconds; one skip). The model executable
 was rebuilt at the scheduler carry (118 jobs); its source is unchanged. Independent frozen-source
 and scope reviews have no unresolved correctness findings in these components.
 
@@ -42,7 +42,7 @@ against this mirror, including exact original/observed output comparison.
 The retry and two current time witnesses include complete-advance checks.
 Generated streams prove accepted mirror behavior, not Linux capture or schedule
 reachability. These replayers were last run at the scheduler carry; the subsequent
-pure-removal and receive extensions change none of their code. Reproduction commands and
+pure-removal, receive and RX ring-journal extensions change none of their code. Reproduction commands and
 provenance are retained below.
 
 **Carries and review history.**
@@ -624,9 +624,37 @@ peer-queue/packet-state updates may precede `-EPIPE`. Missing objects and queue-
 Stops. No ownership or queue-validity premise, or unchanged-peer-state conclusion, is imposed.
 `EnqueueAdmission` independently derives from each original TX/RX body that a zero return requires
 an existing, non-full entry ring. The older success alternative alone does not establish that guard.
-These are successful-return implications, not scheduler event observations: a future observer must
-emit admission after the ring update is installed, and consumption after its replacement is installed.
+The guard theorems themselves are successful-return implications. The RX source journal below
+observes the installed mutations; TX source-journal and scheduler composition remain open.
 Passing the full test and then stopping in queue-work emits no admission.
+
+**RX source ring journals.** `RxRingJournal` relates each reached history to a finite execution of the
+original guarded ring operations. `Inv` links its endpoint to the complete device interface-index/ring
+cell on normal return; `Safe` retains only an existential replay ring on Stop. `RxRingFrames` proves
+this cell is preserved by the actual lookup, reference/release, packet and decrypt helpers.
+`RxRingCuts` derives enqueue outcomes and the independent free guard from original source, without
+endpoint assumptions supplied by callers. `RxRingEntry` observes complete RX enqueue and `consumeData`.
+Admission is emitted after installed production; its deferral across the final pure return crosses
+no source effect. EPIPE emits a refused offer; ENOSPC and pre-install Stops emit no ring event.
+Neither refusal is classified as packet disposal. A later consumeData Stop retains an emitted offer.
+
+`RxRingWorker` factors the original decrypt step at branch-checked consumption and installed ring
+replacement, before later packet getters, decryption and publication. Empty polls are recorded after
+the original empty-branch check succeeds. Complete step/iteration erasure preserves result, successful
+World and exact Stop on every input. Softirq still precedes the ring read. IRQ, softirq and rescheduling
+observers have explicit erasure and journal-preservation contracts, allowing their own refined ring
+operations; concrete scheduler callbacks are not yet discharged. No saved-head, packet-ID uniqueness,
+valid-World, homogeneous-batch or ownership assumption is introduced.
+
+From an initialized ring, all four observed calls retain admission/consumed/live conservation and
+an ordinal refinement with exact event/ring erasure and joint consumed/live ordinal distinctness.
+Positive size also retains the retired/stale physical witness; zero size remains covered.
+Duplicate skb numbers are permitted. The interface index is not a fresh lifecycle identity, and the
+ordinal witness is an existence result, not uniqueness of the refinement itself.
+
+[AGENT 2026-10-14] Place RX journal observations at installed-ring cuts, using the complete enqueue
+outcome wrapper only because its last mutation is followed by a pure return. Keep callback contracts
+explicit and keep failed-prefix replay separate from any unavailable failed World.
 
 `PrevQueue` proves original dequeue, peek, peek/drop and enqueue laws. Contents are `peeked.toList ++
 items`; original `count` excludes the cache. Normal peeks preserve contents, and dropping a present peek
@@ -724,18 +752,21 @@ Failing callback entry counts. These results establish neither allocation identi
 between polls. The checkpoint is `c0713d8`; observer definitions and the original chronological
 predicate remain unchanged.
 
-**Remaining scope.** Composition of original receive/transmit enqueue and worker operations with
-the finite journal, worker-local ownership, pipeline conservation and recorded scheduler composition
-remain open, alongside R2’s caller/lifecycle closure.
+**Remaining scope.** TX source-journal composition, concrete RX scheduler callback discharge,
+worker-local ownership, peer-queue/packet-store conservation and recorded scheduler composition
+remain open, alongside R2’s caller/lifecycle closure and lifecycle-reset dispositions.
 Discarded speculative activations must discard history with their trial Worlds. Local observations imply
 neither packet-store emptiness nor whole-schedule no-loss/no-duplication. Finite-prefix conservation
-must account for pending obligations rather than infer eventual delivery from a finite run. The ring
-witness is not yet composed with original enqueue and a real peer queue; it alone makes no
+must account for pending obligations rather than infer eventual delivery from a finite run. The RX source journal
+is not yet connected to a joint peer-queue/packet-store identity invariant; it alone makes no
 packet-arrival, cryptographic, fairness or delivery-order claim.
 
-**Validation and effort.** R4 now has 48 terminal theorems. Seven journal/map/admission exports pass
-the 181-job local target. Independent frozen review has no findings; the combined
-proof gate, fresh stock kernel replay and fast tier above include this extension and the `7a92672` carry.
+**Validation and effort.** The RX source-journal extension adds five grouped exports (53 R4 terminals).
+The 187-job scoped target passes. Independent frozen review has no unresolved findings;
+the coordinated proof gate, fresh stock kernel replay and fast tier above also pass.
+The preceding 48-terminal checkpoint has seven journal/map/admission exports that pass
+the 181-job local target. Its independent frozen review had no findings; the combined
+proof gate, fresh stock kernel replay and fast tier above include the preceding pure-journal extension and the `7a92672` carry.
 The prior 41-terminal checkpoint is `15a56ad`. Before that geometry extension,
 **105 capped local invocations comprise
 36 passes, 68 ordinary failures and one deliberate termination**. All outcomes were collected; no memory
@@ -753,7 +784,15 @@ scoped check, taking 11m11s through local validation and 12m02s of writer-token 
 Option/conditional normalization, inferred payload types and batch, induction unfolding, WP simplification,
 and existential-witness elaboration/tactic syntax. All exits were collected, with no cap or interruption.
 Independent review reconciled the source, seven exports and scoped documentation with no findings.
-No scheduler observer or mutation-event placement has been claimed.
+That pure journal slice did not yet claim source mutation-event placement or scheduler composition.
+The RX source-journal extension took 19m07s from token grant through collected target validation,
+using eight capped builds: two passed and six failed ordinarily. Failures concerned projection/type
+inference, WP witnesses, bind/map and dependent-match normalization, and constructor namespace
+resolution. All exits were collected; no cap or interruption occurred. No source or premise change
+was made to suppress an original Stop. A separate scoped check failed on the English verb
+“admit” in a new comment; the wording was replaced because the trust gate rejects that token
+throughout the proof tree. The corrected scoped check passed; both check exits were collected.
+Total writer-token ownership was 21m45s, including review corrections and cleanup.
 
 The completion-frame worker had two provider interruptions during implementation and one during
 read-only reporting; all dirty worktrees, including nonignored untracked files, were preserved before
@@ -768,7 +807,9 @@ defect; final hashes matched. A table-format finding was fixed. Reviews required
 scope and independent correspondence/provenance proofs rather than conclusions inferred from erasure;
 the checked components now supply those bridges. Reviews also preserved the
 generated-witness/kernel-capture distinction, the retired chronological theorem and unchanged predicate,
-and remaining pipeline limits.
+and remaining pipeline limits. RX source-journal review corrected “unique ordinal refinement” to
+existence with distinct ordinals, and “epoch” to interface index: the cell does not discriminate
+lifecycle resets. Both corrections preserve the formal contracts.
 
 **Ranked mirror-shape recommendations.** None from these components. Physical occupancy and batched
 retirement explain W7; proof-side boundaries, queue frames and projected accumulators handle the local

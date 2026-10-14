@@ -9,6 +9,7 @@ import Leanux.Proofs.WG.Queues.RxPollGroOrder
 import Leanux.Proofs.WG.Queues.SelectedGro
 import Leanux.Proofs.WG.Queues.RxPollProjection
 import Leanux.Proofs.WG.Queues.RxPollProvenance
+import Leanux.Proofs.WG.Queues.RxRingWorker
 
 /-! R4 queue components: physical-ring refusal, original prev_queue FIFO laws,
 and successful-endpoint receive-queue helper frames. Whole recorded-schedule delivery,
@@ -472,5 +473,72 @@ theorem original_rx_admission_not_full (id : SkbId) (w v : World)
     (hr : (enqueuePerDeviceAndPeerRx id).run w = .ok (0, v)) :
     ∃ r, Queues.decryptRing w = some r ∧ r.full = false :=
   Queues.enqueue_rx_success_free id w v hr
+
+
+/-- The complete original RX enqueue and consumeData retain their exact
+result, World on success and Stop on failure, for every input and history.
+The ring log records admission/refusal only at the corresponding source cut. -/
+theorem original_rx_ring_entry_erasure (id : SkbId) (msg : List UInt8) (src : SkbSource) (ds : Nat) :
+    Logged.ErasesPrefix (Queues.RxRing.enqueue id) (enqueuePerDeviceAndPeerRx id) ∧
+      Logged.ErasesPrefix (Queues.RxRing.consume msg src ds) (consumeData msg src ds) :=
+  ⟨Queues.RxRing.enqueue_erases id, Queues.RxRing.consume_erases msg src ds⟩
+
+/-- Every reached RX entry prefix refines original finite ring operations.
+The actual full device-index/ring cell is linked only on normal return;
+ENOSPC and pre-install Stops emit no offer, while EPIPE records a refusal. -/
+theorem original_rx_ring_entry_prefix_refinement (deviceIndex : Nat) (initial : PtrRing SkbId)
+    (id : SkbId) (msg : List UInt8) (src : SkbSource) (ds : Nat) :
+    Logged.PrefixPreserves (Queues.RxRing.Inv deviceIndex initial) (Queues.RxRing.Safe initial)
+      (Queues.RxRing.enqueue id) ∧
+    Logged.PrefixPreserves (Queues.RxRing.Inv deviceIndex initial) (Queues.RxRing.Safe initial)
+      (Queues.RxRing.consume msg src ds) :=
+  ⟨Queues.RxRing.enqueue_preserves id, Queues.RxRing.consume_preserves msg src ds⟩
+
+/-- Original decrypt step/iteration erasure is unconditional on World and
+queue validity; the explicitly supplied observers must erase their callbacks.
+Softirq runs before the ring read, and every original later Stop is preserved. -/
+theorem original_decrypt_ring_worker_erasure
+    (hs : Logged.ErasesPrefix softirq originalSoftirq)
+    (hi : Logged.ErasesPrefix irq originalIrq)
+    (hr : Logged.ErasesPrefix resched originalResched) :
+    Logged.ErasesPrefix (Queues.RxRing.step softirq irq) (decryptStep originalSoftirq originalIrq) ∧
+    Logged.ErasesPrefix (Queues.RxRing.iter softirq irq resched)
+      (decryptIter originalSoftirq originalIrq originalResched) :=
+  ⟨Queues.RxRing.step_erases hs hi, Queues.RxRing.iter_erases hs hi hr⟩
+
+/-- Callback preservation allows their own refined ring operations. The poll
+is recorded after installed consumption and before packet lookup/decryption;
+a later Stop keeps the reached log without asserting a failed World. -/
+theorem original_decrypt_ring_worker_prefix_refinement
+    (hs : Logged.PrefixPreserves (Queues.RxRing.Inv deviceIndex initial) (Queues.RxRing.Safe initial) softirq)
+    (hi : Logged.PrefixPreserves (Queues.RxRing.Inv deviceIndex initial) (Queues.RxRing.Safe initial) irq)
+    (hr : Logged.PrefixPreserves (Queues.RxRing.Inv deviceIndex initial) (Queues.RxRing.Safe initial) resched) :
+    Logged.PrefixPreserves (Queues.RxRing.Inv deviceIndex initial) (Queues.RxRing.Safe initial)
+      (Queues.RxRing.step softirq irq) ∧
+    Logged.PrefixPreserves (Queues.RxRing.Inv deviceIndex initial) (Queues.RxRing.Safe initial)
+      (Queues.RxRing.iter softirq irq resched) :=
+  ⟨Queues.RxRing.step_preserves hs hi, Queues.RxRing.iter_preserves hs hi hr⟩
+
+/-- From an initialized physical ring, each of the four observed source calls
+has admission/consumed/live conservation and an erased ordinal refinement with
+joint consumed/live ordinal uniqueness, including size zero. Positive size
+also retains retired/stale physical conservation. Only successful completion
+links the replay endpoint to the actual returned device-index/ring cell.
+Callback contracts are explicit; no saved-packet ownership, lifecycle-reset
+identity, real scheduler closure or eventual delivery is asserted. -/
+theorem original_rx_ring_initialized_conservation (c : Queues.RxRing.Call α)
+    (hs : Logged.PrefixPreserves (Queues.RxRing.Inv deviceIndex (PtrRing.init n))
+      (Queues.RxRing.Safe (PtrRing.init n)) softirq)
+    (hi : Logged.PrefixPreserves (Queues.RxRing.Inv deviceIndex (PtrRing.init n))
+      (Queues.RxRing.Safe (PtrRing.init n)) irq)
+    (hr : Logged.PrefixPreserves (Queues.RxRing.Inv deviceIndex (PtrRing.init n))
+      (Queues.RxRing.Safe (PtrRing.init n)) resched)
+    (hc : Queues.RxRing.cell w = some (deviceIndex, PtrRing.init n)) :
+    let out := Logged.runPrefix (c.observe softirq irq resched) w []
+    ∃ r, Queues.RxRing.Initialized n out.2 r ∧
+      match out.1 with
+      | .error _ => True
+      | .ok (_, v) => Queues.RxRing.cell v = some (deviceIndex, r) :=
+  c.initialized hs hi hr hc
 
 end Leanux.Proofs.WG.DeliveryOrder
