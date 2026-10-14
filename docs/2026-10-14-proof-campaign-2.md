@@ -3,9 +3,11 @@
 ## Progress
 
 Work is confined to `.worktrees/proofs-campaign-2`, branch `proofs/campaign-2`.
-H1 and H3 have local contracts; their whole-run claims remain open. H4 follows.
+H1, H3 and H4 have local contracts; their whole-operation/whole-run claims
+remain open. H5 has a checked batch-completion counterexample and open progress
+obligations; H6 remains open.
 H2 is waiting on the index-lookup
-dead-peer-store fix and the user's landing notice. H5 and H6 remain open.
+dead-peer-store fix and the user's landing notice.
 No result is claimed complete. The branch has carried main through ca6b22e;
 that landing adds documentation and binary-validation scaffolding but leaves
 the WireGuard mirror unchanged.
@@ -15,7 +17,9 @@ index-lookup fix lands and its landing is relayed. Merge other main landings
 into the campaign branch and carry proofs; never integrate into main or push.
 
 [USER 2026-10-14] Put any requests for the mirror team in a document in this
-tree and notify the user. There are no requests at this checkpoint.
+tree and notify the user. The first request is the
+[batch-completion guard](2026-10-14-campaign-2-mirror-requests.md); the user has
+been notified.
 
 The initial full proof-target build failed in inherited
 `WG/CounterWindow/Refinement.lean`: its execution equation still uses the
@@ -114,3 +118,63 @@ authentication result. No Rule Zero finding or mirror-team request yet.
 
 Ranked mirror suggestions: none at this checkpoint. Effort: a read-only source
 review and capped scoped proof builds; ordinary elaboration failures repaired.
+
+## H4 — Configuration semantics (in progress)
+
+Five local contracts establish invalid allowed-IP rejection without kernel
+mutation, exact allowed-IP dump encoding and space consumption, exact private
+identity normalization, per-peer static-static precomputation, and down-device
+port setting with socket preservation. `Validation`, `Identity` and `Port`
+follow original functions and expose those endpoints in `Statements`.
+
+[AGENT 2026-10-14] Interpret get-after-set as the effective configuration the
+C establishes, not raw-request equality. Private keys are clamped, prefixes
+are masked, an up-device port-zero request allocates a port, and flowinfo-only
+endpoint changes are ignored. The configured UAPI's allowed-IP flag is
+`REPLACE_ALLOWEDIPS`, not a per-prefix removal flag. These source qualifications
+retain C semantics and do not authorize narrowing accepted traces.
+
+Remaining work: compose complete sequential set paths, errno partial-update
+effects, peer flag precedence/removal/replacement and allowed-IP ownership;
+then fresh-dump chunk and coalescing correctness. Deferred work during peer
+removal may affect other peers' dynamic state, so an unrestricted frame is
+not claimed. Stepped dumps and fresh whole dumps require distinct cursor
+contracts. The source review found no new mismatch. No mirror-team request
+from H4; ranked mirror suggestions: none. Effort: source review and capped
+local builds, with ordinary proof-elaboration failures repaired.
+
+## H5 — Termination and progress (finding; remainder open)
+
+The requested operation-end drain property is false on an accepted constructed
+record stream. A two-operation trace starts from the runner's ordinary fixture,
+brings wg0 up and batches one correctly sized cookie message. NET_RX queues the
+receive worker, but its records contain no worker dispatch. `executeTrace`
+accepts; the original syscall-world replay ends with one handshake receive
+item, length counter 1 and pending receive-worker identity 1. No hidden record,
+suspended activation or raised NET_RX remains.
+
+`Progress/BatchBacklog` defines the exact trace and replay; the two terminal
+statements prove runner acceptance and the state summary by `decide +kernel`.
+The replay explicitly follows the runner's fixture initialization, syscall
+calls and ambient skips; no arbitrary preloaded World is used. This is an
+accepted mirror record stream, not a captured Linux execution. The
+[mirror-team request](2026-10-14-campaign-2-mirror-requests.md) locates the omitted
+handshake-queue drain check in `Env.afterBatch` and gives the reproduction.
+
+Ranked mirror change: add the missing environment completion check
+(altitude-preserving). The mirror is unchanged here. The progress claim is not
+weakened to permit this backlog. Remaining H5 work includes committed scheduler
+dispatch/resume coverage, record-budget productivity and the other operation
+completion paths; the finding does not settle those obligations. Effort: one
+read-only source review, model-only evaluation and kernel-reduction proofs.
+A separate critical read-only review found no material defect. It checked the
+runner/replay correspondence, ordinary parser bounds and that the remaining
+queue satisfies the scheduler's runnable-work predicate. It also confirmed
+the boundary: two checked equations, not a theorem exposing the runner's final
+World, and no claim about capture feasibility. No findings required disposition.
+
+Validation for the H4/H5 checkpoint: all seven new terminal statements build,
+print only the three standard axioms, and pass separate stock kernel replays
+with `leanchecker --fresh`. The full proof gate fails at the same inherited
+counter-window refinement; token and import checks pass. No mirror changes,
+guest runs or cap failures.
