@@ -392,6 +392,24 @@ def attach_batches(results, traces, records):
                 raise ValueError("missing or unexpected wg_batch record")
 
 
+def message_index(hex_bytes):
+    """The WireGuard message's index word at byte 4 (little-endian), 0 for a
+    message too short to carry one."""
+    return int.from_bytes(bytes.fromhex(hex_bytes[8:16]), "little") if len(hex_bytes) >= 16 else 0
+
+
+def datagram_peer_key(datagram):
+    """A listener datagram's peer key: [family, length, type, tos, bytes]."""
+    return (datagram[0], message_index(datagram[4]))
+
+
+def reply_peer_key(reply):
+    """A sender-side reply's peer key: its source address and port and the
+    message's index word ([10, addr, port, scope, tos, dst, length, type,
+    word8, bytes])."""
+    return (reply[1], reply[2], message_index(reply[9]))
+
+
 def attach_observed(results, traces, records):
     """Each wg_observe has exactly one record: the datagrams the fixture's
     listeners received (family, length, message type), sorted, since arrival
@@ -445,11 +463,18 @@ def attach_observed(results, traces, records):
                                                     "rx_packets", "rx_bytes", "tx_packets", "tx_bytes"}
                                   or not all(type(v) is int and v >= 0 for v in stats.values())):
             raise ValueError("wg_observe stats")
-        # sorted as the mirror sorts them: by compact JSON
-        compact = lambda x: json.dumps(x, separators=(",", ":"))
-        observations[record["index"]]["datagrams"] = sorted(datagrams, key=compact) if datagrams is not None else None
+        # Ordered as the mirror orders them (Leanux/Env.lean, wg_observe): a
+        # stable sort by the datagram's peer key, so that arrival order is
+        # kept within a peer's session (the listener's family and the
+        # message's index word at byte 4: the receiver index of a data or
+        # cookie message, the sender index of a handshake message) while
+        # the interleaving across peers, which the fixture does not
+        # determine, is free (pre-release review, finding 5; before this a
+        # global sort by compact JSON also lost within-peer order).
+        observations[record["index"]]["datagrams"] = (sorted(datagrams, key=datagram_peer_key)
+                                                      if datagrams is not None else None)
         observations[record["index"]]["stats"] = stats
-        observations[record["index"]]["replies"] = sorted(replies, key=compact)
+        observations[record["index"]]["replies"] = sorted(replies, key=reply_peer_key)
     for trace in traces:
         for index, op in enumerate(trace["ops"]):
             if (op["op"] == "wg_observe") != ((trace["id"], index) in seen):

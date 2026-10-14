@@ -55,10 +55,30 @@ KCOV is also a partial observation of execution:
 - Some branch outcomes have no instrumentation witness after compilation.
 - Source-line witnesses can be shared by inlined call sites. Order checks are
   within a C function, not a complete cross-function execution trace.
-- Unmodeled code is detected only where it intersects the checker's anchored
-  files, functions and spans; coverage is not a completeness proof.
-- Operand matching does not establish that a repeatedly executed comparison
-  was evaluated the same number of times.
+- Unmodeled code is detected within the anchored files: every function of an
+  anchored C file that an operation covers must be listed (it owns
+  decisions), declared branch-free, or named as a helper cut with its reason
+  in `kcov.json` (`helper_cuts`); anything else fails as code outside the
+  declared boundary. Header helpers inlined into unanchored code, and
+  unanchored files, are outside this rule; coverage is not a completeness
+  proof against the C.
+- Operand matching is per model obligation: each reported pair must have some
+  matching kernel comparison row at its site in the operation. Rows are
+  reusable across obligations and surplus kernel rows need no model
+  counterpart, so `operand_pairs_matched` counts obligations met and
+  `operand_rows_distinct` the distinct kernel rows that met one; neither
+  establishes that a repeatedly executed comparison was evaluated the same
+  number of times.
+- The `wg_observe` observation compares the listeners' datagrams and the
+  sender's replies as multisets ordered within a peer session: a stable
+  sort by peer key (the listener's family or the reply's source, and the
+  message's index word) keeps arrival order within a session and leaves the
+  interleaving across peers free. A swap of two datagrams of one session is
+  a disagreement; a different interleaving of two peers is not.
+- Generated suites are sampled conditional on the mirror's own domain filter:
+  the report's `generated` field gives each suite's candidates drawn, in the
+  domain, selected, and the rejection reasons with counts, so a domain that
+  shrinks is visible even when the agreement count is unchanged.
 
 Declared exceptions such as shared compiler exits and unavailable operands
 live in `kcov.json`. Inspect `decision_coverage`, `known_gap_hits` and
