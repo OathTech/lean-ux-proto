@@ -15,16 +15,16 @@ retains current architecture, findings, reproduction provenance, effort and limi
 | --- | --- |
 | R1 | Uniqueness and the intentional inclusive-floor correction are proved, with pure and accepted-run witnesses. |
 | R2 | Endpoint identity and failure-retaining access contracts cover the listed families, concrete Batch scheduling and isolated trials. The four-export create/destruct/delete extension passes scoped/full and coordinated validation and independent frozen review, including the earlier socket/device controls. Initialized whole-run allocation-identity access closure remains open; raw-reference affiliation/credit is a separate stronger property. |
-| R3 | Initialized finite normal call histories refine flat-prefix updates and reached-root lookup. The new local parser/guard bridge and normal root-list-clear contract pass scoped/full and coordinated validation and independent frozen review. Complete WG.free/clear-history, enclosing configuration/Runner closure and packet paths remain open. |
+| R3 | Initialized finite normal call histories refine flat-prefix updates and reached-root lookup. Full normal WG.free now clears represented roots/lists with exact frames and extends those histories; scoped/full targets, independent frozen review and coordinated validation pass. Enclosing configuration/Runner closure and packet paths remain open. |
 | R4 | Physical rings, finite/source journals, per-poll provenance and selected GRO order, and concrete RX scheduling are checked. The balanced lookup/release extension passes coordinated validation. The six-export W7 joint-observer/source-cut extension passes coordinated validation. Five further normal endpoint exports pass scoped/full and coordinated validation and independent frozen review. Accepted input refutes chronological post-GRO order. Joint pipeline conservation remains open. |
 | R5 | The unconditional age/post-zero and wire-nonce readings are false in accepted mirror inputs. Rule Zero resolution retains thirteen positive local contracts, without universal replacement transport claims. |
 | R6 | Cookie exclusion is proved at its original call boundary. A 19-retry/20-initiation episode refutes literal MAX=18; no universal corrected retry bound is claimed. |
 
-**Validation status.** The current coordinated checkpoint passes 365 jobs and
-378 terminal declarations: 376 theorems and two definitions (ReplayWindow 15;
-R1 9; R2 176; R3 80; R4 79; R5 13; R6 6), using only `propext`,
+**Validation status.** The current coordinated checkpoint passes 367 jobs and
+380 terminal declarations: 378 theorems and two definitions (ReplayWindow 15;
+R1 9; R2 176; R3 82; R4 79; R5 13; R6 6), using only `propext`,
 `Classical.choice` and `Quot.sound`. Fresh stock kernel replay, the 60-job
-default build and 114 unit tests (21.897 seconds, one skip) also pass.
+default build and 114 unit tests (23.501 seconds, one skip) also pass.
 The three-export R3 parser/guard/root-list-clear extension passes scoped/full
 targets of 154/358 jobs and independent frozen review, with no unresolved finding.
 The four-export R2 lifecycle extension passes local scoped/full targets of
@@ -33,7 +33,10 @@ These coordinated checks cover the earlier R2/R3/R4 components, including
 the six-export W7 joint observer, over mirror `c047e64`.
 The five-export W7 endpoint extension passes scoped/full targets of 243/365 jobs
 and independent frozen review, with no unresolved finding. The current coordinated
-checks include these endpoints.
+checks include these endpoints. The two-export full-clear/history extension
+has 82 R3 terminals and 380 source declarations (378 theorems, two definitions);
+scoped/full targets pass 156/367 jobs. Independent frozen review has no unresolved
+finding; coordinated validation also passes, with frozen Lean hashes unchanged.
 The preceding `c047e64` carry's 118-job executable build and eleven reproduction
 checks remain applicable to unchanged runtime; they were not rerun for proof-only
 extensions. Frozen reviews have no unresolved defect in the checked components;
@@ -328,6 +331,7 @@ No R3 Rule Zero counterexample or changed charter conclusion is asserted.
 | `RemovalLists`/`Loop`/`Peer` | Explicit resident-only list coherence and fixed saved-list induction; `original_removeByPeer_forest_total` and `original_removeByPeer_forest_properties` and `original_removeByPeer_then_findNode` connect complete original removal to owner filtering and lookup. |
 | `RoutingView`/`Lifecycle`/`Initial`, `FlatHistory`/`RoutingHistory` | Option-valued routing/list projection; original create/refusal and raw-release preservation; original configured fixture; canonical flat updates without node IDs and finite actual-call induction. `original_initialized_routing_history` derives coherence/agreement, and `original_initialized_history_findNode` links reached-root source lookup to the flat winner and actual raw node owner. |
 | `AddressBounds`/`ConfigurationInputs`, `ClearWalk` | Actual UInt8/parser address shape and original setAllowedip guard cuts; normal insertion/routing composition; exact root-list source factor and extensional normal-completion coverage with full list-only frames. `parsed_setAllowedip_bounded_call`, `parsed_setAllowedip_routing_preserved`, `original_rootRemove_lists_normal`. |
+| `ClearSnapshot`/`ClearEndpoint`, `RoutingCall.clear` | Fixed original nodes/current submap with retained list provenance and exclusions; complete original normal clear derives empty represented trees/lists, exact outside fields and seq+1. `original_free_routing_endpoint`, `original_free_then_findNode`; existing initialized history/lookup exports now include clear. |
 
 [AGENT 2026-10-13] Use width-parametric arithmetic, one Patricia tree and pure
 insertion, with contexts as structural paths rather than another executable
@@ -354,6 +358,10 @@ name helper, deriving address shape from its shared Option byte list. Factor the
 original root-list loop at its ForIn carrier and use extensional frontier coverage
 on normal empty-stack return; do not identify its order with subtree enumeration
 or add owner residency/fuel sufficiency to suppress Stops.
+[AGENT 2026-10-14] Compose full clear against a fixed original node snapshot,
+retaining a predicate on surviving resident-list IDs through list filtering and
+node-only erasures. This supports both saved-root walks without equating traversal
+orders or requiring a representation over the partly erased current node map.
 
 **Insertion boundary.** Valid representation, unique IDs, whole-store `NodesBelow`
 freshness, bounded address/CIDR and a resident target peer are explicit inputs.
@@ -402,10 +410,11 @@ Normal `peerCreate` refusal retains the routing projection; success returns the 
 peer frontier and installs an empty list. Owner bounds make that list coherent
 without requiring old owners to reside. Normal raw `peerPut` may delete a peer while
 retaining its trie labels. Histories chain actual normal create/insert/removeByPeer/
-peerPut executions and actual returns; insertion alone supplies bounded arguments
+peerPut/free executions and actual returns; insertion alone supplies bounded arguments
 and a resident target. Removal residency follows from its original getter. Flat
 insertion replaces a canonical prefix, removal filters its owner, and creation,
-release and insertion refusals leave the flat tables unchanged. Both insertion
+release and insertion refusals leave the flat tables unchanged; normal clear empties
+both flat tables. Both insertion
 refusals still retain their distinct sequence/frontier effects in the source
 contracts. Final original findNode is total for bounded queries at the actual
 family root and returns a flat-history winner with the same raw store owner.
@@ -426,14 +435,20 @@ then covers every represented subtree ID without proving fuel sufficiency. Resid
 lists exclude those IDs afterward. The complete node map and every other Kernel,
 Device and peer field are preserved, with only allowed-IP lists hidden by the frame.
 Resident-list ownership follows from RoutingInvariant; raw owners need not reside.
-This is a normal root-list-clear theorem, not complete WG.free or total clearing.
+Complete original WG.free saves both roots before resetting them and incrementing
+sequence, then runs root4 and root6 phases with intervening subtree/freeNode calls.
+The proof retains original node values and surviving-list provenance/exclusions;
+successful getters recover the saved children even after earlier erasures. Normal
+completion derives empty resident lists and an empty represented forest. Its full
+Kernel/device frame preserves every other field and allocation frontier; peer
+absence and complete records are exact except for emptied lists. Current nodes
+are only a value-preserving submap, not necessarily physically empty. Totality is
+not asserted: absent raw owners or erased references may still Stop. The clear
+history constructor carries only actual normal execution, never output coherence.
 
-**Remaining obligations.** Compose both family root walks with WG.free's root reset,
-sequence increment and intervening subtree/freeNode erasures. A fixed original
-node snapshot plus value-preserving current submap is the planned boundary; normal
-getters can recover original children while absent erased references still Stop.
-Then add the flat clear command and failure-retaining completion observations;
-a failing clear has no returned World or successful completion marker. Propagate
+**Remaining obligations.** Add failure-retaining completion observations: a failing
+clear has no returned World or successful completion marker, and earlier partial
+mutations of that failing call are outside the completed-call history. Propagate
 local parser shape through parsePeer/config/operation and public parseTrace, compose
 other Netlink mutations and retain earlier effects on ordinary negative returns.
 Normal finite call histories do not establish this enclosing closure. Connect both
@@ -463,6 +478,7 @@ now rejects it before deletion. It is not a current R3 misrouting counterexample
 | Insertion metadata, coherence and routing invariant | 15: 9 / 6 | 24m44s through collected full build; 25m28s writer-token ownership; scoped/full targets 130/339; six ordinary elaboration failures, no cap/interruption |
 | Initialized finite routing histories | 15: 7 / 8 | 23m15s from first worker clock 09:24:41 through final full-target collection clock 09:47:56; 24m21s through token return at 09:49:02; scoped/full targets 150/347; ordinary elaboration failures, no cap/interruption |
 | Parsed allowed-IP and root-list-clear checkpoint | 27 builds: 7 passes / 20 ordinary elaboration failures; scoped/full targets 154/358 | 27m28s from grant 11:08:10 through full-result collection clock 11:35:38; independent frozen review clear; 28m58s writer-token ownership through handoff clock 11:37:08; no cap/interruption or runtime change |
+| Full normal clear and finite history | 11 calls: 10 builds (five passes / five ordinary elaboration failures) plus a passing scoped check; scoped/full targets 156/367 | 15m52s from grant 12:37:14 through measured full-result collection 12:53:06; 17m45s writer-token ownership through handback 12:54:59. Independent frozen review and coordinated gate, fresh kernel replay, default build and 114 unit tests pass. No cap/interruption or runtime change; all exits collected. |
 
 The represented/loop tranche split into 17 single-step calls and a 12-call
 continuation; its fifteen failures included two heartbeat failures. Final scoped/full

@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.AllowedIps.FlatHistory
 import Leanux.Proofs.WG.AllowedIps.RoutingInitial
+import Leanux.Proofs.WG.AllowedIps.ClearEndpoint
 
 /-! Finite histories of actual normal original calls. Constructors retain
 actual return values and reached-input bounds/residency, never output invariants
@@ -14,6 +15,7 @@ inductive RoutingCall where
   | insert (v4 : Bool) (addr cidr pid : Nat) (result : Int)
   | remove (pid : Nat)
   | put (peer : Option WG.PeerId)
+  | clear
 
 def RoutingCall.flat (c : RoutingCall) (xs : FlatTable × FlatTable) : FlatTable × FlatTable :=
   match c with
@@ -24,6 +26,7 @@ def RoutingCall.flat (c : RoutingCall) (xs : FlatTable × FlatTable) : FlatTable
       else (xs.1, flatInsert 128 addr cidr pid xs.2)
     else xs
   | .remove pid => (flatRemove pid xs.1, flatRemove pid xs.2)
+  | .clear => ([], [])
 
 def flatHistory (calls : List RoutingCall) (xs : FlatTable × FlatTable) : FlatTable × FlatTable :=
   calls.foldl (fun tables c => c.flat tables) xs
@@ -39,6 +42,7 @@ inductive RoutingStep : World → RoutingCall → World → Prop where
       RoutingStep w (.remove pid) v
   | put (hr : (WG.peerPut peer).run w = .ok ((), v)) :
       RoutingStep w (.put peer) v
+  | clear (hr : WG.free.run w = .ok ((), v)) : RoutingStep w .clear v
 
 inductive RoutingHistory : World → List RoutingCall → World → Prop where
   | nil : RoutingHistory w [] w
@@ -62,6 +66,10 @@ theorem RoutingStep.refines (hs : RoutingStep w c v) (hd : w.k.wg = some d)
   | put hr =>
     obtain ⟨out, hout, hinv⟩ := peerPut_routing_preserved _ _ d hd hi _ hr
     exact ⟨out, t4, t6, hout, hinv, he4, he6⟩
+  | clear hr =>
+    obtain ⟨out, hout, hc⟩ := free_endpoint _ _ d hd t4 t6 hi hr
+    exact ⟨out, .empty, .empty, by rw [hout], Cleared.routing hi hc,
+      flatAgree_empty 32, flatAgree_empty 128⟩
   | @insert addr v4 cidr pid w result v ha hc resident hr =>
     obtain ⟨old, p, hold, hp⟩ := resident
     rw [hd] at hold

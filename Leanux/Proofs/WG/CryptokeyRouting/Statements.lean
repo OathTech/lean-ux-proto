@@ -39,14 +39,15 @@ retirement and both-family pure erasure. Explicit resident-only list coherence
 then justifies the complete original saved-list removeByPeer loop, preserves
 that coherence and removes exactly the target peer's entries. Original peer
 creation and raw release preserve routing coherence, permitting orphan owners.
-Finite normal create/insert/remove/release histories from the original configured
+Finite normal create/insert/remove/release/clear histories from the original configured
 fixture refine independent canonical flat-prefix updates and actual-root lookup.
 Their input bounds and resident insertion targets are explicit; enclosing
 Netlink/configuration/Runner closure and packet admission remain separate.
 Actual local parser output now discharges address shape for the setAllowedip
-guards and its selected bounded insertion. Original root-list clearing has a
-normal-return coverage/frame contract; complete free/clear-history composition
-is still separate.
+guards and its selected bounded insertion. Complete original free normally
+clears both represented families and every resident list, preserving the other
+fields and advancing sequence once. This is not a totality or physical-node
+emptiness claim; orphan owners can still make the original traversal Stop.
 -/
 
 namespace Leanux.Proofs.WG.CryptokeyRouting
@@ -1593,7 +1594,7 @@ theorem original_peerPut_routing_preserved (w v : World) (d : WG.Device)
     ∃ out, v.k.wg = some out ∧ RoutingInvariant out t4 t6 :=
   peerPut_routing_preserved w v d hd hi peer hr
 
-/-- Finite actual normal create/insert/removeByPeer/peerPut calls from the
+/-- Finite actual normal create/insert/removeByPeer/peerPut/free calls from the
 original configured fixture refine an independent pair of canonical flat-prefix
 tables. Actual returns determine success/refusal effects. Only insertion's
 reached input bounds and target residency are supplied; coherence and agreement
@@ -1653,8 +1654,8 @@ theorem parsed_setAllowedip_routing_preserved (j : Lean.Json) (what : String)
 /-- Original rootRemovePeerLists has an all-input source equation. From the
 represented subtree and resident-list ownership, a normal return removes every
 represented ID from every resident list and preserves all other Kernel/device
-and complete peer fields. No owner residency, fuel sufficiency, totality or
-complete WG.free/history refinement is asserted. -/
+and complete peer fields. No owner residency, fuel sufficiency or totality is
+asserted; complete normal WG.free and its history rule are stated separately. -/
 theorem original_rootRemove_lists_normal (w v : World) (d : WG.Device) (hd : w.k.wg = some d)
     (ho : ListsOwned d) (root : WG.NodeId) (t : Tree) (width : Nat) (parent : WG.Slot)
     (hroot : t.root = some root) (hrep : RepAt d.nodes width parent t)
@@ -1665,6 +1666,37 @@ theorem original_rootRemove_lists_normal (w v : World) (d : WG.Device) (hd : w.k
           ∀ id ∈ t.nodeIds, id ∉ p.allowedipsList :=
   ⟨rootRemoveSource_eq root, rootRemove_clearListView root w () v hr,
     rootRemove_lists w v d hd ho root hroot hrep hr⟩
+/-- A normal return of the complete original free empties both represented
+families and every resident allowed-IP list. The full Kernel endpoint retains
+complete peer records except those lists, increments sequence once, preserves
+all allocation frontiers and other Device fields, and only deletes node entries.
+Raw orphan owners remain permitted inputs: totality, physical-node emptiness
+and a returned failed World are not claimed. -/
+theorem original_free_routing_endpoint (w v : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (t4 t6 : Tree) (hi : RoutingInvariant d t4 t6)
+    (hr : WG.free.run w = .ok ((), v)) :
+    ∃ out, v.k = {w.k with wg := some out} ∧ Cleared d out ∧
+      RoutingInvariant out .empty .empty := by
+  obtain ⟨out, hout, hc⟩ := free_endpoint w v d hd t4 t6 hi hr
+  exact ⟨out, hout, hc, Cleared.routing hi hc⟩
 
+/-- After a normal original clear, original findNode at either actual family
+root returns no binding. This follows from the derived empty represented forest;
+it does not require every unreachable physical node to have been retired. -/
+theorem original_free_then_findNode (w v : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (t4 t6 : Tree) (hi : RoutingInvariant d t4 t6)
+    (hr : WG.free.run w = .ok ((), v))
+    (v4 : Bool) (key : Nat) (hk : key < 2 ^ rootWidth v4) :
+    ∃ out finish, v.k = {w.k with wg := some out} ∧ Cleared d out ∧
+      (WG.findNode (rootValue out v4) (rootWidth v4) key).run v = .ok (none, finish) ∧
+      finish.k = v.k := by
+  obtain ⟨out, hout, hc⟩ := free_endpoint w v d hd t4 t6 hi hr
+  have hi' := Cleared.routing hi hc
+  have hd' : v.k.wg = some out := by rw [hout]
+  have hw : rootWidth v4 = 32 ∨ rootWidth v4 = 128 := by cases v4 <;> simp [rootWidth]
+  obtain ⟨finish, hrun, hframe⟩ := findNode_run v out (rootWidth v4) key hw hk hd'
+    (selectedTree v4 .empty .empty) (rootSlot v4) (hi'.selected_rep v4) (hi'.selected_valid v4)
+  refine ⟨out, finish, hout, hc, ?_, hframe⟩
+  simpa [hi'.selected_root v4, selectedTree, Tree.lookupId, Tree.lookup] using hrun
 
 end Leanux.Proofs.WG.CryptokeyRouting
