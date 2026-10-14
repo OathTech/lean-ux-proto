@@ -5,9 +5,10 @@
 Worktree `.worktrees/proofs-campaign`, branch `proofs/campaign`; governed by
 [the charter](2026-10-13-charter-proof-campaign.md). Both prerequisites were
 carried from `2c7a076`, then the audit at `f45bde8` and documentation-only
-`a39aded`. The mirror is byte-identical to main. Checked components are current
-over `a39aded`, including the R2 handshake-send, R3 unified-insertion and R4
-general-ring extensions. Open obligations below remain explicit. No integration into main,
+`a39aded`. The mirror is byte-identical to main. Components at the current coordinated checkpoint hold
+over `a39aded`, including the R2 cookie, R3 unified-insertion and R4
+general-ring extensions.
+Open obligations below remain explicit. No integration into main,
 push, differential check or guest run has been performed by this campaign.
 
 | Result | Disposition |
@@ -19,11 +20,11 @@ push, differential check or guest run has been performed by this campaign.
 | R5 key lifetime | Resolved under Rule Zero by counter-limit, delayed-encryption and post-clear-use witnesses, with 13 local positive contracts. |
 | R6 flood resistance | Cookie exclusion proved at the original call boundary; accepted 19-retry/20-initiation episode resolves the literal limit through Rule Zero. Six terminal contracts. |
 
-**Current validation.** `a39aded` has mirror source unchanged from `f45bde8`.
-The proof gate passes 278 jobs and 263 terminal statements
-(ReplayWindow 15; R1 9; R2 140; R3 39; R4 41; R5 13; R6 6), using only `propext`, `Classical.choice` and `Quot.sound`.
+**Current coordinated validation.** `a39aded` has mirror source unchanged from `f45bde8`.
+The proof gate passes 280 jobs and 266 terminal statements
+(ReplayWindow 15; R1 9; R2 143; R3 39; R4 41; R5 13; R6 6), using only `propext`, `Classical.choice` and `Quot.sound`.
 Fresh stock kernel replay passes, as do the 60-job default model build and
-94-test unit tier (21.822 seconds; one skip). Independent frozen-source
+94-test unit tier (22.079 seconds; one skip). Independent frozen-source
 and scope reviews have no unresolved correctness findings in these components.
 
 ```sh
@@ -110,8 +111,9 @@ The charter asks for safety of every internal access after release, across every
 The checked components establish endpoint identity evolution and failure-retaining local access safety. Whole-run closure remains open.
 The accepted stale-cursor findings below expose reference retargeting; they do not resurrect an old identity or settle the full charter claim.
 
-**Send-family extension.** Six complete send calls and three terminal exports pass the local R2 target (205 jobs; 140 terminals),
-the coordinated proof gate and fresh stock kernel replay. Current campaign validation is recorded above.
+**Cookie-family extension.** Four complete cookie calls add three terminal exports (143 R2 terminals).
+The 208-job local target and coordinated validation pass; frozen-source review reports no findings.
+The preceding send family is checked at `83d0df9`; the last campaign validation is recorded above.
 
 **Architecture decisions [AGENT 2026-10-13].** Separate resolved allocation identity from ownership of saved numeric references.
 Share frontier algebra and the seven-field WG kernel projection; retain observation history outside the exception layer.
@@ -121,6 +123,10 @@ Factor IPv4 send into source tail stages that retain the entry route. Keep TX so
 Keep the five handshake calls at exact local boundaries. Share canonical record, jitter, checksum, crypto and index frames,
 preserving legacy signatures by projection instead of duplicating generated source matchers.
 Factor buffer allocation from its exact original socket-send suffix, reusing the existing send observer and keeping ordinary returns distinct from Stops.
+
+**Cookie frame decision [AGENT 2026-10-14].** Mask only the device's cookie secret/birthdate and the ratelimiter table
+in a full-Kernel projection; derive legacy frames by projection. This permits actual rotation/rate accounting while retaining
+device presence, complete resident objects, allocator frontiers and `netIfindexNext` for concrete allocation safety.
 
 **Models and refinement.** `Lifetimes/Store` and `Actions` describe slot/stamp transitions over original executions.
 `Keypairs/Identity` uses whole-syscall evolution to exclude reintroduction of absent old keypair identities at operation endpoints.
@@ -186,10 +192,18 @@ and explicit release origins. Shared filesystem frames end at return, leaving qu
   Initiation's jitter precedes the eager timer-guard getter. The worker performs `peerPut` after every normal initiation return, never after a Stop.
   Ambient socket, index-insertion and session create/put/replacement contracts are explicit and concretely discharged for `AllocationInv`.
   These are complete local calls; outer dispatch and historical reference ownership remain open.
+- **Cookies:** `CookieAccess` covers `makeCookie`, `cookieMessageCreate`, `cookieValidatePacket` and `cookieMessageConsume`
+  with their distinct byte-list, MAC-state and Unit results. The first three are resident-access-free by source inspection;
+  unchanged endpoints alone would not establish that coverage. Rotation retains the age test, new-birthdate clock, random secret and fresh device read;
+  creation draws its nonce first. Validation retains invalid MAC1, disabled/invalid MAC2, rate-limit, allocation and clock outcomes.
+  Consumption observes the reference-taking index lookup, peer read, authenticated clock, fresh setter getter/write and final put.
+  Missing MAC1 and failed authentication keep their ordinary puts; Stops skip later cleanup.
+  `CookieStable` explicitly frames cookie/ratelimiter changes for an arbitrary ambient invariant; `AllocationInv` discharges it concretely.
+  No authentication-success, packet-shape or index-owner-coherence premise is added. Composition through `receiveHandshakePacket` and the receive worker remains open.
 
 `PrefixControl` and `PrefixLoops` share exact conditional, bind, range, map, list and accumulating-fold laws.
 Generic enqueue/decrypt contracts retain explicit softirq, IRQ-exit and rescheduling observers.
-`Framing/KernelEffects`, `WGTime`, `WGData`, `WGHandshake` and `WGIndex` provide canonical frames with legacy projections.
+`Framing/KernelEffects`, `WGTime`, `WGData`, `WGHandshake`, `WGIndex` and `WGCookie` provide canonical frames with legacy projections.
 The index frame preserves the full kernel except the scalar index table, including device presence, resident values and frontiers;
 the original device check and collision/draw records remain. Access-free helper coverage follows source inspection separately:
 neither erasure nor an unchanged-Kernel theorem alone proves that an internally lifted helper contains no reads.
@@ -263,6 +277,7 @@ Send-family review qualified the no-prior-access statement to buffer allocation 
 | TX completion/worker | 6: 1 / 5 | 21m03s |
 | Five-call handshake family | 7: 1 / 6 | About 15m |
 | Six-call handshake send family | 6: 2 / 4 | 7m39s |
+| Four-call cookie family | 5: 2 / 3 | 11m41s |
 
 Earlier caller checkpoints took roughly 6–25 minutes each with 4–19 compilation invocations.
 The first IPv4 architecture failed at proof-search heartbeat limits; its unused observer was removed.
@@ -273,7 +288,12 @@ One earlier tactic loop was deliberately stopped by its verified PID and repaire
 checkpoints reported no interruptions or cap failures; their process exits were collected.
 The send extension corrected four ordinary proof failures (explicit Session import, option-case alignment and discard/branch normalization).
 Its final rerun incorporates the reviewed buffer-allocation qualifier; all exits were collected, with no interruption or cap failure.
-The three send-family exports pass coordinated validation and final frozen-source review; R2 now has 140 terminals.
+The three send-family exports pass coordinated validation and final frozen-source review at `83d0df9` (140 R2 terminals).
+The cookie extension corrected three ordinary build failures: a missing framing import and structure syntax,
+identity-predicate transport, and legacy projection normalization. Its final 208-job target passes with 143 R2 terminals;
+all five invocations' exits were collected, with no interruption or cap failure. Frozen-source review reports no findings.
+The coordinated 280-job gate checks 266 terminal statements; fresh stock-kernel replay, the 60-job model build
+and 94-test unit tier (22.079 seconds; one skip) pass. Earlier results above are historical checkpoints.
 
 Validation details are retained in checkpoints `859d56a` (IPv4), `e6905f2` (encryption), `52a4602` (TX) and `d75f994` (handshake).
 At `d75f994`, R2 has 137 terminal statements; the complete target, coordinated proof gate, fresh stock Lean kernel replay,

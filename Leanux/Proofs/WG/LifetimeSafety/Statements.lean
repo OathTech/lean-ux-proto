@@ -3,6 +3,7 @@ import Leanux.Proofs.WG.Lifetimes.EncryptWorker
 import Leanux.Proofs.WG.Lifetimes.TxWorker
 import Leanux.Proofs.WG.Lifetimes.HandshakeCalls
 import Leanux.Proofs.WG.Lifetimes.HandshakeSend
+import Leanux.Proofs.WG.Lifetimes.CookieAccess
 import Leanux.Proofs.WG.Lifetimes.ReceivePoll
 import Leanux.Proofs.WG.Lifetimes.ReceiveFailure
 import Leanux.Proofs.WG.Lifetimes.TxStagingCalls
@@ -1339,6 +1340,28 @@ theorem handshake_send_family_ambient_access_preserves (c : Lifetimes.AmbientCon
 socket paths, index insertion and session allocation/rotation. This does not
 assert ownership of saved scalar references or closure of outer scheduling. -/
 theorem handshake_send_family_allocation_access_preserves (call : Lifetimes.HandshakeSendCall) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed := call.allocation
+
+/-- The four complete local cookie calls retain their original byte-list,
+MAC-state or Unit result, success World and Stop for every input/history.
+Consumption observes the reference-taking lookup, fresh peer reads, write and
+final puts; the other three calls are access-free by source inspection. -/
+theorem cookie_family_access_erasure (call : Lifetimes.CookieCall) :
+    ErasesPrefix call.observed call.original := call.erases
+
+/-- Explicit ambient contracts and stability under cookie-secret and
+ratelimiter-table updates compose safe access prefixes. Failed authentication
+still reaches the ordinary final put; a preceding Stop skips later cleanup. -/
+theorem cookie_family_ambient_access_preserves (c : Lifetimes.AmbientContracts I)
+    (hc : Lifetimes.CookieStable I) (call : Lifetimes.CookieCall) :
+    PrefixPreserves I Lifetimes.LifetimeEvent.Safe call.observed :=
+  call.preserves_ambient c hc
+
+/-- Allocation geometry discharges cookie-state stability and every consume
+access/reference contract. No successful authentication, packet shape or
+index-owner coherence premise is required. Outer receive workers and ownership
+of saved references remain separate obligations. -/
+theorem cookie_family_allocation_access_preserves (call : Lifetimes.CookieCall) :
     PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed := call.allocation
 
 end Leanux.Proofs.WG.LifetimeSafety

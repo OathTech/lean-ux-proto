@@ -1,6 +1,7 @@
 import Leanux.Proofs.WG.Keypairs.OrdinaryRules
 import Leanux.Proofs.WG.Keypairs.SnapshotRules
 import Leanux.Proofs.WG.Keypairs.Frames.WGTransitions
+import Leanux.Proofs.Framing.WGCookie
 
 namespace Leanux.Proofs.WG.Keypairs.WGMore
 open Leanux Leanux.WG Std.Do Leanux.Proofs.WG.Keypairs Leanux.Proofs.WG.Keypairs.KernelFrames Leanux.Proofs.WG.Keypairs.WGFrames Leanux.Proofs.WG.Keypairs.WGTransitions
@@ -8,6 +9,13 @@ open Lean
 
 set_option pp.structureInstances false
 set_option maxHeartbeats 800000
+
+/-- Legacy receive snapshots are a projection of the canonical cookie frame. -/
+theorem sameSnapshot_of_sameCookieKernel (h : Framing.SameCookieKernel a) : SameSnapshot a := by
+  intro w x v hr
+  have hf := congrArg (fun k => snapshot {w with k}) (h w x v hr)
+  simpa [snapshot, Framing.cookieKernelView, Framing.cookieKernel,
+    Framing.cookieDevice, Option.bind_map, Function.comp_def] using hf
 
 /-! The dump helpers contain many mutable-local joins. Proving each shared
 continuation once avoids expanding its control flow at every incoming edge. -/
@@ -301,7 +309,7 @@ theorem lookupSrc_spec (P : Snapshot → Prop) (protocol : Nat) (bytes : List UI
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (lookupSrc_sameSnapshot protocol bytes).wp P
 
 theorem makeCookie_sameSnapshot (src : SkbSource) : SameSnapshot (Leanux.WG.makeCookie src) := by
-  frame_same [Leanux.WG.makeCookie] using [getDev_spec, branchExpired_spec, hiddenClock64_spec, hidden_snapshot_spec]
+  exact sameSnapshot_of_sameCookieKernel (Framing.makeCookie_sameCookieKernel src)
 
 theorem makeCookie_spec (P : Snapshot → Prop) (src : SkbSource) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.makeCookie src
@@ -315,7 +323,7 @@ theorem netDevices_spec (P : Snapshot → Prop)  :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (netDevices_sameSnapshot ).wp P
 
 theorem ratelimiterAllow_sameSnapshot (src : SkbSource) : SameSnapshot (Leanux.WG.ratelimiterAllow src) := by
-  frame_same [Leanux.WG.ratelimiterAllow] using [envOk_spec, hiddenClock_spec]
+  exact sameSnapshot_of_sameCookieKernel (Framing.ratelimiterAllow_sameCookieKernel src)
 
 theorem ratelimiterAllow_spec (P : Snapshot → Prop) (src : SkbSource) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.ratelimiterAllow src
@@ -385,14 +393,14 @@ theorem consumeData_spec (P : Snapshot → Prop) (hp : Stable P) (msg : List UIn
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (consumeData_ordinary msg src ds).wp P hp
 
 theorem cookieMessageCreate_sameSnapshot (index : Nat) (src : SkbSource) (mac1 : List UInt8) : SameSnapshot (Leanux.WG.cookieMessageCreate index src mac1) := by
-  frame_same [Leanux.WG.cookieMessageCreate] using [getDev_spec, hidden_snapshot_spec, makeCookie_spec]
+  exact sameSnapshot_of_sameCookieKernel (Framing.cookieMessageCreate_sameCookieKernel index src mac1)
 
 theorem cookieMessageCreate_spec (P : Snapshot → Prop) (index : Nat) (src : SkbSource) (mac1 : List UInt8) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.cookieMessageCreate index src mac1
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (cookieMessageCreate_sameSnapshot index src mac1).wp P
 
 theorem cookieValidatePacket_sameSnapshot (msg : List UInt8) (src : SkbSource) (checkCookie : Bool) : SameSnapshot (Leanux.WG.cookieValidatePacket msg src checkCookie) := by
-  frame_same [Leanux.WG.cookieValidatePacket] using [getDev_spec, makeCookie_spec, ratelimiterAllow_spec]
+  exact sameSnapshot_of_sameCookieKernel (Framing.cookieValidatePacket_sameCookieKernel msg src checkCookie)
 
 theorem cookieValidatePacket_spec (P : Snapshot → Prop) (msg : List UInt8) (src : SkbSource) (checkCookie : Bool) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.cookieValidatePacket msg src checkCookie

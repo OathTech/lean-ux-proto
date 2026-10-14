@@ -23,6 +23,15 @@ abbrev FrameSpec (P : (Option Device × Nat × Nat) → Prop) (a : M α) :=
 theorem kernel_frame (a : M α) (h : SameKernel a) : NoNoiseChange a :=
   SameView.of_sameKernel viewOfKernel h
 
+theorem cookieKernel_frame (a : M α) (h : SameCookieKernel a) : NoNoiseChange a := by
+  intro w x v hr
+  have hf := congrArg viewOfKernel (h w x v hr)
+  have he (k : Kernel) : viewOfKernel (cookieKernel k) = viewOfKernel k := by
+    unfold viewOfKernel cookieKernel
+    simp only [Option.map_map]
+    rfl
+  simpa only [cookieKernelView, noiseView, he] using hf
+
 theorem modifyDev_spec (P : (Option Device × Nat × Nat) → Prop)
     (f : Device → Device) (hf : ∀ d, scrub (f d) = scrub d) :
     ⦃fun w => ⌜P (noiseView w)⌝⦄ WG.modifyDev f
@@ -69,7 +78,7 @@ macro "cookie_frame" "[" fs:ident,* "]" "using" "[" specs:ident,* "]" : tactic =
   `(tactic| (apply SameView.of_wp; intro initial; $body))
 
 theorem makeCookie_frame (src : SkbSource) : NoNoiseChange (makeCookie src) := by
-  cookie_frame [makeCookie] using [expired_spec, clock_spec, hidden_spec]
+  exact cookieKernel_frame _ (makeCookie_sameCookieKernel src)
 
 theorem makeCookie_spec (P : (Option Device × Nat × Nat) → Prop) (src : SkbSource) : FrameSpec P (makeCookie src) :=
   (makeCookie_frame src).wp P
@@ -112,7 +121,7 @@ theorem sendBufferReply_spec (P : (Option Device × Nat × Nat) → Prop)
 
 theorem cookieMessageCreate_frame (index : Nat) (src : SkbSource) (mac1 : List UInt8) :
     NoNoiseChange (cookieMessageCreate index src mac1) := by
-  cookie_frame [cookieMessageCreate] using [hidden_spec, makeCookie_spec]
+  exact cookieKernel_frame _ (cookieMessageCreate_sameCookieKernel index src mac1)
 theorem cookieMessageCreate_spec (P : (Option Device × Nat × Nat) → Prop)
     (index : Nat) (src : SkbSource) (mac1 : List UInt8) : FrameSpec P (cookieMessageCreate index src mac1) :=
   (cookieMessageCreate_frame index src mac1).wp P
