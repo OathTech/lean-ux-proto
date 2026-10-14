@@ -346,6 +346,8 @@ inductive Decision where
   | mayAssignModeSet | mayAssignModeCmpFilter | mayAssignModeCmpStrict | mayAssignModeDiffers
   | assignModeSpecAllow | assignModeSpecAllowCmp
   | attachWalker | attachOverBudget | attachTsync | attachLog | attachWaitKillable | attachTsyncSync
+  | attachTsyncFailed | attachTsyncEsrch | canSyncLoop | canSyncIsCaller | canSyncExiting | canSyncMode
+  | syncLoop | syncIsCaller | syncExiting | setFilterTsyncLockFailed
   | getFilterNone
   | logCaseAllow | logCaseTrap | logCaseErrno | logCaseTrace | logCaseUserNotif | logCaseLog
   | logCaseKillThread | logCaseKillProcess | logTrapRequested | logErrnoRequested | logTraceRequested
@@ -2130,6 +2132,18 @@ def Decision.info : Decision → DecisionInfo
   | .attachLog => d "seccomp_attach_filter.log" sec 942 [(943, 943)] []
   | .attachWaitKillable => d "seccomp_attach_filter.wait_killable_recv" sec 946 [(947, 947)] []
   | .attachTsyncSync => d "seccomp_attach_filter.tsync_sync" sec 959 [(960, 960)] []
+  -- TSYNC on one thread (pre-release review finding 11): seccomp_can_sync_threads
+  -- (:490-524) and seccomp_sync_threads (:597-645) are inlined into the attach;
+  -- the thread group is the caller alone, so each walk meets it, skips it and ends
+  | .attachTsyncFailed => d "seccomp_attach_filter.tsync_failed" sec 933 [(934, 937)] []
+  | .attachTsyncEsrch => d "seccomp_attach_filter.tsync_esrch" sec 934 [(935, 935)] [(937, 937)]
+  | .canSyncLoop => d "seccomp_can_sync_threads.thread" sec 499 [(503, 503)] [(523, 523)]
+  | .canSyncIsCaller => d "seccomp_can_sync_threads.is_caller" sec 503 [(504, 504)] [(506, 506)]
+  | .canSyncExiting => d "seccomp_can_sync_threads.exiting" sec 506 [(507, 507)] [(509, 509)]
+  | .canSyncMode => d "seccomp_can_sync_threads.syncable" sec 509 [(513, 513)] [(516, 516)]
+  | .syncLoop => d "seccomp_sync_threads.thread" sec 606 [(608, 608)] []
+  | .syncIsCaller => d "seccomp_sync_threads.is_caller" sec 608 [(609, 609)] [(615, 615)]
+  | .syncExiting => d "seccomp_sync_threads.exiting" sec 615 [(616, 616)] []
   -- get_seccomp_filter (:971-980), in the parent's clone
   | .getFilterNone => d "get_seccomp_filter.no_filter" sec 974 [(975, 975)] [(976, 977)]
   -- seccomp_log (:1000-1041): the switch on the action, the `requested &&` operands and the final test;
@@ -2173,6 +2187,7 @@ def Decision.info : Decision → DecisionInfo
   | .setFilterPrepareErr => d "seccomp_set_mode_filter.prepare_err" sec 1982 [] [(1985, 1985)]
   | .setFilterNewListenerFlag => d "seccomp_set_mode_filter.new_listener" sec 1985 [(1986, 1986)] []
   | .setFilterTsyncLock => d "seccomp_set_mode_filter.tsync_lock" sec 2004 [(2005, 2005)] []
+  | .setFilterTsyncLockFailed => d "seccomp_set_mode_filter.tsync_lock_failed" sec 2005 [(2006, 2006)] []
   | .setFilterCannotAssign => d "seccomp_set_mode_filter.cannot_assign" sec 2010 [(2011, 2011)] [(2013, 2013)]
   | .setFilterDuplicateListener => d "seccomp_set_mode_filter.duplicate_listener" sec 2013 [(2014, 2015)] [(2018, 2018)]
   | .setFilterAttachErr => d "seccomp_set_mode_filter.attach_err" sec 2019 [(2020, 2020)] [(2022, 2023)]
@@ -2694,7 +2709,7 @@ def Decision.comparison : Decision → Option Comparison
   | .mayAssignModeCmpStrict => some ⟨.ne, true, none, false⟩
   | .assignModeSpecAllowCmp => some ⟨.flag, true, none, false⟩
   | .attachOverBudget => some ⟨.gt, true, none, false⟩
-  | .attachTsync | .attachLog | .attachWaitKillable | .attachTsyncSync => some ⟨.flag, true, none, false⟩
+  | .attachTsync | .attachLog | .attachWaitKillable | .attachTsyncSync | .attachTsyncEsrch => some ⟨.flag, true, none, false⟩
   | .prepareLenZero => some ⟨.gt, true, none, false⟩
   | .prepareCreateErr => some ⟨.lt, true, none, false⟩
   | .setFilterBadFlags => some ⟨.gt, true, none, false⟩
@@ -2903,6 +2918,8 @@ def Decision.comparison : Decision → Option Comparison
     once in one operation. -/
 def Decision.repeatable : Decision → Bool
   | .idxInsertHashed | .idxRemoveHashed
+  -- TSYNC on one thread: the two thread walks test their loop twice per call
+  | .canSyncLoop | .syncLoop
   -- W7: a batch's receive poll evaluates the endpoint's family once per packet, both
   -- outcomes in one NET_RX section when IPv4 and IPv6 datagrams share a poll
   -- (w7_multi_rx_9_rst_roam, the receive audit's F6b trace)

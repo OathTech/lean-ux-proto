@@ -735,11 +735,28 @@ def _collect(outdir, traces, process_returncode, alloc=None):
     # seccomp W (design 2.4): an install's ENOMEM is the path budget
     # (MAX_INSNS_PER_PATH), a semantic result the mirror predicts; a real
     # allocation failure there shows as a mirror mismatch, not as pressure
+    # pre-release review finding 11: EINTR, ENOMEM, ENFILE and the restart
+    # codes are ordinary seccomp policy results; a self probe's errno is the
+    # policy's when an earlier install in the trace can return it (a RET
+    # ERRNO with that data), which is provenance, not a tolerance
     if any(row["errno"] in unexpected_errors - (forced if trace.get("domain_extension") == "failslab" else set())
            - ({12} if trace["ops"][row["index"]]["op"] == "seccomp_install" else set())
+           and not _seccomp_policy_errno(trace, row["index"], row["errno"])
            for result, trace in zip(results, traces) for row in result["observations"]):
         raise LinuxRunError("environment_failure", "Unexpected interruption or allocator resource failure", outdir)
     return results
+
+
+def _seccomp_policy_errno(trace, index, errno):
+    """Whether ops[index] is a seccomp probe whose errno an earlier install's
+    program can return (a RET K with SECCOMP_RET_ERRNO and that data): then
+    the errno is the filter's answer, not the guest failing."""
+    ops = trace["ops"]
+    if ops[index]["op"] != "seccomp_probe":
+        return False
+    return any(insn[0] == 0x06 and insn[3] & 0xffff0000 == 0x00050000 and insn[3] & 0xffff == errno
+               for op in ops[:index] if op["op"] == "seccomp_install" and op.get("filter")
+               for insn in op["filter"])
 
 
 def run_linux(traces, outdir, *, timeout=120, steer_wire=None, arm_records=ARM_RECORDS, guest_variant=None, alloc=None):

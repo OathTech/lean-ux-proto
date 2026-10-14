@@ -19,11 +19,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 # trace id: (outcome, a substring of the failure's detail)
 EXPECTED = {
-    'sk_tsync': ('unsupported_path', 'TSYNC'),                 # seccomp_attach_filter, design 9.1
     'sk_new_listener': ('unsupported_path', 'NEW_LISTENER'),   # seccomp_set_mode_filter
     'sk_wait_killable': ('unsupported_path', 'NEW_LISTENER'),  # the same listener arm
     'sk_user_notif': ('unsupported_path', 'USER_NOTIF'),       # __seccomp_filter
-    'sk_ip_load': ('unsupported_path', 'instruction pointer'), # the engine's unsupportedRead (offset 8)
 }
 
 

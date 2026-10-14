@@ -369,7 +369,9 @@ S_ARG_OFFSETS = [0, 4] + [16 + 4 * i for i in range(12)]      # nr, arch, the si
 S_ARG_VALUES = [0, 1, 2, 5, 9, 10, 11, 64, 1 << 32, 2**32 - 1, S_ALLOW, S_ERRNO | 3, S_TRAP | 1, 2 * S_ALLOW,
                 2 * (S_ERRNO | 7)]
 S_SAFE_ACTIONS = [S_ALLOW, S_LOG, S_TRACE, S_ERRNO, S_TRAP]
-S_RESERVED_ERRNO = {4, 12, 23, 512, 513, 514, 516}   # harness/linux.py's infrastructure errnos, never ERRNO data
+# harness/linux.py's infrastructure errnos were never ERRNO data until the
+# pre-release review's finding 11: the harness now tells a policy result from
+# a guest failure by the trace's installs, so the generator may emit them
 
 
 def seccomp_prologue(cases, default=S_ALLOW):
@@ -392,14 +394,9 @@ def seccomp_action(rng, safe):
     a kill or a non-canonical action, which the validator sends to a child."""
     if safe or rng.random() < .7:
         action = rng.choice(S_SAFE_ACTIONS)
-        data = rng.choice([0, 1, 3, 7, 4095, 4096, 65535, rng.randrange(65536)]) if action in (S_ERRNO, S_TRAP) else 0
-        if data in S_RESERVED_ERRNO:
-            data = 7
+        data = rng.choice([0, 1, 3, 4, 7, 12, 23, 512, 4095, 4096, 65535, rng.randrange(65536)]) if action in (S_ERRNO, S_TRAP) else 0
         return action | data
-    word = rng.choice([S_KILL_THREAD, S_KILL_PROCESS, 0x10000, 0x4abc0000 | 9, rng.randrange(2**32)])
-    if word & 0xffff0000 == S_ERRNO and word & 0xffff in S_RESERVED_ERRNO:
-        word = S_ERRNO | 7
-    return word
+    return rng.choice([S_KILL_THREAD, S_KILL_PROCESS, 0x10000, 0x4abc0000 | 9, rng.randrange(2**32)])
 
 
 def seccomp_body(rng, safe):
