@@ -55,6 +55,14 @@ models, so a Rule Zero finding is a success of this campaign.
 
 ## 3. Rule Zero, restated
 
+Rule Zero, in three clauses [USER 2026-10-14]: (1) the mirror might be
+wrong; (2) the kernel might contain bugs; (3) the former is much more likely
+than the latter. Every discrepancy is read in that order: a mirror defect
+first, settled by the differential check against the kernel and fixed on the
+mirror lane; a kernel finding only with positive evidence against the code's
+stated intent, written up in the tray; a statement or relation is never bent
+to accommodate either.
+
 The kernel code may contain bugs, and the mirror follows the code. The
 mirror is the authority on what the code does; the WireGuard paper, the
 protocol description and the code's comments are the authority on what it
