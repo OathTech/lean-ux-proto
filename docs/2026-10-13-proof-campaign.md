@@ -15,17 +15,18 @@ retains current architecture, findings, reproduction provenance, effort and limi
 | --- | --- |
 | R1 | Uniqueness and the intentional inclusive-floor correction are proved, with pure and accepted-run witnesses. |
 | R2 | Endpoint identity and failure-retaining access contracts cover the listed families, concrete Batch scheduling and isolated trials. The maintenance/timer extension passes coordinated validation. Whole-run environment/lifecycle closure and saved-reference ownership remain open. |
-| R3 | Bounded-input normal insertion and represented removal are checked. Complete original `removeByPeer` requires explicit resident-list coherence; initialized insertion coherence, configuration histories and packet-path refinement remain open. |
+| R3 | Bounded-input normal insertion and represented removal now preserve an explicit coherent routing/frontier invariant, including both normal insertion refusals. Coordinated validation passes. Initialization, configuration histories and packet-path refinement remain open. |
 | R4 | Physical rings, finite/source journals, per-poll provenance and selected GRO order, and concrete RX scheduling are checked. Accepted input refutes chronological post-GRO order. Joint pipeline conservation remains open. |
 | R5 | The unconditional age/post-zero and wire-nonce readings are false in accepted mirror inputs. Rule Zero resolution retains thirteen positive local contracts, without universal replacement transport claims. |
 | R6 | Cookie exclusion is proved at its original call boundary. A 19-retry/20-initiation episode refutes literal MAX=18; no universal corrected retry bound is claimed. |
 
-**Validation status.** The current coordinated proof gate passes 334 jobs and
-341 terminal declarations: 339 theorems and two definitions (ReplayWindow 15;
-R1 9; R2 166; R3 68; R4 64; R5 13; R6 6), using only `propext`,
+**Validation status.** The current coordinated checkpoint passes 339 jobs and
+345 terminal declarations: 343 theorems and two definitions (ReplayWindow 15;
+R1 9; R2 166; R3 72; R4 64; R5 13; R6 6), using only `propext`,
 `Classical.choice` and `Quot.sound`. Fresh stock kernel replay, the 60-job
-default build and 114 unit tests (22.822 seconds, one skip) also pass.
-The latest R2 component/scoped/full builds pass 144/226/334 jobs.
+default build and 114 unit tests (23.019 seconds, one skip) also pass.
+The current R3 extension passes scoped/full builds of 130/339 jobs and independent
+frozen-source review. Its bounded-input header wording finding was corrected.
 The preceding `c047e64` carry's 118-job executable build and eleven reproduction
 checks remain applicable to unchanged runtime; they were not rerun for proof-only
 extensions. Frozen reviews have no unresolved defect in the checked components;
@@ -291,6 +292,7 @@ No R3 Rule Zero counterexample or changed charter conclusion is asserted.
 | `Store.RepAt`, `ForestRep`, `Context` | Exact node values/backlinks with unrelated store entries allowed; original placement and `original_findNode_lookup_correct` derive traversal and the 130-step bound. `RepAt` alone does not supply external root linkage. |
 | Pure `Insertion` | Canonical-prefix replacement, validity/compression and old/new ID accounting; `pureTree_insert_lookup_correct`. Exact overwrite retains the old ID/raw address; new requested/intermediate nodes use consecutive IDs. |
 | `InsertionCases`/`InsertionDispatch` | Reuse all staged empty/exact/graft source contracts; `original_add_all_cases`, `original_insert_all_cases` and `original_insert_longest_prefix` derive placement alternatives and actual-root lookup. |
+| `InsertionMetadata`/`Entries`/`Coherence`, `RoutingInvariant`/`InsertionRouting` | Exact source peer-map/frame effects plus binding-ID entry correspondence derive resident coherence and bounded raw owners; `original_insert_routing_preserved`, `original_insert_coherent_peer_maps`, `original_insert_refusal_coherent` and `original_removeByPeer_routing_preserved` retain the combined invariant. |
 | `Removal`, `ContextRemoval` | Pure `eraseId`/compaction, exact entry filtering and ID subsequence; `pure_removal_structure`, lookup and locality contracts. Under compression/Nodup, at most two IDs retire. Pure absent-ID identity is not an original absent-target no-op claim. |
 | `RemovalSource`, raw endpoint/store layers | All-input original loop equation and exact local mutation endpoints, including post-free parent-tail continuation; no representation or owner residency is inferred from stored tags. |
 | `RemovalContext`/`Transport`/`Cases`/`Dispatch` | Membership focus plus represented contexts derive all seven cases; `original_removeStep_forest_total` and `original_removeStep_forest_properties` prove actual execution, both-family erasure, retirement and full frames. |
@@ -308,6 +310,11 @@ Transport exact endpoints through context/forest representation, then carry expl
 resident-list coherence through the original saved loop; do not assume initialized
 history or strengthen raw owner labels to resident ownership.
 
+[AGENT 2026-10-14] Strengthen the common `Inserted` contract with source-derived
+peer-map/device frames, reusing dispatch. Normalize fresh append only after
+coherence proves fresh-ID absence; keep owner-frontier bounds separate from
+owner residency so orphan raw labels remain representable.
+
 **Insertion boundary.** Valid representation, unique IDs, whole-store `NodesBelow`
 freshness, bounded address/CIDR and a resident target peer are explicit inputs.
 Original placement derives exact/empty/stopped cases; callers do not assume the
@@ -316,11 +323,15 @@ refusal leaves `add`'s Kernel unchanged; second refusal consumes one ID, frees i
 node and filters that ID from every peer list. It is not whole-World rollback.
 `insert` increments sequence before success or either refusal. Record Stops and
 invalid-input returns are outside this classification. Exact replacement filters
-then appends once; fresh branches append. The common success contract preserves
-representation, roots/frontier/sequence, validity/Nodup and conditional compression,
-but does not yet unify all Device fields or peer-list effects. Opposite root values
-and supplied representation are preserved; supplied root linkage is not inferred.
-Only the requested peer must reside; old owner labels may be orphaned.
+every peer list then appends once to the target; fresh branches only append to the
+target, without sanitizing arbitrary dangling lists. The common success contract
+now includes those raw peer-map effects and a frame allowing only nodes, peers,
+trie metadata and nextNode to change. `RoutingInvariant` adds both actual family
+roots, validity/compression/Nodup, resident list coherence and node/peer/owner
+frontier bounds. Input coherence derives fresh-ID absence and normalized list
+updates. Both normal refusals preserve node/list contents pointwise under that
+invariant, retaining the sequence increment and any consumed ID. Only the requested
+peer must reside; other owner labels may be orphaned.
 
 **Removal boundary.** Source equality retains branch recording, `listDel` before
 target lookup and both continues. Binary removal clears the owner and retains the
@@ -346,10 +357,12 @@ exactly that peer's entries in both families, with aggregate retirement/outside
 frames. Its totality is conditional on the input representation/coherence; normal
 source execution is a conclusion, not a premise chosen to suppress missing nodes.
 
-**Remaining obligations.** Initialize and preserve insertion/list coherence and
-owner-frontier bounds, propagate parsed address/CIDR bounds through configuration
-and all mutations, and connect both packet paths to authenticated allocation
-identity. Raw peer labels and longest-prefix lookup alone establish no ownership.
+**Remaining obligations.** Initialize the routing invariant and preserve it through
+peer creation and all other configuration mutations, then compose finite original
+insert/remove histories. Whole configuration/runner closure additionally needs
+parsed address/CIDR bounds and negative netlink returns that retain earlier
+mutations. Connect both packet paths to authenticated allocation identity; raw
+peer labels and longest-prefix lookup alone establish no ownership.
 The historical R2 orphan recipe constrained the former accepted domain; `c047e64`
 now rejects it before deletion. It is not a current R3 misrouting counterexample.
 
@@ -371,6 +384,7 @@ now rejects it before deletion. It is not a current R3 misrouting counterexample
 | Local removal source and endpoints | 7: 2 / 5 | 14m17s through source freeze; 14m49s through handoff receipt |
 | Nonroot removal and parent collapse | 9: 3 / 6 | 16m06s through frozen handoff preparation; 12m48s through scoped-target collection |
 | Represented forest and coherent peer removal | 29: 14 / 15 | 43m01s through final full-target collection; 47m57s writer-token ownership |
+| Insertion metadata, coherence and routing invariant | 15: 9 / 6 | 24m44s through collected full build; 25m28s writer-token ownership; scoped/full targets 130/339; six ordinary elaboration failures, no cap/interruption |
 
 The represented/loop tranche split into 17 single-step calls and a 12-call
 continuation; its fifteen failures included two heartbeat failures. Final scoped/full

@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.AllowedIps.InsertionCases
+import Leanux.Proofs.WG.AllowedIps.InsertionMetadata
 
 /-! Complete insertion dispatch from the original total placement traversal.
 Input premises describe the represented store, never the desired insertion
@@ -17,6 +17,9 @@ structure Inserted (d out : WG.Device) (v4 : Bool) (t other : Tree)
   seq : out.peerAllowedips.seq = d.peerAllowedips.seq
   otherRoot : rootValue out (!v4) = rootValue d (!v4)
   otherRep : RepAt out.nodes (rootWidth (!v4)) (rootSlot (!v4)) other
+  peers : InsertionPeers d out (t.insertFresh (rootWidth v4) d.nextNode addr cidr pid).allocations
+    (t.insertFresh (rootWidth v4) d.nextNode addr cidr pid).binding.id pid
+  frame : InsertionFrame d out
 
 /-- Classification concerns normal returns only. A refused record remains a
 Stop, distinct from either normal allocator-refusal endpoint. -/
@@ -50,9 +53,10 @@ theorem add_empty_outcome (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
   have h := case_add_empty_root_correct w w' d hd v4 addr cidr pid p hp he ha hc hb other ho ret hrun
   rcases h with hf | ⟨hz, hk, hbelow, hroot, hrep, _, hother, horep⟩
   · exact .inl hf
-  · refine .inr (.inr ⟨hz, _, hk, hbelow, hroot, hrep, ?_, ?_, hother, horep⟩)
+  · refine .inr (.inr ⟨hz, _, hk, hbelow, hroot, hrep, ?_, ?_, hother, horep, ?_, emptyInstalled_frame ..⟩)
     · rfl
     · exact emptyInstalled_seq d v4 addr cidr pid p
+    · exact emptyInstalled_peers d v4 addr cidr pid p hp
 
 theorem add_gap_outcome (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
     (v4 : Bool) (c : Context) (n : NodeData) (side : Nat) (sibling : Tree)
@@ -73,9 +77,11 @@ theorem add_gap_outcome (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
     hroot hb hbelow hn hr hv ha hc hf hlt hm hbit other ho ret hrun
   rcases h with hfail | ⟨hz, hk, hb', hroot', hr', _, _, hnext, hseq, hroots, ho'⟩
   · exact .inl hfail
-  · refine .inr (.inr ⟨hz, _, hk, hb', hroot', hr', ?_, hseq, hroots _, ho'⟩)
-    rw [context_gap_insertFresh c n side sibling (rootWidth v4) d.nextNode addr cidr pid hf hb hlt hm hbit]
-    exact hnext
+  · refine .inr (.inr ⟨hz, _, hk, hb', hroot', hr', ?_, hseq, hroots _, ho', ?_, gapInstalledAt_frame ..⟩)
+    · rw [context_gap_insertFresh c n side sibling (rootWidth v4) d.nextNode addr cidr pid hf hb hlt hm hbit]
+      exact hnext
+    · rw [context_gap_insertFresh c n side sibling (rootWidth v4) d.nextNode addr cidr pid hf hb hlt hm hbit]
+      exact gapInstalledAt_peers d v4 (c.slot (rootSlot v4)) n side sibling addr cidr pid p hp
 
 theorem add_exact_outcome (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
     (v4 : Bool) (c : Context) (n : NodeData) (l r : Tree) (addr cidr pid : Nat) (p : WG.Peer)
@@ -94,9 +100,11 @@ theorem add_exact_outcome (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
     case_add_context_exact_correct w d hd v4 c n l r addr cidr pid p hp hroot hr hv hnodup ha hc hf hn hm other ho
   rw [hrun] at he
   cases he
-  refine .inr (.inr ⟨rfl, _, hk, hb hbelow, hroot', hr', ?_, hseq, hroots _, ho'⟩)
-  rw [halloc, Nat.add_zero]
-  exact hnext
+  refine .inr (.inr ⟨rfl, _, hk, hb hbelow, hroot', hr', ?_, hseq, hroots _, ho', ?_, exactInstalled_frame ..⟩)
+  · rw [halloc, Nat.add_zero]
+    exact hnext
+  · rw [context_exact_insertFresh c n l r (rootWidth v4) d.nextNode addr cidr pid hf hn hm]
+    exact exactInstalled_peers d n.id _ pid p hp
 
 theorem add_root_graft_outcome (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
     (v4 : Bool) (n : NodeData) (l r : Tree) (addr cidr pid : Nat) (p : WG.Peer)
@@ -117,7 +125,11 @@ theorem add_root_graft_outcome (w w' : World) (d : WG.Device) (hd : w.k.wg = som
   · subst ret
     obtain ⟨hk, hb', hroot', hr', _, _, _, hnext, hother, hseq, ho'⟩ :=
       case_add_root_graft_correct w w' d hd v4 n l r addr cidr pid p hp hroot hb hr hn hv ha hc hstop other ho hrun
-    exact .inr (.inr ⟨rfl, _, hk, hb', hroot', hr', hnext, hseq, hother, ho'⟩)
+    refine .inr (.inr ⟨rfl, _, hk, hb', hroot', hr', hnext, hseq, hother, ho', ?_, graftInstalled_frame ..⟩)
+    rw [root_graft_insertFresh _ _ _ _ _ _ _ _ hstop]
+    rw [graft_binding]
+    exact graftInstalled_peers d v4 n.id _ addr cidr pid _ p hp
+      (by have := graft_allocations (rootWidth v4) d.nextNode addr cidr pid (.node n l r); omega)
 
 theorem add_deep_graft_outcome (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
     (v4 : Bool) (c : Context) (parent : NodeData) (side : Nat) (sibling : Tree)
@@ -149,7 +161,13 @@ theorem add_deep_graft_outcome (w w' : World) (d : WG.Device) (hd : w.k.wg = som
     obtain ⟨hk, hb', hroot', hr', _, _, _, hnext, hother, hseq, ho'⟩ :=
       case_add_context_graft_correct w w' d hd v4 c parent side sibling n l r addr cidr pid p hp
         hroot hb hbelow hr hv hn ha hc hf hlt hm hbit hstop other ho hrun
-    exact .inr (.inr ⟨rfl, _, hk, hb', hroot', hr', hnext, hseq, hother, ho'⟩)
+    refine .inr (.inr ⟨rfl, _, hk, hb', hroot', hr', hnext, hseq, hother, ho', ?_, graftChildInstalled_frame ..⟩)
+    rw [context_graft_insertFresh c parent side sibling n l r (rootWidth v4) d.nextNode addr cidr pid hf hb hlt hm hbit]
+    dsimp only
+    rw [root_graft_insertFresh _ _ _ _ _ _ _ _ hstop]
+    rw [graft_binding]
+    exact graftChildInstalled_peers d v4 parent.id _ n.id _ addr cidr pid _ p hp
+      (by have := graft_allocations (rootWidth v4) d.nextNode addr cidr pid (.node n l r); omega)
 
 /-- Every normal original add return is classified by deriving its structural
 case from original nodePlacement. No path, exactness or stopping predicate is

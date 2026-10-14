@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.AllowedIps.InsertionDispatch
+import Leanux.Proofs.WG.AllowedIps.InsertionRouting
 import Leanux.Proofs.WG.AllowedIps.ContextRemoval
 import Leanux.Proofs.WG.AllowedIps.RemovalStore
 import Leanux.Proofs.WG.AllowedIps.RemovalChildStore
@@ -23,8 +23,8 @@ prefixes and prove longest-prefix lookup in a pure tree with local edge
 conditions. Original node-store traversals terminate and refine this lookup
 under an exact structural representation. Pure insertion preserves the local
 invariants and implements canonical-prefix replacement. Original insertion
-derives all structural cases from its total placement traversal. Every normal
-return is classified as success or one of two allocation refusals; successful
+derives all structural cases from its total placement traversal. Every bounded-input
+normal return is classified as success or one of two allocation refusals; successful
 returns refine pure insertion and actual-root longest-prefix lookup. A supplied
 opposite-family representation is preserved. Pure removal implements exact
 entry filtering and preserves the structural invariants, with local compaction
@@ -1490,5 +1490,65 @@ theorem original_removeByPeer_then_findNode (w : World) (d : WG.Device)
   have hd' : after.k.wg = some out := by rw [ha]
   obtain ⟨queryAfter, hquery, hframe, hwinner⟩ := hs.findNode hf hl hp after hd' hv4 hv6 v4 key hk
   exact ⟨out, after, queryAfter, hrun, ha, hs, hquery, hframe, hwinner⟩
+
+/-- Every bounded-input normal return of original insert preserves the combined
+routing invariant through its actual success or allocation-refusal endpoint.
+Input lists are explicitly coherent; raw owner labels are bounded by nextPeer,
+not assumed resident. The complete Kernel endpoint and sequence increment are
+retained. Record Stops and initialized configuration histories are not covered
+by a normal-return premise. Family selection is the original family == 4 test. -/
+theorem original_insert_routing_preserved (w w' : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (family addr cidr pid : Nat) (p : WG.Peer)
+    (hp : d.peers[pid]? = some p) (t4 t6 : Tree) (hi : RoutingInvariant d t4 t6)
+    (ha : addr < 2 ^ rootWidth (family == 4)) (hc : cidr ≤ rootWidth (family == 4))
+    (ret : Int) (hr : (WG.insert family addr cidr pid).run w = .ok (ret, w')) :
+    ∃ out, w'.k = {w.k with wg := some out} ∧
+      InsertRoutingOutcome d out (family == 4) t4 t6 addr cidr pid ret :=
+  insert_routing_outcome w w' d hd family addr cidr pid p hp t4 t6 hi ha hc ret hr
+
+/-- Successful insertion exposes the exact raw peer-map effect: replacement
+filters every list before target append, while fresh allocation only appends to
+the target. Coherent input and frontier bounds derive fresh-ID absence and hence
+the normalized move-to-tail equation. Both represented families retain validity,
+compression, distinct IDs, list coherence and node/peer/owner frontier bounds. -/
+theorem original_insert_coherent_peer_maps (w w' : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (family addr cidr pid : Nat) (p : WG.Peer)
+    (hp : d.peers[pid]? = some p) (t4 t6 : Tree) (hi : RoutingInvariant d t4 t6)
+    (ha : addr < 2 ^ rootWidth (family == 4)) (hc : cidr ≤ rootWidth (family == 4))
+    (hr : (WG.insert family addr cidr pid).run w = .ok (0, w')) :
+    let v4 := family == 4
+    let inserted := (selectedTree v4 t4 t6).insertFresh (rootWidth v4) d.nextNode addr cidr pid
+    ∃ out, w'.k = {w.k with wg := some out} ∧
+      InsertRoutingOutcome d out v4 t4 t6 addr cidr pid 0 ∧
+      RoutingInvariant out (insertedTree4 d v4 t4 addr cidr pid) (insertedTree6 d v4 t6 addr cidr pid) ∧
+      InsertionPeers d out inserted.allocations inserted.binding.id pid ∧
+      (∀ q : Nat, out.peers[q]? = (d.peers[q]?).map (insertionPeer 0 inserted.binding.id pid q)) :=
+  insert_routing_success w w' d hd family addr cidr pid p hp t4 t6 hi ha hc hr
+
+/-- Either original normal allocation refusal preserves coherent node and peer
+contents pointwise and both old trees. The wrapper still increments sequence;
+partial graft rollback consumes one node ID. The frame preserves every other
+Device field. This is not transactional rollback or a statement about a World
+returned by a Stop, which the original monad does not provide. -/
+theorem original_insert_refusal_coherent (w w' : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (family addr cidr pid : Nat) (p : WG.Peer)
+    (hp : d.peers[pid]? = some p) (t4 t6 : Tree) (hi : RoutingInvariant d t4 t6)
+    (ha : addr < 2 ^ rootWidth (family == 4)) (hc : cidr ≤ rootWidth (family == 4))
+    (hr : (WG.insert family addr cidr pid).run w = .ok (-ENOMEM, w')) :
+    ∃ out, w'.k = {w.k with wg := some out} ∧ InsertionFrame d out ∧ InsertRefused d out t4 t6 :=
+  insert_routing_refusal w w' d hd family addr cidr pid p hp t4 t6 hi ha hc hr
+
+/-- Complete original peer removal is total from the combined routing invariant
+and a resident target. Its precise saved-list erasure contract additionally
+preserves all routing/frontier conditions, including bounds on orphan raw owners.
+The input invariant is explicit; peer creation and initialized histories remain
+separate obligations. -/
+theorem original_removeByPeer_routing_preserved (w : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
+    (t4 t6 : Tree) (hi : RoutingInvariant d t4 t6) :
+    ∃ out w', (WG.removeByPeer pid).run w = .ok ((), w') ∧
+      w'.k = {w.k with wg := some out} ∧ RemovedPeer d out t4 t6 pid p.allowedipsList ∧
+      RoutingInvariant out (t4.eraseIds p.allowedipsList) (t6.eraseIds p.allowedipsList) :=
+  removeByPeer_routing_total w d hd pid p hp t4 t6 hi
 
 end Leanux.Proofs.WG.CryptokeyRouting
