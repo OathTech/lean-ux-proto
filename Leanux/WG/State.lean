@@ -156,7 +156,7 @@ def armTimer (pid : PeerId) (t : PeerTimer) (delay : Nat) (jc? : Option UInt64 :
       if gap < 0 then
         throw (.hidden s!"mod_timer's jiffies {jm} is behind the caller's read {jc} (delay {delay}, expires {e})")
       if gap > 1 then
-        unsupported s!"a stall between a timer's two jiffies reads: the caller's {jc}, mod_timer's {jm} (delay {delay}, expires {e})"
+        unsupported s!"a stall between a timer's two jiffies reads (the mirror's delay matches the published expiry): the caller's {jc}, mod_timer's {jm} (delay {delay}, expires {e})"
       modify fun w => { w with jiffiesLast := some jm }
       -- dispatch order (docs/2026-10-11-dispatch-order.md): the record's
       -- third word is the timer's address, which its section names

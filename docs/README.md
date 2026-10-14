@@ -86,6 +86,7 @@ Read these before the README's claims are taken at face value:
 | [2026-10-13-audit-netlink.md](2026-10-13-audit-netlink.md) | Correspondence audit of the netlink modules against netlink.c: one observable data-shape item (endpoint bytes by family), closed fail-closed |
 | [2026-10-13-decision-census.md](2026-10-13-decision-census.md) | The decision census: 1382 decisions and their outcomes by anchored file, every exclusion in force with its justification, the anchored-file boundary, the W13 scope; its denominator is declared mirror decisions, not independently enumerated C choices |
 | [2026-10-13-compiler-experiment.md](2026-10-13-compiler-experiment.md) | Witness-location stability across two optimisation levels of GCC 13.3: what refused the size-optimised image and what the static comparison shows; not evidence about the C's semantics |
+| [2026-10-13-mutation-campaign.md](2026-10-13-mutation-campaign.md) | The mutation campaign: 308 sampled mechanical mutants of the mirror against the check on s2 (`scripts/mutate.py`), every survivor classified (equivalent projection, logging-only, corpus boundary, real), four check-reach findings, the channels' shares; power kept apart from presence |
 
 ## Pipes, epoll and seccomp
 
