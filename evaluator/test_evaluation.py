@@ -151,7 +151,8 @@ class EvaluationChecks(unittest.TestCase):
                 validate_coverage([self.trace], altered)
 
     CONFIG = {'files': ['fs/eventfd.c'], 'functions': ['eventfd_read', 'eventfd_ctx_do_read'], 'known_gaps': [],
-              'shared_exits': [], 'operand_exclusions': [], 'data_only_operations': []}
+              'shared_exits': [], 'operand_exclusions': [], 'data_only_operations': [],
+              'branch_free_functions': [], 'helper_cuts': []}
 
     def decision(self, label, line, true, false):
         return {'label': label, 'file': 'fs/eventfd.c', 'line': line,
@@ -216,7 +217,35 @@ class EvaluationChecks(unittest.TestCase):
         # An unlisted function running a span line of an anchored C file fails,
         # even when the line is mapped through a listed function.
         problems = run(ready, [222, 235, 1224])
-        self.assertEqual([p['problem'] for p in problems], ['span lines covered by an unlisted function'])
+        self.assertEqual([p['problem'] for p in problems],
+                         ['span lines covered by an unlisted function', 'covered code outside the declared boundary'])
+
+    def test_control_flow_rejects_unlisted_functions_outside_declared_spans(self):
+        # Pre-release review, finding 1: an unlisted function covering an
+        # anchored C line outside every declared span passed the span rule;
+        # the boundary rule rejects it, naming the function and the line.
+        run = self.control_flow_fixture()
+        cells = dict(zip(run.__code__.co_freevars, (c.cell_contents for c in run.__closure__)))
+        cells['loc']['0x999'] = [{'function': 'unlisted_function', 'source': '/x/.deps/linux/fs/eventfd.c:999'}]
+        ready = ['eventfd_read.short_buffer=0', 'eventfd_read.empty=0', 'eventfd_ctx_do_read.semaphore=1']
+        problems = run(ready, [222, 235, 999])
+        self.assertEqual([p['problem'] for p in problems], ['covered code outside the declared boundary'])
+        self.assertEqual(problems[0]['functions'], [{'function': 'unlisted_function', 'lines': ['fs/eventfd.c:999']}])
+        # a helper cut named in the configuration is inside the boundary
+        config = dict(self.CONFIG, helper_cuts=[{'function': 'unlisted_function', 'file': 'fs/eventfd.c',
+                                                'note': 'a test cut'}])
+        model = {'branches': [{'index': 0, 'label': l} for l in ready]}
+        coverage = [{'id': 'cf', 'index': 0, 'count': 3, 'pcs': ['0x222', '0x235', '0x999']}]
+        table = check.parse_decisions([
+            self.decision('eventfd_read.short_buffer', 220, [(221, 221)], [(222, 222)]),
+            self.decision('eventfd_read.empty', 223, [(224, 224)], [(235, 235)]),
+            self.decision('eventfd_ctx_do_read.semaphore', 180, [], [])], config)
+        instrumented = {'fs/eventfd.c:222', 'fs/eventfd.c:224', 'fs/eventfd.c:235'}
+        functions = {'eventfd_read', 'eventfd_ctx_do_read'}
+        witnesses = check.witness_table(table, instrumented, functions)
+        trace = {'version': 1, 'id': 'cf', 'ops': [{'op': 'read', 'fd': {'literal': 8}, 'count': 8}]}
+        self.assertEqual(control_flow(trace, model, coverage, cells['loc'], config, table, witnesses,
+                                      instrumented, functions)[0], [])
 
     def test_control_flow_requires_reached_functions(self):
         run = self.control_flow_fixture()
@@ -940,3 +969,33 @@ class SeccompChecks(unittest.TestCase):
         self.assertEqual([t['id'] for _s, ts, _n in chunks for t in ts], [t['id'] for t in plain + child + long])
         # two child probes are 8.9 MB: one child trace per chunk, and a 2.1 MB install trace (four of 768) joins the last
         self.assertEqual([len(ts) for _s, ts, _n in chunks], [6, 1, 1, 1, 1, 2, 2])
+
+
+class ReviewProbes(unittest.TestCase):
+    """The pre-release review's checker probes (docs/2026-10-14-pre-release-review.md)."""
+
+    def test_operand_agreement_counts_distinct_rows_beside_obligations(self):
+        # finding 5: three identical obligations met by one kernel row; a
+        # second, unmatched row needs no counterpart: 3 obligations, 1 row
+        comparison = {'rel': 'ge', 'const_rhs': False, 'site': None}
+        decisions = {'alloc_fd.at_limit': {'site': 'fs/file.c:514', 'comparison': comparison}}
+        loc = {'0x1': [{'function': 'alloc_fd', 'source': '/x/.deps/linux/fs/file.c:514'}]}
+        model = {'branches': [{'index': 0, 'label': 'alloc_fd.at_limit=0', 'operands': [8, 32]}] * 3}
+        records = [{'records': [[4, '0x8', '0x20', '0x1'], [4, '0x9', '0x20', '0x1']]}]
+        distinct = set()
+        problems, checked = check.operand_agreement({'ops': [{'op': 'dup'}]}, model, records, loc, decisions,
+                                                    distinct=distinct)
+        self.assertEqual((problems, checked), ([], 3))
+        self.assertEqual(len(distinct), 1)
+
+    def test_select_in_domain_accounts_for_every_candidate(self):
+        # finding 3: the account covers all candidates, not only those before
+        # the last selected one, and names every rejection reason
+        candidates = [{'id': f't{i}'} for i in range(6)]
+        verdicts = [{'in_domain': True}, {'in_domain': False, 'site': 'a', 'what': 'x'}, {'in_domain': True},
+                    {'in_domain': True}, {'in_domain': False, 'site': 'b', 'what': 'y'},
+                    {'in_domain': False, 'site': 'a', 'what': 'x'}]
+        kept, account = check.select_in_domain(candidates, verdicts, 2)
+        self.assertEqual([t['id'] for t in kept], ['t0', 't2'])
+        self.assertEqual(account, dict(candidates=6, in_domain=3, selected=2, rejected={'a: x': 2, 'b: y': 1}))
+

@@ -690,20 +690,32 @@ def observe : M (Int × Lean.Json) := do
     | [] => -EAGAIN
   -- W5: each datagram with the TOS / traffic class the listener's cmsg
   -- reports (`IP_RECVTOS`, `IPV6_RECVTCLASS`): the outer DS field wg0 sent
-  let datagrams := (w.listenerV4.map fun (ds, bs) => (4, ds, bs)) ++ (w.listenerV6.map fun (ds, bs) => (6, ds, bs))
+  -- Ordered as the harness orders Linux's (harness/linux.py attach_observed):
+  -- a stable sort by peer key (the listener's family and the message's index
+  -- word at byte 4), keeping arrival order within a peer's session and
+  -- leaving the cross-peer interleaving free (pre-release review, finding 5)
+  let indexWord (bs : List UInt8) : Nat := if bs.length ≥ 8 then WG.u32le bs 4 else 0
+  let keyLt (a b : Nat × Nat × Nat) : Bool :=
+    a.1 < b.1 || (a.1 == b.1 && (a.2.1 < b.2.1 || (a.2.1 == b.2.1 && a.2.2 < b.2.2)))
+  let stableSortBy {α : Type} (key : α → Nat × Nat × Nat) (xs : List α) : List α :=
+    ((((List.range xs.length).zip xs).toArray.qsort fun (i, a) (j, b) => keyLt (key a) (key b) || (key a == key b && i < j)).map (·.2)).toList
+  let datagrams := stableSortBy (fun (f, _, bs) => (f, indexWord bs, 0))
+    ((w.listenerV4.map fun (ds, bs) => (4, ds, bs)) ++ (w.listenerV6.map fun (ds, bs) => (6, ds, bs)))
   let entries := datagrams.map fun (f, ds, bs) =>
     Lean.toJson [Lean.toJson f, Lean.toJson bs.length, Lean.toJson (type bs), Lean.toJson ds, Lean.toJson (hex bs)]
   -- the sender's `recvmsg` source: a `sockaddr_in6` (SEND_FD is an IPv6
   -- socket), where an IPv4 source appears v4-mapped (::ffff:a.b.c.d), with
   -- its scope id (0: no kept source is link-local), then the TOS and the
   -- destination `IPV6_PKTINFO` reports (W5)
-  let replies := w.senderInbox.map fun dg => let bs := dg.bytes
+  let inbox := stableSortBy
+    (fun dg => ((if dg.family == AF_INET then 0xffff00000000 + dg.addr else dg.addr), dg.port, indexWord dg.bytes))
+    w.senderInbox
+  let replies := inbox.map fun dg => let bs := dg.bytes
     let addr6 := if dg.family == AF_INET then 0xffff00000000 + dg.addr else dg.addr
     Lean.toJson [Lean.toJson AF_INET6, Lean.toJson (hex (beBytes addr6 16)), Lean.toJson dg.port, Lean.toJson (0 : Nat),
                  Lean.toJson dg.tos, Lean.toJson (hex (beBytes dg.dst 16)),
                  Lean.toJson bs.length, Lean.toJson (type bs), Lean.toJson (if bs.length ≥ 12 then WG.u32le bs 8 else 0),
                  Lean.toJson (hex bs)]
-  let sortJson (xs : List Lean.Json) := (xs.toArray.qsort fun a b => a.compress < b.compress).toList
   modify fun w => { w with listenerV4 := [], listenerV6 := [], senderInbox := [] }
   -- L: without wg0 the guest's RTM_GETLINK fails with ENODEV: `stats` null
   let stats := match (← getK).wg with
@@ -715,8 +727,8 @@ def observe : M (Int × Lean.Json) := do
                                  ("tx_packets", Lean.toJson d.txPackets), ("tx_bytes", Lean.toJson d.txBytes)]
     | none => Lean.Json.null
   return (ret, Lean.Json.mkObj [
-    ("datagrams", if closed then Lean.Json.null else Lean.Json.arr (sortJson entries).toArray),
-    ("replies", Lean.Json.arr (sortJson replies).toArray),
+    ("datagrams", if closed then Lean.Json.null else Lean.Json.arr entries.toArray),
+    ("replies", Lean.Json.arr replies.toArray),
     ("stats", stats)])
 
 /-- `wg_inject`: the fixture's sender sends one datagram to `port` on 127.0.0.1

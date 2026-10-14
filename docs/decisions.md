@@ -506,3 +506,28 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   harness's determinism rule (the review's finding 5), not the mirror's;
   the sequential one is in the `wireguard` suite.
 
+- **2026-10-14 [AGENT, fork of the coordinator]** The pre-release review's
+  checker findings 1, 3 and 5 (docs/2026-10-14-pre-release-review.md) are
+  fixed in the evaluator and harness, not declared as limitations: (1) the
+  boundary rule: every function of an anchored C file that an operation
+  covers must be listed, branch-free, or a helper cut named in kcov.json
+  with its reason (`helper_cuts`, 50 at this commit, classified by running
+  the suites under the rule and reading the C); the old rule caught an
+  unlisted function only on a declared span. One covered function is not
+  cut because it owns choice points on a modeled path,
+  `wg_socket_send_buffer_as_reply_to_skb` (the receive audit's F3): the
+  cookie-reply trace fails the boundary rule until the mirror declares
+  them, a mirror follow-on. (3) Every report carries the generated suites'
+  selection account (candidates, in the domain, selected, rejection
+  reasons over all candidates). (5) `operand_rows_distinct` beside
+  `operand_pairs_matched`; and the `wg_observe` observation keeps arrival
+  order within a peer session on both sides (a stable sort by peer key),
+  where the global compact-JSON sort lost it. The one-off mutant of the
+  observation (the sender's replies reversed, `Leanux/Env.lean`, run once
+  on `d2_staged_flush_4` and deleted) was rejected as `semantic_mismatch`
+  through the observation; under the old global sort the same mutant
+  could not disagree. Found outside the directive, not fixed: under load
+  `w7_multi_tx_2` can record the kernel queueing the transmit work twice
+  (the robustness landing's schedule), which the mirror now accepts but
+  `dispatch_problems` still reports ("a work item queued while already
+  queued"); the schedule did not recur in the suite runs here.
