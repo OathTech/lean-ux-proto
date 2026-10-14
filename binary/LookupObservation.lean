@@ -83,6 +83,34 @@ def observe (rxSection : Nat) (history : List MachineState) : Except String (Lis
   if initial.pc != Image.Lookup.entry then throw "lookup history does not start at its entry"
   return call "wg_index_hashtable_lookup" initial :: (← observeHistory (edge rxSection) history)
 
+theorem observe_snoc (rxSection : Nat) (history : List MachineState)
+    (current next : MachineState) (events delta : List Point)
+    (last : history.getLast? = some current)
+    (observed : observe rxSection history = .ok events)
+    (newEdge : edge rxSection current next = .ok delta) :
+    observe rxSection (history ++ [next]) = .ok (events ++ delta) := by
+  cases history with
+  | nil => cases last
+  | cons initial rest =>
+    by_cases entry : initial.pc = Image.Lookup.entry
+    · cases raw : observeHistory (edge rxSection) (initial :: rest) with
+      | error e => simp [observe, entry, raw] at observed; cases observed
+      | ok prior =>
+        have he : call "wg_index_hashtable_lookup" initial :: prior = events := by
+          have h := observed
+          simp [observe, entry, raw] at h
+          exact Except.ok.inj h
+        have extended := observeHistory_snoc (edge rxSection) (initial :: rest)
+          current next prior delta last raw newEdge
+        change observeHistory (edge rxSection) (initial :: (rest ++ [next])) = .ok (prior ++ delta) at extended
+        change observe rxSection ((initial :: rest) ++ [next]) = _
+        simp [observe, entry, extended, ← he]
+        rfl
+    · simp [observe, entry] at observed
+      cases observed
+
+#print axioms observe_snoc
+
 /-- Matching includes exact tag, order (via MatchesPoints), and decision record.
     The state relation is supplied by the function-specific physical proof;
     this definition does not turn an arbitrary relation into adequacy. -/
@@ -146,6 +174,33 @@ def CutsAligned (R : MachineState → World → Prop) (rxSection : Nat)
       PrefixMatches R events source ∧
       (source.take events.length).getLast? = some last ∧
       R current last.world
+
+/-- Extending a history cannot change any old cut. Only the newly reached
+    state needs a new correspondence obligation. -/
+theorem CutsAligned.snoc {R rxSection history source}
+    (aligned : CutsAligned R rxSection history source) (next : MachineState)
+    (newCut : next.pc ∈ Image.cutPoints →
+      ∃ events last,
+        observe rxSection (history ++ [next]) = .ok events ∧
+        PrefixMatches R events source ∧
+        (source.take events.length).getLast? = some last ∧ R next last.world) :
+    CutsAligned R rxSection (history ++ [next]) source := by
+  intro i current present cut
+  by_cases old : i < history.length
+  · have hp : history[i]? = some current := by
+      simpa only [List.getElem?_append_left old] using present
+    obtain ⟨events, last, observed, matched, latest, related⟩ := aligned i current hp cut
+    refine ⟨events, last, ?_, matched, latest, related⟩
+    simpa [List.take_append, Nat.sub_eq_zero_of_le (show i + 1 ≤ history.length by omega)] using observed
+  · have bound := (List.getElem?_eq_some_iff.mp present).1
+    have hi : i = history.length := by simp only [List.length_append, List.length_singleton] at bound; omega
+    subst i
+    have hc : next = current := by simpa using present
+    subst current
+    rw [List.take_of_length_le (by simp)]
+    exact newCut cut
+
+#print axioms CutsAligned.snoc
 
 /-- Exact semantic history plus all anchored stuttering cuts. Return
     destination, result registers and saved frame are separate postconditions

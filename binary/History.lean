@@ -21,6 +21,73 @@ theorem instruction_mono [Labels] (fetch : Int64 → Option Decoded)
   · exact False.elim
   · exact fun hp => ⟨hp.1, all_mono _ P Q h hp.2⟩
 
+/-- A finite unrolling of the actual fetched-instruction judgment. The count
+    is a proof device for one region, never a replacement transition system. -/
+def historySteps [Labels] (fetch : Int64 → Option Decoded) :
+    Nat → (Executed → Prop) → Executed → Prop
+  | 0, post, s => post s
+  | n + 1, post, s => historyStep fetch s (historySteps fetch n post)
+
+/-- A single instruction has exactly one appended successor, even when its
+    effects universally quantify undefined flags. -/
+theorem instruction_history [Labels] (fetch : Int64 → Option Decoded)
+    (s : MachineState) (history : List MachineState) (P : MachineState → Prop)
+    (run : instructionStep fetch s P) :
+    historySteps fetch 1
+      (fun t => P t.machine ∧ t.history = history ++ [t.machine]) ⟨s, history⟩ :=
+  instruction_mono fetch s _ _ (fun _ h => ⟨h, rfl⟩) run
+
+theorem historySteps_mono [Labels] (fetch : Int64 → Option Decoded)
+    (n : Nat) (P Q : Executed → Prop) (h : ∀ t, P t → Q t) (s : Executed) :
+    historySteps fetch n P s → historySteps fetch n Q s := by
+  induction n generalizing s with
+  | zero => exact h s
+  | succ n ih =>
+    exact instruction_mono fetch s.machine _ _ (fun t => ih ⟨t, s.history ++ [t]⟩)
+
+theorem historySteps_eventually [Labels] (fetch : Int64 → Option Decoded)
+    (n : Nat) (P : Executed → Prop) (s : Executed)
+    (run : historySteps fetch n P s) : Eventually (historyStep fetch) P s := by
+  induction n generalizing s with
+  | zero => exact .done s run
+  | succ n ih =>
+    apply step_cps
+    exact instruction_mono fetch s.machine _ _ (fun t ht => ih ⟨t, s.history ++ [t]⟩ ht) run
+
+theorem historySteps_add [Labels] (fetch : Int64 → Option Decoded)
+    (n m : Nat) (P : Executed → Prop) (s : Executed) :
+    historySteps fetch (n + m) P s =
+      historySteps fetch n (historySteps fetch m P) s := by
+  induction n generalizing s with
+  | zero => simp only [Nat.zero_add, historySteps]
+  | succ n ih =>
+    simp only [Nat.succ_add, historySteps, historyStep]
+    congr 1
+    funext t
+    exact ih ⟨t, s.history ++ [t]⟩
+
+#print axioms historySteps_eventually
+#print axioms historySteps_add
+
+/-- A locally proved callee execution can be inserted into its caller's
+    actual history. Every local state remains present and in order. -/
+theorem history_prepend [Labels] (fetch : Int64 → Option Decoded)
+    (Q : Executed → Prop) (s : Executed)
+    (run : Eventually (historyStep fetch) Q s) (front : List MachineState) :
+    Eventually (historyStep fetch)
+      (fun t => ∃ localState, Q localState ∧ t.machine = localState.machine ∧
+        t.history = front ++ localState.history)
+      ⟨s.machine, front ++ s.history⟩ := by
+  induction run with
+  | done initial h => exact .done _ ⟨initial, h, rfl, rfl⟩
+  | step initial mid ht _ ih =>
+    apply step_cps
+    apply instruction_mono fetch initial.machine _ _ _ ht
+    intro next hn
+    simpa only [List.append_assoc] using ih ⟨next, initial.history ++ [next]⟩ hn
+
+#print axioms history_prepend
+
 /-- Forgetting the automatically recorded history preserves Kraken execution,
     with the same universal treatment of undefined instruction results. -/
 theorem history_project [Labels] (fetch : Int64 → Option Decoded)
@@ -98,6 +165,51 @@ theorem observeHistory_prefix {Error Checkpoint : Type}
           · rw [← hall, hs, List.append_assoc]
 
 #print axioms observeHistory_prefix
+
+/-- Extending a real history observes exactly its new edge. -/
+theorem observeHistory_snoc {Error Checkpoint : Type}
+    (edge : MachineState → MachineState → Except Error (List Checkpoint))
+    (history : List MachineState) (current next : MachineState)
+    (events delta : List Checkpoint)
+    (last : history.getLast? = some current)
+    (observed : observeHistory edge history = .ok events)
+    (newEdge : edge current next = .ok delta) :
+    observeHistory edge (history ++ [next]) = .ok (events ++ delta) := by
+  induction history generalizing events with
+  | nil => cases last
+  | cons s history ih =>
+    cases history with
+    | nil =>
+      have hs : s = current := Option.some.inj last
+      have he : events = [] := (Except.ok.inj observed).symm
+      subst s
+      subst events
+      simp [observeHistory, newEdge]
+      change Except.ok (delta ++ []) = Except.ok delta
+      rw [List.append_nil]
+    | cons t history =>
+      have tailLast : (t :: history).getLast? = some current := by simpa using last
+      change (do
+        let first ← edge s t
+        let later ← observeHistory edge (t :: history)
+        pure (first ++ later)) = .ok events at observed
+      cases hf : edge s t with
+      | error e => rw [hf] at observed; cases observed
+      | ok first =>
+        cases hl : observeHistory edge (t :: history) with
+        | error e => rw [hf, hl] at observed; cases observed
+        | ok later =>
+          rw [hf, hl] at observed
+          have he : first ++ later = events := Except.ok.inj observed
+          have tail := ih later tailLast hl
+          change (do
+            let first ← edge s t
+            let later ← observeHistory edge ((t :: history) ++ [next])
+            pure (first ++ later)) = .ok (events ++ delta)
+          rw [hf, tail, ← he, List.append_assoc]
+          rfl
+
+#print axioms observeHistory_snoc
 
 /-- Generic full-run transport. `MirrorRun` is the complete accepted run,
     including its worlds and events; `Matches` must equate its observations

@@ -47,6 +47,25 @@ region at `+0xba`, with a separation frame for all other memory.
 that the stored pointer is zero and control reaches the miss exit. These
 use only `propext`, `Classical.choice`, and `Quot.sound`.
 
+The same finding includes an alias in the owning keypair. Linux's
+`queueing.h:68` defines `PACKET_PEER(skb)` as
+`PACKET_CB(skb)->keypair->entry.peer`; the mirror reads `Keypair.peer` at
+`Receive.lean:396` and `Send.lean:101,255`. Clearing only `IndexEntry.peer`
+would leave that alias stale. `KeypairFields.entry_peer_coherent` proves
+that the two physical views must read the same word. A second synthetic
+two-lookup witness uses a keypair entry and reproduces the same 96/75
+instruction runs and differing null decisions, with `Keypair.peer` still
+naming the nonnull peer after the binary word is zero:
+
+```sh
+capped -- binary/.lake/build/bin/binary-probe dead-keypair .tmp/binary-tv/input.json
+```
+
+Mirror peer ID zero in this output is a valid identity whose materialized
+address is `0x600000`; it is not the NULL pointer. The alias finding has been
+raised to the user for the mirror lane, without a local mirror edit or a
+precondition exclusion.
+
 ## Current setup and checks
 
 The charter branch was merged first, as requested. All work is on
@@ -260,3 +279,31 @@ The changed proof modules passed kernel replay, with only standard axioms.
 The fast tier passed 124 tests with one skip (23.52 seconds). These are
 intermediate checks: no `Pre_lookup`, whole-function theorem or transported
 property is claimed.
+
+The full local keypair field equations now include both symmetric keys,
+their timestamp bit patterns and validity bytes, sending counter, remote
+index, initiator flag, refcount and the shared entry peer word. Functionality
+and physical frame lemmas are proved. Valid live names make the three slot
+identities functional too. These are local components: the complete keypair
+store domain cannot be inferred from peer slots or hashed entries, because
+packets/workers retain unhashed objects and RCU retirement outlives final
+reference release. Its entry relation still needs an explicit lifetime and
+ownership account. The fixture rejects out-of-width keypair fields and
+inconsistent peer aliases instead of silently truncating or overwriting them.
+
+[AGENT 2026-10-14] Strengthen region facts by finite unrolling of the same
+fetched-instruction judgment, preserving every actual successor. The new
+`historySteps_eventually` connects these proofs to Kraken's total execution;
+the callee-history insertion and observation/cut extension lemmas are proved
+once. The index comparison has an exact two-instruction suffix and observer
+delta. Five TEST/JE guards also have exact histories, keeping their actual
+undefined AF values under Kraken's universal quantifiers. One-instruction
+CALL facts can retain their histories through `singleton_region`. These
+facts do not yet compose the bucket loop or establish whole-World `R`.
+
+Validation of this checkpoint: `BinaryProofs` and the executable build;
+kernel replay of the changed history, observation and keypair modules;
+standard axioms only and no forbidden proof-source tokens; the recorded
+live/miss three-way tests and both synthetic two-lookup witnesses; 124 fast
+tests with one skip (22.82 seconds). The mirror correction is still absent
+from the inspected main (`ca6b22e`). Milestone 1 remains open.

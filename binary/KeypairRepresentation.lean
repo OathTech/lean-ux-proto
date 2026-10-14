@@ -156,4 +156,168 @@ theorem KeypairSnapshotFields.functional (memory : Mem 64) (base : BitVec 64)
 #print axioms KeypairSnapshotFields.frame
 #print axioms KeypairCounterField.frame
 #print axioms Slots.frame
+
+theorem SymmetricFields.functional (memory : Mem 64) (base : BitVec 64)
+    (first second : Leanux.WG.SymmetricKey)
+    (hfirst : SymmetricFields memory base first) (hsecond : SymmetricFields memory base second) :
+    first = second := by
+  have key := Option.some.inj (hfirst.1.symm.trans hsecond.1)
+  have birthBits : first.birthdate.toBitVec = second.birthdate.toBitVec := by
+    apply BitVec.eq_of_toNat_eq
+    have h := Option.some.inj (hfirst.2.1.symm.trans hsecond.2.1)
+    omega
+  have birth := Int64.toBitVec_inj.mp birthBits
+  have valid : first.isValid = second.isValid := by
+    have h := Option.some.inj (hfirst.2.2.symm.trans hsecond.2.2)
+    cases hf : first.isValid <;> cases hs : second.isValid <;> simp_all
+  cases first
+  cases second
+  cases key
+  cases birth
+  cases valid
+  rfl
+
+/-- At an embedded keypair entry the two physical views necessarily read
+    the same pointer. A stale mirror alias cannot be hidden by this relation. -/
+theorem KeypairFields.entry_peer_coherent (memory : Mem 64) (base kpWord entryWord : BitVec 64)
+    (keypair : Leanux.WG.Keypair) (kind index : BitVec 32)
+    (keypairFields : KeypairFields memory base kpWord keypair)
+    (entryFields : EntryFields memory (base + .ofNat 64 keypair_entry) entryWord kind index) :
+    kpWord = entryWord := by
+  apply BitVec.eq_of_toNat_eq
+  have entry : memory.loadInt ((base + .ofNat 64 keypair_entry) + .ofNat 64 entry_peer) 8 =
+      some (entryWord.toNat : Int) := entryFields.1
+  have h := Option.some.inj
+    (keypairFields.2.2.2.2.2.2.2.symm.trans (by
+      simpa only [BitVec.ofNat_add, BitVec.add_assoc] using entry))
+  omega
+
+/-- All scalar/array fields are determined by physical bytes. The peer ID
+    is interpreted through the separately checked live pointer naming map. -/
+theorem KeypairFields.functional (memory : Mem 64) (base firstWord secondWord : BitVec 64)
+    (first second : Leanux.WG.Keypair)
+    (hfirst : KeypairFields memory base firstWord first)
+    (hsecond : KeypairFields memory base secondWord second) :
+    { first with peer := second.peer } = second ∧ firstWord = secondWord := by
+  obtain ⟨identity, replay⟩ := KeypairSnapshotFields.functional memory base first second hfirst.1 hsecond.1
+  have sending := SymmetricFields.functional memory _ _ _ hfirst.2.1 hsecond.2.1
+  have receiving := SymmetricFields.functional memory _ _ _ hfirst.2.2.1 hsecond.2.2.1
+  have sendingCounter : first.sendingCounter = second.sendingCounter := by
+    have h := Option.some.inj (hfirst.2.2.2.1.symm.trans hsecond.2.2.2.1)
+    omega
+  have remoteIndex : first.remoteIndex = second.remoteIndex := by
+    have h := Option.some.inj (hfirst.2.2.2.2.1.symm.trans hsecond.2.2.2.2.1)
+    omega
+  have initiator : first.iAmTheInitiator = second.iAmTheInitiator := by
+    have h := Option.some.inj (hfirst.2.2.2.2.2.1.symm.trans hsecond.2.2.2.2.2.1)
+    cases hf : first.iAmTheInitiator <;> cases hs : second.iAmTheInitiator <;> simp_all
+  have refcount : first.refcount = second.refcount := by
+    have h := Option.some.inj (hfirst.2.2.2.2.2.2.1.symm.trans hsecond.2.2.2.2.2.2.1)
+    omega
+  constructor
+  · cases first
+    cases second
+    cases identity
+    cases replay
+    cases sending
+    cases receiving
+    cases sendingCounter
+    cases remoteIndex
+    cases initiator
+    cases refcount
+    rfl
+  · apply BitVec.eq_of_toNat_eq
+    have h := Option.some.inj (hfirst.2.2.2.2.2.2.2.symm.trans hsecond.2.2.2.2.2.2.2)
+    omega
+
+#print axioms SymmetricFields.functional
+#print axioms KeypairFields.entry_peer_coherent
+#print axioms KeypairFields.functional
+
+theorem SymmetricFields.frame {before after : Mem 64} {writes : BitVec 64 → Prop}
+    (same : EqualOutside writes before after) (base : BitVec 64)
+    (key : Leanux.WG.SymmetricKey)
+    (disjoint : ∀ i < symmetricSize, ¬writes (base + .ofNat 64 i))
+    (represented : SymmetricFields before base key) : SymmetricFields after base key := by
+  refine ⟨?_, ?_, ?_⟩
+  · have bytes := same.loadBytes (base + .ofNat 64 symmetric_key) 32 (by
+      intro i hi
+      simpa [symmetric_key] using disjoint i (by simp only [symmetricSize]; omega))
+    exact bytes.symm.trans represented.1
+  · exact (unchanged _ _ _ same base symmetricSize disjoint symmetric_birthdate 8
+      (by decide)).symm.trans represented.2.1
+  · exact (unchanged _ _ _ same base symmetricSize disjoint symmetric_is_valid 1
+      (by decide)).symm.trans represented.2.2
+
+theorem KeypairFields.frame {before after : Mem 64} {writes : BitVec 64 → Prop}
+    (same : EqualOutside writes before after) (base peerWord : BitVec 64)
+    (keypair : Leanux.WG.Keypair)
+    (disjoint : ∀ i < keypairSize, ¬writes (base + .ofNat 64 i))
+    (represented : KeypairFields before base peerWord keypair) :
+    KeypairFields after base peerWord keypair := by
+  have part (off size : Nat) (bound : off + size ≤ keypairSize) :
+      ∀ i < size, ¬writes ((base + .ofNat 64 off) + .ofNat 64 i) := by
+    intro i hi
+    simpa only [BitVec.ofNat_add, BitVec.add_assoc] using disjoint (off + i) (by omega)
+  exact ⟨KeypairSnapshotFields.frame same base keypair disjoint represented.1,
+    SymmetricFields.frame same _ _ (part keypair_sending symmetricSize (by decide)) represented.2.1,
+    SymmetricFields.frame same _ _ (part keypair_receiving symmetricSize (by decide)) represented.2.2.1,
+    (unchanged _ _ _ same base keypairSize disjoint keypair_sending_counter 8 (by decide)).symm.trans represented.2.2.2.1,
+    (unchanged _ _ _ same base keypairSize disjoint keypair_remote_index 4 (by decide)).symm.trans represented.2.2.2.2.1,
+    (unchanged _ _ _ same base keypairSize disjoint keypair_i_am_the_initiator 1 (by decide)).symm.trans represented.2.2.2.2.2.1,
+    (unchanged _ _ _ same base keypairSize disjoint keypair_refcount 4 (by decide)).symm.trans represented.2.2.2.2.2.2.1,
+    (unchanged _ _ _ same base keypairSize disjoint (keypair_entry + entry_peer) 8 (by decide)).symm.trans represented.2.2.2.2.2.2.2⟩
+
+#print axioms SymmetricFields.frame
+#print axioms KeypairFields.frame
+
+/-- Local pointer-name validity. A complete object relation must separately
+    justify the live domain from allocation/ownership history; neither
+    readable bytes nor the three peer slots determine that domain. -/
+structure LiveKeypairNames (live : Leanux.WG.KeypairId → Prop) where
+  address : Leanux.WG.KeypairId → BitVec 64
+  nonnull : ∀ id, live id → address id ≠ 0
+  unique : ∀ i j, live i → live j → address i = address j → i = j
+
+def LiveOption (live : Leanux.WG.KeypairId → Prop) : Option Leanux.WG.KeypairId → Prop
+  | none => True
+  | some id => live id
+
+theorem LiveKeypairNames.pointer_injective {live} (names : LiveKeypairNames live)
+    (first second : Option Leanux.WG.KeypairId)
+    (hf : LiveOption live first) (hs : LiveOption live second)
+    (equal : keypairPointer names.address first = keypairPointer names.address second) :
+    first = second := by
+  cases first with
+  | none =>
+    cases second with
+    | none => rfl
+    | some id => exact False.elim (names.nonnull id hs equal.symm)
+  | some id =>
+    cases second with
+    | none => exact False.elim (names.nonnull id hf equal)
+    | some other => exact congrArg some (names.unique id other hf hs equal)
+
+/-- Exact physical slot words plus valid names determine all three mirror
+    identities; `some id` can neither denote NULL nor alias another live ID. -/
+theorem Slots.functional {live} (names : LiveKeypairNames live)
+    (memory : Mem 64) (base : BitVec 64) (first second : Leanux.WG.Peer)
+    (hf : Slots names.address memory base first) (hs : Slots names.address memory base second)
+    (firstLive : LiveOption live first.keypairCurrent ∧
+      LiveOption live first.keypairPrevious ∧ LiveOption live first.keypairNext)
+    (secondLive : LiveOption live second.keypairCurrent ∧
+      LiveOption live second.keypairPrevious ∧ LiveOption live second.keypairNext) :
+    first.keypairCurrent = second.keypairCurrent ∧
+      first.keypairPrevious = second.keypairPrevious ∧ first.keypairNext = second.keypairNext := by
+  have pointer (a b : Option Leanux.WG.KeypairId) (ha : LiveOption live a) (hb : LiveOption live b)
+      (h : (keypairPointer names.address a).toNat = (keypairPointer names.address b).toNat) : a = b :=
+    names.pointer_injective a b ha hb (BitVec.eq_of_toNat_eq h)
+  refine ⟨pointer _ _ firstLive.1 secondLive.1 ?_,
+    pointer _ _ firstLive.2.1 secondLive.2.1 ?_, pointer _ _ firstLive.2.2 secondLive.2.2 ?_⟩
+  · have h := Option.some.inj (hf.1.symm.trans hs.1); omega
+  · have h := Option.some.inj (hf.2.1.symm.trans hs.2.1); omega
+  · have h := Option.some.inj (hf.2.2.symm.trans hs.2.2); omega
+
+#print axioms LiveKeypairNames.pointer_injective
+#print axioms Slots.functional
 end Binary.Layouts

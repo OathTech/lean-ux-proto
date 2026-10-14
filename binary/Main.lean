@@ -123,13 +123,14 @@ def materialize (entries : List Leanux.WG.IndexEntry) (o : Offsets) (preempt : N
 
 def keypairAddr (id : Leanux.WG.KeypairId) : Nat := 0x700000 + id * 0x1000
 
-/-- Materialize the physical replay fields that the landed mirror properties
-    read, including unselected keypairs and the peer's three pointer slots. -/
+/-- Materialize full keypair fields, including unselected objects and the
+    peer's three slots. Reject values that cannot satisfy the exact equations. -/
 def materializePeers (d : Leanux.WG.Device) (o : Offsets) (m : DataMem) : Except String DataMem := do
   for e in d.indexTable do
     unless d.peers.contains e.peer do throw "entry names an absent peer"
   let mut m := m
   for (id, p) in d.peers.toList do
+    unless p.refcount < 2^32 do throw "peer refcount is not a 32-bit value"
     m := put m (peerAddr id + o.peerRefcount) 4 p.refcount
     for (slot, kid) in [(Binary.Layouts.slots_current_keypair, p.keypairCurrent),
         (Binary.Layouts.slots_previous_keypair, p.keypairPrevious),
@@ -142,12 +143,31 @@ def materializePeers (d : Leanux.WG.Device) (o : Offsets) (m : DataMem) : Except
       m := put m (peerAddr id + Binary.Layouts.peer_keypairs + slot) 8 address
   for (id, k) in d.keypairs.toList do
     let a := keypairAddr id
+    unless d.peers.contains k.peer do throw "keypair names an absent peer"
+    for e in d.indexTable do
+      if e.kind == .keypair && e.keypair == some id && e.peer != k.peer then
+        throw "index entry and keypair disagree on their shared peer word"
+    unless k.internalId < 2^64 && k.sendingCounter < 2^64 &&
+        k.receivingCounter.counter < 2^64 && k.remoteIndex < 2^32 && k.refcount < 2^32 do
+      throw "keypair field is outside its physical word width"
+    m := put m (a + Binary.Layouts.keypair_entry + Binary.Layouts.entry_peer) 8 (peerAddr k.peer)
     m := put m (a + Binary.Layouts.keypair_internal_id) 8 k.internalId
+    m := put m (a + Binary.Layouts.keypair_sending_counter) 8 k.sendingCounter
+    m := put m (a + Binary.Layouts.keypair_remote_index) 4 k.remoteIndex
+    m := put m (a + Binary.Layouts.keypair_refcount) 4 k.refcount
+    m := put m (a + Binary.Layouts.keypair_i_am_the_initiator) 1 (if k.iAmTheInitiator then 1 else 0)
+    for (offset, key) in [(Binary.Layouts.keypair_sending, k.sending),
+        (Binary.Layouts.keypair_receiving, k.receiving)] do
+      unless key.key.length == 32 do throw "symmetric key is not 32 bytes"
+      m := m.storeBytes (.ofNat 64 (a + offset + Binary.Layouts.symmetric_key)) key.key
+      m := put m (a + offset + Binary.Layouts.symmetric_birthdate) 8 key.birthdate.toBitVec.toNat
+      m := put m (a + offset + Binary.Layouts.symmetric_is_valid) 1 (if key.isValid then 1 else 0)
     let replay := a + Binary.Layouts.keypair_receiving_counter
     m := put m (replay + Binary.Layouts.replay_counter) 8 k.receivingCounter.counter
     unless k.receivingCounter.backtrack.size == Binary.Layouts.replayWords do
       throw "keypair replay bitmap has the wrong size"
     for i in [:k.receivingCounter.backtrack.size] do
+      unless k.receivingCounter.backtrack[i]! < 2^64 do throw "replay bitmap word exceeds 64 bits"
       m := put m (replay + Binary.Layouts.replay_backtrack + i * Binary.Layouts.replayWordBytes)
         Binary.Layouts.replayWordBytes k.receivingCounter.backtrack[i]!
   return m
@@ -349,25 +369,32 @@ def probe (input : ProbeInput) (actualServices : Bool := false) : Except String 
 
 /-- Synthetic accepted mirror state, not claimed to be a reachable kernel
     entry. Execute the real decoded callee as well as lookup, twice. -/
-def deadPeerCounterexample (input : ProbeInput) : Except String Json := do
+def deadPeerCounterexample (input : ProbeInput) (keypairCase : Bool := false) : Except String Json := do
   let w ← replayPrefix input.trace input.operation
   let some dev := w.k.wg | throw "no device"
   let [e] := dev.indexTable | throw "requires the single-entry fixture"
+  let e := if keypairCase then {e with kind := .keypair, keypair := some 0} else e
+  let dev := if keypairCase then
+      {dev with
+        indexTable := [e]
+        keypairs := dev.keypairs.insert 0 {peer := e.peer}}
+    else dev
   let some peer := dev.peers.get? e.peer | throw "missing peer"
   let w := { w with k := { w.k with wg := some { dev with
     peers := dev.peers.insert e.peer {peer with refcount := 0} } }, steps := #[] }
-  let (answer1, after1) ← (Leanux.WG.indexLookup [.handshake] e.index).run w
+  let (answer1, after1) ← (Leanux.WG.indexLookup [e.kind] e.index).run w
     |>.mapError Leanux.Stop.message
-  let (answer2, after2) ← (Leanux.WG.indexLookup [.handshake] e.index).run {after1 with steps := #[]}
+  let (answer2, after2) ← (Leanux.WG.indexLookup [e.kind] e.index).run {after1 with steps := #[]}
     |>.mapError Leanux.Stop.message
   unless answer1.isNone && answer2.isNone && after1.k == w.k && after2.k == w.k do
     throw "dead-peer mirror behavior changed"
   let memory ← materialize dev.indexTable input.offsets input.preempt
+  let memory ← materializePeers dev input.offsets memory
   let peerAddress := 0x600000 + e.peer * 0x1000
   let memory := put memory (peerAddress + input.offsets.peerRefcount) 4 0
   let some entry := input.instructions[0]? | throw "empty program"
   let regs : Reg64s := {
-    rdi := .ofNat tableAddr, rsi := 1, rdx := .ofNat e.index,
+    rdi := .ofNat tableAddr, rsi := (if keypairCase then 2 else 1), rdx := .ofNat e.index,
     rcx := .ofNat outputAddr, rsp := .ofNat stackAddr,
     rbx := 0x11, rbp := 0x22, r12 := 0x33, r13 := 0x44, r14 := 0x55, r15 := 0x66}
   let initial : MachineState := ⟨{regs, dmem := memory}, .ofNat entry.pc⟩
@@ -396,6 +423,13 @@ def deadPeerCounterexample (input : ProbeInput) : Except String Json := do
   let labels1 := after1.steps.map Leanux.Step.label
   let labels2 := after2.steps.map Leanux.Step.label
   unless labels1 == labels2 do throw "mirror's repeated decisions unexpectedly differ"
+  let alias ← if keypairCase then do
+      let some d := after2.k.wg | throw "device disappeared"
+      let some k := d.keypairs.get? 0 | throw "keypair disappeared"
+      unless k.peer == e.peer do throw "keypair peer alias changed"
+      pure (Json.mkObj [("physical_entry_peer", toJson (0 : Nat)),
+        ("mirror_keypair_peer", toJson k.peer), ("mirror_peer_address", toJson peerAddress)])
+    else pure Json.null
   return Json.mkObj [
     ("status", toJson "counterexample reproduced"),
     ("scope", toJson "synthetic accepted mirror state; kernel reachability not established"),
@@ -404,7 +438,7 @@ def deadPeerCounterexample (input : ProbeInput) : Except String Json := do
     ("machine_instructions", toJson [r1.pcs.size, r2.pcs.size]),
     ("machine_peer_pointer_before", toJson peerAddress),
     ("machine_peer_pointer_after", toJson (0 : Nat)),
-    ("mirror_peer_id_after", toJson e.peer)]
+    ("mirror_peer_id_after", toJson e.peer), ("keypair_alias", alias)]
 
 def main (args : List String) : IO UInt32 := do
   if let ["actual-services", path] := args then
@@ -415,6 +449,11 @@ def main (args : List String) : IO UInt32 := do
   if let ["dead-peer", path] := args then
     let input ← liftE (Json.parse (← IO.FS.readFile path) >>= fromJson?)
     let result ← liftE (deadPeerCounterexample input)
+    IO.println result.compress
+    return 0
+  if let ["dead-keypair", path] := args then
+    let input ← liftE (Json.parse (← IO.FS.readFile path) >>= fromJson?)
+    let result ← liftE (deadPeerCounterexample input true)
     IO.println result.compress
     return 0
   if let ["run", path] := args then

@@ -58,4 +58,20 @@ def KeypairSnapshotFields (m : Mem 64) (a : BitVec 64) (k : Leanux.WG.Keypair) :
   ReplayFields m (a + .ofNat 64 keypair_receiving_counter) k.receivingCounter
 def KeypairCounterField (m : Mem 64) (counter : Nat) : Prop :=
   m.loadInt keypairCounterAddress 8 = some (counter : Int)
+/-- Key bytes, timestamp bit pattern and validity byte; no key placeholder is used here. -/
+def SymmetricFields (m : Mem 64) (a : BitVec 64) (k : Leanux.WG.SymmetricKey) : Prop :=
+  m.loadBytes (a + .ofNat 64 symmetric_key) 32 = some k.key ∧
+  m.loadInt (a + .ofNat 64 symmetric_birthdate) 8 = some k.birthdate.toBitVec.toNat ∧
+  m.loadInt (a + .ofNat 64 symmetric_is_valid) 1 = some (if k.isValid then 1 else 0)
+/-- All non-pointer mirror keypair fields. The entry peer word is
+    explicit: the owning-object and index-table views must agree on it. -/
+def KeypairFields (m : Mem 64) (a peerWord : BitVec 64) (k : Leanux.WG.Keypair) : Prop :=
+  KeypairSnapshotFields m a k ∧
+  SymmetricFields m (a + .ofNat 64 keypair_sending) k.sending ∧
+  SymmetricFields m (a + .ofNat 64 keypair_receiving) k.receiving ∧
+  m.loadInt (a + .ofNat 64 keypair_sending_counter) 8 = some (k.sendingCounter : Int) ∧
+  m.loadInt (a + .ofNat 64 keypair_remote_index) 4 = some (k.remoteIndex : Int) ∧
+  m.loadInt (a + .ofNat 64 keypair_i_am_the_initiator) 1 = some (if k.iAmTheInitiator then 1 else 0) ∧
+  m.loadInt (a + .ofNat 64 keypair_refcount) 4 = some (k.refcount : Int) ∧
+  m.loadInt (a + .ofNat 64 (keypair_entry + entry_peer)) 8 = some peerWord.toNat
 end Binary.Layouts
