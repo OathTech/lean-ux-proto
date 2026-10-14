@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Lifetimes.BatchAudit
 import Leanux.Proofs.WG.Lifetimes.DumpAccess
 import Leanux.Proofs.WG.Lifetimes.FilesystemCalls
 import Leanux.Proofs.WG.Lifetimes.FilesystemLocal
@@ -1762,5 +1763,51 @@ allocator geometry. This does not establish initialized enclosing Syscall/Env/
 Runner closure or the reached entry invariant for every copied scheduling trial. -/
 theorem dump_family_allocation_access_preserves (call : Lifetimes.NetlinkDumpCall) :
     PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed := call.allocation
+
+/-- The actual filter, scheduler, nested reschedule and receive-worker boundaries
+retain every original result, successful World and Stop on arbitrary inputs.
+Probe markers and focused lifetime events are proof-side observations only. -/
+theorem scheduler_audit_family_erasure (call : Lifetimes.BatchAuditCall) :
+    ErasesPrefix call.observed call.original := call.erases
+
+/-- From an allocation-valid projected entry, erasing probe markers gives the
+existing committed lifetime observer exactly, including its failed history.
+This correspondence does not require validity of old probe markers. -/
+theorem scheduler_audit_committed_projection (call : Lifetimes.BatchAuditCall) :
+    ProjectsUnder Lifetimes.AllocationInv Lifetimes.AuditEvent.lifetime?
+      call.observed call.committed := call.projects
+
+/-- Every outcome retains safe committed accesses and valid saved trial entries.
+Successful outcomes also retain the current allocation invariant. Each marker
+keeps facts about its own saved World/history across subsequent mutations. -/
+theorem scheduler_audit_prefix_preserves (call : Lifetimes.BatchAuditCall) :
+    PrefixPreserves Lifetimes.AuditInv Lifetimes.AuditSafe call.observed := call.preserves
+
+/-- The original consistency filter has exactly one entry marker, even with no
+candidates or on Stop. Its saved World and history precede the actual filter;
+no speculative trial accesses are appended to committed lifetime history. -/
+theorem scheduler_audit_filter_entry (w : World) (h : List Lifetimes.AuditEvent) :
+    runPrefix Lifetimes.consistentFilterAudit w h =
+      ((w.suspended.filterM Env.Activation.consistent).run w,
+        h ++ [.probe ⟨w, Lifetimes.lifetimeHistory h⟩]) :=
+  Lifetimes.consistentFilterAudit_run w h
+
+/-- Empty audit history and an allocation-valid local entry suffice for safe
+committed accesses and every recorded filter entry's copied trials, including
+failed prefixes. The exact filter equality retains candidate order, hidden-error
+false decisions and the first non-hidden Stop; certification of all candidates
+does not assert that unevaluated candidates ran. Enclosing initialized Env,
+syscall and Runner composition remains separate. -/
+theorem scheduler_audit_reached_trials (call : Lifetimes.BatchAuditCall) (w : World)
+    (hi : Lifetimes.AllocationInv [] w) :
+    Lifetimes.AuditSafe (runPrefix call.observed w []).2 ∧
+    ∀ p ∈ Lifetimes.probeEntries (runPrefix call.observed w []).2,
+      Lifetimes.AllocationInv p.history p.world ∧
+      (p.world.suspended.filterM Env.Activation.consistent).run p.world =
+        (p.world.suspended.filterM (fun a => Lifetimes.activationTrialDecision a p.world p.history)).map
+          (fun ys => (ys, p.world)) ∧
+      ∀ a ∈ p.world.suspended,
+        Lifetimes.LifetimeEvent.Safe (runPrefix (Lifetimes.activationRunPrefix a) p.world p.history).2 :=
+  call.from_allocation w hi
 
 end Leanux.Proofs.WG.LifetimeSafety

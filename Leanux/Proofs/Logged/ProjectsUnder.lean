@@ -47,6 +47,31 @@ theorem projectsUnder_bind (hg : ProjectsUnder I ρ g a)
       rcases out with ⟨x, v⟩
       exact hf x v hist (by simpa only [hr] using hp)
 
+/-- A finite loop projects exactly while its lower body transports the entry invariant. -/
+theorem projectsUnder_forIn (xs : List γ) (b : β)
+    (g : γ → β → PrefixM E (ForInStep β)) (a : γ → β → PrefixM F (ForInStep β))
+    (ha : ∀ x b, PrefixPreserves I S (a x b))
+    (hg : ∀ x b, ProjectsUnder I ρ (g x b) (a x b)) :
+    ProjectsUnder I ρ (forIn xs b g) (forIn xs b a) := by
+  induction xs generalizing b with
+  | nil => exact projectsUnder_pure ρ b
+  | cons x xs ih =>
+    rw [List.forIn_cons, List.forIn_cons]
+    apply projectsUnder_bind (hg x b) (ha x b)
+    intro step
+    cases step with
+    | done b => exact projectsUnder_pure ρ b
+    | yield b => exact ih b
+
+/-- Range-loop projection retains both normal loop exits and failed prefixes. -/
+theorem projectsUnder_range (r : Std.Legacy.Range) (b : β)
+    (g : Nat → β → PrefixM E (ForInStep β)) (a : Nat → β → PrefixM F (ForInStep β))
+    (ha : ∀ x b, PrefixPreserves I S (a x b))
+    (hg : ∀ x b, ProjectsUnder I ρ (g x b) (a x b)) :
+    ProjectsUnder I ρ (forIn r b g) (forIn r b a) := by
+  rw [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.forIn_eq_forIn_range']
+  exact projectsUnder_forIn _ b g a ha hg
+
 theorem projectsUnder_focus (encode : F → E) (ρ : E → Option F)
     (hd : ∀ e, ρ (encode e) = some e)
     (hg : ∀ w h, I h w → ∃ suffix, (runPrefix a w h).2 = h ++ suffix) :

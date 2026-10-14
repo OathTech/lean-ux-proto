@@ -4,7 +4,7 @@
 
 Work is on `.worktrees/proofs-campaign`, branch `proofs/campaign`, under
 [the charter](2026-10-13-charter-proof-campaign.md). The mirror remains byte-identical
-to `43c7549`; coordinated carry validation passes. The [proof register](proofs.md#results) holds current declarations and
+to `43c7549`; coordinated validation of the R2 scheduler audit extension passes. The [proof register](proofs.md#results) holds current declarations and
 pins; its [model map](proofs.md#layers) supplies the complete module inventory.
 Current components are not completion of the open charter properties. This campaign
 has made no main integration, push, differential check or guest run.
@@ -14,26 +14,26 @@ retains current architecture, findings, reproduction provenance, effort and limi
 | Result | Current disposition |
 | --- | --- |
 | R1 | Uniqueness and the intentional inclusive-floor correction are proved, with pure and accepted-run witnesses. |
-| R2 | Endpoint identity and failure-retaining access contracts cover the listed families, concrete Batch scheduling and isolated trials. All seven original dump calls now have exact typed erasure and concrete allocation-safe failed prefixes. Initialized whole-run allocation-identity access closure remains open; raw-reference affiliation/credit is a separate stronger property. |
+| R2 | Endpoint identity and failure-retaining access contracts cover the listed families, concrete Batch scheduling and isolated trials. All seven original dump calls have exact typed erasure and concrete allocation-safe failed prefixes. The audit scheduler now derives allocation validity at each recorded consistency-filter entry, including failed histories, and links those entries to safe copied trials. Initialized whole-run allocation-identity access closure remains open; raw-reference affiliation/credit is a separate stronger property. |
 | R3 | Initialized finite normal call histories refine flat-prefix updates and reached-root lookup, including full normal clear. Completed setAllowedip/removal events now cover the entire acquired-peer update, with concrete send/flush/cleanup frames and separately derived lookup/create residency. Public setPeerCmd preflight composition, enclosing configuration/Runner closure and packet paths remain open. |
 | R4 | Physical rings, finite/source journals, per-poll provenance and selected GRO order, and concrete RX scheduling are checked. Accepted input refutes chronological post-GRO order. Joint pipeline conservation remains open. |
 | R5 | The unconditional age/post-zero and wire-nonce readings are false in accepted mirror inputs. Rule Zero resolution retains thirteen positive local contracts, without universal replacement transport claims. |
 | R6 | Cookie exclusion is proved at its original call boundary. A 19-retry/20-initiation episode refutes literal MAX=18; no universal corrected retry bound is claimed. |
 
-**Validation status.** Current source has 403 terminal declarations: 401 theorems
-and two definitions (ReplayWindow 15; R1 9; R2 191; R3 90; R4 79; R5 13; R6 6).
-The `43c7549` carry passes the five-target scoped build (148 jobs) and complete
-`LeanuxProofs` build (401 jobs), with no statement changes. Independent frozen
-source/documentation review is clear after correcting three progress rows that
-repeated prior-checkpoint validation without a historical qualifier. Sequential
-coordinated validation passes the 401-job proof gate with 403 declarations on
-permitted axioms only, fresh stock kernel replay, the 60-job default and 118-job
-executable builds, and 124 unit tests (23.184 seconds, one skip). All eleven
-reproductions pass: nine accepted original/observer runs and two expected R2
-pending-dump rejections. Recipes remain unchanged.
-All eight frozen Lean hashes are unchanged. The capped scope/census/whitespace
-check and mirror comparison to `43c7549` pass. Its upstream runtime changes are
-part of this carry; initialized whole-run R2 and remaining R3/R4 closures stay open.
+**Validation status.** Current source has 408 terminal declarations: 406 theorems
+and two definitions (ReplayWindow 15; R1 9; R2 196; R3 90; R4 79; R5 13; R6 6).
+The scheduler audit extension passes component/scoped/full proof builds
+(185/260/403 jobs). Four Lean files add the audit carrier, exact scheduler
+observers, reusable conditional loop projection and five terminal contracts.
+Independent frozen source/export/documentation review is clear. Sequential
+coordinated validation passes the 403-job proof gate with all 408 declarations
+on permitted axioms, fresh stock kernel replay, the 60-job default build and
+124 unit tests (24.530 seconds, one skip). The capped scope/census/whitespace
+check passes; all four frozen Lean hashes are unchanged and the mirror remains
+byte-identical to `43c7549`. This proof-only extension changes no reproduction
+recipe and required no runtime replay. The preceding carry's eleven passing
+reproductions and runtime validation are recorded below. Initialized whole-run
+R2 and the remaining R3/R4 closures stay open.
 
 ```sh
 capped -- scripts/in-bundle scripts/proof-gate
@@ -164,6 +164,7 @@ execution; lifted helper coverage is separately checked against source.
 | Ambient contracts and canonical Kernel projections | Preserve chosen invariants through source-shaped leaves; legacy interfaces project shared frames. Queue scalar preservation does not establish reference credits. |
 | `SavedPeers`, prefix loops/workers | Observe demanded captured entries, including misses, with saved-stamp residency obligations; exact bounded-loop erasure retains callback/exhaustion Stops. |
 | `BatchTrials`, `BatchCalls` | `scheduler_family_access_erasure`, `scheduler_family_allocation_access` and `scheduler_trial_filter_access` separate committed calls from copied-World trials. The ordered filter propagates its first non-hidden Stop; each reached trial has an isolated safe prefix from the same entry invariant. |
+| `Audit`, `BatchAudit` | [AGENT 2026-10-14] Carry saved consistency-filter entry facts in `AuditM` through remaining callers, avoiding separate reachability threading while retaining failed histories and separate trials. The sum event stream projects to committed lifetime events and records the actual current World/projected history immediately before each original filter, including empty filters and Stops. `AuditInv` combines current `AllocationInv` with validity of every saved entry. Result-dependent focus preserves cached predicates and old probe facts. Literal scheduler/nested-reschedule/receive-worker observers have unconditional source erasure, allocation-conditional committed projection and concrete failed-prefix safety. Empty-history local allocation validity derives safe trials at every recorded entry; exact filter correspondence preserves order and early failure without asserting unevaluated candidates ran. The literal source placement and exact filter-entry equation supply coverage; projection alone does not. |
 | `PeerRemoval` | [AGENT 2026-10-14] Reuse fixed send/clear `runWorkerPrefix` wrappers and scalar queue/count frames to compose all seven original flush/removal calls. Exact erasure retains the 4096 drain, dispatch/placeholder order, early returns and saved-ID loops; concrete allocation safety adds no ownership or progress premise. |
 | `DeviceControls` | [AGENT 2026-10-14] Compose eight original socket/device controls using a full-Kernel mask of only socket labels/incoming port and legacy frame projections. Separate source inspection justifies access-free socket lifts; saved-ID loops retain actual peer accesses, negative-return cleanup and Stop prefixes. Concrete allocation safety needs no list-validity, progress or credit assumption. |
 | `DeviceCreation`/`DeviceRetirement`/`DeviceLifecycle` | [AGENT 2026-10-14] Observe guarded creation as one resident-access-free action and prove its normal allocation endpoint, avoiding an invariant at provisional epoch 0. At the original final `wg := none`, append logical releases from every actual pre-drop resident map, with packet stamps `(ifindex, id + 1)`; this accounts for store retirement, not per-object kernel frees or reference credits. Compose complete destruction/deletion with exact socket/peer-removal prefixes and queue-guard Stops. |
@@ -259,10 +260,12 @@ python3 -B docs/proof-campaign-replay.py r2-stale-dump-cursor-orphan |
 ```
 
 **Remaining obligations.** Initialized outer runners/deferred-unit callers,
-timer firing and remaining resident scans are open. BatchTrials proves safety
-conditional on its entry AllocationInv; the current schedule endpoint contract
-does not yet export that invariant at every reached copied-World filter entry.
-That reached-entry obligation remains part of initialized whole-run closure.
+timer firing and remaining resident scans are open. BatchTrials retains its
+conditional entry contract; BatchAudit now derives the needed invariant at every
+recorded filter entry of its concrete scheduler family. Carrying that audit
+contract through the enclosing Env, syscall and initialized Runner remains open.
+Activation.run uses plain condResched callbacks and introduces no nested
+consistency trials; the receive-worker adapter instead carries nestedReschedAudit.
 The ordinary FS call dependency now has strong canonical FSBase, Eventpoll,
 FS/EventpollCalls frames, all eleven dispatch arms and actual taskWorkRun. These
 frames do not execute the separately queued Env.netnsCleanup/netnsPreExit, compose
@@ -305,6 +308,7 @@ replays and both current rejection checks each took under one second.
 | Complete device configuration | 9 calls: 7 builds (3 PASS / 4 ordinary FAIL), then two scoped checks (FAIL / PASS) | 20m51s from grant 14:39:57 through full-result collection 15:00:48; 24m55s ownership through handback 15:03:52. Component/scoped/full targets 178/246/386. Four ordinary elaboration/normalization failures; the first scoped check failed on four trailing spaces, corrected before the passing scope/census check. Those whitespace-only changes postdated the worker full build and pass the coordinated rebuild. No cap/interruption; all exits collected. Existing three grouped exports extended, retaining 185 R2 / 393 total declarations. Independent frozen source/documentation review is clear; its Markdown effort-table separator finding is fixed. Coordinated gate, fresh kernel replay, default build and 114 unit tests pass sequentially; all eight frozen Lean hashes are unchanged. A separate seven-minute source-coverage audit of the committed R2 foundation found no defect in its inspected local contracts. No runtime change or replay. |
 | Complete FS migration and dispatch/task work | 7 calls: 6 builds (3 PASS / 3 ordinary FAIL) plus one passing scope/census/compatibility check | 10m15s from grant 15:10:50 through full-result collection at 15:21:05; 11m51s ownership through handback 15:22:41. Compatibility/scoped/full targets 109/251/391. Failures involved missing projected refcount contracts, replacement of the snapshot-specific eventfd proof tactic, task-only modification framing and generic view universe inference. All 347 legacy signatures are unchanged; three new exports give 188 R2 / 396 source declarations. No cap/interruption or runtime change; all exits collected. The review finding that the register row prematurely described the new extension as current is fixed. Independent frozen source/documentation review is clear. Coordinated gate, fresh kernel replay, default build and 114 unit tests pass sequentially; all ten frozen Lean hashes are unchanged. |
 | Complete Netlink dump family | 14 calls: 13 builds (4 PASS / 9 ordinary FAIL) plus one passing scope/census/compatibility check | 30m09s from grant 16:07:50 through full-result collection clock 16:37:59. Canonical/component/scoped/full targets 45/176/255/401; seven original calls, three new exports, 191 R2 /403 source declarations. Failures were ordinary elaboration/normalization and deterministic heartbeat exhaustion in monolithic serialization/chunk proofs; source cuts and checked continuation-sharing replaced that proof shape without changing premises. No cap/interruption or runtime replay; all exits collected. Exact nine-file scope, whitespace, both legacy theorem-signature sets and the c047e64 mirror comparison pass. Independent frozen source/export/documentation review and sequential coordinated gate, fresh kernel replay, default build and 114 unit tests pass; all seven frozen Lean hashes remain unchanged. Token returned at 16:39:42 (31m52s ownership). |
+| Reached consistency-trial audit | 10 capped calls: nine builds (3 PASS / 6 ordinary FAIL) plus one passing scope/census check | 17m23s from grant 17:10:31 through full-result collection at 17:27:54. Component/scoped/full targets 185/260/403; five new exports, 196 R2 /408 source declarations. Three initial elaboration failures were followed by two full-import failures from a duplicated Lean-generated matcher helper and one insufficient-normalization failure. Normalizing the fixed worker list before local `grind -matchEqs` resolves the collision without changed statements, dependencies or global settings. All ten exits collected; no cap kill, interruption or runtime replay. The 0.06s scoped check passes exact six-file scope, all four Lean hashes, unchanged prior statements/helpers, 408 declarations, whitespace and mirror equality to 43c7549. Four Lean files and two docs; independent frozen source/export/documentation review is clear, including the local tactic repair. Sequential coordinated gate, fresh kernel replay, default build and 124 unit tests pass; all four frozen Lean hashes are unchanged. Token returned at 17:31:59 (21m28s ownership). |
 
 Earlier monolithic IPv4 proof search failed at heartbeat limits; explicit source
 tails replaced it. An earlier tactic loop was deliberately stopped by its verified
