@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.AllowedIps.ConfigurationInputs
+import Leanux.Proofs.WG.AllowedIps.ClearWalk
 import Leanux.Proofs.WG.AllowedIps.RoutingHistory
 import Leanux.Proofs.WG.AllowedIps.ContextRemoval
 import Leanux.Proofs.WG.AllowedIps.RemovalStore
@@ -41,6 +43,10 @@ Finite normal create/insert/remove/release histories from the original configure
 fixture refine independent canonical flat-prefix updates and actual-root lookup.
 Their input bounds and resident insertion targets are explicit; enclosing
 Netlink/configuration/Runner closure and packet admission remain separate.
+Actual local parser output now discharges address shape for the setAllowedip
+guards and its selected bounded insertion. Original root-list clearing has a
+normal-return coverage/frame contract; complete free/clear-history composition
+is still separate.
 -/
 
 namespace Leanux.Proofs.WG.CryptokeyRouting
@@ -1614,5 +1620,51 @@ theorem original_initialized_history_findNode (w v : World) (calls : List Routin
         (answer.map (canonical (rootWidth v4))) ∧
       ∀ e ∈ answer, ∃ n, d.nodes[e.id]? = some n ∧ n.peer = some e.peer :=
   history.findNode hstart v4 key hk
+
+/-- The actual pinned private parser supplies the address/length relation. A
+normal setAllowedip call either rejects without Kernel mutation or reaches an
+actual bounded IPv4/IPv6 insertion after its original guards. Malformed/missing
+fields and AF overrides retain the source behavior; no parser-fidelity premise
+or enclosing parser/Runner closure is assumed. -/
+theorem parsed_setAllowedip_bounded_call (j : Lean.Json) (what : String) (ip : WG.AllowedIpAttrs)
+    (hp : parseAllowedIp j what = .ok (.attrs ip)) (pid : WG.PeerId)
+    (w v : World) (ret : Int) (hr : (WG.setAllowedip pid ip).run w = .ok (ret, v)) :
+    AddressShape ip ∧ AllowedipOutcome w.k pid ip ret v :=
+  ⟨parseAllowedIp_shape j what (.attrs ip) hp, parsed_setAllowedip_outcome j what ip hp pid w v ret hr⟩
+
+/-- Parsed local allowed-IP attributes compose with the actual normal insertion
+contract. Resident target and entry routing/flat agreement remain explicit;
+rejection preserves Kernel, while negative insertion returns keep their actual
+sequence/frontier effects. This is not whole Netlink/configuration closure. -/
+theorem parsed_setAllowedip_routing_preserved (j : Lean.Json) (what : String)
+    (ip : WG.AllowedIpAttrs) (hparse : parseAllowedIp j what = .ok (.attrs ip))
+    (pid : WG.PeerId) (w v : World) (d : WG.Device) (hd : w.k.wg = some d)
+    (t4 t6 : Tree) (hi : RoutingInvariant d t4 t6) (p : WG.Peer) (hp : d.peers[pid]? = some p)
+    (xs : FlatTable × FlatTable) (he4 : FlatAgree 32 t4 xs.1) (he6 : FlatAgree 128 t6 xs.2)
+    (ret : Int) (hr : (WG.setAllowedip pid ip).run w = .ok (ret, v)) :
+    (ret = -EINVAL ∧ v.k = w.k) ∨
+      ∃ v4 out u4 u6, ip.family.getD 0 = (if v4 then WG.AF_INET else WG.AF_INET6) ∧
+        v.k.wg = some out ∧ RoutingInvariant out u4 u6 ∧
+        FlatAgree 32 u4 ((RoutingCall.insert v4 (ip.addr.getD 0) (ip.cidr.getD 0) pid ret).flat xs).1 ∧
+        FlatAgree 128 u6 ((RoutingCall.insert v4 (ip.addr.getD 0) (ip.cidr.getD 0) pid ret).flat xs).2 :=
+  setAllowedip_routing pid ip (parseAllowedIp_shape j what (.attrs ip) hparse)
+    w v d hd hi hp he4 he6 ret hr
+
+/-- Original rootRemovePeerLists has an all-input source equation. From the
+represented subtree and resident-list ownership, a normal return removes every
+represented ID from every resident list and preserves all other Kernel/device
+and complete peer fields. No owner residency, fuel sufficiency, totality or
+complete WG.free/history refinement is asserted. -/
+theorem original_rootRemove_lists_normal (w v : World) (d : WG.Device) (hd : w.k.wg = some d)
+    (ho : ListsOwned d) (root : WG.NodeId) (t : Tree) (width : Nat) (parent : WG.Slot)
+    (hroot : t.root = some root) (hrep : RepAt d.nodes width parent t)
+    (hr : (WG.rootRemovePeerLists root).run w = .ok ((), v)) :
+    rootRemoveSource root = WG.rootRemovePeerLists root ∧ clearListView v = clearListView w ∧
+      ∃ out, v.k.wg = some out ∧ out.nodes = d.nodes ∧
+        ∀ (pid : WG.PeerId) (p : WG.Peer), out.peers[pid]? = some p →
+          ∀ id ∈ t.nodeIds, id ∉ p.allowedipsList :=
+  ⟨rootRemoveSource_eq root, rootRemove_clearListView root w () v hr,
+    rootRemove_lists w v d hd ho root hroot hrep hr⟩
+
 
 end Leanux.Proofs.WG.CryptokeyRouting
