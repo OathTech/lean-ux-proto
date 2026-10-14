@@ -3,6 +3,8 @@ import Leanux.Proofs.WG.Lifetimes.DeviceControls
 import Leanux.Proofs.WG.Lifetimes.DeviceLifecycle
 import Leanux.Proofs.WG.Lifetimes.TimerCallbacks
 import Leanux.Proofs.WG.Lifetimes.AllowedIpsAccess
+import Leanux.Proofs.WG.Lifetimes.AllowedIpsInsert
+import Leanux.Proofs.WG.Lifetimes.ConfigurationPeer
 import Leanux.Proofs.WG.Lifetimes.BatchCalls
 import Leanux.Proofs.WG.Lifetimes.ReceiveIngress
 import Leanux.Proofs.WG.Lifetimes.SocketCalls
@@ -1643,5 +1645,49 @@ theorem device_retirement_actual_maps (w : World) (h : List Lifetimes.LifetimeEv
       Lifetimes.packetResidents w i = some stamp) :=
   ⟨Lifetimes.dropDevicePrefix_run w h, Lifetimes.deviceRetirementEvents_peer w,
     Lifetimes.deviceRetirementEvents_key w, Lifetimes.deviceRetirementEvents_packet w⟩
+
+/-- Complete original add and insert retain every result, successful World and
+Stop on arbitrary inputs. Observations include each demanded saved peer-map
+read and actual peer-list write, including second-allocation rollback. Node-only
+leaves are separately inspected for resident-object access coverage. -/
+theorem allowed_ip_insertion_family_access_erasure (call : Lifetimes.AllowedIpsInsertCall) :
+    ErasesPrefix call.observed call.original := call.erases
+
+/-- An ambient invariant explicitly permits the trie and its allocation-frontier
+changes. The source-order peer observations compose without a bounded-address,
+represented-tree, resident-target, successful-allocation or ownership premise. -/
+theorem allowed_ip_insertion_family_ambient_access_preserves (c : Lifetimes.AmbientContracts I)
+    (hn : Lifetimes.NodeAllocationStable I) (call : Lifetimes.AllowedIpsInsertCall) :
+    PrefixPreserves I Lifetimes.LifetimeEvent.Safe call.observed := call.preserves_ambient c hn
+
+/-- Concrete allocation geometry discharges the node-allocation frame and
+retains safe access prefixes after every original Stop. Normal negative returns
+keep their actual mutations. This local result does not establish routing
+correctness, Netlink/environment composition or initialized whole-run closure. -/
+theorem allowed_ip_insertion_family_allocation_access_preserves (call : Lifetimes.AllowedIpsInsertCall) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed := call.allocation
+
+/-- Original setPort, setAllowedip and complete setPeerCmd retain their exact
+result, successful World and Stop on arbitrary input Worlds and attributes.
+Saved-ID loops, short-circuit attribute records and ordinary-return cleanup keep
+source order. The keepalive setter observes the saved peer without a new getter. -/
+theorem configuration_family_access_erasure (call : Lifetimes.ConfigurationCall) :
+    ErasesPrefix call.observed call.original := call.erases
+
+/-- Explicit socket, trie-allocation, peer creation/removal and TX contracts
+compose the configuration family. A negative return preserves prior mutations
+and reaches its original cleanup; a Stop retains the reached access prefix.
+No valid-attributes, represented-tree, owner-affiliation or queue-progress
+premise replaces a source access. -/
+theorem configuration_family_ambient_access_preserves (c : Lifetimes.AmbientContracts I)
+    (hs : Lifetimes.SocketControlStable I) (r : Lifetimes.ConfigurationPeerContracts I)
+    (call : Lifetimes.ConfigurationCall) :
+    PrefixPreserves I Lifetimes.LifetimeEvent.Safe call.observed := call.preserves_ambient c hs r
+
+/-- Concrete allocation geometry discharges all three configuration calls and
+their failed access prefixes. Complete wgSetDevice, dumps, syscall tails and
+initialized whole-run environment/Runner composition remain separate work. -/
+theorem configuration_family_allocation_access_preserves (call : Lifetimes.ConfigurationCall) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed := call.allocation
 
 end Leanux.Proofs.WG.LifetimeSafety

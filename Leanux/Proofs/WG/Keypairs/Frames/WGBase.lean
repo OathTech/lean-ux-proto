@@ -1,7 +1,7 @@
 import Leanux.Proofs.WG.Keypairs.Frames.Kernel
 import Leanux.Proofs.Framing.WGTime
 import Leanux.Proofs.Framing.WGIndex
-import Leanux.Proofs.Framing.WGAllowedIps
+import Leanux.Proofs.Framing.WGAllowedIpsInsert
 import Leanux.Proofs.Framing.WGSocketLifecycle
 
 set_option pp.structureInstances false
@@ -20,6 +20,13 @@ theorem sameSnapshot_of_sameNodeKernel (h : Framing.SameNodeKernel a) : SameSnap
   simpa [snapshot, Framing.nodeKernelView, Framing.nodeKernel,
     Framing.nodeDevice, Option.bind_map, Function.comp_def] using hf
 
+
+/-- Node allocation changes only the additional trie frontier. -/
+theorem sameSnapshot_of_sameNodeAllocation (h : Framing.SameNodeAllocation a) : SameSnapshot a := by
+  intro w x v hr
+  have hf := congrArg (fun k => snapshot {w with k}) (h w x v hr)
+  simpa [snapshot, Framing.nodeAllocationView, Framing.nodeAllocationKernel,
+    Framing.nodeAllocationDevice, Framing.nodeDevice, Option.bind_map, Function.comp_def] using hf
 
 /-- The socket-control mask retains the legacy receive-state view. -/
 theorem sameSnapshot_of_sameSocketKernel (h : Framing.SameSocketKernel a) : SameSnapshot a := by
@@ -65,14 +72,14 @@ theorem branchExpired_spec (P : Snapshot → Prop) (d : Decision) (birthday : In
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (branchExpired_sameSnapshot d birthday seconds f).wp P
 
 theorem choose_sameSnapshot (node : AipNode) (key : Nat) : SameSnapshot (Leanux.WG.choose node key) := by
-  frame_same [Leanux.WG.choose] using []
+  exact sameSnapshot_of_sameKernel (Framing.choose_sameKernel node key)
 
 theorem choose_spec (P : Snapshot → Prop) (node : AipNode) (key : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.choose node key
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (choose_sameSnapshot node key).wp P
 
 theorem commonBits_sameSnapshot (node : AipNode) (key : Nat) (bits : Nat) : SameSnapshot (Leanux.WG.commonBits node key bits) := by
-  frame_same [Leanux.WG.commonBits] using []
+  exact sameSnapshot_of_sameKernel (Framing.commonBits_sameKernel node key bits)
 
 theorem commonBits_spec (P : Snapshot → Prop) (node : AipNode) (key : Nat) (bits : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.commonBits node key bits
@@ -266,7 +273,7 @@ theorem PrevQueue_peek_spec (P : Snapshot → Prop) {α : Type} (q : PrevQueue �
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (PrevQueue_peek_sameSnapshot (α := α) q).wp P
 
 theorem allocNode_sameSnapshot (site : AllocSite) (n : AipNode) : SameSnapshot (Leanux.WG.allocNode site n) := by
-  frame_same [Leanux.WG.allocNode] using [getDev_spec, hiddenAlloc_snapshot_spec]
+  exact sameSnapshot_of_sameNodeAllocation (Framing.allocNode_sameNodeAllocation site n)
 
 theorem allocNode_spec (P : Snapshot → Prop) (site : AllocSite) (n : AipNode) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.allocNode site n
@@ -329,7 +336,7 @@ theorem loopbackSoftirq_spec (P : Snapshot → Prop)  :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (loopbackSoftirq_sameSnapshot ).wp P
 
 theorem prefixMatches_sameSnapshot (node : AipNode) (key bits : Nat) : SameSnapshot (Leanux.WG.prefixMatches node key bits) := by
-  frame_same [Leanux.WG.prefixMatches] using [commonBits_spec]
+  exact sameSnapshot_of_sameKernel (Framing.prefixMatches_sameKernel node key bits)
 
 theorem prefixMatches_spec (P : Snapshot → Prop) (node : AipNode) (key bits : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.prefixMatches node key bits
@@ -434,7 +441,7 @@ theorem loopbackSend_spec (P : Snapshot → Prop) (sites : List HiddenSite) (rai
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (loopbackSend_sameSnapshot sites raised).wp P
 
 theorem nodePlacement_sameSnapshot (trie : Option NodeId) (key cidr bits : Nat) : SameSnapshot (Leanux.WG.nodePlacement trie key cidr bits) := by
-  frame_same [Leanux.WG.nodePlacement] using [AipNode_bitAt_spec, choose_spec, getNode_spec, prefixMatches_spec]
+  exact sameSnapshot_of_sameKernel (Framing.nodePlacement_sameKernel trie key cidr bits)
 
 theorem nodePlacement_spec (P : Snapshot → Prop) (trie : Option NodeId) (key cidr bits : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.nodePlacement trie key cidr bits
@@ -497,7 +504,7 @@ theorem bucketHas_spec (P : Snapshot → Prop) (walk collide : Decision) (index 
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (bucketHas_sameSnapshot walk collide index).wp P
 
 theorem connectNode_sameSnapshot (slot : Slot) (id : NodeId) : SameSnapshot (Leanux.WG.connectNode slot id) := by
-  frame_same [Leanux.WG.connectNode] using [getNode_spec, setNode_spec, slotSet_spec]
+  exact sameSnapshot_of_sameNodeKernel (Framing.connectNode_sameNodeKernel slot id)
 
 theorem connectNode_spec (P : Snapshot → Prop) (slot : Slot) (id : NodeId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.connectNode slot id
@@ -586,7 +593,7 @@ theorem tunnelXmit_spec (P : Snapshot → Prop) (e : Endpoint) (bytes : List UIn
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (tunnelXmit_sameSnapshot e bytes ds r exactRx).wp P
 
 theorem chooseAndConnectNode_sameSnapshot (parent node : NodeId) : SameSnapshot (Leanux.WG.chooseAndConnectNode parent node) := by
-  frame_same [Leanux.WG.chooseAndConnectNode] using [choose_spec, connectNode_spec, getNode_spec]
+  exact sameSnapshot_of_sameNodeKernel (Framing.chooseAndConnectNode_sameNodeKernel parent node)
 
 theorem chooseAndConnectNode_spec (P : Snapshot → Prop) (parent node : NodeId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.chooseAndConnectNode parent node
