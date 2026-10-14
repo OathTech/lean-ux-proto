@@ -85,7 +85,7 @@ def cookieMessageConsume (msg : List UInt8) : M Unit := do
   let entry ← indexLookup [.handshake, .keypair] (u32le msg 4)
   if ← branch .cookieLookupMiss entry.isNone then return
   let some e := entry | invariant "unreachable"
-  let pid := e.peer
+  let some pid := e.peer | invariant "unreachable"   -- the got peer (peerlookup.c:219-220)
   let p ← getPeer pid
   if ← branch .cookieNoMac1Sent !p.haveSentMac1 then
     peerPut (some pid)   -- goto out
@@ -412,7 +412,7 @@ def enqueuePerPeerRx (irqExit : M Unit) (id : SkbId) (state : PacketState) : M U
 def consumeData (msg : List UInt8) (src : SkbSource) (ds : Nat) : M Unit := do
   -- `data->key_idx`, of a keypair; the lookup takes a reference to the peer
   let entry ← indexLookup [.keypair] (u32le msg 4)
-  let peer := entry.map (·.peer)
+  let peer := entry.bind (·.peer)
   -- `unlikely(!wg_noise_keypair_get(PACKET_CB(skb)->keypair))`
   let kp ← match entry with
     | none => do keypairGetCurrent; pure none   -- wg_noise_keypair_get(NULL)

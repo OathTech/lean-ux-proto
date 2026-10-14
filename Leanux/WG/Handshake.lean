@@ -295,7 +295,8 @@ def consumeResponse (msg : List UInt8) : M (Option PeerId) := do
   let entry ← indexLookup [.handshake] (u32le msg 8)
   if ← branch .crespNoHandshake entry.isNone then return none
   let some e := entry | invariant "unreachable"
-  let pid := e.peer
+  -- the entry a lookup returns carries the got peer (peerlookup.c:219-220)
+  let some pid := e.peer | invariant "unreachable"
   let fail : M (Option PeerId) := do
     peerPut (some pid)
     return none

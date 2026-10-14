@@ -604,3 +604,17 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   placement, and is withdrawn; the evidence runs on a first-run mismatch
   again, the W7 13.2 (ii) form. Each mutant is rejected after its fix; the
   area suites agree.
+- **2026-10-14 [AGENT, fork of the coordinator]** The mirror's index-table
+  entry carries `entry->peer` as the C does: `IndexEntry.peer : Option PeerId`,
+  and `indexLookup` stores `wg_peer_get_maybe_zero`'s result back into the
+  entry (peerlookup.c:218), so a failed get leaves NULL there and a later
+  lookup of the same entry takes the get's `!peer` arm (peer.c:75), where the
+  mirror took the `kref_get_unless_zero` arm again. A mirror defect found by
+  the binary adequacy grind's region lemmas over `wg_index_hashtable_lookup`,
+  the first Rule Zero finding at that level. The two-lookup witness (a hashed
+  handshake entry naming a peer at count zero, looked up twice): the mirror
+  on main reported `peerGetMaybeZeroDead` at both lookups, the fixed mirror
+  reports `peerGetMaybeZeroDead` then `peerGetMaybeZeroNull`, the C's order.
+  The arm is modelled and unexercised on this configuration (one CPU, no
+  preemption): no lookup finds an entry whose peer is at zero, the reasons
+  with the C lines in the lifecycle design (16.6). Not a scope cut.
