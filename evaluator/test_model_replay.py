@@ -134,10 +134,14 @@ def with_timer_caller_jiffies(trace):
     keepalive = max((peer.get('keepalive', 0) for op in trace['ops'] if op.get('op') == 'wg_set'
                      for peer in op.get('config', {}).get('peers', [])), default=0)
     for records in trace['hidden']:
-        out, jitter = [], {}
+        out, jitter, draw_at = [], {}, {}
         for site, value in records:
             for name, draw_site in JITTER_SITES.items():
                 if site == draw_site:
+                    # the compiled argument reads jiffies before the jitter draw (measured on
+                    # s3), so the synthetic caller read goes before the first draw of the
+                    # rejection loop, not right before the arm
+                    draw_at.setdefault(name, len(out))
                     r = int(value[:2], 16)
                     if (83 * r) % 256 >= 256 % 83:
                         jitter[name] = 83 * r // 256
@@ -156,8 +160,10 @@ def with_timer_caller_jiffies(trace):
                 if not fits:
                     raise AssertionError(f'replay fixture: arm {value} fits no timer delay within a tick of {jm:#x}')
                 caller, jc = fits[-1]   # the jittered fit, when its draw is present, over a coincident constant
-                jitter.pop({422: 'new_handshake', 424: 'retransmit'}.get(caller, ''), None)
-                out.append([caller, jc.to_bytes(8, 'little').hex()])
+                name = {422: 'new_handshake', 424: 'retransmit'}.get(caller, '')
+                jitter.pop(name, None)
+                at = draw_at.pop(name, len(out))
+                out.insert(at, [caller, jc.to_bytes(8, 'little').hex()])
             out.append([site, value])
         records[:] = out
     return trace
