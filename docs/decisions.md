@@ -575,11 +575,21 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   which the C function returns), and a decision reported after one at a
   later line of the function is a decision evaluated past Linux's return;
   a line-level rule was tried twice and withdrawn, a line owning several
-  blocks; (4) a trace with open NAPI
-  placements always goes through the placement evidence, whose per-section
-  matching ties the mirror's NET_RX ordinals to the guest's blocks (before,
-  only a first-run operand mismatch triggered it); the section-confined
-  operand relation was written and tested but not applied on the main path,
-  since on batch traces (w7_mixed op 4) it fails at an ordinal the guest's
-  block tags place elsewhere, a disagreement for the W7 placement work to
-  settle. Each mutant is rejected after its fix; the area suites agree.
+  blocks; (4) the operand relation on the
+  main path is section-confined: a branch the mirror stamped with NET_RX
+  ordinal k matches only the records of the guest's k-th `net_rx_action`
+  block, on every trace, so a mis-stamped mirror fails where before only
+  the placement evidence (run on a first-run mismatch) could see it. The
+  disagreement that had kept the confined relation off the main path
+  (w7_mixed op 4, the mirror's ordinal 4 against the guest's 6) was the
+  mirror's: it counted only the NET_RX sections it runs as a worker, while
+  the guest numbers every `net_rx_action` section, including the loopback
+  transmissions' and the flood producers' sections the mirror consumes and
+  skips; now every consumed section start advances the ordinal
+  (`noteNetRxStart`, at the four consumption points), an instrument
+  change, no data or control flow of the C. The narrow form tried first
+  (4ca380f: the placement evidence forced for every trace with open
+  placements) left the mutant alive on rx_counter_jump, which has no open
+  placement, and is withdrawn; the evidence runs on a first-run mismatch
+  again, the W7 13.2 (ii) form. Each mutant is rejected after its fix; the
+  area suites agree.

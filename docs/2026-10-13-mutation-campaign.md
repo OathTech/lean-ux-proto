@@ -586,7 +586,7 @@ defect; the `unsupported` ones are the gaps the census lists.
 
 | Mutant | Site | Category | Why it survived | Fix |
 | --- | --- | --- | --- | --- |
-| m-ec0783b3a0 | `Env/Batch.lean:38` the NET_RX section ordinal, condition negated | **R** | its logical twin `w != .netRx` (m-f61392504a) was rejected by the placement-evidence check, while this one passed the subset and the whole suite with 15 inline placements present in the confirming run (`napi_orders`: a 94, bc 15); the placement evidence's sensitivity to the section ordinal depends on which placement runs occur | a check rule: the placement evidence should compare the section ordinals of the steps it replays, not only their control flow — fixed in 4ca380f (every trace with open placements goes through the placement evidence, whose per-section matching ties the mirror's ordinals to the guest's blocks; the section-confined relation itself fails batch traces at ordinal 4 and is reported for the W7 placement work) |
+| m-ec0783b3a0 | `Env/Batch.lean:38` the NET_RX section ordinal, condition negated | **R** | its logical twin `w != .netRx` (m-f61392504a) was rejected by the placement-evidence check, while this one passed the subset and the whole suite with 15 inline placements present in the confirming run (`napi_orders`: a 94, bc 15); the placement evidence's sensitivity to the section ordinal depends on which placement runs occur | a check rule: the placement evidence should compare the section ordinals of the steps it replays, not only their control flow — fixed in 8340562: the operand relation on the main path is section-confined (a branch stamped with ordinal k matches only the guest's k-th `net_rx_action` block), on every trace, after the mirror's ordinal was made the guest's (it counted only the NET_RX sections it ran as a worker, not the loopback and flood-producer sections it skips; now every consumed section start counts). 4ca380f's narrow form (the placement evidence forced for every trace with open placements) did not reject this mutant: rx_counter_jump has no open placement, so the evidence never ran |
 | m-d7dee84db8 | `Env/IpStack.lean:72` checksum fold negated | rejected (wireguard) | the environment's IP checksum is verified by the receive path on an injected datagram; survived `handwritten` only | none: resolved in 6.8 |
 | m-ad789234b2 | `Env/IpStack.lean:72` `>` → `≥` at 0xffff | CB | the boundary value never occurs | none worth a trace |
 | m-ab0b08a1e3 | `Env/Stack.lean:72` the TCP ack flag negated | rejected (wireguard) | the TCP helper is exercised by the stage traces; survived `handwritten` only | none: resolved in 6.8 |
@@ -833,7 +833,8 @@ its row of section 6):
    passes the placement-evidence check in a run with 15 inline placements
    while its logical twin was rejected; the check's sensitivity to the
    ordinal depends on which placement runs occur. Fix: the placement
-   evidence should compare the section ordinals it replays.
+   evidence should compare the section ordinals it replays. (After the
+   fix the site is line 39 and the same mutation is m-cef7af2b2a.)
 
 What the channels' shares say: control flow and hidden records catch most
 of what is caught (the witnesses and the records are the instruments with
