@@ -30,9 +30,16 @@ surface, we don't care much, that's a judgement call."
 
 So, in this assignment:
 - The trust surface is two things: Kraken's semantics at the pinned commit,
-  and the statement of section 1 with everything it quantifies over or
-  assumes: `R`, the environment premises, the call contracts, the decoder and
-  the image, all of them declarations in `binary/TrustBase.lean`. They are reviewed
+  and the statement of section 1 with the premises it assumes: the
+  environment premises, the call contracts, the decoder and the image, all
+  of them declarations in `binary/TrustBase.lean`. `R` as a whole is a proof
+  artefact, not surface: a wrong body fails the proofs or weakens the
+  transported properties, both visibly. Its machine-side domain at an entry,
+  the precondition `Pre_f`, *is* surface, because an unsatisfiable `Pre_f`
+  makes every theorem vacuous [USER 2026-10-14: "a sub-part of R defines the
+  states over which the binary may be called, and this *is* a trust surface
+  (eg it could be vacuous and we would prove the binary 'correct' even
+  though it couldn't be executed)"]. Section 2a says how it is guarded. They are reviewed
   independently (section 7a) and every change to them is visible, named and
   justified. Correctness here is the whole point.
 - Everything outside that surface is a means: generators, scripts,
@@ -140,6 +147,35 @@ goal is split, and a native axiom is a request to the user, not a default);
 (`scripts/proof-gate`) is extended by this charter to the `binary/` tree:
 the three standard axioms plus the declarations of `TrustBase.lean` and
 nothing else, reported by name.
+
+## 2a. The entry precondition: non-vacuity and realism
+
+For each certified function `f`, `Pre_f` (the machine states `R` relates to
+some mirror world at `f`'s entry, with the ABI arguments) is listed in
+`binary/TrustBase.lean` by name next to the function's theorem, and two
+guards accompany it:
+
+- **Non-vacuity, required at the function's milestone:** a concrete machine
+  state satisfying `Pre_f`, constructed and executed under Kraken to the
+  return (the probe's materialised state for the index lookup is the first),
+  so the theorem is known to apply to at least one state. A `Pre_f` without
+  its witness does not land.
+- **Realism, required before the first transport (milestone 4):** the
+  kernel's own entry states satisfy `Pre_f`. A record-only hook (class-
+  approved, one oracle rebuild at an integration) captures, at an anchored
+  entry during the differential run, the structures `R` reads for that
+  function; the precondition is then checked offline against every recorded
+  entry in the corpus, as a check rule with a fail-closed verdict. The
+  report names the entries checked and the count. Until the hook exists, the
+  witness is built from a corpus operation's mirror state through the DWARF
+  layouts, and the report says so.
+
+The same observation fixes what the reviewer checks about `R`'s body: the
+fields the landed properties read (the replay counter and its bitmap, the
+keypair slots and their identities, the queues' contents, the endpoint, the
+allowed-IPs nodes, the handshake state) must be related by equality under
+`R`, not loosely, or a transported property means less than its name. The
+review compares `R`'s equations against the properties' statements.
 
 ## 3. The method
 
@@ -257,8 +293,10 @@ the trust-base file verbatim, then after each milestone.
 After milestone 1 and before milestone 2, the coordinator sends the theorem
 statement, the transport corollary, the composition lemma's statement and
 `binary/TrustBase.lean` to an independent reviewer with no context, with one
-question: is this the theorem we want, and is every item in the trust base
-both necessary and stated at its weakest? The review's findings are
+question: is this the theorem we want, is every item in the trust base both
+necessary and stated at its weakest, is each `Pre_f` satisfiable by a reachable
+kernel state and the one the kernel actually provides at the call, and does
+`R` relate by equality every field the landed properties read? The review's findings are
 corrections to the surface before the grind scales; a finding that the
 surface is wrong is the most valuable result this assignment can produce
 early. The same review repeats at milestone 4 (the first transport) and
