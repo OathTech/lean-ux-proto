@@ -234,6 +234,75 @@ def rx_1025():
                                            "wg_packet_consume_data.enqueued_epipe=0"])}
 
 
+# --- Simultaneous initiation (the pre-release review's finding 3, 2026-10-14) ---
+PEER2 = b"\x33" * 32                        # a second peer, its private key the trace's
+PEER2_INIT_EPHEMERAL = b"\x47" * 32
+PEER2_INIT_INDEX = 0x0badcaff
+DST4_Q = bytes([11, 0, 0, 1])                # inside the second peer's 11.0.0.0/8
+INIT = "wg_receive_handshake_packet.initiation=1"
+NO_KEYPAIR = "wg_packet_send_staged_packets.no_keypair=1"
+
+
+def theirs(peer_private=d1.PEER, ephemeral=d2.PEER_INIT_EPHEMERAL, index=d2.PEER_INIT_INDEX):
+    """A peer's initiation to wg0 (the other side initiating)."""
+    return noise.initiation(noise.public_key(d1.DEVICE), peer_private, ephemeral, noise.tai64n(1, 0), index)
+
+
+def inject_raw_item(message):
+    return {"kind": "inject", "family": 4, "port": d1.PORT, "message": message.hex()}
+
+
+def pending():
+    """Simultaneous initiation (the pre-release review's finding 3): wg0's own
+    initiation is queued (a wg_xmit with no session) while the peer's
+    initiation arrives, so the handshake send worker (handshake_send_wq,
+    unbound) and the handshake receive worker are both queued when the batch
+    call returns and run in the recorded order; the retired
+    `requireNotPending` stop refused the receive-first order. wg0's draws are
+    recorded, not steered, since no later message depends on them. A
+    sequential variant then injects the peer's response to wg0's
+    now-replaced initiation: the index lookup finds nothing
+    (consume_response's no_handshake arm). The suite holds the two traces
+    whose two guest children agree on the order; `held()` has the two whose
+    order differed between the children on s2 (2026-10-14), which the
+    harness's determinism rule refuses although the mirror reproduces each
+    child's returns on its own capture."""
+    out = {}
+    setup = d2.setup(keepalive=False)
+    out["p_sim_init_batch_recv_first"] = (setup + [batch([inject_raw_item(theirs()), xmit_item(d2.payload(64, 11))], 400),
+                                                    OBSERVE, GET], [], [INIT, NO_KEYPAIR])
+    stale = d1.respond(d1.wg0_initiation()).message   # the peer's response to wg0's steered initiation
+    out["p_sim_init_seq_stale_response"] = (setup + [xmit(d2.payload(64, 15)), OBSERVE, d1.inject(theirs()), OBSERVE,
+                                                     d1.inject(stale), OBSERVE, GET],
+                                            d1.steer_initiation() + [["index_draw", "draw"]],   # wg0's response index: recorded
+                                            [NO_KEYPAIR, INIT, "wg_receive_handshake_packet.response=1",
+                                             "wg_noise_handshake_consume_response.no_handshake=1",
+                                             "wg_receive_handshake_packet.response_no_peer=1"])
+    return out
+
+
+def held():
+    """Simultaneous-initiation traces outside every suite: the order of the
+    unbound send worker and the receive worker varied between the two guest
+    children on s2 (send_first: pc send-first and observe 148, cmp
+    receive-first and observe -EAGAIN; two_peers: 148 and -EAGAIN likewise),
+    which `harness/linux.py`'s determinism rule reports as an environment
+    failure. Written with `--held DIR` for the replay evidence."""
+    out = {}
+    setup = d2.setup(keepalive=False)
+    out["p_sim_init_batch_send_first"] = (setup + [batch([xmit_item(d2.payload(64, 12)), inject_raw_item(theirs())], 400),
+                                                    OBSERVE, GET], [], [INIT, NO_KEYPAIR])
+    peer_q = {"public_key": d1.key(noise.public_key(PEER2)),
+              "allowed_ips": [{"family": 4, "addr": DST4_Q[:1].hex() + "000000", "cidr": 8}], "endpoint": d1.LISTENER}
+    setup2 = [{"op": "wg_set", "config": {"private_key": d1.key(d1.DEVICE), "listen_port": d1.PORT,
+                                          "peers": [d2.peer_config(False), peer_q]}}, {"op": "wg_up"}]
+    xmit_q = {"kind": "xmit", "packet": {"family": 4, "dst": DST4_Q.hex(), "payload": d2.payload(64, 13).hex()}}
+    out["p_sim_init_two_peers"] = (setup2 + [batch([xmit_item(d2.payload(64, 14)), xmit_q, inject_raw_item(theirs()),
+                                                   inject_raw_item(theirs(PEER2, PEER2_INIT_EPHEMERAL, PEER2_INIT_INDEX))], 400),
+                                             OBSERVE, GET], [], [INIT, NO_KEYPAIR])
+    return out
+
+
 def controls():
     """Beyond the WireGuard boundary (section 16): the mirror answers
     `unsupported` (fail-noisy), never a prediction. Each is a well-formed
@@ -258,7 +327,10 @@ def finish(out, validate=True):
         fixture = entry[3] if len(entry) > 3 else None
         if wait_after_up(ops) > WAIT_BUDGET_SECONDS:
             raise AssertionError(f"{name} exceeds the guest's wait budget")
-        trace = {"version": 1, "id": name, "ops": ops, "steer": steer, "expect": list(dict.fromkeys(expect))}
+        trace = {"version": 1, "id": name, "ops": ops}
+        if steer:   # recorded draws need no schedule (the simultaneous-initiation traces)
+            trace["steer"] = steer
+        trace["expect"] = list(dict.fromkeys(expect))
         if fixture:
             trace["net_fixture"] = fixture
         result[name] = validate_trace(trace) if validate else trace
@@ -266,7 +338,13 @@ def finish(out, validate=True):
 
 
 def main():
-    for directory, written in ((ROOT / "corpus" / "wireguard", finish(traces())),
+    if len(sys.argv) == 3 and sys.argv[1] == "--held":
+        directory = Path(sys.argv[2]); directory.mkdir(parents=True, exist_ok=True)
+        for name, trace in finish(held()).items():
+            (directory / f"{name}.json").write_text(json.dumps(trace, indent=2) + "\n")
+        print(f"wrote {len(held())} held traces to {directory}")
+        return
+    for directory, written in ((ROOT / "corpus" / "wireguard", finish(traces()) | finish(pending())),
                                (ROOT / "corpus" / "w47-controls", finish(controls(), validate=False)),
                                (ROOT / "corpus" / "w7-tier", finish(tier()))):
         directory.mkdir(exist_ok=True)
