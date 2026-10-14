@@ -108,8 +108,8 @@ theorem peekHiddenSite_spec (P : WGKernelView → Prop)  :
     ⦃fun w => ⌜P (wgKernelView w)⌝⦄ Leanux.peekHiddenSite
     ⦃⇓? _ w => ⌜P (wgKernelView w)⌝⦄ := (peekHiddenSite_sameWGKernel).wp P
 
-theorem peekUnit_sameWGKernel (w : Worker) : SameWGKernel (Leanux.peekUnit w) := by
-  frame_wg [peekUnit] using [skipAmbient_spec]
+theorem peekUnit_sameWGKernel (w : Worker) : SameWGKernel (Leanux.peekUnit w) :=
+  sameWGKernel_of_sameKernel (Framing.peekUnit_sameKernel w)
 
 theorem peekUnit_spec (P : WGKernelView → Prop) (w : Worker) :
     ⦃fun w => ⌜P (wgKernelView w)⌝⦄ Leanux.peekUnit w
@@ -178,8 +178,8 @@ theorem queueDeviceWork_spec (P : WGKernelView → Prop) (w : Worker) :
     ⦃fun w => ⌜P (wgKernelView w)⌝⦄ Leanux.queueDeviceWork w
     ⦃⇓? _ w => ⌜P (wgKernelView w)⌝⦄ := (queueDeviceWork_sameWGKernel w).wp P
 
-theorem resolveUnit_sameWGKernel (w : Worker) (unit : Nat) (queue : List Nat) : SameWGKernel (Leanux.resolveUnit w unit queue) := by
-  frame_wg [resolveUnit] using []
+theorem resolveUnit_sameWGKernel (w : Worker) (unit : Nat) (queue : List Nat) : SameWGKernel (Leanux.resolveUnit w unit queue) :=
+  sameWGKernel_of_sameKernel (Framing.resolveUnit_sameKernel w unit queue)
 
 theorem resolveUnit_spec (P : WGKernelView → Prop) (w : Worker) (unit : Nat) (queue : List Nat) :
     ⦃fun w => ⌜P (wgKernelView w)⌝⦄ Leanux.resolveUnit w unit queue

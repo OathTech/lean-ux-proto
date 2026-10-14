@@ -123,4 +123,16 @@ theorem skipCut_sameKernel (sites : List HiddenSite) : SameKernel (skipCut sites
   simp only [Functor.discard, map_const, Function.comp_apply, Function.const, map_eq_pure_bind]
   exact sameKernel_wp _ (sameKernel_bind (skipCutSites_sameKernel sites) (fun _ => sameKernel_pure ())) (fun s => s = k)
 
+theorem peekUnit_sameKernel (worker : Worker) : SameKernel (peekUnit worker) := by
+  apply sameKernel_of_wp
+  intro k
+  have hs := sameKernel_wp _ skipAmbient_sameKernel (fun s => s = k)
+  mvcgen [peekUnit, hs]
+
+theorem resolveUnit_sameKernel (worker : Worker) (unit : Nat) (queue : List Nat) :
+    SameKernel (resolveUnit worker unit queue) := by
+  apply sameKernel_of_wp
+  intro k
+  mvcgen [resolveUnit, invariant, unsupported]
+
 end Leanux.Proofs.Framing

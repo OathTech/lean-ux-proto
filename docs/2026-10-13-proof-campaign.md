@@ -6,9 +6,9 @@ Worktree `.worktrees/proofs-campaign`, branch `proofs/campaign`; governed by
 [the charter](2026-10-13-charter-proof-campaign.md). Both prerequisites were
 carried from `2c7a076`, then the audit at `f45bde8` and documentation-only
 `a39aded`, then the scheduler robustness change at `7a92672`.
-All registered components are current over `7a92672`, including the R2 handshake
-receive/worker and thin ingress, R3 insertion/pure-removal/local removal steps and R4 finite and RX source
-ring-journal extensions. The new `cryptAhead` call is observed and framed, and the historical
+All registered components are current over `7a92672`, including R2 concrete Batch scheduling
+and separate copied trials, R3 insertion/pure-removal/local removal steps and R4 finite
+and RX source ring journals. The new `cryptAhead` call is observed and framed, and the historical
 witness seed no longer depends on the removed evaluator fixture.
 Open obligations below remain explicit. No integration into main,
 push, differential check or guest run has been performed by this campaign.
@@ -16,17 +16,17 @@ push, differential check or guest run has been performed by this campaign.
 | Result | Disposition |
 | --- | --- |
 | R1 anti-replay | Complete: uniqueness and the intentional inclusive-floor correction, with pure and accepted-run witnesses. |
-| R2 lifetimes | Endpoint identity and failure-retaining access contracts cover the listed call families. Whole-run caller/lifecycle/scheduler closure and saved-reference ownership remain open. The stale-cursor finding is checked. |
+| R2 lifetimes | Endpoint identity and failure-retaining access contracts cover the listed call families, now including the concrete Batch scheduler and separate copied trials. Whole-run environment/lifecycle closure and saved-reference ownership remain open. The stale-cursor finding is checked. |
 | R3 routing | Prefix arithmetic, represented-tree lookup and unified bounded-input normal insertion dispatch are checked. Pure removal/locality and total binary/root-tagged leaf/unary source steps are checked. General removal, saved-list coherence, configuration-history and packet-path refinements remain open. |
 | R4 delivery | W7's two full-ring drops are explained. An accepted replay refutes chronological post-GRO stack order. Per-poll selected order, removal/provenance, concrete stack frames and RX source ring journals are checked; pipeline conservation remains open. |
 | R5 key lifetime | Resolved under Rule Zero by counter-limit, delayed-encryption and post-clear-use witnesses, with 13 local positive contracts. |
 | R6 flood resistance | Cookie exclusion proved at the original call boundary; accepted 19-retry/20-initiation episode resolves the literal limit through Rule Zero. Six terminal contracts. |
 
 **Last coordinated validation.** The mirror is byte-identical to `7a92672`.
-The proof gate passes 298 jobs and 301 terminal statements
-(ReplayWindow 15; R1 9; R2 152; R3 53; R4 53; R5 13; R6 6), using only `propext`, `Classical.choice` and `Quot.sound`.
+The proof gate passes 305 jobs and 306 terminal statements
+(ReplayWindow 15; R1 9; R2 157; R3 53; R4 53; R5 13; R6 6), using only `propext`, `Classical.choice` and `Quot.sound`.
 Fresh stock kernel replay passes, as do the 60-job default model build and
-expanded 110-test unit tier (23.540 seconds; one skip). The model executable
+expanded 110-test unit tier (23.937 seconds; one skip). The model executable
 was rebuilt at the scheduler carry (118 jobs); its source is unchanged. Independent frozen-source
 and scope reviews have no unresolved correctness findings in these components.
 
@@ -42,7 +42,7 @@ against this mirror, including exact original/observed output comparison.
 The retry and two current time witnesses include complete-advance checks.
 Generated streams prove accepted mirror behavior, not Linux capture or schedule
 reachability. These replayers were last run at the scheduler carry; the subsequent
-pure/local removal, receive and RX ring-journal extensions change none of their code. Reproduction commands and
+pure/local removal, receive, RX ring-journal and scheduler-access extensions change none of their runtime code. Reproduction commands and
 provenance are retained below.
 
 **Carries and review history.**
@@ -144,11 +144,11 @@ The charter asks for safety of every internal access after release, across every
 The checked components establish endpoint identity evolution and failure-retaining local access safety. Whole-run closure remains open.
 The accepted stale-cursor findings below expose reference retargeting; they do not resurrect an old identity or settle the full charter claim.
 
-**Receive-family extension.** Complete handshake receive, queue step/iteration/whole worker and thin UDP/packet entry
-add nine grouped terminal exports (152 R2 terminals). The 214-job scoped target and 290-job full proof-tree build pass;
-frozen-source review has no unresolved findings. The coordinated proof gate,
-fresh stock kernel replay and fast tier pass, with current counts recorded above.
-The cookie/send checkpoints remain checked; the last coordinated campaign validation is recorded above.
+**Scheduler extension.** The concrete Batch scheduler adds five grouped exports (157 R2 terminals).
+The complete ten-call family and whole trial filter pass their 173-job local target;
+the scoped Statements target passes 221 jobs and the full proof tree passes 305 jobs. Coordinated
+proof-gate, fresh kernel replay and fast-tier checks pass, with current counts above.
+The prior receive-family checkpoint at `6c4d08f` had 152 terminals.
 
 **Architecture decisions [AGENT 2026-10-13].** Separate resolved allocation identity from ownership of saved numeric references.
 Share frontier algebra and the seven-field WG kernel projection; retain observation history outside the exception layer.
@@ -165,6 +165,9 @@ device presence, complete resident objects, allocator frontiers and `netIfindexN
 
 **Receive composition decision [AGENT 2026-10-14].** Reuse the original load/source factor and existing lower-call observers;
 share a failure-retaining bounded worker loop. Keep rescheduling explicit and separate handshake byte queues from resident skb stores.
+
+**Scheduler trial decision [AGENT 2026-10-14].** Keep original copied-World consistency trials outside the committed access history;
+prove their complete filter order/results and isolated safe prefixes separately. This avoids committing and then rolling back speculative releases.
 
 **Models and refinement.** `Lifetimes/Store` and `Actions` describe slot/stamp transitions over original executions.
 `Keypairs/Identity` uses whole-syscall evolution to exclude reintroduction of absent old keypair identities at operation endpoints.
@@ -247,8 +250,18 @@ and explicit release origins. Shared filesystem frames end at return, leaving qu
   the existing complete `consumeData` observer. Header/DS-field leaves are resident-access-free by source inspection.
   Named cookie/socket/session/staging/statistics/queue contracts discharge concretely for `AllocationInv`; callbacks remain explicit.
 
+- **Concrete Batch scheduling:** `BatchNapi`, `BatchActivation`, `BatchScheduler`, `BatchTrials` and `BatchCalls` cover
+  both NAPI placements, activation work/occupancy tests, `cryptAhead`, iteration/run, dispatch, schedule and nested rescheduling.
+  Eager saved-peer filtering records every tested entry, including misses, before callbacks; short-circuit `any` records only demanded entries.
+  The schedule guard retains its eager device getter even when the next site is not NET_RX. Dispatch retains queue erasure before section start.
+  `cryptAhead` retains append/encrypt/erase and error ordering. The original occupancy and record-budget loops retain every exhaustion Stop.
+  Actual checksum, stack/NAPI, encrypt, decrypt, TX and receive callbacks discharge concretely for `AllocationInv`.
+  The original consistency filter still discards each trial World/history. Its exact equation uses the separately observed trials in source order,
+  including the first non-hidden Stop; every candidate has a safe isolated prefix from the same entry invariant, without claiming unevaluated candidates ran.
+
 `PrefixControl` and `PrefixLoops` share exact conditional, bind, range, map, list and accumulating-fold laws.
 `PrefixWorkers` shares original iteration and bounded whole-loop erasure and prefix safety, including callback/exhaustion Stops.
+`PrefixBatch` shares exact section wrappers and pure-observation composition; `Framing/Batch` provides canonical scheduler frames with legacy projections.
 Generic enqueue/decrypt contracts retain explicit softirq, IRQ-exit and rescheduling observers.
 `Framing/KernelEffects`, `WGTime`, `WGData`, `WGHandshake`, `WGIndex`, `WGCookie` and `WGReceiveHeaders` provide canonical frames with legacy projections.
 The index frame preserves the full kernel except the scalar index table, including device presence, resident values and frontiers;
@@ -265,8 +278,9 @@ but covers a source segment. These are original-run-conditioned equations, not a
 The timer guard's peer getter executes unconditionally before `andM`. Duplicate cleanup IDs and malformed queues remain admitted,
 including a later Stop after an earlier free. Safe access prefixes establish neither delivery/order nor reference ownership.
 
-**Remaining closure.** Full caller, device-lifecycle and scheduler coverage remains unproved: concrete encrypt/TX scheduler callbacks,
-socket setup/reinitialization and outer dispatch, timer callbacks, peer removal, netlink and remaining resident scans.
+**Remaining closure.** Whole-run environment and device-lifecycle coverage remains unproved: outer runners and deferred-unit callers,
+socket setup/reinitialization, timer callbacks, peer removal, netlink and remaining resident scans. The Batch scheduler now discharges
+its concrete worker callbacks; this does not discharge the separate R4 mutation-journal callback contracts or conservation obligations.
 Saved scalar-reference ownership is separate: an aliased or dangling ID may stop after earlier safe accesses.
 No C simulation is claimed. C initializes cache/handshake before incrementing the peer counter; the mirror increments/inserts first.
 The proofs follow the mirror's order; that difference alone is not a lifetime counterexample.
@@ -309,10 +323,12 @@ A reusable conditional law moved into `Logged/Prefix`; an overbroad docstring wa
 TX review checked source/C ordering and confirmed composition through existing laws without requiring a new sequence runner.
 Legacy frame signatures were preserved through canonical projections, resolving duplicate generated matcher declarations.
 Documentation status/count discrepancies were corrected. No unresolved correctness finding remains for the checked components;
-this does not close their stated caller, scheduler or ownership obligations.
+this does not close their stated enclosing-environment, lifecycle or ownership obligations.
 Send-family review qualified the no-prior-access statement to buffer allocation refusal; response/session allocation has preceding peer accesses.
 Receive review qualified common completion to a false `beginSession` return, excluding Stops,
 and corrected the stale cookie-map sentence that left the now-covered local receive composition open.
+Scheduler review checked source order, failed prefixes and whole-filter trial correspondence; all 13 frozen Lean hashes were reconciled without findings.
+The stale map/report claims that scheduler callbacks remained open were corrected to the enclosing environment and lifecycle limits.
 
 **Effort.** The ledger records invocations, not an invented campaign total. Each accepted cursor reproduction takes under one second.
 
@@ -328,6 +344,7 @@ and corrected the stale cookie-map sentence that left the now-covered local rece
 | Six-call handshake send family | 6: 2 / 4 | 7m39s |
 | Four-call cookie family | 5: 2 / 3 | 11m41s |
 | Handshake receive/worker and thin ingress | 7: 2 / 5 | 20m06s through full-build collection |
+| Concrete Batch scheduler and separate trials | 18: 5 / 13 | 29m41s through full-build collection |
 
 Earlier caller checkpoints took roughly 6–25 minutes each with 4–19 compilation invocations.
 The first IPv4 architecture failed at proof-search heartbeat limits; its unused observer was removed.
@@ -357,6 +374,16 @@ No differential check or guest was run for this proof work.
 (2) If that domain expands, retain the actual device lifetime in the cursor as C does: altitude-preserving, with separate validation.
 (3) Retain named allocation, deletion and same-object update boundaries: altitude-preserving operational structure.
 No production history field is proposed, and no mirror change was made for these proofs.
+
+The scheduler extension's second build failed because a generic wrapper was moved to a new module while that invocation's dependency graph was already running.
+That was a build-input timing error, not a cap or interruption. Subsequent invocations kept input sources fixed until their exits were collected.
+The remaining failures were ordinary source-factor/type elaboration: pure scan insertion, discard normalization, paired match cases,
+explicit queue-update inference, source bind normalization and `Except.map` reduction. No mirror semantics or theorem premises changed.
+All 18 exits were collected: five passes, the timing failure and twelve ordinary elaboration failures, with no cap or interruption.
+The final 221-job Statements and 305-job full-tree builds pass with 157 R2 terminals; frozen-source review found no unresolved issue.
+Validation was collected at 03:35:55 UTC, 29m41s after the token grant; token handoff and cleanup took 30m55s in all.
+Coordinated proof-gate, fresh kernel replay and fast-tier checks pass. Independent review reconciled all 13 Lean files
+and the final report/register with no unresolved findings. The unchanged cursor witnesses were not rerun.
 
 ## R3 — cryptokey routing (in progress)
 

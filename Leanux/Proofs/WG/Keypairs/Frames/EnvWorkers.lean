@@ -12,9 +12,8 @@ set_option maxHeartbeats 400000
 set_option pp.structureInstances false
 
 theorem runWorker_sameSnapshot (worker : Worker) (body : M Unit)
-    (hb : SameSnapshot body) : SameSnapshot (Env.runWorker worker body) := by
-  have body_spec (P : Snapshot → Prop) := hb.wp P
-  frame_same [Env.runWorker] using [hidden_snapshot_spec, peekHiddenSite_spec, body_spec]
+    (hb : SameSnapshot body) : SameSnapshot (Env.runWorker worker body) :=
+  Framing.runWorker_sameView snapshot (fun _ _ he => by simp [snapshot, he]) worker body hb
 
 theorem runWorker_snapshot_spec (P : Snapshot → Prop) (worker : Worker)
     (body : M Unit) (hb : SameSnapshot body) :

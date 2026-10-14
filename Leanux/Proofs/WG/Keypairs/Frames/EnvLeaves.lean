@@ -2,6 +2,7 @@ import Leanux.Proofs.WG.Keypairs.Frames.WGDevice
 import Leanux.Env
 import Leanux.Proofs.Framing.Stack
 import Leanux.Proofs.Framing.WGData
+import Leanux.Proofs.Framing.Batch
 import Leanux.Proofs.WG.Keypairs.SnapshotRules
 
 /-! Framing the inner IP delivery cut and scheduler/environment leaves. -/
@@ -89,8 +90,8 @@ theorem fixtureSend_spec (P : Snapshot → Prop) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.Env.fixtureSend
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := fixtureSend_sameSnapshot.wp P
 
-theorem condResched_sameSnapshot (self : Worker) : SameSnapshot (Env.condResched self) := by
-  frame_same [Env.condResched] using [peekHiddenSite_spec, hidden_snapshot_spec]
+theorem condResched_sameSnapshot (self : Worker) : SameSnapshot (Env.condResched self) :=
+  sameSnapshot_of_sameWGKernel (Framing.sameWGKernel_of_sameKernel (Framing.condResched_sameKernel self))
 
 theorem condResched_spec (P : Snapshot → Prop) (self : Worker) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Env.condResched self
@@ -107,18 +108,8 @@ theorem activationOccupancy_sameSnapshot (a : Activation) : SameSnapshot (Env.Ac
   frame_same [Env.Activation.occupancy] using [getDev_spec, getPeer_spec]
 
 /-- The trial executes on a copy; its returned World is discarded. -/
-theorem activationConsistent_sameSnapshot (a : Activation) : SameSnapshot (Env.Activation.consistent a) := by
-  intro w b w' hr
-  unfold Env.Activation.consistent at hr
-  simp only [StateT.run_bind, StateT.run_get, pure_bind] at hr
-  cases he : (Env.Activation.run a).run w with
-  | ok out =>
-    simp only [he, StateT.run_pure] at hr
-    cases hr
-    rfl
-  | error e =>
-    simp only [he, StateT.run_pure] at hr
-    cases e <;> cases hr <;> rfl
+theorem activationConsistent_sameSnapshot (a : Activation) : SameSnapshot (Env.Activation.consistent a) :=
+  sameSnapshot_of_sameWGKernel (Framing.sameWGKernel_of_sameKernel (Framing.activationConsistent_sameKernel a))
 
 theorem activationConsistent_spec (P : Snapshot → Prop) (a : Activation) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Env.Activation.consistent a

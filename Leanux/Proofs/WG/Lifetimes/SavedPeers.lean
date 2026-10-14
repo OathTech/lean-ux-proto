@@ -98,4 +98,48 @@ theorem savedPeerAny_spec (c : AmbientContracts I) (P : IdentityView → Prop)
         (fun _ _ hi => hi) (fun _ _ _ hi => ⟨hi.1, hi.2.1⟩)
     · exact ih
 
+/-- An eager map over a captured peer store. Every tested entry, including
+misses, emits its saved identity before the pure predicate is evaluated. -/
+def savedPeerFilterMap (f : PeerId → Peer → Option α) : List (PeerId × Peer) → MixedM (List α)
+  | [] => pure []
+  | (id, p) :: rest => do
+    savedPeerRead id p
+    let tail ← savedPeerFilterMap f rest
+    return match f id p with | none => tail | some x => x :: tail
+
+theorem savedPeerFilterMap_run (f : PeerId → Peer → Option α)
+    (xs : List (PeerId × Peer)) (w : World) (h : List LifetimeEvent) :
+    runPrefix (savedPeerFilterMap f xs) w h =
+      (.ok (xs.filterMap (fun x => f x.1 x.2), w),
+        h ++ xs.map (fun x => LifetimeEvent.peer (.read x.1 x.2.internalId))) := by
+  induction xs generalizing h with
+  | nil => simp [savedPeerFilterMap]
+  | cons x xs ih =>
+    rcases x with ⟨id,p⟩
+    simp only [savedPeerFilterMap, savedPeerRead, runPrefix_bind, runPrefix_emit, ih]
+    cases hf : f id p <;> simp [hf, List.append_assoc]
+
+theorem savedPeerFilterMap_erases (f : PeerId → Peer → Option α) (xs : List (PeerId × Peer)) :
+    ErasesPrefix (savedPeerFilterMap f xs) (pure (xs.filterMap (fun x => f x.1 x.2))) := by
+  intro w h
+  rw [savedPeerFilterMap_run]
+  rfl
+
+theorem savedPeerFilterMap_spec (c : AmbientContracts I) (P : IdentityView → Prop)
+    (f : PeerId → Peer → Option α) (xs : List (PeerId × Peer)) :
+    AmbientSpec I (fun s => P s ∧ SavedPeers xs s) (savedPeerFilterMap f xs) (fun _ => P) := by
+  induction xs with
+  | nil =>
+    exact (c.pure (fun s => P s ∧ SavedPeers [] s) []).consequence
+      (fun _ _ hi => hi) (fun _ _ _ hi => ⟨hi.1, hi.2.1⟩)
+  | cons x xs ih =>
+    rcases x with ⟨id,p⟩
+    unfold savedPeerFilterMap
+    have hread : AmbientSpec I (fun s => P s ∧ SavedPeers ((id,p)::xs) s)
+        (savedPeerRead id p) (fun _ s => P s ∧ SavedPeers xs s) :=
+      (savedPeerRead_spec c (fun s => P s ∧ SavedPeers xs s) id p).consequence
+      (fun _ _ hi => ⟨hi.1, ⟨hi.2.1, fun i q hq => hi.2.2 i q (by simp [hq])⟩,
+        hi.2.2 id p (by simp)⟩) (fun _ _ _ hi => ⟨hi.1, hi.2.1⟩)
+    exact PrefixEnsures.bind hread (fun _ => PrefixEnsures.bind ih (fun _ => c.pure P _))
+
 end Leanux.Proofs.WG.Lifetimes

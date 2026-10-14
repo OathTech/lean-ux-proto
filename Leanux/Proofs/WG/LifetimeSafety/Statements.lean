@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Lifetimes.BatchCalls
 import Leanux.Proofs.WG.Lifetimes.ReceiveIngress
 import Leanux.Proofs.WG.Lifetimes.SocketCalls
 import Leanux.Proofs.WG.Lifetimes.EncryptWorker
@@ -1436,5 +1437,55 @@ authentication, queue-drain or index-owner premises. The byte/source handshake
 queue is distinct from resident rx-skbs; worker scheduling remains separate. -/
 theorem receive_ingress_allocation_access_preserves (call : Lifetimes.ReceiveIngressCall) :
     PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed := call.allocation
+
+/-- Every demanded entry of an eager saved-peer filter contributes exactly one
+read, including misses, before any later scheduler callback. This is an exact
+observation equation; residency for safety is supplied at the source capture. -/
+theorem scheduler_saved_filter_exact (f : PeerId → Peer → Option α)
+    (xs : List (PeerId × Peer)) (w : World) (h : List Lifetimes.LifetimeEvent) :
+    runPrefix (Lifetimes.savedPeerFilterMap f xs) w h =
+      (.ok (xs.filterMap (fun x => f x.1 x.2), w),
+        h ++ xs.map (fun x => Lifetimes.LifetimeEvent.peer (.read x.1 x.2.internalId))) :=
+  Lifetimes.savedPeerFilterMap_run f xs w h
+
+/-- A section wrapper preserves its original start/stop and NET_RX metadata,
+including failures before or after its callback. Callback safety is explicit. -/
+theorem scheduler_section_access_contract (worker : Worker)
+    (observed : Lifetimes.MixedM Unit) (original : M Unit)
+    (he : ErasesPrefix observed original)
+    (hs : PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe observed) :
+    ErasesPrefix (runWorkerPrefix worker observed) (Env.runWorker worker original) ∧
+      PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe
+        (runWorkerPrefix worker observed) :=
+  ⟨runWorkerPrefix_erases worker he,
+    runWorkerPrefix_preserves Lifetimes.allocationAmbient.safe
+      Lifetimes.allocationAmbient.kernelStable worker hs⟩
+
+/-- Ten concrete Batch calls retain their original result type, full normal
+World and exact Stop on every input. Committed histories exclude consistency
+trials, whose copied-world execution is certified separately below. -/
+theorem scheduler_family_access_erasure (call : Lifetimes.BatchCall) :
+    ErasesPrefix call.observed call.original := call.erases
+
+/-- Concrete NAPI/stack, encryption/checksum, TX, decrypt and handshake-receive
+callbacks discharge all scheduler callback contracts. Every outcome retains a
+safe committed access prefix; successful outcomes preserve allocation geometry.
+This does not establish saved-reference ownership or progress without Stops. -/
+theorem scheduler_family_allocation_access (call : Lifetimes.BatchCall) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed :=
+  call.allocation
+
+/-- The whole original consistency filter agrees with separately observed
+trials in source order, including its first non-hidden Stop. Every candidate's
+trial prefix is safe from the same entry invariant; the equation does not claim
+unevaluated candidates ran. No speculative history or World is committed. -/
+theorem scheduler_trial_filter_access (xs : List Activation) (w : World)
+    (h : List Lifetimes.LifetimeEvent) (hi : Lifetimes.AllocationInv h w) :
+    runPrefix (liftPrefix (xs.filterM Env.Activation.consistent)) w h =
+      ((xs.filterM (fun a => Lifetimes.activationTrialDecision a w h)).map (fun ys => (ys, w)), h) ∧
+      ∀ a ∈ xs, Lifetimes.LifetimeEvent.Safe
+        (runPrefix (Lifetimes.activationRunPrefix a) w h).2 :=
+  ⟨Prod.ext (Lifetimes.activationTrials_filter xs w h) rfl,
+    Lifetimes.activationTrials_safe xs w h hi⟩
 
 end Leanux.Proofs.WG.LifetimeSafety

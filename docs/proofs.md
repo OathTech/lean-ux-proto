@@ -32,7 +32,8 @@ directory whose `Statements.lean` is the gated surface.
   seven original explicit-input crypto helpers over the full Kernel; `WGIndex`
   preserves every Kernel field except the device's scalar index table, including
   allocation geometry and device presence. Legacy signatures project these
-  canonical contracts. `Kernel`
+  canonical contracts. `Batch` shares section-wrapper and record-only scheduler
+  frames over the full Kernel, with legacy interfaces derived by projection. `Kernel`
   proves original kernel helpers over the full WG view, with the old keypair
   interfaces derived by projection. `Tools` shares loop/map contracts and proof
   setup without depending on the keypair frame hierarchy. `Signal`, `PipeAux`
@@ -60,6 +61,7 @@ directory whose `Statements.lean` is the gated surface.
   failure-retaining observers. `Capture` retains exact original-action run
   witnesses with erasure and prefix contracts. `PrefixWorkers` composes one
   original worker iteration with explicit step and rescheduling contracts.
+  `PrefixBatch` shares exact worker-section observations and callback preservation.
   `TimerPass` observes completed original timer, clear/send-worker and crypt
   scheduler calls, retaining exact before/after Worlds and failure erasure.
   `Advance` preserves the complete original advance syscall, including its
@@ -133,7 +135,8 @@ directory whose `Statements.lean` is the gated surface.
   `Framing/WGData` discharges the concrete checksum and padding frames. Consumed
   encrypt-ring replacement has its own allocation frame, separate from produce.
   Failed prefixes retain every resolved access; saved-head association and
-  ownership are not asserted. Concrete outer scheduler callbacks remain open.
+  ownership are not asserted. Concrete Batch composition now discharges those
+  worker callbacks; enclosing environment and lifecycle paths remain open.
   `TxCompletion` and `TxWorker` add the five TX completion helpers, worker step
   and iteration, with complete socket observers and explicit rescheduling.
   Exact failed prefixes include the peer read before a jitter Stop. The shared
@@ -156,8 +159,11 @@ directory whose `Statements.lean` is the gated surface.
   Ambient cookie stability is explicit and concretely discharged for allocation
   safety. `HandshakeReceive`, `ReceiveWorker` and `ReceiveIngress` compose full
   local receive processing, iteration/bounded workers and UDP/packet entry.
-  Concrete outer scheduler/callback, lifecycle and saved-reference ownership
-  closure remain open.
+  `BatchNapi`, `BatchActivation`, `BatchScheduler`, `BatchTrials` and `BatchCalls`
+  now compose the concrete Batch scheduler with exact erasure and allocation safety.
+  Copied-World trial filters have separate execution and access-safety contracts;
+  their histories are discarded. Outer environment/lifecycle and saved-reference
+  ownership closure remain open.
   `CounterAccess`, `AllowedLookupAccess`, `ReceiveCompletion` and `ReceivePoll`
   cover the complete validator, routing lookup, receive completion and polling
   with an explicit callback contract; `ReceiveFailure` retains the exact
@@ -168,12 +174,13 @@ directory whose `Statements.lean` is the gated surface.
   The IPv4 observer uses exact source tail stages and retains both endpoint
   accesses before a reset-clock failure. `DeviceXmit` and `StackAccess` observe the
   complete transmit entry, actual stack callback and receive poll using that
-  callback. Socket setup and outer scheduler/lifecycle coverage remain open.
+  callback. Socket setup and remaining outer environment/lifecycle coverage remain open.
 - `Leanux/Proofs/WG/LifetimeSafety/`: campaign R2 in progress: keypair store
   absence/freshness at original operation endpoints (`Keypairs/Identity`),
   peer/packet helper-family contracts, and a checked stale dump-cursor finding.
   Complete local handshake receive/worker and UDP/packet ingress compose the
-  existing observers with explicit rescheduling contracts. Full caller/lifecycle
+  existing observers with explicit rescheduling contracts; concrete Batch scheduling
+  discharges its internal worker callbacks. Full caller/lifecycle
   and all-internal-access safety remain unproved.
 - `Leanux/Proofs/WG/AllowedIps/`: width-parametric prefix arithmetic (`Prefix`)
   and exact original-helper execution equations (`ArithmeticMirror`); `Tree`
@@ -309,7 +316,7 @@ ReplayWindow. The conventions that keep proof work cheap are in
 | --- | --- | --- | --- | --- | --- | --- |
 | Receive counter window: replay freedom (S1, S2, S3) | S1: every accepted execution has its exact acceptance history, and no two events share an allocation lifetime and a wire counter. S2: `counterValidate` returns exactly what receive.c's rule returns and leaves exactly its replay state. S3: every non-receive syscall and every validator call leave every other keypair's window unchanged, per call and for whole syscalls including the runner's ambient step. | `Leanux/Proofs/WG/ReplayWindow/` (`Statements.lean`, 15 terminal declarations; `Counterexamples.lean`) | [charter](2026-10-12-charter-window-proof.md) | [independent review, two parts](2026-10-12-spike-window-review.md); the spike's [report](2026-10-13-spike-window.md) and [self-review](2026-10-13-spike-window-self-review.md) | 7a92672 | current |
 | R1: anti-replay uniqueness and inclusive floor | No wire counter is accepted twice in one allocation lifetime; every accepted counter is at or above the inclusive lower edge, for pure runs, original validator calls and accepted runner histories. Equality at the charter's floor is intentionally permitted, with a concrete recorded replay. | `Leanux/Proofs/WG/AntiReplay/` (`Statements.lean`, 9 terminal theorems) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r1--anti-replay-uniqueness-and-the-inclusive-floor) | 7a92672 | current |
-| R2 components: store identities; access prefixes; stale dump-cursor finding | Original endpoints preserve fresh lifetime identity, and failure-retaining observations cover the listed allocation, reference, receive, transmit, socket, polling, handshake, cookie, complete handshake receive/worker and thin UDP/packet ingress calls under explicit ambient/callback contracts. Cookie-state framing retains all resident objects and allocator geometry. Accepted runner witnesses expose a stale dump cursor releasing a replacement peer, including an orphaned trie binding. Whole-run caller, lifecycle and scheduler closure and saved-reference ownership remain open. | `Leanux/Proofs/WG/LifetimeSafety/` (`Statements.lean`, 152 terminal theorems) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r2--lifetime-identity-and-retained-references-in-progress) | 7a92672 | current |
+| R2 components: store identities; access prefixes; stale dump-cursor finding | Original endpoints preserve fresh lifetime identity, and failure-retaining observations cover the listed allocation, reference, receive, transmit, socket, polling, handshake, cookie, complete handshake receive/worker, thin UDP/packet ingress and concrete Batch scheduler calls under explicit ambient/callback contracts. Cookie-state framing retains all resident objects and allocator geometry. Accepted runner witnesses expose a stale dump cursor releasing a replacement peer, including an orphaned trie binding. Copied consistency trials have separate exact filter and safe-prefix contracts. Whole-run environment/lifecycle closure and saved-reference ownership remain open. | `Leanux/Proofs/WG/LifetimeSafety/` (`Statements.lean`, 157 terminal theorems) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r2--lifetime-identity-and-retained-references-in-progress) | 7a92672 | current; remaining obligations explicit |
 | R3 components: prefix arithmetic, pure mutations and represented-tree lookup | Original IPv4/IPv6 helpers and all bounded-input normal insertion cases refine pure insertion and represented-tree longest-prefix lookup. Dispatch derives placement cases internally; refusal/rollback endpoints remain exact, while common success gives structural representation, roots, allocation and sequence effects. A supplied opposite-family representation is framed without inferring linkage. List deletion has exact filtered endpoints. Pure removal filters entries and preserves structural/local compaction laws. The original removal loop has an all-input source equation; binary and root-tagged leaf/unary steps have total exact endpoints and local representation transport. General removal/history, saved-list coherence and packet paths remain open. | `Leanux/Proofs/WG/CryptokeyRouting/` (`Statements.lean`, 53 terminal theorems) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r3--cryptokey-routing-in-progress) | 7a92672 | current; remaining obligations explicit |
 | R4 components and GRO order finding | Exact physical-ring laws and finite journals conserve admitted occurrences across consumed/live and retired/stale contents; tag erasure permits duplicate payloads. RX enqueue/consumeData and decrypt step/iteration now refine those journals on reached prefixes under explicit worker callback contracts; initialized calls inherit conservation and ordinal distinctness. Original TX/RX success independently implies an entry ring that is not full. Queue/poll and concrete stack contracts establish per-poll removal prefixes, selected GRO callback order and occurrence provenance. An accepted generated replay refutes chronological post-GRO stack order. Pipeline/scheduler conservation remains open. | `Leanux/Proofs/WG/DeliveryOrder/` (`Statements.lean`, 53 terminal theorems; `ReplayGro.lean`) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r4--queue-poll-and-delivery-order-components-in-progress) | 7a92672 | current; remaining obligations explicit |
 | R5: key lifetime enforcement; Rule Zero findings | Thirteen local theorems identify exact original clock tests, RX AEAD admission and failed-tag coverage, accepted-wire-nonce bounds, TX staging certificates, zero-timer store framing and timer-pass erasure. Accepted original/observed replays authenticate nonce R+1 before rejection and encrypt queued transport keepalives after recorded expiry or zero/clear before a new handshake, using the same packet-held material. New time inputs have coherent coarse/jiffies/arm arithmetic, without a Linux schedule claim. The original unconditional statement is false; universal replacement transport theorems are not claimed. | `Leanux/Proofs/WG/KeyLifetime/` (`Statements.lean`, 13 terminal theorems; `Replay.lean`, `ReplayDelayed.lean`, `ReplayPostClear.lean`) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r5--key-lifetime-enforcement-rule-zero-findings) | 7a92672 | current |
