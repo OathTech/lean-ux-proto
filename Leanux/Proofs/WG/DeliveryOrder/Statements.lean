@@ -17,6 +17,7 @@ import Leanux.Proofs.WG.Queues.TxDispositionStep
 import Leanux.Proofs.WG.Queues.TxDispositionEndpoints
 
 import Leanux.Proofs.WG.Queues.RxPollStampPhase
+import Leanux.Proofs.WG.Queues.RxPollComposition
 
 /-! R4 queue components: physical-ring refusal, original prev_queue FIFO laws,
 and successful-endpoint receive-queue helper frames. Whole recorded-schedule delivery,
@@ -940,5 +941,77 @@ It records attempted handoff, without asserting callback success. -/
 theorem joint_poll_callback_entry_prefix (e : Entry) (w : World) (h : List Queues.RxJoint.Event) :
     ∃ suffix, (runPrefix (enter e) w h).2 = h ++ [.entered e] ++ suffix :=
   enter_suffix e w h
+
+
+/-- Every removed key and every entered payload has its matching original
+capture read before its supporting removal, inside the new poll suffix.
+The operational provenance requires no allocation or successful-return premise. -/
+theorem joint_poll_capture_read_suffix (pid : PeerId) (budget : Nat) (w : World)
+    (prior : List Lifetimes.LifetimeEvent) (suffix : List Queues.RxJoint.Event)
+    (he : (runPrefix (poll pid budget) w (seed prior)).2 = seed prior ++ suffix) :
+    (∀ k ∈ removalKeys suffix, ReadBeforeRemoval [] suffix k) ∧
+      (∀ e ∈ entries suffix, ReadBeforeRemoval [] suffix e.key) :=
+  ⟨poll_suffix_read_before pid budget w prior suffix he,
+    poll_suffix_entry_read_before pid budget w prior suffix he⟩
+
+/-- No new removal or callback entry names a previously released allocation.
+Entry stamps are distinct on failed prefixes too. Normal return has observed
+all removal and entry releases in this very suffix, including explicit drops. -/
+theorem joint_poll_suffix_lifetime (pid : PeerId) (budget : Nat) (w : World)
+    (prior : List Lifetimes.LifetimeEvent) (hi : Lifetimes.AllocationInv prior w)
+    (suffix : List Queues.RxJoint.Event)
+    (he : (runPrefix (poll pid budget) w (seed prior)).2 = seed prior ++ suffix) :
+    ((∀ k ∈ removalKeys suffix, ¬ PriorReleased prior k.2.2) ∧
+      (∀ e ∈ entries suffix, ¬ PriorReleased prior e.stamp)) ∧
+    (((entries suffix).map Entry.stamp).Nodup ∧
+      (match (runPrefix (poll pid budget) w (seed prior)).1 with
+       | .error _ => True
+       | .ok _ => ∀ e ∈ entries suffix, Released suffix e.stamp)) ∧
+    (match (runPrefix (poll pid budget) w (seed prior)).1 with
+     | .error _ => True
+     | .ok _ => ∀ k ∈ removalKeys suffix, Released suffix k.2.2) :=
+  ⟨poll_suffix_fresh pid budget w prior hi suffix he,
+    poll_suffix_entries pid budget w prior hi suffix he,
+    poll_suffix_removal_release pid budget w prior hi suffix he⟩
+
+/-- Persistent poll metadata directly projects to the existing audit observer
+at the identical incoming lifetime history. Old probe entries and Stops are
+retained. Source erasure and suffix extension are unconditional. -/
+theorem joint_poll_persistent_correspondence (pid : PeerId) (budget : Nat) :
+    ErasesPrefix (Queues.RxHistory.observePoll pid budget)
+      (Leanux.WG.rxPoll pid budget (fun bytes => bytes.forM Leanux.Env.deliverInner)) ∧
+    ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent
+      (Queues.RxHistory.observePoll pid budget)
+      (Lifetimes.auditFocus (Lifetimes.rxPollStackPrefix pid budget)) ∧
+    Appends (Queues.RxHistory.observePoll pid budget) :=
+  ⟨Queues.RxHistory.observePoll_erases pid budget,
+    Queues.RxHistory.observePoll_projects pid budget,
+    Queues.RxHistory.observePoll_appends pid budget⟩
+
+/-- Normal boundaries retain released, distinct entry stamps; failed prefixes
+retain uniqueness without requiring the last capture's release. The generic
+audit frame preserves recorded entries, not coverage of polls inside its callee. -/
+theorem joint_poll_boundary_composition (pid : PeerId) (budget : Nat)
+    (a : Lifetimes.AuditM α) (ha : PrefixPreserves Lifetimes.AuditInv Lifetimes.AuditSafe a) :
+    PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe
+      (Queues.RxHistory.observePoll pid budget) ∧
+    PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe
+      (Queues.RxHistory.audit a) :=
+  ⟨Queues.RxHistory.observePoll_preserves pid budget, Queues.RxHistory.audit_preserves a ha⟩
+
+/-- Finite sequences of the original polls have distinct observed callback-entry
+allocation stamps on every prefix from an allocation-valid empty-history entry.
+This is composition of polls, not initialized scheduler/Runner coverage or
+successful stack delivery. -/
+theorem joint_poll_finite_sequence (calls : List (PeerId × Nat)) (w : World)
+    (hi : Lifetimes.AllocationInv [] w) :
+    ErasesPrefix (Queues.RxHistory.polls calls)
+      (calls.forM fun (pid, budget) => do
+        discard <| Leanux.WG.rxPoll pid budget (fun bytes => bytes.forM Leanux.Env.deliverInner)) ∧
+    PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe
+      (Queues.RxHistory.polls calls) ∧
+    Queues.RxHistory.BoundarySafe (runPrefix (Queues.RxHistory.polls calls) w []).2 :=
+  ⟨Queues.RxHistory.polls_erases calls, Queues.RxHistory.polls_preserves calls,
+    Queues.RxHistory.polls_safe calls w hi⟩
 
 end Leanux.Proofs.WG.DeliveryOrder
