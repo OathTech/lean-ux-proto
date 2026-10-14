@@ -386,6 +386,16 @@ def run_check(tree, suite, prefixes, out, timeout):
         cmd += ['-m', 'evaluator.check']
     cmd += ['--suite', suite, '--out', out]
     env = {k: v for k, v in os.environ.items() if k not in ('LEANUX_ROOT', 'LEANUX_ARTIFACTS', 'LEANUX_CACHE_ROOT')}
+    # The harness accepts a kernel only inside the shared root's or the
+    # running tree's artifact root: a kernel elsewhere (a worktree's own
+    # rebuild of the oracle) is hard-linked into the scratch tree once.
+    kernel = env.get('LEANUX_KERNEL_DIR')
+    if kernel:
+        local = Path(tree) / '.artifacts' / Path(kernel).name
+        if not local.exists():
+            local.parent.mkdir(parents=True, exist_ok=True)
+            subprocess.run(['cp', '-al', kernel, str(local)], check=True)
+        env['LEANUX_KERNEL_DIR'] = str(local)
     shutil.rmtree(Path(tree) / out, ignore_errors=True)
     proc = subprocess.run(['timeout', str(timeout), *cmd], cwd=tree, env=env, capture_output=True, text=True)
     report_path = Path(tree) / out / 'report.json'
