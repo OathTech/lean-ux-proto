@@ -1,4 +1,5 @@
 import Layouts
+import Memory
 import Leanux.WG.Types
 
 namespace Binary
@@ -35,6 +36,37 @@ theorem bucket_tail (peers : Leanux.WG.PeerId → Address) (m : Mem 64)
     (h : Bucket peers m head ((a, e) :: rest)) :
     ∃ next, m.loadInt (head + .ofNat 64 Layouts.node_next) 8 = some next.toNat ∧
       Bucket peers m next rest := h.2.2.2.2.2.2
+
+/-- A disjoint write preserves every exact field in the represented chain.
+    The premise refers to physical entry bytes, not to a ghost copy of entries. -/
+theorem Bucket.frame (peers : Leanux.WG.PeerId → Address)
+    {before after : Mem 64} {writes : Address → Prop}
+    (same : EqualOutside writes before after) (es : List (Address × Leanux.WG.IndexEntry))
+    (disjoint : ∀ cell ∈ es, ∀ i < Layouts.entrySize, ¬ writes (cell.1 + .ofNat 64 i))
+    (head : Address) (represented : Bucket peers before head es) :
+    Bucket peers after head es := by
+  induction es generalizing head with
+  | nil => exact represented
+  | cons cell es ih =>
+    rcases cell with ⟨a, e⟩
+    rcases represented with ⟨ha, hh, hnode, hi, hp, fields, next, hn, tail⟩
+    have unchanged (off n : Nat) (bound : off + n ≤ Layouts.entrySize) :
+        before.loadInt (a + .ofNat 64 off) n = after.loadInt (a + .ofNat 64 off) n := by
+      apply same.loadInt
+      intro i hi
+      have h := disjoint (a, e) (by simp) (off + i) (by omega)
+      simpa only [BitVec.ofNat_add, BitVec.add_assoc] using h
+    refine ⟨ha, hh, hnode, hi, hp, ?_, next, ?_, ?_⟩
+    · rcases fields with ⟨peer, kind, index⟩
+      exact ⟨(unchanged Layouts.entry_peer 8 (by decide)).symm.trans peer,
+        (unchanged Layouts.entry_type 4 (by decide)).symm.trans kind,
+        (unchanged Layouts.entry_index 4 (by decide)).symm.trans index⟩
+    · rw [hnode] at hn ⊢
+      simp only [Layouts.entry_index_hash, Layouts.node_next, BitVec.add_zero] at hn ⊢
+      exact (unchanged 8 8 (by decide)).symm.trans hn
+    · exact ih (fun cell hc => disjoint cell (by simp [hc])) next tail
+
+#print axioms Bucket.frame
 
 #print axioms bucket_tail
 

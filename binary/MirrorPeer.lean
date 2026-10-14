@@ -1,0 +1,42 @@
+import MirrorLoop
+
+namespace Binary.PeerMirror
+open Leanux Leanux.WG
+open LookupMirror (record)
+
+private theorem throw_run (e : Stop) (w : World) :
+    (throw e : M α).run w = .error e := rfl
+
+def recordCmp (w : World) (d : Decision) (outcome : Bool) (a b : Int) : World :=
+  {w with steps := w.steps.push {decision := d, outcome, operands := some (a, b), netRx := w.netRxSection}}
+
+def countRecords (w : World) (old : Nat) : World :=
+  let w := recordCmp w .refcountAddNzZero (old == 0) old 0
+  let w := if old == 0 then w else record w .refcountAddNzRetry false
+  record (record w .refcountAddNzNegative false) .refcountAddNzWraps false
+
+theorem count_run (old : Nat) (w : World) (small : old + 1 < 2^31) :
+    (refcountIncNotZero old).run w = .ok (old != 0, countRecords w old) := by
+  have noWrap : ¬old + 1 ≥ 2^31 := by omega
+  by_cases zero : old = 0 <;>
+    simp [refcountIncNotZero, branchCmp, branch, countRecords, recordCmp, record, zero, noWrap] <;> rfl
+
+/-- Saturation is ruled out by accepted mirror execution, not by hiding
+    those states in an entry precondition or trusting a warning callee. -/
+theorem accepted_count_bound (old : Nat) (w w' : World) (answer : Bool)
+    (accepted : (refcountIncNotZero old).run w = .ok (answer, w')) : old + 1 < 2^31 := by
+  by_cases h : old + 1 < 2^31
+  · exact h
+  have wraps : old + 1 ≥ 2^31 := by omega
+  have zero : old ≠ 0 := by omega
+  simp [refcountIncNotZero, branchCmp, branch, unsupported, zero, wraps, throw_run] at accepted
+  cases accepted
+
+theorem count_zero (w : World) :
+    (refcountIncNotZero 0).run w = .ok (false, countRecords w 0) :=
+  count_run 0 w (by decide)
+
+#print axioms count_run
+#print axioms accepted_count_bound
+#print axioms count_zero
+end Binary.PeerMirror

@@ -127,8 +127,11 @@ obligations, not additional assumed conclusions.
 
 The 23 decoded lookup regions now have symbolic instruction facts: fifteen
 distinct region proofs and one CALL proof shared by eight identical
-instrumentation-call terms (their equality is checked in Lean). Six
-peer-get decision/exit regions are proved. The loop is not yet composed
+instrumentation-call terms (their equality is checked in Lean). All 31
+peer-get regions also have instruction facts: eleven singleton trace calls
+share one proof, eight comparison/argument setup regions have direct proofs,
+and the remaining twelve cover the prologue, epilogue, refcount load and
+update, guards and jumps. The loop is not yet composed
 through its invariant, peer-get's complete theorem is not yet proved, and
 these counts do **not** constitute milestone 1.
 
@@ -150,3 +153,66 @@ PeerRegions Prologue BucketEntry Representation Symbolic` passed. The fast
 unit tier passed 124 tests with one skip. Reconstructing the private Kraken
 commit from the shared base and the committed-format patch produced the
 exact pinned hash. No dependency source or global configuration was changed.
+
+
+## Further work on composition and observations
+
+[AGENT 2026-10-14] Record every actual instruction successor before extracting
+correspondence points. Final-state transport alone cannot rule out skipped
+or additional decision-point visits. `Binary.history_project` proves that
+forgetting this history gives the same strict Kraken instruction execution;
+`transport_run` states the generic implication for a complete accepted run.
+Neither is the missing function simulation. Service contracts must preserve
+this observation discipline too: endpoint framing alone would permit an
+unobserved re-entry into an anchored function.
+
+`MirrorHistory` logs the current World at each branch and mirrored call or
+return. Its marks cannot accept a supplied World. Erasure of the entire
+logged lookup to the current executable lookup is proved, including failures;
+the logged loop also has an exact recursive run equation. `LookupObservation`
+extracts tags, decisions and comparison operands from actual machine edges,
+without receiving the expected mirror run. It rejects unexpected successors
+at declared conditional points and preserves repeated visits. The physical
+relation between the two histories is still unproved.
+
+`PeerMirror.accepted_count_bound` derives the signed-count bound from an
+accepted mirror run. It does not add a positive-refcount entry restriction:
+the zero path stays accepted. `PeerGet.increment` proves the actual memory
+CMPXCHG succeeds when the loaded word remains unchanged, increments it, and
+sets only R15's low byte. Composition still owes the unchanged-word premise
+from separation and the single-CPU environment. The binary writes the count
+before the mirror's final `setPeer`; the intermediate correspondence must
+track that pending update through the saved old value, not assert a false
+memory equality.
+
+The physical frame lemma `storeInt_frame` proves equality of every byte
+outside the written range. Its read corollary preserves exact values and
+unmapped results. This supplies a way to preserve a concrete whole-world
+representation; it does not supply that representation by itself. External
+inputs, execution-derived history, synthetic names and the three documented
+fixture-unknown device secret fields need explicit interpretation separate
+from exact physical field equalities.
+
+The kernel's `arch/x86/Makefile` selects eight-byte stack alignment. The
+service ABI must follow the compiled kernel's actual register preservation,
+stack accesses and return address, without silently assuming the userspace
+sixteen-byte entry alignment. The existing region proofs interpret CALL and
+RET explicitly and impose no such alignment restriction.
+
+
+The concrete history comparison passes on the recorded live case (15
+semantic/call/return points, 506 instructions with real services) and the
+recorded miss case (six points, 191 instructions with real services).
+Both also retain the three-way kernel/mirror check using the previously
+recorded raw streams. The current history does not yet assert `R` at the
+additional stuttering instrumentation, comparison and BH cut points;
+those are a separate open composition obligation required by the charter.
+
+
+The new history, mirror logging, peer-get and memory lemmas passed kernel
+replay with `lake env leanchecker` through `capped`; their axiom lists contain
+only the three standard axioms. The binary proof target builds. The fast unit
+tier again passed 124 tests with one skip (23.94 seconds). The disjoint-write
+frame lemma is instantiated for the complete local bucket chain in
+`Bucket.frame`. No `Pre_lookup`, concrete satisfying proof, whole-world
+simulation, or transported result is claimed by this checkpoint.

@@ -23,15 +23,14 @@ capped -- python3 binary/run.py --trace d1_second_response
 capped -- python3 binary/census.py
 cd binary
 capped -- lake build BinaryProofs
-capped -- lake env leanchecker Execution RegionExecution MirrorLoop Memory Image ImageLayout Layouts Regions PeerRegions Prologue BucketEntry Representation Symbolic
+capped -- lake env leanchecker Execution History RegionExecution MirrorLoop MirrorPeer MirrorHistory LookupObservation Memory Image ImageLayout Layouts Regions PeerRegions PeerPrologue Prologue BucketEntry Representation Symbolic
 ```
 
 Generated state, census and comparison output go under `.tmp/binary-tv`;
 guest evidence goes under `.artifacts/check`. They are disposable. Lake
 dependency outputs are also private, in `../.deps/kraken/.lake` and
-`../.lake`; the main checkout and other worktrees are untouched. Root
-v4.33.1 builds and this v4.35.0 experiment must not run concurrently in this
-worktree's shared mirror build directory.
+`../.lake`; the main checkout and other worktrees are untouched. Both packages now use Lean v4.35.0 after merging the toolchain update from
+main.
 
 The two concrete cases exercise a miss and a successful lookup with a
 one-entry bucket. Peer-get executes its decoded instructions; instrumentation
@@ -39,7 +38,10 @@ and `__local_bh_enable_ip` use explicit summaries. Additional guest streams
 preserve ordered coverage and comparisons in these two pinned function ranges.
 Reusing an older check without those streams fails noisily.
 Each case also runs the decoded service bodies with a materialized task/KCOV
-fixture in PC-capture mode and checks its actual coverage buffer.
+fixture in PC-capture mode and checks its actual coverage buffer. It also
+checks the proof-side machine observer against the logged mirror's exact
+semantic decisions and call/return tags. Physical correspondence at those
+points and the additional stuttering cuts is still proof work.
 
 `binary/generate.py` regenerates the instruction regions, their layout proofs,
 and DWARF scalar-field equations. All current region proofs use only Lean's

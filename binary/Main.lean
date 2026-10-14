@@ -1,6 +1,7 @@
 import Kraken.X64.Parser
 import Kraken.X64.Semantics
 import Leanux.Runner
+import LookupObservation
 
 open Lean
 
@@ -126,6 +127,7 @@ def materializeServices (m : DataMem) : DataMem := Id.run do
 structure Run where
   state : MachineState
   pcs : Array Nat := #[]
+  history : Array MachineState := #[]
   coverage : Array Nat := #[]
   comparisons : Array (Nat × Nat × Nat) := #[]
   writes : Array (Nat × Nat) := #[]
@@ -155,12 +157,13 @@ def readNat (s : MachineState) (a n : Nat) : Except String Nat := do
 
 def interpret [Labels] (seed : UInt64) (r : Run) (i : Instr) (pc size : Nat) : Except String Run :=
   effects seed r (i.interp r.state.data ⟨.ofNat pc, .ofNat (pc+size)⟩
-    (fun d => .done ⟨d, .ofNat (pc+size)⟩) (fun p d => .done ⟨d, p⟩))
+    (fun d => .done ⟨d, .ofNat (pc+size)⟩) (fun p d => .done ⟨d, p⟩)) >>= fun next =>
+      pure {next with history := r.history.push next.state}
 
 def runMachine (input : ProbeInput) (initial : MachineState) (seed : UInt64)
     (actualServices : Bool := false) : Except String Run := do
   let _ : Labels := ⟨fun l => .ofNat ((input.labels.find? (·.1 == l)).map (·.2) |>.getD 0)⟩
-  let mut r : Run := {state := initial}
+  let mut r : Run := {state := initial, history := #[initial]}
   for _ in [:1000] do
     let pc := r.state.pc.toBitVec.toNat
     if pc == stopAddr then return r
@@ -274,6 +277,20 @@ def probe (input : ProbeInput) (actualServices : Bool := false) : Except String 
       decisions := decisions.push s!"__refcount_add_not_zero.wraps={if next == helper + 0xe1 then 1 else 0}"
     if pc == helper + 0x9d then
       decisions := decisions.push "wg_peer_get_maybe_zero.refcount_zero=0"
+  -- Exercise the proof-side observer on every concrete instruction state.
+  -- This checks its event ordering, not the unfinished physical relation R.
+  let observed ← Binary.LookupObservation.observe w.netRxSection r.history.toList
+  let ((loggedAnswer, points), _) ← ((Binary.MirrorHistory.lookup [.handshake] input.query).run []).run w
+    |>.mapError Leanux.Stop.message
+  unless loggedAnswer == answer do throw "logged mirror changed lookup's result"
+  unless observed.length == points.length do
+    throw s!"correspondence length mismatch: machine={observed.length}, mirror={points.length}"
+  for (actual, expectedPoint) in observed.zip points do
+    unless actual.tag == expectedPoint.tag do
+      throw s!"correspondence tag mismatch: {repr actual.tag} versus {repr expectedPoint.tag}"
+    if let some step := actual.step then
+      unless expectedPoint.world.steps.back? == some step do
+        throw s!"correspondence decision mismatch: {Leanux.Step.label step}"
   let mirrorDecisions := after.steps.map Leanux.Step.label
   unless decisions == mirrorDecisions do throw s!"decision disagreement: machine={decisions}, mirror={mirrorDecisions}"
   return Json.mkObj [
@@ -281,7 +298,7 @@ def probe (input : ProbeInput) (actualServices : Bool := false) : Except String 
     ("services", toJson (if actualServices then "decoded bodies, KCOV_TRACE_PC" else "summaries")),
     ("instructions_executed", toJson r.pcs.size), ("coverage", toJson r.coverage),
     ("comparisons", toJson r.comparisons), ("decisions", toJson decisions),
-    ("mirror_decisions", toJson mirrorDecisions), ("memory", toJson "all non-stack bytes match materialized mirror result"),
+    ("mirror_decisions", toJson mirrorDecisions), ("correspondence_points", toJson observed.length), ("memory", toJson "all non-stack bytes match materialized mirror result"),
     ("entries", toJson (before.map fun e => e.index)), ("query", toJson input.query),
     ("undefined_choices", toJson r.undefinedCount), ("write_accesses", toJson r.writes)]
 

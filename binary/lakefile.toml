@@ -17,4 +17,4 @@ root = "Main"
 
 [[lean_lib]]
 name = "BinaryProofs"
-roots = ["Execution", "RegionExecution", "MirrorLoop", "Memory", "Symbolic", "Image", "ImageLayout", "Layouts", "Regions", "PeerRegions", "Prologue", "BucketEntry", "Representation"]
+roots = ["Execution", "History", "RegionExecution", "MirrorLoop", "MirrorPeer", "MirrorHistory", "LookupObservation", "Memory", "Symbolic", "Image", "ImageLayout", "Layouts", "Regions", "PeerRegions", "PeerPrologue", "Prologue", "BucketEntry", "Representation"]
