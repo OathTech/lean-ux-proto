@@ -15,7 +15,7 @@ theorem lookup_rxQueues (root : Option NodeId) (bits key : Nat) :
   intro s
   have hs := (rxQueues_kernel (swapEndian_sameKernel bits)).wp (fun t => t = s)
   have hf := (rxQueues_kernel (findNode_sameKernel root bits key)).wp (fun t => t = s)
-  have hn := fun id => (rxQueues_kernel (getNode_sameKernel id)).wp (fun t => t = s)
+  have hn := fun id => (rxQueues_kernel (Framing.getNode_sameKernel id)).wp (fun t => t = s)
   have hp := fun pid => (peerGetMaybeZero_rxQueues pid).wp (fun t => t = s)
   mvcgen [lookup, hs, hf, hn, hp, branch, invariant, unsupported]
 

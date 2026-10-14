@@ -1,6 +1,7 @@
 import Leanux.Proofs.WG.Keypairs.Frames.Kernel
 import Leanux.Proofs.Framing.WGTime
 import Leanux.Proofs.Framing.WGIndex
+import Leanux.Proofs.Framing.WGAllowedIps
 
 set_option pp.structureInstances false
 set_option maxHeartbeats 800000
@@ -11,8 +12,16 @@ namespace Leanux.Proofs.WG.Keypairs.WGFrames
 open Leanux Leanux.WG Std.Do Leanux.Proofs.WG.Keypairs Leanux.Proofs.WG.Keypairs.KernelFrames
 
 
+/-- Node-only updates retain the legacy receive-state view. -/
+theorem sameSnapshot_of_sameNodeKernel (h : Framing.SameNodeKernel a) : SameSnapshot a := by
+  intro w x v hr
+  have hf := congrArg (fun k => snapshot {w with k}) (h w x v hr)
+  simpa [snapshot, Framing.nodeKernelView, Framing.nodeKernel,
+    Framing.nodeDevice, Option.bind_map, Function.comp_def] using hf
+
+
 theorem AipNode_bitAt_sameSnapshot (n : AipNode) (i : Nat) : SameSnapshot (Leanux.WG.AipNode.bitAt n i) := by
-  frame_same [Leanux.WG.AipNode.bitAt] using []
+  exact sameSnapshot_of_sameKernel (Framing.aipBitAt_sameKernel n i)
 
 theorem AipNode_bitAt_spec (P : Snapshot → Prop) (n : AipNode) (i : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.AipNode.bitAt n i
@@ -180,7 +189,7 @@ theorem raiseLoopbackRx_spec (P : Snapshot → Prop)  :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (raiseLoopbackRx_sameSnapshot ).wp P
 
 theorem setNode_sameSnapshot (id : NodeId) (n : AipNode) : SameSnapshot (Leanux.WG.setNode id n) := by
-  frame_same [Leanux.WG.setNode] using []
+  exact sameSnapshot_of_sameNodeKernel (Framing.setNode_sameNodeKernel id n)
 
 theorem setNode_spec (P : Snapshot → Prop) (id : NodeId) (n : AipNode) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.setNode id n
@@ -265,7 +274,7 @@ theorem getKeypair_spec (P : Snapshot → Prop) (id : KeypairId) :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (getKeypair_sameSnapshot id).wp P
 
 theorem getNode_sameSnapshot (id : NodeId) : SameSnapshot (Leanux.WG.getNode id) := by
-  frame_same [Leanux.WG.getNode] using [getDev_spec]
+  exact sameSnapshot_of_sameKernel (Framing.getNode_sameKernel id)
 
 theorem getNode_spec (P : Snapshot → Prop) (id : NodeId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.getNode id
@@ -377,7 +386,7 @@ theorem findNode_spec (P : Snapshot → Prop) (trie : Option NodeId) (bits key :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (findNode_sameSnapshot trie bits key).wp P
 
 theorem freeNode_sameSnapshot (id : NodeId) : SameSnapshot (Leanux.WG.freeNode id) := by
-  frame_same [Leanux.WG.freeNode] using [getNode_spec]
+  exact sameSnapshot_of_sameNodeKernel (Framing.freeNode_sameNodeKernel id)
 
 theorem freeNode_spec (P : Snapshot → Prop) (id : NodeId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.freeNode id
@@ -440,14 +449,14 @@ theorem rootRemovePeerLists_spec (P : Snapshot → Prop) (root : NodeId) :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (rootRemovePeerLists_sameSnapshot root).wp P
 
 theorem slotGet_sameSnapshot (s : Slot) : SameSnapshot (Leanux.WG.slotGet s) := by
-  frame_same [Leanux.WG.slotGet] using [AipNode_bitAt_spec, getDev_spec, getNode_spec]
+  exact sameSnapshot_of_sameKernel (Framing.slotGet_sameKernel s)
 
 theorem slotGet_spec (P : Snapshot → Prop) (s : Slot) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.slotGet s
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (slotGet_sameSnapshot s).wp P
 
 theorem slotSet_sameSnapshot (s : Slot) (v : Option NodeId) : SameSnapshot (Leanux.WG.slotSet s v) := by
-  frame_same [Leanux.WG.slotSet] using [getNode_spec, setNode_spec]
+  exact sameSnapshot_of_sameNodeKernel (Framing.slotSet_sameNodeKernel s v)
 
 theorem slotSet_spec (P : Snapshot → Prop) (s : Slot) (v : Option NodeId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.slotSet s v
@@ -461,7 +470,7 @@ theorem socketInit_spec (P : Snapshot → Prop) (port : Nat) :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (socketInit_sameSnapshot port).wp P
 
 theorem subtree_sameSnapshot (id : NodeId) : SameSnapshot (Leanux.WG.subtree id) := by
-  frame_same [Leanux.WG.subtree] using [getDev_spec, getNode_spec]
+  exact sameSnapshot_of_sameKernel (Framing.subtree_sameKernel id)
 
 theorem subtree_spec (P : Snapshot → Prop) (id : NodeId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.subtree id

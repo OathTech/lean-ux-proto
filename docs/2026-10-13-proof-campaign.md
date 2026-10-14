@@ -6,8 +6,8 @@ Worktree `.worktrees/proofs-campaign`, branch `proofs/campaign`; governed by
 [the charter](2026-10-13-charter-proof-campaign.md). Both prerequisites were
 carried from `2c7a076`, then the audit at `f45bde8` and documentation-only
 `a39aded`, then the scheduler robustness change at `7a92672`.
-All registered components are current over `7a92672`, including R2 concrete Batch scheduling
-and separate copied trials, R3 insertion/pure-removal/all local removal arms and R4 finite
+All registered components are current over `7a92672`, including R2 concrete Batch scheduling,
+separate copied trials and allowed-IP removal access, R3 insertion/pure-removal/all local removal arms and R4 finite
 and RX/TX source ring journals. The new `cryptAhead` call is observed and framed, and the historical
 witness seed no longer depends on the removed evaluator fixture.
 Open obligations below remain explicit. No integration into main,
@@ -16,17 +16,17 @@ push, differential check or guest run has been performed by this campaign.
 | Result | Disposition |
 | --- | --- |
 | R1 anti-replay | Complete: uniqueness and the intentional inclusive-floor correction, with pure and accepted-run witnesses. |
-| R2 lifetimes | Endpoint identity and failure-retaining access contracts cover the listed call families, now including the concrete Batch scheduler and separate copied trials. Whole-run environment/lifecycle closure and saved-reference ownership remain open. The stale-cursor finding is checked. |
+| R2 lifetimes | Endpoint identity and failure-retaining access contracts cover the listed call families, now including the concrete Batch scheduler, separate copied trials and six allowed-IP list/removal calls. Whole-run environment/lifecycle closure and saved-reference ownership remain open. The stale-cursor finding is checked. |
 | R3 routing | Prefix arithmetic, represented-tree lookup, bounded-input normal insertion dispatch, pure removal/locality and all local source removal arms are checked. Whole-forest removal, saved-list coherence, configuration-history and packet-path refinements remain open. |
 | R4 delivery | W7's two full-ring drops are explained. An accepted replay refutes chronological post-GRO stack order. Per-poll selected order, removal/provenance, concrete stack frames and RX/TX source ring journals are checked; pipeline conservation remains open. |
 | R5 key lifetime | Resolved under Rule Zero by counter-limit, delayed-encryption and post-clear-use witnesses, with 13 local positive contracts. |
 | R6 flood resistance | Cookie exclusion proved at the original call boundary; accepted 19-retry/20-initiation episode resolves the literal limit through Rule Zero. Six terminal contracts. |
 
 **Last coordinated validation.** The mirror is byte-identical to `7a92672`.
-The proof gate passes 314 jobs and 320 terminal statements
-(ReplayWindow 15; R1 9; R2 157; R3 62; R4 58; R5 13; R6 6), using only `propext`, `Classical.choice` and `Quot.sound`.
+The proof gate passes 316 jobs and 323 terminal statements
+(ReplayWindow 15; R1 9; R2 160; R3 62; R4 58; R5 13; R6 6), using only `propext`, `Classical.choice` and `Quot.sound`.
 Fresh stock kernel replay passes, as do the 60-job default model build and
-expanded 110-test unit tier (22.548 seconds; one skip). The model executable
+expanded 110-test unit tier (23.668 seconds; one skip). The model executable
 was rebuilt at the scheduler carry (118 jobs); its source is unchanged. Independent frozen-source
 and scope reviews have no unresolved correctness findings in these components.
 
@@ -42,7 +42,7 @@ against this mirror, including exact original/observed output comparison.
 The retry and two current time witnesses include complete-advance checks.
 Generated streams prove accepted mirror behavior, not Linux capture or schedule
 reachability. These replayers were last run at the scheduler carry; the subsequent
-pure/local removal, receive, RX/TX ring-journal and scheduler-access extensions change none of their runtime code. Reproduction commands and
+pure/local removal, receive, RX/TX ring-journal, scheduler-access and allowed-IP-access extensions change none of their runtime code. Reproduction commands and
 provenance are retained below.
 
 **Carries and review history.**
@@ -144,7 +144,12 @@ The charter asks for safety of every internal access after release, across every
 The checked components establish endpoint identity evolution and failure-retaining local access safety. Whole-run closure remains open.
 The accepted stale-cursor findings below expose reference retargeting; they do not resurrect an old identity or settle the full charter claim.
 
-**Scheduler extension.** The concrete Batch scheduler adds five grouped exports (157 R2 terminals).
+**Allowed-IP access extension.** Three grouped exports cover `listAddTail`, `listDel`,
+`removeByPeer`, `rootRemovePeerLists`, `free` and `peerMakeDead` (160 R2 terminals).
+The six-call component passes its local 134-job target; the scoped Statements target passes 224 jobs. Frozen-source review has no correctness or premise findings.
+Coordinated validation passes with the counts above; this extension does not close whole-run R2.
+
+**Previous scheduler checkpoint.** The concrete Batch scheduler added five grouped exports (157 R2 terminals).
 The complete ten-call family and whole trial filter pass their 173-job local target;
 the scoped Statements target passes 221 jobs and the full proof tree passes 305 jobs. Coordinated
 proof-gate, fresh kernel replay and fast-tier checks pass, with current counts above.
@@ -168,6 +173,11 @@ share a failure-retaining bounded worker loop. Keep rescheduling explicit and se
 
 **Scheduler trial decision [AGENT 2026-10-14].** Keep original copied-World consistency trials outside the committed access history;
 prove their complete filter order/results and isolated safe prefixes separately. This avoids committing and then rolling back speculative releases.
+
+**Allowed-IP access decision [AGENT 2026-10-14].** Share a full-Kernel mask of only nodes and trie roots/sequence,
+including the existing exact `RemovalSource` parent tail, and project legacy frames from it.
+Observe every demanded saved peer-map entry, including misses, interleaved with each hit's original saved-value write;
+carry saved stamps across the fold without inserting getters. The mask retains `nextNode`, every resident object and every allocation frontier.
 
 **Models and refinement.** `Lifetimes/Store` and `Actions` describe slot/stamp transitions over original executions.
 `Keypairs/Identity` uses whole-syscall evolution to exclude reintroduction of absent old keypair identities at operation endpoints.
@@ -268,6 +278,15 @@ The index frame preserves the full kernel except the scalar index table, includi
 the original device check and collision/draw records remain. Access-free helper coverage follows source inspection separately:
 neither erasure nor an unchanged-Kernel theorem alone proves that an internally lifted helper contains no reads.
 
+`AllowedIpsAccess` now covers the six local list/removal calls with complete result/World/Stop erasure and concrete `AllocationInv`.
+`listDel` reads every tested captured map entry and writes only hits. `removeByPeer` reuses the exact shared node suffix;
+`rootRemovePeerLists` preserves child pushes before the owner lookup/list check. `free` clears both roots and updates sequence before either walk;
+`peerMakeDead` retains peer-list removal before trie removal, then hash removal before its final fresh peer read/write.
+All source outcomes for missing nodes/owners, malformed arrays, duplicate IDs or cycles are retained, including original bound-exhaustion Stops and their access prefixes.
+The node-only mask permits no peer/keypair/packet change; arbitrary ambient invariants explicitly supply node stability and scalar peer-list/hash contracts.
+Concrete allocation discharges all of them, without shape, list-coherence or saved-owner premises. Insertion/allocation callers, complete peer removal,
+netlink, timers and device lifecycle remain separate closure obligations. Node helper access-freedom is checked against source, not inferred from endpoint framing.
+
 **Failure-prefix coverage.** Exact conditional equations retain pending-worker/refcount accesses, including writes before zero-refcount rejection;
 release events occur only after successful final puts. Session birthdate-clock failure retains six events, peer initialization's first
 cache-clock failure retains allocation/write, receive queue-record failure retains five accesses including the setter's nested read,
@@ -329,6 +348,8 @@ Receive review qualified common completion to a false `beginSession` return, exc
 and corrected the stale cookie-map sentence that left the now-covered local receive composition open.
 Scheduler review checked source order, failed prefixes and whole-filter trial correspondence; all 13 frozen Lean hashes were reconciled without findings.
 The stale map/report claims that scheduler callbacks remained open were corrected to the enclosing environment and lifecycle limits.
+Allowed-IP frozen-source review found no correctness or premise issue. Its current-versus-pending opening was qualified to the preceding coordinated checkpoint;
+source-outcome wording was corrected to avoid claiming all duplicate-ID lists fail.
 
 **Effort.** The ledger records invocations, not an invented campaign total. Each accepted cursor reproduction takes under one second.
 
@@ -345,6 +366,7 @@ The stale map/report claims that scheduler callbacks remained open were correcte
 | Four-call cookie family | 5: 2 / 3 | 11m41s |
 | Handshake receive/worker and thin ingress | 7: 2 / 5 | 20m06s through full-build collection |
 | Concrete Batch scheduler and separate trials | 18: 5 / 13 | 29m41s through full-build collection |
+| Allowed-IP list/removal access | 6: 3 / 3 | 17m17s through scoped-target collection |
 
 Earlier caller checkpoints took roughly 6–25 minutes each with 4–19 compilation invocations.
 The first IPv4 architecture failed at proof-search heartbeat limits; its unused observer was removed.
@@ -369,6 +391,13 @@ Validation details are retained in checkpoints `859d56a` (IPv4), `e6905f2` (encr
 At `d75f994`, R2 has 137 terminal statements; the complete target, coordinated proof gate, fresh stock Lean kernel replay,
 model build and unit tier pass. Current campaign counts are recorded above. Unchanged cursor witnesses were not rerun for these extensions.
 No differential check or guest was run for this proof work.
+
+The allowed-IP extension's three ordinary failures were loop/matcher elaboration, recursive source-loop/continuation alignment,
+and explicit projection arguments. All six capped builds were collected (exit codes `1,0,1,1,0,0`); no interruption or cap failure occurred.
+The final 134-job component and 224-job Statements targets pass with 160 R2 terminals. The first coordinated gate failed
+on an ambiguous legacy/canonical `getNode_sameKernel` reference in `RxCompletionFrame`; explicitly selecting the canonical theorem
+repaired it without changing a statement or premise. Independent review checked the repair and frozen sources. The repeated gate,
+fresh stock kernel replay and fast tier all pass. Writer handoff and cleanup took 17m56s; coordinated checks followed.
 
 **Ranked mirror-shape recommendations.** (1) Restore pending-dump deletion rejection: altitude-preserving fixture-domain enforcement.
 (2) If that domain expands, retain the actual device lifetime in the cursor as C does: altitude-preserving, with separate validation.

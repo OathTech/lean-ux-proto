@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Lifetimes.AllowedIpsAccess
 import Leanux.Proofs.WG.Lifetimes.BatchCalls
 import Leanux.Proofs.WG.Lifetimes.ReceiveIngress
 import Leanux.Proofs.WG.Lifetimes.SocketCalls
@@ -1487,5 +1488,26 @@ theorem scheduler_trial_filter_access (xs : List Activation) (w : World)
         (runPrefix (Lifetimes.activationRunPrefix a) w h).2 :=
   ⟨Prod.ext (Lifetimes.activationTrials_filter xs w h) rfl,
     Lifetimes.activationTrials_safe xs w h hi⟩
+
+/-- Six original allowed-IP list/removal calls preserve their full result,
+normal World and exact Stop on every input. Saved-map reads and hit writes are
+interleaved in source order; neither erasure nor its observers assume a valid
+trie, distinct node identifiers, live owners or successful bounded traversal. -/
+theorem allowedips_family_access_erasure (call : Lifetimes.AllowedIpsCall) :
+    ErasesPrefix call.observed call.original := call.erases
+
+/-- Explicit node-only and peer-list/hash contracts compose every retained
+access prefix. The saved-map scan derives current stamps at its actual getDev
+and transports them across earlier writes without adding source getters. -/
+theorem allowedips_family_ambient_access_preserves (c : Lifetimes.AmbientContracts I)
+    (r : Lifetimes.AllowedIpsContracts I) (call : Lifetimes.AllowedIpsCall) :
+    PrefixPreserves I Lifetimes.LifetimeEvent.Safe call.observed := call.preserves_ambient c r
+
+/-- Allocation geometry discharges the entire six-call family, including
+malformed-node/owner and exhausted-walk failures after earlier accesses. This
+is resolved-current-store access safety, not saved-reference ownership, trie
+correctness or composition through the remaining insertion/lifecycle callers. -/
+theorem allowedips_family_allocation_access_preserves (call : Lifetimes.AllowedIpsCall) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed := call.allocation
 
 end Leanux.Proofs.WG.LifetimeSafety

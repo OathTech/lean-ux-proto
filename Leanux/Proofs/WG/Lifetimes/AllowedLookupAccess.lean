@@ -14,10 +14,8 @@ theorem swapEndian_sameKernel (bits : Nat) : SameKernel (swapEndian bits) := by
   intro k
   mvcgen [swapEndian, branch, invariant, unsupported]
 
-theorem getNode_sameKernel (id : NodeId) : SameKernel (getNode id) := by
-  apply sameKernel_of_wp
-  intro k
-  mvcgen [getNode, getDev, getK, invariant]
+theorem getNode_sameKernel (id : NodeId) : SameKernel (getNode id) :=
+  Framing.getNode_sameKernel id
 
 theorem findNode_sameKernel (root : Option NodeId) (bits key : Nat) :
     SameKernel (findNode root bits key) := by
