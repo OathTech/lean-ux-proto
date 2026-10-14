@@ -119,9 +119,7 @@ theorem from_initial {g : Obs α}
     Safe (PtrRing.init n) (runPrefix g w []).2 ∧
       match (runPrefix g w []).1 with
       | .error _ => True
-      | .ok (_, v) => Inv deviceIndex (PtrRing.init n) (runPrefix g w []).2 v := by
-  obtain ⟨_, _, hs, ho⟩ := hg w [] (initial_inv hc)
-  exact ⟨hs, ho⟩
+      | .ok (_, v) => Inv deviceIndex (PtrRing.init n) (runPrefix g w []).2 v := Ring.Source.from_initial hg hc
 
 /-- The four concrete source calls in this slice. Callback arguments are
 used only by the worker constructors; entry calls discharge all their leaves. -/
@@ -160,16 +158,6 @@ theorem Call.initialized (c : Call α)
     ∃ r, Initialized n out.2 r ∧
       match out.1 with
       | .error _ => True
-      | .ok (_, v) => cell v = some (deviceIndex, r) := by
-  obtain ⟨safe, done⟩ := from_initial (c.preserves hs hi hr) hc
-  cases hout : (runPrefix (c.observe softirq irq resched) w []).1 with
-  | error e =>
-    obtain ⟨r, hj⟩ := safe
-    exact ⟨r, hj.initialized, by simp [hout]⟩
-  | ok result =>
-    rcases result with ⟨x, v⟩
-    simp only [hout] at done
-    obtain ⟨r, hj, he⟩ := done
-    exact ⟨r, hj.initialized, by simpa only [hout] using he⟩
+      | .ok (_, v) => cell v = some (deviceIndex, r) := Ring.Source.initialized (c.preserves hs hi hr) hc
 
 end Leanux.Proofs.WG.Queues.RxRing

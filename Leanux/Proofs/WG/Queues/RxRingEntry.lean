@@ -11,85 +11,26 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
 open Ring.Journal
 
 theorem lift_frame (ha : SameView cell a) :
-    PrefixPreserves (Inv deviceIndex initial) (Safe initial) (liftPrefix a) := by
-  apply PrefixEnsures.preserves
-  apply PrefixEnsures.lift _ (fun _ _ hi => hi.safe)
-  intro h w x v hi hr
-  obtain ⟨r, hj, hc⟩ := hi
-  exact ⟨r, hj, (ha w x v hr).trans hc⟩
+    PrefixPreserves (Inv deviceIndex initial) (Safe initial) (liftPrefix a) :=
+  Ring.Source.lift_frame ha
 
-def enqueue (id : SkbId) : Obs Int := do
-  let ret ← liftPrefix (enqueuePerDeviceAndPeerRx id)
-  if ret = 0 then emitPrefix (.offered id true)
-  else if ret = -EPIPE then emitPrefix (.offered id false)
-  return ret
+def enqueue (id : SkbId) : Obs Int := Ring.Source.enqueue (enqueuePerDeviceAndPeerRx id) id
 
-theorem enqueue_erases (id : SkbId) : ErasesPrefix (enqueue id) (enqueuePerDeviceAndPeerRx id) := by
-  intro w h
-  simp only [enqueue, runPrefix_bind, runPrefix_lift]
-  cases hr : (enqueuePerDeviceAndPeerRx id).run w with
-  | error e => rfl
-  | ok result =>
-    rcases result with ⟨ret, v⟩
-    by_cases hz : ret = 0
-    · simp only [hz, ↓reduceIte, runPrefix_bind, runPrefix_emit, runPrefix_pure]
-    · simp only [hz, ↓reduceIte]
-      by_cases hp : ret = -EPIPE <;>
-        simp only [hp, ↓reduceIte, runPrefix_bind, runPrefix_emit, runPrefix_pure]
+theorem enqueue_erases (id : SkbId) : ErasesPrefix (enqueue id) (enqueuePerDeviceAndPeerRx id) :=
+  Ring.Source.enqueue_erases _ _
 
 theorem enqueue_preserves (id : SkbId) :
-    PrefixPreserves (Inv deviceIndex initial) (Safe initial) (enqueue id) := by
-  intro w h hi
-  obtain ⟨r, hj, hc⟩ := hi
-  simp only [enqueue, runPrefix_bind, runPrefix_lift]
-  cases hr : (enqueuePerDeviceAndPeerRx id).run w with
-  | error e => exact ⟨[], by simp, ⟨r, hj⟩, True.intro⟩
-  | ok result =>
-    rcases result with ⟨ret, v⟩
-    rcases enqueue_result id w v ret hr with ⟨rfl, ha⟩ | ⟨rfl, ha⟩ | ⟨rfl, ha, e, s, hb, hf⟩
-    · have hf := enqueue_free id hc hr
-      have hn : Refines initial (h ++ [.offered id true]) (r.produce id) := by
-        simpa [step, tryProduce, hf] using hj.step (.offer id)
-      simp only [↓reduceIte, runPrefix_bind, runPrefix_emit, runPrefix_pure]
-      exact ⟨[.offered id true], rfl, ⟨_, hn⟩, ⟨_, hn, by simpa [hc] using ha⟩⟩
-    · simp only [ENOSPC, EPIPE, Int.reduceNeg, Int.reduceEq, ↓reduceIte, runPrefix_pure]
-      exact ⟨[], by simp, ⟨r, hj⟩, ⟨r, hj, ha.trans hc⟩⟩
-    · have he : (e, s) = (deviceIndex, r) := Option.some.inj (hb.symm.trans hc)
-      have he' : s = r := congrArg Prod.snd he
-      have hf' : r.full = true := he' ▸ hf
-      have hn : Refines initial (h ++ [.offered id false]) r := by
-        simpa [step, tryProduce, hf'] using hj.step (.offer id)
-      simp only [EPIPE, Int.reduceNeg, Int.reduceEq, ↓reduceIte, runPrefix_bind,
-        runPrefix_emit, runPrefix_pure]
-      exact ⟨[.offered id false], rfl, ⟨r, hn⟩, ⟨r, hn, ha.trans hc⟩⟩
+    PrefixPreserves (Inv deviceIndex initial) (Safe initial) (enqueue id) :=
+  Ring.Source.enqueue_preserves _ id
+    (fun w ret v hr => enqueue_result id w v ret hr)
+    (fun _ _ _ hc hr => enqueue_free id hc hr)
 
-def poll : Obs (Option SkbId) := do
-  let out ← liftPrefix pollSource
-  emitPrefix (.polled out)
-  return out
+def poll : Obs (Option SkbId) := Ring.Source.poll pollSource
 
-theorem poll_erases : ErasesPrefix poll pollSource := by
-  intro w h
-  simp only [poll, runPrefix_bind, runPrefix_lift]
-  cases hr : pollSource.run w with
-  | error e => rfl
-  | ok result =>
-    rcases result with ⟨out, v⟩
-    simp [runPrefix_emit, runPrefix_pure]
+theorem poll_erases : ErasesPrefix poll pollSource := Ring.Source.poll_erases _
 
-theorem poll_preserves : PrefixPreserves (Inv deviceIndex initial) (Safe initial) poll := by
-  intro w h hi
-  obtain ⟨r, hj, hc⟩ := hi
-  simp only [poll, runPrefix_bind, runPrefix_lift]
-  cases hr : pollSource.run w with
-  | error e => exact ⟨[], by simp, ⟨r, hj⟩, True.intro⟩
-  | ok result =>
-    rcases result with ⟨out, v⟩
-    obtain ⟨ho, hv⟩ := poll_result hc hr
-    have hn : Refines initial (h ++ [.polled out]) r.consume.2 := by
-      simpa [step, ho] using hj.step .poll
-    simp only [runPrefix_bind, runPrefix_emit, runPrefix_pure]
-    exact ⟨[.polled out], rfl, ⟨_, hn⟩, ⟨_, hn, hv⟩⟩
+theorem poll_preserves : PrefixPreserves (Inv deviceIndex initial) (Safe initial) poll :=
+  Ring.Source.poll_preserves _ (fun _ _ _ _ hc hr => poll_result hc hr)
 
 def enqueuePeer (irq : Obs Unit) (id : SkbId) (state : PacketState) : Obs Unit := do
   let pid := (← liftPrefix (getKeypair (← liftPrefix (getRxSkb id)).keypair)).peer

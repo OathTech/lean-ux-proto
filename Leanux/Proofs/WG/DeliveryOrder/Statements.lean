@@ -10,6 +10,7 @@ import Leanux.Proofs.WG.Queues.SelectedGro
 import Leanux.Proofs.WG.Queues.RxPollProjection
 import Leanux.Proofs.WG.Queues.RxPollProvenance
 import Leanux.Proofs.WG.Queues.RxRingWorker
+import Leanux.Proofs.WG.Queues.TxRingWorker
 
 /-! R4 queue components: physical-ring refusal, original prev_queue FIFO laws,
 and successful-endpoint receive-queue helper frames. Whole recorded-schedule delivery,
@@ -540,5 +541,77 @@ theorem original_rx_ring_initialized_conservation (c : Queues.RxRing.Call α)
       | .error _ => True
       | .ok (_, v) => Queues.RxRing.cell v = some (deviceIndex, r) :=
   c.initialized hs hi hr hc
+
+/-- Complete original TX enqueue/createData erasure preserves every result,
+successful World and exact Stop, with no queue or packet validity premise. -/
+theorem original_tx_ring_entry_erasure (pid : PeerId) (item : List SkbId) :
+    Logged.ErasesPrefix (Queues.TxRing.enqueue pid item) (enqueuePerDeviceAndPeer pid item) ∧
+      Logged.ErasesPrefix (Queues.TxRing.create pid item) (createData pid item) :=
+  ⟨Queues.TxRing.enqueue_erases pid item, Queues.TxRing.create_erases pid item⟩
+
+/-- TX admission/refusal events refine original finite ring operations.
+The full device-index/ring cell is linked on normal return; later createData
+Stops retain prior events. ENOSPC and pre-install queue-work Stops emit none. -/
+theorem original_tx_ring_entry_prefix_refinement (deviceIndex : Nat)
+    (initial : PtrRing (List SkbId)) (pid : PeerId) (item : List SkbId) :
+    Logged.PrefixPreserves (Queues.TxRing.Inv deviceIndex initial) (Queues.TxRing.Safe initial)
+      (Queues.TxRing.enqueue pid item) ∧
+    Logged.PrefixPreserves (Queues.TxRing.Inv deviceIndex initial) (Queues.TxRing.Safe initial)
+      (Queues.TxRing.create pid item) :=
+  ⟨Queues.TxRing.enqueue_preserves pid item, Queues.TxRing.create_preserves pid item⟩
+
+/-- Encryption and its complete step/iteration preserve exact original
+behavior for arbitrary Worlds and callback implementations. Softirq precedes
+the ring read; checksum remains between its original guards and later reads. -/
+theorem original_encrypt_ring_worker_erasure
+    (hc : ∀ p, Logged.ErasesPrefix (checksum p) (originalChecksum p))
+    (hs : Logged.ErasesPrefix softirq originalSoftirq)
+    (hr : Logged.ErasesPrefix resched originalResched) (kp : KeypairId) (pkt : DataPacket) :
+    Logged.ErasesPrefix (Queues.TxRing.packet checksum kp pkt) (encryptPacket originalChecksum kp pkt) ∧
+    Logged.ErasesPrefix (Queues.TxRing.step checksum softirq) (encryptStep originalChecksum originalSoftirq) ∧
+    Logged.ErasesPrefix (Queues.TxRing.iter checksum softirq resched)
+      (encryptIter originalChecksum originalSoftirq originalResched) :=
+  ⟨Queues.TxRing.packet_erases hc kp pkt, Queues.TxRing.step_erases hc hs,
+    Queues.TxRing.iter_erases hc hs hr⟩
+
+/-- Each consumed whole-list occurrence is recorded after installation and
+before malformed-list, packet lookup, encryption or publication Stops. Explicit
+callback contracts allow further ring mutations with their own journal events;
+no NAPI/stack callback is silently assumed to preserve the entry ring. -/
+theorem original_encrypt_ring_worker_prefix_refinement
+    (hc : ∀ p, Logged.PrefixPreserves (Queues.TxRing.Inv deviceIndex initial)
+      (Queues.TxRing.Safe initial) (checksum p))
+    (hs : Logged.PrefixPreserves (Queues.TxRing.Inv deviceIndex initial) (Queues.TxRing.Safe initial) softirq)
+    (hr : Logged.PrefixPreserves (Queues.TxRing.Inv deviceIndex initial) (Queues.TxRing.Safe initial) resched)
+    (kp : KeypairId) (pkt : DataPacket) :
+    Logged.PrefixPreserves (Queues.TxRing.Inv deviceIndex initial) (Queues.TxRing.Safe initial)
+      (Queues.TxRing.packet checksum kp pkt) ∧
+    Logged.PrefixPreserves (Queues.TxRing.Inv deviceIndex initial) (Queues.TxRing.Safe initial)
+      (Queues.TxRing.step checksum softirq) ∧
+    Logged.PrefixPreserves (Queues.TxRing.Inv deviceIndex initial) (Queues.TxRing.Safe initial)
+      (Queues.TxRing.iter checksum softirq resched) :=
+  ⟨Queues.TxRing.packet_preserves hc kp pkt, Queues.TxRing.step_preserves hc hs,
+    Queues.TxRing.iter_preserves hc hs hr⟩
+
+/-- Initialized conservation and fresh offer ordinals apply to occurrences of
+whole TX ring batches, permitting duplicate/empty payload lists. Positive size
+retains retired/stale physical contents, and size zero is covered. A Stop yields
+an existential replay ring, without a failed World. Only successful completion
+links the endpoint to the actual cell. This is neither constituent-packet
+uniqueness nor lifecycle, peer-queue or concrete scheduler closure. -/
+theorem original_tx_ring_initialized_conservation (c : Queues.TxRing.Call α)
+    (hc : ∀ p, Logged.PrefixPreserves (Queues.TxRing.Inv deviceIndex (PtrRing.init n))
+      (Queues.TxRing.Safe (PtrRing.init n)) (checksum p))
+    (hs : Logged.PrefixPreserves (Queues.TxRing.Inv deviceIndex (PtrRing.init n))
+      (Queues.TxRing.Safe (PtrRing.init n)) softirq)
+    (hr : Logged.PrefixPreserves (Queues.TxRing.Inv deviceIndex (PtrRing.init n))
+      (Queues.TxRing.Safe (PtrRing.init n)) resched)
+    (hw : Queues.TxRing.cell w = some (deviceIndex, PtrRing.init n)) :
+    let out := Logged.runPrefix (c.observe checksum softirq resched) w []
+    ∃ r, Queues.TxRing.Initialized n out.2 r ∧
+      match out.1 with
+      | .error _ => True
+      | .ok (_, v) => Queues.TxRing.cell v = some (deviceIndex, r) :=
+  c.initialized hc hs hr hw
 
 end Leanux.Proofs.WG.DeliveryOrder

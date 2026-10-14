@@ -8,7 +8,7 @@ carried from `2c7a076`, then the audit at `f45bde8` and documentation-only
 `a39aded`, then the scheduler robustness change at `7a92672`.
 All registered components are current over `7a92672`, including R2 concrete Batch scheduling
 and separate copied trials, R3 insertion/pure-removal/local removal steps and R4 finite
-and RX source ring journals. The new `cryptAhead` call is observed and framed, and the historical
+and RX/TX source ring journals. The new `cryptAhead` call is observed and framed, and the historical
 witness seed no longer depends on the removed evaluator fixture.
 Open obligations below remain explicit. No integration into main,
 push, differential check or guest run has been performed by this campaign.
@@ -18,15 +18,15 @@ push, differential check or guest run has been performed by this campaign.
 | R1 anti-replay | Complete: uniqueness and the intentional inclusive-floor correction, with pure and accepted-run witnesses. |
 | R2 lifetimes | Endpoint identity and failure-retaining access contracts cover the listed call families, now including the concrete Batch scheduler and separate copied trials. Whole-run environment/lifecycle closure and saved-reference ownership remain open. The stale-cursor finding is checked. |
 | R3 routing | Prefix arithmetic, represented-tree lookup and unified bounded-input normal insertion dispatch are checked. Pure removal/locality and total binary/root-tagged leaf/unary source steps are checked. General removal, saved-list coherence, configuration-history and packet-path refinements remain open. |
-| R4 delivery | W7's two full-ring drops are explained. An accepted replay refutes chronological post-GRO stack order. Per-poll selected order, removal/provenance, concrete stack frames and RX source ring journals are checked; pipeline conservation remains open. |
+| R4 delivery | W7's two full-ring drops are explained. An accepted replay refutes chronological post-GRO stack order. Per-poll selected order, removal/provenance, concrete stack frames and RX/TX source ring journals are checked; pipeline conservation remains open. |
 | R5 key lifetime | Resolved under Rule Zero by counter-limit, delayed-encryption and post-clear-use witnesses, with 13 local positive contracts. |
 | R6 flood resistance | Cookie exclusion proved at the original call boundary; accepted 19-retry/20-initiation episode resolves the literal limit through Rule Zero. Six terminal contracts. |
 
 **Last coordinated validation.** The mirror is byte-identical to `7a92672`.
-The proof gate passes 305 jobs and 306 terminal statements
-(ReplayWindow 15; R1 9; R2 157; R3 53; R4 53; R5 13; R6 6), using only `propext`, `Classical.choice` and `Quot.sound`.
+The proof gate passes 310 jobs and 311 terminal statements
+(ReplayWindow 15; R1 9; R2 157; R3 53; R4 58; R5 13; R6 6), using only `propext`, `Classical.choice` and `Quot.sound`.
 Fresh stock kernel replay passes, as do the 60-job default model build and
-expanded 110-test unit tier (23.937 seconds; one skip). The model executable
+expanded 110-test unit tier (23.216 seconds; one skip). The model executable
 was rebuilt at the scheduler carry (118 jobs); its source is unchanged. Independent frozen-source
 and scope reviews have no unresolved correctness findings in these components.
 
@@ -42,7 +42,7 @@ against this mirror, including exact original/observed output comparison.
 The retry and two current time witnesses include complete-advance checks.
 Generated streams prove accepted mirror behavior, not Linux capture or schedule
 reachability. These replayers were last run at the scheduler carry; the subsequent
-pure/local removal, receive, RX ring-journal and scheduler-access extensions change none of their runtime code. Reproduction commands and
+pure/local removal, receive, RX/TX ring-journal and scheduler-access extensions change none of their runtime code. Reproduction commands and
 provenance are retained below.
 
 **Carries and review history.**
@@ -698,8 +698,8 @@ peer-queue/packet-state updates may precede `-EPIPE`. Missing objects and queue-
 Stops. No ownership or queue-validity premise, or unchanged-peer-state conclusion, is imposed.
 `EnqueueAdmission` independently derives from each original TX/RX body that a zero return requires
 an existing, non-full entry ring. The older success alternative alone does not establish that guard.
-The guard theorems themselves are successful-return implications. The RX source journal below
-observes the installed mutations; TX source-journal and scheduler composition remain open.
+The guard theorems themselves are successful-return implications. The RX and TX source journals below
+observe installed mutations; concrete scheduler composition remains open.
 Passing the full test and then stopping in queue-work emits no admission.
 
 **RX source ring journals.** `RxRingJournal` relates each reached history to a finite execution of the
@@ -729,6 +729,38 @@ ordinal witness is an existence result, not uniqueness of the refinement itself.
 [AGENT 2026-10-14] Place RX journal observations at installed-ring cuts, using the complete enqueue
 outcome wrapper only because its last mutation is followed by a pure return. Keep callback contracts
 explicit and keep failed-prefix replay separate from any unavailable failed World.
+
+**Shared source core and TX journals.** `RingSource` factors the finite replay relation, full-cell
+invariant, failed-prefix safety, outcome observation and initialized conservation over an arbitrary
+ring payload type. The existing RX API and terminal statements retain their meanings and signatures.
+Generic endpoint contracts are explicit; both RX and TX cuts derive them from their original bodies.
+A generic normal-endpoint contract alone does not establish source event completeness: that also
+uses the concrete enqueue/poll boundaries, whose installation has no subsequent effect or failure
+before return. This is refinement of the executable mirror, not a C simulation.
+
+`TxRingFrames` retains the entire interface-index/encrypt-ring cell through actual packet, peer,
+keypair, CPU and publication helpers. `TxRingCuts` derives the complete original enqueue endpoints,
+independent non-full success guard and branch-before-install consume cut. `TxRingEntry` observes
+complete enqueue and `createData`: ENOSPC emits no offer; EPIPE emits refusal and still reaches the
+original DEAD publication; later publication or cleanup Stops retain reached events. Saved-device
+reads are justified by concrete intervening frames, without a convenient World-validity premise.
+
+`TxRingWorker` observes original `encryptPacket`, step and iteration. Softirq runs before the ring
+getter and may itself perform observed ring operations. Installed consumption is recorded before
+empty-list, head/member getter, checksum, encryption, setter-reread and publication failures.
+Padding remains before checksum; a normal encryption failure marks DEAD, breaks the packet walk,
+and publishes the original whole list. Checksum, softirq and rescheduling callbacks have explicit
+erasure and journal-preservation contracts; the concrete checksum contract is discharged separately.
+No ring frame is asserted for NAPI/stack callbacks, which can enqueue TX work.
+
+Initialized conservation counts whole-list ring occurrences, retaining empty/duplicate payloads in
+the underlying model and original empty-item Stops at source calls. It proves neither uniqueness of
+constituent packet IDs nor ownership of saved heads, keypairs or peer-queue aliases. As for RX, only
+normal return links the replay ring to the actual World; the interface index is no lifecycle stamp.
+
+[AGENT 2026-10-14] Share the payload-parametric source-journal core between RX and TX, preserving the
+RX API. Compose TX events at installed mutation cuts and expose callback contracts rather than
+framing callbacks that may enqueue work.
 
 `PrevQueue` proves original dequeue, peek, peek/drop and enqueue laws. Contents are `peeked.toList ++
 items`; original `count` excludes the cache. Normal peeks preserve contents, and dropping a present peek
@@ -826,7 +858,7 @@ Failing callback entry counts. These results establish neither allocation identi
 between polls. The checkpoint is `c0713d8`; observer definitions and the original chronological
 predicate remain unchanged.
 
-**Remaining scope.** TX source-journal composition, concrete RX scheduler callback discharge,
+**Remaining scope.** Concrete RX/TX scheduler callback discharge,
 worker-local ownership, peer-queue/packet-store conservation and recorded scheduler composition
 remain open, alongside R2’s caller/lifecycle closure and lifecycle-reset dispositions.
 Discarded speculative activations must discard history with their trial Worlds. Local observations imply
@@ -835,7 +867,11 @@ must account for pending obligations rather than infer eventual delivery from a 
 is not yet connected to a joint peer-queue/packet-store identity invariant; it alone makes no
 packet-arrival, cryptographic, fairness or delivery-order claim.
 
-**Validation and effort.** The RX source-journal extension adds five grouped exports (53 R4 terminals).
+**Validation and effort.** The TX source-journal extension adds five grouped exports (58 R4 terminals).
+The complete local target passes 193 jobs. Coordinated proof gate, fresh stock kernel replay and
+fast-tier checks pass, with current counts above. Independent frozen source and scope review has
+no unresolved correctness findings; its report-status finding is corrected by this refresh.
+The preceding RX source-journal extension added five grouped exports (53 R4 terminals).
 The 187-job scoped target passes. Independent frozen review has no unresolved findings;
 the coordinated proof gate, fresh stock kernel replay and fast tier above also pass.
 The preceding 48-terminal checkpoint has seven journal/map/admission exports that pass
@@ -867,6 +903,13 @@ was made to suppress an original Stop. A separate scoped check failed on the Eng
 “admit” in a new comment; the wording was replaced because the trust gate rejects that token
 throughout the proof tree. The corrected scoped check passed; both check exits were collected.
 Total writer-token ownership was 21m45s, including review corrections and cleanup.
+
+The TX source-journal extension used eight capped builds: four passed and four failed ordinarily,
+taking 11m58s from the 03:42:59 UTC grant through collected target validation at 03:54:57 UTC.
+Failures concerned a missing projection import, frame normalization/name resolution, the local
+history-event type, and EPIPE constant namespace normalization. All exits were collected; no cap or
+interruption occurred. Total writer-token ownership was 13m44s. The source controls and theorem
+premises were not weakened to resolve them.
 
 The completion-frame worker had two provider interruptions during implementation and one during
 read-only reporting; all dirty worktrees, including nonignored untracked files, were preserved before
