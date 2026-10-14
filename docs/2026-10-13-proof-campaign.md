@@ -15,23 +15,20 @@ retains current architecture, findings, reproduction provenance, effort and limi
 | --- | --- |
 | R1 | Uniqueness and the intentional inclusive-floor correction are proved, with pure and accepted-run witnesses. |
 | R2 | Endpoint identity and failure-retaining access contracts cover the listed families, concrete Batch scheduling and isolated trials. The maintenance/timer and flush/removal extensions pass coordinated validation. Whole-run environment/lifecycle closure and saved-reference ownership remain open. |
-| R3 | Bounded-input normal insertion and represented removal now preserve an explicit coherent routing/frontier invariant, including both normal insertion refusals. Coordinated validation passes. Initialization, configuration histories and packet-path refinement remain open. |
+| R3 | The checked insertion/removal invariant now extends to original peer creation/release and finite normal call histories from the configured fixture, refining independent flat-prefix updates and reached-root lookup. The five new exports pass scoped and coordinated validation. Enclosing configuration/Runner closure and packet paths remain open. |
 | R4 | Physical rings, finite/source journals, per-poll provenance and selected GRO order, and concrete RX scheduling are checked. The local balanced lookup/release extension passes coordinated validation. Accepted input refutes chronological post-GRO order. Joint pipeline conservation remains open. |
 | R5 | The unconditional age/post-zero and wire-nonce readings are false in accepted mirror inputs. Rule Zero resolution retains thirteen positive local contracts, without universal replacement transport claims. |
 | R6 | Cookie exclusion is proved at its original call boundary. A 19-retry/20-initiation episode refutes literal MAX=18; no universal corrected retry bound is claimed. |
 
-**Validation status.** The current coordinated checkpoint passes 342 jobs and
-352 terminal declarations: 350 theorems and two definitions (ReplayWindow 15;
-R1 9; R2 169; R3 72; R4 68; R5 13; R6 6), using only `propext`,
+**Validation status.** The current coordinated checkpoint passes 347 jobs and
+357 terminal declarations: 355 theorems and two definitions (ReplayWindow 15;
+R1 9; R2 169; R3 77; R4 68; R5 13; R6 6), using only `propext`,
 `Classical.choice` and `Quot.sound`. Fresh stock kernel replay, the 60-job
-default build and 114 unit tests (22.721 seconds, one skip) also pass.
-The R3 routing extension passed scoped/full builds of 130/339 jobs and independent
-frozen-source review; its bounded-input header wording finding was corrected.
-The three-export R2 flush/removal component passes scoped/full builds of 227/340
-jobs and independent source/documentation review. The four-export R4 balanced
-lookup/release extension passes scoped/full builds of 232/342 jobs and scoped
-source checks. Independent source and scope reviews have no unresolved finding;
-all three extensions are covered by the current coordinated checks.
+default build and 114 unit tests (22.702 seconds, one skip) also pass.
+The five-export R3 initialized-call-history extension passes scoped/full targets
+of 150/347 jobs. Independent frozen review has no unresolved finding; the stale
+scope wording, flat-model dependency and node-ID wording corrections are verified.
+These coordinated checks also cover the preceding R2/R3/R4 components.
 The preceding `c047e64` carry's 118-job executable build and eleven reproduction
 checks remain applicable to unchanged runtime; they were not rerun for proof-only
 extensions. Frozen reviews have no unresolved defect in the checked components;
@@ -291,7 +288,8 @@ No production history field is proposed.
 
 **Original versus proved.** The charter concerns configuration history and RX/TX
 cryptokey identity binding. Current [terminal contracts](../Leanux/Proofs/WG/CryptokeyRouting/Statements.lean)
-prove represented trie operations, not that enclosing history or packet claim.
+prove represented trie operations and initialized finite histories of the listed
+original calls, not the enclosing configuration or packet claim.
 No R3 Rule Zero counterexample or changed charter conclusion is asserted.
 
 | Model | Abstraction and refinement boundary |
@@ -305,6 +303,7 @@ No R3 Rule Zero counterexample or changed charter conclusion is asserted.
 | `RemovalSource`, raw endpoint/store layers | All-input original loop equation and exact local mutation endpoints, including post-free parent-tail continuation; no representation or owner residency is inferred from stored tags. |
 | `RemovalContext`/`Transport`/`Cases`/`Dispatch` | Membership focus plus represented contexts derive all seven cases; `original_removeStep_forest_total` and `original_removeStep_forest_properties` prove actual execution, both-family erasure, retirement and full frames. |
 | `RemovalLists`/`Loop`/`Peer` | Explicit resident-only list coherence and fixed saved-list induction; `original_removeByPeer_forest_total` and `original_removeByPeer_forest_properties` and `original_removeByPeer_then_findNode` connect complete original removal to owner filtering and lookup. |
+| `RoutingView`/`Lifecycle`/`Initial`, `FlatHistory`/`RoutingHistory` | Option-valued routing/list projection; original create/refusal and raw-release preservation; original configured fixture; canonical flat updates without node IDs and finite actual-call induction. `original_initialized_routing_history` derives coherence/agreement, and `original_initialized_history_findNode` links reached-root source lookup to the flat winner and actual raw node owner. |
 
 [AGENT 2026-10-13] Use width-parametric arithmetic, one Patricia tree and pure
 insertion, with contexts as structural paths rather than another executable
@@ -322,6 +321,10 @@ history or strengthen raw owner labels to resident ownership.
 peer-map/device frames, reusing dispatch. Normalize fresh append only after
 coherence proves fresh-ID absence; keep owner-frontier bounds separate from
 owner residency so orphan raw labels remain representable.
+[AGENT 2026-10-14] Retain device/list absence in the lifecycle projection and
+canonical prefix bits/raw owners without node IDs in the flat history. Use typed
+v4/v6 calls with actual normal returns and reached-input insertion bounds/residency;
+derive intermediate invariants rather than placing them in history constructors.
 
 **Insertion boundary.** Valid representation, unique IDs, whole-store `NodesBelow`
 freshness, bounded address/CIDR and a resident target peer are explicit inputs.
@@ -365,11 +368,23 @@ exactly that peer's entries in both families, with aggregate retirement/outside
 frames. Its totality is conditional on the input representation/coherence; normal
 source execution is a conclusion, not a premise chosen to suppress missing nodes.
 
-**Remaining obligations.** Initialize the routing invariant and preserve it through
-peer creation and all other configuration mutations, then compose finite original
-insert/remove histories. Whole configuration/runner closure additionally needs
-parsed address/CIDR bounds and negative netlink returns that retain earlier
-mutations. Connect both packet paths to authenticated allocation identity; raw
+**Finite-call boundary.** The original configured fixture establishes the invariant.
+Normal `peerCreate` refusal retains the routing projection; success returns the old
+peer frontier and installs an empty list. Owner bounds make that list coherent
+without requiring old owners to reside. Normal raw `peerPut` may delete a peer while
+retaining its trie labels. Histories chain actual normal create/insert/removeByPeer/
+peerPut executions and actual returns; insertion alone supplies bounded arguments
+and a resident target. Removal residency follows from its original getter. Flat
+insertion replaces a canonical prefix, removal filters its owner, and creation,
+release and insertion refusals leave the flat tables unchanged. Both insertion
+refusals still retain their distinct sequence/frontier effects in the source
+contracts. Final original findNode is total for bounded queries at the actual
+family root and returns a flat-history winner with the same raw store owner.
+
+**Remaining obligations.** Whole configuration/Netlink/Runner closure needs frames
+for the other mutations, parsed address/CIDR bounds and negative netlink returns
+that retain earlier mutations; normal call histories do not cover a failed Stop's
+World. Connect both packet paths to authenticated allocation identity; raw
 peer labels and longest-prefix lookup alone establish no ownership.
 The historical R2 orphan recipe constrained the former accepted domain; `c047e64`
 now rejects it before deletion. It is not a current R3 misrouting counterexample.
@@ -393,6 +408,7 @@ now rejects it before deletion. It is not a current R3 misrouting counterexample
 | Nonroot removal and parent collapse | 9: 3 / 6 | 16m06s through frozen handoff preparation; 12m48s through scoped-target collection |
 | Represented forest and coherent peer removal | 29: 14 / 15 | 43m01s through final full-target collection; 47m57s writer-token ownership |
 | Insertion metadata, coherence and routing invariant | 15: 9 / 6 | 24m44s through collected full build; 25m28s writer-token ownership; scoped/full targets 130/339; six ordinary elaboration failures, no cap/interruption |
+| Initialized finite routing histories | 15: 7 / 8 | 23m15s from first worker clock 09:24:41 through final full-target collection clock 09:47:56; 24m21s through token return at 09:49:02; scoped/full targets 150/347; ordinary elaboration failures, no cap/interruption |
 
 The represented/loop tranche split into 17 single-step calls and a 12-call
 continuation; its fifteen failures included two heartbeat failures. Final scoped/full
@@ -405,6 +421,10 @@ that diagnostic is unavailable and the owned file was deleted without sandbox/gl
 changes. Failed patch/relocation applications made no affected-file changes and were
 not build invocations. Two later read-only planning turns disconnected after pure
 removal validation; all four dirty worktrees were snapshotted before subsequent work.
+The finite-history review separated the pure flat model from Runner/lifecycle imports,
+corrected a stale open-scope sentence and clarified that raw peer IDs remain while
+node IDs are omitted. One additional read-only whitespace check ran directly and
+passed; it was not a capped build/check invocation.
 No build was interrupted. Reviewed `freeNode` residency, root linkage versus values,
 normal returns versus reachability, endpoint versus event order, and Stop versus
 successful-World wording were corrected. A source-factor observation was withdrawn

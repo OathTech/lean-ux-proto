@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.AllowedIps.InsertionRouting
+import Leanux.Proofs.WG.AllowedIps.RoutingHistory
 import Leanux.Proofs.WG.AllowedIps.ContextRemoval
 import Leanux.Proofs.WG.AllowedIps.RemovalStore
 import Leanux.Proofs.WG.AllowedIps.RemovalChildStore
@@ -35,8 +35,12 @@ effects. A represented forest and explicit target membership now derive every
 local case and its separation, yielding total original-step execution, exact
 retirement and both-family pure erasure. Explicit resident-only list coherence
 then justifies the complete original saved-list removeByPeer loop, preserves
-that coherence and removes exactly the target peer's entries. Establishing this
-coherence through initialized configuration history and packet admission remain separate.
+that coherence and removes exactly the target peer's entries. Original peer
+creation and raw release preserve routing coherence, permitting orphan owners.
+Finite normal create/insert/remove/release histories from the original configured
+fixture refine independent canonical flat-prefix updates and actual-root lookup.
+Their input bounds and resident insertion targets are explicit; enclosing
+Netlink/configuration/Runner closure and packet admission remain separate.
 -/
 
 namespace Leanux.Proofs.WG.CryptokeyRouting
@@ -378,7 +382,8 @@ insertion result. The actual selected root, structural representation, local
 validity and duplicate-free node identifiers are retained. Premises explicitly
 supply the requested path, initial root linkage and whole-store freshness.
 Both root values, the sequence, and any supplied opposite-family representation
-are framed. Other insertion cases, ownership coherence and history remain open. -/
+are framed. Separate dispatch, coherence and finite-call history contracts below
+cover those additional boundaries; enclosing configuration and packet paths remain open. -/
 theorem original_add_context_empty_child_correct (w w' : World) (d : WG.Device)
     (hd : w.k.wg = some d) (v4 : Bool) (c : Context) (n : NodeData) (side : Nat) (sibling : Tree)
     (addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
@@ -1541,8 +1546,8 @@ theorem original_insert_refusal_coherent (w w' : World) (d : WG.Device)
 /-- Complete original peer removal is total from the combined routing invariant
 and a resident target. Its precise saved-list erasure contract additionally
 preserves all routing/frontier conditions, including bounds on orphan raw owners.
-The input invariant is explicit; peer creation and initialized histories remain
-separate obligations. -/
+The input invariant is explicit; the finite initialized history contracts below
+derive it for their listed calls, without enclosing configuration closure. -/
 theorem original_removeByPeer_routing_preserved (w : World) (d : WG.Device)
     (hd : w.k.wg = some d) (pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
     (t4 t6 : Tree) (hi : RoutingInvariant d t4 t6) :
@@ -1550,5 +1555,64 @@ theorem original_removeByPeer_routing_preserved (w : World) (d : WG.Device)
       w'.k = {w.k with wg := some out} ∧ RemovedPeer d out t4 t6 pid p.allowedipsList ∧
       RoutingInvariant out (t4.eraseIds p.allowedipsList) (t6.eraseIds p.allowedipsList) :=
   removeByPeer_routing_total w d hd pid p hp t4 t6 hi
+
+/-- Actual peer creation either normally refuses with ENOMEM and preserves the
+routing projection, or returns the old peer frontier and installs an empty list
+at that slot while advancing the frontier. Device/list absence remains explicit.
+Initializer Stops have no returned World and are not converted to refusals. -/
+theorem original_peerCreate_routing_effects (w v : World) (key : WG.Key) (psk : Option WG.Key)
+    (result : Except Int WG.PeerId) (hr : (WG.peerCreate key psk).run w = .ok (result, v)) :
+    match result with
+    | .error err => err = -ENOMEM ∧ routingView v = routingView w
+    | .ok pid => ∃ s, routingView w = some s ∧ pid = s.peerFrontier ∧
+        routingView v = some s.allocate :=
+  peerCreate_routing w v key psk result hr
+
+/-- Original normal peer creation preserves both represented families, resident
+list coherence and node/peer/raw-owner frontier bounds. The owner bound makes a
+fresh empty peer list coherent even when older raw owners are no longer resident. -/
+theorem original_peerCreate_routing_preserved (w v : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (t4 t6 : Tree) (hi : RoutingInvariant d t4 t6)
+    (key : WG.Key) (psk : Option WG.Key) (result : Except Int WG.PeerId)
+    (hr : (WG.peerCreate key psk).run w = .ok (result, v)) :
+    ∃ out, v.k.wg = some out ∧ RoutingInvariant out t4 t6 :=
+  peerCreate_routing_preserved w v d hd hi key psk result hr
+
+/-- A normal raw peerPut preserves the routing invariant and both trees, even
+when it deletes a peer and leaves its raw owner labels in the trie. This is not
+a reference-credit or authorization theorem, and assumes no positive refcount. -/
+theorem original_peerPut_routing_preserved (w v : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (t4 t6 : Tree) (hi : RoutingInvariant d t4 t6)
+    (peer : Option WG.PeerId) (hr : (WG.peerPut peer).run w = .ok ((), v)) :
+    ∃ out, v.k.wg = some out ∧ RoutingInvariant out t4 t6 :=
+  peerPut_routing_preserved w v d hd hi peer hr
+
+/-- Finite actual normal create/insert/removeByPeer/peerPut calls from the
+original configured fixture refine an independent pair of canonical flat-prefix
+tables. Actual returns determine success/refusal effects. Only insertion's
+reached input bounds and target residency are supplied; coherence and agreement
+are derived at every step. This does not cover enclosing Netlink or Runner calls. -/
+theorem original_initialized_routing_history (w v : World) (calls : List RoutingCall)
+    (history : RoutingHistory w calls v) (rlimit : Nat) (foreign stepped seccompChild : Bool)
+    (hstart : w.k = Runner.initialKernel rlimit true false foreign stepped seccompChild) :
+    ∃ out t4 t6, v.k.wg = some out ∧ RoutingInvariant out t4 t6 ∧
+      FlatAgree 32 t4 (flatHistory calls ([], [])).1 ∧
+      FlatAgree 128 t6 (flatHistory calls ([], [])).2 := history.initialized hstart
+
+/-- Bounded IPv4/IPv6 findNode at the actual reached root returns a longest
+matching canonical prefix justified by the finite call history. Any returned
+node has that raw owner in the actual store. No owner-residency, packet identity
+authorization, enclosing configuration history or failed-World claim follows. -/
+theorem original_initialized_history_findNode (w v : World) (calls : List RoutingCall)
+    (history : RoutingHistory w calls v) (rlimit : Nat) (foreign stepped seccompChild : Bool)
+    (hstart : w.k = Runner.initialKernel rlimit true false foreign stepped seccompChild)
+    (v4 : Bool) (key : Nat) (hk : key < 2 ^ rootWidth v4) :
+    ∃ (d : WG.Device) (answer : Option Entry) (finish : World), v.k.wg = some d ∧
+      (WG.findNode (rootValue d v4) (rootWidth v4) key).run v =
+        .ok (answer.map Entry.id, finish) ∧ finish.k = v.k ∧
+      FlatWinner (rootWidth v4) key (selectedFlat v4 (flatHistory calls ([], [])))
+        (answer.map (canonical (rootWidth v4))) ∧
+      ∀ e ∈ answer, ∃ n, d.nodes[e.id]? = some n ∧ n.peer = some e.peer :=
+  history.findNode hstart v4 key hk
 
 end Leanux.Proofs.WG.CryptokeyRouting
