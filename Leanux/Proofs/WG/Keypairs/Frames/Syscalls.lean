@@ -1,3 +1,4 @@
+import Leanux.Proofs.Framing.Syscalls
 import Leanux.Proofs.WG.Keypairs.Frames.FS
 import Leanux.Proofs.WG.Keypairs.OrdinaryRules
 
@@ -53,7 +54,7 @@ theorem rtnetlinkRequest_spec (P : Snapshot → Prop) (hp : Stable P)
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (rtnetlinkRequest_ordinary body hb).wp P hp
 
 theorem netnsClose_sameSnapshot : SameSnapshot netnsClose := by
-  frame_same [netnsClose] using [sysClose_spec, taskWorkRun_spec]
+  exact sameSnapshot_of_sameWGKernel Framing.SyscallFrames.netnsClose_sameWGKernel
 
 theorem netnsClose_spec (P : Snapshot → Prop) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ netnsClose

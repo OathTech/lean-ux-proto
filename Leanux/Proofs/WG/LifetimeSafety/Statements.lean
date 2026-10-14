@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Lifetimes.SyscallsAudit
 import Leanux.Proofs.WG.Lifetimes.EnvRemainingCalls
 import Leanux.Proofs.WG.Lifetimes.EnvDeferredCalls
 import Leanux.Proofs.WG.Lifetimes.BatchAudit
@@ -1860,8 +1861,36 @@ theorem environment_remaining_family_preserves (call : Lifetimes.EnvRemainingCal
 /-- Each actual reached consistency-filter entry has its own allocation-valid
 World/history and exact ordered copied-filter result, including failed trials.
 Speculative histories remain separate from committed lifetime accesses. This is
-a local-entry theorem; syscall and initialized whole-Runner closure remain open. -/
+a local-entry theorem; initialized whole-Runner closure remains open. -/
 theorem environment_remaining_reached_trials (call : Lifetimes.EnvRemainingCall) (w : World)
+    (hi : Lifetimes.AllocationInv [] w) :
+    Lifetimes.AuditSafe (runPrefix call.observed w []).2 ∧
+    ∀ p ∈ Lifetimes.probeEntries (runPrefix call.observed w []).2,
+      Lifetimes.AllocationInv p.history p.world ∧
+      (p.world.suspended.filterM Env.Activation.consistent).run p.world =
+        (p.world.suspended.filterM (fun a => Lifetimes.activationTrialDecision a p.world p.history)).map
+          (fun ys => (ys, p.world)) ∧
+      ∀ a ∈ p.world.suspended,
+        Lifetimes.LifetimeEvent.Safe (runPrefix (Lifetimes.activationRunPrefix a) p.world p.history).2 :=
+  call.from_allocation w hi
+
+/-- All typed dispatcher and complete syscall calls, plus the namespace holder
+close, erase to their exact original result, successful World or Stop. No parser
+or allocation-validity premise is required for source erasure. -/
+theorem syscall_family_erasure (call : Lifetimes.SyscallAuditCall) :
+    ErasesPrefix call.observed call.original := call.erases
+
+/-- Concrete allocation identity and saved consistency-filter entries survive
+all original syscall constructors, wrappers and postworkers. Stop retains the
+safe reached history; no descriptor, ownership or drain premise is added. -/
+theorem syscall_family_preserves (call : Lifetimes.SyscallAuditCall) :
+    PrefixPreserves Lifetimes.AuditInv Lifetimes.AuditSafe call.observed := call.preserves
+
+/-- Actual reached filter entries derive allocation validity from the syscall's
+local entry, including postworker failures. The copied filter has exact order
+and Stops; its speculative access histories stay separate from committed ones.
+Initialized outer Runner composition remains an independent obligation. -/
+theorem syscall_reached_trials (call : Lifetimes.SyscallAuditCall) (w : World)
     (hi : Lifetimes.AllocationInv [] w) :
     Lifetimes.AuditSafe (runPrefix call.observed w []).2 ∧
     ∀ p ∈ Lifetimes.probeEntries (runPrefix call.observed w []).2,
