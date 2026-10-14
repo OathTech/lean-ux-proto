@@ -13,6 +13,16 @@
     "upstream_equivalence": "release contents identical to the snapshot, file by file (17,493 files), checked 2026-09-30"
   },
   {
+    "name": "lean",
+    "version": "4.35.0",
+    "origin": "/home/dev/.elan/toolchains/leanprover--lean4---v4.35.0",
+    "provenance": "independent local copy; no shared hardlinks",
+    "archive": ".deps/downloads/lean-4.35.0-local-snapshot.tar.zst",
+    "sha256": "ef2b2ef9af56af9dbe0131613e0cf57c198fe5107f3d232e1860bb34c00a5b53",
+    "size_bytes": 774990000,
+    "destination": ".tools/lean-4.35.0"
+  },
+  {
     "name": "go",
     "version": "1.26.5",
     "origin": "/usr/local/go",

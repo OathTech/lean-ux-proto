@@ -28,7 +28,7 @@ python3 scripts/restore-toolchains.py --only lean
 
 These download from the Ubuntu snapshot service, kernel.org and GitHub, verify
 the locked SHA-256 hashes, and extract into `.tools/` and `.deps/`. They do not
-install system packages. Lean is pinned to 4.33.1. Go, syzkaller, Firecracker
+install system packages. Lean is pinned to 4.35.0 (`lean-toolchain`; a checkout on an older pin keeps its own staged toolchain, see `scripts/in-bundle`). Go, syzkaller, Firecracker
 and the Lean MCP helper are optional and not needed here.
 
 Create a worktree for builds and experiments:

@@ -2,6 +2,7 @@
 """Select the local toolchain; confinement belongs to the calling nono session."""
 import os
 import json
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -36,6 +37,30 @@ for path in (root, cache, artifacts):
 sysroot = shared / '.tools/sysroot'
 if not (sysroot / 'usr/bin/gcc-13').is_file():
     raise SystemExit('Missing staged sysroot. Run scripts/stage-resources.py packages first.')
+
+# The Lean toolchain is the one this checkout's `lean-toolchain` names, staged
+# under the shared `.tools` as `lean-<version>` (`.tools/lean` is the legacy
+# name of the 4.33.1 stage, kept until every checkout has moved on). A
+# worktree on another toolchain keeps its own; a missing or mismatched stage
+# fails closed here rather than building with whatever `lean` is on PATH.
+toolchain_file = root / 'lean-toolchain'
+declared = toolchain_file.read_text().strip() if toolchain_file.is_file() else ''
+match = re.fullmatch(r'leanprover/lean4:v(\d+\.\d+\.\d+(?:-rc\d+)?)', declared)
+if not match:
+    raise SystemExit(f'Unrecognised lean-toolchain in {root}: {declared!r}')
+lean_version = match.group(1)
+lean_root = None
+for candidate in (shared / '.tools' / f'lean-{lean_version}', shared / '.tools/lean'):
+    lean_bin = candidate / 'bin/lean'
+    if not lean_bin.is_file():
+        continue
+    probe = subprocess.run([str(lean_bin), '--version'], capture_output=True, text=True)
+    if probe.returncode == 0 and f'version {lean_version},' in probe.stdout:
+        lean_root = candidate
+        break
+if lean_root is None:
+    raise SystemExit(f'No staged Lean {lean_version} for {root} under {shared / ".tools"}. '
+                     'Run scripts/restore-toolchains.py --only lean.')
 
 for name in ('tmp', 'lake', 'elan', 'go-build', 'go', 'bundle-bin', 'bundle-libs'):
     (cache / name).mkdir(parents=True, exist_ok=True)
@@ -87,7 +112,7 @@ env.update({
     'LEANUX_ROOT': str(root), 'LEANUX_SHARED_ROOT': str(shared),
     'LEANUX_CACHE_ROOT': str(cache), 'LEANUX_ARTIFACTS': str(artifacts),
     'LEANUX_SYSROOT': str(sysroot),
-    'PATH': ':'.join(str(p) for p in (cache / 'bundle-bin', shared / '.tools/lean/bin',
+    'PATH': ':'.join(str(p) for p in (cache / 'bundle-bin', lean_root / 'bin',
                                    shared / '.tools/go/bin', sysroot / 'usr/bin', sysroot / 'bin')),
     'LD_LIBRARY_PATH': str(cache / 'bundle-libs'),
     'LC_ALL': 'C', 'LANG': 'C', 'TERM': 'dumb',

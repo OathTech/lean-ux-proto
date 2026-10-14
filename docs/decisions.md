@@ -604,6 +604,19 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   placement, and is withdrawn; the evidence runs on a first-run mismatch
   again, the W7 13.2 (ii) form. Each mutant is rejected after its fix; the
   area suites agree.
+- **2026-10-14 [USER]** The Lean toolchain moves to v4.35.0: "If we can bump
+  to 4.35 we probably should, we can then also use the new lake comparator
+  feature"; "we can update our lean toolchain if need be". The bump is on
+  `main` only; the proof campaign's worktree keeps v4.33.1 until it merges
+  [USER: "Just make sure not to break the Codex#2 grind"], which
+  `scripts/in-bundle`'s per-checkout toolchain selection makes safe. The
+  one source change v4.35.0 needs is a type ascription in
+  `Leanux/WG/NetlinkDump.lean` (no behaviour change). Kraken (`.deps/kraken`
+  at 8af7806) builds on v4.35.0 and not on v4.33.1, which is the reason
+  for the version [AGENT, coordinator: the toolchain tests of 2026-10-14].
+- **2026-10-14 [USER]** Rule Zero's canonical form, for every proof charter
+  and the standing rules: "(1) the mirror might be wrong, (2) the kernel
+  might contain bugs, (3) the former is much more likely than the latter."
 - **2026-10-14 [USER]** The binary-level adequacy of the WireGuard mirror
   and the transport of its landed results to the binary are the objective
   of the simulation track; the theorem and its trust surface must be
@@ -616,3 +629,12 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   reusable checker (same day: "we're not building some reusable toolchain,
   we are proving a single target theorem"). Charter:
   docs/2026-10-15-charter-binary-adequacy.md.
+- **2026-10-14 [USER]** The direction of discrepancies at the binary level:
+  "the purpose of the verification should be to validate the mirror, and
+  detect discrepancies. Not to conform to mistakes in the mirror. The
+  binary (ie the real kernel) is the source of truth here of course." A
+  region that will not close because the mirror differs from the machine is
+  a mirror defect fixed on the mirror lane; the adequacy theorem's
+  precondition and relation are never narrowed to accommodate one. First
+  instance: the index lookup's dead-peer store (peerlookup.c), found by the
+  grind at milestone 1 [AGENT: the fix on task/index-lookup-fix].
