@@ -6,7 +6,7 @@ Worktree `.worktrees/proofs-campaign`, branch `proofs/campaign`; governed by
 [the charter](2026-10-13-charter-proof-campaign.md). Both prerequisites were
 carried from `2c7a076`, then the audit at `f45bde8` and documentation-only
 `a39aded`. The mirror is byte-identical to main. Checked components are current
-over `a39aded`, including the six-call R2 handshake-send extension. Open
+over `a39aded`, including the R2 handshake-send and R4 general-ring extensions. Open
 obligations below remain explicit. No integration into main,
 push, differential check or guest run has been performed by this campaign.
 
@@ -20,10 +20,10 @@ push, differential check or guest run has been performed by this campaign.
 | R6 flood resistance | Cookie exclusion proved at the original call boundary; accepted 19-retry/20-initiation episode resolves the literal limit through Rule Zero. Six terminal contracts. |
 
 **Current validation.** `a39aded` has mirror source unchanged from `f45bde8`.
-The proof gate passes 274 jobs and 252 terminal statements
-(ReplayWindow 15; R1 9; R2 140; R3 34; R4 35; R5 13; R6 6), using only `propext`, `Classical.choice` and `Quot.sound`.
+The proof gate passes 276 jobs and 258 terminal statements
+(ReplayWindow 15; R1 9; R2 140; R3 34; R4 41; R5 13; R6 6), using only `propext`, `Classical.choice` and `Quot.sound`.
 Fresh stock kernel replay passes, as do the 60-job default model build and
-94-test unit tier (21.921 seconds; one skip). Independent frozen-source
+94-test unit tier (21.965 seconds; one skip). Independent frozen-source
 and scope reviews have no unresolved correctness findings in these components.
 
 ```sh
@@ -455,6 +455,21 @@ keepalive’s uncleared slot. Linux and the mirror agree on both `-EPIPE` drops 
 all producers precede worker consumption. The theorem is a closed ring witness, not refinement of that
 complete recorded run.
 
+`RingGeometry` now represents a positive-size ring by tail `t`, a physically occupied stale list,
+and a live FIFO. Slots are `(stale ++ live)[offset n t j]?`; the bounds are
+`t + stale.length < n` and `stale.length + live.length ≤ n`. Original initialization has both lists
+empty. Physical fullness is exactly total occupancy `n`; original peek, count and items expose only
+the live list, retaining multiplicity. Size zero has separate unconditional refusal/empty laws.
+`RingSteps` proves exact original production and consumption: a physically free produce appends one
+live occurrence; consume moves the live head into stale storage or clears exactly the stale prefix
+plus that head. The original batch threshold and ring-end wrap determine retirement, for every batch,
+including zero and values larger than the ring. Successor bounds are proved, not postulated.
+No distinct-payload, endpoint-validity, or ownership premise is added. The six new terminal exports
+pass the local target (176 jobs), coordinated proof gate, fresh stock kernel replay and frozen review.
+
+[AGENT 2026-10-14] Use direct tail-relative slot offsets and exact `ringOf` equalities to separate
+physical stale occupancy from logical live contents; defer finite journals to the next slice.
+
 **Original enqueue and queues.** `Queues/Enqueue` classifies complete `enqueuePerDeviceAndPeer` normal
 returns: success produces the item; `-ENOSPC` leaves the ring unchanged; `-EPIPE` means physical
 fullness and an unchanged ring. The earlier peer-capacity test retains priority, and
@@ -557,7 +572,7 @@ Failing callback entry counts. These results establish neither allocation identi
 between polls. The checkpoint is `c0713d8`; observer definitions and the original chronological
 predicate remain unchanged.
 
-**Remaining scope.** Receive enqueue, general ring interleavings, worker-local ownership, pipeline
+**Remaining scope.** Receive enqueue, finite ring journals, worker-local ownership, pipeline
 conservation and recorded scheduler composition remain open, alongside R2’s caller/lifecycle closure.
 Discarded speculative activations must discard history with their trial Worlds. Local observations imply
 neither packet-store emptiness nor whole-schedule no-loss/no-duplication. Finite-prefix conservation
@@ -565,13 +580,20 @@ must account for pending obligations rather than infer eventual delivery from a 
 witness is not yet composed with original enqueue and a real peer queue; it alone makes no
 packet-arrival, cryptographic, fairness or delivery-order claim.
 
-**Validation and effort.** R4 has 35 terminal theorems. Checkpoints above passed coordinated proof
-gates, fresh stock kernel replay, model builds, unit tiers and independent frozen-source review; current
-whole-tree validation is recorded above. Across the R4 slices, **105 capped local invocations comprise
+**Validation and effort.** R4 now has 41 terminal theorems. The six new ring exports pass the
+coordinated proof gate, fresh stock kernel replay, model build, unit tier and independent frozen-source
+review. Current whole-tree counts are recorded above. Before this ring extension,
+**105 capped local invocations comprise
 36 passes, 68 ordinary failures and one deliberate termination**. All outcomes were collected; no memory
 cap was hit. Corrected failures concerned elaboration, matching, simplification or replay assertions.
 Owned temporary outputs were removed. These proof slices made no mirror edits, main integration, push or
 new QEMU/differential run.
+
+The general ring extension took 7m42s and used 13 capped invocations: four passed and nine failed ordinarily.
+Failures concerned Boolean simplification, inferred type parameters, list/array lookup normalization,
+and dependent-match export elaboration. All exits were collected; no cap or interruption occurred.
+Review corrected the report’s “live ownership” wording to “live contents”; no unresolved finding remains.
+Its exact one-step laws are a prerequisite for conservation, not a finite-journal or pipeline theorem.
 
 The completion-frame worker had two provider interruptions during implementation and one during
 read-only reporting; all dirty worktrees, including nonignored untracked files, were preserved before

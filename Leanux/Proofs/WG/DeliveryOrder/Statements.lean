@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.Queues.FullRing
+import Leanux.Proofs.WG.Queues.RingSteps
 import Leanux.Proofs.WG.Queues.Enqueue
 import Leanux.Proofs.WG.Queues.PrevQueue
 import Leanux.Proofs.WG.Queues.RxCompletionFrame
@@ -13,6 +14,72 @@ and successful-endpoint receive-queue helper frames. Whole recorded-schedule del
 pipeline conservation, and callback/scheduler ownership are separate obligations. -/
 namespace Leanux.Proofs.WG.DeliveryOrder
 open Leanux Leanux.WG
+
+/-- Every positive-size original initialization is represented with empty
+stale and live lists and the original batch. Zero size is separate below. -/
+theorem initialized_ring_representation (n : Nat) (hn : 0 < n) :
+    (PtrRing.init n : PtrRing α) =
+      Queues.Ring.ringOf n (PtrRing.init (α := α) n).batch 0 [] [] ∧
+    Queues.Ring.Bounds n 0 ([] : List α) [] :=
+  ⟨Queues.Ring.init_eq hn, by simp [Queues.Ring.Bounds, hn]⟩
+
+/-- Physical fullness counts both stale occupied slots and live items; peek,
+logical count and items see exactly the live FIFO, including multiplicity. -/
+theorem represented_ring_geometry (n batch t : Nat) (stale live : List α)
+    (hb : Queues.Ring.Bounds n t stale live) :
+    let r := Queues.Ring.ringOf n batch t stale live
+    r.full = (stale.length + live.length == n) ∧ r.peek = live.head? ∧
+      r.count = live.length ∧ r.items = live :=
+  ⟨Queues.Ring.full hb, Queues.Ring.peek hb, Queues.Ring.count hb, Queues.Ring.items hb⟩
+
+/-- An original physically free producer appends one live occurrence and
+preserves the representation bounds. Values need not be distinct. -/
+theorem represented_ring_produce (n batch t : Nat) (stale live : List α) (x : α)
+    (hb : Queues.Ring.Bounds n t stale live)
+    (hf : (Queues.Ring.ringOf n batch t stale live).full = false) :
+    (Queues.Ring.ringOf n batch t stale live).produce x =
+      Queues.Ring.ringOf n batch t stale (live ++ [x]) ∧
+    Queues.Ring.Bounds n t stale (live ++ [x]) := by
+  rw [Queues.Ring.full hb] at hf
+  have hfree : stale.length + live.length < n := by
+    have := hb.2
+    simp only [beq_eq_false_iff_ne] at hf
+    omega
+  exact ⟨Queues.Ring.produce hb hfree x, Queues.Ring.produce_bounds hb hfree x⟩
+
+/-- Complete original consume geometry: empty consumes do nothing; a live
+head either joins the stale prefix or retires that prefix at the batch/end
+threshold. This includes batch zero, oversized batches and end wrap. -/
+theorem represented_ring_consume (n batch t : Nat) (stale live : List α)
+    (hb : Queues.Ring.Bounds n t stale live) :
+    (Queues.Ring.ringOf n batch t stale live).consume =
+      match live with
+      | [] => (none, Queues.Ring.ringOf n batch t stale [])
+      | x :: xs =>
+        if stale.length + 1 < batch ∧ t + (stale.length + 1) < n then
+          (some x, Queues.Ring.ringOf n batch t (stale ++ [x]) xs)
+        else (some x, Queues.Ring.ringOf n batch
+          (Queues.Ring.loc n t (stale.length + 1)) [] xs) :=
+  by
+    cases live with
+    | nil => exact Queues.Ring.consume_empty hb
+    | cons x xs => simpa only using Queues.Ring.consume_eq (batch := batch) hb
+
+/-- The successor bounds are proved, not assumed: original consume returns
+the live head and a represented ring whose live FIFO is exactly the tail. -/
+theorem represented_ring_consume_preserves (n batch t : Nat) (stale live : List α)
+    (hb : Queues.Ring.Bounds n t stale live) :
+    ∃ t' stale', Queues.Ring.Bounds n t' stale' live.tail ∧
+      (Queues.Ring.ringOf n batch t stale live).consume =
+        (live.head?, Queues.Ring.ringOf n batch t' stale' live.tail) :=
+  Queues.Ring.consume_preserves hb
+
+/-- Every size-zero ring refuses guarded production and consumes nothing,
+independently of its other fields. No positive-size premise is imposed. -/
+theorem zero_size_ring_no_progress (r : PtrRing α) (hz : r.size = 0) (x : α) :
+    r.full = true ∧ r.peek = none ∧ r.consume = (none, r) ∧
+      r.count = 0 ∧ r.items = [] ∧ Queues.tryProduce r x = (false, r) :=
+  Queues.Ring.zero_size r hz x
 
 /-- Any finite sequence of production attempts against an already full ring
 rejects every item and leaves the complete ring unchanged. -/
