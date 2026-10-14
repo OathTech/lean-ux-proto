@@ -614,3 +614,6 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   `Leanux/WG/NetlinkDump.lean` (no behaviour change). Kraken (`.deps/kraken`
   at 8af7806) builds on v4.35.0 and not on v4.33.1, which is the reason
   for the version [AGENT, coordinator: the toolchain tests of 2026-10-14].
+- **2026-10-14 [USER]** Rule Zero's canonical form, for every proof charter
+  and the standing rules: "(1) the mirror might be wrong, (2) the kernel
+  might contain bugs, (3) the former is much more likely than the latter."
