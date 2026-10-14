@@ -1,55 +1,52 @@
 # B4 design: load as a recorded input, the ratelimiter's GC, the entry allocation — 2026-10-15
 
 Stream B4 of [the parallel plan](2026-10-14-wireguard-parallel-plan.md)
-(section 2, row B4). Design only; nothing here is built. Measured on the
-s4 oracle (identity `6b2018b9…`), one trace at a time, in
-`.worktrees/design-b4` [AGENT, fork of the coordinator].
+(section 2, row B4). Design only; nothing here is built. Revised against
+[the independent review](2026-10-15-design-b4-review.md) (cd183e0, 21
+findings): every finding is dispositioned in section 14. The measurement
+of section 2.4 was taken on the s4 oracle (identity `6b2018b9…`) before
+the review; no run was made for the revision [AGENT, fork of the
+coordinator].
 
 ## 0. Summary
 
-Three questions, three answers:
+Three questions; after the review, two are built now and one leaves the
+stream.
 
-1. **Under-load as a recorded input.** No new record kind. The kernel
-   already records everything the under-load decision depends on: the
-   compare's operands at `receive.c:112-113` (the comparison instrument,
-   checked per distinct value), the clock read per packet at `:115`
-   (site 130) and the decay read at `:117` (site 6), and the producer and
-   worker sections with the queue and resched records. What is missing is
-   that the mirror does not *use* them for the flood's tail: it summarises
-   the tail (`floodTailEffect`) and the check skips the flood's decisions.
-   The change is to retire the summary and the check's special case and run
-   every flood packet through the real producer and worker, as `wg_batch`
-   already does for data packets. Measured: the exact execution consumes
-   the same 1,565 remote records the summary discards or folds, reports
-   5,703 branches instead of one, matches 1,049 operand pairs instead of
-   18 (every tail packet's counter against Linux's), and costs the mirror
-   10 ms for the 520 packets (section 2.4).
-2. **The GC.** It runs in every WireGuard trace today, about once a second
-   from `wg_create`, unobserved: the work function is not in the dispatch
-   set, so no section opens and nothing it does is recorded; the mirror's
-   `gcEntries true` arm stops as unsupported but is never reached. Making
-   it a dispatched unit needs two record-only hook changes in unanchored
-   files (the firing section named after the delayed work's function, the
-   arm record at `__queue_delayed_work`), one dispatch-set symbol, and one
-   harness change that closes an instrument gap: the guest resets the remote
-   area at every operation's start, so a section that lands between
-   operations is lost. The GC's sections would land there often; the peer
-   timers' never do only because of the trace bound.
-3. **The entry allocation.** No kernel change: the kind-305 hook is
-   generic (`slab_alloc_node`, armed by address ranges the harness resolves
-   from a site table), so the "site not in the hook's list" wording of the
-   E design is wrong. The site is a row in `harness/steer.py`'s
-   `ALLOC_SITES` plus an `AllocSite` constructor; the failure arm becomes
-   the C's `err_oom` drop, modelled, reachable only by steering a class the
-   host does not enable. The init's three allocations stay outside the
-   model, with the reason written (section 4.4).
+1. **Under-load as a recorded input: no new record kind.** The kernel
+   already records what the decision depends on: the compare's operands
+   at `receive.c:112-113`, a clock read per packet at `:115` (site 130) or
+   `:117` (site 6), and the producer and worker sections with the queue
+   and resched records. The mirror does not use them for the flood's
+   tail: it summarises the tail (`floodTailEffect`) and the checker skips
+   the flood's decisions. The change is to run the flood as the
+   `wg_batch` it is, delete the summary, the discard and the exact flag,
+   and replace the checker's special case by a named rule change on the
+   trust surface (section 2.3, U1). The measurement taken so far ran the
+   exact flag's path, which keeps the discard and the preset counter and
+   skips control flow; it is restated as exactly that (section 2.4), and
+   the prototype of the real path over the thirteen flood traces and the
+   control is the build's first step, with a stop condition.
+2. **The GC: deferred to its own stream.** The review found three
+   concrete defects in the GC design (the arm hook's attribution, the
+   cancel model, the gap rule) and four missing rules. The exclusion
+   stays, with its reason sharpened by the review's facts (section 3).
+   The claim that the inter-operation gap is a silent instrument gap is
+   retracted: `section_problems` fails a lost section loudly. U2 is
+   withdrawn.
+3. **The entry allocation: no kernel change.** The kind-305 hook is
+   generic; the site is a row in `harness/steer.py`'s `ALLOC_SITES` plus
+   an `AllocSite` constructor; the failure arm becomes the C's `err_oom`
+   drop, modelled, reachable only by steering a class the host does not
+   enable. The init's three allocations stay outside the model with the
+   reason written (section 4).
 
-Estimate: about 0.15 WU (three to four agent-days) for the build, half of
-it the flood's exact execution and its corpus and controls, a quarter the
-GC with its hooks and the guest's window change, the rest the allocation
-site, the docs and the one-off mutants. The stop risk is the GC's
-placement: a 1 Hz tick-driven unit that can land inside any task section
-needs an ambient-section rule the mirror does not have today (section 11).
+With the GC out, B4 needs **no oracle change**: it lands on s4. The
+two-table uninit defect (section 3.5) is fixed in the same build.
+
+Estimate for questions 1 and 3 plus the uninit fix: about 2.25
+agent-days, roughly 0.1 WU (section 12); the proof-tree repair it forces
+is costed separately (section 10).
 
 ## 1. The C, verified against `.deps/linux` (6.12.110)
 
@@ -69,12 +66,16 @@ if (under_load) {
 mac_state = wg_cookie_validate_packet(&wg->cookie_checker, skb, under_load); /* :121-122 */
 ```
 
-`last_under_load` is a function-local static (`:100`). The producer
+`last_under_load` is a function-local static (`:100`).
+`MAX_QUEUED_INCOMING_HANDSHAKES` is 4096 (`messages.h:51`): the
+under-load threshold is 512, the busy threshold 2,048. The producer
 (`wg_packet_receive`, softirq) tests `handshake_queue_len > MAX/2` for the
-trylock path (`:554-558`), produces (`:560`), increments (`:567`) and
-queues the worker (`:570-571`). The worker (`:206-218`) consumes
-(`:212`), handles (`:213`), decrements (`:215`) and `cond_resched`s
-(`:216`) per packet.
+trylock path (`:554-558`, `spin_trylock_bh` on `producer_lock`),
+produces (`:560`, `ptr_ring_produce_bh`: `producer_lock`,
+`ptr_ring.h:160-164`), increments (`:567`) and queues the worker
+(`:570-571`). The worker (`:206-218`) consumes under `consumer_lock`
+(`ptr_ring_consume_bh`, `ptr_ring.h:362-368`; `:212`), handles (`:213`),
+decrements (`:215`) and `cond_resched`s (`:216`) per packet.
 
 ### 1.2 The ratelimiter (`ratelimiter.c`)
 
@@ -107,28 +108,41 @@ queues the worker (`:570-571`). The worker (`:206-218`) consumes
   MAC2 (`:140-144`), `VALID_MAC_WITH_COOKIE_BUT_RATELIMITED` unless
   `wg_ratelimiter_allow` (`:146-148`), `VALID_MAC_WITH_COOKIE` (`:150`).
 
-### 1.3 The delayed work and the configuration
+### 1.3 The delayed work and the configuration (kept for the GC stream)
 
 `DECLARE_DEFERRABLE_WORK(gc_work, wg_ratelimiter_gc_entries)` (`:20`) is
 a `delayed_work` whose timer has function `delayed_work_timer_fn` and
 flags `TIMER_DEFERRABLE | TIMER_IRQSAFE` (`include/linux/workqueue.h:244-257`).
 `queue_delayed_work` (`workqueue.h:676-682`) is `queue_delayed_work_on`
-(`kernel/workqueue.c:2575-2595`): a `test_and_set_bit(WORK_STRUCT_PENDING_BIT)`
-and, when it was clear, `__queue_delayed_work` (`:2524-2567`): `delay == 0`
+(`kernel/workqueue.c:2575-2595`): `test_and_set_bit(WORK_STRUCT_PENDING_BIT)`
+and `!clear_pending_if_disabled(work)` (`:2585-2586`; the function at
+`:2386-2399` clears the bit again, without queueing, when the work is
+disabled), then `__queue_delayed_work` (`:2524-2562`): `delay == 0`
 queues at once (`:2541-2544`), else `timer->expires = jiffies + delay`
-(`:2549`) and, housekeeping disabled on this config, `add_timer_global`
-(`:2561`), which is `__mod_timer(…, MOD_TIMER_NOTPENDING)`
-(`kernel/time/timer.c:1325-1331`) and so **bypasses `mod_timer`**, where the
-kind-303 arm hook sits. The timer's callback `delayed_work_timer_fn`
-(`workqueue.c:2515-2521`) is `__queue_work(dwork->cpu, dwork->wq,
-&dwork->work)`. `cancel_delayed_work_sync` (`:4470-4474`) is
-`__cancel_work_sync(…, WORK_CANCEL_DELAYED)` (`:4382`): grab pending
-(deleting a pending timer), then `__flush_work` if the work runs.
+(`:2548`) and, housekeeping disabled on this config, `add_timer_global`
+(`:2558`; `add_timer_on` at `:2555` and `:2560`), which is
+`__mod_timer(…, MOD_TIMER_NOTPENDING)` (`kernel/time/timer.c:1325-1331`)
+and so **bypasses `mod_timer`**, where the kind-303 arm hook sits.
+`__queue_delayed_work` is out of line in the oracle (`System.map`:
+`ffffffff81090570 t __queue_delayed_work`). The timer's callback
+`delayed_work_timer_fn` (`:2515-2521`) is `__queue_work(dwork->cpu,
+dwork->wq, &dwork->work)`. `cancel_delayed_work_sync` (`:4470-4474`) is
+`__cancel_work_sync(…, WORK_CANCEL_DELAYED)` (`:4382-4402`): it cancels
+with `WORK_CANCEL_DISABLE` (`:4386`), flushes a running instance
+(`:4397-4398`) and re-enables the work only afterwards (`:4400-4401`), so
+**a requeue issued while the cancel waits sets PENDING and has it cleared
+by `clear_pending_if_disabled`: nothing is armed**.
+
+The wheel rounds an expiry up to its level's granularity
+(`calc_index`, `timer.c:579-581`: `expires = (expires >> LVL_SHIFT(lvl))
++ 1`); with `LVL_CLK_SHIFT = 3` and `LVL_BITS = 6` (`:154`, `:168`), a
+delay of 250 ticks lands on level 1 (`LVL_START(1) = 63`, granularity 8),
+so the GC timer fires in `(E, E + 8]`.
 
 The oracle's configuration (`kernel/config-x86_64-net-choice`): `HZ=250`,
 `HZ_PERIODIC` (no `NO_HZ`: `NR_BASES = 1`, so `BASE_DEF` is the one base,
 `timer.c:200-203`, and the deferrable flag changes nothing about
-placement), `PREEMPT_NONE`, no `SMP`, `IPV6`, no
+placement), `PREEMPT_NONE`, no `SMP`, no `DEBUG_SPINLOCK`, `IPV6`, no
 `WQ_POWER_EFFICIENT_DEFAULT` (`system_power_efficient_wq` is an ordinary
 per-CPU workqueue, `workqueue.c:7876-7877`), no `CPU_ISOLATION`.
 
@@ -136,10 +150,10 @@ per-CPU workqueue, `workqueue.c:7876-7877`), no `CPU_ISOLATION`.
 
 - Clock reads are wrapped generically (`kernel/patches/gen-choice-stream.py:444-457`):
   every exported reader records `{kind 200+, _RET_IP_, value}`, attributed
-  to the caller's frame. So `:57`, `:115`, `:117`, `:121`, `:146` are
-  sites 124, 130, 6, 132, 133 already (`Defs.lean:1209,1290,1328,1332-1333`),
-  written only in a recording context (`kcov_choice_write`: outside one,
-  nothing, uncounted).
+  to the caller's frame. So `:117`, `:57`, `:115`, `:121`, `:146` are
+  sites 6, 124, 130, 132, 133 (`Leanux/Kernel/Defs.lean:1209`, `:1290`,
+  `:1328`, `:1332`, `:1333`), written only in a recording context
+  (`kcov_choice_write`: outside one, nothing, uncounted).
 - Allocation outcomes, kind 305, are recorded by one hook in
   `slab_alloc_node` and one in `__alloc_pages_noprof`, gated by an armed
   range set the harness loads per chunk (`gen:1467-1516`,
@@ -155,16 +169,21 @@ per-CPU workqueue, `workqueue.c:7876-7877`), no `CPU_ISOLATION`.
   set; sections open in `process_one_work` and `call_timer_fn` for armed
   functions (`gen:748-751`, `:1183-1189`), the unit being the work or the
   timer address. The set is `harness/linux.py`'s `DISPATCH_SYMBOLS`
-  (`:94-104`): fourteen of `DISPATCH_MAX` 16.
+  (`:94-104`), armed per trace by `arm_masks` (`:106-127`): fourteen
+  symbols; `Defs.lean:950-956` reserves indices 14-15 for W5-W6's units.
 - The resched record, kind 302, is written only when `__cond_resched` is
   about to schedule and only inside a task's dispatch section
   (`gen:586-600`).
 - The guest resets the remote area at every operation's start except
   before `wg_observe` (`harness/guest.c:2174`, `:2269`) and reads it at
-  the operation's end (`:2674`), after that operation's wait. The
-  end-of-wait jiffies read (kind 310) is taken after `wg_inject`'s,
-  `wg_set`'s, `wg_up`'s, `wg_xmit`'s, `wg_batch`'s and `wg_advance`'s
-  waits and before `wg_observe` (`:2608-2613`, `:2636`).
+  the operation's end (`:2674`), after that operation's wait; after the
+  trace it reads the kernel's count of opened sections
+  (`KCOV_LEANUX_SECTION_STATUS`, `:1480-1484`) and the checker's
+  `section_problems` (`evaluator/check.py:653-667`) fails the trace when
+  the recorded section starts do not match it. The end-of-wait jiffies
+  read (kind 310) is taken after `wg_inject`'s, `wg_set`'s, `wg_up`'s,
+  `wg_xmit`'s, `wg_batch`'s and `wg_advance`'s waits and before
+  `wg_observe` (`:2608-2613`, `:2636`).
 
 ## 2. Question 1: under-load as a recorded input
 
@@ -179,31 +198,33 @@ receive audit's F9 fix), saves the recorded clock (site 130) into
 `handshakeQueueLen + 1` at the ring produce; the worker's decrement is in
 `receiveStep` (`:242`).
 
-`Env.flood` (`Leanux/Env.lean:776-850`) builds the batch as the guest
+`Env.flood` (`Leanux/Env.lean:791-850`) builds the batch as the guest
 does: the leading valids in the ring, the counter at the batch's size
 (the measured fact that io_uring queues the whole batch before the
 single-CPU worker runs). Then:
 
 - the producer side of every send (520 `net_rx_action` sections, their
   IP-layer cut draws, the first packet's queue record) is dropped by
-  `discardFloodRecords` (`Defs.lean:2236-2248`), which fails closed on
-  any site outside its allow list;
+  `discardFloodRecords` (`:812`; `Defs.lean:2236-2248`), which fails
+  closed on any site outside its allow list;
 - the leading valids run through `handshakeReceiveWorker` with their
   records;
-- the invalid tail is folded by `floodTailEffect` (`:2264-2287`): per
-  tail packet one `under_load_now` read at or over the threshold, or one
-  decay read below it with the reset applied, and the resched records,
-  into `lastUnderLoad`; the counter is set to 0 at the end; any other
-  record is a mismatch;
-- `LEANUX_FLOOD_EXACT=1` (`Main.lean:21`, `World.floodExact`) instead
-  rebuilds the guest's 148-byte template (type 1, a MAC1 of `0xff`) and
-  runs the tail through the real worker, for checking the summary against
-  the unsummarised execution (the pre-release review's section 8).
+- the invalid tail is folded by `floodTailEffect` (`Defs.lean:2264-2287`):
+  per tail packet one `under_load_now` read at or over the threshold, or
+  one decay read below it with the reset applied, and the resched
+  records, into `lastUnderLoad`; the counter is set to 0 at the end; any
+  other record is a mismatch;
+- `LEANUX_FLOOD_EXACT=1` (`Main.lean:21`, `World.floodExact`,
+  `Defs.lean:1495`) takes a branch **after the discard** (`Env.lean:821`)
+  that rebuilds the guest's 148-byte template (type 1, a MAC1 of `0xff`),
+  **still presets the counter to the batch's size** (`:828`) and runs the
+  tail through the real worker. It was built to check the summary's fold
+  against the worker, not the producer side, and not the design below.
 
-The check's `control_flow` special-cases the operation (`evaluator/check.py:1043-1057`):
-it requires `receive.c:115` covered iff the batch is at least 512 and
-skips every decision of the operation; the batch size is read from the
-trace, not from the records.
+The checker's `control_flow` special-cases the operation
+(`evaluator/check.py:1043-1059`): it requires `receive.c:115` covered iff
+the batch is at least 512 and skips every decision of the operation; the
+batch size is read from the trace, not from the records.
 
 ### 2.2 What a record of the counter at `:112` would add: nothing
 
@@ -212,14 +233,15 @@ source". Read literally, that is a new record kind carrying the
 `atomic_read` at `:112`. It is not warranted, for three reasons verified
 above:
 
-- **The value is already recorded.** `:112-113` is a declared comparison;
-  the comparison child records its operands at every execution, and the
+- **The value is already recorded.** `:112-113` is a declared comparison
+  whose operands the comparison child records at every execution; the
   guest deduplicates rows by `(kind, operands, PC)` (`check.py:1233-1236`),
   so a tail of 520 packets whose counter runs 520, 519, …, 1 yields 520
-  distinct rows, each of which a mirror `branchCmp` must match
-  (`operand_rows_distinct`, `:1253-1256`). The instrument that would
-  check the counter per packet exists; the mirror does not report the
-  decisions it would be checked against.
+  distinct rows. The instrument is one-directional: each mirror
+  obligation must match some kernel row, and surplus kernel rows need no
+  counterpart (`:1241-1246`, the pre-release review's finding 5);
+  `operand_rows_distinct` is a report counter (`:1857`, `:1908`), not a
+  check. So the rows check what the mirror reports, never what it omits.
 - **The counter is not a hidden input.** It is kernel state computed by
   the producer's increments and the worker's decrements. Its hidden input
   is the producer/worker interleaving, which the NET_RX sections, the
@@ -227,391 +249,399 @@ above:
   record of the counter would be an instrument on a derived value: the
   mirror would check it, never consume it. (The kind-311 caller read is a
   different case: `jiffies` is a genuine hidden input, the tick's.)
-- **Every tail packet is already placed in the stream.** A packet at or
-  over the threshold records the clock at `:115`; one below it with a
-  saved `last_under_load` records the age test at `:117`. The only
-  unplaced packet would be one below the threshold with `last_under_load
-  == 0`, which inside one flood means a second of decay elapsed
-  mid-drain: the drain takes about a millisecond (`docs/2026-10-05-e-dos.md`
-  4.1, M4). It cannot happen in a flood that crossed; in one that did not
-  (`e_underload_511`), no packet records anything and none needs to, the
-  threshold's operands being the evidence.
+- **Every tail packet is placed in the stream, in order, by its clock
+  record.** A packet at or over the threshold records the clock at
+  `:115`; one below it with a saved `last_under_load` records the age
+  test at `:117`. Those records are consumed in order at their exact
+  sites, and that consumption, not the operand rows, is what makes the
+  exact execution per-packet complete. The only unplaced packet would be
+  one below the threshold with `last_under_load == 0`, which inside one
+  flood means a second of decay elapsed mid-drain: the drain takes about
+  a millisecond (`docs/2026-10-05-e-dos.md` 4.1, M4). It cannot happen in
+  a flood that crossed; in one that did not (`e_underload_511`), no
+  packet records anything and none needs to, the threshold's operands
+  being the evidence.
 
 **[AGENT] No new record kind for the counter.** The review's "a source
 record if exact queue depth is otherwise ambiguous" is met by the exact
-execution, which makes the depth unambiguous because the mirror computes
-it from the same events the kernel does and the comparison instrument
-checks it at every packet.
+execution, which computes the depth from the same events the kernel does,
+with every packet's clock record consumed in order.
 
-### 2.3 The change: retire the summary and the special case
+### 2.3 The change: the flood over `Env.batch`, and the checker rule it needs
 
 The mirror runs the flood as what it is: a `wg_batch` of `count` sends of
 the fixture's template, preceded by the leading valids and the optional
-control, in the guest's order (`guest.c:1590-1594`). `Env.batch` (W7
-stream B, `Leanux/Env/Batch.lean`) already runs an io_uring submission
-exactly: each send's `net_rx_action` section is the producer
+control, in the guest's order (`guest.c:1588-1594`). `Env.batch` (W7
+stream B, `Env.lean:895`, `afterBatch` `:870`) already runs an io_uring
+submission exactly: each send's `net_rx_action` section is the producer
 (`wg_packet_receive`: the handshake switch, the ring produce, the counter,
 `queue_work_on` with its queue record for the first packet and the
 pending bit for the rest), the receive worker's activation is resumed
-where the resched records put it, and a worker that outlives the wait
-fails closed. So:
+where the resched records put it, a section between two items' records
+mismatches (`:887-893`: the sends run inline in the trace task and the
+kworkers wait for the call to return), and a worker that outlives the
+wait fails closed. So:
 
 - `Env.flood` becomes a thin wrapper: the template is an environment fact
-  (the fixture's packet bytes, `Env.lean`, as `floodExact` builds it
-  today), the items are the leading valids, the control if any, then
-  `count` templates; the rest is `Env.batch`'s machinery with the
-  handshake producer arm. `floodTailEffect`, `discardFloodRecords`,
-  `World.floodExact` and `LEANUX_FLOOD_EXACT` are deleted.
+  (the fixture's packet bytes, as the exact branch builds it today), the
+  items are the leading valids, the control if any, then `count`
+  templates; the rest is `Env.batch`'s machinery with the handshake
+  producer arm. `floodTailEffect`, `discardFloodRecords`,
+  `World.floodExact`, the `LEANUX_FLOOD_EXACT` switch and
+  `executeTrace`'s `floodExact` parameter are deleted.
 - `handshakeQueueLen` is no longer set to the batch's size by the
-  operation: it is incremented per produce and decremented per consume,
-  and the batch-before-worker fact becomes what the records show, not an
-  assumption. If a run ever had the worker preempt the submitter (it
-  cannot on `PREEMPT_NONE` without a schedule point in the submission,
-  and `io_uring_enter` has none, measured in the E design), the exact
-  execution would follow the records anyway.
-- The check's `wg_flood` arm in `control_flow` is deleted; the flood's
-  decisions are checked like any operation's. The coverage rule on `:115`
-  becomes the ordinary outcome check of `.hsUnderLoad`. The placement
-  ceiling (`protocol.py:79`) already counts the flood's packets.
-- The merged-injection control (`corpus/underload-controls/e_underload_merged`,
-  `scripts/steering-controls.py:37,79`) loses its object: there is no
-  discarded region for the control to land in. It becomes a positive trace
-  (`e_underload_control_valid`: a mid-batch valid initiation gets its
-  cookie reply like any other) and the control suite gets a replacement
-  that exercises the new fail-closed edge: `e_underload_miscounted`, a
-  flood whose trace says `count: 519` for a guest batch of 520 (the guest
-  takes the count from the trace, so the control is built by the script
-  with a deliberately mismatched mirror input), which leaves one producer
-  section and one clock record unconsumed.
+  operation: it is incremented per produce and decremented per consume.
+  The batch-before-worker fact is then what the records show; a worker
+  section between two producers' records is a mismatch, as `Env.batch`
+  has it, which is the right fail-closed behaviour.
+- The flood's drain: `afterBatch`'s `requireDrained` (`:881-882`) lists
+  the decrypt, encrypt, tx and send queues and not the handshake queue;
+  the flood wrapper adds the handshake queue and the counter at zero, so
+  a receive worker that outlives the wait stops the operation.
+- **The checker rule change (U1).** Without the `wg_flood` arm the flood
+  goes through the ordinary `control_flow` rules, and every flood would
+  fail: "decision reported more than once" applies to every decision not
+  declared `repeatable` and to every operation but `wg_batch` and
+  `wg_netns_close` (`check.py:1095-1106`); "opposite outcome covered"
+  applies unless the decision is `repeatable` (`:1133-1140`); and none of
+  the flood path's decisions is repeatable (`Decision.repeatable`,
+  `Leanux/Kernel/Decision.lean:2959-3065`: of the path only
+  `workerConsumed` is). The flood also needs the batch's file restriction
+  (`op_files = BATCH_FILES(...)` for `wg_batch`, `:1066`): its
+  `io_uring_enter` runs the same fixture plumbing in `fs/file.c` that the
+  batch excludes. The change, then, is three rules on the trust surface:
+  `wg_flood` joins `wg_batch` in the file restriction and in the repeat
+  rule's exemption, and the decisions a flood evaluates with both
+  outcomes in one operation are declared `repeatable`: `hsUnderLoad`
+  (true for the first 9 packets of 520, false after), `hsWasUnderLoad`,
+  `macInvalid` and `macNoCookieCheck` (the valids against the tail), the
+  `packet_needs_cookie` arms, and `rxQueueBusy` (the busy trace). **What
+  this weakens:** a `repeatable` declaration applies in every operation,
+  so for those decisions "reported more than once" and "opposite outcome
+  covered" no longer fire anywhere; their per-packet reports collapse
+  into outcome sets, as the batch's do. Per-packet precision then rests
+  on the record stream (each packet's clock record consumed in order at
+  its exact site: exact) and on the operand rows (one-directional), not
+  on control flow. "Outcome not witnessed" and the order rule within a
+  function still apply. A per-operation variant (the exemption extended
+  to the opposite-outcome rule for `wg_flood` only, with no `repeatable`
+  declarations) would be narrower; its cost is a second exemption on the
+  opposite-outcome rule, which today has none. [AGENT] The design names
+  the `repeatable` route, the precedent being the W7 tier's declarations
+  (`Decision.lean:2970-2974`), and puts the choice to the user in U1.
+- The merged-injection control **stays**. `corpus/underload-controls/e_underload_merged`
+  (`scripts/steering-controls.py:37,79`) has the guest process a valid
+  initiation the Runner ignores (`Runner.lean:646-650`); under the exact
+  execution the run diverges at that packet's first cookie record and at
+  the counter's operand, and the control's expected detail is updated to
+  that. No miscount control (it would need a seam that feeds the mirror
+  an input other than the guest's; none exists and none should) and no
+  positive "control valid" trace (the guest places the control right after
+  the leading valids, `guest.c:1588-1593`, which is `e_underload_two_replies`).
+
+This answers the E design's C1: the summary and the discard existed
+because a site-level skip of site 6 would eat the injection's own record.
+The exact execution has no skip at all; every record is consumed at its
+own site in order, an operation's records end at the operation, and
+`requireDrained` stops a worker that outlives the wait. A merged or extra
+packet diverges the per-packet sequence. The guard is kept and stronger.
 
 What stays environment: the template's bytes, the submission's order and
 the guest's wait after the submission (`QUEUE_WAIT_US`, 100 ms, inside
-the operation). Nothing moves into the mirror that is not the C's: the
-producer and the worker are the mirror's already.
+the operation). Nothing moves into the mirror that is not the C's.
 
-### 2.4 The measurement: exact versus summarised on s4
+### 2.4 The measurement: what was measured, and the build's first step
 
 `e_underload_live` (520 invalid packets, no leading valid, then an
-injection inside the decay), one run each way, the same guest build
-(`check.py --suite wireguard --trace e_underload_live`, the second with
-`LEANUX_FLOOD_EXACT=1 --no-build`); the flood is operation 3.
+injection inside the decay) and `e_underload_ratelimit` (520 invalid,
+two leading valids), one run each on s4, the summarised path and the
+exact flag's path (`check.py --suite wireguard --trace <id>`, the second
+with `LEANUX_FLOOD_EXACT=1 --no-build`). **What the exact flag's path
+is:** the producer side discarded as in the summary, the counter preset
+to the batch's size, control flow skipped by the checker's `wg_flood`
+arm, the tail run through the real worker. It is not the design of
+section 2.3; the figures below say what that path consumed and reported,
+no more.
 
-| | summarised | exact |
+| `e_underload_live`, operation 3 | summarised | exact flag |
 | --- | --- | --- |
 | verdict | agreement, 7 operations | agreement, 7 operations |
-| remote records of the flood operation (pc child) | 1,565: 520 clock reads (`:115`), 521 section starts and 521 stops (520 producers, one worker), 2 resched, 1 queue | 1,565, the same |
+| remote records of the flood (pc child), the kernel's count | 1,565: 520 clock reads (9 at `:115`, 511 at `:117`), 521 section starts and 521 stops (520 producers, one worker), 2 resched, 1 queue | 1,565, the same kernel count |
+| of which consumed by a mirror unit | 524 (the worker's section bracket, the leading valids' records: none here) folded by `floodTailEffect`; 1,041 discarded | 524 by the worker; 1,041 still discarded |
 | mirror branches reported for the flood | 1 | 5,703 |
 | operand pairs matched / distinct rows (trace) | 18 / 14 | 1,049 / 536 |
-| the mirror on the recorded inputs (the trace, `scripts/in-bundle .lake/build/bin/leanux-model`) | 0.09 s | 0.10 s |
+| the mirror on the recorded inputs (`scripts/in-bundle .lake/build/bin/leanux-model`) | 0.09 s | 0.10 s |
 
-`e_underload_ratelimit` exact (two leading valids, one of them a cookie
-reply and a steered MAC2 initiation): agreement, 5,885 branches for the
+`e_underload_ratelimit`, exact flag: agreement, 5,885 branches for the
 flood, 1,061 pairs over 544 rows, 0.10 s against 0.09 s.
 
-The operand figures are the point: `operand_agreement` is not skipped
-for the flood (only `control_flow` is), so in the exact run every tail
-packet's `hsUnderLoad` compare was matched against Linux's rows, 520
-distinct counter values, and all agreed. The counter is already checked
-per packet by the instruments that exist; the summary only declines to
-report it.
+What these figures do show: (a) with 520 queued the counter is at or over
+512 for the first 9 packets only, so the tail is 9 reads at `:115` and
+511 at `:117`, and the exact path consumed each in order at its site
+(the worker half of the design is exact and agrees); (b) `operand_agreement`
+is not skipped for the flood, so the 1,049 pairs include 520
+`hsUnderLoad` and 511 `hsDecayExpired` obligations, each matched by a
+kernel row: the per-packet counter values the mirror computed agree with
+Linux's in that direction; (c) the worker half costs the mirror about
+10 ms for 520 packets. What they do not show: the producer side through
+`Env.batch` (never ran), the batch-before-worker fact from records (the
+counter was preset), the 5,703 branches against coverage (control flow
+was skipped; section 2.3 says the checker would reject them unchanged),
+and the cost with producers (an estimate: about 11 labels per packet on
+the worker, 6 on the producer, so about 9,000 labels for 520 against
+`MAX_BRANCHES = 262144`, `protocol.py:230`).
 
-The record cost is the same: the tail already writes one clock record per
-packet and the producers already open a section each; the summary
-discards or folds what the exact execution consumes. The mirror's time
-per packet, a MAC1 (`blake2s` over 116 bytes, `Leanux/WG/Blake2s.lean:68`,
-a `List UInt8` implementation) and about a dozen decisions, is about
-20 µs on this box: 10 ms for a flood of 520, and about 0.3 s for the
-largest flood the harness accepts (`2^20` is the validator's ceiling,
-`harness/trace.py:444`; a realistic maximum is the 16,384 of the E
-measurements). At the corpus's flood sizes (510 to 520 invalid packets in
-fourteen traces, `corpus/wireguard/e_underload_*`,
-`l_delete_ratelimited`) the cost is nothing. The report bound is `MAX_BRANCHES = 262144`
-(`protocol.py:230`); a 520-packet flood reports about 8,000 labels
-(producer and worker arms per packet), and the W7 tier's 1,024-item batch
-reports 126,531, so a flood of a few thousand packets is inside the bound
-and a 16,384-packet one (the harness allows `2^20`) is not: the bound
-becomes the flood's size limit, declared in the trace validator.
+**The build's first step** [AGENT]: prototype `Env.flood` over
+`Env.batch` with the checker rules of section 2.3, run the thirteen
+`corpus/wireguard` flood traces and the control
+(`check.py --suite wireguard` on those ids, one claim-point-sized run),
+and restate this table from that run before U1 goes to the user. Stop
+condition: **report rather than fix if the exact path mismatches** on any
+of the thirteen (a producer section where the mirror expects none, a
+counter operand that differs, a worker that outlives the wait): the
+mismatch is a finding about the batch's assumptions or the mirror, not
+something to absorb in the wrapper.
 
-[AGENT] The exact execution is affordable at every size the corpus uses
-and at the sizes the review asked for (a few thousand, to place the
-boundary tightly); it replaces the summary. Nothing of the summary is
-kept.
+The report bound: a 520-packet flood reports about 9,000 labels, the W7
+tier's 1,024-item batch reports 126,531, so a flood of a few thousand
+packets is inside the bound and a 16,384-packet one is not (the harness
+allows `2^20`, `harness/trace.py:444`). The bound becomes the flood's
+size limit, declared in the trace validator: enough for the 511/512/513
+boundary and for the 2,050-packet busy trace.
 
 ### 2.5 The busy test and the trylock (`:554-558`)
 
-The producer's other read of the counter, `> MAX/2` for the trylock path,
-is `.rxQueueBusy` (`Decision.lean:1147`), reached as true by any flood
-over 1,024 packets and stopping as unsupported because `spin_trylock_bh`'s
-outcome "is the worker's lock state at that instant, which no record
-carries" (the receive audit). With the exact execution the producer's
-section order relative to the worker's is recorded, but the lock is held
-by `ptr_ring_consume_bh` only inside the worker's consume, so a producer
-section that interleaves a worker activation at a resched record sees the
-lock free (the worker yields between packets, `:216`, outside the
-consume), and the trylock succeeds. On this single CPU the trylock can
-fail only if the producer's softirq preempts the worker inside its
-consume, which `ptr_ring_consume_bh` prevents (`_bh`: softirqs off). So
-the outcome is derivable: success, always, on this config; the arm
-`.rxQueueBusy` true then produces under the trylock exactly as the plain
-path does. [AGENT] B4 declares it so, with the argument, and a trace
-`e_underload_busy` (a flood of 1,100) covers the arm; `rxProduceFailed`
-under the trylock (the ring full at 4,096) stays out of reach by the
-flood size limit above.
+The producer's other read of the counter is `> MAX/2`, that is 2,048
+(`messages.h:51`; the mirror has it right, `Receive.lean:473`): the
+`.rxQueueBusy` arm (`Decision.lean:1147`), reached as true by the k-th
+produce when k - 1 > 2,048 are queued, so the smallest batch that takes
+it once is 2,050. Today the arm stops as unsupported because
+`spin_trylock_bh`'s outcome is "the worker's lock state at that instant,
+which no record carries" (the receive audit). That reason is wrong about
+the lock: the trylock is on `producer_lock` (`receive.c:555`), which only
+producers take (`ptr_ring.h:160-164`); the worker consumes under
+`consumer_lock` (`ptr_ring.h:362-368`), so its position is irrelevant.
+And on this configuration the outcome is constant: with `CONFIG_SMP` and
+`CONFIG_DEBUG_SPINLOCK` off, `arch_spin_trylock` is `({ barrier();
+(void)(lock); 1; })` (`include/linux/spinlock_up.h:56`): the trylock
+always succeeds. [AGENT] B4 declares the arm's outcome so, keyed to the
+configuration (a `CONFIG_SMP` oracle would need a record), and the
+`.rxQueueBusy` true arm produces under the trylock exactly as the plain
+path does. The trace `e_underload_busy` is a flood of 2,050 or more
+(2,100 proposed: the arm taken 51 times, about 36,000 labels, inside the
+bound). `rxProduceFailed` under the trylock (the ring full at 4,096) stays
+out of reach by the size limit of section 2.4.
 
 ### 2.6 Decisions and operands
 
 No new decision on the under-load path. The decisions that become checked
-per packet: `hsUnderLoad` (520 distinct operand rows per flood),
-`hsWasUnderLoad`, `hsDecayExpired`, `hsCookie`, the `packet_needs_cookie`
-arms, the MAC1 outcome (`cookieValidatePacket`'s decisions), and on the
-producer side `wg_packet_receive`'s handshake arm, `.rxQueueBusy`, the
-produce and the queue. The comparison child's area holds the 520 rows (a
-`wg_create` window already exceeds that count by far).
+per packet, under the rule of section 2.3: `hsUnderLoad` (520 distinct
+operand obligations per flood), `hsWasUnderLoad`, `hsDecayExpired`,
+`hsCookie`, the `packet_needs_cookie` arms, the MAC1 outcome
+(`cookieValidatePacket`'s decisions), and on the producer side
+`wg_packet_receive`'s handshake arm, `.rxQueueBusy`, the produce and the
+queue. The comparison child's area holds the rows (a `wg_create` window
+already exceeds that count by far).
 
-## 3. Question 2: the GC as a dispatched unit
+## 3. Question 2, the GC: deferred to its own stream
 
-### 3.1 Today: it runs, unobserved
+### 3.1 What stands
 
-`gcEntries` (`Leanux/WG/Device.lean:131-161`) models the uninit walk
-(`work = false`) and stops at `.gcHasWork` for a periodic run. The work
-function is not in `DISPATCH_SYMBOLS`, so no section opens, the clock
-read at `:57` is written in no recording context, and the requeue's
-`add_timer_global` bypasses the arm hook even for an armed function. The
-run is invisible.
+The GC runs in every WireGuard trace today, unobserved. The timer is
+armed at `wg_create` for `jiffies + 250` and re-armed by each run; the
+work function is not in `DISPATCH_SYMBOLS`, so no section opens, the
+clock read at `:57` is written in no recording context, and the requeue's
+`add_timer_global` bypasses the arm hook even for an armed function.
+Measured on `e_underload_live` (section 2.4's run): the end-of-wait reads
+give `4294892911` after `wg_set` and `4294893291` after the last
+injection, 380 ticks (1.52 s) from an instant already after the device's
+creation (the cmp child: 523 ticks; `timing.jsonl`: 1.49 s and 2.03 s
+since `wg_up`). So at least one run per trace, two in the cmp child, with
+the tables empty. A run with entries would free an entry idle for more
+than a second, and the next handshake from that source would insert
+(site 133) where the mirror, holding the entry, predicts a hit (site
+132): a hidden mismatch, fail-closed. That is why the ratelimiter traces
+keep their second initiation within the same tick and no trace advances
+past a second with an entry in the table. The exclusion is safe; it
+bounds the corpus; `gcEntries true` (`Leanux/WG/Device.lean:144-161`)
+stops as unsupported and is never reached.
 
-It happens in every WireGuard trace. The timer is armed at `wg_create`
-for `jiffies + 250` and re-armed by each run for `+ 250`. Measured on
-`e_underload_live` (section 2.4's run): the end-of-wait reads give
-`4294892911` after `wg_set`, `4294893291` after the last injection: 380
-ticks, 1.52 s, from an instant already after the device's creation (the
-cmp child: 523 ticks); `timing.jsonl` says 1.49 s and 2.03 s since
-`wg_up`. So at least one GC run, and in the cmp child two, with the
-tables empty: a walk of 2,048 buckets, a requeue, nothing else. A run
-with entries matters: an entry idle for more than a second is freed, and
-the next handshake from that source inserts (site 133) where the mirror,
-holding the entry, predicts a hit (site 132). That is a hidden mismatch,
-fail-closed, which is why the ratelimiter traces keep their second
-initiation within the same tick and no trace advances past a second with
-an entry in the table. The exclusion is safe; it bounds the corpus.
+### 3.2 The exclusion, kept, with its reason sharpened
 
-### 3.2 The representation at the thin layer
+The first version of this note designed the GC as a dispatched unit. The
+review found three defects in that design and four rules it lacked, each
+checkable against the C or the harness; the GC therefore leaves this
+stream, and the reason the E design's section 11 gives ("its firing is
+outside the trace's windows on this fixture and no record names it") is
+sharpened to the following, which a later stream must overcome:
 
-The GC is the C's data and control flow in the mirror (`gcEntries`,
-completed), and three environment facts: when its timer fires, when the
-kworker runs the work, and when the walk yields. All three come from
-records.
+1. **The arm record would carry no WireGuard site.** The arm happens in
+   `__queue_delayed_work`, which is out of line in the oracle
+   (`System.map`: `ffffffff81090570 t __queue_delayed_work`, called from
+   `queue_delayed_work_on`), so `_RET_IP_` there is an address in
+   `kernel/workqueue.c`, the same for the init's arm (`:191`) and the
+   requeue (`:81`). A hook must either pass the outer return address
+   from `queue_delayed_work_on` and `mod_delayed_work_on` (both exported;
+   the WireGuard callers inline `queue_delayed_work`) or declare one
+   `workqueue.c` site and tell the two arms apart by mirror state.
+2. **A requeue during the cancel arms nothing.** `cancel_delayed_work_sync`
+   disables the work before flushing a running instance and re-enables it
+   only afterwards (`workqueue.c:4386`, `:4400-4401`); a
+   `queue_delayed_work` issued meanwhile sets PENDING and has it cleared
+   by `clear_pending_if_disabled` (`:2585-2586`, `:2386-2399`) without
+   queueing and without reaching any arm hook. Every `wg_delete` that
+   meets a run in progress sees no arm record. The state needs the
+   disable count across the cancel and the arming rule needs the test.
+3. **The inter-operation gap is loud, not silent.** The first version
+   said a section landing between one operation's remote read and the
+   next operation's reset "is lost, silently" and called this an
+   instrument gap that B4 would close. **That claim is retracted.** The
+   guest reads the kernel's count of opened sections after the trace
+   (`guest.c:1480-1484`) and `section_problems` (`check.py:653-667`,
+   since 0437dbc, 2026-10-04) fails the trace with "dispatch sections
+   opened but not recorded" when the recorded starts fall short. The
+   per-operation reset dates from 2026-10-01 and the `wg_observe`
+   exception from 2026-10-06; since sections exist, nothing in a gap has
+   been able to pass silently. The integration record must not carry this
+   as a found gap. What the gap does mean for a GC stream: once the GC is
+   armed in a trace, a firing in any window outside a reset-to-read span
+   is a frequent loud failure, and a gap rule must close every such
+   window: the head (records before operation 0, after the dispatch
+   load, stated to belong to it), the gaps between operations, and the
+   tail (after the last read the child runs `delete_wg0`, `guest.c:2727`,
+   `:2755`, whose `cancel_delayed_work_sync` comes last; a firing there is
+   opened and never recorded, so a trailing idle segment the mirror
+   consumes is needed). Never resetting has a capacity cost: `CAPACITY`
+   is 4 Mi words (`guest.c:51`), the comparison child's records are four
+   words each, and `full_remote_kcov` (`:2676`) would trip on the
+   cumulative count; a trace with a large batch, a large flood or several
+   `wg_create` windows needs numbers. (The first version also said no
+   peer timer lands in a gap because "their delays are 5 s and up"; that
+   is not the reason. The peer timers' natural firings land in operations'
+   waits by the trace bound and the advances, and `section_problems`
+   catches one that did not.)
+4. **No rule detects a missing firing.** "Consumed where the records
+   place them" accepts the sections present and rejects none absent: the
+   GC's timer and work addresses are constant (`gc_work` is static), and
+   a stale pending timer passes the next firing's due test. The peer
+   timers share this property today (`runTimers`, `Env.lean:406-441`). A
+   GC stream needs a completeness rule wherever the mirror knows
+   `jiffies` (the kind-310 reads, the 303 arms, the 311 reads): a pending
+   GC timer due by then must already have fired, respecting the wheel's
+   rounding (section 1.3: the timer fires in `(E, E + 8]`), and either
+   arguing away a softirq deferred to `ksoftirqd` or stating it as a
+   residual. The strict due test `time_before(expires, J)` is sound for
+   the same rounding-up reason.
+5. **The nested firing is common, and its run's placement is unrecorded.**
+   A tick's `TIMER_SOFTIRQ` runs before `NET_RX` in the same
+   `handle_softirqs` pass, including at the `local_bh_enable` of every
+   loopback send inside the trace task's system call, so a GC firing
+   nested in a task section is as frequent as the fraction of time spent
+   in task sections and system calls, times about four firings per trace.
+   The trace task's yields are unrecorded (`kcov_dispatch_resched` writes
+   only inside a dispatch section, `gen:586-600`), so a sleep or
+   `cond_resched` inside a system call runs the GC's run mid-call, placed
+   by sequence order alone. The mirror has no rule for an ambient
+   dispatched unit with content at an arbitrary read, and a first-day
+   spike over the full WireGuard suite is needed to measure how often the
+   case occurs before any rule is written.
+6. **The activation machinery covers queue-draining workers only.**
+   `Activation.hasWork`, `iter` and `occupancy` (`Leanux/Env/Batch.lean:141-152`,
+   `:201-227`) are over the encrypt, decrypt, receive and tx workers, with
+   "not a draining worker" invariants for everything else. A 2,048-bucket
+   walk with a resched point per bucket, resumable after a yield, is a
+   new activation kind with its own fuel and consistency test.
+7. **Slot 14 is reserved.** `Defs.lean:950-956` reserves indices 14-15
+   for "W5-W6's two units"; W5 and W6 landed (`docs/2026-10-06-w5-w6-receive.md`)
+   and `DISPATCH_SYMBOLS` has fourteen entries, so whether the reservation
+   is dead is for the GC stream to settle with the interface's owner
+   before taking the slot, and the comment updated either way.
 
-- **State.** `Kernel.ratelimiter` gains `gcTimer : Option UInt64` (the
-  pending timer's `expires`; `none` when not pending) and `gcPending :
-  Bool` (the work's `WORK_STRUCT_PENDING_BIT`: set from the queue call
-  until `process_one_work` starts the run). The refcount, the key and the
-  two tables are as today.
-- **Arming** (`:191` at init, `:81` at the requeue). `queue_delayed_work`
-  is: if `gcPending` then nothing (the C's `test_and_set_bit`, a decision
-  in `kernel/workqueue.c`, unanchored, so a plain `if` in the mirror);
-  else `gcPending := true`, and the arm record (section 3.3) gives
-  `{jiffies, expires, timer}`: the mirror checks `expires = jiffies + 250`
-  (the C's `:2549`; `HZ` is a constant of the configuration) and records
-  the timer's address as the unit (`timerUnits`, as `armTimer` does,
-  `Leanux/WG/State.lean:145-160`). The init's arm happens inside
-  `wg_create`'s own task context: a recording context, so the record is
-  there.
-- **Firing.** A section of `wg_ratelimiter_gc_entries` whose unit is the
-  timer's address (section 3.3's hook) is the firing: the mirror requires
-  `gcTimer` pending with `time_before(expires, J)` for a `J` it knows (the
-  requeue's arm record inside the run that follows, or the end-of-wait
-  read: section 3.5), clears `gcTimer`, and consumes the queue record
-  (kind 307, the work's address) that `delayed_work_timer_fn`'s
-  `__queue_work` writes inside the section; `gcPending` stays set (the
-  bit was set at the arm). The section contains nothing else.
-- **The run.** A section of the same function whose unit is the work's
-  address: `gcPending := false` (`process_one_work` clears the bit
-  before the call), then `gcEntries true`: the clock read (site 124),
-  the walk over 2,048 buckets with, per bucket, the v4 and v6 entries
-  whose expiry test `now - last_time_ns > NSEC_PER_SEC` is a new
-  comparison decision each (`gcV4EntryExpired` at `:66`, `gcV6EntryExpired`
-  at `:72`, operands `(now - last_time_ns, 1000000000)`), the entry's
-  removal (`entry_uninit`: out of the table; the counter's decrement is
-  deferred to the RCU callback, `:45`, so between the removal and the
-  grace period the kernel's `total_entries` is higher than the mirror's
-  table size: unobservable, the limit being out of reach, and declared
-  with `rlOverLimit`'s reason), then `cond_resched` per bucket
-  (`nestedResched` on the GC's worker: a resched record is consumed if
-  one is there, as the receive worker's loop does), then the requeue (the
-  arm above). The bucket a given entry lives in is a cut (the hsiphash),
-  so the per-entry decisions are reported for bucket 0 standing for the
-  walk, as today, and the `gcBucketIter` outcomes as a set.
-- **Cancel** (`:211` at the last uninit). With the timer pending: it is
-  deleted (`gcTimer := none`, `gcPending := false`; no record: the C's
-  `try_to_grab_pending` is deterministic on the mirror's state). With the
-  work queued and not started: the item is taken off the queue (the same
-  fields). With the run in progress (the GC's activation suspended at a
-  resched record): `cancel_delayed_work_sync` waits, so the mirror runs
-  the activation to its section stop before the uninit proceeds (the W7
-  activation machinery, `Env.schedule`), and the requeue inside that run
-  arms a timer that the cancel then deletes. Then the uninit walk with
-  `work = false`, as today, but over **both** tables (section 3.6).
+### 3.3 What a later GC stream must meet
 
-### 3.3 The oracle changes: record-only, class-approved
+Named here so the stream's charter can start from them:
 
-Two existing LEANUX hook lines change and one gains a call; no kernel
-source line is added or moved, and both files are unanchored (the checker
-reads no spans from `kernel/time/timer.c` or `kernel/workqueue.c`).
+- **Per-trace arming.** `wg_ratelimiter_gc_entries` armed only in the GC
+  traces (`arm_masks`, as `cleanup_net` is armed for foreign-creator
+  traces), never in every WireGuard trace: no existing verdict depends on
+  the new placement rules until they have paid their way.
+- **The spike first.** One guest run measuring, per WireGuard trace, the
+  wall time outside the reset-to-read spans (the gaps plus the tail) and
+  how often a tick's softirq lands inside a task section: the failure
+  rate a GC armed everywhere would cause under today's guest, and the
+  size of the nested case.
+- **The arm record's attribution** (item 1), **the disable state** across
+  the cancel (item 2), **the head, tail and capacity rule** of the guest's
+  window (item 3), **the due-means-fired completeness rule** respecting
+  the wheel's rounding (item 4), **the nested-section rule** sized by the
+  spike (item 5), **a new activation kind** for the walk (item 6), **the
+  slot** (item 7).
+- The representation the first version proposed and that survives the
+  review, for reuse: `Kernel.ratelimiter.gcTimer`/`gcPending` with the
+  firing named by the delayed work's function in `call_timer_fn`'s hook
+  (`fn == delayed_work_timer_fn ? container_of(timer, struct delayed_work,
+  timer)->work.func : fn`, record-only, no armed work function being a
+  delayed work today; `linkwatch_event` is one but no trace arms it, and
+  W8b inherits the firing sections when it does), the run's section as
+  `gcEntries true` with two new comparison decisions (`gcV4EntryExpired`
+  at `:66`, `gcV6EntryExpired` at `:72`, operands `(now - last_time_ns,
+  NSEC_PER_SEC)`), the RCU-deferred decrement of `total_entries` declared
+  unobservable under the out-of-reach limit, and the traces
+  `e_underload_ratelimit_gc`, `e_underload_ratelimit_gc_kept`,
+  `e_underload_ratelimit6_gc`.
 
-1. **The firing section is named after the delayed work's function.** In
-   `call_timer_fn` the hook (`gen:1187-1188`) becomes
-   `kcov_dispatch_start(&section, fn == delayed_work_timer_fn ?
-   (void *)container_of(timer, struct delayed_work, timer)->work.func : fn,
-   timer);`. A delayed work whose function is armed opens a section named
-   by that function with the timer as its unit; every other delayed work
-   (vmstat, neighbour GC, and the rest) still opens none, since
-   `delayed_work_timer_fn` itself is not armed. The queue record that
-   `__queue_work` writes from inside is then in a recording context.
-2. **The arm record at `__queue_delayed_work`.** The line
-   `add_timer_global(timer);` (`workqueue.c:2561`) becomes
-   `{ kcov_timer_arm(dwork->work.func, jiffies, timer->expires, _RET_IP_,
-   timer); add_timer_global(timer); }`, and the two `add_timer_on` lines
-   (`:2557`, `:2563`) the same (unreachable on this config, kept for the
-   hook's honesty). Keyed on the work function, so only armed delayed
-   works record, in the same format as `mod_timer`'s record. The requeue's
-   caller frame is `ratelimiter.c:81`; the init's `ratelimiter.c:191`:
-   two sites of kind 303 beside the peers' arm site.
-3. `DISPATCH_SYMBOLS` gains `wg_ratelimiter_gc_entries` (harness, not
-   kernel; the fifteenth of sixteen slots), armed by every WireGuard
-   trace like the peer timers; `Worker.ratelimiterGc` in the mirror with
-   its section site, `resched?` and the symbol, in the order the comment at
-   `Defs.lean:950-956` prescribes.
+### 3.4 The interface requirement on the timer representation (B3), extended
 
-The new identity and patch hash go in the merge's record. A behaviour
-change there is none: no config option, no boot parameter, no functional
-patch.
+Written against the interface, not B3's note (not read), for the GC
+stream's use; B4 itself now needs nothing from B3.
 
-### 3.4 The harness: the inter-operation gap
-
-The remote area is reset at each operation's start (`guest.c:2269`,
-except before `wg_observe`) and read at its end (`:2674`), after that
-operation's wait. A section that opens after the read and before the next
-reset is lost, silently. No peer timer lands there: their delays (5 s and
-up) exceed the trace bound, and the advance's wait is inside its
-operation. The GC fires at every 250th tick wherever the guest is, so its
-sections would land in the gap in a good fraction of runs, and the mirror
-could not be exact: the arm record of a run in the gap is lost with it,
-and the next run's section would name a unit never armed.
-
-The fix is in the guest, one rule: **the remote area is never reset
-between operations; each operation's remote row is the records since the
-previous operation's read.** The read position moves instead of the
-count. Records in the gap belong to the next operation as its head; the
-mirror treats every operation's start as an idle point (the rule
-`wg_observe` already has: "the guest's wait before this operation",
-`Env.observe`, `Env.lean:688`), consuming the GC's firing and run there
-before the operation's own records. The per-operation rows the checker
-builds (`check.py:555-595`) do not change shape. This closes an instrument
-gap that exists today for every armed unit, not only the GC; the trace
-bound made it unreachable, which is a bound, not a rule. One-off mutant: a
-guest that keeps the reset, run on a trace whose GC fires in a gap (an
-advance of 300 ticks between two operations with no wait of their own):
-the mirror finds the run's section missing and the next arm's unit unknown
-(rejected).
-
-### 3.5 The environment rule, new
-
-> **The ratelimiter GC's two units (the firing, the run) are dispatched
-> wherever the records place them, never predicted.** (i) At an
-> operation's start (the gap before it) and at an idle point inside an
-> operation (`idleTimers`, `afterAdvance`): consumed by `runTimers`'s loop
-> like a peer timer's section, the firing's due test against the
-> end-of-wait read where one exists. (ii) Inside a task section at a record
-> boundary (the tick landed in the trace task's own system call or in a
-> kworker's section): the firing is a softirq section nested there, read by
-> `hidden` as an ambient dispatched unit at that point; the run's section
-> follows at the task's next yield, which for a kworker is a resched record
-> (the activation machinery) and for the trace task is its return to user
-> mode, i.e. the operation's end or the gap. (iii) Never inside a softirq
-> section (the timer and NET_RX vectors are siblings, `handle_softirqs`).
-> The firing's due test when no end-of-wait read bounds it is the requeue's
-> own arm record inside the run that follows: `time_before(expires,
-> jiffies_at_requeue)` is the kernel's `__run_timers` invariant and is
-> exact. A GC section with no pending GC timer, a run with `gcPending`
-> clear, or a requeue whose jiffies is not past the fired expiry is a hidden
-> mismatch.
-
-Case (ii) is the rule the mirror lacks. `skipAmbient` (`Defs.lean:2180`)
-drops ambient *records*; a nested ambient *section* with content (the
-queue record) needs `hidden` to recognise the GC's section start, run the
-firing, and continue with the record it was asked for. That is a small,
-general mechanism ("an ambient dispatched unit at any read"), and it is
-the stream's stop risk (section 11): if it cannot be made exact and
-fail-closed, the GC cannot be a dispatched unit on this fixture, and the
-exclusion stays with its reason sharpened.
-
-Whether an environment rule moves into the mirror: no. The GC's walk,
-removal and requeue are the mirror's (the C's); the placement of its
-sections is the environment's, from records.
-
-### 3.6 Does any corpus trace reach a run today; what exercises it
-
-Every WireGuard trace longer than a second after `wg_create` reaches one
-or more runs, unobserved (section 3.1). With B4 every such trace gains
-the GC's sections in its records and the mirror consumes them; the traces
-themselves do not change. The runs with entries, which is what the GC is
-for, need new traces:
-
-| Trace | Content | What it checks |
-| --- | --- | --- |
-| `e_underload_ratelimit_gc` | flood; an initiation from one source inserts; `wg_advance` 300; the GC's run frees the entry (`gcV4EntryExpired` true, operands); the same source inserts again (site 133 twice, no 132) | the periodic walk with an entry, the expiry comparison, the arm and firing records |
-| `e_underload_ratelimit_gc_kept` | as above with `wg_advance` 200 then the second initiation inside the entry's second: the run keeps it (`gcV4EntryExpired` false), the second initiation hits (site 132) | the comparison's false arm |
-| `e_underload_ratelimit6_gc` | the v6 table's run with an entry (`gcV6EntryExpired`) | the second table's walk |
-| `l_delete_ratelimited6` | an IPv6 entry, then `wg_delete`: the uninit walk over the v6 table | the uninit's v6 arm, today constant false |
-| `l_recreate_ratelimited6` | as above, then `wg_create`, `wg_set`, `wg_up` and an initiation from the same `/64`: an insert (the kernel emptied the table at uninit) | the mirror defect below, as a positive trace once fixed |
-| `e_underload_busy` | a flood of 1,100 | `.rxQueueBusy` true under the trylock (section 2.5) |
-
-**A mirror defect, found reading (Rule Zero, clause 1).** `gcEntries`
-with `work = false` empties `table` and reports `gcV6EntryIter` false
-always (`Device.lean:150-155`), and `ratelimiterInit` resets `table`
-only (`:128`): after a delete with IPv6 entries and a re-create, the
-mirror holds entries the kernel freed (`:70-74` on the uninit walk). The
-next IPv6 initiation from that `/64` would be a hit in the mirror (site
-132) and an insert in the kernel (site 133): a hidden mismatch, so the
-verdict today could not be wrong silently; no trace does this, so the
-defect has been invisible. The comment on `gcEntries` ("the entries are
-IPv4") predates F12. B4 fixes both (`gcEntries` walks both tables;
-`ratelimiterInit` resets both; the comment), with `l_recreate_ratelimited6`
-as the witness. The `WGCookie.lean` frame of campaign 1 already views both
-tables (`Framing/WGCookie.lean:19`), so the frame is right and the mirror
-was behind it.
-
-### 3.7 The interface requirement on the timer representation (B3)
-
-Written against the interface, not B3's note (not read). Whichever
-representation lands, the GC needs:
-
-- **R1, an owner beside the peers.** A kernel-global timer
-  (`Kernel.ratelimiter.gcTimer`) with `expires`, pending or not, armed
-  and deleted by the ratelimiter's code, not a peer's.
+- **R1, an owner beside the peers.** A kernel-global timer with
+  `expires`, pending or not, armed and deleted by the ratelimiter's code.
 - **R2, the arm.** The same consumption shape as `armTimer`'s: a kind-303
-  record `{jiffies, expires, timer}` at the arm site, the caller's delay
-  checked against the published expiry (`expires = jiffies + HZ`; the
-  caller's own read is the same instant here, `:2549`, so no kind-311
-  record is needed), the timer's address registered as the unit.
+  record `{jiffies, expires, timer}`, `expires = jiffies + HZ` checked
+  (the caller's read is the same instant, `workqueue.c:2548`), the
+  timer's address registered as the unit; **with the attribution of
+  section 3.2 item 1** (the outer return address, or one `workqueue.c`
+  site told apart by state).
 - **R3, the firing.** A record-placed section whose due test is
   `time_before(expires, J)` for a `J` the mirror knows, or, under a wheel
-  representation, the wheel's own order among the timers due at the
-  tick. The GC timer is `TIMER_DEFERRABLE | TIMER_IRQSAFE` in the one
-  base of this configuration (section 1.3); if B3 models bucket
-  placement, the deferrable flag must be stated as not changing it here.
-- **R4, deletion** at `cancel_delayed_work_sync`, from the mirror's
-  state, no record.
-- **R5, nesting.** The firing may land inside a task section (section
-  3.5, case ii); the peer timers do not need this, the GC does.
-- **R6, the pairing.** The timer unit is armed by the 303 record and
-  consumed by the firing section; the work unit by the 307 record inside
-  that section and the run's section (`dispatch_problems`,
-  `check.py:748-798`, unchanged).
+  representation, the wheel's own order; **the wheel model must place the
+  GC timer by `calc_wheel_index` like the peers'** (level 1, granularity
+  8, firing in `(E, E + 8]`), the deferrable flag being irrelevant to
+  placement on this configuration (one base).
+- **R4, deletion** at `cancel_delayed_work_sync`, from state, no record.
+- **R5, nesting.** The firing may land inside a task section.
+- **R6, the pairing.** The timer unit armed by the 303 record and consumed
+  by the firing section; the work unit by the 307 record inside it and
+  the run's section (`dispatch_problems`, `check.py:748-798`).
+- **R7, completeness.** A due timer must have fired by any known
+  `jiffies`, with the rounding and the `ksoftirqd` residual stated.
+- **R8, the disable state** during `cancel_delayed_work_sync`: a requeue
+  while disabled arms nothing and records nothing.
 
-If B3 lands first, the GC timer joins the wheel as one more `timer_list`;
-if B4 lands first, R1-R6 are met by the record-driven firing and B3
-replaces R3's due test by the wheel. Neither blocks the other.
+### 3.5 The two-table uninit defect: fixed in this build
+
+Found reading (Rule Zero, clause 1), confirmed by the review. `gcEntries`
+with `work = false` empties `table` only and reports `gcV6EntryIter`
+false always (`Device.lean:152-158`), and `ratelimiterInit` resets
+`table` only (`:128`); the C's uninit walk empties both tables
+(`ratelimiter.c:64-74`). After a delete with IPv6 entries and a re-create,
+the mirror holds entries the kernel freed. It could not have hidden a
+wrong verdict: a delete with IPv6 entries makes the kernel cover `:73`
+against the mirror's `gcV6EntryIter=0` ("opposite outcome covered"), and
+a re-create followed by a lookup from the same `/64` gives site 132
+against 133. No corpus trace has IPv6 entries followed by `wg_delete`
+(`l_delete_ratelimited` is IPv4), so the defect has been invisible. The
+docstring of `gcEntries` ("an IPv6 handshake is `unsupported`", `:138`)
+predates F12. B4 fixes both tables in `gcEntries` and `ratelimiterInit`
+and the docstring, with two traces: `l_delete_ratelimited6` (an IPv6
+entry, then `wg_delete`: the uninit's v6 arm, which fails before the fix
+and passes after) and `l_recreate_ratelimited6` (then `wg_create`,
+`wg_set`, `wg_up` and an initiation from the same `/64`: an insert). This
+is independent of the GC and lands with questions 1 and 3. Campaign 1's
+`WGCookie.lean` frame already views both tables
+(`Framing/WGCookie.lean:19`): the frame was right and the mirror behind
+it.
 
 ## 4. Question 3: the entry allocation
 
@@ -627,24 +657,27 @@ sent. Observable.
 
 ### 4.2 The mirror today, and a wrong sentence
 
-`ratelimiterAllow` (`Receive.lean:192-197`): `branch .rlAllocFail
-!(← envOk .ratelimiterEntry)` and the arm `unsupported`. `envOk` is the
-pipes-era environment oracle (`EnvSite`, `Defs.lean:697-709`), which
-always answers success. The E design's section 11 says the site "is not in
-the kind-305 hook's list (`kernel/patches/gen-choice-stream.py`)". There
-is no such list: the hook is generic (section 1.4) and records any armed
-range; what is missing is the site's row in `ALLOC_SITES` and its
-`AllocSite` constructor. B4 corrects the sentence in the E design and the
-receive audit's F13 row.
+`ratelimiterAllow` (`Receive.lean:153-200`; the branch at `:189`):
+`branch .rlAllocFail !(← envOk .ratelimiterEntry)` and the arm
+`unsupported`. `envOk` is the pipes-era environment oracle (`EnvSite`,
+`Defs.lean:697-709`), which always answers success. The E design's section
+11 and the comment at `Receive.lean:184-188` say the site "is not in the
+kind-305 hook's list (`kernel/patches/gen-choice-stream.py`)". There is no
+such list: `__kcov_alloc_pre` tests `canonicalize_ip(addr)` against the
+loaded ranges (`gen:1475-1478`), the ranges come from `ALLOC_SITES` rows
+through `objdump` (`steer.py:250-298`), and `wg_ratelimiter_allow` calls
+`kmem_cache_alloc_noprof` directly (`ffffffff813a1c80` in the oracle).
+What is missing is the site's row and its `AllocSite` constructor. B4
+corrects the sentence in the E design, the comment, and the receive
+audit's F13 row.
 
 ### 4.3 The change: no kernel change
 
 - `AllocSite.kmemCacheAllocRlEntry`: consumer `drivers/net/wireguard/ratelimiter.c:138`,
   a direct site (`kmem_cache_alloc_noprof` is in `ALLOC_ENTRIES`,
-  `steer.py:161`; the return address is in `wg_ratelimiter_allow`),
-  `.exact 1`, hidden id `70 + index`; the `ALLOC_SITES` row with
-  `cls='kworker'`, like `kzallocKeypair` (`noise.c:100`, `steer.py:219`):
-  the receive worker's context.
+  `steer.py:161`), `.exact 1`, hidden id `70 + index`; the `ALLOC_SITES`
+  row with `cls='kworker'`, like `kzallocKeypair` (`noise.c:100`,
+  `steer.py:219`): the receive worker's context.
 - `ratelimiterAllow` consumes it with `hiddenAlloc`; the false arm is the
   C's `err_oom`: the counter back by one and `return false`, so
   `cookieValidatePacket` returns `.ratelimited` and the packet is
@@ -653,10 +686,12 @@ receive audit's F13 row.
 - Arming. A chunk is armed for a site when a trace steers it or the run's
   `arm` lists it (`check.py:1568-1578`); `hiddenAlloc` answers success
   unarmed (the A design's transitional rule, 6.6, still in force:
-  `Defs.lean:2220`). The ratelimiter traces (`e_underload_ratelimit*`,
-  `l_delete_ratelimited`, the GC traces above) declare the site with a
-  `draw` entry so their chunk records it and the mirror consumes the
-  record; the success outcome is then checked, not assumed.
+  `Defs.lean:2211`). The ratelimiter traces (`e_underload_ratelimit*`,
+  `l_delete_ratelimited`, the two uninit traces of section 3.5) declare
+  the site with a `draw` entry, which `alloc_refusal` accepts for the
+  `kworker` class (it returns before the class gate, `steer.py:310-311`),
+  so their chunk records it and the mirror consumes the record; the
+  success outcome is then checked, not assumed.
 - The failure arm is reachable only by steering, and the `kworker` class
   is not steerable (`ENABLED_CLASSES = {'atomic'}`, the `failslab`
   extension adds `task`; `steer.py:180-181`): the user's A1 decision. B4
@@ -688,176 +723,302 @@ deleted with them. `EnvSite` keeps its pipe-path sites.
 
 | Record | Today | After B4 |
 | --- | --- | --- |
-| the clock per tail packet (`:115`, site 130) | folded by `floodTailEffect` | consumed by the worker per packet |
-| the decay read in a tail (`:117`, site 6) | folded | consumed per packet |
+| the clock per tail packet (`:115`, site 130; `:117`, site 6) | folded by `floodTailEffect` | consumed by the worker per packet, in order |
 | the producer sections and the IP-layer draws of a flood | discarded by `discardFloodRecords` | consumed by the producer per packet (`Env.batch`) |
 | the flood's queue and resched records | dropped | consumed (the first packet's queue, the worker's yields) |
-| the counter at `:112` | derived; its compare's operands recorded and unchecked for the tail | derived; checked per packet |
-| the GC's clock (`:57`, site 124) | never in a recording context | consumed per run |
-| the GC's firing and run sections (kind 300/301) | none | new, from the dispatch set |
-| the GC's queue record (kind 307) | none | new, inside the firing section |
-| the GC's arm records (`:191`, `:81`, kind 303) | none | new, from the `__queue_delayed_work` hook |
-| the GC's resched records (`:78`) | none | consumed when present |
+| the counter at `:112` | derived; its compare's operands recorded, the tail's unreported | derived; reported and matched per packet (one-directional) |
 | the entry allocation (`:138`, kind 305) | `envOk` | a declared site, consumed when the chunk is armed |
 
-All new records are record-only. No behaviour change is proposed; the
-only candidate that would be one, arming `delayed_work_timer_fn` itself,
-is rejected in section 3.3 because it would section every delayed work.
+No new record kind. No oracle change: B4 lands on s4. The GC's records
+(sections, queue, arm, the `:57` clock) are the GC stream's.
 
 ## 6. Environment rules touched
 
 - `Env.flood`: rewritten over `Env.batch`; the summary, the discard and
-  the exact flag deleted (section 2.3).
+  the exact flag deleted (section 2.3); the drain check gains the
+  handshake queue and the counter.
 - The decay: unchanged in the mirror (`receiveHandshakePacket`); the
   environment no longer folds it.
-- A new rule for the GC's placement (section 3.5), including the ambient
-  nested section at any read.
-- Every operation's start is an idle point (section 3.4), which is the
-  `wg_observe` rule generalised.
-- `requireDrained` at the flood's end: the worker drained within the wait
-  or the operation fails, as `wg_batch` has it.
+- The busy arm's outcome: constant on this configuration (section 2.5),
+  a declared fact of the environment, not a record.
+- Nothing else. The GC's placement rules of the first version are
+  withdrawn with the GC.
 
 ## 7. Decisions and operands added
 
 | Decision | Site | Operands | Note |
 | --- | --- | --- | --- |
-| `gcV4EntryExpired` | `ratelimiter.c:66` | `now - last_time_ns` vs `NSEC_PER_SEC` | `gt`, non-constant rhs is a constant: `const_rhs` |
-| `gcV6EntryExpired` | `ratelimiter.c:72` | the same | |
-| `.rxQueueBusy` true arm | `receive.c:554-558` | none new | the trylock's success derived (section 2.5) |
+| `.rxQueueBusy` true arm | `receive.c:554-558` | none new | the trylock constant on this configuration (section 2.5) |
 | `.ratelimiterInit{Cache,TableV4,TableV6}Err` | `:165`, `:180`, `:185` | none | constant false with the reason |
 | `.rlAllocFail` | `:139` | none | over the record; the true arm modelled |
+| `repeatable` on `hsUnderLoad`, `hsWasUnderLoad`, `macInvalid`, `macNoCookieCheck`, the `packet_needs_cookie` arms, `rxQueueBusy` | | | the checker rule change of U1 |
 
-No decision is removed. The flood's existing decisions become checked.
+No decision is removed. The GC's two comparison decisions belong to the
+GC stream.
 
 ## 8. One-off mutants
 
 | Mutant | Rejected by |
 | --- | --- |
 | the mirror ignores the resched records of the flood's worker (runs it in one activation) | the W7 interleaving: a producer section between activations is consumed in the wrong order, hidden mismatch |
-| the arm hook keyed on the timer's function instead of the work's (no record) | `ratelimiterInit` finds no arm record |
-| the firing section named `delayed_work_timer_fn` (hook 1 reverted) | the section is from an unlisted function: the coverage boundary |
-| the guest's per-operation reset kept (section 3.4) | a GC run in a gap: the next arm names an unknown unit |
+| the under-load threshold at 511 in the exact flood | `e_underload_511/512/513` (the boundary traces) |
 | `envOk` kept for the entry while the chunk is armed | an unconsumed record |
 
-Each run once in its commit and deleted; none replaces a sentinel. The
-sentinel set does not change: `E-M8` (queue under-load ignored) is covered
-by the exact execution's `hsUnderLoad` rows, and `E-M10/M11` by the
-ratelimit traces as today.
+Each run once in its commit and deleted; none replaces a sentinel.
+`scripts/wg-mutants.py` holds thirteen sentinels and none for E
+(`:36-121`); nothing about the sentinel set is claimed.
 
 ## 9. Corpus
 
-Additions: the six traces of section 3.6, `e_underload_control_valid`
-(the former control as a positive trace), and the control
-`e_underload_miscounted` replacing `e_underload_merged` in
-`corpus/underload-controls` and `scripts/steering-controls.py`. Changes:
-none to existing traces; every WireGuard trace's records gain the GC's
-sections, which the mirror consumes. The suite's run time grows by the
-exact flood execution (section 2.4) across fourteen traces.
+Additions: `e_underload_busy` (2,100), `l_delete_ratelimited6`,
+`l_recreate_ratelimited6`. Kept: `e_underload_merged` with its expected
+detail updated. Changes: none to existing traces. The suite's run time is
+unchanged in any measurable way (section 2.4). The GC traces of section
+3.3 belong to the GC stream.
 
-## 10. Proof-tree frames touched
+## 10. Proof-tree frames touched, and the repair's cost
 
-Read-only, by `git show` of both branches.
+Read-only, by `git grep` and `git show` on `main` (ca6b22e),
+`proofs/campaign` and `proofs/campaign-2`.
 
-- `proofs/campaign`, `Leanux/Proofs/Framing/EnvOperations.lean:78`
-  (`floodTailEffect_sameKernel`) and `Framing/Kernel.lean:247-252`
-  (`discardFloodRecords_sameWGKernel`, `_spec`): their subjects are
-  deleted; the frames go, and `Env.flood`'s frame is re-proved over
-  `Env.batch`'s (which the campaign already frames for `wg_batch`).
-- `proofs/campaign`, `Framing/WGCookie.lean:55-78`
-  (`ratelimiterAllow_sameCookieKernel`): `hiddenAlloc` replaces `envOk`
-  in the body; the view is unchanged (both tables are already in it,
-  `:19`). A re-run.
-- `proofs/campaign`, `Framing/WGDeviceLifecycle.lean:13-51`
-  (`ratelimiterKernel`, `ratelimiterInit_`, `gcEntries_`,
-  `ratelimiterUninit_sameRatelimiterKernel`): the view erases
-  `ratelimiter` wholesale (`:13`), so `gcTimer`/`gcPending` and the
-  two-table walk are inside the erased field: the statements hold, the
-  proofs re-run with the new arms (`gcEntries true` no longer stops).
-- `proofs/campaign-2`, `Leanux/Proofs/Logged/Operations.lean:255-303`
-  (`floodLogged`, `floodLogged_erases`) and `Logged/Syscalls.lean:30,49`:
-  a line-by-line copy of `Env.flood` with an erasure proof; it must be
-  re-mirrored over the new `Env.flood`. A lag-and-repair item for the
-  campaign, per the register rule; the integration record says so.
-- Campaign 2's H2 (index uniqueness) and H5 (termination under fairness)
-  are not over the ratelimiter or the flood; H6 (timer discipline) may
-  take the GC timer as a non-peer timer into its model or exclude it by
-  name, which the charter leaves to the campaign.
+**Statement edits** (deleting `executeTrace`'s `floodExact` parameter).
+On `proofs/campaign` the statements quantify over it explicitly
+(`{floodExact : Bool}` and the argument): `WG/AntiReplay/Statements.lean:29-41`
+(`runner_uniqueness`, `runner_floor`: register results, so the edit is
+named as a statement edit under Rule Zero), the carried
+`WG/ReplayWindow/Statements.lean:16-18` (`S1`), `Logged/Runner.lean:12-122`,
+`Logged/Checkpoints.lean:41-156` (`executeTraceCheckpoints`),
+`WG/Keypairs/Evolution/{Bounds,Runner,Syscalls}.lean`,
+`WG/Lifetimes/EnvTrafficAudit.lean:125`, `Logged/Operations.lean:314`.
+On `main` and `proofs/campaign-2` the statements use the default argument
+(`Logged/Runner.lean`, `WG/ReplayWindow/Statements.lean:17-20`,
+`Evolution/{Runner,Syscalls}.lean`, campaign 2's `Progress/BatchBacklog.lean:42`):
+no statement text changes there, the parameter's removal being
+transparent.
+
+**Deleted with their subjects.** Campaign 1: `Framing/EnvOperations.lean:78-85`
+(`floodTailEffect_sameKernel`), `Framing/Kernel.lean:247-252`
+(`discardFloodRecords_sameWGKernel`, `_spec`), `WG/Keypairs/Frames/Kernel.lean:219-224`.
+Main and campaign 2: `WG/Keypairs/Frames/Kernel.lean:179-184` (the same
+frames). `Env.flood`'s own frame (`WG/Keypairs/Frames/Env.lean:29-36`,
+all three trees) is re-proved over `Env.batch`'s frames, which the trees
+already hold for `wg_batch`.
+
+**Re-mirrored copies** (`floodLogged` and the prefix copies of the flood
+and of `packetReceive`). Campaign 1: `Logged/Operations.lean:284-350` (its
+`floodLogged`, with `family`), `WG/Lifetimes/EnvTrafficAudit.lean:83-136`
+(`floodQueue`, `auditFloodReset_preserves`, the prefix copy at `:120-135`),
+`WG/Lifetimes/ReceiveIngress.lean:54-58,83-88` (the `packetReceive`
+prefix with the busy arm). Main and campaign 2: `Logged/Operations.lean:255-303`
+(`floodLogged` without `family`: campaign 2's copy already lags main's
+`Env.flood` by F12's parameter), `WG/Keypairs/Evolution/Operations.lean:41-43,119-121`
+(`floodLogged_evolves` and the `discardFloodRecords`/`floodTailEffect`
+`ordinary_head` steps).
+
+**Re-runs.** `ratelimiterAllow`'s frames (campaign 1
+`Framing/WGCookie.lean:55-78`; `WG/Keypairs/Frames/WGMore.lean:317-322`
+on main and campaign 2, `:326-331` on campaign 1): `hiddenAlloc` replaces
+`envOk`; `packetReceive_ordinary` (`WGMore.lean:460`, all three trees)
+for the busy arm; the ratelimiter lifecycle frames (`Framing/WGDeviceLifecycle.lean:13-51,126`
+on campaign 1; `WG/Keypairs/Frames/WGDevice.lean:45-64,81,135` on main
+and campaign 2, `:53-72,150` on campaign 1; `WG/Lifetimes/DeviceLifecycle.lean:24,62,80`
+on campaign 1) for the two-table `gcEntries` and the constant init arms.
+Unaffected: campaign 1's `Cookies/Load.lean`, `Cookies/Gate.lean` and
+`FloodResistance/Statements.lean`, which are over `loadPhase` with the
+counter as a hypothesis, and the `envOk` frames of the pipe paths
+(`envOk` itself stays).
+
+**On `main`,** `LeanuxProofs` is the import closure of `Leanux/Proofs.lean`
+(`lakefile.toml:10-11`), which is `ReplayWindow.Statements` and
+`Counterexamples`; `Statements` imports `Keypairs.Evolution.Runner` and
+`Syscalls`, whose closure holds `Frames/Env.lean`, `Frames/Kernel.lean`,
+`Frames/WGDevice.lean`, `WGMore.lean`, `Evolution/Operations.lean` and
+`Logged/Operations.lean`. So the register's one current result
+(ReplayWindow) lags at B4's landing until those are repaired; the
+integration record says so and the repair is a follow-on on the proof
+tree, per the register rule.
+
+**Cost of the repair** [AGENT]: main, about 0.5 day (the frame deletions,
+`Env.flood`'s frame over `Env.batch`, the `floodLogged` re-mirroring, the
+re-runs); campaign 2, the same edits on the same files plus its
+`BatchBacklog` re-run, about 0.5 day, done as a carry when it next merges
+main (the `family` lag is repaired in the same pass); campaign 1, the
+statement edits (mechanical, nine files, about 0.25 day) plus its own
+`floodLogged` and prefix copies and the lifecycle frames, about 0.75 day,
+as a carry. About 1.75 agent-days across the three trees, none of it a
+condition on B4's landing.
 
 ## 11. Risks
 
-1. **The nested GC section (the stop risk).** Case (ii) of section 3.5
-   needs `hidden` to accept an ambient dispatched unit at any read inside
-   a task section, exactly and fail-closed. Today the mirror has
-   `skipAmbient` for records and the NET_RX `sectionOf` machinery for
-   loopback transmissions; a timer section with content nested at an
-   arbitrary point is new. If it cannot be made exact (a GC firing inside
-   a kworker's section whose work section then interleaves that
-   kworker's remaining activations in an order the resched records do
-   not determine), B4 stops at the GC and lands questions 1 and 3 alone;
-   the GC exclusion is then rewritten with this reason. Settled in the
-   first day of the build on `e_underload_ratelimit_gc` under the W7
-   activation machinery, before anything else of the GC is built.
-2. **The gap rule changes every trace's remote rows.** The guest's
-   per-operation reset is gone for all suites; FS traces have no remote
-   area, seccomp traces none; the WireGuard suites re-record. If a unit
-   other than the GC turns out to land in gaps today (none should by the
-   bound), it surfaces as new mismatches at the claim point, which is the
-   point.
-3. **The exact flood's time.** Measured negligible (section 2.4: 10 ms
-   for 520 packets, the model's whole trace in a tenth of a second); the
-   cost that remains is the report's size, risk 4. Not a risk.
-4. **The report bound.** A flood above a few thousand packets exceeds
-   `MAX_BRANCHES`; the validator refuses it with the reason, which bounds
-   the boundary traces the review asked for to a few thousand. Enough for
-   511/512/513 and for 1,100.
-5. **The dispatch set's last slot.** Fifteen of sixteen after B4; B2's
-   second device needs no symbol (the NAPI and workers are per device by
-   unit, not by function), but a sixteenth unit anywhere means raising
-   `DISPATCH_MAX`, a record-only change.
-6. **Campaign 2's `floodLogged` copy** lags until repaired; the register
-   says so at the landing.
+1. **The exact flood path mismatches on a corpus trace** (the build's
+   first step, section 2.4). A producer section where `Env.batch` expects
+   none, a counter operand that differs, a worker that outlives the wait:
+   reported, not fixed in the wrapper; the design is re-put to the user
+   with the mismatch.
+2. **The checker rule change weakens control flow for the declared
+   decisions in every operation** (section 2.3). Named in U1 with the
+   narrower per-operation alternative; the user chooses.
+3. **The report bound.** A flood above a few thousand packets exceeds
+   `MAX_BRANCHES`; the validator refuses it with the reason. Enough for
+   511/512/513 and for 2,100.
+4. **The proof-tree lag** (section 10): the register's one result lags at
+   the landing; the repair is costed and is a follow-on.
+5. **The GC stays excluded**, with the corpus bound it implies (no trace
+   advances past a second with a ratelimiter entry in the table), until
+   its own stream lands.
 
-## 12. Estimate
+## 12. Estimate (questions 1 and 3 plus the uninit fix)
 
-About 0.15 WU (one WU being WireGuard's three weeks,
-`docs/2026-10-12-kernel-scout.md`), three to four agent-days of build:
+About 2.25 agent-days, roughly 0.1 WU (one WU being WireGuard's three
+weeks, `docs/2026-10-12-kernel-scout.md`):
 
 | Part | Days |
 | --- | --- |
-| the flood over `Env.batch`, the deletions, the check's arm, the control's replacement, the busy arm, the boundary and busy traces | 1.5 |
-| the GC: the two hooks and the rebuild, the dispatch symbol, the state and the arms, the firing and the run, the gap rule in the guest and the mirror, the nested-section rule, four traces | 1 to 1.5 |
-| the entry allocation site, the init's constant arms, the docs (E design 11, the receive audit's F13, the census rows 132-135, `docs/decisions.md`), the one-off mutants | 0.5 |
+| the flood over `Env.batch`, the deletions, the checker rules, the control's updated detail, the busy arm, `e_underload_busy`; the prototype run over the thirteen flood traces and the control as the first step | 1.5 |
+| the entry allocation site, the init's constant arms, the docs (E design 11, the receive audit's F13, the census rows 132 and 135, `docs/decisions.md`), the three one-off mutants | 0.5 |
+| the two-table uninit fix, its docstring, `l_delete_ratelimited6` and `l_recreate_ratelimited6` | 0.25 |
 
-Plus the settling pass on s5 (the rebuilt oracle: the claim point's full
-check, controls and sentinels) and the audit the plan schedules before the
-build.
+No oracle rebuild and no new identity: the claim point is the full
+check, controls and sentinels on s4. The proof-tree repair (about 1.75
+days across the trees, section 10) and the GC stream (3 to 5 days plus
+its claim point, by the review's count, section 3) are separate.
 
 ## 13. Decisions: the user's, and tactical
 
 For the user:
 
-- **U1.** The flood becomes a `wg_batch` in the mirror and the summary,
-  the discard, the exact flag and the check's special case are deleted
-  (section 2.3). The merged-injection control is replaced by the
-  miscount control. This retires a declared summary contract from the
-  trust surface in favour of the ordinary check.
-- **U2.** The GC is made a dispatched unit with the two hook changes of
-  section 3.3 (record-only, class-approved, but listed here because they
-  touch the timer and workqueue hooks every other unit uses) and the
-  guest's gap rule of section 3.4, which changes how every operation's
-  remote row is cut.
-- **U3.** The nested-section rule (section 3.5, case ii) as the stop
-  condition: if it cannot be exact, the GC stays excluded and B4 lands
-  without it.
+- **U1.** The flood becomes a `wg_batch` in the mirror; the summary, the
+  discard, the exact flag and the checker's `wg_flood` arm are deleted;
+  and **three rules on the trust surface change** (section 2.3):
+  `wg_flood` joins `wg_batch` in the file restriction and in the repeat
+  rule's exemption, and the flood path's decisions that take both
+  outcomes in one operation are declared `repeatable`, which weakens
+  "reported more than once" and "opposite outcome covered" for those
+  decisions in every operation (the per-operation variant is the
+  alternative). The merged-injection control is kept with its detail
+  updated. The prototype run over the thirteen flood traces and the
+  control precedes this decision (section 2.4).
+- **U2.** *Withdrawn.* The GC leaves this stream (section 3); there is no
+  oracle change and no guest window change in B4. A GC stream's charter
+  puts its own decisions.
+- **U3.** *Withdrawn with U2.* Its content, the stop condition for the
+  nested-section rule, becomes the GC stream's.
 
 Tactical [AGENT]:
 
 - no record kind for the counter (section 2.2);
-- the trylock's success derived on this config (section 2.5);
-- the GC's per-entry comparisons as two decisions with operands;
+- the trylock constant on this configuration, keyed to it (section 2.5);
 - the entry site record-only, no `kworker` steering class (section 4.3);
 - the init's three allocations constant-false with the reason, census
   row 132 unchanged (section 4.4);
-- the two-table uninit fix and the comment, with `l_recreate_ratelimited6`
-  as its witness (section 3.6);
-- the flood size limit at the report bound (section 2.4).
+- the two-table uninit fix and the docstring, with `l_delete_ratelimited6`
+  and `l_recreate_ratelimited6` as its witnesses (section 3.5);
+- the flood size limit at the report bound (section 2.4);
+- the three one-off mutants (section 8).
+
+## 14. Review dispositions
+
+Against [the review](2026-10-15-design-b4-review.md), one by one. "Fixed"
+means the note now says what the finding asked, at the section named;
+"answered" gives a reason the reader can check; "raised" puts it to the
+user.
+
+1. **Fixed** (section 2.4). The measurement is restated as the exact
+   flag's path: the discard kept (`Env.lean:812` precedes the branch at
+   `:821`), the counter preset (`:828`), control flow skipped
+   (`check.py:1043-1059`), 9 reads at `:115` and 511 at `:117` (520
+   queued, the counter at or over 512 for the first 9), the kernel's
+   record count fixed whatever the mirror does, the 10 ms the worker half
+   only. The prototype over the thirteen flood traces and the control is
+   the build's first step with "report rather than fix if the exact path
+   mismatches".
+2. **Fixed** (sections 2.3, 13). The checker change is named in U1 as
+   three trust-surface rules: the file restriction (`check.py:1066`), the
+   repeat rule's exemption (`:1095-1106`) and the `repeatable`
+   declarations (`Decision.lean:2959-3065`: none of the flood path's
+   decisions is repeatable today), with what they weaken and the
+   per-operation alternative.
+3. **Fixed** (section 2.2). The operand instrument is stated as
+   one-directional (`check.py:1241-1246`; `operand_rows_distinct` a
+   report counter, `:1857`, `:1908`); the per-packet completeness
+   argument now rests on the in-order clock records.
+4. **Fixed** (section 2.5). The threshold is 2,048 (`messages.h:51`,
+   `Receive.lean:473`); the trylock is on `producer_lock`
+   (`receive.c:555`, `ptr_ring.h:160-164`), the worker's `consumer_lock`
+   irrelevant (`ptr_ring.h:362-368`); the outcome is constant on this
+   configuration (`spinlock_up.h:56`, no `SMP`, no `DEBUG_SPINLOCK`); the
+   trace is 2,050 or more (2,100 proposed).
+5. **Fixed** (section 8). No sentinel claim; `scripts/wg-mutants.py` has
+   thirteen sentinels and none for E; a one-off mutant for the exact
+   flood's threshold at 511 is added, rejected by the boundary traces.
+6. **Fixed** (sections 2.3, 9). `e_underload_merged` is kept (the Runner
+   ignores `control`, `Runner.lean:646-650`; the run diverges at the
+   control's first cookie record and the counter's operand); the miscount
+   control and the "control valid" trace are dropped (the latter is
+   `e_underload_two_replies`, `guest.c:1588-1593`).
+7. **Fixed as a reason for the exclusion** (section 3.2 item 1). The GC
+   leaves the stream; the attribution fact is recorded for its charter
+   (`System.map`: `__queue_delayed_work` out of line), the `workqueue.c`
+   lines corrected (section 1.3: `:2548`, `:2555`, `:2558`, `:2560`;
+   `clear_pending_if_disabled` `:2386-2399`, `:2585-2586`).
+8. **Fixed as a reason for the exclusion** (section 3.2 item 2, section
+   1.3). `cancel_delayed_work_sync` disables the work
+   (`workqueue.c:4386`, re-enabled `:4400-4401`), so a requeue during the
+   cancel arms nothing; the first version's "arms a timer that the cancel
+   then deletes" is withdrawn; R8 added (section 3.4).
+9. **Fixed, with the claim retracted** (section 3.2 item 3). The gap is
+   loud: `section_problems` (`check.py:653-667`) against the kernel's
+   opened count (`guest.c:1480-1484`). The note says so explicitly, says
+   the integration record must not carry it as a found gap, and records
+   the head, tail (`delete_wg0`, `guest.c:2727`, `:2755`) and capacity
+   (`CAPACITY`, `:51`; `full_remote_kcov`, `:2676`) requirements for the
+   GC stream. The mutant is withdrawn (`gc_work` is static; the phase is
+   uncontrolled). The "5 s and up" sentence is withdrawn; the file's
+   persistent-keepalive trace carries `"keepalive": 5`, not the 2 s the
+   review names, which does not change the point.
+10. **Fixed as a requirement** (section 3.2 item 4, R7). The
+    due-means-fired rule with the wheel's rounding (`timer.c:579-581`,
+    level 1, granularity 8) and the `ksoftirqd` residual.
+11. **Fixed as a requirement** (section 3.2 item 5, section 3.3).
+    Per-trace arming and the suite-wide spike first; the trace task's
+    yields are unrecorded (`gen:586-600`), so the run's placement rests
+    on sequence order.
+12. **Fixed as a requirement** (section 3.2 item 6). The activation
+    machinery covers the four draining workers (`Env/Batch.lean:141-152`,
+    `:201-227`); the walk is a new activation kind.
+13. **Fixed as a requirement** (section 3.2 item 7). Slot 14 is reserved
+    (`Defs.lean:950-956`); whether the reservation is dead (W5 and W6
+    landed, fourteen symbols) is for the GC stream to settle before taking
+    it.
+14. **Confirmed, kept** (section 4). The hook is generic
+    (`gen:1475-1478`, `steer.py:250-298`, the direct call at
+    `ffffffff813a1c80`); a `draw` entry passes for the `kworker` class
+    (`steer.py:310-311`); the E design's sentence and the comment at
+    `Receive.lean:184-188` are corrected in the build.
+15. **Confirmed, kept, in this build** (section 3.5). The two-table fix,
+    `l_delete_ratelimited6` failing before and passing after, and
+    `l_recreate_ratelimited6`; the docstring at `Device.lean:138`.
+16. **Fixed** (section 10). The frames list is complete on all three
+    trees, the `runner_uniqueness`/`runner_floor` and carried `S1`
+    statement edits named as statement edits, main's import closure
+    traced (`lakefile.toml:10-11`), and the repair costed at about 1.75
+    days across the trees as follow-ons.
+17. **Fixed.** The site lines are the file's (`Defs.lean:1209` site 6,
+    `:1290` site 124, `:1328` site 130, `:1332-1333` sites 132-133; the
+    first version listed the lines in the wrong order against the sites;
+    the review's own "124 at :1209, 6 at :1208" does not match the file
+    either, which `grep -n '⟨124, \|⟨6, ' Leanux/Kernel/Defs.lean` shows);
+    `Device.lean` ranges corrected (`:115-129`, `:128`, `:144-161`,
+    `:152-158`); thirteen flood traces plus the control.
+18. **Fixed** (section 2.3). A section between two items' records
+    mismatches (`Env.lean:887-893`), stated as the fail-closed behaviour;
+    the flood wrapper adds the handshake queue and the counter to
+    `afterBatch`'s drain check (`:881-882`).
+19. **Fixed** (section 3.4). R7, R8, the arm-record attribution and the
+    firing tick added to the B3 interface, for the GC stream's use.
+20. **Fixed** (section 12). The estimate covers questions 1 and 3 plus
+    the uninit fix: about 2.25 days, no oracle rebuild; the GC's 3 to 5
+    days are the GC stream's; the proof repair is costed separately.
+21. **Fixed** (section 13). U1 names the rule change and the control
+    decision; U2 is withdrawn with the GC (and the "closes an instrument
+    gap" wording with it); U3's content goes to the GC stream.
