@@ -7,7 +7,7 @@ Worktree `.worktrees/proofs-campaign`, branch `proofs/campaign`; governed by
 carried from `2c7a076`, then the audit at `f45bde8` and documentation-only
 `a39aded`, then the scheduler robustness change at `7a92672`.
 All registered components are current over `7a92672`, including R2 concrete Batch scheduling
-and separate copied trials, R3 insertion/pure-removal/local removal steps and R4 finite
+and separate copied trials, R3 insertion/pure-removal/all local removal arms and R4 finite
 and RX/TX source ring journals. The new `cryptAhead` call is observed and framed, and the historical
 witness seed no longer depends on the removed evaluator fixture.
 Open obligations below remain explicit. No integration into main,
@@ -17,16 +17,16 @@ push, differential check or guest run has been performed by this campaign.
 | --- | --- |
 | R1 anti-replay | Complete: uniqueness and the intentional inclusive-floor correction, with pure and accepted-run witnesses. |
 | R2 lifetimes | Endpoint identity and failure-retaining access contracts cover the listed call families, now including the concrete Batch scheduler and separate copied trials. Whole-run environment/lifecycle closure and saved-reference ownership remain open. The stale-cursor finding is checked. |
-| R3 routing | Prefix arithmetic, represented-tree lookup and unified bounded-input normal insertion dispatch are checked. Pure removal/locality and total binary/root-tagged leaf/unary source steps are checked. General removal, saved-list coherence, configuration-history and packet-path refinements remain open. |
+| R3 routing | Prefix arithmetic, represented-tree lookup, bounded-input normal insertion dispatch, pure removal/locality and all local source removal arms are checked. Whole-forest removal, saved-list coherence, configuration-history and packet-path refinements remain open. |
 | R4 delivery | W7's two full-ring drops are explained. An accepted replay refutes chronological post-GRO stack order. Per-poll selected order, removal/provenance, concrete stack frames and RX/TX source ring journals are checked; pipeline conservation remains open. |
 | R5 key lifetime | Resolved under Rule Zero by counter-limit, delayed-encryption and post-clear-use witnesses, with 13 local positive contracts. |
 | R6 flood resistance | Cookie exclusion proved at the original call boundary; accepted 19-retry/20-initiation episode resolves the literal limit through Rule Zero. Six terminal contracts. |
 
 **Last coordinated validation.** The mirror is byte-identical to `7a92672`.
-The proof gate passes 310 jobs and 311 terminal statements
-(ReplayWindow 15; R1 9; R2 157; R3 53; R4 58; R5 13; R6 6), using only `propext`, `Classical.choice` and `Quot.sound`.
+The proof gate passes 314 jobs and 320 terminal statements
+(ReplayWindow 15; R1 9; R2 157; R3 62; R4 58; R5 13; R6 6), using only `propext`, `Classical.choice` and `Quot.sound`.
 Fresh stock kernel replay passes, as do the 60-job default model build and
-expanded 110-test unit tier (23.216 seconds; one skip). The model executable
+expanded 110-test unit tier (22.548 seconds; one skip). The model executable
 was rebuilt at the scheduler carry (118 jobs); its source is unchanged. Independent frozen-source
 and scope reviews have no unresolved correctness findings in these components.
 
@@ -554,8 +554,8 @@ frontier and sequence effects, and local representation transport. Binary owner
 clearing represents pure erasure under compression and uniqueness. Unary
 promotion derives parent/descendant separation from tree uniqueness and represents
 the surviving subtree. These are separate local execution and structural facts;
-the selected-root/whole-forest bridge, non-root detach/parent collapse and complete
-saved-list loop are still open. No arbitrary-world saved-list coherence, owner
+the selected-root/whole-forest bridge and complete saved-list loop are still open.
+The raw nonroot source arms are covered by the extension below. No arbitrary-world saved-list coherence, owner
 residency, history invariant or packet authorization is inferred. One step keeps
 the sequence unchanged; the source equation retains the original loop's increment.
 
@@ -563,6 +563,49 @@ Eight new terminals pass the 113-job scoped target. Independent frozen source
 and documentation review has no unresolved findings; its owner-label wording
 correction is fixed. The coordinated proof gate, fresh stock kernel replay and
 fast tier above pass and include these eight terminals.
+
+**Nonroot original removal extension.** `RemovalSource.removeParentTail` factors
+only the final collapse suffix, starting with the fresh parent getter after
+freeing the target [AGENT 2026-10-14]. This small boundary keeps each source
+reduction local and avoids reducing the entire source body at once;
+the original loop equation still closes by `rfl` with only the original import.
+
+`RemovalChildMirror`, `RemovalCollapse` and `RemovalSteps` prove total original
+iterations for nonroot unary detachment, leaf removal with an owned parent,
+and leaf removal that collapses an ownerless parent through a root or child
+slot. Input premises name resident target/parent records, readable target and
+opposite child slots, valid slot indices, and distinct identities; sibling and
+grandparent residency is required only when that path dereferences them.
+Optional absent siblings are included. No owner-residency, saved-list coherence,
+input-root linkage or desired output is an execution premise. Original `set!`
+behavior is retained without a parent-array-length condition in arms that do
+not read its child array. List deletion still precedes the target getter.
+
+The exact collapse-prefix equation derives the owner/sibling reads from the
+updated parent after detachment, then frees the target and enters the continuation
+with its fresh parent read. It requires
+no sibling/grandparent residency and leaves their later Stops in the actual
+continuation. It equates results, complete successful Worlds and exact Stops;
+it supplies no event journal or returned World on failure. The total endpoint
+theorems separately discharge the later reads from input snapshots and ID
+separation. No C simulation or mirror modification is claimed.
+
+`RemovalChildStore` gives pointwise whole-node-map equations in source write
+priority, even for aliased arguments to the pure endpoint expressions. The
+execution premises supply the separation under which target and collapsed
+parent are retired. Promoted siblings retain every field except their backlink;
+other raw owner labels remain intact. Retained-parent/child-collapse arms keep
+both roots; root collapse updates its selected family root and frames the other.
+Every arm preserves `nextNode` and the per-step sequence and filters all peer
+lists exactly. These are raw local contracts: deriving ID separation from tree
+Nodup, transporting arbitrary represented contexts and both forests, and carrying
+a coherent saved list through complete `removeByPeer` remain future work.
+
+Nine grouped exports pass the 117-job Statements target, bringing R3 to 62
+terminals. Independent frozen source, premise, store, export and documentation
+review found no correctness defect; its two documentation precision findings
+are fixed. Coordinated proof-gate, fresh stock kernel replay and fast-tier checks pass,
+with current counts above.
 
 **Remaining claim.** General original removal and configuration histories remain open.
 Parsed-input bounds and history invariants still need propagation through all mutations.
@@ -589,6 +632,7 @@ following tranche counts are separate, not an inferred campaign total.
 | Unified insertion dispatch | 11: 8 / 3 | 12m08s |
 | Pure removal and context locality | 9: 6 / 3 | 9m05s validation; 10m16s writer-token ownership |
 | Local removal source and endpoints | 7: 2 / 5 | 14m17s through source freeze; 14m49s through handoff receipt |
+| Nonroot removal and parent collapse | 9: 3 / 6 | 16m06s through frozen handoff preparation; 12m48s through scoped-target collection |
 
 The staged child architecture replaced a failed monolithic proof; this was not
 a mirror finding. Three deep-graft source-factor attempts hit Lean heartbeat
@@ -612,6 +656,16 @@ log was read-denied by nono; its diagnostics are unavailable and that owned file
 was deleted. No sandbox/global setting changed. All process exits were collected;
 no cap hit or interruption occurred. The final scoped target passed 113 jobs;
 there was no separate full build in this worker slice.
+
+Nonroot removal used nine capped builds: three passes and six ordinary failures.
+Failures concerned declaration layout, an unreduced Option guard, a redundant
+closing tactic, map-lookup simplification and metadata projection elaboration.
+Increasing the metadata heartbeat limit did not resolve it; explicit projection
+reduction then passed at the default limit. One failed patch application matched
+no text and made no change; it was not a build invocation or interruption.
+The final scoped target passed 117 jobs at 04:15:41 UTC after the 04:02:53 token
+grant. Every process exit was collected; no cap, crash or interruption occurred.
+No separate full proof build or coordinated gate was run in this worker slice.
 
 Pure removal used nine capped builds, six passing and three ordinary failures.
 The failures concerned namespace/implicit-ID elaboration, simplified conjunction

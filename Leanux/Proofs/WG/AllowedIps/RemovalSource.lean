@@ -5,6 +5,16 @@ mirror, so resident-access observers can reuse it without a framing cycle. -/
 namespace Leanux.Proofs.WG.AllowedIps
 open Leanux Leanux.WG
 
+/-- The collapse suffix starts with the original fresh parent read, after
+the target has been freed. The saved sibling is only a raw node identifier. -/
+def removeParentTail (parent : NodeId) (sibling : Option NodeId) : M (ForInStep Unit) := do
+  let pn ← getNode parent
+  if ← branch .removeSiblingExists sibling.isSome then
+    if let some c := sibling then setNode c { (← getNode c) with parent := pn.parent }
+  slotSet pn.parent sibling
+  freeNode parent
+  return .yield ()
+
 /-- The node-only suffix, after list deletion. Both source continues yield
 to the next saved identifier; neither ends the outer peer-removal loop. -/
 def removeNodeBody (id : NodeId) : M (ForInStep Unit) := do
@@ -33,12 +43,7 @@ def removeNodeBody (id : NodeId) : M (ForInStep Unit) := do
   freeNode id
   if ← branch .removeNotFreeParent !freeParent then return .yield ()
   let .child parent _ := n.parent | invariant "free_parent without a parent node"
-  let pn ← getNode parent
-  if ← branch .removeSiblingExists sibling.isSome then
-    if let some c := sibling then setNode c { (← getNode c) with parent := pn.parent }
-  slotSet pn.parent sibling
-  freeNode parent
-  return .yield ()
+  removeParentTail parent sibling
 
 def removeStep (id : NodeId) : M (ForInStep Unit) := do
   _ ← branch .removeListIter true

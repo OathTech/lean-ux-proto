@@ -1,6 +1,7 @@
 import Leanux.Proofs.WG.AllowedIps.InsertionDispatch
 import Leanux.Proofs.WG.AllowedIps.ContextRemoval
 import Leanux.Proofs.WG.AllowedIps.RemovalStore
+import Leanux.Proofs.WG.AllowedIps.RemovalChildStore
 import Leanux.Proofs.WG.AllowedIps.ArithmeticMirror
 import Leanux.Proofs.WG.AllowedIps.Tree
 import Leanux.Proofs.WG.AllowedIps.LookupMirror
@@ -26,8 +27,9 @@ returns refine pure insertion and actual-root longest-prefix lookup. A supplied
 opposite-family representation is preserved. Pure removal implements exact
 entry filtering and preserves the structural invariants, with local compaction
 laws under compression and distinct IDs. The original removal loop has an
-all-input source equation; binary and root-tagged leaf/unary iterations have
-total exact endpoints and local store representation facts. General removal,
+all-input source equation; binary, root-tagged leaf/unary, nonroot unary and
+leaf/parent-collapse iterations have total exact endpoints and complete store
+effects. Local binary/root-unary representation facts are separate. General removal,
 configuration-history agreement, and packet admission remain separate obligations.
 -/
 
@@ -1203,5 +1205,148 @@ theorem local_removal_unary_representation (d : WG.Device) (v4 : Bool) (n c : No
     RepAt (removalRootUnary d v4 n.id old c.id child).nodes
       (rootWidth v4) (rootSlot v4) t :=
   removalRootUnary_rep d v4 n c l r left hr hn
+
+/-- The leaf/ownerless-parent prefix reaches the exact post-target-free
+continuation. This equation keeps later missing-sibling/grandparent Stops;
+no successful-tail premise or failed-prefix World is assumed. -/
+theorem original_removal_collapse_continuation (w : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (id parent side : Nat) (n pn : WG.AipNode)
+    (hn : d.nodes[id]? = some n) (hp : d.nodes[parent]? = some pn)
+    (hip : id ≠ parent) (hb : side ≤ 1) (howner : pn.peer = none)
+    (hbits : n.bit = #[none, none]) (hparent : n.parent = .child parent side)
+    (sibling : Option Nat) (hs : pn.bit[1-side]? = some sibling) :
+    (removeNodeBody id).run w = (removeParentTail parent sibling).run
+      { removalRecords w removalCollapseRecords with
+        k := { w.k with wg := some (removalLeafDetached d id n parent side pn) } } :=
+  removeNodeBody_leaf_collapse_run w d hd id parent side n pn hn hp hip hb howner hbits hparent sibling hs
+
+/-- Original nonroot unary removal is total under resident, distinct input
+snapshots and a valid parent-slot index. The raw endpoint does not require
+parent linkage, parent array length, owner residency or list coherence. -/
+theorem original_removal_child_unary_step (w : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (left : Bool) (id parent side child : Nat) (n pn cn : WG.AipNode)
+    (hn : d.nodes[id]? = some n) (hp : d.nodes[parent]? = some pn)
+    (hc : d.nodes[child]? = some cn) (hip : id ≠ parent) (hic : id ≠ child)
+    (hcp : child ≠ parent) (hb : side ≤ 1)
+    (hbits : n.bit = if left then #[some child, none] else #[none, some child])
+    (hparent : n.parent = .child parent side) :
+    ∃ w', (removeStep id).run w = .ok (.yield (), w') ∧
+      w'.k = { w.k with wg := some (removalChildUnary (unlisted d id) id n parent side pn child cn) } := by
+  obtain ⟨result, w', he, hx, hk⟩ := (Leanux.Proofs.Framing.total_iff_run _ _ _).mp
+    (removeStep_child_unary_wp w.k d hd left id parent side child n pn cn hn hp hc hip hic hcp hb hbits hparent) w rfl
+  subst result
+  exact ⟨w', he, hk⟩
+
+/-- The leaf's owned parent is reread after detachment and retained. Its
+raw owner label need not resolve to a resident peer. Every list is filtered
+before the target getter; both device roots remain unchanged. -/
+theorem original_removal_child_leaf_step (w : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (id parent side : Nat) (n pn : WG.AipNode)
+    (hn : d.nodes[id]? = some n) (hp : d.nodes[parent]? = some pn)
+    (hip : id ≠ parent) (hb : side ≤ 1) (howner : pn.peer.isSome)
+    (hbits : n.bit = #[none, none]) (hparent : n.parent = .child parent side) :
+    ∃ w', (removeStep id).run w = .ok (.yield (), w') ∧
+      w'.k = { w.k with wg := some (removalLeafDetached (unlisted d id) id n parent side pn) } := by
+  obtain ⟨result, w', he, hx, hk⟩ := (Leanux.Proofs.Framing.total_iff_run _ _ _).mp
+    (removeStep_child_leaf_owned_wp w.k d hd id parent side n pn hn hp hip hb howner hbits hparent) w rfl
+  subst result
+  exact ⟨w', he, hk⟩
+
+/-- An ownerless parent with a root tag is collapsed after target retirement.
+Both sibling-present and sibling-absent paths are included. The tag does not
+assert that the input root points to the parent. -/
+theorem original_removal_collapse_root_step (w : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (id parent side : Nat) (n pn : WG.AipNode)
+    (hn : d.nodes[id]? = some n) (hp : d.nodes[parent]? = some pn)
+    (hip : id ≠ parent) (hb : side ≤ 1) (howner : pn.peer = none)
+    (hbits : n.bit = #[none, none]) (hparent : n.parent = .child parent side)
+    (v4 : Bool) (hbase : pn.parent = rootSlot v4) (sibling : Option (Nat × WG.AipNode))
+    (hbit : pn.bit[1-side]? = some (sibling.map Prod.fst))
+    (hs : ∀ c cn, sibling = some (c, cn) → d.nodes[c]? = some cn ∧ c ≠ id ∧ c ≠ parent) :
+    ∃ w', (removeStep id).run w = .ok (.yield (), w') ∧
+      w'.k = { w.k with wg := some (removalCollapseRoot (unlisted d id) id n parent side pn v4 sibling) } := by
+  obtain ⟨result, w', he, hx, hk⟩ := (Leanux.Proofs.Framing.total_iff_run _ _ _).mp
+    (removeStep_leaf_collapse_root_wp w.k d hd id parent side n pn hn hp hip hb howner hbits hparent
+      v4 hbase sibling hbit hs) w rfl
+  subst result
+  exact ⟨w', he, hk⟩
+
+/-- Collapse below a resident grandparent retains the actual reread/update
+order and the original array write. Input separation prevents intervening
+writes/frees from invalidating supplied snapshots; no final effect is a premise. -/
+theorem original_removal_collapse_child_step (w : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (id parent side grand gside : Nat) (n pn gn : WG.AipNode)
+    (hn : d.nodes[id]? = some n) (hp : d.nodes[parent]? = some pn)
+    (hg : d.nodes[grand]? = some gn) (hip : id ≠ parent) (hig : id ≠ grand)
+    (hpg : parent ≠ grand) (hb : side ≤ 1) (hgb : gside ≤ 1) (howner : pn.peer = none)
+    (hbits : n.bit = #[none, none]) (hparent : n.parent = .child parent side)
+    (hbase : pn.parent = .child grand gside) (sibling : Option (Nat × WG.AipNode))
+    (hbit : pn.bit[1-side]? = some (sibling.map Prod.fst))
+    (hs : ∀ c cn, sibling = some (c, cn) →
+      d.nodes[c]? = some cn ∧ c ≠ id ∧ c ≠ parent ∧ c ≠ grand) :
+    ∃ w', (removeStep id).run w = .ok (.yield (), w') ∧
+      w'.k = { w.k with wg := some (removalCollapseChild (unlisted d id) id n parent side pn grand gside gn sibling) } := by
+  obtain ⟨result, w', he, hx, hk⟩ := (Leanux.Proofs.Framing.total_iff_run _ _ _).mp
+    (removeStep_leaf_collapse_child_wp w.k d hd id parent side grand gside n pn gn hn hp hg hip hig hpg
+      hb hgb howner hbits hparent hbase sibling hbit hs) w rfl
+  subst result
+  exact ⟨w', he, hk⟩
+
+/-- Exact pointwise node effects for retained-parent arms. Conditional order
+matches source writes even for aliased arguments to these endpoint functions. -/
+theorem nonroot_removal_node_store (d : WG.Device) (id : Nat) (n : WG.AipNode)
+    (parent side : Nat) (pn : WG.AipNode) (child : Nat) (cn : WG.AipNode) (q : Nat) :
+    (removalChildUnary d id n parent side pn child cn).nodes[q]? =
+      (if id = q then none else if parent = q then
+        some { pn with bit := pn.bit.set! side (some child) } else if child = q then
+        some { cn with parent := .child parent side } else d.nodes[q]?) ∧
+    (removalLeafDetached d id n parent side pn).nodes[q]? =
+      (if id = q then none else if parent = q then
+        some { pn with bit := pn.bit.set! side none } else d.nodes[q]?) :=
+  ⟨removalChildUnary_node .., removalLeafDetached_node ..⟩
+
+/-- Whole-store equations retain the parent-free, grandparent-write and
+sibling-write priorities. The execution contracts above supply the separation
+under which both target and parent are retired. -/
+theorem collapse_removal_node_store (d : WG.Device) (id : Nat) (n : WG.AipNode)
+    (parent side : Nat) (pn : WG.AipNode) (v4 : Bool) (grand gside : Nat) (gn : WG.AipNode)
+    (sibling : Option (Nat × WG.AipNode)) (q : Nat) :
+    (removalCollapseRoot d id n parent side pn v4 sibling).nodes[q]? =
+      (if parent = q then none else
+        match sibling with
+        | none => if id = q then none else d.nodes[q]?
+        | some (c, cn) => if c = q then some { cn with parent := rootSlot v4 }
+            else if id = q then none else d.nodes[q]?) ∧
+    (removalCollapseChild d id n parent side pn grand gside gn sibling).nodes[q]? =
+      (if parent = q then none else if grand = q then
+        some { gn with bit := gn.bit.set! gside (sibling.map Prod.fst) } else
+        match sibling with
+        | none => if id = q then none else d.nodes[q]?
+        | some (c, cn) => if c = q then some { cn with parent := .child grand gside }
+            else if id = q then none else d.nodes[q]?) :=
+  ⟨removalCollapseRoot_node .., removalCollapseChild_node ..⟩
+
+/-- Retained-parent endpoints preserve both family roots, the allocation
+frontier and sequence, and filter every peer list at the target ID. -/
+theorem nonroot_removal_metadata (d : WG.Device) (id : Nat) (n : WG.AipNode)
+    (parent side : Nat) (pn : WG.AipNode) (child : Nat) (cn : WG.AipNode) :
+    (let out := removalChildUnary (unlisted d id) id n parent side pn child cn
+     RemovalMetadata d out id ∧ ∀ v4, rootValue out v4 = rootValue d v4) ∧
+    (let out := removalLeafDetached (unlisted d id) id n parent side pn
+     RemovalMetadata d out id ∧ ∀ v4, rootValue out v4 = rootValue d v4) :=
+  ⟨removalChildUnary_metadata .., removalLeafDetached_metadata ..⟩
+
+/-- Root collapse changes only its selected root; child collapse preserves
+both roots. Neither allocates nor increments sequence, and list filtering is
+exact. The enclosing peer-removal loop's increment remains separate. -/
+theorem collapse_removal_metadata (d : WG.Device) (id : Nat) (n : WG.AipNode)
+    (parent side : Nat) (pn : WG.AipNode) (v4 : Bool) (grand gside : Nat) (gn : WG.AipNode)
+    (sibling : Option (Nat × WG.AipNode)) :
+    (let out := removalCollapseRoot (unlisted d id) id n parent side pn v4 sibling
+     RemovalMetadata d out id ∧ rootValue out v4 = sibling.map Prod.fst ∧
+       rootValue out (!v4) = rootValue d (!v4)) ∧
+    (let out := removalCollapseChild (unlisted d id) id n parent side pn grand gside gn sibling
+     RemovalMetadata d out id ∧ ∀ v4, rootValue out v4 = rootValue d v4) :=
+  ⟨removalCollapseRoot_metadata .., removalCollapseChild_metadata ..⟩
 
 end Leanux.Proofs.WG.CryptokeyRouting
