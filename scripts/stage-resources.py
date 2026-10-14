@@ -79,6 +79,12 @@ def sources(names=None):
         raise RuntimeError(f"unknown sources {sorted(set(names) - known)}")
     selected = [entry for entry in lock if names is None or entry["name"] in names]
     for entry in selected:
+        if entry.get("consumer") == "binary":
+            if names is not None:
+                raise RuntimeError(f"{entry['name']} is an opt-in Git dependency: clone {entry['url']} "
+                                   f"at {entry['commit']} into .deps/{entry['name']}; binary/run.py verifies it")
+            print(f"Not staged in the base bundle: {entry['name']} (binary/run.py dependency)", flush=True)
+            continue
         archive = ROOT / entry["archive"]
         fetch(entry["url"], archive, entry["sha256"])
         unpack(archive, ROOT / ".deps" / entry["name"])

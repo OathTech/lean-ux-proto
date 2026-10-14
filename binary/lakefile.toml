@@ -1,0 +1,16 @@
+name = "binaryTV"
+version = "0.1.0"
+defaultTargets = ["binary-probe"]
+moreLeanArgs = ["-j1"]
+
+[[require]]
+name = "Kraken"
+path = "../.deps/kraken"
+
+[[require]]
+name = "leanux"
+path = ".."
+
+[[lean_exe]]
+name = "binary-probe"
+root = "Main"

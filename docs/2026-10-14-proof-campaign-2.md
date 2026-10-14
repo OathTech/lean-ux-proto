@@ -6,7 +6,9 @@ Work is confined to `.worktrees/proofs-campaign-2`, branch `proofs/campaign-2`.
 H1 and H3 have local contracts; their whole-run claims remain open. H4 follows.
 H2 is waiting on the index-lookup
 dead-peer-store fix and the user's landing notice. H5 and H6 remain open.
-No result is claimed complete.
+No result is claimed complete. The branch has carried main through ca6b22e;
+that landing adds documentation and binary-validation scaffolding but leaves
+the WireGuard mirror unchanged.
 
 [USER 2026-10-14] Work H1, H3 and H4 before H2; start H2 only after the
 index-lookup fix lands and its landing is relayed. Merge other main landings
