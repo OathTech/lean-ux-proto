@@ -109,6 +109,7 @@ Read these before the README's claims are taken at face value:
 | [2026-10-13-window-proof-conventions.md](2026-10-13-window-proof-conventions.md) | Conventions that make carrying proofs over mirror changes cheaper |
 | [2026-10-13-charter-proof-campaign.md](2026-10-13-charter-proof-campaign.md) | The campaign charter: six WireGuard properties in dependency order |
 | [2026-10-14-charter-binary-tv.md](2026-10-14-charter-binary-tv.md) | Charter for the scoping of binary-level translation validation: the mirror against the compiled oracle under Kraken's x86-64 semantics, a probe on one WireGuard function |
+| [2026-10-15-binary-tv-scoping.md](2026-10-15-binary-tv-scoping.md) | Instruction census and executable three-way index-lookup probe under Kraken; blockers, state relation and checker estimates |
 | [2026-10-13-review-r5-counterexamples.md](2026-10-13-review-r5-counterexamples.md) | The independent review of the campaign's R5 counterexamples: three statement artefacts, design nuances at most, no tray entry |
 
 ## Reviews of the whole

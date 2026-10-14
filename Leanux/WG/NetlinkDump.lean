@@ -234,7 +234,7 @@ def wgGetDeviceDump (ctx0 : DumpCtx) (prevSeq0 : Nat) (skb0 : NlSkb) : M DumpCal
   else
     -- list_prepare_entry / list_for_each_entry_continue: from the peer
     -- after the cursor (the last completed one), or the first
-    let fromPeers := match ctx.nextPeer with
+    let fromPeers : List PeerId := match ctx.nextPeer with
       | none => d.peerList
       | some pid => (d.peerList.dropWhile (· != pid)).drop 1
     let mut ps : Array PeerDumpAttrs := #[]
