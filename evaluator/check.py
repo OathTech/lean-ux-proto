@@ -448,6 +448,14 @@ SECCOMP_IP = 312
 # at the end of every wait the mirror treats as an idle point; the mirror's
 # firing window ends at this value instead of a fixture bound.
 JIFFIES_END = 310
+# Pre-release review finding 2 (docs/2026-10-14-pre-release-review.md,
+# section 2): the caller's jiffies read that computes a peer timer's expiry,
+# {jiffies} (8 bytes, class 'jiffies', resolved by the consumer frame: the
+# caller's own line in drivers/net/wireguard/timers.c, one site per caller
+# of mod_peer_timer), written by kcov_timer_jiffies before the arm record;
+# the mirror computes the expiry from it and compares with the arm record's
+# published expiry, so the read is never recovered from the answer.
+TIMER_CALLER_JIFFIES = 311
 
 
 def load_hidden_sites():
@@ -555,7 +563,7 @@ def resolve_choices(per, sites, locations, dispatch=None):
                 kind_class = 'random' if kind in RANDOM_KINDS else 'clock' if 200 <= kind <= 216 \
                     else 'resched' if raw_kind == RESCHED else 'timer' if raw_kind == TIMER_ARM \
                     else 'advance' if raw_kind == TIME_ADVANCE else 'alloc' if kind == ALLOC_KIND \
-                    else 'queue' if raw_kind == QUEUE else 'jiffies' if raw_kind in (DST_CACHE_JIFFIES, JIFFIES_END) \
+                    else 'queue' if raw_kind == QUEUE else 'jiffies' if raw_kind in (DST_CACHE_JIFFIES, JIFFIES_END, TIMER_CALLER_JIFFIES) \
                     else 'address' if raw_kind in (EPOLL_INSERT_ADDRESS, SECCOMP_IP) \
                     else 'program' if raw_kind == SECCOMP_PROGRAM else None
                 if kind_class == 'queue':
@@ -702,14 +710,15 @@ def jiffies_problems(traces, per):
                                   kinds=[r[0] for r in records[:records.index(advances[0])]][:8]))
             floor = None
             for kind, _ip, _seq, length, data, _func in records:
-                if kind not in (TIMER_ARM, TIME_ADVANCE, JIFFIES_END):
+                if kind not in (TIMER_ARM, TIME_ADVANCE, JIFFIES_END, TIMER_CALLER_JIFFIES):
                     continue
                 if length != (24 if kind == TIMER_ARM else 16 if kind == TIME_ADVANCE else 8):
                     found.append(dict(index=index, problem=f'record kind {kind} length {length}'))
                     continue
                 first = int.from_bytes(bytes.fromhex(data[:16]), 'little')
-                if kind == JIFFIES_END:
-                    # the end-of-wait read (item 7): never behind the last known value
+                if kind in (JIFFIES_END, TIMER_CALLER_JIFFIES):
+                    # the end-of-wait read (item 7) and a timer caller's read (review
+                    # finding 2): never behind the last known value
                     if last is not None and first < last:
                         found.append(dict(index=index, problem='jiffies went back', last=last, jiffies=first, kind=kind))
                     elif last is not None:

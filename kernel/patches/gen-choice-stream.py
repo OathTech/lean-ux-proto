@@ -54,6 +54,8 @@ adds no include and no line: an extern declaration and the call share the
 line of `fp = bpf_prog_select_runtime(fp, &err);` (1315 in both sources).
 Review item 7 (docs/2026-10-13-review-items-7-8.md, section 5): the end of
 a guest wait as a record, KCOV_LEANUX_JIFFIES (207): jiffies_64 read and
+(pre-release review finding 2) the caller's jiffies read before each
+mod_peer_timer in drivers/net/wireguard/timers.c as kind 311 {jiffies};
 written as kind 310 {jiffies} (8 bytes) into the remote area of the
 process's common handle (kcov_jiffies_read; kcov_choice_write split into
 the area writer and its wrapper). In any recording context. Record-only;
@@ -68,7 +70,8 @@ TOUCHED=['kernel/kcov.c','include/linux/kcov.h','include/linux/sched.h','drivers
          'include/net/dst_cache.h','net/core/dst_cache.c',
          'fs/eventpoll.c',
          'net/core/filter.c',
-         'kernel/seccomp.c']
+         'kernel/seccomp.c',
+         'drivers/net/wireguard/timers.c']
 shutil.rmtree(WD, ignore_errors=True)
 for side in ('base', 'new'):
     for f in TOUCHED:
@@ -875,6 +878,29 @@ void notrace kcov_dst_cache_ts(unsigned long ts, unsigned long ip)
 EXPORT_SYMBOL(kcov_dst_cache_ts);
 
 /*
+ * LEANUX pre-release review, finding 2 (docs/2026-10-14-pre-release-review.md,
+ * section 2): the caller's jiffies read that computes a peer timer's expiry.
+ * mod_peer_timer's seven callers in drivers/net/wireguard/timers.c compute
+ * `jiffies + delay` before the call; the arm record (kind 303, at mod_timer)
+ * carries mod_timer's own later read and the expiry, so the caller's read
+ * could only be recovered from the expiry and the mirror's delay, which
+ * absorbs a delay wrong by one tick. Each caller's read now passes through
+ * this identity function, which records it as kind 311 {jiffies} (8 bytes)
+ * at the caller's own address (_THIS_IP_ on the caller's line), gated like
+ * the arm record (KCOV_DISPATCH_ARM_RECORDS); outside a trace one load and
+ * the value is returned unchanged. Record-only.
+ */
+unsigned long notrace kcov_timer_jiffies(unsigned long j, unsigned long ip)
+{
+	u64 v = j;
+
+	if (READ_ONCE(kcov_dispatch_kcov) && (READ_ONCE(kcov_dispatch.flags) & KCOV_DISPATCH_ARM_RECORDS))
+		kcov_choice_ip(311, ip, &v, sizeof(v));
+	return j;
+}
+EXPORT_SYMBOL(kcov_timer_jiffies);
+
+/*
  * LEANUX epoll (docs/2026-10-12-epoll-design.md, section 3.2): the address
  * of the struct file an epoll item is keyed by (ep_cmp_ffd: the file
  * pointer, then the fd), recorded at ep_rbtree_insert (fs/eventpoll.c,
@@ -1197,6 +1223,18 @@ static inline void dst_cache_reset(struct dst_cache *dst_cache)
 	WRITE_ONCE(dst_cache->reset_ts, ts);
 	kcov_dst_cache_ts(ts, _THIS_IP_);	/* LEANUX W9: kind 306 */
 }''')
+# LEANUX pre-release review, finding 2: the caller's jiffies read before each
+# mod_peer_timer (kind 311), on the caller's own line (line-preserving: the
+# read passes through kcov_timer_jiffies, declared on mod_peer_timer's line
+# since timers.c includes no kcov.h; the file keeps its line count).
+TC = 'drivers/net/wireguard/timers.c'
+sub(TC, 'static inline void mod_peer_timer(struct wg_peer *peer,\n',
+    'unsigned long kcov_timer_jiffies(unsigned long j, unsigned long ip); static inline void mod_peer_timer(struct wg_peer *peer,\n')
+sub(TC, 'jiffies + REJECT_AFTER_TIME * 3 * HZ);', 'kcov_timer_jiffies(jiffies, _THIS_IP_) + REJECT_AFTER_TIME * 3 * HZ);', 2)   # :62, :206
+sub(TC, 'jiffies + KEEPALIVE_TIMEOUT * HZ);', 'kcov_timer_jiffies(jiffies, _THIS_IP_) + KEEPALIVE_TIMEOUT * HZ);', 2)             # :87, :159
+sub(TC, 'jiffies + (KEEPALIVE_TIMEOUT + REKEY_TIMEOUT) * HZ +', 'kcov_timer_jiffies(jiffies, _THIS_IP_) + (KEEPALIVE_TIMEOUT + REKEY_TIMEOUT) * HZ +')   # :149
+sub(TC, 'jiffies + REKEY_TIMEOUT * HZ +', 'kcov_timer_jiffies(jiffies, _THIS_IP_) + REKEY_TIMEOUT * HZ +')                       # :185
+sub(TC, 'jiffies + peer->persistent_keepalive_interval * HZ);', 'kcov_timer_jiffies(jiffies, _THIS_IP_) + peer->persistent_keepalive_interval * HZ);')   # :216
 sub('net/core/dst_cache.c', '''fail:
 	idst->refresh_ts = jiffies;
 	return NULL;''', '''fail:
@@ -1655,8 +1693,14 @@ void kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsign
 """, """/* LEANUX D3: mod_timer's arm record (kind 303). */
 void kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsigned long ip, void *timer);
 """ + ALLOC_H)
+sub('include/linux/kcov.h', """void kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsigned long ip, void *timer);
+""", """void kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsigned long ip, void *timer);
+/* LEANUX review finding 2: a peer timer caller's jiffies read (kind 311). */
+unsigned long kcov_timer_jiffies(unsigned long j, unsigned long ip);
+""")
 sub('include/linux/kcov.h', """static inline void kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsigned long ip, void *timer) {}
 """, """static inline void kcov_timer_arm(void *func, unsigned long now, unsigned long expires, unsigned long ip, void *timer) {}
+static inline unsigned long kcov_timer_jiffies(unsigned long j, unsigned long ip) { return j; }
 struct kcov_alloc_ctx { };
 static inline bool kcov_alloc_pre(struct kcov_alloc_ctx *ctx, unsigned long addr, gfp_t gfp,
 				  unsigned long size, bool page) { return false; }

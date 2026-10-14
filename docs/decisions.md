@@ -531,3 +531,20 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   (the robustness landing's schedule), which the mirror now accepts but
   `dispatch_problems` still reports ("a work item queued while already
   queued"); the schedule did not recur in the suite runs here.
+- **2026-10-14 [AGENT, fork of the coordinator]** Pre-release review finding 2
+  (docs/2026-10-14-pre-release-review.md, section 2): a peer timer's expiry
+  is computed from the caller's own recorded `jiffies` read (kind 311,
+  `kcov_timer_jiffies` on each of `mod_peer_timer`'s seven caller lines,
+  record-only under the approved class; the s3 oracle pair) and compared
+  with the arm record's published expiry, instead of recovering the read
+  as `expires - delay`, which absorbed a delay wrong by one tick. The
+  `mod_timer` read keeps its 0-or-1 admissibility against the caller's;
+  the items 7-8 design's "publication identity" wording is withdrawn.
+- **2026-10-14 [AGENT, fork of the coordinator]** Pre-release review finding 6
+  (section 6): `Env.wgDelete` refuses a delete while a stepped dump is
+  pending, as the guest does (`wg_delete_with_dump_pending`), since the
+  mirror's dump cursor carries a Boolean device presence and not the C's
+  retained device reference; the control `n6_delete_with_dump_pending`
+  keeps the composition outside the domain (the campaign's stale-cursor
+  witness was such an accepted replay). Supporting it means cursor
+  ownership, the review's longer-term option, recorded in the W2 design.

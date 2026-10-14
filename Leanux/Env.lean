@@ -623,6 +623,20 @@ def wgDown : M Int := do
     `NETDEV_UNREGISTER` remove every route via wg0. -/
 def wgDelete : M Int := do
   if (← getK).wg.isSome then requireIdleDevice
+  -- Pre-release review finding 6 (docs/2026-10-14-pre-release-review.md,
+  -- section 6; W2 design 5): the guest refuses `wg_delete` while a stepped
+  -- dump is pending (`guest.c` `wg_delete_with_dump_pending`: the dump's
+  -- cursor holds the device reference, W2 C1), and the mirror's cursor does
+  -- not carry that reference, so the composition is outside the domain here
+  -- too, fail-closed, rather than a delete the guest would never perform.
+  -- pending as the guest counts it: started, and its NLMSG_DONE not yet
+  -- received (`dump_pending`, guest.c), which outlasts `cb_running` by the
+  -- queued chunks
+  let pending (sock : WG.NlSock) : Bool :=
+    sock.cbRunning || sock.queue.any fun chunk => chunk.messages.any fun m => match m with | .done .. => true | _ => false
+  let k ← getK
+  if pending k.nlSock7 || pending k.nlSock8 then
+    unsupported "a delete with a stepped dump pending (the dump's cursor holds the device reference; the guest refuses wg_delete_with_dump_pending)"
   let ret ← WG.wgDelete
   -- W9: NETDEV_UNREGISTER removes every address and route via wg0
   modify fun w => { w with addrs4 := [], addrs6 := [], defaultRoute4 := false, defaultRoute6 := false,

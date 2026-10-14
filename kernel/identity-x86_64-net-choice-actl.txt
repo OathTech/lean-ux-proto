@@ -47,6 +47,10 @@
 # (review item 7, record-only under the approved class); control patch sha256
 # fdb1306f7699f7206baa1281ae9ee1cd3ba4f4e1a55fb742c2f8ede5bef0a0c1. The identity and vmlinux lines below
 # are that build's [AGENT 2026-10-13, review item 7].
-04432df82a517ecb023b029c5e29efd6dc9351124e8d9fbfba4d274a74ee5f75
+# Built 2026-10-14 as .artifacts/kernel-net-choice-actl-s3: the same change as the oracle's s3 (the kind-311
+# timer caller read, record-only), control patch sha256
+# 6e27b546309dcfeea6487bc7cde27a28ff76505c72cccae03833e59292121e7d [AGENT 2026-10-14, review finding 2];
+# the s2 lines it replaces were 04432df8... and 44f1c971...
+6c5e5a69919e113aa2c0228bfb2edd42d5d7f35d9d50cbc4672cbd1ca0cf7655
 # vmlinux sha256 of the build the evidence used (path-dependent):
-44f1c971db514de7d71945dcdb9a0616f5c1c9f8b384649dee45b567af0c7b98
+1749e7a8cf226416ec34c11e08cabffad047a53445a1ae3567281a46ae7f83f2

@@ -27,8 +27,38 @@ EXPECTED = {
 }
 
 
+MODEL = ROOT / ".lake/build/bin/leanux-model"
+# Pre-release review finding 6 (docs/2026-10-14-pre-release-review.md, section
+# 6): the guest refuses wg_delete while a stepped dump is pending (guest.c,
+# "wg_delete_with_dump_pending"), and the mirror's dump cursor does not carry
+# the device reference the kernel's does, so the mirror alone
+# (`leanux-model --domain`) must place the composition outside its domain
+# with the stated reason, never accept it (the campaign's stale-cursor
+# witness was such an accepted replay).
+DOMAIN_EXPECTED = {
+    "n6_delete_with_dump_pending": "a delete with a stepped dump pending",
+}
+
+
+def domain_check(name, reason):
+    if not MODEL.is_file():
+        raise SystemExit(f"{MODEL} is missing: run `lake build leanux-model` first")
+    trace = json.loads((ROOT / "corpus/netlink-controls" / f"{name}.json").read_text())
+    import subprocess
+    proc = subprocess.run([str(MODEL), "--domain"], input=(json.dumps(trace) + "\n").encode(),
+                          capture_output=True, timeout=120)
+    rows = [json.loads(line) for line in proc.stdout.decode().splitlines() if line.strip()]
+    row = rows[0] if rows else {}
+    ok = row.get("in_domain") is False and reason in json.dumps(row)
+    print(f"{name}: {'outside the domain as expected' if ok else 'UNEXPECTED'}: {json.dumps(row)[:200]} "
+          f"{proc.stderr.decode()[-200:].strip()}")
+    return ok
+
+
 def main():
     failures = 0
+    for name, reason in DOMAIN_EXPECTED.items():
+        failures += not domain_check(name, reason)
     for name, reason in EXPECTED.items():
         trace = json.loads((ROOT / "corpus/netlink-controls" / f"{name}.json").read_text())
         try:

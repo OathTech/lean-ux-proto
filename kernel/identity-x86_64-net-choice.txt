@@ -115,6 +115,13 @@
 # docs/2026-10-13-review-items-7-8.md section 5), record-only under the approved class; patch sha256
 # 15f67b482fe446d0ed5bcdba075fa5f382677f3c6dafa448dc7dc306f8cc2bf9. The identity and vmlinux lines below
 # are that build's [AGENT 2026-10-13, review item 7].
-cea1e9a3a5e2a55782008594d9ff5e9bc7bcfe5348258ac92bf07f87e1875295
+# Built 2026-10-14 as .artifacts/kernel-net-choice-s3: the s2 configuration (unchanged) with the kind-311
+# record of each peer timer caller's jiffies read (kcov_timer_jiffies, kernel/kcov.c; the seven callers of
+# mod_peer_timer in drivers/net/wireguard/timers.c read through it on their own lines, the file keeping its
+# line count), record-only under the approved class (pre-release review finding 2,
+# docs/2026-10-14-pre-release-review.md section 2); patch sha256
+# 8fbf65c7e214b4f5a5db78fe6d9f3a5f7a8403c38e6300d4667cd64abf295e0c. The identity and vmlinux lines below
+# are that build's [AGENT 2026-10-14, review finding 2]; the s2 lines it replaces were cea1e9a3... and c711e27d...
+8376e99e9985265aa83b9238a0656d4f3de187818f81b6ee188d6953720a85c5
 # vmlinux sha256 of the build the evidence used (path-dependent):
-c711e27d74504184f317bec4414a0f1fa1472821635855954f64763c384aeff0
+1987a8ed91019271dbfe71e0bf42d4a67fc32d1f6b1f31e1bc6b854a519c252e
