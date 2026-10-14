@@ -50,7 +50,7 @@ writes at 44-45 and 48 are IP-stack state below the boundary (section 3).
 
 | # | C | Lean | Class | What | Effect |
 |---|---|---|---|---|---|
-| S1 | 122-128 | 85 | 6 | `requireNotPending` before each peer's purge: a fail-noisy dispatch-timing guard the C has no counterpart for. | I. Keep: it is the hidden-input rule for a queued handshake worker, and it stops rather than guesses. |
+| S1 | 122-128 | 85 | 6 | (retired 2026-10-14, a no-op) `requireNotPending` before each peer's purge: a fail-noisy dispatch-timing guard the C has no counterpart for. | I. Keep: it is the hidden-input rule for a queued handshake worker, and it stops rather than guesses. |
 
 The per-peer sequence purge, `wg_timers_stop`, `wg_noise_handshake_clear`,
 `wg_noise_keypairs_clear` (next, previous, current), `wg_noise_reset_last_sent_handshake`

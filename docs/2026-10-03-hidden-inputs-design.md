@@ -169,7 +169,8 @@ already the order in which work items ran. A section record at each wrapper
 That also allows a guest change. Today the guest waits only in `wg_observe`,
 before the reset, which would discard a section that ran during the wait.
 Instead, it waits inside the operation that queues the work, as `wg_inject`
-already does. Most uses of `requireNotPending` could then retire.
+already does. Most uses of `requireNotPending` could then retire. (Retired
+2026-10-14: docs/2026-10-11-dispatch-order.md, the last section.)
 
 Hard later:
 - RCU interleavings between readers and writers;

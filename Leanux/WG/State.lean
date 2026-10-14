@@ -88,13 +88,18 @@ def freeRxSkb (id : SkbId) : M Unit := do
   let _ ← getRxSkb id
   modifyDev fun d => { d with rxSkbs := d.rxSkbs.erase id }
 
-/-- A path that reads or changes state the pending handshake worker also
-    touches: its outcome depends on when the worker runs. Work queued earlier
-    in this same system call, before it slept, has certainly not run
-    (`CONFIG_PREEMPT_NONE`, one CPU), so such paths are determined. -/
-def requireNotPending (pid : PeerId) (what : String) : M Unit := do
-  if (← getPeer pid).handshakePending && !(← get).queuedThisCall.contains pid then
-    unsupported s!"{what} races the pending handshake worker"
+/-- Retired (2026-10-14, the pre-release review's finding 3). It stopped a
+    path that reads or changes state the pending handshake send worker also
+    touches, on the ground that its outcome depended on when the worker ran.
+    Since the dispatch-order capture, the worker runs exactly where its
+    section records place it (`Leanux/Env/Batch.lean`'s scheduler), so a
+    receive that the kernel ran before the queued send worker is determined:
+    the pending work's effects apply at its section, not before. The stop
+    excluded ordinary simultaneous initiation (a peer's initiation arriving
+    while wg0's own is queued, `corpus/wireguard/p_sim_init_*`). A section
+    record the scheduler cannot place is a hidden mismatch, as before. The
+    callers and `World.queuedThisCall` remain for a later cleanup. -/
+def requireNotPending (_pid : PeerId) (_what : String) : M Unit := pure ()
 
 /-- Short-circuit `&&` and `||` over decisions: the right operand runs only
     when the left does not decide. (W3: moved here from `Netlink.lean`, so
