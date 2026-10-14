@@ -652,3 +652,13 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   sharpened in the note's section 3 and the claim that the guest's
   per-operation remote reset is a silent instrument gap is retracted
   (`section_problems` fails a lost section loudly).
+- **2026-10-15 [AGENT, fork of the coordinator]** B4 part 2, the prototype
+  that precedes the user's U1 decision (docs/2026-10-15-design-b4-load-
+  ratelimiter.md 2.3, 13): the flood runs exactly over `Env.batch`'s
+  machinery; the summary, the discard, the exact flag and the checker's
+  `wg_flood` arm are deleted; the three checker rules of U1 are changed,
+  with the `repeatable` list grown by three consume-path decisions the
+  prototype run found (`consumeFlood`, `consumeFailedPut`, `hsInitNoPeer`);
+  `make_cookie.ipv4`'s witness corrected to the built kernel's layout (a
+  declaration error the skipped flood had hidden); `e_underload_merged`
+  kept with its new detail. The user accepts or drops this part as U1.

@@ -1497,11 +1497,6 @@ structure World where
       which runs before Linux). -/
   hiddenPlaceholders : Bool := false
   placeholderCount : Nat := 0
-  /-- `LEANUX_FLOOD_EXACT=1`: a flood's invalid tail runs through the real
-      worker packet by packet instead of `floodTailEffect`'s summary, to
-      check the summary against the unsummarised execution (the pre-release
-      review's section 8). -/
-  floodExact : Bool := false
   /-- W7 phase 2: the draining workers' activations suspended at a
       `cond_resched`, oldest first, each resumed when the records name it
       (`Activation`, `Env.schedule`). An operation ends with none suspended
@@ -1631,8 +1626,8 @@ structure World where
       receive.c:119). Kernel-global and never reset by teardown; per trace
       here because the checker runs each flooding trace in its own guest
       (docs/2026-10-05-e-dos.md §4.2), so a leak between traces is a
-      control-flow mismatch. A flood's invalid tail sets it to that tail's
-      last under-load read (`floodTailEffect`). -/
+      control-flow mismatch. Every flood packet the receive worker handles
+      sets or decays it as the C does (B4: the flood runs exactly). -/
   lastUnderLoad : Option Int64 := none
 
 /-- Why a mirror execution stopped without an observation. -/
@@ -2235,65 +2230,6 @@ def dropHiddenRecord : M (Option Nat) := do
     noteNetRxStart r.site
     return some r.site
   | _ => return none
-
-/-- E-B, the producer-side discard before a flood's receive-worker section
-    (docs/2026-10-05-e-dos.md §4.1): drop head records whose site is in
-    `allowed` (the fixture's sends' cut draws and NET_RX brackets) until the
-    next record is `stop`, or the stream is exhausted. A record outside
-    `allowed` is a hidden mismatch (something the mirror would have modeled
-    where it stands). Bounded by the operation's record count. -/
-def discardFloodRecords (stop : Nat) (allowed : List Nat) : M Nat := do
-  let mut dropped := 0
-  for _ in [0:4000000] do
-    match ← peekHiddenSite with
-    | some s =>
-      if s == stop then return dropped
-      if !allowed.contains s then
-        throw (.hidden s!"flood: a modeled record (site {s}) inside the discarded flood region (a mid-flood injection)")
-      _ ← dropHiddenRecord
-      dropped := dropped + 1
-    | none => return dropped
-  throw (.hidden "flood: the record stream did not drain")
-
-/-- The effect contract of a flood's invalid tail (the review's 3.4): the
-    packets the receive worker drops at the MAC1 check after the leading
-    valids, up to the section's `stop`. Each one runs
-    `wg_receive_handshake_packet` to the MAC check: with the counter at or
-    over the threshold it saves the clock (`under_load_now`, receive.c:115);
-    below it, with `last_under_load` set, it reads the clock for the decay
-    (`birthdate_has_expired`, receive.c:117) and resets `last_under_load` when
-    the decay has expired (:119); then `cond_resched` (`resched_receive`). The
-    contract folds exactly those records, in order, into the new
-    `last_under_load`, from `last` (the value the leading valids left): no
-    other state changes (a dropped packet is freed; `handshake_queue_len` is
-    decremented per packet, to 0 at the drain, which the caller sets). Any
-    other record is a hidden mismatch (a mid-flood injection, or a decay read
-    with no saved time). Returns the new value and whether an under-load read
-    occurred (the flood crossed the threshold). -/
-def floodTailEffect (stop : Nat) (cuts : List Nat) (last : Option Int64) : M (Option Int64 × Bool) := do
-  let underLoad := (HiddenSite.underLoadNow).info.id
-  let decay := (HiddenSite.birthdateExpired).info.id
-  let resched := (HiddenSite.reschedReceive).info.id
-  let mut last := last
-  let mut crossed := false
-  for _ in [0:4000000] do
-    match ← peekHiddenSite with
-    | some s =>
-      if s == stop then return (last, crossed)
-      if s == underLoad then
-        last := some (← hiddenClock64 .underLoadNow)
-        crossed := true
-      else if s == decay then
-        let some saved := last
-          | throw (.hidden "flood: a decay clock read with no saved under-load time (a mid-flood injection)")
-        let now ← hiddenClock64 .birthdateExpired
-        if saved + 1000000000 ≤ now then last := none   -- wg_birthdate_has_expired(last_under_load, 1), in s64
-      else if s == resched || cuts.contains s then
-        _ ← dropHiddenRecord
-      else
-        throw (.hidden s!"flood: a modeled record (site {s}) inside the discarded flood region (a mid-flood injection)")
-    | none => return (last, crossed)
-  throw (.hidden "flood: the record stream did not drain")
 
 def getFile (id : FileId) : M File := do
   match (← getK).files.get? id with

@@ -313,9 +313,13 @@ wait fails closed. So:
   `wg_flood` joins `wg_batch` in the file restriction and in the repeat
   rule's exemption, and the decisions a flood evaluates with both
   outcomes in one operation are declared `repeatable`: `hsUnderLoad`
-  (true for the first 9 packets of 520, false after), `hsWasUnderLoad`,
-  `macInvalid` and `macNoCookieCheck` (the valids against the tail), the
-  `packet_needs_cookie` arms, and `rxQueueBusy` (the busy trace). **What
+  (true for the first 9 packets of 520, false after), `macInvalid` (the
+  valids against the tail), the `packet_needs_cookie` arms that take both
+  outcomes (`hsLoadedCookieOk`, `hsMacNoCookie`, `hsNeedsCookieMac`),
+  `rxQueueBusy` (the busy trace), and, found by the prototype run, the
+  consume path's `consumeFlood`, `consumeFailedPut` and `hsInitNoPeer`
+  (section 2.4). `hsWasUnderLoad` and `macNoCookieCheck` take one outcome
+  per flood and are not declared. **What
   this weakens:** a `repeatable` declaration applies in every operation,
   so for those decisions "reported more than once" and "opposite outcome
   covered" no longer fire anywhere; their per-packet reports collapse
@@ -408,6 +412,31 @@ packets is inside the bound and a 16,384-packet one is not (the harness
 allows `2^20`, `harness/trace.py:444`). The bound becomes the flood's
 size limit, declared in the trace validator: enough for the 511/512/513
 boundary and for the 2,050-packet busy trace.
+
+**The prototype run (2026-10-15, B4 part 2, on s4).** `Env.flood` over
+`Env.batch` with the three checker rules, the sixteen flood traces (the
+thirteen plus `e_underload_busy`, `l_delete_ratelimited6` and
+`l_recreate_ratelimited6` from part 1) and the control:
+
+| Trace | Outcome | Flood labels | Note |
+| --- | --- | --- | --- |
+| `e_underload_flood`, `_cookie`, `_two_replies`, `_cookie_rotated`, `_live`, `_decayed` | agreement | 19,223 to 19,333 | first run |
+| `e_underload_511`, `_512`, `_513` | agreement | 17,997 to 18,998 | first run |
+| `e_underload_busy` (2,100) | agreement | 74,523 | first run; the busy arm from the 2,050th packet |
+| `e_underload_ratelimit`, `l_delete_ratelimited` | agreement after two declaration changes | 19,457 | first run: "opposite outcome covered" for `consume_initiation.flood`, `.failed_put`, `initiation_no_peer`: the second leading initiation is dropped by noise.c's 50/s test where the first was consumed, both outcomes in one operation; declared `repeatable` |
+| `e_underload_ratelimit6`, `_ratelimit6_deny`, `l_delete_ratelimited6`, `l_recreate_ratelimited6` | agreement after the same, plus `make_cookie.ipv4`'s witness corrected | 19,378 to 19,763 | the only PC attributed to cookie.c:108 is the IPv6 arm's block entry, covered by every IPv6 `make_cookie` and by no IPv4 one (the coverage maps of both families, and `objdump -l`); the declaration witnesses :110-111 now and leaves the IPv4 arm unobservable |
+| `e_underload_merged` (control) | rejected: `unsupported_path`, "work the flood queued outlived the guest's wait" | | the kernel's extra producer section stands where the mirror expects the worker |
+
+Records: the exact flood consumes every remote record of the operation
+(no discard); the hidden streams agreed on every trace (no hidden
+mismatch anywhere in the run). Labels: about 37 per packet, producer and
+worker, so the validator's bound of 4,000 packets (the ring's 4,096)
+stays inside `MAX_BRANCHES`. The `repeatable` list is nine decisions, not
+the six of section 2.3: the consume path's three were found by the run.
+The one-off mutant B4-M1 (the receive worker's yields ignored) is
+rejected by `e_underload_busy` and `e_underload_live` (a hidden mismatch at
+the resched record, site 60). The whole `wireguard` suite on the final
+build is reported in the part-2 commit.
 
 ### 2.5 The busy test and the trylock (`:554-558`)
 
