@@ -16,6 +16,8 @@ import Leanux.Proofs.WG.Queues.RxBorrow
 import Leanux.Proofs.WG.Queues.TxDispositionStep
 import Leanux.Proofs.WG.Queues.TxDispositionEndpoints
 
+import Leanux.Proofs.WG.Queues.RxPollStampPhase
+
 /-! R4 queue components: physical-ring refusal, original prev_queue FIFO laws,
 and successful-endpoint receive-queue helper frames. Whole recorded-schedule delivery,
 pipeline conservation, and callback/scheduler ownership are separate obligations. -/
@@ -872,5 +874,71 @@ theorem original_tx_list_disposal_exact (item : List SkbId) (w v : World)
       if id ∈ item then none else Queues.TxDisposition.txPackets w id :=
   (Framing.hoare_iff_triple _ _ _).mpr
     (Queues.TxDisposition.freeList_wp item (Queues.TxDisposition.txPackets w)) w () v rfl hr
+
+open Leanux.Proofs.Logged Queues.RxJoint
+
+/-- One actual poll observes both stamped GRO payloads and original lifetime
+accesses. Source erasure and GRO projection are unconditional; direct access
+projection transports the existing allocation invariant. -/
+theorem joint_poll_correspondence (pid : PeerId) (budget : Nat) :
+    ErasesPrefix (poll pid budget)
+      (Leanux.WG.rxPoll pid budget (fun bytes => bytes.forM Leanux.Env.deliverInner)) ∧
+    ProjectsPrefix groEvent id (poll pid budget) (Queues.rxPollGro pid budget) ∧
+    ProjectsUnder Lifetimes.AllocationInv accessEvent (poll pid budget)
+      (Lifetimes.rxPollStackPrefix pid budget) :=
+  ⟨poll_erases pid budget, poll_gro pid budget, poll_access pid budget⟩
+
+/-- Each poll starts a fresh occurrence journal while retaining arbitrary
+valid prior lifetime history. Every Stop retains its exact safe access suffix. -/
+theorem joint_poll_fresh_history (pid : PeerId) (budget : Nat) (w : World)
+    (prior : List Lifetimes.LifetimeEvent) (hi : Lifetimes.AllocationInv prior w) :
+    runPrefix (Queues.rxPollGro pid budget) w [] =
+      ((runPrefix (poll pid budget) w (seed prior)).1,
+        (runPrefix (poll pid budget) w (seed prior)).2.filterMap groEvent) ∧
+    ∃ suffix, (runPrefix (poll pid budget) w (seed prior)).2 = seed prior ++ suffix ∧
+      Lifetimes.LifetimeEvent.Safe (prior ++ suffix.filterMap accessEvent) ∧
+      (match (runPrefix (poll pid budget) w (seed prior)).1 with
+       | .error _ => True
+       | .ok (_, v) => Lifetimes.AllocationInv (prior ++ suffix.filterMap accessEvent) v) :=
+  ⟨poll_fresh_gro pid budget w prior, poll_safe_suffix pid budget w prior hi⟩
+
+/-- Removal allocation stamps are distinct on every reached poll prefix.
+Normal return observes a real release for every removed allocation; no release
+of a pending captured stamp is asserted after a Stop. -/
+theorem joint_poll_removal_identity_safety (pid : PeerId) (budget : Nat) (w : World)
+    (prior : List Lifetimes.LifetimeEvent) (hi : Lifetimes.AllocationInv prior w) :
+    (removedStamps (runPrefix (poll pid budget) w (seed prior)).2).Nodup ∧
+      (match (runPrefix (poll pid budget) w (seed prior)).1 with
+       | .error _ => True
+       | .ok _ => ∀ s ∈ removedStamps (runPrefix (poll pid budget) w (seed prior)).2,
+          Released (runPrefix (poll pid budget) w (seed prior)).2 s) :=
+  poll_removed_stamps pid budget w prior hi
+
+/-- Actual callback entries have distinct allocation stamps within one poll.
+Normal poll completion has released them all, including buffered GRO payloads
+entered after their packet storage's earlier release. This is not a completed
+delivery or cross-poll uniqueness statement. -/
+theorem joint_poll_callback_identity_safety (pid : PeerId) (budget : Nat) (w : World)
+    (prior : List Lifetimes.LifetimeEvent) (hi : Lifetimes.AllocationInv prior w) :
+    let h := (runPrefix (poll pid budget) w (seed prior)).2
+    ((entries h).map Entry.stamp).Nodup ∧
+      (match (runPrefix (poll pid budget) w (seed prior)).1 with
+       | .error _ => True
+       | .ok _ => ∀ e ∈ entries h, Released h e.stamp) :=
+  poll_entry_stamps pid budget w prior hi
+
+/-- Full occurrence/slot/stamp provenance comes from the same joint poll
+journal, even on failure. Independent source erasures are not its premise. -/
+theorem joint_poll_callback_removal_provenance (pid : PeerId) (budget : Nat) (w : World)
+    (prior : List Lifetimes.LifetimeEvent) :
+    let h := (runPrefix (poll pid budget) w (seed prior)).2
+    ∀ e ∈ entries h, e.key ∈ removalKeys h :=
+  poll_entry_support pid budget w prior
+
+/-- An entry event precedes the actual stack callback and survives its Stop.
+It records attempted handoff, without asserting callback success. -/
+theorem joint_poll_callback_entry_prefix (e : Entry) (w : World) (h : List Queues.RxJoint.Event) :
+    ∃ suffix, (runPrefix (enter e) w h).2 = h ++ [.entered e] ++ suffix :=
+  enter_suffix e w h
 
 end Leanux.Proofs.WG.DeliveryOrder

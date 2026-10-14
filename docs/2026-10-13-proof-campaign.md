@@ -5,7 +5,9 @@
 Work is on `.worktrees/proofs-campaign`, branch `proofs/campaign`, under
 [the charter](2026-10-13-charter-proof-campaign.md). The mirror remains byte-identical
 to `ca6b22e`; coordinated validation passes for initialized R2 Runner safety
-and the current R3 public-command/parser extension.
+and the preceding R3 public-command/parser extension. The current joint stamped
+rxPoll slice passes scoped/full builds, exact checks, frozen review and coordinated
+validation.
 The [proof register](proofs.md#results) holds current declarations and
 pins; its [model map](proofs.md#layers) supplies the complete module inventory.
 Current components are not completion of the open charter properties. This campaign
@@ -18,15 +20,25 @@ retains current architecture, findings, reproduction provenance, effort and limi
 | R1 | Uniqueness and the intentional inclusive-floor correction are proved, with pure and accepted-run witnesses. |
 | R2 | Initialized allocation-identity access safety now holds for every typed Runner trace and both placeholder/flood modes, including failed histories. Every reached consistency-filter entry derives its own allocation invariant and safe isolated trials with exact ordered filter correspondence. No parser, array-length, progress or success premise is added. Raw-reference affiliation/credit remains a separate stronger property. Coordinated validation of the three new exports passes. |
 | R3 | Initialized finite normal call histories refine flat-prefix updates and reached-root lookup, including full normal clear. Completed setAllowedip/removal events now cover the complete public peer command, with source-derived acquisition and concrete send/flush/cleanup frames. Successful public parseTrace supplies every configured peer's address shape. Enclosing device configuration/Runner closure and packet paths remain open. |
-| R4 | Physical rings, finite/source journals, per-poll provenance and selected GRO order, and concrete RX scheduling are checked. Accepted input refutes chronological post-GRO order. Joint pipeline conservation remains open. |
+| R4 | Physical rings, finite/source journals, selected GRO order and concrete RX scheduling are checked. A joint stamped poll proves full callback/removal provenance, per-poll stamp uniqueness on every prefix and observed release on normal return, from valid prior lifetime history. Accepted input refutes chronological post-GRO order. Cross-poll duplicate freedom and joint pipeline conservation remain open. |
 | R5 | The unconditional age/post-zero and wire-nonce readings are false in accepted mirror inputs. Rule Zero resolution retains thirteen positive local contracts, without universal replacement transport claims. |
 | R6 | Cookie exclusion is proved at its original call boundary. A 19-retry/20-initiation episode refutes literal MAX=18; no universal corrected retry bound is claimed. |
 
-**Validation status.** The current R3 public-command/parser extension passes the
+**Validation status.** The current joint stamped poll adds six exports, giving
+85 R4 / 429 terminal declarations (427 theorems and two definitions). The 257-job
+scoped Statements and 431-job full proof builds pass. The capped exact nine-file
+scope/compatibility/census/whitespace/mirror and token/import check passes, preserving
+all 423 prior declaration statements/proof bodies. Independent frozen review is
+clear after the failure-diagnostic reporting amendment. Sequential coordinated
+validation passes the 431-job proof gate on all 429 declarations, fresh stock
+kernel replay, the 60-job default build and 124 unit tests (22.258 seconds, one
+skip). The coordinator's capped exact check confirms nine-file scope, all frozen
+hashes, census, compatibility, whitespace and mirror equality. The seven frozen
+Lean hashes are unchanged. The preceding R3 public-command/parser extension passes the
 286-job scoped statements and 425-job full proof builds. The capped exact
 five-file scope/compatibility check passes all 420 prior declaration statements
 and proof bodies, whitespace, the empty index and mirror equality. Three new exports
-give 93 R3 / 423 current-source terminal declarations (421 theorems and two
+gave 93 R3 / 423 terminal declarations at that checkpoint (421 theorems and two
 definitions). Independent frozen review is clear. Sequential coordinated validation
 passes the 425-job proof gate with all 423 declarations on permitted axioms,
 fresh stock kernel replay, the 60-job default build and 124 unit tests
@@ -684,6 +696,7 @@ post-GRO reading is false; joint pipeline conservation remains open.
 | `PrevQueue`, `RxQueueView` | Contents include cached peek; original queue laws and concrete receive-cell frames allow peer deletion. Malformed nonstub empty queues retain their invariant Stop. |
 | `RxPollPrefix`/`Order`, projected `GroState` | Original outer-drop observations, buffered offers and callback entries; `original_poll_removal_prefix` and selected callback-prefix/completion contracts. |
 | `RxPollTags`, `RxPollProjection`, `RxPollProvenance` | Buffered tags are a subsequence of removed occurrences; direct result/World/Stop/log projection and concrete stack frames derive callback origins. Separate erasures alone would not prove log agreement. |
+| `Logged/ProjectsUnderTo`, `StampedGro`, `RxPollJoint*`, `RxPollStampSafety`, `RxPollStampPhase` | One stamped execution has exact original/GRO erasure and direct allocation-conditional lifetime projection. Fresh local metadata retains arbitrary valid prior lifetime history; capture/removal/release phases and full GRO payload provenance prove per-poll removal/callback stamp uniqueness on failed prefixes and actual releases on normal completion. |
 | `SourceScheduler`, `RxRingScheduler`, `RxRingTrials` | Concrete RX scheduler refinement discharges its callbacks; original trial decisions/ordered filter and safe trial prefixes remain separate from committed history. |
 | `Framing/PeerBorrow`, `RxBorrow` | Actual lookup acquisition derives positive old refcount; adjacent repayment restores the full outside-peer Kernel and every complete peer record pointwise. Existing access observers retain failed prefixes. |
 | `TxDisposition*`, `Logged/ProjectsUnder` | Joint actual admission/publication/removal/completion cuts; exact createData access/ring projection and allocation-conditional full-step access projection. Source cuts and normal EPIPE queue/DEAD-head/ring, ENOSPC packet-absence and actual DEAD-step disposal endpoints. Publication queue retention spans CPU/work updates; arbitrary-schedule transport is separate. |
@@ -718,6 +731,14 @@ schedules, together with the charter's named W7 transmit-drop characterization.
 Transmit callbacks must preserve the required RX carrier invariant. Universal
 outgoing staged/encrypt/socket conservation is additional scope, not a prerequisite
 for the receive claim; existing conditional TX journal contracts remain as stated.
+
+[AGENT 2026-10-14] Prove per-poll duplicate freedom before enclosing conservation.
+Capture allocation identity from the same original second packet getter, focus the
+existing lifetime observers, and carry the stamp with exact GRO bytes. Use direct
+mapped-result projections, a fresh local GRO journal and prior valid lifetime
+history; independent source erasures do not establish journal agreement. Separate
+capture/removal/release phases from payload provenance, permitting a pending stamp
+on Stop and held callbacks after earlier packet release.
 
 **W7 and physical fullness.** Two produce/consume pairs in the original size-1024
 ring leave logical count zero but physical slots 0 and 1 occupied. The next 1024
@@ -854,7 +875,40 @@ a DEAD packet, normal execution returns true, frees the whole item and retains
 not identify that entry with an earlier refusal across arbitrary intervening work.
 Empty/malformed batches and missing peers/keys preserve their original Stops.
 
-**Remaining obligations.** RX carrier preservation through relevant transmit
+**Joint stamped poll.** The observer wraps the original second successful
+`getRxSkb` immediately before queue removal and captures `(ifindex, skb + 1)`;
+it adds no getter. Every original getter, put, free, decision, callback and Stop
+is retained. One execution projects unconditionally to `WG.rxPoll` and to
+`RxPollGro`, and directly to `rxPollStackPrefix` under the existing `AllocationInv`.
+The latter projection transports that invariant through concrete intermediate
+contracts and maps the GRO accumulator result explicitly.
+
+A poll starts with no local occurrence events and any valid prior lifetime history.
+The capture/removal/release phase proof derives freshness from the actual getter,
+keeps the captured device ifindex through the existing full ring-cell frames, and uses the
+actual free's read/release observations before another iteration returns to Ready.
+Every reached removal stamp is distinct, including on Stop. Normal poll return
+has an observed release for every removed stamp. This does not assume distinct
+queue IDs, per-iteration freshness or release; malformed aliases may instead Stop.
+
+A separate journal invariant of this same observer retains the complete
+occurrence/slot/stamp key through both GRO lists and every callback entry. Every
+entered key belongs to an actual removal. Removal-stamp uniqueness and the existing
+exactly projected callback-ordinal uniqueness give callback-stamp uniqueness within
+one poll. Normal completion has released every entered stamp. Buffered GRO bytes
+may be handed off after their packet storage was released. The entry event occurs
+before the focused original stack callback and remains visible if that callback
+Stops; it is not a successful-delivery marker. `rxPollFree = false` also includes
+`consumeDataDone = none`, and the final packet free runs for drops and GRO handoffs.
+These control distinctions are retained, without treating the flag or free as a
+semantic drop disposition.
+
+**Remaining obligations.** Cross-poll duplicate freedom needs the finite caller
+spine to compose the same stamped poll journal with the initialized R2 access
+history; whole-call access frames alone do not observe nested callbacks. It also
+needs a whole-poll bridge from the reached getter freshness cut to disjointness
+of new entered stamps from releases in the incoming prior history. RX carrier
+preservation through relevant transmit
 callbacks, enclosing ingress/runner/lifecycle, worker-local ownership and joint
 receive-pipeline conservation remain open. Packet stores, decrypt rings, peer
 queues, worker locals and GRO buffers contain overlapping references; their sizes
@@ -885,8 +939,19 @@ staged-to-socket conservation is not claimed or required by this receive result.
 | Balanced lookup/reference cut | 15 builds: six passes/nine ordinary failures; one passing scoped check | 18m19s from first worker clock (08:55:24) through final full-target collection (09:13:43); 20m44s through token return; scoped/full targets 232/342 and coordinated validation pass |
 | W7 joint observer/source cuts | 28 builds: six passes/22 ordinary failures; one passing scoped check; scoped/full targets 239/355 | 36m41s from grant 10:24:22 through full-target collection 11:01:03; 39m08s through token return 11:03:30; independent frozen review and coordinated validation pass |
 | W7 normal endpoints | 21 calls: 20 builds (four passes/16 ordinary failures) plus a passing scoped check; scoped/full targets 243/365 | 20m51s from grant 12:09:19 through measured full-result collection 12:30:10; 23m18s total token ownership through handback 12:32:37. No cap/interruption, all exits collected. Independent frozen review and coordinated gate, fresh kernel replay, default build and 114 unit tests pass. |
+| Joint stamped rxPoll | 32 capped calls: 30 builds (13 PASS / 17 FAIL) and two passing exact checks. Failures included simplifier recursion depth at call 10 and the existing 2,000,000-heartbeat limit at call 20; narrower composition and explicit bind adapters closed them without raising limits. Every exit is collected; no memory-cap failure. | Grant 21:15:22 UTC; full-target collection 21:50:33 (35m11s), token return 21:59:01 (43m39s ownership). Scoped/full 257/431; frozen review and final documentation reconciliation are clear after the reporting amendment. Sequential coordinated proof gate, fresh kernel replay, default build, 124 unit tests and exact scope/hash/compatibility checks pass. All seven frozen Lean hashes are unchanged. |
 
-Failures were elaboration/replay assertions; the RX scoped check rejected the
+Failed joint-poll calls 16 and 23 also printed Lean elaborator-recovery
+`sorry ()` / `[sorry]` goal terms after ambiguous constructor/type errors and an
+unknown substituted identifier. These were failed-elaboration placeholders in
+error diagnostics, not source proof admissions; both calls failed. The corrected
+257-job scoped and 431-job full builds pass, and the exact source token check
+passes. Coordinated axiom checking on all 429 declarations and fresh stock kernel
+replay also pass. The worker removed its 30 exact log files; calls 01 and 32
+returned directly without separate files.
+
+Failures were elaboration/replay assertions, plus the noted phase heartbeat
+timeout; the RX scoped check rejected the
 English token “admit” and passed after correction. Scheduler integration exposed a
 duplicate Activation matcher, resolved with canonical frames and legacy projections.
 The balanced-reference tranche encountered record-layout/getter normalization
