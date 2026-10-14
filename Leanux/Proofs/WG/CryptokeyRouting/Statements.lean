@@ -2,6 +2,8 @@ import Leanux.Proofs.WG.AllowedIps.InsertionDispatch
 import Leanux.Proofs.WG.AllowedIps.ContextRemoval
 import Leanux.Proofs.WG.AllowedIps.RemovalStore
 import Leanux.Proofs.WG.AllowedIps.RemovalChildStore
+import Leanux.Proofs.WG.AllowedIps.RemovalDispatch
+import Leanux.Proofs.WG.AllowedIps.RemovalPeer
 import Leanux.Proofs.WG.AllowedIps.ArithmeticMirror
 import Leanux.Proofs.WG.AllowedIps.Tree
 import Leanux.Proofs.WG.AllowedIps.LookupMirror
@@ -29,8 +31,12 @@ entry filtering and preserves the structural invariants, with local compaction
 laws under compression and distinct IDs. The original removal loop has an
 all-input source equation; binary, root-tagged leaf/unary, nonroot unary and
 leaf/parent-collapse iterations have total exact endpoints and complete store
-effects. Local binary/root-unary representation facts are separate. General removal,
-configuration-history agreement, and packet admission remain separate obligations.
+effects. A represented forest and explicit target membership now derive every
+local case and its separation, yielding total original-step execution, exact
+retirement and both-family pure erasure. Explicit resident-only list coherence
+then justifies the complete original saved-list removeByPeer loop, preserves
+that coherence and removes exactly the target peer's entries. Establishing this
+coherence through initialized configuration history and packet admission remain separate.
 -/
 
 namespace Leanux.Proofs.WG.CryptokeyRouting
@@ -134,8 +140,9 @@ theorem original_findNode_successful_lookup_correct (w w' : World) (d : WG.Devic
 /-- Pure Patricia insertion replaces the owner of exactly the requested
 canonical prefix, retaining unmasked addresses and old node identifiers on
 overwrite. Lookup afterward chooses the longest match in that updated flat
-binding list. This is a theorem about the intermediate recursive algorithm;
-general refinement of original `add` and its allocation failures remains open. -/
+binding list. This intermediate-algorithm theorem is complemented by the
+original insertion dispatch and allocation-refusal theorems below; complete
+configuration-history agreement remains a separate obligation. -/
 theorem pureTree_insert_lookup_correct (t : Tree) (width fresh addr cidr peer key : Nat)
     (hv : t.Valid width) (ha : addr < 2 ^ width) (hc : cidr ≤ width) :
     let result := t.insertFresh width fresh addr cidr peer
@@ -1348,5 +1355,140 @@ theorem collapse_removal_metadata (d : WG.Device) (id : Nat) (n : WG.AipNode)
     (let out := removalCollapseChild (unlisted d id) id n parent side pn grand gside gn sibling
      RemovalMetadata d out id ∧ ∀ v4, rootValue out v4 = rootValue d v4) :=
   ⟨removalCollapseRoot_metadata .., removalCollapseChild_metadata ..⟩
+
+/-- One iteration factored from original removeByPeer completes for every
+represented target ID. Forest representation, compression and distinct IDs
+derive all seven source cases, including actual roots and parent links.
+The full Kernel endpoint represents eraseId in both families, filters every
+resident peer list, preserves sequence/frontier and other fields, erases all
+retired represented IDs, and frames nodes outside the original forest. No
+owner residency, saved-list coherence or absent-target no-op is assumed. -/
+theorem original_removeStep_forest_total (w : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (t4 t6 : Tree) (id : Nat) (hf : ForestRep d t4 t6)
+    (hn4 : t4.nodeIds.Nodup) (hn6 : t6.nodeIds.Nodup)
+    (hc4 : t4.Compressed) (hc6 : t6.Compressed)
+    (hi : id ∈ t4.nodeIds ++ t6.nodeIds) :
+    ∃ out w', (removeStep id).run w = .ok (.yield (), w') ∧
+      w'.k = {w.k with wg := some out} ∧ RemovedForest d out t4 t6 id :=
+  remove_forest_total w d hd t4 t6 id hf hn4 hn6 hc4 hc6 hi
+
+/-- Every returned original step has the same represented endpoint. With
+valid input prefixes, both resulting trees remain valid, compressed and
+duplicate-free; their IDs are sublists and their ordered entries are exactly
+filtered by the target ID. This concerns one iteration, not the enclosing
+loop's sequence increment or a history of peer removals. -/
+theorem original_removeStep_forest_properties (w w' : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (t4 t6 : Tree) (id : Nat) (hf : ForestRep d t4 t6)
+    (hn4 : t4.nodeIds.Nodup) (hn6 : t6.nodeIds.Nodup)
+    (hc4 : t4.Compressed) (hc6 : t6.Compressed)
+    (hv4 : t4.Valid 32) (hv6 : t6.Valid 128)
+    (hi : id ∈ t4.nodeIds ++ t6.nodeIds) (result : ForInStep PUnit)
+    (hrun : (removeStep id).run w = .ok (result, w')) :
+    result = .yield () ∧ (∃ out, w'.k = {w.k with wg := some out} ∧ RemovedForest d out t4 t6 id) ∧
+      (t4.eraseId id).Valid 32 ∧ (t6.eraseId id).Valid 128 ∧
+      (t4.eraseId id).Compressed ∧ (t6.eraseId id).Compressed ∧
+      (t4.eraseId id).nodeIds.Nodup ∧ (t6.eraseId id).nodeIds.Nodup ∧
+      (t4.eraseId id).nodeIds.Sublist t4.nodeIds ∧ (t6.eraseId id).nodeIds.Sublist t6.nodeIds ∧
+      (t4.eraseId id).entries = t4.entries.filter (fun e => e.id != id) ∧
+      (t6.eraseId id).entries = t6.entries.filter (fun e => e.id != id) := by
+  have he := remove_forest_endpoint w w' d hd t4 t6 id hf hn4 hn6 hc4 hc6 hi result hrun
+  exact ⟨he.1, he.2, Tree.eraseId_valid hv4 id, Tree.eraseId_valid hv6 id,
+    Tree.eraseId_compressed t4 id, Tree.eraseId_compressed t6 id,
+    Tree.eraseId_nodup hn4 id, Tree.eraseId_nodup hn6 id,
+    Tree.eraseId_nodeIds t4 id, Tree.eraseId_nodeIds t6 id,
+    Tree.eraseId_entries t4 id, Tree.eraseId_entries t6 id⟩
+
+/-- After the original target-removal step, original findNode at the actual
+selected family root completes with the longest-prefix winner among exactly
+the surviving entries. The query is bounded to its family width. Returned
+owners remain raw labels; this theorem makes no packet authorization claim. -/
+theorem original_removeStep_then_findNode (w : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (t4 t6 : Tree) (id : Nat) (hf : ForestRep d t4 t6)
+    (hn4 : t4.nodeIds.Nodup) (hn6 : t6.nodeIds.Nodup)
+    (hc4 : t4.Compressed) (hc6 : t6.Compressed)
+    (hv4 : t4.Valid 32) (hv6 : t6.Valid 128)
+    (hi : id ∈ t4.nodeIds ++ t6.nodeIds) (v4 : Bool) (key : Nat)
+    (hk : key < 2 ^ rootWidth v4) :
+    let t := if v4 then t4 else t6
+    ∃ out after queryAfter, (removeStep id).run w = .ok (.yield (), after) ∧
+      after.k = {w.k with wg := some out} ∧ RemovedForest d out t4 t6 id ∧
+      (WG.findNode (rootValue out v4) (rootWidth v4) key).run after =
+        .ok ((t.eraseId id).lookupId (rootWidth v4) key, queryAfter) ∧
+      queryAfter.k = after.k ∧
+      Winner (rootWidth v4) key (t.entries.filter (fun e => e.id != id))
+        ((t.eraseId id).lookup (rootWidth v4) key) := by
+  obtain ⟨out, after, hrun, ha, hs⟩ := remove_forest_total w d hd t4 t6 id hf hn4 hn6 hc4 hc6 hi
+  have hd' : after.k.wg = some out := by rw [ha]
+  obtain ⟨queryAfter, hquery, hframe, hwinner⟩ := hs.findNode after hd' hv4 hv6 v4 key hk
+  exact ⟨out, after, queryAfter, hrun, ha, hs, hquery, hframe, hwinner⟩
+
+/-- Complete original peer removal is total from represented compressed
+forests and explicitly coherent resident lists. The saved target list supplies
+owned membership for every original iteration; no owner-residency condition is
+imposed on other entries. The result includes exact sequence/list effects,
+both-family erasure, retired-ID absence, complete framing and preserved
+coherence. This does not establish coherence from initialized histories. -/
+theorem original_removeByPeer_forest_total (w : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
+    (t4 t6 : Tree) (hf : ForestRep d t4 t6)
+    (hn4 : t4.nodeIds.Nodup) (hn6 : t6.nodeIds.Nodup)
+    (hc4 : t4.Compressed) (hc6 : t6.Compressed) (hl : ResidentLists d t4 t6) :
+    ∃ out w', (WG.removeByPeer pid).run w = .ok ((), w') ∧
+      w'.k = {w.k with wg := some out} ∧ RemovedPeer d out t4 t6 pid p.allowedipsList :=
+  removeByPeer_total w d hd pid p hp t4 t6 hf hn4 hn6 hc4 hc6 hl
+
+/-- The normal endpoint has an empty target list, no target-owned entries,
+and exactly one sequence increment iff the saved list was nonempty. All peer
+lists are filtered at the saved IDs while other peer fields are preserved.
+Valid inputs retain validity, compression, distinct IDs and frontier bounds;
+the outcome contract also includes outside-node and retired-node equations. -/
+theorem original_removeByPeer_forest_properties (w w' : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
+    (t4 t6 : Tree) (hf : ForestRep d t4 t6)
+    (hn4 : t4.nodeIds.Nodup) (hn6 : t6.nodeIds.Nodup)
+    (hc4 : t4.Compressed) (hc6 : t6.Compressed)
+    (hv4 : t4.Valid 32) (hv6 : t6.Valid 128) (hl : ResidentLists d t4 t6)
+    (hr : (WG.removeByPeer pid).run w = .ok ((), w')) :
+    let ids := p.allowedipsList
+    ∃ out, w'.k = {w.k with wg := some out} ∧ RemovedPeer d out t4 t6 pid ids ∧
+      out.peerAllowedips.seq = d.peerAllowedips.seq + (if ids.isEmpty then 0 else 1) ∧
+      out.nextNode = d.nextNode ∧ (NodesBelow d → NodesBelow out) ∧
+      out.peers[pid]? = some {p with allowedipsList := []} ∧
+      (∀ q : Nat, out.peers[q]? = (d.peers[q]?).map (unlistIds ids)) ∧
+      (∀ e ∈ (t4.eraseIds ids).entries ++ (t6.eraseIds ids).entries, e.peer ≠ pid) ∧
+      (t4.eraseIds ids).Valid 32 ∧ (t6.eraseIds ids).Valid 128 ∧
+      (t4.eraseIds ids).Compressed ∧ (t6.eraseIds ids).Compressed ∧
+      (t4.eraseIds ids).nodeIds.Nodup ∧ (t6.eraseIds ids).nodeIds.Nodup ∧
+      (t4.eraseIds ids).nodeIds.Sublist t4.nodeIds ∧ (t6.eraseIds ids).nodeIds.Sublist t6.nodeIds := by
+  obtain ⟨out, hk, hs⟩ := removeByPeer_endpoint w w' d hd pid p hp t4 t6 hf hn4 hn6 hc4 hc6 hl hr
+  exact ⟨out, hk, hs, hs.seq, hs.nextNode, hs.below, hs.target_empty hp, hs.peers,
+    hs.no_target_entry, Tree.eraseIds_valid _ _ hv4, Tree.eraseIds_valid _ _ hv6,
+    Tree.eraseIds_compressed _ _ hc4, Tree.eraseIds_compressed _ _ hc6,
+    (Tree.eraseIds_nodeIds _ _).nodup hn4, (Tree.eraseIds_nodeIds _ _).nodup hn6,
+    Tree.eraseIds_nodeIds _ _, Tree.eraseIds_nodeIds _ _⟩
+
+/-- Complete original removal followed by original findNode at its actual
+family root returns the longest-prefix winner after filtering exactly the
+target peer's entries. Input list coherence and bounded query/valid prefixes
+are explicit; returned raw owner labels do not imply packet authorization. -/
+theorem original_removeByPeer_then_findNode (w : World) (d : WG.Device)
+    (hd : w.k.wg = some d) (pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
+    (t4 t6 : Tree) (hf : ForestRep d t4 t6)
+    (hn4 : t4.nodeIds.Nodup) (hn6 : t6.nodeIds.Nodup)
+    (hc4 : t4.Compressed) (hc6 : t6.Compressed)
+    (hv4 : t4.Valid 32) (hv6 : t6.Valid 128) (hl : ResidentLists d t4 t6)
+    (v4 : Bool) (key : Nat) (hk : key < 2 ^ rootWidth v4) :
+    let t := if v4 then t4 else t6
+    ∃ out after queryAfter, (WG.removeByPeer pid).run w = .ok ((), after) ∧
+      after.k = {w.k with wg := some out} ∧ RemovedPeer d out t4 t6 pid p.allowedipsList ∧
+      (WG.findNode (rootValue out v4) (rootWidth v4) key).run after =
+        .ok ((t.eraseIds p.allowedipsList).lookupId (rootWidth v4) key, queryAfter) ∧
+      queryAfter.k = after.k ∧
+      Winner (rootWidth v4) key (t.entries.filter (fun e => e.peer != pid))
+        ((t.eraseIds p.allowedipsList).lookup (rootWidth v4) key) := by
+  obtain ⟨out, after, hrun, ha, hs⟩ := removeByPeer_total w d hd pid p hp t4 t6 hf hn4 hn6 hc4 hc6 hl
+  have hd' : after.k.wg = some out := by rw [ha]
+  obtain ⟨queryAfter, hquery, hframe, hwinner⟩ := hs.findNode hf hl hp after hd' hv4 hv6 v4 key hk
+  exact ⟨out, after, queryAfter, hrun, ha, hs, hquery, hframe, hwinner⟩
 
 end Leanux.Proofs.WG.CryptokeyRouting

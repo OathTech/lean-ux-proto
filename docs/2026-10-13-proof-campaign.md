@@ -6,10 +6,11 @@ Worktree `.worktrees/proofs-campaign`, branch `proofs/campaign`; governed by
 [the charter](2026-10-13-charter-proof-campaign.md). Both prerequisites were
 carried from `2c7a076`, then the audit at `f45bde8` and documentation-only
 `a39aded`, then the scheduler robustness change at `7a92672`.
-The registered components now pass coordinated validation over the authorized `c047e64` carry,
-including R2 concrete Batch scheduling and allowed-IP access, R3 insertion/pure-removal/all local
-removal arms, and R4 finite and RX/TX source journals plus the concrete RX scheduler.
-The mirror is byte-identical to that main revision, and all seven register rows are current.
+The registered components pass coordinated validation over the authorized `c047e64` carry,
+including R2 concrete Batch scheduling and allowed-IP access, R3 insertion and complete
+represented peer removal from explicit list coherence, and R4 finite and RX/TX source
+journals plus the concrete RX scheduler. The mirror remains byte-identical to that main
+revision, and all seven register rows are current at their stated scope.
 Open obligations below remain explicit. No integration into main,
 push, differential check or guest run has been performed by this campaign.
 
@@ -17,17 +18,23 @@ push, differential check or guest run has been performed by this campaign.
 | --- | --- |
 | R1 anti-replay | Complete: uniqueness and the intentional inclusive-floor correction, with pure and accepted-run witnesses. |
 | R2 lifetimes | Endpoint identity and failure-retaining access contracts cover the listed call families, now including the concrete Batch scheduler, separate copied trials and six allowed-IP list/removal calls. Whole-run environment/lifecycle closure and saved-reference ownership remain open. The historical stale-cursor recipes now have checked pending-dump rejection at `c047e64`. |
-| R3 routing | Prefix arithmetic, represented-tree lookup, bounded-input normal insertion dispatch, pure removal/locality and all local source removal arms are checked. Whole-forest removal, saved-list coherence, configuration-history and packet-path refinements remain open. |
+| R3 routing | Prefix arithmetic, represented-tree lookup, bounded-input normal insertion dispatch, pure removal/locality and all local source removal arms are checked. Unified represented-forest target removal and complete original removeByPeer from explicit resident-list coherence pass scoped and coordinated validation. Initialized insertion/list coherence, configuration-history and packet-path refinements remain open. |
 | R4 delivery | W7's two full-ring drops are explained. An accepted replay refutes chronological post-GRO stack order. Per-poll selected order, removal/provenance, concrete stack frames and RX/TX source ring journals are checked; pipeline conservation remains open. |
 | R5 key lifetime | Resolved under Rule Zero by counter-limit, delayed-encryption and post-clear-use witnesses, with 13 local positive contracts. |
 | R6 flood resistance | Cookie exclusion proved at the original call boundary; accepted 19-retry/20-initiation episode resolves the literal limit through Rule Zero. Six terminal contracts. |
 
 **Last coordinated validation.** The mirror is byte-identical to `c047e64`.
-The proof gate passes 325 jobs and 329 terminal declarations: 327 theorems and two helper definitions
-(ReplayWindow 15; R1 9; R2 160; R3 62; R4 64; R5 13; R6 6), using only `propext`, `Classical.choice` and `Quot.sound`.
-Fresh stock kernel replay passes, as do the 60-job default model build, the rebuilt 118-job
-model executable, and the expanded 114-test unit tier (23.128 seconds; one skip).
-Independent frozen-source and scope review has no unresolved correctness finding.
+The proof gate passes 332 jobs and 335 terminal declarations: 333 theorems and two helper definitions
+(ReplayWindow 15; R1 9; R2 160; R3 68; R4 64; R5 13; R6 6), using only `propext`, `Classical.choice` and `Quot.sound`.
+Fresh stock kernel replay, the 60-job default model build and the 114-test unit tier
+(23.573 seconds; one skip) pass. The unchanged runtime retains the preceding carry's
+118-job executable build and eleven passing reproduction checks; neither was rerun for
+this proof-only extension. Independent frozen-source and scope review has no unresolved finding.
+
+**Represented-removal extension.** Over the same `c047e64` mirror, the new
+R3 source passes its 125-job Statements target and the 332-job full proof build.
+The coordinated checks above include all six new exports: three single-step forest
+contracts and three complete coherent peer-removal contracts. No runtime reproduction changed.
 
 ```sh
 capped -- scripts/in-bundle scripts/proof-gate
@@ -41,8 +48,8 @@ All eleven current reproduction checks pass, as detailed below. Generated stream
 mirror behavior, not Linux capture or schedule reachability. Reproduction commands and provenance
 are retained with each result.
 
-**Current `c047e64` carry.** The full local proof target passes 325 jobs;
-terminal count remains 329. Exact observers now retain kind-311 caller-jiffies reads before timer guards
+**Preceding `c047e64` carry checkpoint.** The full local proof target passed 325 jobs
+and counted 329 terminal declarations. Exact observers retain kind-311 caller-jiffies reads before timer guards
 and before jitter, including arbitrary arm-record mode and its Stops. The typed timer family exposes
 the actual caller value/site. `requireNotPending` is now the original no-op; peer get/put histories
 therefore remove its retired read rather than invent a replacement access. Cookie framing permits both
@@ -623,7 +630,8 @@ frontier and sequence effects, and local representation transport. Binary owner
 clearing represents pure erasure under compression and uniqueness. Unary
 promotion derives parent/descendant separation from tree uniqueness and represents
 the surviving subtree. These are separate local execution and structural facts;
-the selected-root/whole-forest bridge and complete saved-list loop are still open.
+the selected-root/whole-forest bridge and complete saved-list loop are established
+by the later layers below, with explicit input coherence for the whole loop.
 The raw nonroot source arms are covered by the extension below. No arbitrary-world saved-list coherence, owner
 residency, history invariant or packet authorization is inferred. One step keeps
 the sequence unchanged; the source equation retains the original loop's increment.
@@ -666,9 +674,8 @@ parent are retired. Promoted siblings retain every field except their backlink;
 other raw owner labels remain intact. Retained-parent/child-collapse arms keep
 both roots; root collapse updates its selected family root and frames the other.
 Every arm preserves `nextNode` and the per-step sequence and filters all peer
-lists exactly. These are raw local contracts: deriving ID separation from tree
-Nodup, transporting arbitrary represented contexts and both forests, and carrying
-a coherent saved list through complete `removeByPeer` remain future work.
+lists exactly. These raw local contracts supply the represented refinement below;
+they do not themselves assume or establish saved-list coherence.
 
 Nine grouped exports pass the 117-job Statements target, bringing R3 to 62
 terminals. Independent frozen source, premise, store, export and documentation
@@ -676,7 +683,81 @@ review found no correctness defect; its two documentation precision findings
 are fixed. Coordinated proof-gate, fresh stock kernel replay and fast-tier checks pass,
 with current counts above.
 
-**Remaining claim.** General original removal and configuration histories remain open.
+**Represented target removal.** [AGENT 2026-10-14] Use the existing exact
+source endpoints behind structural focus and retained-parent/grandparent
+transport, rather than reduce the full source again. This keeps source order
+and late Stops in the checked raw layer while the new layer derives linkage
+and alias separation from the input representation. Carry resident-only list
+coherence through the saved-list fold as an explicit input invariant; its
+initialized preservation belongs to the subsequent history layer.
+
+`RemovalContext` obtains a real focus from explicit node-ID membership,
+decomposes the last context edge and separates the two families through their
+encoded widths. `RemovalTransport` proves the local represented store updates;
+`RemovalCases` connects all seven structural cases to their original total
+source WPs. `RemovalDispatch.remove_forest_total` derives those cases from
+`ForestRep`, per-tree compression and distinct node IDs. Target membership is
+an explicit input, not a consequence of forest representation. Compression
+supplies the nonempty sibling at ownerless-parent collapse. No owner residency,
+saved-list coherence, desired endpoint or successful-return premise is used
+to obtain total execution.
+
+The returned full Kernel endpoint represents `eraseId` in both families,
+preserves every node outside the original forest and erases every represented
+ID absent from the resulting forest. Other device/Kernel fields are framed;
+all resident peer lists are filtered exactly, while node allocation frontier
+and the per-step allowed-IP sequence are unchanged. `NodesBelow` is preserved
+when supplied. Valid prefixes additionally yield valid, compressed,
+duplicate-free results, ordered entry filtering and ID sublists. Original
+`findNode` at either actual resulting root selects the longest-prefix winner
+among those filtered entries and preserves the resulting Kernel.
+
+The earlier raw all-input source equations continue to cover malformed/missing
+targets and late Stops. The represented step theorem proves normal completion
+under its structural inputs; it does not reinterpret an absent original target
+as a no-op and supplies no World on a failed computation.
+
+**Complete coherent peer removal.** `RemovalLists.ResidentLists` states, for
+resident peers only, that the saved list is duplicate-free and contains exactly
+the IDs of entries carrying that peer label. Raw orphan owner labels remain
+permitted. `OwnedIds` demands owned entries for saved IDs, rather than membership
+in the structural tree alone. Exact entry filtering proves every later saved ID
+survives prior removals, including ownerless-parent collapse.
+
+`RemovalLoop.remove_saved_total` runs the original fixed `forIn` list and
+composes both-family representation, all-peer list filtering, frontier/sequence
+preservation, complete device/Kernel framing, outside-node preservation and
+retirement of every disappeared represented ID. It does not reread a changing
+peer list. `RemovalPeer.removeByPeer_total` then includes the original initial
+peer getter, empty-list branch, one sequence increment for a nonempty list,
+saved loop and final false iteration record. Empty lists return at their original
+branch without the final record. Residency and list coherence are explicit
+input premises, not consequences of arbitrary forest representation.
+
+The complete operation preserves resident-only coherence and filters each
+family's entries by the target peer label. Owner functionality is derived from
+the represented node store, so this filter is proved from saved-list membership.
+The target remains resident with its list empty; all other peer fields retain
+their input values. All peer-list effects are specified by ordered filtering at
+the saved IDs. Validity, compression, distinct IDs, ID sublists and supplied
+node-frontier bounds survive. Original `findNode` at the actual resulting family
+root selects the longest-prefix winner among exactly the entries of other peers.
+This is an operation theorem conditional on input coherence, not initialized
+insertion or configuration-history closure, and raw labels do not establish
+cryptographic identity or packet admission.
+
+Six grouped exports (three single-step and three whole-peer) pass the final
+Statements target: 125 jobs and 68 R3 terminals. The full proof build passes
+332 jobs. Independent source, premises, retirement, loop and final export review
+has no unresolved correctness finding. Frozen documentation reconciliation corrected
+two stale validation-status labels. The coordinated 332-job gate checks all 335 declarations;
+fresh stock kernel replay, the 60-job model build and 114 unit tests (23.573 seconds,
+one skip) pass. These checks include the six new exports and leave the remaining
+history and packet-path obligations explicit.
+
+**Remaining claim.** Establishing insertion/list coherence and owner-frontier
+bounds from initialization, and propagating them through configuration histories,
+remain open.
 Parsed-input bounds and history invariants still need propagation through all mutations.
 Both packet paths follow R2. Owners are raw peer slots, not allocation or
 cryptographic identities; no liveness/ownership claim follows from tree lookup.
@@ -702,6 +783,21 @@ following tranche counts are separate, not an inferred campaign total.
 | Pure removal and context locality | 9: 6 / 3 | 9m05s validation; 10m16s writer-token ownership |
 | Local removal source and endpoints | 7: 2 / 5 | 14m17s through source freeze; 14m49s through handoff receipt |
 | Nonroot removal and parent collapse | 9: 3 / 6 | 16m06s through frozen handoff preparation; 12m48s through scoped-target collection |
+| Represented forest and coherent peer removal | 29: 14 / 15 | 43m01s through final full-target collection; 47m57s writer-token ownership |
+
+The represented-forest and coherent-loop tranche used 29 capped builds: 14
+passes and 15 ordinary failures, including two elaboration heartbeat failures.
+The first 17 calls closed the single-step forest bridge; the 12-call continuation
+closed resident coherence and the complete saved-list loop. Failures concerned
+implicit binder inference, context simplification, full-record definitional
+reduction, list/Boolean lemmas and monadic bind elaboration. Explicit local
+projections and a small `Except.bind` run equation resolved those issues without
+changing the mirror or weakening input obligations. All exits were collected;
+there was no cap hit, crash or interruption. One patch-context mismatch made no
+change to its affected file. Final scoped/full builds passed 125/332 jobs. No
+runtime reproduction changed or was rerun. The worker returned the token after final
+review corrections and owned-log cleanup; all four coordinated trust/build/unit
+invocations then passed. Campaign scope and whitespace checks pass.
 
 The staged child architecture replaced a failed monolithic proof; this was not
 a mirror finding. Three deep-graft source-factor attempts hit Lean heartbeat
