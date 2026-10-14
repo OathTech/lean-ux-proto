@@ -604,3 +604,15 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   placement, and is withdrawn; the evidence runs on a first-run mismatch
   again, the W7 13.2 (ii) form. Each mutant is rejected after its fix; the
   area suites agree.
+- **2026-10-14 [USER]** The binary-level adequacy of the WireGuard mirror
+  and the transport of its landed results to the binary are the objective
+  of the simulation track; the theorem and its trust surface must be
+  correct and are reviewed independently; everything outside the trust
+  surface is a means, ephemeral unless later promoted: "The eventual
+  adequacy result & transport of wireguard results to the binary, is the
+  only thing that matters. We are going to get it done by any means
+  necessary. The theorem / trust surface MUST MUST be correct. Everything
+  else is ephemeral." The method is a direct per-region grind, not a
+  reusable checker (same day: "we're not building some reusable toolchain,
+  we are proving a single target theorem"). Charter:
+  docs/2026-10-15-charter-binary-adequacy.md.

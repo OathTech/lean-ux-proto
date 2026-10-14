@@ -19,6 +19,28 @@ coordinator] wrote the charter from the probe's findings; the probe's
 estimate priced a certificate checker and its soundness theorem, which this
 charter does not build.
 
+## 0. What matters, and what does not
+
+[USER 2026-10-14] "The eventual adequacy result & transport of wireguard
+results to the binary, is the only thing that matters. We are going to get it
+done by any means necessary. The theorem / trust surface MUST MUST be correct.
+Everything else is ephemeral. It might get promoted to reusable
+infrastructure at some point. But basically if it's outside the trust
+surface, we don't care much, that's a judgement call."
+
+So, in this assignment:
+- The theorem statement of section 1, the transport corollary of section 1a,
+  and `binary/TrustBase.lean` are the trust surface. They are reviewed
+  independently (section 7a) and every change to them is visible, named and
+  justified. Correctness here is the whole point.
+- Everything outside that surface is a means: generators, scripts,
+  automation, scratch definitions, the shape of intermediate lemmas, the
+  private Kraken branch's internals. Any means that the Lean kernel accepts
+  and that adds nothing to the trust base is allowed, including ugly ones.
+  The house rules on form, naming and documentation apply to the trust
+  surface and the reports, not to the means. What proves useful may be
+  promoted to infrastructure later; nothing is built for reuse now.
+
 ## 1. The theorem
 
 For an anchored WireGuard function `f` with mirror `m_f`, with `R` the state
@@ -38,6 +60,23 @@ as stated premises. The first theorem to close is for
 `wg_index_hashtable_lookup`, over every path: hit, miss, type reject,
 reference reject, and the bucket chain's loop. The order after it is in
 section 5.
+
+## 1a. Transport
+
+The point of adequacy is to carry the mirror's results to the binary. For
+each result landed in `Leanux/Proofs/` (the counter window's S1 to S3, the
+campaigns' R1 to R6 and H1 to H6 as they land), the transport corollary is:
+a property proved of the mirror's runs, over the record streams the runner
+accepts, holds of the corresponding machine executions under `R` and the
+environment assumptions. The composition lemma of section 3 is stated so
+that this corollary is one application of it per result, not a new proof
+per result: the machine execution's decision sequence and end state are
+those of the mirror's run, so a predicate on the mirror's run is a predicate
+on the machine's. The first transport is S2 (the counter window's rule is
+the machine's) at milestone 4, when `counter_validate`'s inlined range is
+certified; the report names each result transported, with the exact
+statement that was transported and the premises `R` and the environment add
+to it.
 
 ## 2. The trust base, kept in one file
 
@@ -192,12 +231,27 @@ own attribution, no merge, no push. Report after milestone 1 with the rate
 you measured (regions per agent-day, automated versus hand-finished) and
 the trust-base file verbatim, then after each milestone.
 
+## 7a. Review of the trust surface
+
+After milestone 1 and before milestone 2, the coordinator sends the theorem
+statement, the transport corollary, the composition lemma's statement and
+`binary/TrustBase.lean` to an independent reviewer with no context, with one
+question: is this the theorem we want, and is every item in the trust base
+both necessary and stated at its weakest? The review's findings are
+corrections to the surface before the grind scales; a finding that the
+surface is wrong is the most valuable result this assignment can produce
+early. The same review repeats at milestone 4 (the first transport) and
+before the whole-trace composition.
+
 ## Paste for Codex#3
 
 > Follow-on to your scoping probe, same worktree and branch: prove one
 > theorem, adequacy of the mirrored WireGuard functions at the binary level
-> under Kraken, by a direct per-region grind with a minimised trust base.
-> Charter: `docs/2026-10-15-charter-binary-adequacy.md` (read it whole). No
+> under Kraken, by a direct per-region grind with a minimised trust base,
+> and transport the mirror's landed results to the binary through it. The
+> theorem statement, the transport corollary and `binary/TrustBase.lean` are
+> the trust surface and must be correct; everything outside it is a means and
+> may be ugly. Charter: `docs/2026-10-15-charter-binary-adequacy.md` (read it whole). No
 > certificate checker and no soundness theorem about a checker: region
 > lemmas between correspondence points, discharged by symbolic execution,
 > composed by one lemma proved once; `R` generated from DWARF for records
