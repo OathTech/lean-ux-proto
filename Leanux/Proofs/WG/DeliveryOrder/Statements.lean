@@ -19,6 +19,7 @@ import Leanux.Proofs.WG.Queues.TxDispositionEndpoints
 import Leanux.Proofs.WG.Queues.RxPollStampPhase
 import Leanux.Proofs.WG.Queues.RxPollComposition
 import Leanux.Proofs.WG.Queues.RxNapiHistory
+import Leanux.Proofs.WG.Queues.RxActivationHistory
 
 /-! R4 queue components: physical-ring refusal, original prev_queue FIFO laws,
 and successful-endpoint receive-queue helper frames. Whole recorded-schedule delivery,
@@ -1060,5 +1061,69 @@ theorem original_napi_irq_exit_joint :
   ⟨Queues.RxHistory.napiIrqExit_erases, Queues.RxHistory.napiIrqExit_projects,
     Queues.RxHistory.napiIrqExit_preserves,
     fun w hi => (Queues.RxHistory.napiIrqExit_preserves w [] (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1⟩
+
+/-- The concrete encrypt iteration observes its initial softirq even when its
+queue is empty. The remaining checksum/encryption/reschedule cut contains no poll.
+Failed prefixes retain entry uniqueness; only normal returns restore releases. -/
+theorem original_encrypt_iteration_joint :
+    ErasesPrefix Queues.RxHistory.encryptIteration (Leanux.WG.encryptIter Leanux.Env.checksumHelp Leanux.Env.napiSoftirq
+      (Leanux.Env.condResched .encryptWorker)) ∧
+    ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent
+      Queues.RxHistory.encryptIteration (Lifetimes.auditFocus (Lifetimes.encryptIterPrefix (fun p => liftPrefix (Leanux.Env.checksumHelp p))
+        Lifetimes.napiSoftirqPrefix (liftPrefix (Leanux.Env.condResched .encryptWorker)))) ∧
+    PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe
+      Queues.RxHistory.encryptIteration ∧
+    ∀ w, Lifetimes.AllocationInv [] w →
+      Queues.RxHistory.BoundarySafe (runPrefix Queues.RxHistory.encryptIteration w []).2 :=
+  ⟨Queues.RxHistory.encryptIteration_erases, Queues.RxHistory.encryptIteration_projects,
+    Queues.RxHistory.encryptIteration_preserves,
+    fun w hi => (Queues.RxHistory.encryptIteration_preserves w [] (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1⟩
+
+/-- The concrete decrypt iteration observes initial and trailing softirqs plus
+the publication IRQ placement. Cached publication writes and later peerPut retain
+the original getters, callback Stops and allocation-derived identity checks. -/
+theorem original_decrypt_iteration_joint :
+    ErasesPrefix Queues.RxHistory.decryptIteration (Leanux.WG.decryptIter Leanux.Env.napiSoftirq Leanux.Env.napiIrqExit
+      (Leanux.Env.condResched .decryptWorker)) ∧
+    ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent
+      Queues.RxHistory.decryptIteration (Lifetimes.auditFocus (Lifetimes.decryptIterPrefix Lifetimes.napiSoftirqPrefix Lifetimes.napiIrqExitPrefix
+        (liftPrefix (Leanux.Env.condResched .decryptWorker)))) ∧
+    PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe
+      Queues.RxHistory.decryptIteration ∧
+    ∀ w, Lifetimes.AllocationInv [] w →
+      Queues.RxHistory.BoundarySafe (runPrefix Queues.RxHistory.decryptIteration w []).2 :=
+  ⟨Queues.RxHistory.decryptIteration_erases, Queues.RxHistory.decryptIteration_projects,
+    Queues.RxHistory.decryptIteration_preserves,
+    fun w hi => (Queues.RxHistory.decryptIteration_preserves w [] (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1⟩
+
+/-- Transmit pre-encryption retains hidden-record guards, its temporary work
+queue and suspended activation update, including Stops after an observed encrypt
+callback. Direct audit projection preserves the same prior probe interleaving. -/
+theorem original_crypt_ahead_joint (pid : PeerId) :
+    ErasesPrefix (Queues.RxHistory.cryptAhead pid) (Leanux.Env.cryptAhead pid) ∧
+    ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent
+      (Queues.RxHistory.cryptAhead pid) (Lifetimes.auditFocus (Lifetimes.cryptAheadPrefix pid)) ∧
+    PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe
+      (Queues.RxHistory.cryptAhead pid) ∧
+    ∀ w, Lifetimes.AllocationInv [] w →
+      Queues.RxHistory.BoundarySafe (runPrefix (Queues.RxHistory.cryptAhead pid) w []).2 :=
+  ⟨Queues.RxHistory.cryptAhead_erases pid, Queues.RxHistory.cryptAhead_projects pid,
+    Queues.RxHistory.cryptAhead_preserves pid,
+    fun w hi => (Queues.RxHistory.cryptAhead_preserves pid w [] (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1⟩
+
+/-- One original activation iteration composes all concrete crypt callbacks
+with poll-free TX/receive observers. This is a local allocation-valid contract;
+whole scheduler/Runner coverage and completed stack delivery remain open. -/
+theorem original_activation_iteration_joint (a : Activation) :
+    ErasesPrefix (Queues.RxHistory.activationIteration a) (Leanux.Env.Activation.iter a) ∧
+    ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent
+      (Queues.RxHistory.activationIteration a) (Lifetimes.auditFocus (Lifetimes.activationIterPrefix a)) ∧
+    PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe
+      (Queues.RxHistory.activationIteration a) ∧
+    ∀ w, Lifetimes.AllocationInv [] w →
+      Queues.RxHistory.BoundarySafe (runPrefix (Queues.RxHistory.activationIteration a) w []).2 :=
+  ⟨Queues.RxHistory.activationIteration_erases a, Queues.RxHistory.activationIteration_projects a,
+    Queues.RxHistory.activationIteration_preserves a,
+    fun w hi => (Queues.RxHistory.activationIteration_preserves a w [] (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1⟩
 
 end Leanux.Proofs.WG.DeliveryOrder
