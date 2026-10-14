@@ -52,6 +52,7 @@
   "generic_update_time",
   "inode_update_timestamps",
   "inode_set_ctime_current",
+  "iput",
   "current_time",
   "timestamp_truncate",
   "____fput",
@@ -458,11 +459,6 @@
    "function": "ihold",
    "file": "fs/inode.c",
    "note": "the inode reference taken by the listed dup and open paths: VFS inode lifecycle below the file-descriptor slice (P design, docs/2026-10-05-p-pipes.md): the mirror's file objects carry no inode; the listed pipe, eventfd and epoll functions summarize allocation, reference and eviction as environment effects with constant outcomes in the fixture (the allocation sites are below the recorded ones), so these helpers' own branches are not choice points of a modeled path. Found by the boundary rule (pre-release review, finding 1)."
-  },
-  {
-   "function": "iput",
-   "file": "fs/inode.c",
-   "note": "the inode reference dropped by the listed release paths (dput on the last fput): VFS inode lifecycle below the file-descriptor slice (P design, docs/2026-10-05-p-pipes.md): the mirror's file objects carry no inode; the listed pipe, eventfd and epoll functions summarize allocation, reference and eviction as environment effects with constant outcomes in the fixture (the allocation sites are below the recorded ones), so these helpers' own branches are not choice points of a modeled path. Found by the boundary rule (pre-release review, finding 1)."
   },
   {
    "function": "evict",

@@ -25,6 +25,9 @@ open Leanux
     `sk_clear_memalloc` and `udp_tunnel_sock_release` are cut points. -/
 def sockFree (sock : Option Nat) : M Unit := do
   if ← branch .sockFreeNull sock.isNone then return
+  -- udp_tunnel_sock_release -> sock_release (net/socket.c, a cut) ->
+  -- iput(SOCK_INODE(sock)): a kernel socket's inode holds its only reference
+  iputReport true
 
 /-- wg_socket_reinit (socket.c:419-437): swap the socket pointers, take
     `incoming_port` from the new IPv4 socket, free the old ones.

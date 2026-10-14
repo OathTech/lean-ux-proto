@@ -111,13 +111,16 @@ def newInodePseudo : M (Option PipefsInodeId) := do
 def iputPipefs (id : PipefsInodeId) : M Unit := do
   let ino ← getInode id
   if ino.iCount == 0 then invariant s!"iput of pipefs inode {id} with i_count 0"
-  if ino.iCount > 1 then
+  -- `atomic_dec_and_lock(&inode->i_count, &inode->i_lock)` (:1895): the last
+  -- reference evicts (the mutation campaign's finding 1, 2026-10-14: declared
+  -- so that a mirror that never evicts is seen against iput_final's coverage)
+  if ← branch .iputLastReference (ino.iCount == 1) then
+    -- `inode->i_nlink && (inode->i_state & I_DIRTY_TIME)` (:1896; pseudo
+    -- inodes keep i_nlink = 1)
+    if ← branch .iputLazytime (ino.iState &&& I_DIRTY_TIME != 0) then unsupported "iput: lazytime dirty inode"
+    modifyK fun k => { k with inodes := k.inodes.erase id }
+  else
     setInode id { ino with iCount := ino.iCount - 1 }
-    return
-  -- `inode->i_nlink && (inode->i_state & I_DIRTY_TIME)` (pseudo inodes keep
-  -- i_nlink = 1)
-  if ino.iState &&& I_DIRTY_TIME != 0 then unsupported "iput: lazytime dirty inode"
-  modifyK fun k => { k with inodes := k.inodes.erase id }
 
 /-- `dput(dentry)` of a pipe file's pseudo dentry (fs/dcache.c:845), a cut
     apart from the count: `d_lockref.count` drops; the last reference kills

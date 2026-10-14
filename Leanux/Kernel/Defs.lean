@@ -1780,6 +1780,18 @@ def workerLoop (w : Worker) (pid : Option Nat) (step : M Bool) (afterItem : M Un
     if (← workerIter w pid step (do afterItem; pure false)) == .ended then return
   invariant drained
 
+/-- `iput(inode)` (fs/inode.c:1889-1904) where the mirror holds no inode of
+    its own: the last-reference test (`atomic_dec_and_lock`, :1895) and, on
+    the last reference, the lazytime test (:1896), false for every such
+    inode. The shared anonymous inode of eventfd and epoll keeps its pinned
+    reference (`last` false); a socket's or a namespace pin's inode holds its
+    only reference (`last` true). A pipefs inode's own count decides it in
+    `iputPipefs` (Leanux/FS/Inode.lean). The mutation campaign's finding 1
+    (2026-10-14): a leaked inode was invisible without the declaration. -/
+def iputReport (last : Bool) : M Unit := do
+  if ← branch .iputLastReference last then
+    _ ← branch .iputLazytime false
+
 /-- Record a C value comparison: its outcome and the two values the C
     compares at the condition. The check matches them against
     `KCOV_TRACE_CMP` records at the condition line. -/
