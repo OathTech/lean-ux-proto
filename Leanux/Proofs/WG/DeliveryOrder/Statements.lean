@@ -14,6 +14,7 @@ import Leanux.Proofs.WG.Queues.TxRingWorker
 import Leanux.Proofs.WG.Queues.RxRingTrials
 import Leanux.Proofs.WG.Queues.RxBorrow
 import Leanux.Proofs.WG.Queues.TxDispositionStep
+import Leanux.Proofs.WG.Queues.TxDispositionEndpoints
 
 /-! R4 queue components: physical-ring refusal, original prev_queue FIFO laws,
 and successful-endpoint receive-queue helper frames. Whole recorded-schedule delivery,
@@ -814,5 +815,62 @@ theorem original_tx_strict_reference_cut (pid : PeerId) (w v : World)
     Framing.SameView Framing.PeerBorrow.view (do peerGet pid; peerPut (some pid)) :=
   ⟨(Framing.hoare_iff_triple _ _ _).mpr (Framing.PeerBorrow.strict_acquire_spec pid w.k) w () v rfl hr,
     Framing.PeerBorrow.strict_repaid pid⟩
+
+/-- The actual publication borrow spans CPU/work-queue updates. Every peer's
+full TX queue is retained on normal return; publication's keypair-derived peer
+need not equal the original enqueue caller. Stops have only the existing prefix. -/
+theorem original_tx_publication_retains_queues (item : List SkbId) (state : PacketState) :
+    Framing.SameView Queues.TxDisposition.txQueues (enqueuePerPeerTx item state) :=
+  Queues.TxDisposition.publication_queues item state
+
+/-- The original ring-refusal createData path retains the newly enqueued item,
+marks its actual head DEAD and leaves the physical encrypt ring unchanged. The
+entry guards are source conditions; normal return is explicit, not guaranteed. -/
+theorem original_create_data_epipe_endpoint (pid : PeerId) (first : SkbId) (rest : List SkbId)
+    (d : Device) (p : Peer) (w v : World) (hd : w.k.wg = some d)
+    (hp : d.peers[pid]? = some p) (hl : p.isDead = false)
+    (hq : p.txQueue.count < MAX_QUEUED_PACKETS) (hf : d.encryptQueue.full = true)
+    (hr : (createData pid (first :: rest)).run w = .ok ((), v)) :
+    Queues.TxDisposition.txQueues v pid = some (p.txQueue.enqueue (first :: rest)) ∧
+    Queues.TxDisposition.HeadState first .dead v ∧
+    Queues.TxRing.cell v = some (d.ifindex, d.encryptQueue) :=
+  (Framing.hoare_iff_triple _ _ _).mpr
+    (Queues.TxDisposition.create_pipe pid first rest d p hp hl hq hf) w () v hd hr
+
+/-- Actual peer-queue refusal and normal cleanup remove every supplied packet
+slot. The preceding key/peer puts may Stop; peer-queue retention is not claimed. -/
+theorem original_create_data_enospc_endpoint (pid : PeerId) (item : List SkbId)
+    (p : Peer) (w v : World) (hp : Framing.PeerBorrow.resident w.k pid = some p)
+    (hl : p.isDead = false) (hq : MAX_QUEUED_PACKETS ≤ p.txQueue.count)
+    (hr : (createData pid item).run w = .ok ((), v)) :
+    ∀ id ∈ item, Queues.TxDisposition.txPackets v id = none :=
+  (Framing.hoare_iff_triple _ _ _).mpr
+    (Queues.TxDisposition.create_noSpace pid item p.txQueue hq)
+      w () v ⟨p, hp, hl, rfl⟩ hr
+
+/-- Complete original txStep on its actual logical DEAD head frees the whole
+item without adding socket output. This is a local step contract, not a proof
+that every previous EPIPE reaches this state under an arbitrary schedule. -/
+theorem original_dead_tx_step_disposal (pid : PeerId) (first : SkbId) (rest : List SkbId)
+    (p : Peer) (w v : World) (result : Bool)
+    (hp : Framing.PeerBorrow.resident w.k pid = some p)
+    (hq : p.txQueue.all.head? = some (first :: rest))
+    (hd : Queues.TxDisposition.HeadState first .dead w)
+    (hr : (txStep pid).run w = .ok (result, v)) :
+    result = true ∧ (∀ id ∈ first :: rest, Queues.TxDisposition.txPackets v id = none) ∧
+      v.sent = w.sent :=
+  (Framing.hoare_iff_triple _ _ _).mpr
+    (Queues.TxDisposition.dead_step_endpoint pid first rest w.sent)
+      w result v ⟨⟨p, hp, hq⟩, hd, rfl⟩ hr
+
+/-- Normal original list frees erase exactly the listed TX slots. Repeated IDs
+are allowed in the statement: a later missing getter instead Stops, retaining
+only its reached access prefix, and cannot satisfy this normal-run premise. -/
+theorem original_tx_list_disposal_exact (item : List SkbId) (w v : World)
+    (hr : (Queues.TxDisposition.freeList item).run w = .ok ((), v)) :
+    Queues.TxDisposition.txPackets v = fun id =>
+      if id ∈ item then none else Queues.TxDisposition.txPackets w id :=
+  (Framing.hoare_iff_triple _ _ _).mpr
+    (Queues.TxDisposition.freeList_wp item (Queues.TxDisposition.txPackets w)) w () v rfl hr
 
 end Leanux.Proofs.WG.DeliveryOrder
