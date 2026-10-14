@@ -83,7 +83,7 @@ def observe (rxSection : Nat) (history : List MachineState) : Except String (Lis
   if initial.pc != Image.Lookup.entry then throw "lookup history does not start at its entry"
   return call "wg_index_hashtable_lookup" initial :: (← observeHistory (edge rxSection) history)
 
-/-- Matching includes exact tag, order (via Forall₂), and decision record.
+/-- Matching includes exact tag, order (via MatchesPoints), and decision record.
     The state relation is supplied by the function-specific physical proof;
     this definition does not turn an arbitrary relation into adequacy. -/
 def MatchesPoint (R : MachineState → World → Prop) (actual : Point)
@@ -93,4 +93,70 @@ def MatchesPoint (R : MachineState → World → Prop) (actual : Point)
     | none => True
     | some step => mirror.world.steps.back? = some step
 
+/-- Pointwise correspondence with equal lengths and order. -/
+inductive MatchesPoints (R : MachineState → World → Prop) :
+    List Point → List MirrorHistory.Point → Prop where
+  | nil : MatchesPoints R [] []
+  | cons {actual mirror actuals mirrors} :
+      MatchesPoint R actual mirror → MatchesPoints R actuals mirrors →
+      MatchesPoints R (actual :: actuals) (mirror :: mirrors)
+
+theorem MatchesPoints.length_eq {R actual mirror} (h : MatchesPoints R actual mirror) :
+    actual.length = mirror.length := by
+  induction h with
+  | nil => rfl
+  | cons _ _ ih => exact congrArg Nat.succ ih
+
+theorem MatchesPoints.take {R actual mirror} (h : MatchesPoints R actual mirror) (n : Nat) :
+    MatchesPoints R (actual.take n) (mirror.take n) := by
+  induction h generalizing n with
+  | nil => simpa using (MatchesPoints.nil (R := R))
+  | cons head tail ih =>
+    cases n with
+    | zero => exact .nil
+    | succ n => exact .cons head (ih n)
+
+/-- The matched semantic events form the exact corresponding source prefix.
+    Counting events without checking their tags, records and states would not
+    justify choosing a source World for an intermediate machine cut. -/
+def PrefixMatches (R : MachineState → World → Prop) (actual : List Point)
+    (source : List MirrorHistory.Point) : Prop :=
+  actual.length ≤ source.length ∧
+    MatchesPoints R actual (source.take actual.length)
+
+theorem prefix_of_append {R front rest source}
+    (h : MatchesPoints R (front ++ rest) source) : PrefixMatches R front source := by
+  have lengths := h.length_eq
+  refine ⟨?_, ?_⟩
+  · simp only [List.length_append] at lengths
+    omega
+  · simpa only [List.take_left] using h.take front.length
+
+/-- Stuttering correspondence at every anchored region/call/comparison cut.
+    The active source World is determined by an exact matched prefix of the
+    fixed accepted run. Service-internal PCs are deliberately outside this
+    domain; their contracts must exclude additional anchored observations.
+    Pending writes and temporary registers belong to the phase equations of
+    R. This is a proof obligation, not an axiom or an established invariant. -/
+def CutsAligned (R : MachineState → World → Prop) (rxSection : Nat)
+    (history : List MachineState) (source : List MirrorHistory.Point) : Prop :=
+  ∀ i current, history[i]? = some current → current.pc ∈ Image.cutPoints →
+    ∃ events last,
+      observe rxSection (history.take (i + 1)) = .ok events ∧
+      PrefixMatches R events source ∧
+      (source.take events.length).getLast? = some last ∧
+      R current last.world
+
+/-- Exact semantic history plus all anchored stuttering cuts. Return
+    destination, result registers and saved frame are separate postconditions
+    of the function theorem, not consequences of a return tag. -/
+def MatchesRun {α : Type} (R : MachineState → World → Prop) (rxSection : Nat)
+    (executed : Executed) (source : MirrorHistory.Run α) : Prop :=
+  ∃ points, observe rxSection executed.history = .ok points ∧
+    MatchesPoints R points source.points ∧
+    CutsAligned R rxSection executed.history source.points ∧
+    R executed.machine source.finalWorld
+
+#print axioms MatchesPoints.length_eq
+#print axioms prefix_of_append
 end Binary.LookupObservation

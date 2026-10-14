@@ -23,7 +23,7 @@ capped -- python3 binary/run.py --trace d1_second_response
 capped -- python3 binary/census.py
 cd binary
 capped -- lake build BinaryProofs
-capped -- lake env leanchecker Execution History RegionExecution MirrorLoop MirrorPeer MirrorHistory LookupObservation Memory Image ImageLayout Layouts Regions PeerRegions PeerPrologue Prologue BucketEntry Representation Symbolic
+capped -- lake env leanchecker Execution History RegionExecution MirrorLoop MirrorPeer MirrorHistory LookupObservation Memory Image ImageLayout Layouts Regions PeerRegions PeerPrologue Prologue BucketEntry Representation KeypairRepresentation Symbolic
 ```
 
 Generated state, census and comparison output go under `.tmp/binary-tv`;

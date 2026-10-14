@@ -368,6 +368,18 @@ theorem comparison_region_terms :
     Image.PeerGet.r6e = Image.PeerGet.r32 ∧ Image.PeerGet.rd4 = Image.PeerGet.rb5 :=
   ⟨rfl, rfl⟩
 
+/-- The mirror-acceptance bound excludes both signed-warning edges after
+    the successful increment. Zero is included. -/
+theorem count_signs (old : Nat) (acceptedBound : old + 1 < 2^31) :
+    (BitVec.ofNat 32 old).msb = false ∧ (BitVec.ofNat 32 old + 1).msb = false := by
+  have oldBound : old < 2^32 := by omega
+  have newBound : old + 1 < 2^32 := by omega
+  simp [BitVec.msb_eq_decide, BitVec.toNat_add, Nat.mod_eq_of_lt oldBound,
+    Nat.mod_eq_of_lt newBound]
+  omega
+
+#print axioms count_signs
+
 #print axioms trace_call
 #print axioms trace_region_terms
 #print axioms null_guard

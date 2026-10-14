@@ -2,6 +2,7 @@ import Kraken.X64.Parser
 import Kraken.X64.Semantics
 import Leanux.Runner
 import LookupObservation
+import Layouts
 
 open Lean
 
@@ -23,6 +24,9 @@ structure Offsets where
   pprev : Nat
   kind : Nat
   index : Nat
+  peerHandshake : Nat
+  handshakeEntry : Nat
+  keypairEntry : Nat
   peerRefcount : Nat
   deriving FromJson
 
@@ -70,7 +74,14 @@ def replayPrefix (j : Json) (count : Nat) : Except String Leanux.World := do
   return {w with steps := #[], hidden := some []}
 
 def tableAddr : Nat := 0x100000
-def entryAddr (i : Nat) : Nat := 0x200000 + i * 0x100
+def peerAddr (id : Leanux.WG.PeerId) : Nat := 0x600000 + id * 0x1000
+
+def entryAddr (e : Leanux.WG.IndexEntry) (o : Offsets) : Except String Nat := do
+  match e.kind with
+  | .handshake => return peerAddr e.peer + o.peerHandshake + o.handshakeEntry
+  | .keypair =>
+    let some id := e.keypair | throw "keypair entry has no keypair identity"
+    return 0x700000 + id * 0x1000 + o.keypairEntry
 def outputAddr : Nat := 0x300000
 def stackAddr : Nat := 0x400800
 def stopAddr : Nat := 0x500000
@@ -80,34 +91,66 @@ def put (m : DataMem) (a size v : Nat) : DataMem :=
 
 /-- Heap materialization is generated from the mirror list and DWARF offsets.
     Synthetic addresses are related to identities, not claimed to be kernel pointers. -/
-def materialize (entries : List Leanux.WG.IndexEntry) (o : Offsets) (preempt : Nat) : DataMem := Id.run do
+def materialize (entries : List Leanux.WG.IndexEntry) (o : Offsets) (preempt : Nat) : Except String DataMem := do
   let mut m : DataMem := (List.replicate o.tableSize (0 : UInt8)).At (.ofNat 64 tableAddr)
   m := m.storeBytes (.ofNat 64 (stackAddr - 0x800)) (List.replicate 0x810 0)
   m := put m stackAddr 8 stopAddr
   m := put m outputAddr 8 0xfeedface
   m := put m preempt 4 0
+  let addresses ← entries.mapM (entryAddr · o)
+  unless addresses.eraseDups.length == addresses.length do
+    throw "index entries alias the same embedded object"
   for (e, i) in entries.zipIdx do
-    let addr := entryAddr i
+    let addr ← entryAddr e o
     m := m.storeBytes (.ofNat 64 addr) (List.replicate o.entrySize 0)
     let bucket := e.index % 8192
     let bucketAddr := tableAddr + o.buckets + bucket * o.headSize + o.first
     let before := (entries.take i).zipIdx.filter (fun (e, _) => e.index % 8192 == bucket)
     let after := (entries.zipIdx.drop (i+1)).find? (fun (e, _) => e.index % 8192 == bucket)
-    let prevAddr := match before.getLast? with
-      | none => bucketAddr
-      | some (_, j) => entryAddr j + o.hash + o.next
+    let prevAddr ← match before.getLast? with
+      | none => pure bucketAddr
+      | some (previous, _) => (entryAddr previous o).map (fun a => a + o.hash + o.next)
+    let nextAddr ← match after with
+      | none => pure 0
+      | some (next, _) => (entryAddr next o).map (fun a => a + o.hash)
     if before.isEmpty then m := put m bucketAddr 8 (addr + o.hash)
     m := put m (addr + o.peer) 8 (0x600000 + e.peer * 0x1000)
-    m := put m (addr + o.hash + o.next) 8 (after.map (fun (_, j) => entryAddr j + o.hash) |>.getD 0)
+    m := put m (addr + o.hash + o.next) 8 nextAddr
     m := put m (addr + o.hash + o.pprev) 8 prevAddr
     m := put m (addr + o.kind) 4 (if e.kind == .handshake then 1 else 2)
     m := put m (addr + o.index) 4 e.index
   return m
 
-def materializePeers (d : Leanux.WG.Device) (o : Offsets) (m : DataMem) : Except String DataMem :=
-  d.indexTable.foldlM (fun m e => match d.peers.get? e.peer with
-    | some p => pure (put m (0x600000 + e.peer * 0x1000 + o.peerRefcount) 4 p.refcount)
-    | none => throw "entry names an absent peer") m
+def keypairAddr (id : Leanux.WG.KeypairId) : Nat := 0x700000 + id * 0x1000
+
+/-- Materialize the physical replay fields that the landed mirror properties
+    read, including unselected keypairs and the peer's three pointer slots. -/
+def materializePeers (d : Leanux.WG.Device) (o : Offsets) (m : DataMem) : Except String DataMem := do
+  for e in d.indexTable do
+    unless d.peers.contains e.peer do throw "entry names an absent peer"
+  let mut m := m
+  for (id, p) in d.peers.toList do
+    m := put m (peerAddr id + o.peerRefcount) 4 p.refcount
+    for (slot, kid) in [(Binary.Layouts.slots_current_keypair, p.keypairCurrent),
+        (Binary.Layouts.slots_previous_keypair, p.keypairPrevious),
+        (Binary.Layouts.slots_next_keypair, p.keypairNext)] do
+      let address ← match kid with
+        | none => pure 0
+        | some id => do
+          unless d.keypairs.contains id do throw "peer slot names an absent keypair"
+          pure (keypairAddr id)
+      m := put m (peerAddr id + Binary.Layouts.peer_keypairs + slot) 8 address
+  for (id, k) in d.keypairs.toList do
+    let a := keypairAddr id
+    m := put m (a + Binary.Layouts.keypair_internal_id) 8 k.internalId
+    let replay := a + Binary.Layouts.keypair_receiving_counter
+    m := put m (replay + Binary.Layouts.replay_counter) 8 k.receivingCounter.counter
+    unless k.receivingCounter.backtrack.size == Binary.Layouts.replayWords do
+      throw "keypair replay bitmap has the wrong size"
+    for i in [:k.receivingCounter.backtrack.size] do
+      m := put m (replay + Binary.Layouts.replay_backtrack + i * Binary.Layouts.replayWordBytes)
+        Binary.Layouts.replayWordBytes k.receivingCounter.backtrack[i]!
+  return m
 
 def coverageAddr : Nat := 0x900000
 def coverageBytes : Nat := 0x2000
@@ -201,7 +244,8 @@ def probe (input : ProbeInput) (actualServices : Bool := false) : Except String 
   let (answer, after) ← (Leanux.WG.indexLookup [.handshake] input.query).run w
     |>.mapError Leanux.Stop.message
   let some afterDev := after.k.wg | throw "mirror lost device"
-  let memory ← materializePeers dev input.offsets (materialize before input.offsets input.preempt)
+  let memory ← materializePeers dev input.offsets (← materialize before input.offsets input.preempt)
+  let memory := put memory Binary.Layouts.keypairCounterAddress.toNat 8 w.k.keypairCounter
   let memory := if actualServices then materializeServices memory else memory
   let some entry := input.instructions[0]? | throw "empty instruction list"
   let regs : Reg64s := {
@@ -219,18 +263,19 @@ def probe (input : ProbeInput) (actualServices : Bool := false) : Except String 
   let answerAddr ← match answer with
     | none => pure 0
     | some e => do
-      let some n := before.idxOf? e | throw "returned entry is not in initial table"
-      pure (entryAddr n)
+      unless before.contains e do throw "returned entry is not in initial table"
+      entryAddr e input.offsets
   unless r.state.data.regs.rax.toNat == answerAddr && r.state.data.regs.rsp.toNat == stackAddr + 8 do
     throw "return or stack mismatch"
   for reg in [Reg64.rbx, .rbp, .r12, .r13, .r14, .r15] do
     unless r.state.data.regs.get64 reg == initial.data.regs.get64 reg do throw s!"callee-save mismatch: {repr reg}"
   let stackBase := BitVec.ofNat 64 (stackAddr - 0x800)
   let some stackBytes := memory.loadBytes stackBase 0x810 | throw "initial stack missing"
-  let expected ← materializePeers afterDev input.offsets (materialize afterDev.indexTable input.offsets input.preempt)
+  let expected ← materializePeers afterDev input.offsets (← materialize afterDev.indexTable input.offsets input.preempt)
   let expected := match answer with
     | none => expected
     | some e => put expected outputAddr 8 (0x600000 + e.peer * 0x1000)
+  let expected := put expected Binary.Layouts.keypairCounterAddress.toNat 8 after.k.keypairCounter
   let expected := if actualServices then materializeServices expected else expected
   let mut finalMemory := r.state.data.dmem.storeBytes stackBase stackBytes
   if actualServices then
@@ -317,7 +362,7 @@ def deadPeerCounterexample (input : ProbeInput) : Except String Json := do
     |>.mapError Leanux.Stop.message
   unless answer1.isNone && answer2.isNone && after1.k == w.k && after2.k == w.k do
     throw "dead-peer mirror behavior changed"
-  let memory := materialize dev.indexTable input.offsets input.preempt
+  let memory ← materialize dev.indexTable input.offsets input.preempt
   let peerAddress := 0x600000 + e.peer * 0x1000
   let memory := put memory (peerAddress + input.offsets.peerRefcount) 4 0
   let some entry := input.instructions[0]? | throw "empty program"
@@ -332,7 +377,7 @@ def deadPeerCounterexample (input : ProbeInput) : Except String Json := do
     unless r.state.data.regs.rax == 0 && r.state.data.regs.rsp.toNat == stackAddr + 8 do
       throw "counterexample did not return NULL into its entry frame"
     unless (← readNat r.state outputAddr 8) == 0xfeedface do throw "output changed on miss"
-  let peerField := entryAddr 0 + input.offsets.peer
+  let peerField := (← entryAddr e input.offsets) + input.offsets.peer
   unless (← readNat initial peerField 8) == peerAddress &&
       (← readNat r1.state peerField 8) == 0 && (← readNat r2.state peerField 8) == 0 do
     throw "expected kernel to clear the index entry peer pointer"

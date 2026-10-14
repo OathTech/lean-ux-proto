@@ -216,3 +216,47 @@ tier again passed 124 tests with one skip (23.94 seconds). The disjoint-write
 frame lemma is instantiated for the complete local bucket chain in
 `Bucket.frame`. No `Pre_lookup`, concrete satisfying proof, whole-world
 simulation, or transported result is claimed by this checkpoint.
+
+
+[AGENT 2026-10-14] Supplement exact semantic histories with explicit
+stuttering-cut alignment. `Image.cutPoints` is generated from the anchored
+region entries and their calls, comparisons/tests and returns; service
+internals are outside this domain. `CutsAligned` requires each cut's actual
+history prefix to observe successfully and match the corresponding prefix
+of the fixed source run, and relates the cut state to that prefix's last
+source World. It is defined as an obligation, not asserted as a theorem.
+Generic prefix lemmas prove that a successful full observation cannot hide
+an earlier observation error or change an already emitted prefix.
+
+Read-only observation review found no wrong semantic offsets or branch
+outcomes. Its substantive findings are retained as obligations: pending
+refcount and entry-pointer updates need explicit phase equations; the
+pending refcount cannot rely on RBP after the epilogue restores it; the
+logged suffix must change with the mirror correction; anchored cut alignment
+and service non-reentry remain to be proved; and return tags require separate
+saved-frame/result obligations. The existing epilogue region facts interpret
+RET, but their function-level frame premises remain to be discharged.
+
+The DWARF equations now include the physical keypair internal ID, replay
+counter and all 128 bitmap words, the three keypair slots, and the global
+keypair counter. Array dimensions and element widths come from DWARF and
+are checked against the mirror. The replay relation is functional: the same
+physical bytes determine the complete mirror counter and bitmap. A separate
+frame proof shows that storing NULL into the embedded entry's peer word
+preserves those fields, without requiring the entire keypair object to be
+read-only. Store membership and the rest of the whole-World relation remain
+open.
+
+[AGENT 2026-10-14] Materialize index entries at their actual embedded-object
+offsets, rather than allocating independent entry objects. This corrects a
+fixture limitation before attempting the formal precondition witness. The
+fixture also materializes keypair slots, internal IDs, counters and bitmaps.
+The recorded live and miss checks pass again (506 and 191 instructions with
+actual services; 15 and six observed points). The two-lookup dead-peer test
+still reproduces the defect in 96 and 75 instructions. It is a synthetic
+accepted mirror state, not a claim of captured kernel reachability.
+
+The changed proof modules passed kernel replay, with only standard axioms.
+The fast tier passed 124 tests with one skip (23.52 seconds). These are
+intermediate checks: no `Pre_lookup`, whole-function theorem or transported
+property is claimed.

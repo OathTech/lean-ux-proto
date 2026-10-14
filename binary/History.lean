@@ -61,6 +61,44 @@ def observeHistory {Error Checkpoint : Type}
     let later ← observeHistory edge (t :: rest)
     return here ++ later
 
+/-- A successful full observation cannot hide an earlier observation error
+    or change an already emitted prefix. This supports stuttering-cut facts
+    against the fixed complete source run. -/
+theorem observeHistory_prefix {Error Checkpoint : Type}
+    (edge : MachineState → MachineState → Except Error (List Checkpoint))
+    (front rest : List MachineState) (all : List Checkpoint)
+    (observed : observeHistory edge (front ++ rest) = .ok all) :
+    ∃ events suffix, observeHistory edge front = .ok events ∧ all = events ++ suffix := by
+  induction front generalizing all with
+  | nil => exact ⟨[], all, rfl, rfl⟩
+  | cons s front ih =>
+    cases front with
+    | nil => exact ⟨[], all, rfl, rfl⟩
+    | cons t front =>
+      change (do
+        let here ← edge s t
+        let later ← observeHistory edge ((t :: front) ++ rest)
+        pure (here ++ later)) = .ok all at observed
+      cases he : edge s t with
+      | error e => rw [he] at observed; cases observed
+      | ok here =>
+        cases hl : observeHistory edge ((t :: front) ++ rest) with
+        | error e => rw [he, hl] at observed; cases observed
+        | ok later =>
+          rw [he, hl] at observed
+          have hall : here ++ later = all := Except.ok.inj observed
+          obtain ⟨events, suffix, hp, hs⟩ := ih later hl
+          refine ⟨here ++ events, suffix, ?_, ?_⟩
+          · change (do
+              let first ← edge s t
+              let next ← observeHistory edge (t :: front)
+              pure (first ++ next)) = .ok (here ++ events)
+            rw [he, hp]
+            rfl
+          · rw [← hall, hs, List.append_assoc]
+
+#print axioms observeHistory_prefix
+
 /-- Generic full-run transport. `MirrorRun` is the complete accepted run,
     including its worlds and events; `Matches` must equate its observations
     to the deterministic observation of the recorded machine history.

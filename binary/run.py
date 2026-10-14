@@ -79,6 +79,9 @@ def prepare(check, out, trace_name):
                    peer=entry['members']['peer'], hash=entry['members']['index_hash'],
                    next=node['members']['next'], pprev=node['members']['pprev'],
                    kind=entry['members']['type'], index=entry['members']['index'],
+                   peerHandshake=o['wg_peer']['members']['handshake'],
+                   handshakeEntry=o['noise_handshake']['members']['entry'],
+                   keypairEntry=o['noise_keypair']['members']['entry'],
                    peerRefcount=o['wg_peer']['members']['refcount'] +
                      o['kref']['members']['refcount'] + o['refcount_struct']['members']['refs'])
     hooks, labels, instructions = {}, {}, []
