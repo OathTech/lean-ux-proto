@@ -257,3 +257,14 @@ kernel replay also passes: `capped -- scripts/in-bundle lake env leanchecker
 proof gate was run and fails at inherited `CounterWindow/Refinement.lean`;
 its token and import checks pass. No full-gate success or complete H6 result is
 claimed. No mirror changes or guest runs.
+
+Independent H6 review disposition: no mathematical defect found in the eleven
+local contracts. Fixed the traversal docstring's “exactly when re-arms” wording:
+the endpoint theorem does not observe arm-event occurrence when an old timer
+was already present. Removed the jitter docstring's unproved exhaustion clause;
+its proposition only covers normal completion. Added the source qualification
+that `createDataDone` invokes traversal once per encrypted item/list, before
+its per-packet send loop (`Data.lean:181–194`, C `send.c:242–260`), not once per
+individual packet or necessarily a successful transmission. These corrections
+change claims in prose, not theorem propositions. Whole-run event coverage and
+failure characterization remain explicitly open.

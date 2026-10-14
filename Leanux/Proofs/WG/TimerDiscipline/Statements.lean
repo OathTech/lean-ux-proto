@@ -36,7 +36,7 @@ theorem original_guarded_arm (site : HiddenSite) (pid : PeerId) (timer : PeerTim
         else peerAt w pid = some p) :=
   modPeerTimer_effect site pid timer delay d p resident
 
-/-- The traversal hook re-arms persistent keepalive exactly when its interval is nonzero and the device is running and peer alive. -/
+/-- With a nonzero interval and running/live guard, normal traversal has the peer-state effect of setting persistent keepalive to some expiry; otherwise it preserves the peer. -/
 theorem original_traversal (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) :
     Ensures (timersTraversal pid) (fun w => w.k.wg = some d)
@@ -45,7 +45,7 @@ theorem original_traversal (pid : PeerId) (d : Device) (p : Peer)
         else peerAt w pid = some p) :=
   timersTraversal_effect pid d p resident
 
-/-- The session-derived hook re-arms only the zero-key timer when running and alive, and otherwise preserves the peer. -/
+/-- On normal completion the session-derived hook sets only the zero-key timer to some expiry when running and alive, and otherwise preserves the peer. -/
 theorem original_session_derived (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) :
     Ensures (timersSessionDerived pid) (fun w => w.k.wg = some d)
@@ -75,7 +75,7 @@ theorem original_handshake_complete (pid : PeerId) (site : HiddenSite) (p : Peer
   timersHandshakeComplete_effect pid site p
 
 /-- Every successful jitter draw returns fewer than HZ/3 ticks and leaves
-all kernel state unchanged; exhausted record streams do not return a value. -/
+all kernel state unchanged. This normal-completion contract does not characterize errors. -/
 theorem original_jitter_bound (site : HiddenSite) (initial : Kernel) :
     Ensures (jitterBelowRekeyTimeout site) (fun w => w.k = initial)
       (fun n w => w.k = initial ∧ n < HZ / 3) :=
