@@ -16,20 +16,22 @@ retains current architecture, findings, reproduction provenance, effort and limi
 | R1 | Uniqueness and the intentional inclusive-floor correction are proved, with pure and accepted-run witnesses. |
 | R2 | Endpoint identity and failure-retaining access contracts cover the listed families, concrete Batch scheduling and isolated trials. The maintenance/timer and flush/removal extensions pass coordinated validation. Whole-run environment/lifecycle closure and saved-reference ownership remain open. |
 | R3 | Bounded-input normal insertion and represented removal now preserve an explicit coherent routing/frontier invariant, including both normal insertion refusals. Coordinated validation passes. Initialization, configuration histories and packet-path refinement remain open. |
-| R4 | Physical rings, finite/source journals, per-poll provenance and selected GRO order, and concrete RX scheduling are checked. Accepted input refutes chronological post-GRO order. Joint pipeline conservation remains open. |
+| R4 | Physical rings, finite/source journals, per-poll provenance and selected GRO order, and concrete RX scheduling are checked. The local balanced lookup/release extension passes coordinated validation. Accepted input refutes chronological post-GRO order. Joint pipeline conservation remains open. |
 | R5 | The unconditional age/post-zero and wire-nonce readings are false in accepted mirror inputs. Rule Zero resolution retains thirteen positive local contracts, without universal replacement transport claims. |
 | R6 | Cookie exclusion is proved at its original call boundary. A 19-retry/20-initiation episode refutes literal MAX=18; no universal corrected retry bound is claimed. |
 
-**Validation status.** The current coordinated checkpoint passes 340 jobs and
-348 terminal declarations: 346 theorems and two definitions (ReplayWindow 15;
-R1 9; R2 169; R3 72; R4 64; R5 13; R6 6), using only `propext`,
+**Validation status.** The current coordinated checkpoint passes 342 jobs and
+352 terminal declarations: 350 theorems and two definitions (ReplayWindow 15;
+R1 9; R2 169; R3 72; R4 68; R5 13; R6 6), using only `propext`,
 `Classical.choice` and `Quot.sound`. Fresh stock kernel replay, the 60-job
-default build and 114 unit tests (23.159 seconds, one skip) also pass.
+default build and 114 unit tests (22.721 seconds, one skip) also pass.
 The R3 routing extension passed scoped/full builds of 130/339 jobs and independent
 frozen-source review; its bounded-input header wording finding was corrected.
 The three-export R2 flush/removal component passes scoped/full builds of 227/340
-jobs and independent source/documentation review. Both extensions are covered by
-the current coordinated checks.
+jobs and independent source/documentation review. The four-export R4 balanced
+lookup/release extension passes scoped/full builds of 232/342 jobs and scoped
+source checks. Independent source and scope reviews have no unresolved finding;
+all three extensions are covered by the current coordinated checks.
 The preceding `c047e64` carry's 118-job executable build and eleven reproduction
 checks remain applicable to unchanged runtime; they were not rerun for proof-only
 extensions. Frozen reviews have no unresolved defect in the checked components;
@@ -428,6 +430,7 @@ post-GRO reading is false; joint pipeline conservation remains open.
 | `RxPollPrefix`/`Order`, projected `GroState` | Original outer-drop observations, buffered offers and callback entries; `original_poll_removal_prefix` and selected callback-prefix/completion contracts. |
 | `RxPollTags`, `RxPollProjection`, `RxPollProvenance` | Buffered tags are a subsequence of removed occurrences; direct result/World/Stop/log projection and concrete stack frames derive callback origins. Separate erasures alone would not prove log agreement. |
 | `SourceScheduler`, `RxRingScheduler`, `RxRingTrials` | Concrete RX scheduler refinement discharges its callbacks; original trial decisions/ordered filter and safe trial prefixes remain separate from committed history. |
+| `Framing/PeerBorrow`, `RxBorrow` | Actual lookup acquisition derives positive old refcount; adjacent repayment restores the full outside-peer Kernel and every complete peer record pointwise. Existing access observers retain failed prefixes. |
 
 [AGENT 2026-10-13] Use symbolic filling/pointwise slot algebra; retain complete
 receive cells with peer identity and permit deletion. Observe drop, completion offer
@@ -441,6 +444,15 @@ across its final pure return. Share the payload-parametric RX/TX source core whi
 preserving RX interfaces, explicit callbacks and Stop replay. Share scheduler
 control through parameterized proof bodies and keep copied trials separate; project
 canonical scheduler frames into unchanged legacy signatures.
+[AGENT 2026-10-14] Prove the adjacent source-lookup/reference-repayment cut before
+the carrier ledger. Use full outside-peer Kernel equality plus pointwise complete
+peer equality, avoiding irrelevant TreeMap shape obligations. Import the existing
+WGBase proof environment to reuse generated source matchers; no legacy signature changes.
+[AGENT 2026-10-14] Close R4 over the receive-to-stack pipeline under accepted
+schedules, together with the charter's named W7 transmit-drop characterization.
+Transmit callbacks must preserve the required RX carrier invariant. Universal
+outgoing staged/encrypt/socket conservation is additional scope, not a prerequisite
+for the receive claim; existing conditional TX journal contracts remain as stated.
 
 **W7 and physical fullness.** Two produce/consume pairs in the original size-1024
 ring leave logical count zero but physical slots 0 and 1 occupied. The next 1024
@@ -448,9 +460,15 @@ guarded offers accept 1022 and refuse two, ending producer/head/tail at 0/2/0 wi
 exact accepted FIFO. The [W7 tier](2026-10-13-w7-full-ring-tier.md) corrected the
 one-drop prediction that omitted the keepalive slot: Linux and mirror agree on
 both `-EPIPE` drops. All producers precede consumption. The closed ring witness is
-not refinement of that entire recorded run. Its observer input rearranges captured
-records and adds synthetic end-of-wait bounds; caller-clock migration is described
-above, not a fresh capture.
+not refinement of that entire recorded run. The command below checks an
+**eight-transmit scheduler regression**, not the 1024-item wrap or its two drops.
+It rearranges captured records and adds synthetic end-of-wait bounds;
+caller-clock migration is described above, not a fresh capture. The full-tier
+operations are tracked in `corpus/w7-tier/w7_ring_wrap.json` (and the extra ENOSPC
+case in `w7_ring_1025.json`), but their full hidden streams are not tracked here.
+The original EPIPE path through DEAD publication and `txStep` disposal without
+sending, and ENOSPC's direct `createData` cleanup, remain open. Neither the small
+replay nor the pure ring theorem closes those obligations.
 
 ```sh
 capped -- scripts/in-bundle bash -o pipefail -c 'python3 -B -c "import json; from evaluator.test_model_replay import W7_CRYPT_AHEAD, with_jiffies_end, with_timer_caller_jiffies; print(json.dumps(with_timer_caller_jiffies(with_jiffies_end(W7_CRYPT_AHEAD))))" | lake env lean --run Leanux/Proofs/Logged/Replay.lean'
@@ -523,12 +541,35 @@ Non-decrypt lifted calls have no RX mutation cut by separate source inspection.
 Copied trials retain first non-hidden Stop, discard returned Worlds/events and
 certify only reached prefixes, without claiming every candidate ran.
 
-**Remaining obligations.** TX callback/scheduler composition, enclosing ingress/
-runner/lifecycle, worker-local ownership and joint peer-queue/packet-store conservation
-remain open. Initialized index/keypair affiliation, allocation/lifecycle identity,
-purge dispositions and operation-specific RX quiescence require source-derived
-invariants. A finite prefix must keep pending obligations; it cannot imply eventual
-delivery, packet-store emptiness or whole-schedule no-loss/no-duplication.
+The balanced `lookupSrc; peerPut` cut in original `consumeDataDone` needs no
+initial liveness, trie validity or ownership premise. A normal `Some pid` lookup
+derives a resident peer with positive old refcount, so immediate repayment cannot
+take the deletion branch. `original_lookup_source_reference_restoration` retains
+the actual lookup result and the complete semantic Kernel endpoint; the map's
+internal representation is not equated. The corresponding destination-lookup
+lemma covers immediate repayment, not a whole transmit call. Explicit projections
+retain RX queues, NAPI flags and all three key slots. Bounded slot affiliation is
+preserved only if it already holds; missing key slots are allowed. Existing mixed
+observers give unconditional erasure and allocation-safe failure histories.
+These are normal-return restoration and failed-prefix access claims, not total
+repayment, a failed World, affiliation initialization or whole-callback protection.
+
+**Remaining obligations.** RX carrier preservation through relevant transmit
+callbacks, enclosing ingress/runner/lifecycle, worker-local ownership and joint
+receive-pipeline conservation remain open. Packet stores, decrypt rings, peer
+queues, worker locals and GRO buffers contain overlapping references; their sizes
+cannot simply be added. Initialized index/keypair affiliation, allocation/lifecycle
+identity and named source dispositions require source-derived invariants. These
+include early rejection, failed validation, keepalive consumption and purge/free
+paths; a free after a GRO offer need not be a drop. The W7 transmit path from EPIPE through DEAD
+publication to `txStep` disposal without sending, and ENOSPC's direct `createData`
+cleanup, remain open separately.
+
+A finite prefix must retain pending obligations. At an accepted drained boundary,
+queue checks alone do not establish empty packet stores or peer queues. Stack
+callback entry, normal completion and packet disposal remain distinct observations;
+local poll ordinals do not establish cross-poll uniqueness. Universal outgoing
+staged-to-socket conservation is not claimed or required by this receive result.
 
 **Effort.** Counts are per slice; no memory cap was hit.
 
@@ -540,10 +581,14 @@ delivery, packet-store emptiness or whole-schedule no-loss/no-duplication.
 | RX source journals | Eight builds: two passes/six failures; scoped checks one pass/one failure | 19m07s validation; 21m45s ownership |
 | TX source journals | Eight builds: four passes/four failures | 11m58s validation; 13m44s ownership |
 | Concrete RX scheduler | 15 builds: four passes/eleven ordinary failures | 30m07s |
+| Balanced lookup/reference cut | 15 builds: six passes/nine ordinary failures; one passing scoped check | 18m19s from first worker clock (08:55:24) through final full-target collection (09:13:43); 20m44s through token return; scoped/full targets 232/342 and coordinated validation pass |
 
 Failures were elaboration/replay assertions; the RX scoped check rejected the
 English token “admit” and passed after correction. Scheduler integration exposed a
 duplicate Activation matcher, resolved with canonical frames and legacy projections.
+The balanced-reference tranche encountered record-layout/getter normalization
+failures and a duplicate peerPut matcher. Normalizing the known Option alone did
+not fix the latter; sharing the existing WGBase proof environment did.
 A completion-frame worker had two implementation interruptions and one reporting
 interruption; dirty worktrees were preserved. Separately, the initial ring writer
 resumed after deliberate termination without the required snapshot. Work stopped;
@@ -553,6 +598,12 @@ compile failure. Reviews fixed callback-log scope, required direct correspondenc
 provenance, replaced “unique refinement” by existence with distinct ordinals,
 “epoch” by interface index, and “ownership” by contents; they also corrected
 normal-endpoint/Stop, positive-size, copied-frame/header and table/status wording.
+The balanced-reference review corrected a terminal's suggestion that the immediate
+positive-count repayment consumed hidden records; its branches append steps only.
+It also replaced inherited device-epoch wording in the map and queue-view header
+with interface-index wording; the existing field and API names remain unchanged.
+The subsequent scope review distinguished EPIPE's DEAD publication and later
+worker disposal from ENOSPC's direct cleanup in the remaining W7 obligations.
 
 **Ranked mirror suggestions.** None. Physical occupancy/batched retirement explain
 W7, and proof-side frames/projections handle local polling without production changes.

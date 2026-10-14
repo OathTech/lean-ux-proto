@@ -12,6 +12,7 @@ import Leanux.Proofs.WG.Queues.RxPollProvenance
 import Leanux.Proofs.WG.Queues.RxRingWorker
 import Leanux.Proofs.WG.Queues.TxRingWorker
 import Leanux.Proofs.WG.Queues.RxRingTrials
+import Leanux.Proofs.WG.Queues.RxBorrow
 
 /-! R4 queue components: physical-ring refusal, original prev_queue FIFO laws,
 and successful-endpoint receive-queue helper frames. Whole recorded-schedule delivery,
@@ -673,5 +674,42 @@ theorem original_rx_consistency_trial_conservation (xs : List Activation) (w : W
     ∀ a ∈ xs, ∃ r, Queues.RxRing.Initialized n
       (Logged.runPrefix (Queues.RxRing.activationRun a) w h).2 r :=
   Queues.RxRing.trials_initialized xs w h hi
+
+/-- The adjacent original lookupSrc/peerPut cut returns the lookup's actual
+result and restores the full outside-peer Kernel and all complete peer records.
+A Some result derives a positive pre-acquisition count in Borrowed. No initial
+liveness, represented-trie or ownership premise is required. This is normal
+partial correctness, not a total-repayment theorem. -/
+theorem original_lookup_source_reference_restoration (protocol : Nat) (bytes : List UInt8)
+    (w v : World) (result : Option PeerId)
+    (hr : (Queues.RxBorrow.source protocol bytes).run w = .ok (result, v)) :
+    ∃ acquired, (lookupSrc protocol bytes).run w = .ok (result, acquired) ∧
+      Framing.PeerBorrow.Borrowed w.k result acquired.k ∧
+      Framing.PeerBorrow.view v = Framing.PeerBorrow.view w :=
+  Queues.RxBorrow.repayLookup_normal _ (Queues.RxBorrow.lookupSrc_spec protocol bytes) w v result hr
+
+/-- The existing lookup/acquisition/release observers compose with exact
+result, full successful World and Stop erasure on all inputs. -/
+theorem original_lookup_repayment_access_erasure (protocol : Nat) (bytes : List UInt8) :
+    Logged.ErasesPrefix (Queues.RxBorrow.observed protocol bytes)
+      (Queues.RxBorrow.source protocol bytes) := Queues.RxBorrow.observed_erases protocol bytes
+
+/-- Real accesses preceding any Stop remain in the safe history under the
+existing concrete allocation invariant; no failed World is manufactured. -/
+theorem original_lookup_repayment_allocation_access_preserves (protocol : Nat) (bytes : List UInt8) :
+    Logged.PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe
+      (Queues.RxBorrow.observed protocol bytes) := Queues.RxBorrow.observed_preserves protocol bytes
+
+/-- Normal repayment retains exact RX queues, resident NAPI flags and all
+three key slots. It also preserves bounded slot affiliation if already true;
+affiliation initialization and the remaining pipeline are separate obligations. -/
+theorem original_lookup_repayment_carrier_projections (protocol : Nat) (bytes : List UInt8) :
+    Framing.SameView Queues.rxQueues (Queues.RxBorrow.source protocol bytes) ∧
+    (∀ pid, Framing.SameView (fun w => (Framing.PeerBorrow.resident w.k pid).map fun p =>
+      (p.napiScheduled, p.keypairCurrent, p.keypairPrevious, p.keypairNext))
+      (Queues.RxBorrow.source protocol bytes)) ∧
+    Framing.SameView Queues.RxBorrow.SlotAffiliation (Queues.RxBorrow.source protocol bytes) :=
+  ⟨Queues.RxBorrow.source_queues protocol bytes,
+    Queues.RxBorrow.source_peer_fields protocol bytes, Queues.RxBorrow.source_affiliation protocol bytes⟩
 
 end Leanux.Proofs.WG.DeliveryOrder

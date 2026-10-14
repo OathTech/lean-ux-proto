@@ -4,7 +4,7 @@ import Leanux.Proofs.Framing.Projection
 set_option maxHeartbeats 800000
 set_option pp.structureInstances false
 
-/-! Receive queues indexed by peer slot and tagged with device epoch and peer
+/-! Receive queues indexed by peer slot and tagged with device interface index and peer
 identity. Retention allows deletion; it does not identify a replacement peer
 with an old peer or assume that generic lifetime contracts preserve queues. -/
 namespace Leanux.Proofs.WG.Queues
