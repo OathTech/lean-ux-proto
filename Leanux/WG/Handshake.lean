@@ -366,8 +366,10 @@ def jitterBelowRekeyTimeout (site : HiddenSite) : M Nat := do
     jitter draw) is evaluated before `mod_peer_timer`'s test. -/
 def timersDataSent (pid : PeerId) : M Unit := do
   if ← branch .timersDataSentNotPending !((← getPeer pid).timerPending .newHandshake) then
-    let jitter ← jitterBelowRekeyTimeout .newHandshakeJitter
+    -- the compiled argument reads `jiffies` (the kind-311 record) before the
+    -- jitter draw (measured on s3: site 422 precedes the site-16 draws)
     let jc ← callerJiffies .timerJiffiesDataSent   -- timers.c:149
+    let jitter ← jitterBelowRekeyTimeout .newHandshakeJitter
     if ← modPeerTimerGuard pid then
       armTimer pid .newHandshake (KEEPALIVE_TIMEOUT_TICKS + REKEY_TIMEOUT_TICKS + jitter) jc
 
@@ -442,8 +444,12 @@ def sendBufferToPeer (pid : PeerId) (bytes : List UInt8) : M Unit := do
 /-- wg_timers_handshake_initiated (timers.c:182-187): the retransmit timer,
     with its jitter (`jitterBelowRekeyTimeout`). -/
 def timersHandshakeInitiated (pid : PeerId) : M Unit := do
+  -- the compiled argument reads `jiffies` (the kind-311 record) before the
+  -- jitter draw (measured on s3: site 424 precedes the site-14 draws)
+  let jc ← callerJiffies .timerJiffiesHandshakeInitiated   -- timers.c:185
   let jitter ← jitterBelowRekeyTimeout .retransmitJitter
-  discard <| modPeerTimer .timerJiffiesHandshakeInitiated pid .retransmitHandshake (REKEY_TIMEOUT_TICKS + jitter)   -- timers.c:185
+  if ← modPeerTimerGuard pid then
+    armTimer pid .retransmitHandshake (REKEY_TIMEOUT_TICKS + jitter) jc
 
 /-- wg_packet_send_handshake_response (send.c:85-108). -/
 def sendHandshakeResponse (pid : PeerId) : M Unit := do
