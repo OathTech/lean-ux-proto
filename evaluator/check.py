@@ -954,9 +954,20 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
         # threshold: receive.c:115 (last_under_load = now) is covered.
         if op['op'] == 'wg_flood':
             covered = raw_lines(coverage[index], locations, config['files'])
-            if 'drivers/net/wireguard/receive.c:115' not in covered:
+            # The batch is queued whole before the worker runs, so its first
+            # packet sees the batch's size: the threshold is crossed iff the
+            # batch (the leading valids, the control, the invalids) is at least
+            # MAX_QUEUED_INCOMING_HANDSHAKES / 8 = 512 (receive.c:112-113). Both
+            # directions are checked (the boundary traces e_underload_511/512/513,
+            # 2026-10-14; the pre-release review's section 8).
+            batch = op['count'] + len(op.get('messages', [])) + (1 if op.get('control') else 0)
+            reached = 'drivers/net/wireguard/receive.c:115' in covered
+            if batch >= 512 and not reached:
                 problems.append(dict(index=index,
                                      problem='flood did not reach under_load (receive.c:115 not covered)'))
+            if batch < 512 and reached:
+                problems.append(dict(index=index,
+                                     problem=f'flood of {batch} reached under_load below the threshold (receive.c:115 covered)'))
             continue
         # W7 (docs/2026-10-06-w4-w7-transmit-bulk.md, 5.5): a `wg_batch` is one
         # io_uring_enter whose descriptor plumbing (the ring's fdget, each
