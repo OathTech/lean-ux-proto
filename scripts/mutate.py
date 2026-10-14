@@ -416,13 +416,16 @@ def clean_tree(tree):
         raise RuntimeError(f'scratch tree {tree} is dirty: {dirty}')
 
 
+ONLY_SUITE = None   # --only-suite: every mutant runs on this whole suite instead of its subsets
+
+
 def run_one(m, tree, timeout, confirm):
     t0 = time.time()
     clean_tree(tree)
     apply_mutant(m, tree)
     result = dict(m, status=None, runs=[])
     try:
-        for suite, prefixes in subsets_for(m['file'], m['cls']):
+        for suite, prefixes in ([(ONLY_SUITE, [''])] if ONLY_SUITE else subsets_for(m['file'], m['cls'])):
             out = f".artifacts/check/mut-{m['id']}-{suite}"
             report, err, uncompilable = run_check(tree, suite, prefixes, out, timeout)
             status, mism, other = classify(report)
@@ -625,6 +628,7 @@ def main(argv=None):
     ap.add_argument('--summary', action='store_true')
     ap.add_argument('--report', help='write the Markdown tables of --results to this file')
     ap.add_argument('--reclassify', action='store_true', help='recompute non-rejected statuses from the kept reports')
+    ap.add_argument('--only-suite', help='run the selected mutants on this whole suite only (a confirmation pass)')
     args = ap.parse_args(argv)
     if args.reclassify:
         print(f'{reclassify(ROOT / args.results, args.workers)} rows reclassified')
@@ -671,6 +675,8 @@ def main(argv=None):
         print(f"{len(rows)} results")
         return 0
     if args.run:
+        global ONLY_SUITE
+        ONLY_SUITE = args.only_suite
         dirty = subprocess.run(['git', 'status', '--porcelain', '--untracked-files=no'], cwd=ROOT,
                                capture_output=True, text=True).stdout
         if dirty:

@@ -146,4 +146,53 @@ measures the comparison. By class:
 | stop-passthrough | yes, on the stopped path only | no |
 | order-swapped | no (both arms are tested either way) | yes (the decision order) |
 
-RESULTS_PLACEHOLDER
+## 4. The population and the selection
+
+The population is the enumeration above: 4,319 single-line mutants of the
+mirror at main 2c7a076 (the mirror files are byte-identical through
+7ea0289, where the campaign ran), plus 34 two-line `order-swapped`
+mutants added after the first pass. The sample is `--cap 1`: for every
+(file, class) pair with at least one mutant, the one at the middle of the
+file's list by line, deterministic, 308 mutants in all (296 of the eight
+single-line classes and 12 order swaps). The cap is a budget choice, one
+suite run per mutant at four to six minutes; it samples every file and
+every class once, and it is blind to the second and later sites of a class
+in a file. Each sampled mutant ran on its file's corpus subset
+(section 1); a survivor on a subset ran again on its whole area suite, and
+SURVIVOR_CONFIRMATION_SENTENCE
+
+## 5. The counts
+
+COUNTS_PLACEHOLDER
+
+## 6. The survivors, one by one
+
+Every mutant that passed its subset and its area suite, with its category:
+**EP** an equivalent projection (what the mirror does is unchanged on every
+input the relation sees, or the mirror cannot reach the edit on any
+correct run); **LO** logging-only, the behaviour intact; **CB** a corpus
+boundary, the edit changes behaviour on an input no trace supplies; **R**
+a reach problem of the check itself, a changed behaviour no instrument
+reports even when a trace takes the path. The fix class follows: a trace,
+a declaration, a check rule, or nothing.
+
+SURVIVORS_PLACEHOLDER
+
+## 7. What each channel caught: behaviour-changing examples
+
+EXAMPLES_PLACEHOLDER
+
+## 8. Conclusion
+
+CONCLUSION_PLACEHOLDER
+
+Reproduction, from a clean checkout on the s2 oracle:
+
+```sh
+export LEANUX_KERNEL_DIR=/path/to/.artifacts/kernel-net-choice-s2   # identity cea1e9a3…
+capped -- scripts/in-bundle python3 scripts/mutate.py --list --cap 1            # the sample
+capped -- scripts/in-bundle python3 scripts/mutate.py --run --cap 1 --workers 4 --confirm-survivors \
+    --results .artifacts/mutation/results.jsonl
+capped -- scripts/in-bundle python3 scripts/mutate.py --reclassify --workers 4 --results .artifacts/mutation/results.jsonl
+capped -- scripts/in-bundle python3 scripts/mutate.py --report docs/mutation-tables.md --results .artifacts/mutation/results.jsonl
+```
