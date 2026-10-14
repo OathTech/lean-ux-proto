@@ -180,6 +180,41 @@ with `leanchecker --fresh`. The full proof gate fails at the same inherited
 counter-window refinement; token and import checks pass. No mirror changes,
 guest runs or cap failures.
 
+H5 continuation: `Progress/Scheduler` now proves the original resumption
+probe's exact outcome and World preservation, its success/mismatch iff
+contracts, and the empty/productive worker-iteration equations. Five additional
+terminal statements make seven in H5. A successful probe runs an activation on
+a copy; it does not itself resume it. In `schedule`, actual resumption first
+removes that activation from `suspended`. Equating the probed and actual runs
+needs a frame for that removal, because `cryptAhead` reads `suspended`.
+
+A second investigation reproduced an invalid occupancy premise: a nested NAPI
+callback inside the encrypt worker generates a reply and refills that worker's
+queue. `QueueRefill` retains the initialized-prefix executable reproduction;
+[request 2](2026-10-14-campaign-2-mirror-requests.md#2-account-for-nested-queue-refill-in-activation-budgets)
+gives the exact evidence boundary, source locations and altitude-preserving
+correction requested. The user was notified. This is an evaluated model-prefix
+finding, not an accepted-run termination counterexample or a kernel-reduction
+theorem. Both JSON-based reduction and a typed-trace reduction were attempted;
+the latter exposes the remaining non-reducing arithmetic-loop implementation.
+No proof oracle or added assumption substitutes for that missing proof.
+
+Ranked mirror requests are now (1) the missing batch completion check and
+(2) a callback-aware activation bound, both altitude-preserving. A read-only
+independent review confirmed the second source path and required the explicit
+prefix-only qualification above. That qualification is incorporated in the
+request and witness documentation. The full scheduler has two candidate proof
+architectures: an erased dispatch/resume event observer, or source-factorized
+single-turn execution followed by a bounded iteration relation. Neither is
+claimed complete. Kernel-checked local contracts do not establish termination
+of every transitive arithmetic loop or full dispatch/resume completeness.
+
+The seven H5 statements pass scoped build, standard-axiom inspection and
+stock kernel replay (`leanchecker --fresh Leanux.Proofs.WG.Progress.Statements`,
+through the capped bundle). The
+full gate was rerun and fails at the same inherited counter refinement; token
+and import checks pass. The separate executable refill reproduction succeeds.
+
 ## H6 — Timer discipline (in progress)
 
 [USER 2026-10-14] Resume the interrupted H6 work, then H5, remaining H4 and
