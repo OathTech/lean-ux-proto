@@ -604,3 +604,6 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   placement, and is withdrawn; the evidence runs on a first-run mismatch
   again, the W7 13.2 (ii) form. Each mutant is rejected after its fix; the
   area suites agree.
+- **2026-10-14 [USER]** Rule Zero's canonical form, for every proof charter
+  and the standing rules: "(1) the mirror might be wrong, (2) the kernel
+  might contain bugs, (3) the former is much more likely than the latter."

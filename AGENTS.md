@@ -42,7 +42,10 @@ documents are indexed in [docs/README.md](docs/README.md).
 Theorems live only in the proof tree, `Leanux/Proofs/`, its own lake target
 `LeanuxProofs` outside the default build; its map and its register of
 results are [docs/proofs.md](docs/proofs.md). Proofs are a validation
-channel for the models beside the differential check. The mirror
+channel for the models beside the differential check, under Rule Zero:
+(1) the mirror might be wrong; (2) the kernel might contain bugs; (3) the
+former is much more likely than the latter [USER 2026-10-14]. A discrepancy
+is read in that order and a statement is never bent to accommodate one. The mirror
 (`Leanux/FS`, `Leanux/WG`, `Leanux/Kernel`, `Leanux/Env`,
 `Leanux/Runner.lean`) carries no theorem, no proof-shaped restructuring, and
 no change made to let a proof close: a proof that cannot close is a report
