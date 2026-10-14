@@ -604,3 +604,13 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   placement, and is withdrawn; the evidence runs on a first-run mismatch
   again, the W7 13.2 (ii) form. Each mutant is rejected after its fix; the
   area suites agree.
+- **2026-10-14 [USER]** The Lean toolchain moves to v4.35.0: "If we can bump
+  to 4.35 we probably should, we can then also use the new lake comparator
+  feature"; "we can update our lean toolchain if need be". The bump is on
+  `main` only; the proof campaign's worktree keeps v4.33.1 until it merges
+  [USER: "Just make sure not to break the Codex#2 grind"], which
+  `scripts/in-bundle`'s per-checkout toolchain selection makes safe. The
+  one source change v4.35.0 needs is a type ascription in
+  `Leanux/WG/NetlinkDump.lean` (no behaviour change). Kraken (`.deps/kraken`
+  at 8af7806) builds on v4.35.0 and not on v4.33.1, which is the reason
+  for the version [AGENT, coordinator: the toolchain tests of 2026-10-14].
