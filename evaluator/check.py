@@ -1106,6 +1106,16 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
             problems.append(dict(index=index, problem='no model decision'))
         for name, outcome in sorted(reported):
             own, other = witnesses[name][outcome], witnesses[name][not outcome]
+            # A reported decision whose condition line owns an instrumentation
+            # point must have run it: a decision the mirror evaluates past the
+            # point where Linux returned (a removed early return) reports an
+            # outcome at a line Linux never reached, which no witness of the
+            # outcome itself can show when the outcome is unwitnessed (the
+            # mutation campaign's finding 3, 2026-10-14).
+            site = decisions[name]['site']
+            if not data_only and site.split(':')[0] in op_files and site in instrumented and site not in lines:
+                problems.append(dict(index=index, label=f'{name}={int(outcome)}',
+                                     problem='reported decision at a line Linux never reached', site=site))
             if own and not (lines & own):
                 problems.append(dict(index=index, label=f'{name}={int(outcome)}', problem='outcome not witnessed',
                                      witnesses=sorted(own)))
@@ -1194,7 +1204,7 @@ def operands_match(lhs, rhs, record, comparison):
 
 
 def operand_agreement(trace, model_obs, comparisons, locations, decisions, functions=None, exclusions=(),
-                      excluded=None, distinct=None):
+                      excluded=None, distinct=None, sections=None):
     """A3: declared value comparisons report operands, and each matches a
     comparison Linux made at the decision's condition line (the innermost
     source frame of the comparison) in the same operation, in one of the
@@ -1216,8 +1226,21 @@ def operand_agreement(trace, model_obs, comparisons, locations, decisions, funct
     across obligations and surplus kernel rows need no model counterpart
     (pre-release review, finding 5). `checked` counts obligations met;
     `distinct`, when given, receives the (operation, site, row) triples that
-    met one, so a report can count distinct kernel rows beside obligations."""
+    met one, so a report can count distinct kernel rows beside obligations.
+
+    `sections` (the trace's `netrx_sections` map), when given, confines a
+    branch to the records of its own NET_RX section: a branch stamped with
+    ordinal k matches only records the guest tagged with that section's
+    block, and a branch outside any section only records outside the NET_RX
+    blocks, as the placement evidence already does per section (the mutation
+    campaign's finding 4, 2026-10-14: a mirror that mis-stamped its sections
+    passed whenever no placement evidence ran). Two distinct declared
+    comparisons must match distinct kernel comparisons: a C comparison is an
+    instruction, so two decisions whose only match is one PC are one
+    comparison declared twice, or a mirror evaluating a test the kernel
+    skipped (finding 2: setfl's `&&` with the outcome inverted)."""
     problems, checked = [], 0
+    matched = {}   # (operation, site) -> {decision: the PCs its pair matched}
     for branch in model_obs['branches']:
         name = branch['label'].rpartition('=')[0]
         if name not in decisions:
@@ -1256,21 +1279,42 @@ def operand_agreement(trace, model_obs, comparisons, locations, decisions, funct
                                  problem='declared comparison reported without operands'))
             continue
         site = comparison['site'] or decisions[name]['site']
-        records = [(r[0], int(r[1], 16), int(r[2], 16)) for r in comparisons[branch['index']]['records']
-                   if locations[r[3]][0]['source'].split('/.deps/linux/')[-1].split(' ')[0] == site
-                   and attributable(locations[r[3]])
-                   and (functions is None or listed(locations[r[3]], functions))]
+        ordinal = sections.get((trace.get('id'), branch['index']), {}) if sections is not None else None
+        section = branch.get('section', 0)
+        def inside(r):
+            if ordinal is None:
+                return True
+            blocks = record_blocks(r)
+            if section:
+                return any(ordinal.get(b) == section for b in blocks)
+            return not blocks or any(b not in ordinal for b in blocks)
+        rows = [r for r in comparisons[branch['index']]['records']
+                if locations[r[3]][0]['source'].split('/.deps/linux/')[-1].split(' ')[0] == site
+                and attributable(locations[r[3]])
+                and (functions is None or listed(locations[r[3]], functions))
+                and inside(r)]
+        records = [(r[0], int(r[1], 16), int(r[2], 16)) for r in rows]
         lhs, rhs = branch['operands']
         if not records:
             problems.append(dict(index=branch['index'], label=branch['label'], problem='no comparison recorded at condition',
-                                 site=site, operands=[lhs, rhs]))
+                                 site=site, operands=[lhs, rhs], section=section))
         elif not any(operands_match(lhs, rhs, r, comparison) for r in records):
             problems.append(dict(index=branch['index'], label=branch['label'], problem='operands differ from Linux',
                                  site=site, operands=[lhs, rhs], linux=[[k, hex(x), hex(y)] for k, x, y in records[:6]]))
         else:
             checked += 1
+            hits = [r for r in rows if operands_match(lhs, rhs, (r[0], int(r[1], 16), int(r[2], 16)), comparison)]
             if distinct is not None:
-                distinct.update((branch['index'], site, r) for r in records if operands_match(lhs, rhs, r, comparison))
+                distinct.update((branch['index'], site, (r[0], int(r[1], 16), int(r[2], 16))) for r in hits)
+            matched.setdefault((branch['index'], site), {}).setdefault(name, set()).update(r[3] for r in hits)
+    for (index, site), by_name in sorted(matched.items()):
+        names = sorted(by_name)
+        for i, a in enumerate(names):
+            for b in names[i + 1:]:
+                if len(by_name[a]) == 1 and by_name[a] == by_name[b]:
+                    problems.append(dict(index=index, label=f'{a}, {b}',
+                                         problem='two declared comparisons matched one kernel comparison',
+                                         site=site, pc=next(iter(by_name[a]))))
     return problems, checked
 
 
@@ -1599,7 +1643,8 @@ def run_chunk(traces, out, kcov, guest_variant=None, alloc_flags=0, arm=()):
             excluded, distinct = Counter(), set()
             operand_problems, checked = operand_agreement(trace, actual_cmp, trace_comparisons,
                                                           compared['locations'], kcov[1], set(kcov[0]['functions']),
-                                                          kcov[0]['operand_exclusions'], excluded, distinct)
+                                                          kcov[0]['operand_exclusions'], excluded, distinct,
+                                                          sections=sections)
             if operand_problems and actual_cmp.get('napi_irq_ambiguous'):
                 # the second run, every open placement before the put
                 count = actual_cmp['napi_irq_ambiguous']
@@ -1644,7 +1689,8 @@ def run_chunk(traces, out, kcov, guest_variant=None, alloc_flags=0, arm=()):
                                     excluded, distinct = Counter(), set()
                                     operand_problems, checked = operand_agreement(
                                         trace, selected, trace_comparisons, compared['locations'], kcov[1],
-                                        set(kcov[0]['functions']), kcov[0]['operand_exclusions'], excluded, distinct)
+                                        set(kcov[0]['functions']), kcov[0]['operand_exclusions'], excluded, distinct,
+                                        sections=sections)
                                     if not operand_problems:
                                         # popped into the report's napi_before_put_sections
                                         outcomes[f'napi placement ({trace["id"]})'] = ','.join(map(str, before_put))

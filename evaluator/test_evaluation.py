@@ -334,6 +334,75 @@ class EvaluationChecks(unittest.TestCase):
         self.assertTrue(run(dict(label='alloc_fd.o_cloexec=0', operands=[0, 0]), [])[0])         # undeclared
         self.assertEqual(run(dict(label='made_up=1', operands=[1, 2]), []), ([], 0))             # left to control_flow
 
+    def test_two_declared_comparisons_cannot_share_one_kernel_comparison(self):
+        # The mutation campaign's finding 2 (2026-10-14): setfl's `&&` declares
+        # two decisions at one condition line; a mirror evaluating the second
+        # test when Linux skipped it reported a pair that matched the single
+        # kernel row the first test left. A C comparison is an instruction:
+        # distinct decisions must match distinct PCs.
+        cmp = {'rel': 'flag', 'const_rhs': True, 'site': None}
+        decisions = {'setfl.o_append_changed': dict(site='fs/fcntl.c:48', comparison=cmp),
+                     'setfl.is_append': dict(site='fs/fcntl.c:48', comparison=cmp)}
+        loc = {'0x1': [{'function': 'do_fcntl', 'source': '/x/.deps/linux/fs/fcntl.c:48'}],
+               '0x2': [{'function': 'do_fcntl', 'source': '/x/.deps/linux/fs/fcntl.c:48'}]}
+        trace = {'ops': [{'op': 'fcntl'}]}
+        both = {'branches': [dict(index=0, label='setfl.o_append_changed=0', operands=[0, 0]),
+                             dict(index=0, label='setfl.is_append=0', operands=[0, 0])]}
+        one_row = [{'records': [[5, '0x0', '0x0', '0x1']]}]
+        problems, _ = check.operand_agreement(trace, both, one_row, loc, decisions)
+        self.assertEqual([p['problem'] for p in problems], ['two declared comparisons matched one kernel comparison'])
+        two_rows = [{'records': [[5, '0x0', '0x0', '0x1'], [5, '0x0', '0x0', '0x2']]}]
+        self.assertEqual(check.operand_agreement(trace, both, two_rows, loc, decisions)[0], [])
+
+    def test_operand_agreement_matches_within_the_branch_section(self):
+        # The mutation campaign's finding 4: a branch stamped with a NET_RX
+        # section ordinal matches only the records the guest tagged with that
+        # section's block, and a branch outside any section only records
+        # outside the NET_RX blocks.
+        cmp = {'rel': 'ge', 'const_rhs': False, 'site': None}
+        decisions = {'wg_packet_rx_poll.counter': dict(site='drivers/net/wireguard/receive.c:300', comparison=cmp)}
+        loc = {'0x1': [{'function': 'wg_packet_rx_poll',
+                        'source': '/x/.deps/linux/drivers/net/wireguard/receive.c:300'}]}
+        trace = {'id': 't', 'ops': [{'op': 'wg_inject'}]}
+        sections = {('t', 0): {3: 1}}   # dispatch block 3 is NET_RX section 1
+        def run(section, block):
+            branch = dict(index=0, label='wg_packet_rx_poll.counter=1', operands=[8, 32])
+            if section:
+                branch['section'] = section
+            records = [{'records': [[4, '0x8', '0x20', '0x1', block]]}]
+            return check.operand_agreement(trace, {'branches': [branch]}, records, loc, decisions, sections=sections)
+        self.assertEqual(run(1, '3'), ([], 1))
+        self.assertTrue(run(1, '2')[0])          # the record lies in another block
+        self.assertTrue(run(0, '3')[0])          # a branch outside any section cannot use a NET_RX block's record
+        self.assertEqual(run(0, '2'), ([], 1))
+        self.assertEqual(check.operand_agreement(trace, {'branches': [dict(index=0, label='wg_packet_rx_poll.counter=1',
+                                                                            operands=[8, 32])]},
+                                                 [{'records': [[4, '0x8', '0x20', '0x1', '3']]}], loc, decisions),
+                         ([], 1))                # without the map, the old relation
+
+    def test_reported_decision_must_reach_its_line(self):
+        # The mutation campaign's finding 3: a removed early return makes the
+        # mirror report a decision past the point where Linux returned; when
+        # that outcome is unwitnessed nothing else shows it, so a reported
+        # decision whose condition line owns a point must have run it.
+        table = check.parse_decisions([
+            self.decision('eventfd_read.short_buffer', 220, [(221, 221)], [(222, 222)]),
+            self.decision('eventfd_ctx_do_read.semaphore', 180, [], [])], self.CONFIG)
+        instrumented = {'fs/eventfd.c:180', 'fs/eventfd.c:221', 'fs/eventfd.c:222'}
+        functions = {'eventfd_read', 'eventfd_ctx_do_read'}
+        witnesses = check.witness_table(table, instrumented, functions)
+        loc = {f'0x{n}': [{'function': 'eventfd_read', 'source': f'/x/.deps/linux/fs/eventfd.c:{n}'}]
+               for n in (180, 221, 222)}
+        trace = {'version': 1, 'id': 'rl', 'ops': [{'op': 'read', 'fd': {'literal': 8}, 'count': 8}]}
+        def run(labels, lines):
+            model = {'branches': [{'index': 0, 'label': l} for l in labels]}
+            coverage = [{'id': 'rl', 'index': 0, 'count': len(lines), 'pcs': [f'0x{n}' for n in lines]}]
+            return control_flow(trace, model, coverage, loc, self.CONFIG, table, witnesses, instrumented, functions)[0]
+        labels = ['eventfd_read.short_buffer=1', 'eventfd_ctx_do_read.semaphore=1']
+        self.assertEqual(run(labels, [221, 180]), [])
+        self.assertEqual([p['problem'] for p in run(labels, [221])],
+                         ['reported decision at a line Linux never reached'])
+
     def test_section_agreement_two_runs(self):
         # W7 stream H (13.2 (ii), T1): the (c') placement of an inline NAPI
         # poll changes the operands inside that poll's NET_RX section and of
