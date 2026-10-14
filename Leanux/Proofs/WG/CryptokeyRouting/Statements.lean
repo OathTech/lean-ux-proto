@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AllowedIps.RoutingRxFrames
 import Leanux.Proofs.WG.Configuration.LifecycleCompletion
 import Leanux.Proofs.WG.Configuration.DeviceCompletion
 import Leanux.Proofs.WG.Configuration.PeerCommandCompletion
@@ -1947,5 +1948,79 @@ theorem original_optional_routing_initialization (trace : Runner.Trace) (w : Wor
       (Runner.initialKernel trace.rlimit trace.net trace.bare trace.foreign trace.stepped trace.seccompChild) = .ok w.k →
       GlobalCompletionState ([], []) [] w) :=
   ⟨Configuration.global_initial trace w, Configuration.global_initial_prefill trace w⟩
+
+/-- Complete original TX calls preserve the routing table, node/peer frontiers
+and each surviving resident list on every normal return, including ordinary
+errors. Peer deletion is permitted. Arbitrary encryption and rescheduling
+callbacks require their own routing frames; the checksum and Stack callbacks
+are also discharged concretely. This is not destination authorization. -/
+theorem original_tx_routing_frames (family addr : Nat) (packets : List WG.Packet) (mtu : Nat)
+    (pid : WG.PeerId) (item : List WG.SkbId) (bytes : List UInt8)
+    (checksum : WG.Packet → M WG.Packet) (softirq : M Unit) (need : M Bool)
+    (hc : ∀ pkt, RetainsRoutingCall (checksum pkt))
+    (hs : RetainsRoutingCall softirq) (hn : RetainsRoutingCall need) :
+    RetainsRoutingCall (WG.wgXmit family addr packets mtu) ∧
+    RetainsRoutingCall (WG.createDataDone pid item) ∧
+    RetainsRoutingCall (WG.txStep pid) ∧ RetainsRoutingCall (WG.txIter pid need) ∧
+    RetainsRoutingCall (WG.encryptStep checksum softirq) ∧
+    RetainsRoutingCall (WG.encryptIter checksum softirq need) ∧
+    RetainsRoutingCall (Env.deliverInner bytes) ∧
+    (∀ pkt, RetainsRoutingCall (Env.checksumHelp pkt)) :=
+  ⟨wgXmit_routing family addr packets mtu, createDataDone_routing pid item,
+    txStep_routing pid, txIter_routing pid need hn,
+    encryptStep_routing checksum softirq hc hs, encryptIter_routing checksum softirq need hc hs hn,
+    deliverInner_routing bytes, actualChecksum_routing⟩
+
+/-- Complete original receive completion/poll and decrypt iteration retain
+routing data and surviving lists. Generic GRO, IRQ, softirq and rescheduling
+callbacks have explicit frames; the actual Stack callback is proved separately
+in the conjunction. No live-owner, credit, affiliation, valid-packet, successful
+execution or drain premise is imposed. No authorization or delivery conclusion
+follows from this routing frame. -/
+theorem original_rx_routing_frames (pid : WG.PeerId) (budget : Nat)
+    (pkt : WG.RxPacket) (endpoint : WG.Endpoint)
+    (callback : List (List UInt8) → M Unit) (softirq irq : M Unit) (need : M Bool)
+    (hc : ∀ xs, RetainsRoutingCall (callback xs))
+    (hs : RetainsRoutingCall softirq) (hi : RetainsRoutingCall irq) (hn : RetainsRoutingCall need) :
+    RetainsRoutingCall (WG.consumeDataDone pid pkt endpoint) ∧
+    RetainsRoutingCall (WG.rxPoll pid budget callback) ∧
+    RetainsRoutingCall (WG.rxPoll pid budget (fun xs => xs.forM Env.deliverInner)) ∧
+    RetainsRoutingCall (WG.decryptStep softirq irq) ∧
+    RetainsRoutingCall (WG.decryptIter softirq irq need) :=
+  ⟨consumeDataDone_routing pid pkt endpoint, rxPoll_routing pid budget callback hc,
+    actualRxPoll_routing pid budget, decryptStep_routing softirq irq hs hi,
+    decryptIter_routing softirq irq need hs hi hn⟩
+
+/-- Whole-call traffic lifts erase to the actual original computations. They
+leave completion history unchanged on every outcome, preserve optional global
+routing/flat agreement on normal return and retain the earlier safe history on
+Stop. There is no returned failed World, packet authorization, or enclosing
+scheduler/Runner claim. -/
+theorem original_traffic_routing_completion (initial : FlatTable × FlatTable)
+    (family addr : Nat) (packets : List WG.Packet) (mtu : Nat)
+    (pid : WG.PeerId) (budget : Nat) (pkt : WG.RxPacket) (endpoint : WG.Endpoint) :
+    (Logged.ErasesPrefix (Logged.liftPrefix (Event := RoutingCompletion) (WG.wgXmit family addr packets mtu))
+        (WG.wgXmit family addr packets mtu) ∧
+      Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+        (Logged.liftPrefix (WG.wgXmit family addr packets mtu))) ∧
+    (Logged.ErasesPrefix (Logged.liftPrefix (Event := RoutingCompletion) (WG.txStep pid)) (WG.txStep pid) ∧
+      Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+        (Logged.liftPrefix (WG.txStep pid))) ∧
+    (Logged.ErasesPrefix (Logged.liftPrefix (Event := RoutingCompletion) (WG.consumeDataDone pid pkt endpoint))
+        (WG.consumeDataDone pid pkt endpoint) ∧
+      Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+        (Logged.liftPrefix (WG.consumeDataDone pid pkt endpoint))) ∧
+    (Logged.ErasesPrefix (Logged.liftPrefix (Event := RoutingCompletion)
+        (WG.rxPoll pid budget (fun xs => xs.forM Env.deliverInner)))
+        (WG.rxPoll pid budget (fun xs => xs.forM Env.deliverInner)) ∧
+      Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+        (Logged.liftPrefix (WG.rxPoll pid budget (fun xs => xs.forM Env.deliverInner)))) := by
+  have lift {α : Type} (a : M α) (ha : RetainsRoutingCall a) :
+      Logged.ErasesPrefix (Logged.liftPrefix (Event := RoutingCompletion) a) a ∧
+        Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+          (Logged.liftPrefix a) :=
+    ⟨Logged.erasesPrefix_lift a, global_completion_lift initial a ha⟩
+  exact ⟨lift _ (wgXmit_routing family addr packets mtu), lift _ (txStep_routing pid),
+    lift _ (consumeDataDone_routing pid pkt endpoint), lift _ (actualRxPoll_routing pid budget)⟩
 
 end Leanux.Proofs.WG.CryptokeyRouting
