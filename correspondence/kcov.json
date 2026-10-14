@@ -137,7 +137,8 @@
   "wg_get_device_dump",
   "wg_get_device_start",
   "wg_index_hashtable_insert",
-  "wg_index_hashtable_lookup", "wg_index_hashtable_remove",
+  "wg_index_hashtable_lookup",
+  "wg_index_hashtable_remove",
   "wg_index_hashtable_replace",
   "wg_newlink",
   "wg_noise_expire_current_peer_keypairs",
@@ -430,6 +431,258 @@
   "seccomp_may_assign_mode",
   "seccomp_log",
   "percpu_counter_compare"
+ ],
+ "helper_cuts": [
+  {
+   "function": "alloc_inode",
+   "file": "fs/inode.c",
+   "note": "inode allocation under new_inode_pseudo (get_pipe_inode, eventfd and epoll creation): VFS inode lifecycle below the file-descriptor slice (P design, docs/2026-10-05-p-pipes.md): the mirror's file objects carry no inode; the listed pipe, eventfd and epoll functions summarize allocation, reference and eviction as environment effects with constant outcomes in the fixture (the allocation sites are below the recorded ones), so these helpers' own branches are not choice points of a modeled path. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "inode_init_always_gfp",
+   "file": "fs/inode.c",
+   "note": "inode field initialization under alloc_inode: VFS inode lifecycle below the file-descriptor slice (P design, docs/2026-10-05-p-pipes.md): the mirror's file objects carry no inode; the listed pipe, eventfd and epoll functions summarize allocation, reference and eviction as environment effects with constant outcomes in the fixture (the allocation sites are below the recorded ones), so these helpers' own branches are not choice points of a modeled path. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "get_next_ino",
+   "file": "fs/inode.c",
+   "note": "the per-cpu inode number counter under new_inode_pseudo, an environment value the observation does not carry: VFS inode lifecycle below the file-descriptor slice (P design, docs/2026-10-05-p-pipes.md): the mirror's file objects carry no inode; the listed pipe, eventfd and epoll functions summarize allocation, reference and eviction as environment effects with constant outcomes in the fixture (the allocation sites are below the recorded ones), so these helpers' own branches are not choice points of a modeled path. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "new_inode_pseudo",
+   "file": "fs/inode.c",
+   "note": "the anonymous inode constructor the listed creators call: VFS inode lifecycle below the file-descriptor slice (P design, docs/2026-10-05-p-pipes.md): the mirror's file objects carry no inode; the listed pipe, eventfd and epoll functions summarize allocation, reference and eviction as environment effects with constant outcomes in the fixture (the allocation sites are below the recorded ones), so these helpers' own branches are not choice points of a modeled path. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "ihold",
+   "file": "fs/inode.c",
+   "note": "the inode reference taken by the listed dup and open paths: VFS inode lifecycle below the file-descriptor slice (P design, docs/2026-10-05-p-pipes.md): the mirror's file objects carry no inode; the listed pipe, eventfd and epoll functions summarize allocation, reference and eviction as environment effects with constant outcomes in the fixture (the allocation sites are below the recorded ones), so these helpers' own branches are not choice points of a modeled path. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "iput",
+   "file": "fs/inode.c",
+   "note": "the inode reference dropped by the listed release paths (dput on the last fput): VFS inode lifecycle below the file-descriptor slice (P design, docs/2026-10-05-p-pipes.md): the mirror's file objects carry no inode; the listed pipe, eventfd and epoll functions summarize allocation, reference and eviction as environment effects with constant outcomes in the fixture (the allocation sites are below the recorded ones), so these helpers' own branches are not choice points of a modeled path. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "evict",
+   "file": "fs/inode.c",
+   "note": "inode eviction on the last iput: VFS inode lifecycle below the file-descriptor slice (P design, docs/2026-10-05-p-pipes.md): the mirror's file objects carry no inode; the listed pipe, eventfd and epoll functions summarize allocation, reference and eviction as environment effects with constant outcomes in the fixture (the allocation sites are below the recorded ones), so these helpers' own branches are not choice points of a modeled path. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "clear_inode",
+   "file": "fs/inode.c",
+   "note": "inode clearing under evict: VFS inode lifecycle below the file-descriptor slice (P design, docs/2026-10-05-p-pipes.md): the mirror's file objects carry no inode; the listed pipe, eventfd and epoll functions summarize allocation, reference and eviction as environment effects with constant outcomes in the fixture (the allocation sites are below the recorded ones), so these helpers' own branches are not choice points of a modeled path. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "destroy_inode",
+   "file": "fs/inode.c",
+   "note": "inode destruction under evict: VFS inode lifecycle below the file-descriptor slice (P design, docs/2026-10-05-p-pipes.md): the mirror's file objects carry no inode; the listed pipe, eventfd and epoll functions summarize allocation, reference and eviction as environment effects with constant outcomes in the fixture (the allocation sites are below the recorded ones), so these helpers' own branches are not choice points of a modeled path. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "free_inode_nonrcu",
+   "file": "fs/inode.c",
+   "note": "the inode free under destroy_inode: VFS inode lifecycle below the file-descriptor slice (P design, docs/2026-10-05-p-pipes.md): the mirror's file objects carry no inode; the listed pipe, eventfd and epoll functions summarize allocation, reference and eviction as environment effects with constant outcomes in the fixture (the allocation sites are below the recorded ones), so these helpers' own branches are not choice points of a modeled path. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "inode_owner_or_capable",
+   "file": "fs/inode.c",
+   "note": "the permission predicate of setfl's O_NOATIME arm (fs/fcntl.c): a cut point whose owner test passes for the fixture's root process, which owns every inode it creates (P design section 3, Leanux/FS/Fcntl.lean); its uid and capability branches are facts of the fixture, not choice points of the mirror"
+  },
+  {
+   "function": "stream_open",
+   "file": "fs/open.c",
+   "note": "mirrored as its two flag assignments (Leanux/FS/PipeCreate.lean, fs/open.c:1654-1659), a body with no choice point, so it owns a coverage point but no decision"
+  },
+  {
+   "function": "hmac",
+   "file": "drivers/net/wireguard/noise.c",
+   "note": "the HMAC-BLAKE2s construction (its key-length branch is the primitive's): a Noise cryptographic helper mirrored as a pure function (Leanux/WG/NoiseCrypto.lean, Handshake.lean); the primitives' internal branches are below the altitude (AGENTS.md: the cryptographic primitives are not modeled as control flow). Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "mix_hash",
+   "file": "drivers/net/wireguard/noise.c",
+   "note": "the Noise hash mixing: a Noise cryptographic helper mirrored as a pure function (Leanux/WG/NoiseCrypto.lean, Handshake.lean); the primitives' internal branches are below the altitude (AGENTS.md: the cryptographic primitives are not modeled as control flow). Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "handshake_init",
+   "file": "drivers/net/wireguard/noise.c",
+   "note": "the handshake state's initial chaining and hash values: a Noise cryptographic helper mirrored as a pure function (Leanux/WG/NoiseCrypto.lean, Handshake.lean); the primitives' internal branches are below the altitude (AGENTS.md: the cryptographic primitives are not modeled as control flow). Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "handshake_zero",
+   "file": "drivers/net/wireguard/noise.c",
+   "note": "the handshake state zeroed (memzero and the state word), mirrored as the zeroed value: a Noise cryptographic helper mirrored as a pure function (Leanux/WG/NoiseCrypto.lean, Handshake.lean); the primitives' internal branches are below the altitude (AGENTS.md: the cryptographic primitives are not modeled as control flow). Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "precompute_key",
+   "file": "drivers/net/wireguard/cookie.c",
+   "note": "the cookie checker's BLAKE2s key derivation: a Noise cryptographic helper mirrored as a pure function (Leanux/WG/NoiseCrypto.lean, Handshake.lean); the primitives' internal branches are below the altitude (AGENTS.md: the cryptographic primitives are not modeled as control flow). Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "wg_setup",
+   "file": "drivers/net/wireguard/device.c",
+   "note": "the netdev setup (device.c:276 covered): a device or peer constructor with a branch-free body (assignments and initializations), mirrored as the corresponding state's initial value; no choice point. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "wg_allowedips_init",
+   "file": "drivers/net/wireguard/allowedips.c",
+   "note": "the allowed-IPs table initial value: a device or peer constructor with a branch-free body (assignments and initializations), mirrored as the corresponding state's initial value; no choice point. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "wg_cookie_checker_init",
+   "file": "drivers/net/wireguard/cookie.c",
+   "note": "the cookie checker initial value: a device or peer constructor with a branch-free body (assignments and initializations), mirrored as the corresponding state's initial value; no choice point. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "wg_cookie_init",
+   "file": "drivers/net/wireguard/cookie.c",
+   "note": "the per-peer cookie state initial value: a device or peer constructor with a branch-free body (assignments and initializations), mirrored as the corresponding state's initial value; no choice point. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "wg_prev_queue_init",
+   "file": "drivers/net/wireguard/queueing.c",
+   "note": "the prev queue's initial value (PrevQueue.lean): a device or peer constructor with a branch-free body (assignments and initializations), mirrored as the corresponding state's initial value; no choice point. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "wg_timers_init",
+   "file": "drivers/net/wireguard/timers.c",
+   "note": "the peer's timers initialized (timer_setup, no arm): a device or peer constructor with a branch-free body (assignments and initializations), mirrored as the corresponding state's initial value; no choice point. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "wg_timers_stop",
+   "file": "drivers/net/wireguard/timers.c",
+   "note": "the peer's timers deleted and the handshake work flushed at removal, a body of del_timer_sync and flush_work calls whose results the C ignores; mirrored as the timers cleared (Timers.lean). Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "wg_packet_queue_free",
+   "file": "drivers/net/wireguard/queueing.c",
+   "note": "the per-device queue freed at destruct (free_percpu, ptr_ring_cleanup under a WARN that the ring is empty, which the listed wg_destruct guards as an invariant); no choice point. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "wg_timers_any_authenticated_packet_sent",
+   "file": "drivers/net/wireguard/timers.c",
+   "note": "one del_timer of the keepalive timer (timers.c:168-171), mirrored as the timer-state effect in Timers.lean; no choice point. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "wg_timers_any_authenticated_packet_received",
+   "file": "drivers/net/wireguard/timers.c",
+   "note": "one del_timer of the new-handshake timer (timers.c:176-179), mirrored as the timer-state effect in Timers.lean; no choice point. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "wg_packet_send_handshake_cookie",
+   "file": "drivers/net/wireguard/send.c",
+   "note": "the cookie reply's sender (send.c:110-118): a ratelimited debug print compiled to nothing, wg_cookie_message_create and the reply send, no choice point of its own; the message creation and the send are mirrored in Receive.lean's cookie path. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "wg_cookie_message_create",
+   "file": "drivers/net/wireguard/cookie.c",
+   "note": "the cookie message built from the listed make_cookie, the recorded nonce and the XChaCha20-Poly1305 seal (cookie.c:181-199); no choice point of its own. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "wg_index_hashtable_alloc",
+   "file": "drivers/net/wireguard/peerlookup.c",
+   "note": "the index table's kvmalloc and its NULL test (peerlookup.c:83-92): an allocation helper whose only test is the allocation's result, which the listed caller decides on the returned value at its own line (the recorded site is the allocation; a-alloc design); the helper adds no choice point of its own. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "wg_pubkey_hashtable_alloc",
+   "file": "drivers/net/wireguard/peerlookup.c",
+   "note": "the pubkey table's kvmalloc and its NULL test (peerlookup.c:22-33): an allocation helper whose only test is the allocation's result, which the listed caller decides on the returned value at its own line (the recorded site is the allocation; a-alloc design); the helper adds no choice point of its own. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "wg_packet_queue_init",
+   "file": "drivers/net/wireguard/queueing.c",
+   "note": "the ring and worker allocation with their failure tests (queueing.c:17-41): an allocation helper whose only test is the allocation's result, which the listed caller decides on the returned value at its own line (the recorded site is the allocation; a-alloc design); the helper adds no choice point of its own. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "wg_socket_init",
+   "file": "drivers/net/wireguard/socket.c",
+   "note": "the UDP socket creation service (udp_sock_create for each family and the failure unwinds, socket.c:346-393): the listed wg_open decides on its one result, the bind outcome (L design), and the mirror holds the sockets as the device's port; the per-family creation outcomes are environment facts the fixture does not vary. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "wg_prev_queue_enqueue",
+   "file": "drivers/net/wireguard/queueing.c",
+   "note": "the prev queue's MPSC enqueue (queueing.c:72-78): its one test, the count against MAX_QUEUED_PACKETS, is the listed caller's decision on the returned Bool at queueing.h (PrevQueue.enqueue in the mirror), one outcome at one site; the enqueue itself is branch-free. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "sk_filter_trim_cap",
+   "file": "net/core/filter.c",
+   "note": "the socket-filter hook on the UDP receive path (sk_filter from the UDP layer, net/core/filter.c:138-170): an environment service of the IP stack below WireGuard's boundary whose branches are on the socket's filter (none installed on the fixture's sockets), the memalloc flag and the security hook; the file is anchored for seccomp's classic-BPF checker and translation, not for this path. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "dup_fd",
+   "file": "fs/file.c",
+   "note": "the descriptor table copied at the child probe's clone (fs/file.c:297-403): the child probe's creation is an environment effect (seccomp design 6.2, the clone's fd-table copy): the mirror gives the child the parent's descriptor table as a value, so the copy's sizing and loop are not choice points of a modeled path (W's step-0 measurement: no span-line collision); fs/file.c is anchored for the descriptor-table decisions of the single task. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "sane_fdtable_size",
+   "file": "fs/file.c",
+   "note": "the copied table's size under dup_fd: the child probe's creation is an environment effect (seccomp design 6.2, the clone's fd-table copy): the mirror gives the child the parent's descriptor table as a value, so the copy's sizing and loop are not choice points of a modeled path (W's step-0 measurement: no span-line collision); fs/file.c is anchored for the descriptor-table decisions of the single task. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "get_file_rcu",
+   "file": "fs/file.c",
+   "note": "the file references taken by dup_fd's copy loop: the child probe's creation is an environment effect (seccomp design 6.2, the clone's fd-table copy): the mirror gives the child the parent's descriptor table as a value, so the copy's sizing and loop are not choice points of a modeled path (W's step-0 measurement: no span-line collision); fs/file.c is anchored for the descriptor-table decisions of the single task. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "get_signal",
+   "file": "kernel/signal.c",
+   "note": "the delivery loop that dequeues the pending SIGSYS and selects the handler or the default action: signal delivery is an environment effect by the P9 widening's scope [USER 2026-10-13; seccomp design section 16]: the mirror models generation to the pending set and the wake (send_signal_locked, prepare_signal, complete_signal, force_sig_info_to_task, listed), and takes delivery's effect (the handler ran, the frame, the restored mask, the child's exit) from the observation; kernel/signal.c is anchored for the generation chain, not for this path. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "siginfo_layout",
+   "file": "kernel/signal.c",
+   "note": "the siginfo layout chosen for the handler frame: signal delivery is an environment effect by the P9 widening's scope [USER 2026-10-13; seccomp design section 16]: the mirror models generation to the pending set and the wake (send_signal_locked, prepare_signal, complete_signal, force_sig_info_to_task, listed), and takes delivery's effect (the handler ran, the frame, the restored mask, the child's exit) from the observation; kernel/signal.c is anchored for the generation chain, not for this path. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "copy_siginfo_to_user",
+   "file": "kernel/signal.c",
+   "note": "the siginfo copied to the handler frame: signal delivery is an environment effect by the P9 widening's scope [USER 2026-10-13; seccomp design section 16]: the mirror models generation to the pending set and the wake (send_signal_locked, prepare_signal, complete_signal, force_sig_info_to_task, listed), and takes delivery's effect (the handler ran, the frame, the restored mask, the child's exit) from the observation; kernel/signal.c is anchored for the generation chain, not for this path. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "signal_setup_done",
+   "file": "kernel/signal.c",
+   "note": "the handler frame set up and the signal mask blocked for the handler: signal delivery is an environment effect by the P9 widening's scope [USER 2026-10-13; seccomp design section 16]: the mirror models generation to the pending set and the wake (send_signal_locked, prepare_signal, complete_signal, force_sig_info_to_task, listed), and takes delivery's effect (the handler ran, the frame, the restored mask, the child's exit) from the observation; kernel/signal.c is anchored for the generation chain, not for this path. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "set_current_blocked",
+   "file": "kernel/signal.c",
+   "note": "the signal mask changed for the handler and restored by rt_sigreturn: signal delivery is an environment effect by the P9 widening's scope [USER 2026-10-13; seccomp design section 16]: the mirror models generation to the pending set and the wake (send_signal_locked, prepare_signal, complete_signal, force_sig_info_to_task, listed), and takes delivery's effect (the handler ran, the frame, the restored mask, the child's exit) from the observation; kernel/signal.c is anchored for the generation chain, not for this path. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "__set_task_blocked",
+   "file": "kernel/signal.c",
+   "note": "the mask change under set_current_blocked: signal delivery is an environment effect by the P9 widening's scope [USER 2026-10-13; seccomp design section 16]: the mirror models generation to the pending set and the wake (send_signal_locked, prepare_signal, complete_signal, force_sig_info_to_task, listed), and takes delivery's effect (the handler ran, the frame, the restored mask, the child's exit) from the observation; kernel/signal.c is anchored for the generation chain, not for this path. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "recalc_sigpending",
+   "file": "kernel/signal.c",
+   "note": "the pending flag recomputed on dequeue and on mask changes: signal delivery is an environment effect by the P9 widening's scope [USER 2026-10-13; seccomp design section 16]: the mirror models generation to the pending set and the wake (send_signal_locked, prepare_signal, complete_signal, force_sig_info_to_task, listed), and takes delivery's effect (the handler ran, the frame, the restored mask, the child's exit) from the observation; kernel/signal.c is anchored for the generation chain, not for this path. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "do_sigaltstack",
+   "file": "kernel/signal.c",
+   "note": "the alternate stack consulted for the handler frame: signal delivery is an environment effect by the P9 widening's scope [USER 2026-10-13; seccomp design section 16]: the mirror models generation to the pending set and the wake (send_signal_locked, prepare_signal, complete_signal, force_sig_info_to_task, listed), and takes delivery's effect (the handler ran, the frame, the restored mask, the child's exit) from the observation; kernel/signal.c is anchored for the generation chain, not for this path. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "restore_altstack",
+   "file": "kernel/signal.c",
+   "note": "the alternate stack restored by rt_sigreturn: signal delivery is an environment effect by the P9 widening's scope [USER 2026-10-13; seccomp design section 16]: the mirror models generation to the pending set and the wake (send_signal_locked, prepare_signal, complete_signal, force_sig_info_to_task, listed), and takes delivery's effect (the handler ran, the frame, the restored mask, the child's exit) from the observation; kernel/signal.c is anchored for the generation chain, not for this path. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "task_clear_jobctl_pending",
+   "file": "kernel/signal.c",
+   "note": "job control cleared on the child's exit (do_group_exit): the child's exit is an environment effect (seccomp design, audit C1: its filter release runs after the window closes); signal delivery is an environment effect by the P9 widening's scope [USER 2026-10-13; seccomp design section 16]: the mirror models generation to the pending set and the wake (send_signal_locked, prepare_signal, complete_signal, force_sig_info_to_task, listed), and takes delivery's effect (the handler ran, the frame, the restored mask, the child's exit) from the observation; kernel/signal.c is anchored for the generation chain, not for this path. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "zap_other_threads",
+   "file": "kernel/signal.c",
+   "note": "the thread group zapped on the child's exit (do_group_exit), one thread: the child's exit is an environment effect (seccomp design, audit C1); signal delivery is an environment effect by the P9 widening's scope [USER 2026-10-13; seccomp design section 16]: the mirror models generation to the pending set and the wake (send_signal_locked, prepare_signal, complete_signal, force_sig_info_to_task, listed), and takes delivery's effect (the handler ran, the frame, the restored mask, the child's exit) from the observation; kernel/signal.c is anchored for the generation chain, not for this path. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "flush_sigqueue",
+   "file": "kernel/signal.c",
+   "note": "the pending queue flushed on the child's exit: the child's exit is an environment effect (seccomp design, audit C1); signal delivery is an environment effect by the P9 widening's scope [USER 2026-10-13; seccomp design section 16]: the mirror models generation to the pending set and the wake (send_signal_locked, prepare_signal, complete_signal, force_sig_info_to_task, listed), and takes delivery's effect (the handler ran, the frame, the restored mask, the child's exit) from the observation; kernel/signal.c is anchored for the generation chain, not for this path. Found by the boundary rule (pre-release review, finding 1)."
+  }
  ],
  "data_only_operations": [
   "seccomp_prctl",
