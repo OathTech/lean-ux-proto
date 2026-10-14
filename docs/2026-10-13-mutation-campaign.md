@@ -91,4 +91,59 @@ The largest files: `FS/Eventpoll.lean` 389, `FS/Pipe.lean` 356,
 samples: `--cap N` keeps at most N mutants per file and class, evenly spaced
 by line (cap 1: 296; cap 2: 551; cap 3: 769).
 
+## 3. How the results are counted (power apart from presence)
+
+A survival is not a missed defect unless the mutant changes behaviour the
+check is supposed to see. The pre-release review (section 10) asks for the
+population and the selection method first, then the counts in five
+categories, and the survivors one by one. The categories:
+
+- **Applicable semantic mutants:** the mutant changes what the mirror does
+  on some input (a decision's path, a value an observation or a later
+  decision depends on, a record's consumption), so a trace that reaches it
+  can reject it. A survival here is a presence question: did the corpus
+  reach the edit with a distinguishing input.
+- **Equivalent projection mutants:** the mutant changes only what the
+  mirror reports, not what it does, and the report is equal on every input
+  the relation sees. The clear case is an operand swap at a comparison
+  whose two operands are equal whenever the compare runs (`x == 1` with
+  `x` always 1, `flags & MASK != 0` with the mask bits never set): the
+  recorded pair is the same pair. Such a survival is not a missed defect
+  and does not call for a trace; it is listed so the count is honest.
+- **Uncompilable or invalid:** the model does not build, the mutated
+  runner no longer prints parseable output (`invalid_output` on every
+  trace), or the decision table is broken (a duplicate label). Not
+  semantic mutants; counted apart.
+- **No verdict or inconclusive:** an infrastructure outcome (a timeout, a
+  busy slot, an environment failure), or a mutant whose rejection needs a
+  scheduling opportunity the run did not contain. The second kind is
+  distinguished from a survival the way the sentinel D2-M12 now is: the
+  count of traces in the run that could have distinguished the mutant is
+  given, and zero means inconclusive, not survived.
+- **Confirmed survivors:** applicable semantic mutants that pass the
+  subset and then the whole area suite. Each is explained; none is excluded
+  because the corpus merely missed its boundary, since that is exactly the
+  finding.
+
+Two kinds of mutation are kept apart throughout: one that only corrupts
+what the mirror logs (the recorded outcome of a decision the mirror does
+not branch on, the operands of a comparison, a hidden record consumed as a
+different value) and trips a hidden-record or operand mismatch with the
+behaviour intact; and one that changes behaviour with the logging intact
+(a negated condition, a removed early return, a constant off by one in a
+path the mirror takes). The first measures the instruments; the second
+measures the comparison. By class:
+
+| Class | Changes behaviour | Changes the log |
+| --- | --- | --- |
+| decision-negated | yes (the other arm runs) | yes (the recorded outcome) |
+| condition-negated | yes | no |
+| comparison-operator | yes at the boundary value | yes where the compare is declared with operands (the outcome) |
+| constant-off-by-one | yes at the boundary | yes where the constant is an operand |
+| early-return-removed | yes | no |
+| operand-swapped | no | yes (the recorded operands) |
+| record-skipped | yes where the record's value steers a path (an allocation failure, a clock) | yes (the record is left unconsumed) |
+| stop-passthrough | yes, on the stopped path only | no |
+| order-swapped | no (both arms are tested either way) | yes (the decision order) |
+
 RESULTS_PLACEHOLDER

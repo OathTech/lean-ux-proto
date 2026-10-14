@@ -26,6 +26,7 @@ Classes (one edit each; `old` and `new` are whole lines):
   operand-swapped       a `branchCmp`'s two recorded operands exchanged, outcome kept
   record-skipped        a hidden-input consumption replaced by a constant (`hidden`, `hiddenAlloc`)
   stop-passthrough      `then unsupported "..."` / `then invariant "..."` becomes `then pure ()`
+  order-swapped         two adjacent early-return decisions exchanged (the sentinel B1-M5's shape)
 
 Determinism: the enumeration depends only on the tree; ids are a hash of
 (file, line, class, old line). `--cap N` keeps at most N per (file, class),
@@ -52,7 +53,7 @@ ROOT = Path(__file__).resolve().parent.parent
 MIRROR = ['Leanux/WG', 'Leanux/FS', 'Leanux/Seccomp', 'Leanux/Kernel', 'Leanux/Env', 'Leanux/Env.lean',
           'Leanux/Runner.lean', 'Leanux/Syscalls.lean']
 CLASSES = ['decision-negated', 'condition-negated', 'comparison-operator', 'constant-off-by-one',
-           'early-return-removed', 'operand-swapped', 'record-skipped', 'stop-passthrough']
+           'early-return-removed', 'operand-swapped', 'record-skipped', 'stop-passthrough', 'order-swapped']
 
 # The corpus subset that reaches a file: (suite, [id prefixes]) per mirror
 # path prefix, from the sentinel scripts' subsets and the design docs; '' is
@@ -296,6 +297,16 @@ def enumerate_mutants(files=None, classes=None, cap=None):
                 digest = hashlib.sha1(f'{path}:{n}:{cls}:{line}'.encode()).hexdigest()[:10]
                 per_class.setdefault(cls, []).append(dict(id=f'm-{digest}', file=path, line=n, cls=cls,
                                                           old=line, new=new, note=note))
+        if not classes or 'order-swapped' in classes:
+            pat = re.compile(r'^(\s*)if ← branch(?:Cmp)? \.[A-Za-z0-9_]+ .* then return\b')
+            for n in range(1, len(lines)):
+                a, b = lines[n - 1], lines[n]
+                ma, mb = pat.match(a), pat.match(b)
+                if ma and mb and ma.group(1) == mb.group(1) and a != b:
+                    digest = hashlib.sha1(f'{path}:{n}:order-swapped:{a}'.encode()).hexdigest()[:10]
+                    per_class.setdefault('order-swapped', []).append(dict(
+                        id=f'm-{digest}', file=path, line=n, cls='order-swapped', old=a + '\n' + b, new=b + '\n' + a,
+                        note='two adjacent decisions exchanged'))
         for cls, ms in per_class.items():
             if cap and len(ms) > cap:
                 step = len(ms) / cap
@@ -318,9 +329,10 @@ def subsets_for(path, cls=None):
 def apply_mutant(m, tree):
     full = Path(tree) / m['file']
     lines = full.read_text().split('\n')
-    if lines[m['line'] - 1] != m['old']:
+    span = m['old'].count('\n') + 1
+    if '\n'.join(lines[m['line'] - 1:m['line'] - 1 + span]) != m['old']:
         raise RuntimeError(f"{m['id']}: line {m['line']} of {m['file']} is not the enumerated line")
-    lines[m['line'] - 1] = m['new']
+    lines[m['line'] - 1:m['line'] - 1 + span] = m['new'].split('\n')
     full.write_text('\n'.join(lines))
 
 
@@ -335,9 +347,19 @@ def classify(report):
         # invariant) on every one of them in the domain filter. That is the
         # mirror's own verdict, named in the abort message; any other abort
         # is the infrastructure's.
-        if 'wrong side of the domain filter' in str(report['aborted']):
+        reason = str(report['aborted'])
+        if 'wrong side of the domain filter' in reason or 'mirror invariant violated' in reason \
+                or 'domain filter failed' in reason:
             return 'rejected', ['domain_filter'], []
+        if 'model build failed' in reason:
+            return 'uncompilable', [], ['build failed']
+        if 'duplicate label or unanchored file' in reason:
+            return 'invalid', [], ['the decision table broken']
         return 'no_verdict', mismatches, other + ['aborted']
+    if outcomes and outcomes <= {'invalid_output'}:
+        # the mutated mirror's output no longer parses: the runner's output
+        # format was mutated, not the C's control flow
+        return 'invalid', [], ['invalid_output']
     if mismatches and not other:
         return 'rejected', mismatches, other
     if mismatches:
@@ -440,7 +462,7 @@ def run_one(m, tree, timeout, confirm):
     return result
 
 
-def run_campaign(mutants, workers, results_path, timeout, confirm):
+def run_campaign(mutants, workers, results_path, timeout, confirm, offset=0):
     done = set()
     if results_path.exists():
         for line in results_path.read_text().splitlines():
@@ -452,7 +474,7 @@ def run_campaign(mutants, workers, results_path, timeout, confirm):
     queue = list(todo)
 
     def worker(k):
-        tree = scratch_tree(k, ROOT)
+        tree = scratch_tree(k + offset, ROOT)
         while True:
             with lock:
                 if not queue:
@@ -474,12 +496,41 @@ def run_campaign(mutants, workers, results_path, timeout, confirm):
         t.join()
 
 
+def reclassify(results_path, workers):
+    """Recompute every non-rejected row's status from its kept report (the
+    classification may have been refined after the run); the abort reason
+    becomes the row's problem."""
+    rows = [json.loads(l) for l in results_path.read_text().splitlines() if l.strip()]
+    changed = 0
+    for r in rows:
+        if r['status'] == 'rejected' or not r['runs']:
+            continue
+        last = r['runs'][-1]
+        for k in range(workers):
+            suite = last['suite']
+            tag = '-full' if last['prefixes'] == [''] and len(r['runs']) > 1 and r['runs'][-2]['suite'] != suite else ''
+            p = ROOT.parent / f'mutation-scratch-{k}' / '.artifacts' / 'check' / f"mut-{r['id']}-{suite}{tag}" / 'report.json'
+            if not p.exists():
+                p = ROOT.parent / f'mutation-scratch-{k}' / '.artifacts' / 'check' / f"mut-{r['id']}-{suite}" / 'report.json'
+            if p.exists():
+                report = json.load(open(p))
+                status, mism, other = classify(report)
+                if report.get('aborted'):
+                    r['problem'] = str(report['aborted'])[:300]
+                if status != r['status']:
+                    r['status'], r['channel'] = status, ','.join(mism) or ','.join(other)
+                    changed += 1
+                break
+    results_path.write_text(''.join(json.dumps(r) + '\n' for r in rows))
+    return changed
+
+
 def summarise(results_path):
     rows = [json.loads(l) for l in results_path.read_text().splitlines() if l.strip()]
     by = {}
     for r in rows:
         key = (r['file'], r['cls'])
-        d = by.setdefault(key, dict(generated=0, uncompilable=0, rejected=0, survived=0, no_verdict=0, channels={}))
+        d = by.setdefault(key, dict(generated=0, uncompilable=0, invalid=0, rejected=0, survived=0, no_verdict=0, channels={}))
         d['generated'] += 1
         d[r['status']] += 1
         if r['status'] == 'rejected':
@@ -492,26 +543,26 @@ def render_report(results_path):
     shares, every survivor with its diff, every uncompilable with its line."""
     rows, by = summarise(results_path)
     lines = []
-    total = dict(generated=0, uncompilable=0, rejected=0, survived=0, no_verdict=0)
-    lines.append('| File | Class | Generated | Uncompilable | Rejected | Survived | No verdict |')
-    lines.append('| --- | --- | ---: | ---: | ---: | ---: | ---: |')
+    total = dict(generated=0, uncompilable=0, invalid=0, rejected=0, survived=0, no_verdict=0)
+    lines.append('| File | Class | Generated | Uncompilable | Invalid | Rejected | Survived | No verdict |')
+    lines.append('| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |')
     for (f, c), d in sorted(by.items()):
-        lines.append(f"| `{f.split('/', 1)[1]}` | {c} | {d['generated']} | {d['uncompilable']} | {d['rejected']} | "
-                     f"{d['survived']} | {d['no_verdict']} |")
+        lines.append(f"| `{f.split('/', 1)[1]}` | {c} | {d['generated']} | {d['uncompilable']} | {d['invalid']} | "
+                     f"{d['rejected']} | {d['survived']} | {d['no_verdict']} |")
         for k in total:
             total[k] += d[k]
-    lines.append(f"| **all** | | **{total['generated']}** | **{total['uncompilable']}** | **{total['rejected']}** | "
-                 f"**{total['survived']}** | **{total['no_verdict']}** |")
+    lines.append(f"| **all** | | **{total['generated']}** | **{total['uncompilable']}** | **{total['invalid']}** | "
+                 f"**{total['rejected']}** | **{total['survived']}** | **{total['no_verdict']}** |")
     lines.append('')
     by_class = {}
     for r in rows:
-        d = by_class.setdefault(r['cls'], dict(generated=0, uncompilable=0, rejected=0, survived=0, no_verdict=0))
+        d = by_class.setdefault(r['cls'], dict(generated=0, uncompilable=0, invalid=0, rejected=0, survived=0, no_verdict=0))
         d['generated'] += 1
         d[r['status']] += 1
-    lines.append('| Class | Generated | Uncompilable | Rejected | Survived | No verdict |')
-    lines.append('| --- | ---: | ---: | ---: | ---: | ---: |')
+    lines.append('| Class | Generated | Uncompilable | Invalid | Rejected | Survived | No verdict |')
+    lines.append('| --- | ---: | ---: | ---: | ---: | ---: | ---: |')
     for c, d in sorted(by_class.items()):
-        lines.append(f"| {c} | {d['generated']} | {d['uncompilable']} | {d['rejected']} | {d['survived']} | {d['no_verdict']} |")
+        lines.append(f"| {c} | {d['generated']} | {d['uncompilable']} | {d['invalid']} | {d['rejected']} | {d['survived']} | {d['no_verdict']} |")
     lines.append('')
     channels = {}
     for r in rows:
@@ -540,8 +591,8 @@ def render_report(results_path):
         lines.append(f"  + {r['new'].strip()}")
         lines.append('  ```')
     lines.append('')
-    unc = [r for r in rows if r['status'] == 'uncompilable']
-    lines.append(f'### Uncompilable ({len(unc)})')
+    unc = [r for r in rows if r['status'] in ('uncompilable', 'invalid')]
+    lines.append(f'### Uncompilable or invalid ({len(unc)})')
     lines.append('')
     for r in unc:
         lines.append(f"- `{r['id']}` `{r['file']}:{r['line']}` {r['cls']}: `{r['new'].strip()[:110]}`")
@@ -566,12 +617,18 @@ def main(argv=None):
     ap.add_argument('--file', dest='files', nargs='*')
     ap.add_argument('--cap', type=int)
     ap.add_argument('--workers', type=int, default=1)
+    ap.add_argument('--scratch-offset', type=int, default=0,
+                    help='first scratch worktree index (fresh trees when earlier ones are still in use)')
     ap.add_argument('--timeout', type=int, default=2400, help='seconds per check run')
     ap.add_argument('--results', default='.artifacts/mutation/results.jsonl')
     ap.add_argument('--confirm-survivors', action='store_true')
     ap.add_argument('--summary', action='store_true')
     ap.add_argument('--report', help='write the Markdown tables of --results to this file')
+    ap.add_argument('--reclassify', action='store_true', help='recompute non-rejected statuses from the kept reports')
     args = ap.parse_args(argv)
+    if args.reclassify:
+        print(f'{reclassify(ROOT / args.results, args.workers)} rows reclassified')
+        return 0
     if args.report:
         Path(args.report).write_text(render_report(ROOT / args.results))
         print(f'wrote {args.report}')
@@ -620,7 +677,7 @@ def main(argv=None):
             raise SystemExit('the campaign tree must be clean (the ids are of the committed tree)')
         results_path = ROOT / args.results
         results_path.parent.mkdir(parents=True, exist_ok=True)
-        run_campaign(mutants, args.workers, results_path, args.timeout, args.confirm_survivors)
+        run_campaign(mutants, args.workers, results_path, args.timeout, args.confirm_survivors, args.scratch_offset)
         return 0
     ap.print_help()
     return 2
