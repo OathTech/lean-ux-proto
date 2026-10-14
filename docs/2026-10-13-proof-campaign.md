@@ -14,19 +14,22 @@ retains current architecture, findings, reproduction provenance, effort and limi
 | Result | Current disposition |
 | --- | --- |
 | R1 | Uniqueness and the intentional inclusive-floor correction are proved, with pure and accepted-run witnesses. |
-| R2 | Endpoint identity and failure-retaining access contracts cover the listed families, concrete Batch scheduling and isolated trials. The maintenance/timer extension passes coordinated validation. Whole-run environment/lifecycle closure and saved-reference ownership remain open. |
+| R2 | Endpoint identity and failure-retaining access contracts cover the listed families, concrete Batch scheduling and isolated trials. The maintenance/timer and flush/removal extensions pass coordinated validation. Whole-run environment/lifecycle closure and saved-reference ownership remain open. |
 | R3 | Bounded-input normal insertion and represented removal now preserve an explicit coherent routing/frontier invariant, including both normal insertion refusals. Coordinated validation passes. Initialization, configuration histories and packet-path refinement remain open. |
 | R4 | Physical rings, finite/source journals, per-poll provenance and selected GRO order, and concrete RX scheduling are checked. Accepted input refutes chronological post-GRO order. Joint pipeline conservation remains open. |
 | R5 | The unconditional age/post-zero and wire-nonce readings are false in accepted mirror inputs. Rule Zero resolution retains thirteen positive local contracts, without universal replacement transport claims. |
 | R6 | Cookie exclusion is proved at its original call boundary. A 19-retry/20-initiation episode refutes literal MAX=18; no universal corrected retry bound is claimed. |
 
-**Validation status.** The current coordinated checkpoint passes 339 jobs and
-345 terminal declarations: 343 theorems and two definitions (ReplayWindow 15;
-R1 9; R2 166; R3 72; R4 64; R5 13; R6 6), using only `propext`,
+**Validation status.** The current coordinated checkpoint passes 340 jobs and
+348 terminal declarations: 346 theorems and two definitions (ReplayWindow 15;
+R1 9; R2 169; R3 72; R4 64; R5 13; R6 6), using only `propext`,
 `Classical.choice` and `Quot.sound`. Fresh stock kernel replay, the 60-job
-default build and 114 unit tests (23.019 seconds, one skip) also pass.
-The current R3 extension passes scoped/full builds of 130/339 jobs and independent
-frozen-source review. Its bounded-input header wording finding was corrected.
+default build and 114 unit tests (23.159 seconds, one skip) also pass.
+The R3 routing extension passed scoped/full builds of 130/339 jobs and independent
+frozen-source review; its bounded-input header wording finding was corrected.
+The three-export R2 flush/removal component passes scoped/full builds of 227/340
+jobs and independent source/documentation review. Both extensions are covered by
+the current coordinated checks.
 The preceding `c047e64` carry's 118-job executable build and eleven reproduction
 checks remain applicable to unchanged runtime; they were not rerun for proof-only
 extensions. Frozen reviews have no unresolved defect in the checked components;
@@ -150,6 +153,7 @@ execution; lifted helper coverage is separately checked against source.
 | Ambient contracts and canonical Kernel projections | Preserve chosen invariants through source-shaped leaves; legacy interfaces project shared frames. Queue scalar preservation does not establish reference credits. |
 | `SavedPeers`, prefix loops/workers | Observe demanded captured entries, including misses, with saved-stamp residency obligations; exact bounded-loop erasure retains callback/exhaustion Stops. |
 | `BatchTrials`, `BatchCalls` | `scheduler_family_access_erasure`, `scheduler_family_allocation_access` and `scheduler_trial_filter_access` separate committed calls from copied-World trials. The ordered filter propagates its first non-hidden Stop; each reached trial has an isolated safe prefix from the same entry invariant. |
+| `PeerRemoval` | [AGENT 2026-10-14] Reuse fixed send/clear `runWorkerPrefix` wrappers and scalar queue/count frames to compose all seven original flush/removal calls. Exact erasure retains the 4096 drain, dispatch/placeholder order, early returns and saved-ID loops; concrete allocation safety adds no ownership or progress premise. |
 
 [AGENT 2026-10-13] Separate identity from saved-reference ownership, share frontier
 algebra and the WG projection, and retain history outside exceptions. Observe saved
@@ -172,7 +176,8 @@ staging/encryption/completion/workers, both socket families and loopback, five N
 constructor/consumer/MAC calls, six handshake-send calls, four cookie calls,
 handshake receive/bounded workers/UDP ingress, concrete Batch scheduling, six
 allowed-IP list/removal calls, and now four key-maintenance calls plus all five
-expired timer callbacks and their dispatcher. Concrete `AllocationInv` discharges
+expired timer callbacks and their dispatcher, plus both flushed workers, the workqueue
+drain, timer stop and after-dead/optional/all-peer removal. Concrete `AllocationInv` discharges
 these local ambient contracts; source Stops and ordinary negative returns differ.
 Batch callbacks are discharged, without implying R4 journal or conservation closure.
 
@@ -227,7 +232,7 @@ python3 -B docs/proof-campaign-replay.py r2-stale-dump-cursor-orphan |
 ```
 
 **Remaining obligations.** Outer runners/deferred-unit callers, socket setup and
-reinitialization, timer firing/flush, complete peer removal, netlink, insertion and
+reinitialization, timer firing, netlink, insertion and
 remaining resident scans/lifecycle composition are open. Saved scalar affiliation
 and reference credits are separate: dangling/aliased IDs can Stop after safe
 accesses. C initializes cache/handshake before incrementing the peer counter;
@@ -253,6 +258,7 @@ replays and both current rejection checks each took under one second.
 | Concrete Batch scheduler and separate trials | 18: 5 / 13 | 29m41s through full-build collection |
 | Allowed-IP list/removal access | 6: 3 / 3 | 17m17s through scoped-target collection |
 | Key maintenance and expired timers | 5: 3 / 2 | 20m07s through collected full-build result; component/scoped/full targets 144/226/334 |
+| Inline flush and peer removal | 5: 3 / 2 | 9m53s through collected full build; 14m57s ownership including recovery freezes; component/scoped/full 158/227/340. Two ordinary elaboration failures; two read-only reviewer capacity interruptions caused freezes/all-dirty snapshots, with no build interrupted. |
 
 Earlier monolithic IPv4 proof search failed at heartbeat limits; explicit source
 tails replaced it. An earlier tactic loop was deliberately stopped by its verified

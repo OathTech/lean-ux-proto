@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Lifetimes.PeerRemoval
 import Leanux.Proofs.WG.Lifetimes.TimerCallbacks
 import Leanux.Proofs.WG.Lifetimes.AllowedIpsAccess
 import Leanux.Proofs.WG.Lifetimes.BatchCalls
@@ -1557,6 +1558,28 @@ theorem timer_callback_family_ambient_access_preserves (c : Lifetimes.AmbientCon
 safe access prefixes on all original outcomes. This neither bounds retries nor
 proves timer firing, reference credits, queue draining or whole-run lifecycle safety. -/
 theorem timer_callback_family_allocation_access_preserves (call : Lifetimes.TimerCallbackCall) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed := call.allocation
+
+/-- Seven complete original inline-flush, timer-stop and peer-removal calls
+retain their result, successful World and exact Stop on every input. Queue
+removal and pending reset precede section entry; the original 4096-step drain,
+placeholder order, early returns and both saved-ID passes remain unchanged. -/
+theorem peer_removal_family_access_erasure (call : Lifetimes.PeerRemovalCall) :
+    ErasesPrefix call.observed call.original := call.erases
+
+/-- Independent socket/index/release/allowed-IP and scalar queue/count contracts
+compose the complete family. Saved lists contain raw IDs; their later callees
+resolve current peers. No distinctness, pending-work, successful-drain or
+reference-ownership premise replaces those accesses. -/
+theorem peer_removal_family_ambient_access_preserves (c : Lifetimes.AmbientContracts I)
+    (r : Lifetimes.PeerRemovalContracts I) (call : Lifetimes.PeerRemovalCall) :
+    PrefixPreserves I Lifetimes.LifetimeEvent.Safe call.observed := call.preserves_ambient c r
+
+/-- Concrete allocation geometry discharges every lower-call and bookkeeping
+contract, retaining safe access prefixes after failures and the invariant on
+normal completion. This is resolved-store safety, not reference-credit ownership,
+eventual queue draining, device destruction or whole-run environment closure. -/
+theorem peer_removal_family_allocation_access_preserves (call : Lifetimes.PeerRemovalCall) :
     PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed := call.allocation
 
 end Leanux.Proofs.WG.LifetimeSafety
