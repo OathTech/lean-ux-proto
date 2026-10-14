@@ -4,10 +4,9 @@
 
 Work is on `.worktrees/proofs-campaign`, branch `proofs/campaign`, under
 [the charter](2026-10-13-charter-proof-campaign.md). The mirror remains byte-identical
-to `ca6b22e`. The current R4 suffix/composition extension passes scoped/full
+to `ca6b22e`. The current R3 optional-device/lifecycle extension passes scoped/full
 builds, exact checks, independent frozen review and coordinated validation.
-The preceding R3 device-completion and joint stamped rxPoll
-checkpoints passed their coordinated validation.
+The preceding R4 suffix/composition checkpoint passed coordinated validation.
 The [proof register](proofs.md#results) holds current declarations and
 pins; its [model map](proofs.md#layers) supplies the complete module inventory.
 Current components are not completion of the open charter properties. This campaign
@@ -19,54 +18,28 @@ retains current architecture, findings, reproduction provenance, effort and limi
 | --- | --- |
 | R1 | Uniqueness and the intentional inclusive-floor correction are proved, with pure and accepted-run witnesses. |
 | R2 | Initialized allocation-identity access safety now holds for every typed Runner trace and both placeholder/flood modes, including failed histories. Every reached consistency-filter entry derives its own allocation invariant and safe isolated trials with exact ordered filter correspondence. No parser, array-length, progress or success premise is added. Raw-reference affiliation/credit remains a separate stronger property. Coordinated validation of the three new exports passes. |
-| R3 | Initialized finite normal call histories refine flat-prefix updates and reached-root lookup, including full normal clear. Completed setAllowedip/removal events now cover the complete public peer command, with source-derived acquisition and concrete send/flush/cleanup frames. Successful public parseTrace supplies every configured peer's address shape. The complete original device command now composes clear/removal/peer-command completions; normal clear/remove-all leaves the folded tables empty. Routed present-device entry remains explicit. Enclosing lifecycle/Runner execution and packet paths remain open. |
+| R3 | Initialized finite normal call histories refine flat-prefix updates and reached-root lookup, including full normal clear. Completed setAllowedip/removal events now cover the complete public peer command, with source-derived acquisition and concrete send/flush/cleanup frames. Successful public parseTrace supplies every configured peer's address shape. The complete original device command now composes clear/removal/peer-command completions; normal clear/remove-all leaves the folded tables empty. Optional routing now includes absent devices, guarded creation, down, destruction/deletion and all fixture/prefill modes. Whole absent peer/device commands retain their entry journals, without assuming interface lookup failure. Enclosing syscall/Runner execution and packet paths remain open. |
 | R4 | Physical rings, finite/source journals, selected GRO order and concrete RX scheduling are checked. A joint stamped poll proves full callback/removal provenance, per-poll stamp uniqueness on every prefix and observed release on normal return, from valid prior lifetime history. Accepted input refutes chronological post-GRO order. Capture reads now support removal and entry stamps in the new suffix, excluding prior releases. Finite original-poll sequences compose distinct entry stamps with a direct audit projection. Initialized concrete caller/Runner coverage and joint pipeline conservation remain open. |
 | R5 | The unconditional age/post-zero and wire-nonce readings are false in accepted mirror inputs. Rule Zero resolution retains thirteen positive local contracts, without universal replacement transport claims. |
 | R6 | Cookie exclusion is proved at its original call boundary. A 19-retry/20-initiation episode refutes literal MAX=18; no universal corrected retry bound is claimed. |
 
-**Validation status.** The current R4 suffix/composition extension passes the
-261-job scoped Statements and 436-job full proof builds. Five exports give
-90 R4 / 437 current-source terminal declarations (435 theorems and two definitions).
-The capped exact check preserves all 432 prior declaration statements/proof bodies
-and checks six-file scope, census, whitespace, empty index, source tokens/imports
-and mirror equality. Independent frozen source/export/documentation review is
-clear at 22:36:44 UTC. Sequential coordinated validation passes the 436-job
-proof gate on all 437 declarations, fresh stock kernel replay, the 60-job default
-build and 124 unit tests (21.863 seconds, one skip). The coordinator's capped
-exact check confirms the frozen hashes, six-file scope, all 432 prior bodies,
-census, whitespace and mirror equality.
+**Validation status.** The current R3 optional-device/lifecycle extension passes
+293-job scoped Statements and 439-job full proof builds. Three exports give
+99 R3 / 440 current-source declarations (438 theorems and two definitions).
+The capped exact six-file check passes all 437 prior terminal statements/proof
+bodies, census, whitespace, empty index, the existing comment-aware token/import
+checks and mirror equality. Independent frozen source/export/documentation review is
+clear. Sequential coordinated validation passes the 439-job proof gate on all
+440 declarations, fresh stock kernel replay, the 60-job default build and 124
+unit tests (22.004 seconds, one skip). The coordinator's capped exact check
+confirms the frozen hashes, scope, compatibility, census, whitespace and mirror.
+The preceding R4 suffix/composition checkpoint passed its 436-job gate
+on 437 declarations, fresh replay, default build and 124 units (21.863 seconds,
+one skip), plus frozen review and exact scope/compatibility checks.
 
-The preceding R3 device-completion extension passed the
-289-job scoped Statements and 433-job full proof builds. Three exports gave
-96 R3 / 432 terminal declarations at that checkpoint (430 theorems and two definitions).
-The capped exact check passes seven-file scope, all 429 prior declaration
-statements/proof bodies, census, whitespace, empty index and mirror equality.
-Independent frozen review is clear after the local-scope wording correction.
-Sequential coordinated validation passes the 433-job proof gate on all 432
-declarations, fresh stock kernel replay, the 60-job default build and 124 unit
-tests (22.031 seconds, one skip). The coordinator's capped exact check confirms
-all frozen hashes, scope, compatibility, census, whitespace and mirror equality.
-The final comment-only Statements correction was rebuilt by the gate.
-The preceding joint stamped poll checkpoint passed the
-431-job proof gate on all 429 declarations, fresh stock kernel replay, the 60-job
-default build and 124 unit tests (22.258 seconds, one skip). Its frozen review and
-exact scope/hash/census/compatibility/whitespace/mirror checks passed; the failed
-elaborator-recovery diagnostic amendment remains in its effort record.
-The preceding R3 public-command/parser extension passes the
-286-job scoped statements and 425-job full proof builds. The capped exact
-five-file scope/compatibility check passes all 420 prior declaration statements
-and proof bodies, whitespace, the empty index and mirror equality. Three new exports
-gave 93 R3 / 423 terminal declarations at that checkpoint (421 theorems and two
-definitions). Independent frozen review is clear. Sequential coordinated validation
-passes the 425-job proof gate with all 423 declarations on permitted axioms,
-fresh stock kernel replay, the 60-job default build and 124 unit tests
-(22.863 seconds, one skip). The coordinator's capped exact check confirms the
-five-file scope, frozen hashes, census, compatibility, whitespace and mirror.
-The preceding initialized Runner checkpoint passed the
-423-job proof gate on all 420 declarations, fresh stock kernel replay, the 60-job
-default build and 124 unit tests (23.215 seconds, one skip), with exact compatibility
-and frozen-hash checks. R2 remains closed at its stated access-safety boundary;
-R3/R4 enclosing closures remain open.
+[AGENT 2026-10-14] Condense repeated checkpoint validation here; the
+checkpoint commit messages retain historical counts and timings, and the result
+effort tables below retain failed attempts and their disposition.
 
 **Preceding Lean 4.35 carry (`ca6b22e`).** The Lean 4.35 carry passes the 147-job and 182-job scoped
 targets and the 420-job full proof target. Five proof files repair collection
@@ -92,22 +65,6 @@ checking because the bundle PATH omitted `git`; one infrastructure retry appende
 `/usr/bin` only in that command's environment and passed within its 900-second
 bound (19:44:08 to result collection at 19:50:45 UTC). No global state changed.
 At that checkpoint, initialized whole-run R2 and remaining R3/R4 closures remained open.
-
-**Preceding syscall checkpoint (`43c7549`, Lean 4.33).** The syscall extension has 417 terminal declarations
-(415 theorems and two definitions), including 205 R2 theorems. Wrapper/compatibility,
-dispatch, enclosing syscall and terminal targets pass 228/239/240/277 jobs; the
-full proof target passes 420 jobs. The capped exact eight-file scope/census/
-signature/whitespace/mirror check passes, retaining all ten compatibility
-signatures and 202 prior R2 terminals. Independent frozen review is clear; its
-two documentation findings are corrected. A separate lower/Env/syscall source
-coverage audit found no issue in its inspected surfaces. Sequential coordinated
-validation passes the 420-job proof gate with all 417 declarations on permitted
-axioms, fresh stock kernel replay, the 60-job default build and 124 unit tests
-(22.751 seconds, one skip). The capped scope/census/whitespace check confirms all
-six frozen Lean hashes. Its first run failed only because a non-trust assertion
-pinned the moving shared main head; checking ancestry instead passes. At that checkpoint the mirror was byte-identical
-to `43c7549`; no reproduction recipe or runtime behavior changed. At that checkpoint,
-initialized whole-run R2 and remaining R3/R4 closures remained open.
 
 ```sh
 capped -- scripts/in-bundle scripts/proof-gate
@@ -460,8 +417,9 @@ No production history field is proposed.
 cryptokey identity binding. Current [terminal contracts](../Leanux/Proofs/WG/CryptokeyRouting/Statements.lean)
 prove represented trie operations and initialized finite histories of the listed
 original calls, plus complete peer/device-command completion prefixes and public
-parser address shape. Present-device routed entry remains explicit; enclosing
-lifecycle/Runner execution and the packet claim remain open.
+parser address shape. Optional routing now handles absent devices and actual guarded
+creation, down, destruction/deletion, plus all initial fixture and successful prefill
+modes. Enclosing syscall/Runner execution and the packet claim remain open.
 No R3 Rule Zero counterexample or changed charter conclusion is asserted.
 
 | Model | Abstraction and refinement boundary |
@@ -481,6 +439,7 @@ No R3 Rule Zero counterexample or changed charter conclusion is asserted.
 | `RoutingRetains`/`Completions`, concrete send/socket/handshake/flush frames, `RoutingAcquire`; configuration tail/removal/update observers | Deletion-permitting routing frames; actual whole-setAllowedip/removal events and flat folding; exact acquired-peer update through replacement/removal, attributes and complete tail. Lookup/create residency is separately derived. Unconditional erasure remains separate from entry-conditional safe-prefix and normal reached-state agreement. |
 | `PeerCommandCompletion`, `ParserShape` | Literal public preflight/acquisition suffix, derived optional-peer residency and complete command prefixes; actual private parsePeer/config/operation plus the pause-stripping accumulator and exact public-parser suffix derive every configured peer's address shape. `original_setPeerCmd_completion_erasure`, `original_setPeerCmd_routing_prefix`, `parsed_trace_peer_commands_routing`. |
 | `RoutingDeviceFrames`, `DeviceCompletion`, completed clear/remove-all | Strong configuration/socket projections and concrete cache/key-expiry frames; all four original DeviceSource cuts compose actual clear/removal/peer-command events. Normal clear/remove-all leaves folded flat tables empty, without physical-node emptiness or totality. `original_device_configuration_completion_erasure`, `original_device_configuration_routing_prefix`, `parsed_trace_device_configuration_routing`. |
+| `RoutingGlobal`, `RoutingDeviceLifecycleFrames`, `LifecycleCompletion` | Absence denotes empty flat tables; present states retain the existing invariant and event validity. Original guarded create/down/destruct/delete and absent whole configuration paths preserve safe completion prefixes. Actual fixture/prefill initialization includes bare and nonnetwork modes. `original_optional_lifecycle_erasure`, `original_optional_lifecycle_routing_prefix`, `original_optional_routing_initialization`. |
 
 [AGENT 2026-10-13] Use width-parametric arithmetic, one Patricia tree and pure
 insertion, with contexts as structural paths rather than another executable
@@ -649,8 +608,22 @@ Ordinary negative results retain preceding completed changes and actual cleanup.
 actual WG.free boundary; compose original DeviceSource continuations with concrete
 silent frames, retaining an empty-fold postcondition for later lifecycle use.
 
-**Remaining obligations.** Compose the actual Runner, including bare/create/delete
-intervals and concrete silent frames for nonconfiguration calls.
+Optional routing now preserves the existing present-device contracts while adding
+absence with empty folded tables. Guarded original creation either retains routing
+or installs an empty device from absence. Original down permits peer deletion;
+destruction observes the real clear/remove-all before lifting its unchanged queue,
+sleep and ratelimiter suffix to the final device drop. No synthetic reset is added.
+Whole absent peer/device commands preserve exactly their entry journals, even if
+an arbitrary fixture row makes interface lookup succeed. Direct invalid setAllowedip
+can still complete while absent; it is not covered by that whole-command fact.
+All typed initial fixture modes and successful seccomp prefill establish optional
+routing. These are source-derived local contracts, not enclosing Runner execution.
+[AGENT 2026-10-14] Keep present completion validity unchanged and add an optional
+routing state; use the actual clear's derived empty fold before final device drop,
+and the guarded creation endpoint for fresh empty routing.
+
+**Remaining obligations.** Compose the actual syscalls and Runner with the optional
+state, lifecycle observations and concrete silent frames for nonconfiguration calls.
 A failing clear has no returned World or successful completion marker; earlier
 partial mutations are outside a completed-call history. Literal contiguous
 histories cannot span unobserved guards/helper effects. The earlier tagged
@@ -693,6 +666,7 @@ now rejects it before deletion. It is not a current R3 misrouting counterexample
 | Acquired-peer removal/update completion | 30 calls: 29 builds (8 PASS / 21 ordinary elaboration/normalization FAIL) plus one passing scope/census check; final scoped/full targets 278/397 | 30m40s from grant 15:30:16 through final full-result collection clock 16:00:56. Four exports, 90 R3 /400 source declarations. No cap/interruption; all exits collected. The complete acquired stage and concrete flush/acquisition foundations compile; repeated preflight continuation-normalization failures left whole setPeerCmd composition open at that checkpoint (closed by the later literal observer). No runtime change/replay. Independent frozen review and coordinated gate/fresh replay/default/unit validation pass. Token returned at 16:02:40 (32m24s ownership). |
 | Public peer command and parsed address shape | 33 capped calls: 32 builds (7 PASS / 25 ordinary FAIL) plus a passing exact scope/compatibility check; scoped/full 286/425 | 45m06s from measured grant 20:18:48 through full-result measurement 21:03:54 UTC. Three exports; 93 R3 / 423 source declarations. Failures were elaboration/normalization and deterministic tactic limits, including the public-command mutable join and parser continuation expansion; literal acquisition and parser suffix cuts close both without changing source or premises. All exits collected, no cap/interruption, recovery admission diagnostic or runtime replay. The exact check preserves all 420 prior declaration statements/proof bodies and confirms five-file scope, census, whitespace and mirror equality. Literal source cuts retain all original errors and Stops; no added target-residency, parser-fidelity, credit or progress premise. Independent frozen review is clear, with no finding. Token returned at 21:08:52 (50m04s ownership). Sequential coordinated proof gate, fresh stock kernel replay, default build and 124 unit tests pass; the capped exact scope/hash/census/compatibility/whitespace/mirror check also passes. |
 | Complete device routing completion | 12 capped calls: 10 builds (4 PASS / 6 ordinary FAIL) plus two passing exact checks; scoped/full 289/433 | 9m00s from measured grant 22:07:48 through full-result measurement 22:16:48 UTC. Three exports; 96 R3 / 432 source declarations. Failures were local projection/bind normalization, one namespace qualification, list-proof subgoal ordering and an empty-fold rewrite. The first failed build also rejected a declaration containing metavariables; no source admission or recovery `declaration uses sorry` diagnostic occurred. No cap/interruption or runtime change/replay; all exits collected. The exact check preserves all 429 prior declaration statements/proof bodies and confirms scope, census, whitespace and mirror equality. Independent source/export review found no defect; its low stale-scope finding in two map passages and one old terminal comment is corrected, preserving every declaration statement/proof body. The coordinator gate rebuilt the final comment-only edit. Final independent documentation reconciliation is clear. Sequential coordinated gate (433 jobs, 432 permitted-axiom declarations), fresh stock kernel replay, default build (60 jobs), unit tests (124, 22.031 seconds, one skip) and capped exact scope/hash/census/compatibility/whitespace/mirror checks all pass. Token handback clock 22:21:52 UTC (14m04s ownership); all 12 named logs removed and no active jobs. |
+| Optional routing and device lifecycle | 14 capped calls: 11 builds (3 PASS / 8 ordinary FAIL), three exact checks (FAIL / PASS / PASS); scoped/full 293/439 | 9m31s from measured grant 22:41:55 through full-result measurement 22:51:26 UTC. Three exports; 99 R3 / 440 source declarations. Failures concerned cached-peer-list/let normalization, namespace and private-predicate inference, history equality direction, an extra scope terminator and a getK leaf. Calls 5 and 8 explicitly reported kernel-rejected metavariable placeholders; no source admission or recovery `declaration uses sorry` diagnostic was introduced. No cap/interruption or runtime change/replay; all build exits collected. Check 12 failed because its temporary token scan included comments and matched an existing English verb; check 13 reuses the actual gate's comment-aware token/import routines and passes. Check 14 confirms the final review metadata and frozen hashes. All 437 prior terminal statements/proof bodies are unchanged; exact six-file scope, census, whitespace, empty index and mirror equality pass. Independent frozen source/export/documentation review is clear. Sequential coordinated proof gate, fresh stock kernel replay, default build, 124 unit tests and exact scope/hash/compatibility checks pass. Token returned 22:56:55 UTC (15m00s ownership); all 14 worker logs are removed. The coordinator staged-whitespace check then rejected a trailing blank line in the new lifecycle file; removing it changes no compiled code. The corrected staged check passes. The coordinator also corrected the stale pending-validation register cell before commit. |
 
 The represented/loop tranche split into 17 single-step calls and a 12-call
 continuation; its fifteen failures included two heartbeat failures. Final scoped/full

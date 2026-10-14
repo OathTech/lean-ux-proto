@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Configuration.LifecycleCompletion
 import Leanux.Proofs.WG.Configuration.DeviceCompletion
 import Leanux.Proofs.WG.Configuration.PeerCommandCompletion
 import Leanux.Proofs.WG.Configuration.ParserShape
@@ -1887,5 +1888,64 @@ theorem parsed_trace_device_configuration_routing (j : Lean.Json) (trace : Runne
   refine ⟨hs, ?_⟩
   intro attrs hop
   exact Configuration.wgSetDeviceObserved_spec initial attrs (hs (.wgSet attrs) hop)
+
+/-- Original optional-device lifecycle observers erase unconditionally,
+including absent-device errors, arbitrary fixture rows and failed teardown.
+Creation and down run as exact original lifts; no synthetic reset event is used. -/
+theorem original_optional_lifecycle_erasure (a : WG.DeviceAttrs) (p : WG.PeerAttrs) :
+    Logged.ErasesPrefix (Logged.liftPrefix (Event := RoutingCompletion) WG.wgCreate) WG.wgCreate ∧
+    Logged.ErasesPrefix (Logged.liftPrefix (Event := RoutingCompletion) WG.wgDown) WG.wgDown ∧
+    Logged.ErasesPrefix Configuration.wgDestructObserved WG.wgDestruct ∧
+    Logged.ErasesPrefix Configuration.wgDeleteObserved WG.wgDelete ∧
+    Logged.ErasesPrefix (Configuration.setPeerCmdObserved p) (WG.setPeerCmd p) ∧
+    Logged.ErasesPrefix (Configuration.wgSetDeviceObserved a) (WG.wgSetDevice a) :=
+  ⟨Logged.erasesPrefix_lift _, Logged.erasesPrefix_lift _,
+    Configuration.wgDestructObserved_erases, Configuration.wgDeleteObserved_erases,
+    Configuration.setPeerCmdObserved_erases p, Configuration.wgSetDeviceObserved_erases a⟩
+
+/-- The optional state represents absence by empty flat tables and present
+routing by the existing structural invariant. Actual guarded creation, down,
+destruction/deletion and complete configuration preserve it on normal return,
+while all Stops retain semantically safe completed prefixes. Absent whole peer
+and device commands preserve exactly their entry histories on every outcome;
+this does not extend direct invalid allowed-IP completions to absent devices.
+Only local address shape is required, with no fixture-authenticity, resident-owner,
+credit, drain or successful-execution premise. Runner and packet closure remain separate. -/
+theorem original_optional_lifecycle_routing_prefix (initial : FlatTable × FlatTable)
+    (a : WG.DeviceAttrs) (p : WG.PeerAttrs)
+    (ha : Configuration.DeviceAddressShape a) (hp : Configuration.PeerAddressShape p) :
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Logged.liftPrefix WG.wgCreate) ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Logged.liftPrefix WG.wgDown) ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      Configuration.wgDestructObserved ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      Configuration.wgDeleteObserved ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Configuration.setPeerCmdObserved p) ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Configuration.wgSetDeviceObserved a) ∧
+    (∀ h0, Logged.PrefixPreserves (fun h w => h = h0 ∧ routingView w = none) (fun h => h = h0)
+      (Configuration.setPeerCmdObserved p)) ∧
+    (∀ h0, Logged.PrefixPreserves (fun h w => h = h0 ∧ routingView w = none) (fun h => h = h0)
+      (Configuration.wgSetDeviceObserved a)) :=
+  ⟨wgCreate_global_completion initial, global_completion_lift initial _ wgDown_routing,
+    Configuration.wgDestructObserved_global initial, Configuration.wgDeleteObserved_global initial,
+    Configuration.setPeerCmdObserved_global initial p hp, Configuration.wgSetDeviceObserved_global initial a ha,
+    fun h => Configuration.setPeerCmdObserved_absent h p,
+    fun h => Configuration.wgSetDeviceObserved_absent h a⟩
+
+/-- The actual Runner fixture initializes optional routing for every typed
+trace, including bare and nonnetwork modes. Successful original seccomp prefill
+preserves that initialization. This is an initial-state theorem, not execution
+of the enclosing Runner, and makes no returned-World claim for failed prefill. -/
+theorem original_optional_routing_initialization (trace : Runner.Trace) (w : World) :
+    (w.k = Runner.initialKernel trace.rlimit trace.net trace.bare trace.foreign trace.stepped trace.seccompChild →
+      GlobalCompletionState ([], []) [] w) ∧
+    (Env.seccompPrefill trace.seccompPrefill
+      (Runner.initialKernel trace.rlimit trace.net trace.bare trace.foreign trace.stepped trace.seccompChild) = .ok w.k →
+      GlobalCompletionState ([], []) [] w) :=
+  ⟨Configuration.global_initial trace w, Configuration.global_initial_prefill trace w⟩
 
 end Leanux.Proofs.WG.CryptokeyRouting
