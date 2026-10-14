@@ -4,7 +4,7 @@ from elftools.elf.elffile import ELFFile
 
 def layouts(kernel):
     wanted = {'index_hashtable', 'index_hashtable_entry', 'hlist_node', 'hlist_head',
-              'allowedips_node', 'allowedips', 'pcpu_hot'}
+              'allowedips_node', 'allowedips', 'pcpu_hot', 'wg_peer', 'kref', 'refcount_struct'}
     result = {}
     with open(kernel, 'rb') as stream:
         dwarf = ELFFile(stream).get_dwarf_info()

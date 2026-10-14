@@ -50,9 +50,9 @@ def normalize(asm):
     return asm
 
 
-def extract(kernel):
+def extract(kernel, extra_names=()):
     config = json.loads((ROOT / 'correspondence/kcov.json').read_text())
-    names = set(config['functions'])
+    names = set(config['functions']) | set(extra_names)
     sizes = {}
     for row in run('nm', '-S', '--defined-only', str(kernel)).splitlines():
         cols = row.split()
@@ -79,7 +79,7 @@ def extract(kernel):
         f['instructions'] = [i for i in f['instructions'] if i['pc'] < f['entry'] + size]
     locations = frames(kernel, [i['pc'] for f in functions for i in f['instructions']])
     # Also include a listed non-WG caller if any of its inline frames is WG.
-    functions = [f for f in functions if any('/wireguard/' in src
+    functions = [f for f in functions if f['name'] in extra_names or any('/wireguard/' in src
                  for i in f['instructions'] for _, src in locations[i['pc']])]
     for f in functions:
         for i in f['instructions']:

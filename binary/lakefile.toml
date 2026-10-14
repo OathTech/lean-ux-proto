@@ -14,3 +14,7 @@ path = ".."
 [[lean_exe]]
 name = "binary-probe"
 root = "Main"
+
+[[lean_lib]]
+name = "BinaryProofs"
+roots = ["Execution", "RegionExecution", "MirrorLoop", "Memory", "Symbolic", "Image", "ImageLayout", "Layouts", "Regions", "PeerRegions", "Prologue", "BucketEntry", "Representation"]

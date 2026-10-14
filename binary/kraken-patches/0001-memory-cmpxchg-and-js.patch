@@ -1,0 +1,208 @@
+From eed58b7eda5d1873919616e996bcac205a724dc8 Mon Sep 17 00:00:00 2001
+From: Codex <codex@localhost>
+Date: Wed, 14 Oct 2026 18:17:53 +0000
+Subject: [PATCH] Add memory cmpxchg and sign-condition semantics for WireGuard
+ lookup
+
+[AGENT 2026-10-14] Implement only the forms reached by peer-get: memory cmpxchg and the sign condition. Register destinations remain explicit unsupported effects. Freeze the destination address before accumulator writeback; request memory write permission on both comparison outcomes. Intel SDM vol. 2 CMPXCHG and Jcc define flags and effects. Tested success, failure, zero extension, borrow, signed overflow, accumulator addressing, parser rejection, and failed-compare write permission with capped lake build Kraken.X64.LookupTests Kraken.X64.PrintATT (Lean v4.35.0). No proof axiom introduced.
+---
+ Kraken/X64/LookupTests.lean  | 68 ++++++++++++++++++++++++++++++++++++
+ Kraken/X64/Parser/Basic.lean |  7 ++++
+ Kraken/X64/PrintATT.lean     |  1 +
+ Kraken/X64/PrintIntel.lean   |  2 ++
+ Kraken/X64/Semantics.lean    | 18 ++++++++++
+ Kraken/X64/Syntax.lean       |  3 +-
+ 6 files changed, 98 insertions(+), 1 deletion(-)
+ create mode 100644 Kraken/X64/LookupTests.lean
+
+diff --git a/Kraken/X64/LookupTests.lean b/Kraken/X64/LookupTests.lean
+new file mode 100644
+index 0000000..fd9e6da
+--- /dev/null
++++ b/Kraken/X64/LookupTests.lean
+@@ -0,0 +1,68 @@
++module
++
++import Kraken.X64.OmniSemantics
++import Kraken.X64.Parser
++meta import Kraken.X64.Semantics
++meta import Kraken.Mem
++
++open Kraken.X64
++
++private instance : Labels := ⟨fun _ => 100⟩
++
++private def cx : Instr := .regular .W64 .W32
++  (.cmpxchg (.mem { base := some (.reg .rbx), idx := none }) (.low .rcx .W32))
++
++private def initial (acc value : UInt64) : MachineData := {
++  regs := { rax := acc, rbx := 0x1000, rcx := 9 }
++  dmem := (Int.toBytes 4 value.toNat).At 0x1000 }
++
++private def execute (i : Instr) (s : MachineData) : Effects :=
++  i.interp s ⟨0, 5⟩ (fun d => .done ⟨d, 5⟩) (fun p d => .done ⟨d, p⟩)
++
++-- Executable tests, not proof certificates. Errors and unmapped accesses fail.
++private def check (post : MachineState → Bool) : Effects → Bool
++  | .done s => post s
++  | .require_exec_access _ k => check post (k ())
++  | .require_read_access _ _ k => check post (k ())
++  | .require_write_access _ _ k => check post (k ())
++  | _ => false
++
++-- Success leaves the accumulator's upper half untouched.
++#guard check (fun t => t.pc == 5 && t.data.regs.rax == 0x123400000005 &&
++    t.data.status.zf && t.data.dmem.loadInt 0x1000 4 == some 9)
++  (execute cx (initial 0x123400000005 5))
++
++-- Failure writes back memory and zero-extends EAX.
++#guard check (fun t => t.data.regs.rax == 5 && !t.data.status.zf &&
++    t.data.dmem.loadInt 0x1000 4 == some 5 && !t.data.status.cf)
++  (execute cx (initial 0x123400000006 5))
++
++#guard check (fun t => t.data.status.cf && t.data.status.sf && !t.data.status.of)
++  (execute cx (initial 0 1))
++#guard check (fun t => !t.data.status.cf && !t.data.status.sf && t.data.status.of)
++  (execute cx (initial 0x80000000 1))
++
++-- Address uses the original RAX, before failure overwrites the accumulator.
++#guard check (fun t => t.data.regs.rax == 5 && t.data.dmem.loadInt 0x1000 4 == some 5)
++  (execute (.regular .W64 .W32
++    (.cmpxchg (.mem { base := some (.reg .rax), idx := none }) (.low .rcx .W32)))
++    { (initial 0x1000 5) with regs := { rax := 0x1000, rcx := 9 } })
++
++example (s : MachineData) :
++    (execute (.regular .W64 .W64 (.jcc .s "negative")) s).All
++      (fun t => t.pc = if s.status.sf then 100 else 5) := by
++  simp [execute, Instr.interp, Operation.interp, CondCode.interp, Effects.All]
++  split <;> simp_all [Effects.All, label]
++
++#guard (Parser.parse "cmpxchg %r12d,0x0(%r13)").isOk
++#guard (Parser.parse "js negative").isOk
++#guard !(Parser.parse "cmpxchg $1,0x0(%r13)").isOk
++
++-- Failure still requests write permission.
++#guard match execute cx (initial 6 5) with
++    | .require_exec_access _ k => match k () with
++      | .require_read_access _ _ k => match k () with
++        | .require_write_access a w _ => a == 0x1000 && w == .W32
++        | _ => false
++      | _ => false
++    | _ => false
+diff --git a/Kraken/X64/Parser/Basic.lean b/Kraken/X64/Parser/Basic.lean
+index 246ea0d..1178357 100644
+--- a/Kraken/X64/Parser/Basic.lean
++++ b/Kraken/X64/Parser/Basic.lean
+@@ -510,6 +510,7 @@ def parseCondCode (suffix : String.Slice) : Parser CondCode :=
+   | "be" | "na" => .pure .be
+   | "l" | "nge" => .pure .l
+   | "le" | "ng" => .pure .le
++  | "s" => .pure .s
+   | _ => .fail s!"unknown condition code: {suffix}"
+ 
+ -- ============================================================================
+@@ -885,6 +886,12 @@ def parseInstr : Parser Instr := do
+     let w ← instrWidth mn
+     commaSeparated w parseOperand parseRegOrMem .cmp
+ 
++  | "cmpxchg" =>
++    commaSeparated .none parseRegA parseRegOrMem .cmpxchg
++  | "cmpxchgq" | "cmpxchgl" | "cmpxchgw" | "cmpxchgb" => do
++    let w ← instrWidth mn
++    commaSeparated w parseRegA parseRegOrMem .cmpxchg
++
+   -- Test (sets flags based on AND without storing result)
+   | "test" =>
+     commaSeparated .none parseOperand parseRegOrMem .test
+diff --git a/Kraken/X64/PrintATT.lean b/Kraken/X64/PrintATT.lean
+index 757dac5..0c7f108 100644
+--- a/Kraken/X64/PrintATT.lean
++++ b/Kraken/X64/PrintATT.lean
+@@ -92,6 +92,7 @@ def operation {w} (aw : Width) (op : Operation w) : String :=
+   | .sub d x => two "sub" (operand aw x) (rm aw d)
+   | .sbb d x => two "sbb" (operand aw x) (rm aw d)
+   | .cmp a b => two "cmp" (operand aw b) (rm aw a)
++  | .cmpxchg d x => two "cmpxchg" (reg x) (rm aw d)
+   | .mul x => one "mul" (rm aw x)
+   | .mulx hi lo x => s!"mulx {rm aw x}, {reg lo}, {reg hi}"
+   | .imul1 x => one "imul" (rm aw x)
+diff --git a/Kraken/X64/PrintIntel.lean b/Kraken/X64/PrintIntel.lean
+index b03d7db..a0353e5 100644
+--- a/Kraken/X64/PrintIntel.lean
++++ b/Kraken/X64/PrintIntel.lean
+@@ -117,6 +117,7 @@ instance : ToString RelRegOrMem where toString rel := rel.toStr
+ 
+ instance : ToString CondCode where toString
+   | .z => "e" | .nz => "ne" | .c => "b" | .nc => "ae" | .a => "a" | .be => "be" | .l => "l" | .le => "le"
++  | .s => "s"
+ 
+ instance : ToString ShiftCountExpr where toString
+   | .cl => "cl"
+@@ -144,6 +145,7 @@ def Operation.toStr {w} (op : Operation w) (addr_w : Width := .W64) : String :=
+   | .sub dst src => s!"sub {dst.toStr addr_w}, {src.toStr addr_w}"
+   | .sbb dst src => s!"sbb {dst.toStr addr_w}, {src.toStr addr_w}"
+   | .cmp a b => s!"cmp {a.toStr addr_w}, {b.toStr addr_w}"
++  | .cmpxchg dst src => s!"cmpxchg {dst.toStr addr_w}, {src}"
+   | .mul src => s!"mul {src.toStr addr_w}"
+   | .mulx hi lo src => s!"mulx {hi}, {lo}, {src.toStr addr_w}"
+   | .imul none src1 src2 => s!"imul {src1.toStr addr_w}, {src2.toStr addr_w}"
+diff --git a/Kraken/X64/Semantics.lean b/Kraken/X64/Semantics.lean
+index 8a850cd..8bb2855 100644
+--- a/Kraken/X64/Semantics.lean
++++ b/Kraken/X64/Semantics.lean
+@@ -422,6 +422,7 @@ def CondCode.interp (cc : CondCode) (s : StatusFlags) : Bool := match cc with
+   | .z  => s.zf | .nz => !s.zf | .c  => s.cf | .nc => !s.cf
+   | .a  => !s.cf && !s.zf | .be => s.cf || s.zf
+   | .l => s.sf != s.of | .le => (s.sf != s.of) || s.zf
++  | .s => s.sf
+ 
+ @[kstep] def ShiftCountExpr.interp [Labels] (c : ShiftCountExpr) (s : MachineData) (p : Std.Rco Int64) := match c with
+   | .cl => s.regs.rcx.toBitVec.take 8
+@@ -569,6 +570,23 @@ set_option maxHeartbeats 1000000
+       af := (v.take 4).unsigned != (a.take 4).unsigned - (b.take 4).unsigned,
+       of := v.signed != a.signed - b.signed }
+     next { s with status }))
++  -- Intel SDM vol. 2, CMPXCHG: compare accumulator - destination;
++  -- the memory destination receives a write even when comparison fails.
++  -- Only the memory form encountered in the pinned UP kernel is supported.
++  -- Freeze its address before a failed comparison overwrites the accumulator.
++  | .cmpxchg (.reg _) _ => unimplemented "CMPXCHG register destination"
++  | .cmpxchg (.mem dst) src =>
++    let addr := (dst.interp s.regs p).zeroExtend 64
++    let a := s.regs.get (.low .rax w)
++    let replacement := s.regs.get src
++    s.load addr w (fun b s =>
++    let v := a - b
++    let status := .from_result v {
++      cf := v.unsigned != a.unsigned - b.unsigned
++      af := (v.take 4).unsigned != (a.take 4).unsigned - (b.take 4).unsigned
++      of := v.signed != a.signed - b.signed }
++    { s with status }.store addr (if a == b then replacement else b) (fun s =>
++      next (if a == b then s else s.setReg (.low .rax w) b)))
+   | .mul src =>
+     let a := s.regs.get (Reg.low .rax w)
+     src.interp s p (fun b s =>
+diff --git a/Kraken/X64/Syntax.lean b/Kraken/X64/Syntax.lean
+index 84ac0c0..a8d6d88 100644
+--- a/Kraken/X64/Syntax.lean
++++ b/Kraken/X64/Syntax.lean
+@@ -173,7 +173,7 @@ attribute [coe] AvxOperand.regOrMem
+ abbrev AvxOperand.avx {w} (r : AvxReg w) : AvxOperand w := regOrMem (.avx r)
+ abbrev AvxOperand.mem {w} (m : AddrExpr) : AvxOperand w := regOrMem (.mem m)
+ 
+-inductive CondCode | z | nz | c | nc | a | be | l | le
++inductive CondCode | z | nz | c | nc | a | be | l | le | s
+   deriving Repr, BEq, DecidableEq, Hashable, Lean.ToExpr
+ abbrev CondCode.e := CondCode.z
+ abbrev CondCode.ne := CondCode.nz
+@@ -207,6 +207,7 @@ inductive Operation (w : Width)
+   | sub  (_ : Dst w) (src : Operand w)
+   | sbb  (_ : Dst w) (src : Operand w)
+   | cmp  (a : RegOrMem w) (b : Operand w)
++  | cmpxchg (dst : RegOrMem w) (src : Reg w)
+   | mul  (src : RegOrMem w)
+   | mulx (hi lo : Reg w) (src : RegOrMem w) -- {_ : 32 <= w.bits}
+   -- imul1 and imul collectively describe variants of the same
+-- 
+2.43.0
+

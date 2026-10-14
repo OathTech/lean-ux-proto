@@ -1120,6 +1120,40 @@ static void print_pcs(const char *tag, const char *id, unsigned i, const unsigne
     printf("]}\n");
 }
 
+/* Binary adequacy probe: preserve repetitions in the two pinned s4 ranges.
+ * This extra test stream leaves the differential check's coverage unchanged.
+ * The consumer verifies the ELF identity before using these addresses. */
+static void print_binary_pcs(const char *stream, const char *id, unsigned i,
+                             const unsigned long *area, unsigned long count)
+{
+    printf("LEANUX_BINARY_PCS {\"id\":\"%s\",\"index\":%u,\"stream\":\"%s\",\"pcs\":[", id, i, stream);
+    int comma = 0;
+    for (unsigned long j = 1; j <= count; ++j) {
+        unsigned long pc = area[j];
+        if (!((pc > 0xffffffff813a0470UL && pc <= 0xffffffff813a0540UL) ||
+              (pc > 0xffffffff81399610UL && pc <= 0xffffffff8139970aUL))) continue;
+        printf("%s\"0x%lx\"", comma ? "," : "", pc);
+        comma = 1;
+    }
+    printf("]}\n");
+}
+
+static void print_binary_comparisons(const char *stream, const char *id, unsigned i,
+                                    const unsigned long *area, unsigned long count)
+{
+    printf("LEANUX_BINARY_CMP {\"id\":\"%s\",\"index\":%u,\"stream\":\"%s\",\"records\":[", id, i, stream);
+    int comma = 0;
+    for (unsigned long j = 0; j < count; ++j) {
+        const unsigned long *r = area + 1 + 4 * j;
+        unsigned long pc = r[3];
+        if (!((pc > 0xffffffff813a0470UL && pc <= 0xffffffff813a0540UL) ||
+              (pc > 0xffffffff81399610UL && pc <= 0xffffffff8139970aUL))) continue;
+        printf("%s[%lu,\"0x%lx\",\"0x%lx\",\"0x%lx\"]", comma ? "," : "", r[0], r[1], r[2], pc);
+        comma = 1;
+    }
+    printf("]}\n");
+}
+
 static unsigned char observe_buffer[2048];
 static struct timespec went_up;
 /* the clock read before a candidate first up's window (becomes went_up) */
@@ -2683,6 +2717,8 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         if (comparisons) {
             /* The remote stream's comparisons: the handshake worker's peer
              * reference counts (stage C) are declared comparisons. */
+            print_binary_comparisons("task", t->id, i, coverage, count);
+            if (remote) print_binary_comparisons("remote", t->id, i, remote, remote_count);
             print_records("LEANUX_CMP", t->id, i, coverage, count, NULL);
             if (remote) print_records("LEANUX_RCMP", t->id, i, remote, remote_count, cmp_block);
             seccomp_child_streams(t, i, &result[i], comparisons);
@@ -2690,6 +2726,8 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         }
         print_pcs("LEANUX_COVERAGE", t->id, i, coverage, count);
         if (remote) print_pcs("LEANUX_RCOVERAGE", t->id, i, remote, remote_count);
+        print_binary_pcs("task", t->id, i, coverage, count);
+        if (remote) print_binary_pcs("remote", t->id, i, remote, remote_count);
         seccomp_child_streams(t, i, &result[i], comparisons);
     }
     if (up_seen)
