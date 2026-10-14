@@ -1658,9 +1658,17 @@ def run_chunk(traces, out, kcov, guest_variant=None, alloc_flags=0, arm=()):
             excluded, distinct = Counter(), set()
             operand_problems, checked = operand_agreement(trace, actual_cmp, trace_comparisons,
                                                           compared['locations'], kcov[1], set(kcov[0]['functions']),
-                                                          kcov[0]['operand_exclusions'], excluded, distinct,
-                                                          sections=sections)
-            if operand_problems and actual_cmp.get('napi_irq_ambiguous'):
+                                                          kcov[0]['operand_exclusions'], excluded, distinct)
+            # A trace with open placements always goes through the placement
+            # evidence, whose per-section matching ties the mirror's NET_RX
+            # ordinals to the guest's blocks; until 2026-10-14 it ran only on
+            # a first-run operand mismatch, so a mirror that mis-stamped its
+            # sections passed whenever the site-only relation happened to
+            # hold (the mutation campaign's finding 4). The section-confined
+            # relation itself (`sections=`) is not applied to the first run:
+            # on batch traces it fails at an ordinal the guest's block tags do
+            # not carry, a disagreement for the W7 placement work to settle.
+            if actual_cmp.get('napi_irq_ambiguous'):
                 # the second run, every open placement before the put
                 count = actual_cmp['napi_irq_ambiguous']
                 with_records = next(t for t in with_hidden('cmp') if t['id'] == trace['id'])
@@ -1704,8 +1712,7 @@ def run_chunk(traces, out, kcov, guest_variant=None, alloc_flags=0, arm=()):
                                     excluded, distinct = Counter(), set()
                                     operand_problems, checked = operand_agreement(
                                         trace, selected, trace_comparisons, compared['locations'], kcov[1],
-                                        set(kcov[0]['functions']), kcov[0]['operand_exclusions'], excluded, distinct,
-                                        sections=sections)
+                                        set(kcov[0]['functions']), kcov[0]['operand_exclusions'], excluded, distinct)
                                     if not operand_problems:
                                         # popped into the report's napi_before_put_sections
                                         outcomes[f'napi placement ({trace["id"]})'] = ','.join(map(str, before_put))

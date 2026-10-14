@@ -78,8 +78,13 @@ def socketInit (port : Nat) : M Int := do
       if held first then unsupported "the random port draw collides with a bound port"
       pure first
     else
-      -- udp_sock_create4 fails; pr_err (loglevel 3, no record); goto out
-      if held port then return -EADDRINUSE
+      -- udp_sock_create4 fails: the socket was created, the bind refused,
+      -- and udp_sock_create4's error path releases it (sock_release ->
+      -- iput, the inode's only reference); pr_err (loglevel 3, no record);
+      -- goto out
+      if held port then
+        iputReport true
+        return -EADDRINUSE
       pure port
   -- ipv6_mod_enabled(); the IPv6 socket at `chosen`, v6only: no conflict
   socketReinit (some chosen) (some chosen)
