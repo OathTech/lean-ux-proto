@@ -28,7 +28,7 @@ theorem erasesPrefix_bind_pure (hg : ErasesPrefix g (pure x))
 def runWorkerPrefix (worker : Worker) (body : PrefixM Event Unit) : PrefixM Event Unit := do
   _ ← liftPrefix (hidden (.sectionStart worker))
   if worker == .netRx then
-    liftPrefix (modify fun s => {s with netRxSections := s.netRxSections + 1, netRxSection := s.netRxSections + 1})
+    liftPrefix (modify fun s => {s with netRxSection := s.netRxSections})
   body
   if worker == .netRx then liftPrefix (modify fun s => {s with netRxSection := 0})
   _ ← liftPrefix (hidden (.sectionStop worker))

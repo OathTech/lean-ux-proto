@@ -89,15 +89,20 @@ theorem skipAmbient_sameKernel : SameKernel skipAmbient := by
   intro k
   mvcgen [skipAmbient]
 
+theorem noteNetRxStart_sameKernel (site : Nat) : SameKernel (noteNetRxStart site) := by
+  apply sameKernel_of_wp
+  intro k
+  mvcgen [noteNetRxStart]
+
 theorem hidden_sameKernel (s : HiddenSite) : SameKernel (hidden s) := by
   apply sameKernel_of_wp
   intro k
-  mvcgen [hidden, skipAmbient]
+  mvcgen [hidden, skipAmbient, noteNetRxStart]
 
 theorem allocRecord_sameKernel (s : AllocSite) : SameKernel (recordOutcome s) := by
   apply sameKernel_of_wp
   intro k
-  mvcgen [recordOutcome, hidden, skipAmbient]
+  mvcgen [recordOutcome, hidden, skipAmbient, noteNetRxStart]
 
 theorem allocPlaceholder_sameKernel (s : AllocSite) : SameKernel (placeholderOutcome s) := by
   apply sameKernel_of_wp
@@ -108,7 +113,7 @@ theorem keypairAllocation_sameKernel : SameKernel (hiddenAlloc .kzallocKeypair) 
   apply sameKernel_of_wp
   intro k
   rw [← allocationOutcome_eq]
-  mvcgen [allocationOutcome, recordOutcome, placeholderOutcome, hidden, skipAmbient, invariant, unsupported]
+  mvcgen [allocationOutcome, recordOutcome, placeholderOutcome, hidden, skipAmbient, noteNetRxStart, invariant, unsupported]
   invariants
   | inv1 _ n _ _ _ _ _ _ => fun r _ => ⟨n - r.2 + 1⟩
   | inv2 => ((⇓? _ w => ⌜w.k = k⌝) : PostCond _ (.arg World (.except Stop .pure)))

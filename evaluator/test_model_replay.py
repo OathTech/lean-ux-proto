@@ -296,6 +296,84 @@ S2_B_FIRST_DATAGRAMS = [
 ]
 
 
+# W8 under load (the integration record c047e64's named follow-on): the live
+# capture of w8_down_exit_up on s4 with one kind-302 record inserted in the
+# netns-close operation at `default_device_exit_batch`'s cond_resched
+# (net/core/dev.c:12174, site 427, ambient), between cleanup_net's own
+# yields (site 152), every other value the capture's own. The old model:
+# "expected section_stop:cleanup_net (site 115), the record is site 427".
+W8_DEFAULT_DEVICE_EXIT = json.loads(r'''{"arm_records":true,"hidden":[[[150,"3addfeff00000000"],[5,"d2720f8f00000000"],[150,"3addfeff00000000"],[128,"53ddfeff00000000"]],[[312,"40e4cb81ffffffff408c3e81ffffffff"],[114,"408c3e81ffffffff40e4cb81ffffffff"],[150,"7dddfeff00000000"],[150,"7fddfeff00000000"],[427,"0000000000000000"],[152,"0000000000000000"],[152,"0000000000000000"],[152,"0000000000000000"],[115,"0000000000000000"]],[[128,"c1defeff00000000"]],[],[[128,"30dffeff00000000"]]],"id":"w8_default_device_exit_resched","net_fixture":"foreign-creator","ops":[{"config":{"listen_port":51820,"peers":[{"allowed_ips":[{"addr":"0a000000","cidr":8,"family":4}],"endpoint":{"addr":"7f000001","family":4,"port":51999},"keepalive":25,"public_key":"0faa684ed28867b97f4a6a2dee5df8ce974e76b7018e3f22a1c4cf2678570f20"}],"private_key":"1111111111111111111111111111111111111111111111111111111111111111"},"op":"wg_set"},{"op":"wg_netns_close"},{"op":"wg_up"},{"op":"wg_get"},{"op":"wg_observe"}],"version":1}''')
+
+
+class NetnsExitYield(unittest.TestCase):
+    def test_default_device_exit_resched_is_ambient(self):
+        # the yield inside cleanup_net's section is passed over, like site 152
+        self.assertIsNone(replay_raw(W8_DEFAULT_DEVICE_EXIT))
+
+    def test_a_record_the_mirror_does_not_declare_still_fails(self):
+        # the same stream with an undeclared site in that position
+        trace = json.loads(json.dumps(W8_DEFAULT_DEVICE_EXIT))
+        trace['hidden'][1] = [[999 if r[0] == 427 else r[0], r[1]] for r in trace['hidden'][1]]
+        self.assertIn('the record is site 999', replay_raw(trace) or '')
+
+
+def _replay_prepared(trace):
+    """Run the model on a trace whose caller reads are already in place (no second synthesis)."""
+    if not MODEL.is_file():
+        raise AssertionError(f'{MODEL} is missing: run `lake build leanux-model` first')
+    result = subprocess.run([MODEL], input=json.dumps(with_jiffies_end(trace)).encode(), capture_output=True, timeout=120)
+    out = (result.stdout + result.stderr).decode()
+    return None if result.returncode == 0 and out.startswith('{') and not result.stderr else out.strip()
+
+
+def _s2_keepalive_arm():
+    """S2_B_FIRST with its caller reads synthesised once; the index of the keepalive
+    arm (site 426, 25 s, the first arm of wg_up) and of its read in operation 1."""
+    trace = with_timer_caller_jiffies(S2_B_FIRST)
+    records = trace['hidden'][1]
+    read = next(i for i, r in enumerate(records) if r[0] == 426)
+    arm = read + 1
+    assert records[arm][0] == TIMER_ARM_SITE
+    return trace, read, arm
+
+
+class TimerArmMessages(unittest.TestCase):
+    """The three verdicts of `armTimer` with the caller's read (kind 311) present
+    (review finding 2; the mutation campaign noted the pre-311 model reported a
+    wrong delay as a stall)."""
+
+    def test_prepared_capture_agrees(self):
+        trace, _, _ = _s2_keepalive_arm()
+        self.assertIsNone(_replay_prepared(trace))
+
+    def test_a_wrong_delay_names_the_expiry_mismatch(self):
+        # the caller's read one tick earlier: expires = jc + delay no longer equals the published e
+        trace, read, _ = _s2_keepalive_arm()
+        jc = int.from_bytes(bytes.fromhex(trace['hidden'][1][read][1]), 'little')
+        trace['hidden'][1][read][1] = ((jc - 1) & MASK64).to_bytes(8, 'little').hex()
+        out = _replay_prepared(trace) or ''
+        self.assertIn('timer expiry differs from Linux', out)
+        self.assertIn("the mirror's delay 6250 gives", out)
+        self.assertNotIn('a stall between', out)
+
+    def test_a_gap_above_one_tick_is_a_stall(self):
+        # mod_timer's own read two ticks after the caller's, the published expiry unchanged
+        trace, read, arm = _s2_keepalive_arm()
+        jc = int.from_bytes(bytes.fromhex(trace['hidden'][1][read][1]), 'little')
+        value = trace['hidden'][1][arm][1]
+        trace['hidden'][1][arm][1] = ((jc + 2) & MASK64).to_bytes(8, 'little').hex() + value[16:]
+        out = _replay_prepared(trace) or ''
+        self.assertIn("a stall between a timer's two jiffies reads (the mirror's delay matches the published expiry)", out)
+        self.assertNotIn('timer expiry differs', out)
+
+    def test_mod_timer_behind_the_caller_is_a_hidden_mismatch(self):
+        trace, read, arm = _s2_keepalive_arm()
+        jc = int.from_bytes(bytes.fromhex(trace['hidden'][1][read][1]), 'little')
+        value = trace['hidden'][1][arm][1]
+        trace['hidden'][1][arm][1] = ((jc - 1) & MASK64).to_bytes(8, 'little').hex() + value[16:]
+        self.assertIn("is behind the caller's read", _replay_prepared(trace) or '')
+
+
 class DispatchOrder(unittest.TestCase):
     """Dispatch order (docs/2026-10-11-dispatch-order.md): the mirror runs the
     queued unit the dispatch record names. Mutant Q-M1 (scripts/wg-mutants.py)

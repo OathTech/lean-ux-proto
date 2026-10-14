@@ -154,11 +154,11 @@ class EvaluationChecks(unittest.TestCase):
               'shared_exits': [], 'operand_exclusions': [], 'data_only_operations': [],
               'branch_free_functions': [], 'helper_cuts': []}
 
-    def decision(self, label, line, true, false):
+    def decision(self, label, line, true, false, terminal=None, repeatable=False):
         return {'label': label, 'file': 'fs/eventfd.c', 'line': line,
                 'when_true': [{'file': 'fs/eventfd.c', 'lo': lo, 'hi': hi} for lo, hi in true],
                 'when_false': [{'file': 'fs/eventfd.c', 'lo': lo, 'hi': hi} for lo, hi in false],
-                'repeatable': False, 'comparison': None}
+                'repeatable': repeatable, 'comparison': None, 'terminal': terminal or []}
 
     def control_flow_fixture(self):
         table = check.parse_decisions([
@@ -333,6 +333,77 @@ class EvaluationChecks(unittest.TestCase):
         self.assertTrue(run(dict(label='alloc_fd.at_limit=0'), [[4, '0x8', '0x20', '0x1']])[0])   # operands omitted
         self.assertTrue(run(dict(label='alloc_fd.o_cloexec=0', operands=[0, 0]), [])[0])         # undeclared
         self.assertEqual(run(dict(label='made_up=1', operands=[1, 2]), []), ([], 0))             # left to control_flow
+
+    def test_two_declared_comparisons_cannot_share_one_kernel_comparison(self):
+        # The mutation campaign's finding 2 (2026-10-14): setfl's `&&` declares
+        # two decisions at one condition line; a mirror evaluating the second
+        # test when Linux skipped it reported a pair that matched the single
+        # kernel row the first test left. A C comparison is an instruction:
+        # distinct decisions must match distinct PCs.
+        cmp = {'rel': 'flag', 'const_rhs': True, 'site': None}
+        decisions = {'setfl.o_append_changed': dict(site='fs/fcntl.c:48', comparison=cmp),
+                     'setfl.is_append': dict(site='fs/fcntl.c:48', comparison=cmp)}
+        loc = {'0x1': [{'function': 'do_fcntl', 'source': '/x/.deps/linux/fs/fcntl.c:48'}],
+               '0x2': [{'function': 'do_fcntl', 'source': '/x/.deps/linux/fs/fcntl.c:48'}]}
+        trace = {'ops': [{'op': 'fcntl'}]}
+        both = {'branches': [dict(index=0, label='setfl.o_append_changed=0', operands=[0, 0]),
+                             dict(index=0, label='setfl.is_append=0', operands=[0, 0])]}
+        one_row = [{'records': [[5, '0x0', '0x0', '0x1']]}]
+        problems, _ = check.operand_agreement(trace, both, one_row, loc, decisions)
+        self.assertEqual([p['problem'] for p in problems], ['two declared comparisons matched one kernel comparison'])
+        two_rows = [{'records': [[5, '0x0', '0x0', '0x1'], [5, '0x0', '0x0', '0x2']]}]
+        self.assertEqual(check.operand_agreement(trace, both, two_rows, loc, decisions)[0], [])
+
+    def test_operand_agreement_matches_within_the_branch_section(self):
+        # The mutation campaign's finding 4: a branch stamped with a NET_RX
+        # section ordinal matches only the records the guest tagged with that
+        # section's block, and a branch outside any section only records
+        # outside the NET_RX blocks.
+        cmp = {'rel': 'ge', 'const_rhs': False, 'site': None}
+        decisions = {'wg_packet_rx_poll.counter': dict(site='drivers/net/wireguard/receive.c:300', comparison=cmp)}
+        loc = {'0x1': [{'function': 'wg_packet_rx_poll',
+                        'source': '/x/.deps/linux/drivers/net/wireguard/receive.c:300'}]}
+        trace = {'id': 't', 'ops': [{'op': 'wg_inject'}]}
+        sections = {('t', 0): {3: 1}}   # dispatch block 3 is NET_RX section 1
+        def run(section, block):
+            branch = dict(index=0, label='wg_packet_rx_poll.counter=1', operands=[8, 32])
+            if section:
+                branch['section'] = section
+            records = [{'records': [[4, '0x8', '0x20', '0x1', block]]}]
+            return check.operand_agreement(trace, {'branches': [branch]}, records, loc, decisions, sections=sections)
+        self.assertEqual(run(1, '3'), ([], 1))
+        self.assertTrue(run(1, '2')[0])          # the record lies in another block
+        self.assertTrue(run(0, '3')[0])          # a branch outside any section cannot use a NET_RX block's record
+        self.assertEqual(run(0, '2'), ([], 1))
+        self.assertEqual(check.operand_agreement(trace, {'branches': [dict(index=0, label='wg_packet_rx_poll.counter=1',
+                                                                            operands=[8, 32])]},
+                                                 [{'records': [[4, '0x8', '0x20', '0x1', '3']]}], loc, decisions),
+                         ([], 1))                # without the map, the old relation
+
+    def test_decision_after_the_function_returned(self):
+        # The mutation campaign's finding 3: a removed early return makes the
+        # mirror report a decision past the point where Linux returned, which
+        # no witness shows when that outcome is unwitnessed. After a terminal
+        # outcome the function's next decision is a new call, from the top.
+        table = check.parse_decisions([
+            self.decision('eventfd_read.short_buffer', 220, [(221, 221)], [(222, 222)], terminal=[True], repeatable=True),
+            self.decision('eventfd_read.empty', 223, [], [(224, 224)], terminal=[True], repeatable=True)], self.CONFIG)
+        instrumented = {'fs/eventfd.c:221', 'fs/eventfd.c:222', 'fs/eventfd.c:224'}
+        functions = {'eventfd_read'}
+        witnesses = check.witness_table(table, instrumented, functions)
+        loc = {f'0x{n}': [{'function': 'eventfd_read', 'source': f'/x/.deps/linux/fs/eventfd.c:{n}'}]
+               for n in (221, 222, 224)}
+        trace = {'version': 1, 'id': 'tr', 'ops': [{'op': 'read', 'fd': {'literal': 8}, 'count': 8}]}
+        def run(labels, lines):
+            model = {'branches': [{'index': 0, 'label': l} for l in labels]}
+            coverage = [{'id': 'tr', 'index': 0, 'count': len(lines), 'pcs': [f'0x{n}' for n in lines]}]
+            return control_flow(trace, model, coverage, loc, self.CONFIG, table, witnesses, instrumented, functions)[0]
+        self.assertEqual(run(['eventfd_read.short_buffer=1'], [221]), [])
+        self.assertEqual([p['problem'] for p in run(['eventfd_read.short_buffer=1', 'eventfd_read.empty=1'], [221])],
+                         ['decision reported after the function returned'])
+        # a second call after the return starts from the top
+        self.assertEqual(run(['eventfd_read.short_buffer=1', 'eventfd_read.short_buffer=0', 'eventfd_read.empty=0'],
+                             [221, 222, 224]), [])
 
     def test_section_agreement_two_runs(self):
         # W7 stream H (13.2 (ii), T1): the (c') placement of an inline NAPI
@@ -652,6 +723,25 @@ class EvaluationChecks(unittest.TestCase):
         self.assertEqual(problems, {})
         _, problems, _, _ = check.resolve_choices({('t', 'pc'): [[[303, '0xc', 1, 24, '00' * 24, None]]]}, sites, locations)
         self.assertEqual(problems['t'][0]['problem'], 'choice from an undeclared consumer')
+
+    def test_default_device_exit_resched_resolves_as_ambient(self):
+        # W8 under load: cleanup_net's pernet exit_batch for the device layer
+        # yields at net/core/dev.c:12174 (default_device_exit_batch's
+        # cond_resched); the record's consumer frame is that line (sched.h is
+        # a choice helper). Declared as the ambient site 427 it resolves;
+        # without the declaration it is an undeclared consumer (the
+        # integration record c047e64's named follow-on).
+        frame = lambda src: [{'source': f'/x/.deps/linux/{src}'}]
+        locations = {'0xd': frame('include/linux/sched.h:2085') + frame('net/core/dev.c:12174')}
+        op = [[302, '0xd', 1, 8, '00' * 8, None]]
+        declared = {('resched', 'net/core/dev.c:12174'): dict(id=427, label='resched:default_device_exit_batch', len=8, role='ambient')}
+        resolved, problems, skipped, _ = check.resolve_choices({('t', 'pc'): [op]}, declared, locations)
+        self.assertEqual([r[0] for r in resolved[('t', 'pc')][0]], [427])
+        self.assertEqual(problems, {})
+        self.assertEqual(dict(skipped), {'ambient:resched:default_device_exit_batch': 1})
+        _, problems, _, _ = check.resolve_choices({('t', 'pc'): [op]}, {}, locations)
+        self.assertEqual(problems['t'][0]['problem'], 'choice from an undeclared consumer')
+        self.assertEqual(problems['t'][0]['call_chain'], ['include/linux/sched.h:2085', 'net/core/dev.c:12174'])
 
     def test_empty_run_is_not_a_pass(self):
         class Args:

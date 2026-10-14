@@ -4,7 +4,7 @@
 
 Work is on `.worktrees/proofs-campaign`, branch `proofs/campaign`, under
 [the charter](2026-10-13-charter-proof-campaign.md). The mirror remains byte-identical
-to `c047e64`. The [proof register](proofs.md#results) holds current declarations and
+to `43c7549`; coordinated carry validation passes. The [proof register](proofs.md#results) holds current declarations and
 pins; its [model map](proofs.md#layers) supplies the complete module inventory.
 Current components are not completion of the open charter properties. This campaign
 has made no main integration, push, differential check or guest run.
@@ -14,27 +14,26 @@ retains current architecture, findings, reproduction provenance, effort and limi
 | Result | Current disposition |
 | --- | --- |
 | R1 | Uniqueness and the intentional inclusive-floor correction are proved, with pure and accepted-run witnesses. |
-| R2 | Endpoint identity and failure-retaining access contracts cover the listed families, concrete Batch scheduling and isolated trials. All seven original dump calls now have exact typed erasure and concrete allocation-safe failed prefixes; scoped/full builds, independent frozen review and coordinated checks pass. Initialized whole-run allocation-identity access closure remains open; raw-reference affiliation/credit is a separate stronger property. |
-| R3 | Initialized finite normal call histories refine flat-prefix updates and reached-root lookup, including full normal clear. Completed setAllowedip/removal events now cover the entire acquired-peer update, with concrete send/flush/cleanup frames and separately derived lookup/create residency. Scoped/full targets, independent frozen source/export/documentation review and coordinated checks pass. Public setPeerCmd preflight composition, enclosing configuration/Runner closure and packet paths remain open. |
-| R4 | Physical rings, finite/source journals, per-poll provenance and selected GRO order, and concrete RX scheduling are checked. The balanced lookup/release extension passes coordinated validation. The six-export W7 joint-observer/source-cut extension passes coordinated validation. Five further normal endpoint exports pass scoped/full and coordinated validation and independent frozen review. Accepted input refutes chronological post-GRO order. Joint pipeline conservation remains open. |
+| R2 | Endpoint identity and failure-retaining access contracts cover the listed families, concrete Batch scheduling and isolated trials. All seven original dump calls now have exact typed erasure and concrete allocation-safe failed prefixes. Initialized whole-run allocation-identity access closure remains open; raw-reference affiliation/credit is a separate stronger property. |
+| R3 | Initialized finite normal call histories refine flat-prefix updates and reached-root lookup, including full normal clear. Completed setAllowedip/removal events now cover the entire acquired-peer update, with concrete send/flush/cleanup frames and separately derived lookup/create residency. Public setPeerCmd preflight composition, enclosing configuration/Runner closure and packet paths remain open. |
+| R4 | Physical rings, finite/source journals, per-poll provenance and selected GRO order, and concrete RX scheduling are checked. Accepted input refutes chronological post-GRO order. Joint pipeline conservation remains open. |
 | R5 | The unconditional age/post-zero and wire-nonce readings are false in accepted mirror inputs. Rule Zero resolution retains thirteen positive local contracts, without universal replacement transport claims. |
 | R6 | Cookie exclusion is proved at its original call boundary. A 19-retry/20-initiation episode refutes literal MAX=18; no universal corrected retry bound is claimed. |
 
 **Validation status.** Current source has 403 terminal declarations: 401 theorems
 and two definitions (ReplayWindow 15; R1 9; R2 191; R3 90; R4 79; R5 13; R6 6).
-The seven-call dump extension passes component/scoped/full builds of
-176/255/401 jobs and independent frozen source/export/documentation review.
-Sequential coordinated validation passes the 401-job proof gate with 403
-declarations and only `propext`,
-`Classical.choice` and `Quot.sound`, fresh stock kernel replay, the 60-job default
-build and 114 unit tests (22.793 seconds, one skip). All seven frozen Lean hashes
-remain unchanged. The mirror remains
-byte-identical to `c047e64`; runtime has not changed. Per-tranche measurements
-remain below. Initialized whole-run R2 and the remaining R3/R4 closures stay open.
-The preceding `c047e64` carry's 118-job executable build and eleven reproduction
-checks remain applicable to unchanged runtime; they were not rerun for proof-only
-extensions. Frozen reviews have no unresolved defect in the checked components;
-the unconfirmed source concerns below remain open.
+The `43c7549` carry passes the five-target scoped build (148 jobs) and complete
+`LeanuxProofs` build (401 jobs), with no statement changes. Independent frozen
+source/documentation review is clear after correcting three progress rows that
+repeated prior-checkpoint validation without a historical qualifier. Sequential
+coordinated validation passes the 401-job proof gate with 403 declarations on
+permitted axioms only, fresh stock kernel replay, the 60-job default and 118-job
+executable builds, and 124 unit tests (23.184 seconds, one skip). All eleven
+reproductions pass: nine accepted original/observer runs and two expected R2
+pending-dump rejections. Recipes remain unchanged.
+All eight frozen Lean hashes are unchanged. The capped scope/census/whitespace
+check and mirror comparison to `43c7549` pass. Its upstream runtime changes are
+part of this carry; initialized whole-run R2 and remaining R3/R4 closures stay open.
 
 ```sh
 capped -- scripts/in-bundle scripts/proof-gate
@@ -65,6 +64,15 @@ crypt-ahead sites, `floodExact`, both ratelimiter tables and the no-op
 `requireNotPending`; they do not invent its retired getter. These are source
 correspondence obligations, not additional R4/R5 property conclusions.
 
+[AGENT 2026-10-14] Carry `43c7549` through shared full-Kernel frames for
+`noteNetRxStart` and `iputReport`, projecting into the existing WG views and
+retaining existing source-body proofs for pipefs and epoll. Both worker observers
+now assign the already-incremented NET_RX count to the current section; record
+consumption itself retains the source's ordinal update order. Filesystem and
+socket callers retain the new inode-report decisions in original call order.
+The timer observer carries the exact revised stall Stop text. Eight Lean files
+change; terminal statements, premises and reproduction recipes are unchanged.
+
 | Carry | Measured effort |
 | --- | --- |
 | Seccomp/shared frames | 17 compile passes; 36m34s. |
@@ -72,6 +80,7 @@ correspondence obligations, not additional R4/R5 property conclusions.
 | Audit `f45bde8` | 14 root, six R2 and sixteen R4 build/probe calls before passing gates and nine replays. |
 | Scheduler `7a92672` | 15 calls: 14 passes, one failure; 16m20s validation, 17m22s token ownership. |
 | `c047e64` | 23 calls: 14 passes, nine ordinary failures (seven proofs, two replay parsers); 29m33s. |
+| `43c7549` | Two capped builds, both PASS (148-job scoped closure, 321.28s; 401-job full proof closure, 298.03s); zero ordinary failures, cap kills or interruptions. All exits collected; one cheap uncapped scope/census check passed; the coordinator repeated it under capped, passing exact ten-file scope, eight frozen Lean hashes, 403 declarations, whitespace and mirror equality. 12m50s from grant 16:47:30 through full-result collection 17:00:20 UTC. Eight Lean files; independent frozen source/documentation review is clear after the status-wording correction, and sequential coordinated proof gate, fresh kernel replay, default/executable builds, 124 unit tests and eleven reproductions pass. Token returned at 17:03:32 (16m02s ownership). Recipes are unchanged. |
 
 Carry review corrected missing caller-read success before jitter failure, obsolete
 pending-worker wording, a reply-invariant copy and an accidentally lifted

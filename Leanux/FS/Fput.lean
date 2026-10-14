@@ -53,8 +53,14 @@ def fputFinal (fid : FileId) : M Unit := do
     unsupported "file_f_owner_release with an owner"
   putFileAccess f
   -- dput(dentry): a pipe file's pseudo dentry counts its references
-  -- (`dputPipefs`); the anonymous inode's dentry is a cut point
-  if let some (.pipefs id) := f.fInode then dputPipefs id
+  -- (`dputPipefs`); every other file's pseudo dentry is a cut point whose
+  -- last reference puts its inode (`dentry_unlink_inode` -> `iput`, reported
+  -- by `iputReport`): the shared anonymous inode of eventfd and epoll keeps
+  -- its pinned reference, a socket's or a namespace pin's inode is freed
+  match f.fInode with
+  | some (.pipefs id) => dputPipefs id
+  | some (.fixture _) => iputReport true
+  | some .anon | none => iputReport false
   -- W8: the pin's nsfs dentry goes with the file's last reference
   -- (`nsfs_evict` -> `ns->ops->put` -> `put_net`): the creating namespace's
   -- last reference, by the fixture's order (the sockets' RCU-deferred puts

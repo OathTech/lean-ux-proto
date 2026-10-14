@@ -205,7 +205,7 @@ theorem vfsWrite_spec (P : WGKernelView → Prop) (fid : FileId) (buf : ByteArra
     ⦃⇓? _ w => ⌜P (wgKernelView w)⌝⦄ := (vfsWrite_sameWGKernel fid buf count pos).wp P
 
 theorem anonInodeGetfileImpl_sameWGKernel (fopId : FopsId) (priv : PrivateData) (flags : UInt32) (makeInode : Bool) : SameWGKernel (Leanux.anonInodeGetfileImpl fopId priv flags makeInode) := by
-  frame_wg [Leanux.anonInodeGetfileImpl] using [allocFilePseudo_spec, fopsOf_spec, getFile_spec, setFile_spec]
+  frame_wg [Leanux.anonInodeGetfileImpl] using [iputReport_spec, allocFilePseudo_spec, fopsOf_spec, getFile_spec, setFile_spec]
 
 theorem anonInodeGetfileImpl_spec (P : WGKernelView → Prop) (fopId : FopsId) (priv : PrivateData) (flags : UInt32) (makeInode : Bool) :
     ⦃fun w => ⌜P (wgKernelView w)⌝⦄ Leanux.anonInodeGetfileImpl fopId priv flags makeInode
@@ -226,7 +226,7 @@ theorem doFcntl_spec (P : WGKernelView → Prop) (fd : Nat) (cmd : FcntlCmd) (ar
     ⦃⇓? _ w => ⌜P (wgKernelView w)⌝⦄ := (doFcntl_sameWGKernel fd cmd arg fid).wp P
 
 theorem fputFinal_sameWGKernel (fid : FileId) : SameWGKernel (Leanux.fputFinal fid) := by
-  frame_wg [Leanux.fputFinal] using [dputPipefs_spec, fileFree_spec, fopRelease_spec, fopsOf_spec, getFile_spec, inodeIsChr_spec, putFileAccess_spec, queueDeviceWork_spec,
+  frame_wg [Leanux.fputFinal] using [iputReport_spec, dputPipefs_spec, fileFree_spec, fopRelease_spec, fopsOf_spec, getFile_spec, inodeIsChr_spec, putFileAccess_spec, queueDeviceWork_spec,
     eventpollReleaseFile_spec]
 
 theorem fputFinal_spec (P : WGKernelView → Prop) (fid : FileId) :

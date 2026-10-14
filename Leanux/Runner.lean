@@ -1125,6 +1125,7 @@ def decisionsJson : Json :=
     Json.mkObj [("label", toJson i.label), ("file", toJson i.file), ("line", toJson i.line),
       ("when_true", .arr (i.whenTrue.map spanJson).toArray),
       ("when_false", .arr (i.whenFalse.map spanJson).toArray),
+      ("terminal", .arr (i.terminal.map toJson).toArray),
       ("repeatable", toJson d.repeatable),
       ("comparison", match d.comparison with
         | some c => Json.mkObj [("rel", toJson c.rel.name), ("const_rhs", toJson c.constRhs),

@@ -112,7 +112,7 @@ def timerArmExpiry (pid : PeerId) (t : PeerTimer) (delay : Nat) (jc : Option UIn
       if gap < 0 then
         throw (.hidden s!"mod_timer's jiffies {jm} is behind the caller's read {caller} (delay {delay}, expires {e})")
       if gap > 1 then
-        unsupported s!"a stall between a timer's two jiffies reads: the caller's {caller}, mod_timer's {jm} (delay {delay}, expires {e})"
+        unsupported s!"a stall between a timer's two jiffies reads (the mirror's delay matches the published expiry): the caller's {caller}, mod_timer's {jm} (delay {delay}, expires {e})"
       modify fun w => {w with jiffiesLast := some jm}
       let u := recordWord bs 2
       if u != 0 then modify fun w => {w with timerUnits := (u, pid, t) :: w.timerUnits.filter (·.1 != u)}

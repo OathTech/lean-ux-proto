@@ -32,7 +32,8 @@ theorem modifyDev_socket_spec (P : Kernel → Prop) (f : Device → Device)
 theorem sockFree_sameKernel (sock : Option Nat) : SameKernel (sockFree sock) := by
   apply SameView.of_wp
   intro initial
-  mvcgen [sockFree, branch]
+  have hi := sameKernel_wp _ (iputReport_sameKernel true) (fun k => k = initial)
+  mvcgen [sockFree, branch, hi]
 
 theorem socketReinit_sameSocketKernel (new4 new6 : Option Nat) :
     SameSocketKernel (socketReinit new4 new6) := by
@@ -49,6 +50,7 @@ theorem socketInit_sameSocketKernel (port : Nat) : SameSocketKernel (socketInit 
   intro initial
   have hh := fun site => (SameView.of_sameKernel socketKernel (hidden_sameKernel site)).wp (fun s => s = initial)
   have hs := fun a b => (socketReinit_sameSocketKernel a b).wp (fun s => s = initial)
-  mvcgen [socketInit, getDev, getK, invariant, unsupported, hh, hs]
+  have hi := (SameView.of_sameKernel socketKernel (iputReport_sameKernel true)).wp (fun s => s = initial)
+  mvcgen [socketInit, getDev, getK, invariant, unsupported, hh, hs, hi]
 
 end Leanux.Proofs.Framing

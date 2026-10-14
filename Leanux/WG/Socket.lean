@@ -25,6 +25,9 @@ open Leanux
     `sk_clear_memalloc` and `udp_tunnel_sock_release` are cut points. -/
 def sockFree (sock : Option Nat) : M Unit := do
   if ← branch .sockFreeNull sock.isNone then return
+  -- udp_tunnel_sock_release -> sock_release (net/socket.c, a cut) ->
+  -- iput(SOCK_INODE(sock)): a kernel socket's inode holds its only reference
+  iputReport true
 
 /-- wg_socket_reinit (socket.c:419-437): swap the socket pointers, take
     `incoming_port` from the new IPv4 socket, free the old ones.
@@ -75,8 +78,13 @@ def socketInit (port : Nat) : M Int := do
       if held first then unsupported "the random port draw collides with a bound port"
       pure first
     else
-      -- udp_sock_create4 fails; pr_err (loglevel 3, no record); goto out
-      if held port then return -EADDRINUSE
+      -- udp_sock_create4 fails: the socket was created, the bind refused,
+      -- and udp_sock_create4's error path releases it (sock_release ->
+      -- iput, the inode's only reference); pr_err (loglevel 3, no record);
+      -- goto out
+      if held port then
+        iputReport true
+        return -EADDRINUSE
       pure port
   -- ipv6_mod_enabled(); the IPv6 socket at `chosen`, v6only: no conflict
   socketReinit (some chosen) (some chosen)

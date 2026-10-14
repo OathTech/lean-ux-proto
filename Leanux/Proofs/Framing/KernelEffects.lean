@@ -10,7 +10,7 @@ theorem hiddenAlloc_sameKernel (site : AllocSite) : SameKernel (hiddenAlloc site
   apply sameKernel_of_wp
   intro k
   rw [← allocationOutcome_eq]
-  mvcgen [allocationOutcome, recordOutcome, placeholderOutcome, hidden, skipAmbient, invariant, unsupported]
+  mvcgen [allocationOutcome, recordOutcome, placeholderOutcome, hidden, skipAmbient, noteNetRxStart, invariant, unsupported]
   invariants
   | inv1 _ n _ _ _ _ _ _ => fun r _ => ⟨n - r.2 + 1⟩
   | inv2 => ((⇓? _ w => ⌜w.k = k⌝) : PostCond _ (.arg World (.except Stop .pure)))
@@ -41,6 +41,11 @@ theorem branchCmp_sameKernel (d : Decision) (outcome : Bool) (a b : Int) : SameK
   apply sameKernel_of_wp
   intro k
   mvcgen [branchCmp]
+
+theorem iputReport_sameKernel (last : Bool) : SameKernel (iputReport last) := by
+  apply sameKernel_of_wp
+  intro k
+  mvcgen [iputReport, branch]
 
 theorem recordBudget_sameKernel  : SameKernel (recordBudget) := by
   apply sameKernel_of_wp
@@ -109,7 +114,7 @@ theorem skipCutSites_sameKernel (sites : List HiddenSite) : SameKernel (skipCutS
   apply sameKernel_of_wp
   intro k
   have hs := sameKernel_wp _ skipAmbient_sameKernel (fun s => s = k)
-  mvcgen [skipCutSites, hs, recordBudget, budgetExhausted, unsupported, invariant]
+  mvcgen [skipCutSites, hs, noteNetRxStart, recordBudget, budgetExhausted, unsupported, invariant]
   all_goals try exact ((⇓? _ w => ⌜w.k = k⌝) : PostCond _ (.arg World (.except Stop .pure)))
   all_goals try dsimp +zetaDelta only at *
   all_goals try simp_all

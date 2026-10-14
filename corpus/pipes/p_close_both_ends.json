@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "id": "p_close_both_ends",
+  "ops": [
+    {
+      "op": "pipe2",
+      "flags": 2048
+    },
+    {
+      "op": "write",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      },
+      "count": 5,
+      "value": "81985529216486895"
+    },
+    {
+      "op": "close",
+      "fd": {
+        "pipe": 0,
+        "end": 1
+      }
+    },
+    {
+      "op": "read",
+      "fd": {
+        "pipe": 0,
+        "end": 0
+      },
+      "count": 100
+    },
+    {
+      "op": "close",
+      "fd": {
+        "pipe": 0,
+        "end": 0
+      }
+    }
+  ],
+  "expect": [
+    "iput.last_reference=1",
+    "iput.lazytime_dirty=0"
+  ]
+}

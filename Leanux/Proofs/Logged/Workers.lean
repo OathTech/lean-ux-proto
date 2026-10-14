@@ -33,10 +33,10 @@ theorem workerLoopLogged_erases (w : Worker) (pid : Option Nat)
 def runWorkerLogged (w : Worker) (body : GhostM Unit) : GhostM Unit := do
   _ ← hidden (.sectionStart w)
   -- W7 stream H (13.2 (ii)): a NET_RX section's steps carry its ordinal in
-  -- the operation; a softirq never nests in a softirq, so the ordinal is
-  -- cleared at its end
+  -- the operation, after hidden has advanced its count; a softirq never
+  -- nests in a softirq, so the ordinal is cleared at its end
   if w == .netRx then
-    modifyWorld fun s => { s with netRxSections := s.netRxSections + 1, netRxSection := s.netRxSections + 1 }
+    modifyWorld fun s => { s with netRxSection := s.netRxSections }
   body
   if w == .netRx then modifyWorld fun s => { s with netRxSection := 0 }
   _ ← hidden (.sectionStop w)

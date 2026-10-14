@@ -17,6 +17,16 @@ theorem skipAmbient_spec (P : WGKernelView → Prop) :
     ⦃⇓? _ w => ⌜P (wgKernelView w)⌝⦄ :=
   (sameWGKernel_of_sameKernel skipAmbient_sameKernel).wp P
 
+theorem noteNetRxStart_spec (P : WGKernelView → Prop) (site : Nat) :
+    ⦃fun w => ⌜P (wgKernelView w)⌝⦄ noteNetRxStart site
+    ⦃⇓? _ w => ⌜P (wgKernelView w)⌝⦄ :=
+  (sameWGKernel_of_sameKernel (noteNetRxStart_sameKernel site)).wp P
+
+theorem iputReport_spec (P : WGKernelView → Prop) (last : Bool) :
+    ⦃fun w => ⌜P (wgKernelView w)⌝⦄ iputReport last
+    ⦃⇓? _ w => ⌜P (wgKernelView w)⌝⦄ :=
+  (sameWGKernel_of_sameKernel (iputReport_sameKernel last)).wp P
+
 theorem routeLookup_sameWGKernel (family saddr daddr : Nat) : SameWGKernel (Leanux.routeLookup family saddr daddr) :=
   sameWGKernel_of_sameKernel (Framing.routeLookup_sameKernel family saddr daddr)
 
@@ -221,14 +231,14 @@ theorem skipCut_spec (P : WGKernelView → Prop) (sites : List HiddenSite) :
     ⦃⇓? _ w => ⌜P (wgKernelView w)⌝⦄ := (skipCut_sameWGKernel sites).wp P
 
 theorem skipCutExactly_sameWGKernel (site : HiddenSite) (n : Nat) (between : List HiddenSite := []) : SameWGKernel (Leanux.skipCutExactly site n between) := by
-  frame_wg [skipCutExactly] using [skipAmbient_spec, skipCut_spec]
+  frame_wg [skipCutExactly] using [skipAmbient_spec, skipCut_spec, noteNetRxStart_spec]
 
 theorem skipCutExactly_spec (P : WGKernelView → Prop) (site : HiddenSite) (n : Nat) (between : List HiddenSite := []) :
     ⦃fun w => ⌜P (wgKernelView w)⌝⦄ Leanux.skipCutExactly site n between
     ⦃⇓? _ w => ⌜P (wgKernelView w)⌝⦄ := (skipCutExactly_sameWGKernel site n between).wp P
 
 theorem dropHiddenRecord_sameWGKernel  : SameWGKernel (Leanux.dropHiddenRecord) := by
-  frame_wg [dropHiddenRecord] using [skipAmbient_spec]
+  frame_wg [dropHiddenRecord] using [skipAmbient_spec, noteNetRxStart_spec]
 
 theorem dropHiddenRecord_spec (P : WGKernelView → Prop)  :
     ⦃fun w => ⌜P (wgKernelView w)⌝⦄ Leanux.dropHiddenRecord
