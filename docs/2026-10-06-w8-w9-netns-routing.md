@@ -1657,8 +1657,12 @@ Deviations [AGENT]:
   device only `operstate` changes, which nothing observes. W8b decides.
 - **Inside the section** the records are the pre-exit's, one `dst_cache_reset_ts`
   from `sit0`'s unregister (`ipip6_tunnel_uninit`, a cut consumer) and
-  `cleanup_net`'s own `cond_resched` (an ambient site, 152). The
-  allocations are below the cut (A).
+  `cleanup_net`'s own `cond_resched` (an ambient site, 152), and, under
+  load only, `default_device_exit_batch`'s `cond_resched`
+  (net/core/dev.c:12174, the device layer's pernet `exit_batch` run by
+  `ops_exit_list` at net_namespace.c:178; an ambient site, 427, declared
+  2026-10-14 after two traces met it in a loaded claim-point run and passed
+  alone). The allocations are below the cut (A).
 - **The check accepts repeated decisions inside `wg_netns_close`**: four
   close system calls in one operation.
 - **`wg_socket_init` stays unlisted** (3.3's operand exclusions not built):

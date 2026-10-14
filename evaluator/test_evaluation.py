@@ -653,6 +653,25 @@ class EvaluationChecks(unittest.TestCase):
         _, problems, _, _ = check.resolve_choices({('t', 'pc'): [[[303, '0xc', 1, 24, '00' * 24, None]]]}, sites, locations)
         self.assertEqual(problems['t'][0]['problem'], 'choice from an undeclared consumer')
 
+    def test_default_device_exit_resched_resolves_as_ambient(self):
+        # W8 under load: cleanup_net's pernet exit_batch for the device layer
+        # yields at net/core/dev.c:12174 (default_device_exit_batch's
+        # cond_resched); the record's consumer frame is that line (sched.h is
+        # a choice helper). Declared as the ambient site 427 it resolves;
+        # without the declaration it is an undeclared consumer (the
+        # integration record c047e64's named follow-on).
+        frame = lambda src: [{'source': f'/x/.deps/linux/{src}'}]
+        locations = {'0xd': frame('include/linux/sched.h:2085') + frame('net/core/dev.c:12174')}
+        op = [[302, '0xd', 1, 8, '00' * 8, None]]
+        declared = {('resched', 'net/core/dev.c:12174'): dict(id=427, label='resched:default_device_exit_batch', len=8, role='ambient')}
+        resolved, problems, skipped, _ = check.resolve_choices({('t', 'pc'): [op]}, declared, locations)
+        self.assertEqual([r[0] for r in resolved[('t', 'pc')][0]], [427])
+        self.assertEqual(problems, {})
+        self.assertEqual(dict(skipped), {'ambient:resched:default_device_exit_batch': 1})
+        _, problems, _, _ = check.resolve_choices({('t', 'pc'): [op]}, {}, locations)
+        self.assertEqual(problems['t'][0]['problem'], 'choice from an undeclared consumer')
+        self.assertEqual(problems['t'][0]['call_chain'], ['include/linux/sched.h:2085', 'net/core/dev.c:12174'])
+
     def test_empty_run_is_not_a_pass(self):
         class Args:
             generated_count, wireguard_count, seed, trace = 0, 0, 0, None
