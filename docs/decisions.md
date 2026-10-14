@@ -575,6 +575,11 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   which the C function returns), and a decision reported after one at a
   later line of the function is a decision evaluated past Linux's return;
   a line-level rule was tried twice and withdrawn, a line owning several
-  blocks; (4) operand matching confines a
-  branch to the records of its own NET_RX section, as the placement evidence
-  already did. Each mutant is rejected after its fix; the area suites agree.
+  blocks; (4) a trace with open NAPI
+  placements always goes through the placement evidence, whose per-section
+  matching ties the mirror's NET_RX ordinals to the guest's blocks (before,
+  only a first-run operand mismatch triggered it); the section-confined
+  operand relation was written and tested but not applied on the main path,
+  since on batch traces (w7_mixed op 4) it fails at an ordinal the guest's
+  block tags place elsewhere, a disagreement for the W7 placement work to
+  settle. Each mutant is rejected after its fix; the area suites agree.
