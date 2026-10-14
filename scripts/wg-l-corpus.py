@@ -31,6 +31,9 @@ _spec.loader.exec_module(d1)
 _spec3 = importlib.util.spec_from_file_location("wg_d3_corpus", ROOT / "scripts" / "wg-d3-corpus.py")
 d3 = importlib.util.module_from_spec(_spec3)
 _spec3.loader.exec_module(d3)
+_spec_e = importlib.util.spec_from_file_location("wg_e_underload_corpus", ROOT / "scripts" / "wg-e-underload-corpus.py")
+eb = importlib.util.module_from_spec(_spec_e)
+_spec_e.loader.exec_module(eb)
 
 DEVICE, PEER, PORT, LISTENER = d1.DEVICE, d1.PEER, d1.PORT, d1.LISTENER
 SENDER = {"family": 4, "addr": "7f000001", "port": 51998}   # the fixture's sender
@@ -249,6 +252,31 @@ def traces():
     e = json.loads((ROOT / "corpus/wireguard/e_underload_ratelimit.json").read_text())
     out["l_delete_ratelimited"] = ({"net_fixture": e["net_fixture"]}, e["ops"][:5] + [DELETE, GET], e["steer"],
                                    e["expect"] + ["wg_ratelimiter_gc_entries.v4_entry_iterate=1"])
+    # The same over the IPv6 table (ratelimiter.c:70-74; B4's two-table fix,
+    # docs/2026-10-15-design-b4-load-ratelimiter.md 3.5): the uninit walk
+    # meets the /64 entry (v6_entry_iterate=1), which the mirror left in
+    # place before the fix (the opposite outcome covered); and, re-created,
+    # the device's lookup from the same /64 is an insert again (site 133),
+    # where a mirror still holding the entry would predict a hit (site 132).
+    # The second device's schedule repeats the first's (its own secret, the
+    # insert, the response) with a later initiation timestamp.
+    e6 = json.loads((ROOT / "corpus/wireguard/e_underload_ratelimit6.json").read_text())
+    out["l_delete_ratelimited6"] = ({"net_fixture": e6["net_fixture"]}, e6["ops"][:5] + [DELETE, GET], e6["steer"],
+                                    e6["expect"] + ["wg_ratelimiter_gc_entries.v6_entry_iterate=1"])
+    # Each device gets one flood with one initiation (an insert, then its
+    # response) and no observe: two floods' comparison dumps and two observes
+    # exceed the guest's 4.5 s rekey bound (measured 2026-10-15); the
+    # witness is the record stream (site 133 twice, never 132), not a reply.
+    def one6(sec):
+        f = dict(e6["ops"][3])
+        f["messages"] = [eb.rl_initiation6(d1.PEER_EPHEMERAL, sec, d1.PEER_INDEX).hex()]
+        return f
+    out["l_recreate_ratelimited6"] = (
+        {"net_fixture": e6["net_fixture"]},
+        e6["ops"][:3] + [one6(1), DELETE, CREATE, e6["ops"][1], UP, one6(3), GET],
+        e6["steer"] + e6["steer"],
+        ["wg_receive_handshake_packet.initiation=1", "wg_ratelimiter_allow.inet6=1",
+         "wg_ratelimiter_allow.over_max_entries=0", "wg_ratelimiter_gc_entries.v6_entry_iterate=1"])
     # With D3 (section 7) [AGENT, int-dl follow-up 2].
     retransmit_steer = d2_initiator_steer()
     zk_ops, _, zk_steer = d3.session()

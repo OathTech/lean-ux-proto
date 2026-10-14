@@ -188,12 +188,20 @@ def ratelimit_traces():
     # and its token compare by the operands; only the first response is steered.
     two = flood(leading=[rl_initiation(d1.PEER_EPHEMERAL, 1, d1.PEER_INDEX),
                          rl_initiation(d1.PEER_EPHEMERAL_2, 2, d1.PEER_INDEX_2)])
-    steer = [["cookie_secret", RL_SECRET.hex()],
-             ["resp_ephemeral", d1.RESP_EPHEMERAL.hex()], ["index_draw", d1.le32(RL_INDEX_1)]]
+    steer = RL_STEER
     expect = ["wg_receive_handshake_packet.initiation=1", "wg_ratelimiter_allow.entry_matches=1",
               "wg_ratelimiter_allow.inet=1"]
     return {"e_underload_ratelimit": dict(ops=[CREATE, configure_peer(), UP, two, OBSERVE, GET],
                                           steer=steer, expect=expect)}
+
+
+# The ratelimiter traces' schedule, in encounter order: the cookie secret
+# (wg_create), then the entry allocation at the first initiation's insert
+# (ratelimiter.c:138, kind 305: a `draw` entry, which arms the trace's chunk
+# for the site so the mirror consumes its record; B4, docs/2026-10-15-
+# design-b4-load-ratelimiter.md 4.3), then the response's ephemeral and index.
+RL_STEER = [["cookie_secret", RL_SECRET.hex()], ["kmemCacheAllocRlEntry", "draw"],
+            ["resp_ephemeral", d1.RESP_EPHEMERAL.hex()], ["index_draw", d1.le32(RL_INDEX_1)]]
 
 
 def write_suite(subdir, cases):
@@ -255,8 +263,7 @@ def ratelimit6_traces():
     the sixth is denied: VALID_MAC_WITH_COOKIE_BUT_RATELIMITED, an invalid MAC
     under load, dropped (`.macRatelimited=1`, `.rlAllow=0`). The receive
     audit's F12; the pre-release review's limitations table."""
-    steer = [["cookie_secret", RL_SECRET.hex()],
-             ["resp_ephemeral", d1.RESP_EPHEMERAL.hex()], ["index_draw", d1.le32(RL_INDEX_1)]]
+    steer = RL_STEER
     two = flood(leading=[rl_initiation6(d1.PEER_EPHEMERAL, 1, d1.PEER_INDEX),
                          rl_initiation6(d1.PEER_EPHEMERAL_2, 2, d1.PEER_INDEX_2)], family=6)
     six = flood(leading=[rl_initiation6(bytes([0x60 + i]) * 32, i + 1, 0x0600_0000 + i) for i in range(6)],
@@ -275,13 +282,26 @@ def ratelimit6_traces():
     }
 
 
+def busy_traces():
+    """The producer's busy test (receive.c:554, `handshake_queue_len >
+    MAX_QUEUED_INCOMING_HANDSHAKES / 2` = 2048): the k-th send of the batch
+    sees k - 1 queued, so a flood of 2,100 takes the trylock arm from its
+    2,050th packet. On this configuration the trylock always succeeds
+    (include/linux/spinlock_up.h:56: no CONFIG_SMP, no CONFIG_DEBUG_SPINLOCK)
+    and the packet is produced under it (B4, section 2.5). The mirror runs
+    the producer per packet only with the exact flood (B4's part 2); until
+    then the arm's coverage is the kernel's alone."""
+    return {"e_underload_busy": base_ops() + [flood(count=2100), OBSERVE, GET]}
+
+
 def main():
     write_suite("wireguard", traces())
     write_suite("wireguard", boundary_traces())
+    write_suite("wireguard", busy_traces())
     write_steered("wireguard", ratelimit_traces())
     write_steered("wireguard", ratelimit6_traces())
     write_suite("underload-controls", controls())
-    print(f"wrote {len(traces()) + len(boundary_traces())} + {len(ratelimit_traces()) + len(ratelimit6_traces())} "
+    print(f"wrote {len(traces()) + len(boundary_traces()) + len(busy_traces())} + {len(ratelimit_traces()) + len(ratelimit6_traces())} "
           f"wireguard and {len(controls())} control traces")
 
 

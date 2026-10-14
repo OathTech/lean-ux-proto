@@ -638,3 +638,17 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   precondition and relation are never narrowed to accommodate one. First
   instance: the index lookup's dead-peer store (peerlookup.c), found by the
   grind at milestone 1 [AGENT: the fix on task/index-lookup-fix].
+- **2026-10-15 [AGENT, fork of the coordinator]** B4 part 1 (the settled
+  parts of docs/2026-10-15-design-b4-load-ratelimiter.md): the ratelimiter
+  entry allocation is a kind-305 site consumed by `rlAllocFail`, with the
+  E design's "not in the hook's list" sentence corrected (the hook is
+  generic); `wg_ratelimiter_init`'s three allocation arms are constant
+  false with the reason (creation allocations outside the model, census
+  row 132 unchanged); the uninit walk empties both ratelimiter tables, as
+  the C does, with `l_delete_ratelimited6` and `l_recreate_ratelimited6`
+  as witnesses; the producer's busy arm (receive.c:554) produces under the
+  trylock, constant on this configuration (spinlock_up.h:56), with
+  `e_underload_busy` (2,100 packets). The GC stays excluded; its reason is
+  sharpened in the note's section 3 and the claim that the guest's
+  per-operation remote reset is a silent instrument gap is retracted
+  (`section_problems` fails a lost section loudly).

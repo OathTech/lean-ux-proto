@@ -108,10 +108,16 @@ def wgDown : M Unit := do
     (an environment fact; docs/2026-10-05-l-lifecycle.md, section 2.1). -/
 def RATELIMITER_TABLE_SIZE : Nat := 2048
 
-/-- wg_ratelimiter_init (ratelimiter.c:158-203). The slab cache and the
-    tables are allocation sites (A's domain); the GC work it queues runs on
-    `system_power_efficient_wq` outside every section, reading no table
-    entry on the modeled paths (a cut). -/
+/-- wg_ratelimiter_init (ratelimiter.c:158-203). The slab cache (:164) and
+    the two 16 KiB tables (:179, :184) are creation allocations outside the
+    model (docs/2026-10-05-a-alloc.md 2.5): `kmem_cache_create` allocates
+    several objects through mm/slab_common.c with a state-dependent count,
+    and a 16 KiB `kvcalloc` is a large kmalloc from mm/slub.c addresses the
+    kind-305 hook never arms, with a vmalloc fallback never failed (A 6.2,
+    M7); their failure arms are constant-outcome decisions with this reason
+    (B4, 4.4). The GC work it queues (:191) runs on
+    `system_power_efficient_wq` outside every section: not a dispatched
+    unit of this harness, excluded with the reason in B4's section 3. -/
 def ratelimiterInit : M Int := do
   -- mutex_lock(&init_lock); `++init_refcnt != 1`
   modifyK fun k => { k with ratelimiter := { k.ratelimiter with refcnt := k.ratelimiter.refcnt + 1 } }
@@ -119,28 +125,30 @@ def ratelimiterInit : M Int := do
     modifyK fun k => { k with ratelimiter := { k.ratelimiter with refcnt := k.ratelimiter.refcnt - 1 } }
     return -ENOMEM
   if ← branch .ratelimiterInitNotFirst ((← getK).ratelimiter.refcnt != 1) then return 0
-  if ← branch .ratelimiterInitCacheErr !(← envOk .ratelimiterCache) then return ← undo
-  if ← branch .ratelimiterInitTableV4Err !(← envOk .ratelimiterTable) then return ← undo
-  if ← branch .ratelimiterInitTableV6Err !(← envOk .ratelimiterTable) then return ← undo
+  if ← branch .ratelimiterInitCacheErr false then return ← undo
+  if ← branch .ratelimiterInitTableV4Err false then return ← undo
+  if ← branch .ratelimiterInitTableV6Err false then return ← undo
   -- queue_delayed_work(system_power_efficient_wq, &gc_work, HZ)
   let key ← hidden .ratelimiterKey
-  -- the tables are kvcalloc'ed: empty (the last uninit's GC emptied them too)
-  modifyK fun k => { k with ratelimiter := { k.ratelimiter with key, table := [] } }
+  -- both tables are kvcalloc'ed: empty (the last uninit's GC emptied them too)
+  modifyK fun k => { k with ratelimiter := { k.ratelimiter with key, table := [], table6 := [] } }
   return 0
 
-/-- wg_ratelimiter_gc_entries (ratelimiter.c:55-83). With `work` NULL (the
-    uninit path) every entry is uninitialized: `hlist_del_rcu` and the
-    `call_rcu` free, so the tables end empty; the clock read's value is
-    unused there. The periodic run (`work` set: the delayed work, every
-    `HZ`) removes the entries idle for more than a second; it is not a
-    dispatched unit of this harness, so a run inside a trace is outside the
-    domain (E's note: entries persist for the trace). The entries are IPv4
-    (`ratelimiterAllow`: an IPv6 handshake is `unsupported`), and their
-    buckets are a cut (the hsiphash of `(net, ip)` under the random key),
-    so which iteration meets an entry is unknown: the outcomes are reported
-    as a set per operation (a repeatable decision's outcomes are a set in
-    the check), bucket 0 standing for the walk, and the report of a trace
-    is bounded (4096 branches, evaluator/protocol.py). -/
+/-- wg_ratelimiter_gc_entries (ratelimiter.c:55-82). With `work` NULL (the
+    uninit path) every entry of both tables is uninitialized (:64-67 the
+    IPv4 list, :70-74 the IPv6 list): `hlist_del_rcu` and the `call_rcu`
+    free, so the tables end empty; the clock read's value is unused there.
+    The periodic run (`work` set: the delayed work, every `HZ`) removes the
+    entries idle for more than a second; it is not a dispatched unit of this
+    harness, so a run inside a trace is outside the domain (excluded with
+    the reason in docs/2026-10-15-design-b4-load-ratelimiter.md, section 3:
+    entries persist for the trace). The entries' buckets are a cut (the
+    hsiphash of `(net, ip)` under the random key), so which iteration meets
+    an entry is unknown: the outcomes are reported as a set per operation
+    (a repeatable decision's outcomes are a set in the check), bucket 0
+    standing for the walk, and the report of a trace is bounded
+    (evaluator/protocol.py MAX_BRANCHES). B4 fixed the walk, which emptied
+    the IPv4 table only (the IPv6 table since the receive audit's F12). -/
 def gcEntries (work : Bool) : M Unit := do
   let _now ← hiddenClock .ratelimiterGcNow
   for i in [0:RATELIMITER_TABLE_SIZE] do
@@ -154,7 +162,11 @@ def gcEntries (work : Bool) : M Unit := do
         _ ← branch .gcV4EntryIter true
       modifyK fun k => { k with ratelimiter := { k.ratelimiter with table := [] } }
     _ ← report .gcV4EntryIter false
-    -- table_v6[i]: no IPv6 entry on the modeled paths
+    -- hlist_for_each_entry_safe over table_v6[i] (70-74): the same walk
+    if i == 0 && !work then
+      for _ in (← getK).ratelimiter.table6 do
+        _ ← branch .gcV6EntryIter true
+      modifyK fun k => { k with ratelimiter := { k.ratelimiter with table6 := [] } }
     _ ← report .gcV6EntryIter false
     if ← report .gcHasWork work then unsupported "the ratelimiter GC's cond_resched (a work run)"
   _ ← branch .gcBucketIter false

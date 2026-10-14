@@ -693,18 +693,17 @@ a site's records (section 6.2): -/
     `AllocSite.kzallocPipeInfo`'s note), the page usercopies and
     `__sigqueue_alloc`. -/
 inductive EnvSite where
-  -- L: wg_newlink's allocations (device.c:325-367) and wg_ratelimiter_init's
-  -- (ratelimiter.c:164-185); `register_netdevice` (A's domain: assumed
-  -- success in the harness)
+  -- L: wg_newlink's allocations (device.c:325-367); `register_netdevice`
+  -- (A's domain: assumed success in the harness). wg_ratelimiter_init's
+  -- (ratelimiter.c:164-185) are constant-outcome decisions since B4
+  -- (`ratelimiterInit`): creation allocations outside the model
   | pubkeyHashtableAlloc | indexHashtableAlloc | allocWorkqueue | packetQueueInit
-  | ratelimiterCache | ratelimiterTable | registerNetdevice
+  | registerNetdevice
   -- P (pipes, design section 5). `allocInode` is the inode-allocation cut:
   -- new_inode_pseudo -> alloc_inode -> alloc_inode_sb, inode_init_always_gfp
   -- and get_next_ino, no decisions (audit M3)
   | allocInode | kcallocResizeBufs
   | copyPageToIter | copyPageFromIter | sigqueueAlloc
-  -- E-B arm C: wg_ratelimiter_allow's per-entry kmem_cache_alloc (ratelimiter.c:138)
-  | ratelimiterEntry
   -- W4: skb_gso_segment's allocations inside skb_segment (device.c:179), an
   -- assumed-success site as the sites above (A's domain)
   | skbSegment
@@ -765,6 +764,10 @@ inductive AllocSite where
   -- epoll (docs/2026-10-12-epoll-design.md, 3.1; b-task): the four consumer
   -- frames of fs/eventpoll.c
   | kzallocEp | kmemCacheZallocEpi | kmemCacheAllocPwq | kmemCacheZallocEphead
+  -- B4 (docs/2026-10-15-design-b4-load-ratelimiter.md, 4.3): the
+  -- ratelimiter entry, wg_ratelimiter_allow's kmem_cache_alloc
+  -- (ratelimiter.c:138) in the handshake receive worker; index 69, id 139
+  | kmemCacheAllocRlEntry
   deriving Repr, BEq, DecidableEq
 
 structure AllocSiteInfo where
@@ -886,6 +889,10 @@ def AllocSite.info : AllocSite → AllocSiteInfo
   | .kmemCacheZallocEpi => ⟨123, "kmemCacheZallocEpi", "fs/eventpoll.c", 1764, .exact 1⟩
   | .kmemCacheAllocPwq => ⟨124, "kmemCacheAllocPwq", "fs/eventpoll.c", 1550, .exact 1⟩
   | .kmemCacheZallocEphead => ⟨125, "kmemCacheZallocEphead", "fs/eventpoll.c", 1722, .exact 1⟩
+  -- B4: a direct site in the receive worker (kworker context, record-only:
+  -- the class is not steerable); index 69 is the first after seccomp's
+  -- 58-68 whose id, 139, is free
+  | .kmemCacheAllocRlEntry => ⟨69, "kmemCacheAllocRlEntry", "drivers/net/wireguard/ratelimiter.c", 138, .exact 1⟩
 
 def AllocSite.all : List AllocSite :=
   [.kmallocEventfdCtx, .filpAlloc, .dAllocPseudo, .kmallocFdtable, .kvmallocFdArray, .kvmallocFdBitmaps,
@@ -897,7 +904,8 @@ def AllocSite.all : List AllocSite :=
    .kzallocSfilter, .vmallocBpfProg, .kzallocBpfAux, .percpuBpfActive, .percpuBpfStats,
    .kmallocOrigFprog, .kmemdupOrigFilter, .kmallocArrayMasks, .kmemdupOldProg, .vmallocBpfProgRealloc,
    .kcallocAddrs,
-   .kzallocEp, .kmemCacheZallocEpi, .kmemCacheAllocPwq, .kmemCacheZallocEphead]
+   .kzallocEp, .kmemCacheZallocEpi, .kmemCacheAllocPwq, .kmemCacheZallocEphead,
+   .kmemCacheAllocRlEntry]
 
 /-- An allocation site's hidden-site id: A's block 70-99 by index
     (docs/2026-10-05-a-alloc.md, section 6.1) and `70 + index` above it
@@ -905,7 +913,8 @@ def AllocSite.all : List AllocSite :=
     100-117; epoll's 122-125: ids 192-195 of its block); seccomp's sites,
     indices 58-68, take 400 + (index - 58), in seccomp's block 400-419
     (docs/2026-10-11-interface.md; 200-219 would meet `Worker.sectionId`'s
-    ids from index 15) [AGENT, seccomp X merges]. -/
+    ids from index 15) [AGENT, seccomp X merges]; B4's ratelimiter entry,
+    index 69, takes id 139 under the `70 + index` rule. -/
 def AllocSite.hiddenId (s : AllocSite) : Nat :=
   let i := s.info.index
   if 58 ≤ i ∧ i ≤ 68 then 400 + (i - 58) else 70 + i
