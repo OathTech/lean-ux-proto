@@ -7,6 +7,9 @@ official release when the snapshot is absent (a fresh clone); the release's
 top-level directory becomes the destination. Lean 4.33.1's release was
 compared file by file with the snapshot on 2026-09-30: identical (17,493
 files). `--only NAME[,NAME]` restores a subset (the check needs `lean`).
+Several rows may share a name (one per Lean version); each restores its own
+destination, `.tools/lean` for 4.33.1 and `.tools/lean-<version>` after it,
+and `scripts/in-bundle` picks the one a checkout's `lean-toolchain` names.
 """
 import argparse
 import hashlib

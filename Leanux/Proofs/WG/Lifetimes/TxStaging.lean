@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.Lifetimes.TxEnqueue
+import Leanux.Proofs.Framing.WGReceiveHeaders
 
 set_option maxHeartbeats 600000
 set_option pp.structureInstances false
@@ -10,9 +11,17 @@ namespace Leanux.Proofs.WG.Lifetimes
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Std.Do
 
 theorem ipTunnelEcnEncap_sameKernel (pkt : Packet) : SameKernel (ipTunnelEcnEncap pkt) := by
-  apply sameKernel_of_wp
-  intro k
-  mvcgen [ipTunnelEcnEncap, ipTunnelGetDsfield, Packet.protocol, branch, invariant, unsupported]
+  -- Share the DS-field frame and compose record effects without materializing
+  -- nested World-valued VCs in mvcgen's automatic trivial-goal simplifier.
+  unfold ipTunnelEcnEncap Packet.protocol
+  repeat' first
+    | exact ipTunnelGetDsfield_sameKernel _ _
+    | exact sameKernel_branch _ _
+    | exact sameKernel_pure _
+    | (solve | intro w x v hr; cases hr)
+    | apply sameKernel_bind
+    | split
+    | (intro x; try dsimp only)
 
 def purgeStagedPacketsPrefix (pid : PeerId) : MixedM Unit := do
   let p ← getPeerMixed pid

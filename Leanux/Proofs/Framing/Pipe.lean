@@ -167,7 +167,8 @@ theorem freePipeInfo_sameWGKernel (pid : PipeId) : SameWGKernel (freePipeInfo pi
   invariants
   | inv1 => fun i w => ⟨((w.k.pipes[pid]?).map (·.ringSize)).getD 0 - i⟩
   | inv2 => ((⇓? _ w => ⌜wgKernelView w = initial⌝) : PostCond _ (.arg World (.except Stop .pure)))
-  case vc4.Q =>
+  -- Select the continuation goal by its type, not mvcgen's generated case name.
+  all_goals try
     let current : World := by assumption
     exact fun w' => pipeView pid w' = pipeView pid current
   all_goals try dsimp +zetaDelta only at *

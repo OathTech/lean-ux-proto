@@ -108,6 +108,10 @@ Read these before the README's claims are taken at face value:
 | [2026-10-13-spike-window-self-review.md](2026-10-13-spike-window-self-review.md) | The spike's self-review of its port; not the independent review |
 | [2026-10-13-window-proof-conventions.md](2026-10-13-window-proof-conventions.md) | Conventions that make carrying proofs over mirror changes cheaper |
 | [2026-10-13-charter-proof-campaign.md](2026-10-13-charter-proof-campaign.md) | The campaign charter: six WireGuard properties in dependency order |
+| [2026-10-14-charter-proof-campaign-2.md](2026-10-14-charter-proof-campaign-2.md) | Charter for proof campaign 2: the handshake and configuration group (Noise state machine, index uniqueness, roaming, configuration semantics, progress, timer discipline), beside campaign 1 under a disjointness rule |
+| [2026-10-14-charter-binary-tv.md](2026-10-14-charter-binary-tv.md) | Charter for the scoping of binary-level translation validation: the mirror against the compiled oracle under Kraken's x86-64 semantics, a probe on one WireGuard function |
+| [2026-10-15-charter-binary-adequacy.md](2026-10-15-charter-binary-adequacy.md) | Charter for the binary-level adequacy grind: one theorem per anchored WireGuard function under Kraken, region lemmas between correspondence points, the trust base in one file |
+| [2026-10-15-binary-tv-scoping.md](2026-10-15-binary-tv-scoping.md) | Instruction census and executable three-way index-lookup probe under Kraken; blockers, state relation and checker estimates |
 | [2026-10-13-review-r5-counterexamples.md](2026-10-13-review-r5-counterexamples.md) | The independent review of the campaign's R5 counterexamples: three statement artefacts, design nuances at most, no tray entry |
 
 ## Reviews of the whole

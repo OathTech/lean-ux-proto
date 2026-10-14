@@ -104,7 +104,19 @@ theorem allocEmptyFile_spec (P : WGKernelView → Prop) (flags : UInt32) :
     ⦃⇓? _ w => ⌜P (wgKernelView w)⌝⦄ := (allocEmptyFile_sameWGKernel flags).wp P
 
 theorem allocFdtable_sameWGKernel (slotsWanted : Nat) : SameWGKernel (Leanux.allocFdtable slotsWanted) := by
-  frame_wg [Leanux.allocFdtable] using [hiddenAlloc_spec]
+  -- Compose the record-only effects without expanding nested World-valued VCs
+  -- in mvcgen's automatic trivial-goal simplifier.
+  apply sameWGKernel_of_sameKernel
+  unfold Leanux.allocFdtable
+  repeat' first
+    | exact branchCmp_sameKernel _ _ _ _
+    | exact hiddenAlloc_sameKernel _
+    | exact sameKernel_branch _ _
+    | exact sameKernel_pure _
+    | (solve | intro w x v hr; cases hr)
+    | apply sameKernel_bind
+    | split
+    | (intro x; try dsimp only)
 
 theorem allocFdtable_spec (P : WGKernelView → Prop) (slotsWanted : Nat) :
     ⦃fun w => ⌜P (wgKernelView w)⌝⦄ Leanux.allocFdtable slotsWanted

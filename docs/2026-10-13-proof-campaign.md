@@ -4,7 +4,7 @@
 
 Work is on `.worktrees/proofs-campaign`, branch `proofs/campaign`, under
 [the charter](2026-10-13-charter-proof-campaign.md). The mirror remains byte-identical
-to `43c7549`; coordinated validation of the syscall extension passes.
+to `ca6b22e`; the Lean 4.35 carry and coordinated validation pass.
 The [proof register](proofs.md#results) holds current declarations and
 pins; its [model map](proofs.md#layers) supplies the complete module inventory.
 Current components are not completion of the open charter properties. This campaign
@@ -21,7 +21,32 @@ retains current architecture, findings, reproduction provenance, effort and limi
 | R5 | The unconditional age/post-zero and wire-nonce readings are false in accepted mirror inputs. Rule Zero resolution retains thirteen positive local contracts, without universal replacement transport claims. |
 | R6 | Cookie exclusion is proved at its original call boundary. A 19-retry/20-initiation episode refutes literal MAX=18; no universal corrected retry bound is claimed. |
 
-**Validation status.** The syscall extension has 417 terminal declarations
+**Validation status.** The Lean 4.35 carry passes the 147-job and 182-job scoped
+targets and the 420-job full proof target. Five proof files repair collection
+type inference, generated VC goal selection and automatic VC simplification;
+no theorem statement or source operation changes. The capped exact check passes
+the seven-file scope, all 417 byte-identical terminal declarations (205 R2),
+240 unchanged declaration headers, whitespace and mirror/staged-merge equality.
+Independent frozen source/documentation review is clear. Sequential coordinated
+validation passes the 420-job proof gate (all 417 terminal declarations use only
+permitted axioms), fresh stock kernel replay, the 60-job default and 118-job
+executable builds, 124 unit tests (23.751 seconds, one skip), and eleven
+reproductions (nine accepted with original/observer agreement and two expected
+pending-dump rejections). The coordinator repeats the exact frozen hash, scope,
+census, whitespace and mirror checks, which pass.
+
+A supplementary explicit export of all 417 terminal declarations and their
+dependencies passes Lean paranoid, lean4lean, nanoda, con-leche, con-ron and Lean
+default; its axiom report contains only `propext`, `Quot.sound` and
+`Classical.choice`. This export-only run uses `--inadvisably-no-sandbox`, so it is
+a speedbump, not a sandboxed project check. A plain `lake check` would cover the
+default targets, which exclude `LeanuxProofs`. The first attempt failed before
+checking because the bundle PATH omitted `git`; one infrastructure retry appended
+`/usr/bin` only in that command's environment and passed within its 900-second
+bound (19:44:08 to result collection at 19:50:45 UTC). No global state changed.
+Initialized whole-run R2 and remaining R3/R4 closures stay open.
+
+**Preceding syscall checkpoint (`43c7549`, Lean 4.33).** The syscall extension has 417 terminal declarations
 (415 theorems and two definitions), including 205 R2 theorems. Wrapper/compatibility,
 dispatch, enclosing syscall and terminal targets pass 228/239/240/277 jobs; the
 full proof target passes 420 jobs. The capped exact eight-file scope/census/
@@ -33,7 +58,7 @@ validation passes the 420-job proof gate with all 417 declarations on permitted
 axioms, fresh stock kernel replay, the 60-job default build and 124 unit tests
 (22.751 seconds, one skip). The capped scope/census/whitespace check confirms all
 six frozen Lean hashes. Its first run failed only because a non-trust assertion
-pinned the moving shared main head; checking ancestry instead passes. The mirror remains byte-identical
+pinned the moving shared main head; checking ancestry instead passes. At that checkpoint the mirror was byte-identical
 to `43c7549`; no reproduction recipe or runtime behavior changes. Initialized
 whole-run R2 and remaining R3/R4 closures stay open.
 
@@ -43,6 +68,21 @@ capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs
 capped -- scripts/in-bundle lake build
 capped -- scripts/in-bundle lake build leanux-model
 capped -- scripts/in-bundle python3 -B -m unittest evaluator.test_evaluation evaluator.test_model_replay harness.test_trace harness.test_wg harness.test_linux
+```
+
+To repeat the supplementary export check, in this checkout:
+
+```sh
+mkdir -p .tmp
+capped -- scripts/in-bundle lake env python3 - <<'PYEXPORT'
+from pathlib import Path
+import runpy, subprocess
+names = runpy.run_path("scripts/proof-gate", run_name="proof_gate_names")["terminal_statements"]()
+with Path(".tmp/campaign-proof-export.ndjson").open("wb") as output:
+    subprocess.run(["leanexport", "Leanux.Proofs", "--", *names], stdout=output, check=True)
+PYEXPORT
+capped -- timeout --signal=TERM --kill-after=10s 900s scripts/in-bundle sh -c 'PATH="$PATH:/usr/bin"; export PATH; exec lake check --from-export=.tmp/campaign-proof-export.ndjson --paranoid --inadvisably-no-sandbox'
+rm .tmp/campaign-proof-export.ndjson
 ```
 
 **Shared reproduction provenance.** Eleven checks comprise nine accepted mirror
@@ -75,6 +115,15 @@ socket callers retain the new inode-report decisions in original call order.
 The timer observer carries the exact revised stall Stop text. Eight Lean files
 change; terminal statements, premises and reproduction recipes are unchanged.
 
+The `ca6b22e` / Lean 4.35 carry mirrors the original dump walk's explicit
+`List PeerId` annotation in both its source factor and lifetime observer.
+The pipe frame selects its continuation by goal type, while ECN encapsulation
+and fdtable allocation compose existing complete-Kernel frames instead of
+expanding nested World-valued automatic VCs. Five proof files change; all
+417 terminal declarations, legacy APIs and reproduction recipes are retained.
+Toolchain deprecation warnings remain visible; no tactic-limit or global-setting
+change is used.
+
 | Carry | Measured effort |
 | --- | --- |
 | Seccomp/shared frames | 17 compile passes; 36m34s. |
@@ -83,6 +132,7 @@ change; terminal statements, premises and reproduction recipes are unchanged.
 | Scheduler `7a92672` | 15 calls: 14 passes, one failure; 16m20s validation, 17m22s token ownership. |
 | `c047e64` | 23 calls: 14 passes, nine ordinary failures (seven proofs, two replay parsers); 29m33s. |
 | `43c7549` | Two capped builds, both PASS (148-job scoped closure, 321.28s; 401-job full proof closure, 298.03s); zero ordinary failures, cap kills or interruptions. All exits collected; one cheap uncapped scope/census check passed; the coordinator repeated it under capped, passing exact ten-file scope, eight frozen Lean hashes, 403 declarations, whitespace and mirror equality. 12m50s from grant 16:47:30 through full-result collection 17:00:20 UTC. Eight Lean files; independent frozen source/documentation review is clear after the status-wording correction, and sequential coordinated proof gate, fresh kernel replay, default/executable builds, 124 unit tests and eleven reproductions pass. Token returned at 17:03:32 (16m02s ownership). Recipes are unchanged. |
+| `ca6b22e` / Lean 4.35 | Eight capped calls: six builds (three PASS: 147-job scoped, 182-job scoped, 420-job full; three ordinary FAIL) plus two passing exact scope/compatibility checks. Failures were automatic VC recursion in ECN encapsulation, one incomplete structural tactic attempt, and the first full build's fdtable VC recursion plus dump-observer collection inference. That failed collection elaboration also emitted recovery `declaration uses sorry` diagnostics; no source admission was introduced. The corrected full build and final axiom gate pass without non-standard axioms. All exits collected; no cap kills or interruptions. Grant 19:14:43, full result collected 19:32:55 UTC: 18m12s. Five Lean files and two docs; all 417 terminal declarations and 240 changed-module declaration headers are unchanged. Independent frozen review is clear; the historical-pin wording correction is retained. Sequential coordinated gate, fresh kernel replay, default/executable builds, unit tests, eleven reproductions and exact frozen checks pass. The supplementary export-only six-checker run also passes, with the sandbox and one infrastructure retry limits stated above. Token returned 19:37:12 UTC (22m29s ownership). |
 
 Carry review corrected missing caller-read success before jitter failure, obsolete
 pending-worker wording, a reply-invariant copy and an accidentally lifted

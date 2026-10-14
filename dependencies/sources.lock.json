@@ -19,5 +19,13 @@
     "sha256": "79fb5f59b57dc07af71f3ae9dedd3528cc31241ea47e2dfb7c68c893131f1c4e",
     "archive": ".deps/downloads/syzkaller-853b104bb454141a5b0fc0e4218ec78e9f34ffb1.tar.gz",
     "commit": "853b104bb454141a5b0fc0e4218ec78e9f34ffb1"
+  },
+  {
+    "name": "kraken",
+    "url": "https://github.com/AeneasVerif/kraken.git",
+    "commit": "8af78062037bc237b341d20252aafd1797c1bcb7",
+    "kind": "git",
+    "consumer": "binary",
+    "toolchain": "leanprover/lean4:v4.35.0"
   }
 ]
