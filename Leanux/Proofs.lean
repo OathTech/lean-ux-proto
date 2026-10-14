@@ -4,6 +4,7 @@ import Leanux.Proofs.WG.Noise.Statements
 import Leanux.Proofs.WG.Roaming.Statements
 import Leanux.Proofs.WG.Config.Statements
 import Leanux.Proofs.WG.Progress.Statements
+import Leanux.Proofs.WG.TimerDiscipline.Statements
 
 /-! The proof tree's root: the terminal statements of every result, one import
 per result directory, and the checked counterexamples. `lake build LeanuxProofs`

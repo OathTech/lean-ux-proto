@@ -5,7 +5,8 @@
 Work is confined to `.worktrees/proofs-campaign-2`, branch `proofs/campaign-2`.
 H1, H3 and H4 have local contracts; their whole-operation/whole-run claims
 remain open. H5 has a checked batch-completion counterexample and open progress
-obligations; H6 remains open.
+obligations. H6 has eleven local timer contracts; whole-run site coverage and
+retry/session counting remain open.
 H2 is waiting on the index-lookup
 dead-peer-store fix and the user's landing notice.
 No result is claimed complete. The branch has carried main through ca6b22e;
@@ -178,3 +179,46 @@ print only the three standard axioms, and pass separate stock kernel replays
 with `leanchecker --fresh`. The full proof gate fails at the same inherited
 counter-window refinement; token and import checks pass. No mirror changes,
 guest runs or cap failures.
+
+## H6 — Timer discipline (in progress)
+
+[USER 2026-10-14] Resume the interrupted H6 work, then H5, remaining H4 and
+H2 when its prerequisite landing is relayed. The interrupted dirty worktrees
+were preserved under snapshot refs without moving branches or working files.
+
+`TimerDiscipline/Arming` proves exact recorded arming, deletion, the
+running/live guard, and peer effects of traversal, session derivation, data
+receipt and handshake completion. `Jitter` proves that every successful
+jitter draw is below `HZ / 3 = 83`, including the rejection loop, and frames
+the entire kernel. Eleven terminal statements include the two authenticated
+packet hooks that delete timers. The arm equation uses UInt64 addition and
+the signed zero-or-one-tick admissibility gap; it is not a firing-time claim.
+All contracts concern original functions on normal completion. They do not
+assert that malformed record streams succeed.
+
+The charter's wording needs these source qualifications, with universal
+caller coverage still open: “re-arms on every authenticated traversal” means
+at the traversal hook with nonzero interval, running device and live peer.
+“Once per session” is the session-derived hook's guarded arm attempt; the
+retransmit give-up path separately arms absent zero-key timers. The zero-key
+callback queues clear work, rather than clearing keys synchronously. None of
+these local endpoints proves the absence of other arming sites in a whole
+runner execution. The literal once-per-session count remains unproved, not
+silently replaced by the local theorem.
+
+Architecture: standalone weakest-precondition contracts, with a local map
+composition rule and exact peer-update factorization for handshake completion.
+These avoid the inherited shared import failure; existing shared lemmas remain
+untouched. Remaining work: all seven source arming sites with exact delay and
+caller provenance, completed retry-episode counting, and source-complete caller
+coverage for traversal and session derivation. No H6 mirror mismatch has been
+established; ranked mirror suggestions: none.
+
+Effort: capped elaboration, repaired syntax/composition errors and one local
+heartbeat exhaustion; no memory-cap failure. Scoped build and axiom inspection
+pass for all eleven statements using only the three standard axioms. Stock
+kernel replay also passes: `capped -- scripts/in-bundle lake env leanchecker
+--fresh Leanux.Proofs.WG.TimerDiscipline.Statements`. The full
+proof gate was run and fails at inherited `CounterWindow/Refinement.lean`;
+its token and import checks pass. No full-gate success or complete H6 result is
+claimed. No mirror changes or guest runs.
