@@ -461,4 +461,15 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   take several id prefixes. The replay tests' captures predate the kind-310
   record and the module had failed on every capture since item 7;
   `with_jiffies_end` appends the record as a replay fixture.
-
+- **2026-10-14 [AGENT, fork of the coordinator]** The receive-path scope holes of
+  the pre-release review (`docs/2026-10-14-pre-release-review.md`, sections 8
+  and 12, the IPv6 rate-limiting row): the under-load threshold declared with
+  its operands and crossed exactly by `e_underload_511/512/513`; the flood
+  summary checkable against the unsummarised execution (`LEANUX_FLOOD_EXACT=1`);
+  the IPv6 ratelimiter table modelled (`.rlProtoIp6`, `table6`, a `wg_flood`
+  with `family: 6`), the entry allocation's unrecorded site and the GC's
+  exclusion written; `cookie.c:147` (`.macRatelimited`) and
+  `wg_socket_send_buffer_as_reply_to_skb` (listed, five decisions) declared;
+  `wgXmit` checks the packet header's destination against the environment's;
+  the ECN rewrite's length implication asserted; the E arm named "cookie
+  gating under the modelled load state"; disposition tables on both audits.

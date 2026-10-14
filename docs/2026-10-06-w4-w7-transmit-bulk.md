@@ -98,6 +98,21 @@ WireGuard line of its own) and the n = 4 and `rx_dead` instances.
 
 ### 2.1 UDP GSO through `wg_xmit`
 
+**The environment helper's contract (`Env.xmitPackets`, 2026-10-14; the
+device audit's X3/X6 and the pre-release review's section 12).** Inputs: the
+datagram's family and destination (the sender's `sendto` address), the
+payload, `gso_size` (none or a divisor of the payload), the route MTU if the
+fixture names one, `IP_PMTUDISC_PROBE`, the TOS. Result: the list of IP
+packets `wg_xmit` receives (one, or the segments of a GSO skb, two or more,
+each with its own header built from the destination; the GSO flag is the
+list's length, `skb_is_gso ↔ pkts.length ≥ 2`) and `dst_mtu`, or the
+sender's error (`-EMSGSIZE`, `-EINVAL`). What it summarises: the IP layer's
+segmentation and size checks below the WireGuard boundary (`udp_send_skb`,
+`__ip_append_data`, `ip_finish_output_gso`, cited below); no WireGuard
+state changes. At the boundary `wgXmit` checks that every packet's header
+destination equals the supplied destination and stops `invariant` on a
+disagreement, so the trie lookup's key is the packet's own (device.c:153).
+
 *v3 scope:* kept for **IPv4 with a `gso_size` that divides the payload**;
 IPv6 GSO and a short last segment are beyond the WireGuard boundary (no
 WireGuard line of their own, 16.1) and are `unsupported` in `xmitPackets`
