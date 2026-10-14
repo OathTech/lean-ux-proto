@@ -241,6 +241,13 @@ def ip6EcnSetEct1 (bytes : List UInt8) : M (List UInt8) := do
     the protocol switch on `skb_protocol(skb, true)` (the inner header is
     long enough: `consume_data_done` pulled it). -/
 def inetEcnSet (ce : Bool) (protocol : Nat) (bytes : List UInt8) : M (List UInt8) := do
+  -- `skb_network_header(skb) + sizeof(hdr) <= skb_tail_pointer(skb)`
+  -- (inet_ecn.h:176-177, 182-183, 212-213, 218-219): implied by the honest
+  -- test before every call (receive.c:369-372 pulls the whole inner header),
+  -- so it is no decision of its own; the implication is checked here,
+  -- fail-closed (the receive audit's F8)
+  if protocol == 4 && bytes.length < 20 then invariant "an ECN rewrite of a short IPv4 header (the honest test admitted it)"
+  if protocol == 6 && bytes.length < 40 then invariant "an ECN rewrite of a short IPv6 header (the honest test admitted it)"
   if ce then
     if ← branch .inetSetCeIp (protocol == 4) then return ← ipEcnSetCe bytes
     if ← branch .inetSetCeIpv6 (protocol == 6) then return ← ip6EcnSetCe bytes

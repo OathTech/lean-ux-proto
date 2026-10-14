@@ -762,7 +762,7 @@ def inject (family port : Nat) (msg : List UInt8) (tos : Nat := 0) (ll : Bool :=
     mid-flood injection), a flood that did not cross the threshold, or a
     section that did not close in this operation (the worker outliving the
     window) fail closed. The op returns 0 (the submission succeeded). -/
-def flood (count port : Nat) (messages : List (List UInt8)) : M Int := do
+def flood (count port family : Nat) (messages : List (List UInt8)) : M Int := do
   let some d := (← getK).wg | unsupported "a flood to a port other than wg0's (no wg0)"
   if !d.running || port != d.incomingPort then unsupported "a flood to a port other than wg0's"
   -- without records (the domain filter runs before Linux), accept the flood: it
@@ -789,7 +789,22 @@ def flood (count port : Nat) (messages : List (List UInt8)) : M Int := do
   -- through the real worker (each packet's records, the `cond_resched`
   -- between packets), which decrements the counter per packet
   _ ← hidden (.sectionStart .receiveWorker)
-  let src ← senderSource 4 0
+  -- the flood's family: the fixture sender's v4-mapped destination (wg0 sees
+  -- IPv4 from 127.0.0.1) or ::1 (IPv6, the ratelimiter's /64 table)
+  let src ← senderSource family 0
+  if (← get).floodExact then
+    -- the unsummarised execution (the pre-release review's section 8): every
+    -- tail packet is the guest's invalid template (148 bytes: type 1, a MAC1
+    -- of 0xff) and runs through the real worker, consuming the records the
+    -- summary below folds; used to check the summary, not for the claim
+    let invalid : List UInt8 := [1] ++ List.replicate 115 0 ++ List.replicate 16 0xff ++ List.replicate 16 0
+    modifyDev fun d => { d with handshakeQueue := (messages ++ List.replicate count invalid).map (fun m => (m, src)),
+                                handshakeQueueLen := d.handshakeQueueLen + messages.length + count,
+                                handshakeLastCpu := 0 }
+    WG.handshakeReceiveWorker (nestedResched .receiveWorker)
+    _ ← hidden (.sectionStop .receiveWorker)
+    deliverSent
+    return 0
   -- the batch's producer side (wg_packet_receive per datagram, receive.c:567-568):
   -- the ring and the counter, and `wg_cpumask_next_online(&last_cpu)` per
   -- packet, which on this one-CPU kernel leaves `last_cpu` at 0

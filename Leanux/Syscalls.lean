@@ -79,7 +79,7 @@ inductive Syscall where
   | wgDelroute (family : Nat)
   /-- E-B: an io_uring flood to wg0's `port`: `count` invalid-MAC1 initiations
       with `messages` valid-MAC1 initiations submitted first. -/
-  | wgFlood (count port : Nat) (messages : List (List UInt8))
+  | wgFlood (count port family : Nat) (messages : List (List UInt8))
   /-- W7: `items` submitted as one io_uring batch; the guest waits `waitMs`
       after it (docs/2026-10-06-w4-w7-transmit-bulk.md, 5.5). -/
   | wgBatch (items : List Env.BatchItem) (waitMs : Nat)
@@ -307,7 +307,7 @@ def dispatch : Syscall → M Int
   | .wgInject family port message tos ll dest => socketCallOn SENDER_FD (Env.inject family port message tos ll dest)
   | .wgDeladdr family => rtnetlinkRequest (Env.wgDeladdr family)
   | .wgDelroute family => rtnetlinkRequest (Env.wgDelroute family)
-  | .wgFlood count port messages => Env.flood count port messages
+  | .wgFlood count port family messages => Env.flood count port family messages
   -- W7: the io_uring submission's descriptor plumbing (the ring's fdget, each
   -- send's fget of the sender) is the fixture's, as the flood's is: not modeled
   | .wgBatch items _ => Env.batch items
