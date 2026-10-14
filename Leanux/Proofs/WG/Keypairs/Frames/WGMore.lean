@@ -1,3 +1,4 @@
+import Leanux.Proofs.Framing.WGReceiveHeaders
 import Leanux.Proofs.WG.Keypairs.OrdinaryRules
 import Leanux.Proofs.WG.Keypairs.SnapshotRules
 import Leanux.Proofs.WG.Keypairs.Frames.WGTransitions
@@ -379,7 +380,7 @@ theorem updateRxStats_spec (P : Snapshot → Prop) (pid : PeerId) (len : Nat) :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (updateRxStats_sameSnapshot pid len).wp P
 
 theorem validateHeaderLen_sameSnapshot (msg : List UInt8) : SameSnapshot (Leanux.WG.validateHeaderLen msg) := by
-  frame_same [Leanux.WG.validateHeaderLen] using []
+  exact sameSnapshot_of_sameKernel (Framing.validateHeaderLen_sameKernel msg)
 
 theorem validateHeaderLen_spec (P : Snapshot → Prop) (msg : List UInt8) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.validateHeaderLen msg
@@ -452,7 +453,7 @@ theorem lookupInterface_spec (P : Snapshot → Prop) (ref : DeviceRef) :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (lookupInterface_sameSnapshot ref).wp P
 
 theorem prepareSkbHeader_sameSnapshot (msg : List UInt8) : SameSnapshot (Leanux.WG.prepareSkbHeader msg) := by
-  frame_same [Leanux.WG.prepareSkbHeader] using [validateHeaderLen_spec]
+  exact sameSnapshot_of_sameKernel (Framing.prepareSkbHeader_sameKernel msg)
 
 theorem prepareSkbHeader_spec (P : Snapshot → Prop) (msg : List UInt8) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.prepareSkbHeader msg

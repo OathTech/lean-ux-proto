@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Lifetimes.ReceiveIngress
 import Leanux.Proofs.WG.Lifetimes.SocketCalls
 import Leanux.Proofs.WG.Lifetimes.EncryptWorker
 import Leanux.Proofs.WG.Lifetimes.TxWorker
@@ -1362,6 +1363,78 @@ access/reference contract. No successful authentication, packet shape or
 index-owner coherence premise is required. Outer receive workers and ownership
 of saved references remain separate obligations. -/
 theorem cookie_family_allocation_access_preserves (call : Lifetimes.CookieCall) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed := call.allocation
+
+/-- Endpoint-from-skb, cookie reply, cookie send, full handshake receive and
+queue step preserve every original result, World and Stop for every history.
+Nested normal returns and failed-record prefixes retain source ordering. -/
+theorem handshake_receive_family_access_erasure (call : Lifetimes.HandshakeReceiveCall) :
+    ErasesPrefix call.observed call.original := call.erases
+
+/-- Explicit ambient and named lower-helper contracts compose the complete
+handshake receive family. A false beginSession return still reaches common completion;
+queue decrement occurs only after a normal handler return. -/
+theorem handshake_receive_family_ambient_access_preserves (c : Lifetimes.AmbientContracts I)
+    (r : Lifetimes.HandshakeReceiveContracts I) (q : Lifetimes.ReceiveQueueContracts I)
+    (call : Lifetimes.HandshakeReceiveCall) :
+    PrefixPreserves I Lifetimes.LifetimeEvent.Safe call.observed := call.preserves_ambient c r q
+
+/-- Allocation geometry discharges socket, cookie, session, staging, statistics
+and queue-bookkeeping contracts, including normal rejection and Stop prefixes.
+No saved-reference ownership or outer scheduler closure is asserted. -/
+theorem handshake_receive_family_allocation_access_preserves (call : Lifetimes.HandshakeReceiveCall) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed := call.allocation
+
+/-- Exact source erasure for one original receive-worker iteration and the
+whole original bounded worker. Callback erasure is explicit; the 4096-step
+exhaustion Stop is preserved, without an assumed queue-drain premise. -/
+theorem handshake_receive_worker_access_erasure
+    (hi : ErasesPrefix afterItem originalAfter) (hc : ErasesPrefix condResched originalResched) :
+    ErasesPrefix (Lifetimes.receiveIterPrefix afterItem)
+      (workerIter .receiveWorker none receiveStep originalAfter) ∧
+    ErasesPrefix (Lifetimes.handshakeReceiveWorkerPrefix condResched)
+      (handshakeReceiveWorker originalResched) :=
+  ⟨Lifetimes.receiveIterPrefix_erases hi, Lifetimes.handshakeReceiveWorkerPrefix_erases hc⟩
+
+/-- Complete failed and successful worker prefixes compose under explicit
+rescheduling contracts. The callback runs only after the handler and counter
+decrement; callbacks may change residents while preserving the invariant. -/
+theorem handshake_receive_worker_ambient_access_preserves (c : Lifetimes.AmbientContracts I)
+    (r : Lifetimes.HandshakeReceiveContracts I) (q : Lifetimes.ReceiveQueueContracts I)
+    (hi : PrefixPreserves I Lifetimes.LifetimeEvent.Safe afterItem)
+    (hc : PrefixPreserves I Lifetimes.LifetimeEvent.Safe condResched) :
+    PrefixPreserves I Lifetimes.LifetimeEvent.Safe (Lifetimes.receiveIterPrefix afterItem) ∧
+    PrefixPreserves I Lifetimes.LifetimeEvent.Safe (Lifetimes.handshakeReceiveWorkerPrefix condResched) :=
+  ⟨Lifetimes.receiveIterPrefix_preserves c r q hi,
+   Lifetimes.handshakeReceiveWorkerPrefix_preserves c r q hc⟩
+
+/-- The original receive step and all local helpers discharge concrete
+allocation safety; only the caller-provided rescheduling observations retain
+an explicit contract. This is local worker composition, not a scheduler proof. -/
+theorem handshake_receive_worker_allocation_access_preserves
+    (hi : PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe afterItem)
+    (hc : PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe condResched) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe (Lifetimes.receiveIterPrefix afterItem) ∧
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe (Lifetimes.handshakeReceiveWorkerPrefix condResched) :=
+  handshake_receive_worker_ambient_access_preserves Lifetimes.allocationAmbient
+    Lifetimes.allocationHandshakeReceive Lifetimes.allocationReceiveQueue hi hc
+
+/-- Original CPU selection, packet receive and UDP entry have exact result,
+World and Stop erasure. Header and DS-field leaves are resident-access-free by
+source inspection; data consumption uses its complete existing observer. -/
+theorem receive_ingress_access_erasure (call : Lifetimes.ReceiveIngressCall) :
+    ErasesPrefix call.observed call.original := call.erases
+
+/-- Explicit queue/CPU-update and existing data-consumption contracts compose
+safe ingress prefixes through ordinary drops and unsupported/record Stops. -/
+theorem receive_ingress_ambient_access_preserves (c : Lifetimes.AmbientContracts I)
+    (r : Lifetimes.ReceiveIngressContracts I) (call : Lifetimes.ReceiveIngressCall) :
+    PrefixPreserves I Lifetimes.LifetimeEvent.Safe call.observed := call.preserves_ambient c r
+
+/-- Allocation geometry discharges all ingress contracts without packet-shape,
+authentication, queue-drain or index-owner premises. The byte/source handshake
+queue is distinct from resident rx-skbs; worker scheduling remains separate. -/
+theorem receive_ingress_allocation_access_preserves (call : Lifetimes.ReceiveIngressCall) :
     PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed := call.allocation
 
 end Leanux.Proofs.WG.LifetimeSafety

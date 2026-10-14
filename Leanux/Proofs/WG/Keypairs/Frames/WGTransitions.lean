@@ -1,3 +1,4 @@
+import Leanux.Proofs.Framing.WGReceiveHeaders
 import Leanux.Proofs.WG.Keypairs.Frames.WGBase
 
 namespace Leanux.Proofs.WG.Keypairs.WGTransitions
@@ -56,7 +57,7 @@ theorem handshakeClear_spec (P : Snapshot → Prop) (pid : PeerId) :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (handshakeClear_sameSnapshot pid).wp P
 
 theorem ipTunnelGetDsfield_sameSnapshot (protocol : Nat) (hdr : List UInt8) : SameSnapshot (Leanux.WG.ipTunnelGetDsfield protocol hdr) := by
-  frame_same [Leanux.WG.ipTunnelGetDsfield] using []
+  exact sameSnapshot_of_sameKernel (Framing.ipTunnelGetDsfield_sameKernel protocol hdr)
 
 theorem ipTunnelGetDsfield_spec (P : Snapshot → Prop) (protocol : Nat) (hdr : List UInt8) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.ipTunnelGetDsfield protocol hdr

@@ -6,10 +6,11 @@ Worktree `.worktrees/proofs-campaign`, branch `proofs/campaign`; governed by
 [the charter](2026-10-13-charter-proof-campaign.md). Both prerequisites were
 carried from `2c7a076`, then the audit at `f45bde8` and documentation-only
 `a39aded`, then the scheduler robustness change at `7a92672`.
-All registered components are current over `7a92672`, including the R2 cookie,
-R3 insertion/pure-removal and R4 finite ring-journal extensions. The new `cryptAhead`
-call is observed and framed, and the historical witness seed no longer depends
-on the removed evaluator fixture. Open obligations below remain explicit. No integration into main,
+All registered components are current over `7a92672`, including the R2 handshake
+receive/worker and thin ingress, R3 insertion/pure-removal and R4 finite ring-journal
+extensions. The new `cryptAhead` call is observed and framed, and the historical
+witness seed no longer depends on the removed evaluator fixture.
+Open obligations below remain explicit. No integration into main,
 push, differential check or guest run has been performed by this campaign.
 
 | Result | Disposition |
@@ -22,10 +23,10 @@ push, differential check or guest run has been performed by this campaign.
 | R6 flood resistance | Cookie exclusion proved at the original call boundary; accepted 19-retry/20-initiation episode resolves the literal limit through Rule Zero. Six terminal contracts. |
 
 **Last coordinated validation.** The mirror is byte-identical to `7a92672`.
-The proof gate passes 286 jobs and 279 terminal statements
-(ReplayWindow 15; R1 9; R2 143; R3 45; R4 48; R5 13; R6 6), using only `propext`, `Classical.choice` and `Quot.sound`.
+The proof gate passes 290 jobs and 288 terminal statements
+(ReplayWindow 15; R1 9; R2 152; R3 45; R4 48; R5 13; R6 6), using only `propext`, `Classical.choice` and `Quot.sound`.
 Fresh stock kernel replay passes, as do the 60-job default model build and
-expanded 110-test unit tier (22.731 seconds; one skip). The model executable
+expanded 110-test unit tier (23.463 seconds; one skip). The model executable
 was rebuilt at the scheduler carry (118 jobs); its source is unchanged. Independent frozen-source
 and scope reviews have no unresolved correctness findings in these components.
 
@@ -40,8 +41,8 @@ All ten campaign witnesses and the new scheduler `W7_CRYPT_AHEAD` case pass
 against this mirror, including exact original/observed output comparison.
 The retry and two current time witnesses include complete-advance checks.
 Generated streams prove accepted mirror behavior, not Linux capture or schedule
-reachability. These replayers were last run at the scheduler carry; this
-pure-removal extension changes none of their code. Reproduction commands and
+reachability. These replayers were last run at the scheduler carry; the subsequent
+pure-removal and receive extensions change none of their code. Reproduction commands and
 provenance are retained below.
 
 **Carries and review history.**
@@ -143,9 +144,11 @@ The charter asks for safety of every internal access after release, across every
 The checked components establish endpoint identity evolution and failure-retaining local access safety. Whole-run closure remains open.
 The accepted stale-cursor findings below expose reference retargeting; they do not resurrect an old identity or settle the full charter claim.
 
-**Cookie-family extension.** Four complete cookie calls add three terminal exports (143 R2 terminals).
-The 208-job local target and coordinated validation pass; frozen-source review reports no findings.
-The preceding send family is checked at `83d0df9`; the last campaign validation is recorded above.
+**Receive-family extension.** Complete handshake receive, queue step/iteration/whole worker and thin UDP/packet entry
+add nine grouped terminal exports (152 R2 terminals). The 214-job scoped target and 290-job full proof-tree build pass;
+frozen-source review has no unresolved findings. The coordinated proof gate,
+fresh stock kernel replay and fast tier pass, with current counts recorded above.
+The cookie/send checkpoints remain checked; the last coordinated campaign validation is recorded above.
 
 **Architecture decisions [AGENT 2026-10-13].** Separate resolved allocation identity from ownership of saved numeric references.
 Share frontier algebra and the seven-field WG kernel projection; retain observation history outside the exception layer.
@@ -159,6 +162,9 @@ Factor buffer allocation from its exact original socket-send suffix, reusing the
 **Cookie frame decision [AGENT 2026-10-14].** Mask only the device's cookie secret/birthdate and the ratelimiter table
 in a full-Kernel projection; derive legacy frames by projection. This permits actual rotation/rate accounting while retaining
 device presence, complete resident objects, allocator frontiers and `netIfindexNext` for concrete allocation safety.
+
+**Receive composition decision [AGENT 2026-10-14].** Reuse the original load/source factor and existing lower-call observers;
+share a failure-retaining bounded worker loop. Keep rescheduling explicit and separate handshake byte queues from resident skb stores.
 
 **Models and refinement.** `Lifetimes/Store` and `Actions` describe slot/stamp transitions over original executions.
 `Keypairs/Identity` uses whole-syscall evolution to exclude reintroduction of absent old keypair identities at operation endpoints.
@@ -231,11 +237,20 @@ and explicit release origins. Shared filesystem frames end at return, leaving qu
   Consumption observes the reference-taking index lookup, peer read, authenticated clock, fresh setter getter/write and final put.
   Missing MAC1 and failed authentication keep their ordinary puts; Stops skip later cleanup.
   `CookieStable` explicitly frames cookie/ratelimiter changes for an arbitrary ambient invariant; `AllocationInv` discharges it concretely.
-  No authentication-success, packet-shape or index-owner-coherence premise is added. Composition through `receiveHandshakePacket` and the receive worker remains open.
+  No authentication-success, packet-shape or index-owner-coherence premise is added.
+- **Handshake receive and ingress:** `HandshakeReceive` observes endpoint extraction/update, cookie replies and the complete
+  `receiveHandshakePacket`, including recorded load/decay, nested ordinary returns and Stops. False response-session creation still
+  reaches common completion; peer RX stats precede device stats, then received/traversal timers and the final peer put.
+  `ReceiveWorker` pops before handling, decrements only after normal completion, and composes the original iteration and whole
+  4096-step loop with explicit rescheduling observations. Exhaustion remains the original Stop; no drain premise is added.
+  `ReceiveIngress` covers CPU selection, `packetReceive` and `wgReceive`, including header rejection, busy/full queue paths and
+  the existing complete `consumeData` observer. Header/DS-field leaves are resident-access-free by source inspection.
+  Named cookie/socket/session/staging/statistics/queue contracts discharge concretely for `AllocationInv`; callbacks remain explicit.
 
 `PrefixControl` and `PrefixLoops` share exact conditional, bind, range, map, list and accumulating-fold laws.
+`PrefixWorkers` shares original iteration and bounded whole-loop erasure and prefix safety, including callback/exhaustion Stops.
 Generic enqueue/decrypt contracts retain explicit softirq, IRQ-exit and rescheduling observers.
-`Framing/KernelEffects`, `WGTime`, `WGData`, `WGHandshake`, `WGIndex` and `WGCookie` provide canonical frames with legacy projections.
+`Framing/KernelEffects`, `WGTime`, `WGData`, `WGHandshake`, `WGIndex`, `WGCookie` and `WGReceiveHeaders` provide canonical frames with legacy projections.
 The index frame preserves the full kernel except the scalar index table, including device presence, resident values and frontiers;
 the original device check and collision/draw records remain. Access-free helper coverage follows source inspection separately:
 neither erasure nor an unchanged-Kernel theorem alone proves that an internally lifted helper contains no reads.
@@ -251,7 +266,7 @@ The timer guard's peer getter executes unconditionally before `andM`. Duplicate 
 including a later Stop after an earlier free. Safe access prefixes establish neither delivery/order nor reference ownership.
 
 **Remaining closure.** Full caller, device-lifecycle and scheduler coverage remains unproved: concrete encrypt/TX scheduler callbacks,
-socket setup/reinitialization, receive-handshake processing and outer send dispatch, timer callbacks, peer removal, netlink and remaining resident scans.
+socket setup/reinitialization and outer dispatch, timer callbacks, peer removal, netlink and remaining resident scans.
 Saved scalar-reference ownership is separate: an aliased or dangling ID may stop after earlier safe accesses.
 No C simulation is claimed. C initializes cache/handshake before incrementing the peer counter; the mirror increments/inserts first.
 The proofs follow the mirror's order; that difference alone is not a lifetime counterexample.
@@ -296,6 +311,8 @@ Legacy frame signatures were preserved through canonical projections, resolving 
 Documentation status/count discrepancies were corrected. No unresolved correctness finding remains for the checked components;
 this does not close their stated caller, scheduler or ownership obligations.
 Send-family review qualified the no-prior-access statement to buffer allocation refusal; response/session allocation has preceding peer accesses.
+Receive review qualified common completion to a false `beginSession` return, excluding Stops,
+and corrected the stale cookie-map sentence that left the now-covered local receive composition open.
 
 **Effort.** The ledger records invocations, not an invented campaign total. Each accepted cursor reproduction takes under one second.
 
@@ -310,6 +327,7 @@ Send-family review qualified the no-prior-access statement to buffer allocation 
 | Five-call handshake family | 7: 1 / 6 | About 15m |
 | Six-call handshake send family | 6: 2 / 4 | 7m39s |
 | Four-call cookie family | 5: 2 / 3 | 11m41s |
+| Handshake receive/worker and thin ingress | 7: 2 / 5 | 20m06s through full-build collection |
 
 Earlier caller checkpoints took roughly 6–25 minutes each with 4–19 compilation invocations.
 The first IPv4 architecture failed at proof-search heartbeat limits; its unused observer was removed.
@@ -325,7 +343,10 @@ The cookie extension corrected three ordinary build failures: a missing framing 
 identity-predicate transport, and legacy projection normalization. Its final 208-job target passes with 143 R2 terminals;
 all five invocations' exits were collected, with no interruption or cap failure. Frozen-source review reports no findings.
 The coordinated 280-job gate checks 266 terminal statements; fresh stock-kernel replay, the 60-job model build
-and 94-test unit tier (22.079 seconds; one skip) pass. Earlier results above are historical checkpoints.
+and 94-test unit tier (22.079 seconds; one skip) pass. Earlier results above are historical checkpoints. The receive extension's five ordinary failures were an implicit event binder,
+a missing postcondition-to-preservation projection, normalization of the device-stat update, and two Lean layout errors.
+The corrected scoped target and full proof-tree build pass; all seven exits are collected, with no interruption or cap failure.
+The frozen review's two wording findings are fixed as described above. Coordinated gate/kernel/fast-tier validation passes.
 
 Validation details are retained in checkpoints `859d56a` (IPv4), `e6905f2` (encryption), `52a4602` (TX) and `d75f994` (handshake).
 At `d75f994`, R2 has 137 terminal statements; the complete target, coordinated proof gate, fresh stock Lean kernel replay,
