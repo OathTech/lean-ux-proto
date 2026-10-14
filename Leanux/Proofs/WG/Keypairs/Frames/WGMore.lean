@@ -254,7 +254,7 @@ theorem expiredZeroKeyMaterial_spec (P : Snapshot → Prop) (pid : PeerId) :
 
 theorem getAllowedips_sameSnapshot (skb : NlSkb) (family masked cidr : Nat) :
     SameSnapshot (Leanux.WG.getAllowedips skb family masked cidr) := by
-  frame_same [Leanux.WG.getAllowedips] using []
+  exact sameSnapshot_of_sameKernel (Framing.getAllowedips_sameKernel skb family masked cidr)
 
 theorem getAllowedips_spec (P : Snapshot → Prop) (skb : NlSkb) (family masked cidr : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.getAllowedips skb family masked cidr
@@ -423,16 +423,7 @@ theorem drainHandshakeSendWq_spec (P : Snapshot → Prop) (hp : Stable P) (upTo 
 
 theorem getPeerDump_sameSnapshot (pid : PeerId) (ctx : DumpCtx) (skb : NlSkb) :
     SameSnapshot (Leanux.WG.getPeerDump pid ctx skb) := by
-  unfold Leanux.WG.getPeerDump
-  repeat' first
-    | (snapshot_head Leanux.WG.getPeer; with_reducible exact @getPeer_sameSnapshot _)
-    | (snapshot_head Leanux.WG.getDev; with_reducible exact @getDev_sameSnapshot)
-    | (snapshot_head Leanux.WG.getNode; with_reducible exact @getNode_sameSnapshot _)
-    | (snapshot_head Leanux.WG.readNode; with_reducible exact @readNode_sameSnapshot _)
-    | (snapshot_head Leanux.WG.getAllowedips; with_reducible exact @getAllowedips_sameSnapshot _ _ _ _)
-    | (snapshot_head Leanux.branch; with_reducible exact @branch_sameSnapshot _ _)
-    | (snapshot_head Leanux.invariant; with_reducible exact @invariant_sameSnapshot _ _)
-    | dump_snapshot_step
+  exact sameSnapshot_of_sameKernel (Framing.getPeerDump_sameKernel pid ctx skb)
 
 theorem getPeerDump_spec (P : Snapshot → Prop) (pid : PeerId) (ctx : DumpCtx) (skb : NlSkb) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.getPeerDump pid ctx skb
@@ -514,17 +505,16 @@ theorem wgGetDeviceDump_spec (P : Snapshot → Prop) (ctx : DumpCtx) (prevSeq : 
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (wgGetDeviceDump_sameSnapshot ctx prevSeq skb).wp P
 
 theorem getNlSock_sameSnapshot (fd : Nat) : SameSnapshot (WG.getNlSock fd) := by
-  frame_same [WG.getNlSock] using []
+  exact sameSnapshot_of_sameKernel (Framing.getNlSock_sameKernel fd)
 
 theorem getNlSock_spec (P : Snapshot → Prop) (fd : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ WG.getNlSock fd
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (getNlSock_sameSnapshot fd).wp P
 
 theorem setNlSock_sameSnapshot (fd : Nat) (sock : NlSock) : SameSnapshot (WG.setNlSock fd sock) := by
-  unfold WG.setNlSock
-  apply snapshot_modifyK
-  intro k
-  split <;> exact ⟨rfl, rfl⟩
+  intro w x v hr
+  have hf := congrArg (fun k => snapshot {w with k}) (Framing.setNlSock_sameDumpKernel fd sock w x v hr)
+  simpa [snapshot, Framing.dumpView, Framing.dumpKernel] using hf
 
 theorem setNlSock_spec (P : Snapshot → Prop) (fd : Nat) (sock : NlSock) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ WG.setNlSock fd sock
@@ -555,7 +545,7 @@ theorem netlinkRecvmsg_spec (P : Snapshot → Prop) (fd : Nat) :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (netlinkRecvmsg_sameSnapshot fd).wp P
 
 theorem coalesce_sameSnapshot (messages : List NlMessage) : SameSnapshot (WG.coalesce messages) := by
-  frame_same [WG.coalesce] using []
+  exact sameSnapshot_of_sameKernel (Framing.coalesce_sameKernel messages)
 
 theorem coalesce_spec (P : Snapshot → Prop) (messages : List NlMessage) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ WG.coalesce messages

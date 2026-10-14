@@ -1,3 +1,4 @@
+import Leanux.Proofs.Framing.WGDump
 import Leanux.Proofs.WG.Keypairs.Frames.Kernel
 import Leanux.Proofs.Framing.WGTime
 import Leanux.Proofs.Framing.WGIndex
@@ -350,7 +351,7 @@ theorem prefixMatches_spec (P : Snapshot → Prop) (node : AipNode) (key bits : 
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (prefixMatches_sameSnapshot node key bits).wp P
 
 theorem readNode_sameSnapshot (n : AipNode) : SameSnapshot (Leanux.WG.readNode n) := by
-  frame_same [Leanux.WG.readNode] using [swapEndian_spec]
+  exact sameSnapshot_of_sameKernel (Framing.readNode_sameKernel n)
 
 theorem readNode_spec (P : Snapshot → Prop) (n : AipNode) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.readNode n

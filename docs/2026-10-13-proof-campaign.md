@@ -14,19 +14,21 @@ retains current architecture, findings, reproduction provenance, effort and limi
 | Result | Current disposition |
 | --- | --- |
 | R1 | Uniqueness and the intentional inclusive-floor correction are proved, with pure and accepted-run witnesses. |
-| R2 | Endpoint identity and failure-retaining access contracts cover the listed families, concrete Batch scheduling and isolated trials. The complete-FS extension adds strong frames and exact allocation-safe lifts for all eleven FS dispatch arms and actual taskWorkRun; compatibility/scoped/full targets pass 109/251/391 jobs. Independent frozen review and coordinated checks pass for this extension. Initialized whole-run allocation-identity access closure remains open; raw-reference affiliation/credit is a separate stronger property. |
+| R2 | Endpoint identity and failure-retaining access contracts cover the listed families, concrete Batch scheduling and isolated trials. All seven original dump calls now have exact typed erasure and concrete allocation-safe failed prefixes; scoped/full builds, independent frozen review and coordinated checks pass. Initialized whole-run allocation-identity access closure remains open; raw-reference affiliation/credit is a separate stronger property. |
 | R3 | Initialized finite normal call histories refine flat-prefix updates and reached-root lookup, including full normal clear. Completed setAllowedip/removal events now cover the entire acquired-peer update, with concrete send/flush/cleanup frames and separately derived lookup/create residency. Scoped/full targets, independent frozen source/export/documentation review and coordinated checks pass. Public setPeerCmd preflight composition, enclosing configuration/Runner closure and packet paths remain open. |
 | R4 | Physical rings, finite/source journals, per-poll provenance and selected GRO order, and concrete RX scheduling are checked. The balanced lookup/release extension passes coordinated validation. The six-export W7 joint-observer/source-cut extension passes coordinated validation. Five further normal endpoint exports pass scoped/full and coordinated validation and independent frozen review. Accepted input refutes chronological post-GRO order. Joint pipeline conservation remains open. |
 | R5 | The unconditional age/post-zero and wire-nonce readings are false in accepted mirror inputs. Rule Zero resolution retains thirteen positive local contracts, without universal replacement transport claims. |
 | R6 | Cookie exclusion is proved at its original call boundary. A 19-retry/20-initiation episode refutes literal MAX=18; no universal corrected retry bound is claimed. |
 
-**Validation status.** Current source has 400 terminal declarations: 398 theorems
-and two definitions (ReplayWindow 15; R1 9; R2 188; R3 90; R4 79; R5 13; R6 6).
-The acquired-peer R3 extension passes scoped/full builds of 278/397 jobs and
-independent frozen source/export/documentation review. Coordinated validation
-passes the 397-job proof gate with 400 declarations and only `propext`,
+**Validation status.** Current source has 403 terminal declarations: 401 theorems
+and two definitions (ReplayWindow 15; R1 9; R2 191; R3 90; R4 79; R5 13; R6 6).
+The seven-call dump extension passes component/scoped/full builds of
+176/255/401 jobs and independent frozen source/export/documentation review.
+Sequential coordinated validation passes the 401-job proof gate with 403
+declarations and only `propext`,
 `Classical.choice` and `Quot.sound`, fresh stock kernel replay, the 60-job default
-build and 114 unit tests (22.162 seconds, one skip). The mirror remains
+build and 114 unit tests (22.793 seconds, one skip). All seven frozen Lean hashes
+remain unchanged. The mirror remains
 byte-identical to `c047e64`; runtime has not changed. Per-tranche measurements
 remain below. Initialized whole-run R2 and the remaining R3/R4 closures stay open.
 The preceding `c047e64` carry's 118-job executable build and eleven reproduction
@@ -160,6 +162,7 @@ execution; lifted helper coverage is separately checked against source.
 | Device configuration | [AGENT 2026-10-14] Share literal device-configuration continuations below the proof layers; use a full-Kernel mask for only identity/cookie-key/generation/fwmark updates and focus the existing precomputation observer. Extend the existing configuration family to complete wgSetDevice, preserving saved-ID loops, generation-before-error, put-before-remove and ordinary-return zero-key cleanup; concrete allocation safety needs no routing, attribute-validity or reference-credit assumption. |
 | Local filesystem frame migration | [AGENT 2026-10-14] Prove original Wait/Pipe/PipeRead operations once over the complete WG kernel view and project the legacy contracts, retaining weak wait-IH signatures, exact source aliases and pipe geometry/progress. Source inspection separately justifies six access-free lifts; normal frames transport AllocationInv, while exact lifts retain all incoming history and original Stops. This avoids duplicate operational proofs and does not claim whole-FS or outer-run closure. |
 | Complete filesystem frames and calls | [AGENT 2026-10-14] Move FSBase/Eventpoll/FS/EventpollCalls operational proofs into canonical full-WG frames and derive all 347 legacy signatures by projection. Generic SameView list/search rules retain weak callback premises; fixed-source epoll fuel results retain weak-IH APIs. Eleven typed original FS dispatch arms and actual taskWorkRun have source-audited exact unchanged-history lifts and concrete AllocationInv transport. Normal frames and exact Stop/history behavior are separate; queueing namespace cleanup does not execute it. |
+| Netlink dump family | [AGENT 2026-10-14] Share literal serialization/header cuts and canonical complete-Kernel frames; mask only the two netlink socket records and project legacy APIs. Observe all seven original dump calls at demanded peer/cursor/refcount accesses, preserving new-acquire-before-old-put, queue-before-done and pop-before-next-dump. Concrete allocation safety retains failed prefixes without cursor affiliation, valid lists or drain-success premises. |
 
 [AGENT 2026-10-13] Separate identity from saved-reference ownership, share frontier
 algebra and the WG projection, and retain history outside exceptions. Observe saved
@@ -247,14 +250,18 @@ python3 -B docs/proof-campaign-replay.py r2-stale-dump-cursor-orphan |
 ```
 
 **Remaining obligations.** Initialized outer runners/deferred-unit callers,
-timer firing, dumps and remaining resident scans are open.
+timer firing and remaining resident scans are open. BatchTrials proves safety
+conditional on its entry AllocationInv; the current schedule endpoint contract
+does not yet export that invariant at every reached copied-World filter entry.
+That reached-entry obligation remains part of initialized whole-run closure.
 The ordinary FS call dependency now has strong canonical FSBase, Eventpoll,
 FS/EventpollCalls frames, all eleven dispatch arms and actual taskWorkRun. These
 frames do not execute the separately queued Env.netnsCleanup/netnsPreExit, compose
 the enclosing syscall/Runner tails, or establish failed-World invariants.
 Complete local wgSetDevice now includes canonical device-identity/cookie-key/lookup
-frames and focused precompute transport; the Netlink socket wrappers, dumps and
-actual syscall postworkers remain to be composed.
+frames and focused precompute transport. All seven local dump calls are now
+composed; their enclosing socket-syscall wrappers and actual syscall postworkers
+remain open.
 The three original WG lifecycle calls now cover actual final store retirement
 locally; their enclosing environment and initialized Runner composition remain open. Saved scalar
 affiliation and reference credits are stronger separate properties:
@@ -288,6 +295,7 @@ replays and both current rejection checks each took under one second.
 | Local strong-FS frames and lifts | 6 calls: 5 builds (4 / 1) and one passing scope/census check | 16m52s from grant 13:44:39 through full-result collection at 14:01:31; 19m31s ownership through handback 14:04:10. Compatibility/scoped/full targets 90/242/376. One ordinary migration failure truncated the legacy iterator-count statement and omitted arithmetic hypothesis arguments; independent review found the same statement issue. Both were restored without changing the API. No cap/interruption, all exits collected. Three grouped exports over six original calls; independent frozen source/documentation review clear. Coordinated gate, fresh kernel replay, default build and 114 unit tests pass sequentially; frozen Lean hashes unchanged. |
 | Complete device configuration | 9 calls: 7 builds (3 PASS / 4 ordinary FAIL), then two scoped checks (FAIL / PASS) | 20m51s from grant 14:39:57 through full-result collection 15:00:48; 24m55s ownership through handback 15:03:52. Component/scoped/full targets 178/246/386. Four ordinary elaboration/normalization failures; the first scoped check failed on four trailing spaces, corrected before the passing scope/census check. Those whitespace-only changes postdated the worker full build and pass the coordinated rebuild. No cap/interruption; all exits collected. Existing three grouped exports extended, retaining 185 R2 / 393 total declarations. Independent frozen source/documentation review is clear; its Markdown effort-table separator finding is fixed. Coordinated gate, fresh kernel replay, default build and 114 unit tests pass sequentially; all eight frozen Lean hashes are unchanged. A separate seven-minute source-coverage audit of the committed R2 foundation found no defect in its inspected local contracts. No runtime change or replay. |
 | Complete FS migration and dispatch/task work | 7 calls: 6 builds (3 PASS / 3 ordinary FAIL) plus one passing scope/census/compatibility check | 10m15s from grant 15:10:50 through full-result collection at 15:21:05; 11m51s ownership through handback 15:22:41. Compatibility/scoped/full targets 109/251/391. Failures involved missing projected refcount contracts, replacement of the snapshot-specific eventfd proof tactic, task-only modification framing and generic view universe inference. All 347 legacy signatures are unchanged; three new exports give 188 R2 / 396 source declarations. No cap/interruption or runtime change; all exits collected. The review finding that the register row prematurely described the new extension as current is fixed. Independent frozen source/documentation review is clear. Coordinated gate, fresh kernel replay, default build and 114 unit tests pass sequentially; all ten frozen Lean hashes are unchanged. |
+| Complete Netlink dump family | 14 calls: 13 builds (4 PASS / 9 ordinary FAIL) plus one passing scope/census/compatibility check | 30m09s from grant 16:07:50 through full-result collection clock 16:37:59. Canonical/component/scoped/full targets 45/176/255/401; seven original calls, three new exports, 191 R2 /403 source declarations. Failures were ordinary elaboration/normalization and deterministic heartbeat exhaustion in monolithic serialization/chunk proofs; source cuts and checked continuation-sharing replaced that proof shape without changing premises. No cap/interruption or runtime replay; all exits collected. Exact nine-file scope, whitespace, both legacy theorem-signature sets and the c047e64 mirror comparison pass. Independent frozen source/export/documentation review and sequential coordinated gate, fresh kernel replay, default build and 114 unit tests pass; all seven frozen Lean hashes remain unchanged. Token returned at 16:39:42 (31m52s ownership). |
 
 Earlier monolithic IPv4 proof search failed at heartbeat limits; explicit source
 tails replaced it. An earlier tactic loop was deliberately stopped by its verified

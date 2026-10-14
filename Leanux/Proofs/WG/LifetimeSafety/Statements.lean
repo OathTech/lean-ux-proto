@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Lifetimes.DumpAccess
 import Leanux.Proofs.WG.Lifetimes.FilesystemCalls
 import Leanux.Proofs.WG.Lifetimes.FilesystemLocal
 import Leanux.Proofs.WG.Lifetimes.PeerRemoval
@@ -1690,7 +1691,7 @@ theorem configuration_family_ambient_access_preserves (c : Lifetimes.AmbientCont
     PrefixPreserves I Lifetimes.LifetimeEvent.Safe call.observed := call.preserves_ambient c hs r d
 
 /-- Concrete allocation geometry discharges all four configuration calls and
-their failed access prefixes. Dumps, syscall tails and
+their failed access prefixes. Syscall tails and
 initialized whole-run environment/Runner composition remain separate work. -/
 theorem configuration_family_allocation_access_preserves (call : Lifetimes.ConfigurationCall) :
     PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed := call.allocation
@@ -1739,5 +1740,27 @@ syscall/Runner composition remain separate lifetime obligations. -/
 theorem filesystem_family_allocation_preserves (call : Lifetimes.FilesystemCall) :
     PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed :=
   call.allocation
+
+/-- All seven original dump calls retain their exact typed result, successful
+World and Stop for arbitrary inputs and histories. Cursor reads are demanded at
+original sites, the new cursor is acquired before the old cursor is put, and
+receive pops its old chunk before running the next dump. -/
+theorem dump_family_access_erasure (call : Lifetimes.NetlinkDumpCall) :
+    ErasesPrefix call.observed call.original := call.erases
+
+/-- Explicit ambient reference contracts and socket-record stability compose
+the whole dump family, including queued completion before done, malformed cursor
+Stops, partial chunks and the original finite receive-loop exhaustion. No cursor
+affiliation, list validity, reference credit or successful drain is assumed. -/
+theorem dump_family_ambient_access_preserves (c : Lifetimes.AmbientContracts I)
+    (stable : Lifetimes.DumpStable I) (call : Lifetimes.NetlinkDumpCall) :
+    PrefixPreserves I Lifetimes.LifetimeEvent.Safe call.observed := call.preserves_ambient c stable
+
+/-- Concrete AllocationInv discharges all seven calls and retains safe access
+history on every Stop. The exact netlink mask retains all resident objects and
+allocator geometry. This does not establish initialized enclosing Syscall/Env/
+Runner closure or the reached entry invariant for every copied scheduling trial. -/
+theorem dump_family_allocation_access_preserves (call : Lifetimes.NetlinkDumpCall) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed := call.allocation
 
 end Leanux.Proofs.WG.LifetimeSafety
