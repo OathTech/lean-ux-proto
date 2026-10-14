@@ -6,7 +6,8 @@ Worktree `.worktrees/proofs-campaign`, branch `proofs/campaign`; governed by
 [the charter](2026-10-13-charter-proof-campaign.md). Both prerequisites were
 carried from `2c7a076`, then the audit at `f45bde8` and documentation-only
 `a39aded`. The mirror is byte-identical to main. Checked components are current
-over `a39aded`; open obligations below remain explicit. No integration into main,
+over `a39aded`, including the six-call R2 handshake-send extension. Open
+obligations below remain explicit. No integration into main,
 push, differential check or guest run has been performed by this campaign.
 
 | Result | Disposition |
@@ -19,10 +20,10 @@ push, differential check or guest run has been performed by this campaign.
 | R6 flood resistance | Cookie exclusion proved at the original call boundary; accepted 19-retry/20-initiation episode resolves the literal limit through Rule Zero. Six terminal contracts. |
 
 **Current validation.** `a39aded` has mirror source unchanged from `f45bde8`.
-The proof gate passes 273 jobs and 249 terminal statements
-(ReplayWindow 15; R1 9; R2 137; R3 34; R4 35; R5 13; R6 6), using only `propext`, `Classical.choice` and `Quot.sound`.
+The proof gate passes 274 jobs and 252 terminal statements
+(ReplayWindow 15; R1 9; R2 140; R3 34; R4 35; R5 13; R6 6), using only `propext`, `Classical.choice` and `Quot.sound`.
 Fresh stock kernel replay passes, as do the 60-job default model build and
-94-test unit tier (21.789 seconds; one skip). Independent frozen-source
+94-test unit tier (21.921 seconds; one skip). Independent frozen-source
 and scope reviews have no unresolved correctness findings in these components.
 
 ```sh
@@ -109,6 +110,9 @@ The charter asks for safety of every internal access after release, across every
 The checked components establish endpoint identity evolution and failure-retaining local access safety. Whole-run closure remains open.
 The accepted stale-cursor findings below expose reference retargeting; they do not resurrect an old identity or settle the full charter claim.
 
+**Send-family extension.** Six complete send calls and three terminal exports pass the local R2 target (205 jobs; 140 terminals),
+the coordinated proof gate and fresh stock kernel replay. Current campaign validation is recorded above.
+
 **Architecture decisions [AGENT 2026-10-13].** Separate resolved allocation identity from ownership of saved numeric references.
 Share frontier algebra and the seven-field WG kernel projection; retain observation history outside the exception layer.
 Strengthen access safety with resident uniqueness and allocation/epoch bounds, sharing caller proofs through explicit ambient contracts.
@@ -116,6 +120,7 @@ Observe saved peer entries when their predicates are demanded, carrying saved st
 Factor IPv4 send into source tail stages that retain the entry route. Keep TX socket and rescheduling contracts explicit.
 Keep the five handshake calls at exact local boundaries. Share canonical record, jitter, checksum, crypto and index frames,
 preserving legacy signatures by projection instead of duplicating generated source matchers.
+Factor buffer allocation from its exact original socket-send suffix, reusing the existing send observer and keeping ordinary returns distinct from Stops.
 
 **Models and refinement.** `Lifetimes/Store` and `Actions` describe slot/stamp transitions over original executions.
 `Keypairs/Identity` uses whole-syscall evolution to exclude reintroduction of absent old keypair identities at operation endpoints.
@@ -173,6 +178,14 @@ and explicit release origins. Shared filesystem frames end at return, leaving qu
   Response consumption retains the state-check getter and the setter's separate fresh getter. Ordinary rejection performs its puts;
   a Stop does not execute later cleanup. MAC addition retains the immediate saved-peer write before its short-circuited age test.
   The ambient index-insertion contract is concretely discharged for `AllocationInv`, as are reference-taking lookups and failure puts.
+- **Handshake send:** `HandshakeSend` covers `sendBufferToPeer`, `timersSessionDerived`, `timersHandshakeInitiated`,
+  `sendHandshakeInitiation`, `sendHandshakeResponse` and `handshakeSendWorker`. Buffer allocation refusal precedes peer access
+  and creates no modeled packet identity. Its unconditional source factor reuses original `sendSkbToPeer`, discarding only the Boolean result.
+  A normal allocation/socket refusal still lets initiation reach its retransmit jitter/timer; a Stop skips subsequent work.
+  Response reads its first clock before its first peer getter; construction/session refusal, later clocks and fresh setters keep their original order.
+  Initiation's jitter precedes the eager timer-guard getter. The worker performs `peerPut` after every normal initiation return, never after a Stop.
+  Ambient socket, index-insertion and session create/put/replacement contracts are explicit and concretely discharged for `AllocationInv`.
+  These are complete local calls; outer dispatch and historical reference ownership remain open.
 
 `PrefixControl` and `PrefixLoops` share exact conditional, bind, range, map, list and accumulating-fold laws.
 Generic enqueue/decrypt contracts retain explicit softirq, IRQ-exit and rescheduling observers.
@@ -192,7 +205,7 @@ The timer guard's peer getter executes unconditionally before `andM`. Duplicate 
 including a later Stop after an earlier free. Safe access prefixes establish neither delivery/order nor reference ownership.
 
 **Remaining closure.** Full caller, device-lifecycle and scheduler coverage remains unproved: concrete encrypt/TX scheduler callbacks,
-socket setup/reinitialization, outer handshake execution, timer callbacks, peer removal, netlink and remaining resident scans.
+socket setup/reinitialization, receive-handshake processing and outer send dispatch, timer callbacks, peer removal, netlink and remaining resident scans.
 Saved scalar-reference ownership is separate: an aliased or dangling ID may stop after earlier safe accesses.
 No C simulation is claimed. C initializes cache/handshake before incrementing the peer counter; the mirror increments/inserts first.
 The proofs follow the mirror's order; that difference alone is not a lifetime counterexample.
@@ -236,6 +249,7 @@ TX review checked source/C ordering and confirmed composition through existing l
 Legacy frame signatures were preserved through canonical projections, resolving duplicate generated matcher declarations.
 Documentation status/count discrepancies were corrected. No unresolved correctness finding remains for the checked components;
 this does not close their stated caller, scheduler or ownership obligations.
+Send-family review qualified the no-prior-access statement to buffer allocation refusal; response/session allocation has preceding peer accesses.
 
 **Effort.** The ledger records invocations, not an invented campaign total. Each accepted cursor reproduction takes under one second.
 
@@ -248,6 +262,7 @@ this does not close their stated caller, scheduler or ownership obligations.
 | Encryption worker | 4: 2 / 2 | About 6m |
 | TX completion/worker | 6: 1 / 5 | 21m03s |
 | Five-call handshake family | 7: 1 / 6 | About 15m |
+| Six-call handshake send family | 6: 2 / 4 | 7m39s |
 
 Earlier caller checkpoints took roughly 6–25 minutes each with 4–19 compilation invocations.
 The first IPv4 architecture failed at proof-search heartbeat limits; its unused observer was removed.
@@ -256,6 +271,9 @@ Other failures were proof elaboration, simplification or integration failures, i
 bind/fold alignment, private-name normalization, metadata inference and duplicate matchers. They remain failures, not mirror findings.
 One earlier tactic loop was deliberately stopped by its verified PID and repaired. The later IPv4, encryption, TX and handshake
 checkpoints reported no interruptions or cap failures; their process exits were collected.
+The send extension corrected four ordinary proof failures (explicit Session import, option-case alignment and discard/branch normalization).
+Its final rerun incorporates the reviewed buffer-allocation qualifier; all exits were collected, with no interruption or cap failure.
+The three send-family exports pass coordinated validation and final frozen-source review; R2 now has 140 terminals.
 
 Validation details are retained in checkpoints `859d56a` (IPv4), `e6905f2` (encryption), `52a4602` (TX) and `d75f994` (handshake).
 At `d75f994`, R2 has 137 terminal statements; the complete target, coordinated proof gate, fresh stock Lean kernel replay,

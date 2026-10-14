@@ -2,6 +2,7 @@ import Leanux.Proofs.WG.Lifetimes.SocketCalls
 import Leanux.Proofs.WG.Lifetimes.EncryptWorker
 import Leanux.Proofs.WG.Lifetimes.TxWorker
 import Leanux.Proofs.WG.Lifetimes.HandshakeCalls
+import Leanux.Proofs.WG.Lifetimes.HandshakeSend
 import Leanux.Proofs.WG.Lifetimes.ReceivePoll
 import Leanux.Proofs.WG.Lifetimes.ReceiveFailure
 import Leanux.Proofs.WG.Lifetimes.TxStagingCalls
@@ -1314,5 +1315,30 @@ theorem handshake_mac_clock_failure (pid : PeerId) (msg : List UInt8)
     runPrefix (Lifetimes.addMacToPacketPrefix pid msg) w h =
       (.error e, h ++ [.peer (.read pid p.internalId), .peer (.write pid p.internalId)]) :=
   Lifetimes.addMacToPacketPrefix_clock_failure pid msg w written clockEntry p h e hp hw hb hc
+
+/-- The complete buffer send, two timer helpers, initiation, response and send
+worker retain their original Unit results, Worlds and Stops on every input and
+history. Buffer allocation refusal occurs before any resolved peer access. -/
+theorem handshake_send_family_access_erasure (call : Lifetimes.HandshakeSendCall) :
+    ErasesPrefix call.observed call.original := call.erases
+
+/-- Explicit ambient, socket and primitive index/session contracts compose
+safe resolved access prefixes through the six original send calls. A normal
+initiation return reaches the worker's put; a Stop skips that later cleanup. -/
+theorem handshake_send_family_ambient_access_preserves (c : Lifetimes.AmbientContracts I)
+    (sc : Lifetimes.SocketContracts I)
+    (hi : ∀ pid kind, PrefixPreserves I Lifetimes.LifetimeEvent.Safe (liftPrefix (indexInsert pid kind)))
+    (create : ∀ pid, PrefixPreserves I Lifetimes.LifetimeEvent.Safe (Lifetimes.keypairCreatePrefix pid))
+    (put : ∀ kp now, PrefixPreserves I Lifetimes.LifetimeEvent.Safe (Lifetimes.keypairPutPrefix kp now))
+    (replace : ∀ pid kp, PrefixPreserves I Lifetimes.LifetimeEvent.Safe
+      (liftPrefix (indexReplaceHandshake pid kp))) (call : Lifetimes.HandshakeSendCall) :
+    PrefixPreserves I Lifetimes.LifetimeEvent.Safe call.observed :=
+  call.preserves_ambient c sc hi create put replace
+
+/-- Concrete allocation contracts discharge every send-family leaf, including
+socket paths, index insertion and session allocation/rotation. This does not
+assert ownership of saved scalar references or closure of outer scheduling. -/
+theorem handshake_send_family_allocation_access_preserves (call : Lifetimes.HandshakeSendCall) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed := call.allocation
 
 end Leanux.Proofs.WG.LifetimeSafety
