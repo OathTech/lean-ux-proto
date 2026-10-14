@@ -3,6 +3,7 @@ import Leanux.Env
 import Leanux.Proofs.Framing.Stack
 import Leanux.Proofs.Framing.WGData
 import Leanux.Proofs.Framing.Batch
+import Leanux.Proofs.Framing.EnvLeaves
 import Leanux.Proofs.WG.Keypairs.SnapshotRules
 
 /-! Framing the inner IP delivery cut and scheduler/environment leaves. -/
@@ -61,15 +62,15 @@ theorem checksumHelp_spec (P : Snapshot → Prop) (pkt : Packet) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ (Leanux.Env.checksumHelp pkt)
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (checksumHelp_sameSnapshot pkt).wp P
 
-theorem deliverSent_sameSnapshot  : SameSnapshot Leanux.Env.deliverSent := by
-  frame_same [Leanux.Env.deliverSent] using []
+theorem deliverSent_sameSnapshot  : SameSnapshot Leanux.Env.deliverSent :=
+  sameSnapshot_of_sameWGKernel (Framing.sameWGKernel_of_sameKernel Framing.deliverSent_sameKernel)
 
 theorem deliverSent_spec (P : Snapshot → Prop)  :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.Env.deliverSent
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (deliverSent_sameSnapshot ).wp P
 
-theorem peekNextSite_sameSnapshot  : SameSnapshot Leanux.Env.peekNextSite := by
-  frame_same [Leanux.Env.peekNextSite] using []
+theorem peekNextSite_sameSnapshot  : SameSnapshot Leanux.Env.peekNextSite :=
+  sameSnapshot_of_sameWGKernel (Framing.sameWGKernel_of_sameKernel Framing.peekNextSite_sameKernel)
 
 theorem peekNextSite_spec (P : Snapshot → Prop)  :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.Env.peekNextSite

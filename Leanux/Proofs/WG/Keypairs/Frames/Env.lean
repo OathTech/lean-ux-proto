@@ -11,8 +11,8 @@ open Observers SchedulerObservers
 set_option maxHeartbeats 400000
 set_option pp.structureInstances false
 
-theorem requireNoCryptWork_sameSnapshot  : SameSnapshot Env.requireNoCryptWork := by
-  frame_same [Env.requireNoCryptWork] using []
+theorem requireNoCryptWork_sameSnapshot  : SameSnapshot Env.requireNoCryptWork :=
+  sameSnapshot_of_sameWGKernel (Framing.sameWGKernel_of_sameKernel (Framing.requireNoCryptWork_sameKernel))
 
 theorem requireNoCryptWork_spec (P : Snapshot → Prop)  :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Env.requireNoCryptWork
@@ -68,8 +68,8 @@ theorem runOneClearWorker_spec (P : Snapshot → Prop) (hp : Stable P)  :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Env.runOneClearWorker
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (runOneClearWorker_ordinary ).wp P hp
 
-theorem timerWorker_sameSnapshot (timer : PeerTimer) : SameSnapshot (Env.timerWorker timer) := by
-  frame_same [Env.timerWorker] using []
+theorem timerWorker_sameSnapshot (timer : PeerTimer) : SameSnapshot (Env.timerWorker timer) :=
+  sameSnapshot_of_sameWGKernel (Framing.sameWGKernel_of_sameKernel (Framing.timerWorker_sameKernel timer))
 
 theorem timerWorker_spec (P : Snapshot → Prop) (timer : PeerTimer) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ (Env.timerWorker timer)
@@ -89,8 +89,8 @@ theorem fireTimer_spec (P : Snapshot → Prop) (hp : Stable P) (worker : Worker)
     ⦃fun w => ⌜P (snapshot w)⌝⦄ (Env.fireTimer worker jHi)
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (fireTimer_ordinary worker jHi).wp P hp
 
-theorem advance_sameSnapshot (ticks : Nat) : SameSnapshot (Env.advance ticks) := by
-  frame_same [Env.advance] using [hidden_snapshot_spec]
+theorem advance_sameSnapshot (ticks : Nat) : SameSnapshot (Env.advance ticks) :=
+  sameSnapshot_of_sameWGKernel (Framing.sameWGKernel_of_sameKernel (Framing.advance_sameKernel ticks))
 
 theorem advance_spec (P : Snapshot → Prop) (ticks : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ (Env.advance ticks)

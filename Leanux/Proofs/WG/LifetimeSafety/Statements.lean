@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Lifetimes.EnvDeferredCalls
 import Leanux.Proofs.WG.Lifetimes.BatchAudit
 import Leanux.Proofs.WG.Lifetimes.DumpAccess
 import Leanux.Proofs.WG.Lifetimes.FilesystemCalls
@@ -1799,6 +1800,37 @@ false decisions and the first non-hidden Stop; certification of all candidates
 does not assert that unevaluated candidates ran. Enclosing initialized Env,
 syscall and Runner composition remains separate. -/
 theorem scheduler_audit_reached_trials (call : Lifetimes.BatchAuditCall) (w : World)
+    (hi : Lifetimes.AllocationInv [] w) :
+    Lifetimes.AuditSafe (runPrefix call.observed w []).2 ∧
+    ∀ p ∈ Lifetimes.probeEntries (runPrefix call.observed w []).2,
+      Lifetimes.AllocationInv p.history p.world ∧
+      (p.world.suspended.filterM Env.Activation.consistent).run p.world =
+        (p.world.suspended.filterM (fun a => Lifetimes.activationTrialDecision a p.world p.history)).map
+          (fun ys => (ys, p.world)) ∧
+      ∀ a ∈ p.world.suspended,
+        Lifetimes.LifetimeEvent.Safe (runPrefix (Lifetimes.activationRunPrefix a) p.world p.history).2 :=
+  call.from_allocation w hi
+
+/-- Fifteen original environment guard, deferred-worker and timer calls retain
+every typed result, successful World and Stop on arbitrary inputs. Captured-map
+lookups emit one read per present occurrence, none for absent slots; scan order,
+short-circuit guards and original finite bounds remain unchanged. -/
+theorem environment_deferred_family_erasure (call : Lifetimes.EnvDeferredCall) :
+    ErasesPrefix call.observed call.original := call.erases
+
+/-- Concrete allocation and saved-probe validity compose through actual worker
+and timer dispatch. Every Stop retains safe committed accesses and valid saved
+trial entries; only normal results assert the current invariant. No timer-detached,
+queue-drain, distinct-ID, reference-credit or successful-callback premise is added. -/
+theorem environment_deferred_family_preserves (call : Lifetimes.EnvDeferredCall) :
+    PrefixPreserves Lifetimes.AuditInv Lifetimes.AuditSafe call.observed := call.preserves
+
+/-- From a local allocation-valid entry, each recorded filter entry supplies
+exact ordered copied-filter correspondence and safe isolated trial histories,
+including failures. These speculative histories remain separate from committed
+accesses. Remaining Env controls/ingress/observation, Syscall and initialized
+Runner composition are not supplied by this local family. -/
+theorem environment_deferred_reached_trials (call : Lifetimes.EnvDeferredCall) (w : World)
     (hi : Lifetimes.AllocationInv [] w) :
     Lifetimes.AuditSafe (runPrefix call.observed w []).2 ∧
     ∀ p ∈ Lifetimes.probeEntries (runPrefix call.observed w []).2,
