@@ -7,7 +7,7 @@ Worktree `.worktrees/proofs-campaign`, branch `proofs/campaign`; governed by
 carried from `2c7a076`, then the audit at `f45bde8` and documentation-only
 `a39aded`, then the scheduler robustness change at `7a92672`.
 All registered components are current over `7a92672`, including the R2 cookie,
-R3 unified-insertion and R4 finite ring-journal extensions. The new `cryptAhead`
+R3 insertion/pure-removal and R4 finite ring-journal extensions. The new `cryptAhead`
 call is observed and framed, and the historical witness seed no longer depends
 on the removed evaluator fixture. Open obligations below remain explicit. No integration into main,
 push, differential check or guest run has been performed by this campaign.
@@ -16,22 +16,23 @@ push, differential check or guest run has been performed by this campaign.
 | --- | --- |
 | R1 anti-replay | Complete: uniqueness and the intentional inclusive-floor correction, with pure and accepted-run witnesses. |
 | R2 lifetimes | Endpoint identity and failure-retaining access contracts cover the listed call families. Whole-run caller/lifecycle/scheduler closure and saved-reference ownership remain open. The stale-cursor finding is checked. |
-| R3 routing | Prefix arithmetic, represented-tree lookup and unified bounded-input normal insertion dispatch are checked. Removal, configuration-history and packet-path refinements remain open. |
+| R3 routing | Prefix arithmetic, represented-tree lookup and unified bounded-input normal insertion dispatch are checked. Pure removal and its locality laws are checked. Original removal, configuration-history and packet-path refinements remain open. |
 | R4 delivery | W7's two full-ring drops are explained. An accepted replay refutes chronological post-GRO stack order. Current per-poll selected order, removal/provenance and concrete callback frames are checked; pipeline conservation remains open. |
 | R5 key lifetime | Resolved under Rule Zero by counter-limit, delayed-encryption and post-clear-use witnesses, with 13 local positive contracts. |
 | R6 flood resistance | Cookie exclusion proved at the original call boundary; accepted 19-retry/20-initiation episode resolves the literal limit through Rule Zero. Six terminal contracts. |
 
 **Last coordinated validation.** The mirror is byte-identical to `7a92672`.
-The proof gate passes 284 jobs and 273 terminal statements
-(ReplayWindow 15; R1 9; R2 143; R3 39; R4 48; R5 13; R6 6), using only `propext`, `Classical.choice` and `Quot.sound`.
-Fresh stock kernel replay passes, as do the 118-job model executable build and
-expanded 110-test unit tier (22.585 seconds; one skip). Independent frozen-source
+The proof gate passes 286 jobs and 279 terminal statements
+(ReplayWindow 15; R1 9; R2 143; R3 45; R4 48; R5 13; R6 6), using only `propext`, `Classical.choice` and `Quot.sound`.
+Fresh stock kernel replay passes, as do the 60-job default model build and
+expanded 110-test unit tier (22.731 seconds; one skip). The model executable
+was rebuilt at the scheduler carry (118 jobs); its source is unchanged. Independent frozen-source
 and scope reviews have no unresolved correctness findings in these components.
 
 ```sh
 capped -- scripts/in-bundle scripts/proof-gate
 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs
-capped -- scripts/in-bundle lake build leanux-model
+capped -- scripts/in-bundle lake build
 capped -- scripts/in-bundle python3 -B -m unittest evaluator.test_evaluation evaluator.test_model_replay harness.test_trace harness.test_wg harness.test_linux
 ```
 
@@ -39,7 +40,9 @@ All ten campaign witnesses and the new scheduler `W7_CRYPT_AHEAD` case pass
 against this mirror, including exact original/observed output comparison.
 The retry and two current time witnesses include complete-advance checks.
 Generated streams prove accepted mirror behavior, not Linux capture or schedule
-reachability. Reproduction commands and provenance are retained below.
+reachability. These replayers were last run at the scheduler carry; this
+pure-removal extension changes none of their code. Reproduction commands and
+provenance are retained below.
 
 **Carries and review history.**
 
@@ -457,7 +460,27 @@ Old owner labels may be orphaned. Invalid-input returns and record Stops are
 outside the bounded-input normal-return classification. Independent frozen-source
 review found no correctness issue; the coordinated gate and fresh stock kernel replay pass.
 
-**Remaining claim.** Removal and general configuration histories remain open.
+**Pure removal.** `Removal` adds one recursive `Tree.eraseId` and a local
+`compact` helper [AGENT 2026-10-14]. Exact ordered entry filtering and node-ID
+subsequence hold on arbitrary trees. Validity and enclosing child geometry are
+preserved, output is compressed, and independent longest-prefix lookup agrees
+with the filtered entries. Node-ID uniqueness and frontier bounds are inherited.
+Absent-ID identity requires input compression: malformed ownerless unary nodes
+would otherwise be normalized. With compression and distinct IDs, at most two
+IDs disappear and only a targeted leaf can make a nonempty subtree empty.
+A binary target retains its node ID after owner clearing.
+
+`ContextRemoval` derives the precise locality equations: a binary/unary target
+changes only its focus; a leaf either retains its owned parent or promotes its
+nonempty sibling through an ownerless parent. Outer ancestors and siblings keep
+their exact pure data, with ID separation derived from whole-tree uniqueness.
+These equations explain the source's target-plus-immediate-parent shape; they
+are not original `removeByPeer` execution or deallocation-event theorems.
+Six new terminal exports pass the local 110-job target and full 286-job proof
+build. Independent frozen-source and documentation review found no issue; the
+coordinated proof gate, fresh stock kernel replay and fast tier above pass.
+
+**Remaining claim.** Original removal and general configuration histories remain open.
 Parsed-input bounds and history invariants still need propagation through all mutations.
 Both packet paths follow R2. Owners are raw peer slots, not allocation or
 cryptographic identities; no liveness/ownership claim follows from tree lookup.
@@ -480,6 +503,7 @@ following tranche counts are separate, not an inferred campaign total.
 | Selected-root successful refinement | 7: 4 / 3 | About 8m |
 | Arbitrary-depth nonempty graft | 30: 4 / 26 | 36m47s |
 | Unified insertion dispatch | 11: 8 / 3 | 12m08s |
+| Pure removal and context locality | 9: 6 / 3 | 9m05s validation; 10m16s writer-token ownership |
 
 The staged child architecture replaced a failed monolithic proof; this was not
 a mirror finding. Three deep-graft source-factor attempts hit Lean heartbeat
@@ -493,6 +517,15 @@ error and two default-heartbeat failures in rollback metadata. Projection-only
 simplification closed the latter without raising limits. All exits were collected;
 no cap or interruption occurred. Earlier checkpoint validation is retained in the
 corresponding commits; current combined validation is above.
+
+Pure removal used nine capped builds, six passing and three ordinary failures.
+The failures concerned namespace/implicit-ID elaboration, simplified conjunction
+shapes and rewrite ordering in local compaction proofs. The final
+targeted/full builds passed 110/286 jobs; every exit was collected, with no cap
+or interruption. Owned build output was removed at handoff. Two subsequent
+read-only planning turns disconnected after validation had completed. All four
+dirty worktrees, including nonignored untracked files, were snapshotted after
+each interruption before further edits; no build was interrupted.
 
 Independent reviews corrected a `freeNode` contract missing node residency,
 and distinguished normal-return classification from reachability, root values

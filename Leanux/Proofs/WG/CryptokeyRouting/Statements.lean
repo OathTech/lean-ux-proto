@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AllowedIps.InsertionDispatch
+import Leanux.Proofs.WG.AllowedIps.ContextRemoval
 import Leanux.Proofs.WG.AllowedIps.ArithmeticMirror
 import Leanux.Proofs.WG.AllowedIps.Tree
 import Leanux.Proofs.WG.AllowedIps.LookupMirror
@@ -11,7 +12,7 @@ import Leanux.Proofs.WG.AllowedIps.ExactStore
 import Leanux.Proofs.WG.AllowedIps.DeepGraft
 
 /-!
-# R3: prefix arithmetic, pure insertion and represented-tree operations
+# R3: prefix arithmetic, pure mutations and represented-tree operations
 
 These statements connect the original arithmetic helpers to leading-bit
 prefixes and prove longest-prefix lookup in a pure tree with local edge
@@ -21,7 +22,9 @@ invariants and implements canonical-prefix replacement. Original insertion
 derives all structural cases from its total placement traversal. Every normal
 return is classified as success or one of two allocation refusals; successful
 returns refine pure insertion and actual-root longest-prefix lookup. A supplied
-opposite-family representation is preserved. Removal, configuration-history
+opposite-family representation is preserved. Pure removal implements exact
+entry filtering and preserves the structural invariants, with local compaction
+laws under compression and distinct IDs. Original removal, configuration-history
 agreement, and packet admission remain separate obligations of the result.
 -/
 
@@ -1026,5 +1029,71 @@ theorem original_insert_longest_prefix (w w' : World) (d : WG.Device) (hd : w.k.
           (fun e => e.prefixKey (rootWidth v4) != (cidr, prefixBits (rootWidth v4) cidr addr)))
         (inserted.tree.lookup (rootWidth v4) key) ∧ final.k = w'.k := by
   apply insert_lookup <;> assumption
+
+/-- Pure removal filters exactly the owned entries with the requested node ID,
+retaining order and multiplicity. On a valid tree its lookup is a longest-prefix
+winner for that independently filtered list. This is not yet an original
+removeByPeer execution or peer-owner history theorem. -/
+theorem pure_removal_entries_and_lookup (t : Tree) (id width key : Nat)
+    (hv : t.Valid width) :
+    (t.eraseId id).entries = t.entries.filter (fun e => e.id != id) ∧
+      Winner width key (t.entries.filter (fun e => e.id != id))
+        ((t.eraseId id).lookup width key) :=
+  ⟨Tree.eraseId_entries t id, Tree.eraseId_lookup_spec hv id key⟩
+
+/-- Pure removal preserves local prefix validity and yields a compressed tree.
+Its node-ID list is a subsequence of the input, so uniqueness and every input ID
+bound are preserved. No input compression, owner residency or fresh allocation
+premise is required here. -/
+theorem pure_removal_structure (t : Tree) (id width : Nat)
+    (hv : t.Valid width) (hn : t.nodeIds.Nodup) :
+    (t.eraseId id).Valid width ∧ (t.eraseId id).Compressed ∧
+      (t.eraseId id).nodeIds.Sublist t.nodeIds ∧ (t.eraseId id).nodeIds.Nodup ∧
+      ∀ frontier, (∀ j ∈ t.nodeIds, j < frontier) →
+        ∀ j ∈ (t.eraseId id).nodeIds, j < frontier :=
+  ⟨Tree.eraseId_valid hv id, Tree.eraseId_compressed t id,
+    Tree.eraseId_nodeIds t id, Tree.eraseId_nodup hn id,
+    fun _ hb => Tree.eraseId_bounded hb id⟩
+
+/-- An absent identifier leaves a compressed input exactly unchanged.
+Compression is essential: arbitrary malformed ownerless unary nodes are
+normalized by the pure operation. -/
+theorem pure_removal_absent (t : Tree) (id : Nat) (hc : t.Compressed)
+    (hi : id ∉ t.nodeIds) : t.eraseId id = t :=
+  Tree.eraseId_absent hc hi
+
+/-- On a compressed tree with distinct node identifiers, one erasure removes
+at most two IDs. The whole result is empty only for an empty input or a targeted
+leaf. A binary target retains its node ID after its ownership is cleared.
+These are pure structural laws, not original deallocation-event counts. -/
+theorem pure_removal_compaction_bound (t : Tree) (id : Nat)
+    (hc : t.Compressed) (hn : t.nodeIds.Nodup) :
+    t.nodeIds.length ≤ (t.eraseId id).nodeIds.length + 2 ∧
+      (t.eraseId id = .empty ↔ t = .empty ∨
+        ∃ n, t = .node n .empty .empty ∧ n.id = id) :=
+  ⟨Tree.eraseId_retired_le_two hc hn id, Tree.eraseId_empty_iff hc hn id⟩
+
+/-- A binary or unary target is changed only at its focus: ownership is
+cleared and a sole child is promoted. Every outer ancestor and sibling keeps
+its exact pure data. Context ID separation is derived from whole-tree Nodup. -/
+theorem pure_removal_nonleaf_context (c : Context) (n : NodeData) (l r : Tree)
+    (hc : (c.plug (.node n l r)).Compressed)
+    (hn : (c.plug (.node n l r)).nodeIds.Nodup)
+    (hchild : l.root.isSome ∨ r.root.isSome) :
+    (c.plug (.node n l r)).eraseId n.id =
+      c.plug (Tree.compact {n with peer := none} l r) :=
+  c.eraseId_nonleaf n l r hc hn hchild
+
+/-- A leaf's owned parent remains, with that child removed; an ownerless
+parent is replaced by its nonempty sibling. No further ancestor is compacted.
+This equation supplies the local shape for later source refinement, without
+assuming coherent peer lists or resident old owner labels. -/
+theorem pure_removal_leaf_context (c : Context) (parent n : NodeData)
+    (side : Nat) (sibling : Tree)
+    (hc : (c.plug (Tree.fork parent side (.node n .empty .empty) sibling)).Compressed)
+    (hn : (c.plug (Tree.fork parent side (.node n .empty .empty) sibling)).nodeIds.Nodup) :
+    (c.plug (Tree.fork parent side (.node n .empty .empty) sibling)).eraseId n.id =
+      c.plug (if parent.peer = none then sibling else Tree.fork parent side .empty sibling) :=
+  c.eraseId_leaf_parent parent n side sibling hc hn
 
 end Leanux.Proofs.WG.CryptokeyRouting
