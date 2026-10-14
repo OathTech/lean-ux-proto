@@ -23,7 +23,8 @@ def anonInodeGetfileImpl (fopId : FopsId) (priv : PrivateData) (flags : UInt32) 
   -- ihold(inode)
   let file ← allocFilePseudo (flags &&& (O_ACCMODE ||| O_NONBLOCK)) .anon fopId
   if ← branch .anonGetfileFileErr (file matches .error _) then
-    return file  -- err_iput: iput(inode); err: module_put(fops->owner)
+    iputReport false  -- err_iput: iput(inode), the shared inode keeps its pinned reference
+    return file       -- err: module_put(fops->owner)
   -- file->f_mapping = inode->i_mapping
   if let .ok fid := file then
     setFile fid { (← getFile fid) with privateData := some priv }  -- file->private_data = priv

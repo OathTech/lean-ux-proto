@@ -1535,8 +1535,10 @@ structure World where
       `false`. `napiAmbiguous` counts the polls met. -/
   napiBeforePut : List Bool := []
   napiAmbiguous : Nat := 0
-  /-- W7 stream H: the NET_RX sections consumed so far in the operation and
-      the one open now (0: none), stamped on every step (`Step.section`). -/
+  /-- W7 stream H: the NET_RX section starts consumed so far in the
+      operation (`noteNetRxStart`: run or skipped, every one the records
+      carry) and the one open now (0: none), stamped on every step
+      (`Step.section`). -/
   netRxSections : Nat := 0
   netRxSection : Nat := 0
   /-- A steered trace's schedule (site label, value or a draw), which the
@@ -1790,6 +1792,18 @@ def workerLoop (w : Worker) (pid : Option Nat) (step : M Bool) (afterItem : M Un
     if (← workerIter w pid step (do afterItem; pure false)) == .ended then return
   invariant drained
 
+/-- `iput(inode)` (fs/inode.c:1889-1904) where the mirror holds no inode of
+    its own: the last-reference test (`atomic_dec_and_lock`, :1895) and, on
+    the last reference, the lazytime test (:1896), false for every such
+    inode. The shared anonymous inode of eventfd and epoll keeps its pinned
+    reference (`last` false); a socket's or a namespace pin's inode holds its
+    only reference (`last` true). A pipefs inode's own count decides it in
+    `iputPipefs` (Leanux/FS/Inode.lean). The mutation campaign's finding 1
+    (2026-10-14): a leaked inode was invisible without the declaration. -/
+def iputReport (last : Bool) : M Unit := do
+  if ← branch .iputLastReference last then
+    _ ← branch .iputLazytime false
+
 /-- Record a C value comparison: its outcome and the two values the C
     compares at the condition. The check matches them against
     `KCOV_TRACE_CMP` records at the condition line. -/
@@ -1840,9 +1854,22 @@ def skipAmbient : M Unit := do
   if let some rs := w.hidden then
     set { w with hidden := some (rs.dropWhile fun r => HiddenSite.passive r.site) }
 
+/-- W7 stream H: a `net_rx_action` section start, consumed by any consumer
+    (`hidden`, a cut, the flood discard), advances the NET_RX ordinal
+    (`World.netRxSections`): the ordinal counts every NET_RX section the
+    records carry, in the order the mirror consumes them, which is how the
+    guest numbers its blocks (`evaluator/check.py`, `netrx_sections`); a
+    section the environment only skips (a loopback transmission's, a flood
+    producer's) counts like one it runs [AGENT, 2026-10-14: the mutation
+    campaign's finding 4]. -/
+def noteNetRxStart (site : Nat) : M Unit := do
+  if site == (HiddenSite.sectionStart .netRx).info.id then
+    modify fun w => { w with netRxSections := w.netRxSections + 1 }
+
 /-- Consume the next choice record, which must come from `s`. -/
 def hidden (s : HiddenSite) : M (List UInt8) := do
   skipAmbient
+  noteNetRxStart s.info.id
   let w ← get
   let i := s.info
   match w.hidden with
@@ -2098,6 +2125,7 @@ def skipCutSites (sites : List HiddenSite) : M (List Nat) := do
       if let some i := allocIds.find? (·.id == r.site) then
         if r.bytes.headD 1 != 1 then unsupported s!"a below-cut allocation failed ({i.label}, {i.file}:{i.line})"
       set { w with hidden := some rest }
+      noteNetRxStart r.site
       taken := taken ++ [r.site]
     | _ => return taken
   budgetExhausted "a cut point's records"
@@ -2121,6 +2149,7 @@ def skipCutExactly (site : HiddenSite) (n : Nat) (between : List HiddenSite := [
       if r.site != site.info.id then
         throw (.hidden s!"expected {site.info.label} (cut, {n} records), the record is site {r.site}")
       set { w with hidden := some rest }
+      noteNetRxStart r.site
     | some [] => throw (.hidden s!"expected {site.info.label} (cut, {n} records), no record left")
   skipCut between
   skipAmbient
@@ -2194,6 +2223,7 @@ def dropHiddenRecord : M (Option Nat) := do
   match (← get).hidden with
   | some (r :: rest) =>
     modify fun s => { s with hidden := some rest }
+    noteNetRxStart r.site
     return some r.site
   | _ => return none
 

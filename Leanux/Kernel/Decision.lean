@@ -46,6 +46,7 @@ inductive Decision where
   | fputFinalNotOpened | eventpollReleaseLinked | fputFinalFasync | fputFinalRelease
   | fputFinalCharDevice | fputFinalHasCdev | fputFinalNotPath
   | fileOwnerRelease | fputFinalNeedUnmount
+  | iputLastReference | iputLazytime
   | fputLast | fputNotOpened | fputInInterrupt | fputKthread | fputTaskWorkAddFailed | fputSyncLast
   -- fs/open.c
   | filpFlushCountZero | filpFlushHasFlush | filpFlushNotPath | closeNoFile
@@ -535,6 +536,9 @@ structure DecisionInfo where
   line : Nat
   whenTrue : List Span := []
   whenFalse : List Span := []
+  /-- The outcomes at which the C function returns (an early return arm):
+      the check knows the function's next decision is a new call. -/
+  terminal : List Bool := []
 
 private def ev := "fs/eventfd.c"
 private def ft := "fs/file_table.c"
@@ -659,6 +663,12 @@ def Decision.info : Decision → DecisionInfo
   | .eventpollReleaseLinked => d "eventpoll_release.linked" eph 45 [(53, 53)] [(46, 46)]
   | .fputFinalFasync => d "__fput.fasync" ft 463 [(465, 465)] []
   | .fputFinalRelease => d "__fput.fop_release" ft 467 [(468, 468)] []
+  -- iput (fs/inode.c:1889-1904): `atomic_dec_and_lock(&inode->i_count, ...)`,
+  -- the last reference (true: the lazytime test runs), then `inode->i_nlink
+  -- && (inode->i_state & I_DIRTY_TIME)` (true: the retry arm; false:
+  -- iput_final). The mutation campaign's finding 1 (2026-10-14).
+  | .iputLastReference => d "iput.last_reference" "fs/inode.c" 1895 [(1896, 1896)] []
+  | .iputLazytime => d "iput.lazytime_dirty" "fs/inode.c" 1896 [(1897, 1900)] [(1903, 1903)]
   | .fputFinalCharDevice => d "__fput.char_device" ft 469 [] []
   | .fputFinalHasCdev => d "__fput.has_cdev" ft 469 [] []
   | .fputFinalNotPath => d "__fput.not_fmode_path" ft 470 [(471, 471)] []
@@ -929,9 +939,11 @@ def Decision.info : Decision → DecisionInfo
   -- `sit0` from the third); the whole condition does (`lookupNotWireguard`)
   | .lookupKindMismatch => d "lookup_interface.kind_mismatch" wnl 68 [] []
   | .lookupNotWireguard => d "lookup_interface.not_wireguard" wnl 67 [(69, 70)] []
-  | .getAipNoNest => d "get_allowedips.no_nest" wnl 81 [(82, 82)] [(84, 84)]
-  | .getAipPutCidr => d "get_allowedips.put_cidr_failed" wnl 84 [] [(85, 85)]
-  | .getAipPutFamily => d "get_allowedips.put_family_failed" wnl 85 [] [(86, 86)]
+  -- each failed put returns -EMSGSIZE (the mutation campaign's finding 3,
+  -- 2026-10-14: a return removed from the mirror reported the next put)
+  | .getAipNoNest => { d "get_allowedips.no_nest" wnl 81 [(82, 82)] [(84, 84)] with terminal := [true] }
+  | .getAipPutCidr => { d "get_allowedips.put_cidr_failed" wnl 84 [] [(85, 85)] with terminal := [true] }
+  | .getAipPutFamily => { d "get_allowedips.put_family_failed" wnl 85 [] [(86, 86)] with terminal := [true] }
   | .getAipFamily6 => d "get_allowedips.inet6_length" wnl 86 [] []
   | .getAipPutAddr => d "get_allowedips.put_addr_failed" wnl 86 [] [(92, 93)]
   | .getPeerNoNest => d "get_peer.no_nest" wnl 113 [(114, 114)] [(116, 118)]
@@ -2945,6 +2957,8 @@ def Decision.comparison : Decision → Option Comparison
     once in one operation. -/
 def Decision.repeatable : Decision → Bool
   | .idxInsertHashed | .idxRemoveHashed
+  -- iput runs once per inode an operation releases (a netns close puts several)
+  | .iputLastReference | .iputLazytime
   -- TSYNC on one thread: the two thread walks test their loop twice per call
   | .canSyncLoop | .syncLoop
   -- W7: a batch's receive poll evaluates the endpoint's family once per packet, both

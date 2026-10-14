@@ -501,6 +501,22 @@ trace("p_blocking_filtered", [
 ])
 
 
+# Both ends closed inside the trace: the last close of the read end drops the
+# pseudo dentry's last reference, `dentry_unlink_inode` puts the pipefs inode
+# and `iput` takes its last-reference arm (fs/inode.c:1895, the lazytime
+# test at :1896 and `iput_final` at :1903 witnessing it) and evicts. The
+# mutation campaign's finding 1 (2026-10-14): every other pipes trace leaves
+# a read end open to the process's exit, so a mirror that never evicted a
+# pipefs inode was never seen; the arm is pinned by `expect`.
+trace("p_close_both_ends", [
+    pipe2(NB),                                 # 0
+    write(W(0), 5),                            # 1: 5
+    close(W(0)),                               # 2: 0 (the shared dentry keeps the reader's reference: no iput)
+    read(R(0), 100),                           # 3: 5
+    close(R(0)),                               # 4: 0: the last reference, the inode evicted
+], expect=["iput.last_reference=1", "iput.lazytime_dirty=0"])
+
+
 def render(t):
     return json.dumps(validate_trace(t), indent=2) + "\n"
 

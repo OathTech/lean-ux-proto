@@ -545,7 +545,7 @@ two values differ.
 
 | Mutant | Site | Category | Why it survived | Fix |
 | --- | --- | --- | --- | --- |
-| m-1c99f9201d | `FS/Fcntl.lean:41` `.setflAppendChanged` | CB | no trace toggles `O_APPEND` through `F_SETFL`, so the compare's operands are 0 either way and the negated arm only runs the `IS_APPEND` test, false on pipefs; the outcome itself is unwitnessed in the built code (the `&&` shares its block) | a trace setting `O_APPEND` on a pipe end (operand 0x400, the arm's path) |
+| m-1c99f9201d | `FS/Fcntl.lean:41` `.setflAppendChanged` | CB | no trace toggles `O_APPEND` through `F_SETFL`, so the compare's operands are 0 either way and the negated arm only runs the `IS_APPEND` test, false on pipefs; the outcome itself is unwitnessed in the built code (the `&&` shares its block) | a trace setting `O_APPEND` on a pipe end (operand 0x400, the arm's path) — fixed in 90bb2b8 (two distinct declared comparisons must match distinct kernel comparison PCs; the campaign's finding 2) |
 | m-3fca1634a9 | `FS/Wait.lean:222` `.epBusyLoopOnUsecs` | LO | the outcome is discarded (`_ ←`) and the compare is folded out of the oracle, so neither a witness nor an operand record exists | declare the decision branch-free |
 
 ### 6.3 Skipped records
@@ -586,7 +586,7 @@ defect; the `unsupported` ones are the gaps the census lists.
 
 | Mutant | Site | Category | Why it survived | Fix |
 | --- | --- | --- | --- | --- |
-| m-ec0783b3a0 | `Env/Batch.lean:38` the NET_RX section ordinal, condition negated | **R** | its logical twin `w != .netRx` (m-f61392504a) was rejected by the placement-evidence check, while this one passed the subset and the whole suite with 15 inline placements present in the confirming run (`napi_orders`: a 94, bc 15); the placement evidence's sensitivity to the section ordinal depends on which placement runs occur | a check rule: the placement evidence should compare the section ordinals of the steps it replays, not only their control flow |
+| m-ec0783b3a0 | `Env/Batch.lean:38` the NET_RX section ordinal, condition negated | **R** | its logical twin `w != .netRx` (m-f61392504a) was rejected by the placement-evidence check, while this one passed the subset and the whole suite with 15 inline placements present in the confirming run (`napi_orders`: a 94, bc 15); the placement evidence's sensitivity to the section ordinal depends on which placement runs occur | a check rule: the placement evidence should compare the section ordinals of the steps it replays, not only their control flow — fixed in 8340562: the operand relation on the main path is section-confined (a branch stamped with ordinal k matches only the guest's k-th `net_rx_action` block), on every trace, after the mirror's ordinal was made the guest's (it counted only the NET_RX sections it ran as a worker, not the loopback and flood-producer sections it skips; now every consumed section start counts). 4ca380f's narrow form (the placement evidence forced for every trace with open placements) did not reject this mutant: rx_counter_jump has no open placement, so the evidence never ran |
 | m-d7dee84db8 | `Env/IpStack.lean:72` checksum fold negated | rejected (wireguard) | the environment's IP checksum is verified by the receive path on an injected datagram; survived `handwritten` only | none: resolved in 6.8 |
 | m-ad789234b2 | `Env/IpStack.lean:72` `>` → `≥` at 0xffff | CB | the boundary value never occurs | none worth a trace |
 | m-ab0b08a1e3 | `Env/Stack.lean:72` the TCP ack flag negated | rejected (wireguard) | the TCP helper is exercised by the stage traces; survived `handwritten` only | none: resolved in 6.8 |
@@ -605,7 +605,7 @@ defect; the `unsupported` ones are the gaps the census lists.
 | m-2a64bed551 | `Seccomp/Translate.lean:55` 32768 → 32769 | CB | the boundary value | the same trace |
 | m-62fabd29a0 | `FS/Fcntl.lean:43` `S_APPEND != 0` → `== 0` | CB | the line is inside the `O_APPEND`-changed block that no trace enters | the `O_APPEND` trace above |
 | m-a863e3ebe4 | `FS/File.lean:55` `bitbit > start` → `≥` | CB | differs only at `bitbit == start` | none worth a trace |
-| m-b42171750c | `FS/Inode.lean:114` `i_count > 1` → `≥ 1` | **R** | the last `iput` no longer evicts the pipefs inode and nothing notices: `fs/inode.c` is anchored only for its timestamp helpers, `iput_final`/`evict` have no declared decision, and no observation counts inodes; a mirror that leaks every pipe's inode passes | a declaration on `iput_final`'s path (fs/inode.c) or an observation of the inode count after close |
+| m-b42171750c | `FS/Inode.lean:114` `i_count > 1` → `≥ 1` | **R** | the last `iput` no longer evicts the pipefs inode and nothing notices: `fs/inode.c` is anchored only for its timestamp helpers, `iput_final`/`evict` have no declared decision, and no observation counts inodes; a mirror that leaks every pipe's inode passes | a declaration on `iput_final`'s path (fs/inode.c) or an observation of the inode count after close — fixed in a8cad18 (`iput` listed with `iput.last_reference` and `iput.lazytime_dirty` declared; the pipefs count decides it, `iputReport` elsewhere) with the trace `p_close_both_ends`, since no pipes trace closed both ends of a pipe inside its operations |
 | m-9997959668 | `FS/Wait.lean:184` `ret < 0` → `≤ 0` | CB | the walk breaks after the first callback returning 0; every corpus wait queue has one entry at the walk | a trace with two waiters on one head |
 | m-b47970fdce | `Kernel/Refcount.lean:12` `old > 0` → `≥ 0` | EP | differs only at `old == 0`, a use-after-free no correct run reaches | none |
 | m-d6cb2b5d37 | `Syscalls.lean:173` `fd ≥ rlimit` → `>` | CB | no trace names exactly the limit's descriptor number | a trace at the boundary |
@@ -672,7 +672,7 @@ suite, and the record-skipped ones `alloc` as well.
 | m-1067963e6a | `WG/Handshake.lean:49` the kdf's two constant-false tests, return removed | EP | the condition is constant false by the mirror's construction (pointer tests the thin layer does not model) | none |
 | m-3fc43a1223 | `WG/RxData.lean:65` `.decNoKeypair false`, return removed | EP | constant false by construction | none |
 | m-7e879b58df | `WG/PrevQueue.lean:47` `.prevQueueTailNotHead false`, stop removed | EP | constant false: a producer mid-enqueue cannot occur on one CPU | none |
-| m-cd49baa63b | `WG/NetlinkDump.lean:57` `.getAipNoNest`, return removed | **R** | the arm is taken twice in the suite; falling through, the next `put` fails on the same full buffer and returns the same result, but the mirror now reports an extra decision (`get_allowedips.put_cidr`) the kernel never evaluated, and nothing flags it because that outcome is unwitnessed | a check rule: a reported decision in a function whose coverage ends before it is a mismatch |
+| m-cd49baa63b | `WG/NetlinkDump.lean:57` `.getAipNoNest`, return removed | **R** | the arm is taken twice in the suite; falling through, the next `put` fails on the same full buffer and returns the same result, but the mirror now reports an extra decision (`get_allowedips.put_cidr`) the kernel never evaluated, and nothing flags it because that outcome is unwitnessed | a check rule: a reported decision in a function whose coverage ends before it is a mismatch — fixed in 5d2e65b (terminal outcomes declared: after one, the function's next decision is a new call from the top) |
 | m-9528a4d447 | `WG/Socket.lean:27` `.sockFreeNull`, return removed | EP | both outcomes taken (386 and 26); the continuation on a missing socket is a no-op | none |
 | m-519d8769a1 | `WG/State.lean:218` `loopbackSoftirq`'s "not raised" return removed | EP | every caller tests the flag first; the body on a clear flag changes nothing | none |
 | m-90315e93fd | `WG/Receive.lean:48` `.hdrTooShort`, return removed | CB | no injected datagram is shorter than 4 bytes (274 false) | a trace injecting a 3-byte datagram |
@@ -812,7 +812,8 @@ twelve of those are steered allocation failures or a steered environment
 failure at a site the `alloc` suite does not cover (four WireGuard sites,
 five FS sites, seccomp's whole set), and the rest are boundary values and
 unexercised error arms. Four are reach problems of the check itself and
-are the campaign's findings:
+are the campaign's findings (each fixed on 2026-10-14; the fix is named in
+its row of section 6):
 
 1. `FS/Inode.lean:114` (m-b42171750c): the last `iput` of a pipefs inode no
    longer evicts it and nothing notices; `fs/inode.c` is anchored for its
@@ -832,7 +833,8 @@ are the campaign's findings:
    passes the placement-evidence check in a run with 15 inline placements
    while its logical twin was rejected; the check's sensitivity to the
    ordinal depends on which placement runs occur. Fix: the placement
-   evidence should compare the section ordinals it replays.
+   evidence should compare the section ordinals it replays. (After the
+   fix the site is line 39 and the same mutation is m-cef7af2b2a.)
 
 What the channels' shares say: control flow and hidden records catch most
 of what is caught (the witnesses and the records are the instruments with

@@ -571,3 +571,36 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   retry. Evidence: `W8_DEFAULT_DEVICE_EXIT` in `evaluator/test_model_replay.py`
   (the live capture with the record inserted; the old model fails, the new
   agrees) and the checker-level test in `evaluator/test_evaluation.py`.
+- **2026-10-14 [AGENT, fork of the coordinator]** The mutation campaign's four
+  reach findings (docs/2026-10-13-mutation-campaign.md, section 8) closed as
+  check rules and one declaration, no mirror semantics changed: (1) `iput`
+  is a listed decision function with `iput.last_reference` (fs/inode.c:1895)
+  and `iput.lazytime_dirty` (:1896) declared, the pipefs inode's count
+  deciding it and `iputReport` saying which way the C goes where the mirror
+  holds no inode (the shared anonymous inode keeps its pinned reference; a
+  socket's or a pin's inode is freed), so a leaked inode is seen against
+  iput_final's coverage, on the new trace `p_close_both_ends` (no pipes trace
+  closed both ends inside its operations before); (2) two distinct declared comparisons at one
+  condition line must match distinct kernel comparison PCs, a C comparison
+  being an instruction; (3) the decision table declares terminal outcomes (the arms at
+  which the C function returns), and a decision reported after one at a
+  later line of the function is a decision evaluated past Linux's return;
+  a line-level rule was tried twice and withdrawn, a line owning several
+  blocks; (4) the operand relation on the
+  main path is section-confined: a branch the mirror stamped with NET_RX
+  ordinal k matches only the records of the guest's k-th `net_rx_action`
+  block, on every trace, so a mis-stamped mirror fails where before only
+  the placement evidence (run on a first-run mismatch) could see it. The
+  disagreement that had kept the confined relation off the main path
+  (w7_mixed op 4, the mirror's ordinal 4 against the guest's 6) was the
+  mirror's: it counted only the NET_RX sections it runs as a worker, while
+  the guest numbers every `net_rx_action` section, including the loopback
+  transmissions' and the flood producers' sections the mirror consumes and
+  skips; now every consumed section start advances the ordinal
+  (`noteNetRxStart`, at the four consumption points), an instrument
+  change, no data or control flow of the C. The narrow form tried first
+  (4ca380f: the placement evidence forced for every trace with open
+  placements) left the mutant alive on rx_counter_jump, which has no open
+  placement, and is withdrawn; the evidence runs on a first-run mismatch
+  again, the W7 13.2 (ii) form. Each mutant is rejected after its fix; the
+  area suites agree.
