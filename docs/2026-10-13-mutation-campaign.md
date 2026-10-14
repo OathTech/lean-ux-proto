@@ -159,11 +159,355 @@ suite run per mutant at four to six minutes; it samples every file and
 every class once, and it is blind to the second and later sites of a class
 in a file. Each sampled mutant ran on its file's corpus subset
 (section 1); a survivor on a subset ran again on its whole area suite, and
-SURVIVOR_CONFIRMATION_SENTENCE
+then, after the baseline census named the suites that take each
+survivor's distinguishing outcome, on those suites too (section 6.8).
 
 ## 5. The counts
 
-COUNTS_PLACEHOLDER
+| File | Class | Generated | Uncompilable | Invalid | Rejected | Survived | No verdict |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `Env.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Env.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Env.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Env.lean` | early-return-removed | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Env.lean` | record-skipped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Env.lean` | stop-passthrough | 1 | 0 | 0 | 0 | 1 | 0 |
+| `Env/Batch.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Env/Batch.lean` | condition-negated | 1 | 0 | 0 | 0 | 1 | 0 |
+| `Env/Batch.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Env/Batch.lean` | early-return-removed | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Env/Batch.lean` | stop-passthrough | 1 | 0 | 0 | 0 | 1 | 0 |
+| `Env/IpStack.lean` | comparison-operator | 1 | 0 | 0 | 0 | 1 | 0 |
+| `Env/IpStack.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Env/IpStack.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Env/IpStack.lean` | early-return-removed | 1 | 0 | 0 | 0 | 1 | 0 |
+| `Env/IpStack.lean` | stop-passthrough | 1 | 0 | 0 | 0 | 1 | 0 |
+| `Env/Stack.lean` | comparison-operator | 1 | 0 | 0 | 0 | 1 | 0 |
+| `Env/Stack.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Env/Stack.lean` | constant-off-by-one | 1 | 0 | 0 | 0 | 1 | 0 |
+| `Env/Stack.lean` | stop-passthrough | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/AnonInodes.lean` | constant-off-by-one | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/AnonInodes.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/AnonInodes.lean` | early-return-removed | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/Close.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Close.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Close.lean` | constant-off-by-one | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/Close.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Close.lean` | early-return-removed | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Eventfd.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Eventfd.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Eventfd.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Eventfd.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Eventfd.lean` | early-return-removed | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Eventfd.lean` | operand-swapped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Eventfd.lean` | record-skipped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Eventfd.lean` | stop-passthrough | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/EventfdOps.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/EventfdOps.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/EventfdOps.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/EventfdOps.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/EventfdOps.lean` | early-return-removed | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/EventfdOps.lean` | operand-swapped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/EventfdOps.lean` | stop-passthrough | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/Eventpoll.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Eventpoll.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Eventpoll.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Eventpoll.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Eventpoll.lean` | early-return-removed | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/Eventpoll.lean` | operand-swapped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Eventpoll.lean` | order-swapped | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/Eventpoll.lean` | record-skipped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Eventpoll.lean` | stop-passthrough | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/Fcntl.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Fcntl.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Fcntl.lean` | decision-negated | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/Fcntl.lean` | early-return-removed | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/Fcntl.lean` | operand-swapped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Fcntl.lean` | stop-passthrough | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/File.lean` | comparison-operator | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/File.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/File.lean` | constant-off-by-one | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/File.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/File.lean` | early-return-removed | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/File.lean` | operand-swapped | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/File.lean` | order-swapped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/File.lean` | record-skipped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/File.lean` | stop-passthrough | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/FileTable.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/FileTable.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/FileTable.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/FileTable.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/FileTable.lean` | early-return-removed | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/FileTable.lean` | operand-swapped | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/FileTable.lean` | record-skipped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/FileTable.lean` | stop-passthrough | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/Fput.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Fput.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Fput.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Fput.lean` | operand-swapped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Inode.lean` | comparison-operator | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/Inode.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Inode.lean` | constant-off-by-one | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/Inode.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Inode.lean` | early-return-removed | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/Inode.lean` | operand-swapped | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/Inode.lean` | stop-passthrough | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/Open.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Open.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Open.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Open.lean` | early-return-removed | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/Open.lean` | operand-swapped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Pipe.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Pipe.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Pipe.lean` | constant-off-by-one | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/Pipe.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Pipe.lean` | early-return-removed | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/Pipe.lean` | operand-swapped | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/Pipe.lean` | record-skipped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Pipe.lean` | stop-passthrough | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/PipeCreate.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/PipeCreate.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/PipeCreate.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/PipeCreate.lean` | early-return-removed | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/PipeCreate.lean` | operand-swapped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Poll.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Poll.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Poll.lean` | operand-swapped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Poll.lean` | record-skipped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/ReadWrite.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/ReadWrite.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/ReadWrite.lean` | constant-off-by-one | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/ReadWrite.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/ReadWrite.lean` | early-return-removed | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/ReadWrite.lean` | operand-swapped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/ReadWrite.lean` | order-swapped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/ReadWrite.lean` | stop-passthrough | 1 | 1 | 0 | 0 | 0 | 0 |
+| `FS/Wait.lean` | comparison-operator | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/Wait.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Wait.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `FS/Wait.lean` | decision-negated | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/Wait.lean` | early-return-removed | 1 | 0 | 0 | 0 | 1 | 0 |
+| `FS/Wait.lean` | operand-swapped | 1 | 0 | 0 | 0 | 1 | 0 |
+| `Kernel/Decision.lean` | comparison-operator | 1 | 0 | 1 | 0 | 0 | 0 |
+| `Kernel/Decision.lean` | condition-negated | 1 | 0 | 1 | 0 | 0 | 0 |
+| `Kernel/Defs.lean` | comparison-operator | 1 | 0 | 0 | 0 | 1 | 0 |
+| `Kernel/Defs.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Kernel/Defs.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Kernel/Defs.lean` | early-return-removed | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Kernel/Defs.lean` | stop-passthrough | 1 | 1 | 0 | 0 | 0 | 0 |
+| `Kernel/Refcount.lean` | comparison-operator | 1 | 0 | 0 | 0 | 1 | 0 |
+| `Kernel/Refcount.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Kernel/Refcount.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Kernel/Refcount.lean` | early-return-removed | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Kernel/Refcount.lean` | operand-swapped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Kernel/Refcount.lean` | stop-passthrough | 1 | 0 | 0 | 0 | 1 | 0 |
+| `Kernel/Signal.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Kernel/Signal.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Kernel/Signal.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Kernel/Signal.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Kernel/Signal.lean` | early-return-removed | 1 | 0 | 0 | 0 | 1 | 0 |
+| `Kernel/Signal.lean` | operand-swapped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Kernel/Signal.lean` | order-swapped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Runner.lean` | comparison-operator | 1 | 0 | 1 | 0 | 0 | 0 |
+| `Runner.lean` | condition-negated | 1 | 0 | 1 | 0 | 0 | 0 |
+| `Runner.lean` | constant-off-by-one | 1 | 0 | 0 | 0 | 1 | 0 |
+| `Runner.lean` | early-return-removed | 1 | 0 | 1 | 0 | 0 | 0 |
+| `Seccomp/Bridge.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Seccomp/Bridge.lean` | condition-negated | 1 | 0 | 0 | 0 | 1 | 0 |
+| `Seccomp/Bridge.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Seccomp/Bridge.lean` | early-return-removed | 1 | 0 | 0 | 0 | 1 | 0 |
+| `Seccomp/Classic.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Seccomp/Classic.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Seccomp/Classic.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Seccomp/Classic.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Seccomp/Classic.lean` | early-return-removed | 1 | 0 | 0 | 0 | 1 | 0 |
+| `Seccomp/Classic.lean` | operand-swapped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Seccomp/Classic.lean` | order-swapped | 1 | 0 | 0 | 0 | 1 | 0 |
+| `Seccomp/Classic.lean` | stop-passthrough | 1 | 0 | 0 | 0 | 1 | 0 |
+| `Seccomp/Decisions.lean` | comparison-operator | 1 | 0 | 0 | 0 | 1 | 0 |
+| `Seccomp/Decisions.lean` | condition-negated | 1 | 0 | 0 | 0 | 1 | 0 |
+| `Seccomp/Decisions.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Seccomp/Engine.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Seccomp/Engine.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Seccomp/Engine.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Seccomp/Filter.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Seccomp/Filter.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Seccomp/Filter.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Seccomp/Filter.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Seccomp/Filter.lean` | early-return-removed | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Seccomp/Filter.lean` | operand-swapped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Seccomp/Filter.lean` | record-skipped | 1 | 0 | 0 | 0 | 1 | 0 |
+| `Seccomp/Prefill.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Seccomp/Prefill.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Seccomp/Syscalls.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Seccomp/Syscalls.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Seccomp/Syscalls.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Seccomp/Syscalls.lean` | early-return-removed | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Seccomp/Translate.lean` | comparison-operator | 1 | 0 | 0 | 0 | 1 | 0 |
+| `Seccomp/Translate.lean` | condition-negated | 1 | 0 | 0 | 0 | 1 | 0 |
+| `Seccomp/Translate.lean` | constant-off-by-one | 1 | 0 | 0 | 0 | 1 | 0 |
+| `Seccomp/Translate.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Seccomp/Translate.lean` | early-return-removed | 1 | 0 | 0 | 0 | 1 | 0 |
+| `Seccomp/Translate.lean` | operand-swapped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Seccomp/Translate.lean` | order-swapped | 1 | 0 | 0 | 0 | 1 | 0 |
+| `Syscalls.lean` | comparison-operator | 1 | 0 | 0 | 0 | 1 | 0 |
+| `Syscalls.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Syscalls.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `Syscalls.lean` | early-return-removed | 1 | 0 | 0 | 0 | 1 | 0 |
+| `Syscalls.lean` | stop-passthrough | 1 | 0 | 0 | 0 | 1 | 0 |
+| `WG/AllowedIps.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/AllowedIps.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/AllowedIps.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/AllowedIps.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/AllowedIps.lean` | early-return-removed | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/AllowedIps.lean` | operand-swapped | 1 | 1 | 0 | 0 | 0 | 0 |
+| `WG/AllowedIps.lean` | order-swapped | 1 | 0 | 0 | 0 | 1 | 0 |
+| `WG/AllowedIps.lean` | stop-passthrough | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Blake2s.lean` | comparison-operator | 1 | 1 | 0 | 0 | 0 | 0 |
+| `WG/Blake2s.lean` | condition-negated | 1 | 1 | 0 | 0 | 0 | 0 |
+| `WG/Blake2s.lean` | constant-off-by-one | 1 | 1 | 0 | 0 | 0 | 0 |
+| `WG/Curve25519.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Curve25519.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Curve25519.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Data.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Data.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Data.lean` | constant-off-by-one | 1 | 1 | 0 | 0 | 0 | 0 |
+| `WG/Data.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Data.lean` | early-return-removed | 1 | 0 | 0 | 0 | 1 | 0 |
+| `WG/Data.lean` | operand-swapped | 1 | 1 | 0 | 0 | 0 | 0 |
+| `WG/Data.lean` | order-swapped | 1 | 0 | 0 | 0 | 1 | 0 |
+| `WG/Data.lean` | record-skipped | 1 | 0 | 0 | 0 | 1 | 0 |
+| `WG/Device.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Device.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Device.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Device.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Device.lean` | early-return-removed | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Device.lean` | order-swapped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Device.lean` | record-skipped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Device.lean` | stop-passthrough | 1 | 0 | 0 | 0 | 1 | 0 |
+| `WG/Handshake.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Handshake.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Handshake.lean` | constant-off-by-one | 1 | 0 | 0 | 0 | 1 | 0 |
+| `WG/Handshake.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Handshake.lean` | early-return-removed | 1 | 0 | 0 | 0 | 1 | 0 |
+| `WG/Handshake.lean` | operand-swapped | 1 | 1 | 0 | 0 | 0 | 0 |
+| `WG/Handshake.lean` | record-skipped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Handshake.lean` | stop-passthrough | 1 | 0 | 0 | 0 | 1 | 0 |
+| `WG/Keypair.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Keypair.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Keypair.lean` | early-return-removed | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Keypair.lean` | record-skipped | 1 | 0 | 0 | 0 | 1 | 0 |
+| `WG/Netlink.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Netlink.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Netlink.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Netlink.lean` | early-return-removed | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/NetlinkDump.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/NetlinkDump.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/NetlinkDump.lean` | constant-off-by-one | 1 | 0 | 0 | 0 | 1 | 0 |
+| `WG/NetlinkDump.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/NetlinkDump.lean` | early-return-removed | 1 | 0 | 0 | 0 | 1 | 0 |
+| `WG/NetlinkDump.lean` | stop-passthrough | 1 | 0 | 0 | 0 | 1 | 0 |
+| `WG/NoiseCrypto.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/NoiseCrypto.lean` | condition-negated | 1 | 1 | 0 | 0 | 0 | 0 |
+| `WG/NoiseCrypto.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Peer.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Peer.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Peer.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Peer.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Peer.lean` | early-return-removed | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Peer.lean` | operand-swapped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Peer.lean` | record-skipped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Peer.lean` | stop-passthrough | 1 | 0 | 0 | 0 | 1 | 0 |
+| `WG/PeerRemove.lean` | comparison-operator | 1 | 0 | 0 | 0 | 1 | 0 |
+| `WG/PeerRemove.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/PeerRemove.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/PeerRemove.lean` | early-return-removed | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/PeerRemove.lean` | stop-passthrough | 1 | 0 | 0 | 0 | 1 | 0 |
+| `WG/PrevQueue.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/PrevQueue.lean` | early-return-removed | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/PrevQueue.lean` | stop-passthrough | 1 | 0 | 0 | 0 | 1 | 0 |
+| `WG/PtrRing.lean` | comparison-operator | 1 | 1 | 0 | 0 | 0 | 0 |
+| `WG/PtrRing.lean` | condition-negated | 1 | 1 | 0 | 0 | 0 | 0 |
+| `WG/PtrRing.lean` | constant-off-by-one | 1 | 1 | 0 | 0 | 0 | 0 |
+| `WG/Receive.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Receive.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Receive.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Receive.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Receive.lean` | early-return-removed | 1 | 0 | 0 | 0 | 1 | 0 |
+| `WG/Receive.lean` | operand-swapped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Receive.lean` | order-swapped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Receive.lean` | record-skipped | 1 | 0 | 0 | 0 | 1 | 0 |
+| `WG/Receive.lean` | stop-passthrough | 1 | 0 | 0 | 0 | 1 | 0 |
+| `WG/RxData.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/RxData.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/RxData.lean` | constant-off-by-one | 1 | 0 | 0 | 0 | 1 | 0 |
+| `WG/RxData.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/RxData.lean` | early-return-removed | 1 | 0 | 0 | 0 | 1 | 0 |
+| `WG/RxData.lean` | operand-swapped | 1 | 1 | 0 | 0 | 0 | 0 |
+| `WG/RxData.lean` | order-swapped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/RxData.lean` | record-skipped | 1 | 0 | 0 | 0 | 1 | 0 |
+| `WG/RxData.lean` | stop-passthrough | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Send.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Send.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Send.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Send.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Send.lean` | early-return-removed | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Send.lean` | operand-swapped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Send.lean` | order-swapped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Send.lean` | record-skipped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Socket.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Socket.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Socket.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Socket.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Socket.lean` | early-return-removed | 1 | 0 | 0 | 0 | 1 | 0 |
+| `WG/Socket.lean` | record-skipped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Socket.lean` | stop-passthrough | 1 | 0 | 0 | 0 | 1 | 0 |
+| `WG/State.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/State.lean` | condition-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/State.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/State.lean` | early-return-removed | 1 | 0 | 0 | 0 | 1 | 0 |
+| `WG/State.lean` | record-skipped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/State.lean` | stop-passthrough | 1 | 0 | 0 | 0 | 1 | 0 |
+| `WG/Timers.lean` | comparison-operator | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Timers.lean` | constant-off-by-one | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Timers.lean` | decision-negated | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Timers.lean` | operand-swapped | 1 | 0 | 0 | 1 | 0 | 0 |
+| `WG/Types.lean` | comparison-operator | 1 | 0 | 0 | 0 | 1 | 0 |
+| `WG/Types.lean` | constant-off-by-one | 1 | 0 | 0 | 0 | 1 | 0 |
+| **all** | | **308** | **14** | **5** | **197** | **92** | **0** |
+
+| Class | Generated | Uncompilable | Invalid | Rejected | Survived | No verdict |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| comparison-operator | 51 | 2 | 2 | 35 | 12 | 0 |
+| condition-negated | 43 | 3 | 2 | 34 | 4 | 0 |
+| constant-off-by-one | 51 | 3 | 0 | 35 | 13 | 0 |
+| decision-negated | 36 | 0 | 0 | 34 | 2 | 0 |
+| early-return-removed | 42 | 0 | 1 | 19 | 22 | 0 |
+| operand-swapped | 27 | 4 | 0 | 18 | 5 | 0 |
+| order-swapped | 12 | 0 | 0 | 7 | 5 | 0 |
+| record-skipped | 18 | 0 | 0 | 13 | 5 | 0 |
+| stop-passthrough | 28 | 2 | 0 | 2 | 24 | 0 |
+
+| Channel | Rejections | Share |
+| --- | ---: | ---: |
+| hidden_mismatch | 65 | 32% |
+| control_flow_mismatch | 53 | 26% |
+| mirror_invariant | 20 | 10% |
+| domain_filter | 18 | 9% |
+| unsupported_path | 11 | 5% |
+| semantic_mismatch | 11 | 5% |
+| control_flow_mismatch,semantic_mismatch | 10 | 5% |
+| control_flow_mismatch,mirror_invariant,semantic_mismatch | 2 | 1% |
+| semantic_mismatch,unsupported_path | 1 | 0% |
+| control_flow_mismatch,hidden_mismatch | 1 | 0% |
+| control_flow_mismatch,semantic_mismatch,unsupported_path | 1 | 0% |
+| control_flow_mismatch,hidden_mismatch,unsupported_path | 1 | 0% |
+| hidden_mismatch,unsupported_path | 1 | 0% |
+| control_flow_mismatch,mirror_invariant | 1 | 0% |
+| hidden_mismatch,mirror_invariant | 1 | 0% |
+
+Time per mutant: median 242 s, mean 572 s, total 48 h 58 min of worker time over 308 runs.
+
 
 ## 6. The survivors, one by one
 
@@ -243,16 +587,16 @@ defect; the `unsupported` ones are the gaps the census lists.
 | Mutant | Site | Category | Why it survived | Fix |
 | --- | --- | --- | --- | --- |
 | m-ec0783b3a0 | `Env/Batch.lean:38` the NET_RX section ordinal, condition negated | **R** | its logical twin `w != .netRx` (m-f61392504a) was rejected by the placement-evidence check, while this one passed the subset and the whole suite with 15 inline placements present in the confirming run (`napi_orders`: a 94, bc 15); the placement evidence's sensitivity to the section ordinal depends on which placement runs occur | a check rule: the placement evidence should compare the section ordinals of the steps it replays, not only their control flow |
-| m-d7dee84db8 | `Env/IpStack.lean:72` checksum fold negated | CB | the environment's IP checksum is never observed on `handwritten`; a WireGuard injection would carry it (confirmation on `wireguard` pending) | PENDING_WG |
+| m-d7dee84db8 | `Env/IpStack.lean:72` checksum fold negated | rejected (wireguard) | the environment's IP checksum is verified by the receive path on an injected datagram; survived `handwritten` only | none: resolved in 6.8 |
 | m-ad789234b2 | `Env/IpStack.lean:72` `>` → `≥` at 0xffff | CB | the boundary value never occurs | none worth a trace |
-| m-ab0b08a1e3 | `Env/Stack.lean:72` the TCP ack flag negated | CB | the environment's TCP helper is not exercised on `handwritten` (confirmation on `wireguard` pending) | PENDING_WG |
+| m-ab0b08a1e3 | `Env/Stack.lean:72` the TCP ack flag negated | rejected (wireguard) | the TCP helper is exercised by the stage traces; survived `handwritten` only | none: resolved in 6.8 |
 | m-f40fbc343a | `Env/Stack.lean:46` `<` → `≤` | CB | boundary only | none |
-| m-85b3373196 | `Env/Stack.lean:46` `+1` → `+2` | CB | as above (confirmation pending) | PENDING_WG |
-| m-9ffcb57df3 | `Env/IpStack.lean:22` `SENDER_PORT` + 1 | CB | the sender port of injected packets is not observed on `handwritten` (confirmation pending) | PENDING_WG |
+| m-85b3373196 | `Env/Stack.lean:46` `+1` → `+2` | CB | the sequence increment feeds no observation inside WireGuard's boundary; the ack-flag mutant on the same helper was rejected, so the helper runs | none (outside the boundary) |
+| m-9ffcb57df3 | `Env/IpStack.lean:22` `SENDER_PORT` + 1 | rejected (alloc, wireguard) | the injected datagram's source port is observed in those suites | none: resolved in 6.8 |
 | m-133ab68446 | `FS/File.lean:60` `roundup_pow_of_two` negated | CB | `alloc_fdtable` runs only when the table grows past 64 descriptors, which no trace does; the wrong size would then reach `findNextFdAllFull`'s operand | a trace holding 65 descriptors |
 | m-a0580e9458 | `FS/File.lean:60` `n ≤ 1` → `n ≤ 2` | CB | as above | the same trace |
-| m-fa9da72d01 | `Kernel/Defs.lean:907` the allocation-site id map negated | CB (subset) | the kind-305 records are unarmed outside the `alloc` suite, which the subset did not include (confirmation on `alloc` pending) | PENDING_ALLOC |
-| m-bcac7274dc | `Kernel/Defs.lean:907` `58 ≤ i` → `58 < i` | CB (subset) | as above, for site 58 | PENDING_ALLOC |
+| m-fa9da72d01 | `Kernel/Defs.lean:907` the allocation-site id map negated | rejected (alloc) | the armed allocation records expose the id map | none: resolved in 6.8 |
+| m-bcac7274dc | `Kernel/Defs.lean:907` `58 ≤ i` → `58 < i` | CB | no steered trace targets site 58 exactly (`alloc` survived) | a steered trace at site 58 |
 | m-cf6dab30c3 | `Seccomp/Bridge.lean:62` the repeatable mark negated | LO | the per-operation comparison is set-based, so emission multiplicity is invisible by design | none |
 | m-208ec53979 | `Seccomp/Decisions.lean:281` `SDecision.all` filter negated | EP | the list is used by the tests, not on the checked path | none |
 | m-04f699319f | `Seccomp/Decisions.lean:281` `==` → `!=` | EP | as above | none |
@@ -265,10 +609,10 @@ defect; the `unsupported` ones are the gaps the census lists.
 | m-9997959668 | `FS/Wait.lean:184` `ret < 0` → `≤ 0` | CB | the walk breaks after the first callback returning 0; every corpus wait queue has one entry at the walk | a trace with two waiters on one head |
 | m-b47970fdce | `Kernel/Refcount.lean:12` `old > 0` → `≥ 0` | EP | differs only at `old == 0`, a use-after-free no correct run reaches | none |
 | m-d6cb2b5d37 | `Syscalls.lean:173` `fd ≥ rlimit` → `>` | CB | no trace names exactly the limit's descriptor number | a trace at the boundary |
-| m-6297bb9625 | `FS/AnonInodes.lean:22` `-ENODEV` → `-ENOTDIR` | CB (steered) | the anon-inode failure is a steered path (confirmation on `alloc` pending) | PENDING_ALLOC |
+| m-6297bb9625 | `FS/AnonInodes.lean:22` `-ENODEV` → `-ENOTDIR` | CB | no steered trace fails the anon-inode allocation (`alloc` survived) | a steered trace at that site |
 | m-d6e357a769 | `FS/Close.lean:21` `-512` → `-513` | EP (contract) | `ERESTARTSYS` from a pipe close needs a signal the harness never sends | none |
 | m-cd402fd597 | `FS/Inode.lean:46` `NSEC_PER_SEC` + 1 | CB | the pipefs timestamps it feeds are never observed (no `fstat` in the corpus) and their compare is non-constant | a trace observing a pipe's `ctime` after a write |
-| m-19762748d3 | `FS/Pipe.lean:40` `PIPE_MIN_DEF_BUFFERS` + 1 | CB (steered) | used only under the soft pipe-buffer limit, a steered path (confirmation pending) | PENDING_ALLOC |
+| m-19762748d3 | `FS/Pipe.lean:40` `PIPE_MIN_DEF_BUFFERS` + 1 | CB | no trace reaches the soft pipe-buffer limit (`alloc` survived) | a trace under the soft limit |
 | m-fbdcb07871 | `FS/ReadWrite.lean:18` `2^63` → `3^63` | EP (contract) | a count that large cannot be passed | none |
 | m-261f7b4645 | `Runner.lean:17` `MAX_IO` + 1 | EP | a runner bound, not the C's | none |
 
@@ -277,28 +621,117 @@ defect; the `unsupported` ones are the gaps the census lists.
 | Mutant | Site | Category | Why it survived | Fix |
 | --- | --- | --- | --- | --- |
 | m-545d3ed0ba | `Env/IpStack.lean:182` `-EMSGSIZE` | EP (contract) | no payload exceeds the fragment size | none |
-| m-04f1275a2b | `FS/AnonInodes.lean:22` `.anonInodeErr` | CB (steered) | PENDING_ALLOC | PENDING_ALLOC |
+| m-04f1275a2b | `FS/AnonInodes.lean:22` `.anonInodeErr` | CB | no steered trace fails the anon-inode allocation (`alloc` survived) | a steered trace at that site |
 | m-5ee912dbd3 | `FS/Close.lean:13` `.closeNoFile` → `-EBADF` | CB | no trace closes an unknown descriptor | a trace: `close` of a never-opened fd |
 | m-c94fc660c7 | `FS/Eventfd.lean:25` invalid flags | CB | no trace passes an invalid eventfd flag | a trace |
 | m-0177f5cdad | `FS/EventfdOps.lean:76` a short eventfd read | CB | no trace reads an eventfd with fewer than 8 bytes | a trace |
 | m-ad049b9b15 | `FS/Eventpoll.lean:90` a dead file at `ep_item_poll` | EP | unreachable on a correct run | none |
 | m-9ec4b350ac | `FS/Fcntl.lean:43` `-EPERM` on `S_APPEND` | CB | inside the `O_APPEND` block no trace enters | the `O_APPEND` trace |
-| m-e3cceef5de | `FS/FileTable.lean:109` `.allocPathPseudoFail` | CB (steered) | PENDING_ALLOC | PENDING_ALLOC |
-| m-415d0346f2 | `FS/Inode.lean:96` `envOk .allocInode` | CB (steered) | PENDING_ALLOC | PENDING_ALLOC |
+| m-e3cceef5de | `FS/FileTable.lean:109` `.allocPathPseudoFail` | rejected (alloc) | `a2_dentry_nomem` steers the failure | none: resolved in 6.8 |
+| m-415d0346f2 | `FS/Inode.lean:96` `envOk .allocInode` | CB | no steered trace fails the inode allocation (`alloc` survived) | a steered trace |
 | m-00693e433c | `FS/Open.lean:17` `filp_flush` at count 0 | EP | unreachable on a correct run | none |
-| m-d070830a74 | `FS/Pipe.lean:101` `envOk .copyPageToIter` | CB (steered) | PENDING_ALLOC | PENDING_ALLOC |
-| m-18e6657307 | `FS/PipeCreate.lean:24` `.getPipeInodeNoInode` | CB (steered) | PENDING_ALLOC | PENDING_ALLOC |
+| m-d070830a74 | `FS/Pipe.lean:101` `envOk .copyPageToIter` | CB | no steered trace fails the page copy (`alloc` survived) | a steered trace |
+| m-18e6657307 | `FS/PipeCreate.lean:24` `.getPipeInodeNoInode` | CB | no steered trace fails `get_pipe_inode` (`alloc` survived) | a steered trace |
 | m-057152dfc5 | `FS/ReadWrite.lean:18` the negative count | EP (contract) | as above | none |
 | m-f83350256b | `FS/Wait.lean:174` the empty-queue return | EP | the walk over an empty queue returns the same value | none |
-| m-cbb3079fa2 | `Kernel/Signal.lean:96` `.sigqueueAllocNoUcounts` | CB (steered) | PENDING_ALLOC | PENDING_ALLOC |
-| m-736cd45d76 | `Runner.lean:177` the pipe-reference descriptor form | CB (subset) | the form is used by the pipes corpus, which the runner's subset did not include (confirmation on `pipes` pending) | PENDING_PIPES |
+| m-cbb3079fa2 | `Kernel/Signal.lean:96` `.sigqueueAllocNoUcounts` | CB | no trace exhausts the signal ucounts (`alloc`, `wireguard` survived) | a trace at the sigpending limit |
+| m-736cd45d76 | `Runner.lean:177` the pipe-reference descriptor form | invalid | the pipe-reference descriptor form is the runner's input parsing; the mutated runner refuses the pipes and alloc corpora (`domain_filter`, `invalid_output`) | none: not a mirror mutant |
 | m-92f6d1fc7b | `Seccomp/Bridge.lean:65` the repeatable dedup | LO | set-based comparison, as above | none |
 | m-9a33d70c0c | `Seccomp/Classic.lean:145` a code past the table | CB | no corpus program has such a code (the mutated lookup would panic on one) | a trace with an opcode ≥ the table size |
 | m-da2fe3a128 | `Seccomp/Translate.lean:127` a jump target past the end at translation | EP | the classic checker rejects it first, as in the C; the translation's test is defensive | none |
 | m-2ce60eff07 | `Syscalls.lean:126` `-EBADF` | CB | no trace passes an unknown descriptor to that syscall | a trace |
 | m-07f15a1eb8 | `WG/Data.lean:53` `.padNoMtu` | CB | no trace sends with MTU 0 | a trace (if MTU 0 is settable; else EP) |
 
-ORDER_SWAPPED_PLACEHOLDER
+### 6.7 Order swaps and the WireGuard survivors of the second pass
+
+Order swaps are logging-only by class: both tests run either way, so the
+behaviour is the same unless the first test's arm has an effect the second
+depends on. The channel that sees them is the decision order against the
+witnesses, so a swap of two tests that are both false on every trace, one
+of them unwitnessed, is invisible.
+
+| Mutant | Site | Category | Why it survived | Fix |
+| --- | --- | --- | --- | --- |
+| m-abcfccd124 | `WG/AllowedIps.lean:117` `.addCidrTooLong` ↔ `.addNoPeer` | LO, CB | both false on all 3,620 adds in the census; `cidr_too_long` is unwitnessed, so the order of two false outcomes is not checked | a trace adding a too-long prefix (the arm, then the order) |
+| m-36f6242651 | `WG/Data.lean:87` `.encCowDataFailed` ↔ `.encTooManyFrags` | LO | both false on every encrypt (278); the first is unwitnessed, the second a constant | none (the C's `cow_data` failure is an allocation the mirror steers elsewhere) |
+| m-bb18cdf5e7 | `FS/Eventpoll.lean:688` the two `put_user` fault tests | LO | both false on every delivery (83); the first unwitnessed | none (a fault needs an unmapped user buffer, outside the contract) |
+| m-74ca2f2010 | `Seccomp/Classic.lean:256` `.basicsLenZero` ↔ `.basicsLenOverMax` | LO | the C compiles `len == 0 \|\| len > MAX` into one test; the corpus has both rejections, and the declared pair is order-free in the built code | none |
+| m-51fc08039e | `Seccomp/Translate.lean:194` `.convLenNonpositive` ↔ `.convLenOverMax` | LO | as above | none |
+
+The WireGuard files' survivors came from the second pass (the rerun after
+the oracle was rebuilt); every one ran its subset and the whole `wireguard`
+suite, and the record-skipped ones `alloc` as well.
+
+| Mutant | Site | Category | Why it survived | Fix |
+| --- | --- | --- | --- | --- |
+| m-ca4e5c16f1 | `WG/Handshake.lean:23` `HANDSHAKE_ZEROED` 0 → 1 | EP | a mirror-internal state label; the C's enum value is never an operand or an observation | none |
+| m-45a739fa51 | `WG/Data.lean:78` `hiddenAlloc .skbCowHead` → ok | CB | no steered trace fails `skb_cow_head` (the `alloc` suite steers other sites) | a steered trace at that site |
+| m-22037fe598 | `WG/Keypair.lean:51` `hiddenAlloc .kzallocKeypair` → ok | CB | no steered trace fails the keypair allocation | a steered trace |
+| m-37c1d985b6 | `WG/RxData.lean:79` `hiddenAlloc .skbCowDataRx` → ok | CB | as above, the receive-side `skb_cow_data` | a steered trace |
+| m-5f7165446a | `WG/Receive.lean:195` `hiddenAlloc .replySkb` → ok | CB | as above, the cookie reply's skb | a steered trace |
+| m-1067963e6a | `WG/Handshake.lean:49` the kdf's two constant-false tests, return removed | EP | the condition is constant false by the mirror's construction (pointer tests the thin layer does not model) | none |
+| m-3fc43a1223 | `WG/RxData.lean:65` `.decNoKeypair false`, return removed | EP | constant false by construction | none |
+| m-7e879b58df | `WG/PrevQueue.lean:47` `.prevQueueTailNotHead false`, stop removed | EP | constant false: a producer mid-enqueue cannot occur on one CPU | none |
+| m-cd49baa63b | `WG/NetlinkDump.lean:57` `.getAipNoNest`, return removed | **R** | the arm is taken twice in the suite; falling through, the next `put` fails on the same full buffer and returns the same result, but the mirror now reports an extra decision (`get_allowedips.put_cidr`) the kernel never evaluated, and nothing flags it because that outcome is unwitnessed | a check rule: a reported decision in a function whose coverage ends before it is a mismatch |
+| m-9528a4d447 | `WG/Socket.lean:27` `.sockFreeNull`, return removed | EP | both outcomes taken (386 and 26); the continuation on a missing socket is a no-op | none |
+| m-519d8769a1 | `WG/State.lean:218` `loopbackSoftirq`'s "not raised" return removed | EP | every caller tests the flag first; the body on a clear flag changes nothing | none |
+| m-90315e93fd | `WG/Receive.lean:48` `.hdrTooShort`, return removed | CB | no injected datagram is shorter than 4 bytes (274 false) | a trace injecting a 3-byte datagram |
+| m-3db354f814 | `WG/PeerRemove.lean:81` `upTo == some pid` → `!=` | CB | the partial flush (`upTo` set) runs only in the netns-close fixture, outside the corpus | a trace in that fixture |
+| m-efeecf19ba | `WG/RxData.lean:40` `NAPI_POLL_WEIGHT` 64 → 65 | CB | no poll has 64 or more packets pending | a receive batch of 65 datagrams |
+| m-c5ebae05a4 | `WG/Types.lean:188` `SMP_CACHE_BYTES` 64 → 65 | CB | the headroom alignment it feeds reaches no declared compare and no observation on the corpus | a declared operand at the headroom test, or a trace whose headroom crosses the alignment |
+| m-87d2df8557 | `WG/Types.lean:213` the ring's batch rule `>` → `≥` at `size / 2` | CB | the batch is 16 against a half-size of 512; the boundary never occurs | none worth a trace |
+| m-f9ed3f3b36 | `WG/NetlinkDump.lean:38` `NLMSG_GOODSIZE` 3776 → 3777 | CB | no dump sits within one byte of the split boundary | a dump sized to the boundary (the W2 stepped traces could) |
+| m-67ee11e735 | `WG/Handshake.lean:284` unsupported: the handshake entry unhashed | EP (excluded) | | none |
+| m-45ba4c3730 | `WG/Socket.lean:75` unsupported: a port collision | EP (excluded) | | none |
+| m-7628dd8ab0 | `WG/Peer.lean:140` unsupported: an index stolen during insertion | EP (excluded) | | none |
+| m-faf3cf1fd2 | `WG/NetlinkDump.lean:153` invariant: a stale allowed-IPs cursor | EP | | none |
+| m-c78a7f5817 | `WG/PeerRemove.lean:48` invariant: queued work without a pending flag | EP | | none |
+| m-01256f22fa | `WG/Receive.lean:282` invariant: a wrong packet in the handshake queue | EP | | none |
+| m-767196a929 | `WG/State.lean:210` invariant: a NET_RX raised while pending | EP | | none |
+
+### 6.8 Confirmation passes beyond the file's subset
+
+The baseline decision census (`--decision-census` on every suite, the four
+groups of section 5) showed for several survivors that the distinguishing
+outcome is taken in a suite outside their file's subset, so every survivor
+was rerun on the suites the census named: `alloc` (the armed allocation
+records) for all of them, `handwritten` for the FS, kernel and seccomp
+files, `epoll` for the FS files, `pipes` for the runner and the kernel
+files, `wireguard` for the environment model. A rejection here moves the
+mutant from the survivors to the rejected, with the suite named; the
+tables above carry the outcome in their category column; the passes' rejections are:
+
+| Mutant | Site | Rejected by | Channel | What the trace supplied |
+| --- | --- | --- | --- | --- |
+| m-9ffcb57df3 | `Env/IpStack.lean:22` `SENDER_PORT` + 1 | alloc | semantic mismatch | an injected datagram whose source port is observed |
+| m-10201516ff | `FS/EventfdOps.lean:33` operand swap | alloc, handwritten | operand mismatch | a freed eventfd context with id ≠ 0 |
+| m-133ab68446 | `FS/File.lean:60` `roundup_pow_of_two` negated | alloc, handwritten | unsupported path | `a2_allocfd_nomem` and `expand_by_allocation` grow the table past 64 |
+| m-fcf16f4ca1 | `FS/File.lean:71` order swap | alloc, handwritten | control flow | the table growth's two tests |
+| m-e3cceef5de | `FS/FileTable.lean:109` `.allocPathPseudoFail` | alloc | hidden mismatch | `a2_dentry_nomem` steers the failure |
+| m-fa9da72d01 | `Kernel/Defs.lean:907` the site-id map negated | alloc | hidden mismatch | an armed allocation record |
+| m-5ee912dbd3 | `FS/Close.lean:13` `.closeNoFile` | handwritten | mirror invariant | `failed_producer_reference` closes a descriptor that does not exist |
+| m-c94fc660c7 | `FS/Eventfd.lean:25` invalid flags, return removed | handwritten | semantic mismatch | an eventfd with an invalid flag |
+| m-0f81f80729 | `FS/Eventfd.lean:25` operand swap | handwritten | operand mismatch | the same trace (operand ≠ 0) |
+| m-0177f5cdad | `FS/EventfdOps.lean:76` the short read | handwritten | semantic mismatch | a 4-byte eventfd read |
+| m-805feb4dbd | `FS/Fcntl.lean:41` operand swap | handwritten | operand mismatch | `F_SETFL` toggling `O_APPEND` (operand 0x400) |
+| m-62fabd29a0 | `FS/Fcntl.lean:43` `S_APPEND` test flipped | handwritten | semantic mismatch | the same trace: `-EPERM` returned |
+| m-736cd45d76 | `Runner.lean:177` the pipe-reference form | alloc | invalid input | the alloc traces use the form; the mutated runner rejects its own input, an invalid mutant |
+| m-d7dee84db8 | `Env/IpStack.lean:72` the checksum fold negated | wireguard | unsupported path, semantic mismatch | an injected IPv4 datagram whose checksum the receive path verifies (`receive.c:487`) |
+| m-ab0b08a1e3 | `Env/Stack.lean:72` the TCP ack flag negated | wireguard | semantic mismatch | a TCP-over-WireGuard exchange in the stage traces |
+
+Two consequences for the tables above. The `O_APPEND` toggle *is* in the
+corpus (`handwritten`), so m-1c99f9201d, the negated `.setflAppendChanged`
+decision that survived `handwritten` too while its operand-swap twin was
+rejected there, is a witness gap and not a corpus boundary: the outcome of
+`setfl.o_append_changed` is unwitnessed in the built code and its arm's only
+effect on pipefs is the `IS_APPEND` test, so a mirror that takes the wrong
+arm with the right operands passes; category **R**, fix a witness or a
+declared compare on `IS_APPEND`. And the subset trimming of section 1
+(handwritten dropped from the FS subsets to halve the run time) was the
+cause of nine provisional survivals, all resolved by the pass; the
+reproduction command below keeps `--confirm-survivors`, which runs the
+whole area suite, and the subsets in the tool now include `handwritten`
+for the FS files.
 
 ## 7. What each channel caught: behaviour-changing examples
 
@@ -341,7 +774,18 @@ logging-only; the channel named is the one the report carries.
   operands differ from the kernel's record on every install; the sentinel
   I8-M1 (the age test's left operand skewed by one nanosecond, every
   outcome unchanged) is the canonical logging-only case of this channel.
-  TIMER_TICK_EXAMPLE
+  The timer change: `WG/Peer.lean:159` `REKEY_TIMEOUT` 5 → 6 seconds
+  (m-94d8944d6f, run on request) and `WG/Peer.lean:160` `KEEPALIVE_TIMEOUT`
+  10 → 11 (m-f0adc4b54a): both rejected at the kind-303 arm record, the
+  mirror's expiry differing from the kernel's by the extra second's ticks.
+  The report names the channel `unsupported_path` with the item-8 arm
+  rule's message, "a stall between a timer's two jiffies reads": the rule
+  reads any gap above one tick as a stall, so a wrong delay is reported as
+  a stall rather than as a wrong delay. A rejection either way, but the
+  message misattributes the cause; the sentinel D3-M8 (a delay short by
+  `REKEY_TIMEOUT`) is reported the same way. The keepalive one survived its
+  subset (`s2_`, `wg_`, `l_`) and was rejected by the whole suite, the
+  confirmation step doing its job.
 - **Mirror invariant (the mutated mirror stops itself).** `Env.lean:271` the
   "no device" early return removed: the worker runs without a device and
   the invariant "no WireGuard device in this trace's fixture" fires.
@@ -360,7 +804,48 @@ logging-only; the channel named is the one the report carries.
 
 ## 8. Conclusion
 
-CONCLUSION_PLACEHOLDER
+The check rejects 84 percent of the applicable semantic mutants in the
+sample, and every one of the 38 that survive is explained. Thirty-four are
+corpus boundaries: an arm, a boundary value or a steered allocation site
+that no trace supplies, each with the trace named that would reject it;
+twelve of those are steered allocation failures or a steered environment
+failure at a site the `alloc` suite does not cover (four WireGuard sites,
+five FS sites, seccomp's whole set), and the rest are boundary values and
+unexercised error arms. Four are reach problems of the check itself and
+are the campaign's findings:
+
+1. `FS/Inode.lean:114` (m-b42171750c): the last `iput` of a pipefs inode no
+   longer evicts it and nothing notices; `fs/inode.c` is anchored for its
+   timestamp helpers only and no observation counts inodes. Fix: a declared
+   decision on `iput_final`'s path or an observation of the inode count.
+2. `FS/Fcntl.lean:41` (m-1c99f9201d): a recorded decision whose outcome is
+   unwitnessed in the built code (`setfl.o_append_changed`) and whose arm
+   has no observable effect on pipefs passes with the outcome inverted,
+   although the corpus takes both outcomes. Fix: a witness, or a declared
+   compare on the `IS_APPEND` test the arm runs.
+3. `WG/NetlinkDump.lean:57` (m-cd49baa63b): a removed early return makes the
+   mirror report a decision the kernel never evaluated, and the check does
+   not flag an extra reported decision whose outcome is unwitnessed. Fix: a
+   check rule tying a reported decision to the coverage of its function
+   past the point where the kernel returned.
+4. `Env/Batch.lean:38` (m-ec0783b3a0): the NET_RX section ordinal negated
+   passes the placement-evidence check in a run with 15 inline placements
+   while its logical twin was rejected; the check's sensitivity to the
+   ordinal depends on which placement runs occur. Fix: the placement
+   evidence should compare the section ordinals it replays.
+
+What the channels' shares say: control flow and hidden records catch most
+of what is caught (the witnesses and the records are the instruments with
+reach), the domain filter catches a wrong mirror before Linux runs
+thirteen times, and the operand channel alone catches only the
+logging-only edits it was built for. The sentinel set is confirmed as
+representative: every channel it names rejected mutants here in the same
+way. Recommended additions, from the survivors: no new sentinel (the four
+findings are check rules and declarations, not channels), and the
+thirty-four traces listed, of which the steered allocation sites and the
+`O_APPEND` toggle are the cheapest.
+
+Cost: median 242 s, mean 572 s, total 48 h 58 min of worker time over 308 runs. The confirmation passes added about 230 further suite runs.
 
 Reproduction, from a clean checkout on the s2 oracle:
 

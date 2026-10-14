@@ -38,6 +38,8 @@ clean pass), no_verdict (infrastructure), uncompilable (the model build
 failed).
 """
 import argparse
+import collections
+import glob
 import hashlib
 import json
 import os
@@ -86,7 +88,7 @@ SUBSETS = {
     'Leanux/FS/Wait.lean': [('epoll', ['']), ('pipes', [''])],
     'Leanux/FS/Poll.lean': [('epoll', [''])],
     'Leanux/FS/Fput.lean': [('epoll', ['']), ('pipes', [''])],
-    'Leanux/FS/': [('pipes', [''])],
+    'Leanux/FS/': [('pipes', ['']), ('handwritten', [''])],   # the campaign's confirmation pass showed handwritten distinguishes nine FS survivors of pipes alone
     'Leanux/Seccomp/': [('seccomp', [''])],
     'Leanux/Kernel/Signal.lean': [('pipes', ['']), ('seccomp', [''])],
     'Leanux/Kernel/': [('handwritten', ['']), ('wireguard', ['b1_', 'd3_'])],
@@ -524,12 +526,17 @@ def reclassify(results_path, workers):
         if r['status'] == 'rejected' or not r['runs']:
             continue
         last = r['runs'][-1]
+        suite = last['suite']
+        tag = '-full' if last['prefixes'] == [''] and len(r['runs']) > 1 and r['runs'][-2]['suite'] != suite else ''
+        candidates = []
         for k in range(workers):
-            suite = last['suite']
-            tag = '-full' if last['prefixes'] == [''] and len(r['runs']) > 1 and r['runs'][-2]['suite'] != suite else ''
-            p = ROOT.parent / f'mutation-scratch-{k}' / '.artifacts' / 'check' / f"mut-{r['id']}-{suite}{tag}" / 'report.json'
-            if not p.exists():
-                p = ROOT.parent / f'mutation-scratch-{k}' / '.artifacts' / 'check' / f"mut-{r['id']}-{suite}" / 'report.json'
+            for name in (f"mut-{r['id']}-{suite}{tag}", f"mut-{r['id']}-{suite}"):
+                q = ROOT.parent / f'mutation-scratch-{k}' / '.artifacts' / 'check' / name / 'report.json'
+                if q.exists():
+                    candidates.append(q)
+        # the newest report: an earlier campaign's run of the same id may
+        # survive in another scratch tree
+        for p in sorted(candidates, key=lambda q: q.stat().st_mtime, reverse=True)[:1]:
             if p.exists():
                 report = json.load(open(p))
                 status, mism, other = classify(report)
@@ -541,6 +548,39 @@ def reclassify(results_path, workers):
                 break
     results_path.write_text(''.join(json.dumps(r) + '\n' for r in rows))
     return changed
+
+
+def finalize(results_path):
+    """Merge the campaign's results with every confirmation pass (results-<suite>.jsonl
+    beside it, from --only-suite runs) into results-final.jsonl: a survivor rejected by
+    any pass is rejected, naming the pass; a runner mutant that refuses its own input is
+    invalid."""
+    base=[json.loads(l) for l in open(str(results_path))]
+    passes={}
+    order=['alloc','handwritten','epoll','pipes','wireguard','wg-retry','timer']
+    for f in sorted(glob.glob(str(results_path.parent / (results_path.stem + '-*.jsonl'))), key=lambda f: order.index(os.path.basename(f)[8:-6]) if os.path.basename(f)[8:-6] in order else 99):
+        name=os.path.basename(f)[len('results-'):-len('.jsonl')]
+        if name in ('final',) or name.endswith('aborted') or name.startswith('pruned'): continue
+        for l in open(f):
+            r=json.loads(l); passes.setdefault(r['id'], []).append((name, r['status'], r['channel'], r['problem']))
+    final=[]
+    for r in base:
+        conf=passes.get(r['id'], [])
+        r=dict(r); r['confirmations']=[dict(suite=n, status=s, channel=c) for n,s,c,_ in conf]
+        r['campaign_status']=r['status']
+        if r['file']=='Leanux/Runner.lean' and any(s=='rejected' and c=='domain_filter' for _,s,c,_ in conf):
+            # the mutated runner refuses its own input: not the C's control flow
+            r['status'],r['channel']='invalid',"the runner's input parsing mutated"
+        elif r['status']=='survived':
+            if any(s=='rejected' for _,s,_,_ in conf):
+                n,s,c,p=[x for x in conf if x[1]=='rejected'][0]
+                r['status'],r['channel'],r['problem']='rejected',c,f'by the {n} pass: '+p
+            elif any(s=='invalid' for _,s,_,_ in conf) or any(s=='no_verdict' and 'invalid_output' in c for _,s,c,_ in conf):
+                r['status'],r['channel']='invalid',','.join(c for _,s,c,_ in conf if s!='survived')
+        final.append(r)
+    open(str(results_path.parent / (results_path.stem + '-final.jsonl')),'w').write(''.join(json.dumps(r)+'\n' for r in final))
+    print('final:', dict(collections.Counter(r['status'] for r in final)), 'of', len(final))
+    print('moved by confirmation:', [(r['id'], r['status'], r['confirmations'][-1]['suite'] if r['confirmations'] else '') for r in final if r['campaign_status']!=r['status']])
 
 
 def summarise(results_path):
@@ -644,7 +684,11 @@ def main(argv=None):
     ap.add_argument('--report', help='write the Markdown tables of --results to this file')
     ap.add_argument('--reclassify', action='store_true', help='recompute non-rejected statuses from the kept reports')
     ap.add_argument('--only-suite', help='run the selected mutants on this whole suite only (a confirmation pass)')
+    ap.add_argument('--finalize', action='store_true', help='merge --results with its confirmation passes into results-final.jsonl')
     args = ap.parse_args(argv)
+    if args.finalize:
+        finalize(ROOT / args.results)
+        return 0
     if args.reclassify:
         print(f'{reclassify(ROOT / args.results, args.workers)} rows reclassified')
         return 0
