@@ -560,3 +560,14 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   `wgXmit` checks the packet header's destination against the environment's;
   the ECN rewrite's length implication asserted; the E arm named "cookie
   gating under the modelled load state"; disposition tables on both audits.
+- **2026-10-14 [AGENT, fork of the coordinator]** The `cond_resched` in
+  `default_device_exit_batch` (net/core/dev.c:12174, the device layer's
+  pernet `exit_batch` inside `cleanup_net`'s section) is the ambient
+  hidden site 427, passed over like `cleanup_net`'s own yield (152): two
+  W8 traces met it under a loaded claim point as "choice kind 302 from an
+  undeclared consumer" and passed alone (the integration record c047e64's
+  named follow-on). Exact and fail-closed: the mirror runs nothing across
+  it, a record there from any other site is still a mismatch, and no
+  retry. Evidence: `W8_DEFAULT_DEVICE_EXIT` in `evaluator/test_model_replay.py`
+  (the live capture with the record inserted; the old model fails, the new
+  agrees) and the checker-level test in `evaluator/test_evaluation.py`.

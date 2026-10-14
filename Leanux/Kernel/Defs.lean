@@ -1138,6 +1138,15 @@ inductive HiddenSite where
       scheduling inside cleanup_net's section while the exiting namespace's
       hashtables are torn down: ambient, as `reschedNetnsCleanup` [AGENT, wgen]. -/
   | reschedRhashtableDestroy
+  /-- `default_device_exit_batch`'s `cond_resched` (net/core/dev.c:12174,
+      the pernet `exit_batch` of the device layer, run by `cleanup_net`'s
+      `ops_exit_list` at net/core/net_namespace.c:178 while the exiting
+      namespace's devices are moved out): a scheduler choice inside
+      cleanup_net's section, written only under load, across which the
+      mirror runs nothing (no other armed unit runs in the teardown), so
+      ambient as `reschedNetnsCleanup` [AGENT, fork of the coordinator,
+      2026-10-14: the integration record c047e64's named follow-on]. -/
+  | reschedDefaultDeviceExit
   /-- epoll (docs/2026-10-12-epoll-design.md, 3.2; id 190 of epoll's block
       190-199): the kind-308 record of the `struct file` address an epoll
       item is keyed by, written by `kcov_epoll_insert` at the end of
@@ -1299,6 +1308,7 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   | .dstCacheResetTs => ⟨150, "dst_cache_reset_ts", "jiffies", "include/net/dst_cache.h", 90, 8, .mirror⟩
   | .reschedNetnsCleanup => ⟨152, "resched:cleanup_net", "resched", "net/core/net_namespace.c", 174, 8, .ambient⟩
   | .reschedRhashtableDestroy => ⟨153, "resched:rhashtable_free_and_destroy", "resched", "lib/rhashtable.c", 1161, 8, .ambient⟩
+  | .reschedDefaultDeviceExit => ⟨427, "resched:default_device_exit_batch", "resched", "net/core/dev.c", 12174, 8, .ambient⟩
   | .dstCacheRefreshTs => ⟨151, "dst_cache_refresh_ts", "jiffies", "net/core/dst_cache.c", 63, 8, .mirror⟩
   | .alloc s => let i := s.info
     -- `AllocSite.hiddenId`: 70 + index, unique by construction (the indices skip D3's
@@ -1342,7 +1352,7 @@ def HiddenSite.all : List HiddenSite :=
   ++ (Worker.all.filter fun w => w.timer?.isNone && w != .netRx).map .queued
   ++ [.cookieSecretBirthdate, .cookieSecret, .pubkeyHashKey, .ratelimiterKey, .ratelimiterGcNow, .udpPortDraw,
       .neighReachTime, .netlinkAutobindPort]
-  ++ [.dstCacheResetTs, .dstCacheRefreshTs, .reschedNetnsCleanup, .reschedRhashtableDestroy]
+  ++ [.dstCacheResetTs, .dstCacheRefreshTs, .reschedNetnsCleanup, .reschedRhashtableDestroy, .reschedDefaultDeviceExit]
   ++ AllocSite.all.map .alloc
   ++ [.currentTime]
   ++ [.underLoadNow, .cookieNonce, .ratelimiterNow, .ratelimiterInsertNow, .cookieSecretRotateNow, .cookieSecretRotated]
