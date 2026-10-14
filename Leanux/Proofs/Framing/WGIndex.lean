@@ -41,6 +41,21 @@ theorem modifyDev_index_spec (P : Kernel → Prop) (f : Device → Device)
   simpa [indexKernelView, indexKernel, modifyDev, modifyK,
     Option.map_map, Function.comp_def, hf] using hp
 
+/-- Unhashing reads the device and records its decision before filtering the
+scalar index table. Missing-device and record outcomes remain original. -/
+theorem indexUnhash_sameIndexKernel (decision : Decision) (hashed : IndexEntry → Bool) :
+    SameView indexKernelView (indexUnhash decision hashed) := by
+  apply SameView.of_wp
+  intro initial
+  have hm := modifyDev_index_spec (fun s => s = initial)
+    (fun d => {d with indexTable := d.indexTable.filter fun e => !hashed e}) (fun _ => rfl)
+  mvcgen [indexUnhash, getDev, getK, branch, invariant, hm]
+
+theorem indexRemove_sameIndexKernel (pid : PeerId) (kind : IndexKind) :
+    SameView indexKernelView (indexRemove pid kind) := by
+  rw [indexRemove_eq]
+  exact indexUnhash_sameIndexKernel _ _
+
 theorem indexInsert_sameIndexKernel (pid : PeerId) (kind : IndexKind) :
     SameView indexKernelView (indexInsert pid kind) := by
   apply SameView.of_wp

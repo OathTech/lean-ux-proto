@@ -161,7 +161,11 @@ theorem mapM_snapshot_spec (P : Snapshot → Prop) {α β : Type}
   exact loop xs []
 
 theorem indexRemove_sameSnapshot (pid : PeerId) (kind : IndexKind) : SameSnapshot (Leanux.WG.indexRemove pid kind) := by
-  frame_same [Leanux.WG.indexRemove, _private.Leanux.WG.Peer.«0».Leanux.WG.unhashEntry] using [getDev_spec]
+  intro w x v hr
+  have hf := congrArg (fun k => snapshot {w with k})
+    (Framing.indexRemove_sameIndexKernel pid kind w x v hr)
+  simpa [snapshot, Framing.indexKernelView, Framing.indexKernel,
+    Option.bind_map, Function.comp_def] using hf
 
 theorem indexRemove_spec (P : Snapshot → Prop) (pid : PeerId) (kind : IndexKind) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.indexRemove pid kind

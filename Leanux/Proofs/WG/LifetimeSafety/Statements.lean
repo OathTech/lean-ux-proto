@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Lifetimes.TimerCallbacks
 import Leanux.Proofs.WG.Lifetimes.AllowedIpsAccess
 import Leanux.Proofs.WG.Lifetimes.BatchCalls
 import Leanux.Proofs.WG.Lifetimes.ReceiveIngress
@@ -1511,6 +1512,51 @@ malformed-node/owner and exhausted-walk failures after earlier accesses. This
 is resolved-current-store access safety, not saved-reference ownership, trie
 correctness or composition through the remaining insertion/lifecycle callers. -/
 theorem allowedips_family_allocation_access_preserves (call : Lifetimes.AllowedIpsCall) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed := call.allocation
+
+/-- Four complete key-maintenance calls preserve the exact original result,
+World and Stop on all inputs. Reset reads its clock before its peer; expiration
+retains saved scalar slots but resolves each key afresh; queued clearing ends
+with the original peer put, including every earlier failed-access prefix. -/
+theorem key_maintenance_family_access_erasure (call : Lifetimes.KeyMaintenanceCall) :
+    ErasesPrefix call.observed call.original := call.erases
+
+/-- Maintenance composes explicit original index-removal and keypair-release
+contracts with resident-access contracts. The scalar index frame is separate
+from source-inspected internal access coverage. -/
+theorem key_maintenance_family_ambient_access_preserves (c : Lifetimes.AmbientContracts I)
+    (hi : ∀ pid kind, PrefixPreserves I Lifetimes.LifetimeEvent.Safe
+      (liftPrefix (indexRemove pid kind)))
+    (hp : ∀ kp now, PrefixPreserves I Lifetimes.LifetimeEvent.Safe
+      (Lifetimes.keypairPutPrefix kp now))
+    (call : Lifetimes.KeyMaintenanceCall) :
+    PrefixPreserves I Lifetimes.LifetimeEvent.Safe call.observed := call.preserves_ambient c hi hp
+
+/-- Concrete allocation geometry discharges the complete maintenance family.
+These are resolved-store access prefixes, with no saved-slot ownership,
+key-material non-use or successful outer clearing/lifecycle conclusion. -/
+theorem key_maintenance_family_allocation_access_preserves (call : Lifetimes.KeyMaintenanceCall) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed := call.allocation
+
+/-- All five original expired callbacks and their dispatcher have unconditional
+result/World/Stop erasure. The strict retry comparison, fresh keepalive-reset
+getter, caller-jiffies records and already-queued clear-work acquire/put remain
+in source order; no own-timer-detachment premise is imposed. -/
+theorem timer_callback_family_access_erasure (call : Lifetimes.TimerCallbackCall) :
+    ErasesPrefix call.observed call.original := call.erases
+
+/-- Existing staging/socket/timer observations compose through explicit ambient
+and scalar-work-queue contracts. Ordinary refusal and Stop retain their distinct
+continuations; callbacks do not assume queue ownership or drain progress. -/
+theorem timer_callback_family_ambient_access_preserves (c : Lifetimes.AmbientContracts I)
+    (t : Lifetimes.TxContracts I) (q : Lifetimes.TimerQueueContracts I)
+    (call : Lifetimes.TimerCallbackCall) :
+    PrefixPreserves I Lifetimes.LifetimeEvent.Safe call.observed := call.preserves_ambient c t q
+
+/-- Allocation geometry discharges every timer callback contract and retains
+safe access prefixes on all original outcomes. This neither bounds retries nor
+proves timer firing, reference credits, queue draining or whole-run lifecycle safety. -/
+theorem timer_callback_family_allocation_access_preserves (call : Lifetimes.TimerCallbackCall) :
     PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed := call.allocation
 
 end Leanux.Proofs.WG.LifetimeSafety
