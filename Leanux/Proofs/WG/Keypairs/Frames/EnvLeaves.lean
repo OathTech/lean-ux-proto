@@ -97,15 +97,15 @@ theorem condResched_spec (P : Snapshot → Prop) (self : Worker) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Env.condResched self
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (condResched_sameSnapshot self).wp P
 
-theorem activationHasWork_sameSnapshot (a : Activation) : SameSnapshot (Env.Activation.hasWork a) := by
-  frame_same [Env.Activation.hasWork] using [getDev_spec, getPeer_spec, getTxSkb_spec]
+theorem activationHasWork_sameSnapshot (a : Activation) : SameSnapshot (Env.Activation.hasWork a) :=
+  sameSnapshot_of_sameWGKernel (Framing.sameWGKernel_of_sameKernel (Framing.activationHasWork_sameKernel a))
 
 theorem activationHasWork_spec (P : Snapshot → Prop) (a : Activation) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Env.Activation.hasWork a
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (activationHasWork_sameSnapshot a).wp P
 
-theorem activationOccupancy_sameSnapshot (a : Activation) : SameSnapshot (Env.Activation.occupancy a) := by
-  frame_same [Env.Activation.occupancy] using [getDev_spec, getPeer_spec]
+theorem activationOccupancy_sameSnapshot (a : Activation) : SameSnapshot (Env.Activation.occupancy a) :=
+  sameSnapshot_of_sameWGKernel (Framing.sameWGKernel_of_sameKernel (Framing.activationOccupancy_sameKernel a))
 
 /-- The trial executes on a copy; its returned World is discarded. -/
 theorem activationConsistent_sameSnapshot (a : Activation) : SameSnapshot (Env.Activation.consistent a) :=

@@ -2,10 +2,10 @@ import Leanux.Proofs.Framing.KernelEffects
 import Leanux.Env.Batch
 import Leanux.Proofs.Framing.Projection
 
-/-! Full-kernel frames for record-only scheduler leaves. These frames alone
+/-! Full-kernel frames for read-only and record-only scheduler leaves. These frames alone
 make no internal-access claim; the lifetime observers inspect their source. -/
 namespace Leanux.Proofs.Framing
-open Leanux Std.Do
+open Leanux Leanux.WG Std.Do
 
 /-- A callback frame lifts through section records and NET_RX scalar metadata. -/
 theorem runWorker_sameView {σ : Type} (view : World → σ)
@@ -56,5 +56,15 @@ theorem filterAuxM_sameKernel (f : α → M Bool) (hf : ∀ a, SameKernel (f a))
 theorem filterM_sameKernel (f : α → M Bool) (hf : ∀ a, SameKernel (f a))
     (xs : List α) : SameKernel (xs.filterM f) :=
   sameKernel_bind (filterAuxM_sameKernel f hf xs []) (fun ys => sameKernel_pure ys.reverse)
+
+theorem activationOccupancy_sameKernel (a : Activation) : SameKernel (Env.Activation.occupancy a) := by
+  apply sameKernel_of_wp
+  intro k
+  mvcgen [Env.Activation.occupancy, getDev, getK, getPeer, invariant]
+
+theorem activationHasWork_sameKernel (a : Activation) : SameKernel (Env.Activation.hasWork a) := by
+  apply sameKernel_of_wp
+  intro k
+  mvcgen [Env.Activation.hasWork, getDev, getK, getPeer, getTxSkb, invariant]
 
 end Leanux.Proofs.Framing

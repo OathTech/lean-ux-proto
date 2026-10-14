@@ -11,6 +11,7 @@ import Leanux.Proofs.WG.Queues.RxPollProjection
 import Leanux.Proofs.WG.Queues.RxPollProvenance
 import Leanux.Proofs.WG.Queues.RxRingWorker
 import Leanux.Proofs.WG.Queues.TxRingWorker
+import Leanux.Proofs.WG.Queues.RxRingTrials
 
 /-! R4 queue components: physical-ring refusal, original prev_queue FIFO laws,
 and successful-endpoint receive-queue helper frames. Whole recorded-schedule delivery,
@@ -613,5 +614,64 @@ theorem original_tx_ring_initialized_conservation (c : Queues.TxRing.Call α)
       | .error _ => True
       | .ok (_, v) => Queues.TxRing.cell v = some (deviceIndex, r) :=
   c.initialized hc hs hr hw
+
+/-- Concrete NAPI/IRQ and non-decrypt activations retain the complete RX ring
+cell on normal return. Non-decrypt work includes actual cryptAhead, stack/TX
+callbacks and handshake receive. These frames assert no failed World. -/
+theorem original_rx_scheduler_callback_frames :
+    Framing.SameView Queues.RxRing.cell Leanux.Env.napiSoftirq ∧
+    Framing.SameView Queues.RxRing.cell Leanux.Env.napiIrqExit ∧
+    ∀ a : Activation, a.worker ≠ .decryptWorker →
+      Framing.SameView Queues.RxRing.cell (Leanux.Env.Activation.iter a) :=
+  ⟨Queues.RxRing.napiSoftirq_cell, Queues.RxRing.napiIrqExit_cell, Queues.RxRing.otherIter_cell⟩
+
+/-- ConsumeData and original scheduler iteration/run/dispatch/schedule/nested
+rescheduling have unconditional result/World/Stop erasure. This includes eager
+pending-NAPI reads, cryptAhead, ambiguity and record/occupancy-bound failures. -/
+theorem original_rx_scheduler_erasure (c : Queues.RxRing.SchedulerCall α) :
+    Logged.ErasesPrefix c.observe c.original := c.erases
+
+/-- All actual callbacks are discharged for this RX-ring invariant. Reached
+committed prefixes refine finite original ring executions, including Stops;
+normal returns additionally identify the physical ring. This is a scheduler
+call contract, not a packet-carrier or enclosing runner theorem. -/
+theorem original_rx_scheduler_prefix_refinement (c : Queues.RxRing.SchedulerCall α) :
+    Logged.PrefixPreserves (Queues.RxRing.Inv deviceIndex initial)
+      (Queues.RxRing.Safe initial) c.observe := c.preserves
+
+/-- A prior initialized journal may already describe a nonempty current ring.
+The concrete scheduler extends its conservation and ordinal refinement, with
+no duplicate-skb restriction. Failed outcomes have only a replay endpoint;
+normal outcomes link it to the actual device-index/ring cell. -/
+theorem original_rx_scheduler_initialized_conservation (c : Queues.RxRing.SchedulerCall α)
+    (hi : Queues.RxRing.Inv deviceIndex (PtrRing.init n) h w) :
+    let out := Logged.runPrefix c.observe w h
+    ∃ r, Queues.RxRing.Initialized n out.2 r ∧
+      match out.1 with
+      | .error _ => True
+      | .ok (_, v) => Queues.RxRing.cell v = some (deviceIndex, r) := c.initialized hi
+
+/-- Original copied-world trials retain the caller history, discard their
+Worlds, and reproduce ordered filter decisions including hidden rejection and
+the first non-hidden Stop. These equations hold without an invariant premise. -/
+theorem original_rx_consistency_trials (a : Activation) (xs : List Activation)
+    (w : World) (h : List Queues.RxRing.Event) :
+    Logged.runPrefix (Logged.liftPrefix (Leanux.Env.Activation.consistent a) : Queues.RxRing.Obs Bool) w h =
+      ((match (Logged.runPrefix (Queues.RxRing.activationRun a) w h).1 with
+        | .ok _ => .ok (true, w)
+        | .error (.hidden _) => .ok (false, w)
+        | .error e => .error e), h) ∧
+    (xs.filterM Leanux.Env.Activation.consistent).run w =
+      (xs.filterM (fun a => Queues.RxRing.trialDecision a w h)).map (fun ys => (ys, w)) :=
+  ⟨Queues.RxRing.activationConsistent_trial a w h, Queues.RxRing.trials_filter xs w h⟩
+
+/-- Every candidate has a separately conserved reached trial prefix, even if
+it would reject or Stop. This certifies potentially evaluated candidates; it
+neither commits their events nor asserts that every listed candidate ran. -/
+theorem original_rx_consistency_trial_conservation (xs : List Activation) (w : World)
+    (h : List Queues.RxRing.Event) (hi : Queues.RxRing.Inv deviceIndex (PtrRing.init n) h w) :
+    ∀ a ∈ xs, ∃ r, Queues.RxRing.Initialized n
+      (Logged.runPrefix (Queues.RxRing.activationRun a) w h).2 r :=
+  Queues.RxRing.trials_initialized xs w h hi
 
 end Leanux.Proofs.WG.DeliveryOrder

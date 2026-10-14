@@ -6,10 +6,12 @@ Worktree `.worktrees/proofs-campaign`, branch `proofs/campaign`; governed by
 [the charter](2026-10-13-charter-proof-campaign.md). Both prerequisites were
 carried from `2c7a076`, then the audit at `f45bde8` and documentation-only
 `a39aded`, then the scheduler robustness change at `7a92672`.
-All registered components are current over `7a92672`, including R2 concrete Batch scheduling,
+The registered components pass coordinated validation over `7a92672`, including R2 concrete Batch scheduling,
 separate copied trials and allowed-IP removal access, R3 insertion/pure-removal/all local removal arms and R4 finite
 and RX/TX source ring journals. The new `cryptAhead` call is observed and framed, and the historical
 witness seed no longer depends on the removed evaluator fixture.
+The R4 RX scheduler extension below also passes coordinated validation. Main has since
+advanced to `c047e64`; all rows lag that new mirror pending the authorized carry and repairs.
 Open obligations below remain explicit. No integration into main,
 push, differential check or guest run has been performed by this campaign.
 
@@ -23,10 +25,10 @@ push, differential check or guest run has been performed by this campaign.
 | R6 flood resistance | Cookie exclusion proved at the original call boundary; accepted 19-retry/20-initiation episode resolves the literal limit through Rule Zero. Six terminal contracts. |
 
 **Last coordinated validation.** The mirror is byte-identical to `7a92672`.
-The proof gate passes 316 jobs and 323 terminal statements
-(ReplayWindow 15; R1 9; R2 160; R3 62; R4 58; R5 13; R6 6), using only `propext`, `Classical.choice` and `Quot.sound`.
+The proof gate passes 325 jobs and 329 terminal statements
+(ReplayWindow 15; R1 9; R2 160; R3 62; R4 64; R5 13; R6 6), using only `propext`, `Classical.choice` and `Quot.sound`.
 Fresh stock kernel replay passes, as do the 60-job default model build and
-expanded 110-test unit tier (23.668 seconds; one skip). The model executable
+expanded 110-test unit tier (23.853 seconds; one skip). The model executable
 was rebuilt at the scheduler carry (118 jobs); its source is unchanged. Independent frozen-source
 and scope reviews have no unresolved correctness findings in these components.
 
@@ -782,7 +784,7 @@ Stops. No ownership or queue-validity premise, or unchanged-peer-state conclusio
 `EnqueueAdmission` independently derives from each original TX/RX body that a zero return requires
 an existing, non-full entry ring. The older success alternative alone does not establish that guard.
 The guard theorems themselves are successful-return implications. The RX and TX source journals below
-observe installed mutations; concrete scheduler composition remains open.
+observe installed mutations; concrete RX scheduler composition is described below.
 Passing the full test and then stopping in queue-work emits no admission.
 
 **RX source ring journals.** `RxRingJournal` relates each reached history to a finite execution of the
@@ -800,7 +802,7 @@ replacement, before later packet getters, decryption and publication. Empty poll
 the original empty-branch check succeeds. Complete step/iteration erasure preserves result, successful
 World and exact Stop on every input. Softirq still precedes the ring read. IRQ, softirq and rescheduling
 observers have explicit erasure and journal-preservation contracts, allowing their own refined ring
-operations; concrete scheduler callbacks are not yet discharged. No saved-head, packet-ID uniqueness,
+operations; the concrete RX scheduler below now discharges these callbacks. No saved-head, packet-ID uniqueness,
 valid-World, homogeneous-batch or ownership assumption is introduced.
 
 From an initialized ring, all four observed calls retain admission/consumed/live conservation and
@@ -941,16 +943,59 @@ Failing callback entry counts. These results establish neither allocation identi
 between polls. The checkpoint is `c0713d8`; observer definitions and the original chronological
 predicate remain unchanged.
 
-**Remaining scope.** Concrete RX/TX scheduler callback discharge,
-worker-local ownership, peer-queue/packet-store conservation and recorded scheduler composition
-remain open, alongside R2’s caller/lifecycle closure and lifecycle-reset dispositions.
-Discarded speculative activations must discard history with their trial Worlds. Local observations imply
-neither packet-store emptiness nor whole-schedule no-loss/no-duplication. Finite-prefix conservation
-must account for pending obligations rather than infer eventual delivery from a finite run. The RX source journal
-is not yet connected to a joint peer-queue/packet-store identity invariant; it alone makes no
-packet-arrival, cryptographic, fairness or delivery-order claim.
+**Concrete RX scheduler calls.** `RxRingCallbackFrames` and `RxRingNapi` prove the complete
+interface-index/decrypt-ring cell frame through actual rxPoll/GRO, stack delivery and IRQ placement.
+`RxRingEncrypt`, `RxRingSocket`, `RxRingTx` and `RxRingHandshake` cover the non-decrypt workers,
+including both socket families, loopback, keypair/session changes, peer deletion, TX staging and
+cryptAhead's actual encrypt iteration. No valid-World, resident-owner, packet-distinctness or
+homogeneous-batch premise is added. These are normal-endpoint frames; failed executions have no
+returned World. Source inspection separately establishes that the lifted callees contain no decrypt-ring
+mutation cut, so their whole-call lifting does not hide an RX journal event on a later Stop.
 
-**Validation and effort.** The TX source-journal extension adds five grouped exports (58 R4 terminals).
+`SourceScheduler` shares original run/dispatch/schedule control with activation and NAPI observers as
+parameters. `RxRingScheduler` instantiates it concretely: decrypt activations use the checked worker
+journal, while other activations preserve the cell. Eager pending-NAPI getDev, queue erase before
+section start, fallback dispatch order, cryptAhead, suspension/resumption, ambiguity and every record
+or occupancy budget failure retain their original position. Unconditional erasure covers the complete
+result, successful World and exact Stop. Its six-call family includes consumeData and nestedResched.
+The ring invariant has no remaining callback premise at these concrete call boundaries.
+
+`RxRingTrials` relates separately observed activation trials to the original consistency decision and
+ordered filter. Hidden mismatch means false; the first non-hidden Stop propagates. Each trial begins
+at the caller's World/history; its returned World and events never enter committed history. Every
+candidate has a separately safe reached prefix, without a claim that every candidate was evaluated.
+Initialized conservation extends a prior refined history that may already describe a nonempty current
+ring. Admission/consumed/live conservation and distinct offer ordinals also cover size zero and
+duplicate skb values. The retired/stale structural representation requires positive size; a failed
+prefix has only an existential replay ring.
+
+[AGENT 2026-10-14] Share scheduler control through callback-parameterized proof-side bodies;
+keep copied-trial histories separate from committed ring histories. Canonical read-only scheduler
+frames replace duplicate legacy proof bodies by projections, preserving their theorem statements.
+
+**Remaining scope.** TX-ring callback/scheduler composition, enclosing ingress/runner and lifecycle
+operations, worker-local ownership and joint peer-queue/packet-store conservation remain open.
+Concrete RX scheduler refinement alone implies neither packet-store emptiness nor whole-schedule
+no-loss/no-duplication. Finite-prefix conservation must retain pending obligations and cannot infer
+eventual delivery. The interface index does not distinguish fresh lifecycle resets. Initialized
+index/keypair affiliation, lifecycle purges versus anomalies and operation-specific RX quiescence
+still need source-derived invariants; none is assumed by these erasures or smuggled into the final
+charter claim. There is no new accepted counterexample or Linux simulation claim in this slice.
+
+**Validation and effort.** The RX scheduler extension adds six grouped exports (64 R4 terminals).
+The concrete core passes 208 jobs and the complete Statements target passes 230 jobs. Coordinated
+proof gate (325 jobs, 329 terminals), fresh stock kernel replay, 60-job model build and
+110-test unit tier (23.853 seconds, one skip) all pass. Independent review has checked
+source/control, callback discharge, separate trials, exports and all fourteen frozen hashes;
+no unresolved correctness or scope finding remains. Fifteen sequential capped builds used 30m07s from the 04:49:27 UTC grant through final
+collection at 05:19:34: four passed and eleven failed ordinarily. Failures concerned type inference,
+normalization, WP leaf selection/depth and an integration-only duplicate generated matcher for
+Activation.hasWork. Canonical hasWork/occupancy SameKernel proofs now live in Framing/Batch, with
+legacy EnvLeaves statements unchanged as projections. All exits were collected; no cap or interruption
+occurred. Review corrected copied queue-frame wording, a normal-endpoint versus Stop distinction,
+the canonical frame header's read-only scope, and the positive-size condition on retired/stale
+representation; these did not change theorem statements.
+The prior TX source-journal extension added five grouped exports (58 R4 terminals).
 The complete local target passes 193 jobs. Coordinated proof gate, fresh stock kernel replay and
 fast-tier checks pass, with current counts above. Independent frozen source and scope review has
 no unresolved correctness findings; its report-status finding is corrected by this refresh.
