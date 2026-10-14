@@ -4,7 +4,8 @@
 
 Work is on `.worktrees/proofs-campaign`, branch `proofs/campaign`, under
 [the charter](2026-10-13-charter-proof-campaign.md). The mirror remains byte-identical
-to `ca6b22e`; initialized R2 Runner proofs and coordinated validation pass.
+to `ca6b22e`; coordinated validation passes for initialized R2 Runner safety
+and the current R3 public-command/parser extension.
 The [proof register](proofs.md#results) holds current declarations and
 pins; its [model map](proofs.md#layers) supplies the complete module inventory.
 Current components are not completion of the open charter properties. This campaign
@@ -16,24 +17,26 @@ retains current architecture, findings, reproduction provenance, effort and limi
 | --- | --- |
 | R1 | Uniqueness and the intentional inclusive-floor correction are proved, with pure and accepted-run witnesses. |
 | R2 | Initialized allocation-identity access safety now holds for every typed Runner trace and both placeholder/flood modes, including failed histories. Every reached consistency-filter entry derives its own allocation invariant and safe isolated trials with exact ordered filter correspondence. No parser, array-length, progress or success premise is added. Raw-reference affiliation/credit remains a separate stronger property. Coordinated validation of the three new exports passes. |
-| R3 | Initialized finite normal call histories refine flat-prefix updates and reached-root lookup, including full normal clear. Completed setAllowedip/removal events now cover the entire acquired-peer update, with concrete send/flush/cleanup frames and separately derived lookup/create residency. Public setPeerCmd preflight composition, enclosing configuration/Runner closure and packet paths remain open. |
+| R3 | Initialized finite normal call histories refine flat-prefix updates and reached-root lookup, including full normal clear. Completed setAllowedip/removal events now cover the complete public peer command, with source-derived acquisition and concrete send/flush/cleanup frames. Successful public parseTrace supplies every configured peer's address shape. Enclosing device configuration/Runner closure and packet paths remain open. |
 | R4 | Physical rings, finite/source journals, per-poll provenance and selected GRO order, and concrete RX scheduling are checked. Accepted input refutes chronological post-GRO order. Joint pipeline conservation remains open. |
 | R5 | The unconditional age/post-zero and wire-nonce readings are false in accepted mirror inputs. Rule Zero resolution retains thirteen positive local contracts, without universal replacement transport claims. |
 | R6 | Cookie exclusion is proved at its original call boundary. A 19-retry/20-initiation episode refutes literal MAX=18; no universal corrected retry bound is claimed. |
 
-**Validation status.** The initialized Runner extension passes the 33-job outer
-foundation, 242-job observer, 243-job safety and 280-job terminal targets; the
-full proof target passes 423 jobs. Three new exports give 208 R2 / 420 total
-terminal declarations (418 theorems and two definitions). The capped exact check
-passes the six-file scope, census, whitespace, unchanged mirror and all 417 prior
-declaration statements/proof bodies; stale local-scope comments are corrected.
-Independent frozen export/documentation and bounded source-coverage reviews are
-clear; their stale-comment findings are corrected. Sequential coordinated
-validation passes the 423-job proof gate (all 420 terminal declarations use only
-permitted axioms), fresh stock kernel replay, the 60-job default build and
-124 unit tests (23.215 seconds, one skip). The coordinator's capped exact
-scope/census/compatibility/whitespace/mirror check passes and confirms all four
-frozen Lean hashes. R3/R4 closures remain open.
+**Validation status.** The current R3 public-command/parser extension passes the
+286-job scoped statements and 425-job full proof builds. The capped exact
+five-file scope/compatibility check passes all 420 prior declaration statements
+and proof bodies, whitespace, the empty index and mirror equality. Three new exports
+give 93 R3 / 423 current-source terminal declarations (421 theorems and two
+definitions). Independent frozen review is clear. Sequential coordinated validation
+passes the 425-job proof gate with all 423 declarations on permitted axioms,
+fresh stock kernel replay, the 60-job default build and 124 unit tests
+(22.863 seconds, one skip). The coordinator's capped exact check confirms the
+five-file scope, frozen hashes, census, compatibility, whitespace and mirror.
+The preceding initialized Runner checkpoint passed the
+423-job proof gate on all 420 declarations, fresh stock kernel replay, the 60-job
+default build and 124 unit tests (23.215 seconds, one skip), with exact compatibility
+and frozen-hash checks. R2 remains closed at its stated access-safety boundary;
+R3/R4 enclosing closures remain open.
 
 **Preceding Lean 4.35 carry (`ca6b22e`).** The Lean 4.35 carry passes the 147-job and 182-job scoped
 targets and the 420-job full proof target. Five proof files repair collection
@@ -426,7 +429,8 @@ No production history field is proposed.
 **Original versus proved.** The charter concerns configuration history and RX/TX
 cryptokey identity binding. Current [terminal contracts](../Leanux/Proofs/WG/CryptokeyRouting/Statements.lean)
 prove represented trie operations and initialized finite histories of the listed
-original calls, not the enclosing configuration or packet claim.
+original calls, plus complete peer-command completion prefixes and public parser
+address shape; the enclosing device-configuration and packet claim remain open.
 No R3 Rule Zero counterexample or changed charter conclusion is asserted.
 
 | Model | Abstraction and refinement boundary |
@@ -444,6 +448,7 @@ No R3 Rule Zero counterexample or changed charter conclusion is asserted.
 | `AddressBounds`/`ConfigurationInputs`, `ClearWalk` | Actual UInt8/parser address shape and original setAllowedip guard cuts; normal insertion/routing composition; exact root-list source factor and extensional normal-completion coverage with full list-only frames. `parsed_setAllowedip_bounded_call`, `parsed_setAllowedip_routing_preserved`, `original_rootRemove_lists_normal`. |
 | `ClearSnapshot`/`ClearEndpoint`, `RoutingCall.clear` | Fixed original nodes/current submap with retained list provenance and exclusions; complete original normal clear derives empty represented trees/lists, exact outside fields and seq+1. `original_free_routing_endpoint`, `original_free_then_findNode`; existing initialized history/lookup exports now include clear. |
 | `RoutingRetains`/`Completions`, concrete send/socket/handshake/flush frames, `RoutingAcquire`; configuration tail/removal/update observers | Deletion-permitting routing frames; actual whole-setAllowedip/removal events and flat folding; exact acquired-peer update through replacement/removal, attributes and complete tail. Lookup/create residency is separately derived. Unconditional erasure remains separate from entry-conditional safe-prefix and normal reached-state agreement. |
+| `PeerCommandCompletion`, `ParserShape` | Literal public preflight/acquisition suffix, derived optional-peer residency and complete command prefixes; actual private parsePeer/config/operation plus the pause-stripping accumulator and exact public-parser suffix derive every configured peer's address shape. `original_setPeerCmd_completion_erasure`, `original_setPeerCmd_routing_prefix`, `parsed_trace_peer_commands_routing`. |
 
 [AGENT 2026-10-13] Use width-parametric arithmetic, one Patricia tree and pure
 insertion, with contexts as structural paths rather than another executable
@@ -483,6 +488,11 @@ Share the original tail factor and existing send-frame matcher environment.
 placing removeByPeer events inside peerMakeDead before later cleanup/flush effects.
 Reuse socket/handshake source factors and prove deletion-permitting concrete frames;
 keep lookup/create residency separate until public-command preflight composes.
+[AGENT 2026-10-14] Compose the public command as a literal observer, retaining
+CompletionAcquired across a named acquisition suffix rather than changing its
+result representation. Propagate actual parser output through separate checked
+list/array and suffix contracts; an rfl source equation preserves all parser
+branches while avoiding repeated continuation expansion.
 
 
 **Insertion boundary.** Valid representation, unique IDs, whole-store `NodesBelow`
@@ -590,18 +600,21 @@ frames retain routing on normal returns without a drain-success, reference-credi
 or affiliation premise. Actual lookup and creation/refusal separately derive the
 returned raw-slot residency; they establish no public-key identity association.
 
-**Remaining obligations.** Public setPeerCmd preflight/acquisition composition is
-still open. Its attempted tagged preparation equation did not close within this
-slice's elaboration budget; the uncompiled draft was removed, without replacing
-it by a target-residency or desired-output premise. The compiled acquired stage
-retains explicit entry routing/target/address shape. Extend to enclosing peer/device
-configuration and completed clear observations. A failing clear has no returned
-World or successful completion marker; earlier partial mutations are outside a
-completed-call history. Propagate local parser shape through parsePeer/config/operation
-and public parseTrace, including bare/create/delete intervals and other Netlink
-mutations. Literal contiguous histories cannot span unobserved guards/helper effects.
-Connect packet paths to authenticated allocation identity; raw peer labels and
-longest-prefix lookup alone establish no ownership.
+The complete public peer-command contract now derives residency through actual
+lookup/create outcomes, retaining ordinary errors and earlier completed effects
+on later Stop. Successful public parseTrace proves all configured peers' address
+shape, preserving malformed alternatives and device-selector updates.
+
+**Remaining obligations.** Compose enclosing device configuration and completed
+clear observations, then the actual Runner, including bare/create/delete intervals.
+A failing clear has no returned World or successful completion marker; earlier
+partial mutations are outside a completed-call history. Literal contiguous
+histories cannot span unobserved guards/helper effects. The earlier tagged
+preparation equation was removed after elaboration failures; the current literal
+observer closes that public-command boundary without an output-invariant or
+target-residency premise. Connect packet paths to authenticated allocation identity;
+raw peer labels and longest-prefix lookup alone establish no ownership.
+
 The historical R2 orphan recipe constrained the former accepted domain; `c047e64`
 now rejects it before deletion. It is not a current R3 misrouting counterexample.
 
@@ -628,7 +641,8 @@ now rejects it before deletion. It is not a current R3 misrouting counterexample
 | Parsed allowed-IP and root-list-clear checkpoint | 27 builds: 7 passes / 20 ordinary elaboration failures; scoped/full targets 154/358 | 27m28s from grant 11:08:10 through full-result collection clock 11:35:38; independent frozen review clear; 28m58s writer-token ownership through handoff clock 11:37:08; no cap/interruption or runtime change |
 | Full normal clear and finite history | 11 calls: 10 builds (five passes / five ordinary elaboration failures) plus a passing scoped check; scoped/full targets 156/367 | 15m52s from grant 12:37:14 through measured full-result collection 12:53:06; 17m45s writer-token ownership through handback 12:54:59. Independent frozen review and coordinated gate, fresh kernel replay, default build and 114 unit tests pass. No cap/interruption or runtime change; all exits collected. |
 | Whole allowed-IP completions and peer tail | 17 calls: 16 builds (7 passes / 9 ordinary elaboration/normalization failures) plus one passing scope/census check; scoped/full targets 210/382 | 20m15s from grant 14:09:16 through full-result collection clock 14:29:31; 24m11s writer-token ownership through handback 14:33:27. Four new exports, 86 R3 /393 source declarations. No cap/interruption or runtime change; all exits collected. Independent frozen review is clear after correcting the report's zero-return wording: flatInsert may be idempotent. Coordinated gate, fresh kernel replay, default build and 114 unit tests pass sequentially; frozen Lean hashes are unchanged. |
-| Acquired-peer removal/update completion | 30 calls: 29 builds (8 PASS / 21 ordinary elaboration/normalization FAIL) plus one passing scope/census check; final scoped/full targets 278/397 | 30m40s from grant 15:30:16 through final full-result collection clock 16:00:56. Four exports, 90 R3 /400 source declarations. No cap/interruption; all exits collected. The complete acquired stage and concrete flush/acquisition foundations compile; repeated preflight continuation-normalization failures left whole setPeerCmd composition open. No runtime change/replay. Independent frozen review and coordinated gate/fresh replay/default/unit validation pass. Token returned at 16:02:40 (32m24s ownership). |
+| Acquired-peer removal/update completion | 30 calls: 29 builds (8 PASS / 21 ordinary elaboration/normalization FAIL) plus one passing scope/census check; final scoped/full targets 278/397 | 30m40s from grant 15:30:16 through final full-result collection clock 16:00:56. Four exports, 90 R3 /400 source declarations. No cap/interruption; all exits collected. The complete acquired stage and concrete flush/acquisition foundations compile; repeated preflight continuation-normalization failures left whole setPeerCmd composition open at that checkpoint (closed by the later literal observer). No runtime change/replay. Independent frozen review and coordinated gate/fresh replay/default/unit validation pass. Token returned at 16:02:40 (32m24s ownership). |
+| Public peer command and parsed address shape | 33 capped calls: 32 builds (7 PASS / 25 ordinary FAIL) plus a passing exact scope/compatibility check; scoped/full 286/425 | 45m06s from measured grant 20:18:48 through full-result measurement 21:03:54 UTC. Three exports; 93 R3 / 423 source declarations. Failures were elaboration/normalization and deterministic tactic limits, including the public-command mutable join and parser continuation expansion; literal acquisition and parser suffix cuts close both without changing source or premises. All exits collected, no cap/interruption, recovery admission diagnostic or runtime replay. The exact check preserves all 420 prior declaration statements/proof bodies and confirms five-file scope, census, whitespace and mirror equality. Literal source cuts retain all original errors and Stops; no added target-residency, parser-fidelity, credit or progress premise. Independent frozen review is clear, with no finding. Token returned at 21:08:52 (50m04s ownership). Sequential coordinated proof gate, fresh stock kernel replay, default build and 124 unit tests pass; the capped exact scope/hash/census/compatibility/whitespace/mirror check also passes. |
 
 The represented/loop tranche split into 17 single-step calls and a 12-call
 continuation; its fifteen failures included two heartbeat failures. Final scoped/full

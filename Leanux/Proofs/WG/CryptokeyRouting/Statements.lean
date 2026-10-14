@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Configuration.PeerCommandCompletion
+import Leanux.Proofs.WG.Configuration.ParserShape
 import Leanux.Proofs.WG.Configuration.PeerUpdateCompletion
 import Leanux.Proofs.WG.AllowedIps.RoutingAcquire
 import Leanux.Proofs.WG.Configuration.PeerTailCompletion
@@ -48,10 +50,11 @@ Their input bounds and resident insertion targets are explicit. Whole local
 setAllowedip/removal completions and the original acquired-peer configuration stage additionally
 retain semantically valid completed prefixes on later Stops, using concrete
 send/flush/cleanup routing frames that permit peer deletion. Actual lookup/create
-contracts derive raw-slot residency separately. Their entry routing,
-resident target and local address-shape premises remain explicit; enclosing
-setPeerCmd preflight composition, Netlink/configuration/Runner closure and packet
-admission remain separate.
+contracts derive raw-slot residency through the complete public setPeerCmd
+preflight, without a whole-command target-residency premise. Successful public
+parseTrace supplies every configured peer's address shape, including malformed
+entry alternatives. Entry routing remains explicit; enclosing device configuration,
+Runner closure and packet admission remain separate.
 Actual local parser output now discharges address shape for the setAllowedip
 guards and its selected bounded insertion. Complete original free normally
 clears both represented families and every resident list, preserving the other
@@ -1804,5 +1807,39 @@ theorem original_configuration_acquisition_routing (initial : FlatTable × FlatT
     Logged.PrefixEnsures (CompletionState initial) (CompletionSafe initial)
       (Logged.liftPrefix (WG.peerCreate key psk)) (CompletionCreated initial) :=
   ⟨pubkeyLookup_completion initial key, peerCreate_completion initial key psk⟩
+
+/-- The complete public peer-command observer erases to the original call for
+all attributes and Worlds, preserving every ordinary return and Stop. Nested
+routing completion events remain at their actual primitive boundaries. -/
+theorem original_setPeerCmd_completion_erasure (a : WG.PeerAttrs) :
+    Logged.ErasesPrefix (Configuration.setPeerCmdObserved a) (WG.setPeerCmd a) :=
+  Configuration.setPeerCmdObserved_erases a
+
+/-- From routed entry and local address shape, the complete original command
+preserves semantically valid completed prefixes on every outcome and derives
+reached routing/flat agreement on normal returns. Actual lookup/create outcomes
+supply residency; no target-residency, credit, affiliation or progress premise
+is imposed on this whole-command contract. -/
+theorem original_setPeerCmd_routing_prefix (initial : FlatTable × FlatTable)
+    (a : WG.PeerAttrs) (shape : Configuration.PeerAddressShape a) :
+    Logged.PrefixEnsures (CompletionState initial) (CompletionSafe initial)
+      (Configuration.setPeerCmdObserved a) (fun _ => CompletionState initial) :=
+  Configuration.setPeerCmdObserved_spec initial a shape
+
+/-- Successful public parsing derives address shape for every actual wgSet
+peer attribute, so its whole peer-command contract needs no extra shape premise.
+Malformed entries remain legal alternatives. This links parsed commands to the
+local contract; it is not execution of the enclosing configuration or Runner. -/
+theorem parsed_trace_peer_commands_routing (j : Lean.Json) (trace : Runner.Trace)
+    (hparse : Runner.parseTrace j = .ok trace) (initial : FlatTable × FlatTable) :
+    Configuration.TraceAddressShape trace ∧
+      ∀ attrs, Runner.Operation.wgSet attrs ∈ trace.ops →
+        ∀ peer, WG.PeerEntry.attrs peer ∈ attrs.peers.getD [] →
+          Logged.PrefixEnsures (CompletionState initial) (CompletionSafe initial)
+            (Configuration.setPeerCmdObserved peer) (fun _ => CompletionState initial) := by
+  have hs := Configuration.parseTrace_shape j trace hparse
+  refine ⟨hs, ?_⟩
+  intro attrs hop peer hp
+  exact Configuration.setPeerCmdObserved_spec initial peer (hs (.wgSet attrs) hop peer hp)
 
 end Leanux.Proofs.WG.CryptokeyRouting
