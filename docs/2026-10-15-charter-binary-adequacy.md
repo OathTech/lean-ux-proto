@@ -29,8 +29,10 @@ infrastructure at some point. But basically if it's outside the trust
 surface, we don't care much, that's a judgement call."
 
 So, in this assignment:
-- The theorem statement of section 1, the transport corollary of section 1a,
-  and `binary/TrustBase.lean` are the trust surface. They are reviewed
+- The trust surface is two things: Kraken's semantics at the pinned commit,
+  and the statement of section 1 with everything it quantifies over or
+  assumes: `R`, the environment premises, the call contracts, the decoder and
+  the image, all of them declarations in `binary/TrustBase.lean`. They are reviewed
   independently (section 7a) and every change to them is visible, named and
   justified. Correctness here is the whole point.
 - Everything outside that surface is a means: generators, scripts,
@@ -43,40 +45,59 @@ So, in this assignment:
 
 ## 1. The theorem
 
-For an anchored WireGuard function `f` with mirror `m_f`, with `R` the state
-relation between a Kraken machine state and a mirror state:
+[USER 2026-10-14] "The ideal result here is essentially an adequacy result
+over the kraken semantics for this specific binary. That is, if the binary
+target function is called (inside the kernel) with the necessary precondition
+satisfied over its state, the binary executes and establishes a post
+condition that satisfies the theorems that have been proved about the lean
+mirror. That is, any property we prove about the mirror is necessarily also
+a property that we have proved over the binary. ... It should be phrased so
+that we can transport any of the properties we care about into the binary.
+Not over specific properties. That is, it's a generic simulation which shows
+the binary is a refinement over the observations our properties depend on."
 
-> If the machine state `σ` is related by `R` to the mirror state `s` at
-> `f`'s entry, with `f`'s arguments in their ABI registers, and Kraken runs
-> `f` from its first instruction to the return into the entry frame under
-> the environment assumptions, consuming the record stream `ρ` at the hook
-> calls, then the run reaches a state `σ'`, `m_f` run from `s` on `ρ` reaches
-> `s'`, `R σ' s'` holds, and the machine's branch outcomes at the
-> correspondence points equal `m_f`'s decisions in order.
+Fix the image (identity `6b2018b9`) and Kraken's semantics at the pinned
+commit. `R` is the state relation between a Kraken machine state and a
+mirror world; it relates the whole mirror world, so it is the strongest
+observation the mirror's properties can depend on. For an anchored function
+`f` with mirror `m_f`:
 
-Adequacy of the mirror for an operation is the composition of these over
-the recorded sequence of anchored entries, with the environment assumptions
-as stated premises. The first theorem to close is for
-`wg_index_hashtable_lookup`, over every path: hit, miss, type reject,
-reference reject, and the bucket chain's loop. The order after it is in
-section 5.
+> For every machine state `σ` and mirror world `s` with `R σ s`, every record
+> stream `ρ`, under the environment premises of section 2: if the mirror's
+> run of `m_f` from `s` on `ρ` is accepted (no fail-closed stop) and ends in
+> `s'`, then Kraken's execution of `f` from `σ`, with the arguments in their
+> ABI registers and `ρ` consumed at the hook calls, terminates at the return
+> into the entry frame in a state `σ'` with `R σ' s'`, and at every
+> correspondence point between the two, the machine state is `R`-related to
+> the mirror's world at that point.
 
-## 1a. Transport
+Composed over the recorded sequence of anchored entries (section 3), the
+same statement holds for a whole operation and for a whole trace, with the
+environment premises as the only additions.
 
-The point of adequacy is to carry the mirror's results to the binary. For
-each result landed in `Leanux/Proofs/` (the counter window's S1 to S3, the
-campaigns' R1 to R6 and H1 to H6 as they land), the transport corollary is:
-a property proved of the mirror's runs, over the record streams the runner
-accepts, holds of the corresponding machine executions under `R` and the
-environment assumptions. The composition lemma of section 3 is stated so
-that this corollary is one application of it per result, not a new proof
-per result: the machine execution's decision sequence and end state are
-those of the mirror's run, so a predicate on the mirror's run is a predicate
-on the machine's. The first transport is S2 (the counter window's rule is
-the machine's) at milestone 4, when `counter_validate`'s inlined range is
-certified; the report names each result transported, with the exact
-statement that was transported and the premises `R` and the environment add
-to it.
+## 1a. Transport, generic
+
+The mirror's results are universal statements over accepted mirror runs:
+sequences of mirror worlds and events. The theorem says that the `R`-images
+of the machine states at the correspondence points *are* such a run, and
+the accepted one. Therefore every property proved over mirror runs holds of
+the binary's execution read through `R`, for every property at once,
+landed or future: the counter window's S1 to S3, the campaigns' R1 to R6
+and H1 to H6, and anything after them. There is no per-property transport
+and no mention of any property in the statement; the binary refines the
+mirror with respect to everything `R` observes.
+
+The transport corollary is stated once, generically: for any predicate `P`
+on mirror runs, if `P` holds of every accepted run of `m_f` from `s` on `ρ`,
+then `P` holds of the mirror run induced by the machine execution from any
+`σ` with `R σ s`. It is one application of the theorem. The report names,
+at each milestone, which landed results are thereby carried to the binary
+for the functions certified so far, as a consequence and not as work.
+
+A binary execution the mirror would refuse as `unsupported` is outside the
+claim by construction: the premise "the mirror's run is accepted" is the
+fail-closed stance carried over, not a gap. A separate, weaker lemma may
+state that up to the stop the two agreed; it is not required.
 
 ## 2. The trust base, kept in one file
 
