@@ -309,3 +309,25 @@ modelled from the records); **F10**, the 4096-slot handshake `ptr_ring`
 still represented as a `List` with a length full-test, the one ring the
 simulation-target review's repair (4.1) did not reach, which a large
 handshake batch after a drained one would expose.
+
+## 20. Disposition (2026-10-14, the pre-release review's section 12)
+
+Every item of the findings tables, so that the verdict paragraph's "every
+conditional" cannot override its own omissions.
+
+| Item | Disposition | Where |
+|---|---|---|
+| F1 | fixed: `consume_data`'s `-ENOSPC` arm as the C's two puts and silent free; `w7_ring_rx_1025` in the tier | task/receive-fixes (landed in f45bde8), the tier (7a92672) |
+| F2 | fixed: `.macRatelimited` at cookie.c:147, a declared decision | task/review-receive (2026-10-14) |
+| F3 | fixed: `wg_socket_send_buffer_as_reply_to_skb` listed; `.replyInSkbNull`, `.replyEndpointErr`, `.replyNoMem` (A's `replySkb` record), `.replyInet`, `.replyInet6` | task/review-receive |
+| F4 | fixed with F7: `make_cookie`'s protocol switch as `.cookieProtoIp`/`.cookieProtoIpv6` | task/receive-fixes |
+| F5 | justified: the full test precedes both the produce and the `queue_work_on`; no state the order could change between them | internal |
+| F6a | justified: D2 placement (b), the pending NET_RX at the consume's `spin_unlock_bh`; the scheduler places it by the records | internal |
+| F6b | fixed: `GroState`, the batch of 8 and the held lone TCP segment; unobservable on one CPU (every decrypt runs the softirq inline), modelled and listed unexercised | task/receive-fixes, W5-W6 design |
+| F7 | fixed: the cookie-secret rotation modelled from the records; `e_underload_cookie_rotated` | task/receive-fixes |
+| F8 | checked: the `network_header + sizeof(hdr) <= tail` tests are implied by the honest test (receive.c:369-372); `inetEcnSet` asserts the implication fail-closed | task/review-receive |
+| F9 | fixed: `.hsUnderLoad` declared with its operands (receive.c:112-113, the counter against 512); the boundary traces `e_underload_511/512/513` | task/review-receive |
+| F10 | deferred: the 4096-slot handshake `ptr_ring` as a `List` with a length full-test; unreachable inside the domain (the trylock arm at > 2048 stops first); a representation task named in the audit wave's integration record | f45bde8 |
+| F12 | fixed: the IPv6 ratelimiter table (`.rlProtoIp6`, `table6` keyed by the source /64), `e_underload_ratelimit6` and `_deny`; a `wg_flood` with `family: 6` | task/review-receive |
+| F13 | justified, follow-on named: `kmem_cache_alloc(entry_cache)` is not in the kind-305 hook's list, so `envOk .ratelimiterEntry` is the environment's success and the failure arm stops; a record-only site is the follow-on | E design §11 |
+| F14 | justified: store-hygiene `invariant`s with no C counterpart, fail-noisy on a mirror defect only | internal |

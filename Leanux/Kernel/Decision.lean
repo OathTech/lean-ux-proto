@@ -170,8 +170,12 @@ inductive Decision where
   | macInvalid | macNoCookieCheck | cookieLookupMiss
   -- E-B: wg_cookie_validate_packet's MAC2 compare under load (cookie.c:143)
   | macCookieInvalid
+  -- cookie.c:147: the ratelimiter's verdict under load (the receive audit's F2)
+  | macRatelimited
   -- E-B arm C: wg_ratelimiter_allow (ratelimiter.c)
   | rlProtoIp | rlEntryMatch | rlAllow | rlOverLimit | rlAllocFail
+  -- ratelimiter.c:101: the IPv6 table, keyed by the source /64 (the receive audit's F12)
+  | rlProtoIp6
   -- E-A: wg_cookie_message_consume beyond the lookup
   | cookieNoMac1Sent | cookieDecryptOk
   -- drivers/net/wireguard/peerlookup.c
@@ -200,6 +204,8 @@ inductive Decision where
   | timersDataSentNotPending | timersDataReceivedRunning | timersDataReceivedNotPending
   | modTimerRunning | modTimerAlive | traversalKeepalive | keypairPutUnreferenceNow | keypairKrefPutReleased
   | idxReplaceUnhashed | sendBufNoMem | sendSkbInet | sendSkbInet6 | sendSkbOk
+  -- socket.c:203-233 wg_socket_send_buffer_as_reply_to_skb (the receive audit's F3)
+  | replyInSkbNull | replyEndpointErr | replyNoMem | replyInet | replyInet6
   | initRateLimited | initCreated | initNoIdentity | initNoEphemeral | initEsFailed | initSsFailed
   | idxInsWalk1 | idxInsCollide1 | idxInsWalk2 | idxInsCollide2 | idxWalk | idxTypeMatch | idxPeerAlive
   -- D1 stream B
@@ -1156,6 +1162,9 @@ def Decision.info : Decision → DecisionInfo
   -- drivers/net/wireguard/cookie.c
   | .macInvalid => d "wg_cookie_validate_packet.mac1_invalid" wck 132 [(133, 133)] [(135, 135)]
   | .macNoCookieCheck => d "wg_cookie_validate_packet.no_cookie_check" wck 137 [(138, 138)] [(140, 140)]
+  -- `if (!wg_ratelimiter_allow(skb, net)) goto out` (cookie.c:147-148): true keeps
+  -- VALID_MAC_WITH_COOKIE_BUT_RATELIMITED, false reaches VALID_MAC_WITH_COOKIE (:150)
+  | .macRatelimited => d "wg_cookie_validate_packet.ratelimited" wck 147 [(148, 148)] [(150, 150)]
   -- E-B: under load, make_cookie then compute_mac2; the memneq fails for a
   -- valid-MAC1 initiation with no cookie (true → goto out = VALID_MAC_BUT_NO_COOKIE).
   -- The true side shares the `out:` epilogue; the false side reaches the ratelimiter.
@@ -1252,6 +1261,14 @@ def Decision.info : Decision → DecisionInfo
   | .sendSkbInet => d "wg_socket_send_skb_to_peer.inet" wso 174 [(175, 176)] [(177, 177)]
   | .sendSkbInet6 => d "wg_socket_send_skb_to_peer.inet6" wso 177 [(178, 179)] [(181, 181)]
   | .sendSkbOk => d "wg_socket_send_skb_to_peer.sent" wso 182 [(183, 183)] []
+  -- wg_socket_send_buffer_as_reply_to_skb (socket.c:203-233), listed 2026-10-14
+  -- (the receive audit's F3): the NULL-skb and endpoint-error returns, the
+  -- GFP_ATOMIC alloc_skb (A's `replySkb` site) and the family switch
+  | .replyInSkbNull => d "wg_socket_send_buffer_as_reply_to_skb.no_skb" wso 211 [(212, 212)] []
+  | .replyEndpointErr => d "wg_socket_send_buffer_as_reply_to_skb.endpoint_error" wso 214 [(215, 215)] []
+  | .replyNoMem => d "wg_socket_send_buffer_as_reply_to_skb.no_mem" wso 218 [(219, 219)] [(220, 222)]
+  | .replyInet => d "wg_socket_send_buffer_as_reply_to_skb.inet" wso 224 [(225, 225)] []
+  | .replyInet6 => d "wg_socket_send_buffer_as_reply_to_skb.inet6" wso 226 [(227, 227)] []
   -- the early return at 27 shares the function's epilogue: no witness
   | .initRateLimited => d "wg_packet_send_handshake_initiation.rate_limited" wsd 25 [] [(29, 33)]
   | .initCreated => d "wg_packet_send_handshake_initiation.created" wsd 34 [(35, 42)] []
@@ -2073,6 +2090,9 @@ def Decision.info : Decision → DecisionInfo
   | .rlAllow => d "wg_ratelimiter_allow.allow" wrl 126 [] []
   | .rlOverLimit => d "wg_ratelimiter_allow.over_max_entries" wrl 135 [(136, 136)] [(138, 138)]
   | .rlAllocFail => d "wg_ratelimiter_allow.alloc_failed" wrl 139 [(140, 140)] [(142, 142)]
+  -- `else if (skb->protocol == htons(ETH_P_IPV6))` (:101): the /64 key and the
+  -- IPv6 table (:103-105); the `else return false` arm (:109) is for neither family
+  | .rlProtoIp6 => d "wg_ratelimiter_allow.inet6" wrl 101 [(103, 105)] [(109, 109)]
   -- seccomp stream V: kernel/seccomp.c (docs/2026-10-12-seccomp-design.md, 2.1-2.4, 2.8-2.10).
   -- __secure_computing (:1378-1404): the switch on the mode
   | .secureComputingStrict => d "__secure_computing.case_strict" sec 1391 [(1392, 1393)] []
@@ -2483,6 +2503,13 @@ def Decision.comparison : Decision → Option Comparison
   -- `is_valid && !expired` spans cookie.c:170-172: the age test is recorded
   -- at 170 with the `is_valid` byte test (measured, e_cookie_then_reinitiate)
   | .addMacCookieFresh => some ⟨.le, false, some 170, false⟩
+  -- `under_load = atomic_read(&wg->handshake_queue_len) >= MAX_QUEUED_INCOMING_HANDSHAKES / 8`
+  -- (receive.c:112-113): an int against the constant 512; the compare is
+  -- attributed to the `if (under_load)` at :114 (measured on s2: the
+  -- comparison site is :114, none at :112-113), so the decision's own line;
+  -- declared with operands since 2026-10-14 (the receive audit's F9, the
+  -- pre-release review's section 8)
+  | .hsUnderLoad => some ⟨.ge, true, none, false⟩
   -- `under_load = !wg_birthdate_has_expired(last_under_load, 1)` is at
   -- receive.c:117; the decision's line is the `if (!under_load)` at 118
   | .hsDecayExpired => some ⟨.le, false, some 117, false⟩
@@ -3066,6 +3093,9 @@ def Decision.repeatable : Decision → Bool
   -- P stream 2 signal (end)
   -- E-B arm C: the ratelimiter bucket walk compares each entry
   | .rlEntryMatch => true
+  -- several leading valids in one flood operation evaluate these per packet
+  | .macRatelimited | .rlProtoIp6 | .replyInSkbNull | .replyEndpointErr | .replyNoMem
+  | .replyInet | .replyInet6 => true
   -- W12 (docs/2026-10-06-w3-w12.md, Part II): a timer callback runs once
   -- per due peer in one pass, so its decisions repeat within the
   -- advance's operation

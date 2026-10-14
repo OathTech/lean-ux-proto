@@ -16,6 +16,9 @@ def main (args : List String) : IO UInt32 := do
     output.putStrLn Leanux.Runner.hiddenSitesJson.compress
     return 0
   let domainOnly := args == ["--domain"]
+  -- the flood summary's check mode (docs/2026-10-05-e-dos.md, the pre-release
+  -- review's section 8): the invalid tail unsummarised
+  let floodExact := (← IO.getEnv "LEANUX_FLOOD_EXACT") == some "1"
   if !args.isEmpty && !domainOnly then
     errors.putStrLn "usage: leanux-model [--decisions | --hidden-sites | --domain] < traces.jsonl"
     return 2
@@ -36,7 +39,7 @@ def main (args : List String) : IO UInt32 := do
     | .ok trace =>
       -- `--domain` runs before Linux, without hidden-input records: their
       -- reads return placeholders, and the check's run is authoritative
-      match Leanux.Runner.executeTrace trace (placeholders := domainOnly) with
+      match Leanux.Runner.executeTrace trace (placeholders := domainOnly) (floodExact := floodExact) with
       | .error (index, .outsideDomain site what) =>
         if domainOnly then
           -- `--domain`: report whether each trace stays inside the modeled domain

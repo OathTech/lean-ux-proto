@@ -322,6 +322,15 @@ def wgXmit (family addr : Nat) (pkts : List Packet) (mtu : Nat) : M Int := do
     -- socket, and the kernel's own IP layer never hands wg_xmit a bad nibble.
     modifyDev fun d => { d with txErrors := d.txErrors + 1 }
     return -EPROTONOSUPPORT
+  -- the lookup key is the packet's own destination (device.c:153;
+  -- allowedips.c:360-362 read `ip_hdr(skb)->daddr` / `ipv6_hdr(skb)->daddr`):
+  -- the environment hands the datagram's destination beside the bytes it
+  -- built from it, so the two must agree, for every segment of a GSO list
+  -- (the device audit's X6; fail-closed at the environment boundary)
+  for p in pkts do
+    let field (off len : Nat) := ((p.bytes.drop off).take len).foldl (fun acc b => acc * 256 + b.toNat) 0
+    let dst := if family == 4 then field 16 4 else field 24 16
+    if dst != addr then invariant "the environment's destination disagrees with the packet header"
   let err (ret : Int) : M Int := do
     -- err_icmp: icmp_ndo_send / icmpv6_ndo_send (cut points, whose rate limit
     -- and IP output draw cut-site choices), then err. The error is sent iff

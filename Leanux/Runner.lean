@@ -61,7 +61,7 @@ inductive Operation where
       with `messages` valid-MAC1 initiations submitted first (processed under
       load via the queue depth, their cookie replies checked byte-exact);
       docs/2026-10-05-e-dos.md §8. -/
-  | wgFlood (count port : Nat) (messages : List (List UInt8))
+  | wgFlood (count port family : Nat) (messages : List (List UInt8))
   /-- W7: an io_uring batch of injects and transmits (docs/2026-10-06-w4-w7-transmit-bulk.md, 5.5). -/
   | wgBatch (items : List Env.BatchItem) (waitMs : Nat)
   /-- D3: the virtual time advance (harness/trace.py `wg_advance`). -/
@@ -143,7 +143,7 @@ structure Trace where
 def Trace.net (t : Trace) : Bool :=
   t.ops.any fun
     | .wgSet _ | .wgGet _ | .wgUp | .wgXmit .. | .wgObserve | .wgInject .. | .wgAdvance _
-    | .wgFlood _ _ _ | .wgCreate | .wgDown | .wgDelete | .wgSetMtu _ | .wgBatch _ _
+    | .wgFlood _ _ _ _ | .wgCreate | .wgDown | .wgDelete | .wgSetMtu _ | .wgBatch _ _
     | .wgDeladdr _ | .wgDelroute _ | .wgNetnsClose | .wgGetStart _ | .wgGetRecv => true
     | _ => false
 
@@ -647,9 +647,17 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
     -- the mirror must NOT model) is a fixture-only field the mirror ignores: it
     -- lands in the discarded region and makes the check fail closed.
     let obj ← j.getObj?
-    if !(obj.all (fun k _ => ["op", "count", "port", "messages", "control"].contains k)
+    if !(obj.all (fun k _ => ["op", "count", "port", "family", "messages", "control"].contains k)
         && obj.contains "op" && obj.contains "count" && obj.contains "port") then
-      throw "expected op, count, port and optionally messages, control"
+      throw "expected op, count, port and optionally family, messages, control"
+    -- `family` (optional, default 4): the flood's destination, the v4-mapped
+    -- 127.0.0.1 or ::1 (the ratelimiter's IPv6 /64 table, 2026-10-14)
+    let family ← match j.getObjVal? "family" with
+      | .ok v => do
+        let n ← v.getNat?
+        if n != 4 && n != 6 then throw "family: expected 4 or 6"
+        pure n
+      | .error _ => pure 4
     let count ← natField j "count" (2 ^ 20)
     if count == 0 then throw "count: expected 1-2^20"
     let port ← natField j "port" 65535
@@ -661,7 +669,7 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
           hexBytes m s.length "messages"
       | .ok _ => throw "messages: expected an array"
       | .error _ => pure []
-    return .wgFlood count port messages
+    return .wgFlood count port family messages
   | "wg_batch" =>
     -- W7 (docs/2026-10-06-w4-w7-transmit-bulk.md, 5.5): `items`, each
     -- `{kind: "inject", family, port, message}` or `{kind: "xmit", packet}`;
@@ -999,7 +1007,7 @@ def toSyscall (results : Array Int) (ends : Array (Option (Nat × Nat))) (index 
   | .wgInject family port message tos ll dest => .wgInject family port message tos ll dest
   | .wgDeladdr family => .wgDeladdr family
   | .wgDelroute family => .wgDelroute family
-  | .wgFlood count port messages => .wgFlood count port messages
+  | .wgFlood count port family messages => .wgFlood count port family messages
   | .wgBatch items waitMs => .wgBatch items waitMs
   | .wgAdvance ticks => .wgAdvance ticks
   | .wgCreate => .wgCreate
@@ -1014,7 +1022,7 @@ def toSyscall (results : Array Int) (ends : Array (Option (Nat × Nat))) (index 
 
 /-- Run a trace. A `Stop` is returned with the operation index: the mirror
     never reports an observation for a path it does not model. -/
-def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat × Stop) Json := do
+def executeTrace (trace : Trace) (placeholders : Bool := false) (floodExact : Bool := false) : Except (Nat × Stop) Json := do
   let mut world : World := { k := initialKernel trace.rlimit trace.net trace.bare trace.foreign trace.stepped trace.seccompChild, env := harnessEnv,
                              timing := Env.timing, portBound := Env.portBound,
                              fixtureNetDevices := Env.fixtureNetDevices,
@@ -1022,6 +1030,7 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
                              netnsCHolders := if trace.foreign then [9, 8, 5, 4] else [],
                              allocArmed := trace.allocArmed, routes := trace.routes,
                              hiddenPlaceholders := placeholders && trace.hidden.isNone,
+                             floodExact,
                              steerValues := if placeholders then trace.steer else [],
                              armRecords := trace.armRecords, dstCacheRecords := trace.dstCacheRecords,
                              napiBeforePut := trace.napiBeforePut,

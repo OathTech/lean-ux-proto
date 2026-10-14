@@ -214,11 +214,75 @@ def write_steered(subdir, cases):
         (out / f"{name}.json").write_text(json.dumps(trace, indent=2) + "\n")
 
 
+def boundary_traces():
+    """The under_load threshold (receive.c:112-113, `>= MAX_QUEUED_INCOMING_HANDSHAKES
+    / 8` = 512): the worker sees the batch's size on its first packet (the counter
+    is decremented after the packet, receive.c:215), so one leading valid at a
+    batch of 511 is not under load (consumed: a handshake response), at 512 and
+    513 it is (a cookie reply). The compare's operands are checked
+    (`.hsUnderLoad` declared with them, 2026-10-14; the receive audit's F9, the
+    pre-release review's section 8)."""
+    v1 = valid_initiation(0x1111_1111, b"\x51" * 32)
+    return {
+        "e_underload_511": dict(ops=[CREATE, configure_peer(), UP, flood(leading=[v1], count=510), OBSERVE, GET],
+                                expect=["wg_receive_handshake_packet.under_load=0",
+                                        "wg_receive_handshake_packet.initiation=1",
+                                        "wg_noise_handshake_consume_initiation.flood=0"]),
+        "e_underload_512": dict(ops=base_ops() + [flood(leading=[v1], count=511), OBSERVE, GET],
+                                expect=["wg_receive_handshake_packet.under_load=1"]),
+        "e_underload_513": dict(ops=base_ops() + [flood(leading=[v1], count=512), OBSERVE, GET],
+                                expect=["wg_receive_handshake_packet.under_load=1"]),
+    }
+
+
+SENDER_SADDR6 = bytes(15) + b"\x01"   # ::1, the flood's source when family is 6
+
+
+def rl_initiation6(ephemeral, sec, index):
+    """`rl_initiation` over IPv6: make_cookie hashes the 16-byte source ::1."""
+    cookie = noise.make_cookie(RL_SECRET, SENDER_SADDR6, SENDER_SPORT)
+    init = noise.initiation(noise.public_key(d1.DEVICE), d1.PEER, ephemeral, noise.tai64n(sec, 0), index)
+    return noise.with_mac2(init, cookie)
+
+
+def ratelimit6_traces():
+    """arm C over IPv6 (ratelimiter.c:101-106): the flood and the valid-MAC2
+    initiations arrive from ::1, so the ratelimiter keys the source /64 in its
+    IPv6 table (`.rlProtoIp6`). Two initiations: both allowed (the second hits
+    the bucket), as the IPv4 trace. Six: the entry is inserted with four
+    tokens left (TOKEN_MAX - PACKET_COST), the second to fifth are allowed and
+    deducted (each then dropped by noise.c's own 50/s consumption check), and
+    the sixth is denied: VALID_MAC_WITH_COOKIE_BUT_RATELIMITED, an invalid MAC
+    under load, dropped (`.macRatelimited=1`, `.rlAllow=0`). The receive
+    audit's F12; the pre-release review's limitations table."""
+    steer = [["cookie_secret", RL_SECRET.hex()],
+             ["resp_ephemeral", d1.RESP_EPHEMERAL.hex()], ["index_draw", d1.le32(RL_INDEX_1)]]
+    two = flood(leading=[rl_initiation6(d1.PEER_EPHEMERAL, 1, d1.PEER_INDEX),
+                         rl_initiation6(d1.PEER_EPHEMERAL_2, 2, d1.PEER_INDEX_2)], family=6)
+    six = flood(leading=[rl_initiation6(bytes([0x60 + i]) * 32, i + 1, 0x0600_0000 + i) for i in range(6)],
+                family=6)
+    return {
+        "e_underload_ratelimit6": dict(ops=[CREATE, configure_peer(), UP, two, OBSERVE, GET], steer=steer,
+                                       expect=["wg_receive_handshake_packet.initiation=1",
+                                               "wg_ratelimiter_allow.inet6=1",
+                                               "wg_ratelimiter_allow.entry_matches=1",
+                                               "wg_cookie_validate_packet.ratelimited=0"]),
+        "e_underload_ratelimit6_deny": dict(ops=[CREATE, configure_peer(), UP, six, OBSERVE, GET], steer=steer,
+                                            expect=["wg_ratelimiter_allow.inet6=1",
+                                                    "wg_ratelimiter_allow.allow=1",
+                                                    "wg_ratelimiter_allow.allow=0",
+                                                    "wg_cookie_validate_packet.ratelimited=1"]),
+    }
+
+
 def main():
     write_suite("wireguard", traces())
+    write_suite("wireguard", boundary_traces())
     write_steered("wireguard", ratelimit_traces())
+    write_steered("wireguard", ratelimit6_traces())
     write_suite("underload-controls", controls())
-    print(f"wrote {len(traces())} + {len(ratelimit_traces())} wireguard and {len(controls())} control traces")
+    print(f"wrote {len(traces()) + len(boundary_traces())} + {len(ratelimit_traces()) + len(ratelimit6_traces())} "
+          f"wireguard and {len(controls())} control traces")
 
 
 if __name__ == "__main__":

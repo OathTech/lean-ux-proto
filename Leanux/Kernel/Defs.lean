@@ -584,6 +584,10 @@ structure Ratelimiter where
       stale entries arms a timer (D3); its firing is out of scope on this base
       (no timer source here), so entries persist for the trace. -/
   table : List (Nat × Int × Int) := []
+  /-- `table_v6` (ratelimiter.c:23, :100-106): the IPv6 entries, keyed by the
+      source /64 (the first eight bytes of the address, `memcpy(&ip, &saddr, 8)`),
+      the same bucket algorithm; modelled 2026-10-14 (the receive audit's F12). -/
+  table6 : List (Nat × Int × Int) := []
   deriving Repr, BEq
 
 /-- Whole-kernel mirror state. `nrFiles`/`maxFiles` mirror the system-wide
@@ -1474,6 +1478,11 @@ structure World where
       which runs before Linux). -/
   hiddenPlaceholders : Bool := false
   placeholderCount : Nat := 0
+  /-- `LEANUX_FLOOD_EXACT=1`: a flood's invalid tail runs through the real
+      worker packet by packet instead of `floodTailEffect`'s summary, to
+      check the summary against the unsummarised execution (the pre-release
+      review's section 8). -/
+  floodExact : Bool := false
   /-- W7 phase 2: the draining workers' activations suspended at a
       `cond_resched`, oldest first, each resumed when the records name it
       (`Activation`, `Env.schedule`). An operation ends with none suspended

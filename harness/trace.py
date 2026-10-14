@@ -345,8 +345,12 @@ def validate_trace(trace):
         if name == "wg_flood":
             # E-B: `messages` (leading valid initiations the mirror checks) and
             # `control` (one mid-flood valid the mirror must not model) optional
-            if not FIELDS[name] <= set(op) <= FIELDS[name] | {"messages", "control"}:
-                raise InvalidTrace(f"ops[{i}]: expected {sorted(FIELDS[name])} and optionally messages, control")
+            if not FIELDS[name] <= set(op) <= FIELDS[name] | {"family", "messages", "control"}:
+                raise InvalidTrace(f"ops[{i}]: expected {sorted(FIELDS[name])} and optionally family, messages, control")
+            # the flood's destination family (default 4, the v4-mapped 127.0.0.1; 6 is
+            # ::1, the ratelimiter's /64 table, 2026-10-14)
+            if op.get("family", 4) not in (4, 6):
+                raise InvalidTrace(f"ops[{i}].family: expected 4 or 6")
             pipes = False
         elif name == "wg_batch":
             if not FIELDS[name] <= set(op) <= FIELDS[name] | {"wait_ms"}:
@@ -442,10 +446,10 @@ def validate_trace(trace):
             # the leading valids and the optional control are 148-byte (296-hex)
             # handshake initiations (the guest submits them as fixed-size slots)
             messages = op.get("messages", [])
-            if type(messages) is not list or len(messages) > 4 or any(
+            if type(messages) is not list or len(messages) > 8 or any(
                     type(m) is not str or not re.fullmatch(r"(?:[0-9a-f]{2}){148}", m, re.ASCII)
                     for m in messages):
-                raise InvalidTrace(f"ops[{i}].messages: expected 0-4 leading 148-byte initiations (hex)")
+                raise InvalidTrace(f"ops[{i}].messages: expected 0-8 leading 148-byte initiations (hex)")
             if "control" in op and (type(op["control"]) is not str
                                     or not re.fullmatch(r"(?:[0-9a-f]{2}){148}", op["control"], re.ASCII)):
                 raise InvalidTrace(f"ops[{i}].control: expected a 148-byte initiation (hex)")
@@ -768,6 +772,7 @@ def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False, allo
                 a = op["ticks"]
             if op["op"] == "wg_flood":
                 a, b = op["count"], op["port"]
+                op_value = str(op.get("family", 4))   # the value field carries the family
             if op["op"] == "wg_batch":
                 # W7: a = the item count, b = the guest's wait after the submission (ms)
                 a, b = len(op["items"]), op.get("wait_ms", 100)
