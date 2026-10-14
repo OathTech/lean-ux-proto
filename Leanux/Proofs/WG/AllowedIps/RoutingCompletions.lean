@@ -2,24 +2,30 @@ import Leanux.Proofs.WG.AllowedIps.RoutingRetains
 import Leanux.Proofs.WG.AllowedIps.ConfigurationInputs
 import Leanux.Proofs.Logged.PrefixLoops
 
-/-! Completed whole setAllowedip calls, including guard rejection and normal
-allocation refusals. Events carry actual views and returns; semantic validity
+/-! Completed whole setAllowedip and removeByPeer calls, including attribute
+guard rejection and normal allocation refusals. The explicit call sum carries
+actual views and signed attribute returns; semantic validity
 is proved separately from unconditional erasure. No event or World is returned
 for a primitive which Stops, while earlier completed events remain available. -/
 namespace Leanux.Proofs.WG.AllowedIps
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
 set_option pp.structureInstances false
 
+inductive RoutingCompletedCall where
+  | allowedIp (pid : PeerId) (attrs : AllowedIpAttrs) (result : Int)
+  | removePeer (pid : PeerId)
+
 structure RoutingCompletion where
-  pid : PeerId
-  attrs : AllowedIpAttrs
-  result : Int
+  call : RoutingCompletedCall
   before : Option RoutingState
   after : Option RoutingState
 
 def RoutingCompletion.flat (e : RoutingCompletion) (xs : FlatTable × FlatTable) :=
-  (RoutingCall.insert (e.attrs.family.getD 0 == AF_INET)
-    (e.attrs.addr.getD 0) (e.attrs.cidr.getD 0) e.pid e.result).flat xs
+  match e.call with
+  | .allowedIp pid attrs result =>
+    (RoutingCall.insert (attrs.family.getD 0 == AF_INET)
+      (attrs.addr.getD 0) (attrs.cidr.getD 0) pid result).flat xs
+  | .removePeer pid => (RoutingCall.remove pid).flat xs
 
 def completionFold (h : List RoutingCompletion) (xs : FlatTable × FlatTable) :=
   h.foldl (fun tables e => e.flat tables) xs
@@ -28,13 +34,19 @@ def completionFold (h : List RoutingCompletion) (xs : FlatTable × FlatTable) :=
     completionFold (h ++ k) xs = completionFold k (completionFold h xs) :=
   List.foldl_append
 
-/-- The source witness is about the whole attribute call, never a fabricated
-insertion on guard rejection. Flat agreement is a semantic obligation, not a
+/-- The source witness is about the whole selected primitive, never a fabricated
+insertion on guard rejection or whole peer-object removal. Flat agreement is a semantic obligation, not a
 field supplied by the executable event constructor. -/
 def RoutingCompletion.Valid (xs : FlatTable × FlatTable) (e : RoutingCompletion) : Prop :=
-  AddressShape e.attrs ∧ RoutedView e.before xs ∧ RoutedView e.after (e.flat xs) ∧
-  ∃ w v, routingView w = e.before ∧ routingView v = e.after ∧
-    (setAllowedip e.pid e.attrs).run w = .ok (e.result, v)
+  match e.call with
+  | .allowedIp pid attrs result =>
+    AddressShape attrs ∧ RoutedView e.before xs ∧ RoutedView e.after (e.flat xs) ∧
+    ∃ w v, routingView w = e.before ∧ routingView v = e.after ∧
+      (setAllowedip pid attrs).run w = .ok (result, v)
+  | .removePeer pid =>
+    RoutedView e.before xs ∧ RoutedView e.after (e.flat xs) ∧
+    ∃ w v, routingView w = e.before ∧ routingView v = e.after ∧
+      (removeByPeer pid).run w = .ok ((), v)
 
 inductive CompletionSafe (initial : FlatTable × FlatTable) : List RoutingCompletion → Prop where
   | nil : CompletionSafe initial []
@@ -85,13 +97,13 @@ def completedAllowedip (pid : PeerId) (ip : AllowedIpAttrs) : PrefixM RoutingCom
     match (setAllowedip pid ip).run w with
     | .error e => (.error e, h)
     | .ok (ret, v) =>
-      (.ok (ret, v), h ++ [⟨pid, ip, ret, routingView w, routingView v⟩])
+      (.ok (ret, v), h ++ [⟨.allowedIp pid ip ret, routingView w, routingView v⟩])
 
 theorem completedAllowedip_run (pid : PeerId) (ip : AllowedIpAttrs) (w : World) (h : List RoutingCompletion) :
     runPrefix (completedAllowedip pid ip) w h =
       match (setAllowedip pid ip).run w with
       | .error e => (.error e, h)
-      | .ok (ret, v) => (.ok (ret, v), h ++ [⟨pid, ip, ret, routingView w, routingView v⟩]) := rfl
+      | .ok (ret, v) => (.ok (ret, v), h ++ [⟨.allowedIp pid ip ret, routingView w, routingView v⟩]) := rfl
 
 theorem completedAllowedip_erases (pid : PeerId) (ip : AllowedIpAttrs) :
     ErasesPrefix (completedAllowedip pid ip) (setAllowedip pid ip) := by
@@ -110,7 +122,7 @@ theorem completedAllowedip_preserves (initial : FlatTable × FlatTable)
     exact ⟨[], by simp, hi.1.1, trivial⟩
   | ok out =>
     obtain ⟨ret, v⟩ := out
-    let e : RoutingCompletion := ⟨pid, ip, ret, routingView w, routingView v⟩
+    let e : RoutingCompletion := ⟨.allowedIp pid ip ret, routingView w, routingView v⟩
     have hout := setAllowedip_routed_target pid ip hs hi.1.2 hi.2 hr
     have hv : e.Valid (completionFold h initial) := ⟨hs, hi.1.2, hout.1, w, v, rfl, rfl, hr⟩
     have safe := CompletionSafe.snoc hi.1.1 hv
@@ -138,5 +150,56 @@ theorem completion_lift_same (initial : FlatTable × FlatTable) (pid : PeerId)
   · exact fun _ _ hi => hi.1.1
   · intro h w x v hi hr
     simpa only [CompletionTarget, CompletionState, ha w x v hr] using hi
+
+theorem removeByPeer_routed (pid : PeerId)
+    (hi : RoutedView (routingView w) xs)
+    (hr : (removeByPeer pid).run w = .ok ((), v)) :
+    RoutedView (routingView v) ((RoutingCall.remove pid).flat xs) ∧
+      RoutingResident pid (routingView v) := by
+  obtain ⟨d, t4, t6, hd, hinv, h4, h6⟩ := hi.realize
+  have step : RoutingStep w (.remove pid) v := .remove hr
+  obtain ⟨out, u4, u6, hout, ho, he4, he6⟩ := step.refines hd hinv h4 h6
+  refine ⟨⟨out, u4, u6, by simp [routingView, hout], ho, he4, he6⟩, ?_⟩
+  obtain ⟨p, hp⟩ := removeByPeer_input_resident w v d pid hd hr
+  obtain ⟨out', hk, hm⟩ := removeByPeer_endpoint w v d hd pid p hp t4 t6 hinv.forest
+    hinv.nodup4 hinv.nodup6 hinv.compressed4 hinv.compressed6 hinv.lists hr
+  exact routingResident_of_peer (by rw [hk]) (hm.target_empty hp)
+
+def completedRemovePeer (pid : PeerId) : PrefixM RoutingCompletion Unit :=
+  fun w => ExceptT.mk fun h =>
+    match (removeByPeer pid).run w with
+    | .error err => (.error err, h)
+    | .ok ((), v) => (.ok ((), v), h ++ [⟨.removePeer pid, routingView w, routingView v⟩])
+
+theorem completedRemovePeer_run (pid : PeerId) (w : World) (h : List RoutingCompletion) :
+    runPrefix (completedRemovePeer pid) w h =
+      match (removeByPeer pid).run w with
+      | .error err => (.error err, h)
+      | .ok ((), v) => (.ok ((), v), h ++ [⟨.removePeer pid, routingView w, routingView v⟩]) := rfl
+
+theorem completedRemovePeer_erases (pid : PeerId) :
+    ErasesPrefix (completedRemovePeer pid) (removeByPeer pid) := by
+  intro w h
+  rw [completedRemovePeer_run]
+  cases hr : (removeByPeer pid).run w with
+  | error e => rfl
+  | ok out => cases out with | mk u v => cases u; rfl
+
+theorem completedRemovePeer_spec (initial : FlatTable × FlatTable) (pid : PeerId) :
+    PrefixEnsures (CompletionState initial) (CompletionSafe initial)
+      (completedRemovePeer pid) (fun _ => CompletionTarget initial pid) := by
+  intro w h hi
+  rw [completedRemovePeer_run]
+  cases hr : (removeByPeer pid).run w with
+  | error err => exact ⟨[], by simp, hi.1, trivial⟩
+  | ok out =>
+    obtain ⟨u, v⟩ := out
+    cases u
+    let e : RoutingCompletion := ⟨.removePeer pid, routingView w, routingView v⟩
+    have hout := removeByPeer_routed pid hi.2 hr
+    have hv : e.Valid (completionFold h initial) := ⟨hi.2, hout.1, w, v, rfl, rfl, hr⟩
+    have safe := CompletionSafe.snoc hi.1 hv
+    refine ⟨[e], rfl, safe, ⟨⟨safe, ?_⟩, hout.2⟩⟩
+    simpa [completionFold, List.foldl_append, e, RoutingCompletion.flat] using hout.1
 
 end Leanux.Proofs.WG.AllowedIps

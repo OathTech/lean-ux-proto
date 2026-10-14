@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Configuration.PeerUpdateCompletion
+import Leanux.Proofs.WG.AllowedIps.RoutingAcquire
 import Leanux.Proofs.WG.Configuration.PeerTailCompletion
 import Leanux.Proofs.WG.AllowedIps.ConfigurationInputs
 import Leanux.Proofs.WG.AllowedIps.ClearWalk
@@ -43,11 +45,13 @@ creation and raw release preserve routing coherence, permitting orphan owners.
 Finite normal create/insert/remove/release/clear histories from the original configured
 fixture refine independent canonical flat-prefix updates and actual-root lookup.
 Their input bounds and resident insertion targets are explicit. Whole local
-setAllowedip completions and the original peer-configuration tail additionally
+setAllowedip/removal completions and the original acquired-peer configuration stage additionally
 retain semantically valid completed prefixes on later Stops, using concrete
-send/cleanup routing frames that permit peer deletion. Their entry routing,
+send/flush/cleanup routing frames that permit peer deletion. Actual lookup/create
+contracts derive raw-slot residency separately. Their entry routing,
 resident target and local address-shape premises remain explicit; enclosing
-Netlink/configuration/Runner closure and packet admission remain separate.
+setPeerCmd preflight composition, Netlink/configuration/Runner closure and packet
+admission remain separate.
 Actual local parser output now discharges address shape for the setAllowedip
 guards and its selected bounded insertion. Complete original free normally
 clears both represented families and every resident list, preserving the other
@@ -1748,5 +1752,57 @@ theorem original_peerConfigTail_routing_prefix (initial : FlatTable × FlatTable
     Logged.PrefixEnsures (CompletionTarget initial pid) (CompletionSafe initial)
       (Configuration.peerConfigTailObserved a peer pid) (fun _ => CompletionState initial) :=
   Configuration.peerConfigTailObserved_spec initial a shape peer pid
+
+/-- Removal, peer death/removal and the complete acquired-peer update stage
+have exact original erasure for all inputs. The journal records the nested
+removeByPeer normal cut before later peer cleanup or flushing can Stop; it does
+not label that cut as completion of whole peer-object removal. -/
+theorem original_peer_update_completion_erasure (pid : WG.PeerId) (peer : Option WG.PeerId)
+    (a : WG.PeerAttrs) (flags : UInt32) (psk : Option WG.Key) :
+    Logged.ErasesPrefix (completedRemovePeer pid) (WG.removeByPeer pid) ∧
+    Logged.ErasesPrefix (Configuration.peerMakeDeadObserved pid) (WG.peerMakeDead pid) ∧
+    Logged.ErasesPrefix (Configuration.peerRemoveObserved peer) (WG.peerRemove peer) ∧
+    Logged.ErasesPrefix (Configuration.peerConfigUpdateObserved a peer flags psk pid)
+      (Configuration.peerConfigUpdateSource a peer flags psk pid) :=
+  ⟨completedRemovePeer_erases pid, Configuration.peerMakeDeadObserved_erases pid,
+    Configuration.peerRemoveObserved_erases peer,
+    Configuration.peerConfigUpdateObserved_erases a peer flags psk pid⟩
+
+/-- Completed routing removal derives its flat owner filtering and target
+residency from the original normal call. Peer-object removal may subsequently
+delete peers or Stop during flushing; its earlier completed routing prefix
+remains safe, and only normal returns carry reached routing/flat agreement. -/
+theorem original_peer_removal_routing_prefix (initial : FlatTable × FlatTable)
+    (pid : WG.PeerId) (peer : Option WG.PeerId) :
+    Logged.PrefixEnsures (CompletionState initial) (CompletionSafe initial)
+      (completedRemovePeer pid) (fun _ => CompletionTarget initial pid) ∧
+    Logged.PrefixEnsures (CompletionState initial) (CompletionSafe initial)
+      (Configuration.peerRemoveObserved peer) (fun _ => CompletionState initial) :=
+  ⟨completedRemovePeer_spec initial pid, Configuration.peerRemoveObserved_spec initial peer⟩
+
+/-- The actual acquired-peer update stage covers REMOVE_ME, preshared-key and
+endpoint changes, REPLACE_ALLOWEDIPS and the complete allowed-IP/send tail.
+Its explicit local routing/target/shape inputs derive safe completed prefixes
+on every outcome and routing/flat agreement on normal returns. No drain-success,
+reference-credit or affiliation premise is imposed. The public preflight/acquire
+composition of setPeerCmd remains outside this stage theorem. -/
+theorem original_peer_update_routing_prefix (initial : FlatTable × FlatTable)
+    (a : WG.PeerAttrs) (shape : Configuration.PeerAddressShape a)
+    (peer : Option WG.PeerId) (flags : UInt32) (psk : Option WG.Key) (pid : WG.PeerId) :
+    Logged.PrefixEnsures (CompletionTarget initial pid) (CompletionSafe initial)
+      (Configuration.peerConfigUpdateObserved a peer flags psk pid) (fun _ => CompletionState initial) :=
+  Configuration.peerConfigUpdateObserved_spec initial a shape peer flags psk pid
+
+/-- Actual public-key-table lookup and peer creation establish the returned
+raw-slot residency. Lookup preserves the routing view; creation/refusal preserves
+flat agreement while retaining its actual allocator effects. No public-key/peer
+identity affiliation or full setPeerCmd composition is asserted. -/
+theorem original_configuration_acquisition_routing (initial : FlatTable × FlatTable)
+    (key : WG.Key) (psk : Option WG.Key) :
+    Logged.PrefixEnsures (CompletionState initial) (CompletionSafe initial)
+      (Logged.liftPrefix (WG.pubkeyLookup key)) (CompletionAcquired initial) ∧
+    Logged.PrefixEnsures (CompletionState initial) (CompletionSafe initial)
+      (Logged.liftPrefix (WG.peerCreate key psk)) (CompletionCreated initial) :=
+  ⟨pubkeyLookup_completion initial key, peerCreate_completion initial key psk⟩
 
 end Leanux.Proofs.WG.CryptokeyRouting

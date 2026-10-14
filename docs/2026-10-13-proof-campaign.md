@@ -15,22 +15,20 @@ retains current architecture, findings, reproduction provenance, effort and limi
 | --- | --- |
 | R1 | Uniqueness and the intentional inclusive-floor correction are proved, with pure and accepted-run witnesses. |
 | R2 | Endpoint identity and failure-retaining access contracts cover the listed families, concrete Batch scheduling and isolated trials. The complete-FS extension adds strong frames and exact allocation-safe lifts for all eleven FS dispatch arms and actual taskWorkRun; compatibility/scoped/full targets pass 109/251/391 jobs. Independent frozen review and coordinated checks pass for this extension. Initialized whole-run allocation-identity access closure remains open; raw-reference affiliation/credit is a separate stronger property. |
-| R3 | Initialized finite normal call histories refine flat-prefix updates and reached-root lookup, including full normal clear. Four new completion-journal exports cover whole setAllowedip calls and the actual peer-configuration tail, with concrete send/cleanup frames and safe completed prefixes on Stop. Scoped/full targets, independent frozen review and coordinated validation pass. Enclosing configuration/Runner closure and packet paths remain open. |
+| R3 | Initialized finite normal call histories refine flat-prefix updates and reached-root lookup, including full normal clear. Completed setAllowedip/removal events now cover the entire acquired-peer update, with concrete send/flush/cleanup frames and separately derived lookup/create residency. Scoped/full targets, independent frozen source/export/documentation review and coordinated checks pass. Public setPeerCmd preflight composition, enclosing configuration/Runner closure and packet paths remain open. |
 | R4 | Physical rings, finite/source journals, per-poll provenance and selected GRO order, and concrete RX scheduling are checked. The balanced lookup/release extension passes coordinated validation. The six-export W7 joint-observer/source-cut extension passes coordinated validation. Five further normal endpoint exports pass scoped/full and coordinated validation and independent frozen review. Accepted input refutes chronological post-GRO order. Joint pipeline conservation remains open. |
 | R5 | The unconditional age/post-zero and wire-nonce readings are false in accepted mirror inputs. Rule Zero resolution retains thirteen positive local contracts, without universal replacement transport claims. |
 | R6 | Cookie exclusion is proved at its original call boundary. A 19-retry/20-initiation episode refutes literal MAX=18; no universal corrected retry bound is claimed. |
 
-**Validation status.** The current coordinated checkpoint passes 391 jobs and
-396 terminal declarations: 394 theorems and two definitions (ReplayWindow 15;
-R1 9; R2 188; R3 86; R4 79; R5 13; R6 6). Complete filesystem frames and calls
-add three grouped exports, with compatibility/scoped/full targets of 109/251/391
-jobs and no unresolved independent review finding. The proof gate reports only
-`propext`, `Classical.choice` and `Quot.sound`. Fresh stock kernel replay, the
-60-job default build and 114 unit tests (22.814 seconds, one skip) pass sequentially.
-All ten frozen Lean hashes are unchanged, and the mirror remains byte-identical
-to `c047e64`. These checks include the earlier R2/R3/R4 components; per-tranche
-measurements remain below. Initialized whole-run R2 and the remaining R3/R4
-closures are still open.
+**Validation status.** Current source has 400 terminal declarations: 398 theorems
+and two definitions (ReplayWindow 15; R1 9; R2 188; R3 90; R4 79; R5 13; R6 6).
+The acquired-peer R3 extension passes scoped/full builds of 278/397 jobs and
+independent frozen source/export/documentation review. Coordinated validation
+passes the 397-job proof gate with 400 declarations and only `propext`,
+`Classical.choice` and `Quot.sound`, fresh stock kernel replay, the 60-job default
+build and 114 unit tests (22.162 seconds, one skip). The mirror remains
+byte-identical to `c047e64`; runtime has not changed. Per-tranche measurements
+remain below. Initialized whole-run R2 and the remaining R3/R4 closures stay open.
 The preceding `c047e64` carry's 118-job executable build and eleven reproduction
 checks remain applicable to unchanged runtime; they were not rerun for proof-only
 extensions. Frozen reviews have no unresolved defect in the checked components;
@@ -342,7 +340,7 @@ No R3 Rule Zero counterexample or changed charter conclusion is asserted.
 | `RoutingView`/`Lifecycle`/`Initial`, `FlatHistory`/`RoutingHistory` | Option-valued routing/list projection; original create/refusal and raw-release preservation; original configured fixture; canonical flat updates without node IDs and finite actual-call induction. `original_initialized_routing_history` derives coherence/agreement, and `original_initialized_history_findNode` links reached-root source lookup to the flat winner and actual raw node owner. |
 | `AddressBounds`/`ConfigurationInputs`, `ClearWalk` | Actual UInt8/parser address shape and original setAllowedip guard cuts; normal insertion/routing composition; exact root-list source factor and extensional normal-completion coverage with full list-only frames. `parsed_setAllowedip_bounded_call`, `parsed_setAllowedip_routing_preserved`, `original_rootRemove_lists_normal`. |
 | `ClearSnapshot`/`ClearEndpoint`, `RoutingCall.clear` | Fixed original nodes/current submap with retained list provenance and exclusions; complete original normal clear derives empty represented trees/lists, exact outside fields and seq+1. `original_free_routing_endpoint`, `original_free_then_findNode`; existing initialized history/lookup exports now include clear. |
-| `RoutingRetains`/`Completions`/`SendFrames`, `Configuration/AllowedIpSource`/`PeerTailRouting`/`PeerTailCompletion` | Deletion-permitting routing frames; actual whole-setAllowedip events and flat folding; exact original allowed-IP loop plus keepalive/staged/cleanup tail. Unconditional erasure is separate from entry-conditional safe-prefix and normal reached-state agreement. |
+| `RoutingRetains`/`Completions`, concrete send/socket/handshake/flush frames, `RoutingAcquire`; configuration tail/removal/update observers | Deletion-permitting routing frames; actual whole-setAllowedip/removal events and flat folding; exact acquired-peer update through replacement/removal, attributes and complete tail. Lookup/create residency is separately derived. Unconditional erasure remains separate from entry-conditional safe-prefix and normal reached-state agreement. |
 
 [AGENT 2026-10-13] Use width-parametric arithmetic, one Patricia tree and pure
 insertion, with contexts as structural paths rather than another executable
@@ -378,6 +376,10 @@ permitting peer deletion while retaining nodes/table/frontiers. Journal whole
 setAllowedip completions and derive semantic validity from actual calls; use
 stronger cached-peer frames only where source getters/setters require them.
 Share the original tail factor and existing send-frame matcher environment.
+[AGENT 2026-10-14] Extend the completion journal with an explicit primitive sum,
+placing removeByPeer events inside peerMakeDead before later cleanup/flush effects.
+Reuse socket/handshake source factors and prove deletion-permitting concrete frames;
+keep lookup/create residency separate until public-command preflight composes.
 
 
 **Insertion boundary.** Valid representation, unique IDs, whole-store `NodesBelow`
@@ -477,16 +479,26 @@ alone does not assert physical adjacency; actual source composition and concrete
 silent frames provide the connection. No affiliation or reference-credit premise
 is needed for these trie/list frames.
 
-**Remaining obligations.** Extend completion observations beyond this actual tail
-to creation/removal/clear and the enclosing peer/device configuration. A failing
-clear has no returned World or successful completion marker, and its earlier partial
-mutations are outside a completed-call history. Propagate local parser shape through
-parsePeer/config/operation and public parseTrace; include bare/create/delete device
-intervals and other Netlink mutations. Literal contiguous finite call histories
-cannot span unobserved guards and helper effects. The present tail theorem starts
-with explicit routing/residency/shape; it does not establish enclosing initialized
-closure. Connect both packet paths to authenticated allocation identity; raw peer
-labels and longest-prefix lookup alone establish no ownership.
+The acquired-peer update now also covers REMOVE_ME, preshared-key and endpoint
+updates and REPLACE_ALLOWEDIPS. A nested removeByPeer event records actual routing
+removal before hash/death/flush work; it does not claim whole peer-object removal
+completed. Source-derived socket, handshake, key-clear, timers and bounded drain
+frames retain routing on normal returns without a drain-success, reference-credit
+or affiliation premise. Actual lookup and creation/refusal separately derive the
+returned raw-slot residency; they establish no public-key identity association.
+
+**Remaining obligations.** Public setPeerCmd preflight/acquisition composition is
+still open. Its attempted tagged preparation equation did not close within this
+slice's elaboration budget; the uncompiled draft was removed, without replacing
+it by a target-residency or desired-output premise. The compiled acquired stage
+retains explicit entry routing/target/address shape. Extend to enclosing peer/device
+configuration and completed clear observations. A failing clear has no returned
+World or successful completion marker; earlier partial mutations are outside a
+completed-call history. Propagate local parser shape through parsePeer/config/operation
+and public parseTrace, including bare/create/delete intervals and other Netlink
+mutations. Literal contiguous histories cannot span unobserved guards/helper effects.
+Connect packet paths to authenticated allocation identity; raw peer labels and
+longest-prefix lookup alone establish no ownership.
 The historical R2 orphan recipe constrained the former accepted domain; `c047e64`
 now rejects it before deletion. It is not a current R3 misrouting counterexample.
 
@@ -513,6 +525,7 @@ now rejects it before deletion. It is not a current R3 misrouting counterexample
 | Parsed allowed-IP and root-list-clear checkpoint | 27 builds: 7 passes / 20 ordinary elaboration failures; scoped/full targets 154/358 | 27m28s from grant 11:08:10 through full-result collection clock 11:35:38; independent frozen review clear; 28m58s writer-token ownership through handoff clock 11:37:08; no cap/interruption or runtime change |
 | Full normal clear and finite history | 11 calls: 10 builds (five passes / five ordinary elaboration failures) plus a passing scoped check; scoped/full targets 156/367 | 15m52s from grant 12:37:14 through measured full-result collection 12:53:06; 17m45s writer-token ownership through handback 12:54:59. Independent frozen review and coordinated gate, fresh kernel replay, default build and 114 unit tests pass. No cap/interruption or runtime change; all exits collected. |
 | Whole allowed-IP completions and peer tail | 17 calls: 16 builds (7 passes / 9 ordinary elaboration/normalization failures) plus one passing scope/census check; scoped/full targets 210/382 | 20m15s from grant 14:09:16 through full-result collection clock 14:29:31; 24m11s writer-token ownership through handback 14:33:27. Four new exports, 86 R3 /393 source declarations. No cap/interruption or runtime change; all exits collected. Independent frozen review is clear after correcting the report's zero-return wording: flatInsert may be idempotent. Coordinated gate, fresh kernel replay, default build and 114 unit tests pass sequentially; frozen Lean hashes are unchanged. |
+| Acquired-peer removal/update completion | 30 calls: 29 builds (8 PASS / 21 ordinary elaboration/normalization FAIL) plus one passing scope/census check; final scoped/full targets 278/397 | 30m40s from grant 15:30:16 through final full-result collection clock 16:00:56. Four exports, 90 R3 /400 source declarations. No cap/interruption; all exits collected. The complete acquired stage and concrete flush/acquisition foundations compile; repeated preflight continuation-normalization failures left whole setPeerCmd composition open. No runtime change/replay. Independent frozen review and coordinated gate/fresh replay/default/unit validation pass. Token returned at 16:02:40 (32m24s ownership). |
 
 The represented/loop tranche split into 17 single-step calls and a 12-call
 continuation; its fifteen failures included two heartbeat failures. Final scoped/full
