@@ -145,11 +145,16 @@ ranges.
 **The arm rule, split into its two facts.** The source input is the caller's
 read `J_c`; the record carries `mod_timer`'s read `J_m` and `expires`. Since
 `expires = J_c + delay` exactly in the C (`timers.c:62,…`, the jitter already
-drawn), `J_c := expires − delay` is the caller's read, recovered from the
-record and the mirror's own delay. The semantic rule is then **expiry :=
-J_c + delay**, computed by the mirror, and the record's `expires` must equal
-it (publication identity: a mismatch is a wrong delay in the mirror, D3-M8's
-channel, now by equality). The second fact, `J_m − J_c ∈ {0, 1}`, is an
+drawn), `J_c` is the caller's read. As first implemented it was recovered
+from the record and the mirror's own delay as `expires − delay`, which the
+pre-release review (2026-10-14, finding 2) showed absorbs a delay wrong by
+one tick: both delays store the published expiry. Since that finding the
+caller's read is its own record (kind 311, `kcov_timer_jiffies` on each
+caller's line), and the semantic rule is **expiry := J_c + delay**,
+computed by the mirror from the recorded `J_c`, which must equal the
+record's `expires` (a mismatch is a wrong delay in the mirror, by one tick
+or more: a hidden mismatch, D3-M8's channel by equality). The second fact,
+`J_m − J_c ∈ {0, 1}`, is an
 **admissibility condition of the environment**: between the two reads only a
 tick interrupt moves `jiffies` on one CPU, and the guest's waits are the
 places the trace allows stalls; a larger gap is outside the fixture's timing
@@ -419,7 +424,10 @@ wanted.
 
 **Tactical [AGENT], under the standing delegation:** the C's macros as the
 mirror's comparison helpers rather than range arguments; the arm rule split
-into publication identity and an environment admissibility condition; the
+into the expiry equality over the caller's recorded read (kind 311 since
+the pre-release review's finding 2; the first implementation recovered the
+read from the published expiry, which the review showed was no check of
+the delay) and an environment admissibility condition; the
 record-driven loop measures and the derived activation bound; the
 record-only kind 310 over the explicit-fixture option for the firing window.
 These are entered in `docs/decisions.md` with the implementation.
