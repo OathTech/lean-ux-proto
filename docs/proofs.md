@@ -41,6 +41,10 @@ directory whose `Statements.lean` is the gated surface.
   carries the acceptance-history invariant through the observers, the
   scheduler, the operations, the runner and the syscalls.
 - `Leanux/Proofs/WG/ReplayWindow/`: the first result (below).
+- `Leanux/Proofs/WG/Noise/`: campaign 2's local handshake-state and session-slot
+  contracts; whole-run ownership and lifetime confirmation remain open.
+- `Leanux/Proofs/WG/Roaming/`: campaign 2's source-endpoint and remote-destination
+  contracts; receive authentication provenance and whole-run coverage remain open.
 
 The dependency order is CounterWindow, Logged, Framing, Keypairs,
 ReplayWindow. The conventions that keep proof work cheap are in
@@ -52,6 +56,13 @@ ReplayWindow. The conventions that keep proof work cheap are in
 | Result | Statements | Directory | Charter | Review | Mirror commit | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | Receive counter window: replay freedom (S1, S2, S3) | S1: every accepted execution has its exact acceptance history, and no two events share an allocation lifetime and a wire counter. S2: `counterValidate` returns exactly what receive.c's rule returns and leaves exactly its replay state. S3: every non-receive syscall and every validator call leave every other keypair's window unchanged, per call and for whole syscalls including the runner's ambient step. | `Leanux/Proofs/WG/ReplayWindow/` (`Statements.lean`, 15 terminal declarations; `Counterexamples.lean`) | [charter](2026-10-12-charter-window-proof.md) | [independent review, two parts](2026-10-12-spike-window-review.md); the spike's [report](2026-10-13-spike-window.md) and [self-review](2026-10-13-spike-window-self-review.md) | 6f1f84c | lagging since 247beec (review item 8 landed 2026-10-13: the two counter-limit tests now carry operands and `CounterWindow/Refinement.lean`'s `counterValidate_execution` expects plain records; the proof campaign repairs it on merge). Carried from ef7c535 over the epoll landing on 2026-10-13 (the wait-queue, epoll release and epoll system-call frames). |
+
+Campaign 2's working-branch checkpoints (not complete results):
+
+| Result | Checked local surface | Directory | Charter/report | Mirror commit | Status |
+| --- | --- | --- | --- | --- | --- |
+| H1 Noise session state machine | 11 terminal declarations: rotation, confirmation and adjacent-call nonrepeat, clearing, zeroing, creation tags, consume-success tags, session tag guard, expiry slots | `Leanux/Proofs/WG/Noise/Statements.lean` | [charter](2026-10-14-charter-proof-campaign-2.md), [report](2026-10-14-proof-campaign-2.md) | eebb900 | In progress; scoped build current. Whole-run edge ownership, full session composition and lifetime confirmation open. Full gate fails in inherited `CounterWindow/Refinement.lean`. |
+| H3 Endpoint roaming | 5 terminal declarations: source conversion, remote destination setter, cache-source clearing frame, packet-source setter and AEAD plaintext/source contract | `Leanux/Proofs/WG/Roaming/Statements.lean` | [charter](2026-10-14-charter-proof-campaign-2.md), [report](2026-10-14-proof-campaign-2.md) | eebb900 | In progress; scoped build current. Authentication provenance and whole-run caller coverage open; same inherited gate failure. |
 
 The gate for every row: `capped -- scripts/in-bundle scripts/proof-gate`
 (the build, the axioms of every terminal statement, the forbidden tokens,
