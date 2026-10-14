@@ -13,6 +13,7 @@ import Leanux.Proofs.WG.Queues.RxRingWorker
 import Leanux.Proofs.WG.Queues.TxRingWorker
 import Leanux.Proofs.WG.Queues.RxRingTrials
 import Leanux.Proofs.WG.Queues.RxBorrow
+import Leanux.Proofs.WG.Queues.TxDispositionStep
 
 /-! R4 queue components: physical-ring refusal, original prev_queue FIFO laws,
 and successful-endpoint receive-queue helper frames. Whole recorded-schedule delivery,
@@ -711,5 +712,107 @@ theorem original_lookup_repayment_carrier_projections (protocol : Nat) (bytes : 
     Framing.SameView Queues.RxBorrow.SlotAffiliation (Queues.RxBorrow.source protocol bytes) :=
   ⟨Queues.RxBorrow.source_queues protocol bytes,
     Queues.RxBorrow.source_peer_fields protocol bytes, Queues.RxBorrow.source_affiliation protocol bytes⟩
+
+/-- The joint admission, publication, createData and TX-step observations erase
+on every input, preserving the complete original result, World and Stop. -/
+theorem original_tx_disposition_erasure (pid : PeerId) (item : List SkbId) (state : PacketState) :
+    Logged.ErasesPrefix (Queues.TxDisposition.enqueue pid item) (enqueuePerDeviceAndPeer pid item) ∧
+    Logged.ErasesPrefix (Queues.TxDisposition.publish item state) (enqueuePerPeerTx item state) ∧
+    Logged.ErasesPrefix (Queues.TxDisposition.create pid item) (createData pid item) ∧
+    Logged.ErasesPrefix (Queues.TxDisposition.step pid) (txStep pid) :=
+  ⟨Queues.TxDisposition.enqueue_erases pid item, Queues.TxDisposition.publish_erases item state,
+    Queues.TxDisposition.create_erases pid item, Queues.TxDisposition.step_erases pid⟩
+
+/-- Direct history correspondence, stronger than separate erasures. createData's
+access/ring projections are unconditional; full-step access projection uses the
+existing AllocationInv at entry and concretely discharged intermediate contracts. -/
+theorem original_tx_disposition_projections (pid : PeerId) (item : List SkbId) :
+    Logged.ProjectsPrefix Queues.TxDisposition.accessEvent id
+      (Queues.TxDisposition.create pid item) (Lifetimes.createDataPrefix pid item) ∧
+    Logged.ProjectsPrefix Queues.TxDisposition.ringEvent id
+      (Queues.TxDisposition.create pid item) (Queues.TxRing.create pid item) ∧
+    Logged.ProjectsUnder Lifetimes.AllocationInv Queues.TxDisposition.accessEvent
+      (Queues.TxDisposition.step pid) (Lifetimes.txStepPrefix pid) :=
+  ⟨Queues.TxDisposition.create_access pid item, Queues.TxDisposition.create_ring pid item,
+    Queues.TxDisposition.step_access pid⟩
+
+/-- Reached-prefix access safety and the existing ring refinement transport
+through the direct projections. A Stop has no retained World. -/
+theorem original_tx_disposition_prefix_refinement (pid : PeerId) (item : List SkbId)
+    (w : World) (h : List Queues.TxDisposition.Event)
+    (ha : Lifetimes.AllocationInv (h.filterMap Queues.TxDisposition.accessEvent) w)
+    (hr : Queues.TxRing.Inv deviceIndex initial (h.filterMap Queues.TxDisposition.ringEvent) w) :
+    (Lifetimes.LifetimeEvent.Safe
+      ((Logged.runPrefix (Queues.TxDisposition.create pid item) w h).2.filterMap Queues.TxDisposition.accessEvent) ∧
+      match (Logged.runPrefix (Queues.TxDisposition.create pid item) w h).1 with
+      | .error _ => True
+      | .ok (_, v) => Lifetimes.AllocationInv
+          ((Logged.runPrefix (Queues.TxDisposition.create pid item) w h).2.filterMap Queues.TxDisposition.accessEvent) v) ∧
+    (Lifetimes.LifetimeEvent.Safe
+      ((Logged.runPrefix (Queues.TxDisposition.step pid) w h).2.filterMap Queues.TxDisposition.accessEvent) ∧
+      match (Logged.runPrefix (Queues.TxDisposition.step pid) w h).1 with
+      | .error _ => True
+      | .ok (_, v) => Lifetimes.AllocationInv
+          ((Logged.runPrefix (Queues.TxDisposition.step pid) w h).2.filterMap Queues.TxDisposition.accessEvent) v) ∧
+    (Queues.TxRing.Safe initial
+      ((Logged.runPrefix (Queues.TxDisposition.create pid item) w h).2.filterMap Queues.TxDisposition.ringEvent) ∧
+      match (Logged.runPrefix (Queues.TxDisposition.create pid item) w h).1 with
+      | .error _ => True
+      | .ok (_, v) => Queues.TxRing.Inv deviceIndex initial
+          ((Logged.runPrefix (Queues.TxDisposition.create pid item) w h).2.filterMap Queues.TxDisposition.ringEvent) v) :=
+by
+  have hc := (Queues.TxDisposition.create_access pid item).under.preserves
+      (Lifetimes.createDataPrefix_preserves_ambient Lifetimes.allocationAmbient Lifetimes.allocationTx pid item) w h ha
+  have hs := (Queues.TxDisposition.step_access pid).preserves
+      (Lifetimes.txStepPrefix_preserves_ambient Lifetimes.allocationAmbient Lifetimes.allocationTx Lifetimes.allocationSocket pid) w h ha
+  have hj := (Queues.TxDisposition.create_ring pid item).under.preserves (Queues.TxRing.create_preserves pid item) w h hr
+  constructor
+  · cases he : (Logged.runPrefix (Queues.TxDisposition.create pid item) w h).1 <;> simpa only [he] using hc
+  constructor
+  · cases he : (Logged.runPrefix (Queues.TxDisposition.step pid) w h).1 <;> simpa only [he] using hs
+  · cases he : (Logged.runPrefix (Queues.TxDisposition.create pid item) w h).1 <;> simpa only [he] using hj
+
+/-- Exact original continuations: EPIPE returns, ENOSPC enters direct cleanup,
+and a reached DEAD head skips completion before disposal. These are local cuts,
+not full queue-retention or store-absence endpoints. -/
+theorem original_tx_disposition_continuations (pid : PeerId) (item : List SkbId)
+    (first : SkbId) (head : DataPacket) (hd : head.state = .dead) :
+    Queues.TxDisposition.createTail pid item first (-WG.EPIPE) = (do
+      _ ← Logged.liftPrefix (branch .createDataOk false)
+      _ ← Logged.liftPrefix (branch .createDataOkEpipe true)
+      pure ()) ∧
+    Queues.TxDisposition.createTail pid item first (-WG.ENOSPC) = (do
+      _ ← Logged.liftPrefix (branch .createDataOk false)
+      _ ← Logged.liftPrefix (branch .createDataOkEpipe false)
+      Queues.TxDisposition.cleanup pid item first) ∧
+    Queues.TxDisposition.afterHead pid item head = (do
+      Queues.TxDisposition.drop pid item
+      _ ← Logged.liftPrefix (branch .txCrypted false)
+      Queues.TxDisposition.dispose pid item head.keypair) ∧
+    Logged.HistoryFrame Queues.TxDisposition.completionEvent (Queues.TxDisposition.afterHead pid item head) :=
+  ⟨Queues.TxDisposition.epipe_tail pid item first, Queues.TxDisposition.enospc_tail pid item first,
+    Queues.TxDisposition.dead_afterHead pid item head hd, Queues.TxDisposition.dead_no_completion pid item head hd⟩
+
+/-- Exact release observation and normal no-send disposal. Subsequent getter or
+put failure retains the reached prefix but supplies no final World. -/
+theorem original_tx_disposition_release_cut (pid : PeerId) (item : List SkbId) (key : KeypairId)
+    (id : SkbId) (w : World) (h : List Queues.TxDisposition.Event) :
+    Logged.runPrefix (Queues.TxDisposition.access (Lifetimes.freeTxSkbPrefix id)) w h =
+      (match (getTxSkb id).run w with
+      | .error e => (.error e, h)
+      | .ok (_, _) => ((freeTxSkb id).run w,
+          h ++ [.access (.packet (.read (.inl id) (Lifetimes.packetStamp w id))),
+                .access (.packet (.release (.inl id) (Lifetimes.packetStamp w id)))])) ∧
+    Framing.SameView (fun w => w.sent) (Queues.TxDisposition.disposeSource pid item key) :=
+  ⟨Queues.TxDisposition.free_run id w h, Queues.TxDisposition.dispose_no_send pid item key⟩
+
+/-- Strict peerGet derives positivity from its original normal return. Immediate
+repayment restores the semantic Kernel; intervening publication is not covered. -/
+theorem original_tx_strict_reference_cut (pid : PeerId) (w v : World)
+    (hr : (peerGet pid).run w = .ok ((), v)) :
+    Framing.PeerBorrow.Borrowed w.k (some pid) v.k ∧
+    Framing.SameView Framing.PeerBorrow.view (do peerGet pid; peerPut (some pid)) :=
+  ⟨(Framing.hoare_iff_triple _ _ _).mpr (Framing.PeerBorrow.strict_acquire_spec pid w.k) w () v rfl hr,
+    Framing.PeerBorrow.strict_repaid pid⟩
 
 end Leanux.Proofs.WG.DeliveryOrder
