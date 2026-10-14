@@ -88,13 +88,18 @@ def freeRxSkb (id : SkbId) : M Unit := do
   let _ ← getRxSkb id
   modifyDev fun d => { d with rxSkbs := d.rxSkbs.erase id }
 
-/-- A path that reads or changes state the pending handshake worker also
-    touches: its outcome depends on when the worker runs. Work queued earlier
-    in this same system call, before it slept, has certainly not run
-    (`CONFIG_PREEMPT_NONE`, one CPU), so such paths are determined. -/
-def requireNotPending (pid : PeerId) (what : String) : M Unit := do
-  if (← getPeer pid).handshakePending && !(← get).queuedThisCall.contains pid then
-    unsupported s!"{what} races the pending handshake worker"
+/-- Retired (2026-10-14, the pre-release review's finding 3). It stopped a
+    path that reads or changes state the pending handshake send worker also
+    touches, on the ground that its outcome depended on when the worker ran.
+    Since the dispatch-order capture, the worker runs exactly where its
+    section records place it (`Leanux/Env/Batch.lean`'s scheduler), so a
+    receive that the kernel ran before the queued send worker is determined:
+    the pending work's effects apply at its section, not before. The stop
+    excluded ordinary simultaneous initiation (a peer's initiation arriving
+    while wg0's own is queued, `corpus/wireguard/p_sim_init_*`). A section
+    record the scheduler cannot place is a hidden mismatch, as before. The
+    callers and `World.queuedThisCall` remain for a later cleanup. -/
+def requireNotPending (_pid : PeerId) (_what : String) : M Unit := pure ()
 
 /-- Short-circuit `&&` and `||` over decisions: the right operand runs only
     when the left does not decide. (W3: moved here from `Netlink.lean`, so
@@ -110,6 +115,12 @@ def recordWord (bs : List UInt8) (k : Nat) : Nat :=
 /-- The same word as the C's `unsigned long` (review item 8). -/
 def recordWord64 (bs : List UInt8) (k : Nat) : UInt64 := (recordWord bs k).toUInt64
 
+/-- The caller's `jiffies` read before a `mod_peer_timer` (pre-release
+    review finding 2): kind 311 at `site`, consumed where the C evaluates the
+    argument, before the guard; `none` without arm records. -/
+def callerJiffies (site : HiddenSite) : M (Option UInt64) := do
+  if (← get).armRecords then some <$> hiddenJiffies site else pure none
+
 /-- D3 (docs/2026-10-05-d3-timers.md, sections 3.3 and 5.1): `mod_timer(&peer->
     timer_x, jiffies + delay)`, once `mod_peer_timer`'s guard has passed.
     With arm records (`World.armRecords`) the kind-303 record carries
@@ -117,29 +128,33 @@ def recordWord64 (bs : List UInt8) (k : Nat) : UInt64 := (recordWord bs k).toUIn
     (docs/2026-10-13-review-items-7-8.md, section 4) splits the rule into
     its two facts. The caller's read `J_c` is the source input and
     `expires = J_c + delay` exactly (timers.c:62,87,149,159,185,206,216),
-    so `J_c := expires - delay` is recovered from the record and the
-    mirror's own delay, and the expiry the mirror stores is `J_c + delay`.
-    `J_m - J_c` is then an admissibility condition of the environment: a
-    tick may land between the two reads, so the gap is 0 or 1 on this
-    one-CPU kernel. A negative gap cannot come from a stall (a stall only
-    raises `J_m`): it is the mirror's delay being too small, a hidden
-    mismatch (the D3-M8 channel). A gap above 1 is either a stall between
-    the reads, outside the fixture's timing domain, or a delay too large;
-    the record cannot tell them apart and it is reported as `unsupported`.
-    `J_m` becomes the last known `jiffies`. All arithmetic is the C's,
-    on `unsigned long`. Without records (the domain filter) the expiry is
-    the nominal `jiffies + delay` from the last known `jiffies` (0 before
-    any). `mod_timer` of a pending timer moves it (`__mod_timer`), so the
-    field is overwritten. -/
-def armTimer (pid : PeerId) (t : PeerTimer) (delay : Nat) : M Unit := do
+    the caller's read `J_c` is its own record (kind 311, pre-release review
+    finding 2), consumed before the guard; the mirror computes
+    `expires = J_c + delay` and compares it with the published `e` (a
+    mismatch is a wrong delay in the mirror, a hidden mismatch, by one
+    tick or more). `J_m - J_c` is then an admissibility condition of the
+    environment: a tick may land between the two reads, so the gap is 0
+    or 1 on this one-CPU kernel; a negative gap cannot happen (the records
+    would be inconsistent: a hidden mismatch); a gap above 1 is a stall
+    between the reads, outside the fixture's timing domain, `unsupported`.
+    `J_m` becomes the last known `jiffies`. All arithmetic is the C's, on
+    `unsigned long`. Without records (the domain filter) the expiry is the
+    nominal `jiffies + delay` from the last known `jiffies` (0 before any).
+    `mod_timer` of a pending timer moves it (`__mod_timer`), so the field
+    is overwritten. -/
+def armTimer (pid : PeerId) (t : PeerTimer) (delay : Nat) (jc? : Option UInt64 := none) : M Unit := do
   let w ← get
   let e ← if w.armRecords then
       let bs ← hidden .modTimerArm
       let (jm, e) := (recordWord64 bs 0, recordWord64 bs 1)
-      let jc := e - delay.toUInt64          -- the caller's read, recovered
-      let gap := (jm - jc).toInt64          -- `(long)(J_m - J_c)`
+      -- the caller's read is recorded (kind 311), never recovered from `e`
+      let some jc := jc? | invariant "a timer armed with arm records and no caller read (kind 311)"
+      let expires := jc + delay.toUInt64       -- `expires = jiffies + delay`, the caller's arithmetic
+      if expires != e then
+        throw (.hidden s!"timer expiry differs from Linux: the caller read jiffies {jc} and mod_timer published {e}; the mirror's delay {delay} gives {expires}")
+      let gap := (jm - jc).toInt64             -- `(long)(J_m - J_c)`
       if gap < 0 then
-        throw (.hidden s!"timer expiry differs from Linux: mod_timer at jiffies {jm} to {e}, the mirror's delay is {delay} (the caller's read would be {jc}, after mod_timer's)")
+        throw (.hidden s!"mod_timer's jiffies {jm} is behind the caller's read {jc} (delay {delay}, expires {e})")
       if gap > 1 then
         unsupported s!"a stall between a timer's two jiffies reads: the caller's {jc}, mod_timer's {jm} (delay {delay}, expires {e})"
       modify fun w => { w with jiffiesLast := some jm }
@@ -147,7 +162,7 @@ def armTimer (pid : PeerId) (t : PeerTimer) (delay : Nat) : M Unit := do
       -- third word is the timer's address, which its section names
       let u := recordWord bs 2
       if u != 0 then modify fun w => { w with timerUnits := (u, pid, t) :: w.timerUnits.filter (·.1 != u) }
-      pure (jc + delay.toUInt64)            -- `expires = J_c + delay`, the record's by construction
+      pure e
     else pure (w.jiffiesLast.getD 0 + delay.toUInt64)
   setPeer pid ((← getPeer pid).setTimer t (some e))
 

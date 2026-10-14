@@ -50,7 +50,7 @@ writes at 44-45 and 48 are IP-stack state below the boundary (section 3).
 
 | # | C | Lean | Class | What | Effect |
 |---|---|---|---|---|---|
-| S1 | 122-128 | 85 | 6 | `requireNotPending` before each peer's purge: a fail-noisy dispatch-timing guard the C has no counterpart for. | I. Keep: it is the hidden-input rule for a queued handshake worker, and it stops rather than guesses. |
+| S1 | 122-128 | 85 | 6 | (retired 2026-10-14, a no-op) `requireNotPending` before each peer's purge: a fail-noisy dispatch-timing guard the C has no counterpart for. | I. Keep: it is the hidden-input rule for a queued handshake worker, and it stops rather than guesses. |
 
 The per-peer sequence purge, `wg_timers_stop`, `wg_noise_handshake_clear`,
 `wg_noise_keypairs_clear` (next, previous, current), `wg_noise_reset_last_sent_handshake`
@@ -185,3 +185,26 @@ decisions are live and a malformed environment packet fails closed); **D1**
 (an `invariant` on a nonempty handshake ring in `wgDestruct`, matching the
 guard on the other queues), with X6 and X8 as the same kind of cheap
 fail-closed tightening if a fourth is wanted.
+
+## 5. Disposition (2026-10-14, the pre-release review's section 12)
+
+Every item of section 2, so that the verdict's "every choice point" cannot
+override this table.
+
+| Item | Disposition | Where |
+|---|---|---|
+| X1 | fixed: `wg_check_packet_protocol` decided from the first packet's version nibble against `family` | task/device-fixes (landed in f45bde8) |
+| X2 | justified: `skb_valid_dst` is fixed `true` for the environment's routed datagrams (census P11, W4) | declared |
+| X3 | justified, contract written: the GSO flag is the list's length by `Env.xmitPackets`' contract (`skb_is_gso ↔ pkts.length ≥ 2`) | W4 design 2.1 (2026-10-14) |
+| X4 | justified: `skb_share_check` false per segment, no AF_PACKET (census P11) | declared |
+| X5 | justified: the ICMP error's NET_RX section is consumed inside `err` at the C's `rcu_read_unlock_bh`; an order of the mirror's own bookkeeping, no choice point between | internal |
+| X6 | fixed: `wgXmit` checks every packet's header destination against the environment's and stops `invariant` on a disagreement | task/review-receive (2026-10-14) |
+| X7 | justified: `PTR_ERR(segs)` is `-ENOMEM` for the one failure the environment models (an allocation inside `skb_segment`) | internal |
+| X8 | fixed: an empty `pkts` is an `invariant` | task/device-fixes |
+| D1 | fixed: an `invariant` on a nonempty handshake ring in `wgDestruct` | task/device-fixes |
+| U1 | justified: `wgSetup` builds the device with L's defaults; the fields the C sets later are set on the same paths (L design) | internal |
+| N2 | deferred: the `alloc_workqueue` and `ptr_ring_init` sites below the allocation cut; the census (section 5) lists them as unrecorded by construction, and a record-only site per allocator is the follow-on if a failure path is wanted | census |
+| M1 | fixed: `setMtu` returns `-EINVAL` above `max_mtu` and for a negative `ifr_mtu` (dev.c:9064-9073), two traces | task/device-fixes |
+| M2 | deferred with reason: `dev_set_mtu_ext` returns 0 for an unchanged MTU before validating and before the notifiers (dev.c:9090-9094); the mirror validates first, so a `wg_set_mtu` to the current value above `max_mtu` would differ (`-EINVAL` against 0). Unreachable while `max_mtu` exceeds every current MTU the fixture sets; one line when a trace wants it | this table |
+| S1 | keep: `requireNotPending` is the hidden-input guard for a dispatch the records would otherwise leave ambiguous; a fail-noisy exclusion, recorded (the pre-release review's section 3 lists it among the ordinary compositions to open) | internal |
+| R1 | justified: the per-entry `if (!work || expired)` is constant true on the uninit walk and folded into `.gcV4EntryIter` | internal |

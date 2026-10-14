@@ -62,7 +62,8 @@ its owner (`peer->transmit_handshake_work`, `transmit_packet_work`,
   record names a unit; a section start must name a unit queued or armed
   earlier and not dispatched since, and consumes it. Problems (the trace
   fails): a dispatched unit never queued or armed; a work item queued while
-  already queued; a non-softirq section without its unit. Units still queued
+  already queued (since the claim-point robustness landing, a second
+  instance, consumed by its own section); a non-softirq section without its unit. Units still queued
   or armed at the trace's end are counted in the report (`dispatch units left
   queued/armed`), not failed: an unfired timer is normal, and work that outlived
   the guest's wait is the mirror's existing refusal.
@@ -155,3 +156,48 @@ replayable. Live runs cannot take that path: `pair_sections` refuses an
 
 What the record pays for: the s2 defect above; W3+W12's several peers'
 timers in one pass; the tx workers of several peers.
+
+## The pending-handshake guard, retired (2026-10-14)
+
+`requireNotPending` (State.lean) stopped any path that reads or changes
+state the queued handshake send worker also touches, unless the work was
+queued in the same system call: the worker's timing was unrecorded when the
+guard was written. With the section records and the scheduler loop the
+worker runs exactly where its section is, so the paths are determined. The
+stop excluded ordinary simultaneous initiation on one CPU (the pre-release
+review's finding 3): a peer's initiation arriving while wg0's own is queued.
+
+Measured on s2 with `corpus/wireguard/p_sim_init_*` and the held traces
+(`scripts/wg-w47-corpus.py --held`): a batch of one `wg_xmit` without a
+session (queues the send worker, `handshake_send_wq`, unbound) and one
+injected initiation (queues the receive worker). The remote stream at the
+batch, by sequence number, ran the send worker first in some children and
+the receive worker first in others:
+
+- `p_sim_init_batch_recv_first`: in one run both children ran the send
+  worker first (seq 17, the receive worker at seq 33; observe 148 twice,
+  the trace agreed); in the next run the pc child ran the receive worker
+  first (observe -EAGAIN) and the cmp child the send worker first (148).
+- `p_sim_init_batch_send_first`: the pc child send first (seq 17, 32), the
+  cmp child receive first (`wg_packet_handshake_receive_worker` seq 75,
+  `wg_packet_handshake_send_worker` seq 91); observe 148 against -EAGAIN
+  (the response roams the endpoint to the injector before the initiation
+  goes out, so the listener sees nothing).
+- `p_sim_init_two_peers`: both children receive first; the two send
+  workers' order differed; observe 148 against -EAGAIN.
+
+On every receive-first capture the old mirror stopped at peer.c:75
+(`wg_peer_get_maybe_zero` in `consume_initiation`: "a reference count the
+handshake worker also changes races the pending handshake worker"); with
+the guard retired it replays each child's capture to that child's returns
+([0, 0, 4, 148, 0] and [0, 0, 4, -11, 0] for the two-peer trace). The two
+three batch traces are outside the harness's domain by its determinism
+rule (`harness/linux.py`, the comparison child must rerun to identical
+observations), not the mirror's: the review's finding 5. They are held
+outside every suite with that reason (`--held`); the sequential trace is
+in the `wireguard` suite.
+
+The guard is a no-op; its callers and `World.queuedThisCall` are dead and
+go in a later cleanup. A section the scheduler cannot place stays a hidden
+mismatch.
+

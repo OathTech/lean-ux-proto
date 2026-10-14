@@ -183,10 +183,26 @@ def domain_filter(traces):
     return verdicts
 
 
-def load_traces(suites, counts, seed, only, filtered, alloc_share=ALLOC_SHARE):
+def select_in_domain(candidates, verdicts, count):
+    """The first `count` candidates the mirror's domain filter accepts, and
+    the selection's account (pre-release review, finding 3): candidates
+    drawn, in the domain, selected, and every rejection reason with its
+    count over all candidates, not only those before the last selected one,
+    so a newly introduced `unsupported` that shrinks the challenge set shows
+    in the report rather than being replaced by another accepted candidate."""
+    kept = [t for t, v in zip(candidates, verdicts) if v['in_domain']][:count]
+    rejected = Counter(f"{v['site']}: {v['what']}" for v in verdicts if not v['in_domain'])
+    account = dict(candidates=len(candidates), in_domain=sum(1 for v in verdicts if v['in_domain']),
+                   selected=len(kept), rejected=dict(sorted(rejected.items())))
+    return kept, account
+
+
+def load_traces(suites, counts, seed, only, filtered, alloc_share=ALLOC_SHARE, selection=None):
     """The selected suites. Generated traces are drawn from a fixed number of
     seeded candidates, keeping those the mirror places inside the domain;
-    `filtered` receives the rejected candidates' reasons."""
+    `filtered` receives the rejected candidates' reasons up to the last
+    selected candidate (the historical field); `selection`, when given,
+    receives each generated suite's full account (`select_in_domain`)."""
     traces = []
     for suite in suites:
         if suite in ('generated', 'wireguard-generated', 'pipes-generated', 'epoll-generated', 'seccomp-generated'):
@@ -201,7 +217,9 @@ def load_traces(suites, counts, seed, only, filtered, alloc_share=ALLOC_SHARE):
             count = counts[suite]
             candidates = [validate_trace(t) for t in source(seed, count * CANDIDATES_PER_TRACE)]
             verdicts = domain_filter(candidates)
-            kept = [t for t, v in zip(candidates, verdicts) if v['in_domain']][:count]
+            kept, account = select_in_domain(candidates, verdicts, count)
+            if selection is not None:
+                selection[suite] = account
             if len(kept) < count:
                 raise ValueError(f'only {len(kept)} of {count} generated traces are inside the domain')
             last = candidates.index(kept[-1])
@@ -302,9 +320,23 @@ class ModelStopped(InvalidOutput):
 def load_kcov_config():
     config = json.loads(ANCHORS.read_text())
     if (set(config) != {'version', 'description', 'files', 'functions', 'branch_free_functions', 'known_gaps',
-                        'shared_exits', 'operand_exclusions', 'data_only_operations'}
+                        'shared_exits', 'operand_exclusions', 'data_only_operations', 'helper_cuts'}
             or config['version'] != 2):
         raise ValueError('kcov config fields or version')
+    # The declared boundary (pre-release review, finding 1): every function
+    # of an anchored C file that an operation covers is listed (it owns
+    # decisions or is branch-free) or is a helper cut named here with the
+    # reason it has no modeled decision: a helper whose work is below the
+    # mirror's altitude (a slab free, a list splice) or an environment
+    # service the mirror summarizes. A covered function in none of the
+    # three lists fails the check as code outside the declared boundary.
+    if type(config['helper_cuts']) is not list or any(
+            type(h) is not dict or set(h) != {'function', 'file', 'note'}
+            or type(h['function']) is not str or h['file'] not in config['files'] or not h['file'].endswith('.c')
+            or type(h['note']) is not str or not h['note']
+            or h['function'] in config['functions'] or h['function'] in config['branch_free_functions']
+            for h in config['helper_cuts']):
+        raise ValueError('helper cuts: function, an anchored C file and a note, outside the listed functions')
     # seccomp W (design 6.3): operations whose kernel work is entirely in
     # unlisted files (prctl's no-new-privs arms, capset), checked by their
     # data (the next install's result, the queries' answers), so exempt from
@@ -402,6 +434,13 @@ EPOLL_INSERT_ADDRESS = 308
 # then its own translation instruction by instruction, so a mismatch names
 # the first differing instruction.
 SECCOMP_PROGRAM = 309
+# Pre-release review finding 11 (docs/2026-10-14-pre-release-review.md): the
+# instruction pointer populate_seccomp_data stores for a filtered system
+# call (class 'address', resolved by the consumer frame: kernel/seccomp.c:265,
+# a line the hook shares with the statement there; 8 bytes, one per
+# __seccomp_filter entry that builds its own seccomp_data); a filter that
+# loads offsets 8..15 of struct seccomp_data branches on it.
+SECCOMP_IP = 312
 # Review item 7 (docs/2026-10-13-review-items-7-8.md, section 5): the end of
 # a guest idle wait, {jiffies} (8 bytes, class 'jiffies' like kind 306,
 # resolved by the consumer frame: the ioctl's call site fs/ioctl.c:51 as
@@ -409,6 +448,14 @@ SECCOMP_PROGRAM = 309
 # at the end of every wait the mirror treats as an idle point; the mirror's
 # firing window ends at this value instead of a fixture bound.
 JIFFIES_END = 310
+# Pre-release review finding 2 (docs/2026-10-14-pre-release-review.md,
+# section 2): the caller's jiffies read that computes a peer timer's expiry,
+# {jiffies} (8 bytes, class 'jiffies', resolved by the consumer frame: the
+# caller's own line in drivers/net/wireguard/timers.c, one site per caller
+# of mod_peer_timer), written by kcov_timer_jiffies before the arm record;
+# the mirror computes the expiry from it and compares with the arm record's
+# published expiry, so the read is never recovered from the answer.
+TIMER_CALLER_JIFFIES = 311
 
 
 def load_hidden_sites():
@@ -516,8 +563,8 @@ def resolve_choices(per, sites, locations, dispatch=None):
                 kind_class = 'random' if kind in RANDOM_KINDS else 'clock' if 200 <= kind <= 216 \
                     else 'resched' if raw_kind == RESCHED else 'timer' if raw_kind == TIMER_ARM \
                     else 'advance' if raw_kind == TIME_ADVANCE else 'alloc' if kind == ALLOC_KIND \
-                    else 'queue' if raw_kind == QUEUE else 'jiffies' if raw_kind in (DST_CACHE_JIFFIES, JIFFIES_END) \
-                    else 'address' if raw_kind == EPOLL_INSERT_ADDRESS \
+                    else 'queue' if raw_kind == QUEUE else 'jiffies' if raw_kind in (DST_CACHE_JIFFIES, JIFFIES_END, TIMER_CALLER_JIFFIES) \
+                    else 'address' if raw_kind in (EPOLL_INSERT_ADDRESS, SECCOMP_IP) \
                     else 'program' if raw_kind == SECCOMP_PROGRAM else None
                 if kind_class == 'queue':
                     # {work, func}: the site is the queued function's symbol
@@ -663,14 +710,15 @@ def jiffies_problems(traces, per):
                                   kinds=[r[0] for r in records[:records.index(advances[0])]][:8]))
             floor = None
             for kind, _ip, _seq, length, data, _func in records:
-                if kind not in (TIMER_ARM, TIME_ADVANCE, JIFFIES_END):
+                if kind not in (TIMER_ARM, TIME_ADVANCE, JIFFIES_END, TIMER_CALLER_JIFFIES):
                     continue
                 if length != (24 if kind == TIMER_ARM else 16 if kind == TIME_ADVANCE else 8):
                     found.append(dict(index=index, problem=f'record kind {kind} length {length}'))
                     continue
                 first = int.from_bytes(bytes.fromhex(data[:16]), 'little')
-                if kind == JIFFIES_END:
-                    # the end-of-wait read (item 7): never behind the last known value
+                if kind in (JIFFIES_END, TIMER_CALLER_JIFFIES):
+                    # the end-of-wait read (item 7) and a timer caller's read (review
+                    # finding 2): never behind the last known value
                     if last is not None and first < last:
                         found.append(dict(index=index, problem='jiffies went back', last=last, jiffies=first, kind=kind))
                     elif last is not None:
@@ -707,7 +755,10 @@ def dispatch_problems(per):
     timer}) names a unit; the section start that dispatches it (300: {func,
     unit}) must name a unit queued or armed earlier in the trace and not
     dispatched since, which it then consumes (a re-arm moves a timer, a
-    re-queue of a running item queues it again). A softirq section (unit
+    re-queue of a running item queues it again; a second queue record while
+    an instance is pending is a second instance, the kernel's PENDING bit
+    cleared by process_one_work before the first section, which the mirror
+    accepts since the claim-point robustness landing). A softirq section (unit
     0 for net_rx_action) is paired with nothing; any other section without
     a unit is a kernel without the identity. Returns the problems, and per
     (trace, mode) the units still queued or armed at the trace's end
@@ -715,17 +766,20 @@ def dispatch_problems(per):
     refuses as having outlived the guest's wait)."""
     problems, leftovers = {}, {}
     for (trace_id, mode), ops in per.items():
-        pending, found = {}, []
+        pending, found = {}, []   # unit -> ['work', instances] or ['timer', 1]
         for index, records in enumerate(ops):
             for kind, _ip, _seq, length, data, func in records:
                 raw = kind & 0x7fff
                 if raw == QUEUE and length == 16:
+                    # the kernel's PENDING test succeeded: a second record while an
+                    # instance is pending is a second instance (process_one_work cleared
+                    # the bit before the first section started; the mirror's rule)
                     unit = int.from_bytes(bytes.fromhex(data[:16]), 'little')
-                    if unit in pending and pending[unit] == 'work':
-                        found.append(dict(index=index, problem='a work item queued while already queued', unit=hex(unit)))
-                    pending[unit] = 'work'
+                    entry = pending.setdefault(unit, ['work', 0])
+                    entry[0] = 'work'
+                    entry[1] += 1
                 elif raw == TIMER_ARM and length == 24:
-                    pending[int.from_bytes(bytes.fromhex(data[32:48]), 'little')] = 'timer'
+                    pending[int.from_bytes(bytes.fromhex(data[32:48]), 'little')] = ['timer', 1]
                 elif raw == SECTION_START and length == 16:
                     unit = int.from_bytes(bytes.fromhex(data[16:32]), 'little')
                     if unit == 0:
@@ -734,11 +788,13 @@ def dispatch_problems(per):
                     elif unit not in pending:
                         found.append(dict(index=index, problem='a dispatched unit that was never queued or armed', unit=hex(unit)))
                     else:
-                        del pending[unit]
+                        pending[unit][1] -= 1
+                        if pending[unit][1] == 0:
+                            del pending[unit]
         if found:
             problems.setdefault(trace_id, []).extend(dict(p, label='dispatch', mode=mode) for p in found)
         if pending:
-            leftovers[(trace_id, mode)] = dict(Counter(pending.values()))
+            leftovers[(trace_id, mode)] = dict(Counter(k for k, n in pending.values() for _ in range(n)))
     return problems, leftovers
 
 
@@ -851,6 +907,30 @@ def unlisted_c_lines(row, locations, files, functions):
     return lines
 
 
+def boundary_violations(row, locations, files, allowed):
+    """Covered code outside the declared boundary (pre-release review,
+    finding 1): the attributable PCs of the operation whose symbol (the
+    outermost frame's function) is in none of the listed, branch-free or
+    helper-cut sets and which run a line of an anchored `.c` file, by any
+    frame. The span-line rule above only catches such a function on a
+    declared outcome span; this one catches it anywhere in the anchored C.
+    Header lines stay the stated gap (helpers inlined into unmodeled code).
+    Returns `{function: sorted lines}`."""
+    outside = {}
+    for pc in row['pcs']:
+        frames = locations[pc]
+        if not attributable(frames):
+            continue
+        function = frames[-1]['function'].split('.')[0]
+        if function in allowed:
+            continue
+        for frame in frames:
+            source = frame['source'].split('/.deps/linux/')[-1].split(' ')[0]
+            if source.split(':')[0] in files and source.split(':')[0].endswith('.c'):
+                outside.setdefault(function, set()).add(source)
+    return {f: sorted(lines) for f, lines in sorted(outside.items())}
+
+
 def frame_chain(frames):
     """A point's DWARF frames as `file:line` strings, innermost first."""
     return tuple(frame['source'].split('/.deps/linux/')[-1].split(' ')[0] for frame in frames)
@@ -944,6 +1024,10 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
     for branch in model_obs['branches']:
         steps.setdefault(branch['index'], []).append(branch['label'])
     span_lines = set().union(*(e['spans'][o] for e in decisions.values() for o in (True, False)))
+    # the declared boundary: listed functions, branch-free ones (decisions
+    # without points of their own) and the named helper cuts
+    allowed = set(config['functions']) | set(config.get('branch_free_functions', ())) \
+        | {h['function'] for h in config.get('helper_cuts', ())}
     problems, gaps = [], Counter()
     order_stats = Counter()
     for index, op in enumerate(trace['ops']):
@@ -954,9 +1038,20 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
         # threshold: receive.c:115 (last_under_load = now) is covered.
         if op['op'] == 'wg_flood':
             covered = raw_lines(coverage[index], locations, config['files'])
-            if 'drivers/net/wireguard/receive.c:115' not in covered:
+            # The batch is queued whole before the worker runs, so its first
+            # packet sees the batch's size: the threshold is crossed iff the
+            # batch (the leading valids, the control, the invalids) is at least
+            # MAX_QUEUED_INCOMING_HANDSHAKES / 8 = 512 (receive.c:112-113). Both
+            # directions are checked (the boundary traces e_underload_511/512/513,
+            # 2026-10-14; the pre-release review's section 8).
+            batch = op['count'] + len(op.get('messages', [])) + (1 if op.get('control') else 0)
+            reached = 'drivers/net/wireguard/receive.c:115' in covered
+            if batch >= 512 and not reached:
                 problems.append(dict(index=index,
                                      problem='flood did not reach under_load (receive.c:115 not covered)'))
+            if batch < 512 and reached:
+                problems.append(dict(index=index,
+                                     problem=f'flood of {batch} reached under_load below the threshold (receive.c:115 covered)'))
             continue
         # W7 (docs/2026-10-06-w4-w7-transmit-bulk.md, 5.5): a `wg_batch` is one
         # io_uring_enter whose descriptor plumbing (the ring's fdget, each
@@ -975,6 +1070,10 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
                          & span_lines)
         if foreign:
             problems.append(dict(index=index, problem='span lines covered by an unlisted function', lines=foreign))
+        outside = boundary_violations(coverage[index], locations, op_files, allowed)
+        if outside:
+            problems.append(dict(index=index, problem='covered code outside the declared boundary',
+                                 functions=[dict(function=f, lines=lines) for f, lines in outside.items()]))
         # a declared shared exit reached by an early return witnesses nothing:
         # its lines are the inlined helper's, which did not run (kcov.json
         # shared_exits; counted with the gaps below)
@@ -1095,7 +1194,7 @@ def operands_match(lhs, rhs, record, comparison):
 
 
 def operand_agreement(trace, model_obs, comparisons, locations, decisions, functions=None, exclusions=(),
-                      excluded=None):
+                      excluded=None, distinct=None):
     """A3: declared value comparisons report operands, and each matches a
     comparison Linux made at the decision's condition line (the innermost
     source frame of the comparison) in the same operation, in one of the
@@ -1110,7 +1209,14 @@ def operand_agreement(trace, model_obs, comparisons, locations, decisions, funct
     guest deduplicates comparison rows (harness/guest.c: one row per kind,
     operands and PC), so repeated identical comparisons (a recursive walk
     meeting the same two counters) are one row: the requirement is presence,
-    not one row per report. `excluded` (a Counter) receives the count."""
+    not one row per report. `excluded` (a Counter) receives the count.
+
+    The relation is per model obligation: each reported pair must have some
+    matching kernel row at its site in the operation; rows are reusable
+    across obligations and surplus kernel rows need no model counterpart
+    (pre-release review, finding 5). `checked` counts obligations met;
+    `distinct`, when given, receives the (operation, site, row) triples that
+    met one, so a report can count distinct kernel rows beside obligations."""
     problems, checked = [], 0
     for branch in model_obs['branches']:
         name = branch['label'].rpartition('=')[0]
@@ -1163,6 +1269,8 @@ def operand_agreement(trace, model_obs, comparisons, locations, decisions, funct
                                  site=site, operands=[lhs, rhs], linux=[[k, hex(x), hex(y)] for k, x, y in records[:6]]))
         else:
             checked += 1
+            if distinct is not None:
+                distinct.update((branch['index'], site, r) for r in records if operands_match(lhs, rhs, r, comparison))
     return problems, checked
 
 
@@ -1488,10 +1596,10 @@ def run_chunk(traces, out, kcov, guest_variant=None, alloc_flags=0, arm=()):
             problems, trace_gaps = control_flow(trace, actual, trace_coverage, mapped['locations'], *kcov)
             # P: declared operand exclusions are counted with the gaps, from
             # the placement that agrees (D3 merge [AGENT])
-            excluded = Counter()
+            excluded, distinct = Counter(), set()
             operand_problems, checked = operand_agreement(trace, actual_cmp, trace_comparisons,
                                                           compared['locations'], kcov[1], set(kcov[0]['functions']),
-                                                          kcov[0]['operand_exclusions'], excluded)
+                                                          kcov[0]['operand_exclusions'], excluded, distinct)
             if operand_problems and actual_cmp.get('napi_irq_ambiguous'):
                 # the second run, every open placement before the put
                 count = actual_cmp['napi_irq_ambiguous']
@@ -1533,10 +1641,10 @@ def run_chunk(traces, out, kcov, guest_variant=None, alloc_flags=0, arm=()):
                                 if problem:
                                     operand_problems = [dict(index=None, label='napi placement', problem=problem)]
                                 else:
-                                    excluded = Counter()
+                                    excluded, distinct = Counter(), set()
                                     operand_problems, checked = operand_agreement(
                                         trace, selected, trace_comparisons, compared['locations'], kcov[1],
-                                        set(kcov[0]['functions']), kcov[0]['operand_exclusions'], excluded)
+                                        set(kcov[0]['functions']), kcov[0]['operand_exclusions'], excluded, distinct)
                                     if not operand_problems:
                                         # popped into the report's napi_before_put_sections
                                         outcomes[f'napi placement ({trace["id"]})'] = ','.join(map(str, before_put))
@@ -1555,6 +1663,7 @@ def run_chunk(traces, out, kcov, guest_variant=None, alloc_flags=0, arm=()):
             if [o['ret'] for o in actual_cmp['observations']] != [o['ret'] for o in actual['observations']]:
                 problems.append(dict(index=None, label='returns', problem='the comparison run returns differently'))
             outcomes['operand pairs matched'] += checked
+            outcomes['operand rows distinct'] += len(distinct)
             gaps.update(trace_gaps)
             outcomes.update(b['label'] for b in actual['branches'])
             if problems:
@@ -1596,7 +1705,7 @@ def main(argv=None):
         config = load_kcov_config()
     except (ValueError, OSError) as exc:
         parser.exit(2, f'invalid input: {exc}\n')
-    traces, filtered = [], Counter()
+    traces, filtered, selection = [], Counter(), {}
     out.mkdir(parents=True, exist_ok=False)
     started = datetime.now(timezone.utc).isoformat()
     results, gaps, build, aborted, identity = {}, Counter(), None, None, None
@@ -1607,7 +1716,11 @@ def main(argv=None):
         traces = load_traces(suites, {'generated': args.generated_count, 'wireguard-generated': args.wireguard_count,
                                       'pipes-generated': args.pipes_count, 'epoll-generated': args.epoll_count,
                                       'seccomp-generated': args.seccomp_count},
-                             args.seed, args.trace, filtered, args.alloc_share)
+                             args.seed, args.trace, filtered, args.alloc_share, selection)
+        for suite, account in selection.items():
+            print(f"{suite}: {account['candidates']} candidates, {account['in_domain']} in the domain, "
+                  f"{account['selected']} selected; rejected: "
+                  + (', '.join(f'{k} ({v})' for k, v in account['rejected'].items()) or 'none'), file=sys.stderr)
         decisions.update(load_decisions(config))
         instrumented, functions, chains = instrumented_lines(KERNEL / 'vmlinux', config['functions'], config['files'])
         # each declared shared exit names exactly one instrumentation point
@@ -1660,6 +1773,7 @@ def main(argv=None):
         raise
     finally:
         matched = outcomes.pop('operand pairs matched', 0)
+        distinct_rows = outcomes.pop('operand rows distinct', 0)
         skipped = {k[len('choice records skipped ('):-1]: outcomes.pop(k) for k in list(outcomes)
                    if k.startswith('choice records skipped (')}
         placements = {k[len('napi placement ('):-1]: [int(x) for x in outcomes.pop(k).split(',')]
@@ -1670,7 +1784,8 @@ def main(argv=None):
             (out / 'decision-census.json').write_text(json.dumps(census, indent=2) + '\n')
         status = write_report(out, traces, results, gaps, build, aborted, started, suites, args,
                               coverage, matched, filtered, splits,
-                              skipped, retries, placements, alloc_runs, kernel_identity=identity)
+                              skipped, retries, placements, alloc_runs, kernel_identity=identity,
+                              operand_rows_distinct=distinct_rows, generated=selection)
     return 0 if status == 'pass' else 1
 
 
@@ -1694,7 +1809,8 @@ def decision_summary(decisions, outcomes, witnesses):
 
 def write_report(out, traces, results, gaps, build, aborted, started, suites, args, decision_coverage=None,
                  operand_pairs_matched=0, domain_filtered=None, chunk_splits=0, choice_records_skipped=None,
-                 chunk_retries=None, napi_before_put_sections=None, alloc_runs=None, kernel_identity=None):
+                 chunk_retries=None, napi_before_put_sections=None, alloc_runs=None, kernel_identity=None,
+                 operand_rows_distinct=0, generated=None):
     ordered = [results.get(trace['id'], dict(id=trace['id'], outcome='not_run')) for trace in traces]
     counts = Counter(r['outcome'] for r in ordered)
     vmlinux = KERNEL / 'vmlinux'
@@ -1717,6 +1833,14 @@ def write_report(out, traces, results, gaps, build, aborted, started, suites, ar
                        guest_variant=getattr(args, 'guest_variant', None), alloc_share=getattr(args, 'alloc_share', None)),
         traces=len(traces), operations=sum(len(t['ops']) for t in traces),
         counts=dict(counts), known_gap_hits=dict(gaps), operand_pairs_matched=operand_pairs_matched,
+        # pre-release review, finding 5: obligations met (above) beside the
+        # distinct kernel rows that met one; rows are reusable across
+        # obligations, so the two counts differ by design
+        operand_rows_distinct=operand_rows_distinct,
+        # pre-release review, finding 3: the generated suites' candidates
+        # drawn, in the domain, selected, and the rejection reasons, so a
+        # shrinking challenge set is visible at every claim point
+        generated=dict(sorted((generated or {}).items())),
         # cut and ambient choice records (coverage child), by site: consumed
         # without their values, so their growth is visible here
         choice_records_skipped=dict(sorted((choice_records_skipped or {}).items())),
@@ -1740,7 +1864,8 @@ def write_report(out, traces, results, gaps, build, aborted, started, suites, ar
         decision_coverage=decision_coverage,
         failures=[r for r in ordered if r['outcome'] != 'agreement'])
     (out / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
-    print(json.dumps({k: report[k] for k in ('status', 'traces', 'operations', 'counts', 'operand_pairs_matched')}, indent=2))
+    print(json.dumps({k: report[k] for k in ('status', 'traces', 'operations', 'counts', 'operand_pairs_matched',
+                                             'operand_rows_distinct', 'generated')}, indent=2))
     print(f'report: {out / "report.json"}', file=sys.stderr)
     return report['status']
 

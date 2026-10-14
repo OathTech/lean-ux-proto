@@ -90,7 +90,7 @@ theorem peer_creation_call_sequence_prefix_safe (calls : List Peers.CreationCall
     Lifetimes.AccessEvent.Safe ((runPrefix (Peers.CreationCall.observe calls) w h).2.take n) :=
   (Peers.CreationCall.observe_preserves calls w h hi).choose_spec.2.1.take n
 
-/-- The complete original peerPut is observed at both successful getter sites,
+/-- The complete original peerPut is observed at its successful getter,
 the actual setter and the inline release. For every World, erasing observations
 returns the exact original result or Stop, while errors retain the exact prefix. -/
 theorem peer_put_access_exact (peer : Option PeerId) (w : World) (h : List Peers.PeerEvent) :
@@ -253,7 +253,8 @@ theorem packet_rx_lookup_current (i : SkbId) (w w' : World) (p : RxPacket)
 live replacement peer, allocation identity 55 with one reference, while its
 configured peer list and public-key hash still retain slot 26. This is a
 retargeted reference to a new identity; the original identity does not return.
-The explicit-record runner replay separately establishes the replacement path. -/
+The historical explicit-record runner replay established the replacement path
+before c047e64; the current runner rejects deletion while that dump is pending. -/
 theorem stale_cursor_retargets_replacement :
     CursorWitness.before = some (55, 1, false) ∧
     CursorWitness.afterDone = some (none, [26], [26]) := by
@@ -409,8 +410,8 @@ theorem enqueue_keypair_failure_prefix (irq : Lifetimes.MixedM Unit) (id : SkbId
       (.error e, h ++ [.packet (.read (.inr id) (Lifetimes.packetStamp w id))]) :=
   Lifetimes.enqueuePerPeerRxPrefix_keypair_failure irq id state w h pkt e hr hk
 
-/-- Original peer acquisition emits its two reads and conditional write in
-source order, retaining the exact prefix on pending-worker or refcount failure. -/
+/-- Original peer acquisition emits its read and conditional write in
+source order, retaining the exact prefix on refcount failure. -/
 theorem peer_acquire_access_exact (id : PeerId) (w : World) (h : List Peers.PeerEvent) :
     runPrefix (Lifetimes.peerGetLocal id) w h =
       ((peerGet id).run w, h ++ Lifetimes.peerGetEvents id w) :=
@@ -1275,17 +1276,19 @@ theorem tx_iteration_allocation_access_preserves (pid : PeerId)
     PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe
       (Lifetimes.txIterPrefix pid needResched) := Lifetimes.txIterPrefix_allocation pid hr
 
-/-- An original jitter Stop retains the preceding peer read and occurs before
+/-- After the original caller-jiffies read succeeds, an original jitter Stop
+retains the preceding peer read and occurs before
 the timer guard. These are original-run premises, not a desired-prefix premise
 or an accepted-run witness. -/
-theorem tx_timer_jitter_failure (pid : PeerId) (w entered : World)
+theorem tx_timer_jitter_failure (pid : PeerId) (w entered clocked : World) (jc : Option UInt64)
     (p : Peer) (h : List Lifetimes.LifetimeEvent) (e : Stop)
     (hp : (getPeer pid).run w = .ok (p, w))
     (hb : (branch .timersDataSentNotPending !(p.timerPending .newHandshake)).run w = .ok (true, entered))
-    (hj : (jitterBelowRekeyTimeout .newHandshakeJitter).run entered = .error e) :
+    (hc : (callerJiffies .timerJiffiesDataSent).run entered = .ok (jc, clocked))
+    (hj : (jitterBelowRekeyTimeout .newHandshakeJitter).run clocked = .error e) :
     runPrefix (Lifetimes.timersDataSentPrefix pid) w h =
       (.error e, h ++ [.peer (.read pid p.internalId)]) :=
-  Lifetimes.timersDataSentPrefix_jitter_failure pid w entered p h e hp hb hj
+  Lifetimes.timersDataSentPrefix_jitter_failure pid w entered clocked jc p h e hp hb hc hj
 
 
 /-- The two Noise constructors, both consumers and MAC addition retain their

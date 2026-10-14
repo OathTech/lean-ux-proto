@@ -584,6 +584,10 @@ structure Ratelimiter where
       stale entries arms a timer (D3); its firing is out of scope on this base
       (no timer source here), so entries persist for the trace. -/
   table : List (Nat × Int × Int) := []
+  /-- `table_v6` (ratelimiter.c:23, :100-106): the IPv6 entries, keyed by the
+      source /64 (the first eight bytes of the address, `memcpy(&ip, &saddr, 8)`),
+      the same bucket algorithm; modelled 2026-10-14 (the receive audit's F12). -/
+  table6 : List (Nat × Int × Int) := []
   deriving Repr, BEq
 
 /-- Whole-kernel mirror state. `nrFiles`/`maxFiles` mirror the system-wide
@@ -1033,6 +1037,18 @@ inductive HiddenSite where
       `{jiffies before, jiffies after}` of the `wg_advance` operation, in
       the trace process's task stream. -/
   | modTimerArm | timeAdvance | jiffiesEnd
+  /-- Pre-release review, finding 2 (docs/2026-10-14-pre-release-review.md,
+      section 2): the caller's `jiffies` read that computes a peer timer's
+      expiry, recorded as kind 311 `{jiffies}` on the caller's own line in
+      timers.c (`kcov_timer_jiffies`, an identity through which each of
+      `mod_peer_timer`'s seven callers reads). Consumed before the guard,
+      as the C evaluates the argument; `armTimer` computes the expiry from
+      it and compares with the arm record's published expiry, so a delay
+      wrong by one tick no longer disappears into a reconstructed read.
+      One site per caller: ids 420-426. -/
+  | timerJiffiesRetransmitZeroKey | timerJiffiesExpiredKeepalive | timerJiffiesDataSent
+  | timerJiffiesDataReceived | timerJiffiesHandshakeInitiated | timerJiffiesSessionDerived
+  | timerJiffiesTraversal
   /-- Dispatch order (docs/2026-10-11-dispatch-order.md): the kind-307 queue
       record `{work, func}` written at `__queue_work` for a work item of the
       dispatch set; its site is the work function. Consumed where the mirror
@@ -1068,6 +1084,13 @@ inductive HiddenSite where
       end of the mirror's translation (4.3) through the bridge, which reads
       the length first and holds it in `World.translatedLen`. -/
   | bpfProgInsn
+  /-- seccomp, pre-release review finding 11 (id 414 of the stream's 400-419):
+      the instruction pointer `populate_seccomp_data` stores (`KSTK_EIP(task)`,
+      kernel/seccomp.c:265), one kind-312 record of 8 bytes per
+      `__seccomp_filter` entry that builds its own `seccomp_data`, before the
+      cache check; class `address` like kind 308 (a value resolved by its
+      consumer frame). A filter that loads offsets 8..15 branches on it. -/
+  | seccompIp
   /-- seccomp (stream V, measured on stream W's scratch kernel): the two
       clock reads of `copy_process` in the parent's window of a child probe,
       `p->start_time = ktime_get_ns()` at `kernel/fork.c:2532` (kind 206) and
@@ -1235,6 +1258,16 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   -- `Env.afterAdvance` as the firing window's exact end. Id 128: the first
   -- free id after L's block (120-127).
   | .jiffiesEnd => ⟨128, "jiffies_end", "jiffies", "fs/ioctl.c", 51, 8, .mirror⟩
+  -- Pre-release review finding 2: the caller's jiffies read before each
+  -- mod_peer_timer, kind 311, 8 bytes, at the caller's line (the `_THIS_IP_`
+  -- of the `kcov_timer_jiffies(jiffies, _THIS_IP_)` expression); ids 420-426.
+  | .timerJiffiesRetransmitZeroKey => ⟨420, "timer_jiffies_retransmit_zero_key", "jiffies", "drivers/net/wireguard/timers.c", 62, 8, .mirror⟩
+  | .timerJiffiesExpiredKeepalive => ⟨421, "timer_jiffies_expired_keepalive", "jiffies", "drivers/net/wireguard/timers.c", 87, 8, .mirror⟩
+  | .timerJiffiesDataSent => ⟨422, "timer_jiffies_data_sent", "jiffies", "drivers/net/wireguard/timers.c", 149, 8, .mirror⟩
+  | .timerJiffiesDataReceived => ⟨423, "timer_jiffies_data_received", "jiffies", "drivers/net/wireguard/timers.c", 159, 8, .mirror⟩
+  | .timerJiffiesHandshakeInitiated => ⟨424, "timer_jiffies_handshake_initiated", "jiffies", "drivers/net/wireguard/timers.c", 185, 8, .mirror⟩
+  | .timerJiffiesSessionDerived => ⟨425, "timer_jiffies_session_derived", "jiffies", "drivers/net/wireguard/timers.c", 206, 8, .mirror⟩
+  | .timerJiffiesTraversal => ⟨426, "timer_jiffies_traversal", "jiffies", "drivers/net/wireguard/timers.c", 216, 8, .mirror⟩
   -- L (ids 120-126, outside E-A's 64-69, A's 70-99 and D3's 100-115). The
   -- consumer frames were confirmed on the built kernel by stream G's L0 probe
   -- (scripts/wg-l0-probe.py): kind 208 at cookie.c:23 and ratelimiter.c:57,
@@ -1292,6 +1325,7 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   | .inetEhashSecret => ⟨140, "inet_ehash_secret", "random", "net/ipv4/inet_hashtables.c", 36, 4, .cut⟩
   -- seccomp (ids 400-419; 400-410 are `AllocSite.hiddenId`'s)
   | .bpfProgInsn => ⟨411, "bpf_prog_insn", "program", "net/core/filter.c", 1315, 8, .mirror⟩
+  | .seccompIp => ⟨414, "seccomp_ip", "address", "kernel/seccomp.c", 265, 8, .mirror⟩
   | .forkStartTime => ⟨412, "fork_start_time", "clock", "kernel/fork.c", 2532, 8, .mirror⟩
   | .forkStartBoottime => ⟨413, "fork_start_boottime", "clock", "kernel/fork.c", 2533, 8, .mirror⟩
 
@@ -1303,6 +1337,8 @@ def HiddenSite.all : List HiddenSite :=
   ++ [.reschedReceive, .reschedEncrypt, .reschedTx, .reschedDecrypt, .newHandshakeJitter, .walltimeLastHandshakeData,
       .cookieBirthdate]
   ++ [.modTimerArm, .timeAdvance, .jiffiesEnd]
+  ++ [.timerJiffiesRetransmitZeroKey, .timerJiffiesExpiredKeepalive, .timerJiffiesDataSent, .timerJiffiesDataReceived,
+      .timerJiffiesHandshakeInitiated, .timerJiffiesSessionDerived, .timerJiffiesTraversal]
   ++ (Worker.all.filter fun w => w.timer?.isNone && w != .netRx).map .queued
   ++ [.cookieSecretBirthdate, .cookieSecret, .pubkeyHashKey, .ratelimiterKey, .ratelimiterGcNow, .udpPortDraw,
       .neighReachTime, .netlinkAutobindPort]
@@ -1310,7 +1346,7 @@ def HiddenSite.all : List HiddenSite :=
   ++ AllocSite.all.map .alloc
   ++ [.currentTime]
   ++ [.underLoadNow, .cookieNonce, .ratelimiterNow, .ratelimiterInsertNow, .cookieSecretRotateNow, .cookieSecretRotated]
-  ++ [.bpfProgInsn, .forkStartTime, .forkStartBoottime]
+  ++ [.bpfProgInsn, .forkStartTime, .forkStartBoottime, .seccompIp]
   ++ [.inetEhashSecret]
   ++ [.epollInsertAddress]
 
@@ -1442,6 +1478,11 @@ structure World where
       which runs before Linux). -/
   hiddenPlaceholders : Bool := false
   placeholderCount : Nat := 0
+  /-- `LEANUX_FLOOD_EXACT=1`: a flood's invalid tail runs through the real
+      worker packet by packet instead of `floodTailEffect`'s summary, to
+      check the summary against the unsummarised execution (the pre-release
+      review's section 8). -/
+  floodExact : Bool := false
   /-- W7 phase 2: the draining workers' activations suspended at a
       `cond_resched`, oldest first, each resumed when the records name it
       (`Activation`, `Env.schedule`). An operation ends with none suspended

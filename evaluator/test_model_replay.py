@@ -90,7 +90,7 @@ def run_raw(trace):
     """`run` without `widen`, for a capture made on the current kernel (its
     section starts and arms already carry their identity words; `widen` would
     mis-pad them)."""
-    result = subprocess.run([MODEL], input=json.dumps(with_jiffies_end(trace)).encode(), capture_output=True,
+    result = subprocess.run([MODEL], input=json.dumps(with_timer_caller_jiffies(with_jiffies_end(trace))).encode(), capture_output=True,
                             timeout=120)
     return result.returncode, result.stdout.decode(), result.stderr.decode()
 
@@ -105,6 +105,68 @@ def run_raw(trace):
 JIFFIES_END_OPS = ('wg_set', 'wg_inject', 'wg_up', 'wg_xmit', 'wg_batch', 'wg_observe', 'wg_advance')
 JIFFIES_END_SITE = 128
 JIFFIES_SITES = {100: 0, 150: 0, 151: 0, 101: 8}   # site -> byte offset of its jiffies word
+
+
+# Pre-release review finding 2 (kind 311, Leanux/WG/State.lean `callerJiffies`):
+# the mirror consumes a peer timer caller's own jiffies read before each arm
+# record. The captures above predate the instrument, so the replays insert,
+# before every arm record not already preceded by one, the caller-read record
+# the kernel now writes, with the value the capture determines: the arm's
+# published expiry minus the delay of the timer the arm fits (the five
+# timers' delays are the C's constants; a jittered one takes the jitter from
+# the last accepted draw record in the operation, the C's `(83 * r) >> 8`),
+# the fit being the one whose implied caller read is within a tick of
+# mod_timer's. A fixture of the replay, not a mirror rule: a capture made on
+# a kernel with the instrument carries the record itself and is left alone.
+# Sites 422-426 are the ordinary callers; the two expired-callback re-arms
+# (420, 421) do not occur in these captures.
+TIMER_ARM_SITE = 100
+TIMER_CALLER_SITE_IDS = {420, 421, 422, 423, 424, 425, 426}
+JITTER_SITES = {'retransmit': 14, 'new_handshake': 16}
+HZ = 250
+MASK64 = (1 << 64) - 1
+
+
+def with_timer_caller_jiffies(trace):
+    trace = copy.deepcopy(trace)
+    if 'hidden' not in trace:
+        return trace
+    keepalive = max((peer.get('keepalive', 0) for op in trace['ops'] if op.get('op') == 'wg_set'
+                     for peer in op.get('config', {}).get('peers', [])), default=0)
+    for records in trace['hidden']:
+        out, jitter, draw_at = [], {}, {}
+        for site, value in records:
+            for name, draw_site in JITTER_SITES.items():
+                if site == draw_site:
+                    # the compiled argument reads jiffies before the jitter draw (measured on
+                    # s3), so the synthetic caller read goes before the first draw of the
+                    # rejection loop, not right before the arm
+                    draw_at.setdefault(name, len(out))
+                    r = int(value[:2], 16)
+                    if (83 * r) % 256 >= 256 % 83:
+                        jitter[name] = 83 * r // 256
+            if site == TIMER_ARM_SITE and not (out and out[-1][0] in TIMER_CALLER_SITE_IDS):
+                jm = int.from_bytes(bytes.fromhex(value[:16]), 'little')
+                e = int.from_bytes(bytes.fromhex(value[16:32]), 'little')
+                # a jittered timer is armed right after its draw in the same operation, so
+                # it is a candidate only while an unconsumed draw precedes the arm
+                candidates = [(425, 540 * HZ), (423, 10 * HZ), (426, keepalive * HZ)]
+                if 'new_handshake' in jitter:
+                    candidates.append((422, 15 * HZ + jitter['new_handshake']))
+                if 'retransmit' in jitter:
+                    candidates.append((424, 5 * HZ + jitter['retransmit']))
+                fits = [(caller, (e - delay) & MASK64) for caller, delay in candidates
+                        if delay and ((jm - ((e - delay) & MASK64)) & MASK64) <= 1]
+                if not fits:
+                    raise AssertionError(f'replay fixture: arm {value} fits no timer delay within a tick of {jm:#x}')
+                caller, jc = fits[-1]   # the jittered fit, when its draw is present, over a coincident constant
+                name = {422: 'new_handshake', 424: 'retransmit'}.get(caller, '')
+                jitter.pop(name, None)
+                at = draw_at.pop(name, len(out))
+                out.insert(at, [caller, jc.to_bytes(8, 'little').hex()])
+            out.append([site, value])
+        records[:] = out
+    return trace
 
 
 def with_jiffies_end(trace):
@@ -125,7 +187,7 @@ def with_jiffies_end(trace):
 def replay(trace):
     if not MODEL.is_file():
         raise AssertionError(f'{MODEL} is missing: run `lake build leanux-model` first')
-    result = subprocess.run([MODEL], input=json.dumps(with_jiffies_end(widen(trace))).encode(), capture_output=True,
+    result = subprocess.run([MODEL], input=json.dumps(with_timer_caller_jiffies(with_jiffies_end(widen(trace)))).encode(), capture_output=True,
                             timeout=120)
     out = (result.stdout + result.stderr).decode()
     return None if result.returncode == 0 and out.startswith('{') and not result.stderr else out.strip()
@@ -134,7 +196,7 @@ def replay_raw(trace):
     """`replay` without `widen`: a capture made on the current kernel (the identity words, the kind-306 records)."""
     if not MODEL.is_file():
         raise AssertionError(f'{MODEL} is missing: run `lake build leanux-model` first')
-    result = subprocess.run([MODEL], input=json.dumps(with_jiffies_end(trace)).encode(), capture_output=True, timeout=120)
+    result = subprocess.run([MODEL], input=json.dumps(with_timer_caller_jiffies(with_jiffies_end(trace))).encode(), capture_output=True, timeout=120)
     out = (result.stdout + result.stderr).decode()
     return None if result.returncode == 0 and out.startswith('{') and not result.stderr else out.strip()
 

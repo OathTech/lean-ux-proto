@@ -99,67 +99,62 @@ theorem setPeerEndpointPrefix_spec (c : AmbientContracts I) (P : IdentityView �
 
 /-- The access-free prelude of the original timer arm. Its world updates and
 hidden-input failures occur before the first resolved peer read. -/
-def timerArmExpiry (pid : PeerId) (t : PeerTimer) (delay : Nat) : M UInt64 := do
+def timerArmExpiry (pid : PeerId) (t : PeerTimer) (delay : Nat) (jc : Option UInt64 := none) : M UInt64 := do
   let w ← get
-  if w.armRecords then
-    let bs ← hidden .modTimerArm
-    let (jm, e) := (recordWord64 bs 0, recordWord64 bs 1)
-    let jc := e - delay.toUInt64
-    let gap := (jm - jc).toInt64
-    if gap < 0 then
-      throw (.hidden s!"timer expiry differs from Linux: mod_timer at jiffies {jm} to {e}, the mirror's delay is {delay} (the caller's read would be {jc}, after mod_timer's)")
-    if gap > 1 then
-      unsupported s!"a stall between a timer's two jiffies reads: the caller's {jc}, mod_timer's {jm} (delay {delay}, expires {e})"
-    modify fun w => {w with jiffiesLast := some jm}
-    let u := recordWord bs 2
-    if u != 0 then modify fun w => {w with timerUnits := (u, pid, t) :: w.timerUnits.filter (·.1 != u)}
-    return jc + delay.toUInt64
-  else return w.jiffiesLast.getD 0 + delay.toUInt64
+  let e ← if w.armRecords then
+      let bs ← hidden .modTimerArm
+      let (jm, e) := (recordWord64 bs 0, recordWord64 bs 1)
+      let some caller := jc | invariant "a timer armed with arm records and no caller read (kind 311)"
+      let expires := caller + delay.toUInt64
+      if expires != e then
+        throw (.hidden s!"timer expiry differs from Linux: the caller read jiffies {caller} and mod_timer published {e}; the mirror's delay {delay} gives {expires}")
+      let gap := (jm - caller).toInt64
+      if gap < 0 then
+        throw (.hidden s!"mod_timer's jiffies {jm} is behind the caller's read {caller} (delay {delay}, expires {e})")
+      if gap > 1 then
+        unsupported s!"a stall between a timer's two jiffies reads: the caller's {caller}, mod_timer's {jm} (delay {delay}, expires {e})"
+      modify fun w => {w with jiffiesLast := some jm}
+      let u := recordWord bs 2
+      if u != 0 then modify fun w => {w with timerUnits := (u, pid, t) :: w.timerUnits.filter (·.1 != u)}
+      return e
+    else return w.jiffiesLast.getD 0 + delay.toUInt64
+  pure e
 
-theorem timerArmExpiry_sameKernel (pid : PeerId) (t : PeerTimer) (delay : Nat) :
-    SameKernel (timerArmExpiry pid t delay) := by
+theorem timerArmExpiry_sameKernel (pid : PeerId) (t : PeerTimer) (delay : Nat) (jc : Option UInt64 := none) :
+    SameKernel (timerArmExpiry pid t delay jc) := by
   apply sameKernel_of_wp
   intro k
   have hs := sameKernel_wp _ (hidden_sameKernel .modTimerArm) (fun k' => k' = k)
-  mvcgen [timerArmExpiry, hs, unsupported]
+  mvcgen [timerArmExpiry, hs, unsupported, invariant]
 
-theorem armTimer_source (pid : PeerId) (t : PeerTimer) (delay : Nat) :
-    armTimer pid t delay = (do
-      let e ← timerArmExpiry pid t delay
+theorem armTimer_source (pid : PeerId) (t : PeerTimer) (delay : Nat) (jc : Option UInt64 := none) :
+    armTimer pid t delay jc = (do
+      let e ← timerArmExpiry pid t delay jc
       setPeer pid ((← getPeer pid).setTimer t (some e))) := by
-  simp only [armTimer, timerArmExpiry, bind_assoc, pure_bind]
-  congr 1
-  funext w
-  split
-  · simp only [bind_assoc]
-    congr 1
-    funext bs
-    split <;> try simp only [bind_assoc]
-    all_goals first | rfl | skip
-    split <;> try simp only [bind_assoc]
-    all_goals congr 1
-    all_goals first | funext u | skip
-    all_goals split <;> simp only [bind_assoc, pure_bind]
-  · rfl
+  have ib {α β : Type} (c : Prop) [Decidable c] (a b : M α) (f : α → M β) :
+      ((if c then a else b) >>= f) = (if c then a >>= f else b >>= f) := by
+    split <;> rfl
+  cases jc <;> simp only [armTimer, timerArmExpiry, bind_assoc, pure_bind, ib]
+  all_goals rfl
 
-def armTimerPrefix (pid : PeerId) (t : PeerTimer) (delay : Nat) : MixedM Unit := do
-  let e ← liftPrefix (timerArmExpiry pid t delay)
+def armTimerPrefix (pid : PeerId) (t : PeerTimer) (delay : Nat) (jc : Option UInt64 := none) : MixedM Unit := do
+  let e ← liftPrefix (timerArmExpiry pid t delay jc)
   modifyPeerKeysPrefix pid fun p => p.setTimer t (some e)
 
 def delTimerPrefix (pid : PeerId) (t : PeerTimer) : MixedM Unit :=
   modifyPeerKeysPrefix pid fun p => p.setTimer t none
 
-theorem armTimerPrefix_erases (pid : PeerId) (t : PeerTimer) (delay : Nat) :
-    ErasesPrefix (armTimerPrefix pid t delay) (armTimer pid t delay) := by
-  rw [armTimer_source]
+theorem armTimerPrefix_erases (pid : PeerId) (t : PeerTimer) (delay : Nat) (jc : Option UInt64 := none) :
+    ErasesPrefix (armTimerPrefix pid t delay jc) (armTimer pid t delay jc) := by
+  rw [armTimer_source pid t delay jc]
   exact erasesPrefix_bind (erasesPrefix_lift _) (fun _ => modifyPeerKeysPrefix_erases _ _)
 
 theorem delTimerPrefix_erases (pid : PeerId) (t : PeerTimer) :
     ErasesPrefix (delTimerPrefix pid t) (delTimer pid t) := modifyPeerKeysPrefix_erases _ _
 
 theorem armTimerPrefix_spec (c : AmbientContracts I) (P : IdentityView → Prop)
-    (pid : PeerId) (t : PeerTimer) (delay : Nat) : AmbientSpec I P (armTimerPrefix pid t delay) (fun _ => P) := by
-  apply PrefixEnsures.bind (c.kernel P _ (timerArmExpiry_sameKernel pid t delay))
+    (pid : PeerId) (t : PeerTimer) (delay : Nat) (jc : Option UInt64 := none) : AmbientSpec I P (armTimerPrefix pid t delay jc) (fun _ => P) := by
+  apply PrefixEnsures.bind (c.kernel P _ (timerArmExpiry_sameKernel pid t delay jc))
   intro e
   exact modifyPeerKeysPrefix_spec_ambient c P pid _ (fun p => by cases t <;> rfl)
 
@@ -193,28 +188,34 @@ theorem modPeerTimerGuardPrefix_spec (c : AmbientContracts I) (P : IdentityView 
     · exact sameKernel_branch _ _
     · exact sameKernel_pure _)
 
-def modPeerTimerPrefix (pid : PeerId) (t : PeerTimer) (delay : Nat) : MixedM Bool := do
+def modPeerTimerPrefix (site : HiddenSite) (pid : PeerId) (t : PeerTimer) (delay : Nat) : MixedM Bool := do
+  let jc ← liftPrefix (callerJiffies site)
   if ← modPeerTimerGuardPrefix pid then
-    armTimerPrefix pid t delay
+    armTimerPrefix pid t delay jc
     return true
   return false
 
-theorem modPeerTimerPrefix_erases (pid : PeerId) (t : PeerTimer) (delay : Nat) :
-    ErasesPrefix (modPeerTimerPrefix pid t delay) (modPeerTimer pid t delay) := by
+theorem modPeerTimerPrefix_erases (site : HiddenSite) (pid : PeerId) (t : PeerTimer) (delay : Nat) :
+    ErasesPrefix (modPeerTimerPrefix site pid t delay) (modPeerTimer site pid t delay) := by
   unfold modPeerTimerPrefix modPeerTimer
+  apply erasesPrefix_bind (erasesPrefix_lift _)
+  intro jc
   apply erasesPrefix_bind (modPeerTimerGuardPrefix_erases pid)
   intro b
   split
-  · exact erasesPrefix_bind (armTimerPrefix_erases pid t delay) (fun _ => erasesPrefix_pure _)
+  · exact erasesPrefix_bind (armTimerPrefix_erases pid t delay jc) (fun _ => erasesPrefix_pure _)
   · exact erasesPrefix_pure _
 
 theorem modPeerTimerPrefix_spec (c : AmbientContracts I) (P : IdentityView → Prop)
-    (pid : PeerId) (t : PeerTimer) (delay : Nat) : AmbientSpec I P (modPeerTimerPrefix pid t delay) (fun _ => P) := by
+    (site : HiddenSite) (pid : PeerId) (t : PeerTimer) (delay : Nat) :
+    AmbientSpec I P (modPeerTimerPrefix site pid t delay) (fun _ => P) := by
   unfold modPeerTimerPrefix
+  apply PrefixEnsures.bind (c.kernel P _ (callerJiffies_sameKernel site))
+  intro jc
   apply PrefixEnsures.bind (modPeerTimerGuardPrefix_spec c P pid)
   intro b
   split
-  · exact PrefixEnsures.bind (armTimerPrefix_spec c P pid t delay) (fun _ => c.pure P _)
+  · exact PrefixEnsures.bind (armTimerPrefix_spec c P pid t delay jc) (fun _ => c.pure P _)
   · exact c.pure P _
 
 def timersHandshakeCompletePrefix (pid : PeerId) (site : HiddenSite := .walltimeLastHandshake) : MixedM Unit := do
@@ -229,14 +230,14 @@ def timersAnyAuthenticatedPacketReceivedPrefix (pid : PeerId) : MixedM Unit :=
 def timersDataReceivedPrefix (pid : PeerId) : MixedM Unit := do
   if ← liftPrefix (branch .timersDataReceivedRunning (← liftPrefix getDev).running) then
     if ← liftPrefix (branch .timersDataReceivedNotPending !((← getPeerMixed pid).timerPending .sendKeepalive)) then
-      discard <| modPeerTimerPrefix pid .sendKeepalive KEEPALIVE_TIMEOUT_TICKS
+      discard <| modPeerTimerPrefix .timerJiffiesDataReceived pid .sendKeepalive KEEPALIVE_TIMEOUT_TICKS
     else
       modifyPeerKeysPrefix pid fun p => {p with timerNeedAnotherKeepalive := true}
 
 def timersTraversalPrefix (pid : PeerId) : MixedM Unit := do
   let interval := (← getPeerMixed pid).persistentKeepaliveInterval
   if ← liftPrefix (branchCmp .traversalKeepalive (interval != 0) interval 0) then
-    discard <| modPeerTimerPrefix pid .persistentKeepalive (interval * HZ)
+    discard <| modPeerTimerPrefix .timerJiffiesTraversal pid .persistentKeepalive (interval * HZ)
 
 theorem timersHandshakeCompletePrefix_erases (pid : PeerId) (site : HiddenSite) :
     ErasesPrefix (timersHandshakeCompletePrefix pid site) (timersHandshakeComplete pid site) := by
@@ -259,7 +260,7 @@ theorem timersDataReceivedPrefix_erases (pid : PeerId) :
   repeat' first
     | exact getPeerMixed_erases _
     | exact setPeerMixed_erases _ _
-    | exact modPeerTimerPrefix_erases _ _ _
+    | exact modPeerTimerPrefix_erases _ _ _ _
     | exact modifyPeerKeysPrefix_erases _ _
     | exact erasesPrefix_lift _
     | exact erasesPrefix_pure _
@@ -275,7 +276,7 @@ theorem timersTraversalPrefix_erases (pid : PeerId) :
   repeat' first
     | exact getPeerMixed_erases _
     | exact setPeerMixed_erases _ _
-    | exact modPeerTimerPrefix_erases _ _ _
+    | exact modPeerTimerPrefix_erases _ _ _ _
     | exact erasesPrefix_lift _
     | exact erasesPrefix_pure _
     | apply erasesPrefix_bind
@@ -308,7 +309,7 @@ theorem timersDataReceivedPrefix_spec (c : AmbientContracts I) (P : IdentityView
     | exact c.getPeer_frame P _
     | exact c.branch P _ _
     | exact c.branchCmp P _ _ _ _
-    | exact modPeerTimerPrefix_spec c P _ _ _
+    | exact modPeerTimerPrefix_spec c P _ _ _ _
     | exact modifyPeerKeysPrefix_spec_ambient c P _ _ (fun _ => rfl)
     | exact c.pure P _
     | apply PrefixEnsures.bind
@@ -323,7 +324,7 @@ theorem timersTraversalPrefix_spec (c : AmbientContracts I) (P : IdentityView �
     | exact c.getPeer_frame P _
     | exact c.branch P _ _
     | exact c.branchCmp P _ _ _ _
-    | exact modPeerTimerPrefix_spec c P _ _ _
+    | exact modPeerTimerPrefix_spec c P _ _ _ _
     | exact c.pure P _
     | apply PrefixEnsures.bind
     | split

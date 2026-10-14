@@ -146,3 +146,24 @@ class KernelIdentityTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ObservationOrder(unittest.TestCase):
+    """wg_observe's datagrams keep arrival order within a peer session and
+    are free across peers (pre-release review, finding 5)."""
+
+    def test_within_session_order_kept_across_sessions_free(self):
+        from harness.linux import attach_observed
+        data = lambda idx, counter: '04000000' + idx.to_bytes(4, 'little').hex() + counter.to_bytes(8, 'little').hex()
+        # one session (index 7): two data messages arriving counter 1 then 0 stay in that order
+        a, b = [4, 16, 4, 0, data(7, 1)], [4, 16, 4, 0, data(7, 0)]
+        # a second session (index 3) interleaved: it sorts to its own key, order inside it kept
+        c, d = [4, 16, 4, 0, data(3, 5)], [4, 16, 4, 0, data(3, 4)]
+        results = [{'id': 'o', 'observations': [{}]}]
+        traces = [{'id': 'o', 'ops': [{'op': 'wg_observe'}]}]
+        records = [{'id': 'o', 'index': 0, 'datagrams': [a, c, b, d], 'replies': [],
+                    'stats': {k: 0 for k in ('tx_errors', 'tx_dropped', 'rx_frame_errors', 'rx_length_errors',
+                                             'rx_packets', 'rx_bytes', 'tx_packets', 'tx_bytes')}}]
+        attach_observed(results, traces, records)
+        self.assertEqual(results[0]['observations'][0]['datagrams'], [c, d, a, b])
+

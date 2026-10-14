@@ -47,7 +47,9 @@ U32 = 2**32 - 1
 SKF_AD_OFF = 0xfffff000      # the ancillary load space (include/uapi/linux/filter.h)
 NB = 0o4000                  # O_NONBLOCK = EFD_NONBLOCK
 # harness/linux.py treats these errnos as the guest's infrastructure failing
-# (EINTR, ENOMEM, ENFILE, the restart codes), so no ERRNO data here is one
+# (EINTR, ENOMEM, ENFILE, the restart codes) unless the trace's own installs
+# make them a policy result (a RET ERRNO with that data before the probe:
+# provenance, pre-release review finding 11); s_errno_reserved_* use them
 RESERVED_ERRNO = {4, 12, 23, 512, 513, 514, 516}
 
 
@@ -285,6 +287,62 @@ trace("s_flag_arms", [
     install(ALLOW_ALL, flags=["log", "spec_allow"]),       # 7: 0
     prctl("get_seccomp"),                      # 8: 2
     probe(102),                                # 9: 0
+])
+
+# TSYNC on a single thread (pre-release review finding 11): the cred_guard_mutex
+# is uncontended (:2004-2005), seccomp_can_sync_threads walks a group of one
+# and returns 0 (:499-523), the filter attaches, seccomp_sync_threads walks the
+# same group and changes nothing (:606-645), the unlock (:2027-2028). With
+# TSYNC_ESRCH the -ESRCH arm (:934-935) is declared but never taken here.
+trace("s_tsync_single", [
+    install(ALLOW_ALL, flags=["tsync"]),       # 0: 0
+    prctl("get_seccomp"),                      # 1: 2
+    probe(102),                                # 2: 0
+    install(prologue([(104, [ret(ERRNO | 5)])]), flags=["tsync", "tsync_esrch"]),   # 3: 0
+    probe(104),                                # 4: -5
+    probe(102),                                # 5: 0
+])
+
+# The instruction pointer (pre-release review finding 11): populate_seccomp_data
+# stores KSTK_EIP(task) (:265), recorded there (kind 312) and consumed by the
+# mirror, so a filter loading offsets 8..15 branches on the recorded value.
+# The low word is never 0 (-2); its parity is the run's (the comment cannot
+# say which arm, the record does); a canonical user address has a nonzero
+# high word (-4); a child probe's own pointer is its own record.
+trace("s_ip_load_zero", [
+    install(prologue([(102, [ld(IP), jeq(0, 0, 1), ret(ERRNO | 1), ret(ERRNO | 2)])])),   # 0: 0
+    probe(102),                                # 1: -2
+])
+trace("s_ip_parity", [
+    install(prologue([(102, [ld(IP), insn(JSET_K, 0, 1, 1), ret(ERRNO | 1), ret(ERRNO | 2)])])),   # 0: 0
+    probe(102),                                # 1: -1 (odd) or -2 (even): the recorded pointer decides
+])
+trace("s_ip_high_word", [
+    install(prologue([(102, [ld(IP + 4), jeq(0, 0, 1), ret(ERRNO | 3), ret(ERRNO | 4)])])),   # 0: 0
+    probe(102),                                # 1: -4
+])
+trace("s_ip_child", [
+    install(prologue([(102, [ld(IP), jeq(0, 0, 1), ret(ERRNO | 1), ret(ERRNO | 2)])])),   # 0: 0
+    child(102),                                # 1: child {ret -2}
+])
+
+# Reserved errnos as policy results (pre-release review finding 11): EINTR,
+# ENOMEM, ENFILE and the restart codes are ordinary ERRNO data; the harness
+# tells them from its own infrastructure failures by the trace's installs.
+trace("s_errno_reserved_self", [
+    install(prologue([(102, [ret(ERRNO | 4)]), (104, [ret(ERRNO | 12)]), (107, [ret(ERRNO | 23)]),
+                      (108, [ret(ERRNO | 512)]), (1000, [ret(ERRNO | 516)])])),   # 0: 0
+    probe(102),                                # 1: -4
+    probe(104),                                # 2: -12
+    probe(107),                                # 3: -23
+    probe(108),                                # 4: -512
+    probe(1000),                               # 5: -516
+])
+trace("s_errno_reserved_child", [
+    install(prologue([(102, [ret(ERRNO | 513)]), (104, [ret(ERRNO | 514)]), (107, [ret(ERRNO | 4)])])),   # 0: 0
+    child(102),                                # 1: child {ret -513}
+    child(104),                                # 2: child {ret -514}
+    child(107),                                # 3: child {ret -4}
 ])
 
 # prctl(PR_SET_SECCOMP): prctl_set_seccomp (kernel/sys.c:2130-2155) maps mode 2
@@ -718,12 +776,9 @@ trace("s_mixed_files", [
 # Valid traces the kernel runs and the mirror must refuse at the named site
 # (design 9.1); scripts/seccomp-controls.py checks the stop.
 
-# TSYNC on a single thread is a successful no-op in the C (:490, :597); the
-# mirror stops unsupported at seccomp_attach_filter's TSYNC arm.
-trace("sk_tsync", [
-    install(ALLOW_ALL, flags=["tsync"]),       # 0: 0 (Linux)
-    prctl("get_seccomp"),                      # 1: 2
-], table=CONTROL_TRACES)
+# (TSYNC on a single thread and a CTX load of the instruction pointer were
+# controls until the pre-release review's finding 11: now s_tsync_single and
+# the s_ip_* traces above, in the domain.)
 
 # NEW_LISTENER returns the listener descriptor (8, the first free one); the
 # mirror stops at seccomp_set_mode_filter's listener arm.
@@ -746,12 +801,6 @@ trace("sk_user_notif", [
     child(102),                                # 1: child {ret -ENOSYS} (Linux)
 ], table=CONTROL_TRACES)
 
-# A CTX load of instruction_pointer (offset 8) at run time: the engine's
-# unsupportedRead; Linux compares the real pointer with 0 and answers -2.
-trace("sk_ip_load", [
-    install(prologue([(102, [ld(IP), jeq(0, 0, 1), ret(ERRNO | 1), ret(ERRNO | 2)])])),   # 0: 0
-    probe(102),                                # 1: -2 (Linux)
-], table=CONTROL_TRACES)
 
 
 def render(t):
@@ -764,8 +813,6 @@ def check_rules():
     instructions, and no trace holds more than three child probes."""
     for t in list(TRACES.values()) + list(CONTROL_TRACES.values()):
         installs = [op["filter"] for op in t["ops"] if op["op"] == "seccomp_install" and op["filter"]]
-        assert not any(i[0] == RET_K and i[3] & 0xffff0000 == ERRNO and i[3] & 0xffff in RESERVED_ERRNO
-                       for p in installs for i in p), t["id"]
         assert all(len(p) <= 772 for p in installs), t["id"]   # 772: the budget trace's smallest crossing install
         assert sum(op["op"] == "seccomp_probe" and op["where"] == "child" for op in t["ops"]) <= 3, t["id"]
         assert not any(op["op"] == "seccomp_probe" and op["where"] == "self" and any(

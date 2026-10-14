@@ -48,10 +48,11 @@ def cryptAheadLogged (pid : PeerId) : GhostM Unit := do
   let some item := (← getPeer pid).txQueue.all.head? | return
   let some id := item.head? | invariant "an empty ring item"
   if (← getTxSkb id).state != .uncrypted then return
-  if (← peekHiddenSite) != some HiddenSite.modTimerArm.info.id then return
+  let next ← peekHiddenSite
+  unless next == some HiddenSite.modTimerArm.info.id || next == some HiddenSite.timerJiffiesTraversal.info.id do return
   let w ← getWorld
   let some enc := w.suspended.find? (·.worker == .encryptWorker)
-    | throw (.hidden "the tx worker's head is uncrypted and no encrypt activation is suspended, but the next record is a timer arm (site 100)")
+    | throw (.hidden "the tx worker's head is uncrypted and no encrypt activation is suspended, but the next record is the traversal timer's caller read or arm (site 426 or 100)")
   modifyDev fun d => { d with txWorkQueue := d.txWorkQueue ++ [pid] }
   let r ← encryptIterLogged checksumHelp napiSoftirqLogged (liftM (condResched .encryptWorker))
   modifyDev fun d => { d with txWorkQueue := d.txWorkQueue.erase pid }
@@ -59,7 +60,7 @@ def cryptAheadLogged (pid : PeerId) : GhostM Unit := do
   | .continued =>
     modifyWorld fun s => { s with suspended := s.suspended.map fun x =>
       if x == enc then { x with iterations := x.iterations + 1 } else x }
-  | .ended => throw (.hidden "the encrypt activation's queue is empty, but the next record is a timer arm (site 100)")
+  | .ended => throw (.hidden "the encrypt activation's queue is empty, but the next record is the traversal timer's caller read or arm (site 426 or 100)")
   | .yielded => invariant "the encrypt activation yielded on a record that is not a resched"
 
 theorem cryptAheadLogged_erases (pid : PeerId) :

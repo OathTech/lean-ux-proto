@@ -132,10 +132,10 @@ theorem setPeerEndpoint_cell (pid : PeerId) (e : Endpoint) : SameView cell (setP
   all_goals try dsimp +zetaDelta only at *
   all_goals simp_all [cell, Option.map_map, Function.comp_def]
 
-theorem armTimer_cell (pid : PeerId) (timer : PeerTimer) (delay : Nat) :
-    SameView cell (armTimer pid timer delay) := by
-  rw [armTimer_source]
-  apply SameView.bind (cell_kernel (timerArmExpiry_sameKernel pid timer delay))
+theorem armTimer_cell (pid : PeerId) (timer : PeerTimer) (delay : Nat) (jc : Option UInt64 := none) :
+    SameView cell (armTimer pid timer delay jc) := by
+  rw [armTimer_source pid timer delay jc]
+  apply SameView.bind (cell_kernel (timerArmExpiry_sameKernel pid timer delay jc))
   intro expiry
   exact modifyPeer_cell pid (fun p => p.setTimer timer (some expiry))
     (fun p => by cases timer <;> rfl) (fun p => by cases timer <;> rfl)
@@ -150,13 +150,14 @@ theorem modPeerTimerGuard_cell (pid : PeerId) : SameView cell (modPeerTimerGuard
   have hg := (getPeer_cell pid).wp (fun t => t = s)
   mvcgen [modPeerTimerGuard, getDev, getK, hg, WG.andM, branch, invariant]
 
-theorem modPeerTimer_cell (pid : PeerId) (timer : PeerTimer) (delay : Nat) :
-    SameView cell (modPeerTimer pid timer delay) := by
+theorem modPeerTimer_cell (site : HiddenSite) (pid : PeerId) (timer : PeerTimer) (delay : Nat) :
+    SameView cell (modPeerTimer site pid timer delay) := by
   apply SameView.of_wp
   intro s
   have hg := (modPeerTimerGuard_cell pid).wp (fun t => t = s)
-  have ha := (armTimer_cell pid timer delay).wp (fun t => t = s)
-  mvcgen [modPeerTimer, hg, ha]
+  have ha := fun jc => (armTimer_cell pid timer delay jc).wp (fun t => t = s)
+  have hc := (cell_kernel (callerJiffies_sameKernel site)).wp (fun t => t = s)
+  mvcgen [modPeerTimer, hg, ha, hc]
 
 theorem timersHandshakeComplete_cell (pid : PeerId) (site : HiddenSite) :
     SameView cell (timersHandshakeComplete pid site) := by
@@ -178,7 +179,7 @@ theorem timersDataReceived_cell (pid : PeerId) : SameView cell (timersDataReceiv
   intro s
   have hg := getPeer_cell_spec (fun t => t = s) pid
   have hs := fun p => setPeer_cell_spec (fun t => t = s) pid p
-  have ht := (modPeerTimer_cell pid .sendKeepalive KEEPALIVE_TIMEOUT_TICKS).wp (fun t => t = s)
+  have ht := (modPeerTimer_cell .timerJiffiesDataReceived pid .sendKeepalive KEEPALIVE_TIMEOUT_TICKS).wp (fun t => t = s)
   have hd := discard_view_spec cell (fun t => t = s) _ ht
   mvcgen [timersDataReceived, hg, hs, ht, hd, getDev, getK, branch, invariant]
   all_goals try dsimp +zetaDelta only at *
@@ -188,7 +189,7 @@ theorem timersTraversal_cell (pid : PeerId) : SameView cell (timersTraversal pid
   apply SameView.of_wp
   intro s
   have hg := (getPeer_cell pid).wp (fun t => t = s)
-  have ht := fun delay => (modPeerTimer_cell pid .persistentKeepalive delay).wp (fun t => t = s)
+  have ht := fun delay => (modPeerTimer_cell .timerJiffiesTraversal pid .persistentKeepalive delay).wp (fun t => t = s)
   have hd := fun delay => discard_view_spec cell (fun t => t = s) _ (ht delay)
   mvcgen [timersTraversal, hg, ht, hd, branchCmp]
 

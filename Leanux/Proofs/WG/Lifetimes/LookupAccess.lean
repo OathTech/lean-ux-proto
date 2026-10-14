@@ -5,37 +5,21 @@ set_option maxHeartbeats 1000000
 set_option pp.structureInstances false
 
 /-! Reference-taking lookups. Index and public-key table scans inspect scalar
-references; every resolved peer access remains explicit, including the pending
-worker check and the read preceding a zero or overflowing reference count. -/
+references; every resolved peer access remains explicit, including the read
+preceding a zero or overflowing reference count. The retired pending-worker
+helper is the original no-op and emits no access. -/
 namespace Leanux.Proofs.WG.Lifetimes
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Std.Do
 
-def requireNotPendingMixed (pid : PeerId) (what : String) : MixedM Unit := do
-  if (← getPeerMixed pid).handshakePending && !(← liftPrefix get).queuedThisCall.contains pid then
-    liftPrefix (unsupported s!"{what} races the pending handshake worker")
+def requireNotPendingMixed (_pid : PeerId) (_what : String) : MixedM Unit := pure ()
 
 theorem requireNotPendingMixed_erases (pid : PeerId) (what : String) :
-    ErasesPrefix (requireNotPendingMixed pid what) (requireNotPending pid what) := by
-  unfold requireNotPendingMixed requireNotPending
-  apply erasesPrefix_bind (getPeerMixed_erases pid)
-  intro p
-  apply erasesPrefix_bind (erasesPrefix_lift get)
-  intro w
-  split
-  · exact erasesPrefix_lift _
-  · exact erasesPrefix_pure _
+    ErasesPrefix (requireNotPendingMixed pid what) (requireNotPending pid what) :=
+  erasesPrefix_pure _
 
 theorem requireNotPendingMixed_spec (c : AmbientContracts I) (P : IdentityView → Prop)
     (pid : PeerId) (what : String) :
-    AmbientSpec I P (requireNotPendingMixed pid what) (fun _ => P) := by
-  unfold requireNotPendingMixed
-  apply PrefixEnsures.bind (c.getPeer_frame P pid)
-  intro p
-  apply PrefixEnsures.bind (c.kernel P get (by intro w x v hr; cases hr; rfl))
-  intro w
-  split
-  · exact c.unsupported P _
-  · exact c.pure P _
+    AmbientSpec I P (requireNotPendingMixed pid what) (fun _ => P) := c.pure P _
 
 def peerGetMaybeZeroPrefix (peer : Option PeerId) : MixedM (Option PeerId) := do
   if ← liftPrefix (branch .peerGetMaybeZeroNull peer.isNone) then return none

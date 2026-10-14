@@ -38,4 +38,10 @@ theorem jitterBelowRekeyTimeout_sameKernel (site : HiddenSite) :
   all_goals try dsimp +zetaDelta only at *
   all_goals simp_all
 
+theorem callerJiffies_sameKernel (site : HiddenSite) : SameKernel (callerJiffies site) := by
+  apply sameKernel_of_wp
+  intro k
+  have hh := sameKernel_wp _ (hiddenJiffies_sameKernel site) (fun k' => k' = k)
+  mvcgen [callerJiffies, hh]
+
 end Leanux.Proofs.Framing

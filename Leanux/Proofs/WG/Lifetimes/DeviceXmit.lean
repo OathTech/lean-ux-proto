@@ -111,6 +111,10 @@ def wgXmitSource (family addr : Nat) (pkts : List Packet) (mtu : Nat) : M Int :=
   if ← branch .xmitBadProtocol !ok then
     modifyDev fun d => {d with txErrors := d.txErrors + 1}
     return -EPROTONOSUPPORT
+  for p in pkts do
+    let field (off len : Nat) := ((p.bytes.drop off).take len).foldl (fun acc b => acc * 256 + b.toNat) 0
+    let dst := if family == 4 then field 16 4 else field 24 16
+    if dst != addr then invariant "the environment's destination disagrees with the packet header"
   let err (ret : Int) : M Int := do
     -- err_icmp: icmp_ndo_send / icmpv6_ndo_send (cut points, whose rate limit
     -- and IP output draw cut-site choices), then err. The error is sent iff
@@ -175,6 +179,10 @@ def wgXmitPrefix (family addr : Nat) (pkts : List Packet) (mtu : Nat) : MixedM I
   if ← rxBranch .xmitBadProtocol !ok then
     liftPrefix (modifyDev fun d => {d with txErrors := d.txErrors + 1})
     return -EPROTONOSUPPORT
+  for p in pkts do
+    let field (off len : Nat) := ((p.bytes.drop off).take len).foldl (fun acc b => acc * 256 + b.toNat) 0
+    let dst := if family == 4 then field 16 4 else field 24 16
+    if dst != addr then liftPrefix (invariant "the environment's destination disagrees with the packet header")
   let err (ret : Int) : MixedM Int := do
     -- err_icmp: icmp_ndo_send / icmpv6_ndo_send (cut points, whose rate limit
     -- and IP output draw cut-site choices), then err. The error is sent iff

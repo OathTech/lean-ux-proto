@@ -392,6 +392,24 @@ def attach_batches(results, traces, records):
                 raise ValueError("missing or unexpected wg_batch record")
 
 
+def message_index(hex_bytes):
+    """The WireGuard message's index word at byte 4 (little-endian), 0 for a
+    message too short to carry one."""
+    return int.from_bytes(bytes.fromhex(hex_bytes[8:16]), "little") if len(hex_bytes) >= 16 else 0
+
+
+def datagram_peer_key(datagram):
+    """A listener datagram's peer key: [family, length, type, tos, bytes]."""
+    return (datagram[0], message_index(datagram[4]))
+
+
+def reply_peer_key(reply):
+    """A sender-side reply's peer key: its source address and port and the
+    message's index word ([10, addr, port, scope, tos, dst, length, type,
+    word8, bytes])."""
+    return (reply[1], reply[2], message_index(reply[9]))
+
+
 def attach_observed(results, traces, records):
     """Each wg_observe has exactly one record: the datagrams the fixture's
     listeners received (family, length, message type), sorted, since arrival
@@ -445,11 +463,18 @@ def attach_observed(results, traces, records):
                                                     "rx_packets", "rx_bytes", "tx_packets", "tx_bytes"}
                                   or not all(type(v) is int and v >= 0 for v in stats.values())):
             raise ValueError("wg_observe stats")
-        # sorted as the mirror sorts them: by compact JSON
-        compact = lambda x: json.dumps(x, separators=(",", ":"))
-        observations[record["index"]]["datagrams"] = sorted(datagrams, key=compact) if datagrams is not None else None
+        # Ordered as the mirror orders them (Leanux/Env.lean, wg_observe): a
+        # stable sort by the datagram's peer key, so that arrival order is
+        # kept within a peer's session (the listener's family and the
+        # message's index word at byte 4: the receiver index of a data or
+        # cookie message, the sender index of a handshake message) while
+        # the interleaving across peers, which the fixture does not
+        # determine, is free (pre-release review, finding 5; before this a
+        # global sort by compact JSON also lost within-peer order).
+        observations[record["index"]]["datagrams"] = (sorted(datagrams, key=datagram_peer_key)
+                                                      if datagrams is not None else None)
         observations[record["index"]]["stats"] = stats
-        observations[record["index"]]["replies"] = sorted(replies, key=compact)
+        observations[record["index"]]["replies"] = sorted(replies, key=reply_peer_key)
     for trace in traces:
         for index, op in enumerate(trace["ops"]):
             if (op["op"] == "wg_observe") != ((trace["id"], index) in seen):
@@ -735,11 +760,28 @@ def _collect(outdir, traces, process_returncode, alloc=None):
     # seccomp W (design 2.4): an install's ENOMEM is the path budget
     # (MAX_INSNS_PER_PATH), a semantic result the mirror predicts; a real
     # allocation failure there shows as a mirror mismatch, not as pressure
+    # pre-release review finding 11: EINTR, ENOMEM, ENFILE and the restart
+    # codes are ordinary seccomp policy results; a self probe's errno is the
+    # policy's when an earlier install in the trace can return it (a RET
+    # ERRNO with that data), which is provenance, not a tolerance
     if any(row["errno"] in unexpected_errors - (forced if trace.get("domain_extension") == "failslab" else set())
            - ({12} if trace["ops"][row["index"]]["op"] == "seccomp_install" else set())
+           and not _seccomp_policy_errno(trace, row["index"], row["errno"])
            for result, trace in zip(results, traces) for row in result["observations"]):
         raise LinuxRunError("environment_failure", "Unexpected interruption or allocator resource failure", outdir)
     return results
+
+
+def _seccomp_policy_errno(trace, index, errno):
+    """Whether ops[index] is a seccomp probe whose errno an earlier install's
+    program can return (a RET K with SECCOMP_RET_ERRNO and that data): then
+    the errno is the filter's answer, not the guest failing."""
+    ops = trace["ops"]
+    if ops[index]["op"] != "seccomp_probe":
+        return False
+    return any(insn[0] == 0x06 and insn[3] & 0xffff0000 == 0x00050000 and insn[3] & 0xffff == errno
+               for op in ops[:index] if op["op"] == "seccomp_install" and op.get("filter")
+               for insn in op["filter"])
 
 
 def run_linux(traces, outdir, *, timeout=120, steer_wire=None, arm_records=ARM_RECORDS, guest_variant=None, alloc=None):

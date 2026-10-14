@@ -335,10 +335,13 @@ def modPeerTimerGuard (pid : PeerId) : M Bool := do
 
 /-- mod_peer_timer (timers.c:30-39): whether the timer was armed; if so,
     `mod_timer(timer, jiffies + delay)` (`armTimer`, D3). `delay` is in
-    ticks, as the caller computed it. -/
-def modPeerTimer (pid : PeerId) (t : PeerTimer) (delay : Nat) : M Bool := do
+    ticks, as the caller computed it; the caller's `jiffies` read is the
+    kind-311 record at `site` (the caller's line), consumed before the
+    guard as the C evaluates the argument (pre-release review finding 2). -/
+def modPeerTimer (site : HiddenSite) (pid : PeerId) (t : PeerTimer) (delay : Nat) : M Bool := do
+  let jc ← callerJiffies site
   if ← modPeerTimerGuard pid then
-    armTimer pid t delay
+    armTimer pid t delay jc
     return true
   return false
 
@@ -363,15 +366,18 @@ def jitterBelowRekeyTimeout (site : HiddenSite) : M Nat := do
     jitter draw) is evaluated before `mod_peer_timer`'s test. -/
 def timersDataSent (pid : PeerId) : M Unit := do
   if ← branch .timersDataSentNotPending !((← getPeer pid).timerPending .newHandshake) then
+    -- the compiled argument reads `jiffies` (the kind-311 record) before the
+    -- jitter draw (measured on s3: site 422 precedes the site-16 draws)
+    let jc ← callerJiffies .timerJiffiesDataSent   -- timers.c:149
     let jitter ← jitterBelowRekeyTimeout .newHandshakeJitter
     if ← modPeerTimerGuard pid then
-      armTimer pid .newHandshake (KEEPALIVE_TIMEOUT_TICKS + REKEY_TIMEOUT_TICKS + jitter)
+      armTimer pid .newHandshake (KEEPALIVE_TIMEOUT_TICKS + REKEY_TIMEOUT_TICKS + jitter) jc
 
 /-- wg_timers_data_received (timers.c:154-163). -/
 def timersDataReceived (pid : PeerId) : M Unit := do
   if ← branch .timersDataReceivedRunning (← getDev).running then
     if ← branch .timersDataReceivedNotPending !((← getPeer pid).timerPending .sendKeepalive) then
-      discard <| modPeerTimer pid .sendKeepalive KEEPALIVE_TIMEOUT_TICKS
+      discard <| modPeerTimer .timerJiffiesDataReceived pid .sendKeepalive KEEPALIVE_TIMEOUT_TICKS   -- timers.c:159
     else
       setPeer pid { (← getPeer pid) with timerNeedAnotherKeepalive := true }
 
@@ -399,14 +405,14 @@ def timersHandshakeComplete (pid : PeerId) (site : HiddenSite := .walltimeLastHa
 
 /-- wg_timers_session_derived (timers.c:201-207): the zero-key timer. -/
 def timersSessionDerived (pid : PeerId) : M Unit :=
-  discard <| modPeerTimer pid .zeroKeyMaterial ZERO_KEY_MATERIAL_TICKS
+  discard <| modPeerTimer .timerJiffiesSessionDerived pid .zeroKeyMaterial ZERO_KEY_MATERIAL_TICKS   -- timers.c:206
 
 /-- wg_timers_any_authenticated_packet_traversal (timers.c:212-217). -/
 def timersTraversal (pid : PeerId) : M Unit := do
   let interval := (← getPeer pid).persistentKeepaliveInterval
   -- `peer->persistent_keepalive_interval` (u16) against 0: a recorded 2-byte compare
   if ← branchCmp .traversalKeepalive (interval != 0) interval 0 then
-    discard <| modPeerTimer pid .persistentKeepalive (interval * HZ)
+    discard <| modPeerTimer .timerJiffiesTraversal pid .persistentKeepalive (interval * HZ)   -- timers.c:216
 
 /-- `HANDSHAKE_DSCP` (send.c:18): CS4, the DS field of every handshake
     message `wg_socket_send_buffer_to_peer` sends (send.c:41, :105). -/
@@ -438,8 +444,12 @@ def sendBufferToPeer (pid : PeerId) (bytes : List UInt8) : M Unit := do
 /-- wg_timers_handshake_initiated (timers.c:182-187): the retransmit timer,
     with its jitter (`jitterBelowRekeyTimeout`). -/
 def timersHandshakeInitiated (pid : PeerId) : M Unit := do
+  -- the compiled argument reads `jiffies` (the kind-311 record) before the
+  -- jitter draw (measured on s3: site 424 precedes the site-14 draws)
+  let jc ← callerJiffies .timerJiffiesHandshakeInitiated   -- timers.c:185
   let jitter ← jitterBelowRekeyTimeout .retransmitJitter
-  discard <| modPeerTimer pid .retransmitHandshake (REKEY_TIMEOUT_TICKS + jitter)
+  if ← modPeerTimerGuard pid then
+    armTimer pid .retransmitHandshake (REKEY_TIMEOUT_TICKS + jitter) jc
 
 /-- wg_packet_send_handshake_response (send.c:85-108). -/
 def sendHandshakeResponse (pid : PeerId) : M Unit := do

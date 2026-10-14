@@ -55,10 +55,11 @@ deferred clearing is explained in its own comment (`ptr_ring.h:267-271`),
 so a burst of more than the ring's free slots losing its tail is the
 intended behaviour of a bounded ring, and the effective capacity being
 1024 minus up to 15 consumed-but-uncleared slots follows from it. What is
-not defensible on the same terms is that the loss leaves no trace in the
-device statistics: `wg_xmit` has returned success to the stack for these
-packets, every other discard in the driver's send path increments a
-counter, and an operator looking at `ip -s link` or `/sys/class/net/<dev>/statistics`
+inconsistent with the rest of the send path's accounting is that the loss
+leaves no trace in the device statistics: `wg_xmit` has returned success to
+the stack for these packets, the two other discards on the send path this
+repository has exercised (the staged-packet purge and `wg_xmit`'s error
+labels) increment a counter, and an operator looking at `ip -s link` or `/sys/class/net/<dev>/statistics`
 sees zero drops and a transfer count short by the lost packets. The
 `kfree_skb_list` call does fire the `skb:kfree_skb` tracepoint with
 `SKB_DROP_REASON_NOT_SPECIFIED` (`include/linux/skbuff.h:1314-1317`), so
@@ -102,7 +103,11 @@ into the burst).
 Without this repository: on a single-CPU machine or VM, bring up a
 WireGuard pair, send a small packet, then send 1024 datagrams through the
 interface in one burst (`sendmmsg`, or an `io_uring` batch) before the
-encrypt worker has run; count the packets at the peer; compare
+encrypt worker has run (scheduling prerequisite: every produce must happen
+before the encrypt worker's first consume; the recorded `io_uring` batch on
+an idle single CPU establishes that order, a generic burst does not, so
+confirm it from a tracepoint on `wg_packet_encrypt_worker`); count the
+packets at the peer; compare
 `ip -s link show wg0` (TX dropped 0) and `wg show wg0 transfer` (short by
 the lost packets); `perf trace -e skb:kfree_skb` shows the frees from
 `wg_packet_tx_worker` with reason `NOT_SPECIFIED`.
@@ -116,11 +121,20 @@ up to 15 entries before its 1024 slots are in use.
 
 ## Impact
 
-Operators of busy or bursty senders on few-core hosts, who see loss with no
-counter to diagnose it. Not attacker-steerable beyond sending bursts from
-a host that is already a legitimate sender; no security consequence
-identified. The missing accounting applies equally to the
-encryption-failure `DEAD` arm in `wg_packet_tx_worker`.
+Recorded loss: on the oracle, two of 1025 accepted data messages in one
+burst were freed with every counter at zero, in the fixture's scheduling
+order above; the five tier traces reproduce the rule drops = items − free
+slots.
+
+Source-derived mechanism: the physical full test and the deferred clearing
+in `ptr_ring.h`, and the uncounted free in `wg_packet_tx_worker`; read from
+the C and confirmed by the counters, not measured under production load.
+
+Attack feasibility: none identified. The loss is steerable only by a host
+that is already a legitimate sender of bursts. Operators of busy or bursty
+senders on few-core hosts see loss with no counter to diagnose it. The
+missing accounting applies equally to the encryption-failure `DEAD` arm in
+`wg_packet_tx_worker`.
 
 ## How this repository found it
 

@@ -6,46 +6,83 @@ Worktree `.worktrees/proofs-campaign`, branch `proofs/campaign`; governed by
 [the charter](2026-10-13-charter-proof-campaign.md). Both prerequisites were
 carried from `2c7a076`, then the audit at `f45bde8` and documentation-only
 `a39aded`, then the scheduler robustness change at `7a92672`.
-The registered components pass coordinated validation over `7a92672`, including R2 concrete Batch scheduling,
-separate copied trials and allowed-IP removal access, R3 insertion/pure-removal/all local removal arms and R4 finite
-and RX/TX source ring journals. The new `cryptAhead` call is observed and framed, and the historical
-witness seed no longer depends on the removed evaluator fixture.
-The R4 RX scheduler extension below also passes coordinated validation. Main has since
-advanced to `c047e64`; all rows lag that new mirror pending the authorized carry and repairs.
+The registered components now pass coordinated validation over the authorized `c047e64` carry,
+including R2 concrete Batch scheduling and allowed-IP access, R3 insertion/pure-removal/all local
+removal arms, and R4 finite and RX/TX source journals plus the concrete RX scheduler.
+The mirror is byte-identical to that main revision, and all seven register rows are current.
 Open obligations below remain explicit. No integration into main,
 push, differential check or guest run has been performed by this campaign.
 
 | Result | Disposition |
 | --- | --- |
 | R1 anti-replay | Complete: uniqueness and the intentional inclusive-floor correction, with pure and accepted-run witnesses. |
-| R2 lifetimes | Endpoint identity and failure-retaining access contracts cover the listed call families, now including the concrete Batch scheduler, separate copied trials and six allowed-IP list/removal calls. Whole-run environment/lifecycle closure and saved-reference ownership remain open. The stale-cursor finding is checked. |
+| R2 lifetimes | Endpoint identity and failure-retaining access contracts cover the listed call families, now including the concrete Batch scheduler, separate copied trials and six allowed-IP list/removal calls. Whole-run environment/lifecycle closure and saved-reference ownership remain open. The historical stale-cursor recipes now have checked pending-dump rejection at `c047e64`. |
 | R3 routing | Prefix arithmetic, represented-tree lookup, bounded-input normal insertion dispatch, pure removal/locality and all local source removal arms are checked. Whole-forest removal, saved-list coherence, configuration-history and packet-path refinements remain open. |
 | R4 delivery | W7's two full-ring drops are explained. An accepted replay refutes chronological post-GRO stack order. Per-poll selected order, removal/provenance, concrete stack frames and RX/TX source ring journals are checked; pipeline conservation remains open. |
 | R5 key lifetime | Resolved under Rule Zero by counter-limit, delayed-encryption and post-clear-use witnesses, with 13 local positive contracts. |
 | R6 flood resistance | Cookie exclusion proved at the original call boundary; accepted 19-retry/20-initiation episode resolves the literal limit through Rule Zero. Six terminal contracts. |
 
-**Last coordinated validation.** The mirror is byte-identical to `7a92672`.
-The proof gate passes 325 jobs and 329 terminal statements
+**Last coordinated validation.** The mirror is byte-identical to `c047e64`.
+The proof gate passes 325 jobs and 329 terminal declarations: 327 theorems and two helper definitions
 (ReplayWindow 15; R1 9; R2 160; R3 62; R4 64; R5 13; R6 6), using only `propext`, `Classical.choice` and `Quot.sound`.
-Fresh stock kernel replay passes, as do the 60-job default model build and
-expanded 110-test unit tier (23.853 seconds; one skip). The model executable
-was rebuilt at the scheduler carry (118 jobs); its source is unchanged. Independent frozen-source
-and scope reviews have no unresolved correctness findings in these components.
+Fresh stock kernel replay passes, as do the 60-job default model build, the rebuilt 118-job
+model executable, and the expanded 114-test unit tier (23.128 seconds; one skip).
+Independent frozen-source and scope review has no unresolved correctness finding.
 
 ```sh
 capped -- scripts/in-bundle scripts/proof-gate
 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs
 capped -- scripts/in-bundle lake build
+capped -- scripts/in-bundle lake build leanux-model
 capped -- scripts/in-bundle python3 -B -m unittest evaluator.test_evaluation evaluator.test_model_replay harness.test_trace harness.test_wg harness.test_linux
 ```
 
-All ten campaign witnesses and the new scheduler `W7_CRYPT_AHEAD` case pass
-against this mirror, including exact original/observed output comparison.
-The retry and two current time witnesses include complete-advance checks.
-Generated streams prove accepted mirror behavior, not Linux capture or schedule
-reachability. These replayers were last run at the scheduler carry; the subsequent
-pure/local removal, receive, RX/TX ring-journal, scheduler-access and allowed-IP-access extensions change none of their runtime code. Reproduction commands and
-provenance are retained below.
+All eleven current reproduction checks pass, as detailed below. Generated streams establish
+mirror behavior, not Linux capture or schedule reachability. Reproduction commands and provenance
+are retained with each result.
+
+**Current `c047e64` carry.** The full local proof target passes 325 jobs;
+terminal count remains 329. Exact observers now retain kind-311 caller-jiffies reads before timer guards
+and before jitter, including arbitrary arm-record mode and its Stops. The typed timer family exposes
+the actual caller value/site. `requireNotPending` is now the original no-op; peer get/put histories
+therefore remove its retired read rather than invent a replacement access. Cookie framing permits both
+ratelimiter tables while retaining every resident object and allocation frontier. The carry also retains
+recorded under-load comparison operands, cookie-reply checks, per-packet destination validation,
+the new seccomp record/calls and stable per-session observation ordering. Runner erasure and anti-replay
+contracts quantify the new `floodExact` mode; committed scheduler observations keep both crypt-ahead sites.
+
+All eleven current reproduction commands pass: nine accepted runs with exact original/observer output
+agreement, and two R2 rejection checks. Each R2 check separately accepts the first three operations,
+verifies the old cursor's identity and reference count, then requires both complete runners to reject
+operation 3 with the exact pending-dump reason. The raw stale-cursor theorem remains a local counterexample;
+its former full-run reachability is historical, not an ownership proof for the current runner.
+The migrated retry episode still has 19 retries/20 initiations; both coherent time witnesses still
+check original complete-advance equality and new transmitted ciphertext. GRO still reverses the
+selected packets' chronological stack order under one peer/key lifetime. No new Linux capture is claimed.
+
+**Decision [AGENT 2026-10-14].** Keep both historical R2 recipes and check their current rejection,
+while preserving their accepted pre-delete boundary and labeling all later old values historical.
+For the coherent R5/R6 recipes, generate timer caller records from the recipe's chosen clock,
+in source order, with independent arm-expiry checks. The separate historical W7 fixture uses
+main's `with_timer_caller_jiffies` migration, which reconstructs caller values from the captured
+arm expiry and matching delay; it is not an independently captured caller-clock observation.
+These are input-reproduction migrations, not a mirror rule or new kernel evidence.
+
+Local validation used 23 sequential capped invocations: 14 passed and nine failed ordinarily
+(seven proof elaboration/normalization failures and two Lean parser failures in the rewritten R2 replayers).
+Invocation 4 was launched before the final timer diagnostic from invocation 3 was noticed; it retained
+that known failing goal. Subsequent targeted corrections closed it without changing the source boundary.
+The full target passed in invocation 10; all eleven final replayers passed in invocations 11 and 14–23.
+All exits were collected by 05:58:22 UTC, 29m33s after the 05:28:49 token grant; no cap or interruption occurred.
+Review finding CARRY-R4-1 removed obsolete pending-worker/getter descriptions. CARRY-R4-2 corrected the
+jitter-failure theorem and terminal to require the original caller-read success before the failed jitter;
+this is an explicit changed source prelude, not an `armRecords = false` restriction. The reply invariant
+copy and an accidentally lifted `idleTimers` call were also corrected; the observer again records that
+call's validator events. Final frozen-hash review reconciled all forty files with no unresolved finding;
+the five coordinated trust/build/unit invocations above all passed. Only documentation reconciliation
+followed those source checks. The campaign diff passes the whitespace speedbump; the broader staged
+merge reports carried whitespace in three upstream text files and two kernel patch files, all unchanged
+from `c047e64`. These are outside the campaign repair diff.
 
 **Carries and review history.**
 
@@ -79,7 +116,7 @@ The four coordinated trust/fast checks above also pass.
 The W7 observer check is reproduced by:
 
 ```sh
-capped -- scripts/in-bundle bash -o pipefail -c 'python3 -B -c "import json; from evaluator.test_model_replay import W7_CRYPT_AHEAD, with_jiffies_end; print(json.dumps(with_jiffies_end(W7_CRYPT_AHEAD)))" | lake env lean --run Leanux/Proofs/Logged/Replay.lean'
+capped -- scripts/in-bundle bash -o pipefail -c 'python3 -B -c "import json; from evaluator.test_model_replay import W7_CRYPT_AHEAD, with_jiffies_end, with_timer_caller_jiffies; print(json.dumps(with_timer_caller_jiffies(with_jiffies_end(W7_CRYPT_AHEAD))))" | lake env lean --run Leanux/Proofs/Logged/Replay.lean'
 ```
 
 A prerequisite-carry worker interruption required preserving all dirty worktrees
@@ -144,7 +181,7 @@ or production history field would not preserve altitude and is not proposed.
 
 The charter asks for safety of every internal access after release, across every run, with a reused slot denoting a new identity.
 The checked components establish endpoint identity evolution and failure-retaining local access safety. Whole-run closure remains open.
-The accepted stale-cursor findings below expose reference retargeting; they do not resurrect an old identity or settle the full charter claim.
+The historically accepted stale-cursor findings below expose reference retargeting; they do not resurrect an old identity or settle the full charter claim.
 
 **Allowed-IP access extension.** Three grouped exports cover `listAddTail`, `listDel`,
 `removeByPeer`, `rootRemovePeerLists`, `free` and `peerMakeDead` (160 R2 terminals).
@@ -166,7 +203,7 @@ Keep the five handshake calls at exact local boundaries. Share canonical record,
 preserving legacy signatures by projection instead of duplicating generated source matchers.
 Factor buffer allocation from its exact original socket-send suffix, reusing the existing send observer and keeping ordinary returns distinct from Stops.
 
-**Cookie frame decision [AGENT 2026-10-14].** Mask only the device's cookie secret/birthdate and the ratelimiter table
+**Cookie frame decision [AGENT 2026-10-14].** Mask only the device's cookie secret/birthdate and both ratelimiter tables
 in a full-Kernel projection; derive legacy frames by projection. This permits actual rotation/rate accounting while retaining
 device presence, complete resident objects, allocator frontiers and `netIfindexNext` for concrete allocation safety.
 
@@ -242,7 +279,7 @@ and explicit release origins. Shared filesystem frames end at return, leaving qu
   and creates no modeled packet identity. Its unconditional source factor reuses original `sendSkbToPeer`, discarding only the Boolean result.
   A normal allocation/socket refusal still lets initiation reach its retransmit jitter/timer; a Stop skips subsequent work.
   Response reads its first clock before its first peer getter; construction/session refusal, later clocks and fresh setters keep their original order.
-  Initiation's jitter precedes the eager timer-guard getter. The worker performs `peerPut` after every normal initiation return, never after a Stop.
+  Initiation's caller-jiffies read precedes jitter, which precedes the eager timer-guard getter. The worker performs `peerPut` after every normal initiation return, never after a Stop.
   Ambient socket, index-insertion and session create/put/replacement contracts are explicit and concretely discharged for `AllocationInv`.
   These are complete local calls; outer dispatch and historical reference ownership remain open.
 - **Cookies:** `CookieAccess` covers `makeCookie`, `cookieMessageCreate`, `cookieValidatePacket` and `cookieMessageConsume`
@@ -289,11 +326,11 @@ The node-only mask permits no peer/keypair/packet change; arbitrary ambient inva
 Concrete allocation discharges all of them, without shape, list-coherence or saved-owner premises. Insertion/allocation callers, complete peer removal,
 netlink, timers and device lifecycle remain separate closure obligations. Node helper access-freedom is checked against source, not inferred from endpoint framing.
 
-**Failure-prefix coverage.** Exact conditional equations retain pending-worker/refcount accesses, including writes before zero-refcount rejection;
+**Failure-prefix coverage.** Exact conditional equations retain the current refcount accesses, including writes before zero-refcount rejection;
 release events occur only after successful final puts. Session birthdate-clock failure retains six events, peer initialization's first
 cache-clock failure retains allocation/write, receive queue-record failure retains five accesses including the setter's nested read,
 and handshake-completion clock failure retains four accesses. Cache-miss and keepalive allocation-record failures retain one peer read.
-An empty-bitmap validator failure retains the initial keypair read and no write. TX jitter failure retains the pending-timer read;
+An empty-bitmap validator failure retains the initial keypair read and no write. TX jitter failure, after a successful original caller-jiffies read, retains the pending-timer peer read;
 MAC age-test failure retains its peer read/write pair. The IPv4 clear/reset equation retains read/write before a reset-clock Stop,
 but covers a source segment. These are original-run-conditioned equations, not accepted-run witnesses.
 The timer guard's peer getter executes unconditionally before `andM`. Duplicate cleanup IDs and malformed queues remain admitted,
@@ -306,17 +343,18 @@ Saved scalar-reference ownership is separate: an aliased or dangling ID may stop
 No C simulation is claimed. C initializes cache/handshake before incrementing the peer counter; the mirror increments/inserts first.
 The proofs follow the mirror's order; that difference alone is not a lifetime counterexample.
 
-**Accepted reference findings.** An eight-operation mirror run creates 28 peers, starts a stepped dump, deletes wg0,
-creates a new wg0 with 27 replacement peers, then receives a chunk. The cursor retained raw slot 26, old identity 27,
-with two references. Continuation cleanup instead releases replacement identity 55, with one reference, removing it while
+**Historical accepted reference findings (through `7a92672`).** An eight-operation mirror run created 28 peers, started a stepped dump, deleted wg0,
+created a new wg0 with 27 replacement peers, then received a chunk. The cursor retained raw slot 26, old identity 27,
+with two references. Continuation cleanup instead released replacement identity 55, with one reference, removing it while
 the peer list and public-key table still name slot 26. The received message is the already queued first chunk;
 continuation generation performs the destructive put. This is reference retargeting and table incoherence, not resurrection of identity 27.
 
 The guest rejects deletion with a pending dump (`wg_delete_with_dump_pending`), as the W1/W2 design requires.
-`Env.wgDelete` checks worker idleness but omits that guard. C retains `ctx->wg`; the mirror resumes a Boolean-held cursor against the current device.
-This is an accepted-mirror domain bug, not evidence of a Linux lifetime bug. Its explicit non-placeholder records are synthetic, not a fresh capture.
-The replay checks five runner checkpoints, their count and original JSON equality. The kernel-reduced
-`stale_cursor_retargets_replacement` separately exercises `wgGetDeviceDone`; the full replay reaches the bad put through dump-resume cleanup.
+`Env.wgDelete` then checked worker idleness but omitted that guard; `c047e64` restores it, including queued DONE chunks. C retains `ctx->wg`; the mirror resumes a Boolean-held cursor against the current device.
+This was an accepted-mirror domain bug, not evidence of a Linux lifetime bug. Its explicit non-placeholder records are synthetic, not a fresh capture.
+The historical replay checked five runner checkpoints, their count and original JSON equality.
+The current replay instead checks the accepted pre-delete boundary and exact original/observer rejection at operation 3. The kernel-reduced
+`stale_cursor_retargets_replacement` separately exercises `wgGetDeviceDone`; the historical full replay reached the bad put through dump-resume cleanup.
 
 ```sh
 set -o pipefail
@@ -325,11 +363,11 @@ python3 -B docs/proof-campaign-replay.py r2-stale-dump-cursor |
 capped -- scripts/in-bundle scripts/proof-gate
 ```
 
-A second accepted eight-operation variant gives replacement peer 26 an IPv4 `10.0.0.0/8` binding before the stale continuation releases it.
+A second historically accepted eight-operation variant gave replacement peer 26 an IPv4 `10.0.0.0/8` binding before the stale continuation released it.
 The final checkpoint follows the actual device root: the prefix still names slot 26 while resident identity 55 is absent.
-It checks eight checkpoint emissions, five specified projections and original-runner JSON equality, again using explicit synthetic records.
-This rules out unconditional owner-residency invariants; it neither resurrects identity 27 nor alone proves packet misrouting
-or disagreement with insert/remove history. The original witness is unchanged.
+It previously checked eight checkpoint emissions, five specified projections and original-runner JSON equality, using explicit synthetic records.
+The current check likewise rejects operation 3 before replacement allocation. The old accepted run ruled out unconditional owner-residency invariants on that mirror; it neither resurrects identity 27 nor alone proves packet misrouting
+or disagreement with insert/remove history. The historical input recipe is unchanged; its current accepted domain has changed.
 
 ```sh
 set -o pipefail
@@ -353,7 +391,7 @@ The stale map/report claims that scheduler callbacks remained open were correcte
 Allowed-IP frozen-source review found no correctness or premise issue. Its current-versus-pending opening was qualified to the preceding coordinated checkpoint;
 source-outcome wording was corrected to avoid claiming all duplicate-ID lists fail.
 
-**Effort.** The ledger records invocations, not an invented campaign total. Each accepted cursor reproduction takes under one second.
+**Effort.** The ledger records invocations, not an invented campaign total. Each historical cursor reproduction took under one second; both current rejection checks also passed in under one second.
 
 | Checkpoint | Capped invocations: passed / failed | Elapsed |
 | --- | --- | --- |
@@ -401,9 +439,9 @@ on an ambiguous legacy/canonical `getNode_sameKernel` reference in `RxCompletion
 repaired it without changing a statement or premise. Independent review checked the repair and frozen sources. The repeated gate,
 fresh stock kernel replay and fast tier all pass. Writer handoff and cleanup took 17m56s; coordinated checks followed.
 
-**Ranked mirror-shape recommendations.** (1) Restore pending-dump deletion rejection: altitude-preserving fixture-domain enforcement.
-(2) If that domain expands, retain the actual device lifetime in the cursor as C does: altitude-preserving, with separate validation.
-(3) Retain named allocation, deletion and same-object update boundaries: altitude-preserving operational structure.
+**Ranked mirror-shape recommendations.** Pending-dump deletion rejection is resolved by `c047e64`, with both current rejection checks passing.
+(1) If that domain expands, retain the actual device lifetime in the cursor as C does: altitude-preserving, with separate validation.
+(2) Retain named allocation, deletion and same-object update boundaries: altitude-preserving operational structure.
 No production history field is proposed, and no mirror change was made for these proofs.
 
 The scheduler extension's second build failed because a generic wrapper was moved to a new module while that invocation's dependency graph was already running.
@@ -642,8 +680,8 @@ with current counts above.
 Parsed-input bounds and history invariants still need propagation through all mutations.
 Both packet paths follow R2. Owners are raw peer slots, not allocation or
 cryptographic identities; no liveness/ownership claim follows from tree lookup.
-The R2 orphan-owner replay above is a constraint on any proposed ownership
-invariant, not yet an R3 counterexample. No R3 statement has been reshaped
+The historical R2 orphan-owner replay above constrained ownership invariants over its former accepted domain;
+`c047e64` now rejects that recipe before deletion. It is not an R3 counterexample for the current runner. No R3 statement has been reshaped
 and no Rule Zero finding is claimed.
 
 **Effort and review.** Arithmetic, pure-tree, original traversal and pure
@@ -1218,6 +1256,21 @@ change the C's control flow and is not altitude-preserving.
 
 
 ## R6 — cookie exclusion and retry-limit finding
+
+**Lifecycle source discrepancy at `c047e64` (not yet a replay finding).**
+`Receive.ratelimiterAllow` now creates and updates IPv6 entries in `table6`,
+but `Device.ratelimiterInit` resets only `table`, and `gcEntries false` walks
+and clears only that IPv4 table while reporting no IPv6 entries. The local
+Linux `ratelimiter.c:55–83` walks both families and clears every entry on the
+last uninit (`:205–221`); reinitialization allocates empty tables. Thus the
+mirror source appears to retain IPv6 rate-limit state across the last uninit
+and reinit. This was found while preparing R2 lifecycle composition and checked
+against both sources. No accepted runner reproduction or differential result
+has yet been established. It is not a Linux bug claim or a premise of the
+cookie-exclusion theorem, and the campaign has not edited the mirror. A
+follow-up should exercise IPv6 cookie admission, device deletion/recreation
+and admission from the same source /64.
+
 
 **Original claims and disposition.** The charter requires that an initiation
 without valid MAC2 under load never reaches Noise, and that retransmission

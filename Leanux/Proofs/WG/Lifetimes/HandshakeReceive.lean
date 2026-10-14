@@ -20,10 +20,17 @@ def setPeerEndpointFromSkbPrefix (pid : PeerId) (src : SkbSource) : MixedM Unit 
     setPeerEndpointPrefix pid e
 
 def sendBufferAsReplyToSkbPrefix (src : SkbSource) (buffer : List UInt8) : MixedM Unit := do
+  if ← liftPrefix (branch .replyInSkbNull false) then
+    liftPrefix (invariant "a cookie reply without an skb")
   let endpoint ← liftPrefix (endpointFromSkb src)
-  let some e := endpoint | liftPrefix (invariant "a cookie reply to an skb that is neither IPv4 nor IPv6")
-  if !(← liftPrefix (hiddenAlloc .replySkb)) then return
-  _ ← if e.family == AF_INET then send4Prefix e none buffer 0 false else send6Prefix e none buffer 0 false
+  if ← liftPrefix (branch .replyEndpointErr endpoint.isNone) then
+    liftPrefix (invariant "a cookie reply to an skb that is neither IPv4 nor IPv6")
+  let some e := endpoint | liftPrefix (invariant "unreachable")
+  if ← liftPrefix (branch .replyNoMem !(← liftPrefix (hiddenAlloc .replySkb))) then return
+  if ← liftPrefix (branch .replyInet (e.family == AF_INET)) then
+    _ ← send4Prefix e none buffer 0 false
+  else if ← liftPrefix (branch .replyInet6 (e.family == AF_INET6)) then
+    _ ← send6Prefix e none buffer 0 false
 
 def sendHandshakeCookiePrefix (msg : List UInt8) (src : SkbSource) : MixedM Unit := do
   let index := u32le msg 4
@@ -222,6 +229,7 @@ theorem sendBufferAsReplyToSkbPrefix_preserves (c : AmbientContracts I) (sc : So
     PrefixPreserves I LifetimeEvent.Safe (sendBufferAsReplyToSkbPrefix src buffer) := by
   unfold sendBufferAsReplyToSkbPrefix
   repeat' first
+    | with_reducible exact AmbientContracts.drop (c.branch (fun _ => True) _ _)
     | with_reducible exact AmbientContracts.drop (c.kernel (fun _ => True) _ (endpointFromSkb_sameKernel _))
     | with_reducible exact AmbientContracts.drop (c.kernel (fun _ => True) _ (hiddenAlloc_sameKernel _))
     | with_reducible exact AmbientContracts.drop (send4Prefix_spec c sc (fun _ => True) _ _ _ _ _)

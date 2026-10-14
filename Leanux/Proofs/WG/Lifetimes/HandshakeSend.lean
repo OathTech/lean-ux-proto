@@ -30,11 +30,13 @@ def sendBufferToPeerPrefix (pid : PeerId) (bytes : List UInt8) : MixedM Unit := 
   discard <| sendSkbToPeerPrefix pid bytes HANDSHAKE_DSCP
 
 def timersSessionDerivedPrefix (pid : PeerId) : MixedM Unit :=
-  discard <| modPeerTimerPrefix pid .zeroKeyMaterial ZERO_KEY_MATERIAL_TICKS
+  discard <| modPeerTimerPrefix .timerJiffiesSessionDerived pid .zeroKeyMaterial ZERO_KEY_MATERIAL_TICKS
 
 def timersHandshakeInitiatedPrefix (pid : PeerId) : MixedM Unit := do
+  let jc ← liftPrefix (callerJiffies .timerJiffiesHandshakeInitiated)
   let jitter ← liftPrefix (jitterBelowRekeyTimeout .retransmitJitter)
-  discard <| modPeerTimerPrefix pid .retransmitHandshake (REKEY_TIMEOUT_TICKS + jitter)
+  if ← modPeerTimerGuardPrefix pid then
+    armTimerPrefix pid .retransmitHandshake (REKEY_TIMEOUT_TICKS + jitter) jc
 
 def sendHandshakeInitiationPrefix (pid : PeerId) : MixedM Unit := do
   if ← liftPrefix (branchExpired .initRateLimited (← getPeerMixed pid).lastSentHandshake REKEY_TIMEOUT (!·)) then return
@@ -86,12 +88,20 @@ theorem sendBufferToPeerPrefix_erases (pid : PeerId) (bytes : List UInt8) :
 
 theorem timersSessionDerivedPrefix_erases (pid : PeerId) :
     ErasesPrefix (timersSessionDerivedPrefix pid) (timersSessionDerived pid) := by
-  exact erasesPrefix_bind (modPeerTimerPrefix_erases pid _ _) (fun _ => erasesPrefix_pure _)
+  exact erasesPrefix_bind (modPeerTimerPrefix_erases _ pid _ _) (fun _ => erasesPrefix_pure _)
 
 theorem timersHandshakeInitiatedPrefix_erases (pid : PeerId) :
     ErasesPrefix (timersHandshakeInitiatedPrefix pid) (timersHandshakeInitiated pid) := by
-  exact erasesPrefix_bind (erasesPrefix_lift _) (fun _ =>
-    erasesPrefix_bind (modPeerTimerPrefix_erases pid _ _) (fun _ => erasesPrefix_pure _))
+  unfold timersHandshakeInitiatedPrefix timersHandshakeInitiated
+  apply erasesPrefix_bind (erasesPrefix_lift _)
+  intro jc
+  apply erasesPrefix_bind (erasesPrefix_lift _)
+  intro jitter
+  apply erasesPrefix_bind (modPeerTimerGuardPrefix_erases pid)
+  intro yes
+  apply erasesPrefix_ite
+  · intro _; exact armTimerPrefix_erases _ _ _ _
+  · intro _; exact erasesPrefix_pure _
 
 theorem sendHandshakeInitiationPrefix_erases (pid : PeerId) :
     ErasesPrefix (sendHandshakeInitiationPrefix pid) (sendHandshakeInitiation pid) := by
@@ -157,13 +167,21 @@ theorem sendBufferToPeerPrefix_spec (c : AmbientContracts I) (sc : SocketContrac
 theorem timersSessionDerivedPrefix_spec (c : AmbientContracts I)
     (P : IdentityView → Prop) (pid : PeerId) :
     AmbientSpec I P (timersSessionDerivedPrefix pid) (fun _ => P) :=
-  PrefixEnsures.bind (modPeerTimerPrefix_spec c P pid _ _) (fun _ => c.pure P _)
+  PrefixEnsures.bind (modPeerTimerPrefix_spec c P _ pid _ _) (fun _ => c.pure P _)
 
 theorem timersHandshakeInitiatedPrefix_spec (c : AmbientContracts I)
     (P : IdentityView → Prop) (pid : PeerId) :
-    AmbientSpec I P (timersHandshakeInitiatedPrefix pid) (fun _ => P) :=
-  PrefixEnsures.bind (c.kernel P _ (jitterBelowRekeyTimeout_sameKernel _)) (fun _ =>
-    PrefixEnsures.bind (modPeerTimerPrefix_spec c P pid _ _) (fun _ => c.pure P _))
+    AmbientSpec I P (timersHandshakeInitiatedPrefix pid) (fun _ => P) := by
+  unfold timersHandshakeInitiatedPrefix
+  apply PrefixEnsures.bind (c.kernel P _ (callerJiffies_sameKernel _))
+  intro jc
+  apply PrefixEnsures.bind (c.kernel P _ (jitterBelowRekeyTimeout_sameKernel _))
+  intro jitter
+  apply PrefixEnsures.bind (modPeerTimerGuardPrefix_spec c P pid)
+  intro yes
+  split
+  · exact armTimerPrefix_spec c P _ _ _ _
+  · exact c.pure P _
 
 theorem sendHandshakeInitiationPrefix_preserves (c : AmbientContracts I) (sc : SocketContracts I)
     (hi : ∀ pid kind, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (indexInsert pid kind)))

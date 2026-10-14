@@ -3,7 +3,7 @@ import Leanux.Proofs.Framing.Tools
 import Leanux.WG.Receive
 
 /-! Canonical original cookie frames. The projection omits only the device
-cookie secret/birthdate and the ratelimiter table. It retains device presence,
+cookie secret/birthdate and both ratelimiter tables. It retains device presence,
 complete resident stores, every allocation frontier, and all other Kernel
 fields. Source inspection separately establishes that these four helpers do
 not dereference resident peers, keypairs or packets. -/
@@ -16,7 +16,7 @@ def cookieDevice (d : Device) : Device :=
 def cookieKernel (k : Kernel) : Kernel :=
   {k with
     wg := k.wg.map cookieDevice
-    ratelimiter := {k.ratelimiter with table := []}}
+    ratelimiter := {k.ratelimiter with table := [], table6 := []}}
 
 def cookieKernelView (w : World) : Kernel := cookieKernel w.k
 
@@ -58,7 +58,7 @@ theorem ratelimiterAllow_sameCookieKernel (src : SkbSource) : SameCookieKernel (
   have hc := fun site => (SameView.of_sameKernel cookieKernel (hiddenClock_sameKernel site)).wp (fun s => s = initial)
   have he := fun site => (SameView.of_sameKernel cookieKernel (envOk_sameKernel site)).wp (fun s => s = initial)
   have hm := modifyK_cookie_spec (fun s => s = initial)
-  mvcgen [ratelimiterAllow, getK, branch, branchCmp, unsupported, hc, he, hm]
+  mvcgen [ratelimiterAllow, getK, branch, branchCmp, unsupported, invariant, hc, he, hm]
   all_goals try dsimp +zetaDelta only at *
   all_goals simp_all [cookieKernelView, cookieKernel, cookieDevice]
 

@@ -102,10 +102,11 @@ def cryptAheadPrefix (pid : PeerId) : MixedM Unit := do
   let some item := (← getPeerMixed pid).txQueue.all.head? | return
   let some id := item.head? | liftPrefix (invariant "an empty ring item")
   if (← getTxSkbPrefix id).state != .uncrypted then return
-  if (← liftPrefix peekHiddenSite) != some HiddenSite.modTimerArm.info.id then return
+  let next ← liftPrefix peekHiddenSite
+  unless next == some HiddenSite.modTimerArm.info.id || next == some HiddenSite.timerJiffiesTraversal.info.id do return
   let w ← liftPrefix get
   let some enc := w.suspended.find? (·.worker == .encryptWorker)
-    | throw (.hidden "the tx worker's head is uncrypted and no encrypt activation is suspended, but the next record is a timer arm (site 100)")
+    | throw (.hidden "the tx worker's head is uncrypted and no encrypt activation is suspended, but the next record is the traversal timer's caller read or arm (site 426 or 100)")
   liftPrefix (modifyDev fun d => {d with txWorkQueue := d.txWorkQueue ++ [pid]})
   let r ← encryptIterPrefix (fun p => liftPrefix (Env.checksumHelp p)) napiSoftirqPrefix
     (liftPrefix (Env.condResched .encryptWorker))
@@ -114,7 +115,7 @@ def cryptAheadPrefix (pid : PeerId) : MixedM Unit := do
   | .continued =>
     liftPrefix (modify fun s => {s with suspended := s.suspended.map fun x =>
       if x == enc then {x with iterations := x.iterations + 1} else x})
-  | .ended => throw (.hidden "the encrypt activation's queue is empty, but the next record is a timer arm (site 100)")
+  | .ended => throw (.hidden "the encrypt activation's queue is empty, but the next record is the traversal timer's caller read or arm (site 426 or 100)")
   | .yielded => liftPrefix (invariant "the encrypt activation yielded on a record that is not a resched")
 
 theorem cryptAheadPrefix_erases (pid : PeerId) : ErasesPrefix (cryptAheadPrefix pid) (Env.cryptAhead pid) := by

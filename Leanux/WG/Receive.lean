@@ -151,28 +151,45 @@ def RL_MAX_ENTRIES : Nat := 16384
     needs 16384 distinct source IPs — out of reach (the profound reason); the GC
     that frees stale entries arms a timer (D3), out of scope on this base. -/
 def ratelimiterAllow (src : SkbSource) : M Bool := do
-  if ← branch .rlProtoIp (src.family == 4) then pure ()
-  else unsupported "the ratelimiter on a non-IPv4 handshake (arm C is IPv4)"
-  let ip := src.saddr
-  match (← getK).ratelimiter.table.find? (·.1 == ip) with
+  -- the family switch (ratelimiter.c:95-109): IPv4 keys by the source address,
+  -- IPv6 by the source /64 (`memcpy(&ip, &saddr, 8)`: the first eight bytes,
+  -- the high 64 bits of the network-order address), each family in its own
+  -- table (`table_v4`, `table_v6`; the bucket hash is a cut); another protocol
+  -- returns false (:108-109), unreachable here: the skb came from one of the
+  -- two UDP sockets
+  let (v6, ip) ← do
+    if ← branch .rlProtoIp (src.family == 4) then pure (false, src.saddr)
+    else if ← branch .rlProtoIp6 (src.family == 6) then pure (true, src.saddr / 2 ^ 64)
+    else invariant "a handshake skb that is neither IPv4 nor IPv6 at the ratelimiter"
+  let table (k : Kernel) : List (Nat × Int × Int) := if v6 then k.ratelimiter.table6 else k.ratelimiter.table
+  let setTable (k : Kernel) (t : List (Nat × Int × Int)) : Kernel :=
+    if v6 then { k with ratelimiter := { k.ratelimiter with table6 := t } }
+    else { k with ratelimiter := { k.ratelimiter with table := t } }
+  match (table (← getK)).find? (·.1 == ip) with
   | some (_, tokens, lastTime) =>
     _ ← branch .rlEntryMatch true
     let now ← hiddenClock .ratelimiterNow
     let newTokens := min TOKEN_MAX (tokens + now - lastTime)
     let ret ← branchCmp .rlAllow (newTokens ≥ PACKET_COST) newTokens PACKET_COST
     let tokens' := if ret then newTokens - PACKET_COST else newTokens
-    modifyK fun k => { k with ratelimiter := { k.ratelimiter with
-      table := k.ratelimiter.table.map fun e => if e.1 == ip then (ip, tokens', now) else e } }
+    modifyK fun k => setTable k ((table k).map fun e => if e.1 == ip then (ip, tokens', now) else e)
     return ret
   | none =>
-    let total := (← getK).ratelimiter.table.length + 1
+    -- `atomic_inc_return(&total_entries) > max_entries` (:135): one counter
+    -- over both tables
+    let k ← getK
+    let total := k.ratelimiter.table.length + k.ratelimiter.table6.length + 1
     if ← branchCmp .rlOverLimit (total > RL_MAX_ENTRIES) (Int.ofNat total) (Int.ofNat RL_MAX_ENTRIES) then
       unsupported "the ratelimiter table limit (16384 distinct source IPs — out of reach)"
+    -- `kmem_cache_alloc(entry_cache, GFP_KERNEL)` (:138): the site is not in the
+    -- kind-305 hook's list (kernel/patches/gen-choice-stream.py has no
+    -- ratelimiter.c site), so its outcome is the environment's (`envOk`, a
+    -- success on this fixture) and the failure arm stops; a record-only site is
+    -- the named follow-on (the receive audit's F13)
     if ← branch .rlAllocFail !(← envOk .ratelimiterEntry) then
       unsupported "a ratelimiter entry allocation failure (-ENOMEM)"
     let now ← hiddenClock .ratelimiterInsertNow
-    modifyK fun k => { k with ratelimiter := { k.ratelimiter with
-      table := (ip, TOKEN_MAX - PACKET_COST, now) :: k.ratelimiter.table } }
+    modifyK fun k => setTable k ((ip, TOKEN_MAX - PACKET_COST, now) :: table k)
     return true
 
 /-- wg_cookie_validate_packet (cookie.c:119-154): the MAC1 check, and under
@@ -190,7 +207,10 @@ def cookieValidatePacket (msg : List UInt8) (src : SkbSource) (checkCookie : Boo
   let givenMac2 := (msg.drop (len - 16)).take 16
   if ← branch .macCookieInvalid (computed2 != givenMac2) then return .noCookie
   -- VALID_MAC_WITH_COOKIE_BUT_RATELIMITED unless wg_ratelimiter_allow permits
-  if ← ratelimiterAllow src then return .withCookie else return .ratelimited
+  -- `if (!wg_ratelimiter_allow(skb, net)) goto out` (cookie.c:147-148): the
+  -- verdict is a declared decision (the receive audit's F2)
+  if ← branch .macRatelimited !(← ratelimiterAllow src) then return .ratelimited
+  return .withCookie
 
 /-- wg_socket_send_buffer_as_reply_to_skb (socket.c:203-233): the reply goes to
     the initiating skb's endpoint (the flooding/injecting fixture sender). The
@@ -199,19 +219,25 @@ def cookieValidatePacket (msg : List UInt8) (src : SkbSource) (checkCookie : Boo
     `sendBufferToPeer`. The function is not listed in the correspondence map, so
     only `wg_socket_endpoint_from_skb`'s decisions are checked for it. -/
 def sendBufferAsReplyToSkb (src : SkbSource) (buffer : List UInt8) : M Unit := do
+  -- `if (unlikely(!in_skb)) return -EINVAL` (socket.c:211-212): the receive
+  -- path always hands an skb, so the false arm is the one taken
+  if ← branch .replyInSkbNull false then invariant "a cookie reply without an skb"
   let endpoint ← endpointFromSkb src
-  let some e := endpoint | invariant "a cookie reply to an skb that is neither IPv4 nor IPv6"
-  -- `alloc_skb(len + SKB_HEADER_LEN, GFP_ATOMIC)` (socket.c:217): NULL returns
+  -- `if (unlikely(ret < 0)) return ret` (:214-215): endpoint_from_skb fails for
+  -- neither family, unreachable from the two UDP sockets
+  if ← branch .replyEndpointErr endpoint.isNone then
+    invariant "a cookie reply to an skb that is neither IPv4 nor IPv6"
+  let some e := endpoint | invariant "unreachable"
+  -- `alloc_skb(len + SKB_HEADER_LEN, GFP_ATOMIC)` (:217-219): NULL returns
   -- -ENOMEM, which the caller ignores (receive.c), so no reply is sent. The
-  -- record is consumed as A's table declares (`replySkb`, exact 2); the arm is
-  -- not a declared decision because the function is unlisted (follow-up: list
-  -- it and declare the arm, as `.sendBufNoMem` is for socket.c:192)
-  -- [AGENT, int-e merge].
-  if !(← hiddenAlloc .replySkb) then return
-  -- W9: send4/send6 (Socket.lean) with no cache (socket.c:225, :227) on the
-  -- endpoint built from the skb; E's lax NET_RX cut is kept for this path
-  -- (`exactRx := false`). The result is the caller's to ignore.
-  _ ← if e.family == AF_INET then send4 e none buffer 0 false else send6 e none buffer 0 false
+  -- record is A's `replySkb` site (exact 2) and the arm a declared decision;
+  -- the function is listed since 2026-10-14 (the receive audit's F3).
+  if ← branch .replyNoMem !(← hiddenAlloc .replySkb) then return
+  -- the family switch (:224-227): send4/send6 (Socket.lean) with no cache on
+  -- the endpoint built from the skb (W9); E's lax NET_RX cut is kept for this
+  -- path (`exactRx := false`). The result is the caller's to ignore.
+  if ← branch .replyInet (e.family == AF_INET) then _ ← send4 e none buffer 0 false
+  else if ← branch .replyInet6 (e.family == AF_INET6) then _ ← send6 e none buffer 0 false
 
 /-- wg_cookie_message_create (cookie.c:180-196): header 3 ‖ receiver index ‖
     nonce (`get_random_bytes_wait`, `.cookieNonce`) ‖ `xchacha20poly1305_encrypt`
@@ -239,7 +265,11 @@ def receiveHandshakePacket (msg : List UInt8) (src : SkbSource) : M Unit := do
   -- (receive.c:112): the counter, which a `wg_flood`'s batch has filled before
   -- the worker runs (E-B v2, the queue-depth design).
   let mut underLoad := false
-  if ← branch .hsUnderLoad ((← getDev).handshakeQueueLen ≥ MAX_QUEUED_INCOMING_HANDSHAKES / 8) then
+  -- the compare's operands: the counter (an int) against the constant 512,
+  -- compiled `> 511`, which the check's `ge` shift absorbs (declared 2026-10-14)
+  let queueLen := (← getDev).handshakeQueueLen
+  if ← branchCmp .hsUnderLoad (queueLen ≥ MAX_QUEUED_INCOMING_HANDSHAKES / 8)
+        (Int.ofNat queueLen) (Int.ofNat (MAX_QUEUED_INCOMING_HANDSHAKES / 8)) then
     -- `last_under_load = ktime_get_coarse_boottime_ns()` (receive.c:115)
     let now ← hiddenClock64 .underLoadNow
     modify fun w => { w with lastUnderLoad := some now }

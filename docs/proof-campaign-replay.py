@@ -312,6 +312,29 @@ def delayed_encryption(clear=False):
         for r in records:
             if r[0] in units:
                 r[1] = r[1][:16] + units[r[0]].to_bytes(8, "little").hex()
+    # Independent caller reads (kind 311) are generated from the recipe's
+    # own clock, never recovered from the arm expiry. Insert after queue-work
+    # records and before each source arm guard; jitter callers read first.
+    for records in [up, response, *receives, tail]:
+        out, in_keepalive = [], False
+        for r in records:
+            if r[0] == 104:
+                in_keepalive = True
+            elif r[0] == 105:
+                in_keepalive = False
+            if r[0] == 100:
+                words = [int.from_bytes(bytes.fromhex(r[1])[i:i+8], "little")
+                         for i in range(0, 24, 8)]
+                now, expiry, timer = words
+                site = {17: 426, 18: 424, 19: 425, 20: 421 if in_keepalive else 423}[timer]
+                if timer == 18:
+                    if not out or out[-1][0] != 14:
+                        raise ValueError("retransmit arm is not preceded by its single jitter draw")
+                    out.insert(len(out) - 1, record(site, now))
+                else:
+                    out.append(record(site, now))
+            out.append(r)
+        records[:] = out
     trace["id"] = "r5_coherent_post_clear" if clear else "r5_delayed_encryption"
     trace["ops"] = trace["ops"][:4] + copy.deepcopy(data["ops"][4:6]) + [
         {"op": "wg_advance", "ticks": (311 - 134) * 250}]
@@ -335,6 +358,10 @@ def delayed_encryption(clear=False):
             if site in {5, 6, 7, 8, 13}:
                 check_clock(words[0] >= last_ns, "coarse clock moved backward")
                 last_ns = words[0]
+            if site in {420, 421, 422, 423, 424, 425, 426}:
+                if words[0] < last_jiffies:
+                    raise ValueError("caller jiffies moved backward")
+                last_jiffies = words[0]
             if site == 100:
                 now, expiry, timer = words
                 check_clock(now >= last_jiffies, "timer-arm jiffies moved backward")
@@ -422,7 +449,7 @@ def retransmit_limit():
         return [record(40, 0, 1), record(6, coarse(i)), record(7, coarse(i)),
                 [1, draws[1]], record(3, 1700000000 + seconds, nanos), [4, draws[4]],
                 record(8, coarse(i)), record(48, 0, 0), record(49, 0),
-                record(14, 1), record(100, tick(i), tick(i) + 1250, 2), record(41, 0)]
+                record(424, tick(i)), record(14, 1), record(100, tick(i), tick(i) + 1250, 2), record(41, 0)]
 
     trace["hidden"] = [[record(5, coarse(0) - 8000000), record(128, first - 2)],
                        [record(128, first - 1)],
@@ -432,7 +459,7 @@ def retransmit_limit():
         if i < 20:
             records += [record(6, coarse(i)), record(300, 1, 0), record(103, 0)] + send(i)
         else:
-            records += [record(100, tick(i), tick(i) + 135000, 3), record(103, 0)]
+            records += [record(420, tick(i)), record(100, tick(i), tick(i) + 135000, 3), record(103, 0)]
         records.append(record(128, tick(i) + 1))
         trace["hidden"].append(records)
         if trace["ops"][i + 2]["ticks"] != tick(i) - (tick(i - 1) + 1):
@@ -450,6 +477,10 @@ def retransmit_limit():
                 if words[0] < last_ns:
                     raise ValueError("retry coarse clock moved backward")
                 last_ns = words[0]
+            if site in {420, 424}:
+                if words[0] < last_tick:
+                    raise ValueError("retry caller jiffies moved backward")
+                last_tick = words[0]
             if site == 100:
                 now, expiry, timer = words
                 if now < last_tick or expiry - now != (1250 if timer == 2 else 135000):

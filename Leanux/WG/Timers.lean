@@ -33,7 +33,7 @@ def expiredRetransmitHandshake (pid : PeerId) : M Unit := do
     purgeStagedPackets pid
     -- a timer for destroying any residue of a partial exchange
     if ← branch .retransmitZeroKeyNotPending !((← getPeer pid).timerPending .zeroKeyMaterial) then
-      discard <| modPeerTimer pid .zeroKeyMaterial ZERO_KEY_MATERIAL_TICKS
+      discard <| modPeerTimer .timerJiffiesRetransmitZeroKey pid .zeroKeyMaterial ZERO_KEY_MATERIAL_TICKS   -- timers.c:62
   else
     let p ← getPeer pid
     setPeer pid { p with timerHandshakeAttempts := p.timerHandshakeAttempts + 1 }
@@ -47,7 +47,7 @@ def expiredSendKeepalive (pid : PeerId) : M Unit := do
   sendKeepalive pid
   if ← branch .keepaliveNeedAnother (← getPeer pid).timerNeedAnotherKeepalive then
     setPeer pid { (← getPeer pid) with timerNeedAnotherKeepalive := false }
-    discard <| modPeerTimer pid .sendKeepalive KEEPALIVE_TIMEOUT_TICKS
+    discard <| modPeerTimer .timerJiffiesExpiredKeepalive pid .sendKeepalive KEEPALIVE_TIMEOUT_TICKS   -- timers.c:87
 
 /-- wg_expired_new_handshake (timers.c:91-103). -/
 def expiredNewHandshake (pid : PeerId) : M Unit := do

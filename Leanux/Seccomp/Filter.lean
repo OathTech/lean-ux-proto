@@ -44,6 +44,8 @@ def SECCOMP_FILTER_FLAG_LOG : UInt32 := 2
 def SECCOMP_FILTER_FLAG_SPEC_ALLOW : UInt32 := 4
 def SECCOMP_FILTER_FLAG_NEW_LISTENER : UInt32 := 8
 def SECCOMP_FILTER_FLAG_TSYNC_ESRCH : UInt32 := 16
+
+def errESRCH : Int := -3
 def SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV : UInt32 := 32
 def SECCOMP_FILTER_FLAG_MASK : UInt32 := 63
 
@@ -289,6 +291,9 @@ def seccompLog (_syscall : Int) (_signr : Nat) (action : UInt32) (requested : Bo
     `syscall_set_return_value` are register effects carried by the outcome. -/
 def seccompFilter {E : Type} [BpfEngine E] (e : E) (nr : Int) (sd : SeccompData) : M FilterOutcome := do
   if ← kbranch .filterNoSd true then pure ()   -- populate_seccomp_data(&sd_local)
+  -- the instruction pointer the C stores there (:265), recorded at that line
+  -- (kind 312, HiddenSite.seccompIp): a filter loading offsets 8..15 branches on it
+  let sd : SeccompData := { sd with ip := some (UInt64.ofNat (← hiddenU64 .seccompIp)) }
   let (filterRet, matched) ← seccompRunFilters e sd
   let data : Int := (filterRet &&& SECCOMP_RET_DATA).toNat
   let action := filterRet &&& SECCOMP_RET_ACTION_FULL
@@ -405,6 +410,33 @@ def seccompAssignMode (mode : SeccompMode) (flags : UInt32) : M Unit := do
   if !(← kbranch .assignModeSpecAllow set) then
     pure ()   -- arch_seccomp_spec_mitigate(task): a cut
 
+/-- seccomp_can_sync_threads (:490-524), inlined into seccomp_attach_filter:
+    the walk over the thread group validating every other thread. The
+    mirror's thread group is the current task alone (design 9.2: a second
+    thread is outside the domain), so the walk meets the caller, skips it
+    (:503) and returns 0 (:523); the arms for another thread are the C's,
+    reached by no run of this representation. -/
+def seccompCanSyncThreads : M Int := do
+  for _ in [()] do   -- for_each_thread(caller, thread): the group is the caller
+    if !(← kbranch .canSyncLoop true) then break
+    if ← kbranch .canSyncIsCaller true then continue
+    if ← kbranch .canSyncExiting false then continue
+    if ← kbranch .canSyncMode false then continue
+    _root_.Leanux.unsupported "a second thread in the group (design 9.2)"
+  _ ← kbranch .canSyncLoop false
+  return 0
+
+/-- seccomp_sync_threads (:597-645), inlined into seccomp_attach_filter:
+    the walk that hands every other thread the caller's filter. On the
+    one-task group it meets the caller and skips it (:608); nothing changes. -/
+def seccompSyncThreads : M Unit := do
+  for _ in [()] do
+    if !(← kbranch .syncLoop true) then break
+    if ← kbranch .syncIsCaller true then continue
+    if ← kbranch .syncExiting false then continue
+    _root_.Leanux.unsupported "a second thread in the group (design 9.2)"
+  _ ← kbranch .syncLoop false
+
 /-- seccomp_attach_filter (:913-963): the path budget over the chain, the
     flags, the chain link, the cache, the head and the count. -/
 def seccompAttachFilter (flags : UInt32) (id : FilterId) : M Int := do
@@ -420,15 +452,17 @@ def seccompAttachFilter (flags : UInt32) (id : FilterId) : M Int := do
   if walker.isSome then _root_.Leanux.invariant "seccomp_attach_filter: the chain is longer than filter_count"
   if ← kbranchCmp .attachOverBudget (total > MAX_INSNS_PER_PATH) total MAX_INSNS_PER_PATH then return errENOMEM
   if ← kflag .attachTsync flags SECCOMP_FILTER_FLAG_TSYNC then
-    _root_.Leanux.unsupported "SECCOMP_FILTER_FLAG_TSYNC (design 9.1: a scope choice)"
+    let ret ← seccompCanSyncThreads
+    if ← kbranch .attachTsyncFailed (ret != 0) then
+      if ← kflag .attachTsyncEsrch flags SECCOMP_FILTER_FLAG_TSYNC_ESRCH then return errESRCH
+      else return ret
   if ← kflag .attachLog flags SECCOMP_FILTER_FLAG_LOG then modifyFilter id fun f => { f with log := true }
   if ← kflag .attachWaitKillable flags SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV then
     modifyFilter id fun f => { f with waitKillableRecv := true }
   modifyFilter id fun f => { f with prev := tk.seccomp.filter }
   seccompCachePrepare id
   modifySeccomp fun s => { s with filter := some id, filterCount := s.filterCount + 1 }
-  if ← kflag .attachTsyncSync flags SECCOMP_FILTER_FLAG_TSYNC then
-    _root_.Leanux.unsupported "SECCOMP_FILTER_FLAG_TSYNC (seccomp_sync_threads)"
+  if ← kflag .attachTsyncSync flags SECCOMP_FILTER_FLAG_TSYNC then seccompSyncThreads
   return 0
 
 /-- seccomp_filter_free (:526-531) of a prepared filter that was not
@@ -488,8 +522,10 @@ def hasDuplicateListener : M Bool := do
   if ← kbranch .dupListenerNoNotif true then return false
   _root_.Leanux.unsupported "a filter with a notifier (NEW_LISTENER)"
 
-/-- seccomp_set_mode_filter (:1947-2044). `NEW_LISTENER` and `TSYNC` leave
-    the domain at their first test after the prepare (design 9.1). -/
+/-- seccomp_set_mode_filter (:1947-2044). `NEW_LISTENER` leaves the domain
+    at its first test after the prepare (design 9.1); `TSYNC` on the one-task
+    group takes the C's path (the cred_guard_mutex uncontended, the two thread
+    walks meeting only the caller). -/
 def seccompSetModeFilter (flags : UInt32) (fprog : SockFprog) (badFprog : Bool) : M Int := do
   -- `flags & ~SECCOMP_FILTER_FLAG_MASK`: compiled as the unsigned `flags > MASK` (measured)
   if ← kbranchCmp .setFilterBadFlags (flags > SECCOMP_FILTER_FLAG_MASK) flags.toNat SECCOMP_FILTER_FLAG_MASK.toNat then
@@ -518,7 +554,10 @@ def seccompSetModeFilter (flags : UInt32) (fprog : SockFprog) (badFprog : Bool) 
     _root_.Leanux.unsupported "SECCOMP_FILTER_FLAG_NEW_LISTENER (design 9.1)"
   -- `flags & TSYNC && mutex_lock_killable(&cred_guard_mutex)`
   if ← kflag .setFilterTsyncLock flags SECCOMP_FILTER_FLAG_TSYNC then
-    _root_.Leanux.unsupported "SECCOMP_FILTER_FLAG_TSYNC (design 9.1)"
+    -- mutex_lock_killable(&current->signal->cred_guard_mutex): uncontended on
+    -- one task, it returns 0; its killable arm needs a pending fatal signal
+    if ← kbranch .setFilterTsyncLockFailed false then
+      _root_.Leanux.unsupported "mutex_lock_killable(cred_guard_mutex) interrupted by a fatal signal"
   -- spin_lock_irq(&current->sighand->siglock)
   let mut ret : Int := errEINVAL
   let mut prepared : Option FilterId := some id
@@ -535,7 +574,7 @@ def seccompSetModeFilter (flags : UInt32) (fprog : SockFprog) (badFprog : Bool) 
       seccompAssignMode .filter flags
   -- out: spin_unlock_irq
   if ← kflag .setFilterTsyncUnlock flags SECCOMP_FILTER_FLAG_TSYNC then
-    _root_.Leanux.invariant "TSYNC reached the unlock: the lock arm leaves the domain first"
+    pure ()   -- mutex_unlock(&current->signal->cred_guard_mutex): a cut
   -- out_put_fd
   if ← kflag .setFilterNewListenerOut flags SECCOMP_FILTER_FLAG_NEW_LISTENER then
     _root_.Leanux.invariant "NEW_LISTENER reached out_put_fd: its arm leaves the domain first"

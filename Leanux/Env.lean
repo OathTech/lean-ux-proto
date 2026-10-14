@@ -623,6 +623,20 @@ def wgDown : M Int := do
     `NETDEV_UNREGISTER` remove every route via wg0. -/
 def wgDelete : M Int := do
   if (← getK).wg.isSome then requireIdleDevice
+  -- Pre-release review finding 6 (docs/2026-10-14-pre-release-review.md,
+  -- section 6; W2 design 5): the guest refuses `wg_delete` while a stepped
+  -- dump is pending (`guest.c` `wg_delete_with_dump_pending`: the dump's
+  -- cursor holds the device reference, W2 C1), and the mirror's cursor does
+  -- not carry that reference, so the composition is outside the domain here
+  -- too, fail-closed, rather than a delete the guest would never perform.
+  -- pending as the guest counts it: started, and its NLMSG_DONE not yet
+  -- received (`dump_pending`, guest.c), which outlasts `cb_running` by the
+  -- queued chunks
+  let pending (sock : WG.NlSock) : Bool :=
+    sock.cbRunning || sock.queue.any fun chunk => chunk.messages.any fun m => match m with | .done .. => true | _ => false
+  let k ← getK
+  if pending k.nlSock7 || pending k.nlSock8 then
+    unsupported "a delete with a stepped dump pending (the dump's cursor holds the device reference; the guest refuses wg_delete_with_dump_pending)"
   let ret ← WG.wgDelete
   -- W9: NETDEV_UNREGISTER removes every address and route via wg0
   modify fun w => { w with addrs4 := [], addrs6 := [], defaultRoute4 := false, defaultRoute6 := false,
@@ -690,20 +704,32 @@ def observe : M (Int × Lean.Json) := do
     | [] => -EAGAIN
   -- W5: each datagram with the TOS / traffic class the listener's cmsg
   -- reports (`IP_RECVTOS`, `IPV6_RECVTCLASS`): the outer DS field wg0 sent
-  let datagrams := (w.listenerV4.map fun (ds, bs) => (4, ds, bs)) ++ (w.listenerV6.map fun (ds, bs) => (6, ds, bs))
+  -- Ordered as the harness orders Linux's (harness/linux.py attach_observed):
+  -- a stable sort by peer key (the listener's family and the message's index
+  -- word at byte 4), keeping arrival order within a peer's session and
+  -- leaving the cross-peer interleaving free (pre-release review, finding 5)
+  let indexWord (bs : List UInt8) : Nat := if bs.length ≥ 8 then WG.u32le bs 4 else 0
+  let keyLt (a b : Nat × Nat × Nat) : Bool :=
+    a.1 < b.1 || (a.1 == b.1 && (a.2.1 < b.2.1 || (a.2.1 == b.2.1 && a.2.2 < b.2.2)))
+  let stableSortBy {α : Type} (key : α → Nat × Nat × Nat) (xs : List α) : List α :=
+    ((((List.range xs.length).zip xs).toArray.qsort fun (i, a) (j, b) => keyLt (key a) (key b) || (key a == key b && i < j)).map (·.2)).toList
+  let datagrams := stableSortBy (fun (f, _, bs) => (f, indexWord bs, 0))
+    ((w.listenerV4.map fun (ds, bs) => (4, ds, bs)) ++ (w.listenerV6.map fun (ds, bs) => (6, ds, bs)))
   let entries := datagrams.map fun (f, ds, bs) =>
     Lean.toJson [Lean.toJson f, Lean.toJson bs.length, Lean.toJson (type bs), Lean.toJson ds, Lean.toJson (hex bs)]
   -- the sender's `recvmsg` source: a `sockaddr_in6` (SEND_FD is an IPv6
   -- socket), where an IPv4 source appears v4-mapped (::ffff:a.b.c.d), with
   -- its scope id (0: no kept source is link-local), then the TOS and the
   -- destination `IPV6_PKTINFO` reports (W5)
-  let replies := w.senderInbox.map fun dg => let bs := dg.bytes
+  let inbox := stableSortBy
+    (fun dg => ((if dg.family == AF_INET then 0xffff00000000 + dg.addr else dg.addr), dg.port, indexWord dg.bytes))
+    w.senderInbox
+  let replies := inbox.map fun dg => let bs := dg.bytes
     let addr6 := if dg.family == AF_INET then 0xffff00000000 + dg.addr else dg.addr
     Lean.toJson [Lean.toJson AF_INET6, Lean.toJson (hex (beBytes addr6 16)), Lean.toJson dg.port, Lean.toJson (0 : Nat),
                  Lean.toJson dg.tos, Lean.toJson (hex (beBytes dg.dst 16)),
                  Lean.toJson bs.length, Lean.toJson (type bs), Lean.toJson (if bs.length ≥ 12 then WG.u32le bs 8 else 0),
                  Lean.toJson (hex bs)]
-  let sortJson (xs : List Lean.Json) := (xs.toArray.qsort fun a b => a.compress < b.compress).toList
   modify fun w => { w with listenerV4 := [], listenerV6 := [], senderInbox := [] }
   -- L: without wg0 the guest's RTM_GETLINK fails with ENODEV: `stats` null
   let stats := match (← getK).wg with
@@ -715,8 +741,8 @@ def observe : M (Int × Lean.Json) := do
                                  ("tx_packets", Lean.toJson d.txPackets), ("tx_bytes", Lean.toJson d.txBytes)]
     | none => Lean.Json.null
   return (ret, Lean.Json.mkObj [
-    ("datagrams", if closed then Lean.Json.null else Lean.Json.arr (sortJson entries).toArray),
-    ("replies", Lean.Json.arr (sortJson replies).toArray),
+    ("datagrams", if closed then Lean.Json.null else Lean.Json.arr entries.toArray),
+    ("replies", Lean.Json.arr replies.toArray),
     ("stats", stats)])
 
 /-- `wg_inject`: the fixture's sender sends one datagram to `port` on 127.0.0.1
@@ -762,7 +788,7 @@ def inject (family port : Nat) (msg : List UInt8) (tos : Nat := 0) (ll : Bool :=
     mid-flood injection), a flood that did not cross the threshold, or a
     section that did not close in this operation (the worker outliving the
     window) fail closed. The op returns 0 (the submission succeeded). -/
-def flood (count port : Nat) (messages : List (List UInt8)) : M Int := do
+def flood (count port family : Nat) (messages : List (List UInt8)) : M Int := do
   let some d := (← getK).wg | unsupported "a flood to a port other than wg0's (no wg0)"
   if !d.running || port != d.incomingPort then unsupported "a flood to a port other than wg0's"
   -- without records (the domain filter runs before Linux), accept the flood: it
@@ -789,7 +815,22 @@ def flood (count port : Nat) (messages : List (List UInt8)) : M Int := do
   -- through the real worker (each packet's records, the `cond_resched`
   -- between packets), which decrements the counter per packet
   _ ← hidden (.sectionStart .receiveWorker)
-  let src ← senderSource 4 0
+  -- the flood's family: the fixture sender's v4-mapped destination (wg0 sees
+  -- IPv4 from 127.0.0.1) or ::1 (IPv6, the ratelimiter's /64 table)
+  let src ← senderSource family 0
+  if (← get).floodExact then
+    -- the unsummarised execution (the pre-release review's section 8): every
+    -- tail packet is the guest's invalid template (148 bytes: type 1, a MAC1
+    -- of 0xff) and runs through the real worker, consuming the records the
+    -- summary below folds; used to check the summary, not for the claim
+    let invalid : List UInt8 := [1] ++ List.replicate 115 0 ++ List.replicate 16 0xff ++ List.replicate 16 0
+    modifyDev fun d => { d with handshakeQueue := (messages ++ List.replicate count invalid).map (fun m => (m, src)),
+                                handshakeQueueLen := d.handshakeQueueLen + messages.length + count,
+                                handshakeLastCpu := 0 }
+    WG.handshakeReceiveWorker (nestedResched .receiveWorker)
+    _ ← hidden (.sectionStop .receiveWorker)
+    deliverSent
+    return 0
   -- the batch's producer side (wg_packet_receive per datagram, receive.c:567-568):
   -- the ring and the counter, and `wg_cpumask_next_online(&last_cpu)` per
   -- packet, which on this one-CPU kernel leaves `last_cpu` at 0

@@ -1,13 +1,11 @@
 {
   "version": 1,
-  "id": "sk_tsync",
+  "id": "s_ip_load_zero",
   "ops": [
     {
       "op": "seccomp_install",
       "via": "seccomp",
-      "flags": [
-        "tsync"
-      ],
+      "flags": [],
       "filter": [
         [
           32,
@@ -34,6 +32,36 @@
           0
         ],
         [
+          21,
+          0,
+          4,
+          102
+        ],
+        [
+          32,
+          0,
+          0,
+          8
+        ],
+        [
+          21,
+          0,
+          1,
+          0
+        ],
+        [
+          6,
+          0,
+          0,
+          327681
+        ],
+        [
+          6,
+          0,
+          0,
+          327682
+        ],
+        [
           6,
           0,
           0,
@@ -42,8 +70,9 @@
       ]
     },
     {
-      "op": "seccomp_prctl",
-      "cmd": "get_seccomp"
+      "op": "seccomp_probe",
+      "nr": 102,
+      "where": "self"
     }
   ]
 }

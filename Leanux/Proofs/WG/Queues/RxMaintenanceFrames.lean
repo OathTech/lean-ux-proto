@@ -31,10 +31,10 @@ theorem setPeerEndpoint_rxQueues (pid : PeerId) (e : Endpoint) : SameView rxQueu
   all_goals try dsimp +zetaDelta only at *
   all_goals unfold rxQueues at *; simp_all [CurrentRx]
 
-theorem armTimer_rxQueues (pid : PeerId) (timer : PeerTimer) (delay : Nat) :
-    SameView rxQueues (armTimer pid timer delay) := by
-  rw [armTimer_source]
-  apply SameView.bind (rxQueues_kernel (timerArmExpiry_sameKernel pid timer delay))
+theorem armTimer_rxQueues (pid : PeerId) (timer : PeerTimer) (delay : Nat) (jc : Option UInt64 := none) :
+    SameView rxQueues (armTimer pid timer delay jc) := by
+  rw [armTimer_source pid timer delay jc]
+  apply SameView.bind (rxQueues_kernel (timerArmExpiry_sameKernel pid timer delay jc))
   intro expiry
   exact modifyPeer_rxQueues pid (fun p => p.setTimer timer (some expiry))
     (fun p => by cases timer <;> rfl) (fun p => by cases timer <;> rfl)
@@ -49,13 +49,14 @@ theorem modPeerTimerGuard_rxQueues (pid : PeerId) : SameView rxQueues (modPeerTi
   have hg := (getPeer_rxQueues pid).wp (fun t => t = s)
   mvcgen [modPeerTimerGuard, getDev, getK, hg, WG.andM, branch, invariant]
 
-theorem modPeerTimer_rxQueues (pid : PeerId) (timer : PeerTimer) (delay : Nat) :
-    SameView rxQueues (modPeerTimer pid timer delay) := by
+theorem modPeerTimer_rxQueues (site : HiddenSite) (pid : PeerId) (timer : PeerTimer) (delay : Nat) :
+    SameView rxQueues (modPeerTimer site pid timer delay) := by
   apply SameView.of_wp
   intro s
   have hg := (modPeerTimerGuard_rxQueues pid).wp (fun t => t = s)
-  have ha := (armTimer_rxQueues pid timer delay).wp (fun t => t = s)
-  mvcgen [modPeerTimer, hg, ha]
+  have ha := fun jc => (armTimer_rxQueues pid timer delay jc).wp (fun t => t = s)
+  have hc := (rxQueues_kernel (callerJiffies_sameKernel site)).wp (fun t => t = s)
+  mvcgen [modPeerTimer, hg, ha, hc]
 
 theorem timersHandshakeComplete_rxQueues (pid : PeerId) (site : HiddenSite) :
     SameView rxQueues (timersHandshakeComplete pid site) := by
@@ -77,7 +78,7 @@ theorem timersDataReceived_rxQueues (pid : PeerId) : SameView rxQueues (timersDa
   intro s
   have hg := getPeer_rx_spec (fun t => t = s) pid
   have hs := fun p => setPeer_rx_spec (fun t => t = s) pid p
-  have ht := (modPeerTimer_rxQueues pid .sendKeepalive KEEPALIVE_TIMEOUT_TICKS).wp (fun t => t = s)
+  have ht := (modPeerTimer_rxQueues .timerJiffiesDataReceived pid .sendKeepalive KEEPALIVE_TIMEOUT_TICKS).wp (fun t => t = s)
   have hd := discard_view_spec rxQueues (fun t => t = s) _ ht
   mvcgen [timersDataReceived, hg, hs, ht, hd, getDev, getK, branch, invariant]
   all_goals try dsimp +zetaDelta only at *
@@ -87,7 +88,7 @@ theorem timersTraversal_rxQueues (pid : PeerId) : SameView rxQueues (timersTrave
   apply SameView.of_wp
   intro s
   have hg := (getPeer_rxQueues pid).wp (fun t => t = s)
-  have ht := fun delay => (modPeerTimer_rxQueues pid .persistentKeepalive delay).wp (fun t => t = s)
+  have ht := fun delay => (modPeerTimer_rxQueues .timerJiffiesTraversal pid .persistentKeepalive delay).wp (fun t => t = s)
   have hd := fun delay => discard_view_spec rxQueues (fun t => t = s) _ (ht delay)
   mvcgen [timersTraversal, hg, ht, hd, branchCmp]
 

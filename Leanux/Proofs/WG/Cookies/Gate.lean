@@ -14,7 +14,9 @@ open Leanux.Proofs.WG.CounterWindow Leanux.Proofs.WG.KeyTimes
 /-- The original queue-depth and recorded-clock load calculation. -/
 def loadPhase : M Bool := do
   let mut underLoad := false
-  if ← branch .hsUnderLoad ((← getDev).handshakeQueueLen ≥ MAX_QUEUED_INCOMING_HANDSHAKES / 8) then
+  let queueLen := (← getDev).handshakeQueueLen
+  if ← branchCmp .hsUnderLoad (queueLen ≥ MAX_QUEUED_INCOMING_HANDSHAKES / 8)
+      (Int.ofNat queueLen) (Int.ofNat (MAX_QUEUED_INCOMING_HANDSHAKES / 8)) then
     -- `last_under_load = ktime_get_coarse_boottime_ns()` (receive.c:115)
     let now ← hiddenClock64 .underLoadNow
     modify fun w => { w with lastUnderLoad := some now }
@@ -36,7 +38,9 @@ def loadPhase : M Bool := do
 /-- The same load calculation with its source continuation left abstract. -/
 def withLoad (next : Bool → M Unit) : M Unit := do
   let mut underLoad := false
-  if ← branch .hsUnderLoad ((← getDev).handshakeQueueLen ≥ MAX_QUEUED_INCOMING_HANDSHAKES / 8) then
+  let queueLen := (← getDev).handshakeQueueLen
+  if ← branchCmp .hsUnderLoad (queueLen ≥ MAX_QUEUED_INCOMING_HANDSHAKES / 8)
+      (Int.ofNat queueLen) (Int.ofNat (MAX_QUEUED_INCOMING_HANDSHAKES / 8)) then
     -- `last_under_load = ktime_get_coarse_boottime_ns()` (receive.c:115)
     let now ← hiddenClock64 .underLoadNow
     modify fun w => { w with lastUnderLoad := some now }

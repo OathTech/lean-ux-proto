@@ -23,8 +23,9 @@ theorem timersDataSent_cell pid : SameView cell (timersDataSent pid) := by
   have hp := (getPeer_frame pid).wp (fun t => t = s)
   have hj := (kernel (jitterBelowRekeyTimeout_sameKernel .newHandshakeJitter)).wp (fun t => t = s)
   have hg := (modPeerTimerGuard_cell pid).wp (fun t => t = s)
-  have ha := fun n => (armTimer_cell pid .newHandshake n).wp (fun t => t = s)
-  mvcgen [timersDataSent, hp, hj, hg, ha, branch]
+  have ha := fun n jc => (armTimer_cell pid .newHandshake n jc).wp (fun t => t = s)
+  have hc := (kernel (callerJiffies_sameKernel .timerJiffiesDataSent)).wp (fun t => t = s)
+  mvcgen [timersDataSent, hp, hj, hg, ha, hc, branch]
 
 theorem timersAnyAuthenticatedPacketSent_cell pid : SameView cell (timersAnyAuthenticatedPacketSent pid) :=
   delTimer_cell pid .sendKeepalive

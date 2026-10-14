@@ -25,9 +25,10 @@ def sendSkbToPeerPrefix (pid : PeerId) (bytes : List UInt8) (ds : Nat) : MixedM 
 
 def timersDataSentPrefix (pid : PeerId) : MixedM Unit := do
   if ← liftPrefix (branch .timersDataSentNotPending !((← getPeerMixed pid).timerPending .newHandshake)) then
+    let jc ← liftPrefix (callerJiffies .timerJiffiesDataSent)
     let jitter ← liftPrefix (jitterBelowRekeyTimeout .newHandshakeJitter)
     if ← modPeerTimerGuardPrefix pid then
-      armTimerPrefix pid .newHandshake (KEEPALIVE_TIMEOUT_TICKS + REKEY_TIMEOUT_TICKS + jitter)
+      armTimerPrefix pid .newHandshake (KEEPALIVE_TIMEOUT_TICKS + REKEY_TIMEOUT_TICKS + jitter) jc
 
 def timersAnyAuthenticatedPacketSentPrefix (pid : PeerId) : MixedM Unit :=
   delTimerPrefix pid .sendKeepalive
@@ -81,7 +82,7 @@ theorem timersDataSentPrefix_erases (pid : PeerId) :
   repeat' first
     | with_reducible exact getPeerMixed_erases _
     | with_reducible exact modPeerTimerGuardPrefix_erases _
-    | with_reducible exact armTimerPrefix_erases _ _ _
+    | with_reducible exact armTimerPrefix_erases _ _ _ _
     | with_reducible exact erasesPrefix_lift _
     | with_reducible exact erasesPrefix_pure _
     | with_reducible apply erasesPrefix_bind
@@ -156,9 +157,10 @@ theorem timersDataSentPrefix_spec (c : AmbientContracts I) (P : IdentityView →
   repeat' first
     | with_reducible exact c.getPeer_frame P _
     | with_reducible exact c.branch P _ _
+    | with_reducible exact c.kernel P _ (callerJiffies_sameKernel _)
     | with_reducible exact c.kernel P _ (jitterBelowRekeyTimeout_sameKernel _)
     | with_reducible exact modPeerTimerGuardPrefix_spec c P _
-    | with_reducible exact armTimerPrefix_spec c P _ _ _
+    | with_reducible exact armTimerPrefix_spec c P _ _ _ _
     | with_reducible exact c.pure P _
     | with_reducible apply PrefixEnsures.bind
     | (with_reducible split)
@@ -212,13 +214,14 @@ theorem createDataDonePrefix_preserves (c : AmbientContracts I) (t : TxContracts
 
 /-- A jitter failure occurs after the pending-timer read and before the timer
 guard. Premises describe consecutive original runs, not a desired log. -/
-theorem timersDataSentPrefix_jitter_failure (pid : PeerId) (w entered : World)
+theorem timersDataSentPrefix_jitter_failure (pid : PeerId) (w entered clocked : World) (jc : Option UInt64)
     (p : Peer) (h : List LifetimeEvent) (e : Stop)
     (hp : (getPeer pid).run w = .ok (p, w))
     (hb : (branch .timersDataSentNotPending !(p.timerPending .newHandshake)).run w = .ok (true, entered))
-    (hj : (jitterBelowRekeyTimeout .newHandshakeJitter).run entered = .error e) :
+    (hc : (callerJiffies .timerJiffiesDataSent).run entered = .ok (jc, clocked))
+    (hj : (jitterBelowRekeyTimeout .newHandshakeJitter).run clocked = .error e) :
     runPrefix (timersDataSentPrefix pid) w h = (.error e, h ++ [.peer (.read pid p.internalId)]) := by
   simp only [timersDataSentPrefix, runPrefix_bind, getPeerMixed_run, hp,
-    runPrefix_lift, hb, ↓reduceIte, hj]
+    runPrefix_lift, hb, ↓reduceIte, hc, hj]
 
 end Leanux.Proofs.WG.Lifetimes

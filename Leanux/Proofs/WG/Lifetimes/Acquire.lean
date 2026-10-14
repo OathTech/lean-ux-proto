@@ -3,8 +3,7 @@ import Leanux.Proofs.WG.Lifetimes.MixedFrames
 set_option maxHeartbeats 1000000
 set_option pp.structureInstances false
 
-/-! Reference acquisition's two reads and conditional write, including
-pending-worker and refcount rejection prefixes. -/
+/-! Reference acquisition's read and conditional write, including refcount rejection prefixes. -/
 namespace Leanux.Proofs.WG.Lifetimes
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Std.Do
 
@@ -12,8 +11,7 @@ def peerGetEvents (id : PeerId) (w : World) : List Peers.PeerEvent :=
   match w.k.wg.bind (fun d => d.peers[id]?) with
   | none => []
   | some p =>
-    if p.handshakePending && !w.queuedThisCall.contains id then [.read id p.internalId]
-    else [.read id p.internalId, .read id p.internalId] ++
+    [.read id p.internalId] ++
       if p.refcount = 0 ∨ p.refcount + 1 ≥ 2 ^ 31 then [] else [.write id p.internalId]
 
 theorem peerGetLocal_events (id : PeerId) (w : World) (h : List Peers.PeerEvent) :
@@ -26,19 +24,16 @@ theorem peerGetLocal_events (id : PeerId) (w : World) (h : List Peers.PeerEvent)
     | none => simp [peerGetLocal, peerGetEvents, Peers.requireNotPendingPrefix,
         runPrefix_bind, getPeer, getDev, getK, hd, hp, invariant]
     | some p =>
-      by_cases hpend : p.handshakePending = true ∧ ¬ id ∈ w.queuedThisCall
+      by_cases hz : p.refcount = 0
       · simp [peerGetLocal, peerGetEvents, Peers.requireNotPendingPrefix,
-          runPrefix_bind, getPeer, getDev, getK, hd, hp, hpend, unsupported]
-      · by_cases hz : p.refcount = 0
-        · simp [peerGetLocal, peerGetEvents, Peers.requireNotPendingPrefix,
-            runPrefix_bind, getPeer, getDev, getK, hd, hp, hpend, hz,
-            refcountInc, branch, branchCmp, unsupported, List.append_assoc]
-        · by_cases ho : p.refcount + 1 ≥ 2 ^ 31
-          all_goals have hwrap : (2147483647 ≤ p.refcount) ↔ (p.refcount + 1 ≥ 2 ^ 31) := by omega
-          all_goals simp [peerGetLocal, peerGetEvents, Peers.requireNotPendingPrefix,
-            runPrefix_bind, getPeer, getDev, getK, hd, hp, hpend, hz, ho, hwrap,
-            refcountInc, branch, branchCmp, unsupported, setPeer, modifyDev, modifyK,
-            List.append_assoc]
+          runPrefix_bind, getPeer, getDev, getK, hd, hp, hz,
+          refcountInc, branch, branchCmp, unsupported, List.append_assoc]
+      · by_cases ho : p.refcount + 1 ≥ 2 ^ 31
+        all_goals have hwrap : (2147483647 ≤ p.refcount) ↔ (p.refcount + 1 ≥ 2 ^ 31) := by omega
+        all_goals simp [peerGetLocal, peerGetEvents, Peers.requireNotPendingPrefix,
+          runPrefix_bind, getPeer, getDev, getK, hd, hp, hz, ho, hwrap,
+          refcountInc, branch, branchCmp, unsupported, setPeer, modifyDev, modifyK,
+          List.append_assoc]
 
 theorem peerGetLocal_run (id : PeerId) (w : World) (h : List Peers.PeerEvent) :
     runPrefix (peerGetLocal id) w h = ((peerGet id).run w, h ++ peerGetEvents id w) :=
@@ -54,24 +49,18 @@ theorem peerGetEvents_preserves (id : PeerId) (w : World) (h : List Peers.PeerEv
       rw [hp]; rfl
     have hn : ¬ AccessEvent.Released h p.internalId := fun hr => hi.2.2 _ hr id live
     have one := AccessEvent.safe_append_read (slot := id) hi.1 hn
-    have two := AccessEvent.safe_append_read (slot := id) one
+    have two := AccessEvent.safe_append_write (slot := id) one
       (by simpa only [AccessEvent.released_append_read] using hn)
-    have three := AccessEvent.safe_append_write (slot := id) two
-      (by simpa only [AccessEvent.released_append_read] using hn)
-    by_cases pending : p.handshakePending = true ∧ ¬ id ∈ w.queuedThisCall
-    · simpa [peerGetEvents, hp, pending, Peers.AccessInv] using
+    by_cases bad : p.refcount = 0 ∨ p.refcount + 1 ≥ 2 ^ 31
+    · have bad' : p.refcount = 0 ∨ 2147483647 ≤ p.refcount := by omega
+      simpa [peerGetEvents, hp, bad, bad', Peers.AccessInv] using
         (show Peers.AccessInv (h ++ [.read id p.internalId]) w from
           ⟨one, hi.2.1, fun s hs => hi.2.2 s (AccessEvent.released_append_read.mp hs)⟩)
-    · by_cases bad : p.refcount = 0 ∨ p.refcount + 1 ≥ 2 ^ 31
-      · have bad' : p.refcount = 0 ∨ 2147483647 ≤ p.refcount := by omega
-        simpa [peerGetEvents, hp, pending, bad, bad', List.append_assoc, Peers.AccessInv] using
-          (show Peers.AccessInv ((h ++ [.read id p.internalId]) ++ [.read id p.internalId]) w from
-            ⟨two, hi.2.1, fun s hs => hi.2.2 s (by simpa only [AccessEvent.released_append_read, AccessEvent.released_append_write] using hs)⟩)
-      · have bad' : ¬(p.refcount = 0 ∨ 2147483647 ≤ p.refcount) := by omega
-        simpa [peerGetEvents, hp, pending, bad, bad', List.append_assoc, Peers.AccessInv] using
-          (show Peers.AccessInv (((h ++ [.read id p.internalId]) ++ [.read id p.internalId]) ++
-            [.write id p.internalId]) w from
-              ⟨three, hi.2.1, fun s hs => hi.2.2 s (by simpa only [AccessEvent.released_append_read, AccessEvent.released_append_write] using hs)⟩)
+    · have bad' : ¬(p.refcount = 0 ∨ 2147483647 ≤ p.refcount) := by omega
+      simpa [peerGetEvents, hp, bad, bad', List.append_assoc, Peers.AccessInv] using
+        (show Peers.AccessInv ((h ++ [.read id p.internalId]) ++ [.write id p.internalId]) w from
+          ⟨two, hi.2.1, fun s hs => hi.2.2 s (by simpa only [AccessEvent.released_append_read,
+            AccessEvent.released_append_write] using hs)⟩)
 
 theorem peerGetLocal_preserves (id : PeerId) :
     PrefixPreserves Peers.AccessInv AccessEvent.Safe (peerGetLocal id) := by

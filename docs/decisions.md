@@ -461,4 +461,102 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   take several id prefixes. The replay tests' captures predate the kind-310
   record and the module had failed on every capture since item 7;
   `with_jiffies_end` appends the record as a replay fixture.
+- **2026-10-14 [AGENT, fork of the coordinator]** The public claims are
+  rewritten to the observation level, per the pre-release review
+  (`docs/2026-10-14-pre-release-review.md`, sections 3, 4, 7, 9, 13, 14 and
+  its limitations table): the README opens with the review's description
+  (one configured, patched, single-CPU executable; selected supported
+  traces; projected branch witnesses; operand presence; reconstructed
+  scheduling choices; finite windows; separately pinned mirror theorems;
+  neither the correspondence nor general security proved), carries a scope
+  table of the consequential exclusions with their status and a
+  trusted-boundary account; the proof register gains a result table
+  (original claim, exact theorem, event boundary, premises, counterexample
+  or blocker, pin) and counts theorem results, infrastructure and witnesses
+  apart; the compiler experiment is renamed to witness-location stability
+  with its units corrected; the tray's two drafts are narrowed to what was
+  measured, with recorded loss, source-derived mechanism and attack
+  feasibility separated; the reproduction guide names the approved build by
+  identity. Sentences that describe the state after the review's code fixes
+  are marked with the branch that carries the fix.
+- **2026-10-14 [AGENT, fork of the coordinator]** Pre-release review finding
+  11 (docs/2026-10-14-pre-release-review.md, section 11), the seccomp scope:
+  `TSYNC` on the one-task group is in scope as the C's path (the thread walks
+  of `seccomp_can_sync_threads` and `seccomp_sync_threads` meet only the
+  caller; threaded synchronisation stays out, a representation limit);
+  `instruction_pointer` is recorded at `populate_seccomp_data` (kind 312,
+  record-only, class-approved, the oracle rebuilt at integration) and filters
+  that branch on it are in the domain; EINTR, ENOMEM, ENFILE and the restart
+  codes are ordinary `ERRNO` policy results, told from a guest failure by the
+  trace's installs (provenance) in harness/linux.py, so the corpus and the
+  generator emit them; the feature is named "single-task seccomp with
+  classic-BPF translation and an interpreter service" with `BpfEngine`'s
+  laws as premises; a sparse 4096-instruction single filter is deferred
+  (the comparison child's record area), the reason in the design's section 10.
+- **2026-10-14 [AGENT, fork of the coordinator]** `requireNotPending` is
+  retired (a no-op; `docs/2026-10-11-dispatch-order.md`, the last section),
+  the pre-release review's finding 3: with the section records and the
+  scheduler loop the queued handshake send worker runs exactly where its
+  section is, so a receive the kernel ran before it is determined; the stop
+  excluded ordinary simultaneous initiation. Evidence: the receive-first
+  captures of `p_sim_init_*` on s2, which the old mirror refused at
+  peer.c:75 and the new one replays to each child's returns. The three
+  batch traces stay outside the suites because the two guest children ran
+  the unbound send worker and the receive worker in different orders, the
+  harness's determinism rule (the review's finding 5), not the mirror's;
+  the sequential one is in the `wireguard` suite.
 
+- **2026-10-14 [AGENT, fork of the coordinator]** The pre-release review's
+  checker findings 1, 3 and 5 (docs/2026-10-14-pre-release-review.md) are
+  fixed in the evaluator and harness, not declared as limitations: (1) the
+  boundary rule: every function of an anchored C file that an operation
+  covers must be listed, branch-free, or a helper cut named in kcov.json
+  with its reason (`helper_cuts`, 50 at this commit, classified by running
+  the suites under the rule and reading the C); the old rule caught an
+  unlisted function only on a declared span. One covered function is not
+  cut because it owns choice points on a modeled path,
+  `wg_socket_send_buffer_as_reply_to_skb` (the receive audit's F3): the
+  cookie-reply trace fails the boundary rule until the mirror declares
+  them, a mirror follow-on. (3) Every report carries the generated suites'
+  selection account (candidates, in the domain, selected, rejection
+  reasons over all candidates). (5) `operand_rows_distinct` beside
+  `operand_pairs_matched`; and the `wg_observe` observation keeps arrival
+  order within a peer session on both sides (a stable sort by peer key),
+  where the global compact-JSON sort lost it. The one-off mutant of the
+  observation (the sender's replies reversed, `Leanux/Env.lean`, run once
+  on `d2_staged_flush_4` and deleted) was rejected as `semantic_mismatch`
+  through the observation; under the old global sort the same mutant
+  could not disagree. Found outside the directive, not fixed: under load
+  `w7_multi_tx_2` can record the kernel queueing the transmit work twice
+  (the robustness landing's schedule), which the mirror now accepts but
+  `dispatch_problems` still reports ("a work item queued while already
+  queued"); the schedule did not recur in the suite runs here.
+- **2026-10-14 [AGENT, fork of the coordinator]** Pre-release review finding 2
+  (docs/2026-10-14-pre-release-review.md, section 2): a peer timer's expiry
+  is computed from the caller's own recorded `jiffies` read (kind 311,
+  `kcov_timer_jiffies` on each of `mod_peer_timer`'s seven caller lines,
+  record-only under the approved class; the s3 oracle pair) and compared
+  with the arm record's published expiry, instead of recovering the read
+  as `expires - delay`, which absorbed a delay wrong by one tick. The
+  `mod_timer` read keeps its 0-or-1 admissibility against the caller's;
+  the items 7-8 design's "publication identity" wording is withdrawn.
+- **2026-10-14 [AGENT, fork of the coordinator]** Pre-release review finding 6
+  (section 6): `Env.wgDelete` refuses a delete while a stepped dump is
+  pending, as the guest does (`wg_delete_with_dump_pending`), since the
+  mirror's dump cursor carries a Boolean device presence and not the C's
+  retained device reference; the control `n6_delete_with_dump_pending`
+  keeps the composition outside the domain (the campaign's stale-cursor
+  witness was such an accepted replay). Supporting it means cursor
+  ownership, the review's longer-term option, recorded in the W2 design.
+- **2026-10-14 [AGENT, fork of the coordinator]** The receive-path scope holes of
+  the pre-release review (`docs/2026-10-14-pre-release-review.md`, sections 8
+  and 12, the IPv6 rate-limiting row): the under-load threshold declared with
+  its operands and crossed exactly by `e_underload_511/512/513`; the flood
+  summary checkable against the unsummarised execution (`LEANUX_FLOOD_EXACT=1`);
+  the IPv6 ratelimiter table modelled (`.rlProtoIp6`, `table6`, a `wg_flood`
+  with `family: 6`), the entry allocation's unrecorded site and the GC's
+  exclusion written; `cookie.c:147` (`.macRatelimited`) and
+  `wg_socket_send_buffer_as_reply_to_skb` (listed, five decisions) declared;
+  `wgXmit` checks the packet header's destination against the environment's;
+  the ECN rewrite's length implication asserted; the E arm named "cookie
+  gating under the modelled load state"; disposition tables on both audits.

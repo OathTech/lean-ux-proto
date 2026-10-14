@@ -118,8 +118,8 @@ theorem injectLogged_evolves (family port : Nat) (msg : List UInt8)
   unfold injectLogged
   repeat' operation_step
 
-theorem floodLogged_evolves (count port : Nat) (messages : List (List UInt8)) :
-    Evolves (floodLogged count port messages) := by
+theorem floodLogged_evolves (count port family : Nat) (messages : List (List UInt8)) :
+    Evolves (floodLogged count port family messages) := by
   unfold floodLogged
   repeat' operation_step
   all_goals exact evolves_throw _

@@ -13,9 +13,9 @@ open Leanux.Proofs.WG.CounterWindow
 and no two events share an allocation lifetime and wire counter. The history
 records every committed true original validator return, including packets dropped
 later; discarded scheduler consistency probes do not commit World or history. -/
-theorem S1 (trace : Trace) (placeholders : Bool) (json : Json)
-    (accepted : Runner.executeTrace trace placeholders = .ok json) :
-    ∃ history, (executeTraceLogged trace placeholders).run [] = .ok (json, history) ∧
+theorem S1 (trace : Trace) (placeholders : Bool) {floodExact : Bool} (json : Json)
+    (accepted : Runner.executeTrace trace placeholders floodExact = .ok json) :
+    ∃ history, (executeTraceLogged trace placeholders floodExact).run [] = .ok (json, history) ∧
       history.Nodup :=
   executeTrace_accepted_nodup trace placeholders json accepted
 

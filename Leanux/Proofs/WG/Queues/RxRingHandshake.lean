@@ -170,7 +170,7 @@ theorem beginSession_cell pid : SameView cell (beginSession pid) := by
 theorem timersSessionDerived_cell pid : SameView cell (timersSessionDerived pid) := by
   apply SameView.of_wp
   intro s
-  have h_mod := fun p t n => (modPeerTimer_cell p t n).wp (fun t => t = s)
+  have h_mod := fun site p t n => (modPeerTimer_cell site p t n).wp (fun t => t = s)
   have hd (α : Type) := discard_view_spec cell (α := α) (fun t => t = s)
   mvcgen [timersSessionDerived, h_mod, hd]
 

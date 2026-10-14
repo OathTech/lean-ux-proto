@@ -9,7 +9,7 @@ set_option pp.structureInstances false
 namespace Leanux.Proofs.Logged
 open Lean Leanux Leanux.Runner
 
-def executeTraceLogged (trace : Trace) (placeholders : Bool := false) : StateT History (Except (Nat × Stop)) Json := do
+def executeTraceLogged (trace : Trace) (placeholders : Bool := false) (floodExact : Bool := false) : StateT History (Except (Nat × Stop)) Json := do
   let mut world : World := { k := initialKernel trace.rlimit trace.net trace.bare trace.foreign trace.stepped trace.seccompChild, env := harnessEnv,
                              timing := Env.timing, portBound := Env.portBound,
                              fixtureNetDevices := Env.fixtureNetDevices,
@@ -17,6 +17,7 @@ def executeTraceLogged (trace : Trace) (placeholders : Bool := false) : StateT H
                              netnsCHolders := if trace.foreign then [9, 8, 5, 4] else [],
                              allocArmed := trace.allocArmed, routes := trace.routes,
                              hiddenPlaceholders := placeholders && trace.hidden.isNone,
+                             floodExact,
                              steerValues := if placeholders then trace.steer else [],
                              armRecords := trace.armRecords, dstCacheRecords := trace.dstCacheRecords,
                              napiBeforePut := trace.napiBeforePut,
@@ -93,8 +94,8 @@ def executeTraceLogged (trace : Trace) (placeholders : Bool := false) : StateT H
 
 /-- Exact erasure all the way to the unchanged executable runner.
 This is the observation bridge, not yet the no-duplicate invariant. -/
-theorem executeTraceLogged_erases (trace : Trace) (placeholders : Bool) :
-    ErasesT (executeTraceLogged trace placeholders) (Runner.executeTrace trace placeholders) := by
+theorem executeTraceLogged_erases (trace : Trace) (placeholders : Bool) {floodExact : Bool} :
+    ErasesT (executeTraceLogged trace placeholders floodExact) (Runner.executeTrace trace placeholders floodExact) := by
   unfold executeTraceLogged Runner.executeTrace
   repeat' first
     | contradiction
@@ -115,10 +116,10 @@ theorem executeTraceLogged_erases (trace : Trace) (placeholders : Bool) :
 
 /-- Accepted runner inputs have an observer history and unchanged JSON.
 The history invariant is a separate proof obligation. -/
-theorem executeTraceLogged_success_iff (trace : Trace) (placeholders : Bool)
+theorem executeTraceLogged_success_iff (trace : Trace) (placeholders : Bool) {floodExact : Bool}
     (json : Json) (history : History) :
-    Runner.executeTrace trace placeholders = .ok json ↔
-      ∃ history', (executeTraceLogged trace placeholders).run history = .ok (json, history') :=
+    Runner.executeTrace trace placeholders floodExact = .ok json ↔
+      ∃ history', (executeTraceLogged trace placeholders floodExact).run history = .ok (json, history') :=
   erasesT_success_iff (executeTraceLogged_erases trace placeholders) json history
 
 end Leanux.Proofs.Logged

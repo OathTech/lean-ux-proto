@@ -82,7 +82,7 @@ theorem seccompLog_spec (P : WGKernelView → Prop) (_syscall : Int) (_signr : N
     ⦃⇓? _ w => ⌜P (wgKernelView w)⌝⦄ := (seccompLog_sameWGKernel _syscall _signr action requested).wp P
 
 theorem seccompFilter_sameWGKernel {E : Type} [BpfEngine E] (e : E) (nr : Int) (sd : SeccompData) : SameWGKernel (Leanux.Seccomp.seccompFilter e nr sd) := by
-  frame_wg [Leanux.Seccomp.seccompFilter] using [forceSigSeccomp_spec, kbranch_spec, kbranchCmp_spec, getFilter_spec, modifySeccomp_spec, seccompRunFilters_spec, seccompLog_spec, sbranch_spec, sbranchCmp_spec]
+  frame_wg [Leanux.Seccomp.seccompFilter] using [hiddenU64_spec, forceSigSeccomp_spec, kbranch_spec, kbranchCmp_spec, getFilter_spec, modifySeccomp_spec, seccompRunFilters_spec, seccompLog_spec, sbranch_spec, sbranchCmp_spec]
 
 theorem seccompFilter_spec (P : WGKernelView → Prop) {E : Type} [BpfEngine E] (e : E) (nr : Int) (sd : SeccompData) :
     ⦃fun w => ⌜P (wgKernelView w)⌝⦄ Leanux.Seccomp.seccompFilter e nr sd
@@ -116,8 +116,22 @@ theorem seccompAssignMode_spec (P : WGKernelView → Prop) (mode : SeccompMode) 
     ⦃fun w => ⌜P (wgKernelView w)⌝⦄ Leanux.Seccomp.seccompAssignMode mode flags
     ⦃⇓? _ w => ⌜P (wgKernelView w)⌝⦄ := (seccompAssignMode_sameWGKernel mode flags).wp P
 
+theorem seccompCanSyncThreads_sameWGKernel : SameWGKernel seccompCanSyncThreads := by
+  frame_wg [seccompCanSyncThreads] using [kbranch_spec]
+
+theorem seccompCanSyncThreads_spec (P : WGKernelView → Prop) :
+    ⦃fun w => ⌜P (wgKernelView w)⌝⦄ seccompCanSyncThreads
+    ⦃⇓? _ w => ⌜P (wgKernelView w)⌝⦄ := seccompCanSyncThreads_sameWGKernel.wp P
+
+theorem seccompSyncThreads_sameWGKernel : SameWGKernel seccompSyncThreads := by
+  frame_wg [seccompSyncThreads] using [kbranch_spec]
+
+theorem seccompSyncThreads_spec (P : WGKernelView → Prop) :
+    ⦃fun w => ⌜P (wgKernelView w)⌝⦄ seccompSyncThreads
+    ⦃⇓? _ w => ⌜P (wgKernelView w)⌝⦄ := seccompSyncThreads_sameWGKernel.wp P
+
 theorem seccompAttachFilter_sameWGKernel (flags : UInt32) (id : FilterId) : SameWGKernel (Leanux.Seccomp.seccompAttachFilter flags id) := by
-  frame_wg [Leanux.Seccomp.seccompAttachFilter] using [getCurrent_spec, kbranch_spec, kbranchCmp_spec, kflag_spec, getFilter_spec, modifyFilter_spec, modifySeccomp_spec, seccompCachePrepare_spec, sbranch_spec, sbranchCmp_spec]
+  frame_wg [Leanux.Seccomp.seccompAttachFilter] using [seccompCanSyncThreads_spec, seccompSyncThreads_spec, getCurrent_spec, kbranch_spec, kbranchCmp_spec, kflag_spec, getFilter_spec, modifyFilter_spec, modifySeccomp_spec, seccompCachePrepare_spec, sbranch_spec, sbranchCmp_spec]
 
 theorem seccompAttachFilter_spec (P : WGKernelView → Prop) (flags : UInt32) (id : FilterId) :
     ⦃fun w => ⌜P (wgKernelView w)⌝⦄ Leanux.Seccomp.seccompAttachFilter flags id

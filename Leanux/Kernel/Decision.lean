@@ -170,8 +170,12 @@ inductive Decision where
   | macInvalid | macNoCookieCheck | cookieLookupMiss
   -- E-B: wg_cookie_validate_packet's MAC2 compare under load (cookie.c:143)
   | macCookieInvalid
+  -- cookie.c:147: the ratelimiter's verdict under load (the receive audit's F2)
+  | macRatelimited
   -- E-B arm C: wg_ratelimiter_allow (ratelimiter.c)
   | rlProtoIp | rlEntryMatch | rlAllow | rlOverLimit | rlAllocFail
+  -- ratelimiter.c:101: the IPv6 table, keyed by the source /64 (the receive audit's F12)
+  | rlProtoIp6
   -- E-A: wg_cookie_message_consume beyond the lookup
   | cookieNoMac1Sent | cookieDecryptOk
   -- drivers/net/wireguard/peerlookup.c
@@ -200,6 +204,8 @@ inductive Decision where
   | timersDataSentNotPending | timersDataReceivedRunning | timersDataReceivedNotPending
   | modTimerRunning | modTimerAlive | traversalKeepalive | keypairPutUnreferenceNow | keypairKrefPutReleased
   | idxReplaceUnhashed | sendBufNoMem | sendSkbInet | sendSkbInet6 | sendSkbOk
+  -- socket.c:203-233 wg_socket_send_buffer_as_reply_to_skb (the receive audit's F3)
+  | replyInSkbNull | replyEndpointErr | replyNoMem | replyInet | replyInet6
   | initRateLimited | initCreated | initNoIdentity | initNoEphemeral | initEsFailed | initSsFailed
   | idxInsWalk1 | idxInsCollide1 | idxInsWalk2 | idxInsCollide2 | idxWalk | idxTypeMatch | idxPeerAlive
   -- D1 stream B
@@ -346,6 +352,8 @@ inductive Decision where
   | mayAssignModeSet | mayAssignModeCmpFilter | mayAssignModeCmpStrict | mayAssignModeDiffers
   | assignModeSpecAllow | assignModeSpecAllowCmp
   | attachWalker | attachOverBudget | attachTsync | attachLog | attachWaitKillable | attachTsyncSync
+  | attachTsyncFailed | attachTsyncEsrch | canSyncLoop | canSyncIsCaller | canSyncExiting | canSyncMode
+  | syncLoop | syncIsCaller | syncExiting | setFilterTsyncLockFailed
   | getFilterNone
   | logCaseAllow | logCaseTrap | logCaseErrno | logCaseTrace | logCaseUserNotif | logCaseLog
   | logCaseKillThread | logCaseKillProcess | logTrapRequested | logErrnoRequested | logTraceRequested
@@ -1154,6 +1162,9 @@ def Decision.info : Decision → DecisionInfo
   -- drivers/net/wireguard/cookie.c
   | .macInvalid => d "wg_cookie_validate_packet.mac1_invalid" wck 132 [(133, 133)] [(135, 135)]
   | .macNoCookieCheck => d "wg_cookie_validate_packet.no_cookie_check" wck 137 [(138, 138)] [(140, 140)]
+  -- `if (!wg_ratelimiter_allow(skb, net)) goto out` (cookie.c:147-148): true keeps
+  -- VALID_MAC_WITH_COOKIE_BUT_RATELIMITED, false reaches VALID_MAC_WITH_COOKIE (:150)
+  | .macRatelimited => d "wg_cookie_validate_packet.ratelimited" wck 147 [(148, 148)] [(150, 150)]
   -- E-B: under load, make_cookie then compute_mac2; the memneq fails for a
   -- valid-MAC1 initiation with no cookie (true → goto out = VALID_MAC_BUT_NO_COOKIE).
   -- The true side shares the `out:` epilogue; the false side reaches the ratelimiter.
@@ -1250,6 +1261,14 @@ def Decision.info : Decision → DecisionInfo
   | .sendSkbInet => d "wg_socket_send_skb_to_peer.inet" wso 174 [(175, 176)] [(177, 177)]
   | .sendSkbInet6 => d "wg_socket_send_skb_to_peer.inet6" wso 177 [(178, 179)] [(181, 181)]
   | .sendSkbOk => d "wg_socket_send_skb_to_peer.sent" wso 182 [(183, 183)] []
+  -- wg_socket_send_buffer_as_reply_to_skb (socket.c:203-233), listed 2026-10-14
+  -- (the receive audit's F3): the NULL-skb and endpoint-error returns, the
+  -- GFP_ATOMIC alloc_skb (A's `replySkb` site) and the family switch
+  | .replyInSkbNull => d "wg_socket_send_buffer_as_reply_to_skb.no_skb" wso 211 [(212, 212)] []
+  | .replyEndpointErr => d "wg_socket_send_buffer_as_reply_to_skb.endpoint_error" wso 214 [(215, 215)] []
+  | .replyNoMem => d "wg_socket_send_buffer_as_reply_to_skb.no_mem" wso 218 [(219, 219)] [(220, 222)]
+  | .replyInet => d "wg_socket_send_buffer_as_reply_to_skb.inet" wso 224 [(225, 225)] []
+  | .replyInet6 => d "wg_socket_send_buffer_as_reply_to_skb.inet6" wso 226 [(227, 227)] []
   -- the early return at 27 shares the function's epilogue: no witness
   | .initRateLimited => d "wg_packet_send_handshake_initiation.rate_limited" wsd 25 [] [(29, 33)]
   | .initCreated => d "wg_packet_send_handshake_initiation.created" wsd 34 [(35, 42)] []
@@ -2071,6 +2090,9 @@ def Decision.info : Decision → DecisionInfo
   | .rlAllow => d "wg_ratelimiter_allow.allow" wrl 126 [] []
   | .rlOverLimit => d "wg_ratelimiter_allow.over_max_entries" wrl 135 [(136, 136)] [(138, 138)]
   | .rlAllocFail => d "wg_ratelimiter_allow.alloc_failed" wrl 139 [(140, 140)] [(142, 142)]
+  -- `else if (skb->protocol == htons(ETH_P_IPV6))` (:101): the /64 key and the
+  -- IPv6 table (:103-105); the `else return false` arm (:109) is for neither family
+  | .rlProtoIp6 => d "wg_ratelimiter_allow.inet6" wrl 101 [(103, 105)] [(109, 109)]
   -- seccomp stream V: kernel/seccomp.c (docs/2026-10-12-seccomp-design.md, 2.1-2.4, 2.8-2.10).
   -- __secure_computing (:1378-1404): the switch on the mode
   | .secureComputingStrict => d "__secure_computing.case_strict" sec 1391 [(1392, 1393)] []
@@ -2130,6 +2152,18 @@ def Decision.info : Decision → DecisionInfo
   | .attachLog => d "seccomp_attach_filter.log" sec 942 [(943, 943)] []
   | .attachWaitKillable => d "seccomp_attach_filter.wait_killable_recv" sec 946 [(947, 947)] []
   | .attachTsyncSync => d "seccomp_attach_filter.tsync_sync" sec 959 [(960, 960)] []
+  -- TSYNC on one thread (pre-release review finding 11): seccomp_can_sync_threads
+  -- (:490-524) and seccomp_sync_threads (:597-645) are inlined into the attach;
+  -- the thread group is the caller alone, so each walk meets it, skips it and ends
+  | .attachTsyncFailed => d "seccomp_attach_filter.tsync_failed" sec 933 [(934, 937)] []
+  | .attachTsyncEsrch => d "seccomp_attach_filter.tsync_esrch" sec 934 [(935, 935)] [(937, 937)]
+  | .canSyncLoop => d "seccomp_can_sync_threads.thread" sec 499 [(503, 503)] [(523, 523)]
+  | .canSyncIsCaller => d "seccomp_can_sync_threads.is_caller" sec 503 [(504, 504)] [(506, 506)]
+  | .canSyncExiting => d "seccomp_can_sync_threads.exiting" sec 506 [(507, 507)] [(509, 509)]
+  | .canSyncMode => d "seccomp_can_sync_threads.syncable" sec 509 [(513, 513)] [(516, 516)]
+  | .syncLoop => d "seccomp_sync_threads.thread" sec 606 [(608, 608)] []
+  | .syncIsCaller => d "seccomp_sync_threads.is_caller" sec 608 [(609, 609)] [(615, 615)]
+  | .syncExiting => d "seccomp_sync_threads.exiting" sec 615 [(616, 616)] []
   -- get_seccomp_filter (:971-980), in the parent's clone
   | .getFilterNone => d "get_seccomp_filter.no_filter" sec 974 [(975, 975)] [(976, 977)]
   -- seccomp_log (:1000-1041): the switch on the action, the `requested &&` operands and the final test;
@@ -2173,6 +2207,7 @@ def Decision.info : Decision → DecisionInfo
   | .setFilterPrepareErr => d "seccomp_set_mode_filter.prepare_err" sec 1982 [] [(1985, 1985)]
   | .setFilterNewListenerFlag => d "seccomp_set_mode_filter.new_listener" sec 1985 [(1986, 1986)] []
   | .setFilterTsyncLock => d "seccomp_set_mode_filter.tsync_lock" sec 2004 [(2005, 2005)] []
+  | .setFilterTsyncLockFailed => d "seccomp_set_mode_filter.tsync_lock_failed" sec 2005 [(2006, 2006)] []
   | .setFilterCannotAssign => d "seccomp_set_mode_filter.cannot_assign" sec 2010 [(2011, 2011)] [(2013, 2013)]
   | .setFilterDuplicateListener => d "seccomp_set_mode_filter.duplicate_listener" sec 2013 [(2014, 2015)] [(2018, 2018)]
   | .setFilterAttachErr => d "seccomp_set_mode_filter.attach_err" sec 2019 [(2020, 2020)] [(2022, 2023)]
@@ -2468,6 +2503,13 @@ def Decision.comparison : Decision → Option Comparison
   -- `is_valid && !expired` spans cookie.c:170-172: the age test is recorded
   -- at 170 with the `is_valid` byte test (measured, e_cookie_then_reinitiate)
   | .addMacCookieFresh => some ⟨.le, false, some 170, false⟩
+  -- `under_load = atomic_read(&wg->handshake_queue_len) >= MAX_QUEUED_INCOMING_HANDSHAKES / 8`
+  -- (receive.c:112-113): an int against the constant 512; the compare is
+  -- attributed to the `if (under_load)` at :114 (measured on s2: the
+  -- comparison site is :114, none at :112-113), so the decision's own line;
+  -- declared with operands since 2026-10-14 (the receive audit's F9, the
+  -- pre-release review's section 8)
+  | .hsUnderLoad => some ⟨.ge, true, none, false⟩
   -- `under_load = !wg_birthdate_has_expired(last_under_load, 1)` is at
   -- receive.c:117; the decision's line is the `if (!under_load)` at 118
   | .hsDecayExpired => some ⟨.le, false, some 117, false⟩
@@ -2694,7 +2736,7 @@ def Decision.comparison : Decision → Option Comparison
   | .mayAssignModeCmpStrict => some ⟨.ne, true, none, false⟩
   | .assignModeSpecAllowCmp => some ⟨.flag, true, none, false⟩
   | .attachOverBudget => some ⟨.gt, true, none, false⟩
-  | .attachTsync | .attachLog | .attachWaitKillable | .attachTsyncSync => some ⟨.flag, true, none, false⟩
+  | .attachTsync | .attachLog | .attachWaitKillable | .attachTsyncSync | .attachTsyncEsrch => some ⟨.flag, true, none, false⟩
   | .prepareLenZero => some ⟨.gt, true, none, false⟩
   | .prepareCreateErr => some ⟨.lt, true, none, false⟩
   | .setFilterBadFlags => some ⟨.gt, true, none, false⟩
@@ -2903,6 +2945,8 @@ def Decision.comparison : Decision → Option Comparison
     once in one operation. -/
 def Decision.repeatable : Decision → Bool
   | .idxInsertHashed | .idxRemoveHashed
+  -- TSYNC on one thread: the two thread walks test their loop twice per call
+  | .canSyncLoop | .syncLoop
   -- W7: a batch's receive poll evaluates the endpoint's family once per packet, both
   -- outcomes in one NET_RX section when IPv4 and IPv6 datagrams share a poll
   -- (w7_multi_rx_9_rst_roam, the receive audit's F6b trace)
@@ -3049,6 +3093,9 @@ def Decision.repeatable : Decision → Bool
   -- P stream 2 signal (end)
   -- E-B arm C: the ratelimiter bucket walk compares each entry
   | .rlEntryMatch => true
+  -- several leading valids in one flood operation evaluate these per packet
+  | .macRatelimited | .rlProtoIp6 | .replyInSkbNull | .replyEndpointErr | .replyNoMem
+  | .replyInet | .replyInet6 => true
   -- W12 (docs/2026-10-06-w3-w12.md, Part II): a timer callback runs once
   -- per due peer in one pass, so its decisions repeat within the
   -- advance's operation

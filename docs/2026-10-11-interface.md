@@ -32,6 +32,11 @@ Shared, coordinator-owned, allocated here and append-only per stream:
   `jiffies`, written into the remote stream by `KCOV_LEANUX_JIFFIES`, ioctl
   207; `HiddenSite.jiffiesEnd`, id 128, the first free id after L's 120-127;
   review item 7, `docs/2026-10-13-review-items-7-8.md` section 5);
+- record kind 311, a peer timer caller's `jiffies` read (`TIMER_CALLER_JIFFIES`,
+  class `jiffies`, written by `kcov_timer_jiffies` on each of `mod_peer_timer`'s
+  seven caller lines in `drivers/net/wireguard/timers.c`; `HiddenSite` ids
+  420-426, one per caller; pre-release review finding 2,
+  `docs/2026-10-14-pre-release-review.md` section 2);
 - `HiddenSite` ids: W5-W6 140-149, W8-W9 150-169, W1-W2 170-179, W3-W12
   180-189 (`Leanux/Kernel/Defs.lean`, each stream's own block);
 - `Worker` indices 12-13 (W8-W9) and 14-15 (W5-W6), with their section

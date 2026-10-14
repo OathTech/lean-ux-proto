@@ -1550,18 +1550,24 @@ struct flood_state {
     unsigned char tmpl[148];
 };
 
-static int flood_prep(struct flood_state *fs, unsigned port, unsigned n_invalid,
+static int flood_prep(struct flood_state *fs, unsigned port, unsigned n_invalid, unsigned family,
                       const unsigned char *payload, unsigned payload_len)
 {
     memset(fs->tmpl, 0, sizeof(fs->tmpl));
     fs->tmpl[0] = 1;                       /* MESSAGE_HANDSHAKE_INITIATION */
     memset(fs->tmpl + 116, 0xff, 16);     /* a MAC1 that will not match */
     /* v4-mapped destination: SEND_FD is the dual-stack IPv6 fixture sender, so
-     * wg0 sees IPv4 from 127.0.0.1:SENDER_PORT (as wg_inject does). */
+     * wg0 sees IPv4 from 127.0.0.1:SENDER_PORT (as wg_inject does); family 6
+     * sends to ::1 instead, so wg0 sees IPv6 (the ratelimiter's /64 table,
+     * 2026-10-14). */
     memset(&fs->dst, 0, sizeof(fs->dst));
     fs->dst.sin6_family = AF_INET6; fs->dst.sin6_port = htons((uint16_t)port);
-    fs->dst.sin6_addr.s6_addr[10] = fs->dst.sin6_addr.s6_addr[11] = 0xff;
-    fs->dst.sin6_addr.s6_addr[12] = 127; fs->dst.sin6_addr.s6_addr[15] = 1;
+    if (family == 6) {
+        fs->dst.sin6_addr.s6_addr[15] = 1;
+    } else {
+        fs->dst.sin6_addr.s6_addr[10] = fs->dst.sin6_addr.s6_addr[11] = 0xff;
+        fs->dst.sin6_addr.s6_addr[12] = 127; fs->dst.sin6_addr.s6_addr[15] = 1;
+    }
     unsigned n_leading = payload_len >= 2 ? payload[0] : 0;
     unsigned control = payload_len >= 2 ? payload[1] : 0;
     if ((unsigned)2 + (n_leading + control) * 148u != payload_len) return -1;
@@ -2196,7 +2202,8 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         int flood_ready = 0, batch_ready = 0;
         if (op->code == OP_WG_FLOOD) {
             if (!t->net) fail(t->id, i, "invalid_input", "wireguard_without_network_fixture");
-            if (flood_prep(&flood, (unsigned)op->b, (unsigned)op->a, op->payload, op->payload_len))
+            if (op->value != 0 && op->value != 4 && op->value != 6) fail(t->id, i, "invalid_input", "wire_flood_family");
+            if (flood_prep(&flood, (unsigned)op->b, (unsigned)op->a, (unsigned)op->value, op->payload, op->payload_len))
                 fail(t->id, i, "environment_failure", "flood_prepare");
             flood_ready = 1;
         }
@@ -2474,8 +2481,8 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         case OP_PIPE2: ret = syscall(SYS_pipe2, pipe_fds, (unsigned long)op->b); break;
         case OP_WG_FLOOD: {
             /* E-B: submit the prepared io_uring flood batch (op->a count, op->b
-             * port); op->payload is an optional bundled valid initiation (the
-             * merged-injection negative control). */
+             * port, op->value the family, 0/4 or 6); op->payload is an optional
+             * bundled valid initiation (the merged-injection negative control). */
             ret = flood_enter(&flood);
             break;
         }

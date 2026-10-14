@@ -8,8 +8,8 @@ set_option pp.structureInstances false
 set_option maxHeartbeats 1000000
 
 /-! Source-level peer-access observation of the original release helper and
-dump-completion callback. Both reads inside peerPut are explicit, including
-requireNotPending's read. Errors retain the prefix already observed. -/
+dump-completion callback. The resolved getter inside peerPut is explicit, including
+the current source getters. Errors retain the prefix already observed. -/
 namespace Leanux.Proofs.WG.Peers
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.WG.Lifetimes Leanux.Proofs.Framing
 
@@ -35,9 +35,7 @@ def erasePeerPrefix (pid : PeerId) (dropped : Nat) : PrefixM PeerEvent Unit :=
       | none => h
       | some stamp => h ++ [.release pid stamp])
 
-def requireNotPendingPrefix (pid : PeerId) (what : String) : PrefixM PeerEvent Unit := do
-  if (← getPeerPrefix pid).handshakePending && !(← liftPrefix (get : M World)).queuedThisCall.contains pid then
-    liftPrefix (unsupported s!"{what} races the pending handshake worker")
+def requireNotPendingPrefix (_pid : PeerId) (_what : String) : PrefixM PeerEvent Unit := pure ()
 
 def peerPutPrefix (peer : Option PeerId) : PrefixM PeerEvent Unit := do
   if ← liftPrefix (branch .peerPutNull peer.isNone) then return
@@ -84,12 +82,7 @@ theorem erasePeerPrefix_erases (pid : PeerId) (dropped : Nat) :
 
 theorem requireNotPendingPrefix_erases (pid : PeerId) (what : String) :
     ErasesPrefix (requireNotPendingPrefix pid what) (requireNotPending pid what) := by
-  unfold requireNotPendingPrefix requireNotPending
-  apply erasesPrefix_bind (getPeerPrefix_erases pid)
-  intro p
-  apply erasesPrefix_bind (erasesPrefix_lift (get : M World))
-  intro w
-  split <;> first | exact erasesPrefix_lift _ | exact erasesPrefix_pure _
+  exact erasesPrefix_pure _
 
 theorem peerPutPrefix_erases (peer : Option PeerId) :
     ErasesPrefix (peerPutPrefix peer) (peerPut peer) := by
@@ -114,16 +107,14 @@ theorem wgGetDeviceDonePrefix_erases (ctx : DumpCtx) :
   exact erasesPrefix_bind (erasesPrefix_lift _) (fun _ => peerPutPrefix_erases _)
 
 /-- Complete expected observations, including errors. A count of zero writes
-the resident before refcountDecAndTest rejects it; a pending-worker rejection
-occurs after the first read. No failed getter resolves an object. -/
+the resident before refcountDecAndTest rejects it; No failed getter resolves an object. -/
 def peerPutEvents (peer : Option PeerId) (w : World) : List PeerEvent :=
   match peer with
   | none => []
   | some pid => match w.k.wg.bind (fun d => d.peers[pid]?) with
     | none => []
     | some p =>
-      if p.handshakePending && !w.queuedThisCall.contains pid then [.read pid p.internalId]
-      else [.read pid p.internalId, .read pid p.internalId, .write pid p.internalId] ++
+      [.read pid p.internalId, .write pid p.internalId] ++
         if p.refcount = 1 then [.release pid p.internalId] else []
 
 theorem peerPutPrefix_events (peer : Option PeerId) (w : World) (h : List PeerEvent) :
@@ -134,36 +125,27 @@ theorem peerPutPrefix_events (peer : Option PeerId) (w : World) (h : List PeerEv
   | some pid =>
     cases hd : w.k.wg with
     | none => simp [peerPutPrefix, peerPutEvents, requireNotPendingPrefix,
-        runPrefix_bind, getPeer, getDev, getK, hd,
-        branch, invariant, StateT.run_bind, StateT.run_modify, StateT.run_pure, StateT.run_get]
+        runPrefix_bind, getPeer, getDev, getK, hd, branch, invariant]
     | some d =>
       cases hp : d.peers[pid]? with
       | none => simp [peerPutPrefix, peerPutEvents, requireNotPendingPrefix,
-          runPrefix_bind, getPeer, getDev, getK, hd, hp,
-          branch, invariant, StateT.run_bind, StateT.run_modify, StateT.run_pure, StateT.run_get]
+          runPrefix_bind, getPeer, getDev, getK, hd, hp, branch, invariant]
       | some p =>
-        by_cases hpend : p.handshakePending = true ∧ ¬ pid ∈ w.queuedThisCall
+        by_cases hz : p.refcount = 0
         · simp [peerPutPrefix, peerPutEvents, requireNotPendingPrefix,
-            runPrefix_bind, getPeer, getDev, getK, hd, hp, hpend,
-            branch, invariant, unsupported, StateT.run_bind, StateT.run_modify,
-            StateT.run_pure, StateT.run_get]
-        · by_cases hz : p.refcount = 0
-          · simp [peerPutPrefix, peerPutEvents, requireNotPendingPrefix,
-              runPrefix_bind, getPeer, getDev, getK,
-              hd, hp, hpend, hz, setPeer, modifyDev, modifyK, refcountDecAndTest,
-              branch, branchCmp, invariant, unsupported, StateT.run_bind, StateT.run_modify,
-              StateT.run_pure, StateT.run_get, List.append_assoc]
-          · have hpos : 0 < p.refcount := Nat.pos_of_ne_zero hz
-            by_cases ho : p.refcount = 1
-            all_goals simp [peerPutPrefix, peerPutEvents, requireNotPendingPrefix,
-              runPrefix_bind, getPeer, getDev, getK,
-              hd, hp, hpend, hz, ho, hpos, setPeer, modifyDev, modifyK, refcountDecAndTest,
-              branch, branchCmp, invariant, unsupported, indexRemove_eq, indexUnhash, retirePeerUnits, snapshot,
-              StateT.run_bind, StateT.run_modify, StateT.run_pure, StateT.run_get,
-              Std.TreeMap.getElem?_insert, List.append_assoc]
+            runPrefix_bind, getPeer, getDev, getK, hd, hp, hz, setPeer, modifyDev,
+            modifyK, refcountDecAndTest, branch, branchCmp, invariant, unsupported, List.append_assoc]
+        · have hpos : 0 < p.refcount := Nat.pos_of_ne_zero hz
+          by_cases ho : p.refcount = 1
+          all_goals simp [peerPutPrefix, peerPutEvents, requireNotPendingPrefix,
+            runPrefix_bind, getPeer, getDev, getK, hd, hp, hz, ho, hpos, setPeer,
+            modifyDev, modifyK, refcountDecAndTest, branch, branchCmp, invariant,
+            indexRemove_eq, indexUnhash, retirePeerUnits, snapshot,
+            StateT.run_bind, StateT.run_modify, StateT.run_pure, StateT.run_get,
+            Std.TreeMap.getElem?_insert, List.append_assoc]
 
 /-- Erasure and exact source observation together, for every input including
-missing objects, pending-worker rejection and invalid reference counts. -/
+missing objects and invalid reference counts. -/
 theorem peerPutPrefix_run (peer : Option PeerId) (w : World) (h : List PeerEvent) :
     runPrefix (peerPutPrefix peer) w h =
       ((peerPut peer).run w, h ++ peerPutEvents peer w) :=
@@ -195,16 +177,12 @@ theorem peerPutEvents_safe (peer : Option PeerId) (w : World) (h : List PeerEven
         rw [hp]; rfl
       have hn : ¬ AccessEvent.Released h p.internalId := fun hr => hi.2.2 _ hr pid live
       have one := AccessEvent.safe_append_read (slot := pid) (stamp := p.internalId) hi.1 hn
-      by_cases pending : p.handshakePending = true ∧ ¬ pid ∈ w.queuedThisCall
-      · simpa [peerPutEvents, hp, pending] using one
-      · have two := AccessEvent.safe_append_read (slot := pid) (stamp := p.internalId) one
-          (by simpa only [AccessEvent.released_append_read] using hn)
-        have three := AccessEvent.safe_append_write (slot := pid) (stamp := p.internalId) two
-          (by simpa only [AccessEvent.released_append_read] using hn)
-        by_cases released : p.refcount = 1
-        · have four := AccessEvent.safe_append_release (slot := pid) (stamp := p.internalId) three
-          simpa [peerPutEvents, hp, pending, released, List.append_assoc] using four
-        · simpa [peerPutEvents, hp, pending, released, List.append_assoc] using three
+      have two := AccessEvent.safe_append_write (slot := pid) (stamp := p.internalId) one
+        (by simpa only [AccessEvent.released_append_read] using hn)
+      by_cases released : p.refcount = 1
+      · have three := AccessEvent.safe_append_release (slot := pid) (stamp := p.internalId) two
+        simpa [peerPutEvents, hp, released, List.append_assoc] using three
+      · simpa [peerPutEvents, hp, released, List.append_assoc] using two
 
 theorem peerPutEvents_release (peer : Option PeerId) (w : World) (stamp : Nat)
     (hr : AccessEvent.Released (peerPutEvents peer w) stamp) :
@@ -216,12 +194,10 @@ theorem peerPutEvents_release (peer : Option PeerId) (w : World) (stamp : Nat)
     cases hp : w.k.wg.bind (fun d => d.peers[pid]?) with
     | none => simp [peerPutEvents, hp, AccessEvent.Released] at hr
     | some p =>
-      by_cases pending : p.handshakePending = true ∧ ¬ pid ∈ w.queuedThisCall
-      · simp [peerPutEvents, hp, pending, AccessEvent.Released] at hr
-      · by_cases released : p.refcount = 1
-        · refine ⟨pid, p, rfl, hp, released, ?_⟩
-          simpa [peerPutEvents, hp, pending, released, AccessEvent.Released] using hr
-        · simp [peerPutEvents, hp, pending, released, AccessEvent.Released] at hr
+      by_cases released : p.refcount = 1
+      · refine ⟨pid, p, rfl, hp, released, ?_⟩
+        simpa [peerPutEvents, hp, released, AccessEvent.Released] using hr
+      · simp [peerPutEvents, hp, released, AccessEvent.Released] at hr
 
 theorem peerPut_release_snapshot (pid : PeerId) (w w' : World) (p : Peer)
     (hp : w.k.wg.bind (fun d => d.peers[pid]?) = some p) (hc : p.refcount = 1)
@@ -231,24 +207,19 @@ theorem peerPut_release_snapshot (pid : PeerId) (w w' : World) (p : Peer)
   | none => simp [hd] at hp
   | some d =>
     simp only [hd, Option.bind_some] at hp
-    by_cases pending : p.handshakePending = true ∧ ¬ pid ∈ w.queuedThisCall
-    · simp [peerPut, requireNotPending, getPeer, getDev, getK, hd, hp, pending,
-        branch, unsupported, StateT.run_bind, StateT.run_modify, StateT.run_pure,
-        StateT.run_get] at hr
-    · simp [peerPut, requireNotPending, getPeer, getDev, getK, hd, hp, hc, pending,
-        setPeer, modifyDev, modifyK, refcountDecAndTest, branch, branchCmp,
-        indexRemove_eq, indexUnhash, retirePeerUnits, StateT.run_bind, StateT.run_modify,
-        StateT.run_pure, StateT.run_get] at hr
-      cases hr
-      apply Store.ext
-      · rfl
-      · funext j
-        by_cases hj : pid = j
-        · subst j
-          simp [snapshot, hd, Store.put, Std.TreeMap.getElem?_erase,
-            Std.TreeMap.getElem?_insert]
-        · simp [snapshot, hd, Store.put, Std.TreeMap.getElem?_erase,
-            Std.TreeMap.getElem?_insert, Std.LawfulEqOrd.compare_eq_iff_eq, hj, Ne.symm hj]
+    simp [peerPut, requireNotPending, getPeer, getDev, getK, hd, hp, hc,
+      setPeer, modifyDev, modifyK, refcountDecAndTest, branch, branchCmp,
+      indexRemove_eq, indexUnhash, retirePeerUnits, StateT.run_bind, StateT.run_modify,
+      StateT.run_pure, StateT.run_get] at hr
+    cases hr
+    apply Store.ext
+    · rfl
+    · funext j
+      by_cases hj : pid = j
+      · subst j
+        simp [snapshot, hd, Store.put, Std.TreeMap.getElem?_erase, Std.TreeMap.getElem?_insert]
+      · simp [snapshot, hd, Store.put, Std.TreeMap.getElem?_erase, Std.TreeMap.getElem?_insert,
+          Std.LawfulEqOrd.compare_eq_iff_eq, hj, Ne.symm hj]
 
 theorem peerPutPrefix_preserves (peer : Option PeerId) :
     PrefixPreserves AccessInv AccessEvent.Safe (peerPutPrefix peer) := by

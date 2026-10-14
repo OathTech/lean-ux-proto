@@ -190,20 +190,32 @@ def observeLogged : GhostM (Int × Lean.Json) := do
     | [] => -EAGAIN
   -- W5: each datagram with the TOS / traffic class the listener's cmsg
   -- reports (`IP_RECVTOS`, `IPV6_RECVTCLASS`): the outer DS field wg0 sent
-  let datagrams := (w.listenerV4.map fun (ds, bs) => (4, ds, bs)) ++ (w.listenerV6.map fun (ds, bs) => (6, ds, bs))
+  -- Ordered as the harness orders Linux's (harness/linux.py attach_observed):
+  -- a stable sort by peer key (the listener's family and the message's index
+  -- word at byte 4), keeping arrival order within a peer's session and
+  -- leaving the cross-peer interleaving free (pre-release review, finding 5)
+  let indexWord (bs : List UInt8) : Nat := if bs.length ≥ 8 then WG.u32le bs 4 else 0
+  let keyLt (a b : Nat × Nat × Nat) : Bool :=
+    a.1 < b.1 || (a.1 == b.1 && (a.2.1 < b.2.1 || (a.2.1 == b.2.1 && a.2.2 < b.2.2)))
+  let stableSortBy {α : Type} (key : α → Nat × Nat × Nat) (xs : List α) : List α :=
+    ((((List.range xs.length).zip xs).toArray.qsort fun (i, a) (j, b) => keyLt (key a) (key b) || (key a == key b && i < j)).map (·.2)).toList
+  let datagrams := stableSortBy (fun (f, _, bs) => (f, indexWord bs, 0))
+    ((w.listenerV4.map fun (ds, bs) => (4, ds, bs)) ++ (w.listenerV6.map fun (ds, bs) => (6, ds, bs)))
   let entries := datagrams.map fun (f, ds, bs) =>
     Lean.toJson [Lean.toJson f, Lean.toJson bs.length, Lean.toJson (type bs), Lean.toJson ds, Lean.toJson (hex bs)]
   -- the sender's `recvmsg` source: a `sockaddr_in6` (SEND_FD is an IPv6
   -- socket), where an IPv4 source appears v4-mapped (::ffff:a.b.c.d), with
   -- its scope id (0: no kept source is link-local), then the TOS and the
   -- destination `IPV6_PKTINFO` reports (W5)
-  let replies := w.senderInbox.map fun dg => let bs := dg.bytes
+  let inbox := stableSortBy
+    (fun dg => ((if dg.family == AF_INET then 0xffff00000000 + dg.addr else dg.addr), dg.port, indexWord dg.bytes))
+    w.senderInbox
+  let replies := inbox.map fun dg => let bs := dg.bytes
     let addr6 := if dg.family == AF_INET then 0xffff00000000 + dg.addr else dg.addr
     Lean.toJson [Lean.toJson AF_INET6, Lean.toJson (hex (beBytes addr6 16)), Lean.toJson dg.port, Lean.toJson (0 : Nat),
                  Lean.toJson dg.tos, Lean.toJson (hex (beBytes dg.dst 16)),
                  Lean.toJson bs.length, Lean.toJson (type bs), Lean.toJson (if bs.length ≥ 12 then WG.u32le bs 8 else 0),
                  Lean.toJson (hex bs)]
-  let sortJson (xs : List Lean.Json) := (xs.toArray.qsort fun a b => a.compress < b.compress).toList
   modifyWorld fun w => { w with listenerV4 := [], listenerV6 := [], senderInbox := [] }
   -- L: without wg0 the guest's RTM_GETLINK fails with ENODEV: `stats` null
   let stats := match (← getK).wg with
@@ -215,9 +227,10 @@ def observeLogged : GhostM (Int × Lean.Json) := do
                                  ("tx_packets", Lean.toJson d.txPackets), ("tx_bytes", Lean.toJson d.txBytes)]
     | none => Lean.Json.null
   return (ret, Lean.Json.mkObj [
-    ("datagrams", if closed then Lean.Json.null else Lean.Json.arr (sortJson entries).toArray),
-    ("replies", Lean.Json.arr (sortJson replies).toArray),
+    ("datagrams", if closed then Lean.Json.null else Lean.Json.arr entries.toArray),
+    ("replies", Lean.Json.arr replies.toArray),
     ("stats", stats)])
+
 
 theorem observeLogged_erases  :
     Erases (observeLogged) (Env.observe) := by
@@ -268,10 +281,10 @@ theorem injectLogged_erases (family port : Nat) (msg : List UInt8) (tos : Nat) (
     | with_reducible exact observeLogged_erases
     | ghost_env_step
 
-def floodLogged (count port : Nat) (messages : List (List UInt8)) : GhostM Int := do
+def floodLogged (count port family : Nat) (messages : List (List UInt8)) : GhostM Int := do
   let some d := (← getK).wg | unsupported "a flood to a port other than wg0's (no wg0)"
   if !d.running || port != d.incomingPort then unsupported "a flood to a port other than wg0's"
-  -- without records (the domain filter runs before Linux), accept the floodLogged: it
+  -- without records (the domain filter runs before Linux), accept the flood: it
   -- is a natural harness input, inside the domain; the decay then reads the
   -- placeholder clock (a prediction only)
   if (← getWorld).hidden.isNone then
@@ -283,20 +296,35 @@ def floodLogged (count port : Nat) (messages : List (List UInt8)) : GhostM Int :
   let stopRx := (HiddenSite.sectionStop .netRx).info.id
   let cuts := [startRx, stopRx, (HiddenSite.ipIdentKey).info.id, (HiddenSite.ipIdentReserve).info.id,
                (HiddenSite.flowHashSecret).info.id, (HiddenSite.udpPortDraw).info.id,
-               -- the first floodLogged packet's `queue_work_on` of the receive work
+               -- the first flood packet's `queue_work_on` of the receive work
                -- (dispatch order): its record sits in that packet's `net_rx`
                -- section; the mirror fills `handshakeQueue` below instead
                (HiddenSite.queued .receiveWorker).info.id]
   -- before the receive worker runs: the fixture's io_uring sends' producer
   -- `net_rx` sections and IP-layer cut draws
   let _ ← discardFloodRecords startW cuts
-  -- the receive-worker section: the batchLogged is queued (the ring with the
-  -- leading valids, the counter at the batchLogged's size); the leading valids go
+  -- the receive-worker section: the batch is queued (the ring with the
+  -- leading valids, the counter at the batch's size); the leading valids go
   -- through the real worker (each packet's records, the `cond_resched`
   -- between packets), which decrements the counter per packet
   _ ← hidden (.sectionStart .receiveWorker)
-  let src ← senderSource 4 0
-  -- the batchLogged's producer side (wg_packet_receive per datagram, receive.c:567-568):
+  -- the flood's family: the fixture sender's v4-mapped destination (wg0 sees
+  -- IPv4 from 127.0.0.1) or ::1 (IPv6, the ratelimiter's /64 table)
+  let src ← senderSource family 0
+  if (← getWorld).floodExact then
+    -- the unsummarised execution (the pre-release review's section 8): every
+    -- tail packet is the guest's invalid template (148 bytes: type 1, a MAC1
+    -- of 0xff) and runs through the real worker, consuming the records the
+    -- summary below folds; used to check the summary, not for the claim
+    let invalid : List UInt8 := [1] ++ List.replicate 115 0 ++ List.replicate 16 0xff ++ List.replicate 16 0
+    modifyDev fun d => { d with handshakeQueue := (messages ++ List.replicate count invalid).map (fun m => (m, src)),
+                                handshakeQueueLen := d.handshakeQueueLen + messages.length + count,
+                                handshakeLastCpu := 0 }
+    handshakeReceiveWorkerLogged (nestedReschedLogged .receiveWorker)
+    _ ← hidden (.sectionStop .receiveWorker)
+    deliverSent
+    return 0
+  -- the batch's producer side (wg_packet_receive per datagram, receive.c:567-568):
   -- the ring and the counter, and `wg_cpumask_next_online(&last_cpu)` per
   -- packet, which on this one-CPU kernel leaves `last_cpu` at 0
   modifyDev fun d => { d with handshakeQueue := messages.map (fun m => (m, src)),
@@ -314,8 +342,11 @@ def floodLogged (count port : Nat) (messages : List (List UInt8)) : GhostM Int :
   deliverSent
   return 0
 
-theorem floodLogged_erases (count port : Nat) (messages : List (List UInt8)) :
-    Erases (floodLogged count port messages) (Env.flood count port messages) := by
+/-! ## W7 stream B: `wg_batch` (docs/2026-10-06-w4-w7-transmit-bulk.md, 5.5) -/
+
+
+theorem floodLogged_erases (count port family : Nat) (messages : List (List UInt8)) :
+    Erases (floodLogged count port family messages) (Env.flood count port family messages) := by
   unfold floodLogged Env.flood
   repeat' first
     | with_reducible exact runSendWorkersLogged_erases
@@ -347,7 +378,7 @@ theorem pollScheduledInlineLogged_erases  :
     | with_reducible exact afterAdvanceLogged_erases
     | with_reducible exact observeLogged_erases
     | with_reducible exact injectLogged_erases _ _ _ _ _ _
-    | with_reducible exact floodLogged_erases _ _ _
+    | with_reducible exact floodLogged_erases _ _ _ _
     | ghost_env_step
 
 def afterBatchLogged : GhostM Unit := do
@@ -378,7 +409,7 @@ theorem afterBatchLogged_erases  :
     | with_reducible exact afterAdvanceLogged_erases
     | with_reducible exact observeLogged_erases
     | with_reducible exact injectLogged_erases _ _ _ _ _ _
-    | with_reducible exact floodLogged_erases _ _ _
+    | with_reducible exact floodLogged_erases _ _ _ _
     | with_reducible exact pollScheduledInlineLogged_erases
     | ghost_env_step
 
@@ -429,7 +460,7 @@ theorem batchLogged_erases (items : List BatchItem) :
     | with_reducible exact afterAdvanceLogged_erases
     | with_reducible exact observeLogged_erases
     | with_reducible exact injectLogged_erases _ _ _ _ _ _
-    | with_reducible exact floodLogged_erases _ _ _
+    | with_reducible exact floodLogged_erases _ _ _ _
     | with_reducible exact pollScheduledInlineLogged_erases
     | with_reducible exact afterBatchLogged_erases
     | ghost_env_step

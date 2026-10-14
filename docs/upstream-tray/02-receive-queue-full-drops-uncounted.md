@@ -1,4 +1,4 @@
-# 02 — WireGuard discards received data packets silently when a peer's receive queue or the decrypt ring is full: no `rx_dropped`, and the free is `consume_skb`, invisible even to the drop monitor; the queue fills before authentication
+# 02 — WireGuard discards received data packets when a peer's receive queue or the decrypt ring is full: not counted as a device drop, freed through `consume_skb` rather than the drop tracepoint; the queue fills before authentication
 
 Target: Linux 6.12.110, `drivers/net/wireguard/receive.c`,
 `drivers/net/wireguard/queueing.h`, `drivers/net/wireguard/queueing.c`.
@@ -42,10 +42,12 @@ valid.
 
 **OBSERVABILITY GAP**, with a **QUESTION**. The drop follows from the same
 bounded queues as draft 01 and is the intended behaviour under overload.
-What leaves no trace is worse than on the send side: the device counters
-do not move, and because the free is `consume_skb`, neither does the
-`kfree_skb` tracepoint, so an operator has no signal at all that valid
-packets were lost. The question is about where the limit sits:
+The accounting gap is wider than on the send side: the device counters do
+not move, and because the free is `consume_skb` the packet is not counted
+as a drop and does not fire the `skb:kfree_skb` tracepoint; it fires
+`skb:consume_skb`, the same event a normally delivered packet fires, so the
+drop monitor records a consume, not a drop, and an operator has no signal
+that distinguishes this loss from normal processing. The question is about where the limit sits:
 `wg_packet_consume_data` admits a packet to the peer's queue on the key
 index alone, before any cryptographic check (the AEAD runs in the decrypt
 worker, the replay counter in `wg_packet_rx_poll`). A captured valid data
@@ -63,20 +65,27 @@ keepalive-sized data messages (32 bytes, an empty inner) injected to the
 peer in one batch operation, all queued before the decrypt worker runs
 (single CPU; the workers run after the batch call returns). The 1025th
 finds `rx_queue` at 1024 and takes `-ENOSPC`. Observed on the oracle,
-Linux-only: the run completes in 15.6 s, 1024 messages are delivered and the
-1025th is discarded, `rx_dropped` and `rx_errors` unchanged. The trace is
-not in a differential suite yet: the 1024 inline NAPI polls that follow
-exceed the evaluator's bound on ambiguous poll placements (`evaluator/protocol.py`,
-64 per trace), so the differential verdict is withheld; the mirror runs the
-trace in domain with the `-ENOSPC` arm modelled as the C's puts and free
-(`docs/2026-10-13-audit-receive.md`, item F1, fixed on main).
+Linux-only: the run completes in 15.6 s, 1024 keepalive messages are
+processed (an empty inner payload: no inner packet is delivered to the
+stack; "delivered" here means decrypted and consumed by the receive poll)
+and the 1025th is discarded, `rx_dropped` and `rx_errors` unchanged. The
+trace is in the `w7-tier` suite on `main` since 7a92672 (the evaluator's
+placement ceiling follows the trace's injected-message count), and the
+differential run agrees with the `-ENOSPC` arm modelled as the C's puts and
+free (`docs/2026-10-13-audit-receive.md`, item F1, fixed on main).
 
 Without this repository: on a single-CPU machine or VM, inject more than
 1024 valid data datagrams to a WireGuard peer in one burst (a replay of one
 captured datagram suffices to fill the queue; it is rejected later, after
 decryption), then send one legitimate packet before the queue drains;
 observe it lost while `ip -s link show wg0` shows RX dropped 0 and
-`perf trace -e skb:kfree_skb` shows nothing for it.
+`perf trace -e skb:kfree_skb` shows nothing for it. Scheduling
+prerequisite: the whole burst must reach `wg_packet_consume_data` before
+the decrypt worker runs. In this repository's fixture that order is
+established by the recorded `io_uring` batch on an otherwise idle single
+CPU (the workers' records all follow the batch call's return); a generic
+user-space burst does not guarantee it, so confirm the order from a
+tracepoint on `wg_packet_decrypt_worker` before counting a loss.
 
 ## Expected versus actual
 
@@ -86,13 +95,25 @@ freed through `consume_skb` with no statistic and no drop tracepoint.
 
 ## Impact
 
-Receivers under bursts on few-core hosts, who see loss with no counter and
-no drop-monitor event to diagnose it. For the question: an off-path sender
-holding one captured data datagram can fill a peer's queue with 1024
-replays per drain period and cause legitimate packets arriving meanwhile
-to be discarded silently; there is no amplification, no state kept beyond
-the queue, and the cost is one packet per slot per drain, so this is a
-transient loss, not a lockout. No other security consequence identified.
+Recorded loss: on the oracle, one of 1025 valid messages injected in one
+burst to one peer was freed with no counter moved; measured once, in the
+fixture's scheduling order above.
+
+Source-derived mechanism: `wg_packet_consume_data` admits a packet to the
+queue on its key index alone (`receive.c:516-527`), so queue slots are
+taken before the AEAD runs; a replayed valid datagram occupies a slot until
+the decrypt worker rejects it. This is read from the C, not measured under
+load.
+
+Attack feasibility: not measured. The capability an off-path sender holding
+one captured data datagram would have is to fill a peer's queue with up to
+1024 replays per drain period, so that legitimate packets arriving before
+the drain are discarded without a counter; whether ordinary worker
+scheduling on a loaded receiver leaves that window open, and for how long,
+is not established here. There is no amplification, no state kept beyond
+the queue, and the cost is one packet per slot per drain: a transient loss
+at most, not a lockout. Operators under bursts on few-core hosts see the
+same loss with no counter and no drop event to diagnose it.
 
 ## How this repository found it
 

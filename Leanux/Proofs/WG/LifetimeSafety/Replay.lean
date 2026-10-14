@@ -1,8 +1,10 @@
 import Leanux.Proofs.Logged.Checkpoints
 
-/-! Reproduce the stale dump cursor's effect through the original runner and
-its proved checkpoint observer. The generated stream is synthetic, explicit
-and replayed without placeholders. Every expected checkpoint is asserted. -/
+/-! Check the historical stale dump cursor recipe's current rejection.
+The original runner and its proved checkpoint observer accept the pre-delete
+prefix, then reject deletion with a pending dump at c047e64. Later expected
+values below describe the historical accepted run, not current checkpoints.
+The input records are synthetic and explicit, with no placeholders. -/
 open Lean Leanux Leanux.WG Leanux.Runner Leanux.Proofs.Logged
 
 private structure CursorCheckpoint where
@@ -47,24 +49,32 @@ def main : IO UInt32 := do
     | .ok t => pure t
   if trace.id != "r2_stale_dump_cursor" || trace.hidden.isNone || trace.ops.size != 8 then
     throw (IO.userError "expected the eight-operation r2-stale-dump-cursor witness with explicit records")
-  let original ← match executeTrace trace false with
-    | .error (index, stop) => throw (IO.userError s!"original operation {index}: {stop.message}")
+  -- Preserve the historical pre-delete boundary, but require the current
+  -- original and observer to reject the full recipe at the new runner guard.
+  let beforeDelete : Trace := { trace with ops := trace.ops.extract 0 3, hidden := trace.hidden.map (·.extract 0 3) }
+  let prefixOriginal ← match executeTrace beforeDelete false with
+    | .error (index, stop) => throw (IO.userError s!"prefix original {index}: {stop.message}")
     | .ok json => pure json
-  let (observed, checkpoints) ← match (executeTraceCheckpoints projectCursor trace false).run [] with
-    | .error (index, stop) => throw (IO.userError s!"observer operation {index}: {stop.message}")
+  let (prefixObserved, checkpoints) ← match (executeTraceCheckpoints projectCursor beforeDelete false).run [] with
+    | .error (index, stop) => throw (IO.userError s!"prefix observer {index}: {stop.message}")
     | .ok result => pure result
-  if original.compress != observed.compress then
-    throw (IO.userError "original and checkpoint runner outputs disagree")
-  if checkpoints.length != trace.ops.size then
-    throw (IO.userError "checkpoint count does not equal operation count")
-  for want in expected do
-    let some actual := checkpoints[want.index]?
-      | throw (IO.userError s!"missing checkpoint {want.index}")
-    if actual != want then
-      throw (IO.userError s!"checkpoint mismatch: expected {repr want}; observed {repr actual}")
+  if prefixOriginal.compress != prefixObserved.compress || checkpoints.length != 3 ||
+      checkpoints[2]? != expected.head? then
+    throw (IO.userError "pre-delete dump-cursor checkpoint or original/observer output differs")
+  let reason := "a delete with a stepped dump pending (the dump's cursor holds the device reference; the guest refuses wg_delete_with_dump_pending)"
+  let (index, site) ← match executeTrace trace false,
+      (executeTraceCheckpoints projectCursor trace false).run [] with
+    | .error (i, .outsideDomain s message), .error (j, .outsideDomain t other) =>
+      if i != 3 || j != i || s != t || message != reason || other != reason then
+        throw (IO.userError "original/observer rejection differs from the exact pending-dump guard")
+      pure (i, s)
+    | _, _ => throw (IO.userError "historical cursor recipe was not rejected by both current runners")
+  let some pre := checkpoints[2]? | throw (IO.userError "missing pre-delete checkpoint")
   let output ← IO.getStdout
-  output.putStrLn (Json.mkObj [("id", toJson trace.id), ("accepted", toJson true),
-    ("original_json_matches", toJson true), ("record_origin", toJson "synthetic"),
-    ("finding", toJson "stale cursor retargets replacement lifetime 55; no old-identity resurrection"),
-    ("checkpoints", toJson (expected.map checkpointJson))]).compress
+  output.putStrLn (Json.mkObj [("id", toJson trace.id), ("accepted", toJson false),
+    ("current_rejection_check", toJson true), ("original_observer_stop_matches", toJson true),
+    ("operation", toJson index), ("stop_site", toJson site), ("reason", toJson reason),
+    ("record_origin", toJson "synthetic historical recipe"),
+    ("pre_delete_checkpoint", checkpointJson pre),
+    ("historical_checkpoints", toJson (expected.map checkpointJson))]).compress
   return 0

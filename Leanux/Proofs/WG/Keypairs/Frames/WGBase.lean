@@ -343,12 +343,12 @@ theorem socketReinit_spec (P : Snapshot → Prop) (new4 new6 : Option Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.socketReinit new4 new6
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (socketReinit_sameSnapshot new4 new6).wp P
 
-theorem armTimer_sameSnapshot (pid : PeerId) (t : PeerTimer) (delay : Nat) : SameSnapshot (Leanux.WG.armTimer pid t delay) := by
+theorem armTimer_sameSnapshot (pid : PeerId) (t : PeerTimer) (delay : Nat) (jc : Option UInt64 := none) : SameSnapshot (Leanux.WG.armTimer pid t delay jc) := by
   frame_same [Leanux.WG.armTimer] using [getPeer_spec, hidden_snapshot_spec, setPeer_spec]
 
-theorem armTimer_spec (P : Snapshot → Prop) (pid : PeerId) (t : PeerTimer) (delay : Nat) :
-    ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.armTimer pid t delay
-    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (armTimer_sameSnapshot pid t delay).wp P
+theorem armTimer_spec (P : Snapshot → Prop) (pid : PeerId) (t : PeerTimer) (delay : Nat) (jc : Option UInt64 := none) :
+    ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.armTimer pid t delay jc
+    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (armTimer_sameSnapshot pid t delay jc).wp P
 
 theorem delTimer_sameSnapshot (pid : PeerId) (t : PeerTimer) : SameSnapshot (Leanux.WG.delTimer pid t) := by
   frame_same [Leanux.WG.delTimer] using [getPeer_spec, setPeer_spec]

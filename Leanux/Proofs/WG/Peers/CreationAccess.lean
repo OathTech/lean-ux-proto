@@ -119,14 +119,7 @@ theorem creation_stop (P : Store PeerId → Prop) (what : String) :
 
 theorem creation_require (P : Store PeerId → Prop) (pid : PeerId) (what : String) :
     CreationSpec P (requireNotPendingPrefix pid what) (fun _ => P) := by
-  unfold requireNotPendingPrefix
-  apply PrefixEnsures.bind (creation_get P pid)
-  intro p
-  apply PrefixEnsures.bind (creation_world (fun s => P s ∧ s.slots pid = some p.internalId))
-  intro w
-  split
-  · exact creation_forget (creation_stop (fun s => P s ∧ s.slots pid = some p.internalId) _) (fun _ _ h => h.1)
-  · exact creation_forget (creation_pure (fun s => P s ∧ s.slots pid = some p.internalId) ()) (fun _ _ h => h.1)
+  exact creation_pure P ()
 
 def dstCacheResetPrefix (pid : PeerId) : PrefixM PeerEvent Unit := do
   let w ← liftPrefix (get : M World)

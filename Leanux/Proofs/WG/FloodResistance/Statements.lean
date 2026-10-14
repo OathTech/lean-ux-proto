@@ -13,7 +13,7 @@ actual recorded coarse clock; no saved-decay premise is required. -/
 theorem original_under_load_queue (w u : World) (d : Device) (now : Int64)
     (hd : w.k.wg = some d)
     (hq : d.handshakeQueueLen ≥ MAX_QUEUED_INCOMING_HANDSHAKES / 8)
-    (hc : (hiddenClock64 .underLoadNow).run (record w .hsUnderLoad true) = .ok (now, u)) :
+    (hc : (hiddenClock64 .underLoadNow).run (recordCmp w .hsUnderLoad true (Int.ofNat d.handshakeQueueLen) (Int.ofNat (MAX_QUEUED_INCOMING_HANDSHAKES / 8))) = .ok (now, u)) :
     loadPhase.run w = .ok (true, {u with lastUnderLoad := some now}) :=
   load_queue w u d now hd hq hc
 
@@ -24,7 +24,7 @@ theorem original_under_load_decay (w u : World) (d : Device) (last now : Int64)
     (hq : ¬d.handshakeQueueLen ≥ MAX_QUEUED_INCOMING_HANDSHAKES / 8)
     (hl : w.lastUnderLoad = some last)
     (hc : (hiddenClock64 .birthdateExpired).run
-      (record (record w .hsUnderLoad false) .hsWasUnderLoad true) = .ok (now, u))
+      (record (recordCmp w .hsUnderLoad false (Int.ofNat d.handshakeQueueLen) (Int.ofNat (MAX_QUEUED_INCOMING_HANDSHAKES / 8))) .hsWasUnderLoad true) = .ok (now, u))
     (hn : ¬deadline last 1 ≤ now) :
     loadPhase.run w = .ok (true,
       recordCmp u .hsDecayExpired false (deadline last 1).toInt now.toInt) :=

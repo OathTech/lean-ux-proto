@@ -8,10 +8,10 @@ open Leanux Leanux.WG Leanux.Proofs.Logged
 inductive MaintenanceCall where
   | cache (pid : PeerId)
   | endpoint (pid : PeerId) (e : Endpoint)
-  | arm (pid : PeerId) (timer : PeerTimer) (delay : Nat)
+  | arm (pid : PeerId) (timer : PeerTimer) (delay : Nat) (caller : Option UInt64)
   | deleteTimer (pid : PeerId) (timer : PeerTimer)
   | guard (pid : PeerId)
-  | modifyTimer (pid : PeerId) (timer : PeerTimer) (delay : Nat)
+  | modifyTimer (site : HiddenSite) (pid : PeerId) (timer : PeerTimer) (delay : Nat)
   | handshakeComplete (pid : PeerId) (site : HiddenSite)
   | authenticatedReceived (pid : PeerId)
   | dataReceived (pid : PeerId)
@@ -22,16 +22,16 @@ inductive MaintenanceCall where
 namespace MaintenanceCall
 
 def Result : MaintenanceCall → Type
-  | .guard _ | .modifyTimer _ _ _ => Bool
+  | .guard _ | .modifyTimer _ _ _ _ => Bool
   | _ => Unit
 
 def original (call : MaintenanceCall) : M call.Result := match call with
   | .cache pid => dstCacheReset pid
   | .endpoint pid e => setPeerEndpoint pid e
-  | .arm pid t d => armTimer pid t d
+  | .arm pid t d jc => armTimer pid t d jc
   | .deleteTimer pid t => delTimer pid t
   | .guard pid => modPeerTimerGuard pid
-  | .modifyTimer pid t d => modPeerTimer pid t d
+  | .modifyTimer site pid t d => modPeerTimer site pid t d
   | .handshakeComplete pid site => timersHandshakeComplete pid site
   | .authenticatedReceived pid => timersAnyAuthenticatedPacketReceived pid
   | .dataReceived pid => timersDataReceived pid
@@ -42,10 +42,10 @@ def original (call : MaintenanceCall) : M call.Result := match call with
 def observed (call : MaintenanceCall) : MixedM call.Result := match call with
   | .cache pid => dstCacheResetMixed pid
   | .endpoint pid e => setPeerEndpointPrefix pid e
-  | .arm pid t d => armTimerPrefix pid t d
+  | .arm pid t d jc => armTimerPrefix pid t d jc
   | .deleteTimer pid t => delTimerPrefix pid t
   | .guard pid => modPeerTimerGuardPrefix pid
-  | .modifyTimer pid t d => modPeerTimerPrefix pid t d
+  | .modifyTimer site pid t d => modPeerTimerPrefix site pid t d
   | .handshakeComplete pid site => timersHandshakeCompletePrefix pid site
   | .authenticatedReceived pid => timersAnyAuthenticatedPacketReceivedPrefix pid
   | .dataReceived pid => timersDataReceivedPrefix pid
@@ -57,10 +57,10 @@ theorem erases (call : MaintenanceCall) : ErasesPrefix call.observed call.origin
   cases call with
   | cache pid => exact dstCacheResetMixed_erases pid
   | endpoint pid e => exact setPeerEndpointPrefix_erases pid e
-  | arm pid t d => exact armTimerPrefix_erases pid t d
+  | arm pid t d jc => exact armTimerPrefix_erases pid t d jc
   | deleteTimer pid t => exact delTimerPrefix_erases pid t
   | guard pid => exact modPeerTimerGuardPrefix_erases pid
-  | modifyTimer pid t d => exact modPeerTimerPrefix_erases pid t d
+  | modifyTimer site pid t d => exact modPeerTimerPrefix_erases site pid t d
   | handshakeComplete pid site => exact timersHandshakeCompletePrefix_erases pid site
   | authenticatedReceived pid => exact timersAnyAuthenticatedPacketReceivedPrefix_erases pid
   | dataReceived pid => exact timersDataReceivedPrefix_erases pid
@@ -75,10 +75,10 @@ theorem preserves_ambient (c : AmbientContracts I)
   cases call with
   | cache pid => exact AmbientContracts.drop (dstCacheResetMixed_spec c (fun _ => True) pid)
   | endpoint pid e => exact AmbientContracts.drop (setPeerEndpointPrefix_spec c (fun _ => True) pid e)
-  | arm pid t d => exact AmbientContracts.drop (armTimerPrefix_spec c (fun _ => True) pid t d)
+  | arm pid t d jc => exact AmbientContracts.drop (armTimerPrefix_spec c (fun _ => True) pid t d jc)
   | deleteTimer pid t => exact AmbientContracts.drop (delTimerPrefix_spec c (fun _ => True) pid t)
   | guard pid => exact AmbientContracts.drop (modPeerTimerGuardPrefix_spec c (fun _ => True) pid)
-  | modifyTimer pid t d => exact AmbientContracts.drop (modPeerTimerPrefix_spec c (fun _ => True) pid t d)
+  | modifyTimer site pid t d => exact AmbientContracts.drop (modPeerTimerPrefix_spec c (fun _ => True) site pid t d)
   | handshakeComplete pid site => exact AmbientContracts.drop (timersHandshakeCompletePrefix_spec c (fun _ => True) pid site)
   | authenticatedReceived pid => exact AmbientContracts.drop (timersAnyAuthenticatedPacketReceivedPrefix_spec c (fun _ => True) pid)
   | dataReceived pid => exact AmbientContracts.drop (timersDataReceivedPrefix_spec c (fun _ => True) pid)

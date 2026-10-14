@@ -27,7 +27,7 @@ Other dispatch cases retain the original whole action. -/
 def dispatchLogged : Syscall → GhostM Int
   | .wgInject family port message tos ll dest =>
       socketCallOnLogged SENDER_FD (injectLogged family port message tos ll dest)
-  | .wgFlood count port messages => floodLogged count port messages
+  | .wgFlood count port family messages => floodLogged count port family messages
   | .wgBatch items _ => batchLogged items
   | .wgObserve => do
     -- the fixture's observation happens whether or not the listener is still
@@ -46,7 +46,7 @@ theorem dispatchLogged_erases (call : Syscall) : Erases (dispatchLogged call) (L
        repeat' first
          | with_reducible apply socketCallOnLogged_erases
          | with_reducible exact injectLogged_erases _ _ _ _ _ _
-         | with_reducible exact floodLogged_erases _ _ _
+         | with_reducible exact floodLogged_erases _ _ _ _
          | with_reducible exact batchLogged_erases _
          | with_reducible exact observeLogged_erases
          | ghost_step)

@@ -224,12 +224,17 @@ theorem mixPrecomputedDh_spec (P : Snapshot → Prop) (chainingKey precomputed :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.mixPrecomputedDh chainingKey precomputed
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (mixPrecomputedDh_sameSnapshot chainingKey precomputed).wp P
 
-theorem modPeerTimer_sameSnapshot (pid : PeerId) (t : PeerTimer) (delay : Nat) : SameSnapshot (Leanux.WG.modPeerTimer pid t delay) := by
-  frame_same [Leanux.WG.modPeerTimer] using [armTimer_spec, modPeerTimerGuard_spec]
+theorem callerJiffies_spec (P : Snapshot → Prop) (site : HiddenSite) :
+    ⦃fun w => ⌜P (snapshot w)⌝⦄ callerJiffies site
+    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ :=
+  (sameSnapshot_of_sameKernel (Framing.callerJiffies_sameKernel site)).wp P
 
-theorem modPeerTimer_spec (P : Snapshot → Prop) (pid : PeerId) (t : PeerTimer) (delay : Nat) :
-    ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.modPeerTimer pid t delay
-    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (modPeerTimer_sameSnapshot pid t delay).wp P
+theorem modPeerTimer_sameSnapshot (site : HiddenSite) (pid : PeerId) (t : PeerTimer) (delay : Nat) : SameSnapshot (Leanux.WG.modPeerTimer site pid t delay) := by
+  frame_same [Leanux.WG.modPeerTimer] using [callerJiffies_spec, armTimer_spec, modPeerTimerGuard_spec]
+
+theorem modPeerTimer_spec (P : Snapshot → Prop) (site : HiddenSite) (pid : PeerId) (t : PeerTimer) (delay : Nat) :
+    ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.modPeerTimer site pid t delay
+    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (modPeerTimer_sameSnapshot site pid t delay).wp P
 
 theorem receivedWithKeypair_ordinary (pid : PeerId) (received : KeypairId) : OrdinaryAction (Leanux.WG.receivedWithKeypair pid received) := by
   frame_ordinary [Leanux.WG.receivedWithKeypair] using [getPeer_spec, modifyPeer_spec] ordinary [keypairPut_ordinary_spec]
@@ -246,7 +251,7 @@ theorem setPeerEndpointFromSkb_spec (P : Snapshot → Prop) (pid : PeerId) (src 
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (setPeerEndpointFromSkb_sameSnapshot pid src).wp P
 
 theorem timersDataSent_sameSnapshot (pid : PeerId) : SameSnapshot (Leanux.WG.timersDataSent pid) := by
-  frame_same [Leanux.WG.timersDataSent] using [armTimer_spec, getPeer_spec, jitterBelowRekeyTimeout_spec, modPeerTimerGuard_spec]
+  frame_same [Leanux.WG.timersDataSent] using [callerJiffies_spec, armTimer_spec, getPeer_spec, jitterBelowRekeyTimeout_spec, modPeerTimerGuard_spec]
 
 theorem timersDataSent_spec (P : Snapshot → Prop) (pid : PeerId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.timersDataSent pid
@@ -328,7 +333,7 @@ theorem timersDataReceived_spec (P : Snapshot → Prop) (pid : PeerId) :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (timersDataReceived_sameSnapshot pid).wp P
 
 theorem timersHandshakeInitiated_sameSnapshot (pid : PeerId) : SameSnapshot (Leanux.WG.timersHandshakeInitiated pid) := by
-  frame_same [Leanux.WG.timersHandshakeInitiated] using [jitterBelowRekeyTimeout_spec, modPeerTimer_spec]
+  frame_same [Leanux.WG.timersHandshakeInitiated] using [callerJiffies_spec, jitterBelowRekeyTimeout_spec, modPeerTimerGuard_spec, armTimer_spec]
 
 theorem timersHandshakeInitiated_spec (P : Snapshot → Prop) (pid : PeerId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.timersHandshakeInitiated pid
