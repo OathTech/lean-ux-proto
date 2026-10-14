@@ -402,6 +402,13 @@ EPOLL_INSERT_ADDRESS = 308
 # then its own translation instruction by instruction, so a mismatch names
 # the first differing instruction.
 SECCOMP_PROGRAM = 309
+# Pre-release review finding 11 (docs/2026-10-14-pre-release-review.md): the
+# instruction pointer populate_seccomp_data stores for a filtered system
+# call (class 'address', resolved by the consumer frame: kernel/seccomp.c:265,
+# a line the hook shares with the statement there; 8 bytes, one per
+# __seccomp_filter entry that builds its own seccomp_data); a filter that
+# loads offsets 8..15 of struct seccomp_data branches on it.
+SECCOMP_IP = 312
 # Review item 7 (docs/2026-10-13-review-items-7-8.md, section 5): the end of
 # a guest idle wait, {jiffies} (8 bytes, class 'jiffies' like kind 306,
 # resolved by the consumer frame: the ioctl's call site fs/ioctl.c:51 as
@@ -517,7 +524,7 @@ def resolve_choices(per, sites, locations, dispatch=None):
                     else 'resched' if raw_kind == RESCHED else 'timer' if raw_kind == TIMER_ARM \
                     else 'advance' if raw_kind == TIME_ADVANCE else 'alloc' if kind == ALLOC_KIND \
                     else 'queue' if raw_kind == QUEUE else 'jiffies' if raw_kind in (DST_CACHE_JIFFIES, JIFFIES_END) \
-                    else 'address' if raw_kind == EPOLL_INSERT_ADDRESS \
+                    else 'address' if raw_kind in (EPOLL_INSERT_ADDRESS, SECCOMP_IP) \
                     else 'program' if raw_kind == SECCOMP_PROGRAM else None
                 if kind_class == 'queue':
                     # {work, func}: the site is the queued function's symbol

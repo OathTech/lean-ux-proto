@@ -27,9 +27,12 @@ each; the [scope table](#scope) below is its summary.
 - **A Lean model:** file descriptors, eventfd, pipes and epoll; WireGuard
   configuration, handshakes, encrypted traffic, timers, device and peer
   lifecycle, routing and allocation-failure paths, with the packet queues and
-  worker scheduling represented as the kernel keeps them; seccomp's filter
-  chain and its cache, the classic-BPF checker and translation, strict mode,
-  and the sandboxed child probe, with the eBPF interpreter as a service
+  worker scheduling represented as the kernel keeps them. Single-task seccomp
+  with classic-BPF translation and an interpreter service, landed on
+  2026-10-13: the filter chain and its cache, the classic-BPF checker and
+  translation, strict mode, and the sandboxed child probe; excluded: the
+  listener protocol (`USER_NOTIF`, `NEW_LISTENER`), tracer-mediated `TRACE`,
+  and threaded `TSYNC` synchronisation. The eBPF interpreter is a service
   behind a contract (not a verified interpreter, verifier or JIT).
 - **A Linux test runner:** executes operation traces in a single-CPU x86-64
   guest, using Linux 6.12.110 with coverage and input-recording patches. The

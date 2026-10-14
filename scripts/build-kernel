@@ -86,11 +86,11 @@ if [ "$PROFILE" = net-rcov ] || [ "$PROFILE" = net-hidden ] || [ "$PROFILE" = ne
     # translated eBPF program and its length at bpf_migrate_filter
     # (net/core/filter.c), record-only; both hooks line-preserving. The hashes
     # are the merged patches' (X, phase 2b).
-    CHOICE_SHA=15f67b482fe446d0ed5bcdba075fa5f382677f3c6dafa448dc7dc306f8cc2bf9
+    CHOICE_SHA=e5015be3a92138287a50827995407bb92ffa545321d7772a1c36c0805bf9b33d
     # net-choice-actl: the allocation-steering control kernel (A, section 7:
     # K1, K4, K5), the same patch with control load flags; never an oracle
     ACTL_PATCH="$LEANUX_ROOT/kernel/patches/choice-stream-alloc-controls.patch"
-    ACTL_SHA=fdb1306f7699f7206baa1281ae9ee1cd3ba4f4e1a55fb742c2f8ede5bef0a0c1
+    ACTL_SHA=543932ed9bbbe6f18e64f651c3968da49a1e5fe93001440c345e86ce2c9b1132
     if [ "$PROFILE" = net-choice ]; then
         SOURCE="$LEANUX_ARTIFACTS/src/linux-6.12.110-choice-stream-da"
         PATCH_SHA_RECORD="$CHOICE_SHA"

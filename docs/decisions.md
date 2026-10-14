@@ -479,3 +479,17 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   feasibility separated; the reproduction guide names the approved build by
   identity. Sentences that describe the state after the review's code fixes
   are marked with the branch that carries the fix.
+- **2026-10-14 [AGENT, fork of the coordinator]** Pre-release review finding
+  11 (docs/2026-10-14-pre-release-review.md, section 11), the seccomp scope:
+  `TSYNC` on the one-task group is in scope as the C's path (the thread walks
+  of `seccomp_can_sync_threads` and `seccomp_sync_threads` meet only the
+  caller; threaded synchronisation stays out, a representation limit);
+  `instruction_pointer` is recorded at `populate_seccomp_data` (kind 312,
+  record-only, class-approved, the oracle rebuilt at integration) and filters
+  that branch on it are in the domain; EINTR, ENOMEM, ENFILE and the restart
+  codes are ordinary `ERRNO` policy results, told from a guest failure by the
+  trace's installs (provenance) in harness/linux.py, so the corpus and the
+  generator emit them; the feature is named "single-task seccomp with
+  classic-BPF translation and an interpreter service" with `BpfEngine`'s
+  laws as premises; a sparse 4096-instruction single filter is deferred
+  (the comparison child's record area), the reason in the design's section 10.

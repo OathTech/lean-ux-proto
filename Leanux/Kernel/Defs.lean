@@ -1068,6 +1068,13 @@ inductive HiddenSite where
       end of the mirror's translation (4.3) through the bridge, which reads
       the length first and holds it in `World.translatedLen`. -/
   | bpfProgInsn
+  /-- seccomp, pre-release review finding 11 (id 414 of the stream's 400-419):
+      the instruction pointer `populate_seccomp_data` stores (`KSTK_EIP(task)`,
+      kernel/seccomp.c:265), one kind-312 record of 8 bytes per
+      `__seccomp_filter` entry that builds its own `seccomp_data`, before the
+      cache check; class `address` like kind 308 (a value resolved by its
+      consumer frame). A filter that loads offsets 8..15 branches on it. -/
+  | seccompIp
   /-- seccomp (stream V, measured on stream W's scratch kernel): the two
       clock reads of `copy_process` in the parent's window of a child probe,
       `p->start_time = ktime_get_ns()` at `kernel/fork.c:2532` (kind 206) and
@@ -1292,6 +1299,7 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   | .inetEhashSecret => ⟨140, "inet_ehash_secret", "random", "net/ipv4/inet_hashtables.c", 36, 4, .cut⟩
   -- seccomp (ids 400-419; 400-410 are `AllocSite.hiddenId`'s)
   | .bpfProgInsn => ⟨411, "bpf_prog_insn", "program", "net/core/filter.c", 1315, 8, .mirror⟩
+  | .seccompIp => ⟨414, "seccomp_ip", "address", "kernel/seccomp.c", 265, 8, .mirror⟩
   | .forkStartTime => ⟨412, "fork_start_time", "clock", "kernel/fork.c", 2532, 8, .mirror⟩
   | .forkStartBoottime => ⟨413, "fork_start_boottime", "clock", "kernel/fork.c", 2533, 8, .mirror⟩
 
@@ -1310,7 +1318,7 @@ def HiddenSite.all : List HiddenSite :=
   ++ AllocSite.all.map .alloc
   ++ [.currentTime]
   ++ [.underLoadNow, .cookieNonce, .ratelimiterNow, .ratelimiterInsertNow, .cookieSecretRotateNow, .cookieSecretRotated]
-  ++ [.bpfProgInsn, .forkStartTime, .forkStartBoottime]
+  ++ [.bpfProgInsn, .forkStartTime, .forkStartBoottime, .seccompIp]
   ++ [.inetEhashSecret]
   ++ [.epollInsertAddress]
 

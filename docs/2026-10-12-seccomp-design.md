@@ -65,9 +65,14 @@ interpreter for the opcode subset the translation emits so that it is
 executable today; an external Lean model of the eBPF ISA can replace it
 without touching the rest.
 
-Out of scope, fail-noisy (section 9): `TSYNC`, `NEW_LISTENER` and
-`USER_NOTIF`, `TRACE` with a tracer, a second thread, filters that read the
-instruction pointer, strict mode in the trace process.
+The feature, named at the altitude the evidence supports (pre-release review
+finding 11, 2026-10-14): **single-task seccomp with classic-BPF translation
+and an interpreter service**. Out of scope, fail-noisy (section 9):
+`NEW_LISTENER` and `USER_NOTIF` (the listener protocol), `TRACE` with a
+tracer (the ptrace protocol), a second thread (so threaded `TSYNC`
+synchronisation), strict mode in the trace process. In scope since the
+review: `TSYNC` on the one-task group (the C's no-op path, 2.4) and filters
+that read the instruction pointer (recorded at its source, 3.2).
 
 ## 2. The kernel paths, verified
 
@@ -238,7 +243,9 @@ emulation, 2.6), then `bpf_prepare_filter` (:1329-1366):
   the saved copy.
 
 Back in `seccomp_set_mode_filter`: `NEW_LISTENER` is out of scope; the
-`TSYNC` mutex is out of scope; under `siglock`, `seccomp_may_assign_mode`
+`TSYNC` mutex (:2004-2005, `mutex_lock_killable` on `cred_guard_mutex`) is
+uncontended on one task and returns 0, its killable arm (:2006, a pending
+fatal signal) an explicit stop; under `siglock`, `seccomp_may_assign_mode`
 (:437-445: a mode already set must be the same mode; strict after filter
 and filter after strict are `-EINVAL`), `has_duplicate_listener` (:1917:
 false at its first test, no listener), `seccomp_attach_filter`
@@ -247,7 +254,13 @@ false at its first test, no listener), `seccomp_attach_filter`
 - the path budget (:922-926): the new program's **eBPF** length plus, for
   each filter already on the chain, its eBPF length plus 4, must not exceed
   `MAX_INSNS_PER_PATH` (:240; 32768), else `-ENOMEM`;
-- `TSYNC` (:929-937): out of scope;
+- `TSYNC` (:929-937): `seccomp_can_sync_threads` (:490-524) walks the
+  thread group, meets only the caller on the one-task group, skips it
+  (:503) and returns 0 (:523); the `if (ret)` arm (:933-937, `-ESRCH`
+  under `TSYNC_ESRCH`) is declared and never taken here; after the attach,
+  `seccomp_sync_threads` (:959-960, :597-645) walks the same group and
+  changes nothing; the arms for another thread (:506-520, :615-644) are
+  the C's, reached by no run of the single-task representation;
 - the `log` (:943) and `wait_killable_recv` (:947) flags;
 - `filter->prev = current->seccomp.filter`, `seccomp_cache_prepare`, the
   head pointer, `filter_count++` (:953-956).
@@ -430,11 +443,16 @@ trace rather than recorded:
 - the task's capability set (root, all capabilities) and no-new-privs bit
   (clear) at trace start: the mirror's initial task state.
 
-One hidden value is deliberately not recorded: `instruction_pointer`
-(`populate_seccomp_data`, :265). A filter that loads offsets 8..15 passes
-the checker (the mirror accepts it too) but makes the engine's input
-partial; running such a filter is `unsupported` at the seam (4.4). The
-generator never emits those loads; one control does (7).
+`instruction_pointer` (`populate_seccomp_data`, :265, `KSTK_EIP(task)`) is
+recorded at that line as kind 312 (`HiddenSite.seccompIp`, 8 bytes, class
+`address`; the hook shares the line, the anchored file keeps its length),
+once per `__seccomp_filter` entry that builds its own `seccomp_data` (:1258,
+before the cache check), in the task's or the child's stream. The mirror
+consumes it at its populate point and the engine serves offsets 8..15 from
+it, so a filter that branches on the pointer runs the same program on the
+same value (the `s_ip_*` traces, 7). Until the pre-release review it was the
+one hidden value deliberately not recorded and such filters stopped at the
+seam.
 
 ### 3.3 The translated program: a record, not a hidden input (kind 309)
 
@@ -581,7 +599,12 @@ class BpfEngine (E : Type) where
 ```
 
 Terms an instance must satisfy, stated once in the file so an external
-ISA model can be checked against them:
+ISA model can be checked against them. They are **premises**, not
+consequences of the class: `BpfEngine` supplies a `run` field and nothing
+proves an arbitrary instance meets them; a theorem parametric in `E` takes
+them as hypotheses, and `MiniInterp` is the one instance whose adherence
+the tests and the kind-309 byte comparison exercise (pre-release review
+finding 11):
 
 1. `CTX` reads are `LDX_MEM W` at 4-aligned offsets below 64: offset 0 is
    `nr` as a 32-bit value, 4 is `arch`, 8 and 12 are the two halves of
@@ -1041,10 +1064,10 @@ signoff; no bundle, no narrative.
 
 | What | Where it stops | Why |
 | --- | --- | --- |
-| `TSYNC`, `TSYNC_ESRCH` | validator; mirror `unsupported` at `seccomp_attach_filter` | a scope choice: single-threaded sync is a no-op in the C, brought in later if wanted |
+| threaded `TSYNC` (a second thread to synchronise) | not expressible; the mirror's thread walks stop `unsupported` on another thread | single-task domain; `TSYNC` and `TSYNC_ESRCH` on the one-task group are in scope since the pre-release review (`s_tsync_single`) |
 | `NEW_LISTENER`, `WAIT_KILLABLE_RECV`, `USER_NOTIF` | validator; mirror `unsupported` at `seccomp_set_mode_filter` / `__seccomp_filter` | a listener file and a blocking protocol |
 | `TRACE` with a tracer | mirror `unsupported` at the `ptrace_event_enabled` cut | no tracer in the fixture; the no-tracer arm is in scope |
-| a CTX load of offsets 8..15 at run time | engine `unsupportedRead` | `instruction_pointer` is not recorded |
+| a CTX load of offsets 8..15 without a kind-312 record | engine `unsupportedRead` | only in a record-free run; `instruction_pointer` is recorded since the pre-release review (3.2) |
 | strict mode in the trace process | validator | the process could not report (6.2) |
 | a second thread | not expressible | single-task domain |
 | a file operation in the child | runner `invariant` | the child has no modelled file table (4.1) |
@@ -1110,6 +1133,17 @@ with the prefill fixture (5, 7).
    emulates such an `orig_prog` 463 times; the check's cost is bounded by
    distinct pairs (4.2), but the mirror's emission size and Lean run time
    are worth one measurement at step 0 beside the three-filter trace.
+   The 768-instruction ceiling per install is the comparison child's
+   record area (about 250 comparison records per classic instruction,
+   stream W), an instrumentation limit, not a semantic one; a sparse
+   4096-instruction single filter stays **deferred** (pre-release review
+   finding 11): the harness runs both children for every trace and the
+   comparison child reports `empty_or_full_kcov` at that size, so a
+   Linux-only observation with the kind-309 bytes compared offline needs a
+   PC-only observation mode the harness does not have, a harness change
+   outside the scope-wording task; the translation of long programs is
+   exercised by the 768-instruction installs and the 3990-instruction
+   prefill program's offline translation (`s_budget_*`).
 7. **Config.** `CONFIG_SECCOMP=y` is additive (2.1, 6.3); the regression
    claim on the existing corpora is the evidence. It is the first
    behaviour-bearing config change since the 2026-10-07 rule; the user

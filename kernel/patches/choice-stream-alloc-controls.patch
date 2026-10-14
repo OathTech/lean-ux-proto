@@ -106,7 +106,7 @@
  	case KCOV_REMOTE_ENABLE:
  		if (get_user(remote_num_handles, (unsigned __user *)(arg +
  				offsetof(struct kcov_remote_arg, num_handles))))
-@@ -1125,3 +1174,968 @@
+@@ -1125,3 +1174,987 @@
  }
  
  device_initcall(kcov_init);
@@ -689,6 +689,25 @@
 +EXPORT_SYMBOL(kcov_seccomp_program);
 +
 +/*
++ * LEANUX seccomp, pre-release review finding 11 (docs/2026-10-14-pre-release-
++ * review.md): the instruction pointer populate_seccomp_data stores for a
++ * filtered system call (KSTK_EIP(task), kernel/seccomp.c:265), as one
++ * kind-312 record of 8 bytes from that one line (_THIS_IP_), on every
++ * __seccomp_filter entry that builds its own seccomp_data (sd == NULL, the
++ * syscall-entry path), before the cache check. A filter that loads offsets
++ * 8..15 of struct seccomp_data branches on this value; the mirror consumes
++ * the record at its populate point and runs the same program. Written in
++ * any recording context, like kinds 308 and 309. Record-only.
++ */
++void notrace kcov_seccomp_ip(unsigned long value, unsigned long ip)
++{
++	u64 v = value;
++
++	kcov_choice_ip(312, ip, &v, sizeof(v));
++}
++EXPORT_SYMBOL(kcov_seccomp_ip);
++
++/*
 + * LEANUX D3 (section 4.3): the virtual time advance, on the calling task's
 + * own KCOV descriptor: { unsigned long ticks; }, 1 <= ticks <= 2^31. Only
 + * from a task that is collecting (the trace process), so the kind-304
@@ -1077,7 +1096,7 @@
 +}
 --- a/include/linux/kcov.h
 +++ b/include/linux/kcov.h
-@@ -44,6 +44,47 @@
+@@ -44,6 +44,49 @@
  void kcov_remote_start(u64 handle);
  void kcov_remote_stop(void);
  u64 kcov_common_handle(void);
@@ -1122,10 +1141,12 @@
 +void kcov_epoll_insert(unsigned long file, unsigned long ip);
 +/* LEANUX seccomp: bpf_migrate_filter's translated-program records (kind 309). */
 +void kcov_seccomp_program(const void *insns, unsigned int len, unsigned long ip);
++/* LEANUX seccomp: populate_seccomp_data's instruction-pointer record (kind 312). */
++void kcov_seccomp_ip(unsigned long value, unsigned long ip);
  
  static inline void kcov_remote_start_common(u64 id)
  {
-@@ -99,6 +140,20 @@
+@@ -99,6 +142,21 @@
  static inline void kcov_finish_switch(struct task_struct *t) {}
  static inline void kcov_remote_start(u64 handle) {}
  static inline void kcov_remote_stop(void) {}
@@ -1143,6 +1164,7 @@
 +static inline void kcov_work_queued(struct work_struct *work, unsigned long ip) {}
 +static inline void kcov_epoll_insert(unsigned long file, unsigned long ip) {}
 +static inline void kcov_seccomp_program(const void *insns, unsigned int len, unsigned long ip) {}
++static inline void kcov_seccomp_ip(unsigned long value, unsigned long ip) {}
  static inline u64 kcov_common_handle(void)
  {
  	return 0;
@@ -1901,3 +1923,14 @@
  	if (err)
  		goto out_err_free;
  
+--- a/kernel/seccomp.c
++++ b/kernel/seccomp.c
+@@ -262,7 +262,7 @@
+ 	sd->args[3] = args[3];
+ 	sd->args[4] = args[4];
+ 	sd->args[5] = args[5];
+-	sd->instruction_pointer = KSTK_EIP(task);
++	sd->instruction_pointer = KSTK_EIP(task); { extern void kcov_seccomp_ip(unsigned long value, unsigned long ip); kcov_seccomp_ip(sd->instruction_pointer, _THIS_IP_); }	/* LEANUX seccomp: kind 312 */
+ }
+ 
+ /**
