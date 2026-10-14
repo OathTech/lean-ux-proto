@@ -168,8 +168,13 @@ if set(OPCODES) != set(FIELDS):
     raise AssertionError(f"OPCODES and FIELDS name different operations: {set(OPCODES) ^ set(FIELDS)}")
 # The guest's KCOV area in words, task and remote (harness/guest.c CAPACITY):
 # KCOV stops at CAPACITY - 1 PCs or (CAPACITY - 1) // 4 comparison records,
-# and the guest fails an operation whose area filled.
+# and the guest fails an operation whose area filled. The comparison child's
+# task area is twice that (guest.c TASK_CMP_CAPACITY; B1, a flood past the
+# handshake ring's 4096 slots has about 1.41 M task-side comparison records):
+# its limit is (KCOV_TASK_CMP_CAPACITY - 1) // 4 records, and a merged
+# comparison row (task and remote) stays below the sum of the two limits.
 KCOV_CAPACITY = 4 * 1024 * 1024
+KCOV_TASK_CMP_CAPACITY = 8 * 1024 * 1024
 # The optional top-level `net_fixture` (L): "bare" starts a network trace
 # without wg0; absent, the fixture creates a down wg0. W8: "foreign-creator"
 # creates wg0 from a second namespace C (its creating namespace), which holds
