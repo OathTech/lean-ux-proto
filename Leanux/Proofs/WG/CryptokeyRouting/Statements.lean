@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Configuration.PeerTailCompletion
 import Leanux.Proofs.WG.AllowedIps.ConfigurationInputs
 import Leanux.Proofs.WG.AllowedIps.ClearWalk
 import Leanux.Proofs.WG.AllowedIps.RoutingHistory
@@ -41,7 +42,11 @@ that coherence and removes exactly the target peer's entries. Original peer
 creation and raw release preserve routing coherence, permitting orphan owners.
 Finite normal create/insert/remove/release/clear histories from the original configured
 fixture refine independent canonical flat-prefix updates and actual-root lookup.
-Their input bounds and resident insertion targets are explicit; enclosing
+Their input bounds and resident insertion targets are explicit. Whole local
+setAllowedip completions and the original peer-configuration tail additionally
+retain semantically valid completed prefixes on later Stops, using concrete
+send/cleanup routing frames that permit peer deletion. Their entry routing,
+resident target and local address-shape premises remain explicit; enclosing
 Netlink/configuration/Runner closure and packet admission remain separate.
 Actual local parser output now discharges address shape for the setAllowedip
 guards and its selected bounded insertion. Complete original free normally
@@ -1698,5 +1703,50 @@ theorem original_free_then_findNode (w v : World) (d : WG.Device)
     (selectedTree v4 .empty .empty) (rootSlot v4) (hi'.selected_rep v4) (hi'.selected_valid v4)
   refine ⟨out, finish, hout, hc, ?_, hframe⟩
   simpa [hi'.selected_root v4, selectedTree, Tree.lookupId, Tree.lookup] using hrun
+
+/-- Original raw release and staged-send helpers retain nodes, table/frontiers
+and surviving resident lists, permitting peer deletion and raw orphan owners.
+These are normal-return frames, not reference-affiliation or totality claims. -/
+theorem original_routing_silent_frames (pid : WG.PeerId) (peer : Option WG.PeerId) :
+    RetainsRoutingCall (WG.peerPut peer) ∧
+    RetainsRoutingCall (WG.sendStagedPackets pid) ∧
+    RetainsRoutingCall (WG.sendKeepalive pid) :=
+  ⟨peerPut_retainsRouting peer, sendStagedPackets_routing pid, sendKeepalive_routing pid⟩
+
+/-- The whole setAllowedip observer and actual original peer-configuration tail
+cut erase exactly for every input, including malformed attributes and Stops.
+Only normally completed whole attribute calls emit events; their exact signed
+returns and before/after views are retained. This statement has no routing,
+address-shape, target-residency or normal-return premise. -/
+theorem routing_completion_source_erasure (pid : WG.PeerId) (ip : WG.AllowedIpAttrs)
+    (a : WG.PeerAttrs) (peer : Option WG.PeerId) :
+    Logged.ErasesPrefix (completedAllowedip pid ip) (WG.setAllowedip pid ip) ∧
+    Logged.ErasesPrefix (Configuration.peerConfigTailObserved a peer pid)
+      (Configuration.peerConfigTailSource a peer pid) :=
+  ⟨completedAllowedip_erases pid ip, Configuration.peerConfigTailObserved_erases a peer pid⟩
+
+/-- Actual whole-call completion derives semantic flat agreement and preserves
+the insertion target from its exact source outcomes. Exactly return zero updates
+the flat table; guard rejections and allocation refusals retain the table and
+all actual source effects. A Stop preserves the prior safe journal without a
+failed World or a completion event. Entry shape/routing/residency are explicit. -/
+theorem setAllowedip_completion_routing (initial : FlatTable × FlatTable)
+    (pid : WG.PeerId) (ip : WG.AllowedIpAttrs) (shape : AddressShape ip) :
+    Logged.PrefixPreserves (CompletionTarget initial pid) (CompletionSafe initial)
+      (completedAllowedip pid ip) :=
+  completedAllowedip_preserves initial pid ip shape
+
+/-- The actual allowed-IP loop, early cleanup and complete remaining peer tail
+preserve a semantically valid completed-call prefix even on Stop. Normal returns
+also derive current routing/flat agreement from that prefix. Target residency
+is maintained only while inserting; concrete send/release frames permit later
+peer deletion. Local address shape and entry routing/residency remain premises;
+this is not enclosing setPeerCmd, parser, Netlink or Runner closure. -/
+theorem original_peerConfigTail_routing_prefix (initial : FlatTable × FlatTable)
+    (a : WG.PeerAttrs) (shape : Configuration.PeerAddressShape a)
+    (peer : Option WG.PeerId) (pid : WG.PeerId) :
+    Logged.PrefixEnsures (CompletionTarget initial pid) (CompletionSafe initial)
+      (Configuration.peerConfigTailObserved a peer pid) (fun _ => CompletionState initial) :=
+  Configuration.peerConfigTailObserved_spec initial a shape peer pid
 
 end Leanux.Proofs.WG.CryptokeyRouting
