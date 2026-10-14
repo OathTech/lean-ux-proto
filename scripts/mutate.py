@@ -295,7 +295,12 @@ def enumerate_mutants(files=None, classes=None, cap=None):
                 if new == line.rstrip():
                     continue
                 digest = hashlib.sha1(f'{path}:{n}:{cls}:{line}'.encode()).hexdigest()[:10]
-                per_class.setdefault(cls, []).append(dict(id=f'm-{digest}', file=path, line=n, cls=cls,
+                # several mutants of one class at one line (two literals, two
+                # operators) share the digest: the first keeps it, the rest
+                # carry an ordinal, so earlier results keep their ids
+                seen = sum(1 for m in per_class.get(cls, []) if m['id'].startswith(f'm-{digest}'))
+                ident = f'm-{digest}' if seen == 0 else f'm-{digest}-{seen}'
+                per_class.setdefault(cls, []).append(dict(id=ident, file=path, line=n, cls=cls,
                                                           old=line, new=new, note=note))
         if not classes or 'order-swapped' in classes:
             pat = re.compile(r'^(\s*)if ← branch(?:Cmp)? \.[A-Za-z0-9_]+ .* then return\b')

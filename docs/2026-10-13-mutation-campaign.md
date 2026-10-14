@@ -176,7 +176,129 @@ a reach problem of the check itself, a changed behaviour no instrument
 reports even when a trace takes the path. The fix class follows: a trace,
 a declaration, a check rule, or nothing.
 
-SURVIVORS_PLACEHOLDER
+### 6.1 Operand swaps (logging-only by class)
+
+The operand channel (`operands_match` in `evaluator/check.py`) matches a
+non-constant `KCOV_TRACE_CMP` record in either operand order, because the
+compiler canonicalises the order; a constant record needs the declared
+variable on the mirror's left and the constant on its right. So a swap at
+a non-constant compare is equivalent under the declared relation by
+construction, and a swap at a constant compare is visible only when the
+two values differ.
+
+| Mutant | Site | Category | Why it survived | Fix |
+| --- | --- | --- | --- | --- |
+| m-0f81f80729 | `FS/Eventfd.lean:25` `flags & ~EFD_FLAGS_SET` vs 0 | EP | both values 0 on every trace (no invalid eventfd flag in the corpus) | none |
+| m-10201516ff | `FS/EventfdOps.lean:33` `cid ≥ 0` | EP on this corpus | the freed context's id was 0 in every trace (one eventfd at a time) | a trace with two eventfds would distinguish it; still logging-only |
+| m-805feb4dbd | `FS/Fcntl.lean:41` `(arg ^ flags) & O_APPEND` vs 0 | EP | both values 0: no trace toggles `O_APPEND` | none |
+| m-123df34b8b | `FS/File.lean:53` `bitbit ≥ maxfd` | EP | non-constant compare, order-insensitive by the rule | none |
+| m-8f9a03dc8d | `FS/FileTable.lean:38` `f_mode & FMODE_NOACCOUNT` vs 0 | EP | both values 0 | none |
+| m-6c13ec73b6 | `FS/Inode.lean:139` `tv_sec ≥ s_time_max` | EP | non-constant compare (`sb->s_time_max` is a field) | none |
+| m-965d2938de | `FS/Pipe.lean:136` `page_count == 1` | EP on this corpus | the count was 1 at every release (no shared page) | a trace sharing a page between two pipes; still logging-only |
+| m-ca3da3a8f3 | `FS/Wait.lean:222` `busy_poll_usecs != 0` | EP | the compare is folded out of the oracle (`CONFIG_NET_RX_BUSY_POLL` off): no record exists | declare the decision branch-free |
+
+### 6.2 Negated decisions
+
+| Mutant | Site | Category | Why it survived | Fix |
+| --- | --- | --- | --- | --- |
+| m-1c99f9201d | `FS/Fcntl.lean:41` `.setflAppendChanged` | CB | no trace toggles `O_APPEND` through `F_SETFL`, so the compare's operands are 0 either way and the negated arm only runs the `IS_APPEND` test, false on pipefs; the outcome itself is unwitnessed in the built code (the `&&` shares its block) | a trace setting `O_APPEND` on a pipe end (operand 0x400, the arm's path) |
+| m-3fca1634a9 | `FS/Wait.lean:222` `.epBusyLoopOnUsecs` | LO | the outcome is discarded (`_ ←`) and the compare is folded out of the oracle, so neither a witness nor an operand record exists | declare the decision branch-free |
+
+### 6.3 Skipped records
+
+| Mutant | Site | Category | Why it survived | Fix |
+| --- | --- | --- | --- | --- |
+| m-2f50545f38 | `Seccomp/Filter.lean:463` `hiddenAlloc .kzallocSfilter` → always ok | CB | the kind-305 records are armed only in steered allocation traces, and the seccomp corpus has none: the seccomp sites of design 3.1 are declared but no `s_alloc_*` trace steers them | steered allocation-failure traces for seccomp's recorded sites (the epoll corpus has four such traces; the WireGuard and pipes corpora have the `alloc` suite) |
+
+### 6.4 Stops made pass-through
+
+An `invariant` stop guards the mirror against itself and fires on no
+correct run, so removing it is unobservable by design. An `unsupported`
+stop marks a path outside the domain; the domain filter keeps every corpus
+trace off it, so removing it is invisible unless a trace reaches the path,
+which is the definition of the documented exclusions. None is a missed
+defect; the `unsupported` ones are the gaps the census lists.
+
+| Mutant | Site | Stop | Category |
+| --- | --- | --- | --- |
+| m-0262fc1aa6 | `Env/IpStack.lean:111` | invariant: a TOS beyond a byte | EP |
+| m-6d59b18f4f | `Env/Stack.lean:111` | invariant: `consume_data_done` trims to `tot_len` | EP |
+| m-680f2828ab | `FS/EventfdOps.lean:106` | invariant: eventfd_write buffer shorter than 8 | EP |
+| m-e5db213929 | `FS/FileTable.lean:112` | invariant: `d_alloc_pseudo` with a dentry | EP |
+| m-ffb382ef8a | `FS/Inode.lean:113` | invariant: `iput` at `i_count` 0 | EP |
+| m-43e133f4da | `FS/Pipe.lean:91` | invariant: `put_page` with no reference | EP |
+| m-c6c585c607 | `Seccomp/Classic.lean:197` | invariant: a `JA` target past the end | EP |
+| m-8f06f1ccd9 | `Env.lean:110` | unsupported: link-local source off loopback | EP (excluded) |
+| m-baa08cd485 | `FS/Eventfd.lean:19` | unsupported: ida bitmap allocation at id ≥ 63 | EP (excluded) |
+| m-7fcc53a2d9 | `Env/Batch.lean:109` | unsupported: NAPI polls of several peers in one softirq | EP (excluded) |
+| m-56a8c05b80 | `FS/Eventpoll.lean:786` | unsupported: a positive `epoll_wait` timeout (tier 2) | EP (excluded) |
+| m-580cff30a4 | `FS/Fcntl.lean:58` | unsupported: `f_op->check_flags` | EP (excluded) |
+| m-e624aa0bb2 | `FS/File.lean:78` | unsupported: the kvmalloc fallback | EP (excluded) |
+| m-623192681e | `Kernel/Refcount.lean:14` | unsupported: `refcount_warn_saturate` | EP (excluded) |
+| m-b6965f47ab | `Syscalls.lean:223` | unsupported: `wg_netns_close` outside the fixture | EP (excluded) |
+| m-69787d5726 | `WG/Device.lean:35` | unsupported: a lookup retry after a dying peer | EP (excluded) |
+
+### 6.5 Negated conditions, changed operators, constants off by one
+
+| Mutant | Site | Category | Why it survived | Fix |
+| --- | --- | --- | --- | --- |
+| m-ec0783b3a0 | `Env/Batch.lean:38` the NET_RX section ordinal, condition negated | **R** | its logical twin `w != .netRx` (m-f61392504a) was rejected by the placement-evidence check, while this one passed the subset and the whole suite with 15 inline placements present in the confirming run (`napi_orders`: a 94, bc 15); the placement evidence's sensitivity to the section ordinal depends on which placement runs occur | a check rule: the placement evidence should compare the section ordinals of the steps it replays, not only their control flow |
+| m-d7dee84db8 | `Env/IpStack.lean:72` checksum fold negated | CB | the environment's IP checksum is never observed on `handwritten`; a WireGuard injection would carry it (confirmation on `wireguard` pending) | PENDING_WG |
+| m-ad789234b2 | `Env/IpStack.lean:72` `>` → `≥` at 0xffff | CB | the boundary value never occurs | none worth a trace |
+| m-ab0b08a1e3 | `Env/Stack.lean:72` the TCP ack flag negated | CB | the environment's TCP helper is not exercised on `handwritten` (confirmation on `wireguard` pending) | PENDING_WG |
+| m-f40fbc343a | `Env/Stack.lean:46` `<` → `≤` | CB | boundary only | none |
+| m-85b3373196 | `Env/Stack.lean:46` `+1` → `+2` | CB | as above (confirmation pending) | PENDING_WG |
+| m-9ffcb57df3 | `Env/IpStack.lean:22` `SENDER_PORT` + 1 | CB | the sender port of injected packets is not observed on `handwritten` (confirmation pending) | PENDING_WG |
+| m-133ab68446 | `FS/File.lean:60` `roundup_pow_of_two` negated | CB | `alloc_fdtable` runs only when the table grows past 64 descriptors, which no trace does; the wrong size would then reach `findNextFdAllFull`'s operand | a trace holding 65 descriptors |
+| m-a0580e9458 | `FS/File.lean:60` `n ≤ 1` → `n ≤ 2` | CB | as above | the same trace |
+| m-fa9da72d01 | `Kernel/Defs.lean:907` the allocation-site id map negated | CB (subset) | the kind-305 records are unarmed outside the `alloc` suite, which the subset did not include (confirmation on `alloc` pending) | PENDING_ALLOC |
+| m-bcac7274dc | `Kernel/Defs.lean:907` `58 ≤ i` → `58 < i` | CB (subset) | as above, for site 58 | PENDING_ALLOC |
+| m-cf6dab30c3 | `Seccomp/Bridge.lean:62` the repeatable mark negated | LO | the per-operation comparison is set-based, so emission multiplicity is invisible by design | none |
+| m-208ec53979 | `Seccomp/Decisions.lean:281` `SDecision.all` filter negated | EP | the list is used by the tests, not on the checked path | none |
+| m-04f699319f | `Seccomp/Decisions.lean:281` `==` → `!=` | EP | as above | none |
+| m-a0c041a9cf | `Seccomp/Translate.lean:106` the 16-bit sign extension negated | CB | no corpus program converts a 16-bit immediate on that path | a trace with a negative 16-bit immediate |
+| m-f095e17543 | `Seccomp/Translate.lean:55` `≥ 32768` → `> 32768` | CB | the boundary value | the same trace |
+| m-2a64bed551 | `Seccomp/Translate.lean:55` 32768 → 32769 | CB | the boundary value | the same trace |
+| m-62fabd29a0 | `FS/Fcntl.lean:43` `S_APPEND != 0` → `== 0` | CB | the line is inside the `O_APPEND`-changed block that no trace enters | the `O_APPEND` trace above |
+| m-a863e3ebe4 | `FS/File.lean:55` `bitbit > start` → `≥` | CB | differs only at `bitbit == start` | none worth a trace |
+| m-b42171750c | `FS/Inode.lean:114` `i_count > 1` → `≥ 1` | **R** | the last `iput` no longer evicts the pipefs inode and nothing notices: `fs/inode.c` is anchored only for its timestamp helpers, `iput_final`/`evict` have no declared decision, and no observation counts inodes; a mirror that leaks every pipe's inode passes | a declaration on `iput_final`'s path (fs/inode.c) or an observation of the inode count after close |
+| m-9997959668 | `FS/Wait.lean:184` `ret < 0` → `≤ 0` | CB | the walk breaks after the first callback returning 0; every corpus wait queue has one entry at the walk | a trace with two waiters on one head |
+| m-b47970fdce | `Kernel/Refcount.lean:12` `old > 0` → `≥ 0` | EP | differs only at `old == 0`, a use-after-free no correct run reaches | none |
+| m-d6cb2b5d37 | `Syscalls.lean:173` `fd ≥ rlimit` → `>` | CB | no trace names exactly the limit's descriptor number | a trace at the boundary |
+| m-6297bb9625 | `FS/AnonInodes.lean:22` `-ENODEV` → `-ENOTDIR` | CB (steered) | the anon-inode failure is a steered path (confirmation on `alloc` pending) | PENDING_ALLOC |
+| m-d6e357a769 | `FS/Close.lean:21` `-512` → `-513` | EP (contract) | `ERESTARTSYS` from a pipe close needs a signal the harness never sends | none |
+| m-cd402fd597 | `FS/Inode.lean:46` `NSEC_PER_SEC` + 1 | CB | the pipefs timestamps it feeds are never observed (no `fstat` in the corpus) and their compare is non-constant | a trace observing a pipe's `ctime` after a write |
+| m-19762748d3 | `FS/Pipe.lean:40` `PIPE_MIN_DEF_BUFFERS` + 1 | CB (steered) | used only under the soft pipe-buffer limit, a steered path (confirmation pending) | PENDING_ALLOC |
+| m-fbdcb07871 | `FS/ReadWrite.lean:18` `2^63` → `3^63` | EP (contract) | a count that large cannot be passed | none |
+| m-261f7b4645 | `Runner.lean:17` `MAX_IO` + 1 | EP | a runner bound, not the C's | none |
+
+### 6.6 Removed early returns
+
+| Mutant | Site | Category | Why it survived | Fix |
+| --- | --- | --- | --- | --- |
+| m-545d3ed0ba | `Env/IpStack.lean:182` `-EMSGSIZE` | EP (contract) | no payload exceeds the fragment size | none |
+| m-04f1275a2b | `FS/AnonInodes.lean:22` `.anonInodeErr` | CB (steered) | PENDING_ALLOC | PENDING_ALLOC |
+| m-5ee912dbd3 | `FS/Close.lean:13` `.closeNoFile` → `-EBADF` | CB | no trace closes an unknown descriptor | a trace: `close` of a never-opened fd |
+| m-c94fc660c7 | `FS/Eventfd.lean:25` invalid flags | CB | no trace passes an invalid eventfd flag | a trace |
+| m-0177f5cdad | `FS/EventfdOps.lean:76` a short eventfd read | CB | no trace reads an eventfd with fewer than 8 bytes | a trace |
+| m-ad049b9b15 | `FS/Eventpoll.lean:90` a dead file at `ep_item_poll` | EP | unreachable on a correct run | none |
+| m-9ec4b350ac | `FS/Fcntl.lean:43` `-EPERM` on `S_APPEND` | CB | inside the `O_APPEND` block no trace enters | the `O_APPEND` trace |
+| m-e3cceef5de | `FS/FileTable.lean:109` `.allocPathPseudoFail` | CB (steered) | PENDING_ALLOC | PENDING_ALLOC |
+| m-415d0346f2 | `FS/Inode.lean:96` `envOk .allocInode` | CB (steered) | PENDING_ALLOC | PENDING_ALLOC |
+| m-00693e433c | `FS/Open.lean:17` `filp_flush` at count 0 | EP | unreachable on a correct run | none |
+| m-d070830a74 | `FS/Pipe.lean:101` `envOk .copyPageToIter` | CB (steered) | PENDING_ALLOC | PENDING_ALLOC |
+| m-18e6657307 | `FS/PipeCreate.lean:24` `.getPipeInodeNoInode` | CB (steered) | PENDING_ALLOC | PENDING_ALLOC |
+| m-057152dfc5 | `FS/ReadWrite.lean:18` the negative count | EP (contract) | as above | none |
+| m-f83350256b | `FS/Wait.lean:174` the empty-queue return | EP | the walk over an empty queue returns the same value | none |
+| m-cbb3079fa2 | `Kernel/Signal.lean:96` `.sigqueueAllocNoUcounts` | CB (steered) | PENDING_ALLOC | PENDING_ALLOC |
+| m-736cd45d76 | `Runner.lean:177` the pipe-reference descriptor form | CB (subset) | the form is used by the pipes corpus, which the runner's subset did not include (confirmation on `pipes` pending) | PENDING_PIPES |
+| m-92f6d1fc7b | `Seccomp/Bridge.lean:65` the repeatable dedup | LO | set-based comparison, as above | none |
+| m-9a33d70c0c | `Seccomp/Classic.lean:145` a code past the table | CB | no corpus program has such a code (the mutated lookup would panic on one) | a trace with an opcode ≥ the table size |
+| m-da2fe3a128 | `Seccomp/Translate.lean:127` a jump target past the end at translation | EP | the classic checker rejects it first, as in the C; the translation's test is defensive | none |
+| m-2ce60eff07 | `Syscalls.lean:126` `-EBADF` | CB | no trace passes an unknown descriptor to that syscall | a trace |
+| m-07f15a1eb8 | `WG/Data.lean:53` `.padNoMtu` | CB | no trace sends with MTU 0 | a trace (if MTU 0 is settable; else EP) |
+
+ORDER_SWAPPED_PLACEHOLDER
 
 ## 7. What each channel caught: behaviour-changing examples
 
