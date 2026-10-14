@@ -64,10 +64,20 @@ def attributable(frames):
 
 
 def instrumented_lines(kernel, functions, files):
+    """`instrumented_points` without its per-symbol map."""
+    lines, names, chains, _ = instrumented_points(kernel, functions, files)
+    return lines, names, chains
+
+
+def instrumented_points(kernel, functions, files):
     """Source lines that own a KCOV instrumentation point in the given functions,
     the (inlined) function names those points belong to, and how many points
     have each frame chain (`file:line` per DWARF frame, innermost first; the
-    check's shared-exit declarations must each name exactly one).
+    check's shared-exit declarations must each name exactly one), and per
+    listed symbol the (inlined function, `file:line`) pairs that own a point
+    in that symbol's body: a helper inlined into several callers is
+    instrumented differently in each copy, so whether a line owns a point is
+    a fact about one copy (the check's unreached-line rule reads it).
 
     KCOV records the return address of the call to `__sanitizer_cov_trace_pc`.
     When a callee ends by jumping to the hook (directly, conditionally, or
@@ -111,7 +121,7 @@ def instrumented_lines(kernel, functions, files):
                 if target and (target.group(0) == COVERAGE_HOOK or ends_in_coverage(target.group(1))):
                     pcs.append(int(following.split(':')[0], 16))
         per_function[function] = pcs
-    lines, names, chains = set(), set(), Counter()
+    lines, names, chains, by_symbol = set(), set(), Counter(), {}
     for function, pcs in per_function.items():
         query = ''.join(hex(pc - 1) + '\n' for pc in pcs).encode()
         output = subprocess.run(['addr2line', '-e', kernel, '-a', '-i', '-f'], input=query,
@@ -136,7 +146,8 @@ def instrumented_lines(kernel, functions, files):
                 if source.split(':')[0] in files:
                     lines.add(source)
                     names.add(frame['function'])
+                    by_symbol.setdefault(function, set()).add((frame['function'].split('.')[0], source))
                     found += 1
         if not found:
             raise ValueError(f'function {function} has no instrumentation point in the anchored files')
-    return lines, names, chains
+    return lines, names, chains, by_symbol
