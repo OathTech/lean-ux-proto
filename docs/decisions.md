@@ -560,3 +560,21 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   `wgXmit` checks the packet header's destination against the environment's;
   the ECN rewrite's length implication asserted; the E arm named "cookie
   gating under the modelled load state"; disposition tables on both audits.
+- **2026-10-14 [AGENT, fork of the coordinator]** The mutation campaign's four
+  reach findings (docs/2026-10-13-mutation-campaign.md, section 8) closed as
+  check rules and one declaration, no mirror semantics changed: (1) `iput`
+  is a listed decision function with `iput.last_reference` (fs/inode.c:1895)
+  and `iput.lazytime_dirty` (:1896) declared, the pipefs inode's count
+  deciding it and `iputReport` saying which way the C goes where the mirror
+  holds no inode (the shared anonymous inode keeps its pinned reference; a
+  socket's or a pin's inode is freed), so a leaked inode is seen against
+  iput_final's coverage, on the new trace `p_close_both_ends` (no pipes trace
+  closed both ends inside its operations before); (2) two distinct declared comparisons at one
+  condition line must match distinct kernel comparison PCs, a C comparison
+  being an instruction; (3) the decision table declares terminal outcomes (the arms at
+  which the C function returns), and a decision reported after one at a
+  later line of the function is a decision evaluated past Linux's return;
+  a line-level rule was tried twice and withdrawn, a line owning several
+  blocks; (4) operand matching confines a
+  branch to the records of its own NET_RX section, as the placement evidence
+  already did. Each mutant is rejected after its fix; the area suites agree.
