@@ -96,6 +96,21 @@ def PtrRing.items (r : PtrRing α) : List α :=
   (r15.slots[0]?).getD none == some 0 && r15.consumerTail == 0
     && (r16.slots[0]?).getD none == none && r16.consumerTail == 16 && r16.count == 16
 
+-- The handshake ring (B1, docs/2026-10-15-design-b1-handshake-ring.md 4.4):
+-- 4096 slots, batch 16; 25 produced and consumed leave slots 16 to 24
+-- occupied (25 = 16 + 9), then 4087 produces succeed and the 4088th finds the
+-- ring full. At batch 32 the 25 would all be carried and only 4071 would fit:
+-- the guard discriminates the batch, as the corpus twin `e_ring_carry` does
+-- (measured on the oracle: 4087 of 4088).
+#guard
+  let r : PtrRing Nat := PtrRing.init MAX_QUEUED_INCOMING_HANDSHAKES
+  let r := (List.range 25).foldl (fun r i => r.produce i) r
+  let r := (List.range 25).foldl (fun r _ => (r.consume).2) r
+  let carried := (List.range 25).filter fun i => ((r.slots[i]?).getD none).isSome
+  let r' := (List.range 4087).foldl (fun r i => r.produce (100 + i)) r
+  r.batch == 16 && r.count == 0 && r.consumerTail == 16 && carried == List.range' 16 9
+    && !r.full && r'.count == 4087 && r'.full
+
 -- Wrap at the ring's end: both cursors return to 0 and the slots are cleared.
 #guard
   let r : PtrRing Nat := (List.range 1024).foldl (fun r i => r.produce i) (PtrRing.init 1024)

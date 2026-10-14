@@ -190,6 +190,10 @@ def SMP_CACHE_BYTES : Nat := 64
     (`wg_packet_queue_init`) and the bound of a peer's `prev_queue`. -/
 def MAX_QUEUED_PACKETS : Nat := 1024
 
+/-- `MAX_QUEUED_INCOMING_HANDSHAKES` (messages.h:51): the handshake ring's
+    size (`wg_packet_queue_init`, device.c:358-359). -/
+def MAX_QUEUED_INCOMING_HANDSHAKES : Nat := 4096
+
 /-- `struct ptr_ring` (include/linux/ptr_ring.h:30-40) as data (simulation-
     target review, section 4.1): the producer cursor, the consumer head (the
     next valid entry) and tail (the next entry to invalidate), the size, the
@@ -442,8 +446,15 @@ structure Device where
   mac1Key : Key := List.replicate 32 0
   /-- `handshake_queue.last_cpu`, initialized to -1 (queueing.c:31). -/
   handshakeLastCpu : Int := -1
-  /-- `handshake_queue.ring`: queued handshake messages, oldest first. -/
-  handshakeQueue : List (List UInt8 × SkbSource) := []
+  /-- `handshake_queue.ring` (device.c:358-359): a `ptr_ring` of
+      `MAX_QUEUED_INCOMING_HANDSHAKES` slots, batch 16, holding the queued
+      handshake messages with their sources (B1,
+      docs/2026-10-15-design-b1-handshake-ring.md). Produced at
+      `wg_packet_receive` (receive.c:555-560), consumed by the receive worker
+      (:212); its occupancy, cursors and batch rule are the C's, so the full
+      test is physical occupancy, not the count. `wg_stop`'s drain leaves an
+      empty ring's cursors as they are (device.c:130). -/
+  handshakeQueue : PtrRing (List UInt8 × SkbSource) := PtrRing.init MAX_QUEUED_INCOMING_HANDSHAKES
   /-- `handshake_queue_len` (device.h), the atomic counter beside the ring:
       incremented by the producer after a successful produce (receive.c:567)
       and decremented by the worker after each packet (receive.c:215), so it

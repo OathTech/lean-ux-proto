@@ -2246,45 +2246,70 @@ def discardFloodRecords (stop : Nat) (allowed : List Nat) : M Nat := do
     | none => return dropped
   throw (.hidden "flood: the record stream did not drain")
 
-/-- The effect contract of a flood's invalid tail (the review's 3.4): the
-    packets the receive worker drops at the MAC1 check after the leading
-    valids, up to the section's `stop`. Each one runs
-    `wg_receive_handshake_packet` to the MAC check: with the counter at or
-    over the threshold it saves the clock (`under_load_now`, receive.c:115);
-    below it, with `last_under_load` set, it reads the clock for the decay
-    (`birthdate_has_expired`, receive.c:117) and resets `last_under_load` when
-    the decay has expired (:119); then `cond_resched` (`resched_receive`). The
-    contract folds exactly those records, in order, into the new
-    `last_under_load`, from `last` (the value the leading valids left): no
-    other state changes (a dropped packet is freed; `handshake_queue_len` is
-    decremented per packet, to 0 at the drain, which the caller sets). Any
-    other record is a hidden mismatch (a mid-flood injection, or a decay read
-    with no saved time). Returns the new value and whether an under-load read
-    occurred (the flood crossed the threshold). -/
-def floodTailEffect (stop : Nat) (cuts : List Nat) (last : Option Int64) : M (Option Int64 × Bool) := do
+/-- The effect contract of a flood's invalid tail (the review's 3.4; per
+    packet since B1, docs/2026-10-15-design-b1-handshake-ring.md section 5):
+    the `packets` the receive worker drops at the MAC1 check after the
+    leading valids, up to the section's `stop`. Each one runs
+    `wg_receive_handshake_packet` to the MAC check, reading the counter at
+    receive.c:112 as `counter - i` (the leading valids have each decremented
+    it; each tail packet decrements after its own processing): at or over
+    `threshold` it saves the clock (`under_load_now`, :115); below it, with
+    `last_under_load` set, it reads the clock for the decay
+    (`birthdate_has_expired`, :117) and resets `last_under_load` when the
+    decay has expired (:119); below it with the static clear it reads
+    nothing (:116 false). Then `cond_resched` (`resched_receive`), whose
+    yields and the cut sites are the only records between packets. The
+    contract requires exactly the predicted site for each packet, in order,
+    and the section's `stop` right after the last packet's records: a
+    record where none is predicted, a predicted record missing, or any
+    other site is a hidden mismatch (a mid-flood injection, or a ring
+    whose capacity or batch is not the C's). No other state changes (a
+    dropped packet is freed; the ring's consume and the counter's drain are
+    the caller's). Returns the new `last_under_load` and whether an
+    under-load read occurred (the flood crossed the threshold). -/
+def floodTailEffect (stop : Nat) (cuts : List Nat) (last : Option Int64) (packets counter threshold : Nat) :
+    M (Option Int64 × Bool) := do
   let underLoad := (HiddenSite.underLoadNow).info.id
   let decay := (HiddenSite.birthdateExpired).info.id
   let resched := (HiddenSite.reschedReceive).info.id
   let mut last := last
   let mut crossed := false
-  for _ in [0:4000000] do
-    match ← peekHiddenSite with
-    | some s =>
-      if s == stop then return (last, crossed)
-      if s == underLoad then
-        last := some (← hiddenClock64 .underLoadNow)
-        crossed := true
-      else if s == decay then
-        let some saved := last
-          | throw (.hidden "flood: a decay clock read with no saved under-load time (a mid-flood injection)")
+  -- the worker's yields and the cut sites between two packets (bounded by
+  -- the records left: each iteration drops one)
+  let skipBetween : M Unit := do
+    for _ in [0:(← recordsLeft)] do
+      match ← peekHiddenSite with
+      | some s => if s == resched || cuts.contains s then _ ← dropHiddenRecord else return
+      | none => return
+  for i in [0:packets] do
+    skipBetween
+    let read := counter - i   -- `atomic_read(&wg->handshake_queue_len)` (receive.c:112)
+    if read ≥ threshold then
+      match ← peekHiddenSite with
+      | some s =>
+        if s != underLoad then
+          throw (.hidden s!"flood: tail packet {i} at counter {read}: expected the under-load clock read (site {underLoad}), found site {s}")
+      | none => throw (.hidden s!"flood: tail packet {i} at counter {read}: the record stream ended before its under-load clock read")
+      last := some (← hiddenClock64 .underLoadNow)
+      crossed := true
+    else
+      match last with
+      | some saved =>
+        match ← peekHiddenSite with
+        | some s =>
+          if s != decay then
+            throw (.hidden s!"flood: tail packet {i} at counter {read}: expected the decay clock read (site {decay}), found site {s}")
+        | none => throw (.hidden s!"flood: tail packet {i} at counter {read}: the record stream ended before its decay clock read")
         let now ← hiddenClock64 .birthdateExpired
         if saved + 1000000000 ≤ now then last := none   -- wg_birthdate_has_expired(last_under_load, 1), in s64
-      else if s == resched || cuts.contains s then
-        _ ← dropHiddenRecord
-      else
-        throw (.hidden s!"flood: a modeled record (site {s}) inside the discarded flood region (a mid-flood injection)")
-    | none => return (last, crossed)
-  throw (.hidden "flood: the record stream did not drain")
+      | none => pure ()   -- `else if (last_under_load)` false: no clock read
+  skipBetween
+  match ← peekHiddenSite with
+  | some s =>
+    if s != stop then
+      throw (.hidden s!"flood: after the tail's {packets} packets: expected the receive worker's section stop, found site {s} (a mid-flood injection, or a tail the ring did not admit)")
+  | none => throw (.hidden s!"flood: after the tail's {packets} packets: the record stream ended before the receive worker's section stop")
+  return (last, crossed)
 
 def getFile (id : FileId) : M File := do
   match (← getK).files.get? id with

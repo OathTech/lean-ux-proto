@@ -770,7 +770,7 @@ def inject (family port : Nat) (msg : List UInt8) (tos : Nat := 0) (ll : Bool :=
   runCryptWorkers
   let d ← getDev
   requireDrained "the datagram queued"
-    [!d.handshakeQueue.isEmpty, !d.decryptQueue.empty, !d.encryptQueue.empty, !d.txWorkQueue.isEmpty]
+    [!d.handshakeQueue.empty, !d.decryptQueue.empty, !d.encryptQueue.empty, !d.txWorkQueue.isEmpty]
   return msg.length   -- udp_sendmsg returns the datagram's length
 
 /-- `wg_flood` (docs/2026-10-05-e-dos.md §8, E-B v2): the fixture submits an
@@ -778,16 +778,22 @@ def inject (family port : Nat) (msg : List UInt8) (tos : Nat := 0) (ll : Bool :=
     then `count` invalid ones; the whole batch is queued before the single-CPU
     receive worker runs, so the worker sees `handshake_queue_len` at the
     batch's size (over the `under_load` threshold) from its first packet, and
-    one fully-drained section handles the batch. The mirror holds the batch as
-    the C does: the ring with the leading valids, the counter at the batch's
-    size. The leading valids run through the real worker, each with its
-    records. The invalid tail is summarized by `floodTailEffect`'s exact
-    contract (the review's 3.4): its only state effects are the counter's drain
-    and `last_under_load`, folded from the tail's own clock records, which
-    carry the C's choices. A tail record the contract does not cover (a
-    mid-flood injection), a flood that did not cross the threshold, or a
-    section that did not close in this operation (the worker outliving the
-    window) fail closed. The op returns 0 (the submission succeeded). -/
+    one fully-drained section handles the batch. The mirror produces the
+    batch as the C does (B1, docs/2026-10-15-design-b1-handshake-ring.md
+    section 5): every packet through the ring in the C's order, the leading
+    valids first, `__ptr_ring_produce` failing on an occupied slot and the
+    counter counting the successes; so the ring's occupancy, and the
+    counter the worker reads, are the C's. The leading valids run through
+    the real worker, each with its records; the invalid tail is consumed
+    from the ring and summarized by `floodTailEffect`'s per-packet contract
+    (the review's 3.4): its only state effects are the counter's drain and
+    `last_under_load`, folded from the tail's own clock records, which carry
+    the C's choices, each packet's record predicted from the counter it
+    reads; then the worker's final empty poll. A tail record the contract
+    does not predict (a mid-flood injection, a ring whose capacity is not
+    the C's), a flood that did not cross the threshold, or a section that
+    did not close in this operation (the worker outliving the window) fail
+    closed. The op returns 0 (the submission succeeded). -/
 def flood (count port family : Nat) (messages : List (List UInt8)) : M Int := do
   let some d := (← getK).wg | unsupported "a flood to a port other than wg0's (no wg0)"
   if !d.running || port != d.incomingPort then unsupported "a flood to a port other than wg0's"
@@ -818,31 +824,55 @@ def flood (count port family : Nat) (messages : List (List UInt8)) : M Int := do
   -- the flood's family: the fixture sender's v4-mapped destination (wg0 sees
   -- IPv4 from 127.0.0.1) or ::1 (IPv6, the ratelimiter's /64 table)
   let src ← senderSource family 0
+  -- the batch's producer side (wg_packet_receive per datagram, receive.c:552-571),
+  -- in the C's order: the leading valids, then the guest's invalid template
+  -- (148 bytes: type 1, a MAC1 of 0xff) `count` times, each through
+  -- `__ptr_ring_produce` (ptr_ring.h:104-116): an occupied slot drops the
+  -- packet without the counter's increment (:561-567); a success increments
+  -- it. `wg_cpumask_next_online(&last_cpu)` per packet leaves `last_cpu` at
+  -- 0 on this one-CPU kernel. The producers' sections are discarded above.
+  let invalid : List UInt8 := [1] ++ List.replicate 115 0 ++ List.replicate 16 0xff ++ List.replicate 16 0
+  let mut leading := 0
+  for m in messages do
+    if (← getDev).handshakeQueue.full then invariant "a flood's leading valid dropped at a full handshake ring"
+    modifyDev fun d => { d with handshakeQueue := d.handshakeQueue.produce (m, src),
+                                handshakeQueueLen := d.handshakeQueueLen + 1 }
+    leading := leading + 1
+  let mut tail := 0
+  for _ in [0:count] do
+    if !(← getDev).handshakeQueue.full then
+      modifyDev fun d => { d with handshakeQueue := d.handshakeQueue.produce (invalid, src),
+                                  handshakeQueueLen := d.handshakeQueueLen + 1 }
+      tail := tail + 1
+  modifyDev fun d => { d with handshakeLastCpu := 0 }
   if (← get).floodExact then
     -- the unsummarised execution (the pre-release review's section 8): every
-    -- tail packet is the guest's invalid template (148 bytes: type 1, a MAC1
-    -- of 0xff) and runs through the real worker, consuming the records the
+    -- tail packet runs through the real worker, consuming the records the
     -- summary below folds; used to check the summary, not for the claim
-    let invalid : List UInt8 := [1] ++ List.replicate 115 0 ++ List.replicate 16 0xff ++ List.replicate 16 0
-    modifyDev fun d => { d with handshakeQueue := (messages ++ List.replicate count invalid).map (fun m => (m, src)),
-                                handshakeQueueLen := d.handshakeQueueLen + messages.length + count,
-                                handshakeLastCpu := 0 }
     WG.handshakeReceiveWorker (nestedResched .receiveWorker)
     _ ← hidden (.sectionStop .receiveWorker)
     deliverSent
     return 0
-  -- the batch's producer side (wg_packet_receive per datagram, receive.c:567-568):
-  -- the ring and the counter, and `wg_cpumask_next_online(&last_cpu)` per
-  -- packet, which on this one-CPU kernel leaves `last_cpu` at 0
-  modifyDev fun d => { d with handshakeQueue := messages.map (fun m => (m, src)),
-                              handshakeQueueLen := d.handshakeQueueLen + messages.length + count,
-                              handshakeLastCpu := 0 }
-  WG.handshakeReceiveWorker (nestedResched .receiveWorker)
-  -- the invalid tail: its clock records fold into `last_under_load`; the
-  -- counter drains to 0 (every tail packet is dequeued and dropped)
-  let (last, crossed) ← floodTailEffect stopW cuts (← get).lastUnderLoad
+  -- the worker's iterations for the leading valids (receive.c:212-216 per
+  -- packet, the ring's consume and the packet's records), exactly `leading`
+  -- of them: the loop itself would run on into the tail
+  for _ in [0:leading] do
+    if (← workerIter .receiveWorker none WG.receiveStep (do nestedResched .receiveWorker; pure false)) == .ended then
+      invariant "a flood's leading valid is missing from the handshake ring"
+  -- the invalid tail: each packet's clock record predicted from the counter
+  -- it reads, folded into `last_under_load`; then the tail's consumes from
+  -- the ring (the batch rule clears the slots as the C's does) and the
+  -- counter's drain (every tail packet is dequeued and dropped)
+  let (last, crossed) ← floodTailEffect stopW cuts (← get).lastUnderLoad tail
+    (← getDev).handshakeQueueLen (WG.MAX_QUEUED_INCOMING_HANDSHAKES / 8)
+  for _ in [0:tail] do
+    let (item, ring) := (← getDev).handshakeQueue.consume
+    if item.isNone then invariant "a flood's tail packet is missing from the handshake ring"
+    modifyDev fun d => { d with handshakeQueue := ring, handshakeQueueLen := d.handshakeQueueLen - 1 }
   modify fun w => { w with lastUnderLoad := last }
-  modifyDev fun d => { d with handshakeQueueLen := 0 }
+  -- the loop's final poll of the drained ring (`ptr_ring_consume_bh` NULL,
+  -- receive.c:212), where the C has it: after the tail
+  if ← WG.receiveStep then invariant "a flood's handshake ring did not drain"
   _ ← hidden (.sectionStop .receiveWorker)
   if messages.isEmpty && !crossed then
     throw (.hidden "the flood did not cross the under_load threshold (no under_load record)")
