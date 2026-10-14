@@ -17,6 +17,9 @@ for row in json.loads((ROOT / "dependencies/packages.lock.json").read_text()):
     include(".deps/downloads/debs/" + row["filename"], row["sha256"])
 for name in ("sources", "toolchains"):
     for row in json.loads((ROOT / f"dependencies/{name}.lock.json").read_text()):
+        if row.get("consumer") == "binary":
+            print(f"Outside the base bundle: {row['name']}; verified separately by binary/run.py")
+            continue
         include(row["archive"], row["sha256"])
 for row in json.loads((ROOT / "dependencies/documentation.lock.json").read_text()):
     include(row["path"], row["sha256"])

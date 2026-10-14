@@ -617,3 +617,24 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
 - **2026-10-14 [USER]** Rule Zero's canonical form, for every proof charter
   and the standing rules: "(1) the mirror might be wrong, (2) the kernel
   might contain bugs, (3) the former is much more likely than the latter."
+- **2026-10-14 [USER]** The binary-level adequacy of the WireGuard mirror
+  and the transport of its landed results to the binary are the objective
+  of the simulation track; the theorem and its trust surface must be
+  correct and are reviewed independently; everything outside the trust
+  surface is a means, ephemeral unless later promoted: "The eventual
+  adequacy result & transport of wireguard results to the binary, is the
+  only thing that matters. We are going to get it done by any means
+  necessary. The theorem / trust surface MUST MUST be correct. Everything
+  else is ephemeral." The method is a direct per-region grind, not a
+  reusable checker (same day: "we're not building some reusable toolchain,
+  we are proving a single target theorem"). Charter:
+  docs/2026-10-15-charter-binary-adequacy.md.
+- **2026-10-14 [USER]** The direction of discrepancies at the binary level:
+  "the purpose of the verification should be to validate the mirror, and
+  detect discrepancies. Not to conform to mistakes in the mirror. The
+  binary (ie the real kernel) is the source of truth here of course." A
+  region that will not close because the mirror differs from the machine is
+  a mirror defect fixed on the mirror lane; the adequacy theorem's
+  precondition and relation are never narrowed to accommodate one. First
+  instance: the index lookup's dead-peer store (peerlookup.c), found by the
+  grind at milestone 1 [AGENT: the fix on task/index-lookup-fix].
