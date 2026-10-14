@@ -351,28 +351,44 @@ printing to the count), both with the one leading valid of
 | trace | ops | Linux (measured, section 8) | the list mirror | the ring mirror |
 | --- | --- | --- | --- | --- |
 | `e_ring_full` | `wg_create`, `wg_set`, `wg_up`, `wg_flood` count 4096 + 1 leading (4097 sends) | 4096 produced, 1 dropped; the worker's first packet reads the counter at 4096 | 4097 queued: `.hsUnderLoad` operand 4097, the tail contract predicts 4096 packets | 4096, 1 dropped: exact |
-| `e_ring_carry` | …, `wg_flood` 24 + 1 (25 sends), `wg_down`, `wg_up`, `wg_flood` 4087 + 1 (4088 sends) | second flood: 4087 produced, 1 dropped (slots 16 to 24 carried across the down and up) | 4088 queued | 4087, 1 dropped: exact |
+| `e_ring_carry` | …, `wg_flood` 536 + 1 (537 sends), `wg_down`, `wg_up`, `wg_flood` 4087 + 1 (4088 sends) | second flood: 4087 produced, 1 dropped (slots 528 to 536 carried across the down and up) | 4088 queued | 4087, 1 dropped: exact |
 
 The first is the handshake twin of `w7_ring_fresh_1024`; the second of
 `w7_ring_batch_clear` and `w7_ring_wrap` together (the batch rule, the
-wrap and the carry across `wg_stop` in one flood). The first stage is 25,
-not 521: 521 = 9 mod every power of two from 16 to 512, so a 521-packet
-drain carries nine slots at batch 32 as well, while 25 carries nine at
-batch 16 and 25 at every larger batch (4071 produced instead of 4087). The
-`wg_down`/`wg_up` between the stages checks decision 13.4 (no reinit at
-`wg_stop`) differentially at a cost of 0.25 s of the trace budget
-(section 8). The two traces reject a list mirror in two independent ways:
-the operand at `receive.c:112` (`.hsUnderLoad`, the remote comparison
-stream) and the tail's predicted length.
+wrap and the carry across `wg_stop` in one flood). The first stage is 537
+(536 invalid and the leading valid), not 521 and not 25: 521 = 9 mod every
+power of two from 16 to 512, so a 521-packet drain carries nine slots at
+batch 32 as well, while 537 = 33 × 16 + 9 carries nine at batch 16 and 25
+at batch 32 (4071 produced instead of 4087); and 25, the probes' first
+stage, fails in the check for a reason the probes could not show
+(section 8, the build): the comparison child reruns the trace in the
+coverage child's boot, and the kernel-global `last_under_load`
+(receive.c:100) the coverage child's second flood left behind makes a
+below-threshold first packet read the decay clock (:117) in the
+comparison child only, a record the mirror cannot predict. It is the leak
+chunk isolation keeps between traces (`evaluator/check.py`,
+`chunk_traces`), here between the two children of one trace; a first
+stage under load from the queue depth reads the clocks the mirror predicts
+in both children. The `wg_down`/`wg_up` between the stages checks
+decision 13.4 (no reinit at `wg_stop`) differentially at a cost of 0.25 s
+of the trace budget (section 8). The two traces reject a list mirror in
+two independent ways: the operand at `receive.c:112` (`.hsUnderLoad`, the
+remote comparison stream) and the tail's predicted length.
 
 The sentinel set gains one mutant, run once and reported in the commit, then
 kept only if it replaces a weaker sentinel: the batch rule at 1 instead of
 16 on the handshake ring. `e_ring_carry` rejects it: with the batch at 1 the
 first stage leaves no carry, so the second flood of 4088 fits the ring
 whole (4088 produced, none dropped) against Linux's 4087, one tail packet
-too many and the counter 4088 against 4087 at :112. `e_ring_full` does not
-(a fresh ring takes 4096 at any batch). A batch-32 mutant
-(`SMP_CACHE_BYTES` 128) is rejected the same way (4071 against 4087).
+too many (the contract predicts an under-load read where the kernel's
+packet, one counter lower, read the decay clock) and the counter 4088
+against 4087 at :112. `e_ring_full` does not (a fresh ring takes 4096 at
+any batch). A batch-32 mutant (`SMP_CACHE_BYTES` 128) is rejected the same
+way (4071 against 4087). Run once at the build (B1-M1, commit 5fcac3f, s4):
+`e_ring_carry` rejected, `hidden_mismatch`, "operation 6: tail packet 3575
+at counter 512: expected the under-load clock read (site 130), found site
+6" (the mutant's tail runs one counter ahead of the kernel's); `e_ring_full`
+agreed under the mutant; the mutant reverted, not kept.
 
 ## 8. The probes [AGENT, 2026-10-15, Linux only, s4, no mirror]
 
@@ -489,7 +505,11 @@ area at 8 M words, `cmp_block` at the task area's size (or not written for
 the task area), the remote area unchanged, the host's merged comparison
 bound at 3,145,725. Three probes, three limits (the area, the table, the
 host bound), each found by the run that hit it, and the third run clean
-on every axis.
+on every axis. The build then found a fourth thing the probes could not:
+with a 25-packet first stage the check's comparison child, which reruns
+the trace after the coverage child in the same boot, reads a decay clock
+the coverage child's run left armed (section 7); the committed first
+stage is 537, with the same nine carried slots.
 
 ## 9. Out of scope (fail-noisy), and why
 
@@ -678,7 +698,9 @@ Tactical [AGENT], stated for the record:
 5. `MAX_QUEUED_INCOMING_HANDSHAKES` moves to `Types.lean` under its name.
 6. The worker's fuel is the capacity plus one, in every copy (4.2).
 7. The twin traces end at their last flood, and the carry twin's first
-   stage is 25 (section 7).
+   stage is 537, under load, since a below-threshold first stage reads a
+   decay clock the mirror cannot predict in the comparison child (section
+   7).
 
 ## 14. Artifacts
 
@@ -750,8 +772,9 @@ the finding asked, at the section named.
    (`linux.py:585, 726-727`) is added to the change's scope after probe 3
    hit it.
 8. **What the figures support.** Fixed: the batch is now shown by the
-   25-packet first stage (4087, where batch 32 gives 4071) in probe 2 and
-   the `#guard` uses the same number (4.4, section 7); the sections are
+   25-packet first stage (4087, where batch 32 gives 4071) in probes 2 and
+   3 and the `#guard` uses the same number (4.4); the committed trace uses
+   537 for the reason section 7 gives, with the same carry; the sections are
    read as one NET_RX section per send plus one without records, then the
    worker's, and "every send reached `wg_packet_receive`" is marked as
    inferred (section 8); probe 1's big-flood figures are attributed to the
@@ -771,3 +794,40 @@ the finding asked, at the section named.
 13. **`wg_down`/`wg_up` in the carry twin.** Adopted and measured: 0.25 s
     of the budget, and the nine carried slots survive it (sections 7, 8;
     decision 13.4).
+
+## 16. The build [AGENT, fork of the coordinator, 2026-10-15]
+
+On `task/design-b1`, in three commits after the note: 676eee9 (the mirror:
+sections 4 and 5, the fuel in every mirror copy, option B of 4.3, the
+`#guard`), 5fcac3f (the capacity change of section 6 in full, the
+generator and the two traces of section 7, the one-off mutant run once)
+and this note's update. The proof tree is not edited; the copies the
+campaigns repair under the lag rule are the fuel in
+`Leanux/Proofs/Logged/Workers.lean:107-109` on `main` and both campaign
+branches, campaign 1's `Lifetimes/ReceiveWorker.lean:47-49` and
+`Lifetimes/BatchAudit.lean:186-188` and the docstring of
+`LifetimeSafety/Statements.lean:1407-1409`, and the ring's type in the
+frames of section 10.
+
+Two things the build found that the design did not have:
+
+- **The carry twin's first stage is 537, not 25** (section 7): the check's
+  comparison child reruns a trace after the coverage child in the same
+  boot, and `last_under_load` (receive.c:100, kernel-global) stays armed
+  from the coverage child's second flood, so a below-threshold first
+  packet reads the decay clock in the comparison child only. The probes
+  ran each trace once per child too, but with other floods before it in
+  the same boot, which hid the asymmetry. It is the leak chunk isolation
+  already keeps between traces; between the two children of one trace the
+  only exact rule is the trace's construction: the first handshake packet
+  of a trace that will cross the threshold must itself be under load from
+  the queue depth. No kernel or harness change; recorded here as a
+  constraint on under-load corpus traces.
+- **The host's merged comparison bound** (section 6, found by probe 3 and
+  raised at the build).
+
+Validation on the committed tree, on s4 under a loaded box: the five
+unit-test modules 124 OK (1 skipped); the `wireguard` suite 263 traces,
+1798 operations, 263 agreements, no retries, 34 minutes at eight slots
+beside a full check and a sentinel chain (`.artifacts/check/b1-wg-final`,
+ephemeral).
