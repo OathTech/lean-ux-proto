@@ -1,0 +1,31 @@
+{
+ "id": "n6_delete_with_dump_pending",
+ "ops": [
+  {
+   "config": {
+    "listen_port": 51820,
+    "peers": [
+     {
+      "allowed_ips": [
+       {
+        "addr": "0a000000",
+        "cidr": 8,
+        "family": 4
+       }
+      ],
+      "public_key": "2222222222222222222222222222222222222222222222222222222222222222"
+     }
+    ],
+    "private_key": "1111111111111111111111111111111111111111111111111111111111111111"
+   },
+   "op": "wg_set"
+  },
+  {
+   "op": "wg_get_start"
+  },
+  {
+   "op": "wg_delete"
+  }
+ ],
+ "version": 1
+}
