@@ -67,29 +67,38 @@ scripts/in-bundle python3 -B -m unittest \
   harness.test_d1_keys harness.test_d1_keepalive harness.test_linux
 ```
 
-The four-module subset in [AGENTS.md](AGENTS.md) is the fast tier run on every
-commit; the full list above adds the recorded replays and the Noise and
+The five-module line in [AGENTS.md](AGENTS.md) (the evaluation tests, the
+recorded model replays, and the trace, WireGuard and Linux harness tests) is
+the fast tier run on every commit; the full list above adds the Noise and
 keepalive vectors.
 
 ## 3. Build the Linux test kernel
 
 ```sh
-export LEANUX_KERNEL_DIR="$PWD/.artifacts/kernel-net-choice-e2"
+export LEANUX_KERNEL_DIR="$PWD/.artifacts/kernel-net-choice-s2"
 LEANUX_KERNEL_PROFILE=net-choice LEANUX_KERNEL_BUILD="$LEANUX_KERNEL_DIR" \
   scripts/in-bundle scripts/build-kernel
 ```
 
 This extracts a private copy of Linux 6.12.110, applies the pinned
 `choice-stream.patch` (coverage, the recording of hidden inputs, and the
-record of epoll's tree order), and builds the `net-choice` profile with four
+records of epoll's tree order, seccomp's translated program and the
+end-of-wait jiffies; every hook on an existing line, the anchored files keep
+their pristine line counts), and builds the `net-choice` profile with four
 jobs by default (`LEANUX_JOBS` overrides this). It also writes the generated
 configuration to `kernel/config-x86_64-net-choice`; check `git diff` afterwards.
 
 Every check and guest boot computes the build's identity and compares it with
 [`kernel/identity-x86_64-net-choice.txt`](kernel/identity-x86_64-net-choice.txt),
 refusing any other build. The approved build at this revision is the one the
-file names, "e2"; the directory name is a convention, the identity is the
-check. A stock kernel or an older project kernel cannot substitute for it. To
+file names: identity
+`cea1e9a3a5e2a55782008594d9ff5e9bc7bcfe5348258ac92bf07f87e1875295`
+(the directory `kernel-net-choice-s2` by convention; the identity is the
+check), with the control twin
+`04432df82a517ecb023b029c5e29efd6dc9351124e8d9fbfba4d274a74ee5f75`.
+The timer-input record of the pre-release review's finding 2 replaces the
+pair with `kernel-net-choice-s3` and a new identity (after the finding-2 fix
+on task/review-timer); the file, not this sentence, is the authority. A stock kernel or an older project kernel cannot substitute for it. To
 reuse an existing matching build, skip the build command and set
 `LEANUX_KERNEL_DIR` to its absolute path inside a checkout's `.artifacts/`
 (the current worktree or its main checkout). The negative-control suites use
@@ -114,9 +123,13 @@ scripts/in-bundle python3 -m evaluator.check
 The checker builds the model automatically. `--no-build` reuses a build only
 if it is up to date. `--suite` accepts a comma-separated list: `handwritten`,
 `critic`, `wireguard`, `alloc`, `generated`, `wireguard-generated`, `pipes`,
-`pipes-generated`, `epoll`, `epoll-generated`. Generated cases use a fixed
-default seed; `--generated-count`, `--wireguard-count`, `--pipes-count` and
-`--epoll-count` set their sizes. Use `--trace ID` with the relevant suite to
+`pipes-generated`, `epoll`, `epoll-generated`, `seccomp`, `seccomp-generated`,
+and `w7-tier` (the full-ring tier, outside the default list). Generated cases
+use a fixed default seed; `--generated-count`, `--wireguard-count`,
+`--pipes-count`, `--epoll-count` and `--seccomp-count` set their sizes. The
+generated suites are filtered by the model's own domain before selection;
+the report carries the candidate and selected counts with the rejection
+reasons (after the finding-3 fix on task/review-checker). Use `--trace ID` with the relevant suite to
 replay one case.
 
 A passing run exits 0 and writes `"status": "pass"` in
@@ -149,9 +162,10 @@ scripts/in-bundle scripts/proof-gate
 ```
 
 The gate builds the target, prints the axioms of every statement in each
-result's `Statements.lean` and fails unless each set is exactly `propext`,
-`Classical.choice` and `Quot.sound`, then scans the tree for admissions and
+result's `Statements.lean` and fails on any axiom beyond `propext`,
+`Classical.choice` and `Quot.sound` (a statement may use fewer), then scans the tree for admissions and
 unsafe constructs and checks that nothing outside the tree imports it. It
 ends with `proof gate: PASS` and exit status 0. The map of the tree, the
-register of results and the mirror commit each holds over are in
-[docs/proofs.md](docs/proofs.md).
+register of results, the mirror commit each holds over and whether it is
+current or lagging at this revision, and the result table (claim, theorem,
+boundary, premises, counterexample) are in [docs/proofs.md](docs/proofs.md).

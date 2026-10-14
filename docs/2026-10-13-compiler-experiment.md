@@ -1,4 +1,11 @@
-# The compiler experiment: what in the correspondence is the C, and what is GCC at -O2
+# The compiler experiment: witness-location stability across two optimisation levels
+
+> Units and a correction [AGENT, 2026-10-14, after the pre-release review §9]:
+> this document counts decision *outcomes* (2764, of which 1465 carry a span)
+> and comparison *sites* (320). The integration record of 2026-10-13
+> (`f45bde8`) wrote "969 of 1382 decisions" where the unit is outcomes. The
+> result is stability of where the instrumentation lands across two builds of
+> the same GCC; it is compiler evidence, not evidence about the C's semantics.
 
 [AGENT, fork of the coordinator, 2026-10-13] under the user's direction of
 2026-10-13 (fidelity, audits and census gaps while the proof campaign runs).
@@ -55,7 +62,9 @@ dynamic questions, operand order and value, remain unmeasured.
 
 `correspondence/kcov.json` lists 226 functions. They are the symbols of the
 -O2 image whose bodies the checker disassembles; the functions inlined into
-them are reached through DWARF frames and are not listed.
+them are reached through DWARF frames and are not listed. The list, and
+every table in this section, is build-bound: it describes the -O2 image's
+symbols, and a second build gets its own.
 
 | | count | names |
 | --- | --- | --- |
@@ -140,7 +149,8 @@ Folded or moved at -Os (-O2 only): `bpf_convert_filter.emit_jf_zero.target_over_
 (send.c:133), `keep_key_fresh.rx_birthdate_expired` (receive.c:231),
 `timespec64_equal.nsec` and `.sec` (time64.h:49).
 
-Shared exits: of the seven declared frame chains, only `ep_modify`'s
+Shared exits (build-bound declarations: each names a frame chain of the
+-O2 image): of the seven declared frame chains, only `ep_modify`'s
 (`fs/eventpoll.c:1979 < :2604`) exists at -Os. `file_end_write`,
 `__file_update_time`, `bpf_migrate_filter`, `seccomp_get_notif_sizes`,
 `fdput` and `ep_register_epitem` name no point: the merged return blocks
@@ -177,9 +187,12 @@ had the harness accepted the boot.
 | (3) observation disagreement | not measurable (no -Os observation obtainable) | — |
 
 What survives both levels, 969 witnessed outcomes and 311 comparison sites,
-is the correspondence's C-semantics core as far as a static measurement can
-tell. The unmeasured residue is the operand order and value at the 311
-sites, which needs a run.
+is witness-location stability: the declared lines own a hook in both images
+of the same GCC 13.3.0. That is evidence about where the instrumentation
+lands, not about the C's semantics; the C-source reasoning for a declaration
+is the audit and the design document that declared it, and no dynamic
+evidence (operand order and value at the 311 sites, the outcomes taken)
+was obtained at -Os, since no observation of that image exists.
 
 ## 6. Recommendation
 
@@ -201,11 +214,15 @@ explicit:
    recorded per kernel identity in the identity file rather than as one
    number, since they are properties of the image.
 
-For the simulation proof the useful statement is the inverse of the
-experiment's: every declaration in the 969/311 core is a fact about the C
-that two compilations agree on, and the 12 + 6 + 32 + the six shared exits
-are the places where the proof must not rely on the correspondence's
-witness, only on the C.
+For the simulation proof the useful statement is narrower than a semantic
+one: the 969 outcomes and 311 sites are where two optimisation levels of one
+compiler agree on the witness location, a property of the builds that says
+nothing by itself about the C; the 12 + 6 + 32 outcomes and the six shared
+exits are where the correspondence's witness is demonstrably build-bound,
+so a proof must rely on the C alone there, and it should rely on the C
+rather than the witness everywhere else too. Two dynamic builds would test
+more implementations; they would not upgrade the correspondence to a
+simulation theorem.
 
 ## 7. Reproduction and leftovers
 
