@@ -316,8 +316,8 @@ theorem makeCookie_spec (P : Snapshot → Prop) (src : SkbSource) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.makeCookie src
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (makeCookie_sameSnapshot src).wp P
 
-theorem netDevices_sameSnapshot  : SameSnapshot (Leanux.WG.netDevices ) := by
-  frame_same [Leanux.WG.netDevices] using []
+theorem netDevices_sameSnapshot  : SameSnapshot (Leanux.WG.netDevices ) :=
+  sameSnapshot_of_sameKernel Framing.netDevices_sameKernel
 
 theorem netDevices_spec (P : Snapshot → Prop)  :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.netDevices
@@ -445,8 +445,8 @@ theorem inetEcnSet_spec (P : Snapshot → Prop) (ce : Bool) (protocol : Nat) (by
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.inetEcnSet ce protocol bytes
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (inetEcnSet_sameSnapshot ce protocol bytes).wp P
 
-theorem lookupInterface_sameSnapshot (ref : DeviceRef) : SameSnapshot (Leanux.WG.lookupInterface ref) := by
-  frame_same [Leanux.WG.lookupInterface] using [netDevices_spec]
+theorem lookupInterface_sameSnapshot (ref : DeviceRef) : SameSnapshot (Leanux.WG.lookupInterface ref) :=
+  sameSnapshot_of_sameKernel (Framing.lookupInterface_sameKernel ref)
 
 theorem lookupInterface_spec (P : Snapshot → Prop) (ref : DeviceRef) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.lookupInterface ref

@@ -3,6 +3,7 @@ import Leanux.Proofs.Framing.WGTime
 import Leanux.Proofs.Framing.WGIndex
 import Leanux.Proofs.Framing.WGAllowedIpsInsert
 import Leanux.Proofs.Framing.WGSocketLifecycle
+import Leanux.Proofs.Framing.WGConfiguration
 
 set_option pp.structureInstances false
 set_option maxHeartbeats 800000
@@ -35,6 +36,12 @@ theorem sameSnapshot_of_sameSocketKernel (h : Framing.SameSocketKernel a) : Same
   simpa [snapshot, Framing.socketKernelView, Framing.socketKernel,
     Framing.socketDevice, Option.bind_map, Function.comp_def] using hf
 
+
+theorem sameSnapshot_of_sameConfiguration (h : Framing.SameConfiguration a) : SameSnapshot a := by
+  intro w x v hr
+  have hf := congrArg (fun k => snapshot {w with k}) (h w x v hr)
+  simpa [snapshot, Framing.configurationView, Framing.configurationKernel,
+    Framing.configurationDevice, Option.bind_map, Function.comp_def] using hf
 
 theorem AipNode_bitAt_sameSnapshot (n : AipNode) (i : Nat) : SameSnapshot (Leanux.WG.AipNode.bitAt n i) := by
   exact sameSnapshot_of_sameKernel (Framing.aipBitAt_sameKernel n i)
@@ -279,8 +286,8 @@ theorem allocNode_spec (P : Snapshot → Prop) (site : AllocSite) (n : AipNode) 
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.allocNode site n
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (allocNode_sameSnapshot site n).wp P
 
-theorem cookiePrecomputeDeviceKeys_sameSnapshot  : SameSnapshot (Leanux.WG.cookiePrecomputeDeviceKeys ) := by
-  frame_same [Leanux.WG.cookiePrecomputeDeviceKeys] using [getDev_spec]
+theorem cookiePrecomputeDeviceKeys_sameSnapshot  : SameSnapshot (Leanux.WG.cookiePrecomputeDeviceKeys ) :=
+  sameSnapshot_of_sameConfiguration Framing.cookiePrecomputeDeviceKeys_sameConfiguration
 
 theorem cookiePrecomputeDeviceKeys_spec (P : Snapshot → Prop)  :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.cookiePrecomputeDeviceKeys
@@ -578,8 +585,8 @@ theorem setPeerEndpoint_spec (P : Snapshot → Prop) (pid : PeerId) (e : Endpoin
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.setPeerEndpoint pid e
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (setPeerEndpoint_sameSnapshot pid e).wp P
 
-theorem setStaticIdentityPrivateKey_sameSnapshot (privateKey : Key) : SameSnapshot (Leanux.WG.setStaticIdentityPrivateKey privateKey) := by
-  frame_same [Leanux.WG.setStaticIdentityPrivateKey] using [generatePublic_spec, getDev_spec, requireNotPending_spec]
+theorem setStaticIdentityPrivateKey_sameSnapshot (privateKey : Key) : SameSnapshot (Leanux.WG.setStaticIdentityPrivateKey privateKey) :=
+  sameSnapshot_of_sameConfiguration (Framing.setStaticIdentityPrivateKey_sameConfiguration privateKey)
 
 theorem setStaticIdentityPrivateKey_spec (P : Snapshot → Prop) (privateKey : Key) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.setStaticIdentityPrivateKey privateKey

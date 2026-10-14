@@ -14,22 +14,23 @@ retains current architecture, findings, reproduction provenance, effort and limi
 | Result | Current disposition |
 | --- | --- |
 | R1 | Uniqueness and the intentional inclusive-floor correction are proved, with pure and accepted-run witnesses. |
-| R2 | Endpoint identity and failure-retaining access contracts cover the listed families, concrete Batch scheduling and isolated trials. The six-export add/insert and setPort/setAllowedip/setPeerCmd extension passes scoped/full and coordinated validation and independent frozen source/documentation review. The new local strong-FS extension has three exports; scoped/full and coordinated validation and independent frozen source/documentation review pass. Earlier lifecycle components passed the preceding coordinated checkpoint. Initialized whole-run allocation-identity access closure remains open; raw-reference affiliation/credit is a separate stronger property. |
+| R2 | Endpoint identity and failure-retaining access contracts cover the listed families, concrete Batch scheduling and isolated trials. Complete wgSetDevice now joins the existing grouped configuration contracts with concrete AllocationInv discharge. Component/scoped/full targets pass 178/246/386 jobs; independent frozen source/documentation review is clear. Coordinated validation passes on the final frozen files. Initialized whole-run allocation-identity access closure remains open; raw-reference affiliation/credit is a separate stronger property. |
 | R3 | Initialized finite normal call histories refine flat-prefix updates and reached-root lookup, including full normal clear. Four new completion-journal exports cover whole setAllowedip calls and the actual peer-configuration tail, with concrete send/cleanup frames and safe completed prefixes on Stop. Scoped/full targets, independent frozen review and coordinated validation pass. Enclosing configuration/Runner closure and packet paths remain open. |
 | R4 | Physical rings, finite/source journals, per-poll provenance and selected GRO order, and concrete RX scheduling are checked. The balanced lookup/release extension passes coordinated validation. The six-export W7 joint-observer/source-cut extension passes coordinated validation. Five further normal endpoint exports pass scoped/full and coordinated validation and independent frozen review. Accepted input refutes chronological post-GRO order. Joint pipeline conservation remains open. |
 | R5 | The unconditional age/post-zero and wire-nonce readings are false in accepted mirror inputs. Rule Zero resolution retains thirteen positive local contracts, without universal replacement transport claims. |
 | R6 | Cookie exclusion is proved at its original call boundary. A 19-retry/20-initiation episode refutes literal MAX=18; no universal corrected retry bound is claimed. |
 
-**Validation status.** The current coordinated checkpoint passes 382 jobs and
-393 terminal declarations: 391 theorems
-and two definitions (ReplayWindow 15; R1 9; R2 185; R3 86; R4 79; R5 13; R6 6).
-The new four-export R3 completion-journal/tail extension passes scoped/full targets
-of 210/382 jobs; independent frozen review has no unresolved finding. The proof
-gate reports only `propext`, `Classical.choice` and `Quot.sound`. Fresh stock
-kernel replay, the 60-job default build and 114 unit tests (21.939 seconds, one
-skip) pass sequentially. All seven frozen Lean hashes are unchanged and the mirror
-remains byte-identical to `c047e64`. These checks include the earlier R2/R3/R4
-components; per-tranche measurements remain below.
+**Validation status.** The current coordinated checkpoint passes 386 jobs and
+393 terminal declarations: 391 theorems and two definitions (ReplayWindow 15;
+R1 9; R2 185; R3 86; R4 79; R5 13; R6 6). Complete wgSetDevice extends the existing
+three grouped configuration exports, with component/scoped/full targets of
+178/246/386 jobs and no unresolved independent review finding. The proof gate
+reports only `propext`, `Classical.choice` and `Quot.sound`. Fresh stock kernel
+replay, the 60-job default build and 114 unit tests (23.641 seconds, one skip)
+pass sequentially. All eight frozen Lean hashes are unchanged, including the
+final whitespace repair, and the mirror remains byte-identical to `c047e64`.
+These checks include the earlier R2/R3/R4 components; per-tranche measurements
+remain below.
 The preceding `c047e64` carry's 118-job executable build and eleven reproduction
 checks remain applicable to unchanged runtime; they were not rerun for proof-only
 extensions. Frozen reviews have no unresolved defect in the checked components;
@@ -158,6 +159,7 @@ execution; lifted helper coverage is separately checked against source.
 | `DeviceControls` | [AGENT 2026-10-14] Compose eight original socket/device controls using a full-Kernel mask of only socket labels/incoming port and legacy frame projections. Separate source inspection justifies access-free socket lifts; saved-ID loops retain actual peer accesses, negative-return cleanup and Stop prefixes. Concrete allocation safety needs no list-validity, progress or credit assumption. |
 | `DeviceCreation`/`DeviceRetirement`/`DeviceLifecycle` | [AGENT 2026-10-14] Observe guarded creation as one resident-access-free action and prove its normal allocation endpoint, avoiding an invariant at provisional epoch 0. At the original final `wg := none`, append logical releases from every actual pre-drop resident map, with packet stamps `(ifindex, id + 1)`; this accounts for store retirement, not per-object kernel frees or reference credits. Compose complete destruction/deletion with exact socket/peer-removal prefixes and queue-guard Stops. |
 | Insertion and peer configuration | [AGENT 2026-10-14] Give insertion a separate node-allocation mask permitting `nextNode` changes while retaining full tracked residents/frontiers and the stricter removal frame. Share literal peer-configuration source stages below lifetime/routing imports; compose complete add/insert, setPort/setAllowedip/setPeerCmd with saved-peer writes, ordinary-negative cleanup and safe failed prefixes, without routing or attribute-validity premises. |
+| Device configuration | [AGENT 2026-10-14] Share literal device-configuration continuations below the proof layers; use a full-Kernel mask for only identity/cookie-key/generation/fwmark updates and focus the existing precomputation observer. Extend the existing configuration family to complete wgSetDevice, preserving saved-ID loops, generation-before-error, put-before-remove and ordinary-return zero-key cleanup; concrete allocation safety needs no routing, attribute-validity or reference-credit assumption. |
 | Local filesystem frame migration | [AGENT 2026-10-14] Prove original Wait/Pipe/PipeRead operations once over the complete WG kernel view and project the legacy contracts, retaining weak wait-IH signatures, exact source aliases and pipe geometry/progress. Source inspection separately justifies six access-free lifts; normal frames transport AllocationInv, while exact lifts retain all incoming history and original Stops. This avoids duplicate operational proofs and does not claim whole-FS or outer-run closure. |
 
 [AGENT 2026-10-13] Separate identity from saved-reference ownership, share frontier
@@ -246,12 +248,13 @@ python3 -B docs/proof-campaign-replay.py r2-stale-dump-cursor-orphan |
 ```
 
 **Remaining obligations.** Initialized outer runners/deferred-unit callers,
-timer firing, complete wgSetDevice, dumps and remaining resident scans are open.
+timer firing, dumps and remaining resident scans are open.
 The ordinary FS dependency still needs strong FSBase, Eventpoll/EventpollCalls and
 FS-dispatch composition, followed by actual syscall-tail task work. Local wait/pipe
 frames do not establish scheduler preservation or failed-World invariants.
-The next configuration bridge needs canonical device-identity/cookie-key/lookup
-frames and focused precompute transport before enclosing syscall composition.
+Complete local wgSetDevice now includes canonical device-identity/cookie-key/lookup
+frames and focused precompute transport; the Netlink socket wrappers, dumps and
+actual syscall postworkers remain to be composed.
 The three original WG lifecycle calls now cover actual final store retirement
 locally; their enclosing environment and initialized Runner composition remain open. Saved scalar
 affiliation and reference credits are stronger separate properties:
@@ -283,6 +286,7 @@ replays and both current rejection checks each took under one second.
 | Device creation/destruction/deletion | 14: 2 / 12 | 18m58s from grant 11:42:06 through full-target collection at 12:01:04; 22m43s total token ownership. Scoped/full targets 233/362, R2 176 exports. Twelve ordinary elaboration/normalization failures, no cap/interruption; all exits collected. Independent frozen review and coordinated gate, fresh kernel replay, default build and 114 unit tests pass. The coordinator mistakenly overlapped the cached default build (0.033s) with kernel replay; both were capped and both exits collected, then serial validation resumed. |
 | Insertion and peer configuration | 18: 8 / 10 (17 builds: 7 / 10; one passing scope/census check) | 33m38s from grant 13:02:01 through final full-result measurement 13:35:39; 36m19s ownership through handback 13:38:20. Scoped/full targets 238/372; R2 182 exports, total 386 declarations. The insertion-only full checkpoint passed 369 jobs before configuration. One invocation hit deterministic heartbeat limits in monolithic peer-command proofs; source stages replaced that proof shape. Nine other invocations failed ordinary elaboration/normalization. No cap/interruption, all exits collected; independent frozen source/documentation review clear. Coordinated gate, fresh kernel replay, default build and 114 unit tests pass sequentially; frozen Lean hashes unchanged. |
 | Local strong-FS frames and lifts | 6 calls: 5 builds (4 / 1) and one passing scope/census check | 16m52s from grant 13:44:39 through full-result collection at 14:01:31; 19m31s ownership through handback 14:04:10. Compatibility/scoped/full targets 90/242/376. One ordinary migration failure truncated the legacy iterator-count statement and omitted arithmetic hypothesis arguments; independent review found the same statement issue. Both were restored without changing the API. No cap/interruption, all exits collected. Three grouped exports over six original calls; independent frozen source/documentation review clear. Coordinated gate, fresh kernel replay, default build and 114 unit tests pass sequentially; frozen Lean hashes unchanged. |
+| Complete device configuration | 9 calls: 7 builds (3 PASS / 4 ordinary FAIL), then two scoped checks (FAIL / PASS) | 20m51s from grant 14:39:57 through full-result collection 15:00:48; 24m55s ownership through handback 15:03:52. Component/scoped/full targets 178/246/386. Four ordinary elaboration/normalization failures; the first scoped check failed on four trailing spaces, corrected before the passing scope/census check. Those whitespace-only changes postdated the worker full build and pass the coordinated rebuild. No cap/interruption; all exits collected. Existing three grouped exports extended, retaining 185 R2 / 393 total declarations. Independent frozen source/documentation review is clear; its Markdown effort-table separator finding is fixed. Coordinated gate, fresh kernel replay, default build and 114 unit tests pass sequentially; all eight frozen Lean hashes are unchanged. A separate seven-minute source-coverage audit of the committed R2 foundation found no defect in its inspected local contracts. No runtime change or replay. |
 
 Earlier monolithic IPv4 proof search failed at heartbeat limits; explicit source
 tails replaced it. An earlier tactic loop was deliberately stopped by its verified

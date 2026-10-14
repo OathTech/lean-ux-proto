@@ -369,40 +369,4 @@ theorem setPeerCmdPrefix_preserves (c : AmbientContracts I) (r : ConfigurationPe
     | (with_reducible split)
   all_goals simp_all
 
-inductive ConfigurationCall where
-  | port (port : Nat)
-  | allowedIp (pid : PeerId) (attrs : AllowedIpAttrs)
-  | peer (attrs : PeerAttrs)
-
-namespace ConfigurationCall
-
-def original : ConfigurationCall → M Int
-  | .port p => setPort p
-  | .allowedIp pid attrs => setAllowedip pid attrs
-  | .peer attrs => setPeerCmd attrs
-
-def observed : ConfigurationCall → MixedM Int
-  | .port p => setPortPrefix p
-  | .allowedIp pid attrs => setAllowedipPrefix pid attrs
-  | .peer attrs => setPeerCmdPrefix attrs
-
-theorem erases (call : ConfigurationCall) : ErasesPrefix call.observed call.original := by
-  cases call with
-  | port port => exact setPortPrefix_erases port
-  | allowedIp pid attrs => exact setAllowedipPrefix_erases pid attrs
-  | peer attrs => exact setPeerCmdPrefix_erases attrs
-
-theorem preserves_ambient (c : AmbientContracts I) (hs : SocketControlStable I)
-    (r : ConfigurationPeerContracts I) (call : ConfigurationCall) :
-    PrefixPreserves I LifetimeEvent.Safe call.observed := by
-  cases call with
-  | port port => exact setPortPrefix_preserves c hs port
-  | allowedIp pid attrs => exact setAllowedipPrefix_preserves c r.nodes pid attrs
-  | peer attrs => exact setPeerCmdPrefix_preserves c r attrs
-
-theorem allocation (call : ConfigurationCall) :
-    PrefixPreserves AllocationInv LifetimeEvent.Safe call.observed :=
-  call.preserves_ambient allocationAmbient allocationSocketControlStable allocationConfigurationPeer
-
-end ConfigurationCall
 end Leanux.Proofs.WG.Lifetimes

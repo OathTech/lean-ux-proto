@@ -5,7 +5,7 @@ import Leanux.Proofs.WG.Lifetimes.DeviceLifecycle
 import Leanux.Proofs.WG.Lifetimes.TimerCallbacks
 import Leanux.Proofs.WG.Lifetimes.AllowedIpsAccess
 import Leanux.Proofs.WG.Lifetimes.AllowedIpsInsert
-import Leanux.Proofs.WG.Lifetimes.ConfigurationPeer
+import Leanux.Proofs.WG.Lifetimes.ConfigurationDevice
 import Leanux.Proofs.WG.Lifetimes.BatchCalls
 import Leanux.Proofs.WG.Lifetimes.ReceiveIngress
 import Leanux.Proofs.WG.Lifetimes.SocketCalls
@@ -1668,25 +1668,28 @@ correctness, Netlink/environment composition or initialized whole-run closure. -
 theorem allowed_ip_insertion_family_allocation_access_preserves (call : Lifetimes.AllowedIpsInsertCall) :
     PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed := call.allocation
 
-/-- Original setPort, setAllowedip and complete setPeerCmd retain their exact
+/-- Original setPort, setAllowedip, setPeerCmd and complete wgSetDevice retain their exact
 result, successful World and Stop on arbitrary input Worlds and attributes.
 Saved-ID loops, short-circuit attribute records and ordinary-return cleanup keep
-source order. The keepalive setter observes the saved peer without a new getter. -/
+source order. The keepalive setter observes the saved peer without a new getter. Device
+configuration preserves generation-before-error, put-before-remove and every
+short-circuit key-installation/zero-key record. -/
 theorem configuration_family_access_erasure (call : Lifetimes.ConfigurationCall) :
     ErasesPrefix call.observed call.original := call.erases
 
-/-- Explicit socket, trie-allocation, peer creation/removal and TX contracts
+/-- Explicit socket, trie-allocation, peer creation/removal, device configuration,
+focused precomputation, index removal and TX contracts
 compose the configuration family. A negative return preserves prior mutations
 and reaches its original cleanup; a Stop retains the reached access prefix.
 No valid-attributes, represented-tree, owner-affiliation or queue-progress
 premise replaces a source access. -/
 theorem configuration_family_ambient_access_preserves (c : Lifetimes.AmbientContracts I)
     (hs : Lifetimes.SocketControlStable I) (r : Lifetimes.ConfigurationPeerContracts I)
-    (call : Lifetimes.ConfigurationCall) :
-    PrefixPreserves I Lifetimes.LifetimeEvent.Safe call.observed := call.preserves_ambient c hs r
+    (d : Lifetimes.ConfigurationDeviceContracts I) (call : Lifetimes.ConfigurationCall) :
+    PrefixPreserves I Lifetimes.LifetimeEvent.Safe call.observed := call.preserves_ambient c hs r d
 
-/-- Concrete allocation geometry discharges all three configuration calls and
-their failed access prefixes. Complete wgSetDevice, dumps, syscall tails and
+/-- Concrete allocation geometry discharges all four configuration calls and
+their failed access prefixes. Dumps, syscall tails and
 initialized whole-run environment/Runner composition remain separate work. -/
 theorem configuration_family_allocation_access_preserves (call : Lifetimes.ConfigurationCall) :
     PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed := call.allocation
