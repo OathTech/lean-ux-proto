@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.Lifetimes.PeerRemoval
 import Leanux.Proofs.WG.Lifetimes.DeviceControls
+import Leanux.Proofs.WG.Lifetimes.DeviceLifecycle
 import Leanux.Proofs.WG.Lifetimes.TimerCallbacks
 import Leanux.Proofs.WG.Lifetimes.AllowedIpsAccess
 import Leanux.Proofs.WG.Lifetimes.BatchCalls
@@ -1600,10 +1601,47 @@ theorem device_control_family_ambient_access_preserves (c : Lifetimes.AmbientCon
     PrefixPreserves I Lifetimes.LifetimeEvent.Safe call.observed := call.preserves_ambient c r
 
 /-- Concrete allocation geometry discharges all eight controls and keeps the
-actual failed access prefixes. Device creation/destruction, timer firing,
-Netlink/environment and initialized whole-run composition remain separate;
+actual failed access prefixes. Timer firing, Netlink/environment and initialized whole-run composition remain separate;
 reference affiliation is a stronger property, not a premise of this contract. -/
 theorem device_control_family_allocation_access_preserves (call : Lifetimes.DeviceControlCall) :
     PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed := call.allocation
+
+/-- Complete guarded create, destruction and deletion retain the original
+result, successful World and Stop for arbitrary inputs. Destruction records the
+actual residual-store retirement at the final device drop, preserving all prior
+accesses and failures. Creation has no resident-object accesses to omit. -/
+theorem device_lifecycle_family_access_erasure (call : Lifetimes.DeviceLifecycleCall) :
+    ErasesPrefix call.observed call.original := call.erases
+
+/-- Explicit device-control, scalar initialization, ratelimiter and retirement
+contracts compose the lifecycle family for an ambient invariant. These contracts
+are discharged concretely below; no queue-emptiness-to-store-emptiness or
+reference-credit assumption replaces the actual final maps. -/
+theorem device_lifecycle_family_ambient_access_preserves (c : Lifetimes.AmbientContracts I)
+    (r : Lifetimes.DeviceLifecycleContracts I) (call : Lifetimes.DeviceLifecycleCall) :
+    PrefixPreserves I Lifetimes.LifetimeEvent.Safe call.observed := call.preserves_ambient c r
+
+/-- Concrete allocation identity safety covers all three original lifecycle
+calls and their failed access prefixes. Successful creation registers a fresh
+empty epoch without requiring the invariant at provisional setup. Netlink, timer
+firing and initialized enclosing environment/Runner composition remain open. -/
+theorem device_lifecycle_family_allocation_access_preserves (call : Lifetimes.DeviceLifecycleCall) :
+    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed := call.allocation
+
+/-- The final original device-store drop appends exactly the releases of its
+actual resident maps, including both packet kinds with `(ifindex,id+1)` stamps.
+This is logical store retirement, not a claim of individual kernel frees or
+reference-credit ownership. Arbitrary incoming histories are retained exactly. -/
+theorem device_retirement_actual_maps (w : World) (h : List Lifetimes.LifetimeEvent) :
+    runPrefix Lifetimes.dropDevicePrefix w h =
+      (.ok ((), Lifetimes.deviceDropped w), h ++ Lifetimes.deviceRetirementEvents w) ∧
+    (∀ i stamp, .peer (.release i stamp) ∈ Lifetimes.deviceRetirementEvents w ↔
+      (Peers.snapshot w).slots i = some stamp) ∧
+    (∀ i stamp, .keypair (.release i stamp) ∈ Lifetimes.deviceRetirementEvents w ↔
+      Lifetimes.keypairResidents w i = some stamp) ∧
+    (∀ i stamp, .packet (.release i stamp) ∈ Lifetimes.deviceRetirementEvents w ↔
+      Lifetimes.packetResidents w i = some stamp) :=
+  ⟨Lifetimes.dropDevicePrefix_run w h, Lifetimes.deviceRetirementEvents_peer w,
+    Lifetimes.deviceRetirementEvents_key w, Lifetimes.deviceRetirementEvents_packet w⟩
 
 end Leanux.Proofs.WG.LifetimeSafety

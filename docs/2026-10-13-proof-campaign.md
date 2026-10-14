@@ -14,20 +14,22 @@ retains current architecture, findings, reproduction provenance, effort and limi
 | Result | Current disposition |
 | --- | --- |
 | R1 | Uniqueness and the intentional inclusive-floor correction are proved, with pure and accepted-run witnesses. |
-| R2 | Endpoint identity and failure-retaining access contracts cover the listed families, concrete Batch scheduling and isolated trials. The socket/device control extension passes scoped and coordinated validation and independent review. Initialized whole-run allocation-identity access closure remains open; raw-reference affiliation/credit is a separate stronger property. |
+| R2 | Endpoint identity and failure-retaining access contracts cover the listed families, concrete Batch scheduling and isolated trials. The four-export create/destruct/delete extension passes scoped/full and coordinated validation and independent frozen review, including the earlier socket/device controls. Initialized whole-run allocation-identity access closure remains open; raw-reference affiliation/credit is a separate stronger property. |
 | R3 | Initialized finite normal call histories refine flat-prefix updates and reached-root lookup. The new local parser/guard bridge and normal root-list-clear contract pass scoped/full and coordinated validation and independent frozen review. Complete WG.free/clear-history, enclosing configuration/Runner closure and packet paths remain open. |
 | R4 | Physical rings, finite/source journals, per-poll provenance and selected GRO order, and concrete RX scheduling are checked. The balanced lookup/release extension passes coordinated validation. The six-export W7 joint-observer/source-cut extension passes scoped/full and coordinated validation and independent frozen review. Accepted input refutes chronological post-GRO order. Joint pipeline conservation remains open. |
 | R5 | The unconditional age/post-zero and wire-nonce readings are false in accepted mirror inputs. Rule Zero resolution retains thirteen positive local contracts, without universal replacement transport claims. |
 | R6 | Cookie exclusion is proved at its original call boundary. A 19-retry/20-initiation episode refutes literal MAX=18; no universal corrected retry bound is claimed. |
 
-**Validation status.** The current coordinated checkpoint passes 358 jobs and
-369 terminal declarations: 367 theorems and two definitions (ReplayWindow 15;
-R1 9; R2 172; R3 80; R4 74; R5 13; R6 6), using only `propext`,
+**Validation status.** The current coordinated checkpoint passes 362 jobs and
+373 terminal declarations: 371 theorems and two definitions (ReplayWindow 15;
+R1 9; R2 176; R3 80; R4 74; R5 13; R6 6), using only `propext`,
 `Classical.choice` and `Quot.sound`. Fresh stock kernel replay, the 60-job
-default build and 114 unit tests (22.314 seconds, one skip) also pass.
+default build and 114 unit tests (22.530 seconds, one skip) also pass.
 The three-export R3 parser/guard/root-list-clear extension passes scoped/full
 targets of 154/358 jobs and independent frozen review, with no unresolved finding.
-These coordinated checks also cover the earlier R2/R3/R4 components, including
+The four-export R2 lifecycle extension passes local scoped/full targets of
+233/362 jobs and independent frozen review, with no unresolved finding.
+These coordinated checks cover the earlier R2/R3/R4 components, including
 the six-export W7 joint observer, over mirror `c047e64`.
 The preceding `c047e64` carry's 118-job executable build and eleven reproduction
 checks remain applicable to unchanged runtime; they were not rerun for proof-only
@@ -155,6 +157,7 @@ execution; lifted helper coverage is separately checked against source.
 | `BatchTrials`, `BatchCalls` | `scheduler_family_access_erasure`, `scheduler_family_allocation_access` and `scheduler_trial_filter_access` separate committed calls from copied-World trials. The ordered filter propagates its first non-hidden Stop; each reached trial has an isolated safe prefix from the same entry invariant. |
 | `PeerRemoval` | [AGENT 2026-10-14] Reuse fixed send/clear `runWorkerPrefix` wrappers and scalar queue/count frames to compose all seven original flush/removal calls. Exact erasure retains the 4096 drain, dispatch/placeholder order, early returns and saved-ID loops; concrete allocation safety adds no ownership or progress premise. |
 | `DeviceControls` | [AGENT 2026-10-14] Compose eight original socket/device controls using a full-Kernel mask of only socket labels/incoming port and legacy frame projections. Separate source inspection justifies access-free socket lifts; saved-ID loops retain actual peer accesses, negative-return cleanup and Stop prefixes. Concrete allocation safety needs no list-validity, progress or credit assumption. |
+| `DeviceCreation`/`DeviceRetirement`/`DeviceLifecycle` | [AGENT 2026-10-14] Observe guarded creation as one resident-access-free action and prove its normal allocation endpoint, avoiding an invariant at provisional epoch 0. At the original final `wg := none`, append logical releases from every actual pre-drop resident map, with packet stamps `(ifindex, id + 1)`; this accounts for store retirement, not per-object kernel frees or reference credits. Compose complete destruction/deletion with exact socket/peer-removal prefixes and queue-guard Stops. |
 
 [AGENT 2026-10-13] Separate identity from saved-reference ownership, share frontier
 algebra and the WG projection, and retain history outside exceptions. Observe saved
@@ -185,7 +188,8 @@ handshake receive/bounded workers/UDP ingress, concrete Batch scheduling, six
 allowed-IP list/removal calls, and now four key-maintenance calls plus all five
 expired timer callbacks and their dispatcher, plus both flushed workers, the workqueue
 drain, timer stop and after-dead/optional/all-peer removal; socket free/reinit/init,
-device open/up/stop/down and namespace pre-exit. Concrete `AllocationInv` discharges
+device open/up/stop/down and namespace pre-exit; guarded creation, destruction
+and deletion with actual residual-store retirement. Concrete `AllocationInv` discharges
 these local ambient contracts; source Stops and ordinary negative returns differ.
 Batch callbacks are discharged, without implying R4 journal or conservation closure.
 
@@ -240,8 +244,9 @@ python3 -B docs/proof-campaign-replay.py r2-stale-dump-cursor-orphan |
 ```
 
 **Remaining obligations.** Initialized outer runners/deferred-unit callers,
-timer firing, Netlink, insertion, remaining resident scans and device
-creation/destruction with actual final retirement are open. Saved scalar
+timer firing, Netlink, insertion and remaining resident scans are open.
+The three original WG lifecycle calls now cover actual final store retirement
+locally; their enclosing environment and initialized Runner composition remain open. Saved scalar
 affiliation and reference credits are stronger separate properties:
 dangling/aliased IDs can Stop after safe accesses. C initializes cache/handshake before incrementing the peer counter;
 the mirror increments/inserts first. Proofs follow the mirror; this difference
@@ -268,6 +273,7 @@ replays and both current rejection checks each took under one second.
 | Key maintenance and expired timers | 5: 3 / 2 | 20m07s through collected full-build result; component/scoped/full targets 144/226/334 |
 | Inline flush and peer removal | 5: 3 / 2 | 9m53s through collected full build; 14m57s ownership including recovery freezes; component/scoped/full 158/227/340. Two ordinary elaboration failures; two read-only reviewer capacity interruptions caused freezes/all-dirty snapshots, with no build interrupted. |
 | Socket/device controls | 6: 4 / 2 | 18m20s from token acceptance through full-target collection; 19m18s total token ownership; component/scoped/full 160/229/349. Two ordinary proof elaboration failures, no cap/interruption; all exits collected. Coordinated gate, fresh kernel replay, default build and 114 unit tests pass. |
+| Device creation/destruction/deletion | 14: 2 / 12 | 18m58s from grant 11:42:06 through full-target collection at 12:01:04; 22m43s total token ownership. Scoped/full targets 233/362, R2 176 exports. Twelve ordinary elaboration/normalization failures, no cap/interruption; all exits collected. Independent frozen review and coordinated gate, fresh kernel replay, default build and 114 unit tests pass. The coordinator mistakenly overlapped the cached default build (0.033s) with kernel replay; both were capped and both exits collected, then serial validation resumed. |
 
 Earlier monolithic IPv4 proof search failed at heartbeat limits; explicit source
 tails replaced it. An earlier tactic loop was deliberately stopped by its verified
@@ -281,7 +287,9 @@ were removed. Earlier scheduler and allowed-IP ownership totals were 30m55s
 and 17m56s respectively.
 
 The socket/device review qualified the reset after a negative open result as
-`wgUp`’s continuation; `wgOpen` itself does not reset running.
+`wgUp`’s continuation; `wgOpen` itself does not reset running. The lifecycle
+review qualified fresh-epoch registration as successful creation, retaining
+existing-device/refusal alternatives, and corrected one missing list comma.
 Reviews deleted an unused impossible KDF-failure premise; corrected no-device
 `modifyDev` framing, saved-stamp/cache scope, original-run versus accepted-domain
 wording and an overbroad docstring; and shared a conditional law in `Prefix`.

@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.Keypairs.Frames.WGConfig
+import Leanux.Proofs.Framing.WGDeviceLifecycle
 
 /-! Receive-state framing for the original WireGuard device lifecycle and transmit paths. -/
 namespace Leanux.Proofs.WG.Keypairs.WGDevice
@@ -42,43 +43,56 @@ theorem wgDown_spec (P : Snapshot → Prop) (hp : Stable P)  :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ wgDown
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (wgDown_ordinary ).wp P hp
 
+theorem sameSnapshot_of_sameLinkKernel (ha : Framing.SameLinkKernel a) : SameSnapshot a := by
+  intro w x v hr
+  have he := congrArg (fun k => snapshot {w with k}) (ha w x v hr)
+  simpa [snapshot, Framing.linkKernelView, Framing.linkKernel, Framing.linkDevice,
+    Option.bind_map, Function.comp_def] using he
+
 theorem ratelimiterInit_sameSnapshot  : SameSnapshot ratelimiterInit := by
-  frame_same [ratelimiterInit] using [envOk_spec, hidden_snapshot_spec]
+  exact sameSnapshot_of_sameLinkKernel (Framing.ratelimiter_link Framing.ratelimiterInit_sameRatelimiterKernel)
 
 theorem ratelimiterInit_spec (P : Snapshot → Prop)  :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ ratelimiterInit
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (ratelimiterInit_sameSnapshot ).wp P
 
 theorem gcEntries_sameSnapshot (work : Bool) : SameSnapshot (gcEntries work) := by
-  frame_same [gcEntries] using [hiddenClock_spec]
+  exact sameSnapshot_of_sameLinkKernel (Framing.ratelimiter_link (Framing.gcEntries_sameRatelimiterKernel work))
 
 theorem gcEntries_spec (P : Snapshot → Prop) (work : Bool) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ (gcEntries work)
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (gcEntries_sameSnapshot work).wp P
 
 theorem ratelimiterUninit_sameSnapshot  : SameSnapshot ratelimiterUninit := by
-  frame_same [ratelimiterUninit] using [gcEntries_spec, mayHaveSlept_spec, skipCut_spec]
+  exact sameSnapshot_of_sameLinkKernel (Framing.ratelimiter_link Framing.ratelimiterUninit_sameRatelimiterKernel)
 
 theorem ratelimiterUninit_spec (P : Snapshot → Prop)  :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ ratelimiterUninit
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (ratelimiterUninit_sameSnapshot ).wp P
 
 theorem cookieCheckerInit_sameSnapshot  : SameSnapshot cookieCheckerInit := by
-  frame_same [cookieCheckerInit] using [hiddenClock64_spec, hidden_snapshot_spec]
+  exact sameSnapshot_of_sameLinkKernel Framing.cookieCheckerInit_sameLinkKernel
 
 theorem cookieCheckerInit_spec (P : Snapshot → Prop)  :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ cookieCheckerInit
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (cookieCheckerInit_sameSnapshot ).wp P
 
 theorem pubkeyHashtableAlloc_sameSnapshot  : SameSnapshot pubkeyHashtableAlloc := by
-  frame_same [pubkeyHashtableAlloc] using [envOk_spec, hidden_snapshot_spec]
+  exact sameSnapshot_of_sameLinkKernel Framing.pubkeyHashtableAlloc_sameLinkKernel
 
 theorem pubkeyHashtableAlloc_spec (P : Snapshot → Prop)  :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ pubkeyHashtableAlloc
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (pubkeyHashtableAlloc_sameSnapshot ).wp P
 
 theorem wgNewlink_sameSnapshot  : SameSnapshot wgNewlink := by
-  frame_same [wgNewlink] using [cookieCheckerInit_spec, pubkeyHashtableAlloc_spec, ratelimiterInit_spec, envOk_spec, mayHaveSlept_spec, skipCutExactly_spec, skipCut_spec]
+  intro w x v hr
+  have he := (Framing.hoare_iff_triple _ _ _).mpr (Framing.wgNewlink_endpoint (Framing.linkView w)) w x v rfl hr
+  rcases he with ⟨_,he⟩ | ⟨_,he⟩
+  all_goals
+    have hf := congrArg (fun s : Framing.WGKernelView =>
+      snapshot {w with k := {w.k with wg := s.wg, keypairCounter := s.keypairCounter}}) he
+    simpa [snapshot, Framing.linkView, Framing.linkKernel, Framing.linkDevice,
+      Framing.WGKernelView.ofKernel, Framing.registeredLink, Option.bind_map, Function.comp_def] using hf
 
 theorem wgNewlink_spec (P : Snapshot → Prop)  :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ wgNewlink
