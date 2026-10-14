@@ -1656,19 +1656,19 @@ def run_chunk(traces, out, kcov, guest_variant=None, alloc_flags=0, arm=()):
             # P: declared operand exclusions are counted with the gaps, from
             # the placement that agrees (D3 merge [AGENT])
             excluded, distinct = Counter(), set()
+            # The relation is section-confined (`sections=`): a branch the
+            # mirror stamped with NET_RX ordinal k matches only the records
+            # of the guest's k-th `net_rx_action` block, so a mirror that
+            # mis-stamps its sections fails on every trace, not only where
+            # the placement evidence below happens to run (the mutation
+            # campaign's finding 4, 2026-10-14). The mirror counts every
+            # section start it consumes, run or skipped
+            # (`Leanux/Kernel/Defs.lean`, `noteNetRxStart`), as the guest
+            # numbers its blocks.
             operand_problems, checked = operand_agreement(trace, actual_cmp, trace_comparisons,
                                                           compared['locations'], kcov[1], set(kcov[0]['functions']),
-                                                          kcov[0]['operand_exclusions'], excluded, distinct)
-            # A trace with open placements always goes through the placement
-            # evidence, whose per-section matching ties the mirror's NET_RX
-            # ordinals to the guest's blocks; until 2026-10-14 it ran only on
-            # a first-run operand mismatch, so a mirror that mis-stamped its
-            # sections passed whenever the site-only relation happened to
-            # hold (the mutation campaign's finding 4). The section-confined
-            # relation itself (`sections=`) is not applied to the first run:
-            # on batch traces it fails at an ordinal the guest's block tags do
-            # not carry, a disagreement for the W7 placement work to settle.
-            if actual_cmp.get('napi_irq_ambiguous'):
+                                                          kcov[0]['operand_exclusions'], excluded, distinct, sections)
+            if operand_problems and actual_cmp.get('napi_irq_ambiguous'):
                 # the second run, every open placement before the put
                 count = actual_cmp['napi_irq_ambiguous']
                 with_records = next(t for t in with_hidden('cmp') if t['id'] == trace['id'])
@@ -1712,7 +1712,8 @@ def run_chunk(traces, out, kcov, guest_variant=None, alloc_flags=0, arm=()):
                                     excluded, distinct = Counter(), set()
                                     operand_problems, checked = operand_agreement(
                                         trace, selected, trace_comparisons, compared['locations'], kcov[1],
-                                        set(kcov[0]['functions']), kcov[0]['operand_exclusions'], excluded, distinct)
+                                        set(kcov[0]['functions']), kcov[0]['operand_exclusions'], excluded, distinct,
+                                        sections)
                                     if not operand_problems:
                                         # popped into the report's napi_before_put_sections
                                         outcomes[f'napi placement ({trace["id"]})'] = ','.join(map(str, before_put))
