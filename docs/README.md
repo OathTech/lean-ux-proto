@@ -6,6 +6,27 @@ it is history, not setup instructions. Setup is
 [REPRODUCING.md](../REPRODUCING.md); the standing rules are
 [AGENTS.md](../AGENTS.md).
 
+## The documents the broad claims rest on
+
+Read these before the README's claims are taken at face value:
+
+- [2026-10-14-pre-release-review.md](2026-10-14-pre-release-review.md): the
+  critiques an outside expert would make, ranked, with the fix for each.
+- [2026-10-13-decision-census.md](2026-10-13-decision-census.md): every
+  declared decision outcome, exercised or not, with the reason or its absence;
+  every exclusion in force; the anchored-file boundary.
+- [2026-10-13-compiler-experiment.md](2026-10-13-compiler-experiment.md):
+  which declarations are stable across two optimisation levels, and what that
+  does not show.
+- The four correspondence audits of the WireGuard mirror against the C:
+  [device](2026-10-13-audit-device.md), [handshake](2026-10-13-audit-handshake.md),
+  [receive](2026-10-13-audit-receive.md), [netlink](2026-10-13-audit-netlink.md),
+  each with its findings' disposition.
+- [2026-10-12-simulation-target-review.md](2026-10-12-simulation-target-review.md):
+  whether the mirror's altitude suits a later simulation proof.
+- [2026-10-13-review-r5-counterexamples.md](2026-10-13-review-r5-counterexamples.md):
+  the independent reading of the proof campaign's first Rule Zero counterexamples.
+
 ## Living documents
 
 | Document | Contents |
@@ -24,7 +45,7 @@ it is history, not setup instructions. Setup is
 | Document | Contents |
 | --- | --- |
 | [2026-09-29-way-forward.md](2026-09-29-way-forward.md) | The assessment that set the thin-layer direction: a behavioural mirror, no theorem proving, data and control-flow correspondence |
-| [2026-09-29-next-plan.md](2026-09-29-next-plan.md) | Finish the FD/eventfd slice, then WireGuard |
+| [2026-09-29-next-plan.md](2026-09-29-next-plan.md) | Finish the FD/eventfd slice, then WireGuard; superseded by the kernel scout (2026-10-12) and the decisions register for what followed |
 | [2026-10-03-choice-stream-strategy.md](2026-10-03-choice-stream-strategy.md) | Hidden inputs recorded at generic kernel interception points and replayed: the choice stream |
 | [2026-10-03-hidden-inputs-design.md](2026-10-03-hidden-inputs-design.md) | The hidden-input record kinds and their sites |
 | [2026-10-03-steering-design.md](2026-10-03-steering-design.md) | Steering a hidden input to a chosen outcome; the kernel mechanism later superseded |
@@ -39,26 +60,32 @@ it is history, not setup instructions. Setup is
 
 | Document | Contents |
 | --- | --- |
-| [2026-09-30-wireguard-stage-a-report.md](2026-09-30-wireguard-stage-a-report.md) | Stage A report: configuration and device state |
-| [2026-09-30-wireguard-stage-b1-report.md](2026-09-30-wireguard-stage-b1-report.md) | Stage B1 report: transmit and routing |
-| [2026-10-01-wireguard-stage-b2-report.md](2026-10-01-wireguard-stage-b2-report.md) | Stage B2 report: the receive path up to Noise |
-| [2026-10-01-wireguard-stage-c-report.md](2026-10-01-wireguard-stage-c-report.md) | Stage C report: the Noise responder |
+| [2026-09-30-wireguard-stage-a-report.md](2026-09-30-wireguard-stage-a-report.md) | Stage A report: configuration and device state; its scope and exclusions are superseded by the WireGuard census (2026-10-06) and the decision census (2026-10-13) |
+| [2026-09-30-wireguard-stage-b1-report.md](2026-09-30-wireguard-stage-b1-report.md) | Stage B1 report: transmit and routing; scope superseded as above |
+| [2026-10-01-wireguard-stage-b2-report.md](2026-10-01-wireguard-stage-b2-report.md) | Stage B2 report: the receive path up to Noise; scope superseded as above, and the receive audit (2026-10-13) is the current reading of that path |
+| [2026-10-01-wireguard-stage-c-report.md](2026-10-01-wireguard-stage-c-report.md) | Stage C report: the Noise responder; scope superseded as above, and the handshake audit (2026-10-13) is the current reading |
 | [2026-10-04-d1-sprint.md](2026-10-04-d1-sprint.md) | D1: the initiator role, in parallel streams |
 | [2026-10-04-d2-data-plane.md](2026-10-04-d2-data-plane.md) | D2 design: the data plane, workers and queues |
 | [2026-10-04-d2-sprint.md](2026-10-04-d2-sprint.md) | D2 sprint record |
 | [2026-10-05-d3-timers.md](2026-10-05-d3-timers.md) | D3: timers, timer sections and virtual time |
 | [2026-10-05-a-alloc.md](2026-10-05-a-alloc.md) | A: allocation outcomes recorded and steered |
-| [2026-10-05-e-dos.md](2026-10-05-e-dos.md) | E: cookies and the rate limiter under load |
+| [2026-10-05-e-dos.md](2026-10-05-e-dos.md) | E: cookies and the rate limiter under load; its §11 exclusion reasons were corrected in place on 2026-10-13 by the receive fixes; IPv6 rate limiting remains excluded with the old stage reason (see the pre-release review §8) |
 | [2026-10-05-e-probe-results.md](2026-10-05-e-probe-results.md) | E: the under-load reachability probe |
 | [2026-10-05-l-lifecycle.md](2026-10-05-l-lifecycle.md) | L: device lifecycle |
 | [2026-10-06-wireguard-census.md](2026-10-06-wireguard-census.md) | Coverage census of WireGuard's source against the mirror; the W rows |
 | [2026-10-06-w1-w2-netlink.md](2026-10-06-w1-w2-netlink.md) | W1 and W2: netlink completeness and multi-message dumps |
 | [2026-10-06-w3-w12.md](2026-10-06-w3-w12.md) | W3 and W12: two small coverage workstreams |
-| [2026-10-06-w4-w7-transmit-bulk.md](2026-10-06-w4-w7-transmit-bulk.md) | W4 and W7: transmit shapes and bulk queues; the full-ring tier and the open two-drop finding |
+| [2026-10-06-w4-w7-transmit-bulk.md](2026-10-06-w4-w7-transmit-bulk.md) | W4 and W7: transmit shapes and bulk queues; the two-drop finding it left open is closed in the full-ring tier document (2026-10-13), and its 17.16 counterexample is superseded there |
 | [2026-10-06-w5-w6-receive.md](2026-10-06-w5-w6-receive.md) | W5 and W6: receive shapes and the stack's reactions to inner packets |
 | [2026-10-06-w8-w9-netns-routing.md](2026-10-06-w8-w9-netns-routing.md) | W8 and W9: netns exit, socket errors and routing |
 | [2026-10-13-w7-full-ring-tier.md](2026-10-13-w7-full-ring-tier.md) | The W7 full-ring tier: the two silent drops at the 1024-item wrap explained from the records (two uncleared carried slots, no interleave), the tier's five traces |
-| [2026-10-13-review-items-7-8.md](2026-10-13-review-items-7-8.md) | Review items 7 and 8: the runner's budgets as derived or record-driven measures with the kind-310 end-of-wait read, and jiffies as the C's 64-bit type with its comparisons declared |
+| [2026-10-13-review-items-7-8.md](2026-10-13-review-items-7-8.md) | Review items 7 and 8: the runner's budgets as derived or record-driven measures with the kind-310 end-of-wait read, and jiffies as the C's 64-bit type with its comparisons declared; its section 4's "publication identity" claim for the arm rule is corrected by the pre-release review's finding 2 (the caller's read is recorded, after the fix on task/review-timer) |
+| [2026-10-13-audit-device.md](2026-10-13-audit-device.md) | Correspondence audit of `Leanux/WG/Device.lean` against device.c by a fresh reader: 13 items, one observable (the MTU error code), fixed |
+| [2026-10-13-audit-handshake.md](2026-10-13-audit-handshake.md) | Correspondence audit of `Leanux/WG/Handshake.lean` against noise.c: nine internal items, none observable; two fixed |
+| [2026-10-13-audit-receive.md](2026-10-13-audit-receive.md) | Correspondence audit of the receive path against receive.c and cookie.c: 14 items, two observable (the receive ring-full drop, the cookie secret rotation), fixed; residual items F2, F3, F12, F13 open |
+| [2026-10-13-audit-netlink.md](2026-10-13-audit-netlink.md) | Correspondence audit of the netlink modules against netlink.c: one observable data-shape item (endpoint bytes by family), closed fail-closed |
+| [2026-10-13-decision-census.md](2026-10-13-decision-census.md) | The decision census: 1382 decisions and their outcomes by anchored file, every exclusion in force with its justification, the anchored-file boundary, the W13 scope; its denominator is declared mirror decisions, not independently enumerated C choices |
+| [2026-10-13-compiler-experiment.md](2026-10-13-compiler-experiment.md) | Witness-location stability across two optimisation levels of GCC 13.3: what refused the size-optimised image and what the static comparison shows; not evidence about the C's semantics |
 
 ## Pipes, epoll and seccomp
 
@@ -80,6 +107,13 @@ it is history, not setup instructions. Setup is
 | [2026-10-13-spike-window-self-review.md](2026-10-13-spike-window-self-review.md) | The spike's self-review of its port; not the independent review |
 | [2026-10-13-window-proof-conventions.md](2026-10-13-window-proof-conventions.md) | Conventions that make carrying proofs over mirror changes cheaper |
 | [2026-10-13-charter-proof-campaign.md](2026-10-13-charter-proof-campaign.md) | The campaign charter: six WireGuard properties in dependency order |
+| [2026-10-13-review-r5-counterexamples.md](2026-10-13-review-r5-counterexamples.md) | The independent review of the campaign's R5 counterexamples: three statement artefacts, design nuances at most, no tray entry |
+
+## Reviews of the whole
+
+| Document | Contents |
+| --- | --- |
+| [2026-10-14-pre-release-review.md](2026-10-14-pre-release-review.md) | The pre-release review: 14 critiques an outside expert would make, ranked by damage and fairness, with a fix for each; the two concrete evidence defects (the foreign-function rule, the timer-input reconstruction) and the self-selected domain lead |
 
 ## Retired
 

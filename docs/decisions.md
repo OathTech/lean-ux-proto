@@ -461,4 +461,21 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   take several id prefixes. The replay tests' captures predate the kind-310
   record and the module had failed on every capture since item 7;
   `with_jiffies_end` appends the record as a replay fixture.
-
+- **2026-10-14 [AGENT, fork of the coordinator]** The public claims are
+  rewritten to the observation level, per the pre-release review
+  (`docs/2026-10-14-pre-release-review.md`, sections 3, 4, 7, 9, 13, 14 and
+  its limitations table): the README opens with the review's description
+  (one configured, patched, single-CPU executable; selected supported
+  traces; projected branch witnesses; operand presence; reconstructed
+  scheduling choices; finite windows; separately pinned mirror theorems;
+  neither the correspondence nor general security proved), carries a scope
+  table of the consequential exclusions with their status and a
+  trusted-boundary account; the proof register gains a result table
+  (original claim, exact theorem, event boundary, premises, counterexample
+  or blocker, pin) and counts theorem results, infrastructure and witnesses
+  apart; the compiler experiment is renamed to witness-location stability
+  with its units corrected; the tray's two drafts are narrowed to what was
+  measured, with recorded loss, source-derived mechanism and attack
+  feasibility separated; the reproduction guide names the approved build by
+  identity. Sentences that describe the state after the review's code fixes
+  are marked with the branch that carries the fix.
