@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.TimerDiscipline.RxDataTimersClaims
 import Leanux.Proofs.WG.TimerDiscipline.ResponseTraversalClaims
+import Leanux.Proofs.WG.TimerDiscipline.InitiationTraversalClaims
 import Leanux.Proofs.WG.TimerDiscipline.DataDoneClaims
 import Leanux.Proofs.WG.TimerDiscipline.OutgoingResponseSessionClaims
 import Leanux.Proofs.WG.TimerDiscipline.ObservationClaims
@@ -561,5 +562,28 @@ theorem original_outgoing_response_traversal (pid : PeerId) :
   · intro entry pre
     rw [observedResponseTraversal_erase pid]
   · exact observedResponseTraversal_facts pid
+
+/-- The original initiation sender invokes traversal exactly when its original
+rate-check/creation/MAC prefix yields a message. Early exits yield no hook. On
+normal full return, the actual hook's enabled/live/running/recorded guards give
+the exact persistent expiry and clock gap at its after-state. Authenticated-sent
+deletion, the second clock/write, socket send and final retransmit hook remain
+unchanged. Erasure includes errors; no transmission, final expiry or retained
+failed-call certificate is asserted. -/
+theorem original_outgoing_initiation_traversal (pid : PeerId) :
+    Campaign2.AgreesOn (fun _ => True)
+      (initiationTraversalPrelude pid >>= initiationTraversalSuffix pid)
+      (sendHandshakeInitiation pid) ∧
+    Campaign2.AgreesOn (fun _ => True)
+      (do let _ ← observedInitiationTraversal pid; pure ()) (sendHandshakeInitiation pid) ∧
+    Campaign2.Ensures (observedInitiationTraversal pid) (fun _ => True)
+      (fun cut _ => InitiationTraversalFacts pid cut) := by
+  constructor
+  · intro entry pre
+    rw [initiationTraversal_source pid]
+  · constructor
+    · intro entry pre
+      rw [observedInitiationTraversal_erase pid]
+    · exact observedInitiationTraversal_facts pid
 
 end Leanux.Proofs.WG.TimerDiscipline
