@@ -1,6 +1,7 @@
 import Leanux.Proofs.WG.Progress.ObservationBridge
 import Leanux.Proofs.WG.Progress.CutClaims
 import Leanux.Proofs.WG.Progress.FlushQueueClaims
+import Leanux.Proofs.WG.Progress.PowSource
 
 /-! Projected H5 contracts. Inspection adapters report the exact original
 outcomes from the same concrete entry; their totality is not a claim that the
@@ -434,5 +435,15 @@ theorem original_flushed_clear_queue (pid : PeerId) (d : Device) :
           flushQueueCount (flushedClearQueues pid d) + 1 =
             flushQueueCount (TimerDiscipline.workQueues d))) :=
   source_flushed_clear_queue pid d
+
+/-- The original pure modular-exponentiation loop agrees with a finite,
+non-exhausted evaluation of its exact accumulator steps whenever the initial
+exponent is smaller than the fuel. Choosing fuel `e + 1` works for every input.
+Zero exponent and zero modulus retain the original semantics. This is a local
+arithmetic-loop contract, not a complete runner or cryptographic correctness claim. -/
+theorem original_pow_mod_finite (b e modulus fuel : Nat) (enough : e < fuel) :
+    ∃ final, powEval modulus fuel (1, b % modulus, e) = some final ∧
+      final.2.2 = 0 ∧ originalPowMod b e modulus = final.1 :=
+  powMod_finite_with_fuel b e modulus fuel enough
 
 end Leanux.Proofs.WG.Progress

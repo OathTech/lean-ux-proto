@@ -29,12 +29,12 @@ No independent existential projected runs are spliced together.
 | H2 Index | 47 contracts, including lifecycle boundaries, handshake reception/sending, staged/keepalive sending, queued clearing, worker/timer dispatch and original workqueue draining/post-death removal | Public projection complete: 14 total contracts, 31 normal-return contracts, 1 exact stop and 1 projected initializer theorem; reachable coherence, broader records and the corpus runner composition remain open. |
 | H3 Roaming | 8 contracts, including decrypt publication and its same-execution first-poll endpoint connection | Public projection complete; first selected packet provenance is conditional on matching publication identity. General queue provenance and complete caller coverage remain open. |
 | H4 Configuration | 64 contracts, including normal removal/death converses under two-slot node shape, live-key removal with empty work queues, and the internal dump-accounting finding | Public projection and frame separation complete. Queued-work removal, private-key collision, mixed attributes, global ownership and general dump composition remain open. |
-| H5 Progress | 29 contracts, including original flush queue effects/count decrease, cut-loop budget adequacy, and the accepted batch-backlog counterexample | Public projection and frame separation complete; the recorded cut cannot exhaust its budget and normal selected flushes decrease queue count. Whole-worker record decrease, full loop coverage and probe/detach composition remain open. The backlog witness is historical over `de62c9d`: main's batch guard now addresses request 1. |
+| H5 Progress | 30 contracts, including original exponentiation-loop finite evaluation, flush queue effects/count decrease, cut-loop budget adequacy, and the accepted batch-backlog counterexample | Public projection and frame separation complete; the recorded cut cannot exhaust its budget and normal selected flushes decrease queue count. Whole-worker record decrease, full loop coverage and probe/detach composition remain open. The backlog witness is historical over `de62c9d`: main's batch guard now addresses request 1. |
 | H6 Timers | 35 timer/worker contracts, including consecutive original retry pairs, conditional recorded rearming and same-peer attempt counting | Public projection and frame separation complete; a successful pair from an empty send queue derives the retry bound, reference acquisition/release, final empty queue and cleared pending flag. Conditional rearming preserves the exact expiry through release and section stop; consecutive successful pairs selecting the same initial peer increase attempts by their length and are bounded by 19 from zero. Scheduler retry episodes and whole-run arming/session counts remain open. |
 
 Projection/frame factoring completed at `69f988a` for all six results, preserving
 all 153 existing headline names before new mathematics. The following H2 lifecycle/sender
-and H6 dispatch/rearm increments, H3 publication/poll provenance, H5 cut-loop progress, H1 ordered clearing/rotation and H4 live-key removal bring the total to 201. No public statement directly names `World` or
+and H6 dispatch/rearm increments, H3 publication/poll provenance, H5 cut-loop progress, H1 ordered clearing/rotation and H4 live-key removal bring the total to 202. No public statement directly names `World` or
 `Kernel`.
 The full proof gate remains failed in inherited campaign-1 counter-window and
 index carries; those files have not been edited. Scoped validation does not
@@ -54,7 +54,7 @@ connections to the current executable mirror, not replacement interpreters.
 | H2 | `Index/View`, `TableModel`, `OwnerWordModel`, `AllocationModel`, `ReleaseModel`, `LifecycleModel` and pure release effects/bounds; `Statements`, `HandshakeClaims`, `OwnerUpdateClaims`, `LifecycleSource`, `LinkSource`, `SendSource`, `DispatchSource`, `ResponseSource`, `ConsumeSource`, `StagedSource`, `ReceiveOperations`, `ReceiveSource`, `ClearSource`, `TimerSource`, `FlushSource` and the other operation/source modules. | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`, `NewlinkFrames`, `SendFrames`, `DispatchFrames`, `ResponseFrames`, `ConsumeFrames`, `StagedFrames`, `ReceiveFrames`, `ClearFrames`, `TimerFrames`, `FlushFrames`; the old `HandshakeFrames` and `OwnerFrames` paths are import-only reexports, not duplicated lemmas. |
 | H3 | `Roaming/Model`, `View`, `Statements`, `EndpointClaims`, `EndpointSource`, `Authentication`, `PublicationModel`, `PublicationSource`, `PublicationClaims`, `PollEndpointModel`, `PollEndpointSource`, `PollEndpointClaims`. | `Roaming/Frames`, `PublicationFrames`, `PollEndpointFrames`; `Basic` reexports the endpoint source connection. |
 | H4 | `Config/Model`, `AllowedRemovalModel`, `AllowedPairsModel`, `AllowedPairsEffects`, `AllowedRemovalConverseSource`, `AllowedRemovalConverseClaims`, `QuietModel`, `LiveRemovalModel`, `LiveRemovalSource`, `ClaimView`, `Statements`, `SourceClaims`, `ObservationBridge`, and existing substantive effect/source modules. | `ConcreteFrames` isolates six whole-kernel endpoint contracts; `OperationFrames` isolates seven generic helpers; `ReadbackFrames` retains socket/fixture preservation; `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `AllowedPairsFrames`, `QuietFrames`, `LiveRemovalFrames`, `KeyFieldFrames` isolate within-WG preservation. |
-| H5 | `Progress/Model`, `View`, `Statements`, `SourceClaims`, `ObservationBridge`; `ControlLaws` is generic state/error control and `ControlSource` connects it exactly to the original worker; the scheduler/source modules retain actual execution factors. `CutModel`, `CutSource` and `CutClaims` establish original cut-loop progress; `FlushQueueModel`, `FlushQueueSource` and `FlushQueueClaims` establish original flush effects and count decrease. | `StackFrames` isolates caller-guard preservation; `CutFrames` isolates record/error-location preservation; `FlushQueueFrames` isolates queue preservation through worker bodies and release. Probe/filter/no-work contracts also establish outputs and remain substantive source claims. |
+| H5 | `Progress/Model`, `View`, `Statements`, `SourceClaims`, `ObservationBridge`; `ControlLaws` is generic state/error control and `ControlSource` connects it exactly to the original worker; the scheduler/source modules retain actual execution factors. `CutModel`, `CutSource` and `CutClaims` establish original cut-loop progress; `FlushQueueModel`, `FlushQueueSource` and `FlushQueueClaims` establish original flush effects and count decrease; `PowModel` and `PowSource` connect a finite evaluator to the original arithmetic loop. | `StackFrames` isolates caller-guard preservation; `CutFrames` isolates record/error-location preservation; `FlushQueueFrames` isolates queue preservation through worker bodies and release. Probe/filter/no-work contracts also establish outputs and remain substantive source claims. |
 | H6 | `TimerDiscipline/Model`, `View`, `SendView`, `Statements`, `ObservationBridge`, `ObservationClaims`, `SourceClaims`, `SendDispatchModel`, `SendDispatchClaims`, `RetryDispatchModel`, `RetryDispatchClaims`, `RetryRearmModel`, `RetryRearmClaims`, `RetrySequenceModel`, `RetrySequenceClaims`, and `*Source` operational proofs. | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`, `RetryDispatchFrames`, `RetryRearmFrames`, `WorkStateFrames`. |
 
 A compound exact effect is not a disposable frame merely because its name
@@ -1331,19 +1331,46 @@ definitional throw reductions and membership-based arithmetic errors were
 corrected. No cap failure, guest run or infrastructure retry. The full gate
 remains the unchanged inherited failure last observed at `69f988a`.
 
-[AGENT 2026-10-15] Next address the original modular-exponentiation loop through
+[AGENT 2026-10-15] Address the original modular-exponentiation loop through
 an exact finite accumulator evaluator before expanding the handshake caller
-transcript. Read-only inspection found the stock `Lean.Loop.forIn_eq_of_monadTail`
-unfolding theorem, whose axioms are standard, and the exponent-halving variant.
-Unrestricted equality to stock `Nat.powMod` would be a statement artefact:
-the original returns 1 at exponent zero even modulo 1. Preserve that behavior.
-The toolchain's `repeatM` has an `implemented_by repeatM.erased` annotation and
-stock `Nat.powMod` an external implementation annotation; these are reported
-trust-surface observations, not proof oracles. The proposed proof must use
-kernel-checked unfolding and ordinary recursion. No new annotation or axiom is
-proposed, and no finite-evaluator result or accepted queue-refill witness is yet
-claimed. Whole-drain selection, scheduler progress and operation-end coverage
-remain open; no new mirror request arose from the flush increment.
+transcript. The original accumulator behavior is the contract: unrestricted
+equality to stock `Nat.powMod` is a statement artefact, because the original
+returns 1 at exponent zero even modulo 1.
+
+`PowModel` now defines the exact accumulator/base/exponent step and an
+Option-valued finite evaluator; exhausted fuel is explicit. `PowSource` connects
+the original private `powMod` to its actual loop by definitional equality.
+The stock `Lean.Loop.forIn_eq_of_monadTail`, with the standard `LawfulMonad Id`
+and `MonadTail Id` instances, gives checked logical unfolding. Induction on fuel
+proves successful finite evaluation and final exponent zero whenever the initial
+exponent is smaller than the fuel. Thus `e + 1` suffices for every original input,
+including zero exponent and zero modulus. The public theorem retains arbitrary
+sufficient fuel. This is exact operational adequacy and local termination, not
+an algebraic modular-power identity, optimized bound, compiler-correctness or
+whole-run result. No new frame support is needed.
+
+Trust-surface observations from the toolchain inspection are retained explicitly:
+stock `Init/While.lean`'s `repeatM` has an `implemented_by repeatM.erased`
+annotation, and stock `Nat.powMod` has an external implementation annotation.
+The proof uses the original loop's logical definition and checked fixed-point
+equation, followed by finite induction; it does not invoke either executable
+override as an oracle. No new annotation or nonstandard axiom is introduced.
+
+H5 now has 30 headlines and the campaign 202. The capped 32-thread Progress
+build passed (190 jobs), all 30 headline axioms plus three source equations are
+standard, and fresh stock Progress kernel replay passed. All 202 campaign
+headlines import and pass axiom inspection together; token and
+import/root/default-target checks pass. Independent review closed without
+mathematical, source or scope findings. Reproduce with
+`LEAN_NUM_THREADS=32 capped -- scripts/in-bundle lake build Leanux.Proofs.WG.Progress.Statements`
+and the same wrapper around `lake env leanchecker --fresh Leanux.Proofs.WG.Progress.Statements`.
+Three deterministic elaboration failures (Id inference, match/split normalization,
+Boolean simplification) were corrected. No infrastructure rerun, cap failure,
+heartbeat change or guest run. Full-gate failure remains inherited, last observed
+at `69f988a`. Queue-refill reproduction was not changed or rechecked here; no
+accepted witness or affordability of full kernel reduction is claimed. Whole-drain
+selection, scheduler progress and operation-end coverage remain open. No new
+mirror request arose.
 
 ## H6 — Timer discipline (in progress)
 
