@@ -78,11 +78,21 @@ def tableAddr : Nat := 0x100000
 def peerAddr (id : Leanux.WG.PeerId) : Nat := 0x600000 + id * 0x1000
 
 def entryAddr (e : Leanux.WG.IndexEntry) (o : Offsets) : Except String Nat := do
-  match e.kind with
-  | .handshake => return peerAddr e.peer + o.peerHandshake + o.handshakeEntry
-  | .keypair =>
-    let some id := e.keypair | throw "keypair entry has no keypair identity"
-    return 0x700000 + id * 0x1000 + o.keypairEntry
+  match e.owner with
+  | .handshake id => return peerAddr id + o.peerHandshake + o.handshakeEntry
+  | .keypair id => return 0x700000 + id * 0x1000 + o.keypairEntry
+
+def ownerWord (d : Leanux.WG.Device) (owner : Leanux.WG.IndexOwner) : Except String (Option Nat) := do
+  match owner with
+  | .handshake id =>
+    let some p := d.peers.get? id | throw "handshake owner missing"
+    return p.handshakeEntryPeer
+  | .keypair id =>
+    let some k := d.keypairs.get? id | throw "keypair owner missing"
+    return k.peer
+
+def nullablePeerAddr (peer : Option Nat) : Nat := peer.map peerAddr |>.getD 0
+
 def outputAddr : Nat := 0x300000
 def stackAddr : Nat := 0x400800
 def stopAddr : Nat := 0x500000
@@ -92,7 +102,8 @@ def put (m : DataMem) (a size v : Nat) : DataMem :=
 
 /-- Heap materialization is generated from the mirror list and DWARF offsets.
     Synthetic addresses are related to identities, not claimed to be kernel pointers. -/
-def materialize (entries : List Leanux.WG.IndexEntry) (o : Offsets) (preempt : Nat) : Except String DataMem := do
+def materialize (d : Leanux.WG.Device) (o : Offsets) (preempt : Nat) : Except String DataMem := do
+  let entries := d.indexTable
   let mut m : DataMem := (List.replicate o.tableSize (0 : UInt8)).At (.ofNat 64 tableAddr)
   m := m.storeBytes (.ofNat 64 (stackAddr - 0x800)) (List.replicate 0x810 0)
   m := put m stackAddr 8 stopAddr
@@ -115,7 +126,7 @@ def materialize (entries : List Leanux.WG.IndexEntry) (o : Offsets) (preempt : N
       | none => pure 0
       | some (next, _) => (entryAddr next o).map (fun a => a + o.hash)
     if before.isEmpty then m := put m bucketAddr 8 (addr + o.hash)
-    m := put m (addr + o.peer) 8 (0x600000 + e.peer * 0x1000)
+    m := put m (addr + o.peer) 8 (nullablePeerAddr (← ownerWord d e.owner))
     m := put m (addr + o.hash + o.next) 8 nextAddr
     m := put m (addr + o.hash + o.pprev) 8 prevAddr
     m := put m (addr + o.kind) 4 (if e.kind == .handshake then 1 else 2)
@@ -128,11 +139,17 @@ def keypairAddr (id : Leanux.WG.KeypairId) : Nat := 0x700000 + id * 0x1000
     peer's three slots. Reject values that cannot satisfy the exact equations. -/
 def materializePeers (d : Leanux.WG.Device) (o : Offsets) (m : DataMem) : Except String DataMem := do
   for e in d.indexTable do
-    unless d.peers.contains e.peer do throw "entry names an absent peer"
+    let word ← ownerWord d e.owner
+    if let some id := word then
+      unless d.peers.contains id do throw "entry names an absent peer"
   let mut m := m
   for (id, p) in d.peers.toList do
     unless p.refcount < 2^32 do throw "peer refcount is not a 32-bit value"
     m := put m (peerAddr id + o.peerRefcount) 4 p.refcount
+    if let some pid := p.handshakeEntryPeer then
+      unless d.peers.contains pid do throw "handshake word names an absent peer"
+    m := put m (peerAddr id + o.peerHandshake + o.handshakeEntry + o.peer) 8
+      (nullablePeerAddr p.handshakeEntryPeer)
     for (slot, kid) in [(Binary.Layouts.slots_current_keypair, p.keypairCurrent),
         (Binary.Layouts.slots_previous_keypair, p.keypairPrevious),
         (Binary.Layouts.slots_next_keypair, p.keypairNext)] do
@@ -144,14 +161,12 @@ def materializePeers (d : Leanux.WG.Device) (o : Offsets) (m : DataMem) : Except
       m := put m (peerAddr id + Binary.Layouts.peer_keypairs + slot) 8 address
   for (id, k) in d.keypairs.toList do
     let a := keypairAddr id
-    unless d.peers.contains k.peer do throw "keypair names an absent peer"
-    for e in d.indexTable do
-      if e.kind == .keypair && e.keypair == some id && e.peer != k.peer then
-        throw "index entry and keypair disagree on their shared peer word"
+    if let some pid := k.peer then
+      unless d.peers.contains pid do throw "keypair names an absent peer"
     unless k.internalId < 2^64 && k.sendingCounter < 2^64 &&
         k.receivingCounter.counter < 2^64 && k.remoteIndex < 2^32 && k.refcount < 2^32 do
       throw "keypair field is outside its physical word width"
-    m := put m (a + Binary.Layouts.keypair_entry + Binary.Layouts.entry_peer) 8 (peerAddr k.peer)
+    m := put m (a + Binary.Layouts.keypair_entry + Binary.Layouts.entry_peer) 8 (nullablePeerAddr k.peer)
     m := put m (a + Binary.Layouts.keypair_internal_id) 8 k.internalId
     m := put m (a + Binary.Layouts.keypair_sending_counter) 8 k.sendingCounter
     m := put m (a + Binary.Layouts.keypair_remote_index) 4 k.remoteIndex
@@ -265,7 +280,7 @@ def probe (input : ProbeInput) (actualServices : Bool := false) : Except String 
   let (answer, after) ← (Leanux.WG.indexLookup [.handshake] input.query).run w
     |>.mapError Leanux.Stop.message
   let some afterDev := after.k.wg | throw "mirror lost device"
-  let memory ← materializePeers dev input.offsets (← materialize before input.offsets input.preempt)
+  let memory ← materializePeers dev input.offsets (← materialize dev input.offsets input.preempt)
   let memory := put memory Binary.Layouts.keypairCounterAddress.toNat 8 w.k.keypairCounter
   let memory := if actualServices then materializeServices memory else memory
   let some entry := input.instructions[0]? | throw "empty instruction list"
@@ -283,8 +298,8 @@ def probe (input : ProbeInput) (actualServices : Bool := false) : Except String 
       r.state.data.dmem == alternate.state.data.dmem do throw "undefined-value seed changes observables"
   let answerAddr ← match answer with
     | none => pure 0
-    | some e => do
-      unless before.contains e do throw "returned entry is not in initial table"
+    | some (owner, _) => do
+      let some e := before.find? (·.owner == owner) | throw "returned owner is not in initial table"
       entryAddr e input.offsets
   unless r.state.data.regs.rax.toNat == answerAddr && r.state.data.regs.rsp.toNat == stackAddr + 8 do
     throw "return or stack mismatch"
@@ -292,10 +307,10 @@ def probe (input : ProbeInput) (actualServices : Bool := false) : Except String 
     unless r.state.data.regs.get64 reg == initial.data.regs.get64 reg do throw s!"callee-save mismatch: {repr reg}"
   let stackBase := BitVec.ofNat 64 (stackAddr - 0x800)
   let some stackBytes := memory.loadBytes stackBase 0x810 | throw "initial stack missing"
-  let expected ← materializePeers afterDev input.offsets (← materialize afterDev.indexTable input.offsets input.preempt)
+  let expected ← materializePeers afterDev input.offsets (← materialize afterDev input.offsets input.preempt)
   let expected := match answer with
     | none => expected
-    | some e => put expected outputAddr 8 (0x600000 + e.peer * 0x1000)
+    | some (_, pid) => put expected outputAddr 8 (peerAddr pid)
   let expected := put expected Binary.Layouts.keypairCounterAddress.toNat 8 after.k.keypairCounter
   let expected := if actualServices then materializeServices expected else expected
   let mut finalMemory := r.state.data.dmem.storeBytes stackBase stackBytes
@@ -308,44 +323,10 @@ def probe (input : ProbeInput) (actualServices : Bool := false) : Except String 
     finalMemory := finalMemory.storeBytes (.ofNat 64 coverageAddr) (List.replicate coverageBytes 0)
   unless finalMemory == expected do
     throw "non-stack memory disagrees with mirror"
-  -- Test-only decision projection; outcomes come from actual machine
-  -- successors. This is not used by the theorem.
-  let mut decisions : Array String := #[]
-  let mut found := false
-  for i in [:r.pcs.size] do
-    let pc := r.pcs[i]!
-    let next := r.pcs[i+1]?.getD stopAddr
-    if pc == entry.pc + 0x32 then
-      decisions := decisions.push s!"wg_index_hashtable_lookup.entry={if next == entry.pc + 0x34 then 1 else 0}"
-    if pc == entry.pc + 0x5c then
-      decisions := decisions.push s!"wg_index_hashtable_lookup.index_matches={if next == entry.pc + 0x95 then 1 else 0}"
-    if pc == entry.pc + 0x6a then
-      decisions := decisions.push s!"wg_index_hashtable_lookup.entry={if next == entry.pc + 0x34 then 1 else 0}"
-    if pc == entry.pc + 0xab then
-      decisions := decisions.push s!"wg_index_hashtable_lookup.type_matches={if next == entry.pc + 0xad then 1 else 0}"
-    if pc == entry.pc + 0xb2 then
-      found := true
-      decisions := decisions.push "wg_index_hashtable_lookup.found=1"
-    if pc == entry.pc + 0x71 && !found then
-      decisions := decisions.push "wg_index_hashtable_lookup.found=0"
-    if pc == entry.pc + 0xc3 then
-      decisions := decisions.push s!"wg_index_hashtable_lookup.peer_alive={if next == entry.pc + 0xc5 then 1 else 0}"
-    let helper := 0xffffffff81399610
-    if pc == helper + 0x15 then
-      decisions := decisions.push s!"wg_peer_get_maybe_zero.null={if next == helper + 0xdd then 1 else 0}"
-    if pc == helper + 0x3d then
-      decisions := decisions.push s!"__refcount_add_not_zero.old_zero={if next == helper + 0xb0 then 1 else 0}"
-    if pc == helper + 0x63 then
-      decisions := decisions.push s!"__refcount_add_not_zero.cmpxchg_failed={if next == helper + 0xf2 then 1 else 0}"
-    if pc == helper + 0x79 then
-      decisions := decisions.push s!"__refcount_add_not_zero.old_negative={if next == helper + 0xe1 then 1 else 0}"
-    if pc == helper + 0x8d then
-      decisions := decisions.push s!"__refcount_add_not_zero.wraps={if next == helper + 0xe1 then 1 else 0}"
-    if pc == helper + 0x9d then
-      decisions := decisions.push "wg_peer_get_maybe_zero.refcount_zero=0"
   -- Exercise the proof-side observer on every concrete instruction state.
   -- This checks its event ordering, not the unfinished physical relation R.
   let observed ← Binary.LookupObservation.observe w.netRxSection r.history.toList
+  let decisions := (observed.filterMap (·.step)).toArray.map Leanux.Step.label
   let ((loggedAnswer, points), _) ← ((Binary.MirrorHistory.lookup [.handshake] input.query).run []).run w
     |>.mapError Leanux.Stop.message
   unless loggedAnswer == answer do throw "logged mirror changed lookup's result"
@@ -374,24 +355,27 @@ def deadPeerCounterexample (input : ProbeInput) (keypairCase : Bool := false) : 
   let w ← replayPrefix input.trace input.operation
   let some dev := w.k.wg | throw "no device"
   let [e] := dev.indexTable | throw "requires the single-entry fixture"
-  let e := if keypairCase then {e with kind := .keypair, keypair := some 0} else e
+  let some pid ← ownerWord dev e.owner | throw "fixture peer word already NULL"
+  let e := if keypairCase then {e with owner := .keypair 0} else e
   let dev := if keypairCase then
       {dev with
         indexTable := [e]
-        keypairs := dev.keypairs.insert 0 {peer := e.peer}}
+        keypairs := dev.keypairs.insert 0 {peer := some pid}}
     else dev
-  let some peer := dev.peers.get? e.peer | throw "missing peer"
+  let some peer := dev.peers.get? pid | throw "missing peer"
   let w := { w with k := { w.k with wg := some { dev with
-    peers := dev.peers.insert e.peer {peer with refcount := 0} } }, steps := #[] }
+    peers := dev.peers.insert pid {peer with refcount := 0} } }, steps := #[] }
   let (answer1, after1) ← (Leanux.WG.indexLookup [e.kind] e.index).run w
     |>.mapError Leanux.Stop.message
   let (answer2, after2) ← (Leanux.WG.indexLookup [e.kind] e.index).run {after1 with steps := #[]}
     |>.mapError Leanux.Stop.message
-  unless answer1.isNone && answer2.isNone && after1.k == w.k && after2.k == w.k do
-    throw "dead-peer mirror behavior changed"
-  let memory ← materialize dev.indexTable input.offsets input.preempt
+  unless answer1.isNone && answer2.isNone && after2.k == after1.k do
+    throw "dead-peer lookup result or second owner store differs"
+  let some afterDev := after1.k.wg | throw "device disappeared"
+  unless (← ownerWord afterDev e.owner).isNone do throw "mirror did not clear owning peer word"
+  let memory ← materialize dev input.offsets input.preempt
   let memory ← materializePeers dev input.offsets memory
-  let peerAddress := 0x600000 + e.peer * 0x1000
+  let peerAddress := peerAddr pid
   let memory := put memory (peerAddress + input.offsets.peerRefcount) 4 0
   let some entry := input.instructions[0]? | throw "empty program"
   let regs : Reg64s := {
@@ -423,23 +407,26 @@ def deadPeerCounterexample (input : ProbeInput) (keypairCase : Bool := false) : 
   unless !firstNull && secondNull do throw "expected changed null-peer decision on repeated lookup"
   let labels1 := after1.steps.map Leanux.Step.label
   let labels2 := after2.steps.map Leanux.Step.label
-  unless labels1 == labels2 do throw "mirror's repeated decisions unexpectedly differ"
+  for (r, source) in [(r1, after1), (r2, after2)] do
+    let points ← Binary.LookupObservation.observe w.netRxSection r.history.toList
+    unless (points.filterMap (·.step)).toArray == source.steps do
+      throw "two-lookup regression decision sequence mismatch"
   let alias ← if keypairCase then do
       let some d := after2.k.wg | throw "device disappeared"
       let some k := d.keypairs.get? 0 | throw "keypair disappeared"
-      unless k.peer == e.peer do throw "keypair peer alias changed"
+      unless k.peer.isNone do throw "keypair owner word was not cleared"
       pure (Json.mkObj [("physical_entry_peer", toJson (0 : Nat)),
         ("mirror_keypair_peer", toJson k.peer), ("mirror_peer_address", toJson peerAddress)])
     else pure Json.null
   return Json.mkObj [
-    ("status", toJson "counterexample reproduced"),
+    ("status", toJson "fixed two-lookup regression passed"),
     ("scope", toJson "synthetic accepted mirror state; kernel reachability not established"),
     ("machine_null_peer_decisions", toJson [firstNull, secondNull]),
     ("mirror_first", toJson labels1), ("mirror_second", toJson labels2),
     ("machine_instructions", toJson [r1.pcs.size, r2.pcs.size]),
     ("machine_peer_pointer_before", toJson peerAddress),
     ("machine_peer_pointer_after", toJson (0 : Nat)),
-    ("mirror_peer_id_after", toJson e.peer), ("keypair_alias", alias)]
+    ("mirror_peer_id_after", toJson (none : Option Nat)), ("keypair_alias", alias)]
 
 /-! Concrete tests of the named service specifications against the pinned
     fetched instruction bodies. These tests are not used by any proof. -/

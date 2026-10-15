@@ -94,8 +94,8 @@ intermediate instruction states needed for the pending loop composition.
 `ScanNode.node_to_compare` composes the nonempty-node path +0x34 to +0x59,
 including four actual instrumentation calls, with physical framing at every
 appended cut. `LoopSearch.lookup_split` relates its source decomposition to
-the actual logged lookup. Recursive loop composition and whole-World R are
-still open. Replay these components with:
+the actual logged lookup. The recursive physical loop is composed below; whole-World R remains
+open. Replay these components with:
 
 ```sh
 cd binary
@@ -118,3 +118,24 @@ while changing its embedded peer word, including to NULL; owner-ID
 correspondence is separate. Replay these additions with `capped -- lake env
 leanchecker Representation LookupType ScanSearch ScanType BucketScan
 KeypairRepresentation`.
+
+
+The owner-shaped mirror repair is merged from `de62c9d`. `OwnerWord` and
+`OwnerStore` relate and execute the single nullable peer word embedded in a
+handshake or keypair; the source setter reloads the current owner. The
+`dead-peer` and `dead-keypair` commands now check fixed two-lookup regressions.
+They are constructed states, not kernel entry snapshots.
+
+`DeviceScalars`, `SerialCpu` and `ListRing` add exact stable fields and active
+circular-list components for whole-World R. Names, object-store membership,
+retirement, and the remaining heap components are separate obligations.
+`PeerPrologueHistory`, `PeerSignHistory`, `PeerReturnHistory`,
+`PeerSavedHistory` and `PeerFinishHistory` retain actual helper instruction
+histories; `MirrorPeerPoints` identifies the corresponding source worlds.
+The complete helper and lookup correspondence proofs remain open.
+
+Replay the current owner, list and helper-history components in `binary/`:
+
+```sh
+capped -- lake env leanchecker Layouts SerialCpu DeviceScalars ListRing MirrorLoop MirrorHistory MirrorPeerPoints LoopSearch PeerSignHistory PeerReturnHistory PeerSavedHistory PeerPrologueHistory PeerFinishHistory OwnerWord OwnerStore BucketScan
+```

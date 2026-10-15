@@ -83,12 +83,16 @@ theorem result_world (kinds : List IndexKind) (index : Nat) (es : List IndexEntr
 
 /-- The suffix starts after the found decision. It retains the actual helper
     call and the peer-alive decision; it does not log found a second time. -/
-def searchSuffix (entry : Option IndexEntry) : MirrorHistory.Logged (Option IndexEntry) := do
+def searchSuffix (entry : Option IndexEntry) : MirrorHistory.Logged (Option (IndexOwner × PeerId)) := do
   match entry with
   | none => return none
   | some e =>
-    let peer ← MirrorHistory.called "wg_peer_get_maybe_zero" (MirrorHistory.peerGet (some e.peer))
-    if ← MirrorHistory.branchLogged .idxPeerAlive peer.isSome then return entry
+    let word ← StateT.lift e.owner.peerWord
+    let peer ← MirrorHistory.called "wg_peer_get_maybe_zero" (MirrorHistory.peerGet word)
+    StateT.lift (e.owner.setPeerWord peer)
+    if ← MirrorHistory.branchLogged .idxPeerAlive peer.isSome then
+      let some pid := peer | StateT.lift (invariant "unreachable")
+      return some (e.owner, pid)
     return none
 
 /-- Splitting the terminal source code preserves its complete logged run,

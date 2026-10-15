@@ -10,6 +10,7 @@ from elftools.dwarf.dwarf_expr import DWARFExprParser
 from census import ORACLE, ROOT, extract
 from layouts import layouts, type_bytes
 from peer_layouts import generate_peer_scalars
+from device_layouts import generate_device_scalars
 
 
 def main():
@@ -164,7 +165,7 @@ def main():
         if o[record]['member_sizes'][field] != expected_size:
             raise ValueError(f'fixture field width differs from mirror: {record}.{field}')
     for record, prefix, fields in [
-            ('wg_device', 'device', ['cookie_checker', 'peer_hashtable']),
+            ('wg_device', 'device', ['cookie_checker', 'peer_hashtable', 'peer_list']),
             ('cookie_checker', 'cookie', ['secret', 'secret_birthdate']),
             ('pubkey_hashtable', 'pubkeyTable', ['key'])]:
         text += [f'def {prefix}Size : Nat := {o[record]["size"]}']
@@ -196,7 +197,21 @@ def main():
                   + o['refcount_struct']['members']['refs'])
     text += [f'def peerSize : Nat := {o["wg_peer"]["size"]}',
              f'def peer_refcount : Nat := {peer_count}',
+             f'def peer_serial_work_cpu : Nat := {o["wg_peer"]["members"]["serial_work_cpu"]}',
              f'def peer_keypairs : Nat := {o["wg_peer"]["members"]["keypairs"]}']
+    for record, prefix, fields in [
+            ('list_head', 'list', ['next', 'prev']),
+            ('wg_peer', 'peer', ['peer_list', 'allowedips_list']),
+            ('allowedips_node', 'allowedipsNode', ['peer_list'])]:
+        text += [f'def {prefix}_{field} : Nat := {o[record]["members"][field]}' for field in fields]
+    for record, field, width in [('wg_device', 'peer_list', 16),
+            ('wg_peer', 'peer_list', 16), ('wg_peer', 'allowedips_list', 16),
+            ('allowedips_node', 'peer_list', 16), ('list_head', 'next', 8),
+            ('list_head', 'prev', 8)]:
+        if o[record]['member_sizes'][field] != width:
+            raise ValueError(f'{record}.{field}: unexpected list field width')
+    if o['list_head']['size'] != 16:
+        raise ValueError('list_head must contain two 64-bit pointers')
     with ORACLE.open('rb') as stream:
         symbols = ELFFile(stream).get_section_by_name('.symtab').get_symbol_by_name('keypair_counter')
         if not symbols or len(symbols) != 1 or symbols[0]['st_size'] != 8:
@@ -240,6 +255,7 @@ def main():
         'end Binary.Layouts', '']
     (ROOT / 'binary/Layouts.lean').write_text('\n'.join(text))
     generate_peer_scalars(ROOT, o)
+    generate_device_scalars(ROOT, o)
 
 
 if __name__ == '__main__':

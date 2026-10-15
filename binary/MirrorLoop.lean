@@ -77,14 +77,17 @@ theorem sourceBody_eq_body (kinds : List IndexKind) (index : Nat) :
   cases hm : (e.index == index) <;> cases ht : (kinds.contains e.kind) <;>
     simp [sourceBody, body, branch, hm, ht] <;> rfl
 
-def finish (a : Acc) : M (Option IndexEntry) := do
+def finish (a : Acc) : M (Option (IndexOwner × PeerId)) := do
   let entry := a.1
   let stopped := a.2
   if !stopped then _ ← branch .idxWalk false
   if ← branch .idxFound entry.isSome then
     let some e := entry | invariant "unreachable"
-    let peer ← peerGetMaybeZero (some e.peer)
-    if ← branch .idxPeerAlive peer.isSome then return entry
+    let peer ← peerGetMaybeZero (← e.owner.peerWord)
+    e.owner.setPeerWord peer
+    if ← branch .idxPeerAlive peer.isSome then
+      let some pid := peer | invariant "unreachable"
+      return some (e.owner, pid)
   return none
 
 /-- This equality checks that the recursive presentation is the actual
@@ -117,7 +120,7 @@ theorem indexLookup_run (kinds : List IndexKind) (index : Nat)
   change ((do
     let a ← forIn (d.indexTable.filter (fun e => e.index % 8192 == index % 8192))
       (none, false) (body kinds index)
-    finish a) : M (Option IndexEntry)).run w = _
+    finish a) : M (Option (IndexOwner × PeerId))).run w = _
   exact loop_then _ _ _ _ _ _
 
 #print axioms loop_run

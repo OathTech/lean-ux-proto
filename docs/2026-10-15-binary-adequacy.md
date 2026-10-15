@@ -9,6 +9,15 @@ property is claimed by the current region lemmas.
 narrow `Pre_f` to exclude it. The correction is being made on the mirror
 lane and will be merged from main. Continue the other regions meanwhile.
 
+Resolution: the owner-shaped repair landed on main at `de62c9d` and was
+merged into this branch at `a3c0a44` after the user's landing paste. The
+historical finding and its every-path scope remain. Both handshake-owner
+and keypair-owner two-lookup regressions now pass: the first clears the
+single peer word, and the second takes the null-peer branch. The commands
+below exercise the fixed regression on this branch; the original failure
+is preserved in the pre-fix history. No dead-peer state was excluded from
+Pre or R to obtain this result.
+
 Classification: **mirror defect**. In the pinned ELF,
 `wg_index_hashtable_lookup+0xba` (`0xffffffff813a052a`) executes
 `mov %rax,(%rbx)`. Linux's `drivers/net/wireguard/peerlookup.c:218` assigns
@@ -687,3 +696,120 @@ function or whole-R region is certified; the support lemmas do not count
 toward the milestone's measured region rate. The final milestone report
 still owes that rate and the trust base verbatim. No main merge or push; no
 mirror-lane landing paste has arrived.
+
+
+## Landed owner repair and physical components, 2026-10-15
+
+[USER 2026-10-15] Merge main after the `de62c9d` landing paste; retain
+finding 1 and dead-peer states without narrowing Pre or R. Abstract peer
+retirement using the lifecycle design's section 16.6 no-reader claim, and
+report any reader found by the regions. The merge is `a3c0a44`; main itself
+was not advanced by this work.
+
+The logged lookup and its decomposition now follow the landed owner shape:
+read the nullable word through its handshake/keypair owner, call peer-get,
+record its return, reload the current owner, write the result, then record
+`idxPeerAlive`. Reloading matters when the handshake owner is the peer the
+helper just incremented. `OwnerWord` relates that one word by its embedded
+physical address, and `OwnerStore` proves the actual +0xba MOV with its
+exact eight-byte frame and the source setters' current-record premises.
+NULL and non-NULL stores use the same lemmas. Naming includes represented
+zero-count peers; the component does not identify ownership by reading the
+nullable word.
+
+The materializer follows those same owner addresses. Both synthetic
+regressions execute 96 then 75 instructions, observe null decisions
+`[false, true]`, and agree with the complete mirror decision sequences.
+The keypair case checks the formerly stale alias as well. These remain
+constructed accepted states, not measured reachable kernel entry states.
+Review found a separate probe bug: its duplicate manual decision projector
+always emitted dead=false at the common final callback. It was removed in
+favor of the actual-history observer, which correctly distinguishes null,
+dead and live paths. Both recorded comparisons passed again after that fix.
+
+`DeviceScalars` generates 13 stable physical equations from DWARF, including
+exact non-placeholder key bytes and signed CPU words. `SerialCpuField`
+decodes every 32-bit serial-work CPU word, with the sentinel 1 represented
+by `none`; this closes the `none`/`some 1` ambiguity in the older scalar
+component when included in R. The four documented opaque fixture fields
+remain governed by `FixtureKnowledge`, not by physical-zero requirements.
+`ListRing` supplies exact forward and backward links, the closing sentinel,
+ordered physical-list functionality and byte framing. Its two instances
+relate `Device.peerList` and `Peer.allowedipsList` through DWARF locations.
+Store membership and names remain separate: teardown unlinks a peer before
+its references disappear, transiently before `numPeers` is decremented,
+and may reuse its link in the local dead-peers list. Retired allowed-IPs
+nodes share list storage with their RCU callback and need lifetime equations.
+
+`MirrorPeerPoints` gives the exact source worlds at all helper decisions
+and return, for null, dead and accepted live counts. `PeerSignHistory`
+retains the actual TEST/JS states and universally chosen AF.
+`PeerReturnHistory` and `PeerSavedHistory` execute all eight epilogue
+instructions with every successor present. `PeerFinishHistory` composes
+the final callback and epilogue, proves the exact return observation and
+memory framing at every appended cut. `PeerPrologueHistory` records the
+six saves, argument copy and actual callback CALL. These are physical and
+source components; they do not yet establish R at all helper points.
+
+Review dispositions: the probe projection defect is fixed. Owner naming,
+present-store membership, and separation between distinct owning objects
+are retained as concrete full-R obligations, not silently assumed by
+`OwnerWord.At`. Stores must compose with `OwnerStore.set_*_run` to obtain
+the current record. A history-upgrade trap was also identified: the old
+`incremented` endpoint abstraction intentionally ignores flags; the exact
+CMPXCHG/XOR history must instead carry the actual status and undefined AF.
+The existing endpoint proof is unaffected.
+
+The lifecycle no-reader claim still needs a lifetime argument. Inspection
+found syntactic post-put reads in the next receive-poll queue iteration and
+NAPI completion (`RxData`), and in the next transmit queue iteration (`Data`).
+This is not yet a reachable zero-to-reader counterexample: the device's
+reference and teardown drains may prove those puts cannot reach zero while
+those readers remain. R must establish that condition before treating a
+retired peer as inaccessible garbage. The constructed zero-count lookup
+peers remain present and readable, as required by the every-path scope.
+
+No trust-base declaration was added or changed by this batch. Whole-World
+R still needs the remaining pointer, queue, timer, endpoint/cache and
+non-WireGuard equations, then the actual helper pending-count phase and
+lookup pending-owner-word phase. The bucket loop's physical invariant must
+be lifted through those equations. `Pre_lookup` remains absent until its
+concrete formal witness accompanies it; neither a weak placeholder Pre nor
+an assumed R-preservation lemma was introduced. Function adequacy and
+generic transport are still open, and no function or whole-R region is
+certified. The milestone report still owes the measured region rate and
+`TrustBase.lean` verbatim. The mirror proof register remains lagging for
+ReplayWindow since `247beec`, including its index-lookup framing repairs;
+no landed property has been transported by these components.
+
+Validation for this batch: full-parallel capped build passed (226 jobs),
+283 printed axiom dependency lists contained only the standard three
+axioms, and the source audit passed for 71 Lean files. The generator's six
+Lean outputs reproduce byte-for-byte. Initial syntax/elaboration attempts,
+including heartbeat timeouts, failed and were corrected before the final
+build; none counted as a pass. The fast tier passed 124 tests with one skip
+in 37.130 seconds. Both fresh recorded three-way tests passed, then passed
+again against those captures after the projector correction: bucket miss
+`d1_wrong_receiver_index_same_bucket` (45 summarized-service instructions,
+191 with actual services) and live `d1_second_response` (111 and 506).
+`LEANUX_QEMU_SLOTS=16` was used. Both two-lookup owner regressions passed
+again after the correction. Captures and logs remain ephemeral.
+
+Reproduce the recorded checks with `LEANUX_QEMU_SLOTS=16 capped --
+/usr/bin/python3 binary/run.py` and the same command with
+`--trace d1_second_response`; reuse a completed capture using `--check`.
+Run the two owner regressions using the commands at finding 1. Build with
+`capped -- lake build BinaryProofs binary-probe` in `binary/`.
+
+Kernel replay passed for the 16 changed/new proof modules. Reproduce in
+`binary/` with `capped -- lake env leanchecker Layouts SerialCpu
+DeviceScalars ListRing MirrorLoop MirrorHistory MirrorPeerPoints LoopSearch
+PeerSignHistory PeerReturnHistory PeerSavedHistory PeerPrologueHistory
+PeerFinishHistory OwnerWord OwnerStore BucketScan`. No main update or push.
+
+Independent read-only review found no correctness defect in the prologue,
+shared finish, or circular-list proofs, and rechecked all six list offsets
+and widths against DWARF. Its remaining boundaries are explicit: ring
+functionality determines addresses, so semantic identities still require
+injective lifetime names and membership; the shared finish exports per-cut
+memory framing, not per-cut whole-R correspondence or KCOV state by itself.

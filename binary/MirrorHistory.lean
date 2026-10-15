@@ -216,14 +216,18 @@ theorem loop_erases (kinds : List IndexKind) (index : Nat)
     Erases (forIn es a (body kinds index)) (forIn es a (LookupMirror.body kinds index)) :=
   erases_forIn es a _ _ (body_erases kinds index)
 
-def finish (a : LookupMirror.Acc) : Logged (Option IndexEntry) := do
+def finish (a : LookupMirror.Acc) : Logged (Option (IndexOwner × PeerId)) := do
   let entry := a.1
   let stopped := a.2
   if !stopped then _ ← branchLogged .idxWalk false
   if ← branchLogged .idxFound entry.isSome then
     let some e := entry | StateT.lift (invariant "unreachable")
-    let peer ← called "wg_peer_get_maybe_zero" (peerGet (some e.peer))
-    if ← branchLogged .idxPeerAlive peer.isSome then return entry
+    let word ← StateT.lift e.owner.peerWord
+    let peer ← called "wg_peer_get_maybe_zero" (peerGet word)
+    StateT.lift (e.owner.setPeerWord peer)
+    if ← branchLogged .idxPeerAlive peer.isSome then
+      let some pid := peer | StateT.lift (invariant "unreachable")
+      return some (e.owner, pid)
   return none
 
 theorem finish_erases (a : LookupMirror.Acc) :
@@ -243,13 +247,25 @@ theorem finish_erases (a : LookupMirror.Acc) :
         intro _
         exact erases_pure _
       | some e =>
+        apply erases_bind (erases_lift _)
+        intro word
         apply erases_bind (called_erases _ _ _ (peerGet_erases _))
         intro peer
+        apply erases_bind (erases_lift _)
+        intro _
         apply erases_bind (branch_erases _ _)
         intro alive
-        cases alive <;> exact erases_pure _
+        cases alive with
+        | false => exact erases_pure _
+        | true =>
+          cases peer with
+          | none =>
+            apply erases_bind (erases_lift _)
+            intro _
+            exact erases_pure _
+          | some pid => exact erases_pure _
 
-def lookup (kinds : List IndexKind) (index : Nat) : Logged (Option IndexEntry) :=
+def lookup (kinds : List IndexKind) (index : Nat) : Logged (Option (IndexOwner × PeerId)) :=
   called "wg_index_hashtable_lookup" do
     let es ← StateT.lift (indexBucket index)
     let a ← forIn es (none, false) (body kinds index)
