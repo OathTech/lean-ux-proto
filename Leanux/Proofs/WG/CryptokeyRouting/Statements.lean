@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Packets.PublicationIdentity
 import Leanux.Proofs.WG.Origins.SupportRunner
 import Leanux.Proofs.WG.Origins.SupportEnvironment
 import Leanux.Proofs.WG.Origins.RetainingLifecycle
@@ -3001,5 +3002,75 @@ theorem initialized_committed_material_support :
     fun trace placeholders pre post p he =>
       Origins.HistorySupport.HistorySafe.probe _ pre post p
         (Origins.HistorySupport.executeTraceHistory_support trace placeholders) he⟩
+
+/-- Supplied configured-table coherence is preserved by original creation,
+retirement, make-dead and fresh owner acquisition. Lookup identifies its actual
+resident configured key. Slot bounds do not bound process-global stamps;
+dangling rows and dead residents are allowed. This is not initialized closure. -/
+theorem original_configured_peer_identity :
+    (∀ key psk, ⦃fun w=>⌜ConfiguredIdentity.Inv w⌝⦄ WG.peerCreate key psk
+      ⦃⇓? result w=>⌜ConfiguredIdentity.Inv w ∧ ∀pid,result=.ok pid →
+        ∃s p,ConfiguredIdentity.view w=some s ∧ s.peers pid=some p ∧ p.static=key⌝⦄) ∧
+    (∀ key w v pid, ConfiguredIdentity.Inv w →
+      (WG.pubkeyLookup key).run w=.ok (some pid,v) →
+      ConfiguredIdentity.view v=ConfiguredIdentity.view w ∧
+      ∃d p,w.k.wg=some d ∧ d.peers[pid]?=some p ∧ (key,pid)∈d.peerHashtable ∧
+        p.remoteStatic=key ∧ 0<p.refcount) ∧
+    (∀ peer, ⦃fun w=>⌜ConfiguredIdentity.Inv w⌝⦄ WG.peerPut peer
+      ⦃⇓? _ w=>⌜ConfiguredIdentity.Inv w⌝⦄) ∧
+    (∀ pid w v, ConfiguredIdentity.Inv w →
+      (WG.peerMakeDead pid).run w=.ok ((),v) → ConfiguredIdentity.Inv v) ∧
+    (∀ owner w v result, ConfiguredIdentity.Inv w →
+      (Affiliation.acquireOwner owner).run w=.ok (result,v) → ConfiguredIdentity.Inv v) :=
+  ⟨ConfiguredIdentity.peerCreate_spec,ConfiguredIdentity.pubkeyLookup_identity,
+    ConfiguredIdentity.peerPut_preserves,ConfiguredIdentity.peerMakeDead_preserves,
+    ConfiguredIdentity.acquireOwner_preserves⟩
+
+/-- Configured material support retains one actual derivation-front Context,
+material/owner witness and entry table row. The actual whole normal session tail
+supplies live/self facts; a Some front alone may precede a Stop. The unchanged
+observer has unconditional erasure and its original same-input AllocationInv
+projection. Incoming configured support is supplied, not initialized here. -/
+theorem original_configured_session_support :
+    (∀ pid, Logged.ErasesPrefix (SessionOrigin.observed pid) (WG.beginSession pid) ∧
+      Logged.ProjectsUnder Lifetimes.AllocationInv MaterialOrigin.life?
+        (SessionOrigin.observed pid) (Lifetimes.beginSessionPrefix pid)) ∧
+    (∀ pid w v result history, ConfiguredIdentity.Inv w → ConfiguredSession.Inv history w →
+      (WG.beginSession pid).run w=.ok (result,v) →
+      ∃front u,(SessionOrigin.front pid).run w=.ok (front,u) ∧
+        ConfiguredSession.Inv (history++[SessionOrigin.Receipt.material pid ⟨front,w,u⟩]) v) ∧
+    (∀ pid w v result h t, MaterialOrigin.Valid SessionOrigin.Receipt.Valid h →
+      ConfiguredIdentity.Inv w → ConfiguredSession.Inv (h.filterMap Origins.receipt?) w →
+      Logged.runPrefix (SessionOrigin.observed pid) w h=(.ok (result,v),t) →
+      ConfiguredSession.Inv (t.filterMap Origins.receipt?) v) ∧
+    (∀ history epoch slot key pid, ConfiguredSession.Supported history epoch slot key →
+      key.peer=some pid → ConfiguredSession.ByPeer history epoch slot key pid) :=
+  ⟨fun pid=>⟨SessionOrigin.observed_erases pid,SessionOrigin.observed_projects pid⟩,
+    ConfiguredSession.beginSession_support,ConfiguredSession.observed_support,
+    fun _ _ _ _ _ hs hw=>hs.byPeer hw⟩
+
+/-- Original prepare's fresh decrypt receipt is linked to the actual captured
+ring item and write. A successful decrypt then identifies its historical
+configured session caller, exact AEAD transformation and state-only stored
+publication before IRQ. Some prepare may instead publish DEAD. The endpoint
+claim is normal-only; lower receiptObserved separately retains later Stop
+prefixes. Supplied support/compatibility are explicit, and current peer-slot
+identity, initialized publication and later Stack/routing joins remain open. -/
+theorem original_rx_publication_identity :
+    Logged.ErasesPrefix RxOrigin.prepare Queues.RxWorkers.prepareSource ∧
+    Logged.ProjectsUnder Lifetimes.AllocationInv MaterialOrigin.life?
+      RxOrigin.prepare Queues.RxWorkers.preparePrefix ∧
+    (∀ history w v h t pid, ConfiguredSession.Inv history w → Queues.RxCredits.RxCompatible w →
+      Logged.runPrefix RxOrigin.prepare w h=(.ok (some pid,v),t) →
+      ∃d id ring, ∃(r : Logged.RunWitness (RxPacket × Option RxPacket)), ∃pre suffix,
+        w.k.wg=some d ∧ d.decryptQueue.consume=(some id,ring) ∧
+        r.before=Packets.update (CounterWindow.record w .decWorkerConsumed true)
+          (fun d=>{d with decryptQueue:=ring}) ∧
+        r.Valid (RxOrigin.readDecrypt id) ∧
+        Logged.runPrefix (MaterialOrigin.access (RxOrigin.readDecryptPrefix id)) r.before h=
+          (.ok (r.value,r.after),h++pre) ∧
+        t=h++pre++[MaterialOrigin.Event.receipt (RxOrigin.Receipt.decrypt id r)]++suffix ∧
+        ∀out,r.value.2=some out → PublicationIdentity.Identity history id r out pid v) :=
+  ⟨RxOrigin.prepare_erases,RxOrigin.prepare_projects,PublicationIdentity.prepare_identity⟩
 
 end Leanux.Proofs.WG.CryptokeyRouting

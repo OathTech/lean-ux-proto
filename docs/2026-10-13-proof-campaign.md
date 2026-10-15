@@ -4,8 +4,9 @@
 
 Work on `proofs/campaign` in `.worktrees/proofs-campaign` follows [the charter](2026-10-13-charter-proof-campaign.md),
 with representation batch `cb2348e` carried and validated. All seven baseline results are current there, including the
-local normal-poll carrier and initialized R3 committed-support extensions. The new local R4
-whole-admission/stable-RX extension passes independent review and coordinated validation. Earlier results include the local R4
+local normal-poll carrier and initialized R3 committed-support extensions. The local R4
+whole-admission/stable-RX extension passes independent review and coordinated validation. The new R3
+configured-peer/session/publication source cuts pass independent review and coordinated validation. Earlier results include the local R4
 packet-to-receipt link extension, local R3 owner-acquisition material frame and initialized R4 linkage.
 The session/decrypt source injection is validated with the original caller, audit and R4 contracts preserved.
 The local RX reference-transfer/discharge extension passes coordinated validation.
@@ -20,106 +21,69 @@ was made by this campaign.
 | --- | --- |
 | R1 | Replay uniqueness proved; inclusive-floor correction witnessed. |
 | R2 | Initialized allocation-identity access safety proved, including failures/trials; affiliation/credits separate. |
-| R3 | Parsed initialized routing histories and initialized committed material support proved; configured identity and packet binding open. |
+| R3 | Initialized routing/committed material support and local configured identity/publication cuts; initialized packet authorization open. |
 | R4 | Initialized entry/completion uniqueness and packet/receipt linkage; chronology refuted; receive-pipeline conservation open. |
 | R5 | Accepted age/post-zero/wire-nonce counterexamples; thirteen positive local contracts. |
 | R6 | Cookie exclusion proved; literal MAX=18 refuted, without a replacement universal bound. |
 
-**Preceding R3 stateful support (`a945ea8`, validated).** Three grouped exports
-preserve all 508 prior terminal bodies: 511 declarations (509 theorems/two definitions; 135 R3/125 R4).
-[HistorySupport](../Leanux/Proofs/WG/Origins/HistorySupport.lean),
-[SupportCallers](../Leanux/Proofs/WG/Origins/SupportCallers.lean) and
-[SupportEnvironment](../Leanux/Proofs/WG/Origins/SupportEnvironment.lean) preserve supplied receiving-material
-support through the existing session/decrypt, poll, scheduler and complete deferred/remaining environment
-observers. Each decrypt receipt uses its exact strict earlier journal prefix and captured entry World;
-successful decrypt retains the actual stored packet/key, full derivation-front witness and AEAD equation. Each saved
-filter entry has the exact prior lifetime projection and support at its saved World, including filter Stop.
-Normal return preserves state support; every outcome preserves receipt and positional checks, not a failed World.
-This origin-only history predicate is separate from R2 access validity and invalid-key RX carrier ownership.
-At that checkpoint, initialization/configuration/dump composition remained open; `b4acf05` closes committed
-support. Ingress admission, configured peer identity and packet transport remain open; copied-trial origin transcripts are optional separate coverage.
+**Current R3 configured-identity extension (validated).** Three groups add
+actual peer creation/lookup/retirement/make-dead/fresh owner-acquisition contracts, one-witness configured
+session support, and successful RX publication identity. All518 prior terminal bodies remain unchanged;
+521 declarations (519 theorems/two definitions;141 R3/129 R4). Supplied table coherence bounds
+raw slots, permits dangling rows/dead residents, and never bounds process-global stamps by slot frontiers.
+A normal whole session, including its actual live/self tail, supplies the configured derivation-front Context;
+a Some front alone may precede a Stop. Actual normal prepare identifies the captured ring item/write,
+fresh decrypt receipt position, full packet/key/AEAD transformation and state-only publication before IRQ.
+DEAD publication does not assert successful decryption. Configured support and RX compatibility remain
+supplied premises; initialized configured identity, current peer-allocation transport and the routing/Stack
+join remain open. The old original erasures, same-input AllocationInv R2 projections and initialized domains
+are unchanged. No cryptographic authentication or accepted counterexample is claimed.
 
-The preceding `8f9b8a2` R4 callback checkpoint passed its 508-job/508-declaration permitted-axiom gate,
-fresh kernel replay, default60 and 103 tests (21.919s, one skip), with independent review and exact checks.
-Its same-ledger normal protection and nullable compatibility boundaries remain unchanged.
-At that checkpoint, review found unfunded Handoff ghost loans; explicit funded transport and resident-owner
-consequences resolved the finding. Its initial write/build shell lacked fail-closed chaining: the write succeeded,
-but the process-rule failure was reported and subsequent commands were corrected.
+**Current effort and review.** The 42 worker calls comprise 40 builds (six clean PASS, 34 ordinary FAIL)
+and two passing exact checks. Scoped/full builds pass 474/523 jobs. Coordinated validation passes the
+523-job/521-declaration proof gate, fresh kernel replay after compilation, default 60-job build and
+103 tests (21.825s, one skip). Exact checks preserve all 518 prior bodies, four frozen Lean sources,
+six-path scope, recipes and mirror pin. Independent static review found no substantive issue; root review
+corrected the register to retain parsed routing's parser premise separately from all-typed committed support.
+Failures concern annotations, source normalization and observer composition; default 200k exhaustion in
+call 26 was repaired structurally. Calls 01/03/17 displayed rejected elaboration-recovery goals, with no source
+admission. Two early multi-write shell calls lacked explicit fail-fast chaining; their writes succeeded and
+no error was masked. Subsequent edits use one Python call with separate checks. A duplicate collection of
+finished call 19 returned an unknown-handle diagnostic without losing a running job. No interruption,
+cap/limit increase or infrastructure retry occurred. The commit records the full measured ledger and commands.
 
-**Preceding R4 normal-poll carrier checkpoint (`f1209f5`, validated).** Two groups preserve the older
-511 terminal bodies: 513 declarations (135 R3/127 R4). Concrete key/current frames, Stack callbacks and
-normal poll execution retain the supplied funded RX inventory, filtered by fresh removals with removed storage
-absent and the named nondelivery/completion partition. Uncrypted heads may remain. Initialized pipeline
-conservation and configured identity remain open. Its worker ledger was 44 calls (42 builds:10 PASS/32 ordinary
-FAIL; two exact checks), scoped431/full514. Gate514/513, fresh replay after compilation, default60 and
-103 tests (21.635s, one skip) passed. The commit retains measured effort, default-limit status, rejected kernel
-metavariables in01/26 and recovery placeholders in10/19/22/33/40, with no source admission. Independent review
-corrected two stale scope clauses. [AGENT 2026-10-15] Deletion-tolerant normal-poll composition allows actual
-positive payment to retire its peer; a later original getter may Stop. No invented caller/base reservation or
-totality premise simplifies the loop; failed prefixes remain separate from endpoint Worlds.
-
-**Preceding R3 committed support (`b4acf05`, validated).** Three groups preserve 513 prior bodies:
-516 declarations (514 theorems/two definitions; 138 R3/127 R4). Actual configuration/dump, eventful syscall
-wrappers and post-workers compose support from original initialization/prefill for all typed traces/both flags.
-Successful decrypts retain actual packet/key/AEAD evidence and a successful derivation-front receipt in their
-strict earlier committed prefix; saved probes retain captured-World support. Later session-tail steps may Stop.
-The sixteen-call ledger (14 builds: five clean PASS/eight FAIL/one exit-zero diagnostic finding; two exact PASS),
-scoped464/full517, independent review and gate517/516, fresh replay, default60 and 103 tests (21.784s/one skip)
-are retained in that commit. Default-limit failures06/08 and unchecked tactic-index diagnostics09/10 were
-repaired structurally; call09's exit zero was not a clean pass. The canonical import fixed call12's generated-name
-collision. Review corrected stale provenance gaps and the derivation-front/whole-session distinction.
+**Preceding checkpoints.** `a945ea8` supplied stateful material support, initialized by `b4acf05` for all
+typed traces/both flags including Stops. `b4acf05` passed scoped464/full517 and gate517/516, fresh replay,
+default60 and103 tests (21.784s/one skip); its16 calls include five clean builds/eight failed builds/one exit-zero
+tactic-index diagnostic and two passing exact checks. The checked source-head repair and canonical import
+fix, and review's derivation-front/whole-session distinction, remain recorded in that commit.
 [AGENT 2026-10-15] Split ordered copied-trial transcripts from configuration/dump plus committed support:
 occurrence-indexed alternate executions need their own accounting contract on the existing journal.
 
-**Current R4 admission/stable extension (validated).** Two groups preserve all
-516 prior terminal bodies: 518 declarations (516 theorems/two definitions; 138 R3/129 R4).
-`RxAdmissionCarrier` derives actual nullable acquisition, allocation freshness and transfer into the supplied
-inventory/queue/credit/key-compatibility product. `RxIngressCarrier` closes original whole consumeData: its
-same admission witness retains the actual index/key/peer/allocation chain, enqueue result and finish run.
-Success and EPIPE retain the queued carrier; ENOSPC pays key/peer references and frees the unpublished cell.
-The existing receipt observer appends that exact witness before the finish suffix. The public endpoint theorem
-assumes normal return; the separate lower receipt equation also covers a later Stop with no failed World.
-`RxIngressStable` relates all queued carriers to the logical uncrypted ring contents and requires only an
-uncrypted head of each cold nonempty peer queue. A dead EPIPE tail is permitted and is processable as a drop.
-Whole normal admission preserves this same outcome-selected stable ledger. The existing physical ring observer
-separately supplies its actual appended safe/refined journal for the same original normal execution. At a supplied
-stable boundary, empty physical ring plus cold resident NAPI flags force the ledger and RX store empty, including
-ring size zero. No initialized ingress injection, worker/ring/callback propagation or full pipeline closure is claimed.
+`8f9b8a2` validated full staged-send/consume protection (gate508/508, replay, default60,103 tests/one skip).
+Review's unfunded ghost-loan finding was resolved by funded transport and resident-owner consequences.
+Its initial write/build shell lacked fail-closed chaining; the write succeeded, the process defect was reported,
+and subsequent commands were corrected. `f1209f5` validated concrete Stack and normal-poll carrier contracts
+(gate514/513, replay, default60,103 tests/one skip;44 calls). Its rejected kernel metavariables/recovery goals
+and two corrected scope clauses are recorded there. [AGENT 2026-10-15] Deletion-tolerant normal-poll composition
+allows actual positive payment to retire its peer; a later getter may Stop. No invented caller/base reservation
+or totality premise simplifies the loop; failed prefixes remain separate from endpoint Worlds.
 
-**Current effort.** The admission lease began19:18:39 UTC; finishing ownership accepted20:04:04 after root30 passed371; reserve21:08:39/call62,
-deadline21:28:39/call72. Scoped47 passes434 jobs, collected20:28:01; full48 passes520, collected20:28:08.
-Full49 passes520 after the new export's comment correction, collected20:29:01. All49 build calls are collected:
-14 PASS/35 ordinary FAIL. PASS calls are02/05/12/17/21/23/26/30/42/44/46/47/48/49. The remaining calls failed
-ordinary elaboration, source-effect normalization or composition. Default recursion failed in13/14/25/28/39;
-failed-elaboration recovery goals appeared in13/16/27/39. No source admission, kernel diagnostic, cap/limit increase
-or infrastructure retry occurred. Call45's multiple-target split and endpoint rewrite were repaired locally.
-The initial worker's usage-limit interruption happened after call16 had finished with failure; root recovered its
-FAIL/COLLECTABLE result (19:43:12), preserved all five dirty worktrees before editing at19:48:15 under
+`192c7e7` validated whole normal admission and stable RX: exact admission receipt/allocation/enqueue/finish,
+retained queued carrier on0/EPIPE, paid/freed ENOSPC, logical uncrypted-ring/cold-head structure and stable
+ring-empty/NAPI-cold emptiness even at size zero. Its physical ring observer remains a separate correspondence;
+initialized pipeline conservation is open. Gate520/518, fresh replay after compilation, default60 and103 tests
+(22.860s/one skip) passed. The52 calls comprised49 builds(14PASS/35FAIL) and three exact PASS; default recursion
+13/14/25/28/39 and recovery13/16/27/39 were repaired without raised limits. The worker usage interruption followed
+finished failed16; root preserved all five dirty worktrees before takeover under
 `refs/snapshots/proof-campaign-r4-admission-usage-20261015T194814Z/`, campaign snapshot
-`06e337a6c24a24918ab45176d50cdd3f495f9487`, then continued with no active process. Worker01–16 had3PASS/13FAIL;
-root17–30 had5PASS/9FAIL; finishing31–49 had6PASS/13FAIL. No memory cap was hit. Every heavy call uses
-Lake parallelism32/QEMU slots16, unchanged32G and per-Lean `-j1`; no new proof limit was raised.
-Root's intermediate stable review20:08:36–20:19:06 covered the supplied-state model through free.
-Finding1 at the final source boundary distinguished the normal-only public export from the broader lower
-stopped-finish receipt lemma; the new comment was corrected and rebuilt. Exact50 passes the six-path scope,
-all516 old bodies,518 declarations, tokens/imports/default limits, whitespace/EOF, unchanged recipes and mirror/index/pins
-(collected20:31:45). Final source/export/docs review is clear at20:33:01 after Finding1 was fixed.
-Exact51 passes the review metadata; final exact52 repeats the check after the ledger update. The52-call ledger
-is49 builds (14PASS/35FAIL) plus three passing exact checks.
-Self-audit also found finishing write/build shell commands without explicit fail-fast chaining: all writes succeeded
-and exact50 verified the intended tree, but a failed write would not have stopped the following build. This process
-defect is disclosed; check51 used explicit fail-fast setup and the final52 metadata edit/check use separate
-sequential tool calls. Every earlier build handle was collected before the next edit; no observed write error was masked.
-Writer ownership ended20:34:27 with all52 calls collected. Coordinated validation passes: the520-job/518-declaration
-permitted-axiom gate, fresh kernel replay collected by20:37:29 after gate compilation, default60 and103 unit tests
-(22.860s,one skip). Exact comparison retains all516 prior terminal bodies and four frozen Lean hashes, with six-path
-scope, default new-proof limits, unchanged mirror and seven current pins. Every validation job was collected before
-this metadata update. No infrastructure retry, differential check or guest run occurred.
+`06e337a6c24a24918ab45176d50cdd3f495f9487`. Review corrected a normal-only export's stopped-tail wording;
+self-audit disclosed missing fail-fast chaining with successful writes/no masked error, corrected before final checks.
 
 **Current foundations.** The persistent RX journal records actual session/decrypt source cuts and preserves
 unconditional original erasure, the same full incoming R2 audit/probes and the established R4 boundary,
 completion, receipt-validity and linkage meanings. Local receipt validity requires a valid incoming journal.
-Actual ingress admission injection, configured identity, packet transport and earlier routing alignment remain open;
+Actual ingress admission injection, initialized configured identity, packet transport and earlier routing alignment remain open;
 ordered copied-trial origin receipts are optional separate coverage; initialized committed material support is now validated.
 
 **Representation carry (`cb2348e`).** Handshake consumers write the captured returned PtrRing before
@@ -277,6 +241,23 @@ No production history field.
 trie/configuration refinement and parsed initialized completion history, not full RX/TX identity binding. Public parsing
 supplies address shape required for failed-history validity and normal endpoint agreement. Unconditional erasure covers
 all typed traces/both placeholder settings. No R3 Rule Zero counterexample is asserted.
+
+**Configured source cuts (validated).**
+[ConfiguredIdentity](../Leanux/Proofs/WG/Peers/ConfiguredIdentity.lean) follows original table insertion,
+lookup acquisition, list unlink/table filtering/dead setter, retirement and fresh owner store-back, including
+aliasing and NULL. Its supplied invariant permits stale rows and dead residents. Full configuration/removal
+caller closure and an initialized configured registry are still separate.
+[ConfiguredSession](../Leanux/Proofs/WG/Origins/ConfiguredSession.lean) couples the same actual front
+RunWitness/Context, material/stamp/epoch, owner and configured entry row; actual whole normal session
+completion supplies live/self facts before support is retained through the tail. A stopped tail retains the old
+observer's receipt, not a configured endpoint claim.
+[PublicationIdentity](../Leanux/Proofs/WG/Packets/PublicationIdentity.lean) connects original prepare's
+captured ring pop to its actual stored decrypt receipt and pre-IRQ publication. Successful decrypt gives
+historical session caller/public key, exact packet/AEAD transformation and preserved allocation stamp;
+Some prepare can instead publish DEAD. Arbitrary older receipt history is retained, and the new receipt has
+an exact fresh position. Supplied configured support is not an initialized occurrence proof; historical caller
+identity does not identify a later resident peer at the same raw slot. RX/key-frontier continuity, admission
+injection, configured caller propagation and lookup/Stack alignment remain open. No Noise authenticity is claimed.
 
 **Architecture.** The [map](proofs.md#layers) details these refinements:
 
