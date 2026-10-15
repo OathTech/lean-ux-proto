@@ -19,6 +19,7 @@ import Leanux.Proofs.WG.Index.TimerSource
 import Leanux.Proofs.WG.Index.FlushSource
 import Leanux.Proofs.WG.Index.SessionCoherenceSource
 import Leanux.Proofs.WG.Index.SessionAllocationSource
+import Leanux.Proofs.WG.Index.SessionSequenceSource
 
 /-! H2's original-operation table contracts. Reachable owner/peer-word
 coherence remains a separate obligation. -/
@@ -604,5 +605,26 @@ theorem original_begin_session_allocation (pid : PeerId) (d : Device) (p : Peer)
         final.nextKeypairId = d.nextKeypairId + (if ok then 1 else 0) ∧
         d.keypairs[d.nextKeypairId]? = none) :=
   beginSession_allocation pid d p resident bound
+
+/-- Consecutive original session calls for the listed peers, with no interleaved
+handshake installation. Entry observations erase exactly to the original mapM,
+including stopped outcomes. On normal return, results retain input order and
+length; successful observed entry IDs form the consecutive allocation range and
+are pairwise distinct. The store bound and allocation freshness hold at each
+actual entry, and the final bound and cursor account for every true result.
+Only an initial device and store bound are assumed. Final key residency,
+lifetime ownership, reachability and successful completion are not claimed. -/
+theorem original_session_allocation_sequence (pids : List PeerId) :
+    Campaign2.AgreesOn (fun _ => True) (pids.mapM beginSession)
+      (do let calls ← observedSessionCalls pids
+          pure (calls.map SessionAllocationCall.result)) ∧
+    (∀ d, KeypairStoreBounded d →
+      Campaign2.Ensures (observedSessionCalls pids) (fun s => s.wg.device = some d)
+        (SessionAllocationSequenceFacts d pids)) := by
+  constructor
+  · intro entry pre
+    rw [observedSessionCalls_erase]
+  · intro d bound
+    exact observedSessionCalls_facts pids d bound
 
 end Leanux.Proofs.WG.Index
