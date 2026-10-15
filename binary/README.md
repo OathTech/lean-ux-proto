@@ -35,7 +35,9 @@ results await their anchored functions and the charter's realism check.
 
 The milestone report, measured rate and verbatim trust surface are in
 [the adequacy report](../docs/2026-10-15-binary-adequacy.md#milestone-1-function-theorem-and-review-handoff).
-The separate coordinator-led surface review is required before milestone 2.
+The independent milestone-1 review approved proceeding with named fixes.
+Per the user’s resume instruction, milestone 2’s review rechecks those fixes;
+there is no separate review before starting it.
 
 ## Build and trust checks
 

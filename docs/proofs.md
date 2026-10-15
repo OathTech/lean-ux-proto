@@ -128,7 +128,7 @@ realism and physical frame premises.
 
 | Function | Headline theorem / transport | Decoded regions | Named service contracts | Mirror pin | Status |
 | --- | --- | --- | --- | --- | --- |
-| `wg_index_hashtable_lookup`, including `wg_peer_get_maybe_zero` | `Binary.LookupRelation.lookup_simulation`, `lookup_transport`, `lookup_framed_transport` | 54 (23 lookup, 31 helper) | `TracePcContract`, `TraceCmp4Contract`, `TraceConstCmp4Contract`, `TraceConstCmp1Contract`, `BhEnableContract` | `cb2348e` | Function and bucket-loop composition proved; original ABI return, all accepted helper paths, result and cut frames. Independent surface review and external sandboxed toolchain gate pending. |
+| `wg_index_hashtable_lookup`, including `wg_peer_get_maybe_zero` | `Binary.LookupRelation.lookup_simulation`, `lookup_transport`, `lookup_framed_transport` | 54 (23 lookup, 31 helper) | `TracePcContract`, `TraceCmp4Contract`, `TraceConstCmp4Contract`, `TraceConstCmp1Contract`, `BhEnableContract` | `cb2348e` | Function and bucket-loop composition proved; original ABI return, all accepted helper paths, result and cut frames. Independent review: go with named fixes; F1/F3/F4/F5/F8/F10/F11 implemented for recheck at M2. External export gate PASS at 430ea90 only; updated surface awaits M2 export gate. |
 
 The concrete frame instance `lookup_snapshot_transport` carries exact
 frontier and source-live lifetime/replay fields through lookup, conditional
