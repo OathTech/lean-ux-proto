@@ -10,14 +10,14 @@ the other H5 clauses and corrected-main carry remain open.
 
 | Result | Headlines | Established scope | Remaining charter core |
 | --- | ---: | --- | --- |
-| H1 Noise | 21 | State/slot edges, clearing/rotation, session effects and recorded total success, consecutive confirmation | Remaining whole-call edges/totality, clock provenance, allocation-lifetime confirmation |
+| H1 Noise | 22 | State/slot edges, clearing/rotation, session effects and recorded total success, total initiation creation, consecutive confirmation | Remaining whole-call edges/totality, clock provenance, allocation-lifetime confirmation |
 | H2 Index | 52 | Exact index operations, all normal lookup outcomes, caller table safety, session coherence/allocation sequence | Reachable hashed uniqueness and owner/peer residency through all driver entries |
 | H3 Roaming | 13 | Authenticated handshake cuts, decrypt/first-poll join, complete poll setter-attempt audit | Queue/callback authentication invariant, broader caller coverage, final endpoint |
 | H4 Configuration | 79 | Leaves/flags, effective bounded readback, removal/replacement phase effects, root insertion/transfer, actual two-chunk getter and scalar set/get composition | Global ownership, queued cleanup/completion, mixed attributes, general getter pagination |
 | H5 Progress | 41 | Accepted operation boundaries, actual final-boundary backlog, scheduling inspections, cut/pow/drain/poll bounds, arbitrary supplied-record index/jitter-loop adequacy, cookie activation and scheduled resumption | Whole-worker record decrease, global progress, corrected-main carry |
 | H6 Timers | 47 | Seven local arm sites, recorded delays, caller hook compositions, retry bound, pending/absent-zero-key give-up, total recorded retransmit hook | Complete caller coverage, scheduler episodes, session-relative counting |
 
-**253 headlines**; latest increments: H5 cookie activation/scheduled resumption and H6 total retransmit hook.
+**254 headlines**; latest increment: total original initiation creation from static guards and supplied records.
 Scoped builds, axioms and fresh replay pass; independent review found no issue.
 The full proof gate remains **failed in inherited campaign-1 files**.
 
@@ -57,7 +57,7 @@ universal execution contracts.
 
 | Result directory | Substantive files | Separate structural frame files |
 | --- | --- | --- |
-| `Noise` | `Model`, `Slots`, state/consume edges; clear, rotation, session and confirmation-sequence `Model/Effects/Source` families; `Execution`, `AccessSource`, `RestartModel`; `SessionReadyModel/Source/Claims` | `KernelFrames`, `PeerFrames`, `SlotFrames`, `ClearFrames`, `RotationFrames`, `SessionFrames`, `SessionReadyFrames`, standalone `RestartFrames` |
+| `Noise` | `Model`, `Slots`, state/consume edges; clear, rotation, session and confirmation-sequence `Model/Effects/Source` families; `Execution`, `AccessSource`, `RestartModel`; `SessionReadyModel/Source/Claims`, `InitiationReadyModel/Source/Claims` | `KernelFrames`, `PeerFrames`, `SlotFrames`, `ClearFrames`, `RotationFrames`, `SessionFrames`, `SessionReadyFrames`, `InitiationReadyFrames`, standalone `RestartFrames` |
 | `Index` | View/table/owner/allocation/release models; lookup provenance and empty-result source; lifecycle/caller operation sources; session coherence/allocation/sequence effects and sources | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`, `NewlinkFrames`, `SendFrames`, `DispatchFrames`, `ResponseFrames`, `ConsumeFrames`, `StagedFrames`, `ReceiveFrames`, `ClearFrames`, `TimerFrames`, `FlushFrames`, `SessionCoherenceFrames`, `SessionAllocationFrames` |
 | `Roaming` | Endpoint/authentication claims; publication, poll endpoint/attempt, response, initiation and handshake-audit model/source/claim families | `Frames`, `PublicationFrames`, `PollEndpointFrames` |
 | `Config` | `ClaimView`, models/effects/source claims, observation bridge; allowed-IP removal/insertion/transfer, collision, removal flags, remove-all/replacement, multipart/suffix readback families; `SocketReadbackModel/Claims` and five substantive `SocketReadback*Source` files; `ScalarSocketReadbackClaims/Source` compose original set/get | `ConcreteFrames`, `OperationFrames`, `ReadbackFrames`, `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `AllowedPairsFrames`, `QuietFrames`, `LiveRemovalFrames`, `KeyFieldFrames`, `CollisionFrames`, `AllowedInsertFrames`, `RemoveAllFrames` |
@@ -107,6 +107,17 @@ referenced-peer residency is assumed: this mirror's dereference checks only
 the non-null word. These facts do not establish final key coherence or
 reachability. Birthdate remains existential; exact decoded-clock and final
 record-suffix claims, other input outcomes and broader call totality remain open.
+
+The full original `createInitiation` now succeeds under resident-peer/identity,
+non-null stored-word and pure crypto guards, with a 32-byte ephemeral record,
+16-byte timestamp and any finite collision prefix followed by a fresh index draw.
+Collision tests apply after removing this handshake owner's old rows. The result
+fixes the returned message, all ordered peer/index writes and exact unused record
+suffix; a separate frame preserves the timer-record mode on that same run.
+No prior handshake-state, liveness, reference-count, table-uniqueness, self-owner
+or referenced-peer-residency premise is required. Crypto guards are named value
+predicates; no successful execution is assumed. This does not assert a fixed
+message length for arbitrary identity fields, send/rearm behavior or reachability.
 
 For consecutive actual `receivedWithKeypair` calls, the first ID matching
 initial next is the sole true result, with the exact confirmation effect;
@@ -438,22 +449,30 @@ accepted-run findings. H1/H2/H3/H6 have no ranked mirror-change request.
 
 ## Validation and trust limitations
 
-Latest six-target build: **461 jobs**, all **253 headlines** standard axioms
-only (`propext`, `Classical.choice`, `Quot.sound`); token/import/root/default/
-projected-name checks pass. Progress: 229 jobs, 41 headlines; TimerDiscipline:
-241 jobs, 47 headlines. All 41 new support declarations across nine files pass
-the axiom check. Independent read-only reviews found no issue in either increment.
-Fresh Progress and TimerDiscipline kernel replay both passed (exit 0).
+Latest six-target build passed **465 jobs**. All **254 headlines** and 29 new
+support declarations use only the three standard axioms; token/import/root/
+default/projected-name checks pass. The author passed Source/Frames at 145 jobs
+and Noise Statements at 151 jobs. Fresh Noise kernel replay passed.
+Independent read-only review found no semantic issue;
+its EOF-whitespace note was corrected before the final build.
 
-H5 prototype compilation: root 22 invocations (six passes, 16 corrected failures)
-and one successful declaration inspection; model author seven invocations (four
-passes, three corrected failures). Packaging/composition used 18 compiler
-invocations: eight passes, nine corrected failures and the separate diagnostic
-rerun failure below. H6 used six stdin prototypes (three passes, three corrected
-record-layout/map-unfolding failures), then its packaged build passed first time.
-A staged whitespace check caught two extra EOF blank lines in the new H5 files;
-these were removed before the final build, axiom check and Progress replay.
-No infrastructure retry or limit increase occurred in these increments.
+Initiation prototype: 14 capped stdin compilations, six passes and eight
+corrected failures. Packaging: four builds, three passes and one corrected
+import-collision failure in generated match-congruence declarations; importing
+Source before the separate Frames repaired it. Root's three mode-frame stdin
+compilations had one pass and two corrected failures: private-name resolution/
+monolithic unfolding at the stock heartbeat limit, then a trivial exceptional
+postcondition. Splitting the crypto proof into local contracts closed it without
+raising that limit. The initiation source uses an 800000-heartbeat budget,
+unchanged throughout the retained continuation and packaging. Earlier prototype
+inputs are no longer retained, so its initial budget cannot be confirmed; this
+is not evidence of an unchanged budget across the entire investigation. The
+memory cap was unchanged. Retained compiler outputs were captured for diagnosis.
+
+The preceding H5/H6 checkpoint `daa1b10` passed 461 build jobs, all 253 headlines
+and 41 supports on standard axioms, both fresh replays and independent reviews.
+Its compiler counts and corrected drafts are in that commit. The diagnostic
+rerun violation below remains explicitly recorded; it was not infrastructure.
 The earlier socket-getter review found a headline attribution error, corrected:
 the callback returns DATA; the enclosing socket dump appends DONE and finalizes.
 Earlier closed increments also passed
@@ -495,7 +514,8 @@ repeated an unchanged failed REPLACE_PEERS source draft. This was not
 infrastructure or a permitted retry. Launch control was corrected; neither
 failure was accepted. There have been no cap hits/increases, guests or guest
 timeouts. Ordinary corrected elaboration failures remain failures, documented
-in commits; deterministic limits were not raised.
+in commits. Earlier deterministic-limit accounting is in those commits; the
+initiation investigation has the budget-history uncertainty stated above.
 
 One bounded trial kernel-checked original curve25519 through the finite power
 bridge (about 0.334 s). A separate single full QueueRefill reduction trial failed

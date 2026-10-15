@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Noise.InitiationReadyClaims
 import Leanux.Proofs.WG.Campaign2.Bridge
 import Leanux.Proofs.WG.Noise.ConsumeEdges
 import Leanux.Proofs.WG.Noise.ClearSource
@@ -297,5 +298,31 @@ theorem original_confirmation_sequence_ready_returns (pid : PeerId) (ids : List 
   exact ⟨results, out, run, final, device, effect,
     confirmationSequenceEffect_length pid ids d final p results effect,
     confirmationSequenceEffect_count pid ids d final p results effect⟩
+
+/-- The original initiation returns its exact message and ordered Device/index
+updates from a resident peer, an identity, a non-null handshake peer word, pure
+crypto success guards, and supplied ephemeral/clock/collision-then-fresh records.
+It consumes exactly that prefix and preserves timer-record mode. This needs no
+successful-execution premise, owner coherence or previous handshake state.
+It does not claim a fixed wire-message length for arbitrary identity fields,
+send/rearm behavior, or a reachable-state invariant. -/
+theorem original_create_initiation_ready (pid : PeerId) (d : Device) (p : Peer) (mode : Bool)
+    (resident : d.peers[pid]? = some p) (identity : d.staticIdentity.hasIdentity = true)
+    (word : p.handshakeEntryPeer ≠ none) (nonnull : p.precomputedStaticStatic ≠ List.replicate 32 0)
+    (ephemeral clock : List UInt8) (randomWidth : ephemeral.length = 32) (width : clock.length = 16)
+    (secretNonNull : clamp ephemeral ≠ nullPoint)
+    (pubOk : (curve25519 (clamp ephemeral) basePoint).2 = true)
+    (dhOk : (curve25519 (clamp ephemeral) p.remoteStatic).2 = true)
+    (collisions : List Index.Draw) (fresh : Index.Draw) (rest : List HiddenRecord)
+    (allCollide : ∀ draw ∈ collisions,
+      (Index.removeOwner (.handshake pid) d.indexTable).any (·.index == draw.value) = true)
+    (isFresh : (Index.removeOwner (.handshake pid) d.indexTable).any (·.index == fresh.value) = false) :
+    Campaign2.Returns (createInitiation pid)
+      (fun s => s.wg.device = some d ∧ s.ambient.hidden = some ({site := 1, bytes := ephemeral} ::
+        {site := 3, bytes := clock} :: Index.drawStream collisions fresh rest) ∧ s.wg.armRecords = mode)
+      (fun out s => out = some (InitiationReady.result pid d p ephemeral clock fresh.value).1 ∧
+        s.wg.device = some (InitiationReady.result pid d p ephemeral clock fresh.value).2 ∧ s.ambient.hidden = some rest ∧ s.wg.armRecords = mode) :=
+  InitiationReady.createInitiation_projected pid d p mode resident identity word nonnull
+    ephemeral clock randomWidth width secretNonNull pubOk dhOk collisions fresh rest allCollide isFresh
 
 end Leanux.Proofs.WG.Noise
