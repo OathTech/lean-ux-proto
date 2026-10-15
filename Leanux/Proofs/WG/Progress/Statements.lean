@@ -4,6 +4,7 @@ import Leanux.Proofs.WG.Progress.FlushQueueClaims
 import Leanux.Proofs.WG.Progress.PowSource
 import Leanux.Proofs.WG.Progress.DrainClaims
 import Leanux.Proofs.WG.Progress.PollBoundClaims
+import Leanux.Proofs.WG.Progress.RunnerBoundaryClaims
 
 /-! Projected H5 contracts. Inspection adapters report the exact original
 outcomes from the same concrete entry; their totality is not a claim that the
@@ -18,6 +19,32 @@ theorem original_pending_batch_accepted : accepted = true :=
 /-- The actual initialized two-operation fixture's pending receive backlog. -/
 theorem original_pending_batch_state : backlog = some (1, 1, [1], some 0, 0, false) :=
   SourceClaims.original_pending_batch_state
+
+/-- Every accepted original trace supplies exactly its ordered operation
+boundaries after ambient stripping and the original three completion guards.
+These guards say nothing about pending workers or scheduled NAPI. -/
+theorem original_accepted_operation_boundaries (trace : Runner.Trace)
+    (placeholders floodExact : Bool) (output : Lean.Json)
+    (acceptedRun : Runner.executeTrace trace placeholders floodExact = .ok output) :
+    ∃ audit, executeTraceWithBoundaries trace placeholders floodExact = .ok audit ∧
+      audit.output = output ∧
+      audit.boundaries.map RunnerBoundary.index = List.range trace.ops.size ∧
+      audit.boundaries.length = trace.ops.size ∧
+      ∀ cut ∈ audit.boundaries, RunnerBoundaryClean cut :=
+  runnerAudit_of_accepted trace placeholders floodExact output acceptedRun
+
+/-- The historical constructed trace is accepted by the original runner, with
+its checked backlog at the actual final operation boundary. The absent record,
+suspension and NET_RX obligations coexist with runnable pending worker work. -/
+theorem original_pending_batch_boundary :
+    ∃ audit first second,
+      executeTraceWithBoundaries pendingTrace false false = .ok audit ∧
+      Runner.executeTrace pendingTrace = .ok audit.output ∧
+      audit.boundaries = [first, second] ∧
+      first.index = 0 ∧ second.index = 1 ∧
+      RunnerBoundaryClean first ∧ RunnerBoundaryClean second ∧
+      boundaryBacklog second.after = some (1, 1, [1], some 0, 0, false) :=
+  pending_accepted_boundary
 
 /-- The original probe reports successful execution or hidden mismatch on its
 entry snapshot, and propagates every other exact error. -/

@@ -14,10 +14,11 @@ the other H5 clauses and corrected-main carry remain open.
 | H2 Index | 52 | Exact index operations, all normal lookup outcomes, caller table safety, session coherence/allocation sequence | Reachable hashed uniqueness and owner/peer residency through all driver entries |
 | H3 Roaming | 13 | Authenticated handshake cuts, decrypt/first-poll join, complete poll setter-attempt audit | Queue/callback authentication invariant, broader caller coverage, final endpoint |
 | H4 Configuration | 77 | Leaves/flags, effective bounded readback, removal/replacement phase effects, root insertion/transfer, finite IPv4 suffix readback | Global ownership, queued cleanup/completion, mixed attributes, full getter pagination |
-| H5 Progress | 33 | Historical backlog finding, scheduling inspections, cut/pow/drain/poll bounds | Whole-worker record decrease, operation-end coverage, global progress |
+| H5 Progress | 35 | Accepted operation boundaries, actual final-boundary backlog, scheduling inspections, cut/pow/drain/poll bounds | Whole-worker record decrease, global progress, corrected-main carry |
 | H6 Timers | 45 | Seven local arm sites, recorded delays, caller hook compositions, retry bound/give-up | Complete caller coverage, scheduler episodes, session-relative counting |
 
-**240 headlines**; latest increment `62e8694`. Scoped checks pass.
+**242 headlines**; latest checked increment: H5 accepted operation boundaries and
+backlog bridge. Scoped checks pass.
 The full proof gate remains **failed in inherited campaign-1 files**.
 
 [USER 2026-10-15] Resume before the split: factor claims over a WireGuard-only
@@ -60,7 +61,7 @@ universal execution contracts.
 | `Index` | View/table/owner/allocation/release models; lookup provenance and empty-result source; lifecycle/caller operation sources; session coherence/allocation/sequence effects and sources | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`, `NewlinkFrames`, `SendFrames`, `DispatchFrames`, `ResponseFrames`, `ConsumeFrames`, `StagedFrames`, `ReceiveFrames`, `ClearFrames`, `TimerFrames`, `FlushFrames`, `SessionCoherenceFrames`, `SessionAllocationFrames` |
 | `Roaming` | Endpoint/authentication claims; publication, poll endpoint/attempt, response, initiation and handshake-audit model/source/claim families | `Frames`, `PublicationFrames`, `PollEndpointFrames` |
 | `Config` | `ClaimView`, models/effects/source claims, observation bridge; allowed-IP removal/insertion/transfer, collision, removal flags, remove-all/replacement, multipart/suffix readback families | `ConcreteFrames`, `OperationFrames`, `ReadbackFrames`, `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `AllowedPairsFrames`, `QuietFrames`, `LiveRemovalFrames`, `KeyFieldFrames`, `CollisionFrames`, `AllowedInsertFrames`, `RemoveAllFrames` |
-| `Progress` | Model/view/source/observation claims; control/scheduler sources; cut, flush-queue, pow, drain and poll-bound model/source/effect/claim families | `StackFrames`, `CutFrames`, `FlushQueueFrames` |
+| `Progress` | Model/view/source/observation claims; control/scheduler sources; cut, flush-queue, pow, drain and poll-bound model/source/effect/claim families; `RunnerBoundaryModel/Claims` are projected; `RunnerBoundarySource`, `RunnerBoundaryAuditSource` and `BacklogSource` connect the actual runner | `StackFrames`, `CutFrames`, `FlushQueueFrames` |
 | `TimerDiscipline` | Model/view/send-view/observation claims; recorded, send/retry/rearm/sequence/boundary, pending-give-up, session, data and traversal model/source/effect/claim families | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`, `RetryDispatchFrames`, `RetryRearmFrames`, `WorkStateFrames`, `ResponseSessionFrames` |
 
 `Index/HandshakeFrames` and `OwnerFrames` are import-only reexports.
@@ -256,10 +257,22 @@ collision completion remain open.
 
 The accepted constructed backlog witness below refutes historical
 no-pending-at-completion. Original acceptance and backlog equations are
-kernel-checked; the auxiliary two-syscall runner's threading correspondence is
-currently source-reviewed, not a separate equality theorem. Runnable backlog
-uses the original activation predicate. Main's corrected refusal is not yet
-carried. Total inspection never implies successful dispatch or drain.
+kernel-checked. A symbolic bridge now proves that this backlog occurs at the
+original runner's actual final operation boundary, identifying both syscall and
+ambient-strip successors without reevaluating the trace. Runnable backlog uses
+the original activation predicate. This is a constructed fixture, not a parsed
+or captured Linux run. Main's corrected refusal is not yet carried.
+
+Every accepted original trace now supplies exactly one ordered projected boundary
+per operation, with consecutive indices and identical output JSON. Each boundary
+has absent/empty hidden records, no suspended activation and no pending NET_RX
+signal, after original ambient stripping and guards. This covers file/network
+operations and negative syscall returns. Exact source/audit erasure includes
+prefill, descriptor/result bookkeeping, output formatting and final placement/
+steering checks, including errors. Boundary lists are returned only on successful
+whole-trace completion; later errors discard them. There is no pending-work,
+worker-queue or scheduled-NAPI emptiness conclusion. Total inspection never
+implies successful dispatch or drain.
 
 Source-connected scheduler claims retain actual dispatch/resumption, caller
 busy/idle/error and NAPI branches. Cut budgets are derived before ambient
@@ -281,7 +294,7 @@ budget at most MAX_QUEUED_PACKETS+1 excludes its finish-time exhaustion on norma
 prefix return: each continued iteration increments count despite arbitrary
 callbacks. Queue-test stop can mean an uncrypted head. Unsupported repoll remains.
 Neither local result proves callback/internal work termination. Whole-worker
-record decrease, full operation boundaries and global progress remain open.
+record decrease, detached-activation progress and global progress remain open.
 
 ## H6 — Timer discipline
 
@@ -327,7 +340,7 @@ changes as altitude-preserving. No mirror/kernel edit or upstream report occurre
 
 | Finding | Evidence and limit | Status |
 | --- | --- | --- |
-| H5 batch backlog | Kernel-checked accepted constructed fixture trace and backlog, separate replay summary; not captured Linux | Historical over de62c9d. Main `9db558b` adds completion guard; corrected refusal/carry open |
+| H5 batch backlog | Kernel-checked accepted constructed fixture and backlog, with symbolic proof locating it at the actual final runner boundary; not parsed/captured Linux | Historical over de62c9d. Main `9db558b` adds completion guard; corrected refusal/carry open |
 | H5 nested refill | Evaluated initialized prefix/source review; operation 4 reaches worker occupancy-budget invariant; later suffix incomplete | Neither accepted complete trace nor kernel-proved prefix; callback-aware bound requested |
 | H4 dump cancellation | Accepted getter, kernel-checked internal room 3720 versus source-derived C 3724 | Restore pre-nest snapshot; no demonstrated compared-output mismatch. Dead-cursor extension only inspected |
 
@@ -336,11 +349,12 @@ accepted-run findings. H1/H2/H3/H6 have no ranked mirror-change request.
 
 ## Validation and trust limitations
 
-Latest six-target build: **425 jobs**, all **240 headlines** standard axioms
+Latest six-target build: **430 jobs**, all **242 headlines** standard axioms
 only (`propext`, `Classical.choice`, `Quot.sound`); token/import/root/default/
-projected-name checks pass. Latest Config build: 215 jobs, 77 headlines plus
-13 suffix support declarations, fresh stock kernel replay exit 0. Independent
-read-only source review found no issue. Earlier closed increments also passed
+projected-name checks pass. Latest Progress build: 215 jobs, 35 headlines and 15 new support declarations
+checked. Fresh stock kernel replay passed (exit 0). Independent
+read-only review found no issue. The preceding Config suffix increment passed
+215 jobs, 77 headlines plus 13 support declarations and fresh replay exit 0. Earlier closed increments also passed
 affected scoped builds, axiom checks and fresh replay; counts, corrected draft
 failures and review dispositions are in their commits. Reviews did not rerun
 reported validation. All review findings were fixed, including unconditional
@@ -376,6 +390,13 @@ Stock `repeatM` has `implemented_by repeatM.erased`; stock `Nat.powMod`
 has an external implementation annotation. Proofs use logical definitions,
 checked equations and induction, not executable overrides as oracles.
 No project axiom or forbidden trusted declaration was added.
+
+The H5 runner increment used 16 implementation builds, with nine corrected
+failed drafts (source/prefill normalization, case-rewritten equalities, range
+normalization, explicit witnesses and initial-state reduction). A sub-agent
+usage-limit interruption left the tree preserved at snapshot `ab0c13c`; root
+completed the bridge and projected claims. No build was active at takeover; no
+infrastructure retry, limit increase or new structural frame was needed.
 
 Reproduce scoped validation with the six targets (default memory cap unchanged):
 
