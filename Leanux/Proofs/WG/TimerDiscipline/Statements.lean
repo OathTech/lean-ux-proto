@@ -4,6 +4,7 @@ import Leanux.Proofs.WG.TimerDiscipline.Retry
 import Leanux.Proofs.WG.TimerDiscipline.RecordedSite
 import Leanux.Proofs.WG.TimerDiscipline.RecordedJitter
 import Leanux.Proofs.WG.TimerDiscipline.ArmingPrefixes
+import Leanux.Proofs.WG.TimerDiscipline.RemainingSites
 
 namespace Leanux.Proofs.WG.TimerDiscipline
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
@@ -206,5 +207,62 @@ theorem original_traversal_recorded (pid : PeerId) (d : Device) (p : Peer)
       ∃ now, final.jiffiesLast = some now ∧
         0 ≤ (now - caller).toInt64 ∧ (now - caller).toInt64 ≤ 1 :=
   traversal_recorded_clock pid d p resident enabled running alive initial final device records run
+
+/-- With arm-record mode enabled, original data receipt on a running live peer
+with no send-keepalive timer arms that timer at its caller-read result plus
+KEEPALIVE_TIMEOUT * HZ ticks, after the original running and pending tests. -/
+theorem original_data_received_recorded (pid : PeerId) (d : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p) (absent : p.timerPending .sendKeepalive = false)
+    (running : d.running = true) (alive : p.isDead = false)
+    (initial final : World) (device : initial.k.wg = some d) (records : initial.armRecords = true)
+    (run : (timersDataReceived pid).run initial = .ok ((), final)) :
+    ∃ beforeRead caller afterRead,
+      (dataReceivedPrefix pid).run initial = .ok (some true, beforeRead) ∧
+      (callerJiffies .timerJiffiesDataReceived).run beforeRead = .ok (some caller, afterRead) ∧
+      peerAt final pid = some (p.setTimer .sendKeepalive
+        (some (caller + KEEPALIVE_TIMEOUT_TICKS.toUInt64))) ∧
+      ∃ now, final.jiffiesLast = some now ∧
+        0 ≤ (now - caller).toInt64 ∧ (now - caller).toInt64 ≤ 1 :=
+  dataReceived_recorded_clock pid d p resident absent running alive initial final device records run
+
+/-- After the original keepalive send completes, a running live peer needing
+another keepalive clears that flag and rearms at its caller-read result plus
+KEEPALIVE_TIMEOUT * HZ. Residency and flag premises concern the actual post-send
+state, not callback entry; arm-record mode is enabled there. -/
+theorem original_expired_keepalive_recorded (pid : PeerId) (d : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p) (needed : p.timerNeedAnotherKeepalive = true)
+    (running : d.running = true) (alive : p.isDead = false)
+    (initial afterSend final : World)
+    (send : (sendKeepalive pid).run initial = .ok ((), afterSend))
+    (device : afterSend.k.wg = some d) (records : afterSend.armRecords = true)
+    (run : (expiredSendKeepalive pid).run initial = .ok ((), final)) :
+    ∃ beforeRead caller afterRead,
+      (keepaliveRearmPrefix pid).run afterSend = .ok (true, beforeRead) ∧
+      (callerJiffies .timerJiffiesExpiredKeepalive).run beforeRead = .ok (some caller, afterRead) ∧
+      peerAt final pid = some (({ p with timerNeedAnotherKeepalive := false } : Peer).setTimer
+        .sendKeepalive (some (caller + KEEPALIVE_TIMEOUT_TICKS.toUInt64))) ∧
+      ∃ now, final.jiffiesLast = some now ∧
+        0 ≤ (now - caller).toInt64 ∧ (now - caller).toInt64 ≤ 1 :=
+  expiredKeepalive_recorded_clock pid d p resident needed running alive initial afterSend final send device records run
+
+/-- With arm-record mode enabled, original retransmit give-up above the attempt
+limit deletes send-keepalive, purges staged packets and arms an absent zero-key
+timer on a running live peer. Expiry is the original site read plus
+REJECT_AFTER_TIME * 3 * HZ; both original decision prefixes are witnessed. -/
+theorem original_retransmit_giveup_recorded (pid : PeerId) (d : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p) (limit : p.timerHandshakeAttempts > MAX_TIMER_HANDSHAKES)
+    (absent : p.timerPending .zeroKeyMaterial = false)
+    (running : d.running = true) (alive : p.isDead = false)
+    (initial final : World) (device : initial.k.wg = some d) (records : initial.armRecords = true)
+    (run : (expiredRetransmitHandshake pid).run initial = .ok ((), final)) :
+    ∃ afterDecision beforeRead caller afterRead,
+      (retransmitDecision pid).run initial = .ok (true, afterDecision) ∧
+      (giveUpArmPrefix pid).run afterDecision = .ok (true, beforeRead) ∧
+      (callerJiffies .timerJiffiesRetransmitZeroKey).run beforeRead = .ok (some caller, afterRead) ∧
+      peerAt final pid = some ((giveUpPeer p).setTimer .zeroKeyMaterial
+        (some (caller + ZERO_KEY_MATERIAL_TICKS.toUInt64))) ∧
+      ∃ now, final.jiffiesLast = some now ∧
+        0 ≤ (now - caller).toInt64 ∧ (now - caller).toInt64 ≤ 1 :=
+  retransmitGiveUp_recorded_clock pid d p resident limit absent running alive initial final device records run
 
 end Leanux.Proofs.WG.TimerDiscipline
