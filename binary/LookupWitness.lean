@@ -7,7 +7,7 @@ set_option maxRecDepth 8192
 set_option maxHeartbeats 800000
 set_option linter.unusedSimpArgs false
 
-private theorem load_away (m : Mem 64) (base a : BitVec 64) (width size : Nat) (value : Int)
+theorem load_away (m : Mem 64) (base a : BitVec 64) (width size : Nat) (value : Int)
     (apart : ∀ i < width, ¬InRange base size (a + .ofNat 64 i)) :
     (m.storeInt base size value).loadInt a width = m.loadInt a width :=
   ((storeInt_frame m base size value).loadInt a width apart).symm
@@ -241,7 +241,7 @@ private theorem stack_with_bytes_mapped (base : BitVec 64) (size top n : Nat)
       ((base + .ofNat 64 top) - .ofNat 64 ((n+1)*8)) 8).isSome = true :=
   storeBytes_defined _ _ _ _ _ (zero_at_mapped_sub base size top n bound below inside)
 
-theorem stack_mapped (n : Nat) (bound : n < 6) :
+theorem stack_mapped (n : Nat) (bound : n < 13) :
     (memory.loadInt ((0x400800#64) - .ofNat 64 ((n+1)*8)) 8).isSome = true := by
   unfold memory
   iterate 12 apply storeInt_defined
@@ -276,7 +276,7 @@ theorem related : LookupRelation.R config [initial] [LookupRelation.entryPoint d
 theorem source_accepts : ∃ final, (WG.indexLookup [.handshake] config.query).run world = .ok (none, final) := by
   exact ⟨_, rfl⟩
 
-private theorem range_nat (base width : Nat) (a : BitVec 64)
+theorem range_nat (base width : Nat) (a : BitVec 64)
     (bound : base+width ≤ 2^64) (inside : InRange (.ofNat 64 base) width a) :
     base ≤ a.toNat ∧ a.toNat < base+width := by
   obtain ⟨i, hi, rfl⟩ := inside
@@ -352,7 +352,7 @@ theorem witness_pre : Pre_lookup config coverage 0 0x500000 initial world := by
     pc := rfl, frame := ⟨by decide, return_read⟩, table := rfl, query := rfl
     kinds := ?_, projected := projected, focus := entry_focus, physical := physical
     steps := rfl, rxSection := rfl, coverageAt := ?_, preemptAt := callback_state.2.1
-    stackMapped := stack_mapped, outputMapped := fun h => False.elim (noOutput h)
+    stackMapped := fun n hn => stack_mapped n (by change n < 6 at hn; omega), outputMapped := fun h => False.elim (noOutput h)
     bhHardirq := by decide, bhPending := fun _ => pending_read
     readsScratch := ?_, serviceStack := ?_, coverageStack := ?_, coverageMetadata := ?_
     coveragePreempt := ?_, bhStack := ?_, bhMetadata := ?_, dataService := fun a _ => noData a

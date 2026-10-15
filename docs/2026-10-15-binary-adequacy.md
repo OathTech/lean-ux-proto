@@ -2886,3 +2886,36 @@ def Pre_lookup (c : LookupRelation.Config) (coverage : KcovLayout)
 
 end Binary.TrustBase
 ```
+
+
+### Milestone-1 review fix F1: hit-domain witnesses (2026-10-15)
+
+[USER] Finish the independent review changes in the stated order, one commit
+per finding, then proceed directly to milestone 2; that review rechecks these
+fixes. No separate review is required before milestone 2.
+
+`LookupHitWitness.dead_pre` and `live_pre` prove the unchanged `Pre_lookup`
+for concrete selected-handshake states. Unlike the miss witness, they exercise
+the owner and count representation, thirteen stack words, and (on the live
+path) the output mapping and separation clauses. The live read projection is
+checked against operation 3 of `d1_second_response`; the zero-count mutation
+is a witness to the admitted domain, not to kernel reachability. Finding 1
+remains recorded; neither Pre nor R was narrowed.
+
+The exact Lean states executed to the original return: dead **441 instructions,
+14 points**, live **506 instructions, 15 points**, each at two undefined-value
+seeds. ABI registers/stack, owner word, reference count, output and ordered
+mirror decisions agree. The live run also matches the recorded reference
+probe's coverage and operands. Reproduction: `binary/run.py --trace
+ d1_second_response` (or its completed `--check` directory), then from
+`binary/`, `capped -- lake env lean LookupHitWitnessTest.lean`. This run reused
+`.artifacts/check/binary-tv-20261015-024837`; the three-way check passed before
+the exact-state tests. Both witness declarations are included in the binary
+axiom gate. Their only axioms are `propext`, `Classical.choice`, `Quot.sound`.
+No callback contract was used to shortcut the concrete executions.
+The default build (353 jobs), binary axiom/escape gate, fresh
+`leanchecker LookupHitWitness` closure replay and unit tier (126 tests,
+one skip) all passed.
+
+Development elaboration failures were fixed before these passes; no killed
+or timed-out run was counted as success. F3 and later findings remain open.

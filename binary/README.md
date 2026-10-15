@@ -82,6 +82,19 @@ Execute it from entry to return, from `binary/`:
 LEANUX_QEMU_SLOTS=16 capped -- lake env lean LookupWitnessTest.lean
 ```
 
+The hit states are proved by `LookupHitWitness.dead_pre` and `live_pre`.
+After the `d1_second_response` three-way run, execute both exact states:
+
+```sh
+cd binary
+LEANUX_QEMU_SLOTS=16 capped -- lake env lean LookupHitWitnessTest.lean
+```
+
+The live hit's read projection matches the recorded entry. The dead hit is
+its zero-count mutation, and checks the owner-word clear as well as the ABI,
+result, count and mirror decisions. Both run all decoded callback bodies to
+the original return, with two undefined-value seeds.
+
 This is a state materialized from a recorded operation's mirror read
 projection, not a captured kernel entry and not a reachability proof.
 `binary/generate.py` regenerates ELF instruction terms and DWARF layouts.
