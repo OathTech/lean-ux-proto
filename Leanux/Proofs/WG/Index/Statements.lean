@@ -21,6 +21,7 @@ import Leanux.Proofs.WG.Index.SessionCoherenceSource
 import Leanux.Proofs.WG.Index.SessionAllocationSource
 import Leanux.Proofs.WG.Index.SessionSequenceSource
 import Leanux.Proofs.WG.Index.LookupProvenanceSource
+import Leanux.Proofs.WG.Index.LookupNoneSource
 
 /-! H2's original-operation table contracts. Reachable owner/peer-word
 coherence remains a separate obligation. -/
@@ -644,5 +645,21 @@ theorem original_index_lookup_success (kinds : List IndexKind) (index : Nat) (d 
           d.peers[pid]? = some p ∧ 0 < p.refcount ∧ p.refcount + 1 < 2 ^ 31 ∧
           final.wg.device = some (writeOwnerWord (acquirePeer d pid p) owner (some pid))) :=
   indexLookup_success kinds index d
+
+/-- Every normally returned empty original lookup has exactly one of three
+causes: the first equal numeric index is absent or its kind is disallowed;
+the permitted row's resident owner object stores NULL; or its stored peer is
+resident with zero references. The first case leaves the device unchanged.
+The latter two execute the exact owner-word clear, retaining even the NULL
+case's same-value map store. A missing owner object or dangling stored peer is
+not a normal empty result. Only the entry device is assumed; no coherence,
+uniqueness, isDead or readiness premise is supplied. This is normal-return
+classification, not completion, reachability or lifetime ownership. -/
+theorem original_index_lookup_none (kinds : List IndexKind) (index : Nat) (d : Device) :
+    Campaign2.Ensures (indexLookup kinds index) (fun s => s.wg.device = some d)
+      (fun result final => result = none → ∃ d', final.wg.device = some d' ∧
+        ∃ cause, LookupNoneCase kinds index d d' cause ∧
+          ∀ other, LookupNoneCase kinds index d d' other → other = cause) :=
+  indexLookup_none kinds index d
 
 end Leanux.Proofs.WG.Index
