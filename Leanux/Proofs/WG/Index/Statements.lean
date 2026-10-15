@@ -15,6 +15,7 @@ import Leanux.Proofs.WG.Index.ResponseSource
 import Leanux.Proofs.WG.Index.ConsumeSource
 import Leanux.Proofs.WG.Index.StagedSource
 import Leanux.Proofs.WG.Index.ReceiveSource
+import Leanux.Proofs.WG.Index.TimerSource
 
 /-! H2's original-operation table contracts. Reachable owner/peer-word
 coherence remains a separate obligation. -/
@@ -506,5 +507,40 @@ queue-count decrement; it does not assert whole-worker or scheduler closure. -/
 theorem original_receive_step_tables :
     Campaign2.Ensures receiveStep View.TablesSafe (fun _ s => View.TablesSafe s) :=
   receiveStep_tables
+
+/-- Original queued key-material clearing preserves the optional-device table
+invariant on normal return through handshake unhash, all three ordered keypair
+releases, and the final peer put. No static release budget, slot distinctness,
+owner-word identity or resident-peer premise is added. Completion is not asserted. -/
+theorem original_queued_clear_tables (pid : PeerId) :
+    Campaign2.Ensures (queuedExpiredZeroKeyMaterial pid) View.TablesSafe
+      (fun _ s => View.TablesSafe s) :=
+  queuedExpiredZeroKeyMaterial_tables pid
+
+/-- Every normal return of the original clear-work dispatcher preserves numeric
+index uniqueness, owner uniqueness and the hashed-keypair allocation bound.
+This includes actual named/head selection, queue removal and both section reads;
+it does not assert that arbitrary queue states or records permit completion. -/
+theorem original_clear_dispatch_tables :
+    Campaign2.Ensures Env.runOneClearWorker View.TablesSafe (fun _ s => View.TablesSafe s) :=
+  runOneClearWorker_tables
+
+/-- All five original timer callbacks preserve the optional-device table
+invariant on normal return. Actual retry, keepalive, queueing and compensating
+release paths remain covered. No timer readiness, residency or reference-count
+premise is required; subsequent worker execution is outside this contract. -/
+theorem original_timer_callback_tables (pid : PeerId) (timer : PeerTimer) :
+    Campaign2.Ensures (timerCallback pid timer) View.TablesSafe
+      (fun _ s => View.TablesSafe s) :=
+  timerCallback_tables pid timer
+
+/-- Original timer dispatch preserves the table invariant on every normal
+return, including its actual timer/peer selection, due checks, detachment and
+section-wrapped callback. This adds no callback assumption or ready-timer premise
+and makes no whole-timer-loop or arbitrary-record completion claim. -/
+theorem original_fire_timer_tables (worker : Worker) (horizon : UInt64) :
+    Campaign2.Ensures (Env.fireTimer worker horizon) View.TablesSafe
+      (fun _ s => View.TablesSafe s) :=
+  fireTimer_tables worker horizon
 
 end Leanux.Proofs.WG.Index
