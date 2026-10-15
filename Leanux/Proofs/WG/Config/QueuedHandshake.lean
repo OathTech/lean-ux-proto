@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.OperationFrames
 import Leanux.Proofs.WG.Config.KeyInstall
 
 set_option pp.structureInstances false
@@ -5,11 +6,6 @@ set_option maxHeartbeats 800000
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
-
-theorem recordQueued_kernel (P : Kernel → Prop) (worker : Worker) (pid : PeerId) :
-    ⦃fun w => ⌜P w.k⌝⦄ recordQueued worker pid ⦃⇓? _ w => ⌜P w.k⌝⦄ := by
-  have hh := hidden_kernel_spec P
-  mvcgen [recordQueued, hh]
 
 theorem peerGet_exact (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) :

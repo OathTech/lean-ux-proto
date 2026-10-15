@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.OperationFrames
 import Leanux.Proofs.WG.Config.Validation
 import Leanux.Proofs.WG.Config.DumpSource
 import Leanux.Proofs.WG.Noise.Slots
@@ -27,11 +28,6 @@ def peerFixedAttrs (p : Peer) : List (String × Json) :=
 def peerFixedSpace (p : Peer) : Nat :=
   136 + if (p.endpoint.map (·.family)).getD 0 = AF_INET then 20
         else if (p.endpoint.map (·.family)).getD 0 = AF_INET6 then 32 else 0
-
-theorem branch_kernel (P : Kernel → Prop) (decision : Decision) (outcome : Bool) :
-    ⦃fun w => ⌜P w.k⌝⦄ branch decision outcome
-    ⦃⇓? ret w => ⌜ret = outcome ∧ P w.k⌝⦄ := by
-  mvcgen [branch]
 
 theorem dumpAllowed_none (p : Peer) (ctx : DumpCtx) (skb0 skb : NlSkb)
     (pubkey : String) (attrs : List (String × Json)) (P : Kernel → Prop) :

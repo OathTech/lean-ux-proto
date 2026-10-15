@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Config.OperationFrames
+import Leanux.Proofs.WG.Config.Model
 import Leanux.Proofs.WG.Config.EndpointSources
 import Leanux.Proofs.WG.Config.DeviceScalars
 
@@ -6,21 +8,6 @@ set_option maxHeartbeats 800000
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
-
-/-- All device fields except the peer-store representation. -/
-def withoutPeers (d : Device) : Device := { d with peers := {} }
-
-theorem clearEndpointSource_device_frame (pid : PeerId) (initial : Option Device) :
-    ⦃fun w => ⌜w.k.wg.map withoutPeers = initial⌝⦄ clearPeerEndpointSrc pid
-    ⦃⇓? _ w => ⌜w.k.wg.map withoutPeers = initial⌝⦄ := by
-  have hh := Roaming.hiddenJiffies_kernel_spec (fun k => k.wg.map withoutPeers = initial)
-  mvcgen [clearPeerEndpointSrc, dstCacheResetNow, dstCacheReset,
-    getPeer, getDev, getK, setPeer, modifyDev, modifyK, invariant, hh]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [withoutPeers, Option.map_map, Function.comp_def]
-  all_goals subst_vars
-  all_goals simp_all [withoutPeers, Option.map_map, Function.comp_def]
 
 def fwmarkAttrs (d : Device) (mark : Nat) : DeviceAttrs :=
   { device := byIndex d, fwmark := some mark }

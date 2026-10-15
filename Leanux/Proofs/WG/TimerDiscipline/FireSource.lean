@@ -1,5 +1,5 @@
 import Leanux.Env
-import Leanux.Proofs.WG.TimerDiscipline.Retry
+import Leanux.Proofs.WG.TimerDiscipline.RetrySource
 
 set_option autoImplicit false
 set_option pp.structureInstances false

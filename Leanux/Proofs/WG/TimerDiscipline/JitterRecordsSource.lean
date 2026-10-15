@@ -1,4 +1,5 @@
-import Leanux.Proofs.WG.TimerDiscipline.Jitter
+import Leanux.Proofs.WG.TimerDiscipline.Model
+import Leanux.Proofs.WG.TimerDiscipline.JitterFrames
 import Leanux.Proofs.WG.Config.Returns
 
 set_option autoImplicit false
@@ -7,22 +8,6 @@ namespace Leanux.Proofs.WG.TimerDiscipline
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Leanux.Proofs.WG.Config
 
 /-- The two one-byte rejection-sampling sites in the timer paths. -/
-inductive JitterSite where
-  | retransmit
-  | newHandshake
-
-def JitterSite.hiddenSite : JitterSite → HiddenSite
-  | .retransmit => .retransmitJitter
-  | .newHandshake => .newHandshakeJitter
-
-def jitterRecord (site : JitterSite) (byte : UInt8) : HiddenRecord :=
-  { site := site.hiddenSite.info.id, bytes := [byte, 0, 0, 0, 0, 0, 0, 0] }
-
-abbrev jitterAccepted (byte : UInt8) : Prop :=
-  (HZ / 3 * byte.toNat) % 256 ≥ 256 % (HZ / 3)
-
-def jitterValue (byte : UInt8) : Nat := HZ / 3 * byte.toNat / 256
-
 theorem hiddenJitter_run (site : JitterSite) (byte : UInt8) (rest : List HiddenRecord)
     (w : World) (records : w.hidden = some (jitterRecord site byte :: rest)) :
     (hidden site.hiddenSite).run w = .ok ([byte], { w with hidden := some rest }) := by
@@ -82,9 +67,6 @@ theorem jitterStep_accepted (site : JitterSite) (byte : UInt8) (rest : List Hidd
       { w with hidden := some rest } = _
   rw [if_pos accepted]
   rfl
-
-def jitterStream (site : JitterSite) (rejected : List UInt8) (accepted : UInt8)
-    (rest : List HiddenRecord) := rejected.map (jitterRecord site) ++ jitterRecord site accepted :: rest
 
 theorem jitterLoop_records (site : JitterSite) (rejected : List UInt8) (accepted : UInt8)
     (rest : List HiddenRecord) (bad : ∀ byte ∈ rejected, ¬jitterAccepted byte)

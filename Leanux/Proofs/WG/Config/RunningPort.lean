@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.OperationFrames
 import Leanux.Proofs.WG.Config.FwmarkEffects
 import Leanux.Proofs.WG.Config.SocketPorts
 
@@ -6,19 +7,6 @@ set_option maxHeartbeats 800000
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
-
-theorem hidden_portBound (bound : Nat → Bool) (site : HiddenSite) :
-    ⦃fun w => ⌜w.portBound = bound⌝⦄ hidden site
-    ⦃⇓? _ w => ⌜w.portBound = bound⌝⦄ := by
-  mvcgen [hidden, skipAmbient, noteNetRxStart]
-
-theorem clearEndpointSource_portBound (pid : PeerId) (bound : Nat → Bool) :
-    Ensures (clearPeerEndpointSrc pid) (fun w => w.portBound = bound)
-      (fun _ w => w.portBound = bound) := by
-  have hh := hidden_portBound bound
-  rw [ensures_iff]
-  mvcgen [clearPeerEndpointSrc, dstCacheResetNow, dstCacheReset, hiddenJiffies,
-    getPeer, getDev, getK, setPeer, modifyDev, modifyK, invariant, hh]
 
 def portClearLoop (pids : List PeerId) : M Unit := do
   for pid in pids do

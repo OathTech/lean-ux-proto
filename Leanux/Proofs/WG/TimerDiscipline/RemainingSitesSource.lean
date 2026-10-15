@@ -1,5 +1,6 @@
-import Leanux.Proofs.WG.TimerDiscipline.ArmingPrefixes
-import Leanux.Proofs.WG.TimerDiscipline.Retry
+import Leanux.Proofs.WG.TimerDiscipline.Model
+import Leanux.Proofs.WG.TimerDiscipline.ArmingPrefixesSource
+import Leanux.Proofs.WG.TimerDiscipline.RetrySource
 
 set_option autoImplicit false
 set_option pp.structureInstances false
@@ -130,13 +131,6 @@ theorem expiredKeepalive_recorded_clock (pid : PeerId) (d : Device) (p : Peer)
     { p with timerNeedAnotherKeepalive := false } (by simp [withPeer]) running alive
     beforeRead final hd hm run
   exact ⟨beforeRead, caller, afterRead, hprefix, hread, effect⟩
-
-def giveUpPeer (p : Peer) : Peer :=
-  { (p.setTimer .sendKeepalive none) with staged := [] }
-
-def giveUpDevice (d : Device) (pid : PeerId) (p : Peer) : Device :=
-  withPeer { (withPeer d pid (p.setTimer .sendKeepalive none)) with
-    txDropped := d.txDropped + p.staged.length } pid (giveUpPeer p)
 
 def giveUpArmPrefix (pid : PeerId) : M Bool := do
   delTimer pid .sendKeepalive

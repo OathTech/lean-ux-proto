@@ -1,4 +1,5 @@
-import Leanux.Proofs.WG.TimerDiscipline.InitiationArm
+import Leanux.Proofs.WG.TimerDiscipline.View
+import Leanux.Proofs.WG.TimerDiscipline.InitiationArmSource
 import Leanux.Proofs.WG.Noise.StateEdges
 
 set_option autoImplicit false
@@ -7,12 +8,6 @@ set_option maxHeartbeats 800000
 
 namespace Leanux.Proofs.WG.TimerDiscipline
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
-
-/-- The fields connecting a timer dispatch to the next send worker. -/
-abbrev InitiationView := Nat × Nat × Nat × Option UInt64
-
-def initiationView (p : Peer) : InitiationView :=
-  (p.internalId, p.timerHandshakeAttempts, p.refcount, p.timerRetransmitHandshake)
 
 def initiationAt (w : World) (pid : PeerId) : Option InitiationView :=
   (peerAt w pid).map initiationView

@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.Model
 import Leanux.Proofs.WG.Config.Fwmark
 
 set_option pp.structureInstances false
@@ -5,9 +6,6 @@ set_option maxHeartbeats 800000
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
-
-def sourceClear (p : Peer) : Prop :=
-  (∀ e, p.endpoint = some e → e.src = 0 ∧ e.srcIf = 0) ∧ p.dstCache.slot = none
 
 def sourcesClear (k : Kernel) (pids : List PeerId) : Prop :=
   ∀ pid ∈ pids, ∃ p, (k.wg.bind fun d => d.peers[pid]?) = some p ∧ sourceClear p

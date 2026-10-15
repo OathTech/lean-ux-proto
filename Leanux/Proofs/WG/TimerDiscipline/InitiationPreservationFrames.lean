@@ -1,4 +1,5 @@
-import Leanux.Proofs.WG.TimerDiscipline.Jitter
+import Leanux.Proofs.WG.TimerDiscipline.View
+import Leanux.Proofs.WG.TimerDiscipline.JitterFrames
 import Leanux.Proofs.WG.TimerDiscipline.SendBufferFrame
 
 set_option autoImplicit false
@@ -54,9 +55,6 @@ theorem initiationArmPrefix_view (pid : PeerId) (v : InitiationView) :
     Function.comp_def, Std.TreeMap.getElem?_insert]
   all_goals grind only
 
-abbrev WorkerView := Nat × Nat × Nat
-
-def workerView (p : Peer) : WorkerView := (p.internalId, p.timerHandshakeAttempts, p.refcount)
 def workerAt (w : World) (pid : PeerId) : Option WorkerView := (peerAt w pid).map workerView
 
 theorem timersHandshakeInitiated_workerView (pid : PeerId) (v : WorkerView) :

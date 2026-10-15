@@ -2,8 +2,11 @@
 
 ## 1. Reject a batch that leaves handshake receive work pending
 
-Status: reproduced by model execution and proved by kernel reduction on main
-`ca6b22e`. This is a mirror acceptance/progress finding, not a claim
+Status: **addressed on main** by `9db558b`, included in representation batch
+`cb2348e` (read-only inspection, 2026-10-15). Campaign 2 still proves the
+historical acceptance witness over `de62c9d`; the corrected-refusal carry is
+pending. Originally reproduced by model execution and proved by kernel
+reduction on main `ca6b22e`. This is a mirror acceptance/progress finding, not a claim
 about a captured Linux run or a kernel bug. No mirror change is made here.
 
 H5 asks that an accepted operation leave no undispatched runnable unit.

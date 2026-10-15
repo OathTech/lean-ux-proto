@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Campaign2.Bridge
+import Leanux.Proofs.WG.Index.View
 import Leanux.Proofs.WG.Index.PeerRelease
 import Leanux.Proofs.WG.Index.DrawExhaustion
 import Leanux.Proofs.WG.Index.DrawRecords
@@ -15,8 +17,8 @@ open Leanux Leanux.WG Leanux.Proofs.WG.Noise Leanux.Proofs.WG.Config
 other device field, and preserves numeric-index and owner uniqueness. -/
 theorem original_index_remove (owner : IndexOwner) (d : Device)
     (indices : UniqueIndices d.indexTable) (owners : UniqueOwners d.indexTable) :
-    Returns (indexRemove owner) (fun w => w.k.wg = some d)
-      (fun _ w => w.k.wg = some { d with indexTable := removeOwner owner d.indexTable } ∧
+    Campaign2.Returns (indexRemove owner) (fun w => w.wg.device = some d)
+      (fun _ w => w.wg.device = some { d with indexTable := removeOwner owner d.indexTable } ∧
         UniqueIndices (removeOwner owner d.indexTable) ∧
         UniqueOwners (removeOwner owner d.indexTable)) := by
   intro w pre
@@ -27,8 +29,8 @@ theorem original_index_remove (owner : IndexOwner) (d : Device)
 it removes the entry even when its separately stored peer word is NULL. -/
 theorem original_keypair_index_remove (id : KeypairId) (d : Device)
     (indices : UniqueIndices d.indexTable) (owners : UniqueOwners d.indexTable) :
-    Returns (indexRemove (.keypair id)) (fun w => w.k.wg = some d)
-      (fun _ w => w.k.wg = some { d with indexTable := removeOwner (.keypair id) d.indexTable } ∧
+    Campaign2.Returns (indexRemove (.keypair id)) (fun w => w.wg.device = some d)
+      (fun _ w => w.wg.device = some { d with indexTable := removeOwner (.keypair id) d.indexTable } ∧
         UniqueIndices (removeOwner (.keypair id) d.indexTable) ∧
         UniqueOwners (removeOwner (.keypair id) d.indexTable)) :=
   original_index_remove (.keypair id) d indices owners
@@ -39,11 +41,11 @@ keypair is not already hashed. Every stored peer word is unchanged. -/
 theorem original_index_replace (pid : PeerId) (kp : KeypairId) (d : Device)
     (indices : UniqueIndices d.indexTable) (owners : UniqueOwners d.indexTable)
     (fresh : ∀ e ∈ d.indexTable, e.owner ≠ .keypair kp) :
-    Returns (indexReplaceHandshake pid kp) (fun w => w.k.wg = some d)
+    Campaign2.Returns (indexReplaceHandshake pid kp) (fun w => w.wg.device = some d)
       (fun hashed w =>
         let updated := if hashed then { d with indexTable := replaceOwner pid kp d.indexTable } else d
         hashed = d.indexTable.any (·.owner == .handshake pid) ∧
-        w.k.wg = some updated ∧ UniqueIndices updated.indexTable ∧ UniqueOwners updated.indexTable) := by
+        w.wg.device = some updated ∧ UniqueIndices updated.indexTable ∧ UniqueOwners updated.indexTable) := by
   intro w pre
   obtain ⟨hashed, final, run, value, device⟩ := indexReplace_exact pid kp d w pre
   refine ⟨hashed, final, run, value, device, ?_, ?_⟩
@@ -59,10 +61,10 @@ first, then chooses an index absent from the remaining table. It preserves
 both uniqueness properties; this does not promise success on missing draws. -/
 theorem original_index_insert (owner : IndexOwner) (d : Device)
     (indices : UniqueIndices d.indexTable) (owners : UniqueOwners d.indexTable) :
-    Ensures (indexInsert owner) (fun w => w.k.wg = some d)
+    Campaign2.Ensures (indexInsert owner) (fun w => w.wg.device = some d)
       (fun index w =>
         let table := { index, owner } :: removeOwner owner d.indexTable
-        w.k.wg = some { d with indexTable := table } ∧
+        w.wg.device = some { d with indexTable := table } ∧
           UniqueIndices table ∧ UniqueOwners table) := by
   intro w index final pre run
   obtain ⟨device, fresh⟩ := indexInsert_exact owner d w index final pre run
@@ -76,8 +78,8 @@ theorem original_index_insert (owner : IndexOwner) (d : Device)
 returned owner belongs to an initial row with the requested index and an
 allowed kind. -/
 theorem original_index_lookup (kinds : List IndexKind) (index : Nat) (d : Device) :
-    Ensures (indexLookup kinds index) (fun w => w.k.wg = some d)
-      (fun result w => tableAt w = some d.indexTable ∧
+    Campaign2.Ensures (indexLookup kinds index) (fun w => w.wg.device = some d)
+      (fun result w => View.tableAt w = some d.indexTable ∧
         ∀ owner pid, result = some (owner, pid) →
           ∃ e ∈ d.indexTable, e.index = index ∧ e.owner = owner ∧ kinds.contains e.kind = true) :=
   indexLookup_owner kinds index d
@@ -89,8 +91,8 @@ theorem original_index_lookup_null (kinds : List IndexKind) (index : Nat)
     (table : d.indexTable.find? (·.index == index) = some { index, owner })
     (permitted : kinds.contains (IndexEntry.kind { index, owner }) = true)
     (word : ownerWord d owner = some none) :
-    Returns (indexLookup kinds index) (fun w => w.k.wg = some d)
-      (fun result w => result = none ∧ w.k.wg = some (writeOwnerWord d owner none)) :=
+    Campaign2.Returns (indexLookup kinds index) (fun w => w.wg.device = some d)
+      (fun result w => result = none ∧ w.wg.device = some (writeOwnerWord d owner none)) :=
   indexLookup_null kinds index owner d table permitted word
 
 /-- A matching permitted entry referencing a zero-reference peer returns
@@ -101,8 +103,8 @@ theorem original_index_lookup_zero_reference (kinds : List IndexKind) (index : N
     (permitted : kinds.contains (IndexEntry.kind { index, owner }) = true)
     (pid : PeerId) (p : Peer) (word : ownerWord d owner = some (some pid))
     (resident : d.peers[pid]? = some p) (zero : p.refcount = 0) :
-    Returns (indexLookup kinds index) (fun w => w.k.wg = some d)
-      (fun result w => result = none ∧ w.k.wg = some (writeOwnerWord d owner none)) :=
+    Campaign2.Returns (indexLookup kinds index) (fun w => w.wg.device = some d)
+      (fun result w => result = none ∧ w.wg.device = some (writeOwnerWord d owner none)) :=
   indexLookup_dead kinds index owner d table permitted pid p word resident zero
 
 /-- A matching permitted entry with a resident, positively referenced peer
@@ -116,9 +118,9 @@ theorem original_index_lookup_live (kinds : List IndexKind) (index : Nat)
     (pid : PeerId) (p : Peer) (word : ownerWord d owner = some (some pid))
     (resident : d.peers[pid]? = some p) (live : 0 < p.refcount)
     (bounded : p.refcount + 1 < 2 ^ 31) :
-    Returns (indexLookup kinds index) (fun w => w.k.wg = some d)
+    Campaign2.Returns (indexLookup kinds index) (fun w => w.wg.device = some d)
       (fun result w => result = some (owner, pid) ∧
-        w.k.wg = some (writeOwnerWord (acquirePeer d pid p) owner (some pid))) :=
+        w.wg.device = some (writeOwnerWord (acquirePeer d pid p) owner (some pid))) :=
   indexLookup_live kinds index owner d table permitted pid p word resident live bounded
 
 /-- A finite contiguous recorded collision prefix followed by a fresh draw makes the
@@ -131,12 +133,12 @@ theorem original_index_insert_recorded (owner : IndexOwner) (d : Device)
     (allCollide : ∀ draw ∈ collisions,
       (removeOwner owner d.indexTable).any (·.index == draw.value) = true)
     (isFresh : (removeOwner owner d.indexTable).any (·.index == fresh.value) = false) :
-    Returns (indexInsert owner)
-      (fun w => w.k.wg = some d ∧ w.hidden = some (drawStream collisions fresh rest))
+    Campaign2.Returns (indexInsert owner)
+      (fun w => w.wg.device = some d ∧ w.ambient.hidden = some (drawStream collisions fresh rest))
       (fun result w =>
         let table := { index := fresh.value, owner } :: removeOwner owner d.indexTable
-        result = fresh.value ∧ w.k.wg = some { d with indexTable := table } ∧
-          w.hidden = some rest ∧ UniqueIndices table ∧ UniqueOwners table) := by
+        result = fresh.value ∧ w.wg.device = some { d with indexTable := table } ∧
+          w.ambient.hidden = some rest ∧ UniqueIndices table ∧ UniqueOwners table) := by
   intro w pre
   obtain ⟨result, final, run, value, device, records⟩ :=
     indexInsert_records owner d collisions fresh rest allCollide isFresh w pre
@@ -153,14 +155,14 @@ returns the third. This is a local composition, not an accepted runner trace. -/
 theorem original_index_insert_corpus_draws (first second : PeerId)
     (different : first ≠ second) (d : Device) (empty : d.indexTable = [])
     (rest : List HiddenRecord) :
-    Returns (corpusInsertPair first second)
-      (fun w => w.k.wg = some d ∧ w.hidden = some
+    Campaign2.Returns (corpusInsertPair first second)
+      (fun w => w.wg.device = some d ∧ w.ambient.hidden = some
         (corpusCollisionDraw.record :: corpusCollisionDraw.record :: corpusFreshDraw.record :: rest))
       (fun result w => result = (0x0a0b0c0d, 0x11223344) ∧
-        w.k.wg = some { d with indexTable :=
+        w.wg.device = some { d with indexTable :=
           [{ index := 0x11223344, owner := .handshake second },
            { index := 0x0a0b0c0d, owner := .handshake first }] } ∧
-        w.hidden = some rest) :=
+        w.ambient.hidden = some rest) :=
   corpusInsertPair_returns first second different d empty rest
 
 /-- Bounds on resident and hashed keypair identities make a successful
@@ -169,11 +171,11 @@ leaves the index table untouched, and preserves those bounds. Allocation
 failure returns no keypair and preserves the device and allocation counter. -/
 theorem original_keypair_create_index_fresh (peer : Option PeerId) (d : Device)
     (counter : Nat) (owners : KeypairOwnersBounded d) (store : KeypairStoreBounded d) :
-    Ensures (keypairCreate peer) (fun w => w.k.wg = some d ∧ w.k.keypairCounter = counter)
+    Campaign2.Ensures (keypairCreate peer) (fun w => w.wg.device = some d ∧ w.wg.keypairCounter = counter)
       (fun result w => match result with
-        | none => w.k.wg = some d ∧ w.k.keypairCounter = counter
+        | none => w.wg.device = some d ∧ w.wg.keypairCounter = counter
         | some id => id = d.nextKeypairId ∧
-          w.k.wg = some (createdDevice d counter peer) ∧ w.k.keypairCounter = counter + 1 ∧
+          w.wg.device = some (createdDevice d counter peer) ∧ w.wg.keypairCounter = counter + 1 ∧
           d.keypairs[id]? = none ∧ (∀ e ∈ d.indexTable, e.owner ≠ .keypair id) ∧
           ownerWord (createdDevice d counter peer) (.keypair id) = some peer ∧
           KeypairOwnersBounded (createdDevice d counter peer) ∧
@@ -191,20 +193,20 @@ theorem original_keypair_create_index_fresh (peer : Option PeerId) (d : Device)
 /-- Every normal completion of original initiation creation preserves
 numeric index uniqueness, including its recorded insertion path. -/
 theorem original_create_initiation_indices (pid : PeerId) :
-    Ensures (createInitiation pid) IndicesSafe (fun _ w => IndicesSafe w) :=
+    Campaign2.Ensures (createInitiation pid) View.IndicesSafe (fun _ w => View.IndicesSafe w) :=
   (ensures_iff _ _ _).mpr (createInitiation_indices_spec pid)
 
 /-- Every normal completion of original response creation preserves
 numeric index uniqueness, including its recorded insertion path. -/
 theorem original_create_response_indices (pid : PeerId) :
-    Ensures (createResponse pid) IndicesSafe (fun _ w => IndicesSafe w) :=
+    Campaign2.Ensures (createResponse pid) View.IndicesSafe (fun _ w => View.IndicesSafe w) :=
   (ensures_iff _ _ _).mpr (createResponse_indices_spec pid)
 
 /-- Every normal completion of original session installation preserves
 numeric index uniqueness through allocation, slot rotation, displaced-key
 removal and handshake-to-keypair replacement. -/
 theorem original_begin_session_indices (pid : PeerId) :
-    Ensures (beginSession pid) IndicesSafe (fun _ w => IndicesSafe w) :=
+    Campaign2.Ensures (beginSession pid) View.IndicesSafe (fun _ w => View.IndicesSafe w) :=
   (ensures_iff _ _ _).mpr (beginSession_indices_spec pid)
 
 /-- If the first equal-index entry is absent or has a disallowed kind,
@@ -213,8 +215,8 @@ does not skip a disallowed equal-index row in search of a later row. -/
 theorem original_index_lookup_miss (kinds : List IndexKind) (index : Nat) (d : Device)
     (noMatch : ∀ e, d.indexTable.find? (·.index == index) = some e →
       kinds.contains e.kind = false) :
-    Returns (indexLookup kinds index) (fun w => w.k.wg = some d)
-      (fun result w => result = none ∧ w.k.wg = some d) :=
+    Campaign2.Returns (indexLookup kinds index) (fun w => w.wg.device = some d)
+      (fun result w => result = none ∧ w.wg.device = some d) :=
   indexLookup_miss kinds index d noMatch
 
 /-- Original keypair release removes every row for that owner when requested
@@ -225,10 +227,10 @@ this says nothing about peer residency or references held in slots and packets. 
 theorem original_keypair_release (id : KeypairId) (now : Bool) (d : Device) (k : Keypair)
     (resident : d.keypairs[id]? = some k) (live : 0 < k.refcount) (word : k.peer ≠ none)
     (indices : UniqueIndices d.indexTable) (owners : UniqueOwners d.indexTable) :
-    Returns (keypairPut (some id) now) (fun w => w.k.wg = some d)
+    Campaign2.Returns (keypairPut (some id) now) (fun w => w.wg.device = some d)
       (fun _ w =>
         let final := releasedDevice d id k now
-        w.k.wg = some final ∧
+        w.wg.device = some final ∧
         final.indexTable = (if now || k.refcount == 1 then
           removeOwner (.keypair id) d.indexTable else d.indexTable) ∧
         final.keypairs[id]? = (if k.refcount = 1 then none else some { k with refcount := k.refcount - 1 }) ∧
@@ -247,8 +249,8 @@ theorem original_keypair_release_allocation_bounds (id : KeypairId) (now : Bool)
     (d : Device) (k : Keypair) (resident : d.keypairs[id]? = some k)
     (live : 0 < k.refcount) (word : k.peer ≠ none)
     (owners : KeypairOwnersBounded d) (store : KeypairStoreBounded d) :
-    Returns (keypairPut (some id) now) (fun w => w.k.wg = some d)
-      (fun _ w => w.k.wg = some (releasedDevice d id k now) ∧
+    Campaign2.Returns (keypairPut (some id) now) (fun w => w.wg.device = some d)
+      (fun _ w => w.wg.device = some (releasedDevice d id k now) ∧
         (releasedDevice d id k now).nextKeypairId = d.nextKeypairId ∧
         KeypairOwnersBounded (releasedDevice d id k now) ∧
         KeypairStoreBounded (releasedDevice d id k now)) := by
@@ -261,14 +263,14 @@ theorem original_keypair_release_allocation_bounds (id : KeypairId) (now : Bool)
 and the hashed-keypair allocation bound on normal completion, including removal
 of the owner's previous row before insertion. Numeric uniqueness is separate. -/
 theorem original_create_initiation_owners (pid : PeerId) :
-    Ensures (createInitiation pid) OwnersBoundedSafe (fun _ w => OwnersBoundedSafe w) :=
+    Campaign2.Ensures (createInitiation pid) View.OwnersBoundedSafe (fun _ w => View.OwnersBoundedSafe w) :=
   (ensures_iff _ _ _).mpr (createInitiation_owners_spec pid)
 
 /-- Original response creation preserves embedded-owner uniqueness on every
 normal completion, retaining the hashed-keypair allocation bound. Missing record
 inputs are not promised to succeed. -/
 theorem original_create_response_owners (pid : PeerId) :
-    Ensures (createResponse pid) OwnersBoundedSafe (fun _ w => OwnersBoundedSafe w) :=
+    Campaign2.Ensures (createResponse pid) View.OwnersBoundedSafe (fun _ w => View.OwnersBoundedSafe w) :=
   (ensures_iff _ _ _).mpr (createResponse_owners_spec pid)
 
 /-- Original session installation preserves embedded-owner uniqueness when all
@@ -278,7 +280,7 @@ it unhashed until replacement. This covers normal completion and early returns,
 and retains the allocation bound for composition; it does not cover stopped
 prefixes, store/slot safety or full reachable owner-word coherence. -/
 theorem original_begin_session_owners (pid : PeerId) :
-    Ensures (beginSession pid) OwnersBoundedSafe (fun _ w => OwnersBoundedSafe w) :=
+    Campaign2.Ensures (beginSession pid) View.OwnersBoundedSafe (fun _ w => View.OwnersBoundedSafe w) :=
   (ensures_iff _ _ _).mpr (beginSession_owners_spec pid)
 
 /-- A finite contiguous stream consisting only of colliding draws is rejected
@@ -287,14 +289,16 @@ is tested after removing this owner's old row. The record-derived budget has
 one extra turn, so rejection occurs at the next hidden read, before budget
 exhaustion. This includes an empty stream and does not constrain the hiddenPlaceholders
 flag. Recordless placeholder execution is outside its scope. It does not claim
-an accepted runner trace or expose a final World on error. -/
+an accepted runner trace or expose a final state on error. -/
 theorem original_index_insert_exhausted (owner : IndexOwner) (d : Device) (draws : List Draw)
     (allCollide : ∀ draw ∈ draws,
-      (removeOwner owner d.indexTable).any (·.index == draw.value) = true)
-    (w : World) (device : w.k.wg = some d)
-    (records : w.hidden = some (draws.map Draw.record)) :
-    (indexInsert owner).run w = .error (.hidden "no record left for index_draw") :=
-  indexInsert_exhausted owner d draws allCollide w device records
+      (removeOwner owner d.indexTable).any (·.index == draw.value) = true) :
+    Campaign2.Observes (indexInsert owner)
+      (fun s => s.wg.device = some d ∧ s.ambient.hidden = some (draws.map Draw.record))
+      (fun _ out => out = .error (.hidden "no record left for index_draw")) := by
+  intro w pre
+  rw [indexInsert_exhausted owner d draws allCollide w pre.1 pre.2]
+  rfl
 
 /-- Original peer release decrements the count. The last release removes all
 handshake-owner rows, erases the peer and charges its staged packets to txDropped;
@@ -304,10 +308,10 @@ effects; it does not establish safety of references in other objects. -/
 theorem original_peer_release (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) (live : 0 < p.refcount)
     (indices : UniqueIndices d.indexTable) (owners : UniqueOwners d.indexTable) :
-    Returns (peerPut (some pid)) (fun w => w.k.wg = some d)
+    Campaign2.Returns (peerPut (some pid)) (fun w => w.wg.device = some d)
       (fun _ w =>
         let final := releasedPeerDevice d pid p
-        w.k.wg = some final ∧
+        w.wg.device = some final ∧
         final.indexTable = (if p.refcount = 1 then removeOwner (.handshake pid) d.indexTable else d.indexTable) ∧
         final.peers[pid]? = (if p.refcount = 1 then none else some { p with refcount := p.refcount - 1 }) ∧
         (∀ other : PeerId, pid ≠ other → final.peers[other]? = d.peers[other]?) ∧
@@ -326,10 +330,10 @@ preservation of these bounds are not claimed. -/
 theorem original_peer_release_allocation_bounds (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) (live : 0 < p.refcount)
     (owners : KeypairOwnersBounded d) (store : KeypairStoreBounded d) :
-    Returns (peerPut (some pid)) (fun w => w.k.wg = some d)
+    Campaign2.Returns (peerPut (some pid)) (fun w => w.wg.device = some d)
       (fun _ w =>
         let final := releasedPeerDevice d pid p
-        w.k.wg = some final ∧ final.keypairs = d.keypairs ∧ final.nextKeypairId = d.nextKeypairId ∧
+        w.wg.device = some final ∧ final.keypairs = d.keypairs ∧ final.nextKeypairId = d.nextKeypairId ∧
         KeypairOwnersBounded final ∧ KeypairStoreBounded final) := by
   intro w pre
   obtain ⟨ret, final, run, device⟩ := peerPut_exact pid d p resident live w pre

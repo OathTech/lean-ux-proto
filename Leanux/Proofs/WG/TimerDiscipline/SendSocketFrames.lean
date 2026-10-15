@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.TimerDiscipline.SendPeerView
+import Leanux.Proofs.WG.TimerDiscipline.SendPeerFrames
 
 set_option autoImplicit false
 set_option pp.structureInstances false

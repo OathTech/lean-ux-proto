@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.Model
 import Leanux.Proofs.WG.Config.PeerScalars
 
 set_option pp.structureInstances false
@@ -5,11 +6,6 @@ set_option maxHeartbeats 800000
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
-
-def clearedSource (p : Peer) (reset : UInt64) : Peer :=
-  { p with
-    endpoint := p.endpoint.map fun e => { e with src := 0, srcIf := 0 }
-    dstCache := { p.dstCache with resetTs := reset, slot := none } }
 
 theorem clearEndpointSource_exact (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) :

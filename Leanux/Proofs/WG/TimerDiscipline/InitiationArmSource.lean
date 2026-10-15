@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.TimerDiscipline.RecordedJitter
+import Leanux.Proofs.WG.TimerDiscipline.RecordedJitterSource
 
 set_option autoImplicit false
 

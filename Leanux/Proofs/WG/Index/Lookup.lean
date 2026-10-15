@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.TableModel
 import Leanux.Proofs.WG.Noise.Slots
 import Leanux.Proofs.WG.Index.LookupSource
 
@@ -44,8 +45,6 @@ theorem indexLookup_factor (kinds : List IndexKind) (index : Nat) :
   rw [indexLookup_source]
   simp [lookupPrefix, bind_assoc]
 
-def bucket (index : Nat) (table : List IndexEntry) : List IndexEntry :=
-  table.filter (·.index % (2 ^ INDEX_HASHTABLE_BITS) == index % (2 ^ INDEX_HASHTABLE_BITS))
 
 theorem lookupPrefix_returns (kinds : List IndexKind) (index : Nat) (d : Device) :
     Returns (lookupPrefix kinds index) (fun w => w.k.wg = some d)

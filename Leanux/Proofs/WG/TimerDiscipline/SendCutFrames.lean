@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.TimerDiscipline.FireSelection
+import Leanux.Proofs.WG.TimerDiscipline.FireSelectionSource
 import Leanux.Proofs.WG.TimerDiscipline.InitiationFrames
 
 set_option autoImplicit false

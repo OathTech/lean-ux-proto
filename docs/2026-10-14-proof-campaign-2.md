@@ -2,43 +2,79 @@
 
 ## Progress
 
-**Paused at the user's request, 2026-10-15.** All work remains on
-`proofs/campaign-2`, over mirror commit `de62c9d`; no merge to main or push.
-The last checkpoint has 153 terminal declarations, all importing together and
-passing standard-axiom inspection. The full proof gate still fails in inherited
-campaign-1 counter-window/index carries. None of H1–H6 is claimed complete.
+**Resumed for state-split preparation, 2026-10-15.** Work remains on
+`proofs/campaign-2` over mirror `de62c9d`. Main has since advanced to the
+representation batch at `cb2348e`; this checkpoint is **lagging main**. No merge
+or push has been performed during this resumption. None of H1–H6 is complete.
 
-[USER 2026-10-15] Stop and preserve the current closed checkpoint because the
-mirror is being split into per-subsystem worlds, with functions typed over the
-data they access. Resume only after a paste says that split has landed. On
-resumption, retype statements; delete frame lemmas made trivial or unstatable
-by the new types instead of repairing them. No merge to main and no push.
+[USER 2026-10-15] Resume before the split lands. Read the design on
+`task/state-split`, factor claims over a WireGuard-only projection, separate
+frames, then continue H2 and the remaining charter. Delete frames made trivial
+or unstatable by the eventual new types; retype the substantive claims. No
+shared-layer edits, merge or push. This supersedes the earlier pause pending
+landing, whose closed checkpoint was `aeece72`.
 
-| Result | Checked checkpoint | Still open at pause |
+[AGENT 2026-10-15] Use a real data projection (`Campaign2/View`) and an explicit
+execution connection (`Campaign2/Bridge`). The view contains WireGuard state
+and a separately named ambient context, with no task, file, pipe, epoll or
+seccomp stores. Contracts quantify **every concrete realization**, keeping
+partial correctness, total return and exact stops distinct. Clock/prefix
+observations execute the original composites on a copy of the same entry;
+checked erasure equations retain the original result, final state and errors.
+No independent existential projected runs are spliced together.
+
+| Result | Existing mathematical checkpoint | Factoring / remaining mathematics |
 | --- | --- | --- |
-| H1 Noise | 11 local state/slot contracts | Whole-call transition coverage and key-confirmation composition. |
-| H2 Index | 23 original-operation uniqueness, lookup, collision-draw and release contracts | Whole-driver reachable ownership/coherence, broader record layouts and the corpus runner composition. |
-| H3 Roaming | 5 local endpoint contracts | Successful-authentication provenance and complete caller coverage, with the source's outer-address qualifications. |
-| H4 Configuration | 60 contracts, including total witnessed removal with empty slots/queues; checked internal dump-accounting finding | Queued-work/live-keypair removal and replacement, private-key collision and mixed attributes, global allowed-IP ownership, general multipart dump composition. |
-| H5 Progress | 25 contracts and an accepted batch-backlog counterexample | Productive-record decrease, full loop/activation coverage and probe/detach framing; unrestricted no-pending-at-return wording is refuted. |
-| H6 Timers | 29 contracts, including original send-prefix/send-worker retry frames | Environment worker selection/dequeue, complete retry episodes, whole-run arming-site and session-count coverage. |
+| H1 Noise | 11 local state/slot contracts | Public projection complete; whole-call edge coverage and lifetime confirmation remain open. |
+| H2 Index | 23 original-operation uniqueness, lookup, collision-draw and release contracts | Public projection complete, retaining 13 total contracts, 9 normal-return contracts and 1 exact stop; reachable coherence, broader records and the corpus runner composition remain open. |
+| H3 Roaming | 5 endpoint/authentication leaf contracts | Public projection complete; authentication provenance and complete caller coverage remain open. |
+| H4 Configuration | 60 contracts and the reachable internal dump-accounting finding | Public projection complete; residual within-WG helper separation remains. Queued/live-keypair removal, private-key collision, mixed attributes, global ownership and general dump composition remain open. |
+| H5 Progress | 25 contracts and the accepted batch-backlog counterexample | Public projection next; productive-record decrease, full loop coverage and probe/detach composition remain open. The backlog witness is historical over `de62c9d`: main's batch guard now addresses request 1. |
+| H6 Timers | 29 local timer/worker contracts | Public projection and generic frame separation complete; environment worker selection/dequeue, complete retry episodes and whole-run arming/session counts remain open. |
 
-The new H6 worker body preserves identity and retry attempts and releases one
-reference under the explicit retained-reference premise. It does not establish
-an entire retry episode. Further development is paused; the remaining obligations
-above are a handoff for the split mirror, not a new work queue for the old types.
+No new mathematical result was started during this factoring checkpoint.
+The full proof gate remains failed in inherited campaign-1 counter-window and
+index carries; those files have not been edited. Scoped validation does not
+constitute a passing full gate. The report's earlier results concern their
+recorded mirror commits, not the newer representation batch.
 
-Work is confined to `.worktrees/proofs-campaign-2`, branch `proofs/campaign-2`.
-H1, H3 and H4 have local contracts; their whole-operation/whole-run claims
-remain open. H4 also has a checked reachable internal dump-accounting finding. H5 has a checked batch-completion counterexample and open progress
-obligations. H6 has twenty-nine local timer contracts; whole-run site coverage and
-retry/session counting remain open.
-H2 was unblocked by the user's landing notice for `de62c9d` on 2026-10-15.
-Main was merged into this branch at `5033f7a`. No result is claimed complete.
-The existing campaign-2 terminal declarations build over `de62c9d` and
-pass standard-axiom inspection. The changed Noise and configuration modules
-also pass fresh stock kernel replay. The full gate remains failed in inherited
-campaign-1 files; campaign 1 owns their repair.
+### Claims, frames and the split boundary
+
+Paths below are under `Leanux/Proofs/WG/`; `.lean` is implicit. Public claims
+remain the six result `Statements` modules. Their concrete source proofs are
+connections to the current executable mirror, not replacement interpreters.
+
+| Area | Data / claims / source connections | Separate frame support |
+| --- | --- | --- |
+| Common C2 | `Campaign2/View` is data-only; `Campaign2/Bridge` defines projection and universal execution contracts. | No shared campaign-1 layer is changed. |
+| H1 | `Noise/Model`, `Statements`, `Slots`, `StateEdges`, `ConsumeEdges`; `Execution` holds the concrete monad connection. | `AccessFrames`, `KernelFrames`, `PeerFrames`, `SlotFrames`; `Basic` reexports access support. |
+| H2 | `Index/View`, `TableModel`, `OwnerWordModel`, `AllocationModel`, `ReleaseModel` and pure release effects/bounds; `Statements`, `HandshakeClaims`, `OwnerUpdateClaims` and the other operation/source modules. | `IndexFieldFrames`, `OwnerFieldFrames`; the old `HandshakeFrames` and `OwnerFrames` paths are import-only reexports, not duplicated lemmas. |
+| H3 | `Roaming/Model`, `View`, `Statements`, `EndpointClaims`, `EndpointSource`, `Authentication`. | `Roaming/Frames`; `Basic` reexports the endpoint source connection. |
+| H4 | `Config/Model`, `ClaimView`, `Statements`, `SourceClaims`, `ObservationBridge`, and existing substantive effect/source modules. | `ConcreteFrames` isolates six whole-kernel endpoint contracts; `OperationFrames` isolates seven generic helpers; `ReadbackFrames` retains necessary socket/fixture preservation. Further within-WG footprint helpers still need their family file split. |
+| H5 | `Progress/Statements` and existing concrete scheduler/source modules; projection migration is queued. | Probe/filter/no-work preservation still needs separation during migration. |
+| H6 | `TimerDiscipline/Model`, `View`, `Statements`, `ObservationBridge`, `ObservationClaims`, `SourceClaims`, and `*Source` operational proofs. | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`. |
+
+A compound exact effect is not a disposable frame merely because its name
+contains “frame”: mark/generation updates, cleared-peer accumulation, reference
+decrements and dump/UDP payload results remain substantive claims. The seven
+H4 dump/UDP helpers with arbitrary kernel predicates are concrete source
+contracts that also establish outputs. After the mirror split, delete only
+structural preservation made trivial or unstatable; retain and retype those
+outputs and meaningful within-WG preservation. H6's reference-decrement proof
+is therefore in `SendWorkerSource`, separate from send preservation.
+
+Validation at this checkpoint: the five migrated public modules build together
+(215 jobs). All 128 H1–H4/H6 terminal declarations import together and their
+printed axioms are a subset of `propext`, `Classical.choice`, `Quot.sound`.
+Fresh stock kernel replay passed separately for H2, H4 and H6. Commands:
+`LEAN_NUM_THREADS=32 capped -- scripts/in-bundle lake build` with those five
+`Leanux.Proofs.WG.<Result>.Statements` targets; the same capped bundle runs
+`lake env lean --stdin` for the complete headline axiom list and
+`lake env leanchecker --fresh <module>` for replay. The full
+`LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle scripts/proof-gate`
+failed in inherited `ReplayWindow.Counterexamples` and `CounterWindow.Refinement`;
+the forbidden-token and import/root/default-target checks passed. No cap hit,
+guest run or infrastructure rerun. Mirror and shared proof files are unchanged.
 
 [USER 2026-10-15] The index-lookup fix has landed at `de62c9d`; merge main
 into the campaign branch, carry the index frames and permit H2 to start.

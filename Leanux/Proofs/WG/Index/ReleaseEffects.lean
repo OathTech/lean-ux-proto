@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.Index.Release
+import Leanux.Proofs.WG.Index.ReleaseModel
 
 set_option autoImplicit false
 set_option pp.structureInstances false

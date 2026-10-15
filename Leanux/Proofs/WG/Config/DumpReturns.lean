@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.OperationFrames
 import Leanux.Proofs.WG.Config.PeerDump
 import Leanux.Proofs.WG.Config.Returns
 
@@ -7,11 +8,6 @@ set_option maxRecDepth 2048
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Lean Std.Do
-
-theorem branch_kernel_returns (P : Kernel → Prop) (decision : Decision) (outcome : Bool) :
-    ⦃fun w => ⌜P w.k⌝⦄ branch decision outcome
-    ⦃⇓ ret w => ⌜ret = outcome ∧ P w.k⌝⦄ := by
-  mvcgen [branch]
 
 theorem dumpAllowed_none_returns (p : Peer) (ctx : DumpCtx) (skb0 skb : NlSkb)
     (pubkey : String) (attrs : List (String × Json)) (P : Kernel → Prop) :

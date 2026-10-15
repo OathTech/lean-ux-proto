@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.TimerDiscipline.SendSocketView
+import Leanux.Proofs.WG.TimerDiscipline.SendSocketFrames
 
 set_option autoImplicit false
 set_option pp.structureInstances false
