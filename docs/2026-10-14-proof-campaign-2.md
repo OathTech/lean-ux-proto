@@ -25,7 +25,7 @@ No independent existential projected runs are spliced together.
 
 | Result | Existing mathematical checkpoint | Factoring / remaining mathematics |
 | --- | --- | --- |
-| H1 Noise | 17 state/slot, ordered-clear and exact rotation/confirmation contracts | Public projection complete; ordered release effects and static totality are checked. Whole-call edge coverage, full session composition and lifetime confirmation remain open. |
+| H1 Noise | 18 state/slot, ordered-clear, rotation/confirmation and full session-effect contracts | Public projection complete; exact normal session composition and static rotation/release totality are checked. Whole-call edge coverage, session totality, exposed derivation-clock provenance and lifetime confirmation remain open. |
 | H2 Index | 44 contracts, including lifecycle boundaries, handshake reception/sending, staged/keepalive sending, queued clearing and original worker/timer dispatch | Public projection complete: 14 total contracts, 28 normal-return contracts, 1 exact stop and 1 projected initializer theorem; reachable coherence, broader records and the corpus runner composition remain open. |
 | H3 Roaming | 8 contracts, including decrypt publication and its same-execution first-poll endpoint connection | Public projection complete; first selected packet provenance is conditional on matching publication identity. General queue provenance and complete caller coverage remain open. |
 | H4 Configuration | 62 contracts, including live-key removal with empty work queues, and the internal dump-accounting finding | Public projection and frame separation complete. Queued-work removal, private-key collision, mixed attributes, global ownership and general dump composition remain open. |
@@ -34,7 +34,7 @@ No independent existential projected runs are spliced together.
 
 Projection/frame factoring completed at `69f988a` for all six results, preserving
 all 153 existing headline names before new mathematics. The following H2 lifecycle/sender
-and H6 dispatch/rearm increments, H3 publication/poll provenance, H5 cut-loop progress, H1 ordered clearing/rotation and H4 live-key removal bring the total to 193. No public statement directly names `World` or
+and H6 dispatch/rearm increments, H3 publication/poll provenance, H5 cut-loop progress, H1 ordered clearing/rotation and H4 live-key removal bring the total to 194. No public statement directly names `World` or
 `Kernel`.
 The full proof gate remains failed in inherited campaign-1 counter-window and
 index carries; those files have not been edited. Scoped validation does not
@@ -50,7 +50,7 @@ connections to the current executable mirror, not replacement interpreters.
 | Area | Data / claims / source connections | Separate frame support |
 | --- | --- | --- |
 | Common C2 | `Campaign2/View` is data-only; `Campaign2/Bridge` defines projection and universal execution contracts. | No shared campaign-1 layer is changed. |
-| H1 | `Noise/Model`, `Statements`, `Slots`, `StateEdges`, `ConsumeEdges`, `ClearModel`, `ClearEffects`, `ClearSource`, `RotationModel`, `RotationEffects`, `RotationSource`; `Execution` holds the concrete monad connection; `AccessSource` holds accessor read/write contracts, reexported by `Basic`. | `KernelFrames`, `PeerFrames`, `SlotFrames`, `ClearFrames`, `RotationFrames`. |
+| H1 | `Noise/Model`, `Statements`, `Slots`, `StateEdges`, `ConsumeEdges`, `ClearModel`, `ClearEffects`, `ClearSource`, `RotationModel`, `RotationEffects`, `RotationSource`, `SessionModel`, `SessionSource`; `Execution` holds the concrete monad connection; `AccessSource` holds accessor read/write contracts, reexported by `Basic`. | `KernelFrames`, `PeerFrames`, `SlotFrames`, `ClearFrames`, `RotationFrames`, `SessionFrames`. |
 | H2 | `Index/View`, `TableModel`, `OwnerWordModel`, `AllocationModel`, `ReleaseModel`, `LifecycleModel` and pure release effects/bounds; `Statements`, `HandshakeClaims`, `OwnerUpdateClaims`, `LifecycleSource`, `LinkSource`, `SendSource`, `DispatchSource`, `ResponseSource`, `ConsumeSource`, `StagedSource`, `ReceiveOperations`, `ReceiveSource`, `ClearSource`, `TimerSource` and the other operation/source modules. | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`, `NewlinkFrames`, `SendFrames`, `DispatchFrames`, `ResponseFrames`, `ConsumeFrames`, `StagedFrames`, `ReceiveFrames`, `ClearFrames`, `TimerFrames`; the old `HandshakeFrames` and `OwnerFrames` paths are import-only reexports, not duplicated lemmas. |
 | H3 | `Roaming/Model`, `View`, `Statements`, `EndpointClaims`, `EndpointSource`, `Authentication`, `PublicationModel`, `PublicationSource`, `PublicationClaims`, `PollEndpointModel`, `PollEndpointSource`, `PollEndpointClaims`. | `Roaming/Frames`, `PublicationFrames`, `PollEndpointFrames`; `Basic` reexports the endpoint source connection. |
 | H4 | `Config/Model`, `AllowedRemovalModel`, `QuietModel`, `LiveRemovalModel`, `LiveRemovalSource`, `ClaimView`, `Statements`, `SourceClaims`, `ObservationBridge`, and existing substantive effect/source modules. | `ConcreteFrames` isolates six whole-kernel endpoint contracts; `OperationFrames` isolates seven generic helpers; `ReadbackFrames` retains socket/fixture preservation; `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `QuietFrames`, `LiveRemovalFrames`, `KeyFieldFrames` isolate within-WG preservation. |
@@ -157,7 +157,7 @@ allocation and index-operation frames; `StateEdges` and `ConsumeEdges` prove
 tag endpoints. The initial eleven terminal statements cover these local contracts.
 The consume statements establish the returned peer's tag, not failed-prefix
 framing or authentication provenance. `beginSession`'s tag contract is checked;
-its complete allocation/rotation contract is still open.
+its complete normal allocation/rotation effect is now covered below.
 
 General original keypair clearing now has two additional projected contracts.
 For a resident entry peer, normal completion derives `ClearRun`: each next,
@@ -227,6 +227,38 @@ infrastructure rerun in this increment. Reproduce with the preceding scoped
 Noise/Config build command and capped fresh replay of `Noise.Statements`.
 The full gate remains failed in the unchanged inherited files.
 
+`SessionModel` and `SessionSource` now connect the full original `beginSession`
+entry point to exact normal-return effects. A false return preserves the device
+and allocation counter, including when allocation records were consumed. A true
+return derives an accepted initial tag, live peer, non-NULL handshake peer word,
+counter increment, allocation overwrite, role/remote-index assignment, both KDF
+keys with validity and birthdate, handshake zeroing, ordered rotation/release and
+replacement of the actually hashed handshake entry. The initial peer's residency
+is the only peer premise; freshness, distinct slots and a successful-release
+witness are not assumed. Aliasing may erase the allocated key before its identity
+is installed in the final table, so store residency and lifetime coherence are
+not concluded.
+
+[AGENT 2026-10-15] Keep birthdate existential in this exact-effect milestone.
+Its witness comes from the original derivation; no independently executed clock
+probe is postulated. An exposed clock-read observation and total session success
+remain separate obligations. `SessionFrames` holds counter and owner-word
+preservation. Exact accessors and compound effects remain in Source: the review's
+P3 placement question for `sessionPeer_read` was answered by its returned-peer
+and residency equation, consistent with `Noise/AccessSource`, and a comment now
+explains that distinction. Independent review closed with no outstanding findings.
+
+H1 now has 18 headlines and the campaign 194. The capped full-parallel Noise and
+Config build passed (220 jobs); all 18 Noise headlines and two exact suffix-source
+equations use only standard axioms, and fresh Noise kernel replay passed. All
+194 campaign headlines import and pass axiom inspection together; token and
+import/root/default-target checks pass. Reproduce with
+`LEAN_NUM_THREADS=32 capped -- scripts/in-bundle lake build Leanux.Proofs.WG.Noise.Statements Leanux.Proofs.WG.Config.Statements`
+and `capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Noise.Statements`.
+Ordinary source/elaboration errors were corrected; no heartbeat timeout, cap
+failure, guest timeout or infrastructure rerun. Full gate failure remains in
+unchanged inherited files, last run at `69f988a`. No new mirror request or finding.
+
 Expiry's remaining sending-key effect was already proved in H4's
 `original_expiry_store_effects`, `original_expiry_keypair_fields` and
 `original_expiry_clock_relation`: next/current sending validity, aliases,
@@ -234,7 +266,7 @@ handshake zero/unhash and the actual reset-clock provenance. H1 reuses those
 checked normal-return contracts; no duplicate proof is needed.
 
 Remaining H1 work: source-call coverage of owned edges through the runner;
-full session allocation/derivation/rotation composition; fresh-allocation
+session totality and an exposed derivation-clock observation; fresh-allocation
 provenance for session installation and confirmation once per allocation lifetime.
 The immediate second-call confirmation theorem is deliberately not presented
 as the lifetime theorem. Slots are individually optional values, not a bound

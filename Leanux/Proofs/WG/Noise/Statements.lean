@@ -2,6 +2,7 @@ import Leanux.Proofs.WG.Campaign2.Bridge
 import Leanux.Proofs.WG.Noise.ConsumeEdges
 import Leanux.Proofs.WG.Noise.ClearSource
 import Leanux.Proofs.WG.Noise.RotationSource
+import Leanux.Proofs.WG.Noise.SessionSource
 
 /-! H1's checked local endpoints. Whole-run edge ownership and confirmation
 uniqueness by allocation lifetime remain separate obligations. -/
@@ -215,5 +216,21 @@ theorem original_confirmation_ready_returns (pid : PeerId) (received : KeypairId
   intro w pre
   obtain ⟨ok, final, run, post⟩ := receivedWithKeypair_returns_ready pid received d p resident ready w pre
   exact ⟨ok, final, run, original_confirmation_ordered pid received d p resident w ok final pre run⟩
+
+/-- Every normal original session return has the exact allocation, role/remote-index,
+derived-key, handshake-zero, ordered rotation/release and index-replacement effects.
+False returns preserve the Device and allocation counter, even when allocation
+records were consumed. True returns use an existential birthdate from the original
+derivation; an exposed clock observation is separate. No freshness, distinctness
+or successful-release premise is assumed, and aliasing may erase the allocated
+key before it is installed in the final table. Completion and lifetime coherence
+are not asserted. -/
+theorem original_begin_session_ordered (pid : PeerId) (d : Device) (p : Peer) (counter : Nat)
+    (resident : d.peers[pid]? = some p) :
+    Campaign2.Ensures (beginSession pid)
+      (fun s => s.wg.device = some d ∧ s.wg.keypairCounter = counter)
+      (fun ok s => ∃ final, s.wg.device = some final ∧
+        SessionEffect pid d p counter ok final s.wg.keypairCounter) :=
+  beginSession_effect pid d p counter resident
 
 end Leanux.Proofs.WG.Noise
