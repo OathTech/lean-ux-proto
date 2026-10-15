@@ -100,8 +100,10 @@ Validation is scoped to the change:
 - no unrequested harness, guest or kernel changes during a validation task:
   report the finding instead.
 
-The host is shared. Keep `LEANUX_QEMU_SLOTS` at 8 (the default) and budget
-timeouts with headroom. A failure that depends on scheduling order is a modeling gap: fix it
+The host has 32 cores and is usually under-used: use it. `LEANUX_QEMU_SLOTS`
+is 16 (the default; guests are single-threaded at 256 MiB), builds and suite
+runs run concurrently with other agents' runs, and every heavy job stays
+inside `capped`. Budget timeouts with headroom. A failure that depends on scheduling order is a modeling gap: fix it
 in the environment model (`Leanux/Env.lean`) with an exact, fail-closed rule,
 never with a retry. A rerun happens at most once, only on an infrastructure
 outcome, and is recorded in the report

@@ -27,12 +27,15 @@ def keypairGet (kp : Option KeypairId) : M (Option KeypairId) := do
 /-- wg_noise_keypair_put (noise.c:131-140) through the store: the index
     entry is removed when `unreference_now`, and the last reference's release
     (`keypair_free_kref`) removes it again and frees the keypair (`call_rcu`,
-    a cut point). -/
+    a cut point). Both removals find the table through the entry's peer word
+    (`keypair->entry.peer->device->index_hashtable`, noise.c:126, :137). -/
 def keypairPut (kp : Option KeypairId) (unreferenceNow : Bool) : M Unit := do
   if ← branch .keypairPutNull kp.isNone then return
   let some id := kp | invariant "unreachable"
   let k ← getKeypair id
-  let removeEntry : M Unit := indexRemoveKeypair id
+  let removeEntry : M Unit := do
+    _ ← IndexOwner.peerDeref (.keypair id)
+    indexRemove (.keypair id)
   if ← branch .keypairPutUnreferenceNow unreferenceNow then removeEntry
   setKeypair id { k with refcount := k.refcount - 1 }
   if ← branch .keypairKrefPutReleased (← refcountDecAndTest k.refcount) then
@@ -44,8 +47,9 @@ private def modifyPeer (pid : PeerId) (f : Peer → Peer) : M Unit := do
   setPeer pid (f (← getPeer pid))
 
 /-- keypair_create (noise.c:98-110): a zeroed keypair in the store, with the
-    next `keypair_counter` value and one reference. -/
-def keypairCreate (pid : PeerId) : M (Option KeypairId) := do
+    next `keypair_counter` value, the caller's peer word (`entry.peer`,
+    noise.c:107: `handshake->entry.peer` as it is, :827) and one reference. -/
+def keypairCreate (peer : Option PeerId) : M (Option KeypairId) := do
   -- kzalloc in a kworker: GFP_KERNEL, record-only (class b-kworker, Q2)
   let ok ← hiddenAlloc .kzallocKeypair
   if ← branch .keypairCreateNoMem !ok then return none
@@ -53,7 +57,7 @@ def keypairCreate (pid : PeerId) : M (Option KeypairId) := do
   modifyK fun k => { k with keypairCounter := internalId }
   let id := (← getDev).nextKeypairId
   modifyDev fun d => { d with nextKeypairId := id + 1 }
-  setKeypair id { internalId, peer := pid }   -- entry.type = KEYPAIR; kref_init
+  setKeypair id { internalId, peer }   -- entry.type = KEYPAIR; entry.peer = peer; kref_init
   return some id
 
 /-- add_new_keypair (noise.c:198-251). -/
@@ -105,12 +109,19 @@ def keypairsClear (pid : PeerId) : M Unit := do
   modifyPeer pid fun p => { p with keypairCurrent := none }
   keypairPut old true
 
+/-- wg_noise_handshake_clear (noise.c:88-96): the handshake's index entry
+    removed from the table its peer word names
+    (`handshake->entry.peer->device->index_hashtable`, :92), then
+    `handshake_zero`. -/
+def handshakeClear (pid : PeerId) : M Unit := do
+  _ ← IndexOwner.peerDeref (.handshake pid)
+  indexRemove (.handshake pid)
+  handshakeZero pid
+
 /-- wg_noise_expire_current_peer_keypairs (noise.c:179-196). -/
 def expireCurrentPeerKeypairs (pid : PeerId) : M Unit := do
   requireNotPending pid "clearing the handshake"
-  -- wg_noise_handshake_clear: remove the entry, then handshake_zero
-  indexRemove pid .handshake
-  handshakeZero pid
+  handshakeClear pid
   resetLastSentHandshake pid
   let invalidate (kp : KeypairId) : M Unit := do
     let k ← getKeypair kp
@@ -122,12 +133,6 @@ def expireCurrentPeerKeypairs (pid : PeerId) : M Unit := do
   if ← branch .expireCurrentKeypair p.keypairCurrent.isSome then
     let some kp := p.keypairCurrent | invariant "unreachable"
     invalidate kp
-
-/-- wg_noise_handshake_clear (noise.c:88-96): the handshake's index entry
-    removed, then `handshake_zero`. -/
-def handshakeClear (pid : PeerId) : M Unit := do
-  indexRemove pid .handshake
-  handshakeZero pid
 
 /-- wg_queued_expired_zero_key_material (timers.c:122-133), the work item
     `clear_peer_work` on `handshake_send_wq`, queued by the zero-key timer
