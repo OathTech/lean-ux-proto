@@ -122,7 +122,7 @@ review and capped scoped proof builds; ordinary elaboration failures repaired.
 
 ## H4 — Configuration semantics (in progress)
 
-Twenty-eight terminal declarations cover configuration leaves, peer flags, bounded
+Thirty-two terminal declarations cover configuration leaves, peer flags, bounded
 readback, normal-return guarantees, one sequential partial-error case, and
 fwmark/cache frames. `Validation`, `Identity` and `Port` prove invalid allowed-IP
 rejection, exact allowed-IP serialization, private-identity normalization,
@@ -168,8 +168,12 @@ contract also covers namespace failure. `RandomPort` proves port-zero success
 selects within 32768..60999 and, for a supplied padded four-byte draw with a free
 first candidate, proves an actual return installing exactly the computed port.
 The generic zero-port theorem remains partial: missing records or a collision
-can stop. The explicit hidden-input leaf proves consumption of the head record;
-final record-tail preservation through socket replacement is not yet claimed.
+can stop. `ZeroPort` composes normal port-zero behavior through the outer setter,
+including stopped/running behavior and the equal-zero no-op. `RecordedPort`
+strengthens the supplied-draw success theorem to exact final record-tail
+preservation and proves an occupied first candidate raises the mirror's declared
+outside-domain collision stop. This is a modeled-domain boundary, not a kernel
+bind-error or collision-retry claim.
 
 [AGENT 2026-10-14] Get-after-set means the effective configuration established
 by the C: keys are clamped, prefixes masked, running port-zero may allocate a
@@ -187,16 +191,16 @@ found no defect. The fwmark/socket review found one wording error: a supplied
 IPv4 socket assigns its port, which need not change the previous value. The
 statement documentation now says assignment/preservation. No further defects
 were found. Independent review of the port composition and recorded-draw
-increment found no defect. Actual outer dump composition remains open.
+increment and subsequent outer-zero/record-tail/collision increment found no
+defect. Actual outer dump composition remains open.
 
-Remaining: outer port-zero composition, collision-stop and final record-tail
-contracts, complete private-key effects, full peer
+Remaining: complete private-key effects, full peer
 removal/replacement and allowed-IP ownership, other partial-error combinations,
 and general dump chunks/coalescing. Deferred removal work can change other
 peers' dynamic state, so no unrestricted removal frame is claimed. No H4
 mirror mismatch or mirror-team request; ranked mirror suggestions: none.
 
-Validation: all twenty-eight statements pass scoped build, standard-axiom inspection
+Validation: all thirty-two statements pass scoped build, standard-axiom inspection
 (only `propext`, `Classical.choice`, `Quot.sound`), and `capped --
 scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Config.Statements`.
 The full proof gate fails in inherited `CounterWindow.Refinement`; token/import

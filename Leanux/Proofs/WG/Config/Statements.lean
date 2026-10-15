@@ -9,6 +9,8 @@ import Leanux.Proofs.WG.Config.SocketPorts
 import Leanux.Proofs.WG.Config.FwmarkEffects
 import Leanux.Proofs.WG.Config.DevicePorts
 import Leanux.Proofs.WG.Config.RandomPort
+import Leanux.Proofs.WG.Config.ZeroPort
+import Leanux.Proofs.WG.Config.RecordedPort
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
@@ -354,5 +356,52 @@ theorem original_zero_socket_record_return (d : Device) (net : d.creatingNet = t
       (fun ret w => ret = 0 ∧ w.k.wg = some
         { d with sock4 := some (drawnPort a b c e), sock6 := some (drawnPort a b c e), incomingPort := drawnPort a b c e }) :=
   socketInit_zero_record_returns d net a b c e rest free4 free6
+
+/-- In an existing namespace, normal completion of a port-zero request
+returns zero. An existing zero port is a no-op; otherwise listed peer sources
+and caches are cleared, a stopped device stores zero, and a running device
+installs both sockets at a port within the local range. Other fields are framed. -/
+theorem original_zero_port_effects (d : Device) (net : d.creatingNet = true) :
+    Ensures (setPort 0) (fun w => w.k.wg = some d)
+      (fun ret w => ret = 0 ∧ zeroPortEffects d w) :=
+  setPort_zero_effects d net
+
+/-- A port-zero outer configuration request in an existing namespace
+increments the device generation and has the specified no-op, stopped-device,
+or running-allocation effects on normal completion. -/
+theorem original_device_zero_port (d : Device) (net : d.creatingNet = true) :
+    Ensures (wgSetDevice (portAttrs d 0))
+      (fun w => w.k.wg = some d ∧ selectsDevice w d)
+      (fun ret w => ret = 0 ∧ zeroPortEffects
+        { d with deviceUpdateGen := d.deviceUpdateGen + 1 } w) :=
+  setDevice_port_zero d net
+
+/-- An explicit free first-candidate draw in an existing namespace guarantees
+socket initialization returns normally and installs the computed port. It consumes exactly the head
+draw record and preserves the remaining record list through socket replacement. -/
+theorem original_zero_socket_record_tail (d : Device) (net : d.creatingNet = true)
+    (a b c e : UInt8) (rest : List HiddenRecord)
+    (free4 : d.sock4 ≠ some (drawnPort a b c e))
+    (free6 : d.sock6 ≠ some (drawnPort a b c e)) :
+    Returns (socketInit 0)
+      (fun w => w.k.wg = some d ∧
+        w.hidden = some (udpDrawRecord a b c e :: rest) ∧ w.portBound (drawnPort a b c e) = false)
+      (fun ret w => ret = 0 ∧ w.k.wg = some
+        { d with sock4 := some (drawnPort a b c e), sock6 := some (drawnPort a b c e), incomingPort := drawnPort a b c e } ∧
+        w.hidden = some rest) :=
+  socketInit_zero_record_tail_returns d net a b c e rest free4 free6
+
+/-- With an explicit draw whose first candidate is occupied, socket
+initialization stops at the mirror's declared domain boundary with its collision
+message. This describes the modeled-domain stop, not a kernel bind error or
+a claim about the kernel's collision retry behavior. -/
+theorem original_zero_socket_collision_stop (w : World) (d : Device) (a b c e : UInt8)
+    (rest : List HiddenRecord) (device : w.k.wg = some d) (net : d.creatingNet = true)
+    (records : w.hidden = some (udpDrawRecord a b c e :: rest))
+    (collision : (w.portBound (drawnPort a b c e) ||
+      d.sock4 == some (drawnPort a b c e) || d.sock6 == some (drawnPort a b c e)) = true) :
+    ∃ site, (socketInit 0).run w = .error
+      (.outsideDomain site "the random port draw collides with a bound port") :=
+  socketInit_zero_collision w d a b c e rest device net records collision
 
 end Leanux.Proofs.WG.Config
