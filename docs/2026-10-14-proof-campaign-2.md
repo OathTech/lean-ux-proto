@@ -13,11 +13,11 @@ remains failed in inherited campaign-1 files.
 | H1 Noise | 20 | State/slot contracts, ordered clearing and rotation, static release budgets, full normal session effects and consecutive first-match confirmation | Whole-call edge coverage, session totality, exposed derivation-clock provenance, allocation-lifetime confirmation; reinstallation transport awaits shared-scope decision |
 | H2 Index | 52 | Exact index operations and successful-lookup provenance and unique normal-empty classification, original caller table safety, successful session publication coherence, session store bound and distinct allocation IDs across actual consecutive calls | Reachable hashed uniqueness and owner/peer-word residency through driver entries; outer-removal and ingress frame scopes await decision |
 | H3 Roaming | 13 | Data publication/first-poll join, both authenticated handshake cuts and inspection retaining them through continuation failure, plus every poll iteration’s designated endpoint-setter attempt | AEAD provenance across queue/callback changes, broader caller coverage and final endpoint preservation |
-| H4 Configuration | 76 | Configuration leaves/flags, bounded public readback, port/fwmark/key effects, normal live-key removal and private-key collision composition, full REMOVE_ME, witness-free normal REPLACE_ALLOWEDIPS and remove-all and flag-only REPLACE_PEERS phase effects, empty-root insertion, exact root transfer and actual peer-dump readback, including two-fragment split/resume/coalescing | Collision completion, queued cleanup effects, mixed attributes, global ownership and general multipart readback |
+| H4 Configuration | 77 | Configuration leaves/flags, bounded public readback, port/fwmark/key effects, normal live-key removal and private-key collision composition, full REMOVE_ME, witness-free normal REPLACE_ALLOWEDIPS and remove-all and flag-only REPLACE_PEERS phase effects, empty-root insertion, exact root transfer and actual peer-dump readback, including arbitrary finite IPv4 suffix split/resume/coalescing | Collision completion, queued cleanup effects, mixed attributes, global ownership and general multipart readback |
 | H5 Progress | 33 | Historical backlog counterexample, source-connected scheduling inspections, cut/pow/drain/poll bounds | Whole-worker record decrease, full operation-end coverage and global termination/progress |
 | H6 Timers | 45 | Local arm/delete rules, recorded delays, actual retry/send pairs, consecutive same-peer count bound and immediate give-up boundary, total pending-zero-key give-up, both response session hooks, data-completion sends, receive-data hooks and outgoing and accepted-handshake receive traversal compositions | Complete caller/site coverage, scheduler episodes and session-relative arm counting |
 
-Total: **239 headlines**. The factoring checkpoint `69f988a` preserved all 153
+Total: **240 headlines**. The factoring checkpoint `69f988a` preserved all 153
 then-existing headlines. Recent mathematical checkpoints include `a2923a1`
 (H1 consecutive confirmation) and `7b34fa4` (H6 response-session timer hook).
 
@@ -62,7 +62,7 @@ connections to the current executable mirror, not replacement interpreters.
 | H1 | `Noise/Model`, `Statements`, `Slots`, `StateEdges`, `ConsumeEdges`, `ClearModel`, `ClearEffects`, `ClearSource`, `RotationModel`, `RotationEffects`, `RotationSource`, `SessionModel`, `SessionSource`, `ConfirmationSequenceModel`, `ConfirmationSequenceEffects`, `ConfirmationSequenceSource`, `RestartModel`; `Execution` holds the concrete monad connection; `AccessSource` holds accessor read/write contracts, reexported by `Basic`. | `KernelFrames`, `PeerFrames`, `SlotFrames`, `ClearFrames`, `RotationFrames`, `SessionFrames`; standalone `RestartFrames` holds the three checked next-slot/cursor variants. |
 | H2 | `Index/View`, `LookupProvenanceSource`, `LookupNoneModel`, `LookupNoneSource`, `TableModel`, `OwnerWordModel`, `AllocationModel`, `ReleaseModel`, `LifecycleModel` and pure release effects/bounds; `Statements`, `HandshakeClaims`, `OwnerUpdateClaims`, `LifecycleSource`, `LinkSource`, `SendSource`, `DispatchSource`, `ResponseSource`, `ConsumeSource`, `StagedSource`, `ReceiveOperations`, `ReceiveSource`, `ClearSource`, `TimerSource`, `FlushSource`, `SessionCoherenceModel`, `SessionCoherenceEffects`, `SessionCoherenceSource`, `SessionAllocationEffects`, `SessionAllocationSource`, `SessionSequenceModel`, `SessionSequenceEffects`, `SessionSequenceSource` and the other operation/source modules. | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`, `NewlinkFrames`, `SendFrames`, `DispatchFrames`, `ResponseFrames`, `ConsumeFrames`, `StagedFrames`, `ReceiveFrames`, `ClearFrames`, `TimerFrames`, `FlushFrames`, `SessionCoherenceFrames`, `SessionAllocationFrames`; the old `HandshakeFrames` and `OwnerFrames` paths are import-only reexports, not duplicated lemmas. |
 | H3 | `Roaming/Model`, `View`, `Statements`, `EndpointClaims`, `EndpointSource`, `Authentication`, `PublicationModel`, `PublicationSource`, `PublicationClaims`, `PollEndpointModel`, `PollEndpointSource`, `PollEndpointClaims`, `PollAttemptModel`, `PollAttemptSource`, `PollAttemptAuditSource`, `PollAttemptClaims`, `ResponseModel`, `ResponseCryptoSource`, `ResponseConsumeSource`, `ResponseLookupSource`, `ResponseCallSource`, `ResponseCallClaims`, `InitiationModel`, `InitiationCryptoSource`, `InitiationLookupSource`, `InitiationConsumeSource`, `InitiationCallSource`, `InitiationCallClaims`, `HandshakeAuditModel`, `HandshakeAuditSource`, `HandshakeAuditClaims`. | `Roaming/Frames`, `PublicationFrames`, `PollEndpointFrames`; `Basic` reexports the endpoint source connection. The response and initiation increments reuse existing accessor/read/clock support without new frames. |
-| H4 | `Config/Model`, `AllowedRemovalModel`, `AllowedPairsModel`, `AllowedPairsEffects`, `AllowedRemovalConverseSource`, `AllowedRemovalConverseClaims`, `QuietModel`, `LiveRemovalModel`, `LiveRemovalSource`, `CollisionModel`, `CollisionRemovalSource`, `CollisionRequestSource`, `AllowedInsertModel`, `AllowedInsertSource`, `AllowedReadbackSource`, `AllowedRoundTripSource`, `AllowedTransferModel`, `AllowedPlacementSource`, `AllowedTransferOperations`, `AllowedTransferSource`, `AllowedTransferRequestSource`, `AllowedTransferReadbackSource`, `RemoveFlagModel`, `RemoveFlagEffects`, `RemoveFlagSource`, `RemoveFlagRequestSource`, `ReplacementConverseSource`, `ReplacementConverseRequestSource`, `RemoveAllModel`, `RemoveAllEffects`, `RemoveAllSource`, `RemoveAllObservationSource`, `ReplacePeersRequestSource`, `ReplacePeersRequestClaims`, `MultipartModel`, `MultipartSource`, `MultipartClaims`, `ClaimView`, `Statements`, `SourceClaims`, `ObservationBridge`, and existing substantive effect/source modules. | `ConcreteFrames` isolates six whole-kernel endpoint contracts; `OperationFrames` isolates seven generic helpers; `ReadbackFrames` retains socket/fixture preservation; `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `AllowedPairsFrames`, `QuietFrames`, `LiveRemovalFrames`, `KeyFieldFrames`, `CollisionFrames`, `AllowedInsertFrames`, `RemoveAllFrames` isolate within-WG preservation. |
+| H4 | `Config/Model`, `AllowedRemovalModel`, `AllowedPairsModel`, `AllowedPairsEffects`, `AllowedRemovalConverseSource`, `AllowedRemovalConverseClaims`, `QuietModel`, `LiveRemovalModel`, `LiveRemovalSource`, `CollisionModel`, `CollisionRemovalSource`, `CollisionRequestSource`, `AllowedInsertModel`, `AllowedInsertSource`, `AllowedReadbackSource`, `AllowedRoundTripSource`, `AllowedTransferModel`, `AllowedPlacementSource`, `AllowedTransferOperations`, `AllowedTransferSource`, `AllowedTransferRequestSource`, `AllowedTransferReadbackSource`, `RemoveFlagModel`, `RemoveFlagEffects`, `RemoveFlagSource`, `RemoveFlagRequestSource`, `ReplacementConverseSource`, `ReplacementConverseRequestSource`, `RemoveAllModel`, `RemoveAllEffects`, `RemoveAllSource`, `RemoveAllObservationSource`, `ReplacePeersRequestSource`, `ReplacePeersRequestClaims`, `MultipartModel`, `MultipartSource`, `MultipartClaims`, `SuffixReadbackModel`, `SuffixReadbackSource`, `SuffixReadbackClaims`, `ClaimView`, `Statements`, `SourceClaims`, `ObservationBridge`, and existing substantive effect/source modules. | `ConcreteFrames` isolates six whole-kernel endpoint contracts; `OperationFrames` isolates seven generic helpers; `ReadbackFrames` retains socket/fixture preservation; `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `AllowedPairsFrames`, `QuietFrames`, `LiveRemovalFrames`, `KeyFieldFrames`, `CollisionFrames`, `AllowedInsertFrames`, `RemoveAllFrames` isolate within-WG preservation. |
 | H5 | `Progress/Model`, `View`, `Statements`, `SourceClaims`, `ObservationBridge`; `ControlLaws` is generic state/error control and `ControlSource` connects it exactly to the original worker; the scheduler/source modules retain actual execution factors. `CutModel`, `CutSource` and `CutClaims` establish original cut-loop progress; `FlushQueueModel`, `FlushQueueSource` and `FlushQueueClaims` establish original flush effects and count decrease; `PowModel` and `PowSource` connect a finite evaluator to the original arithmetic loop. `DrainModel`, `DrainOperations`, `DrainSelectionSource`, `DrainAuditSource`, `DrainEffects` and `DrainClaims` connect a phase audit and queue bound to the original workqueue drain. `PollBoundModel`, `PollBoundEffects`, `PollStepSource`, `PollLoopSource`, `PollBoundSource` and `PollBoundClaims` connect the actual receive poll to its budget audit; no new structural frames. | `StackFrames` isolates caller-guard preservation; `CutFrames` isolates record/error-location preservation; `FlushQueueFrames` isolates queue preservation through worker bodies and release. Probe/filter/no-work contracts also establish outputs and remain substantive source claims. |
 | H6 | `TimerDiscipline/Model`, `View`, `SendView`, `Statements`, `ObservationBridge`, `ObservationClaims`, `SourceClaims`, `SendDispatchModel`, `SendDispatchClaims`, `RetryDispatchModel`, `RetryDispatchClaims`, `RetryRearmModel`, `RetryRearmClaims`, `RetrySequenceModel`, `RetrySequenceClaims`, `RetryBoundarySource`, `RetryBoundaryClaims`, `PendingGiveUpModel`, `PendingGiveUpSource`, `ResponseSessionModel`, `ResponseSessionEffects`, `ResponseSessionClaims`, `OutgoingResponseSessionModel`, `OutgoingResponseSessionClaims`, `DataDoneModel`, `DataDoneClaims`, `RxDataTimersModel`, `RxDataTimersClaims`, `ResponseTraversalModel`, `ResponseTraversalClaims`, `InitiationTraversalModel`, `InitiationTraversalClaims`, `ReceiveTraversalModel`, `ReceiveTraversalClaims`, and `*Source` operational proofs. | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`, `RetryDispatchFrames`, `RetryRearmFrames`, `WorkStateFrames`, `ResponseSessionFrames`. |
 
@@ -518,6 +518,19 @@ There is no complete-device, arbitrary-pagination, setter-composition or
 concurrent-update claim. The three new files contain model/source/claim content,
 with no structural frames or shared variants.
 
+The two-call readback now generalizes to an arbitrary finite IPv4 suffix. For
+`a :: b :: tail`, the first 168-byte call emits `a` and splits at `b`; the actual
+returned context feeds a second call with room at least
+`44 + 28 * (1 + tail.length)`, which emits the whole remaining suffix in order
+and clears cursor/sequence. Coalescing uses these actual fragments. Only `a ≠ b`
+is needed to select the intended first cursor occurrence; later repeated IDs
+are allowed because the second call fits all of them. Nodes need only residency
+and width 32, not ownership, trie shape or address bounds. Exact source factors
+preserve cancellation, sequence changes, stale-cursor errors and failed-IP room
+restoration before imposing the total-return premises. Device/header/flags/DONE
+and capacities are still supplied, with no outer socket or other-peer traversal
+claim. The new model/source/claims files add no frames.
+
 ## H5 — Termination and progress
 
 The literal no-pending-at-completion claim is historically refuted on this
@@ -786,6 +799,7 @@ remain recorded in their commits, and affected shared C2 changes were rechecked.
 | H4 remove-all phase order | 207 | 74 + 10 | 4 |
 | H4 REPLACE_PEERS request | 209 | 75 + 4 | 3 |
 | H4 two-fragment readback | 212 | 76 + 10 | 7 |
+| H4 finite IPv4 suffix readback | 215 | 77 + 13 | 10 |
 | H6 immediate retry boundary | 233 | 44 + 3 | 3 |
 | H6 pending-zero-key give-up | 235 | 45 + 2 | 4 |
 
@@ -861,6 +875,13 @@ Roaming replay passed (exit 0). Independent read-only review found no issue in
 source correspondence, per-iteration state threading, attempt retention or scope.
 No infrastructure retry, resource-limit increase or new frame was needed.
 
+H4 finite suffix readback used twelve implementation build invocations with ten
+corrected failures (source/loop normalization, staged WP composition, tuple
+inference, arithmetic and list membership). Its Config build, all 77 headlines
+plus 13 support axiom checks and fresh replay passed. Independent read-only
+review found no source/correctness/scope issue. No infrastructure retry, cap or
+limit increase, new frame or shared edit occurred.
+
 Review dispositions: H5 drain and H2 sequence made source correspondence
 unconditional and kept bounds only on effects; H3 initiation distinguished
 `memcmp` replay ordering from signed wrapping clocks; H4 readback clarified the
@@ -868,8 +889,8 @@ peer’s allowed-IP list; H4 transfer clarified that only the allowed-IP cursor
 and sequence reset. All findings were fixed. H5 drain's staged EOF whitespace
 was corrected in the next commit. Both pre-adjustment and changed-interface H2
 sequence replays passed; this was source-driven revalidation, not a retry.
-The six-target scoped build passes together (422 jobs), with existing unused-simp
-and deprecated-tactic warnings. Combined inspection covers all 239 headlines. This does **not**
+The six-target scoped build passes together (425 jobs), with existing unused-simp
+and deprecated-tactic warnings. Combined inspection covers all 240 headlines. This does **not**
 constitute a passing full gate.
 
 The full gate was last actually run at `69f988a` and **failed** in inherited

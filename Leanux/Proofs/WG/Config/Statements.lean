@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.Config.SourceClaims
+import Leanux.Proofs.WG.Config.SuffixReadbackClaims
 import Leanux.Proofs.WG.Config.ClaimView
 import Leanux.Proofs.WG.Config.ObservationBridge
 import Leanux.Proofs.WG.Config.LiveRemovalSource
@@ -1145,5 +1146,38 @@ theorem original_multipart_peer_readback (d : Device) (p : Peer) (a b : NodeId)
   multipartPeerDump_returns d p a b pid addr₁ cidr₁ addr₂ cidr₂ parent₁ parent₂
     ctx firstSkb secondSkb resident listed distinct endpoint firstNode secondNode
     fresh sequence firstRoom secondRoom
+
+/-- For any finite IPv4 list with at least two nodes and distinct first two
+IDs, the original peer getter uses a 168-byte first chunk to emit fixed attrs
+and one IP, then splits at the second node. A second original call uses that
+actual returned context and enough supplied room to serialize the entire
+remaining suffix, preserving its order and repetitions and clearing the cursor
+and sequence. Node residency and width are explicit; no trie shape, ownership
+or global list uniqueness is assumed. The coalescer consumes the actual two
+fragments and returns the whole ordered IP list. Device attrs, flags and DONE
+are supplied framing, not socket-generated messages. The device is unchanged.
+This proves two-call peer serialization with caller-supplied capacities, not
+outer socket pagination, traversal of other peers or concurrent modification. -/
+theorem original_ipv4_suffix_readback (d : Device) (p : Peer) (nodes : NodeId → AipNode)
+    (a b : NodeId) (tail : List NodeId) (pid : PeerId)
+    (ctx : DumpCtx) (firstSkb secondSkb : NlSkb)
+    (resident : d.peers[pid]? = some p) (listed : p.allowedipsList = a :: b :: tail)
+    (distinct : a ≠ b) (endpoint : p.endpoint = none)
+    (readable : Ipv4Residents d nodes (a :: b :: tail))
+    (fresh : ctx.nextAllowedip = none) (sequence : ctx.allowedipsSeq = 0)
+    (firstRoom : firstSkb.room = 168)
+    (secondRoom : 44 + 28 * (1 + tail.length) ≤ secondSkb.room) :
+    Campaign2.Returns (multipartPeerDump pid d ctx firstSkb secondSkb)
+      (fun s => s.wg.device = some d)
+      (fun result s => s.wg.device = some d ∧ result =
+        (({ firstSkb with room := 0 },
+          { ctx with nextAllowedip := some b, allowedipsSeq := d.peerAllowedips.seq },
+          .split (multipartFirst p (nodes a).bits (nodes a).cidr)),
+         ({ secondSkb with room := secondSkb.room - (44 + 28 * (1 + tail.length)) },
+          { ctx with nextAllowedip := none, allowedipsSeq := 0 },
+          .complete (suffixLast p nodes (b :: tail))),
+         .ok (suffixJson d p nodes (a :: b :: tail)))) :=
+  suffixPeerDump_returns d p nodes a b tail pid ctx firstSkb secondSkb
+    resident listed distinct endpoint readable fresh sequence firstRoom secondRoom
 
 end Leanux.Proofs.WG.Config
