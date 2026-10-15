@@ -20,6 +20,7 @@ import Leanux.Proofs.WG.Queues.RxPollStampPhase
 import Leanux.Proofs.WG.Queues.RxPollComposition
 import Leanux.Proofs.WG.Queues.RxNapiHistory
 import Leanux.Proofs.WG.Queues.RxActivationHistory
+import Leanux.Proofs.WG.Queues.RxScheduleHistory
 
 /-! R4 queue components: physical-ring refusal, original prev_queue FIFO laws,
 and successful-endpoint receive-queue helper frames. Whole recorded-schedule delivery,
@@ -1113,7 +1114,8 @@ theorem original_crypt_ahead_joint (pid : PeerId) :
 
 /-- One original activation iteration composes all concrete crypt callbacks
 with poll-free TX/receive observers. This is a local allocation-valid contract;
-whole scheduler/Runner coverage and completed stack delivery remain open. -/
+the enclosing scheduler is composed below. Initialized Env/Runner coverage and
+completed stack delivery remain open. -/
 theorem original_activation_iteration_joint (a : Activation) :
     ErasesPrefix (Queues.RxHistory.activationIteration a) (Leanux.Env.Activation.iter a) ∧
     ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent
@@ -1125,5 +1127,77 @@ theorem original_activation_iteration_joint (a : Activation) :
   ⟨Queues.RxHistory.activationIteration_erases a, Queues.RxHistory.activationIteration_projects a,
     Queues.RxHistory.activationIteration_preserves a,
     fun w hi => (Queues.RxHistory.activationIteration_preserves a w [] (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1⟩
+
+/-- A complete original activation run observes every reached iteration,
+including occupancy reads, section-stop failure, yield and bound exhaustion.
+Only normal completion restores releases; failed prefixes retain entry uniqueness. -/
+theorem original_activation_run_joint (a : Activation) :
+    ErasesPrefix (Queues.RxHistory.activationRun a) (Leanux.Env.Activation.run a) ∧
+    ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent
+      (Queues.RxHistory.activationRun a) (Lifetimes.auditFocus (Lifetimes.activationRunPrefix a)) ∧
+    PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe
+      (Queues.RxHistory.activationRun a) ∧
+    ∀ w, Lifetimes.AllocationInv [] w →
+      Queues.RxHistory.BoundarySafe (runPrefix (Queues.RxHistory.activationRun a) w []).2 :=
+  ⟨Queues.RxHistory.activationRun_erases a, Queues.RxHistory.activationRun_projects a,
+    Queues.RxHistory.activationRun_preserves a,
+    fun w hi => (Queues.RxHistory.activationRun_preserves a w [] (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1⟩
+
+/-- Original dispatch retains empty/default refusals, TX unit resolution and
+queue erasure before section start. Its actual run carries stamped NAPI callbacks
+and directly projects to the existing audit at the same incoming history. -/
+theorem original_dispatch_joint (worker : Worker) :
+    ErasesPrefix (Queues.RxHistory.dispatch worker) (Leanux.Env.dispatch worker) ∧
+    ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent
+      (Queues.RxHistory.dispatch worker) (Lifetimes.auditFocus (Lifetimes.dispatchPrefix worker)) ∧
+    PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe
+      (Queues.RxHistory.dispatch worker) ∧
+    ∀ w, Lifetimes.AllocationInv [] w →
+      Queues.RxHistory.BoundarySafe (runPrefix (Queues.RxHistory.dispatch worker) w []).2 :=
+  ⟨Queues.RxHistory.dispatch_erases worker, Queues.RxHistory.dispatch_projects worker,
+    Queues.RxHistory.dispatch_preserves worker,
+    fun w hi => (Queues.RxHistory.dispatch_preserves worker w [] (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1⟩
+
+/-- The actual finite scheduler observes committed polls and exact existing
+filter-entry probes. Copied trial worlds and histories remain isolated; each
+reached marker supplies allocation safety and the original ordered filter decision.
+This local entry contract does not establish initialized enclosing Runner coverage. -/
+theorem original_recorded_schedule_joint (stack : Option Worker) :
+    ErasesPrefix (Queues.RxHistory.schedule stack) (Leanux.Env.schedule stack) ∧
+    ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent
+      (Queues.RxHistory.schedule stack) (Lifetimes.scheduleAudit stack) ∧
+    PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe
+      (Queues.RxHistory.schedule stack) ∧
+    ∀ w, Lifetimes.AllocationInv [] w →
+      Queues.RxHistory.BoundarySafe (runPrefix (Queues.RxHistory.schedule stack) w []).2 ∧
+      ∀ p ∈ Lifetimes.probeEntries (Queues.RxHistory.auditHistory
+          (runPrefix (Queues.RxHistory.schedule stack) w []).2),
+        Lifetimes.AllocationInv p.history p.world ∧
+        (p.world.suspended.filterM Leanux.Env.Activation.consistent).run p.world =
+          (p.world.suspended.filterM (fun a => Lifetimes.activationTrialDecision a p.world p.history)).map
+            (fun ys => (ys, p.world)) ∧
+        ∀ a ∈ p.world.suspended,
+          Lifetimes.LifetimeEvent.Safe (runPrefix (Lifetimes.activationRunPrefix a) p.world p.history).2 :=
+  ⟨Queues.RxHistory.schedule_erases stack, Queues.RxHistory.schedule_projects stack,
+    Queues.RxHistory.schedule_preserves stack,
+    fun w hi => ⟨(Queues.RxHistory.schedule_preserves stack w []
+      (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1,
+      fun p hp => Queues.RxHistory.schedule_trials stack w []
+        (Queues.RxHistory.boundary_initial w hi) p hp⟩⟩
+
+/-- Nested rescheduling consumes the original worker reschedule record and
+invokes the observed scheduler only on its true arm. Audit probes, Stops and
+committed entry uniqueness survive; callback entry is not completed delivery. -/
+theorem original_nested_reschedule_joint (self : Worker) :
+    ErasesPrefix (Queues.RxHistory.nestedResched self) (Leanux.Env.nestedResched self) ∧
+    ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent
+      (Queues.RxHistory.nestedResched self) (Lifetimes.nestedReschedAudit self) ∧
+    PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe
+      (Queues.RxHistory.nestedResched self) ∧
+    ∀ w, Lifetimes.AllocationInv [] w →
+      Queues.RxHistory.BoundarySafe (runPrefix (Queues.RxHistory.nestedResched self) w []).2 :=
+  ⟨Queues.RxHistory.nestedResched_erases self, Queues.RxHistory.nestedResched_projects self,
+    Queues.RxHistory.nestedResched_preserves self,
+    fun w hi => (Queues.RxHistory.nestedResched_preserves self w [] (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1⟩
 
 end Leanux.Proofs.WG.DeliveryOrder

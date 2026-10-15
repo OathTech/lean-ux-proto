@@ -4,8 +4,8 @@
 
 Work is on `.worktrees/proofs-campaign`, branch `proofs/campaign`, under
 [the charter](2026-10-13-charter-proof-campaign.md). The mirror remains byte-identical
-to `ca6b22e`. The current R3 admission/NAPI/maintenance extension passes scoped/full
-builds, exact checks, independent review and coordinated validation.
+to `ca6b22e`. The current R4 scheduler extension passes scoped/full builds,
+exact checks, independent review and coordinated validation.
 The [proof register](proofs.md#results) holds current declarations and
 pins; its [model map](proofs.md#layers) supplies the complete module inventory.
 Current components are not completion of the open charter properties. This campaign
@@ -18,20 +18,20 @@ retains current architecture, findings, reproduction provenance, effort and limi
 | R1 | Uniqueness and the intentional inclusive-floor correction are proved, with pure and accepted-run witnesses. |
 | R2 | Initialized allocation-identity access safety now holds for every typed Runner trace and both placeholder/flood modes, including failed histories. Every reached consistency-filter entry derives its own allocation invariant and safe isolated trials with exact ordered filter correspondence. No parser, array-length, progress or success premise is added. Raw-reference affiliation/credit remains a separate stronger property. Coordinated validation of the three new exports passes. |
 | R3 | Initialized finite normal call histories refine flat-prefix updates and reached-root lookup, including full normal clear. Completed setAllowedip/removal events now cover the complete public peer command, with source-derived acquisition and concrete send/flush/cleanup frames. Successful public parseTrace supplies every configured peer's address shape. The complete original device command now composes clear/removal/peer-command completions; normal clear/remove-all leaves the folded tables empty. Optional routing now includes absent devices, guarded creation, down, destruction/deletion and all fixture/prefill modes. Whole absent peer/device commands retain their entry journals, without assuming interface lookup failure. Concrete silent TX/Stack/RX completion and poll now retain routing and surviving lists, with explicit frames for generic worker callbacks. Concrete receive admission, both direct NAPI poll callers, IRQ placement, crypt iterations, five timer callbacks and device open/up/namespace exit now close further original callers. Whole-call lifts leave completion histories unchanged. Enclosing scheduler/Env/syscall/Runner execution and packet paths remain open. |
-| R4 | Physical rings, finite/source journals, selected GRO order and concrete RX scheduling are checked. A joint stamped poll proves full callback/removal provenance, per-poll stamp uniqueness on every prefix and observed release on normal return, from valid prior lifetime history. Accepted input refutes chronological post-GRO order. Capture reads now support removal and entry stamps in the new suffix, excluding prior releases. Finite original-poll sequences compose distinct entry stamps with a direct audit projection. Both direct poll sites and the IRQ-exit wrapper now preserve this boundary with exact original erasure and direct R2 audit projection. Concrete crypt-worker iterations, transmit pre-encryption and one activation iteration now observe their reached NAPI callbacks with the same direct R2 audit projection and boundary contracts. Enclosing scheduler/ingress/lifecycle and initialized Runner coverage plus joint pipeline conservation remain open. |
+| R4 | Physical rings, finite/source journals, selected GRO order and concrete RX scheduling are checked. A joint stamped poll proves full callback/removal provenance, per-poll stamp uniqueness on every prefix and observed release on normal return, from valid prior lifetime history. Accepted input refutes chronological post-GRO order. Capture reads now support removal and entry stamps in the new suffix, excluding prior releases. Finite original-poll sequences compose distinct entry stamps with a direct audit projection. Both direct poll sites and the IRQ-exit wrapper now preserve this boundary with exact original erasure and direct R2 audit projection. Concrete crypt-worker iterations, transmit pre-encryption and one activation iteration now observe their reached NAPI callbacks with the same direct R2 audit projection and boundary contracts. Complete activation runs, dispatch, recorded scheduling and nested rescheduling now compose stamped committed polls with exact full-audit projection and actual filter probes; copied trials remain isolated. Enclosing ingress/lifecycle and initialized Env/Runner coverage plus joint pipeline conservation remain open. |
 | R5 | The unconditional age/post-zero and wire-nonce readings are false in accepted mirror inputs. Rule Zero resolution retains thirteen positive local contracts, without universal replacement transport claims. |
 | R6 | Cookie exclusion is proved at its original call boundary. A 19-retry/20-initiation episode refutes literal MAX=18; no universal corrected retry bound is claimed. |
 
-**Validation status.** The current R3 admission/NAPI/maintenance extension passes
-its 318-job scoped Statements and 450-job full proof builds. Three grouped exports
-give 105 R3 / 453 declarations (451 theorems and two definitions). The proof gate
-passes all 453 declarations with permitted axioms only; fresh stock kernel replay,
-the 60-job default build and 124 unit tests (22.983 seconds, one skip) pass.
-Exact six-file hashes/scope, all 450 prior terminal statements/proof bodies,
-source/register counts, whitespace and mirror equality pass. Independent review
-is clear after correcting the normal-return versus Stop wording in the module
-map. Replay, default build and units ran concurrently under unchanged caps.
-No runtime source or reproduction has changed.
+**Validation status.** The current R4 scheduler extension passes its 288-job
+scoped Statements and 452-job full proof builds. Four grouped exports give
+101 R4 / 457 declarations (455 theorems and two definitions). The proof gate
+passes all 457 with permitted axioms only; fresh stock kernel replay, the 60-job
+default build and 124 unit tests (23.011 seconds, one skip) pass. Exact five-file
+hashes/scope, all 453 prior terminal statements/proof bodies, source/register
+counts, whitespace and mirror equality pass. Independent frozen review is clear
+after correcting the older iteration theorem's stale scope comment. Replay,
+default build and units ran concurrently under unchanged caps. No runtime source
+or reproduction has changed.
 
 [AGENT 2026-10-14] Condense repeated checkpoint validation here; the
 checkpoint commit messages retain historical counts and timings, and the result
@@ -736,6 +736,7 @@ post-GRO reading is false; joint pipeline conservation remains open.
 | `RxPollTags`, `RxPollProjection`, `RxPollProvenance` | Buffered tags are a subsequence of removed occurrences; direct result/World/Stop/log projection and concrete stack frames derive callback origins. Separate erasures alone would not prove log agreement. |
 | `Logged/ProjectsUnderTo`, `StampedGro`, `RxPollJoint*`, `RxPollStampSafety`, `RxPollStampPhase` | One stamped execution has exact original/GRO erasure and direct allocation-conditional lifetime projection. Fresh local metadata retains arbitrary valid prior lifetime history; capture/removal/release phases and full GRO payload provenance prove per-poll removal/callback stamp uniqueness on failed prefixes and actual releases on normal completion. |
 | `RxWorkerCuts`, `RxWorkerHistory`, `RxActivationHistory` | Concrete encryption/decryption callbacks, transmit pre-encryption and one activation iteration use the persistent stamped observers. Exact original erasure, direct focused-R2 projection at the same incoming history, normal boundaries and failed-prefix entry uniqueness. |
+| `RxActivationRunHistory`, `RxScheduleHistory` | Actual activation runs, dispatch, scheduling and nested rescheduling carry stamped committed polls, direct full R2 audit correspondence and exact reached-filter probes; candidate trial histories stay isolated. |
 | `SourceScheduler`, `RxRingScheduler`, `RxRingTrials` | Concrete RX scheduler refinement discharges its callbacks; original trial decisions/ordered filter and safe trial prefixes remain separate from committed history. |
 | `Framing/PeerBorrow`, `RxBorrow` | Actual lookup acquisition derives positive old refcount; adjacent repayment restores the full outside-peer Kernel and every complete peer record pointwise. Existing access observers retain failed prefixes. |
 | `TxDisposition*`, `Logged/ProjectsUnder` | Joint actual admission/publication/removal/completion cuts; exact createData access/ring projection and allocation-conditional full-step access projection. Source cuts and normal EPIPE queue/DEAD-head/ring, ENOSPC packet-absence and actual DEAD-step disposal endpoints. Publication queue retention spans CPU/work updates; arbitrary-schedule transport is separate. |
@@ -1024,12 +1025,48 @@ not infer history neutrality from source erasure. Prior probe markers remain
 interleaved. Only the empty-history corollary requires local AllocationInv.
 Normal return restores the entered-stamp release boundary; failed prefixes retain
 entry uniqueness without a release endpoint or failed World. Entry still means
-attempted callback handoff, not successful delivery. Copied consistency trials
-and the enclosing activation run/dispatch/scheduler are not covered by this slice.
+attempted callback handoff, not successful delivery. The enclosing activation
+run/dispatch/scheduler and saved consistency-filter probes are covered separately
+below; trial callback entries remain isolated.
 
 [AGENT 2026-10-14] Reuse existing poll-free lifetime observers and factor exact
 publication/callback boundaries, keeping observed NAPI calls explicit. This avoids
 copying lower packet operations or silently hiding a poll in a focused whole call.
+
+**Complete local scheduling.** `RxActivationRunHistory` retains the actual
+observed occupancy read, occupancy-plus-one bound, mutable activation iterations,
+section-stop consumption, suspended append on yield and exhaustion Stop. Dispatch
+keeps each empty/default refusal, TX unit resolution and queue erase before its
+section start and observed activation run. The finite-loop projection transports
+the actual continuation history through the existing allocation/append contracts;
+source erasure is unconditional.
+
+`RxScheduleHistory` follows the existing R2 audit scheduler's control literally.
+It retains the no-record worker order, record-driven bound, dispatch guards,
+NET_RX test, post-poll record check, exact single-candidate resumption, optional
+stack-worker ambiguity check and all Stops. Pending-NAPI and has-work controls use
+the actual lower read observers, preserving the original eager device read and
+short-circuit saved-peer scan. Nested rescheduling consumes the original worker
+choice and invokes the observed scheduler only on its true arm.
+
+Each actual consistency-filter entry uses the existing focused filter audit,
+which captures its current World and lifetime history before the original copied
+trials. The marker survives an empty filter or a later Stop. Direct projection
+is to `scheduleAudit`, retaining complete probe payloads and interleaving, not
+merely its lifetime-only projection. Existing saved-probe contracts give each
+reached entry's allocation invariant, exact ordered filter decisions and safe
+isolated candidate histories. Candidate callback entries are never appended to
+the committed stamped journal. A failed committed callback retains its entry and
+prefix; only normal return restores the released-entry boundary.
+
+The four grouped exports provide exact original erasure, direct audit projection
+and concrete BoundaryInv/failed BoundarySafe preservation. Only their separate
+empty-history corollaries require local AllocationInv. These remain local caller
+contracts, not initialized Env/Runner coverage, successful stack delivery or
+receive-pipeline conservation. [AGENT 2026-10-15] Keep a literal audit-aware
+scheduler in the proof tree: the older ring-oriented SourceScheduler raw lifts
+control reads and omits actual probe markers, so its independent erasure cannot
+supply this direct audit correspondence.
 
 **Remaining obligations.** Initialized whole-schedule duplicate freedom needs
 the enclosing concrete caller spine to connect the persistent stamped journal to
@@ -1070,6 +1107,7 @@ staged-to-socket conservation is not claimed or required by this receive result.
 | Capture suffix and finite poll composition | 13 capped calls, 11 builds (6 PASS / 5 ordinary FAIL) and two passing exact checks; scoped/full 261/436 | Grant 22:27:43 UTC; full-result collection 22:34:04 (6m21s); token returned 22:37:34 (9m51s ownership). Five exports, 90 R4 / 437 source declarations. Failures were local reserved-field/identifier syntax, list/filter normalization, dependent bind/loop inference and a let-unfold repair. No cap/limit failure, interruption, source admission or runtime change/replay; all exits collected. The exact check preserves all 432 prior declarations and confirms scope, census, whitespace, source tokens/imports and mirror equality. Independent frozen review is clear at 22:36:44 UTC with no finding. Sequential coordinated proof gate, fresh kernel replay, default build, 124 unit tests and exact scope/hash/compatibility checks pass. All four frozen Lean hashes are unchanged; all 13 worker logs are removed. |
 | Direct NAPI callers | 17 capped calls: 13 builds (8 PASS / 5 FAIL), four exact checks (FAIL / PASS / PASS / PASS); scoped/full 283/442 | Acceptance 23:05:30 UTC; final full-result collection 23:14:55 (9m25s). Three exports, 93 R4 / 443 source declarations. Call 1 failed at the existing simplifier recursion limit after a self-rewriting equation; directed rewrites close it. Call 6 failed at the existing 200,000-heartbeat limit in expanded softirq focus; factoring the exact section wrapper closes it without raising limits. Other failures were dotted-constructor inference, tactic-macro hygiene/parser and explicit history-parameter inference. No source admission, recovery placeholder diagnostic, cap/interruption or runtime change/replay. Every exit is collected. Check 12 failed because its temporary script required zero from a clean new-file `git diff --no-index --check`, whose difference exit is one; checks 13/16 accept the normal difference status only with empty diagnostics and independently inspect every line and EOF. The exact six-file check preserves all 440 old terminal bodies and confirms census, empty index, whitespace, source tokens/imports and mirror equality. The exports keep the allocation premise inside only the local empty-history corollary; erasure, direct conditional projection and invariant preservation remain unconditional contracts. Independent frozen review is clear with no finding (final pass 23:16:15–23:16:32). Final metadata/hash check 17 passes. Token returned 23:17:24 UTC (11m54s from acceptance; 12m19s from root grant at 23:05:05); all 17 worker logs are removed. Sequential coordinated proof gate (442 jobs, 443 permitted-axiom declarations), fresh stock kernel replay, default build (60 jobs), unit suite (124, 22.155 seconds, one skip), and exact frozen-hash/scope/compatibility/census/whitespace/mirror checks pass. All four frozen Lean hashes remain unchanged. |
 | Concrete crypt workers and activation iteration | Eight capped calls: seven builds (4 PASS / 3 FAIL), one passing exact check; scoped/full 286/447 | Root grant 23:39:17 UTC, measured acceptance 23:39:31; full-result collection 23:48:38 (9m07s after acceptance). Four exports; 97 R4 / 450 source declarations. Calls 1 and 2 failed at the existing 200,000-heartbeat limit in broad factorization scripts and also reported branch-normalization, an unavailable tactic and unreachable-Stop frame goals; directed bind/case proofs close them without raising limits. Call 5 failed on get/suspended-bookkeeping allocation frames because restricted transparency prevented their reduction; the existing concrete unchanged-Kernel proof closes them. No cap/interruption, source admission, recovery-placeholder diagnostic or runtime change/replay. All exits collected. Call 8 checks exact six-file scope, all 446 prior terminal statements/proof bodies, census, whitespace/EOF including untracked files, empty index, actual comment-aware gate tokens/imports and mirror equality. Independent review found two stale current census rows in the proof register; both are corrected to 97 R4 and 450 total declarations. Revised independent review is clear at 23:50:40 UTC. Coordinated gate (447 jobs, 450 permitted-axiom declarations), fresh stock replay, default build (60 jobs), units (124, 23.045 seconds, one skip) and exact frozen checks pass. Token returned 23:50:54 UTC (11m23s after acceptance; 11m37s after grant); all eight worker logs are removed. |
+| Complete local scheduling | Six capped calls: four builds (2 PASS / 2 FAIL), two passing exact checks; scoped/full 288/452 | Root grant 2026-10-15 00:10:46 UTC, acceptance 00:11:04; full-result collection 00:16:14 (5m10s after acceptance). Four exports; 101 R4 / 457 declarations. Call 1 failed on focused-loop type alignment and contradictory duplicated dispatch matches; direct list induction and contradiction normalization close these. Call 2 compiled run/dispatch but failed at the existing 200,000-heartbeat limit in the scheduler projection's final broad congruence search; normalizing the fixed worker selection before directed projection closes it without raising limits. No cap/interruption, source admission, recovery-placeholder diagnostic or runtime change/replay. All exits collected. Call 5 checks exact scope, all 453 prior terminal statements/proof bodies, source/register counts, whitespace/EOF including untracked files, empty index, actual gate tokens/imports and mirror equality. Preliminary review identified the old activation-iteration scope comment as stale; its comment-only correction points to scheduler composition while keeping initialized Env/Runner and delivery open. Independent frozen source/export/documentation review is clear (00:17:45–00:19:19), with no unresolved finding. Final metadata/hash check 6 passes; coordinated gate (452 jobs, 457 permitted-axiom declarations), fresh stock kernel replay, default build (60 jobs), units (124, 23.011 seconds, one skip) and exact frozen checks pass. Token returned 00:19:58 UTC (8m54s after acceptance; 9m12s after grant); all six call exits are collected. Builds use command-scoped LEAN_NUM_THREADS=32 for Lake scheduling; the unchanged project -j1 still applies to individual Lean processes. |
 
 Failed joint-poll calls 16 and 23 also printed Lean elaborator-recovery
 `sorry ()` / `[sorry]` goal terms after ambiguous constructor/type errors and an
