@@ -834,7 +834,7 @@ def run_linux(traces, outdir, *, timeout=120, steer_wire=None, arm_records=ARM_R
 
 QEMU_LOCK_WAIT = 3600
 # Concurrent guests (single-threaded TCG, 256 MiB each); LEANUX_QEMU_SLOTS overrides.
-QEMU_SLOTS = int(os.environ.get("LEANUX_QEMU_SLOTS", "8"))
+QEMU_SLOTS = int(os.environ.get("LEANUX_QEMU_SLOTS", "16"))
 
 
 def _run_locked(traces, outdir, timeout, arm_records, guest_variant=None, alloc=None, kernel_identity=None):

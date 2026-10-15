@@ -674,3 +674,11 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   modelled path reads a peer between the zero and the release. The mirror
   stays deterministic; a modelled reader found later would make it a
   record-only RCU-callback section, reported rather than built.
+- **2026-10-14 [USER]** Use the box aggressively: "we can share guidance with
+  the agent to be more aggressive with resources where this would speed them
+  up". The guest-slot default moves from 8 to 16 (the box has 32 cores and
+  over 90 GB free most of the day; guests are single-threaded; the measured
+  claim point of 2026-10-14 took 2 h 17 min at 8 slots on a shared box);
+  builds and suite runs run concurrently across agents; `capped`, the
+  memory cap, the KILLED-is-failure rule and the one-recorded-rerun rule are
+  unchanged [AGENT, coordinator: the measurement and the number].
