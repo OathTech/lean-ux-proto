@@ -16,6 +16,7 @@ import Leanux.Proofs.WG.Config.ExpiryClock
 import Leanux.Proofs.WG.Config.KeyInstall
 import Leanux.Proofs.WG.Config.KeyInstallEffects
 import Leanux.Proofs.WG.Config.DumpCancellation
+import Leanux.Proofs.WG.Config.KeyRequest
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
@@ -589,5 +590,18 @@ This is arithmetic supporting the source review, not a formal C simulation. -/
 theorem empty_dump_cancellation_accounting :
     DumpCancellation.cancelledNestRoom = 3724 ∧ 3720 + nlaTotal 0 = DumpCancellation.cancelledNestRoom :=
   DumpCancellation.cancellation_accounting
+
+/-- A changed private-key-only outer request with no generated-public-key
+peer-table match returns zero on normal completion, increments generation, and
+performs the full installation relation including optional staged sending.
+The raw request differs from the stored key; no peer-removal arm is taken.
+This does not guarantee input records or establish aggregate clock provenance. -/
+theorem original_private_key_request_no_collision (d : Device) (key : Key)
+    (changed : d.staticIdentity.staticPrivate ≠ key) (absent : noKeyCollision d key) :
+    Ensures (wgSetDevice (privateKeyAttrs d key))
+      (fun w => w.k.wg = some d ∧ selectsDevice w d)
+      (fun ret w => ret = 0 ∧ ∃ final, w.k.wg = some final ∧
+        KeyPeerRun (requestsStagedSend d key) (installedDevice (requestGeneration d) key) d.peerList final) :=
+  setDevice_private_changed_no_collision d key changed absent
 
 end Leanux.Proofs.WG.Config

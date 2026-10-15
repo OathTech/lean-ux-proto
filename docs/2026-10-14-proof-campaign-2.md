@@ -211,7 +211,11 @@ reference-count bounds may also stop execution. These are normal-completion
 Device contracts, including the send-work queue, not descriptions of World
 bookkeeping or record consumption. Independent reviews found no semantic defect
 in the staging, per-peer, loop or installation increments and confirmed these
-scope limits.
+scope limits. The original outer private-key-only setter now composes that
+relation when the raw key changes and no generated-public-key table entry
+matches. It returns zero on normal completion and includes the generation
+increment. The earlier unchanged-key total contract covers the no-op key arm;
+collision removal and later peer attributes remain separate obligations.
 
 [AGENT 2026-10-15] Compose private-key updates from a baseline after optional
 self-peer removal: removal may flush other peers' work under the old identity,
@@ -239,7 +243,7 @@ defect. Review of the identity/precomputation/expiry leaves found no semantic
 defect and identified the weak existential-time and missing-target scope limits
 recorded above. Actual outer dump composition remains open.
 
-Remaining: private-key collision removal and outer request composition; full peer
+Remaining: private-key collision removal and mixed-attribute outer composition; full peer
 removal/replacement and allowed-IP ownership, other partial-error combinations,
 and general dump chunks/coalescing. Deferred removal work can change other
 peers' dynamic state, so no unrestricted removal frame is claimed.
@@ -256,7 +260,7 @@ check: both the C and the mirror's own design require restoring pre-nest room.
 gives the witness and reproduction command. Ranked mirror suggestion 1:
 correct the saved cancellation snapshot (altitude-preserving).
 
-Validation: all fifty-one statements pass scoped build, standard-axiom inspection
+Validation: all fifty-two statements pass scoped build, standard-axiom inspection
 (only `propext`, `Classical.choice`, `Quot.sound`), and `capped --
 scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Config.Statements`.
 The full proof gate fails in inherited `CounterWindow.Refinement`; token/import
