@@ -17,7 +17,7 @@ import sys
 import subprocess
 import time
 
-from .trace import KCOV_CAPACITY, KCOV_TASK_CMP_CAPACITY, OPCODES, is_stepped, uses_wireguard, InvalidTrace, loads_trace, serialize_wire, validate_trace
+from .trace import KCOV_CAPACITY, OPCODES, task_cmp_capacity, is_stepped, uses_wireguard, InvalidTrace, loads_trace, serialize_wire, validate_trace
 from .wg import decode_dump, decode_messages
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -720,13 +720,16 @@ def _collect(outdir, traces, process_returncode, alloc=None):
                 raise ValueError("coverage addresses")
         if len(comparisons) != len(expected_coverage):
             raise ValueError("comparison records per operation")
+        by_id = {trace["id"]: trace for trace in traces}
         for row, (identifier, index) in zip(comparisons, expected_coverage):
             if type(row) is not dict or set(row) != {"id", "index", "count", "records"} or row["id"] != identifier or row["index"] != index:
                 raise ValueError("comparison identity or order")
-            # a merged row is the task stream (its area twice the size, B1) and
-            # the remote stream, each below its own limit (the guest fails a
-            # full area), so the sum is below the sum of the limits
-            if type(row["count"]) is not int or not 1 <= row["count"] < (KCOV_TASK_CMP_CAPACITY - 1) // 4 + (KCOV_CAPACITY - 1) // 4 \
+            # a merged row is the task stream (its area sized per trace, B1:
+            # task_cmp_capacity) and the remote stream, each below its own
+            # limit (the guest fails a full area), so the sum is below the sum
+            # of the limits
+            if type(row["count"]) is not int \
+                    or not 1 <= row["count"] < (task_cmp_capacity(by_id[identifier]) - 1) // 4 + (KCOV_CAPACITY - 1) // 4 \
                     or not 1 <= len(row["records"]) <= row["count"]:
                 raise ValueError("comparison record count")
             if len({tuple(r) for r in row["records"]}) != len(row["records"]):

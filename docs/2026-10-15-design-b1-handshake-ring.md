@@ -309,6 +309,20 @@ headroom); the two tests extended. About 40 lines across the guest,
 guest side of exactly this change (the constant, the area, its check, the
 table) and the host side untouched, which is why the host rejected it.
 
+**The larger area is per trace, not for every trace** (the build's
+regression, section 16): the comparison child's task area is
+`TASK_CMP_CAPACITY` only for a trace with a flood of more than
+`FLOOD_BIG_AREA_SENDS` = 2048 sends (count, leading valids and control;
+`guest.c` `task_capacity`, `harness/trace.py` `task_cmp_capacity`, the
+host's merged bound per trace, pinned by `test_trace`). The mapping is
+shared with every process the trace forks, and `fork` copies its page
+tables (`copy_pte_range`, `vm_normal_page`, `mm/memory.c:1139-1189, 597`),
+work the comparison child records as about four distinct comparisons per
+page; the seccomp probes fork a child per operation, and at twice the
+pages their rows grew by 1.7 MB each, past the 16 MiB captured-output
+limit on single-trace chunks. With the area sized per trace the seccomp
+traces' output is the former size to within a boot's variation.
+
 **Memory, measured.** `KCOV_INIT_TRACE` allocates with `vmalloc_user`
 (`kcov.c:718`), which is `__GFP_ZERO` (`mm/vmalloc.c:4063-4069`): the pages
 are committed and zeroed at once, not touched lazily. The comparison
@@ -831,3 +845,34 @@ unit-test modules 124 OK (1 skipped); the `wireguard` suite 263 traces,
 1798 operations, 263 agreements, no retries, 34 minutes at eight slots
 beside a full check and a sentinel chain (`.artifacts/check/b1-wg-final`,
 ephemeral).
+
+### 16.1 The regression at the batch's claim point, and its fix [AGENT, 2026-10-15]
+
+On `int/repr-batch` (B4 then B1 over the landed index-lookup fix) the
+claim point's `seccomp` group failed 47 of 267 traces at `output_limit`
+("Captured output exceeded 16777216 bytes"), single-trace chunks
+included, while the same group had passed in full an hour earlier
+without B1. Measured on `s_strict_child` (three seccomp probe
+operations), Linux only, one boot each:
+
+| tree | `boot.log` | task comparison rows: records / distinct / bytes per operation |
+| --- | --- | --- |
+| main de62c9d | 12,582,748 B | 258,654 / 68,761 / 3.52 MB; 344,410 / 87,951 / 4.46 MB; 346,137 / 88,253 / 4.48 MB |
+| branch 5fcac3f (area at 8 M words for every trace) | truncated at 16,777,216 B | 384,042 / 101,615 / 5.22 MB; 469,832 / 120,829 / 6.16 MB; the third row cut |
+| branch with the per-trace area | 12,537,850 B | 258,581 / 68,709 / 3.52 MB; 342,426 / 87,528 / 4.44 MB; 343,538 / 87,751 / 4.45 MB |
+
+What grew: not a dump proportional to the capacity, not the table, not
+the header. Each probe operation's task comparison stream gained about
+125,400 records and 32,900 distinct ones, the same on every operation,
+and the extra distinct records sit at four program counters: `mm/memory.c:1189`
+(`copy_pte_range`, 24,647 of them), :1139 (`copy_pte_range`), :597
+(`vm_normal_page`) and `pte_pfn` (`arch/x86/include/asm/pgtable.h:266`),
+8,192 to 24,647 each, which is one to three per page of the 8,192 pages
+the larger mapping adds. A seccomp probe forks its sandboxed child; the
+KCOV task area is a shared `VM_MIXEDMAP` mapping whose page tables `fork`
+copies, one comparison with a distinct pfn operand per page, and the
+comparison child records that work. The growth is inherent to the mapping
+size and a harness artefact of the change: the area is now sized per
+trace (above), the seccomp probes' output returns to its former size, and
+the flood twins keep theirs. Nothing dropped silently before: every
+seccomp row's count was far below the old limit of 1,048,575.

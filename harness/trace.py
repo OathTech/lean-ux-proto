@@ -175,6 +175,24 @@ if set(OPCODES) != set(FIELDS):
 # comparison row (task and remote) stays below the sum of the two limits.
 KCOV_CAPACITY = 4 * 1024 * 1024
 KCOV_TASK_CMP_CAPACITY = 8 * 1024 * 1024
+# Only a trace with a flood of more than this many sends gets the larger
+# area (guest.c task_capacity): the mapping is shared with every process the
+# trace forks, and fork copies its page tables, work the comparison child
+# records as one distinct comparison per page, which at twice the pages took
+# the seccomp probes' rows past the captured-output limit.
+FLOOD_BIG_AREA_SENDS = 2048
+
+
+def task_cmp_capacity(trace):
+    """The comparison child's task area for this trace, in words (B1,
+    guest.c task_capacity): KCOV_TASK_CMP_CAPACITY when a flood's sends (its
+    count, leading valids and control) exceed FLOOD_BIG_AREA_SENDS, else
+    KCOV_CAPACITY."""
+    for op in trace["ops"]:
+        if op["op"] == "wg_flood" and \
+                op["count"] + len(op.get("messages", ())) + (1 if op.get("control") else 0) > FLOOD_BIG_AREA_SENDS:
+            return KCOV_TASK_CMP_CAPACITY
+    return KCOV_CAPACITY
 # The optional top-level `net_fixture` (L): "bare" starts a network trace
 # without wg0; absent, the fixture creates a down wg0. W8: "foreign-creator"
 # creates wg0 from a second namespace C (its creating namespace), which holds
