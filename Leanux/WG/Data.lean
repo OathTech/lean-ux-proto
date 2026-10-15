@@ -102,27 +102,39 @@ def encryptPacket (checksumHelp : Packet → M Packet) (keypair : KeypairId) (pk
   -- census's P14 class, no decision (the Send audit's F5)
   return some (dataMessage k.remoteIndex pkt.nonce k.sending.key (inner.bytes ++ List.replicate paddingLen 0))
 
+/-- The ring poll at wg_packet_encrypt_worker's loop head (send.c:293),
+    `ptr_ring_consume_bh`: `__ptr_ring_consume` takes the head's item and
+    discards its slot under the batch rule (ptr_ring.h:291-303, :264-289),
+    then `spin_unlock_bh` runs a pending softirq, and the `!= NULL` test
+    follows. `softirq` is the environment's NET_RX placement (`napiSoftirq`,
+    design 17.17): the NAPI poll the decrypt worker raised runs here when the
+    kernel switched to this worker at the decrypt worker's `cond_resched`
+    before the softirq ran. It runs after the consume, as the C orders it:
+    the poll can produce into this ring (a key confirmation flushes the
+    peer's staged packets, receive.c:345-349 → send.c:388 → queueing.h:174),
+    so at a physically full ring the slot the consume has just cleared is
+    what the poll's produce finds, where the former order (the poll before
+    the consume) met the occupied slot and dropped the list with `-EPIPE`
+    (the Send audit's F1, 2026-10-15; the compile-time instance in
+    `Leanux/Runner.lean`). -/
+def encryptRingPoll (softirq : M Unit) : M (Option (List SkbId)) := do
+  let (item, ring) := (← getDev).encryptQueue.consume
+  modifyDev fun d => { d with encryptQueue := ring }
+  softirq
+  _ ← branch .encWorkerConsumed item.isSome
+  return item
+
 /-- One iteration of wg_packet_encrypt_worker (send.c:287-309): the ring
     poll (`ptr_ring_consume_bh`; `false` when empty: the loop ends) and the
     item's packets encrypted under `PACKET_CB(first)->keypair` until one
     fails (`DEAD`: the walk breaks, and the tx worker frees the whole list).
-    `softirq` is the environment's NET_RX placement: the ring poll's
-    `spin_unlock_bh` (send.c:293) runs a pending softirq, as the decrypt
-    worker's does (`decryptStep`), so the NAPI poll the decrypt worker
-    raised runs here when the kernel switched to this worker at the decrypt
-    worker's `cond_resched` before the softirq ran (design 17.17). W7 phase
-    2: the iteration is the unit the environment interleaves (`workerIter`). -/
+    `softirq` is the environment's NET_RX placement at the ring poll
+    (`encryptRingPoll`). W7 phase 2: the iteration is the unit the
+    environment interleaves (`workerIter`). -/
 def encryptStep (checksumHelp : Packet → M Packet) (softirq : M Unit) : M Bool := do
-  -- ptr_ring_consume_bh: its spin_unlock_bh runs a pending softirq; the
-  -- head's slot, discarded by the batch rule
-  softirq
-  match (← getDev).encryptQueue.consume with
-  | (none, _) =>
-    _ ← branch .encWorkerConsumed false
-    return false
-  | (some first, ring) =>
-    _ ← branch .encWorkerConsumed true
-    modifyDev fun d => { d with encryptQueue := ring }
+  match ← encryptRingPoll softirq with
+  | none => return false
+  | some first =>
     let some headId := first.head? | invariant "an empty ring item"
     let head ← getTxSkb headId
     -- skb_list_walk_safe(first, skb, next): each skb encrypted in place
