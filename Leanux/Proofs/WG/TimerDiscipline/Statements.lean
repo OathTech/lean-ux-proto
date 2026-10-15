@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TimerDiscipline.SendWorkerFrame
 import Leanux.Proofs.WG.TimerDiscipline.JitterExhaustion
 import Leanux.Proofs.WG.TimerDiscipline.InitiationArm
 import Leanux.Proofs.WG.TimerDiscipline.Arming
@@ -356,5 +357,36 @@ theorem original_jitter_exhausted (site : JitterSite) (rejected : List UInt8)
     (jitterBelowRekeyTimeout site.hiddenSite).run w =
       .error (.hidden s!"no record left for {site.hiddenSite.info.label}") :=
   jitter_exhausted site rejected bad w records
+
+/-- A normally completed original initiation-send prefix preserves the peer's
+allocation identity, retry-attempt count, reference count and retransmit expiry.
+This includes message construction, MAC, traversal, socket/cache/accounting
+updates and the original early exits; the retransmit arm hook follows it. -/
+theorem original_initiation_prefix_frame (pid : PeerId) (identity attempts refs : Nat)
+    (expiry : Option UInt64) :
+    Ensures (initiationArmPrefix pid)
+      (fun w => initiationAt w pid = some (identity, attempts, refs, expiry))
+      (fun _ w => initiationAt w pid = some (identity, attempts, refs, expiry)) :=
+  (ensures_iff _ _ _).mpr (initiationArmPrefix_view pid (identity, attempts, refs, expiry))
+
+/-- Original initiation sending preserves peer identity, retry attempts and
+references whenever it returns normally. Its final hook may change the
+retransmit expiry. A normal return does not assert transmission success. -/
+theorem original_handshake_send_frame (pid : PeerId) (identity attempts refs : Nat) :
+    Ensures (sendHandshakeInitiation pid)
+      (fun w => workerAt w pid = some (identity, attempts, refs))
+      (fun _ w => workerAt w pid = some (identity, attempts, refs)) :=
+  sendHandshakeInitiation_workerView pid (identity, attempts, refs)
+
+/-- A normally returning original handshake-send worker preserves identity and
+retry attempts and releases one reference. More than one entry reference keeps
+the peer resident after that release. This is the worker body, before composition
+with the environment's selection/dequeue and a complete retry episode. -/
+theorem original_send_worker_frame (pid : PeerId) (identity attempts refs : Nat)
+    (retained : 1 < refs) :
+    Ensures (handshakeSendWorker pid)
+      (fun w => workerAt w pid = some (identity, attempts, refs))
+      (fun _ w => workerAt w pid = some (identity, attempts, refs - 1)) :=
+  handshakeSendWorker_workerView pid identity attempts refs retained
 
 end Leanux.Proofs.WG.TimerDiscipline

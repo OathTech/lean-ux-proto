@@ -2,10 +2,36 @@
 
 ## Progress
 
+**Paused at the user's request, 2026-10-15.** All work remains on
+`proofs/campaign-2`, over mirror commit `de62c9d`; no merge to main or push.
+The last checkpoint has 153 terminal declarations, all importing together and
+passing standard-axiom inspection. The full proof gate still fails in inherited
+campaign-1 counter-window/index carries. None of H1–H6 is claimed complete.
+
+[USER 2026-10-15] Stop and preserve the current closed checkpoint because the
+mirror is being split into per-subsystem worlds, with functions typed over the
+data they access. Resume only after a paste says that split has landed. On
+resumption, retype statements; delete frame lemmas made trivial or unstatable
+by the new types instead of repairing them. No merge to main and no push.
+
+| Result | Checked checkpoint | Still open at pause |
+| --- | --- | --- |
+| H1 Noise | 11 local state/slot contracts | Whole-call transition coverage and key-confirmation composition. |
+| H2 Index | 23 original-operation uniqueness, lookup, collision-draw and release contracts | Whole-driver reachable ownership/coherence, broader record layouts and the corpus runner composition. |
+| H3 Roaming | 5 local endpoint contracts | Successful-authentication provenance and complete caller coverage, with the source's outer-address qualifications. |
+| H4 Configuration | 60 contracts, including total witnessed removal with empty slots/queues; checked internal dump-accounting finding | Queued-work/live-keypair removal and replacement, private-key collision and mixed attributes, global allowed-IP ownership, general multipart dump composition. |
+| H5 Progress | 25 contracts and an accepted batch-backlog counterexample | Productive-record decrease, full loop/activation coverage and probe/detach framing; unrestricted no-pending-at-return wording is refuted. |
+| H6 Timers | 29 contracts, including original send-prefix/send-worker retry frames | Environment worker selection/dequeue, complete retry episodes, whole-run arming-site and session-count coverage. |
+
+The new H6 worker body preserves identity and retry attempts and releases one
+reference under the explicit retained-reference premise. It does not establish
+an entire retry episode. Further development is paused; the remaining obligations
+above are a handoff for the split mirror, not a new work queue for the old types.
+
 Work is confined to `.worktrees/proofs-campaign-2`, branch `proofs/campaign-2`.
 H1, H3 and H4 have local contracts; their whole-operation/whole-run claims
 remain open. H4 also has a checked reachable internal dump-accounting finding. H5 has a checked batch-completion counterexample and open progress
-obligations. H6 has twenty-six local timer contracts; whole-run site coverage and
+obligations. H6 has twenty-nine local timer contracts; whole-run site coverage and
 retry/session counting remain open.
 H2 was unblocked by the user's landing notice for `de62c9d` on 2026-10-15.
 Main was merged into this branch at `5033f7a`. No result is claimed complete.
@@ -749,8 +775,30 @@ is made. Independent read-only review found no arithmetic, linkage or World-fram
 defect. This closes the restricted exhaustion clause previously removed from
 the normal-completion bound's docstring.
 
-Remaining work: completed retry-episode counting and source-complete caller
-coverage for traversal and session derivation. No H6 mirror mismatch has been
+`InitiationFrames`, `SendCutFrames`, `SendPeerView`, `SendSocketView`,
+`SendBufferFrame`, `InitiationPreservation` and `SendWorkerFrame` add three
+normal-completion terminals. The original initiation-send prefix preserves
+identity, attempt count, reference count and retransmit expiry. The final arm
+hook may change the expiry but preserves the first three fields. The original
+handshake-send worker then releases one reference, preserving residence under
+`refs > 1`. Early returns and ignored socket results remain explicit; normal
+return does not imply successful transmission. Independent read-only review
+found no correctness or scope defect.
+
+[AGENT 2026-10-15] Use result-local retry projections through cache/socket
+operations. These fields are absent from campaign 1's keypair snapshot, so its
+frame theorems cannot imply them. The two kernel/cut variants are named for the
+shared contracts they specialize; the allocation variant names its Noise
+counterpart. No existing shared declaration changes. Direct socket expansion
+and an initial read/write-contract version hit local heartbeat limits; separate
+cache/tunnel/send contracts and reduction of the known optional cache argument
+closed the same proposition. One generated peekHiddenSite declaration clash
+was resolved by importing the existing timer-selection module. No limit was raised.
+
+Remaining work at pause: environment worker selection/dequeue, completed
+retry-episode counting and source-complete caller coverage for traversal and
+session derivation. The split-world resume rule above supersedes further
+old-World frame development. No H6 mirror mismatch has been
 established; ranked mirror suggestions: none.
 
 Effort: capped elaboration, repaired syntax/composition errors and one local
@@ -761,7 +809,7 @@ assumed. The dispatcher factor needed explicit failure-bind equations and a
 shared case split on the due list after ordinary elaboration failures; an overly
 broad simplification reached recursion depth and was replaced by bounded
 rewrites. No resource limit was raised. Scoped build and axiom inspection
-pass for all twenty-six statements using only the three standard axioms. Stock
+pass for all twenty-nine statements using only the three standard axioms. Stock
 kernel replay also passes: `capped -- scripts/in-bundle lake env leanchecker
 --fresh Leanux.Proofs.WG.TimerDiscipline.Statements`. The full
 proof gate remains failed at inherited `CounterWindow/Refinement.lean` and
