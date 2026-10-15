@@ -1189,13 +1189,28 @@ filter. The counts in `wait_after_up` stay 0 for the lifecycle operations
 `wg_peer_get_maybe_zero` back into the entry (`:218`): a failed get leaves
 `entry->peer` NULL, and a later lookup that finds the same entry takes the
 get's `!peer` arm (`peer.c:75`) instead of the `kref_get_unless_zero` arm.
-Until 2026-10-14 the mirror's entry kept its peer id across a failed get, so
-a second lookup of a dead entry reported `peerGetMaybeZeroDead` where the C
-reports `peerGetMaybeZeroNull`. Found by the binary adequacy grind's region
-lemma over the lookup, the first Rule Zero finding at the binary level;
-fixed by `IndexEntry.peer : Option PeerId` and the store-back in
-`indexLookup` (`Leanux/WG/Peer.lean`), with a two-lookup witness in the
-fixing commit.
+The entry is embedded in its owner (`struct noise_handshake`, noise.h:30-31,
+inside the peer; `struct noise_keypair`, noise.h:65-66), so the word the
+lookup writes is the owner's: `keypair->entry.peer`, set at creation from
+the handshake's word (noise.c:107, :827) and read by `PACKET_PEER(skb)`
+(queueing.h:68; receive.c:185, :198; send.c:386 `wg_peer_get(keypair->entry.peer)`),
+or `handshake->entry.peer`, set at init (noise.c:68); both are dereferenced
+to reach the table (`entry.peer->device->index_hashtable`: noise.c:92,
+:126, :137, :570, :714, :851). Until 2026-10-14 the mirror's table entry
+kept its own copy of the peer id across a failed get (a second lookup of a
+dead entry reported `peerGetMaybeZeroDead` where the C reports
+`peerGetMaybeZeroNull`), and the keypair's copy (`Keypair.peer : PeerId := 0`)
+was a second word the C does not have. Found by the binary adequacy grind's
+region lemmas over the lookup, the first Rule Zero finding at the binary
+level. The mirror now has the C's shape: the table holds each hashed entry's
+index and owner (`IndexEntry`, `IndexOwner`); the one peer word per entry
+lives in the owner (`Keypair.peer`, `Peer.handshakeEntryPeer`, both
+`Option PeerId`); the lookup reads and writes it through the owner
+(`IndexOwner.peerWord`, `setPeerWord`); and every dereference of the word
+(`IndexOwner.peerDeref`: the `PACKET_PEER` reads, `wg_peer_get` of it, the
+table reads above) is an explicit fail-closed arm on NULL, where the C
+dereferences a NULL pointer. Two-lookup witnesses, one per owner, are in
+the fixing commits.
 
 The arm is modelled and unexercised: in this configuration
 (`CONFIG_NR_CPUS=1`, `CONFIG_PREEMPT_NONE=y`) no lookup finds an entry whose
@@ -1226,4 +1241,45 @@ the decrement and the removal. The same holds of the get in
 `wg_pubkey_hashtable_lookup` (`peerlookup.c:53-71`; the mirror's
 `pubkeyLookup`): `peer_make_dead` removes the pubkey entry (`peer.c:86`)
 while the count is still at least one. Both arms stay as decisions without a
-witness, the C's control flow; neither is a scope cut.
+witness, the C's control flow; neither is a scope cut. The NULL-dereference
+arms are unexercised for the same reason: the word is NULL only after a
+failed get.
+
+**Two further claims, kept apart** (the Peer audit's F2,
+`docs/2026-10-15-audit-peer.md`).
+
+- *The state space.* The adequacy theorem the binary lane is after
+  quantifies over every machine state and mirror world the relation names,
+  reachable or not, so a hashed entry whose peer's count is zero need only
+  be expressible in the mirror's state type and handled by `indexLookup`
+  as the C handles it. It is, and it is: a `Peer` at `refcount 0` in the
+  store with its entry hashed (either owner) is a state of the mirror's
+  state space, and on that constructed state the fixed mirror takes the
+  get's dead arm (`peerGetMaybeZeroDead`), stores NULL into the owner's
+  word, returns NULL, and at the next lookup takes the `!peer` arm, as the
+  witnesses in the fixing commits show. The arms are unexercised by the
+  mirror's transitions on this configuration, handled as the C on the
+  state.
+- *The transitions.* The mirror erases a peer in `peerPut` at the zero,
+  where the C frees it at the RCU callback (`call_rcu` at `peer.c:220`,
+  `rcu_release` at `:186-198`); between the two the C's object is garbage
+  that nothing on one CPU reads, because every path by which a pointer to
+  the peer can be found is severed before the count can reach zero, and
+  the one that is not is severed inside the zero's own put: the
+  `peer_list` link, the allowedips nodes and the pubkey entry at
+  `peer_make_dead` (`peer.c:83-86`); the timers at `:106`; the keypair
+  entries at `:101` (`noise.c:136-138`); the queued work and the NAPI at
+  `:116-129`; the handshake entry at `:211-212`, inside the `kref_put`
+  (`:227`) that reaches zero, before any lookup of handshake kind can run
+  (those run in the handshake receive worker, `receive.c:92-112`, a
+  kworker that does not preempt the task doing the put and, when it is
+  that task, puts after its own lookups); the callback itself
+  (`rcu_release`) touches only the `dst_cache`, the `WARN_ON` (the audit's
+  F3) and the free. That divergence is for the simulation relation to
+  abstract (an unreferenced object relates to its absence), not for the
+  mirror to model: this paragraph is the claim the binary lane has to
+  discharge. The mirror stays deterministic here; the RCU callback's run
+  point is an unrecorded kernel choice that nothing observes. Only a
+  modelled path that reads a peer between the zero and the release would
+  make F2 a mirror change, and then the deterministic route is a
+  record-only RCU-callback section, not a guess. None was found.

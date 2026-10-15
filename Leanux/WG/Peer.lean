@@ -26,6 +26,26 @@ def peerGet (pid : PeerId) : M Unit := do
   refcountInc p.refcount
   setPeer pid { p with refcount := p.refcount + 1 }
 
+/-- `entry->peer` of an owner's embedded `index_hashtable_entry`, read
+    through the owner. -/
+def IndexOwner.peerWord : IndexOwner → M (Option PeerId)
+  | .handshake pid => return (← getPeer pid).handshakeEntryPeer
+  | .keypair kp => return (← getKeypair kp).peer
+
+/-- A store into `entry->peer` (peerlookup.c:218). -/
+def IndexOwner.setPeerWord (o : IndexOwner) (v : Option PeerId) : M Unit := do
+  match o with
+  | .handshake pid => setPeer pid { (← getPeer pid) with handshakeEntryPeer := v }
+  | .keypair kp => setKeypair kp { (← getKeypair kp) with peer := v }
+
+/-- A dereference of `entry->peer` (`entry.peer->device`, `wg_peer_get(entry.peer)`,
+    `PACKET_PEER(skb)->...`): on NULL the C dereferences a NULL pointer, which
+    the mirror does not model. NULL is stored only by a failed get, which
+    this configuration never reaches (docs/2026-10-05-l-lifecycle.md 16.6). -/
+def IndexOwner.peerDeref (o : IndexOwner) : M PeerId := do
+  let some pid ← o.peerWord | unsupported "entry->peer is NULL: the C dereferences it"
+  return pid
+
 /-- `hlist_del_init_rcu(&entry->index_hash)` (rculist.h:182-188): the
     `hlist_unhashed` test is the decision `d`, true when the entry is in the
     table; the unhash leaves it absent either way. -/
@@ -33,15 +53,10 @@ private def unhashEntry (d : Decision) (hashed : IndexEntry → Bool) : M Unit :
   _ ← branch d ((← getDev).indexTable.any hashed)
   modifyDev fun dev => { dev with indexTable := dev.indexTable.filter fun e => !hashed e }
 
-/-- wg_index_hashtable_remove (peerlookup.c:192-198) of a peer's entry of
-    this kind: `hlist_del_init_rcu`, a no-op if unhashed. -/
-def indexRemove (pid : PeerId) (kind : IndexKind) : M Unit :=
-  unhashEntry .idxRemoveHashed fun e => e.peer == (some pid) && e.kind == kind
-
-/-- wg_index_hashtable_remove (peerlookup.c:192-198) of a keypair's entry
-    (noise.c:126, :136). -/
-def indexRemoveKeypair (id : KeypairId) : M Unit :=
-  unhashEntry .idxRemoveHashed fun e => e.keypair == some id
+/-- wg_index_hashtable_remove (peerlookup.c:192-198) of an owner's entry:
+    `hlist_del_init_rcu`, a no-op if unhashed. -/
+def indexRemove (owner : IndexOwner) : M Unit :=
+  unhashEntry .idxRemoveHashed (·.owner == owner)
 
 /-- wg_peer_put (peer.c:223-228) and kref_release (200-221): the release
     removes the handshake's index entry (which `peer_remove_after_dead`
@@ -54,7 +69,7 @@ def peerPut (peer : Option PeerId) : M Unit := do
   let p ← getPeer pid
   setPeer pid { p with refcount := p.refcount - 1 }
   if ← branch .peerKrefPutReleased (← refcountDecAndTest p.refcount) then
-    indexRemove pid .handshake
+    indexRemove (.handshake pid)   -- `&peer->handshake.entry` (peer.c:211-212)
     -- wg_packet_purge_staged_packets: DEV_STATS_ADD(tx_dropped, qlen)
     modifyDev fun d => { d with txDropped := d.txDropped + p.staged.length, peers := d.peers.erase pid }
     -- the peer's work structs and timers are freed with it (rcu_free): their
@@ -122,9 +137,9 @@ def indexBucket (index : Nat) : M (List IndexEntry) := do
   let mask := 2 ^ INDEX_HASHTABLE_BITS
   return (← getDev).indexTable.filter (·.index % mask == index % mask)
 
-/-- Whether a peer's entry of this kind is hashed. -/
-def indexHashed (pid : PeerId) (kind : IndexKind) : M Bool :=
-  return (← getDev).indexTable.any fun e => e.peer == (some pid) && e.kind == kind
+/-- Whether an owner's entry is hashed (`!hlist_unhashed`). -/
+def indexHashed (owner : IndexOwner) : M Bool :=
+  return (← getDev).indexTable.any (·.owner == owner)
 
 /-- A walk over a bucket for `index`, reporting the loop and the compare:
     whether some entry has this index. -/
@@ -137,9 +152,9 @@ private def bucketHas (walk collide : Decision) (index : Nat) : M Bool := do
 
 /-- wg_index_hashtable_insert (peerlookup.c:109-153): a fresh random index
     (a recorded hidden input) not in use, inserted at the head. -/
-def indexInsert (pid : PeerId) (kind : IndexKind) : M Nat := do
+def indexInsert (owner : IndexOwner) : M Nat := do
   -- `hlist_del_init_rcu(&entry->index_hash)` first (peerlookup.c:125)
-  unhashEntry .idxInsertHashed fun e => e.peer == (some pid) && e.kind == kind
+  unhashEntry .idxInsertHashed (·.owner == owner)
   -- `goto search_unused_slot` draws again; nothing else inserts meanwhile
   -- (one CPU), so the locked walk agrees with the unlocked one. The C loop
   -- is unbounded; the draws are records, so the loop is record-driven
@@ -151,7 +166,7 @@ def indexInsert (pid : PeerId) (kind : IndexKind) : M Nat := do
     -- the locked walk's collision (stolen meanwhile, peerlookup.c:148) needs
     -- a concurrent insert
     if ← bucketHas .idxInsWalk2 .idxInsCollide2 index then unsupported "an index stolen during insertion"
-    modifyDev fun d => { d with indexTable := { index, peer := some pid, kind } :: d.indexTable }
+    modifyDev fun d => { d with indexTable := { index, owner } :: d.indexTable }
     return index
   budgetExhausted "index draws"
 
@@ -160,10 +175,12 @@ def indexInsert (pid : PeerId) (kind : IndexKind) : M Nat := do
     handshake's index and list position, and the handshake's is unhashed.
     Whether the handshake entry was hashed. -/
 def indexReplaceHandshake (pid : PeerId) (kp : KeypairId) : M Bool := do
-  let hashed ← indexHashed pid .handshake
+  let hashed ← indexHashed (.handshake pid)
   if ← branch .idxReplaceUnhashed !hashed then return false
+  -- `new->index = old->index; hlist_replace_rcu(...)`: the keypair's own
+  -- entry, with its own peer word, takes the index and the list position
   modifyDev fun d => { d with indexTable := d.indexTable.map fun e =>
-    if e.peer == (some pid) && e.kind == .handshake then { e with kind := .keypair, keypair := some kp } else e }
+    if e.owner == (.handshake pid) then { e with owner := .keypair kp } else e }
   return true
 
 def NSEC_PER_SEC : Int := 1000000000
@@ -221,8 +238,9 @@ def peerGetMaybeZero (peer : Option PeerId) : M (Option PeerId) := do
   return some pid
 
 /-- wg_index_hashtable_lookup (peerlookup.c:201-226): the entry under
-    `index` whose kind is in `kinds`, with a strong reference to its peer. -/
-def indexLookup (kinds : List IndexKind) (index : Nat) : M (Option IndexEntry) := do
+    `index` whose kind is in `kinds` (its owner, which the caller casts the
+    entry to), with a strong reference to its peer (`*peer`). -/
+def indexLookup (kinds : List IndexKind) (index : Nat) : M (Option (IndexOwner × PeerId)) := do
   let mut entry : Option IndexEntry := none
   let mut stopped := false
   for e in ← indexBucket index do
@@ -235,16 +253,20 @@ def indexLookup (kinds : List IndexKind) (index : Nat) : M (Option IndexEntry) :
   if ← branch .idxFound entry.isSome then
     let some e := entry | invariant "unreachable"
     -- `entry->peer = wg_peer_get_maybe_zero(entry->peer)` (peerlookup.c:218):
-    -- the get's result is stored back into the table entry, so a failed get
-    -- leaves NULL there and a later lookup of the same entry takes
-    -- wg_peer_get_maybe_zero's `!peer` arm (found by the binary adequacy
-    -- grind, 2026-10-14). The failed get is unreachable on one CPU without
-    -- preemption (docs/2026-10-05-l-lifecycle.md, the index lookup's dead
-    -- arm); the data flow is the C's regardless.
-    let peer ← peerGetMaybeZero e.peer
-    modifyDev fun d => { d with indexTable := d.indexTable.map fun x =>
-      if x.index == e.index && x.kind == e.kind then { x with peer } else x }
-    if ← branch .idxPeerAlive peer.isSome then return some { e with peer }
+    -- the owner's peer word is read and the get's result stored back into
+    -- it, so a failed get leaves NULL there, a later lookup of the same
+    -- entry takes wg_peer_get_maybe_zero's `!peer` arm, and the owner's
+    -- other reads of the word (`PACKET_PEER`, `entry.peer->device`) find
+    -- NULL (found by the binary adequacy grind, 2026-10-14). The failed get
+    -- is unreachable on one CPU without preemption
+    -- (docs/2026-10-05-l-lifecycle.md 16.6); the data flow is the C's
+    -- regardless.
+    let peer ← peerGetMaybeZero (← e.owner.peerWord)
+    e.owner.setPeerWord peer
+    -- `if (likely(entry->peer)) *peer = entry->peer; else entry = NULL;`
+    if ← branch .idxPeerAlive peer.isSome then
+      let some pid := peer | invariant "unreachable"
+      return some (e.owner, pid)
   return none
 
 /-- `wg_pubkey_hashtable_lookup` (peerlookup.c:53-71): a map lookup (the
@@ -260,6 +282,9 @@ def pubkeyLookup (key : Key) : M (Option PeerId) := do
 
 /-- wg_noise_handshake_init (noise.c:59-76). -/
 def handshakeInit (pid : PeerId) (presharedKey : Option Key) : M Unit := do
+  -- `handshake->entry.type = INDEX_HASHTABLE_HANDSHAKE; handshake->entry.peer = peer`
+  -- (noise.c:67-68): the embedded entry's peer word, the owner itself
+  IndexOwner.setPeerWord (.handshake pid) (some pid)
   if ← branch .handshakeInitHasPsk presharedKey.isSome then
     let p ← getPeer pid
     setPeer pid { p with presharedKey := presharedKey.getD p.presharedKey }
