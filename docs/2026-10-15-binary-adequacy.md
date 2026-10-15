@@ -1462,3 +1462,39 @@ and this segment are not substituted for the milestone's certified-region
 rate. Milestone 1's function/region rate and verbatim TrustBase report are
 still owed when that milestone is reached (or in today's candid status if
 it remains incomplete).
+
+### Entry correspondence and callback-domain audit
+
+`LookupEntrySimulation` initializes the actual entry call, then composes
+the prologue and first callback and the four-instruction bucket header.
+The silent-region lemma derives correspondence from the executed memory
+frame at each cut. The head read is obtained from the selected-bucket
+relation after the actual BH-count store. Both wrappers retain the raw
+tail and every cut's memory frame for later untouched-WG transport; review
+caught that those facts had initially been discarded by the wrappers.
+These are conditional supporting regions, not an entry-to-return theorem.
+
+The relation definitions now live in `LookupProjection`, and the raw
+count-phase definitions in `PeerCountState`, without changing their
+bodies. This permits the eventual witnessed entry declaration to import
+the definitions without a circular dependency on its own proof lemmas.
+`TrustBase.lean` remains unchanged; `Pre_lookup` is not yet declared.
+
+The precondition audit found that the existing uniform KCOV invariant
+requires all metadata even when the callback would skip some reads.
+At the recorded preempt counts 0 and 512, softirqEnabled is never read.
+Simply weakening readiness to the current count is insufficient: modular
+addition can change the gating. For example, incoming 0x00fffe00 rejects
+tracing, while adding 512 produces 0x01000000 and enables metadata reads.
+The entry domain must cover both actual callback contexts without forcing
+the count to zero. Full selected-bucket shape is likewise a uniform field
+representation, not the exact path's minimum byte-read set. These domain
+questions remain explicit; no dead-peer state has been excluded.
+
+Validation for the entry checkpoint: capped default build passed (270
+jobs), with standard-only axioms for all seven new declarations. Fresh
+kernel replay passed with the imported proof path; the final frame-export
+change also passed kernel replay against those verified imports. No runtime or mirror change was
+made. No KILLED banner or timeout occurred. Function certification and
+transport remain at zero; the witnessed Pre and complete helper/function
+composition are still required.
