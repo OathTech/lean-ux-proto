@@ -205,7 +205,12 @@ def validate_observation(trace, result):
     return result
 
 
-def parse_batch(traces, output, max_bytes=16 * 1024 * 1024):
+# The model's output per batch: a harness budget on its size, not a check
+# rule. 32 MB since lane C (2026-10-15): a 4096-packet flood reports one trie
+# lookup per send (e_ring_full: 18 MB, 267,448 branches, 122,940 of them the
+# lookups), 16 MB no longer held it; the host's OUTPUT_LIMIT on the guest's
+# console (harness/linux.py) is a separate bound.
+def parse_batch(traces, output, max_bytes=32 * 1024 * 1024):
     if not traces:
         raise InvalidOutput('empty required test batch')
     if len(output) > max_bytes:
