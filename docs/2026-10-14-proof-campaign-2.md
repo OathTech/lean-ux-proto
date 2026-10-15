@@ -10,14 +10,14 @@ the other H5 clauses and corrected-main carry remain open.
 
 | Result | Headlines | Established scope | Remaining charter core |
 | --- | ---: | --- | --- |
-| H1 Noise | 20 | State/slot edges, clearing/rotation, session effects, consecutive confirmation | Whole-call edges, totality, allocation-lifetime confirmation |
+| H1 Noise | 21 | State/slot edges, clearing/rotation, session effects and recorded total success, consecutive confirmation | Remaining whole-call edges/totality, clock provenance, allocation-lifetime confirmation |
 | H2 Index | 52 | Exact index operations, all normal lookup outcomes, caller table safety, session coherence/allocation sequence | Reachable hashed uniqueness and owner/peer residency through all driver entries |
 | H3 Roaming | 13 | Authenticated handshake cuts, decrypt/first-poll join, complete poll setter-attempt audit | Queue/callback authentication invariant, broader caller coverage, final endpoint |
 | H4 Configuration | 79 | Leaves/flags, effective bounded readback, removal/replacement phase effects, root insertion/transfer, actual two-chunk getter and scalar set/get composition | Global ownership, queued cleanup/completion, mixed attributes, general getter pagination |
 | H5 Progress | 39 | Accepted operation boundaries, actual final-boundary backlog, scheduling inspections, cut/pow/drain/poll bounds, arbitrary supplied-record index/jitter-loop adequacy | Whole-worker record decrease, global progress, corrected-main carry |
 | H6 Timers | 46 | Seven local arm sites, recorded delays, caller hook compositions, retry bound, pending/absent-zero-key give-up | Complete caller coverage, scheduler episodes, session-relative counting |
 
-**249 headlines**; latest increment: H4 scalar set followed by multipart socket get.
+**250 headlines**; latest increment: H1 original session total success from static readiness.
 Scoped builds, axioms and fresh replay pass; independent review found no issue.
 The full proof gate remains **failed in inherited campaign-1 files**.
 
@@ -57,7 +57,7 @@ universal execution contracts.
 
 | Result directory | Substantive files | Separate structural frame files |
 | --- | --- | --- |
-| `Noise` | `Model`, `Slots`, state/consume edges; clear, rotation, session and confirmation-sequence `Model/Effects/Source` families; `Execution`, `AccessSource`, `RestartModel` | `KernelFrames`, `PeerFrames`, `SlotFrames`, `ClearFrames`, `RotationFrames`, `SessionFrames`, standalone `RestartFrames` |
+| `Noise` | `Model`, `Slots`, state/consume edges; clear, rotation, session and confirmation-sequence `Model/Effects/Source` families; `Execution`, `AccessSource`, `RestartModel`; `SessionReadyModel/Source/Claims` | `KernelFrames`, `PeerFrames`, `SlotFrames`, `ClearFrames`, `RotationFrames`, `SessionFrames`, `SessionReadyFrames`, standalone `RestartFrames` |
 | `Index` | View/table/owner/allocation/release models; lookup provenance and empty-result source; lifecycle/caller operation sources; session coherence/allocation/sequence effects and sources | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`, `NewlinkFrames`, `SendFrames`, `DispatchFrames`, `ResponseFrames`, `ConsumeFrames`, `StagedFrames`, `ReceiveFrames`, `ClearFrames`, `TimerFrames`, `FlushFrames`, `SessionCoherenceFrames`, `SessionAllocationFrames` |
 | `Roaming` | Endpoint/authentication claims; publication, poll endpoint/attempt, response, initiation and handshake-audit model/source/claim families | `Frames`, `PublicationFrames`, `PollEndpointFrames` |
 | `Config` | `ClaimView`, models/effects/source claims, observation bridge; allowed-IP removal/insertion/transfer, collision, removal flags, remove-all/replacement, multipart/suffix readback families; `SocketReadbackModel/Claims` and five substantive `SocketReadback*Source` files; `ScalarSocketReadbackClaims/Source` compose original set/get | `ConcreteFrames`, `OperationFrames`, `ReadbackFrames`, `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `AllowedPairsFrames`, `QuietFrames`, `LiveRemovalFrames`, `KeyFieldFrames`, `CollisionFrames`, `AllowedInsertFrames`, `RemoveAllFrames` |
@@ -95,8 +95,18 @@ not an accepted-run finding.
 Complete normal `beginSession` effects cover allocation, KDF fields,
 role/remote index, handshake zeroing, rotation and hashed replacement.
 False returns preserve device and allocation cursor, though records may be
-consumed. True-return birthdate is existential; exposed derivation-clock
-provenance and total completion remain open.
+consumed. Total success now follows from accepted/live handshake state,
+non-null stored peer word, hashed handshake entry, static `SessionReady`, and
+an armed successful 40-byte allocation record followed by an 8-byte birthdate
+record. Readiness is calculated after the allocator's actual insertion, so it
+accounts for overwriting an aliased key's reference count with one. The same
+successful original run yields the existing ordered `SessionEffect`; no
+execution witness is assumed. Allocation-ID aliases remain allowed, including
+ones that erase the new key during rotation. Neither self-owner equality nor
+referenced-peer residency is assumed: this mirror's dereference checks only
+the non-null word. These facts do not establish final key coherence or
+reachability. Birthdate remains existential; exact decoded-clock and final
+record-suffix claims, other input outcomes and broader call totality remain open.
 
 For consecutive actual `receivedWithKeypair` calls, the first ID matching
 initial next is the sole true result, with the exact confirmation effect;
@@ -397,11 +407,13 @@ accepted-run findings. H1/H2/H3/H6 have no ranked mirror-change request.
 
 ## Validation and trust limitations
 
-Latest six-target build: **448 jobs**, all **249 headlines** standard axioms
+Latest six-target build: **452 jobs**, all **250 headlines** standard axioms
 only (`propext`, `Classical.choice`, `Quot.sound`); token/import/root/default/
-projected-name checks pass. Latest Config build: 224 jobs, 79 headlines and
-two new support declarations checked; fresh kernel replay passed (exit 0).
-Independent read-only review found no issue in the scalar multipart composition.
+projected-name checks pass. Latest Noise build: 146 jobs, 21 headlines and
+21 new support declarations checked; fresh kernel replay passed (exit 0).
+Final independent read-only review found no issue in the session total-success increment.
+The author used 18 scoped build invocations: 16 corrected failures and two passes,
+plus two successful declaration inspections. No infrastructure rerun was needed.
 The earlier socket-getter review found a headline attribution error, corrected:
 the callback returns DATA; the enclosing socket dump appends DONE and finalizes.
 Earlier closed increments also passed

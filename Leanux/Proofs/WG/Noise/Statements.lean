@@ -3,6 +3,7 @@ import Leanux.Proofs.WG.Noise.ConsumeEdges
 import Leanux.Proofs.WG.Noise.ClearSource
 import Leanux.Proofs.WG.Noise.RotationSource
 import Leanux.Proofs.WG.Noise.SessionSource
+import Leanux.Proofs.WG.Noise.SessionReadyClaims
 import Leanux.Proofs.WG.Noise.ConfirmationSequenceSource
 
 /-! H1's checked local endpoints. Whole-run edge ownership and confirmation
@@ -233,6 +234,30 @@ theorem original_begin_session_ordered (pid : PeerId) (d : Device) (p : Peer) (c
       (fun ok s => ∃ final, s.wg.device = some final ∧
         SessionEffect pid d p counter ok final s.wg.keypairCounter) :=
   beginSession_effect pid d p counter resident
+
+/-- The original session call returns true for every realization with an accepted
+live handshake, a non-null stored peer word, a hashed handshake entry, static
+release readiness after the actual allocation overwrite, and valid armed
+allocation-success and birthdate records. The same run has all ordered
+`SessionEffect` effects. Safe allocation-ID aliases are retained; final key
+residency/coherence and a reachable-state invariant are not asserted. -/
+theorem original_begin_session_ready (pid : PeerId) (d : Device) (p : Peer) (counter : Nat)
+    (resident : d.peers[pid]? = some p)
+    (accepted : p.handshakeState = HANDSHAKE_CREATED_RESPONSE ∨
+      p.handshakeState = HANDSHAKE_CONSUMED_RESPONSE)
+    (alive : p.isDead = false) (word : p.handshakeEntryPeer ≠ none)
+    (hashed : d.indexTable.any (·.owner == .handshake pid) = true)
+    (ready : SessionReady d p counter) (allocation clock : List UInt8)
+    (allocWidth : allocation.length = 40) (allocSuccess : allocation.headD 2 = 1)
+    (clockWidth : clock.length = 8) (rest : List HiddenRecord) :
+    Campaign2.Returns (beginSession pid)
+      (fun s => (s.wg.device = some d ∧ s.wg.keypairCounter = counter) ∧
+        s.ambient.hidden = some (sessionReadyRecords allocation clock rest) ∧
+        s.ambient.allocArmed.contains "kzallocKeypair" = true)
+      (fun ok s => ok = true ∧ ∃ final, s.wg.device = some final ∧
+        SessionEffect pid d p counter ok final s.wg.keypairCounter) :=
+  beginSession_ready_projected pid d p counter resident accepted alive word hashed ready
+    allocation clock allocWidth allocSuccess clockWidth rest
 
 /-- Consecutive original confirmation calls, without an interleaved next-slot
 installation, return true only at the first input matching the initial next slot.
