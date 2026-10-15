@@ -4,6 +4,7 @@ import Leanux.Proofs.WG.Config.ObservationBridge
 import Leanux.Proofs.WG.Config.LiveRemovalSource
 import Leanux.Proofs.WG.Config.AllowedRemovalConverseClaims
 import Leanux.Proofs.WG.Config.CollisionRequestSource
+import Leanux.Proofs.WG.Config.AllowedRoundTripSource
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
@@ -868,5 +869,51 @@ theorem original_private_key_request_collision (d : Device) (key pub : Key)
         CollisionKeyEffect pid (requestGeneration d) p key final) :=
   setDevice_private_collision d key pub pid p changed generated found resident pairs
     live bounded count send clear
+
+/-- Valid original allowed-IP insertion into the selected empty root has two
+normal numeric outcomes: allocation failure returns -ENOMEM after the sequence
+increment, or success performs the exact allocation, peer-list append, parent
+and root writes. Allocation may overwrite an existing node identity; no
+freshness, ownership, topology or completion claim is made. -/
+theorem original_allowedip_empty_root_insert (v4 : Bool) (d : Device)
+    (pid : PeerId) (p : Peer) (addr cidr : Nat)
+    (resident : d.peers[pid]? = some p) (root : allowedRootValue v4 d = none)
+    (width : cidr ≤ allowedBits v4) :
+    Campaign2.Ensures (setAllowedip pid (allowedAttrs v4 addr cidr))
+      (fun s => s.wg.device = some d)
+      (fun ret s => ∃ final, s.wg.device = some final ∧
+        EmptyRootInsertEffect v4 d pid p addr cidr ret final) :=
+  setAllowedip_empty_root_effect v4 d pid p addr cidr resident root width
+
+/-- The actual valid setter followed by the actual peer dump reads back one
+masked prefix on success and fixed peer attributes without an allowed_ips
+attribute after -ENOMEM;
+both retain the exact insertion effect, including the sequence increment.
+The peer’s allowed-IP list is initially empty, the dump cursor is fresh, its sequence is zero
+or matches the incremented sequence, and room is sufficient. The address uses
+the model's mask then fixed-width hexBE serialization, including truncation.
+Source errors remain errors; this is normal peer-dump scope, not outer socket,
+multipart, valid-trie or global ownership coverage. -/
+theorem original_allowedip_get_after_set (v4 : Bool) (d : Device) (pid : PeerId) (p : Peer)
+    (addr cidr : Nat) (ctx : DumpCtx) (skb : NlSkb)
+    (resident : d.peers[pid]? = some p) (empty : p.allowedipsList = [])
+    (root : allowedRootValue v4 d = none) (width : cidr ≤ allowedBits v4)
+    (fresh : ctx.nextAllowedip = none)
+    (sequence : ctx.allowedipsSeq = 0 ∨ ctx.allowedipsSeq = d.peerAllowedips.seq + 1)
+    (room : 172 + allowedIpSpace (allowedFamily v4) ≤ skb.room) :
+    Campaign2.Ensures (do
+      let ret ← setAllowedip pid (allowedAttrs v4 addr cidr)
+      let dump ← getPeerDump pid ctx skb
+      pure (ret, dump))
+      (fun s => s.wg.device = some d)
+      (fun result s => ∃ final, s.wg.device = some final ∧
+        EmptyRootInsertEffect v4 d pid p addr cidr result.1 final ∧
+        result.2 =
+          ({ skb with room := skb.room - (peerFixedSpace p +
+             (if result.1 = 0 then 4 + allowedIpSpace (allowedFamily v4) else 0)) },
+           { ctx with nextAllowedip := none, allowedipsSeq := 0 },
+           .complete { publicKey := hexKey p.remoteStatic, attrs := peerFixedAttrs p ++
+             (if result.1 = 0 then [("allowed_ips", Lean.Json.arr #[allowedJson v4 addr cidr])] else []) })) :=
+  allowedip_get_after_set v4 d pid p addr cidr ctx skb resident empty root width fresh sequence room
 
 end Leanux.Proofs.WG.Config
