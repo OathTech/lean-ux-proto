@@ -241,7 +241,21 @@ were found. Independent review of the port composition and recorded-draw
 increment and subsequent outer-zero/record-tail/collision increment found no
 defect. Review of the identity/precomputation/expiry leaves found no semantic
 defect and identified the weak existential-time and missing-target scope limits
-recorded above. Actual outer dump composition remains open.
+recorded above.
+
+The outer getter is now composed for a single resident peer with no allowed
+IPs and sufficient chunk room. Exact local source equations connect the
+callback and receive-loop factors to the original definitions. The proof
+carries the callback through dump start, data plus DONE queueing, receive and
+coalescing; it proves total return of the exact canonical JSON, unchanged
+device, and a drained, finished socket 7. The socket initially has an empty
+queue and no running dump, and interface lookup selects this device. Its bound
+flag is unrestricted. The loop proof exposes its first receive and proves the
+finished tail immediately breaks, without expanding 4096 iterations. The
+canonical peer includes `allowed_ips: []`. Independent architecture review
+confirmed these premises and the distinction from multipart snapshots. A second
+read-through of the completed increment found no semantic defect; its premature
+validation sentence was corrected before the checks completed.
 
 Remaining: private-key collision removal and mixed-attribute outer composition; full peer
 removal/replacement and allowed-IP ownership, other partial-error combinations,
@@ -260,13 +274,14 @@ check: both the C and the mirror's own design require restoring pre-nest room.
 gives the witness and reproduction command. Ranked mirror suggestion 1:
 correct the saved cancellation snapshot (altitude-preserving).
 
-Validation: all fifty-two statements pass scoped build, standard-axiom inspection
+Validation: all fifty-four statements pass scoped build, standard-axiom inspection
 (only `propext`, `Classical.choice`, `Quot.sound`), and `capped --
 scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Config.Statements`.
 The full proof gate fails in inherited `CounterWindow.Refinement`; token/import
 checks pass. Effort includes repaired proof-elaboration failures, including two
 local heartbeat limits resolved by simplifying put calculations before their
-continuations. No cap hit, infrastructure rerun, mirror edit, differential
+continuations. The suggested `vcgen` replacement failed with a missing toolchain
+constant; the existing `mvcgen` proofs were retained and rechecked. No cap hit, infrastructure rerun, mirror edit, differential
 check or guest run. Builds use full Lake module parallelism with
 `LEAN_NUM_THREADS=32`; gate runs use `LEANUX_QEMU_SLOTS=16`, without a cap change.
 

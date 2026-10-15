@@ -17,6 +17,7 @@ import Leanux.Proofs.WG.Config.KeyInstall
 import Leanux.Proofs.WG.Config.KeyInstallEffects
 import Leanux.Proofs.WG.Config.DumpCancellation
 import Leanux.Proofs.WG.Config.KeyRequest
+import Leanux.Proofs.WG.Config.Getter
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
@@ -603,5 +604,30 @@ theorem original_private_key_request_no_collision (d : Device) (key : Key)
       (fun ret w => ret = 0 ∧ ∃ final, w.k.wg = some final ∧
         KeyPeerRun (requestsStagedSend d key) (installedDevice (requestGeneration d) key) d.peerList final) :=
   setDevice_private_changed_no_collision d key changed absent
+
+/-- A fresh original callback for one resident peer without allowed IPs
+returns all fixed device and peer attributes, completes its cursor and preserves
+the device. The bound reserves room for the transport's final DONE message. -/
+theorem original_single_peer_dump_callback (pid : PeerId) (d : Device) (p : Peer)
+    (peers : d.peerList = [pid]) (resident : d.peers[pid]? = some p)
+    (empty : p.allowedipsList = []) (room : devicePrefixSpace d + 168 + 20 ≤ NLMSG_GOODSIZE) :
+    Returns (wgGetDeviceDump { hasWg := true } 0 {}) (fun w => w.k.wg = some d)
+      (fun result w => result = singlePeerDump d p ∧ w.k.wg = some d) :=
+  wgGetDeviceDump_single pid d p peers resident empty room
+
+/-- The original public getter for one resident peer without allowed IPs
+returns exact canonical JSON, including the empty allowed-IP array, preserves
+the device and leaves socket 7 drained and finished. The socket starts idle
+with an empty queue; its bound flag is unrestricted. This is a total-return
+contract for one complete chunk, not a multipart snapshot theorem. -/
+theorem original_single_peer_getter (pid : PeerId) (d : Device) (p : Peer) (sock : NlSock)
+    (peers : d.peerList = [pid]) (resident : d.peers[pid]? = some p)
+    (noIps : p.allowedipsList = []) (room : devicePrefixSpace d + 168 + 20 ≤ NLMSG_GOODSIZE)
+    (idle : sock.cbRunning = false) (empty : sock.queue = []) :
+    Returns (wgGetDevice (byIndex d))
+      (fun w => w.k.wg = some d ∧ w.k.nlSock7 = sock ∧ selectsDevice w d)
+      (fun result w => result = .ok (singlePeerJson d p) ∧ w.k.wg = some d ∧
+        w.k.nlSock7 = { completedSock sock d p with queue := [] }) :=
+  wgGetDevice_single pid d p sock peers resident noIps room idle empty
 
 end Leanux.Proofs.WG.Config
