@@ -49,17 +49,19 @@ def KeyReads (base : Address) (bits stored query : Nat) (a : Address) : Prop :=
 
 /-- The peer word is read only on a matching prefix; child/selector fields
     only when that matching node is not full length. The physical bitlen,
-    parent link, list/RCU union and unused key bytes are outside the relation. -/
+    parent link, list/RCU union and unused key bytes are outside the relation.
+    The source width is constrained only where choose reads it; a mismatching
+    prefix requires only the actual CIDR byte to be representable. -/
 def NodeFields (memory : Mem 64) (nodes peers : Nat → Address)
     (bits query id : Nat) (node : AipNode) : Prop :=
-  nodes id ≠ 0 ∧ node.bitlen = bits ∧ node.cidr ≤ bits ∧
+  nodes id ≠ 0 ∧ node.cidr < 256 ∧
   KeyFields memory (nodes id + .ofNat 64 AllowedipsLayout.bits) bits node.bits query ∧
   memory.loadInt (nodes id + .ofNat 64 AllowedipsLayout.cidr) 1 = some node.cidr ∧
   (node.cidr ≤ common bits node.bits query →
     memory.loadInt (nodes id + .ofNat 64 AllowedipsLayout.peer) 8 = some (pointer peers node.peer).toNat ∧
     (∀ pid, node.peer = some pid → peers pid ≠ 0) ∧
     (node.cidr < bits →
-      node.bit.size = 2 ∧
+      node.bitlen = bits ∧ node.bit.size = 2 ∧
       memory.loadInt (nodes id + .ofNat 64 AllowedipsLayout.bit_at_a) 1 =
         some (node.cidr / 8 ^^^ ((bits / 8 - 1) % 8)) ∧
       memory.loadInt (nodes id + .ofNat 64 AllowedipsLayout.bit_at_b) 1 = some (7-node.cidr%8) ∧
@@ -110,8 +112,8 @@ theorem NodeFields.frame {before after : Mem 64} {writes : Address → Prop}
     (apart : ∀ a, NodeReads nodes bits query id node a → ¬writes a)
     (fields : NodeFields before nodes peers bits query id node) :
     NodeFields after nodes peers bits query id node := by
-  obtain ⟨nonnull, width, bounded, key, cidr, matching⟩ := fields
-  refine ⟨nonnull, width, bounded,
+  obtain ⟨nonnull, bounded, key, cidr, matching⟩ := fields
+  refine ⟨nonnull, bounded,
     key.frame same (fun a h => apart a (.inl h)), ?_, ?_⟩
   · exact (same.loadInt _ 1 (fun i hi => apart _ (.inr (.inl ⟨i, hi, rfl⟩)))).symm.trans cidr
   · intro matched
@@ -120,8 +122,8 @@ theorem NodeFields.frame {before after : Mem 64} {writes : Address → Prop}
     · exact (same.loadInt _ 8
         (fun i hi => apart _ (.inr (.inr ⟨matched, .inl ⟨i, hi, rfl⟩⟩)))).symm.trans word
     · intro short
-      obtain ⟨size, byteIndex, bitIndex, links⟩ := children short
-      refine ⟨size, ?_, ?_, ?_⟩
+      obtain ⟨width, size, byteIndex, bitIndex, links⟩ := children short
+      refine ⟨width, size, ?_, ?_, ?_⟩
       · exact (same.loadInt _ 1 (fun i hi => apart _
           (.inr (.inr ⟨matched, .inr ⟨short, .inl ⟨i, hi, rfl⟩⟩⟩)))).symm.trans byteIndex
       · exact (same.loadInt _ 1 (fun i hi => apart _

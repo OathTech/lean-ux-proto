@@ -4,6 +4,9 @@ import AllowedipsImage
 import ServiceImage
 import Memory
 import LookupProjection
+import AllowedipsProjection
+import AllowedipsSelection
+import AllowedipsWords
 
 /-! Named trust surface for the pinned lookup proof, under construction.
     These are explicit hypotheses, not globally asserted facts. No declaration
@@ -492,5 +495,98 @@ structure LookupEntry (c : LookupRelation.Config) (coverage : KcovLayout)
 def Pre_lookup (c : LookupRelation.Config) (coverage : KcovLayout)
     (preempt : BitVec 32) (returnAddress : UInt64) (s : MachineState) (world : Leanux.World) : Prop :=
   ∃ v, LookupEntry c coverage preempt returnAddress s world v
+
+
+/-- M2 calls PC and comparison instrumentation in both BH phases. Buffer
+    metadata is required only when the physical callback reads it. -/
+def AllowedipsCoverageNeeded (coverage : KcovLayout) (preempt : BitVec 32) : Prop :=
+  LookupModeRead coverage preempt ∧ (coverage.mode = 2 ∨ coverage.mode = 3)
+
+def AllowedipsCoverageAt (coverage : KcovLayout) (preempt : BitVec 32) (memory : Mem 64) : Prop :=
+  load64 memory currentTaskAddress = some coverage.task ∧
+  (LookupSoftRead preempt → load32 memory (coverage.task+0x704) = some coverage.softirqEnabled) ∧
+  (LookupModeRead coverage preempt → load32 memory (coverage.task+0x6e0) = some coverage.mode) ∧
+  (AllowedipsCoverageNeeded coverage preempt →
+    load32 memory (coverage.task+0x6e4) = some coverage.capacity ∧
+    load64 memory (coverage.task+0x6e8) = some coverage.area ∧ KcovBuffer coverage memory)
+
+def AllowedipsCoverageWrites (coverage : KcovLayout) (preempt : BitVec 32)
+    (a : BitVec 64) : Prop :=
+  (AllowedipsCoverageNeeded coverage preempt ∨ AllowedipsCoverageNeeded coverage (preempt+512)) ∧
+    KcovBufferBytes coverage a
+
+def AllowedipsMetadata (coverage : KcovLayout) (preempt : BitVec 32) (a : BitVec 64) : Prop :=
+  InRange currentTaskAddress 8 a ∨
+  ((LookupSoftRead preempt ∨ LookupSoftRead (preempt+512)) ∧ InRange (coverage.task+0x704) 4 a) ∨
+  ((LookupModeRead coverage preempt ∨ LookupModeRead coverage (preempt+512)) ∧ InRange (coverage.task+0x6e0) 4 a) ∨
+  ((AllowedipsCoverageNeeded coverage preempt ∨ AllowedipsCoverageNeeded coverage (preempt+512)) ∧
+    (InRange (coverage.task+0x6e4) 4 a ∨ InRange (coverage.task+0x6e8) 8 a)) ∨
+  (LookupPendingRead preempt ∧ InRange softirqPendingAddress 2 a)
+
+def AllowedipsServiceBytes (coverage : KcovLayout) (preempt : BitVec 32) (a : BitVec 64) : Prop :=
+  AllowedipsMetadata coverage preempt a ∨
+  ((AllowedipsCoverageNeeded coverage preempt ∨ AllowedipsCoverageNeeded coverage (preempt+512)) ∧
+    KcovStorageBytes coverage a)
+
+/-- Outer saves/local words, the shared call slot, and the deepest peer-get
+    saves/call: every word of this interval is used on a covered path. -/
+def AllowedipsStackWrites (s : MachineState) : BitVec 64 → Prop :=
+  InRange (s.data.regs.rsp.toBitVec-144) 144
+
+def AllowedipsLiveStack (s : MachineState) : BitVec 64 → Prop :=
+  InRange (s.data.regs.rsp.toBitVec-144) 152
+
+def AllowedipsCountWrites (c : AllowedipsRelation.Config) (v : AllowedipsRelation.View)
+    (a : BitVec 64) : Prop :=
+  ∃ pid count, c.focus.peer = some pid ∧ v.count = some count ∧ count ≠ 0 ∧
+    InRange (c.peers pid + .ofNat 64 Layouts.peer_refcount) 4 a
+
+/-- Physical entry domain for both IP families. Focus is a total pure source
+    selection, not an assumption that the binary or mirror terminates; a
+    refused source search gives no selected node. No peer positivity premise.
+    Both address families have executed concrete witnesses in AllowedipsWitnessPre. -/
+structure AllowedipsEntry (c : AllowedipsRelation.Config) (coverage : KcovLayout)
+    (preempt : BitVec 32) (returnAddress : UInt64) (s : MachineState)
+    (world : Leanux.World) (v : AllowedipsRelation.View) : Prop where
+  pc : s.pc = AllowedipsImage.Lookup.entry
+  entry : EntryFrame s returnAddress
+  root : s.data.regs.rdi.toBitVec = AllowedipsRelation.pointer c.nodes c.root
+  bits : s.data.regs.get (.low .rsi .W8) = .ofNat 8 c.bits
+  projection : AllowedipsRelation.project c world = some v
+  related : AllowedipsRelation.R c [s] [LookupObservation.call "lookup" s] s world
+  focusNode : c.focus.node = (AllowedipsSource.select v.nodes c.root c.bits c.key).join
+  focusPeer : c.focus.peer = c.focus.node.bind (fun id => (v.nodes id).bind (·.peer))
+  input : Allowedips.NetworkKey s.data.dmem s.data.regs.rdx.toBitVec c.bits c.key
+  stack : ∀ i < 18,
+    (s.data.dmem.loadInt (s.data.regs.rsp.toBitVec-.ofNat 64 ((i+1)*8)) 8).isSome = true
+  preemptField : load32 s.data.dmem preemptCountAddress = some preempt
+  coverageBefore : AllowedipsCoverageAt coverage preempt s.data.dmem
+  coverageDuring : AllowedipsCoverageAt coverage (preempt+512) s.data.dmem
+  hardirq : (preempt+512) &&& 0x000f0000 = 0
+  pending : LookupPendingRead preempt → s.data.dmem.loadInt softirqPendingAddress 2 = some 0
+  stackData : ∀ a, AllowedipsRelation.Reads c v a → ¬AllowedipsStackWrites s a
+  stackInput : ∀ a, Allowedips.NetworkReads s.data.regs.rdx.toBitVec c.bits a → ¬AllowedipsStackWrites s a
+  stackServices : ∀ a, (AllowedipsServiceBytes coverage preempt a ∨ InRange preemptCountAddress 4 a) →
+    ¬AllowedipsStackWrites s a
+  bufferData : ∀ a, AllowedipsRelation.Reads c v a → ¬AllowedipsCoverageWrites coverage preempt a
+  bufferInput : ∀ a, Allowedips.NetworkReads s.data.regs.rdx.toBitVec c.bits a →
+    ¬(AllowedipsCoverageNeeded coverage preempt ∧ KcovBufferBytes coverage a)
+  bufferStack : ∀ a, AllowedipsCoverageWrites coverage preempt a → ¬AllowedipsLiveStack s a
+  bufferMetadata : ∀ a, AllowedipsCoverageWrites coverage preempt a →
+    ¬AllowedipsMetadata coverage preempt a
+  bufferPreempt : ∀ a, AllowedipsCoverageWrites coverage preempt a → ¬InRange preemptCountAddress 4 a
+  countStack : ∀ a, AllowedipsCountWrites c v a → ¬AllowedipsLiveStack s a
+  countTrie : ∀ a, AllowedipsCountWrites c v a →
+    ¬AllowedipsRelation.TrieReads c.nodes v.nodes c.root c.bits c.key a
+  countServices : ∀ a, AllowedipsCountWrites c v a →
+    ¬(AllowedipsServiceBytes coverage preempt a ∨ InRange preemptCountAddress 4 a)
+  preemptData : ∀ a, AllowedipsRelation.Reads c v a → ¬InRange preemptCountAddress 4 a
+  preemptStack : ∀ a, AllowedipsLiveStack s a → ¬InRange preemptCountAddress 4 a
+  preemptServices : ∀ a, AllowedipsServiceBytes coverage preempt a → ¬InRange preemptCountAddress 4 a
+
+/-- The function's named machine-entry domain, witnessed before it lands. -/
+def Pre_allowedips (c : AllowedipsRelation.Config) (coverage : KcovLayout)
+    (preempt : BitVec 32) (returnAddress : UInt64) (s : MachineState) (world : Leanux.World) : Prop :=
+  ∃ v, AllowedipsEntry c coverage preempt returnAddress s world v
 
 end Binary.TrustBase

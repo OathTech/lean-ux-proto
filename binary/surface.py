@@ -17,8 +17,10 @@ HEADLINES = [
     'Binary.LookupWitness.witness_pre',
     'Binary.LookupHitWitness.dead_pre',
     'Binary.LookupHitWitness.live_pre',
+    'Binary.AllowedipsWitness.pre4',
+    'Binary.AllowedipsWitness.pre6',
 ]
-IMPORTS = ['LookupSnapshotTransport', 'LookupWitness', 'LookupHitWitness']
+IMPORTS = ['LookupSnapshotTransport', 'LookupWitness', 'LookupHitWitness', 'AllowedipsWitnessPre']
 # These definitions determine the meaning of the headline and its environment
 # premises outside TrustBase. The expected text is a specification, not a log.
 DEFINITIONS = [

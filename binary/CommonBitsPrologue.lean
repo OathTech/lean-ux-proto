@@ -233,4 +233,26 @@ theorem prologue_history (fetch : Int64 → Option Decoded)
   apply history_cons _ _ _ _ _ _ (instruction8 fetch agree s mapped)
   exact ⟨rfl, by simp [prologueStates, List.append_assoc]⟩
 
+/-- The eight real save/copy instructions stop at the callback CALL cut. -/
+theorem prologue_prefix_history (fetch : Int64 → Option Decoded)
+    (agree : ∀ p i, AllowedipsImage.fetch p = some i → fetch p = some i)
+    (s : MachineData) (history : List MachineState)
+    (mapped : ∀ n < 5, (s.dmem.loadInt (s.regs.rsp.toBitVec - .ofNat 64 ((n+1)*8)) 8).isSome = true) :
+    historySteps fetch 8 (fun t =>
+      t.machine = ⟨prologueData s 8, AllowedipsImage.CommonBits.entry+0x10⟩ ∧
+      t.history = history ++ (prologueStates s).take 8) ⟨⟨s, AllowedipsImage.CommonBits.entry⟩, history⟩ := by
+  have initial : (⟨⟨prologueData s 0, AllowedipsImage.CommonBits.entry+0⟩, history⟩ : Executed) =
+      ⟨⟨s, AllowedipsImage.CommonBits.entry⟩, history⟩ := by
+    simp [prologueData, savedCount, saveMemory]
+  rw [← initial]
+  apply history_cons _ _ _ _ _ _ (instruction0 fetch agree s mapped)
+  apply history_cons _ _ _ _ _ _ (instruction1 fetch agree s mapped)
+  apply history_cons _ _ _ _ _ _ (instruction2 fetch agree s mapped)
+  apply history_cons _ _ _ _ _ _ (instruction3 fetch agree s mapped)
+  apply history_cons _ _ _ _ _ _ (instruction4 fetch agree s mapped)
+  apply history_cons _ _ _ _ _ _ (instruction5 fetch agree s mapped)
+  apply history_cons _ _ _ _ _ _ (instruction6 fetch agree s mapped)
+  apply history_cons _ _ _ _ _ _ (instruction7 fetch agree s mapped)
+  exact ⟨rfl, by simp [prologueStates, List.append_assoc]⟩
+
 end Binary.CommonBits

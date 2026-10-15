@@ -1,5 +1,6 @@
 import MirrorPeerPoints
 import Leanux.WG.Device
+import AllowedipsSelection
 
 namespace Binary.AllowedipsSource
 open Leanux Leanux.WG MirrorHistory
@@ -220,14 +221,6 @@ def commonChoices (node : AipNode) (key bits : Nat) : Choices :=
      (.fls128High, (node.bits ^^^ key) / 2^64 != 0)]
   else [(.commonBits32,false), (.commonBits128,false)]
 
-def commonValue (node : AipNode) (key bits : Nat) : Nat :=
-  if bits == 32 then 32 - fls (node.bits ^^^ key)
-  else if bits == 128 then
-    let x := node.bits ^^^ key
-    let high := x / 2^64
-    128 - (if high != 0 then fls high + 64 else fls (x % 2^64))
-  else 0
-
 theorem commonBits_run (node : AipNode) (key bits : Nat) (h : List Point) (w : World) :
     ((commonBits node key bits).run h).run w =
       .ok ((commonValue node key bits, h ++ choicePoints w (commonChoices node key bits)),
@@ -272,7 +265,6 @@ theorem records_world (w : World) (choices : Choices) :
 
 /-- The three fields are the elaborated loop's early-return value, current
     node and latest peer-bearing node. A yielded iteration clears `answer`. -/
-abbrev Acc := Option (Option NodeId) × Option NodeId × Option NodeId
 
 def iteration (bits key : Nat) (acc : Acc) : Logged (ForInStep Acc) := do
   let node := acc.2.1

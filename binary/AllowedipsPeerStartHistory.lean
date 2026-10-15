@@ -1,0 +1,162 @@
+import PeerLiveEntryHistory
+import AllowedipsPeerCoverageHistory
+import AllowedipsPeerPrologueHistory
+import AllowedipsPeerScanFrame
+
+namespace Binary.AllowedipsPeerGet
+open PeerGet LookupHistory AllowedipsPeerHistory
+open TrustBase LookupHistory AllowedipsPeerHistory
+local instance : Labels := Image.linkedLabels
+
+def entryWrites (s : MachineData) (coverage : AllowedipsPeerCoverage.Context) (address : BitVec 64) : Prop :=
+  InRange (s.regs.rsp.toBitVec-56) 56 address ∨ AllowedipsPeerCoverage.Context.writes coverage address
+
+theorem prologue_frames (s : MachineData) (q : MachineState)
+    (member : q ∈ prologueStates s ++ [prologueCalled s]) :
+    EqualOutside (InRange (s.regs.rsp.toBitVec-56) 56) s.dmem q.data.dmem := by
+  simp only [prologueStates, List.cons_append, List.nil_append,
+    List.mem_cons, List.not_mem_nil, or_false] at member
+  rcases member with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+  · exact saveMemory_frame s 1 (by decide)
+  · exact saveMemory_frame s 2 (by decide)
+  · exact saveMemory_frame s 3 (by decide)
+  · exact saveMemory_frame s 4 (by decide)
+  · exact saveMemory_frame s 5 (by decide)
+  · exact saveMemory_frame s 6 (by decide)
+  · exact saveMemory_frame s 6 (by decide)
+  · rw [prologue_called_memory]
+    exact saveMemory_frame s 7 (by decide)
+
+/-- Entry through the real prologue and first callback, retaining every
+    successor and every appended-cut memory frame. Callback readiness at
+    the body is derived from the pushed word and physical service frame. -/
+theorem start_history (fetch : Int64 → Option Decoded)
+    (agree : AnchoredDecoderAgreement fetch) (contract : AllowedipsTracePcContract fetch)
+    (s : MachineData) (coverage : AllowedipsPeerCoverage.Context) (preempt : BitVec 32)
+    (state : AllowedipsPeerCoverage.Context.At coverage preempt s.dmem)
+    (phase : True)
+    (aligned : s.regs.rsp.toNat % 8 = 0)
+    (mapped : ∀ n < 7,
+      (s.dmem.loadInt (s.regs.rsp.toBitVec - .ofNat 64 ((n+1)*8)) 8).isSome = true)
+    (pushSeparate : ∀ address, AllowedipsPeerCoverage.Context.bytes coverage address →
+      ¬InRange (s.regs.rsp.toBitVec-56) 56 address)
+    (returnSeparate : AllowedipsPeerCoverage.Context.Separated coverage (InRange (s.regs.rsp.toBitVec-56) 8))
+    (metadataSeparate : AllowedipsPeerCoverage.Context.Separated coverage (AllowedipsPeerCoverage.Context.metadataBytes coverage))
+    (preemptSeparate : AllowedipsPeerCoverage.Context.Separated coverage (InRange preemptCountAddress 4))
+    (rxSection : Nat) (history : List MachineState) (events : List LookupObservation.Point)
+    (observed : observeHistory (AllowedipsPeerObservation.edge rxSection) history = .ok events)
+    (last : history.getLast? = some ⟨s, Image.PeerGet.entry⟩) :
+    Eventually (historyStep fetch) (fun t =>
+      t.machine.pc = Image.PeerGet.entry+0x12 ∧
+      t.machine.data.regs.rsp = s.regs.rsp-48 ∧ t.machine.data.regs.rbx = s.regs.rdi ∧
+      AllowedipsPeerCoverage.CallsReady coverage preempt t.machine.data ∧
+      EqualOutside (AllowedipsPeerCoverage.Context.writes coverage) (saveMemory s 7) t.machine.data.dmem ∧
+      observeHistory (AllowedipsPeerObservation.edge rxSection) t.history = .ok events ∧
+      t.history.getLast? = some t.machine ∧
+      PeerCountPhase.StableExtension history t.history ∧
+      ∃ tail, t.history = history ++ tail ∧
+        ∀ q ∈ tail, q.pc ∈ Image.cutPoints → EqualOutside (entryWrites s coverage) s.dmem q.data.dmem)
+      ⟨⟨s, Image.PeerGet.entry⟩, history⟩ := by
+  have start := historySteps_eventually fetch 8 _ _ (prologue_history fetch agree s history mapped)
+  apply eventually_trans (historyStep fetch) _ _ _ start
+  rintro callee ⟨machine, recorded⟩
+  have cursor : callee = ⟨prologueCalled s, (history ++ prologueStates s) ++ [prologueCalled s]⟩ := by
+    cases callee; simp_all [List.append_assoc]
+  rw [cursor]
+  have stack : (prologueCalled s).data.regs.rsp.toBitVec = s.regs.rsp.toBitVec-56 := by
+    simp only [prologueCalled, Instrumentation.calledState, copiedData, pushedData,
+      UInt64.toBitVec_sub, BitVec.sub_sub]
+    rfl
+  have entry : EntryFrame (prologueCalled s) (Image.PeerGet.entry+0x12).toUInt64 := by
+    constructor
+    · change ((s.regs.rsp-48)-8).toNat % 8 = 0
+      simp only [UInt64.toNat_sub, show (48 : UInt64).toNat = 48 from rfl,
+        show (8 : UInt64).toNat = 8 from rfl]
+      have bound := s.regs.rsp.toNat_lt_size
+      omega
+    · rw [stack, prologue_called_memory]
+      simpa [slot, savedWords] using saveMemory_read s 7 6 (by decide) (by decide)
+  have calleeState : AllowedipsPeerCoverage.Context.At coverage preempt (prologueCalled s).data.dmem := by
+    rw [prologue_called_memory]
+    exact AllowedipsPeerCoverage.state_frame coverage preempt _ _ state _ (saveMemory_frame s 7 (by decide)) pushSeparate
+  have restored := LookupHistory.history_restore last
+  have seen := observeHistory_splice (AllowedipsPeerObservation.edge rxSection)
+    history.dropLast ⟨s, Image.PeerGet.entry⟩ (prologueStates s ++ [prologueCalled s])
+  rw [restored, observed, prologue_observed] at seen
+  change observeHistory (AllowedipsPeerObservation.edge rxSection)
+    (history.dropLast ++ ⟨s, Image.PeerGet.entry⟩ :: (prologueStates s ++ [prologueCalled s])) =
+      .ok (events ++ []) at seen
+  have calleeObserved : observeHistory (AllowedipsPeerObservation.edge rxSection)
+      ((history ++ prologueStates s) ++ [prologueCalled s]) = .ok events := by
+    rw [List.append_assoc, ← restored, List.append_assoc]
+    simpa only [List.singleton_append, List.append_nil] using seen
+  have call := AllowedipsPeerCoverage.observed_callback fetch (.ofNat 0xffffffff810f3100) .pc contract
+    coverage preempt (prologueCalled s) (Image.PeerGet.entry+0x12).toUInt64 rfl entry calleeState (.inl ⟨rfl, phase⟩)
+    (by simpa only [stack] using returnSeparate) metadataSeparate preemptSeparate rxSection
+    (history ++ prologueStates s) events calleeObserved
+  apply eventually_weaken (historyStep fetch) _ _ _ _ call
+  rintro t ⟨returned, state, frame, seen, last, serviceTail, serviceRecorded, serviceLast, noCuts, noReentry⟩
+  have sp : t.machine.data.regs.rsp = s.regs.rsp-48 := by
+    rw [returned.2.1]
+    change ((s.regs.rsp-48)-8)+8 = s.regs.rsp-48
+    apply UInt64.toBitVec_inj.mp
+    exact BitVec.sub_add_cancel _ _
+  have bodySlot : t.machine.data.regs.rsp.toBitVec-8 = s.regs.rsp.toBitVec-56 := by
+    simp only [sp, UInt64.toBitVec_sub, BitVec.sub_sub]
+    rfl
+  have memory : EqualOutside (AllowedipsPeerCoverage.Context.writes coverage) (saveMemory s 7) t.machine.data.dmem := by
+    simpa only [prologue_called_memory] using frame
+  have ready : AllowedipsPeerCoverage.CallsReady coverage preempt t.machine.data := {
+    state := state
+    phase := phase
+    aligned := by
+      rw [sp]
+      simp only [UInt64.toNat_sub, show (48 : UInt64).toNat = 48 from rfl]
+      omega
+    mapped := by
+      rw [bodySlot]
+      have read := memory.loadInt (s.regs.rsp.toBitVec-56) 8 (by
+        intro byte bound written
+        exact returnSeparate _ written ⟨byte, bound, rfl⟩)
+      rw [← read]
+      simpa [slot] using congrArg Option.isSome (saveMemory_read s 7 6 (by decide) (by decide))
+    pushSeparate := by
+      intro address kept inside
+      rw [bodySlot] at inside
+      obtain ⟨byte, bound, eq⟩ := inside
+      exact pushSeparate address kept ⟨byte, by omega, eq⟩
+    returnSeparate := by simpa only [bodySlot] using returnSeparate
+    metadataSeparate := metadataSeparate
+    preemptSeparate := preemptSeparate }
+  have prologueStable : PeerCountPhase.StableExtension history
+      ((history ++ prologueStates s) ++ [prologueCalled s]) := by
+    rw [← restored, List.append_assoc, List.append_assoc, List.singleton_append]
+    apply PeerCountPhase.StableExtension.of_ordinary
+    intro q member
+    simp only [prologueStates, List.cons_append, List.nil_append,
+      List.dropLast_cons_cons, List.dropLast_singleton, List.mem_cons, List.not_mem_nil, or_false] at member
+    rcases member with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
+      constructor <;> simp [Image.PeerGet.entry, Image.PeerGet.entry]
+  have serviceStable := PeerCountPhase.StableExtension.service
+    (history ++ prologueStates s) (prologueCalled s) serviceTail noReentry
+  have stable : PeerCountPhase.StableExtension history t.history := by
+    rw [serviceRecorded]
+    exact prologueStable.trans serviceStable
+  refine ⟨returned.1, sp, returned.2.2.1, ready, memory, seen, last, stable,
+    prologueStates s ++ prologueCalled s :: serviceTail, ?_, ?_⟩
+  · simpa only [List.append_assoc] using serviceRecorded
+  · intro q member cut
+    rcases List.mem_append.mp member with saves | service
+    · have framed := prologue_frames s q (List.mem_append.mpr (.inl saves))
+      exact fun address outside => framed address (fun h => outside (.inl h))
+    · have serviceRestored := LookupHistory.history_restore serviceLast
+      rw [← serviceRestored] at service
+      rcases List.mem_append.mp service with interior | final
+      · exact False.elim (noCuts q interior cut)
+      · have eq := List.mem_singleton.mp final
+        rw [eq]
+        exact (saveMemory_frame s 7 (by decide)).trans memory
+
+#print axioms prologue_frames
+#print axioms start_history
+end Binary.AllowedipsPeerGet

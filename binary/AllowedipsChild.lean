@@ -220,9 +220,9 @@ theorem node_step (s : MachineData) (nodes peers : Nat → BitVec 64)
         rax := UInt64.ofNat (childIndex node query),
         rcx := UInt64.ofNat (7-node.cidr%8),
         rbx := UInt64.ofBitVec (pointer nodes next)}) := by
-  obtain ⟨_, width, _, _, _, matched⟩ := fields
+  obtain ⟨_, _, _, _, matched⟩ := fields
   obtain ⟨_, _, children⟩ := matched matching
-  obtain ⟨_, indexRead, shiftRead, links⟩ := children short
+  obtain ⟨width, _, indexRead, shiftRead, links⟩ := children short
   have position := selector_position bits node.cidr family short
   have bound : byteSelector bits node.cidr < 16 := by
     rcases family with h | h <;> omega

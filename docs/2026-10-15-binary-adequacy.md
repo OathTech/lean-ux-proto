@@ -3728,3 +3728,61 @@ approximately 20.7 GB RSS after 69 seconds (exit 143): a failed proof run,
 not a successful check. The complete dirty task tree was preserved at
 refs/snapshots/binary-tv/m2-paths-stopped-20261015T211934Z before repair.
 The passing component build is distinct from that unfinished composition.
+
+### Witnessed entry domain and complete helper, third checkpoint
+
+`Pre_allowedips` now has two concrete inhabitants, `AllowedipsWitness.pre4`
+and `pre6`, for the exact recorded-prefix states `initial4` and `initial6`.
+Both witnesses replay under the Lean kernel with only the standard three
+axioms. `capped lake env lean AllowedipsWitnessRun.lean`, from `binary/`
+after `allowedips_probe.py`, executes those same states through the actual
+instructions and callbacks to RET: 1,592/1,510 instructions, 34/32 source
+decisions, peers 3/4, respectively. Both undefined-value seeds agree; the
+callee saves, returned stack pointer, preempt count 512 and incremented
+peer count 2 are checked. These are synthetic-address materialisations of
+the recorded mirror read projections, not captured kernel-entry realism.
+
+The named entry declaration relates only the query-reachable trie and
+selected peer count. Its remaining obligations are input words, the actual
+stack slots, conditional KCOV metadata/buffer, BH-enable's hardirq and
+conditional pending-word reads, and explicit allocation separation. The
+entry's low argument byte is related; unused upper argument bits are free.
+There is no positive-count, acyclicity, termination, expected-history or
+future-R hypothesis. Focus is computed by the total bounded source selector.
+The declared preempt and pending obligations come from the existing named
+BH-enable readiness contract; they do not assert facts about arbitrary
+Kraken environments.
+
+[AGENT 2026-10-15] Correct the trie relation's unnecessary global source-width
+and `cidr ≤ bits` conditions: only the actual CIDR-byte representability is
+global. Source width is needed only at matching, non-full nodes where child
+selection reads it. The physical bitlen byte remains outside R. This removes
+an overconstraint in the proof predicate, not a mirror defect; the concrete
+witnesses were rebuilt against the correction.
+
+`CommonBits.entry_history` now executes the complete helper, including its
+entry saves, real callback histories, every IPv4/IPv6/equality branch and RET.
+It exports the computed result/ABI, observer-derived event signature and
+memory frames at every anchored cut. The lookup's actual CALL and helper
+return compose through `AllowedipsLoop.common_call`; the six scratch slots
+remain mapped for the next loop iteration. Peer-get's null/dead/live ports
+also retain actual histories and use only the allowed-IPs coverage context,
+without index-table premises. The initial lookup callback/load/root guard,
+compiler-merged empty exit, scalar setup and BH-enable/return components
+check. Complete lookup loop induction, final function correspondence and
+transport are still in progress; component closure is not function adequacy.
+
+An integrated-build attempt failed because the new transitive local modules
+were not all registered in the package's explicit library roots. Direct
+checks had used their existing oleans; Lake could not resolve some imports
+and native initialisation symbols during its rebuild. The complete checked
+import closure is now registered. A separate witness mapping proof exhausted
+its deterministic heartbeat limit; exact store-preservation steps replaced
+an unrestricted tactic search. Neither failed attempt is counted as a pass.
+
+Validation of this checkpoint: the integrated capped build passed all 481
+jobs; scoped `leanchecker CommonBitsEntryHistory AllowedipsWitnessPre
+AllowedipsRoot AllowedipsPeerExecution` exited successfully; both exact
+witness executions passed again. The binary trust gate passed with the
+explicitly updated trust-surface specification, and its six unit tests
+passed. This is local kernel replay, not a new external `lake check` result.
