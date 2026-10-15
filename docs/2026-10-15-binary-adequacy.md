@@ -307,3 +307,84 @@ standard axioms only and no forbidden proof-source tokens; the recorded
 live/miss three-way tests and both synthetic two-lookup witnesses; 124 fast
 tests with one skip (22.82 seconds). The mirror correction is still absent
 from the inspected main (`ca6b22e`). Milestone 1 remains open.
+
+
+## Trust-base and loop-history checkpoint, 2026-10-15
+
+[USER 2026-10-15] Continue from `1738f86`, keep finding 1 and the entire
+dead-peer domain, and wait for an explicit landing paste before merging
+main. The mirror lane is correcting the owning handshake/keypair entry's
+single peer word. Use full parallel Lake builds and QEMU slots 16, with
+heavy work capped. No merge or push is authorized. These instructions
+override the earlier per-build `-j1` setting and the normal QEMU-slot default
+for this task; neither limit was changed globally.
+
+`binary/TrustBase.lean` now names the pinned semantics/image/decoder,
+text stability, read-only image, permissions, serialization, ABI, and five
+physical service contracts (PC, three comparison callbacks, BH enable).
+These are explicit predicates/hypotheses, not globally asserted axioms.
+No contract assumes a mirror result, an expected decision sequence, or
+preservation of `R`. Coverage contracts specify the actual short-circuit
+reads and ordered buffer writes; BH enable includes nested disable counts.
+Their footprint excludes the immediate return word. The outer invariant
+still owes separation from all live saved stack words, represented objects,
+metadata and read-only storage, plus repeated callback readiness.
+
+The ambient decoder is now bound to the generated service listing too.
+Review of the draft found a real inconsistency: active comparison states
+were admitted by the contracts while two index-only LEAs decoded to missing
+instructions. That is repaired in the private Kraken parser at
+`e033e3dac812a576881a329b2d4c174364f3d44c`, with its reconstructible patch in
+the dependency lock. Existing address semantics are unchanged; the parser
+infers address width from the index when no base is present. Parser tests
+and native x86 comparison pass. The new `binary-probe service-tests` command
+executes 18 callback/BH cases under two undefined-value seeds (648 total
+instructions), comparing the entire memory and ABI-preserved frame. It
+includes active comparison writes, full buffers, disabled capture, hard-IRQ
+early returns and nested BH disable counts.
+
+[AGENT 2026-10-15] Index correspondence by the exact observed event prefix
+as well as machine state. A compiler-merged exit emits two mirror decisions
+at one physical state, with distinct mirror `steps`; a machine-only
+functional relation could not distinguish them. Prefixes now come from
+actual observed edges, and concatenation retains their exact cursor. This
+is a correction to the obligations, not an established whole-World relation.
+
+The bucket's initial JE and back-edge JNE now have exact instruction-history
+and observer equations. The next-pointer load establishes the represented
+tail at the pre-guard induction boundary. The mirror scan is proved to
+change only `steps` by equality of the complete World record. The stack
+lemmas recover all seven pushed helper words after subsequent pushes and
+prove slot separation even across modular address wrap. None of these local
+facts is the composed loop or helper theorem.
+
+`FixtureKnowledge` separates four documented unknown fields from physical
+zero bytes: cookie secret, cookie birthdate, pubkey hash key and global
+ratelimiter key. Locations and widths are extracted/checked from DWARF,
+including the pointer to the pubkey table and the CU-local ratelimiter
+symbol. Origin is computed from fixed fixture lifetime and committed-write
+history, not from whether the mirror value happens to be zero. Recorded
+values agree exactly; an opaque initial field has the documented mirror
+placeholder and mapped physical bytes. Functionality and physical framing
+are proved. The complete relation must still justify that incoming history
+from actual completed writes: consuming a cookie record is not yet the
+field commit, and a recreated device cannot inherit the old device's
+knowledge. The ratelimiter key survives uninit. A statement about an opaque
+mirror placeholder being zero does not assert physical secret bytes are zero.
+
+Validation: `BinaryProofs` and the executable build with full parallelism;
+Lean kernel replay of the changed modules; standard axioms only in the
+printed proof dependencies and no forbidden binary proof-source tokens;
+recorded live/miss three-way tests (506/191 instructions with actual
+services); both synthetic two-lookup defect witnesses; service tests above;
+124 fast tests, one skip, 23.197 seconds. The three-way tests reuse the
+previous raw kernel streams; no new guest capture or kernel entry snapshot
+is claimed. One generator attempt failed because bundle Python lacks
+pyelftools; the successful command uses system `/usr/bin/python3`.
+
+Milestone 1 remains open. Whole-World `R`, complete peer-get, loop composition,
+`Pre_lookup` together with its satisfying execution witness, and the lookup
+simulation/transport theorem are not yet established. No `Pre_lookup` has
+landed alone, and no certified-function rate is claimed from the local
+instruction-fact count. The milestone report still owes its measured rate,
+the trust-base file verbatim, and independent surface review before milestone 2.

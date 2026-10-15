@@ -211,6 +211,24 @@ theorem observeHistory_snoc {Error Checkpoint : Type}
 
 #print axioms observeHistory_snoc
 
+/-- Every execution successor appends itself, so the history cursor cannot
+    drift away from the physical state, including through service calls. -/
+theorem history_last [Labels] (fetch : Int64 → Option Decoded)
+    (Q : Executed → Prop) (s : Executed)
+    (initial : s.history.getLast? = some s.machine)
+    (run : Eventually (historyStep fetch) Q s) :
+    Eventually (historyStep fetch)
+      (fun t => Q t ∧ t.history.getLast? = some t.machine) s := by
+  induction run with
+  | done s h => exact .done s ⟨h, initial⟩
+  | step s mid hs rest ih =>
+    apply step_cps
+    apply instruction_mono fetch s.machine _ _ _ hs
+    intro t ht
+    exact ih ⟨t, s.history ++ [t]⟩ ht (by simp)
+
+#print axioms history_last
+
 /-- Generic full-run transport. `MirrorRun` is the complete accepted run,
     including its worlds and events; `Matches` must equate its observations
     to the deterministic observation of the recorded machine history.

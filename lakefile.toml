@@ -1,7 +1,6 @@
 name = "leanux"
 version = "0.1.0"
 defaultTargets = ["Leanux"]
-moreLeanArgs = ["-j1"]
 
 [[lean_lib]]
 name = "Leanux"

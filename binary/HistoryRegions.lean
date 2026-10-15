@@ -79,6 +79,49 @@ theorem test_self (fetch : Int64 → Option Decoded) (pc : Int64)
   cases hz : (s.regs.get r == 0) <;>
     simp_all [Effects.All, tested, StatusFlags.from_result, List.append_assoc]
 
+/-- The TEST/JNE pattern retains the actual universally chosen AF value in
+    its history. This does not select a canonical value for an undefined bit. -/
+theorem test_self_nz (fetch : Int64 → Option Decoded) (pc : Int64)
+    (w : Width) (r : Reg w) (target : Label) (testSize jumpSize : Nat)
+    (testPositive : 0 < testSize) (jumpPositive : 0 < jumpSize)
+    (first : fetch pc = some ⟨.regular .W64 w (.test (.reg r) (.reg r)), testSize⟩)
+    (second : fetch (pc + .ofNat testSize) =
+      some ⟨.regular .W64 .W64 (.jcc .nz target), jumpSize⟩)
+    (s : MachineData) (history : List MachineState) :
+    historySteps fetch 2 (TestHistory r s (pc + .ofNat testSize)
+      (if s.regs.get r == 0 then pc + .ofNat testSize + .ofNat jumpSize else label target) history)
+      ⟨⟨s, pc⟩, history⟩ := by
+  unfold TestHistory
+  simp only [historySteps, historyStep, instructionStep, first, second,
+    Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp, Effects.All]
+  refine ⟨testPositive, fun af => ⟨jumpPositive, ?_⟩⟩
+  simp only [StatusFlags.from_result, CondCode.interp, BitVec.and_self]
+  cases hz : (s.regs.get r == 0) <;>
+    simp_all [Effects.All, tested, StatusFlags.from_result, List.append_assoc]
+
+/-- The two induction boundaries have the same head register and source
+    phase (before idxWalk), despite opposite encodings of the branch. -/
+theorem first_bucket_guard (fetch : Int64 → Option Decoded)
+    (agree : ∀ p i, Image.fetch p = some i → fetch p = some i)
+    (s : MachineData) (history : List MachineState) :
+    historySteps fetch 2 (TestHistory (.low .rbx .W64) s (Image.Lookup.entry + 0x32)
+      (if s.regs.get (.low .rbx .W64) == 0 then Image.Lookup.entry + 0x6c else Image.Lookup.entry + 0x34) history)
+      ⟨⟨s, Image.Lookup.entry + 0x2f⟩, history⟩ := by
+  exact test_self fetch _ _ _ "L_ffffffff813a04dc" 3 2 (by decide) (by decide)
+    (agree _ _ (by rfl)) (agree _ _ (by rfl)) s history
+
+theorem next_bucket_guard (fetch : Int64 → Option Decoded)
+    (agree : ∀ p i, Image.fetch p = some i → fetch p = some i)
+    (s : MachineData) (history : List MachineState) :
+    historySteps fetch 2 (TestHistory (.low .rbx .W64) s (Image.Lookup.entry + 0x6a)
+      (if s.regs.get (.low .rbx .W64) == 0 then Image.Lookup.entry + 0x6c else Image.Lookup.entry + 0x34) history)
+      ⟨⟨s, Image.Lookup.entry + 0x67⟩, history⟩ := by
+  exact test_self_nz fetch _ _ _ "L_ffffffff813a04a4" 3 2 (by decide) (by decide)
+    (agree _ _ (by rfl)) (agree _ _ (by rfl)) s history
+
+#print axioms first_bucket_guard
+#print axioms next_bucket_guard
+
 theorem entry_guard (fetch : Int64 → Option Decoded)
     (agree : ∀ p i, Image.fetch p = some i → fetch p = some i)
     (s : MachineData) (history : List MachineState) :

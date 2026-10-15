@@ -14,7 +14,7 @@ import tarfile
 from census import ROOT, ORACLE, extract, run
 from layouts import layouts
 
-PIN = 'eed58b7eda5d1873919616e996bcac205a724dc8'
+PIN = 'e033e3dac812a576881a329b2d4c174364f3d44c'
 TRACE = 'd1_wrong_receiver_index_same_bucket'
 TOOLCHAIN = Path.home() / '.elan/toolchains/leanprover--lean4---v4.35.0/bin'
 

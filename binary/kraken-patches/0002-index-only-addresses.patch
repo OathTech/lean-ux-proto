@@ -1,0 +1,99 @@
+From e033e3dac812a576881a329b2d4c174364f3d44c Mon Sep 17 00:00:00 2001
+From: Codex <codex@localhost>
+Date: Thu, 15 Oct 2026 00:04:47 +0000
+Subject: [PATCH] Parse index-only x86 addresses used by KCOV
+
+[AGENT 2026-10-15] Infer the address size from the index when the base is absent. Existing AddrExpr semantics apply unchanged.
+
+Validation: ParserTests build; native assembly comparison passes for the KCOV calculation, modular arithmetic and 32-bit address size.
+---
+ Kraken/X64/Parser/Basic.lean              | 16 +++++++++-------
+ Kraken/X64/ParserTests.lean               |  9 +++++++++
+ Kraken/X64/Test/asm/test_lea_index_only.S | 10 ++++++++++
+ 3 files changed, 28 insertions(+), 7 deletions(-)
+ create mode 100644 Kraken/X64/Test/asm/test_lea_index_only.S
+
+diff --git a/Kraken/X64/Parser/Basic.lean b/Kraken/X64/Parser/Basic.lean
+index 1178357..6afc292 100644
+--- a/Kraken/X64/Parser/Basic.lean
++++ b/Kraken/X64/Parser/Basic.lean
+@@ -358,7 +358,7 @@ def parseMemory : Parser (Width × AddrExpr) := do
+     let disp := disp?.getD (.int64 0)
+ 
+     skipHWs
+-    let (w1, base) ← parseRegOrRipW
++    let base? ← if (← peek!) == ',' then pure none else some <$> parseRegOrRipW
+     -- Check for index register
+     let idx ← (do
+       skipHWs
+@@ -387,14 +387,16 @@ def parseMemory : Parser (Width × AddrExpr) := do
+     let _ ← pchar ')'
+     -- Some adapters between the parsed components and the expected dependent
+     -- pairs:
+-    let w ← match w1, idx with
+-      | w1, .some (w2, _) =>
++    let w ← match base?, idx with
++      | .some (w1, _), .some (w2, _) =>
+         if w1 ≠ w2 then
+           fail "type mismatch in memory addressing operands: base ({w1}) and index ({w2}) have different widths"
+         else
+           .pure w1
+-      | w1, .none =>
+-        .pure w1
++      | .some (w1, _), .none => .pure w1
++      | .none, .some (w2, _) => .pure w2
++      | .none, .none => fail "memory parentheses need a base or index register"
++    let base := base?.map Prod.snd
+     let idx := Option.map (fun (_, idx) => ⟨idx, scale⟩) idx
+ 
+     -- Handle rip-relative addressing (like parseRelRegOrMem below). For a %rip
+@@ -403,8 +405,8 @@ def parseMemory : Parser (Width × AddrExpr) := do
+     -- symbolic one names the target itself (`sym(%rip)`), so we subtract that
+     -- address, as `as` does when encoding it.
+     let disp := match base, disp with
+-      | .rip, .int64 _ => disp
+-      | .rip, _ => .sub disp .after_current_instruction
++      | .some .rip, .int64 _ => disp
++      | .some .rip, _ => .sub disp .after_current_instruction
+       | _, _ => disp
+ 
+     pure (w, { base, idx, disp })
+diff --git a/Kraken/X64/ParserTests.lean b/Kraken/X64/ParserTests.lean
+index 58e3685..cff3001 100644
+--- a/Kraken/X64/ParserTests.lean
++++ b/Kraken/X64/ParserTests.lean
+@@ -399,6 +399,15 @@ info: [Directive.instr
+ #guard_msgs in
+ #check parse("leaq 16(%ebp, %ecx, 4), %rax")
+ 
++-- Index-only addresses used by Linux write_comp_data.
++example : parse("leaq 0x28(,%r11,8), %rsi") =
++    [.instr (.regular .W64 .W64 (.lea (.low .rsi .W64)
++      { base := none, idx := some ⟨.r11, .W64⟩, disp := .int64 40 }))] := rfl
++
++example : parse("leaq 0(,%edi,4), %r11") =
++    [.instr (.regular .W32 .W64 (.lea (.low .r11 .W64)
++      { base := none, idx := some ⟨.rdi, .W32⟩, disp := .int64 0 }))] := rfl
++
+ section error_reporting
+ 
+ /-- error: line 1: unknown register: unlikely -/
+diff --git a/Kraken/X64/Test/asm/test_lea_index_only.S b/Kraken/X64/Test/asm/test_lea_index_only.S
+new file mode 100644
+index 0000000..ed8556e
+--- /dev/null
++++ b/Kraken/X64/Test/asm/test_lea_index_only.S
+@@ -0,0 +1,10 @@
++# Linux KCOV address calculation, including modular and address-size cases.
++movq $3, %rdi
++leaq 0x0(,%rdi,4), %r11
++leaq 0x28(,%r11,8), %rsi
++movq $0x8000000000000001, %rax
++leaq -8(,%rax,8), %rbx
++movl $0x80000001, %ecx
++leaq 0(,%ecx,4), %rdx
++leaq 0(,%rcx,4), %r8
++leal 40(,%rcx,8), %r9d
+-- 
+2.43.0
+

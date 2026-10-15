@@ -4,7 +4,7 @@ From the `task/binary-tv` worktree, with Lean v4.35.0 installed and the shared
 Kraken clone/oracle at the charter's paths:
 
 ```sh
-capped -- python3 binary/run.py
+LEANUX_QEMU_SLOTS=16 capped -- /usr/bin/python3 binary/run.py
 ```
 
 This verifies the private Kraken branch against the dependency lock, builds
@@ -18,12 +18,12 @@ and a locally installed Lean toolchain are required; nothing is downloaded.
 The default command makes a new recorded run. To reuse a completed one:
 
 ```sh
-capped -- python3 binary/run.py --check .artifacts/check/<run>
-capped -- python3 binary/run.py --trace d1_second_response
-capped -- python3 binary/census.py
+LEANUX_QEMU_SLOTS=16 capped -- /usr/bin/python3 binary/run.py --check .artifacts/check/<run>
+LEANUX_QEMU_SLOTS=16 capped -- /usr/bin/python3 binary/run.py --trace d1_second_response
+capped -- /usr/bin/python3 binary/census.py
 cd binary
 capped -- lake build BinaryProofs
-capped -- lake env leanchecker Execution History HistoryRegions RegionExecution MirrorLoop MirrorPeer MirrorHistory LookupObservation Memory Image ImageLayout Layouts Regions PeerRegions PeerPrologue Prologue BucketEntry Representation KeypairRepresentation Symbolic
+capped -- lake env leanchecker TrustBase ServiceImage ServiceComposition FixtureKnowledge StackFrame BucketLoop Execution History HistoryRegions RegionExecution MirrorLoop MirrorPeer MirrorHistory LookupObservation Memory Image ImageLayout Layouts Regions PeerRegions PeerPrologue Prologue BucketEntry Representation KeypairRepresentation Symbolic
 ```
 
 Generated state, census and comparison output go under `.tmp/binary-tv`;
@@ -51,3 +51,18 @@ its results and reproduction at commit `a38e3d0` remain in the
 No kernel memory snapshot, decoding proof or full-function simulation is
 claimed. Current work and Rule Zero findings are in the
 [adequacy report](../docs/2026-10-15-binary-adequacy.md).
+
+The named draft trust surface is `TrustBase.lean`; `Pre_lookup` is deliberately
+absent until its concrete satisfying witness accompanies it. The generated
+service bodies are part of the same pinned decoder. To exercise their active
+KCOV comparison writes and ABI/memory contracts:
+
+```sh
+capped -- binary/.lake/build/bin/binary-probe service-tests
+capped -- /usr/bin/python3 binary/generate.py
+```
+
+The source relation now receives the actual observed event prefix as well as
+the machine state. This distinguishes two mirror decisions emitted at one
+compiled edge. The relation's whole-World components and function composition
+remain unfinished; the checkpoint report describes what is proved.

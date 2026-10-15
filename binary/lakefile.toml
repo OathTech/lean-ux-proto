@@ -1,7 +1,6 @@
 name = "binaryTV"
 version = "0.1.0"
 defaultTargets = ["binary-probe"]
-moreLeanArgs = ["-j1"]
 
 [[require]]
 name = "Kraken"
@@ -17,4 +16,4 @@ root = "Main"
 
 [[lean_lib]]
 name = "BinaryProofs"
-roots = ["Execution", "History", "HistoryRegions", "RegionExecution", "MirrorLoop", "MirrorPeer", "MirrorHistory", "LookupObservation", "Memory", "Symbolic", "Image", "ImageLayout", "Layouts", "Regions", "PeerRegions", "PeerPrologue", "Prologue", "BucketEntry", "Representation", "KeypairRepresentation"]
+roots = ["StackFrame", "BucketLoop", "FixtureKnowledge", "TrustBase", "ServiceImage", "ServiceComposition", "Execution", "History", "HistoryRegions", "RegionExecution", "MirrorLoop", "MirrorPeer", "MirrorHistory", "LookupObservation", "Memory", "Symbolic", "Image", "ImageLayout", "Layouts", "Regions", "PeerRegions", "PeerPrologue", "Prologue", "BucketEntry", "Representation", "KeypairRepresentation"]

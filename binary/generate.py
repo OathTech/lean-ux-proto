@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Emit this image's region terms and DWARF record predicates, not a checker."""
 import hashlib
+import json
 import re
 from pathlib import Path
 from elftools.elf.elffile import ELFFile
+from elftools.dwarf.dwarf_expr import DWARFExprParser
 
 from census import ORACLE, ROOT, extract
-from layouts import layouts
+from layouts import layouts, type_bytes
 
 
 def main():
@@ -21,7 +23,25 @@ def main():
     labels = {}
     region_names = []
     cut_addresses = []
-    for f in extract(ORACLE):
+    service_names = {'__sanitizer_cov_trace_pc', '__sanitizer_cov_trace_cmp4',
+                     '__sanitizer_cov_trace_const_cmp4', '__sanitizer_cov_trace_const_cmp1',
+                     '__local_bh_enable_ip', 'write_comp_data'}
+    functions = extract(ORACLE, service_names)
+    service_text = ['import Image', 'namespace Binary.ServiceImage',
+                    '-- Generated from the same pinned ELF; a parser rejection is a missing PC, never a no-op.',
+                    'def listing : List (Nat × Nat × String) := [']
+    service_rows = [i for f in functions if f['name'] in service_names for i in f['instructions']]
+    service_text += ['  ' + ',\n  '.join(f'({i["pc"]}, {len(bytes.fromhex(i["bytes"]))}, {json.dumps(i["normalized"])})'
+                                     for i in service_rows) + ']']
+    service_text += [
+        'def fetch (pc : Int64) : Option Decoded := do',
+        '  let (_, size, assembly) ← listing.find? (fun row => row.1 == pc.toUInt64.toNat)',
+        '  match Kraken.X64.Parser.parse assembly with',
+        '  | .ok [.instr instruction] => some ⟨instruction, size⟩',
+        '  | _ => none',
+        'end Binary.ServiceImage', '']
+    (ROOT / 'binary/ServiceImage.lean').write_text('\n'.join(service_text))
+    for f in functions:
         if f['name'] not in names:
             continue
         ns = names[f['name']]
@@ -137,6 +157,40 @@ def main():
         text += [f'def {prefix}Size : Nat := {row["size"]}']
         text += [f'def {prefix}_{name} : Nat := {offset}'
                  for name, offset in row['members'].items()]
+    for record, field, expected_size in [('cookie_checker', 'secret', 32),
+            ('cookie_checker', 'secret_birthdate', 8), ('pubkey_hashtable', 'key', 16),
+            ('wg_device', 'peer_hashtable', 8)]:
+        if o[record]['member_sizes'][field] != expected_size:
+            raise ValueError(f'fixture field width differs from mirror: {record}.{field}')
+    for record, prefix, fields in [
+            ('wg_device', 'device', ['cookie_checker', 'peer_hashtable']),
+            ('cookie_checker', 'cookie', ['secret', 'secret_birthdate']),
+            ('pubkey_hashtable', 'pubkeyTable', ['key'])]:
+        text += [f'def {prefix}Size : Nat := {o[record]["size"]}']
+        text += [f'def {prefix}_{field} : Nat := {o[record]["members"][field]}' for field in fields]
+    with ORACLE.open('rb') as stream:
+        dwarf = ELFFile(stream).get_dwarf_info()
+        found = []
+        for cu in dwarf.iter_CUs():
+            cu_name = cu.get_top_DIE().attributes.get('DW_AT_name')
+            if not cu_name or not cu_name.value.decode().endswith('wireguard/ratelimiter.c'):
+                continue
+            for die in cu.iter_DIEs():
+                name = die.attributes.get('DW_AT_name')
+                if die.tag != 'DW_TAG_variable' or not name or name.value != b'key':
+                    continue
+                loc = die.attributes.get('DW_AT_location')
+                if not loc:
+                    continue
+                ops = DWARFExprParser(dwarf.structs).parse_expr(loc.value)
+                if len(ops) != 1 or ops[0].op_name != 'DW_OP_addr':
+                    raise ValueError('ratelimiter key does not have one fixed DWARF address')
+                if type_bytes(die.get_DIE_from_attribute('DW_AT_type')) != 16:
+                    raise ValueError('ratelimiter key is not 16 bytes')
+                found.append(ops[0].args[0])
+        if len(found) != 1:
+            raise ValueError(f'expected one DWARF ratelimiter key, got {found}')
+        text += [f'def ratelimiterKeyAddress : BitVec 64 := .ofNat 64 {found[0]}']
     peer_count = (o['wg_peer']['members']['refcount'] + o['kref']['members']['refcount']
                   + o['refcount_struct']['members']['refs'])
     text += [f'def peerSize : Nat := {o["wg_peer"]["size"]}',

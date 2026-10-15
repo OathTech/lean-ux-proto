@@ -3,6 +3,7 @@ import Kraken.X64.Semantics
 import Leanux.Runner
 import LookupObservation
 import Layouts
+import TrustBase
 
 open Lean
 
@@ -440,7 +441,88 @@ def deadPeerCounterexample (input : ProbeInput) (keypairCase : Bool := false) : 
     ("machine_peer_pointer_after", toJson (0 : Nat)),
     ("mirror_peer_id_after", toJson e.peer), ("keypair_alias", alias)]
 
+/-! Concrete tests of the named service specifications against the pinned
+    fetched instruction bodies. These tests are not used by any proof. -/
+namespace ServiceTests
+open Binary Binary.TrustBase
+local instance : Labels := Image.linkedLabels
+
+def run (initial : MachineState) (seed : UInt64) : Except String (MachineState × Nat) := do
+  let mut r : Run := {state := initial}
+  for n in [:200] do
+    if r.state.pc == Int64.ofNat stopAddr then return (r.state, n)
+    let some decoded := pinnedFetch r.state.pc
+      | throw s!"missing pinned instruction {r.state.pc.toBitVec.toNat}"
+    r ← interpret seed r decoded.instruction r.state.pc.toBitVec.toNat decoded.size
+  throw "service instruction budget exhausted"
+
+def fixture (mode count capacity preempt : Nat) : MachineState := Id.run do
+  let mut memory : DataMem := {}
+  memory := materializeServices memory
+  memory := put memory 0xffffffff81cc85c8 4 preempt
+  memory := put memory (0x800000 + 0x6e0) 4 mode
+  memory := put memory (0x800000 + 0x6e4) 4 capacity
+  memory := put memory coverageAddr 8 count
+  memory := put memory stackAddr 8 stopAddr
+  return {pc := 0, data := {dmem := memory, regs := {
+    rsp := .ofNat stackAddr, rdi := 0xfedcba9876543210, rsi := 0x123456789abcdef0,
+    rbx := 11, rbp := 12, r12 := 13, r13 := 14, r14 := 15, r15 := 16}}}
+
+def checkABI (before after : MachineState) : Except String Unit := do
+  unless after.pc == Int64.ofNat stopAddr && after.data.regs.rsp == before.data.regs.rsp + 8 &&
+      after.data.regs.rbx == before.data.regs.rbx && after.data.regs.rbp == before.data.regs.rbp &&
+      after.data.regs.r12 == before.data.regs.r12 && after.data.regs.r13 == before.data.regs.r13 &&
+      after.data.regs.r14 == before.data.regs.r14 && after.data.regs.r15 == before.data.regs.r15 do
+    throw "service return/frame mismatch"
+
+-- Compare every mapped byte, and reject any newly mapped byte too.
+def checkMemory (expected actual : DataMem) : Except String Unit := do
+  unless expected == actual do throw "service memory mismatch"
+
+def callback (kind : KcovKind) (pc : Nat) (mode count capacity preempt : Nat) : Except String Nat := do
+  let before := {fixture mode count capacity preempt with pc := .ofNat pc}
+  let some stores := KcovPlan kind before | throw "test fixture is not KCOV-ready"
+  let expected := stores.foldl (fun m w => m.storeInt w.address 8 w.value.toInt) before.data.dmem
+  let mut total := 0
+  for seed in [0, 0xffffffffffffffff] do
+    let (after, n) ← run before seed
+    checkABI before after
+    checkMemory expected after.data.dmem
+    total := total + n
+  return total
+
+def bh (count : Nat) : Except String Nat := do
+  let initial := fixture 2 0 1024 count
+  let before := {initial with pc := .ofNat 0xffffffff810732c0, data := {initial.data with regs := {initial.data.regs with rsi := 512}}}
+  let expected := put before.data.dmem 0xffffffff81cc85c8 4 (count - 512)
+  let mut total := 0
+  for seed in [0, 0xffffffffffffffff] do
+    let (after, n) ← run before seed
+    checkABI before after
+    checkMemory expected after.data.dmem
+    total := total + n
+  return total
+
+def tests : Except String Nat := do
+  let mut total := 0
+  for (kind, address) in [(KcovKind.pc, 0xffffffff810f3100),
+      (.cmp4, 0xffffffff810f3e80), (.constCmp4, 0xffffffff810f3f00),
+      (.constCmp1, 0xffffffff810f3ec0)] do
+    let mode := if kind == .pc then 2 else 3
+    total := total + (← callback kind address mode 0 1024 0)
+    total := total + (← callback kind address mode 1024 1024 0)
+    total := total + (← callback kind address 0 0 1024 0)
+    total := total + (← callback kind address mode 0 1024 0x10000)
+  total := total + (← bh 512)
+  total := total + (← bh 1024)
+  return total
+end ServiceTests
+
 def main (args : List String) : IO UInt32 := do
+  if args == ["service-tests"] then
+    match ServiceTests.tests with
+    | .error message => IO.eprintln message; return 1
+    | .ok n => IO.println s!"PASS: 18 service cases, two undefined-value seeds, {n} instructions"; return 0
   if let ["actual-services", path] := args then
     let input ← liftE (Json.parse (← IO.FS.readFile path) >>= fromJson?)
     let result ← liftE (probe input true)

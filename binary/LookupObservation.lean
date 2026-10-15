@@ -111,43 +111,70 @@ theorem observe_snoc (rxSection : Nat) (history : List MachineState)
 
 #print axioms observe_snoc
 
-/-- Matching includes exact tag, order (via MatchesPoints), and decision record.
-    The state relation is supplied by the function-specific physical proof;
-    this definition does not turn an arbitrary relation into adequacy. -/
-def MatchesPoint (R : MachineState → World → Prop) (actual : Point)
+/-- The relation sees the actual event prefix as well as the physical state.
+    Compiler-merged exits can emit two source decisions at the same machine
+    state; their distinct histories must not become unconstrained ghost Worlds. -/
+abbrev Relation := List Point → MachineState → World → Prop
+
+/-- The event prefix includes this point and is built from actual observations. -/
+def MatchesPoint (R : Relation) (seen : List Point) (actual : Point)
     (mirror : MirrorHistory.Point) : Prop :=
-  actual.tag = mirror.tag ∧ R actual.machine mirror.world ∧
+  actual.tag = mirror.tag ∧ R seen actual.machine mirror.world ∧
     match actual.step with
     | none => True
     | some step => mirror.world.steps.back? = some step
 
-/-- Pointwise correspondence with equal lengths and order. -/
-inductive MatchesPoints (R : MachineState → World → Prop) :
-    List Point → List MirrorHistory.Point → Prop where
-  | nil : MatchesPoints R [] []
-  | cons {actual mirror actuals mirrors} :
-      MatchesPoint R actual mirror → MatchesPoints R actuals mirrors →
-      MatchesPoints R (actual :: actuals) (mirror :: mirrors)
+/-- Pointwise correspondence, with an explicit cursor through the actual
+    history. The event prefix is never supplied by the expected mirror run. -/
+inductive MatchesPointsFrom (R : Relation) :
+    List Point → List Point → List MirrorHistory.Point → Prop where
+  | nil {seen} : MatchesPointsFrom R seen [] []
+  | cons {seen actual mirror actuals mirrors} :
+      MatchesPoint R (seen ++ [actual]) actual mirror →
+      MatchesPointsFrom R (seen ++ [actual]) actuals mirrors →
+      MatchesPointsFrom R seen (actual :: actuals) (mirror :: mirrors)
 
-theorem MatchesPoints.length_eq {R actual mirror} (h : MatchesPoints R actual mirror) :
-    actual.length = mirror.length := by
+abbrev MatchesPoints (R : Relation) := MatchesPointsFrom R []
+
+theorem MatchesPointsFrom.length_eq {R seen actual mirror}
+    (h : MatchesPointsFrom R seen actual mirror) : actual.length = mirror.length := by
   induction h with
   | nil => rfl
   | cons _ _ ih => exact congrArg Nat.succ ih
 
-theorem MatchesPoints.take {R actual mirror} (h : MatchesPoints R actual mirror) (n : Nat) :
-    MatchesPoints R (actual.take n) (mirror.take n) := by
+theorem MatchesPointsFrom.take {R seen actual mirror}
+    (h : MatchesPointsFrom R seen actual mirror) (n : Nat) :
+    MatchesPointsFrom R seen (actual.take n) (mirror.take n) := by
   induction h generalizing n with
-  | nil => simpa using (MatchesPoints.nil (R := R))
+  | nil => simp only [List.take_nil]; exact .nil
   | cons head tail ih =>
     cases n with
     | zero => exact .nil
     | succ n => exact .cons head (ih n)
 
+/-- Concatenation retains the exact prefix used by the second region. -/
+theorem MatchesPointsFrom.append {R seen first sourceFirst rest sourceRest}
+    (front : MatchesPointsFrom R seen first sourceFirst)
+    (back : MatchesPointsFrom R (seen ++ first) rest sourceRest) :
+    MatchesPointsFrom R seen (first ++ rest) (sourceFirst ++ sourceRest) := by
+  induction front with
+  | nil => simpa using back
+  | cons head tail ih =>
+    apply MatchesPointsFrom.cons head
+    apply ih
+    simpa only [List.append_assoc, List.singleton_append] using back
+
+/-- The mirror's decision log is an observation of actual edges plus the
+    fixed incoming operation history, not a physical kernel byte array. -/
+def StepsAgree (incoming : List Step) (events : List Point) (world : World) : Prop :=
+  world.steps.toList = incoming ++ events.filterMap (·.step)
+
+#print axioms MatchesPointsFrom.append
+
 /-- The matched semantic events form the exact corresponding source prefix.
     Counting events without checking their tags, records and states would not
     justify choosing a source World for an intermediate machine cut. -/
-def PrefixMatches (R : MachineState → World → Prop) (actual : List Point)
+def PrefixMatches (R : Relation) (actual : List Point)
     (source : List MirrorHistory.Point) : Prop :=
   actual.length ≤ source.length ∧
     MatchesPoints R actual (source.take actual.length)
@@ -166,14 +193,14 @@ theorem prefix_of_append {R front rest source}
     domain; their contracts must exclude additional anchored observations.
     Pending writes and temporary registers belong to the phase equations of
     R. This is a proof obligation, not an axiom or an established invariant. -/
-def CutsAligned (R : MachineState → World → Prop) (rxSection : Nat)
+def CutsAligned (R : Relation) (rxSection : Nat)
     (history : List MachineState) (source : List MirrorHistory.Point) : Prop :=
   ∀ i current, history[i]? = some current → current.pc ∈ Image.cutPoints →
     ∃ events last,
       observe rxSection (history.take (i + 1)) = .ok events ∧
       PrefixMatches R events source ∧
       (source.take events.length).getLast? = some last ∧
-      R current last.world
+      R events current last.world
 
 /-- Extending a history cannot change any old cut. Only the newly reached
     state needs a new correspondence obligation. -/
@@ -183,7 +210,7 @@ theorem CutsAligned.snoc {R rxSection history source}
       ∃ events last,
         observe rxSection (history ++ [next]) = .ok events ∧
         PrefixMatches R events source ∧
-        (source.take events.length).getLast? = some last ∧ R next last.world) :
+        (source.take events.length).getLast? = some last ∧ R events next last.world) :
     CutsAligned R rxSection (history ++ [next]) source := by
   intro i current present cut
   by_cases old : i < history.length
@@ -205,13 +232,13 @@ theorem CutsAligned.snoc {R rxSection history source}
 /-- Exact semantic history plus all anchored stuttering cuts. Return
     destination, result registers and saved frame are separate postconditions
     of the function theorem, not consequences of a return tag. -/
-def MatchesRun {α : Type} (R : MachineState → World → Prop) (rxSection : Nat)
+def MatchesRun {α : Type} (R : Relation) (rxSection : Nat)
     (executed : Executed) (source : MirrorHistory.Run α) : Prop :=
   ∃ points, observe rxSection executed.history = .ok points ∧
     MatchesPoints R points source.points ∧
     CutsAligned R rxSection executed.history source.points ∧
-    R executed.machine source.finalWorld
+    R points executed.machine source.finalWorld
 
-#print axioms MatchesPoints.length_eq
+#print axioms MatchesPointsFrom.length_eq
 #print axioms prefix_of_append
 end Binary.LookupObservation

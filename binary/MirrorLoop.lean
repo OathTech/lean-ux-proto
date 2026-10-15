@@ -27,6 +27,22 @@ def scan (kinds : List IndexKind) (index : Nat) : List IndexEntry → Acc → Wo
       ((if good then some e else a.1, true), record w .idxTypeMatch good)
     else scan kinds index es a w
 
+/-- Scanning changes only the decision log. This is equality of the entire
+    World record, including supplied environment and all physical projections;
+    it does not hide the remaining fields behind an unconstrained predicate. -/
+theorem scan_world (kinds : List IndexKind) (index : Nat)
+    (es : List IndexEntry) (a : Acc) (w : World) :
+    (scan kinds index es a w).2 = {w with steps := (scan kinds index es a w).2.steps} := by
+  induction es generalizing a w with
+  | nil => rfl
+  | cons e es ih =>
+    by_cases hit : (e.index == index) = true
+    · simp [scan, hit, record]
+    · simp only [scan, hit, Bool.false_eq_true, ↓reduceIte]
+      exact ih a (record (record w .idxWalk true) .idxMatch false)
+
+#print axioms scan_world
+
 /-- The operational bucket loop, including the exact ordered decisions.
     No distinct-index or successful-lookup assumption is used. -/
 theorem loop_run (kinds : List IndexKind) (index : Nat)
