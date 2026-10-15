@@ -714,3 +714,16 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   and review kept, for the proof carry the review costed at 10 to 15
   agent-days. "2,3,4 agree with recommendation" [AGENT, coordinator: the
   recommendations].
+- **2026-10-15 [USER]** B3, the timer wheel as a mirror: "Agree re B3, go
+  ahead as proposed". The environment line moves (U1: the firing set and
+  order become semantics in both directions, E1 over stream-bounded passes;
+  the tick's placement, the wait's tick count and the base clock stay
+  recorded; the kind-310/311 reads are not made derived); two record-only
+  hooks (U2: kind 313 in `__mod_timer` after the forward on both paths, kind
+  314 in `enqueue_timer`, written without steering under `base->lock`,
+  carrying the timer's address; class-approved as record-only, the new
+  oracle pair's identity recorded at the landing); `kernel/time/timer.c`
+  mirrored but unanchored, its hooks may add lines (U3); the deferral case
+  `unsupported` only with the lookahead (U4); the per-timer layout with an
+  enqueue stamp (U5) [AGENT, fork of the coordinator: the design; the
+  Claude Opus 5.5 review at 6fe87f2].

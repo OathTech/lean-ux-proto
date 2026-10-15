@@ -456,6 +456,16 @@ JIFFIES_END = 310
 # the mirror computes the expiry from it and compares with the arm record's
 # published expiry, so the read is never recovered from the answer.
 TIMER_CALLER_JIFFIES = 311
+# B3 (docs/2026-10-15-design-b3-timer-wheel.md, sections 4, 6 and 7): the timer
+# wheel's two records at an arm of a dispatch-set timer, both resolved at the
+# arming line like the arm record (mod_timer's return address, passed through
+# __mod_timer): the base clock after forward_timer_base, {clk, timer} (class
+# 'clk', 16 bytes; the hidden input the slot depends on), and the enqueue's
+# slot and bucket expiry, {idx, bucket_expiry, timer} (class 'wheel', 24
+# bytes; absent on a same-slot re-arm). Each names the timer of the arm
+# record it follows; the mirror computes the slot and checks the record.
+TIMER_CLK, TIMER_ENQUEUE = 313, 314
+MASK64 = (1 << 64) - 1
 
 
 def load_hidden_sites():
@@ -468,7 +478,7 @@ def load_hidden_sites():
     for entry in loads(result.stdout.decode()):
         if set(entry) != {'id', 'label', 'kind', 'file', 'line', 'len', 'role'} \
                 or entry['kind'] not in ('random', 'clock', 'section', 'resched', 'timer', 'advance', 'alloc', 'queue', 'jiffies',
-                                         'address', 'program') \
+                                         'address', 'program', 'clk', 'wheel') \
                 or entry['role'] not in ('mirror', 'cut', 'ambient'):
             raise InvalidOutput(f'hidden site fields: {entry}')
         key = (entry['kind'], f"{entry['file']}:{entry['line']}")
@@ -565,7 +575,8 @@ def resolve_choices(per, sites, locations, dispatch=None):
                     else 'advance' if raw_kind == TIME_ADVANCE else 'alloc' if kind == ALLOC_KIND \
                     else 'queue' if raw_kind == QUEUE else 'jiffies' if raw_kind in (DST_CACHE_JIFFIES, JIFFIES_END, TIMER_CALLER_JIFFIES) \
                     else 'address' if raw_kind in (EPOLL_INSERT_ADDRESS, SECCOMP_IP) \
-                    else 'program' if raw_kind == SECCOMP_PROGRAM else None
+                    else 'program' if raw_kind == SECCOMP_PROGRAM \
+                    else 'clk' if raw_kind == TIMER_CLK else 'wheel' if raw_kind == TIMER_ENQUEUE else None
                 if kind_class == 'queue':
                     # {work, func}: the site is the queued function's symbol
                     queued_func = int.from_bytes(bytes.fromhex(data[16:32]), 'little') if length == 16 else 0
@@ -695,7 +706,7 @@ def jiffies_problems(traces, per):
     ops_of = {t['id']: t['ops'] for t in traces}
     problems = {}
     for (trace_id, mode), ops in per.items():
-        found, last, natural = [], None, 0
+        found, last, natural, last_arm, last_clk = [], None, 0, None, None
         for index, records in enumerate(ops):
             op = ops_of[trace_id][index]
             advances = [r for r in records if r[0] == TIME_ADVANCE]
@@ -710,6 +721,26 @@ def jiffies_problems(traces, per):
                                   kinds=[r[0] for r in records[:records.index(advances[0])]][:8]))
             floor = None
             for kind, _ip, _seq, length, data, _func in records:
+                if kind in (TIMER_CLK, TIMER_ENQUEUE):
+                    # B3: each names the timer of the arm record it follows; the base clock
+                    # is at most one past mod_timer's read and never goes back
+                    if length != (16 if kind == TIMER_CLK else 24):
+                        found.append(dict(index=index, problem=f'record kind {kind} length {length}'))
+                        continue
+                    if last_arm is None:
+                        found.append(dict(index=index, problem=f'record kind {kind} without an arm record before it'))
+                        continue
+                    named = int.from_bytes(bytes.fromhex(data[32:48] if kind == TIMER_ENQUEUE else data[16:32]), 'little')
+                    if named != last_arm[1]:
+                        found.append(dict(index=index, problem=f'record kind {kind} names timer {named:#x}, the arm record {last_arm[1]:#x}'))
+                    if kind == TIMER_CLK:
+                        clk = int.from_bytes(bytes.fromhex(data[:16]), 'little')
+                        if ((clk - last_arm[0] - 1) & MASK64) >> 63 == 0 and clk != last_arm[0] and clk != (last_arm[0] + 1) & MASK64:
+                            found.append(dict(index=index, problem='the timer base clock is more than one past mod_timer\'s read', clk=clk, jiffies=last_arm[0]))
+                        if last_clk is not None and ((clk - last_clk) & MASK64) >> 63:
+                            found.append(dict(index=index, problem='the timer base clock went back', clk=clk, last=last_clk))
+                        last_clk = clk
+                    continue
                 if kind not in (TIMER_ARM, TIME_ADVANCE, JIFFIES_END, TIMER_CALLER_JIFFIES):
                     continue
                 if length != (24 if kind == TIMER_ARM else 16 if kind == TIME_ADVANCE else 8):
@@ -740,6 +771,7 @@ def jiffies_problems(traces, per):
                     found.append(dict(index=index, problem='an arm after an advance before its absorbing tick',
                                       after=floor, jiffies=first))
                 last = first
+                last_arm = (first, int.from_bytes(bytes.fromhex(data[32:48]), 'little') if length == 24 else 0)
         if natural > JIFFIES_BOUND + JIFFIES_SLACK:
             found.append(dict(index=None, problem='jiffies progressed beyond the real-time bound',
                               natural=natural, bound=JIFFIES_BOUND))

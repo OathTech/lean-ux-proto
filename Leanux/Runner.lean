@@ -1052,7 +1052,8 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
   let mut fired : Array Json := #[]
   for op in trace.ops do
     let index := results.size
-    world := { world with hidden := trace.hidden.map (·[index]!), netRxRaised := false }
+    let ahead := trace.hidden.map fun h => (h.drop (index + 1)).toList   -- B3, E2's lookahead
+    world := { world with hidden := trace.hidden.map (·[index]!), hiddenAhead := ahead, netRxRaised := false }
     let (ret, w) ← (syscall (toSyscall results ends index op)).run world
       |>.mapError fun e => (index, e)
     let (_, w) ← skipAmbient.run w |>.mapError fun e => (index, e)

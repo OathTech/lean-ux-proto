@@ -126,6 +126,22 @@ SENTINELS = [
    "    if timeAfter c.refreshTs c.resetTs && s.gen == gen then return some s\n",
    "    if false && timeAfter c.refreshTs c.resetTs && s.gen == gen then return some s\n",
    'w9_session_two', 'wireguard'),
+  # B3 (docs/2026-10-15-design-b3-timer-wheel.md, section 15): the standing
+  # sentinel of the timer wheel's record instrument, kinds 313 (the base clock
+  # after forward_timer_base) and 314 (the slot and bucket expiry at the
+  # enqueue): the base clock ignored shows as the kind-314 slot differing at
+  # the one arm of the corpus that runs inside a catch-up pass with another
+  # bucket still due (a lag of about 1800 ticks, the re-arm on level 3, not 2).
+  # One trace. The other B3 one-offs (M1-M6) were run once and removed
+  # [AGENT 2026-10-15].
+  ('B3-M7-clk-is-jm',
+   'timer wheel records (kinds 313 and 314): the recorded base clock is ignored',
+   'instrument: the kind-313 base clock taken as mod_timer\'s read (clk := J_m), so a re-arm inside a '
+   'catch-up pass is placed on level 2 and the kind-314 slot (level 3) differs',
+   'Leanux/WG/State.lean',
+   '  let (clk, u2) := (recordWord64 cb 0, recordWord cb 1)\n',
+   '  let (clk, u2) := (jm, recordWord cb 1)\n',
+   'd3_keepalive_rearm_catchup', 'wireguard'),
 ]
 
 # evaluator.check on the traces of one suite whose ids start with a prefix
