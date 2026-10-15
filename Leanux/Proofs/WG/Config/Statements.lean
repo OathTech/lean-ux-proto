@@ -8,6 +8,7 @@ import Leanux.Proofs.WG.Config.AllowedRoundTripSource
 import Leanux.Proofs.WG.Config.AllowedTransferReadbackSource
 import Leanux.Proofs.WG.Config.RemoveFlagRequestSource
 import Leanux.Proofs.WG.Config.ReplacementConverseRequestSource
+import Leanux.Proofs.WG.Config.RemoveAllObservationSource
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
@@ -1065,5 +1066,30 @@ theorem original_allowedips_replace_pairs (key : Key) (pid : PeerId) (d : Device
   · simpa only [generalReplacementDevice, withPeer, requestGeneration] using removalEffect_seq steps
   · intro id member
     exact removalEffect_owner_none steps id (Or.inl member)
+
+/-- Original remove-all frees allowed IPs, snapshots one peer list, completes
+the entire make-dead pass, then runs cleanup over that same list. Exact erasure
+preserves errors and the original queued-work cleanup. On normal full return,
+the actual post-free device supplies the first-pass inputs. If its listed peers
+are resident and its nodes have two child slots, all selected peers are resident
+and dead at the cut before cleanup, including duplicate selections. This is a
+phase-order contract: it does not assert cleanup completion, final peer erasure,
+free's global trie correctness, or the outer REPLACE_PEERS flag composition. -/
+theorem original_peer_remove_all_phase_order :
+    Campaign2.AgreesOn (fun _ => True) peerRemoveAll (do
+      free
+      let selected := (← getDev).peerList
+      removeAllMark selected
+      removeAllCleanup selected) ∧
+    Campaign2.AgreesOn (fun _ => True)
+      (do let _ ← observedRemoveAll; pure ()) peerRemoveAll ∧
+    Campaign2.Ensures observedRemoveAll (fun _ => True) (fun cut _ => RemoveAllFacts cut) := by
+  constructor
+  · intro entry pre
+    rw [peerRemoveAll_phases]
+  · constructor
+    · intro entry pre
+      rw [observedRemoveAll_erase]
+    · exact observedRemoveAll_facts
 
 end Leanux.Proofs.WG.Config
