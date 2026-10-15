@@ -108,3 +108,13 @@ the first matching index, with exact decision records/tags and physical
 frames at appended cuts. It stops before the matched kind test and is not
 a whole-World simulation. Replay with `capped -- lake env leanchecker
 ScanFrame ScanNode ScanIteration ScanSearch` in `binary/`.
+
+`BucketScan.bucket_loop` adds both matched type outcomes and derives the
+complete source-prefix decision list. Its frames distinguish the actual
++0x9a mask boundary; `KindMask` represents every 32-bit ABI mask by its two
+relevant membership tests. Whole-World correspondence remains open.
+`KeypairFields.entry_peer_store` preserves the represented keypair fields
+while changing its embedded peer word, including to NULL; owner-ID
+correspondence is separate. Replay these additions with `capped -- lake env
+leanchecker Representation LookupType ScanSearch ScanType BucketScan
+KeypairRepresentation`.

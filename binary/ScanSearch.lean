@@ -159,6 +159,34 @@ theorem scan_search (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderA
       · simp [scanSteps, hit, walkTrue, cmpEvent, matchIndex, LookupObservation.decision, decisions]
       · simpa only [List.append_assoc] using frontTrace.trans (trace₄.trans trace₅)
 
+/-- Recover the actual represented suffix of the first matching entry.
+    Its cells remain members of the original bucket for byte separation. -/
+theorem firstIndex_bucket (query : Nat) (memory : Mem 64)
+    (es : List (Address × Leanux.WG.IndexEntry)) (head a : Address) (e : Leanux.WG.IndexEntry)
+    (bucket : BucketShape memory head es) (found : firstIndex query es = some (a,e)) :
+    ∃ rest, BucketShape memory (a+8) ((a,e)::rest) ∧
+      ∀ cell ∈ (a,e)::rest, cell ∈ es := by
+  induction es generalizing head with
+  | nil => cases found
+  | cons cell es ih =>
+    rcases cell with ⟨b,f⟩
+    cases hit : (f.index == query) with
+    | true =>
+      have same : (b,f) = (a,e) := by simpa only [firstIndex, hit, ite_true, Option.some.injEq] using found
+      cases same
+      refine ⟨es, ?_, fun _ member => member⟩
+      have node := (bucket_cons_fields bucket).2.1
+      rw [node] at bucket
+      exact bucket
+    | false =>
+      have foundTail : firstIndex query es = some (a,e) := by
+        simpa only [firstIndex, hit, Bool.false_eq_true, ite_false] using found
+      obtain ⟨next, _, tail⟩ := bucket_tail _ _ _ _ _ bucket
+      obtain ⟨rest, represented, members⟩ := ih next tail foundTail
+      exact ⟨rest, represented, fun cell member => List.mem_cons_of_mem _ (members cell member)⟩
+
+#print axioms firstIndex_bucket
+
 #print axioms DecisionPoints.append
 #print axioms walk_decision_points
 #print axioms scan_search

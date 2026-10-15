@@ -648,3 +648,42 @@ transport theorem remain open. No new function or R-region is certified;
 this support work does not supply the milestone rate. Finding 1 and the
 requirement to quote the trust base verbatim at the milestone are unchanged.
 No main merge or push; no mirror-lane landing paste has arrived.
+
+## Complete physical bucket loop, 2026-10-15
+
+`BucketScan.bucket_loop` composes the recursive scan with the matched type
+suffix, through exhaustion or the first index match of either kind. It
+retains the actual instruction history, exact decision records and tags,
+and physical frames at every appended cut. `source_bucket_steps` equates
+those records with the actual logged mirror prefix. The type suffix exports
+the actual +0x9a boundary before R14 is masked, separating the two register
+phases without relabeling an earlier state. This is still a physical
+component: whole-World R at the corresponding mirror checkpoints is open.
+
+[AGENT 2026-10-15] Relate the ABI kind mask by its two membership tests,
+leaving irrelevant bits free. Review identified that equality to a canonical
+mask would unnecessarily restrict inputs. `maskKinds_represents` proves
+that every 32-bit word has such a source kind-list representation. This is
+not a landed entry precondition.
+
+`KeypairFields.entry_peer_store` permits any new owning peer word, including
+NULL, while preserving represented keys, counters, replay bitmap and other
+scalar fields. It neither interprets the mirror's owner ID nor claims that
+a stale alias survives the write. That correspondence still requires the
+mirror-lane repair; finding 1 remains recorded and no dead-peer state has
+been excluded. No assumption was added to `TrustBase.lean`.
+
+Validation: full-parallel capped build passed (215 jobs), kernel replay of
+`Representation LookupType ScanSearch ScanType BucketScan
+KeypairRepresentation` passed, 243 printed axiom lists were standard-only,
+and the source audit passed for 60 Lean files. The fast tier passed 124 tests
+with one skip in 24.670 seconds, with `LEANUX_QEMU_SLOTS=16`. Independent
+review found no further defect in these components. Reproduce with the
+README build command and `capped -- lake env leanchecker` on those modules.
+
+Milestone 1 remains incomplete: whole-World R, complete helper correspondence,
+witnessed `Pre_lookup`, and function simulation/transport remain open. No
+function or whole-R region is certified; the support lemmas do not count
+toward the milestone's measured region rate. The final milestone report
+still owes that rate and the trust base verbatim. No main merge or push; no
+mirror-lane landing paste has arrived.

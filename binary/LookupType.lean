@@ -107,9 +107,10 @@ theorem type_arguments (fetch : Int64 → Option Decoded)
     The mask can be zero; a wrong-kind first index match is not skipped. -/
 theorem type_source (s : MachineData) (kind : Leanux.WG.IndexKind)
     (kinds : List Leanux.WG.IndexKind)
-    (mask : s.regs.get (.low .r14 .W32) = kindMask kinds) :
+    (mask : KindMask (s.regs.get (.low .r14 .W32)) kinds) :
     decide (typeBits s (.ofBitVec (kindWord kind)) ≠ 0) = kinds.contains kind := by
-  simpa only [typeBits, mask] using kindMask_accepts kinds kind
+  unfold typeBits
+  exact mask kind
 
 #print axioms type_source
 

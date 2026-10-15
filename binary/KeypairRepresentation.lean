@@ -1,5 +1,6 @@
 import Layouts
 import Memory
+import StackFrame
 
 namespace Binary.Layouts
 
@@ -270,6 +271,35 @@ theorem KeypairFields.frame {before after : Mem 64} {writes : BitVec 64 → Prop
 
 #print axioms SymmetricFields.frame
 #print axioms KeypairFields.frame
+
+/-- Updating the embedded entry's peer word preserves every represented
+    keypair scalar, key byte and replay bit. The separate nullable owner-ID
+    equation must be updated by whole R; this does not retain a stale alias. -/
+theorem KeypairFields.entry_peer_store (memory : Mem 64) (base oldWord newWord : BitVec 64)
+    (keypair : Leanux.WG.Keypair) (represented : KeypairFields memory base oldWord keypair) :
+    KeypairFields (memory.storeInt base 8 newWord.toInt) base newWord keypair := by
+  have frame := storeInt_frame memory base 8 newWord.toInt
+  have part (off size : Nat) (low : 8 ≤ off) (high : off+size ≤ 2^64) :
+      ∀ i < size, ¬InRange base 8 ((base + .ofNat 64 off) + .ofNat 64 i) := by
+    intro i hi
+    exact after_entry base off size low high _ ⟨i, hi, rfl⟩
+  have scalar (off size : Nat) (low : 8 ≤ off) (high : off+size ≤ 2^64) :
+      (memory.storeInt base 8 newWord.toInt).loadInt (base + .ofNat 64 off) size =
+        memory.loadInt (base + .ofNat 64 off) size :=
+    (frame.loadInt _ size (part off size low high)).symm
+  refine ⟨entry_peer_store_preserves_snapshot memory base newWord.toInt keypair represented.1,
+    SymmetricFields.frame frame _ _ (part keypair_sending symmetricSize (by decide) (by decide)) represented.2.1,
+    SymmetricFields.frame frame _ _ (part keypair_receiving symmetricSize (by decide) (by decide)) represented.2.2.1,
+    (scalar keypair_sending_counter 8 (by decide) (by decide)).trans represented.2.2.2.1,
+    (scalar keypair_remote_index 4 (by decide) (by decide)).trans represented.2.2.2.2.1,
+    (scalar keypair_i_am_the_initiator 1 (by decide) (by decide)).trans represented.2.2.2.2.2.1,
+    (scalar keypair_refcount 4 (by decide) (by decide)).trans represented.2.2.2.2.2.2.1, ?_⟩
+  have location : base + .ofNat 64 (keypair_entry + entry_peer) = base := by
+    simp [keypair_entry, entry_peer]
+  rw [location]
+  exact load64_store memory base newWord
+
+#print axioms KeypairFields.entry_peer_store
 
 /-- Local pointer-name validity. A complete object relation must separately
     justify the live domain from allocation/ownership history; neither

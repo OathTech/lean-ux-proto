@@ -22,6 +22,27 @@ theorem kindMask_accepts (kinds : List Leanux.WG.IndexKind) (kind : Leanux.WG.In
     cases h : kinds.contains .handshake <;> cases k : kinds.contains .keypair <;>
     simp [kindMask, kindWord, h, k]
 
+/-- Only the C enum bits carry kind membership. Irrelevant high mask bits
+    remain unrestricted, as do order and duplicates in the source list. -/
+def KindMask (word : BitVec 32) (kinds : List Leanux.WG.IndexKind) : Prop :=
+  ∀ kind, decide (word &&& kindWord kind ≠ 0) = kinds.contains kind
+
+theorem kindMask_represents (kinds : List Leanux.WG.IndexKind) :
+    KindMask (kindMask kinds) kinds := kindMask_accepts kinds
+
+def maskKinds (word : BitVec 32) : List Leanux.WG.IndexKind :=
+  (if decide (word &&& kindWord .handshake ≠ 0) then [.handshake] else []) ++
+  (if decide (word &&& kindWord .keypair ≠ 0) then [.keypair] else [])
+
+/-- Every 32-bit mask has a source kind-list representation. -/
+theorem maskKinds_represents (word : BitVec 32) : KindMask word (maskKinds word) := by
+  intro kind
+  cases h : decide (word &&& kindWord .handshake ≠ 0) <;>
+    cases k : decide (word &&& kindWord .keypair ≠ 0) <;> cases kind <;>
+    simp only [maskKinds, h, k, ite_true, Bool.false_eq_true, ite_false] <;> rfl
+
+#print axioms maskKinds_represents
+#print axioms kindMask_represents
 #print axioms kindMask_accepts
 
 /-- Ordered intrusive chain. The head and next fields point to the embedded
