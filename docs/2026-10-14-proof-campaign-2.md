@@ -120,13 +120,13 @@ composing reachable-state coherence. The landed representation keeps owner
 identity in each table row and its optional peer word in the owner object.
 The two are not interchangeable on arbitrary states.
 
-Seventeen terminal statements cover removal, the keypair-removal specialization,
+Twenty terminal statements cover removal, the keypair-removal specialization,
 handshake replacement, normally completed insertion, lookup owner/table
 provenance, total matched-entry NULL/zero-reference/live lookup effects, and
 recorded collision-prefix completion, a corpus-draw two-call instance and
 bounded allocation freshness, three original handshake-operation numeric
 uniqueness contracts, and total absent/disallowed lookup, plus exact keypair release and preservation
-of allocation bounds. Removal and replacement return under device residency. Replacement
+of allocation bounds, and three original handshake owner-uniqueness contracts. Removal and replacement return under device residency. Replacement
 preserves numeric indices and every owner object's peer word; preserving owner
 uniqueness additionally requires the destination keypair not already hashed.
 Insertion first removes this owner's old row, then inserts a fresh numeric
@@ -202,13 +202,28 @@ Proof elaboration initially failed on intermediate device equalities; explicit
 substitution before the second dereference closed the same statement. These
 were failed proof iterations, not infrastructure reruns.
 
+`OwnerFrames`, `SessionOwners` and `OwnerCreation` establish embedded-owner
+uniqueness through the three original handshake operations. The allocation
+bound supplies the destination freshness needed by replacement; the designated
+owner remains unhashed through key derivation, clearing and slot rotation.
+The bound is retained after every normally completed call, including allocation
+failure and early returns, so these three contracts compose across repeated
+normal calls. Independent review first identified loss of the bound in the
+weaker intermediate postcondition; the contract was strengthened before this
+checkpoint. Review of the final composition found no correctness issue.
+Unhashed does not imply resident or live: malformed slot aliases can release
+the designated keypair while preserving these table predicates. Store/slot
+safety, stopped prefixes and reachable owner-word coherence are explicitly
+outside these contracts. The frames are new campaign-2 index predicates;
+no campaign-1 lemma or shared layer was copied or edited.
+
 The table invariant is about hashed entries; this checkpoint does not yet establish all-driver reachable-session
 uniqueness or initialize/preserve owner-store coherence through every caller.
 
 Independent read-only review found no semantic defect. Its wording finding was
 fixed: the terminal lookup docstring now describes its exported provenance
 postcondition, leaving stronger first-selection semantics to the internal
-scan contract. The seventeen statements pass scoped build, standard-axiom inspection
+scan contract. The twenty statements pass scoped build, standard-axiom inspection
 and fresh stock kernel replay (`capped -- scripts/in-bundle lake env leanchecker
 --fresh Leanux.Proofs.WG.Index.Statements`). The full proof gate still fails in
 inherited `CounterWindow.Refinement` and `ReplayWindow.Counterexamples`;

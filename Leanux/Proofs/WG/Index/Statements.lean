@@ -1,7 +1,7 @@
 import Leanux.Proofs.WG.Index.DrawRecords
 import Leanux.Proofs.WG.Index.ReleaseBounds
 import Leanux.Proofs.WG.Index.CorpusDraws
-import Leanux.Proofs.WG.Index.HandshakeFrames
+import Leanux.Proofs.WG.Index.OwnerCreation
 import Leanux.Proofs.WG.Index.LookupMiss
 
 /-! H2's original-operation table contracts. Reachable owner/peer-word
@@ -254,5 +254,29 @@ theorem original_keypair_release_allocation_bounds (id : KeypairId) (now : Bool)
   obtain ⟨ret, final, run, device⟩ := keypairPut_exact id now d k resident live word w pre
   exact ⟨ret, final, run, device, released_next d id k now,
     released_owners_bounded d id k now owners, released_store_bounded d id k now resident store⟩
+
+/-- Original initiation creation preserves uniqueness of embedded table owners
+and the hashed-keypair allocation bound on normal completion, including removal
+of the owner's previous row before insertion. Numeric uniqueness is separate. -/
+theorem original_create_initiation_owners (pid : PeerId) :
+    Ensures (createInitiation pid) OwnersBoundedSafe (fun _ w => OwnersBoundedSafe w) :=
+  (ensures_iff _ _ _).mpr (createInitiation_owners_spec pid)
+
+/-- Original response creation preserves embedded-owner uniqueness on every
+normal completion, retaining the hashed-keypair allocation bound. Missing record
+inputs are not promised to succeed. -/
+theorem original_create_response_owners (pid : PeerId) :
+    Ensures (createResponse pid) OwnersBoundedSafe (fun _ w => OwnersBoundedSafe w) :=
+  (ensures_iff _ _ _).mpr (createResponse_owners_spec pid)
+
+/-- Original session installation preserves embedded-owner uniqueness when all
+initial hashed keypair identities precede the allocation cursor. Allocation
+establishes a fresh destination; key derivation, clearing and slot rotation keep
+it unhashed until replacement. This covers normal completion and early returns,
+and retains the allocation bound for composition; it does not cover stopped
+prefixes, store/slot safety or full reachable owner-word coherence. -/
+theorem original_begin_session_owners (pid : PeerId) :
+    Ensures (beginSession pid) OwnersBoundedSafe (fun _ w => OwnersBoundedSafe w) :=
+  (ensures_iff _ _ _).mpr (beginSession_owners_spec pid)
 
 end Leanux.Proofs.WG.Index
