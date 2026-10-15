@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AllowedIps.RoutingMaintenanceFrames
 import Leanux.Proofs.WG.AllowedIps.RoutingRxFrames
 import Leanux.Proofs.WG.Configuration.LifecycleCompletion
 import Leanux.Proofs.WG.Configuration.DeviceCompletion
@@ -58,8 +59,12 @@ preflight, without a whole-command target-residency premise. Successful public
 parseTrace supplies every configured peer's address shape, including malformed
 entry alternatives. The complete original device configuration now composes
 these cuts, including completed clear before remove-all cleanup. Entry routing
-remains explicit; enclosing lifecycle/Runner closure and packet admission remain
-separate.
+remains explicit in the local contracts. Optional-device routing now covers
+actual guarded creation, down, destruction/deletion, absent whole commands and
+all fixture/prefill modes. Concrete TX/Stack/RX, receive admission, NAPI, crypt
+iterations, timer callbacks and device open/up/namespace exit preserve routing
+through whole-call lifts, permitting peer deletion. Enclosing scheduler/Env/syscall
+and Runner execution, and packet authorization, remain separate.
 Actual local parser output now discharges address shape for the setAllowedip
 guards and its selected bounded insertion. Complete original free normally
 clears both represented families and every resident list, preserving the other
@@ -2022,5 +2027,74 @@ theorem original_traffic_routing_completion (initial : FlatTable × FlatTable)
     ⟨Logged.erasesPrefix_lift a, global_completion_lift initial a ha⟩
   exact ⟨lift _ (wgXmit_routing family addr packets mtu), lift _ (txStep_routing pid),
     lift _ (consumeDataDone_routing pid pkt endpoint), lift _ (actualRxPoll_routing pid budget)⟩
+
+/-- Original receive admission, including keypair refusal and EPIPE/ENOSPC
+cleanup, preserves the routing table/frontiers and every surviving resident
+list on normal return. This requires no input residency, affiliation, credit or
+packet-validity premise. Its whole-call lift erases on all inputs and retains
+safe prior completion history on Stop, without a returned failed World. -/
+theorem original_receive_admission_routing (initial : FlatTable × FlatTable)
+    (msg : List UInt8) (src : WG.SkbSource) (ds : Nat) (id : WG.SkbId) :
+    Framing.SameView routingView (WG.enqueuePerDeviceAndPeerRx id) ∧
+    RetainsRoutingCall (WG.consumeData msg src ds) ∧
+    RetainsRoutingCall (WG.packetReceive msg src) ∧
+    RetainsRoutingCall (WG.wgReceive msg src) ∧
+    Logged.ErasesPrefix (Logged.liftPrefix (Event := RoutingCompletion) (WG.wgReceive msg src))
+      (WG.wgReceive msg src) ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Logged.liftPrefix (WG.wgReceive msg src)) :=
+  ⟨enqueuePerDeviceAndPeerRx_routing id, consumeData_routing msg src ds,
+    packetReceive_routing msg src, wgReceive_routing msg src,
+    Logged.erasesPrefix_lift _, global_completion_lift initial _ (wgReceive_routing msg src)⟩
+
+/-- Both actual direct poll callers, IRQ-exit placement and crypt iterations
+now have concrete routing frames: checksum, Stack, softirq, IRQ and rescheduling
+callbacks are discharged. Original pending-map scans, ambiguity choices and
+Stops remain. No saved-list or progress premise is imposed. This local caller
+closure is not a complete activation/scheduler or packet-authorization theorem. -/
+theorem original_concrete_napi_routing (initial : FlatTable × FlatTable) (pid : WG.PeerId) :
+    RetainsRoutingCall Env.napiSoftirq ∧ RetainsRoutingCall Env.pollScheduledInline ∧
+    RetainsRoutingCall Env.napiIrqExit ∧
+    RetainsRoutingCall (WG.encryptStep Env.checksumHelp Env.napiSoftirq) ∧
+    RetainsRoutingCall (WG.encryptIter Env.checksumHelp Env.napiSoftirq (Env.condResched .encryptWorker)) ∧
+    RetainsRoutingCall (WG.decryptStep Env.napiSoftirq Env.napiIrqExit) ∧
+    RetainsRoutingCall (WG.decryptIter Env.napiSoftirq Env.napiIrqExit (Env.condResched .decryptWorker)) ∧
+    RetainsRoutingCall (WG.txIter pid (Env.condResched .txWorker)) ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Logged.liftPrefix Env.napiSoftirq) ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Logged.liftPrefix Env.pollScheduledInline) ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Logged.liftPrefix Env.napiIrqExit) :=
+  ⟨napiSoftirq_routing, pollScheduledInline_routing, napiIrqExit_routing,
+    actualEncryptStep_routing, actualEncryptIter_routing, actualDecryptStep_routing,
+    actualDecryptIter_routing, actualTxIter_routing pid,
+    global_completion_lift initial _ napiSoftirq_routing,
+    global_completion_lift initial _ pollScheduledInline_routing,
+    global_completion_lift initial _ napiIrqExit_routing⟩
+
+/-- Every original timer callback and device open/up/namespace-exit preserves
+routing on normal return, including ordinary negative errors. Peer deletion is
+allowed, and subsequent cached writes are justified by actual source getters.
+Whole-call lifts retain the existing journal and optional routing state; no
+resident-owner, reference-credit, saved-list, successful-drain or fixture premise
+is needed. Timer scheduling and enclosing Runner execution remain separate. -/
+theorem original_timer_device_routing (initial : FlatTable × FlatTable)
+    (pid : WG.PeerId) (timer : WG.PeerTimer) :
+    RetainsRoutingCall (WG.timerCallback pid timer) ∧
+    RetainsRoutingCall WG.wgOpen ∧ RetainsRoutingCall WG.wgUp ∧
+    Framing.SameView routingView WG.netnsPreExit ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Logged.liftPrefix (WG.timerCallback pid timer)) ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Logged.liftPrefix WG.wgOpen) ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Logged.liftPrefix WG.wgUp) ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Logged.liftPrefix WG.netnsPreExit) :=
+  ⟨timerCallback_routing pid timer, wgOpen_routing, wgUp_routing, netnsPreExit_routing,
+    global_completion_lift initial _ (timerCallback_routing pid timer),
+    global_completion_lift initial _ wgOpen_routing, global_completion_lift initial _ wgUp_routing,
+    global_completion_same initial _ netnsPreExit_routing⟩
 
 end Leanux.Proofs.WG.CryptokeyRouting
