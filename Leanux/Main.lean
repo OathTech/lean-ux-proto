@@ -15,9 +15,15 @@ def main (args : List String) : IO UInt32 := do
   if args == ["--hidden-sites"] then
     output.putStrLn Leanux.Runner.hiddenSitesJson.compress
     return 0
+  -- lane C: the fixture namespace's IPv4 trie at boot (`lo` up), as the
+  -- guest's LEANUX_FIXTURE row reports it (harness/linux.py EXPECTED_NET_FIXTURE)
+  if args == ["--fib-boot"] then
+    match Leanux.Runner.fibBootJson with
+    | .ok j => output.putStrLn j.compress; return 0
+    | .error e => errors.putStrLn e.message; return 4
   let domainOnly := args == ["--domain"]
   if !args.isEmpty && !domainOnly then
-    errors.putStrLn "usage: leanux-model [--decisions | --hidden-sites | --domain] < traces.jsonl"
+    errors.putStrLn "usage: leanux-model [--decisions | --hidden-sites | --fib-boot | --domain] < traces.jsonl"
     return 2
   let input ← IO.getStdin
   repeat

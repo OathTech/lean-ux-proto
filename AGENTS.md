@@ -46,7 +46,7 @@ channel for the models beside the differential check, under Rule Zero:
 (1) the mirror might be wrong; (2) the kernel might contain bugs; (3) the
 former is much more likely than the latter [USER 2026-10-14]. A discrepancy
 is read in that order and a statement is never bent to accommodate one. The mirror
-(`Leanux/FS`, `Leanux/WG`, `Leanux/Kernel`, `Leanux/Env`,
+(`Leanux/FS`, `Leanux/WG`, `Leanux/Net`, `Leanux/Kernel`, `Leanux/Env`,
 `Leanux/Runner.lean`) carries no theorem, no proof-shaped restructuring, and
 no change made to let a proof close: a proof that cannot close is a report
 against the mirror, settled by the differential check, never by editing the
@@ -145,7 +145,7 @@ commit, then deleted unless it replaces a sentinel. No evidence bundles,
 integration records or run narratives: a merge commit's message carries the
 run's counts and the user's signoff.
 
-The mirror (`Leanux/FS`, `Leanux/WG`, `Leanux/Kernel`) contains only the C's
+The mirror (`Leanux/FS`, `Leanux/WG`, `Leanux/Net`, `Leanux/Kernel`) contains only the C's
 data and control flow. Fixture, scheduling and timing assumptions live in
 the environment model (`Leanux/Env.lean`) or the runner.
 

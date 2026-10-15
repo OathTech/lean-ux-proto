@@ -45,6 +45,14 @@ FIELDS = {
     # fixture address and RTM_DELROUTE of the default route via wg0, per
     # family, over L's temporary rtnetlink socket; the result is the ACK
     "wg_deladdr": {"op", "family"}, "wg_delroute": {"op", "family"},
+    # Lane C (docs/2026-10-15-design-c-fib-trie.md, 10): over the same socket,
+    # RTM_NEWROUTE of an IPv4 route (type unicast via `oif` wg0 or lo, or
+    # unreachable, blackhole, prohibit without a device; optional metric, mtu
+    # and the NLM_F_ flags excl, replace, append as `nlflags`) and RTM_NEWADDR of another
+    # IPv4 address on wg0; wg_delroute takes an optional destination with its
+    # prefix, oif, type and metric (without them, the default route via wg0).
+    # The result is the acknowledgement's error; the trie's shape follows.
+    "wg_addroute": {"op", "family", "dst", "plen", "type"}, "wg_addaddr": {"op", "addr", "plen"},
     # W8 (docs/2026-10-06-w8-w9-netns-routing.md 3.2): in the foreign-creator
     # fixture, close the creating namespace's holders (the injector, the
     # listeners, then the pin) and wait for its teardown; the result is 0
@@ -120,6 +128,7 @@ EPOLL_MAXEVENTS = (1, 16)   # tier 1's bound on epoll_wait's maxevents (the kern
 LIFECYCLE_OPS = ("wg_create", "wg_down", "wg_delete")
 WG_OPS = {"wg_set", "wg_get", "wg_up", "wg_xmit", "wg_observe", "wg_inject", "wg_advance",
           "wg_flood", "wg_set_mtu", "wg_batch", "wg_deladdr", "wg_delroute", "wg_netns_close",
+          "wg_addroute", "wg_addaddr",
           "wg_get_start", "wg_get_recv"} | set(LIFECYCLE_OPS)
 STEPPED_OPS = ("wg_get_start", "wg_get_recv")
 # W9: `wg_inject`'s optional destination ("to"): the fixture's loopback
@@ -147,6 +156,7 @@ OPCODES = {
     "wg_get_start": 20, "wg_get_recv": 21,   # W2
     "wg_netns_close": 22,   # W8
     "wg_deladdr": 23, "wg_delroute": 24,   # W9
+    "wg_addroute": 35, "wg_addaddr": 36,   # lane C (docs/2026-10-15-design-c-fib-trie.md, 10)
     # W4+W7: allocated by the coordinator (docs/2026-10-11-interface.md)
     "wg_set_mtu": 25,
     "wg_batch": 26,
@@ -224,6 +234,13 @@ MAX_IO = 69632
 # link-local address fe80::1 on lo (IPV6_PKTINFO), so wg0 learns a scoped
 # endpoint.
 OPTIONAL_OP_FIELDS = {"pause_ms", "tos", "from"}
+# Lane C: a route's optional device, metric, MTU and NLM_F_ flags; a
+# delroute's optional named route
+ROUTING_OPTIONAL = {"wg_addroute": {"oif", "metric", "mtu", "nlflags"},
+                    "wg_delroute": {"dst", "plen", "oif", "type", "metric"}}
+ROUTE_TYPES = {"unicast": 1, "unreachable": 7, "blackhole": 6, "prohibit": 8}   # RTN_*
+ROUTE_OIFS = {"lo": 1, "wg0": 2}   # the wire's device code (the guest knows wg0's ifindex)
+ROUTE_FLAGS = {"excl": 1, "replace": 2, "append": 4}
 SENDER_TOS = (0, 255)
 PAUSE_MS = (1, 20)
 # W1 (docs/2026-10-06-w1-w2-netlink.md, 3.1): the optional device selector
@@ -237,6 +254,38 @@ DEVICE_OPS = {"wg_set", "wg_get", "wg_get_start"}
 # wire has no ninth field.
 GUEST_PIPES = True
 LEGACY_IO = 16
+
+
+def _hex_addr4(value, where):
+    if type(value) is not str or not re.fullmatch(r"[0-9a-f]{8}", value, re.ASCII):
+        raise InvalidTrace(f"{where}: expected 8 lowercase hex digits")
+
+
+def _validate_route(op, where, add):
+    """Lane C: a route's destination and prefix (host bits clear: the trie
+    keys a prefix), type, device, metric, MTU and flags. A unicast route
+    names its device, a reject type none (the kernel refuses one)."""
+    _hex_addr4(op["dst"], f"{where}.dst")
+    _integer(op["plen"], 0, 32, f"{where}.plen")
+    dst, plen = int(op["dst"], 16), op["plen"]
+    if plen < 32 and dst & ((1 << (32 - plen)) - 1):
+        raise InvalidTrace(f"{where}.dst: host bits set for /{plen}")
+    if "type" in op and op["type"] not in ROUTE_TYPES:
+        raise InvalidTrace(f"{where}.type: expected one of {list(ROUTE_TYPES)}")
+    if "oif" in op and op["oif"] not in ROUTE_OIFS:
+        raise InvalidTrace(f"{where}.oif: expected wg0 or lo")
+    if add:
+        if op["type"] == "unicast" and "oif" not in op:
+            raise InvalidTrace(f"{where}: a unicast route needs oif")
+        if op["type"] != "unicast" and "oif" in op:
+            raise InvalidTrace(f"{where}: a {op['type']} route takes no oif")
+        if "mtu" in op:
+            _integer(op["mtu"], 68, 65535, f"{where}.mtu")
+        flags = op.get("nlflags", [])
+        if type(flags) is not list or any(f not in ROUTE_FLAGS for f in flags) or len(set(flags)) != len(flags):
+            raise InvalidTrace(f"{where}.nlflags: expected distinct names among {list(ROUTE_FLAGS)}")
+    if "metric" in op:
+        _integer(op["metric"], 0, 2**32 - 1, f"{where}.metric")
 
 
 def _integer(value, low, high, where):
@@ -383,7 +432,8 @@ def validate_trace(trace):
         else:
             optional = OPTIONAL_OP_FIELDS | ({"device"} if name in DEVICE_OPS else set()) \
                 | ({"to"} if name == "wg_inject" else set()) \
-                | SECCOMP_OPTIONAL.get(name, set())   # W1: the device selector; W9: the destination; seccomp W
+                | SECCOMP_OPTIONAL.get(name, set()) \
+                | ROUTING_OPTIONAL.get(name, set())   # W1: the device selector; W9: the destination; seccomp W; lane C
             _fields({k: v for k, v in op.items() if k not in optional}, FIELDS[name], f"ops[{i}]")
             pipes = name in PIPE_PRODUCERS
         if "device" in op:
@@ -461,6 +511,16 @@ def validate_trace(trace):
             _integer(op["family"], 4, 6, f"ops[{i}].family")
             if op["family"] == 5:
                 raise InvalidTrace(f"ops[{i}].family: expected 4 or 6")
+            if name == "wg_delroute" and set(op) & ROUTING_OPTIONAL["wg_delroute"]:   # lane C: a named route
+                if op["family"] != 4 or "dst" not in op or "plen" not in op:
+                    raise InvalidTrace(f"ops[{i}]: a named route is IPv4 with dst and plen")
+                _validate_route(op, f"ops[{i}]", add=False)
+        if name == "wg_addroute":
+            _integer(op["family"], 4, 4, f"ops[{i}].family")   # IPv4 (IPv6 keeps the environment's rule, the design note U2)
+            _validate_route(op, f"ops[{i}]", add=True)
+        if name == "wg_addaddr":
+            _hex_addr4(op["addr"], f"ops[{i}].addr")
+            _integer(op["plen"], 1, 32, f"ops[{i}].plen")
         if name == "wg_advance":
             _integer(op["ticks"], 1, 2**31, f"ops[{i}].ticks")
         if name == "wg_flood":
@@ -807,6 +867,17 @@ def serialize_wire(traces, steer_wire=None, dispatch=(), arm_records=False, allo
                 a, b = len(op["items"]), op.get("wait_ms", 100)
             if op["op"] in ("wg_deladdr", "wg_delroute"):   # W9
                 a = op["family"]
+                if op["op"] == "wg_delroute" and "dst" in op:   # lane C: a named route; b's top bit marks it
+                    b = (1 << 31) | op["plen"] | (ROUTE_OIFS.get(op.get("oif"), 0) << 8) | (ROUTE_TYPES.get(op.get("type"), 0) << 16)
+                    op_value = str(int(op["dst"], 16) | (op.get("metric", 0) << 32))
+            if op["op"] == "wg_addroute":   # lane C: a = plen | type << 8 | oif code << 16 | flags << 24, b = metric, value = dst | mtu << 32
+                a = op["plen"] | (ROUTE_TYPES[op["type"]] << 8) | (ROUTE_OIFS.get(op.get("oif"), 0) << 16) \
+                    | (sum(ROUTE_FLAGS[f] for f in op.get("nlflags", [])) << 24)
+                b = op.get("metric", 0)
+                op_value = str(int(op["dst"], 16) | (op.get("mtu", 0) << 32))
+            if op["op"] == "wg_addaddr":   # lane C: a = plen, value = the address
+                a = op["plen"]
+                op_value = str(int(op["addr"], 16))
             if op["op"] in ("epoll_ctl", "epoll_wait"):
                 # epoll R (design 6): fd = the set; epoll_ctl's newfd = the target,
                 # a = cmd, b = events, value = data; epoll_wait's a = maxevents, b = timeout

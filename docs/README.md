@@ -114,6 +114,7 @@ Read these before the README's claims are taken at face value:
 | [2026-10-15-binary-tv-scoping.md](2026-10-15-binary-tv-scoping.md) | Instruction census and executable three-way index-lookup probe under Kraken; blockers, state relation and checker estimates |
 | [2026-10-15-design-b4-load-ratelimiter.md](2026-10-15-design-b4-load-ratelimiter.md) | B4 design, revised against its review: the flood run exactly over `wg_batch` with a named checker rule change (no counter record: the instruments already carry it), the entry allocation as a kind-305 site with no kernel change, the two-table uninit fix; the ratelimiter GC deferred to its own stream with the exclusion's reason sharpened; 21 findings dispositioned |
 | [2026-10-15-design-b4-review.md](2026-10-15-design-b4-review.md) | Independent review of the B4 design: 21 findings; build questions 1 and 3 with changes, redesign the GC |
+| [2026-10-15-design-c-fib-trie.md](2026-10-15-design-c-fib-trie.md) | Design C: the IPv4 FIB trie as a mirror module; the fixture's tables measured from the coverage and comparison streams, the trie's shape, scope, corpus, mutants, frames, estimate |
 | [2026-10-13-review-r5-counterexamples.md](2026-10-13-review-r5-counterexamples.md) | The independent review of the campaign's R5 counterexamples: three statement artefacts, design nuances at most, no tray entry |
 
 ## Reviews of the whole

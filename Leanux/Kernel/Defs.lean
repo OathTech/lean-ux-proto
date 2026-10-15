@@ -1,5 +1,6 @@
 import Leanux.Kernel.Decision
 import Leanux.WG.Types
+import Leanux.Net.Fib.Types
 import Std.Data.TreeMap
 import Std.Data.TreeSet
 import Std.Data.HashSet
@@ -64,6 +65,7 @@ def FMODE_NOACCOUNT : UInt32 := (1 : UInt32) <<< 29
 def EBADF : Int := 9
 def EAGAIN : Int := 11
 def ENOMEM : Int := 12
+def ENOBUFS : Int := 105
 def EFAULT : Int := 14
 def EBUSY : Int := 16
 def EPIPE : Int := 32
@@ -620,6 +622,17 @@ structure Kernel where
       `xa_alloc_cyclic` cursor of `dev_by_index`, never reset): the next
       device registered gets this index. -/
   netIfindexNext : Nat := 4
+  /-- Lane C: the namespace's one IPv4 FIB table (the local table aliases
+      the main, docs/2026-10-15-design-c-fib-trie.md 1.1), its
+      `rt_genid` (`rt_cache_flush`, route.c:406-409) and `dev_addr_genid`
+      (the address events, fib_frontend.c:1458/1463/1505; a random start the
+      mirror counts from 0 with the comparison's operands excluded,
+      section 5(a)). -/
+  fib4 : Net.Fib.Table := {}
+  /-- W8's creating namespace C in the foreign-creator mode, where
+      WireGuard's UDP sockets bind and `send4` routes (the W8 design, 3.1):
+      its own table (`lo` only), torn down at `wg_netns_close`. -/
+  fib4C : Net.Fib.Table := {}
   /-- L: the ratelimiter's global singleton (ratelimiter.c:12-18). -/
   ratelimiter : Ratelimiter := {}
   /-- Pipes (P): the pipefs inodes, the `pipe_inode_info`s and their data
@@ -714,6 +727,12 @@ inductive EnvSite where
   -- and get_next_ino, no decisions (audit M3)
   | allocInode | kcallocResizeBufs
   | copyPageToIter | copyPageFromIter | sigqueueAlloc
+  -- lane C (docs/2026-10-15-design-c-fib-trie.md, section 5): the FIB trie's
+  -- GFP_KERNEL allocations in task context, constant successes on the fixture
+  -- until their record-only sites are armed: leaf_new (fib_trie.c:359),
+  -- tnode_alloc (:333), the aliases (:1281, :1344), fib_create_info
+  -- (fib_semantics.c:1489), ip_fib_metrics_init (metrics.c:76)
+  | fibLeafAlloc | fibTnodeAlloc | fibAliasAlloc | fibInfoAlloc | fibMetricsAlloc
   -- W4: skb_gso_segment's allocations inside skb_segment (device.c:179), an
   -- assumed-success site as the sites above (A's domain)
   | skbSegment
@@ -1623,12 +1642,27 @@ structure World where
       check reads (`rt_genid`; the IPv6 fib sernum), bumped by every table
       change. The loopback prefixes are constants (`World.route4/6`). -/
   addrs4 : List Nat := []
+  /-- Lane C: the prefix length of a wg0 address added by `wg_addaddr`; an
+      address absent here is a `/32` (the fixture's). -/
+  addrPlens4 : List (Nat × Nat) := []
   addrs6 : List Nat := []
-  defaultRoute4 : Bool := false
   defaultRoute6 : Bool := false
-  defaultRoute4Accessed : Bool := false
-  ipv4Gen : Nat := 0
   ipv6Gen : Nat := 0
+  /-- Lane C: the IPv4 neighbour entries the stack created at a device's
+      first output (`ip_finish_output2` → `__neigh_create` → `arp_constructor`):
+      on a loopback or point-to-point device (every device of this fixture)
+      the key is `INADDR_ANY`, one entry per device, classified at address 0
+      (arp.c:233-242; the zeronet early return of `__inet_dev_addr_type`), as
+      (in the creating namespace, ifindex, type); never collected on this
+      fixture (`neigh_periodic_work` returns below `gc_thresh1`,
+      neighbour.c:980) and removed by `arp_ifdown` at the device's down and
+      unregister. -/
+  neighbours : List (Bool × Nat × Nat) := []
+  /-- Lane C: which namespace's table the trie functions address: the
+      device namespace D (`Kernel.fib4`), or the creating namespace C
+      (`Kernel.fib4C`) while `send4`/`send6` and C's teardown run in the
+      foreign-creator mode. -/
+  fibCreatorNs : Bool := false
   /-- W9 (design 14.3b): a successful flag-changing `wg_up` gets its
       addresses and routes after the operation's wait (the guest's
       `route_into_wg0` follows the wait), so the table changes apply after
@@ -1697,6 +1731,9 @@ abbrev M := StateT World (Except Stop)
 structure Route where
   dev : Nat
   src : Nat
+  /-- Lane C: the route's `RTAX_MTU` metric (`dst_mtu`, ip.h:490-492), 0 for
+      none (the device's MTU applies). -/
+  mtu : Nat := 0
   deriving Repr, BEq
 
 def LO_IFINDEX : Nat := 1
@@ -1709,23 +1746,6 @@ def LOOPBACK4 : Nat := 0x7f000001
     `from: "ll"` injection. -/
 def LO_LINK_LOCAL : Nat := 0xfe8000000000000000000000ffff0001
 
-/-- `ip_route_output_flow` on the fixture's tables (route.c): a set source
-    must be local (`127/8` or a wg0 address), else `-ENETUNREACH`
-    (route.c:2751-2754; the `-EINVAL` class of :2706-2712 needs a multicast
-    or zeronet source the fixture never configures); a `127/8` destination
-    or a wg0 address takes the local route over `lo` with `prefsrc`
-    (`127.0.0.1` for `127/8`, the address itself otherwise; :2833-2838);
-    anything else the default route via wg0 while it exists, with the
-    device's address as source, else `-ENETUNREACH` (:2714). -/
-def World.route4 (w : World) (saddr daddr : Nat) : Except Int Route :=
-  let isLocal (a : Nat) := a / 2 ^ 24 == 127 || w.addrs4.contains a
-  if saddr != 0 && !isLocal saddr then .error (-101)   -- -ENETUNREACH
-  else if isLocal daddr then
-    .ok { dev := LO_IFINDEX, src := if saddr != 0 then saddr else if daddr / 2 ^ 24 == 127 then LOOPBACK4 else daddr }
-  else match w.defaultRoute4, w.addrs4.head? with
-    | true, some a => .ok { dev := WG0_IFINDEX, src := if saddr != 0 then saddr else a }
-    | _, _ => .error (-101)
-
 /-- `ipv6_dst_lookup_flow` on the fixture's tables: `::1` and wg0's address
     are local over `lo`; else the default route via wg0 (source: the
     device's address) or `ip6_null_entry`'s `-ENETUNREACH`. -/
@@ -1736,18 +1756,6 @@ def World.route6 (w : World) (saddr daddr : Nat) : Except Int Route :=
   else match w.defaultRoute6, w.addrs6.head? with
     | true, some a => .ok { dev := WG0_IFINDEX, src := if saddr != 0 then saddr else a }
     | _, _ => .error (-101)
-
-/-- A lookup, noting a resolution through the IPv4 default route
-    (`fib_alias_accessed`, the `FA_S_ACCESSED` flag `wg_delroute`'s
-    generation bump depends on). -/
-def routeLookup (family saddr daddr : Nat) : M (Except Int Route) := do
-  let w ← get
-  if family == 4 then
-    let r := w.route4 saddr daddr
-    if let .ok { dev := d, .. } := r then
-      if d == WG0_IFINDEX then set { w with defaultRoute4Accessed := true }
-    return r
-  else return w.route6 saddr daddr
 
 /-- W9: whether a fixture socket receives at `addr:port` for `family`: the
     dual-stack sender is bound to the wildcard address at `SENDER_PORT`, so

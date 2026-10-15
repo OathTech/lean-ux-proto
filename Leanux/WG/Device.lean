@@ -1,4 +1,5 @@
 import Leanux.WG.Netlink
+import Leanux.Net.Route
 
 /-!
 # drivers/net/wireguard/device.c — bringing wg0 up and transmitting
@@ -302,14 +303,21 @@ def wgDestruct : M Unit := do
     runs `wg_stop` for an up device; then `flush_all_backlogs` (a sleep
     point), the notifiers, and `netdev_run_todo` (its `rcu_barrier`, a sleep
     point), which calls `wg_destruct`. -/
-def wgDelete : M Int := do
+def wgDelete (onDown : M Unit := pure ()) (onUnregister : M Unit := pure ()) : M Int := do
   if (← getK).wg.isNone then return -ENODEV
-  if (← getDev).running then wgDown
+  if (← getDev).running then
+    wgDown
+    -- `dev_close_many`'s `NETDEV_DOWN` notifiers (the environment's: lane C's
+    -- routing, devinet's multicast leave)
+    onDown
   -- the notifications of dev_close_many and of NETDEV_UNREGISTER (ifinfo,
   -- netconf and address messages: nlmsg_new) and netdev_unregister_kobject's
   -- uevents (alloc_uevent_skb), below the cut when the run armed
   -- __alloc_skb; then flush_all_backlogs
   skipCut allocCuts
+  -- `NETDEV_UNREGISTER`'s notifiers (devinet's `inetdev_destroy`, the
+  -- routing's `fib_disable_ip`), before `wg_destruct` runs from the todo list
+  onUnregister
   mayHaveSlept
   wgDestruct
   return 0
@@ -356,7 +364,21 @@ def wgXmit (family addr : Nat) (pkts : List Packet) (mtu : Nat) : M Int := do
     -- `__dev_queue_xmit`'s `rcu_read_unlock_bh` (`loopbackSend`).
     if !(← branch .xmitErrorInet (family == 4)) then _ ← branch .xmitErrorInet6 (family == 6)
     let drawn ← skipCutSites ([.icmpCredit, .ipIdentKey, .ipIdentReserve, .flowHashSecret] ++ allocCuts)
-    loopbackSend [] (drawn.contains (HiddenSite.icmpCredit).info.id)
+    let mut sent := drawn.contains (HiddenSite.icmpCredit).info.id
+    -- lane C: once the global credit was drawn, `__icmp_send` routes the
+    -- error to the dropped packet's source (icmp.c:780, `icmp_route_lookup`:
+    -- :512 with a zero source; `xfrm_lookup` is the identity without XFRM,
+    -- so :525 classifies the destination on the packet's device); a route
+    -- error is `out_unlock`, nothing sent. The error's loopback delivery
+    -- creates lo's one neighbour (`Net.neighbourClassify`).
+    if family == 4 && sent then
+      let src := ((first.bytes.drop 12).take 4).foldl (fun acc b => acc * 256 + b.toNat) 0
+      match ← Net.routeOutput4 0 src with
+      | .error _ => sent := false
+      | .ok _ =>
+        _ ← Net.Fib.inetDevAddrType (some WG0_IFINDEX) src
+        Net.neighbourClassify LO_IFINDEX
+    loopbackSend [] sent
     modifyDev fun d => { d with txErrors := d.txErrors + 1 }   -- DEV_STATS_INC(dev, tx_errors)
     return ret
   let peer ← lookupDst family addr

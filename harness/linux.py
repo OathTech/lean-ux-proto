@@ -141,7 +141,15 @@ EXPECTED_CLOCKSOURCE = "refined-jiffies"
 # `net.ipv4.icmp_ratelimit` and `net.ipv6.icmp.ratelimit` at 0, and the
 # link-local address fe80::ffff:1/128 on lo (the scoped-source injections;
 # not fe80::1, a transmit destination of existing traces).
-EXPECTED_NET_FIXTURE = {"auto_flowlabels": 0, "icmp_ratelimit": 0, "icmp6_ratelimit": 0, "lo_link_local": "fe80::ffff:1"}
+# Lane C (docs/2026-10-15-design-c-fib-trie.md, 9.3 and 9.4): the fixture
+# namespace's IPv4 trie at boot (`lo` up: 127.0.0.1/32 and 127.0.0.0/8 local,
+# 127.255.255.255/32 broadcast), as /proc/net/fib_trie prints it and the
+# guest reads it back into its LEANUX_FIXTURE row; the mirror builds the
+# same trie by the C's own inserts (`leanux-model --fib-boot`, checked equal
+# by evaluator.test_model_replay).
+EXPECTED_FIB_TRIE_BOOT = ["127.0.0.0", 8, 2, 0, 2, [["127.0.0.0", 31, 1, 0, 0, [["127.0.0.0", [[8, "host", "LOCAL", 0]]], ["127.0.0.1", [[32, "host", "LOCAL", 0]]]]], ["127.255.255.255", [[32, "link", "BROADCAST", 0]]]]]
+EXPECTED_NET_FIXTURE = {"auto_flowlabels": 0, "icmp_ratelimit": 0, "icmp6_ratelimit": 0, "lo_link_local": "fe80::ffff:1",
+                        "fib_trie": EXPECTED_FIB_TRIE_BOOT}
 BOOT_PARAMETERS = f"console=ttyS0 panic=1 nokaslr loglevel=3 clocksource={EXPECTED_CLOCKSOURCE}"
 # epoll stream R (docs/2026-10-12-epoll-design.md, 3.4): fs/eventpoll.c's
 # max_user_watches, computed at boot from the memory the kernel manages when
@@ -283,6 +291,8 @@ def _check_observation(result, trace):
         # wait digest; seccomp W (design 6.1): a probe's sigsys and child records
         fields = fields | {"read": {"digest"}, "epoll_wait": {"digest"}, "write": {"sigpipe"}, "pipe2": {"fds"},
                            "seccomp_probe": {"sigsys", "child"}}.get(op["op"], set())
+        if op["op"] in FIB_TRIE_OPS:
+            fields = fields | {"fib_trie"}   # lane C: the trie after a table-changing operation
         if type(observation) is not dict or set(observation) != fields:
             raise ValueError("operation observation fields")
         ret, error, data = observation["ret"], observation["errno"], observation["bytes"]
@@ -408,6 +418,31 @@ def reply_peer_key(reply):
     message's index word ([10, addr, port, scope, tos, dst, length, type,
     word8, bytes])."""
     return (reply[1], reply[2], message_index(reply[9]))
+
+
+# Lane C: the operations after which the guest reads /proc/net/fib_trie
+# (harness/guest.c print_fib_trie) and the mirror serialises its trie
+# (Leanux/Syscalls.lean): the observation's `fib_trie` field, compared exactly
+FIB_TRIE_OPS = ("wg_up", "wg_down", "wg_delete", "wg_deladdr", "wg_delroute", "wg_set_mtu", "wg_netns_close",
+                "wg_addroute", "wg_addaddr")
+
+
+def attach_fib_tries(results, records):
+    """Each table-changing operation has exactly one LEANUX_FIBTRIE record: the
+    trie as the proc file printed it, a tnode ["prefix", plen, bits, full,
+    empty, [children]], a leaf ["key", [[plen, "scope", "TYPE", tos], ...]],
+    or null for an empty trie."""
+    by_trace = {result["id"]: result for result in results}
+    seen = set()
+    for record in records:
+        if type(record) is not dict or set(record) != {"id", "index", "fib_trie"} or record["id"] not in by_trace:
+            raise ValueError("fib_trie record fields or identity")
+        key = (record["id"], record["index"])
+        observations = by_trace[record["id"]]["observations"]
+        if key in seen or type(record["index"]) is not int or not 0 <= record["index"] < len(observations):
+            raise ValueError("duplicate or out-of-range fib_trie record")
+        seen.add(key)
+        observations[record["index"]]["fib_trie"] = record["fib_trie"]
 
 
 def attach_observed(results, traces, records):
@@ -537,6 +572,7 @@ def _collect(outdir, traces, process_returncode, alloc=None):
     alloc_status, alloc_tsc = [], []
     epoll_rows = []   # epoll R: the warm-up and max_user_watches, once per boot
     child_coverage, child_comparisons, child_hidden = [], [], []   # seccomp W: the sandboxed child's streams
+    fib_tries = []   # lane C: the trie after a table-changing operation (LEANUX_FIBTRIE rows)
     for line in (outdir / "boot.log").read_text(errors="strict").splitlines():
         line = line.rstrip("\r")
         for prefix, target in (("LEANUX_RESULT ", results), ("LEANUX_COVERAGE ", coverage),
@@ -551,7 +587,7 @@ def _collect(outdir, traces, process_returncode, alloc=None):
                                ("LEANUX_ALLOC ", alloc_status), ("LEANUX_ALLOC_TSC ", alloc_tsc),
                                ("LEANUX_EPOLL ", epoll_rows),
                                ("LEANUX_CCOVERAGE ", child_coverage), ("LEANUX_CCMP ", child_comparisons),
-                               ("LEANUX_CHIDDEN ", child_hidden)):
+                               ("LEANUX_CHIDDEN ", child_hidden), ("LEANUX_FIBTRIE ", fib_tries)):
             if line.startswith(prefix):
                 try:
                     target.append(_decode_json(line[len(prefix):]))
@@ -694,6 +730,7 @@ def _collect(outdir, traces, process_returncode, alloc=None):
     try:
         attach_devices(results, traces, wireguard)
         attach_observed(results, traces, observed)
+        attach_fib_tries(results, fib_tries)
         attach_batches(results, traces, batches)
         for result, trace, fixture in zip(results, traces, fixtures):
             _check_observation(result, trace)

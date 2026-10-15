@@ -1916,12 +1916,26 @@ def routing_trace(rng, trace_id):
     - `inject_to`: the peer's response injected to the alias (src4 127.0.0.2,
       cleared at the keepalive's send4) or to wg0's own address;
     - `session_two_sends`: a session, then two data sends: the second hits;
-    - `deladdr6`: the IPv6 address and route deleted, the route twice."""
+    - `deladdr6`: the IPv6 address and route deleted, the route twice.
+    Lane C (docs/2026-10-15-design-c-fib-trie.md, 10), the trie's insertions
+    and deletions inside the window:
+    - `host_route`: a /32 route via wg0 to the transmit's destination (a new
+      leaf, the lookup at it), deleted by name (the transmit then takes the
+      default route);
+    - `reject_route`: a /16 of a reject type (the sender's error), deleted by
+      type (the transmit then goes through);
+    - `addaddr_xmit`: a second address with a /24 (its local, prefix and
+      broadcast routes), a transmit through the prefix route, the fixture's
+      address deleted while it stays, then the default route and a transmit;
+    - `replace_route`: a /16 via wg0 replaced by an unreachable one after a
+      lookup through it (the accessed alias's flush), then deleted."""
     device = rng.choice(D1_DEVICES)
     peer_private = rng.choice(D1_PEERS)
     peer_public = noise.public_key(peer_private)
     variant = rng.choices(['alias', 'two_sends', 'delroute_untouched', 'unroutable', 'deladdr_then_send',
-                           'inject_to', 'session_two_sends', 'deladdr6'], [2, 3, 2, 2, 2, 3, 3, 1])[0]
+                           'inject_to', 'session_two_sends', 'deladdr6',
+                           'host_route', 'reject_route', 'addaddr_xmit', 'replace_route'],
+                          [2, 3, 2, 2, 2, 3, 3, 1, 2, 2, 2, 1])[0]
     observe, get, up = {'op': 'wg_observe'}, {'op': 'wg_get'}, {'op': 'wg_up'}
     advance = {'op': 'wg_advance', 'ticks': RETRANSMIT_FIRE_TICKS}
     allowed = [dict(family=4, addr='0a000000', cidr=8)]
@@ -1968,6 +1982,36 @@ def routing_trace(rng, trace_id):
         ops = setup() + [observe, deladdr(4), delroute(4), xmit(), observe, get]
     elif variant == 'deladdr6':
         ops = setup() + [observe, deladdr(6), delroute(6), delroute(6), get]
+    elif variant in ('host_route', 'reject_route', 'addaddr_xmit', 'replace_route'):
+        def route(dst, plen, type='unicast', **extra):
+            op = {'op': 'wg_addroute', 'family': 4, 'dst': dst, 'plen': plen, 'type': type}
+            if type == 'unicast':
+                op['oif'] = 'wg0'
+            op.update(extra)
+            return op
+        def unroute(dst, plen, **extra):
+            return dict({'op': 'wg_delroute', 'family': 4, 'dst': dst, 'plen': plen}, **extra)
+        if variant == 'host_route':
+            host = '0a0102' + format(rng.randrange(1, 255), '02x')
+            to = {'op': 'wg_xmit', 'packet': dict(family=4, dst=host)}
+            ops = setup() + [observe, route(host, 32), to, observe, unroute(host, 32), to, observe, get]
+        elif variant == 'reject_route':
+            net, kind = rng.randrange(16, 250), rng.choice(['unreachable', 'blackhole', 'prohibit'])
+            prefix = '0a' + format(net, '02x') + '0000'
+            to = {'op': 'wg_xmit', 'packet': dict(family=4, dst='0a' + format(net, '02x') + '00' + format(rng.randrange(1, 255), '02x'))}
+            ops = setup() + [observe, route(prefix, 16, kind), to, unroute(prefix, 16, type=kind), to, observe, get]
+        elif variant == 'addaddr_xmit':
+            net = rng.randrange(1, 250)
+            addr = {'op': 'wg_addaddr', 'addr': '0a' + format(net, '02x') + '0001', 'plen': 24}
+            def to():
+                return {'op': 'wg_xmit', 'packet': dict(family=4, dst='0a' + format(net, '02x') + '00' + format(rng.randrange(2, 255), '02x'))}
+            ops = setup() + [observe, addr, to(), observe, deladdr(4), delroute(4), to(), observe, get]
+        else:
+            net = rng.randrange(16, 250)
+            prefix = '0a' + format(net, '02x') + '0000'
+            to = {'op': 'wg_xmit', 'packet': dict(family=4, dst='0a' + format(net, '02x') + '00' + format(rng.randrange(1, 255), '02x'))}
+            ops = setup() + [observe, route(prefix, 16), to, observe, route(prefix, 16, 'unreachable', nlflags=['replace']), to,
+                             unroute(prefix, 16), get]
     else:
         ours = noise.steered_initiation(peer_public, device, ephemeral, sec, nsec, index)
         response = noise.response(ours, peer_private, rng.randbytes(32), None, rng.randrange(2**32),

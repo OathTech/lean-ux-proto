@@ -56,7 +56,10 @@ inductive Operation where
   | wgInject (family port : Nat) (message : List UInt8) (tos : Nat) (ll : Bool) (dest : Nat)
   /-- W9: the fixture-table operations, per family. -/
   | wgDeladdr (family : Nat)
-  | wgDelroute (family : Nat)
+  | wgDelroute (family : Nat) (named : Bool) (dst plen oif typeCode metric : Nat)
+  /-- Lane C: `wg_addroute` and `wg_addaddr` (the design note, 10). -/
+  | wgAddroute (dst plen oif typeCode metric mtu nlflags : Nat)
+  | wgAddaddr (addr plen : Nat)
   /-- E-B: an io_uring flood of `count` invalid-MAC1 initiations to wg0's port,
       with `messages` valid-MAC1 initiations submitted first (processed under
       load via the queue depth, their cookie replies checked byte-exact);
@@ -144,7 +147,8 @@ def Trace.net (t : Trace) : Bool :=
   t.ops.any fun
     | .wgSet _ | .wgGet _ | .wgUp | .wgXmit .. | .wgObserve | .wgInject .. | .wgAdvance _
     | .wgFlood _ _ _ _ | .wgCreate | .wgDown | .wgDelete | .wgSetMtu _ | .wgBatch _ _
-    | .wgDeladdr _ | .wgDelroute _ | .wgNetnsClose | .wgGetStart _ | .wgGetRecv => true
+    | .wgDeladdr _ | .wgDelroute .. | .wgNetnsClose | .wgGetStart _ | .wgGetRecv
+    | .wgAddroute .. | .wgAddaddr .. => true
     | _ => false
 
 /-- W2: a trace with a stepped dump operation gets the dump socket at fd 8. -/
@@ -230,6 +234,34 @@ private def hexBytes (j : Json) (digits : Nat) (what : String) : Except String (
   return pairs vs
 
 private def bigEndian (bs : List UInt8) : Nat := bs.foldl (fun acc b => acc * 256 + b.toNat) 0
+
+private def optNat (j : Json) (name : String) (bound : Nat) : Except String Nat :=
+  match j.getObjVal? name with
+  | .error _ => pure 0
+  | .ok _ => natField j name bound
+
+/-- Lane C: a route's device, `wg0` or `lo`, 0 when absent. -/
+private def routeOif (j : Json) : Except String Nat :=
+  match j.getObjVal? "oif" with
+  | .error _ => pure 0
+  | .ok o => do
+    match ← o.getStr? with
+    | "lo" => pure LO_IFINDEX
+    | "wg0" => pure WG0_IFINDEX
+    | _ => throw "oif: expected wg0 or lo"
+
+/-- Lane C: a route's type as its `RTN_` code; required for an add, 0 (any)
+    when absent from a delete. -/
+private def routeType (j : Json) (required : Bool) : Except String Nat :=
+  match j.getObjVal? "type" with
+  | .error _ => if required then throw "type: expected unicast, unreachable, blackhole or prohibit" else pure 0
+  | .ok t => do
+    match ← t.getStr? with
+    | "unicast" => pure 1
+    | "unreachable" => pure 7
+    | "blackhole" => pure 6
+    | "prohibit" => pure 8
+    | _ => throw "type: expected unicast, unreachable, blackhole or prohibit"
 
 private def subsetFields (j : Json) (allowed : List String) (what : String) : Except String Unit := do
   let obj ← j.getObj?
@@ -637,10 +669,50 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
     if family != 4 && family != 6 then throw "family: expected 4 or 6"
     return .wgDeladdr family
   | "wg_delroute" =>
-    fields j ["op", "family"]
+    let obj ← j.getObj?
+    if !(obj.all fun k _ => ["op", "family", "dst", "plen", "oif", "type", "metric"].contains k) then
+      throw "wg_delroute: unexpected field"
     let family ← (← field j "family").getNat?
     if family != 4 && family != 6 then throw "family: expected 4 or 6"
-    return .wgDelroute family
+    if obj.size == 2 then return .wgDelroute family false 0 0 0 0 0
+    -- lane C: a named route
+    if family != 4 then throw "wg_delroute: a named route is IPv4"
+    let dst := bigEndian (← hexBytes (← field j "dst") 8 "dst")
+    let plen ← natField j "plen" 32
+    let oif ← routeOif j
+    let typeCode ← routeType j false
+    let metric ← optNat j "metric" 4294967295
+    return .wgDelroute family true dst plen oif typeCode metric
+  | "wg_addroute" =>
+    let obj ← j.getObj?
+    if !(obj.all fun k _ => ["op", "family", "dst", "plen", "type", "oif", "metric", "mtu", "nlflags"].contains k) then
+      throw "wg_addroute: unexpected field"
+    let family ← (← field j "family").getNat?
+    if family != 4 then throw "family: expected 4 (IPv6 routes keep the environment's rule)"
+    let dst := bigEndian (← hexBytes (← field j "dst") 8 "dst")
+    let plen ← natField j "plen" 32
+    let typeCode ← routeType j true
+    let oif ← routeOif j
+    let metric ← optNat j "metric" 4294967295
+    let mtu ← optNat j "mtu" 65535
+    let nlflags ← match j.getObjVal? "nlflags" with
+      | .error _ => pure 0
+      | .ok f => do
+        let arr ← f.getArr?
+        let mut n := 0
+        for x in arr do
+          match ← x.getStr? with
+          | "excl" => n := n ||| Net.Fib.NLM_F_EXCL
+          | "replace" => n := n ||| Net.Fib.NLM_F_REPLACE
+          | "append" => n := n ||| Net.Fib.NLM_F_APPEND
+          | _ => throw "nlflags: expected excl, replace or append"
+        pure n
+    return .wgAddroute dst plen oif typeCode metric mtu nlflags
+  | "wg_addaddr" =>
+    fields j ["op", "addr", "plen"]
+    let addr := bigEndian (← hexBytes (← field j "addr") 8 "addr")
+    let plen ← natField j "plen" 32
+    return .wgAddaddr addr plen
   | "wg_flood" =>
     -- `messages`: the leading valid-MAC1 initiations the mirror processes and
     -- checks (byte-exact cookie replies). `control` (a mid-flood valid packet
@@ -1010,7 +1082,9 @@ def toSyscall (results : Array Int) (ends : Array (Option (Nat × Nat))) (index 
   | .wgObserve => .wgObserve
   | .wgInject family port message tos ll dest => .wgInject family port message tos ll dest
   | .wgDeladdr family => .wgDeladdr family
-  | .wgDelroute family => .wgDelroute family
+  | .wgDelroute family named dst plen oif typeCode metric => .wgDelroute family named dst plen oif typeCode metric
+  | .wgAddroute dst plen oif typeCode metric mtu nlflags => .wgAddroute dst plen oif typeCode metric mtu nlflags
+  | .wgAddaddr addr plen => .wgAddaddr addr plen
   | .wgFlood count port family messages => .wgFlood count port family messages
   | .wgBatch items waitMs => .wgBatch items waitMs
   | .wgAdvance ticks => .wgAdvance ticks
@@ -1023,6 +1097,13 @@ def toSyscall (results : Array Int) (ends : Array (Option (Nat × Nat))) (index 
   | .seccompPrctl cmd args => .seccompPrctl cmd args
   | .seccompCapdrop => .seccompCapdrop
   | .seccompQuery cmd action flags => .seccompQuery cmd action flags
+
+/-- Lane C: the boot trie of a network trace's fixture namespace (`lo` up),
+    for `leanux-model --fib-boot` and the harness's expected fixture facts. -/
+def fibBootJson : Except Stop Json := do
+  let world : World := { k := initialKernel 32 true, env := harnessEnv, timing := Env.timing }
+  let (_, w) ← Net.Fib.bootTables.run world
+  return Net.Fib.shape w.k
 
 /-- Run a trace. A `Stop` is returned with the operation index: the mirror
     never reports an observation for a path it does not model. -/
@@ -1045,6 +1126,16 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
     match Env.seccompPrefill trace.seccompPrefill world.k with
     | .ok k => world := { world with k }
     | .error e => throw (0, .invariant e)
+  -- lane C: the fixture namespaces' IPv4 tables at boot (`lo` up in each),
+  -- built by the C's own sequence outside every window (the design note,
+  -- 9.3); its steps are discarded with the first operation's reset
+  if trace.net then
+    let boot : M Unit := do
+      Net.Fib.bootTables
+      if trace.foreign then Net.Fib.inCreatorNs Net.Fib.bootTables
+    match boot.run world with
+    | .ok (_, w) => world := { w with steps := #[], envCalls := [] }
+    | .error e => throw (0, e)
   let mut results : Array Int := #[]
   let mut ends : Array (Option (Nat × Nat)) := #[]
   let mut observations : Array Json := #[]

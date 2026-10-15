@@ -76,7 +76,10 @@ inductive Syscall where
   /-- W9: `RTM_DELADDR` of wg0's fixture address and `RTM_DELROUTE` of the
       default route via wg0, per family, on a temporary rtnetlink socket. -/
   | wgDeladdr (family : Nat)
-  | wgDelroute (family : Nat)
+  | wgDelroute (family : Nat) (named : Bool) (dst plen oif typeCode metric : Nat)
+  /-- Lane C: the routing corpus's requests over the same socket. -/
+  | wgAddroute (dst plen oif typeCode metric mtu nlflags : Nat)
+  | wgAddaddr (addr plen : Nat)
   /-- E-B: an io_uring flood to wg0's `port`: `count` invalid-MAC1 initiations
       with `messages` valid-MAC1 initiations submitted first. -/
   | wgFlood (count port family : Nat) (messages : List (List UInt8))
@@ -287,9 +290,10 @@ def dispatch : Syscall → M Int
     -- a successful wg_up (and removes with a down, a deletion or
     -- `wg_delroute`), else `-ENETUNREACH`; a local destination never
     -- reaches wg0
-    match ← routeLookup family 0 addr with
-    | .error err => return err
-    | .ok r => if r.dev != WG0_IFINDEX then unsupported "a transmit to a local address (not into wg0)"
+    let r ← match ← Net.routeLookup family 0 addr with
+      | .error err => return err
+      | .ok r => pure r
+    if r.dev != WG0_IFINDEX then unsupported "a transmit to a local address (not into wg0)"
     -- W4: an MTU change below the family's floor took its routes down with
     -- its IP device, and the fixture re-adds them only at the next wg_up
     if let some d := (← getK).wg then
@@ -297,16 +301,22 @@ def dispatch : Syscall → M Int
         unsupported "a transmit after an MTU change took the family's routes into wg0 down"
     -- udp_sendmsg returns the datagram's length once the device took it
     Env.fixtureSend
+    -- lane C: `dst_mtu` is the route's metric when it carries one
+    let opts := { opts with routeMtu := opts.routeMtu <|> (if r.mtu != 0 then some r.mtu else none) }
     match ← Env.xmitPackets family addr payload opts with
     | .error e => return e   -- refused by the sender's IP layer before any output
     | .ok (pkts, mtu) =>
       Env.xmitMulticastLoop family addr
+      -- lane C: `ip_finish_output2` on wg0: the device's one neighbour
+      if family == 4 then Net.neighbourClassify WG0_IFINDEX
       let ret ← WG.wgXmit family addr pkts mtu
       return if ret == 0 then payload.length else ret
   | .wgSetMtu mtu => socketCallOn SENDER_FD (Env.setMtu mtu)
   | .wgInject family port message tos ll dest => socketCallOn SENDER_FD (Env.inject family port message tos ll dest)
   | .wgDeladdr family => rtnetlinkRequest (Env.wgDeladdr family)
-  | .wgDelroute family => rtnetlinkRequest (Env.wgDelroute family)
+  | .wgDelroute family named dst plen oif typeCode metric => rtnetlinkRequest (Env.wgDelroute family named dst plen oif typeCode metric)
+  | .wgAddroute dst plen oif typeCode metric mtu nlflags => rtnetlinkRequest (Env.wgAddroute dst plen oif typeCode metric mtu nlflags)
+  | .wgAddaddr addr plen => rtnetlinkRequest (Env.wgAddaddr addr plen)
   | .wgFlood count port family messages => Env.flood count port family messages
   -- W7: the io_uring submission's descriptor plumbing (the ring's fdget, each
   -- send's fget of the sender) is the fixture's, as the flood's is: not modeled
@@ -391,6 +401,15 @@ def syscall (call : Syscall) : M Int := do
   | .wgAdvance _ => Env.afterAdvance
   -- W8: the namespace's teardown section runs in the guest's wait
   | .wgNetnsClose => Env.netnsCleanup
+  | _ => pure ()
+  -- lane C's shape oracle (the design note, 9.4): after an operation that
+  -- changes the IPv4 tables, the trie as `/proc/net/fib_trie` prints it,
+  -- compared with the guest's read outside the window
+  match call with
+  | .wgUp | .wgDown | .wgDelete | .wgDeladdr _ | .wgDelroute .. | .wgSetMtu _ | .wgNetnsClose
+  | .wgAddroute .. | .wgAddaddr .. =>
+    let shape := Net.Fib.shape (← getK)
+    modify fun w => { w with extraOut := w.extraOut ++ [("fib_trie", shape)] }
   | _ => pure ()
   return ret
 

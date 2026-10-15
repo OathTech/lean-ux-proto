@@ -741,3 +741,29 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   wording ("relates the whole mirror world") was the coordinator's error,
   read literally by the grind [AGENT, coordinator]; the amendment is in the
   charter's section 1.
+- **2026-10-15 [USER]** Lane C, the anchoring question (design note U1):
+  `fib_frontend.c`, `fib_semantics.c` and `route.c` are anchored with cut
+  lists and the per-caller cut for the helpers IPv6 shares, in C2 and C3.
+  This revises the boundary decision of 2026-10-07 for routing (the line is
+  now drawn by function name in the cut lists, one layer down, under that
+  decision's own "unless this breaks important things": campaign 3's
+  end-to-end routing composition) and reverses the `ip_error` deferral of
+  2026-10-08 (the input corpus reaches it). "Agree on the anchoring
+  question."
+- **2026-10-15 [USER]** Lane C, IPv6 (design note U2): deferred, "might be a
+  task later"; IPv6 routing stays environment, and campaign 3's routing
+  composition is stated for IPv4 in its charter.
+- **2026-10-15 [AGENT, coordinator]** Lane C's tactical decisions as the
+  revised note recommends: three landings with C1 first (U3); the
+  `hash_mix` global-hash walk treated as a decision cut (U6).
+- **2026-10-15 [USER]** Lane C, the module's home and the standing rule
+  (design note U4 and U5): the FIB module lives at `Leanux/Net/` beside
+  `FS`, `WG` and `Seccomp`, and AGENTS.md's list of the mirror's directories
+  gains `Leanux/Net` ("agree with recommendation").
+- **2026-10-15 [USER, through the coordinator]** Lane C, a check-rule change
+  on the trust surface: a `wg_batch` operation is compared against the
+  WireGuard files, the headers they inline and `net/ipv4/fib_trie.c`
+  (`evaluator/check.py`, `BATCH_FILES`), since the batch's sends run the
+  trie's lookups and an anchored file's in-window coverage is witnessed in
+  a batch as in a single operation. Its one-off mutant
+  (C1-M8-batch-lookup-outcome) was rejected once and removed.
