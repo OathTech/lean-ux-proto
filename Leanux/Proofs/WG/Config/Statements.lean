@@ -5,6 +5,7 @@ import Leanux.Proofs.WG.Config.LiveRemovalSource
 import Leanux.Proofs.WG.Config.AllowedRemovalConverseClaims
 import Leanux.Proofs.WG.Config.CollisionRequestSource
 import Leanux.Proofs.WG.Config.AllowedRoundTripSource
+import Leanux.Proofs.WG.Config.AllowedTransferReadbackSource
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
@@ -915,5 +916,65 @@ theorem original_allowedip_get_after_set (v4 : Bool) (d : Device) (pid : PeerId)
            .complete { publicKey := hexKey p.remoteStatic, attrs := peerFixedAttrs p ++
              (if result.1 = 0 then [("allowed_ips", Lean.Json.arr #[allowedJson v4 addr cidr])] else []) })) :=
   allowedip_get_after_set v4 d pid p addr cidr ctx skb resident empty root width fresh sequence room
+
+/-- An exact root-leaf match returns zero and transfers its owner with the
+original ordered writes. The same raw address/CIDR is requested; stored address,
+CIDR, width, child links, parent, roots and allocation cursor are retained.
+Every peer list filters all copies
+of this identity, then the destination appends it once. Same-peer assignment
+and duplicate list entries are allowed; no global topology/ownership invariant,
+fresh identity, live reference or running device is assumed. -/
+theorem original_allowedip_root_transfer (v4 : Bool) (d : Device) (id : NodeId)
+    (addr cidr : Nat) (owner : Option PeerId) (parent : Slot) (target : PeerId) (p : Peer)
+    (width : cidr ≤ allowedBits v4) (root : allowedRootValue v4 d = some id)
+    (node : d.nodes[id]? = some { newNode addr cidr (allowedBits v4) owner with parent })
+    (resident : d.peers[target]? = some p) :
+    Campaign2.Returns (setAllowedip target (allowedAttrs v4 addr cidr))
+      (fun s => s.wg.device = some d)
+      (fun ret s => ret = 0 ∧
+        let final := transferRequestDevice d id { newNode addr cidr (allowedBits v4) owner with parent } target p
+        s.wg.device = some final ∧ ∀ q : PeerId, final.peers[q]? =
+          if q = target then some (transferredPeer id p) else d.peers[q]?.map (eraseListedPeer id)) := by
+  intro initial pre
+  obtain ⟨ret, final, run, zero, device⟩ :=
+    setAllowedip_root_transfer v4 d id addr cidr owner parent target p width root node resident initial pre
+  refine ⟨ret, final, run, zero, device, ?_⟩
+  intro q
+  exact transferRootDevice_peers (insertSequenceDevice d) id _ target q p
+
+/-- The original setter then donor and destination peer dumps share the actual
+successive buffer/context. The node's old owner is the distinct resident donor;
+its list filters to empty and the destination list is initially empty. Repeated
+copies in the donor list are allowed. The donor emits fixed attributes without
+allowed_ips; the destination emits the stored masked prefix. The first dump
+resets the allowed-IP cursor and sequence, so no initial sequence premise is needed. The resulting
+room and cursor are exact. This is peer serialization, not outer socket or
+multipart dump coverage. -/
+theorem original_allowedip_transfer_readback (v4 : Bool) (d : Device) (id : NodeId) (addr cidr : Nat)
+    (parent : Slot) (donor target : PeerId) (oldPeer newPeer : Peer)
+    (ctx : DumpCtx) (skb : NlSkb)
+    (different : donor ≠ target) (width : cidr ≤ allowedBits v4)
+    (root : allowedRootValue v4 d = some id)
+    (node : d.nodes[id]? = some { newNode addr cidr (allowedBits v4) (some donor) with parent })
+    (oldResident : d.peers[donor]? = some oldPeer) (newResident : d.peers[target]? = some newPeer)
+    (oldOnly : listRemove oldPeer.allowedipsList id = []) (newEmpty : newPeer.allowedipsList = [])
+    (fresh : ctx.nextAllowedip = none)
+    (room : 340 + allowedIpSpace (allowedFamily v4) ≤ skb.room) :
+    Campaign2.Returns (do
+      let ret ← setAllowedip target (allowedAttrs v4 addr cidr)
+      let first ← getPeerDump donor ctx skb
+      let second ← getPeerDump target first.2.1 first.1
+      pure (ret, first.2.2, second))
+      (fun w => w.wg.device = some d)
+      (fun result w => w.wg.device = some
+          (transferRequestDevice d id { newNode addr cidr (allowedBits v4) (some donor) with parent } target newPeer) ∧
+        result = (0,
+          PeerDump.complete { publicKey := hexKey oldPeer.remoteStatic, attrs := peerFixedAttrs oldPeer },
+          { skb with room := skb.room - (peerFixedSpace oldPeer + peerFixedSpace newPeer + 4 + allowedIpSpace (allowedFamily v4)) },
+          { ctx with nextAllowedip := none, allowedipsSeq := 0 },
+          PeerDump.complete { publicKey := hexKey newPeer.remoteStatic, attrs := peerFixedAttrs newPeer ++
+            [("allowed_ips", Lean.Json.arr #[allowedJson v4 addr cidr])] })) :=
+  transfer_paired_readback v4 d id addr cidr parent donor target oldPeer newPeer ctx skb
+    different width root node oldResident newResident oldOnly newEmpty fresh room
 
 end Leanux.Proofs.WG.Config
