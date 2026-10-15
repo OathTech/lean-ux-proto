@@ -12,6 +12,7 @@ import Leanux.Proofs.WG.Index.LinkSource
 import Leanux.Proofs.WG.Index.SendSource
 import Leanux.Proofs.WG.Index.DispatchSource
 import Leanux.Proofs.WG.Index.ResponseSource
+import Leanux.Proofs.WG.Index.ConsumeSource
 
 /-! H2's original-operation table contracts. Reachable owner/peer-word
 coherence remains a separate obligation. -/
@@ -438,5 +439,31 @@ theorem original_send_handshake_response_tables (pid : PeerId) :
     Campaign2.Ensures (sendHandshakeResponse pid) View.TablesSafe
       (fun _ s => View.TablesSafe s) :=
   sendHandshakeResponse_tables pid
+
+/-- Every normal return of original initiation consumption preserves optional-device
+numeric-index uniqueness, owner uniqueness and the hashed-keypair allocation bound.
+This includes rejected messages and failure-side peer release. It asserts neither
+successful authentication nor completion on arbitrary records. -/
+theorem original_consume_initiation_tables (msg : List UInt8) :
+    Campaign2.Ensures (consumeInitiation msg) View.TablesSafe
+      (fun _ s => View.TablesSafe s) :=
+  consumeInitiation_tables msg
+
+/-- Every normal return of original response consumption preserves the table
+invariant, including lookup's NULL/dead-peer storeback and failure-side release.
+No owner/peer-word identity, residency or reference-count premise is added. -/
+theorem original_consume_response_tables (msg : List UInt8) :
+    Campaign2.Ensures (consumeResponse msg) View.TablesSafe
+      (fun _ s => View.TablesSafe s) :=
+  consumeResponse_tables msg
+
+/-- Every normal return of original cookie-message consumption preserves the
+optional-device table invariant through lookup, cookie updates and peer release.
+This is a table-safety contract, not successful authentication or a promise that
+arbitrary records allow completion. -/
+theorem original_cookie_message_consume_tables (msg : List UInt8) :
+    Campaign2.Ensures (cookieMessageConsume msg) View.TablesSafe
+      (fun _ s => View.TablesSafe s) :=
+  cookieMessageConsume_tables msg
 
 end Leanux.Proofs.WG.Index
