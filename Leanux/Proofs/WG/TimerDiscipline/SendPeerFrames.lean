@@ -40,6 +40,11 @@ def workKernel (k : Kernel) (pid : PeerId) : WorkView :=
 
 def workAt (w : World) (pid : PeerId) : WorkView := workKernel w.k pid
 
+def queueWorkKernel (k : Kernel) (pid : PeerId) : QueueWorkView :=
+  (k.wg.map workQueues, (k.wg.bind fun d => d.peers[pid]?).map Peer.handshakePending)
+
+def queueWorkAt (w : World) (pid : PeerId) : QueueWorkView := queueWorkKernel w.k pid
+
 theorem workAt_observation (w : World) (pid : PeerId) :
     workAt w pid = workObservation (Campaign2.snapshot w) pid := rfl
 
@@ -60,7 +65,7 @@ theorem send_frame_of_sendWork {α : Type} (action : M α) (pid : PeerId)
   have projected := congrArg (fun x : SendWorkView =>
     (x.1.map Prod.fst, x.2.map Prod.fst)) h
   have same : sendAt final pid = sendAt w pid := by
-    simpa [sendAt, sendKernel, sendWorkAt, sendWorkKernel, sendWorkDevice,
+    simpa [sendAt, sendKernel, sendWorkAt, sendWorkKernel, sendWorkDevice, workQueues,
       sendWorkPeer, Option.map_map, Function.comp_def] using projected
   exact same.trans pre
 
@@ -75,17 +80,58 @@ theorem work_frame_of_sendWork {α : Type} (action : M α) (pid : PeerId)
   have h := (ensures_iff _ _ _).mpr
     (frame (sendWorkAt w pid).1 (sendWorkAt w pid).2) w result final rfl run
   have projected := congrArg (fun x : SendWorkView =>
-    (x.1.map Prod.snd, x.2.map Prod.snd)) h
+    (x.1.map (fun q => q.2.1), x.2.map Prod.snd)) h
   have same : workAt final pid = workAt w pid := by
-    simpa [workAt, workKernel, sendWorkAt, sendWorkKernel, sendWorkDevice,
+    simpa [workAt, workKernel, sendWorkAt, sendWorkKernel, sendWorkDevice, workQueues,
       sendWorkPeer, Option.map_map, Function.comp_def] using projected
   exact same.trans pre
+
+theorem queueWork_frame_of_sendWork {α : Type} (action : M α) (pid : PeerId)
+    (frame : ∀ (q : Option SendWorkDevice) (v : Option SendWorkPeer),
+      ⦃fun w => ⌜sendWorkAt w pid = (q, v)⌝⦄ action
+        ⦃⇓? _ w => ⌜sendWorkAt w pid = (q, v)⌝⦄) (v : QueueWorkView) :
+    ⦃fun w => ⌜queueWorkAt w pid = v⌝⦄ action
+      ⦃⇓? _ w => ⌜queueWorkAt w pid = v⌝⦄ := by
+  apply (ensures_iff _ _ _).mp
+  intro w result final pre run
+  have h := (ensures_iff _ _ _).mpr
+    (frame (sendWorkAt w pid).1 (sendWorkAt w pid).2) w result final rfl run
+  have projected := congrArg (fun x : SendWorkView =>
+    (x.1.map Prod.snd, x.2.map Prod.snd)) h
+  have same : queueWorkAt final pid = queueWorkAt w pid := by
+    simpa [queueWorkAt, queueWorkKernel, sendWorkAt, sendWorkKernel, sendWorkDevice,
+      sendWorkPeer, Option.map_map, Function.comp_def] using projected
+  exact same.trans pre
+
+/-- Recover the old send-queue/pending interface from both queues in the same run. -/
+theorem work_frame_of_queueWork {α : Type} (action : M α) (pid : PeerId)
+    (frame : ∀ (queues : WorkQueues) (pending : Bool),
+      ⦃fun w => ⌜queueWorkAt w pid = (some queues, some pending)⌝⦄ action
+        ⦃⇓? _ w => ⌜queueWorkAt w pid = (some queues, some pending)⌝⦄)
+    (queue : List PeerId) (pending : Bool) :
+    ⦃fun w => ⌜workAt w pid = (some queue, some pending)⌝⦄ action
+      ⦃⇓? _ w => ⌜workAt w pid = (some queue, some pending)⌝⦄ := by
+  apply (ensures_iff _ _ _).mp
+  intro w result final pre run
+  cases hd : w.k.wg with
+  | none => simp [workAt, workKernel, hd] at pre
+  | some d =>
+    have hp : d.peers[pid]?.map Peer.handshakePending = some pending := by
+      simpa [workAt, workKernel, hd] using congrArg Prod.snd pre
+    have h := (ensures_iff _ _ _).mpr
+      (frame (workQueues d) pending) w result final
+        (by simpa [queueWorkAt, queueWorkKernel, workAt, workKernel, hd] using hp) run
+    have projected := congrArg (fun x : QueueWorkView => (x.1.map Prod.fst, x.2)) h
+    have same : workAt final pid = workAt w pid := by
+      simpa [queueWorkAt, queueWorkKernel, workAt, workKernel, workQueues,
+        Option.map_map, Function.comp_def, hd, hp] using projected
+    exact same.trans pre
 
 theorem getPeer_sendWorkView (pid : PeerId) (q : Option SendWorkDevice) (v : Option SendWorkPeer) :
     ⦃fun w => ⌜sendWorkAt w pid = (q, v)⌝⦄ getPeer pid
       ⦃⇓? p w => ⌜some (sendWorkPeer p) = v ∧ sendWorkAt w pid = (q, v)⌝⦄ := by
   mvcgen [getPeer, getDev, getK, invariant]
-  all_goals simp_all [sendWorkAt, sendWorkKernel, sendWorkDevice, tableCursor, initiationAt, peerAt]
+  all_goals simp_all [sendWorkAt, sendWorkKernel, sendWorkDevice, workQueues, tableCursor, initiationAt, peerAt]
 
 theorem setPeer_sendWorkView (pid : PeerId) (q : Option SendWorkDevice) (v : Option SendWorkPeer) (p : Peer) :
     ⦃fun w => ⌜some (sendWorkPeer p) = v ∧ sendWorkAt w pid = (q, v)⌝⦄ setPeer pid p
@@ -93,8 +139,8 @@ theorem setPeer_sendWorkView (pid : PeerId) (q : Option SendWorkDevice) (v : Opt
   mvcgen [setPeer, modifyDev, modifyK]
   all_goals try dsimp +zetaDelta only at *
   all_goals repeat intro
-  all_goals simp_all [sendWorkAt, sendWorkKernel, sendWorkDevice, tableCursor, initiationAt, peerAt, Option.bind_map, Function.comp_def]
-  all_goals cases hd : (by assumption : World).k.wg <;> simp_all [sendWorkDevice, tableCursor]
+  all_goals simp_all [sendWorkAt, sendWorkKernel, sendWorkDevice, workQueues, tableCursor, initiationAt, peerAt, Option.bind_map, Function.comp_def]
+  all_goals cases hd : (by assumption : World).k.wg <;> simp_all [sendWorkDevice, workQueues, tableCursor]
 
 theorem dstCacheGet_sendWorkView (pid : PeerId) (gen : Nat) (q : Option SendWorkDevice) (v : Option SendWorkPeer) :
     ⦃fun w => ⌜sendWorkAt w pid = (q, v)⌝⦄ dstCacheGet pid gen
@@ -106,7 +152,7 @@ theorem dstCacheGet_sendWorkView (pid : PeerId) (gen : Nat) (q : Option SendWork
   mvcgen [dstCacheGet, hiddenJiffies, invariant, unsupported, hg, hp, hh]
   all_goals try dsimp +zetaDelta only at *
   all_goals repeat intro
-  all_goals simp_all [sendWorkAt, sendWorkKernel, sendWorkDevice, tableCursor, initiationAt, sendWorkPeer, initiationView, peerAt]
+  all_goals simp_all [sendWorkAt, sendWorkKernel, sendWorkDevice, workQueues, tableCursor, initiationAt, sendWorkPeer, initiationView, peerAt]
 
 theorem dstCacheSet_sendWorkView (pid : PeerId) (src gen dev : Nat) (q : Option SendWorkDevice) (v : Option SendWorkPeer) :
     ⦃fun w => ⌜sendWorkAt w pid = (q, v)⌝⦄ dstCacheSet pid src gen dev
@@ -126,7 +172,7 @@ theorem dstCacheReset_sendWorkView (pid : PeerId) (q : Option SendWorkDevice) (v
   mvcgen [dstCacheReset, hiddenJiffies, invariant, unsupported, hg, hp, hh]
   all_goals try dsimp +zetaDelta only at *
   all_goals repeat intro
-  all_goals simp_all [sendWorkAt, sendWorkKernel, sendWorkDevice, tableCursor, initiationAt, sendWorkPeer, initiationView, peerAt]
+  all_goals simp_all [sendWorkAt, sendWorkKernel, sendWorkDevice, workQueues, tableCursor, initiationAt, sendWorkPeer, initiationView, peerAt]
 
 theorem tunnelXmit_sendWorkView (pid : PeerId) (e : Endpoint) (bytes : List UInt8)
     (ds : Nat) (r : Route) (exactRx : Bool) (q : Option SendWorkDevice) (v : Option SendWorkPeer) :
@@ -139,9 +185,9 @@ theorem tunnelXmit_sendWorkView (pid : PeerId) (e : Endpoint) (bytes : List UInt
     getDev, getK, modifyDev, modifyK, invariant, unsupported, hc, hl]
   all_goals try dsimp +zetaDelta only at *
   all_goals repeat intro
-  all_goals simp_all [P, sendWorkAt, sendWorkKernel, sendWorkDevice, tableCursor, initiationAt, peerAt, Option.bind_map, Function.comp_def]
+  all_goals simp_all [P, sendWorkAt, sendWorkKernel, sendWorkDevice, workQueues, tableCursor, initiationAt, peerAt, Option.bind_map, Function.comp_def]
 
-  all_goals grind [sendWorkDevice, tableCursor]
+  all_goals grind [sendWorkDevice, workQueues, tableCursor]
 
 theorem getPeer_sendView (pid : PeerId) (q : Option TableCursor) (v : Option InitiationView) :
     ⦃fun w => ⌜sendAt w pid = (q, v)⌝⦄ getPeer pid

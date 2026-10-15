@@ -21,12 +21,12 @@ theorem send4_sendWorkView (pid : PeerId) (e : Endpoint) (bytes : List UInt8)
       ⦃fun w => ⌜sendWorkAt w pid = (q, v)⌝⦄ routeLookup family src dst
         ⦃⇓? _ w => ⌜sendWorkAt w pid = (q, v)⌝⦄ := by
     mvcgen [routeLookup]
-    all_goals simp_all [sendWorkAt, sendWorkKernel, sendWorkDevice, tableCursor, initiationAt, peerAt]
+    all_goals simp_all [sendWorkAt, sendWorkKernel, sendWorkDevice, workQueues, tableCursor, initiationAt, peerAt]
   simp only [send4, Option.get!_some]
   mvcgen [getDev, getK, branch, invariant, unsupported, hg, hp, hc, hr, hs, ht, routeFrame]
   all_goals try dsimp +zetaDelta only at *
   all_goals repeat intro
-  all_goals simp_all [sendWorkAt, sendWorkKernel, sendWorkDevice, tableCursor, initiationAt, sendWorkPeer, initiationView, peerAt]
+  all_goals simp_all [sendWorkAt, sendWorkKernel, sendWorkDevice, workQueues, tableCursor, initiationAt, sendWorkPeer, initiationView, peerAt]
   all_goals grind only
 
 theorem send6_sendWorkView (pid : PeerId) (e : Endpoint) (bytes : List UInt8)
@@ -43,12 +43,12 @@ theorem send6_sendWorkView (pid : PeerId) (e : Endpoint) (bytes : List UInt8)
       ⦃fun w => ⌜sendWorkAt w pid = (q, v)⌝⦄ routeLookup family src dst
         ⦃⇓? _ w => ⌜sendWorkAt w pid = (q, v)⌝⦄ := by
     mvcgen [routeLookup]
-    all_goals simp_all [sendWorkAt, sendWorkKernel, sendWorkDevice, tableCursor, initiationAt, peerAt]
+    all_goals simp_all [sendWorkAt, sendWorkKernel, sendWorkDevice, workQueues, tableCursor, initiationAt, peerAt]
   simp only [send6, Option.get!_some]
   mvcgen [getDev, getK, branch, invariant, unsupported, hg, hp, hc, hr, hs, ht, routeFrame]
   all_goals try dsimp +zetaDelta only at *
   all_goals repeat intro
-  all_goals simp_all [sendWorkAt, sendWorkKernel, sendWorkDevice, tableCursor, initiationAt, sendWorkPeer, initiationView, peerAt]
+  all_goals simp_all [sendWorkAt, sendWorkKernel, sendWorkDevice, workQueues, tableCursor, initiationAt, sendWorkPeer, initiationView, peerAt]
   all_goals grind only
 
 theorem send4_sendView (pid : PeerId) (e : Endpoint) (bytes : List UInt8)

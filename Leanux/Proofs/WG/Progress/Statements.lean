@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.Progress.ObservationBridge
 import Leanux.Proofs.WG.Progress.CutClaims
+import Leanux.Proofs.WG.Progress.FlushQueueClaims
 
 /-! Projected H5 contracts. Inspection adapters report the exact original
 outcomes from the same concrete entry; their totality is not a claim that the
@@ -409,5 +410,29 @@ theorem original_cut_records_returns (sites : List HiddenSite) (records : List H
     Campaign2.Returns (skipCutSites sites) (fun entry => entry.ambient.hidden = some records)
       (fun taken final => ∃ rest, final.ambient.hidden = some rest ∧ CutProgress sites records taken rest) :=
   source_cut_returns sites records accepted
+
+/-- On normal return, the original send flush erases the first matching occurrence of pid, if
+present, from its entry send queue and preserves the clear queue, even if peer release deletes
+pid. If pid was queued, the total queued-work count decreases by exactly one.
+No successful completion, queue-selection policy or whole-drain bound is asserted. -/
+theorem original_flushed_send_queue (pid : PeerId) (d : Device) :
+    Ensures (runFlushedSendWork pid) (fun entry => entry.wg.device = some d)
+      (fun _ final => flushQueues final = some (flushedSendQueues pid d) ∧
+        (pid ∈ d.sendWorkQueue →
+          flushQueueCount (flushedSendQueues pid d) + 1 =
+            flushQueueCount (TimerDiscipline.workQueues d))) :=
+  source_flushed_send_queue pid d
+
+/-- On normal return, the original clear flush erases the first matching occurrence of pid, if
+present, from its entry clear queue and preserves the send queue, including final peer release.
+Membership in the entry clear queue gives an exact decrease of one in total work;
+duplicates are allowed. This does not promise successful completion or a drain bound. -/
+theorem original_flushed_clear_queue (pid : PeerId) (d : Device) :
+    Ensures (runFlushedClearWork pid) (fun entry => entry.wg.device = some d)
+      (fun _ final => flushQueues final = some (flushedClearQueues pid d) ∧
+        (pid ∈ d.clearWorkQueue →
+          flushQueueCount (flushedClearQueues pid d) + 1 =
+            flushQueueCount (TimerDiscipline.workQueues d))) :=
+  source_flushed_clear_queue pid d
 
 end Leanux.Proofs.WG.Progress

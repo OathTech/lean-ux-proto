@@ -23,7 +23,7 @@ theorem sendBufferToPeer_spec_sendWork_variant (pid : PeerId) (bytes : List UInt
   mvcgen [sendBufferToPeer, branch, invariant, ha, hg, hp, h4, h6]
   all_goals try dsimp +zetaDelta only at *
   all_goals repeat intro
-  all_goals simp_all [sendWorkAt, sendWorkKernel, sendWorkDevice, tableCursor, initiationAt, sendWorkPeer, initiationView, peerAt]
+  all_goals simp_all [sendWorkAt, sendWorkKernel, sendWorkDevice, workQueues, tableCursor, initiationAt, sendWorkPeer, initiationView, peerAt]
 
 theorem sendBufferToPeer_spec_send_variant (pid : PeerId) (bytes : List UInt8)
     (q : Option TableCursor) (v : Option InitiationView) :
@@ -36,6 +36,12 @@ theorem sendBufferToPeer_workView (pid : PeerId) (bytes : List UInt8) (v : WorkV
     ⦃fun w => ⌜workAt w pid = v⌝⦄ sendBufferToPeer pid bytes
       ⦃⇓? _ w => ⌜workAt w pid = v⌝⦄ := by
   exact work_frame_of_sendWork (sendBufferToPeer pid bytes) pid
+    (sendBufferToPeer_spec_sendWork_variant pid bytes) v
+
+theorem sendBufferToPeer_queueWorkView (pid : PeerId) (bytes : List UInt8) (v : QueueWorkView) :
+    ⦃fun w => ⌜queueWorkAt w pid = v⌝⦄ sendBufferToPeer pid bytes
+      ⦃⇓? _ w => ⌜queueWorkAt w pid = v⌝⦄ := by
+  exact queueWork_frame_of_sendWork (sendBufferToPeer pid bytes) pid
     (sendBufferToPeer_spec_sendWork_variant pid bytes) v
 
 theorem sendBufferToPeer_spec_initiation_variant (pid : PeerId) (bytes : List UInt8)
