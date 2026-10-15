@@ -497,7 +497,16 @@ single-turn execution followed by a bounded iteration relation. Neither is
 claimed complete. Kernel-checked local contracts do not establish termination
 of every transitive arithmetic loop or full dispatch/resume completeness.
 
-The seven H5 statements pass scoped build, standard-axiom inspection and
+`Progress/Dispatch` factors the original dispatch selection/detachment from
+its section-start read and activation execution, including transmit-unit
+resolution. Three additional terminals establish the exact success and
+false-result equivalences and the total no-work World frame. A successful
+dispatch actually runs an iteration-zero activation; a selected activation
+failure cannot be converted to a false no-work result. This is local dispatch
+coverage, not a proof that all runnable work is dispatched by the scheduler.
+Independent read-only review found no issue.
+
+The ten H5 statements pass scoped build, standard-axiom inspection and
 stock kernel replay (`leanchecker --fresh Leanux.Proofs.WG.Progress.Statements`,
 through the capped bundle). The
 full gate was rerun and fails at the same inherited counter refinement; token

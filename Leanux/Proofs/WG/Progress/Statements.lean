@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.Progress.BatchBacklog
 import Leanux.Proofs.WG.Progress.Scheduler
+import Leanux.Proofs.WG.Progress.Dispatch
 
 namespace Leanux.Proofs.WG.Progress
 open Leanux Leanux.Env
@@ -48,5 +49,28 @@ theorem original_worker_productive (worker : Worker) (pid : Option Nat)
       (afterItem.run v >>= fun out =>
         pure (if out.1 then .yielded else .continued, out.2)) :=
   workerIter_productive worker pid step afterItem w v item
+
+/-- Successful original dispatch is exactly its original selection/detachment
+prefix, section-start input read and selected activation run, in that order.
+The activation starts at iteration zero and has the dispatched worker identity. -/
+theorem original_dispatch_runs_activation (worker : Worker) (initial final : World) :
+    (Env.dispatch worker).run initial = .ok (true, final) ↔ DispatchRun worker initial final :=
+  dispatch_success_iff worker initial final
+
+/-- With a resident device, a worker with no eligible work returns false and
+preserves the entire World, including records. Non-draining worker kinds are
+also in this dispatch-specific no-work case. -/
+theorem original_dispatch_no_work (worker : Worker) (d : WG.Device) (initial : World)
+    (device : initial.k.wg = some d) (empty : NoDispatchWork worker d) :
+    (Env.dispatch worker).run initial = .ok (false, initial) :=
+  dispatch_no_work worker d initial device empty
+
+/-- An original dispatch returns false exactly when selection found no
+activation, at the same final World. A selected activation's failed execution
+cannot be converted to false. -/
+theorem original_dispatch_false (worker : Worker) (initial final : World) :
+    (Env.dispatch worker).run initial = .ok (false, final) ↔
+      (dispatchPrefix worker).run initial = .ok (none, final) :=
+  dispatch_false_iff worker initial final
 
 end Leanux.Proofs.WG.Progress
