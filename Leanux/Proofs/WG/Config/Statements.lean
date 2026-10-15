@@ -3,6 +3,7 @@ import Leanux.Proofs.WG.Config.Port
 import Leanux.Proofs.WG.Config.RoundTrip
 import Leanux.Proofs.WG.Config.DeviceScalars
 import Leanux.Proofs.WG.Config.RoundTripReturns
+import Leanux.Proofs.WG.Config.Fwmark
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
@@ -226,5 +227,27 @@ theorem original_scalar_roundtrip_returns (key psk : Key) (interval : Nat) (pid 
            { ctx with nextAllowedip := none, allowedipsSeq := 0 },
            .complete { publicKey := hexKey p.remoteStatic, attrs := peerFixedAttrs updated })) :=
   scalars_get_after_set_returns key psk interval pid d p ctx skb found resident live bounded down fresh empty room
+
+/-- Clearing a resident peer zeroes its cached local source addresses and
+drops its cached destination; only the cache reset timestamp is unspecified.
+Other peer entries and all other device fields are preserved on normal completion. -/
+theorem original_endpoint_source_clear (pid : PeerId) (d : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p) :
+    Ensures (clearPeerEndpointSrc pid) (fun w => w.k.wg = some d)
+      (fun _ w => ∃ d' reset, w.k.wg = some d' ∧
+        d' = { d with peers := d'.peers } ∧
+        d'.peers[pid]? = some (clearedSource p reset) ∧
+        ∀ q, q ≠ pid → d'.peers[q]? = d.peers[q]?) :=
+  clearEndpointSource_exact pid d p resident
+
+/-- On normal completion, a fwmark-only outer set writes the mark and increments
+the generation, preserving every other device field outside the peer store.
+The creating namespace exists and the request selects this device by index. -/
+theorem original_fwmark_device_frame (d : Device) (mark : Nat) (net : d.creatingNet = true) :
+    Ensures (wgSetDevice (fwmarkAttrs d mark))
+      (fun w => w.k.wg = some d ∧ selectsDevice w d)
+      (fun ret w => ret = 0 ∧ w.k.wg.map withoutPeers = some
+        (withoutPeers { d with fwmark := mark, deviceUpdateGen := d.deviceUpdateGen + 1 })) :=
+  setDevice_fwmark_frame d mark net
 
 end Leanux.Proofs.WG.Config

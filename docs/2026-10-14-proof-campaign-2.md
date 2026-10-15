@@ -122,104 +122,65 @@ review and capped scoped proof builds; ordinary elaboration failures repaired.
 
 ## H4 — Configuration semantics (in progress)
 
-Five local contracts establish invalid allowed-IP rejection without kernel
-mutation, exact allowed-IP dump encoding and space consumption, exact private
-identity normalization, per-peer static-static precomputation, and down-device
-port setting with socket preservation. `Validation`, `Identity` and `Port`
-follow original functions and expose those endpoints in `Statements`.
+Twenty terminal declarations cover configuration leaves, peer flags, bounded
+readback, normal-return guarantees, one sequential partial-error case, and
+fwmark/cache frames. `Validation`, `Identity` and `Port` prove invalid allowed-IP
+rejection, exact allowed-IP serialization, private-identity normalization,
+static-static precomputation and stopped-device port setting. `Flags` proves
+missing-peer remove/update-only and self-key no-ops, invalid flag/protocol
+rejection, and acquired-peer removal precedence. The removal equation is a
+stage result, not a complete lifecycle theorem.
 
-[AGENT 2026-10-14] Interpret get-after-set as the effective configuration the
-C establishes, not raw-request equality. Private keys are clamped, prefixes
-are masked, an up-device port-zero request allocates a port, and flowinfo-only
-endpoint changes are ignored. The configured UAPI's allowed-IP flag is
-`REPLACE_ALLOWEDIPS`, not a per-prefix removal flag. These source qualifications
-retain C semantics and do not authorize narrowing accepted traces.
+`PeerScalars`, `PeerDump` and `RoundTrip` compose the original peer setter and
+getter for an existing peer while down: the requested preshared key and
+keepalive interval read back exactly. The dump has a fresh cursor, an empty
+allowed-IP list and at least 168 bytes remaining (enough for the largest fixed
+encoding, with IPv6). `Returns` and the local `*Returns` variants additionally
+prove actual normal-return existence when the reference count is positive and
+its increment is strictly below `2^31`. The broader `Ensures` statements remain
+partial-correctness contracts without that count bound.
 
-The continuation adds nine terminal declarations (fourteen total). `Flags`
-proves missing-peer remove/update-only no-ops, invalid flag/protocol rejection,
-and the self-public-key no-op, each against the original setter. The acquired
-removal stage has an exact source equation: it bypasses all attribute updates
-and performs removal followed by the put. A separate equation connects these
-stages to the original setter; the stage equation alone is not a complete
-peer-removal lifecycle theorem.
+`DeviceScalars` reaches the original outer `wgSetDevice`: an index-selected
+request updates one existing peer, then encounters a malformed peer entry.
+It returns `-EINVAL` normally, retaining the scalar writes and device-generation
+increment. A following peer dump returns and reads back the retained writes.
+This is a proved partial-update case, not an atomic-update guarantee or an
+accepted runner trace. `EndpointSources` proves exact local-source clearing,
+cache-slot removal, and preservation of other peers and other device fields.
+`Fwmark` proves a fwmark-only outer set writes the mark and increments the
+generation, preserving every other device field outside the peer store.
+These two side-effect contracts concern normal completion; joining the loop
+to the claim that every listed peer is cleared remains open.
 
-`PeerScalars` composes public-key lookup, preshared-key and keepalive writes,
-and the final put for an existing live peer while the device is down. Its
-exact device result retains the concrete ordered map insertions; its peer
-projection restores the original reference count. `PeerDump` serializes the
-fixed peer fields, including endpoint encoding and space consumption, for an
-empty allowed-IP list, fresh cursor and at least 168 bytes of tailroom
-(the largest fixed-field encoding, with an IPv6 endpoint). `RoundTrip`
-composes the original setter and getter and proves readback of both requested
-scalar fields with all those premises explicit. These are normal-completion
-contracts, not successful-execution existence or runner reachability claims.
+[AGENT 2026-10-14] Get-after-set means the effective configuration established
+by the C: keys are clamped, prefixes masked, running port-zero may allocate a
+port, and flowinfo-only endpoint changes are ignored. The configured flag is
+`REPLACE_ALLOWEDIPS`, not a per-prefix removal flag. These qualifications keep
+C semantics; they do not authorize narrowing accepted traces.
 
-[AGENT 2026-10-14] Keep local source-factor variants in `Config/PeerSource`
-and `Config/DumpSource`, copied from campaign 1 at c4ef635 and connected to the
-mirror by definitional equations. The coordinator can unify them after that
-landing; no existing shared declaration is edited. Direct expansion and source
-factoring were both tried for the dump theorem. Independent review identified
-that the first full-room premise could not apply after the caller's headers.
-The final premise is sufficient remaining room, resolving that finding.
-Two simplification attempts hit the local elaboration heartbeat limit; combining
-put expansion and its arithmetic rewrites in one pass prevented exponential
-intermediate terms and the generalized proof built in 4.5 seconds. These were
-proof-elaboration failures, not counterexamples or infrastructure retries.
-Actual outer device-dump composition and chunk continuation remain open.
-The review found no mathematical defect or other source mismatch.
+Local source factors are copied from campaign 1 at c4ef635 (`PeerSource`,
+`DumpSource`) and ec95fa8 (`DeviceSource`), with definitional original-function
+equations. The coordinator can unify them after landing; no existing shared
+lemma is changed. Independent review found the first full-room dump premise
+could not apply after the caller's headers; the sufficient-tailroom theorem
+resolves that finding. Review of the normal-return and partial-error increment
+found no defect. Actual outer dump composition remains open.
 
-Remaining work: compose complete sequential set paths, errno partial-update
-effects, peer flag precedence/removal/replacement and allowed-IP ownership;
-then general dump chunk and coalescing correctness. Deferred work during peer
-removal may affect other peers' dynamic state, so an unrestricted frame is
-not claimed. Stepped dumps and fresh whole dumps require distinct cursor
-contracts. The source review found no new mismatch. No mirror-team request
-from H4; ranked mirror suggestions: none. Effort: source review and capped
-local builds, with ordinary proof-elaboration failures repaired.
+Remaining: running-port/socket and complete private-key effects, full peer
+removal/replacement and allowed-IP ownership, other partial-error combinations,
+and general dump chunks/coalescing. Deferred removal work can change other
+peers' dynamic state, so no unrestricted removal frame is claimed. No H4
+mirror mismatch or mirror-team request; ranked mirror suggestions: none.
 
-Validation for the fourteen-statement H4 checkpoint: scoped build, every
-terminal's `#print axioms` (only `propext`, `Classical.choice`, `Quot.sound`),
-and `capped -- scripts/in-bundle lake env leanchecker --fresh
-Leanux.Proofs.WG.Config.Statements` pass. The full proof gate fails in the
-unchanged inherited counter-window refinement; its token/import checks pass.
-The generalized proof was rechecked after resolving the review finding.
-No cap hit, infrastructure rerun, mirror edit, differential check or guest run.
-
-[USER 2026-10-15] Use the box's parallelism concurrently with other agents,
-with `LEANUX_QEMU_SLOTS=16` for suites/checks/gates, every heavy job capped,
-and no cap increase. These checks use `LEAN_NUM_THREADS=32` and Lake's parallel
-module scheduling; the repository's existing per-module Lean arguments stay
-unchanged. This does not alter the campaign's task order or worktree boundary.
-
-The next H4 increment adds four terminal statements (eighteen total).
-`Returns` states actual normal-return existence and the result predicate, with
-an equivalence to the standard no-exception weakest precondition. Local
-`ScalarReturns` and `DumpReturns` variants prove the stopped-device scalar
-setter and sufficiently spacious peer dump return normally. The reference
-count must be positive and its increment strictly below `2^31`; the earlier
-partial-correctness theorems remain valid without that bound. `RoundTripReturns`
-composes them into a returning set/readback theorem.
-
-`DeviceScalars` follows the original outer `wgSetDevice`: its request selects
-the device by index, sets one existing peer's preshared key and keepalive,
-then contains a malformed peer entry. It returns `-EINVAL` normally, with the
-device generation increment and the first peer's changes retained. A following
-peer dump returns and reads back those changes. This is a proved sequential
-partial-update case, not an atomic-update guarantee or an accepted runner trace.
-The remaining partial-error combinations and outer dump chunk loop are open.
-
-[AGENT 2026-10-15] Keep the outer-setter source factor local, copied from
-campaign 1 at ec95fa8 and checked by a definitional equation. The total-return
-variants are local because their stronger no-exception conclusions need
-explicit count bounds and cannot replace the existing broader partial
-contracts. No mirror or existing campaign-1 lemma is changed.
-
-The eighteen-statement checkpoint passes scoped build, standard-axiom
-inspection and fresh stock kernel replay. Independent review found no defect
-in the total-return formulation, original-operation linkage or partial-error
-case. The full gate again fails in inherited `CounterWindow.Refinement`, with
-token/import checks passing. No cap hit or infrastructure rerun. These are
-model theorems; no guest or differential check was run.
+Validation: all twenty statements pass scoped build, standard-axiom inspection
+(only `propext`, `Classical.choice`, `Quot.sound`), and `capped --
+scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Config.Statements`.
+The full proof gate fails in inherited `CounterWindow.Refinement`; token/import
+checks pass. Effort includes repaired proof-elaboration failures, including two
+local heartbeat limits resolved by simplifying put calculations before their
+continuations. No cap hit, infrastructure rerun, mirror edit, differential
+check or guest run. Builds use full Lake module parallelism with
+`LEAN_NUM_THREADS=32`; gate runs use `LEANUX_QEMU_SLOTS=16`, without a cap change.
 
 ## H5 — Termination and progress (finding; remainder open)
 
