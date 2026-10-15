@@ -32,6 +32,23 @@ structure CallsReady (coverage : KcovLayout) (preempt : BitVec 32) (s : MachineD
   metadataSeparate : KcovSeparated coverage (KcovMetadataBytes coverage)
   preemptSeparate : KcovSeparated coverage (InRange preemptCountAddress 4)
 
+/-- Instructions that leave memory and SP unchanged preserve callback
+    readiness, regardless of their temporary registers or undefined flags. -/
+theorem CallsReady.congr {coverage : KcovLayout} {preempt : BitVec 32}
+    {before after : MachineData} (ready : CallsReady coverage preempt before)
+    (memory : after.dmem = before.dmem) (stack : after.regs.rsp = before.regs.rsp) :
+    CallsReady coverage preempt after := by
+  exact {
+    state := by simpa only [memory] using ready.state
+    aligned := by simpa only [stack] using ready.aligned
+    mapped := by simpa only [memory, stack] using ready.mapped
+    pushSeparate := by simpa only [stack] using ready.pushSeparate
+    returnSeparate := by simpa only [stack] using ready.returnSeparate
+    metadataSeparate := ready.metadataSeparate
+    preemptSeparate := ready.preemptSeparate }
+
+#print axioms CallsReady.congr
+
 theorem CallPost.next_ready {s : MachineData} {coverage preempt offset t}
     (post : CallPost s coverage preempt offset t) (ready : CallsReady coverage preempt s) :
     CallsReady coverage preempt t.data := by

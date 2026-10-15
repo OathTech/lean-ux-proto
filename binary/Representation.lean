@@ -10,6 +10,20 @@ def kindWord : Leanux.WG.IndexKind → BitVec 32
   | .handshake => 1
   | .keypair => 2
 
+/-- The C mask denotes membership, so order and duplicates in the mirror's
+    list of allowed kinds have no physical counterpart. -/
+def kindMask (kinds : List Leanux.WG.IndexKind) : BitVec 32 :=
+  (if kinds.contains .handshake then 1 else 0) |||
+  (if kinds.contains .keypair then 2 else 0)
+
+theorem kindMask_accepts (kinds : List Leanux.WG.IndexKind) (kind : Leanux.WG.IndexKind) :
+    decide (kindMask kinds &&& kindWord kind ≠ 0) = kinds.contains kind := by
+  cases kind <;>
+    cases h : kinds.contains .handshake <;> cases k : kinds.contains .keypair <;>
+    simp [kindMask, kindWord, h, k]
+
+#print axioms kindMask_accepts
+
 /-- Ordered intrusive chain. The head and next fields point to the embedded
     hlist_node, not to the beginning of index_hashtable_entry. Every recursive
     call consumes one list entry, so cycles cannot represent a finite bucket.
@@ -57,6 +71,60 @@ theorem bucket_cons_fields {m : Mem 64} {head a : Address}
     m.loadInt (a + .ofNat 64 Layouts.entry_type) 4 = some (kindWord e.kind).toNat ∧
     m.loadInt (a + .ofNat 64 Layouts.entry_index) 4 = some e.index :=
   ⟨h.1, h.2.2.1, h.2.2.2.1, h.2.2.2.2.1, h.2.2.2.2.2.1⟩
+
+/-- Exactly the three fields read by the lookup loop. The owner peer word
+    and hlist pprev word are intentionally absent from this read footprint. -/
+def BucketShapeReads (base address : Address) : Prop :=
+  InRange (base + 8) 8 address ∨ InRange (base + 24) 4 address ∨
+    InRange (base + 28) 4 address
+
+theorem BucketShape.frame_reads {before after : Mem 64} {writes : Address → Prop}
+    (same : EqualOutside writes before after) (es : List (Address × Leanux.WG.IndexEntry))
+    (disjoint : ∀ cell ∈ es, ∀ address, BucketShapeReads cell.1 address → ¬writes address)
+    (head : Address) (represented : BucketShape before head es) :
+    BucketShape after head es := by
+  induction es generalizing head with
+  | nil => exact represented
+  | cons cell es ih =>
+    rcases cell with ⟨a, e⟩
+    rcases represented with ⟨ha, hh, hnode, hi, kind, index, next, hn, tail⟩
+    have apart := disjoint (a, e) (by simp)
+    refine ⟨ha, hh, hnode, hi, ?_, ?_, next, ?_, ?_⟩
+    · exact (same.loadInt _ 4 (fun i hi => apart _ (.inr (.inl ⟨i, hi, rfl⟩)))).symm.trans kind
+    · exact (same.loadInt _ 4 (fun i hi => apart _ (.inr (.inr ⟨i, hi, rfl⟩)))).symm.trans index
+    · rw [hnode] at hn ⊢
+      simp only [Layouts.entry_index_hash, Layouts.node_next, BitVec.add_zero] at hn ⊢
+      exact (same.loadInt _ 8 (fun i hi => apart _ (.inl ⟨i, hi, rfl⟩))).symm.trans hn
+    · exact ih (fun cell hc => disjoint cell (by simp [hc])) next tail
+
+/-- The mandatory write of peer-get's result does not change the loop's
+    fields in that same owning entry, including when the result is NULL. -/
+theorem BucketShapeReads.apart_peer (base address : Address)
+    (read : BucketShapeReads base address) : ¬InRange base 8 address := by
+  rcases read with node | kind | index
+  · simpa only [BitVec.add_zero] using
+      InRange.offset_disjoint base 8 8 0 8 (by decide) (by decide) (by decide) address node
+  · simpa only [BitVec.add_zero] using
+      InRange.offset_disjoint base 24 4 0 8 (by decide) (by decide) (by decide) address kind
+  · simpa only [BitVec.add_zero] using
+      InRange.offset_disjoint base 28 4 0 8 (by decide) (by decide) (by decide) address index
+
+theorem BucketShape.peer_store (memory : Mem 64) (owner : Address) (word : Int)
+    (es : List (Address × Leanux.WG.IndexEntry)) (head : Address)
+    (represented : BucketShape memory head es)
+    (otherEntries : ∀ cell ∈ es, cell.1 ≠ owner →
+      ∀ address, BucketShapeReads cell.1 address → ¬InRange owner 8 address) :
+    BucketShape (memory.storeInt owner 8 word) head es := by
+  apply BucketShape.frame_reads (storeInt_frame memory owner 8 word) es _ head represented
+  intro cell member address read
+  by_cases own : cell.1 = owner
+  · rw [own] at read
+    exact read.apart_peer
+  · exact otherEntries cell member own address read
+
+#print axioms BucketShape.frame_reads
+#print axioms BucketShapeReads.apart_peer
+#print axioms BucketShape.peer_store
 
 /-- A disjoint write preserves every exact field in the represented chain.
     The premise refers to physical entry bytes, not to a ghost copy of entries. -/

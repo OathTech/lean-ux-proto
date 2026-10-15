@@ -153,6 +153,19 @@ theorem type_guard_observation (rxSection : Nat) (s : MachineData) (af : Bool) :
     typeExit, Image.Lookup.entry, Image.PeerGet.entry, zero]
   all_goals rfl
 
+/-- A represented u32 index has exactly its source Nat value. This derives
+    the comparison decision from the physical register equation and the
+    representation bound, rather than assuming a matching decision. -/
+theorem index_source (s : MachineData) (entryIndex query : Nat)
+    (entryBound : entryIndex < 2^32) (queryBound : query < 2^32)
+    (loaded : s.regs.get (.low .rbp .W32) = BitVec.ofNat 32 entryIndex)
+    (argument : s.regs.get (.low .r12 .W32) = BitVec.ofNat 32 query) :
+    indexHit s = (entryIndex == query) := by
+  simp only [indexHit, loaded, argument, BitVec.toNat_ofNat, Nat.mod_eq_of_lt entryBound,
+    Nat.mod_eq_of_lt queryBound]
+
+#print axioms index_source
+
 #print axioms container_sub
 #print axioms container_sub_shape
 #print axioms index_arguments_observation

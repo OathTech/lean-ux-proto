@@ -557,3 +557,59 @@ correspondence at every cut, recursive bucket-loop composition, witnessed
 Finding 1 is unchanged; no state was excluded to close it. The milestone
 report still owes the measured R-region rate and `TrustBase.lean` verbatim.
 No function or transported property is claimed. No main merge or push.
+
+## Node-to-comparison composition, 2026-10-15
+
+`ScanNode.node_to_compare` composes lookup +0x34 through +0x59: four real
+instrumentation CALLs and their named service contracts, container subtraction,
+the entry guard and the three index-argument moves. It derives the nonnull
+entry guard from `BucketShape`, preserves the complete represented bucket,
+establishes the loaded source index, and retains the physical scan frame at
+every appended anchored cut. `ScanFrame` fixes the stack, query, output,
+kind-mask and saved register, and frames memory outside the callback stack
+word and KCOV buffer. RBX and RBP are tracked separately as loop temporaries.
+This is a physical component, not the whole-World relation or an R-region
+certification. Service histories remain in the actual execution; their
+interiors have no anchored cuts under the existing named contract.
+
+`LoopSearch.lookup_split` and `finish_split` connect the source prefix/suffix
+to the actual logged lookup, preserving failures and every World/checkpoint.
+The source equations retain first-index-match termination even for a wrong
+kind and emit `idxFound` once. `kindMask_accepts`, `index_source` and
+`type_source` derive the source decisions from physical words; allowed-kind
+lists may be empty, reordered or duplicated. `LookupType` retains both
+actual undefined AF choices at the AND/XOR intermediates. `CallHistory`
+executes CALL before applying the service contract and derives readiness
+for the next call from the preserved return word.
+
+`BucketShape.frame_reads` now frames exactly next/type/index. Its
+`peer_store` theorem permits the owning peer-word update, including NULL,
+with explicit separation from other entries' read fields. It does not
+pretend to relate that owner word: the mirror repair and owner correspondence
+remain open. Finding 1 is unchanged; neither Pre nor R has been narrowed.
+No assumption was added to `TrustBase.lean`.
+
+The whole-World review also identified two obligations to retain: consumed
+ring slots can contain stale pointers, so object names require lifetimes
+separate from current ownership; `serialWorkCpu.getD 1` alone is not a
+functional relation (`none` and `some 1` coincide). Its eventual full relation
+needs the physical sentinel decoding or a proved reachable-state invariant.
+The current peer scalar predicate is explicitly only a component. No
+whole-World functionality is claimed for it.
+
+Validation: full-parallel build passed (211 jobs), kernel replay passed for
+the eight changed/new proof modules, all 223 printed axiom dependency lists
+use only the standard axioms, and the source audit passed for 56 Lean files.
+Reproduce with `capped -- lake build BinaryProofs binary-probe`, followed by
+`capped -- lake env leanchecker Representation LookupLoads PeerComparisons
+CallHistory LookupType LoopSearch ScanFrame ScanNode` in `binary/`.
+Initial elaboration attempts failed and were corrected before this build and
+replay. The previous 124-test fast-tier result remains the latest; this batch
+changes only binary proofs and documentation, not the mirror or runner.
+
+Milestone 1 remains open: recursive loop composition, whole-World physical
+representation, peer-get correspondence at every cut, witnessed `Pre_lookup`,
+and the function-level simulation/transport theorem. No function is certified,
+and no R-region rate is inferred from supporting lemmas. The milestone report
+still owes the measured rate and the trust base verbatim. No landing paste
+has arrived; no main merge or push.

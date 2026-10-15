@@ -90,3 +90,15 @@ physical framing; pointer/queue/work/timer components remain open.
 `BucketShape` reads only index/type/next, with no restriction on owner peer
 words. `LookupLoads` and `BucketLoop.tail_iteration` preserve the actual
 intermediate instruction states needed for the pending loop composition.
+
+`ScanNode.node_to_compare` composes the nonempty-node path +0x34 to +0x59,
+including four actual instrumentation calls, with physical framing at every
+appended cut. `LoopSearch.lookup_split` relates its source decomposition to
+the actual logged lookup. Recursive loop composition and whole-World R are
+still open. Replay these components with:
+
+```sh
+cd binary
+capped -- lake build BinaryProofs binary-probe
+capped -- lake env leanchecker Representation LookupLoads PeerComparisons CallHistory LookupType LoopSearch ScanFrame ScanNode
+```
