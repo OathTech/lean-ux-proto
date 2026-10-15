@@ -91,7 +91,7 @@ theorem LookupPost.noEarly (c : Config) (coverage : TrustBase.KcovLayout)
     (answer : Option (WG.IndexOwner × WG.PeerId)) (finalWorld : World) (final : Executed)
     (post : LookupPost c coverage preempt ra initial world answer finalWorld final) :
     NoEarlyReturn (Image.Lookup.entry+0x94) final.history := by
-  obtain ⟨_, _, v, points, source, _, _, accepted, observed, matched, _, _, _, ended⟩ := post
+  obtain ⟨_, _, v, points, source, _, _, accepted, observed, matched, _, _, _, _, _, _, ended⟩ := post
   exact no_early_return c.rxSection final.history points source observed matched
     (LookupOuterCount.lookup_total c.kinds c.query world finalWorld answer source accepted) ended
 

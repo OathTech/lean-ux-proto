@@ -29,6 +29,9 @@ theorem miss_execution (fetch : Int64 → Option Decoded)
         ExecutedCorrespondence.CutsAligned (R c) c.rxSection final.history source ∧
         R c final.history points final.machine finalWorld ∧
         CutFrames (LookupWrites c coverage preempt s v) s.dmem final.history ∧
+        LookupCoverageAt coverage preempt v final.machine.data.dmem ∧
+        load32 final.machine.data.dmem preemptCountAddress = some preempt ∧
+        (LookupPendingRead preempt → final.machine.data.dmem.loadInt softirqPendingAddress 2 = some 0) ∧
         EndsAtReturn (Image.Lookup.entry+0x94) final.history)
       ⟨⟨s, Image.Lookup.entry⟩, [⟨s, Image.Lookup.entry⟩]⟩ := by
   obtain ⟨v, entry⟩ := pre
@@ -82,12 +85,16 @@ theorem miss_execution (fetch : Int64 → Option Decoded)
           ExecutedCorrespondence.CutsAligned (R c) c.rxSection final.history source ∧
           R c final.history points final.machine finalWorld ∧
         CutFrames (LookupWrites c coverage preempt s v) s.dmem final.history ∧
+        LookupCoverageAt coverage preempt v final.machine.data.dmem ∧
+        load32 final.machine.data.dmem preemptCountAddress = some preempt ∧
+        (LookupPendingRead preempt → final.machine.data.dmem.loadInt softirqPendingAddress 2 = some 0) ∧
         EndsAtReturn (Image.Lookup.entry+0x94) final.history) current := by
     have run := clear_finish fetch agree tracePc bh c coverage preempt ra s world v entry current pc finalWorld sourceView
       saved ready frame seen source related observed matched aligned latest inactive noReturn cutFrames
     apply eventually_weaken (historyStep fetch) _ _ _ _ run
-    rintro final ⟨ret, zero, frame, full, matching, cuts, endpoint, frames, ended⟩
-    refine ⟨ret, zero, answerEq, v, _, _, entry, frame, ?_, full, matching, cuts, endpoint, frames, ended⟩
+    rintro final ⟨ret, zero, frame, full, matching, cuts, endpoint, frames, coverageAt, countAt, ended⟩
+    refine ⟨ret, zero, answerEq, v, _, _, entry, frame, ?_, full, matching, cuts, endpoint, frames, coverageAt, countAt,
+      pending_from_frame c coverage preempt ra s final.machine.data world v entry frame, ended⟩
     simpa only [answerEq, finalEq] using sourceRun
   rcases places with pc | pc
   · have scratch : ∀ view, project c finalWorld = some view → ∀ a, Reads c view a →

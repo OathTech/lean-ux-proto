@@ -43,8 +43,9 @@ theorem selected_execution (fetch : Int64 → Option Decoded)
       (by simpa only [Option.isSome_none, Bool.false_eq_true, ite_false] using pc)
       finalWorld sourceView saved ready frame points source related observed matched aligned latest inactive noReturn frames
     apply eventually_weaken (historyStep fetch) _ _ _ _ run
-    rintro final ⟨ret, zero, frame, full, matching, cuts, endpoint, cutFrames, ended⟩
-    refine ⟨ret, ?_, v, _, _, entry, frame, sourceRun, full, matching, cuts, endpoint, cutFrames, ended⟩
+    rintro final ⟨ret, zero, frame, full, matching, cuts, endpoint, cutFrames, coverageAt, countAt, ended⟩
+    refine ⟨ret, ?_, v, _, _, entry, frame, sourceRun, full, matching, cuts, endpoint, cutFrames, coverageAt, countAt,
+      pending_from_frame c coverage preempt ra s final.machine.data world v entry frame, ended⟩
     simpa only [answerEq, Option.map_none, LookupResult] using zero
   | some pid =>
     have run := live_finish fetch agree tracePc bh c coverage preempt ra s world v entry result
@@ -52,8 +53,9 @@ theorem selected_execution (fetch : Int64 → Option Decoded)
       finalWorld sourceView saved ready frame output (needed rfl) (mapped rfl)
       points source related observed matched aligned latest inactive noReturn frames
     apply eventually_weaken (historyStep fetch) _ _ _ _ run
-    rintro final ⟨ret, value, outValue, frame, full, matching, cuts, endpoint, cutFrames, ended⟩
-    refine ⟨ret, ?_, v, _, _, entry, frame, sourceRun, full, matching, cuts, endpoint, cutFrames, ended⟩
+    rintro final ⟨ret, value, outValue, frame, full, matching, cuts, endpoint, cutFrames, coverageAt, countAt, ended⟩
+    refine ⟨ret, ?_, v, _, _, entry, frame, sourceRun, full, matching, cuts, endpoint, cutFrames, coverageAt, countAt,
+      pending_from_frame c coverage preempt ra s final.machine.data world v entry frame, ended⟩
     simp only [answerEq, Option.map_some, LookupResult]
     constructor
     · rw [value]; exact ownerReg

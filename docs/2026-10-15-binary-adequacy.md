@@ -2958,3 +2958,28 @@ The underlying Kraken theorem proves successful execution independently of
 that premise. No native-verification axiom or new project axiom was added.
 The external gate at 430ea90 does not cover this changed surface; the next
 external export must be regenerated. No KILLED banner or timeout occurred.
+
+
+### Milestone-1 review fix F4: return service state (2026-10-15)
+
+`LookupPost` now exports `LookupCoverageAt coverage preempt v` for the
+entry view, the restored 32-bit preempt count, and the conditional
+`LookupPendingRead preempt → loadInt softirqPendingAddress 2 = some 0`.
+The coverage fact is preserved through BH-enable by its proved footprint;
+the count follows from the existing balance contract and the epilogue's
+memory equality. The pending word follows from the full-function footprint.
+No premise, Pre clause or R clause changed; TrustBase is unchanged.
+
+These are the service-state clauses needed when composing calls with the
+same read context. They do not invent mapping for an inactive coverage buffer
+or an unread pending word. A later call that reads more (for example a
+nonempty-bucket comparison after an empty-bucket mode-3 lookup) still needs
+those additional mapping/readiness facts from its caller frame/environment.
+The exact hit-state tests now also check preempt/pending values and the KCOV
+header bound after return.
+
+Validation: default build (357 jobs) and binary axiom/escape gate PASS; both
+exact hit executions PASS (441/506 instructions, two seeds each), including
+the added service-state assertions. Only the three standard axioms occur.
+No KILLED banner or timeout occurred. External export replay will cover the
+updated surface at the milestone-2 claim point.

@@ -58,6 +58,8 @@ theorem common_finish (fetch : Int64 → Option Decoded)
         (seen ++ [returned "wg_index_hashtable_lookup" final.machine]) (source ++ [⟨.returned "wg_index_hashtable_lookup", finalWorld⟩]) ∧
       ExecutedCorrespondence.CutsAligned (R c) c.rxSection final.history (source ++ [⟨.returned "wg_index_hashtable_lookup", finalWorld⟩]) ∧
       R c final.history (seen ++ [returned "wg_index_hashtable_lookup" final.machine]) final.machine finalWorld ∧
+      LookupCoverageAt coverage preempt v final.machine.data.dmem ∧
+      load32 final.machine.data.dmem preemptCountAddress = some preempt ∧
       EndsAtReturn (Image.Lookup.entry+0x94) final.history ∧
       ∃ suffix, final.history = current.history ++ suffix ∧
         CutFrames (fun a => scanWrites current.machine.data ⟨coverage, preempt, v⟩ a ∨
@@ -139,6 +141,29 @@ theorem common_finish (fetch : Int64 → Option Decoded)
       simpa only [cbSaved.stack, UInt64.toBitVec_sub, BitVec.sub_sub,
         show (40 : UInt64).toBitVec+8 = (48 : BitVec 64) from rfl] using stack
     · exact entry.bhStack a count (outer_live c s a inside))
+  have afterCoverage : LookupCoverageAt coverage preempt v afterBh.machine.data.dmem := by
+    apply LookupCoverage.coverage_metadata_frame ⟨coverage, preempt, v⟩ _ _
+      traced.frame.ready.state.1 _ frame
+    · intro a read written
+      rcases written with stack | count
+      · exact entry.serviceStack a (.inl read)
+          (callback_stack_in c s callback.machine.data cbSaved.stack a stack)
+      · exact entry.bhMetadata a (.inl read) count
+    · intro needed
+      apply Kcov.buffer_frame coverage _ _ (traced.frame.ready.state.1.2.2.2 needed).2.2 _ frame
+      intro a read written
+      rcases written with stack | count
+      · exact entry.serviceStack a (.inr (.inr ⟨needed, read⟩))
+          (callback_stack_in c s callback.machine.data cbSaved.stack a stack)
+      · exact entry.bhMetadata a (.inr ⟨needed, read⟩) count
+  have afterCount : load32 afterBh.machine.data.dmem preemptCountAddress = some preempt := by
+    unfold load32
+    rw [balanced]
+    have amount : (512+preempt)-512 = preempt := by
+      rw [BitVec.add_comm, BitVec.add_sub_cancel]
+    rw [amount]
+    simp only [Option.map_some, BitVec.ofInt_natCast, BitVec.ofNat_toNat]
+    rfl
   have returnRun := return_from_saved fetch agree c finalWorld s afterBh.machine.data ra afterSaved entry.frame.2
     afterBh.history seen source (by simpa only [← afterPC] using endpoint) full matching cuts latest inactive noReturn
   have cursor : (⟨⟨afterBh.machine.data, Image.Lookup.entry+0x89⟩, afterBh.history⟩ : Executed) = afterBh := by rw [← afterPC]
@@ -157,11 +182,13 @@ theorem common_finish (fetch : Int64 → Option Decoded)
         simpa only [traced.frame.stack] using stack
       · exact outside (.inr count)))
   have bhFrame := liftBh afterBh.machine frame
-  refine ⟨returned, ?_, ?_, full, matching, cuts, endpoint, ended, (cbTail ++ bhTail) ++ retTail, ?_, ?_⟩
+  refine ⟨returned, ?_, ?_, full, matching, cuts, endpoint, ?_, ?_, ended, (cbTail ++ bhTail) ++ retTail, ?_, ?_⟩
   · rw [value, ret.2.2.1]
     exact cbBX
   · rw [memory]
     exact bhFrame
+  · simpa only [memory] using afterCoverage
+  · simpa only [memory] using afterCount
   · simp only [retHistory, bhHistory, cbHistory, List.append_assoc]
   · intro q member cut
     rcases List.mem_append.mp member with earlier | last

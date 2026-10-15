@@ -28,6 +28,9 @@ def LookupPost (c : Config) (coverage : KcovLayout) (preempt : BitVec 32) (ra : 
     ExecutedCorrespondence.CutsAligned (R c) c.rxSection final.history source ∧
     R c final.history points final.machine finalWorld ∧
     CutFrames (LookupWrites c coverage preempt entry.data v) entry.data.dmem final.history ∧
+    LookupCoverageAt coverage preempt v final.machine.data.dmem ∧
+    load32 final.machine.data.dmem preemptCountAddress = some preempt ∧
+    (LookupPendingRead preempt → final.machine.data.dmem.loadInt softirqPendingAddress 2 = some 0) ∧
     EndsAtReturn (Image.Lookup.entry+0x94) final.history
 
 end Binary.LookupRelation

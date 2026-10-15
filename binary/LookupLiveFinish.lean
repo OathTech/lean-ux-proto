@@ -38,6 +38,8 @@ theorem live_finish (fetch : Int64 → Option Decoded)
       ExecutedCorrespondence.CutsAligned (R c) c.rxSection final.history (source ++ [⟨.returned "wg_index_hashtable_lookup", finalWorld⟩]) ∧
       R c final.history (seen ++ [returned "wg_index_hashtable_lookup" final.machine]) final.machine finalWorld ∧
       CutFrames (LookupWrites c coverage preempt s v) s.dmem final.history ∧
+      LookupCoverageAt coverage preempt v final.machine.data.dmem ∧
+      load32 final.machine.data.dmem preemptCountAddress = some preempt ∧
       EndsAtReturn (Image.Lookup.entry+0x94) final.history) current := by
   obtain ⟨raw, rawObserved⟩ := observe_has_raw c.rxSection current.history seen observed
   have readBack : ∀ view, project c finalWorld = some view → ∀ a, Reads c view a → Reads c v a := by
@@ -141,8 +143,8 @@ theorem live_finish (fetch : Int64 → Option Decoded)
     finalWorld sourceView storedSaved storedReady (pending_from_frame c coverage preempt ra s stored.machine.data world v entry storedFrame)
     seen source endpoint full matching cuts latest inactive noReturn
   apply eventually_weaken (historyStep fetch) _ _ _ _ finish
-  rintro final ⟨ret, value, finalFrame, full, matching, cuts, endpoint, ended, suffix, finalHistory, suffixFrames⟩
-  refine ⟨ret, ?_, ?_, ?_, full, matching, cuts, endpoint, ?_, ended⟩
+  rintro final ⟨ret, value, finalFrame, full, matching, cuts, endpoint, coverageAt, countAt, ended, suffix, finalHistory, suffixFrames⟩
+  refine ⟨ret, ?_, ?_, ?_, full, matching, cuts, endpoint, ?_, coverageAt, countAt, ended⟩
   · rw [value, machine]
     exact cbBX
   · have read := finalFrame.loadInt s.regs.rcx.toBitVec 8 (by

@@ -38,6 +38,13 @@ def check : IO Unit := do
         first.state.data.dmem.loadInt 0x600420 4 == some (if live then 2 else 0) &&
         first.state.data.dmem.loadInt 0x300000 8 == some (if live then 0x600000 else 0) do
       throw (IO.userError "hit witness owner/count/output disagrees")
+    unless first.state.data.dmem.loadInt TrustBase.preemptCountAddress 4 == some 0 &&
+        first.state.data.dmem.loadInt TrustBase.softirqPendingAddress 2 == some 0 do
+      throw (IO.userError "hit witness did not restore preempt/pending state")
+    let some coverageCount := first.state.data.dmem.loadInt 0x900000 8
+      | throw (IO.userError "hit witness lost KCOV header")
+    unless 0 ≤ coverageCount && coverageCount ≤ 1024 do
+      throw (IO.userError "hit witness broke KCOV header bound")
     if live then
       let expectedCoverage : Array Nat ← liftE (expected.getObjValAs? (Array Nat) "coverage")
       let expectedComparisons : Array (Nat × Nat × Nat) ← liftE
