@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Configuration.RunnerRouting
 import Leanux.Proofs.WG.AllowedIps.RoutingDumpFrames
 import Leanux.Proofs.WG.AllowedIps.RoutingEnvTimersFrames
 import Leanux.Proofs.WG.AllowedIps.RoutingHandshakeReceiveFrames
@@ -72,8 +73,13 @@ original routing frames too. Complete activation runs, dispatch, scheduling and
 nested rescheduling, deferred workers and both environment timer modes now
 retain routing. Complete environment ingress/batch, control and stepped-dump
 callers now retain routing too; environment deletion observes its actual lifecycle
-completions. Enclosing syscall/Runner execution and packet authorization remain
-separate.
+completions. Complete syscall execution and the initialized Runner now retain
+valid completed histories, including indexed Stops, and normal routing agreement
+in the actual returned accumulator World. Address shape is explicit for typed
+traces and follows from successful public parsing. Erasure is unconditional and
+connects the full proof-side result to a literal source Runner whose JSON
+projection is the original execution. Internal lookup witnesses, packet
+authorization and identity/key affiliation remain separate.
 Actual local parser output now discharges address shape for the setAllowedip
 guards and its selected bounded insertion. Complete original free normally
 clears both represented families and every resident list, preserving the other
@@ -422,7 +428,8 @@ supply the requested path, initial root linkage and whole-store freshness.
 Both root values, the sequence, and any supplied opposite-family representation
 are framed. Separate dispatch, coherence and finite-call history contracts below
 cover those additional boundaries; whole device-command composition is supplied
-separately below. Enclosing lifecycle/Runner execution and packet paths remain open. -/
+separately below, together with lifecycle and initialized Runner composition.
+Packet paths remain open. -/
 theorem original_add_context_empty_child_correct (w w' : World) (d : WG.Device)
     (hd : w.k.wg = some d) (v4 : Bool) (c : Context) (n : NodeData) (side : Nat) (sibling : Tree)
     (addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
@@ -2328,7 +2335,8 @@ retain routing on normal return. Cursor releases may retire resident peers;
 no cursor validity, owner affiliation, residency or successful-drain assumption
 is added. Silent lifts leave the journal unchanged on every outcome, preserve
 optional state only normally, and retain prior history safety on Stop. This is
-neither initialized syscall/Runner closure nor packet authorization. -/
+a local frame; initialized syscall/Runner composition is supplied below,
+while packet authorization remains separate. -/
 theorem original_dump_routing (initial : FlatTable × FlatTable) (fd seq : Nat)
     (ref : WG.DeviceRef) (ctx : WG.DumpCtx) (skb : WG.NlSkb) :
     RetainsRoutingCall (WG.wgGetDeviceDone ctx) ∧
@@ -2352,5 +2360,52 @@ theorem original_dump_routing (initial : FlatTable × FlatTable) (fd seq : Nat)
     global_completion_lift initial _ (netlinkDumpStart_routing fd ref),
     global_completion_lift initial _ (netlinkRecvmsg_routing fd),
     global_completion_lift initial _ (wgGetDevice_routing ref)⟩
+
+/-- Every typed syscall/trace and both Runner flags retain exact execution,
+without address-shape assumptions. The full observed Json × World erases to a
+literal original-call source Runner; projecting its JSON gives executeTrace. -/
+theorem original_routing_runner_erasure (call : Syscall) (trace : Runner.Trace)
+    (placeholders floodExact : Bool) :
+    Logged.ErasesPrefix (Configuration.dispatchObserved call) (dispatch call) ∧
+    Logged.ErasesPrefix (Configuration.syscallObserved call) (syscall call) ∧
+    Logged.ErasesOuter (Configuration.executeTraceObserved trace placeholders floodExact)
+      (Configuration.sourceRunner trace placeholders floodExact) ∧
+    (Configuration.sourceRunner trace placeholders floodExact).map Prod.fst =
+      Runner.executeTrace trace placeholders floodExact :=
+  ⟨Configuration.dispatchObserved_erases call, Configuration.syscallObserved_erases call,
+    Configuration.executeTraceObserved_erases trace placeholders floodExact,
+    Configuration.sourceRunner_json trace placeholders floodExact⟩
+
+/-- Complete original dispatch and syscall suffixes preserve optional routing
+and safe completed prefixes from explicit entry agreement and address shape.
+Ordinary negative returns keep their actual cleanup; Stops retain history only. -/
+theorem original_syscall_routing_prefix (initial : FlatTable × FlatTable) (call : Syscall)
+    (shape : Configuration.SyscallAddressShape call) :
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Configuration.dispatchObserved call) ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Configuration.syscallObserved call) :=
+  ⟨Configuration.dispatchObserved_global initial call shape,
+    Configuration.syscallObserved_global initial call shape⟩
+
+/-- Successful public parsing supplies the shape needed for initialized safe
+completion history on every outcome and routing agreement in the actual normal
+final World. The source connection includes that World, not merely its JSON
+projection. This supplies neither earlier executed lookup certificates nor
+packet authorization, raw-owner residency, key affiliation or trial packets. -/
+theorem parsed_initialized_routing_execution (json : Lean.Json) (trace : Runner.Trace)
+    (parsed : Runner.parseTrace json = .ok trace) (placeholders floodExact : Bool) :
+    Logged.ErasesOuter (Configuration.executeTraceObserved trace placeholders floodExact)
+      (Configuration.sourceRunner trace placeholders floodExact) ∧
+    (Configuration.sourceRunner trace placeholders floodExact).map Prod.fst =
+      Runner.executeTrace trace placeholders floodExact ∧
+    CompletionSafe ([], [])
+      (Logged.runPrefixOuter (Configuration.executeTraceObserved trace placeholders floodExact) []).2 ∧
+    ∀ out, (Logged.runPrefixOuter (Configuration.executeTraceObserved trace placeholders floodExact) []).1 = .ok out →
+      GlobalCompletionState ([], [])
+        (Logged.runPrefixOuter (Configuration.executeTraceObserved trace placeholders floodExact) []).2 out.2 :=
+  ⟨Configuration.executeTraceObserved_erases trace placeholders floodExact,
+    Configuration.sourceRunner_json trace placeholders floodExact,
+    Configuration.parsed_executeTraceObserved_routing json trace parsed placeholders floodExact⟩
 
 end Leanux.Proofs.WG.CryptokeyRouting
