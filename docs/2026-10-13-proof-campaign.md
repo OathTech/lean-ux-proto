@@ -4,8 +4,8 @@
 
 Work on `proofs/campaign` in `.worktrees/proofs-campaign` follows [the charter](2026-10-13-charter-proof-campaign.md),
 with representation batch `cb2348e` carried and validated. All seven rows are current there, including the local R4
-packet-to-receipt link extension. Local R3
-session/material/RX-origin receipts and local material retention compile; initialized R3 packet authorization
+packet-to-receipt link extension and local R3 owner-acquisition material frame. Session/material/RX-origin receipts
+and local support are retained; initialized R3 packet authorization
 and R4 receive-pipeline conservation remain open. The [register](proofs.md#results) holds pins/counts; the
 [model map](proofs.md#layers) supplies refinement details. No main integration, push, differential check or guest run
 was made by this campaign.
@@ -19,7 +19,41 @@ was made by this campaign.
 | R5 | Accepted age/post-zero/wire-nonce counterexamples; thirteen positive local contracts. |
 | R6 | Cookie exclusion proved; literal MAX=18 refuted, without a replacement universal bound. |
 
-**Current packet-to-receipt link (validated).** Two terminal groups preserve all 494
+**Current owner-acquisition material retention (validated).** One grouped export
+preserves all 496 preceding terminal bodies, giving 497 declarations (495 theorems/two definitions; 127 R3/119 R4).
+The actual owner read, peer borrow and fresh owner store establish normal receiving-material retention through
+`acquireOwner` and the complete original `indexLookup`, including a None return that clears the peer word. The
+keypair-owner endpoint retains every other full record field; handshake-owner writes leave the material view equal.
+No affiliation, non-NULL, credit, owner-residency, index uniqueness or slot-distinctness premise is supplied.
+The existing access observer preserves supplied session support on normal return and receipt validity on Stop;
+original erasure is unconditional. A Stop has no returned World. Initialized origin, whole-admission/caller
+propagation, peer identity and authentication remain open.
+
+[AGENT 2026-10-15] Derive this frame by exact read/borrow/fresh-store decomposition. Full-key view equality across
+the borrow identifies the setter's fresh record with the original record; use the existing literal index factor
+and history adapter rather than a second observer hierarchy or an affiliation premise.
+
+**Owner-frame effort.** Acceptance 11:15:31 UTC; 60 minutes/24 capped calls, reserve at 12:00:31 or call 18,
+deadline 12:15:31. Core call 5 PASS354 was collected by the next measured clock 11:20:19; scoped call 6 PASS430
+was collected at 11:21:09. The first four builds failed on ordinary case/substitution, type inference and product
+projection normalization goals. No source admission, recovery-placeholder/kernel diagnostic, proof-limit change,
+cap hit, interruption or infrastructure retry occurred. Full call 7 PASS493 was collected by the measured clock
+11:22:42 (7m11s after acceptance). Exact call 8 PASS was collected at 11:24:14: four-file scope, all 496 prior
+bodies unchanged, one new group, 497 total/127 R3/119 R4, forbidden tokens/imports, tracked/new whitespace/EOF,
+mirror/index and seven pins. Its document hashes precede only the disclosed ledger/status updates. Independent
+frozen review was clear with no findings at 11:25:21 UTC (11:21:26–11:25:21, 3m55s), with metadata reconciliation
+clear at 11:27:51. Ownership returned at 11:27:27, 11m56s after acceptance. The coordinated 493-job build/
+497-declaration permitted-axiom gate, fresh stock kernel replay, 60-job default build and 103 tests (21.794s,
+one skip) pass. Replay started only after the gate's build was collected. Both Lean files retain their frozen
+built hashes; later edits are documentation metadata only. The unchanged executable, 23 model-replay tests
+and historical recipes remain validated by the representation carry and were not rerun for this proof-only
+extension. Command-local LEAN_NUM_THREADS=32 and
+LEANUX_QEMU_SLOTS=16 retain the existing 32G cap and per-compiler -j1. Nine capped calls are collected: seven builds
+(three PASS/four FAIL) and two passing exact checks (8/9). Final check 9 reconciles the final documentation hashes
+and review metadata with the unchanged Lean freeze. Logs and the named temporary checker remain ephemeral
+for the coordinator checkpoint. No active job remains.
+
+**Preceding packet-to-receipt link (`0b1cd078`, validated).** Two terminal groups preserve all 494
 preceding bodies, giving 496 declarations (494 theorems/two definitions; 126 R3/119 R4). Scoped/full builds pass
 403/492 jobs; the full result was collected at 11:02:57 UTC, 31m49s after measured acceptance 10:31:08. Exact scope,
 all 494 old bodies, census, tokens/imports, whitespace and mirror checks pass. Independent frozen source/export/docs
@@ -52,8 +86,8 @@ A single support witness retains the full successful session Context/run, epoch/
 and nullable owner. The actual Some-front recovers its complete entry Peer/state/word without affiliation assumptions;
 support is installed before the tail, which can delete the new key. Concrete session-tail, key-get/put, allocation
 and decrypt retention permit invalid fresh records, invalidation and disappearance. The bounded acquireOwner attempt
-did not close its old-key lookup obligations; it was removed. Actual acquireOwner/indexLookup full-material framing
-remains open. The algebraic keep-or-clear law does not discharge those source calls.
+did not close its old-key lookup obligations; it was removed at that checkpoint. The new exact owner-frame
+extension above closes those local source contracts. The algebraic keep-or-clear law alone did not discharge them.
 
 The combined local adapters execute existing observers once and preserve exact same-input R2 histories under the
 existing AllocationInv. Original erasure is unconditional. Receipt validity is preserved from valid incoming history
@@ -405,7 +439,9 @@ receiving key with one full successful session witness and its keep-or-clear own
 retention and the combined local session/decrypt adapters. Its strict journal-order conclusion uses the supplied
 entry support, not an initialized-history provenance theorem. Normal Some-front facts recover the complete entry peer;
 decrypt retains the actual stored packet, material and AEAD transformation, without equating packet.peer to that peer.
-The source-specific owner-acquisition/index-lookup material frame and whole-caller propagation remain unfinished.
+[Origins/IndexMaterial](../Leanux/Proofs/WG/Origins/IndexMaterial.lean) derives the concrete owner-acquisition and
+index-lookup frame, including nullable store-back, and reuses the existing access adapter for supplied support.
+Whole-admission/caller propagation and initialized provenance remain unfinished.
 
 **Remaining obligations.** Initialized syscall/Runner composition preserves ordinary-negative cleanup and Stops; parser
 shape follows the operation cursor. Local entry agreement still needs connection to earlier actual initialized lookup

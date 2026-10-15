@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Origins.IndexMaterial
 import Leanux.Proofs.WG.Origins.SessionMaterial
 import Leanux.Proofs.WG.Packets.RxOriginCuts
 import Leanux.Proofs.WG.Packets.RoutingCuts
@@ -2660,5 +2661,33 @@ theorem original_decrypt_material_history (id : SkbId) :
   ⟨Origins.localDecrypt_erases id, Origins.localDecrypt_projects id,
     Origins.localDecrypt_valid id, Origins.localDecrypt_support id,
     Origins.localDecrypt_run id, Origins.localDecrypt_origin id⟩
+
+/-- Original owner acquisition and the complete index scan retain receiving
+material on every normal return, including a None result that clears the peer
+word. The keypair endpoint retains every other full-record field and derives
+keep-or-clear from the actual borrow. No affiliation, non-NULL, residency or
+reference-credit premise is added. The existing access observer preserves
+supplied session support normally and receipt validity on Stop; it does not
+establish initialized occurrence chronology or packet/peer authorization. -/
+theorem original_index_material_retention (kinds : List IndexKind) (index : Nat) :
+    Affiliation.indexLookupSource kinds index = WG.indexLookup kinds index ∧
+    (∀ owner w result v, (Affiliation.acquireOwner owner).run w = .ok (result,v) →
+      Origins.Retains w v) ∧
+    (∀ id w v result, (Affiliation.acquireOwner (.keypair id)).run w = .ok (result,v) →
+      ∃ (d : Device) (old : Keypair), w.k.wg = some d ∧ d.keypairs[id]? = some old ∧
+        Origins.WordLe result old.peer ∧
+        Origins.view v = some (d.ifindex, fun q =>
+          if id = q then some {old with peer := result} else d.keypairs[q]?)) ∧
+    (∀ w result v, (WG.indexLookup kinds index).run w = .ok (result,v) →
+      Origins.Retains w v) ∧
+    Logged.ErasesPrefix
+      (MaterialOrigin.access (R := SessionOrigin.Receipt) (Lifetimes.indexLookupPrefix kinds index))
+      (WG.indexLookup kinds index) ∧
+    Logged.PrefixPreserves Origins.SessionInv (MaterialOrigin.Valid SessionOrigin.Receipt.Valid)
+      (MaterialOrigin.access (Lifetimes.indexLookupPrefix kinds index)) :=
+  ⟨Affiliation.indexLookupSource_eq kinds index, Origins.acquireOwner_retains,
+    Origins.acquireOwner_keypair_effect, Origins.indexLookup_retains kinds index,
+    MaterialOrigin.access_erases (Lifetimes.indexLookupPrefix_erases kinds index),
+    Origins.indexLookup_support kinds index⟩
 
 end Leanux.Proofs.WG.CryptokeyRouting
