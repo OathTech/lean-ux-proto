@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TimerDiscipline.RxDataTimersClaims
 import Leanux.Proofs.WG.TimerDiscipline.DataDoneClaims
 import Leanux.Proofs.WG.TimerDiscipline.OutgoingResponseSessionClaims
 import Leanux.Proofs.WG.TimerDiscipline.ObservationClaims
@@ -518,5 +519,28 @@ theorem original_data_done_timers (pid : PeerId) (items : List SkbId) :
   · intro entry pre
     rw [observedDataDone_erase pid items]
   · exact observedDataDone_facts pid items
+
+/-- The original consumeDataDone caller invokes traversal before its keepalive
+test and invokes data-received exactly for nonzero packet length. Its endpoint
+write, confirmation/handshake-complete path, staged sends, freshness check and
+authenticated-received deletion remain original, as do the zero-byte statistics
+return and complete inner-packet validation/routing suffix. On normal full
+return each captured hook has its own guarded timer effect: traversal's enabled
+live/running recorded arm has the exact persistent expiry; data receipt while
+running requests another keepalive when one is pending, and an absent timer on
+a live peer has its recorded caller-plus-delay expiry. The expiry and clock-gap
+facts refer to each hook's after-state. Erasure preserves the original returned
+packet option and every error. This raw-packet contract establishes neither
+authentication nor delivery, final expiry preservation or failed-call cut retention. -/
+theorem original_consume_data_done_timers (pid : PeerId) (pkt : RxPacket) (e : Endpoint) :
+    Campaign2.AgreesOn (fun _ => True)
+      (do let result ← observedRxDataTimers pid pkt e; pure result.2)
+      (consumeDataDone pid pkt e) ∧
+    Campaign2.Ensures (observedRxDataTimers pid pkt e) (fun _ => True)
+      (fun result _ => RxDataTimersFacts pid pkt result.1) := by
+  constructor
+  · intro entry pre
+    rw [observedRxDataTimers_erase pid pkt e]
+  · exact observedRxDataTimers_facts pid pkt e
 
 end Leanux.Proofs.WG.TimerDiscipline
