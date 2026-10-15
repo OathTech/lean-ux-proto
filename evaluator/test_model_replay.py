@@ -484,3 +484,16 @@ class EncryptWorkerRingPoll(unittest.TestCase):
         op = t['hidden'][4]
         t['hidden'][4] = op[:17] + op[12:17] + op[17:]   # the poll's section a second time: nothing is pending
         self.assertIn('hidden-input records disagree', replay_raw(t))
+
+
+class FibBoot(unittest.TestCase):
+    """Lane C: the mirror's boot trie (built by the C's own inserts at `lo` up)
+    is the shape the guest reads back from /proc/net/fib_trie at every
+    trace's start (harness/linux.py EXPECTED_FIB_TRIE_BOOT)."""
+
+    def test_boot_shape_matches_the_fixture_fact(self):
+        from harness.linux import EXPECTED_FIB_TRIE_BOOT
+        result = subprocess.run([MODEL, '--fib-boot'], capture_output=True, timeout=60)
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        self.assertEqual(json.loads(result.stdout.decode()), EXPECTED_FIB_TRIE_BOOT)
+

@@ -1,6 +1,7 @@
 import Leanux.WG.Device
 import Leanux.WG.RxData
 import Leanux.Env.IpStack
+import Leanux.Net.Route
 
 /-!
 # The IP stack on the receive side: what Linux does with an inner packet
@@ -123,10 +124,18 @@ def receive4 (pkt : List UInt8) : M Unit := do
   if dst / 2 ^ 24 == 127 then excluded "2.2 row 8 (a loopback destination, route_localnet 0)"
   if top == 127 then excluded "2.2 row 9 (a loopback source)"
   if dst / 2 ^ 28 == 0xe then excluded "2.2 rows 11a-11c (a multicast destination)"
-  -- row 12: wg0's own address as the source (fib_validate_source)
-  if src == WG0_ADDR4 then excluded "2.2 row 12 (wg0's own address as the source)"
-  -- row 13: a destination that is not local (forwarding off: ip_error, no ICMP)
-  if dst != WG0_ADDR4 then excluded "2.2 row 13 (a destination other than wg0's address)"
+  -- rows 12 and 13, lane C: `ip_route_input_slow`'s lookup on the trie
+  -- (route.c:2347-2376) and `fib_validate_source`'s fast path
+  -- (fib_frontend.c:421-451): a local destination from a local source is a
+  -- martian source (row 12, silent); no route or a route the stack will
+  -- not forward is `ip_error` with forwarding off (row 13: counted, no
+  -- ICMP, silent, W5 2.4.7); a broadcast route is udp.c's broadcast
+  -- delivery, outside this module
+  match ← Net.routeInput4 src dst with
+  | .local true => excluded "2.2 row 12 (a local source: fib_validate_source's -EINVAL)"
+  | .local false => pure ()
+  | .noRoute | .notLocal => return   -- row 13: ip_error, INADDRERRORS, no ICMP
+  | .broadcast => unsupported "a decrypted packet to a broadcast route (udp.c's broadcast delivery)"
   -- row 15: fragments
   if WG.beAt pkt 6 2 % 0x4000 != 0 then excluded "2.2 row 15 (a fragment)"
   let protocol := byte 9

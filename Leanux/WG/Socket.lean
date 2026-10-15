@@ -1,4 +1,5 @@
 import Leanux.WG.State
+import Leanux.Net.Route
 
 /-!
 # drivers/net/wireguard/socket.c — wg0's UDP sockets (L)
@@ -203,7 +204,7 @@ private def tunnelXmit (e : Endpoint) (bytes : List UInt8) (ds : Nat) (r : Route
 def send4 (e : Endpoint) (cache : Option PeerId) (bytes : List UInt8) (ds : Nat) (exactRx : Bool) : M Int := do
   let d ← getDev
   if ← branch .send4SockNull d.sock4.isNone then return -ENONET   -- err: kfree_skb
-  let gen := (← get).ipv4Gen
+  let gen := (← Net.Fib.inSocketNs Net.Fib.getTable).rtGenid4   -- lane C: `rt_genid` (rt_cache_valid, route.c:1602-1607)
   let mut saddr := e.src
   let mut srcIf := e.srcIf
   let mut route : Option Route := none
@@ -225,7 +226,7 @@ def send4 (e : Endpoint) (cache : Option PeerId) (bytes : List UInt8) (ds : Nat)
     if ← branch .send4SrcNotLocal !confirmed then
       clearSrc; saddr := 0; srcIf := 0
       if ← branch .send4ResetA cache.isSome then dstCacheReset cache.get!
-    let mut rt ← routeLookup 4 saddr e.addr
+    let mut rt ← Net.Fib.inSocketNs (Net.routeLookup 4 saddr e.addr)
     let mismatch := srcIf != 0 && (match rt with
       | .error err => err == -EINVAL
       | .ok r => r.dev != srcIf)
@@ -233,7 +234,7 @@ def send4 (e : Endpoint) (cache : Option PeerId) (bytes : List UInt8) (ds : Nat)
       clearSrc; saddr := 0; srcIf := 0
       if ← branch .send4ResetB cache.isSome then dstCacheReset cache.get!
       if ← branch .send4PutRt (match rt with | .ok _ => true | .error _ => false) then pure ()   -- ip_rt_put
-      rt ← routeLookup 4 0 e.addr
+      rt ← Net.Fib.inSocketNs (Net.routeLookup 4 0 e.addr)
     match rt with
     | .error err =>
       if ← branch .send4RouteErr true then return err   -- net_dbg_ratelimited; err: kfree_skb
@@ -268,7 +269,7 @@ def send6 (e : Endpoint) (cache : Option PeerId) (bytes : List UInt8) (ds : Nat)
         setPeer pid { p with endpoint := p.endpoint.map fun e => { e with src := 0 } }
       saddr := 0
       if ← branch .send6Reset cache.isSome then dstCacheReset cache.get!
-    match ← routeLookup 6 saddr e.addr with
+    match ← Net.routeLookup 6 saddr e.addr with
     | .error err =>
       if ← branch .send6RouteErr true then return err
     | .ok r =>

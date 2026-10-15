@@ -6,6 +6,7 @@ import Leanux.WG.Timers
 import Leanux.Env.IpStack
 import Leanux.Env.Batch
 import Leanux.Env.Stack
+import Leanux.Net.Route
 import Leanux.Kernel.Signal
 import Leanux.Seccomp.Prefill
 
@@ -549,6 +550,14 @@ def wgUp : M Int := do
   -- `dev_change_flags`' rtnetlink notifications and the fixture's routes
   -- allocate netlink skbs below the cut (allocation cut sites, A)
   skipCut allocCuts
+  if ret == 0 then
+    -- lane C: `__dev_open`'s `NETDEV_UP` notifiers, devinet's first
+    -- (`ip_mc_up` joins all-hosts: `ip_rt_multicast_event` flushes,
+    -- igmp.c:1484-1486), then `fib_netdev_event` (fib_frontend.c:1491-1500:
+    -- the surviving address's routes added again after a down, the
+    -- generation and a flush)
+    Net.Fib.rtCacheFlush
+    Net.Fib.netdevUp WG0_IFINDEX
   -- W9: the guest's `route_into_wg0` adds wg0's addresses and default routes
   -- after this operation's wait (design 14.3b): `routeIntoWg0` applies them
   -- once the send workers and the idle timers have run
@@ -582,10 +591,18 @@ def setMtu (mtu : Nat) : M Int := do
   -- (addrconf.c:3691-3695) and moves the sernum. A later wg_up re-adds
   -- them (routeIntoWg0).
   if ret == 0 && mtu != old then
-    modify fun w => { w with ipv4Gen := w.ipv4Gen + 1,
-                             addrs4 := if mtu < 68 then [] else w.addrs4,
-                             defaultRoute4 := mtu ≥ 68 && w.defaultRoute4,
-                             addrs6 := if mtu < 1280 then [] else w.addrs6,
+    -- lane C: `NETDEV_CHANGEMTU`'s notifiers in order: devinet's
+    -- `inetdev_event` destroys the `in_device` below 68 (devinet.c:1637-1643:
+    -- each address deleted through the inetaddr chain, the last disabling
+    -- IP on the device), then `fib_netdev_event` (`fib_sync_mtu`, a flush,
+    -- fib_frontend.c:1519-1522) and nexthop.c's flush (:3884-3887)
+    if mtu < 68 then
+      let addrs := (← get).addrs4
+      modify fun w => { w with addrs4 := [] }
+      for a in addrs do
+        Net.Fib.inetaddrDown WG0_IFINDEX a 32 true true
+    Net.Fib.netdevChangeMtu
+    modify fun w => { w with addrs6 := if mtu < 1280 then [] else w.addrs6,
                              defaultRoute6 := mtu ≥ 1280 && w.defaultRoute6,
                              ipv6Gen := if mtu < 1280 then w.ipv6Gen + 1 else w.ipv6Gen }
   return ret
@@ -598,9 +615,14 @@ def setMtu (mtu : Nat) : M Int := do
     wait before the adds so this order is the only one. -/
 def routeIntoWg0 : M Unit := do
   if !(← get).routesPending then return
-  modify fun w => { w with routesPending := false, addrs4 := [WG0_ADDR4], addrs6 := [WG0_ADDR6],
-                           defaultRoute4 := true, defaultRoute6 := true,
-                           ipv4Gen := w.ipv4Gen + 1, ipv6Gen := w.ipv6Gen + 1 }
+  let addrAlready := (← get).addrs4.contains WG0_ADDR4
+  -- lane C: the IPv4 requests on the trie (`Net.Fib.routeIntoWg0`): the
+  -- address through the inetaddr chain, the default route and the W4
+  -- routes through `fib_table_insert`, each a `rt_cache_flush`
+  modify fun w => { w with routesPending := false, addrs4 := [WG0_ADDR4] }
+  let routes4 := (← get).routes.filterMap fun (f, a, m) => if f == 4 then some (a, m) else none
+  Net.Fib.routeIntoWg0 addrAlready WG0_ADDR4 routes4
+  modify fun w => { w with addrs6 := [WG0_ADDR6], defaultRoute6 := true, ipv6Gen := w.ipv6Gen + 1 }
 
 /-- `wg_down`: `SIOCSIFFLAGS` without `IFF_UP`. `-ENODEV` without wg0; a
     down device does not change; an up one goes through `__dev_close_many`
@@ -613,10 +635,15 @@ def wgDown : M Int := do
   -- `__dev_close_many`'s rtnetlink notifications and the routes' removal
   -- allocate netlink skbs below the cut (allocation cut sites, A)
   skipCut allocCuts
-  -- W9: NETDEV_DOWN flushes the IPv4 routes via wg0 (the address stays) and
-  -- removes the IPv6 address and routes (`keep_addr_on_down` 0)
-  modify fun w => { w with defaultRoute4 := false, defaultRoute6 := false, addrs6 := [],
-                           ipv4Gen := w.ipv4Gen + 1, ipv6Gen := w.ipv6Gen + 1 }
+  -- lane C: `NETDEV_DOWN`'s notifiers in order: devinet's `ip_mc_down` (a
+  -- flush), then `fib_netdev_event` → `fib_disable_ip(dev, NETDEV_DOWN,
+  -- false)` (fib_frontend.c:1501-1503): the routes via wg0 whose nexthop
+  -- scope is not `RT_SCOPE_NOWHERE` go dead and are flushed; the local
+  -- route of the surviving address stays. W9: the IPv6 address and routes
+  -- go (`keep_addr_on_down` 0)
+  Net.Fib.rtCacheFlush
+  Net.Fib.netdevDown WG0_IFINDEX
+  modify fun w => { w with defaultRoute6 := false, addrs6 := [], ipv6Gen := w.ipv6Gen + 1 }
   return 0
 
 /-- `wg_delete`: `RTM_DELLINK` (the mirror's `wgDelete`); `NETDEV_DOWN` and
@@ -637,10 +664,23 @@ def wgDelete : M Int := do
   let k ← getK
   if pending k.nlSock7 || pending k.nlSock8 then
     unsupported "a delete with a stepped dump pending (the dump's cursor holds the device reference; the guest refuses wg_delete_with_dump_pending)"
-  let ret ← WG.wgDelete
-  -- W9: NETDEV_UNREGISTER removes every address and route via wg0
-  modify fun w => { w with addrs4 := [], addrs6 := [], defaultRoute4 := false, defaultRoute6 := false,
-                           ipv4Gen := w.ipv4Gen + 1, ipv6Gen := w.ipv6Gen + 1 }
+  -- lane C: `dev_close_many`'s `NETDEV_DOWN` (as `wgDown`'s) and
+  -- `NETDEV_UNREGISTER`'s notifiers in order: devinet's `inetdev_destroy`
+  -- deletes each address through the inetaddr chain (the last disabling IP
+  -- on the device), then `fib_disable_ip(dev, NETDEV_UNREGISTER, true)`
+  -- (fib_frontend.c:1487-1490); W9: the IPv6 address and routes go too
+  let onDown : M Unit := do
+    Net.Fib.rtCacheFlush
+    Net.Fib.netdevDown WG0_IFINDEX
+    modify fun w => { w with defaultRoute6 := false, addrs6 := [], ipv6Gen := w.ipv6Gen + 1 }
+  let onUnregister : M Unit := do
+    let addrs := (← get).addrs4
+    modify fun w => { w with addrs4 := [] }
+    for a in addrs do
+      Net.Fib.inetaddrDown WG0_IFINDEX a 32 true true
+    Net.Fib.netdevUnregister WG0_IFINDEX
+    modify fun w => { w with addrs6 := [], defaultRoute6 := false, ipv6Gen := w.ipv6Gen + 1 }
+  let ret ← WG.wgDelete onDown onUnregister
   return ret
 
 /-- W9 `wg_deladdr` (design section 4.3): `RTM_DELADDR` of wg0's fixture
@@ -654,7 +694,12 @@ def wgDeladdr (family : Nat) : M Int := do
   let w ← get
   if family == 4 then
     if w.addrs4.isEmpty then return -EADDRNOTAVAIL
-    set { w with addrs4 := [], defaultRoute4 := false, ipv4Gen := w.ipv4Gen + 1 }
+    -- lane C: `__inet_del_ifa` unlinks the address, then the inetaddr
+    -- chain's `NETDEV_DOWN`: `fib_del_ifaddr`, the generation, and the
+    -- last address disabling IP on the device (fib_frontend.c:1459-1471)
+    let addr := w.addrs4.head!
+    set { w with addrs4 := [] }
+    Net.Fib.inetaddrDown WG0_IFINDEX addr 32 true false
   else
     if w.addrs6.isEmpty then return -EADDRNOTAVAIL
     set { w with addrs6 := [], ipv6Gen := w.ipv6Gen + 1 }
@@ -668,9 +713,10 @@ def wgDelroute (family : Nat) : M Int := do
   if (← getK).wg.isNone then unsupported "wg_delroute without wg0 (the request names a stale ifindex)"
   let w ← get
   if family == 4 then
-    if !w.defaultRoute4 then return -ESRCH
-    set { w with defaultRoute4 := false, defaultRoute4Accessed := false,
-                 ipv4Gen := if w.defaultRoute4Accessed then w.ipv4Gen + 1 else w.ipv4Gen }
+    -- lane C: `inet_rtm_delroute` → `fib_table_delete` on the trie with the
+    -- guest's request (`delroute_wg0`): `-ESRCH` when absent, the flush only
+    -- if the alias was accessed (fib_trie.c:1754-1755)
+    return ← Net.Fib.delrouteWg0
   else
     if !w.defaultRoute6 then return -ESRCH
     set { w with defaultRoute6 := false, ipv6Gen := w.ipv6Gen + 1 }
@@ -910,17 +956,22 @@ def batch (items : List BatchItem) : M Int := do
     | .xmit family addr payload opts =>
       -- W9: the sender's `sendto` routes on the fixture's tables; a local
       -- destination never reaches wg0
-      match ← routeLookup family 0 addr with
+      match ← Net.routeLookup family 0 addr with
       | .error err => cqes := cqes ++ [err]
       | .ok r =>
         if r.dev != WG0_IFINDEX then unsupported "a batch transmit to a local address (not into wg0)"
         if (family == 4 && !d.inet4Dev) || (family == 6 && !d.inet6Dev) then
           unsupported "a transmit after an MTU change took the family's routes into wg0 down"
         fixtureSend
+        -- lane C: `dst_mtu` is the route's metric when it carries one
+        let opts := { opts with routeMtu := opts.routeMtu <|> (if r.mtu != 0 then some r.mtu else none) }
         match ← xmitPackets family addr payload opts with
         | .error e => cqes := cqes ++ [e]
         | .ok (pkts, mtu) =>
           xmitMulticastLoop family addr
+          -- lane C: `ip_finish_output2`'s neighbour for the next hop on wg0,
+          -- classified by a lookup at its creation (arp.c:242)
+          if family == 4 then Net.neighbourClassify WG0_IFINDEX addr
           let ret ← WG.wgXmit family addr pkts mtu
           cqes := cqes ++ [if ret == 0 then (payload.length : Int) else ret]
   modify fun w => { w with extraOut := [("cqes", Lean.toJson cqes)] }
@@ -943,6 +994,17 @@ def netnsCleanup : M Unit := do
   if let some u ← peekUnit .netnsCleanup then _ ← resolveUnit .netnsCleanup u [0]
   runWorker .netnsCleanup do
     WG.netnsPreExit
+    -- lane C: C's `lo` is unregistered by `default_device_exit_batch`
+    -- (net/core/dev.c): `NETDEV_DOWN` (devinet's `ip_mc_down` flush, then
+    -- `fib_disable_ip(lo, NETDEV_DOWN, false)`), then `NETDEV_UNREGISTER`
+    -- (devinet's `inetdev_destroy` deleting `127.0.0.1/8` through the
+    -- inetaddr chain, then `fib_disable_ip(lo, NETDEV_UNREGISTER, true)`),
+    -- all on C's table; `fib_net_exit` frees it (a cut, the namespace exit)
+    Net.Fib.inCreatorNs do
+      Net.Fib.rtCacheFlush
+      Net.Fib.netdevDown LO_IFINDEX
+      Net.Fib.inetaddrDown LO_IFINDEX LOOPBACK4 8 true true
+      Net.Fib.netdevUnregister LO_IFINDEX
     -- the rest of C's teardown: `sit0`'s unregister resets its tunnel's dst
     -- cache (net/ipv6/sit.c `ipip6_tunnel_uninit`: one kind-306 record, the
     -- only other consumer the section showed), and the notifications' and

@@ -287,14 +287,21 @@ def wgDestruct : M Unit := do
     runs `wg_stop` for an up device; then `flush_all_backlogs` (a sleep
     point), the notifiers, and `netdev_run_todo` (its `rcu_barrier`, a sleep
     point), which calls `wg_destruct`. -/
-def wgDelete : M Int := do
+def wgDelete (onDown : M Unit := pure ()) (onUnregister : M Unit := pure ()) : M Int := do
   if (← getK).wg.isNone then return -ENODEV
-  if (← getDev).running then wgDown
+  if (← getDev).running then
+    wgDown
+    -- `dev_close_many`'s `NETDEV_DOWN` notifiers (the environment's: lane C's
+    -- routing, devinet's multicast leave)
+    onDown
   -- the notifications of dev_close_many and of NETDEV_UNREGISTER (ifinfo,
   -- netconf and address messages: nlmsg_new) and netdev_unregister_kobject's
   -- uevents (alloc_uevent_skb), below the cut when the run armed
   -- __alloc_skb; then flush_all_backlogs
   skipCut allocCuts
+  -- `NETDEV_UNREGISTER`'s notifiers (devinet's `inetdev_destroy`, the
+  -- routing's `fib_disable_ip`), before `wg_destruct` runs from the todo list
+  onUnregister
   mayHaveSlept
   wgDestruct
   return 0

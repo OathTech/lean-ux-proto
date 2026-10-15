@@ -1020,6 +1020,13 @@ def toSyscall (results : Array Int) (ends : Array (Option (Nat × Nat))) (index 
   | .seccompCapdrop => .seccompCapdrop
   | .seccompQuery cmd action flags => .seccompQuery cmd action flags
 
+/-- Lane C: the boot trie of a network trace's fixture namespace (`lo` up),
+    for `leanux-model --fib-boot` and the harness's expected fixture facts. -/
+def fibBootJson : Except Stop Json := do
+  let world : World := { k := initialKernel 32 true, env := harnessEnv, timing := Env.timing }
+  let (_, w) ← Net.Fib.bootTables.run world
+  return Net.Fib.shape w.k
+
 /-- Run a trace. A `Stop` is returned with the operation index: the mirror
     never reports an observation for a path it does not model. -/
 def executeTrace (trace : Trace) (placeholders : Bool := false) (floodExact : Bool := false) : Except (Nat × Stop) Json := do
@@ -1042,6 +1049,16 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) (floodExact : Bo
     match Env.seccompPrefill trace.seccompPrefill world.k with
     | .ok k => world := { world with k }
     | .error e => throw (0, .invariant e)
+  -- lane C: the fixture namespaces' IPv4 tables at boot (`lo` up in each),
+  -- built by the C's own sequence outside every window (the design note,
+  -- 9.3); its steps are discarded with the first operation's reset
+  if trace.net then
+    let boot : M Unit := do
+      Net.Fib.bootTables
+      if trace.foreign then Net.Fib.inCreatorNs Net.Fib.bootTables
+    match boot.run world with
+    | .ok (_, w) => world := { w with steps := #[], envCalls := [] }
+    | .error e => throw (0, e)
   let mut results : Array Int := #[]
   let mut ends : Array (Option (Nat × Nat)) := #[]
   let mut observations : Array Json := #[]

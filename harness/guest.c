@@ -2,6 +2,7 @@
 #define _GNU_SOURCE
 #include <errno.h>
 #include <fcntl.h>
+#include <stdarg.h>
 #include <inttypes.h>
 #include <limits.h>
 #include <linux/genetlink.h>
@@ -1288,6 +1289,169 @@ static void route_into_wg0(const char *id, unsigned index, int first)
     if (close(rtnl)) fail(id, index, "environment_failure", "route_close");
 }
 
+
+/* Lane C's shape oracle (docs/2026-10-15-design-c-fib-trie.md, 9.4): the IPv4
+ * FIB trie as /proc/net/fib_trie prints it (fib_trie.c:2733-2813), read
+ * outside the window and printed as JSON in the mirror's form: a tnode is
+ * ["prefix", plen, bits, full, empty, [children]], a leaf ["key", [aliases]]
+ * with each alias [plen, "scope", "TYPE", tos]. The aliased tables print the
+ * one trie twice ("Main:" then "Local:"); the two sections must be
+ * identical. An empty trie prints nothing: null. */
+#define FIBT_MAX_NODES 2048
+#define FIBT_MAX_ALIASES 4096
+struct fibt_alias { unsigned plen; char scope[12]; char type[14]; unsigned tos; };
+struct fibt_node { int tnode; char addr[20]; unsigned plen, bits, full, empty; int depth;
+                   int first_child, next_sibling; int first_alias, n_aliases; };
+static struct fibt_node fibt_nodes[FIBT_MAX_NODES];
+static struct fibt_alias fibt_aliases[FIBT_MAX_ALIASES];
+static char fibt_text[131072];
+static char fibt_json[262144];
+static size_t fibt_json_len;
+
+static void fibt_emit(const char *id, const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    int n = vsnprintf(fibt_json + fibt_json_len, sizeof(fibt_json) - fibt_json_len, fmt, ap);
+    va_end(ap);
+    if (n < 0 || (size_t)n >= sizeof(fibt_json) - fibt_json_len) fail(id, -1, "environment_failure", "fib_trie_json_size");
+    fibt_json_len += (size_t)n;
+}
+
+static void fibt_emit_node(const char *id, int k)
+{
+    struct fibt_node *n = &fibt_nodes[k];
+    if (n->tnode) {
+        fibt_emit(id, "[\"%s\",%u,%u,%u,%u,[", n->addr, n->plen, n->bits, n->full, n->empty);
+        int first = 1;
+        for (int c = n->first_child; c >= 0; c = fibt_nodes[c].next_sibling) {
+            if (!first) fibt_emit(id, ",");
+            first = 0;
+            fibt_emit_node(id, c);
+        }
+        fibt_emit(id, "]]");
+    } else {
+        fibt_emit(id, "[\"%s\",[", n->addr);
+        for (int a = 0; a < n->n_aliases; ++a) {
+            struct fibt_alias *fa = &fibt_aliases[n->first_alias + a];
+            fibt_emit(id, "%s[%u,\"%s\",\"%s\",%u]", a ? "," : "", fa->plen, fa->scope, fa->type, fa->tos);
+        }
+        fibt_emit(id, "]]");
+    }
+}
+
+/* Parse the proc text into fibt_json; the top node's index or -1 (empty). */
+static const char *fibt_read(const char *id)
+{
+    int fd = open("/proc/net/fib_trie", O_RDONLY);
+    if (fd < 0) fail(id, -1, "environment_failure", "fib_trie_open");
+    size_t len = 0;
+    for (;;) {
+        ssize_t r = read(fd, fibt_text + len, sizeof(fibt_text) - 1 - len);
+        if (r < 0) fail(id, -1, "environment_failure", "fib_trie_read");
+        if (r == 0) break;
+        len += (size_t)r;
+        if (len >= sizeof(fibt_text) - 1) fail(id, -1, "environment_failure", "fib_trie_size");
+    }
+    close(fd);
+    fibt_text[len] = 0;
+    /* split the sections: each starts at a "Main:", "Local:" or "Id N:" line */
+    char *sections[4]; int n_sections = 0;
+    for (char *l = fibt_text; l && *l; ) {
+        char *nl = strchr(l, '\n');
+        if ((l[0] >= 'A' && l[0] <= 'Z') && strchr(l, ':') && (!nl || strchr(l, ':') < nl)) {
+            if (n_sections >= 4) fail(id, -1, "environment_failure", "fib_trie_sections");
+            sections[n_sections++] = l;
+        }
+        l = nl ? nl + 1 : NULL;
+    }
+    if (n_sections == 0) return "null";
+    if (n_sections != 2) fail(id, -1, "environment_failure", "fib_trie_two_tables");
+    /* the two sections must print the one aliased trie identically */
+    {
+        char *a = strchr(sections[0], '\n'), *b = strchr(sections[1], '\n');
+        size_t la = (size_t)(sections[1] - a), lb = strlen(b);
+        if (la != lb || memcmp(a, b, la)) fail(id, -1, "environment_failure", "fib_trie_tables_differ");
+    }
+    int n_nodes = 0, n_aliases = 0, top = -1;
+    int last_at_depth[40];
+    for (int d = 0; d < 40; ++d) last_at_depth[d] = -1;
+    char *end = sections[1];
+    for (char *l = strchr(sections[0], '\n') + 1; l < end && *l; ) {
+        char *nl = strchr(l, '\n');
+        size_t ll = nl ? (size_t)(nl - l) : strlen(l);
+        int spaces = 0;
+        while (spaces < (int)ll && l[spaces] == ' ') ++spaces;
+        const char *body = l + spaces;
+        if (!strncmp(body, "+-- ", 4)) {
+            if (n_nodes >= FIBT_MAX_NODES) fail(id, -1, "environment_failure", "fib_trie_nodes");
+            struct fibt_node *n = &fibt_nodes[n_nodes];
+            memset(n, 0, sizeof(*n));
+            n->tnode = 1; n->first_child = n->next_sibling = -1; n->first_alias = n_aliases;
+            if (sscanf(body + 4, "%19[0-9.]/%u %u %u %u", n->addr, &n->plen, &n->bits, &n->full, &n->empty) != 5)
+                fail(id, -1, "environment_failure", "fib_trie_tnode_line");
+            n->depth = (spaces - 2) / 3 + 1;
+            goto link;
+        } else if (!strncmp(body, "|-- ", 4)) {
+            if (n_nodes >= FIBT_MAX_NODES) fail(id, -1, "environment_failure", "fib_trie_nodes");
+            struct fibt_node *n = &fibt_nodes[n_nodes];
+            memset(n, 0, sizeof(*n));
+            n->tnode = 0; n->first_child = n->next_sibling = -1; n->first_alias = n_aliases;
+            if (sscanf(body + 4, "%19[0-9.]", n->addr) != 1) fail(id, -1, "environment_failure", "fib_trie_leaf_line");
+            n->depth = (spaces - 2) / 3;
+            goto link;
+        } else if (body[0] == '/') {
+            if (n_nodes == 0 || fibt_nodes[n_nodes - 1].tnode || n_aliases >= FIBT_MAX_ALIASES)
+                fail(id, -1, "environment_failure", "fib_trie_alias_line");
+            struct fibt_alias *fa = &fibt_aliases[n_aliases];
+            memset(fa, 0, sizeof(*fa));
+            int consumed = 0;
+            if (sscanf(body + 1, "%u %11s %13s%n", &fa->plen, fa->scope, fa->type, &consumed) != 3)
+                fail(id, -1, "environment_failure", "fib_trie_alias_fields");
+            if (!strncmp(body + 1 + consumed, " tos=", 5)) fa->tos = (unsigned)strtoul(body + 1 + consumed + 5, NULL, 10);
+            fibt_nodes[n_nodes - 1].n_aliases++;
+            n_aliases++;
+            l = nl ? nl + 1 : end;
+            continue;
+        } else {
+            fail(id, -1, "environment_failure", "fib_trie_line");
+        }
+link:
+        {
+            struct fibt_node *n = &fibt_nodes[n_nodes];
+            int d = n->depth;
+            if (d < 1 || d >= 40) fail(id, -1, "environment_failure", "fib_trie_depth");
+            if (d == 1) {
+                if (top >= 0) fail(id, -1, "environment_failure", "fib_trie_two_tops");
+                top = n_nodes;
+            } else {
+                int parent = last_at_depth[d - 1];
+                if (parent < 0 || !fibt_nodes[parent].tnode) fail(id, -1, "environment_failure", "fib_trie_parent");
+                if (fibt_nodes[parent].first_child < 0) fibt_nodes[parent].first_child = n_nodes;
+                else {
+                    int c = fibt_nodes[parent].first_child;
+                    while (fibt_nodes[c].next_sibling >= 0) c = fibt_nodes[c].next_sibling;
+                    fibt_nodes[c].next_sibling = n_nodes;
+                }
+            }
+            last_at_depth[d] = n_nodes;
+            for (int e = d + 1; e < 40; ++e) last_at_depth[e] = -1;
+            n_nodes++;
+        }
+        l = nl ? nl + 1 : end;
+    }
+    if (top < 0) return "null";
+    fibt_json_len = 0;
+    fibt_emit_node(id, top);
+    return fibt_json;
+}
+
+static void print_fib_trie(const char *id, unsigned index)
+{
+    const char *json = fibt_read(id);
+    printf("LEANUX_FIBTRIE {\"id\":\"%s\",\"index\":%u,\"fib_trie\":%s}\n", id, index, json);
+}
+
 /* wg0's transmit counters and receive error counters over a temporary rtnetlink socket, which is closed
  * again (without SOCK_CLOEXEC, see route_into_wg0). The device is named,
  * not indexed (L: it may have been deleted or recreated); exactly ENODEV is
@@ -2076,8 +2240,8 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         /* W5: the network namespace's facts, as read back; W8: the foreign-creator
          * fixture adds the injector (8) and the pin (9) */
         if (t->net)
-            printf(",\"net\":{\"auto_flowlabels\":%ld,\"icmp_ratelimit\":%ld,\"icmp6_ratelimit\":%ld,\"lo_link_local\":\"fe80::ffff:1\"}",
-                   net_sysctl[0], net_sysctl[1], net_sysctl[2]);
+            printf(",\"net\":{\"auto_flowlabels\":%ld,\"icmp_ratelimit\":%ld,\"icmp6_ratelimit\":%ld,\"lo_link_local\":\"fe80::ffff:1\",\"fib_trie\":%s}",
+                   net_sysctl[0], net_sysctl[1], net_sysctl[2], fibt_read(t->id));
         printf("}\n");
     }
     /* Per-task coverage stays enabled from here to exit: KCOV_DISABLE resets
@@ -2637,6 +2801,12 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             jiffies_end(t, i);   /* the end of the advance's wait (kind 310) */
             advanced_ns += jump;
         }
+        /* lane C: the trie after an operation that changes the IPv4 tables,
+         * outside the window (after the waits and route_into_wg0) */
+        if (!comparisons && (op->code == OP_WG_UP || op->code == OP_WG_DOWN || op->code == OP_WG_DELETE
+                             || op->code == OP_WG_DELADDR || op->code == OP_WG_DELROUTE || op->code == OP_WG_SET_MTU
+                             || op->code == OP_WG_NETNS_CLOSE))
+            print_fib_trie(t->id, i);
         if (up_seen) {
             struct timespec now;
             clock_gettime(CLOCK_BOOTTIME, &now);

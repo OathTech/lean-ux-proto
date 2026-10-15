@@ -652,6 +652,8 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   composition is stated for IPv4 in its charter.
 - **2026-10-15 [AGENT, coordinator]** Lane C's tactical decisions as the
   revised note recommends: three landings with C1 first (U3); the
-  `hash_mix` global-hash walk treated as a decision cut (U6). The module's
-  home `Leanux/Net/` (U4) and the AGENTS.md mirror-list change it needs (U5)
-  are built on that assumption and put to the user at the landing.
+  `hash_mix` global-hash walk treated as a decision cut (U6).
+- **2026-10-15 [USER]** Lane C, the module's home and the standing rule
+  (design note U4 and U5): the FIB module lives at `Leanux/Net/` beside
+  `FS`, `WG` and `Seccomp`, and AGENTS.md's list of the mirror's directories
+  gains `Leanux/Net` ("agree with recommendation").

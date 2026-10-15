@@ -58,7 +58,13 @@ DIGEST = re.compile(r'[0-9a-f]{64}')
 # `child` (a child probe's record: an optional strict_ret, then exactly one
 # of ret, exited or signal; null for a self probe)
 EXTRA_FIELDS = {'pipe2': ('fds',), 'read': ('digest',), 'write': ('sigpipe',), 'wg_batch': ('cqes',),
-                'epoll_wait': ('digest',), 'seccomp_probe': ('sigsys', 'child')}
+                'epoll_wait': ('digest',), 'seccomp_probe': ('sigsys', 'child'),
+                # lane C's shape oracle (docs/2026-10-15-design-c-fib-trie.md, 9.4): after an
+                # operation that changes the IPv4 tables, the trie as /proc/net/fib_trie
+                # prints it, read by the guest outside the window and serialised by the mirror
+                'wg_up': ('fib_trie',), 'wg_down': ('fib_trie',), 'wg_delete': ('fib_trie',),
+                'wg_deladdr': ('fib_trie',), 'wg_delroute': ('fib_trie',), 'wg_set_mtu': ('fib_trie',),
+                'wg_netns_close': ('fib_trie',)}
 EPOLL_EVENT_SIZE = 12   # sizeof(struct epoll_event) on x86-64 (packed)
 
 
