@@ -82,7 +82,7 @@ SENTINELS = [
    'Leanux/Net/Fib/Table.lean',
    '                    Lean.toJson f, Lean.toJson e,\n',
    '                    Lean.toJson (0 : Nat), Lean.toJson e,\n',
-   'r_eight_hosts', 'routing'),
+   'r_full_children', 'routing'),
   ('C-M2-receiver-is-sender',
    'semantic mismatch: an observation differs (a datagram byte)',
    'data: the response names its own index as the receiver',
