@@ -1081,6 +1081,14 @@ def flood (count port family : Nat) (messages : List (List UInt8)) : M Int := do
   -- IPv4 from 127.0.0.1) or ::1 (IPv6, the ratelimiter's /64 table)
   let src ← senderSource family 0
   for msg in messages ++ List.replicate count invalid do
+    -- lane C: each send's `udp_sendmsg` routes the datagram to loopback
+    -- (the batch's inject arm likewise) and lo's one neighbour serves it
+    if family == 4 then
+      match ← Net.routeOutput4 0 src.daddr with
+      | .error _ => invariant "wg_flood: the datagram to wg0's port has no route"
+      | .ok r =>
+        if r.dev != LO_IFINDEX || r.src != src.saddr then invariant "wg_flood: the route disagrees with the sender source"
+        Net.neighbourClassify LO_IFINDEX
     fixtureSend
     runWorker .netRx do
       WG.wgReceive msg src
