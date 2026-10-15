@@ -251,6 +251,18 @@ crypto-dataflow frame layer; neither handshake caller needed new shared variants
 
 ## H4 — Configuration semantics
 
+[AGENT 2026-10-15] Clarify the charter's “allowed-IP removal flag” for the
+pinned Linux 6.12.110. There is no per-entry allowed-IP flag: its UAPI
+(`include/uapi/linux/wireguard.h:188–194`) lists family, address and CIDR,
+and `netlink.c:329–355` only validates and inserts. The earlier
+[W1/W2 design note, section 2.1](2026-10-06-w1-w2-netlink.md) already records
+that `WGALLOWEDIP_A_FLAGS` does not exist in this version. Supported removal
+semantics use peer `REMOVE_ME`/`REPLACE_ALLOWEDIPS` and device `REPLACE_PEERS`.
+Those obligations, insertion/ownership transfer and effective readback remain
+in scope; no per-prefix removal behavior is invented. Independent source
+review confirmed this statement/version correction, not a mirror omission
+or an accepted-run finding.
+
 [AGENT 2026-10-14] Get-after-set means the effective configuration: private-key
 clamping, allowed-IP masking, an allocated zero port and ignored flowinfo follow
 the C's operations. Set is not transactional: earlier updates survive a later
