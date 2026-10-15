@@ -109,13 +109,16 @@ def sha256(data):
 
 # W7: the anchored files compared for a `wg_batch` operation (above): the
 # WireGuard sources and the headers their paths inline; the file-table and
-# pipe files are the fixture's io_uring plumbing there.
+# pipe files are the fixture's io_uring plumbing there. Lane C (a check-rule
+# change on the trust surface, 2026-10-15): the IPv4 FIB trie, whose lookups
+# the batch's sends run, is compared in a batch as in a single operation.
 NET_HEADERS = {'include/net/ip_tunnels.h', 'include/net/inet_ecn.h', 'include/linux/if_vlan.h',
                'include/crypto/curve25519.h', 'include/linux/refcount.h'}
+BATCH_NET_FILES = {'net/ipv4/fib_trie.c'}
 
 
 def BATCH_FILES(files):
-    return [f for f in files if f.startswith('drivers/net/wireguard/') or f in NET_HEADERS]
+    return [f for f in files if f.startswith('drivers/net/wireguard/') or f in NET_HEADERS or f in BATCH_NET_FILES]
 
 
 def chunk_traces(traces):

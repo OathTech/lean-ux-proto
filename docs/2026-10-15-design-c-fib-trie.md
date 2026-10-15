@@ -590,6 +590,14 @@ way has one predecessor):
   (`route_into_wg0`, after the wait) run outside the window:
   `Env.outsideWindow` discards their steps, as the boot's tables are
   discarded by the runner (9.3).
+- a check-rule change on the trust surface [USER 2026-10-15, through the
+  coordinator]: a `wg_batch` operation is compared against the WireGuard
+  files, the headers they inline and `net/ipv4/fib_trie.c`
+  (`evaluator/check.py`, `BATCH_FILES`), since the batch's sends run the
+  trie's lookups and an anchored file's in-window coverage is witnessed in
+  a batch as in a single operation; its one-off mutant (a lookup decision
+  reported with the wrong outcome inside a batch send) is in the change's
+  commit message.
 
 For `fib_frontend.c`, `fib_semantics.c` and `route.c` (U1): anchoring them
 lists the reached functions the module mirrors and cuts the rest by name

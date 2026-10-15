@@ -33,6 +33,13 @@ from evaluator.napi_orders import napi_orders  # noqa: E402
 from evaluator.dispatch_orders import dispatch_orders  # noqa: E402
 
 SENTINELS = [
+  ('C1-M8-batch-lookup-outcome',
+   'control-flow mismatch: a trie lookup decision reported with the wrong outcome inside a batch send',
+   'behavior-preserving: fib_table_lookup reports its alias loop head as exhausted at every alias',
+   'Leanux/Net/Fib/Core.lean',
+   '    for fa in fas do\n      _ ← branch .ftlAliasIterate true\n',
+   '    for fa in fas do\n      _ ← branch .ftlAliasIterate false\n',
+   'w7_multi_tx_2', 'wireguard'),
   ('C-M2-receiver-is-sender',
    'semantic mismatch: an observation differs (a datagram byte)',
    'data: the response names its own index as the receiver',
