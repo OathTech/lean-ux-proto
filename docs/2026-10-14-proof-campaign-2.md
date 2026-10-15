@@ -135,14 +135,61 @@ endpoint changes are ignored. The configured UAPI's allowed-IP flag is
 `REPLACE_ALLOWEDIPS`, not a per-prefix removal flag. These source qualifications
 retain C semantics and do not authorize narrowing accepted traces.
 
+The continuation adds nine terminal declarations (fourteen total). `Flags`
+proves missing-peer remove/update-only no-ops, invalid flag/protocol rejection,
+and the self-public-key no-op, each against the original setter. The acquired
+removal stage has an exact source equation: it bypasses all attribute updates
+and performs removal followed by the put. A separate equation connects these
+stages to the original setter; the stage equation alone is not a complete
+peer-removal lifecycle theorem.
+
+`PeerScalars` composes public-key lookup, preshared-key and keepalive writes,
+and the final put for an existing live peer while the device is down. Its
+exact device result retains the concrete ordered map insertions; its peer
+projection restores the original reference count. `PeerDump` serializes the
+fixed peer fields, including endpoint encoding and space consumption, for an
+empty allowed-IP list, fresh cursor and at least 168 bytes of tailroom
+(the largest fixed-field encoding, with an IPv6 endpoint). `RoundTrip`
+composes the original setter and getter and proves readback of both requested
+scalar fields with all those premises explicit. These are normal-completion
+contracts, not successful-execution existence or runner reachability claims.
+
+[AGENT 2026-10-14] Keep local source-factor variants in `Config/PeerSource`
+and `Config/DumpSource`, copied from campaign 1 at c4ef635 and connected to the
+mirror by definitional equations. The coordinator can unify them after that
+landing; no existing shared declaration is edited. Direct expansion and source
+factoring were both tried for the dump theorem. Independent review identified
+that the first full-room premise could not apply after the caller's headers.
+The final premise is sufficient remaining room, resolving that finding.
+Two simplification attempts hit the local elaboration heartbeat limit; combining
+put expansion and its arithmetic rewrites in one pass prevented exponential
+intermediate terms and the generalized proof built in 4.5 seconds. These were
+proof-elaboration failures, not counterexamples or infrastructure retries.
+Actual outer device-dump composition and chunk continuation remain open.
+The review found no mathematical defect or other source mismatch.
+
 Remaining work: compose complete sequential set paths, errno partial-update
 effects, peer flag precedence/removal/replacement and allowed-IP ownership;
-then fresh-dump chunk and coalescing correctness. Deferred work during peer
+then general dump chunk and coalescing correctness. Deferred work during peer
 removal may affect other peers' dynamic state, so an unrestricted frame is
 not claimed. Stepped dumps and fresh whole dumps require distinct cursor
 contracts. The source review found no new mismatch. No mirror-team request
 from H4; ranked mirror suggestions: none. Effort: source review and capped
 local builds, with ordinary proof-elaboration failures repaired.
+
+Validation for the fourteen-statement H4 checkpoint: scoped build, every
+terminal's `#print axioms` (only `propext`, `Classical.choice`, `Quot.sound`),
+and `capped -- scripts/in-bundle lake env leanchecker --fresh
+Leanux.Proofs.WG.Config.Statements` pass. The full proof gate fails in the
+unchanged inherited counter-window refinement; its token/import checks pass.
+The generalized proof was rechecked after resolving the review finding.
+No cap hit, infrastructure rerun, mirror edit, differential check or guest run.
+
+[USER 2026-10-15] Use the box's parallelism concurrently with other agents,
+with `LEANUX_QEMU_SLOTS=16` for suites/checks/gates, every heavy job capped,
+and no cap increase. These checks use `LEAN_NUM_THREADS=32` and Lake's parallel
+module scheduling; the repository's existing per-module Lean arguments stay
+unchanged. This does not alter the campaign's task order or worktree boundary.
 
 ## H5 — Termination and progress (finding; remainder open)
 
