@@ -441,7 +441,11 @@ def validate_trace(trace):
         if name == "wg_advance":
             _integer(op["ticks"], 1, 2**31, f"ops[{i}].ticks")
         if name == "wg_flood":
-            _integer(op["count"], 1, 2**20, f"ops[{i}].count")
+            # B4 (2.4): the flood runs exactly in the mirror; the handshake ring
+            # holds MAX_QUEUED_INCOMING_HANDSHAKES = 4096 (a fuller batch would
+            # take the produce-failed arm) and the report's MAX_BRANCHES bounds
+            # the labels; Leanux/Runner.lean has the same bound
+            _integer(op["count"], 1, 4000, f"ops[{i}].count")
             _integer(op["port"], 1, 65535, f"ops[{i}].port")
             # the leading valids and the optional control are 148-byte (296-hex)
             # handshake initiations (the guest submits them as fixed-size slots)

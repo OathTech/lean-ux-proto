@@ -180,13 +180,18 @@ def ratelimiterAllow (src : SkbSource) : M Bool := do
     let total := k.ratelimiter.table.length + k.ratelimiter.table6.length + 1
     if ← branchCmp .rlOverLimit (total > RL_MAX_ENTRIES) (Int.ofNat total) (Int.ofNat RL_MAX_ENTRIES) then
       unsupported "the ratelimiter table limit (16384 distinct source IPs — out of reach)"
-    -- `kmem_cache_alloc(entry_cache, GFP_KERNEL)` (:138): the site is not in the
-    -- kind-305 hook's list (kernel/patches/gen-choice-stream.py has no
-    -- ratelimiter.c site), so its outcome is the environment's (`envOk`, a
-    -- success on this fixture) and the failure arm stops; a record-only site is
-    -- the named follow-on (the receive audit's F13)
-    if ← branch .rlAllocFail !(← envOk .ratelimiterEntry) then
-      unsupported "a ratelimiter entry allocation failure (-ENOMEM)"
+    -- `kmem_cache_alloc(entry_cache, GFP_KERNEL)` (:138): an allocation
+    -- outcome, kind 305, at this consumer frame (the hook is generic; the site
+    -- is `AllocSite.kmemCacheAllocRlEntry`, armed by the ratelimiter traces'
+    -- `draw` entries; B4, the receive audit's F13). On NULL, `err_oom`
+    -- (:153-155): `atomic_dec(&total_entries)` (the mirror's count is the
+    -- tables' size, so nothing to undo) and `return false`, which
+    -- wg_cookie_validate_packet turns into VALID_MAC_WITH_COOKIE_BUT_RATELIMITED
+    -- (cookie.c:146-148): the packet is dropped. The arm is reached only by
+    -- steering, and the kworker class is not steerable (harness/steer.py
+    -- ENABLED_CLASSES): declared, never taken on this host.
+    if ← branch .rlAllocFail !(← hiddenAlloc .kmemCacheAllocRlEntry) then
+      return false
     let now ← hiddenClock .ratelimiterInsertNow
     modifyK fun k => setTable k ((ip, TOKEN_MAX - PACKET_COST, now) :: table k)
     return true
@@ -472,10 +477,15 @@ def packetReceive (msg : List UInt8) (src : SkbSource) : M Unit := do
   if ← branch .rxHandshake (t == MESSAGE_HANDSHAKE_INITIATION || t == MESSAGE_HANDSHAKE_RESPONSE
                             || t == MESSAGE_HANDSHAKE_COOKIE) then
     if ← branch .rxRngNotReady false then unsupported "unreachable"   -- the guest waits for the RNG
-    -- `handshake_queue_len > MAX_QUEUED_INCOMING_HANDSHAKES / 2` (the counter):
-    -- the trylock path
-    if ← branch .rxQueueBusy ((← getDev).handshakeQueueLen > MAX_QUEUED_INCOMING_HANDSHAKES / 2) then
-      unsupported "spin_trylock_bh on a busy handshake queue"
+    -- `handshake_queue_len > MAX_QUEUED_INCOMING_HANDSHAKES / 2` (the counter,
+    -- against 2048): the trylock path (:555-558). `spin_trylock_bh` is on
+    -- `producer_lock`, which only producers take, and on this configuration
+    -- (no CONFIG_SMP, no CONFIG_DEBUG_SPINLOCK) `arch_spin_trylock` is
+    -- `({ barrier(); (void)(lock); 1; })` (include/linux/spinlock_up.h:56):
+    -- it always succeeds, and `__ptr_ring_produce` runs as the plain path's
+    -- `ptr_ring_produce_bh` does (B4, section 2.5). An SMP oracle would need
+    -- a record here.
+    _ ← branch .rxQueueBusy ((← getDev).handshakeQueueLen > MAX_QUEUED_INCOMING_HANDSHAKES / 2)
     -- ptr_ring_produce_bh fails when the ring (MAX_QUEUED_INCOMING_HANDSHAKES) is full
     if ← branch .rxProduceFailed ((← getDev).handshakeQueue.length ≥ MAX_QUEUED_INCOMING_HANDSHAKES) then return   -- drop
     -- atomic_inc(&wg->handshake_queue_len) (receive.c:567)

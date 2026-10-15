@@ -28,13 +28,18 @@ LIFECYCLE_EXPECTED = {
 }
 
 
-# E-B (docs/2026-10-05-e-dos.md §4.1): the merged-injection control bundles a
-# valid initiation into the flood's io_uring batch, so the kernel makes a cookie
-# reply inside the flood's (discarded) receive-worker section. The mirror's
-# section-bracket discard then meets the reply's modeled records inside the flood
-# section and fails closed (the two-distinct-sections assertion).
+# E-B (docs/2026-10-05-e-dos.md §4.1; B4 part 2, docs/2026-10-15-design-b4-
+# load-ratelimiter.md 2.3): the merged-injection control bundles a valid
+# initiation into the flood's io_uring batch that the mirror is not told of.
+# The flood runs exactly, one producer section per send and the receive
+# worker packet by packet, so the kernel has one producer section and one
+# worker packet more than the mirror: the mirror's last send consumes the
+# control's producer section, the kernel's last producer section then stands
+# where the mirror expects the worker, the activation loop finds no unit for
+# it, and the flood's drain check stops the operation (the batch machinery's
+# fail-closed outcome for a section between items' records).
 UNDERLOAD_EXPECTED = {
-    'e_underload_merged': ('hidden_mismatch', 'inside the discarded flood region'),
+    'e_underload_merged': ('unsupported_path', "work the flood queued outlived the guest's wait"),
 }
 
 
