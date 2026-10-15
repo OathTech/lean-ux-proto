@@ -1051,3 +1051,18 @@ user.
 21. **Fixed** (section 13). U1 names the rule change and the control
     decision; U2 is withdrawn with the GC (and the "closes an instrument
     gap" wording with it); U3's content goes to the GC stream.
+
+## 17. At the landing: two traces dropped [USER 2026-10-15]
+
+`l_recreate_ratelimited6` and `e_underload_busy` were dropped at the landing
+with B3 and C1. Measured by the B3 fork (s4 and s5, quiet and under load):
+the recreate witness's comparison child takes 4.28 s of the 4.5 s bound alone
+on s4 and exceeds it beside any other suite on either oracle; the busy trace
+sits at 4.40 s. The s5 pair adds four hidden records and no comparison rows to
+the recreate trace, so B3's hooks are not the cause; the comparison child's
+volume is: 55,538 comparison records, 56 % in the two `wg_create`s that are the
+recreate's point, 14 per filler packet in the two floods that must each exceed
+the under-load threshold. No reshape keeps both witnesses under the bound.
+`l_delete_ratelimited6` (2x margin) stays as the two-table uninit witness; the
+busy arm keeps its constant-false declaration (section 2.5). The decision is in
+`docs/decisions.md`.

@@ -778,3 +778,19 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   rule is unchanged (the kernel's comparison rows decide each poll's
   placement, replayed once as the evidence); `section_agreement` costs the
   section's records per poll. Not a retry, not a widened enumeration.
+- **2026-10-15 [USER]** The two heavy B4 traces are dropped: `l_recreate_ratelimited6`
+  (the recreate witness) and `e_underload_busy` (the busy arm). Their comparison
+  child sits at the guest's 4.5 s rekey bound on both oracles (4.28 s and 4.40 s
+  alone; over it beside any other suite), a fixture property under TCG that no
+  reshape changes, measured by the B3 fork on s4 and s5 (B3's hooks add four
+  records); `l_delete_ratelimited6` stays as the two-table uninit witness and the
+  busy arm keeps its constant-false declaration. "(1) agreed" to the
+  coordinator's recommendation. The structural remedy for the class (113 of 341
+  traces run past half the bound in the comparison child) is KVM acceleration of
+  the guest, a fixture case to put separately [AGENT, coordinator].
+- **2026-10-15 [USER]** B3 and C1 land as one integration ("(2) great, let's land
+  it"), after one claim point on the combined head on the s5 pair.
+- **2026-10-15 [AGENT, coordinator]** C1 lands before the state split, not after as
+  the split's decision entry said: C1 finished in one session instead of the
+  estimated ten days, and its new module retypes cheaply at the split since
+  nothing depends on it yet.

@@ -263,43 +263,13 @@ def traces():
     e6 = json.loads((ROOT / "corpus/wireguard/e_underload_ratelimit6.json").read_text())
     out["l_delete_ratelimited6"] = ({"net_fixture": e6["net_fixture"]}, e6["ops"][:5] + [DELETE, GET], e6["steer"],
                                     e6["expect"] + ["wg_ratelimiter_gc_entries.v6_entry_iterate=1"])
-    # Each device gets one flood with one initiation (an insert, then its
-    # response) and no observe: two floods' comparison dumps and two observes
-    # exceed the guest's 4.5 s rekey bound (measured 2026-10-15); the
-    # witness is the record stream (site 133 twice, never 132), not a reply.
-    # Measured again 2026-10-16 (task/recreate-trace, after B3's s5 pair):
-    # the trace sits AT the bound in the comparison child, on either oracle.
-    # Alone at a host load of 7: s4 pc 1.70 s, cmp 4.28 s; s5 pc 1.75 s, cmp
-    # over the bound. Beside the wireguard suite (load 9): cmp over the bound
-    # on both. The s5 pair adds four hidden records of 3194 (two kind-313 and
-    # two kind-314, at the two zero-key arms) and no comparison records: not
-    # the cause. The comparison child's cost is its record volume: 55,538
-    # comparison records, of which the two wg_creates 15,483 and 15,336, the
-    # two floods 7,286 and 7,203 (14 per filler packet: the MAC1 check is
-    # branchless), the delete 5,704, the sets and ups about 4,000; the pc
-    # child's coverage is 16,450 PCs. No reshape keeps both witnesses (the
-    # uninit walk over an IPv6 entry, which needs device 1 under load for
-    # its insert, and the re-created device's insert again, which needs
-    # device 2 under load) and halves that: each flood must queue at least
-    # 512 packets (MAX_QUEUED_INCOMING_HANDSHAKES / 8), the global
-    # last_under_load decays within 1 s, before a flood's own processing
-    # ends in the comparison child, and both creates are the trace's point.
-    # The one-flood l_delete_ratelimited6 is at 2.1 s (s4) and 2.3 s (s5) in
-    # the comparison child alone, 2.2 s and 2.4 s under load. A decision for
-    # the coordinator: the trace stays as the recreate witness and is
-    # expected to fail the comparison child's bound under load (recorded as
-    # an infrastructure outcome, never a mirror verdict), or the witness is
-    # given up; the bound is a fixture fact [AGENT 2026-10-16].
-    def one6(sec):
-        f = dict(e6["ops"][3])
-        f["messages"] = [eb.rl_initiation6(d1.PEER_EPHEMERAL, sec, d1.PEER_INDEX).hex()]
-        return f
-    out["l_recreate_ratelimited6"] = (
-        {"net_fixture": e6["net_fixture"]},
-        e6["ops"][:3] + [one6(1), DELETE, CREATE, e6["ops"][1], UP, one6(3), GET],
-        e6["steer"] + e6["steer"],
-        ["wg_receive_handshake_packet.initiation=1", "wg_ratelimiter_allow.inet6=1",
-         "wg_ratelimiter_allow.over_max_entries=0", "wg_ratelimiter_gc_entries.v6_entry_iterate=1"])
+    # l_recreate_ratelimited6 (B4: a delete and recreate with IPv6 rate-limited
+    # entries, the recreate's eight-entry allocation schedule) was dropped at
+    # the landing of 2026-10-15 [USER: "(1) agreed"]: its comparison child
+    # sits at the guest's 4.5 s bound on both oracles (4.28 s alone on s4;
+    # 55,538 comparison records, 56 % in the two creates), a fixture property
+    # no reshape changes; l_delete_ratelimited6 stays as the two-table uninit
+    # witness (2x margin). The B4 note records the measurement.
     # With D3 (section 7) [AGENT, int-dl follow-up 2].
     retransmit_steer = d2_initiator_steer()
     zk_ops, _, zk_steer = d3.session()
