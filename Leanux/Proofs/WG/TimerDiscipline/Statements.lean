@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TimerDiscipline.PendingGiveUpSource
 import Leanux.Proofs.WG.TimerDiscipline.RxDataTimersClaims
 import Leanux.Proofs.WG.TimerDiscipline.ResponseTraversalClaims
 import Leanux.Proofs.WG.TimerDiscipline.InitiationTraversalClaims
@@ -643,5 +644,22 @@ theorem original_retry_boundary (d : Device) (horizons : List UInt64)
             ∃ q, final.peerAt pid = some q ∧ q.internalId = p.internalId ∧
               q.timerHandshakeAttempts = 19)) :=
   source_retry_boundary d horizons empty nineteen pid p resident zero
+
+/-- Above the retry limit, an already-pending zero-key timer makes the original
+callback return without any clock or arm-record read. It deletes send-keepalive,
+purges staged packets and accounts their original length in txDropped, retaining
+the existing zero-key expiry. Exactly two original decisions are appended, with
+the give-up comparison operands and the entry section stamp. Every other
+projected field is unchanged, including hidden records, clocks, attempts and
+work queues. No running/live/record-mode premise is needed. This is one callback,
+not a whole scheduler episode or a once-per-session count. -/
+theorem original_giveup_pending_zero_key (pid : PeerId) (d : Device) (p : Peer)
+    (expiry : UInt64) (resident : d.peers[pid]? = some p)
+    (limit : MAX_TIMER_HANDSHAKES < p.timerHandshakeAttempts)
+    (pending : p.timerZeroKeyMaterial = some expiry) (entry : Campaign2.Snapshot) :
+    Campaign2.Returns (expiredRetransmitHandshake pid)
+      (fun s => s = entry ∧ s.wg.device = some d)
+      (fun _ final => final = pendingGiveUpView entry d pid p) :=
+  pendingGiveUp_returns pid d p expiry resident limit pending entry
 
 end Leanux.Proofs.WG.TimerDiscipline
