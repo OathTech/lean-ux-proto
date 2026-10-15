@@ -6,6 +6,7 @@ import Leanux.Proofs.WG.Config.AllowedRemovalConverseClaims
 import Leanux.Proofs.WG.Config.CollisionRequestSource
 import Leanux.Proofs.WG.Config.AllowedRoundTripSource
 import Leanux.Proofs.WG.Config.AllowedTransferReadbackSource
+import Leanux.Proofs.WG.Config.RemoveFlagRequestSource
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
@@ -976,5 +977,61 @@ theorem original_allowedip_transfer_readback (v4 : Bool) (d : Device) (id : Node
             [("allowed_ips", Lean.Json.arr #[allowedJson v4 addr cidr])] })) :=
   transfer_paired_readback v4 d id addr cidr parent donor target oldPeer newPeer ctx skb
     different width root node oldResident newResident oldOnly newEmpty fresh room
+
+/-- A valid REMOVE_ME command for a resident lookup match removes the peer
+before installing any later attributes. Lookup acquires one reference,
+removal releases one, and the caller releases one. Normal completion returns
+zero with the exact ordered removal effect. The peer is erased exactly when
+its original reference count was one; otherwise its remaining count is one
+less. Node pairs and empty send/clear queues are explicit premises. No
+completion, running-state, key-slot or global ownership premise is hidden in
+the conclusion; arbitrary later peer attributes are bypassed. -/
+theorem original_remove_flag (a : PeerAttrs) (key : Key) (flags : UInt32)
+    (pid : PeerId) (d : Device) (p : Peer)
+    (pubkey : a.publicKey = some key) (flagattr : a.flags = some flags)
+    (valid : flags &&& ~~~WGPEER_F_ALL = 0)
+    (protocol : a.protocolVersion = none ∨ a.protocolVersion = some 1)
+    (remove : flags &&& WGPEER_F_REMOVE_ME ≠ 0)
+    (found : d.peerHashtable.find? (·.1 == key) = some (key, pid))
+    (resident : d.peers[pid]? = some p) (pairs : NodePairs d)
+    (live : 0 < p.refcount) (bounded : p.refcount + 1 < 2 ^ 31)
+    (count : 0 < d.numPeers) (send : d.sendWorkQueue = []) (clear : d.clearWorkQueue = []) :
+    Campaign2.Ensures (setPeerCmd a) (fun s => s.wg.device = some d)
+      (fun ret s => ret = 0 ∧ ∃ final, s.wg.device = some final ∧
+        RemoveFlagEffect pid d p final ∧
+        (final.peers[pid]? = none ↔ p.refcount = 1) ∧
+        (p.refcount ≠ 1 → ∃ q, final.peers[pid]? = some q ∧ q.refcount = p.refcount - 1)) := by
+  intro entry ret out pre run
+  obtain ⟨zero, final, device, effect⟩ := setPeer_remove_flag a key flags pid d p
+    pubkey flagattr valid protocol remove found resident pairs live bounded count send clear
+    entry ret out pre run
+  exact ⟨zero, final, device, effect, removeFlag_residency effect⟩
+
+/-- The original device setter carries the REMOVE_ME effect through a single
+peer entry, with actual interface selection and the preceding generation
+increment. This is a normal-return contract with the same quiet-queue and
+reference premises as the peer command, not arbitrary mixed device attributes
+or queued-work completion. -/
+theorem original_device_remove_flag (a : PeerAttrs) (key : Key) (flags : UInt32)
+    (pid : PeerId) (d : Device) (p : Peer)
+    (pubkey : a.publicKey = some key) (flagattr : a.flags = some flags)
+    (valid : flags &&& ~~~WGPEER_F_ALL = 0)
+    (protocol : a.protocolVersion = none ∨ a.protocolVersion = some 1)
+    (remove : flags &&& WGPEER_F_REMOVE_ME ≠ 0)
+    (found : d.peerHashtable.find? (·.1 == key) = some (key, pid))
+    (resident : d.peers[pid]? = some p) (pairs : NodePairs d)
+    (live : 0 < p.refcount) (bounded : p.refcount + 1 < 2 ^ 31)
+    (count : 0 < d.numPeers) (send : d.sendWorkQueue = []) (clear : d.clearWorkQueue = []) :
+    Campaign2.Ensures (wgSetDevice (singlePeerAttrs d a))
+      (fun s => s.wg.device = some d ∧ ClaimView.selectsDevice s d)
+      (fun ret s => ret = 0 ∧ ∃ final, s.wg.device = some final ∧
+        RemoveFlagEffect pid (requestGeneration d) p final ∧
+        (final.peers[pid]? = none ↔ p.refcount = 1) ∧
+        (p.refcount ≠ 1 → ∃ q, final.peers[pid]? = some q ∧ q.refcount = p.refcount - 1)) := by
+  intro entry ret out pre run
+  obtain ⟨zero, final, device, effect⟩ := setDevice_remove_flag a key flags pid d p
+    pubkey flagattr valid protocol remove found resident pairs live bounded count send clear
+    entry ret out pre run
+  exact ⟨zero, final, device, effect, removeFlag_residency effect⟩
 
 end Leanux.Proofs.WG.Config
