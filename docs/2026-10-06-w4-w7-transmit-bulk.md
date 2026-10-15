@@ -2111,6 +2111,19 @@ Branch `task/w47` continued on the merge of `task/dispatch-order`
   agreement costs the section's records, not a scan per poll. The rule is
   unchanged: no record tells (c') from after-the-put, the kernel's own
   comparison rows do, and the selection is replayed once as the evidence.
+  Evidence, since a quiet box never takes (c') on this trace and a loaded
+  one does so by chance: the failing claim-point chunk's recorded Linux
+  outputs (75148cd, claim-E chunk 004) replayed through the fixed tree
+  with `scripts/probes/replay-chunk.py` agree, the selection choosing the
+  before-put placement at NET_RX section 1677 of 2,049 (1,018 open polls;
+  the three mirror runs and the selection in seven minutes); the one-off
+  mutant W7-PLACEMENT-M1 (`Env.napiIrqExit` applying each placement one
+  poll off, `getD 1` for `headD`) replayed on the same chunk is rejected,
+  "the placement runs differ in 1017 NET_RX sections and 1017 other runs
+  of branches for 1018 open polls: the placements are not independent"
+  (`control_flow_mismatch`); reverted. The tier suite on s5 agrees 6 of 6
+  both quiet and beside the `wireguard` suite at sixteen slots, where the
+  twin opened 1,016 placements and the all-after run agreed outright.
 - **The rule, as the data corrected it.** The design said the (c')
   placement changes only the operands inside the poll's section. The first
   replay of `rx_roam_v6` (one open poll) showed it also changes the
