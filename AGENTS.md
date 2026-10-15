@@ -77,6 +77,7 @@ it is a box matter, not a project requirement.
 ```sh
 capped -- scripts/in-bundle python3 -B -m unittest evaluator.test_evaluation evaluator.test_model_replay harness.test_trace harness.test_wg harness.test_linux
 capped -- scripts/in-bundle python3 -m evaluator.check --suite wireguard   # about 3 minutes
+capped -- scripts/in-bundle python3 -m evaluator.check --suite routing     # the IPv4 FIB trie's corpus, about 3 minutes
 capped -- scripts/in-bundle python3 -m evaluator.check                     # everything: about an hour
 LEANUX_KERNEL_PROFILE=net-choice capped -m 64G -- scripts/in-bundle scripts/build-kernel
 ```

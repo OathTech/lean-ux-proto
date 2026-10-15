@@ -33,6 +33,16 @@ from evaluator.napi_orders import napi_orders  # noqa: E402
 from evaluator.dispatch_orders import dispatch_orders  # noqa: E402
 
 SENTINELS = [
+  # Lane C (docs/2026-10-15-design-c-fib-trie.md, 9.4 and 11): the shape oracle's
+  # standing sentinel, the one-off mutant 7 kept: the serialiser prints 0 for
+  # every tnode's full_children; r_full_children's tnodes count 1 and 2
+  ('C1-M7-shape-full-children',
+   'shape oracle: /proc/net/fib_trie differs (a tnode\'s full_children count)',
+   'data: the shape serialiser prints 0 for every tnode\'s full_children',
+   'Leanux/Net/Fib/Table.lean',
+   '                    Lean.toJson f, Lean.toJson e,\n',
+   '                    Lean.toJson (0 : Nat), Lean.toJson e,\n',
+   'r_full_children', 'routing'),
   ('C-M2-receiver-is-sender',
    'semantic mismatch: an observation differs (a datagram byte)',
    'data: the response names its own index as the receiver',
