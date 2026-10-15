@@ -79,4 +79,3 @@ theorem drain_source (upTo : Option PeerId) :
 
   all_goals (funext s; dsimp +zetaDelta only; cases s.1 <;> rfl)
 end Leanux.Proofs.WG.Progress
-
