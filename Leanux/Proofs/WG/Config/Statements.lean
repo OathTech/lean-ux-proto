@@ -1,6 +1,8 @@
 import Leanux.Proofs.WG.Config.Identity
 import Leanux.Proofs.WG.Config.Port
 import Leanux.Proofs.WG.Config.RoundTrip
+import Leanux.Proofs.WG.Config.DeviceScalars
+import Leanux.Proofs.WG.Config.RoundTripReturns
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
@@ -114,7 +116,7 @@ the original peer setter, including every return and Stop. -/
 theorem original_peer_set_source (a : PeerAttrs) : setPeerCmdSource a = setPeerCmd a :=
   setPeerCmd_source a
 
-/-- For an existing live peer while down, normal completion stores the
+/-- For an existing peer with positive reference count while down, normal completion stores the
 preshared key and keepalive interval through the exact device updates. -/
 theorem original_peer_scalars_down (key psk : Key) (interval : Nat) (pid : PeerId)
     (d : Device) (p : Peer)
@@ -136,7 +138,7 @@ theorem original_fresh_peer_dump (pid : PeerId) (p : Peer) (ctx : DumpCtx) (skb 
          .complete { publicKey := hexKey p.remoteStatic, attrs := peerFixedAttrs p })) :=
   getPeerDump_no_allowedips pid p ctx skb fresh empty room
 
-/-- Setting an existing live peer while down and then dumping it reads back
+/-- Setting an existing peer with positive reference count while down and then dumping it reads back
 the requested preshared key and keepalive interval on normal completion.
 This covers a fresh peer chunk with at least 168 bytes of room and an empty allowed-IP list. -/
 theorem original_scalars_get_after_set (key psk : Key) (interval : Nat) (pid : PeerId)
@@ -157,5 +159,72 @@ theorem original_scalars_get_after_set (key psk : Key) (interval : Nat) (pid : P
            { ctx with nextAllowedip := none, allowedipsSeq := 0 },
            .complete { publicKey := hexKey p.remoteStatic, attrs := peerFixedAttrs updated })) :=
   scalars_get_after_set key psk interval pid d p ctx skb found resident live down fresh empty room
+
+/-- An outer device set updates the first peer and increments the device
+generation before a following malformed peer entry returns EINVAL.
+With the stated reference-count bound and device selection, it returns normally. -/
+theorem original_device_partial_error (d : Device) (key psk : Key) (interval : Nat)
+    (pid : PeerId) (p : Peer)
+    (found : d.peerHashtable.find? (·.1 == key) = some (key, pid))
+    (resident : d.peers[pid]? = some p) (live : 0 < p.refcount) (bounded : p.refcount + 1 < 2 ^ 31) (down : d.running = false) :
+    Returns (wgSetDevice (partialAttrs d key psk interval))
+      (fun w => w.k.wg = some d ∧ selectsDevice w d)
+      (fun ret w => ret = -EINVAL ∧ w.k.wg = some
+        (scalarDevice { d with deviceUpdateGen := d.deviceUpdateGen + 1 } pid p psk interval)) :=
+  setDevice_partial d key psk interval pid p found resident live bounded down
+
+/-- The outer setter returns EINVAL for a later malformed peer entry; a
+subsequent peer dump returns normally and reads back the earlier scalar update.
+The count bound, stopped device, empty allowed-IP list and tailroom are explicit. -/
+theorem original_partial_error_readback (d : Device) (key psk : Key) (interval : Nat)
+    (pid : PeerId) (p : Peer) (ctx : DumpCtx) (skb : NlSkb)
+    (found : d.peerHashtable.find? (·.1 == key) = some (key, pid))
+    (resident : d.peers[pid]? = some p) (live : 0 < p.refcount) (bounded : p.refcount + 1 < 2 ^ 31) (down : d.running = false)
+    (fresh : ctx.nextAllowedip = none) (empty : p.allowedipsList = [])
+    (room : 168 ≤ skb.room) :
+    Returns (do
+      let ret ← wgSetDevice (partialAttrs d key psk interval)
+      let dump ← getPeerDump pid ctx skb
+      pure (ret, dump))
+      (fun w => w.k.wg = some d ∧ selectsDevice w d)
+      (fun result w =>
+        let updated := { p with presharedKey := psk, persistentKeepaliveInterval := interval }
+        peerAt w pid = some updated ∧ result =
+          (-EINVAL, { skb with room := skb.room - peerFixedSpace updated },
+           { ctx with nextAllowedip := none, allowedipsSeq := 0 },
+           .complete { publicKey := hexKey p.remoteStatic, attrs := peerFixedAttrs updated })) :=
+  partial_get_after_set d key psk interval pid p ctx skb found resident live bounded down fresh empty room
+
+/-- The stopped-device scalar setter returns normally and establishes the
+exact device update when the peer reference count is positive and cannot overflow. -/
+theorem original_peer_scalars_return (key psk : Key) (interval : Nat) (pid : PeerId)
+    (d : Device) (p : Peer)
+    (found : d.peerHashtable.find? (·.1 == key) = some (key, pid))
+    (resident : d.peers[pid]? = some p) (live : 0 < p.refcount) (bounded : p.refcount + 1 < 2 ^ 31) (down : d.running = false) :
+    Returns (setPeerCmd (scalarAttrs key psk interval)) (fun w => w.k.wg = some d)
+      (fun ret w => ret = 0 ∧ w.k.wg = some (scalarDevice d pid p psk interval)) :=
+  setPeer_scalars_down_returns key psk interval pid d p found resident live bounded down
+
+/-- A scalar set and subsequent peer dump both return normally and read back
+the requested preshared key and keepalive interval, under the stated count,
+stopped-device, empty allowed-IP list and sufficient-tailroom premises. -/
+theorem original_scalar_roundtrip_returns (key psk : Key) (interval : Nat) (pid : PeerId)
+    (d : Device) (p : Peer) (ctx : DumpCtx) (skb : NlSkb)
+    (found : d.peerHashtable.find? (·.1 == key) = some (key, pid))
+    (resident : d.peers[pid]? = some p) (live : 0 < p.refcount) (bounded : p.refcount + 1 < 2 ^ 31) (down : d.running = false)
+    (fresh : ctx.nextAllowedip = none) (empty : p.allowedipsList = [])
+    (room : 168 ≤ skb.room) :
+    Returns (do
+      let ret ← setPeerCmd (scalarAttrs key psk interval)
+      let dump ← getPeerDump pid ctx skb
+      pure (ret, dump))
+      (fun w => w.k.wg = some d)
+      (fun result w =>
+        let updated := { p with presharedKey := psk, persistentKeepaliveInterval := interval }
+        peerAt w pid = some updated ∧ result =
+          (0, { skb with room := skb.room - peerFixedSpace updated },
+           { ctx with nextAllowedip := none, allowedipsSeq := 0 },
+           .complete { publicKey := hexKey p.remoteStatic, attrs := peerFixedAttrs updated })) :=
+  scalars_get_after_set_returns key psk interval pid d p ctx skb found resident live bounded down fresh empty room
 
 end Leanux.Proofs.WG.Config

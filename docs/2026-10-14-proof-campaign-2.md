@@ -191,6 +191,36 @@ and no cap increase. These checks use `LEAN_NUM_THREADS=32` and Lake's parallel
 module scheduling; the repository's existing per-module Lean arguments stay
 unchanged. This does not alter the campaign's task order or worktree boundary.
 
+The next H4 increment adds four terminal statements (eighteen total).
+`Returns` states actual normal-return existence and the result predicate, with
+an equivalence to the standard no-exception weakest precondition. Local
+`ScalarReturns` and `DumpReturns` variants prove the stopped-device scalar
+setter and sufficiently spacious peer dump return normally. The reference
+count must be positive and its increment strictly below `2^31`; the earlier
+partial-correctness theorems remain valid without that bound. `RoundTripReturns`
+composes them into a returning set/readback theorem.
+
+`DeviceScalars` follows the original outer `wgSetDevice`: its request selects
+the device by index, sets one existing peer's preshared key and keepalive,
+then contains a malformed peer entry. It returns `-EINVAL` normally, with the
+device generation increment and the first peer's changes retained. A following
+peer dump returns and reads back those changes. This is a proved sequential
+partial-update case, not an atomic-update guarantee or an accepted runner trace.
+The remaining partial-error combinations and outer dump chunk loop are open.
+
+[AGENT 2026-10-15] Keep the outer-setter source factor local, copied from
+campaign 1 at ec95fa8 and checked by a definitional equation. The total-return
+variants are local because their stronger no-exception conclusions need
+explicit count bounds and cannot replace the existing broader partial
+contracts. No mirror or existing campaign-1 lemma is changed.
+
+The eighteen-statement checkpoint passes scoped build, standard-axiom
+inspection and fresh stock kernel replay. Independent review found no defect
+in the total-return formulation, original-operation linkage or partial-error
+case. The full gate again fails in inherited `CounterWindow.Refinement`, with
+token/import checks passing. No cap hit or infrastructure rerun. These are
+model theorems; no guest or differential check was run.
+
 ## H5 — Termination and progress (finding; remainder open)
 
 The requested operation-end drain property is false on an accepted constructed
