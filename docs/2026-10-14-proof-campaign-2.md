@@ -449,6 +449,17 @@ global invariant. Independent review found no structural-case or read-order
 defect in the removal relation, sequence frame, final public composition or
 terminal scope.
 
+`AllowedOwnerClear` strengthens both general removal terminals: every identity
+in the original target list is absent or has a NULL owner after the operation.
+Slot writes and reparenting preserve owners from the actual current map, and
+later removals preserve already-cleared owners. This covers duplicates and
+aliases whenever the existing readiness witness exists. It does not establish
+that the list contains every node owned by the peer, physical deletion of
+branching nodes, trie validity or lookup behavior. Independent read-only review
+found no correctness or scope defect. The scoped build, all fifty-eight axiom
+inspections and fresh replay were repeated for the strengthened statements;
+the full gate still fails in the two inherited modules below.
+
 Remaining: private-key collision removal and mixed-attribute outer composition; full peer
 removal/replacement and allowed-IP ownership, other partial-error combinations,
 and general dump chunks/coalescing. Deferred removal work can change other
