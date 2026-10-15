@@ -638,3 +638,47 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   precondition and relation are never narrowed to accommodate one. First
   instance: the index lookup's dead-peer store (peerlookup.c), found by the
   grind at milestone 1 [AGENT: the fix on task/index-lookup-fix].
+- **2026-10-14 [AGENT, fork of the coordinator]** The index hashtable has the
+  C's shape: a hashed entry is its index and its owner (`IndexOwner`: a
+  peer's handshake or a keypair, the structures the entry is embedded in,
+  noise.h:30-31, :65-66), and the entry's one peer word lives in the owner
+  (`Peer.handshakeEntryPeer`, set at noise.c:68; `Keypair.peer`, set from
+  the handshake's word at noise.c:107, :827). `indexLookup` reads the word
+  through the owner and stores `wg_peer_get_maybe_zero`'s result back into
+  it (peerlookup.c:218), so a failed get leaves NULL there, a later lookup
+  of the same entry takes the get's `!peer` arm (peer.c:75), and the owner's
+  other reads of the word (`PACKET_PEER(skb)`, `wg_peer_get(keypair->entry.peer)`,
+  `entry.peer->device->index_hashtable`) find NULL: each is an explicit
+  fail-closed arm (`IndexOwner.peerDeref`, `unsupported`), where the C
+  dereferences a NULL pointer, never a default. Before, the table entry
+  kept its own copy of the peer id and the keypair a second one
+  (`Keypair.peer : PeerId := 0`), two words the C does not have: a mirror
+  defect found by the binary adequacy grind's region lemmas over
+  `wg_index_hashtable_lookup`, the first Rule Zero finding at that level,
+  fixed in two steps (the store-back into the table's copy, then the
+  aliased word). Witnesses (a hashed entry of each owner naming a peer at
+  count zero, looked up twice, then the owner's word dereferenced): the
+  mirror on main reported `peerGetMaybeZeroDead` at both lookups and went
+  on through the dereference; the fixed mirror reports
+  `peerGetMaybeZeroDead` then `peerGetMaybeZeroNull`, the C's order, and
+  stops at the dereference. The arms are modelled and unexercised on this
+  configuration (one CPU, no preemption): no lookup finds an entry whose
+  peer is at zero, the reasons with the C lines in the lifecycle design
+  (16.6). Not a scope cut. The Peer audit's F2 (the mirror erases a peer at
+  count zero where the C frees it at `rcu_release`) is not a mirror change:
+  the adequacy theorem quantifies over states the relation names, reachable
+  or not, and the fixed mirror handles a constructed zero-count state as
+  the C does; the erase-versus-free divergence is for the simulation
+  relation to abstract (an unreferenced object relates to its absence),
+  on the claim, with its C lines in the lifecycle design (16.6), that no
+  modelled path reads a peer between the zero and the release. The mirror
+  stays deterministic; a modelled reader found later would make it a
+  record-only RCU-callback section, reported rather than built.
+- **2026-10-14 [USER]** Use the box aggressively: "we can share guidance with
+  the agent to be more aggressive with resources where this would speed them
+  up". The guest-slot default moves from 8 to 16 (the box has 32 cores and
+  over 90 GB free most of the day; guests are single-threaded; the measured
+  claim point of 2026-10-14 took 2 h 17 min at 8 slots on a shared box);
+  builds and suite runs run concurrently across agents; `capped`, the
+  memory cap, the KILLED-is-failure rule and the one-recorded-rerun rule are
+  unchanged [AGENT, coordinator: the measurement and the number].

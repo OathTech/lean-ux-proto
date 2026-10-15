@@ -132,7 +132,8 @@ def stateJson (pid : PeerId) : M Json := do
   return Json.mkObj [("current", toJson p.keypairCurrent), ("previous", toJson p.keypairPrevious),
     ("next", toJson p.keypairNext), ("keypairs", toJson kps),
     ("index_table", toJson (d.indexTable.map fun e =>
-      Json.mkObj [("index", toJson e.index), ("keypair", toJson e.keypair),
+      Json.mkObj [("index", toJson e.index),
+                  ("keypair", toJson (match e.owner with | .keypair kp => some kp | .handshake _ => none)),
                   ("kind", toJson (if e.kind == .handshake then "handshake" else "keypair"))])),
     ("handshake_state", toJson p.handshakeState), ("handshake_remote_index", toJson p.remoteIndex),
     ("chaining_key", toJson (hs p.chainingKey)),

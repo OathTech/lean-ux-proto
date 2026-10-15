@@ -87,16 +87,28 @@ inductive IndexKind where
 /-- A keypair's identity in the device's keypair store. -/
 abbrev KeypairId := Nat
 
-/-- An `index_hashtable_entry` in the device's index hashtable: a peer's
-    handshake or one of its keypairs, under a random index. -/
+/-- The structure an `index_hashtable_entry` is embedded in (noise.h:30-31,
+    :65-66): a peer's `noise_handshake` or a `noise_keypair` (an initiator
+    peer can hold a current and a next keypair, each with its own entry).
+    The entry's words live there: `peer` in `Peer.handshakeEntryPeer` or
+    `Keypair.peer`, `type` fixed by the owner (noise.c:67, :106). -/
+inductive IndexOwner where
+  | handshake (peer : PeerId)
+  | keypair (keypair : KeypairId)
+  deriving Repr, BEq, DecidableEq
+
+/-- A hashed `index_hashtable_entry` in the device's index hashtable: the
+    random index it hashes under (`entry->index`) and its owner. -/
 structure IndexEntry where
   index : Nat
-  peer : PeerId
-  kind : IndexKind
-  /-- For a keypair entry, which keypair (an initiator peer can hold a
-      current and a next keypair, each with its own entry). -/
-  keypair : Option KeypairId := none
+  owner : IndexOwner
   deriving Repr, BEq
+
+/-- `entry->type`, set once at the owner's init (noise.c:67, :106). -/
+def IndexEntry.kind (e : IndexEntry) : IndexKind :=
+  match e.owner with
+  | .handshake _ => .handshake
+  | .keypair _ => .keypair
 
 /-- `struct noise_symmetric_key`. -/
 structure SymmetricKey where
@@ -126,7 +138,12 @@ structure Keypair where
   /-- The keypair's `kref`. -/
   refcount : Nat := 1
   internalId : Nat := 0
-  peer : PeerId := 0
+  /-- `entry.peer`, the embedded index entry's peer word, set from the
+      handshake's word at creation (noise.c:107, :827) and overwritten by
+      every lookup that finds the entry (peerlookup.c:218): NULL once a
+      lookup's `wg_peer_get_maybe_zero` failed on it. `PACKET_PEER(skb)`
+      (queueing.h:68) reads it. -/
+  peer : Option PeerId
   /-- `receiving_counter` (D2). -/
   receivingCounter : ReplayCounter := {}
   deriving Repr, BEq
@@ -276,6 +293,12 @@ structure Peer where
       through `s64` casts at noise.c:635 and :651; handshake audit I5). -/
   lastInitiationConsumption : Int64 := 0
   txBytes : Nat := 0
+  /-- `handshake.entry.peer`, the embedded index entry's peer word: NULL
+      from the zeroed allocation until `wg_noise_handshake_init` stores the
+      peer (noise.c:68), and overwritten by every lookup that finds the
+      entry (peerlookup.c:218): NULL once a lookup's
+      `wg_peer_get_maybe_zero` failed on it. -/
+  handshakeEntryPeer : Option PeerId := none
   /-- `handshake.state`: ZEROED 0, CREATED_INITIATION 1, CONSUMED_INITIATION 2,
       CREATED_RESPONSE 3, CONSUMED_RESPONSE 4. -/
   handshakeState : Nat := 0
