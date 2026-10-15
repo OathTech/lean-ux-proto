@@ -1238,6 +1238,12 @@ def operands_match(lhs, rhs, record, comparison):
     return sorted((x, y)) == sorted((a, b))
 
 
+def record_site(r, locations):
+    """The condition site of a comparison record: the innermost frame's
+    source, as `operand_agreement` matches it."""
+    return locations[r[3]][0]['source'].split('/.deps/linux/')[-1].split(' ')[0]
+
+
 def operand_agreement(trace, model_obs, comparisons, locations, decisions, functions=None, exclusions=(),
                       excluded=None, distinct=None, sections=None):
     """A3: declared value comparisons report operands, and each matches a
@@ -1516,22 +1522,50 @@ def section_agreement(trace, runs, comparisons, sections, locations, decisions, 
     first, second = runs
     count = first.get('napi_irq_ambiguous', 0)
     ids = range(len(trace['ops']))
-    def records(section):
-        # a section's records are those of its block; the records outside
-        # the NET_RX sections are the task's and those of any other block
-        out = []
-        for index in ids:
-            ordinal = sections.get((trace['id'], index), {})
-            def inside(r):
-                blocks = record_blocks(r)
-                if section:
-                    return any(ordinal.get(b) == section for b in blocks)
-                return not blocks or any(b not in ordinal for b in blocks)
-            out.append({'records': [r for r in comparisons[index]['records'] if inside(r)]})
+    # One pass over the operation's comparison records: a section's records
+    # are those of its block, and the records outside the NET_RX sections
+    # (the task's and any other block's) are indexed by their condition
+    # site. The per-poll agreement below then costs the section's own
+    # records and the put's site, not a scan of the operation's records per
+    # poll: the W7 tier's receive twin opens about a thousand placements
+    # (2026-10-15), and the selection is the same relation either way.
+    inside_section, outside_by_site = {}, {}
+    for index in ids:
+        ordinal = sections.get((trace['id'], index), {})
+        for r in comparisons[index]['records']:
+            blocks = record_blocks(r)
+            for s in {ordinal[b] for b in blocks if b in ordinal}:
+                inside_section.setdefault(s, {i: [] for i in ids})[index].append(r)
+            if not blocks or any(b not in ordinal for b in blocks):
+                outside_by_site.setdefault(record_site(r, locations), {i: [] for i in ids})[index].append(r)
+    def records(section, sites):
+        if section:
+            per_op = inside_section.get(section, {})
+        elif sites is None:
+            per_op = {i: [] for i in ids}
+            for by_op in outside_by_site.values():
+                for i, rs in by_op.items():
+                    per_op[i].extend(rs)
+        else:
+            per_op = {i: [] for i in ids}
+            for site in sites:
+                for i, rs in outside_by_site.get(site, {}).items():
+                    per_op[i].extend(rs)
+        return [{'records': per_op.get(i, [])} for i in ids]
+    def branch_sites(branches):
+        # the condition sites of the branches' declared comparisons; None
+        # when a branch is an operand exclusion (matched by call site)
+        out = set()
+        for b in branches:
+            if 'operands_excluded' in b:
+                return None
+            name = b['label'].rpartition('=')[0]
+            if name in decisions and decisions[name]['comparison'] is not None:
+                out.add(decisions[name]['comparison']['site'] or decisions[name]['site'])
         return out
     def agree(branches, section):
-        return operand_agreement(trace, {'branches': branches}, records(section), locations, decisions,
-                                 functions, exclusions, excluded)
+        return operand_agreement(trace, {'branches': branches}, records(section, branch_sites(branches)),
+                                 locations, decisions, functions, exclusions, excluded)
     a, b = split_sections(first), split_sections(second)
     if placement_shape(first) != placement_shape(second):
         return [dict(index=None, label='napi placement',

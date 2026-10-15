@@ -885,7 +885,19 @@ def parseTrace (j : Json) : Except String Trace := do
   let napiBeforePut ← if hasPlacement then
       (← (← field j "napi_irq_before_put").getArr?).toList.mapM fun b => b.getBool?
     else pure []
-  if napiBeforePut.length > 8 then throw "napi_irq_before_put: more than 8 entries"
+  -- The ceiling on the placement vector is the records': `Env.napiIrqExit`
+  -- opens a poll only where the next record is a NET_RX section start, so
+  -- the vector can name no more polls than the records hold section starts
+  -- (the W7 tier's receive twin opens about a thousand); without records
+  -- there is no open placement. The former bound of 8 was a budget from
+  -- when open placements were rare, and it refused the check's selection
+  -- run on a loaded host (2026-10-15).
+  let netRxStarts := match hidden with
+    | some perOp => perOp.foldl (fun n recs =>
+        n + (recs.filter (·.site == (HiddenSite.sectionStart .netRx).info.id)).length) 0
+    | none => 0
+  if napiBeforePut.length > netRxStarts then
+    throw "napi_irq_before_put: more entries than NET_RX section starts in the records"
   -- L: "bare"; W8: "foreign-creator"; W4: {"routes": [...]}
   let (bare, foreign, routes) ← if hasFixture then do
       let f ← field j "net_fixture"
