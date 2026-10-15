@@ -70,6 +70,13 @@ def peerPut (peer : Option PeerId) : M Unit := do
   setPeer pid { p with refcount := p.refcount - 1 }
   if ← branch .peerKrefPutReleased (← refcountDecAndTest p.refcount) then
     indexRemove (.handshake pid)   -- `&peer->handshake.entry` (peer.c:211-212)
+    -- rcu_release's `WARN_ON(wg_prev_queue_peek(&tx_queue) || wg_prev_queue_peek(&rx_queue))`
+    -- (peer.c:191): a queued batch holds a reference (Send.lean, Receive.lean),
+    -- so a release with packets queued is a reference slip; the C warns and
+    -- frees, the mirror stops here rather than at a later dangling id (the
+    -- Peer audit's F3)
+    if p.txQueue.peeked.isSome || !p.txQueue.items.isEmpty || p.rxQueue.peeked.isSome || !p.rxQueue.items.isEmpty then
+      invariant "rcu_release: a released peer with packets on its tx_queue or rx_queue (peer.c:191)"
     -- wg_packet_purge_staged_packets: DEV_STATS_ADD(tx_dropped, qlen)
     modifyDev fun d => { d with txDropped := d.txDropped + p.staged.length, peers := d.peers.erase pid }
     -- the peer's work structs and timers are freed with it (rcu_free): their
@@ -329,6 +336,10 @@ def peerCreate (publicKey : Key) (presharedKey : Option Key) : M (Except Int Pee
 def peerMakeDead (pid : PeerId) : M Unit := do
   modifyDev fun d => { d with peerList := d.peerList.filter (· != pid) }   -- list_del_init
   removeByPeer pid
+  -- wg_pubkey_hashtable_remove (peerlookup.c:44-50): `hlist_del_init_rcu`'s
+  -- `if (!hlist_unhashed(n))` (rculist.h:183), the twin of the index remove's
+  -- decision (the Peer audit's F4); the entry is absent either way
+  _ ← branch .pubkeyRemoveHashed ((← getDev).peerHashtable.any (·.2 == pid))
   modifyDev fun d => { d with peerHashtable := d.peerHashtable.filter (·.2 != pid) }
   setPeer pid { (← getPeer pid) with isDead := true }
 

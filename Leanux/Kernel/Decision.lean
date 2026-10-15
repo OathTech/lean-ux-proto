@@ -180,7 +180,7 @@ inductive Decision where
   -- E-A: wg_cookie_message_consume beyond the lookup
   | cookieNoMac1Sent | cookieDecryptOk
   -- drivers/net/wireguard/peerlookup.c
-  | idxMatch | idxFound | idxInsertHashed | idxRemoveHashed
+  | idxMatch | idxFound | idxInsertHashed | idxRemoveHashed | pubkeyRemoveHashed
   -- drivers/net/wireguard/queueing.h
   | cpumaskWrap
   -- drivers/net/wireguard/noise.c
@@ -1194,6 +1194,9 @@ def Decision.info : Decision → DecisionInfo
   -- remove's when both run in one operation (handshake audit I2).
   | .idxInsertHashed => d "wg_index_hashtable_insert.entry_hashed" wpl 125 [] []
   | .idxRemoveHashed => d "wg_index_hashtable_remove.entry_hashed" wpl 196 [] []
+  -- hlist_del_init_rcu's unhashed test (rculist.h:183) inlined at the pubkey
+  -- remove; its arms are the header's lines: no witness (the Peer audit's F4)
+  | .pubkeyRemoveHashed => d "wg_pubkey_hashtable_remove.entry_hashed" wpl 48 [] []
   -- drivers/net/wireguard/queueing.h
   | .cpumaskWrap => d "wg_cpumask_next_online.wrap" wqh 128 [(129, 129)] []
   -- drivers/net/wireguard/noise.c
@@ -2965,7 +2968,7 @@ def Decision.comparison : Decision → Option Comparison
     allowed IPs or trie nodes. Only these may be reported more than
     once in one operation. -/
 def Decision.repeatable : Decision → Bool
-  | .idxInsertHashed | .idxRemoveHashed
+  | .idxInsertHashed | .idxRemoveHashed | .pubkeyRemoveHashed   -- once per peer a replace or a remove-all makes dead
   -- iput runs once per inode an operation releases (a netns close puts several)
   | .iputLastReference | .iputLazytime
   -- TSYNC on one thread: the two thread walks test their loop twice per call
