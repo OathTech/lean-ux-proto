@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.TimerDiscipline.Arming
 import Leanux.Proofs.WG.TimerDiscipline.Jitter
+import Leanux.Proofs.WG.TimerDiscipline.Retry
 
 namespace Leanux.Proofs.WG.TimerDiscipline
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
@@ -92,5 +93,24 @@ theorem original_authenticated_received (pid : PeerId) (p : Peer) :
     Ensures (timersAnyAuthenticatedPacketReceived pid) (fun w => peerAt w pid = some p)
       (fun _ w => peerAt w pid = some (p.setTimer .newHandshake none)) :=
   delTimer_exact pid .newHandshake p
+
+/-- The original retransmit callback increments attempts through 18 to 19,
+then leaves the count unchanged on give-up. Every normal completion preserves
+the peer's allocation identity and retransmit-timer field; rearming belongs
+to the later handshake worker. This is a callback contract, not a whole episode. -/
+theorem original_retransmit_counter (pid : PeerId) (p : Peer) :
+    Ensures (expiredRetransmitHandshake pid) (fun w => peerAt w pid = some p)
+      (fun _ w => ∃ q, peerAt w pid = some q ∧ q.internalId = p.internalId ∧
+        q.timerHandshakeAttempts =
+          (if p.timerHandshakeAttempts > 18 then p.timerHandshakeAttempts else p.timerHandshakeAttempts + 1) ∧
+        q.timerRetransmitHandshake = p.timerRetransmitHandshake) := by
+  intro w result final pre run
+  have effect := expiredRetransmit_retryView pid p.internalId p.timerHandshakeAttempts
+    p.timerRetransmitHandshake w result final (by simp [retryAt, retryView, pre]) run
+  cases resident : peerAt final pid with
+  | none => simp [retryAt, resident] at effect
+  | some q =>
+    refine ⟨q, rfl, ?_⟩
+    simpa [retryAt, retryView, resident, nextAttempts, MAX_TIMER_HANDSHAKES, REKEY_TIMEOUT] using effect
 
 end Leanux.Proofs.WG.TimerDiscipline

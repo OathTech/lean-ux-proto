@@ -5,7 +5,7 @@
 Work is confined to `.worktrees/proofs-campaign-2`, branch `proofs/campaign-2`.
 H1, H3 and H4 have local contracts; their whole-operation/whole-run claims
 remain open. H4 also has a checked reachable internal dump-accounting finding. H5 has a checked batch-completion counterexample and open progress
-obligations. H6 has eleven local timer contracts; whole-run site coverage and
+obligations. H6 has twelve local timer contracts; whole-run site coverage and
 retry/session counting remain open.
 H2 was unblocked by the user's landing notice for `de62c9d` on 2026-10-15.
 Main was merged into this branch at `5033f7a`. No result is claimed complete.
@@ -199,7 +199,8 @@ and fresh stock kernel replay (`capped -- scripts/in-bundle lake env leanchecker
 inherited `CounterWindow.Refinement` and `ReplayWindow.Counterexamples`;
 token/import checks pass. The subsequent shared index frames remain campaign
 1's carry. No mirror edit, cap hit, infrastructure rerun, guest or differential
-run. No new mirror-team request at this checkpoint. Independent review of the
+run. Ranked mirror suggestions for H2: none at this checkpoint; no mirror
+change has been requested to simplify the proofs. Independent review of the
 three matched-entry contracts found no correctness issue; it checked owner
 aliasing, missing-owner versus NULL distinctions, and the exact refcount bound.
 
@@ -512,11 +513,21 @@ were preserved under snapshot refs without moving branches or working files.
 running/live guard, and peer effects of traversal, session derivation, data
 receipt and handshake completion. `Jitter` proves that every successful
 jitter draw is below `HZ / 3 = 83`, including the rejection loop, and frames
-the entire kernel. Eleven terminal statements include the two authenticated
-packet hooks that delete timers. The arm equation uses UInt64 addition and
+the entire kernel. Twelve terminal statements include the two authenticated
+packet hooks that delete timers and the retransmit callback counter rule. The arm equation uses UInt64 addition and
 the signed zero-or-one-tick admissibility gap; it is not a firing-time claim.
 All contracts concern original functions on normal completion. They do not
 assert that malformed record streams succeed.
+
+`Retry` factors retry-mode queueing through the original common suffix and
+proves the original retransmit callback's counter transition: counts through
+18 increment, including 18 to 19; counts above 18 stay unchanged on give-up.
+Normal completion preserves peer allocation identity and the retransmit-timer
+field, including rate-limited/dead-peer returns and already-queued reference
+balancing. The callback itself does not re-arm retransmission; the worker's
+`timersHandshakeInitiated` hook does. Independent review found no issue.
+This is not a completed 19-retry episode: scheduler detachment, actual worker
+rearming and the reset paths still need composition.
 
 The charter's wording needs these source qualifications, with universal
 caller coverage still open: “re-arms on every authenticated traversal” means
@@ -538,10 +549,11 @@ established; ranked mirror suggestions: none.
 
 Effort: capped elaboration, repaired syntax/composition errors and one local
 heartbeat exhaustion; no memory-cap failure. Scoped build and axiom inspection
-pass for all eleven statements using only the three standard axioms. Stock
+pass for all twelve statements using only the three standard axioms. Stock
 kernel replay also passes: `capped -- scripts/in-bundle lake env leanchecker
 --fresh Leanux.Proofs.WG.TimerDiscipline.Statements`. The full
-proof gate was run and fails at inherited `CounterWindow/Refinement.lean`;
+proof gate remains failed at inherited `CounterWindow/Refinement.lean` and
+`ReplayWindow/Counterexamples.lean`;
 its token and import checks pass. No full-gate success or complete H6 result is
 claimed. No mirror changes or guest runs.
 
