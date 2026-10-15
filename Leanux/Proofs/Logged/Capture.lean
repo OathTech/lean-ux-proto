@@ -1,4 +1,4 @@
-import Leanux.Proofs.Logged.Prefix
+import Leanux.Proofs.Logged.ProjectsUnder
 
 /-! Exact original-action execution witnesses, retained only in proof-side
 observations. Capturing an action changes neither its World nor its Stop. -/
@@ -24,6 +24,70 @@ theorem runPrefix_captureRun (a : M α) (w : World) (h : List Event) :
       match a.run w with
       | .error e => (.error e, h)
       | .ok (x, v) => (.ok (⟨x, w, v⟩, v), h) := rfl
+
+/-- Execute the observer once, retaining its actual outgoing journal on both
+success and failure. Only a successful return creates a witness. -/
+def captureObserved (a : PrefixM Event α) : PrefixM Event (RunWitness α) :=
+  fun w => ExceptT.mk fun h =>
+    let out := runPrefix a w h
+    (out.1.map (fun (x, v) => (⟨x, w, v⟩, v)), out.2)
+
+theorem runPrefix_captureObserved (a : PrefixM Event α) (w : World) (h : List Event) :
+    runPrefix (captureObserved a) w h =
+      ((runPrefix a w h).1.map (fun (x, v) => (⟨x, w, v⟩, v)),
+        (runPrefix a w h).2) := rfl
+
+theorem Appends.captureObserved (ha : Appends a) : Appends (captureObserved a) := ha
+
+theorem HistoryFrame.captureObserved (ha : HistoryFrame ρ a) :
+    HistoryFrame ρ (captureObserved a) := ha
+
+theorem PrefixPreserves.captureObserved (ha : PrefixPreserves I S a) :
+    PrefixPreserves I S (captureObserved a) := by
+  intro w h hi
+  obtain ⟨s, he, hs, hn⟩ := ha w h hi
+  refine ⟨s, he, hs, ?_⟩
+  cases hr : (runPrefix a w h).1 with
+  | error e => simp [runPrefix_captureObserved, hr, Except.map]
+  | ok out => simpa [runPrefix_captureObserved, hr, Except.map] using hn
+
+/-- Append a successful receipt without rerunning the action. -/
+def receiptObserved (a : PrefixM Event α) (receipt : RunWitness α → Event) : PrefixM Event α := do
+  let r ← captureObserved a
+  emitPrefix (receipt r)
+  return r.value
+
+theorem runPrefix_receiptObserved (a : PrefixM Event α) (receipt : RunWitness α → Event)
+    (w : World) (h : List Event) :
+    runPrefix (receiptObserved a receipt) w h =
+      match runPrefix a w h with
+      | (.error e, t) => (.error e, t)
+      | (.ok (x, v), t) => (.ok (x, v), t ++ [receipt ⟨x, w, v⟩]) := by
+  rw [receiptObserved, runPrefix_bind, runPrefix_captureObserved]
+  cases runPrefix a w h with
+  | mk out t => cases out <;> rfl
+
+theorem receiptObserved_projects (hr : ∀ r, ρ (receipt r) = none)
+    (ha : ProjectsPrefix ρ id a b) : ProjectsPrefix ρ id (receiptObserved a receipt) b := by
+  intro w h
+  rw [ha w h, runPrefix_receiptObserved]
+  cases runPrefix a w h with
+  | mk out t => cases out <;> simp [List.filterMap_append, hr]
+
+theorem receiptObserved_projectsUnder (hr : ∀ r, ρ (receipt r) = none)
+    (ha : ProjectsUnder I ρ a b) : ProjectsUnder I ρ (receiptObserved a receipt) b := by
+  intro w h hi
+  rw [ha w h hi, runPrefix_receiptObserved]
+  cases runPrefix a w h with
+  | mk out t => cases out <;> simp [List.filterMap_append, hr]
+
+theorem Appends.receiptObserved (ha : Appends a) : Appends (receiptObserved a receipt) :=
+  ha.captureObserved.bind (fun _ =>
+    (show Appends (emitPrefix _) from fun _ _ => ⟨[_], rfl⟩).bind (fun _ => Appends.pure _))
+
+theorem HistoryFrame.receiptObserved (ha : HistoryFrame ρ a)
+    (hr : ∀ r, ρ (receipt r) = none) : HistoryFrame ρ (receiptObserved a receipt) :=
+  ha.captureObserved.bind (fun r => (HistoryFrame.emit _ (hr r)).bind (fun _ => HistoryFrame.pure _ _))
 
 theorem captureRun_bind_erases (a : M α) (g : RunWitness α → PrefixM Event β)
     (f : α → M β) (he : ∀ r, ErasesPrefix (g r) (f r.value)) :

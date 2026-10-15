@@ -3,32 +3,29 @@
 ## Progress
 
 Work on `proofs/campaign` in `.worktrees/proofs-campaign` follows [the charter](2026-10-13-charter-proof-campaign.md),
-over unchanged mirror `de62c9d`. The local R3 nullable-affiliation extension builds and passes the proof gate, fresh
-kernel replay and fast tier. Initialized R3 packet authorization and R4 completion/conservation remain open. The
-[register](proofs.md#results) holds pins/counts; the [model map](proofs.md#layers) supplies full module/refinement
-details. No main integration, push, differential check or guest run was made by this campaign.
+over unchanged mirror `de62c9d`. R4 local/persistent callback completion compiles; initialized R3 packet authorization
+and R4 completion/conservation remain open. The [register](proofs.md#results) holds pins/counts; the
+[model map](proofs.md#layers) supplies refinement details. No main integration, push, differential check or guest run
+was made by this campaign.
 
 | Result | Disposition |
 | --- | --- |
 | R1 | Replay uniqueness proved; inclusive-floor correction witnessed. |
 | R2 | Initialized allocation-identity access safety proved, including failures/trials; affiliation/credits separate. |
 | R3 | Parsed initialized routing histories and local nullable affiliation; initialized packet binding open. |
-| R4 | Initialized callback-entry stamp uniqueness proved; chronological GRO order refuted; completion/conservation open. |
+| R4 | Initialized entry uniqueness and local/persistent callback completion; chronology refuted; Runner completion/conservation open. |
 | R5 | Accepted age/post-zero/wire-nonce counterexamples; thirteen positive local contracts. |
 | R6 | Cookie exclusion proved; literal MAX=18 refuted, without a replacement universal bound. |
 
-**Validation.** Scoped/full builds pass 398/476 jobs; the gate passes all 480 declarations (478 theorems/two
-definitions, 120 R3/109 R4), with only `propext`, `Classical.choice`, `Quot.sound`. All 477 preceding terminal bodies
-are unchanged. Default build passes 60 jobs; 124 unit tests pass in 25.440 seconds, one skip. Fresh stock kernel replay
-exits zero with empty diagnostics. Exact scope/compatibility/token/import/whitespace/mirror checks and independent
-frozen review pass.
-The coordinator's first exact script failed with SyntaxError before checks due to replacement-string interpolation; its
-regenerated script passed.
+**Validation.** Callback completion passes scoped/full builds (334/477 jobs), the 483-declaration gate with only
+permitted axioms, fresh stock kernel replay, the 60-job default build and 124 tests (24.775s, one skip).
+Source has 481 theorems/two definitions (120 R3/112 R4), preserving all 480 preceding terminal bodies.
+Baseline `bcbf733` passed the same checks for 480 declarations. Its first coordinator exact script failed with
+SyntaxError before checks; the regenerated script passed.
 
-Preceding carry `a0cf252` passed fresh replay, 60/118-job default/executable builds, 124 tests and eleven recipes: nine
-accepted original/observer agreements and two pending-dump rejections with accepted pre-delete boundaries. Recipes are
-not rerun for this proof-only extension. Historical validation/effort is in checkpoint commits, including `6010243` and
-Lean 4.35 carry `b1ec9e8`.
+Carry `a0cf252` passed eleven recipes: nine accepted agreements and two pending-dump rejections with accepted
+pre-delete boundaries. Those Runner recipes were not rerun: their observers are unchanged. No differential/guest run
+was made. Historical ledgers: `6010243`, `bcbf733` and Lean 4.35 carry `b1ec9e8`.
 
 ```sh
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle scripts/proof-gate
@@ -249,16 +246,17 @@ correspondence remains informal.
 
 **Original versus proved.** The charter requires accepted-schedule order and no silent loss/duplication.
 [Terminals](../Leanux/Proofs/WG/DeliveryOrder/Statements.lean) prove initialized committed callback-entry stamp
-uniqueness for every typed Trace and both flags, including Stops. Chronological GRO order is false; successful Stack
-completion and joint conservation remain open.
+uniqueness for every typed Trace and both flags, including Stops. Chronological GRO order is false. Local/persistent
+polls now pair entries with actual normal Stack returns; caller/Runner completion and joint conservation remain open.
 
-**Architecture.** The map links the complete refinement chain:
+**Architecture.** Refinement chain:
 
 | Layer | Abstraction/refinement |
 | --- | --- |
 | RingGeometry/Steps, journals/occurrences, RX/TX source journals | Stale physical slots/live FIFO, finite occurrence conservation and original installed mutations; Stop prefixes separate from endpoints. |
 | PrevQueue/RxQueueView, poll/GRO tags/provenance | Cached peek, deletion-permitting cell frames and exact bytes/origins; selected order, not chronology. |
 | [Joint projection](../Leanux/Proofs/WG/Queues/RxPollJointProjection.lean), stamp phase/support/history | Same execution's original/GRO/lifetime correspondence, actual read support, uniqueness and normal release. |
+| [Callback completion](../Leanux/Proofs/WG/Queues/RxPollCompletion.lean) | Ordered entry/normal-return pairs; failed prefixes retain at most one unfinished entry. |
 | Concrete caller spine, [Runner history](../Leanux/Proofs/WG/Queues/RxRunnerHistory.lean) | Same-history full R2 audit, isolated trials, actual returned Worlds and initialized entry uniqueness. |
 | Borrow/TX disposition, [endpoints](../Leanux/Proofs/WG/Queues/TxDispositionEndpoints.lean) | Adjacent repayment and original admission/publication/removal/disposal cuts. |
 
@@ -313,13 +311,17 @@ releases; failed BoundarySafe does not. Ordinals restart at zero. Held bytes may
 `rxPollFree=false` includes `consumeDataDone=none`; drops and handoffs both free storage, so neither flag nor free alone
 gives a disposition.
 
-**Caller coverage.** Both direct polls/IRQ rescan, crypt workers/cryptAhead, activation/scheduling, both flood modes,
-NET_RX batch, timers/controls and complete syscalls/Runner are observed literally. Guards/scans/section order,
-normal-negative cleanup and Stops remain exact. Encryption keeps initial softirq; publication IRQ may free the packet
-before its caller returns. CryptAhead retains temporary queues, suspension and late Stops. Actual filter markers
-preserve isolated candidate trials, never committed entries. Result-sensitive outer composition uses the actual World
-and full R2 audit at the same history. No parser, length, success, drain, credit, residency, progress or
-initial-allocation premise is added. Entry precedes Stack and survives its failure; it is not completion.
+**Caller coverage.** Polls/IRQ, crypt/cryptAhead, scheduling, flood/batch, timers/controls and syscalls/Runner retain
+guards, section order, negative-errno cleanup and Stops. Publication IRQ may free its packet before return; encryption
+keeps initial softirq, CryptAhead temporary queues/suspension/late Stops. Filter markers isolate trials. Composition
+uses returned Worlds and identical full R2 history, without
+parser, length, success, drain, credit, residency, progress or initial-allocation premises.
+
+**Callback completion.** `captureObserved` runs the existing observer once at its actual World/history, preserving
+failed journals. Entry precedes Stack; normal return appends actual value/World receipts, erased by old decoders.
+Closed/CompletionPrefix prove ordered valid Stack-return pairs and matching old entries for local/persistent finite
+polls, without allocation/progress premises. Only the new suffix is promoted at the same seed. This proves neither
+inbox/reply success nor caller/Runner completion.
 
 **Source-comment finding.** Independent review (2026-10-15 01:35:32–01:40:05) found `PeerRemove.lean:30,110–122` relying
 in prose on `requireNotPending`, actually `State.lean:102`'s `pure ()`. Later inspection found the same in
@@ -327,14 +329,18 @@ in prose on `requireNotPending`, actually `State.lean:102`'s `pure ()`. Later in
 quiescence. No accepted loss/ duplication witness was found: arbitrary last-peer erasure is not initialized, and the
 poll's last-put candidate Stops at a later getter. No kernel bug claim.
 
-**Remaining obligations.** Actual successful Stack completion, affiliation/credits, worker-local ownership and RX
+**Remaining obligations.** Caller/initialized Runner completion propagation, affiliation/credits, worker-local ownership and RX
 conservation, including relevant TX callbacks. Stores/rings/queues/locals/GRO overlap; counts cannot be added. Named
 rejection, validation, keepalive, purge/free and handoff dispositions need proof. Queue idleness does not empty
 stores/peer queues; finite prefixes retain pending obligations. W7 item/mark transport remains open.
 
-**Effort/process/review.** Slice ledgers: `00fafa4`, `57cb46e`, `c4ef635`, `ec95fa8`, `3dec2c3`, `79dce53`, `1b76322`,
-`983f84b`. Joint polling used 32 calls/35m11s to full success; failed calls 16/23 printed recovery sorry terms and call
-20 hit the existing two-million-heartbeat limit. Corrected source passed gates without admissions/limit escalation.
+**Effort/process/review.** R4 ledgers are in `00fafa4`, `57cb46e`, `c4ef635`, `ec95fa8`, `3dec2c3`, `79dce53`, `1b76322`,
+`983f84b`. Earlier joint-poll failures 16/23 printed recovery sorry terms; call 20 hit the existing two-million-heartbeat
+limit; corrected source passed gates. Receipt work: grant 04:47:00, acceptance 04:47:40, full-build result collected
+05:16:10 (28m30s), handback 05:18:34. Eleven worker builds had four passes/seven ordinary failures; its exact check
+passed. Coordinator gate, fresh replay, default build and units passed. These are collected effort times, not compile durations.
+Call 03 printed two `declaration uses sorry` recovery warnings and rejected a kernel declaration with metavariables
+after namespace/elaboration errors. Corrected builds are clean; no source admission, limit/cap change or interruption.
 
 Runner work used fifteen calls/29m04s to full success, including interrupted FAIL130. An unnecessary duplicate build
 followed a failed edit script and was deliberately interrupted; a corrective edit then occurred **before preservation**,

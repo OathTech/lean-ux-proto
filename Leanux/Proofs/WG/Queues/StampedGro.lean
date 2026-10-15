@@ -1,11 +1,13 @@
 import Leanux.Proofs.Logged.ProjectsUnderTo
+import Leanux.Proofs.Logged.Capture
 import Leanux.Proofs.WG.Queues.RxPollGro
 import Leanux.Proofs.WG.Lifetimes.BatchNapi
 
 /-! One journal carries original lifetime accesses and captured receive
 identities through the original GRO lists. Entry precedes the actual stack
-callback, including a callback which Stops. No residency of held payloads is
-asserted: their original packet storage may already have been freed. -/
+callback, including a callback which Stops. A receipt is appended only after
+its actual normal return. No residency of held payloads is asserted: their
+original packet storage may already have been freed. -/
 set_option maxHeartbeats 2000000
 set_option pp.structureInstances false
 namespace Leanux.Proofs.WG.Queues.RxJoint
@@ -20,6 +22,7 @@ inductive Event where
   | removed (occurrence : Nat) (skb : SkbId) (stamp : PacketStamp)
   | buffered (entry : Entry)
   | entered (entry : Entry)
+  | completed (entry : Entry) (witness : RunWitness Unit)
 
 def accessEvent : Event → Option LifetimeEvent | .access e => some e | _ => none
 def groEvent : Event → Option GroEvent
@@ -27,6 +30,7 @@ def groEvent : Event → Option GroEvent
   | .removed n id _ => some (.removed n id)
   | .buffered e => some (.buffered e.tag)
   | .entered e => some (.entered e.tag)
+  | .completed _ _ => none
 
 abbrev Obs := PrefixM Event
 def access (a : MixedM α) : Obs α := focusPrefix Event.access accessEvent a
@@ -53,7 +57,7 @@ def Gro.erase (g : Gro) : GroState := g.forget.erase
 
 def enter (e : Entry) : Obs Unit := do
   emitPrefix (.entered e)
-  access (stackReceivePrefix e.tag.bytes)
+  receiptObserved (access (stackReceivePrefix e.tag.bytes)) (Event.completed e)
 
 def flush (entries : List Entry) : Obs Unit := entries.forM enter
 
@@ -83,7 +87,8 @@ theorem enter_gro (e : Entry) :
     ProjectsPrefix groEvent id (enter e) (enterGro e.tag) := by
   unfold enter enterGro
   exact projectsPrefix_bind groEvent id id (projectsPrefix_emit _ _)
-    (fun _ => access_gro (stackReceivePrefix_erases _))
+    (fun _ => receiptObserved_projects (fun _ => rfl)
+      (access_gro (stackReceivePrefix_erases _)))
 
 theorem flush_gro (entries : List Entry) :
     ProjectsPrefix groEvent id (flush entries) (flushGro (entries.map Entry.tag)) := by
@@ -151,7 +156,8 @@ theorem stackFlush_allocation (bytes : List (List UInt8)) :
 
 theorem enter_access (e : Entry) :
     ProjectsUnder AllocationInv accessEvent (enter e) (stackReceivePrefix e.tag.bytes) := by
-  exact projectsUnder_emit_bind _ rfl (access_projects (stack_allocation _))
+  exact projectsUnder_emit_bind _ rfl
+    (receiptObserved_projectsUnder (fun _ => rfl) (access_projects (stack_allocation _)))
 
 theorem flush_access (entries : List Entry) :
     ProjectsUnder AllocationInv accessEvent (flush entries)

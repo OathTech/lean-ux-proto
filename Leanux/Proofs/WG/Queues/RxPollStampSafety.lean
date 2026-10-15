@@ -36,7 +36,7 @@ theorem flush_appends (entries : List Entry) : Appends (flush entries) := by
   | nil => exact Appends.pure _
   | cons e rest ih =>
     simp only [flush, List.forM_eq_forM, List.forM_cons] at *
-    exact Appends.bind (Appends.bind (emit_appends _) (fun _ => Appends.focus _ _ _)) (fun _ => ih)
+    exact Appends.bind (Appends.bind (emit_appends _) (fun _ => (Appends.focus _ _ _).receiptObserved)) (fun _ => ih)
 
 theorem normalList_appends (g : Gro) : Appends (normalList g) := by
   unfold normalList
@@ -167,7 +167,7 @@ theorem enter_suffix (e : Entry) (w : World) (h : List Event) :
     ∃ suffix, (runPrefix (enter e) w h).2 = h ++ [.entered e] ++ suffix := by
   unfold enter
   rw [runPrefix_bind, runPrefix_emit]
-  exact Appends.focus _ _ _ w (h ++ [.entered e])
+  exact (access_appends _).receiptObserved w (h ++ [.entered e])
 
 /-- Original GRO selection and occurrence provenance transfer through the
 same joint execution. These are local occurrence facts, not stamp uniqueness. -/

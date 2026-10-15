@@ -19,6 +19,7 @@ import Leanux.Proofs.WG.Queues.TxDispositionEndpoints
 
 import Leanux.Proofs.WG.Queues.RxPollStampPhase
 import Leanux.Proofs.WG.Queues.RxPollComposition
+import Leanux.Proofs.WG.Queues.RxPollCompletion
 import Leanux.Proofs.WG.Queues.RxNapiHistory
 import Leanux.Proofs.WG.Queues.RxActivationHistory
 import Leanux.Proofs.WG.Queues.RxScheduleHistory
@@ -1360,5 +1361,48 @@ theorem initialized_runner_joint (trace : Leanux.Runner.Trace) (placeholders flo
     Queues.RxHistory.executeTraceHistory_safe trace placeholders floodExact,
     Queues.RxHistory.executeTraceHistory_projects trace placeholders floodExact,
     Queues.RxHistory.executeTraceHistory_trials trace placeholders floodExact⟩
+
+/-- The callback observer runs the actual Stack operation once. Entry is before
+it; a receipt contains its actual entry/return Worlds only on normal return.
+A Stop retains the actual callback access prefix and produces no receipt. -/
+theorem original_callback_return_execution (e : Queues.RxJoint.Entry)
+    (w : World) (h : List Queues.RxJoint.Event) :
+    Logged.ErasesPrefix (Queues.RxJoint.enter e) (Leanux.Env.Stack.receive e.tag.bytes) ∧
+    runPrefix (Queues.RxJoint.enter e) w h =
+      match runPrefix (Queues.RxJoint.access (Lifetimes.stackReceivePrefix e.tag.bytes))
+          w (h ++ [.entered e]) with
+      | (.error stop, t) => (.error stop, t)
+      | (.ok (x, v), t) => (.ok (x, v), t ++ [.completed e ⟨x, w, v⟩]) :=
+  ⟨Queues.RxCompletion.enter_erases e, Queues.RxCompletion.enter_run e w h⟩
+
+/-- Every local poll obeys ordered callback pairing, without allocation or
+progress assumptions. Normal return matches all entered callbacks with valid
+original Stack receipts; a failed prefix may leave one final entry unmatched. -/
+theorem original_poll_callback_completion (pid : PeerId) (budget : Nat) :
+    Queues.RxCompletion.Preserves Queues.RxCompletion.jointEvent (Queues.RxJoint.poll pid budget) ∧
+    ∀ w h, Queues.RxCompletion.Closed Queues.RxCompletion.jointEvent h →
+      ∀ n v, (runPrefix (Queues.RxJoint.poll pid budget) w h).1 = .ok (n, v) →
+        let t := (runPrefix (Queues.RxJoint.poll pid budget) w h).2.filterMap Queues.RxCompletion.jointEvent
+        Queues.RxJoint.entries (runPrefix (Queues.RxJoint.poll pid budget) w h).2 =
+          t.filterMap Queues.RxCompletion.completed ∧
+          ∀ e r, Queues.RxCompletion.Step.completed e r ∈ t →
+            r.Valid (Leanux.Env.Stack.receive e.tag.bytes) :=
+  ⟨Queues.RxCompletion.poll_preserves pid budget,
+    fun w h hi n v hr => by
+      simpa only [Queues.RxCompletion.joint_entries] using Queues.RxCompletion.normal_receipts
+        (Queues.RxCompletion.poll_preserves pid budget) w h hi n v hr⟩
+
+/-- Actual persistent polls append only the fresh local suffix and preserve
+ordered callback pairing at the identical incoming audit seed. This includes
+finite poll sequences and Stops; it is not yet caller/Runner completion closure,
+socket inbox delivery, or receive-pipeline conservation. -/
+theorem persistent_poll_callback_completion (pid : PeerId) (budget : Nat)
+    (calls : List (PeerId × Nat)) :
+    Queues.RxCompletion.Preserves Queues.RxCompletion.historyEvent
+      (Queues.RxHistory.observePoll pid budget) ∧
+    Queues.RxCompletion.Preserves Queues.RxCompletion.historyEvent
+      (Queues.RxHistory.polls calls) :=
+  ⟨Queues.RxCompletion.observePoll_preserves pid budget,
+    Queues.RxCompletion.polls_preserves calls⟩
 
 end Leanux.Proofs.WG.DeliveryOrder

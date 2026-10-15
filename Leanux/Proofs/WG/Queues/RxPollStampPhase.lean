@@ -211,7 +211,9 @@ theorem flush_removed (entries : List Entry) : HistoryFrame removedStamp (flush 
     simp only [flush, List.forM_eq_forM, List.forM_cons] at *
     exact HistoryFrame.bind
       (HistoryFrame.bind (HistoryFrame.emit _ rfl) (fun _ =>
-        fun w h => focusPrefix_other Event.access accessEvent removedStamp (fun _ => rfl) _ w h))
+        (show HistoryFrame removedStamp (access _) from
+          fun w h => focusPrefix_other Event.access accessEvent removedStamp (fun _ => rfl) _ w h).receiptObserved
+          (fun _ => rfl)))
       (fun _ => ih)
 
 theorem normalList_removed (g : Gro) : HistoryFrame removedStamp (normalList g) := by
@@ -499,7 +501,15 @@ theorem context_enter (g : Gro) (extra : List EntryKey) (e : Entry)
       · simpa only [hr] using hi.held
       · simpa only [hr] using hi.extra
     exact ⟨[.entered e], rfl, hc.entered, hc⟩
-  · intro _; exact context_access g extra _
+  · intro _
+    exact context_quiet g extra _
+      ((show HistoryFrame removedKey (access _) from
+        fun w h => focusPrefix_other Event.access accessEvent removedKey (fun _ => rfl) _ w h).receiptObserved
+        (fun _ => rfl))
+      ((show HistoryFrame enteredEntry (access _) from
+        fun w h => focusPrefix_other Event.access accessEvent enteredEntry (fun _ => rfl) _ w h).receiptObserved
+        (fun _ => rfl))
+      (access_appends _).receiptObserved
 
 theorem context_flush (g : Gro) (extra : List EntryKey) (es : List Entry)
     (hin : ∀ e ∈ es, e ∈ g.rxList ++ g.held) :

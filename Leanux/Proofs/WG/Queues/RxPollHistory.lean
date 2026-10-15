@@ -14,6 +14,7 @@ inductive Event where
   | removed (occurrence : Nat) (skb : SkbId) (stamp : PacketStamp)
   | buffered (entry : RxJoint.Entry)
   | entered (entry : RxJoint.Entry)
+  | completed (entry : RxJoint.Entry) (witness : RunWitness Unit)
 
 def auditEvent : Event → Option AuditEvent | .audit e => some e | _ => none
 def entryEvent : Event → Option RxJoint.Entry | .entered e => some e | _ => none
@@ -29,6 +30,7 @@ def promote : RxJoint.Event → Event
   | .removed n skb s => .removed n skb s
   | .buffered e => .buffered e
   | .entered e => .entered e
+  | .completed e r => .completed e r
 
 theorem promote_audit (s : List RxJoint.Event) :
     auditHistory (s.map promote) = (s.filterMap RxJoint.accessEvent).map AuditEvent.lifetime := by
