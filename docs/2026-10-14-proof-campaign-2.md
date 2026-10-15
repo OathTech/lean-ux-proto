@@ -5,7 +5,7 @@
 Work is confined to `.worktrees/proofs-campaign-2`, branch `proofs/campaign-2`.
 H1, H3 and H4 have local contracts; their whole-operation/whole-run claims
 remain open. H4 also has a checked reachable internal dump-accounting finding. H5 has a checked batch-completion counterexample and open progress
-obligations. H6 has twenty-two local timer contracts; whole-run site coverage and
+obligations. H6 has twenty-four local timer contracts; whole-run site coverage and
 retry/session counting remain open.
 H2 was unblocked by the user's landing notice for `de62c9d` on 2026-10-15.
 Main was merged into this branch at `5033f7a`. No result is claimed complete.
@@ -666,6 +666,17 @@ shared `Keypairs.Frames.peekUnit_spec` avoids editing the shared layer; no layer
 is copied. Independent review found no defect in the source factor, frames,
 provenance or two terminal scopes. These are individual-dispatch contracts,
 not firing-order, whole-run coverage or universal retry-episode claims.
+`InitiationArm` connects the retransmit arm hook to original
+`sendHandshakeInitiation` by an exact source factor, retaining the rate-limit
+and creation exits, every intervening operation and all branch logs. Two
+terminals expose the reached/skipped continuation and compose the original
+caller-read/jitter deadline at the actual post-prefix state. Socket-send
+success is not inferred: the caller ignores that return. This does not yet
+frame the entire send from entry or count a retry episode. Independent review
+found no mathematical or source-linkage defect; its wording correction from
+“recorded read” to “original caller-read result” was applied, since armRecords
+alone does not exclude placeholder execution.
+
 Remaining work: completed retry-episode counting and source-complete caller
 coverage for traversal and session derivation. No H6 mirror mismatch has been
 established; ranked mirror suggestions: none.
@@ -678,7 +689,7 @@ assumed. The dispatcher factor needed explicit failure-bind equations and a
 shared case split on the due list after ordinary elaboration failures; an overly
 broad simplification reached recursion depth and was replaced by bounded
 rewrites. No resource limit was raised. Scoped build and axiom inspection
-pass for all twenty-two statements using only the three standard axioms. Stock
+pass for all twenty-four statements using only the three standard axioms. Stock
 kernel replay also passes: `capped -- scripts/in-bundle lake env leanchecker
 --fresh Leanux.Proofs.WG.TimerDiscipline.Statements`. The full
 proof gate remains failed at inherited `CounterWindow/Refinement.lean` and

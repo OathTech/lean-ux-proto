@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TimerDiscipline.InitiationArm
 import Leanux.Proofs.WG.TimerDiscipline.Arming
 import Leanux.Proofs.WG.TimerDiscipline.Jitter
 import Leanux.Proofs.WG.TimerDiscipline.Retry
@@ -295,5 +296,39 @@ theorem original_retransmit_dispatch (pid : PeerId) (jHi : UInt64)
           .ok ((pid, .retransmitHandshake), selected))
       (fun _ w => retryAt w pid = some (identity, nextAttempts attempts, none)) :=
   fireTimer_retransmit pid jHi identity attempts timer
+
+/-- Every normal original handshake send either exits in its actual prefix
+or executes the final retransmit arm hook. Reaching the hook means creation
+succeeded, not that the ignored socket-send result was successful. The prefix
+retains rate-limit and creation decisions and every intervening operation. -/
+theorem original_initiation_arm_path (pid : PeerId) (initial final : World)
+    (run : (sendHandshakeInitiation pid).run initial = .ok ((), final)) :
+    ∃ reached beforeArm,
+      (initiationArmPrefix pid).run initial = .ok (reached, beforeArm) ∧
+      if reached then (timersHandshakeInitiated pid).run beforeArm = .ok ((), final)
+      else final = beforeArm :=
+  sendInitiation_arm_execution pid initial final run
+
+/-- When the original initiation-send prefix reaches the hook with a live peer
+on a running device, a normal arm-record-mode completion stores the original
+caller-read result plus rekey delay and bounded jitter. Premises concern the actual
+post-prefix state; this does not frame the send from function entry, establish
+a full retry episode or prove a successful network transmission. -/
+theorem original_initiation_send_arm (pid : PeerId) (d : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p) (running : d.running = true) (alive : p.isDead = false)
+    (initial afterPrefix final : World)
+    (hprefix : (initiationArmPrefix pid).run initial = .ok (true, afterPrefix))
+    (device : afterPrefix.k.wg = some d) (records : afterPrefix.armRecords = true)
+    (run : (sendHandshakeInitiation pid).run initial = .ok ((), final)) :
+    ∃ caller afterRead jitter afterJitter,
+      (callerJiffies .timerJiffiesHandshakeInitiated).run afterPrefix = .ok (some caller, afterRead) ∧
+      (jitterBelowRekeyTimeout .retransmitJitter).run afterRead = .ok (jitter, afterJitter) ∧
+      jitter < HZ / 3 ∧
+      peerAt final pid = some (p.setTimer .retransmitHandshake
+        (some (caller + (REKEY_TIMEOUT_TICKS + jitter).toUInt64))) ∧
+      ∃ now, final.jiffiesLast = some now ∧
+        0 ≤ (now - caller).toInt64 ∧ (now - caller).toInt64 ≤ 1 :=
+  sendInitiation_arm_recorded pid d p resident running alive initial afterPrefix final
+    hprefix device records run
 
 end Leanux.Proofs.WG.TimerDiscipline
