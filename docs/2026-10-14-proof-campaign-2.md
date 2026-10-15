@@ -594,7 +594,17 @@ coverage and the frame from probing to execution after detachment remain open.
 No statement assumes that a successful probe guarantees successful detached
 execution.
 
-The eighteen H5 statements pass scoped build, standard-axiom inspection and
+`RecordedTurn` adds four recorded dispatch/NAPI contracts. Scheduler
+continuation at a worker start is equivalent to original dispatch selecting,
+reading the start record and executing the activation. Normal no-work returns
+and exact dispatch errors are distinguished. A normal NAPI turn executes the
+original poll and its second peek; another NET_RX start returns to the caller,
+otherwise the turn continues. Both peek Worlds are retained because ambient
+records can be consumed. Independent read-only review found no defect. These
+contracts do not assert poll-state framing, queue drainage, productive record
+decrease or whole-loop completion.
+
+The twenty-two H5 statements pass scoped build, standard-axiom inspection and
 stock kernel replay (`leanchecker --fresh Leanux.Proofs.WG.Progress.Statements`,
 through the capped bundle). The
 full gate was rerun and fails at the same inherited counter refinement; token

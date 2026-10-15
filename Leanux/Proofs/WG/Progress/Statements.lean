@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Progress.RecordedTurn
 import Leanux.Proofs.WG.Progress.BatchBacklog
 import Leanux.Proofs.WG.Progress.Scheduler
 import Leanux.Proofs.WG.Progress.Dispatch
@@ -190,5 +191,58 @@ theorem original_turn_stack_error (worker : Worker) (initial afterPeek : World) 
     (failed : (Activation.hasWork { worker }).run afterPeek = .error err) :
     (scheduleTurn (some worker)).run initial = .error err :=
   turn_stack_error worker initial afterPeek next d a err records peek noStart device noPoll candidates failed
+
+/-- At a recorded worker start, the original scheduler continues exactly
+when dispatch actually selects an activation, consumes its start read and
+executes it. The initial peek may consume ambient records. -/
+theorem original_turn_dispatch_runs (stack : Option Worker) (worker : Worker)
+    (initial afterPeek final : World) (next : Option Nat)
+    (records : initial.hidden.isNone = false)
+    (peek : peekHiddenSite.run initial = .ok (next, afterPeek))
+    (start : next.bind sectionOf = some (worker, true)) :
+    (scheduleTurn stack).run initial = .ok (turnContinue, final) ↔ DispatchRun worker afterPeek final :=
+  turn_dispatch_continue_iff stack worker initial afterPeek final next records peek start
+
+/-- At a recorded worker start, the original scheduler returns exactly when
+the original dispatch prefix finds no activation. This is not a global queue
+or pending-work emptiness assertion. -/
+theorem original_turn_dispatch_empty (stack : Option Worker) (worker : Worker)
+    (initial afterPeek final : World) (next : Option Nat)
+    (records : initial.hidden.isNone = false)
+    (peek : peekHiddenSite.run initial = .ok (next, afterPeek))
+    (start : next.bind sectionOf = some (worker, true)) :
+    (scheduleTurn stack).run initial = .ok (turnReturn, final) ↔
+      (dispatchPrefix worker).run afterPeek = .ok (none, final) :=
+  turn_dispatch_return_iff stack worker initial afterPeek final next records peek start
+
+/-- A failed original dispatch at a recorded worker start propagates its exact
+stop through the scheduler turn; it cannot become a no-work return. -/
+theorem original_turn_dispatch_error (stack : Option Worker) (worker : Worker)
+    (initial afterPeek : World) (next : Option Nat) (err : Stop)
+    (records : initial.hidden.isNone = false)
+    (peek : peekHiddenSite.run initial = .ok (next, afterPeek))
+    (start : next.bind sectionOf = some (worker, true))
+    (failed : (Leanux.Env.dispatch worker).run afterPeek = .error err) :
+    (scheduleTurn stack).run initial = .error err :=
+  turn_dispatch_error stack worker initial afterPeek next err records peek start failed
+
+/-- On the original recorded NET_RX branch, a normal turn actually executes
+NAPI and the post-poll peek. It returns when that peek still names NET_RX,
+leaving the section to its caller; otherwise it continues. No poll-state frame,
+queue-drain assertion or productive-record-decrease claim is made. -/
+theorem original_turn_napi (stack : Option Worker) (initial afterPeek final : World) (next : Option Nat)
+    (d : WG.Device) (result : TurnResult) (records : initial.hidden.isNone = false)
+    (peek : peekHiddenSite.run initial = .ok (next, afterPeek))
+    (noStart : ∀ worker, next.bind sectionOf ≠ some (worker, true))
+    (device : afterPeek.k.wg = some d)
+    (poll : (next == some (HiddenSite.sectionStart .netRx).info.id &&
+      d.peers.toList.any (·.2.napiScheduled)) = true)
+    (run : (scheduleTurn stack).run initial = .ok (result, final)) :
+    ∃ afterPoll nextAfter,
+      napiSoftirq.run afterPeek = .ok ((), afterPoll) ∧
+      peekHiddenSite.run afterPoll = .ok (nextAfter, final) ∧
+      result = if nextAfter == some (HiddenSite.sectionStart .netRx).info.id then turnReturn else turnContinue := by
+  rw [turn_napi stack initial afterPeek next d records peek noStart device poll] at run
+  exact napiTurn_execution afterPeek final result run
 
 end Leanux.Proofs.WG.Progress
