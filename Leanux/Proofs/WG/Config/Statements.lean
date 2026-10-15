@@ -9,6 +9,7 @@ import Leanux.Proofs.WG.Config.AllowedTransferReadbackSource
 import Leanux.Proofs.WG.Config.RemoveFlagRequestSource
 import Leanux.Proofs.WG.Config.ReplacementConverseRequestSource
 import Leanux.Proofs.WG.Config.RemoveAllObservationSource
+import Leanux.Proofs.WG.Config.ReplacePeersRequestClaims
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
@@ -1091,5 +1092,24 @@ theorem original_peer_remove_all_phase_order :
     · intro entry pre
       rw [observedRemoveAll_erase]
     · exact observedRemoveAll_facts
+
+/-- A flag-only REPLACE_PEERS request retains the original selection, generation
+update, branch records and cleanup, including errors. Present cuts carry the
+actual remove-all phase facts. With a selected resident device, every normal
+return has such a cut and result zero. The shape/residency premises of those
+phase facts concern the actual post-free device; no completion, final peer
+erasure, free correctness, or mixed-attribute contract is asserted. -/
+theorem original_replace_peers_phase_order (selector : DeviceRef) (d : Device) :
+    Campaign2.AgreesOn (fun _ => True)
+      (do let result ← observedReplacePeers selector; pure result.2)
+      (wgSetDevice (replacePeersAttrs selector)) ∧
+    Campaign2.Ensures (observedReplacePeers selector) (fun _ => True)
+      (fun result _ => ∀ cut, result.1 = some cut → result.2 = 0 ∧ RemoveAllFacts cut) ∧
+    Campaign2.Ensures (observedReplacePeers (byIndex d))
+      (fun s => s.wg.device = some d ∧ ClaimView.selectsDevice s d)
+      (fun result _ => ∃ cut, result = (some cut, 0) ∧ RemoveAllFacts cut) := by
+  refine ⟨?_, observedReplacePeers_facts selector, observedReplacePeers_selected d⟩
+  intro entry pre
+  rw [observedReplacePeers_erase]
 
 end Leanux.Proofs.WG.Config
