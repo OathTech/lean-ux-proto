@@ -192,13 +192,26 @@ run and using the returned clock in the final state, with wrapping arithmetic.
 Independent review confirmed that relation. The read may use placeholders where
 enabled; captured-record provenance is not established by this theorem.
 
-The quiet private-key block now composes identity installation, cookie-key
-recomputation and the snapshotted peer-list loop. Its ordered relation records
-resident peers and intermediate stores, allowing repeated peers and aliased
-keypair slots. An unconditional source equality connects the factor to the
-original configuration continuation. The premise is that the code's staged-send
-condition is false; normal completion is assumed, and loop clocks remain
-existential. Independent review found no semantic defect in this increment.
+The private-key installation block now composes identity installation,
+cookie-key recomputation and the snapshotted peer-list loop for both staged-send
+settings. Its ordered relation records resident peers and intermediate stores,
+allowing repeated peers and aliased keypair slots. An unconditional source
+equality connects the factor to the original configuration continuation.
+
+Expiry invalidates current sending material before staging. The original
+staging contract proves exact Device effects: an empty staged list is unchanged;
+otherwise packets are restored, temporary key references preserve lookups, and
+handshake queueing resets attempts and may retain a queued peer reference.
+Already-pending work balances its temporary reference. The original handshake
+queue function separately exposes the actual age-test clock read; the staging
+and loop relations retain only existential clocks. Expiry alone does not imply
+queue eligibility without a relationship between supplied clock values.
+Dangling current slots cannot complete with nonempty staging. Records and
+reference-count bounds may also stop execution. These are normal-completion
+Device contracts, including the send-work queue, not descriptions of World
+bookkeeping or record consumption. Independent reviews found no semantic defect
+in the staging, per-peer, loop or installation increments and confirmed these
+scope limits.
 
 [AGENT 2026-10-15] Compose private-key updates from a baseline after optional
 self-peer removal: removal may flush other peers' work under the old identity,
@@ -226,14 +239,13 @@ defect. Review of the identity/precomputation/expiry leaves found no semantic
 defect and identified the weak existential-time and missing-target scope limits
 recorded above. Actual outer dump composition remains open.
 
-Remaining: private-key collision removal, the peer-list fold with
-post-expiry staged sending and outer composition; full peer
+Remaining: private-key collision removal and outer request composition; full peer
 removal/replacement and allowed-IP ownership, other partial-error combinations,
 and general dump chunks/coalescing. Deferred removal work can change other
 peers' dynamic state, so no unrestricted removal frame is claimed. No H4
 mirror mismatch or mirror-team request; ranked mirror suggestions: none.
 
-Validation: all forty-three statements pass scoped build, standard-axiom inspection
+Validation: all forty-eight statements pass scoped build, standard-axiom inspection
 (only `propext`, `Classical.choice`, `Quot.sound`), and `capped --
 scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Config.Statements`.
 The full proof gate fails in inherited `CounterWindow.Refinement`; token/import

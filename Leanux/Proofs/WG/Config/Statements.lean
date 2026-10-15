@@ -14,6 +14,7 @@ import Leanux.Proofs.WG.Config.RecordedPort
 import Leanux.Proofs.WG.Config.ExpiryEffects
 import Leanux.Proofs.WG.Config.ExpiryClock
 import Leanux.Proofs.WG.Config.KeyInstall
+import Leanux.Proofs.WG.Config.KeyInstallEffects
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
@@ -512,5 +513,61 @@ theorem original_quiet_key_install (d : Device) (key : Key)
       (fun _ w => ∃ final, w.k.wg = some final ∧
         KeyPeerUpdates (installedDevice d key) d.peerList final) :=
   keyInstall_quiet d key quiet
+
+/-- The original non-retry handshake queue call resets attempts, reads the
+age-test clock, and has the exact Device effect selected by that actual read:
+no queue change, a balanced pending reference pair, or a fresh queued reference.
+World bookkeeping and record availability are outside this normal-run claim. -/
+theorem original_queued_handshake_clock (pid : PeerId) (d : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p) (w v : World) (device : w.k.wg = some d)
+    (run : (sendQueuedHandshakeInitiation pid false).run w = .ok ((), v)) :
+    ∃ now before after,
+      (queuedReadPrefix pid).run w = .ok ({ p with timerHandshakeAttempts := 0 }, before) ∧
+      (hiddenClock64 .birthdateExpired).run before = .ok (now, after) ∧
+      v.k.wg = some (queuedDevice (withPeer d pid { p with timerHandshakeAttempts := 0 })
+        pid { p with timerHandshakeAttempts := 0 } now) :=
+  sendQueued_clock pid d p resident w v device run
+
+/-- Original staging with absent or invalid current sending material either
+returns unchanged for an empty staged list, or restores packets and has the
+specified handshake-queue Device effects. Temporary key references preserve
+lookups. Dangling current slots cannot complete with nonempty staging. Clock
+values here are existential; World bookkeeping and record consumption are not
+characterized, and no return guarantee is claimed. -/
+theorem original_staged_invalid_key (pid : PeerId) (d : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p)
+    (invalid : ∀ id k, p.keypairCurrent = some id → d.keypairs[id]? = some k → k.sending.isValid = false) :
+    Ensures (sendStagedPackets pid) (fun w => w.k.wg = some d)
+      (fun _ w => if p.staged = [] then w.k.wg = some d
+        else ∃ now, w.k.wg = some (invalidStagedDevice d pid p now)) :=
+  staged_invalid pid d p resident invalid
+
+/-- Both branches of the original key-update peer body have the specified
+Device effects: precomputation, expiry, and optional staged-packet restoration
+and handshake queueing. The clocks are existential and completion is assumed. -/
+theorem original_key_peer_effects (pid : PeerId) (d : Device) (p : Peer) (sendStaged : Bool)
+    (resident : d.peers[pid]? = some p) :
+    Ensures (keyPeerSource pid sendStaged) (fun w => w.k.wg = some d)
+      (fun _ w => ∃ expiryNow queueNow,
+        w.k.wg = some (keyPeerDevice d pid p expiryNow sendStaged queueNow)) :=
+  keyPeer_complete pid d p sendStaged resident
+
+/-- The original peer-list loop realizes the ordered Device relation for
+both staged-send settings. Repeated peers and keypair aliases are permitted.
+This normal-completion result does not assert aggregate clock provenance. -/
+theorem original_key_peer_loop_effects (pids : List PeerId) (d : Device) (sendStaged : Bool) :
+    Ensures (keyPeerLoopSource pids sendStaged) (fun w => w.k.wg = some d)
+      (fun _ w => ∃ final, w.k.wg = some final ∧ KeyPeerRun sendStaged d pids final) :=
+  keyPeerLoop_complete pids d sendStaged
+
+/-- The installation block composes identity and cookie keys with the full
+snapshotted peer-list relation, using the code's staged-send condition. The
+baseline is after optional self-peer removal and before later peer attributes;
+this is a Device-state normal-completion contract for that block. -/
+theorem original_key_install_effects (d : Device) (key : Key) :
+    Ensures (keyInstallSource key) (fun w => w.k.wg = some d)
+      (fun _ w => ∃ final, w.k.wg = some final ∧
+        KeyPeerRun (requestsStagedSend d key) (installedDevice d key) d.peerList final) :=
+  keyInstall_complete d key
 
 end Leanux.Proofs.WG.Config
