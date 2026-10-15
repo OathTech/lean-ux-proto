@@ -2,6 +2,7 @@ import Leanux.Proofs.WG.Progress.ObservationBridge
 import Leanux.Proofs.WG.Progress.CutClaims
 import Leanux.Proofs.WG.Progress.FlushQueueClaims
 import Leanux.Proofs.WG.Progress.PowSource
+import Leanux.Proofs.WG.Progress.DrainClaims
 
 /-! Projected H5 contracts. Inspection adapters report the exact original
 outcomes from the same concrete entry; their totality is not a claim that the
@@ -445,5 +446,31 @@ theorem original_pow_mod_finite (b e modulus fuel : Nat) (enough : e < fuel) :
     ∃ final, powEval modulus fuel (1, b % modulus, e) = some final ∧
       final.2.2 = 0 ∧ originalPowMod b e modulus = final.1 :=
   powMod_finite_with_fuel b e modulus fuel enough
+
+/-- The original 4096-turn drain has this exact phase audit: erasing the
+inspection datum gives inspection of the original outcome, including every error.
+With fewer than 4096 queued items, its own budget cannot be the failure origin
+and there are at most initial-count-plus-one loop turns begun. Selection and
+worker failures remain possible; their origin comes from the actual failing call,
+not its error text. Normal completion is at empty queues or the requested clear.
+Inspection itself keeps entry state; the drain's final state is inside its datum.
+No successful drain, failed-worker state, or global runner termination is promised. -/
+theorem original_drain_bounded (upTo : Option PeerId) :
+    ((do let outcome ← observedDrain upTo; pure (eraseDrainOutcome outcome)) =
+      inspect (drainHandshakeSendWq upTo)) ∧
+    (∀ d : Device, flushQueueCount (TimerDiscipline.workQueues d) < 4096 →
+      Returns (observedDrain upTo) (fun entry => entry.wg.device = some d)
+        (fun outcome _ => DrainBounded upTo
+          (flushQueueCount (TimerDiscipline.workQueues d)) outcome)) :=
+  ⟨observedDrain_source upTo, fun d enough => source_drain_bounded upTo d enough⟩
+
+/-- With no requested early-clear boundary, every normal original drain return
+has both queues empty. The static bound excludes own-budget exhaustion, but
+does not exclude a selector or worker failure and does not assert successful return. -/
+theorem original_drain_to_empty (d : Device)
+    (enough : flushQueueCount (TimerDiscipline.workQueues d) < 4096) :
+    Ensures (drainHandshakeSendWq none) (fun entry => entry.wg.device = some d)
+      (fun _ final => flushQueues final = some ([], [])) :=
+  source_drain_to_empty d enough
 
 end Leanux.Proofs.WG.Progress

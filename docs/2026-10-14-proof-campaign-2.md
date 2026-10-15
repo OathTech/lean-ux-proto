@@ -29,12 +29,12 @@ No independent existential projected runs are spliced together.
 | H2 Index | 48 contracts, including lifecycle boundaries, handshake reception/sending, staged/keepalive sending, queued clearing, worker/timer dispatch, original workqueue draining/post-death removal, and successful session publication coherence | Public projection complete: 14 total contracts, 32 normal-return contracts, 1 exact stop and 1 projected initializer theorem; reachable coherence, broader records and the corpus runner composition remain open. |
 | H3 Roaming | 9 contracts, including decrypt publication, its same-execution first-poll endpoint connection, and exact response-caller authentication at the pre-setter cut | Public projection complete; first selected packet provenance is conditional on matching publication identity. Initiation, failed-call prefix retention, general queue provenance and complete caller coverage remain open. |
 | H4 Configuration | 64 contracts, including normal removal/death converses under two-slot node shape, live-key removal with empty work queues, and the internal dump-accounting finding | Public projection and frame separation complete. Queued-work removal, private-key collision, mixed attributes, global ownership and general dump composition remain open. |
-| H5 Progress | 30 contracts, including original exponentiation-loop finite evaluation, flush queue effects/count decrease, cut-loop budget adequacy, and the accepted batch-backlog counterexample | Public projection and frame separation complete; the recorded cut cannot exhaust its budget and normal selected flushes decrease queue count. Whole-worker record decrease, full loop coverage and probe/detach composition remain open. The backlog witness is historical over `de62c9d`: main's batch guard now addresses request 1. |
+| H5 Progress | 32 contracts, including original drain audit/budget adequacy and normal empty-queue completion, exponentiation-loop finite evaluation, flush queue effects/count decrease, cut-loop budget adequacy, and the accepted batch-backlog counterexample | Public projection and frame separation complete; original drain own-exhaustion is excluded below 4096 queued items, while selection/worker errors remain possible. Whole-worker record decrease, full loop coverage and probe/detach composition remain open. The backlog witness is historical over `de62c9d`: main's batch guard now addresses request 1. |
 | H6 Timers | 35 timer/worker contracts, including consecutive original retry pairs, conditional recorded rearming and same-peer attempt counting | Public projection and frame separation complete; a successful pair from an empty send queue derives the retry bound, reference acquisition/release, final empty queue and cleared pending flag. Conditional rearming preserves the exact expiry through release and section stop; consecutive successful pairs selecting the same initial peer increase attempts by their length and are bounded by 19 from zero. Scheduler retry episodes and whole-run arming/session counts remain open. |
 
 Projection/frame factoring completed at `69f988a` for all six results, preserving
 all 153 existing headline names before new mathematics. The following H2 lifecycle/sender
-and H6 dispatch/rearm increments, H3 publication/poll and response provenance, H5 cut-loop progress, H1 ordered clearing/rotation and H4 live-key removal bring the total to 204. No public statement directly names `World` or
+and H6 dispatch/rearm increments, H3 publication/poll and response provenance, H5 cut-loop progress, H1 ordered clearing/rotation and H4 live-key removal bring the total to 206. No public statement directly names `World` or
 `Kernel`.
 The full proof gate remains failed in inherited campaign-1 counter-window and
 index carries; those files have not been edited. Scoped validation does not
@@ -54,7 +54,7 @@ connections to the current executable mirror, not replacement interpreters.
 | H2 | `Index/View`, `TableModel`, `OwnerWordModel`, `AllocationModel`, `ReleaseModel`, `LifecycleModel` and pure release effects/bounds; `Statements`, `HandshakeClaims`, `OwnerUpdateClaims`, `LifecycleSource`, `LinkSource`, `SendSource`, `DispatchSource`, `ResponseSource`, `ConsumeSource`, `StagedSource`, `ReceiveOperations`, `ReceiveSource`, `ClearSource`, `TimerSource`, `FlushSource`, `SessionCoherenceModel`, `SessionCoherenceEffects`, `SessionCoherenceSource` and the other operation/source modules. | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`, `NewlinkFrames`, `SendFrames`, `DispatchFrames`, `ResponseFrames`, `ConsumeFrames`, `StagedFrames`, `ReceiveFrames`, `ClearFrames`, `TimerFrames`, `FlushFrames`, `SessionCoherenceFrames`; the old `HandshakeFrames` and `OwnerFrames` paths are import-only reexports, not duplicated lemmas. |
 | H3 | `Roaming/Model`, `View`, `Statements`, `EndpointClaims`, `EndpointSource`, `Authentication`, `PublicationModel`, `PublicationSource`, `PublicationClaims`, `PollEndpointModel`, `PollEndpointSource`, `PollEndpointClaims`, `ResponseModel`, `ResponseCryptoSource`, `ResponseConsumeSource`, `ResponseLookupSource`, `ResponseCallSource`, `ResponseCallClaims`. | `Roaming/Frames`, `PublicationFrames`, `PollEndpointFrames`; `Basic` reexports the endpoint source connection. The response increment needs no new frame support. |
 | H4 | `Config/Model`, `AllowedRemovalModel`, `AllowedPairsModel`, `AllowedPairsEffects`, `AllowedRemovalConverseSource`, `AllowedRemovalConverseClaims`, `QuietModel`, `LiveRemovalModel`, `LiveRemovalSource`, `ClaimView`, `Statements`, `SourceClaims`, `ObservationBridge`, and existing substantive effect/source modules. | `ConcreteFrames` isolates six whole-kernel endpoint contracts; `OperationFrames` isolates seven generic helpers; `ReadbackFrames` retains socket/fixture preservation; `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `AllowedPairsFrames`, `QuietFrames`, `LiveRemovalFrames`, `KeyFieldFrames` isolate within-WG preservation. |
-| H5 | `Progress/Model`, `View`, `Statements`, `SourceClaims`, `ObservationBridge`; `ControlLaws` is generic state/error control and `ControlSource` connects it exactly to the original worker; the scheduler/source modules retain actual execution factors. `CutModel`, `CutSource` and `CutClaims` establish original cut-loop progress; `FlushQueueModel`, `FlushQueueSource` and `FlushQueueClaims` establish original flush effects and count decrease; `PowModel` and `PowSource` connect a finite evaluator to the original arithmetic loop. | `StackFrames` isolates caller-guard preservation; `CutFrames` isolates record/error-location preservation; `FlushQueueFrames` isolates queue preservation through worker bodies and release. Probe/filter/no-work contracts also establish outputs and remain substantive source claims. |
+| H5 | `Progress/Model`, `View`, `Statements`, `SourceClaims`, `ObservationBridge`; `ControlLaws` is generic state/error control and `ControlSource` connects it exactly to the original worker; the scheduler/source modules retain actual execution factors. `CutModel`, `CutSource` and `CutClaims` establish original cut-loop progress; `FlushQueueModel`, `FlushQueueSource` and `FlushQueueClaims` establish original flush effects and count decrease; `PowModel` and `PowSource` connect a finite evaluator to the original arithmetic loop. `DrainModel`, `DrainOperations`, `DrainSelectionSource`, `DrainAuditSource`, `DrainEffects` and `DrainClaims` connect a phase audit and queue bound to the original workqueue drain. | `StackFrames` isolates caller-guard preservation; `CutFrames` isolates record/error-location preservation; `FlushQueueFrames` isolates queue preservation through worker bodies and release. Probe/filter/no-work contracts also establish outputs and remain substantive source claims. |
 | H6 | `TimerDiscipline/Model`, `View`, `SendView`, `Statements`, `ObservationBridge`, `ObservationClaims`, `SourceClaims`, `SendDispatchModel`, `SendDispatchClaims`, `RetryDispatchModel`, `RetryDispatchClaims`, `RetryRearmModel`, `RetryRearmClaims`, `RetrySequenceModel`, `RetrySequenceClaims`, and `*Source` operational proofs. | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`, `RetryDispatchFrames`, `RetryRearmFrames`, `WorkStateFrames`. |
 
 A compound exact effect is not a disposable frame merely because its name
@@ -1451,6 +1451,42 @@ execution or a kernel-checked prefix result. Both trials used capped stdin Lean
 with the unchanged memory cap, 32 threads and a 120-second timeout. No timeout,
 cap hit, retry, limit increase, rebuild or source-file write occurred. The failed
 trial was stopped rather than repeated. Whole-prefix proof remains open.
+
+The original workqueue drain now has an exact source factor and a phase audit.
+`DrainOperations` preserves empty-before-peek, named-send priority, named-clear,
+the recorded missing-selection error, placeholder send-head/clear-head order,
+requested-clear stopping and the original 4096-turn exhaustion. Selection
+preserves the captured device and derives actual queue membership. The audit
+uses those actual selector and worker executions; its erased raw result equals
+the original outcome unconditionally, including every error and successful
+concrete final state. Its projected inspection leaves its own entry unchanged
+and carries the drain outcome as data; it is not an operational replacement.
+
+`DrainEffects` combines selector membership with the existing original flush
+queue effects. Each normally completed selected worker removes exactly one
+occurrence. With fewer than 4096 initial queued items, the audit begins at most
+initial-count-plus-one loop turns and cannot fail from its own budget. Selection
+and worker errors remain possible and are tagged at the failing call, never
+inferred from an error string. Failed workers expose no final state. A normal
+unrestricted drain has both queues empty; a requested-clear drain may return at
+that clear while other work remains. The strict bound leaves a turn to observe
+empty queues: draining the last item on turn 4096 alone does not provide that
+check. This source boundary is not an accepted-run counterexample. No successful
+worker/selector completion, whole-run termination or new mirror finding is claimed.
+
+H5 now has 32 headlines and the campaign 206. The capped 32-thread Progress
+build passed (196 jobs), all 32 headlines and four source equations have only
+standard axioms, and fresh stock Progress replay passed. Combined checks pass
+for all 206 headlines and the public projection/token/import/root/default checks.
+Reproduce with the preceding Progress build/replay commands. Review closed after
+one public-scope correction: the exact inspection equation is unconditional,
+with the resident-device/count bound confined to the separate progress conjunct.
+The corrected interface was rebuilt, axiom-checked and freshly replayed. Nine
+ordinary source-proof drafts and six earlier read-only prototype drafts failed
+before correction; failed recovery declarations were not accepted results. No
+infrastructure rerun, cap hit, timeout or guest run. No new frames or shared
+variants were needed; selection reuses existing campaign-2 support. The full gate
+retains its inherited failure. Global scheduler/operation-end coverage remains open.
 
 ## H6 — Timer discipline (in progress)
 
