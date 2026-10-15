@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Packets.RoutingCuts
 import Leanux.Proofs.WG.Packets.AffiliationCuts
 import Leanux.Proofs.WG.Configuration.RunnerRouting
 import Leanux.Proofs.WG.AllowedIps.RoutingDumpFrames
@@ -2469,5 +2470,62 @@ theorem original_packet_affiliation_cuts (pid : PeerId) (kid : KeypairId)
     Affiliation.receiveKeyAcquire_spec entry state,
     fun w v d p hi hd hp hs hr => Affiliation.sendAcquire_owner kid pid p w v hi hd hp hs hr,
     Affiliation.decryptPacket_fields⟩
+
+/-- Original normal source/destination lookup answers refine the independent flat
+winner at the actual query World. Failed acquisition is a Stop, not a None answer.
+Actual packet constructors supply all-packet family/destination-byte shape; no
+arbitrary mixed-family list or unbounded-Nat encoding equality is assumed. -/
+theorem original_routing_lookup_and_packet_shapes (v4 : Bool) (addr : Nat)
+    (bytes : List UInt8) (opts : Env.XmitOpts) :
+    (∀ w v xs peer, RoutedView (routingView w) xs →
+      (WG.lookupSrc (if v4 then 4 else 6) bytes).run w = .ok (peer, v) →
+      PeerWinner (rootWidth v4) (sourceAddress v4 bytes) (selectedFlat v4 xs) peer) ∧
+    (∀ w v xs peer, RoutedView (routingView w) xs → addr < 2 ^ rootWidth v4 →
+      (WG.lookupDst (if v4 then 4 else 6) addr).run w = .ok (peer, v) →
+      PeerWinner (rootWidth v4) addr (selectedFlat v4 xs) peer) ∧
+    (⦃fun _ => ⌜True⌝⦄ Env.xmitPackets (if v4 then 4 else 6) addr bytes opts
+      ⦃⇓? result _ => ⌜∀ packets mtu, result = .ok (packets, mtu) →
+        ∀ packet ∈ packets, Packets.DestinationShape (if v4 then 4 else 6) addr packet.bytes⌝⦄) ∧
+    Packets.DestinationShape 4 (WG.beAt bytes 12 4) (Env.Stack.rst4 bytes) ∧
+    (∀ outer, (if v4 then 20 else 40) ≤ bytes.length →
+      (⦃fun _ => ⌜True⌝⦄ WG.inetEcnDecapsulate (if v4 then 4 else 6) outer bytes
+        ⦃⇓? out _ => ⌜Packets.AddressPreserved v4 bytes out⌝⦄)) :=
+  ⟨fun w v xs peer hi hr => lookupSrc_normal w v xs v4 bytes peer hi hr,
+    fun w v xs peer hi ha hr => lookupDst_normal w v xs v4 addr ha peer hi hr,
+    Packets.xmitPackets_shape _ addr bytes opts, Packets.rst4_shape bytes,
+    fun outer hl => Packets.inetEcnDecapsulate_address v4 outer bytes hl⟩
+
+/-- Literal source factors and normal returned-packet/staging cuts retain exact
+intermediate Worlds and original arguments. Routing agreement is an explicit
+local entry premise. RX exposes the actual input/output family and preserved
+source; TX derives query bounds from every actual header guard and identifies
+the completed splice of the original packets with their caller-supplied MTU.
+Initialized packet histories, authenticated key identity, copied trials and
+routing at later encryption/wire-send time are not supplied by this contract. -/
+theorem original_packet_routing_source_cuts (pid : PeerId) (pkt : RxPacket)
+    (endpoint : Endpoint) (family addr : Nat) (packets : List Packet) (mtu : Nat) :
+    (WG.consumeDataDone pid pkt endpoint = (do
+      let ready ← Packets.rxPrepare pid pkt endpoint
+      match ready with | none => return none | some r => Packets.rxFinish pid r)) ∧
+    (WG.wgXmit family addr packets mtu = (do
+      if !(← Packets.txCheck family addr packets mtu) then return -EPROTONOSUPPORT
+      let peer ← WG.lookupDst family addr
+      match ← Packets.txSelect family packets mtu peer with
+      | .error err => return err
+      | .ok (pid, ready) => Packets.txFinish pid ready)) ∧
+    (∀ w v bytes xs, RoutedView (routingView w) xs →
+      (WG.consumeDataDone pid pkt endpoint).run w = .ok (some bytes, v) →
+      ∃ v4 : Bool, WG.ipTunnelParseProtocol bytes = (if v4 then 4 else 6) ∧
+        WG.ipTunnelParseProtocol pkt.bytes = (if v4 then 4 else 6) ∧
+        PeerWinner (rootWidth v4) (sourceAddress v4 bytes) (selectedFlat v4 xs) (some pid) ∧
+        sourceAddress v4 bytes = sourceAddress v4 pkt.bytes) ∧
+    (∀ (v4 : Bool) w v xs, RoutedView (routingView w) xs →
+      (WG.wgXmit (if v4 then 4 else 6) addr packets mtu).run w = .ok (0, v) →
+      ∃ owner, Packets.TxHandoff (if v4 then 4 else 6) addr packets mtu w v owner ∧
+        PeerWinner (rootWidth v4) addr (selectedFlat v4 xs) (some owner) ∧
+        ∀ packet ∈ packets, Packets.destinationField (if v4 then 4 else 6) packet.bytes = addr) :=
+  ⟨Packets.consumeDataDone_factor pid pkt endpoint, Packets.wgXmit_factor family addr packets mtu,
+    fun w v bytes xs hi hr => Packets.consumeDataDone_authorized pid pkt endpoint w v bytes xs hi hr,
+    fun v4 w v xs hi hr => Packets.wgXmit_authorized v4 addr packets mtu w v xs hi hr⟩
 
 end Leanux.Proofs.WG.CryptokeyRouting

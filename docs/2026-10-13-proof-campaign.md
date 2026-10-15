@@ -3,7 +3,7 @@
 ## Progress
 
 Work on `proofs/campaign` in `.worktrees/proofs-campaign` follows [the charter](2026-10-13-charter-proof-campaign.md),
-over unchanged mirror `de62c9d`. R4 local/persistent callback completion compiles; initialized R3 packet authorization
+over unchanged mirror `de62c9d`. Local R3 lookup/address/source cuts compile; initialized R3 packet authorization
 and R4 completion/conservation remain open. The [register](proofs.md#results) holds pins/counts; the
 [model map](proofs.md#layers) supplies refinement details. No main integration, push, differential check or guest run
 was made by this campaign.
@@ -12,16 +12,18 @@ was made by this campaign.
 | --- | --- |
 | R1 | Replay uniqueness proved; inclusive-floor correction witnessed. |
 | R2 | Initialized allocation-identity access safety proved, including failures/trials; affiliation/credits separate. |
-| R3 | Parsed initialized routing histories and local nullable affiliation; initialized packet binding open. |
+| R3 | Parsed initialized routing histories, local nullable affiliation and actual lookup/handoff cuts; initialized packet binding open. |
 | R4 | Initialized entry uniqueness and local/persistent callback completion; chronology refuted; Runner completion/conservation open. |
 | R5 | Accepted age/post-zero/wire-nonce counterexamples; thirteen positive local contracts. |
 | R6 | Cookie exclusion proved; literal MAX=18 refuted, without a replacement universal bound. |
 
-**Validation.** Callback completion passes scoped/full builds (334/477 jobs), the 483-declaration gate with only
-permitted axioms, fresh stock kernel replay, the 60-job default build and 124 tests (24.775s, one skip).
-Source has 481 theorems/two definitions (120 R3/112 R4), preserving all 480 preceding terminal bodies.
-Baseline `bcbf733` passed the same checks for 480 declarations. Its first coordinator exact script failed with
-SyntaxError before checks; the regenerated script passed.
+**Validation.** Local R3 source cuts pass scoped/full builds (401/480 jobs), the 485-declaration permitted-axiom gate,
+fresh stock kernel replay, the 60-job default build and 124 tests (22.976s, one skip). Independent review is clear.
+Current source has 485 declarations (483 theorems/two definitions; 122 R3/112 R4), preserving all 483 preceding
+terminal bodies. Baseline `1a5542d` passed callback completion scoped/full builds (334/477 jobs), the
+483-declaration permitted-axiom gate, fresh stock kernel replay, the 60-job default build and 124 tests (24.775s,
+one skip). Baseline `bcbf733` passed the same checks for 480 declarations; its first coordinator exact script failed
+with SyntaxError before checks and the regenerated script passed.
 
 Carry `a0cf252` passed eleven recipes: nine accepted agreements and two pending-dump rejections with accepted
 pre-delete boundaries. Those Runner recipes were not rerun: their observers are unchanged. No differential/guest run
@@ -222,22 +224,46 @@ separate helper-run premise. A later NULL store-back does not invalidate that hi
 initialized affiliation. [AGENT 2026-10-15] Reuse one nullable projection/source cuts, preserving the stronger old
 SlotAffiliation and separating snapshots from run witnesses.
 
+**Actual local routing cuts.** [LookupExecution](../Leanux/Proofs/WG/AllowedIps/LookupExecution.lean) refines normal
+original lookup/lookupSrc/lookupDst answers to flat winners under actual entry RoutedView. Failed acquisition is a
+Stop, not a None answer; successful termination is not assumed universally. [AddressShape](../Leanux/Proofs/WG/Packets/AddressShape.lean)
+derives every xmitPackets/GSO packet and rst4 reply's family/destination-byte shape, preserving truncation of an
+unbounded supplied Nat. The actual wgXmit header guard derives address bounds. [RoutingCuts](../Leanux/Proofs/WG/Packets/RoutingCuts.lean)
+factors literal consumeDataDone/wgXmit, retaining malformed, ordinary-error and Stop branches. RX returns the actual
+input/output family and unchanged source through ECN/trim. TX zero return yields one exact query/selection/splice/tail
+World chain and the original packet list with its supplied MTU. Handoff is staged append, not later encryption/wire
+transmission. [AGENT 2026-10-15] Reuse local source factors and existing routing frames; add no Runner observer or
+initial-trace premise. Arbitrary mixed-family packet lists are not silently treated as constructor output.
+
 **Remaining obligations.** Initialized syscall/Runner composition preserves ordinary-negative cleanup and Stops; parser
-shape follows the operation cursor. A final-World query is not a certificate for an earlier lookup. Interior
-lookup/handoff witnesses, public-key agreement with peer.remoteStatic, initialized index/key-slot/packet affiliation and
-constructor-derived TX shape remain open. RX authorization is at consumeDataDone; TX handoff at staged append. Copied
-trials imply no packet claim; partial failing clear has no completion marker. The historical R2 orphan recipe is now
-rejected, not a current misrouting witness.
+shape follows the operation cursor. Local entry agreement still needs connection to earlier actual initialized lookup
+history. Historical session/key/public-key ownership and packet origin, initialized RX/TX identity binding and
+copied-trial packet certificates remain open. Nullable compatibility is insufficient for historical key identity.
+Partial failing clear has no completion marker. The historical R2 orphan recipe is now rejected, not a current
+misrouting witness; no new accepted counterexample is claimed.
 
 **Effort/review.** Earlier failures remain in checkpoint commits. A denied /tmp
 diagnostic was unavailable; planning interruptions were snapshotted, no R3 build interrupted. Prior rejected
-metavariables/unknown constants/recovery diagnostics are retained in those ledgers. New work: 28 capped calls, 26 builds
+metavariables/unknown constants/recovery diagnostics are retained in those ledgers. The affiliation tranche used 28 capped calls, 26 builds
 (7 PASS/19 FAIL), two exact checks PASS; full result 04:25:43, 28m58s after acceptance, handback 04:35:08. Call 6 had
 three kernel application-type mismatches; calls 2/10 rejected recovery goals; call 16 reported `declaration uses sorry`
 during failed elaboration. No source admission; corrected builds are clean. No limit/cap/interruption/rerun. Review
 corrected creation overstatement, snapshot/execution wording and a missing TX parent-source factor. Frozen review
 04:29:36–04:33:40 is clear after correcting blanket-validation wording; metadata reconciliation 04:34:47–04:34:51 is
 clear.
+
+**Source-cut effort/review.** Lease 05:28:00, measured acceptance 05:28:32 UTC; scoped PASS collected by 06:00:22.
+Full PASS was collected by 06:02:30; exact PASS by 06:03:27. Final worker ledger: 26 capped calls,
+25 builds (5 PASS/20 ordinary FAIL), one exact check PASS. Call 7 reported recovery `declaration uses sorry` after
+ambiguous andM; calls 22/23 had tactic syntax failures and downstream kernel unknown-constant diagnostics. No source
+admission, limit/cap change, interruption or infrastructure rerun. Review required explicit RX input/output protocol
+linkage; corrected before scoped PASS. Exact check 26 verifies all six paths, 483 byte-identical prior terminal bodies, 485 total/122 R3, tokens/imports,
+whitespace/EOF, empty index and mirror pin. Independent frozen review 05:57:08–06:08:11 found no defect; it retains
+the normal-zero TX boundary, raw RX peer identity and outstanding caller composition. Root gate, fresh replay,
+default build and units passed on their first calls. Root's source/scope/body/token/import checks passed, but its
+final register selector incorrectly included the separate claim table and failed; the corrected remaining pin check
+passed for all seven rows. This was a check-script defect, not an infrastructure retry. No source changed after the
+worker's successful builds; subsequent edits only reconcile report/register metadata.
 
 **Ranked mirror suggestions.** None. Integer-address refinement needs no production restructure; C byte-layout
 correspondence remains informal.
