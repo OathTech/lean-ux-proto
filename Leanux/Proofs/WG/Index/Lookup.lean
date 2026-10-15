@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Noise.Slots
 import Leanux.Proofs.WG.Index.LookupSource
 
 set_option autoImplicit false

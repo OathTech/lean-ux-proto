@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.QuietRemoval
 import Leanux.Proofs.WG.Config.PeerDead
 import Leanux.Proofs.WG.Config.AllowedOwnerClear
 import Leanux.Proofs.WG.Config.AllowedGeneralReplacement
@@ -758,5 +759,22 @@ theorem original_peer_make_dead (pid : PeerId) (p : Peer) (d removed : Device)
   intro w pre
   obtain ⟨ret, final, run, device⟩ := peerMakeDead_returns pid p d removed resident steps w pre
   exact ⟨ret, final, run, device, deadPeerDevice_effects pid p d removed steps⟩
+
+/-- Original peer removal returns for an empty-slot peer with empty send/clear
+queues and a supplied allowed-IP removal witness. The exact Device performs
+membership/death updates, three slot writes, five timer deletions, the empty
+drain, peer-count decrement and final release in source order. Final release
+erases the peer only on its last reference; otherwise the dead peer remains.
+This is a Device contract, not a whole-World frame, a claim about every pending
+flag or a theorem for queued work and live keypair slots. -/
+theorem original_peer_remove_quiet (pid : PeerId) (d removed : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p) (live : 0 < p.refcount) (count : 0 < d.numPeers)
+    (empty : p.keypairNext = none ∧ p.keypairPrevious = none ∧ p.keypairCurrent = none)
+    (send : d.sendWorkQueue = []) (clear : d.clearWorkQueue = [])
+    (steps : RemovalEffect (unlistPeer d pid) p.allowedipsList removed) :
+    Returns (peerRemove (some pid)) (fun w => w.k.wg = some d)
+      (fun _ w => w.k.wg = some (quietRemovedDevice (deadPeerDevice removed pid p) pid
+        { erasePeerList p.allowedipsList p with isDead := true })) :=
+  peerRemove_quiet_returns pid d removed p resident live count empty send clear steps
 
 end Leanux.Proofs.WG.Config

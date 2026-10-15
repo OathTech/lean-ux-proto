@@ -493,7 +493,29 @@ review found no correctness or source-order defect. Proof elaboration
 needed the intermediate device equality simplified before substituting it;
 no mirror or resource-limit change was made.
 
-Remaining: private-key collision removal and mixed-attribute outer composition; full peer
+`EmptyKeypairs`, `QuietTimers` and `QuietRemoval` compose total contracts
+through original `peerRemove (some pid)` for an empty-slot peer with empty
+send/clear queues and a supplied allowed-IP removal witness. The exact Device
+retains the three slot writes and five timer writes, the empty drain, count
+decrement and final release in source order. The drain returns on its first
+iteration without consuming a record. Positive references and device count
+suffice; no reference-increment bound or stopped-device premise is needed.
+Last-reference release unhashes and erases; otherwise a dead peer remains
+resident. Timer deletion clears expiries, not counters or pending flags. Final
+release changes World dispatch associations, so the terminal states a Device
+contract. Independent read-only review found no correctness or scope defect.
+
+[AGENT 2026-10-15] Share the existing Noise slots and state-edge dependencies
+with Index lookup and handshake frames: combined imports exposed duplicate
+Lean-generated `peerDeref` and `createInitiation` sparse-case declarations.
+Sharing their prior declarations resolves the clashes; no theorem proposition
+or mirror definition changes. All six campaign-2 Statements modules now import
+together and all 150 terminal declarations pass standard-axiom inspection.
+The new composition hit local heartbeat limits during nested record projection;
+explicit frame projections and a generic count-decrement contract resolved them
+without raising any limit.
+
+Remaining: private-key collision removal and mixed-attribute outer composition; queued-work/live-keypair peer
 removal/replacement and allowed-IP ownership, other partial-error combinations,
 and general dump chunks/coalescing. Deferred removal work can change other
 peers' dynamic state, so no unrestricted removal frame is claimed.
@@ -510,7 +532,7 @@ check: both the C and the mirror's own design require restoring pre-nest room.
 gives the witness and reproduction command. Ranked mirror suggestion 1:
 correct the saved cancellation snapshot (altitude-preserving).
 
-Validation: all fifty-nine statements pass scoped build, standard-axiom inspection
+Validation: all sixty statements pass scoped build, standard-axiom inspection
 (only `propext`, `Classical.choice`, `Quot.sound`), and `capped --
 scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Config.Statements`.
 The full proof gate fails in inherited `CounterWindow.Refinement` and
