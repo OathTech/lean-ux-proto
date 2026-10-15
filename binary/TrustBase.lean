@@ -2,11 +2,12 @@ import History
 import Image
 import ServiceImage
 import Memory
+import LookupProjection
 
 /-! Named trust surface for the pinned lookup proof, under construction.
     These are explicit hypotheses, not globally asserted facts. No declaration
     here assumes the lookup result, a region's R-preservation, or a mirror run.
-    Pre_lookup will be added together with its concrete satisfying witness.
+    Pre_lookup is accompanied by its concrete satisfying witness.
     The final milestone report must reproduce this file verbatim.
 
     External interpretation: binutils 2.42 supplied the literal AST and DWARF
@@ -292,5 +293,141 @@ def BhEnableContract (fetch : Int64 → Option Decoded) : Prop :=
       before.data.dmem.loadInt preemptCountAddress 4 = some (old.toNat : Int) →
       after.data.dmem.loadInt preemptCountAddress 4 =
         some ((old - before.data.regs.get (.low .rsi .W32)).toNat : Int))
+
+/-- Whether the actual callback reads softirqEnabled before its mode test. -/
+def LookupSoftRead (preempt : BitVec 32) : Prop :=
+  preempt &&& 0xff0100 ≠ 0 ∧
+  ¬(preempt &&& 0x100 = 0 ∨ preempt &&& 0xff0000 ≠ 0)
+
+/-- The callback reaches its mode read only after the preemption/softirq gate. -/
+def LookupModeRead (coverage : KcovLayout) (preempt : BitVec 32) : Prop :=
+  if preempt &&& 0xff0100 ≠ 0 then
+    ¬(preempt &&& 0x100 = 0 ∨ preempt &&& 0xff0000 ≠ 0) ∧ coverage.softirqEnabled ≠ 0
+  else True
+
+/-- PC callbacks occur before and after BH-disable. Comparisons occur only
+    with a nonempty selected bucket, after the actual modular increment. -/
+def LookupBufferNeeded (coverage : KcovLayout) (preempt : BitVec 32)
+    (v : LookupRelation.View) : Prop :=
+  (coverage.mode = 2 ∧ (LookupModeRead coverage preempt ∨ LookupModeRead coverage (512+preempt))) ∨
+  (coverage.mode = 3 ∧ v.bucket ≠ [] ∧ LookupModeRead coverage (512+preempt))
+
+/-- Only callback metadata reached in one of this lookup's two contexts.
+    Unused layout values impose no equality on memory. The active coverage
+    allocation is mapped uniformly; a full buffer is permitted. -/
+def LookupCoverageAt (coverage : KcovLayout) (preempt : BitVec 32)
+    (v : LookupRelation.View) (memory : Mem 64) : Prop :=
+  load64 memory currentTaskAddress = some coverage.task ∧
+  ((LookupSoftRead preempt ∨ LookupSoftRead (512+preempt)) →
+    load32 memory (coverage.task+0x704) = some coverage.softirqEnabled) ∧
+  ((LookupModeRead coverage preempt ∨ LookupModeRead coverage (512+preempt)) →
+    load32 memory (coverage.task+0x6e0) = some coverage.mode) ∧
+  (LookupBufferNeeded coverage preempt v →
+    load32 memory (coverage.task+0x6e4) = some coverage.capacity ∧
+    load64 memory (coverage.task+0x6e8) = some coverage.area ∧ KcovBuffer coverage memory)
+
+def LookupMetadataBytes (coverage : KcovLayout) (preempt : BitVec 32)
+    (v : LookupRelation.View) (a : BitVec 64) : Prop :=
+  InRange currentTaskAddress 8 a ∨
+  ((LookupSoftRead preempt ∨ LookupSoftRead (512+preempt)) ∧ InRange (coverage.task+0x704) 4 a) ∨
+  ((LookupModeRead coverage preempt ∨ LookupModeRead coverage (512+preempt)) ∧ InRange (coverage.task+0x6e0) 4 a) ∨
+  (LookupBufferNeeded coverage preempt v ∧
+    (InRange (coverage.task+0x6e4) 4 a ∨ InRange (coverage.task+0x6e8) 8 a))
+
+def LookupCoverageWrites (coverage : KcovLayout) (preempt : BitVec 32)
+    (v : LookupRelation.View) (a : BitVec 64) : Prop :=
+  LookupBufferNeeded coverage preempt v ∧ KcovBufferBytes coverage a
+
+def LookupServiceBytes (coverage : KcovLayout) (preempt : BitVec 32)
+    (v : LookupRelation.View) (a : BitVec 64) : Prop :=
+  LookupMetadataBytes coverage preempt v a ∨ InRange preemptCountAddress 4 a ∨
+  (LookupBufferNeeded coverage preempt v ∧ KcovStorageBytes coverage a)
+
+/-- The helper is called for a selected owner even when its peer word is NULL. -/
+def LookupStackWords (c : LookupRelation.Config) : Nat := if c.focus.owner.isSome then 13 else 6
+
+def LookupStackWrites (c : LookupRelation.Config) (s : MachineState) : BitVec 64 → Prop :=
+  InRange (s.data.regs.rsp.toBitVec - .ofNat 64 (8*LookupStackWords c)) (8*LookupStackWords c)
+
+def LookupLiveStack (c : LookupRelation.Config) (s : MachineState) : BitVec 64 → Prop :=
+  InRange (s.data.regs.rsp.toBitVec - .ofNat 64 (8*LookupStackWords c)) (8*LookupStackWords c+8)
+
+def LookupBucketBytes (c : LookupRelation.Config) (v : LookupRelation.View) (a : BitVec 64) : Prop :=
+  InRange (c.table + .ofNat 64 (8*(c.query%8192))) 8 a ∨
+  ∃ e ∈ v.bucket, BucketShapeReads (LookupRelation.ownerAddress c e.owner) a
+
+def LookupOwnerBytes (c : LookupRelation.Config) (a : BitVec 64) : Prop :=
+  ∃ owner, c.focus.owner = some owner ∧ InRange (LookupRelation.ownerAddress c owner) 8 a
+
+def LookupCountBytes (c : LookupRelation.Config) (a : BitVec 64) : Prop :=
+  ∃ pid, c.focus.peer = some pid ∧ InRange (c.peers pid + .ofNat 64 Layouts.peer_refcount) 4 a
+
+def LookupDataWrites (c : LookupRelation.Config) (v : LookupRelation.View) (a : BitVec 64) : Prop :=
+  LookupOwnerBytes c a ∨ ((∃ n, v.count = some n ∧ n ≠ 0) ∧ LookupCountBytes c a)
+
+/-- A conditional output requirement, not a count bound on the entry domain.
+    Dead, NULL, miss and rejected-saturation inputs need no output storage. -/
+def LookupOutputNeeded (v : LookupRelation.View) : Prop :=
+  ∃ n, v.count = some n ∧ n ≠ 0 ∧ n+1 < 2^31
+
+def LookupOutputWrites (v : LookupRelation.View) (s : MachineState) (a : BitVec 64) : Prop :=
+  LookupOutputNeeded v ∧ InRange s.data.regs.rcx.toBitVec 8 a
+
+def LookupPendingRead (preempt : BitVec 32) : Prop := (preempt+1) &&& 0x00ffff00 = 0
+
+/-- Named physical entry obligations. Separation is an explicit allocation
+    discipline, not a claim that every safe x86 alias is admitted. No live-
+    peer or positive-count invariant is imposed. Every byte range belongs
+    to lookup, its helper, its stack or its named service callbacks. -/
+structure LookupEntry (c : LookupRelation.Config) (coverage : KcovLayout)
+    (preempt : BitVec 32) (returnAddress : UInt64) (s : MachineState)
+    (world : Leanux.World) (v : LookupRelation.View) : Prop where
+  pc : s.pc = Image.Lookup.entry
+  frame : EntryFrame s returnAddress
+  table : s.data.regs.rdi.toBitVec = c.table
+  query : (s.data.regs.get (.low .rdx .W32)).toNat = c.query
+  kinds : KindMask (s.data.regs.get (.low .rsi .W32)) c.kinds
+  projected : LookupRelation.project c world = some v
+  focus : LookupRelation.EntryFocus c v
+  physical : LookupRelation.Physical c [s] [LookupObservation.call "wg_index_hashtable_lookup" s] s v
+  steps : world.steps.toList = c.incomingSteps
+  rxSection : world.netRxSection = c.rxSection
+  coverageAt : LookupCoverageAt coverage preempt v s.data.dmem
+  preemptAt : load32 s.data.dmem preemptCountAddress = some preempt
+  stackMapped : ∀ n < LookupStackWords c,
+    (s.data.dmem.loadInt (s.data.regs.rsp.toBitVec - .ofNat 64 ((n+1)*8)) 8).isSome = true
+  outputMapped : LookupOutputNeeded v → (s.data.dmem.loadInt s.data.regs.rcx.toBitVec 8).isSome = true
+  bhHardirq : (512+preempt) &&& 0x000f0000 = 0
+  bhPending : LookupPendingRead preempt → s.data.dmem.loadInt softirqPendingAddress 2 = some 0
+  readsScratch : ∀ a, LookupRelation.Reads c v a →
+    ¬(LookupStackWrites c s a ∨ LookupCoverageWrites coverage preempt v a ∨ InRange preemptCountAddress 4 a)
+  serviceStack : ∀ a, LookupServiceBytes coverage preempt v a → ¬LookupStackWrites c s a
+  coverageStack : ∀ a, LookupCoverageWrites coverage preempt v a → ¬LookupLiveStack c s a
+  coverageMetadata : ∀ a, LookupCoverageWrites coverage preempt v a → ¬LookupMetadataBytes coverage preempt v a
+  coveragePreempt : ∀ a, LookupCoverageWrites coverage preempt v a → ¬InRange preemptCountAddress 4 a
+  bhStack : ∀ a, InRange preemptCountAddress 4 a → ¬LookupLiveStack c s a
+  bhMetadata : ∀ a,
+    (LookupMetadataBytes coverage preempt v a ∨
+      (LookupBufferNeeded coverage preempt v ∧ KcovStorageBytes coverage a)) →
+    ¬InRange preemptCountAddress 4 a
+  dataService : ∀ a, LookupServiceBytes coverage preempt v a → ¬LookupDataWrites c v a
+  dataReturn : ∀ a, InRange s.data.regs.rsp.toBitVec 8 a → ¬LookupDataWrites c v a
+  dataBucket : ∀ a, LookupBucketBytes c v a → ¬LookupDataWrites c v a
+  ownerCount : ∀ a, LookupCountBytes c a → ¬LookupOwnerBytes c a
+  outputProtected : ∀ a, LookupOutputWrites v s a →
+    ¬(LookupRelation.Reads c v a ∨ LookupServiceBytes coverage preempt v a ∨
+      InRange (s.data.regs.rsp.toBitVec-48) 56 a ∨ LookupCoverageWrites coverage preempt v a)
+  pendingFrame : LookupPendingRead preempt → ∀ a, InRange softirqPendingAddress 2 a →
+    ¬(LookupStackWrites c s a ∨ LookupCoverageWrites coverage preempt v a ∨
+      LookupDataWrites c v a ∨ LookupOutputWrites v s a)
+
+/-- Entry domain relative to the supplied source World and fixed ABI/address
+    interpretation. Its machine-side domain existentially closes world and
+    these interpretation parameters. No execution or R-preservation premise
+    occurs here; LookupWitness supplies a concrete inhabitant and its test
+    executes that exact state to the recorded return. -/
+def Pre_lookup (c : LookupRelation.Config) (coverage : KcovLayout)
+    (preempt : BitVec 32) (returnAddress : UInt64) (s : MachineState) (world : Leanux.World) : Prop :=
+  ∃ v, LookupEntry c coverage preempt returnAddress s world v
 
 end Binary.TrustBase

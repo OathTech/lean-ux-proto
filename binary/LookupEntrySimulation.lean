@@ -1,6 +1,7 @@
 import LookupBucketSimulation
 import LookupStartHistory
 import LookupBucketFrame
+import CanonicalLoads
 
 namespace Binary.LookupRelation
 open Leanux TrustBase LookupHistory
@@ -175,7 +176,6 @@ theorem header_simulation (fetch : Int64 → Option Decoded)
     (c : Config) (world : World) (s : MachineData)
     (coverage : KcovLayout) (preempt : BitVec 32)
     (ready : PeerGet.CallsReady coverage preempt s)
-    (count : s.dmem.loadInt preemptCountAddress 4 = some (preempt.toNat : Int))
     (table : s.regs.rbx.toBitVec = c.table)
     (query : (s.regs.get (.low .r12 .W32)).toNat = c.query)
     (metadataApart : ∀ a, KcovMetadataBytes coverage a → ¬InRange preemptCountAddress 4 a)
@@ -222,7 +222,8 @@ theorem header_simulation (fetch : Int64 → Option Decoded)
       some (head.toNat : Int) := by
     simpa only [bucket_address c s table query] using headRead
   have run := historySteps_eventually fetch 4 _ _
-    (bucket_header_history fetch agree s preempt head count field history)
+    (bucket_header_history fetch agree s preempt head
+      (load32_raw _ _ _ ready.state.2.1) field history)
   apply eventually_weaken (historyStep fetch) _ _ _ _ run
   rintro t ⟨af, machine, recorded⟩
   have last : t.history.getLast? = some t.machine := by
