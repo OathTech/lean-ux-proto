@@ -1485,7 +1485,9 @@ def Decision.info : Decision → DecisionInfo
   | .ecnEncapInnerCe => d "INET_ECN_encapsulate.inner_ce" ech 49 [] []
   -- `padded_size = min(PACKET_CB(skb)->mtu, ALIGN(last_unit, ...))`
   -- (send.c:157-158): min()'s comparison, true when the MTU is the smaller
-  -- (a branch-free select: no witness)
+  -- (a branch-free select: no witness, and no compare record at :157-158
+  -- over the 2026-10-14 full check's 2303 traces, so no operands: the Send
+  -- audit's F8)
   | .padClamped => d "calculate_skb_padding.clamped" wsd 157 [] []
   -- D3 stream M (their infos; docs/2026-10-05-d3-timers.md, section 5)
   | .retransmitGiveUp => d "wg_expired_retransmit_handshake.give_up" wtm 46 [(51, 62)] [(64, 75)]
@@ -2529,6 +2531,12 @@ def Decision.comparison : Decision → Option Comparison
   -- is compiled as `x > R - 1` (measured: send.c:381 records
   -- `(0xffffffffffffe03d, nonce)`), which the check's `ge` shift absorbs
   | .stagedNonceRejected => some ⟨.ge, true, none, false⟩
+  -- calculate_skb_padding (send.c:145, :154), inlined into encrypt_packet
+  -- (:176): `!mtu` is recorded as the constant 0 against the u32 `mtu`
+  -- (kind 5, 209 rows over the 2026-10-14 full check) and `last_unit > mtu`
+  -- as a non-constant u32 pair (kind 4, 224 rows); the Send audit's F8
+  | .padNoMtu => some ⟨.eq, true, none, false⟩
+  | .padOverMtu => some ⟨.gt, false, none, false⟩
   -- decrypt_packet's condition (receive.c:252-254) records its counter
   -- limit at 252 too (measured, 102 records over the suite)
   | .decCounterLimit => some ⟨.ge, true, some 252, false⟩

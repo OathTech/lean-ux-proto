@@ -48,12 +48,16 @@ def counterNonce (counter : Nat) : List UInt8 := List.replicate 4 0 ++ le64 coun
 def alignPadding (n : Nat) : Nat :=
   (n + MESSAGE_PADDING_MULTIPLE - 1) / MESSAGE_PADDING_MULTIPLE * MESSAGE_PADDING_MULTIPLE
 
-/-- calculate_skb_padding (send.c:141-160). -/
+/-- calculate_skb_padding (send.c:141-160). The two tests carry their
+    operands (the Send audit's F8, 2026-10-15): `!mtu` is the u32 against the
+    constant 0 and `last_unit > mtu` the two u32s, both recorded at their
+    lines inside `encrypt_packet` (:176); the `min` at :157 is a branch-free
+    select the built code records no comparison for. -/
 def calculateSkbPadding (len mtu : Nat) : M Nat := do
-  if ← branch .padNoMtu (mtu == 0) then return alignPadding len - len
+  if ← branchCmp .padNoMtu (mtu == 0) mtu 0 then return alignPadding len - len
   let lastUnit ← do
-    if ← branch .padOverMtu (len > mtu) then pure (len % mtu) else pure len
-  -- min(mtu, ALIGN(last_unit, MESSAGE_PADDING_MULTIPLE))
+    if ← branchCmp .padOverMtu (len > mtu) len mtu then pure (len % mtu) else pure len
+  -- min(mtu, ALIGN(last_unit, MESSAGE_PADDING_MULTIPLE)): a select, no compare record
   let paddedSize ← do
     if ← branch .padClamped (mtu < alignPadding lastUnit) then pure mtu else pure (alignPadding lastUnit)
   return paddedSize - lastUnit
@@ -92,7 +96,10 @@ def encryptPacket (checksumHelp : Packet → M Packet) (keypair : KeypairId) (pk
   -- `skb_to_sgvec` < 0: not an allocation (docs/2026-10-05-a-alloc.md 6.4);
   -- a linear skb: `__skb_to_sgvec` returns 1
   if ← branch .encSgvecFailed false then return none
-  -- chacha20poly1305_encrypt_sg_inplace over the packet and its padding
+  -- chacha20poly1305_encrypt_sg_inplace over the packet and its padding: its
+  -- `false` is `WARN_ON(src_len > INT_MAX)` (lib/crypto/chacha20poly1305.c:236-237),
+  -- structurally dead for a plaintext of at most 65535 + 15 bytes: the
+  -- census's P14 class, no decision (the Send audit's F5)
   return some (dataMessage k.remoteIndex pkt.nonce k.sending.key (inner.bytes ++ List.replicate paddingLen 0))
 
 /-- One iteration of wg_packet_encrypt_worker (send.c:287-309): the ring
