@@ -506,7 +506,18 @@ failure cannot be converted to a false no-work result. This is local dispatch
 coverage, not a proof that all runnable work is dispatched by the scheduler.
 Independent read-only review found no issue.
 
-The ten H5 statements pass scoped build, standard-axiom inspection and
+`Progress/ScheduleTurn` now connects the second architecture to the original
+scheduler by exact source equality, preserving its record budget and exhaustion
+continuation. Successful candidate filtering preserves the entire World and
+selects exactly the successful probes, in order and with duplicates retained.
+The zero/singleton/multiple-candidate resumption cases preserve original return,
+committed execution after detachment, and ambiguity errors. These five terminals
+make fifteen. Independent read-only review found no defect. Productive-turn
+record decrease, iteration coverage, the stack-held-worker case and the frame
+from probing to execution after detachment remain open. No statement assumes
+that a successful probe guarantees successful detached execution.
+
+The fifteen H5 statements pass scoped build, standard-axiom inspection and
 stock kernel replay (`leanchecker --fresh Leanux.Proofs.WG.Progress.Statements`,
 through the capped bundle). The
 full gate was rerun and fails at the same inherited counter refinement; token

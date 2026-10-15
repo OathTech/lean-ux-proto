@@ -1,6 +1,7 @@
 import Leanux.Proofs.WG.Progress.BatchBacklog
 import Leanux.Proofs.WG.Progress.Scheduler
 import Leanux.Proofs.WG.Progress.Dispatch
+import Leanux.Proofs.WG.Progress.ScheduleTurn
 
 namespace Leanux.Proofs.WG.Progress
 open Leanux Leanux.Env
@@ -72,5 +73,76 @@ theorem original_dispatch_false (worker : Worker) (initial final : World) :
     (Env.dispatch worker).run initial = .ok (false, final) ↔
       (dispatchPrefix worker).run initial = .ok (none, final) :=
   dispatch_false_iff worker initial final
+
+/-- The original scheduler is exactly its record-budgeted loop over the factored
+single-turn body. Its normal return and budget-exhaustion continuation are retained. -/
+theorem original_schedule_turns (stack : Option Worker) :
+    Env.schedule stack = (do
+      let budget ← recordBudget
+      let result ← forIn [0:budget] ((none, ()) : Option Unit × Unit)
+        (fun _ _ => scheduleTurn stack)
+      match result.1 with
+      | some ret => pure ret
+      | none => budgetExhausted "the scheduler loop") :=
+  schedule_source stack
+
+/-- A successful original candidate-filter computation preserves the entire
+World and selects exactly the successful activation probes, preserving order
+and multiplicity. Other probe errors are not silently rejected. -/
+theorem original_candidates_exact (candidates : List Activation) (initial final : World)
+    (result : List Activation)
+    (run : (candidates.filterM Activation.consistent).run initial = .ok (result, final)) :
+    final = initial ∧ result = candidates.filter (probeAccepted · initial) :=
+  filter_consistent_result candidates initial final result run
+
+/-- At the original recorded scheduler resumption branch with one candidate
+and no worker held on the caller stack, detach the activation and run it.
+The equation preserves errors from actual execution after detachment; probe
+success alone does not assert success of that execution. -/
+theorem original_turn_resumes (initial afterPeek : World) (next : Option Nat)
+    (d : WG.Device) (a : Activation) (records : initial.hidden.isNone = false)
+    (peek : peekHiddenSite.run initial = .ok (next, afterPeek))
+    (noStart : ∀ worker, next.bind sectionOf ≠ some (worker, true))
+    (device : afterPeek.k.wg = some d)
+    (noPoll : (next == some (HiddenSite.sectionStart .netRx).info.id &&
+      d.peers.toList.any (·.2.napiScheduled)) = false)
+    (candidates : (afterPeek.suspended.filterM Activation.consistent).run afterPeek =
+      .ok ([a], afterPeek)) :
+    (scheduleTurn none).run initial =
+      ((Activation.run a).run (detached afterPeek a) >>= fun out => pure (turnContinue, out.2)) :=
+  turn_resumes_singleton initial afterPeek next d a records peek noStart device noPoll candidates
+
+/-- At the original recorded scheduler resumption branch with no candidate,
+return immediately at the post-peek World. This is one turn, not a queue-drain claim. -/
+theorem original_turn_no_candidate (stack : Option Worker) (initial afterPeek : World) (next : Option Nat)
+    (d : WG.Device) (records : initial.hidden.isNone = false)
+    (peek : peekHiddenSite.run initial = .ok (next, afterPeek))
+    (noStart : ∀ worker, next.bind sectionOf ≠ some (worker, true))
+    (device : afterPeek.k.wg = some d)
+    (noPoll : (next == some (HiddenSite.sectionStart .netRx).info.id &&
+      d.peers.toList.any (·.2.napiScheduled)) = false)
+    (candidates : (afterPeek.suspended.filterM Activation.consistent).run afterPeek =
+      .ok ([], afterPeek)) :
+    (scheduleTurn stack).run initial = .ok (turnReturn, afterPeek) :=
+  turn_no_candidates stack initial afterPeek next d records peek noStart device noPoll candidates
+
+/-- At the original recorded scheduler resumption branch with at least two
+candidates, stop outside the modeled domain with the ambiguity message and
+the original diagnostic site. No activation is committed by that branch. -/
+theorem original_turn_ambiguous (stack : Option Worker) (initial afterPeek : World) (next : Option Nat)
+    (d : WG.Device) (a b : Activation) (rest : List Activation) (records : initial.hidden.isNone = false)
+    (peek : peekHiddenSite.run initial = .ok (next, afterPeek))
+    (noStart : ∀ worker, next.bind sectionOf ≠ some (worker, true))
+    (device : afterPeek.k.wg = some d)
+    (noPoll : (next == some (HiddenSite.sectionStart .netRx).info.id &&
+      d.peers.toList.any (·.2.napiScheduled)) = false)
+    (candidates : (afterPeek.suspended.filterM Activation.consistent).run afterPeek =
+      .ok (a :: b :: rest, afterPeek)) :
+    (scheduleTurn stack).run initial =
+      .error (.outsideDomain (match afterPeek.steps.back? with
+        | some s => s!"{s.decision.info.file}:{s.decision.info.line}"
+        | none => "syscall entry")
+        "the records do not determine which suspended worker resumed") :=
+  turn_ambiguous stack initial afterPeek next d a b rest records peek noStart device noPoll candidates
 
 end Leanux.Proofs.WG.Progress
