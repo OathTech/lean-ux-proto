@@ -112,6 +112,7 @@ Read these before the README's claims are taken at face value:
 | [2026-10-14-charter-binary-tv.md](2026-10-14-charter-binary-tv.md) | Charter for the scoping of binary-level translation validation: the mirror against the compiled oracle under Kraken's x86-64 semantics, a probe on one WireGuard function |
 | [2026-10-15-charter-binary-adequacy.md](2026-10-15-charter-binary-adequacy.md) | Charter for the binary-level adequacy grind: one theorem per anchored WireGuard function under Kraken, region lemmas between correspondence points, the trust base in one file |
 | [2026-10-15-binary-tv-scoping.md](2026-10-15-binary-tv-scoping.md) | Instruction census and executable three-way index-lookup probe under Kraken; blockers, state relation and checker estimates |
+| [2026-10-15-design-state-split.md](2026-10-15-design-state-split.md) | Design for the state split: per-subsystem worlds (WireGuard, the file layer, seccomp, the task lifecycle, the ambient effects) with each module's functions typed over its own state and narrowed within WireGuard where cheap; the measured access matrix, the compile-driven retrofit of the proof tree, the order and estimate |
 | [2026-10-13-review-r5-counterexamples.md](2026-10-13-review-r5-counterexamples.md) | The independent review of the campaign's R5 counterexamples: three statement artefacts, design nuances at most, no tray entry |
 
 ## Reviews of the whole

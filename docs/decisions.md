@@ -682,3 +682,35 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   builds and suite runs run concurrently across agents; `capped`, the
   memory cap, the KILLED-is-failure rule and the one-recorded-rerun rule are
   unchanged [AGENT, coordinator: the measurement and the number].
+- **2026-10-15 [USER]** The mirror's state is split into per-subsystem
+  worlds: "we want the subsystems to operate over localized world types"
+  (WireGuard, the file layer, seccomp, the task lifecycle, with the record
+  stream, the decision log and the dispatch bookkeeping as the ambient part
+  every module has; the runner holds the product and is the only composer).
+  Two kinds of framing: structural, enforced by the types and free, because
+  a function that is not passed a piece of state cannot affect it in a
+  program without side effects; and non-localizable, needing footprint
+  invariants, kept only where an effect cannot be localized. The design:
+  docs/2026-10-15-design-state-split.md.
+- **2026-10-15 [USER]** "we want functions to be narrowed at the type level
+  to just the data they access, where this can be done cheaply": within
+  WireGuard the leaves (the trie, the rings and queues, the index table and
+  slots, the cookie and rate-limiter functions, the timer operations) take
+  their field group's type; the entry points keep the WireGuard world. No
+  footprint invariants in this stream.
+- **2026-10-15 [USER]** The retrofit is compile-driven, with no compatibility
+  wrappers and no equivalence lemmas: "We don't need extensional
+  equivalence, it's just throwing out fields. Just delete fields and see if
+  anything breaks. There's no way for field deletion to modify behavior."
+  In the proof tree, a statement that mentions the global World is retyped
+  over the local world; a frame lemma the types or the one lift lemma now
+  give is deleted, even if its old proof would still compile; nothing is
+  re-proved.
+- **2026-10-15 [USER]** Timing against the campaigns: Codex#2's campaign 1
+  (`proofs/campaign`) finishes R3 and R4 and lands, its retrofit one job
+  afterwards; Codex#1's campaign 2 (`proofs/campaign-2`) stops at its
+  checkpoint now and resumes on the split mirror; Codex#3's binary adequacy
+  grind continues, its R a relation over the WireGuard world literally. The
+  split starts when B3 is on `main` and lands before lane C's C1, whose new
+  module retypes then [AGENT, coordinator: the sequencing argument; the
+  measurements in the design note].
