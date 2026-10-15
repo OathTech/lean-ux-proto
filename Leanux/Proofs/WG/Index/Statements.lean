@@ -13,6 +13,7 @@ import Leanux.Proofs.WG.Index.SendSource
 import Leanux.Proofs.WG.Index.DispatchSource
 import Leanux.Proofs.WG.Index.ResponseSource
 import Leanux.Proofs.WG.Index.ConsumeSource
+import Leanux.Proofs.WG.Index.StagedSource
 
 /-! H2's original-operation table contracts. Reachable owner/peer-word
 coherence remains a separate obligation. -/
@@ -465,5 +466,25 @@ theorem original_cookie_message_consume_tables (msg : List UInt8) :
     Campaign2.Ensures (cookieMessageConsume msg) View.TablesSafe
       (fun _ s => View.TablesSafe s) :=
   cookieMessageConsume_tables msg
+
+/-- Every normal return of original staged-packet sending preserves optional-device
+index and owner uniqueness and the hashed-keypair allocation bound. The original
+nonce loop and skb allocation map feed the actual enqueue paths, including EPIPE
+dead publication and other-failure releases. No resident-peer, owner-word identity
+or reference-count premise is added. This caller queues work; worker execution,
+packet delivery and completion on arbitrary records are not asserted. -/
+theorem original_send_staged_packets_tables (pid : PeerId) :
+    Campaign2.Ensures (sendStagedPackets pid) View.TablesSafe
+      (fun _ s => View.TablesSafe s) :=
+  sendStagedPackets_tables pid
+
+/-- Original keepalive sending preserves the optional-device table invariant
+on every normal return, including allocation failure, existing staged packets,
+and the full staged-send suffix. No residency or reference-count premise is added;
+the contract does not assert transmission or arbitrary-record completion. -/
+theorem original_send_keepalive_tables (pid : PeerId) :
+    Campaign2.Ensures (sendKeepalive pid) View.TablesSafe
+      (fun _ s => View.TablesSafe s) :=
+  sendKeepalive_tables pid
 
 end Leanux.Proofs.WG.Index

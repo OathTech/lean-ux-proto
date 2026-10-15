@@ -26,7 +26,7 @@ No independent existential projected runs are spliced together.
 | Result | Existing mathematical checkpoint | Factoring / remaining mathematics |
 | --- | --- | --- |
 | H1 Noise | 13 state/slot and ordered-clear contracts | Public projection complete; whole-call edge coverage and lifetime confirmation remain open. |
-| H2 Index | 36 contracts, including lifecycle boundaries, both handshake senders, three message consumers and original worker/dispatch | Public projection complete: 14 total contracts, 20 normal-return contracts, 1 exact stop and 1 projected initializer theorem; reachable coherence, broader records and the corpus runner composition remain open. |
+| H2 Index | 38 contracts, including lifecycle boundaries, both handshake senders, three message consumers, staged/keepalive sending and original worker/dispatch | Public projection complete: 14 total contracts, 22 normal-return contracts, 1 exact stop and 1 projected initializer theorem; reachable coherence, broader records and the corpus runner composition remain open. |
 | H3 Roaming | 6 contracts, including original decrypt-worker publication provenance | Public projection complete; carrying provenance through poll execution and complete caller coverage remain open. |
 | H4 Configuration | 60 contracts and the reachable internal dump-accounting finding | Public projection and frame separation complete. Queued/live-keypair removal, private-key collision, mixed attributes, global ownership and general dump composition remain open. |
 | H5 Progress | 27 contracts, including original cut-loop budget adequacy, and the accepted batch-backlog counterexample | Public projection and frame separation complete; the recorded cut cannot exhaust its budget. Whole-worker record decrease, full loop coverage and probe/detach composition remain open. The backlog witness is historical over `de62c9d`: main's batch guard now addresses request 1. |
@@ -34,7 +34,7 @@ No independent existential projected runs are spliced together.
 
 Projection/frame factoring completed at `69f988a` for all six results, preserving
 all 153 existing headline names before new mathematics. The following H2 lifecycle/sender
-and H6 dispatch increments, H3 publication provenance, H5 cut-loop progress and H1 ordered clearing bring the total to 174. No public statement directly names `World` or
+and H6 dispatch increments, H3 publication provenance, H5 cut-loop progress and H1 ordered clearing bring the total to 176. No public statement directly names `World` or
 `Kernel`.
 The full proof gate remains failed in inherited campaign-1 counter-window and
 index carries; those files have not been edited. Scoped validation does not
@@ -51,7 +51,7 @@ connections to the current executable mirror, not replacement interpreters.
 | --- | --- | --- |
 | Common C2 | `Campaign2/View` is data-only; `Campaign2/Bridge` defines projection and universal execution contracts. | No shared campaign-1 layer is changed. |
 | H1 | `Noise/Model`, `Statements`, `Slots`, `StateEdges`, `ConsumeEdges`, `ClearModel`, `ClearEffects`, `ClearSource`; `Execution` holds the concrete monad connection; `AccessSource` holds accessor read/write contracts, reexported by `Basic`. | `KernelFrames`, `PeerFrames`, `SlotFrames`, `ClearFrames`. |
-| H2 | `Index/View`, `TableModel`, `OwnerWordModel`, `AllocationModel`, `ReleaseModel`, `LifecycleModel` and pure release effects/bounds; `Statements`, `HandshakeClaims`, `OwnerUpdateClaims`, `LifecycleSource`, `LinkSource`, `SendSource`, `DispatchSource`, `ResponseSource`, `ConsumeSource` and the other operation/source modules. | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`, `NewlinkFrames`, `SendFrames`, `DispatchFrames`, `ResponseFrames`, `ConsumeFrames`; the old `HandshakeFrames` and `OwnerFrames` paths are import-only reexports, not duplicated lemmas. |
+| H2 | `Index/View`, `TableModel`, `OwnerWordModel`, `AllocationModel`, `ReleaseModel`, `LifecycleModel` and pure release effects/bounds; `Statements`, `HandshakeClaims`, `OwnerUpdateClaims`, `LifecycleSource`, `LinkSource`, `SendSource`, `DispatchSource`, `ResponseSource`, `ConsumeSource`, `StagedSource` and the other operation/source modules. | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`, `NewlinkFrames`, `SendFrames`, `DispatchFrames`, `ResponseFrames`, `ConsumeFrames`, `StagedFrames`; the old `HandshakeFrames` and `OwnerFrames` paths are import-only reexports, not duplicated lemmas. |
 | H3 | `Roaming/Model`, `View`, `Statements`, `EndpointClaims`, `EndpointSource`, `Authentication`, `PublicationModel`, `PublicationSource`, `PublicationClaims`. | `Roaming/Frames`, `PublicationFrames`; `Basic` reexports the endpoint source connection. |
 | H4 | `Config/Model`, `AllowedRemovalModel`, `QuietModel`, `ClaimView`, `Statements`, `SourceClaims`, `ObservationBridge`, and existing substantive effect/source modules. | `ConcreteFrames` isolates six whole-kernel endpoint contracts; `OperationFrames` isolates seven generic helpers; `ReadbackFrames` retains socket/fixture preservation; `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `QuietFrames`, `KeyFieldFrames` isolate within-WG preservation. |
 | H5 | `Progress/Model`, `View`, `Statements`, `SourceClaims`, `ObservationBridge`; `ControlLaws` is generic state/error control and `ControlSource` connects it exactly to the original worker; the scheduler/source modules retain actual execution factors. `CutModel`, `CutSource` and `CutClaims` establish original cut-loop progress. | `StackFrames` isolates caller-guard preservation; `CutFrames` isolates record/error-location preservation. Probe/filter/no-work contracts also establish outputs and remain substantive source claims. |
@@ -514,6 +514,37 @@ run. Ranked mirror suggestions for H2: none at this checkpoint; no mirror
 change has been requested to simplify the proofs. Independent review of the
 three matched-entry contracts found no correctness issue; it checked owner
 aliasing, missing-owner versus NULL distinctions, and the exact refcount bound.
+
+`StagedSource` now closes original `sendStagedPackets` and `sendKeepalive`
+table preservation. The proof retains the original nonce loop, skb allocation
+map, fallback handshake queueing and actual enqueue continuations, including
+EPIPE dead publication and other-failure keypair/peer releases. Caller peer and
+key-owner identities remain independent. Direct normal-return `keypairPut`
+preservation permits a NULL peer word when the reference is retained; it does
+not import the stronger non-NULL premise of the total release contract.
+`StagedFrames` isolates table/cursor-preserving packet, CPU and queue helpers,
+including small local `peekQueuedUnit`, `queueDeviceWork`, and
+`ipTunnelEcnEncap` kernel variants and a keepalive-site variant of the existing
+C2 allocation lemma. Table-filtering releases remain substantive source claims.
+No existing shared lemma or mirror definition is edited or layer copied.
+
+The two new projected headlines need only initial `TablesSafe`. They cover
+normal return, including allocation refusal, without extra residency, reference
+count or owner-word identity premises. These callers enqueue crypt work; the
+contracts do not establish worker execution, transmission, arbitrary-record
+completion or resident-owner/store coherence. They provide the staged-send
+boundary needed for the handshake receive caller.
+
+H2 now has 38 headlines and the campaign 176. The scoped Index build passed
+(182 jobs), all 38 H2 axiom checks and fresh stock replay passed, and all 176
+campaign headlines import and pass axiom inspection together using only the
+standard three axioms. Gate token and import/root/default-target checks pass;
+the inherited full-gate failure remains. Independent review closed after moving
+the purely structural enqueue helper into Frames. Ordinary elaboration fixes
+only; no cap failure, timeout, guest run or infrastructure rerun. Reproduce with
+`LEAN_NUM_THREADS=32 capped -- scripts/in-bundle lake build Leanux.Proofs.WG.Index.Statements`
+and the same wrapper around `lake env leanchecker --fresh Leanux.Proofs.WG.Index.Statements`.
+No new mirror finding or team request arose.
 
 ## H3 — Endpoint roaming (in progress)
 
