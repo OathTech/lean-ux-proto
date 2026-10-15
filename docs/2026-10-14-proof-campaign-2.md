@@ -5,7 +5,7 @@
 Work is confined to `.worktrees/proofs-campaign-2`, branch `proofs/campaign-2`.
 H1, H3 and H4 have local contracts; their whole-operation/whole-run claims
 remain open. H4 also has a checked reachable internal dump-accounting finding. H5 has a checked batch-completion counterexample and open progress
-obligations. H6 has twenty-four local timer contracts; whole-run site coverage and
+obligations. H6 has twenty-six local timer contracts; whole-run site coverage and
 retry/session counting remain open.
 H2 was unblocked by the user's landing notice for `de62c9d` on 2026-10-15.
 Main was merged into this branch at `5033f7a`. No result is claimed complete.
@@ -707,6 +707,17 @@ found no mathematical or source-linkage defect; its wording correction from
 “recorded read” to “original caller-read result” was applied, since armRecords
 alone does not exclude placeholder execution.
 
+`JitterRecords` and `JitterExhaustion` connect exact supplied one-byte draws
+at both timer sites to the original sampler. A contiguous rejected prefix
+followed by an accepted byte returns its original scaled value and changes only
+the remaining record list; an arbitrary suffix survives. All-rejected finite
+streams, including empty input, stop on the extra budget turn with the exact
+missing-record error, before budget exhaustion. Ambient interleavings and
+recordless placeholders are outside these two contracts; no distribution claim
+is made. Independent read-only review found no arithmetic, linkage or World-frame
+defect. This closes the restricted exhaustion clause previously removed from
+the normal-completion bound's docstring.
+
 Remaining work: completed retry-episode counting and source-complete caller
 coverage for traversal and session derivation. No H6 mirror mismatch has been
 established; ranked mirror suggestions: none.
@@ -719,7 +730,7 @@ assumed. The dispatcher factor needed explicit failure-bind equations and a
 shared case split on the due list after ordinary elaboration failures; an overly
 broad simplification reached recursion depth and was replaced by bounded
 rewrites. No resource limit was raised. Scoped build and axiom inspection
-pass for all twenty-four statements using only the three standard axioms. Stock
+pass for all twenty-six statements using only the three standard axioms. Stock
 kernel replay also passes: `capped -- scripts/in-bundle lake env leanchecker
 --fresh Leanux.Proofs.WG.TimerDiscipline.Statements`. The full
 proof gate remains failed at inherited `CounterWindow/Refinement.lean` and

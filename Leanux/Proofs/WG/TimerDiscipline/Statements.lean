@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TimerDiscipline.JitterExhaustion
 import Leanux.Proofs.WG.TimerDiscipline.InitiationArm
 import Leanux.Proofs.WG.TimerDiscipline.Arming
 import Leanux.Proofs.WG.TimerDiscipline.Jitter
@@ -330,5 +331,30 @@ theorem original_initiation_send_arm (pid : PeerId) (d : Device) (p : Peer)
         0 ≤ (now - caller).toInt64 ∧ (now - caller).toInt64 ≤ 1 :=
   sendInitiation_arm_recorded pid d p resident running alive initial afterPrefix final
     hprefix device records run
+
+/-- At either original timer-jitter site, a finite contiguous rejected-draw
+prefix followed by an accepted byte returns that byte's scaled jitter, consumes
+exactly those records and preserves the entire remaining World. Records use the
+original one-byte payload with seven padding zeros; arbitrary suffixes remain.
+This is total execution of the original sampler, not a distribution claim. -/
+theorem original_jitter_records (site : JitterSite) (rejected : List UInt8) (accepted : UInt8)
+    (rest : List HiddenRecord) (bad : ∀ byte ∈ rejected, ¬jitterAccepted byte)
+    (good : jitterAccepted accepted) (w : World)
+    (records : w.hidden = some (jitterStream site rejected accepted rest)) :
+    (jitterBelowRekeyTimeout site.hiddenSite).run w =
+      .ok (jitterValue accepted, { w with hidden := some rest }) :=
+  jitter_records site rejected accepted rest bad good w records
+
+/-- A finite contiguous stream containing only rejected jitter bytes ends at
+the exact original missing-record error. The record-derived budget includes the
+extra read, so this is hidden-input exhaustion before budget exhaustion. Empty
+streams are included; recordless placeholder execution and ambient interleavings
+are outside this contract. -/
+theorem original_jitter_exhausted (site : JitterSite) (rejected : List UInt8)
+    (bad : ∀ byte ∈ rejected, ¬jitterAccepted byte)
+    (w : World) (records : w.hidden = some (rejected.map (jitterRecord site))) :
+    (jitterBelowRekeyTimeout site.hiddenSite).run w =
+      .error (.hidden s!"no record left for {site.hiddenSite.info.label}") :=
+  jitter_exhausted site rejected bad w records
 
 end Leanux.Proofs.WG.TimerDiscipline
