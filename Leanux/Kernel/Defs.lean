@@ -673,6 +673,16 @@ structure Kernel where
       (:1833, :1865): `ep_ptable_queue_proc` reads it and clears it when its
       `pwq` allocation fails (:1551-1553), which `ep_insert` tests (:1877). -/
   epqEpi : Option EpiId := none
+  /-- B3 (docs/2026-10-15-design-b3-timer-wheel.md, section 3.1): the timer
+      base's clock (`timer_bases[0].clk`, kernel/time/timer.c:251-266) as
+      last recorded at an arm (kind 313), kept for the check that the base
+      never rewinds (`__forward_timer_base`, :994-1016); `none` before the
+      first arm. -/
+  timerClk : Option UInt64 := none
+  /-- B3: the enqueue stamp counter (`enqueue_timer`, timer.c:655-680): each
+      enqueue takes the next stamp, which orders a slot's list (newest first,
+      `hlist_add_head`, :659). -/
+  timerEnqueues : Nat := 0
   deriving BEq
 
 /-! ## Allocation outcomes (docs/2026-10-05-a-alloc.md, section 6)
@@ -1037,6 +1047,15 @@ inductive HiddenSite where
       `{jiffies before, jiffies after}` of the `wg_advance` operation, in
       the trace process's task stream. -/
   | modTimerArm | timeAdvance | jiffiesEnd
+  /-- B3 (docs/2026-10-15-design-b3-timer-wheel.md, sections 3.2, 4 and 7):
+      the timer wheel's two records at an arm, written by `__mod_timer` for a
+      timer of the armed set and resolved at the arming line like the arm
+      record: kind 313 `{base->clk, timer}` right after `forward_timer_base`
+      on both paths (the hidden input the slot depends on), and kind 314
+      `{idx, bucket_expiry, timer}` at the enqueue (the slot and bucket
+      expiry the C stored; absent on the same-slot path, so the mirror's own
+      same-slot decision is checked by the record's presence). -/
+  | timerClk | timerEnqueue
   /-- Pre-release review, finding 2 (docs/2026-10-14-pre-release-review.md,
       section 2): the caller's `jiffies` read that computes a peer timer's
       expiry, recorded as kind 311 `{jiffies}` on the caller's own line in
@@ -1267,6 +1286,11 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   -- `Env.afterAdvance` as the firing window's exact end. Id 128: the first
   -- free id after L's block (120-127).
   | .jiffiesEnd => ⟨128, "jiffies_end", "jiffies", "fs/ioctl.c", 51, 8, .mirror⟩
+  -- B3: the wheel's records at mod_peer_timer's line (the caller's return
+  -- address passed through __mod_timer), kind classes `clk` and `wheel`;
+  -- ids 428 and 429 continue the review's 420-427.
+  | .timerClk => ⟨428, "timer_clk", "clk", "drivers/net/wireguard/timers.c", 37, 16, .mirror⟩
+  | .timerEnqueue => ⟨429, "timer_enqueue", "wheel", "drivers/net/wireguard/timers.c", 37, 24, .mirror⟩
   -- Pre-release review finding 2: the caller's jiffies read before each
   -- mod_peer_timer, kind 311, 8 bytes, at the caller's line (the `_THIS_IP_`
   -- of the `kcov_timer_jiffies(jiffies, _THIS_IP_)` expression); ids 420-426.
@@ -1346,7 +1370,7 @@ def HiddenSite.all : List HiddenSite :=
   ++ Worker.all.flatMap (fun w => [.sectionStart w, .sectionStop w])
   ++ [.reschedReceive, .reschedEncrypt, .reschedTx, .reschedDecrypt, .newHandshakeJitter, .walltimeLastHandshakeData,
       .cookieBirthdate]
-  ++ [.modTimerArm, .timeAdvance, .jiffiesEnd]
+  ++ [.modTimerArm, .timeAdvance, .jiffiesEnd, .timerClk, .timerEnqueue]
   ++ [.timerJiffiesRetransmitZeroKey, .timerJiffiesExpiredKeepalive, .timerJiffiesDataSent, .timerJiffiesDataReceived,
       .timerJiffiesHandshakeInitiated, .timerJiffiesSessionDerived, .timerJiffiesTraversal]
   ++ (Worker.all.filter fun w => w.timer?.isNone && w != .netRx).map .queued
@@ -1516,6 +1540,16 @@ structure World where
       ids restart (the simulation-target review, 2026-10-12, section 4.3). -/
   unitPeers : List (Nat × Nat × Nat) := []
   timerUnits : List (Nat × Nat × WG.PeerTimer) := []
+  /-- B3 (docs/2026-10-15-design-b3-timer-wheel.md, section 3.3): the bucket
+      expiry of the step a timer pass is at while one of its callbacks runs
+      (`Env.runTimers`), for the check that an arm inside the pass sees a
+      base clock past that step (`base->clk++`, timer.c:2416); `none`
+      outside a callback. -/
+  timerPassStep : Option UInt64 := none
+  /-- B3 (section 3.4, E2): the later operations' records, for the lookahead
+      that tells a deferred timer softirq (its section appears later) from a
+      due timer that never fires; `none` without records. -/
+  hiddenAhead : Option (List (List HiddenRecord)) := none
   pendingWork : List Nat := []
   /-- W8 (docs/2026-10-06-w8-w9-netns-routing.md, 3.1): the foreign-creator
       fixture, where wg0's creating namespace C is held by the fixture's

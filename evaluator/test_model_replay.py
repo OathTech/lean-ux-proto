@@ -90,7 +90,7 @@ def run_raw(trace):
     """`run` without `widen`, for a capture made on the current kernel (its
     section starts and arms already carry their identity words; `widen` would
     mis-pad them)."""
-    result = subprocess.run([MODEL], input=json.dumps(with_timer_caller_jiffies(with_jiffies_end(trace))).encode(), capture_output=True,
+    result = subprocess.run([MODEL], input=json.dumps(with_wheel_records(with_timer_caller_jiffies(with_jiffies_end(trace)))).encode(), capture_output=True,
                             timeout=120)
     return result.returncode, result.stdout.decode(), result.stderr.decode()
 
@@ -169,6 +169,79 @@ def with_timer_caller_jiffies(trace):
     return trace
 
 
+# B3 (docs/2026-10-15-design-b3-timer-wheel.md, section 3.2; Leanux/WG/State.lean
+# `armTimer`): the mirror consumes, after every arm record that locks the base
+# (a pending timer re-armed with the same expires does not), the base-clock
+# record (kind 313, site 428, {clk, timer}) and, when the C enqueues (a fresh
+# arm or a slot change; not a same-slot re-arm), the enqueue record (kind 314,
+# site 429, {idx, bucket_expiry, timer}). The captures above predate both, so
+# the replays insert them with the values the capture determines: the clock
+# as mod_timer's own read (the no-lag case, which the s4 measurement found
+# for every arm of the corpus) and the slot and bucket expiry by the C's
+# arithmetic (timer.c:567-620) on that clock, tracking each timer's slot and
+# expiry across the trace. A fixture of the replay, not a mirror rule; a
+# capture made on the s5 pair or later carries the records and is left alone.
+TIMER_CLK_SITE, TIMER_ENQUEUE_SITE = 428, 429
+TIMER_SECTION_START_SITES = {102, 104, 106, 108, 112}   # the five callbacks (Worker.sectionId: indices 6-9, 11)
+LVL_START = [None] + [63 << (3 * (n - 1)) for n in range(1, 10)]
+
+
+def wheel_index(expires, clk):
+    """`calc_wheel_index` (timer.c:584-620) at HZ 250 (LVL_DEPTH 9): (slot, bucket expiry)."""
+    delta = (expires - clk) & MASK64
+    for lvl in range(0, 8):
+        if delta < LVL_START[lvl + 1]:
+            break
+    else:
+        if delta >> 63:
+            return clk & 63, clk
+        lvl = 8
+        if delta >= LVL_START[9]:
+            expires = (clk + LVL_START[9] - (1 << 24)) & MASK64
+    e = ((expires >> (3 * lvl)) + 1) & MASK64
+    return 64 * lvl + (e & 63), (e << (3 * lvl)) & MASK64
+
+
+def with_wheel_records(trace):
+    trace = copy.deepcopy(trace)
+    if 'hidden' not in trace:
+        return trace
+    if any(site in (TIMER_CLK_SITE, TIMER_ENQUEUE_SITE) for records in trace['hidden'] for site, _ in records):
+        return trace
+    timers = {}   # timer address -> (expires, slot); cleared by a firing (its section names the timer)
+    for op, records in zip(trace['ops'], trace['hidden']):
+        if op['op'] in ('wg_down', 'wg_delete', 'wg_netns_close'):
+            timers.clear()   # wg_timers_stop (device.c:124, peer.c:106)
+        out, caller = [], None
+        for site, value in records:
+            out.append([site, value])
+            if site in TIMER_CALLER_SITE_IDS:
+                caller = site
+            if site == TIMER_ARM_SITE:
+                jm = int.from_bytes(bytes.fromhex(value[:16]), 'little')
+                e = int.from_bytes(bytes.fromhex(value[16:32]), 'little')
+                addr = int.from_bytes(bytes.fromhex(value[32:48]), 'little') if len(value) >= 48 else 0
+                # the sites whose timer is not pending at the arm, by the C's guard
+                # (timers.c:147, :157) or the callback's detach (:60, :84): a fresh
+                # enqueue, whatever the capture showed before (a deletion the records
+                # do not carry, timers.c:170 and :178, lies between)
+                old = None if caller in (420, 421, 422, 423) else timers.get(addr)
+                if old is not None and old[0] == e:
+                    continue   # __mod_timer :1085-1088: no lock, no records
+                out.append([TIMER_CLK_SITE, jm.to_bytes(8, 'little').hex() + addr.to_bytes(8, 'little').hex()])
+                slot, bexp = wheel_index(e, jm)
+                if old is not None and old[1] == slot:
+                    timers[addr] = (e, slot)   # :1123-1130: the slot kept, no enqueue record
+                    continue
+                timers[addr] = (e, slot)
+                out.append([TIMER_ENQUEUE_SITE, slot.to_bytes(8, 'little').hex() + bexp.to_bytes(8, 'little').hex()
+                            + addr.to_bytes(8, 'little').hex()])
+            elif site in TIMER_SECTION_START_SITES and len(value) >= 32:
+                timers.pop(int.from_bytes(bytes.fromhex(value[16:32]), 'little'), None)
+        records[:] = out
+    return trace
+
+
 def with_jiffies_end(trace):
     trace = copy.deepcopy(trace)
     if 'hidden' not in trace:
@@ -187,7 +260,7 @@ def with_jiffies_end(trace):
 def replay(trace):
     if not MODEL.is_file():
         raise AssertionError(f'{MODEL} is missing: run `lake build leanux-model` first')
-    result = subprocess.run([MODEL], input=json.dumps(with_timer_caller_jiffies(with_jiffies_end(widen(trace)))).encode(), capture_output=True,
+    result = subprocess.run([MODEL], input=json.dumps(with_wheel_records(with_timer_caller_jiffies(with_jiffies_end(widen(trace))))).encode(), capture_output=True,
                             timeout=120)
     out = (result.stdout + result.stderr).decode()
     return None if result.returncode == 0 and out.startswith('{') and not result.stderr else out.strip()
@@ -196,7 +269,7 @@ def replay_raw(trace):
     """`replay` without `widen`: a capture made on the current kernel (the identity words, the kind-306 records)."""
     if not MODEL.is_file():
         raise AssertionError(f'{MODEL} is missing: run `lake build leanux-model` first')
-    result = subprocess.run([MODEL], input=json.dumps(with_timer_caller_jiffies(with_jiffies_end(trace))).encode(), capture_output=True, timeout=120)
+    result = subprocess.run([MODEL], input=json.dumps(with_wheel_records(with_timer_caller_jiffies(with_jiffies_end(trace)))).encode(), capture_output=True, timeout=120)
     out = (result.stdout + result.stderr).decode()
     return None if result.returncode == 0 and out.startswith('{') and not result.stderr else out.strip()
 
@@ -321,7 +394,7 @@ def _replay_prepared(trace):
     """Run the model on a trace whose caller reads are already in place (no second synthesis)."""
     if not MODEL.is_file():
         raise AssertionError(f'{MODEL} is missing: run `lake build leanux-model` first')
-    result = subprocess.run([MODEL], input=json.dumps(with_jiffies_end(trace)).encode(), capture_output=True, timeout=120)
+    result = subprocess.run([MODEL], input=json.dumps(with_wheel_records(with_jiffies_end(trace))).encode(), capture_output=True, timeout=120)
     out = (result.stdout + result.stderr).decode()
     return None if result.returncode == 0 and out.startswith('{') and not result.stderr else out.strip()
 

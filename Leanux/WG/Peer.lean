@@ -57,6 +57,10 @@ def peerPut (peer : Option PeerId) : M Unit := do
     indexRemove pid .handshake
     -- wg_packet_purge_staged_packets: DEV_STATS_ADD(tx_dropped, qlen)
     modifyDev fun d => { d with txDropped := d.txDropped + p.staged.length, peers := d.peers.erase pid }
+    -- B3: a released peer has no pending timer (wg_timers_stop ran at its
+    -- removal, timers.c:235-243); a wheel entry left here is a mirror defect
+    if let some t := PeerTimer.all.find? (fun t => p.timerPending t || (p.wheel t).isSome) then
+      invariant s!"peer {pid} released with its {repr t} timer pending"
     -- the peer's work structs and timers are freed with it (rcu_free): their
     -- dispatch identities end here (docs/2026-10-11-dispatch-order.md, 4)
     retirePeerUnits pid
