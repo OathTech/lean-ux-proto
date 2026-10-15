@@ -43,7 +43,7 @@ def stagedAfterGet (pid : PeerId) (packets : List Packet) (keypair : Option Keyp
   -- `packets.prev->next = NULL`; wg_peer_get(keypair->entry.peer);
   -- PACKET_CB(packets.next)->keypair = keypair: the skbs enter the store
   -- (review 4.2) as the list `wg_packet_create_data` takes
-  peerGet (← getKeypair id).peer
+  peerGet (← IndexOwner.peerDeref (.keypair id))
   let item ← packetsCb.mapM newTxSkb
   createData pid item
 

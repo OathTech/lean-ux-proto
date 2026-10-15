@@ -7,8 +7,8 @@ namespace Leanux.Proofs.WG.Noise
 open Leanux Leanux.WG Std.Do
 
 theorem indexRemove_peers_spec (P : (PeerId → Option Peer) → Prop)
-    (pid : PeerId) (kind : IndexKind) :
-    ⦃fun w => ⌜P (peerAt w)⌝⦄ indexRemove pid kind
+    (owner : IndexOwner) :
+    ⦃fun w => ⌜P (peerAt w)⌝⦄ indexRemove owner
     ⦃⇓? _ w => ⌜P (peerAt w)⌝⦄ := by
   have hm := modifyDev_peers_spec P
   noise_vcgen [indexRemove, _private.Leanux.WG.Peer.«0».Leanux.WG.unhashEntry,
@@ -30,8 +30,8 @@ theorem bucketHas_kernel_spec (P : Kernel → Prop) (walk collide : Decision) (i
   all_goals try trivial
 
 theorem indexInsert_peers_spec (P : (PeerId → Option Peer) → Prop)
-    (pid : PeerId) (kind : IndexKind) :
-    ⦃fun w => ⌜P (peerAt w)⌝⦄ indexInsert pid kind
+    (owner : IndexOwner) :
+    ⦃fun w => ⌜P (peerAt w)⌝⦄ indexInsert owner
     ⦃⇓? _ w => ⌜P (peerAt w)⌝⦄ := by
   have hm := modifyDev_peers_spec P
   have hh := hidden_kernel_spec (fun k => P (fun i => k.wg.bind fun d => d.peers[i]?))
@@ -44,7 +44,7 @@ theorem indexInsert_peers_spec (P : (PeerId → Option Peer) → Prop)
   all_goals try simp_all
   all_goals try trivial
 
-theorem keypairCreate_peers_spec (P : (PeerId → Option Peer) → Prop) (pid : PeerId) :
+theorem keypairCreate_peers_spec (P : (PeerId → Option Peer) → Prop) (pid : Option PeerId) :
     ⦃fun w => ⌜P (peerAt w)⌝⦄ keypairCreate pid
     ⦃⇓? _ w => ⌜P (peerAt w)⌝⦄ := by
   have hh := keypairAllocation_kernel_spec (fun k => P (fun i => k.wg.bind fun d => d.peers[i]?))

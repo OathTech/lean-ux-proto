@@ -16,15 +16,14 @@ def zeroedHandshake (p : Peer) : Peer :=
     handshakeState := 0 }
 
 def expiryHeadDevice (d : Device) (pid : PeerId) (p : Peer) (now : Int64) : Device :=
-  let removed := { d with indexTable := d.indexTable.filter fun e => !(e.peer == pid && e.kind == .handshake) }
+  let removed := { d with indexTable := d.indexTable.filter fun e => !(e.owner == .handshake pid) }
   let zeroed := withPeer removed pid (zeroedHandshake p)
   withPeer zeroed pid { zeroedHandshake p with
     lastSentHandshake := now - (REKEY_TIMEOUT + 1 : Nat).toInt64 * NSEC_PER_SEC64 }
 
 def expiryHeadSource (pid : PeerId) : M Unit := do
   requireNotPending pid "clearing the handshake"
-  indexRemove pid .handshake
-  handshakeZero pid
+  handshakeClear pid
   resetLastSentHandshake pid
 
 theorem expiryHead_exact (pid : PeerId) (d : Device) (p : Peer)
@@ -32,11 +31,11 @@ theorem expiryHead_exact (pid : PeerId) (d : Device) (p : Peer)
     Ensures (expiryHeadSource pid) (fun w => w.k.wg = some d)
       (fun _ w => ∃ now, w.k.wg = some (expiryHeadDevice d pid p now)) := by
   let zeroed := withPeer
-    { d with indexTable := d.indexTable.filter fun e => !(e.peer == pid && e.kind == .handshake) }
+    { d with indexTable := d.indexTable.filter fun e => !(e.owner == .handshake pid) }
     pid (zeroedHandshake p)
   have hh := hiddenClock64_kernel_spec (fun k => k.wg = some zeroed)
   rw [ensures_iff]
-  noise_vcgen [expiryHeadSource, requireNotPending, indexRemove,
+  noise_vcgen [expiryHeadSource, requireNotPending, handshakeClear, IndexOwner.peerDeref, IndexOwner.peerWord, unsupported, indexRemove,
     _private.Leanux.WG.Peer.«0».Leanux.WG.unhashEntry, handshakeZero, resetLastSentHandshake,
     getPeer, getDev, getK, setPeer, modifyDev, modifyK, branch, invariant, hh]
   all_goals try dsimp +zetaDelta only at *
@@ -76,8 +75,6 @@ def expiryTailSource (pid : PeerId) : M Unit := do
 theorem expireCurrent_source (pid : PeerId) :
     expireCurrentPeerKeypairs pid = (do expiryHeadSource pid; expiryTailSource pid) := by
   simp only [expireCurrentPeerKeypairs, expiryHeadSource, expiryTailSource, bind_assoc]
-  congr 1
-  funext _
   congr 1
   funext _
   congr 1

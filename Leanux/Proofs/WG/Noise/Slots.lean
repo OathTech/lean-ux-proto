@@ -25,7 +25,7 @@ theorem keypairPut_peers_spec (P : (PeerId → Option Peer) → Prop)
     ⦃fun w => ⌜P (peerAt w)⌝⦄ keypairPut kp now
     ⦃⇓? _ w => ⌜P (peerAt w)⌝⦄ := by
   have hm := modifyDev_peers_spec P
-  noise_vcgen [keypairPut, indexRemoveKeypair, _private.Leanux.WG.Peer.«0».Leanux.WG.unhashEntry, getKeypair, getDev,
+  noise_vcgen [keypairPut, indexRemove, IndexOwner.peerDeref, IndexOwner.peerWord, _private.Leanux.WG.Peer.«0».Leanux.WG.unhashEntry, getKeypair, getDev,
     getK, setKeypair, refcountDecAndTest, branch, branchCmp, branchCmpExcluded,
     invariant, unsupported, hm]
   all_goals try dsimp +zetaDelta only at *

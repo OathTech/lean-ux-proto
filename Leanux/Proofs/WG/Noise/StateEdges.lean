@@ -23,7 +23,7 @@ theorem createInitiation_tag (pid : PeerId) (old : Nat) :
   have hs := mixPrecomputedDh_kernel_spec P
   have hi := indexInsert_peers_spec (fun ps => (ps pid).map Peer.handshakeState = some old)
   noise_vcgen [createInitiation, _private.Leanux.WG.Handshake.«0».Leanux.WG.setChain,
-    getPeer, getDev, getK, setPeer, modifyDev, modifyK, branch, invariant,
+    IndexOwner.peerDeref, IndexOwner.peerWord, unsupported, getPeer, getDev, getK, setPeer, modifyDev, modifyK, branch, invariant,
     hh, hg, he, hd, hs, hi]
   all_goals try dsimp +zetaDelta only at *
   all_goals repeat intro
@@ -47,7 +47,7 @@ theorem createResponse_tag (pid : PeerId) (old : Nat) :
   have ho := kdfOut_kernel_spec P
   have hi := indexInsert_peers_spec (fun ps => (ps pid).map Peer.handshakeState = some old)
   noise_vcgen [createResponse, _private.Leanux.WG.Handshake.«0».Leanux.WG.setChain,
-    getPeer, getDev, getK, setPeer, modifyDev, modifyK, branch, invariant,
+    IndexOwner.peerDeref, IndexOwner.peerWord, unsupported, getPeer, getDev, getK, setPeer, modifyDev, modifyK, branch, invariant,
     hh, hg, he, hd, hk, ho, hi]
   all_goals try dsimp +zetaDelta only at *
   all_goals repeat intro
@@ -66,7 +66,7 @@ theorem expireCurrentPeerKeypairs_slots (pid : PeerId) (p : Peer) :
       slots p' = slots p ∧ p'.handshakeState = 0
   have hh := hiddenClock64_kernel_spec P
   have hi := indexRemove_peers_spec (fun ps => ps pid = some p)
-  noise_vcgen [expireCurrentPeerKeypairs, requireNotPending, handshakeZero,
+  noise_vcgen [expireCurrentPeerKeypairs, requireNotPending, handshakeClear, IndexOwner.peerDeref, IndexOwner.peerWord, unsupported, handshakeZero,
     resetLastSentHandshake, getPeer, getKeypair, getDev, getK, setPeer,
     setKeypair, modifyDev, modifyK, branch, invariant, hh, hi]
   all_goals try dsimp +zetaDelta only at *
@@ -96,7 +96,7 @@ theorem beginSession_tag (pid : PeerId) (old : Nat) :
   have hd := deriveKeys_peers_spec (fun ps => (ps pid).map Peer.handshakeState = some old)
   have hi := indexReplaceHandshake_peers_spec (fun ps => (ps pid).map Peer.handshakeState = some 0)
   have ha := fun kp => addNewKeypair_tag_spec pid kp 0
-  mvcgen [beginSession, Leanux.WG.andM, handshakeZero, getPeer, getKeypair,
+  mvcgen [beginSession, IndexOwner.peerDeref, IndexOwner.peerWord, Leanux.WG.andM, handshakeZero, getPeer, getKeypair,
     getDev, getK, setPeer, setKeypair, modifyDev, modifyK, branch, invariant,
     unsupported, hc, hd, hi, ha]
   all_goals try dsimp +zetaDelta only at *

@@ -7,11 +7,28 @@ H1, H3 and H4 have local contracts; their whole-operation/whole-run claims
 remain open. H4 also has a checked reachable internal dump-accounting finding. H5 has a checked batch-completion counterexample and open progress
 obligations. H6 has eleven local timer contracts; whole-run site coverage and
 retry/session counting remain open.
-H2 is waiting on the index-lookup
-dead-peer-store fix and the user's landing notice.
-No result is claimed complete. The branch has carried main through ca6b22e;
-that landing adds documentation and binary-validation scaffolding but leaves
-the WireGuard mirror unchanged.
+H2 was unblocked by the user's landing notice for `de62c9d` on 2026-10-15.
+Main was merged into this branch at `5033f7a`. No result is claimed complete.
+The existing 89 campaign-2 terminal declarations build over `de62c9d` and
+pass standard-axiom inspection. The changed Noise and configuration modules
+also pass fresh stock kernel replay. The full gate remains failed in inherited
+campaign-1 files; the shared-frame ownership clarification is pending.
+
+[USER 2026-10-15] The index-lookup fix has landed at `de62c9d`; merge main
+into the campaign branch, carry the index frames and permit H2 to start.
+Guest slots default to 16; concurrent capped runs are allowed. No merge to
+main or push.
+
+[AGENT 2026-10-15] Carry the local Noise, expiry and staged-send contracts
+through the embedded-owner representation. The internal expiry-prefix total
+contract is now a normal-completion contract: a NULL handshake peer word
+stops before clearing. The public successful-expiry statement is unchanged;
+its assumed original run establishes prefix success. This is a statement-domain
+correction for the landed mirror, not a new mirror finding. Index removal uses
+owner identity even when the owner's peer word is NULL. No shared definition
+or lemma has been edited. Independent read-only review found no correctness
+issue in the six-file carry. The queue-refill reproduction still reports its
+expected operation-4 invariant failure. No cap hit or infrastructure rerun.
 
 [USER 2026-10-14] Work H1, H3 and H4 before H2; start H2 only after the
 index-lookup fix lands and its landing is relayed. Merge other main landings
