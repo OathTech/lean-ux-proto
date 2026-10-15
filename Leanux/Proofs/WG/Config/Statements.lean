@@ -10,6 +10,7 @@ import Leanux.Proofs.WG.Config.RemoveFlagRequestSource
 import Leanux.Proofs.WG.Config.ReplacementConverseRequestSource
 import Leanux.Proofs.WG.Config.RemoveAllObservationSource
 import Leanux.Proofs.WG.Config.ReplacePeersRequestClaims
+import Leanux.Proofs.WG.Config.MultipartClaims
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
@@ -1111,5 +1112,38 @@ theorem original_replace_peers_phase_order (selector : DeviceRef) (d : Device) :
   refine ⟨?_, observedReplacePeers_facts selector, observedReplacePeers_selected d⟩
   intro entry pre
   rw [observedReplacePeers_erase]
+
+/-- With two distinct resident IPv4 nodes and no endpoint, the original peer
+getter spends 168 bytes emitting its fixed attributes and first IP, then splits
+at the second node. A second original call uses that returned context, spends
+72 bytes, emits only public key and the second IP, and resets the allowed-IP
+cursor/sequence. The original coalescer merges these actual fragments with the
+supplied device attributes into one ordered two-IP peer. Data flags and DONE
+are supplied too; other device peers are not traversed. The device stays
+unchanged. Chunk capacities are explicit inputs; this proves no socket-level
+chunk production, arbitrary pagination, or concurrent-change behavior. The
+composition stops explicitly if its actual fragment kinds are unexpected. -/
+theorem original_multipart_peer_readback (d : Device) (p : Peer) (a b : NodeId)
+    (pid : PeerId) (addr₁ cidr₁ addr₂ cidr₂ : Nat) (parent₁ parent₂ : Slot)
+    (ctx : DumpCtx) (firstSkb secondSkb : NlSkb)
+    (resident : d.peers[pid]? = some p) (listed : p.allowedipsList = [a, b])
+    (distinct : a ≠ b) (endpoint : p.endpoint = none)
+    (firstNode : d.nodes[a]? = some { newNode addr₁ cidr₁ 32 (some pid) with parent := parent₁ })
+    (secondNode : d.nodes[b]? = some { newNode addr₂ cidr₂ 32 (some pid) with parent := parent₂ })
+    (fresh : ctx.nextAllowedip = none) (sequence : ctx.allowedipsSeq = 0)
+    (firstRoom : firstSkb.room = 168) (secondRoom : 72 ≤ secondSkb.room) :
+    Campaign2.Returns (multipartPeerDump pid d ctx firstSkb secondSkb)
+      (fun s => s.wg.device = some d)
+      (fun result s => s.wg.device = some d ∧ result =
+        (({ firstSkb with room := 0 },
+          { ctx with nextAllowedip := some b, allowedipsSeq := d.peerAllowedips.seq },
+          .split (multipartFirst p addr₁ cidr₁)),
+         ({ secondSkb with room := secondSkb.room - 72 },
+          { ctx with nextAllowedip := none, allowedipsSeq := 0 },
+          .complete (multipartLast p addr₂ cidr₂)),
+         .ok (multipartJson d p addr₁ cidr₁ addr₂ cidr₂))) :=
+  multipartPeerDump_returns d p a b pid addr₁ cidr₁ addr₂ cidr₂ parent₁ parent₂
+    ctx firstSkb secondSkb resident listed distinct endpoint firstNode secondNode
+    fresh sequence firstRoom secondRoom
 
 end Leanux.Proofs.WG.Config
