@@ -16,6 +16,7 @@ import Leanux.Proofs.WG.Index.ConsumeSource
 import Leanux.Proofs.WG.Index.StagedSource
 import Leanux.Proofs.WG.Index.ReceiveSource
 import Leanux.Proofs.WG.Index.TimerSource
+import Leanux.Proofs.WG.Index.FlushSource
 
 /-! H2's original-operation table contracts. Reachable owner/peer-word
 coherence remains a separate obligation. -/
@@ -542,5 +543,33 @@ theorem original_fire_timer_tables (worker : Worker) (horizon : UInt64) :
     Campaign2.Ensures (Env.fireTimer worker horizon) View.TablesSafe
       (fun _ s => View.TablesSafe s) :=
   fireTimer_tables worker horizon
+
+/-- Original handshake-work draining preserves optional-device numeric-index
+uniqueness, owner uniqueness and the hashed-keypair allocation bound on normal
+return. This covers named and placeholder dispatch and the optional clear-work
+stopping target, without assuming empty queues, resident peers or a work budget.
+It does not assert successful draining or exclude the original stopped outcomes. -/
+theorem original_drain_handshake_send_wq_tables (upTo : Option PeerId) :
+    Campaign2.Ensures (drainHandshakeSendWq upTo) View.TablesSafe
+      (fun _ s => View.TablesSafe s) :=
+  drainHandshakeSendWq_tables upTo
+
+/-- Original timer stopping preserves the optional-device table invariant on
+normal return through all five deletions and the conditional clear-work flush.
+No timer readiness, queue emptiness or peer-residency premise is added. -/
+theorem original_timers_stop_tables (pid : PeerId) :
+    Campaign2.Ensures (timersStop pid) View.TablesSafe
+      (fun _ s => View.TablesSafe s) :=
+  timersStop_tables pid
+
+/-- Original removal after the deadness guard preserves the table invariant
+on normal return through ordered keypair releases, timer stopping, both flushes,
+peer-count accounting and final peer release. The original guard remains in the
+computation; no deadness or release-readiness premise is added. This does not
+cover the outer allowed-IP removal or assert completion on arbitrary states. -/
+theorem original_peer_remove_after_dead_tables (pid : PeerId) :
+    Campaign2.Ensures (peerRemoveAfterDead pid) View.TablesSafe
+      (fun _ s => View.TablesSafe s) :=
+  peerRemoveAfterDead_tables pid
 
 end Leanux.Proofs.WG.Index
