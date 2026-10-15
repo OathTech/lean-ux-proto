@@ -473,6 +473,17 @@ found no correctness or scope defect. The scoped build, all fifty-eight axiom
 inspections and fresh replay were repeated for the strengthened statements;
 the full gate still fails in the two inherited modules below.
 
+`PeerDead` composes the witnessed removal with original `peerMakeDead`.
+It removes every occurrence of the peer identity from the device list and
+public-key table, clears the allowed-IP list/processed owners, and marks the
+resident peer dead. Its reference count, the numeric index table and device
+peer count remain unchanged at this stage, as the source requires. A small
+metadata projection supplies the removal frame. This is not the subsequent
+keypair/timer cleanup, workqueue drain or final release. Independent read-only
+review found no correctness or source-order defect. Proof elaboration
+needed the intermediate device equality simplified before substituting it;
+no mirror or resource-limit change was made.
+
 Remaining: private-key collision removal and mixed-attribute outer composition; full peer
 removal/replacement and allowed-IP ownership, other partial-error combinations,
 and general dump chunks/coalescing. Deferred removal work can change other
@@ -490,7 +501,7 @@ check: both the C and the mirror's own design require restoring pre-nest room.
 gives the witness and reproduction command. Ranked mirror suggestion 1:
 correct the saved cancellation snapshot (altitude-preserving).
 
-Validation: all fifty-eight statements pass scoped build, standard-axiom inspection
+Validation: all fifty-nine statements pass scoped build, standard-axiom inspection
 (only `propext`, `Classical.choice`, `Quot.sound`), and `capped --
 scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Config.Statements`.
 The full proof gate fails in inherited `CounterWindow.Refinement` and

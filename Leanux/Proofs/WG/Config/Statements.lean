@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.PeerDead
 import Leanux.Proofs.WG.Config.AllowedOwnerClear
 import Leanux.Proofs.WG.Config.AllowedGeneralReplacement
 import Leanux.Proofs.WG.Config.Identity
@@ -733,5 +734,29 @@ theorem original_allowedips_replace_general (key : Key) (pid : PeerId) (d remove
   refine ⟨ret, result, run, value, device, q, peer, empty, refs, identity, ?_⟩
   intro id member
   exact removalEffect_owner_none steps id (Or.inl member)
+
+/-- Original peer death removes the identity from the device peer list and
+public-key table, performs the witnessed allowed-IP removal and sets isDead.
+The peer remains resident with its original reference count; the numeric index
+table and device peer count are unchanged at this stage. Every processed node
+is absent or unowned. This is peerMakeDead, before later keypair/timer/work
+cleanup and final reference release; no complete peerRemove claim is made. -/
+theorem original_peer_make_dead (pid : PeerId) (p : Peer) (d removed : Device)
+    (resident : d.peers[pid]? = some p)
+    (steps : RemovalEffect (unlistPeer d pid) p.allowedipsList removed) :
+    Returns (peerMakeDead pid) (fun w => w.k.wg = some d)
+      (fun _ w =>
+        let final := deadPeerDevice removed pid p
+        w.k.wg = some final ∧
+        final.peerList = d.peerList.filter (· != pid) ∧
+        final.peerHashtable = d.peerHashtable.filter (·.2 != pid) ∧
+        final.indexTable = d.indexTable ∧ final.numPeers = d.numPeers ∧
+        final.peers[pid]? = some { erasePeerList p.allowedipsList p with isDead := true } ∧
+        (erasePeerList p.allowedipsList p).allowedipsList = [] ∧
+        (erasePeerList p.allowedipsList p).refcount = p.refcount ∧
+        (∀ id ∈ p.allowedipsList, nodeOwner final id = none)) := by
+  intro w pre
+  obtain ⟨ret, final, run, device⟩ := peerMakeDead_returns pid p d removed resident steps w pre
+  exact ⟨ret, final, run, device, deadPeerDevice_effects pid p d removed steps⟩
 
 end Leanux.Proofs.WG.Config
