@@ -2,6 +2,7 @@ import Leanux.Proofs.WG.TimerDiscipline.ObservationClaims
 import Leanux.Proofs.WG.TimerDiscipline.SendDispatchClaims
 import Leanux.Proofs.WG.TimerDiscipline.RetryDispatchClaims
 import Leanux.Proofs.WG.TimerDiscipline.RetryRearmClaims
+import Leanux.Proofs.WG.TimerDiscipline.RetrySequenceClaims
 
 /-! The public H6 interface names only WireGuard and explicit execution
 observations. Concrete source connections and residual frames are separate.
@@ -414,5 +415,31 @@ theorem original_retry_rearm (d : Device) (horizon : UInt64)
     Campaign2.Ensures (observedRetryRearm horizon)
       (fun s => s.wg.device = some d) (RetryRearmCertificate d horizon) :=
   source_retry_rearm d horizon empty
+
+/-- A normal sequence of consecutive original timer/send pairs has adjacent actual
+snapshots and retains every pair's conditional rearm certificate. The send queue
+ends empty. If every actual timer selection names one initial resident peer, its
+identity/reference count are preserved and attempts increase by the sequence
+length; a nonempty sequence also clears pending and bounds initial attempts plus
+length by 19. An empty sequence preserves the entire snapshot, with no attempt or
+pending restriction. observedRetrySequence_erase preserves original errors exactly.
+This is a sequence of the original calls, not an environment scheduler theorem or
+a promise that any positive number of retries completes. -/
+theorem original_retry_sequence (d : Device) (horizons : List UInt64)
+    (empty : d.sendWorkQueue = []) :
+    Campaign2.Ensures (observedRetrySequence horizons)
+      (fun s => s.wg.device = some d) (RetrySequenceCertificate d horizons) :=
+  source_retry_sequence d horizons empty
+
+/-- Starting at zero attempts, at most 19 consecutive pairs can return normally
+with this same actual selected peer. In particular 20 such successful pairs are
+excluded; this does not say that the twentieth timer callback itself fails. -/
+theorem original_retry_sequence_zero_bound (d : Device) (horizons : List UInt64)
+    (empty : d.sendWorkQueue = []) (pid : PeerId) (p : Peer)
+    (resident : d.peers[pid]? = some p) (zero : p.timerHandshakeAttempts = 0) :
+    Campaign2.Ensures (observedRetrySequence horizons)
+      (fun s => s.wg.device = some d)
+      (fun result _ => SameRetryPeer pid result.2 → horizons.length ≤ 19) :=
+  source_retry_sequence_zero_bound d horizons empty pid p resident zero
 
 end Leanux.Proofs.WG.TimerDiscipline

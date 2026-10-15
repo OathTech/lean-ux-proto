@@ -30,11 +30,11 @@ No independent existential projected runs are spliced together.
 | H3 Roaming | 8 contracts, including decrypt publication and its same-execution first-poll endpoint connection | Public projection complete; first selected packet provenance is conditional on matching publication identity. General queue provenance and complete caller coverage remain open. |
 | H4 Configuration | 62 contracts, including live-key removal with empty work queues, and the internal dump-accounting finding | Public projection and frame separation complete. Queued-work removal, private-key collision, mixed attributes, global ownership and general dump composition remain open. |
 | H5 Progress | 27 contracts, including original cut-loop budget adequacy, and the accepted batch-backlog counterexample | Public projection and frame separation complete; the recorded cut cannot exhaust its budget. Whole-worker record decrease, full loop coverage and probe/detach composition remain open. The backlog witness is historical over `de62c9d`: main's batch guard now addresses request 1. |
-| H6 Timers | 33 timer/worker contracts, including original retransmit-timer/send-worker composition and conditional recorded rearming | Public projection and frame separation complete; a successful pair from an empty send queue derives the retry bound, reference acquisition/release, final empty queue and cleared pending flag. Conditional rearming preserves the exact expiry through release and section stop. Complete retry episodes and whole-run arming/session counts remain open. |
+| H6 Timers | 35 timer/worker contracts, including consecutive original retry pairs, conditional recorded rearming and same-peer attempt counting | Public projection and frame separation complete; a successful pair from an empty send queue derives the retry bound, reference acquisition/release, final empty queue and cleared pending flag. Conditional rearming preserves the exact expiry through release and section stop; consecutive successful pairs selecting the same initial peer increase attempts by their length and are bounded by 19 from zero. Scheduler retry episodes and whole-run arming/session counts remain open. |
 
 Projection/frame factoring completed at `69f988a` for all six results, preserving
 all 153 existing headline names before new mathematics. The following H2 lifecycle/sender
-and H6 dispatch/rearm increments, H3 publication/poll provenance, H5 cut-loop progress, H1 ordered clearing/rotation and H4 live-key removal bring the total to 187. No public statement directly names `World` or
+and H6 dispatch/rearm increments, H3 publication/poll provenance, H5 cut-loop progress, H1 ordered clearing/rotation and H4 live-key removal bring the total to 189. No public statement directly names `World` or
 `Kernel`.
 The full proof gate remains failed in inherited campaign-1 counter-window and
 index carries; those files have not been edited. Scoped validation does not
@@ -55,7 +55,7 @@ connections to the current executable mirror, not replacement interpreters.
 | H3 | `Roaming/Model`, `View`, `Statements`, `EndpointClaims`, `EndpointSource`, `Authentication`, `PublicationModel`, `PublicationSource`, `PublicationClaims`, `PollEndpointModel`, `PollEndpointSource`, `PollEndpointClaims`. | `Roaming/Frames`, `PublicationFrames`, `PollEndpointFrames`; `Basic` reexports the endpoint source connection. |
 | H4 | `Config/Model`, `AllowedRemovalModel`, `QuietModel`, `LiveRemovalModel`, `LiveRemovalSource`, `ClaimView`, `Statements`, `SourceClaims`, `ObservationBridge`, and existing substantive effect/source modules. | `ConcreteFrames` isolates six whole-kernel endpoint contracts; `OperationFrames` isolates seven generic helpers; `ReadbackFrames` retains socket/fixture preservation; `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `QuietFrames`, `LiveRemovalFrames`, `KeyFieldFrames` isolate within-WG preservation. |
 | H5 | `Progress/Model`, `View`, `Statements`, `SourceClaims`, `ObservationBridge`; `ControlLaws` is generic state/error control and `ControlSource` connects it exactly to the original worker; the scheduler/source modules retain actual execution factors. `CutModel`, `CutSource` and `CutClaims` establish original cut-loop progress. | `StackFrames` isolates caller-guard preservation; `CutFrames` isolates record/error-location preservation. Probe/filter/no-work contracts also establish outputs and remain substantive source claims. |
-| H6 | `TimerDiscipline/Model`, `View`, `SendView`, `Statements`, `ObservationBridge`, `ObservationClaims`, `SourceClaims`, `SendDispatchModel`, `SendDispatchClaims`, `RetryDispatchModel`, `RetryDispatchClaims`, `RetryRearmModel`, `RetryRearmClaims`, and `*Source` operational proofs. | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`, `RetryDispatchFrames`, `RetryRearmFrames`, `WorkStateFrames`. |
+| H6 | `TimerDiscipline/Model`, `View`, `SendView`, `Statements`, `ObservationBridge`, `ObservationClaims`, `SourceClaims`, `SendDispatchModel`, `SendDispatchClaims`, `RetryDispatchModel`, `RetryDispatchClaims`, `RetryRearmModel`, `RetryRearmClaims`, `RetrySequenceModel`, `RetrySequenceClaims`, and `*Source` operational proofs. | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`, `RetryDispatchFrames`, `RetryRearmFrames`, `WorkStateFrames`. |
 
 A compound exact effect is not a disposable frame merely because its name
 contains “frame”: mark/generation updates, cleared-peer accumulation, reference
@@ -1390,7 +1390,32 @@ and `capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.T
 No cap failure, guest run or infrastructure rerun. The full gate remains failed
 in unchanged inherited shared files, last run at `69f988a`.
 
-Completed retry-episode counting and source-complete caller coverage for
+`RetrySequenceModel`, `RetrySequenceSource` and `RetrySequenceClaims` now
+connect a list of consecutive original timer/send pairs to their actual adjacent
+snapshots. Each step retains the existing conditional rearm certificate; exact
+erasure preserves original errors, including the first failing pair. Starting
+with an empty send queue, normal completion leaves it empty. If every actual
+selection names the same initially resident peer, its identity and reference
+count are preserved and attempts increase by the sequence length. For a nonempty
+sequence, initial attempts plus length are at most 19 and pending is false.
+The zero-start corollary excludes 20 successful pairs with that same peer; it
+does not assert that a twentieth timer callback fails. The empty sequence
+preserves the entire snapshot without an attempt or pending restriction.
+There is no existence, scheduler coverage or transmission guarantee.
+
+These files contain claims and exact source connections; no new frame file is
+needed. The read-discard equality belongs to exact observer erasure, rather
+than arbitrary-state preservation. Independent read-only review closed without
+findings. The scoped H6 build passed (165 jobs); all 35 headlines and both
+sequence erasures use only standard axioms, and fresh stock kernel replay passed.
+All 189 campaign headlines import and pass standard-axiom inspection together;
+the gate's token and import/root/default-target checks pass. Reproduce with the
+same capped H6 build and replay commands above. A local parser initially rejected
+wrapped axiom output; correcting the parser accepted the unchanged output,
+without rerunning the checker. No cap failure, guest run or infrastructure rerun.
+The full gate remains the inherited failure last observed at `69f988a`.
+
+Scheduler retry-episode counting and source-complete caller coverage for
 traversal/session derivation remain open. The dispatch claims do not establish
 successful transmission, reference ownership, or that every timer callback is
 followed by a rearming send. New claims stay
