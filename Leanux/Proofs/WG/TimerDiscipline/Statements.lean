@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TimerDiscipline.DataDoneClaims
 import Leanux.Proofs.WG.TimerDiscipline.OutgoingResponseSessionClaims
 import Leanux.Proofs.WG.TimerDiscipline.ObservationClaims
 import Leanux.Proofs.WG.TimerDiscipline.SendDispatchClaims
@@ -497,5 +498,25 @@ theorem original_outgoing_response_session_arm (pid : PeerId) :
     · intro entry pre
       rw [observedOutgoingResponseSession_source pid]
     · exact observedOutgoingResponseSession_facts pid
+
+/-- The original data-completion caller invokes traversal once before the whole
+supplied list, including an empty list. Its ordered observations retain each
+actual packet read and send Boolean. The data-sent hook is reached exactly when
+some actual send returned true for a packet whose length is not the keepalive
+length. Each hook's own running/live/recorded-mode guards (and interval or pending
+guard) give its caller-clock observation and exact wrapped expiry; data-sent also
+records bounded jitter. These expiry and clock-gap facts hold at each hook's
+after-state. The authenticated-sent hook, loop markers and keepKeyFresh suffix
+remain original. Erasure preserves all errors; the certificate describes normal
+full returns and promises neither transmission nor final expiry preservation. -/
+theorem original_data_done_timers (pid : PeerId) (items : List SkbId) :
+    Campaign2.AgreesOn (fun _ => True)
+      (do let _ ← observedDataDone pid items; pure ()) (createDataDone pid items) ∧
+    Campaign2.Ensures (observedDataDone pid items) (fun _ => True)
+      (fun observation _ => DataDoneFacts pid items observation) := by
+  constructor
+  · intro entry pre
+    rw [observedDataDone_erase pid items]
+  · exact observedDataDone_facts pid items
 
 end Leanux.Proofs.WG.TimerDiscipline
