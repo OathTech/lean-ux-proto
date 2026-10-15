@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.Campaign2.Bridge
 import Leanux.Proofs.WG.Noise.ConsumeEdges
+import Leanux.Proofs.WG.Noise.ClearSource
 
 /-! H1's checked local endpoints. Whole-run edge ownership and confirmation
 uniqueness by allocation lifetime remain separate obligations. -/
@@ -120,5 +121,40 @@ theorem original_consume_response_tag (msg : List UInt8) :
       (fun result w => ∀ pid, result = some pid →
         w.tagAt pid = some HANDSHAKE_CONSUMED_RESPONSE) :=
   consumeResponse_tag msg
+
+/-- Every normal original clear from a resident peer derives its ordered
+next/previous/current release relation. The relation retains the actual slot
+writes, table unhashes, reference decrements and final-reference erasures.
+Aliases are allowed; no release-readiness witness is assumed. Malformed stores
+may stop, so this theorem does not assert completion. -/
+theorem original_clear_ordered (pid : PeerId) (d : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p) :
+    Campaign2.Ensures (keypairsClear pid) (fun s => s.wg.device = some d)
+      (fun _ s => ∃ final, s.wg.device = some final ∧
+        ClearRun pid d [.next, .previous, .current] final ∧
+        final.peers[pid]? = some { p with
+          keypairNext := none, keypairPrevious := none, keypairCurrent := none }) := by
+  intro w result final pre run
+  change w.k.wg = some d at pre
+  obtain ⟨out, device, effect⟩ := keypairsClear_effect pid d p resident w result final pre run
+  have peer := keypairsClear_peer pid p w result final
+    (by simp [peerAt, pre, resident]) run
+  exact ⟨out, device, effect, by simpa [peerAt, device] using peer⟩
+
+/-- Static local reference counts guarantee the original clear completes.
+Each referenced key is resident, has a non-NULL peer word, and has at least
+as many references as occurrences among the three slots. Repeated identities
+are permitted, and the last occurrence may consume the last reference.
+No key-owner/peer identity, queue, or record-stream premise is required. -/
+theorem original_clear_ready_returns (pid : PeerId) (d : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p) (ready : ClearReady d (clearKeys p)) :
+    Campaign2.Returns (keypairsClear pid) (fun s => s.wg.device = some d)
+      (fun _ s => ∃ final, s.wg.device = some final ∧
+        ClearRun pid d [.next, .previous, .current] final ∧
+        final.peers[pid]? = some { p with
+          keypairNext := none, keypairPrevious := none, keypairCurrent := none }) := by
+  intro w pre
+  obtain ⟨result, final, run, effect⟩ := keypairsClear_returns_ready pid d p resident ready w pre
+  exact ⟨result, final, run, original_clear_ordered pid d p resident w result final pre run⟩
 
 end Leanux.Proofs.WG.Noise
