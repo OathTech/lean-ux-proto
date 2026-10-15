@@ -2013,3 +2013,49 @@ def Pre_lookup (c : LookupRelation.Config) (coverage : KcovLayout)
 
 end Binary.TrustBase
 ```
+
+
+### Conditional callback core and helper framing
+
+The conditional callback core now derives readiness from the witnessed
+entry domain, rather than assuming the old uniform metadata invariant.
+`LookupCoverage.Context` fixes the entry view and both preempt contexts;
+its current physical count changes independently. PC eligibility covers
+both contexts. Comparison eligibility requires the actual nonempty bucket
+and post-BH context, and is not a field of general callback readiness.
+Disabled callbacks leave memory exactly unchanged. Enabled callbacks use
+the existing bounded buffer arithmetic and produce the conditional write
+footprint named in Pre. No field was added to Pre, R or the trust surface.
+
+`KcovInvariant.plan_normal_form_of_reads` factors the existing arithmetic;
+the old stronger theorem is a wrapper. `LookupCoverage` proves conditional
+readiness, caller-store framing and callback preservation;
+`LookupCoverageCalls.callback` applies the same named service contract and
+retains NoAnchoredReentry. `LookupPeerRelation.Physical.frame_count` and
+`R.advance_count` preserve the bucket and owner words while requiring the
+count equation to be proved from the executed pending-increment phase.
+They do not claim that an arbitrary permitted count write preserves R.
+
+The 291-job capped default build passed with standard-only axioms for these
+new declarations. Fresh kernel replays passed for LookupCoverageCalls and
+LookupPeerRelation with their imports; the changed-path escape scan and
+diff check passed. Earlier attempts failed on a heartbeat limit, a command
+syntax error, and two guard simplification proofs; those failed attempts
+are not accepted results. A final nonoverlapping build confirmed the green
+result after two earlier build processes briefly overlapped. The callback
+core now elaborates in seconds; the shared arithmetic refactor takes about
+41 seconds. No new KILLED banner occurred at this checkpoint.
+
+This closes supporting callback obligations, not the 36-module execution
+history plumbing or the complete helper/function simulation. In particular,
+NoAnchoredReentry must remain available through callback histories: no-cuts
+alone is insufficient, since the count scanner's CMPXCHG trigger is not a
+correspondence cut. The actual lookup-to-helper call returns to +0xba and
+must be composed in the outer lookup history. No certified function or
+transported property is added; the current TrustBase quoted above is
+unchanged.
+
+Measured follow-on interval: 06:48:56 to 07:03:24 UTC, 868 seconds. It adds
+conditional callback proofs and a helper relation-frame lemma, with zero
+new certified anchored regions/functions (zero per agent-day). These proofs
+were hand-finished; the implementation is not an automated grind-rate result.

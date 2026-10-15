@@ -35,17 +35,24 @@ def argument (kind : KcovKind) (s : MachineState) (reg : Reg64) : BitVec 64 :=
   if kind = .constCmp1 then (s.data.regs.get (.low reg .W8)).setWidth 64
   else (s.data.regs.get (.low reg .W32)).setWidth 64
 
-theorem plan_normal_form (kind : KcovKind) (layout : KcovLayout)
+set_option maxHeartbeats 1200000 in
+/-- Conditional metadata supports exactly the same buffer arithmetic as the
+    existing callback proof; the softirq and mode reads are required only
+    when reached. This intermediate lemma is used on the active path. -/
+theorem plan_normal_form_of_reads (kind : KcovKind) (layout : KcovLayout)
     (s : MachineState) (preempt : BitVec 32) (returnPC : BitVec 64) (count : Nat)
-    (metadata : KcovMetadata layout s.data.dmem)
+    (task : load64 s.data.dmem currentTaskAddress = some layout.task)
+    (softirq : LookupSoftRead preempt → load32 s.data.dmem (layout.task+0x704) = some layout.softirqEnabled)
+    (mode : LookupModeRead layout preempt → load32 s.data.dmem (layout.task+0x6e0) = some layout.mode)
+    (capacity : load32 s.data.dmem (layout.task+0x6e4) = some layout.capacity)
+    (area : load64 s.data.dmem (layout.task+0x6e8) = some layout.area)
     (preemptRead : load32 s.data.dmem preemptCountAddress = some preempt)
     (returnRead : load64 s.data.dmem s.data.regs.rsp.toBitVec = some returnPC)
     (countRead : load64 s.data.dmem layout.area = some (.ofNat 64 count))
     (countBound : count ≤ layout.capacity.toNat) :
-    KcovPlan kind s = some (if enabled kind layout preempt then
-      bufferPlan kind layout count returnPC (argument kind s .rdi) (argument kind s .rsi)
+    KcovPlan kind s = some (if Kcov.enabled kind layout preempt then
+      Kcov.bufferPlan kind layout count returnPC (Kcov.argument kind s .rdi) (Kcov.argument kind s .rsi)
       else []) := by
-  obtain ⟨task, mode, capacity, area, softirq⟩ := metadata
   have capBound := layout.capacity.isLt
   have nextBound : count + 1 < 2^64 := by omega
   have endBound : 32 * count + 40 < 2^64 := by omega
@@ -85,19 +92,42 @@ theorem plan_normal_form (kind : KcovKind) (layout : KcovLayout)
   have o16 : 32*count+40-16 = 8*(4*count+3) := by omega
   have o8 : 32*count+40-8 = 8*(4*count+4) := by omega
   simp only [o32, o24, o16, o8] at a32 a24 a16 a8
-  simp [KcovPlan, preemptRead, returnRead, task, mode, capacity, area, softirq,
-    countRead, nextNat, endGuard, a32, a24, a16, a8]
-  cases kind <;>
+  by_cases h0 : preempt &&& 0xff0100#32 = 0#32
+  all_goals by_cases h1 : preempt &&& 0x100#32 = 0#32
+  all_goals by_cases h2 : preempt &&& 0xff0000#32 = 0#32
+  all_goals by_cases h3 : layout.softirqEnabled = 0#32
+  all_goals simp only [LookupSoftRead, LookupModeRead, h0, h1, h2, h3,
+    not_true_eq_false, not_false_eq_true, false_or, or_false, true_or,
+    false_and, true_and, and_false, ite_true, ite_false, false_implies,
+    true_implies] at softirq mode
+  all_goals simp [KcovPlan, preemptRead, returnRead, task, mode, capacity, area, softirq,
+    h0, h1, h2, h3, countRead, nextNat, endGuard, a32, a24, a16, a8]
+  all_goals cases kind <;>
     simp [enabled, bufferPlan, argument, nextBV, BitVec.ofNat_mul,
       Nat.not_lt, ite_not, ← BitVec.ofNat_add]
-  all_goals by_cases h0 : preempt &&& 0xff0100 = 0 <;> simp_all
-  all_goals by_cases h1 : preempt &&& 0x100 = 0 <;> simp_all
-  all_goals by_cases h2 : preempt &&& 0xff0000 = 0 <;> simp_all
-  all_goals by_cases h3 : layout.softirqEnabled = 0 <;> simp_all
+  all_goals by_cases h0 : preempt &&& 0xff0100#32 = 0#32 <;> simp_all
+  all_goals by_cases h1 : preempt &&& 0x100#32 = 0#32 <;> simp_all
+  all_goals by_cases h2 : preempt &&& 0xff0000#32 = 0#32 <;> simp_all
+  all_goals by_cases h3 : layout.softirqEnabled = 0#32 <;> simp_all
   all_goals by_cases h4 : layout.mode = 2 <;> simp_all
   all_goals by_cases h5 : layout.mode = 3 <;> simp_all
   all_goals simp [Nat.mod_eq_of_lt nextBound, ← Nat.not_lt, ite_not]
   all_goals split <;> simp_all [BitVec.ofNat_mul]
+
+
+theorem plan_normal_form (kind : KcovKind) (layout : KcovLayout)
+    (s : MachineState) (preempt : BitVec 32) (returnPC : BitVec 64) (count : Nat)
+    (metadata : KcovMetadata layout s.data.dmem)
+    (preemptRead : load32 s.data.dmem preemptCountAddress = some preempt)
+    (returnRead : load64 s.data.dmem s.data.regs.rsp.toBitVec = some returnPC)
+    (countRead : load64 s.data.dmem layout.area = some (.ofNat 64 count))
+    (countBound : count ≤ layout.capacity.toNat) :
+    KcovPlan kind s = some (if enabled kind layout preempt then
+      bufferPlan kind layout count returnPC (argument kind s .rdi) (argument kind s .rsi)
+      else []) := by
+  obtain ⟨task, mode, capacity, area, softirq⟩ := metadata
+  exact plan_normal_form_of_reads kind layout s preempt returnPC count task
+    (fun _ => softirq) (fun _ => mode) capacity area preemptRead returnRead countRead countBound
 
 /-- A nonempty callback writes the incremented header first and then only
     positive, in-bounds word indices. The zero-capacity case is included. -/
@@ -323,10 +353,10 @@ theorem inactive_plan (kind : KcovKind) (layout : KcovLayout)
     KcovPlan kind s = some [] := by
   obtain ⟨task, mode, capacity, area, softirq⟩ := metadata
   simp [KcovPlan, preemptRead, returnRead, task, mode, softirq, inactive]
-  all_goals by_cases h0 : preempt &&& 0xff0100 = 0 <;> simp_all
-  all_goals by_cases h1 : preempt &&& 0x100 = 0 <;> simp_all
-  all_goals by_cases h2 : preempt &&& 0xff0000 = 0 <;> simp_all
-  all_goals by_cases h3 : layout.softirqEnabled = 0 <;> simp_all
+  all_goals by_cases h0 : preempt &&& 0xff0100#32 = 0#32 <;> simp_all
+  all_goals by_cases h1 : preempt &&& 0x100#32 = 0#32 <;> simp_all
+  all_goals by_cases h2 : preempt &&& 0xff0000#32 = 0#32 <;> simp_all
+  all_goals by_cases h3 : layout.softirqEnabled = 0#32 <;> simp_all
 
 theorem inactive_ready (kind : KcovKind) (s : MachineState)
     (plan : KcovPlan kind s = some []) : KcovReady kind s :=
@@ -446,6 +476,7 @@ theorem state_frame (layout : KcovLayout) (preempt : BitVec 32) (before after : 
     exact buffer_frame layout before after (state.2.2 active) writes frame
       (fun address inside => separate address (.inr (.inr ⟨active, inside⟩)))
 
+#print axioms plan_normal_form_of_reads
 #print axioms plan_normal_form
 #print axioms bufferPlan_preserves
 #print axioms ready
