@@ -41,7 +41,7 @@ The separate coordinator-led surface review is required before milestone 2.
 
 All heavy commands run through `capped`; a KILLED banner or timeout fails.
 The charter-authorized binary gate builds the default package, prints the
-headline/witness/composition axioms and checks proof sources for escapes:
+headline/witness axioms and checks proof sources for escapes:
 
 ```sh
 capped -- scripts/proof-gate --binary
@@ -60,7 +60,8 @@ capped -- lake check
 the supplied AGENTS.md requires the user to run sandboxed `capped -- lake
 check` outside Nono at the claim point. Do not report the speedbump as that
 gate. The accepted proof axioms are only `propext`, `Classical.choice`, and
-`Quot.sound`; `compose_regions` uses none.
+`Quot.sound`. Milestone 1 uses bespoke per-path composition. The unused
+`compose_regions` helper was retired in review fix F5.
 
 ## Concrete tests
 

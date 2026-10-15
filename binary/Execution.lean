@@ -31,21 +31,6 @@ def instructionStep [Labels] (fetch : Int64 → Option Decoded)
       (fun d => .done ⟨d, s.pc + .ofNat i.size⟩)
       (fun p d => .done ⟨d, p⟩)).All post
 
-/-- Compose finitely many correspondence regions using Kraken's total,
-    universally quantified execution judgment. The instantiated region facts
-    must be proved; this lemma supplies none of them as axioms. -/
-theorem compose_regions {S : Type} (step : S → (S → Prop) → Prop)
-    (I : Nat → S → Prop) (n : Nat)
-    (regions : ∀ k, k < n → ∀ s,
-      I k s → Eventually step (I (k + 1)) s)
-    (s : S) (initial : I 0 s) : Eventually step (I n) s := by
-  induction n with
-  | zero => exact .done s initial
-  | succ n ih =>
-    exact eventually_trans step (I n) (I (n + 1)) s
-      (ih (fun k hk => regions k (Nat.lt_succ_of_lt hk)))
-      (regions n (Nat.lt_succ_self n))
-
 /-- Transport is ordinary predicate implication after the execution theorem.
     A function-specific proof must establish `simulation` for its actual R;
     this lemma alone certifies no binary function or mirror property. -/
@@ -58,7 +43,6 @@ theorem transport {S W : Type} (step : S → (S → Prop) → Prop)
   rintro t ⟨w, hw, hr⟩
   exact ⟨w, hw, hr, property w hw⟩
 
-#print axioms compose_regions
 #print axioms transport
 
 end Binary

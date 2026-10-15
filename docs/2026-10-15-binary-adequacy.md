@@ -2983,3 +2983,27 @@ exact hit executions PASS (441/506 instructions, two seeds each), including
 the added service-state assertions. Only the three standard axioms occur.
 No KILLED banner or timeout occurred. External export replay will cover the
 updated surface at the milestone-2 claim point.
+
+
+### Milestone-1 review fix F5: composition correction (2026-10-15)
+
+`compose_regions` was unused. Milestone 1's composition is bespoke, through
+`selected_execution`, `miss_execution` and their per-path helper lemmas;
+region statements were hand-written, not generated from the correspondence
+table. The original gate's no-axiom result for `compose_regions` was true but
+irrelevant to the headline. It was not the charter's proposed one-time
+composition theorem. [AGENT] Retire the unused lemma and its gate/README
+claim rather than retain an unused artifact as evidence of composition.
+The historical handoff above describes the old checkpoint; this correction
+supersedes its presentation of that helper.
+
+The measured milestone-1 rate remains 54 hand-finished region identities in
+16.98 elapsed hours, zero automated regions; it is not aggregate agent labor.
+It supports no campaign-wide throughput forecast. Milestone 2 will report
+proof lines per anchored instruction and primary/read-only-agent effort, and
+target automation of repeated instruction-step/frame plumbing rather than
+claim a generic composition that is not used.
+
+Validation: default build (357 jobs) and binary gate PASS after removal. No
+Lean source references `compose_regions`; headline proofs and their axiom
+sets are unchanged. No KILLED banner or timeout occurred.

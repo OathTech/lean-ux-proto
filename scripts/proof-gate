@@ -225,7 +225,6 @@ def check_binary():
             'Binary.LookupWitness.witness_pre',
             'Binary.LookupHitWitness.dead_pre',
             'Binary.LookupHitWitness.live_pre',
-            'Binary.compose_regions',
         ], cwd=ROOT / 'binary', imports=['LookupSnapshotTransport', 'LookupWitness', 'LookupHitWitness'],
             artifact_name='binary-proof-gate')
     # Attic definitions are deliberately outside the proof path. The default
