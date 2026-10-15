@@ -7,6 +7,7 @@ import Leanux.Proofs.WG.Config.CollisionRequestSource
 import Leanux.Proofs.WG.Config.AllowedRoundTripSource
 import Leanux.Proofs.WG.Config.AllowedTransferReadbackSource
 import Leanux.Proofs.WG.Config.RemoveFlagRequestSource
+import Leanux.Proofs.WG.Config.ReplacementConverseRequestSource
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
@@ -1033,5 +1034,36 @@ theorem original_device_remove_flag (a : PeerAttrs) (key : Key) (flags : UInt32)
     pubkey flagattr valid protocol remove found resident pairs live bounded count send clear
     entry ret out pre run
   exact ⟨zero, final, device, effect, removeFlag_residency effect⟩
+
+/-- A normally returning original REPLACE_ALLOWEDIPS request with an empty
+replacement list derives its removal witness from execution. The selected
+stopped peer remains resident with an empty list, balanced lookup reference
+and unchanged identity; every processed node is absent or unowned. The exact
+effect includes generation and sequence updates. Only the two-child node
+shape is assumed, not a supplied removal run or global trie validity. This
+does not assert completion for arbitrary malformed or cyclic structures. -/
+theorem original_allowedips_replace_pairs (key : Key) (pid : PeerId) (d : Device) (p : Peer)
+    (found : d.peerHashtable.find? (·.1 == key) = some (key, pid))
+    (resident : d.peers[pid]? = some p) (pairs : NodePairs d)
+    (live : 0 < p.refcount) (bounded : p.refcount + 1 < 2 ^ 31) (down : d.running = false) :
+    Campaign2.Ensures (wgSetDevice (replaceAllowedipsDeviceAttrs d key))
+      (fun s => s.wg.device = some d ∧ ClaimView.selectsDevice s d)
+      (fun ret s => ret = 0 ∧ ∃ removed,
+        RemovalEffect (withPeer (requestGeneration d) pid { p with refcount := p.refcount + 1 })
+          p.allowedipsList removed ∧
+        s.wg.device = some (generalReplacementDevice removed pid p) ∧
+        (generalReplacementDevice removed pid p).peerAllowedips.seq =
+          d.peerAllowedips.seq + (if p.allowedipsList.isEmpty then 0 else 1) ∧
+        ∃ q, (generalReplacementDevice removed pid p).peers[pid]? = some q ∧
+          q.allowedipsList = [] ∧ q.refcount = p.refcount ∧ q.internalId = p.internalId ∧
+          ∀ id ∈ p.allowedipsList, nodeOwner (generalReplacementDevice removed pid p) id = none) := by
+  intro entry ret out pre run
+  obtain ⟨zero, removed, steps, device⟩ := setDevice_replace_effect_pairs key pid d p
+    found resident pairs live bounded down entry ret out pre run
+  obtain ⟨q, peer, empty, refs, identity⟩ := generalReplacement_peer removed pid p
+  refine ⟨zero, removed, steps, device, ?_, q, peer, empty, refs, identity, ?_⟩
+  · simpa only [generalReplacementDevice, withPeer, requestGeneration] using removalEffect_seq steps
+  · intro id member
+    exact removalEffect_owner_none steps id (Or.inl member)
 
 end Leanux.Proofs.WG.Config
