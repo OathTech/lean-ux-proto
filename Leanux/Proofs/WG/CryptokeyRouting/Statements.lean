@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AllowedIps.RoutingHandshakeReceiveFrames
 import Leanux.Proofs.WG.AllowedIps.RoutingMaintenanceFrames
 import Leanux.Proofs.WG.AllowedIps.RoutingRxFrames
 import Leanux.Proofs.WG.Configuration.LifecycleCompletion
@@ -63,7 +64,9 @@ remains explicit in the local contracts. Optional-device routing now covers
 actual guarded creation, down, destruction/deletion, absent whole commands and
 all fixture/prefill modes. Concrete TX/Stack/RX, receive admission, NAPI, crypt
 iterations, timer callbacks and device open/up/namespace exit preserve routing
-through whole-call lifts, permitting peer deletion. Enclosing scheduler/Env/syscall
+through whole-call lifts, permitting peer deletion. Session creation, incoming
+Noise/cookie handling and the concrete handshake receive iteration now have
+original routing frames too. Enclosing scheduler/Env/syscall
 and Runner execution, and packet authorization, remain separate.
 Actual local parser output now discharges address shape for the setAllowedip
 guards and its selected bounded insertion. Complete original free normally
@@ -2096,5 +2099,78 @@ theorem original_timer_device_routing (initial : FlatTable × FlatTable)
     global_completion_lift initial _ (timerCallback_routing pid timer),
     global_completion_lift initial _ wgOpen_routing, global_completion_lift initial _ wgUp_routing,
     global_completion_same initial _ netnsPreExit_routing⟩
+
+/-- Original session creation and response sending preserve the complete routing
+view on normal return. Actual getter facts justify peer setters; keypair/index
+updates do not require resident owners, affiliation or a successful-session
+premise. Original refusal and Stop paths remain unchanged. -/
+theorem original_session_routing_frames (pid : WG.PeerId) (kp : WG.KeypairId)
+    (initiator : Bool) (ck : List UInt8) :
+    Framing.SameView routingView (WG.keypairCreate pid) ∧
+    Framing.SameView routingView (WG.addNewKeypair pid kp) ∧
+    Framing.SameView routingView (WG.deriveKeys kp initiator ck) ∧
+    Framing.SameView routingView (WG.indexReplaceHandshake pid kp) ∧
+    Framing.SameView routingView (WG.beginSession pid) ∧
+    Framing.SameView routingView (WG.createResponse pid) ∧
+    Framing.SameView routingView (WG.timersSessionDerived pid) ∧
+    Framing.SameView routingView (WG.sendHandshakeResponse pid) :=
+  ⟨keypairCreate_routing pid, addNewKeypair_routing pid kp, deriveKeys_routing kp initiator ck,
+    indexReplaceHandshake_routing pid kp, beginSession_routing pid, createResponse_routing pid,
+    timersSessionDerived_routing pid, sendHandshakeResponse_routing pid⟩
+
+/-- Complete original incoming Noise/cookie and handshake receive calls retain
+routing and every surviving peer list on normal return. Releases may retire a
+peer, so equality of resident stores is not claimed. The actual receive-worker
+iteration discharges condResched concretely. There is no input residency,
+affiliation, credit, valid-packet, saved-list or successful-drain premise. -/
+theorem original_handshake_receive_routing_frames (msg : List UInt8) (src : WG.SkbSource) :
+    RetainsRoutingCall (WG.consumeInitiation msg) ∧
+    RetainsRoutingCall (WG.consumeResponse msg) ∧
+    RetainsRoutingCall (WG.cookieMessageConsume msg) ∧
+    RetainsRoutingCall (WG.receiveHandshakePacket msg src) ∧
+    RetainsRoutingCall WG.receiveStep ∧
+    RetainsRoutingCall (workerIter .receiveWorker none WG.receiveStep (Env.condResched .receiveWorker)) :=
+  ⟨consumeInitiation_routing msg, consumeResponse_routing msg, cookieMessageConsume_routing msg,
+    receiveHandshakePacket_routing msg src, receiveStep_routing, actualReceiveIter_routing⟩
+
+/-- Silent whole-call handshake lifts erase exactly to the originals on every
+input. Normal returns preserve optional routing/flat agreement; every outcome
+leaves the completion journal unchanged, retaining prior history safety on Stop
+without a failed World. No packet authorization, enclosing scheduler or Runner
+closure follows from these local caller contracts. -/
+theorem original_handshake_routing_completion (initial : FlatTable × FlatTable)
+    (msg : List UInt8) (src : WG.SkbSource) :
+    (Logged.ErasesPrefix (Logged.liftPrefix (Event := RoutingCompletion) (WG.consumeInitiation msg))
+        (WG.consumeInitiation msg) ∧
+      Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+        (Logged.liftPrefix (WG.consumeInitiation msg))) ∧
+    (Logged.ErasesPrefix (Logged.liftPrefix (Event := RoutingCompletion) (WG.consumeResponse msg))
+        (WG.consumeResponse msg) ∧
+      Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+        (Logged.liftPrefix (WG.consumeResponse msg))) ∧
+    (Logged.ErasesPrefix (Logged.liftPrefix (Event := RoutingCompletion) (WG.cookieMessageConsume msg))
+        (WG.cookieMessageConsume msg) ∧
+      Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+        (Logged.liftPrefix (WG.cookieMessageConsume msg))) ∧
+    (Logged.ErasesPrefix (Logged.liftPrefix (Event := RoutingCompletion) (WG.receiveHandshakePacket msg src))
+        (WG.receiveHandshakePacket msg src) ∧
+      Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+        (Logged.liftPrefix (WG.receiveHandshakePacket msg src))) ∧
+    (Logged.ErasesPrefix (Logged.liftPrefix (Event := RoutingCompletion) WG.receiveStep) WG.receiveStep ∧
+      Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+        (Logged.liftPrefix WG.receiveStep)) ∧
+    (Logged.ErasesPrefix (Logged.liftPrefix (Event := RoutingCompletion)
+        (workerIter .receiveWorker none WG.receiveStep (Env.condResched .receiveWorker)))
+        (workerIter .receiveWorker none WG.receiveStep (Env.condResched .receiveWorker)) ∧
+      Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+        (Logged.liftPrefix (workerIter .receiveWorker none WG.receiveStep (Env.condResched .receiveWorker)))) := by
+  have lift {α : Type} (a : M α) (ha : RetainsRoutingCall a) :
+      Logged.ErasesPrefix (Logged.liftPrefix (Event := RoutingCompletion) a) a ∧
+        Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+          (Logged.liftPrefix a) :=
+    ⟨Logged.erasesPrefix_lift a, global_completion_lift initial a ha⟩
+  exact ⟨lift _ (consumeInitiation_routing msg), lift _ (consumeResponse_routing msg),
+    lift _ (cookieMessageConsume_routing msg), lift _ (receiveHandshakePacket_routing msg src),
+    lift _ receiveStep_routing, lift _ actualReceiveIter_routing⟩
 
 end Leanux.Proofs.WG.CryptokeyRouting
