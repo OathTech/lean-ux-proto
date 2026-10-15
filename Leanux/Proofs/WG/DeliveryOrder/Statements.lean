@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Queues.RxIngressProtection
 import Leanux.Proofs.WG.Queues.RxLinkRunner
 import Leanux.Proofs.WG.Queues.RxPollReceiptLink
 import Leanux.Proofs.WG.Queues.RxPollDisposition
@@ -1619,5 +1620,80 @@ theorem initialized_runner_packet_receipt_linkage (trace : Leanux.Runner.Trace)
   exact ⟨old.1, Queues.RxHistory.executeTraceHistory_projects trace placeholders,
     linked.1, linked.2, Queues.RxLink.executeTraceHistory_ordered trace placeholders,
     Queues.RxHistory.executeTraceHistory_safe trace placeholders, old.2⟩
+
+open Queues.RxCredits
+
+/-- Local source-acquired RX credit cuts. The complete lookup derives positivity
+and its actual loan; admission retains that loan at allocation and derives the
+stored key word. Allocation transfers an explicit reservation into the same
+inventory, with vacancy stated openly. Pure-IRQ publication repays its own
+resolved-peer borrow. This is not full consumeData or initialized protection. -/
+theorem original_rx_credit_transfer :
+    (∀ kinds index w v result,
+      (indexLookup kinds index).run w = .ok (result,v) → Loan w (result.map Prod.snd) v) ∧
+    (∀ msg src ds ctx w v,
+      (RxOrigin.admitSource msg src ds).run w = .ok (some ctx,v) →
+      (∃ before, Loan w (some ctx.packet.peer) before ∧
+        (newRxSkb ctx.packet).run before = .ok (ctx.slot,v)) ∧
+      KeyWord ctx.packet.keypair ctx.packet.peer v) ∧
+    (∀ cs loans w d o pkt,
+      Inventory cs w → w.k.wg = some d → d.rxSkbs[d.nextSkb]? = none →
+      o.epoch = d.ifindex → pkt.peer = o.slot → Protected cs (o :: loans) w →
+      ∃ v, (newRxSkb pkt).run w = .ok (d.nextSkb,v) ∧
+        Inventory (⟨⟨d.ifindex,d.nextSkb⟩,o,.unpublished⟩ :: cs) v ∧
+        Protected (⟨⟨d.ifindex,d.nextSkb⟩,o,.unpublished⟩ :: cs) loans v) ∧
+    (∀ id state w v, (enqueuePerPeerRx (pure ()) id state).run w = .ok ((),v) →
+      ∀ o, balance v o = balance w o) := by
+  refine ⟨?_,?_,?_,publication_balances⟩
+  · intro kinds index w v result hr
+    exact (Framing.hoare_iff_triple _ _ _).mpr (indexLookup_loan kinds index w) w result v rfl hr
+  · intro msg src ds ctx w v hr
+    exact ⟨admitted_loan hr,admitted_key_word hr⟩
+  · intro cs loans w d o pkt hi hd fresh epoch owner hs
+    exact allocate_transfer hi hd fresh epoch owner hs
+
+/-- Actual cached-head selection and payment/free cuts preserve the supplied
+ledger. Positive remaining demand derives non-retirement. The poll cut names
+its caller pid only under the earlier peer guard; key payment must have returned.
+The ENOSPC cut retains all three original decision records and preserves queue
+multiplicities. No ledger phase is inferred retrospectively from a World, and
+these local contracts do not cover general IRQ/Stack callbacks or initialized
+admission/carrier conservation. -/
+theorem original_rx_cleanup_credit_discharge :
+    (∀ (id : SkbId) w d pid p cs loans,
+      w.k.wg = some d → d.peers[pid]? = some p → p.rxQueue.peeked = some id →
+      Inventory (⟨⟨d.ifindex,id⟩,⟨d.ifindex,pid,p.internalId⟩,.queued⟩ :: cs) w →
+      QueueOwners (⟨⟨d.ifindex,id⟩,⟨d.ifindex,pid,p.internalId⟩,.queued⟩ :: cs) w →
+      Protected (⟨⟨d.ifindex,id⟩,⟨d.ifindex,pid,p.internalId⟩,.queued⟩ :: cs) loans w →
+      ∃ v, (Queues.dropRxQueue pid).run w = .ok ((),v) ∧
+        Inventory (⟨⟨d.ifindex,id⟩,⟨d.ifindex,pid,p.internalId⟩,.selected⟩ :: cs) v ∧
+        QueueOwners (⟨⟨d.ifindex,id⟩,⟨d.ifindex,pid,p.internalId⟩,.selected⟩ :: cs) v ∧
+        Protected (⟨⟨d.ifindex,id⟩,⟨d.ifindex,pid,p.internalId⟩,.selected⟩ :: cs) loans v) ∧
+    (∀ c cs loans w, Protected (c :: cs) loans w → c.phase = .selected →
+      0 < demand cs loans c.owner → ∃ p, resident w c.owner = some p ∧ 1 < p.refcount) ∧
+    (∀ c cs loans w a pkt (pid : PeerId) flag,
+      Inventory (c :: cs) w → Protected (c :: cs) loans w → c.phase = .selected →
+      packetAt w c.packet = some pkt → pkt.peer = c.owner.slot → pkt.peer = pid →
+      (keypairPut (some pkt.keypair) false).run w = .ok ((),a) →
+      ∃ v, (do keypairPut (some pkt.keypair) false; peerPut (some pid)
+               _ ← branch .rxPollFree flag; freeRxSkb c.packet.slot).run w = .ok ((),v) ∧
+        Inventory cs v ∧ Protected cs loans v ∧ packetAt v c.packet = none) ∧
+    (∀ ctx c cs loans w a b,
+      (enqueuePerDeviceAndPeerRx ctx.slot).run w = .ok (-ENOSPC,a) →
+      Inventory (c :: cs) a → Protected (c :: cs) loans a → QueueOwners (c :: cs) a →
+      c.phase = .unpublished → c.packet.slot = ctx.slot → ctx.packet.peer = c.owner.slot →
+      (keypairPut (some ctx.packet.keypair) false).run (enospcDecisions a) = .ok ((),b) →
+      ∃ v, (finishSource ctx).run w = .ok ((),v) ∧ Inventory cs v ∧
+        Protected cs loans v ∧ QueueOwners cs v ∧ packetAt v c.packet = none) := by
+  refine ⟨?_,?_,?_,?_⟩
+  · intro id w d pid p cs loans hd hp peek hi hq hs
+    exact drop_selection id hd hp peek hi hq hs
+  · intro c cs loans w hi hc hr
+    exact selected_nonfinal hi hc hr
+  · intro c cs loans w a pkt pid flag hi hs phase hp owner guard hk
+    obtain ⟨v,hv,iv,sv,pv⟩ := cleanup_discharge (flag := flag) hi hs phase hp owner hk
+    exact ⟨v,by simpa only [cleanup_poll_guard _ _ _ _ guard] using hv,iv,sv,pv⟩
+  · intro ctx c cs loans w a b hr hi hs hq phase slot owner hk
+    exact enospc_discharge ctx hr hi hs hq phase slot owner hk
 
 end Leanux.Proofs.WG.DeliveryOrder

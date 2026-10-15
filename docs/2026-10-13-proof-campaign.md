@@ -6,6 +6,7 @@ Work on `proofs/campaign` in `.worktrees/proofs-campaign` follows [the charter](
 with representation batch `cb2348e` carried and validated. All seven rows are current there, including the local R4
 packet-to-receipt link extension, local R3 owner-acquisition material frame and initialized R4 linkage.
 The session/decrypt source injection is validated with the original caller, audit and R4 contracts preserved.
+The local RX reference-transfer/discharge extension passes coordinated validation.
 Session/material/RX-origin receipts and local support
 are retained; initialized R3 packet authorization
 and R4 receive-pipeline conservation remain open. The [register](proofs.md#results) holds pins/counts; the
@@ -21,238 +22,70 @@ was made by this campaign.
 | R5 | Accepted age/post-zero/wire-nonce counterexamples; thirteen positive local contracts. |
 | R6 | Cookie exclusion proved; literal MAX=18 refuted, without a replacement universal bound. |
 
-**Current R3 session/decrypt source injection (validated).** Two grouped exports
-preserve all 499 preceding terminal bodies, giving 501 declarations (499 theorems/two definitions; 129 R3/121 R4).
-The existing persistent RX journal now carries session and decrypt receipts at the actual source cuts. Both receive
-entrances use the same literal handshake factors; the crypt worker captures its stored getter/decrypt once before
-publication. Original erasure is unconditional. Same-input R2 projection retains the full incoming audit/probe history
-under its existing predicates. Existing R4 boundary, completion, receipt-validity and linkage meanings are unchanged.
-Local injected cuts preserve origin receipt validity from a valid incoming journal; fabricated receipts are not repaired.
-Actual ingress admission receipts, initialized material support/configured identity, earlier routing alignment and
-copied-trial origin receipts remain open. This is committed caller injection, not initialized packet authorization.
+**Current R4 local reference transfer/discharge (validated).** Two grouped exports preserve
+all 501 prior terminal bodies: 503 declarations (501 theorems/two definitions; 129 R3/123 R4). The actual index lookup
+derives the positive peer loan and fresh stored key word; normal admission retains that loan at the allocation cut
+and the key word through allocation. A vacant RX slot transfers an explicit reservation into the same inventory.
+Pure-IRQ publication repays the actual resolved peer. Original cached-head drop selects one carrier; selected payment
+and paid-cell free preserve the remaining inventory/credits. The actual ENOSPC tail retains all three decisions,
+then successful key payment, peer payment and free preserve the same queue multiplicities too. Key-payment Stops
+have exact source equations and no invented failed World. The ENOSPC context is a supplied tail argument;
+its packet/key admission provenance is not derived from Inventory. Full consumeData installation/0/EPIPE/ENOSPC composition,
+general IRQ/Stack callbacks and initialized carrier conservation remain open.
 
-[AGENT 2026-10-15] Extract receipt data without renaming it, reuse the existing persistent journal and literal
-callback-parametric handshake factors, and move elementary focus contracts below the caller cycle. Extend the
-internal RxLink.Protocol with an explicit origin-leaf preservation obligation guarded by the lower validity contract;
-its two existing concrete R4 instances discharge that obligation. This is a local generic API strengthening, not an
-inferred arbitrary-predicate frame. No new observer/Runner hierarchy or stronger BoundaryInv/Closed/AuditInv is added.
-Two after-MAC proofs use theorem-local 800,000 heartbeats, matching the existing handshake source proof's bounded
-fanout after deterministic default-200,000 failures. No file-wide/global limit or 32G memory-cap change was made.
+[AGENT 2026-10-15] Keep complete resident inventory, exact queue multiplicity and numeric protection separate;
+transport explicit reservations and the same ledger through source cuts. Ring/GRO aliases are not extra credits.
+The paid phase alone is not proof of historical payment, and inventory alone does not establish allocation vacancy.
+The local allocation theorem states vacancy explicitly; existing Packets.Inv supplies it. A later full poll needs a
+surviving caller reservation for its post-cleanup peer reads. No mirror or existing observer/invariant changed.
 
-**Source-injection effort.** Acceptance 11:56:21 UTC; 90 minutes/48 capped calls, reserve at 13:11:21 or call 40,
-deadline 13:26:21. Scoped call 22 passes 457 jobs, collected 12:47:08. The 23 builds comprise three PASS
-(calls 4/22/23) and 20 ordinary FAIL. Calls 1–3 repaired moved imports/source normalization (call 2 also hit default 200k); 5–12 repaired adapter
-normalization, annotations, refolding and conditional proof composition (call 8 hit default 200k, call 11 the simp-step limit); 13 exposed default-200k projection/append
-failures and dependent kernel unknown-constant diagnostics. Calls 14–16 failed an attempted generic continuation cut,
-which was removed completely; 17/18 repaired validity/suffix type annotations. Call 18 printed rejected recovery
-placeholders. Call 19 failed the completion normal/Stop predicate composition; the existing Closed→CompletionPrefix
-bridge repaired it. Call 20 exposed default-200k completion proof search and dependent kernel unknown constants;
-replacing generic origin search with the concrete prepare leaf solved it without another limit change. Call 21 failed
-a terminal type namespace and printed rejected recovery placeholders. No source admission, cap hit, interruption or
-infrastructure retry occurred. Full call 23 passes 499 jobs, collected 12:49:54 UTC, 53m33s after acceptance.
-Exact check 24 passes all 18 paths, all 499 prior bodies, the 501/129 R3/121 R4 census, tokens/imports,
-tracked/new-file whitespace and EOF, empty index, mirror identity and seven current pins. Its printed document hashes
-precede only this final ledger/review update; the 16 Lean hashes remain fixed. Final metadata check 25 repeats those
-checks and records the final manifest: the worker sequence has 25 capped calls (23 builds, three PASS/20 FAIL, plus
-checks 24/25). Independent frozen review is clear at 12:56:13 UTC: final read 12:54:17–12:56:13 (1m56), after
-the source pass 12:31:51–12:38:41 (6m50). Finding 1 is individually fixed and verified: the activation header now
-distinguishes the enriched receive adapter from TX lifetime focus. Final metadata reconciliation was clear
-12:58:10–12:58:26 (16s). Ownership returned at 12:58:45, 62m24s after acceptance; all 25 exits were collected.
-The coordinated 499-job build/501-declaration permitted-axiom gate, fresh stock kernel replay, 60-job default
-build and 103 tests (21.627s, one skip) pass. Kernel replay started only after gate collection and was collected
-at 13:02:12 UTC. Exact scope, all 499 prior bodies, 16 frozen Lean hashes, census, mirror and seven current pins
-pass; final metadata is checked separately after this record. The coordinator's six capped calls are gate,
-unit tests, pending-metadata exact check, fresh replay, default build and final-metadata exact check.
-No coordinator failure, cap hit, interruption or infrastructure retry occurred. Command-local LEAN_NUM_THREADS=32
-and LEANUX_QEMU_SLOTS=16 retain the existing per-compiler -j1 and unchanged 32G cap. The unchanged executable,
-23 model-replay tests and eleven historical recipes retain their representation-carry validation; they were not
-rerun for this proof-only injection. No active job remains.
+**Current effort.** Acceptance 13:05:15 UTC; 90 minutes/48 capped calls, final 20 minutes/10 calls reserved.
+Scoped call 26 passes 425 jobs (13:52:28); full call 27 passes 502 (13:52:41), 47m26s after acceptance.
+The 27 builds comprise seven PASS and twenty ordinary FAIL. Failed elaborations 3/11/14/18 displayed recovery
+placeholders; 3/14 also reported `declaration uses sorry`, and 14 reported a dependent kernel unknown constant.
+There is no source admission. Calls 5/9 hit default recursion limits; directed factoring/rewrite orientation repaired
+them without raising limits. Other failures were syntax, binder, projection and source-factor proof mechanics.
+The initial successful file-write/build shell lacked explicit fail-closed chaining; all subsequent dependent edits
+and builds were separate and collected. An estimated call-16 timestamp was promptly withdrawn; its collection is
+only bounded by 13:35:12–13:37:15. No cap hit, interruption, infrastructure retry or active job remains.
+Command-local Lake parallelism 32/QEMU slots 16 retain per-compiler `-j1` and the unchanged 32G cap.
+Exact check 28 passes scope, all 501 prior bodies, census, tokens/imports/EOF, mirror/index and the six-file manifest.
+Independent frozen review is clear, with no findings, 13:50:53–13:57:34 (6m41); final metadata check 29 repeats
+compatibility and hashes. The worker ledger totals 29 capped calls: 27 builds plus two exact checks.
+The coordinator's 502-job/503-declaration permitted-axiom gate, fresh stock kernel replay, 60-job
+model build and 103 unit tests (23.335s, one skip) pass. Replay began after gate collection and was
+collected at 14:04:19 UTC. The first coordinator exact check failed because its terminal-body splitter
+included a new top-level open command in the preceding theorem; the corrected check passes all 501
+prior bodies, four frozen Lean hashes, six paths, census and mirror identity. This was a check-script
+defect, not an infrastructure retry. Final metadata is checked separately before commit. Condensation
+and worker metadata review is clear, 14:01:19–14:03:58 (2m39); no finding, recipe or process disclosure
+was lost. No source changed after the successful builds, and no active job remains.
+The preceding source-injection checkpoint `60f8ea06` passed its 501-declaration gate, fresh replay, default60 and
+103 tests (21.627s, one skip); its detailed worker/coordinator failures and review dispositions are in that commit.
+No executable or runtime recipe changed in this proof-only local extension.
 
-**Preceding initialized R4 linkage (`c0bff5e`, validated).** The existing caller/Runner spine derives HistoryLinked
-and separate HistoryReceiptsValid from empty initialization for every typed Trace and both placeholder settings,
-including failed prefill and later Stops. Actual selected packet/stamp/peer and whole-receipt/Entry order hold in the
-committed history with exact original result, full R2 audit/probes and completion distinctness. Global order does not
-label same-poll boundaries. Key/session authentication, inbox arrival, reference protection and admission/carrier
-conservation remain open. Its measured effort and validation follow.
+**Current foundations.** The persistent RX journal records actual session/decrypt source cuts and preserves
+unconditional original erasure, the same full incoming R2 audit/probes and the established R4 boundary,
+completion, receipt-validity and linkage meanings. Local receipt validity requires a valid incoming journal.
+Actual ingress admission injection, initialized material/configured identity, earlier routing alignment and
+copied-trial origin receipts remain open.
 
-**Linkage-propagation effort.** Acceptance 11:33:52 UTC; 75 minutes/36 capped calls, reserve at 12:33:52 or call 28,
-deadline 12:48:52. Call 1 failed a missing audit-suffix list annotation and printed rejected recovery goals plus
-`declaration uses sorry` warnings; no source admission. Call 3 failed a stale completion identifier and unconstrained
-protocol inference. Corrections retain the original semantic contracts and default proof limits. Calls 2/4/5/6 pass
-caller/Runner/scoped/full builds (350/399/406/496 jobs); full collection measured 11:40:25, 6m33s after acceptance.
-Nine capped calls comprise six builds (four PASS/two ordinary FAIL) and three exact checks (7/8/9). Exact scope, all 497
-prior bodies, 499/121 R4/127 R3 census, token/import/EOF/mirror/index checks and frozen hashes pass; check 7 was collected
-at 11:43:02. Review finding 1 identified a stale “current extension” owner-frame reference; it now names the preceding
-R3 checkpoint. Check 9 reconciles the correction/ledger. Independent frozen review was clear at 11:45:24 UTC
-(11:42:50–11:45:24, 2m34s), after that wording fix. Ownership returned at 11:45:10, 11m18s after acceptance.
-The coordinated 496-job build/499-declaration permitted-axiom gate, fresh stock kernel replay, 60-job default
-build and 103 tests (21.481s, one skip) pass. Replay started only after the gate's build was collected.
-The first coordinator final-metadata check failed because the R4 register row still said validation pending;
-the row was corrected before the next check. All four Lean files retain their frozen built hashes; later edits
-are documentation metadata only. The unchanged
-executable, 23 model-replay tests and historical recipes remain validated by the representation carry.
-No cap hit, interruption, kernel diagnostic or infrastructure
-retry occurred. Command-local LEAN_NUM_THREADS=32 permits Lake job parallelism, while the existing per-compiler -j1
-and 32G memory cap remain unchanged; LEANUX_QEMU_SLOTS=16 is retained. No runtime replay recipe was rerun for this
-proof-only propagation. No active job remains.
+**Representation carry (`cb2348e`).** Handshake consumers write the captured returned PtrRing before
+running the handler; only normal return reaches the counter decrement. The worker retains its 4097-poll
+bound and physical full/produce behavior, including carried slots. Exact flood observers retain the single
+sender, all ingress/inline polls, afterBatch, final guards and reached Stop history for arbitrary typed
+messages. Rate-limiter allocation/refusal and both uninit tables are framed. Ten terminal bodies lost only
+the removed `floodExact` argument; the other 479 were unchanged. The captured-ring callback contract
+quantifies over the actual returned ring, with no new initialized validity premise.
 
-**Preceding owner/material frame (`41df9916`, validated).** The actual owner read/borrow/fresh store and whole index
-lookup retain receiving material, including NULL store-back, without affiliation/credit/residency premises. The supplied-
-history adapter preserves normal support and receipt truth on Stop; initialized session origin remains open. Its scoped/
-full builds (430/493), 497-declaration gate, fresh kernel replay, default60 and 103 tests (21.794s, one skip) passed.
-The commit records seven builds (three PASS/four ordinary FAIL), two worker exact checks, six coordinated passes,
-review/effort and the coordinator's stale-heading edit failure. No source admission or limit change occurred.
-
-**Preceding packet-to-receipt link (`0b1cd078`, validated).** Two terminal groups preserve all 494
-preceding bodies, giving 496 declarations (494 theorems/two definitions; 126 R3/119 R4). Scoped/full builds pass
-403/492 jobs; the full result was collected at 11:02:57 UTC, 31m49s after measured acceptance 10:31:08. Exact scope,
-all 494 old bodies, census, tokens/imports, whitespace and mirror checks pass. Independent frozen source/export/docs
-review is clear after the World-equality wording correction; final frozen reconciliation completed at 11:08:41 UTC
-(resumed review 10:52:59–11:08:41, 15m42s including waits). The 492-job build/496-declaration permitted-axiom gate,
-fresh stock kernel replay, 60-job default build and 103 tests (21.856s, one skip) pass. Replay started after the gate's
-build was collected. All four Lean files retain their frozen built hashes; subsequent edits are documentation
-metadata only. The unchanged executable, 23 model-replay tests and historical recipes were validated in the
-representation carry, not rerun for this proof-only extension. The prior validated checkpoint is `8f95d45`;
-its R3 supplied-history limitations remain.
-
-[AGENT 2026-10-15] Keep linkage separate from payload validity, completion and allocation invariants. Transport the
-live selected-cell fact only to consume entry, then retain the exact immutable receipt and ordered historical support.
-No getter, rerun or operational hierarchy is added. The new generic capture contract retains the actual precondition
-at the captured before World, result at the after World, and exact output history before receipt emission.
-
-**Packet-link effort.** The 90-minute/48-call lease reserves the final 20 minutes / 10 calls. Eighteen builds were
-collected (five PASS / 13 ordinary FAIL), plus two passing exact source checks, for 20 capped calls. Ownership returned
-at 11:08:38 UTC, 37m30s after acceptance. Call 02 displayed a rejected elaborator-recovery `sorry` goal term, not a
-source admission. Calls 11 and 13 exhausted the default 200k heartbeats; call 12 tested the split-tail proof at 2M
-before the factored default-limit retry. [AGENT 2026-10-15] Retain a theorem-local 2M bound only for `poll_link`,
-matching the existing poll layer; all other limits and the 32G memory cap stay unchanged. Other failures were local
-inference, normalization or tactic errors, including finite-poll continuation inference in calls 15/16. No kernel
-failure, cap hit, interruption or infrastructure retry occurred. Lake uses command-scoped LEAN_NUM_THREADS=32,
-QEMU slots 16 and unchanged per-compiler -j1. The full call ledger belongs in the checkpoint commit.
-
-**Preceding local R3 material-retention extension (`8f95d45`, validated).** Two terminal groups
-preserve all 492 preceding bodies, giving 494 declarations (492 theorems/two definitions; 126 R3/117 R4).
-A single support witness retains the full successful session Context/run, epoch/slot/stamp, receiving bytes/birthdate
-and nullable owner. The actual Some-front recovers its complete entry Peer/state/word without affiliation assumptions;
-support is installed before the tail, which can delete the new key. Concrete session-tail, key-get/put, allocation
-and decrypt retention permit invalid fresh records, invalidation and disappearance. The bounded acquireOwner attempt
-did not close its old-key lookup obligations; it was removed at that checkpoint. The new exact owner-frame
-extension above closes those local source contracts. The algebraic keep-or-clear law alone did not discharge them.
-
-The combined local adapters execute existing observers once and preserve exact same-input R2 histories under the
-existing AllocationInv. Original erasure is unconditional. Receipt validity is preserved from valid incoming history
-on normal and failed outcomes. A successful decrypt appends its actual stored-packet/run receipt strictly after its
-material witness in the SAME supplied journal, retaining full record-transform/AEAD equations. Incoming support is
-explicit: arbitrary receipts can describe valid standalone runs without a reached execution chain to this World.
-This proves neither initialized origin chronology, historical uniqueness, packet/session peer equality nor public-key
-or handshake authenticity. Later owner clearing is permitted; a non-NULL admission witness remains a separate join.
-
-[AGENT 2026-10-15] Keep material and owner WordLe (`current = none` or `current = original`) in one support witness;
-independent existential predicates could select different session receipts. Reuse suffix-only focus adapters and
-canonical full-WG/kernel frames, without adding another Scheduler/Runner observer hierarchy.
-
-**Material-retention effort.** Measured acceptance 09:39:00 UTC; 75-minute/36-call budget, reserve 10:34:00 or call 28,
-deadline 10:54:00. Closure started at call 28. Scoped 28 PASS (429 jobs) collected by clock 10:20:04; full 29 PASS (490 jobs)
-collected by clock 10:22:01, 43m01s after acceptance. Exact 30 PASS collected by clock 10:23:07 verifies the five-file
-scope, 492 unchanged bodies, census, tokens/imports, whitespace/EOF, mirror and empty index. Its document hashes
-precede the final result/ledger metadata and two independent-review wording corrections.
-The first complete module passed call 18 between measured clocks 10:08:43 and 10:11:01; its collection was not separately
-timestamped (an estimated status timestamp was corrected). Lake scheduling uses command-local LEAN_NUM_THREADS=32,
-QEMU slots 16, unchanged per-compiler -j1 and 32G cap. Thirty capped calls were collected: 29 builds (five PASS: 2/18/22/28/29; 24 ordinary FAIL)
-and exact check 30 PASS. All jobs are collected; evidence remains ephemeral for the coordinator checkpoint.
-Call 1 printed two rejected elaborator-recovery `declaration uses sorry` warnings; call 15 reached the default recursion
-limit in broad simplification, repaired by a targeted rewrite without changing the limit. Calls 23–27 were the bounded
-owner-acquisition proof attempt; the remaining failures were syntax, inference, normalization or local proof goals.
-No source admission, kernel diagnostic, cap hit, interruption or infrastructure rerun occurred. Independent frozen
-review (10:15:39–10:24:18 UTC, 8m39s) cleared the retained contracts after two documentation fixes: the claim-table
-introduction distinguishes preceding validation, and the remaining session-to-key obligation is explicitly initialized.
-The coordinated 490-job build/494-declaration permitted-axiom gate, fresh stock kernel replay, 60-job default build,
-103 tests (21.747s, one skip), and exact source check pass. Replay began only after the gate's build was collected.
-All three Lean files retain their frozen built hashes; subsequent changes are documentation metadata only. The
-unchanged executable, 23 model-replay tests and historical recipes were validated in the representation carry, not
-rerun for this proof-only extension. The preceding validated checkpoint is `ba0bbe3e`.
-
-**Representation carry (`cb2348e`).** The handshake queue observers retain the captured `consume` pair: the returned
-ring is written before the handler, and only normal handler return reaches the counter decrement. The worker has a
-4097-poll bound; the first empty poll or a Stop ends it earlier. Producers use the physical full test and `produce`.
-Down preserves carried slots. Destruction resets the counter without changing the ring at that cut, then eventually
-drops the whole device. Cookie frames cover the recorded ratelimiter entry allocation and its normal refusal/drop;
-existing lifecycle frames cover both tables. Exact flood observers retain one `senderSource`, every original
-producer and inline poll, actual `afterBatch`, final guards and result. They cover arbitrary typed messages, including
-data ingress, and retain reached histories on Stop. Existing afterBatch contracts were moved before flood in the
-audit, stamped history, evolution, routing and completion layers; no new observer hierarchy was introduced.
-
-All 489 terminal names remain. Exactly ten bodies remove only the deleted `floodExact` binder/call argument:
-AntiReplay `runner_uniqueness`/`runner_floor`; CryptokeyRouting `original_routing_runner_erasure`/
-`parsed_initialized_routing_execution`; DeliveryOrder `initialized_runner_joint`/
-`initialized_runner_callback_completion`; LifetimeSafety `runner_audit_erasure`/
-`runner_initialized_access_safety`/`runner_initialized_reached_trials`; ReplayWindow `S1`.
-The other 479 bodies are unchanged. Separately, the two callback-parametric handshake family/worker contracts use
-`ReceiveQueueContracts.pop`, whose premise now quantifies over the captured returned ring. Its canonical
-`allocationReceiveQueue` witness proves preservation for every ring; no validity/reconsume premise is added.
-Initialized Runner domains, audit/probe projections and R4 boundary/completion predicates remain unstrengthened.
-The handshake-bound comment is corrected; the distinct 4096-step send-worker bound is unchanged.
-
-[AGENT 2026-10-15] Carry exact flood by composing the existing ingress, inline-poll and afterBatch observers, preserving
-literal source ordering and partial histories; keep the local captured-ring contract explicit instead of imposing a
-new initialized ring premise.
-
-**Preceding local RX disposition extension (`ba0bbe3e`).** Three new terminal groups retain all 489 prior bodies (492 declarations,
-117 R4). Actual consume runs once at the identical incoming audit history, retaining both normal None and Some;
-new standalone events are erased by old audit/GRO/completion projections, while entry/completion decoders retain
-the full Entry and optional receipt. Scoped/full builds pass 401/488; full result collected 09:22:10 UTC, 70m00s after
-acceptance. Exact checks pass scope, census, all 489 old bodies, tokens/imports, whitespace and mirror identity.
-Independent final review (09:14:51–09:26:26 UTC, 11m35s) found the stated local claims sound after the wording fixes
-below. The 492-declaration permitted-axiom gate, fresh stock kernel replay, 60-job default build and 103 tests
-(21.694s, one skip) pass. The first replay failed because the coordinator launched it during the gate's final
-comment-triggered recompilation, when Statements.olean was temporarily absent. After collecting the build,
-the single permitted infrastructure retry passed; both outcomes are recorded, with no source repair or cap change.
-The unchanged mirror's executable and 23 model-replay tests were validated in the preceding carry, not rerun here.
-The preceding validated baseline is `15f0b97`: the cb2348e carry passed full/gate 486/489, fresh stock kernel replay,
-default/executable builds, 126 tests (one skip), and eleven recipes (nine agreements/two pending-dump rejections).
-Its deterministic 200k-heartbeat build failure and first coordinator exact-normalizer failure were corrected without
-limit or semantic changes; detailed carry timings and the 479+10 terminal API accounting are in `0ed74eb`/`15f0b97`.
-
-[AGENT 2026-10-15] Keep this tranche at fresh-poll occurrence disposition and run/payload receipts. The result-sensitive
-captured packet/stamp/peer link and same-journal receipt provenance were left explicit at this checkpoint, rather
-than inferred from receipt validity or assumed in initialized premises. That bounded attempt proved the actual capture
-lookup and full-RX-store frames; the current packet-link tranche completes their local poll composition.
-
-**RX disposition effort.** Acceptance 08:12:10 UTC; 90-minute/48-call lease with the final 20 minutes / 10 calls reserved. Builds use
-command-scoped LEAN_NUM_THREADS=32 for Lake scheduling and QEMU slots 16, with unchanged per-compiler -j1 and 32G cap.
-Calls 02 and 28 display rejected elaborator-recovery
-`sorry ()` goal terms, not source admissions; calls 11/13 reach the existing 200k limit, repaired by a literal tail cut
-without raising it. An initial wrong-directory call was rejected before launch; no worker infrastructure rerun occurred.
-The first export draft incorrectly shortened the None route and equated repayment with final consume World; it was
-rejected and replaced by the exact source-factor conclusion, retaining separate repayment and rxAfterLookup Worlds.
-Thirty-six worker capped calls were collected: 33 builds (12 PASS / 21 ordinary FAIL) and three exact checks (PASS).
-Ownership returned at 09:26:50 UTC, 74m40s after acceptance. No cap hit, interruption, kernel
-diagnostic or limit increase occurred. Root validation used six capped calls (five PASS and the replay infrastructure
-failure above), followed by final metadata checks. Detailed call ledger belongs in the checkpoint commit.
-Review corrected optional selection wording and the
-decoder distinction above; captured-allocation and same-journal receipt provenance were left open at that checkpoint.
-
-Review also noted stale upstream comments
-at `Env.lean:906–907` and `Env/Batch.lean:294–295,337–338`: the executable afterBatch now checks the handshake ring/counter,
-and flood no longer manages a receive-worker section. The immutable mirror comments were not edited.
-
-**Previous validation (`99e4f88`, over `de62c9d`).** The local origin tranche passed scoped/full builds (426/486 jobs), with 489 terminal
-declarations (487 theorems/two definitions; 124 R3/114 R4), retaining all 487 preceding bodies. The 489-declaration
-permitted-axiom gate, fresh stock kernel replay, 60-job default build and 124 tests (24.066s, one skip) pass.
-Exact source checks and independent frozen source review pass after wording fixes. These are local contracts, not a
-new initialized origin result. The preceding `65e6a6d` initialized R4 callback-completion propagation passed scoped/full builds (337/483 jobs), the
-487-declaration permitted-axiom gate, fresh stock kernel replay, the 60-job default build and 124 tests
-(24.017s, one skip). Its independent frozen review and exact source checks passed, covering 487 declarations
-(485 theorems/two definitions; 122 R3/114 R4), retaining all 485 preceding terminal bodies. The preceding `ce12402`
-R3 source-cut checkpoint passed scoped/full builds (401/480 jobs), the 485-declaration permitted-axiom gate,
-fresh stock kernel replay, the 60-job default build and 124 tests (22.976s, one skip). Baseline `1a5542d` passed the
-same checks for local callback completion (483 declarations). `bcbf733`'s first coordinator exact script failed
-with SyntaxError before checks; the regenerated script passed.
-
-Carry `a0cf252` passed eleven recipes: nine accepted agreements and two pending-dump rejections with accepted
-pre-delete boundaries. They were not rerun for the subsequent local-origin checkpoint; the current carry changes
-their Runner observers and reruns all eleven successfully. No differential/guest run was made. Historical ledgers:
-`6010243`, `bcbf733` and Lean 4.35 carry `b1ec9e8`.
+**Checkpoint provenance.** Representation carry `15f0b979`; local disposition `ba0bbe3e`;
+material retention `8f95d45`; packet/receipt link `0b1cd078`; owner/material frame `41df9916`;
+initialized linkage `c0bff5e`; session/decrypt injection `60f8ea0`. Their commits retain measured
+effort, failed attempts, review dispositions and validation counts. At the preceding checkpoint the
+501-declaration permitted-axiom gate, fresh kernel replay, default build and 103 unit tests (one skip)
+passed. The eleven historical recipes and 23 executable replay tests retain their representation-carry
+validation: nine accepted agreements and two expected pending-dump rejections. They are not rerun for
+proof-only additions.
 
 ```sh
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle scripts/proof-gate
@@ -287,32 +120,17 @@ caller-jiffies from chosen clocks with independent arm-expiry checks. W7 reconst
 expiry/delay via `with_timer_caller_jiffies`; that clock was not independently captured. Generated accepted streams are
 mirror evidence, not captures or Linux schedule proofs.
 
-**Owner-word carry.** `de62c9d` embeds the optional word in its handshake/keypair. Low-level `IndexOwnerAccess` observes
-owner read, acquisition and fresh setter getter/write, including NULL store-back, without inventing a pointed-peer
-getter. Initialization observes its new read/write. Masks preserve actual stores; the index mask omits only the scalar
-table.
+**Owner-word boundary.** Since `de62c9d`, owner read/acquisition/fresh store-back, including NULL,
+is observed in its actual order. Immediate NULL key put Stops before decrement; non-immediate
+count-one/NULL writes zero and then Stops before erasure. Neither emits release. These are
+arbitrary-World equations, not initialized counterexamples. The lifetime note's unreachable-arm
+assertion is not a proof premise.
 
-Put events depend on immediate-unreference and the optional word: immediate NULL Stops before decrement; non-immediate
-count-one/NULL writes zero, rereads and Stops before erasure. Neither emits release. Zero-count cases retain the earlier
-NULL Stop versus decrement-first warning. These arbitrary-World equations are not initialized counterexamples; the
-lifecycle note's unreachable-arm assertion is not a premise.
-
-[AGENT 2026-10-15] Preserve initialized R2/R4 domains and same-history projections, generalizing creation to include
-None. `a0cf252` enumerates ten local repairs to put/failure events, allocation and owner-based families; all 477
-names/other 467 bodies survive. The session getter follows existing premises; Logged/TX/RX/time copies retain actual
-observations. `RxBorrow.KeyRef` remains local. Review corrected the mistakenly some-only routing creation conjunct.
-
-**Effort/trust.** Carry outcomes/timings remain in `a0cf252`. Earlier builds failed with recovery sorry terms, rejected
-metavariables or dependent unknown constants; these were failures, not admissions or passes. Corrected source passed
-gates. Narrow cuts replaced broad searches. R2 reused its established local two-million-heartbeat Runner limit;
-ineffective earlier R3 limit escalation was replaced by a default-limit proof. No global/cap changes or inferred
-campaign total.
-
-[AGENT 2026-10-14] Condense historical validation into checkpoint references. Command-local `LEAN_NUM_THREADS=32`
-schedules Lake; per-Lean `-j1` remains. Infrastructure reruns are limited to one; ordinary failures are not
-infrastructure. [AGENT 2026-10-14] Use command-scoped Codex attribution. `e7b0273` mistakenly inherited default Git
-identity; subsequent commits correct attribution without global changes or ancestry rewriting. Snapshot-rule violations
-remain under R4.
+Builds retain command-local `LEAN_NUM_THREADS=32`, `LEANUX_QEMU_SLOTS=16`, the existing compiler
+`-j1` and unchanged 32G cap. Failed elaboration recovery diagnostics, unknown constants and limit
+exhaustion are recorded as failures in checkpoint commits; no source admission passes the gate.
+No campaign-wide effort total is inferred. Commits use command-scoped Codex attribution; the earlier
+`e7b0273` identity mistake remains in history without global changes or ancestry rewriting.
 
 ## R1 — anti-replay uniqueness and the inclusive floor
 
@@ -511,49 +329,16 @@ copied-trial packet certificates remain open. Nullable compatibility is insuffic
 Partial failing clear has no completion marker. The historical R2 orphan recipe is now rejected, not a current
 misrouting witness; no new accepted counterexample is claimed.
 
-**Effort/review.** Earlier failures remain in checkpoint commits. A denied /tmp
-diagnostic was unavailable; planning interruptions were snapshotted, no R3 build interrupted. Prior rejected
-metavariables/unknown constants/recovery diagnostics are retained in those ledgers. The affiliation tranche used 28 capped calls, 26 builds
-(7 PASS/19 FAIL), two exact checks PASS; full result 04:25:43, 28m58s after acceptance, handback 04:35:08. Call 6 had
-three kernel application-type mismatches; calls 2/10 rejected recovery goals; call 16 reported `declaration uses sorry`
-during failed elaboration. No source admission; corrected builds are clean. No limit/cap/interruption/rerun. Review
-corrected creation overstatement, snapshot/execution wording and a missing TX parent-source factor. Frozen review
-04:29:36–04:33:40 is clear after correcting blanket-validation wording; metadata reconciliation 04:34:47–04:34:51 is
-clear.
-
-**Source-cut effort/review.** Lease 05:28:00, measured acceptance 05:28:32 UTC; scoped PASS collected by 06:00:22.
-Full PASS was collected by 06:02:30; exact PASS by 06:03:27. Final worker ledger: 26 capped calls,
-25 builds (5 PASS/20 ordinary FAIL), one exact check PASS. Call 7 reported recovery `declaration uses sorry` after
-ambiguous andM; calls 22/23 had tactic syntax failures and downstream kernel unknown-constant diagnostics. No source
-admission, limit/cap change, interruption or infrastructure rerun. Review required explicit RX input/output protocol
-linkage; corrected before scoped PASS. Exact check 26 verifies all six paths, 483 byte-identical prior terminal bodies, 485 total/122 R3, tokens/imports,
-whitespace/EOF, empty index and mirror pin. Independent frozen review 05:57:08–06:08:11 found no defect; it retains
-the normal-zero TX boundary, raw RX peer identity and outstanding caller composition. Root gate, fresh replay,
-default build and units passed on their first calls. Root's source/scope/body/token/import checks passed, but its
-final register selector incorrectly included the separate claim table and failed; the corrected remaining pin check
-passed for all seven rows. This was a check-script defect, not an infrastructure retry. No source changed after the
-worker's successful builds; subsequent edits only reconcile report/register metadata.
-
-**Origin-cut effort/review.** Lease 06:31:39, measured acceptance 06:35:01 UTC. Session foundation PASS call 7;
-concrete front PASS call 9; complete RX chain PASS call 15 collected 07:01:59. Scoped call 18 PASS426 collected
-07:05:47; first full call 19 PASS486 collected by 07:06:53; final full call 20 PASS486 collected 07:09:55
-after the validity docstring correction. Final worker ledger: 21 capped calls, 20 builds with
-9 PASS (2/7/9/11/14/15/18/19/20) and 11 FAIL (1/3–6/8/10/12–13/16–17), plus exact check 21 PASS
-collected 07:11:53. It verifies six paths, 487 unchanged prior bodies, 489/124 R3/114 R4, tokens/imports,
-whitespace/EOF, empty index, mirror de62c9d and seven lagging rows; its doc hashes precede this final metadata edit. Four deterministic
-200k-heartbeat diagnostics occurred across calls 3/4/10; call 4 also rejected downstream kernel unknown constants.
-Call 10's wrong type name caused recovery `declaration uses sorry` diagnostics; call 12 printed a recovery placeholder
-after an unknown identifier. Remaining failures were syntax, inference, source-normalization or ordinary proof goals.
-No source admission, limit/cap change, interruption or infrastructure rerun. Review corrected the None-front wording
-and device-only frontier wording, and qualified validity preservation to valid incoming histories. Root review required
-connected session and RX admission prefixes, now explicit.
-Independent preliminary review 06:48:33–06:54:29 and frozen review 07:06:53–07:14:42 are clear after the four
-wording/census findings were fixed. The coordinator's five concurrent checks all passed on their first calls:
-486-job/489-declaration permitted-axiom gate, fresh stock kernel replay, 60-job default build, 124 tests
-(24.066s, one skip), and exact scope/body/import/token/pin checks. The exact check covers the final reviewed source
-and documentation before these validation-only edits. All exits were collected by 07:22:06; no guest/differential
-run, cap increase, interruption or infrastructure rerun. The representation carry is next; all seven register rows
-retain de62c9d and are lagging cb2348e.
+**Effort/review.** Source-cut, local-origin and nullable-affiliation attempts and failed elaboration
+diagnostics are recorded in `ce12402`, `99e4f88` and `bcbf733`; material/owner/source-injection
+extensions are in `8f95d45`, `41df9916` and `60f8ea0`. The last injection used 23 builds
+(three PASS, twenty ordinary FAIL) and two exact checks, with full build collected 53m33s after
+acceptance. Independent review corrected creation/None-front wording, protocol linkage, returned-World
+claims, valid-history premises and a stale activation header. These corrections are reflected above.
+Two after-MAC proofs retain theorem-local 800,000 heartbeats after default-limit failures; no global
+or memory-cap increase was made. The rejected generic continuation proof was removed: an arbitrary
+callback protocol did not provide its required abort law. No source admission or accepted R3
+counterexample resulted from these failed attempts.
 
 **Ranked mirror suggestions.** None. Integer-address refinement needs no production restructure; C byte-layout
 correspondence remains informal.
@@ -565,6 +350,22 @@ correspondence remains informal.
 uniqueness for every typed Trace and both placeholder settings, including Stops. Chronological GRO order is false. Local/persistent
 polls and every initialized Runner normal return pair entries with actual normal Stack returns. Failed histories
 retain valid receipts and at most one trailing unfinished entry; joint conservation remains open.
+
+**Local reference protection.** [Carrier state](../Leanux/Proofs/WG/Queues/RxCarrierState.lean),
+[ingress cuts](../Leanux/Proofs/WG/Queues/RxIngressProtection.lean) and
+[cleanup cuts](../Leanux/Proofs/WG/Queues/RxCleanupProtection.lean) now prove source-acquired loans, fresh allocation
+transfer, pure-IRQ repayment, actual queued/selected/paid/free transitions and the successful ENOSPC suffix.
+All ledgers are explicit local inputs. Remaining positive demand derives non-retirement; no RetainsRx or retrospective
+slack premise substitutes for it. The poll suffix uses its caller pid under the actual earlier packet-peer guard.
+Key payment must have returned; key-credit funding is not asserted. Whole consumeData and initialized protection
+remain open, as do general callbacks, base/TX/work/dump reservations and ring/carrier correspondence.
+
+Independent architecture review identified a source-level arbitrary-World countermodel to framing all consumeDataDone
+by RX credits alone: P owns a selected credit plus reservation at count two, but its next key belongs to Q; staging
+acquires Q and dead-create cleanup pays P, reducing P below demand. This is not an accepted Runner counterexample.
+Later closure needs retained operational key/caller compatibility (including reply-triggered TX), not cryptographic
+unforgeability. Paid-phase history and allocation freshness remain separate proof obligations, not inferred from the
+three state predicates. No mirror repair is proposed from this arbitrary-state example.
 
 **Local disposition extension.** A fresh poll partitions actual removal occurrences by permutation, with no allocation
 premise. Normal return uniquely partitions nondelivery decisions/normal None and completed Stack callbacks. Stop
@@ -691,37 +492,25 @@ rejection, validation, keepalive, purge/free and handoff dispositions still need
 beyond the proved local post-removal partition. Queue idleness does not empty
 stores/peer queues; finite prefixes retain pending obligations. W7 item/mark transport remains open.
 
-**Effort/process/review.** Earlier callback-propagation grant 06:11:24, acceptance 06:12:04. The first Env build failed on
-an unqualified batch type and broad tactic searches reaching the existing 200k heartbeat limit; rejected elaboration
-printed `declaration uses sorry`. Explicit constructor proofs repaired it without source admission or raised limits.
-The existing Runner observer is reused, and its history-only completion proof closes at the default limit.
-Full result collected 06:25:19 (13m15s after acceptance): seven capped builds, six PASS and one ordinary FAIL.
-A metadata edit script separately failed ValueError on a stale heading; it was repaired before the next build.
-The eighth capped call passed exact scope/count/body checks at 06:26:16; ownership returned at 06:27:23.
-Independent frozen review 06:23:53–06:27:59 found no defect. Root gate, fresh replay, default build, units and
-exact checks all passed on their first calls, preserving all 485 prior terminal bodies and seven current pins.
-No cap, interruption, infrastructure rerun or source change after successful builds occurred; final edits only
-reconcile validation metadata.
-Earlier R4 ledgers are in `00fafa4`, `57cb46e`, `c4ef635`, `ec95fa8`, `3dec2c3`, `79dce53`, `1b76322`,
-`983f84b`. Earlier joint-poll failures 16/23 printed recovery sorry terms; call 20 hit the existing two-million-heartbeat
-limit; corrected source passed gates. Receipt work: grant 04:47:00, acceptance 04:47:40, full-build result collected
-05:16:10 (28m30s), handback 05:18:34. Eleven worker builds had four passes/seven ordinary failures; its exact check
-passed. Coordinator gate, fresh replay, default build and units passed. These are collected effort times, not compile durations.
-Call 03 printed two `declaration uses sorry` recovery warnings and rejected a kernel declaration with metavariables
-after namespace/elaboration errors. Corrected builds are clean; no source admission, limit/cap change or interruption.
+**Effort/process/review.** Earlier ring, receipt and caller ledgers are in `00fafa4`, `57cb46e`,
+`c4ef635`, `ec95fa8`, `3dec2c3`, `79dce53`, `1b76322`, `983f84b` and `65e6a6d`;
+the subsequent disposition/linkage checkpoints are listed above. Failed tactic searches, rejected
+recovery terms and dependent kernel diagnostics were failures and were corrected before validation.
+The disposition checkpoint's first coordinator kernel replay overlapped recompilation and failed;
+its sole infrastructure rerun after gate collection passed. Fresh replay now follows collected builds.
 
-Runner work used fifteen calls/29m04s to full success, including interrupted FAIL130. An unnecessary duplicate build
-followed a failed edit script and was deliberately interrupted; a corrective edit then occurred **before preservation**,
-violating the standing rule. Root stopped work and snapshotted six dirty worktrees under
-`refs/snapshots/proof-campaign-r4-runner-duplicate-20261015T021102Z/`; campaign
-`d5336546034e925211a891d88720e913f971c091` matched the dirty tree, branches/indices untouched. No build intervened;
-resumption followed release. Passing validation does not erase this process failure.
+Two process failures remain disclosed. The initial ring writer resumed after deliberate termination
+without snapshot; work stopped and six dirty worktrees were preserved. Later an unnecessary duplicate
+Runner build was interrupted (FAIL 130), followed by a corrective edit **before preservation**.
+Root then stopped work and snapshotted six dirty worktrees under
+`refs/snapshots/proof-campaign-r4-runner-duplicate-20261015T021102Z/`; campaign snapshot
+`d5336546034e925211a891d88720e913f971c091` matched the dirty tree, with branches/indices untouched.
+Passing validation does not erase either violation. Completion-worker interruptions were preserved.
+No R4 memory cap was hit.
 
-The initial ring writer separately resumed after deliberate termination without snapshot; work stopped and all six dirty
-worktrees were preserved before resuming. Completion-worker interruptions were preserved. These were not ordinary
-compile failures; no R4 memory cap was hit. Symbolic algebra replaced large reduction. Reviews required direct
-provenance, qualified EPIPE-at-return/failed-entry claims, corrected uniqueness/ownership/ifindex/scope/census wording
-and noted that immediate repayment appends steps, not hidden records. Findings are dispositioned.
+Independent reviews required direct provenance and corrected EPIPE-at-return, failed-entry, ownership,
+ifindex, uniqueness and census wording. Immediate repayment appends actual steps, not hidden records.
+The remaining initialized conservation obligations are stated above.
 
 **Ranked mirror suggestions.** None; physical occupancy explains W7 and proof-side observations suffice for the checked
 properties.
