@@ -1,5 +1,4 @@
 import MirrorLoop
-import WorldParts
 
 namespace Binary.PeerMirror
 open Leanux Leanux.WG
@@ -91,22 +90,6 @@ theorem accepted_peer_result (pid : PeerId) (w w' : World) (answer : Option Peer
   rw [peer_run pid w device peer hasDevice hasPeer small] at accepted
   exact Prod.mk.inj (Except.ok.inj accepted.symm)
 
-/-- Exhaustive source framing through the checked World partition. Physical
-    representation of the retained fields is a separate proof obligation. -/
-theorem peer_parts (pid : PeerId) (w : World) (peer : Peer) :
-    WorldParts.supplied (peerFinal pid w peer) = WorldParts.supplied w ∧
-    WorldParts.fixture (peerFinal pid w peer) = WorldParts.fixture w ∧
-    WorldParts.knowledge (peerFinal pid w peer) = WorldParts.knowledge w ∧
-    WorldParts.physical (peerFinal pid w peer) =
-      {WorldParts.physical w with k := (peerFinal pid w peer).k} ∧
-    WorldParts.history (peerFinal pid w peer) =
-      {WorldParts.history w with steps :=
-        (record (countRecords (record w .peerGetMaybeZeroNull false) peer.refcount)
-          .peerGetMaybeZeroDead (peer.refcount == 0)).steps} := by
-  by_cases zero : peer.refcount = 0 <;>
-    simp [peerFinal, countRecords, record, recordCmp, zero, WorldParts.physical,
-      WorldParts.supplied, WorldParts.fixture, WorldParts.knowledge, WorldParts.history]
-
 #print axioms count_run
 #print axioms accepted_count_bound
 #print axioms count_zero
@@ -114,5 +97,4 @@ theorem peer_parts (pid : PeerId) (w : World) (peer : Peer) :
 #print axioms peer_null_run
 #print axioms peer_run
 #print axioms accepted_peer_result
-#print axioms peer_parts
 end Binary.PeerMirror

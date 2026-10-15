@@ -1354,3 +1354,111 @@ This checkpoint interval is 3bffac7 at 04:55:01 through 05:11:28 UTC on
 2026-10-15: 987 seconds. It adds zero whole-World R regions and zero
 functions, a measured certification rate of zero per hour. Supporting field,
 phase and composition lemmas are not counted as certified regions.
+
+### Scope correction: WireGuard observations
+
+[USER 2026-10-15] R ranges over the whole World type so WireGuard properties
+transport through one relation; exact representation is required only for
+the anchored WireGuard read/write surface and landed WireGuard observations.
+This includes index owners/tables, peers, keypairs/counters, handshakes,
+rings/queues touched by callers and service-callback metadata. Unrelated
+task-work, exit, seccomp, credentials, signals, epoll and file-layer fields
+are unconstrained. Pre_lookup constrains only reads by lookup and its
+callbacks. Keep established components, stop extending non-WireGuard state,
+and prioritize bucket-loop composition, a concrete witnessed Pre_lookup and
+the function-level simulation; aim the milestone report for today's end.
+No merge or push. The earlier whole-World functionality requirement is
+superseded for unrelated fields; transport must remain exact on each claimed
+WireGuard observation rather than claim arbitrary unrelated predicates.
+
+[USER 2026-10-15] Further strict clarification: R is exactly the frame
+relation needed by the simulation, over the WireGuard projection. Each
+clause needs an anchored read/write or landed WireGuard observation as its
+justification. Untouched state is handled by the binary write footprint and
+mirror unchanged-field theorems, never an additional relation clause.
+The theorem target and TrustBase are unchanged. Remove unrelated task/file
+components from the proof path; they have no planned WireGuard milestone
+use and are removed from the tree. Their earlier work remains visible in
+the historical checkpoints, not carried as proof prerequisites. This
+supersedes the broader relation-assembly direction above. Pre_lookup will
+constrain only lookup/callback reads. The day's target remains the witnessed
+Pre, function simulation and milestone report, with no merge or push.
+
+
+### WireGuard frame relation and bucket composition
+
+The strict scope correction is implemented: the task/file/exit/signal
+components and exhaustive World partition are removed, including their
+unused source-frame consumer and library roots. No physical relation over
+unrelated state remains on this proof path. Existing WG field components
+remain available for later anchored functions, not lookup prerequisites.
+
+`LookupRelation.project` contains the selected bucket, the selected owner's
+nullable peer word and the initially referenced peer's count. The focus is
+identity only; it does not copy a source Peer/Device into the environment.
+The source projection is separate from incoming steps/rx-section context
+and actual raw/event execution histories. Each physical clause has a direct
+lookup/helper read/write justification. No device-table-pointer load,
+unselected bucket or pprev link is required. BucketShape is a uniform
+selected-chain representation, not the minimum individual bytes read by an
+early-hit path. Untouched WG observations still need the generic frame
+extension before any transported property is claimed.
+
+[AGENT 2026-10-15] Guard the count's pending CMPXCHG phase by the actual
+observed active helper call. The raw scan and its machine-captured operand
+remain unchanged; the guard removes irrelevant bucket-history obligations
+and makes helper return commit ordinary equality. Guard owner-store phase
+by both PC and the actual last helper-return tag, so an outer RET into the
+same PC range cannot be misclassified.
+
+Independent review exposed a concrete relation counterexample: a source
+Some peer ID could map to physical NULL while its refcount word at offset
+1056 remained mapped. The mirror would take the nonnull branch and the
+machine the null branch. The focused pointer now must be non-NULL. This is
+a pointer interpretation condition, not refcount positivity: dead peers
+remain in scope, and finding 1 is unchanged. EntryFocus must still be bound
+at function entry; it is not assumed to have been initialized by the bucket
+preservation theorem.
+
+`LookupBucketSimulation.bucket_simulation` now composes the complete
+arbitrary-length bucket segment under its incoming invariant. It retains
+the exact source computation, each emitted decision's source World and
+actual raw prefix, every anchored silent cut's latest source World, and R
+at the endpoint. The first index match terminates even when its kind is
+rejected. Physical preservation follows from the executed loop's writes,
+including the two phases around the mask-register overwrite. The observer
+location lemma distinguishes repeated equal states and compiler-merged
+events. The final ScanFrame and raw observations are exported for suffix
+composition, resolving a continuation gap identified by review. Review
+found no remaining local correctness defect in the composed segment.
+
+This is not entry-to-return adequacy. Entry/header prefix initialization,
+EntryFocus, the complete accepted peer-get relation, owner/output/BH/return
+composition, Pre_lookup with its concrete witness and the generic untouched
+WG frame extension remain open. No function or landed property is certified
+by this checkpoint. TrustBase.lean is unchanged and adds no assumptions.
+The first satisfying witness will use the recorded same-bucket miss;
+its existing concrete materialization ran 191 instructions to return, versus
+506 for the recorded live lookup. Both match the mirror and recorded kernel
+observations. These are synthesized entry heaps from recorded mirror
+prefixes, not captured kernel-entry memory, and are tests rather than proofs.
+
+
+Validation: capped full-parallel default build passed (267 jobs); all 468
+printed axiom lists contain only propext, Classical.choice and Quot.sound.
+Fresh kernel replays passed for LookupRelation and LookupBucketSimulation
+with their imports. The final export of the already-proved ScanFrame/raw
+observations then passed current-module replay against those verified
+imports. The new proof files' forbidden-construct scan and git diff check
+passed. Local elaboration/generator failures were corrected, not counted as
+passes. No KILLED banner or timeout occurred. Mirror/runtime/oracle are
+unchanged; the prior concrete and three-way tests remain applicable.
+
+Measured checkpoint interval: 1377184 at 05:11:43 to validation at 05:53:14
+UTC, 2026-10-15, is 2491 seconds. It closes one conditional bucket-segment
+simulation with all its cuts, but zero witnessed entry-to-return functions.
+The certified-function rate remains zero per agent-day; supporting lemmas
+and this segment are not substituted for the milestone's certified-region
+rate. Milestone 1's function/region rate and verbatim TrustBase report are
+still owed when that milestone is reached (or in today's candid status if
+it remains incomplete).

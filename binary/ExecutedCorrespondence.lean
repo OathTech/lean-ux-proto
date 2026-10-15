@@ -96,6 +96,20 @@ theorem CutsAligned.prefix {R rxSection front tail source}
   have result := aligned i current extended cut
   simpa [List.take_append, Nat.sub_eq_zero_of_le (show i + 1 ≤ front.length by omega)] using result
 
+theorem CutsAligned.append_source {R rxSection history source}
+    (aligned : CutsAligned R rxSection history source) (tail : List MirrorHistory.Point) :
+    CutsAligned R rxSection history (source ++ tail) := by
+  intro i current present cut
+  obtain ⟨events, last, observed, matched, latest, related⟩ := aligned i current present cut
+  have takeEq : (source ++ tail).take events.length = source.take events.length :=
+    List.take_append_of_le_length matched.1
+  refine ⟨events, last, observed, ⟨?_, ?_⟩, ?_, related⟩
+  · have bound := matched.1
+    simp only [List.length_append]
+    omega
+  · simpa only [takeEq] using matched.2
+  · simpa only [takeEq] using latest
+
 theorem CutsAligned.append_no_cuts {R rxSection history source}
     (aligned : CutsAligned R rxSection history source) (tail : List MachineState)
     (noCuts : ∀ s ∈ tail, s.pc ∉ Image.cutPoints) :
@@ -157,6 +171,7 @@ theorem AtPoint.last {R rxSection history seen current world}
   simp [present]
 
 #print axioms CutsAligned.snoc
+#print axioms CutsAligned.append_source
 #print axioms CutsAligned.prefix
 #print axioms CutsAligned.append_no_cuts
 #print axioms AtPoint.last

@@ -23,7 +23,7 @@ LEANUX_QEMU_SLOTS=16 capped -- /usr/bin/python3 binary/run.py --trace d1_second_
 capped -- /usr/bin/python3 binary/census.py
 cd binary
 capped -- lake build BinaryProofs
-capped -- lake env leanchecker LookupLoads PeerScalars WorldParts KcovHistory PeerAccepted ServiceObservation TrustBase ServiceImage ServiceComposition KcovInvariant KcovExecution PeerCall PeerStart PeerReturn PeerFinish PeerNull PeerNullEntry PeerComparisons PeerLoad PeerDeadCallbacks PeerDeadFinish PeerDeadEntry PeerIncrement PeerLiveCallbacks PeerLiveFinish PeerIncrementFinish PeerLiveEntry FixtureKnowledge StackFrame BucketLoop Execution History HistoryRegions RegionExecution MirrorLoop MirrorPeer MirrorHistory LookupObservation Memory Image ImageLayout Layouts Regions PeerRegions PeerPrologue Prologue BucketEntry Representation KeypairRepresentation Symbolic
+capped -- lake env leanchecker LookupLoads PeerScalars KcovHistory PeerAccepted ServiceObservation TrustBase ServiceImage ServiceComposition KcovInvariant KcovExecution PeerCall PeerStart PeerReturn PeerFinish PeerNull PeerNullEntry PeerComparisons PeerLoad PeerDeadCallbacks PeerDeadFinish PeerDeadEntry PeerIncrement PeerLiveCallbacks PeerLiveFinish PeerIncrementFinish PeerLiveEntry FixtureKnowledge StackFrame BucketLoop Execution History HistoryRegions RegionExecution MirrorLoop MirrorPeer MirrorHistory LookupObservation Memory Image ImageLayout Layouts Regions PeerRegions PeerPrologue Prologue BucketEntry Representation KeypairRepresentation Symbolic
 ```
 
 Generated state, census and comparison output go under `.tmp/binary-tv`;
@@ -66,7 +66,7 @@ capped -- /usr/bin/python3 binary/generate.py
 
 The source relation now receives the actual observed event prefix as well as
 the machine state. This distinguishes two mirror decisions emitted at one
-compiled edge. The relation's whole-World components and function composition
+compiled edge. The relation's WireGuard components and function composition
 remain unfinished; the checkpoint report describes what is proved.
 
 `KcovInvariant` proves callback readiness and preservation from physical
@@ -83,8 +83,7 @@ four-byte increment. `peer-nonnull` checks both paths, including the largest
 accepted count, active/disabled/full buffers and both capture modes, against
 the decoded service bodies. Whole-function correspondence remains open.
 
-`WorldParts` is an exhaustive field decomposition, not the whole-world
-relation. `PeerScalars` supplies 29 DWARF-derived stable peer equations and
+`PeerScalars` supplies 29 DWARF-derived stable peer equations and
 physical framing; pointer/queue/work/timer components remain open.
 `ServiceObservation` and `KcovHistory` retain callback histories and cuts.
 `BucketShape` reads only index/type/next, with no restriction on owner peer
@@ -94,7 +93,7 @@ intermediate instruction states needed for the pending loop composition.
 `ScanNode.node_to_compare` composes the nonempty-node path +0x34 to +0x59,
 including four actual instrumentation calls, with physical framing at every
 appended cut. `LoopSearch.lookup_split` relates its source decomposition to
-the actual logged lookup. The recursive physical loop is composed below; whole-World R remains
+the actual logged lookup. The recursive physical loop is composed below; WireGuard R remains
 open. Replay these components with:
 
 ```sh
@@ -106,7 +105,7 @@ capped -- lake env leanchecker Representation LookupLoads PeerComparisons CallHi
 `ScanSearch.scan_search` executes arbitrary bucket misses to exhaustion or
 the first matching index, with exact decision records/tags and physical
 frames at appended cuts. It stops before the matched kind test and is not
-a whole-World simulation. Replay with `capped -- lake env leanchecker
+a WireGuard simulation. Replay with `capped -- lake env leanchecker
 ScanFrame ScanNode ScanIteration ScanSearch` in `binary/`.
 
 `BucketScan.bucket_loop` adds both matched type outcomes and derives the
@@ -127,7 +126,7 @@ handshake or keypair; the source setter reloads the current owner. The
 They are constructed states, not kernel entry snapshots.
 
 `DeviceScalars`, `SerialCpu` and `ListRing` add exact stable fields and active
-circular-list components for whole-World R. Names, object-store membership,
+circular-list components for WireGuard R. Names, object-store membership,
 retirement, and the remaining heap components are separate obligations.
 `PeerPrologueHistory`, `PeerSignHistory`, `PeerReturnHistory`,
 `PeerSavedHistory` and `PeerFinishHistory` retain actual helper instruction
@@ -144,7 +143,7 @@ capped -- lake env leanchecker Layouts SerialCpu DeviceScalars ListRing MirrorLo
 `PeerNullEntryHistory.null_entry_history` now composes the complete physical
 null-helper path, including both actual callbacks and RET, with exact
 observer events and memory framing at every appended cut. It does not yet
-supply whole-World R or the nonnull helper paths. Replay with `capped -- lake
+supply WireGuard R or the nonnull helper paths. Replay with `capped -- lake
 env leanchecker PeerClearHistory PeerStartHistory PeerNullHistory
 PeerNullEntryHistory`; `binary-probe peer-null` exercises the actual service
 bodies under two undefined-value seeds.
@@ -154,7 +153,7 @@ bodies under two undefined-value seeds.
 zero-count helper path from entry through RET, all five decision states,
 and per-cut memory framing. `PeerNonNullPrefixHistory` obtains the count
 from the physical word and admits zero. These components do not yet supply
-the complete helper's whole-World relation. Replay the nine modules named
+the complete helper's WireGuard relation. Replay the nine modules named
 in the dead-helper report; `binary-probe peer-nonnull` exercises 21 cases
 with actual service bodies and two undefined-value seeds.
 
@@ -162,7 +161,7 @@ with actual service bodies and two undefined-value seeds.
 `PeerIncrementFinishHistory.increment_finish_history` composes the actual
 live increment through RET and exports the post-increment memory frame at
 every later decision and cut. `PeerLiveZeroHistory` supplies the preceding
-nonzero guard/callback. The full live entry and whole-World correspondence
+nonzero guard/callback. The full live entry and WireGuard correspondence
 remain open. To replay imports as well, run one module per invocation:
 `capped -- lake env leanchecker --fresh PeerLiveZeroHistory` and
 `capped -- lake env leanchecker --fresh PeerDeadEntryHistory` in `binary/`.
@@ -172,7 +171,7 @@ remain open. To replay imports as well, run one module per invocation:
 helper entry through RET, retaining all six decision states and the exact
 physical increment. Null/zero cuts frame entry memory; later cuts frame
 the incremented memory. Together with null/dead histories this covers all
-accepted physical helper paths. The whole-World accepted helper theorem
+accepted physical helper paths. The WireGuard accepted helper theorem
 and lookup adequacy remain open. Replay imports with one root:
 `capped -- lake env leanchecker --fresh PeerLiveEntryHistory` in `binary/`.
 
@@ -181,31 +180,14 @@ and lookup adequacy remain open. Replay imports with one root:
 framing and projection to `BucketShape`. Its mutation fold still needs actual
 incoming provenance and owner/lifetime naming. `EndpointHeap` decodes active
 endpoint fields with exact byte order and leaves inactive union bytes alone.
-`WorldContext` derives decision logs from observed events under one fixed
-nonphysical context; its event cursor handles compiler-merged decisions.
-These remain components of the unfinished whole-World R.
-
-
-`FdHeap` supplies concrete task/files/fdtable pointers, descriptor entries
-and bitmap fields, with read-footprint frames and functionality under fixed
-allocation names. `binary/fd_layouts.py` regenerates its pinned offsets.
-Generation history, fixture-file abstractions and the remaining task fields
-remain open; this is not a whole-Kernel relation. Replay with
-`capped -- lake env leanchecker --fresh FdHeap` in `binary/`.
-
-
-`TaskHeap` adds exact selected task flags, signal masks, credential/capability,
-rlimit and seccomp scalar fields. It frames their physical read support and
-permits shared credentials/signal objects. Task works, SIGSYS disposition
-and filter contents remain separate. Regenerate its offsets with capped
-`binary/task_layouts.py`; replay with `capped -- lake env leanchecker --fresh
-TaskHeap` in `binary/`.
+These are available components; lookup relates only its justified WireGuard
+reads/writes and landed observations, with untouched state handled by frames.
 
 
 `LookupPeerCallHistory`, `LookupResultHistory` and `LookupReturnHistory`
 retain the actual helper call, owner store/NULL guard, output store and
 lookup epilogue. They admit NULL/dead peers and establish physical histories;
-whole-World composition remains open. Replay each module separately with
+WireGuard composition remains open. Replay each module separately with
 `capped -- lake env leanchecker --fresh MODULE` in `binary/`.
 
 
@@ -215,15 +197,47 @@ and `LookupBucketFrame` cover the BH increment, bucket-head read and changed
 callback state. `LookupBhHistory` records argument setup and the named
 BH-enable service execution. `OwnerPending` relates the old source owner
 word through the actual helper-return snapshot until idxPeerAlive. These
-components do not establish the whole-World simulation. The standalone
+components do not establish the WireGuard simulation. The standalone
 package now builds BinaryProofs by default, including for lake check export.
 
-`TaskWorkHeap` represents the attached callback chain, preserving callback
-order and distinguishing the closed sentinel. It does not supply a detached
-activation or callback effects. `PeerCountPhase` projects the outstanding
-refcount increment from actual instruction edges, retaining the old source
-count until helper return. `ExecutedCorrespondence.MatchesRun` threads the
-exact instruction prefix into R at semantic points and stuttering cuts;
-the older semantic-only interface cannot support that phase projection.
-These components still require whole-World assembly. Replay each with
-`capped -- lake env leanchecker --fresh MODULE` in `binary/`.
+`PeerCountPhase` projects the outstanding refcount increment from actual
+instruction edges, retaining the old source count until helper return.
+`ExecutedCorrespondence.MatchesRun` threads the exact instruction prefix
+into R at semantic points and stuttering cuts; the older semantic-only
+interface cannot support that phase projection.
+
+R is the simulation's frame relation over the WireGuard projection. Every
+clause needs an anchored read/write or a landed WireGuard observation.
+Unrelated task/file components have been removed from the proof path and
+tree. Untouched fields are handled by write-footprint and source-frame
+lemmas, not additional relation clauses. Pre_lookup constrains only lookup
+and callback reads. The function-level simulation remains incomplete.
+
+
+`LookupRelation` projects the selected bucket, focused owner peer word and
+focused peer count. It relates none of the task, file, signal, credential or
+seccomp state. The focused peer remains named after dead-peer NULL store-back;
+its address must be non-NULL, but its count may be zero. An active-helper flag
+from actual observed calls/returns guards the raw CMPXCHG phase. Owner-store
+phase also checks the last actual helper return, so an outer RET into the
+same address range cannot masquerade as a pending store. Untouched WG
+observations need a generic frame extension, not extra base-relation fields.
+
+`LookupBucketSimulation.bucket_simulation` composes the actual bucket loop
+with this relation at every decision, anchored stuttering cut and endpoint.
+It uses the operational source bucket result, stops at the first index match
+regardless of kind, and retains the final register/readiness frame and raw
+history needed by the suffix. Its incoming representation, ABI cursor and
+matched/aligned prefix must still be established from function entry.
+`ObservationLocations` locates each event at its emitting occurrence in the
+fixed instruction history. `BucketWorlds` fixes the exact source checkpoints
+and latest world at cuts. These are conditional segment results: no complete
+lookup adequacy, witnessed Pre_lookup or property transport is claimed yet.
+
+The obsolete whole-World partition and task/file heap components have been
+removed. Run the new kernel replay one root per invocation:
+
+```sh
+cd binary
+capped -- lake env leanchecker --fresh LookupBucketSimulation
+```
