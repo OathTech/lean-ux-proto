@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Origins.SupportRunner
 import Leanux.Proofs.WG.Origins.SupportEnvironment
 import Leanux.Proofs.WG.Origins.RetainingLifecycle
 import Leanux.Proofs.WG.Queues.RxCompletionEnvironment
@@ -2930,5 +2931,75 @@ theorem original_origin_support_environment :
     (∀ call, Origins.HistorySupport.Preserves (Queues.RxHistory.remaining call)) :=
   ⟨Origins.HistorySupport.runWorker, Origins.HistorySupport.handshakeReceiveWorker,
     Origins.HistorySupport.deferred, Origins.HistorySupport.remaining⟩
+
+/-- Actual peer creation, allowed-IP insertion and complete device configuration
+retain full receiving material and the keep-or-clear owner relation on every
+normal return, including partial updates returning negative errno. Deletion and
+invalidation are allowed; no returned World is asserted after a Stop. -/
+theorem original_material_retaining_configuration :
+    (∀ key psk, Framing.SameView Origins.view (WG.peerCreate key psk)) ∧
+    (∀ pid psk, Framing.SameView Origins.view (WG.handshakeInit pid psk)) ∧
+    (∀ family addr cidr pid, Framing.SameView Origins.view (WG.insert family addr cidr pid)) ∧
+    (∀ pid ip, Framing.SameView Origins.view (WG.setAllowedip pid ip)) ∧
+    (∀ attrs, Origins.Retaining.RetainsCall (WG.setPeerCmd attrs)) ∧
+    (∀ attrs, Origins.Retaining.RetainsCall (WG.wgSetDevice attrs)) :=
+  ⟨Origins.Retaining.peerCreate_material, Origins.Retaining.handshakeInit_material,
+    Origins.Retaining.insert_material, Origins.Retaining.setAllowedip_material,
+    Origins.Retaining.setPeerCmd_material, Origins.Retaining.wgSetDevice_material⟩
+
+/-- Cursor acquisition/release, dump callbacks, socket queues and the original
+bounded whole-dump loop preserve every receiving-material view field on normal
+return. Arbitrary cursor values need no validity, residency or drain premise. -/
+theorem original_material_retaining_dump :
+    (∀ ctx, Framing.SameView Origins.view (WG.wgGetDeviceDone ctx)) ∧
+    (∀ ctx seq skb, Framing.SameView Origins.view (WG.wgGetDeviceDump ctx seq skb)) ∧
+    (∀ fd, Framing.SameView Origins.view (WG.netlinkDump fd)) ∧
+    (∀ fd ref, Framing.SameView Origins.view (WG.netlinkDumpStart fd ref)) ∧
+    (∀ fd, Framing.SameView Origins.view (WG.netlinkRecvmsg fd)) ∧
+    (∀ ref, Framing.SameView Origins.view (WG.wgGetDevice ref)) :=
+  ⟨Origins.Retaining.wgGetDeviceDone_material, Origins.Retaining.wgGetDeviceDump_material,
+    Origins.Retaining.netlinkDump_material, Origins.Retaining.netlinkDumpStart_material,
+    Origins.Retaining.netlinkRecvmsg_material, Origins.Retaining.wgGetDevice_material⟩
+
+/-- Original initialization discharges receiving-material support for every
+committed session/decrypt/probe history, for all typed traces and both flags.
+Successful decrypts retain exact stored packet/key, AEAD and strictly earlier
+session evidence. Saved probes retain support at their actual entry Worlds.
+JSON or indexed Stop and the same full R2 audit projection remain exact; failures
+retain checked history, not a returned World. Copied-trial origin transcripts,
+configured peer identity and packet-to-Stack authorization are separate claims. -/
+theorem initialized_committed_material_support :
+    (∀ trace placeholders,
+      Logged.ErasesOuter (Queues.RxHistory.executeTraceHistory trace placeholders)
+        (Runner.executeTrace trace placeholders) ∧
+      Logged.runPrefixOuter (Lifetimes.executeTraceAudit trace placeholders) [] =
+        ((Logged.runPrefixOuter (Queues.RxHistory.executeTraceHistory trace placeholders) []).1,
+          Queues.RxHistory.auditHistory
+            (Logged.runPrefixOuter (Queues.RxHistory.executeTraceHistory trace placeholders) []).2) ∧
+      Origins.HistorySupport.HistorySafe
+        (Logged.runPrefixOuter (Queues.RxHistory.executeTraceHistory trace placeholders) []).2) ∧
+    (∀ trace placeholders pre post id (r : Logged.RunWitness (RxPacket × Option RxPacket)) out,
+      (Logged.runPrefixOuter (Queues.RxHistory.executeTraceHistory trace placeholders) []).2 =
+        pre ++ .rx (.decrypt id r) :: post → r.value.2 = some out →
+      ∃ d k, r.before.k.wg = some d ∧ d.rxSkbs[id]? = some r.value.1 ∧
+        d.keypairs[r.value.1.keypair]? = some k ∧
+        Origins.Supported (Origins.HistorySupport.sessions pre) d.ifindex r.value.1.keypair k ∧
+        (WG.decryptPacket r.value.1).run r.before = .ok (some out,r.after) ∧
+        out = {r.value.1 with nonce := u64le r.value.1.bytes 8, bytes := out.bytes} ∧
+        aeadDecrypt k.receiving.key (counterNonce (u64le r.value.1.bytes 8))
+          (r.value.1.bytes.drop 16) [] = some out.bytes) ∧
+    (∀ trace placeholders pre post p,
+      (Logged.runPrefixOuter (Queues.RxHistory.executeTraceHistory trace placeholders) []).2 =
+        pre ++ .audit (.probe p) :: post →
+      p.history = Queues.RxHistory.prior pre ∧ Origins.HistorySupport.StateSupported pre p.world) :=
+  ⟨fun trace placeholders => ⟨Queues.RxHistory.executeTraceHistory_erases trace placeholders,
+      Queues.RxHistory.executeTraceHistory_projects trace placeholders,
+      Origins.HistorySupport.executeTraceHistory_support trace placeholders⟩,
+    fun trace placeholders pre post id r out he ho =>
+      Origins.HistorySupport.HistorySafe.decrypt _ pre post id r out
+        (Origins.HistorySupport.executeTraceHistory_support trace placeholders) he ho,
+    fun trace placeholders pre post p he =>
+      Origins.HistorySupport.HistorySafe.probe _ pre post p
+        (Origins.HistorySupport.executeTraceHistory_support trace placeholders) he⟩
 
 end Leanux.Proofs.WG.CryptokeyRouting

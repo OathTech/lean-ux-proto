@@ -4,7 +4,8 @@
 
 Work on `proofs/campaign` in `.worktrees/proofs-campaign` follows [the charter](2026-10-13-charter-proof-campaign.md),
 with representation batch `cb2348e` carried and validated. All seven rows are current there, including the
-new local normal-poll carrier extension. Earlier results include the local R4
+local normal-poll carrier extension. The new R3 initialized committed-support extension passes
+independent review and coordinated validation. Earlier results include the local R4
 packet-to-receipt link extension, local R3 owner-acquisition material frame and initialized R4 linkage.
 The session/decrypt source injection is validated with the original caller, audit and R4 contracts preserved.
 The local RX reference-transfer/discharge extension passes coordinated validation.
@@ -19,7 +20,7 @@ was made by this campaign.
 | --- | --- |
 | R1 | Replay uniqueness proved; inclusive-floor correction witnessed. |
 | R2 | Initialized allocation-identity access safety proved, including failures/trials; affiliation/credits separate. |
-| R3 | Parsed initialized routing histories, local lookup/affiliation cuts and actual session/RX-origin receipts; initialized packet binding open. |
+| R3 | Parsed initialized routing histories and initialized committed material support proved; configured identity and packet binding open. |
 | R4 | Initialized entry/completion uniqueness and packet/receipt linkage; chronology refuted; receive-pipeline conservation open. |
 | R5 | Accepted age/post-zero/wire-nonce counterexamples; thirteen positive local contracts. |
 | R6 | Cookie exclusion proved; literal MAX=18 refuted, without a replacement universal bound. |
@@ -31,12 +32,12 @@ preserve all 508 prior terminal bodies: 511 declarations (509 theorems/two defin
 [SupportEnvironment](../Leanux/Proofs/WG/Origins/SupportEnvironment.lean) preserve supplied receiving-material
 support through the existing session/decrypt, poll, scheduler and complete deferred/remaining environment
 observers. Each decrypt receipt uses its exact strict earlier journal prefix and captured entry World;
-successful decrypt retains the actual stored packet/key, full session witness and AEAD equation. Each saved
+successful decrypt retains the actual stored packet/key, full derivation-front witness and AEAD equation. Each saved
 filter entry has the exact prior lifetime projection and support at its saved World, including filter Stop.
 Normal return preserves state support; every outcome preserves receipt and positional checks, not a failed World.
 This origin-only history predicate is separate from R2 access validity and invalid-key RX carrier ownership.
-Initialized support, configuration/dump composition, ingress admission injection, configured peer identity,
-packet transport to poll/Stack and copied-trial origin receipts remain open.
+At that checkpoint, initialization/configuration/dump composition remained open; this extension closes committed
+support. Ingress admission, configured peer identity, packet transport and copied-trial origins remain open.
 
 The preceding `8f9b8a2` R4 callback checkpoint passed its 508-job/508-declaration permitted-axiom gate,
 fresh kernel replay, default60 and 103 tests (21.919s, one skip), with independent review and exact checks.
@@ -45,43 +46,63 @@ At that checkpoint, review found unfunded Handoff ghost loans; explicit funded t
 consequences resolved the finding. Its initial write/build shell lacked fail-closed chaining: the write succeeded,
 but the process-rule failure was reported and subsequent commands were corrected.
 
-**Current R4 normal-poll carrier extension (validated).** Two groups preserve all 511 prior
-terminal bodies: 513 declarations (511 theorems/two definitions; 135 R3/127 R4). Concrete key/current
-frames, Stack callbacks and unchanged normal poll execution retain the supplied funded RX inventory.
-The endpoint filters that exact original ledger by the poll's fresh removal identities, proves removed
-storage absent, and joins the named nondelivery/completed-callback partition. Uncrypted queued heads
-can remain. Initialized admission/ring/lifecycle conservation and configured identity remain open.
+**Preceding R4 normal-poll carrier checkpoint (`f1209f5`, validated).** Two groups preserve the older
+511 terminal bodies: 513 declarations (135 R3/127 R4). Concrete key/current frames, Stack callbacks and
+normal poll execution retain the supplied funded RX inventory, filtered by fresh removals with removed storage
+absent and the named nondelivery/completion partition. Uncrypted heads may remain. Initialized pipeline
+conservation and configured identity remain open. Its worker ledger was 44 calls (42 builds:10 PASS/32 ordinary
+FAIL; two exact checks), scoped431/full514. Gate514/513, fresh replay after compilation, default60 and
+103 tests (21.635s, one skip) passed. The commit retains measured effort, default-limit status, rejected kernel
+metavariables in01/26 and recovery placeholders in10/19/22/33/40, with no source admission. Independent review
+corrected two stale scope clauses. [AGENT 2026-10-15] Deletion-tolerant normal-poll composition allows actual
+positive payment to retire its peer; a later original getter may Stop. No invented caller/base reservation or
+totality premise simplifies the loop; failed prefixes remain separate from endpoint Worlds.
 
-**Current effort.** Acceptance 17:18:46 UTC; 130 minutes/72 capped calls, final 20 minutes/10 calls
-reserved at 19:08:46 or call62. Scoped41 passes 431 jobs; full42 passes 514, collected at
-18:24:47 UTC (66m01s after acceptance). Forty-two builds comprise ten PASS and thirty-two ordinary FAIL.
-Exact43 passes six-path scope, all 511 prior bodies, census, tokens/imports, whitespace/EOF,
-unchanged mirror/index and seven pins. Final metadata/hashes are covered by exact44: 44 calls total
-(42 builds: 10 PASS/32 ordinary FAIL; two exact checks). Independent frozen review is clear
-(18:24:52–18:31:01 UTC, 6m09s); final metadata review is clear at 18:32:04.
-Worker ownership ended at 18:31:46 UTC (73m00s), with every job collected.
-Coordinated validation passes: the 514-job/513-declaration permitted-axiom gate, fresh kernel replay
-collected at 18:35:30 after gate compilation, default build (60 jobs), and 103 unit tests
-(21.635s, one skip). Exact comparison retains all prior bodies and the four frozen Lean hashes.
-Every new proof retains default limits; no limit exhaustion occurred. Lake job parallelism is 32, QEMU slots16,
-with unchanged 32G cap and per-Lean `-j1`. Ordinary elaboration failures include rejected kernel
-metavariable diagnostics in calls01/26 and recovery goal placeholders in calls10/19/22/33/40;
-there is no source admission. No cap increase, interruption, infrastructure retry, differential or guest
-run occurred. The full per-call ledger belongs in the checkpoint commit.
-Independent review found two stale RX-carrier scope clauses in the map/claim table; both now explicitly
-leave initialized funding/work/admission correspondence open, while acknowledging the local callback result.
-[AGENT 2026-10-15] Use deletion-tolerant normal-poll composition: actual positive packet payment may
-retire its peer; a later original getter can Stop. No extra caller/base reservation or totality premise
-is introduced solely to simplify the loop. Failed-prefix protocols remain separate from endpoint Worlds.
-The preceding `a945ea8` checkpoint passed gate511/511, fresh kernel replay after compilation, default60
-and 103 tests (22.370s, one skip); its recovery/kernel/default-limit failures and three fixed review
-findings are recorded in that commit. It introduced no source admissions or proof-limit increase.
+**Current R3 committed-support extension (validated).** Three groups preserve all
+513 prior terminal bodies: 516 declarations (514 theorems/two definitions; 138 R3/127 R4).
+`RetainingConfiguration` frames actual peer creation, allowed-IP insertion and full peer/device configuration,
+including ordinary negative errno after partial updates. `RetainingDump` frames captured cursor acquire/put/done,
+queue/callback/start-error behavior and the bounded whole dump without cursor/residency/drain premises.
+`SupportRunner` composes the existing eventful syscall dispatcher, descriptor wrappers and actual post-workers;
+it does not treat the old audit dispatcher as universally origin-free. Empty/absent initial keys and the seccomp
+prefill frame establish committed material support for all typed traces/both flags. Each successful decrypt
+retains its exact packet/key/AEAD equations and a full successful derivation-front receipt in its strict earlier journal
+prefix; actual saved probes retain support at their captured entry Worlds. Original JSON/indexed Stop and full
+same-input R2 audit/probes are unchanged. Stops retain checked history, not a returned World. Configured identity,
+admission/packet transport, earlier lookup-history alignment and copied-trial origin transcripts remain open.
+The receipt ends after deriveKeys; later handshake clearing, rotation or index replacement may Stop. It does
+not assert whole beginSession completion or cryptographic handshake authentication.
+
+**Current effort.** Accepted 18:39:21 UTC; 110 minutes/60 capped calls, final 20 minutes/10 calls reserved
+at 20:09:21 or call 50, deadline 20:29:21. Scoped 13 passes 464 jobs, collected at 19:00:44
+(21m23s after acceptance); full 14 passes 517, collected at 19:02:33 (23m12s). Exact 15 covers
+six-path scope, all 513 prior bodies, the 516/138 R3/127 R4 census, tokens/imports, default new-proof
+limits, whitespace/EOF, mirror/index/pins and report recipes. Exact 16 covers final worker metadata.
+Worker ownership ended at 19:09:02 (29m41s), with all handles collected. Its sixteen-call ledger comprises
+fourteen builds: five clean PASS, eight ordinary FAIL, and one exit-zero diagnostic finding; both exact checks pass.
+Calls 06/08 exhausted the default 200k limit during unification/search; structural decomposition and source-head
+matching resolved them without raising limits. Calls 09/10 each logged 256 unchecked tactic-index diagnostics:
+09 exited zero and is not a clean validation pass; 10 failed. Checked Option matching repaired the helper.
+Call 12 failed a generated congruence-name import collision, repaired by importing the canonical dump frames.
+The checkpoint commit retains every ordinary elaboration failure and the complete per-call ledger.
+Independent frozen review is clear (18:59:51–19:07:22 UTC, 7m31s); final metadata is clear at
+19:08:31 (8m40s total). Finding 1 corrected stale initialized-provenance gaps to the actual configured-peer,
+ingress and transport obligations. Finding 2 named the derivation-front boundary and allowed later session-tail
+Stops. Both were fixed and verified individually.
+Coordinated validation passes: the 517-job/516-declaration permitted-axiom gate, fresh kernel replay collected
+at 19:13:17 after gate compilation, default build (60 jobs), and 103 unit tests (21.784s, one skip).
+Exact comparison retains all prior bodies and the four frozen Lean hashes. All jobs were collected before
+updating this report. No process interruption, source admission, rejected kernel/recovery-admission diagnostic,
+cap increase, infrastructure retry, differential check or guest run occurred. Every new proof retains default
+limits; Lake parallelism is 32, QEMU slots 16, with the unchanged 32G cap and per-Lean `-j1`.
+[AGENT 2026-10-15] Split ordered copied-trial transcripts from configuration/dump plus committed support:
+occurrence-indexed alternate executions need their own accounting contract on the existing journal.
 
 **Current foundations.** The persistent RX journal records actual session/decrypt source cuts and preserves
 unconditional original erasure, the same full incoming R2 audit/probes and the established R4 boundary,
 completion, receipt-validity and linkage meanings. Local receipt validity requires a valid incoming journal.
-Actual ingress admission injection, initialized material/configured identity, earlier routing alignment and
-copied-trial origin receipts remain open.
+Actual ingress admission injection, configured identity, packet transport, earlier routing alignment and
+ordered copied-trial origin receipts remain open; initialized committed material support is now validated.
 
 **Representation carry (`cb2348e`).** Handshake consumers write the captured returned PtrRing before
 running the handler; only normal return reaches the counter decrement. The worker retains its 4097-poll
@@ -312,11 +333,12 @@ AllocationInv on the same input World's projected incoming history. Receipt vali
 history (empty qualifies), independently of AllocationInv.
 [AGENT 2026-10-15] Reuse captureObserved and existing R2 source cuts with a shared receipt journal; retain the local
 projection domain rather than add invalid-history append infrastructure. No initialized origin premise or new Runner
-hierarchy was introduced. Initialized session-to-later-key allocation matching, peer public-key provenance, packet transport to
-poll/Stack, copied trials and initialized identity closure remain open. A snapshot or raw peer winner does not settle them.
+hierarchy was introduced. Initialized committed material/stamp matching is now established below. Configured peer
+public-key provenance, ingress/packet transport to poll/Stack, copied-trial origins and identity closure remain open.
+A snapshot or raw peer winner does not settle those remaining links.
 
 **Local material retention.** [Origins/State](../Leanux/Proofs/WG/Origins/State.lean) supports every resident valid
-receiving key with one full successful session witness and its keep-or-clear owner; invalid keys require no support.
+receiving key with one full successful derivation-front witness and its keep-or-clear owner; invalid keys require no support.
 [Origins/SessionMaterial](../Leanux/Proofs/WG/Origins/SessionMaterial.lean) proves actual front installation/tail
 retention and the combined local session/decrypt adapters. Its strict journal-order conclusion uses the supplied
 entry support, not an initialized-history provenance theorem. Normal Some-front facts recover the complete entry peer;
@@ -326,7 +348,8 @@ index-lookup frame, including nullable store-back, and reuses the existing acces
 The new `RetainingLeaves`, `RetainingTraffic` and `RetainingLifecycle` source contracts extend normal
 material retention through concrete non-installing traffic, timers and lifecycle operations. They reuse actual
 record getters and stronger canonical masks, with no affiliation/residency/credit or successful-drain premise.
-Whole-admission and initialized provenance remain unfinished; the supplied-state caller propagation below is now validated.
+Whole-admission and configured peer/packet provenance remain unfinished. The supplied-state caller propagation
+below is validated; the new Runner composition establishes initialized committed material provenance.
 
 **Actual caller injection.** [ReceiptTypes](../Leanux/Proofs/WG/Origins/ReceiptTypes.lean) keeps existing qualified
 receipt/context names while removing the import cycle. [HandshakeSources](../Leanux/Proofs/WG/Origins/HandshakeSources.lean)
@@ -337,7 +360,7 @@ normal tail/decrement and Stop bypass order remain original. All prior audit/pro
 Old metadata decoders erase session/RX receipts; the linkage decoder retains lifetime access events. Its concrete
 Protocol instances preserve the existing R4 predicates. Copied scheduler trials retain their isolated R2 observer;
 this extension does not claim their session/decrypt receipts. Available admission receipt types do not mean ingress
-admission has been injected. Local validity and source linkage do not establish initialized material support.
+admission has been injected. That local layer alone does not establish initialized material support; the new Runner composition below does.
 
 **Stateful caller support.** [AGENT 2026-10-15] Keep the existing observer and use positional checks plus
 `Origins.Inv (sessions h)` at the actual World; bundle append and state-preservation proofs to avoid repeatedly
@@ -348,11 +371,14 @@ worker, deferred send/clear/crypt work, both timer modes, ingress/flood/batch an
 requires its actual body contract; every concrete typed environment constructor discharges its own contract.
 The supplied journal may contain prior receipts only when its explicit validity/support predicates hold. Strict
 prefixes distinguish duplicate equal receipt values. Saved-probe entry support does not observe a copied trial's
-internal origin events. These are preservation contracts, not an initialized material chain or public-key theorem.
+internal origin events. Those local preservation contracts are now composed by `SupportRunner` through actual configuration/dump,
+syscall wrappers, dispatch and source post-workers. The original fixture and successful seccomp prefill discharge
+initial support; failed prefill leaves empty safe history. Every typed trace/both flags retain checked committed
+history, including Stops. This is an initialized material chain, not a configured-public-key or packet-binding theorem.
 
-**Remaining obligations.** Initialized syscall/Runner composition preserves ordinary-negative cleanup and Stops; parser
-shape follows the operation cursor. Local entry agreement still needs connection to earlier actual initialized lookup
-history. Historical session/key/public-key ownership and packet origin, initialized RX/TX identity binding and
+**Remaining obligations.** Initialized committed support now preserves ordinary-negative cleanup and Stops.
+Routing parser shape follows its operation cursor, but local lookup agreement still needs connection to the
+actual contemporaneous initialized routing history. Historical session/key/public-key ownership and packet origin, initialized RX/TX identity binding and
 copied-trial packet certificates remain open. Nullable compatibility is insufficient for historical key identity.
 Partial failing clear has no completion marker. The historical R2 orphan recipe is now rejected, not a current
 misrouting witness; no new accepted counterexample is claimed.
