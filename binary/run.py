@@ -74,9 +74,6 @@ def prepare(check, out, trace_name):
                      o['kref']['members']['refcount'] + o['refcount_struct']['members']['refs'])
     hooks, labels, instructions = {}, {}, []
     peer_get, = [g for g in functions if g['name'] == 'wg_peer_get_maybe_zero']
-    if (f['entry'], f['size'], peer_get['entry'], peer_get['size']) != (
-            0xffffffff813a0470, 0xd0, 0xffffffff81399610, 0xfa):
-        raise ValueError('raw coverage filter ranges disagree with ELF')
     anchor_rows = f['instructions'] + peer_get['instructions']
     service_rows = [i for g in functions if g['name'] in service_names for i in g['instructions']]
     for i in anchor_rows + service_rows:
@@ -202,7 +199,7 @@ def main():
         # The bundle fixes tools and guest libraries. Prepend this package's
         # Lean afterwards, so the check's freshness test uses the same version.
         env = dict(os.environ, LEANUX_KERNEL_DIR=str(ORACLE.parent))
-        shell = f'export PATH="{TOOLCHAIN}:$PATH"; exec python3 -m evaluator.check --suite wireguard --trace {args.trace} --out "$1"'
+        shell = f'export PATH="{TOOLCHAIN}:$PATH"; exec python3 -m evaluator.check --suite wireguard --binary-coverage --trace {args.trace} --out "$1"'
         checked_command([str(ROOT / 'scripts/in-bundle'), '/bin/sh', '-c', shell, 'binary-tv', str(check)], ROOT, env)
     out = ROOT / '.tmp/binary-tv'
     out.mkdir(parents=True, exist_ok=True)

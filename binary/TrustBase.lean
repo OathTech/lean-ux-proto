@@ -25,7 +25,7 @@ import LookupProjection
 -/
 namespace Binary.TrustBase
 
-def krakenCommit : String := "e033e3dac812a576881a329b2d4c174364f3d44c"
+def krakenCommit : String := "e91a885e02f5ac6e63bacf1de10733f9a0b7e788"
 def kernelIdentity : String := "6b2018b9"
 def elfSha256 : String := "16c346209885db6c610d4aa126c6eb30f5d3c02f0498d95e606473945f648774"
 def decoderVersion : String := "GNU objdump (GNU Binutils for Ubuntu) 2.42"

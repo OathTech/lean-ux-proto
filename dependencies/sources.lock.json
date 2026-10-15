@@ -23,14 +23,15 @@
   {
     "name": "kraken",
     "url": "https://github.com/AeneasVerif/kraken.git",
-    "commit": "e033e3dac812a576881a329b2d4c174364f3d44c",
+    "commit": "e91a885e02f5ac6e63bacf1de10733f9a0b7e788",
     "kind": "git",
     "consumer": "binary",
     "toolchain": "leanprover/lean4:v4.35.0",
     "upstream_commit": "8af78062037bc237b341d20252aafd1797c1bcb7",
     "patches": [
       "binary/kraken-patches/0001-memory-cmpxchg-and-js.patch",
-      "binary/kraken-patches/0002-index-only-addresses.patch"
+      "binary/kraken-patches/0002-index-only-addresses.patch",
+      "binary/kraken-patches/0003-isolate-unfinished-examples.patch"
     ]
   }
 ]

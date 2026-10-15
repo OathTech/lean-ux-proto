@@ -9,7 +9,7 @@ import os
 from unittest import mock
 
 from .linux import (ARTIFACTS, GUEST_VARIANTS, IDENTITY, KERNEL, LinuxRunError, _bounded_process, approved_kernel_identity,
-                    kernel_identity, run_linux, verify_kernel)
+                    binary_coverage_ranges, kernel_identity, run_linux, verify_kernel)
 
 
 class BoundedProcessTests(unittest.TestCase):
@@ -144,8 +144,6 @@ class KernelIdentityTests(unittest.TestCase):
             self.assertEqual(caught.exception.kind, "kernel_mismatch")
 
 
-if __name__ == "__main__":
-    unittest.main()
 
 
 class ObservationOrder(unittest.TestCase):
@@ -167,3 +165,21 @@ class ObservationOrder(unittest.TestCase):
         attach_observed(results, traces, records)
         self.assertEqual(results[0]['observations'][0]['datagrams'], [c, d, a, b])
 
+
+
+class BinaryCoverageRangesTests(unittest.TestCase):
+    def test_ranges_come_from_elf_sizes(self):
+        with mock.patch("harness.linux.subprocess.check_output", return_value="1000 20 t first\n2000 30 T second\n"):
+            self.assertEqual(binary_coverage_ranges(symbols=("second", "first")), [
+                dict(symbol="second", lo=0x2000, hi=0x2030),
+                dict(symbol="first", lo=0x1000, hi=0x1020)])
+
+    def test_missing_or_ambiguous_symbol_fails(self):
+        for output in ("", "1000 20 t target\n2000 30 t target\n"):
+            with self.subTest(output=output), mock.patch("harness.linux.subprocess.check_output", return_value=output):
+                with self.assertRaises(ValueError):
+                    binary_coverage_ranges(symbols=("target",))
+
+
+if __name__ == "__main__":
+    unittest.main()

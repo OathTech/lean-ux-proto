@@ -1,0 +1,46 @@
+From e91a885e02f5ac6e63bacf1de10733f9a0b7e788 Mon Sep 17 00:00:00 2001
+From: Codex <codex@localhost>
+Date: Thu, 15 Oct 2026 20:31:25 +0000
+Subject: [PATCH] Isolate unfinished examples outside compiled Kraken library
+
+---
+ Kraken.lean                                                    | 1 -
+ .../unfinished-examples/Examples.lean.txt                      | 0
+ .../unfinished-examples/IncrementDMA.lean.txt                  | 0
+ notes/unfinished-examples/README.md                            | 3 +++
+ 4 files changed, 3 insertions(+), 1 deletion(-)
+ rename Kraken/X64/Examples/Examples.lean => notes/unfinished-examples/Examples.lean.txt (100%)
+ rename Kraken/X64/Examples/IncrementDMA.lean => notes/unfinished-examples/IncrementDMA.lean.txt (100%)
+ create mode 100644 notes/unfinished-examples/README.md
+
+diff --git a/Kraken.lean b/Kraken.lean
+index 1671d55..189e79a 100644
+--- a/Kraken.lean
++++ b/Kraken.lean
+@@ -10,7 +10,6 @@ For experimental features (SymM tactics), see kraken-experimental/.
+ -/
+ 
+ public import Kraken.Tactics
+-import Kraken.X64.Examples.Examples
+ public import Kraken.X64.OmniSemantics
+ public import Kraken.X64.Parser
+ public import Kraken.X64.Semantics
+diff --git a/Kraken/X64/Examples/Examples.lean b/notes/unfinished-examples/Examples.lean.txt
+similarity index 100%
+rename from Kraken/X64/Examples/Examples.lean
+rename to notes/unfinished-examples/Examples.lean.txt
+diff --git a/Kraken/X64/Examples/IncrementDMA.lean b/notes/unfinished-examples/IncrementDMA.lean.txt
+similarity index 100%
+rename from Kraken/X64/Examples/IncrementDMA.lean
+rename to notes/unfinished-examples/IncrementDMA.lean.txt
+diff --git a/notes/unfinished-examples/README.md b/notes/unfinished-examples/README.md
+new file mode 100644
+index 0000000..5e8a8a4
+--- /dev/null
++++ b/notes/unfinished-examples/README.md
+@@ -0,0 +1,3 @@
++These upstream experiments contain three unfinished proofs. They are retained
++as text outside every Lean library glob, and are not imported by Kraken.
++They are not evidence for binary adequacy.
+-- 
+2.43.0

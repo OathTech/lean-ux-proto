@@ -3030,3 +3030,40 @@ The default build and all headline/witness axioms remain clean. No KILLED
 banner or timeout occurred. This local gate is distinct from external
 `lake check --from-export`; the README's complete external recipe is the
 remaining documentation item after F11.
+
+
+### Milestone-1 review fix F10: scoped capture and isolated examples (2026-10-15)
+
+Raw `LEANUX_BINARY_PCS`/`LEANUX_BINARY_CMP` output is now opt-in via
+`evaluator.check --binary-coverage`, which the standalone probe requests.
+The host resolves the two M1 function ranges from the identity-checked ELF's
+symbol addresses and sizes; missing or ambiguous symbols fail. The guest
+receives those ranges as an input file and contains no s4 address constants.
+Ordinary runs install no range file and emit no raw binary stream. The
+existing differential coverage remains unchanged.
+
+The branch-added binary-gate paragraph in AGENTS.md is reverted. It wanted
+to make the standalone charter gate discoverable beside the mirror proof
+gate; that was a proposed standing-rule edit, not needed for the authorized
+charter task. Commands and their claim scope live in binary/README.md. The
+16-slot setting is retained: [USER 2026-10-15] explicitly requested
+`LEANUX_QEMU_SLOTS=16` for this track, overriding the older 8-slot practice.
+
+The private Kraken patch isolates **all three** unfinished example proofs
+(the two in Examples.lean and the one in IncrementDMA.lean), preserving the
+files as `.lean.txt` under `notes/unfinished-examples/`, outside every Lean
+library glob and import. The root import is removed. No ISA semantics changed.
+The new clean pin is `e91a885e02f5ac6e63bacf1de10733f9a0b7e788`; the lock,
+TrustBase and reviewed surface specification agree. Reapplying the three
+patches to upstream `8af7806` reproduces that exact clean commit.
+
+Validation: 132 unit tests PASS (one skip), plus two range-resolution tests
+PASS; the private Kraken default build (67 jobs), binary default build
+(357 jobs), and binary pin/axiom/surface gate PASS. A fresh ordinary
+same-bucket-miss differential run passes (one trace, six operations) with
+zero raw binary lines; a fresh opt-in miss run passes the three-way comparison.
+The exact Lean miss witness executes 191 instructions to return with six
+points and two undefined-value seeds. No KILLED banner or timeout occurred.
+The fresh opt-in live-hit run also passes the three-way comparison (one
+trace, six operations); both exact hit witnesses execute to return again:
+dead 441 instructions/14 points, live 506/15, two undefined-value seeds each.

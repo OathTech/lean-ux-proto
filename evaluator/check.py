@@ -1532,7 +1532,7 @@ def section_agreement(trace, runs, comparisons, sections, locations, decisions, 
     return problems, before_put, [section in before_put for section in polls]
 
 
-def run_chunk(traces, out, kcov, guest_variant=None, alloc_flags=0, arm=()):
+def run_chunk(traces, out, kcov, guest_variant=None, alloc_flags=0, arm=(), binary_coverage=False):
     """`alloc_flags`: the allocation load flags of an armed chunk; nonzero
     only for the control kernel's controls, which the oracle rejects. `arm`:
     allocation sites to arm without steering them (a control's armed run of
@@ -1563,7 +1563,7 @@ def run_chunk(traces, out, kcov, guest_variant=None, alloc_flags=0, arm=()):
         # one arm-record switch for the kernel (the wire's `A` line) and the
         # mirror (the input's `arm_records`)
         linux = run_linux(traces, out / 'linux', timeout=guest_timeout(traces), steer_wire=steer_wire,
-                          arm_records=ARM_RECORDS, guest_variant=guest_variant, alloc=alloc)
+                          arm_records=ARM_RECORDS, guest_variant=guest_variant, alloc=alloc, binary_coverage=binary_coverage)
         coverage = [loads(line) for line in (out / 'linux/coverage.jsonl').read_text().splitlines()]
         validate_coverage(traces, coverage)
         mapped = symbolize(coverage, KERNEL / 'vmlinux')
@@ -1737,6 +1737,8 @@ def main(argv=None):
     parser.add_argument('--trace')
     parser.add_argument('--out', type=Path)
     parser.add_argument('--no-build', action='store_true', help='reuse the existing .lake build')
+    parser.add_argument('--binary-coverage', action='store_true',
+                        help='opt in to repeated binary-probe coverage at ELF-derived anchored ranges')
     parser.add_argument('--decision-census', action='store_true',
                         help='also write decision-census.json: one row per decision, its outcomes and witnesses')
     parser.add_argument('--guest-variant', choices=sorted(GUEST_VARIANTS),
@@ -1792,7 +1794,7 @@ def main(argv=None):
         while pending:
             start, chunk, name = pending.pop(0)
             print(f'traces {start}-{start + len(chunk) - 1} ...', file=sys.stderr, flush=True)
-            chunk_results, chunk_gaps, chunk_outcomes = run_chunk(chunk, out / name, kcov, args.guest_variant)
+            chunk_results, chunk_gaps, chunk_outcomes = run_chunk(chunk, out / name, kcov, args.guest_variant, binary_coverage=args.binary_coverage)
             first = {r.get('outcome') for r in chunk_results.values()}
             if chunk_results and len(first) == 1 and first <= set(RETRIED_OUTCOMES):
                 detail = next(iter(chunk_results.values())).get('detail')
@@ -1800,7 +1802,7 @@ def main(argv=None):
                 retries[name] = dict(retries=1, first_outcome=next(iter(chunk_results.values()))['outcome'],
                                      detail=detail, rerun=name + '-retry')
                 chunk_results, chunk_gaps, chunk_outcomes = run_chunk(chunk, out / (name + '-retry'), kcov,
-                                                                      args.guest_variant)
+                                                                      args.guest_variant, binary_coverage=args.binary_coverage)
                 retries[name]['rerun_outcomes'] = dict(Counter(r.get('outcome') for r in chunk_results.values()))
             # One guest's console output is bounded; a chunk that exceeds it
             # is rerun as two halves (recorded in the report). A single trace

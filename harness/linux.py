@@ -177,6 +177,27 @@ def dispatch_addresses(kernel=None, symbols=DISPATCH_SYMBOLS):
     return [found[name] for name in symbols]
 
 
+def binary_coverage_ranges(kernel=None, symbols=("wg_index_hashtable_lookup", "wg_peer_get_maybe_zero")):
+    """Resolve opted-in capture ranges from the already identity-checked ELF."""
+    text = subprocess.check_output(["nm", "-S", "--defined-only", str(Path(kernel or KERNEL) / "vmlinux")],
+                                   text=True, timeout=60)
+    found = {}
+    for line in text.splitlines():
+        parts = line.split()
+        if len(parts) != 4 or parts[3] not in symbols:
+            continue
+        address, size, kind, name = parts
+        if kind not in ("t", "T") or name in found or int(size, 16) <= 0:
+            raise ValueError(f"binary coverage symbol {name} is not one nonempty text symbol")
+        lo, length = int(address, 16), int(size, 16)
+        if not 0 < lo < lo + length < 2**64:
+            raise ValueError(f"invalid binary coverage range for {name}")
+        found[name] = dict(symbol=name, lo=lo, hi=lo+length)
+    if set(found) != set(symbols):
+        raise ValueError(f"binary coverage symbols missing: {sorted(set(symbols) - set(found))}")
+    return [found[name] for name in symbols]
+
+
 class LinuxRunError(RuntimeError):
     def __init__(self, kind, message, outdir):
         super().__init__(message)
@@ -791,7 +812,7 @@ def _seccomp_policy_errno(trace, index, errno):
                for insn in op["filter"])
 
 
-def run_linux(traces, outdir, *, timeout=120, steer_wire=None, arm_records=ARM_RECORDS, guest_variant=None, alloc=None):
+def run_linux(traces, outdir, *, timeout=120, steer_wire=None, arm_records=ARM_RECORDS, guest_variant=None, alloc=None, binary_coverage=False):
     """Return ordered observations; preserve evidence and raise on execution failures.
 
     `outdir` must be a fresh/empty directory within the task's artifact root.
@@ -830,7 +851,7 @@ def run_linux(traces, outdir, *, timeout=120, steer_wire=None, arm_records=ARM_R
                 lock.close()
                 continue
             with lock:
-                return _run_locked(traces, outdir, timeout, arm_records, guest_variant, alloc, identity)
+                return _run_locked(traces, outdir, timeout, arm_records, guest_variant, alloc, identity, binary_coverage)
         if time.monotonic() >= deadline:
             raise LinuxRunError("resource_busy", f"Other guests held all {QEMU_SLOTS} QEMU slots for {QEMU_LOCK_WAIT} s", outdir)
         if not waited:
@@ -844,19 +865,23 @@ QEMU_LOCK_WAIT = 3600
 QEMU_SLOTS = int(os.environ.get("LEANUX_QEMU_SLOTS", "16"))
 
 
-def _run_locked(traces, outdir, timeout, arm_records, guest_variant=None, alloc=None, kernel_identity=None):
+def _run_locked(traces, outdir, timeout, arm_records, guest_variant=None, alloc=None, kernel_identity=None, binary_coverage=False):
     build = ["gcc", "-static", "-O2", "-Wall", "-Wextra", "-Werror", "-std=c11", *GUEST_VARIANTS.get(guest_variant, ()), str(ROOT / "harness/guest.c"), "-o", str(outdir / "guest-runner")]
     started = time.monotonic()
     build_returncode = _bounded_process(build, outdir / "build.log", 60, OUTPUT_LIMIT)
     if build_returncode:
         raise LinuxRunError("build_failure", "Guest compilation failed; inspect build.log", outdir)
+    ranges = binary_coverage_ranges() if binary_coverage else []
+    guest_args = " --binary-ranges /binary-ranges.txt" if ranges else ""
+    if ranges:
+        (outdir / "binary-ranges.txt").write_text("".join(f'{r["lo"]:x} {r["hi"]:x}\n' for r in ranges))
     (outdir / "init").write_text(
         "#!/bin/sh\n"
         "/bin/busybox mount -t devtmpfs devtmpfs /dev\n"
         "/bin/busybox mount -t proc proc /proc\n"
         "/bin/busybox mount -t sysfs sysfs /sys\n"
         "/bin/busybox mount -t debugfs debugfs /sys/kernel/debug\n"
-        "/guest-runner /wire.txt\n"
+        f"/guest-runner /wire.txt{guest_args}\n"
         "result=$?\n"
         "echo LEANUX_GUEST_EXIT=$result\n"
         "/bin/busybox reboot -f\n"
@@ -867,6 +892,8 @@ def _run_locked(traces, outdir, timeout, arm_records, guest_variant=None, alloc=
         if any(c.isspace() for c in str(source)):
             raise LinuxRunError("environment_failure", "initramfs source path contains whitespace", outdir)
         spec.append(f"file {target} {source} {mode} 0 0")
+    if ranges:
+        spec.append(f"file /binary-ranges.txt {outdir / 'binary-ranges.txt'} 444 0 0")
     (outdir / "initramfs.list").write_text("\n".join(spec) + "\n")
     cpio_command = [str(KERNEL / "usr/gen_init_cpio"), "-t", "0", str(outdir / "initramfs.list")]
     cpio = subprocess.check_output(cpio_command, timeout=30)
@@ -875,7 +902,7 @@ def _run_locked(traces, outdir, timeout, arm_records, guest_variant=None, alloc=
     # The run's inputs that decide its verdict: the kernel (its identity, checked
     # before the boot), the guest build and boot commands, the budgets. No
     # certificate beyond that: the mirror, the harness and the tools are git state.
-    provenance = {"schema_version": 2, "expected_clocksource": EXPECTED_CLOCKSOURCE, "arm_records": arm_records, "guest_variant": guest_variant, "alloc": alloc or {"flags": 0, "ranges": []}, "kernel_identity": kernel_identity, "build_command": build, "cpio_command": cpio_command, "qemu_command": command, "timeout_seconds": timeout, "captured_output_limit_bytes": OUTPUT_LIMIT}
+    provenance = {"schema_version": 2, "expected_clocksource": EXPECTED_CLOCKSOURCE, "arm_records": arm_records, "guest_variant": guest_variant, "alloc": alloc or {"flags": 0, "ranges": []}, "kernel_identity": kernel_identity, "binary_coverage_ranges": ranges, "build_command": build, "cpio_command": cpio_command, "qemu_command": command, "timeout_seconds": timeout, "captured_output_limit_bytes": OUTPUT_LIMIT}
     (outdir / "provenance.json").write_text(json.dumps(provenance, indent=2) + "\n")
     (outdir / "qemu-command.json").write_text(json.dumps(command, indent=2) + "\n")
     try:
