@@ -3,6 +3,7 @@ import Leanux.Proofs.WG.Roaming.View
 import Leanux.Proofs.WG.Roaming.Authentication
 import Leanux.Proofs.WG.Roaming.PublicationClaims
 import Leanux.Proofs.WG.Roaming.PollEndpointClaims
+import Leanux.Proofs.WG.Roaming.ResponseCallClaims
 
 namespace Leanux.Proofs.WG.Roaming
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
@@ -94,5 +95,32 @@ theorem original_publication_poll_endpoint (softirq : M Unit) (pid : PeerId)
     Campaign2.Ensures (observedDecryptPoll softirq pid budget toStack) (fun _ => True)
       (fun result _ => PublicationPollObservation pid budget result) :=
   observedDecryptPoll_authenticated softirq pid budget toStack
+
+/-- For response-kind packets, the complete original handshake caller factors
+at the actual endpoint setter: no cut takes a pure suffix, while a present cut
+immediately invokes the setter and retains the full original continuation.
+The returned observation is exactly that same prefix/suffix execution's cut.
+On normal full completion the cut records actual MAC admission, same-entry
+index lookup with separately recorded owner/reference identities, both DH checks, the
+specified derived AEAD key/AAD and successful empty plaintext, and the consumer's
+state recheck/commit. The outer packet source is not an AEAD input. No final
+endpoint preservation, initiation coverage or failed-full-call prefix completeness
+is asserted. Observation erasure is unconditional, including errors, by
+observedResponseHandshake_erase. -/
+theorem original_response_endpoint_authentication (msg : List UInt8) (src : SkbSource)
+    (kind : messageType msg = MESSAGE_HANDSHAKE_RESPONSE) :
+    Campaign2.AgreesOn (fun _ => True) (receiveHandshakePacket msg src)
+      (responseCallPrefix msg src >>= responseCallSuffix msg src) ∧
+    Campaign2.AgreesOn (fun _ => True) (observedResponseHandshake msg src)
+      (responseCallTranscript msg src) ∧
+    Campaign2.Ensures (observedResponseHandshake msg src) (fun _ => True)
+      (fun observed _ => ResponseCallObservation msg observed) := by
+  constructor
+  · intro w pre
+    rw [receiveHandshakePacket_response msg src kind]
+  · constructor
+    · intro w pre
+      rw [observedResponseHandshake_source msg src kind]
+    · exact observedResponseHandshake_facts msg src kind
 
 end Leanux.Proofs.WG.Roaming

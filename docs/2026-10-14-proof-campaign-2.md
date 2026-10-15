@@ -27,14 +27,14 @@ No independent existential projected runs are spliced together.
 | --- | --- | --- |
 | H1 Noise | 18 state/slot, ordered-clear, rotation/confirmation and full session-effect contracts | Public projection complete; exact normal session composition and static rotation/release totality are checked. Whole-call edge coverage, session totality, exposed derivation-clock provenance and lifetime confirmation remain open. |
 | H2 Index | 47 contracts, including lifecycle boundaries, handshake reception/sending, staged/keepalive sending, queued clearing, worker/timer dispatch and original workqueue draining/post-death removal | Public projection complete: 14 total contracts, 31 normal-return contracts, 1 exact stop and 1 projected initializer theorem; reachable coherence, broader records and the corpus runner composition remain open. |
-| H3 Roaming | 8 contracts, including decrypt publication and its same-execution first-poll endpoint connection | Public projection complete; first selected packet provenance is conditional on matching publication identity. General queue provenance and complete caller coverage remain open. |
+| H3 Roaming | 9 contracts, including decrypt publication, its same-execution first-poll endpoint connection, and exact response-caller authentication at the pre-setter cut | Public projection complete; first selected packet provenance is conditional on matching publication identity. Initiation, failed-call prefix retention, general queue provenance and complete caller coverage remain open. |
 | H4 Configuration | 64 contracts, including normal removal/death converses under two-slot node shape, live-key removal with empty work queues, and the internal dump-accounting finding | Public projection and frame separation complete. Queued-work removal, private-key collision, mixed attributes, global ownership and general dump composition remain open. |
 | H5 Progress | 30 contracts, including original exponentiation-loop finite evaluation, flush queue effects/count decrease, cut-loop budget adequacy, and the accepted batch-backlog counterexample | Public projection and frame separation complete; the recorded cut cannot exhaust its budget and normal selected flushes decrease queue count. Whole-worker record decrease, full loop coverage and probe/detach composition remain open. The backlog witness is historical over `de62c9d`: main's batch guard now addresses request 1. |
 | H6 Timers | 35 timer/worker contracts, including consecutive original retry pairs, conditional recorded rearming and same-peer attempt counting | Public projection and frame separation complete; a successful pair from an empty send queue derives the retry bound, reference acquisition/release, final empty queue and cleared pending flag. Conditional rearming preserves the exact expiry through release and section stop; consecutive successful pairs selecting the same initial peer increase attempts by their length and are bounded by 19 from zero. Scheduler retry episodes and whole-run arming/session counts remain open. |
 
 Projection/frame factoring completed at `69f988a` for all six results, preserving
 all 153 existing headline names before new mathematics. The following H2 lifecycle/sender
-and H6 dispatch/rearm increments, H3 publication/poll provenance, H5 cut-loop progress, H1 ordered clearing/rotation and H4 live-key removal bring the total to 202. No public statement directly names `World` or
+and H6 dispatch/rearm increments, H3 publication/poll and response provenance, H5 cut-loop progress, H1 ordered clearing/rotation and H4 live-key removal bring the total to 203. No public statement directly names `World` or
 `Kernel`.
 The full proof gate remains failed in inherited campaign-1 counter-window and
 index carries; those files have not been edited. Scoped validation does not
@@ -52,7 +52,7 @@ connections to the current executable mirror, not replacement interpreters.
 | Common C2 | `Campaign2/View` is data-only; `Campaign2/Bridge` defines projection and universal execution contracts. | No shared campaign-1 layer is changed. |
 | H1 | `Noise/Model`, `Statements`, `Slots`, `StateEdges`, `ConsumeEdges`, `ClearModel`, `ClearEffects`, `ClearSource`, `RotationModel`, `RotationEffects`, `RotationSource`, `SessionModel`, `SessionSource`; `Execution` holds the concrete monad connection; `AccessSource` holds accessor read/write contracts, reexported by `Basic`. | `KernelFrames`, `PeerFrames`, `SlotFrames`, `ClearFrames`, `RotationFrames`, `SessionFrames`. |
 | H2 | `Index/View`, `TableModel`, `OwnerWordModel`, `AllocationModel`, `ReleaseModel`, `LifecycleModel` and pure release effects/bounds; `Statements`, `HandshakeClaims`, `OwnerUpdateClaims`, `LifecycleSource`, `LinkSource`, `SendSource`, `DispatchSource`, `ResponseSource`, `ConsumeSource`, `StagedSource`, `ReceiveOperations`, `ReceiveSource`, `ClearSource`, `TimerSource`, `FlushSource` and the other operation/source modules. | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`, `NewlinkFrames`, `SendFrames`, `DispatchFrames`, `ResponseFrames`, `ConsumeFrames`, `StagedFrames`, `ReceiveFrames`, `ClearFrames`, `TimerFrames`, `FlushFrames`; the old `HandshakeFrames` and `OwnerFrames` paths are import-only reexports, not duplicated lemmas. |
-| H3 | `Roaming/Model`, `View`, `Statements`, `EndpointClaims`, `EndpointSource`, `Authentication`, `PublicationModel`, `PublicationSource`, `PublicationClaims`, `PollEndpointModel`, `PollEndpointSource`, `PollEndpointClaims`. | `Roaming/Frames`, `PublicationFrames`, `PollEndpointFrames`; `Basic` reexports the endpoint source connection. |
+| H3 | `Roaming/Model`, `View`, `Statements`, `EndpointClaims`, `EndpointSource`, `Authentication`, `PublicationModel`, `PublicationSource`, `PublicationClaims`, `PollEndpointModel`, `PollEndpointSource`, `PollEndpointClaims`, `ResponseModel`, `ResponseCryptoSource`, `ResponseConsumeSource`, `ResponseLookupSource`, `ResponseCallSource`, `ResponseCallClaims`. | `Roaming/Frames`, `PublicationFrames`, `PollEndpointFrames`; `Basic` reexports the endpoint source connection. The response increment needs no new frame support. |
 | H4 | `Config/Model`, `AllowedRemovalModel`, `AllowedPairsModel`, `AllowedPairsEffects`, `AllowedRemovalConverseSource`, `AllowedRemovalConverseClaims`, `QuietModel`, `LiveRemovalModel`, `LiveRemovalSource`, `ClaimView`, `Statements`, `SourceClaims`, `ObservationBridge`, and existing substantive effect/source modules. | `ConcreteFrames` isolates six whole-kernel endpoint contracts; `OperationFrames` isolates seven generic helpers; `ReadbackFrames` retains socket/fixture preservation; `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `AllowedPairsFrames`, `QuietFrames`, `LiveRemovalFrames`, `KeyFieldFrames` isolate within-WG preservation. |
 | H5 | `Progress/Model`, `View`, `Statements`, `SourceClaims`, `ObservationBridge`; `ControlLaws` is generic state/error control and `ControlSource` connects it exactly to the original worker; the scheduler/source modules retain actual execution factors. `CutModel`, `CutSource` and `CutClaims` establish original cut-loop progress; `FlushQueueModel`, `FlushQueueSource` and `FlushQueueClaims` establish original flush effects and count decrease; `PowModel` and `PowSource` connect a finite evaluator to the original arithmetic loop. | `StackFrames` isolates caller-guard preservation; `CutFrames` isolates record/error-location preservation; `FlushQueueFrames` isolates queue preservation through worker bodies and release. Probe/filter/no-work contracts also establish outputs and remain substantive source claims. |
 | H6 | `TimerDiscipline/Model`, `View`, `SendView`, `Statements`, `ObservationBridge`, `ObservationClaims`, `SourceClaims`, `SendDispatchModel`, `SendDispatchClaims`, `RetryDispatchModel`, `RetryDispatchClaims`, `RetryRearmModel`, `RetryRearmClaims`, `RetrySequenceModel`, `RetrySequenceClaims`, and `*Source` operational proofs. | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`, `RetryDispatchFrames`, `RetryRearmFrames`, `WorkStateFrames`. |
@@ -797,10 +797,41 @@ authentication result. No Rule Zero finding or mirror-team request yet.
 transcripts carrying actual AEAD arguments/results and the actual MAC admission
 decision. Cut before the endpoint setter: its later cache-reset read can fail
 after the endpoint write. Retain the original continuation and errors; immediate
-destination equality requires successful setter completion. This is the next
-architecture, not a closed theorem. Tag endpoints alone are insufficient
+destination equality requires successful setter completion. The response case
+is now closed below; initiation remains open. Tag endpoints alone are insufficient
 authentication evidence; semantic crypto-dataflow contracts were considered as
 the alternative but would require more leaf contracts and preservation proofs.
+
+The ninth H3 headline connects the complete original response-kind caller to
+its actual pre-setter cut. Its only message premise is the response kind, not
+authentication. A no-cut suffix is pure; a present cut immediately invokes the
+original setter and retains session installation, timer hooks, keepalive,
+statistics and final reference release. Both original-operation correspondence
+and decorated-observation correspondence are exact, including errors. The latter
+ties the returned certificate to that very prefix/suffix execution rather than
+an independently supplied observation.
+
+On normal full return, the cut derives the actual under-load/MAC admission,
+lookup owner and referenced peer separately, the lookup's same-entry result and
+post-lookup peer, both successful DH checks, exact KDF-derived AEAD key/AAD,
+successful empty plaintext, and the consumer's state recheck and committed
+fields. The outer source is not an AEAD input. This is response-only caller
+coverage, not final endpoint preservation, initiation coverage, general queue
+provenance or retained prefix evidence after a failing full call. `ResponseModel`
+holds projected data and predicates; the five other new Response modules hold
+substantive crypto/source/claim connections. No shared frame variants were added.
+
+H3 now has 9 headlines and the campaign 203. The capped 32-thread scoped build
+passed (59 jobs); all 9 headlines and 10 exact source equations have only the
+three standard axioms, and fresh stock Roaming replay exited 0. Combined import
+and axiom inspection of all 203 headlines, public projection checks and the
+gate's token/import/root/default-target checks passed. Independent review closed
+without findings. Reproduce with the preceding scoped Roaming build and fresh
+replay commands. Deterministic parse/normalization errors and a simplifier step
+limit were corrected; an existing generated sparse-case name collision was
+resolved by importing the existing Noise frame module first. No existing shared
+proposition changed, infrastructure retry, cap hit, heartbeat timeout or guest
+run. The full gate retains the inherited failure last observed at `69f988a`.
 
 Ranked mirror suggestions: none at this checkpoint. Effort: a read-only source
 review and capped scoped proof builds; ordinary elaboration failures repaired.
@@ -1371,6 +1402,24 @@ at `69f988a`. Queue-refill reproduction was not changed or rechecked here; no
 accepted witness or affordability of full kernel reduction is claimed. Whole-drain
 selection, scheduler progress and operation-end coverage remain open. No new
 mirror request arose.
+
+Two bounded read-only reduction trials followed the finite-loop proof. One
+concrete original `curve25519 (List.replicate 32 17) basePoint` equation checked
+through a proof-required `Option.get` evaluator bridge and `decide +kernel`
+(exit 0, about 0.334 seconds, standard three axioms). A separate ordinary
+evaluation supplied candidate output bytes; that evaluation was not the proof.
+This establishes one needed arithmetic call, not full-run reduction throughput.
+
+The single whole-prefix trial for `executeTrace QueueRefill.concreteTrace`
+**failed**, exit 1: stock `cbv`, using the checked original-pow equation as a
+local evaluation rewrite, exceeded its simplifier step limit. The failed
+elaboration's recovery declaration reported `sorryAx`; no theorem was obtained
+or committed. This is not evidence that the target equation is false. The
+queue-refill item remains executable-prefix evidence, not an accepted complete
+execution or a kernel-checked prefix result. Both trials used capped stdin Lean
+with the unchanged memory cap, 32 threads and a 120-second timeout. No timeout,
+cap hit, retry, limit increase, rebuild or source-file write occurred. The failed
+trial was stopped rather than repeated. Whole-prefix proof remains open.
 
 ## H6 — Timer discipline (in progress)
 
