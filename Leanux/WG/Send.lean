@@ -14,17 +14,32 @@ tx workers are in `Leanux/WG/Data.lean`, run by the environment
 (`Leanux/Env.lean`).
 
 The handshake send worker (`wg_packet_handshake_send_worker`) is mirrored in
-`Leanux/WG/Handshake.lean`; the environment (`Leanux/Env.lean`) runs it when
-the queuing operation waits for it. Within the queuing system call, paths that
-read what the worker changes are `unsupported` unless the work was queued in
-that same call (`requireNotPending`).
+`Leanux/WG/Handshake.lean`; the environment (`Leanux/Env.lean`) runs it where
+its section records place it (the dispatch-order capture,
+docs/2026-10-11-dispatch-order.md). The `WORK_STRUCT_PENDING` bit of a
+peer's `transmit_handshake_work` is `Peer.handshakePending`: set by the
+`queue_work` that queues it, cleared by `process_one_work` when the pool
+takes the item (`Env.runOneSendWorker`, `runFlushedSendWork`), and the
+kernel's queue record tells a second queueing after that dequeue from a
+`queue_work` that found the bit set (`peekQueuedUnit`; the rule of ce038d4,
+carried here by the Send audit's F3).
 
-Domain limits (fail-noisy): more than one item in a crypt queue (the
-per-device ring or the peer's `tx_queue`, whose MPSC internals in queueing.c
-are mirrored as "the queue yields the item"). An item is the staged list
-`wg_packet_send_staged_packets` hands to `wg_packet_create_data` (D2 stream
-A): keepalives and the IP packets `wg_xmit` staged, each with its nonce and
-`ds`.
+An item is the staged list `wg_packet_send_staged_packets` hands to
+`wg_packet_create_data` (D2 stream A): keepalives and the IP packets
+`wg_xmit` staged, each with its nonce and `ds`. The crypt queues hold any
+number of items (W7: the device's `PtrRing`, the peer's `PrevQueue`).
+
+Altitude (the Send audit's F4, 2026-10-15): the skbuff.h list primitives'
+internal tests on this path are not choice points of the mirror:
+`skb_queue_splice_init`'s `!skb_queue_empty` (send.c:351) is the test at
+:353, `skb_queue_splice`'s (:407) is always true after :353,
+`__skb_queue_purge`'s dequeue loop (:338) only frees, and `skb_orphan`'s
+`if (skb->destructor)` (:400) releases the sending socket's buffer charge
+below WireGuard's boundary, unobservable under the fixture's
+`SO_SNDBUFFORCE` (W4-W7 2.7). Two store-hygiene assertions have no C
+counterpart and can only turn a mirror defect into a stop (F6):
+`enqueuePerPeerTx`'s "the head is on its peer's `tx_queue`" and
+`freeTxSkb` on a dangling id (State.lean).
 -/
 
 namespace Leanux.WG
@@ -40,11 +55,8 @@ def REKEY_AFTER_TIME : Nat := 120
 def REKEY_AFTER_MESSAGES : Nat := 2 ^ 60
 def COUNTER_WINDOW_SIZE : Nat := 8192 - 64   -- COUNTER_BITS_TOTAL - BITS_PER_LONG
 def REJECT_AFTER_MESSAGES : Nat := (2 ^ 64 - 1) - COUNTER_WINDOW_SIZE - 1
-/-- wg_packet_send_queued_handshake_initiation (send.c:55-83). The pending
-    check comes first: once queued, `queue_work` and `last_sent_handshake`
-    depend on the worker's timing. -/
+/-- wg_packet_send_queued_handshake_initiation (send.c:55-83). -/
 def sendQueuedHandshakeInitiation (pid : PeerId) (isRetry : Bool) : M Unit := do
-  requireNotPending pid "queueing a handshake"
   if ← branch .queuedNotRetry !isRetry then
     setPeer pid { (← getPeer pid) with timerHandshakeAttempts := 0 }
   let p ← getPeer pid
@@ -52,21 +64,18 @@ def sendQueuedHandshakeInitiation (pid : PeerId) (isRetry : Bool) : M Unit := do
   if ← branchExpired .queuedNotExpired p.lastSentHandshake REKEY_TIMEOUT (!·) then return
   if ← branch .queuedDead p.isDead then return
   peerGet pid
-  -- `!queue_work(...)`: false iff the work is still queued (queued earlier in
-  -- this call; requireNotPending excludes every other pending case)
-  if ← branch .queuedAlreadyQueued p.handshakePending then
+  -- `!queue_work(handshake_send_wq, &transmit_handshake_work)` (send.c:75):
+  -- false iff PENDING is set. The mirror's bit is `handshakePending`; a queue
+  -- record for a unit it still holds queued means process_one_work had taken
+  -- the item (PENDING cleared) before its section started, so this queueing
+  -- is a second instance, whose own section follows the first's
+  -- (`peekQueuedUnit`; ce038d4's rule, the Send audit's F3)
+  if ← branch .queuedAlreadyQueued (p.handshakePending && !(← peekQueuedUnit .sendWorker pid)) then
     peerPut (some pid)
     return
   setPeer pid { (← getPeer pid) with handshakePending := true }
   recordQueued .sendWorker pid   -- queue_work's record (dispatch order)
   modifyDev fun d => { d with sendWorkQueue := d.sendWorkQueue ++ [pid] }
-  modify fun w => { w with queuedThisCall := pid :: w.queuedThisCall }
-
-/-- wg_noise_keypair_get (noise.c:142-149) of a NULL keypair (the data
-    receive path's `wg_noise_keypair_get(NULL)`, Receive.lean). -/
-def keypairGetCurrent : M Unit := do
-  -- `unlikely(!keypair || ...)`: `!keypair` decides
-  _ ← branch .keypairGetNull true
 
 /-- wg_cpumask_next_online (queueing.h:125-132) on this single-CPU kernel:
     `cpumask_next(n)` is `n + 1` and `nr_cpu_ids` is 1. The CPU chosen. -/
@@ -137,7 +146,10 @@ def enqueuePerDeviceAndPeer (pid : PeerId) (item : List SkbId) : M Int := do
   if ← branch .enqueueRingFull d.encryptQueue.full then return -EPIPE
   -- queue_work_on(cpu, wq, &per_cpu_ptr(device_queue->worker, cpu)->work):
   -- queued iff not pending, with its record (dispatch order); the
-  -- environment runs the encrypt worker while its ring holds items
+  -- environment runs the encrypt worker while its ring holds items. The C
+  -- produces (queueing.h:174) before it queues (:176); the record is
+  -- consumed first here, and nothing reads the ring between the full test
+  -- above and the produce (the Send audit's F2, the receive audit's F5)
   queueDeviceWork .encryptWorker
   modifyDev fun d => { d with encryptQueue := d.encryptQueue.produce item }
   return 0

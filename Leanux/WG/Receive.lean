@@ -419,7 +419,7 @@ def consumeData (msg : List UInt8) (src : SkbSource) (ds : Nat) : M Unit := do
     | some (IndexOwner.handshake _, _) => invariant "a handshake entry under the keypair mask"
   -- `unlikely(!wg_noise_keypair_get(PACKET_CB(skb)->keypair))`
   let kp ← match keypair with
-    | none => do keypairGetCurrent; pure none   -- wg_noise_keypair_get(NULL)
+    | none => do keypairGetNull; pure none   -- wg_noise_keypair_get(NULL)
     | some kp => keypairGet (some kp)
   if ← branch .dataNoKeypair kp.isNone then
     -- err_keypair: wg_peer_put(peer), then dev_kfree_skb

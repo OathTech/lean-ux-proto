@@ -260,7 +260,9 @@ def runOneSendWorker : M Unit := do
   modifyDev fun d => { d with sendWorkQueue := d.sendWorkQueue.erase pid }
   let p ← getPeer pid
   if !p.handshakePending then invariant "queued work without a pending flag"
-  setPeer pid { p with handshakePending := false }
+  -- process_one_work clears PENDING as it takes the item; a second instance
+  -- queued after that (its own entry in the queue) has set it again
+  setPeer pid { p with handshakePending := (← getDev).sendWorkQueue.contains pid }
   runWorker .sendWorker (WG.handshakeSendWorker pid)
 
 /-- The handshake send worker for each queued peer, oldest first, once the

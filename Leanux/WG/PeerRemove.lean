@@ -46,7 +46,8 @@ def runFlushedSendWork (pid : PeerId) : M Unit := do
   modifyDev fun d => { d with sendWorkQueue := d.sendWorkQueue.erase pid }
   let p ← getPeer pid
   if !p.handshakePending then invariant "queued work without a pending flag"
-  setPeer pid { p with handshakePending := false }
+  -- PENDING cleared at the dequeue, set again by a second instance still queued
+  setPeer pid { p with handshakePending := (← getDev).sendWorkQueue.contains pid }
   _ ← hidden (.sectionStart .sendWorker)
   handshakeSendWorker pid
   _ ← hidden (.sectionStop .sendWorker)
