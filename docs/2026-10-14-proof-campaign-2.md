@@ -122,7 +122,7 @@ review and capped scoped proof builds; ordinary elaboration failures repaired.
 
 ## H4 — Configuration semantics (in progress)
 
-Twenty terminal declarations cover configuration leaves, peer flags, bounded
+Twenty-three terminal declarations cover configuration leaves, peer flags, bounded
 readback, normal-return guarantees, one sequential partial-error case, and
 fwmark/cache frames. `Validation`, `Identity` and `Port` prove invalid allowed-IP
 rejection, exact allowed-IP serialization, private-identity normalization,
@@ -149,8 +149,12 @@ accepted runner trace. `EndpointSources` proves exact local-source clearing,
 cache-slot removal, and preservation of other peers and other device fields.
 `Fwmark` proves a fwmark-only outer set writes the mark and increments the
 generation, preserving every other device field outside the peer store.
-These two side-effect contracts concern normal completion; joining the loop
-to the claim that every listed peer is cleared remains open.
+`ClearedSources` joins the literal loop to the outer setter and proves every
+listed peer ends with cleared source fields and no cache slot. These fwmark
+contracts concern normal completion. `SocketPorts` proves actual normal return
+and an exact device update for socket replacement and for initialization at a
+nonzero port in an existing namespace: conflicts return `-EADDRINUSE` without
+a device change, success replaces both sockets and the incoming port.
 
 [AGENT 2026-10-14] Get-after-set means the effective configuration established
 by the C: keys are clamped, prefixes masked, running port-zero may allocate a
@@ -166,13 +170,13 @@ could not apply after the caller's headers; the sufficient-tailroom theorem
 resolves that finding. Review of the normal-return and partial-error increment
 found no defect. Actual outer dump composition remains open.
 
-Remaining: running-port/socket and complete private-key effects, full peer
+Remaining: running-port composition, port-zero draws, complete private-key effects, full peer
 removal/replacement and allowed-IP ownership, other partial-error combinations,
 and general dump chunks/coalescing. Deferred removal work can change other
 peers' dynamic state, so no unrestricted removal frame is claimed. No H4
 mirror mismatch or mirror-team request; ranked mirror suggestions: none.
 
-Validation: all twenty statements pass scoped build, standard-axiom inspection
+Validation: all twenty-three statements pass scoped build, standard-axiom inspection
 (only `propext`, `Classical.choice`, `Quot.sound`), and `capped --
 scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Config.Statements`.
 The full proof gate fails in inherited `CounterWindow.Refinement`; token/import

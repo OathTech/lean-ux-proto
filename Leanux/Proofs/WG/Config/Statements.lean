@@ -4,6 +4,8 @@ import Leanux.Proofs.WG.Config.RoundTrip
 import Leanux.Proofs.WG.Config.DeviceScalars
 import Leanux.Proofs.WG.Config.RoundTripReturns
 import Leanux.Proofs.WG.Config.Fwmark
+import Leanux.Proofs.WG.Config.ClearedSources
+import Leanux.Proofs.WG.Config.SocketPorts
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
@@ -249,5 +251,37 @@ theorem original_fwmark_device_frame (d : Device) (mark : Nat) (net : d.creating
       (fun ret w => ret = 0 ∧ w.k.wg.map withoutPeers = some
         (withoutPeers { d with fwmark := mark, deviceUpdateGen := d.deviceUpdateGen + 1 })) :=
   setDevice_fwmark_frame d mark net
+
+/-- On normal completion, a fwmark-only outer set clears local endpoint
+sources and cached destination slots for every peer in the device list.
+It also writes the mark, increments generation and frames other device fields. -/
+theorem original_fwmark_clears_listed_peers (d : Device) (mark : Nat) (net : d.creatingNet = true) :
+    Ensures (wgSetDevice (fwmarkAttrs d mark))
+      (fun w => w.k.wg = some d ∧ selectsDevice w d)
+      (fun ret w => ret = 0 ∧ w.k.wg.map withoutPeers = some
+        (withoutPeers { d with fwmark := mark, deviceUpdateGen := d.deviceUpdateGen + 1 }) ∧
+        sourcesClear w.k d.peerList) :=
+  setDevice_fwmark_sources d mark net
+
+/-- Socket replacement returns normally, installs both supplied socket
+pointers, and changes the incoming port exactly when IPv4 receives a new socket.
+Every other device field is preserved. -/
+theorem original_socket_reinit (new4 new6 : Option Nat) (d : Device) :
+    Returns (socketReinit new4 new6) (fun w => w.k.wg = some d)
+      (fun _ w => w.k.wg = some
+        { d with sock4 := new4, sock6 := new6, incomingPort := new4.getD d.incomingPort }) :=
+  socketReinit_returns new4 new6 d
+
+/-- With an existing creating namespace and a nonzero requested port,
+socket initialization returns normally: a conflict returns EADDRINUSE with
+the device unchanged; otherwise both sockets and the incoming port are replaced. -/
+theorem original_nonzero_socket_init (port : Nat) (nonzero : port ≠ 0)
+    (d : Device) (bound : Bool) (net : d.creatingNet = true) :
+    Returns (socketInit port) (fun w => w.k.wg = some d ∧ w.portBound port = bound)
+      (fun ret w => if bound || d.sock4 == some port || d.sock6 == some port
+        then ret = -EADDRINUSE ∧ w.k.wg = some d
+        else ret = 0 ∧ w.k.wg = some
+          { d with sock4 := some port, sock6 := some port, incomingPort := port }) :=
+  socketInit_nonzero_returns port nonzero d bound net
 
 end Leanux.Proofs.WG.Config
