@@ -23,47 +23,48 @@ was made by this campaign.
 | R5 | Accepted age/post-zero/wire-nonce counterexamples; thirteen positive local contracts. |
 | R6 | Cookie exclusion proved; literal MAX=18 refuted, without a replacement universal bound. |
 
-**Current R4 callback protection (validated).** Two grouped exports
-preserve all 506 prior terminal bodies: 508 declarations (506 theorems/two definitions; 132 R3/125 R4).
-[Protection frames](../Leanux/Proofs/WG/Queues/RxProtectionFrames.lean),
-[TX handoffs](../Leanux/Proofs/WG/Queues/TxRxProtection.lean) and
-[consume protection](../Leanux/Proofs/WG/Queues/RxConsumeProtection.lean) cover full original
-sendStagedPackets and consumeDataDone on normal return. Actual acquisition, TX allocation, disposal,
-publication and queued-handshake paths derive typed queue-append/reference deltas. The same supplied RX
-Inventory, QueueOwners and Protected ledger survives, including its explicit reservations and new durable
-charges. Staging assumes nullable current-key compatibility; consume needs only its packet key's nullable,
-receiving-validity-independent compatibility. Actual promotion and timer frames establish the staging cut.
+**Current R3 stateful support (validated).** Three grouped exports
+preserve all 508 prior terminal bodies: 511 declarations (509 theorems/two definitions; 135 R3/125 R4).
+[HistorySupport](../Leanux/Proofs/WG/Origins/HistorySupport.lean),
+[SupportCallers](../Leanux/Proofs/WG/Origins/SupportCallers.lean) and
+[SupportEnvironment](../Leanux/Proofs/WG/Origins/SupportEnvironment.lean) preserve supplied receiving-material
+support through the existing session/decrypt, poll, scheduler and complete deferred/remaining environment
+observers. Each decrypt receipt uses its exact strict earlier journal prefix and captured entry World;
+successful decrypt retains the actual stored packet/key, full session witness and AEAD equation. Each saved
+filter entry has the exact prior lifetime projection and support at its saved World, including filter Stop.
+Normal return preserves state support; every outcome preserves receipt and positional checks, not a failed World.
+This origin-only history predicate is separate from R2 access validity and invalid-key RX carrier ownership.
+Initialized support, configuration/dump composition, ingress admission injection, configured peer identity,
+packet transport to poll/Stack and copied-trial origin receipts remain open.
 
-The exact balance is endpoint accounting, not TX packet ownership, send-pending/work correspondence or
-an output key-compatibility frame. Generic unfunded Handoff equations admit ghost loans; independent review
-identified this and the funded transport/resident-owner consequences now supply the contextual meaning.
-No reservation is inferred from spare refcount. Stops retain their source behavior without a returned World.
-Whole consumeData admission, arbitrary IRQ/Stack callbacks, surviving poll-caller credits and initialized
-carrier conservation remain open. The earlier `00c204d` material-retention checkpoint remains validated;
-its normal-only nullable-owner/support contracts do not imply initialized R3 origin.
+The preceding `8f9b8a2` R4 callback checkpoint passed its 508-job/508-declaration permitted-axiom gate,
+fresh kernel replay, default60 and 103 tests (21.919s, one skip), with independent review and exact checks.
+Its same-ledger normal protection and nullable compatibility boundaries remain unchanged.
+At that checkpoint, review found unfunded Handoff ghost loans; explicit funded transport and resident-owner
+consequences resolved the finding. Its initial write/build shell lacked fail-closed chaining: the write succeeded,
+but the process-rule failure was reported and subsequent commands were corrected.
 
-**Current effort.** Acceptance 14:49:10 UTC; initial 90 minutes/48 capped calls, final 20 minutes/10 calls reserved.
-[AGENT 2026-10-15] The coordinator extended this same six-path tranche by 40 minutes/24 calls to finish
-actual callback composition; total 130 minutes/72 calls, reserve 16:39:10 or call 62, deadline 16:59:10.
-Scoped call 49 passes 428 jobs; full call 50 passes 508, collected 16:12:04 UTC (82m54s after acceptance).
-Fifty builds comprise twelve PASS and thirty-eight ordinary FAIL. Failures include source-factor/WP
-normalization, tuple/record projections, private-helper and result-type errors. Call 20's rejected Kernel-indexed
-representation produced recovery warnings and two kernel declaration-has-metavariables errors; it was reverted.
-Calls 17/38 displayed recovery placeholders. Call 45 exhausted the default simp-step bound. No source admission
-or raised limit remains: all final proofs use defaults. The initial write/build shell lacked fail-closed chaining;
-the write succeeded, but this was a process-rule failure, reported and corrected for subsequent commands.
-No interruption, infrastructure retry or cap failure occurred. Lake scheduling uses command-local threads 32,
-QEMU slots 16 and the unchanged 32G cap; existing per-compiler -j1 is unchanged. All owned jobs are collected.
-The final worker ledger is 52 capped calls: fifty builds (12 PASS/38 ordinary FAIL) and two passing exact checks.
-Exact 51 preserves all 506 prior bodies, 508 total/132 R3/125 R4, the six-path scope, imports/tokens/EOF,
-whitespace, mirror/pins and empty index; exact 52 reconciles only final review/ledger metadata and the six hashes.
-Independent source/export/docs review is clear: the staging pass was 15:59:22–16:01:35 UTC and final continuation
-16:11:09–16:15:28. The earlier unfunded-loan finding is fixed by funded transport and resident-owner consequences;
-no unresolved finding remains. Worker ownership ended at 16:16:15 UTC (87m05s); final metadata review
-reconciled at 16:16:27. Coordinated validation passes: 508-job/508-declaration permitted-axiom gate,
-fresh kernel replay collected at 16:19:41 after gate compilation, default build (60 jobs), and 103 unit
-tests (21.919s, one skip). The exact checks retain all four frozen Lean hashes and every prior terminal body.
-The full per-call ledger belongs in the checkpoint commit, not this short report.
+**Current effort.** Acceptance 16:23:27 UTC; 110 minutes/60 capped calls, final 20 minutes/10 calls reserved.
+Scoped26 passes 458 jobs; full27 passes 511, collected by sampled 17:05:09 (41m42s after acceptance).
+Twenty-seven builds comprise seven PASS and twenty ordinary FAIL. Early failures were source/focus
+normalization, eliminated or unresolved binders, leaf-frame and namespace errors. Call01 displayed a rejected
+elaborator-recovery `sorry` placeholder; calls16/17 reported dependent kernel unknown-constant errors for the
+failed scheduler declaration. Calls10–13/16–17 exhausted default 200,000-heartbeat searches. Bundled append/support
+contracts and single-step source dispatch replaced repeated continuation traversal; all new proofs retain defaults.
+Call25 reached the reviewer's draft generic-worker export issue and failed; it now names the actual runWorkerPrefix
+with an explicit body preservation premise. No source admission, cap/limit increase, interruption or infrastructure
+retry occurred. Exact28 passes six-path scope, all508 prior bodies, census511/135R3/125R4,
+comment-aware tokens/imports, tracked/new whitespace and EOF, mirror/pins and empty index. The ledger is
+29 capped calls: 27 builds (7 PASS/20 FAIL) plus exact28/29 PASS. Exact28's doc hashes preceded ledger/status
+and review wording fixes; final exact29 records the final six hashes, with all four Lean hashes unchanged.
+Independent frozen review is clear at 17:08:27 UTC (17:01:33–17:08:27, 6m54 including waits). Its three findings
+are fixed: the generic worker export's actual body premise, the R2/R4-only initialization qualifier and the named
+historical R4 failure disclosures. Final metadata review is clear (17:10:24–17:10:31).
+Worker ownership ended at 17:10:42 UTC (47m15s); all jobs were collected before handback.
+Coordinated validation passes: 511-job/511-declaration permitted-axiom gate, fresh kernel replay
+collected at 17:13:57 after gate compilation, default build (60 jobs), and 103 unit tests
+(22.370s, one skip). Exact comparison retains every prior body and all four frozen Lean hashes.
+The full per-call ledger belongs in the checkpoint commit.
 
 **Current foundations.** The persistent RX journal records actual session/decrypt source cuts and preserves
 unconditional original erasure, the same full incoming R2 audit/probes and the established R4 boundary,
@@ -82,7 +83,7 @@ quantifies over the actual returned ring, with no new initialized validity premi
 **Checkpoint provenance.** Representation carry `15f0b979`; local disposition `ba0bbe3e`;
 material retention `8f95d45`; packet/receipt link `0b1cd078`; owner/material frame `41df9916`;
 initialized linkage `c0bff5e`; session/decrypt injection `60f8ea0`; RX-credit cuts `bc45a9c`;
-material-retaining operations `00c204d`. Their commits retain measured
+material-retaining operations `00c204d`; full RX callback protection `8f9b8a2`. Their commits retain measured
 effort, failed attempts, review dispositions and validation counts. At source-injection checkpoint `60f8ea0`, the
 501-declaration permitted-axiom gate, fresh kernel replay, default build and 103 unit tests (one skip)
 passed. The eleven historical recipes and 23 executable replay tests retain their representation-carry
@@ -314,7 +315,7 @@ index-lookup frame, including nullable store-back, and reuses the existing acces
 The new `RetainingLeaves`, `RetainingTraffic` and `RetainingLifecycle` source contracts extend normal
 material retention through concrete non-installing traffic, timers and lifecycle operations. They reuse actual
 record getters and stronger canonical masks, with no affiliation/residency/credit or successful-drain premise.
-Whole-admission and stateful material-support propagation, plus initialized provenance, remain unfinished.
+Whole-admission and initialized provenance remain unfinished; the supplied-state caller propagation below is now validated.
 
 **Actual caller injection.** [ReceiptTypes](../Leanux/Proofs/WG/Origins/ReceiptTypes.lean) keeps existing qualified
 receipt/context names while removing the import cycle. [HandshakeSources](../Leanux/Proofs/WG/Origins/HandshakeSources.lean)
@@ -326,6 +327,17 @@ Old metadata decoders erase session/RX receipts; the linkage decoder retains lif
 Protocol instances preserve the existing R4 predicates. Copied scheduler trials retain their isolated R2 observer;
 this extension does not claim their session/decrypt receipts. Available admission receipt types do not mean ingress
 admission has been injected. Local validity and source linkage do not establish initialized material support.
+
+**Stateful caller support.** [AGENT 2026-10-15] Keep the existing observer and use positional checks plus
+`Origins.Inv (sessions h)` at the actual World; bundle append and state-preservation proofs to avoid repeatedly
+expanding the same source continuation. `HistorySupport` composes exact session installation and stored decrypt
+receipts with concrete quiet erasure/material frames. `SupportCallers` covers both session sites, crypt preparation,
+NAPI, activation, recorded scheduling and nested rescheduling. `SupportEnvironment` covers the complete receive
+worker, deferred send/clear/crypt work, both timer modes, ingress/flood/batch and controls. The generic worker wrapper
+requires its actual body contract; every concrete typed environment constructor discharges its own contract.
+The supplied journal may contain prior receipts only when its explicit validity/support predicates hold. Strict
+prefixes distinguish duplicate equal receipt values. Saved-probe entry support does not observe a copied trial's
+internal origin events. These are preservation contracts, not an initialized material chain or public-key theorem.
 
 **Remaining obligations.** Initialized syscall/Runner composition preserves ordinary-negative cleanup and Stops; parser
 shape follows the operation cursor. Local entry agreement still needs connection to earlier actual initialized lookup

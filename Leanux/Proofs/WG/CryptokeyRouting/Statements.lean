@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Origins.SupportEnvironment
 import Leanux.Proofs.WG.Origins.RetainingLifecycle
 import Leanux.Proofs.WG.Queues.RxCompletionEnvironment
 import Leanux.Proofs.WG.Queues.RxLinkEnvironment
@@ -2856,5 +2857,78 @@ theorem original_material_retaining_lifecycle :
     Origins.Retaining.wgDown_material, Origins.Retaining.of_view Origins.Retaining.netnsPreExit_material,
     Origins.Retaining.wgCreate_material, Origins.Retaining.wgDestruct_material,
     Origins.Retaining.wgDelete_material⟩
+
+/-- The existing session/decrypt/poll/filter cuts preserve supplied stateful
+support. Every successful decrypt receipt has full material and run evidence
+from its strict earlier journal prefix at its captured entry World. Saved filter
+entries retain that exact prefix's lifetime projection and material support.
+This is not initialized provenance, R2 lifetime validity or copied-trial receipt
+coverage; a stopped execution returns safe history, not a World. -/
+theorem original_origin_support_cuts :
+    (∀ pid, Origins.HistorySupport.Preserves (Origins.HistoryAdapters.session pid)) ∧
+    (∀ id, Origins.HistorySupport.Preserves (Origins.HistoryAdapters.decrypt id)) ∧
+    Origins.HistorySupport.Preserves Origins.HistoryAdapters.prepare ∧
+    (∀ pid budget, Origins.HistorySupport.Preserves (Queues.RxHistory.observePoll pid budget)) ∧
+    Origins.HistorySupport.Preserves (Queues.RxHistory.audit Lifetimes.consistentFilterAudit) ∧
+    (∀ h pre post id (r : Logged.RunWitness (RxPacket × Option RxPacket)) out,
+      Origins.HistorySupport.HistorySafe h → h = pre ++ .rx (.decrypt id r) :: post →
+      r.value.2 = some out →
+      ∃ d k, r.before.k.wg = some d ∧ d.rxSkbs[id]? = some r.value.1 ∧
+        d.keypairs[r.value.1.keypair]? = some k ∧
+        Origins.Supported (Origins.HistorySupport.sessions pre) d.ifindex r.value.1.keypair k ∧
+        (WG.decryptPacket r.value.1).run r.before = .ok (some out,r.after) ∧
+        out = {r.value.1 with nonce := u64le r.value.1.bytes 8, bytes := out.bytes} ∧
+        aeadDecrypt k.receiving.key (counterNonce (u64le r.value.1.bytes 8))
+          (r.value.1.bytes.drop 16) [] = some out.bytes) ∧
+    (∀ h pre post p, Origins.HistorySupport.HistorySafe h →
+      h = pre ++ .audit (.probe p) :: post →
+      p.history = Queues.RxHistory.prior pre ∧ Origins.HistorySupport.StateSupported pre p.world) :=
+  ⟨Origins.HistorySupport.session, Origins.HistorySupport.decrypt,
+    Origins.HistorySupport.prepare, Origins.HistorySupport.poll,
+    Origins.HistorySupport.filter_probe, Origins.HistorySupport.HistorySafe.decrypt,
+    Origins.HistorySupport.HistorySafe.probe⟩
+
+/-- Concrete receive, crypt, NAPI and scheduler callers preserve the same
+supplied support on the existing observer. Session installation composes its
+actual receipt contract, while non-installing leaves use concrete full-material
+retention. Filter-entry evidence includes Stops but is not a claim about the
+internal origin receipts of isolated copied trials. -/
+theorem original_origin_support_callers :
+    Origins.HistorySupport.Preserves Origins.HistoryAdapters.receiveStep ∧
+    Origins.HistorySupport.Preserves Origins.HistoryAdapters.receiveIteration ∧
+    Origins.HistorySupport.Preserves Queues.RxHistory.encryptIteration ∧
+    Origins.HistorySupport.Preserves Queues.RxHistory.decryptStep ∧
+    Origins.HistorySupport.Preserves Queues.RxHistory.decryptIteration ∧
+    (∀ pid, Origins.HistorySupport.Preserves (Queues.RxHistory.cryptAhead pid)) ∧
+    (∀ a, Origins.HistorySupport.Preserves (Queues.RxHistory.activationIteration a) ∧
+      Origins.HistorySupport.Preserves (Queues.RxHistory.activationRun a)) ∧
+    (∀ worker, Origins.HistorySupport.Preserves (Queues.RxHistory.dispatch worker)) ∧
+    (∀ stack, Origins.HistorySupport.Preserves (Queues.RxHistory.schedule stack)) ∧
+    (∀ worker, Origins.HistorySupport.Preserves (Queues.RxHistory.nestedResched worker)) ∧
+    Origins.HistorySupport.Preserves Queues.RxHistory.napiSoftirq ∧
+    Origins.HistorySupport.Preserves Queues.RxHistory.pollScheduledInline ∧
+    Origins.HistorySupport.Preserves Queues.RxHistory.napiIrqExit :=
+  ⟨Origins.HistorySupport.receiveStep, Origins.HistorySupport.receiveIteration,
+    Origins.HistorySupport.encryptIteration, Origins.HistorySupport.decryptStep,
+    Origins.HistorySupport.decryptIteration, Origins.HistorySupport.cryptAhead,
+    fun a => ⟨Origins.HistorySupport.activationIteration a, Origins.HistorySupport.activationRun a⟩,
+    Origins.HistorySupport.dispatch, Origins.HistorySupport.schedule,
+    Origins.HistorySupport.nestedResched, Origins.HistorySupport.napiSoftirq,
+    Origins.HistorySupport.pollScheduledInline, Origins.HistorySupport.napiIrqExit⟩
+
+/-- Both receive-worker entrances and every existing deferred/remaining Env
+constructor compose stateful origin support, including actual timer, traffic,
+batch and control suffixes. Normal results retain support at their returned
+World; every outcome retains positional receipt/probe checks. Initial support,
+configuration/dump composition, initialized Runner and configured peer identity
+are separate obligations. No observer or older R2/R4 predicate is changed. -/
+theorem original_origin_support_environment :
+    (∀ worker (body : Queues.RxHistory.Obs Unit), Origins.HistorySupport.Preserves body →
+      Origins.HistorySupport.Preserves (Logged.runWorkerPrefix worker body)) ∧
+    Origins.HistorySupport.Preserves Queues.RxHistory.handshakeReceiveWorker ∧
+    (∀ call, Origins.HistorySupport.Preserves (Queues.RxHistory.deferred call)) ∧
+    (∀ call, Origins.HistorySupport.Preserves (Queues.RxHistory.remaining call)) :=
+  ⟨Origins.HistorySupport.runWorker, Origins.HistorySupport.handshakeReceiveWorker,
+    Origins.HistorySupport.deferred, Origins.HistorySupport.remaining⟩
 
 end Leanux.Proofs.WG.CryptokeyRouting
