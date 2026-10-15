@@ -6,7 +6,7 @@ local instance : Labels := Image.linkedLabels
 
 theorem nonnull_guard_history (fetch : Int64 → Option Decoded)
     (agree : AnchoredDecoderAgreement fetch) (base body : MachineData)
-    (coverage : KcovLayout) (preempt : BitVec 32)
+    (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (frame : ScanFrame base coverage preempt body) (nonnull : body.regs.rbx ≠ 0)
     (rxSection : Nat) (history : List MachineState) (events : List LookupObservation.Point)
     (observed : observeHistory (LookupObservation.edge rxSection) history = .ok events)
@@ -45,8 +45,9 @@ theorem nonnull_prefix_history (fetch : Int64 → Option Decoded)
     (tracePc : TracePcContract fetch) (traceCmp : TraceConstCmp4Contract fetch)
     (body : MachineData) (nonnull : body.regs.rbx ≠ 0) (count : UInt32)
     (field : body.dmem.loadInt (body.regs.rbx.toBitVec+0x420) 4 = some count.toNat)
-    (coverage : KcovLayout) (preempt : BitVec 32) (ready : CallsReady coverage preempt body)
+    (coverage : LookupCoverage.Context) (preempt : BitVec 32) (ready : LookupCoverage.CallsReady coverage preempt body)
     (fieldSeparate : ∀ a, InRange (body.regs.rbx.toBitVec+0x420) 4 a → ¬scanWrites body coverage a)
+    (comparison : coverage.CompareAllowed preempt)
     (rxSection : Nat) (history : List MachineState) (events : List LookupObservation.Point)
     (observed : observeHistory (LookupObservation.edge rxSection) history = .ok events)
     (last : history.getLast? = some ⟨body, Image.PeerGet.entry+0x12⟩) :
@@ -56,7 +57,7 @@ theorem nonnull_prefix_history (fetch : Int64 → Option Decoded)
       t.machine.data.regs.rbx = body.regs.rbx ∧
       t.machine.data.regs.rbp = count.toUInt64 ∧
       t.machine.data.regs.r13 = body.regs.rbx+0x420 ∧
-      CallsReady coverage preempt t.machine.data ∧
+      LookupCoverage.CallsReady coverage preempt t.machine.data ∧
       EqualOutside (scanWrites body coverage) body.dmem t.machine.data.dmem ∧
       t.history.getLast? = some t.machine ∧
       ∃ af, observeHistory (LookupObservation.edge rxSection) t.history =
@@ -74,7 +75,7 @@ theorem nonnull_prefix_history (fetch : Int64 → Option Decoded)
   have pc₁ : guarded.machine.pc = Image.PeerGet.entry+0x1b := congrArg MachineState.pc machine₁
   let event := LookupObservation.decision rxSection .peerGetMaybeZeroNull false guarded.machine
   have call := scan_call_cursor fetch "L_ffffffff810f3100" guarded
-    (by rw [pc₁]; exact agree _ _ (by rfl)) .pc tracePc body coverage preempt trace₁.frame
+    (by rw [pc₁]; exact agree _ _ (by rfl)) .pc tracePc body coverage preempt trace₁.frame (trace₁.frame).ready.pc_allowed
     rxSection (events ++ [event]) trace₁.observed trace₁.last (by
       simp [LookupObservation.edge, pc₁, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
   apply eventually_trans (historyStep fetch) _ _ _ call
@@ -87,7 +88,7 @@ theorem nonnull_prefix_history (fetch : Int64 → Option Decoded)
       intro byte bound; exact fieldSeparate _ ⟨byte, bound, rfl⟩)]
     exact field
   have load := load_body_history fetch agree tracePc traceCmp afterCall.machine.data count field₂
-    coverage preempt trace₂.frame.ready rxSection afterCall.history (events ++ [event])
+    coverage preempt trace₂.frame.ready comparison rxSection afterCall.history (events ++ [event])
     trace₂.observed (by rw [← pc₂]; exact trace₂.last)
   have cursor : (⟨⟨afterCall.machine.data, Image.PeerGet.entry+0x20⟩, afterCall.history⟩ : Executed) = afterCall := by rw [← pc₂]
   rw [cursor] at load

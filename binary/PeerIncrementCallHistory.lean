@@ -5,14 +5,23 @@ namespace Binary.PeerGet
 open TrustBase LookupHistory
 local instance : Labels := Image.linkedLabels
 
+theorem incremented_lookup_ready (s : MachineData) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
+    (ready : LookupCoverage.CallsReady coverage preempt s)
+    (countSeparate : ∀ a, coverage.bytes a → ¬InRange s.regs.r13.toBitVec 4 a) :
+    LookupCoverage.CallsReady coverage preempt (incremented s) := by
+  refine ⟨?_, ready.phase, ready.aligned, ?_, ready.pushSeparate, ready.returnSeparate,
+    ready.metadataSeparate, ready.preemptSeparate⟩
+  · exact LookupCoverage.state_frame coverage preempt _ _ ready.state _ (incremented_frame s) countSeparate
+  · exact storeInt_defined _ _ _ _ _ _ ready.mapped
+
 /-- The count write is already present at the next anchored cut. Its
     physical post-state is used as the callback frame base, not as a
     fictitious pre-increment mirror state. -/
 theorem increment_trace (fetch : Int64 → Option Decoded)
     (agree : AnchoredDecoderAgreement fetch) (body : MachineData)
-    (coverage : KcovLayout) (preempt : BitVec 32) (ready : CallsReady coverage preempt body)
+    (coverage : LookupCoverage.Context) (preempt : BitVec 32) (ready : LookupCoverage.CallsReady coverage preempt body)
     (count : body.dmem.loadInt body.regs.r13.toBitVec 4 = some (body.regs.get (.low .rbp .W32)).toNat)
-    (countSeparate : ∀ a, KcovStateBytes coverage a → ¬InRange body.regs.r13.toBitVec 4 a)
+    (countSeparate : ∀ a, LookupCoverage.Context.bytes coverage a → ¬InRange body.regs.r13.toBitVec 4 a)
     (rxSection : Nat) (history : List MachineState) (events : List LookupObservation.Point)
     (observed : observeHistory (LookupObservation.edge rxSection) history = .ok events)
     (last : history.getLast? = some ⟨body, Image.PeerGet.entry+0x44⟩) :
@@ -22,9 +31,9 @@ theorem increment_trace (fetch : Int64 → Option Decoded)
       ⟨⟨body, Image.PeerGet.entry+0x44⟩, history⟩ := by
   apply historySteps_mono fetch 7 _ _ _ _ (increment_history fetch agree body history count)
   rintro t ⟨af, machine, recorded⟩
-  have ready₂ : CallsReady coverage preempt (incFinal body af) := by
+  have ready₂ : LookupCoverage.CallsReady coverage preempt (incFinal body af) := by
     rw [incFinal_shape]
-    exact (incremented_ready body coverage preempt ready countSeparate).congr rfl rfl
+    exact (incremented_lookup_ready body coverage preempt ready countSeparate).congr rfl rfl
   have frame := ScanFrame.initial (incFinal body af) coverage preempt ready₂
   refine ⟨af, machine, ScanTrace.of_suffix observed last _ recorded ?_ ?_
     (increment_observed rxSection body af) ?_⟩
@@ -38,10 +47,11 @@ theorem increment_trace (fetch : Int64 → Option Decoded)
     The callback's own history and all its actual anchored cuts are retained. -/
 theorem increment_call_history (fetch : Int64 → Option Decoded)
     (agree : AnchoredDecoderAgreement fetch) (traceByte : TraceConstCmp1Contract fetch)
-    (body : MachineData) (coverage : KcovLayout) (preempt : BitVec 32)
-    (ready : CallsReady coverage preempt body)
+    (body : MachineData) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
+    (ready : LookupCoverage.CallsReady coverage preempt body)
     (count : body.dmem.loadInt body.regs.r13.toBitVec 4 = some (body.regs.get (.low .rbp .W32)).toNat)
-    (countSeparate : ∀ a, KcovStateBytes coverage a → ¬InRange body.regs.r13.toBitVec 4 a)
+    (countSeparate : ∀ a, LookupCoverage.Context.bytes coverage a → ¬InRange body.regs.r13.toBitVec 4 a)
+    (comparison : coverage.CompareAllowed preempt)
     (rxSection : Nat) (history : List MachineState) (events : List LookupObservation.Point)
     (observed : observeHistory (LookupObservation.edge rxSection) history = .ok events)
     (last : history.getLast? = some ⟨body, Image.PeerGet.entry+0x44⟩) :
@@ -57,7 +67,7 @@ theorem increment_call_history (fetch : Int64 → Option Decoded)
   rintro atCall ⟨af, machine, trace⟩
   have pc : atCall.machine.pc = Image.PeerGet.entry+0x5b := congrArg MachineState.pc machine
   have call := scan_call_cursor fetch "L_ffffffff810f3ec0" atCall
-    (by rw [pc]; exact agree _ _ (by rfl)) .constCmp1 traceByte (incFinal body af) coverage preempt trace.frame
+    (by rw [pc]; exact agree _ _ (by rfl)) .constCmp1 traceByte (incFinal body af) coverage preempt trace.frame (LookupCoverage.compare_allowed comparison (by decide))
     rxSection events trace.observed trace.last (by
       simp [LookupObservation.edge, pc, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
   apply eventually_weaken (historyStep fetch) _ _ _ _ call

@@ -5,7 +5,7 @@ namespace Binary.PeerGet
 open TrustBase LookupHistory
 local instance : Labels := Image.linkedLabels
 
-def liveWrites (body : MachineData) (coverage : KcovLayout) (a : Address) : Prop :=
+def liveWrites (body : MachineData) (coverage : LookupCoverage.Context) (a : Address) : Prop :=
   InRange body.regs.r13.toBitVec 4 a ∨ scanWrites body coverage a
 
 /-- Successful physical increment through RET. The count/callback separation
@@ -16,22 +16,23 @@ theorem increment_finish_history (fetch : Int64 → Option Decoded)
     (traceByte : TraceConstCmp1Contract fetch)
     (initial : MachineState) (body : MachineData) (returnAddress : UInt64)
     (entry : EntryFrame initial returnAddress) (sp : body.regs.rsp = initial.data.regs.rsp-48)
-    (coverage : KcovLayout) (preempt : BitVec 32) (ready : CallsReady coverage preempt body)
+    (coverage : LookupCoverage.Context) (preempt : BitVec 32) (ready : LookupCoverage.CallsReady coverage preempt body)
     (count : body.dmem.loadInt body.regs.r13.toBitVec 4 = some (body.regs.get (.low .rbp .W32)).toNat)
     (nonzero : body.regs.get (.low .rbp .W32) ≠ 0)
     (bound : (body.regs.get (.low .rbp .W32)).toNat+1 < 2^31)
-    (countSeparate : ∀ a, KcovStateBytes coverage a → ¬InRange body.regs.r13.toBitVec 4 a)
+    (countSeparate : ∀ a, LookupCoverage.Context.bytes coverage a → ¬InRange body.regs.r13.toBitVec 4 a)
     (fieldSeparate : ∀ a, InRange body.regs.r13.toBitVec 4 a → ¬scanWrites body coverage a)
     (writes : Address → Prop)
     (frame : EqualOutside writes (saveMemory initial.data 7) body.dmem)
     (savedSeparate : ∀ a, InRange (initial.data.regs.rsp.toBitVec-48) 56 a →
       ¬(writes a ∨ liveWrites body coverage a))
+    (comparison : coverage.CompareAllowed preempt)
     (rxSection : Nat) (history : List MachineState) (events : List LookupObservation.Point)
     (observed : observeHistory (LookupObservation.edge rxSection) history = .ok events)
     (last : history.getLast? = some ⟨body, Image.PeerGet.entry+0x44⟩) :
     Eventually (historyStep fetch) (fun final =>
       Returned initial final.machine returnAddress ∧ final.machine.data.regs.rax = body.regs.rbx ∧
-      KcovState coverage preempt final.machine.data.dmem ∧
+      LookupCoverage.Context.At coverage preempt final.machine.data.dmem ∧
       final.machine.data.dmem.loadInt body.regs.r13.toBitVec 4 = some ((body.regs.get (.low .rbp .W32)+1).toNat : Int) ∧
       EqualOutside (liveWrites body coverage) body.dmem final.machine.data.dmem ∧
       final.history.getLast? = some final.machine ∧
@@ -51,7 +52,7 @@ theorem increment_finish_history (fetch : Int64 → Option Decoded)
             EqualOutside (scanWrites body coverage) (incremented body).dmem q.data.dmem)
       ⟨⟨body, Image.PeerGet.entry+0x44⟩, history⟩ := by
   have call := increment_call_history fetch agree traceByte body coverage preempt ready count countSeparate
-    rxSection history events observed last
+    comparison rxSection history events observed last
   apply eventually_trans (historyStep fetch) _ _ _ call
   rintro testedState ⟨af, pc, bx, bp, trace⟩
   have regs := incremented_registers body
@@ -85,7 +86,7 @@ theorem increment_finish_history (fetch : Int64 → Option Decoded)
       · exact .inr (.inl h)
       · exact .inr (.inr h)
       · exact .inr (.inr h))
-    rxSection testedState.history events trace.observed (by rw [← pc]; exact trace.last)
+    comparison rxSection testedState.history events trace.observed (by rw [← pc]; exact trace.last)
   have cursor : (⟨⟨testedState.machine.data, Image.PeerGet.entry+0x60⟩, testedState.history⟩ : Executed) = testedState := by rw [← pc]
   rw [cursor] at finish
   apply eventually_weaken (historyStep fetch) _ _ _ _ finish

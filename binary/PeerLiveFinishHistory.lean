@@ -11,8 +11,8 @@ theorem live_finish_history (fetch : Int64 → Option Decoded)
     (agree : AnchoredDecoderAgreement fetch) (contract : TracePcContract fetch) (traceCmp : TraceConstCmp4Contract fetch)
     (initial : MachineState) (body : MachineData) (returnAddress : UInt64)
     (entry : EntryFrame initial returnAddress) (sp : body.regs.rsp = initial.data.regs.rsp-48)
-    (coverage : KcovLayout) (preempt : BitVec 32)
-    (ready : CallsReady coverage preempt body)
+    (coverage : LookupCoverage.Context) (preempt : BitVec 32)
+    (ready : LookupCoverage.CallsReady coverage preempt body)
     (success : body.regs.get (.low .r15 .W8) ≠ 0)
     (oldPositive : (body.regs.get (.low .rbp .W32)).msb = false)
     (newPositive : (body.regs.get (.low .r12 .W32)).msb = false)
@@ -21,12 +21,13 @@ theorem live_finish_history (fetch : Int64 → Option Decoded)
     (frame : EqualOutside writes (saveMemory initial.data 7) body.dmem)
     (savedSeparate : ∀ address, InRange (initial.data.regs.rsp.toBitVec-48) 56 address →
       ¬(writes address ∨ scanWrites body coverage address))
+    (comparison : coverage.CompareAllowed preempt)
     (rxSection : Nat) (history : List MachineState) (events : List LookupObservation.Point)
     (observed : observeHistory (LookupObservation.edge rxSection) history = .ok events)
     (last : history.getLast? = some ⟨body, Image.PeerGet.entry+0x60⟩) :
     Eventually (historyStep fetch) (fun final =>
       Returned initial final.machine returnAddress ∧ final.machine.data.regs.rax = body.regs.rbx ∧
-      KcovState coverage preempt final.machine.data.dmem ∧
+      LookupCoverage.Context.At coverage preempt final.machine.data.dmem ∧
       EqualOutside (scanWrites body coverage) body.dmem final.machine.data.dmem ∧
       final.history.getLast? = some final.machine ∧
       ∃ retry negative wrap dead : MachineState,
@@ -45,7 +46,7 @@ theorem live_finish_history (fetch : Int64 → Option Decoded)
             EqualOutside (scanWrites body coverage) body.dmem q.data.dmem)
       ⟨⟨body, Image.PeerGet.entry+0x60⟩, history⟩ := by
   have callbacks := live_callbacks_history fetch agree contract traceCmp body coverage preempt ready
-    success oldPositive newPositive nonzero rxSection history events observed last
+    success oldPositive newPositive nonzero comparison rxSection history events observed last
   apply eventually_trans (historyStep fetch) _ _ _ callbacks
   rintro cleared ⟨retry, negative, wrap, dead, pc₂, bx₂, _, retryFrame, negativeFrame, wrapFrame, deadFrame, clearTrace⟩
   let decisions := [LookupObservation.decision rxSection .refcountAddNzRetry false retry,

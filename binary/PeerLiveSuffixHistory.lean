@@ -13,22 +13,23 @@ theorem live_suffix_history (fetch : Int64 → Option Decoded)
     (traceByte : TraceConstCmp1Contract fetch)
     (initial : MachineState) (body : MachineData) (returnAddress : UInt64)
     (entry : EntryFrame initial returnAddress) (sp : body.regs.rsp = initial.data.regs.rsp-48)
-    (coverage : KcovLayout) (preempt : BitVec 32) (ready : CallsReady coverage preempt body)
+    (coverage : LookupCoverage.Context) (preempt : BitVec 32) (ready : LookupCoverage.CallsReady coverage preempt body)
     (count : body.dmem.loadInt body.regs.r13.toBitVec 4 = some (body.regs.get (.low .rbp .W32)).toNat)
     (nonzero : body.regs.get (.low .rbp .W32) ≠ 0)
     (bound : (body.regs.get (.low .rbp .W32)).toNat+1 < 2^31)
-    (countSeparate : ∀ a, KcovStateBytes coverage a → ¬InRange body.regs.r13.toBitVec 4 a)
+    (countSeparate : ∀ a, LookupCoverage.Context.bytes coverage a → ¬InRange body.regs.r13.toBitVec 4 a)
     (fieldSeparate : ∀ a, InRange body.regs.r13.toBitVec 4 a → ¬scanWrites body coverage a)
     (writes : Address → Prop)
     (frame : EqualOutside writes (saveMemory initial.data 7) body.dmem)
     (savedSeparate : ∀ a, InRange (initial.data.regs.rsp.toBitVec-48) 56 a →
       ¬(writes a ∨ liveWrites body coverage a))
+    (comparison : coverage.CompareAllowed preempt)
     (rxSection : Nat) (history : List MachineState) (events : List LookupObservation.Point)
     (observed : observeHistory (LookupObservation.edge rxSection) history = .ok events)
     (last : history.getLast? = some ⟨body, Image.PeerGet.entry+0x3b⟩) :
     Eventually (historyStep fetch) (fun final =>
       Returned initial final.machine returnAddress ∧ final.machine.data.regs.rax = body.regs.rbx ∧
-      KcovState coverage preempt final.machine.data.dmem ∧
+      LookupCoverage.Context.At coverage preempt final.machine.data.dmem ∧
       final.machine.data.dmem.loadInt body.regs.r13.toBitVec 4 = some ((body.regs.get (.low .rbp .W32)+1).toNat : Int) ∧
       EqualOutside (liveWrites body coverage) body.dmem final.machine.data.dmem ∧
       final.history.getLast? = some final.machine ∧
@@ -85,7 +86,7 @@ theorem live_suffix_history (fetch : Int64 → Option Decoded)
       · exact .inl h
       · exact .inr (.inr h)
       · exact .inr h)
-    rxSection atIncrement.history (events ++ [zeroEvent]) trace.observed (by rw [← pc]; exact trace.last)
+    comparison rxSection atIncrement.history (events ++ [zeroEvent]) trace.observed (by rw [← pc]; exact trace.last)
   have cursor : (⟨⟨atIncrement.machine.data, Image.PeerGet.entry+0x44⟩, atIncrement.history⟩ : Executed) = atIncrement := by rw [← pc]
   rw [cursor] at finish
   apply eventually_weaken (historyStep fetch) _ _ _ _ finish

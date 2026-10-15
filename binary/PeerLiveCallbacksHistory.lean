@@ -9,12 +9,13 @@ local instance : Labels := Image.linkedLabels
 theorem live_callbacks_history (fetch : Int64 → Option Decoded)
     (agree : AnchoredDecoderAgreement fetch)
     (tracePc : TracePcContract fetch) (traceCmp : TraceConstCmp4Contract fetch)
-    (body : MachineData) (coverage : KcovLayout) (preempt : BitVec 32)
-    (ready : CallsReady coverage preempt body)
+    (body : MachineData) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
+    (ready : LookupCoverage.CallsReady coverage preempt body)
     (success : body.regs.get (.low .r15 .W8) ≠ 0)
     (oldPositive : (body.regs.get (.low .rbp .W32)).msb = false)
     (newPositive : (body.regs.get (.low .r12 .W32)).msb = false)
     (nonzero : body.regs.get (.low .rbp .W32) ≠ 0)
+    (comparison : coverage.CompareAllowed preempt)
     (rxSection : Nat) (history : List MachineState) (events : List LookupObservation.Point)
     (observed : observeHistory (LookupObservation.edge rxSection) history = .ok events)
     (last : history.getLast? = some ⟨body, Image.PeerGet.entry+0x60⟩) :
@@ -32,14 +33,14 @@ theorem live_callbacks_history (fetch : Int64 → Option Decoded)
           LookupObservation.decision rxSection .peerGetMaybeZeroDead false dead]) t)
       ⟨⟨body, Image.PeerGet.entry+0x60⟩, history⟩ := by
   have retry := live_retry_stage fetch agree tracePc traceCmp body body coverage preempt
-    (ScanFrame.initial body coverage preempt ready) success rxSection history events observed last
+    (ScanFrame.initial body coverage preempt ready) success comparison rxSection history events observed last
   apply eventually_trans (historyStep fetch) _ _ _ retry
   rintro first ⟨retry, pc₁, bx₁, bp₁, retryFrame, trace₁⟩
   let events₁ := events ++ [LookupObservation.decision rxSection .refcountAddNzRetry false retry]
   have oldPositive₁ : (first.machine.data.regs.get (.low .rbp .W32)).msb = false := by
     simpa only [Reg64s.get, Reg64s.get64, Reg.base, Reg.offset, bp₁] using oldPositive
   have negative := live_negative_stage fetch agree tracePc traceCmp body first.machine.data coverage preempt
-    trace₁.frame oldPositive₁ rxSection first.history events₁ trace₁.observed (by rw [← pc₁]; exact trace₁.last)
+    trace₁.frame oldPositive₁ comparison rxSection first.history events₁ trace₁.observed (by rw [← pc₁]; exact trace₁.last)
   have cursor₁ : (⟨⟨first.machine.data, Image.PeerGet.entry+0x77⟩, first.history⟩ : Executed) = first := by rw [← pc₁]
   rw [cursor₁] at negative
   apply eventually_trans (historyStep fetch) _ _ _ negative
@@ -50,7 +51,7 @@ theorem live_callbacks_history (fetch : Int64 → Option Decoded)
   have nonzero₂ : second.machine.data.regs.get (.low .rbp .W32) ≠ 0 := by
     simpa only [Reg64s.get, Reg64s.get64, Reg.base, Reg.offset, bp₂, bp₁] using nonzero
   have wrap := live_wrap_stage fetch agree tracePc traceCmp body second.machine.data coverage preempt
-    trace₂.frame positive₂ nonzero₂ rxSection second.history events₂ trace₂.observed (by rw [← pc₂]; exact trace₂.last)
+    trace₂.frame positive₂ nonzero₂ comparison rxSection second.history events₂ trace₂.observed (by rw [← pc₂]; exact trace₂.last)
   have cursor₂ : (⟨⟨second.machine.data, Image.PeerGet.entry+0x8a⟩, second.history⟩ : Executed) = second := by rw [← pc₂]
   rw [cursor₂] at wrap
   apply eventually_weaken (historyStep fetch) _ _ _ _ wrap

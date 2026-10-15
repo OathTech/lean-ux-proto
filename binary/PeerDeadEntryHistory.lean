@@ -13,22 +13,24 @@ theorem dead_entry_history (fetch : Int64 → Option Decoded)
     (s : MachineData) (returnAddress : UInt64)
     (entry : EntryFrame ⟨s, Image.PeerGet.entry⟩ returnAddress) (nonnull : s.regs.rdi ≠ 0)
     (field : s.dmem.loadInt (s.regs.rdi.toBitVec+0x420) 4 = some 0)
-    (coverage : KcovLayout) (preempt : BitVec 32)
-    (state : KcovState coverage preempt s.dmem)
+    (coverage : LookupCoverage.Context) (preempt : BitVec 32)
+    (state : LookupCoverage.Context.At coverage preempt s.dmem)
+    (phase : preempt = coverage.entryPreempt ∨ preempt = 512+coverage.entryPreempt)
     (mapped : ∀ n < 7,
       (s.dmem.loadInt (s.regs.rsp.toBitVec - .ofNat 64 ((n+1)*8)) 8).isSome = true)
-    (pushSeparate : ∀ address, KcovStateBytes coverage address →
+    (pushSeparate : ∀ address, LookupCoverage.Context.bytes coverage address →
       ¬InRange (s.regs.rsp.toBitVec-56) 56 address)
-    (coverageSeparate : KcovSeparated coverage (InRange (s.regs.rsp.toBitVec-56) 64))
-    (metadataSeparate : KcovSeparated coverage (KcovMetadataBytes coverage))
-    (preemptSeparate : KcovSeparated coverage (InRange preemptCountAddress 4))
+    (coverageSeparate : LookupCoverage.Context.Separated coverage (InRange (s.regs.rsp.toBitVec-56) 64))
+    (metadataSeparate : LookupCoverage.Context.Separated coverage (LookupCoverage.Context.metadataBytes coverage))
+    (preemptSeparate : LookupCoverage.Context.Separated coverage (InRange preemptCountAddress 4))
     (fieldSeparate : ∀ a, InRange (s.regs.rdi.toBitVec+0x420) 4 a → ¬entryWrites s coverage a)
+    (comparison : coverage.CompareAllowed preempt)
     (rxSection : Nat) (history : List MachineState) (events : List LookupObservation.Point)
     (observed : observeHistory (LookupObservation.edge rxSection) history = .ok events)
     (last : history.getLast? = some ⟨s, Image.PeerGet.entry⟩) :
     Eventually (historyStep fetch) (fun final =>
       Returned ⟨s, Image.PeerGet.entry⟩ final.machine returnAddress ∧
-      final.machine.data.regs.rax = 0 ∧ KcovState coverage preempt final.machine.data.dmem ∧
+      final.machine.data.regs.rax = 0 ∧ LookupCoverage.Context.At coverage preempt final.machine.data.dmem ∧
       EqualOutside (entryWrites s coverage) s.dmem final.machine.data.dmem ∧
       final.history.getLast? = some final.machine ∧
       ∃ nullPoint zeroPoint negative wrap dead : MachineState,
@@ -48,11 +50,11 @@ theorem dead_entry_history (fetch : Int64 → Option Decoded)
           ∀ q ∈ tail, q.pc ∈ Image.cutPoints →
             EqualOutside (entryWrites s coverage) s.dmem q.data.dmem)
       ⟨⟨s, Image.PeerGet.entry⟩, history⟩ := by
-  have headerSeparate : KcovSeparated coverage (InRange (s.regs.rsp.toBitVec-56) 8) := by
+  have headerSeparate : LookupCoverage.Context.Separated coverage (InRange (s.regs.rsp.toBitVec-56) 8) := by
     intro address buffer inside
     obtain ⟨byte, bound, eq⟩ := inside
     exact coverageSeparate address buffer ⟨byte, by omega, eq⟩
-  have start := start_history fetch agree contract s coverage preempt state entry.1 mapped
+  have start := start_history fetch agree contract s coverage preempt state phase entry.1 mapped
     pushSeparate headerSeparate metadataSeparate preemptSeparate rxSection history events observed last
   apply eventually_trans (historyStep fetch) _ _ _ start
   rintro body ⟨pc, sp, bx, ready, memory, seen, last, startTail, startRecorded, startCuts⟩
@@ -63,10 +65,10 @@ theorem dead_entry_history (fetch : Int64 → Option Decoded)
   have savedBase : s.regs.rsp.toBitVec-48 = (s.regs.rsp.toBitVec-56)+8 := by
     rw [show (56 : BitVec 64) = 48+8 from rfl, ← BitVec.sub_sub, BitVec.sub_add_cancel]
   have savedSeparate : ∀ address, InRange (s.regs.rsp.toBitVec-48) 56 address →
-      ¬(KcovBufferBytes coverage address ∨ scanWrites body.machine.data coverage address) := by
+      ¬(LookupCoverage.Context.writes coverage address ∨ scanWrites body.machine.data coverage address) := by
     intro address inside written
     rw [savedBase] at inside
-    have outside : ¬KcovBufferBytes coverage address := fun inBuffer =>
+    have outside : ¬LookupCoverage.Context.writes coverage address := fun inBuffer =>
       coverageSeparate address inBuffer (stack_tail_inside _ _ inside)
     rcases written with h | h | h
     · exact outside h
@@ -92,7 +94,7 @@ theorem dead_entry_history (fetch : Int64 → Option Decoded)
       intro a inside written
       rw [bx] at inside
       exact fieldSeparate a inside (subset a written))
-    (KcovBufferBytes coverage) memory savedSeparate rxSection body.history events seen
+    (LookupCoverage.Context.writes coverage) memory savedSeparate comparison rxSection body.history events seen
     (by rw [← pc]; exact last)
   have cursor : (⟨⟨body.machine.data, Image.PeerGet.entry+0x12⟩, body.history⟩ : Executed) = body := by rw [← pc]
   rw [cursor] at finish

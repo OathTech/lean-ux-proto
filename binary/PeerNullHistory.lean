@@ -9,7 +9,7 @@ local instance : Labels := Image.linkedLabels
     undefined TEST flag and a physical frame at both appended cuts. -/
 theorem null_guard_history (fetch : Int64 → Option Decoded)
     (agree : AnchoredDecoderAgreement fetch) (base body : MachineData)
-    (coverage : KcovLayout) (preempt : BitVec 32)
+    (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (frame : ScanFrame base coverage preempt body) (null : body.regs.rbx = 0)
     (rxSection : Nat) (history : List MachineState) (events : List LookupObservation.Point)
     (observed : observeHistory (LookupObservation.edge rxSection) history = .ok events)
@@ -41,7 +41,7 @@ theorem null_guard_history (fetch : Int64 → Option Decoded)
     preserves the physical scan-style frame and emits no source decision. -/
 theorem clear_trace (fetch : Int64 → Option Decoded)
     (agree : AnchoredDecoderAgreement fetch) (base body : MachineData)
-    (coverage : KcovLayout) (preempt : BitVec 32)
+    (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (frame : ScanFrame base coverage preempt body)
     (rxSection : Nat) (history : List MachineState) (events : List LookupObservation.Point)
     (observed : observeHistory (LookupObservation.edge rxSection) history = .ok events)
@@ -72,8 +72,8 @@ theorem null_suffix_history (fetch : Int64 → Option Decoded)
     (agree : AnchoredDecoderAgreement fetch) (contract : TracePcContract fetch)
     (initial : MachineState) (body : MachineData) (returnAddress : UInt64)
     (entry : EntryFrame initial returnAddress) (sp : body.regs.rsp = initial.data.regs.rsp-48)
-    (null : body.regs.rbx = 0) (coverage : KcovLayout) (preempt : BitVec 32)
-    (ready : CallsReady coverage preempt body)
+    (null : body.regs.rbx = 0) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
+    (ready : LookupCoverage.CallsReady coverage preempt body)
     (writes : BitVec 64 → Prop)
     (frame : EqualOutside writes (saveMemory initial.data 7) body.dmem)
     (savedSeparate : ∀ address, InRange (initial.data.regs.rsp.toBitVec-48) 56 address →
@@ -83,7 +83,7 @@ theorem null_suffix_history (fetch : Int64 → Option Decoded)
     (last : history.getLast? = some ⟨body, Image.PeerGet.entry+0x12⟩) :
     Eventually (historyStep fetch) (fun final =>
       Returned initial final.machine returnAddress ∧ final.machine.data.regs.rax = 0 ∧
-      KcovState coverage preempt final.machine.data.dmem ∧
+      LookupCoverage.Context.At coverage preempt final.machine.data.dmem ∧
       EqualOutside (scanWrites body coverage) body.dmem final.machine.data.dmem ∧
       final.history.getLast? = some final.machine ∧
       ∃ af, observeHistory (LookupObservation.edge rxSection) final.history =

@@ -55,10 +55,11 @@ theorem walk_decision_points (rxSection : Nat) (s : MachineData) (af : Bool) :
 
 theorem scan_search (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderAgreement fetch)
     (tracePc : TracePcContract fetch) (traceCmp : TraceCmp4Contract fetch)
-    (base : MachineData) (coverage : KcovLayout) (preempt : BitVec 32)
+    (base : MachineData) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (query rxSection : Nat)
     (queryReg : (base.regs.get (.low .r12 .W32)).toNat = query)
     (es : List (Address × Leanux.WG.IndexEntry))
+    (comparison : es ≠ [] → coverage.CompareAllowed preempt)
     (separate : ∀ cell ∈ es, ∀ address, BucketShapeReads cell.1 address →
       ¬scanWrites base coverage address)
     (first : Bool) (s : MachineData) (frame : ScanFrame base coverage preempt s)
@@ -87,6 +88,7 @@ theorem scan_search (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderA
     · simp [walkPoints, testedZero, LookupObservation.decision, scanSteps]
   | cons cell es ih =>
     rcases cell with ⟨a,e⟩
+    have canCompare := comparison (by simp)
     have fields := bucket_cons_fields bucket
     have node : s.regs.rbx.toBitVec = a+8 := fields.2.1
     have nonzero : s.regs.get (.low .rbx .W64) ≠ 0#64 := by
@@ -101,7 +103,7 @@ theorem scan_search (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderA
     have node₁ : t₁.machine.data.regs.rbx.toBitVec = a+8 := by
       rw [machine₁]; exact node
     have nodeRun := node_to_compare fetch agree tracePc traceCmp base t₁.machine.data coverage preempt
-      trace₁.frame a e es node₁ (by rw [← node]; exact bucket) separate rxSection t₁.history
+      trace₁.frame a e es node₁ (by rw [← node]; exact bucket) separate canCompare rxSection t₁.history
       (events ++ walkPoints rxSection s af) trace₁.observed (by rw [← pc₁]; exact trace₁.last)
     have cursor₁ : (⟨⟨t₁.machine.data, Image.Lookup.entry+0x34⟩, t₁.history⟩ : Executed) = t₁ := by rw [← pc₁]
     rw [cursor₁] at nodeRun
@@ -144,7 +146,7 @@ theorem scan_search (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderA
       rw [cursor₃] at miss
       apply eventually_trans (historyStep fetch) _ _ _ miss
       rintro t₄ ⟨next, pc₄, bx₄, baseTail, _, trace₄⟩
-      have recur := ih (fun cell member => separate cell (List.mem_cons_of_mem _ member)) false
+      have recur := ih (fun _ => canCompare) (fun cell member => separate cell (List.mem_cons_of_mem _ member)) false
         t₄.machine.data trace₄.frame (by rw [bx₄]; exact baseTail) t₄.history
         (((events ++ walkPoints rxSection s af) ++ [cmpEvent])) trace₄.observed
         (by change t₄.history.getLast? = some ⟨t₄.machine.data, Image.Lookup.entry+0x67⟩; rw [← pc₄]; exact trace₄.last)

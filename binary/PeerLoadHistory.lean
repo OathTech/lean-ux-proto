@@ -84,7 +84,7 @@ theorem refcount_load_history (fetch : Int64 → Option Decoded)
 theorem refcount_load_trace (fetch : Int64 → Option Decoded)
     (agree : AnchoredDecoderAgreement fetch) (body : MachineData) (count : UInt32)
     (field : body.dmem.loadInt (body.regs.rbx.toBitVec+0x420) 4 = some count.toNat)
-    (coverage : KcovLayout) (preempt : BitVec 32) (ready : CallsReady coverage preempt body)
+    (coverage : LookupCoverage.Context) (preempt : BitVec 32) (ready : LookupCoverage.CallsReady coverage preempt body)
     (rxSection : Nat) (history : List MachineState) (events : List LookupObservation.Point)
     (observed : observeHistory (LookupObservation.edge rxSection) history = .ok events)
     (last : history.getLast? = some ⟨body, Image.PeerGet.entry+0x20⟩) :
@@ -111,7 +111,7 @@ theorem refcount_load_trace (fetch : Int64 → Option Decoded)
     follows its callback supplies the decision and its actual operands. -/
 theorem old_arguments_trace (fetch : Int64 → Option Decoded)
     (agree : AnchoredDecoderAgreement fetch) (base body : MachineData)
-    (coverage : KcovLayout) (preempt : BitVec 32)
+    (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (frame : ScanFrame base coverage preempt body)
     (rxSection : Nat) (history : List MachineState) (events : List LookupObservation.Point)
     (observed : observeHistory (LookupObservation.edge rxSection) history = .ok events)
@@ -146,7 +146,8 @@ theorem load_body_history (fetch : Int64 → Option Decoded)
     (tracePc : TracePcContract fetch) (traceCmp : TraceConstCmp4Contract fetch)
     (body : MachineData) (count : UInt32)
     (field : body.dmem.loadInt (body.regs.rbx.toBitVec+0x420) 4 = some count.toNat)
-    (coverage : KcovLayout) (preempt : BitVec 32) (ready : CallsReady coverage preempt body)
+    (coverage : LookupCoverage.Context) (preempt : BitVec 32) (ready : LookupCoverage.CallsReady coverage preempt body)
+    (comparison : coverage.CompareAllowed preempt)
     (rxSection : Nat) (history : List MachineState) (events : List LookupObservation.Point)
     (observed : observeHistory (LookupObservation.edge rxSection) history = .ok events)
     (last : history.getLast? = some ⟨body, Image.PeerGet.entry+0x20⟩) :
@@ -163,7 +164,7 @@ theorem load_body_history (fetch : Int64 → Option Decoded)
   rintro loadedState ⟨machine₁, trace₁⟩
   have pc₁ : loadedState.machine.pc = Image.PeerGet.entry+0x2d := congrArg MachineState.pc machine₁
   have call := scan_call_cursor fetch "L_ffffffff810f3100" loadedState
-    (by rw [pc₁]; exact agree _ _ (by rfl)) .pc tracePc (loaded body count) coverage preempt trace₁.frame
+    (by rw [pc₁]; exact agree _ _ (by rfl)) .pc tracePc (loaded body count) coverage preempt trace₁.frame (trace₁.frame).ready.pc_allowed
     rxSection events trace₁.observed trace₁.last (by
       simp [LookupObservation.edge, pc₁, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
   apply eventually_trans (historyStep fetch) _ _ _ call
@@ -178,7 +179,7 @@ theorem load_body_history (fetch : Int64 → Option Decoded)
   rintro afterSetup ⟨af, machine₃, trace₃⟩
   have pc₃ : afterSetup.machine.pc = Image.PeerGet.entry+0x36 := congrArg MachineState.pc machine₃
   have call := scan_call_cursor fetch "L_ffffffff810f3f00" afterSetup
-    (by rw [pc₃]; exact agree _ _ (by rfl)) .constCmp4 traceCmp (loaded body count) coverage preempt trace₃.frame
+    (by rw [pc₃]; exact agree _ _ (by rfl)) .constCmp4 traceCmp (loaded body count) coverage preempt trace₃.frame (LookupCoverage.compare_allowed comparison (by decide))
     rxSection events trace₃.observed trace₃.last (by
       simp [LookupObservation.edge, pc₃, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
   apply eventually_weaken (historyStep fetch) _ _ _ _ call

@@ -195,7 +195,7 @@ theorem bucketExitBase_memory (base : MachineData) (query : Nat)
   simp only [bucketExitBase]
   split <;> rfl
 
-theorem bucketExitBase_writes (base : MachineData) (coverage : KcovLayout) (query : Nat)
+theorem bucketExitBase_writes (base : MachineData) (coverage : LookupCoverage.Context) (query : Nat)
     (es : List (Address × Leanux.WG.IndexEntry)) :
     scanWrites (bucketExitBase base query es) coverage = scanWrites base coverage := by
   simp only [bucketExitBase]
@@ -204,7 +204,7 @@ theorem bucketExitBase_writes (base : MachineData) (coverage : KcovLayout) (quer
 /-- R's stable WG footprint sees one memory frame across both loop phases.
     The post-AND register mask really changes, so this intentionally does
     not claim ScanFrame base after the AND. -/
-theorem bucketCuts_memory (base : MachineData) (coverage : KcovLayout) (preempt : BitVec 32)
+theorem bucketCuts_memory (base : MachineData) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (query : Nat) (es : List (Address × Leanux.WG.IndexEntry))
     (before after : List MachineState)
     (first : ScanCuts base coverage preempt before)

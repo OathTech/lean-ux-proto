@@ -5,8 +5,8 @@ namespace Binary.PeerGet
 open TrustBase LookupHistory
 local instance : Labels := Image.linkedLabels
 
-def entryWrites (s : MachineData) (coverage : KcovLayout) (address : BitVec 64) : Prop :=
-  InRange (s.regs.rsp.toBitVec-56) 56 address ∨ KcovBufferBytes coverage address
+def entryWrites (s : MachineData) (coverage : LookupCoverage.Context) (address : BitVec 64) : Prop :=
+  InRange (s.regs.rsp.toBitVec-56) 56 address ∨ LookupCoverage.Context.writes coverage address
 
 theorem prologue_frames (s : MachineData) (q : MachineState)
     (member : q ∈ prologueStates s ++ [prologueCalled s]) :
@@ -29,24 +29,25 @@ theorem prologue_frames (s : MachineData) (q : MachineState)
     the body is derived from the pushed word and physical service frame. -/
 theorem start_history (fetch : Int64 → Option Decoded)
     (agree : AnchoredDecoderAgreement fetch) (contract : TracePcContract fetch)
-    (s : MachineData) (coverage : KcovLayout) (preempt : BitVec 32)
-    (state : KcovState coverage preempt s.dmem)
+    (s : MachineData) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
+    (state : LookupCoverage.Context.At coverage preempt s.dmem)
+    (phase : preempt = coverage.entryPreempt ∨ preempt = 512+coverage.entryPreempt)
     (aligned : s.regs.rsp.toNat % 8 = 0)
     (mapped : ∀ n < 7,
       (s.dmem.loadInt (s.regs.rsp.toBitVec - .ofNat 64 ((n+1)*8)) 8).isSome = true)
-    (pushSeparate : ∀ address, KcovStateBytes coverage address →
+    (pushSeparate : ∀ address, LookupCoverage.Context.bytes coverage address →
       ¬InRange (s.regs.rsp.toBitVec-56) 56 address)
-    (returnSeparate : KcovSeparated coverage (InRange (s.regs.rsp.toBitVec-56) 8))
-    (metadataSeparate : KcovSeparated coverage (KcovMetadataBytes coverage))
-    (preemptSeparate : KcovSeparated coverage (InRange preemptCountAddress 4))
+    (returnSeparate : LookupCoverage.Context.Separated coverage (InRange (s.regs.rsp.toBitVec-56) 8))
+    (metadataSeparate : LookupCoverage.Context.Separated coverage (LookupCoverage.Context.metadataBytes coverage))
+    (preemptSeparate : LookupCoverage.Context.Separated coverage (InRange preemptCountAddress 4))
     (rxSection : Nat) (history : List MachineState) (events : List LookupObservation.Point)
     (observed : observeHistory (LookupObservation.edge rxSection) history = .ok events)
     (last : history.getLast? = some ⟨s, Image.PeerGet.entry⟩) :
     Eventually (historyStep fetch) (fun t =>
       t.machine.pc = Image.PeerGet.entry+0x12 ∧
       t.machine.data.regs.rsp = s.regs.rsp-48 ∧ t.machine.data.regs.rbx = s.regs.rdi ∧
-      CallsReady coverage preempt t.machine.data ∧
-      EqualOutside (KcovBufferBytes coverage) (saveMemory s 7) t.machine.data.dmem ∧
+      LookupCoverage.CallsReady coverage preempt t.machine.data ∧
+      EqualOutside (LookupCoverage.Context.writes coverage) (saveMemory s 7) t.machine.data.dmem ∧
       observeHistory (LookupObservation.edge rxSection) t.history = .ok events ∧
       t.history.getLast? = some t.machine ∧
       ∃ tail, t.history = history ++ tail ∧
@@ -71,9 +72,9 @@ theorem start_history (fetch : Int64 → Option Decoded)
       omega
     · rw [stack, prologue_called_memory]
       simpa [slot, savedWords] using saveMemory_read s 7 6 (by decide) (by decide)
-  have calleeState : KcovState coverage preempt (prologueCalled s).data.dmem := by
+  have calleeState : LookupCoverage.Context.At coverage preempt (prologueCalled s).data.dmem := by
     rw [prologue_called_memory]
-    exact Kcov.state_frame coverage preempt _ _ state _ (saveMemory_frame s 7 (by decide)) pushSeparate
+    exact LookupCoverage.state_frame coverage preempt _ _ state _ (saveMemory_frame s 7 (by decide)) pushSeparate
   have restored := history_restore last
   have seen := observeHistory_splice (LookupObservation.edge rxSection)
     history.dropLast ⟨s, Image.PeerGet.entry⟩ (prologueStates s ++ [prologueCalled s])
@@ -85,12 +86,12 @@ theorem start_history (fetch : Int64 → Option Decoded)
       ((history ++ prologueStates s) ++ [prologueCalled s]) = .ok events := by
     rw [List.append_assoc, ← restored, List.append_assoc]
     simpa only [List.singleton_append, List.append_nil] using seen
-  have call := Kcov.observed_callback fetch (.ofNat 0xffffffff810f3100) .pc contract
-    coverage preempt (prologueCalled s) (Image.PeerGet.entry+0x12).toUInt64 rfl entry calleeState
+  have call := LookupCoverage.observed_callback fetch (.ofNat 0xffffffff810f3100) .pc contract
+    coverage preempt (prologueCalled s) (Image.PeerGet.entry+0x12).toUInt64 rfl entry calleeState (.inl ⟨rfl, phase⟩)
     (by simpa only [stack] using returnSeparate) metadataSeparate preemptSeparate rxSection
     (history ++ prologueStates s) events calleeObserved
   apply eventually_weaken (historyStep fetch) _ _ _ _ call
-  rintro t ⟨returned, state, frame, seen, last, serviceTail, serviceRecorded, serviceLast, noCuts⟩
+  rintro t ⟨returned, state, frame, seen, last, serviceTail, serviceRecorded, serviceLast, noCuts, _noReentry⟩
   have sp : t.machine.data.regs.rsp = s.regs.rsp-48 := by
     rw [returned.2.1]
     change ((s.regs.rsp-48)-8)+8 = s.regs.rsp-48
@@ -99,10 +100,11 @@ theorem start_history (fetch : Int64 → Option Decoded)
   have bodySlot : t.machine.data.regs.rsp.toBitVec-8 = s.regs.rsp.toBitVec-56 := by
     simp only [sp, UInt64.toBitVec_sub, BitVec.sub_sub]
     rfl
-  have memory : EqualOutside (KcovBufferBytes coverage) (saveMemory s 7) t.machine.data.dmem := by
+  have memory : EqualOutside (LookupCoverage.Context.writes coverage) (saveMemory s 7) t.machine.data.dmem := by
     simpa only [prologue_called_memory] using frame
-  have ready : CallsReady coverage preempt t.machine.data := {
+  have ready : LookupCoverage.CallsReady coverage preempt t.machine.data := {
     state := state
+    phase := phase
     aligned := by
       rw [sp]
       simp only [UInt64.toNat_sub, show (48 : UInt64).toNat = 48 from rfl]

@@ -45,8 +45,10 @@ theorem bucket_related (fetch : Int64 → Option Decoded)
     (tracePc : TracePcContract fetch) (traceCmp : TraceCmp4Contract fetch)
     (traceConstCmp : TraceConstCmp4Contract fetch)
     (c : Config) (world : World) (v : View) (projected : project c world = some v)
-    (base : MachineData) (coverage : KcovLayout) (preempt : BitVec 32)
-    (ready : PeerGet.CallsReady coverage preempt base)
+    (base : MachineData) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
+    (ready : LookupCoverage.CallsReady coverage preempt base)
+    (entryBucket : coverage.entryView.bucket = v.bucket)
+    (currentCount : preempt = 512+coverage.entryPreempt)
     (history : List MachineState) (seen prior : List LookupObservation.Point)
     (related : R c history seen ⟨base, Image.Lookup.entry+0x2f⟩ world)
     (observed : LookupObservation.observe c.rxSection history = .ok seen)
@@ -90,8 +92,14 @@ theorem bucket_related (fetch : Int64 → Option Decoded)
     obtain ⟨entry, present, equal⟩ := List.mem_map.mp member
     subst cell
     exact apart address (.inr (.inl ⟨entry, present, read⟩))
+  have comparison : cells c v ≠ [] → coverage.CompareAllowed preempt := by
+    intro nonempty
+    refine ⟨currentCount, ?_⟩
+    intro empty
+    rw [entryBucket] at empty
+    exact nonempty (by simp [cells, empty])
   have run := bucket_loop fetch agree tracePc traceCmp traceConstCmp base coverage preempt
-    c.query c.rxSection c.kinds query mask (cells c v) separate true base
+    c.query c.rxSection c.kinds query mask (cells c v) comparison separate true base
     (ScanFrame.initial base coverage preempt ready) bucket history prior rawObserved related.1
   apply eventually_weaken (historyStep fetch) _ _ _ _ run
   rintro t ⟨stop, frame, last, ⟨delta, records, tags, rawFull⟩,
@@ -295,8 +303,10 @@ theorem bucket_simulation (fetch : Int64 → Option Decoded)
     (tracePc : TracePcContract fetch) (traceCmp : TraceCmp4Contract fetch)
     (traceConstCmp : TraceConstCmp4Contract fetch)
     (c : Config) (world : World) (v : View) (projected : project c world = some v)
-    (base : MachineData) (coverage : KcovLayout) (preempt : BitVec 32)
-    (ready : PeerGet.CallsReady coverage preempt base)
+    (base : MachineData) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
+    (ready : LookupCoverage.CallsReady coverage preempt base)
+    (entryBucket : coverage.entryView.bucket = v.bucket)
+    (currentCount : preempt = 512+coverage.entryPreempt)
     (history : List MachineState) (seen prior : List LookupObservation.Point)
     (related : R c history seen ⟨base, Image.Lookup.entry+0x2f⟩ world)
     (observed : LookupObservation.observe c.rxSection history = .ok seen)
@@ -327,7 +337,7 @@ theorem bucket_simulation (fetch : Int64 → Option Decoded)
           (LookupSearch.result c.kinds c.query v.bucket sourceHistory world).2)
       ⟨⟨base, Image.Lookup.entry+0x2f⟩, history⟩ := by
   have run := bucket_related fetch agree tracePc traceCmp traceConstCmp c world v projected
-    base coverage preempt ready history seen prior related observed rawObserved inactive
+    base coverage preempt ready entryBucket currentCount history seen prior related observed rawObserved inactive
     noReturn query mask cursor apart sourceHistory
   apply eventually_weaken (historyStep fetch) _ _ _ _ run
   rintro t ⟨stop, frame, last, delta, records, tags, cuts, observedFull, rawFull, finalR, tail, recorded, frames⟩

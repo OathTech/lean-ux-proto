@@ -5,7 +5,7 @@ open TrustBase
 local instance : Labels := Image.linkedLabels
 
 theorem scan_container (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderAgreement fetch)
-    (base s : MachineData) (coverage : KcovLayout) (preempt : BitVec 32)
+    (base s : MachineData) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (frame : ScanFrame base coverage preempt s)
     (rxSection : Nat) (history : List MachineState) (events : List LookupObservation.Point)
     (observed : observeHistory (LookupObservation.edge rxSection) history = .ok events)
@@ -29,7 +29,7 @@ theorem scan_container (fetch : Int64 → Option Decoded) (agree : AnchoredDecod
     simpa only [eq, machine] using nextFrame
 
 theorem scan_entry_guard (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderAgreement fetch)
-    (base s : MachineData) (coverage : KcovLayout) (preempt : BitVec 32)
+    (base s : MachineData) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (frame : ScanFrame base coverage preempt s)
     (nonnull : s.regs.get (.low .rbx .W64) ≠ 0#64)
     (rxSection : Nat) (history : List MachineState) (events : List LookupObservation.Point)
@@ -55,7 +55,7 @@ theorem scan_entry_guard (fetch : Int64 → Option Decoded) (agree : AnchoredDec
     rcases member with rfl | rfl <;> exact nextFrame
 
 theorem scan_index_arguments (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderAgreement fetch)
-    (base s : MachineData) (index : UInt32) (coverage : KcovLayout) (preempt : BitVec 32)
+    (base s : MachineData) (index : UInt32) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (frame : ScanFrame base coverage preempt s)
     (field : s.dmem.loadInt (s.regs.rbx.toBitVec+28) 4 = some index.toNat)
     (rxSection : Nat) (history : List MachineState) (events : List LookupObservation.Point)
@@ -89,13 +89,14 @@ theorem scan_index_arguments (fetch : Int64 → Option Decoded) (agree : Anchore
     the physical invariant at every appended anchored cut. -/
 theorem node_to_compare (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderAgreement fetch)
     (tracePc : TracePcContract fetch) (traceCmp : TraceCmp4Contract fetch)
-    (base s : MachineData) (coverage : KcovLayout) (preempt : BitVec 32)
+    (base s : MachineData) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (frame : ScanFrame base coverage preempt s)
     (a : Address) (e : Leanux.WG.IndexEntry) (rest : List (Address × Leanux.WG.IndexEntry))
     (node : s.regs.rbx.toBitVec = a+8)
     (bucket : BucketShape base.dmem (a+8) ((a,e)::rest))
     (separate : ∀ cell ∈ (a,e)::rest, ∀ address, BucketShapeReads cell.1 address →
       ¬scanWrites base coverage address)
+    (comparison : coverage.CompareAllowed preempt)
     (rxSection : Nat) (history : List MachineState) (events : List LookupObservation.Point)
     (observed : observeHistory (LookupObservation.edge rxSection) history = .ok events)
     (last : history.getLast? = some ⟨s, Image.Lookup.entry+0x34⟩) :
@@ -107,7 +108,8 @@ theorem node_to_compare (fetch : Int64 → Option Decoded) (agree : AnchoredDeco
       ⟨⟨s, Image.Lookup.entry+0x34⟩, history⟩ := by
   have first := scan_call_cursor fetch "L_ffffffff810f3100"
     ⟨⟨s, Image.Lookup.entry+0x34⟩, history⟩ (agree _ _ (by rfl)) .pc tracePc base coverage preempt
-    frame rxSection events observed last (by
+    frame (frame).ready.pc_allowed
+    rxSection events observed last (by
       simp [LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
   apply eventually_trans (historyStep fetch) _ _ _ first
   rintro t₁ ⟨pc₁, bx₁, _, trace₁⟩
@@ -126,7 +128,7 @@ theorem node_to_compare (fetch : Int64 → Option Decoded) (agree : AnchoredDeco
     change s.regs.rbx.toBitVec-8 = a
     rw [node, BitVec.add_sub_cancel]
   have second := scan_call_cursor fetch "L_ffffffff810f3100" t₂
-    (by rw [pc₂]; exact agree _ _ (by rfl)) .pc tracePc base coverage preempt trace₂.frame
+    (by rw [pc₂]; exact agree _ _ (by rfl)) .pc tracePc base coverage preempt trace₂.frame (trace₂.frame).ready.pc_allowed
     rxSection events trace₂.observed trace₂.last (by
       simp [LookupObservation.edge, pc₂, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
   apply eventually_trans (historyStep fetch) _ _ _ second
@@ -150,7 +152,7 @@ theorem node_to_compare (fetch : Int64 → Option Decoded) (agree : AnchoredDeco
     change t₃.machine.data.regs.rbx.toBitVec = a
     rw [bx₃, bx₂]
   have third := scan_call_cursor fetch "L_ffffffff810f3100" t₄
-    (by rw [pc₄]; exact agree _ _ (by rfl)) .pc tracePc base coverage preempt trace₄.frame
+    (by rw [pc₄]; exact agree _ _ (by rfl)) .pc tracePc base coverage preempt trace₄.frame (trace₄.frame).ready.pc_allowed
     rxSection events trace₄.observed trace₄.last (by
       simp [LookupObservation.edge, pc₄, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
   apply eventually_trans (historyStep fetch) _ _ _ third
@@ -175,7 +177,7 @@ theorem node_to_compare (fetch : Int64 → Option Decoded) (agree : AnchoredDeco
   rintro t₆ ⟨machine₆, trace₆⟩
   have pc₆ : t₆.machine.pc = Image.Lookup.entry+0x54 := congrArg MachineState.pc machine₆
   have fourth := scan_call_cursor fetch "L_ffffffff810f3e80" t₆
-    (by rw [pc₆]; exact agree _ _ (by rfl)) .cmp4 traceCmp base coverage preempt trace₆.frame
+    (by rw [pc₆]; exact agree _ _ (by rfl)) .cmp4 traceCmp base coverage preempt trace₆.frame (LookupCoverage.compare_allowed comparison (by decide))
     rxSection events trace₆.observed trace₆.last (by
       simp [LookupObservation.edge, pc₆, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
   apply eventually_weaken (historyStep fetch) _ _ _ _ fourth

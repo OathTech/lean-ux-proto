@@ -70,11 +70,12 @@ def BucketStop (query : Nat) (kinds : List Leanux.WG.IndexKind)
 theorem bucket_loop (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderAgreement fetch)
     (tracePc : TracePcContract fetch) (traceCmp : TraceCmp4Contract fetch)
     (traceConstCmp : TraceConstCmp4Contract fetch)
-    (base : MachineData) (coverage : KcovLayout) (preempt : BitVec 32)
+    (base : MachineData) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (query rxSection : Nat) (kinds : List Leanux.WG.IndexKind)
     (queryReg : (base.regs.get (.low .r12 .W32)).toNat = query)
     (mask : KindMask (base.regs.get (.low .r14 .W32)) kinds)
     (es : List (Address × Leanux.WG.IndexEntry))
+    (comparison : es ≠ [] → coverage.CompareAllowed preempt)
     (separate : ∀ cell ∈ es, ∀ address, BucketShapeReads cell.1 address →
       ¬scanWrites base coverage address)
     (first : Bool) (s : MachineData) (frame : ScanFrame base coverage preempt s)
@@ -97,7 +98,7 @@ theorem bucket_loop (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderA
              boundary.pc = Image.Lookup.entry+0x9a ∧ ScanFrame base coverage preempt boundary.data))
       ⟨⟨s, Image.Lookup.entry+(if first then 0x2f else 0x67)⟩, history⟩ := by
   have scan := scan_search fetch agree tracePc traceCmp base coverage preempt query rxSection queryReg
-    es separate first s frame bucket history events observed last
+    es comparison separate first s frame bucket history events observed last
   apply eventually_trans (historyStep fetch) _ _ _ scan
   rintro t₁ ⟨stop, delta, records, tags, trace⟩
   cases found : firstIndex query es with
@@ -112,13 +113,14 @@ theorem bucket_loop (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderA
     · intro q member _; cases member
   | some cell =>
     rcases cell with ⟨a,e⟩
+    have canCompare := comparison (by intro empty; subst es; cases found)
     obtain ⟨rest, represented, members⟩ := firstIndex_bucket query base.dmem es _ a e bucket found
     have hit : t₁.machine.pc = Image.Lookup.entry+0x95 ∧ t₁.machine.data.regs.rbx.toBitVec = a ∧
         (t₁.machine.data.regs.get (.low .rbp .W32)).toNat = e.index := by
       simpa only [ScanStop, found] using stop
     have suffix := matched_type_exit fetch agree tracePc traceConstCmp base t₁.machine.data coverage preempt
       trace.frame a e rest hit.2.1 represented (fun cell member => separate cell (members cell member)) kinds mask
-      rxSection t₁.history (events ++ delta) trace.observed (by rw [← hit.1]; exact trace.last)
+      canCompare rxSection t₁.history (events ++ delta) trace.observed (by rw [← hit.1]; exact trace.last)
     have cursor : (⟨⟨t₁.machine.data, Image.Lookup.entry+0x95⟩, t₁.history⟩ : Executed) = t₁ := by rw [← hit.1]
     rw [cursor] at suffix
     apply eventually_weaken (historyStep fetch) _ _ _ _ suffix

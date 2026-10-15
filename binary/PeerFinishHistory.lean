@@ -13,8 +13,8 @@ theorem finish_9d_history (fetch : Int64 → Option Decoded)
     (initial : MachineState) (body : MachineData) (returnAddress : UInt64)
     (entry : EntryFrame initial returnAddress)
     (sp : body.regs.rsp = initial.data.regs.rsp - 48)
-    (coverage : KcovLayout) (preempt : BitVec 32)
-    (ready : CallsReady coverage preempt body)
+    (coverage : LookupCoverage.Context) (preempt : BitVec 32)
+    (ready : LookupCoverage.CallsReady coverage preempt body)
     (writes : BitVec 64 → Prop)
     (frame : EqualOutside writes (saveMemory initial.data 7) body.dmem)
     (savedSeparate : ∀ address, InRange (initial.data.regs.rsp.toBitVec-48) 56 address →
@@ -25,7 +25,7 @@ theorem finish_9d_history (fetch : Int64 → Option Decoded)
     Eventually (historyStep fetch) (fun final =>
       Returned initial final.machine returnAddress ∧
       final.machine.data.regs.rax = body.regs.rbx ∧
-      KcovState coverage preempt final.machine.data.dmem ∧
+      LookupCoverage.Context.At coverage preempt final.machine.data.dmem ∧
       EqualOutside (scanWrites body coverage) body.dmem final.machine.data.dmem ∧
       observeHistory (LookupObservation.edge rxSection) final.history =
         .ok (events ++ [LookupObservation.returned "wg_peer_get_maybe_zero" final.machine]) ∧
@@ -36,7 +36,7 @@ theorem finish_9d_history (fetch : Int64 → Option Decoded)
       ⟨⟨body, Image.PeerGet.entry+0x9d⟩, history⟩ := by
   have call := scan_call_cursor fetch "L_ffffffff810f3100"
     ⟨⟨body, Image.PeerGet.entry+0x9d⟩, history⟩ (agree _ _ (by rfl)) .pc contract
-    body coverage preempt (ScanFrame.initial body coverage preempt ready)
+    body coverage preempt (ScanFrame.initial body coverage preempt ready) ((ScanFrame.initial body coverage preempt ready)).ready.pc_allowed
     rxSection events observed last (by
       simp [LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
   apply eventually_trans (historyStep fetch) _ _ _ call

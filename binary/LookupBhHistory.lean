@@ -1,4 +1,4 @@
-import CallHistory
+import LookupCallHistory
 import ScanFrame
 
 namespace Binary.LookupBh

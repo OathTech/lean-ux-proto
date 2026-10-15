@@ -2086,3 +2086,45 @@ the bucket and helper histories, deriving comparison eligibility at the
 actual nonempty-bucket branch. The helper's CMPXCHG/cut composition,
 function theorem and transport remain open. TrustBase and its quoted text
 above are unchanged; certified-function throughput remains zero.
+
+
+### Entry through the bucket loop, 07:34:38 UTC
+
+The execution histories now use the conditional callback invariant from the
+witnessed entry domain. Comparisons require a nonempty selected bucket at
+the actual comparison path; empty-bucket and NULL-helper paths introduce no
+such requirement. Zero-count peers remain admitted. No change was made to
+Pre_lookup, R or TrustBase, whose verbatim text above still matches the file.
+
+`LookupFromPre.bucket_from_pre` composes the actual prologue, BH-disable and
+complete bucket search directly from Pre_lookup, retaining all-cut R and
+matching against LookupSearch.result. Header phase, ABI registers, callback
+readiness and memory separation are derived rather than added as headline
+premises. Its retained loop-head history is explicitly a prefix of the
+final history, addressing a read-only review's interface finding.
+
+The default capped build passed (295 jobs); the final review amendment's
+target build passed (97 jobs). Fresh kernel replays passed for LookupFromPre
+and the live, dead and NULL helper histories, including their imports;
+LookupFromPre was replayed again after the prefix amendment. Printed axioms
+are only propext, Classical.choice and Quot.sound. The changed-path escape
+scan and diff check passed. A first replay invocation incorrectly supplied
+multiple modules with --fresh and failed; each was subsequently replayed
+with the supported single-module invocation. Ordinary elaboration errors
+in the bridge were fixed. No KILLED banner or timeout occurred here.
+
+Two read-only reviews found no domain regression or lost observations in
+the callback refactor or entry composition. The missing loop-head prefix
+fact was fixed. The stronger per-cut byte frames remain available in the
+underlying segment lemmas; their eventual function-level frame composition
+is still work to do, not an asserted consequence of this wrapper.
+
+Measured interval: 07:10:46 to 07:34:38 UTC, 1432 seconds. This integrates
+35 history modules and adds the entry-to-bucket composition; it does not
+certify a new anchored function or add new separately certified regions.
+Certified-function throughput is still zero. The changes were hand-finished
+with scripted mechanical renaming, not an automated region-grind result.
+The complete peer-get all-cut relation, owner/BH/return composition, generic
+frame transport and function-level lookup theorem remain open. In particular,
+ScanFrame still discards callback no-reentry evidence; preserving the count
+scanner through the same executed prefixes is the next integration step.

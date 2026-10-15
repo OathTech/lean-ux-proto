@@ -1,4 +1,4 @@
-import CallHistory
+import LookupCallHistory
 import LookupType
 
 namespace Binary.LookupHistory
@@ -8,12 +8,12 @@ local instance : Labels := Image.linkedLabels
 /-- Physical component of the bucket-loop invariant. RBX is the moving
     node/entry cursor and RBP is the loaded index; neither is fixed here.
     This is not the whole-World relation. -/
-def scanWrites (base : MachineData) (coverage : KcovLayout) (a : Address) : Prop :=
-  InRange (base.regs.rsp.toBitVec-8) 8 a ∨ KcovBufferBytes coverage a
+def scanWrites (base : MachineData) (coverage : LookupCoverage.Context) (a : Address) : Prop :=
+  InRange (base.regs.rsp.toBitVec-8) 8 a ∨ LookupCoverage.Context.writes coverage a
 
-structure ScanFrame (base : MachineData) (coverage : KcovLayout) (preempt : BitVec 32)
+structure ScanFrame (base : MachineData) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (current : MachineData) : Prop where
-  ready : PeerGet.CallsReady coverage preempt current
+  ready : LookupCoverage.CallsReady coverage preempt current
   stack : current.regs.rsp = base.regs.rsp
   query : current.regs.r12 = base.regs.r12
   output : current.regs.r13 = base.regs.r13
@@ -21,8 +21,8 @@ structure ScanFrame (base : MachineData) (coverage : KcovLayout) (preempt : BitV
   saved : current.regs.r15 = base.regs.r15
   memory : EqualOutside (scanWrites base coverage) base.dmem current.dmem
 
-theorem ScanFrame.initial (base : MachineData) (coverage : KcovLayout) (preempt : BitVec 32)
-    (ready : PeerGet.CallsReady coverage preempt base) : ScanFrame base coverage preempt base :=
+theorem ScanFrame.initial (base : MachineData) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
+    (ready : LookupCoverage.CallsReady coverage preempt base) : ScanFrame base coverage preempt base :=
   ⟨ready, rfl, rfl, rfl, rfl, rfl, fun _ _ => rfl⟩
 
 theorem ScanFrame.congr {base current next : MachineData} {coverage preempt}
@@ -44,7 +44,7 @@ theorem ScanFrame.bucket {base current : MachineData} {coverage preempt}
     BucketShape current.dmem head es :=
   BucketShape.frame_reads frame.memory es separate head represented
 
-def ScanCuts (base : MachineData) (coverage : KcovLayout) (preempt : BitVec 32)
+def ScanCuts (base : MachineData) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (history : List MachineState) : Prop :=
   ∀ s ∈ history, s.pc ∈ Image.cutPoints → ScanFrame base coverage preempt s.data
 
@@ -58,7 +58,7 @@ theorem ScanCuts.append {base coverage preempt first second}
 
 /-- Actual suffix of a scan execution, retaining its observations and the
     physical frame at every appended cut. -/
-structure ScanTrace (base : MachineData) (coverage : KcovLayout) (preempt : BitVec 32)
+structure ScanTrace (base : MachineData) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (rxSection : Nat) (initialHistory : List MachineState)
     (events : List LookupObservation.Point) (current : Executed) : Prop where
   frame : ScanFrame base coverage preempt current.machine.data
@@ -139,8 +139,9 @@ theorem ScanTrace.of_observed_suffix {base coverage preempt rxSection history ev
 theorem scan_call (fetch : Int64 → Option Decoded) (pc : Int64) (target : Label)
     (here : fetch pc = some ⟨Instrumentation.callInstruction target, 5⟩) (kind : KcovKind)
     (contract : ServiceReturns fetch (label target) (KcovReady kind) (KcovWrites kind) (KcovEffect kind))
-    (base s : MachineData) (coverage : KcovLayout) (preempt : BitVec 32)
+    (base s : MachineData) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (frame : ScanFrame base coverage preempt s)
+    (allowed : coverage.Allowed preempt kind)
     (rxSection : Nat) (front : List MachineState) (events : List LookupObservation.Point)
     (observed : observeHistory (LookupObservation.edge rxSection) (front ++ [⟨s, pc⟩]) = .ok events)
     (silent : LookupObservation.edge rxSection ⟨s, pc⟩
@@ -154,10 +155,10 @@ theorem scan_call (fetch : Int64 → Option Decoded) (pc : Int64) (target : Labe
       ∃ tail, t.history = (front ++ [⟨s, pc⟩]) ++ tail ∧
         ScanCuts base coverage preempt tail)
       ⟨⟨s, pc⟩, front ++ [⟨s, pc⟩]⟩ := by
-  have call := Instrumentation.observed_call fetch pc target here kind contract s coverage preempt
-    frame.ready rxSection front events [] observed silent
+  have call := LookupInstrumentation.observed_call fetch pc target here kind contract s coverage preempt
+    frame.ready allowed rxSection front events [] observed silent
   apply eventually_weaken (historyStep fetch) _ _ _ _ call
-  rintro t ⟨ret, ready, memory, observations, last, tail, recorded, localLast, noCuts⟩
+  rintro t ⟨ret, ready, memory, observations, last, tail, recorded, localLast, noCuts, _noReentry⟩
   obtain ⟨finalPC, sp, bx, bp, r12, r13, r14, r15⟩ :=
     Instrumentation.returned_caller s (pc+5) (label target) t.machine ret
   have preserved : ScanFrame base coverage preempt t.machine.data := {
@@ -194,8 +195,9 @@ theorem scan_call_cursor (fetch : Int64 → Option Decoded) (target : Label)
     (s : Executed) (here : fetch s.machine.pc = some ⟨Instrumentation.callInstruction target, 5⟩)
     (kind : KcovKind)
     (contract : ServiceReturns fetch (label target) (KcovReady kind) (KcovWrites kind) (KcovEffect kind))
-    (base : MachineData) (coverage : KcovLayout) (preempt : BitVec 32)
+    (base : MachineData) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (frame : ScanFrame base coverage preempt s.machine.data)
+    (allowed : coverage.Allowed preempt kind)
     (rxSection : Nat) (events : List LookupObservation.Point)
     (observed : observeHistory (LookupObservation.edge rxSection) s.history = .ok events)
     (last : s.history.getLast? = some s.machine)
@@ -208,7 +210,7 @@ theorem scan_call_cursor (fetch : Int64 → Option Decoded) (target : Label)
       ScanTrace base coverage preempt rxSection s.history events t) s := by
   have restored := history_restore last
   have call := scan_call fetch s.machine.pc target here kind contract base s.machine.data
-    coverage preempt frame rxSection s.history.dropLast events
+    coverage preempt frame allowed rxSection s.history.dropLast events
     (by simpa only [restored] using observed) silent
   have initial : (⟨⟨s.machine.data, s.machine.pc⟩, s.history.dropLast ++ [⟨s.machine.data, s.machine.pc⟩]⟩ : Executed) = s := by
     cases s with

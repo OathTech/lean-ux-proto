@@ -96,17 +96,18 @@ theorem silent_extension (c : Config) (world : World) (s t : MachineState)
 theorem start_simulation (fetch : Int64 → Option Decoded)
     (agree : AnchoredDecoderAgreement fetch) (contract : TracePcContract fetch)
     (c : Config) (world : World) (s : MachineData)
-    (coverage : KcovLayout) (preempt : BitVec 32)
+    (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (related : R c [⟨s, Image.Lookup.entry⟩] [entryPoint s] ⟨s, Image.Lookup.entry⟩ world)
-    (state : KcovState coverage preempt s.dmem)
+    (state : LookupCoverage.Context.At coverage preempt s.dmem)
+    (phase : preempt = coverage.entryPreempt ∨ preempt = 512+coverage.entryPreempt)
     (stackAligned : s.regs.rsp.toNat % 8 = 0)
     (mapped : ∀ n < 6,
       (s.dmem.loadInt (s.regs.rsp.toBitVec - .ofNat 64 ((n+1)*8)) 8).isSome = true)
-    (pushSeparate : ∀ address, KcovStateBytes coverage address →
+    (pushSeparate : ∀ address, LookupCoverage.Context.bytes coverage address →
       ¬InRange (s.regs.rsp.toBitVec-48) 48 address)
-    (returnSeparate : KcovSeparated coverage (InRange (s.regs.rsp.toBitVec-48) 8))
-    (metadataSeparate : KcovSeparated coverage (KcovMetadataBytes coverage))
-    (preemptSeparate : KcovSeparated coverage (InRange preemptCountAddress 4))
+    (returnSeparate : LookupCoverage.Context.Separated coverage (InRange (s.regs.rsp.toBitVec-48) 8))
+    (metadataSeparate : LookupCoverage.Context.Separated coverage (LookupCoverage.Context.metadataBytes coverage))
+    (preemptSeparate : LookupCoverage.Context.Separated coverage (InRange preemptCountAddress 4))
     (apart : ∀ v, project c world = some v → ∀ address, Reads c v address →
       ¬Lookup.entryWrites s coverage address) :
     Eventually (historyStep fetch) (fun t =>
@@ -116,8 +117,8 @@ theorem start_simulation (fetch : Int64 → Option Decoded)
       t.machine.data.regs.r13 = s.regs.rcx ∧
       t.machine.data.regs.r14 = UInt64.ofNat (s.regs.get (.low .rsi .W32)).toNat ∧
       t.machine.data.regs.r15 = s.regs.r15 ∧
-      PeerGet.CallsReady coverage preempt t.machine.data ∧
-      EqualOutside (KcovBufferBytes coverage) (Lookup.saveMemory s 6) t.machine.data.dmem ∧
+      LookupCoverage.CallsReady coverage preempt t.machine.data ∧
+      EqualOutside (LookupCoverage.Context.writes coverage) (Lookup.saveMemory s 6) t.machine.data.dmem ∧
       observeHistory (LookupObservation.edge c.rxSection) t.history = .ok [] ∧
       LookupObservation.observe c.rxSection t.history = .ok [entryPoint s] ∧
       LookupObservation.MatchesPoints
@@ -133,7 +134,7 @@ theorem start_simulation (fetch : Int64 → Option Decoded)
   have initialRaw : observeHistory (LookupObservation.edge c.rxSection)
       [⟨s, Image.Lookup.entry⟩] = .ok [] := rfl
   obtain ⟨matched, aligned⟩ := entry_correspondence c world s related
-  have run := Lookup.start_history fetch agree contract s coverage preempt state stackAligned
+  have run := Lookup.start_history fetch agree contract s coverage preempt state phase stackAligned
     mapped pushSeparate returnSeparate metadataSeparate preemptSeparate c.rxSection
     [⟨s, Image.Lookup.entry⟩] [] initialRaw rfl
   apply eventually_weaken (historyStep fetch) _ _ _ _ run
@@ -174,13 +175,14 @@ theorem bucket_address (c : Config) (s : MachineData)
 theorem header_simulation (fetch : Int64 → Option Decoded)
     (agree : AnchoredDecoderAgreement fetch)
     (c : Config) (world : World) (s : MachineData)
-    (coverage : KcovLayout) (preempt : BitVec 32)
-    (ready : PeerGet.CallsReady coverage preempt s)
+    (coverage : LookupCoverage.Context) (preempt : BitVec 32)
+    (ready : LookupCoverage.CallsReady coverage preempt s)
+    (entryCount : preempt = coverage.entryPreempt)
     (table : s.regs.rbx.toBitVec = c.table)
     (query : (s.regs.get (.low .r12 .W32)).toNat = c.query)
-    (metadataApart : ∀ a, KcovMetadataBytes coverage a → ¬InRange preemptCountAddress 4 a)
-    (storageApart : coverage.mode = 2 ∨ coverage.mode = 3 →
-      ∀ a, KcovStorageBytes coverage a → ¬InRange preemptCountAddress 4 a)
+    (metadataApart : ∀ a, LookupCoverage.Context.metadataBytes coverage a → ¬InRange preemptCountAddress 4 a)
+    (storageApart : LookupBufferNeeded coverage.coverage coverage.entryPreempt coverage.entryView →
+      ∀ a, KcovStorageBytes coverage.coverage a → ¬InRange preemptCountAddress 4 a)
     (apart : ∀ v, project c world = some v → ∀ a, Reads c v a →
       ¬InRange preemptCountAddress 4 a)
     (history : List MachineState) (seen prior : List LookupObservation.Point)
@@ -197,7 +199,7 @@ theorem header_simulation (fetch : Int64 → Option Decoded)
       t.machine.pc = Image.Lookup.entry+0x2f ∧
       (∃ head, t.machine.data.regs =
         {s.regs with rbx := .ofBitVec head, rax := .ofBitVec ((Lookup.bucketWord s).setWidth 64)}) ∧
-      PeerGet.CallsReady coverage (512+preempt) t.machine.data ∧
+      LookupCoverage.CallsReady coverage (512+preempt) t.machine.data ∧
       t.machine.data.dmem.loadInt (c.table + .ofNat 64 (8 * (c.query % 8192))) 8 =
         some (t.machine.data.regs.rbx.toBitVec.toNat : Int) ∧
       EqualOutside (InRange preemptCountAddress 4) s.dmem t.machine.data.dmem ∧
@@ -223,7 +225,7 @@ theorem header_simulation (fetch : Int64 → Option Decoded)
     simpa only [bucket_address c s table query] using headRead
   have run := historySteps_eventually fetch 4 _ _
     (bucket_header_history fetch agree s preempt head
-      (load32_raw _ _ _ ready.state.2.1) field history)
+      (load32_raw _ _ _ ready.state.2) field history)
   apply eventually_weaken (historyStep fetch) _ _ _ _ run
   rintro t ⟨af, machine, recorded⟩
   have last : t.history.getLast? = some t.machine := by
@@ -255,7 +257,7 @@ theorem header_simulation (fetch : Int64 → Option Decoded)
     exact header_registers s preempt head af
   · rw [machine]
     exact header_ready s preempt coverage head af
-      (bh_ready s preempt coverage ready metadataApart storageApart)
+      (bh_ready s preempt coverage ready entryCount metadataApart storageApart)
   · rw [machine, header_registers]
     exact headRead
   · simpa only [← recorded, List.append_nil] using full

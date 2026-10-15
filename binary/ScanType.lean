@@ -19,7 +19,7 @@ theorem ScanFrame.masked {base s : MachineData} {coverage preempt}
 /-- Every successor after AND uses its exact overwritten R14 value. The
     incoming +9a state remains in the earlier phase; it is not re-labelled. -/
 theorem scan_type_arguments (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderAgreement fetch)
-    (base s : MachineData) (kind : UInt32) (coverage : KcovLayout) (preempt : BitVec 32)
+    (base s : MachineData) (kind : UInt32) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (frame : ScanFrame base coverage preempt s)
     (field : s.dmem.loadInt (s.regs.rbx.toBitVec+24) 4 = some kind.toNat)
     (rxSection : Nat) (history : List MachineState) (events : List LookupObservation.Point)
@@ -51,7 +51,7 @@ theorem scan_type_arguments (fetch : Int64 → Option Decoded) (agree : Anchored
 /-- The terminal kind guard emits both source decisions, in their original
     order, at the same actual machine state. -/
 theorem scan_type_guard (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderAgreement fetch)
-    (base s : MachineData) (coverage : KcovLayout) (preempt : BitVec 32)
+    (base s : MachineData) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (frame : ScanFrame base coverage preempt s)
     (rxSection : Nat) (history : List MachineState) (events : List LookupObservation.Point)
     (observed : observeHistory (LookupObservation.edge rxSection) history = .ok events)
@@ -89,7 +89,7 @@ theorem kindBase_value (base : MachineData) (kind : UInt32) :
     rejected kind still has RBX=a here; the later XOR has not run yet. -/
 theorem matched_type_exit (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderAgreement fetch)
     (tracePc : TracePcContract fetch) (traceCmp : TraceConstCmp4Contract fetch)
-    (base s : MachineData) (coverage : KcovLayout) (preempt : BitVec 32)
+    (base s : MachineData) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (frame : ScanFrame base coverage preempt s)
     (a : Address) (e : Leanux.WG.IndexEntry) (rest : List (Address × Leanux.WG.IndexEntry))
     (cursor : s.regs.rbx.toBitVec = a)
@@ -97,6 +97,7 @@ theorem matched_type_exit (fetch : Int64 → Option Decoded) (agree : AnchoredDe
     (separate : ∀ cell ∈ (a,e)::rest, ∀ address, BucketShapeReads cell.1 address →
       ¬scanWrites base coverage address)
     (kinds : List Leanux.WG.IndexKind) (mask : KindMask (base.regs.get (.low .r14 .W32)) kinds)
+    (comparison : coverage.CompareAllowed preempt)
     (rxSection : Nat) (history : List MachineState) (events : List LookupObservation.Point)
     (observed : observeHistory (LookupObservation.edge rxSection) history = .ok events)
     (last : history.getLast? = some ⟨s, Image.Lookup.entry+0x95⟩) :
@@ -117,7 +118,8 @@ theorem matched_type_exit (fetch : Int64 → Option Decoded) (agree : AnchoredDe
   let kind := UInt32.ofBitVec (kindWord e.kind)
   have call := scan_call_cursor fetch "L_ffffffff810f3100"
     ⟨⟨s, Image.Lookup.entry+0x95⟩, history⟩ (agree _ _ (by rfl)) .pc tracePc base coverage preempt
-    frame rxSection events observed last (by
+    frame (frame).ready.pc_allowed
+    rxSection events observed last (by
       simp [LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
   apply eventually_trans (historyStep fetch) _ _ _ call
   rintro t₁ ⟨pc₁, bx₁, _, trace₁⟩
@@ -136,7 +138,8 @@ theorem matched_type_exit (fetch : Int64 → Option Decoded) (agree : AnchoredDe
   have pc₂ : t₂.machine.pc = Image.Lookup.entry+0xa3 := congrArg MachineState.pc machine₂
   have cmpCall := scan_call_cursor fetch "L_ffffffff810f3f00" t₂
     (by rw [pc₂]; exact agree _ _ (by rfl)) .constCmp4 traceCmp (kindBase base kind) coverage preempt
-    trace₂.frame rxSection events trace₂.observed trace₂.last (by
+    trace₂.frame (LookupCoverage.compare_allowed comparison (by decide))
+    rxSection events trace₂.observed trace₂.last (by
       simp [LookupObservation.edge, pc₂, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
   apply eventually_trans (historyStep fetch) _ _ _ cmpCall
   rintro t₃ ⟨pc₃, bx₃, _, trace₃⟩

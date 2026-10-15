@@ -7,7 +7,7 @@ local instance : Labels := Image.linkedLabels
 /-- Both loop headers execute the same source walk decision. The empty
     case also emits the compiler-merged found=false event. -/
 theorem scan_walk (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderAgreement fetch)
-    (first : Bool) (base s : MachineData) (coverage : KcovLayout) (preempt : BitVec 32)
+    (first : Bool) (base s : MachineData) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (frame : ScanFrame base coverage preempt s)
     (rxSection : Nat) (history : List MachineState) (events : List LookupObservation.Point)
     (observed : observeHistory (LookupObservation.edge rxSection) history = .ok events)
@@ -42,7 +42,7 @@ theorem scan_walk (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderAgr
 /-- The index guard appends its actual decision instead of keeping an
     unchanged event list across a semantic branch. -/
 theorem scan_compare (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderAgreement fetch)
-    (base s : MachineData) (coverage : KcovLayout) (preempt : BitVec 32)
+    (base s : MachineData) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (frame : ScanFrame base coverage preempt s)
     (rxSection : Nat) (history : List MachineState) (events : List LookupObservation.Point)
     (observed : observeHistory (LookupObservation.edge rxSection) history = .ok events)
@@ -66,7 +66,7 @@ theorem scan_compare (fetch : Int64 → Option Decoded) (agree : AnchoredDecoder
 /-- The actual tail-pointer load preserves the scan frame and records its
     successor at the recursive loop header. -/
 theorem scan_next (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderAgreement fetch)
-    (base s : MachineData) (next : UInt64) (coverage : KcovLayout) (preempt : BitVec 32)
+    (base s : MachineData) (next : UInt64) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (frame : ScanFrame base coverage preempt s)
     (loaded : s.dmem.loadInt (s.regs.rbx.toBitVec+8) 8 = some next.toNat)
     (rxSection : Nat) (history : List MachineState) (events : List LookupObservation.Point)
@@ -93,7 +93,7 @@ theorem scan_next (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderAgr
     current memory, so the induction does not assume a fresh bucket. -/
 theorem scan_miss (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderAgreement fetch)
     (tracePc : TracePcContract fetch)
-    (base s : MachineData) (coverage : KcovLayout) (preempt : BitVec 32)
+    (base s : MachineData) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (frame : ScanFrame base coverage preempt s)
     (a : Address) (e : Leanux.WG.IndexEntry) (rest : List (Address × Leanux.WG.IndexEntry))
     (cursor : s.regs.rbx.toBitVec = a)
@@ -111,7 +111,8 @@ theorem scan_miss (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderAgr
       ⟨⟨s, Image.Lookup.entry+0x5e⟩, history⟩ := by
   have call := scan_call_cursor fetch "L_ffffffff810f3100"
     ⟨⟨s, Image.Lookup.entry+0x5e⟩, history⟩ (agree _ _ (by rfl)) .pc tracePc base coverage preempt
-    frame rxSection events observed last (by
+    frame (frame).ready.pc_allowed
+    rxSection events observed last (by
       simp [LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
   apply eventually_trans (historyStep fetch) _ _ _ call
   rintro t₁ ⟨pc₁, bx₁, _, trace₁⟩
