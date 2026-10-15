@@ -102,3 +102,9 @@ cd binary
 capped -- lake build BinaryProofs binary-probe
 capped -- lake env leanchecker Representation LookupLoads PeerComparisons CallHistory LookupType LoopSearch ScanFrame ScanNode
 ```
+
+`ScanSearch.scan_search` executes arbitrary bucket misses to exhaustion or
+the first matching index, with exact decision records/tags and physical
+frames at appended cuts. It stops before the matched kind test and is not
+a whole-World simulation. Replay with `capped -- lake env leanchecker
+ScanFrame ScanNode ScanIteration ScanSearch` in `binary/`.

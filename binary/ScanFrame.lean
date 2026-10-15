@@ -66,10 +66,10 @@ structure ScanTrace (base : MachineData) (coverage : KcovLayout) (preempt : BitV
   last : current.history.getLast? = some current.machine
   extension : ∃ tail, current.history = initialHistory ++ tail ∧ ScanCuts base coverage preempt tail
 
-theorem ScanTrace.trans {base coverage preempt rxSection history events current next}
+theorem ScanTrace.trans {base coverage preempt rxSection history events nextEvents current next}
     (first : ScanTrace base coverage preempt rxSection history events current)
-    (second : ScanTrace base coverage preempt rxSection current.history events next) :
-    ScanTrace base coverage preempt rxSection history events next := by
+    (second : ScanTrace base coverage preempt rxSection current.history nextEvents next) :
+    ScanTrace base coverage preempt rxSection history nextEvents next := by
   obtain ⟨a, ha, ca⟩ := first.extension
   obtain ⟨b, hb, cb⟩ := second.extension
   exact ⟨second.frame, second.observed, second.last, a++b,
@@ -100,6 +100,31 @@ theorem ScanTrace.of_suffix {base coverage preempt rxSection history events curr
   rw [restored, observed, silent] at combined
   change observeHistory (LookupObservation.edge rxSection) (history.dropLast ++ current :: tail) =
     .ok (events ++ []) at combined
+  refine ⟨frame, ?_, ?_, tail, recorded, cuts⟩
+  · rw [recorded, ← restored, List.append_assoc]
+    simpa only [List.singleton_append, List.append_nil] using combined
+  · rw [recorded, ← restored, List.append_assoc]
+    simp only [List.singleton_append]
+    simp only [List.getLast?_append, lastNext, Option.some_or]
+
+/-- Append a concrete instruction suffix after its symbolic execution has
+    supplied every successor and its cut facts. -/
+theorem ScanTrace.of_observed_suffix {base coverage preempt rxSection history events current next}
+    (observed : observeHistory (LookupObservation.edge rxSection) history = .ok events)
+    (last : history.getLast? = some current)
+    (tail : List MachineState) (recorded : next.history = history ++ tail)
+    (frame : ScanFrame base coverage preempt next.machine.data)
+    (lastNext : (current :: tail).getLast? = some next.machine)
+    (delta : List LookupObservation.Point)
+    (silent : observeHistory (LookupObservation.edge rxSection) (current :: tail) = .ok delta)
+    (cuts : ScanCuts base coverage preempt tail) :
+    ScanTrace base coverage preempt rxSection history (events ++ delta) next := by
+  have restored := history_restore last
+  have combined := observeHistory_splice (LookupObservation.edge rxSection)
+    history.dropLast current tail
+  rw [restored, observed, silent] at combined
+  change observeHistory (LookupObservation.edge rxSection) (history.dropLast ++ current :: tail) =
+    .ok (events ++ delta) at combined
   refine ⟨frame, ?_, ?_, tail, recorded, cuts⟩
   · rw [recorded, ← restored, List.append_assoc]
     simpa only [List.singleton_append, List.append_nil] using combined
@@ -193,6 +218,7 @@ theorem scan_call_cursor (fetch : Int64 → Option Decoded) (target : Label)
   rintro t ⟨pc, bx, bp, frame, seen, last, tail, recorded, cuts⟩
   exact ⟨pc, bx, bp, frame, seen, last, tail, by simpa only [restored] using recorded, cuts⟩
 
+#print axioms ScanTrace.of_observed_suffix
 #print axioms ScanTrace.of_suffix
 #print axioms ScanTrace.trans
 #print axioms scan_call_cursor

@@ -613,3 +613,38 @@ and the function-level simulation/transport theorem. No function is certified,
 and no R-region rate is inferred from supporting lemmas. The milestone report
 still owes the measured rate and the trust base verbatim. No landing paste
 has arrived; no main merge or push.
+
+## Recursive physical scan, 2026-10-15
+
+`ScanSearch.scan_search` now executes both loop headers, arbitrary miss
+iterations, and termination at the first matching index (+0x95) or exhausted
+bucket (+0x6c). `ScanIteration.scan_miss` executes the callback and actual
+next-pointer load, deriving the tail in both current and fixed incoming
+memory. Recursion assumes neither a fresh representation nor fresh callback
+readiness. Duplicate indices, empty kind masks and dead peers remain in scope;
+the scan does not read peer words or test kinds yet.
+
+The result carries exact ordered decision records, their decision tags,
+and physical framing at every appended anchored cut. Review found that a
+filtered-record equality alone would not exclude extra step=none points;
+the final statement additionally proves every emitted point has a decision
+record and its matching tag. This does not establish whole-World point
+correspondence. The matching case stops before type testing and `idxFound`,
+so this is not yet the complete `LoopSearch.searchPrefix` simulation.
+`ScanTrace.trans` now composes changed event lists while retaining their
+equality to the deterministic observer of the complete actual history.
+
+Validation: full-parallel capped build passed (213 jobs); kernel replay of
+`ScanFrame ScanNode ScanIteration ScanSearch` passed; 231 printed axiom
+lists used only standard axioms; the source audit passed for 58 Lean files.
+Initial elaboration failures were corrected before the final build/replay.
+No runtime, mirror, oracle or trust-surface change. The review found no
+execution or recursion defect in the physical component.
+
+Milestone 1 remains incomplete. The type suffix needs its own R14 phase
+equation after AND, not a restricted accepted mask. Whole-World R, full
+helper correspondence, witnessed `Pre_lookup`, and the lookup adequacy and
+transport theorem remain open. No new function or R-region is certified;
+this support work does not supply the milestone rate. Finding 1 and the
+requirement to quote the trust base verbatim at the milestone are unchanged.
+No main merge or push; no mirror-lane landing paste has arrived.
