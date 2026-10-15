@@ -192,3 +192,11 @@ allocation names. `binary/fd_layouts.py` regenerates its pinned offsets.
 Generation history, fixture-file abstractions and the remaining task fields
 remain open; this is not a whole-Kernel relation. Replay with
 `capped -- lake env leanchecker --fresh FdHeap` in `binary/`.
+
+
+`TaskHeap` adds exact selected task flags, signal masks, credential/capability,
+rlimit and seccomp scalar fields. It frames their physical read support and
+permits shared credentials/signal objects. Task works, SIGSYS disposition
+and filter contents remain separate. Regenerate its offsets with capped
+`binary/task_layouts.py`; replay with `capped -- lake env leanchecker --fresh
+TaskHeap` in `binary/`.

@@ -1132,3 +1132,33 @@ array-size proof failures were corrected; none was counted as a pass.
 Reproduce replay with `capped -- lake env leanchecker --fresh FdHeap` in
 `binary/`. No runtime or mirror change, new assumption, Pre restriction,
 whole-R region certification, main update or push.
+
+
+## Task scalar, credential and limit component, 2026-10-15
+
+`TaskHeap.Fields` now relates the modeled task's blocked/private-pending
+signal masks, in_eventfd, PF_KTHREAD, no-new-privileges, TIF_SIGPENDING,
+subjective credential pointer and effective CAP_SYS_ADMIN bit, signal
+pointer and RLIMIT_NOFILE, and seccomp mode/count/filter pointer. The
+selected task remains independent of KCOV current. Other flag bits and
+sharing of credential/signal objects stay unrestricted. Task work, exit
+state, SIGSYS disposition, filter contents and naming/lifetime coherence
+remain separate obligations, not omitted parts of a claimed whole-task R.
+`task_layouts.py` extracts checked widths and offsets from the pinned
+fs/file{,_table}.c DWARF CUs, including in_eventfd's bitfield location.
+
+The physical frame proof initially failed recursion/heartbeat limits. A
+separate read helper and base-tag/Nat offset metadata avoided elaborating
+large concrete-address membership expressions; the proof then built in
+under a second under the original heartbeat limit. Independent review of
+the final code confirmed equivalent read support and the physical field
+interpretations. Earlier timeouts were failures, not successful runs.
+
+Validation: capped full-parallel build passed (258 jobs), all 386 printed
+axiom lists were standard-only, both new Lean sources passed the forbidden
+construct scan (the prior 101-file audits remain applicable), and fresh
+kernel replay of TaskHeap with imports passed. Regenerate offsets with
+`capped -- /usr/bin/python3 binary/task_layouts.py`; replay in `binary/` with
+`capped -- lake env leanchecker --fresh TaskHeap`. No mirror/runtime change,
+trust-base addition, domain restriction, whole-R certification, main update
+or push. The function-level milestone and its final report remain open.
