@@ -1280,3 +1280,77 @@ for that count. Milestone 1, its witnessed Pre_lookup, whole-World relation,
 complete helper/loop/function simulation and generic transport remain open.
 No property is claimed transported. The final milestone report still owes
 TrustBase.lean verbatim and the campaign's measured rate.
+
+### Task-work and raw-prefix correspondence checkpoint
+
+`TaskWorkHeap` now represents the attached finite callback chain through
+every physical next/function word. Its classification retains non-fput
+callbacks and cannot classify an actual `____fput` node as another callback.
+Fixed relevant-allocation names determine the file IDs. NULL termination and
+the distinct `work_exited` sentinel are separate cases; frames preserve the
+queue head and node fields, not callback behavior. The generator follows
+anonymous DWARF records/unions, verifies field widths and symbol kinds, and
+extracts the pinned task-work offsets and two symbols. The initial generator
+failure on the anonymous file union was corrected, not ignored.
+
+This is only the attached queue. During `task_work_run`, the detached suffix
+must come from the actual suspended activation and precede newly queued work;
+it is not an arbitrary supplied list. An independent source audit found a
+proof route to `fputFinal_sameTask` for all accepted runs: epRemove increments
+a positive count before its nested fput, which therefore cannot enqueue.
+That theorem is not yet checked. Nor would it establish effects for unknown
+physical callbacks. No reachable accepted ordering discrepancy was found.
+
+The task-exit audit distinguishes PF_EXITING from the later task-work closed
+marker. The mirror never assigns Task.exited=true. A retained child after
+Env.childExit is a historical view, including its old seccomp filter ID,
+not equality to every current physical field. Actual parent wait4 entry can
+precede child exit, so source program position alone cannot determine the
+physical lifecycle phase. These need execution-derived equations, not a
+new no-exit precondition.
+
+`PeerCountPhase` captures the old operand from the actual successful
+CMPXCHG edge, requires the current physical word to be its modular successor,
+and clears the pending update at helper RET. The checked one-instruction
+composition establishes both the history extension and the old source-count
+relation. No positivity or overflow restriction is built into the relation;
+acceptance supplies non-overflow at source commit. Service no-reentry proves
+phase preservation, while preserving count bytes still needs the existing
+write-footprint separation. The full accepted helper composition must prove
+the unique outstanding increment and exclude warning paths by acceptance.
+
+[AGENT 2026-10-15] Use the actual raw instruction prefix as an argument of
+the final R interface. The early CMPXCHG does not emit a semantic event, so
+the semantic-only relation cannot establish its phase provenance.
+`ExecutedCorrespondence.AtPoint` selects only an index in the fixed executed
+history, at the edge that emitted the current event. Its before/after event
+counts distinguish silent repeated states and allow compiler-merged events
+to share one raw prefix. Cuts and final correspondence receive their exact
+raw prefixes too. The relation will use `PeerCountPhase.scan none`, never a
+freely chosen initial pending token. This changes no environment assumption;
+the new interface remains a proof obligation, not a claimed simulation.
+
+Independent reviews found no local defects in these three components and
+confirmed their integration obligations. A separate SIGSYS audit found that
+default/immutable updates preserve unrelated action flags, restorer and mask.
+The pinned action starts at sighand+984, with handler/flags/restorer/mask at
+offsets 0/8/16/24. The fixture's libc adds SA_RESTORER to SA_SIGINFO; its
+handler/restorer addresses need guest-image provenance, not kernel constants.
+No reachable fixture defect was found. Task assembly and that disposition
+component remain open.
+
+Validation: capped full-parallel default build passed (271 jobs), with 460
+printed axiom lists, all standard-only. Fresh kernel replays passed for
+TaskWorkHeap, PeerCountPhase and ExecutedCorrespondence with imports; the
+final correspondence append/service lemmas then passed a current-module
+replay against those unchanged imports. Initial local elaboration failures
+were corrected. TrustBase.lean, mirror, runtime and oracle are unchanged.
+The previous concrete/three-way tests remain applicable. No KILLED or timeout
+was counted as success. No whole-World region/function was certified and no
+mirror property was transported; milestone 1 and its witnessed Pre_lookup
+remain incomplete.
+
+This checkpoint interval is 3bffac7 at 04:55:01 through 05:11:28 UTC on
+2026-10-15: 987 seconds. It adds zero whole-World R regions and zero
+functions, a measured certification rate of zero per hour. Supporting field,
+phase and composition lemmas are not counted as certified regions.

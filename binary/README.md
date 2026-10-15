@@ -217,3 +217,13 @@ BH-enable service execution. `OwnerPending` relates the old source owner
 word through the actual helper-return snapshot until idxPeerAlive. These
 components do not establish the whole-World simulation. The standalone
 package now builds BinaryProofs by default, including for lake check export.
+
+`TaskWorkHeap` represents the attached callback chain, preserving callback
+order and distinguishing the closed sentinel. It does not supply a detached
+activation or callback effects. `PeerCountPhase` projects the outstanding
+refcount increment from actual instruction edges, retaining the old source
+count until helper return. `ExecutedCorrespondence.MatchesRun` threads the
+exact instruction prefix into R at semantic points and stuttering cuts;
+the older semantic-only interface cannot support that phase projection.
+These components still require whole-World assembly. Replay each with
+`capped -- lake env leanchecker --fresh MODULE` in `binary/`.
