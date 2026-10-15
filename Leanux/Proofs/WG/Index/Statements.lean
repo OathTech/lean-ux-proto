@@ -1,8 +1,8 @@
-import Leanux.Proofs.WG.Index.Insert
+import Leanux.Proofs.WG.Index.DrawRecords
 import Leanux.Proofs.WG.Index.PeerWords
 
 /-! H2's original-operation table contracts. Reachable owner/peer-word
-coherence and total recorded collision-prefix runs remain separate obligations. -/
+coherence remains a separate obligation. -/
 namespace Leanux.Proofs.WG.Index
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Leanux.Proofs.WG.Config
 
@@ -115,5 +115,31 @@ theorem original_index_lookup_live (kinds : List IndexKind) (index : Nat)
       (fun result w => result = some (owner, pid) ∧
         w.k.wg = some (writeOwnerWord (acquirePeer d pid p) owner (some pid))) :=
   indexLookup_live kinds index owner d table permitted pid p word resident live bounded
+
+/-- A finite contiguous recorded collision prefix followed by a fresh draw makes the
+original insertion return that fresh index. Its record-derived budget suffices,
+the unused suffix stays untouched, and both table uniqueness properties hold.
+Collision and freshness are measured after removing this owner's old row. -/
+theorem original_index_insert_recorded (owner : IndexOwner) (d : Device)
+    (indices : UniqueIndices d.indexTable) (owners : UniqueOwners d.indexTable)
+    (collisions : List Draw) (fresh : Draw) (rest : List HiddenRecord)
+    (allCollide : ∀ draw ∈ collisions,
+      (removeOwner owner d.indexTable).any (·.index == draw.value) = true)
+    (isFresh : (removeOwner owner d.indexTable).any (·.index == fresh.value) = false) :
+    Returns (indexInsert owner)
+      (fun w => w.k.wg = some d ∧ w.hidden = some (drawStream collisions fresh rest))
+      (fun result w =>
+        let table := { index := fresh.value, owner } :: removeOwner owner d.indexTable
+        result = fresh.value ∧ w.k.wg = some { d with indexTable := table } ∧
+          w.hidden = some rest ∧ UniqueIndices table ∧ UniqueOwners table) := by
+  intro w pre
+  obtain ⟨result, final, run, value, device, records⟩ :=
+    indexInsert_records owner d collisions fresh rest allCollide isFresh w pre
+  refine ⟨result, final, run, value, device, records,
+    insert_indices owner fresh.value _ indices ?_, insert_owners owner fresh.value _ owners⟩
+  intro e member
+  have absent := List.any_eq_false.mp isFresh e member
+  have different : e.index ≠ fresh.value := by simpa using absent
+  exact Ne.symm different
 
 end Leanux.Proofs.WG.Index

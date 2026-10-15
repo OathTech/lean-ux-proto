@@ -120,9 +120,10 @@ composing reachable-state coherence. The landed representation keeps owner
 identity in each table row and its optional peer word in the owner object.
 The two are not interchangeable on arbitrary states.
 
-Eight terminal statements cover removal, the keypair-removal specialization,
+Nine terminal statements cover removal, the keypair-removal specialization,
 handshake replacement, normally completed insertion, lookup owner/table
-provenance, and total matched-entry NULL/zero-reference/live lookup effects. Removal and replacement return under device residency. Replacement
+provenance, total matched-entry NULL/zero-reference/live lookup effects, and
+recorded collision-prefix completion. Removal and replacement return under device residency. Replacement
 preserves numeric indices and every owner object's peer word; preserving owner
 uniqueness additionally requires the destination keypair not already hashed.
 Insertion first removes this owner's old row, then inserts a fresh numeric
@@ -147,16 +148,23 @@ excluded by explicit premises matching the original stops. These local effects
 remain separate from reachable owner/peer coherence.
 `Collision` proves bucket walking tests exact numeric membership in the whole
 table. `Insert` factors the original draw loop and proves freshness on normal
-completion by induction over its budgeted iterations. Total recorded-prefix
-completion, exact record consumption, retry-event correspondence and the
-`s2_index_collision` instance remain open. The table invariant is about hashed
+completion by induction over its budgeted iterations. `DrawRecords` proves
+that any finite contiguous sequence of colliding four-byte draws followed by
+a fresh draw completes the original insertion: the original record-derived
+budget suffices, each collision yields to the next original iteration, and
+the unused hidden-record suffix is preserved exactly. The collision premises
+refer to the table after unhashing the inserting owner; repeated collisions
+and arbitrary trailing records are allowed. Independent review found no
+correctness issue and prompted the explicit “contiguous” qualification.
+Interspersed ambient records, streams without a fresh draw, explicit branch-log
+counting and the `s2_index_collision` runner instance remain open. The table invariant is about hashed
 entries; this checkpoint does not yet establish all-driver reachable-session
 uniqueness or initialize/preserve owner-store coherence through every caller.
 
 Independent read-only review found no semantic defect. Its wording finding was
 fixed: the terminal lookup docstring now describes its exported provenance
 postcondition, leaving stronger first-selection semantics to the internal
-scan contract. The eight statements pass scoped build, standard-axiom inspection
+scan contract. The nine statements pass scoped build, standard-axiom inspection
 and fresh stock kernel replay (`capped -- scripts/in-bundle lake env leanchecker
 --fresh Leanux.Proofs.WG.Index.Statements`). The full proof gate still fails in
 inherited `CounterWindow.Refinement` and `ReplayWindow.Counterexamples`;
