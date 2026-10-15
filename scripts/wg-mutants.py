@@ -157,7 +157,7 @@ SENTINELS = [
    'Leanux/Kernel/TimerWheel.lean',
    '  | some we => if we.slot == slot then .kept we else .enqueued slot bexp\n',
    '  | some _ => .enqueued slot bexp\n',
-   'd3_persistent_k', 'wireguard'),
+   'd2_padding_mtu', 'wireguard'),   # a trace with same-slot re-arms (five on s5); d3_persistent_* have none
   ('B3-M6-between-zone-fires',
    'hidden-input mismatch: a timer due by its expiry but not by its bucket (the between zone) never fires',
    'rule: expires instead of the bucket expiry as the due test',
