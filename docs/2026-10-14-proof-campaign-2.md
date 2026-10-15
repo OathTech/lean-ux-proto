@@ -30,11 +30,11 @@ No independent existential projected runs are spliced together.
 | H3 Roaming | 5 endpoint/authentication leaf contracts | Public projection complete; authentication provenance and complete caller coverage remain open. |
 | H4 Configuration | 60 contracts and the reachable internal dump-accounting finding | Public projection and frame separation complete. Queued/live-keypair removal, private-key collision, mixed attributes, global ownership and general dump composition remain open. |
 | H5 Progress | 25 contracts and the accepted batch-backlog counterexample | Public projection and frame separation complete; productive-record decrease, full loop coverage and probe/detach composition remain open. The backlog witness is historical over `de62c9d`: main's batch guard now addresses request 1. |
-| H6 Timers | 29 local timer/worker contracts | Public projection and generic frame separation complete; environment worker selection/dequeue, complete retry episodes and whole-run arming/session counts remain open. |
+| H6 Timers | 31 timer/worker contracts, including original environment send dispatch | Public projection and frame separation complete; selection/dequeue/section composition proved under the count premise. Complete retry episodes and whole-run arming/session counts remain open. |
 
 Projection/frame factoring completed at `69f988a` for all six results, preserving
 all 153 existing headline names before new mathematics. The following H2 lifecycle
-increments bring the total to 159. No public statement directly names `World` or
+and H6 dispatch increments bring the total to 161. No public statement directly names `World` or
 `Kernel`.
 The full proof gate remains failed in inherited campaign-1 counter-window and
 index carries; those files have not been edited. Scoped validation does not
@@ -55,7 +55,7 @@ connections to the current executable mirror, not replacement interpreters.
 | H3 | `Roaming/Model`, `View`, `Statements`, `EndpointClaims`, `EndpointSource`, `Authentication`. | `Roaming/Frames`; `Basic` reexports the endpoint source connection. |
 | H4 | `Config/Model`, `AllowedRemovalModel`, `QuietModel`, `ClaimView`, `Statements`, `SourceClaims`, `ObservationBridge`, and existing substantive effect/source modules. | `ConcreteFrames` isolates six whole-kernel endpoint contracts; `OperationFrames` isolates seven generic helpers; `ReadbackFrames` retains socket/fixture preservation; `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `QuietFrames`, `KeyFieldFrames` isolate within-WG preservation. |
 | H5 | `Progress/Model`, `View`, `Statements`, `SourceClaims`, `ObservationBridge`; `ControlLaws` is generic state/error control and `ControlSource` connects it exactly to the original worker; the scheduler/source modules retain actual execution factors. | `StackFrames` isolates caller-guard preservation. Probe/filter/no-work contracts also establish outputs and remain substantive source claims. |
-| H6 | `TimerDiscipline/Model`, `View`, `Statements`, `ObservationBridge`, `ObservationClaims`, `SourceClaims`, and `*Source` operational proofs. | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`. |
+| H6 | `TimerDiscipline/Model`, `View`, `Statements`, `ObservationBridge`, `ObservationClaims`, `SourceClaims`, `SendDispatchModel`, `SendDispatchClaims`, and `*Source` operational proofs. | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`. |
 
 A compound exact effect is not a disposable frame merely because its name
 contains “frame”: mark/generation updates, cleared-peer accumulation, reference
@@ -793,9 +793,9 @@ and import checks pass. The separate executable refill reproduction succeeds.
 H2 when its prerequisite landing is relayed. The interrupted dirty worktrees
 were preserved under snapshot refs without moving branches or working files.
 
-`TimerDiscipline/Arming` proves exact recorded arming, deletion, the
+`TimerDiscipline/ArmingSource` proves exact recorded arming, deletion, the
 running/live guard, and peer effects of traversal, session derivation, data
-receipt and handshake completion. `Jitter` proves that every successful
+receipt and handshake completion. `JitterFrames` proves that every successful
 jitter draw is below `HZ / 3 = 83`, including the rejection loop, and frames
 the entire kernel. Twenty-two terminal statements include the two authenticated
 packet hooks that delete timers and the retransmit callback counter rule. The arm equation uses UInt64 addition and
@@ -803,7 +803,7 @@ the signed zero-or-one-tick admissibility gap; it is not a firing-time claim.
 All contracts concern original functions on normal completion. They do not
 assert that malformed record streams succeed.
 
-`Retry` factors retry-mode queueing through the original common suffix and
+`RetrySource` factors retry-mode queueing through the original common suffix and
 proves the original retransmit callback's counter transition: counts through
 18 increment, including 18 to 19; counts above 18 stay unchanged on give-up.
 Normal completion preserves peer allocation identity and the retransmit-timer
@@ -826,7 +826,7 @@ silently replaced by the local theorem.
 Architecture: standalone weakest-precondition contracts, with a local map
 composition rule and exact peer-update factorization for handshake completion.
 These avoid the inherited shared import failure; existing shared lemmas remain
-untouched. `RecordedSite`, `RecordedJitter` and `ArmingPrefixes` connect the
+untouched. `RecordedSiteSource`, `RecordedJitterSource` and `ArmingPrefixesSource` connect the
 original caller-read operations and exact wrapped expiry equations to session
 derivation, handshake initiation, data sending and traversal. The jittered
 sites retain the original read order and prove the jitter bound; traversal
@@ -834,18 +834,18 @@ permits an already pending timer. These contracts assume arm-record mode is
 enabled, which also admits placeholder reads when that separate mode is enabled;
 they do not assert consumption of supplied records. Independent review found no
 mathematical defect; the stronger supplied-record wording was corrected.
-`RemainingSites` adds the other three concrete arming sites. Data receipt retains
+`RemainingSitesSource` adds the other three concrete arming sites. Data receipt retains
 both original decisions. Retransmit give-up includes the attempt-limit decision,
 keepalive deletion and staged purge before the absent-zero-key test and arm.
 Expired keepalive anchors its residency, running/live and need-another premises
 to the actual state after the original `sendKeepalive`; deriving these premises
 from callback entry remains open. Its theorem does not frame that send.
 Independent read-only review found no issue in these three additions.
-`Fire` factors the complete original timer dispatcher into its actual selection
-and detached section suffix, preserving all failure arms. `FireSelection`
+`FireSource` factors the complete original timer dispatcher into its actual selection
+and detached section suffix, preserving all failure arms. `FireSelectionSource`
 proves that every normally completed dispatch selected a resident peer's pending
 timer of the worker's kind, due under the mirror's wrapped `timeBefore` test.
-`FireRetry` carries the callback rule through detachment and actual section
+`FireRetrySource` carries the callback rule through detachment and actual section
 reads: retransmission stays detached during this call. The selected-peer
 premise is an actual original-prefix execution. Selection preserves kernel
 state but can consume ambient records. One local kernel-state variant of
@@ -853,7 +853,7 @@ shared `Keypairs.Frames.peekUnit_spec` avoids editing the shared layer; no layer
 is copied. Independent review found no defect in the source factor, frames,
 provenance or two terminal scopes. These are individual-dispatch contracts,
 not firing-order, whole-run coverage or universal retry-episode claims.
-`InitiationArm` connects the retransmit arm hook to original
+`InitiationArmSource` connects the retransmit arm hook to original
 `sendHandshakeInitiation` by an exact source factor, retaining the rate-limit
 and creation exits, every intervening operation and all branch logs. Two
 terminals expose the reached/skipped continuation and compose the original
@@ -864,7 +864,7 @@ found no mathematical or source-linkage defect; its wording correction from
 “recorded read” to “original caller-read result” was applied, since armRecords
 alone does not exclude placeholder execution.
 
-`JitterRecords` and `JitterExhaustion` connect exact supplied one-byte draws
+`JitterRecordsSource` and `JitterExhaustionSource` connect exact supplied one-byte draws
 at both timer sites to the original sampler. A contiguous rejected prefix
 followed by an accepted byte returns its original scaled value and changes only
 the remaining record list; an arbitrary suffix survives. All-rejected finite
@@ -875,8 +875,8 @@ is made. Independent read-only review found no arithmetic, linkage or World-fram
 defect. This closes the restricted exhaustion clause previously removed from
 the normal-completion bound's docstring.
 
-`InitiationFrames`, `SendCutFrames`, `SendPeerView`, `SendSocketView`,
-`SendBufferFrame`, `InitiationPreservation` and `SendWorkerFrame` add three
+`InitiationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`,
+`SendBufferFrame`, `InitiationPreservationFrames` and `SendWorkerFrame` add three
 normal-completion terminals. The original initiation-send prefix preserves
 identity, attempt count, reference count and retransmit expiry. The final arm
 hook may change the expiry but preserves the first three fields. The original
@@ -895,11 +895,39 @@ cache/tunnel/send contracts and reduction of the known optional cache argument
 closed the same proposition. One generated peekHiddenSite declaration clash
 was resolved by importing the existing timer-selection module. No limit was raised.
 
-Remaining work at pause: environment worker selection/dequeue, completed
-retry-episode counting and source-complete caller coverage for traversal and
-session derivation. The split-world resume rule above supersedes further
-old-World frame development. No H6 mirror mismatch has been
-established; ranked mirror suggestions: none.
+The resumed increment connects the worker to original `Env.runOneSendWorker`.
+`SendDispatchSource` factors the actual head-or-named selection, one-occurrence
+queue erase, pending test/clear, section-start read, original worker body and
+section-stop read. Its decorated execution erases exactly to the original,
+including every error. `SendDispatchModel` records the pure selection and
+before/after-section observations; `SendDispatchClaims` exports projected
+contracts, and `SendDispatchFrames` separately proves that peeking preserves
+the device and unit associations. Named selection uses the first matching
+association; an absent peek is not asserted to mean a recordless stream.
+Successful execution derives residency and `handshakePending = true` for the
+selected queued peer, with the exact dequeued device before the section and
+after its start read. Assuming every resident queued peer has reference count
+greater than one, the worker and final state retain its allocation identity and
+attempt count, with one reference released. A second headline states this
+endpoint directly for original `runOneSendWorker`.
+
+These are 31 H6 headlines and 161 across the campaign. The scoped H6 build
+passed (130 jobs), all 31 axiom inspections and fresh stock kernel replay passed,
+and combined import/axiom inspection of all 161 headlines passed with only the
+three standard axioms. Independent read-only review found no correctness or
+source-linkage defect. Wording corrections distinguish a count premise from
+reference ownership, existential execution from a uniqueness claim, and normal
+return from guaranteed completion. Routine source-factor/bind proof errors were
+corrected without weakening statements; no cap failure or infrastructure rerun.
+The full gate's inherited failure remains as recorded above, last run at `69f988a`.
+
+Completed retry-episode counting and source-complete caller coverage for
+traversal/session derivation remain open. The dispatch claims do not establish
+final queue/pending preservation, successful transmission, reference ownership,
+or that every timer callback is followed by a rearming send. New claims stay
+over the projection and new frames stay separate, pending deletion or retyping
+when the split lands. No H6 mirror mismatch has been established; ranked mirror
+suggestions: none.
 
 Effort: capped elaboration, repaired syntax/composition errors and one local
 heartbeat exhaustion; no memory-cap failure. The give-up proof was split into
@@ -909,7 +937,7 @@ assumed. The dispatcher factor needed explicit failure-bind equations and a
 shared case split on the due list after ordinary elaboration failures; an overly
 broad simplification reached recursion depth and was replaced by bounded
 rewrites. No resource limit was raised. Scoped build and axiom inspection
-pass for all twenty-nine statements using only the three standard axioms. Stock
+passed for the earlier twenty-nine statements using only the three standard axioms. Stock
 kernel replay also passes: `capped -- scripts/in-bundle lake env leanchecker
 --fresh Leanux.Proofs.WG.TimerDiscipline.Statements`. The full
 proof gate remains failed at inherited `CounterWindow/Refinement.lean` and

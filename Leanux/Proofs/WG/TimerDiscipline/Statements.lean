@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.TimerDiscipline.ObservationClaims
+import Leanux.Proofs.WG.TimerDiscipline.SendDispatchClaims
 
 /-! The public H6 interface names only WireGuard and explicit execution
 observations. Concrete source connections and residual frames are separate.
@@ -352,5 +353,30 @@ theorem original_send_worker_frame (pid : PeerId) (identity attempts refs : Nat)
       (fun w => workerObservation w pid = some (identity, attempts, refs))
       (fun _ w => workerObservation w pid = some (identity, attempts, refs - 1)) :=
   source_send_worker_frame pid identity attempts refs retained
+
+/-- A normally completed original environment send dispatch selects the queue
+head or the first matching named association, erases one queue occurrence, and
+requires then clears the selected peer's pending flag before its section starts.
+The observations retain the actual ordered section reads and worker execution.
+The retained peer keeps its identity and attempt count and loses one reference.
+No final queue or pending-flag frame, or successful transmission, is asserted. -/
+theorem original_send_dispatch_path (d : Device) (units : List (Nat × Nat × Nat))
+    (retained : RetainedSendQueue d) :
+    Campaign2.Ensures (observed Env.runOneSendWorker sendWorkerExecution)
+      (fun s => s.wg.device = some d ∧ s.ambient.unitPeers = units)
+      (fun result final => ∃ execution, result.1 = .ok (execution, final) ∧
+        CompletedSendWorker d units execution final) :=
+  source_send_dispatch_path d units retained
+
+/-- A successful original environment dispatch releases one reference from an
+originally queued, pending peer, preserving that allocation's identity and retry
+attempts. The entry reference assumption ensures the selected peer remains resident.
+This normal-return preservation contract does not promise successful completion. -/
+theorem original_send_dispatch (d : Device) (retained : RetainedSendQueue d) :
+    Campaign2.Ensures Env.runOneSendWorker (fun s => s.wg.device = some d)
+      (fun _ final => ∃ pid p, pid ∈ d.sendWorkQueue ∧ d.peers[pid]? = some p ∧
+        p.handshakePending = true ∧ workerObservation final pid =
+          some (p.internalId, p.timerHandshakeAttempts, p.refcount - 1)) :=
+  source_send_dispatch d retained
 
 end Leanux.Proofs.WG.TimerDiscipline
