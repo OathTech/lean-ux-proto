@@ -2,6 +2,7 @@ import Leanux.Proofs.WG.Campaign2.Bridge
 import Leanux.Proofs.WG.Roaming.View
 import Leanux.Proofs.WG.Roaming.Authentication
 import Leanux.Proofs.WG.Roaming.PublicationClaims
+import Leanux.Proofs.WG.Roaming.PollEndpointClaims
 
 namespace Leanux.Proofs.WG.Roaming
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
@@ -64,5 +65,34 @@ theorem original_decrypt_publication_authentication (softirq irqExit : M Unit) :
     Campaign2.Ensures (observedDecryptStep softirq irqExit) (fun _ => True)
       (fun result _ => PublicationObservation result) :=
   observedDecryptStep_authenticated softirq irqExit
+
+/-- A normal original poll has its actual budget-guarded first-prefix
+observation. If that first iteration reaches the endpoint setter, its packet
+was resident at poll entry, its peer field equals the poll peer, it is CRYPTED,
+and the original
+counter check returned true. Its supported outer source determines the
+immediate destination. Later GRO, release and stack callbacks remain in the
+original execution; no final endpoint preservation is claimed. Discarding the
+observation is exactly rxPoll, including errors, by observedRxPoll_erase. -/
+theorem original_poll_first_endpoint (pid : PeerId) (budget : Nat)
+    (toStack : List (List UInt8) → M Unit) (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (observedRxPoll pid budget toStack) (fun s => s = entry)
+      (fun result _ => PollEndpointObservation pid budget entry result) :=
+  observedRxPoll_facts pid budget toStack entry
+
+/-- On normal return of the original decryptStep whose irqExit callback is this rxPoll, the
+publication and first-poll endpoint cuts belong to the same execution. When
+the actual first endpoint packet id equals the just-published id, it carries
+the AEAD plaintext under the historical key read during decryption, with the
+source, peer, keypair and decoded counter preserved. Softirq and stack
+callbacks remain arbitrary. This is a conditional packet-identity join, not
+a queue-store invariant or Env.napiIrqExit coverage theorem; it says nothing
+about inner delivery or the endpoint after later callbacks. The exact original
+operation, including errors, is recovered by observedDecryptPoll_erase. -/
+theorem original_publication_poll_endpoint (softirq : M Unit) (pid : PeerId)
+    (budget : Nat) (toStack : List (List UInt8) → M Unit) :
+    Campaign2.Ensures (observedDecryptPoll softirq pid budget toStack) (fun _ => True)
+      (fun result _ => PublicationPollObservation pid budget result) :=
+  observedDecryptPoll_authenticated softirq pid budget toStack
 
 end Leanux.Proofs.WG.Roaming
