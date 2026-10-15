@@ -209,24 +209,25 @@ def check_imports():
 
 def check_binary():
     """Standalone charter surface; no dependency on lagging mirror proofs."""
-    print('[binary] default build, headline/witness axioms, proof-source escapes', flush=True)
+    sys.path.insert(0, str(ROOT / 'binary'))
+    from pin import verify_pin
+    from surface import HEADLINES, IMPORTS, check_surface
+    print('[binary] private Kraken pin/cleanliness, build, axioms, trust-surface diff, source escapes', flush=True)
+    try:
+        print(f'Kraken pin and clean tree: {verify_pin(ROOT)}', flush=True)
+    except (ValueError, OSError, subprocess.CalledProcessError) as exc:
+        fail(str(exc))
+        return 1
     result = subprocess.run(capped(['lake', '-d', 'binary', 'build']), cwd=ROOT)
     if result.returncode:
         fail(f'binary build exited {result.returncode}')
     if not failures:
-        check_axioms([
-            'Binary.LookupRelation.lookup_simulation',
-            'Binary.LookupRelation.lookup_transport',
-            'Binary.LookupRelation.LookupPost.frame',
-            'Binary.LookupRelation.LookupPost.frame_cuts',
-            'Binary.LookupRelation.lookup_framed_transport',
-            'Binary.LookupRelation.lookup_snapshot_transport',
-            'Binary.LookupSourceFrame.lookup_receivingSnapshot',
-            'Binary.LookupWitness.witness_pre',
-            'Binary.LookupHitWitness.dead_pre',
-            'Binary.LookupHitWitness.live_pre',
-        ], cwd=ROOT / 'binary', imports=['LookupSnapshotTransport', 'LookupWitness', 'LookupHitWitness'],
-            artifact_name='binary-proof-gate')
+        check_axioms(HEADLINES, cwd=ROOT / 'binary', imports=IMPORTS,
+                     artifact_name='binary-proof-gate')
+        try:
+            check_surface()
+        except (ValueError, OSError, subprocess.CalledProcessError) as exc:
+            fail(str(exc))
     # Attic definitions are deliberately outside the proof path. The default
     # BinaryProofs build and kernel replay check the actual import closure.
     files = sorted((ROOT / 'binary').glob('*.lean'))

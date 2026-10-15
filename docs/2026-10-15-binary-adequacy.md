@@ -3007,3 +3007,26 @@ claim a generic composition that is not used.
 Validation: default build (357 jobs) and binary gate PASS after removal. No
 Lean source references `compose_regions`; headline proofs and their axiom
 sets are unchanged. No KILLED banner or timeout occurred.
+
+
+### Milestone-1 review fix F8: pin and surface drift gate (2026-10-15)
+
+The binary gate now requires the private Kraken HEAD to match both the lock
+and `TrustBase.krakenCommit`, verifies the resolved Lake path, and rejects
+tracked changes or untracked source files before building. Ignored build
+outputs are permitted. The concrete probe uses the same read-only pin check.
+The gate prints the headline types, R/postcondition, finite-history and
+return-boundary definitions, and verbatim `TrustBase.lean`, then diffs the
+explicit `binary/TrustSurface.expected.txt` specification. An intentional
+surface change requires a visible baseline diff; the gate does not rewrite it.
+[AGENT] Include the finite-history definitions because they determine the
+meaning of the new environment premise; names alone would hide that change.
+
+Validation: the updated binary gate PASS. Six small tests PASS: clean tree
+with ignored build output, rejected tracked edit, rejected untracked source,
+rejected changed HEAD, rejected trust/lock disagreement, and visible changed
+premise in the surface diff. Fixture repositories are temporary and deleted.
+The default build and all headline/witness axioms remain clean. No KILLED
+banner or timeout occurred. This local gate is distinct from external
+`lake check --from-export`; the README's complete external recipe is the
+remaining documentation item after F11.

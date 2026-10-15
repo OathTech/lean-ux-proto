@@ -1,0 +1,82 @@
+"""Print and diff the binary trust specification. Baseline updates are explicit."""
+import argparse
+import difflib
+from pathlib import Path
+import subprocess
+import tempfile
+
+ROOT = Path(__file__).resolve().parents[1]
+HEADLINES = [
+    'Binary.LookupRelation.lookup_simulation',
+    'Binary.LookupRelation.lookup_transport',
+    'Binary.LookupRelation.LookupPost.frame',
+    'Binary.LookupRelation.LookupPost.frame_cuts',
+    'Binary.LookupRelation.lookup_framed_transport',
+    'Binary.LookupRelation.lookup_snapshot_transport',
+    'Binary.LookupSourceFrame.lookup_receivingSnapshot',
+    'Binary.LookupWitness.witness_pre',
+    'Binary.LookupHitWitness.dead_pre',
+    'Binary.LookupHitWitness.live_pre',
+]
+IMPORTS = ['LookupSnapshotTransport', 'LookupWitness', 'LookupHitWitness']
+# These definitions determine the meaning of the headline and its environment
+# premises outside TrustBase. The expected text is a specification, not a log.
+DEFINITIONS = [
+    'Binary.LookupRelation.R', 'Binary.LookupRelation.LookupPost',
+    'Binary.EffectSuccessor', 'Binary.InstructionSuccessor', 'Binary.ActualHistory',
+    'Binary.NoEarlyReturn', 'Binary.EndsAtReturn',
+]
+EXPECTED = ROOT / 'binary/TrustSurface.expected.txt'
+
+
+def render_surface(root=ROOT):
+    root = Path(root)
+    temp = root / '.tmp'
+    temp.mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='binary-surface-', dir=temp) as directory:
+        source = Path(directory) / 'Surface.lean'
+        source.write_text(''.join(f'import {name}\n' for name in IMPORTS)
+                          + 'set_option format.width 110\nset_option pp.universes true\n'
+                          + ''.join(f'#check @{name}\n' for name in HEADLINES)
+                          + ''.join(f'#print {name}\n' for name in DEFINITIONS))
+        result = subprocess.run(['lake', 'env', 'lean', str(source)], cwd=root / 'binary',
+                                capture_output=True, text=True)
+        if result.returncode:
+            raise ValueError(f'trust-surface printing failed:\n{result.stdout}{result.stderr}')
+        if result.stderr:
+            raise ValueError(f'unexpected trust-surface diagnostics: {result.stderr}')
+    return ('HEADLINE STATEMENTS AND INTERPRETATION DEFINITIONS\n' + result.stdout.rstrip()
+            + '\n\nTRUST DECLARATIONS: binary/TrustBase.lean (verbatim)\n'
+            + (root / 'binary/TrustBase.lean').read_text())
+
+
+def diff_surface(actual, expected):
+    return ''.join(difflib.unified_diff(expected.splitlines(keepends=True),
+                                      actual.splitlines(keepends=True),
+                                      fromfile='expected trust surface', tofile='current trust surface'))
+
+
+def check_surface():
+    actual = render_surface()
+    print(actual, end='' if actual.endswith('\n') else '\n', flush=True)
+    delta = diff_surface(actual, EXPECTED.read_text())
+    if delta:
+        print(delta, end='', flush=True)
+        raise ValueError('binary trust surface changed; inspect the diff and explicitly update its specification')
+    print('binary trust-surface diff: PASS', flush=True)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--write-expected', action='store_true',
+                        help='intentionally replace the reviewed specification; commit and review its diff')
+    args = parser.parse_args()
+    if args.write_expected:
+        EXPECTED.write_text(render_surface())
+        print(f'Updated {EXPECTED}; review its Git diff')
+    else:
+        check_surface()
+
+
+if __name__ == '__main__':
+    main()

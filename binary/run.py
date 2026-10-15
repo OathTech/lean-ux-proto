@@ -3,25 +3,23 @@
 import argparse
 from datetime import datetime, timezone
 import hashlib
-import io
 import json
 import os
 from pathlib import Path
 import re
 import subprocess
-import tarfile
 
 from census import ROOT, ORACLE, extract, run
 from layouts import layouts
+from pin import verify_pin
 
-PIN = 'e033e3dac812a576881a329b2d4c174364f3d44c'
 TRACE = 'd1_wrong_receiver_index_same_bucket'
 TOOLCHAIN = Path.home() / '.elan/toolchains/leanprover--lean4---v4.35.0/bin'
 
 
 def bootstrap():
     [lock] = [r for r in json.loads((ROOT / 'dependencies/sources.lock.json').read_text()) if r['name'] == 'kraken']
-    if lock['commit'] != PIN or lock['toolchain'] != (ROOT / 'binary/lean-toolchain').read_text().strip():
+    if lock['toolchain'] != (ROOT / 'binary/lean-toolchain').read_text().strip():
         raise ValueError('dependency pin or toolchain drift')
     dest = ROOT / '.deps/kraken'
     shared = ROOT.parents[1] / '.deps/kraken'
@@ -33,17 +31,7 @@ def bootstrap():
             subprocess.run(['git', '-C', str(dest), '-c', 'user.name=Codex',
                             '-c', 'user.email=codex@localhost', 'am', '--committer-date-is-author-date',
                             str(ROOT / patch)], check=True)
-    actual = subprocess.check_output(['git', '-C', str(dest), 'rev-parse', 'HEAD'], text=True).strip()
-    if actual != PIN:
-        raise ValueError(f'private Kraken commit drift: {actual}')
-    # Refuse source drift in the private copy, without consulting/building any
-    # shared cache. No shared dependency file is modified.
-    data = subprocess.check_output(['git', '-C', str(dest), 'archive', PIN])
-    with tarfile.open(fileobj=io.BytesIO(data)) as archive:
-        for member in archive.getmembers():
-            if member.isfile():
-                if (dest / member.name).read_bytes() != archive.extractfile(member).read():
-                    raise ValueError(f'private Kraken source drift: {member.name}')
+    verify_pin(ROOT)
 
 
 def checked_command(args, cwd, env=None):

@@ -41,11 +41,26 @@ The separate coordinator-led surface review is required before milestone 2.
 
 All heavy commands run through `capped`; a KILLED banner or timeout fails.
 The charter-authorized binary gate builds the default package, prints the
-headline/witness axioms and checks proof sources for escapes:
+headline/witness axioms and checks proof sources for escapes. Before building,
+it requires agreement between the lock, `TrustBase.krakenCommit`, the resolved
+private path dependency and its clean Git HEAD (including untracked sources).
+It prints the headline types, invocation-boundary definitions, R/postcondition
+and verbatim trust declarations, and diffs `TrustSurface.expected.txt`:
 
 ```sh
 capped -- scripts/proof-gate --binary
 ```
+
+An intended surface change updates the specification explicitly, after
+inspecting the changed statement/premises, and commits that diff for review:
+
+```sh
+capped -- python3 binary/surface.py --write-expected
+capped -- python3 -B -m unittest binary.test_trust_gate
+```
+
+The gate never updates the expected surface automatically. The baseline is
+the reviewable specification, not a retained execution log.
 
 Kernel replay and toolchain checking, from `binary/`:
 
