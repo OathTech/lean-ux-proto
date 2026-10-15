@@ -64,7 +64,7 @@ EXTRA_FIELDS = {'pipe2': ('fds',), 'read': ('digest',), 'write': ('sigpipe',), '
                 # prints it, read by the guest outside the window and serialised by the mirror
                 'wg_up': ('fib_trie',), 'wg_down': ('fib_trie',), 'wg_delete': ('fib_trie',),
                 'wg_deladdr': ('fib_trie',), 'wg_delroute': ('fib_trie',), 'wg_set_mtu': ('fib_trie',),
-                'wg_netns_close': ('fib_trie',)}
+                'wg_netns_close': ('fib_trie',), 'wg_addroute': ('fib_trie',), 'wg_addaddr': ('fib_trie',)}
 EPOLL_EVENT_SIZE = 12   # sizeof(struct epoll_event) on x86-64 (packed)
 
 
@@ -248,7 +248,8 @@ SEMANTIC_ERRNOS = {'eventfd2': {12, 22, 24}, 'dup': {9, 12, 24}, 'dup3': {9, 12,
                    # EBADF once the listeners are closed; wg_netns_close fails only
                    # outside the oracle's setup (the holders are the fixture's);
                    # W4: wg_xmit's EMSGSIZE and EINVAL from the sender's IP layer
-                   'wg_up': {19, 98, 64}, 'wg_xmit': {126, 89, 93, 101, 90, 22}, 'wg_observe': {11, 9}, 'read': {9, 11, 22}, 'write': {9, 11, 22},
+                   # lane C: wg_xmit's EHOSTUNREACH (113) and EACCES (13) from a reject route
+                   'wg_up': {19, 98, 64}, 'wg_xmit': {126, 89, 93, 101, 90, 22, 113, 13}, 'wg_observe': {11, 9}, 'read': {9, 11, 22}, 'write': {9, 11, 22},
                    'wg_netns_close': set(),
                    # D3: the advance ioctl fails only outside the oracle's setup (-EOPNOTSUPP, -EINVAL, -EPERM)
                    'wg_advance': set(),
@@ -265,6 +266,11 @@ SEMANTIC_ERRNOS = {'eventfd2': {12, 22, 24}, 'dup': {9, 12, 24}, 'dup3': {9, 12,
                    # wg0's fixture address (EADDRNOTAVAIL when absent) and
                    # RTM_DELROUTE of the default route via wg0 (ESRCH when absent)
                    'wg_deladdr': {99}, 'wg_delroute': {3},
+                   # Lane C (docs/2026-10-15-design-c-fib-trie.md, 10): RTM_NEWROUTE's
+                   # EEXIST, ENETDOWN (fib_check_nh_nongw), ENODEV (a stale ifindex),
+                   # EINVAL, ENOBUFS and ENOMEM (fib_create_info); RTM_NEWADDR's EEXIST,
+                   # ENODEV, ENOBUFS (no in_device), EINVAL
+                   'wg_addroute': {17, 100, 19, 22, 105, 12}, 'wg_addaddr': {17, 19, 105, 22},
                    # W2 (docs/2026-10-06-w1-w2-netlink.md 4.2): the stepped dump's
                    # request is acknowledged on a later receive, never failed; a
                    # receive with nothing queued is EAGAIN (the mirror's unsupported)

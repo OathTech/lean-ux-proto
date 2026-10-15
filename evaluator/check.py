@@ -32,6 +32,7 @@ from .protocol import InvalidOutput, compare, loads, parse_batch, validate_cover
 ROOT = Path(__file__).resolve().parents[1]
 ANCHORS = ROOT / 'correspondence/kcov.json'
 SUITES = ('handwritten', 'critic', 'wireguard', 'alloc', 'generated', 'wireguard-generated', 'pipes', 'pipes-generated',
+          'routing',   # lane C: corpus/routing, the IPv4 FIB trie's insertions, deletions and lookups (the design note, 10)
           'epoll', 'epoll-generated',   # epoll T: corpus/epoll and the `epoll` generator profile (design section 7)
           'seccomp', 'seccomp-generated')   # seccomp X: corpus/seccomp and the `seccomp` generator profile (design 7)
 # Corpus suites whose traces pass the domain filter first: the pipes corpus

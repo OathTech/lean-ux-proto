@@ -423,7 +423,8 @@ def reply_peer_key(reply):
 # Lane C: the operations after which the guest reads /proc/net/fib_trie
 # (harness/guest.c print_fib_trie) and the mirror serialises its trie
 # (Leanux/Syscalls.lean): the observation's `fib_trie` field, compared exactly
-FIB_TRIE_OPS = ("wg_up", "wg_down", "wg_delete", "wg_deladdr", "wg_delroute", "wg_set_mtu", "wg_netns_close")
+FIB_TRIE_OPS = ("wg_up", "wg_down", "wg_delete", "wg_deladdr", "wg_delroute", "wg_set_mtu", "wg_netns_close",
+                "wg_addroute", "wg_addaddr")
 
 
 def attach_fib_tries(results, records):

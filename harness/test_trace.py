@@ -96,6 +96,46 @@ class TraceContractTests(unittest.TestCase):
         self.assertEqual(serialize_wire([self.trace]),
                          'LEANUX_WIRE_V2\n1\nD 0\nA 0\nM 0 0\nT case 3 32 0 0 0 0 0 0\n1 0 -1 0 -1 0 2048 0 0\n6 1 0 0 -1 8 0 18446744073709551615 0\n3 0 -2147483648 1 0 0 4294967295 0 0\n')
 
+    def test_routing_operations(self):
+        # Lane C (docs/2026-10-15-design-c-fib-trie.md, 10): wg_addroute, wg_addaddr
+        # and the named wg_delroute, their validation and wire
+        peer = {"public_key": "22" * 32, "allowed_ips": [{"family": 4, "addr": "0a000000", "cidr": 8}]}
+        base = [{"op": "wg_set", "config": {"private_key": "11" * 32, "listen_port": 51820, "peers": [peer]}}, {"op": "wg_up"}]
+        ops = base + [
+            {"op": "wg_addroute", "family": 4, "dst": "0a090000", "plen": 16, "type": "unicast", "oif": "wg0",
+             "metric": 7, "mtu": 1000, "nlflags": ["excl", "append"]},
+            {"op": "wg_addroute", "family": 4, "dst": "08000000", "plen": 5, "type": "unreachable"},
+            {"op": "wg_addaddr", "addr": "0a010001", "plen": 24},
+            {"op": "wg_delroute", "family": 4, "dst": "0a090000", "plen": 16, "oif": "lo", "type": "blackhole", "metric": 3},
+            {"op": "wg_delroute", "family": 4}]
+        trace = {"version": 1, "id": "routing", "ops": ops}
+        lines = serialize_wire([validate_trace(trace)], dispatch=(1,)).splitlines()
+        self.assertEqual(lines[-5], f"35 0 -1 0 -1 {16 | 1 << 8 | 2 << 16 | 5 << 24} 7 {0x0a090000 | 1000 << 32} 0")
+        self.assertEqual(lines[-4], f"35 0 -1 0 -1 {5 | 7 << 8} 0 {0x08000000} 0")
+        self.assertEqual(lines[-3], f"36 0 -1 0 -1 24 0 {0x0a010001} 0")
+        self.assertEqual(lines[-2], f"24 0 -1 0 -1 4 {1 << 31 | 16 | 1 << 8 | 6 << 16} {0x0a090000 | 3 << 32} 0")
+        self.assertEqual(lines[-1], "24 0 -1 0 -1 4 0 0 0")
+        bad = [
+            {"op": "wg_addroute", "family": 6, "dst": "0a090000", "plen": 16, "type": "unicast", "oif": "wg0"},
+            {"op": "wg_addroute", "family": 4, "dst": "0a090001", "plen": 16, "type": "unicast", "oif": "wg0"},   # host bits
+            {"op": "wg_addroute", "family": 4, "dst": "0a090000", "plen": 16, "type": "unicast"},   # no device
+            {"op": "wg_addroute", "family": 4, "dst": "0a090000", "plen": 16, "type": "prohibit", "oif": "lo"},
+            {"op": "wg_addroute", "family": 4, "dst": "0a090000", "plen": 16, "type": "local", "oif": "wg0"},
+            {"op": "wg_addroute", "family": 4, "dst": "0a090000", "plen": 16, "type": "unicast", "oif": "eth0"},
+            {"op": "wg_addroute", "family": 4, "dst": "0a090000", "plen": 16, "type": "unicast", "oif": "wg0", "nlflags": ["excl", "excl"]},
+            {"op": "wg_addroute", "family": 4, "dst": "0a090000", "plen": 16, "type": "unicast", "oif": "wg0", "mtu": 67},
+            {"op": "wg_addroute", "family": 4, "dst": "0a090000", "plen": 33, "type": "unicast", "oif": "wg0"},
+            {"op": "wg_addaddr", "addr": "0a010001", "plen": 0},
+            {"op": "wg_addaddr", "addr": "0A010001", "plen": 24},
+            {"op": "wg_delroute", "family": 6, "dst": "0a090000", "plen": 16},
+            {"op": "wg_delroute", "family": 4, "dst": "0a090000"},
+            {"op": "wg_delroute", "family": 4, "plen": 16},
+        ]
+        for op in bad:
+            with self.subTest(op=op):
+                with self.assertRaises(InvalidTrace):
+                    validate_trace({"version": 1, "id": "routing", "ops": base + [op]})
+
     def test_sender_tos_and_link_local_source(self):
         # W5 (docs/2026-10-06-w5-w6-receive.md, section 6): `tos` on wg_inject
         # and wg_xmit, `from: "ll"` on an IPv6 wg_inject; the wire carries
@@ -392,7 +432,7 @@ class OpcodeTableTests(unittest.TestCase):
         self.assertEqual(sorted(c for n, c in OPCODES.items()
                                 if n not in ("pipe2", "wg_advance", "wg_create", "wg_down", "wg_delete", "wg_flood",
                                              "wg_set_mtu", "wg_batch", "wg_deladdr", "wg_delroute", "wg_netns_close",
-                                             "wg_get_start", "wg_get_recv",
+                                             "wg_get_start", "wg_get_recv", "wg_addroute", "wg_addaddr",
                                              "epoll_create1", "epoll_ctl", "epoll_wait",
                                              "seccomp_install", "seccomp_probe", "seccomp_prctl", "seccomp_capdrop",
                                              "seccomp_query")),

@@ -564,6 +564,19 @@ def wgUp : M Int := do
   if ret == 0 then modify fun w => { w with routesPending := true }
   return ret
 
+/-- `inetdev_destroy(in_dev)` (devinet.c:313-336) for wg0: `in_dev->dead`,
+    then each address deleted through the inetaddr chain (`NETDEV_DOWN`,
+    `fib_del_ifaddr` with the scan skipped), the last one disabling IP on
+    the device (`fib_inetaddr_event`, fib_frontend.c:1459-1471). -/
+def inetdevDestroy : M Unit := do
+  let w ← get
+  let addrs := w.addrs4
+  modify fun w => { w with addrs4 := [], addrPlens4 := [] }
+  let mut rest := addrs
+  for a in addrs do
+    rest := rest.drop 1
+    Net.Fib.inetaddrDown WG0_IFINDEX a ((w.addrPlens4.lookup a).getD 32) rest.isEmpty true
+
 /-- W4: `wg_set_mtu`, `SIOCSIFMTU` on wg0 from the fixture's sender
     (`dev_ioctl` → `dev_set_mtu`): `-ENODEV` without wg0; the notifications
     of `NETDEV_CHANGEMTU` and the IPv6 and IPv4 teardowns below 1280 and 68
@@ -577,6 +590,11 @@ def setMtu (mtu : Nat) : M Int := do
   -- the guest fills `ifr_mtu` with `(int)op->a` (guest.c): the trace's u32
   -- word reaches `dev_set_mtu` negative at or above 2^31
   let newMtu : Int := if mtu ≥ 2 ^ 31 then (mtu : Int) - 2 ^ 32 else mtu
+  -- lane C: an MTU raised back over IPV4_MIN_MTU re-creates the in_device
+  -- (`inetdev_event` `NETDEV_CHANGEMTU` → `inetdev_init`, devinet.c:1620-1626),
+  -- a path the mirror does not model: the fixture's addresses stay gone
+  -- until the next up on this fixture only when the MTU stays below 68
+  if old < 68 && newMtu ≥ 68 then unsupported "an MTU raised back over IPV4_MIN_MTU (inetdev_init re-creates the in_device)"
   let ret ← WG.setMtu newMtu
   skipCut allocCuts
   -- W9's tables (docs/2026-10-06-w8-w9-netns-routing.md, 14.3d): the
@@ -596,11 +614,7 @@ def setMtu (mtu : Nat) : M Int := do
     -- each address deleted through the inetaddr chain, the last disabling
     -- IP on the device), then `fib_netdev_event` (`fib_sync_mtu`, a flush,
     -- fib_frontend.c:1519-1522) and nexthop.c's flush (:3884-3887)
-    if mtu < 68 then
-      let addrs := (← get).addrs4
-      modify fun w => { w with addrs4 := [] }
-      for a in addrs do
-        Net.Fib.inetaddrDown WG0_IFINDEX a 32 true true
+    if mtu < 68 then inetdevDestroy
     Net.Fib.netdevChangeMtu
     modify fun w => { w with addrs6 := if mtu < 1280 then [] else w.addrs6,
                              defaultRoute6 := mtu ≥ 1280 && w.defaultRoute6,
@@ -638,7 +652,7 @@ def routeIntoWg0 : M Unit := do
   let down4 := (← getDev).mtu < 68
   modify fun w => { w with routesPending := false }
   if !down4 then
-    modify fun w => { w with addrs4 := [WG0_ADDR4] }
+    modify fun w => { w with addrs4 := if addrAlready then w.addrs4 else w.addrs4 ++ [WG0_ADDR4] }
     let routes4 := (← get).routes.filterMap fun (f, a, m) => if f == 4 then some (a, m) else none
     outsideWindow (Net.Fib.routeIntoWg0 addrAlready WG0_ADDR4 routes4)
   modify fun w => { w with addrs6 := [WG0_ADDR6], defaultRoute6 := true, ipv6Gen := w.ipv6Gen + 1 }
@@ -693,10 +707,7 @@ def wgDelete : M Int := do
     Net.Fib.netdevDown WG0_IFINDEX
     modify fun w => { w with defaultRoute6 := false, addrs6 := [], ipv6Gen := w.ipv6Gen + 1 }
   let onUnregister : M Unit := do
-    let addrs := (← get).addrs4
-    modify fun w => { w with addrs4 := [] }
-    for a in addrs do
-      Net.Fib.inetaddrDown WG0_IFINDEX a 32 true true
+    inetdevDestroy
     Net.Fib.netdevUnregister WG0_IFINDEX
     modify fun w => { w with addrs6 := [], defaultRoute6 := false, ipv6Gen := w.ipv6Gen + 1 }
   let ret ← WG.wgDelete onDown onUnregister
@@ -712,13 +723,14 @@ def wgDeladdr (family : Nat) : M Int := do
   if (← getK).wg.isNone then unsupported "wg_deladdr without wg0 (the request names a stale ifindex)"
   let w ← get
   if family == 4 then
-    if w.addrs4.isEmpty then return -EADDRNOTAVAIL
+    -- the request names the fixture's address (`deladdr_wg0`)
+    if !w.addrs4.contains WG0_ADDR4 then return -EADDRNOTAVAIL
     -- lane C: `__inet_del_ifa` unlinks the address, then the inetaddr
     -- chain's `NETDEV_DOWN`: `fib_del_ifaddr`, the generation, and the
     -- last address disabling IP on the device (fib_frontend.c:1459-1471)
-    let addr := w.addrs4.head!
-    set { w with addrs4 := [] }
-    Net.Fib.inetaddrDown WG0_IFINDEX addr 32 true false
+    let rest := w.addrs4.filter (· != WG0_ADDR4)
+    set { w with addrs4 := rest }
+    Net.Fib.inetaddrDown WG0_IFINDEX WG0_ADDR4 32 rest.isEmpty false
   else
     if w.addrs6.isEmpty then return -EADDRNOTAVAIL
     set { w with addrs6 := [], ipv6Gen := w.ipv6Gen + 1 }
@@ -728,17 +740,61 @@ def wgDeladdr (family : Nat) : M Int := do
     when absent. IPv4's `rt_genid` moves only if the route was ever looked
     up (`fib_table_delete`, `fib_trie.c:1754-1755`, `FA_S_ACCESSED`); the
     IPv6 sernum moves unconditionally (`fib6_del`). -/
-def wgDelroute (family : Nat) : M Int := do
+def wgDelroute (family : Nat) (named : Bool) (dst plen oif typeCode metric : Nat) : M Int := do
   if (← getK).wg.isNone then unsupported "wg_delroute without wg0 (the request names a stale ifindex)"
   let w ← get
   if family == 4 then
     -- lane C: `inet_rtm_delroute` → `fib_table_delete` on the trie with the
     -- guest's request (`delroute_wg0`): `-ESRCH` when absent, the flush only
-    -- if the alias was accessed (fib_trie.c:1754-1755)
+    -- if the alias was accessed (fib_trie.c:1754-1755). A named route
+    -- (`delroute_request`): table main, any protocol and scope, the type
+    -- when given, the device and metric when given
+    if named then
+      let type := (Net.Fib.RouteType.ofCode? typeCode).getD .unspec
+      return ← Net.Fib.tableDelete { dst, dstLen := plen, table := Net.Fib.RT_TABLE_MAIN, protocol := 0,
+                                     scope := Net.Fib.RT_SCOPE_NOWHERE, type, oif, priority := metric }
     return ← Net.Fib.delrouteWg0
   else
     if !w.defaultRoute6 then return -ESRCH
     set { w with defaultRoute6 := false, ipv6Gen := w.ipv6Gen + 1 }
+  return 0
+
+/-- Lane C `wg_addroute`: `RTM_NEWROUTE` over L's temporary rtnetlink socket
+    (`inet_rtm_newroute` → `rtm_to_fib_config` → `fib_new_table` →
+    `fib_table_insert`, fib_frontend.c:899-926): table main, protocol
+    static, scope link for a unicast route via `oif` and universe for a
+    reject type, the metric and `RTAX_MTU` when given, `NLM_F_CREATE` and
+    the trace's flags. A stale ifindex (no wg0) fails in `fib_create_info`
+    (`-ENODEV`). The result is the acknowledgement's error. -/
+def wgAddroute (dst plen oif typeCode metric mtu nlflags : Nat) : M Int := do
+  let some type := Net.Fib.RouteType.ofCode? typeCode | invariant "wg_addroute: an unknown route type"
+  let cfg : Net.Fib.Config :=
+    { dst, dstLen := plen, table := Net.Fib.RT_TABLE_MAIN, protocol := Net.Fib.RTPROT_STATIC,
+      scope := if type == .unicast then Net.Fib.RT_SCOPE_LINK else Net.Fib.RT_SCOPE_UNIVERSE,
+      type, oif, priority := metric, mtu, nlflags := Net.Fib.NLM_F_CREATE ||| nlflags }
+  Net.Fib.tableInsert cfg
+
+/-- Lane C `wg_addaddr`: `RTM_NEWADDR` of another IPv4 address on wg0
+    (`inet_rtm_newaddr`, devinet.c:966-1030, `NLM_F_CREATE | NLM_F_EXCL`):
+    `-ENODEV` for a stale ifindex, `-ENOBUFS` without the `in_device`
+    (:888), `-EEXIST` for an address already there with its prefix
+    (`find_matching_ifa`); a secondary (an address in the prefix of one
+    already there, `__inet_insert_ifa` :530-541) and another primary with
+    the same local are not modelled. Then `__inet_insert_ifa`'s
+    `NETDEV_UP` through the inetaddr chain (`fib_add_ifaddr`: the local
+    route, the prefix route and its broadcast). -/
+def wgAddaddr (addr plen : Nat) : M Int := do
+  let some d := (← getK).wg | return -ENODEV
+  if !d.inet4Dev then return -ENOBUFS
+  let w ← get
+  let mask := if plen == 0 then 0 else Net.Fib.KEY_MAX - (2 ^ (32 - plen) - 1)
+  for a in w.addrs4 do
+    let p := (w.addrPlens4.lookup a).getD 32
+    if a == addr && p == plen then return -EEXIST
+    if a == addr then unsupported "wg_addaddr of an address already there with another prefix (a second primary)"
+    if p == plen && a &&& mask == addr &&& mask then unsupported "wg_addaddr of a secondary address (in the prefix of one already there)"
+  modify fun w => { w with addrs4 := w.addrs4 ++ [addr], addrPlens4 := w.addrPlens4 ++ [(addr, plen)] }
+  Net.Fib.inetaddrUp WG0_IFINDEX addr plen
   return 0
 
 /-- `wg_observe`: its `recvfrom` on the IPv4 listener returns the first

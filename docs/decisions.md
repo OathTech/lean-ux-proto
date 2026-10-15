@@ -657,3 +657,10 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   (design note U4 and U5): the FIB module lives at `Leanux/Net/` beside
   `FS`, `WG` and `Seccomp`, and AGENTS.md's list of the mirror's directories
   gains `Leanux/Net` ("agree with recommendation").
+- **2026-10-15 [USER, through the coordinator]** Lane C, a check-rule change
+  on the trust surface: a `wg_batch` operation is compared against the
+  WireGuard files, the headers they inline and `net/ipv4/fib_trie.c`
+  (`evaluator/check.py`, `BATCH_FILES`), since the batch's sends run the
+  trie's lookups and an anchored file's in-window coverage is witnessed in
+  a batch as in a single operation. Its one-off mutant
+  (C1-M8-batch-lookup-outcome) was rejected once and removed.

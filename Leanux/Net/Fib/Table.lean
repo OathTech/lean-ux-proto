@@ -75,6 +75,12 @@ def deviceAddrs (dev : Nat) : M (List (Nat × Nat)) := do
   if dev == WG0_IFINDEX then return (← get).addrs4.map (·, RT_SCOPE_UNIVERSE)
   return []
 
+/-- The prefix length of a device's address: `lo`'s `/8`, wg0's `/32` unless
+    `wg_addaddr` gave another (`World.addrPlens4`). -/
+def devicePlen (dev addr : Nat) : M Nat := do
+  if dev == LO_IFINDEX then return 8
+  return ((← get).addrPlens4.lookup addr).getD 32
+
 /-- `inet_select_addr(dev, dst, scope)` (devinet.c:1356-1413) with no
     destination: the device's first primary address whose scope is within
     `scope`; with none, the scan of the other devices finds `lo`'s
@@ -249,7 +255,7 @@ def tableInsert (cfg : Config) : M Int := do
   if ← branch .ftiHasAlias fa.isSome then
     let some faIdx := fa | invariant "fib_table_insert: unreachable"
     let some fas := aliases | invariant "fib_table_insert: unreachable"
-    let faE := fas[faIdx]!
+    let some faE := fas[faIdx]? | invariant "fib_table_insert: fib_find_alias returned an index beyond the leaf"
     let faPrio : Nat := ((← getTable).infos.get? faE.info).map (·.priority) |>.getD 0
     if ← branchCmp .ftiDscpEq (faE.dscp == dscp) faE.dscp dscp then
       if ← branchCmp .ftiPrioEq (faPrio == fiPrio) faPrio fiPrio then existing := true
@@ -258,9 +264,11 @@ def tableInsert (cfg : Config) : M Int := do
     let some fas := aliases | invariant "fib_table_insert: unreachable"
     err := -17   -- -EEXIST
     if ← branchCmp .ftiExcl (cfg.nlflags &&& NLM_F_EXCL != 0) (cfg.nlflags &&& NLM_F_EXCL) 0 then return ← out err
-    -- the match loop from `fa` on
+    -- the match loop from `fa` on (`hlist_for_each_entry_from` moves `fa`
+    -- itself: a break leaves it at that alias, the end leaves it NULL)
     let mut faMatch : Option Nat := none
     faFirst := fa
+    fa := none
     let mut i : Nat := faIdx
     for a in fas.drop faIdx do
       _ ← branch .ftiMatchIterate true
@@ -269,11 +277,12 @@ def tableInsert (cfg : Config) : M Int := do
       if ← branchCmp .ftiMatchSlen (a.slen != slen) a.slen slen then brk := true
       else if ← branchCmp .ftiMatchTb (a.tbId != tbId) a.tbId tbId then brk := true
       else if ← branchCmp .ftiMatchDscp (a.dscp != dscp) a.dscp dscp then brk := true
-      if brk then break
-      if ← branchCmp .ftiMatchPrio (aPrio != fiPrio) aPrio fiPrio then break
+      if brk then fa := some i; break
+      if ← branchCmp .ftiMatchPrio (aPrio != fiPrio) aPrio fiPrio then fa := some i; break
       if ← branchCmp .ftiMatchType (a.type == cfg.type) a.type.code cfg.type.code then
         if ← branch .ftiMatchInfo (a.info == fi) then
           faMatch := some i
+          fa := some i
           break
       i := i + 1
     if ← branchCmp .ftiReplace (cfg.nlflags &&& NLM_F_REPLACE != 0) (cfg.nlflags &&& NLM_F_REPLACE) 0 then
@@ -284,7 +293,7 @@ def tableInsert (cfg : Config) : M Int := do
       err := -105   -- -ENOBUFS
       if ← branch .ftiReplaceNoAlias !(← envOk .fibAliasAlloc) then return ← out err
       let some fIdx := faFirst | invariant "fib_table_insert: unreachable"
-      let old := fas[fIdx]!
+      let some old := fas[fIdx]? | invariant "fib_table_insert: fa_first beyond the leaf"
       let newFa : FibAlias := { slen := old.slen, tbId, dscp := old.dscp, type := cfg.type,
                                 accessed := false, info := fi }
       let some lp := lPath | invariant "fib_table_insert: unreachable"
@@ -328,7 +337,7 @@ def tableInsert (cfg : Config) : M Int := do
     (fib_trie.c:1663-1691): the notifier chain is below the cut; the
     `fib_find_alias` call and the two tests are the C's. -/
 def notifyAliasDelete (aliases : List FibAlias) (index : Nat) : M Unit := do
-  let fa := aliases[index]!
+  let some fa := aliases[index]? | invariant "fib_notify_alias_delete: the alias is beyond the leaf"
   let first ← findAlias (some aliases) fa.slen 0 0 fa.tbId true
   if ← branch .fnaNotFirst (first != some index) then return
   let next := aliases[index + 1]?
@@ -387,7 +396,7 @@ def tableDelete (cfg : Config) : M Int := do
     i := i + 1
   if ← branch .ftdNotFound toDelete.isNone then return -3
   let some dIdx := toDelete | invariant "fib_table_delete: unreachable"
-  let old := fas[dIdx]!
+  let some old := fas[dIdx]? | invariant "fib_table_delete: fa_to_delete beyond the leaf"
   notifyAliasDelete fas dIdx   -- rtmsg_fib: below the cut
   if ← branchCmp .ftdDefault (plen == 0) plen 0 then modifyNumDefault tbId (· - 1)
   removeAlias tpPath lPath dIdx
@@ -435,6 +444,7 @@ def tableFlush (tbId : Nat) (flushAll : Bool) : M Nat := do
     let nPath := pnPath ++ [cindex]
     let mut slen : Nat := 0
     let mut kept : List FibAlias := []
+    let mut deleted : Nat := 0   -- this leaf's deletions so far (`found` counts the flush's)
     for fa in c.aliases do
       _ ← branch .ftfAliasIterate true
       let fi? := (← getTable).infos.get? fa.info
@@ -446,7 +456,8 @@ def tableFlush (tbId : Nat) (flushAll : Bool) : M Nat := do
         let some fi := fi? | invariant "fib_table_flush: unreachable"
         let dead : Nat := fi.flags &&& RTNH_F_DEAD
         if ← branchCmp .ftfNotDead (dead == 0) dead 0 then
-          let errCode : Nat := if fa.type.error == 0 then 0 else 1
+          -- `fib_props[fa->fa_type].error` as the C's int (a negative errno's u32 word)
+          let errCode : Nat := (if fa.type.error < 0 then 2 ^ 32 + fa.type.error else fa.type.error).toNat
           if ← branchCmp .ftfNoError (errCode == 0) errCode 0 then keep := true
       if keep then
         slen := fa.slen
@@ -465,10 +476,11 @@ def tableFlush (tbId : Nat) (flushAll : Bool) : M Nat := do
       -- notify over the list as it stands (the kept and the not yet
       -- visited aliases), rtmsg (`pfsrc_removed`: never set on these
       -- paths), delete, release
-      let current := kept ++ (c.aliases.drop (kept.length + found))
+      let current := kept ++ (c.aliases.drop (kept.length + deleted))
       notifyAliasDelete current kept.length
       if ← branchCmp .ftfPfsrcRemoved false 0 0 then pure ()
       releaseInfo fa.info
+      deleted := deleted + 1
       found := found + 1
     _ ← branch .ftfAliasIterate false
     let leaf' := (c.withAliases kept).withSlen slen
@@ -569,9 +581,13 @@ def delIfaddr (dev : Nat) (addr prefixlen : Nat) (devDead : Bool) : M Unit := do
     fibMagic false (if dev == LO_IFINDEX then .local else .unicast) any prefixlen addr dev 0
     subnet := true
   if !devDead then
-    -- :1241-1313: the scan over the device's other addresses
-    if (← deviceAddrs dev).any (fun (a, _) => a != addr) then
-      unsupported "fib_del_ifaddr with another address on the device (address promotion)"
+    -- :1241-1313: the scan over the device's other addresses. Every address
+    -- here is a primary with its own local (a secondary is refused at
+    -- `wg_addaddr`), so :1284 `prim->ifa_local != ifa1->ifa_local` skips each
+    -- and `ok` stays 0; another primary with this local (:1286-1288) is not
+    -- modelled
+    if (← deviceAddrs dev).any (fun (a, _) => a == addr) then
+      unsupported "fib_del_ifaddr with another primary of the same local address"
   -- no_promotions (:1314-1345): `ok` is 0
   fibMagic false .broadcast 0 32 addr dev 0   -- `ifa->ifa_broadcast` is 0
   if subnet && prefixlen < 31 then
@@ -601,7 +617,7 @@ def inetaddrDown (dev : Nat) (addr prefixlen : Nat) (last devDead : Bool) : M Un
     of the device added again. -/
 def netdevUp (dev : Nat) : M Unit := do
   for (a, _) in ← deviceAddrs dev do
-    addIfaddr dev a (if dev == LO_IFINDEX then 8 else 32) true
+    addIfaddr dev a (← devicePlen dev a) true
   devAddrGenidBump
   rtCacheFlush
 

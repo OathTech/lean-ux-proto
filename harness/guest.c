@@ -176,6 +176,9 @@ struct fixture_route { unsigned family; unsigned char dst[16]; unsigned mtu; };
 /* W4 (docs/2026-10-06-w4-w7-transmit-bulk.md section 6): SIOCSIFMTU on wg0; W7: the batch. */
 #define OP_WG_SET_MTU 25
 #define OP_WG_BATCH 26
+/* Lane C (docs/2026-10-15-design-c-fib-trie.md, 10): the routing requests. */
+#define OP_WG_ADDROUTE 35
+#define OP_WG_ADDADDR 36
 /* epoll stream R (docs/2026-10-12-epoll-design.md section 6; the codes from
  * docs/2026-10-11-interface.md): fd is the set (epfd); epoll_ctl's newfd is
  * the target, a = cmd, b = events, value = data; epoll_wait's a = maxevents,
@@ -717,6 +720,80 @@ static size_t delroute_wg0(int family, unsigned char *payload, size_t size)
     rt->rtm_scope = RT_SCOPE_LINK;
     rt->rtm_type = RTN_UNICAST;
     attr(payload, &len, RTA_OIF, &wg, sizeof(wg));
+    return len;
+}
+
+/* Lane C's routing requests (docs/2026-10-15-design-c-fib-trie.md, 10).
+ * wg_addroute: a = plen | RTN_ type << 8 | device code << 16 (1 lo, 2 wg0)
+ * | NLM_F_ bits << 24 (1 EXCL, 2 REPLACE, 4 APPEND), b = the metric, value =
+ * dst | mtu << 32: table main, protocol static, scope link for a unicast
+ * route and universe for a reject type. */
+static void be32_bytes(uint32_t v, unsigned char *out)
+{
+    out[0] = v >> 24; out[1] = v >> 16; out[2] = v >> 8; out[3] = v;
+}
+static size_t addroute_request(const struct operation *op, unsigned char *payload, size_t size)
+{
+    size_t len = sizeof(struct rtmsg);
+    memset(payload, 0, size);
+    struct rtmsg *rt = (struct rtmsg *)payload;
+    unsigned plen = op->a & 0xff, type = (op->a >> 8) & 0xff, devsel = (op->a >> 16) & 0xff;
+    uint32_t oif = devsel == 1 ? 1 : wg_ifindex, metric = op->b, mtu = (uint32_t)(op->value >> 32);
+    unsigned char dst[4];
+    be32_bytes((uint32_t)op->value, dst);
+    rt->rtm_family = AF_INET;
+    rt->rtm_dst_len = plen;
+    rt->rtm_table = RT_TABLE_MAIN;
+    rt->rtm_protocol = RTPROT_STATIC;
+    rt->rtm_scope = type == RTN_UNICAST ? RT_SCOPE_LINK : RT_SCOPE_UNIVERSE;
+    rt->rtm_type = type;
+    if (plen) attr(payload, &len, RTA_DST, dst, 4);
+    if (devsel) attr(payload, &len, RTA_OIF, &oif, sizeof(oif));
+    if (metric) attr(payload, &len, RTA_PRIORITY, &metric, sizeof(metric));
+    if (mtu) {
+        unsigned char metrics[16];
+        size_t mlen = 0;
+        attr(metrics, &mlen, RTAX_MTU, &mtu, sizeof(mtu));
+        attr(payload, &len, RTA_METRICS, metrics, mlen);
+    }
+    return len;
+}
+/* wg_addaddr: a = plen, value = the address: RTM_NEWADDR on wg0 with
+ * IFA_LOCAL and IFA_ADDRESS, scope universe, no broadcast. */
+static size_t addaddr_request(const struct operation *op, unsigned char *payload, size_t size)
+{
+    size_t len = sizeof(struct ifaddrmsg);
+    memset(payload, 0, size);
+    struct ifaddrmsg *ifa = (struct ifaddrmsg *)payload;
+    unsigned char a4[4];
+    be32_bytes((uint32_t)op->value, a4);
+    ifa->ifa_family = AF_INET;
+    ifa->ifa_prefixlen = op->a & 0xff;
+    ifa->ifa_index = wg_ifindex;
+    attr(payload, &len, IFA_LOCAL, a4, 4);
+    attr(payload, &len, IFA_ADDRESS, a4, 4);
+    return len;
+}
+/* wg_delroute of a named route (b's top bit): b = plen | device code << 8 |
+ * RTN_ type << 16 (0: any), value = dst | metric << 32: table main, any
+ * protocol and scope (RT_SCOPE_NOWHERE), the type when given. */
+static size_t delroute_request(const struct operation *op, unsigned char *payload, size_t size)
+{
+    size_t len = sizeof(struct rtmsg);
+    memset(payload, 0, size);
+    struct rtmsg *rt = (struct rtmsg *)payload;
+    unsigned plen = op->b & 0xff, devsel = (op->b >> 8) & 0xff, type = (op->b >> 16) & 0xff;
+    uint32_t oif = devsel == 1 ? 1 : wg_ifindex, metric = (uint32_t)(op->value >> 32);
+    unsigned char dst[4];
+    be32_bytes((uint32_t)op->value, dst);
+    rt->rtm_family = AF_INET;
+    rt->rtm_dst_len = plen;
+    rt->rtm_table = RT_TABLE_MAIN;
+    rt->rtm_scope = RT_SCOPE_NOWHERE;
+    rt->rtm_type = type;
+    if (plen) attr(payload, &len, RTA_DST, dst, 4);
+    if (devsel) attr(payload, &len, RTA_OIF, &oif, sizeof(oif));
+    if (metric) attr(payload, &len, RTA_PRIORITY, &metric, sizeof(metric));
     return len;
 }
 
@@ -2357,10 +2434,22 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         if (op->code == OP_WG_DELADDR || op->code == OP_WG_DELROUTE) {
             if (!t->net) fail(t->id, i, "invalid_input", "wireguard_without_network_fixture");
             if (op->a != 4 && op->a != 6) fail(t->id, i, "invalid_input", "fixture_family");
+            if ((op->b & 0x80000000u) && (op->code != OP_WG_DELROUTE || op->a != 4)) fail(t->id, i, "invalid_input", "wire_named_route");
             lifecycle_fd = rtnl_temporary(t, i);
             lifecycle_len = op->code == OP_WG_DELADDR
                 ? deladdr_wg0(op->a == 4 ? AF_INET : AF_INET6, lifecycle_body, sizeof(lifecycle_body))
+                : (op->b & 0x80000000u) ? delroute_request(op, lifecycle_body, sizeof(lifecycle_body))   /* lane C */
                 : delroute_wg0(op->a == 4 ? AF_INET : AF_INET6, lifecycle_body, sizeof(lifecycle_body));
+        }
+        /* Lane C: the routing corpus's requests, over the same temporary socket. */
+        if (op->code == OP_WG_ADDROUTE || op->code == OP_WG_ADDADDR) {
+            if (!t->net) fail(t->id, i, "invalid_input", "wireguard_without_network_fixture");
+            if (op->code == OP_WG_ADDROUTE && ((op->a & 0xff) > 32 || ((op->a >> 16) & 0xff) > 2 || (op->a >> 24) > 7))
+                fail(t->id, i, "invalid_input", "wire_addroute");
+            if (op->code == OP_WG_ADDADDR && (op->a < 1 || op->a > 32)) fail(t->id, i, "invalid_input", "wire_addaddr");
+            lifecycle_fd = rtnl_temporary(t, i);
+            lifecycle_len = op->code == OP_WG_ADDROUTE ? addroute_request(op, lifecycle_body, sizeof(lifecycle_body))
+                                                       : addaddr_request(op, lifecycle_body, sizeof(lifecycle_body));
         }
         /* E-B: the flood's socket, io_uring ring and SQEs are prepared before
          * the window (their inode/fd setup draws non-WireGuard clock records);
@@ -2566,6 +2655,10 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             strcpy(request.ifr_name, "wg0");
             request.ifr_mtu = (int)op->a;
             ret = syscall(SYS_ioctl, SEND_FD, SIOCSIFMTU, &request);
+            /* lane C: below IPV4_MIN_MTU the kernel destroyed the in_device and
+             * its addresses (devinet.c:1637-1643); a later up at a valid MTU
+             * adds the address afresh (route_into_wg0 expects 0, not -EEXIST) */
+            if (ret == 0 && (int)op->a < 68) addr4_deleted = 1;
             break;
         }
         case OP_WG_INJECT: {
@@ -2673,12 +2766,20 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             if (error < 0) { errno = -error; ret = -1; } else ret = 0;
             break;
         }
-        case OP_WG_DELADDR: case OP_WG_DELROUTE: {
+        case OP_WG_DELADDR: case OP_WG_DELROUTE: case OP_WG_ADDROUTE: case OP_WG_ADDADDR: {
             /* W9: RTM_DELADDR of wg0's fixture address or RTM_DELROUTE of
              * the default route via wg0; the acknowledgement's error code is
-             * the result (EADDRNOTAVAIL, ESRCH when absent). */
-            int error = nl_send(lifecycle_fd, op->code == OP_WG_DELADDR ? RTM_DELADDR : RTM_DELROUTE,
-                                NLM_F_REQUEST | NLM_F_ACK, 0, lifecycle_body, lifecycle_len, 0);
+             * the result (EADDRNOTAVAIL, ESRCH when absent). Lane C: the
+             * named route's deletion, RTM_NEWROUTE with NLM_F_CREATE and the
+             * trace's flags, RTM_NEWADDR with NLM_F_CREATE | NLM_F_EXCL. */
+            unsigned short type = op->code == OP_WG_DELADDR ? RTM_DELADDR : op->code == OP_WG_DELROUTE ? RTM_DELROUTE
+                                : op->code == OP_WG_ADDROUTE ? RTM_NEWROUTE : RTM_NEWADDR;
+            unsigned short flags = NLM_F_REQUEST | NLM_F_ACK;
+            if (op->code == OP_WG_ADDROUTE)
+                flags |= NLM_F_CREATE | ((op->a >> 24) & 1 ? NLM_F_EXCL : 0) | ((op->a >> 24) & 2 ? NLM_F_REPLACE : 0)
+                       | ((op->a >> 24) & 4 ? NLM_F_APPEND : 0);
+            if (op->code == OP_WG_ADDADDR) flags |= NLM_F_CREATE | NLM_F_EXCL;
+            int error = nl_send(lifecycle_fd, type, flags, 0, lifecycle_body, lifecycle_len, 0);
             if (!error) error = nl_receive(t->id, (int)i, lifecycle_fd, 0, NULL, 0);
             if (error < 0) { errno = -error; ret = -1; } else ret = 0;
             if (op->code == OP_WG_DELADDR && op->a == 4 && ret == 0) addr4_deleted = 1;
@@ -2808,7 +2909,7 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
          * outside the window (after the waits and route_into_wg0) */
         if (!comparisons && (op->code == OP_WG_UP || op->code == OP_WG_DOWN || op->code == OP_WG_DELETE
                              || op->code == OP_WG_DELADDR || op->code == OP_WG_DELROUTE || op->code == OP_WG_SET_MTU
-                             || op->code == OP_WG_NETNS_CLOSE))
+                             || op->code == OP_WG_NETNS_CLOSE || op->code == OP_WG_ADDROUTE || op->code == OP_WG_ADDADDR))
             print_fib_trie(t->id, i);
         if (up_seen) {
             struct timespec now;

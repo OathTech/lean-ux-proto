@@ -857,19 +857,27 @@ nothing to the coverage.
 
 ## 10. The corpus
 
-A `routing` directory under `corpus/` with its own suite name, run with
-the WireGuard groups at the claim point, and the generator's `routing`
-class (`ROUTING_SHARE`, today 0.05) extended with route insertions. The
-guest adds, inside the lane: `wg_addroute family dst plen oif type metric
-[mtu] [flags]` (`RTM_NEWROUTE` with `NLM_F_CREATE` and optionally `EXCL`,
-`REPLACE`, `APPEND`; type unicast, unreachable, blackhole or prohibit;
-`oif` wg0 or `lo`; the validator refuses type local, a gateway and a
-table other than main), `wg_addaddr addr plen` on wg0 (a second address,
-a prefix shorter than 32, for `fib_add_ifaddr`'s prefix and broadcast
-routes and `fib_del_ifaddr`'s scan), `wg_delroute` generalised to a
-destination, prefix, `oif` and metric, and the `/proc/net/fib_trie` read of
-9.4; the harness adds the trace fields, the validator rules and the
-generator class.
+A `routing` directory under `corpus/` with its own suite name (`--suite
+routing`), run with the WireGuard groups at the claim point, and the
+generator's `routing` class (`ROUTING_SHARE`, today 0.05) extended with
+route insertions. The guest adds, inside the lane (as built in C1):
+`wg_addroute {family 4, dst, plen, type, [oif], [metric], [mtu],
+[nlflags]}` (`RTM_NEWROUTE` over L's temporary rtnetlink socket with
+`NLM_F_CREATE` and the named `excl`, `replace`, `append`; type `unicast`
+via `oif` wg0 or lo, scope link, or `unreachable`, `blackhole`, `prohibit`
+without a device, scope universe; table main, protocol static; the
+validator refuses host bits in the destination, type local, a gateway and
+a table other than main; opcode 35), `wg_addaddr {addr, plen}` on wg0
+(`RTM_NEWADDR` with `NLM_F_CREATE | NLM_F_EXCL`, no broadcast: a second
+primary address, for `fib_add_ifaddr`'s prefix and broadcast routes and
+`fib_del_ifaddr`'s scan; a secondary address is refused by the mirror,
+fail-closed; opcode 36), `wg_delroute` generalised with `{dst, plen,
+[oif], [type], [metric]}` (any protocol and scope, the type when given;
+the bare form stays the default route via wg0), and the
+`/proc/net/fib_trie` read of 9.4 after each; the harness adds the trace
+fields, the validator rules (`harness/trace.py`, `_validate_route`) and
+the generator class's four variants (`host_route`, `reject_route`,
+`addaddr_xmit`, `replace_route`).
 
 Traces:
 
@@ -911,8 +919,15 @@ Traces:
   exclusion by decisions; the loopback destinations stay martians before
   the lookup (row 8).
 
-About fourteen handwritten traces and the generator class. IPv6 traces
-stay with the environment's rule.
+Thirteen handwritten traces (`r_insert_arms`, `r_insert_down`,
+`r_eight_hosts`, `r_walk`, `r_prefix_tie`, `r_reject_types`,
+`r_delete_arms`, `r_replace`, `r_addaddr`, `r_addaddr_device`,
+`r_delete_device_routes`, `r_mtu_route`, `r_lookup_depths`) and the
+generator class. The input-side traces (a session's decrypted packet to
+the second address, to its broadcast, to a host route's destination)
+need the session machinery of the generator and are the next landing's;
+the DSCP alias needs `rtm_tos` on the request, not taken in C1. IPv6
+traces stay with the environment's rule.
 
 ## 11. One-off mutants
 

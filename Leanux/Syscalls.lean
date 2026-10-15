@@ -76,7 +76,10 @@ inductive Syscall where
   /-- W9: `RTM_DELADDR` of wg0's fixture address and `RTM_DELROUTE` of the
       default route via wg0, per family, on a temporary rtnetlink socket. -/
   | wgDeladdr (family : Nat)
-  | wgDelroute (family : Nat)
+  | wgDelroute (family : Nat) (named : Bool) (dst plen oif typeCode metric : Nat)
+  /-- Lane C: the routing corpus's requests over the same socket. -/
+  | wgAddroute (dst plen oif typeCode metric mtu nlflags : Nat)
+  | wgAddaddr (addr plen : Nat)
   /-- E-B: an io_uring flood to wg0's `port`: `count` invalid-MAC1 initiations
       with `messages` valid-MAC1 initiations submitted first. -/
   | wgFlood (count port family : Nat) (messages : List (List UInt8))
@@ -311,7 +314,9 @@ def dispatch : Syscall → M Int
   | .wgSetMtu mtu => socketCallOn SENDER_FD (Env.setMtu mtu)
   | .wgInject family port message tos ll dest => socketCallOn SENDER_FD (Env.inject family port message tos ll dest)
   | .wgDeladdr family => rtnetlinkRequest (Env.wgDeladdr family)
-  | .wgDelroute family => rtnetlinkRequest (Env.wgDelroute family)
+  | .wgDelroute family named dst plen oif typeCode metric => rtnetlinkRequest (Env.wgDelroute family named dst plen oif typeCode metric)
+  | .wgAddroute dst plen oif typeCode metric mtu nlflags => rtnetlinkRequest (Env.wgAddroute dst plen oif typeCode metric mtu nlflags)
+  | .wgAddaddr addr plen => rtnetlinkRequest (Env.wgAddaddr addr plen)
   | .wgFlood count port family messages => Env.flood count port family messages
   -- W7: the io_uring submission's descriptor plumbing (the ring's fdget, each
   -- send's fget of the sender) is the fixture's, as the flood's is: not modeled
@@ -401,7 +406,8 @@ def syscall (call : Syscall) : M Int := do
   -- changes the IPv4 tables, the trie as `/proc/net/fib_trie` prints it,
   -- compared with the guest's read outside the window
   match call with
-  | .wgUp | .wgDown | .wgDelete | .wgDeladdr _ | .wgDelroute _ | .wgSetMtu _ | .wgNetnsClose =>
+  | .wgUp | .wgDown | .wgDelete | .wgDeladdr _ | .wgDelroute .. | .wgSetMtu _ | .wgNetnsClose
+  | .wgAddroute .. | .wgAddaddr .. =>
     let shape := Net.Fib.shape (← getK)
     modify fun w => { w with extraOut := w.extraOut ++ [("fib_trie", shape)] }
   | _ => pure ()

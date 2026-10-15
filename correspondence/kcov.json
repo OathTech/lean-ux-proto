@@ -391,6 +391,44 @@
     "fs/eventpoll.c:2584"
    ],
    "note": "epoll stream S: ep_alloc_epitem's percpu_counter_dec on its -ENOMEM path (:1766) and ep_register_epitem's on its attach-error path (:1808) are one block in the built code, attributed to the latter; the steered epitem failure (e_alloc_epitem_nomem) reaches it without ep_register_epitem running. ep_register_epitem's own path runs its `if (tep)` block (:1800) first. arch/x86/include/asm/irqflags.h is anchored only so this chain can be named."
+  },
+  {
+   "function": "collapse",
+   "frames": [
+    "net/ipv4/fib_trie.c:699",
+    "net/ipv4/fib_trie.c:907"
+   ],
+   "points": 2,
+   "unless_covered": [
+    "net/ipv4/fib_trie.c:695",
+    "net/ipv4/fib_trie.c:907"
+   ],
+   "note": "resize's return without a collapse (:910, `return node_parent(tn)`) shares collapse's :699 (`tp = node_parent(oldtnode)`, the same value, one block): the two points attributed to collapse:699 inlined at resize:907 run on every resize (return PCs 0xffffffff8151ced2 and 0xffffffff8151d4c4 in the accepted build); collapse's `return tp` (:706) is the same merged return (the next entry); collapse itself ran only when its scan at :695 did. Found by the routing corpus (every insertion's resize), 2026-10-15."
+  },
+  {
+   "function": "fib_insert_node",
+   "frames": [
+    "net/ipv4/fib_trie.c:1153",
+    "net/ipv4/fib_trie.c:1165"
+   ],
+   "unless_covered": [
+    "net/ipv4/fib_trie.c:359",
+    "net/ipv4/fib_trie.c:1115",
+    "net/ipv4/fib_trie.c:1165"
+   ],
+   "note": "fib_insert_alias's returns (:1193 and :1165's `return fib_insert_node(...)`) are one block attributed to fib_insert_node:1153 (`return 0`) inlined at :1165 (return PC 0xffffffff8151d60c in the accepted build): it runs on an alias added to an existing leaf although fib_insert_node did not; fib_insert_node ran only when leaf_new's allocation at :359 did. Found by r_tb_order (the routing corpus), 2026-10-15."
+  },
+  {
+   "function": "collapse",
+   "frames": [
+    "net/ipv4/fib_trie.c:706",
+    "net/ipv4/fib_trie.c:907"
+   ],
+   "unless_covered": [
+    "net/ipv4/fib_trie.c:695",
+    "net/ipv4/fib_trie.c:907"
+   ],
+   "note": "resize's return without a collapse (:910) is one block with collapse's `return tp` (:706) inlined at resize:907 (return PC 0xffffffff8151cf8b in the accepted build): covered on every resize; collapse itself ran only when its scan at :695 did. Found by the routing corpus, 2026-10-15."
   }
  ],
  "operand_exclusions": [

@@ -65,6 +65,7 @@ def FMODE_NOACCOUNT : UInt32 := (1 : UInt32) <<< 29
 def EBADF : Int := 9
 def EAGAIN : Int := 11
 def ENOMEM : Int := 12
+def ENOBUFS : Int := 105
 def EFAULT : Int := 14
 def EBUSY : Int := 16
 def EPIPE : Int := 32
@@ -1599,6 +1600,9 @@ structure World where
       check reads (`rt_genid`; the IPv6 fib sernum), bumped by every table
       change. The loopback prefixes are constants (`World.route4/6`). -/
   addrs4 : List Nat := []
+  /-- Lane C: the prefix length of a wg0 address added by `wg_addaddr`; an
+      address absent here is a `/32` (the fixture's). -/
+  addrPlens4 : List (Nat × Nat) := []
   addrs6 : List Nat := []
   defaultRoute6 : Bool := false
   ipv6Gen : Nat := 0

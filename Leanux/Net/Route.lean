@@ -17,6 +17,31 @@ namespace Leanux.Net
 open Leanux
 open Leanux.Net.Fib
 
+/-- `fib_select_default(flp, res)` (fib_semantics.c:1868-1935): the scan over
+    the leaf's default aliases for a live gateway route to prefer. None of
+    this fixture's routes has a gateway (`wg_addroute` takes none), so every
+    candidate that reaches :1904 is skipped at `!nhc->nhc_gw_family` and
+    the result stands; the scan's earlier tests are the C's, in order. -/
+def fibSelectDefault (res : Result) : M Unit := do
+  let leaf ← nodeAt res.leaf
+  let some first := (← getTable).infos.get? res.info | invariant "fib_select_default: an alias without its info"
+  let mut lastPrio := first.priority
+  let mut lastDscp := 0
+  for fa in leaf.aliases do
+    let some fi := (← getTable).infos.get? fa.info | invariant "fib_select_default: an alias without its info"
+    if fa.slen != KEYLENGTH - res.prefixlen then continue
+    if fa.dscp != 0 then continue   -- `fib_dscp_masked_match` on a zero-DSCP flow
+    if fa.tbId != res.tbId then continue
+    if fi.priority > lastPrio && fa.dscp == lastDscp then
+      if lastDscp != 0 then continue
+      break
+    if fi.flags &&& RTNH_F_DEAD != 0 then continue
+    lastDscp := fa.dscp
+    lastPrio := fi.priority
+    if fi.scope != RT_SCOPE_LINK || fi.type != .unicast then continue
+    -- :1904: `!nhc->nhc_gw_family`: no route here has a gateway
+    continue
+
 /-- `ip_route_output_key_hash_rcu(net, fl4, res, skb)` (route.c:2696-2864) for
     the flows WireGuard's sockets and the fixture's sender build: no `oif`,
     no mark, scope universe, a destination always set. The source test at
@@ -43,7 +68,11 @@ def routeOutput4 (saddr daddr : Nat) : M (Except Int Route) := do
       -- :2833-2841: the prefsrc or the destination; the loopback device
       if saddr == 0 then saddr := if fi.prefsrc != 0 then fi.prefsrc else daddr
       return .ok { dev := LO_IFINDEX, src := saddr, mtu := fi.mtu }
-    -- :2855-2857: `fib_select_path` (a single path, the source when none) and the device
+    -- :2855-2857: `fib_select_path` (fib_semantics.c:2269-2300): no oif, a
+    -- single path; a default route in a table with more than one goes
+    -- through `fib_select_default`; the source when none
+    if res.prefixlen == 0 && (← numDefault res.tbId) > 1 && res.type == .unicast then
+      fibSelectDefault res
     if saddr == 0 then saddr ← resultPrefsrc res.info
     -- __mkroute_output (:2545-2665): `IN_DEV_ROUTE_LOCALNET` off, so a loopback
     -- source on a non-loopback device is -EINVAL (:2558-2562)
