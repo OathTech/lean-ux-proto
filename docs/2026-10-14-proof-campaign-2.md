@@ -29,12 +29,12 @@ No independent existential projected runs are spliced together.
 | H2 Index | 36 contracts, including lifecycle boundaries, both handshake senders, three message consumers and original worker/dispatch | Public projection complete: 14 total contracts, 20 normal-return contracts, 1 exact stop and 1 projected initializer theorem; reachable coherence, broader records and the corpus runner composition remain open. |
 | H3 Roaming | 6 contracts, including original decrypt-worker publication provenance | Public projection complete; carrying provenance through poll execution and complete caller coverage remain open. |
 | H4 Configuration | 60 contracts and the reachable internal dump-accounting finding | Public projection and frame separation complete. Queued/live-keypair removal, private-key collision, mixed attributes, global ownership and general dump composition remain open. |
-| H5 Progress | 25 contracts and the accepted batch-backlog counterexample | Public projection and frame separation complete; productive-record decrease, full loop coverage and probe/detach composition remain open. The backlog witness is historical over `de62c9d`: main's batch guard now addresses request 1. |
+| H5 Progress | 27 contracts, including original cut-loop budget adequacy, and the accepted batch-backlog counterexample | Public projection and frame separation complete; the recorded cut cannot exhaust its budget. Whole-worker record decrease, full loop coverage and probe/detach composition remain open. The backlog witness is historical over `de62c9d`: main's batch guard now addresses request 1. |
 | H6 Timers | 32 timer/worker contracts, including original retransmit-timer/send-worker composition | Public projection and frame separation complete; a successful pair from an empty send queue derives the retry bound, reference acquisition/release, final empty queue and cleared pending flag. Complete retry episodes and whole-run arming/session counts remain open. |
 
 Projection/frame factoring completed at `69f988a` for all six results, preserving
 all 153 existing headline names before new mathematics. The following H2 lifecycle/sender
-and H6 dispatch increments, plus H3 publication provenance, bring the total to 170. No public statement directly names `World` or
+and H6 dispatch increments, H3 publication provenance and H5 cut-loop progress bring the total to 172. No public statement directly names `World` or
 `Kernel`.
 The full proof gate remains failed in inherited campaign-1 counter-window and
 index carries; those files have not been edited. Scoped validation does not
@@ -54,7 +54,7 @@ connections to the current executable mirror, not replacement interpreters.
 | H2 | `Index/View`, `TableModel`, `OwnerWordModel`, `AllocationModel`, `ReleaseModel`, `LifecycleModel` and pure release effects/bounds; `Statements`, `HandshakeClaims`, `OwnerUpdateClaims`, `LifecycleSource`, `LinkSource`, `SendSource`, `DispatchSource`, `ResponseSource`, `ConsumeSource` and the other operation/source modules. | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`, `NewlinkFrames`, `SendFrames`, `DispatchFrames`, `ResponseFrames`, `ConsumeFrames`; the old `HandshakeFrames` and `OwnerFrames` paths are import-only reexports, not duplicated lemmas. |
 | H3 | `Roaming/Model`, `View`, `Statements`, `EndpointClaims`, `EndpointSource`, `Authentication`, `PublicationModel`, `PublicationSource`, `PublicationClaims`. | `Roaming/Frames`, `PublicationFrames`; `Basic` reexports the endpoint source connection. |
 | H4 | `Config/Model`, `AllowedRemovalModel`, `QuietModel`, `ClaimView`, `Statements`, `SourceClaims`, `ObservationBridge`, and existing substantive effect/source modules. | `ConcreteFrames` isolates six whole-kernel endpoint contracts; `OperationFrames` isolates seven generic helpers; `ReadbackFrames` retains socket/fixture preservation; `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `QuietFrames`, `KeyFieldFrames` isolate within-WG preservation. |
-| H5 | `Progress/Model`, `View`, `Statements`, `SourceClaims`, `ObservationBridge`; `ControlLaws` is generic state/error control and `ControlSource` connects it exactly to the original worker; the scheduler/source modules retain actual execution factors. | `StackFrames` isolates caller-guard preservation. Probe/filter/no-work contracts also establish outputs and remain substantive source claims. |
+| H5 | `Progress/Model`, `View`, `Statements`, `SourceClaims`, `ObservationBridge`; `ControlLaws` is generic state/error control and `ControlSource` connects it exactly to the original worker; the scheduler/source modules retain actual execution factors. `CutModel`, `CutSource` and `CutClaims` establish original cut-loop progress. | `StackFrames` isolates caller-guard preservation; `CutFrames` isolates record/error-location preservation. Probe/filter/no-work contracts also establish outputs and remain substantive source claims. |
 | H6 | `TimerDiscipline/Model`, `View`, `SendView`, `Statements`, `ObservationBridge`, `ObservationClaims`, `SourceClaims`, `SendDispatchModel`, `SendDispatchClaims`, `RetryDispatchModel`, `RetryDispatchClaims`, and `*Source` operational proofs. | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`, `RetryDispatchFrames`, `WorkStateFrames`. |
 
 A compound exact effect is not a disposable frame merely because its name
@@ -67,8 +67,8 @@ outputs and meaningful within-WG preservation. H6's reference-decrement proof
 is therefore in `SendWorkerSource`, separate from send preservation.
 
 H5 retains two runner findings, two generic worker laws, eighteen total
-inspection contracts, two total original no-work contracts and one scheduler
-agreement. Inspection totality is not underlying-operation success. The actual
+inspection contracts, two total original no-work contracts, one scheduler
+agreement and two original recorded-cut progress contracts. Inspection totality is not underlying-operation success. The actual
 dispatch and NAPI decorations erase to the original actions, with exact stops;
 all branch observations retain their concrete intermediate executions. Generic
 worker laws have an exact original-operation instance and make no claim that
@@ -910,6 +910,40 @@ stock kernel replay (`leanchecker --fresh Leanux.Proofs.WG.Progress.Statements`,
 through the capped bundle). The
 full gate was rerun and fails at the same inherited counter refinement; token
 and import checks pass. The separate executable refill reproduction succeeds.
+
+The original `skipCutSites` now has a record-budget adequacy proof. `CutSource`
+factors the unchanged range loop, including its original allocation check,
+ambient stripping, head consumption and NET_RX ordinal update. An induction
+on remaining turns proves that entry record count plus one suffices: every
+continuing turn removes at least one record, and the extra turn finds an empty
+or unselected head. The successful result leaves a genuine input suffix, every
+reported site is selected, and reported-site count plus remaining-record count
+is bounded by the initial count. No exact reported-site order is claimed.
+
+The unconditional recorded outcome is successful return or the original
+below-cut allocation error, with its actual location and message; budget
+exhaustion is excluded. A separate total-return contract assumes `CutAccepted`
+only over the consumed non-passive selected prefix. Failed allocation records
+beyond the first unselected boundary need no premise. The acceptance test keeps
+the original `headD 1` behavior, including successful empty payloads and no byte
+length check. These claims concern the original operation on every concrete
+realization of the projected entry, not an inspection adapter. The suffix/drop
+operation is a substantive source effect; `CutFrames` contains only untouched
+record/error-location preservation. No shared lemma was copied.
+
+H5 now has 27 headlines, and the campaign has 172. The scoped Progress build
+passed (84 jobs), all 27 headline axiom checks plus exact source equality use
+only the three standard axioms, and fresh stock kernel replay passed. All 172
+campaign headlines import and pass axiom inspection together; the gate's token
+and import/root/default-target checks pass. Independent read-only review found
+no correctness or scope defect. Ordinary elaboration corrections only; no cap
+failure, timeout, guest run or infrastructure rerun. Reproduce with
+`LEAN_NUM_THREADS=32 capped -- scripts/in-bundle lake build Leanux.Proofs.WG.Progress.Statements`
+and the same wrapper around `lake env leanchecker --fresh Leanux.Proofs.WG.Progress.Statements`.
+The full gate remains failed in inherited shared files. Worker-body record
+monotonicity, scheduler-wide productive turns and operation-end closure remain
+open; this result does not settle the callback-refill finding or prove whole
+scheduler termination.
 
 ## H6 — Timer discipline (in progress)
 

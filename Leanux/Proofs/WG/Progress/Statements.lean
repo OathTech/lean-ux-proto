@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.Progress.ObservationBridge
+import Leanux.Proofs.WG.Progress.CutClaims
 
 /-! Projected H5 contracts. Inspection adapters report the exact original
 outcomes from the same concrete entry; their totality is not a claim that the
@@ -387,5 +388,26 @@ theorem original_recordless_turn_error (stack : Option Worker) (worker : Worker)
   change observeResult ((scheduleTurn stack).run w) = .error err
   rw [same]
   rfl
+
+/-- The original recorded cut cannot exhaust its record-derived budget.
+It either returns a suffix at an empty/non-cut boundary, with every reported
+site selected and costing at least one input record, or propagates the actual
+below-cut allocation error with its original location and message. Passive
+records cost input but are not reported. No exact reported-site order is claimed. -/
+theorem original_cut_records_outcome (sites : List HiddenSite) (records : List HiddenRecord) :
+    Campaign2.Observes (skipCutSites sites) (fun entry => entry.ambient.hidden = some records)
+      (CutOutcome sites records) :=
+  source_cut_outcome sites records
+
+/-- With successful allocation bytes in the selected non-passive prefix,
+the original cut returns for every concrete realization of this record stream.
+Records after its first stopping boundary need no allocation premise. Empty
+allocation payloads have the original successful default byte; this operation
+does not check payload lengths. The result has the suffix and consumption bound. -/
+theorem original_cut_records_returns (sites : List HiddenSite) (records : List HiddenRecord)
+    (accepted : CutAccepted sites records) :
+    Campaign2.Returns (skipCutSites sites) (fun entry => entry.ambient.hidden = some records)
+      (fun taken final => ∃ rest, final.ambient.hidden = some rest ∧ CutProgress sites records taken rest) :=
+  source_cut_returns sites records accepted
 
 end Leanux.Proofs.WG.Progress
