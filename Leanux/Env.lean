@@ -804,8 +804,19 @@ def afterBatch : M Unit := do
       runOneSendWorker
     else break
   let d ← getDev
+  -- the completion guard: every queue a dispatched unit drains, as the
+  -- injection path's (`inject`). The handshake receive queue and its counter
+  -- were omitted until 2026-10-15 (campaign 2's request 1: a constructed
+  -- stream that queues the receive worker and never dispatches it was
+  -- accepted). The pending-worker identity (`World.pendingWork`) is not
+  -- checked here: it is the environment's dispatch bookkeeping, set only at
+  -- a produce, so a pending receive worker always has a non-empty queue in
+  -- the mirror's own transitions; the queue and the counter are the C's
+  -- data, and a pending bit with an empty queue would be an invariant
+  -- violation, not a completion fact.
   requireDrained "the batch queued"
-    [!d.decryptQueue.empty, !d.encryptQueue.empty, !d.txWorkQueue.isEmpty, !d.sendWorkQueue.isEmpty]
+    [!d.decryptQueue.empty, !d.encryptQueue.empty, !d.txWorkQueue.isEmpty, !d.sendWorkQueue.isEmpty,
+     !d.handshakeQueue.isEmpty, d.handshakeQueueLen != 0]
   deliverSent
 
 /-- `wg_batch`: the fixture's sender submits `items` as one `io_uring_enter`,
