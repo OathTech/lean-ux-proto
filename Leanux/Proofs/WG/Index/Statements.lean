@@ -20,6 +20,7 @@ import Leanux.Proofs.WG.Index.FlushSource
 import Leanux.Proofs.WG.Index.SessionCoherenceSource
 import Leanux.Proofs.WG.Index.SessionAllocationSource
 import Leanux.Proofs.WG.Index.SessionSequenceSource
+import Leanux.Proofs.WG.Index.LookupProvenanceSource
 
 /-! H2's original-operation table contracts. Reachable owner/peer-word
 coherence remains a separate obligation. -/
@@ -626,5 +627,22 @@ theorem original_session_allocation_sequence (pids : List PeerId) :
     rw [observedSessionCalls_erase]
   · intro d bound
     exact observedSessionCalls_facts pids d bound
+
+/-- Any successful original index lookup derives its first equal-index row and
+permitted kind, initial owner word and resident peer, positive reference count
+and non-overflowing acquisition. Its exact final device includes the ordered
+peer acquisition and owner-word store, including aliased identities. Only the
+entry device is assumed; no table uniqueness, owner/peer coherence, isDead flag,
+or readiness premise is supplied. This normal-return implication does not
+promise completion or identify the owner object with its referenced peer. -/
+theorem original_index_lookup_success (kinds : List IndexKind) (index : Nat) (d : Device) :
+    Campaign2.Ensures (indexLookup kinds index) (fun s => s.wg.device = some d)
+      (fun result final => ∀ owner pid, result = some (owner, pid) →
+        d.indexTable.find? (·.index == index) = some { index, owner } ∧
+        kinds.contains (IndexEntry.kind { index, owner }) = true ∧
+        ownerWord d owner = some (some pid) ∧ ∃ p,
+          d.peers[pid]? = some p ∧ 0 < p.refcount ∧ p.refcount + 1 < 2 ^ 31 ∧
+          final.wg.device = some (writeOwnerWord (acquirePeer d pid p) owner (some pid))) :=
+  indexLookup_success kinds index d
 
 end Leanux.Proofs.WG.Index
