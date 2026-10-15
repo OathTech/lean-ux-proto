@@ -1,6 +1,9 @@
 import Leanux.Proofs.WG.TimerDiscipline.Arming
 import Leanux.Proofs.WG.TimerDiscipline.Jitter
 import Leanux.Proofs.WG.TimerDiscipline.Retry
+import Leanux.Proofs.WG.TimerDiscipline.RecordedSite
+import Leanux.Proofs.WG.TimerDiscipline.RecordedJitter
+import Leanux.Proofs.WG.TimerDiscipline.ArmingPrefixes
 
 namespace Leanux.Proofs.WG.TimerDiscipline
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
@@ -112,5 +115,96 @@ theorem original_retransmit_counter (pid : PeerId) (p : Peer) :
   | some q =>
     refine ⟨q, rfl, ?_⟩
     simpa [retryAt, retryView, resident, nextAttempts, MAX_TIMER_HANDSHAKES, REKEY_TIMEOUT] using effect
+
+/-- With arm-record mode enabled, a normally completed guarded arm uses
+the original callerJiffies operation at the supplied site. When the guard passes, expiry equals
+that read plus delay; the arm's own read is zero or one signed tick later. -/
+theorem original_guarded_arm_recorded (site : HiddenSite) (pid : PeerId) (timer : PeerTimer)
+    (delay : Nat) (d : Device) (p : Peer) (resident : d.peers[pid]? = some p)
+    (initial final : World) (result : Bool) (device : initial.k.wg = some d)
+    (records : initial.armRecords = true)
+    (run : (modPeerTimer site pid timer delay).run initial = .ok (result, final)) :
+    ∃ caller afterRead,
+      (callerJiffies site).run initial = .ok (some caller, afterRead) ∧
+      result = (d.running && !p.isDead) ∧
+      if result then
+        peerAt final pid = some (p.setTimer timer (some (caller + delay.toUInt64))) ∧
+        ∃ now, final.jiffiesLast = some now ∧
+          0 ≤ (now - caller).toInt64 ∧ (now - caller).toInt64 ≤ 1
+      else peerAt final pid = some p :=
+  modPeerTimer_recorded_clock site pid timer delay d p resident initial final result device records run
+
+/-- With arm-record mode enabled, the original session-derived hook on a
+running live peer arms zero-key material at its original caller-read result
+plus REJECT_AFTER_TIME * 3 * HZ ticks.
+This exact site and delay contract covers one hook invocation. -/
+theorem original_session_derived_recorded (pid : PeerId) (d : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p) (running : d.running = true) (alive : p.isDead = false)
+    (initial final : World) (device : initial.k.wg = some d) (records : initial.armRecords = true)
+    (run : (timersSessionDerived pid).run initial = .ok ((), final)) :
+    ∃ caller afterRead,
+      (callerJiffies .timerJiffiesSessionDerived).run initial = .ok (some caller, afterRead) ∧
+      peerAt final pid = some (p.setTimer .zeroKeyMaterial
+        (some (caller + ZERO_KEY_MATERIAL_TICKS.toUInt64))) ∧
+      ∃ now, final.jiffiesLast = some now ∧
+        0 ≤ (now - caller).toInt64 ∧ (now - caller).toInt64 ≤ 1 :=
+  sessionDerived_recorded_clock pid d p resident running alive initial final device records run
+
+/-- With arm-record mode enabled, original handshake-initiated arming
+uses its caller-read result plus REKEY_TIMEOUT * HZ and a jitter below HZ/3.
+The caller read precedes the original jitter computation, and both executions
+are witnessed; supplied records and permitted placeholders are both covered. -/
+theorem original_handshake_initiated_recorded (pid : PeerId) (d : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p) (running : d.running = true) (alive : p.isDead = false)
+    (initial final : World) (device : initial.k.wg = some d) (records : initial.armRecords = true)
+    (run : (timersHandshakeInitiated pid).run initial = .ok ((), final)) :
+    ∃ caller afterRead jitter afterJitter,
+      (callerJiffies .timerJiffiesHandshakeInitiated).run initial = .ok (some caller, afterRead) ∧
+      (jitterBelowRekeyTimeout .retransmitJitter).run afterRead = .ok (jitter, afterJitter) ∧
+      jitter < HZ / 3 ∧
+      peerAt final pid = some (p.setTimer .retransmitHandshake
+        (some (caller + (REKEY_TIMEOUT_TICKS + jitter).toUInt64))) ∧
+      ∃ now, final.jiffiesLast = some now ∧
+        0 ≤ (now - caller).toInt64 ∧ (now - caller).toInt64 ≤ 1 := by
+  rw [handshakeInitiated_source] at run
+  exact jitteredArm_recorded_clock .timerJiffiesHandshakeInitiated .retransmitJitter
+    pid .retransmitHandshake REKEY_TIMEOUT_TICKS d p resident running alive
+    initial final device records run
+
+/-- With arm-record mode enabled and no pending new-handshake timer,
+original data-sent arming on a running live peer uses its caller-read result
+plus keepalive and rekey delays and bounded jitter, in original read order. -/
+theorem original_data_sent_recorded (pid : PeerId) (d : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p) (absent : p.timerPending .newHandshake = false)
+    (running : d.running = true) (alive : p.isDead = false)
+    (initial final : World) (device : initial.k.wg = some d) (records : initial.armRecords = true)
+    (run : (timersDataSent pid).run initial = .ok ((), final)) :
+    ∃ beforeRead caller afterRead jitter afterJitter,
+      (dataSentPrefix pid).run initial = .ok (true, beforeRead) ∧
+      (callerJiffies .timerJiffiesDataSent).run beforeRead = .ok (some caller, afterRead) ∧
+      (jitterBelowRekeyTimeout .newHandshakeJitter).run afterRead = .ok (jitter, afterJitter) ∧
+      jitter < HZ / 3 ∧
+      peerAt final pid = some (p.setTimer .newHandshake
+        (some (caller + (KEEPALIVE_TIMEOUT_TICKS + REKEY_TIMEOUT_TICKS + jitter).toUInt64))) ∧
+      ∃ now, final.jiffiesLast = some now ∧
+        0 ≤ (now - caller).toInt64 ∧ (now - caller).toInt64 ≤ 1 :=
+  dataSent_recorded_clock pid d p resident absent running alive initial final device records run
+
+/-- With arm-record mode enabled, original traversal on a running live peer
+with nonzero interval sets persistent keepalive to its caller-read result plus
+interval * HZ, even if that timer was already pending. -/
+theorem original_traversal_recorded (pid : PeerId) (d : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p) (enabled : p.persistentKeepaliveInterval ≠ 0)
+    (running : d.running = true) (alive : p.isDead = false)
+    (initial final : World) (device : initial.k.wg = some d) (records : initial.armRecords = true)
+    (run : (timersTraversal pid).run initial = .ok ((), final)) :
+    ∃ beforeRead caller afterRead,
+      (traversalPrefix pid).run initial = .ok ((p.persistentKeepaliveInterval, true), beforeRead) ∧
+      (callerJiffies .timerJiffiesTraversal).run beforeRead = .ok (some caller, afterRead) ∧
+      peerAt final pid = some (p.setTimer .persistentKeepalive
+        (some (caller + (p.persistentKeepaliveInterval * HZ).toUInt64))) ∧
+      ∃ now, final.jiffiesLast = some now ∧
+        0 ≤ (now - caller).toInt64 ∧ (now - caller).toInt64 ≤ 1 :=
+  traversal_recorded_clock pid d p resident enabled running alive initial final device records run
 
 end Leanux.Proofs.WG.TimerDiscipline

@@ -5,7 +5,7 @@
 Work is confined to `.worktrees/proofs-campaign-2`, branch `proofs/campaign-2`.
 H1, H3 and H4 have local contracts; their whole-operation/whole-run claims
 remain open. H4 also has a checked reachable internal dump-accounting finding. H5 has a checked batch-completion counterexample and open progress
-obligations. H6 has twelve local timer contracts; whole-run site coverage and
+obligations. H6 has seventeen local timer contracts; whole-run site coverage and
 retry/session counting remain open.
 H2 was unblocked by the user's landing notice for `de62c9d` on 2026-10-15.
 Main was merged into this branch at `5033f7a`. No result is claimed complete.
@@ -513,7 +513,7 @@ were preserved under snapshot refs without moving branches or working files.
 running/live guard, and peer effects of traversal, session derivation, data
 receipt and handshake completion. `Jitter` proves that every successful
 jitter draw is below `HZ / 3 = 83`, including the rejection loop, and frames
-the entire kernel. Twelve terminal statements include the two authenticated
+the entire kernel. Seventeen terminal statements include the two authenticated
 packet hooks that delete timers and the retransmit callback counter rule. The arm equation uses UInt64 addition and
 the signed zero-or-one-tick admissibility gap; it is not a firing-time claim.
 All contracts concern original functions on normal completion. They do not
@@ -542,14 +542,22 @@ silently replaced by the local theorem.
 Architecture: standalone weakest-precondition contracts, with a local map
 composition rule and exact peer-update factorization for handshake completion.
 These avoid the inherited shared import failure; existing shared lemmas remain
-untouched. Remaining work: all seven source arming sites with exact delay and
-caller provenance, completed retry-episode counting, and source-complete caller
+untouched. `RecordedSite`, `RecordedJitter` and `ArmingPrefixes` connect the
+original caller-read operations and exact wrapped expiry equations to session
+derivation, handshake initiation, data sending and traversal. The jittered
+sites retain the original read order and prove the jitter bound; traversal
+permits an already pending timer. These contracts assume arm-record mode is
+enabled, which also admits placeholder reads when that separate mode is enabled;
+they do not assert consumption of supplied records. Independent review found no
+mathematical defect; the stronger supplied-record wording was corrected.
+Remaining work: exact delay and caller provenance for data receipt, expired
+keepalive and retransmit give-up, completed retry-episode counting, and source-complete caller
 coverage for traversal and session derivation. No H6 mirror mismatch has been
 established; ranked mirror suggestions: none.
 
 Effort: capped elaboration, repaired syntax/composition errors and one local
 heartbeat exhaustion; no memory-cap failure. Scoped build and axiom inspection
-pass for all twelve statements using only the three standard axioms. Stock
+pass for all seventeen statements using only the three standard axioms. Stock
 kernel replay also passes: `capped -- scripts/in-bundle lake env leanchecker
 --fresh Leanux.Proofs.WG.TimerDiscipline.Statements`. The full
 proof gate remains failed at inherited `CounterWindow/Refinement.lean` and
