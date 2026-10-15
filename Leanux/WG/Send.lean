@@ -98,7 +98,7 @@ def cpumaskChooseOnline (pid : PeerId) : M Nat := do
     `transmit_packet_work` queued on its serial CPU. -/
 def enqueuePerPeerTx (item : List SkbId) (state : PacketState) : M Unit := do
   let some first := item.head? | invariant "an empty ring item"
-  let pid := (← getKeypair (← getTxSkb first).keypair).peer
+  let pid ← IndexOwner.peerDeref (.keypair (← getTxSkb first).keypair)   -- PACKET_PEER(first)
   peerGet pid
   -- atomic_set_release(&PACKET_CB(first)->state, state): the one skb the
   -- peer's tx_queue (queued or peeked, W7) and the worker name (review 4.2)
@@ -252,7 +252,7 @@ def sendStagedPackets (pid : PeerId) : M Unit := do
   -- `packets.prev->next = NULL`; wg_peer_get(keypair->entry.peer);
   -- PACKET_CB(packets.next)->keypair = keypair: the skbs enter the store
   -- (review 4.2) as the list `wg_packet_create_data` takes
-  peerGet (← getKeypair id).peer
+  peerGet (← IndexOwner.peerDeref (.keypair id))
   let item ← packetsCb.mapM newTxSkb
   createData pid item
 

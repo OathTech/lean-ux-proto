@@ -190,7 +190,10 @@ def createInitiation (pid : PeerId) : M (Option (List UInt8)) := do
   let encTime := aeadEncrypt key noiseNonce timestamp h
   let h := noiseHash (h ++ encTime)
   setChain pid ck h
-  let index ← indexInsert pid .handshake
+  -- `wg_index_hashtable_insert(handshake->entry.peer->device->index_hashtable, ...)`
+  -- (noise.c:569-571): the table through the entry's peer word
+  _ ← IndexOwner.peerDeref (.handshake pid)
+  let index ← indexInsert (.handshake pid)
   setPeer pid { (← getPeer pid) with handshakeState := HANDSHAKE_CREATED_INITIATION }
   return some (le32 1 ++ le32 index ++ e ++ encStatic ++ encTime ++ List.replicate 32 0)
 
@@ -226,7 +229,10 @@ def createResponse (pid : PeerId) : M (Option (List UInt8)) := do
   let encNothing := aeadEncrypt key noiseNonce [] h
   let h := noiseHash (h ++ encNothing)
   setChain pid ck h
-  let index ← indexInsert pid .handshake
+  -- `wg_index_hashtable_insert(handshake->entry.peer->device->index_hashtable, ...)`
+  -- (noise.c:713-715): the table through the entry's peer word
+  _ ← IndexOwner.peerDeref (.handshake pid)
+  let index ← indexInsert (.handshake pid)
   setPeer pid { (← getPeer pid) with handshakeState := HANDSHAKE_CREATED_RESPONSE }
   return some (le32 2 ++ le32 index ++ le32 receiver ++ e ++ encNothing ++ List.replicate 32 0)
 
@@ -268,7 +274,9 @@ def beginSession (pid : PeerId) : M Bool := do
   let st := (← getPeer pid).handshakeState
   if ← andM (branch .sessionNotCreatedResponse (st != HANDSHAKE_CREATED_RESPONSE))
       (branch .sessionNotConsumedResponse (st != HANDSHAKE_CONSUMED_RESPONSE)) then return false
-  let created ← keypairCreate pid
+  -- `keypair_create(handshake->entry.peer)` (noise.c:827): the handshake
+  -- entry's peer word, as it is, becomes the keypair entry's
+  let created ← keypairCreate (← IndexOwner.peerWord (.handshake pid))
   if ← branch .sessionNoKeypair created.isNone then return false
   let some kp := created | invariant "unreachable"
   let p ← getPeer pid
@@ -280,8 +288,11 @@ def beginSession (pid : PeerId) : M Bool := do
   if ← branch .sessionAlive !(← getPeer pid).isDead then
     addNewKeypair pid kp
     -- the keypair's entry takes the handshake's place
-    -- `ret = wg_index_hashtable_replace(...)`: false when the handshake entry
-    -- was unhashed meanwhile (a concurrent clear), outside the domain
+    -- `ret = wg_index_hashtable_replace(handshake->entry.peer->device->index_hashtable, ...)`
+    -- (noise.c:851-853): the table through the entry's peer word; false
+    -- when the handshake entry was unhashed meanwhile (a concurrent clear),
+    -- outside the domain
+    _ ← IndexOwner.peerDeref (.handshake pid)
     if !(← indexReplaceHandshake pid kp) then unsupported "begin_session: the handshake entry was unhashed"
     return true
   unsupported "a dead peer finishing a session"
@@ -294,9 +305,9 @@ def consumeResponse (msg : List UInt8) : M (Option PeerId) := do
   -- `src->receiver_index`, of a handshake
   let entry ← indexLookup [.handshake] (u32le msg 8)
   if ← branch .crespNoHandshake entry.isNone then return none
-  let some e := entry | invariant "unreachable"
-  -- the entry a lookup returns carries the got peer (peerlookup.c:219-220)
-  let some pid := e.peer | invariant "unreachable"
+  -- `handshake = (struct noise_handshake *)entry` (the owner, a peer's
+  -- handshake), `peer` the lookup's reference (peerlookup.c:220)
+  let some (IndexOwner.handshake _, pid) := entry | invariant "a keypair entry under the handshake mask"
   let fail : M (Option PeerId) := do
     peerPut (some pid)
     return none
