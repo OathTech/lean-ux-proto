@@ -72,16 +72,19 @@ theorem drop_gro (pid occurrence skb : Nat) (stamp : PacketStamp) :
 theorem consume_gro (pid occurrence skb : Nat) (stamp : PacketStamp) (pkt : RxPacket) (ep : Endpoint) :
     ProjectsPrefix groEvent (Option.map Entry.tag) (consume pid occurrence skb stamp pkt ep)
       (consumeGro pid occurrence skb pkt ep) := by
-  unfold consume consumeGro
-  apply projectsPrefix_bind groEvent id (Option.map Entry.tag)
-    (access_gro (consumeDataDonePrefix_erases _ _ _))
-  intro out
-  cases out with
-  | none => exact projectsPrefix_pure _ _ _
-  | some bytes =>
-    apply projectsPrefix_bind groEvent id (Option.map Entry.tag) (projectsPrefix_emit _ _)
-    intro _
-    exact projectsPrefix_pure _ _ _
+  intro w h
+  have hp := access_gro (consumeDataDonePrefix_erases pid pkt ep) w h
+  simp only [consumeGro, runPrefix_bind]
+  rw [hp, consume_run]
+  cases runPrefix (access (consumeDataDonePrefix pid pkt ep)) w h with
+  | mk result hist =>
+    cases result with
+    | error e => rfl
+    | ok out =>
+      rcases out with ⟨out, v⟩
+      cases out <;> simp only [map_eq_pure_bind, runPrefix_bind, runPrefix_emit, runPrefix_pure, groEvent,
+        List.filterMap_append, List.filterMap_cons, List.filterMap_nil, List.append_nil,
+        Option.map, Except.map, Prod.fst, Prod.snd, id]
 
 theorem receiveOption_gro (g : Gro) (out : Option Entry) :
     ProjectsPrefix groEvent Gro.forget (out.elim (pure g) (receive g))
@@ -110,6 +113,8 @@ theorem poll_gro (pid : PeerId) (budget : Nat) :
         | with_reducible exact access_gro (readyAccess_erases _)
         | with_reducible exact capture_gro _
         | with_reducible exact drop_gro _ _ _ _
+        | with_reducible exact receiptObserved_projects (fun _ => rfl) (access_gro (counterValidatePrefix_erases _ _))
+        | with_reducible exact receiptObserved_projects (fun _ => rfl) (projectsPrefix_lift _ _)
         | with_reducible exact access_gro (counterValidatePrefix_erases _ _)
         | with_reducible exact access_gro (keypairPutPrefix_erases _ _)
         | with_reducible exact access_gro (peerPutMixed_erases _)
@@ -203,8 +208,7 @@ theorem consume_access (pid occurrence skb : Nat) (stamp : PacketStamp) (pkt : R
   intro w h hi
   have hp := access_projects
     (consumeDataDonePrefix_preserves_ambient allocationAmbient allocationTx allocationRx pid pkt ep) w h hi
-  simp only [consume, runPrefix_bind]
-  rw [hp]
+  rw [hp, consume_run]
   cases hr : runPrefix (access (consumeDataDonePrefix pid pkt ep)) w h with
   | mk result hist =>
     cases result with
@@ -276,6 +280,8 @@ theorem poll_access (pid : PeerId) (budget : Nat) :
             | with_reducible exact (access_projects (readyAccess_allocation _)).to_mapped
             | with_reducible exact (capture_access _).underTo
             | with_reducible exact (drop_access _ _ _ _).to_mapped
+            | with_reducible exact (receiptObserved_projectsUnder (fun _ => rfl) (access_projects (AmbientContracts.drop (counterValidatePrefix_spec allocationAmbient (fun _ => True) _ _)))).to_mapped
+            | with_reducible exact (receiptObserved_projects (fun _ => rfl) (projectsPrefix_lift _ _)).underTo
             | with_reducible exact (access_projects (AmbientContracts.drop (counterValidatePrefix_spec allocationAmbient (fun _ => True) _ _))).to_mapped
             | with_reducible exact (access_projects (allocationTx.put _ _)).to_mapped
             | with_reducible exact (access_projects (allocationAmbient.peerPut _)).to_mapped

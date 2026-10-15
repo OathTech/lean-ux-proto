@@ -71,15 +71,19 @@ theorem flushAll_appends (g : Gro) : Appends (flushAll g) := by
 theorem consume_appends (pid occurrence skb : Nat) (stamp : PacketStamp) (pkt : RxPacket) (ep : Endpoint) :
     Appends (consume pid occurrence skb stamp pkt ep) := by
   unfold consume
-  apply Appends.bind (Appends.focus _ _ _)
-  intro out
-  cases out with
+  apply Appends.bind (Appends.focus _ _ _).captureObserved
+  intro r
+  apply Appends.bind (emit_appends _)
+  intro _
+  cases r.value with
   | none => exact Appends.pure _
   | some bytes => exact Appends.bind (emit_appends _) (fun _ => Appends.pure _)
 
 theorem poll_appends (pid : PeerId) (budget : Nat) : Appends (poll pid budget) := by
   unfold poll drop
   repeat' first
+    | with_reducible exact (access_appends _).receiptObserved
+    | with_reducible exact (Appends.lift _).receiptObserved
     | with_reducible exact capture_appends _
     | with_reducible exact consume_appends _ _ _ _ _ _
     | with_reducible exact receive_appends _ _

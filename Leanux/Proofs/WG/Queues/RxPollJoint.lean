@@ -29,12 +29,36 @@ def drop (pid : PeerId) (occurrence : Nat) (id : SkbId) (stamp : PacketStamp) : 
 
 def consume (pid : PeerId) (occurrence : Nat) (id : SkbId) (stamp : PacketStamp)
     (pkt : RxPacket) (endpoint : Endpoint) : Obs (Option Entry) := do
-  match ← access (consumeDataDonePrefix pid pkt endpoint) with
+  let r ← captureObserved (access (consumeDataDonePrefix pid pkt endpoint))
+  let receipt : RxDisposition.ConsumeReceipt := ⟨pid, pkt, endpoint, r⟩
+  emitPrefix (.consumed occurrence id stamp receipt)
+  match r.value with
   | none => return none
   | some bytes =>
-    let e : Entry := ⟨⟨occurrence, id, bytes⟩, stamp⟩
+    let e : Entry := ⟨⟨occurrence, id, bytes⟩, stamp, some receipt⟩
     emitPrefix (.buffered e)
     return some e
+
+/-- The captured call is the original access observer at the actual incoming
+history. Its Stop keeps every access; normal None also receives a receipt. -/
+theorem consume_run (pid occurrence id : Nat) (stamp : PacketStamp)
+    (pkt : RxPacket) (ep : Endpoint) (w : World) (h : List Event) :
+    runPrefix (consume pid occurrence id stamp pkt ep) w h =
+      match runPrefix (access (consumeDataDonePrefix pid pkt ep)) w h with
+      | (.error e, t) => (.error e, t)
+      | (.ok (out, v), t) =>
+        let receipt : RxDisposition.ConsumeReceipt := ⟨pid, pkt, ep, ⟨out, w, v⟩⟩
+        let t := t ++ [.consumed occurrence id stamp receipt]
+        match out with
+        | none => (.ok (none, v), t)
+        | some bytes =>
+          let entry : Entry := ⟨⟨occurrence, id, bytes⟩, stamp, some receipt⟩
+          (.ok (some entry, v), t ++ [.buffered entry]) := by
+  simp only [consume, runPrefix_bind, runPrefix_captureObserved]
+  cases runPrefix (access (consumeDataDonePrefix pid pkt ep)) w h with
+  | mk out t => cases out with
+    | error e => rfl
+    | ok result => rcases result with ⟨out, v⟩; cases out <;> rfl
 
 def completeAccess (pid : PeerId) : MixedM Unit :=
   modifyPeerKeysPrefix pid fun p => {p with napiScheduled := false}
@@ -56,9 +80,12 @@ def poll (pid : PeerId) (budget : Nat) : Obs Nat := do
     if pkt.peer != pid then liftPrefix (invariant "a packet on another peer's rx_queue")
     drop pid workDone id captured.2
     let mut free := true
-    if !(← liftPrefix (branch .rxPollNotCrypted (pkt.state != .crypted))) then
-      if !(← liftPrefix (branch .rxPollCounterInvalid !(← access (counterValidatePrefix pkt.keypair pkt.nonce)))) then
-        let endpoint ← liftPrefix (endpointFromSkb pkt.source)
+    if !(← receiptObserved (liftPrefix (branch .rxPollNotCrypted (pkt.state != .crypted)))
+        (Event.checkedState workDone id captured.2 pkt)) then
+      if !(← liftPrefix (branch .rxPollCounterInvalid !(← receiptObserved (access (counterValidatePrefix pkt.keypair pkt.nonce))
+          (Event.checkedCounter workDone id captured.2 pkt)))) then
+        let endpoint ← receiptObserved (liftPrefix (endpointFromSkb pkt.source))
+          (Event.checkedEndpoint workDone id captured.2 pkt)
         if !(← liftPrefix (branch .rxPollEndpointFailed endpoint.isNone)) then
           let some e := endpoint | liftPrefix (invariant "unreachable")
           for entry in (← consume pid workDone id captured.2 pkt e).toList do

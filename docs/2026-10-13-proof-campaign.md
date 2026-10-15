@@ -43,24 +43,41 @@ The handshake-bound comment is corrected; the distinct 4096-step send-worker bou
 literal source ordering and partial histories; keep the local captured-ring contract explicit instead of imposing a
 new initialized ring premise.
 
-**Carry effort/validation.** Lease granted 07:25:01 UTC, accepted 07:26:04. Six capped calls: five builds, four PASS and
-one FAIL, plus exact check 06 PASS. Core call 01 passed 169 jobs (collected 07:34:28); R2/Logged/routing call 02
-passed 401 (07:42:33). Full call 03 failed in `RxEnvTrafficHistory.flood_projects` at the deterministic 200,000-heartbeat
-limit. Explicit local producer projection/preservation contracts replaced broad tactic search; no limit changed.
-Targeted call 04 passed 267 jobs (07:52:01); full call 05 passed 486 (07:55:00), when Lean source froze. Exact 06
-checked 45 Lean files/two docs, 489/479+10 declarations, tokens/imports/default target, whitespace/EOF, the unchanged
-pending index and mirror, and seven lagging pins. Its document hashes precede only this final metadata edit; Lean
-hashes are unchanged. All exits are collected. No kernel/recovery diagnostic, cap hit, interruption, infrastructure
-rerun or cap/limit increase occurred. Builds used `LEAN_NUM_THREADS=32`, `LEANUX_QEMU_SLOTS=16` and the unchanged 32G cap.
-Independent review ran 07:47:26–08:00:25 UTC (12m59, read-only) and is clear after correcting the poll-bound wording,
-down versus destruction lifetime, and the upstream comment location. Coordinated checks pass: the 486-job build and
-489-declaration permitted-axiom gate, fresh stock kernel replay, 60-job default build, fresh 118-job executable build,
-and 126 tests in 23.840s (one skip). Units ran only after the executable rebuild passed. All eleven historical recipes
-pass: nine accepted agreements and two pending-dump rejections with accepted pre-delete boundaries. Root's eighteen
-capped calls comprise seventeen PASS and one FAIL: its first exact checker incorrectly retained whitespace before a
-closing parenthesis when deleting `floodExact`; the corrected checker passes the unchanged source. This was a checker
-repair, not an infrastructure retry. It confirms mirror identity, scope, all 489 names, 479 unchanged bodies, ten exact
-API removals, imports/tokens and formatting. All jobs are collected; the register is current over `cb2348e`.
+**Current local RX disposition extension.** Three new terminal groups retain all 489 prior bodies (492 declarations,
+117 R4). Actual consume runs once at the identical incoming audit history, retaining both normal None and Some;
+new standalone events are erased by old audit/GRO/completion projections, while entry/completion decoders retain
+the full Entry and optional receipt. Scoped/full builds pass 401/488; full result collected 09:22:10 UTC, 70m00s after
+acceptance. Exact checks pass scope, census, all 489 old bodies, tokens/imports, whitespace and mirror identity.
+Independent final review (09:14:51–09:26:26 UTC, 11m35s) found the stated local claims sound after the wording fixes
+below. The 492-declaration permitted-axiom gate, fresh stock kernel replay, 60-job default build and 103 tests
+(21.694s, one skip) pass. The first replay failed because the coordinator launched it during the gate's final
+comment-triggered recompilation, when Statements.olean was temporarily absent. After collecting the build,
+the single permitted infrastructure retry passed; both outcomes are recorded, with no source repair or cap change.
+The unchanged mirror's executable and 23 model-replay tests were validated in the preceding carry, not rerun here.
+The preceding validated baseline is `15f0b97`: the cb2348e carry passed full/gate 486/489, fresh stock kernel replay,
+default/executable builds, 126 tests (one skip), and eleven recipes (nine agreements/two pending-dump rejections).
+Its deterministic 200k-heartbeat build failure and first coordinator exact-normalizer failure were corrected without
+limit or semantic changes; detailed carry timings and the 479+10 terminal API accounting are in `0ed74eb`/`15f0b97`.
+
+[AGENT 2026-10-15] Keep this tranche at fresh-poll occurrence disposition and run/payload receipts. The result-sensitive
+captured packet/stamp/peer link and same-journal receipt provenance remain explicit obligations; do not infer them
+from receipt validity or strengthen initialized premises. A bounded source-link attempt proves the actual capture
+lookup and full-RX-store drop/counter frames, but does not yet transport the relation to consume through the poll.
+
+**Current effort.** Acceptance 08:12:10 UTC; 90-minute/48-call lease with the final 20 minutes / 10 calls reserved. Builds use
+command-scoped LEAN_NUM_THREADS=32 for Lake scheduling and QEMU slots 16, with unchanged per-compiler -j1 and 32G cap.
+Calls 02 and 28 display rejected elaborator-recovery
+`sorry ()` goal terms, not source admissions; calls 11/13 reach the existing 200k limit, repaired by a literal tail cut
+without raising it. An initial wrong-directory call was rejected before launch; no worker infrastructure rerun occurred.
+The first export draft incorrectly shortened the None route and equated repayment with final consume World; it was
+rejected and replaced by the exact source-factor conclusion, retaining separate repayment and rxAfterLookup Worlds.
+Thirty-six worker capped calls were collected: 33 builds (12 PASS / 21 ordinary FAIL) and three exact checks (PASS).
+Ownership returned at 09:26:50 UTC, 74m40s after acceptance. No cap hit, interruption, kernel
+diagnostic or limit increase occurred. Root validation used six capped calls (five PASS and the replay infrastructure
+failure above), followed by final metadata checks. Detailed call ledger belongs in the checkpoint commit.
+Review corrected optional selection wording and the
+decoder distinction above; captured-allocation and same-journal receipt provenance remain open, not silently assumed.
+
 Review also noted stale upstream comments
 at `Env.lean:906–907` and `Env/Batch.lean:294–295,337–338`: the executable afterBatch now checks the handshake ring/counter,
 and flood no longer manages a receive-worker section. The immutable mirror comments were not edited.
@@ -373,6 +390,24 @@ correspondence remains informal.
 uniqueness for every typed Trace and both placeholder settings, including Stops. Chronological GRO order is false. Local/persistent
 polls and every initialized Runner normal return pair entries with actual normal Stack returns. Failed histories
 retain valid receipts and at most one trailing unfinished entry; joint conservation remains open.
+
+**Local disposition extension.** A fresh poll partitions actual removal occurrences by permutation, with no allocation
+premise. Normal return uniquely partitions nondelivery decisions/normal None and completed Stack callbacks. Stop
+additionally retains at most one unresolved selection, the entire unentered selected-offer suffix and at most one entered,
+uncompleted callback. The suffix includes the second held offer rejected before insertion; it is not a claim that
+all residuals are physically stored in GRO. A completed threshold callback stays completed if later put/free Stops.
+Nondelivery decisions on Stop do not assert completed cleanup. Normal None has the original keepalive/header/length
+or repaid source-peer-mismatch route; cause predicates may overlap. Endpoint normal None is proved impossible;
+malformed families/unsupported IPv6 Stop instead. The state predicate is accurately “not crypted,” not assumed DEAD.
+
+Independent review exposed the missing captured packet/stamp/peer-to-consume link. It remains open, with actual
+capture and full-store preservation cuts proved for the next phase proof. `ConsumePayloadValid` asserts only a valid
+original consume run producing the carried bytes; it does not identify an earlier consumed event in that journal.
+Fresh suffix promotion preserves old probes/history and does not validate arbitrary old metadata. These are local
+post-removal results, not initialized admission conservation or authenticated routing. Review also corrected the
+generic partition helper's disjointness wording: only the fresh-poll Nodup theorem supplies uniqueness/disjointness.
+See [receipt source factors](../Leanux/Proofs/WG/Queues/RxDispositionReceipts.lean) and
+[local accounting](../Leanux/Proofs/WG/Queues/RxPollDisposition.lean).
 
 **Architecture.** Refinement chain:
 

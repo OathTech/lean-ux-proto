@@ -154,6 +154,21 @@ theorem read_stop (base : List Event) (pending : Option (SkbId × PacketStamp))
   simp only [runPrefix_bind, runPrefix_lift, he]
   exact ⟨[], by simp, hi.1, True.intro⟩
 
+theorem read_receipt_access (base : List Event) (pending : Option (SkbId × PacketStamp))
+    (a : MixedM α) (f : RunWitness α → Event) (hf : ∀ r, removedStamp (f r) = none) :
+    PrefixPreserves (fun h _ => ReadContext base pending h) (ReadSupport base)
+      (receiptObserved (access a) f) :=
+  read_quiet base pending _ (access_appends a).receiptObserved
+    ((show HistoryFrame removedStamp (access a) from
+      fun w h => focusPrefix_other Event.access accessEvent removedStamp (fun _ => rfl) a w h).receiptObserved hf)
+
+theorem read_receipt_lift (base : List Event) (pending : Option (SkbId × PacketStamp))
+    (a : M α) (f : RunWitness α → Event) (hf : ∀ r, removedStamp (f r) = none) :
+    PrefixPreserves (fun h _ => ReadContext base pending h) (ReadSupport base)
+      (receiptObserved (liftPrefix a) f) :=
+  read_quiet base pending _ (Appends.lift a).receiptObserved
+    ((HistoryFrame.lift _ a).receiptObserved hf)
+
 macro "rx_read_step" : tactic => `(tactic|
   repeat' first
     | exact PrefixEnsures.pure (fun _ _ hi => hi.1) (fun _ _ hi => hi)
@@ -165,6 +180,8 @@ macro "rx_read_step" : tactic => `(tactic|
     | with_reducible apply read_bind _ _ _ _ (read_quiet _ _ _ (receive_appends _ _) (receive_removed _ _))
     | with_reducible apply read_bind _ _ _ _ (read_quiet _ _ _ (flushAll_appends _) (flushAll_removed _))
     | with_reducible apply read_bind _ _ _ _ (read_option _ _ _ _)
+    | with_reducible apply read_bind _ _ _ _ (read_receipt_access _ _ _ _ (fun _ => rfl))
+    | with_reducible apply read_bind _ _ _ _ (read_receipt_lift _ _ _ _ (fun _ => rfl))
     | with_reducible apply read_bind _ _ _ _ (read_access _ _ _)
     | with_reducible apply read_bind _ _ _ _ (read_lift _ _ _)
     | with_reducible apply PrefixPreserves.forIn _ _ _ (fun _ _ hi => hi.1)

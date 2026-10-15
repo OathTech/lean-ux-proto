@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Queues.RxPollDisposition
 import Leanux.Proofs.WG.Queues.RxRunnerHistory
 import Leanux.Proofs.WG.Queues.FullRing
 import Leanux.Proofs.WG.Queues.RingOccurrences
@@ -1449,5 +1450,74 @@ theorem initialized_runner_callback_completion (trace : Leanux.Runner.Trace)
   have hp := Queues.RxCompletion.executeTraceHistory_completion trace placeholders
   have hr := Queues.RxCompletion.executeTraceHistory_receipts trace placeholders
   exact ⟨hp.1, hr.1, hr.2.1, fun result hs => ⟨hp.2 result hs, hr.2.2 result hs⟩⟩
+
+/-- Every freshly observed poll has valid check/consume receipts and carried
+consume-run payload witnesses, even on Stop. Normal None is classified
+by the original executed source factors; the endpoint helper never returns
+None normally. This run/payload result does not yet identify the consume
+packet with the earlier captured allocation or its earlier consumed journal
+event, nor prove initialized routing. -/
+theorem original_poll_disposition_receipts (pid : PeerId) (budget : Nat)
+    (w : World) (prior : List Lifetimes.LifetimeEvent) :
+    Queues.RxDisposition.Valid
+      (runPrefix (Queues.RxJoint.poll pid budget) w (Queues.RxJoint.seed prior)).2 ∧
+    (∀ r : Queues.RxDisposition.ConsumeReceipt, r.Valid → r.run.value = none →
+      Queues.RxDisposition.PrepareRejected r.packet ∨
+      ∃ ready u q routed paid,
+        (Packets.rxPrepare r.peer r.packet r.endpoint).run r.run.before = .ok (some ready, u) ∧
+        (lookupSrc ready.protocol ready.bytes).run u = .ok (routed, q) ∧
+        (peerPut routed).run q = .ok ((), paid) ∧ routed ≠ some r.peer ∧
+        (Packets.rxAfterLookup r.peer ready routed).run q = .ok (none, r.run.after)) ∧
+    (∀ (pkt : RxPacket) (r : Logged.RunWitness (Option Endpoint)),
+      r.Valid (endpointFromSkb pkt.source) → r.value = none → False) :=
+  ⟨Queues.RxDisposition.poll_seed_valid pid budget w prior,
+    Queues.RxDisposition.none_classified, Queues.RxDisposition.endpoint_none_impossible⟩
+
+/-- Actual removed occurrences partition by source phase, not chronological
+concatenation of GRO output. Stop retains at most one unresolved selection, the entire
+unentered selected-offer suffix (including an offered second held packet), and
+at most one entered unfinished callback. Normal return leaves no residual and
+partitions uniquely into nondelivery decisions/None and completed Stack calls.
+Nondelivery decisions on Stop do not assert completed put/free cleanup. This is
+local post-removal accounting, not initialized admission/carrier conservation. -/
+theorem original_poll_occurrence_dispositions (pid : PeerId) (budget : Nat)
+    (w : World) (prior : List Lifetimes.LifetimeEvent) :
+    let h := (runPrefix (Queues.RxJoint.poll pid budget) w (Queues.RxJoint.seed prior)).2
+    (∃ pending : Option Queues.RxJoint.EntryKey,
+      Queues.RxDisposition.Account pending h ∧
+      ((Queues.RxJoint.removalKeys h).map Prod.fst).Perm
+        ((h.filterMap Queues.RxDisposition.nondeliveryKey).map Prod.fst ++
+         (Queues.RxDisposition.completedEntries h).map (fun e => e.tag.occurrence) ++
+         (Queues.RxDisposition.callbackPending h).map (fun e => e.tag.occurrence) ++
+         (Queues.RxDisposition.unentered h).map Queues.GroEntry.occurrence ++ pending.toList.map Prod.fst) ∧
+      (Queues.RxDisposition.callbackPending h).length ≤ 1 ∧
+      ((Queues.RxJoint.removalKeys h).map Prod.fst).Nodup) ∧
+    (∀ n v, (runPrefix (Queues.RxJoint.poll pid budget) w (Queues.RxJoint.seed prior)).1 = .ok (n, v) →
+      Queues.RxDisposition.Account none h ∧ Queues.RxDisposition.callbackPending h = [] ∧
+      Queues.RxDisposition.unentered h = [] ∧
+      ((Queues.RxJoint.removalKeys h).map Prod.fst).Perm
+        ((h.filterMap Queues.RxDisposition.nondeliveryKey).map Prod.fst ++
+          (Queues.RxDisposition.completedEntries h).map (fun e => e.tag.occurrence)) ∧
+      (((h.filterMap Queues.RxDisposition.nondeliveryKey).map Prod.fst ++
+          (Queues.RxDisposition.completedEntries h).map (fun e => e.tag.occurrence))).Nodup) :=
+  ⟨Queues.RxDisposition.poll_partition pid budget w prior,
+    fun n v hr => Queues.RxDisposition.poll_normal_partition pid budget w v prior n hr⟩
+
+/-- Persistent promotion uses the same incoming lifetime history and appends
+only its actual fresh valid receipt suffix, preserving prior probes. Original
+erasure is unconditional; the separate existing full audit projection keeps
+its original allocation premise. No old arbitrary origin metadata is validated. -/
+theorem persistent_poll_disposition_receipts (pid : PeerId) (budget : Nat)
+    (w : World) (h : List Queues.RxHistory.Event) :
+    Logged.ErasesPrefix (Queues.RxHistory.observePoll pid budget)
+      (rxPoll pid budget (fun bytes => bytes.forM Leanux.Env.deliverInner)) ∧
+    ∃ suffix : List Queues.RxJoint.Event,
+      (runPrefix (Queues.RxJoint.poll pid budget) w (Queues.RxJoint.seed (Queues.RxHistory.prior h))).2 =
+        Queues.RxJoint.seed (Queues.RxHistory.prior h) ++ suffix ∧
+      runPrefix (Queues.RxHistory.observePoll pid budget) w h =
+        ((runPrefix (Queues.RxJoint.poll pid budget) w (Queues.RxJoint.seed (Queues.RxHistory.prior h))).1,
+          h ++ suffix.map Queues.RxHistory.promote) ∧ Queues.RxDisposition.Valid suffix :=
+  ⟨Queues.RxHistory.observePoll_erases pid budget,
+    Queues.RxDisposition.observePoll_receipt_suffix pid budget w h⟩
 
 end Leanux.Proofs.WG.DeliveryOrder

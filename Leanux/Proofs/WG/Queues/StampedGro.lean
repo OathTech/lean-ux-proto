@@ -2,6 +2,7 @@ import Leanux.Proofs.Logged.ProjectsUnderTo
 import Leanux.Proofs.Logged.Capture
 import Leanux.Proofs.WG.Queues.RxPollGro
 import Leanux.Proofs.WG.Lifetimes.BatchNapi
+import Leanux.Proofs.WG.Queues.RxDispositionReceipts
 
 /-! One journal carries original lifetime accesses and captured receive
 identities through the original GRO lists. Entry precedes the actual stack
@@ -16,10 +17,19 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Lifetimes
 structure Entry where
   tag : GroEntry
   stamp : PacketStamp
+  origin : Option RxDisposition.ConsumeReceipt := none
 
 inductive Event where
   | access (event : LifetimeEvent)
   | removed (occurrence : Nat) (skb : SkbId) (stamp : PacketStamp)
+  | checkedState (occurrence : Nat) (skb : SkbId) (stamp : PacketStamp)
+      (packet : RxPacket) (run : RunWitness Bool)
+  | checkedCounter (occurrence : Nat) (skb : SkbId) (stamp : PacketStamp)
+      (packet : RxPacket) (run : RunWitness Bool)
+  | checkedEndpoint (occurrence : Nat) (skb : SkbId) (stamp : PacketStamp)
+      (packet : RxPacket) (run : RunWitness (Option Endpoint))
+  | consumed (occurrence : Nat) (skb : SkbId) (stamp : PacketStamp)
+      (receipt : RxDisposition.ConsumeReceipt)
   | buffered (entry : Entry)
   | entered (entry : Entry)
   | completed (entry : Entry) (witness : RunWitness Unit)
@@ -31,6 +41,8 @@ def groEvent : Event → Option GroEvent
   | .buffered e => some (.buffered e.tag)
   | .entered e => some (.entered e.tag)
   | .completed _ _ => none
+  | .consumed _ _ _ _ => none
+  | .checkedState .. | .checkedCounter .. | .checkedEndpoint .. => none
 
 abbrev Obs := PrefixM Event
 def access (a : MixedM α) : Obs α := focusPrefix Event.access accessEvent a

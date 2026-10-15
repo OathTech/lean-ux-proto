@@ -215,12 +215,20 @@ theorem capture_quiet (skb : SkbId) : Preserves jointEvent (RxJoint.capture skb)
   rw [RxJoint.capture_run]
   cases (getRxSkb skb).run w <;> simp [List.filterMap_append, jointEvent]
 
+theorem receipt_quiet (a : PrefixM E α) (f : RunWitness α → E)
+    (ha : Preserves ρ a) (hf : ∀ r, ρ (f r) = none) : Preserves ρ (receiptObserved a f) := by
+  unfold receiptObserved
+  exact ha.captureObserved.bind (fun r => (emit_quiet _ (hf r)).bind
+    (fun _ => PrefixPreserves.pure (fun _ _ hi => hi.prefix) r.value))
+
 theorem consume_quiet (pid n skb : Nat) (stamp : PacketStamp) (pkt : RxPacket) (ep : Endpoint) :
     Preserves jointEvent (RxJoint.consume pid n skb stamp pkt ep) := by
   unfold RxJoint.consume
-  apply PrefixPreserves.bind (access_quiet _)
-  intro out
-  cases out with
+  apply PrefixPreserves.bind (access_quiet _).captureObserved
+  intro r
+  apply PrefixPreserves.bind (emit_quiet _ rfl)
+  intro _
+  cases r.value with
   | none => exact PrefixPreserves.pure (fun _ _ hi => hi.prefix) _
   | some bytes => exact (emit_quiet _ rfl).bind (fun _ => PrefixPreserves.pure (fun _ _ hi => hi.prefix) _)
 
@@ -231,6 +239,8 @@ theorem poll_preserves (pid : PeerId) (budget : Nat) : Preserves jointEvent (RxJ
   unfold RxJoint.poll RxJoint.drop
   repeat' first
     | with_reducible exact capture_quiet _
+    | with_reducible exact receipt_quiet _ _ (access_quiet _) (fun _ => rfl)
+    | with_reducible exact receipt_quiet _ _ (lift_quiet _) (fun _ => rfl)
     | with_reducible exact consume_quiet _ _ _ _ _ _
     | with_reducible exact receive_preserves _ _
     | with_reducible exact flushAll_preserves _

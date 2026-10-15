@@ -104,6 +104,15 @@ theorem phase_emit (kind : PhaseKind) (e : Event)
     (PrefixPreserves.pure (fun _ _ hi => hi.safe) ()) (erasesPrefix_pure ())
     (SameView.pure _ ()) (HistoryFrame.emit e hm) (emit_appends e)
 
+theorem phase_receipt (kind : PhaseKind) (a : Obs α) (f : RunWitness α → Event)
+    (ha : PrefixPreserves (Phase kind) StampSafe a)
+    (hx : ∀ r, accessEvent (f r) = none) (hm : ∀ r, removedStamp (f r) = none) :
+    PrefixPreserves (Phase kind) StampSafe (receiptObserved a f) := by
+  unfold receiptObserved
+  exact ha.captureObserved.bind (fun r =>
+    (phase_emit kind (f r) (hx r) (hm r)).bind (fun _ =>
+      PrefixPreserves.pure (fun _ _ hi => hi.safe) r.value))
+
 theorem phase_capture (skb : SkbId) :
     PrefixEnsures (Phase .ready) StampSafe (capture skb)
       (fun out => Phase (.captured skb out.2)) := by
@@ -189,10 +198,13 @@ theorem phase_free (skb : SkbId) (stamp : PacketStamp) :
 theorem consume_removed (pid n skb : Nat) (stamp : PacketStamp) (pkt : RxPacket) (ep : Endpoint) :
     HistoryFrame removedStamp (consume pid n skb stamp pkt ep) := by
   unfold consume
-  apply HistoryFrame.bind
-    (fun w h => focusPrefix_other Event.access accessEvent removedStamp (fun _ => rfl) _ w h)
-  intro out
-  cases out with
+  apply HistoryFrame.bind (HistoryFrame.captureObserved
+    (show HistoryFrame removedStamp (access _) from
+      fun w h => focusPrefix_other Event.access accessEvent removedStamp (fun _ => rfl) _ w h))
+  intro r
+  apply HistoryFrame.bind (HistoryFrame.emit _ rfl)
+  intro _
+  cases r.value with
   | none => exact HistoryFrame.pure _ _
   | some bytes => exact HistoryFrame.bind (HistoryFrame.emit _ rfl) (fun _ => HistoryFrame.pure _ _)
 
@@ -327,6 +339,11 @@ macro "rx_stamp_step" : tactic => `(tactic|
     | with_reducible apply phase_bind _ _ _ (phase_peek _ _)
     | with_reducible apply phase_bind _ _ _ (phase_ready _ _)
     | with_reducible apply phase_bind _ _ _ (phase_complete _ _)
+    | with_reducible apply phase_bind _ _ _ (phase_receipt _ _ _ (phase_access _ _
+        (AmbientContracts.drop (counterValidatePrefix_spec allocationAmbient (fun _ => True) _ _))
+        (counterValidatePrefix_erases _ _) (RxRing.counterValidate_cell _ _)) (fun _ => rfl) (fun _ => rfl))
+    | with_reducible apply phase_bind _ _ _ (phase_receipt _ _ _ (phase_lift _ _ (sameKernel_branch _ _)) (fun _ => rfl) (fun _ => rfl))
+    | with_reducible apply phase_bind _ _ _ (phase_receipt _ _ _ (phase_lift _ _ (endpointFromSkb_sameKernel _)) (fun _ => rfl) (fun _ => rfl))
     | with_reducible apply phase_bind _ _ _ (phase_access _ _
         (AmbientContracts.drop (counterValidatePrefix_spec allocationAmbient (fun _ => True) _ _))
         (counterValidatePrefix_erases _ _) (RxRing.counterValidate_cell _ _))
@@ -426,6 +443,15 @@ theorem context_access (g : Gro) (extra : List EntryKey) (a : MixedM α) :
     (fun w h => focusPrefix_other Event.access accessEvent enteredEntry (fun _ => rfl) a w h)
     (access_appends a)
 
+theorem context_receipt (g : Gro) (extra : List EntryKey) (a : Obs α) (f : RunWitness α → Event)
+    (ha : PrefixPreserves (fun h _ => Context g extra h) Supported a)
+    (hr : ∀ r, removedKey (f r) = none) (he : ∀ r, enteredEntry (f r) = none) :
+    PrefixPreserves (fun h _ => Context g extra h) Supported (receiptObserved a f) := by
+  unfold receiptObserved
+  exact ha.captureObserved.bind (fun r =>
+    (context_quiet g extra _ (HistoryFrame.emit _ (hr r)) (HistoryFrame.emit _ (he r)) (emit_appends _)).bind
+      (fun _ => PrefixPreserves.pure (fun _ _ hi => hi.entered) r.value))
+
 theorem context_lift (g : Gro) (extra : List EntryKey) (a : M α) :
     PrefixPreserves (fun h _ => Context g extra h) Supported (liftPrefix a) :=
   context_quiet g extra _ (HistoryFrame.lift _ _) (HistoryFrame.lift _ _) (Appends.lift _)
@@ -470,9 +496,12 @@ theorem context_consume (g : Gro) (pid n skb : Nat) (stamp : PacketStamp) (pkt :
       (consume pid n skb stamp pkt ep)
       (fun out h _ => Context g (out.toList.map Entry.key) h) := by
   unfold consume
-  apply context_bind g [(n, skb, stamp)] _ _ (context_access g [(n, skb, stamp)] _)
-  intro out
-  cases out with
+  apply context_bind g [(n, skb, stamp)] _ _ (context_access g [(n, skb, stamp)] _).captureObserved
+  intro r
+  apply context_bind g [(n, skb, stamp)] _ _
+    (context_quiet _ _ _ (HistoryFrame.emit _ rfl) (HistoryFrame.emit _ rfl) (emit_appends _))
+  intro _
+  cases r.value with
   | none => exact PrefixEnsures.pure (fun _ _ hi => hi.entered) (fun _ _ hi => hi.weaken)
   | some bytes =>
     apply context_bind g [(n, skb, stamp)] _ _ (context_buffered g [(n, skb, stamp)] _)
@@ -654,6 +683,8 @@ macro "rx_support_step" : tactic => `(tactic|
     | with_reducible apply PrefixEnsures.bind (context_consume _ _ _ _ _ _ _)
     | with_reducible apply PrefixEnsures.bind (context_option _ _)
     | with_reducible apply PrefixEnsures.bind (context_flushAll _)
+    | with_reducible apply context_bind _ _ _ _ (context_receipt _ _ _ _ (context_access _ _ _) (fun _ => rfl) (fun _ => rfl))
+    | with_reducible apply context_bind _ _ _ _ (context_receipt _ _ _ _ (context_lift _ _ _) (fun _ => rfl) (fun _ => rfl))
     | with_reducible apply context_bind _ _ _ _ (context_capture _ _ _)
     | with_reducible apply context_bind _ _ _ _ (context_access _ _ _)
     | with_reducible apply context_bind _ _ _ _ (context_lift _ _ _)

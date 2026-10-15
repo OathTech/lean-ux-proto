@@ -12,6 +12,14 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Lifetimes
 inductive Event where
   | audit (event : AuditEvent)
   | removed (occurrence : Nat) (skb : SkbId) (stamp : PacketStamp)
+  | checkedState (occurrence : Nat) (skb : SkbId) (stamp : PacketStamp)
+      (packet : RxPacket) (run : RunWitness Bool)
+  | checkedCounter (occurrence : Nat) (skb : SkbId) (stamp : PacketStamp)
+      (packet : RxPacket) (run : RunWitness Bool)
+  | checkedEndpoint (occurrence : Nat) (skb : SkbId) (stamp : PacketStamp)
+      (packet : RxPacket) (run : RunWitness (Option Endpoint))
+  | consumed (occurrence : Nat) (skb : SkbId) (stamp : PacketStamp)
+      (receipt : RxDisposition.ConsumeReceipt)
   | buffered (entry : RxJoint.Entry)
   | entered (entry : RxJoint.Entry)
   | completed (entry : RxJoint.Entry) (witness : RunWitness Unit)
@@ -31,6 +39,10 @@ def promote : RxJoint.Event → Event
   | .buffered e => .buffered e
   | .entered e => .entered e
   | .completed e r => .completed e r
+  | .consumed n skb s r => .consumed n skb s r
+  | .checkedState n skb s p r => .checkedState n skb s p r
+  | .checkedCounter n skb s p r => .checkedCounter n skb s p r
+  | .checkedEndpoint n skb s p r => .checkedEndpoint n skb s p r
 
 theorem promote_audit (s : List RxJoint.Event) :
     auditHistory (s.map promote) = (s.filterMap RxJoint.accessEvent).map AuditEvent.lifetime := by
