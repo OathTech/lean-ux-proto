@@ -505,24 +505,32 @@ theorem keypair_get_access_observation (kp : Option KeypairId) (w : World)
       ((keypairGet kp).run w, h ++ Lifetimes.keypairGetEvents kp w) :=
   Lifetimes.keypairGetPrefix_run kp w h
 
-/-- Keypair put reads and writes a resolved resident, then releases exactly
-when its original count was one. The equation includes failing executions. -/
+/-- Keypair put observes the current owner word at each actual unhash. NULL
+may Stop before a write or release; the equation includes every failing prefix. -/
 theorem keypair_put_access_observation (kp : Option KeypairId) (now : Bool)
     (w : World) (h : List Lifetimes.LifetimeEvent) :
     runPrefix (Lifetimes.keypairPutPrefix kp now) w h =
-      ((keypairPut kp now).run w, h ++ Lifetimes.keypairPutEvents kp w) :=
+      ((keypairPut kp now).run w, h ++ Lifetimes.keypairPutEvents kp now w) :=
   Lifetimes.keypairPutPrefix_run kp now w h
 
-/-- A zero-count keypair put fails after the read and decrementing write.
-Its retained prefix has no release; failure exposes no final World. -/
+/-- A zero-count put retains the source-order prefix, including an earlier
+NULL Stop when immediate unhashing is requested. Neither arm releases. -/
 theorem keypair_zero_refcount_failure_prefix (id : KeypairId) (now : Bool)
     (w : World) (h : List Lifetimes.LifetimeEvent) (d : Device) (k : Keypair)
     (hd : w.k.wg = some d) (hk : d.keypairs[id]? = some k) (hz : k.refcount = 0) :
     runPrefix (Lifetimes.keypairPutPrefix (some id) now) w h =
-      (.error (.outsideDomain
-        s!"{Decision.refcountSubNonpositive.info.file}:{Decision.refcountSubNonpositive.info.line}"
-        "refcount_warn_saturate (use after free)"),
-        h ++ [.keypair (.read id k.internalId), .keypair (.write id k.internalId)]) :=
+      (if now && k.peer.isNone then
+        (.error (.outsideDomain
+          s!"{Decision.keypairPutUnreferenceNow.info.file}:{Decision.keypairPutUnreferenceNow.info.line}"
+          "entry->peer is NULL: the C dereferences it"),
+          h ++ [.keypair (.read id k.internalId), .keypair (.read id k.internalId)])
+      else
+        (.error (.outsideDomain
+          s!"{Decision.refcountSubNonpositive.info.file}:{Decision.refcountSubNonpositive.info.line}"
+          "refcount_warn_saturate (use after free)"),
+          h ++ ([.keypair (.read id k.internalId)] ++
+            (if now then [.keypair (.read id k.internalId)] else []) ++
+            [.keypair (.write id k.internalId)]))) :=
   Lifetimes.keypairPutPrefix_zero_failure id now w h d k hd hk hz
 
 /-- TX free records its successful getter before the epoch-tagged release.
@@ -570,21 +578,21 @@ theorem decrypt_iteration_release_access_preserves (softirq irq : Lifetimes.Mixe
 
 /-- Complete keypair creation, including hidden-input failures and ordinary
 allocation refusal, erases to the original outcome and complete final World. -/
-theorem keypair_allocation_access_erasure (pid : PeerId) :
+theorem keypair_allocation_access_erasure (pid : Option PeerId) :
     ErasesPrefix (Lifetimes.keypairCreatePrefix pid) (keypairCreate pid) :=
   Lifetimes.keypairCreatePrefix_erases pid
 
 /-- Complete keypair creation retains safe failure prefixes and preserves the
 allocation invariant on success. No caller, lifecycle, or scheduler closure is
 assumed from this helper theorem. -/
-theorem keypair_allocation_access_preserves (pid : PeerId) :
+theorem keypair_allocation_access_preserves (pid : Option PeerId) :
     PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe
       (Lifetimes.keypairCreatePrefix pid) :=
   Lifetimes.keypairCreatePrefix_preserves pid
 
 /-- A successful insertion records allocation then initialization write. Failed
 creation and normal memory refusal retain the incoming history exactly. -/
-theorem keypair_allocation_access_observation (pid : PeerId) (w : World)
+theorem keypair_allocation_access_observation (pid : Option PeerId) (w : World)
     (h : List Lifetimes.LifetimeEvent) :
     runPrefix (Lifetimes.keypairCreatePrefix pid) w h = match (keypairCreate pid).run w with
       | .error e => (.error e, h)
@@ -724,7 +732,7 @@ theorem begin_session_birthdate_failure_prefix (pid : PeerId) (kp : KeypairId)
     (selected : Bool) (e : Stop)
     (hbefore : (getPeer pid).run w = .ok (before, w))
     (hstate : (Lifetimes.sessionStateRejected before.handshakeState).run w = .ok (false, allocEntry))
-    (hcreate : (keypairCreate pid).run allocEntry = .ok (some kp, allocated))
+    (hcreate : (keypairCreate before.handshakeEntryPeer).run allocEntry = .ok (some kp, allocated))
     (hguard : (branch .sessionNoKeypair (Option.isNone (some kp))).run allocated = .ok (false, guarded))
     (hpeer : (getPeer pid).run guarded = .ok (current, guarded))
     (hkey : (getKeypair kp).run guarded = .ok (k, guarded))
@@ -733,7 +741,7 @@ theorem begin_session_birthdate_failure_prefix (pid : PeerId) (kp : KeypairId)
       .ok (selected, clockEntry))
     (hclock : (hiddenClock64 .deriveKeysBirthdate).run clockEntry = .error e) :
     runPrefix (Lifetimes.beginSessionPrefix pid) w h =
-      (.error e, h ++ [.peer (.read pid before.internalId),
+      (.error e, h ++ [.peer (.read pid before.internalId), .peer (.read pid before.internalId),
         .keypair (.allocate kp (allocEntry.k.keypairCounter + 1)),
         .keypair (.write kp (allocEntry.k.keypairCounter + 1)),
         .peer (.read pid current.internalId), .keypair (.read kp k.internalId),
@@ -1314,8 +1322,8 @@ theorem handshake_family_access_erasure (call : Lifetimes.HandshakeCall) :
 contracts and an explicit original scalar-index-insertion contract. This does
 not assert the lookup table's ownership or an outer worker's execution. -/
 theorem handshake_family_ambient_access_preserves (c : Lifetimes.AmbientContracts I)
-    (hi : ∀ pid kind, PrefixPreserves I Lifetimes.LifetimeEvent.Safe
-      (liftPrefix (indexInsert pid kind))) (call : Lifetimes.HandshakeCall) :
+    (hi : ∀ owner, PrefixPreserves I Lifetimes.LifetimeEvent.Safe
+      (liftPrefix (indexInsert owner))) (call : Lifetimes.HandshakeCall) :
     PrefixPreserves I Lifetimes.LifetimeEvent.Safe call.observed := call.preserves_ambient c hi
 
 /-- The concrete allocation invariant discharges every named handshake leaf,
@@ -1348,7 +1356,7 @@ safe resolved access prefixes through the six original send calls. A normal
 initiation return reaches the worker's put; a Stop skips that later cleanup. -/
 theorem handshake_send_family_ambient_access_preserves (c : Lifetimes.AmbientContracts I)
     (sc : Lifetimes.SocketContracts I)
-    (hi : ∀ pid kind, PrefixPreserves I Lifetimes.LifetimeEvent.Safe (liftPrefix (indexInsert pid kind)))
+    (hi : ∀ owner, PrefixPreserves I Lifetimes.LifetimeEvent.Safe (liftPrefix (indexInsert owner)))
     (create : ∀ pid, PrefixPreserves I Lifetimes.LifetimeEvent.Safe (Lifetimes.keypairCreatePrefix pid))
     (put : ∀ kp now, PrefixPreserves I Lifetimes.LifetimeEvent.Safe (Lifetimes.keypairPutPrefix kp now))
     (replace : ∀ pid kp, PrefixPreserves I Lifetimes.LifetimeEvent.Safe
@@ -1538,8 +1546,8 @@ theorem key_maintenance_family_access_erasure (call : Lifetimes.KeyMaintenanceCa
 contracts with resident-access contracts. The scalar index frame is separate
 from source-inspected internal access coverage. -/
 theorem key_maintenance_family_ambient_access_preserves (c : Lifetimes.AmbientContracts I)
-    (hi : ∀ pid kind, PrefixPreserves I Lifetimes.LifetimeEvent.Safe
-      (liftPrefix (indexRemove pid kind)))
+    (hi : ∀ owner, PrefixPreserves I Lifetimes.LifetimeEvent.Safe
+      (liftPrefix (indexRemove owner)))
     (hp : ∀ kp now, PrefixPreserves I Lifetimes.LifetimeEvent.Safe
       (Lifetimes.keypairPutPrefix kp now))
     (call : Lifetimes.KeyMaintenanceCall) :

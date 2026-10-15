@@ -58,8 +58,7 @@ def consumeResponsePrefix (msg : List UInt8) : MixedM (Option PeerId) := do
   if ← liftPrefix (branch .crespNoIdentity !identity.hasIdentity) then return none
   let entry ← indexLookupPrefix [.handshake] (u32le msg 8)
   if ← liftPrefix (branch .crespNoHandshake entry.isNone) then return none
-  let some e := entry | liftPrefix (invariant "unreachable")
-  let pid := e.peer
+  let some (IndexOwner.handshake _, pid) := entry | liftPrefix (invariant "a keypair entry under the handshake mask")
   let fail : MixedM (Option PeerId) := do
     peerPutMixed (some pid)
     return none

@@ -71,7 +71,7 @@ def main : IO UInt32 := do
   let pc ← getPeer0 dc
   let some retained := dc.keypairs[slot]? | throw (IO.userError "packet-held keypair was lost")
   require (pc.keypairCurrent.isNone && pc.keypairNext.isNone && pc.keypairPrevious.isNone &&
-    pc.handshakeState == 0 && !dc.indexTable.any (·.keypair == some slot))
+    pc.handshakeState == 0 && !dc.indexTable.any (·.owner == .keypair slot))
     "clear did not remove peer slots, handshake state and keypair index"
   require (retained == {key with sendingCounter := 2})
     "clear did not retain exactly the same key material and one packet reference"

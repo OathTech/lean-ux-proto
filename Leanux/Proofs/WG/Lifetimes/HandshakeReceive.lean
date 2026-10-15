@@ -195,7 +195,7 @@ structure HandshakeReceiveContracts (I : List LifetimeEvent → World → Prop) 
   cookie : CookieStable I
   tx : TxContracts I
   stats : ∀ len, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (modifyDev (rxStatsUpdate len)))
-  index : ∀ pid kind, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (indexInsert pid kind))
+  index : ∀ owner, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (indexInsert owner))
   create : ∀ pid, PrefixPreserves I LifetimeEvent.Safe (keypairCreatePrefix pid)
   put : ∀ kp now, PrefixPreserves I LifetimeEvent.Safe (keypairPutPrefix kp now)
   replace : ∀ pid kp, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (indexReplaceHandshake pid kp))

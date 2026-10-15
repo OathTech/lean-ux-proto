@@ -157,7 +157,7 @@ theorem handshakeInit_samePeerSnapshot (pid : PeerId) (psk : Option Key) :
   have get_spec := getPeer_live_spec (fun t => t = s)
   have set_spec := setPeer_live_spec (fun t => t = s)
   have precompute_spec := (precomputeStaticStatic_samePeerSnapshot pid).wp (fun t => t = s)
-  mvcgen [handshakeInit, get_spec, set_spec, precompute_spec, branch]
+  mvcgen [handshakeInit, IndexOwner.setPeerWord, get_spec, set_spec, precompute_spec, branch]
   all_goals simp_all [snapshot]
 
 end Leanux.Proofs.WG.Peers

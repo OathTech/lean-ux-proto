@@ -2118,9 +2118,9 @@ theorem original_timer_device_routing (initial : FlatTable × FlatTable)
 view on normal return. Actual getter facts justify peer setters; keypair/index
 updates do not require resident owners, affiliation or a successful-session
 premise. Original refusal and Stop paths remain unchanged. -/
-theorem original_session_routing_frames (pid : WG.PeerId) (kp : WG.KeypairId)
+theorem original_session_routing_frames (pid : WG.PeerId) (peerWord : Option WG.PeerId) (kp : WG.KeypairId)
     (initiator : Bool) (ck : List UInt8) :
-    Framing.SameView routingView (WG.keypairCreate pid) ∧
+    Framing.SameView routingView (WG.keypairCreate peerWord) ∧
     Framing.SameView routingView (WG.addNewKeypair pid kp) ∧
     Framing.SameView routingView (WG.deriveKeys kp initiator ck) ∧
     Framing.SameView routingView (WG.indexReplaceHandshake pid kp) ∧
@@ -2128,7 +2128,7 @@ theorem original_session_routing_frames (pid : WG.PeerId) (kp : WG.KeypairId)
     Framing.SameView routingView (WG.createResponse pid) ∧
     Framing.SameView routingView (WG.timersSessionDerived pid) ∧
     Framing.SameView routingView (WG.sendHandshakeResponse pid) :=
-  ⟨keypairCreate_routing pid, addNewKeypair_routing pid kp, deriveKeys_routing kp initiator ck,
+  ⟨keypairCreate_routing peerWord, addNewKeypair_routing pid kp, deriveKeys_routing kp initiator ck,
     indexReplaceHandshake_routing pid kp, beginSession_routing pid, createResponse_routing pid,
     timersSessionDerived_routing pid, sendHandshakeResponse_routing pid⟩
 

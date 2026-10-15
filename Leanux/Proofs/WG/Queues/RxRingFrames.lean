@@ -69,8 +69,9 @@ theorem keypairGet_frame (id : Option KeypairId) : SameView cell (keypairGet id)
 theorem keypairPut_frame (id : Option KeypairId) (now : Bool) : SameView cell (keypairPut id now) := by
   apply SameView.of_wp
   intro s
-  simp only [keypairPut, indexRemoveKeypair_eq]
-  mvcgen [indexUnhash, getKeypair, getDev, getK, setKeypair, modifyDev, modifyK,
+  simp only [keypairPut, indexRemove_eq]
+  have hd := fun o k => sameKernel_wp _ (indexOwner_peerDeref_sameKernel o) (fun v => v = k)
+  mvcgen [hd, indexUnhash, getKeypair, getDev, getK, setKeypair, modifyDev, modifyK,
     refcountDecAndTest, branch, branchCmp, invariant, unsupported]
   all_goals try dsimp +zetaDelta only at *
   all_goals simp_all [cell, Option.map_map, Function.comp_def]
@@ -113,7 +114,7 @@ theorem indexLookup_frame (kinds : List IndexKind) (index : Nat) : SameView cell
   intro s
   have hp := fun id => (peerGetMaybeZero_frame id).wp (fun t => t = s)
   have hb := (kernel (indexBucket_sameKernel index)).wp (fun t => t = s)
-  mvcgen [indexLookup, hp, hb, branch, invariant]
+  mvcgen [indexLookup, IndexOwner.peerWord, IndexOwner.setPeerWord, getPeer, getKeypair, getDev, getK, setPeer, setKeypair, modifyDev, modifyK, hp, hb, branch, invariant]
   all_goals try exact ((⇓? _ w => ⌜cell w = s⌝) : PostCond _ (.arg World (.except Stop .pure)))
   all_goals try dsimp +zetaDelta only at *
   all_goals simp_all [cell]

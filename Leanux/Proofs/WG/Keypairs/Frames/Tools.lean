@@ -95,7 +95,7 @@ theorem keypairPut_ordinary_spec (P : Snapshot → Prop) (hp : Stable P)
   (keypairPut_ordinary kp now).wp P hp
 
 theorem keypairCreate_ordinary_spec (P : Snapshot → Prop) (hp : Stable P)
-    (pid : PeerId) :
+    (pid : Option PeerId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ keypairCreate pid ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ :=
   (keypairCreate_ordinary pid).wp P hp
 

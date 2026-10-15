@@ -120,7 +120,7 @@ theorem handshakeInit_routing (pid : PeerId) (psk : Option Key) : SameView routi
   have hg := routing_getPeer (fun t => t = s)
   have hs := routing_setPeer (fun t => t = s)
   have ht := (precomputeStaticStatic_routing pid).wp (fun t => t = s)
-  mvcgen [handshakeInit, hg, hs, ht, branch]
+  mvcgen [handshakeInit, IndexOwner.setPeerWord, hg, hs, ht, branch]
   all_goals simp_all
 
 end Leanux.Proofs.WG.AllowedIps

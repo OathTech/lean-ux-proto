@@ -84,8 +84,7 @@ def cookieMessageConsume (msg : List UInt8) : M Unit := do
   -- `src->receiver_index`, of a handshake or a keypair
   let entry ← indexLookup [.handshake, .keypair] (u32le msg 4)
   if ← branch .cookieLookupMiss entry.isNone then return
-  let some e := entry | invariant "unreachable"
-  let pid := e.peer
+  let some (_, pid) := entry | invariant "unreachable"   -- `peer`, the lookup's reference (peerlookup.c:220)
   let p ← getPeer pid
   if ← branch .cookieNoMac1Sent !p.haveSentMac1 then
     peerPut (some pid)   -- goto out
@@ -393,7 +392,7 @@ def enqueuePerDeviceAndPeerRx (id : SkbId) : M Int := do
     still-UNCRYPTED packet of its keypair is the one the worker holds, since
     both the ring and the queue are FIFO. -/
 def enqueuePerPeerRx (irqExit : M Unit) (id : SkbId) (state : PacketState) : M Unit := do
-  let pid := (← getKeypair (← getRxSkb id).keypair).peer   -- PACKET_PEER(skb)
+  let pid ← IndexOwner.peerDeref (.keypair (← getRxSkb id).keypair)   -- PACKET_PEER(skb)
   peerGet pid
   let p ← getPeer pid
   -- atomic_set_release(&PACKET_CB(skb)->state, state): the one skb the
@@ -412,11 +411,16 @@ def enqueuePerPeerRx (irqExit : M Unit) (id : SkbId) (state : PacketState) : M U
 def consumeData (msg : List UInt8) (src : SkbSource) (ds : Nat) : M Unit := do
   -- `data->key_idx`, of a keypair; the lookup takes a reference to the peer
   let entry ← indexLookup [.keypair] (u32le msg 4)
-  let peer := entry.map (·.peer)
+  -- `PACKET_CB(skb)->keypair = (struct noise_keypair *)entry` (the owner),
+  -- `peer` the lookup's reference (peerlookup.c:220)
+  let (keypair, peer) ← match entry with
+    | none => pure (none, none)
+    | some (IndexOwner.keypair kp, pid) => pure (some kp, some pid)
+    | some (IndexOwner.handshake _, _) => invariant "a handshake entry under the keypair mask"
   -- `unlikely(!wg_noise_keypair_get(PACKET_CB(skb)->keypair))`
-  let kp ← match entry with
+  let kp ← match keypair with
     | none => do keypairGetCurrent; pure none   -- wg_noise_keypair_get(NULL)
-    | some e => keypairGet e.keypair
+    | some kp => keypairGet (some kp)
   if ← branch .dataNoKeypair kp.isNone then
     -- err_keypair: wg_peer_put(peer), then dev_kfree_skb
     peerPut peer

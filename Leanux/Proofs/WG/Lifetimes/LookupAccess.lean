@@ -79,7 +79,7 @@ theorem peerGetMaybeZeroPrefix_spec_ambient (c : AmbientContracts I)
         intro _
         exact c.pure P _
 
-def indexLookupPrefix (kinds : List IndexKind) (index : Nat) : MixedM (Option IndexEntry) := do
+def indexLookupPrefix (kinds : List IndexKind) (index : Nat) : MixedM (Option (IndexOwner × PeerId)) := do
   let mut entry : Option IndexEntry := none
   let mut stopped := false
   for e in ← liftPrefix (indexBucket index) do
@@ -91,8 +91,11 @@ def indexLookupPrefix (kinds : List IndexKind) (index : Nat) : MixedM (Option In
   if !stopped then _ ← liftPrefix (branch .idxWalk false)
   if ← liftPrefix (branch .idxFound entry.isSome) then
     let some e := entry | liftPrefix (invariant "unreachable")
-    let peer ← peerGetMaybeZeroPrefix (some e.peer)
-    if ← liftPrefix (branch .idxPeerAlive peer.isSome) then return entry
+    let peer ← peerGetMaybeZeroPrefix (← peerWordPrefix e.owner)
+    setPeerWordPrefix e.owner peer
+    if ← liftPrefix (branch .idxPeerAlive peer.isSome) then
+      let some pid := peer | liftPrefix (invariant "unreachable")
+      return some (e.owner, pid)
   return none
 
 theorem indexLookupPrefix_erases (kinds : List IndexKind) (index : Nat) :
@@ -119,13 +122,19 @@ theorem indexLookupPrefix_erases (kinds : List IndexKind) (index : Nat) :
     have tail : ErasesPrefix
         (do if ← liftPrefix (branch .idxFound entry.isSome) then
               let some e := entry | liftPrefix (invariant "unreachable")
-              let peer ← peerGetMaybeZeroPrefix (some e.peer)
-              if ← liftPrefix (branch .idxPeerAlive peer.isSome) then return entry
+              let peer ← peerGetMaybeZeroPrefix (← peerWordPrefix e.owner)
+              setPeerWordPrefix e.owner peer
+              if ← liftPrefix (branch .idxPeerAlive peer.isSome) then
+                let some pid := peer | liftPrefix (invariant "unreachable")
+                return some (e.owner, pid)
             return none)
         (do if ← branch .idxFound entry.isSome then
               let some e := entry | invariant "unreachable"
-              let peer ← peerGetMaybeZero (some e.peer)
-              if ← branch .idxPeerAlive peer.isSome then return entry
+              let peer ← peerGetMaybeZero (← e.owner.peerWord)
+              e.owner.setPeerWord peer
+              if ← branch .idxPeerAlive peer.isSome then
+                let some pid := peer | invariant "unreachable"
+                return some (e.owner, pid)
             return none) := by
       apply erasesPrefix_bind (erasesPrefix_lift _)
       intro found
@@ -133,11 +142,17 @@ theorem indexLookupPrefix_erases (kinds : List IndexKind) (index : Nat) :
       · cases entry with
         | none => exact erasesPrefix_bind (erasesPrefix_lift _) (fun _ => erasesPrefix_pure _)
         | some e =>
+          apply erasesPrefix_bind (peerWordPrefix_erases _)
+          intro word
           apply erasesPrefix_bind (peerGetMaybeZeroPrefix_erases _)
           intro peer
+          apply erasesPrefix_bind (setPeerWordPrefix_erases _ _)
+          intro _
           apply erasesPrefix_bind (erasesPrefix_lift _)
           intro alive
-          split <;> exact erasesPrefix_pure _
+          split
+          · cases peer <;> first | exact erasesPrefix_pure _ | exact erasesPrefix_lift _
+          · exact erasesPrefix_pure _
       · exact erasesPrefix_pure _
     split
     · exact erasesPrefix_bind (erasesPrefix_lift _) (fun _ => tail)
@@ -171,8 +186,11 @@ theorem indexLookupPrefix_preserves_ambient (c : AmbientContracts I)
     have tail : PrefixPreserves I LifetimeEvent.Safe
         (do if ← liftPrefix (branch .idxFound entry.isSome) then
               let some e := entry | liftPrefix (invariant "unreachable")
-              let peer ← peerGetMaybeZeroPrefix (some e.peer)
-              if ← liftPrefix (branch .idxPeerAlive peer.isSome) then return entry
+              let peer ← peerGetMaybeZeroPrefix (← peerWordPrefix e.owner)
+              setPeerWordPrefix e.owner peer
+              if ← liftPrefix (branch .idxPeerAlive peer.isSome) then
+                let some pid := peer | liftPrefix (invariant "unreachable")
+                return some (e.owner, pid)
             return none) := by
       apply PrefixPreserves.bind (AmbientContracts.drop (c.branch (fun _ => True) _ _))
       intro found
@@ -183,11 +201,19 @@ theorem indexLookupPrefix_preserves_ambient (c : AmbientContracts I)
           intro _
           exact PrefixPreserves.pure c.safe _
         | some e =>
+          apply PrefixPreserves.bind (AmbientContracts.drop (peerWordPrefix_spec c (fun _ => True) _))
+          intro word
           apply PrefixPreserves.bind (AmbientContracts.drop (peerGetMaybeZeroPrefix_spec_ambient c (fun _ => True) _))
           intro peer
+          apply PrefixPreserves.bind (AmbientContracts.drop (setPeerWordPrefix_spec c (fun _ => True) _ _))
+          intro _
           apply PrefixPreserves.bind (AmbientContracts.drop (c.branch (fun _ => True) _ _))
           intro alive
-          split <;> exact PrefixPreserves.pure c.safe _
+          split
+          · cases peer
+            · exact AmbientContracts.drop (c.invariant (fun _ => True) _)
+            · exact PrefixPreserves.pure c.safe _
+          · exact PrefixPreserves.pure c.safe _
       · exact PrefixPreserves.pure c.safe _
     split
     · exact PrefixPreserves.bind (AmbientContracts.drop (c.branch (fun _ => True) _ _)) (fun _ => tail)

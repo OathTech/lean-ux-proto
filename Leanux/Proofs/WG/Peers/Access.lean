@@ -44,7 +44,7 @@ def peerPutPrefix (peer : Option PeerId) : PrefixM PeerEvent Unit := do
   let p ← getPeerPrefix pid
   setPeerPrefix pid { p with refcount := p.refcount - 1 }
   if ← liftPrefix (branch .peerKrefPutReleased (← liftPrefix (refcountDecAndTest p.refcount))) then
-    liftPrefix (indexRemove pid .handshake)
+    liftPrefix (indexRemove (.handshake pid))
     erasePeerPrefix pid p.staged.length
     liftPrefix (retirePeerUnits pid)
 

@@ -22,7 +22,7 @@ def cpumaskChooseOnlinePrefix (pid : PeerId) : MixedM Nat := do
 
 def enqueuePerPeerTxPrefix (item : List SkbId) (state : PacketState) : MixedM Unit := do
   let some first := item.head? | liftPrefix (invariant "an empty ring item")
-  let pid := (← getKeypairPrefix (← getTxSkbPrefix first).keypair).peer
+  let pid ← peerDerefPrefix (.keypair (← getTxSkbPrefix first).keypair)
   peerGetMixed pid
   if !((← getPeerMixed pid).txQueue.all.any (·.head? == some first)) then
     liftPrefix (invariant "an item for the tx worker that is not on its peer's tx_queue")
@@ -87,8 +87,8 @@ theorem enqueuePerPeerTxPrefix_erases (item : List SkbId) (state : PacketState) 
   | some first =>
     apply erasesPrefix_bind (getTxSkbPrefix_erases _)
     intro pkt
-    apply erasesPrefix_bind (getKeypairPrefix_erases _)
-    intro k
+    apply erasesPrefix_bind (peerDerefPrefix_erases _)
+    intro pid
     apply erasesPrefix_bind (peerGetMixed_erases _)
     intro _
     apply erasesPrefix_bind (getPeerMixed_erases _)
@@ -217,8 +217,8 @@ theorem enqueuePerPeerTxPrefix_preserves_ambient (c : AmbientContracts I) (t : T
   | some first =>
     apply PrefixPreserves.bind (AmbientContracts.drop (t.get (fun _ => True) _))
     intro pkt
-    apply PrefixPreserves.bind (AmbientContracts.drop (c.getKeypair_frame (fun _ => True) _))
-    intro k
+    apply PrefixPreserves.bind (AmbientContracts.drop (peerDerefPrefix_spec c (fun _ => True) _))
+    intro pid
     apply PrefixPreserves.bind (c.peerGet _)
     intro _
     apply PrefixPreserves.bind (AmbientContracts.drop (c.getPeer_frame (fun _ => True) _))

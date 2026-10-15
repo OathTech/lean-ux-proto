@@ -123,7 +123,7 @@ theorem sessionKeypairPrefix_spec_ambient (c : AmbientContracts I) (P : Identity
 def beginSessionPrefix (pid : PeerId) : MixedM Bool := do
   let st := (← getPeerMixed pid).handshakeState
   if ← liftPrefix (sessionStateRejected st) then return false
-  let created ← keypairCreatePrefix pid
+  let created ← keypairCreatePrefix (← peerWordPrefix (.handshake pid))
   if ← liftPrefix (branch .sessionNoKeypair created.isNone) then return false
   let some kp := created | liftPrefix (invariant "unreachable")
   let p ← getPeerMixed pid
@@ -134,6 +134,7 @@ def beginSessionPrefix (pid : PeerId) : MixedM Bool := do
   handshakeZeroPrefix pid
   if ← liftPrefix (branch .sessionAlive !(← getPeerMixed pid).isDead) then
     addNewKeypairPrefix pid kp
+    _ ← peerDerefPrefix (.handshake pid)
     if !(← liftPrefix (indexReplaceHandshake pid kp)) then
       liftPrefix (unsupported "begin_session: the handshake entry was unhashed")
     return true
@@ -146,6 +147,8 @@ theorem beginSessionPrefix_erases (pid : PeerId) :
   repeat' first
     | exact getPeerMixed_erases _
     | exact keypairCreatePrefix_erases _
+    | exact peerWordPrefix_erases _
+    | exact peerDerefPrefix_erases _
     | exact getKeypairPrefix_erases _
     | exact setKeypairPrefix_erases _ _
     | exact sessionKeypairPrefix_erases _ _ _
@@ -172,7 +175,9 @@ theorem beginSessionPrefix_preserves_ambient (c : AmbientContracts I)
   intro rejected
   split
   · exact PrefixPreserves.pure c.safe false
-  · apply PrefixPreserves.bind (create pid)
+  · apply PrefixPreserves.bind (AmbientContracts.drop (peerWordPrefix_spec c (fun _ => True) (.handshake pid)))
+    intro word
+    apply PrefixPreserves.bind (create word)
     intro created
     apply PrefixPreserves.bind (AmbientContracts.drop (c.branch (fun _ => True) _ _))
     intro missing
@@ -189,6 +194,7 @@ theorem beginSessionPrefix_preserves_ambient (c : AmbientContracts I)
             (do handshakeZeroPrefix pid
                 if ← liftPrefix (branch .sessionAlive !(← getPeerMixed pid).isDead) then
                   addNewKeypairPrefix pid kp
+                  _ ← peerDerefPrefix (.handshake pid)
                   if !(← liftPrefix (indexReplaceHandshake pid kp)) then
                     liftPrefix (unsupported "begin_session: the handshake entry was unhashed")
                   return true
@@ -201,6 +207,8 @@ theorem beginSessionPrefix_preserves_ambient (c : AmbientContracts I)
           intro live
           split
           · apply PrefixPreserves.bind (addNewKeypairPrefix_preserves_ambient c put pid kp)
+            intro _
+            apply PrefixPreserves.bind (AmbientContracts.drop (peerDerefPrefix_spec c (fun _ => True) (.handshake pid)))
             intro _
             apply PrefixPreserves.bind (replace pid kp)
             intro replaced

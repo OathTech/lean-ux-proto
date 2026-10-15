@@ -249,7 +249,8 @@ theorem enqueuePerPeerRx_routing (irq : M Unit) (hi : RetainsRoutingCall irq)
   have hs := fun pid p => routing_setPeer P pid p
   have hir := hi.wp s
   have hput := fun pid => (peerPut_retainsRouting pid).wp s
-  mvcgen [enqueuePerPeerRx, hk, hget, hp, hs, hir, hput,
+  have hw := fun o => (ownerDeref_routing o).wp P
+  mvcgen [hw, enqueuePerPeerRx, hk, hget, hp, hs, hir, hput,
     setRxSkb, getRxSkb, getDev, getK, modifyDev, modifyK, invariant]
   all_goals try dsimp +zetaDelta only [P] at *
   all_goals try simp_all [routingView, routingState, Option.bind_map, Function.comp_def]

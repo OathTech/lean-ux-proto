@@ -206,7 +206,7 @@ theorem wgSetDevicePrefix_erases (a : DeviceAttrs) :
 structure ConfigurationDeviceContracts (I : List LifetimeEvent → World → Prop) : Prop where
   state : ConfigurationStable I
   precompute : ∀ pid, PrefixPreserves I LifetimeEvent.Safe (precomputeStaticStaticMixed pid)
-  index : ∀ pid kind, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (indexRemove pid kind))
+  index : ∀ owner, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (indexRemove owner))
 
 theorem allocationConfigurationDevice : ConfigurationDeviceContracts AllocationInv :=
   ⟨allocationConfigurationStable, precomputeStaticStaticMixed_allocation, indexRemove_allocation⟩

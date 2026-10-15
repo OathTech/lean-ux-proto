@@ -12,7 +12,7 @@ theorem bind_congr {m : Type → Type} [Monad m] (a : m α) (f g : α → m β)
   congrArg (fun k => a >>= k) (funext h)
 
 def publishSource (id : SkbId) (state : PacketState) : M PeerId := do
-  let pid := (← getKeypair (← getRxSkb id).keypair).peer
+  let pid ← IndexOwner.peerDeref (.keypair (← getRxSkb id).keypair)
   peerGet pid
   let p ← getPeer pid
   if !(p.rxQueue.all.contains id) then invariant "a decrypted packet that is not on its peer's rx_queue"
@@ -21,7 +21,7 @@ def publishSource (id : SkbId) (state : PacketState) : M PeerId := do
   return pid
 
 def publishPrefix (id : SkbId) (state : PacketState) : MixedM PeerId := do
-  let pid := (← getKeypairPrefix (← getRxSkbPrefix id).keypair).peer
+  let pid ← peerDerefPrefix (.keypair (← getRxSkbPrefix id).keypair)
   peerGetMixed pid
   let p ← getPeerMixed pid
   if !(p.rxQueue.all.contains id) then liftPrefix (invariant "a decrypted packet that is not on its peer's rx_queue")
@@ -34,7 +34,7 @@ theorem publish_erases (id : SkbId) (state : PacketState) :
   unfold publishPrefix publishSource
   repeat' first
     | with_reducible exact getRxSkbPrefix_erases _
-    | with_reducible exact getKeypairPrefix_erases _
+    | with_reducible exact peerDerefPrefix_erases _
     | with_reducible exact peerGetMixed_erases _
     | with_reducible exact getPeerMixed_erases _
     | with_reducible exact setRxSkbPrefix_erases _ _
@@ -51,34 +51,34 @@ theorem publish_preserves (id : SkbId) (state : PacketState) :
   let c := allocationAmbient
   apply PrefixPreserves.bind (AmbientContracts.drop (c.getRx (fun _ => True) id))
   intro pkt
-  apply PrefixPreserves.bind (AmbientContracts.drop (c.getKeypair (fun _ => True) pkt.keypair))
-  intro kp
-  apply PrefixPreserves.bind (c.peerGet kp.peer)
+  apply PrefixPreserves.bind (AmbientContracts.drop (peerDerefPrefix_spec c (fun _ => True) (.keypair pkt.keypair)))
+  intro pid
+  apply PrefixPreserves.bind (c.peerGet pid)
   intro _
   apply PrefixEnsures.preserves
-  have hget : PrefixEnsures AllocationInv LifetimeEvent.Safe (getPeerMixed kp.peer)
-      (fun p h w => AllocationInv h w ∧ (identityView w).1.slots kp.peer = some p.internalId) :=
-    (c.getPeer (fun _ => True) kp.peer).consequence
+  have hget : PrefixEnsures AllocationInv LifetimeEvent.Safe (getPeerMixed pid)
+      (fun p h w => AllocationInv h w ∧ (identityView w).1.slots pid = some p.internalId) :=
+    (c.getPeer (fun _ => True) pid).consequence
       (fun _ _ hn => ⟨hn, True.intro⟩) (fun _ _ _ hn => ⟨hn.1, hn.2.2⟩)
   apply PrefixEnsures.bind hget
   intro p
   dsimp only
   have tail : PrefixEnsures
-      (fun h w => AllocationInv h w ∧ (identityView w).1.slots kp.peer = some p.internalId)
+      (fun h w => AllocationInv h w ∧ (identityView w).1.slots pid = some p.internalId)
       LifetimeEvent.Safe
       (do setRxSkbPrefix id fun q => {q with state}
-          setPeerMixed kp.peer {p with napiScheduled := true}
-          pure kp.peer) (fun _ => AllocationInv) := by
-    apply PrefixEnsures.bind (c.setRx (fun s => s.1.slots kp.peer = some p.internalId) id _)
+          setPeerMixed pid {p with napiScheduled := true}
+          pure pid) (fun _ => AllocationInv) := by
+    apply PrefixEnsures.bind (c.setRx (fun s => s.1.slots pid = some p.internalId) id _)
     intro _
-    apply PrefixEnsures.bind ((c.setPeer (fun _ => True) kp.peer
+    apply PrefixEnsures.bind ((c.setPeer (fun _ => True) pid
       {p with napiScheduled := true}).consequence
       (fun _ _ hn => ⟨hn.1, True.intro, hn.2⟩) (fun _ _ _ hn => hn.1))
     intro _
-    exact PrefixPreserves.pure c.safe kp.peer
+    exact PrefixPreserves.pure c.safe pid
   split
   · apply PrefixEnsures.bind (Q := fun (_ : Unit) h w =>
-      AllocationInv h w ∧ (identityView w).1.slots kp.peer = some p.internalId)
+      AllocationInv h w ∧ (identityView w).1.slots pid = some p.internalId)
     · apply PrefixEnsures.lift _ (fun h w hn => c.safe h w hn.1)
       intro h w x v hn hr
       simp [invariant] at hr

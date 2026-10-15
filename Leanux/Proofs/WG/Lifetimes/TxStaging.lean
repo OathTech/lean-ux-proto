@@ -76,7 +76,7 @@ def sendStagedPacketsPrefix (pid : PeerId) : MixedM Unit := do
     if ← liftPrefix (branchCmp .stagedNonceRejected (nonce ≥ REJECT_AFTER_MESSAGES) nonce REJECT_AFTER_MESSAGES) then return ← outNokey true
     packetsCb := packetsCb ++ [{ peer := pid, keypair := id, nonce, plaintext := pkt, ds }]
   _ ← liftPrefix (branch .stagedNonceIterate false)
-  peerGetMixed (← getKeypairPrefix id).peer
+  peerGetMixed (← peerDerefPrefix (.keypair id))
   let item ← packetsCb.mapM newTxSkbPrefix
   createDataPrefix pid item
 
@@ -172,6 +172,7 @@ theorem stagedOutNokeyPrefix_erases (pid : PeerId) (packets : List Packet)
   all_goals repeat' first
     | with_reducible exact getPeerMixed_erases _
     | with_reducible exact setPeerMixed_erases _ _
+    | with_reducible exact peerDerefPrefix_erases _
     | with_reducible exact getKeypairPrefix_erases _
     | with_reducible exact setKeypairPrefix_erases _ _
     | with_reducible exact keypairPutPrefix_erases _ _
@@ -218,6 +219,7 @@ theorem sendStagedPacketsPrefix_erases (pid : PeerId) :
           split
           · exact hout true
           · repeat' first
+              | with_reducible exact peerDerefPrefix_erases _
               | with_reducible exact getKeypairPrefix_erases _
               | with_reducible exact setKeypairPrefix_erases _ _
               | with_reducible exact peerGetMixed_erases _
@@ -278,6 +280,7 @@ theorem sendStagedPacketsPrefix_preserves_ambient (c : AmbientContracts I) (t : 
           split
           · exact hout true
           · repeat' first
+              | with_reducible exact AmbientContracts.drop (peerDerefPrefix_spec c (fun _ => True) _)
               | with_reducible exact AmbientContracts.drop (c.getKeypair_frame (fun _ => True) _)
               | with_reducible exact AmbientContracts.drop (c.branch (fun _ => True) _ _)
               | with_reducible exact AmbientContracts.drop (c.branchCmp (fun _ => True) _ _ _ _)

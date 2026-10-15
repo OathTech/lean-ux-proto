@@ -53,7 +53,7 @@ def stagingObserved (pid : PeerId) : PrefixM TxAdmission Unit := do
       return ← outNokey true
     packetsCb := packetsCb ++ [{peer := pid, keypair := id, nonce, plaintext := pkt, ds}]
   _ ← liftPrefix (branch .stagedNonceIterate false)
-  liftPrefix (peerGet (← liftPrefix (getKeypair id)).peer)
+  liftPrefix (peerGet (← liftPrefix (IndexOwner.peerDeref (.keypair id))))
   let allocation ← captureRun (packetsCb.mapM newTxSkb)
   emitPrefix {peer := pid, slot := id, keyRead, clockRead, packets := packetsCb, allocation}
   liftPrefix (createData pid allocation.value)

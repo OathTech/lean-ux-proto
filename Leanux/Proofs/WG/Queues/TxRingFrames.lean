@@ -62,8 +62,9 @@ theorem freeTx_frame (id : SkbId) : SameView cell (freeTxSkb id) := by
 theorem keypairPut_frame (id : Option KeypairId) (now : Bool) : SameView cell (keypairPut id now) := by
   apply SameView.of_wp
   intro s
-  simp only [keypairPut, indexRemoveKeypair_eq]
-  mvcgen [indexUnhash, getKeypair, getDev, getK, setKeypair, modifyDev, modifyK,
+  simp only [keypairPut, indexRemove_eq]
+  have hd := fun o k => sameKernel_wp _ (indexOwner_peerDeref_sameKernel o) (fun v => v = k)
+  mvcgen [hd, indexUnhash, getKeypair, getDev, getK, setKeypair, modifyDev, modifyK,
     refcountDecAndTest, branch, branchCmp, invariant, unsupported]
   all_goals try dsimp +zetaDelta only at *
   all_goals simp_all [cell, Option.map_map, Function.comp_def]
@@ -120,7 +121,8 @@ theorem enqueuePeer_frame (item : List SkbId) (state : PacketState) :
   have hrec := fun id => (kernel (Lifetimes.recordQueued_sameKernel .txWorker id)).wp (fun t => t = s)
   have hm := fun id => (modify (fun d => {d with txWorkQueue := d.txWorkQueue ++ [id]})
     (fun _ => rfl) (fun _ => rfl)).wp (fun t => t = s)
-  mvcgen [enqueuePerPeerTx, ht, hk, hp, hg, hu, hs, hc, hpeek, hrec, hm,
+  have hw := fun o => (kernel (indexOwner_peerDeref_sameKernel o)).wp (fun t => t = s)
+  mvcgen [hw, enqueuePerPeerTx, ht, hk, hp, hg, hu, hs, hc, hpeek, hrec, hm,
     getDev, getK, invariant]
   all_goals try exact ((⇓? _ w => ⌜cell w = s⌝) : PostCond _ (.arg World (.except Stop .pure)))
   all_goals simp_all [cell]

@@ -184,16 +184,16 @@ theorem mapM_snapshot_spec (P : Snapshot → Prop) {α β : Type}
     | cons y ys ih => mvcgen [List.mapM.loop, hf, ih]
   exact loop xs []
 
-theorem indexRemove_sameSnapshot (pid : PeerId) (kind : IndexKind) : SameSnapshot (Leanux.WG.indexRemove pid kind) := by
+theorem indexRemove_sameSnapshot (owner : IndexOwner) : SameSnapshot (Leanux.WG.indexRemove owner) := by
   intro w x v hr
   have hf := congrArg (fun k => snapshot {w with k})
-    (Framing.indexRemove_sameIndexKernel pid kind w x v hr)
+    (Framing.indexRemove_sameIndexKernel owner w x v hr)
   simpa [snapshot, Framing.indexKernelView, Framing.indexKernel,
     Option.bind_map, Function.comp_def] using hf
 
-theorem indexRemove_spec (P : Snapshot → Prop) (pid : PeerId) (kind : IndexKind) :
-    ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.indexRemove pid kind
-    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (indexRemove_sameSnapshot pid kind).wp P
+theorem indexRemove_spec (P : Snapshot → Prop) (owner : IndexOwner) :
+    ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.indexRemove owner
+    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (indexRemove_sameSnapshot owner).wp P
 
 theorem keypairPutNull_sameSnapshot  : SameSnapshot (Leanux.WG.keypairPutNull ) := by
   frame_same [Leanux.WG.keypairPutNull] using []
@@ -315,6 +315,36 @@ theorem getPeer_spec (P : Snapshot → Prop) (id : PeerId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.getPeer id
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (getPeer_sameSnapshot id).wp P
 
+/-- The embedded word is read through its owner; only successful states are
+framed here. Lifetime observers separately record the resolved owner access. -/
+theorem ownerPeerWord_sameSnapshot (owner : IndexOwner) :
+    SameSnapshot owner.peerWord := by
+  cases owner <;> frame_same [IndexOwner.peerWord] using [getPeer_spec, getKeypair_spec]
+
+theorem ownerPeerWord_spec (P : Snapshot → Prop) (owner : IndexOwner) :
+    ⦃fun w => ⌜P (snapshot w)⌝⦄ owner.peerWord
+    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (ownerPeerWord_sameSnapshot owner).wp P
+
+/-- The setter rereads its current owner. Updating its peer word retains the
+actual keypair counter cell; no whole-store mask is introduced. -/
+theorem ownerSetPeerWord_sameSnapshot (owner : IndexOwner) (peer : Option PeerId) :
+    SameSnapshot (owner.setPeerWord peer) := by
+  cases owner <;> frame_same [IndexOwner.setPeerWord]
+    using [getPeer_spec, setPeer_spec, getKeypair_live_spec, setKeypair_live_spec]
+
+theorem ownerSetPeerWord_spec (P : Snapshot → Prop) (owner : IndexOwner)
+    (peer : Option PeerId) :
+    ⦃fun w => ⌜P (snapshot w)⌝⦄ owner.setPeerWord peer
+    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (ownerSetPeerWord_sameSnapshot owner peer).wp P
+
+theorem ownerPeerDeref_sameSnapshot (owner : IndexOwner) :
+    SameSnapshot owner.peerDeref := by
+  frame_same [IndexOwner.peerDeref] using [ownerPeerWord_spec]
+
+theorem ownerPeerDeref_spec (P : Snapshot → Prop) (owner : IndexOwner) :
+    ⦃fun w => ⌜P (snapshot w)⌝⦄ owner.peerDeref
+    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (ownerPeerDeref_sameSnapshot owner).wp P
+
 theorem indexBucket_sameSnapshot (index : Nat) : SameSnapshot (Leanux.WG.indexBucket index) :=
   sameSnapshot_of_sameKernel (Framing.indexBucket_sameKernel index)
 
@@ -322,12 +352,12 @@ theorem indexBucket_spec (P : Snapshot → Prop) (index : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.indexBucket index
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (indexBucket_sameSnapshot index).wp P
 
-theorem indexHashed_sameSnapshot (pid : PeerId) (kind : IndexKind) : SameSnapshot (Leanux.WG.indexHashed pid kind) := by
+theorem indexHashed_sameSnapshot (owner : IndexOwner) : SameSnapshot (Leanux.WG.indexHashed owner) := by
   frame_same [Leanux.WG.indexHashed] using [getDev_spec]
 
-theorem indexHashed_spec (P : Snapshot → Prop) (pid : PeerId) (kind : IndexKind) :
-    ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.indexHashed pid kind
-    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (indexHashed_sameSnapshot pid kind).wp P
+theorem indexHashed_spec (P : Snapshot → Prop) (owner : IndexOwner) :
+    ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.indexHashed owner
+    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (indexHashed_sameSnapshot owner).wp P
 
 theorem listDel_sameSnapshot (id : NodeId) : SameSnapshot (Leanux.WG.listDel id) := by
   frame_same [Leanux.WG.listDel] using [getDev_spec, setPeer_spec]
@@ -532,17 +562,17 @@ theorem free_spec (P : Snapshot → Prop)  :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.free
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (free_sameSnapshot ).wp P
 
-theorem indexInsert_sameSnapshot (pid : PeerId) (kind : IndexKind) : SameSnapshot (Leanux.WG.indexInsert pid kind) :=
+theorem indexInsert_sameSnapshot (owner : IndexOwner) : SameSnapshot (Leanux.WG.indexInsert owner) :=
   by
   intro w x v hr
-  have hf := Framing.indexInsert_sameIndexKernel pid kind w x v hr
+  have hf := Framing.indexInsert_sameIndexKernel owner w x v hr
   have hs := congrArg (fun k => snapshotOfWGKernelView (Framing.WGKernelView.ofKernel k)) hf
   simpa [snapshotOfWGKernelView, Framing.indexKernelView, Framing.indexKernel,
     Framing.WGKernelView.ofKernel, snapshot, Option.bind_map, Function.comp_def] using hs
 
-theorem indexInsert_spec (P : Snapshot → Prop) (pid : PeerId) (kind : IndexKind) :
-    ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.indexInsert pid kind
-    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (indexInsert_sameSnapshot pid kind).wp P
+theorem indexInsert_spec (P : Snapshot → Prop) (owner : IndexOwner) :
+    ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.indexInsert owner
+    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (indexInsert_sameSnapshot owner).wp P
 
 theorem peerGet_sameSnapshot (pid : PeerId) : SameSnapshot (Leanux.WG.peerGet pid) := by
   frame_same [Leanux.WG.peerGet] using [getPeer_spec, refcountInc_spec, requireNotPending_spec, setPeer_spec]
@@ -615,14 +645,14 @@ theorem clearPeerEndpointSrc_spec (P : Snapshot → Prop) (pid : PeerId) :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (clearPeerEndpointSrc_sameSnapshot pid).wp P
 
 theorem handshakeInit_sameSnapshot (pid : PeerId) (presharedKey : Option Key) : SameSnapshot (Leanux.WG.handshakeInit pid presharedKey) := by
-  frame_same [Leanux.WG.handshakeInit] using [getPeer_spec, precomputeStaticStatic_spec, setPeer_spec]
+  frame_same [Leanux.WG.handshakeInit] using [ownerSetPeerWord_spec, getPeer_spec, precomputeStaticStatic_spec, setPeer_spec]
 
 theorem handshakeInit_spec (P : Snapshot → Prop) (pid : PeerId) (presharedKey : Option Key) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.handshakeInit pid presharedKey
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (handshakeInit_sameSnapshot pid presharedKey).wp P
 
 theorem indexLookup_sameSnapshot (kinds : List IndexKind) (index : Nat) : SameSnapshot (Leanux.WG.indexLookup kinds index) := by
-  frame_same [Leanux.WG.indexLookup] using [indexBucket_spec, peerGetMaybeZero_spec]
+  frame_same [Leanux.WG.indexLookup] using [ownerPeerWord_spec, ownerSetPeerWord_spec, indexBucket_spec, peerGetMaybeZero_spec]
 
 theorem indexLookup_spec (P : Snapshot → Prop) (kinds : List IndexKind) (index : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.indexLookup kinds index

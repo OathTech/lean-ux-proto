@@ -71,7 +71,7 @@ def enqueue (pid : PeerId) (item : List SkbId) : Obs Int := do
 
 def publish (item : List SkbId) (state : PacketState) : Obs Unit := do
   let some first := item.head? | liftPrefix (invariant "an empty ring item")
-  let pid := (← access (getKeypairPrefix (← access (getTxSkbPrefix first)).keypair)).peer
+  let pid ← access (peerDerefPrefix (.keypair (← access (getTxSkbPrefix first)).keypair))
   access (peerGetMixed pid)
   if !((← access (getPeerMixed pid)).txQueue.all.any (·.head? == some first)) then
     liftPrefix (invariant "an item for the tx worker that is not on its peer's tx_queue")
@@ -195,7 +195,7 @@ theorem publish_erases (item : List SkbId) (state : PacketState) :
   cases hh : item.head? <;> simp only [hh]
   repeat' first
     | with_reducible exact access_erases (getTxSkbPrefix_erases _)
-    | with_reducible exact access_erases (getKeypairPrefix_erases _)
+    | with_reducible exact access_erases (peerDerefPrefix_erases _)
     | with_reducible exact access_erases (peerGetMixed_erases _)
     | with_reducible exact access_erases (getPeerMixed_erases _)
     | with_reducible exact access_erases (setTxSkbPrefix_erases _ _)

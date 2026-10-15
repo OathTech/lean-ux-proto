@@ -46,8 +46,7 @@ theorem cookieLift_spec (c : AmbientContracts I) (hc : CookieStable I)
 def cookieMessageConsumePrefix (msg : List UInt8) : MixedM Unit := do
   let entry ← indexLookupPrefix [.handshake, .keypair] (u32le msg 4)
   if ← liftPrefix (branch .cookieLookupMiss entry.isNone) then return
-  let some e := entry | liftPrefix (invariant "unreachable")
-  let pid := e.peer
+  let some (_, pid) := entry | liftPrefix (invariant "unreachable")
   let p ← getPeerMixed pid
   if ← liftPrefix (branch .cookieNoMac1Sent !p.haveSentMac1) then
     peerPutMixed (some pid)

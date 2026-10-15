@@ -276,7 +276,8 @@ theorem enqueuePerPeerTx_cell (item : List SkbId) (state : PacketState) :
   have hpeek := fun pid => (cell_kernel (peekQueuedUnit_sameKernel .txWorker pid)).wp P
   have hrec := fun pid => (cell_kernel (recordQueued_sameKernel .txWorker pid)).wp P
   have hdev := fun pid => (txDevice_cell (.work pid)).wp P
-  mvcgen [enqueuePerPeerTx, htx, hk, hg, hget, hput, hset, hcpu, hpeek, hrec, hdev,
+  have hw := fun o => (cell_kernel (indexOwner_peerDeref_sameKernel o)).wp P
+  mvcgen [hw, enqueuePerPeerTx, htx, hk, hg, hget, hput, hset, hcpu, hpeek, hrec, hdev,
     getDev, getK, modifyDev, modifyK, branch, invariant]
   all_goals try dsimp +zetaDelta only [P] at *
   all_goals try (unfold cell at *; simp_all [Option.bind_map, Function.comp_def])
@@ -349,7 +350,8 @@ theorem sendStagedPackets_cell (pid : PeerId) : SameView cell (sendStagedPackets
   have hc := fun item => (createData_cell pid item).wp P
   have hl (α β : Type) := list_view_spec cell (α := α) (β := β) P
   simp only [sendStagedPackets, getPeer_twice]
-  mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, hl, hg, hs, hk, hset, hget, hp, hout, hput, hqueue, ht, he, hn, hc, branch, branchCmp, invariant]
+  have hw := fun o => (cell_kernel (indexOwner_peerDeref_sameKernel o)).wp P
+  mvcgen [hw,-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, hl, hg, hs, hk, hset, hget, hp, hout, hput, hqueue, ht, he, hn, hc, branch, branchCmp, invariant]
   all_goals try exact ((⇓? _ w => ⌜P (cell w)⌝) : PostCond _ (.arg World (.except Stop .pure)))
   all_goals try dsimp +zetaDelta only [P] at *
   all_goals try (unfold cell at *; simp_all [CurrentRx, Option.bind_map, Function.comp_def])

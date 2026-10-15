@@ -184,7 +184,7 @@ theorem timersHandshakeInitiatedPrefix_spec (c : AmbientContracts I)
   · exact c.pure P _
 
 theorem sendHandshakeInitiationPrefix_preserves (c : AmbientContracts I) (sc : SocketContracts I)
-    (hi : ∀ pid kind, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (indexInsert pid kind)))
+    (hi : ∀ owner, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (indexInsert owner)))
     (pid : PeerId) : PrefixPreserves I LifetimeEvent.Safe (sendHandshakeInitiationPrefix pid) := by
   unfold sendHandshakeInitiationPrefix
   repeat' first
@@ -207,7 +207,7 @@ theorem sendHandshakeInitiationPrefix_preserves (c : AmbientContracts I) (sc : S
     | (with_reducible split)
 
 theorem sendHandshakeResponsePrefix_preserves (c : AmbientContracts I) (sc : SocketContracts I)
-    (hi : ∀ pid kind, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (indexInsert pid kind)))
+    (hi : ∀ owner, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (indexInsert owner)))
     (create : ∀ pid, PrefixPreserves I LifetimeEvent.Safe (keypairCreatePrefix pid))
     (put : ∀ kp now, PrefixPreserves I LifetimeEvent.Safe (keypairPutPrefix kp now))
     (replace : ∀ pid kp, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (indexReplaceHandshake pid kp)))
@@ -232,7 +232,7 @@ theorem sendHandshakeResponsePrefix_preserves (c : AmbientContracts I) (sc : Soc
     | (with_reducible split)
 
 theorem handshakeSendWorkerPrefix_preserves (c : AmbientContracts I) (sc : SocketContracts I)
-    (hi : ∀ pid kind, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (indexInsert pid kind)))
+    (hi : ∀ owner, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (indexInsert owner)))
     (pid : PeerId) : PrefixPreserves I LifetimeEvent.Safe (handshakeSendWorkerPrefix pid) :=
   PrefixPreserves.bind (sendHandshakeInitiationPrefix_preserves c sc hi pid) (fun _ => c.peerPut _)
 
@@ -272,7 +272,7 @@ theorem erases (call : HandshakeSendCall) : ErasesPrefix call.observed call.orig
   | worker pid => exact handshakeSendWorkerPrefix_erases pid
 
 theorem preserves_ambient (c : AmbientContracts I) (sc : SocketContracts I)
-    (hi : ∀ pid kind, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (indexInsert pid kind)))
+    (hi : ∀ owner, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (indexInsert owner)))
     (create : ∀ pid, PrefixPreserves I LifetimeEvent.Safe (keypairCreatePrefix pid))
     (put : ∀ kp now, PrefixPreserves I LifetimeEvent.Safe (keypairPutPrefix kp now))
     (replace : ∀ pid kp, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (indexReplaceHandshake pid kp)))

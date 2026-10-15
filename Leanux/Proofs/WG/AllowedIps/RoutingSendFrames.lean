@@ -32,6 +32,12 @@ theorem getKeypair_routing (id : KeypairId) : SameView routingView (getKeypair i
   intro s
   mvcgen [getKeypair, getDev, getK, invariant]
 
+theorem ownerDeref_routing (owner : IndexOwner) : SameView routingView owner.peerDeref :=
+  routing_kernel _ (indexOwner_peerDeref_sameKernel owner)
+
+theorem ownerWord_routing (owner : IndexOwner) : SameView routingView owner.peerWord :=
+  routing_kernel _ (indexOwner_peerWord_sameKernel owner)
+
 theorem setKeypair_routing (id : KeypairId) (k : Keypair) : SameView routingView (setKeypair id k) :=
   modifyDev_routing _ (fun _ => rfl)
 
@@ -82,8 +88,9 @@ theorem keypairGet_routing (kp : Option KeypairId) : SameView routingView (keypa
 theorem keypairPut_routing (kp : Option KeypairId) (now : Bool) : SameView routingView (keypairPut kp now) := by
   apply SameView.of_wp
   intro s
-  simp only [keypairPut, indexRemoveKeypair_eq, indexUnhash]
-  mvcgen [getKeypair, getDev, getK, setKeypair, modifyDev, modifyK,
+  simp only [keypairPut, indexRemove_eq, indexUnhash]
+  have hd := fun o k => sameKernel_wp _ (indexOwner_peerDeref_sameKernel o) (fun v => v = k)
+  mvcgen [hd,getKeypair, getDev, getK, setKeypair, modifyDev, modifyK,
     branch, branchCmp, refcountDecAndTest, unsupported, invariant]
   all_goals dsimp +zetaDelta only at *
   all_goals simp_all [routingView, routingState]
@@ -157,7 +164,8 @@ theorem enqueuePerPeerTx_routing (item : List SkbId) (state : PacketState) :
   have hpeek := fun pid => (routing_kernel _ (peekQueuedUnit_sameKernel .txWorker pid)).wp P
   have hrec := fun pid => (routing_kernel _ (recordQueued_sameKernel .txWorker pid)).wp P
   have hdev := fun pid => (txDevice_routing (.work pid)).wp P
-  mvcgen [enqueuePerPeerTx, htx, hk, hg, hget, hput, hset, hcpu, hpeek, hrec, hdev,
+  have hw := fun o => (ownerDeref_routing o).wp P
+  mvcgen [hw, enqueuePerPeerTx, htx, hk, hg, hget, hput, hset, hcpu, hpeek, hrec, hdev,
     getDev, getK, modifyDev, modifyK, branch, invariant]
   all_goals try dsimp +zetaDelta only [P] at *
   all_goals try (unfold routingView at *; simp_all [routingState, Option.bind_map, Function.comp_def])
@@ -231,7 +239,8 @@ theorem sendStagedPackets_routing (pid : PeerId) : RetainsRoutingCall (sendStage
   have hc := fun item => (createData_routing pid item).wp s
   have hl (α β : Type) := list_view_spec routingView (α := α) (β := β) P
   simp only [sendStagedPackets, getPeer_twice]
-  mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, hl, hg, hs, hk, hset, hget, hp, hout, hput, hqueue, ht, he, hn, hc, branch, branchCmp, invariant]
+  have hw := fun o => (routing_kernel _ (indexOwner_peerDeref_sameKernel o)).wp P
+  mvcgen [hw,-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, hl, hg, hs, hk, hset, hget, hp, hout, hput, hqueue, ht, he, hn, hc, branch, branchCmp, invariant]
   all_goals try exact ((⇓? _ w => ⌜P (routingView w)⌝) : PostCond _ (.arg World (.except Stop .pure)))
   all_goals try dsimp +zetaDelta only [P] at *
   all_goals try (unfold routingView at *; simp_all [routingState, Option.bind_map, Function.comp_def])

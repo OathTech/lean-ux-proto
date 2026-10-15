@@ -69,7 +69,7 @@ theorem handshakeInit_peerInitView (pid : PeerId) (psk : Option Key) :
   apply SameView.of_wp
   intro s
   have precompute_spec := (precomputeStaticStatic_peerInitView pid).wp (fun t => t = s)
-  mvcgen [handshakeInit, precompute_spec, getPeer, getDev, getK,
+  mvcgen [handshakeInit, IndexOwner.setPeerWord, precompute_spec, getPeer, getDev, getK,
     setPeer, modifyDev, modifyK, branch, invariant]
   all_goals dsimp +zetaDelta only at *
   all_goals try unfold peerInitView at *

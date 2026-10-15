@@ -87,7 +87,7 @@ def main : IO UInt32 := do
       let d ← device cleared.execution.after
       let p ← peer0 d
       require (p.keypairCurrent.isNone && p.keypairNext.isNone && p.keypairPrevious.isNone &&
-        p.handshakeState == 0 && !d.indexTable.any (·.keypair == some slot) &&
+        p.handshakeState == 0 && !d.indexTable.any (·.owner == .keypair slot) &&
         d.keypairs[slot]? == some {retained with refcount := 1} &&
         d.txSkbs[packetId]? == some packet) "clear did not retain exactly the packet-held material"
       pure cleared.execution.after

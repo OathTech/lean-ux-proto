@@ -133,7 +133,7 @@ theorem source_peer_fields (protocol : Nat) (bytes : List UInt8) (pid : PeerId) 
 /-- A key reference is below the current allocation frontier and any resident
 key at that slot belongs to the named peer. Existence is not required. -/
 def KeyRef (d : Device) (pid : PeerId) (kid : KeypairId) : Prop :=
-  kid < d.nextKeypairId ∧ ∀ key, d.keypairs[kid]? = some key → key.peer = pid
+  kid < d.nextKeypairId ∧ ∀ key, d.keypairs[kid]? = some key → key.peer = some pid
 
 def SlotAffiliation (w : World) : Prop :=
   ∀ d pid p kid, w.k.wg = some d → d.peers[pid]? = some p →

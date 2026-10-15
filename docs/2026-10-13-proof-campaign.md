@@ -3,16 +3,19 @@
 ## Progress
 
 Work is on `.worktrees/proofs-campaign`, branch `proofs/campaign`, under
-[the charter](2026-10-13-charter-proof-campaign.md). The mirror remains byte-identical
-to `ca6b22e`; main `de62c9d` is newer and its authorized carry is pending.
-The R3 initialized syscall/Runner extension passes coordinated validation
-and independent frozen review.
+[the charter](2026-10-13-charter-proof-campaign.md). The checkout mirror is
+byte-identical to `de62c9d`, carried into this branch with the shared proof
+frames repaired. The proof gate, fresh kernel replay, model/executable builds,
+unit tests and eleven reproductions pass; all register rows are current over
+that mirror. R3 packet authorization and R4 completion/conservation remain open.
 The [proof register](proofs.md#results) holds current declarations and
 pins; its [model map](proofs.md#layers) supplies the complete module inventory.
 Current components are not completion of the open charter properties. This campaign
 has made no main integration, push, differential check or guest run.
 [AGENT 2026-10-14] Keep the module inventory/register in the proof map; this report
 retains current architecture, findings, reproduction provenance, effort and limits.
+
+The following result dispositions are current over `de62c9d`.
 
 | Result | Current disposition |
 | --- | --- |
@@ -23,18 +26,30 @@ retains current architecture, findings, reproduction provenance, effort and limi
 | R5 | The unconditional age/post-zero and wire-nonce readings are false in accepted mirror inputs. Rule Zero resolution retains thirteen positive local contracts, without universal replacement transport claims. |
 | R6 | Cookie exclusion is proved at its original call boundary. A 19-retry/20-initiation episode refutes literal MAX=18; no universal corrected retry bound is claimed. |
 
-**Validation status.** The R3 initialized syscall/Runner extension passes its
-389-job scoped Statements and 472-job full proof builds. The coordinated gate
-passes all 477 terminal declarations (117 R3; 475 theorems and two definitions)
-with permitted axioms only. Fresh stock kernel replay, the 60-job default build
-and 124 unit tests (52.644 seconds, one skip) pass. Exact six-file scope/hashes,
-all 474 prior terminal statements/proof bodies, census, tokens/imports, whitespace
-including new files and mirror equality pass. Independent frozen review is clear.
-Replay, default build and units ran concurrently with unchanged caps; no
-infrastructure rerun. The sixteen worker calls comprise thirteen builds (six
-passes, seven ordinary failures) and three passing exact checks. No cap kill,
-interruption, runtime source or reproduction change occurred. This slice remains
-pinned to `ca6b22e`; all register rows disclose the lag to main `de62c9d`.
+**Validation status.** The `de62c9d` carry passes the 281-job
+`LifetimeSafety.Statements` closure and full 473-job `LeanuxProofs` build.
+The proof gate passes all 477 terminal declarations (117 R3, 109 R4;
+475 theorems and two definitions), using only `propext`, `Classical.choice`
+and `Quot.sound`. Fresh stock kernel replay exits zero with no diagnostics.
+Default/executable builds pass 60/118 jobs, and all 124 unit tests pass
+(24.853 seconds, one skip). Eleven reproduction checks pass: nine accepted
+original/observer agreements and two exact pending-dump rejections, each with
+its accepted pre-delete boundary. These generated records are mirror inputs,
+not new kernel captures. Every coordinated job completed without a cap kill,
+timeout, interruption or rerun.
+
+Ten local terminal code/API deltas are enumerated below; the other 467 statement
+and proof bodies, including universal initialized R2/R4 domains, are unchanged.
+All 64 changed Lean files match their frozen manifest, including the thirteen
+foundational files. Root exact checks pass scope/census, reviewed terminal
+deltas, tokens/imports, whitespace/EOF and mirror equality. Independent frozen
+source/documentation review found no unresolved defect (03:49:09–03:53:03 UTC,
+3m54s, following a 6m24s preliminary review). Root review corrected an accidentally
+`some pid`-only R3 creation conjunct to quantify a separate optional peer word,
+including `none`; no initialized premise was added. The carry changes proof/docs
+files only beyond the authorized incoming main changes. The older `6010243`
+checkpoint remains the prior validated `ca6b22e` pin; its counts and timings are
+retained in that commit.
 
 [AGENT 2026-10-14] Condense repeated checkpoint validation here; the
 checkpoint commit messages retain historical counts and timings, and the result
@@ -125,8 +140,66 @@ expanding nested World-valued automatic VCs. Five proof files change; all
 Toolchain deprecation warnings remain visible; no tactic-limit or global-setting
 change is used.
 
+**Embedded index peer-word carry (`de62c9d`).** The source now
+stores one optional peer word in the owning handshake/keypair. Index lookup reads
+that word and stores the acquisition result through a fresh owner getter. The
+new `IndexOwnerAccess` layer is below release and lookup, preventing an import
+cycle. Its literal observers retain both reads and the setter write; `peerDeref`
+checks NULL after resolving the owner, without an invented getter for the peer
+named by the word. Existing Kernel/counter/identity frames retain their actual
+projections; the index frame still omits only the scalar index table. Peer
+initialization now observes its new initial read/write before the PSK branch.
+
+`keypairPutPrefix` observes a fresh owner read before each unhash. Its exact event
+formula depends on `unreferenceNow` and the optional peer word. If the word is
+NULL and immediate unreference is requested, it stops before decrementing. If
+immediate unreference is false and the count is one, the source writes the zero
+count, reads the owner again and stops before erasing. Both failed prefixes are
+proved exactly and contain no release event. The zero-count theorem is
+case-complete: the immediate NULL stop precedes the old decrement-first warning;
+other zero-count cases retain the warning and their actual reads/write. These
+are conditional source equations over arbitrary Worlds, not accepted initialized
+Runner counterexamples or kernel findings. The lifecycle note's assertion that
+the failed acquisition is unreachable is not used as a proof premise.
+
+[AGENT 2026-10-15] Preserve the universal initialized R2/R4 domains while carrying
+the new source observations. Generalize creation APIs to `Option PeerId`, including
+`none`, and review local signature/history deltas explicitly instead of adding
+non-NULL premises. The foundational slice kept terminal files unchanged; the
+remaining carry makes the following ten reviewed source/API repairs. All other
+467 terminal statement/proof bodies and all 477 names remain unchanged.
+
+| Terminal declarations | Source-required delta |
+| --- | --- |
+| `keypair_put_access_observation` | The exact event list now takes the immediate-unreference flag as well as the entry World. |
+| `keypair_zero_refcount_failure_prefix` | Distinguish the earlier immediate NULL Stop from the decrement-first zero-count warning, with the actual prefix in each case. |
+| `keypair_allocation_access_erasure`, `keypair_allocation_access_preserves`, `keypair_allocation_access_observation` | Creation accepts an optional peer word, including `none`. |
+| `begin_session_birthdate_failure_prefix` | Add the actual handshake-word read and create from that stored optional word; derive the getter from the existing entry/guard premises. |
+| `handshake_family_ambient_access_preserves`, `handshake_send_family_ambient_access_preserves`, `key_maintenance_family_ambient_access_preserves` | Quantify owner-based insertion/removal contracts instead of the retired table peer field. |
+| `original_session_routing_frames` | Generalize only the creation conjunct to a separate optional peer-word argument; retain the existing peer argument for the other calls. |
+
+The new primitives are threaded through actual lookup, allocation-release,
+session, handshake/maintenance, receive and TX observers. Lookup observes the owner
+read, attempted acquisition and fresh owner getter/write, including NULL store-back;
+it returns the acquired peer beside the owner. Receive observers retain the explicit
+owner-kind split and wrong-mask Stop before keypair acquisition. The separate Logged
+worker, joint TX disposition, RX publication and key-time staging copies follow the
+same changed source calls. Their direct lifetime projections use the identical
+incoming histories; no conclusion is inferred merely from two independent erasures.
+
+Routing and ring/queue frames project the actual updated fields; full-Kernel
+read-only dereference frames discharge those leaf calls without masking stores.
+The local RX key-reference contract now says `key.peer = some pid`. This is an
+explicit local affiliation contract, not a premise added to initialized R2/R4.
+Fixture literals use optional owners, and delayed/post-clear reproduction checks
+inspect the scalar index owner's tag. No new accepted initialized counterexample
+or kernel finding is asserted. Credit affiliation, non-NULL reachability,
+completed stack delivery and pipeline conservation remain separate obligations.
+
 | Carry | Measured effort |
 | --- | --- |
+| `de62c9d` remaining source/claim carry | Grant 2026-10-15 03:16:14 UTC, measured acceptance 03:16:38; R2 closure collected 03:35:17 (281 jobs); first full PASS collected 03:48:01 (473 jobs, 31m23s after acceptance). Fifteen collected capped calls through handback: twelve build/compile calls (three PASS / nine ordinary FAIL) and three passing exact checks. Call 13 compiles both changed replay programs without executing a trace and overlaps the full build without writing build outputs. Calls 1–2 failed on a malformed tactic invocation and an optional-word case equation; calls 3–7 exposed readonly leaf/initializer, source bind/pure-pair normalization and new getter-prefix obligations in receive/session/maintenance. Calls 10–11 exposed three keypair-put frames and two TX publication callers missing the actual owner-read WP; directed full-Kernel readonly frames close them. No source admission, recovery-placeholder/kernel diagnostic, heartbeat/recursion/cap failure, interruption or infrastructure rerun occurred; every exit is collected, limits unchanged. Sixty-four Lean files plus two docs, including the unchanged thirteen-file foundation. Exactly ten reviewed terminal code/API deltas, all 477 names and the other 467 bodies preserved; initialized R2/R4 domains and same-history/probe projections are unchanged. Exact checks 9/14/15 pass; the final manifest covers every owned path and the unchanged staged index/MERGE_HEAD/mirror. Handback at 03:50:09 UTC (33m31s after acceptance). Independent frozen review is clear; coordinated gate, fresh replay, default/executable builds, units and all eleven reproductions pass as recorded above. |
+| `de62c9d` foundational owner-word carry | Nine capped calls: seven builds (two PASS / five ordinary FAIL) and two passing exact checks; final KeypairRelease closure 117 jobs. Grant 2026-10-15 02:58:08 UTC, measured acceptance 02:58:50; first passing closure collected 03:06:05, final closure with the explicit second NULL-stop equation collected 03:07:01 (8m11s after acceptance). Calls 1–2 failed on keypair ordinary framing: snapshot equality alone lost the saved resident relation, repaired by the actual read-only full-Kernel dereference frame. Call 3 compiled WGBase/Transitions/More but exposed Peers.Frames.handshakeInit; root explicitly added that one dependency to scope before its repair. Call 4 failed on the initializer's nested bind association; call 5 on positivity normalization in the exact put-event cases. Directed source frames, bind normalization and Nat positivity close these without raising existing limits. No source admission, recovery-placeholder/kernel diagnostic, heartbeat/recursion/cap failure or interruption occurred. The pending merge index and all mirror files remain untouched. Thirteen Lean files plus two docs; all 477 terminal declarations retain byte-identical Statements files. Exact check 8 passes the scope, compatibility, census, tokens/imports, tracked/new whitespace/EOF, mirror and staged-index checks. Independent frozen source/documentation review is clear (03:08:40–03:10:05 UTC); its minor count-label finding is retained: check 8 called 477 terminal declarations 'files/code'. The earlier log is unchanged; final check 9 uses the correct declaration label and confirms the metadata, hashes and unchanged index/mirror. No full-tree build, proof gate, fresh replay or runtime reproduction is claimed for this slice. |
 | Seccomp/shared frames | 17 compile passes; 36m34s. |
 | Prerequisites `2c7a076` | About 40m, 12 local builds; earlier transmit/stack work five attempts. |
 | Audit `f45bde8` | 14 root, six R2 and sixteen R4 build/probe calls before passing gates and nine replays. |

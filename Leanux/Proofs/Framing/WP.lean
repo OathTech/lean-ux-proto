@@ -148,12 +148,24 @@ theorem indexUnhash_protected (d : Decision) (hashed : IndexEntry → Bool)
   subst d
   grind only
 
+/-- Resolving an embedded peer word reads its owner and does not mutate the
+Kernel. This frame is not an access-coverage claim. -/
+theorem indexOwner_peerWord_sameKernel (owner : IndexOwner) : SameKernel owner.peerWord := by
+  cases owner <;> apply sameKernel_of_wp <;> intro k
+  all_goals mvcgen [IndexOwner.peerWord, getPeer, getKeypair, getDev, getK, invariant]
+
+theorem indexOwner_peerDeref_sameKernel (owner : IndexOwner) : SameKernel owner.peerDeref := by
+  apply sameKernel_of_wp
+  intro k
+  have hw := sameKernel_wp _ (indexOwner_peerWord_sameKernel owner) (fun s => s = k)
+  mvcgen [IndexOwner.peerDeref, hw, unsupported]
+
 theorem keypairPut_preserves (kp : Option KeypairId) (now : Bool) (slot stamp : Nat)
     (counter : ReplayCounter) :
     Preserves (Protected slot stamp counter) (keypairPut kp now) := by
   unfold Preserves
   refine (hoare_iff_triple (keypairPut kp now) _ _).mpr ?_
-  simp only [keypairPut, indexRemoveKeypair_eq]
+  simp only [keypairPut, IndexOwner.peerDeref, IndexOwner.peerWord, indexRemove_eq]
   have hu := fun d hashed => indexUnhash_protected d hashed slot stamp counter
   have hg := fun query => getKeypair_wp query slot stamp counter
   have hs := fun query k => setKeypair_wp query slot stamp counter k
@@ -168,7 +180,7 @@ theorem keypairPut_preserves (kp : Option KeypairId) (now : Bool) (slot stamp : 
     simp only [Std.TreeMap.getElem?_erase] at hk
     split at hk <;> simp_all
 
-theorem keypairCreate_preserves (pid : PeerId) (slot stamp : Nat)
+theorem keypairCreate_preserves (pid : Option PeerId) (slot stamp : Nat)
     (counter : ReplayCounter) :
     Preserves (Protected slot stamp counter) (keypairCreate pid) := by
   have alloc_spec := sameKernel_wp _ keypairAllocation_sameKernel

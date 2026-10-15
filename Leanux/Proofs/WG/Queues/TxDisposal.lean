@@ -57,8 +57,9 @@ theorem keyPut_packets (key : Option KeypairId) (now : Bool) :
     SameView txPackets (keypairPut key now) := by
   apply SameView.of_wp
   intro s
-  simp only [keypairPut, indexRemoveKeypair_eq]
-  mvcgen [indexUnhash, getKeypair, getDev, getK, setKeypair, modifyDev, modifyK,
+  simp only [keypairPut, indexRemove_eq]
+  have hd := fun o k => sameKernel_wp _ (indexOwner_peerDeref_sameKernel o) (fun v => v = k)
+  mvcgen [hd, indexUnhash, getKeypair, getDev, getK, setKeypair, modifyDev, modifyK,
     refcountDecAndTest, branch, branchCmp, invariant, unsupported]
   all_goals unfold txPackets at *
   all_goals dsimp +zetaDelta only at *

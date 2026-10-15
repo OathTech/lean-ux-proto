@@ -33,7 +33,7 @@ theorem poll_preserves : PrefixPreserves (Inv deviceIndex initial) (Safe initial
   Ring.Source.poll_preserves _ (fun _ _ _ _ hc hr => poll_result hc hr)
 
 def enqueuePeer (irq : Obs Unit) (id : SkbId) (state : PacketState) : Obs Unit := do
-  let pid := (← liftPrefix (getKeypair (← liftPrefix (getRxSkb id)).keypair)).peer
+  let pid ← liftPrefix (IndexOwner.peerDeref (.keypair (← liftPrefix (getRxSkb id)).keypair))
   liftPrefix (peerGet pid)
   let p ← liftPrefix (getPeer pid)
   if !(p.rxQueue.all.contains id) then liftPrefix (invariant "a decrypted packet that is not on its peer's rx_queue")
@@ -64,6 +64,7 @@ theorem enqueuePeer_preserves (hi : PrefixPreserves (Inv deviceIndex initial) (S
   repeat' first
     | with_reducible exact hi
     | with_reducible exact lift_frame (getRx_frame _)
+    | with_reducible exact lift_frame (kernel (indexOwner_peerDeref_sameKernel _))
     | with_reducible exact lift_frame (getKeypair_frame _)
     | with_reducible exact lift_frame (getPeer_frame _)
     | with_reducible exact lift_frame (peerGet_frame _)
@@ -79,10 +80,13 @@ theorem enqueuePeer_preserves (hi : PrefixPreserves (Inv deviceIndex initial) (S
 
 def consume (msg : List UInt8) (src : SkbSource) (ds : Nat) : Obs Unit := do
   let entry ← liftPrefix (indexLookup [.keypair] (u32le msg 4))
-  let peer := entry.map (·.peer)
-  let kp ← match entry with
+  let (keypair, peer) ← match entry with
+    | none => pure (none, none)
+    | some (IndexOwner.keypair kp, pid) => pure (some kp, some pid)
+    | some (IndexOwner.handshake _, _) => liftPrefix (invariant "a handshake entry under the keypair mask")
+  let kp ← match keypair with
     | none => do liftPrefix keypairGetCurrent; pure none
-    | some e => liftPrefix (keypairGet e.keypair)
+    | some kp => liftPrefix (keypairGet (some kp))
   if ← liftPrefix (branch .dataNoKeypair kp.isNone) then
     liftPrefix (peerPut peer)
     return
@@ -103,61 +107,69 @@ def consume (msg : List UInt8) (src : SkbSource) (ds : Nat) : Obs Unit := do
 theorem consume_erases (msg : List UInt8) (src : SkbSource) (ds : Nat) :
     ErasesPrefix (consume msg src ds) (consumeData msg src ds) := by
   unfold consume consumeData
+  simp only [pure_bind]
   apply erasesPrefix_bind (erasesPrefix_lift _)
   intro entry
   cases entry with
   | none =>
     apply erasesPrefix_bind (erasesPrefix_lift _)
     intro _
-    simp only [pure_bind, Option.map_none]
+    try simp only [pure_bind, Option.map_none]
     apply erasesPrefix_bind (erasesPrefix_lift _)
     intro noKey
     split
     · exact erasesPrefix_bind (erasesPrefix_lift _) (fun _ => erasesPrefix_pure _)
     · exact erasesPrefix_lift _
   | some e =>
-    apply erasesPrefix_bind (erasesPrefix_lift _)
-    intro kp
-    apply erasesPrefix_bind (erasesPrefix_lift _)
-    intro noKey
-    split
-    · exact erasesPrefix_bind (erasesPrefix_lift _) (fun _ => erasesPrefix_pure _)
-    · cases kp with
-      | none => exact erasesPrefix_lift _
-      | some id =>
-        apply erasesPrefix_bind (erasesPrefix_lift _)
-        intro p
-        apply erasesPrefix_bind (erasesPrefix_lift _)
-        intro dead
-        split
-        · exact erasesPrefix_bind (erasesPrefix_lift _) (fun _ =>
-            erasesPrefix_bind (erasesPrefix_lift _) (fun _ => erasesPrefix_pure _))
-        · apply erasesPrefix_bind (erasesPrefix_lift _)
-          intro skb
-          apply erasesPrefix_bind (enqueue_erases skb)
-          intro ret
+    rcases e with ⟨owner, pid⟩
+    cases owner with
+    | handshake owner =>
+      intro w h
+      simp [runPrefix_bind, runPrefix_lift, invariant, StateT.run_bind]
+    | keypair key =>
+      try simp only [pure_bind]
+      apply erasesPrefix_bind (erasesPrefix_lift _)
+      intro kp
+      apply erasesPrefix_bind (erasesPrefix_lift _)
+      intro noKey
+      split
+      · exact erasesPrefix_bind (erasesPrefix_lift _) (fun _ => erasesPrefix_pure _)
+      · cases kp with
+        | none => exact erasesPrefix_lift _
+        | some id =>
           apply erasesPrefix_bind (erasesPrefix_lift _)
-          intro pipe
-          have tail : ErasesPrefix (Event := Event)
-              (do if ← liftPrefix (WG.orM (branch .dataEnqueueOk (ret == 0))
-                    (branch .dataEnqueueOkEpipe (ret == -EPIPE))) then return
-                  liftPrefix (keypairPut (some id) false)
-                  liftPrefix (peerPut (some e.peer))
-                  liftPrefix (freeRxSkb skb))
-              (do if ← WG.orM (branch .dataEnqueueOk (ret == 0))
-                    (branch .dataEnqueueOkEpipe (ret == -EPIPE)) then return
-                  keypairPut (some id) false
-                  peerPut (some e.peer)
-                  freeRxSkb skb) := by
-            apply erasesPrefix_bind (erasesPrefix_lift _)
-            intro okay
-            split
-            · exact erasesPrefix_pure _
-            · exact erasesPrefix_bind (erasesPrefix_lift _) (fun _ =>
-                erasesPrefix_bind (erasesPrefix_lift _) (fun _ => erasesPrefix_lift _))
+          intro p
+          apply erasesPrefix_bind (erasesPrefix_lift _)
+          intro dead
           split
-          · exact erasesPrefix_bind (enqueuePeer_erases (erasesPrefix_pure ()) skb .dead) (fun _ => tail)
-          · exact tail
+          · exact erasesPrefix_bind (erasesPrefix_lift _) (fun _ =>
+              erasesPrefix_bind (erasesPrefix_lift _) (fun _ => erasesPrefix_pure _))
+          · apply erasesPrefix_bind (erasesPrefix_lift _)
+            intro skb
+            apply erasesPrefix_bind (enqueue_erases skb)
+            intro ret
+            apply erasesPrefix_bind (erasesPrefix_lift _)
+            intro pipe
+            have tail : ErasesPrefix (Event := Event)
+                (do if ← liftPrefix (WG.orM (branch .dataEnqueueOk (ret == 0))
+                      (branch .dataEnqueueOkEpipe (ret == -EPIPE))) then return
+                    liftPrefix (keypairPut (some id) false)
+                    liftPrefix (peerPut (some pid))
+                    liftPrefix (freeRxSkb skb))
+                (do if ← WG.orM (branch .dataEnqueueOk (ret == 0))
+                      (branch .dataEnqueueOkEpipe (ret == -EPIPE)) then return
+                    keypairPut (some id) false
+                    peerPut (some pid)
+                    freeRxSkb skb) := by
+              apply erasesPrefix_bind (erasesPrefix_lift _)
+              intro okay
+              split
+              · exact erasesPrefix_pure _
+              · exact erasesPrefix_bind (erasesPrefix_lift _) (fun _ =>
+                  erasesPrefix_bind (erasesPrefix_lift _) (fun _ => erasesPrefix_lift _))
+            split
+            · exact erasesPrefix_bind (enqueuePeer_erases (erasesPrefix_pure ()) skb .dead) (fun _ => tail)
+            · exact tail
 
 theorem consume_preserves (msg : List UInt8) (src : SkbSource) (ds : Nat) :
     PrefixPreserves (Inv deviceIndex initial) (Safe initial) (consume msg src ds) := by

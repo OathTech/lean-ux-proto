@@ -146,8 +146,9 @@ theorem keypairPut_ordinary (kp : Option KeypairId) (now : Bool) :
     OrdinaryAction (keypairPut kp now) := by
   apply ordinaryAction_of_wp
   intro s
-  simp only [keypairPut, indexRemoveKeypair_eq]
-  mvcgen [indexUnhash, getKeypair, getDev, getK, setKeypair, modifyDev, modifyK,
+  simp only [keypairPut, indexRemove_eq]
+  have hd := fun o k => sameKernel_wp _ (indexOwner_peerDeref_sameKernel o) (fun v => v = k)
+  mvcgen [hd, indexUnhash, getKeypair, getDev, getK, setKeypair, modifyDev, modifyK,
     branch, branchCmp, refcountDecAndTest, unsupported, invariant]
   all_goals try dsimp +zetaDelta only at *
   all_goals try simp_all [snapshot]
@@ -157,7 +158,7 @@ theorem keypairPut_ordinary (kp : Option KeypairId) (now : Bool) :
   | exact ordinary_map_insert_erase _ _ _ _
   | apply ordinary_map_insert_same <;> first | assumption | rfl
 
-theorem keypairCreate_ordinary (pid : PeerId) : OrdinaryAction (keypairCreate pid) := by
+theorem keypairCreate_ordinary (pid : Option PeerId) : OrdinaryAction (keypairCreate pid) := by
   apply ordinaryAction_of_wp
   intro s
   have alloc_spec := sameKernel_wp _ keypairAllocation_sameKernel

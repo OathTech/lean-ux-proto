@@ -189,8 +189,8 @@ theorem peerRemoveAllPrefix_erases : ErasesPrefix peerRemoveAllPrefix peerRemove
 queue progress, pending-work consistency or saved-reference credit condition. -/
 structure PeerRemovalContracts (I : List LifetimeEvent → World → Prop) : Prop where
   socket : SocketContracts I
-  indexInsert : ∀ pid kind, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (WG.indexInsert pid kind))
-  indexRemove : ∀ pid kind, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (WG.indexRemove pid kind))
+  indexInsert : ∀ owner, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (WG.indexInsert owner))
+  indexRemove : ∀ owner, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (WG.indexRemove owner))
   keypairPut : ∀ kp now, PrefixPreserves I LifetimeEvent.Safe (keypairPutPrefix kp now)
   allowedIps : AllowedIpsContracts I
   sendErase : ∀ pid, PrefixPreserves I LifetimeEvent.Safe

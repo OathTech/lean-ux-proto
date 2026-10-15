@@ -15,7 +15,7 @@ theorem beginSessionPrefix_clock_failure (pid : PeerId) (kp : KeypairId)
     (selected : Bool) (e : Stop)
     (hbefore : (getPeer pid).run w = .ok (before, w))
     (hstate : (sessionStateRejected before.handshakeState).run w = .ok (false, allocEntry))
-    (hcreate : (keypairCreate pid).run allocEntry = .ok (some kp, allocated))
+    (hcreate : (keypairCreate before.handshakeEntryPeer).run allocEntry = .ok (some kp, allocated))
     (hguard : (branch .sessionNoKeypair (Option.isNone (some kp))).run allocated = .ok (false, guarded))
     (hpeer : (getPeer pid).run guarded = .ok (current, guarded))
     (hkey : (getKeypair kp).run guarded = .ok (k, guarded))
@@ -24,17 +24,28 @@ theorem beginSessionPrefix_clock_failure (pid : PeerId) (kp : KeypairId)
       .ok (selected, clockEntry))
     (hclock : (hiddenClock64 .deriveKeysBirthdate).run clockEntry = .error e) :
     runPrefix (beginSessionPrefix pid) w h =
-      (.error e, h ++ [.peer (.read pid before.internalId),
+      (.error e, h ++ [.peer (.read pid before.internalId), .peer (.read pid before.internalId),
         .keypair (.allocate kp (allocEntry.k.keypairCounter + 1)),
         .keypair (.write kp (allocEntry.k.keypairCounter + 1)),
         .peer (.read pid current.internalId), .keypair (.read kp k.internalId),
         .keypair (.write kp k.internalId)]) := by
+  have he : allocEntry.k = w.k := sessionStateRejected_sameKernel _ w false allocEntry hstate
+  have hword : (getPeer pid).run allocEntry = .ok (before, allocEntry) := by
+    cases hd : w.k.wg with
+    | none => simp [getPeer, getDev, getK, hd, invariant] at hbefore
+    | some d =>
+      cases hp : d.peers[pid]? with
+      | none => simp [getPeer, getDev, getK, hd, hp, invariant] at hbefore
+      | some p =>
+        have hb : p = before := by simpa [getPeer, getDev, getK, hd, hp] using hbefore
+        simp [getPeer, getDev, getK, he, hd, hp, hb]
   have present : guarded.k.wg.isSome = true := by
     cases hd : guarded.k.wg with
     | none => simp [getKeypair, getDev, getK, hd, invariant] at hkey
     | some d => rfl
   simp only [beginSessionPrefix, runPrefix_bind, getPeerMixed_run, hbefore,
-    runPrefix_lift, hstate, Bool.false_eq_true, ↓reduceIte,
+    runPrefix_lift, hstate, Bool.false_eq_true, ↓reduceIte, peerWordPrefix,
+    getPeerMixed_run, hword, runPrefix_pure,
     keypairCreatePrefix_observation, hcreate, hguard, hpeer,
     sessionKeypairPrefix, getKeypairPrefix_run, hkey, setKeypairPrefix_run,
     present, hwrite, hselect]

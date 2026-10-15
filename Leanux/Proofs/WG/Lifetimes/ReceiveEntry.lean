@@ -146,10 +146,13 @@ theorem enqueuePerDeviceAndPeerRxPrefix_allocation (id : SkbId) :
 
 def consumeDataPrefix (msg : List UInt8) (src : SkbSource) (ds : Nat) : MixedM Unit := do
   let entry ← indexLookupPrefix [.keypair] (u32le msg 4)
-  let peer := entry.map (·.peer)
-  let kp ← match entry with
+  let (keypair, peer) ← match entry with
+    | none => pure (none, none)
+    | some (IndexOwner.keypair kp, pid) => pure (some kp, some pid)
+    | some (IndexOwner.handshake _, _) => liftPrefix (invariant "a handshake entry under the keypair mask")
+  let kp ← match keypair with
     | none => do liftPrefix keypairGetCurrent; pure none
-    | some e => keypairGetPrefix e.keypair
+    | some kp => keypairGetPrefix (some kp)
   if ← liftPrefix (branch .dataNoKeypair kp.isNone) then
     peerPutMixed peer
     return
@@ -170,61 +173,70 @@ def consumeDataPrefix (msg : List UInt8) (src : SkbSource) (ds : Nat) : MixedM U
 theorem consumeDataPrefix_erases (msg : List UInt8) (src : SkbSource) (ds : Nat) :
     ErasesPrefix (consumeDataPrefix msg src ds) (consumeData msg src ds) := by
   unfold consumeDataPrefix consumeData
+  simp only [pure_bind]
   apply erasesPrefix_bind (indexLookupPrefix_erases _ _)
   intro entry
   cases entry with
   | none =>
+    dsimp only
     apply erasesPrefix_bind (erasesPrefix_lift _)
     intro _
-    simp only [pure_bind, Option.map_none]
+    try simp only [pure_bind, Option.map_none]
     apply erasesPrefix_bind (erasesPrefix_lift _)
     intro noKey
     split
     · exact erasesPrefix_bind (peerPutMixed_erases _) (fun _ => erasesPrefix_pure _)
     · exact erasesPrefix_lift _
   | some e =>
-    apply erasesPrefix_bind (keypairGetPrefix_erases e.keypair)
-    intro kp
-    apply erasesPrefix_bind (erasesPrefix_lift _)
-    intro noKey
-    split
-    · exact erasesPrefix_bind (peerPutMixed_erases _) (fun _ => erasesPrefix_pure _)
-    · cases kp with
-      | none => exact erasesPrefix_lift _
-      | some id =>
-        apply erasesPrefix_bind (getPeerMixed_erases _)
-        intro p
-        apply erasesPrefix_bind (erasesPrefix_lift _)
-        intro dead
-        split
-        · exact erasesPrefix_bind (keypairPutPrefix_erases _ _) (fun _ =>
-            erasesPrefix_bind (peerPutMixed_erases _) (fun _ => erasesPrefix_pure _))
-        · apply erasesPrefix_bind (PacketAllocation.erases (.rx _))
-          intro skb
-          apply erasesPrefix_bind (enqueuePerDeviceAndPeerRxPrefix_erases skb)
-          intro ret
+    rcases e with ⟨owner, pid⟩
+    cases owner with
+    | handshake owner =>
+      intro w h
+      simp [runPrefix_bind, runPrefix_lift, invariant, StateT.run_bind]
+    | keypair key =>
+      try simp only [pure_bind]
+      apply erasesPrefix_bind (keypairGetPrefix_erases (some key))
+      intro kp
+      apply erasesPrefix_bind (erasesPrefix_lift _)
+      intro noKey
+      split
+      · exact erasesPrefix_bind (peerPutMixed_erases _) (fun _ => erasesPrefix_pure _)
+      · cases kp with
+        | none => exact erasesPrefix_lift _
+        | some id =>
+          apply erasesPrefix_bind (getPeerMixed_erases _)
+          intro p
           apply erasesPrefix_bind (erasesPrefix_lift _)
-          intro pipe
-          have tail : ErasesPrefix (Event := LifetimeEvent)
-              (do if ← liftPrefix (WG.orM (branch .dataEnqueueOk (ret == 0))
-                    (branch .dataEnqueueOkEpipe (ret == -EPIPE))) then return
-                  keypairPutPrefix (some id) false
-                  peerPutMixed (some e.peer)
-                  freeRxSkbPrefix skb)
-              (do if ← WG.orM (branch .dataEnqueueOk (ret == 0))
-                    (branch .dataEnqueueOkEpipe (ret == -EPIPE)) then return
-                  keypairPut (some id) false
-                  peerPut (some e.peer)
-                  freeRxSkb skb) := by
-            apply erasesPrefix_bind (erasesPrefix_lift _)
-            intro okay
-            split
-            · exact erasesPrefix_pure _
-            · exact erasesPrefix_bind (keypairPutPrefix_erases _ _) (fun _ =>
-                erasesPrefix_bind (peerPutMixed_erases _) (fun _ => freeRxSkbPrefix_erases _))
+          intro dead
           split
-          · exact erasesPrefix_bind (enqueuePerPeerRxPrefix_pure_erases skb .dead) (fun _ => tail)
-          · exact tail
+          · exact erasesPrefix_bind (keypairPutPrefix_erases _ _) (fun _ =>
+              erasesPrefix_bind (peerPutMixed_erases _) (fun _ => erasesPrefix_pure _))
+          · apply erasesPrefix_bind (PacketAllocation.erases (.rx _))
+            intro skb
+            apply erasesPrefix_bind (enqueuePerDeviceAndPeerRxPrefix_erases skb)
+            intro ret
+            apply erasesPrefix_bind (erasesPrefix_lift _)
+            intro pipe
+            have tail : ErasesPrefix (Event := LifetimeEvent)
+                (do if ← liftPrefix (WG.orM (branch .dataEnqueueOk (ret == 0))
+                      (branch .dataEnqueueOkEpipe (ret == -EPIPE))) then return
+                    keypairPutPrefix (some id) false
+                    peerPutMixed (some pid)
+                    freeRxSkbPrefix skb)
+                (do if ← WG.orM (branch .dataEnqueueOk (ret == 0))
+                      (branch .dataEnqueueOkEpipe (ret == -EPIPE)) then return
+                    keypairPut (some id) false
+                    peerPut (some pid)
+                    freeRxSkb skb) := by
+              apply erasesPrefix_bind (erasesPrefix_lift _)
+              intro okay
+              split
+              · exact erasesPrefix_pure _
+              · exact erasesPrefix_bind (keypairPutPrefix_erases _ _) (fun _ =>
+                  erasesPrefix_bind (peerPutMixed_erases _) (fun _ => freeRxSkbPrefix_erases _))
+            split
+            · exact erasesPrefix_bind (enqueuePerPeerRxPrefix_pure_erases skb .dead) (fun _ => tail)
+            · exact tail
 
 theorem consumeDataPrefix_preserves_ambient (c : AmbientContracts I)
     (put : ∀ kp now, PrefixPreserves I LifetimeEvent.Safe (keypairPutPrefix kp now))
@@ -237,59 +249,69 @@ theorem consumeDataPrefix_preserves_ambient (c : AmbientContracts I)
     (msg : List UInt8) (src : SkbSource) (ds : Nat) :
     PrefixPreserves I LifetimeEvent.Safe (consumeDataPrefix msg src ds) := by
   unfold consumeDataPrefix
+  simp only [pure_bind]
   apply PrefixPreserves.bind (indexLookupPrefix_preserves_ambient c _ _)
   intro entry
   cases entry with
   | none =>
+    dsimp only
     apply PrefixPreserves.bind (AmbientContracts.drop (c.kernel (fun _ => True) _ keypairGetCurrent_sameKernel))
     intro _
-    simp only [pure_bind, Option.map_none]
+    try simp only [pure_bind, Option.map_none]
     apply PrefixPreserves.bind (AmbientContracts.drop (c.branch (fun _ => True) _ _))
     intro noKey
     split
     · exact PrefixPreserves.bind (c.peerPut _) (fun _ => PrefixPreserves.pure c.safe ())
     · exact AmbientContracts.drop (c.invariant (fun _ => True) _)
   | some e =>
-    apply PrefixPreserves.bind (AmbientContracts.drop (keypairGetPrefix_spec_ambient c (fun _ => True) e.keypair))
-    intro kp
-    apply PrefixPreserves.bind (AmbientContracts.drop (c.branch (fun _ => True) _ _))
-    intro noKey
-    split
-    · exact PrefixPreserves.bind (c.peerPut _) (fun _ => PrefixPreserves.pure c.safe ())
-    · cases kp with
-      | none => exact AmbientContracts.drop (c.invariant (fun _ => True) _)
-      | some id =>
-        apply PrefixPreserves.bind (AmbientContracts.drop (c.getPeer_frame (fun _ => True) _))
-        intro p
-        apply PrefixPreserves.bind (AmbientContracts.drop (c.branch (fun _ => True) _ _))
-        intro dead
-        split
-        · exact PrefixPreserves.bind (put _ _) (fun _ =>
-            PrefixPreserves.bind (c.peerPut _) (fun _ => PrefixPreserves.pure c.safe ()))
-        · apply PrefixPreserves.bind (alloc _)
-          intro skb
-          apply PrefixPreserves.bind (enqueuePerDeviceAndPeerRxPrefix_preserves_ambient c hc hq skb)
-          intro ret
+    rcases e with ⟨owner, pid⟩
+    cases owner with
+    | handshake owner =>
+      intro w h hi
+      simp [runPrefix_bind, runPrefix_lift, invariant]
+      exact c.safe h w hi
+    | keypair key =>
+      try simp only [pure_bind]
+      apply PrefixPreserves.bind (AmbientContracts.drop (keypairGetPrefix_spec_ambient c (fun _ => True) (some key)))
+      intro kp
+      apply PrefixPreserves.bind (AmbientContracts.drop (c.branch (fun _ => True) _ _))
+      intro noKey
+      split
+      · exact PrefixPreserves.bind (c.peerPut _) (fun _ => PrefixPreserves.pure c.safe ())
+      · cases kp with
+        | none => exact AmbientContracts.drop (c.invariant (fun _ => True) _)
+        | some id =>
+          apply PrefixPreserves.bind (AmbientContracts.drop (c.getPeer_frame (fun _ => True) _))
+          intro p
           apply PrefixPreserves.bind (AmbientContracts.drop (c.branch (fun _ => True) _ _))
-          intro pipe
-          have tail : PrefixPreserves I LifetimeEvent.Safe
-              (do if ← liftPrefix (WG.orM (branch .dataEnqueueOk (ret == 0))
-                    (branch .dataEnqueueOkEpipe (ret == -EPIPE))) then return
-                  keypairPutPrefix (some id) false
-                  peerPutMixed (some e.peer)
-                  freeRxSkbPrefix skb) := by
-            apply PrefixPreserves.bind (AmbientContracts.drop (c.kernel (fun _ => True) _
-              (orM_sameKernel (sameKernel_branch _ _) (sameKernel_branch _ _))))
-            intro okay
-            split
-            · exact PrefixPreserves.pure c.safe ()
-            · exact PrefixPreserves.bind (put _ _) (fun _ =>
-                PrefixPreserves.bind (c.peerPut _) (fun _ => free _))
+          intro dead
           split
-          · exact PrefixPreserves.bind
-              (enqueuePerPeerRxPrefix_preserves_ambient c (PrefixPreserves.pure c.safe ()) skb .dead)
-              (fun _ => tail)
-          · exact tail
+          · exact PrefixPreserves.bind (put _ _) (fun _ =>
+              PrefixPreserves.bind (c.peerPut _) (fun _ => PrefixPreserves.pure c.safe ()))
+          · apply PrefixPreserves.bind (alloc _)
+            intro skb
+            apply PrefixPreserves.bind (enqueuePerDeviceAndPeerRxPrefix_preserves_ambient c hc hq skb)
+            intro ret
+            apply PrefixPreserves.bind (AmbientContracts.drop (c.branch (fun _ => True) _ _))
+            intro pipe
+            have tail : PrefixPreserves I LifetimeEvent.Safe
+                (do if ← liftPrefix (WG.orM (branch .dataEnqueueOk (ret == 0))
+                      (branch .dataEnqueueOkEpipe (ret == -EPIPE))) then return
+                    keypairPutPrefix (some id) false
+                    peerPutMixed (some pid)
+                    freeRxSkbPrefix skb) := by
+              apply PrefixPreserves.bind (AmbientContracts.drop (c.kernel (fun _ => True) _
+                (orM_sameKernel (sameKernel_branch _ _) (sameKernel_branch _ _))))
+              intro okay
+              split
+              · exact PrefixPreserves.pure c.safe ()
+              · exact PrefixPreserves.bind (put _ _) (fun _ =>
+                  PrefixPreserves.bind (c.peerPut _) (fun _ => free _))
+            split
+            · exact PrefixPreserves.bind
+                (enqueuePerPeerRxPrefix_preserves_ambient c (PrefixPreserves.pure c.safe ()) skb .dead)
+                (fun _ => tail)
+            · exact tail
 
 theorem consumeDataPrefix_allocation (msg : List UInt8) (src : SkbSource) (ds : Nat) :
     PrefixPreserves AllocationInv LifetimeEvent.Safe (consumeDataPrefix msg src ds) :=

@@ -9,7 +9,7 @@ open Leanux Leanux.WG Leanux.Proofs.Framing Leanux.Proofs.WG.Lifetimes Std.Do
 set_option maxHeartbeats 1000000
 set_option pp.structureInstances false
 
-theorem keypairCreate_routing (pid : PeerId) : SameView routingView (keypairCreate pid) := by
+theorem keypairCreate_routing (pid : Option PeerId) : SameView routingView (keypairCreate pid) := by
   apply SameView.of_wp
   intro s
   have ha := (routing_kernel _ (hiddenAlloc_sameKernel .kzallocKeypair)).wp (fun t => t = s)
@@ -58,12 +58,14 @@ theorem beginSession_routing (pid : PeerId) : SameView routingView (beginSession
   have hg := (getPeer_routing pid).wp (fun t => t = s)
   have hk := fun id => (getKeypair_routing id).wp (fun t => t = s)
   have hs := fun id k => (setKeypair_routing id k).wp (fun t => t = s)
-  have hc := (keypairCreate_routing pid).wp (fun t => t = s)
+  have hc := fun word => (keypairCreate_routing word).wp (fun t => t = s)
   have hd := fun k b ck => (deriveKeys_routing k b ck).wp (fun t => t = s)
   have hz := (handshakeZero_routing pid).wp (fun t => t = s)
   have ha := fun k => (addNewKeypair_routing pid k).wp (fun t => t = s)
   have hr := fun k => (indexReplaceHandshake_routing pid k).wp (fun t => t = s)
-  mvcgen [beginSession, hg, hk, hs, hc, hd, hz, ha, hr, branch, WG.andM, invariant, unsupported]
+  have hw := fun o => (ownerWord_routing o).wp (fun t => t = s)
+  have hf := fun o => (ownerDeref_routing o).wp (fun t => t = s)
+  mvcgen [hw, hf, beginSession, hg, hk, hs, hc, hd, hz, ha, hr, branch, WG.andM, invariant, unsupported]
 
 theorem createResponse_routing (pid : PeerId) : SameView routingView (createResponse pid) := by
   apply SameView.of_wp
@@ -76,10 +78,11 @@ theorem createResponse_routing (pid : PeerId) : SameView routingView (createResp
   have hd := fun b ck p q => (routing_kernel _ (mixDh_sameKernel b ck p q)).wp (fun t => t = s)
   have hk := fun b c ck d => (routing_kernel _ (Framing.kdf_sameKernel b c ck d)).wp (fun t => t = s)
   have ho := fun xs i => (routing_kernel _ (Framing.kdfOut_sameKernel xs i)).wp (fun t => t = s)
-  have hi := (indexInsert_routing pid .handshake).wp (fun t => t = s)
+  have hi := (indexInsert_routing (.handshake pid)).wp (fun t => t = s)
   unfold createResponse
   index_unfold _private.Leanux.WG.Handshake.«0».Leanux.WG.setChain
-  mvcgen [hg, hs, hh, hp, he, hd, hk, ho, hi, branch, invariant]
+  have hw := (ownerDeref_routing (.handshake pid)).wp (fun t => t = s)
+  mvcgen [hw, hg, hs, hh, hp, he, hd, hk, ho, hi, branch, invariant]
   all_goals try dsimp +zetaDelta only at *
   all_goals simp_all [routingView, routingState]
 

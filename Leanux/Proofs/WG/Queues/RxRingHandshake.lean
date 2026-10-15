@@ -9,9 +9,9 @@ set_option pp.structureInstances false
 namespace Leanux.Proofs.WG.Queues.RxRing
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Leanux.Proofs.WG.Lifetimes Std.Do
 
-theorem indexInsert_cell pid kind : SameView cell (indexInsert pid kind) := by
+theorem indexInsert_cell owner : SameView cell (indexInsert owner) := by
   intro w x v hr
-  have he := indexInsert_sameIndexKernel pid kind w x v hr
+  have he := indexInsert_sameIndexKernel owner w x v hr
   have h := congrArg (fun k : Kernel => k.wg.map fun d => (d.ifindex, d.decryptQueue)) he
   simpa [indexKernelView, indexKernel, cell, Option.map_map, Function.comp_def] using h
 
@@ -76,10 +76,12 @@ theorem createResponse_cell pid : SameView cell (createResponse pid) := by
   have h_dh := fun b ck p q => (kernel (mixDh_sameKernel b ck p q)).wp (fun t => t = s)
   have h_kdf := fun b c ck d => (kernel (Framing.kdf_sameKernel b c ck d)).wp (fun t => t = s)
   have h_out := fun xs i => (kernel (Framing.kdfOut_sameKernel xs i)).wp (fun t => t = s)
-  have h_idx := fun p k => (indexInsert_cell p k).wp (fun t => t = s)
+  have h_idx := fun owner => (indexInsert_cell owner).wp (fun t => t = s)
   unfold createResponse
   index_unfold _private.Leanux.WG.Handshake.«0».Leanux.WG.setChain
-  mvcgen [h_gp, h_sp, h_hidden, h_pub, h_eph, h_dh, h_kdf, h_out, h_idx, branch, branchCmp, WG.andM, WG.orM, invariant, unsupported]
+  have h_owner := fun o => (kernel (indexOwner_peerDeref_sameKernel o)).wp (fun t => t = s)
+  have h_word := fun o => (kernel (indexOwner_peerWord_sameKernel o)).wp (fun t => t = s)
+  mvcgen [h_owner, h_word, h_gp, h_sp, h_hidden, h_pub, h_eph, h_dh, h_kdf, h_out, h_idx, branch, branchCmp, WG.andM, WG.orM, invariant, unsupported]
   all_goals try exact ((⇓? _ w => ⌜cell w = s⌝) : PostCond _ (.arg World (.except Stop .pure)))
   all_goals try dsimp +zetaDelta only at *
   all_goals simp_all [cell, Option.map_map, Function.comp_def]
@@ -162,7 +164,9 @@ theorem beginSession_cell pid : SameView cell (beginSession pid) := by
   have h_zero := fun p => (handshakeZero_cell p).wp (fun t => t = s)
   have h_add := fun p k => (addNewKeypair_cell p k).wp (fun t => t = s)
   have h_replace := fun p k => (indexReplaceHandshake_cell p k).wp (fun t => t = s)
-  mvcgen [beginSession, h_gp, h_sp, h_gk, h_sk, h_create, h_derive, h_zero, h_add, h_replace, branch, branchCmp, WG.andM, WG.orM, invariant, unsupported]
+  have h_owner := fun o => (kernel (indexOwner_peerDeref_sameKernel o)).wp (fun t => t = s)
+  have h_word := fun o => (kernel (indexOwner_peerWord_sameKernel o)).wp (fun t => t = s)
+  mvcgen [h_owner, h_word, beginSession, h_gp, h_sp, h_gk, h_sk, h_create, h_derive, h_zero, h_add, h_replace, branch, branchCmp, WG.andM, WG.orM, invariant, unsupported]
   all_goals try exact ((⇓? _ w => ⌜cell w = s⌝) : PostCond _ (.arg World (.except Stop .pure)))
   all_goals try dsimp +zetaDelta only at *
   all_goals simp_all [cell, Option.map_map, Function.comp_def]

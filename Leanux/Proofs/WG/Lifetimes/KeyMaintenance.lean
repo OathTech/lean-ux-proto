@@ -9,10 +9,10 @@ and their subsequent getters resolve the current store independently. -/
 namespace Leanux.Proofs.WG.Lifetimes
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
 
-theorem indexRemove_identity_metadata (pid : PeerId) (kind : IndexKind) :
-    SameView (fun w => (identityView w, allocationMetadata w)) (indexRemove pid kind) := by
+theorem indexRemove_identity_metadata (owner : IndexOwner) :
+    SameView (fun w => (identityView w, allocationMetadata w)) (indexRemove owner) := by
   intro w x v hr
-  have hf := indexRemove_sameIndexKernel pid kind w x v hr
+  have hf := indexRemove_sameIndexKernel owner w x v hr
   have he := congrArg (fun k => identityView {w with k}) hf
   have hm := congrArg (fun k => allocationMetadata {w with k}) hf
   apply Prod.ext
@@ -21,12 +21,12 @@ theorem indexRemove_identity_metadata (pid : PeerId) (kind : IndexKind) :
   · unfold allocationMetadata deviceAllocationMetadata at hm ⊢
     simpa [indexKernelView, indexKernel, Option.map_map, Function.comp_def] using hm
 
-theorem indexRemove_allocation (pid : PeerId) (kind : IndexKind) :
-    PrefixPreserves AllocationInv LifetimeEvent.Safe (liftPrefix (indexRemove pid kind)) := by
+theorem indexRemove_allocation (owner : IndexOwner) :
+    PrefixPreserves AllocationInv LifetimeEvent.Safe (liftPrefix (indexRemove owner)) := by
   apply PrefixEnsures.preserves
   apply PrefixEnsures.lift _ (fun _ _ hi => hi.safe)
   intro h w x v hi hr
-  have hf := indexRemove_identity_metadata pid kind w x v hr
+  have hf := indexRemove_identity_metadata owner w x v hr
   exact hi.congr (congrArg Prod.fst hf) (congrArg Prod.snd hf)
 
 def resetLastSentHandshakePrefix (pid : PeerId) : MixedM Unit := do
@@ -35,7 +35,8 @@ def resetLastSentHandshakePrefix (pid : PeerId) : MixedM Unit := do
   setPeerMixed pid {p with lastSentHandshake := now - (REKEY_TIMEOUT + 1 : Nat).toInt64 * NSEC_PER_SEC64}
 
 def handshakeClearPrefix (pid : PeerId) : MixedM Unit := do
-  liftPrefix (indexRemove pid .handshake)
+  _ ← peerDerefPrefix (.handshake pid)
+  liftPrefix (indexRemove (.handshake pid))
   handshakeZeroPrefix pid
 
 def invalidateSendingPrefix (kp : KeypairId) : MixedM Unit := do
@@ -44,7 +45,8 @@ def invalidateSendingPrefix (kp : KeypairId) : MixedM Unit := do
 
 def expireCurrentPeerKeypairsPrefix (pid : PeerId) : MixedM Unit := do
   requireNotPendingMixed pid "clearing the handshake"
-  liftPrefix (indexRemove pid .handshake)
+  _ ← peerDerefPrefix (.handshake pid)
+  liftPrefix (indexRemove (.handshake pid))
   handshakeZeroPrefix pid
   resetLastSentHandshakePrefix pid
   let p ← getPeerMixed pid
@@ -67,7 +69,8 @@ theorem resetLastSentHandshakePrefix_erases (pid : PeerId) :
 
 theorem handshakeClearPrefix_erases (pid : PeerId) :
     ErasesPrefix (handshakeClearPrefix pid) (handshakeClear pid) :=
-  erasesPrefix_bind (erasesPrefix_lift _) (fun _ => handshakeZeroPrefix_erases pid)
+  erasesPrefix_bind (peerDerefPrefix_erases _) (fun _ =>
+    erasesPrefix_bind (erasesPrefix_lift _) (fun _ => handshakeZeroPrefix_erases pid))
 
 theorem invalidateSendingPrefix_erases (kp : KeypairId) :
     ErasesPrefix (invalidateSendingPrefix kp)
@@ -76,8 +79,11 @@ theorem invalidateSendingPrefix_erases (kp : KeypairId) :
 
 theorem expireCurrentPeerKeypairsPrefix_erases (pid : PeerId) :
     ErasesPrefix (expireCurrentPeerKeypairsPrefix pid) (expireCurrentPeerKeypairs pid) := by
-  unfold expireCurrentPeerKeypairsPrefix expireCurrentPeerKeypairs
+  unfold expireCurrentPeerKeypairsPrefix expireCurrentPeerKeypairs handshakeClear
+  simp only [bind_assoc]
   apply erasesPrefix_bind (requireNotPendingMixed_erases _ _)
+  intro _
+  apply erasesPrefix_bind (peerDerefPrefix_erases _)
   intro _
   apply erasesPrefix_bind (erasesPrefix_lift _)
   intro _
@@ -87,9 +93,12 @@ theorem expireCurrentPeerKeypairsPrefix_erases (pid : PeerId) :
   intro _
   apply erasesPrefix_bind (getPeerMixed_erases _)
   intro p
+  simp only [invalidateSendingPrefix, bind_assoc]
   cases hn : p.keypairNext <;> cases hc : p.keypairCurrent <;> simp only [hn, hc]
   all_goals
     repeat' first
+      | with_reducible exact getKeypairPrefix_erases _
+      | with_reducible exact setKeypairPrefix_erases _ _
       | with_reducible exact invalidateSendingPrefix_erases _
       | with_reducible exact erasesPrefix_lift _
       | with_reducible exact erasesPrefix_pure _
@@ -117,18 +126,20 @@ theorem invalidateSendingPrefix_spec (c : AmbientContracts I) (P : IdentityView 
     c.setKeypair P kp {k with sending := {k.sending with isValid := false}})
 
 theorem handshakeClearPrefix_preserves (c : AmbientContracts I)
-    (hi : ∀ pid kind, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (indexRemove pid kind)))
+    (hi : ∀ owner, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (indexRemove owner)))
     (pid : PeerId) : PrefixPreserves I LifetimeEvent.Safe (handshakeClearPrefix pid) :=
-  PrefixPreserves.bind (hi pid .handshake) (fun _ =>
-    AmbientContracts.drop (handshakeZeroPrefix_spec_ambient c (fun _ => True) pid))
+  PrefixPreserves.bind (AmbientContracts.drop (peerDerefPrefix_spec c (fun _ => True) (.handshake pid))) (fun _ =>
+    PrefixPreserves.bind (hi (.handshake pid)) (fun _ =>
+      AmbientContracts.drop (handshakeZeroPrefix_spec_ambient c (fun _ => True) pid)))
 
 theorem expireCurrentPeerKeypairsPrefix_preserves (c : AmbientContracts I)
-    (hi : ∀ pid kind, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (indexRemove pid kind)))
+    (hi : ∀ owner, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (indexRemove owner)))
     (pid : PeerId) : PrefixPreserves I LifetimeEvent.Safe (expireCurrentPeerKeypairsPrefix pid) := by
   unfold expireCurrentPeerKeypairsPrefix
   repeat' first
     | with_reducible exact AmbientContracts.drop (requireNotPendingMixed_spec c (fun _ => True) _ _)
-    | with_reducible exact hi _ _
+    | with_reducible exact AmbientContracts.drop (peerDerefPrefix_spec c (fun _ => True) _)
+    | with_reducible exact hi _
     | with_reducible exact AmbientContracts.drop (handshakeZeroPrefix_spec_ambient c (fun _ => True) _)
     | with_reducible exact AmbientContracts.drop (resetLastSentHandshakePrefix_spec c (fun _ => True) _)
     | with_reducible exact AmbientContracts.drop (invalidateSendingPrefix_spec c (fun _ => True) _)
@@ -141,7 +152,7 @@ theorem expireCurrentPeerKeypairsPrefix_preserves (c : AmbientContracts I)
     | (with_reducible intro x; try dsimp only)
 
 theorem queuedExpiredZeroKeyMaterialPrefix_preserves (c : AmbientContracts I)
-    (hi : ∀ pid kind, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (indexRemove pid kind)))
+    (hi : ∀ owner, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (indexRemove owner)))
     (hp : ∀ kp now, PrefixPreserves I LifetimeEvent.Safe (keypairPutPrefix kp now))
     (pid : PeerId) : PrefixPreserves I LifetimeEvent.Safe (queuedExpiredZeroKeyMaterialPrefix pid) :=
   PrefixPreserves.bind (handshakeClearPrefix_preserves c hi pid) (fun _ =>
@@ -175,7 +186,7 @@ theorem erases (call : KeyMaintenanceCall) : ErasesPrefix call.observed call.ori
   | queuedClear pid => exact queuedExpiredZeroKeyMaterialPrefix_erases pid
 
 theorem preserves_ambient (c : AmbientContracts I)
-    (hi : ∀ pid kind, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (indexRemove pid kind)))
+    (hi : ∀ owner, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (indexRemove owner)))
     (hp : ∀ kp now, PrefixPreserves I LifetimeEvent.Safe (keypairPutPrefix kp now))
     (call : KeyMaintenanceCall) : PrefixPreserves I LifetimeEvent.Safe call.observed := by
   cases call with

@@ -41,6 +41,7 @@ theorem publication_head (first : SkbId) (rest : List SkbId) (state : PacketStat
     ⦃fun _ => ⌜True⌝⦄ enqueuePerPeerTx (first :: rest) state
     ⦃⇓? _ w => ⌜HeadState first state w⌝⦄ := by
   have hg := fun pid => (peerGet_packets pid).wp (fun _ => True)
+  have ho := fun owner => (packets_kernel (indexOwner_peerDeref_sameKernel owner)).wp (fun _ => True)
   have hc := fun pid => (cpu_packets pid).wp (fun s => ∃ p, s first = some p ∧ p.state = state)
   have hp := fun pid => (peerPut_packets (some pid)).wp (fun s => ∃ p, s first = some p ∧ p.state = state)
   have hpeek := fun pid => (packets_kernel (peekQueuedUnit_sameKernel .txWorker pid)).wp
@@ -49,7 +50,7 @@ theorem publication_head (first : SkbId) (rest : List SkbId) (state : PacketStat
     (fun s => ∃ p, s first = some p ∧ p.state = state)
   unfold HeadState
   rw [publication_factor]
-  mvcgen [publicationMiddle, hg, hc, hp, hpeek, hrec, getTxSkb, getKeypair,
+  mvcgen [publicationMiddle, ho, hg, hc, hp, hpeek, hrec, getTxSkb, getKeypair,
     getPeer, getDev, getK, setTxSkb, modifyDev, modifyK, invariant]
   all_goals unfold txPackets at *
   all_goals try dsimp +zetaDelta only at *

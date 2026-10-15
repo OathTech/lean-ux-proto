@@ -51,13 +51,13 @@ theorem indexUnhash_sameIndexKernel (decision : Decision) (hashed : IndexEntry â
     (fun d => {d with indexTable := d.indexTable.filter fun e => !hashed e}) (fun _ => rfl)
   mvcgen [indexUnhash, getDev, getK, branch, invariant, hm]
 
-theorem indexRemove_sameIndexKernel (pid : PeerId) (kind : IndexKind) :
-    SameView indexKernelView (indexRemove pid kind) := by
+theorem indexRemove_sameIndexKernel (owner : IndexOwner) :
+    SameView indexKernelView (indexRemove owner) := by
   rw [indexRemove_eq]
   exact indexUnhash_sameIndexKernel _ _
 
-theorem indexInsert_sameIndexKernel (pid : PeerId) (kind : IndexKind) :
-    SameView indexKernelView (indexInsert pid kind) := by
+theorem indexInsert_sameIndexKernel (owner : IndexOwner) :
+    SameView indexKernelView (indexInsert owner) := by
   apply SameView.of_wp
   intro initial
   have hh := fun site => (SameView.of_sameKernel indexKernel (hidden_sameKernel site)).wp (fun s => s = initial)

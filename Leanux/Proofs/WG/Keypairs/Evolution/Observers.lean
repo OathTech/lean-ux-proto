@@ -178,6 +178,7 @@ theorem enqueuePerPeerRxLogged_evolves (irq : GhostM Unit) (hi : Evolves irq)
     (id : SkbId) (state : PacketState) : Evolves (enqueuePerPeerRxLogged irq id state) := by
   unfold enqueuePerPeerRxLogged
   repeat' evolves_step
+  exact (sameSnapshot_of_sameKernel (indexOwner_peerDeref_sameKernel _)).ordinary
 
 theorem decryptStepLogged_evolves (softirq irq : GhostM Unit)
     (hs : Evolves softirq) (hi : Evolves irq) : Evolves (decryptStepLogged softirq irq) := by

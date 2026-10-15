@@ -13,7 +13,7 @@ def world : World :=
     { remoteStatic := [], presharedKey := [], precomputedStaticStatic := [],
       internalId := 1, refcount := 4, endpoint := some { family := WG.AF_INET, addr := 0, port := 0 },
       keypairCurrent := some 1, rxQueue := { items := [1, 2] }, napiScheduled := true }
-  let keypair : WG.Keypair := { internalId := 1, peer := 1, refcount := 3 }
+  let keypair : WG.Keypair := { internalId := 1, peer := some 1, refcount := 3 }
   let ready : WG.RxPacket := { peer := 1, keypair := 1, nonce := 0, bytes := [], source := src, state := .crypted }
   let device : WG.Device :=
     { ifindex := 3, ifname := "wg0", running := true,

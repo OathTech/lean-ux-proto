@@ -43,7 +43,7 @@ theorem erases (call : HandshakeCall) : ErasesPrefix call.observed call.original
   | addMac pid msg => exact addMacToPacketPrefix_erases pid msg
 
 theorem preserves_ambient (c : AmbientContracts I)
-    (hi : ∀ pid kind, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (indexInsert pid kind)))
+    (hi : ∀ owner, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (indexInsert owner)))
     (call : HandshakeCall) : PrefixPreserves I LifetimeEvent.Safe call.observed := by
   cases call with
   | createInitiation pid => exact createInitiationPrefix_preserves c hi pid

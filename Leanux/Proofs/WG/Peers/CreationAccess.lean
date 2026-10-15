@@ -146,6 +146,7 @@ def precomputeStaticStaticPrefix (pid : PeerId) : PrefixM PeerEvent Unit := do
   if zero then setPeerPrefix pid { (← getPeerPrefix pid) with precomputedStaticStatic := List.replicate 32 0 }
 
 def handshakeInitPrefix (pid : PeerId) (psk : Option Key) : PrefixM PeerEvent Unit := do
+  setPeerPrefix pid { (← getPeerPrefix pid) with handshakeEntryPeer := some pid }
   if ← liftPrefix (branch .handshakeInitHasPsk psk.isSome) then
     let p ← getPeerPrefix pid
     setPeerPrefix pid { p with presharedKey := psk.getD p.presharedKey }
@@ -190,7 +191,8 @@ theorem precomputeStaticStaticPrefix_erases (pid : PeerId) :
 
 theorem handshakeInitPrefix_erases (pid : PeerId) (psk : Option Key) :
     ErasesPrefix (handshakeInitPrefix pid psk) (handshakeInit pid psk) := by
-  unfold handshakeInitPrefix handshakeInit
+  unfold handshakeInitPrefix handshakeInit IndexOwner.setPeerWord
+  simp only [bind_assoc]
   repeat' first
     | contradiction
     | with_reducible exact precomputeStaticStaticPrefix_erases _
@@ -260,6 +262,10 @@ theorem precomputeStaticStaticPrefix_spec (P : Store PeerId → Prop) (pid : Pee
 theorem handshakeInitPrefix_spec (P : Store PeerId → Prop) (pid : PeerId) (psk : Option Key) :
     CreationSpec P (handshakeInitPrefix pid psk) (fun _ => P) := by
   unfold handshakeInitPrefix
+  apply PrefixEnsures.bind (creation_get P pid)
+  intro p
+  apply PrefixEnsures.bind (creation_set P pid {p with handshakeEntryPeer := some pid})
+  intro _
   apply PrefixEnsures.bind (creation_branch P _ _)
   intro b
   split

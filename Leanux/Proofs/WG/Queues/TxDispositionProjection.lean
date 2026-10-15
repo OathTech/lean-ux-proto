@@ -19,6 +19,15 @@ theorem keyGet_appends (id : KeypairId) : Appends (getKeypairPrefix id) := by
   split
   · exact ⟨[], by simp⟩
   · exact ⟨_, rfl⟩
+theorem ownerDeref_appends (owner : IndexOwner) : Appends (peerDerefPrefix owner) := by
+  unfold peerDerefPrefix
+  apply Appends.bind
+  · cases owner <;> unfold peerWordPrefix
+    all_goals apply Appends.bind
+    all_goals first | exact getPeer_appends _ | exact keyGet_appends _ | intro x; exact Appends.pure _
+  · intro word
+    cases word <;> first | exact Appends.lift _ | exact Appends.pure _
+
 theorem txGet_appends (id : SkbId) : Appends (getTxSkbPrefix id) := by
   intro w h
   rw [getTxSkbPrefix_run]
@@ -115,7 +124,7 @@ theorem publish_access (item : List SkbId) (state : PacketState) :
   cases hh : item.head? <;> simp only [hh]
   repeat' first
     | with_reducible exact access_project (txGet_appends _)
-    | with_reducible exact access_project (keyGet_appends _)
+    | with_reducible exact access_project (ownerDeref_appends _)
     | with_reducible exact access_project (peerGet_appends _)
     | with_reducible exact access_project (getPeer_appends _)
     | with_reducible exact access_project (txSet_appends _ _)

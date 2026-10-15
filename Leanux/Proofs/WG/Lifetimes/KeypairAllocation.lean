@@ -11,17 +11,17 @@ excludes those inputs from the preservation theorem through its slot bound. -/
 namespace Leanux.Proofs.WG.Lifetimes
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
 
-def keyAllocationDevice (d : Device) (stamp : Nat) (pid : PeerId) : Device :=
+def keyAllocationDevice (d : Device) (stamp : Nat) (pid : Option PeerId) : Device :=
   {d with
     nextKeypairId := d.nextKeypairId + 1
     keypairs := d.keypairs.insert d.nextKeypairId {internalId := stamp, peer := pid}}
 
-def keyAllocationWorld (w : World) (d : Device) (pid : PeerId) : World :=
+def keyAllocationWorld (w : World) (d : Device) (pid : Option PeerId) : World :=
   {w with k := {w.k with
     keypairCounter := w.k.keypairCounter + 1
     wg := some (keyAllocationDevice d (w.k.keypairCounter + 1) pid)}}
 
-def keypairCreateCore (pid : PeerId) : M KeypairId := do
+def keypairCreateCore (pid : Option PeerId) : M KeypairId := do
   let stamp := (← getK).keypairCounter + 1
   modifyK fun k => {k with keypairCounter := stamp}
   let id := (← getDev).nextKeypairId
@@ -29,7 +29,7 @@ def keypairCreateCore (pid : PeerId) : M KeypairId := do
   setKeypair id {internalId := stamp, peer := pid}
   return id
 
-theorem keypairCreateCore_run (pid : PeerId) (w : World) :
+theorem keypairCreateCore_run (pid : Option PeerId) (w : World) :
     (keypairCreateCore pid).run w = match w.k.wg with
       | none => .error (.invariant "no WireGuard device in this trace's fixture")
       | some d => .ok (d.nextKeypairId, keyAllocationWorld w d pid) := by
@@ -37,27 +37,27 @@ theorem keypairCreateCore_run (pid : PeerId) (w : World) :
     simp [keypairCreateCore, getK, modifyK, getDev, modifyDev, setKeypair,
       invariant, hd, keyAllocationWorld, keyAllocationDevice]
 
-def keypairCreateCorePrefix (pid : PeerId) : MixedM KeypairId :=
+def keypairCreateCorePrefix (pid : Option PeerId) : MixedM KeypairId :=
   fun w => ExceptT.mk fun h => match (keypairCreateCore pid).run w with
     | .error e => (.error e, h)
     | .ok (id, v) => (.ok (id, v), h ++
         [.keypair (.allocate id (w.k.keypairCounter + 1)),
          .keypair (.write id (w.k.keypairCounter + 1))])
 
-@[simp] theorem keypairCreateCorePrefix_run (pid : PeerId) (w : World) (h : List LifetimeEvent) :
+@[simp] theorem keypairCreateCorePrefix_run (pid : Option PeerId) (w : World) (h : List LifetimeEvent) :
     runPrefix (keypairCreateCorePrefix pid) w h = match (keypairCreateCore pid).run w with
       | .error e => (.error e, h)
       | .ok (id, v) => (.ok (id, v), h ++
           [.keypair (.allocate id (w.k.keypairCounter + 1)),
            .keypair (.write id (w.k.keypairCounter + 1))]) := rfl
 
-theorem keypairCreateCorePrefix_erases (pid : PeerId) :
+theorem keypairCreateCorePrefix_erases (pid : Option PeerId) :
     ErasesPrefix (keypairCreateCorePrefix pid) (keypairCreateCore pid) := by
   intro w h
   rw [keypairCreateCorePrefix_run]
   cases (keypairCreateCore pid).run w <;> rfl
 
-theorem keyAllocation_store (w : World) (d : Device) (pid : PeerId) (hd : w.k.wg = some d) :
+theorem keyAllocation_store (w : World) (d : Device) (pid : Option PeerId) (hd : w.k.wg = some d) :
     keyStore (keyAllocationWorld w d pid) = (keyStore w).allocate d.nextKeypairId := by
   apply Store.ext
   · rfl
@@ -67,7 +67,7 @@ theorem keyAllocation_store (w : World) (d : Device) (pid : PeerId) (hd : w.k.wg
       Store.allocate]
     by_cases he : j = d.nextKeypairId <;> simp_all [eq_comm]
 
-theorem AllocationInv.key_allocate (hi : AllocationInv h w) (hd : w.k.wg = some d) (pid : PeerId) :
+theorem AllocationInv.key_allocate (hi : AllocationInv h w) (hd : w.k.wg = some d) (pid : Option PeerId) :
     AllocationInv (h ++ [.keypair (.allocate d.nextKeypairId (w.k.keypairCounter + 1)),
       .keypair (.write d.nextKeypairId (w.k.keypairCounter + 1))])
       (keyAllocationWorld w d pid) := by
@@ -134,7 +134,7 @@ theorem AllocationInv.key_allocate (hi : AllocationInv h w) (hd : w.k.wg = some 
     apply hi.packetPast d hd s
     simpa [events, List.filterMap_append, List.filterMap_cons, List.filterMap_nil, LifetimeEvent.packet?, keyAllocationDevice] using hs
 
-theorem keypairCreateCorePrefix_preserves (pid : PeerId) :
+theorem keypairCreateCorePrefix_preserves (pid : Option PeerId) :
     PrefixPreserves AllocationInv LifetimeEvent.Safe (keypairCreateCorePrefix pid) := by
   intro w h hi
   rw [keypairCreateCorePrefix_run, keypairCreateCore_run]
@@ -144,18 +144,18 @@ theorem keypairCreateCorePrefix_preserves (pid : PeerId) :
     have hn := hi.key_allocate hd pid
     exact ⟨_, rfl, hn.safe, hn⟩
 
-def keypairCreatePrefix (pid : PeerId) : MixedM (Option KeypairId) := do
+def keypairCreatePrefix (pid : Option PeerId) : MixedM (Option KeypairId) := do
   let ok ← liftPrefix (hiddenAlloc .kzallocKeypair)
   if ← liftPrefix (branch .keypairCreateNoMem !ok) then return none
   return some (← keypairCreateCorePrefix pid)
 
-theorem keypairCreate_factor (pid : PeerId) : keypairCreate pid = (do
+theorem keypairCreate_factor (pid : Option PeerId) : keypairCreate pid = (do
     let ok ← hiddenAlloc .kzallocKeypair
     if ← branch .keypairCreateNoMem !ok then return none
     return some (← keypairCreateCore pid)) := by
   simp [keypairCreate, keypairCreateCore]
 
-theorem keypairCreatePrefix_erases (pid : PeerId) :
+theorem keypairCreatePrefix_erases (pid : Option PeerId) :
     ErasesPrefix (keypairCreatePrefix pid) (keypairCreate pid) := by
   rw [keypairCreate_factor]
   unfold keypairCreatePrefix
@@ -167,7 +167,7 @@ theorem keypairCreatePrefix_erases (pid : PeerId) :
   · exact erasesPrefix_pure _
   · exact erasesPrefix_bind (keypairCreateCorePrefix_erases pid) (fun id => erasesPrefix_pure (some id))
 
-theorem keypairCreatePrefix_preserves (pid : PeerId) :
+theorem keypairCreatePrefix_preserves (pid : Option PeerId) :
     PrefixPreserves AllocationInv LifetimeEvent.Safe (keypairCreatePrefix pid) := by
   unfold keypairCreatePrefix
   apply PrefixPreserves.bind (allocation_kernel _ (hiddenAlloc_sameKernel _))
@@ -182,7 +182,7 @@ theorem keypairCreatePrefix_preserves (pid : PeerId) :
 /-- Exact observations on every original outcome. Hidden-input failure and
 normal allocation refusal have no resolved object access; a successful
 insertion records its new identity and initializing write. -/
-theorem keypairCreatePrefix_observation (pid : PeerId) (w : World) (h : List LifetimeEvent) :
+theorem keypairCreatePrefix_observation (pid : Option PeerId) (w : World) (h : List LifetimeEvent) :
     runPrefix (keypairCreatePrefix pid) w h = match (keypairCreate pid).run w with
       | .error e => (.error e, h)
       | .ok (none, v) => (.ok (none, v), h)
@@ -203,13 +203,13 @@ theorem keypairCreatePrefix_observation (pid : PeerId) (w : World) (h : List Lif
     cases w.k.wg <;> simp [keyAllocationWorld]
 
 /-- A failed creation retains the incoming history exactly. -/
-theorem keypairCreatePrefix_failure (pid : PeerId) (w : World) (h : List LifetimeEvent) (e : Stop)
+theorem keypairCreatePrefix_failure (pid : Option PeerId) (w : World) (h : List LifetimeEvent) (e : Stop)
     (hr : (keypairCreate pid).run w = .error e) :
     runPrefix (keypairCreatePrefix pid) w h = (.error e, h) := by
   rw [keypairCreatePrefix_observation, hr]
 
 /-- Ordinary memory-allocation refusal also leaves the history unchanged. -/
-theorem keypairCreatePrefix_refusal (pid : PeerId) (w v : World) (h : List LifetimeEvent)
+theorem keypairCreatePrefix_refusal (pid : Option PeerId) (w v : World) (h : List LifetimeEvent)
     (hr : (keypairCreate pid).run w = .ok (none, v)) :
     runPrefix (keypairCreatePrefix pid) w h = (.ok (none, v), h) := by
   rw [keypairCreatePrefix_observation, hr]

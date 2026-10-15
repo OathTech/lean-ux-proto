@@ -9,12 +9,8 @@ def indexUnhash (d : Decision) (hashed : IndexEntry → Bool) : M Unit := do
   _ ← branch d ((← getDev).indexTable.any hashed)
   modifyDev fun dev => { dev with indexTable := dev.indexTable.filter fun e => !hashed e }
 
-theorem indexRemove_eq (pid : PeerId) (kind : IndexKind) :
-    indexRemove pid kind = indexUnhash .idxRemoveHashed
-      (fun e => e.peer == pid && e.kind == kind) := rfl
-
-theorem indexRemoveKeypair_eq (id : KeypairId) :
-    indexRemoveKeypair id = indexUnhash .idxRemoveHashed
-      (fun e => e.keypair == some id) := rfl
+theorem indexRemove_eq (owner : IndexOwner) :
+    indexRemove owner = indexUnhash .idxRemoveHashed
+      (fun e => e.owner == owner) := rfl
 
 end Leanux.Proofs.Framing

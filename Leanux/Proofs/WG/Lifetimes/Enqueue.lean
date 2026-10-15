@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.Lifetimes.Ambient
+import Leanux.Proofs.WG.Lifetimes.IndexOwnerAccess
 
 /-! Receive enqueue with one shared, failure-retaining event stream. The
 callback is an explicit parameter; its observations are composed in place. -/
@@ -6,7 +6,7 @@ namespace Leanux.Proofs.WG.Lifetimes
 open Leanux Leanux.WG Leanux.Proofs.Logged
 
 def enqueuePerPeerRxPrefix (irq : MixedM Unit) (id : SkbId) (state : PacketState) : MixedM Unit := do
-  let pid := (← getKeypairPrefix (← getRxSkbPrefix id).keypair).peer
+  let pid ← peerDerefPrefix (.keypair (← getRxSkbPrefix id).keypair)
   peerGetMixed pid
   let p ← getPeerMixed pid
   if !(p.rxQueue.all.contains id) then
@@ -22,11 +22,11 @@ theorem enqueuePerPeerRxPrefix_erases (hi : ErasesPrefix irq original)
   unfold enqueuePerPeerRxPrefix enqueuePerPeerRx
   apply erasesPrefix_bind (getRxSkbPrefix_erases id)
   intro pkt
-  apply erasesPrefix_bind (getKeypairPrefix_erases pkt.keypair)
-  intro kp
-  apply erasesPrefix_bind (peerGetMixed_erases kp.peer)
+  apply erasesPrefix_bind (peerDerefPrefix_erases (.keypair pkt.keypair))
+  intro pid
+  apply erasesPrefix_bind (peerGetMixed_erases pid)
   intro _
-  apply erasesPrefix_bind (getPeerMixed_erases kp.peer)
+  apply erasesPrefix_bind (getPeerMixed_erases pid)
   intro p
   dsimp only
   split
@@ -34,18 +34,18 @@ theorem enqueuePerPeerRxPrefix_erases (hi : ErasesPrefix irq original)
     intro _
     apply erasesPrefix_bind (setRxSkbPrefix_erases id _)
     intro _
-    apply erasesPrefix_bind (setPeerMixed_erases kp.peer _)
+    apply erasesPrefix_bind (setPeerMixed_erases pid _)
     intro _
     apply erasesPrefix_bind hi
     intro _
-    exact peerPutMixed_erases (some kp.peer)
+    exact peerPutMixed_erases (some pid)
   · apply erasesPrefix_bind (setRxSkbPrefix_erases id _)
     intro _
-    apply erasesPrefix_bind (setPeerMixed_erases kp.peer _)
+    apply erasesPrefix_bind (setPeerMixed_erases pid _)
     intro _
     apply erasesPrefix_bind hi
     intro _
-    exact peerPutMixed_erases (some kp.peer)
+    exact peerPutMixed_erases (some pid)
 
 theorem enqueuePerPeerRxPrefix_pure_erases (id : SkbId) (state : PacketState) :
     ErasesPrefix (enqueuePerPeerRxPrefix (pure ()) id state)
@@ -62,35 +62,35 @@ theorem enqueuePerPeerRxPrefix_preserves_ambient (c : AmbientContracts I)
   unfold enqueuePerPeerRxPrefix
   apply PrefixPreserves.bind (AmbientContracts.drop (c.getRx (fun _ => True) id))
   intro pkt
-  apply PrefixPreserves.bind (AmbientContracts.drop (c.getKeypair (fun _ => True) pkt.keypair))
-  intro kp
-  apply PrefixPreserves.bind (c.peerGet kp.peer)
+  apply PrefixPreserves.bind (AmbientContracts.drop (peerDerefPrefix_spec c (fun _ => True) (.keypair pkt.keypair)))
+  intro pid
+  apply PrefixPreserves.bind (c.peerGet pid)
   intro _
   apply PrefixEnsures.preserves
-  have hget : PrefixEnsures I LifetimeEvent.Safe (getPeerMixed kp.peer)
-      (fun p h w => I h w ∧ (identityView w).1.slots kp.peer = some p.internalId) :=
-    (c.getPeer (fun _ => True) kp.peer).consequence
+  have hget : PrefixEnsures I LifetimeEvent.Safe (getPeerMixed pid)
+      (fun p h w => I h w ∧ (identityView w).1.slots pid = some p.internalId) :=
+    (c.getPeer (fun _ => True) pid).consequence
       (fun _ _ hn => ⟨hn, True.intro⟩) (fun _ _ _ hn => ⟨hn.1, hn.2.2⟩)
   apply PrefixEnsures.bind hget
   intro p
   dsimp only
   have tail : PrefixEnsures
-      (fun h w => I h w ∧ (identityView w).1.slots kp.peer = some p.internalId)
+      (fun h w => I h w ∧ (identityView w).1.slots pid = some p.internalId)
       LifetimeEvent.Safe
       (do setRxSkbPrefix id fun q => {q with state}
-          setPeerMixed kp.peer {p with napiScheduled := true}
+          setPeerMixed pid {p with napiScheduled := true}
           irq
-          peerPutMixed (some kp.peer)) (fun _ => I) := by
-    apply PrefixEnsures.bind (c.setRx (fun s => s.1.slots kp.peer = some p.internalId) id _)
+          peerPutMixed (some pid)) (fun _ => I) := by
+    apply PrefixEnsures.bind (c.setRx (fun s => s.1.slots pid = some p.internalId) id _)
     intro _
-    apply PrefixEnsures.bind ((c.setPeer (fun _ => True) kp.peer
+    apply PrefixEnsures.bind ((c.setPeer (fun _ => True) pid
       {p with napiScheduled := true}).consequence
         (fun _ _ hn => ⟨hn.1, True.intro, hn.2⟩) (fun _ _ _ hn => hn.1))
     intro _
-    exact PrefixPreserves.bind hi (fun _ => c.peerPut (some kp.peer))
+    exact PrefixPreserves.bind hi (fun _ => c.peerPut (some pid))
   split
   · apply PrefixEnsures.bind (Q := fun (_ : Unit) h w =>
-        I h w ∧ (identityView w).1.slots kp.peer = some p.internalId)
+        I h w ∧ (identityView w).1.slots pid = some p.internalId)
     · apply PrefixEnsures.lift _ (fun h w hn => c.safe h w hn.1)
       intro h w x v hn hr
       simp [invariant] at hr
@@ -117,6 +117,6 @@ theorem enqueuePerPeerRxPrefix_keypair_failure (irq : MixedM Unit) (id : SkbId)
     runPrefix (enqueuePerPeerRxPrefix irq id state) w h =
       (.error e, h ++ [.packet (.read (.inr id) (packetStamp w id))]) := by
   simp only [enqueuePerPeerRxPrefix, runPrefix_bind, getRxSkbPrefix_run, hr,
-    getKeypairPrefix_run, hk]
+    peerDerefPrefix, peerWordPrefix, getKeypairPrefix_run, hk]
 
 end Leanux.Proofs.WG.Lifetimes

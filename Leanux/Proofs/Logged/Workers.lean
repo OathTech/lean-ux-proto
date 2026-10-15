@@ -114,7 +114,7 @@ theorem handshakeReceiveWorkerLogged_erases (g : GhostM Unit) (o : M Unit) (h : 
   exact workerLoopLogged_erases _ _ _ _ _ _ _ _ (erases_liftM _) h
 
 def enqueuePerPeerRxLogged (irqExit : GhostM Unit) (id : SkbId) (state : PacketState) : GhostM Unit := do
-  let pid := (← getKeypair (← getRxSkb id).keypair).peer   -- PACKET_PEER(skb)
+  let pid ← IndexOwner.peerDeref (.keypair (← getRxSkb id).keypair)   -- PACKET_PEER(skb)
   peerGet pid
   let p ← getPeer pid
   -- atomic_set_release(&PACKET_CB(skb)->state, state): the one skb the

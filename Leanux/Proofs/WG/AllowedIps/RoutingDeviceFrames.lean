@@ -52,12 +52,13 @@ theorem expireCurrentPeerKeypairs_routing (pid : PeerId) :
   apply SameView.of_wp
   intro s
   have hn := (requireNotPending_routing pid "clearing the handshake").wp (fun t => t = s)
-  have hi := (indexRemove_routing pid .handshake).wp (fun t => t = s)
+  have hi := (indexRemove_routing (.handshake pid)).wp (fun t => t = s)
   have hh := (handshakeZero_routing pid).wp (fun t => t = s)
   have hr := (resetLastSentHandshake_routing pid).wp (fun t => t = s)
   have hp := (getPeer_routing pid).wp (fun t => t = s)
   have hg := fun kp => (getKeypair_routing kp).wp (fun t => t = s)
   have hs := fun kp k => (setKeypair_routing kp k).wp (fun t => t = s)
-  mvcgen [expireCurrentPeerKeypairs, hn, hi, hh, hr, hp, hg, hs, branch, invariant]
+  have hclear := (handshakeClear_routing pid).wp (fun t => t = s)
+  mvcgen [expireCurrentPeerKeypairs, hclear, hn, hi, hh, hr, hp, hg, hs, branch, invariant]
 
 end Leanux.Proofs.WG.AllowedIps

@@ -122,7 +122,7 @@ theorem publicationMiddle_frame (pid : PeerId) (first : SkbId) (state : PacketSt
 theorem publication_factor (item : List SkbId) (state : PacketState) :
     enqueuePerPeerTx item state = (do
       let some first := item.head? | invariant "an empty ring item"
-      let pid := (← getKeypair (← getTxSkb first).keypair).peer
+      let pid ← IndexOwner.peerDeref (.keypair (← getTxSkb first).keypair)
       peerGet pid
       publicationMiddle pid first state
       peerPut (some pid)) := by
@@ -136,7 +136,7 @@ theorem publication_queues (item : List SkbId) (state : PacketState) :
   rw [publication_factor]
   have mid := fun pid first => (publicationMiddle_frame pid first state).wp
     (fun t => t.1 = q ∧ ∃ n, 1 < n ∧ t.2 = some n)
-  mvcgen [strict_acquire_queues, nonfinal_put_queues, mid, getKeypair, getTxSkb,
+  mvcgen [IndexOwner.peerDeref, IndexOwner.peerWord, unsupported, strict_acquire_queues, nonfinal_put_queues, mid, getKeypair, getTxSkb,
     getDev, getK, invariant]
   all_goals try unfold borrowView at *
   all_goals unfold txQueues at *

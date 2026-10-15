@@ -21,13 +21,23 @@ theorem peerGetMaybeZero_routing (peer : Option PeerId) :
     have hs := routingState_insert_same d pid p {p with refcount := p.refcount + 1} hp rfl
     simp [routingView, hk, hd, hs]
 
+theorem ownerSetWord_routing (owner : IndexOwner) (peer : Option PeerId) :
+    SameView routingView (owner.setPeerWord peer) := by
+  cases owner with
+  | handshake pid =>
+    exact modifyPeer_routing pid (fun p => {p with handshakeEntryPeer := peer}) (fun _ => rfl)
+  | keypair kp =>
+    exact (getKeypair_routing kp).bind fun k => setKeypair_routing kp {k with peer}
+
 theorem indexLookup_routing (kinds : List IndexKind) (index : Nat) :
     SameView routingView (indexLookup kinds index) := by
   apply SameView.of_wp
   intro s
   have hp := fun peer => (peerGetMaybeZero_routing peer).wp (fun t => t = s)
   have hb := (routing_kernel _ (Framing.indexBucket_sameKernel index)).wp (fun t => t = s)
-  mvcgen [indexLookup, hp, hb, branch, invariant]
+  have hw := fun owner => (ownerWord_routing owner).wp (fun t => t = s)
+  have hs := fun owner peer => (ownerSetWord_routing owner peer).wp (fun t => t = s)
+  mvcgen [indexLookup, hp, hb, hw, hs, branch, invariant]
   all_goals try exact ((⇓? _ w => ⌜routingView w = s⌝) : PostCond _ (.arg World (.except Stop .pure)))
   all_goals try dsimp +zetaDelta only at *
   all_goals simp_all [routingView]

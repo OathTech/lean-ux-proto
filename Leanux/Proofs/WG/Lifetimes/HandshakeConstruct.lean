@@ -14,10 +14,10 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
 
 /-- The index table has no resolved object dereference. This frame transports
 allocation safety while retaining the original device/record failures. -/
-theorem indexInsert_identity_metadata (pid : PeerId) (kind : IndexKind) :
-    SameView (fun w => (identityView w, allocationMetadata w)) (indexInsert pid kind) := by
+theorem indexInsert_identity_metadata (owner : IndexOwner) :
+    SameView (fun w => (identityView w, allocationMetadata w)) (indexInsert owner) := by
   intro w x v hr
-  have hf := indexInsert_sameIndexKernel pid kind w x v hr
+  have hf := indexInsert_sameIndexKernel owner w x v hr
   have he := congrArg (fun k => identityView {w with k}) hf
   have hm := congrArg (fun k => allocationMetadata {w with k}) hf
   apply Prod.ext
@@ -28,12 +28,12 @@ theorem indexInsert_identity_metadata (pid : PeerId) (kind : IndexKind) :
     unfold allocationMetadata deviceAllocationMetadata at hm ⊢
     simpa [indexKernelView, indexKernel, Option.map_map, Function.comp_def] using hm
 
-theorem indexInsert_allocation (pid : PeerId) (kind : IndexKind) :
-    PrefixPreserves AllocationInv LifetimeEvent.Safe (liftPrefix (indexInsert pid kind)) := by
+theorem indexInsert_allocation (owner : IndexOwner) :
+    PrefixPreserves AllocationInv LifetimeEvent.Safe (liftPrefix (indexInsert owner)) := by
   apply PrefixEnsures.preserves
   apply PrefixEnsures.lift _ (fun _ _ hi => hi.safe)
   intro h w x v hi hr
-  have hf := indexInsert_identity_metadata pid kind w x v hr
+  have hf := indexInsert_identity_metadata owner w x v hr
   exact hi.congr (congrArg Prod.fst hf) (congrArg Prod.snd hf)
 
 def setChainPrefix (pid : PeerId) (ck hash : List UInt8) : MixedM Unit :=
@@ -75,7 +75,8 @@ def createInitiationPrefix (pid : PeerId) : MixedM (Option (List UInt8)) := do
   let encTime := aeadEncrypt key noiseNonce timestamp h
   let h := noiseHash (h ++ encTime)
   setChainPrefix pid ck h
-  let index ← liftPrefix (indexInsert pid .handshake)
+  _ ← peerDerefPrefix (.handshake pid)
+  let index ← liftPrefix (indexInsert (.handshake pid))
   modifyPeerKeysPrefix pid fun p => {p with handshakeState := HANDSHAKE_CREATED_INITIATION}
   return some (le32 1 ++ le32 index ++ e ++ encStatic ++ encTime ++ List.replicate 32 0)
 
@@ -103,7 +104,8 @@ def createResponsePrefix (pid : PeerId) : MixedM (Option (List UInt8)) := do
   let encNothing := aeadEncrypt key noiseNonce [] h
   let h := noiseHash (h ++ encNothing)
   setChainPrefix pid ck h
-  let index ← liftPrefix (indexInsert pid .handshake)
+  _ ← peerDerefPrefix (.handshake pid)
+  let index ← liftPrefix (indexInsert (.handshake pid))
   modifyPeerKeysPrefix pid fun p => {p with handshakeState := HANDSHAKE_CREATED_RESPONSE}
   return some (le32 2 ++ le32 index ++ le32 receiver ++ e ++ encNothing ++ List.replicate 32 0)
 
@@ -126,6 +128,7 @@ theorem createInitiationPrefix_erases (pid : PeerId) :
     | with_reducible exact modifyPeerKeysPrefix_erases _ _
     | with_reducible exact getPeerMixed_erases _
     | with_reducible exact setPeerMixed_erases _ _
+    | with_reducible exact peerDerefPrefix_erases _
     | with_reducible exact erasesPrefix_lift _
     | with_reducible exact erasesPrefix_pure _
     | with_reducible apply andPrefix_erases
@@ -145,6 +148,7 @@ theorem createResponsePrefix_erases (pid : PeerId) :
     | with_reducible exact modifyPeerKeysPrefix_erases _ _
     | with_reducible exact getPeerMixed_erases _
     | with_reducible exact setPeerMixed_erases _ _
+    | with_reducible exact peerDerefPrefix_erases _
     | with_reducible exact erasesPrefix_lift _
     | with_reducible exact erasesPrefix_pure _
     | with_reducible apply andPrefix_erases
@@ -163,6 +167,7 @@ theorem addMacToPacketPrefix_erases (pid : PeerId) (msg : List UInt8) :
     | with_reducible exact modifyPeerKeysPrefix_erases _ _
     | with_reducible exact getPeerMixed_erases _
     | with_reducible exact setPeerMixed_erases _ _
+    | with_reducible exact peerDerefPrefix_erases _
     | with_reducible exact erasesPrefix_lift _
     | with_reducible exact erasesPrefix_pure _
     | with_reducible apply andPrefix_erases
@@ -194,7 +199,7 @@ theorem addMacToPacketPrefix_preserves (c : AmbientContracts I) (pid : PeerId) (
     split <;> exact c.pure (fun _ => True) _
 
 theorem createInitiationPrefix_preserves (c : AmbientContracts I)
-    (hi : ∀ pid kind, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (indexInsert pid kind)))
+    (hi : ∀ owner, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (indexInsert owner)))
     (pid : PeerId) : PrefixPreserves I LifetimeEvent.Safe (createInitiationPrefix pid) := by
   unfold createInitiationPrefix
   repeat' first
@@ -209,7 +214,8 @@ theorem createInitiationPrefix_preserves (c : AmbientContracts I)
     | with_reducible exact AmbientContracts.drop (c.kernel (fun _ => True) _ (Framing.mixPrecomputedDh_sameKernel _ _))
     | with_reducible exact AmbientContracts.drop (c.kernel (fun _ => True) _ (Framing.kdf_sameKernel _ _ _ _))
     | with_reducible exact AmbientContracts.drop (c.kernel (fun _ => True) _ (Framing.kdfOut_sameKernel _ _))
-    | with_reducible exact hi _ _
+    | with_reducible exact AmbientContracts.drop (peerDerefPrefix_spec c (fun _ => True) _)
+    | with_reducible exact hi _
     | with_reducible exact AmbientContracts.drop (c.branch (fun _ => True) _ _)
     | with_reducible exact AmbientContracts.drop (c.invariant (fun _ => True) _)
     | with_reducible exact PrefixPreserves.pure c.safe _
@@ -219,7 +225,7 @@ theorem createInitiationPrefix_preserves (c : AmbientContracts I)
     | (with_reducible split)
 
 theorem createResponsePrefix_preserves (c : AmbientContracts I)
-    (hi : ∀ pid kind, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (indexInsert pid kind)))
+    (hi : ∀ owner, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (indexInsert owner)))
     (pid : PeerId) : PrefixPreserves I LifetimeEvent.Safe (createResponsePrefix pid) := by
   unfold createResponsePrefix
   repeat' first
@@ -234,7 +240,8 @@ theorem createResponsePrefix_preserves (c : AmbientContracts I)
     | with_reducible exact AmbientContracts.drop (c.kernel (fun _ => True) _ (Framing.mixPrecomputedDh_sameKernel _ _))
     | with_reducible exact AmbientContracts.drop (c.kernel (fun _ => True) _ (Framing.kdf_sameKernel _ _ _ _))
     | with_reducible exact AmbientContracts.drop (c.kernel (fun _ => True) _ (Framing.kdfOut_sameKernel _ _))
-    | with_reducible exact hi _ _
+    | with_reducible exact AmbientContracts.drop (peerDerefPrefix_spec c (fun _ => True) _)
+    | with_reducible exact hi _
     | with_reducible exact AmbientContracts.drop (c.branch (fun _ => True) _ _)
     | with_reducible exact AmbientContracts.drop (c.invariant (fun _ => True) _)
     | with_reducible exact PrefixPreserves.pure c.safe _

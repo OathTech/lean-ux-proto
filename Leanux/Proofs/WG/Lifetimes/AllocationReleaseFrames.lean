@@ -57,8 +57,9 @@ theorem keypairPut_rest (kp : Option KeypairId) (now : Bool) :
     SameView keypairReleaseRest (keypairPut kp now) := by
   apply SameView.of_wp
   intro s
-  simp only [keypairPut, indexRemoveKeypair_eq, indexUnhash]
-  mvcgen [keypairPut, getKeypair, getDev, getK, setKeypair, modifyDev, modifyK,
+  simp only [keypairPut, indexRemove_eq, indexUnhash]
+  have hd := fun o k => sameKernel_wp _ (indexOwner_peerDeref_sameKernel o) (fun v => v = k)
+  mvcgen [hd, keypairPut, getKeypair, getDev, getK, setKeypair, modifyDev, modifyK,
     branch, branchCmp, refcountDecAndTest, unsupported, invariant]
   all_goals dsimp +zetaDelta only at *
   all_goals unfold keypairReleaseRest Peers.snapshot packetResidents allocationMetadata at *

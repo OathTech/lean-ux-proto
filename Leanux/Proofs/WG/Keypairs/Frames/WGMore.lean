@@ -164,7 +164,7 @@ theorem lookup_spec (P : Snapshot → Prop) (root : Option NodeId) (bits key : N
 theorem enqueuePerPeerRx_sameSnapshot (irq : M Unit) (hi : SameSnapshot irq)
     (pkt : SkbId) (state : PacketState) : SameSnapshot (enqueuePerPeerRx irq pkt state) := by
   have irq_spec := hi.wp
-  frame_same [Leanux.WG.enqueuePerPeerRx] using [irq_spec, getKeypair_live_spec,
+  frame_same [Leanux.WG.enqueuePerPeerRx] using [ownerPeerDeref_spec, irq_spec, getKeypair_live_spec,
     getPeer_spec, setPeer_spec, peerGet_spec, peerPut_spec, getRxSkb_spec, setRxSkb_spec]
 
 theorem enqueuePerPeerRx_pure_spec (P : Snapshot → Prop) (pkt : SkbId) (state : PacketState) :

@@ -74,12 +74,12 @@ theorem keypairPut_origin (kp : Option KeypairId) (now : Bool) (w : World) (h : 
           rcases hx with ⟨rfl, rfl⟩
           change (w.k.wg.bind (fun d => d.keypairs[j]?)).map (·.internalId) = _
           rw [hk]; rfl
-    simp only
-    split
+    cases now <;> cases hp : k.peer <;> by_cases hc : k.refcount = 1
     all_goals constructor
-    all_goals simp [ReleasedFrom, List.filterMap_cons, List.filterMap_nil,
-      LifetimeEvent.peer?, LifetimeEvent.keypair?, LifetimeEvent.packet?, AccessEvent.Released]
-    exact ⟨i, live⟩
+    all_goals simp [hp, hc, ReleasedFrom, List.filterMap_append, List.filterMap_cons,
+      List.filterMap_nil, LifetimeEvent.peer?, LifetimeEvent.keypair?,
+      LifetimeEvent.packet?, AccessEvent.Released]
+    all_goals exact ⟨i, live⟩
 
 theorem peerGetMixed_allocation (id : PeerId) :
     PrefixPreserves AllocationInv LifetimeEvent.Safe (peerGetMixed id) :=

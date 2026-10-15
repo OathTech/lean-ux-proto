@@ -85,9 +85,9 @@ theorem modifyDev_routing (f : Device → Device)
   cases hr
   simp [routingView, modifyDev, modifyK, Option.map_map, Function.comp_def, hf]
 
-theorem indexRemove_routing (pid : PeerId) (kind : IndexKind) :
-    SameView routingView (indexRemove pid kind) := by
-  apply (indexRemove_sameIndexKernel pid kind).of_factor
+theorem indexRemove_routing (owner : IndexOwner) :
+    SameView routingView (indexRemove owner) := by
+  apply (indexRemove_sameIndexKernel owner).of_factor
     (fun k : Kernel => k.wg.map routingState) routingView
   intro w
   simp [routingView, indexKernelView, indexKernel, routingState, Option.map_map, Function.comp_def]
@@ -153,7 +153,7 @@ theorem peerPut_routing_spec (start : World) (peer : Option PeerId) :
     ⦃fun w => ⌜w.k = start.k⌝⦄ peerPut peer
     ⦃⇓? _ w => ⌜routingView w = routingView start ∨
       ∃ pid, routingView w = (routingView start).map (fun s => s.erase pid)⌝⦄ := by
-  have hi := fun pid => (indexRemove_routing pid .handshake).wp
+  have hi := fun pid => (indexRemove_routing (.handshake pid)).wp
     (fun s => s = routingView start)
   simp only [peerPut]
   mvcgen [hi, getPeer, getDev, getK, setPeer, modifyDev, modifyK,

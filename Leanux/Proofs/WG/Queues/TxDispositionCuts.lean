@@ -127,8 +127,8 @@ theorem dispose_no_send (pid : PeerId) (item : List SkbId) (key : KeypairId) :
     mvcgen [freeTxSkb, getTxSkb, getDev, getK, modifyDev, modifyK, invariant]
   have kp : ⦃fun w => ⌜w.sent = sent⌝⦄ keypairPut (some key) false
       ⦃⇓? _ w => ⌜w.sent = sent⌝⦄ := by
-    simp only [keypairPut, Framing.indexRemoveKeypair_eq]
-    mvcgen [Framing.indexUnhash, getKeypair, getDev, getK, setKeypair, modifyDev, modifyK,
+    simp only [keypairPut, Framing.indexRemove_eq]
+    mvcgen [IndexOwner.peerDeref, IndexOwner.peerWord, Framing.indexUnhash, getKeypair, getDev, getK, setKeypair, modifyDev, modifyK,
       refcountDecAndTest, branch, branchCmp, invariant, unsupported]
   have pp : ⦃fun w => ⌜w.sent = sent⌝⦄ peerPut (some pid)
       ⦃⇓? _ w => ⌜w.sent = sent⌝⦄ := by

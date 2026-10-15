@@ -80,9 +80,9 @@ theorem timersHandshakeInitiated_routing (pid : PeerId) :
   have ha := fun n jc => (armTimer_routing pid .retransmitHandshake n jc).wp (fun t => t = s)
   mvcgen [timersHandshakeInitiated, hc, hj, hg, ha]
 
-theorem indexInsert_routing (pid : PeerId) (kind : IndexKind) :
-    SameView routingView (indexInsert pid kind) := by
-  apply (indexInsert_sameIndexKernel pid kind).of_factor
+theorem indexInsert_routing (owner : IndexOwner) :
+    SameView routingView (indexInsert owner) := by
+  apply (indexInsert_sameIndexKernel owner).of_factor
     (fun k : Kernel => k.wg.map routingState) routingView
   intro w
   simp [routingView, indexKernelView, indexKernel, routingState, Option.map_map, Function.comp_def]
@@ -98,10 +98,11 @@ theorem createInitiation_routing (pid : PeerId) : SameView routingView (createIn
   have he := fun b e ck h => (routing_kernel _ (messageEphemeral_sameKernel b e ck h)).wp (fun t => t = s)
   have hd := fun b ck p q => (routing_kernel _ (mixDh_sameKernel b ck p q)).wp (fun t => t = s)
   have hpre := fun ck p => (routing_kernel _ (mixPrecomputedDh_sameKernel ck p)).wp (fun t => t = s)
-  have hi := (indexInsert_routing pid .handshake).wp (fun t => t = s)
+  have hi := (indexInsert_routing (.handshake pid)).wp (fun t => t = s)
   unfold createInitiation
   index_unfold _private.Leanux.WG.Handshake.«0».Leanux.WG.setChain
-  mvcgen [hg, hs, hh, hp, he, hd, hpre, hi, getDev, getK, branch, invariant]
+  have hw := (ownerDeref_routing (.handshake pid)).wp (fun t => t = s)
+  mvcgen [hw, hg, hs, hh, hp, he, hd, hpre, hi, getDev, getK, branch, invariant]
   all_goals try dsimp +zetaDelta only at *
   all_goals try dsimp +zetaDelta only at *
   all_goals try simp_all [routingView, routingState]
@@ -167,7 +168,8 @@ theorem keypairsClear_routing (pid : PeerId) : SameView routingView (keypairsCle
   all_goals simp_all
 
 theorem handshakeClear_routing (pid : PeerId) : SameView routingView (handshakeClear pid) :=
-  (indexRemove_routing pid .handshake).bind (fun _ => handshakeZero_routing pid)
+  (ownerDeref_routing (.handshake pid)).bind (fun _ =>
+    (indexRemove_routing (.handshake pid)).bind (fun _ => handshakeZero_routing pid))
 
 theorem handshakeSendWorker_routing (pid : PeerId) : RetainsRoutingCall (handshakeSendWorker pid) := by
   apply ProjectedAction.of_wp
