@@ -55,6 +55,10 @@
 # and kind-312 records, record-only), control patch sha256
 # 6e27b546309dcfeea6487bc7cde27a28ff76505c72cccae03833e59292121e7d [AGENT 2026-10-14, the review-fix
 # integration]; the s3 lines it replaces were 6c5e5a69... and 1749e7a8...
-cdd39a3600494994f4b47a7e1172792c751d2b7ed23058008ee34dc519191c64
+# Built 2026-10-15 as .artifacts/kernel-net-choice-actl-s5: the same change as the oracle's s5 (the kind-313
+# and kind-314 timer wheel records, record-only; B3 step 1), control patch sha256
+# ab3a39ef58e3522af6a77c5bbfb5dfd840a2884074cf74260955648b61ca4a92 [AGENT 2026-10-15, B3 step 1]; the s4
+# lines it replaces were cdd39a36... and 5e0ea845...
+aa192fdc560e260d13f469f8cea4fc99a44a9bfaa2eb522c864c3014fa198120
 # vmlinux sha256 of the build the evidence used (path-dependent):
-5e0ea845e075cba0b482ab9985bbc1d95570daf0fd70bfafee619f0e638adafc
+14302f57b6841db6a3787e270efd9ca6ecfa39e14faaeb455a0c87ca2a7e38f1

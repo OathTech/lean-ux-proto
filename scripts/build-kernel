@@ -89,11 +89,11 @@ if [ "$PROFILE" = net-rcov ] || [ "$PROFILE" = net-hidden ] || [ "$PROFILE" = ne
     # instruction pointer (kernel/seccomp.c:265, line-preserving) and the kind-311 record of each peer timer
     # caller's jiffies read (drivers/net/wireguard/timers.c, line-preserving),
     # record-only.
-    CHOICE_SHA=8fbf65c7e214b4f5a5db78fe6d9f3a5f7a8403c38e6300d4667cd64abf295e0c
+    CHOICE_SHA=630b602a200d66eea6cfee7ba33bc9924d50bf517984ee32be8a1a1dd96ae51b
     # net-choice-actl: the allocation-steering control kernel (A, section 7:
     # K1, K4, K5), the same patch with control load flags; never an oracle
     ACTL_PATCH="$LEANUX_ROOT/kernel/patches/choice-stream-alloc-controls.patch"
-    ACTL_SHA=6e27b546309dcfeea6487bc7cde27a28ff76505c72cccae03833e59292121e7d
+    ACTL_SHA=ab3a39ef58e3522af6a77c5bbfb5dfd840a2884074cf74260955648b61ca4a92
     if [ "$PROFILE" = net-choice ]; then
         SOURCE="$LEANUX_ARTIFACTS/src/linux-6.12.110-choice-stream-da"
         PATCH_SHA_RECORD="$CHOICE_SHA"
