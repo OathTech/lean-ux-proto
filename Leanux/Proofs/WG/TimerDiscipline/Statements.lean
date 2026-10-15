@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TimerDiscipline.OutgoingResponseSessionClaims
 import Leanux.Proofs.WG.TimerDiscipline.ObservationClaims
 import Leanux.Proofs.WG.TimerDiscipline.SendDispatchClaims
 import Leanux.Proofs.WG.TimerDiscipline.RetryDispatchClaims
@@ -8,6 +9,7 @@ import Leanux.Proofs.WG.TimerDiscipline.ResponseSessionClaims
 /-! The public H6 interface names only WireGuard and explicit execution
 observations. Concrete source connections and residual frames are separate.
 `observed_erase` retains exact original errors for decorated prefix claims. -/
+
 namespace Leanux.Proofs.WG.TimerDiscipline
 open Leanux Leanux.WG Campaign2
 
@@ -469,5 +471,31 @@ theorem original_response_session_arm (msg : List UInt8) (src : SkbSource)
     · intro entry pre
       rw [observedResponseSession_source msg src kind]
     · exact observedResponseSession_facts msg src kind
+
+/-- The original outgoing response sender and its decorated execution factor
+through the actual session-derived hook. On normal full return, response creation
+may have rejected the call without reaching the session stage. A present cut
+records the actual session result and ordered SessionEffect; its hook observation
+is present exactly when beginSession returned true. That case derives the counter
+increment and a live resident peer. Running-device and arm-record conditions at
+the actual before-hook cut give the caller-jiffies read, exact wrapped zero-key
+expiry and clockGap at the after-hook cut. The remaining original timer hooks,
+second clock/write and socket send execute unchanged. No successful completion,
+transmission, final expiry preservation, failed-call prefix retention or global
+once-per-session count is asserted. Erasure preserves every original error. -/
+theorem original_outgoing_response_session_arm (pid : PeerId) :
+    Campaign2.AgreesOn (fun _ => True) (sendHandshakeResponse pid)
+      (outgoingResponseSessionPrefix pid >>= outgoingResponseSessionSuffix pid) ∧
+    Campaign2.AgreesOn (fun _ => True) (observedOutgoingResponseSession pid)
+      (outgoingResponseSessionTranscript pid) ∧
+    Campaign2.Ensures (observedOutgoingResponseSession pid) (fun _ => True)
+      (fun observation _ => OutgoingResponseSessionObservation pid observation) := by
+  constructor
+  · intro entry pre
+    rw [outgoingResponseSession_source pid]
+  · constructor
+    · intro entry pre
+      rw [observedOutgoingResponseSession_source pid]
+    · exact observedOutgoingResponseSession_facts pid
 
 end Leanux.Proofs.WG.TimerDiscipline
