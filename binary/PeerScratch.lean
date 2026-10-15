@@ -2,6 +2,9 @@ import StackFrame
 
 namespace Binary.PeerGet
 
+def ScratchMapped (initial : MachineData) (memory : Mem 64) : Prop :=
+  ∀ a, InRange (initial.regs.rsp.toBitVec-56) 56 a → (memory.get? a).isSome = true
+
 /-- Six saved registers and the final callback return slot supply all bytes
     of helper scratch after return, even when the later output aliases it. -/
 theorem scratch_slots_mapped (initial : MachineData) (memory : Mem 64)

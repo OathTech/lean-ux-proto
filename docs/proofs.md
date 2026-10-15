@@ -116,3 +116,23 @@ the lag.
 
 The tree was restructured from `Leanux/Spikes/` on 2026-10-13; the dated
 documents above keep the historical names in their prose.
+
+
+## Binary adequacy (standalone charter target)
+
+The user-opened [binary charter](2026-10-15-charter-binary-adequacy.md)
+authorizes `binary/` separately from the mirror proof tree. Its current
+[report](2026-10-15-binary-adequacy.md#milestone-1-function-theorem-and-review-handoff)
+quotes the trust base and distinguishes proof acceptance from kernel-entry
+realism and physical frame premises.
+
+| Function | Headline theorem / transport | Decoded regions | Named service contracts | Mirror pin | Status |
+| --- | --- | --- | --- | --- | --- |
+| `wg_index_hashtable_lookup`, including `wg_peer_get_maybe_zero` | `Binary.LookupRelation.lookup_simulation`, `lookup_transport`, `lookup_framed_transport` | 54 (23 lookup, 31 helper) | `TracePcContract`, `TraceCmp4Contract`, `TraceConstCmp4Contract`, `TraceConstCmp1Contract`, `BhEnableContract` | `cb2348e` | Function and bucket-loop composition proved; original ABI return, all accepted helper paths, result and cut frames. Independent surface review and external sandboxed toolchain gate pending. |
+
+The concrete frame instance `lookup_snapshot_transport` carries exact
+frontier and source-live lifetime/replay fields through lookup, conditional
+on their initial representation and untouched-byte separation. It does not
+prove physical allocation membership/absence or whole-trace S1–S3/R1–R6/H1–H6.
+Those results need their remaining anchors and the milestone-4 entry-realism
+check. The mirror proof register's existing lag is unchanged by this work.

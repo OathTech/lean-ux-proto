@@ -33,6 +33,14 @@ theorem bind_accepted {first : Logged α} {next : α → Logged β}
     simp only [StateT.run_bind, run] at accepted
     exact ⟨value, middle, intermediate, rfl, accepted⟩
 
+theorem called_run_at (symbol : String) (action : Logged α)
+    (world final : World) (answer : α) (history points : List Point)
+    (run : (action.run (history ++ [⟨.call symbol, world⟩])).run world = .ok ((answer, points), final)) :
+    ((called symbol action).run history).run world =
+      .ok ((answer, points ++ [⟨.returned symbol, final⟩]), final) := by
+  simp [called, mark, StateT.run_bind, run]
+  rfl
+
 /-- Extract the actual callee execution from its logged CALL/RET wrapper. -/
 theorem called_accepted {action : Logged α} {symbol : String}
     {history points : List Point} {world final : World} {answer : α}
@@ -97,13 +105,56 @@ theorem owner_peerWord_run (world : World) (device : Device) (owner : IndexOwner
 
 /-- The concrete source continuation after the helper, retained for the
     owner-store and final-result composition. -/
-def afterHelper (owner : IndexOwner) (peer : Option PeerId) :
+def resultSource (owner : IndexOwner) (peer : Option PeerId) :
     MirrorHistory.Logged (Option (IndexOwner × PeerId)) := do
-  StateT.lift (owner.setPeerWord peer)
   if ← MirrorHistory.branchLogged .idxPeerAlive peer.isSome then
     let some pid := peer | StateT.lift (invariant "unreachable")
     return some (owner, pid)
   return none
+
+def afterHelper (owner : IndexOwner) (peer : Option PeerId) :
+    MirrorHistory.Logged (Option (IndexOwner × PeerId)) := do
+  StateT.lift (owner.setPeerWord peer)
+  resultSource owner peer
+
+theorem resultSource_run (owner : IndexOwner) (peer : Option PeerId)
+    (history : List MirrorHistory.Point) (world : World) :
+    ((resultSource owner peer).run history).run world =
+      let next := LookupMirror.record world .idxPeerAlive peer.isSome
+      .ok ((peer.map (fun pid => (owner, pid)), history ++ [⟨.decision .idxPeerAlive, next⟩]), next) := by
+  cases peer <;> simp [resultSource, StateT.run_bind, MirrorHistory.branch_run] <;> rfl
+
+/-- Acceptance retains the exact source store and result checkpoint, rather
+    than merely a successful helper in isolation. -/
+theorem afterHelper_accepted (owner : IndexOwner) (peer : Option PeerId)
+    (history points : List MirrorHistory.Point) (world final : World)
+    (answer : Option (IndexOwner × PeerId))
+    (accepted : ((afterHelper owner peer).run history).run world = .ok ((answer, points), final)) :
+    ∃ setWorld, (owner.setPeerWord peer).run world = .ok ((), setWorld) ∧
+      answer = peer.map (fun pid => (owner, pid)) ∧
+      final = LookupMirror.record setWorld .idxPeerAlive peer.isSome ∧
+      points = history ++ [⟨.decision .idxPeerAlive, final⟩] := by
+  obtain ⟨unit, middle, setWorld, setRun, resultRun⟩ := MirrorHistory.bind_accepted accepted
+  have erased := MirrorHistory.erases_lift (owner.setPeerWord peer) history world
+  rw [setRun] at erased
+  have actual : (owner.setPeerWord peer).run world = .ok (unit, setWorld) := erased.symm
+  cases unit
+  simp only [StateT.run_lift, StateT.run_bind, StateT.run_pure, actual] at setRun
+  change Except.ok (((), history), setWorld) = Except.ok (((), middle), setWorld) at setRun
+  have equal : history = middle := congrArg (fun p => p.1.2) (Except.ok.inj setRun)
+  subst middle
+  rw [resultSource_run] at resultRun
+  have equal := Except.ok.inj resultRun
+  refine ⟨setWorld, actual, ?_, ?_, ?_⟩
+  · exact (congrArg (fun p => p.1.1) equal).symm
+  · exact (congrArg Prod.snd equal).symm
+  · have finalEq := (congrArg Prod.snd equal).symm
+    dsimp only at finalEq
+    rw [finalEq]
+    exact (congrArg (fun p => p.1.2) equal).symm
+
+#print axioms resultSource_run
+#print axioms afterHelper_accepted
 
 /-- Accepted lookup execution fixes a successful helper run and its actual
     accepted continuation. It adds no liveness or count-bound premise. -/
@@ -118,10 +169,14 @@ theorem lookup_accepts_helper (c : Config) (coverage : KcovLayout) (preempt : Bi
       ((MirrorHistory.called "wg_peer_get_maybe_zero" (MirrorHistory.peerGet c.focus.peer)).run
         (LookupSearch.result c.kinds c.query v.bucket [sourceEntry world] world).1.2).run
         (helperWorld c world v) = .ok ((helperAnswer, middle), helperFinal) ∧
-      ((afterHelper owner helperAnswer).run middle).run helperFinal = .ok ((answer, points), final) := by
+      ((afterHelper owner helperAnswer).run middle).run helperFinal = .ok ((answer, points), final) ∧
+      ((MirrorHistory.lookup c.kinds c.query).run []).run world =
+        .ok ((answer, points ++ [⟨.returned "wg_index_hashtable_lookup", final⟩]), final) := by
   obtain ⟨points, logged⟩ := (MirrorHistory.lookup_erases c.kinds c.query).accepted_logs world final answer accepted []
   rw [LookupSearch.lookup_split] at logged
   obtain ⟨bodyPoints, bodyRun⟩ := MirrorHistory.called_accepted logged
+  have fullSource := MirrorHistory.called_run_at "wg_index_hashtable_lookup" _ world final answer [] bodyPoints bodyRun
+  rw [← LookupSearch.lookup_split] at fullSource
   obtain ⟨es, initialPoints, initialWorld, bucketRun, prefixRun⟩ := MirrorHistory.bind_accepted bodyRun
   obtain ⟨device, hasDevice⟩ : ∃ device, world.k.wg = some device := by
     cases hd : world.k.wg with
@@ -175,7 +230,7 @@ theorem lookup_accepts_helper (c : Config) (coverage : KcovLayout) (preempt : Bi
       Except.ok ((word, afterReadPoints), afterReadWorld) at readRun
     obtain ⟨⟨rfl, rfl⟩, rfl⟩ := Prod.mk.inj (Except.ok.inj readRun.symm)
     obtain ⟨peer, middle, helperFinal, helperRun, continuation⟩ := MirrorHistory.bind_accepted rest
-    refine ⟨peer, helperFinal, middle, bodyPoints, ?_, helperRun, continuation⟩
+    refine ⟨peer, helperFinal, middle, bodyPoints, ?_, helperRun, continuation, fullSource⟩
     have erased := MirrorHistory.called_erases "wg_peer_get_maybe_zero" _ _ (MirrorHistory.peerGet_erases c.focus.peer)
     have h := erased (LookupSearch.result c.kinds c.query v.bucket [sourceEntry world] world).1.2 (helperWorld c world v)
     rw [helperRun] at h
@@ -186,5 +241,6 @@ theorem lookup_accepts_helper (c : Config) (coverage : KcovLayout) (preempt : Bi
 #print axioms owner_peerWord_run
 #print axioms MirrorHistory.Erases.accepted_logs
 #print axioms MirrorHistory.bind_accepted
+#print axioms MirrorHistory.called_run_at
 #print axioms MirrorHistory.called_accepted
 end Binary.LookupRelation

@@ -131,6 +131,13 @@ tree, and fails if anything outside the tree imports it, if the root
 `Leanux/Proofs.lean` misses a result's `Statements`, or if `LeanuxProofs` is
 a default lake target.
 
+The user-opened binary adequacy charter has a separate standalone target:
+`capped -- scripts/proof-gate --binary` builds `binary/`, prints its headline,
+frame, witness and composition axioms, and checks its proof sources for
+escapes. Its claim-point kernel replay/toolchain commands are in
+[binary/README.md](binary/README.md); this does not add a mirror acceptance
+gate.
+
 Everything else is a speedbump: cheap, run at claim points, never blocking
 intermediate work, built to catch honest drift and not adversarial attack:
 - the negative control suites (`corpus/*-controls`, their scripts);

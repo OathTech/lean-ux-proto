@@ -1,4 +1,5 @@
 import LookupEntrySimulation
+import CutFrames
 
 namespace Binary.LookupRelation
 open Leanux TrustBase LookupHistory
@@ -119,6 +120,8 @@ structure BeforeBucket (c : Config) (world : World) (s : MachineData)
   aligned : ExecutedCorrespondence.CutsAligned (R c) c.rxSection t.history [sourceEntry world]
   related : R c t.history [entryPoint s] t.machine world
   stable : PeerCountPhase.StableExtension [⟨s, Image.Lookup.entry⟩] t.history
+  frames : CutFrames (fun a => Lookup.entryWrites s coverage a ∨ InRange preemptCountAddress 4 a)
+    s.dmem t.history
 
 private theorem low32_ofNat (v : BitVec 32) :
     (UInt64.ofNat v.toNat).toBitVec.extractLsb' 0 32 = v := by
@@ -164,11 +167,21 @@ theorem header_from_started (fetch : Int64 → Option Decoded)
   rw [cursor] at run
   apply eventually_weaken (historyStep fetch) _ _ _ _ run
   rintro t ⟨pc', ⟨head, regs⟩, ready', loaded, memory', raw', observed',
-    matched', aligned', related', stable', _⟩
-  exact ⟨pc', by simpa only [regs] using sp,
+    matched', aligned', related', stable', suffix, recorded, frames⟩
+  refine ⟨pc', by simpa only [regs] using sp,
     by simpa only [regs, Reg64s.get, Reg64s.get64, Reg.base] using queryReg, by simpa only [regs] using out,
     by simpa only [regs, Reg64s.get, Reg64s.get64, Reg.base] using kindReg, by simpa only [regs] using saved,
-    ready', loaded, memory.trans memory', raw', observed', matched', aligned', related', stable.trans stable'⟩
+    ready', loaded, memory.trans memory', raw', observed', matched', aligned', related', stable.trans stable', ?_⟩
+  obtain ⟨prefixTail, prefixEq, prefixFrames⟩ := tail
+  have old : CutFrames (fun a => Lookup.entryWrites s ⟨coverage, preempt, v⟩ a ∨ InRange preemptCountAddress 4 a) s.dmem u.history := by
+    rw [prefixEq]
+    exact (CutFrames.initial _ _).append_after (fun _ _ => rfl) prefixFrames (fun _ => Or.inl)
+  have endpoint : EqualOutside (fun a => Lookup.entryWrites s ⟨coverage, preempt, v⟩ a ∨ InRange preemptCountAddress 4 a) s.dmem u.machine.data.dmem := by
+    intro a outside
+    exact (Lookup.saveMemory_frame s 6 (by decide) a (fun inside => outside (.inl (.inl inside)))).trans
+      (memory a (fun inside => outside (.inl (.inr inside))))
+  rw [recorded]
+  exact old.append_after endpoint frames (fun _ => Or.inr)
 
 theorem header_from_pre (fetch : Int64 → Option Decoded)
     (agree : AnchoredDecoderAgreement fetch) (tracePc : TracePcContract fetch)
@@ -207,7 +220,9 @@ def AfterBucket (c : Config) (world : World) (s : MachineData)
         (LookupSearch.result c.kinds c.query v.bucket [sourceEntry world] world).1.2 ∧
       R c t.history ([entryPoint s] ++ delta) t.machine
         (LookupSearch.result c.kinds c.query v.bucket [sourceEntry world] world).2 ∧
-      PeerCountPhase.StableExtension head.history t.history ∧ DecisionPoints delta
+      PeerCountPhase.StableExtension head.history t.history ∧ DecisionPoints delta ∧
+      ∃ tail, t.history = head.history ++ tail ∧
+        CutFrames (scanWrites head.machine.data ⟨coverage, preempt, v⟩) head.machine.data.dmem tail
 
 theorem bucket_from_head (fetch : Int64 → Option Decoded)
     (agree : AnchoredDecoderAgreement fetch) (tracePc : TracePcContract fetch)
@@ -242,7 +257,7 @@ theorem bucket_from_head (fetch : Int64 → Option Decoded)
   have run := LookupObservation.history_prefix fetch _ head head.history ⟨[], by simp⟩ run
   apply eventually_weaken (historyStep fetch) _ _ _ _ run
   rintro t ⟨result, prefixed⟩
-  exact ⟨head, atHead, prefixed, by simpa only [List.nil_append] using result⟩
+  exact ⟨head, atHead, prefixed, by simpa only [List.nil_append, CutFrames] using result⟩
 
 /-- Prologue, BH-disable and the complete bucket loop, including an empty
     bucket, every collision prefix and either kind outcome. All execution

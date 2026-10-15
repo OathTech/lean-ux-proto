@@ -129,7 +129,7 @@ theorem null_suffix_history (fetch : Int64 → Option Decoded)
   have cursor₂ : (⟨⟨cleared.machine.data, Image.PeerGet.entry+0x9d⟩, cleared.history⟩ : Executed) = cleared := by rw [← pc₂]
   rw [cursor₂] at finish
   apply eventually_weaken (historyStep fetch) _ _ _ _ finish
-  rintro final ⟨returned, result, state, endFrame, seen, last, returning, tail, recorded, cuts⟩
+  rintro final ⟨returned, _scratch, result, state, endFrame, seen, last, returning, tail, recorded, cuts⟩
   have before := guardTrace.trans clearTrace
   have wholeFrame : EqualOutside (scanWrites body coverage) body.dmem final.machine.data.dmem := by
     rw [writeEq] at endFrame

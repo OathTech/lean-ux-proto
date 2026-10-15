@@ -32,7 +32,8 @@ theorem live_body_history (fetch : Int64 → Option Decoded)
     (observed : observeHistory (LookupObservation.edge rxSection) history = .ok events)
     (last : history.getLast? = some ⟨body, Image.PeerGet.entry+0x12⟩) :
     Eventually (historyStep fetch) (fun final =>
-      Returned initial final.machine returnAddress ∧ final.machine.data.regs.rax = body.regs.rbx ∧
+      Returned initial final.machine returnAddress ∧
+      ScratchMapped initial.data final.machine.data.dmem ∧ final.machine.data.regs.rax = body.regs.rbx ∧
       LookupCoverage.Context.At coverage preempt final.machine.data.dmem ∧
       final.machine.data.dmem.loadInt (body.regs.rbx.toBitVec+0x420) 4 = some ((count.toBitVec+1).toNat : Int) ∧
       EqualOutside (peerWrites body coverage) body.dmem final.machine.data.dmem ∧
@@ -98,7 +99,7 @@ theorem live_body_history (fetch : Int64 → Option Decoded)
   have cursor : (⟨⟨atZero.machine.data, Image.PeerGet.entry+0x3b⟩, atZero.history⟩ : Executed) = atZero := by rw [← pc]
   rw [cursor] at finish
   apply eventually_weaken (historyStep fetch) _ _ _ _ finish
-  rintro final ⟨returned, result, state, finalCount, finalFrame, last, phase, zeroPoint, retry, negative, wrap, dead,
+  rintro final ⟨returned, scratch, result, state, finalCount, finalFrame, last, phase, zeroPoint, retry, negative, wrap, dead,
     zeroFrame, retryFrame, negativeFrame, wrapFrame, deadFrame, seen, before, after, recorded, beforeCuts, afterCuts, phaseAt⟩
   have increments : EqualOutside (scanWrites body coverage) (incrementPeerMemory body count) (incremented atZero.machine.data).dmem := by
     simp only [incrementPeerMemory, incremented, incrementMemory, address, old]
@@ -115,7 +116,7 @@ theorem live_body_history (fetch : Int64 → Option Decoded)
     intro a outside; exact (increments a outside).trans (framed a outside)
   have phase := prefixStable.incrementing phase
   rw [address, old] at phase
-  refine ⟨returned, result.trans bx, state, ?_, ?_, last, phase, nullPoint, zeroPoint, retry, negative, wrap, dead,
+  refine ⟨returned, scratch, result.trans bx, state, ?_, ?_, last, phase, nullPoint, zeroPoint, retry, negative, wrap, dead,
     (fun _ _ => rfl), transferOld zeroFrame, transferNew retryFrame, transferNew negativeFrame,
     transferNew wrapFrame, transferNew deadFrame, ?_, prefixTail ++ before, after, ?_, ?_, ?_, ?_⟩
   · simpa only [address, old] using finalCount

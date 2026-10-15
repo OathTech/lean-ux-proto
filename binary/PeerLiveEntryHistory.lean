@@ -36,7 +36,8 @@ theorem live_entry_history (fetch : Int64 → Option Decoded)
     (observed : observeHistory (LookupObservation.edge rxSection) history = .ok events)
     (last : history.getLast? = some ⟨s, Image.PeerGet.entry⟩) :
     Eventually (historyStep fetch) (fun final =>
-      Returned ⟨s, Image.PeerGet.entry⟩ final.machine returnAddress ∧ final.machine.data.regs.rax = s.regs.rdi ∧
+      Returned ⟨s, Image.PeerGet.entry⟩ final.machine returnAddress ∧
+      PeerGet.ScratchMapped s final.machine.data.dmem ∧ final.machine.data.regs.rax = s.regs.rdi ∧
       LookupCoverage.Context.At coverage preempt final.machine.data.dmem ∧
       final.machine.data.dmem.loadInt (s.regs.rdi.toBitVec+0x420) 4 = some ((count.toBitVec+1).toNat : Int) ∧
       EqualOutside (fun a => InRange (s.regs.rdi.toBitVec+0x420) 4 a ∨ entryWrites s coverage a) s.dmem final.machine.data.dmem ∧
@@ -122,7 +123,7 @@ theorem live_entry_history (fetch : Int64 → Option Decoded)
   have cursor : (⟨⟨body.machine.data, Image.PeerGet.entry+0x12⟩, body.history⟩ : Executed) = body := by rw [← pc]
   rw [cursor] at finish
   apply eventually_weaken (historyStep fetch) _ _ _ _ finish
-  rintro final ⟨returned, result, state, finalCount, finalFrame, last, phase, nullPoint, zeroPoint, retry, negative, wrap, dead,
+  rintro final ⟨returned, scratch, result, state, finalCount, finalFrame, last, phase, nullPoint, zeroPoint, retry, negative, wrap, dead,
     nullFrame, zeroFrame, retryFrame, negativeFrame, wrapFrame, deadFrame, seen, before, after, recorded, beforeCuts, afterCuts, phaseAt⟩
   have transferOld {m : Mem 64}
       (framed : EqualOutside (scanWrites body.machine.data coverage) body.machine.data.dmem m) :
@@ -140,7 +141,7 @@ theorem live_entry_history (fetch : Int64 → Option Decoded)
     exact (increments a outside).trans (framed a (fun h => outside (subset a h)))
   have phase := startStable.incrementing phase
   rw [bx] at phase
-  refine ⟨returned, result.trans bx, state, ?_, ?_, last, phase, nullPoint, zeroPoint, retry, negative, wrap, dead,
+  refine ⟨returned, scratch, result.trans bx, state, ?_, ?_, last, phase, nullPoint, zeroPoint, retry, negative, wrap, dead,
     transferOld nullFrame, transferOld zeroFrame, transferNew retryFrame, transferNew negativeFrame,
     transferNew wrapFrame, transferNew deadFrame, seen, startTail ++ before, after, ?_, ?_, ?_, ?_⟩
   · simpa only [bx] using finalCount

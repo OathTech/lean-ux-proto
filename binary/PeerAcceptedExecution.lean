@@ -53,6 +53,7 @@ theorem accepted_nonnull_helper_execution (c : Config) (world : World) (device :
       ¬(InRange (s.regs.rdi.toBitVec+0x420) 4 a ∨ PeerGet.entryWrites s coverage a)) :
     Eventually (historyStep fetch) (fun final =>
       Returned ⟨s, Image.PeerGet.entry⟩ final.machine returnAddress ∧
+      (answer.isSome = true → PeerGet.ScratchMapped s final.machine.data.dmem) ∧
       final.machine.data.regs.rax = (if answer.isSome then s.regs.rdi else 0) ∧
       LookupCoverage.Context.At coverage preempt final.machine.data.dmem ∧
       EqualOutside (fun a => (peer.refcount ≠ 0 ∧ InRange (s.regs.rdi.toBitVec+0x420) 4 a) ∨ PeerGet.entryWrites s coverage a)
@@ -65,7 +66,11 @@ theorem accepted_nonnull_helper_execution (c : Config) (world : World) (device :
         ExecutedCorrespondence.CutsAligned (R c) c.rxSection final.history
           (sourceHistory ++ MirrorHistory.peerPoints world peer ++
             [⟨.returned "wg_peer_get_maybe_zero", worldFinal⟩]) ∧
-        R c final.history points final.machine (worldFinal))
+        R c final.history points final.machine worldFinal ∧
+        ∃ tail, final.history = history ++ tail ∧
+          ∀ q ∈ tail, q.pc ∈ Image.cutPoints →
+            EqualOutside (fun a => (peer.refcount ≠ 0 ∧ InRange (s.regs.rdi.toBitVec+0x420) 4 a) ∨
+              PeerGet.entryWrites s coverage a) s.dmem q.data.dmem)
       ⟨⟨s, Image.PeerGet.entry⟩, history⟩ := by
   have bound := PeerMirror.accepted_peer_bound pid world worldFinal answer device peer hasDevice hasPeer accepted
   obtain ⟨answerEq, finalEq⟩ := PeerMirror.accepted_peer_result pid world worldFinal answer device peer hasDevice hasPeer accepted
@@ -96,11 +101,16 @@ theorem accepted_nonnull_helper_execution (c : Config) (world : World) (device :
             exact .inl ⟨i, by omega, eq⟩
           · exact .inr buffer)
     apply eventually_weaken (historyStep fetch) _ _ _ _ run
-    rintro final ⟨ret, result, ready, frame, rest⟩
-    refine ⟨ret, ?_, ready, ?_, rest⟩
+    rintro final ⟨ret, result, ready, frame, points, full, returned, matched, cuts, related,
+      tail, recorded, frames⟩
+    refine ⟨ret, ?_, ?_, ready, ?_, points, full, returned, matched, cuts, related,
+      tail, recorded, ?_⟩
+    · simp [answerEq, zero]
     · simpa only [answerEq, zero, ite_true, Option.isSome_none, Bool.false_eq_true, ite_false] using result
     · intro a outside
       exact frame a (fun written => outside (.inr written))
+    · intro q member cut a outside
+      exact frames q member cut a (fun written => outside (.inr written))
   · let count := UInt32.ofNat peer.refcount
     have countNat : count.toNat = peer.refcount := by
       simp only [count, UInt32.toNat_ofNat]
@@ -123,11 +133,18 @@ theorem accepted_nonnull_helper_execution (c : Config) (world : World) (device :
         · exact .inl ⟨zero, count⟩
         · exact .inr scratch) ownerApart
     apply eventually_weaken (historyStep fetch) _ _ _ _ run
-    rintro final ⟨ret, result, ready, frame, rest⟩
-    refine ⟨ret, ?_, ready, ?_, rest⟩
+    rintro final ⟨ret, scratch, result, ready, frame, points, full, returned, matched, cuts, related,
+      tail, recorded, frames⟩
+    refine ⟨ret, fun _ => scratch, ?_, ready, ?_, points, full, returned, matched, cuts, related,
+      tail, recorded, ?_⟩
     · simpa only [answerEq, ite_eq_right zero, Option.isSome_some, ite_true] using result
     · intro a outside
       apply frame a
+      rintro (count | scratch)
+      · exact outside (.inl ⟨zero, count⟩)
+      · exact outside (.inr scratch)
+    · intro q member cut a outside
+      apply frames q member cut a
       rintro (count | scratch)
       · exact outside (.inl ⟨zero, count⟩)
       · exact outside (.inr scratch)

@@ -54,6 +54,7 @@ theorem live_helper_execution (c : Config) (world : World) (device : Device)
       ¬(InRange (s.regs.rdi.toBitVec+0x420) 4 a ∨ PeerGet.entryWrites s coverage a)) :
     Eventually (historyStep fetch) (fun final =>
       Returned ⟨s, Image.PeerGet.entry⟩ final.machine returnAddress ∧
+      PeerGet.ScratchMapped s final.machine.data.dmem ∧
       final.machine.data.regs.rax = s.regs.rdi ∧
       LookupCoverage.Context.At coverage preempt final.machine.data.dmem ∧
       EqualOutside (fun a => InRange (s.regs.rdi.toBitVec+0x420) 4 a ∨ PeerGet.entryWrites s coverage a)
@@ -66,13 +67,17 @@ theorem live_helper_execution (c : Config) (world : World) (device : Device)
         ExecutedCorrespondence.CutsAligned (R c) c.rxSection final.history
           (sourceHistory ++ MirrorHistory.peerPoints world peer ++
             [⟨.returned "wg_peer_get_maybe_zero", PeerMirror.peerFinal pid world peer⟩]) ∧
-        R c final.history points final.machine (PeerMirror.peerFinal pid world peer))
+        R c final.history points final.machine (PeerMirror.peerFinal pid world peer) ∧
+        ∃ tail, final.history = history ++ tail ∧
+          ∀ q ∈ tail, q.pc ∈ Image.cutPoints →
+            EqualOutside (fun a => InRange (s.regs.rdi.toBitVec+0x420) 4 a ∨ PeerGet.entryWrites s coverage a)
+              s.dmem q.data.dmem)
       ⟨⟨s, Image.PeerGet.entry⟩, history⟩ := by
   have run := PeerGet.live_entry_history fetch agree contract traceCmp traceByte s returnAddress entry nonnull
     count nonzero bound field coverage preempt state phase mapped pushSeparate coverageSeparate metadataSeparate
     preemptSeparate countSeparate fieldSeparate comparison c.rxSection history events observed last
   apply eventually_weaken (historyStep fetch) _ _ _ _ run
-  rintro final ⟨returned, result, ready, finalCount, frame, lastFinal, phaseAny,
+  rintro final ⟨returned, scratch, result, ready, finalCount, frame, lastFinal, phaseAny,
     nullPoint, zeroPoint, retry, negative, wrap, dead, _, _, _, _, _, _, rawFull,
     before, after, recorded, oldFrames, newFrames, phaseAt⟩
   have countNonzero : count.toNat ≠ 0 := by
@@ -138,10 +143,17 @@ theorem live_helper_execution (c : Config) (world : World) (device : Device)
     dsimp only [delta]
     rw [← related.2.2.2]
     exact peer_decision_worlds _ _ _ _ _ _ _ _
-  refine ⟨returned, result, ready, frame, _, full, ?_, ?_, ?_, endpoint⟩
+  refine ⟨returned, scratch, result, ready, frame, _, full, ?_, ?_, ?_, endpoint,
+    before ++ after, by simpa only [List.append_assoc] using recorded, ?_⟩
   · simp [lastHelperReturn, LookupObservation.returned]
   · simpa only [splitHistory, ← recorded, worlds] using all.1
   · simpa only [splitHistory, ← recorded, worlds] using all.2
+  · intro q member cut
+    rcases List.mem_append.mp member with old | incremented
+    · intro a outside
+      exact oldFrames q old cut a (fun written => outside (.inr written))
+    · exact (storeInt_frame s.dmem _ 4 _).trans
+        (by simpa only [PeerGet.incrementEntryMemory] using newFrames q incremented cut)
 
 #print axioms live_helper_execution
 end Binary.LookupRelation

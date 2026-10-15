@@ -28,7 +28,8 @@ theorem live_suffix_history (fetch : Int64 → Option Decoded)
     (observed : observeHistory (LookupObservation.edge rxSection) history = .ok events)
     (last : history.getLast? = some ⟨body, Image.PeerGet.entry+0x3b⟩) :
     Eventually (historyStep fetch) (fun final =>
-      Returned initial final.machine returnAddress ∧ final.machine.data.regs.rax = body.regs.rbx ∧
+      Returned initial final.machine returnAddress ∧
+      ScratchMapped initial.data final.machine.data.dmem ∧ final.machine.data.regs.rax = body.regs.rbx ∧
       LookupCoverage.Context.At coverage preempt final.machine.data.dmem ∧
       final.machine.data.dmem.loadInt body.regs.r13.toBitVec 4 = some ((body.regs.get (.low .rbp .W32)+1).toNat : Int) ∧
       EqualOutside (liveWrites body coverage) body.dmem final.machine.data.dmem ∧
@@ -94,7 +95,7 @@ theorem live_suffix_history (fetch : Int64 → Option Decoded)
   have cursor : (⟨⟨atIncrement.machine.data, Image.PeerGet.entry+0x44⟩, atIncrement.history⟩ : Executed) = atIncrement := by rw [← pc]
   rw [cursor] at finish
   apply eventually_weaken (historyStep fetch) _ _ _ _ finish
-  rintro final ⟨returned, result, state, finalCount, finalFrame, last, incrementPhase, retry, negative, wrap, dead,
+  rintro final ⟨returned, scratch, result, state, finalCount, finalFrame, last, incrementPhase, retry, negative, wrap, dead,
     retryFrame, negativeFrame, wrapFrame, deadFrame, seen, tail, recorded, cuts⟩
   have increments : EqualOutside (scanWrites body coverage) (incremented body).dmem
       (incremented atIncrement.machine.data).dmem := by
@@ -112,7 +113,7 @@ theorem live_suffix_history (fetch : Int64 → Option Decoded)
     obtain ⟨incAf, returnedPhase⟩ := incrementPhase
     exact ⟨atIncrement.machine.data, atIncrement.history, incAf, trace.stable,
       (by rw [← pc]; exact trace.last), congrArg UInt64.toBitVec address, old, returnedPhase⟩
-  refine ⟨returned, result.trans bx, state, ?_, ?_, last, phase, zeroPoint, retry, negative, wrap, dead,
+  refine ⟨returned, scratch, result.trans bx, state, ?_, ?_, last, phase, zeroPoint, retry, negative, wrap, dead,
     (fun _ _ => rfl), transfer retryFrame, transfer negativeFrame, transfer wrapFrame, transfer deadFrame,
     ?_, earlier, tail, ?_, ?_, ?_, ?_⟩
   · simpa only [address, old] using finalCount

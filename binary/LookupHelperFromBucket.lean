@@ -45,7 +45,7 @@ theorem helper_call_from_bucket (fetch : Int64 → Option Decoded)
     (owner : IndexOwner) (focused : c.focus.owner = some owner) :
     Eventually (historyStep fetch) (BeforeHelper c coverage preempt s world v bucket owner) bucket := by
   have stateFacts := selected_after_bucket c coverage preempt returnAddress s world v entry bucket afterBucket owner focused
-  obtain ⟨head, atHead, _, stop, frame, delta, observed, raw, matched, aligned, related, stable, tags⟩ := afterBucket
+  obtain ⟨head, atHead, _, stop, frame, delta, observed, raw, matched, aligned, related, stable, tags, _⟩ := afterBucket
   obtain ⟨pc, ownerReg, stack, ready, comparison, ownerField, delta', observed', inactive, noReturn, incoming⟩ := stateFacts
   have sameDelta : delta' = delta := List.append_cancel_left (Except.ok.inj (observed'.symm.trans observed))
   subst delta'

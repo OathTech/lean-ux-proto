@@ -58,7 +58,10 @@ theorem dead_helper_execution (c : Config) (world : World) (device : Device)
         ExecutedCorrespondence.CutsAligned (R c) c.rxSection final.history
           (sourceHistory ++ MirrorHistory.peerPoints world peer ++
             [⟨.returned "wg_peer_get_maybe_zero", PeerMirror.peerFinal pid world peer⟩]) ∧
-        R c final.history points final.machine (PeerMirror.peerFinal pid world peer))
+        R c final.history points final.machine (PeerMirror.peerFinal pid world peer) ∧
+        ∃ tail, final.history = history ++ tail ∧
+          ∀ q ∈ tail, q.pc ∈ Image.cutPoints →
+            EqualOutside (PeerGet.entryWrites s coverage) s.dmem q.data.dmem)
       ⟨⟨s, Image.PeerGet.entry⟩, history⟩ := by
   have run := PeerGet.dead_entry_history fetch agree contract traceCmp s returnAddress entry nonnull
     field coverage preempt state phase mapped pushSeparate coverageSeparate metadataSeparate
@@ -108,7 +111,7 @@ theorem dead_helper_execution (c : Config) (world : World) (device : Device)
     dsimp only [delta]
     rw [← related.2.2.2]
     exact peer_decision_worlds _ _ _ _ _ _ _ _
-  refine ⟨returned, result, ready, frame, _, full, ?_, ?_, ?_, endpoint⟩
+  refine ⟨returned, result, ready, frame, _, full, ?_, ?_, ?_, endpoint, tail, recorded, frames⟩
   · simp [lastHelperReturn, LookupObservation.returned]
   · simpa only [splitHistory, ← recorded, worlds] using all.1
   · simpa only [splitHistory, ← recorded, worlds] using all.2

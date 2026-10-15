@@ -1,6 +1,7 @@
 import PeerSavedHistory
 import PeerPhaseExceptions
 import ScanFrame
+import PeerScratch
 
 namespace Binary.PeerGet
 open TrustBase LookupHistory
@@ -25,6 +26,7 @@ theorem finish_9d_history (fetch : Int64 → Option Decoded)
     (last : history.getLast? = some ⟨body, Image.PeerGet.entry+0x9d⟩) :
     Eventually (historyStep fetch) (fun final =>
       Returned initial final.machine returnAddress ∧
+      ScratchMapped initial.data final.machine.data.dmem ∧
       final.machine.data.regs.rax = body.regs.rbx ∧
       LookupCoverage.Context.At coverage preempt final.machine.data.dmem ∧
       EqualOutside (scanWrites body coverage) body.dmem final.machine.data.dmem ∧
@@ -85,7 +87,18 @@ theorem finish_9d_history (fetch : Int64 → Option Decoded)
       initial.data.regs.rbx initial.data.regs.rbp initial.data.regs.r12 initial.data.regs.r13
       initial.data.regs.r14 initial.data.regs.r15 returnAddress
       (by rw [← pc]; exact trace.last)
-  refine ⟨returned, result.trans bx, memory ▸ trace.frame.ready.state,
+  have scratch : ScratchMapped initial.data final.machine.data.dmem := by
+    rw [memory]
+    apply scratch_bytes_mapped
+    apply scratch_slots_mapped initial.data _ _ (frame.trans trace.frame.memory) savedSeparate
+    have bottom := trace.frame.ready.mapped
+    have stack := trace.frame.stack.trans sp
+    have address : afterCall.machine.data.regs.rsp.toBitVec-8 = initial.data.regs.rsp.toBitVec-56 := by
+      simp only [stack, UInt64.toBitVec_sub]
+      rw [BitVec.sub_sub]
+      rfl
+    simpa only [address] using bottom
+  refine ⟨returned, scratch, result.trans bx, memory ▸ trace.frame.ready.state,
     memory ▸ trace.frame.memory, ?_, ?_, returning, earlier ++ epilogue, ?_, ?_⟩
   · rw [recorded, ← restored, List.append_assoc]
     exact seen

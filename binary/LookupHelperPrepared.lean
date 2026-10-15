@@ -1,6 +1,7 @@
 import LookupHelperSeparation
 import LookupHelperSource
 import PeerAcceptedExecution
+import LookupOutputMapping
 
 namespace Binary.LookupRelation
 open Leanux Leanux.WG TrustBase LookupHistory LookupObservation PeerCountPhase
@@ -32,6 +33,36 @@ private theorem initial_raw (c : Config) (s : MachineData) (history : List Machi
       exact List.cons.inj h |>.2
     exact congrArg Except.ok same
 
+/-- Actual helper-return postcondition, retaining source and physical frames
+    needed by the owner/output/outer-return continuation. -/
+def AfterHelper (c : Config) (coverage : KcovLayout) (preempt : BitVec 32)
+    (s : MachineData) (world : World) (v : View) (current : Executed)
+    (answer : Option PeerId) (worldFinal : World) (final : Executed) : Prop :=
+      Returned current.machine final.machine (Image.Lookup.entry+0xba).toUInt64 ∧
+      (answer.isSome = true → PeerGet.ScratchMapped current.machine.data final.machine.data.dmem) ∧
+      (answer.isSome = true → (final.machine.data.dmem.loadInt s.regs.rcx.toBitVec 8).isSome = true) ∧
+      (answer.isSome = true → LookupOutputNeeded v) ∧
+      (∃ afterView, project c worldFinal = some afterView ∧ afterView.bucket = v.bucket ∧ afterView.ownerWord = v.ownerWord) ∧
+      final.machine.data.regs.rax.toBitVec = OwnerWord.pointer c.peers answer ∧
+      decide (final.machine.data.regs.rax ≠ 0) = answer.isSome ∧
+      LookupCoverage.Context.At ⟨coverage, preempt, v⟩ (512+preempt) final.machine.data.dmem ∧
+      EqualOutside (fun a => LookupDataWrites c v a ∨ PeerGet.entryWrites current.machine.data ⟨coverage, preempt, v⟩ a)
+        current.machine.data.dmem final.machine.data.dmem ∧
+      ∃ sourcePoints points,
+        (∀ prior, ((MirrorHistory.peerGet c.focus.peer).run prior).run (helperWorld c world v) = .ok ((answer, prior ++ sourcePoints), worldFinal)) ∧
+        observe c.rxSection final.history = .ok points ∧
+        lastHelperReturn points = some final.machine ∧
+        MatchesPoints (ExecutedCorrespondence.AtPoint (R c) c.rxSection final.history) points
+          (helperSource c world v ++ sourcePoints ++ [⟨.returned "wg_peer_get_maybe_zero", worldFinal⟩]) ∧
+        ExecutedCorrespondence.CutsAligned (R c) c.rxSection final.history
+          (helperSource c world v ++ sourcePoints ++ [⟨.returned "wg_peer_get_maybe_zero", worldFinal⟩]) ∧
+        R c final.history points final.machine worldFinal ∧
+        ∃ tail, final.history = current.history ++ tail ∧
+          ∀ q ∈ tail, q.pc ∈ Image.cutPoints →
+            EqualOutside (fun a => LookupDataWrites c v a ∨
+              PeerGet.entryWrites current.machine.data ⟨coverage, preempt, v⟩ a)
+              current.machine.data.dmem q.data.dmem
+
 /-- Every helper ABI, mapping and separation premise is now derived from
     the witnessed lookup entry and its actual executed CALL. -/
 theorem helper_from_call (fetch : Int64 → Option Decoded)
@@ -45,21 +76,9 @@ theorem helper_from_call (fetch : Int64 → Option Decoded)
     (before : BeforeHelper c coverage preempt s world v bucket owner current)
     (answer : Option PeerId) (worldFinal : World)
     (accepted : (peerGetMaybeZero c.focus.peer).run (helperWorld c world v) = .ok (answer, worldFinal)) :
-    Eventually (historyStep fetch) (fun final =>
-      Returned current.machine final.machine (Image.Lookup.entry+0xba).toUInt64 ∧
-      final.machine.data.regs.rax.toBitVec = OwnerWord.pointer c.peers answer ∧
-      LookupCoverage.Context.At ⟨coverage, preempt, v⟩ (512+preempt) final.machine.data.dmem ∧
-      EqualOutside (fun a => LookupDataWrites c v a ∨ PeerGet.entryWrites current.machine.data ⟨coverage, preempt, v⟩ a)
-        current.machine.data.dmem final.machine.data.dmem ∧
-      ∃ sourcePoints points,
-        (∀ prior, ((MirrorHistory.peerGet c.focus.peer).run prior).run (helperWorld c world v) = .ok ((answer, prior ++ sourcePoints), worldFinal)) ∧
-        observe c.rxSection final.history = .ok points ∧
-        lastHelperReturn points = some final.machine ∧
-        MatchesPoints (ExecutedCorrespondence.AtPoint (R c) c.rxSection final.history) points
-          (helperSource c world v ++ sourcePoints ++ [⟨.returned "wg_peer_get_maybe_zero", worldFinal⟩]) ∧
-        ExecutedCorrespondence.CutsAligned (R c) c.rxSection final.history
-          (helperSource c world v ++ sourcePoints ++ [⟨.returned "wg_peer_get_maybe_zero", worldFinal⟩]) ∧
-        R c final.history points final.machine worldFinal) current := by
+    Eventually (historyStep fetch)
+      (AfterHelper c coverage preempt s world v current answer worldFinal) current := by
+  have savedBefore := before
   obtain ⟨callback, delta, cbPC, cbStack, cbOwner, traced, machine, recorded, abi, state, comparison,
     stable, observed, matched, aligned, related⟩ := before
   have pc : current.machine.pc = Image.PeerGet.entry := by rw [machine]; rfl
@@ -120,13 +139,18 @@ theorem helper_from_call (fetch : Int64 → Option Decoded)
       active noReturn (by rfl) initial seed incoming scratch
     rw [cursor] at run
     apply eventually_weaken (historyStep fetch) _ _ _ _ run
-    rintro final ⟨ret, result, ready, frame, points, full, returned, matching, cuts, endpoint⟩
-    refine ⟨by simpa only [← pc] using ret, ?_, ready, ?_, _, points, ?_, full, returned, matching, cuts, endpoint⟩
+    rintro final ⟨ret, result, ready, frame, points, full, returned, matching, cuts, endpoint,
+      tail, recorded, frames⟩
+    refine ⟨by simpa only [← pc] using ret, (by simp), (by simp), (by simp), ⟨v, projected, rfl, rfl⟩, ?_, (by rw [result]; rfl), ready, ?_, _, points, ?_, full, returned, matching, cuts, endpoint,
+      tail, recorded, ?_⟩
     · rw [result]; rfl
     · intro a outside
       exact frame a (fun h => outside (.inr h))
     · intro prior
+      rw [focusPeer]
       exact MirrorHistory.peer_null_run_logged prior _
+    · intro q member cut a outside
+      exact frames q member cut a (fun written => outside (.inr written))
   | some pid =>
     obtain ⟨device, peer, hasDevice, hasPeer, nonnull, field⟩ := related.peer_entry_data c (helperWorld c world v)
       current.machine current.history seen initial pid focusPeer
@@ -168,9 +192,35 @@ theorem helper_from_call (fetch : Int64 → Option Decoded)
         · exact scratch v projected a (.inr (.inr (.inl read))) stack)
     rw [cursor] at run
     apply eventually_weaken (historyStep fetch) _ _ _ _ run
-    rintro final ⟨ret, result, ready, frame, points, full, returned, matching, cuts, endpoint⟩
-    refine ⟨by simpa only [← pc] using ret, ?_, ready, ?_, MirrorHistory.peerPoints (helperWorld c world v) peer,
-      points, ?_, full, returned, matching, cuts, endpoint⟩
+    rintro final ⟨ret, scratch, result, ready, frame, points, full, returned, matching, cuts, endpoint,
+      tail, recorded, frames⟩
+    have outputNeeded : answer.isSome = true → LookupOutputNeeded v := by
+      intro live
+      refine ⟨peer.refcount, viewCount, ?_, bound⟩
+      intro zero
+      simp [sourceResult.1, zero] at live
+    have mappedOutput : answer.isSome = true → (final.machine.data.dmem.loadInt s.regs.rcx.toBitVec 8).isSome = true := by
+      intro live
+      have needed := outputNeeded live
+      apply output_mapped_after_helper c coverage preempt returnAddress s world v entry current.machine.data
+        final.machine.data needed
+        (output_mapped_at_helper c coverage preempt returnAddress s world v entry bucket current afterBucket owner savedBefore needed)
+        (scratch live)
+      intro a outside
+      apply frame a
+      rintro (⟨nonzero, countByte⟩ | stack)
+      · exact outside (.inl (.inr ⟨⟨peer.refcount, viewCount, nonzero⟩, pid, focusPeer,
+          by simpa only [peerPointer, show BitVec.ofNat 64 Layouts.peer_refcount = 0x420 from rfl] using countByte⟩))
+      · exact outside (.inr stack)
+    have projectedFinal := project_peerFinal c (helperWorld c world v) device pid peer v hasDevice hasPeer focusPeer projected
+    rw [← sourceResult.2] at projectedFinal
+    have sourceFrame : ∃ afterView, project c worldFinal = some afterView ∧ afterView.bucket = v.bucket ∧ afterView.ownerWord = v.ownerWord := by
+      refine ⟨_, projectedFinal, ?_, ?_⟩ <;> split <;> rfl
+    have alive : decide (final.machine.data.regs.rax ≠ 0) = answer.isSome := by
+      rw [result]
+      cases answer <;> simp [notNull]
+    refine ⟨by simpa only [← pc] using ret, scratch, mappedOutput, outputNeeded, sourceFrame, ?_, alive, ready, ?_, MirrorHistory.peerPoints (helperWorld c world v) peer,
+      points, ?_, full, returned, matching, cuts, endpoint, tail, recorded, ?_⟩
     · rw [sourceResult.1] at result ⊢
       by_cases zero : peer.refcount = 0
       · simp only [zero, ite_true, Option.isSome_none, Bool.false_eq_true, ite_false] at result
@@ -185,8 +235,14 @@ theorem helper_from_call (fetch : Int64 → Option Decoded)
           by simpa only [peerPointer, show BitVec.ofNat 64 Layouts.peer_refcount = 0x420 from rfl] using countByte⟩))
       · exact outside (.inr stack)
     · intro prior
-      rw [sourceResult.1, sourceResult.2]
+      rw [focusPeer, sourceResult.1, sourceResult.2]
       exact MirrorHistory.peer_run_logged pid prior (helperWorld c world v) device peer hasDevice hasPeer bound
+    · intro q member cut a outside
+      apply frames q member cut a
+      rintro (⟨nonzero, countByte⟩ | stack)
+      · exact outside (.inl (.inr ⟨⟨peer.refcount, viewCount, nonzero⟩, pid, focusPeer,
+          by simpa only [peerPointer, show BitVec.ofNat 64 Layouts.peer_refcount = 0x420 from rfl] using countByte⟩))
+      · exact outside (.inr stack)
 
 #print axioms helper_from_call
 end Binary.LookupRelation

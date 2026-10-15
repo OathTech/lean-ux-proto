@@ -50,7 +50,10 @@ theorem null_helper_execution (c : Config) (world : World)
         ExecutedCorrespondence.CutsAligned (R c) c.rxSection final.history
           (sourceHistory ++ [⟨.decision .peerGetMaybeZeroNull, LookupMirror.record world .peerGetMaybeZeroNull true⟩] ++
             [⟨.returned "wg_peer_get_maybe_zero", LookupMirror.record world .peerGetMaybeZeroNull true⟩]) ∧
-        R c final.history points final.machine (LookupMirror.record world .peerGetMaybeZeroNull true))
+        R c final.history points final.machine (LookupMirror.record world .peerGetMaybeZeroNull true) ∧
+        ∃ tail, final.history = history ++ tail ∧
+          ∀ q ∈ tail, q.pc ∈ Image.cutPoints →
+            EqualOutside (PeerGet.entryWrites s coverage) s.dmem q.data.dmem)
       ⟨⟨s, Image.PeerGet.entry⟩, history⟩ := by
   have run := PeerGet.null_entry_history fetch agree contract s returnAddress entry null
     coverage preempt state phase mapped pushSeparate coverageSeparate metadataSeparate
@@ -110,7 +113,7 @@ theorem null_helper_execution (c : Config) (world : World)
     dsimp only [delta]
     rw [← related.2.2.2]
     rfl
-  refine ⟨returned, result, ready, frame, _, full, ?_, ?_, ?_, endpoint⟩
+  refine ⟨returned, result, ready, frame, _, full, ?_, ?_, ?_, endpoint, tail, recorded, frames⟩
   · simp [lastHelperReturn, LookupObservation.returned]
   · simpa only [splitHistory, ← recorded, worlds] using all.1
   · simpa only [splitHistory, ← recorded, worlds] using all.2

@@ -30,6 +30,22 @@ theorem selected_stop (c : Config) (v : View) (s : MachineState) (owner : IndexO
       rw [empty] at found
       cases found
 
+/-- The no-owner branch retains both actual machine exits: exhaustion's
+    callback at +6c and first-match wrong-kind at +71. -/
+theorem selected_stop_none (c : Config) (v : View) (s : MachineState)
+    (focused : selected c v.bucket = none) (stop : BucketStop c.query c.kinds (cells c v) s) :
+    s.pc = Image.Lookup.entry+0x6c ∨ s.pc = Image.Lookup.entry+0x71 := by
+  cases found : v.bucket.find? (fun e => e.index == c.query) with
+  | none =>
+    simp only [BucketStop, cells, first_cells, found, Option.map_none] at stop
+    exact .inl stop.1
+  | some entry =>
+    cases allowed : c.kinds.contains entry.kind with
+    | false =>
+      simp only [BucketStop, cells, first_cells, found, Option.map_some, allowed, Bool.false_eq_true, ite_false] at stop
+      exact .inr stop.1
+    | true => simp [selected, found, allowed] at focused
+
 theorem result_latest (c : Config) (entries : List IndexEntry)
     (source : List MirrorHistory.Point) (world : World) :
     (LookupSearch.result c.kinds c.query entries source world).1.2.getLast?.map (·.world) =
@@ -55,7 +71,7 @@ theorem selected_after_bucket (c : Config) (coverage : KcovLayout) (preempt : Bi
       helperActive ([entryPoint s] ++ delta) = false ∧
       lastHelperReturn ([entryPoint s] ++ delta) = none ∧
       StableExtension [⟨s, Image.Lookup.entry⟩] t.history := by
-  obtain ⟨head, atHead, _, stop, frame, delta, observed, raw, matched, aligned, related, stable, tags⟩ := afterBucket
+  obtain ⟨head, atHead, _, stop, frame, delta, observed, raw, matched, aligned, related, stable, tags, _⟩ := afterBucket
   have selectedEq := entry.focus.1.trans focused
   obtain ⟨pc, ownerReg, nonempty⟩ := selected_stop c v t.machine owner selectedEq stop
   have inactive : helperActive ([entryPoint s] ++ delta) = false := by
@@ -87,6 +103,7 @@ theorem selected_after_bucket (c : Config) (coverage : KcovLayout) (preempt : Bi
     ⟨rfl, nonempty⟩, loaded, delta, observed, inactive, noReturn, atHead.stable.trans stable⟩
 
 #print axioms selected_stop
+#print axioms selected_stop_none
 #print axioms result_latest
 #print axioms selected_after_bucket
 end Binary.LookupRelation
