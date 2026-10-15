@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.TimerDiscipline.SendDispatchModel
+import Leanux.Proofs.WG.TimerDiscipline.SendView
 
 namespace Leanux.Proofs.WG.TimerDiscipline
 open Leanux Leanux.WG Campaign2
@@ -17,15 +18,16 @@ def FreshRetryPeer (before queued : Peer) : Prop :=
   queued.refcount = before.refcount + 1 ∧ queued.handshakePending = true ∧
   queued.timerRetransmitHandshake = none
 
-/-- The retry worker consumes the freshly acquired reference. Queue/pending
-fields after the worker and retransmit rearming are outside this certificate. -/
+/-- The retry worker consumes the freshly acquired reference, leaves the send
+queue empty, and clears the selected pending flag. Retransmit rearming is separate. -/
 def CompletedRetryDispatch (pid : PeerId) (before : Peer)
     (afterTimer : Snapshot) (send : SendWorkerExecution) (final : Snapshot) : Prop :=
   ∃ d queued, afterTimer.wg.device = some d ∧ d.sendWorkQueue = [pid] ∧
     d.peers[pid]? = some queued ∧ FreshRetryPeer before queued ∧ send.pid = pid ∧
     CompletedSendWorker d afterTimer.ambient.unitPeers send final ∧
     workerObservation final pid =
-      some (before.internalId, before.timerHandshakeAttempts + 1, before.refcount)
+      some (before.internalId, before.timerHandshakeAttempts + 1, before.refcount) ∧
+    workObservation final pid = (some [], some false)
 
 /-- A normal pair exposes its selected resident peer and derives its entry
 attempt bound, without an assumed output-reference invariant. -/

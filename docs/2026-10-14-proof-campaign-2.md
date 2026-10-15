@@ -30,7 +30,7 @@ No independent existential projected runs are spliced together.
 | H3 Roaming | 6 contracts, including original decrypt-worker publication provenance | Public projection complete; carrying provenance through poll execution and complete caller coverage remain open. |
 | H4 Configuration | 60 contracts and the reachable internal dump-accounting finding | Public projection and frame separation complete. Queued/live-keypair removal, private-key collision, mixed attributes, global ownership and general dump composition remain open. |
 | H5 Progress | 25 contracts and the accepted batch-backlog counterexample | Public projection and frame separation complete; productive-record decrease, full loop coverage and probe/detach composition remain open. The backlog witness is historical over `de62c9d`: main's batch guard now addresses request 1. |
-| H6 Timers | 32 timer/worker contracts, including original retransmit-timer/send-worker composition | Public projection and frame separation complete; a successful pair from an empty send queue derives the retry bound and reference acquisition/release. Complete retry episodes and whole-run arming/session counts remain open. |
+| H6 Timers | 32 timer/worker contracts, including original retransmit-timer/send-worker composition | Public projection and frame separation complete; a successful pair from an empty send queue derives the retry bound, reference acquisition/release, final empty queue and cleared pending flag. Complete retry episodes and whole-run arming/session counts remain open. |
 
 Projection/frame factoring completed at `69f988a` for all six results, preserving
 all 153 existing headline names before new mathematics. The following H2 lifecycle/sender
@@ -55,7 +55,7 @@ connections to the current executable mirror, not replacement interpreters.
 | H3 | `Roaming/Model`, `View`, `Statements`, `EndpointClaims`, `EndpointSource`, `Authentication`, `PublicationModel`, `PublicationSource`, `PublicationClaims`. | `Roaming/Frames`, `PublicationFrames`; `Basic` reexports the endpoint source connection. |
 | H4 | `Config/Model`, `AllowedRemovalModel`, `QuietModel`, `ClaimView`, `Statements`, `SourceClaims`, `ObservationBridge`, and existing substantive effect/source modules. | `ConcreteFrames` isolates six whole-kernel endpoint contracts; `OperationFrames` isolates seven generic helpers; `ReadbackFrames` retains socket/fixture preservation; `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `QuietFrames`, `KeyFieldFrames` isolate within-WG preservation. |
 | H5 | `Progress/Model`, `View`, `Statements`, `SourceClaims`, `ObservationBridge`; `ControlLaws` is generic state/error control and `ControlSource` connects it exactly to the original worker; the scheduler/source modules retain actual execution factors. | `StackFrames` isolates caller-guard preservation. Probe/filter/no-work contracts also establish outputs and remain substantive source claims. |
-| H6 | `TimerDiscipline/Model`, `View`, `SendView`, `Statements`, `ObservationBridge`, `ObservationClaims`, `SourceClaims`, `SendDispatchModel`, `SendDispatchClaims`, `RetryDispatchModel`, `RetryDispatchClaims`, and `*Source` operational proofs. | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`, `RetryDispatchFrames`. |
+| H6 | `TimerDiscipline/Model`, `View`, `SendView`, `Statements`, `ObservationBridge`, `ObservationClaims`, `SourceClaims`, `SendDispatchModel`, `SendDispatchClaims`, `RetryDispatchModel`, `RetryDispatchClaims`, and `*Source` operational proofs. | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`, `RetryDispatchFrames`, `WorkStateFrames`. |
 
 A compound exact effect is not a disposable frame merely because its name
 contains “frame”: mark/generation updates, cleared-peer accumulation, reference
@@ -218,6 +218,14 @@ has no local receiving-index field in `Keypair`: local ownership lives in
 This is a source-grounded statement clarification, not a mirror finding or an
 accepted runner counterexample. Table uniqueness alone still does not establish
 resident-owner, reference-lifetime or whole-driver reachable coherence.
+
+The next lifetime boundary is stronger than `TablesSafe`: its allocation bound
+covers hashed keypair owners, not every resident keypair or live slot.
+`beginSession` allocates at `nextKeypairId` before rotation releases displaced
+slots. Excluding a raw slot that aliases that fresh ID needs store/slot
+coherence, alongside owner residency and reference obligations; table uniqueness
+alone cannot establish it. This is an outstanding invariant dependency, not an
+accepted-run counterexample or a mirror finding.
 
 The first twenty terminal statements cover removal, the keypair-removal specialization,
 handshake replacement, normally completed insertion, lookup owner/table
@@ -1055,8 +1063,8 @@ releases the acquired reference, preserving identity and the incremented count;
 the final reference count equals the entry count. `RetryDispatchFrames` isolates
 the two queue-preservation lemmas that exclude the give-up branch. This is the
 direct original-call pair, not an accepted `runTimers` trace or a scheduler
-interleaving theorem. Final queue/pending preservation and rearming are still
-needed before this step can be iterated into an episode proof.
+interleaving theorem. The following increment establishes final queue/pending
+preservation; rearming is still needed before iteration into an episode proof.
 
 H6 now has 32 headlines and the campaign 167. The scoped build passed (154 jobs),
 all 32 H6 headline axiom checks plus exact erasure and fresh stock replay passed,
@@ -1068,10 +1076,32 @@ selection/result rather than separate timer-section start/stop snapshots.
 Ordinary elaboration errors were corrected; no cap failure or infrastructure
 rerun. The full gate remains the inherited failure described above.
 
+The retry certificate now also concludes that the final send queue is empty and
+the selected peer's pending flag is false, without a new entry premise.
+`SendView` adds an internal queue/pending observation; socket sending proves
+that richer preservation once and projects it to the existing H2/H6 interfaces.
+`WorkStateFrames` carries those fields through creation, insertion, MACs, timer
+hooks and retained peer release. `SendDispatchWorkSource` proves the substantive
+net dequeue effect through the actual start/body/stop execution; it is not a
+disposable frame. The same decorated retry execution supplies all certificate
+conjuncts. No routing layer or shared campaign-1 lemma was copied.
+
+Validation: affected H6 and H2 builds passed (206 jobs), all 68 affected
+headlines plus observer erasure use only the three standard axioms, and fresh
+stock kernel replay passed separately for both Statements modules. A combined
+`leanchecker --fresh` command was rejected because it accepts one module; the
+correct separate invocations passed. This was a command correction, not an
+infrastructure rerun. All 170 campaign headlines import and pass axiom inspection
+together; the gate's forbidden-token and import/root/default-target checks pass.
+Independent review closed after moving the net dispatch-effect theorem from
+Frames to Source and updating the headline's scope wording. Ordinary source
+elaboration corrections did not weaken the contract. No cap failure or guest
+run; the full gate remains failed in the unchanged inherited shared files.
+
 Completed retry-episode counting and source-complete caller coverage for
 traversal/session derivation remain open. The dispatch claims do not establish
-final queue/pending preservation, successful transmission, reference ownership,
-or that every timer callback is followed by a rearming send. New claims stay
+successful transmission, reference ownership, or that every timer callback is
+followed by a rearming send. New claims stay
 over the projection and new frames stay separate, pending deletion or retyping
 when the split lands. No H6 mirror mismatch has been established; ranked mirror
 suggestions: none.

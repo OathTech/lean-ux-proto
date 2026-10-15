@@ -1,6 +1,7 @@
 import Leanux.Proofs.WG.TimerDiscipline.RetryDispatchModel
 import Leanux.Proofs.WG.TimerDiscipline.RetryDispatchFrames
 import Leanux.Proofs.WG.TimerDiscipline.SendDispatchClaims
+import Leanux.Proofs.WG.TimerDiscipline.SendDispatchWorkSource
 import Leanux.Proofs.WG.TimerDiscipline.FireSelectionSource
 import Leanux.Proofs.WG.Config.QuietTimers
 
@@ -219,12 +220,15 @@ theorem retry_send_completed (pid : PeerId) (before : Peer) (afterTimer final : 
     obtain ⟨actual, actualResident, _, _, _, _, view⟩ := finalView
     rw [selectedEq, resident] at actualResident
     cases actualResident
-    refine ⟨send, execution, d, queued, device, single, resident, fresh, selectedEq, completed, ?_⟩
-    rw [selectedEq] at view
-    have identity := fresh.2.2.2.1
-    have attempts := fresh.2.2.2.2.1
-    have refs := fresh.2.2.2.2.2.1
-    simpa [identity, attempts, refs] using view
+    have work := sendWorkerExecution_workView d afterTimer.unitPeers retained
+      afterTimer send final ⟨device, rfl⟩ execution
+    refine ⟨send, execution, d, queued, device, single, resident, fresh, selectedEq, completed, ?_, ?_⟩
+    · rw [selectedEq] at view
+      have identity := fresh.2.2.2.1
+      have attempts := fresh.2.2.2.2.1
+      have refs := fresh.2.2.2.2.2.1
+      simpa [identity, attempts, refs] using view
+    · simpa [selectedEq, single] using work
 
 /-- Above the retry limit, the original callback leaves the send queue empty. -/
 theorem expiredRetransmit_giveUp_empty (pid : PeerId) (d : Device) (p : Peer)

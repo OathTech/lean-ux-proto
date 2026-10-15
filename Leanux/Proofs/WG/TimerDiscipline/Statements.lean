@@ -386,11 +386,11 @@ the actual selected due peer and post-timer state. Successful worker selection
 forces fresh retry queueing: the entry peer was alive, not pending, had a positive
 reference count and was at or below the retry limit. Queueing acquires one
 reference and the callback increments attempts once. The worker releases the
-reference, preserving identity and the incremented attempt count. The observations
+reference, preserving identity and the incremented attempt count, leaves the send
+queue empty and the selected pending flag false. The observations
 record the original timer selection/result and ordered worker section observations.
 Erasure to the original pair is exact, including errors, by
-observedRetryDispatch_erase. Scheduler coverage, final queue/pending preservation,
-rearming, successful transmission and a complete retry episode remain open. -/
+observedRetryDispatch_erase. Scheduler coverage, rearming, successful transmission and a complete retry episode remain open. -/
 theorem original_retry_dispatch (d : Device) (horizon : UInt64)
     (empty : d.sendWorkQueue = []) :
     Campaign2.Ensures (observedRetryDispatch horizon)
