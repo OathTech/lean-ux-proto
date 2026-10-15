@@ -1413,7 +1413,7 @@ theorem handshake_receive_family_allocation_access_preserves (call : Lifetimes.H
     PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed := call.allocation
 
 /-- Exact source erasure for one original receive-worker iteration and the
-whole original bounded worker. Callback erasure is explicit; the 4096-step
+whole original bounded worker. Callback erasure is explicit; the capacity-plus-one (4097-poll)
 exhaustion Stop is preserved, without an assumed queue-drain premise. -/
 theorem handshake_receive_worker_access_erasure
     (hi : ErasesPrefix afterItem originalAfter) (hc : ErasesPrefix condResched originalResched) :
@@ -1856,7 +1856,7 @@ theorem environment_deferred_reached_trials (call : Lifetimes.EnvDeferredCall) (
 
 /-- Fifteen original environment controls, observation, ingress and batch calls
 retain their full typed result, successful World and exact Stop on arbitrary
-inputs. Inline peer scans, multicast loopback, partial CQEs and both flood modes
+inputs. Inline peer scans, multicast loopback, partial CQEs and the exact flood path
 keep their original access and callback order. -/
 theorem environment_remaining_family_erasure (call : Lifetimes.EnvRemainingCall) :
     ErasesPrefix call.observed call.original := call.erases
@@ -1917,29 +1917,29 @@ explicit in the preceding local contracts. They retain histories on Stop as well
 as success, and treat consistency trials separately from committed accesses. -/
 
 /-- The complete initialized observer preserves the original JSON or exact
-indexed Stop for every typed Trace, both placeholder/flood modes and arbitrary
+indexed Stop for every typed Trace, both placeholder settings and arbitrary
 incoming audit history. This is source erasure, separately from access safety. -/
-theorem runner_audit_erasure (trace : Runner.Trace) (placeholders floodExact : Bool) :
-    ErasesOuter (Lifetimes.executeTraceAudit trace placeholders floodExact)
-      (Runner.executeTrace trace placeholders floodExact) :=
-  Lifetimes.executeTraceAudit_erases trace placeholders floodExact
+theorem runner_audit_erasure (trace : Runner.Trace) (placeholders : Bool) :
+    ErasesOuter (Lifetimes.executeTraceAudit trace placeholders)
+      (Runner.executeTrace trace placeholders) :=
+  Lifetimes.executeTraceAudit_erases trace placeholders
 
 /-- Starting from the original fixture, no committed peer, keypair or packet
 read/write resolves an identity released earlier in that history. Every actual
 saved filter entry is allocation-valid. This includes failed prefill, syscalls,
 postworkers and end guards, with no parser, length, progress or success premise. -/
-theorem runner_initialized_access_safety (trace : Runner.Trace) (placeholders floodExact : Bool) :
+theorem runner_initialized_access_safety (trace : Runner.Trace) (placeholders : Bool) :
     Lifetimes.AuditSafe
-      (runPrefixOuter (Lifetimes.executeTraceAudit trace placeholders floodExact) []).2 :=
-  Lifetimes.executeTraceAudit_safe trace placeholders floodExact
+      (runPrefixOuter (Lifetimes.executeTraceAudit trace placeholders) []).2 :=
+  Lifetimes.executeTraceAudit_safe trace placeholders
 
 /-- Actual initialized execution supplies each reached consistency-filter
 entry's allocation invariant. Its copied filter has the original order and
 early Stops, and each candidate's isolated access prefix is safe. Certifying
 unevaluated candidates does not assert they ran or commit their observations. -/
-theorem runner_initialized_reached_trials (trace : Runner.Trace) (placeholders floodExact : Bool) :
+theorem runner_initialized_reached_trials (trace : Runner.Trace) (placeholders : Bool) :
     ∀ p ∈ Lifetimes.probeEntries
-      (runPrefixOuter (Lifetimes.executeTraceAudit trace placeholders floodExact) []).2,
+      (runPrefixOuter (Lifetimes.executeTraceAudit trace placeholders) []).2,
       Lifetimes.AllocationInv p.history p.world ∧
       (p.world.suspended.filterM Env.Activation.consistent).run p.world =
         (p.world.suspended.filterM (fun a => Lifetimes.activationTrialDecision a p.world p.history)).map
@@ -1947,6 +1947,6 @@ theorem runner_initialized_reached_trials (trace : Runner.Trace) (placeholders f
       ∀ a ∈ p.world.suspended,
         Lifetimes.LifetimeEvent.Safe
           (runPrefix (Lifetimes.activationRunPrefix a) p.world p.history).2 :=
-  Lifetimes.executeTraceAudit_trials trace placeholders floodExact
+  Lifetimes.executeTraceAudit_trials trace placeholders
 
 end Leanux.Proofs.WG.LifetimeSafety

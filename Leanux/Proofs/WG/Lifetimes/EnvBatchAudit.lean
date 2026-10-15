@@ -7,22 +7,6 @@ order. No successful draining or valid-input premise is used. -/
 namespace Leanux.Proofs.WG.Lifetimes
 open Leanux Leanux.WG Leanux.Env Leanux.Proofs.Logged Leanux.Proofs.Framing
 
-def afterBatchAudit : AuditM Unit := do
-  liftPrefix (modify fun w => {w with queuedThisCall := []})
-  if (← liftPrefix get).hidden.isNone then
-    runCryptWorkersAudit
-    runSendWorkersAudit
-    return
-  for _ in [0:(← liftPrefix recordBudget)] do
-    scheduleAudit
-    if (← liftPrefix peekNextSite) == some (HiddenSite.sectionStart .sendWorker).info.id && !(← liftPrefix getDev).sendWorkQueue.isEmpty then
-      runOneSendWorkerAudit
-    else break
-  let d ← liftPrefix getDev
-  auditFocus (requireDrainedPrefix "the batch queued"
-    [!d.decryptQueue.empty, !d.encryptQueue.empty, !d.txWorkQueue.isEmpty, !d.sendWorkQueue.isEmpty])
-  liftPrefix deliverSent
-
 def batchItemAudit (d : Device) (cqes : List Int) (item : BatchItem) : AuditM (ForInStep (List Int)) := do
   let mut cqes := cqes
   match item with
@@ -86,14 +70,6 @@ macro "env_batch_preservation" : tactic => `(tactic|
     | with_reducible exact auditLift_kernel _ peekNextSite_sameKernel
     | with_reducible apply PrefixPreserves.range _ _ _ (fun _ _ hi => hi.safe)
     | env_traffic_preservation)
-
-theorem afterBatchAudit_erases : ErasesPrefix afterBatchAudit Env.afterBatch := by
-  unfold afterBatchAudit Env.afterBatch
-  env_batch_erasure
-
-theorem afterBatchAudit_preserves : PrefixPreserves AuditInv AuditSafe afterBatchAudit := by
-  unfold afterBatchAudit
-  env_batch_preservation
 
 theorem batchItemAudit_erases (d : Device) (cqes : List Int) (item : BatchItem) : ErasesPrefix (batchItemAudit d cqes item) (Environment.batchItemSource d cqes item) := by
   unfold batchItemAudit Environment.batchItemSource

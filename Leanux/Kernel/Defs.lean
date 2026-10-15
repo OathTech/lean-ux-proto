@@ -693,18 +693,17 @@ a site's records (section 6.2): -/
     `AllocSite.kzallocPipeInfo`'s note), the page usercopies and
     `__sigqueue_alloc`. -/
 inductive EnvSite where
-  -- L: wg_newlink's allocations (device.c:325-367) and wg_ratelimiter_init's
-  -- (ratelimiter.c:164-185); `register_netdevice` (A's domain: assumed
-  -- success in the harness)
+  -- L: wg_newlink's allocations (device.c:325-367); `register_netdevice`
+  -- (A's domain: assumed success in the harness). wg_ratelimiter_init's
+  -- (ratelimiter.c:164-185) are constant-outcome decisions since B4
+  -- (`ratelimiterInit`): creation allocations outside the model
   | pubkeyHashtableAlloc | indexHashtableAlloc | allocWorkqueue | packetQueueInit
-  | ratelimiterCache | ratelimiterTable | registerNetdevice
+  | registerNetdevice
   -- P (pipes, design section 5). `allocInode` is the inode-allocation cut:
   -- new_inode_pseudo -> alloc_inode -> alloc_inode_sb, inode_init_always_gfp
   -- and get_next_ino, no decisions (audit M3)
   | allocInode | kcallocResizeBufs
   | copyPageToIter | copyPageFromIter | sigqueueAlloc
-  -- E-B arm C: wg_ratelimiter_allow's per-entry kmem_cache_alloc (ratelimiter.c:138)
-  | ratelimiterEntry
   -- W4: skb_gso_segment's allocations inside skb_segment (device.c:179), an
   -- assumed-success site as the sites above (A's domain)
   | skbSegment
@@ -765,6 +764,10 @@ inductive AllocSite where
   -- epoll (docs/2026-10-12-epoll-design.md, 3.1; b-task): the four consumer
   -- frames of fs/eventpoll.c
   | kzallocEp | kmemCacheZallocEpi | kmemCacheAllocPwq | kmemCacheZallocEphead
+  -- B4 (docs/2026-10-15-design-b4-load-ratelimiter.md, 4.3): the
+  -- ratelimiter entry, wg_ratelimiter_allow's kmem_cache_alloc
+  -- (ratelimiter.c:138) in the handshake receive worker; index 69, id 139
+  | kmemCacheAllocRlEntry
   deriving Repr, BEq, DecidableEq
 
 structure AllocSiteInfo where
@@ -886,6 +889,10 @@ def AllocSite.info : AllocSite → AllocSiteInfo
   | .kmemCacheZallocEpi => ⟨123, "kmemCacheZallocEpi", "fs/eventpoll.c", 1764, .exact 1⟩
   | .kmemCacheAllocPwq => ⟨124, "kmemCacheAllocPwq", "fs/eventpoll.c", 1550, .exact 1⟩
   | .kmemCacheZallocEphead => ⟨125, "kmemCacheZallocEphead", "fs/eventpoll.c", 1722, .exact 1⟩
+  -- B4: a direct site in the receive worker (kworker context, record-only:
+  -- the class is not steerable); index 69 is the first after seccomp's
+  -- 58-68 whose id, 139, is free
+  | .kmemCacheAllocRlEntry => ⟨69, "kmemCacheAllocRlEntry", "drivers/net/wireguard/ratelimiter.c", 138, .exact 1⟩
 
 def AllocSite.all : List AllocSite :=
   [.kmallocEventfdCtx, .filpAlloc, .dAllocPseudo, .kmallocFdtable, .kvmallocFdArray, .kvmallocFdBitmaps,
@@ -897,7 +904,8 @@ def AllocSite.all : List AllocSite :=
    .kzallocSfilter, .vmallocBpfProg, .kzallocBpfAux, .percpuBpfActive, .percpuBpfStats,
    .kmallocOrigFprog, .kmemdupOrigFilter, .kmallocArrayMasks, .kmemdupOldProg, .vmallocBpfProgRealloc,
    .kcallocAddrs,
-   .kzallocEp, .kmemCacheZallocEpi, .kmemCacheAllocPwq, .kmemCacheZallocEphead]
+   .kzallocEp, .kmemCacheZallocEpi, .kmemCacheAllocPwq, .kmemCacheZallocEphead,
+   .kmemCacheAllocRlEntry]
 
 /-- An allocation site's hidden-site id: A's block 70-99 by index
     (docs/2026-10-05-a-alloc.md, section 6.1) and `70 + index` above it
@@ -905,7 +913,8 @@ def AllocSite.all : List AllocSite :=
     100-117; epoll's 122-125: ids 192-195 of its block); seccomp's sites,
     indices 58-68, take 400 + (index - 58), in seccomp's block 400-419
     (docs/2026-10-11-interface.md; 200-219 would meet `Worker.sectionId`'s
-    ids from index 15) [AGENT, seccomp X merges]. -/
+    ids from index 15) [AGENT, seccomp X merges]; B4's ratelimiter entry,
+    index 69, takes id 139 under the `70 + index` rule. -/
 def AllocSite.hiddenId (s : AllocSite) : Nat :=
   let i := s.info.index
   if 58 ≤ i ∧ i ≤ 68 then 400 + (i - 58) else 70 + i
@@ -1488,11 +1497,6 @@ structure World where
       which runs before Linux). -/
   hiddenPlaceholders : Bool := false
   placeholderCount : Nat := 0
-  /-- `LEANUX_FLOOD_EXACT=1`: a flood's invalid tail runs through the real
-      worker packet by packet instead of `floodTailEffect`'s summary, to
-      check the summary against the unsummarised execution (the pre-release
-      review's section 8). -/
-  floodExact : Bool := false
   /-- W7 phase 2: the draining workers' activations suspended at a
       `cond_resched`, oldest first, each resumed when the records name it
       (`Activation`, `Env.schedule`). An operation ends with none suspended
@@ -1622,8 +1626,8 @@ structure World where
       receive.c:119). Kernel-global and never reset by teardown; per trace
       here because the checker runs each flooding trace in its own guest
       (docs/2026-10-05-e-dos.md §4.2), so a leak between traces is a
-      control-flow mismatch. A flood's invalid tail sets it to that tail's
-      last under-load read (`floodTailEffect`). -/
+      control-flow mismatch. Every flood packet the receive worker handles
+      sets or decays it as the C does (B4: the flood runs exactly). -/
   lastUnderLoad : Option Int64 := none
 
 /-- Why a mirror execution stopped without an observation. -/
@@ -2226,65 +2230,6 @@ def dropHiddenRecord : M (Option Nat) := do
     noteNetRxStart r.site
     return some r.site
   | _ => return none
-
-/-- E-B, the producer-side discard before a flood's receive-worker section
-    (docs/2026-10-05-e-dos.md §4.1): drop head records whose site is in
-    `allowed` (the fixture's sends' cut draws and NET_RX brackets) until the
-    next record is `stop`, or the stream is exhausted. A record outside
-    `allowed` is a hidden mismatch (something the mirror would have modeled
-    where it stands). Bounded by the operation's record count. -/
-def discardFloodRecords (stop : Nat) (allowed : List Nat) : M Nat := do
-  let mut dropped := 0
-  for _ in [0:4000000] do
-    match ← peekHiddenSite with
-    | some s =>
-      if s == stop then return dropped
-      if !allowed.contains s then
-        throw (.hidden s!"flood: a modeled record (site {s}) inside the discarded flood region (a mid-flood injection)")
-      _ ← dropHiddenRecord
-      dropped := dropped + 1
-    | none => return dropped
-  throw (.hidden "flood: the record stream did not drain")
-
-/-- The effect contract of a flood's invalid tail (the review's 3.4): the
-    packets the receive worker drops at the MAC1 check after the leading
-    valids, up to the section's `stop`. Each one runs
-    `wg_receive_handshake_packet` to the MAC check: with the counter at or
-    over the threshold it saves the clock (`under_load_now`, receive.c:115);
-    below it, with `last_under_load` set, it reads the clock for the decay
-    (`birthdate_has_expired`, receive.c:117) and resets `last_under_load` when
-    the decay has expired (:119); then `cond_resched` (`resched_receive`). The
-    contract folds exactly those records, in order, into the new
-    `last_under_load`, from `last` (the value the leading valids left): no
-    other state changes (a dropped packet is freed; `handshake_queue_len` is
-    decremented per packet, to 0 at the drain, which the caller sets). Any
-    other record is a hidden mismatch (a mid-flood injection, or a decay read
-    with no saved time). Returns the new value and whether an under-load read
-    occurred (the flood crossed the threshold). -/
-def floodTailEffect (stop : Nat) (cuts : List Nat) (last : Option Int64) : M (Option Int64 × Bool) := do
-  let underLoad := (HiddenSite.underLoadNow).info.id
-  let decay := (HiddenSite.birthdateExpired).info.id
-  let resched := (HiddenSite.reschedReceive).info.id
-  let mut last := last
-  let mut crossed := false
-  for _ in [0:4000000] do
-    match ← peekHiddenSite with
-    | some s =>
-      if s == stop then return (last, crossed)
-      if s == underLoad then
-        last := some (← hiddenClock64 .underLoadNow)
-        crossed := true
-      else if s == decay then
-        let some saved := last
-          | throw (.hidden "flood: a decay clock read with no saved under-load time (a mid-flood injection)")
-        let now ← hiddenClock64 .birthdateExpired
-        if saved + 1000000000 ≤ now then last := none   -- wg_birthdate_has_expired(last_under_load, 1), in s64
-      else if s == resched || cuts.contains s then
-        _ ← dropHiddenRecord
-      else
-        throw (.hidden s!"flood: a modeled record (site {s}) inside the discarded flood region (a mid-flood injection)")
-    | none => return (last, crossed)
-  throw (.hidden "flood: the record stream did not drain")
 
 def getFile (id : FileId) : M File := do
   match (← getK).files.get? id with

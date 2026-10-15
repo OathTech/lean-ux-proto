@@ -16,7 +16,7 @@ def dispatchPrefix (worker : Worker) : MixedM Bool := do
   match worker with
   | .encryptWorker => if d.encryptQueue.empty then return false
   | .decryptWorker => if d.decryptQueue.empty then return false
-  | .receiveWorker => if d.handshakeQueue.isEmpty then return false
+  | .receiveWorker => if d.handshakeQueue.empty then return false
   | .txWorker =>
     let some headPid := d.txWorkQueue.head? | return false
     let p ← match ← liftPrefix (peekUnit .txWorker) with
@@ -94,7 +94,7 @@ def schedulePrefix (stack : Option Worker := none) : MixedM Unit := do
       let d ← liftPrefix getDev
       let next := [Worker.receiveWorker, .decryptWorker, .encryptWorker, .txWorker].find? fun w =>
         match w with
-        | .receiveWorker => !d.handshakeQueue.isEmpty
+        | .receiveWorker => !d.handshakeQueue.empty
         | .decryptWorker => !d.decryptQueue.empty
         | .encryptWorker => !d.encryptQueue.empty
         | _ => !d.txWorkQueue.isEmpty
@@ -130,7 +130,7 @@ def scheduleWithPending (stack : Option Worker := none) : M Unit := do
       let d ← getDev
       let next := [Worker.receiveWorker, .decryptWorker, .encryptWorker, .txWorker].find? fun w =>
         match w with
-        | .receiveWorker => !d.handshakeQueue.isEmpty
+        | .receiveWorker => !d.handshakeQueue.empty
         | .decryptWorker => !d.decryptQueue.empty
         | .encryptWorker => !d.encryptQueue.empty
         | _ => !d.txWorkQueue.isEmpty

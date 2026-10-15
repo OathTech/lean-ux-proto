@@ -2368,16 +2368,16 @@ theorem original_dump_routing (initial : FlatTable × FlatTable) (fd seq : Nat)
 without address-shape assumptions. The full observed Json × World erases to a
 literal original-call source Runner; projecting its JSON gives executeTrace. -/
 theorem original_routing_runner_erasure (call : Syscall) (trace : Runner.Trace)
-    (placeholders floodExact : Bool) :
+    (placeholders : Bool) :
     Logged.ErasesPrefix (Configuration.dispatchObserved call) (dispatch call) ∧
     Logged.ErasesPrefix (Configuration.syscallObserved call) (syscall call) ∧
-    Logged.ErasesOuter (Configuration.executeTraceObserved trace placeholders floodExact)
-      (Configuration.sourceRunner trace placeholders floodExact) ∧
-    (Configuration.sourceRunner trace placeholders floodExact).map Prod.fst =
-      Runner.executeTrace trace placeholders floodExact :=
+    Logged.ErasesOuter (Configuration.executeTraceObserved trace placeholders)
+      (Configuration.sourceRunner trace placeholders) ∧
+    (Configuration.sourceRunner trace placeholders).map Prod.fst =
+      Runner.executeTrace trace placeholders :=
   ⟨Configuration.dispatchObserved_erases call, Configuration.syscallObserved_erases call,
-    Configuration.executeTraceObserved_erases trace placeholders floodExact,
-    Configuration.sourceRunner_json trace placeholders floodExact⟩
+    Configuration.executeTraceObserved_erases trace placeholders,
+    Configuration.sourceRunner_json trace placeholders⟩
 
 /-- Complete original dispatch and syscall suffixes preserve optional routing
 and safe completed prefixes from explicit entry agreement and address shape.
@@ -2397,19 +2397,19 @@ final World. The source connection includes that World, not merely its JSON
 projection. This supplies neither earlier executed lookup certificates nor
 packet authorization, raw-owner residency, key affiliation or trial packets. -/
 theorem parsed_initialized_routing_execution (json : Lean.Json) (trace : Runner.Trace)
-    (parsed : Runner.parseTrace json = .ok trace) (placeholders floodExact : Bool) :
-    Logged.ErasesOuter (Configuration.executeTraceObserved trace placeholders floodExact)
-      (Configuration.sourceRunner trace placeholders floodExact) ∧
-    (Configuration.sourceRunner trace placeholders floodExact).map Prod.fst =
-      Runner.executeTrace trace placeholders floodExact ∧
+    (parsed : Runner.parseTrace json = .ok trace) (placeholders : Bool) :
+    Logged.ErasesOuter (Configuration.executeTraceObserved trace placeholders)
+      (Configuration.sourceRunner trace placeholders) ∧
+    (Configuration.sourceRunner trace placeholders).map Prod.fst =
+      Runner.executeTrace trace placeholders ∧
     CompletionSafe ([], [])
-      (Logged.runPrefixOuter (Configuration.executeTraceObserved trace placeholders floodExact) []).2 ∧
-    ∀ out, (Logged.runPrefixOuter (Configuration.executeTraceObserved trace placeholders floodExact) []).1 = .ok out →
+      (Logged.runPrefixOuter (Configuration.executeTraceObserved trace placeholders) []).2 ∧
+    ∀ out, (Logged.runPrefixOuter (Configuration.executeTraceObserved trace placeholders) []).1 = .ok out →
       GlobalCompletionState ([], [])
-        (Logged.runPrefixOuter (Configuration.executeTraceObserved trace placeholders floodExact) []).2 out.2 :=
-  ⟨Configuration.executeTraceObserved_erases trace placeholders floodExact,
-    Configuration.sourceRunner_json trace placeholders floodExact,
-    Configuration.parsed_executeTraceObserved_routing json trace parsed placeholders floodExact⟩
+        (Logged.runPrefixOuter (Configuration.executeTraceObserved trace placeholders) []).2 out.2 :=
+  ⟨Configuration.executeTraceObserved_erases trace placeholders,
+    Configuration.sourceRunner_json trace placeholders,
+    Configuration.parsed_executeTraceObserved_routing json trace parsed placeholders⟩
 
 
 open Std.Do Leanux.WG

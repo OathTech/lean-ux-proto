@@ -682,3 +682,49 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   builds and suite runs run concurrently across agents; `capped`, the
   memory cap, the KILLED-is-failure rule and the one-recorded-rerun rule are
   unchanged [AGENT, coordinator: the measurement and the number].
+- **2026-10-15 [AGENT, fork of the coordinator]** B4 part 1 (the settled
+  parts of docs/2026-10-15-design-b4-load-ratelimiter.md): the ratelimiter
+  entry allocation is a kind-305 site consumed by `rlAllocFail`, with the
+  E design's "not in the hook's list" sentence corrected (the hook is
+  generic); `wg_ratelimiter_init`'s three allocation arms are constant
+  false with the reason (creation allocations outside the model, census
+  row 132 unchanged); the uninit walk empties both ratelimiter tables, as
+  the C does, with `l_delete_ratelimited6` and `l_recreate_ratelimited6`
+  as witnesses; the producer's busy arm (receive.c:554) produces under the
+  trylock, constant on this configuration (spinlock_up.h:56), with
+  `e_underload_busy` (2,100 packets). The GC stays excluded; its reason is
+  sharpened in the note's section 3 and the claim that the guest's
+  per-operation remote reset is a silent instrument gap is retracted
+  (`section_problems` fails a lost section loudly).
+- **2026-10-15 [AGENT, fork of the coordinator]** B4 part 2, the prototype
+  that precedes the user's U1 decision (docs/2026-10-15-design-b4-load-
+  ratelimiter.md 2.3, 13): the flood runs exactly over `Env.batch`'s
+  machinery; the summary, the discard, the exact flag and the checker's
+  `wg_flood` arm are deleted; the three checker rules of U1 are changed,
+  with the `repeatable` list grown by three consume-path decisions the
+  prototype run found (`consumeFlood`, `consumeFailedPut`, `hsInitNoPeer`);
+  `make_cookie.ipv4`'s witness corrected to the built kernel's layout (a
+  declaration error the skipped flood had hidden); `e_underload_merged`
+  kept with its new detail. The user accepts or drops this part as U1.
+- **2026-10-15 [USER]** The representation batch: B4's U1 accepted (the flood
+  runs exactly over `Env.batch`; the summary contract, the discard, the exact
+  flag and the checker's flood special case are deleted; the three checker
+  rules change as the B4 note names, with the `repeatable` list the run
+  found); B2 (the second device) is held until campaign 1 lands, its design
+  and review kept, for the proof carry the review costed at 10 to 15
+  agent-days. "2,3,4 agree with recommendation" [AGENT, coordinator: the
+  recommendations].
+- **2026-10-15 [USER]** The simulation relation `R` of the binary adequacy
+  charter is minimal, a frame property: exactly what the simulation needs,
+  over the WireGuard projection of the World, each clause justified by an
+  anchored function's read or write or by a field a landed result observes;
+  everything a function does not touch is a frame theorem, never a relation
+  clause ("surely it's actively bad for the invariant to carry a load of
+  gunk that relates states that don't matter. Morally, we want to strip the
+  relation to exactly what the simulation needs (that's a kind of frame
+  property)"; "the right way to prove the theorem is minimally").
+  Definitions built for state outside `R` are parked under `binary/attic/`,
+  off the proof path, for a possible later milestone. The charter's first
+  wording ("relates the whole mirror world") was the coordinator's error,
+  read literally by the grind [AGENT, coordinator]; the amendment is in the
+  charter's section 1.

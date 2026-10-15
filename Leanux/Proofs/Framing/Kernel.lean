@@ -244,13 +244,6 @@ theorem dropHiddenRecord_spec (P : WGKernelView → Prop)  :
     ⦃fun w => ⌜P (wgKernelView w)⌝⦄ Leanux.dropHiddenRecord
     ⦃⇓? _ w => ⌜P (wgKernelView w)⌝⦄ := (dropHiddenRecord_sameWGKernel).wp P
 
-theorem discardFloodRecords_sameWGKernel (stop : Nat) (allowed : List Nat) : SameWGKernel (Leanux.discardFloodRecords stop allowed) := by
-  frame_wg [discardFloodRecords] using [dropHiddenRecord_spec, peekHiddenSite_spec]
-
-theorem discardFloodRecords_spec (P : WGKernelView → Prop) (stop : Nat) (allowed : List Nat) :
-    ⦃fun w => ⌜P (wgKernelView w)⌝⦄ Leanux.discardFloodRecords stop allowed
-    ⦃⇓? _ w => ⌜P (wgKernelView w)⌝⦄ := (discardFloodRecords_sameWGKernel stop allowed).wp P
-
 theorem getFile_sameWGKernel (id : FileId) : SameWGKernel (Leanux.getFile id) :=
   FSFileRefs.getFile_sameWGKernel id
 

@@ -143,7 +143,7 @@ def sourceRunnerTail (trace : Trace)
     ++ (if fired.isEmpty then [] else [("fired", .arr fired)])
     ++ (if world.napiAmbiguous > 0 then [("napi_irq_ambiguous", toJson world.napiAmbiguous)] else [])), world)
 
-def executeTraceObserved (trace : Trace) (placeholders : Bool := false) (floodExact : Bool := false) : PrefixOuter RoutingCompletion (Json × World) := do
+def executeTraceObserved (trace : Trace) (placeholders : Bool := false) : PrefixOuter RoutingCompletion (Json × World) := do
   let mut world : World := { k := initialKernel trace.rlimit trace.net trace.bare trace.foreign trace.stepped trace.seccompChild, env := harnessEnv,
                              timing := Env.timing, portBound := Env.portBound,
                              fixtureNetDevices := Env.fixtureNetDevices,
@@ -151,7 +151,6 @@ def executeTraceObserved (trace : Trace) (placeholders : Bool := false) (floodEx
                              netnsCHolders := if trace.foreign then [9, 8, 5, 4] else [],
                              allocArmed := trace.allocArmed, routes := trace.routes,
                              hiddenPlaceholders := placeholders && trace.hidden.isNone,
-                             floodExact,
                              steerValues := if placeholders then trace.steer else [],
                              armRecords := trace.armRecords, dstCacheRecords := trace.dstCacheRecords,
                              napiBeforePut := trace.napiBeforePut,
@@ -164,7 +163,7 @@ def executeTraceObserved (trace : Trace) (placeholders : Bool := false) (floodEx
     | .error e => throw (0, .invariant e)
   runnerTailObserved trace world
 
-def sourceRunner (trace : Trace) (placeholders : Bool := false) (floodExact : Bool := false) : Except (Nat × Stop) (Json × World) := do
+def sourceRunner (trace : Trace) (placeholders : Bool := false) : Except (Nat × Stop) (Json × World) := do
   let mut world : World := { k := initialKernel trace.rlimit trace.net trace.bare trace.foreign trace.stepped trace.seccompChild, env := harnessEnv,
                              timing := Env.timing, portBound := Env.portBound,
                              fixtureNetDevices := Env.fixtureNetDevices,
@@ -172,7 +171,6 @@ def sourceRunner (trace : Trace) (placeholders : Bool := false) (floodExact : Bo
                              netnsCHolders := if trace.foreign then [9, 8, 5, 4] else [],
                              allocArmed := trace.allocArmed, routes := trace.routes,
                              hiddenPlaceholders := placeholders && trace.hidden.isNone,
-                             floodExact,
                              steerValues := if placeholders then trace.steer else [],
                              armRecords := trace.armRecords, dstCacheRecords := trace.dstCacheRecords,
                              napiBeforePut := trace.napiBeforePut,
@@ -207,9 +205,9 @@ theorem runnerTailObserved_erases (trace : Trace) (w : World) :
   unfold runnerTailObserved sourceRunnerTail
   runner_erasure
 
-theorem executeTraceObserved_erases (trace : Trace) (placeholders floodExact : Bool) :
-    ErasesOuter (executeTraceObserved trace placeholders floodExact)
-      (sourceRunner trace placeholders floodExact) := by
+theorem executeTraceObserved_erases (trace : Trace) (placeholders : Bool) :
+    ErasesOuter (executeTraceObserved trace placeholders)
+      (sourceRunner trace placeholders) := by
   unfold executeTraceObserved sourceRunner
   repeat' first
     | with_reducible exact runnerTailObserved_erases _ _
@@ -229,9 +227,9 @@ private theorem except_project_bind {ε α β γ : Type} (a : Except ε α)
 
 /-- The extra World is the source accumulator, with no alteration of the
 original JSON result or indexed Stop. -/
-theorem sourceRunner_json (trace : Trace) (placeholders floodExact : Bool) :
-    (sourceRunner trace placeholders floodExact).map Prod.fst =
-      Runner.executeTrace trace placeholders floodExact := by
+theorem sourceRunner_json (trace : Trace) (placeholders : Bool) :
+    (sourceRunner trace placeholders).map Prod.fst =
+      Runner.executeTrace trace placeholders := by
   unfold sourceRunner sourceRunnerTail Runner.executeTrace
   by_cases hp : trace.seccompPrefill > 0
   all_goals simp only [hp, ↓reduceIte]

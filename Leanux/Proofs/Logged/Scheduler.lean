@@ -118,7 +118,7 @@ def dispatchActivationLogged (w : Worker) : GhostM Bool := do
   match w with
   | .encryptWorker => if d.encryptQueue.empty then return false
   | .decryptWorker => if d.decryptQueue.empty then return false
-  | .receiveWorker => if d.handshakeQueue.isEmpty then return false
+  | .receiveWorker => if d.handshakeQueue.empty then return false
   | .txWorker =>
     let some headPid := d.txWorkQueue.head? | return false
     let p ← match ← peekUnit .txWorker with
@@ -144,7 +144,7 @@ def scheduleLogged (stack : Option Worker := none) : GhostM Unit := do
       let d ← getDev
       let next := [Worker.receiveWorker, .decryptWorker, .encryptWorker, .txWorker].find? fun w =>
         match w with
-        | .receiveWorker => !d.handshakeQueue.isEmpty
+        | .receiveWorker => !d.handshakeQueue.empty
         | .decryptWorker => !d.decryptQueue.empty
         | .encryptWorker => !d.encryptQueue.empty
         | _ => !d.txWorkQueue.isEmpty

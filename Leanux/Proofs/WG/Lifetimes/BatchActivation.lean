@@ -13,7 +13,7 @@ def activationHasWorkPrefix (a : Activation) : MixedM Bool := do
   match a.worker with
   | .encryptWorker => return !d.encryptQueue.empty
   | .decryptWorker => return !d.decryptQueue.empty
-  | .receiveWorker => return !d.handshakeQueue.isEmpty
+  | .receiveWorker => return !d.handshakeQueue.empty
   | .txWorker =>
     let some pid := a.pid | liftPrefix (invariant "a tx activation without its peer")
     let some item := (← getPeerMixed pid).txQueue.all.head? | return false
@@ -26,7 +26,7 @@ def activationOccupancyPrefix (a : Activation) : MixedM Nat := do
   match a.worker with
   | .encryptWorker => return d.encryptQueue.count
   | .decryptWorker => return d.decryptQueue.count
-  | .receiveWorker => return d.handshakeQueue.length
+  | .receiveWorker => return d.handshakeQueue.count
   | .txWorker =>
     let some pid := a.pid | liftPrefix (invariant "a tx activation without its peer")
     return (← getPeerMixed pid).txQueue.all.length

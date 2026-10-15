@@ -10,7 +10,7 @@ open Lean Leanux Leanux.Runner Leanux.Proofs.Logged
 set_option maxHeartbeats 2000000
 set_option pp.structureInstances false
 
-def executeTraceAudit (trace : Trace) (placeholders : Bool := false) (floodExact : Bool := false) : PrefixOuter AuditEvent Json := do
+def executeTraceAudit (trace : Trace) (placeholders : Bool := false) : PrefixOuter AuditEvent Json := do
   let mut world : World := { k := initialKernel trace.rlimit trace.net trace.bare trace.foreign trace.stepped trace.seccompChild, env := harnessEnv,
                              timing := Env.timing, portBound := Env.portBound,
                              fixtureNetDevices := Env.fixtureNetDevices,
@@ -18,7 +18,6 @@ def executeTraceAudit (trace : Trace) (placeholders : Bool := false) (floodExact
                              netnsCHolders := if trace.foreign then [9, 8, 5, 4] else [],
                              allocArmed := trace.allocArmed, routes := trace.routes,
                              hiddenPlaceholders := placeholders && trace.hidden.isNone,
-                             floodExact,
                              steerValues := if placeholders then trace.steer else [],
                              armRecords := trace.armRecords, dstCacheRecords := trace.dstCacheRecords,
                              napiBeforePut := trace.napiBeforePut,
@@ -93,11 +92,11 @@ def executeTraceAudit (trace : Trace) (placeholders : Bool := false) (floodExact
     ++ (if fired.isEmpty then [] else [("fired", .arr fired)])
     ++ (if world.napiAmbiguous > 0 then [("napi_irq_ambiguous", toJson world.napiAmbiguous)] else []))
 
-/-- Exact original JSON or indexed Stop on every typed trace and both flags,
+/-- Exact original JSON or indexed Stop on every typed trace and both placeholder settings,
 with no input-validity premise and arbitrary incoming observer history. -/
-theorem executeTraceAudit_erases (trace : Trace) (placeholders floodExact : Bool) :
-    ErasesOuter (executeTraceAudit trace placeholders floodExact)
-      (Runner.executeTrace trace placeholders floodExact) := by
+theorem executeTraceAudit_erases (trace : Trace) (placeholders : Bool) :
+    ErasesOuter (executeTraceAudit trace placeholders)
+      (Runner.executeTrace trace placeholders) := by
   unfold executeTraceAudit Runner.executeTrace
   repeat' first
     | contradiction

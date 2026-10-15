@@ -38,8 +38,6 @@ macro "operation_leaf_step" : tactic => `(tactic|
     | (ordinary_head WG.delTimer; exact (delTimer_sameSnapshot _ _).ordinary)
     | (ordinary_head Env.fixtureSend; exact fixtureSend_sameSnapshot.ordinary)
     | (ordinary_head Env.senderSource; exact (senderSource_sameSnapshot _ _ _ _).ordinary)
-    | (ordinary_head Leanux.discardFloodRecords; exact (discardFloodRecords_sameSnapshot _ _).ordinary)
-    | (ordinary_head Leanux.floodTailEffect; exact (floodTailEffect_sameSnapshot _ _ _).ordinary)
     | (ordinary_head WG.wgReceive; exact wgReceive_ordinary _ _)
     | scheduler_worker_step)
 
@@ -118,14 +116,20 @@ theorem injectLogged_evolves (family port : Nat) (msg : List UInt8)
   unfold injectLogged
   repeat' operation_step
 
-theorem floodLogged_evolves (count port family : Nat) (messages : List (List UInt8)) :
-    Evolves (floodLogged count port family messages) := by
-  unfold floodLogged
-  repeat' operation_step
-  all_goals exact evolves_throw _
-
 theorem pollScheduledInlineLogged_evolves : Evolves pollScheduledInlineLogged := by
   unfold pollScheduledInlineLogged
   repeat' operation_step
+
+theorem afterBatchLogged_evolves : Evolves afterBatchLogged := by
+  unfold afterBatchLogged
+  repeat' operation_step
+
+theorem floodLogged_evolves (count port family : Nat) (messages : List (List UInt8)) :
+    Evolves (floodLogged count port family messages) := by
+  unfold floodLogged
+  repeat' first
+    | (evolves_head afterBatchLogged; exact afterBatchLogged_evolves)
+    | (evolves_head pollScheduledInlineLogged; exact pollScheduledInlineLogged_evolves)
+    | operation_step
 
 end Leanux.Proofs.WG.Keypairs.OperationObservers

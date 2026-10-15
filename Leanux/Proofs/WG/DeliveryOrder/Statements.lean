@@ -1243,9 +1243,8 @@ theorem original_inject_joint (family port : Nat) (msg : List UInt8) (tos : Nat)
   ⟨Queues.RxHistory.inject_erases family port msg tos ll dest, Queues.RxHistory.inject_projects family port msg tos ll dest, Queues.RxHistory.inject_preserves family port msg tos ll dest,
     fun w hi => (Queues.RxHistory.inject_preserves family port msg tos ll dest w [] (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1⟩
 
-/-- Both original flood modes observe each actual nested receive reschedule.
-The hidden-none shortcut, queue replacement, record cuts and late threshold Stop
-are retained. No drain, progress, credit or history-neutrality premise is added. -/
+/-- The original exact flood observes every producer, inline poll and deferred
+activation, including actual nested receive reschedules and the final drain guard. No drain, progress, credit or history-neutrality premise is added. -/
 theorem original_flood_joint (count port family : Nat) (messages : List (List UInt8)) :
     ErasesPrefix (Queues.RxHistory.flood count port family messages) (Leanux.Env.flood count port family messages) ∧
     ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent (Queues.RxHistory.flood count port family messages) (Lifetimes.floodAudit count port family messages) ∧
@@ -1335,22 +1334,22 @@ theorem original_syscall_family_joint (call : Lifetimes.SyscallAuditCall) :
     fun w hi => (Queues.RxHistory.syscallFamily_preserves call w []
       (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1⟩
 
-/-- Every typed initialized Runner trace and both flags retain distinct committed
+/-- Every typed initialized Runner trace and both placeholder settings retain distinct committed
 callback-entry allocation stamps, even on Stop, and exactly the existing full R2
 audit/probe history. Copied trials remain isolated. No parser, length, success,
 drain, credit or progress premise is added. Callback entry does not assert stack
 completion, and receive-pipeline conservation remains a separate obligation. -/
-theorem initialized_runner_joint (trace : Leanux.Runner.Trace) (placeholders floodExact : Bool) :
-    Logged.ErasesOuter (Queues.RxHistory.executeTraceHistory trace placeholders floodExact)
-      (Leanux.Runner.executeTrace trace placeholders floodExact) ∧
+theorem initialized_runner_joint (trace : Leanux.Runner.Trace) (placeholders : Bool) :
+    Logged.ErasesOuter (Queues.RxHistory.executeTraceHistory trace placeholders)
+      (Leanux.Runner.executeTrace trace placeholders) ∧
     Queues.RxHistory.BoundarySafe
-      (Logged.runPrefixOuter (Queues.RxHistory.executeTraceHistory trace placeholders floodExact) []).2 ∧
-    Logged.runPrefixOuter (Lifetimes.executeTraceAudit trace placeholders floodExact) [] =
-      ((Logged.runPrefixOuter (Queues.RxHistory.executeTraceHistory trace placeholders floodExact) []).1,
+      (Logged.runPrefixOuter (Queues.RxHistory.executeTraceHistory trace placeholders) []).2 ∧
+    Logged.runPrefixOuter (Lifetimes.executeTraceAudit trace placeholders) [] =
+      ((Logged.runPrefixOuter (Queues.RxHistory.executeTraceHistory trace placeholders) []).1,
        Queues.RxHistory.auditHistory
-         (Logged.runPrefixOuter (Queues.RxHistory.executeTraceHistory trace placeholders floodExact) []).2) ∧
+         (Logged.runPrefixOuter (Queues.RxHistory.executeTraceHistory trace placeholders) []).2) ∧
     ∀ p ∈ Lifetimes.probeEntries (Queues.RxHistory.auditHistory
-        (Logged.runPrefixOuter (Queues.RxHistory.executeTraceHistory trace placeholders floodExact) []).2),
+        (Logged.runPrefixOuter (Queues.RxHistory.executeTraceHistory trace placeholders) []).2),
       Lifetimes.AllocationInv p.history p.world ∧
       (p.world.suspended.filterM Leanux.Env.Activation.consistent).run p.world =
         (p.world.suspended.filterM (fun a => Lifetimes.activationTrialDecision a p.world p.history)).map
@@ -1358,10 +1357,10 @@ theorem initialized_runner_joint (trace : Leanux.Runner.Trace) (placeholders flo
       ∀ a ∈ p.world.suspended,
         Lifetimes.LifetimeEvent.Safe
           (runPrefix (Lifetimes.activationRunPrefix a) p.world p.history).2 :=
-  ⟨Queues.RxHistory.executeTraceHistory_erases trace placeholders floodExact,
-    Queues.RxHistory.executeTraceHistory_safe trace placeholders floodExact,
-    Queues.RxHistory.executeTraceHistory_projects trace placeholders floodExact,
-    Queues.RxHistory.executeTraceHistory_trials trace placeholders floodExact⟩
+  ⟨Queues.RxHistory.executeTraceHistory_erases trace placeholders,
+    Queues.RxHistory.executeTraceHistory_safe trace placeholders,
+    Queues.RxHistory.executeTraceHistory_projects trace placeholders,
+    Queues.RxHistory.executeTraceHistory_trials trace placeholders⟩
 
 /-- The callback observer runs the actual Stack operation once. Entry is before
 it; a receipt contains its actual entry/return Worlds only on normal return.
@@ -1424,7 +1423,7 @@ theorem original_caller_callback_completion (deferred : Lifetimes.EnvDeferredCal
     Queues.RxCompletion.remaining_preserves remaining,
     Queues.RxCompletion.syscallFamily_preserves syscall⟩
 
-/-- Every typed initialized Runner trace and both flags retain valid actual
+/-- Every typed initialized Runner trace and both placeholder settings retain valid actual
 Stack-return receipts and distinct completed allocation stamps, even on Stop.
 Normal return pairs every committed callback entry in order; a failed prefix can
 leave one last entry unfinished. Copied consistency trials remain outside this
@@ -1433,11 +1432,11 @@ erasure and exact full audit projection are proved by initialized_runner_joint.
 It proves normal Stack return, not socket inbox arrival or receive-pipeline
 conservation, and adds no parser, allocation or success premise. -/
 theorem initialized_runner_callback_completion (trace : Leanux.Runner.Trace)
-    (placeholders floodExact : Bool) :
-    Logged.ErasesOuter (Queues.RxHistory.executeTraceHistory trace placeholders floodExact)
-      (Leanux.Runner.executeTrace trace placeholders floodExact) ∧
+    (placeholders : Bool) :
+    Logged.ErasesOuter (Queues.RxHistory.executeTraceHistory trace placeholders)
+      (Leanux.Runner.executeTrace trace placeholders) ∧
     let out := Logged.runPrefixOuter
-      (Queues.RxHistory.executeTraceHistory trace placeholders floodExact) []
+      (Queues.RxHistory.executeTraceHistory trace placeholders) []
     let t := out.2.filterMap Queues.RxCompletion.historyEvent
     Queues.RxCompletion.CompletionPrefix Queues.RxCompletion.historyEvent out.2 ∧
     (∀ e r, Queues.RxCompletion.Step.completed e r ∈ t →
@@ -1446,9 +1445,9 @@ theorem initialized_runner_callback_completion (trace : Leanux.Runner.Trace)
     (∀ result, out.1 = .ok result →
       Queues.RxCompletion.Closed Queues.RxCompletion.historyEvent out.2 ∧
       Queues.RxHistory.entries out.2 = t.filterMap Queues.RxCompletion.completed) := by
-  refine ⟨Queues.RxHistory.executeTraceHistory_erases trace placeholders floodExact, ?_⟩
-  have hp := Queues.RxCompletion.executeTraceHistory_completion trace placeholders floodExact
-  have hr := Queues.RxCompletion.executeTraceHistory_receipts trace placeholders floodExact
+  refine ⟨Queues.RxHistory.executeTraceHistory_erases trace placeholders, ?_⟩
+  have hp := Queues.RxCompletion.executeTraceHistory_completion trace placeholders
+  have hr := Queues.RxCompletion.executeTraceHistory_receipts trace placeholders
   exact ⟨hp.1, hr.1, hr.2.1, fun result hs => ⟨hp.2 result hs, hr.2.2 result hs⟩⟩
 
 end Leanux.Proofs.WG.DeliveryOrder

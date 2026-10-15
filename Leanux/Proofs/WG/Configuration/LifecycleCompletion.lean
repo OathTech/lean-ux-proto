@@ -193,10 +193,10 @@ private def destructFinish : M Unit := do
   if !d.sendWorkQueue.isEmpty || !d.encryptQueue.empty || !d.txWorkQueue.isEmpty
       || !d.decryptQueue.empty || !d.clearWorkQueue.isEmpty then
     unsupported "wg_destruct with queued work (destroy_workqueue runs it)"
-  if !d.handshakeQueue.isEmpty then
+  if !d.handshakeQueue.empty then
     invariant "wg_destruct with handshake messages queued (wg_stop drains the ring)"
   mayHaveSlept
-  modifyDev fun d => {d with handshakeQueue := [], handshakeQueueLen := 0}
+  modifyDev fun d => {d with handshakeQueueLen := 0}
   mayHaveSlept
   ratelimiterUninit
   modifyK fun k => {k with wg := none}

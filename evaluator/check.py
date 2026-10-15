@@ -1035,35 +1035,17 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
     problems, gaps = [], Counter()
     order_stats = Counter()
     for index, op in enumerate(trace['ops']):
-        # E-B (docs/2026-10-05-e-dos.md §4.1): a `wg_flood` runs the receive
-        # worker as a discarded section whose per-packet coverage is
-        # scheduling-driven and not modeled (the mirror reports no decisions for
-        # it). The one checked control-flow effect is that the flood crossed the
-        # threshold: receive.c:115 (last_under_load = now) is covered.
-        if op['op'] == 'wg_flood':
-            covered = raw_lines(coverage[index], locations, config['files'])
-            # The batch is queued whole before the worker runs, so its first
-            # packet sees the batch's size: the threshold is crossed iff the
-            # batch (the leading valids, the control, the invalids) is at least
-            # MAX_QUEUED_INCOMING_HANDSHAKES / 8 = 512 (receive.c:112-113). Both
-            # directions are checked (the boundary traces e_underload_511/512/513,
-            # 2026-10-14; the pre-release review's section 8).
-            batch = op['count'] + len(op.get('messages', [])) + (1 if op.get('control') else 0)
-            reached = 'drivers/net/wireguard/receive.c:115' in covered
-            if batch >= 512 and not reached:
-                problems.append(dict(index=index,
-                                     problem='flood did not reach under_load (receive.c:115 not covered)'))
-            if batch < 512 and reached:
-                problems.append(dict(index=index,
-                                     problem=f'flood of {batch} reached under_load below the threshold (receive.c:115 covered)'))
-            continue
         # W7 (docs/2026-10-06-w4-w7-transmit-bulk.md, 5.5): a `wg_batch` is one
         # io_uring_enter whose descriptor plumbing (the ring's fdget, each
         # send's fget of the sender) is the fixture's, as the flood's is; the
         # mirror models none of it (no socketCallOn), so only the WireGuard
         # files and the headers its paths inline are compared for the
         # operation. Everything WireGuard runs per item is checked as usual.
-        op_files = BATCH_FILES(config['files']) if op['op'] == 'wg_batch' else config['files']
+        # B4 (docs/2026-10-15-design-b4-load-ratelimiter.md, 2.3): a `wg_flood`
+        # is the same submission (one io_uring_enter of sends from the fixture's
+        # sender), run exactly per packet since 2026-10-15; it was a summarised
+        # operation whose decisions this function skipped
+        op_files = BATCH_FILES(config['files']) if op['op'] in ('wg_batch', 'wg_flood') else config['files']
         # Raw coverage of a span line (any function, any attribution) must be
         # mapped, and no unlisted function may run span lines of an anchored
         # C file: either means a modeled path runs outside the listed
@@ -1098,9 +1080,11 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
                 problems.append(dict(index=index, label=label, problem='unknown decision'))
             elif any(name == step[0] for name, _ in reported):
                 # W7: a batch runs the receive and transmit paths once per item;
-                # W8: wg_netns_close is four close system calls in one operation.
-                # Their decisions repeat; later outcomes add to the set
-                if not decisions[step[0]]['repeatable'] and op['op'] not in ('wg_batch', 'wg_netns_close'):
+                # W8: wg_netns_close is four close system calls in one operation;
+                # B4: a flood runs the handshake producer and the receive worker
+                # once per packet. Their decisions repeat; later outcomes add to
+                # the set
+                if not decisions[step[0]]['repeatable'] and op['op'] not in ('wg_batch', 'wg_netns_close', 'wg_flood'):
                     problems.append(dict(index=index, label=label, problem='decision reported more than once'))
                 reported.add(step)  # a repeatable decision: later evaluations add outcomes, not order
             else:

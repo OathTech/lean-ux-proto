@@ -6,19 +6,20 @@ observed callback and can mutate residents subject to its ambient contract. -/
 namespace Leanux.Proofs.WG.Lifetimes
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
 
-def popHandshakeQueue (d : Device) : Device :=
-  {d with handshakeQueue := d.handshakeQueue.drop 1}
+def popHandshakeQueue (ring : PtrRing (List UInt8 × SkbSource)) (d : Device) : Device :=
+  {d with handshakeQueue := ring}
 
 def decHandshakeQueue (d : Device) : Device :=
   {d with handshakeQueueLen := d.handshakeQueueLen - 1}
 
 structure ReceiveQueueContracts (I : List LifetimeEvent → World → Prop) : Prop where
-  pop : PrefixPreserves I LifetimeEvent.Safe (liftPrefix (modifyDev popHandshakeQueue))
+  pop : ∀ ring, PrefixPreserves I LifetimeEvent.Safe (liftPrefix (modifyDev (popHandshakeQueue ring)))
   decrement : PrefixPreserves I LifetimeEvent.Safe (liftPrefix (modifyDev decHandshakeQueue))
 
 theorem allocationReceiveQueue : ReceiveQueueContracts AllocationInv := by
   constructor
   all_goals
+    first | intro ring | skip
     apply PrefixEnsures.preserves
     apply PrefixEnsures.lift _ (fun _ _ hi => hi.safe)
     intro h w x v hi hr
@@ -30,13 +31,13 @@ theorem allocationReceiveQueue : ReceiveQueueContracts AllocationInv := by
         decHandshakeQueue, Option.map_map, Function.comp_def] <;> rfl
 
 def receiveStepPrefix : MixedM Bool := do
-  match (← liftPrefix getDev).handshakeQueue with
-  | [] => do
+  match (← liftPrefix getDev).handshakeQueue.consume with
+  | (none, _) => do
     _ ← liftPrefix (branch .workerConsumed false)
     return false
-  | (msg, src) :: _ =>
+  | (some (msg, src), ring) =>
     _ ← liftPrefix (branch .workerConsumed true)
-    liftPrefix (modifyDev popHandshakeQueue)
+    liftPrefix (modifyDev (popHandshakeQueue ring))
     receiveHandshakePacketPrefix msg src
     liftPrefix (modifyDev decHandshakeQueue)
     return true
@@ -46,15 +47,16 @@ def receiveIterPrefix (afterItem : MixedM Bool) : MixedM IterResult :=
 
 def handshakeReceiveWorkerPrefix (condResched : MixedM Unit) : MixedM Unit :=
   workerLoopPrefix .receiveWorker none receiveStepPrefix condResched
-    MAX_QUEUED_INCOMING_HANDSHAKES "the handshake queue did not drain"
+    (MAX_QUEUED_INCOMING_HANDSHAKES + 1) "the handshake queue did not drain"
 
 theorem receiveStepPrefix_erases : ErasesPrefix receiveStepPrefix receiveStep := by
   unfold receiveStepPrefix receiveStep
   apply erasesPrefix_bind (erasesPrefix_lift _)
   intro d
-  cases d.handshakeQueue with
-  | nil => exact erasesPrefix_bind (erasesPrefix_lift _) (fun _ => erasesPrefix_pure _)
-  | cons item rest =>
+  rcases hc : d.handshakeQueue.consume with ⟨item, ring⟩
+  cases item with
+  | none => exact erasesPrefix_bind (erasesPrefix_lift _) (fun _ => erasesPrefix_pure _)
+  | some item =>
     rcases item with ⟨msg, src⟩
     exact erasesPrefix_bind (erasesPrefix_lift _) (fun _ =>
       erasesPrefix_bind (erasesPrefix_lift _) (fun _ =>
@@ -76,14 +78,15 @@ theorem receiveStepPrefix_preserves (c : AmbientContracts I) (r : HandshakeRecei
   unfold receiveStepPrefix
   apply PrefixPreserves.bind (AmbientContracts.drop (c.kernel (fun _ => True) _ getDev_sameKernel))
   intro d
-  cases d.handshakeQueue with
-  | nil =>
+  rcases hc : d.handshakeQueue.consume with ⟨item, ring⟩
+  cases item with
+  | none =>
     exact PrefixPreserves.bind (AmbientContracts.drop (c.branch (fun _ => True) _ _))
       (fun _ => PrefixPreserves.pure c.safe _)
-  | cons item rest =>
+  | some item =>
     rcases item with ⟨msg, src⟩
     exact PrefixPreserves.bind (AmbientContracts.drop (c.branch (fun _ => True) _ _)) (fun _ =>
-      PrefixPreserves.bind q.pop (fun _ =>
+      PrefixPreserves.bind (q.pop ring) (fun _ =>
         PrefixPreserves.bind (receiveHandshakePacketPrefix_preserves c r msg src) (fun _ =>
           PrefixPreserves.bind q.decrement (fun _ => PrefixPreserves.pure c.safe _))))
 

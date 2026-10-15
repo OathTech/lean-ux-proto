@@ -162,7 +162,7 @@ theorem receiveStep_routing : RetainsRoutingCall receiveStep := by
   intro s
   let P := RetainsRouting s
   have hr := fun msg src => (receiveHandshakePacket_routing msg src).wp s
-  have hq := (modifyDev_routing (fun d => {d with handshakeQueue := d.handshakeQueue.drop 1})
+  have hq := fun ring => (modifyDev_routing (fun d => {d with handshakeQueue := ring})
     (fun _ => rfl)).wp P
   have hc := (modifyDev_routing (fun d => {d with handshakeQueueLen := d.handshakeQueueLen - 1})
     (fun _ => rfl)).wp P

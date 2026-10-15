@@ -27,14 +27,6 @@ theorem requireDrained_spec (P : Snapshot → Prop) (what : String) (queues : Li
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Env.requireDrained what queues
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (requireDrained_sameSnapshot what queues).wp P
 
-theorem floodTailEffect_sameSnapshot (stop : Nat) (cuts : List Nat) (last : Option Int64) :
-    SameSnapshot (Leanux.floodTailEffect stop cuts last) :=
-  sameSnapshot_of_sameWGKernel (Framing.sameWGKernel_of_sameKernel (Framing.floodTailEffect_sameKernel stop cuts last))
-
-theorem floodTailEffect_spec (P : Snapshot → Prop) (stop : Nat) (cuts : List Nat) (last : Option Int64) :
-    ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.floodTailEffect stop cuts last
-    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (floodTailEffect_sameSnapshot stop cuts last).wp P
-
 theorem runOneSendWorker_sameSnapshot  : SameSnapshot Env.runOneSendWorker := by
   frame_same [Env.runOneSendWorker, Env.runWorker] using [getDev_spec, getPeer_spec, setPeer_spec, peekUnit_spec, resolveUnit_spec, hidden_snapshot_spec, peekHiddenSite_spec, handshakeSendWorker_spec]
 

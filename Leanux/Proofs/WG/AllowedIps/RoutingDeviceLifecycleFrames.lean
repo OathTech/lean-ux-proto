@@ -65,7 +65,7 @@ theorem wgStop_routing : RetainsRoutingCall wgStop := by
   have hh := fun pid => (handshakeClear_routing pid).wp (RetainsRouting s)
   have hk := fun pid => (keypairsClear_routing pid).wp (RetainsRouting s)
   have hr := fun pid => (resetLastSentHandshake_routing pid).wp (RetainsRouting s)
-  have hm := (modifyDev_routing (fun d => {d with handshakeQueue := [], handshakeQueueLen := 0}) (fun _ => rfl)).wp (RetainsRouting s)
+  have hm := (modifyDev_routing (fun d => {d with handshakeQueueLen := 0}) (fun _ => rfl)).wp (RetainsRouting s)
   have hs := (socketControl_routing _ (socketReinit_sameSocketKernel none none)).wp (RetainsRouting s)
   mvcgen [wgStop, hn, hp, ht, hh, hk, hr, hm, hs, getDev, getK, branch, invariant, unsupported]
   all_goals try exact ((⇓? _ w => ⌜RetainsRouting s (routingView w)⌝) : PostCond _ (.arg World (.except Stop .pure)))

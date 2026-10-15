@@ -28,8 +28,8 @@ theorem audit_initial_prefill (trace : Trace) (w : World)
 
 /-- The initialization and every concrete syscall discharge the state premise;
 both WP branches retain safety, including failed prefill and end guards. -/
-theorem executeTraceAudit_safe_wp (trace : Trace) (placeholders floodExact : Bool) :
-    ⦃fun h => ⌜h = []⌝⦄ executeTraceAudit trace placeholders floodExact
+theorem executeTraceAudit_safe_wp (trace : Trace) (placeholders : Bool) :
+    ⦃fun h => ⌜h = []⌝⦄ executeTraceAudit trace placeholders
     ⦃post⟨fun _ h => ⌜AuditSafe h⌝, fun _ h => ⌜AuditSafe h⌝⟩⦄ := by
   have syscall_spec (index : Nat) (w : World) (call : Syscall) :=
     runAtAudit_wp (syscallAudit_preserves call) index w
@@ -72,18 +72,18 @@ theorem executeTraceAudit_safe_wp (trace : Trace) (placeholders floodExact : Boo
 
 /-- Safety is unconditional in the original result: Stops preserve their reached
 committed history and saved filter-entry validity just as successful JSON does. -/
-theorem executeTraceAudit_safe (trace : Trace) (placeholders floodExact : Bool) :
-    AuditSafe (runPrefixOuter (executeTraceAudit trace placeholders floodExact) []).2 := by
+theorem executeTraceAudit_safe (trace : Trace) (placeholders : Bool) :
+    AuditSafe (runPrefixOuter (executeTraceAudit trace placeholders) []).2 := by
   have hs := (prefixOuter_wp_iff _ _ _ _).mp
-    (executeTraceAudit_safe_wp trace placeholders floodExact) [] rfl
-  cases hr : runPrefixOuter (executeTraceAudit trace placeholders floodExact) [] with
+    (executeTraceAudit_safe_wp trace placeholders) [] rfl
+  cases hr : runPrefixOuter (executeTraceAudit trace placeholders) [] with
   | mk result hist => cases result <;> simpa only [hr] using hs
 
 /-- Every reached saved filter entry is valid from initialized execution. Exact
 filter order and early failure identify the evaluated prefix; certifying all
 candidates does not assert that later candidates were evaluated. -/
-theorem executeTraceAudit_trials (trace : Trace) (placeholders floodExact : Bool) :
-    ∀ p ∈ probeEntries (runPrefixOuter (executeTraceAudit trace placeholders floodExact) []).2,
+theorem executeTraceAudit_trials (trace : Trace) (placeholders : Bool) :
+    ∀ p ∈ probeEntries (runPrefixOuter (executeTraceAudit trace placeholders) []).2,
       AllocationInv p.history p.world ∧
       (p.world.suspended.filterM Env.Activation.consistent).run p.world =
         (p.world.suspended.filterM (fun a => activationTrialDecision a p.world p.history)).map
@@ -91,6 +91,6 @@ theorem executeTraceAudit_trials (trace : Trace) (placeholders floodExact : Bool
       ∀ a ∈ p.world.suspended,
         LifetimeEvent.Safe (runPrefix (activationRunPrefix a) p.world p.history).2 := by
   intro p hp
-  exact savedProbe_trials (executeTraceAudit_safe trace placeholders floodExact).2 hp
+  exact savedProbe_trials (executeTraceAudit_safe trace placeholders).2 hp
 
 end Leanux.Proofs.WG.Lifetimes

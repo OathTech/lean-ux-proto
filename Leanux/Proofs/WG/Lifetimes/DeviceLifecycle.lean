@@ -16,10 +16,10 @@ def wgDestructPrefix : MixedM Unit := do
   if !d.sendWorkQueue.isEmpty || !d.encryptQueue.empty || !d.txWorkQueue.isEmpty
       || !d.decryptQueue.empty || !d.clearWorkQueue.isEmpty then
     liftPrefix (unsupported "wg_destruct with queued work (destroy_workqueue runs it)")
-  if !d.handshakeQueue.isEmpty then
+  if !d.handshakeQueue.empty then
     liftPrefix (invariant "wg_destruct with handshake messages queued (wg_stop drains the ring)")
   liftPrefix mayHaveSlept
-  liftPrefix (modifyDev fun d => {d with handshakeQueue := [], handshakeQueueLen := 0})
+  liftPrefix (modifyDev fun d => {d with handshakeQueueLen := 0})
   liftPrefix mayHaveSlept
   liftPrefix ratelimiterUninit
   dropDevicePrefix

@@ -10,7 +10,7 @@ import shutil
 import subprocess
 import unittest
 
-from .trace import (FIELDS, KCOV_CAPACITY, OPCODES, RESERVED_OPCODES, InvalidTrace, UnsupportedTrace, filter_may_kill, loads_trace,
+from .trace import (FIELDS, FLOOD_BIG_AREA_SENDS, KCOV_CAPACITY, KCOV_TASK_CMP_CAPACITY, OPCODES, task_cmp_capacity, RESERVED_OPCODES, InvalidTrace, UnsupportedTrace, filter_may_kill, loads_trace,
                     serialize_wire, validate_trace)
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -522,6 +522,30 @@ class LifecycleWireTests(unittest.TestCase):
         match = re.search(r"#define CAPACITY \((\d+)UL \* 1024\)", guest)
         self.assertIsNotNone(match)
         self.assertEqual(int(match.group(1)) * 1024, KCOV_CAPACITY)
+        # B1: the comparison child's task area and its own limit
+        match = re.search(r"#define TASK_CMP_CAPACITY \((\d+)UL \* 1024\)", guest)
+        self.assertIsNotNone(match)
+        self.assertEqual(int(match.group(1)) * 1024, KCOV_TASK_CMP_CAPACITY)
+        self.assertGreater(KCOV_TASK_CMP_CAPACITY, KCOV_CAPACITY)
+        match = re.search(r"#define FLOOD_BIG_AREA_SENDS (\d+)\n", guest)
+        self.assertIsNotNone(match)
+        self.assertEqual(int(match.group(1)), FLOOD_BIG_AREA_SENDS)
+
+    def test_task_cmp_capacity_per_trace(self):
+        # B1: only a flood past FLOOD_BIG_AREA_SENDS sends (count, leading
+        # valids, control) gets the comparison child's larger task area
+        base = [{"op": "wg_create"}, {"op": "wg_up"}]
+        msg = "ab" * 148
+        def trace(*ops):
+            return {"version": 1, "id": "t", "net_fixture": "bare", "ops": base + list(ops)}
+        self.assertEqual(task_cmp_capacity(trace()), KCOV_CAPACITY)
+        self.assertEqual(task_cmp_capacity(trace({"op": "wg_flood", "count": FLOOD_BIG_AREA_SENDS, "port": 1})), KCOV_CAPACITY)
+        self.assertEqual(task_cmp_capacity(trace({"op": "wg_flood", "count": FLOOD_BIG_AREA_SENDS, "port": 1, "messages": [msg]})),
+                         KCOV_TASK_CMP_CAPACITY)
+        self.assertEqual(task_cmp_capacity(trace({"op": "wg_flood", "count": FLOOD_BIG_AREA_SENDS - 1, "port": 1, "messages": [msg],
+                                                  "control": msg})), KCOV_TASK_CMP_CAPACITY)
+        self.assertEqual(task_cmp_capacity(trace({"op": "wg_flood", "count": 520, "port": 1}, {"op": "wg_flood", "count": 4096, "port": 1})),
+                         KCOV_TASK_CMP_CAPACITY)
 
 
 if __name__ == '__main__':

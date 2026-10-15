@@ -9,7 +9,7 @@ namespace Leanux.Proofs.WG.Lifetimes
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
 
 def appendHandshakeQueue (msg : List UInt8) (src : SkbSource) (d : Device) : Device :=
-  {d with handshakeQueue := d.handshakeQueue ++ [(msg, src)], handshakeQueueLen := d.handshakeQueueLen + 1}
+  {d with handshakeQueue := d.handshakeQueue.produce (msg, src), handshakeQueueLen := d.handshakeQueueLen + 1}
 
 def setHandshakeCpu (cpu : Int) (d : Device) : Device := {d with handshakeLastCpu := cpu}
 
@@ -53,9 +53,8 @@ def packetReceivePrefix (msg : List UInt8) (src : SkbSource) : MixedM Unit := do
   if ← liftPrefix (branch .rxHandshake (t == MESSAGE_HANDSHAKE_INITIATION || t == MESSAGE_HANDSHAKE_RESPONSE
                             || t == MESSAGE_HANDSHAKE_COOKIE)) then
     if ← liftPrefix (branch .rxRngNotReady false) then liftPrefix (unsupported "unreachable")
-    if ← liftPrefix (branch .rxQueueBusy ((← liftPrefix getDev).handshakeQueueLen > MAX_QUEUED_INCOMING_HANDSHAKES / 2)) then
-      liftPrefix (unsupported "spin_trylock_bh on a busy handshake queue")
-    if ← liftPrefix (branch .rxProduceFailed ((← liftPrefix getDev).handshakeQueue.length ≥ MAX_QUEUED_INCOMING_HANDSHAKES)) then return
+    _ ← liftPrefix (branch .rxQueueBusy ((← liftPrefix getDev).handshakeQueueLen > MAX_QUEUED_INCOMING_HANDSHAKES / 2))
+    if ← liftPrefix (branch .rxProduceFailed (← liftPrefix getDev).handshakeQueue.full) then return
     liftPrefix (modifyDev (appendHandshakeQueue msg src))
     cpumaskNextOnlinePrefix
     liftPrefix (queueDeviceWork .receiveWorker)

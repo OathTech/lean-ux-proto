@@ -38,7 +38,7 @@ theorem emitCheckpoint_then_erases (project : Nat → World → α)
 
 /-- The original runner with one projected observation at each operation's
 successful commit boundary. Final trace guards still control acceptance. -/
-def executeTraceCheckpoints (project : Nat → World → α) (trace : Trace) (placeholders : Bool := false) (floodExact : Bool := false) : StateT (List α) (Except (Nat × Stop)) Json := do
+def executeTraceCheckpoints (project : Nat → World → α) (trace : Trace) (placeholders : Bool := false) : StateT (List α) (Except (Nat × Stop)) Json := do
   let mut world : World := { k := initialKernel trace.rlimit trace.net trace.bare trace.foreign trace.stepped trace.seccompChild, env := harnessEnv,
                              timing := Env.timing, portBound := Env.portBound,
                              fixtureNetDevices := Env.fixtureNetDevices,
@@ -46,7 +46,6 @@ def executeTraceCheckpoints (project : Nat → World → α) (trace : Trace) (pl
                              netnsCHolders := if trace.foreign then [9, 8, 5, 4] else [],
                              allocArmed := trace.allocArmed, routes := trace.routes,
                              hiddenPlaceholders := placeholders && trace.hidden.isNone,
-                             floodExact,
                              steerValues := if placeholders then trace.steer else [],
                              armRecords := trace.armRecords, dstCacheRecords := trace.dstCacheRecords,
                              napiBeforePut := trace.napiBeforePut,
@@ -126,9 +125,9 @@ def executeTraceCheckpoints (project : Nat → World → α) (trace : Trace) (pl
 /-- Forgetting only checkpoint observations recovers the full original
 runner result, including JSON and every exact indexed failure. -/
 theorem executeTraceCheckpoints_erases (project : Nat → World → α)
-    (trace : Trace) (placeholders : Bool) {floodExact : Bool} :
-    ErasesT (executeTraceCheckpoints project trace placeholders floodExact)
-      (Runner.executeTrace trace placeholders floodExact) := by
+    (trace : Trace) (placeholders : Bool) :
+    ErasesT (executeTraceCheckpoints project trace placeholders)
+      (Runner.executeTrace trace placeholders) := by
   unfold executeTraceCheckpoints Runner.executeTrace
   repeat' first
     | contradiction
@@ -149,9 +148,9 @@ theorem executeTraceCheckpoints_erases (project : Nat → World → α)
 /-- Original accepted traces and successful checkpoint-observer executions
 have exactly the same JSON; the observation content is fixed at the emit site. -/
 theorem executeTraceCheckpoints_success_iff (project : Nat → World → α)
-    (trace : Trace) (placeholders : Bool) {floodExact : Bool} (json : Json) (observed : List α) :
-    Runner.executeTrace trace placeholders floodExact = .ok json ↔
-      ∃ observed', (executeTraceCheckpoints project trace placeholders floodExact).run observed =
+    (trace : Trace) (placeholders : Bool) (json : Json) (observed : List α) :
+    Runner.executeTrace trace placeholders = .ok json ↔
+      ∃ observed', (executeTraceCheckpoints project trace placeholders).run observed =
         .ok (json, observed') :=
   erasesT_success_iff (executeTraceCheckpoints_erases project trace placeholders) json observed
 

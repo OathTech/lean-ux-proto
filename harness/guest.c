@@ -47,8 +47,30 @@
  * section 10: a wg_create window's comparison child exceeds 64 K words; E-B: an
  * io_uring flood crossing 512 runs ~600 UDP sends inline in the trace task with
  * KCOV on, so both streams need headroom). The host's bounds follow it
- * (harness/trace.py KCOV_CAPACITY). */
+ * (harness/trace.py KCOV_CAPACITY). It sizes the PC child's task area, the
+ * remote area of both children (and the kernel's per-section area), the
+ * seccomp child's area, the remote-record tables below and every full check.
+ * B1 (docs/2026-10-15-design-b1-handshake-ring.md, section 6): a flood past
+ * the handshake ring's 4096 slots is about 4100 sends in one io_uring_enter,
+ * whose task-side comparison stream (the sends' own comparisons, about 345
+ * records a packet, 1.41 M in all) exceeds (CAPACITY - 1) / 4 records; the
+ * comparison child's task area alone is twice the size, with its own full
+ * check (harness/trace.py KCOV_TASK_CMP_CAPACITY; the host's merged bound is
+ * the sum of the two streams' limits). Both areas are vmalloc'ed and zeroed
+ * at KCOV_INIT_TRACE: 64 + 32 MiB in the comparison child, plus the 32 MiB
+ * the worker's remote section allocates, measured to leave about 75 MiB of
+ * the guest's 256 MiB free. */
 #define CAPACITY (4096UL * 1024)
+#define TASK_CMP_CAPACITY (8192UL * 1024)
+/* Only a trace with a flood of more than this many sends (count, leading
+ * valids and control) gets the larger area (task_capacity below): the
+ * mapping is shared with every process the trace forks (the seccomp probes'
+ * children), and fork copies its page tables, work the comparison child
+ * records as one distinct comparison per page; at twice the pages the
+ * seccomp probes' rows grew past the captured-output limit (B1, the batch's
+ * claim point, 2026-10-15). The host's bound follows (harness/trace.py
+ * FLOOD_BIG_AREA_SENDS, task_cmp_capacity). */
+#define FLOOD_BIG_AREA_SENDS 2048
 /* W7 (design section 12): a wg_batch of 1025 keepalive-size items is about
  * 55 KB on the wire; the per-operation payload and the line buffer hold it. */
 #define MAX_PAYLOAD 65536
@@ -293,6 +315,11 @@ struct alloc_arg { uint32_t n, flags; struct { uint64_t lo, hi; } r[ALLOC_RANGES
 static struct alloc_arg alloc;
 #define KCOV_LEANUX_ALLOC_LOAD _IOW('c', 205, unsigned long)
 #define KCOV_LEANUX_ALLOC_STATUS _IOR('c', 206, unsigned long)
+/* The comparison child's task area for this trace (CAPACITY, or
+ * TASK_CMP_CAPACITY for a trace with a flood past FLOOD_BIG_AREA_SENDS). */
+struct trace;
+static unsigned long task_capacity(const struct trace *t, int comparisons);
+
 struct trace {
     /* net: 0 no network fixture, 1 the fixture with a down wg0, 2 the bare
      * network fixture without wg0 (L, "net_fixture": "bare"), 3 the
@@ -304,6 +331,19 @@ struct trace {
     unsigned nsteer; struct steer_entry steer[STEER_MAX];
     unsigned nroutes; struct fixture_route routes[MAX_FIXTURE_ROUTES];
 };
+
+static unsigned long task_capacity(const struct trace *t, int comparisons)
+{
+    if (!comparisons) return CAPACITY;
+    for (unsigned k = 0; k < t->count; ++k) {
+        const struct operation *op = &t->ops[k];
+        if (op->code != OP_WG_FLOOD) continue;
+        unsigned leading = op->payload_len >= 2 ? op->payload[0] : 0;
+        unsigned control = op->payload_len >= 2 ? op->payload[1] : 0;
+        if ((unsigned long)op->a + leading + control > FLOOD_BIG_AREA_SENDS) return TASK_CMP_CAPACITY;
+    }
+    return CAPACITY;
+}
 /* W4: the running trace's fixture routes, for route_into_wg0. */
 static const struct fixture_route *fixture_routes;
 static unsigned n_fixture_routes;
@@ -1048,7 +1088,7 @@ static void print_choice(int *comma, unsigned long kind, unsigned long ip, unsig
 }
 
 static unsigned long split_hidden(const char *tag, const struct trace *t, unsigned i, unsigned long *area,
-                                  unsigned long count, int comparisons)
+                                  unsigned long count, int comparisons, unsigned short *blocks)
 {
     printf("%s {\"id\":\"%s\",\"index\":%u,\"mode\":\"%s\",\"records\":[", tag, t->id, i,
            comparisons ? "cmp" : "pc");
@@ -1064,24 +1104,27 @@ static unsigned long split_hidden(const char *tag, const struct trace *t, unsign
             j += 3 + n;
         }
     } else {
-        /* the dispatch-section block of each kept comparison record: a
+        /* the dispatch-section block of each kept comparison record of the
+         * remote area (`blocks`, the table print_records reads; the task
+         * area, whose records are in no block, passes NULL and is not
+         * tabled: B1, its comparison area is larger than the table): a
          * section's records reach the remote area as one block at its stop,
          * start record first and stop record last, nested blocks before
          * their enclosing one, so a running count of start records numbers
          * the block and the stop record ends it (0 outside any block) */
-        unsigned long block = 0, blocks = 0;
+        unsigned long block = 0, nblocks = 0;
         for (unsigned long k = 0; k < count;) {
             unsigned long *r = area + 1 + 4 * k;
             if ((r[0] >> 63) && ((r[0] >> 32) & 0xffff) == CHOICE_MAGIC + 1)
                 fail(t->id, i, "coverage_failure", "malformed_choice_record");   /* payload without header */
             if (!(r[0] >> 63) || ((r[0] >> 32) & 0xffff) != CHOICE_MAGIC) {
                 if (kept != k) memmove(area + 1 + 4 * kept, r, 4 * sizeof(*r));
-                cmp_block[kept] = (unsigned short)block;
+                if (blocks) blocks[kept] = (unsigned short)block;
                 ++kept; ++k; continue;
             }
             unsigned long n = r[0] & 0xffff, nrec = 1 + (n + 2) / 3;
             unsigned long kind = (r[0] >> 16) & 0xffff;
-            if (kind == 300) block = ++blocks;
+            if (kind == 300) block = ++nblocks;
             else if (kind == 301) block = 0;
             if (n > 5 || k + nrec > count) fail(t->id, i, "coverage_failure", "malformed_choice_record");
             unsigned long words[6] = {0};
@@ -1876,7 +1919,7 @@ static void seccomp_child_streams(const struct trace *t, unsigned i, const struc
     unsigned long count = __atomic_load_n(&child_area[0], __ATOMIC_RELAXED);
     if (!count || count >= (comparisons ? (CAPACITY - 1) / 4 : CAPACITY - 1))
         fail(t->id, (int)i, "coverage_failure", "empty_or_full_child_kcov");
-    count = split_hidden("LEANUX_CHIDDEN", t, i, child_area, count, comparisons);
+    count = split_hidden("LEANUX_CHIDDEN", t, i, child_area, count, comparisons, NULL);
     if (comparisons) print_records("LEANUX_CCMP", t->id, i, child_area, count, NULL);
     else print_pcs("LEANUX_CCOVERAGE", t->id, i, child_area, count);
 }
@@ -1932,11 +1975,12 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             fail(t->id, -1, "environment_failure", "unexpected_inherited_descriptor");
     int coverage_fd = open("/sys/kernel/debug/kcov", O_RDWR);
     if (coverage_fd != 3) fail(t->id, -1, "coverage_failure", "open_kcov_at_3");
-    if (ioctl(coverage_fd, KCOV_INIT_TRACE, CAPACITY)) fail(t->id, -1, "coverage_failure", "initialize_kcov");
+    const unsigned long task_cap = task_capacity(t, comparisons);
+    if (ioctl(coverage_fd, KCOV_INIT_TRACE, task_cap)) fail(t->id, -1, "coverage_failure", "initialize_kcov");
     if ((alloc.n || alloc.flags) && ioctl(coverage_fd, KCOV_LEANUX_ALLOC_LOAD, &alloc))
         fail(t->id, -1, "coverage_failure", "load_allocation_set");
     load_task_steering(t, coverage_fd);
-    unsigned long *coverage = mmap(NULL, CAPACITY * sizeof(*coverage), PROT_READ | PROT_WRITE, MAP_SHARED, coverage_fd, 0);
+    unsigned long *coverage = mmap(NULL, task_cap * sizeof(*coverage), PROT_READ | PROT_WRITE, MAP_SHARED, coverage_fd, 0);
     if (coverage == MAP_FAILED) fail(t->id, -1, "coverage_failure", "map_kcov");
     for (int fd = 4; fd < (t->net ? LISTEN4_FD : 8); ++fd)
         if (open("/dev/null", O_RDWR) != fd) fail(t->id, -1, "environment_failure", "fill_descriptor");
@@ -2645,8 +2689,9 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
                 fail(t->id, i, "environment_failure", "trace_exceeds_rekey_bound");
         }
         /* KCOV stops counting once the buffer is full, so "full" is the last
-         * value it can reach: CAPACITY - 1 PCs, or (CAPACITY - 1) / 4 records. */
-        if (!count || count >= (comparisons ? (CAPACITY - 1) / 4 : CAPACITY - 1))
+         * value it can reach: CAPACITY - 1 PCs, or (task_cap - 1) / 4 records
+         * (the comparison child's task area for this trace, B1). */
+        if (!count || count >= (comparisons ? (task_cap - 1) / 4 : CAPACITY - 1))
             fail(t->id, i, "coverage_failure", "empty_or_full_kcov");
         result[i].error = ret == -1 ? captured_errno : 0;
         result[i].ret = ret == -1 ? -captured_errno : ret;
@@ -2677,8 +2722,8 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         }
         /* every trace: the generic clock hooks also fire on file paths */
         {
-            count = split_hidden("LEANUX_HIDDEN", t, i, coverage, count, comparisons);
-            if (remote) remote_count = split_hidden("LEANUX_RHIDDEN", t, i, remote, remote_count, comparisons);
+            count = split_hidden("LEANUX_HIDDEN", t, i, coverage, count, comparisons, NULL);
+            if (remote) remote_count = split_hidden("LEANUX_RHIDDEN", t, i, remote, remote_count, comparisons, cmp_block);
         }
         if (comparisons) {
             /* The remote stream's comparisons: the handshake worker's peer

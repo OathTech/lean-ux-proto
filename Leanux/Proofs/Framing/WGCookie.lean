@@ -56,7 +56,7 @@ theorem ratelimiterAllow_sameCookieKernel (src : SkbSource) : SameCookieKernel (
   apply SameView.of_wp
   intro initial
   have hc := fun site => (SameView.of_sameKernel cookieKernel (hiddenClock_sameKernel site)).wp (fun s => s = initial)
-  have he := fun site => (SameView.of_sameKernel cookieKernel (envOk_sameKernel site)).wp (fun s => s = initial)
+  have he := fun site => (SameView.of_sameKernel cookieKernel (hiddenAlloc_sameKernel site)).wp (fun s => s = initial)
   have hm := modifyK_cookie_spec (fun s => s = initial)
   mvcgen [ratelimiterAllow, getK, branch, branchCmp, unsupported, invariant, hc, he, hm]
   all_goals try dsimp +zetaDelta only at *

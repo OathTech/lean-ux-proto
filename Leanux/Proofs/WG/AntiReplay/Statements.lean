@@ -26,9 +26,9 @@ theorem mirror_uniqueness (w w' : World) (kp : KeypairId) (c : ReplayCounter)
 /-- Every accepted full runner execution has its exact committed acceptance
 history, with no repeated (allocation lifetime, wire counter) pair. This
 includes arbitrary accepted recorded schedules and keypair-slot reuse. -/
-theorem runner_uniqueness (trace : Trace) (placeholders : Bool) {floodExact : Bool} (json : Json)
-    (hr : Runner.executeTrace trace placeholders floodExact = .ok json) :
-    ∃ history, (executeTraceLogged trace placeholders floodExact).run [] = .ok (json, history) ∧
+theorem runner_uniqueness (trace : Trace) (placeholders : Bool) (json : Json)
+    (hr : Runner.executeTrace trace placeholders = .ok json) :
+    ∃ history, (executeTraceLogged trace placeholders).run [] = .ok (json, history) ∧
       history.Nodup :=
   Leanux.Proofs.WG.ReplayWindow.S1 trace placeholders json hr
 
@@ -36,9 +36,9 @@ theorem runner_uniqueness (trace : Trace) (placeholders : Bool) {floodExact : Bo
 is at most one window behind every earlier acceptance in the same allocation
 lifetime. The bound includes equality and covers all accepted record streams,
 schedules and keypair-slot reuse, through the exact committed observer. -/
-theorem runner_floor (trace : Trace) (placeholders : Bool) {floodExact : Bool} (json : Json)
-    (hr : Runner.executeTrace trace placeholders floodExact = .ok json) :
-    ∃ history, (executeTraceLogged trace placeholders floodExact).run [] = .ok (json, history) ∧
+theorem runner_floor (trace : Trace) (placeholders : Bool) (json : Json)
+    (hr : Runner.executeTrace trace placeholders = .ok json) :
+    ∃ history, (executeTraceLogged trace placeholders).run [] = .ok (json, history) ∧
       history.Pairwise (fun earlier later => earlier.keypair = later.keypair →
         earlier.nonce ≤ later.nonce + COUNTER_WINDOW_SIZE) := by
   obtain ⟨history, hh⟩ := (executeTraceLogged_success_iff trace placeholders json []).mp hr

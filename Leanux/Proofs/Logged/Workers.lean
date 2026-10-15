@@ -106,7 +106,7 @@ theorem txIterLogged_erases (pid : PeerId) (g : GhostM Bool) (o : M Bool) (h : E
 
 def handshakeReceiveWorkerLogged (condResched : GhostM Unit) : GhostM Unit :=
   workerLoopLogged .receiveWorker none (liftM receiveStep) condResched
-    MAX_QUEUED_INCOMING_HANDSHAKES "the handshake queue did not drain"
+    (MAX_QUEUED_INCOMING_HANDSHAKES + 1) "the handshake queue did not drain"
 
 theorem handshakeReceiveWorkerLogged_erases (g : GhostM Unit) (o : M Unit) (h : Erases g o) :
     Erases (handshakeReceiveWorkerLogged g) (WG.handshakeReceiveWorker o) := by

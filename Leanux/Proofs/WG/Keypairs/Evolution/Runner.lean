@@ -49,8 +49,8 @@ theorem prefill_initial_snapshot (trace : Trace) (w : World)
 
 theorem executeTraceLogged_nodup_wp
     (calls : ∀ call, Evolves (syscallLogged call))
-    (trace : Trace) (placeholders : Bool) {floodExact : Bool} :
-    ⦃fun h => ⌜h = []⌝⦄ executeTraceLogged trace placeholders floodExact
+    (trace : Trace) (placeholders : Bool) :
+    ⦃fun h => ⌜h = []⌝⦄ executeTraceLogged trace placeholders
     ⦃⇓? _ h => ⌜h.Nodup⌝⦄ := by
   have syscall_spec (index : Nat) (w : World) (call : Syscall) :=
     runAtLogged_inv_wp (calls call) index w
@@ -106,8 +106,8 @@ syscall observer contracts are supplied. This is an intermediate composition
 lemma; the final S1 theorem discharges its caller premise. -/
 theorem executeTraceLogged_nodup_of_calls
     (calls : ∀ call, Evolves (syscallLogged call))
-    (trace : Trace) (placeholders : Bool) {floodExact : Bool} (json : Json) (history : History)
-    (hr : (executeTraceLogged trace placeholders floodExact).run [] = .ok (json, history)) :
+    (trace : Trace) (placeholders : Bool) (json : Json) (history : History)
+    (hr : (executeTraceLogged trace placeholders).run [] = .ok (json, history)) :
     history.Nodup :=
   (stateExceptHoare_iff_triple _ _ _).mpr
     (executeTraceLogged_nodup_wp calls trace placeholders) [] json history rfl hr

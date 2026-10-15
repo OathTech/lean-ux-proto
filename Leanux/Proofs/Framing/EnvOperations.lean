@@ -75,19 +75,6 @@ theorem xmitPackets_sameKernel (family addr : Nat) (payload : List UInt8) (opts 
   have hp := fun family addr payload mtu tos => sameKernel_wp _ (xmitPacket_sameKernel family addr payload mtu tos) (fun s => s = k)
   mvcgen [Env.xmitPackets, getK, getDev, invariant, unsupported, hp]
 
-theorem floodTailEffect_sameKernel (stop : Nat) (cuts : List Nat) (last : Option Int64) : SameKernel (floodTailEffect stop cuts last) := by
-  apply sameKernel_of_wp
-  intro k
-  have hp := sameKernel_wp _ peekHiddenSite_sameKernel (fun s => s = k)
-  have hc := fun site => sameKernel_wp _ (hiddenClock64_sameKernel site) (fun s => s = k)
-  have hd := sameKernel_wp _ dropHiddenRecord_sameKernel (fun s => s = k)
-  have hl (α β : Type) := list_view_spec (fun w : World => w.k) (α := α) (β := β) (fun s => s = k)
-  mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, floodTailEffect, getK, getDev, invariant, unsupported, hp, hc, hd, hl]
-  all_goals try exact ((⇓? _ w => ⌜w.k = k⌝) : PostCond _ (.arg World (.except Stop .pure)))
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all
-  all_goals try trivial
-
 theorem observeTail_sameKernel  : SameKernel (Leanux.Proofs.WG.Environment.observeTail) := by
   apply sameKernel_of_wp
   intro k

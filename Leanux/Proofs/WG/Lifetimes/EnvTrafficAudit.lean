@@ -2,9 +2,9 @@ import Leanux.Proofs.WG.Lifetimes.EnvControlsAudit
 import Leanux.Proofs.WG.Lifetimes.ReceiveIngress
 
 /-! Exact environment ingress, multicast loopback and flood observations. Inline
-polling records the complete demanded saved-map scan before effects. Flood queue
-replacement changes byte/source bookkeeping only; its real receive callbacks
-remain audit-aware in both exact and summarized modes. -/
+polling records the complete demanded saved-map scan before effects. Every flood
+producer, inline poll and deferred activation follows the original source,
+including its partial history when a later record or drain guard fails. -/
 namespace Leanux.Proofs.WG.Lifetimes
 open Leanux Leanux.WG Leanux.Env Leanux.Proofs.Logged Leanux.Proofs.Framing
 
@@ -78,67 +78,25 @@ def injectAudit (family port : Nat) (msg : List UInt8) (tos : Nat := 0) (ll : Bo
   runCryptWorkersAudit
   let d ← liftPrefix getDev
   auditFocus (requireDrainedPrefix "the datagram queued"
-    [!d.handshakeQueue.isEmpty, !d.decryptQueue.empty, !d.encryptQueue.empty, !d.txWorkQueue.isEmpty])
+    [!d.handshakeQueue.empty, !d.decryptQueue.empty, !d.encryptQueue.empty, !d.txWorkQueue.isEmpty])
   return msg.length
 
-def floodQueue (messages : List (List UInt8)) (src : SkbSource) (added : Nat) (d : Device) : Device :=
-  {d with handshakeQueue := messages.map (fun m => (m, src)), handshakeQueueLen := d.handshakeQueueLen + added, handshakeLastCpu := 0}
-
-theorem auditFloodQueue_preserves (messages : List (List UInt8)) (src : SkbSource) (added : Nat) :
-    PrefixPreserves AuditInv AuditSafe (liftPrefix (modifyDev (floodQueue messages src added))) := by
-  apply PrefixEnsures.preserves
-  apply PrefixEnsures.lift _ (fun _ _ hi => hi.safe)
-  intro h w x v hi hr
-  cases hr
-  refine ⟨hi.1.congr ?_ ?_, hi.2⟩
-  · unfold identityView Peers.snapshot keypairResidents packetResidents
-    simp [floodQueue, Option.bind_map, Function.comp_def]
-  · simp [allocationMetadata, deviceAllocationMetadata, floodQueue, Option.map_map, Function.comp_def] <;> rfl
-
-theorem auditFloodReset_preserves :
-    PrefixPreserves AuditInv AuditSafe (liftPrefix (modifyDev fun d => {d with handshakeQueueLen := 0})) := by
-  apply PrefixEnsures.preserves
-  apply PrefixEnsures.lift _ (fun _ _ hi => hi.safe)
-  intro h w x v hi hr
-  cases hr
-  refine ⟨hi.1.congr ?_ ?_, hi.2⟩
-  · unfold identityView Peers.snapshot keypairResidents packetResidents
-    simp [Option.bind_map, Function.comp_def]
-  · simp [allocationMetadata, deviceAllocationMetadata, Option.map_map, Function.comp_def] <;> rfl
-
-def floodAudit (count port family : Nat) (messages : List (List UInt8)) : AuditM Int := do
-  let some d := (← liftPrefix getK).wg | liftPrefix (unsupported "a flood to a port other than wg0's (no wg0)")
-  if !d.running || port != d.incomingPort then liftPrefix (unsupported "a flood to a port other than wg0's")
+def afterBatchAudit : AuditM Unit := do
+  liftPrefix (modify fun w => {w with queuedThisCall := []})
   if (← liftPrefix get).hidden.isNone then
-    liftPrefix (modify fun w => {w with lastUnderLoad := some 0})
-    return 0
-  let startW := (HiddenSite.sectionStart .receiveWorker).info.id
-  let stopW := (HiddenSite.sectionStop .receiveWorker).info.id
-  let startRx := (HiddenSite.sectionStart .netRx).info.id
-  let stopRx := (HiddenSite.sectionStop .netRx).info.id
-  let cuts := [startRx, stopRx, (HiddenSite.ipIdentKey).info.id, (HiddenSite.ipIdentReserve).info.id,
-    (HiddenSite.flowHashSecret).info.id, (HiddenSite.udpPortDraw).info.id,
-    (HiddenSite.queued .receiveWorker).info.id]
-  let _ ← liftPrefix (discardFloodRecords startW cuts)
-  _ ← liftPrefix (hidden (.sectionStart .receiveWorker))
-  let src ← liftPrefix (senderSource family 0)
-  if (← liftPrefix get).floodExact then
-    let invalid : List UInt8 := [1] ++ List.replicate 115 0 ++ List.replicate 16 0xff ++ List.replicate 16 0
-    liftPrefix (modifyDev (floodQueue (messages ++ List.replicate count invalid) src (messages.length + count)))
-    handshakeReceiveWorkerAudit (nestedReschedAudit .receiveWorker)
-    _ ← liftPrefix (hidden (.sectionStop .receiveWorker))
-    liftPrefix deliverSent
-    return 0
-  liftPrefix (modifyDev (floodQueue messages src (messages.length + count)))
-  handshakeReceiveWorkerAudit (nestedReschedAudit .receiveWorker)
-  let (last, crossed) ← liftPrefix (floodTailEffect stopW cuts (← liftPrefix get).lastUnderLoad)
-  liftPrefix (modify fun w => {w with lastUnderLoad := last})
-  liftPrefix (modifyDev fun d => {d with handshakeQueueLen := 0})
-  _ ← liftPrefix (hidden (.sectionStop .receiveWorker))
-  if messages.isEmpty && !crossed then
-    liftPrefix (throw (.hidden "the flood did not cross the under_load threshold (no under_load record)"))
+    runCryptWorkersAudit
+    runSendWorkersAudit
+    return
+  for _ in [0:(← liftPrefix recordBudget)] do
+    scheduleAudit
+    if (← liftPrefix peekNextSite) == some (HiddenSite.sectionStart .sendWorker).info.id && !(← liftPrefix getDev).sendWorkQueue.isEmpty then
+      runOneSendWorkerAudit
+    else break
+  let d ← liftPrefix getDev
+  auditFocus (requireDrainedPrefix "the batch queued"
+    [!d.decryptQueue.empty, !d.encryptQueue.empty, !d.txWorkQueue.isEmpty, !d.sendWorkQueue.isEmpty,
+     !d.handshakeQueue.empty, d.handshakeQueueLen != 0])
   liftPrefix deliverSent
-  return 0
 
 macro "env_traffic_erasure" : tactic => `(tactic|
   repeat' first
@@ -165,10 +123,6 @@ macro "env_traffic_preservation" : tactic => `(tactic|
     | with_reducible apply runWorkerPrefix_preserves (fun _ _ hi => hi.safe) (fun _ _ _ he hi => hi.kernel he)
     | with_reducible apply handshakeReceiveWorkerAudit_preserves
     | with_reducible exact nestedReschedAudit_preserves _
-    | with_reducible exact auditFloodQueue_preserves _ _ _
-    | with_reducible exact auditFloodReset_preserves
-    | with_reducible exact auditLift_wgKernel _ (KernelFrames.discardFloodRecords_sameWGKernel _ _)
-    | with_reducible exact auditLift_kernel _ (floodTailEffect_sameKernel _ _ _)
     | with_reducible exact auditLift_kernel _ (hidden_sameKernel _)
     | with_reducible exact auditLift_kernel _ (senderSource_sameKernel _ _ _ _)
     | with_reducible exact auditLift_kernel _ fixtureSend_sameKernel
@@ -202,15 +156,56 @@ theorem injectAudit_preserves (family port : Nat) (msg : List UInt8) (tos : Nat)
   unfold injectAudit
   env_traffic_preservation
 
+theorem afterBatchAudit_erases : ErasesPrefix afterBatchAudit Env.afterBatch := by
+  unfold afterBatchAudit Env.afterBatch
+  repeat' first
+    | with_reducible exact runSendWorkersAudit_erases
+    | with_reducible exact runOneSendWorkerAudit_erases
+    | with_reducible exact scheduleAudit_erases _
+    | with_reducible apply erasesPrefix_range
+    | env_traffic_erasure
+
+theorem afterBatchAudit_preserves : PrefixPreserves AuditInv AuditSafe afterBatchAudit := by
+  unfold afterBatchAudit
+  repeat' first
+    | with_reducible exact runSendWorkersAudit_preserves
+    | with_reducible exact runOneSendWorkerAudit_preserves
+    | with_reducible exact scheduleAudit_preserves _
+    | with_reducible exact auditLift_kernel _ recordBudget_sameKernel
+    | with_reducible exact auditLift_kernel _ peekNextSite_sameKernel
+    | with_reducible apply PrefixPreserves.range _ _ _ (fun _ _ hi => hi.safe)
+    | env_traffic_preservation
+
+def floodAudit (count port family : Nat) (messages : List (List UInt8)) : AuditM Int := do
+  let some d := (← liftPrefix getK).wg | liftPrefix (unsupported "a flood to a port other than wg0's (no wg0)")
+  if !d.running || port != d.incomingPort then liftPrefix (unsupported "a flood to a port other than wg0's")
+  for pid in d.peerList do liftPrefix (requireNotPending pid "a flood while a handshake is queued")
+  let invalid : List UInt8 := [1] ++ List.replicate 115 0 ++ List.replicate 16 0xff ++ List.replicate 16 0
+  let src ← liftPrefix (senderSource family 0)
+  for msg in messages ++ List.replicate count invalid do
+    liftPrefix fixtureSend
+    runWorkerPrefix .netRx do
+      auditFocus (wgReceivePrefix msg src)
+      pollScheduledInlineAudit
+  afterBatchAudit
+  let d ← liftPrefix getDev
+  auditFocus (requireDrainedPrefix "the flood queued" [!d.handshakeQueue.empty, d.handshakeQueueLen != 0])
+  return 0
+
 theorem floodAudit_erases (count port family : Nat) (messages : List (List UInt8)) :
     ErasesPrefix (floodAudit count port family messages) (Env.flood count port family messages) := by
-  unfold floodAudit Env.flood floodQueue
-  simp only [Nat.add_assoc]
-  env_traffic_erasure
+  unfold floodAudit Env.flood
+  repeat' first
+    | with_reducible exact afterBatchAudit_erases
+    | with_reducible exact pollScheduledInlineAudit_erases
+    | env_traffic_erasure
 
 theorem floodAudit_preserves (count port family : Nat) (messages : List (List UInt8)) :
     PrefixPreserves AuditInv AuditSafe (floodAudit count port family messages) := by
   unfold floodAudit
-  env_traffic_preservation
+  repeat' first
+    | with_reducible exact afterBatchAudit_preserves
+    | with_reducible exact pollScheduledInlineAudit_preserves
+    | env_traffic_preservation
 
 end Leanux.Proofs.WG.Lifetimes

@@ -658,8 +658,12 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
         if n != 4 && n != 6 then throw "family: expected 4 or 6"
         pure n
       | .error _ => pure 4
-    let count ← natField j "count" (2 ^ 20)
-    if count == 0 then throw "count: expected 1-2^20"
+    -- B4 (2.4): the flood runs exactly, so its size is bounded by the
+    -- handshake ring (MAX_QUEUED_INCOMING_HANDSHAKES, 4096: B1's twins fill
+    -- it and drop one send at a full slot) and the report's MAX_BRANCHES;
+    -- harness/trace.py has the same bound
+    let count ← natField j "count" 4096
+    if count == 0 then throw "count: expected 1-4096"
     let port ← natField j "port" 65535
     if port == 0 then throw "port: expected 1-65535"
     let messages ← match j.getObjVal? "messages" with
@@ -1022,7 +1026,7 @@ def toSyscall (results : Array Int) (ends : Array (Option (Nat × Nat))) (index 
 
 /-- Run a trace. A `Stop` is returned with the operation index: the mirror
     never reports an observation for a path it does not model. -/
-def executeTrace (trace : Trace) (placeholders : Bool := false) (floodExact : Bool := false) : Except (Nat × Stop) Json := do
+def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat × Stop) Json := do
   let mut world : World := { k := initialKernel trace.rlimit trace.net trace.bare trace.foreign trace.stepped trace.seccompChild, env := harnessEnv,
                              timing := Env.timing, portBound := Env.portBound,
                              fixtureNetDevices := Env.fixtureNetDevices,
@@ -1030,7 +1034,6 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) (floodExact : Bo
                              netnsCHolders := if trace.foreign then [9, 8, 5, 4] else [],
                              allocArmed := trace.allocArmed, routes := trace.routes,
                              hiddenPlaceholders := placeholders && trace.hidden.isNone,
-                             floodExact,
                              steerValues := if placeholders then trace.steer else [],
                              armRecords := trace.armRecords, dstCacheRecords := trace.dstCacheRecords,
                              napiBeforePut := trace.napiBeforePut,

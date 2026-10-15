@@ -22,7 +22,7 @@ def schedule (stack : Option Worker := none) : Obs Unit := do
       let d ← liftPrefix getDev
       let next := [Worker.receiveWorker, .decryptWorker, .encryptWorker, .txWorker].find? fun w =>
         match w with
-        | .receiveWorker => !d.handshakeQueue.isEmpty
+        | .receiveWorker => !d.handshakeQueue.empty
         | .decryptWorker => !d.decryptQueue.empty
         | .encryptWorker => !d.encryptQueue.empty
         | _ => !d.txWorkQueue.isEmpty

@@ -89,8 +89,8 @@ theorem ordinary_runAt_floor_wp {a : M α} (ha : OrdinaryAction a)
 
 theorem executeTraceLogged_floor_wp
     (calls : ∀ call, Evolves (syscallLogged call))
-    (trace : Trace) (placeholders : Bool) {floodExact : Bool} :
-    ⦃fun h => ⌜h = []⌝⦄ executeTraceLogged trace placeholders floodExact
+    (trace : Trace) (placeholders : Bool) :
+    ⦃fun h => ⌜h = []⌝⦄ executeTraceLogged trace placeholders
     ⦃⇓? _ h => ⌜FloorHistory h⌝⦄ := by
   have syscall_spec (index : Nat) (w : World) (call : Syscall) :=
     runAtLogged_floor_wp (calls call) index w
@@ -147,8 +147,8 @@ theorem executeTraceLogged_floor_wp
 contracts are supplied; the terminal result discharges that premise. -/
 theorem executeTraceLogged_floor_of_calls
     (calls : ∀ call, Evolves (syscallLogged call))
-    (trace : Trace) (placeholders : Bool) {floodExact : Bool} (json : Json) (history : History)
-    (hr : (executeTraceLogged trace placeholders floodExact).run [] = .ok (json, history)) :
+    (trace : Trace) (placeholders : Bool) (json : Json) (history : History)
+    (hr : (executeTraceLogged trace placeholders).run [] = .ok (json, history)) :
     FloorHistory history :=
   (stateExceptHoare_iff_triple _ _ _).mpr
     (executeTraceLogged_floor_wp calls trace placeholders) [] json history rfl hr

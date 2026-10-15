@@ -77,8 +77,8 @@ theorem runnerTailObserved_wp (trace : Trace) (shape : TraceAddressShape trace) 
 /-- Successful prefill supplies the actual initialized routing state; prefill
 failure retains the empty safe journal and has no returned World. -/
 theorem executeTraceObserved_wp (trace : Trace) (shape : TraceAddressShape trace)
-    (placeholders floodExact : Bool) :
-    ⦃fun h => ⌜h = []⌝⦄ executeTraceObserved trace placeholders floodExact
+    (placeholders : Bool) :
+    ⦃fun h => ⌜h = []⌝⦄ executeTraceObserved trace placeholders
     ⦃post⟨fun out h => ⌜GlobalCompletionState ([], []) h out.2⌝,
       fun _ h => ⌜CompletionSafe ([], []) h⌝⟩⦄ := by
   have tail_spec (w : World) := runnerTailObserved_wp trace shape w
@@ -97,13 +97,13 @@ theorem executeTraceObserved_wp (trace : Trace) (shape : TraceAddressShape trace
 /-- The actual initialized result retains valid completions on every outcome;
 only a normal result supplies the final accumulator World. -/
 theorem executeTraceObserved_routing (trace : Trace) (shape : TraceAddressShape trace)
-    (placeholders floodExact : Bool) :
-    CompletionSafe ([], []) (runPrefixOuter (executeTraceObserved trace placeholders floodExact) []).2 ∧
-    ∀ out, (runPrefixOuter (executeTraceObserved trace placeholders floodExact) []).1 = .ok out →
-      GlobalCompletionState ([], []) (runPrefixOuter (executeTraceObserved trace placeholders floodExact) []).2 out.2 := by
+    (placeholders : Bool) :
+    CompletionSafe ([], []) (runPrefixOuter (executeTraceObserved trace placeholders) []).2 ∧
+    ∀ out, (runPrefixOuter (executeTraceObserved trace placeholders) []).1 = .ok out →
+      GlobalCompletionState ([], []) (runPrefixOuter (executeTraceObserved trace placeholders) []).2 out.2 := by
   have hs := (prefixOuter_wp_iff _ _ _ _).mp
-    (executeTraceObserved_wp trace shape placeholders floodExact) [] rfl
-  cases hr : runPrefixOuter (executeTraceObserved trace placeholders floodExact) [] with
+    (executeTraceObserved_wp trace shape placeholders) [] rfl
+  cases hr : runPrefixOuter (executeTraceObserved trace placeholders) [] with
   | mk result hist =>
     cases result with
     | error e =>
@@ -114,10 +114,10 @@ theorem executeTraceObserved_routing (trace : Trace) (shape : TraceAddressShape 
       exact ⟨hs.1, fun _ he => by cases he; exact hs⟩
 
 theorem parsed_executeTraceObserved_routing (json : Json) (trace : Trace)
-    (parsed : Runner.parseTrace json = .ok trace) (placeholders floodExact : Bool) :
-    CompletionSafe ([], []) (runPrefixOuter (executeTraceObserved trace placeholders floodExact) []).2 ∧
-    ∀ out, (runPrefixOuter (executeTraceObserved trace placeholders floodExact) []).1 = .ok out →
-      GlobalCompletionState ([], []) (runPrefixOuter (executeTraceObserved trace placeholders floodExact) []).2 out.2 :=
-  executeTraceObserved_routing trace (parseTrace_shape json trace parsed) placeholders floodExact
+    (parsed : Runner.parseTrace json = .ok trace) (placeholders : Bool) :
+    CompletionSafe ([], []) (runPrefixOuter (executeTraceObserved trace placeholders) []).2 ∧
+    ∀ out, (runPrefixOuter (executeTraceObserved trace placeholders) []).1 = .ok out →
+      GlobalCompletionState ([], []) (runPrefixOuter (executeTraceObserved trace placeholders) []).2 out.2 :=
+  executeTraceObserved_routing trace (parseTrace_shape json trace parsed) placeholders
 
 end Leanux.Proofs.WG.Configuration

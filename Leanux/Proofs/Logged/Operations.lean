@@ -265,7 +265,7 @@ def injectLogged (family port : Nat) (msg : List UInt8) (tos : Nat := 0) (ll : B
   runCryptWorkersLogged
   let d ← getDev
   requireDrained "the datagram queued"
-    [!d.handshakeQueue.isEmpty, !d.decryptQueue.empty, !d.encryptQueue.empty, !d.txWorkQueue.isEmpty]
+    [!d.handshakeQueue.empty, !d.decryptQueue.empty, !d.encryptQueue.empty, !d.txWorkQueue.isEmpty]
   return msg.length   -- udp_sendmsg returns the datagram's length
 
 theorem injectLogged_erases (family port : Nat) (msg : List UInt8) (tos : Nat) (ll : Bool) (dest : Nat) :
@@ -279,84 +279,6 @@ theorem injectLogged_erases (family port : Nat) (msg : List UInt8) (tos : Nat) (
     | with_reducible exact idleTimersLogged_erases
     | with_reducible exact afterAdvanceLogged_erases
     | with_reducible exact observeLogged_erases
-    | ghost_env_step
-
-def floodLogged (count port family : Nat) (messages : List (List UInt8)) : GhostM Int := do
-  let some d := (← getK).wg | unsupported "a flood to a port other than wg0's (no wg0)"
-  if !d.running || port != d.incomingPort then unsupported "a flood to a port other than wg0's"
-  -- without records (the domain filter runs before Linux), accept the flood: it
-  -- is a natural harness input, inside the domain; the decay then reads the
-  -- placeholder clock (a prediction only)
-  if (← getWorld).hidden.isNone then
-    modifyWorld fun w => { w with lastUnderLoad := some 0 }
-    return 0
-  let startW := (HiddenSite.sectionStart .receiveWorker).info.id
-  let stopW := (HiddenSite.sectionStop .receiveWorker).info.id
-  let startRx := (HiddenSite.sectionStart .netRx).info.id
-  let stopRx := (HiddenSite.sectionStop .netRx).info.id
-  let cuts := [startRx, stopRx, (HiddenSite.ipIdentKey).info.id, (HiddenSite.ipIdentReserve).info.id,
-               (HiddenSite.flowHashSecret).info.id, (HiddenSite.udpPortDraw).info.id,
-               -- the first flood packet's `queue_work_on` of the receive work
-               -- (dispatch order): its record sits in that packet's `net_rx`
-               -- section; the mirror fills `handshakeQueue` below instead
-               (HiddenSite.queued .receiveWorker).info.id]
-  -- before the receive worker runs: the fixture's io_uring sends' producer
-  -- `net_rx` sections and IP-layer cut draws
-  let _ ← discardFloodRecords startW cuts
-  -- the receive-worker section: the batch is queued (the ring with the
-  -- leading valids, the counter at the batch's size); the leading valids go
-  -- through the real worker (each packet's records, the `cond_resched`
-  -- between packets), which decrements the counter per packet
-  _ ← hidden (.sectionStart .receiveWorker)
-  -- the flood's family: the fixture sender's v4-mapped destination (wg0 sees
-  -- IPv4 from 127.0.0.1) or ::1 (IPv6, the ratelimiter's /64 table)
-  let src ← senderSource family 0
-  if (← getWorld).floodExact then
-    -- the unsummarised execution (the pre-release review's section 8): every
-    -- tail packet is the guest's invalid template (148 bytes: type 1, a MAC1
-    -- of 0xff) and runs through the real worker, consuming the records the
-    -- summary below folds; used to check the summary, not for the claim
-    let invalid : List UInt8 := [1] ++ List.replicate 115 0 ++ List.replicate 16 0xff ++ List.replicate 16 0
-    modifyDev fun d => { d with handshakeQueue := (messages ++ List.replicate count invalid).map (fun m => (m, src)),
-                                handshakeQueueLen := d.handshakeQueueLen + messages.length + count,
-                                handshakeLastCpu := 0 }
-    handshakeReceiveWorkerLogged (nestedReschedLogged .receiveWorker)
-    _ ← hidden (.sectionStop .receiveWorker)
-    deliverSent
-    return 0
-  -- the batch's producer side (wg_packet_receive per datagram, receive.c:567-568):
-  -- the ring and the counter, and `wg_cpumask_next_online(&last_cpu)` per
-  -- packet, which on this one-CPU kernel leaves `last_cpu` at 0
-  modifyDev fun d => { d with handshakeQueue := messages.map (fun m => (m, src)),
-                              handshakeQueueLen := d.handshakeQueueLen + messages.length + count,
-                              handshakeLastCpu := 0 }
-  handshakeReceiveWorkerLogged (nestedReschedLogged .receiveWorker)
-  -- the invalid tail: its clock records fold into `last_under_load`; the
-  -- counter drains to 0 (every tail packet is dequeued and dropped)
-  let (last, crossed) ← floodTailEffect stopW cuts (← getWorld).lastUnderLoad
-  modifyWorld fun w => { w with lastUnderLoad := last }
-  modifyDev fun d => { d with handshakeQueueLen := 0 }
-  _ ← hidden (.sectionStop .receiveWorker)
-  if messages.isEmpty && !crossed then
-    throw (.hidden "the flood did not cross the under_load threshold (no under_load record)")
-  deliverSent
-  return 0
-
-/-! ## W7 stream B: `wg_batch` (docs/2026-10-06-w4-w7-transmit-bulk.md, 5.5) -/
-
-
-theorem floodLogged_erases (count port family : Nat) (messages : List (List UInt8)) :
-    Erases (floodLogged count port family messages) (Env.flood count port family messages) := by
-  unfold floodLogged Env.flood
-  repeat' first
-    | with_reducible exact runSendWorkersLogged_erases
-    | with_reducible exact afterXmitLogged_erases
-    | with_reducible exact runTimersLogged_erases _
-    | with_reducible exact runTimersPlaceholderLogged_erases _
-    | with_reducible exact idleTimersLogged_erases
-    | with_reducible exact afterAdvanceLogged_erases
-    | with_reducible exact observeLogged_erases
-    | with_reducible exact injectLogged_erases _ _ _ _ _ _
     | ghost_env_step
 
 def pollScheduledInlineLogged : GhostM Unit := do
@@ -378,7 +300,6 @@ theorem pollScheduledInlineLogged_erases  :
     | with_reducible exact afterAdvanceLogged_erases
     | with_reducible exact observeLogged_erases
     | with_reducible exact injectLogged_erases _ _ _ _ _ _
-    | with_reducible exact floodLogged_erases _ _ _ _
     | ghost_env_step
 
 def afterBatchLogged : GhostM Unit := do
@@ -394,7 +315,8 @@ def afterBatchLogged : GhostM Unit := do
     else break
   let d ← getDev
   requireDrained "the batch queued"
-    [!d.decryptQueue.empty, !d.encryptQueue.empty, !d.txWorkQueue.isEmpty, !d.sendWorkQueue.isEmpty]
+    [!d.decryptQueue.empty, !d.encryptQueue.empty, !d.txWorkQueue.isEmpty, !d.sendWorkQueue.isEmpty,
+     !d.handshakeQueue.empty, d.handshakeQueueLen != 0]
   deliverSent
 
 theorem afterBatchLogged_erases  :
@@ -409,7 +331,30 @@ theorem afterBatchLogged_erases  :
     | with_reducible exact afterAdvanceLogged_erases
     | with_reducible exact observeLogged_erases
     | with_reducible exact injectLogged_erases _ _ _ _ _ _
-    | with_reducible exact floodLogged_erases _ _ _ _
+    | with_reducible exact pollScheduledInlineLogged_erases
+    | ghost_env_step
+
+def floodLogged (count port family : Nat) (messages : List (List UInt8)) : GhostM Int := do
+  let some d := (← getK).wg | unsupported "a flood to a port other than wg0's (no wg0)"
+  if !d.running || port != d.incomingPort then unsupported "a flood to a port other than wg0's"
+  for pid in d.peerList do requireNotPending pid "a flood while a handshake is queued"
+  let invalid : List UInt8 := [1] ++ List.replicate 115 0 ++ List.replicate 16 0xff ++ List.replicate 16 0
+  let src ← senderSource family 0
+  for msg in messages ++ List.replicate count invalid do
+    fixtureSend
+    runWorkerLogged .netRx do
+      WG.wgReceive msg src
+      pollScheduledInlineLogged
+  afterBatchLogged
+  let d ← getDev
+  requireDrained "the flood queued" [!d.handshakeQueue.empty, d.handshakeQueueLen != 0]
+  return 0
+
+theorem floodLogged_erases (count port family : Nat) (messages : List (List UInt8)) :
+    Erases (floodLogged count port family messages) (Env.flood count port family messages) := by
+  unfold floodLogged Env.flood
+  repeat' first
+    | with_reducible exact afterBatchLogged_erases
     | with_reducible exact pollScheduledInlineLogged_erases
     | ghost_env_step
 
@@ -460,7 +405,6 @@ theorem batchLogged_erases (items : List BatchItem) :
     | with_reducible exact afterAdvanceLogged_erases
     | with_reducible exact observeLogged_erases
     | with_reducible exact injectLogged_erases _ _ _ _ _ _
-    | with_reducible exact floodLogged_erases _ _ _ _
     | with_reducible exact pollScheduledInlineLogged_erases
     | with_reducible exact afterBatchLogged_erases
     | ghost_env_step

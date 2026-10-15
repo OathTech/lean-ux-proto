@@ -2,7 +2,7 @@ import Leanux.Proofs.WG.AllowedIps.RoutingEnvTimersFrames
 import Leanux.Proofs.Framing.EnvOperations
 import Leanux.Proofs.WG.Environment.BatchSource
 
-/-! Original environment ingress, both flood modes and batch submission retain
+/-! Original environment ingress, exact flood and batch submission retain
 routing at normal endpoints. Concrete nested scheduling closes the full receive
 worker. Saved device scalars and lists need no current-device equality premise;
 all actual getters, record failures and finite exhaustion remain unchanged. -/
@@ -68,28 +68,6 @@ theorem inject_routing (family port : Nat) (msg : List UInt8) (tos : Nat)
   all_goals try subst s
   all_goals first | exact RetainsRouting.refl _ | assumption
 
-theorem flood_routing (count port family : Nat) (messages : List (List UInt8)) :
-    RetainsRoutingCall (Env.flood count port family messages) := by
-  apply ProjectedAction.of_wp
-  intro s
-  let P := RetainsRouting s
-  have hd := fun stop cuts => (wgKernel_routing _ (KernelFrames.discardFloodRecords_sameWGKernel stop cuts)).wp P
-  have hh := fun site => (routing_kernel _ (hidden_sameKernel site)).wp P
-  have hs := (routing_kernel _ (senderSource_sameKernel family 0 0 false)).wp P
-  have hw := handshakeReceiveWorker_routing.wp s
-  have hf := fun stop cuts last => (routing_kernel _ (floodTailEffect_sameKernel stop cuts last)).wp P
-  have he := deliverSent_routing.wp P
-  have hm := fun (msgs : List (List UInt8)) (src : SkbSource) n m => (modifyDev_routing
-    (fun d => {d with handshakeQueue := msgs.map (fun x => (x, src)), handshakeQueueLen := d.handshakeQueueLen + n + m, handshakeLastCpu := 0}) (fun _ => rfl)).wp P
-  have hz := (modifyDev_routing (fun d => {d with handshakeQueueLen := 0}) (fun _ => rfl)).wp P
-  mvcgen [Env.flood, hd, hh, hs, hw, hf, he, hm, hz, getK, unsupported]
-  all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try simp_all [routingView]
-  all_goals try trivial
-  all_goals try exact id
-  all_goals try subst s
-  all_goals first | exact RetainsRouting.refl _ | assumption
-
 theorem afterBatch_routing : RetainsRoutingCall Env.afterBatch := by
   apply ProjectedAction.of_wp
   intro s
@@ -104,6 +82,36 @@ theorem afterBatch_routing : RetainsRoutingCall Env.afterBatch := by
   have he := deliverSent_routing.wp P
   mvcgen [Env.afterBatch, hc, hs, hw, hsc, hb, hp, hd, he, getDev, getK, invariant]
   all_goals try exact ((⇓? _ w => ⌜RetainsRouting s (routingView w)⌝) : PostCond _ (.arg World (.except Stop .pure)))
+  all_goals try dsimp +zetaDelta only [P] at *
+  all_goals try simp_all [routingView]
+  all_goals try trivial
+  all_goals try exact id
+  all_goals try subst s
+  all_goals first | exact RetainsRouting.refl _ | assumption
+
+theorem flood_routing (count port family : Nat) (messages : List (List UInt8)) :
+    RetainsRoutingCall (Env.flood count port family messages) := by
+  apply ProjectedAction.of_wp
+  intro s
+  let P := RetainsRouting s
+  have hn := fun pid => (requireNotPending_routing pid "a flood while a handshake is queued").wp P
+  have hf := (routing_kernel _ fixtureSend_sameKernel).wp P
+  have hs := (routing_kernel _ (senderSource_sameKernel family 0 0 false)).wp P
+  have hw (msg src) : RetainsRoutingCall (Env.runWorker .netRx (do wgReceive msg src; Env.pollScheduledInline)) := by
+    apply runWorker_routing
+    apply ProjectedAction.of_wp
+    intro t
+    have hr := (wgReceive_routing msg src).wp t
+    have hp := pollScheduledInline_routing.wp t
+    mvcgen [hr, hp]
+    subst t
+    exact RetainsRouting.refl _
+  have hwp := fun msg src => (hw msg src).wp s
+  have ha := afterBatch_routing.wp s
+  have hd := fun queues => (requireDrained_routing "the flood queued" queues).wp P
+  have hl (α β : Type) := list_view_spec routingView (α := α) (β := β) P
+  mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, hl,
+    Env.flood, hn, hf, hs, hwp, ha, hd, getDev, getK, invariant, unsupported]
   all_goals try dsimp +zetaDelta only [P] at *
   all_goals try simp_all [routingView]
   all_goals try trivial

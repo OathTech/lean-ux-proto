@@ -255,7 +255,7 @@ def runnerTail {E : Type} (call : Syscall → PrefixM E Int) (trace : Trace)
     ++ (if fired.isEmpty then [] else [("fired", .arr fired)])
     ++ (if world.napiAmbiguous > 0 then [("napi_irq_ambiguous", toJson world.napiAmbiguous)] else []))
 
-def executeTraceWith {E : Type} (call : Syscall → PrefixM E Int) (trace : Trace) (placeholders : Bool := false) (floodExact : Bool := false) : PrefixOuter E Json := do
+def executeTraceWith {E : Type} (call : Syscall → PrefixM E Int) (trace : Trace) (placeholders : Bool := false) : PrefixOuter E Json := do
   let mut world : World := { k := initialKernel trace.rlimit trace.net trace.bare trace.foreign trace.stepped trace.seccompChild, env := harnessEnv,
                              timing := Env.timing, portBound := Env.portBound,
                              fixtureNetDevices := Env.fixtureNetDevices,
@@ -263,7 +263,6 @@ def executeTraceWith {E : Type} (call : Syscall → PrefixM E Int) (trace : Trac
                              netnsCHolders := if trace.foreign then [9, 8, 5, 4] else [],
                              allocArmed := trace.allocArmed, routes := trace.routes,
                              hiddenPlaceholders := placeholders && trace.hidden.isNone,
-                             floodExact,
                              steerValues := if placeholders then trace.steer else [],
                              armRecords := trace.armRecords, dstCacheRecords := trace.dstCacheRecords,
                              napiBeforePut := trace.napiBeforePut,
@@ -276,16 +275,16 @@ def executeTraceWith {E : Type} (call : Syscall → PrefixM E Int) (trace : Trac
     | .error e => throw (0, .invariant e)
   runnerTail call trace world
 
-def executeTraceHistory (trace : Trace) (placeholders floodExact : Bool) : PrefixOuter Event Json :=
-  executeTraceWith syscall trace placeholders floodExact
+def executeTraceHistory (trace : Trace) (placeholders : Bool) : PrefixOuter Event Json :=
+  executeTraceWith syscall trace placeholders
 
-theorem executeTraceAudit_eq (trace : Trace) (placeholders floodExact : Bool) :
-    executeTraceAudit trace placeholders floodExact = executeTraceWith syscallAudit trace placeholders floodExact := by
+theorem executeTraceAudit_eq (trace : Trace) (placeholders : Bool) :
+    executeTraceAudit trace placeholders = executeTraceWith syscallAudit trace placeholders := by
   rfl
 
-theorem executeTraceHistory_erases (trace : Trace) (placeholders floodExact : Bool) :
-    ErasesOuter (executeTraceHistory trace placeholders floodExact)
-      (Runner.executeTrace trace placeholders floodExact) := by
+theorem executeTraceHistory_erases (trace : Trace) (placeholders : Bool) :
+    ErasesOuter (executeTraceHistory trace placeholders)
+      (Runner.executeTrace trace placeholders) := by
   unfold executeTraceHistory executeTraceWith runnerTail Runner.executeTrace
   repeat' first
     | contradiction
@@ -311,8 +310,8 @@ theorem runAtBoundary_wp {g : Obs α} (hg : PrefixPreserves BoundaryInv Boundary
 
 /-- The initialization and every concrete syscall discharge the state premise;
 both WP branches retain safety, including failed prefill and end guards. -/
-theorem executeTraceHistory_safe_wp (trace : Trace) (placeholders floodExact : Bool) :
-    ⦃fun h => ⌜h = []⌝⦄ executeTraceHistory trace placeholders floodExact
+theorem executeTraceHistory_safe_wp (trace : Trace) (placeholders : Bool) :
+    ⦃fun h => ⌜h = []⌝⦄ executeTraceHistory trace placeholders
     ⦃post⟨fun _ h => ⌜BoundarySafe h⌝, fun _ h => ⌜BoundarySafe h⌝⟩⦄ := by
   have syscall_spec (index : Nat) (w : World) (call : Syscall) :=
     runAtBoundary_wp (syscall_preserves call) index w
@@ -355,11 +354,11 @@ theorem executeTraceHistory_safe_wp (trace : Trace) (placeholders floodExact : B
 
 /-- Safety is unconditional in the original result: Stops preserve their reached
 committed history and saved filter-entry validity just as successful JSON does. -/
-theorem executeTraceHistory_safe (trace : Trace) (placeholders floodExact : Bool) :
-    BoundarySafe (runPrefixOuter (executeTraceHistory trace placeholders floodExact) []).2 := by
+theorem executeTraceHistory_safe (trace : Trace) (placeholders : Bool) :
+    BoundarySafe (runPrefixOuter (executeTraceHistory trace placeholders) []).2 := by
   have hs := (prefixOuter_wp_iff _ _ _ _).mp
-    (executeTraceHistory_safe_wp trace placeholders floodExact) [] rfl
-  cases hr : runPrefixOuter (executeTraceHistory trace placeholders floodExact) [] with
+    (executeTraceHistory_safe_wp trace placeholders) [] rfl
+  cases hr : runPrefixOuter (executeTraceHistory trace placeholders) [] with
   | mk result hist => cases result <;> simpa only [hr] using hs
 
 /-- Exact full-audit correspondence uses the returned World after each indexed
@@ -410,9 +409,9 @@ theorem runnerTail_projects (trace : Trace) (w : World) :
 
 /-- Initialize the abstract tail with the source's actual initial/prefilled
 Kernel. All flags and defaulted arrays retain the original definitions. -/
-theorem executeTraceHistory_projects_under (trace : Trace) (placeholders floodExact : Bool) :
-    OuterProjects (fun h => h = []) (executeTraceHistory trace placeholders floodExact)
-      (executeTraceAudit trace placeholders floodExact) := by
+theorem executeTraceHistory_projects_under (trace : Trace) (placeholders : Bool) :
+    OuterProjects (fun h => h = []) (executeTraceHistory trace placeholders)
+      (executeTraceAudit trace placeholders) := by
   rw [executeTraceAudit_eq]
   unfold executeTraceHistory executeTraceWith
   repeat' first
@@ -433,23 +432,23 @@ theorem executeTraceHistory_projects_under (trace : Trace) (placeholders floodEx
     | exact audit_initial_prefill trace _ (by assumption)
 
 /-- Initialized exact audit projection, including indexed failure histories. -/
-theorem executeTraceHistory_projects (trace : Trace) (placeholders floodExact : Bool) :
-    runPrefixOuter (executeTraceAudit trace placeholders floodExact) [] =
-      ((runPrefixOuter (executeTraceHistory trace placeholders floodExact) []).1,
-       auditHistory (runPrefixOuter (executeTraceHistory trace placeholders floodExact) []).2) :=
-  executeTraceHistory_projects_under trace placeholders floodExact [] rfl
+theorem executeTraceHistory_projects (trace : Trace) (placeholders : Bool) :
+    runPrefixOuter (executeTraceAudit trace placeholders) [] =
+      ((runPrefixOuter (executeTraceHistory trace placeholders) []).1,
+       auditHistory (runPrefixOuter (executeTraceHistory trace placeholders) []).2) :=
+  executeTraceHistory_projects_under trace placeholders [] rfl
 
 /-- Transfer the existing reached-filter and isolated-trial guarantees through
 the direct full-audit equality. Trial events are not committed callback entries. -/
-theorem executeTraceHistory_trials (trace : Trace) (placeholders floodExact : Bool) :
-    ∀ p ∈ probeEntries (auditHistory (runPrefixOuter (executeTraceHistory trace placeholders floodExact) []).2),
+theorem executeTraceHistory_trials (trace : Trace) (placeholders : Bool) :
+    ∀ p ∈ probeEntries (auditHistory (runPrefixOuter (executeTraceHistory trace placeholders) []).2),
       AllocationInv p.history p.world ∧
       (p.world.suspended.filterM Env.Activation.consistent).run p.world =
         (p.world.suspended.filterM (fun a => activationTrialDecision a p.world p.history)).map
           (fun ys => (ys, p.world)) ∧
       ∀ a ∈ p.world.suspended,
         LifetimeEvent.Safe (runPrefix (activationRunPrefix a) p.world p.history).2 := by
-  have he := congrArg Prod.snd (executeTraceHistory_projects trace placeholders floodExact)
-  simpa only [he] using executeTraceAudit_trials trace placeholders floodExact
+  have he := congrArg Prod.snd (executeTraceHistory_projects trace placeholders)
+  simpa only [he] using executeTraceAudit_trials trace placeholders
 
 end Leanux.Proofs.WG.Queues.RxHistory

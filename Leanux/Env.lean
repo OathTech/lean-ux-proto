@@ -770,84 +770,8 @@ def inject (family port : Nat) (msg : List UInt8) (tos : Nat := 0) (ll : Bool :=
   runCryptWorkers
   let d ← getDev
   requireDrained "the datagram queued"
-    [!d.handshakeQueue.isEmpty, !d.decryptQueue.empty, !d.encryptQueue.empty, !d.txWorkQueue.isEmpty]
+    [!d.handshakeQueue.empty, !d.decryptQueue.empty, !d.encryptQueue.empty, !d.txWorkQueue.isEmpty]
   return msg.length   -- udp_sendmsg returns the datagram's length
-
-/-- `wg_flood` (docs/2026-10-05-e-dos.md §8, E-B v2): the fixture submits an
-    io_uring batch to wg0's port, the leading valid-MAC1 initiations first and
-    then `count` invalid ones; the whole batch is queued before the single-CPU
-    receive worker runs, so the worker sees `handshake_queue_len` at the
-    batch's size (over the `under_load` threshold) from its first packet, and
-    one fully-drained section handles the batch. The mirror holds the batch as
-    the C does: the ring with the leading valids, the counter at the batch's
-    size. The leading valids run through the real worker, each with its
-    records. The invalid tail is summarized by `floodTailEffect`'s exact
-    contract (the review's 3.4): its only state effects are the counter's drain
-    and `last_under_load`, folded from the tail's own clock records, which
-    carry the C's choices. A tail record the contract does not cover (a
-    mid-flood injection), a flood that did not cross the threshold, or a
-    section that did not close in this operation (the worker outliving the
-    window) fail closed. The op returns 0 (the submission succeeded). -/
-def flood (count port family : Nat) (messages : List (List UInt8)) : M Int := do
-  let some d := (← getK).wg | unsupported "a flood to a port other than wg0's (no wg0)"
-  if !d.running || port != d.incomingPort then unsupported "a flood to a port other than wg0's"
-  -- without records (the domain filter runs before Linux), accept the flood: it
-  -- is a natural harness input, inside the domain; the decay then reads the
-  -- placeholder clock (a prediction only)
-  if (← get).hidden.isNone then
-    modify fun w => { w with lastUnderLoad := some 0 }
-    return 0
-  let startW := (HiddenSite.sectionStart .receiveWorker).info.id
-  let stopW := (HiddenSite.sectionStop .receiveWorker).info.id
-  let startRx := (HiddenSite.sectionStart .netRx).info.id
-  let stopRx := (HiddenSite.sectionStop .netRx).info.id
-  let cuts := [startRx, stopRx, (HiddenSite.ipIdentKey).info.id, (HiddenSite.ipIdentReserve).info.id,
-               (HiddenSite.flowHashSecret).info.id, (HiddenSite.udpPortDraw).info.id,
-               -- the first flood packet's `queue_work_on` of the receive work
-               -- (dispatch order): its record sits in that packet's `net_rx`
-               -- section; the mirror fills `handshakeQueue` below instead
-               (HiddenSite.queued .receiveWorker).info.id]
-  -- before the receive worker runs: the fixture's io_uring sends' producer
-  -- `net_rx` sections and IP-layer cut draws
-  let _ ← discardFloodRecords startW cuts
-  -- the receive-worker section: the batch is queued (the ring with the
-  -- leading valids, the counter at the batch's size); the leading valids go
-  -- through the real worker (each packet's records, the `cond_resched`
-  -- between packets), which decrements the counter per packet
-  _ ← hidden (.sectionStart .receiveWorker)
-  -- the flood's family: the fixture sender's v4-mapped destination (wg0 sees
-  -- IPv4 from 127.0.0.1) or ::1 (IPv6, the ratelimiter's /64 table)
-  let src ← senderSource family 0
-  if (← get).floodExact then
-    -- the unsummarised execution (the pre-release review's section 8): every
-    -- tail packet is the guest's invalid template (148 bytes: type 1, a MAC1
-    -- of 0xff) and runs through the real worker, consuming the records the
-    -- summary below folds; used to check the summary, not for the claim
-    let invalid : List UInt8 := [1] ++ List.replicate 115 0 ++ List.replicate 16 0xff ++ List.replicate 16 0
-    modifyDev fun d => { d with handshakeQueue := (messages ++ List.replicate count invalid).map (fun m => (m, src)),
-                                handshakeQueueLen := d.handshakeQueueLen + messages.length + count,
-                                handshakeLastCpu := 0 }
-    WG.handshakeReceiveWorker (nestedResched .receiveWorker)
-    _ ← hidden (.sectionStop .receiveWorker)
-    deliverSent
-    return 0
-  -- the batch's producer side (wg_packet_receive per datagram, receive.c:567-568):
-  -- the ring and the counter, and `wg_cpumask_next_online(&last_cpu)` per
-  -- packet, which on this one-CPU kernel leaves `last_cpu` at 0
-  modifyDev fun d => { d with handshakeQueue := messages.map (fun m => (m, src)),
-                              handshakeQueueLen := d.handshakeQueueLen + messages.length + count,
-                              handshakeLastCpu := 0 }
-  WG.handshakeReceiveWorker (nestedResched .receiveWorker)
-  -- the invalid tail: its clock records fold into `last_under_load`; the
-  -- counter drains to 0 (every tail packet is dequeued and dropped)
-  let (last, crossed) ← floodTailEffect stopW cuts (← get).lastUnderLoad
-  modify fun w => { w with lastUnderLoad := last }
-  modifyDev fun d => { d with handshakeQueueLen := 0 }
-  _ ← hidden (.sectionStop .receiveWorker)
-  if messages.isEmpty && !crossed then
-    throw (.hidden "the flood did not cross the under_load threshold (no under_load record)")
-  deliverSent
-  return 0
 
 /-! ## W7 stream B: `wg_batch` (docs/2026-10-06-w4-w7-transmit-bulk.md, 5.5) -/
 
@@ -880,8 +804,19 @@ def afterBatch : M Unit := do
       runOneSendWorker
     else break
   let d ← getDev
+  -- the completion guard: every queue a dispatched unit drains, as the
+  -- injection path's (`inject`). The handshake receive queue and its counter
+  -- were omitted until 2026-10-15 (campaign 2's request 1: a constructed
+  -- stream that queues the receive worker and never dispatches it was
+  -- accepted). The pending-worker identity (`World.pendingWork`) is not
+  -- checked here: it is the environment's dispatch bookkeeping, set only at
+  -- a produce, so a pending receive worker always has a non-empty queue in
+  -- the mirror's own transitions; the queue and the counter are the C's
+  -- data, and a pending bit with an empty queue would be an invariant
+  -- violation, not a completion fact.
   requireDrained "the batch queued"
-    [!d.decryptQueue.empty, !d.encryptQueue.empty, !d.txWorkQueue.isEmpty, !d.sendWorkQueue.isEmpty]
+    [!d.decryptQueue.empty, !d.encryptQueue.empty, !d.txWorkQueue.isEmpty, !d.sendWorkQueue.isEmpty,
+     !d.handshakeQueue.empty, d.handshakeQueueLen != 0]
   deliverSent
 
 /-- `wg_batch`: the fixture's sender submits `items` as one `io_uring_enter`,
@@ -926,6 +861,53 @@ def batch (items : List BatchItem) : M Int := do
   modify fun w => { w with extraOut := [("cqes", Lean.toJson cqes)] }
   afterBatch
   return items.length
+
+/-! ## E-B over W7: `wg_flood` as a batch (B4, docs/2026-10-15-design-b4-load-ratelimiter.md 2.3) -/
+
+/-- `wg_flood` (docs/2026-10-05-e-dos.md §8; B4, docs/2026-10-15-design-b4-load-ratelimiter.md
+    2.3): the fixture submits one `io_uring_enter` of sends to wg0's port
+    (harness/guest.c `flood_prep`): the leading valid-MAC1 initiations
+    first, then the optional `control` (a valid initiation the mirror is not
+    told of: it diverges the per-packet sequence, fail-closed, the
+    merged-injection control), then `count` copies of the guest's invalid
+    template (148 bytes: type 1, a MAC1 of 0xff; an environment fact). Each
+    send is the producer, run exactly as a `wg_batch`'s inject items are
+    (`batch`): `wg_packet_receive` in a `net_rx_action` section, B1's ring
+    produce (`__ptr_ring_produce`: a full slot drops the packet and leaves
+    the counter, receive.c:561-565), the counter's increment, the first
+    packet's queue record; the worker consumes from the ring
+    (`ptr_ring_consume_bh`, the batch rule) and ends at its first empty
+    poll, where the C has it. The
+    sends run inline in the trace task and the kworkers wait for the call to
+    return, so a worker section between two producers' records mismatches.
+    Then the deferred units, by the records (`afterBatch`): the receive
+    worker drains the queue packet by packet, each with its own records (the
+    under-load clock read at or over the threshold, receive.c:115; the decay
+    read below it, :117; the `cond_resched` between packets, :216), and the
+    handshake queue must be empty, the counter at zero, when the records end:
+    a worker that outlives the guest's wait fails closed. Nothing is
+    summarised, discarded or preset. The operation returns 0 (the submission
+    succeeded). -/
+def flood (count port family : Nat) (messages : List (List UInt8)) : M Int := do
+  let some d := (← getK).wg | unsupported "a flood to a port other than wg0's (no wg0)"
+  if !d.running || port != d.incomingPort then unsupported "a flood to a port other than wg0's"
+  for pid in d.peerList do requireNotPending pid "a flood while a handshake is queued"
+  -- the guest's invalid template (harness/guest.c flood_prep)
+  let invalid : List UInt8 := [1] ++ List.replicate 115 0 ++ List.replicate 16 0xff ++ List.replicate 16 0
+  -- the flood's family: the fixture sender's v4-mapped destination (wg0 sees
+  -- IPv4 from 127.0.0.1) or ::1 (IPv6, the ratelimiter's /64 table)
+  let src ← senderSource family 0
+  for msg in messages ++ List.replicate count invalid do
+    fixtureSend
+    runWorker .netRx do
+      WG.wgReceive msg src
+      pollScheduledInline
+  afterBatch
+  -- the receive worker drained the flood within the guest's wait (B4, 2.3:
+  -- `afterBatch`'s drain check does not list the handshake queue)
+  let d ← getDev
+  requireDrained "the flood queued" [!d.handshakeQueue.empty, d.handshakeQueueLen != 0]
+  return 0
 
 /-! ## W8: the creating namespace's teardown (docs/2026-10-06-w8-w9-netns-routing.md, 3.2) -/
 

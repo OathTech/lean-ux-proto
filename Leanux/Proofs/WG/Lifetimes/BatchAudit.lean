@@ -45,7 +45,7 @@ def scheduleAudit (stack : Option Worker := none) : AuditM Unit := do
       let d ← liftPrefix getDev
       let next := [Worker.receiveWorker, .decryptWorker, .encryptWorker, .txWorker].find? fun w =>
         match w with
-        | .receiveWorker => !d.handshakeQueue.isEmpty
+        | .receiveWorker => !d.handshakeQueue.empty
         | .decryptWorker => !d.decryptQueue.empty
         | .encryptWorker => !d.encryptQueue.empty
         | _ => !d.txWorkQueue.isEmpty
@@ -185,7 +185,7 @@ theorem nestedReschedAudit_projects (self : Worker) :
 an audit-aware callback; the callback still runs only after an item was handled. -/
 def handshakeReceiveWorkerAudit (afterItem : AuditM Unit) : AuditM Unit :=
   workerLoopPrefix .receiveWorker none (auditFocus receiveStepPrefix) afterItem
-    MAX_QUEUED_INCOMING_HANDSHAKES "the handshake queue did not drain"
+    (MAX_QUEUED_INCOMING_HANDSHAKES + 1) "the handshake queue did not drain"
 
 theorem handshakeReceiveWorkerAudit_erases (he : ErasesPrefix afterItem originalAfter) :
     ErasesPrefix (handshakeReceiveWorkerAudit afterItem) (handshakeReceiveWorker originalAfter) :=

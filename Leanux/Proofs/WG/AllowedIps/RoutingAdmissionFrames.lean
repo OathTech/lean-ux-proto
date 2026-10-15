@@ -106,7 +106,7 @@ theorem packetReceive_routing (msg : List UInt8) (src : SkbSource) :
   have hc := fun ds => (consumeData_routing msg src ds).wp s
   have hn := cpumaskNextOnline_routing.wp P
   have hw := (routing_kernel _ (queueDeviceWork_sameKernel .receiveWorker)).wp P
-  have hm := (modifyDev_routing (fun d => {d with handshakeQueue := d.handshakeQueue ++ [(msg, src)], handshakeQueueLen := d.handshakeQueueLen + 1}) (fun _ => rfl)).wp P
+  have hm := (modifyDev_routing (fun d => {d with handshakeQueue := d.handshakeQueue.produce (msg, src), handshakeQueueLen := d.handshakeQueueLen + 1}) (fun _ => rfl)).wp P
   mvcgen [packetReceive, hh, hd, hc, hn, hw, hm, getDev, getK, branch, invariant, unsupported]
   all_goals try dsimp +zetaDelta only [P] at *
   all_goals try (unfold routingView at *; simp_all)

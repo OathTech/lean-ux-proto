@@ -106,7 +106,7 @@ def dispatch (worker : Worker) : Obs Bool := do
   match worker with
   | .encryptWorker => if d.encryptQueue.empty then return false
   | .decryptWorker => if d.decryptQueue.empty then return false
-  | .receiveWorker => if d.handshakeQueue.isEmpty then return false
+  | .receiveWorker => if d.handshakeQueue.empty then return false
   | .txWorker =>
     let some headPid := d.txWorkQueue.head? | return false
     let p ← match ← liftPrefix (peekUnit .txWorker) with

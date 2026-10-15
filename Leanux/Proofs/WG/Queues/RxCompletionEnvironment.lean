@@ -2,7 +2,7 @@ import Leanux.Proofs.WG.Queues.RxCompletionCallers
 import Leanux.Proofs.WG.Queues.RxSyscallsHistory
 
 /-! Completion pairing through the existing environment and syscall observers.
-Both flood modes, inline batch polls, recorded/placeholder timer suffixes and
+Every exact flood producer, inline batch polls, recorded/placeholder timer suffixes and
 normal negative syscall returns retain their concrete callback continuations. -/
 namespace Leanux.Proofs.WG.Queues.RxCompletion
 open Leanux Leanux.WG Leanux.Proofs.Logged Lifetimes
@@ -39,19 +39,21 @@ theorem inject_preserves (family port : Nat) (msg : List UInt8) (tos : Nat) (ll 
     | with_reducible apply runWorker_preserves
     | completion_steps
 
-theorem flood_preserves (count port family : Nat) (messages : List (List UInt8)) :
-    Preserves historyEvent (RxHistory.flood count port family messages) := by
-  unfold RxHistory.flood
-  repeat' first
-    | with_reducible exact handshakeReceiveWorker_preserves
-    | completion_steps
-
 theorem afterBatch_preserves : Preserves historyEvent RxHistory.afterBatch := by
   unfold RxHistory.afterBatch
   repeat' first
     | with_reducible exact runCryptWorkers_preserves
     | with_reducible exact runSendWorkers_preserves
     | with_reducible exact schedule_preserves _
+    | completion_steps
+
+theorem flood_preserves (count port family : Nat) (messages : List (List UInt8)) :
+    Preserves historyEvent (RxHistory.flood count port family messages) := by
+  unfold RxHistory.flood
+  repeat' first
+    | with_reducible exact afterBatch_preserves
+    | with_reducible exact pollScheduledInline_preserves
+    | with_reducible apply runWorker_preserves
     | completion_steps
 
 theorem batchItem_preserves (d : Device) (cqes : List Int) (item : Env.BatchItem) :

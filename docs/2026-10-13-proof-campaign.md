@@ -3,7 +3,7 @@
 ## Progress
 
 Work on `proofs/campaign` in `.worktrees/proofs-campaign` follows [the charter](2026-10-13-charter-proof-campaign.md),
-over unchanged mirror `de62c9d`, now lagging representation batch `cb2348e` pending merge/carry. Local R3
+with representation batch `cb2348e` carried and validated. All seven register rows are current over that mirror. Local R3
 session/material/RX-origin receipts compile; initialized R3 packet authorization
 and R4 receive-pipeline conservation remain open. The [register](proofs.md#results) holds pins/counts; the
 [model map](proofs.md#layers) supplies refinement details. No main integration, push, differential check or guest run
@@ -18,7 +18,54 @@ was made by this campaign.
 | R5 | Accepted age/post-zero/wire-nonce counterexamples; thirteen positive local contracts. |
 | R6 | Cookie exclusion proved; literal MAX=18 refuted, without a replacement universal bound. |
 
-**Validation.** The new local origin tranche passes scoped/full builds (426/486 jobs), with 489 terminal
+**Representation carry (`cb2348e`).** The handshake queue observers retain the captured `consume` pair: the returned
+ring is written before the handler, and only normal handler return reaches the counter decrement. The worker has a
+4097-poll bound; the first empty poll or a Stop ends it earlier. Producers use the physical full test and `produce`.
+Down preserves carried slots. Destruction resets the counter without changing the ring at that cut, then eventually
+drops the whole device. Cookie frames cover the recorded ratelimiter entry allocation and its normal refusal/drop;
+existing lifecycle frames cover both tables. Exact flood observers retain one `senderSource`, every original
+producer and inline poll, actual `afterBatch`, final guards and result. They cover arbitrary typed messages, including
+data ingress, and retain reached histories on Stop. Existing afterBatch contracts were moved before flood in the
+audit, stamped history, evolution, routing and completion layers; no new observer hierarchy was introduced.
+
+All 489 terminal names remain. Exactly ten bodies remove only the deleted `floodExact` binder/call argument:
+AntiReplay `runner_uniqueness`/`runner_floor`; CryptokeyRouting `original_routing_runner_erasure`/
+`parsed_initialized_routing_execution`; DeliveryOrder `initialized_runner_joint`/
+`initialized_runner_callback_completion`; LifetimeSafety `runner_audit_erasure`/
+`runner_initialized_access_safety`/`runner_initialized_reached_trials`; ReplayWindow `S1`.
+The other 479 bodies are unchanged. Separately, the two callback-parametric handshake family/worker contracts use
+`ReceiveQueueContracts.pop`, whose premise now quantifies over the captured returned ring. Its canonical
+`allocationReceiveQueue` witness proves preservation for every ring; no validity/reconsume premise is added.
+Initialized Runner domains, audit/probe projections and R4 boundary/completion predicates remain unstrengthened.
+The handshake-bound comment is corrected; the distinct 4096-step send-worker bound is unchanged.
+
+[AGENT 2026-10-15] Carry exact flood by composing the existing ingress, inline-poll and afterBatch observers, preserving
+literal source ordering and partial histories; keep the local captured-ring contract explicit instead of imposing a
+new initialized ring premise.
+
+**Carry effort/validation.** Lease granted 07:25:01 UTC, accepted 07:26:04. Six capped calls: five builds, four PASS and
+one FAIL, plus exact check 06 PASS. Core call 01 passed 169 jobs (collected 07:34:28); R2/Logged/routing call 02
+passed 401 (07:42:33). Full call 03 failed in `RxEnvTrafficHistory.flood_projects` at the deterministic 200,000-heartbeat
+limit. Explicit local producer projection/preservation contracts replaced broad tactic search; no limit changed.
+Targeted call 04 passed 267 jobs (07:52:01); full call 05 passed 486 (07:55:00), when Lean source froze. Exact 06
+checked 45 Lean files/two docs, 489/479+10 declarations, tokens/imports/default target, whitespace/EOF, the unchanged
+pending index and mirror, and seven lagging pins. Its document hashes precede only this final metadata edit; Lean
+hashes are unchanged. All exits are collected. No kernel/recovery diagnostic, cap hit, interruption, infrastructure
+rerun or cap/limit increase occurred. Builds used `LEAN_NUM_THREADS=32`, `LEANUX_QEMU_SLOTS=16` and the unchanged 32G cap.
+Independent review ran 07:47:26–08:00:25 UTC (12m59, read-only) and is clear after correcting the poll-bound wording,
+down versus destruction lifetime, and the upstream comment location. Coordinated checks pass: the 486-job build and
+489-declaration permitted-axiom gate, fresh stock kernel replay, 60-job default build, fresh 118-job executable build,
+and 126 tests in 23.840s (one skip). Units ran only after the executable rebuild passed. All eleven historical recipes
+pass: nine accepted agreements and two pending-dump rejections with accepted pre-delete boundaries. Root's eighteen
+capped calls comprise seventeen PASS and one FAIL: its first exact checker incorrectly retained whitespace before a
+closing parenthesis when deleting `floodExact`; the corrected checker passes the unchanged source. This was a checker
+repair, not an infrastructure retry. It confirms mirror identity, scope, all 489 names, 479 unchanged bodies, ten exact
+API removals, imports/tokens and formatting. All jobs are collected; the register is current over `cb2348e`.
+Review also noted stale upstream comments
+at `Env.lean:906–907` and `Env/Batch.lean:294–295,337–338`: the executable afterBatch now checks the handshake ring/counter,
+and flood no longer manages a receive-worker section. The immutable mirror comments were not edited.
+
+**Previous validation (`99e4f88`, over `de62c9d`).** The local origin tranche passed scoped/full builds (426/486 jobs), with 489 terminal
 declarations (487 theorems/two definitions; 124 R3/114 R4), retaining all 487 preceding bodies. The 489-declaration
 permitted-axiom gate, fresh stock kernel replay, 60-job default build and 124 tests (24.066s, one skip) pass.
 Exact source checks and independent frozen source review pass after wording fixes. These are local contracts, not a
@@ -32,8 +79,9 @@ same checks for local callback completion (483 declarations). `bcbf733`'s first 
 with SyntaxError before checks; the regenerated script passed.
 
 Carry `a0cf252` passed eleven recipes: nine accepted agreements and two pending-dump rejections with accepted
-pre-delete boundaries. Those Runner recipes were not rerun: their observers are unchanged. No differential/guest run
-was made. Historical ledgers: `6010243`, `bcbf733` and Lean 4.35 carry `b1ec9e8`.
+pre-delete boundaries. They were not rerun for the subsequent local-origin checkpoint; the current carry changes
+their Runner observers and reruns all eleven successfully. No differential/guest run was made. Historical ledgers:
+`6010243`, `bcbf733` and Lean 4.35 carry `b1ec9e8`.
 
 ```sh
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle scripts/proof-gate
@@ -186,7 +234,7 @@ No production history field.
 **Original versus proved.** [Terminal contracts](../Leanux/Proofs/WG/CryptokeyRouting/Statements.lean) establish
 trie/configuration refinement and parsed initialized completion history, not full RX/TX identity binding. Public parsing
 supplies address shape required for failed-history validity and normal endpoint agreement. Unconditional erasure covers
-all typed traces/both flags. No R3 Rule Zero counterexample is asserted.
+all typed traces/both placeholder settings. No R3 Rule Zero counterexample is asserted.
 
 **Architecture.** The [map](proofs.md#layers) details these refinements:
 
@@ -322,7 +370,7 @@ correspondence remains informal.
 
 **Original versus proved.** The charter requires accepted-schedule order and no silent loss/duplication.
 [Terminals](../Leanux/Proofs/WG/DeliveryOrder/Statements.lean) prove initialized committed callback-entry stamp
-uniqueness for every typed Trace and both flags, including Stops. Chronological GRO order is false. Local/persistent
+uniqueness for every typed Trace and both placeholder settings, including Stops. Chronological GRO order is false. Local/persistent
 polls and every initialized Runner normal return pair entries with actual normal Stack returns. Failed histories
 retain valid receipts and at most one trailing unfinished entry; joint conservation remains open.
 
@@ -397,7 +445,7 @@ parser, length, success, drain, credit, residency, progress or initial-allocatio
 **Callback completion.** `captureObserved` runs the existing observer once at its actual World/history, preserving
 failed journals. Entry precedes Stack; normal return appends actual value/World receipts, erased by old decoders.
 Closed/CompletionPrefix prove ordered valid Stack-return pairs through local/persistent polls and the existing
-concrete caller/Runner hierarchy. Every typed Trace and both flags derive the protocol from the empty history,
+concrete caller/Runner hierarchy. Every typed Trace and both placeholder settings derive the protocol from the empty history,
 without parser/allocation/progress premises. Normal return matches all entries; Stops retain valid receipts and at most
 one trailing unfinished callback. Completed stamps inherit existing entry uniqueness. Only new local suffixes are
 promoted at the same seed; isolated trials remain outside committed pairing. No new operational hierarchy or stronger
@@ -527,13 +575,12 @@ encryption-age guard would alter C control flow and is not altitude-preserving.
 
 ## R6 — cookie exclusion and retry-limit finding
 
-**Source-only lifecycle discrepancy.** Since `c047e64`, `ratelimiterAllow` creates/updates IPv6 `table6`, but
-`ratelimiterInit` resets only `table` and `gcEntries false` walks/clears only IPv4 while reporting no IPv6 entries.
-Local Linux `ratelimiter.c:55–83,205–221` walks both families, clears all entries on last uninit and allocates empty
-tables on reinit. The mirror therefore appears to retain IPv6 rate state across last uninit/reinit. This source
-comparison arose during R2 lifecycle work; **no accepted Runner reproduction or differential finding is established**.
-It is neither a Linux bug claim nor a cookie-theorem premise. The mirror remains unchanged. Follow-up should exercise
-IPv6 cookie admission, device deletion/recreation and admission from the same source /64.
+**Historical source-only lifecycle discrepancy, repaired by main.** Since `c047e64`, IPv6 `table6` was
+updated by receive but omitted from initialization and final GC. Linux walks both families. The proof-side
+inspection reported this without an accepted Runner reproduction or differential finding. Main's representation
+batch (`738caf0`, carried in `cb2348e`) now resets both tables and walks/clears both on final uninit; the current
+proof carry follows that original source. This was not a Linux bug claim or a cookie-theorem premise. The campaign
+made no mirror change.
 
 **Original versus proved.** Under-load invalid-MAC2 exclusion has an original cookie-only theorem and full Noise frame
 on normal completion. Literal `MAX_TIMER_HANDSHAKES` attempts is false: the accepted episode has nineteen retries,
@@ -572,5 +619,4 @@ endpoint. Final checks pass; all exits were collected without cap/interruption. 
 `66df779` records the review/tray carry.
 
 **Ranked mirror suggestions.** None for the proved properties. Changing the retry comparison would alter C behavior and
-is not altitude-preserving. The IPv6 lifecycle discrepancy needs its own reproduction/validation, not a proof-driven
-edit.
+is not altitude-preserving. The historical IPv6 lifecycle discrepancy was repaired and validated by main; this carry changes only proofs/docs.

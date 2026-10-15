@@ -216,13 +216,6 @@ theorem dropHiddenRecord_spec (P : Snapshot → Prop)  :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.dropHiddenRecord
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (dropHiddenRecord_sameSnapshot).wp P
 
-theorem discardFloodRecords_sameSnapshot (stop : Nat) (allowed : List Nat) : SameSnapshot (Leanux.discardFloodRecords stop allowed) :=
-  sameSnapshot_of_sameWGKernel (Framing.KernelFrames.discardFloodRecords_sameWGKernel stop allowed)
-
-theorem discardFloodRecords_spec (P : Snapshot → Prop) (stop : Nat) (allowed : List Nat) :
-    ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.discardFloodRecords stop allowed
-    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (discardFloodRecords_sameSnapshot stop allowed).wp P
-
 theorem getFile_sameSnapshot (id : FileId) : SameSnapshot (Leanux.getFile id) :=
   sameSnapshot_of_sameWGKernel (Framing.KernelFrames.getFile_sameWGKernel id)
 

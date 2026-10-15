@@ -26,9 +26,8 @@ macro "batch_evolution_step" : tactic => `(tactic|
     | (ordinary_head WG.wgXmit; exact WGDevice.wgXmit_ordinary _ _ _ _)
     | operation_step)
 
-theorem afterBatchLogged_evolves : Evolves afterBatchLogged := by
-  unfold afterBatchLogged
-  repeat' batch_evolution_step
+theorem afterBatchLogged_evolves : Evolves afterBatchLogged :=
+  OperationObservers.afterBatchLogged_evolves
 
 theorem batchLogged_evolves (items : List BatchItem) : Evolves (batchLogged items) := by
   unfold batchLogged
@@ -156,18 +155,18 @@ theorem syscallLogged_evolves (call : Syscall) : Evolves (syscallLogged call) :=
     | evolves_step
 
 /-- The concrete syscall contracts discharge the outer runner's last premise. -/
-theorem executeTraceLogged_nodup (trace : Leanux.Runner.Trace) (placeholders : Bool) {floodExact : Bool}
+theorem executeTraceLogged_nodup (trace : Leanux.Runner.Trace) (placeholders : Bool)
     (json : Lean.Json) (history : History)
-    (hr : (executeTraceLogged trace placeholders floodExact).run [] = .ok (json, history)) :
+    (hr : (executeTraceLogged trace placeholders).run [] = .ok (json, history)) :
     history.Nodup :=
   RunnerProof.executeTraceLogged_nodup_of_calls syscallLogged_evolves
     trace placeholders json history hr
 
 /-- Every successful original runner execution has its exact observer history,
 and that acceptance history has no repeated lifetime/nonce pair. -/
-theorem executeTrace_accepted_nodup (trace : Leanux.Runner.Trace) (placeholders : Bool) {floodExact : Bool}
-    (json : Lean.Json) (hr : Leanux.Runner.executeTrace trace placeholders floodExact = .ok json) :
-    ∃ history, (executeTraceLogged trace placeholders floodExact).run [] = .ok (json, history) ∧
+theorem executeTrace_accepted_nodup (trace : Leanux.Runner.Trace) (placeholders : Bool)
+    (json : Lean.Json) (hr : Leanux.Runner.executeTrace trace placeholders = .ok json) :
+    ∃ history, (executeTraceLogged trace placeholders).run [] = .ok (json, history) ∧
       history.Nodup := by
   obtain ⟨history, hh⟩ := (executeTraceLogged_success_iff trace placeholders json []).mp hr
   exact ⟨history, hh, executeTraceLogged_nodup trace placeholders json history hh⟩

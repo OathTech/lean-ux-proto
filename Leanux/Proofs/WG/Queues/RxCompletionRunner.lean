@@ -41,8 +41,8 @@ theorem runAtCompletion_wp {g : RxHistory.Obs α} (hg : Preserves historyEvent g
 
 /-- The actual Runner's loops retain the protocol at every returned accumulator;
 initialization and failed prefill leave the empty callback history untouched. -/
-theorem executeTraceHistory_completion_wp (trace : Trace) (placeholders floodExact : Bool) :
-    ⦃fun h => ⌜Closed historyEvent h⌝⦄ RxHistory.executeTraceHistory trace placeholders floodExact
+theorem executeTraceHistory_completion_wp (trace : Trace) (placeholders : Bool) :
+    ⦃fun h => ⌜Closed historyEvent h⌝⦄ RxHistory.executeTraceHistory trace placeholders
     ⦃post⟨fun _ h => ⌜Closed historyEvent h⌝,
       fun _ h => ⌜CompletionPrefix historyEvent h⌝⟩⦄ := by
   have syscall_spec (index : Nat) (w : World) (call : Syscall) :=
@@ -75,15 +75,15 @@ theorem executeTraceHistory_completion_wp (trace : Trace) (placeholders floodExa
   all_goals try (solve | intros; assumption)
   all_goals try (solve | intros; exact Closed.prefix (by assumption))
 
-/-- All typed traces and both flags satisfy the protocol, on success or Stop.
+/-- All typed traces and both placeholder settings satisfy the protocol, on success or Stop.
 No allocation, parser, credit, residency or progress premise is required. -/
-theorem executeTraceHistory_completion (trace : Trace) (placeholders floodExact : Bool) :
-    let out := runPrefixOuter (RxHistory.executeTraceHistory trace placeholders floodExact) []
+theorem executeTraceHistory_completion (trace : Trace) (placeholders : Bool) :
+    let out := runPrefixOuter (RxHistory.executeTraceHistory trace placeholders) []
     CompletionPrefix historyEvent out.2 ∧
       ∀ result, out.1 = .ok result → Closed historyEvent out.2 := by
   have hs := (prefixOuter_wp_iff _ _ _ _).mp
-    (executeTraceHistory_completion_wp trace placeholders floodExact) [] ClosedTrace.nil
-  cases hr : runPrefixOuter (RxHistory.executeTraceHistory trace placeholders floodExact) [] with
+    (executeTraceHistory_completion_wp trace placeholders) [] ClosedTrace.nil
+  cases hr : runPrefixOuter (RxHistory.executeTraceHistory trace placeholders) [] with
   | mk result hist =>
     cases result with
     | error stop =>
@@ -95,14 +95,14 @@ theorem executeTraceHistory_completion (trace : Trace) (placeholders floodExact 
 
 /-- Receipt validity and stamp uniqueness hold in every reached committed
 history; normal return additionally matches the complete ordered entry list. -/
-theorem executeTraceHistory_receipts (trace : Trace) (placeholders floodExact : Bool) :
-    let out := runPrefixOuter (RxHistory.executeTraceHistory trace placeholders floodExact) []
+theorem executeTraceHistory_receipts (trace : Trace) (placeholders : Bool) :
+    let out := runPrefixOuter (RxHistory.executeTraceHistory trace placeholders) []
     let t := out.2.filterMap historyEvent
     (∀ e r, Step.completed e r ∈ t → r.Valid (Stack.receive e.tag.bytes)) ∧
     ((t.filterMap completed).map RxJoint.Entry.stamp).Nodup ∧
     (∀ result, out.1 = .ok result → RxHistory.entries out.2 = t.filterMap completed) := by
-  have hp := executeTraceHistory_completion trace placeholders floodExact
-  have hn := (RxHistory.executeTraceHistory_safe trace placeholders floodExact).2
+  have hp := executeTraceHistory_completion trace placeholders
+  have hn := (RxHistory.executeTraceHistory_safe trace placeholders).2
   refine ⟨PrefixTrace.receipts hp.1, PrefixTrace.completed_nodup hp.1 ?_, ?_⟩
   · simpa only [history_entries, RxHistory.stamps] using hn
   · intro result hr

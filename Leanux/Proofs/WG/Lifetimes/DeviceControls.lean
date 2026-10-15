@@ -71,10 +71,10 @@ def wgStopPrefix : MixedM Unit := do
     keypairsClearPrefix pid
     resetLastSentHandshakePrefix pid
   _ ← liftPrefix (branch .stopPeersIter false)
-  if !(← liftPrefix getDev).handshakeQueue.isEmpty then
+  if !(← liftPrefix getDev).handshakeQueue.empty then
     liftPrefix (unsupported "wg_stop with handshake messages queued for the receive worker (its timing)")
   _ ← liftPrefix (branch .stopDrainIter false)
-  liftPrefix (modifyDev fun d => {d with handshakeQueue := [], handshakeQueueLen := 0})
+  liftPrefix (modifyDev fun d => {d with handshakeQueueLen := 0})
   liftPrefix (socketReinit none none)
 
 def wgDownPrefix : MixedM Unit := do
@@ -153,7 +153,7 @@ structure DeviceControlContracts (I : List LifetimeEvent → World → Prop) : P
   running : ∀ b, PrefixPreserves I LifetimeEvent.Safe
     (liftPrefix (modifyDev fun d => {d with running := b}))
   clearHandshakeQueue : PrefixPreserves I LifetimeEvent.Safe
-    (liftPrefix (modifyDev fun d => {d with handshakeQueue := [], handshakeQueueLen := 0}))
+    (liftPrefix (modifyDev fun d => {d with handshakeQueueLen := 0}))
   creatorExit : PrefixPreserves I LifetimeEvent.Safe
     (liftPrefix (modifyDev fun d => {d with carrier := false, creatingNet := false}))
 
