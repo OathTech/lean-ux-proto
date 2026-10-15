@@ -582,6 +582,15 @@ the armed set with the same lock-free membership test as `kcov_timer_arm`
 - kind 314 `{idx, bucket_expiry, timer}` (24 bytes) in `enqueue_timer`
   (`:655-680`), beside `trace_timer_start`.
 
+As built (section 15.1): `__mod_timer` is out of line in this build, so its
+`_RET_IP_` is inside `timer.c`; it takes its caller's return address as a
+parameter, which its six callers pass as `_RET_IP_`, and both records
+resolve to the arming line (`timers.c:37`) like the arm record. The kind-314
+record is written at `__mod_timer`'s enqueue statement (`:1180-1183`, after
+`enqueue_timer` or `internal_add_timer`, which now returns the bucket
+expiry) from the slot stored in the timer's flags and that bucket expiry:
+the values are `enqueue_timer`'s own, and the same-slot path writes none.
+
 Both run under `base->lock` with interrupts off. They are written with the
 mode check and `kcov_choice_write` directly, **without the steering lookup**,
 exactly as the kind-304 writer does (`gen-choice-stream.py:983-1003`:
@@ -672,6 +681,8 @@ Traces to add (`scripts/wg-d3-corpus.py`):
 
 A sentinel is kept only if one of these replaces an existing channel; B3-M1
 would replace nothing and stays one-off.
+
+The results of the build's runs are in section 15.
 
 ## 10. Proof-tree frames touched (read-only, `git show`)
 
@@ -853,3 +864,70 @@ answered with a reason the user can check, or raised for the user.
 16. Lane E's gain narrower than worded: **fixed.** Section 6 states the gain
     as the must-fire direction over accepted runs, with the level from the
     recorded clock and level 5 reachable in a long catch-up pass.
+
+## 15. Build results (2026-10-15) [AGENT, fork of the coordinator]
+
+The build follows this note as revised, on `task/design-b3`, one commit per
+step. Decisions: U1 to U5 as recorded at `2784166` [USER 2026-10-15: "Agree
+re B3, go ahead as proposed"], U5 the per-timer layout with the enqueue stamp.
+
+### 15.1 The oracle pair (step 1)
+
+`kernel-net-choice-s5`, identity
+`b44d958f09743feddc5fdbc3410cb5de89cead4bffdd62b06582b0c560454767` (patch
+sha256 `630b602a…`), and `kernel-net-choice-actl-s5`, identity
+`aa192fdc560e260d13f469f8cea4fc99a44a9bfaa2eb522c864c3014fa198120` (patch
+`ab3a39ef…`); `kernel/config-x86_64-net-choice` unchanged; no anchored file
+touched. The hooks are as section 7 says, with the placement note there:
+kind 313 after `forward_timer_base` on both paths (`timer.c:1107`, `:1141`),
+kind 314 at `__mod_timer`'s enqueue statement, both written with the mode
+check and `kcov_choice_write` without steering, gated by the armed set and
+`KCOV_DISPATCH_ARM_RECORDS`, carrying the timer's address; `__mod_timer`
+receives its caller's return address from its six callers.
+
+### 15.2 The stop risk: the wheel on the new records (the probe)
+
+`scripts/probes/b3-wheel-replay.py` over the `wireguard` suite's dump on s5
+(261 traces, 156 with arms), the base clock taken from kind 313 and the
+kernel's slot and bucket expiry compared with the probe's arithmetic:
+
+| Measured on s5 | Count |
+| --- | --- |
+| Arm records (kind 303) | 849 |
+| Base-clock records (kind 313) | 755, one per arm that locked the base (the 94 same-expires returns wrote none) |
+| of which the base clock is one ahead of `mod_timer`'s read (the lead after a pass of any owner) / behind it | 53 / 0 |
+| Enqueue records (kind 314) | 593: every fresh placement and move (90), none of the 163 same-slot re-arms |
+| **Enqueues whose slot and bucket expiry equal the probe's arithmetic** | **593 of 593** |
+| **Firings predicted as the next to run (set and order)** | **46 of 46**, in 40 of 40 operations, the five multi-timer passes included |
+| Due timers without a section, by disposition | 0 deferred, 0 unexplained |
+| Deletions performed at the C's sites | 120 (handshake complete 94, data received 1, initiation sent 1, the transmit worker 10, `wg_down` 9, `wg_delete` 5), 0 ambiguous |
+| The between zone | 2 of 2, correctly not fired |
+
+The stop risk of section 11 did not occur on the new records: the wheel fed
+with the recorded clocks predicts every firing, and the kernel's own slots
+agree with the arithmetic at every enqueue.
+
+### 15.3 The mirror, the environment and the validation (steps 2 to 5)
+
+The build: `Leanux/Kernel/TimerWheel.lean`, the per-timer layout, `armTimer`
+over the three paths with kinds 313 and 314, E1 over stream-bounded passes
+and E2 by lookahead in `Leanux/Env.lean`, the two traces, the unit tests
+(`leanux-timer-wheel-tests`, 23 checks) and the firing controls on an s5
+capture (`TimerWheelFiring`, 3 tests). The five unit-test modules: 127
+tests OK. The suite, control and mutant figures:
+
+SUITE_FIGURES
+
+### 15.4 The proof frames for the integration record (read-only)
+
+On `proofs/campaign`: 37 files name a changed or removed timer function
+(`armTimer`, `delTimer`, `fireTimer`, `runTimers`, `runTimersPlaceholder`,
+`idleTimers`, `afterAdvance`, `runTimerSection`, `timerCallback`), 10 of
+them `fireTimer`, which no longer exists; 34 files name `WGKernelView`
+(`Kernel` gained the scalars `timerClk` and `timerEnqueues`); 3 files build
+a `Peer` literal and 2 name its timer fields (`Peer` gained five
+`wheel*` fields and `World` three fields). On `proofs/campaign-2`: 9 files
+name the timer functions (3 of them `fireTimer`), 1 builds a `Peer` literal,
+none names `WGKernelView`. The counts are `git grep -l` over `Leanux/Proofs`
+on each branch; the review's 54 for `WGKernelView` counted differently.
+No file under `Leanux/Proofs/` was edited.

@@ -186,24 +186,29 @@ def traces():
                    "wg_timers_data_received.not_pending=0", NEED_ANOTHER + "=1"])
 
     # B3 (docs/2026-10-15-design-b3-timer-wheel.md, section 9): the keepalive
-    # callback's re-arm inside a catch-up pass. As d3_keepalive_rearm_deleted,
-    # but one advance of 4200 ticks: the pass at the absorbing tick runs the
-    # keepalive's bucket (due about 1700 ticks before the tick), the callback
-    # re-arms at jiffies + 2500 with the base clock forwarded only to the
-    # next due bucket of any owner (timer.c:1008-1014), so the re-arm's
-    # delta is about 4200 and it lands on level 3 (slot 192+, width 512)
-    # instead of level 2. The tx worker's any_authenticated_packet_sent then
-    # deletes it, so only the kind-313 and kind-314 records show the level:
-    # the mutant B3-M7 (the base clock taken as mod_timer's read) computes
-    # level 2 and the kind-314 slot rejects it. The 25 s persistent keepalive
-    # (6250 ticks from the response's receive) is not due: 4200 plus the
-    # trace's real time (under 500 ticks) stays below it.
-    assert 4200 + 500 < 25 * HZ
+    # callback's re-arm inside a catch-up pass with the base clock lagging. A
+    # 12 s persistent keepalive (3000 ticks, level 2) and, from two data
+    # messages without a transmission between (need_another set), the
+    # send-keepalive timer (2500 ticks, level 2): the second's bucket is the
+    # earlier one. One advance of 4700 ticks: the pass at the absorbing tick
+    # runs the keepalive's bucket first; its callback re-arms at jiffies + 2500
+    # with the base forwarded only to the next due bucket, the persistent
+    # keepalive's, about 1700 ticks behind jiffies (timer.c:1008-1014), so the
+    # re-arm's delta is about 4200 and it lands on level 3 (slot 192+, width
+    # 512) instead of 2; the tx worker's any_authenticated_packet_sent then
+    # deletes it, so only the kind-313 and kind-314 records show the level: the
+    # mutant B3-M7 (the base clock taken as mod_timer's read) computes level 2
+    # and the kind-314 slot rejects it. The persistent keepalive then fires in
+    # the same pass and sends a keepalive of its own. (As first built, with
+    # the 25 s keepalive quiet, the callback found no other due bucket and the
+    # base at jiffies: no lag, and the re-arm on level 2.)
+    ops12, sess12, steer12 = session(12)
     out["d3_keepalive_rearm_catchup"] = (
-        ka_ops + [data(sess, 0, "one"), data(sess, 1, "two"), advance(4200), OBSERVE, GET],
-        steer,
-        SESSION + [fired("send_keepalive"), "wg_timers_data_received.not_pending=1",
-                   "wg_timers_data_received.not_pending=0", NEED_ANOTHER + "=1"])
+        ops12 + [data(sess12, 0, "one"), data(sess12, 1, "two"), advance(4700), OBSERVE, GET],
+        steer12,
+        SESSION + [fired("send_keepalive"), fired("send_persistent_keepalive"),
+                   "wg_timers_data_received.not_pending=1", "wg_timers_data_received.not_pending=0",
+                   NEED_ANOTHER + "=1", INTERVAL + "=1"])
 
     # B3 (section 9): two passes in one wait, with work between them. A 1 s
     # persistent keepalive (250 ticks, level 1, width 8) re-armed by the
