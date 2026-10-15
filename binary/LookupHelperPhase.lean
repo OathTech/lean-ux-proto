@@ -79,6 +79,30 @@ theorem helper_live_countPhase {first boundary final : List MachineState} {addre
     simp only [countPhase, cleared]
     split <;> rfl
 
+/-- Count equation for an interior semantic point. The event prefix may
+    end at this decision even if an edge emits several observations; its
+    known active tag phase is used with the same actual raw prefix. -/
+theorem helper_live_count_interior
+    (first middle tail : List MachineState) (address : Address) (old : BitVec 32)
+    (phase : IncrementingReturnAt first (first ++ middle) (first ++ middle ++ tail) address old)
+    (initial : scan none first = none) (memory : Mem 64) (writes : Address → Prop)
+    (field : memory.loadInt address 4 = some (old.toNat : Int))
+    (apart : ∀ j < 4, ¬writes (address + .ofNat 64 j)) (bound : old.toNat+1 < 2^32)
+    (oldFrames : ∀ q ∈ middle, q.pc ∈ Image.cutPoints → EqualOutside writes memory q.data.dmem)
+    (newFrames : ∀ q ∈ tail, q.pc ∈ Image.cutPoints →
+      EqualOutside writes (memory.storeInt address 4 (old+1).toInt) q.data.dmem)
+    (i : Nat) (current : MachineState)
+    (present : (first ++ middle ++ tail)[i]? = some current)
+    (later : first.length ≤ i) (proper : i+1 < (first ++ middle ++ tail).length)
+    (cut : current.pc ∈ Image.cutPoints) (events : List Point) (active : helperActive events = true) :
+    PeerCountPhase.At (countPhase ((first ++ middle ++ tail).take (i+1)) events)
+      current.data.dmem address old.toNat := by
+  have represented := IncrementingReturnAt.count_cuts first middle tail address old phase initial memory writes field apart bound
+    oldFrames newFrames i current present later cut
+  simp only [show ¬(first ++ middle ++ tail).length ≤ i+1 by omega, ite_false] at represented
+  simpa only [countPhase, active, ite_true] using represented
+
+#print axioms helper_live_count_interior
 #print axioms helperActive_append_no_return
 #print axioms helper_live_active
 #print axioms helper_live_countPhase

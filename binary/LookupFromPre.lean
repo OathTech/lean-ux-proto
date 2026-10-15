@@ -28,7 +28,7 @@ def Started (c : Config) (world : World) (s : MachineData)
         ∀ q ∈ tail, q.pc ∈ Image.cutPoints →
           EqualOutside (Lookup.entryWrites s coverage) s.dmem q.data.dmem
 
-private theorem backwards_range (sp : BitVec 64) (small large extra : Nat)
+theorem backwards_range (sp : BitVec 64) (small large extra : Nat)
     (bound : small ≤ large) (a : BitVec 64)
     (inside : InRange (sp - .ofNat 64 small) (small+extra) a) :
     InRange (sp - .ofNat 64 large) (large+extra) a := by
@@ -207,7 +207,7 @@ def AfterBucket (c : Config) (world : World) (s : MachineData)
         (LookupSearch.result c.kinds c.query v.bucket [sourceEntry world] world).1.2 ∧
       R c t.history ([entryPoint s] ++ delta) t.machine
         (LookupSearch.result c.kinds c.query v.bucket [sourceEntry world] world).2 ∧
-      PeerCountPhase.StableExtension head.history t.history
+      PeerCountPhase.StableExtension head.history t.history ∧ DecisionPoints delta
 
 theorem bucket_from_head (fetch : Int64 → Option Decoded)
     (agree : AnchoredDecoderAgreement fetch) (tracePc : TracePcContract fetch)

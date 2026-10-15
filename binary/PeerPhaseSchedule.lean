@@ -169,6 +169,24 @@ theorem StableExtension.nonempty_prefixes {first final : List MachineState}
   · rw [stable.at_prefix (some seed) n (by omega)]
     simpa only [List.take_length] using incoming first.length
 
+theorem IncrementingReturnAt.final {first boundary final : List MachineState} {address old}
+    (phase : IncrementingReturnAt first boundary final address old) (seed : Option Pending) :
+    scan seed final = none := by
+  obtain ⟨_, _, _, _, _, _, returned⟩ := phase
+  exact returned.final seed
+
+theorem ReturningExtension.nonempty_before_return {first final : List MachineState}
+    (phase : ReturningExtension first final) (seed : Pending)
+    (incoming : ∀ n, scan (some seed) (first.take n) ≠ none)
+    (n : Nat) (proper : n < final.length) : scan (some seed) (final.take n) ≠ none := by
+  by_cases early : n ≤ first.length
+  · rw [take_prefixed phase.prefix n early]
+    exact incoming n
+  · rw [phase.at_prefix (some seed) n (by omega), ite_eq_left proper]
+    simpa only [List.take_length] using incoming first.length
+
+#print axioms IncrementingReturnAt.final
+#print axioms ReturningExtension.nonempty_before_return
 #print axioms IncrementingReturnAt.nonempty_before_return
 #print axioms StableExtension.nonempty_prefixes
 #print axioms IncrementingReturnAt.cut_boundary

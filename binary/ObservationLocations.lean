@@ -146,31 +146,47 @@ theorem edge_targets (rxSection : Nat) (before after : MachineState)
                       · rw [ite_eq_right h10] at observed
                         by_cases h11 : before.pc = Image.PeerGet.entry + 0x94
                         · rw [ite_eq_left h11] at observed
-                          change Except.ok _ = Except.ok delta at observed
-                          have equal := Except.ok.inj observed
-                          subst delta
-                          simp [decision]
-                        · rw [ite_eq_right h11] at observed
-                          by_cases h12 : before.pc = Image.PeerGet.entry + 0xb5
-                          · rw [ite_eq_left h12] at observed
+                          cases successor : choice after.pc (Image.PeerGet.entry+0x96) (Image.PeerGet.entry+0x96) with
+                          | error error => rw [successor] at observed; cases observed
+                          | ok value =>
+                            rw [successor] at observed
                             change Except.ok _ = Except.ok delta at observed
                             have equal := Except.ok.inj observed
                             subst delta
                             simp [decision]
-                          · rw [ite_eq_right h12] at observed
-                            by_cases h13 : before.pc = Image.PeerGet.entry + 0xc3
-                            · rw [ite_eq_left h13] at observed
+                        · rw [ite_eq_right h11] at observed
+                          by_cases h12 : before.pc = Image.PeerGet.entry + 0xb5
+                          · rw [ite_eq_left h12] at observed
+                            cases successor : choice after.pc (Image.PeerGet.entry+0xb7) (Image.PeerGet.entry+0xb7) with
+                            | error error => rw [successor] at observed; cases observed
+                            | ok value =>
+                              rw [successor] at observed
                               change Except.ok _ = Except.ok delta at observed
                               have equal := Except.ok.inj observed
                               subst delta
                               simp [decision]
-                            · rw [ite_eq_right h13] at observed
-                              by_cases h14 : before.pc = Image.PeerGet.entry + 0xd4
-                              · rw [ite_eq_left h14] at observed
+                          · rw [ite_eq_right h12] at observed
+                            by_cases h13 : before.pc = Image.PeerGet.entry + 0xc3
+                            · rw [ite_eq_left h13] at observed
+                              cases successor : choice after.pc (Image.PeerGet.entry+0xc8) (Image.PeerGet.entry+0xc8) with
+                              | error error => rw [successor] at observed; cases observed
+                              | ok value =>
+                                rw [successor] at observed
                                 change Except.ok _ = Except.ok delta at observed
                                 have equal := Except.ok.inj observed
                                 subst delta
                                 simp [decision]
+                            · rw [ite_eq_right h13] at observed
+                              by_cases h14 : before.pc = Image.PeerGet.entry + 0xd4
+                              · rw [ite_eq_left h14] at observed
+                                cases successor : choice after.pc (Image.PeerGet.entry+0xd6) (Image.PeerGet.entry+0xd6) with
+                                | error error => rw [successor] at observed; cases observed
+                                | ok value =>
+                                  rw [successor] at observed
+                                  change Except.ok _ = Except.ok delta at observed
+                                  have equal := Except.ok.inj observed
+                                  subst delta
+                                  simp [decision]
                               · rw [ite_eq_right h14] at observed
                                 by_cases h15 : before.pc = Image.PeerGet.entry + 0xaf
                                 · rw [ite_eq_left h15] at observed
@@ -347,31 +363,47 @@ theorem edge_bucket_cuts (rxSection : Nat) (before after : MachineState)
                       · rw [ite_eq_right h10] at observed
                         by_cases h11 : before.pc = Image.PeerGet.entry + 0x94
                         · rw [ite_eq_left h11] at observed
-                          change Except.ok _ = Except.ok delta at observed
-                          have equal := Except.ok.inj observed
-                          subst delta
-                          simp [decision, BucketTag]
-                        · rw [ite_eq_right h11] at observed
-                          by_cases h12 : before.pc = Image.PeerGet.entry + 0xb5
-                          · rw [ite_eq_left h12] at observed
+                          cases successor : choice after.pc (Image.PeerGet.entry+0x96) (Image.PeerGet.entry+0x96) with
+                          | error error => rw [successor] at observed; cases observed
+                          | ok value =>
+                            rw [successor] at observed
                             change Except.ok _ = Except.ok delta at observed
                             have equal := Except.ok.inj observed
                             subst delta
                             simp [decision, BucketTag]
-                          · rw [ite_eq_right h12] at observed
-                            by_cases h13 : before.pc = Image.PeerGet.entry + 0xc3
-                            · rw [ite_eq_left h13] at observed
+                        · rw [ite_eq_right h11] at observed
+                          by_cases h12 : before.pc = Image.PeerGet.entry + 0xb5
+                          · rw [ite_eq_left h12] at observed
+                            cases successor : choice after.pc (Image.PeerGet.entry+0xb7) (Image.PeerGet.entry+0xb7) with
+                            | error error => rw [successor] at observed; cases observed
+                            | ok value =>
+                              rw [successor] at observed
                               change Except.ok _ = Except.ok delta at observed
                               have equal := Except.ok.inj observed
                               subst delta
                               simp [decision, BucketTag]
-                            · rw [ite_eq_right h13] at observed
-                              by_cases h14 : before.pc = Image.PeerGet.entry + 0xd4
-                              · rw [ite_eq_left h14] at observed
+                          · rw [ite_eq_right h12] at observed
+                            by_cases h13 : before.pc = Image.PeerGet.entry + 0xc3
+                            · rw [ite_eq_left h13] at observed
+                              cases successor : choice after.pc (Image.PeerGet.entry+0xc8) (Image.PeerGet.entry+0xc8) with
+                              | error error => rw [successor] at observed; cases observed
+                              | ok value =>
+                                rw [successor] at observed
                                 change Except.ok _ = Except.ok delta at observed
                                 have equal := Except.ok.inj observed
                                 subst delta
                                 simp [decision, BucketTag]
+                            · rw [ite_eq_right h13] at observed
+                              by_cases h14 : before.pc = Image.PeerGet.entry + 0xd4
+                              · rw [ite_eq_left h14] at observed
+                                cases successor : choice after.pc (Image.PeerGet.entry+0xd6) (Image.PeerGet.entry+0xd6) with
+                                | error error => rw [successor] at observed; cases observed
+                                | ok value =>
+                                  rw [successor] at observed
+                                  change Except.ok _ = Except.ok delta at observed
+                                  have equal := Except.ok.inj observed
+                                  subst delta
+                                  simp [decision, BucketTag]
                               · rw [ite_eq_right h14] at observed
                                 by_cases h15 : before.pc = Image.PeerGet.entry + 0xaf
                                 · rw [ite_eq_left h15] at observed
@@ -409,6 +441,257 @@ theorem observed_bucket_cuts (rxSection : Nat) (history : List MachineState)
           rcases List.mem_append.mp member with first | later
           · exact edge_bucket_cuts _ _ _ _ emitted point first tag
           · exact ih remaining tail point later tag
+
+/-- Helper choices, including the straight-line compiler-merged decisions. -/
+def HelperTag (tag : MirrorHistory.Tag) : Prop :=
+  tag = .decision .peerGetMaybeZeroNull ∨ tag = .decision .refcountAddNzZero ∨
+    tag = .decision .refcountAddNzRetry ∨ tag = .decision .refcountAddNzNegative ∨
+    tag = .decision .refcountAddNzWraps ∨ tag = .decision .peerGetMaybeZeroDead
+
+theorem edge_helper_cuts (rxSection : Nat) (before after : MachineState)
+    (delta : List Point) (observed : edge rxSection before after = .ok delta) :
+    ∀ point ∈ delta, HelperTag point.tag → point.machine.pc ∈ Image.cutPoints := by
+  unfold edge at observed
+  dsimp only at observed
+  by_cases h0 : before.pc = Image.Lookup.entry + 0x32 ∨ before.pc = Image.Lookup.entry + 0x6a
+  · rw [ite_eq_left h0] at observed
+    cases selected : choice after.pc (Image.Lookup.entry + 0x34) (Image.Lookup.entry + 0x6c) with
+    | error error =>
+      rw [selected] at observed
+      cases observed
+    | ok value =>
+      rw [selected] at observed
+      have target := choice_success selected
+      change Except.ok _ = Except.ok delta at observed
+      have equal := Except.ok.inj observed
+      subst delta
+
+      cases value <;> simp_all [decision, HelperTag, Image.cutPoints, Image.Lookup.entry, Image.PeerGet.entry]
+  · rw [ite_eq_right h0] at observed
+    by_cases h1 : before.pc = Image.Lookup.entry + 0x5c
+    · rw [ite_eq_left h1] at observed
+      cases selected : choice after.pc (Image.Lookup.entry + 0x95) (Image.Lookup.entry + 0x5e) with
+      | error error =>
+        rw [selected] at observed
+        cases observed
+      | ok value =>
+        rw [selected] at observed
+        have target := choice_success selected
+        change Except.ok _ = Except.ok delta at observed
+        have equal := Except.ok.inj observed
+        subst delta
+
+        cases value <;> simp_all [decision, HelperTag, Image.cutPoints, Image.Lookup.entry, Image.PeerGet.entry]
+    · rw [ite_eq_right h1] at observed
+      by_cases h2 : before.pc = Image.Lookup.entry + 0xab
+      · rw [ite_eq_left h2] at observed
+        cases selected : choice after.pc (Image.Lookup.entry + 0xad) (Image.Lookup.entry + 0x71) with
+        | error error =>
+          rw [selected] at observed
+          cases observed
+        | ok value =>
+          rw [selected] at observed
+          have target := choice_success selected
+          change Except.ok _ = Except.ok delta at observed
+          have equal := Except.ok.inj observed
+          subst delta
+
+          cases value <;> simp_all [decision, HelperTag, Image.cutPoints, Image.Lookup.entry, Image.PeerGet.entry]
+      · rw [ite_eq_right h2] at observed
+        by_cases h3 : before.pc = Image.Lookup.entry + 0xb5
+        · rw [ite_eq_left h3] at observed
+          by_cases wrong : (after.pc != Image.PeerGet.entry) = true
+          · simp only [wrong, ite_true] at observed
+            cases observed
+          · simp only [wrong] at observed
+            change Except.ok _ = Except.ok delta at observed
+            have equal := Except.ok.inj observed
+            subst delta
+            simp [call, HelperTag]
+        · rw [ite_eq_right h3] at observed
+          by_cases h4 : before.pc = Image.Lookup.entry + 0xc3
+          · rw [ite_eq_left h4] at observed
+            cases selected : choice after.pc (Image.Lookup.entry + 0xc5) (Image.Lookup.entry + 0x71) with
+            | error error =>
+              rw [selected] at observed
+              cases observed
+            | ok value =>
+              rw [selected] at observed
+              have target := choice_success selected
+              change Except.ok _ = Except.ok delta at observed
+              have equal := Except.ok.inj observed
+              subst delta
+              cases value <;> simp_all [decision, HelperTag, Image.cutPoints, Image.Lookup.entry, Image.PeerGet.entry]
+          · rw [ite_eq_right h4] at observed
+            by_cases h5 : before.pc = Image.Lookup.entry + 0x94
+            · rw [ite_eq_left h5] at observed
+              change Except.ok _ = Except.ok delta at observed
+              have equal := Except.ok.inj observed
+              subst delta
+              simp [returned, HelperTag]
+            · rw [ite_eq_right h5] at observed
+              by_cases h6 : before.pc = Image.PeerGet.entry + 0x15
+              · rw [ite_eq_left h6] at observed
+                cases selected : choice after.pc (Image.PeerGet.entry + 0xdd) (Image.PeerGet.entry + 0x1b) with
+                | error error =>
+                  rw [selected] at observed
+                  cases observed
+                | ok value =>
+                  rw [selected] at observed
+                  have target := choice_success selected
+                  change Except.ok _ = Except.ok delta at observed
+                  have equal := Except.ok.inj observed
+                  subst delta
+                  cases value <;> simp_all [decision, HelperTag, Image.cutPoints, Image.Lookup.entry, Image.PeerGet.entry]
+              · rw [ite_eq_right h6] at observed
+                by_cases h7 : before.pc = Image.PeerGet.entry + 0x3d
+                · rw [ite_eq_left h7] at observed
+                  cases selected : choice after.pc (Image.PeerGet.entry + 0xb0) (Image.PeerGet.entry + 0x3f) with
+                  | error error =>
+                    rw [selected] at observed
+                    cases observed
+                  | ok value =>
+                    rw [selected] at observed
+                    have target := choice_success selected
+                    change Except.ok _ = Except.ok delta at observed
+                    have equal := Except.ok.inj observed
+                    subst delta
+                    cases value <;> simp_all [decision, HelperTag, Image.cutPoints, Image.Lookup.entry, Image.PeerGet.entry]
+                · rw [ite_eq_right h7] at observed
+                  by_cases h8 : before.pc = Image.PeerGet.entry + 0x63
+                  · rw [ite_eq_left h8] at observed
+                    cases selected : choice after.pc (Image.PeerGet.entry + 0xf2) (Image.PeerGet.entry + 0x69) with
+                    | error error =>
+                      rw [selected] at observed
+                      cases observed
+                    | ok value =>
+                      rw [selected] at observed
+                      have target := choice_success selected
+                      change Except.ok _ = Except.ok delta at observed
+                      have equal := Except.ok.inj observed
+                      subst delta
+                      cases value <;> simp_all [decision, HelperTag, Image.cutPoints, Image.Lookup.entry, Image.PeerGet.entry]
+                  · rw [ite_eq_right h8] at observed
+                    by_cases h9 : before.pc = Image.PeerGet.entry + 0x79
+                    · rw [ite_eq_left h9] at observed
+                      cases selected : choice after.pc (Image.PeerGet.entry + 0xe1) (Image.PeerGet.entry + 0x7b) with
+                      | error error =>
+                        rw [selected] at observed
+                        cases observed
+                      | ok value =>
+                        rw [selected] at observed
+                        have target := choice_success selected
+                        change Except.ok _ = Except.ok delta at observed
+                        have equal := Except.ok.inj observed
+                        subst delta
+                        cases value <;> simp_all [decision, HelperTag, Image.cutPoints, Image.Lookup.entry, Image.PeerGet.entry]
+                    · rw [ite_eq_right h9] at observed
+                      by_cases h10 : before.pc = Image.PeerGet.entry + 0x8d
+                      · rw [ite_eq_left h10] at observed
+                        cases selected : choice after.pc (Image.PeerGet.entry + 0xe1) (Image.PeerGet.entry + 0x8f) with
+                        | error error =>
+                          rw [selected] at observed
+                          cases observed
+                        | ok value =>
+                          rw [selected] at observed
+                          have target := choice_success selected
+                          change Except.ok _ = Except.ok delta at observed
+                          have equal := Except.ok.inj observed
+                          subst delta
+                          cases value <;> simp_all [decision, HelperTag, Image.cutPoints, Image.Lookup.entry, Image.PeerGet.entry]
+                      · rw [ite_eq_right h10] at observed
+                        by_cases h11 : before.pc = Image.PeerGet.entry + 0x94
+                        · rw [ite_eq_left h11] at observed
+                          cases successor : choice after.pc (Image.PeerGet.entry+0x96) (Image.PeerGet.entry+0x96) with
+                          | error error => rw [successor] at observed; cases observed
+                          | ok value =>
+                            rw [successor] at observed
+                            have target := choice_success successor
+                            simp only [ite_self] at target
+                            change Except.ok _ = Except.ok delta at observed
+                            have equal := Except.ok.inj observed
+                            subst delta
+                            simp [decision, HelperTag, target, Image.cutPoints, Image.PeerGet.entry]
+                        · rw [ite_eq_right h11] at observed
+                          by_cases h12 : before.pc = Image.PeerGet.entry + 0xb5
+                          · rw [ite_eq_left h12] at observed
+                            cases successor : choice after.pc (Image.PeerGet.entry+0xb7) (Image.PeerGet.entry+0xb7) with
+                            | error error => rw [successor] at observed; cases observed
+                            | ok value =>
+                              rw [successor] at observed
+                              have target := choice_success successor
+                              simp only [ite_self] at target
+                              change Except.ok _ = Except.ok delta at observed
+                              have equal := Except.ok.inj observed
+                              subst delta
+                              simp [decision, HelperTag, target, Image.cutPoints, Image.PeerGet.entry]
+                          · rw [ite_eq_right h12] at observed
+                            by_cases h13 : before.pc = Image.PeerGet.entry + 0xc3
+                            · rw [ite_eq_left h13] at observed
+                              cases successor : choice after.pc (Image.PeerGet.entry+0xc8) (Image.PeerGet.entry+0xc8) with
+                              | error error => rw [successor] at observed; cases observed
+                              | ok value =>
+                                rw [successor] at observed
+                                have target := choice_success successor
+                                simp only [ite_self] at target
+                                change Except.ok _ = Except.ok delta at observed
+                                have equal := Except.ok.inj observed
+                                subst delta
+                                simp [decision, HelperTag, target, Image.cutPoints, Image.PeerGet.entry]
+                            · rw [ite_eq_right h13] at observed
+                              by_cases h14 : before.pc = Image.PeerGet.entry + 0xd4
+                              · rw [ite_eq_left h14] at observed
+                                cases successor : choice after.pc (Image.PeerGet.entry+0xd6) (Image.PeerGet.entry+0xd6) with
+                                | error error => rw [successor] at observed; cases observed
+                                | ok value =>
+                                  rw [successor] at observed
+                                  have target := choice_success successor
+                                  simp only [ite_self] at target
+                                  change Except.ok _ = Except.ok delta at observed
+                                  have equal := Except.ok.inj observed
+                                  subst delta
+                                  simp [decision, HelperTag, target, Image.cutPoints, Image.PeerGet.entry]
+                              · rw [ite_eq_right h14] at observed
+                                by_cases h15 : before.pc = Image.PeerGet.entry + 0xaf
+                                · rw [ite_eq_left h15] at observed
+                                  change Except.ok _ = Except.ok delta at observed
+                                  have equal := Except.ok.inj observed
+                                  subst delta
+                                  simp [returned, HelperTag]
+                                · rw [ite_eq_right h15] at observed
+                                  change Except.ok [] = Except.ok delta at observed
+                                  have equal := Except.ok.inj observed
+                                  subst delta
+                                  simp
+
+theorem observed_helper_cuts (rxSection : Nat) (history : List MachineState)
+    (events : List Point) (observed : observeHistory (edge rxSection) history = .ok events) :
+    ∀ point ∈ events, HelperTag point.tag → point.machine.pc ∈ Image.cutPoints := by
+  induction history generalizing events with
+  | nil => cases observed; simp
+  | cons before rest ih =>
+    cases rest with
+    | nil => cases observed; simp
+    | cons after rest =>
+      simp only [observeHistory] at observed
+      cases emitted : edge rxSection before after with
+      | error error => rw [emitted] at observed; cases observed
+      | ok delta =>
+        rw [emitted] at observed
+        cases tail : observeHistory (edge rxSection) (after :: rest) with
+        | error error => rw [tail] at observed; cases observed
+        | ok remaining =>
+          rw [tail] at observed
+          have equal : events = delta ++ remaining := (Except.ok.inj observed).symm
+          subst events
+          intro point member tag
+          rcases List.mem_append.mp member with first | later
+          · exact edge_helper_cuts _ _ _ _ emitted point first tag
+          · exact ih remaining tail point later tag
+
+
+#print axioms edge_helper_cuts
+#print axioms observed_helper_cuts
 
 private theorem observe_entry (rxSection : Nat) (initial : MachineState) (rest : List MachineState)
     (entry : initial.pc = Image.Lookup.entry) :

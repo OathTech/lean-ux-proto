@@ -66,6 +66,17 @@ def main():
         cut_addresses.extend(sorted(starts & {i["pc"] for i in rows}))
         cut_addresses.extend(i["pc"] for i in rows
                              if i["normalized"].split()[0] in {"call", "cmp", "test", "ret"})
+        # The observer also emits semantic decisions on straight-line
+        # instructions. Include their actual successors, even when they are
+        # not a control-flow block start or a call/comparison instruction.
+        if f['name'] == 'wg_peer_get_maybe_zero':
+            by_pc = {i['pc']: i for i in rows}
+            for offset in (0x94, 0xb5, 0xc3, 0xd4):
+                source = by_pc[f['entry'] + offset]
+                successor = source['pc'] + len(bytes.fromhex(source['bytes']))
+                if successor not in by_pc:
+                    raise ValueError(f'decision successor is not an instruction: {successor:x}')
+                cut_addresses.append(successor)
         blocks = []
         for i in rows:
             if i['pc'] in starts:
@@ -84,7 +95,7 @@ def main():
                  '  ' + ' ++ '.join(f'r{b[0]["pc"] - f["entry"]:02x}' for b in blocks),
                  f'end {ns}']
     text += [
-        '/-- Anchored region entries, calls, compares/tests and returns; service internals are outside this cut domain. -/',
+        '/-- Anchored region entries, calls, compares/tests, semantic decision successors and returns; service internals are outside this cut domain. -/',
         'def cutPoints : List Int64 := [' + ", ".join(f".ofNat {pc}" for pc in sorted(set(cut_addresses))) + "]",
         '/-- Canonical labels also resolve in the ambient image, outside the anchored ranges. -/',
         'def canonicalAddress (name : String) : Option Int64 := do',

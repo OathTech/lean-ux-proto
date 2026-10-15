@@ -336,7 +336,7 @@ theorem bucket_simulation (fetch : Int64 → Option Decoded)
           (LookupSearch.result c.kinds c.query v.bucket sourceHistory world).1.2 ∧
         R c t.history (seen ++ delta) t.machine
           (LookupSearch.result c.kinds c.query v.bucket sourceHistory world).2 ∧
-        PeerCountPhase.StableExtension history t.history)
+        PeerCountPhase.StableExtension history t.history ∧ DecisionPoints delta)
       ⟨⟨base, Image.Lookup.entry+0x2f⟩, history⟩ := by
   have run := bucket_related fetch agree tracePc traceCmp traceConstCmp c world v projected
     base coverage preempt ready entryBucket currentCount history seen prior related observed rawObserved inactive
@@ -363,7 +363,7 @@ theorem bucket_simulation (fetch : Int64 → Option Decoded)
   have mapped : (cells c v).map Prod.snd = v.bucket := by
     simp [cells, List.map_map, Function.comp_def]
   rw [mapped, related.2.2.2, ← records] at sourcePoints
-  refine ⟨stop, frame, delta, observedFull, rawFull, ?_, ?_, finalR, stable⟩
+  refine ⟨stop, frame, delta, observedFull, rawFull, ?_, ?_, finalR, stable, tags⟩
   · simpa only [recorded, sourcePoints] using allPoints
   · simpa only [recorded, sourcePoints] using allCuts
 

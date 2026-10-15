@@ -2187,3 +2187,82 @@ throughput is claimed. The complete helper simulation, owner/BH/return
 composition, generic untouched-WireGuard frame transport and function-level
 lookup theorem remain open. No landed property is yet transported. The
 verbatim TrustBase quoted above remains byte-for-byte current.
+
+### Helper simulation and accepted source bridge, 09:35:24 UTC
+
+Milestone 1 is still incomplete. `LookupHelperPrepared.helper_from_call`
+now executes every accepted helper path (NULL, present zero-count, and live)
+from the actual lookup CALL to the actual return at lookup+0xba. It retains
+R at all emitting points and all anchored cuts, the exact helper-return
+snapshot, the conditional write footprint, and the logged source execution
+for every incoming source history. Its ABI, mapped stack and separation
+premises are derived from LookupEntry and the executed bucket/call prefix.
+`LookupAcceptedSource.lookup_accepts_helper` derives helper acceptance from
+the actual accepted indexLookup run and retains that run's accepted suffix.
+These are supporting compositions, not the section 1 function theorem.
+
+[AGENT 2026-10-15] Add four semantic successors to the correspondence cuts:
+peer-get +0x96, +0xb7, +0xc8 and +0xd6. They emit the source's computed
+live/dead, negative and wrap decisions even without a corresponding branch.
+The generator derives the successors from the decoded instruction lengths
+and checks instruction boundaries; the observer checks the exact successor.
+The decoded instruction listing and fetch function are unchanged. This adds
+no service premise: NoAnchoredReentry already excludes every anchored
+instruction address, not merely listed cuts.
+
+The physical owner-store component now relates the pending word to the
+actual helper-return snapshot, and its committed word to the actual returned
+value, including NULL. `LookupOwnerSource.owner_set_project` proves the
+landed setter preserves the focused count even when the handshake owner is
+the referenced peer. Finding 1 remains recorded. Neither Pre_lookup nor R
+was narrowed, and TrustBase is unchanged; its verbatim quotation above is
+still byte-for-byte current. No ISA extension was needed in this interval.
+
+Read-only review identified and repaired three API omissions: four missing
+semantic cuts, failure to retain the exact helper-return machine, and an
+unconditional count-write separation premise on the dead branch. The
+accepted helper now requires count-write separation only on the live branch
+and retains that conditional footprint. Another review requested the logged
+helper equation for arbitrary incoming histories; that is now exported.
+No soundness defect or additional dead-peer restriction was found in the
+entry-to-helper composition. A further valid alias case remains to carry:
+the output may overlap dead helper scratch below the outer saved frame.
+The broad byte frame alone does not prove that this storage remains mapped;
+the executed return has the necessary facts. They will be retained, without
+strengthening Pre_lookup. This is a proof-interface omission, not a mirror
+or kernel defect.
+
+Validation: the default capped build passed (324 jobs). Fresh kernel replay
+passed LookupHelperPrepared, LookupOwnerSource and LookupOwnerRelation,
+and LookupAcceptedSource, including their imports. Printed axioms are standard only. The changed-code escape
+scan and diff check passed, and the TrustBase quote comparison passed. The
+three-way test was rerun after the observer/cut change on
+`d1_wrong_receiver_index_same_bucket`, with exact per-invocation coverage,
+repetitions, helper coverage and operands, and mirror decisions agreeing.
+The exact Pre witness ran to return: 191 instructions, six points, two
+undefined-value seeds. It is materialised from the recorded operation's
+mirror read projection, not a captured kernel entry or a reachability proof.
+Reproduce with `LEANUX_QEMU_SLOTS=16 capped -- /usr/bin/python3 -B binary/run.py
+--check .artifacts/check/binary-tv-20261015-024459 --trace
+d1_wrong_receiver_index_same_bucket`, and in binary/ with
+`LEANUX_QEMU_SLOTS=16 capped -- lake env lean LookupWitnessTest.lean`.
+
+Development failures were not passes: ordinary elaboration failures, one
+Lean deterministic heartbeat timeout in an intermediate returning-interior
+proof, an initial generator invocation using an interpreter without
+pyelftools, and an escape-scan false positive caused by stripping line
+comments before block comments. The proof was restructured without the
+attempted recursion override; generation succeeded with /usr/bin/python3;
+the corrected code-only scan passed. No KILLED banner or wall timeout
+occurred. No native reduction axiom or proof escape was introduced.
+
+Measured interval: 08:14:39 to 09:35:24 UTC, 4845 seconds (1.346 primary-agent
+hours), with two concurrent read-only reviews. Three helper path compositions,
+entry/call preparation and source acceptance were hand-finished; they are
+not counted as separately certified anchored regions. Zero newly certified
+regions/functions, hence zero certified regions/functions per agent-day;
+no automated grind throughput or property transport is claimed. The owner
+region's complete cut composition, output mapping/store, BH-enable and outer
+return, generic untouched-WireGuard frame transport, and the function-level
+lookup theorem remain open. This is a progress checkpoint, not the
+milestone-1 go/no-go report.

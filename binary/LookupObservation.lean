@@ -70,11 +70,18 @@ def edge (rxSection : Nat) (s t : MachineState) : Except String (List Point) := 
     let wraps ← choice t.pc (p + 0xe1) (p + 0x8f)
     return [decision rxSection .refcountAddNzWraps wraps t]
   if s.pc = p + 0x94 then
+    let _ ← choice t.pc (p + 0x96) (p + 0x96)
     return [decision rxSection .peerGetMaybeZeroDead
       (s.data.regs.get (.low .rbp .W32) == 0) t]
-  if s.pc = p + 0xb5 then return [decision rxSection .refcountAddNzNegative false t]
-  if s.pc = p + 0xc3 then return [decision rxSection .refcountAddNzWraps false t]
-  if s.pc = p + 0xd4 then return [decision rxSection .peerGetMaybeZeroDead true t]
+  if s.pc = p + 0xb5 then
+    let _ ← choice t.pc (p + 0xb7) (p + 0xb7)
+    return [decision rxSection .refcountAddNzNegative false t]
+  if s.pc = p + 0xc3 then
+    let _ ← choice t.pc (p + 0xc8) (p + 0xc8)
+    return [decision rxSection .refcountAddNzWraps false t]
+  if s.pc = p + 0xd4 then
+    let _ ← choice t.pc (p + 0xd6) (p + 0xd6)
+    return [decision rxSection .peerGetMaybeZeroDead true t]
   if s.pc = p + 0xaf then return [returned "wg_peer_get_maybe_zero" t]
   return []
 

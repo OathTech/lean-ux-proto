@@ -147,31 +147,47 @@ theorem edge_helper_return_pc (rxSection : Nat) (before after : MachineState)
                       · rw [ite_eq_right h10] at observed
                         by_cases h11 : before.pc = Image.PeerGet.entry + 0x94
                         · rw [ite_eq_left h11] at observed
-                          change Except.ok _ = Except.ok delta at observed
-                          have equal := Except.ok.inj observed
-                          subst delta
-                          simp [decision]
-                        · rw [ite_eq_right h11] at observed
-                          by_cases h12 : before.pc = Image.PeerGet.entry + 0xb5
-                          · rw [ite_eq_left h12] at observed
+                          cases successor : choice after.pc (Image.PeerGet.entry+0x96) (Image.PeerGet.entry+0x96) with
+                          | error error => rw [successor] at observed; cases observed
+                          | ok value =>
+                            rw [successor] at observed
                             change Except.ok _ = Except.ok delta at observed
                             have equal := Except.ok.inj observed
                             subst delta
                             simp [decision]
-                          · rw [ite_eq_right h12] at observed
-                            by_cases h13 : before.pc = Image.PeerGet.entry + 0xc3
-                            · rw [ite_eq_left h13] at observed
+                        · rw [ite_eq_right h11] at observed
+                          by_cases h12 : before.pc = Image.PeerGet.entry + 0xb5
+                          · rw [ite_eq_left h12] at observed
+                            cases successor : choice after.pc (Image.PeerGet.entry+0xb7) (Image.PeerGet.entry+0xb7) with
+                            | error error => rw [successor] at observed; cases observed
+                            | ok value =>
+                              rw [successor] at observed
                               change Except.ok _ = Except.ok delta at observed
                               have equal := Except.ok.inj observed
                               subst delta
                               simp [decision]
-                            · rw [ite_eq_right h13] at observed
-                              by_cases h14 : before.pc = Image.PeerGet.entry + 0xd4
-                              · rw [ite_eq_left h14] at observed
+                          · rw [ite_eq_right h12] at observed
+                            by_cases h13 : before.pc = Image.PeerGet.entry + 0xc3
+                            · rw [ite_eq_left h13] at observed
+                              cases successor : choice after.pc (Image.PeerGet.entry+0xc8) (Image.PeerGet.entry+0xc8) with
+                              | error error => rw [successor] at observed; cases observed
+                              | ok value =>
+                                rw [successor] at observed
                                 change Except.ok _ = Except.ok delta at observed
                                 have equal := Except.ok.inj observed
                                 subst delta
                                 simp [decision]
+                            · rw [ite_eq_right h13] at observed
+                              by_cases h14 : before.pc = Image.PeerGet.entry + 0xd4
+                              · rw [ite_eq_left h14] at observed
+                                cases successor : choice after.pc (Image.PeerGet.entry+0xd6) (Image.PeerGet.entry+0xd6) with
+                                | error error => rw [successor] at observed; cases observed
+                                | ok value =>
+                                  rw [successor] at observed
+                                  change Except.ok _ = Except.ok delta at observed
+                                  have equal := Except.ok.inj observed
+                                  subst delta
+                                  simp [decision]
                               · rw [ite_eq_right h14] at observed
                                 by_cases h15 : before.pc = Image.PeerGet.entry + 0xaf
                                 · rw [ite_eq_left h15] at observed
