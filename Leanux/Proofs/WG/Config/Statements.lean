@@ -18,6 +18,7 @@ import Leanux.Proofs.WG.Config.KeyInstallEffects
 import Leanux.Proofs.WG.Config.DumpCancellation
 import Leanux.Proofs.WG.Config.KeyRequest
 import Leanux.Proofs.WG.Config.Getter
+import Leanux.Proofs.WG.Config.ScalarGetter
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
@@ -629,5 +630,34 @@ theorem original_single_peer_getter (pid : PeerId) (d : Device) (p : Peer) (sock
       (fun result w => result = .ok (singlePeerJson d p) ∧ w.k.wg = some d ∧
         w.k.nlSock7 = { completedSock sock d p with queue := [] }) :=
   wgGetDevice_single pid d p sock peers resident noIps room idle empty
+
+/-- Setting an existing stopped peer's preshared key and keepalive interval,
+then calling the original public getter after either setter return, returns the
+exact applied configuration
+and a drained socket. A malformed second peer entry makes the setter return
+EINVAL but does not roll back the first update; the same readback holds.
+The bound on the live reference count guarantees the temporary lookup reference
+can be acquired. The single peer has no allowed IPs and fits one dump chunk. -/
+theorem original_scalar_get_after_set (d : Device) (key psk : Key) (interval : Nat) (bad : Bool)
+    (pid : PeerId) (p : Peer) (sock : NlSock)
+    (peers : d.peerList = [pid])
+    (found : d.peerHashtable.find? (·.1 == key) = some (key, pid))
+    (resident : d.peers[pid]? = some p) (live : 0 < p.refcount)
+    (bounded : p.refcount + 1 < 2 ^ 31) (down : d.running = false)
+    (noIps : p.allowedipsList = []) (room : devicePrefixSpace d + 168 + 20 ≤ NLMSG_GOODSIZE)
+    (idle : sock.cbRunning = false) (empty : sock.queue = []) :
+    Returns (do
+      let ret ← wgSetDevice (scalarDeviceAttrs d key psk interval bad)
+      let dump ← wgGetDevice (byIndex d)
+      pure (ret, dump))
+      (fun w => w.k.wg = some d ∧ w.k.nlSock7 = sock ∧ selectsDevice w d)
+      (fun result w =>
+        let updated := scalarRequestDevice d pid p psk interval
+        let configured := { p with presharedKey := psk, persistentKeepaliveInterval := interval }
+        result = ((if bad then -EINVAL else 0), .ok (singlePeerJson updated configured)) ∧
+          w.k.wg = some updated ∧
+          w.k.nlSock7 = { completedSock sock updated configured with queue := [] }) :=
+  scalar_outer_get_after_set d key psk interval bad pid p sock peers found resident live bounded
+    down noIps room idle empty
 
 end Leanux.Proofs.WG.Config

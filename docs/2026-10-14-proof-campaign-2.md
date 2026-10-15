@@ -257,6 +257,19 @@ confirmed these premises and the distinction from multipart snapshots. A second
 read-through of the completed increment found no semantic defect; its premature
 validation sentence was corrected before the checks completed.
 
+`ReadbackFrames` and `ScalarGetter` now carry socket 7 and fixture interface
+selection through scalar configuration, then compose the original `wgSetDevice`
+and `wgGetDevice`. For one resident, live peer on a stopped device, with a
+bounded temporary reference count and no allowed IPs, the public getter returns
+the new preshared key and keepalive interval in the exact canonical JSON. The
+full Device includes the generation increment and balanced reference; the socket
+is drained and finished. With a malformed second peer entry, the setter returns
+`-EINVAL` and the same first update is read back. This is a total contract for
+the composed original operations under the named premises, not an accepted
+runner-trace witness or a general multipart theorem. Independent review found no
+correctness defect and confirmed the retained partial-update semantics; public
+key/table coherence is not assumed or claimed.
+
 Remaining: private-key collision removal and mixed-attribute outer composition; full peer
 removal/replacement and allowed-IP ownership, other partial-error combinations,
 and general dump chunks/coalescing. Deferred removal work can change other
@@ -274,14 +287,16 @@ check: both the C and the mirror's own design require restoring pre-nest room.
 gives the witness and reproduction command. Ranked mirror suggestion 1:
 correct the saved cancellation snapshot (altitude-preserving).
 
-Validation: all fifty-four statements pass scoped build, standard-axiom inspection
+Validation: all fifty-five statements pass scoped build, standard-axiom inspection
 (only `propext`, `Classical.choice`, `Quot.sound`), and `capped --
 scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Config.Statements`.
 The full proof gate fails in inherited `CounterWindow.Refinement`; token/import
 checks pass. Effort includes repaired proof-elaboration failures, including two
 local heartbeat limits resolved by simplifying put calculations before their
 continuations. The suggested `vcgen` replacement failed with a missing toolchain
-constant; the existing `mvcgen` proofs were retained and rechecked. No cap hit, infrastructure rerun, mirror edit, differential
+constant; the existing `mvcgen` proofs were retained and rechecked. A direct
+scalar-frame proof hit its heartbeat limit; the staged lookup/update/release
+contracts closed the same frame without raising the limit. No cap hit, infrastructure rerun, mirror edit, differential
 check or guest run. Builds use full Lake module parallelism with
 `LEAN_NUM_THREADS=32`; gate runs use `LEANUX_QEMU_SLOTS=16`, without a cap change.
 
