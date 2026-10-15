@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Origins.SessionMaterial
 import Leanux.Proofs.WG.Packets.RxOriginCuts
 import Leanux.Proofs.WG.Packets.RoutingCuts
 import Leanux.Proofs.WG.Packets.AffiliationCuts
@@ -2588,5 +2589,76 @@ theorem original_rx_origin_receipts (msg : List UInt8) (src : SkbSource) (ds : N
   ⟨RxOrigin.consume_erases msg src ds, RxOrigin.consume_projects msg src ds,
     RxOrigin.consume_valid msg src ds, RxOrigin.prepare_erases, RxOrigin.prepare_projects,
     RxOrigin.prepare_valid, RxOrigin.admission_execution msg src ds, RxOrigin.decrypt_receipt⟩
+
+/-- Local material support uses one actual successful session-front witness for
+both receiving material and the nullable keep-or-clear owner. The actual entry
+peer/state/word are recovered without affiliation assumptions. Support is
+installed before the session tail, which may delete the new key. Original
+erasure is unconditional; R2 projection uses exactly its prior AllocationInv.
+Valid incoming receipts remain valid on every outcome. This is a local adapter,
+not initialized Runner origin or cryptographic peer-identity authentication. -/
+theorem original_session_material_retention (pid : PeerId) :
+    Logged.ErasesPrefix (Origins.localSession pid) (WG.beginSession pid) ∧
+    Logged.ProjectsUnder Lifetimes.AllocationInv Origins.lifetime
+      (Origins.localSession pid) (Lifetimes.beginSessionPrefix pid) ∧
+    Logged.PrefixPreserves (fun h _ => Origins.Valid h) Origins.Valid (Origins.localSession pid) ∧
+    Logged.PrefixPreserves
+      (fun h w => MaterialOrigin.Valid SessionOrigin.Receipt.Valid (h.filterMap Origins.sessionDecode) ∧
+        Origins.Inv (Origins.sessions h) w)
+      (fun h => MaterialOrigin.Valid SessionOrigin.Receipt.Valid (h.filterMap Origins.sessionDecode))
+      (Origins.localSession pid) ∧
+    (∀ ctx w v, (SessionOrigin.front pid).run w = .ok (some ctx,v) →
+      ∃ d key, w.k.wg = some d ∧ d.peers[pid]? = some ctx.peer ∧
+        ctx.state = ctx.peer.handshakeState ∧ ctx.word = ctx.peer.handshakeEntryPeer ∧
+        ctx.slot = d.nextKeypairId ∧
+        Origins.view v = some (d.ifindex, fun q => if ctx.slot = q then some key else d.keypairs[q]?) ∧
+        key.internalId = w.k.keypairCounter + 1 ∧ key.peer = ctx.word ∧ key.receiving.isValid = true) ∧
+    (∀ kp w v result, (SessionOrigin.tail pid kp).run w = .ok (result,v) → Origins.Retains w v) ∧
+    (∀ word w v result, (WG.keypairCreate word).run w = .ok (result,v) → Origins.Retains w v) :=
+  ⟨Origins.localSession_erases pid, Origins.localSession_projects pid,
+    Origins.localSession_valid pid, Origins.localSession_support pid,
+    Origins.front_effect pid, fun kp _ _ _ hr => Origins.tail_retains pid kp hr,
+    Origins.create_retains⟩
+
+/-- An actual successful local decrypt appends its full run receipt after a
+matching session receipt in the SAME supplied journal. Incoming material support
+is explicit: an arbitrary supplied witness may be a standalone original run,
+not an earlier reached Runner occurrence. The exact stored packet, material,
+AEAD and record-transform equations are retained. Nullable owner support does
+not identify packet.peer with the session peer. All-input erasure and the old
+same-input R2 projection are independent of this support premise. -/
+theorem original_decrypt_material_history (id : SkbId) :
+    Logged.ErasesPrefix (Origins.localDecrypt id) (RxOrigin.readDecrypt id) ∧
+    Logged.ProjectsUnder Lifetimes.AllocationInv Origins.lifetime
+      (Origins.localDecrypt id) (RxOrigin.readDecryptPrefix id) ∧
+    Logged.PrefixPreserves (fun h _ => Origins.Valid h) Origins.Valid (Origins.localDecrypt id) ∧
+    Logged.PrefixPreserves (fun h w => Origins.Inv (Origins.sessions h) w) (fun _ => True)
+      (Origins.localDecrypt id) ∧
+    (∀ w h,
+      let observed := Logged.runPrefix (RxOrigin.readDecryptPrefix id) w (h.filterMap Origins.lifetime)
+      let suffix := (observed.2.drop (h.filterMap Origins.lifetime).length).map Origins.Event.life
+      Logged.runPrefix (Origins.localDecrypt id) w h = match observed.1 with
+        | .error e => (.error e,h ++ suffix)
+        | .ok (result,v) => (.ok (result,v),h ++ suffix ++ [.rx (.decrypt id ⟨result,w,v⟩)])) ∧
+    (∀ w h packet out v, Origins.Inv (Origins.sessions h) w →
+      (Logged.runPrefix (Origins.localDecrypt id) w h).1 = .ok ((packet,some out),v) →
+      ∃ (suffix : List Lifetimes.LifetimeEvent) (d : Device) (k : Keypair) (pid : PeerId)
+        (r : Logged.RunWitness (Option SessionOrigin.Context)) (ctx : SessionOrigin.Context)
+        (originDev : Device) (original : Keypair) (before middle : List Origins.Event),
+        (Logged.runPrefix (Origins.localDecrypt id) w h).2 =
+          h ++ suffix.map Origins.Event.life ++ [.rx (.decrypt id ⟨(packet,some out),w,v⟩)] ∧
+        h = before ++ [.session (.material pid r)] ++ middle ∧
+        r.Valid (SessionOrigin.front pid) ∧ r.value = some ctx ∧ ctx.slot = packet.keypair ∧
+        r.after.k.wg = some originDev ∧ originDev.ifindex = d.ifindex ∧
+        originDev.keypairs[packet.keypair]? = some original ∧ original.receiving.isValid = true ∧
+        original.peer = ctx.word ∧ MaterialOrigin.material k = MaterialOrigin.material original ∧
+        Origins.WordLe k.peer ctx.word ∧ w.k.wg = some d ∧ d.rxSkbs[id]? = some packet ∧
+        d.keypairs[packet.keypair]? = some k ∧ (WG.decryptPacket packet).run w = .ok (some out,v) ∧
+        out = {packet with nonce := WG.u64le packet.bytes 8, bytes := out.bytes} ∧
+        WG.aeadDecrypt k.receiving.key (WG.counterNonce (WG.u64le packet.bytes 8))
+          (packet.bytes.drop 16) [] = some out.bytes) :=
+  ⟨Origins.localDecrypt_erases id, Origins.localDecrypt_projects id,
+    Origins.localDecrypt_valid id, Origins.localDecrypt_support id,
+    Origins.localDecrypt_run id, Origins.localDecrypt_origin id⟩
 
 end Leanux.Proofs.WG.CryptokeyRouting

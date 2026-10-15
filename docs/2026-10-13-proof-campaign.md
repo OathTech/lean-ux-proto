@@ -4,7 +4,7 @@
 
 Work on `proofs/campaign` in `.worktrees/proofs-campaign` follows [the charter](2026-10-13-charter-proof-campaign.md),
 with representation batch `cb2348e` carried and validated. All seven register rows are current over that mirror. Local R3
-session/material/RX-origin receipts compile; initialized R3 packet authorization
+session/material/RX-origin receipts and local material retention compile; initialized R3 packet authorization
 and R4 receive-pipeline conservation remain open. The [register](proofs.md#results) holds pins/counts; the
 [model map](proofs.md#layers) supplies refinement details. No main integration, push, differential check or guest run
 was made by this campaign.
@@ -17,6 +17,48 @@ was made by this campaign.
 | R4 | Initialized entry uniqueness and callback completion; chronology refuted; receive-pipeline conservation open. |
 | R5 | Accepted age/post-zero/wire-nonce counterexamples; thirteen positive local contracts. |
 | R6 | Cookie exclusion proved; literal MAX=18 refuted, without a replacement universal bound. |
+
+**Local R3 material-retention extension (validated).** Two terminal groups
+preserve all 492 preceding bodies, giving 494 declarations (492 theorems/two definitions; 126 R3/117 R4).
+A single support witness retains the full successful session Context/run, epoch/slot/stamp, receiving bytes/birthdate
+and nullable owner. The actual Some-front recovers its complete entry Peer/state/word without affiliation assumptions;
+support is installed before the tail, which can delete the new key. Concrete session-tail, key-get/put, allocation
+and decrypt retention permit invalid fresh records, invalidation and disappearance. The bounded acquireOwner attempt
+did not close its old-key lookup obligations; it was removed. Actual acquireOwner/indexLookup full-material framing
+remains open. The algebraic keep-or-clear law does not discharge those source calls.
+
+The combined local adapters execute existing observers once and preserve exact same-input R2 histories under the
+existing AllocationInv. Original erasure is unconditional. Receipt validity is preserved from valid incoming history
+on normal and failed outcomes. A successful decrypt appends its actual stored-packet/run receipt strictly after its
+material witness in the SAME supplied journal, retaining full record-transform/AEAD equations. Incoming support is
+explicit: arbitrary receipts can describe valid standalone runs without a reached execution chain to this World.
+This proves neither initialized origin chronology, historical uniqueness, packet/session peer equality nor public-key
+or handshake authenticity. Later owner clearing is permitted; a non-NULL admission witness remains a separate join.
+
+[AGENT 2026-10-15] Keep material and owner WordLe (`current = none` or `current = original`) in one support witness;
+independent existential predicates could select different session receipts. Reuse suffix-only focus adapters and
+canonical full-WG/kernel frames, without adding another Scheduler/Runner observer hierarchy.
+
+**Material-retention effort.** Measured acceptance 09:39:00 UTC; 75-minute/36-call budget, reserve 10:34:00 or call 28,
+deadline 10:54:00. Closure started at call 28. Scoped 28 PASS (429 jobs) collected by clock 10:20:04; full 29 PASS (490 jobs)
+collected by clock 10:22:01, 43m01s after acceptance. Exact 30 PASS collected by clock 10:23:07 verifies the five-file
+scope, 492 unchanged bodies, census, tokens/imports, whitespace/EOF, mirror and empty index. Its document hashes
+precede the final result/ledger metadata and two independent-review wording corrections.
+The first complete module passed call 18 between measured clocks 10:08:43 and 10:11:01; its collection was not separately
+timestamped (an estimated status timestamp was corrected). Lake scheduling uses command-local LEAN_NUM_THREADS=32,
+QEMU slots 16, unchanged per-compiler -j1 and 32G cap. Thirty capped calls were collected: 29 builds (five PASS: 2/18/22/28/29; 24 ordinary FAIL)
+and exact check 30 PASS. All jobs are collected; evidence remains ephemeral for the coordinator checkpoint.
+Call 1 printed two rejected elaborator-recovery `declaration uses sorry` warnings; call 15 reached the default recursion
+limit in broad simplification, repaired by a targeted rewrite without changing the limit. Calls 23–27 were the bounded
+owner-acquisition proof attempt; the remaining failures were syntax, inference, normalization or local proof goals.
+No source admission, kernel diagnostic, cap hit, interruption or infrastructure rerun occurred. Independent frozen
+review (10:15:39–10:24:18 UTC, 8m39s) cleared the retained contracts after two documentation fixes: the claim-table
+introduction distinguishes preceding validation, and the remaining session-to-key obligation is explicitly initialized.
+The coordinated 490-job build/494-declaration permitted-axiom gate, fresh stock kernel replay, 60-job default build,
+103 tests (21.747s, one skip), and exact source check pass. Replay began only after the gate's build was collected.
+All three Lean files retain their frozen built hashes; subsequent changes are documentation metadata only. The
+unchanged executable, 23 model-replay tests and historical recipes were validated in the representation carry, not
+rerun for this proof-only extension. The preceding validated checkpoint is `ba0bbe3e`.
 
 **Representation carry (`cb2348e`).** The handshake queue observers retain the captured `consume` pair: the returned
 ring is written before the handler, and only normal handler return reaches the counter decrement. The worker has a
@@ -43,7 +85,7 @@ The handshake-bound comment is corrected; the distinct 4096-step send-worker bou
 literal source ordering and partial histories; keep the local captured-ring contract explicit instead of imposing a
 new initialized ring premise.
 
-**Current local RX disposition extension.** Three new terminal groups retain all 489 prior bodies (492 declarations,
+**Preceding local RX disposition extension (`ba0bbe3e`).** Three new terminal groups retain all 489 prior bodies (492 declarations,
 117 R4). Actual consume runs once at the identical incoming audit history, retaining both normal None and Some;
 new standalone events are erased by old audit/GRO/completion projections, while entry/completion decoders retain
 the full Entry and optional receipt. Scoped/full builds pass 401/488; full result collected 09:22:10 UTC, 70m00s after
@@ -64,7 +106,7 @@ captured packet/stamp/peer link and same-journal receipt provenance remain expli
 from receipt validity or strengthen initialized premises. A bounded source-link attempt proves the actual capture
 lookup and full-RX-store drop/counter frames, but does not yet transport the relation to consume through the poll.
 
-**Current effort.** Acceptance 08:12:10 UTC; 90-minute/48-call lease with the final 20 minutes / 10 calls reserved. Builds use
+**RX disposition effort.** Acceptance 08:12:10 UTC; 90-minute/48-call lease with the final 20 minutes / 10 calls reserved. Builds use
 command-scoped LEAN_NUM_THREADS=32 for Lake scheduling and QEMU slots 16, with unchanged per-compiler -j1 and 32G cap.
 Calls 02 and 28 display rejected elaborator-recovery
 `sorry ()` goal terms, not source admissions; calls 11/13 reach the existing 200k limit, repaired by a literal tail cut
@@ -326,8 +368,16 @@ AllocationInv on the same input World's projected incoming history. Receipt vali
 history (empty qualifies), independently of AllocationInv.
 [AGENT 2026-10-15] Reuse captureObserved and existing R2 source cuts with a shared receipt journal; retain the local
 projection domain rather than add invalid-history append infrastructure. No initialized origin premise or new Runner
-hierarchy was introduced. Session-to-later-key allocation matching, peer public-key provenance, packet transport to
+hierarchy was introduced. Initialized session-to-later-key allocation matching, peer public-key provenance, packet transport to
 poll/Stack, copied trials and initialized identity closure remain open. A snapshot or raw peer winner does not settle them.
+
+**Local material retention.** [Origins/State](../Leanux/Proofs/WG/Origins/State.lean) supports every resident valid
+receiving key with one full successful session witness and its keep-or-clear owner; invalid keys require no support.
+[Origins/SessionMaterial](../Leanux/Proofs/WG/Origins/SessionMaterial.lean) proves actual front installation/tail
+retention and the combined local session/decrypt adapters. Its strict journal-order conclusion uses the supplied
+entry support, not an initialized-history provenance theorem. Normal Some-front facts recover the complete entry peer;
+decrypt retains the actual stored packet, material and AEAD transformation, without equating packet.peer to that peer.
+The source-specific owner-acquisition/index-lookup material frame and whole-caller propagation remain unfinished.
 
 **Remaining obligations.** Initialized syscall/Runner composition preserves ordinary-negative cleanup and Stops; parser
 shape follows the operation cursor. Local entry agreement still needs connection to earlier actual initialized lookup
