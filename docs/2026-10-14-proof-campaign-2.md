@@ -14,10 +14,11 @@ the other H5 clauses and corrected-main carry remain open.
 | H2 Index | 52 | Exact index operations, all normal lookup outcomes, caller table safety, session coherence/allocation sequence | Reachable hashed uniqueness and owner/peer residency through all driver entries |
 | H3 Roaming | 13 | Authenticated handshake cuts, decrypt/first-poll join, complete poll setter-attempt audit | Queue/callback authentication invariant, broader caller coverage, final endpoint |
 | H4 Configuration | 79 | Leaves/flags, effective bounded readback, removal/replacement phase effects, root insertion/transfer, actual two-chunk getter and scalar set/get composition | Global ownership, queued cleanup/completion, mixed attributes, general getter pagination |
-| H5 Progress | 41 | Accepted operation boundaries, actual final-boundary backlog, scheduling inspections, cut/pow/drain/poll bounds, arbitrary supplied-record index/jitter-loop adequacy, cookie activation and scheduled resumption | Whole-worker record decrease, global progress, corrected-main carry |
+| H5 Progress | 42 | Accepted operation boundaries, actual final-boundary backlog, scheduling inspections, cut/pow/drain/poll bounds, arbitrary supplied-record index/jitter-loop adequacy, cookie activation, scheduled resumption and full bounded receive schedule | Whole-worker record decrease, global progress, corrected-main carry |
 | H6 Timers | 47 | Seven local arm sites, recorded delays, caller hook compositions, retry bound, pending/absent-zero-key give-up, total recorded retransmit hook | Complete caller coverage, scheduler episodes, session-relative counting |
 
-**254 headlines**; latest increment: total original initiation creation from static guards and supplied records.
+**255 headlines**; latest increment: full original cookie-only receive schedule
+from bounded supplied reschedule/stop records.
 Scoped builds, axioms and fresh replay pass; independent review found no issue.
 The full proof gate remains **failed in inherited campaign-1 files**.
 
@@ -61,7 +62,7 @@ universal execution contracts.
 | `Index` | View/table/owner/allocation/release models; lookup provenance and empty-result source; lifecycle/caller operation sources; session coherence/allocation/sequence effects and sources | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`, `NewlinkFrames`, `SendFrames`, `DispatchFrames`, `ResponseFrames`, `ConsumeFrames`, `StagedFrames`, `ReceiveFrames`, `ClearFrames`, `TimerFrames`, `FlushFrames`, `SessionCoherenceFrames`, `SessionAllocationFrames` |
 | `Roaming` | Endpoint/authentication claims; publication, poll endpoint/attempt, response, initiation and handshake-audit model/source/claim families | `Frames`, `PublicationFrames`, `PollEndpointFrames` |
 | `Config` | `ClaimView`, models/effects/source claims, observation bridge; allowed-IP removal/insertion/transfer, collision, removal flags, remove-all/replacement, multipart/suffix readback families; `SocketReadbackModel/Claims` and five substantive `SocketReadback*Source` files; `ScalarSocketReadbackClaims/Source` compose original set/get | `ConcreteFrames`, `OperationFrames`, `ReadbackFrames`, `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `AllowedPairsFrames`, `QuietFrames`, `LiveRemovalFrames`, `KeyFieldFrames`, `CollisionFrames`, `AllowedInsertFrames`, `RemoveAllFrames` |
-| `Progress` | Model/view/source/observation claims; control/scheduler sources; cut, flush-queue, pow, drain and poll-bound model/source/effect/claim families; `RunnerBoundaryModel/Claims`, `IndexProgressModel/Claims` and `JitterProgressModel/Claims` are projected; their `Source` files, `RunnerBoundaryAuditSource` and `BacklogSource` connect original operations; `CookieActivationModel/Source/Loop/Claims` and `CookieSchedulerSource` | `StackFrames`, `CutFrames`, `FlushQueueFrames`, `CookieActivationFrames` |
+| `Progress` | Model/view/source/observation claims; control/scheduler sources; cut, flush-queue, pow, drain and poll-bound model/source/effect/claim families; `RunnerBoundaryModel/Claims`, `IndexProgressModel/Claims` and `JitterProgressModel/Claims` are projected; their `Source` files, `RunnerBoundaryAuditSource` and `BacklogSource` connect original operations; `CookieActivationModel/Source/Loop/Claims`, `CookieSchedulerSource` and `CookieScheduleModel/Source/Claims` | `StackFrames`, `CutFrames`, `FlushQueueFrames`, `CookieActivationFrames`, `CookieScheduleFrames` |
 | `TimerDiscipline` | Model/view/send-view/observation claims; recorded, send/retry/rearm/sequence/boundary, pending-give-up, session, data and traversal model/source/effect/claim families; `AbsentGiveUpModel/Claims` and substantive `AbsentGiveUpSource`; `RetransmitReadyModel/Source/Claims` | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`, `RetryDispatchFrames`, `RetryRearmFrames`, `WorkStateFrames`, `ResponseSessionFrames` |
 
 `Index/HandshakeFrames` and `OwnerFrames` are import-only reexports.
@@ -376,6 +377,18 @@ witness is assumed. This is one scheduler turn with no caller-held worker, not
 whole-schedule termination or fairness. Only two projection equations are frames,
 in `CookieActivationFrames`; the remaining files express operational claims.
 
+The full original scheduler now succeeds from a singleton suspended receive
+activation, an empty index and a cookie-only queue, with `n` arbitrary eight-byte
+reschedule records followed by one arbitrary eight-byte stop record and no tail.
+The premise `n ≤ initial queue length` gives exactly enough work for those yields.
+The original record budget is `n + 2`: the yielding turns, the draining/stop turn,
+and the final no-candidate return all fit. Equality and an initially empty queue
+are covered. The exact final projection empties this receive queue, the records
+and suspension list, subtracts the initial list length from the independent queue
+counter and appends the exact packet/empty-poll decisions. Other work queues and
+pending state are preserved, so this is neither global quiescence nor fairness.
+No successful-run witness, counter consistency or ingress provenance is assumed.
+
 ## H6 — Timer discipline
 
 Local contracts cover all seven concrete arm sites, actual clock-plus-delay
@@ -449,25 +462,22 @@ accepted-run findings. H1/H2/H3/H6 have no ranked mirror-change request.
 
 ## Validation and trust limitations
 
-Latest six-target build passed **465 jobs**. All **254 headlines** and 29 new
-support declarations use only the three standard axioms; token/import/root/
-default/projected-name checks pass. The author passed Source/Frames at 145 jobs
-and Noise Statements at 151 jobs. Fresh Noise kernel replay passed.
-Independent read-only review found no semantic issue;
-its EOF-whitespace note was corrected before the final build.
+Latest six-target build passed **469 jobs**. All **255 headlines**, 15 new
+cookie-schedule supports and four existing scheduler supports use only the three
+standard axioms; token/import/root/default/projected-name checks pass. Independent
+read-only review found no issues. Fresh Progress replay passed. Author packaging
+passed three sequential builds (Frames 32, Source 51, Statements 233 jobs); root
+built all six targets, trimmed EOF whitespace, then passed the final build above.
 
-Initiation prototype: 14 capped stdin compilations, six passes and eight
-corrected failures. Packaging: four builds, three passes and one corrected
-import-collision failure in generated match-congruence declarations; importing
-Source before the separate Frames repaired it. Root's three mode-frame stdin
-compilations had one pass and two corrected failures: private-name resolution/
-monolithic unfolding at the stock heartbeat limit, then a trivial exceptional
-postcondition. Splitting the crypto proof into local contracts closed it without
-raising that limit. The initiation source uses an 800000-heartbeat budget,
-unchanged throughout the retained continuation and packaging. Earlier prototype
-inputs are no longer retained, so its initial budget cannot be confirmed; this
-is not evidence of an unchanged budget across the entire investigation. The
-memory cap was unchanged. Retained compiler outputs were captured for diagnosis.
+The full-scheduler prototype used seven capped stdin compilations: three passes,
+four corrected failures. First diagnostics were truncated; subsequent outputs
+were retained compressed. There was no unchanged-source rerun or limit increase.
+
+The preceding initiation checkpoint `5ee787c` passed 465 build jobs, all 254
+headlines and 29 new supports on standard axioms, fresh Noise replay and review.
+Its source uses an 800000-heartbeat budget unchanged throughout the retained
+continuation; earliest prototype budget provenance is unconfirmed, as recorded
+in that commit. Memory cap was unchanged.
 
 The preceding H5/H6 checkpoint `daa1b10` passed 461 build jobs, all 253 headlines
 and 41 supports on standard axioms, both fresh replays and independent reviews.

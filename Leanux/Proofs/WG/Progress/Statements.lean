@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Progress.CookieScheduleClaims
 import Leanux.Proofs.WG.Progress.CookieActivationClaims
 import Leanux.Proofs.WG.Progress.ObservationBridge
 import Leanux.Proofs.WG.Progress.CutClaims
@@ -613,5 +614,24 @@ theorem original_cookie_scheduled_resumption_progress (a : Activation) (d : Devi
         CookieActivationProgress d.handshakeQueue.length records summary ∧
         (summary.yielded = true → summary.processed = 1)) :=
   cookieScheduler_progress a d records summary receive table cookies resolve
+
+/-- The full original scheduler finishes the cookie-only receive activation,
+including every recorded yield/resumption and the final no-candidate return.
+Its original record budget is sufficient for any n reschedule records followed
+by one stop record, when n does not exceed the initial queue length. All payloads
+are arbitrary eight-byte lists. The exact final projection has empty queue,
+records and suspended list, the independent counter decreased by the initial
+queue length, and five decisions per item plus the final empty poll. No ingress
+provenance, counter consistency or fairness for other queues is asserted. -/
+theorem original_cookie_schedule_outcome (ys : List (List UInt8)) (a : Activation)
+    (d : Device) (stop : List UInt8)
+    (receive : a.worker = .receiveWorker) (table : d.indexTable = []) (cookies : CookieOnly d)
+    (valid : ∀ bytes ∈ ys, bytes.length = 8) (stopLen : stop.length = 8)
+    (occupancy : ys.length ≤ d.handshakeQueue.length) :
+    Campaign2.Observes (schedule none)
+      (fun s => s.wg.device = some d ∧ s.ambient.hidden = some (CookieFull.records ys stop) ∧
+        s.ambient.suspended = [a])
+      (fun entry outcome => outcome = .ok ((), CookieFull.finishedSnapshot d entry)) :=
+  CookieFull.schedule_outcome ys a d stop receive table cookies valid stopLen occupancy
 
 end Leanux.Proofs.WG.Progress
