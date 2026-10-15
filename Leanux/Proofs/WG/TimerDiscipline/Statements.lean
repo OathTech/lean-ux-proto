@@ -1,6 +1,7 @@
 import Leanux.Proofs.WG.TimerDiscipline.RxDataTimersClaims
 import Leanux.Proofs.WG.TimerDiscipline.ResponseTraversalClaims
 import Leanux.Proofs.WG.TimerDiscipline.InitiationTraversalClaims
+import Leanux.Proofs.WG.TimerDiscipline.ReceiveTraversalClaims
 import Leanux.Proofs.WG.TimerDiscipline.DataDoneClaims
 import Leanux.Proofs.WG.TimerDiscipline.OutgoingResponseSessionClaims
 import Leanux.Proofs.WG.TimerDiscipline.ObservationClaims
@@ -585,5 +586,39 @@ theorem original_outgoing_initiation_traversal (pid : PeerId) :
     · intro entry pre
       rw [observedInitiationTraversal_erase pid]
     · exact observedInitiationTraversal_facts pid
+
+/-- For an initiation message, the original receive caller's common traversal
+hook carries the actual accepted consumer/MAC certificate and its selected peer.
+The endpoint setter, response sender, statistics, authenticated-received deletion
+and final release remain original. A normal present cut gives guarded recorded
+persistent expiry at the traversal hook; rejected paths may return no cut. Exact
+erasure retains errors. No final expiry or failed-call retention is claimed. -/
+theorem original_initiation_receive_traversal (msg : List UInt8) (src : SkbSource)
+    (kind : messageType msg = MESSAGE_HANDSHAKE_INITIATION) :
+    Campaign2.AgreesOn (fun _ => True)
+      (do let _ ← observedInitiationReceiveTraversal msg src; pure ()) (receiveHandshakePacket msg src) ∧
+    Campaign2.Ensures (observedInitiationReceiveTraversal msg src) (fun _ => True)
+      (fun result _ => ∀ cut, result = some cut → InitiationReceiveTraversalFacts msg cut) := by
+  constructor
+  · intro entry pre
+    rw [observedInitiationReceiveTraversal_erase msg src kind]
+  · exact observedInitiationReceiveTraversal_facts msg src
+
+/-- For a response message, the common receive traversal follows the actual
+accepted consumer/MAC certificate, endpoint setter and original session/keepalive
+branch. A normal present cut gives the selected peer's guarded recorded persistent
+expiry at the hook. Statistics, authenticated-received deletion and final release
+remain original; exact erasure retains all errors. Hook facts neither require a
+successful new session nor assert final expiry or failed-call retention. -/
+theorem original_response_receive_traversal (msg : List UInt8) (src : SkbSource)
+    (kind : messageType msg = MESSAGE_HANDSHAKE_RESPONSE) :
+    Campaign2.AgreesOn (fun _ => True)
+      (do let _ ← observedResponseReceiveTraversal msg src; pure ()) (receiveHandshakePacket msg src) ∧
+    Campaign2.Ensures (observedResponseReceiveTraversal msg src) (fun _ => True)
+      (fun result _ => ∀ cut, result = some cut → ResponseReceiveTraversalFacts msg cut) := by
+  constructor
+  · intro entry pre
+    rw [observedResponseReceiveTraversal_erase msg src kind]
+  · exact observedResponseReceiveTraversal_facts msg src
 
 end Leanux.Proofs.WG.TimerDiscipline
