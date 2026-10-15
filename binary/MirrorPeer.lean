@@ -36,7 +36,26 @@ theorem count_zero (w : World) :
     (refcountIncNotZero 0).run w = .ok (false, countRecords w 0) :=
   count_run 0 w (by decide)
 
+/-- Accepted peer-get supplies the arithmetic bound used by the binary
+    helper proof. It is not a separate restriction on dead-peer entries. -/
+theorem accepted_peer_bound (pid : PeerId) (w w' : World) (answer : Option PeerId)
+    (device : Device) (peer : Peer)
+    (hasDevice : w.k.wg = some device) (hasPeer : device.peers.get? pid = some peer)
+    (accepted : (peerGetMaybeZero (some pid)).run w = .ok (answer, w')) :
+    peer.refcount + 1 < 2^31 := by
+  by_cases small : peer.refcount + 1 < 2^31
+  · exact small
+  have wraps : peer.refcount + 1 ≥ 2^31 := by omega
+  have nonzero : peer.refcount ≠ 0 := by omega
+  have peerRead : device.peers[pid]? = some peer := hasPeer
+  have wraps' : 2147483647 ≤ peer.refcount := by omega
+  simp [peerGetMaybeZero, branch, requireNotPending, getPeer, getDev, getK,
+    hasDevice, peerRead, refcountIncNotZero, branchCmp, unsupported, nonzero, wraps', throw_run]
+    at accepted
+  cases accepted
+
 #print axioms count_run
 #print axioms accepted_count_bound
 #print axioms count_zero
+#print axioms accepted_peer_bound
 end Binary.PeerMirror

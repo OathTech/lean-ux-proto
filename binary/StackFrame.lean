@@ -50,6 +50,20 @@ theorem load64_store (memory : Mem 64) (address : BitVec 64) (value : BitVec 64)
   have bound := value.isLt
   exact Int.emod_eq_of_lt (by omega) (by omega)
 
+/-- The refcount update has the same unsigned readback rule at 32 bits. -/
+theorem load32_store (memory : Mem 64) (address : BitVec 64) (value : BitVec 32) :
+    (memory.storeInt address 4 value.toInt).loadInt address 4 = some (value.toNat : Int) := by
+  have self := loadBytes_store_self memory address (Int.toBytes 4 value.toInt)
+    (by simp [Int.toBytes_length])
+  simp only [Int.toBytes_length] at self
+  simp only [Mem.storeInt, Mem.loadInt, self, Option.map_some, ofBytes_toBytes]
+  simp only [Int.take, BitVec.toInt_eq_toNat_bmod]
+  apply congrArg some
+  change (value.toNat : Int).bmod (2^32) % ((2^32 : Nat) : Int) = value.toNat
+  rw [Int.bmod_emod]
+  have bound := value.isLt
+  exact Int.emod_eq_of_lt (by omega) (by omega)
+
 /-- Distinct eight-byte slots in the helper's 64-byte stack window do not
     alias, including when the window straddles address zero. -/
 theorem stack_slots_disjoint (base : BitVec 64) (i j : Nat)
@@ -64,6 +78,22 @@ theorem stack_slots_disjoint (base : BitVec 64) (i j : Nat)
   simp only [BitVec.add_comm base, BitVec.add_sub_cancel, BitVec.toNat_ofNat] at nums
   omega
 
+theorem stack_tail_inside (base address : BitVec 64)
+    (inside : InRange (base+8) 56 address) : InRange base 64 address := by
+  obtain ⟨byte, bound, atByte⟩ := inside
+  refine ⟨8+byte, by omega, ?_⟩
+  simpa [BitVec.ofNat_add, BitVec.add_assoc] using atByte
+
+theorem stack_tail_disjoint_header (base address : BitVec 64)
+    (inside : InRange (base+8) 56 address) : ¬InRange base 8 address := by
+  rintro ⟨a, ha, atA⟩
+  obtain ⟨b, hb, atB⟩ := inside
+  have same : base + .ofNat 64 (8+b) = base + .ofNat 64 a := by
+    simpa [BitVec.ofNat_add, BitVec.add_assoc] using atB.symm.trans atA
+  have numbers := congrArg (fun x : BitVec 64 => (x-base).toNat) same
+  simp only [BitVec.add_comm base, BitVec.add_sub_cancel, BitVec.toNat_ofNat] at numbers
+  omega
+
 namespace PeerGet
 
 def slot (s : MachineData) (i : Nat) : BitVec 64 :=
@@ -73,6 +103,13 @@ theorem slot_window (s : MachineData) (i : Nat) (hi : i < 7) :
     slot s i = (s.regs.rsp.toBitVec - 56) + .ofNat 64 (8*(6-i)) := by
   have number : 56 = (i+1)*8 + 8*(6-i) := by omega
   rw [show (56 : BitVec 64) = .ofNat 64 56 from rfl, number, BitVec.ofNat_add,
+    ← BitVec.sub_sub, BitVec.sub_add_cancel]
+  rfl
+
+theorem slot_restore_window (s : MachineData) (i : Nat) (hi : i < 6) :
+    slot s i = (s.regs.rsp.toBitVec - 48) + .ofNat 64 (8*(5-i)) := by
+  have number : 48 = (i+1)*8 + 8*(5-i) := by omega
+  rw [show (48 : BitVec 64) = .ofNat 64 48 from rfl, number, BitVec.ofNat_add,
     ← BitVec.sub_sub, BitVec.sub_add_cancel]
   rfl
 
@@ -98,9 +135,46 @@ theorem saveMemory_read (s : MachineData) (n i : Nat) (bound : n ≤ 7) (saved :
           (by omega) (by omega) (by omega) _ ⟨byte, hb, rfl⟩)
       exact read.symm.trans old
 
+theorem saveMemory_frame (s : MachineData) (n : Nat) (bound : n ≤ 7) :
+    EqualOutside (InRange (s.regs.rsp.toBitVec - 56) 56) s.dmem (saveMemory s n) := by
+  induction n with
+  | zero => intro address outside; rfl
+  | succ n ih =>
+    intro address outside
+    have previous := ih (by omega) address outside
+    have disjoint : ¬InRange (slot s n) 8 address := by
+      rintro ⟨byte, byteBound, atByte⟩
+      apply outside
+      refine ⟨8*(6-n)+byte, by omega, ?_⟩
+      simpa only [slot_window s n (by omega), BitVec.ofNat_add, BitVec.add_assoc] using atByte
+    exact previous.trans (storeInt_frame (saveMemory s n) (slot s n) 8
+      ((savedWords s)[n]?.getD 0).toBitVec.toInt address disjoint)
+
+/-- The seven pushes never overwrite the caller's original return word. -/
+theorem saveMemory_return (s : MachineData) (n : Nat) (bound : n ≤ 7) :
+    (saveMemory s n).loadInt s.regs.rsp.toBitVec 8 = s.dmem.loadInt s.regs.rsp.toBitVec 8 := by
+  induction n with
+  | zero => rfl
+  | succ n ih =>
+    have frame := storeInt_frame (saveMemory s n) (slot s n) 8
+      ((savedWords s)[n]?.getD 0).toBitVec.toInt
+    have read := frame.loadInt s.regs.rsp.toBitVec 8 (by
+      intro byte byteBound
+      rw [slot_window s n (by omega)]
+      apply stack_slots_disjoint (s.regs.rsp.toBitVec-56) 7 (6-n)
+        (by decide) (by omega) (by omega)
+      refine ⟨byte, byteBound, ?_⟩
+      change s.regs.rsp.toBitVec + .ofNat 64 byte =
+        (s.regs.rsp.toBitVec-56+56) + .ofNat 64 byte
+      rw [BitVec.sub_add_cancel])
+    exact read.symm.trans (ih (by omega))
+
 #print axioms saveMemory_read
+#print axioms saveMemory_frame
+#print axioms saveMemory_return
 end PeerGet
 
 #print axioms loadBytes_store_self
 #print axioms load64_store
+#print axioms load32_store
 end Binary

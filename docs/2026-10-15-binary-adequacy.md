@@ -388,3 +388,61 @@ simulation/transport theorem are not yet established. No `Pre_lookup` has
 landed alone, and no certified-function rate is claimed from the local
 instruction-fact count. The milestone report still owes its measured rate,
 the trust-base file verbatim, and independent surface review before milestone 2.
+
+## Physical callback invariant and null helper path, 2026-10-15
+
+The named physical predicates added to `TrustBase.lean` are `KcovLayout`,
+`KcovMetadata`, `KcovBuffer`, `KcovBufferBytes`, `KcovStorageBytes`,
+`KcovMetadataBytes`, `KcovSeparated`, `KcovState` and `KcovStateBytes`.
+These are definitions for the eventual entry domain, not new asserted
+axioms or a declaration of `Pre_lookup`. They describe runtime metadata,
+mapped words, a bounded header and byte separation. No service contract
+was strengthened to promise readiness of a later call or preservation of `R`.
+
+[AGENT 2026-10-15] Retain full buffers and capacity zero, and require buffer
+storage only in active tracing modes. Disabled tracing follows the actual
+early return. Capacity zero still reads the header, so caller-write framing
+protects that word separately from the empty callback-write footprint.
+This last distinction corrected a draft invariant defect identified during
+read-only review; it is not an additional mirror finding.
+
+`KcovInvariant` normalizes the machine-width callback plan to bounded word
+offsets, proves planned writes are mapped and inside the buffer, reads back
+the new header through all payload stores, and preserves the buffer,
+metadata and preempt word. `state_ready` and `state_preserved` derive
+repeated-call readiness from these physical facts. `state_frame` proves
+that separated caller writes preserve the same state. The proofs include
+the exact comparison-record fit boundary and modular address wrap; they
+do not assume absolute-address nonwrap.
+
+`KcovExecution` connects these results to the named fetched-instruction
+service contracts. `PeerStart`, `PeerCall`, `PeerReturn` and `PeerFinish`
+compose the actual prologue, PC calls, six POPs and RET with stack and
+callback-state preservation. The saved-register window excludes the
+reused callback return slot. `PeerNullEntry.null_entry_to_return` now
+executes the complete null-pointer helper path, returning zero, restoring
+the entry ABI and framing all other memory. This is one physical path
+theorem, not the all-path peer-get theorem or a correspondence-point
+simulation. `PeerMirror.accepted_peer_bound` derives the non-null helper's
+refcount arithmetic bound from an accepted mirror run; zero counts remain
+included and no entry restriction is introduced for finding 1.
+
+Validation: full-parallel `BinaryProofs` and executable build (189 jobs),
+kernel replay of all changed proof modules, standard three axioms only in
+their printed dependencies, and no forbidden tokens in the 35 binary Lean
+sources. The fast tier passed 124 tests with one skip (23.377 seconds).
+`capped -- binary/.lake/build/bin/binary-probe peer-null` passed four
+configurations with two undefined-value seeds (368 actual instructions),
+checking the entire memory and ABI, including high-bit saved registers.
+The configurations are PC capture, comparison capture, disabled capture
+and zero capacity. These are synthetic executions, not kernel snapshots
+or a formal satisfying witness for `Pre_lookup`. Initial heartbeat-limited
+proof attempts failed; two exploratory searches were manually terminated.
+Only the subsequent completed builds and replay are counted as passes.
+
+Milestone 1 remains open: the non-null live/dead helper paths and its full
+correspondence theorem, whole-World `R`, the composed bucket loop,
+`Pre_lookup` with its satisfying execution witness, and the lookup
+simulation/transport theorem are still outstanding. No milestone rate is
+inferred from these supporting lemmas. The mirror-lane landing paste has
+not arrived; main has not been merged, and finding 1 is unchanged.

@@ -23,7 +23,7 @@ LEANUX_QEMU_SLOTS=16 capped -- /usr/bin/python3 binary/run.py --trace d1_second_
 capped -- /usr/bin/python3 binary/census.py
 cd binary
 capped -- lake build BinaryProofs
-capped -- lake env leanchecker TrustBase ServiceImage ServiceComposition FixtureKnowledge StackFrame BucketLoop Execution History HistoryRegions RegionExecution MirrorLoop MirrorPeer MirrorHistory LookupObservation Memory Image ImageLayout Layouts Regions PeerRegions PeerPrologue Prologue BucketEntry Representation KeypairRepresentation Symbolic
+capped -- lake env leanchecker TrustBase ServiceImage ServiceComposition KcovInvariant KcovExecution PeerCall PeerStart PeerReturn PeerFinish PeerNull PeerNullEntry FixtureKnowledge StackFrame BucketLoop Execution History HistoryRegions RegionExecution MirrorLoop MirrorPeer MirrorHistory LookupObservation Memory Image ImageLayout Layouts Regions PeerRegions PeerPrologue Prologue BucketEntry Representation KeypairRepresentation Symbolic
 ```
 
 Generated state, census and comparison output go under `.tmp/binary-tv`;
@@ -59,6 +59,7 @@ KCOV comparison writes and ABI/memory contracts:
 
 ```sh
 capped -- binary/.lake/build/bin/binary-probe service-tests
+capped -- binary/.lake/build/bin/binary-probe peer-null
 capped -- /usr/bin/python3 binary/generate.py
 ```
 
@@ -66,3 +67,12 @@ The source relation now receives the actual observed event prefix as well as
 the machine state. This distinguishes two mirror decisions emitted at one
 compiled edge. The relation's whole-World components and function composition
 remain unfinished; the checkpoint report describes what is proved.
+
+`KcovInvariant` proves callback readiness and preservation from physical
+metadata, mapped storage and byte separation; disabled modes need no buffer.
+`PeerNullEntry.null_entry_to_return` composes the helper's null-pointer path
+through actual fetched instructions and the named PC callback contract.
+`peer-null` executes that path with real callbacks in four configurations,
+checking the complete memory and restored ABI under two undefined-value
+seeds. It is a synthetic test, not a witnessed `Pre_lookup` or a kernel
+entry snapshot. Non-null paths and whole-function correspondence remain open.

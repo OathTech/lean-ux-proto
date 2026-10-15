@@ -139,6 +139,66 @@ def load64 (memory : Mem 64) (address : BitVec 64) : Option (BitVec 64) :=
 def load32 (memory : Mem 64) (address : BitVec 64) : Option (BitVec 32) :=
   (memory.loadInt address 4).map (.ofInt 32)
 
+/-- Physical callback metadata, fixed during an anchored call except for the
+    separately balanced preempt count. Capacity is a count of 64-bit words. -/
+structure KcovLayout where
+  task : BitVec 64
+  area : BitVec 64
+  capacity : BitVec 32
+  mode : BitVec 32
+  softirqEnabled : BitVec 32
+
+/-- Exact runtime metadata reads, not the ELF's initial global bytes. -/
+def KcovMetadata (layout : KcovLayout) (memory : Mem 64) : Prop :=
+  load64 memory currentTaskAddress = some layout.task ∧
+  load32 memory (layout.task + 0x6e0) = some layout.mode ∧
+  load32 memory (layout.task + 0x6e4) = some layout.capacity ∧
+  load64 memory (layout.task + 0x6e8) = some layout.area ∧
+  load32 memory (layout.task + 0x704) = some layout.softirqEnabled
+
+/-- Mapped buffer and bounded runtime header. A full buffer is allowed; no
+    callback is required to have room for a record. This predicate says
+    nothing about the peer state or the lookup result. -/
+def KcovBuffer (layout : KcovLayout) (memory : Mem 64) : Prop :=
+  (∀ word < layout.capacity.toNat,
+    (memory.loadInt (layout.area + .ofNat 64 (8 * word)) 8).isSome = true) ∧
+  ∃ count : Nat, count ≤ layout.capacity.toNat ∧
+    load64 memory layout.area = some (.ofNat 64 count)
+
+def KcovBufferBytes (layout : KcovLayout) : BitVec 64 → Prop :=
+  InRange layout.area (8 * layout.capacity.toNat)
+
+/-- Storage read by an active callback. Even capacity zero still requires
+    the header; caller writes must preserve it as well as the buffer words. -/
+def KcovStorageBytes (layout : KcovLayout) (address : BitVec 64) : Prop :=
+  InRange layout.area 8 address ∨ KcovBufferBytes layout address
+
+def KcovMetadataBytes (layout : KcovLayout) (address : BitVec 64) : Prop :=
+  InRange currentTaskAddress 8 address ∨
+  InRange (layout.task + 0x6e0) 4 address ∨
+  InRange (layout.task + 0x6e4) 4 address ∨
+  InRange (layout.task + 0x6e8) 8 address ∨
+  InRange (layout.task + 0x704) 4 address
+
+/-- Physical disjointness from protected memory (metadata, live stack and
+    represented objects). Readiness is proved from this, not assumed at
+    every callback. The caller chooses the actual protected footprint. -/
+def KcovSeparated (layout : KcovLayout) (protectedBytes : BitVec 64 → Prop) : Prop :=
+  ∀ address, KcovBufferBytes layout address → ¬protectedBytes address
+
+/-- Physical state carried between callbacks. Disabled tracing requires no
+    mapped coverage area; the mode field itself still belongs to the task. -/
+def KcovState (layout : KcovLayout) (preempt : BitVec 32) (memory : Mem 64) : Prop :=
+  KcovMetadata layout memory ∧
+  load32 memory preemptCountAddress = some preempt ∧
+  (layout.mode = 2 ∨ layout.mode = 3 → KcovBuffer layout memory)
+
+/-- Bytes that caller stores must preserve. Buffer storage is needed only
+    in an active mode; metadata and preemption state are always physical. -/
+def KcovStateBytes (layout : KcovLayout) (address : BitVec 64) : Prop :=
+  KcovMetadataBytes layout address ∨ InRange preemptCountAddress 4 address ∨
+    ((layout.mode = 2 ∨ layout.mode = 3) ∧ KcovStorageBytes layout address)
+
 /-- Physical KCOV callback specification, with the actual early-return read
     dependencies and machine-width arithmetic. It is not a proof checker. -/
 def KcovPlan (kind : KcovKind) (s : MachineState) : Option (List WordWrite) := do
