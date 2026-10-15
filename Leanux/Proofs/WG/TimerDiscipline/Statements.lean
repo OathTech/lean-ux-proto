@@ -3,6 +3,7 @@ import Leanux.Proofs.WG.TimerDiscipline.SendDispatchClaims
 import Leanux.Proofs.WG.TimerDiscipline.RetryDispatchClaims
 import Leanux.Proofs.WG.TimerDiscipline.RetryRearmClaims
 import Leanux.Proofs.WG.TimerDiscipline.RetrySequenceClaims
+import Leanux.Proofs.WG.TimerDiscipline.ResponseSessionClaims
 
 /-! The public H6 interface names only WireGuard and explicit execution
 observations. Concrete source connections and residual frames are separate.
@@ -441,5 +442,32 @@ theorem original_retry_sequence_zero_bound (d : Device) (horizons : List UInt64)
       (fun s => s.wg.device = some d)
       (fun result _ => SameRetryPeer pid result.2 → horizons.length ≤ 19) :=
   source_retry_sequence_zero_bound d horizons empty pid p resident zero
+
+/-- For response-kind packets, the exact original caller and its decorated
+execution factor through the actual session-derived hook. Normal full return
+reports whether the session stage was reached. A present session cut records
+the entry, returned Bool and before/after-hook observations, and derives H1's
+ordered SessionEffect. The hook is present exactly when that session returned
+true; this successful case derives a counter increment and live resident peer.
+At a reached hook, running-device and arm-record conditions at that actual cut
+give caller-jiffies plus wrapped zero-key delay and clockGap immediately after
+the hook. Caller reads may use permitted placeholders. No successful caller,
+final expiry preservation, failed-call prefix retention or global once-per-session
+arm count is asserted. Erasure retains every original error. -/
+theorem original_response_session_arm (msg : List UInt8) (src : SkbSource)
+    (kind : messageType msg = MESSAGE_HANDSHAKE_RESPONSE) :
+    Campaign2.AgreesOn (fun _ => True) (receiveHandshakePacket msg src)
+      (responseSessionCallPrefix msg src >>= responseSessionCallSuffix msg) ∧
+    Campaign2.AgreesOn (fun _ => True) (observedResponseSession msg src)
+      (responseSessionTranscript msg src) ∧
+    Campaign2.Ensures (observedResponseSession msg src) (fun _ => True)
+      (fun observation _ => ResponseSessionObservation msg observation) := by
+  constructor
+  · intro entry pre
+    rw [responseSessionCall_source msg src kind]
+  · constructor
+    · intro entry pre
+      rw [observedResponseSession_source msg src kind]
+    · exact observedResponseSession_facts msg src kind
 
 end Leanux.Proofs.WG.TimerDiscipline
