@@ -30,11 +30,11 @@ No independent existential projected runs are spliced together.
 | H3 Roaming | 6 contracts, including original decrypt-worker publication provenance | Public projection complete; carrying provenance through poll execution and complete caller coverage remain open. |
 | H4 Configuration | 60 contracts and the reachable internal dump-accounting finding | Public projection and frame separation complete. Queued/live-keypair removal, private-key collision, mixed attributes, global ownership and general dump composition remain open. |
 | H5 Progress | 25 contracts and the accepted batch-backlog counterexample | Public projection and frame separation complete; productive-record decrease, full loop coverage and probe/detach composition remain open. The backlog witness is historical over `de62c9d`: main's batch guard now addresses request 1. |
-| H6 Timers | 31 timer/worker contracts, including original environment send dispatch | Public projection and frame separation complete; selection/dequeue/section composition proved under the count premise. Complete retry episodes and whole-run arming/session counts remain open. |
+| H6 Timers | 32 timer/worker contracts, including original retransmit-timer/send-worker composition | Public projection and frame separation complete; a successful pair from an empty send queue derives the retry bound and reference acquisition/release. Complete retry episodes and whole-run arming/session counts remain open. |
 
 Projection/frame factoring completed at `69f988a` for all six results, preserving
 all 153 existing headline names before new mathematics. The following H2 lifecycle/sender
-and H6 dispatch increments, plus H3 publication provenance, bring the total to 166. No public statement directly names `World` or
+and H6 dispatch increments, plus H3 publication provenance, bring the total to 167. No public statement directly names `World` or
 `Kernel`.
 The full proof gate remains failed in inherited campaign-1 counter-window and
 index carries; those files have not been edited. Scoped validation does not
@@ -55,7 +55,7 @@ connections to the current executable mirror, not replacement interpreters.
 | H3 | `Roaming/Model`, `View`, `Statements`, `EndpointClaims`, `EndpointSource`, `Authentication`, `PublicationModel`, `PublicationSource`, `PublicationClaims`. | `Roaming/Frames`, `PublicationFrames`; `Basic` reexports the endpoint source connection. |
 | H4 | `Config/Model`, `AllowedRemovalModel`, `QuietModel`, `ClaimView`, `Statements`, `SourceClaims`, `ObservationBridge`, and existing substantive effect/source modules. | `ConcreteFrames` isolates six whole-kernel endpoint contracts; `OperationFrames` isolates seven generic helpers; `ReadbackFrames` retains socket/fixture preservation; `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `QuietFrames`, `KeyFieldFrames` isolate within-WG preservation. |
 | H5 | `Progress/Model`, `View`, `Statements`, `SourceClaims`, `ObservationBridge`; `ControlLaws` is generic state/error control and `ControlSource` connects it exactly to the original worker; the scheduler/source modules retain actual execution factors. | `StackFrames` isolates caller-guard preservation. Probe/filter/no-work contracts also establish outputs and remain substantive source claims. |
-| H6 | `TimerDiscipline/Model`, `View`, `SendView`, `Statements`, `ObservationBridge`, `ObservationClaims`, `SourceClaims`, `SendDispatchModel`, `SendDispatchClaims`, and `*Source` operational proofs. | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`. |
+| H6 | `TimerDiscipline/Model`, `View`, `SendView`, `Statements`, `ObservationBridge`, `ObservationClaims`, `SourceClaims`, `SendDispatchModel`, `SendDispatchClaims`, `RetryDispatchModel`, `RetryDispatchClaims`, and `*Source` operational proofs. | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`, `RetryDispatchFrames`. |
 
 A compound exact effect is not a disposable frame merely because its name
 contains “frame”: mark/generation updates, cleared-peer accumulation, reference
@@ -1016,6 +1016,37 @@ reference ownership, existential execution from a uniqueness claim, and normal
 return from guaranteed completion. Routine source-factor/bind proof errors were
 corrected without weakening statements; no cap failure or infrastructure rerun.
 The full gate's inherited failure remains as recorded above, last run at `69f988a`.
+
+`RetryDispatchSource` now connects actual `Env.fireTimer .timerRetransmit`
+directly to actual `Env.runOneSendWorker`. The only entry premises are a named
+resident device and its empty send queue. The observer runs each existing
+inspection at that call's actual entry; the worker starts at the timer's actual
+output state. Erasure gives precisely the two original calls, including errors.
+`RetryDispatchClaims` exposes the actual selected due peer, timer-selection and
+post-timer snapshots, and worker section observations in the pure
+`RetryDispatchModel` certificate.
+
+Successful worker selection rules out every empty-queue callback outcome. This
+derives the selected peer's entry attempt bound (at most 18), alive/not-pending
+flags and positive reference count, rather than assuming them. The callback
+increments attempts once and freshly queues exactly that peer with one acquired
+reference and a detached retransmit timer. The worker selects that peer and
+releases the acquired reference, preserving identity and the incremented count;
+the final reference count equals the entry count. `RetryDispatchFrames` isolates
+the two queue-preservation lemmas that exclude the give-up branch. This is the
+direct original-call pair, not an accepted `runTimers` trace or a scheduler
+interleaving theorem. Final queue/pending preservation and rearming are still
+needed before this step can be iterated into an episode proof.
+
+H6 now has 32 headlines and the campaign 167. The scoped build passed (154 jobs),
+all 32 H6 headline axiom checks plus exact erasure and fresh stock replay passed,
+and all 167 campaign headlines import and pass axiom inspection together with
+only the standard three axioms. Independent review found no mathematical or
+source-linkage defect. Two wording findings were fixed: the callback increments
+attempts while the worker preserves them, and the timer observation exposes
+selection/result rather than separate timer-section start/stop snapshots.
+Ordinary elaboration errors were corrected; no cap failure or infrastructure
+rerun. The full gate remains the inherited failure described above.
 
 Completed retry-episode counting and source-complete caller coverage for
 traversal/session derivation remain open. The dispatch claims do not establish

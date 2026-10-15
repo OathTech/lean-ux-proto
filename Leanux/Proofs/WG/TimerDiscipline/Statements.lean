@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.TimerDiscipline.ObservationClaims
 import Leanux.Proofs.WG.TimerDiscipline.SendDispatchClaims
+import Leanux.Proofs.WG.TimerDiscipline.RetryDispatchClaims
 
 /-! The public H6 interface names only WireGuard and explicit execution
 observations. Concrete source connections and residual frames are separate.
@@ -378,5 +379,23 @@ theorem original_send_dispatch (d : Device) (retained : RetainedSendQueue d) :
         p.handshakePending = true ∧ workerObservation final pid =
           some (p.internalId, p.timerHandshakeAttempts, p.refcount - 1)) :=
   source_send_dispatch d retained
+
+/-- A normally completed original retransmit-timer dispatch followed immediately
+by one original send-worker dispatch, starting with no queued send work, exposes
+the actual selected due peer and post-timer state. Successful worker selection
+forces fresh retry queueing: the entry peer was alive, not pending, had a positive
+reference count and was at or below the retry limit. Queueing acquires one
+reference and the callback increments attempts once. The worker releases the
+reference, preserving identity and the incremented attempt count. The observations
+record the original timer selection/result and ordered worker section observations.
+Erasure to the original pair is exact, including errors, by
+observedRetryDispatch_erase. Scheduler coverage, final queue/pending preservation,
+rearming, successful transmission and a complete retry episode remain open. -/
+theorem original_retry_dispatch (d : Device) (horizon : UInt64)
+    (empty : d.sendWorkQueue = []) :
+    Campaign2.Ensures (observedRetryDispatch horizon)
+      (fun s => s.wg.device = some d)
+      (RetryDispatchCertificate d horizon) :=
+  source_retry_dispatch d horizon empty
 
 end Leanux.Proofs.WG.TimerDiscipline
