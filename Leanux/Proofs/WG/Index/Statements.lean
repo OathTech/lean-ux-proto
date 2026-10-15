@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.Index.Insert
+import Leanux.Proofs.WG.Index.PeerWords
 
 /-! H2's original-operation table contracts. Reachable owner/peer-word
 coherence and total recorded collision-prefix runs remain separate obligations. -/
@@ -75,5 +76,44 @@ theorem original_index_lookup (kinds : List IndexKind) (index : Nat) (d : Device
         ∀ owner pid, result = some (owner, pid) →
           ∃ e ∈ d.indexTable, e.index = index ∧ e.owner = owner ∧ kinds.contains e.kind = true) :=
   indexLookup_owner kinds index d
+
+/-- A matching permitted entry with a NULL stored peer word returns nothing
+and performs the original NULL store, with all device effects specified. -/
+theorem original_index_lookup_null (kinds : List IndexKind) (index : Nat)
+    (owner : IndexOwner) (d : Device)
+    (table : d.indexTable.find? (·.index == index) = some { index, owner })
+    (permitted : kinds.contains (IndexEntry.kind { index, owner }) = true)
+    (word : ownerWord d owner = some none) :
+    Returns (indexLookup kinds index) (fun w => w.k.wg = some d)
+      (fun result w => result = none ∧ w.k.wg = some (writeOwnerWord d owner none)) :=
+  indexLookup_null kinds index owner d table permitted word
+
+/-- A matching permitted entry referencing a zero-reference peer returns
+nothing and stores NULL in that entry's owner, as the landed mirror does. -/
+theorem original_index_lookup_zero_reference (kinds : List IndexKind) (index : Nat)
+    (owner : IndexOwner) (d : Device)
+    (table : d.indexTable.find? (·.index == index) = some { index, owner })
+    (permitted : kinds.contains (IndexEntry.kind { index, owner }) = true)
+    (pid : PeerId) (p : Peer) (word : ownerWord d owner = some (some pid))
+    (resident : d.peers[pid]? = some p) (zero : p.refcount = 0) :
+    Returns (indexLookup kinds index) (fun w => w.k.wg = some d)
+      (fun result w => result = none ∧ w.k.wg = some (writeOwnerWord d owner none)) :=
+  indexLookup_dead kinds index owner d table permitted pid p word resident zero
+
+/-- A matching permitted entry with a resident, positively referenced peer
+returns that owner and its stored peer identity, acquiring one reference.
+The exact subsequent owner store retains that increment even for aliasing
+handshake-owner and referenced-peer identities. -/
+theorem original_index_lookup_live (kinds : List IndexKind) (index : Nat)
+    (owner : IndexOwner) (d : Device)
+    (table : d.indexTable.find? (·.index == index) = some { index, owner })
+    (permitted : kinds.contains (IndexEntry.kind { index, owner }) = true)
+    (pid : PeerId) (p : Peer) (word : ownerWord d owner = some (some pid))
+    (resident : d.peers[pid]? = some p) (live : 0 < p.refcount)
+    (bounded : p.refcount + 1 < 2 ^ 31) :
+    Returns (indexLookup kinds index) (fun w => w.k.wg = some d)
+      (fun result w => result = some (owner, pid) ∧
+        w.k.wg = some (writeOwnerWord (acquirePeer d pid p) owner (some pid))) :=
+  indexLookup_live kinds index owner d table permitted pid p word resident live bounded
 
 end Leanux.Proofs.WG.Index

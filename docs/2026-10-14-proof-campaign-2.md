@@ -120,9 +120,9 @@ composing reachable-state coherence. The landed representation keeps owner
 identity in each table row and its optional peer word in the owner object.
 The two are not interchangeable on arbitrary states.
 
-Five terminal statements cover removal, the keypair-removal specialization,
-handshake replacement, normally completed insertion, and lookup owner/table
-provenance. Removal and replacement return under device residency. Replacement
+Eight terminal statements cover removal, the keypair-removal specialization,
+handshake replacement, normally completed insertion, lookup owner/table
+provenance, and total matched-entry NULL/zero-reference/live lookup effects. Removal and replacement return under device residency. Replacement
 preserves numeric indices and every owner object's peer word; preserving owner
 uniqueness additionally requires the destination keypair not already hashed.
 Insertion first removes this owner's old row, then inserts a fresh numeric
@@ -134,11 +134,17 @@ dereference. The removal statement does not claim a NULL dereference succeeds.
 
 `LookupSource` proves the original scan stops at the first equal numeric
 index, including a disallowed kind; `Lookup` composes that scan with the
-original reference-acquisition/store-back suffix. The current terminal lookup
+original reference-acquisition/store-back suffix. The general terminal lookup
 postcondition says any returned owner comes from an initial row at the
-requested index and allowed kind, and the table is unchanged. It does not yet
-relate the returned peer ID to the stored peer word or state reference-count
-or NULL-store effects. Those are separate from the reachable coherence work.
+requested index and allowed kind, and the table is unchanged. `PeerWords`
+adds total contracts when the first matching row has a permitted kind and
+a resident owner: a NULL word returns nothing; a resident zero-reference peer
+returns nothing and stores NULL; a positive, bounded reference count returns
+the owner and stored peer identity, increments the reference, then stores back
+the word. The exact post-state retains the increment when handshake-owner and
+referenced-peer identities alias. Missing objects and reference overflow are
+excluded by explicit premises matching the original stops. These local effects
+remain separate from reachable owner/peer coherence.
 `Collision` proves bucket walking tests exact numeric membership in the whole
 table. `Insert` factors the original draw loop and proves freshness on normal
 completion by induction over its budgeted iterations. Total recorded-prefix
@@ -150,13 +156,15 @@ uniqueness or initialize/preserve owner-store coherence through every caller.
 Independent read-only review found no semantic defect. Its wording finding was
 fixed: the terminal lookup docstring now describes its exported provenance
 postcondition, leaving stronger first-selection semantics to the internal
-scan contract. The five statements pass scoped build, standard-axiom inspection
+scan contract. The eight statements pass scoped build, standard-axiom inspection
 and fresh stock kernel replay (`capped -- scripts/in-bundle lake env leanchecker
 --fresh Leanux.Proofs.WG.Index.Statements`). The full proof gate still fails in
 inherited `CounterWindow.Refinement` and `ReplayWindow.Counterexamples`;
 token/import checks pass. The subsequent shared index frames remain campaign
 1's carry. No mirror edit, cap hit, infrastructure rerun, guest or differential
-run. No new mirror-team request at this checkpoint.
+run. No new mirror-team request at this checkpoint. Independent review of the
+three matched-entry contracts found no correctness issue; it checked owner
+aliasing, missing-owner versus NULL distinctions, and the exact refcount bound.
 
 ## H3 — Endpoint roaming (in progress)
 
