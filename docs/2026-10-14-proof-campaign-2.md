@@ -15,9 +15,9 @@ remains failed in inherited campaign-1 files.
 | H3 Roaming | 12 | Data publication/first-poll join, both authenticated handshake cuts and inspection retaining them through continuation failure | General queue/caller coverage, final endpoint preservation |
 | H4 Configuration | 75 | Configuration leaves/flags, bounded public readback, port/fwmark/key effects, normal live-key removal and private-key collision composition, full REMOVE_ME, witness-free normal REPLACE_ALLOWEDIPS and remove-all and flag-only REPLACE_PEERS phase effects, empty-root insertion, exact root transfer and actual peer-dump readback | Collision completion, queued cleanup effects, mixed attributes, global ownership and general multipart readback |
 | H5 Progress | 33 | Historical backlog counterexample, source-connected scheduling inspections, cut/pow/drain/poll bounds | Whole-worker record decrease, full operation-end coverage and global termination/progress |
-| H6 Timers | 43 | Local arm/delete rules, recorded delays, actual retry/send pairs, consecutive same-peer count bound and both response session hooks, data-completion sends, receive-data hooks and outgoing and accepted-handshake receive traversal compositions | Complete caller/site coverage, scheduler episodes and session-relative arm counting |
+| H6 Timers | 44 | Local arm/delete rules, recorded delays, actual retry/send pairs, consecutive same-peer count bound and immediate give-up boundary, both response session hooks, data-completion sends, receive-data hooks and outgoing and accepted-handshake receive traversal compositions | Complete caller/site coverage, scheduler episodes and session-relative arm counting |
 
-Total: **234 headlines**. The factoring checkpoint `69f988a` preserved all 153
+Total: **235 headlines**. The factoring checkpoint `69f988a` preserved all 153
 then-existing headlines. Recent mathematical checkpoints include `a2923a1`
 (H1 consecutive confirmation) and `7b34fa4` (H6 response-session timer hook).
 
@@ -59,7 +59,7 @@ connections to the current executable mirror, not replacement interpreters.
 | H3 | `Roaming/Model`, `View`, `Statements`, `EndpointClaims`, `EndpointSource`, `Authentication`, `PublicationModel`, `PublicationSource`, `PublicationClaims`, `PollEndpointModel`, `PollEndpointSource`, `PollEndpointClaims`, `ResponseModel`, `ResponseCryptoSource`, `ResponseConsumeSource`, `ResponseLookupSource`, `ResponseCallSource`, `ResponseCallClaims`, `InitiationModel`, `InitiationCryptoSource`, `InitiationLookupSource`, `InitiationConsumeSource`, `InitiationCallSource`, `InitiationCallClaims`, `HandshakeAuditModel`, `HandshakeAuditSource`, `HandshakeAuditClaims`. | `Roaming/Frames`, `PublicationFrames`, `PollEndpointFrames`; `Basic` reexports the endpoint source connection. The response and initiation increments reuse existing accessor/read/clock support without new frames. |
 | H4 | `Config/Model`, `AllowedRemovalModel`, `AllowedPairsModel`, `AllowedPairsEffects`, `AllowedRemovalConverseSource`, `AllowedRemovalConverseClaims`, `QuietModel`, `LiveRemovalModel`, `LiveRemovalSource`, `CollisionModel`, `CollisionRemovalSource`, `CollisionRequestSource`, `AllowedInsertModel`, `AllowedInsertSource`, `AllowedReadbackSource`, `AllowedRoundTripSource`, `AllowedTransferModel`, `AllowedPlacementSource`, `AllowedTransferOperations`, `AllowedTransferSource`, `AllowedTransferRequestSource`, `AllowedTransferReadbackSource`, `RemoveFlagModel`, `RemoveFlagEffects`, `RemoveFlagSource`, `RemoveFlagRequestSource`, `ReplacementConverseSource`, `ReplacementConverseRequestSource`, `RemoveAllModel`, `RemoveAllEffects`, `RemoveAllSource`, `RemoveAllObservationSource`, `ReplacePeersRequestSource`, `ReplacePeersRequestClaims`, `ClaimView`, `Statements`, `SourceClaims`, `ObservationBridge`, and existing substantive effect/source modules. | `ConcreteFrames` isolates six whole-kernel endpoint contracts; `OperationFrames` isolates seven generic helpers; `ReadbackFrames` retains socket/fixture preservation; `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `AllowedPairsFrames`, `QuietFrames`, `LiveRemovalFrames`, `KeyFieldFrames`, `CollisionFrames`, `AllowedInsertFrames`, `RemoveAllFrames` isolate within-WG preservation. |
 | H5 | `Progress/Model`, `View`, `Statements`, `SourceClaims`, `ObservationBridge`; `ControlLaws` is generic state/error control and `ControlSource` connects it exactly to the original worker; the scheduler/source modules retain actual execution factors. `CutModel`, `CutSource` and `CutClaims` establish original cut-loop progress; `FlushQueueModel`, `FlushQueueSource` and `FlushQueueClaims` establish original flush effects and count decrease; `PowModel` and `PowSource` connect a finite evaluator to the original arithmetic loop. `DrainModel`, `DrainOperations`, `DrainSelectionSource`, `DrainAuditSource`, `DrainEffects` and `DrainClaims` connect a phase audit and queue bound to the original workqueue drain. `PollBoundModel`, `PollBoundEffects`, `PollStepSource`, `PollLoopSource`, `PollBoundSource` and `PollBoundClaims` connect the actual receive poll to its budget audit; no new structural frames. | `StackFrames` isolates caller-guard preservation; `CutFrames` isolates record/error-location preservation; `FlushQueueFrames` isolates queue preservation through worker bodies and release. Probe/filter/no-work contracts also establish outputs and remain substantive source claims. |
-| H6 | `TimerDiscipline/Model`, `View`, `SendView`, `Statements`, `ObservationBridge`, `ObservationClaims`, `SourceClaims`, `SendDispatchModel`, `SendDispatchClaims`, `RetryDispatchModel`, `RetryDispatchClaims`, `RetryRearmModel`, `RetryRearmClaims`, `RetrySequenceModel`, `RetrySequenceClaims`, `ResponseSessionModel`, `ResponseSessionEffects`, `ResponseSessionClaims`, `OutgoingResponseSessionModel`, `OutgoingResponseSessionClaims`, `DataDoneModel`, `DataDoneClaims`, `RxDataTimersModel`, `RxDataTimersClaims`, `ResponseTraversalModel`, `ResponseTraversalClaims`, `InitiationTraversalModel`, `InitiationTraversalClaims`, `ReceiveTraversalModel`, `ReceiveTraversalClaims`, and `*Source` operational proofs. | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`, `RetryDispatchFrames`, `RetryRearmFrames`, `WorkStateFrames`, `ResponseSessionFrames`. |
+| H6 | `TimerDiscipline/Model`, `View`, `SendView`, `Statements`, `ObservationBridge`, `ObservationClaims`, `SourceClaims`, `SendDispatchModel`, `SendDispatchClaims`, `RetryDispatchModel`, `RetryDispatchClaims`, `RetryRearmModel`, `RetryRearmClaims`, `RetrySequenceModel`, `RetrySequenceClaims`, `RetryBoundarySource`, `RetryBoundaryClaims`, `ResponseSessionModel`, `ResponseSessionEffects`, `ResponseSessionClaims`, `OutgoingResponseSessionModel`, `OutgoingResponseSessionClaims`, `DataDoneModel`, `DataDoneClaims`, `RxDataTimersModel`, `RxDataTimersClaims`, `ResponseTraversalModel`, `ResponseTraversalClaims`, `InitiationTraversalModel`, `InitiationTraversalClaims`, `ReceiveTraversalModel`, `ReceiveTraversalClaims`, and `*Source` operational proofs. | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`, `RetryDispatchFrames`, `RetryRearmFrames`, `WorkStateFrames`, `ResponseSessionFrames`. |
 
 A compound exact effect is not a disposable frame merely because its name
 contains “frame”: mark/generation updates, cleared-peer accumulation, reference
@@ -528,6 +528,18 @@ by their length and a nonempty sequence is bounded by 19 from zero. This
 excludes 20 such successful pairs, not a twentieth timer callback. An empty
 sequence preserves the whole snapshot.
 
+At the actual exit of 19 such pairs from zero, the immediately invoked original
+retransmit callback now has an all-outcome give-up contract. For every concrete
+realization of that projected exit, it agrees with the original comparison/log
+followed by the entire give-up tail, including any later arm-record error. No
+arm-record-mode premise is needed to decide the branch. If the callback returns
+normally, the send queue remains empty and the resident peer retains its
+allocation identity and attempt count 19. This is a direct continuation at the
+same boundary, without an intervening scheduler/environment action; it does not
+assert another timer was armed, selected or invoked, or that give-up completes.
+`RetryBoundarySource` and `RetryBoundaryClaims` add substantive source/continuation
+contracts, using existing separate frame support without new frames or variants.
+
 The incoming response caller now has exact source and decorated-observation
 correspondence, retaining errors and the unchanged continuation. On normal full
 return, a present response cut records the actual session entry, returned Bool
@@ -638,6 +650,10 @@ original caller ordering, exact effect/source relations, projection boundary and
 report scope. The H4 pass confirmed the already-recorded commit-wording
 correction from “empty peer list” to the selected peer's allowed-IP list. These
 reviews did not rerun the reported build, axiom or kernel-replay checks.
+An independent read-only pass also found no issue in the immediate H6 retry
+boundary: all-outcome equality retains the comparison and give-up tail, normal
+effects retain count/identity/empty queue, and no scheduled twentieth callback is
+asserted. Its fresh stock kernel replay subsequently passed (exit 0).
 Counts record the check at
 that increment, not the current number of declarations. Earlier H1 confirmation
 had 140 build jobs/20 headlines; H3 response 59 jobs; H2 coherence 206 jobs;
@@ -666,6 +682,7 @@ remain recorded in their commits, and affected shared C2 changes were rechecked.
 | H6 common receive traversal | 231 | 43 + 9 | 1 |
 | H4 remove-all phase order | 207 | 74 + 10 | 4 |
 | H4 REPLACE_PEERS request | 209 | 75 + 4 | 3 |
+| H6 immediate retry boundary | 233 | 44 + 3 | 3 |
 
 The counted drafts were source/elaboration corrections, not infrastructure retries.
 The separate duplicate-build process error below is not counted as a corrected draft.
@@ -702,7 +719,11 @@ a single orchestration cell unconditionally launched the dependent claims build,
 which repeated that unchanged source failure. This was neither an infrastructure
 outcome nor a permitted retry. It is recorded separately from the corrected
 drafts; subsequent dependent builds were launched only after inspecting success.
-No limit was raised, and neither failed output was accepted. Successful outputs were reused when only
+No limit was raised, and neither failed output was accepted.
+H6 immediate retry boundary had three source drafts fail: a missing namespace
+for the total-return contract and two normalization attempts around the exact
+state/error bind. A direct concrete run equality resolved these without changed
+limits. Its claims and headline built on their first invocations. Successful outputs were reused when only
 wrapped/zero-axiom output parsing needed correction; no resource limit increased.
 
 Review dispositions: H5 drain and H2 sequence made source correspondence
@@ -712,8 +733,8 @@ peer’s allowed-IP list; H4 transfer clarified that only the allowed-IP cursor
 and sequence reset. All findings were fixed. H5 drain's staged EOF whitespace
 was corrected in the next commit. Both pre-adjustment and changed-interface H2
 sequence replays passed; this was source-driven revalidation, not a retry.
-The six-target scoped build passes together (409 jobs), with existing unused-simp
-and deprecated-tactic warnings. Combined inspection covers all 234 headlines. This does **not**
+The six-target scoped build passes together (411 jobs), with existing unused-simp
+and deprecated-tactic warnings. Combined inspection covers all 235 headlines. This does **not**
 constitute a passing full gate.
 
 The full gate was last actually run at `69f988a` and **failed** in inherited

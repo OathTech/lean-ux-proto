@@ -9,6 +9,7 @@ import Leanux.Proofs.WG.TimerDiscipline.SendDispatchClaims
 import Leanux.Proofs.WG.TimerDiscipline.RetryDispatchClaims
 import Leanux.Proofs.WG.TimerDiscipline.RetryRearmClaims
 import Leanux.Proofs.WG.TimerDiscipline.RetrySequenceClaims
+import Leanux.Proofs.WG.TimerDiscipline.RetryBoundaryClaims
 import Leanux.Proofs.WG.TimerDiscipline.ResponseSessionClaims
 
 /-! The public H6 interface names only WireGuard and explicit execution
@@ -620,5 +621,27 @@ theorem original_response_receive_traversal (msg : List UInt8) (src : SkbSource)
   · intro entry pre
     rw [observedResponseReceiveTraversal_erase msg src kind]
   · exact observedResponseReceiveTraversal_facts msg src
+
+/-- After 19 consecutive normal retry/send pairs from zero, if all selected the
+same peer, an immediately invoked retransmit callback takes the give-up branch.
+The comparison log and entire tail are retained, including errors. A normal
+callback return preserves attempt count 19 and the empty send queue. This does
+not assert another timer is armed, selected, or invoked, or that give-up returns;
+there is no intervening scheduler/environment action in this boundary contract. -/
+theorem original_retry_boundary (d : Device) (horizons : List UInt64)
+    (empty : d.sendWorkQueue = []) (nineteen : horizons.length = 19)
+    (pid : PeerId) (p : Peer) (resident : d.peers[pid]? = some p)
+    (zero : p.timerHandshakeAttempts = 0) :
+    Campaign2.Ensures (observedRetrySequence horizons)
+      (fun s => s.wg.device = some d)
+      (fun result boundary => SameRetryPeer pid result.2 →
+        Campaign2.AgreesOn (fun s => s = boundary)
+          (expiredRetransmitHandshake pid)
+          (do let _ ← retransmitDecision pid; retransmitGiveUp pid) ∧
+        Campaign2.Ensures (expiredRetransmitHandshake pid) (fun s => s = boundary)
+          (fun _ final => final.wg.device.map Device.sendWorkQueue = some [] ∧
+            ∃ q, final.peerAt pid = some q ∧ q.internalId = p.internalId ∧
+              q.timerHandshakeAttempts = 19)) :=
+  source_retry_boundary d horizons empty nineteen pid p resident zero
 
 end Leanux.Proofs.WG.TimerDiscipline
