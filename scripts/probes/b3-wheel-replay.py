@@ -13,10 +13,14 @@ records in sequence order:
 
 - kind 311 (the caller's jiffies read) names the arming site, so the timer's
   kind; kind 303 {J_m, expires, timer} places the timer with the wheel's
-  arithmetic at clk = J_m (the no-lag case: the base clock is not recorded
-  yet; a kind-313 record is what B3 proposes), applying __mod_timer's three
-  paths (same expires: nothing; same slot: position kept, old bucket expiry
-  kept; else re-enqueued at the head);
+  arithmetic, applying __mod_timer's three paths (same expires: nothing;
+  same slot: position kept, old bucket expiry kept; else re-enqueued at the
+  head).  On a dump from the s5 pair or later, the kind-313 record {clk,
+  timer} that follows the arm supplies the base clock the C used (a dump
+  without it is replayed at clk = J_m, the no-lag case), and the kind-314
+  record {idx, bucket_expiry, timer} at the enqueue is compared with the
+  probe's arithmetic: a differing slot or bucket expiry, a kind 314 on a
+  same-slot re-arm, or none on a move, is a problem;
 - kind 300 (a dispatch section start, {func, unit}) of a wg_expired_*
   callback is a firing of the timer at `unit`; it is judged at that moment
   against the wheel: the earliest pending bucket (level descending, newest
@@ -48,7 +52,7 @@ DELETION MARKERS (drivers/net/wireguard, Linux 6.12.110):
   called at receive.c:201 (every valid handshake message: the response
   received, marker as :194; the initiation received, marker as send.c:100)
   and receive.c:353 (every data packet reaching consume_data_done: the
-  kind-208 age test at receive.c:253 that precedes it; a packet the counter
+  kind-208 age test at receive.c:252-253 (decrypt_packet) that precedes it; a packet the counter
   then rejects is a known over-approximation, noted in the output);
 - timers.c:51 del_timer(send_keepalive) in the retransmit's give-up: the
   kind-311 read at timers.c:62 inside a wg_expired_retransmit_handshake
@@ -79,6 +83,7 @@ def s64(x): x &= M64; return x - (1 << 64) if x >> 63 else x
 def time_after(a, b): return s64(b - a) < 0
 def time_before(a, b): return time_after(b, a)
 def time_after_eq(a, b): return s64(a - b) >= 0
+def time_before_eq_(a, b): return time_after_eq(b, a)
 def calc_index(expires, lvl):
     e = ((expires >> LVL_SHIFT(lvl)) + 1) & M64
     return LVL_OFFS(lvl) + (e & LVL_MASK), (e << LVL_SHIFT(lvl)) & M64
@@ -133,9 +138,22 @@ if not ops_of:
 ips = sorted({rec[1] for ops in per.values() for recs in ops.values() for rec in recs if (rec[0] & 0x7fff) in (205, 208, 311)})
 site = {}
 if ips:
-    out = subprocess.run(['addr2line', '-e', VMLINUX] + [hex(int(ip, 16) - 1) for ip in ips],
+    # the consumer frame: with the inline chain (-i), the first frame in
+    # drivers/net/wireguard (a coarse-clock read inlines ktime_get_coarse_boottime_ns,
+    # whose innermost frame is include/linux/timekeeping.h), as the checker resolves
+    out = subprocess.run(['addr2line', '-e', VMLINUX, '-i', '-a'] + [hex(int(ip, 16) - 1) for ip in ips],
                          capture_output=True, text=True, check=True).stdout.splitlines()
-    for ip, loc in zip(ips, out):
+    chains, cur = {}, None
+    for line in out:
+        if line.startswith('0x'):
+            cur = line.split()[0]; chains[cur] = []
+        elif cur is not None:
+            chains[cur].append(line)
+    for ip in ips:
+        frames = chains.get(hex(int(ip, 16) - 1).replace('0x', '0x').lower(), [])
+        # the age test inlines wg_birthdate_has_expired (timers.h:28) above its caller
+        wg = [f for f in frames if 'drivers/net/wireguard/' in f and 'wireguard/timers.h' not in f]
+        loc = wg[0] if wg else (frames[0] if frames else '?')
         site[ip] = 'drivers/net/wireguard/' + loc.split('drivers/net/wireguard/')[-1].split(' ')[0] if 'drivers/net/wireguard/' in loc else loc
 def short(ip):
     s = site.get(ip, '?')
@@ -147,6 +165,7 @@ key = lambda t: (t['bexp'], -t['lvl'], -t['seq'])
 for tid, ops in sorted(per.items()):
     pending = {}      # timer address -> entry
     seq = 0
+    arm = None        # the last kind-303 arm awaiting its kind-313 / kind-314 records
     anchors = {}      # peer anchor -> True
     def peer_of_timer(addr, kind): return addr - 40 * kind
     def peer_of_unit(u):
@@ -167,6 +186,35 @@ for tid, ops in sorted(per.items()):
                 notes.append((tid, index, 'ambiguous', why, [hex(a) for a in cands]))
         else:
             delete(lambda a, t: t['kind'] == kind and t['peer'] == peer, why, index)
+    def place(a, clk, recorded):
+        global seq
+        a['placed'] = True; a['clk'] = clk
+        addr, e, tk, peer, jm = a['addr'], a['e'], a['tk'], a['peer'], a['jm']
+        overdue = [t['bexp'] for t in pending.values() if time_after_eq(jm, t['bexp'])]
+        if overdue and not recorded:
+            stats['arms with a modeled timer overdue at a no-record replay (clk = min bucket, timer.c:1008-1014)'] += 1
+            clk = min(overdue)
+        idx, bexp = calc_wheel_index(e, clk)
+        if addr in pending:
+            old = pending[addr]
+            if idx == old['idx']:
+                stats['re-arm, same slot (:1123-1130: position and bucket expiry kept)'] += 1
+                old['expires'] = e; a['expect314'] = 'none'; return
+            stats['re-arm, new slot (:1144, :1181: re-enqueued at the head)'] += 1
+        seq += 1
+        pending[addr] = dict(expires=e, idx=idx, bexp=bexp, seq=seq, lvl=level_of(idx), kind=tk, peer=peer, name=KIND_NAME[tk])
+        stats[f'placements at level {level_of(idx)}'] += 1
+        a['expect314'] = (idx, bexp)
+    def settle_arm():
+        # an arm with no kind-313 record (a dump before the s5 pair): the no-lag replay
+        global arm
+        if arm is not None and not arm['placed']:
+            stats['arms replayed at clk = J_m (no kind-313 record)'] += 1
+            place(arm, arm['jm'], False)
+        if arm is not None and arm['expect314'] not in (None, 'none', 'done'):
+            if stats['base clock records (kind 313)']:
+                problems.append((tid, arm['index'], 'a move with no kind-314 record', dict(timer=hex(arm['addr']), expected=arm['expect314'])))
+        arm = None
     for index in sorted(ops):
         recs = sorted(ops[index], key=lambda r: r[2])
         opname = ops_of.get(tid, [None] * (index + 1))[index] if tid in ops_of else None
@@ -179,6 +227,7 @@ for tid, ops in sorted(per.items()):
         order = []; nfired = 0; op_ok = True; last311 = None; open_timer_section = None
         for kind, ip, s, length, data in recs:
             kind &= 0x7fff
+            if kind not in (313, 314): settle_arm()
             if kind == 304:
                 stats['advances (kind 304)'] += 1
             elif kind == 205:
@@ -190,7 +239,7 @@ for tid, ops in sorted(per.items()):
                     if where == 'receive.c:179':
                         delete_kind(2, 'response received (receive.c:201, timers.c:178)', index, None)
             elif kind == 208:
-                if short(ip) == 'receive.c:253':
+                if short(ip) in ('receive.c:252', 'receive.c:253'):   # decrypt_packet's age test (the line this build attributes it to)
                     # a data packet reaching consume_data_done: any_authenticated_packet_received (receive.c:353)
                     delete_kind(2, 'data received (receive.c:353, timers.c:178)', index, None)
             elif kind == 311:
@@ -209,23 +258,35 @@ for tid, ops in sorted(per.items()):
                     delete(lambda a, t: t['kind'] == 2 and t['peer'] == peer, 'initiation received (receive.c:201, timers.c:178)', index)
                 elif last311 == 'timers.c:62' and open_timer_section == 'wg_expired_retransmit_handshake':
                     delete(lambda a, t: t['kind'] == 1 and t['peer'] == peer, 'retransmit gave up (timers.c:51)', index)
-                clk = jm
-                overdue = [t['bexp'] for t in pending.values() if time_after_eq(jm, t['bexp'])]
-                if overdue:
-                    stats['arms with a modeled timer overdue (clk = min bucket, timer.c:1008-1014)'] += 1
-                    clk = min(overdue)
-                if addr in pending:
-                    old = pending[addr]
-                    if old['expires'] == e:
-                        stats['re-arm, same expires (__mod_timer :1085-1088, nothing changes)'] += 1; continue
-                    idx, bexp = calc_wheel_index(e, clk)
-                    if idx == old['idx']:
-                        stats['re-arm, same slot (:1123-1130: position and bucket expiry kept)'] += 1
-                        old['expires'] = e; continue
-                    stats['re-arm, new slot (:1144, :1181: re-enqueued at the head)'] += 1
-                idx, bexp = calc_wheel_index(e, clk); seq += 1
-                pending[addr] = dict(expires=e, idx=idx, bexp=bexp, seq=seq, lvl=level_of(idx), kind=tk, peer=peer, name=KIND_NAME[tk])
-                stats[f'placements at level {level_of(idx)}'] += 1
+                arm = dict(jm=jm, e=e, addr=addr, tk=tk, peer=peer, index=index, placed=False, clk=None, expect314=None)
+                if addr in pending and pending[addr]['expires'] == e:
+                    stats['re-arm, same expires (__mod_timer :1085-1088, nothing changes)'] += 1
+                    arm['placed'] = True   # no lock, no forward: no kind 313 and no kind 314
+                    continue
+            elif kind == 313:
+                clk, taddr = words(data)[:2]
+                stats['base clock records (kind 313)'] += 1
+                if arm is None or arm['placed'] or taddr != arm['addr']:
+                    problems.append((tid, index, 'a kind-313 record without its arm, or naming another timer', hex(taddr))); continue
+                if not time_before_eq_(clk, (arm['jm'] + 1) & M64):
+                    problems.append((tid, index, 'kind 313: clk ahead of mod_timer\'s read by more than one', dict(clk=clk, jm=arm['jm'])))
+                if clk != arm['jm']:
+                    stats['arms whose recorded clk differs from J_m (lead or lag)'] += 1
+                    notes.append((tid, index, 'clk != J_m', hex(arm['addr']), KIND_NAME[arm['tk']], arm['jm'], clk, 'lead' if time_after(clk, arm['jm']) else 'lag'))
+                place(arm, clk, True)
+            elif kind == 314:
+                ridx, rbexp, taddr = words(data)[:3]
+                stats['enqueue records (kind 314)'] += 1
+                if arm is None or taddr != arm['addr'] or arm['expect314'] is None:
+                    problems.append((tid, index, 'a kind-314 record without a placed arm, or naming another timer', hex(taddr))); continue
+                exp = arm['expect314']
+                if exp == 'none':
+                    problems.append((tid, index, 'a kind-314 record on a same-slot re-arm (the C kept the slot?)', dict(timer=hex(taddr))))
+                elif (ridx, rbexp) != exp:
+                    problems.append((tid, index, 'kind 314 differs from the probe\'s wheel arithmetic', dict(kernel=(ridx, rbexp), probe=exp, timer=hex(taddr), name=KIND_NAME[arm['tk']])))
+                else:
+                    stats['enqueues whose slot and bucket expiry match the probe\'s arithmetic'] += 1
+                arm['expect314'] = 'done'
             elif kind == 300 and length == 16:
                 func, unit = words(data)[:2]
                 if func in syms:
@@ -257,6 +318,7 @@ for tid, ops in sorted(per.items()):
                     pending.pop(unit, None)
             elif kind == 301:
                 open_timer_section = None
+        settle_arm()
         if jend is not None:
             stats['idle points (operations with a read)'] += 1
             for a, t in pending.items():

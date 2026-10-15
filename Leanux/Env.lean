@@ -371,7 +371,8 @@ def sectionAppearsLater (w : Worker) (unit : Nat) : M Bool := do
     the mirror predicted, a deletion it missed, or a kernel that did not run
     it). E2. -/
 def requireNothingDue (jPass : UInt64) : M Unit := do
-  let d ← getDev
+  -- L: without wg0 (bare fixture, or after wg_delete) no WireGuard timer exists
+  let some d := (← getK).wg | return
   let some (pid, t, we) := TimerWheel.nextDue d jPass | return
   let w ← timerWorker t
   let unit := (((← get).timerUnits.find? fun e => e.2.1 == pid && e.2.2 == t).map (·.1)).getD 0
