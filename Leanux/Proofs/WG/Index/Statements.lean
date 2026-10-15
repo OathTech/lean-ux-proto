@@ -17,6 +17,7 @@ import Leanux.Proofs.WG.Index.StagedSource
 import Leanux.Proofs.WG.Index.ReceiveSource
 import Leanux.Proofs.WG.Index.TimerSource
 import Leanux.Proofs.WG.Index.FlushSource
+import Leanux.Proofs.WG.Index.SessionCoherenceSource
 
 /-! H2's original-operation table contracts. Reachable owner/peer-word
 coherence remains a separate obligation. -/
@@ -571,5 +572,22 @@ theorem original_peer_remove_after_dead_tables (pid : PeerId) :
     Campaign2.Ensures (peerRemoveAfterDead pid) View.TablesSafe
       (fun _ s => View.TablesSafe s) :=
   peerRemoveAfterDead_tables pid
+
+/-- Original session installation preserves table safety on normal return.
+If it actually returns true, the allocation remains resident with one reference
+and the caller's peer word, occupies the role-selected current/next slot, and
+owns the former handshake index uniquely in the final table. The caller is
+initially resident with a self handshake peer word; its actual rotation releases
+exclude the allocation ID. These are static local premises, not established
+reachable-state invariants. Allocation may overwrite an existing unhashed key;
+global store/slot lifetime safety and completion are not claimed. -/
+theorem original_begin_session_coherence (pid : PeerId) (d : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p) (safe : DeviceTablesSafe d)
+    (self : p.handshakeEntryPeer = some pid)
+    (fresh : SessionRotationFresh p d.nextKeypairId) :
+    Campaign2.Ensures (beginSession pid) (fun s => s.wg.device = some d)
+      (fun ok s => ∃ final, s.wg.device = some final ∧ DeviceTablesSafe final ∧
+        (ok = true → SessionInstalled pid d p final)) :=
+  beginSession_coherence pid d p resident safe self fresh
 
 end Leanux.Proofs.WG.Index

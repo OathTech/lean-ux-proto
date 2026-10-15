@@ -26,7 +26,7 @@ No independent existential projected runs are spliced together.
 | Result | Existing mathematical checkpoint | Factoring / remaining mathematics |
 | --- | --- | --- |
 | H1 Noise | 18 state/slot, ordered-clear, rotation/confirmation and full session-effect contracts | Public projection complete; exact normal session composition and static rotation/release totality are checked. Whole-call edge coverage, session totality, exposed derivation-clock provenance and lifetime confirmation remain open. |
-| H2 Index | 47 contracts, including lifecycle boundaries, handshake reception/sending, staged/keepalive sending, queued clearing, worker/timer dispatch and original workqueue draining/post-death removal | Public projection complete: 14 total contracts, 31 normal-return contracts, 1 exact stop and 1 projected initializer theorem; reachable coherence, broader records and the corpus runner composition remain open. |
+| H2 Index | 48 contracts, including lifecycle boundaries, handshake reception/sending, staged/keepalive sending, queued clearing, worker/timer dispatch, original workqueue draining/post-death removal, and successful session publication coherence | Public projection complete: 14 total contracts, 32 normal-return contracts, 1 exact stop and 1 projected initializer theorem; reachable coherence, broader records and the corpus runner composition remain open. |
 | H3 Roaming | 9 contracts, including decrypt publication, its same-execution first-poll endpoint connection, and exact response-caller authentication at the pre-setter cut | Public projection complete; first selected packet provenance is conditional on matching publication identity. Initiation, failed-call prefix retention, general queue provenance and complete caller coverage remain open. |
 | H4 Configuration | 64 contracts, including normal removal/death converses under two-slot node shape, live-key removal with empty work queues, and the internal dump-accounting finding | Public projection and frame separation complete. Queued-work removal, private-key collision, mixed attributes, global ownership and general dump composition remain open. |
 | H5 Progress | 30 contracts, including original exponentiation-loop finite evaluation, flush queue effects/count decrease, cut-loop budget adequacy, and the accepted batch-backlog counterexample | Public projection and frame separation complete; the recorded cut cannot exhaust its budget and normal selected flushes decrease queue count. Whole-worker record decrease, full loop coverage and probe/detach composition remain open. The backlog witness is historical over `de62c9d`: main's batch guard now addresses request 1. |
@@ -34,7 +34,7 @@ No independent existential projected runs are spliced together.
 
 Projection/frame factoring completed at `69f988a` for all six results, preserving
 all 153 existing headline names before new mathematics. The following H2 lifecycle/sender
-and H6 dispatch/rearm increments, H3 publication/poll and response provenance, H5 cut-loop progress, H1 ordered clearing/rotation and H4 live-key removal bring the total to 203. No public statement directly names `World` or
+and H6 dispatch/rearm increments, H3 publication/poll and response provenance, H5 cut-loop progress, H1 ordered clearing/rotation and H4 live-key removal bring the total to 204. No public statement directly names `World` or
 `Kernel`.
 The full proof gate remains failed in inherited campaign-1 counter-window and
 index carries; those files have not been edited. Scoped validation does not
@@ -51,7 +51,7 @@ connections to the current executable mirror, not replacement interpreters.
 | --- | --- | --- |
 | Common C2 | `Campaign2/View` is data-only; `Campaign2/Bridge` defines projection and universal execution contracts. | No shared campaign-1 layer is changed. |
 | H1 | `Noise/Model`, `Statements`, `Slots`, `StateEdges`, `ConsumeEdges`, `ClearModel`, `ClearEffects`, `ClearSource`, `RotationModel`, `RotationEffects`, `RotationSource`, `SessionModel`, `SessionSource`; `Execution` holds the concrete monad connection; `AccessSource` holds accessor read/write contracts, reexported by `Basic`. | `KernelFrames`, `PeerFrames`, `SlotFrames`, `ClearFrames`, `RotationFrames`, `SessionFrames`. |
-| H2 | `Index/View`, `TableModel`, `OwnerWordModel`, `AllocationModel`, `ReleaseModel`, `LifecycleModel` and pure release effects/bounds; `Statements`, `HandshakeClaims`, `OwnerUpdateClaims`, `LifecycleSource`, `LinkSource`, `SendSource`, `DispatchSource`, `ResponseSource`, `ConsumeSource`, `StagedSource`, `ReceiveOperations`, `ReceiveSource`, `ClearSource`, `TimerSource`, `FlushSource` and the other operation/source modules. | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`, `NewlinkFrames`, `SendFrames`, `DispatchFrames`, `ResponseFrames`, `ConsumeFrames`, `StagedFrames`, `ReceiveFrames`, `ClearFrames`, `TimerFrames`, `FlushFrames`; the old `HandshakeFrames` and `OwnerFrames` paths are import-only reexports, not duplicated lemmas. |
+| H2 | `Index/View`, `TableModel`, `OwnerWordModel`, `AllocationModel`, `ReleaseModel`, `LifecycleModel` and pure release effects/bounds; `Statements`, `HandshakeClaims`, `OwnerUpdateClaims`, `LifecycleSource`, `LinkSource`, `SendSource`, `DispatchSource`, `ResponseSource`, `ConsumeSource`, `StagedSource`, `ReceiveOperations`, `ReceiveSource`, `ClearSource`, `TimerSource`, `FlushSource`, `SessionCoherenceModel`, `SessionCoherenceEffects`, `SessionCoherenceSource` and the other operation/source modules. | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`, `NewlinkFrames`, `SendFrames`, `DispatchFrames`, `ResponseFrames`, `ConsumeFrames`, `StagedFrames`, `ReceiveFrames`, `ClearFrames`, `TimerFrames`, `FlushFrames`, `SessionCoherenceFrames`; the old `HandshakeFrames` and `OwnerFrames` paths are import-only reexports, not duplicated lemmas. |
 | H3 | `Roaming/Model`, `View`, `Statements`, `EndpointClaims`, `EndpointSource`, `Authentication`, `PublicationModel`, `PublicationSource`, `PublicationClaims`, `PollEndpointModel`, `PollEndpointSource`, `PollEndpointClaims`, `ResponseModel`, `ResponseCryptoSource`, `ResponseConsumeSource`, `ResponseLookupSource`, `ResponseCallSource`, `ResponseCallClaims`. | `Roaming/Frames`, `PublicationFrames`, `PollEndpointFrames`; `Basic` reexports the endpoint source connection. The response increment needs no new frame support. |
 | H4 | `Config/Model`, `AllowedRemovalModel`, `AllowedPairsModel`, `AllowedPairsEffects`, `AllowedRemovalConverseSource`, `AllowedRemovalConverseClaims`, `QuietModel`, `LiveRemovalModel`, `LiveRemovalSource`, `ClaimView`, `Statements`, `SourceClaims`, `ObservationBridge`, and existing substantive effect/source modules. | `ConcreteFrames` isolates six whole-kernel endpoint contracts; `OperationFrames` isolates seven generic helpers; `ReadbackFrames` retains socket/fixture preservation; `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `AllowedPairsFrames`, `QuietFrames`, `LiveRemovalFrames`, `KeyFieldFrames` isolate within-WG preservation. |
 | H5 | `Progress/Model`, `View`, `Statements`, `SourceClaims`, `ObservationBridge`; `ControlLaws` is generic state/error control and `ControlSource` connects it exactly to the original worker; the scheduler/source modules retain actual execution factors. `CutModel`, `CutSource` and `CutClaims` establish original cut-loop progress; `FlushQueueModel`, `FlushQueueSource` and `FlushQueueClaims` establish original flush effects and count decrease; `PowModel` and `PowSource` connect a finite evaluator to the original arithmetic loop. | `StackFrames` isolates caller-guard preservation; `CutFrames` isolates record/error-location preservation; `FlushQueueFrames` isolates queue preservation through worker bodies and release. Probe/filter/no-work contracts also establish outputs and remain substantive source claims. |
@@ -702,6 +702,37 @@ local variants because campaign 1's snapshot omits the index table/cursor.
 The [concrete overlap and alternatives](2026-10-15-campaign-2-shared-frame-request.md)
 are recorded before implementation. No shared edit or variant copying has been
 made for this increment. Independent H5/H3 work continues.
+
+The next H2 increment avoids that deferred overlap. `SessionCoherenceModel`
+states successful session publication over device data, `SessionCoherenceSource`
+applies the exact H1 session effect and the existing H2 table invariant to the
+same original execution, and `SessionCoherenceEffects` derives residency,
+selected-slot placement and unique publication. `SessionCoherenceFrames` holds
+only key-store preservation through excluded puts and unchanged handshake-row
+membership through rotation. No shared variants are needed.
+
+The new normal-return contract assumes an initially resident caller, table
+safety, a self handshake peer word and exclusion of the allocation ID from the
+actual role-dependent rotation releases. A true return then leaves that key
+resident with one reference and the caller's peer word, places it in current or
+next according to the original role, and publishes it at the former handshake
+index. Both numeric-index and embedded-owner uniqueness identify that row.
+Only actual releases are excluded; other aliases remain allowed. Allocation
+may overwrite an existing unhashed object. These are static local premises,
+not proved reachable invariants; allocation-store freshness, all-hashed-owner
+residency, global lifetime safety and total completion remain open.
+
+H2 now has 48 headlines and the campaign 204. The capped 32-thread Index build
+passed (206 jobs), all 48 headline axiom checks are standard, and fresh stock
+Index replay exited 0. Combined checks pass for all 204 headlines, including
+projection and gate structural checks. Independent review closed without
+findings. Reproduce with `LEAN_NUM_THREADS=32 capped -- scripts/in-bundle lake build
+Leanux.Proofs.WG.Index.Statements` and the same wrapper for `lake env leanchecker
+--fresh Leanux.Proofs.WG.Index.Statements`. An initial Effects elaboration failure
+was corrected. The first axiom-output parser rejected wrapped stock output;
+the corrected parser checked the same successful Lean output without rerunning
+Lean. No infrastructure rerun, cap hit, timeout or guest run. The full gate
+remains the inherited failure; the shared-frame decision is still pending.
 
 ## H3 — Endpoint roaming (in progress)
 
