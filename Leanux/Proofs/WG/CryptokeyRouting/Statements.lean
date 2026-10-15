@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Origins.RetainingLifecycle
 import Leanux.Proofs.WG.Queues.RxCompletionEnvironment
 import Leanux.Proofs.WG.Queues.RxLinkEnvironment
 import Leanux.Proofs.WG.Origins.IndexMaterial
@@ -2751,5 +2752,109 @@ theorem original_origin_history_projection :
     Origins.HistoryAdapters.receiveStep_valid, Origins.HistoryAdapters.receiveIteration_valid,
     fun _ a => ⟨Queues.RxCompletion.origin_quiet a, Queues.RxLink.linked_origin a,
       Queues.RxLink.receipts_origin a⟩⟩
+
+
+/-- Concrete original leaves retain receiving material on normal returns from
+arbitrary Worlds. Erasure, invalidation and a cleared nullable owner are allowed.
+The generic support consequence transports an already supplied session history;
+this is neither initialized origin nor packet/public-key authorization. -/
+theorem original_material_retaining_leaves :
+    (∀ (α : Type) (a : M α), Framing.SameKernel a → Origins.Retaining.RetainsCall a) ∧
+    (∀ (α : Type) (a : M α), Framing.SameWGKernel a → Origins.Retaining.RetainsCall a) ∧
+    (∀ pid, Origins.Retaining.RetainsCall (WG.peerGet pid)) ∧
+    (∀ peer, Origins.Retaining.RetainsCall (WG.peerPut peer)) ∧
+    (∀ kp, Origins.Retaining.RetainsCall (WG.keypairGet kp)) ∧
+    (∀ kp now, Origins.Retaining.RetainsCall (WG.keypairPut kp now)) ∧
+    (∀ word, Origins.Retaining.RetainsCall (WG.keypairCreate word)) ∧
+    (∀ pid, Origins.Retaining.RetainsCall (WG.createInitiation pid) ∧
+      Origins.Retaining.RetainsCall (WG.createResponse pid) ∧
+      Origins.Retaining.RetainsCall (WG.sendHandshakeInitiation pid) ∧
+      Origins.Retaining.RetainsCall (WG.timersSessionDerived pid)) ∧
+    (∀ msg, Origins.Retaining.RetainsCall (WG.consumeInitiation msg) ∧
+      Origins.Retaining.RetainsCall (WG.consumeResponse msg) ∧
+      Origins.Retaining.RetainsCall (WG.cookieMessageConsume msg)) ∧
+    (∀ (α : Type) (a : M α) history w result v,
+      Origins.Retaining.RetainsCall a → Origins.Inv history w →
+      a.run w = .ok (result,v) → Origins.Inv history v) :=
+  ⟨fun _ _ h => Origins.Retaining.of_view (Origins.kernel h),
+    fun _ _ h => Origins.Retaining.of_view (Origins.sameView_of_sameWG h),
+    fun pid => Origins.Retaining.of_view (Origins.Retaining.peerGet_material pid),
+    fun peer => Origins.Retaining.of_view (Origins.Retaining.peerPut_material peer),
+    Origins.Retaining.keypairGet_material, Origins.Retaining.keypairPut_material,
+    Origins.Retaining.keypairCreate_material,
+    fun pid => ⟨Origins.Retaining.of_view (Origins.Retaining.createInitiation_material pid),
+      Origins.Retaining.of_view (Origins.Retaining.createResponse_material pid),
+      Origins.Retaining.of_view (Origins.Retaining.sendHandshakeInitiation_material pid),
+      Origins.Retaining.of_view (Origins.Retaining.timersSessionDerived_material pid)⟩,
+    fun msg => ⟨Origins.Retaining.consumeInitiation_material msg,
+      Origins.Retaining.consumeResponse_material msg, Origins.Retaining.cookieMessageConsume_material msg⟩,
+    fun _ _ _ _ _ _ h hi hr => h.support hi hr⟩
+
+/-- Original packet and concrete NAPI/Stack paths retain receiving material.
+Crypt iterations use their actual checksum, IRQ, softirq and plain rescheduling
+callbacks. This does not frame the session-installing receive worker/scheduler,
+or guarantee residence, reference funding, callback completion or packet identity. -/
+theorem original_material_retaining_traffic :
+    (∀ pid, Origins.Retaining.RetainsCall (WG.sendStagedPackets pid) ∧
+      Origins.Retaining.RetainsCall (WG.sendKeepalive pid) ∧
+      Origins.Retaining.RetainsCall (WG.txStep pid) ∧
+      Origins.Retaining.RetainsCall (WG.txIter pid (Env.condResched .txWorker))) ∧
+    (∀ family addr packets mtu, Origins.Retaining.RetainsCall (WG.wgXmit family addr packets mtu)) ∧
+    (∀ msg src, Origins.Retaining.RetainsCall (WG.wgReceive msg src)) ∧
+    (∀ msg src ds, Origins.Retaining.RetainsCall (WG.consumeData msg src ds)) ∧
+    (∀ pid pkt endpoint, Origins.Retaining.RetainsCall (WG.consumeDataDone pid pkt endpoint)) ∧
+    (∀ pid budget, Origins.Retaining.RetainsCall
+      (WG.rxPoll pid budget (fun xs => xs.forM Env.deliverInner))) ∧
+    Origins.Retaining.RetainsCall Env.napiSoftirq ∧
+    Origins.Retaining.RetainsCall Env.napiIrqExit ∧
+    Origins.Retaining.RetainsCall Env.pollScheduledInline ∧
+    Origins.Retaining.RetainsCall (WG.encryptIter Env.checksumHelp Env.napiSoftirq
+      (Env.condResched .encryptWorker)) ∧
+    Origins.Retaining.RetainsCall (WG.decryptIter Env.napiSoftirq Env.napiIrqExit
+      (Env.condResched .decryptWorker)) ∧
+    (∀ bytes, Origins.Retaining.RetainsCall (Env.deliverInner bytes)) :=
+  ⟨fun pid => ⟨Origins.Retaining.sendStagedPackets_material pid,
+      Origins.Retaining.sendKeepalive_material pid, Origins.Retaining.txStep_material pid,
+      Origins.Retaining.actualTxIter_material pid⟩,
+    Origins.Retaining.wgXmit_material, Origins.Retaining.wgReceive_material,
+    Origins.Retaining.consumeData_material, Origins.Retaining.consumeDataDone_material,
+    Origins.Retaining.actualRxPoll_material, Origins.Retaining.napiSoftirq_material,
+    Origins.Retaining.napiIrqExit_material, Origins.Retaining.pollScheduledInline_material,
+    Origins.Retaining.actualEncryptIter_material, Origins.Retaining.actualDecryptIter_material,
+    Origins.Retaining.deliverInner_material⟩
+
+/-- Actual clear/flush/timer/removal and guarded device lifecycle calls retain
+receiving material at normal endpoints, including ordinary negative results.
+Saved lists and aliased old slots need no validity/survival premise. Creation
+uses the whole guarded empty-or-unchanged endpoint; arbitrary wgNewlink and
+session installation are deliberately not asserted to retain this view. -/
+theorem original_material_retaining_lifecycle :
+    (∀ pid, Origins.Retaining.RetainsCall (WG.keypairsClear pid) ∧
+      Origins.Retaining.RetainsCall (WG.expireCurrentPeerKeypairs pid) ∧
+      Origins.Retaining.RetainsCall (WG.handshakeSendWorker pid) ∧
+      Origins.Retaining.RetainsCall (WG.queuedExpiredZeroKeyMaterial pid) ∧
+      Origins.Retaining.RetainsCall (WG.timersStop pid)) ∧
+    (∀ upto, Origins.Retaining.RetainsCall (WG.drainHandshakeSendWq upto)) ∧
+    (∀ peer, Origins.Retaining.RetainsCall (WG.peerRemove peer)) ∧
+    Origins.Retaining.RetainsCall WG.peerRemoveAll ∧
+    (∀ pid timer, Origins.Retaining.RetainsCall (WG.timerCallback pid timer)) ∧
+    Origins.Retaining.RetainsCall WG.wgOpen ∧
+    Origins.Retaining.RetainsCall WG.wgUp ∧
+    Origins.Retaining.RetainsCall WG.wgDown ∧
+    Origins.Retaining.RetainsCall WG.netnsPreExit ∧
+    Origins.Retaining.RetainsCall WG.wgCreate ∧
+    Origins.Retaining.RetainsCall WG.wgDestruct ∧
+    Origins.Retaining.RetainsCall WG.wgDelete :=
+  ⟨fun pid => ⟨Origins.Retaining.keypairsClear_material pid,
+      Origins.Retaining.expireCurrentPeerKeypairs_material pid,
+      Origins.Retaining.handshakeSendWorker_material pid,
+      Origins.Retaining.queuedExpiredZeroKeyMaterial_material pid,
+      Origins.Retaining.timersStop_material pid⟩,
+    Origins.Retaining.drainHandshakeSendWq_material, Origins.Retaining.peerRemove_material,
+    Origins.Retaining.peerRemoveAll_material, Origins.Retaining.timerCallback_material,
+    Origins.Retaining.wgOpen_material, Origins.Retaining.wgUp_material,
+    Origins.Retaining.wgDown_material, Origins.Retaining.of_view Origins.Retaining.netnsPreExit_material,
+    Origins.Retaining.wgCreate_material, Origins.Retaining.wgDestruct_material,
+    Origins.Retaining.wgDelete_material⟩
 
 end Leanux.Proofs.WG.CryptokeyRouting

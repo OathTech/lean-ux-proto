@@ -22,47 +22,41 @@ was made by this campaign.
 | R5 | Accepted age/post-zero/wire-nonce counterexamples; thirteen positive local contracts. |
 | R6 | Cookie exclusion proved; literal MAX=18 refuted, without a replacement universal bound. |
 
-**Current R4 local reference transfer/discharge (validated).** Two grouped exports preserve
-all 501 prior terminal bodies: 503 declarations (501 theorems/two definitions; 129 R3/123 R4). The actual index lookup
-derives the positive peer loan and fresh stored key word; normal admission retains that loan at the allocation cut
-and the key word through allocation. A vacant RX slot transfers an explicit reservation into the same inventory.
-Pure-IRQ publication repays the actual resolved peer. Original cached-head drop selects one carrier; selected payment
-and paid-cell free preserve the remaining inventory/credits. The actual ENOSPC tail retains all three decisions,
-then successful key payment, peer payment and free preserve the same queue multiplicities too. Key-payment Stops
-have exact source equations and no invented failed World. The ENOSPC context is a supplied tail argument;
-its packet/key admission provenance is not derived from Inventory. Full consumeData installation/0/EPIPE/ENOSPC composition,
-general IRQ/Stack callbacks and initialized carrier conservation remain open.
+**Current R3 retaining operations (validated).** Three grouped exports
+preserve all 503 prior terminal bodies: 506 declarations (504 theorems/two definitions; 132 R3/123 R4).
+`Origins/RetainingLeaves`, `RetainingTraffic` and `RetainingLifecycle` prove normal-return retention of
+receiving material, allocation stamp and same epoch/slot with a nullable keep-or-clear owner. Erasure and
+invalidation are permitted, including aliased old key slots and fresh invalid allocation. Actual getter records
+justify cached key setters. The packet layer covers TX/Stack, admission, replay validation and RX poll cleanup,
+plus both concrete NAPI sites, IRQ and crypt iterations. Clear/flush/removal, five timer callbacks, up/down,
+netns and guarded create/destruct/delete are concrete. Generic callback contracts remain explicit where used.
 
-[AGENT 2026-10-15] Keep complete resident inventory, exact queue multiplicity and numeric protection separate;
-transport explicit reservations and the same ledger through source cuts. Ring/GRO aliases are not extra credits.
-The paid phase alone is not proof of historical payment, and inventory alone does not establish allocation vacancy.
-The local allocation theorem states vacancy explicitly; existing Packets.Inv supplies it. A later full poll needs a
-surviving caller reservation for its post-cleanup peer reads. No mirror or existing observer/invariant changed.
+[AGENT 2026-10-15] Reuse complete Kernel/WG masks and exact original source cuts for the full receiving-material
+projection; a same-stamp snapshot or routing frame alone cannot justify it. Guarded creation uses the actual
+empty-or-unchanged endpoint. No standalone arbitrary `wgNewlink` or session-installing worker/scheduler frame
+is claimed. An existing `Origins.Inv` transports on normal return; Stops supply no returned World. These
+contracts do not derive initialized support, packet/session identity, reference credits or public-key authorization.
 
-**Current effort.** Acceptance 13:05:15 UTC; 90 minutes/48 capped calls, final 20 minutes/10 calls reserved.
-Scoped call 26 passes 425 jobs (13:52:28); full call 27 passes 502 (13:52:41), 47m26s after acceptance.
-The 27 builds comprise seven PASS and twenty ordinary FAIL. Failed elaborations 3/11/14/18 displayed recovery
-placeholders; 3/14 also reported `declaration uses sorry`, and 14 reported a dependent kernel unknown constant.
-There is no source admission. Calls 5/9 hit default recursion limits; directed factoring/rewrite orientation repaired
-them without raising limits. Other failures were syntax, binder, projection and source-factor proof mechanics.
-The initial successful file-write/build shell lacked explicit fail-closed chaining; all subsequent dependent edits
-and builds were separate and collected. An estimated call-16 timestamp was promptly withdrawn; its collection is
-only bounded by 13:35:12–13:37:15. No cap hit, interruption, infrastructure retry or active job remains.
-Command-local Lake parallelism 32/QEMU slots 16 retain per-compiler `-j1` and the unchanged 32G cap.
-Exact check 28 passes scope, all 501 prior bodies, census, tokens/imports/EOF, mirror/index and the six-file manifest.
-Independent frozen review is clear, with no findings, 13:50:53–13:57:34 (6m41); final metadata check 29 repeats
-compatibility and hashes. The worker ledger totals 29 capped calls: 27 builds plus two exact checks.
-The coordinator's 502-job/503-declaration permitted-axiom gate, fresh stock kernel replay, 60-job
-model build and 103 unit tests (23.335s, one skip) pass. Replay began after gate collection and was
-collected at 14:04:19 UTC. The first coordinator exact check failed because its terminal-body splitter
-included a new top-level open command in the preceding theorem; the corrected check passes all 501
-prior bodies, four frozen Lean hashes, six paths, census and mirror identity. This was a check-script
-defect, not an infrastructure retry. Final metadata is checked separately before commit. Condensation
-and worker metadata review is clear, 14:01:19–14:03:58 (2m39); no finding, recipe or process disclosure
-was lost. No source changed after the successful builds, and no active job remains.
-The preceding source-injection checkpoint `60f8ea06` passed its 501-declaration gate, fresh replay, default60 and
-103 tests (21.627s, one skip); its detailed worker/coordinator failures and review dispositions are in that commit.
-No executable or runtime recipe changed in this proof-only local extension.
+**Current effort.** Acceptance 14:09:20 UTC; 110 minutes/60 capped calls, final 20 minutes/10 calls reserved.
+Scoped call 13 passes 455 jobs; full call 14 passes 505, collected by the measured 14:33:58 UTC clock
+(24m38s after acceptance; collection itself was not separately clocked). Exact call 15 passes six-path scope,
+all 503 prior bodies, 506 total/132 R3/123 R4, tokens/imports/EOF, mirror cb2348e, seven pins and empty index.
+Fourteen builds comprise six PASS and eight ordinary FAIL (1,4,5,6,8,9,10,12): leaf/WP projection,
+replay-counter witness, tactic syntax, missing no-op leaf, Stop-VC and terminal namespace errors.
+No recovery admission, kernel, recursion/heartbeat or cap diagnostic occurred. The initial copied file-wide
+one-million-heartbeat setting was removed after call 2 at coordinator request; call 3 rebuilt the leaves at
+default limits and all final new proofs use defaults. No limit increase was retained. All jobs are collected
+before edits; command-local Lake parallelism 32/QEMU slots 16 and the unchanged 32G cap are used.
+The final ledger is 16 capped calls: fourteen builds plus two passing exact checks. Exact 15 predates only
+final metadata; exact 16 checks the final six hashes. Independent frozen review is clear (14:26:03–14:39:18 UTC,
+13m15s): one stale preceding-checkpoint count was fixed by explicitly naming the historical checkpoint.
+No source, premise or failed-history finding remains; all four Lean hashes are unchanged.
+No interruption, infrastructure retry, guest run or executable change occurred. Ownership ended at 14:41:18 UTC
+(31m58s); final review metadata reconciled at 14:41:04. Coordinated validation passes: 505-job/506-declaration
+permitted-axiom gate, fresh kernel replay collected at 14:45:47 after the gate, default build (60 jobs), and
+103 unit tests (21.165s, one skip). Exact checks retain the four frozen Lean hashes and every prior body.
+The preceding `bc45a9c` local RX-credit checkpoint passed its gate/replay/default/103 tests; its detailed
+failures and review disposition remain in that commit.
 
 **Current foundations.** The persistent RX journal records actual session/decrypt source cuts and preserves
 unconditional original erasure, the same full incoming R2 audit/probes and the established R4 boundary,
@@ -81,7 +75,7 @@ quantifies over the actual returned ring, with no new initialized validity premi
 **Checkpoint provenance.** Representation carry `15f0b979`; local disposition `ba0bbe3e`;
 material retention `8f95d45`; packet/receipt link `0b1cd078`; owner/material frame `41df9916`;
 initialized linkage `c0bff5e`; session/decrypt injection `60f8ea0`. Their commits retain measured
-effort, failed attempts, review dispositions and validation counts. At the preceding checkpoint the
+effort, failed attempts, review dispositions and validation counts. At source-injection checkpoint `60f8ea0`, the
 501-declaration permitted-axiom gate, fresh kernel replay, default build and 103 unit tests (one skip)
 passed. The eleven historical recipes and 23 executable replay tests retain their representation-carry
 validation: nine accepted agreements and two expected pending-dump rejections. They are not rerun for
@@ -309,6 +303,9 @@ entry support, not an initialized-history provenance theorem. Normal Some-front 
 decrypt retains the actual stored packet, material and AEAD transformation, without equating packet.peer to that peer.
 [Origins/IndexMaterial](../Leanux/Proofs/WG/Origins/IndexMaterial.lean) derives the concrete owner-acquisition and
 index-lookup frame, including nullable store-back, and reuses the existing access adapter for supplied support.
+The new `RetainingLeaves`, `RetainingTraffic` and `RetainingLifecycle` source contracts extend normal
+material retention through concrete non-installing traffic, timers and lifecycle operations. They reuse actual
+record getters and stronger canonical masks, with no affiliation/residency/credit or successful-drain premise.
 Whole-admission and stateful material-support propagation, plus initialized provenance, remain unfinished.
 
 **Actual caller injection.** [ReceiptTypes](../Leanux/Proofs/WG/Origins/ReceiptTypes.lean) keeps existing qualified
