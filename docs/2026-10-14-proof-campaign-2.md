@@ -4,7 +4,7 @@
 
 Work is confined to `.worktrees/proofs-campaign-2`, branch `proofs/campaign-2`.
 H1, H3 and H4 have local contracts; their whole-operation/whole-run claims
-remain open. H5 has a checked batch-completion counterexample and open progress
+remain open. H4 also has a checked reachable internal dump-accounting finding. H5 has a checked batch-completion counterexample and open progress
 obligations. H6 has eleven local timer contracts; whole-run site coverage and
 retry/session counting remain open.
 H2 is waiting on the index-lookup
@@ -242,10 +242,21 @@ recorded above. Actual outer dump composition remains open.
 Remaining: private-key collision removal and outer request composition; full peer
 removal/replacement and allowed-IP ownership, other partial-error combinations,
 and general dump chunks/coalescing. Deferred removal work can change other
-peers' dynamic state, so no unrestricted removal frame is claimed. No H4
-mirror mismatch or mirror-team request; ranked mirror suggestions: none.
+peers' dynamic state, so no unrestricted removal frame is claimed.
 
-Validation: all forty-eight statements pass scoped build, standard-axiom inspection
+Rule Zero finding: the empty-device dump retains four bytes of a cancelled
+peers-nest reservation. A one-operation getter trace is accepted from the
+ordinary fixture; the original callback returns room 3720. C's pre-reservation
+snapshot and cancellation give room 3724. Two independent source reviews agree.
+This is a reachable internal accounting mismatch, not a demonstrated compared
+output difference or kernel finding. The three `DumpCancellation` equations are
+kernel checked; the C correspondence is source inspection. Statement-artefact
+check: both the C and the mirror's own design require restoring pre-nest room.
+[Request 3](2026-10-14-campaign-2-mirror-requests.md#3-restore-pre-nest-tailroom-when-cancelling-the-device-peers-nest)
+gives the witness and reproduction command. Ranked mirror suggestion 1:
+correct the saved cancellation snapshot (altitude-preserving).
+
+Validation: all fifty-one statements pass scoped build, standard-axiom inspection
 (only `propext`, `Classical.choice`, `Quot.sound`), and `capped --
 scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Config.Statements`.
 The full proof gate fails in inherited `CounterWindow.Refinement`; token/import

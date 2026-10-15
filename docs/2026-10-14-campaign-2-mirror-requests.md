@@ -123,3 +123,56 @@ the same premise; they are not additional established findings here.
 [AGENT 2026-10-14] Report the erroneous occupancy premise with its evaluated
 initialized prefix, keeping the full-run acceptance and kernel-proof boundaries
 explicit rather than counting it as a proved termination counterexample.
+
+## 3. Restore pre-nest tailroom when cancelling the device peers nest
+
+Status: source correspondence error over `ca6b22e`, with a kernel-checked
+reachable model witness and two independent read-only source reviews. No
+externally compared output difference is established, and this is not a kernel
+finding. The mirror is unchanged.
+
+`Leanux/WG/NetlinkDump.lean:220–232` reserves the four-byte peers-nest header,
+then saves `nestStart`. The empty-peer-list or dead-cursor arm restores that
+post-reservation snapshot, retaining a four-byte debit even though its output
+omits the nest. In pristine C, `drivers/net/wireguard/netlink.c:254,264–268`
+starts and cancels the nest. `include/net/netlink.h:1925–1934` saves the tail
+pointer **before** `nla_put`; `nla_nest_cancel` at lines 1975–1978 calls
+`nlmsg_trim` with that pointer, removing the header too. The design's section
+4.3 in `docs/2026-10-06-w1-w2-netlink.md` also says cancellation restores saved
+pre-nest room. The correspondence audit's cancellation row missed the timing
+of the saved snapshot.
+
+[`Config/DumpCancellation.lean`](../Leanux/Proofs/WG/Config/DumpCancellation.lean)
+contains the typed one-operation trace, ordinary initialized fixture and
+callback witness. Reproduce its kernel-checked equations with:
+
+```
+capped -- scripts/in-bundle lake build Leanux.Proofs.WG.Config.DumpCancellation
+```
+
+The trace is one `wg_get` on the fixture's empty `wg0`, with an empty hidden
+record list. `executeTrace` accepts it. The callback returns zero, one data
+message and a cleared cursor, with `skb.room = 3720`. The retained message
+occupies 52 bytes: 20 for the generic-netlink header, three eight-byte scalar
+attributes and eight bytes for the `"wg0"` name. C cancellation therefore leaves
+`3776 - 52 = 3724`. The Lean arithmetic witness verifies the four-byte gap;
+the C correspondence argument is the source inspection above, not a formal C
+simulation theorem.
+
+Scope: callback byte accounting is internal state. Observations omit message
+lengths, and the supported empty/dead-cursor exits complete with ample room for
+DONE in a fresh chunk. Thus the accepted trace is a reachable accounting
+witness, **not** an accepted trace whose compared JSON or branch observations
+diverge from Linux. No guest or differential check was run here. The concrete
+checked case is the empty-list arm; the shared cancellation line also identifies
+the dead-cursor arm by inspection.
+
+Request: preserve the skb snapshot before the peers-nest reservation and restore
+that snapshot on cancellation. This is altitude-preserving: it corrects the
+existing tailroom abstraction and follows the C's allocation/cancellation order.
+Check the other nest snapshots while making this repair; no additional mismatch
+is asserted here. Mirror-team validation remains separate from the proof tree.
+
+[AGENT 2026-10-15] Report the four-byte correspondence error with its accepted
+fixture and exact callback equation, retaining the internal-only observability
+limit instead of claiming an output or kernel defect.

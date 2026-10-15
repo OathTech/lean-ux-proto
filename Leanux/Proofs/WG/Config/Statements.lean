@@ -15,6 +15,7 @@ import Leanux.Proofs.WG.Config.ExpiryEffects
 import Leanux.Proofs.WG.Config.ExpiryClock
 import Leanux.Proofs.WG.Config.KeyInstall
 import Leanux.Proofs.WG.Config.KeyInstallEffects
+import Leanux.Proofs.WG.Config.DumpCancellation
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
@@ -569,5 +570,24 @@ theorem original_key_install_effects (d : Device) (key : Key) :
       (fun _ w => ∃ final, w.k.wg = some final ∧
         KeyPeerRun (requestsStagedSend d key) (installedDevice d key) d.peerList final) :=
   keyInstall_complete d key
+
+/-- A single empty-device getter is accepted from the runner's ordinary
+fixture with an empty hidden record list. This establishes reachability of the
+cancelled-nest accounting case, not a changed external observation. -/
+theorem empty_dump_trace_accepted : DumpCancellation.accepted = true :=
+  DumpCancellation.emptyTrace_accepted
+
+/-- The original empty-device dump callback completes with one message,
+a cleared cursor and 3720 bytes of tailroom. This retains the cancelled nest's
+four bytes; the source correspondence discrepancy is recorded in request 3. -/
+theorem original_empty_dump_room : DumpCancellation.callbackResult = some (0, 3720, true, 1) :=
+  DumpCancellation.emptyDump_room
+
+/-- The C-derived accounting of the retained header and attributes leaves
+3724 bytes, exactly one cancelled nest header more than the mirror witness.
+This is arithmetic supporting the source review, not a formal C simulation. -/
+theorem empty_dump_cancellation_accounting :
+    DumpCancellation.cancelledNestRoom = 3724 ∧ 3720 + nlaTotal 0 = DumpCancellation.cancelledNestRoom :=
+  DumpCancellation.cancellation_accounting
 
 end Leanux.Proofs.WG.Config
