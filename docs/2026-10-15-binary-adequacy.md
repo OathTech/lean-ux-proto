@@ -3698,3 +3698,33 @@ are not included in passing counts. No cap was raised to obtain a pass.
 The binary proof gate passes at this foundation checkpoint, including the
 clean private dependency pin, headline axiom check, and printed/diffed trust
 surface. This is the project gate, not a new external export replay.
+
+### Checked proof components, second checkpoint
+
+The next integrated capped build passes (386 jobs). New components include
+exact byte/subword extraction from successful loads and stores; all 35
+lookup decoder-layout proofs; the six-instruction child-selection proof
+from NodeFields and complete stack query words for both families; ten
+outer-lookup region endpoints, eight exact two-instruction branch histories,
+five argument/load endpoints, and IPv4's actual BSWAP/store region.
+The logged source erases to WG.lookup and frames every source point: only
+the returned peer's refcount may change; all other peers and WG fields
+are preserved. The concrete source fixtures reproduce the two recorded
+read projections and prove mirror acceptance, but are not yet Pre witnesses.
+
+R's current proof component relates the query-reachable trie and the selected
+peer count, with the count phase obtained from actual execution history.
+Its footprint frame checks. The bounded-loop composition lemma checks by
+induction over the actual logged mirror loop, but is not yet instantiated
+with a complete binary body invariant. It is not an additional headline
+premise. Common-bits stack/history/arithmetic and conditional KCOV callback
+composition components also check. None of these component statements is
+reported as function-level adequacy or completed region-to-R composition.
+
+All four private Kraken patches reconstruct the pinned commit exactly under
+`git am --committer-date-is-author-date`. No new trust declaration is added
+in this checkpoint. A later helper path composition attempt was stopped at
+approximately 20.7 GB RSS after 69 seconds (exit 143): a failed proof run,
+not a successful check. The complete dirty task tree was preserved at
+refs/snapshots/binary-tv/m2-paths-stopped-20261015T211934Z before repair.
+The passing component build is distinct from that unfinished composition.
